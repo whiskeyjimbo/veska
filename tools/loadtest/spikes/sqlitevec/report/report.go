@@ -188,23 +188,23 @@ func RenderMarkdown(inputs SpikeInputs, v Verdict) string {
 	bench1M, recall1M, load1M := popStats(inputs, 1_000_000)
 
 	sb.WriteString("# sqlite-vec Spike — RESULTS\n\n")
-	sb.WriteString(fmt.Sprintf("Generated: %s\n\n", time.Now().UTC().Format(time.RFC3339)))
+	fmt.Fprintf(&sb, "Generated: %s\n\n", time.Now().UTC().Format(time.RFC3339))
 
 	// Verdict box.
 	sb.WriteString("## Verdict\n\n")
-	sb.WriteString(fmt.Sprintf("**Outcome bucket:** `%s`\n\n", v.Bucket))
+	fmt.Fprintf(&sb, "**Outcome bucket:** `%s`\n\n", v.Bucket)
 	sb.WriteString("**Reasons:**\n\n")
 	for _, r := range v.Reasons {
-		sb.WriteString(fmt.Sprintf("- %s\n", r))
+		fmt.Fprintf(&sb, "- %s\n", r)
 	}
 	sb.WriteString("\n")
 
 	// Environment.
 	sb.WriteString("## Environment\n\n")
 	sb.WriteString("| Key | Value |\n|---|---|\n")
-	sb.WriteString(fmt.Sprintf("| sqlite-vec version | `%s` |\n", inputs.Bench.SqliteVecVersion))
-	sb.WriteString(fmt.Sprintf("| SQLite version | `%s` |\n", inputs.Bench.SqliteVersion))
-	sb.WriteString(fmt.Sprintf("| Platform | `%s` |\n", inputs.Bench.Platform))
+	fmt.Fprintf(&sb, "| sqlite-vec version | `%s` |\n", inputs.Bench.SqliteVecVersion)
+	fmt.Fprintf(&sb, "| SQLite version | `%s` |\n", inputs.Bench.SqliteVersion)
+	fmt.Fprintf(&sb, "| Platform | `%s` |\n", inputs.Bench.Platform)
 	sb.WriteString("\n")
 
 	// Latency.
@@ -237,11 +237,11 @@ func RenderMarkdown(inputs SpikeInputs, v Verdict) string {
 		} else {
 			gate = "—"
 		}
-		sb.WriteString(fmt.Sprintf("| %d | %d | %.2f | %.2f | %.2f | %.2f | %s |\n",
+		fmt.Fprintf(&sb, "| %d | %d | %.2f | %.2f | %.2f | %.2f | %s |\n",
 			pop.Population, pop.K,
 			pop.Warm.P50Ms, pop.Warm.P95Ms, pop.Warm.P99Ms, pop.Warm.MaxMs,
 			gate,
-		))
+		)
 	}
 	sb.WriteString("\n")
 
@@ -285,9 +285,9 @@ func RenderMarkdown(inputs SpikeInputs, v Verdict) string {
 		default:
 			gate = "—"
 		}
-		sb.WriteString(fmt.Sprintf("| %d | %.4f | %.4f | %d | %s |\n",
+		fmt.Fprintf(&sb, "| %d | %.4f | %.4f | %d | %s |\n",
 			r.Population, r.RecallAt10, r.RecallAt50, r.HoldOutSize, gate,
-		))
+		)
 	}
 	sb.WriteString("\n")
 
@@ -298,9 +298,9 @@ func RenderMarkdown(inputs SpikeInputs, v Verdict) string {
 		ceilingStr = "not reached"
 	}
 	sb.WriteString("| Metric | Value |\n|---|---|\n")
-	sb.WriteString(fmt.Sprintf("| vec0 ceiling (nodes) | %s |\n", ceilingStr))
-	sb.WriteString(fmt.Sprintf("| Ceiling reason | %s |\n", inputs.Bench.CeilingReason))
-	sb.WriteString(fmt.Sprintf("| Gate (≥ %d) | ", gateCeilingMinNodes))
+	fmt.Fprintf(&sb, "| vec0 ceiling (nodes) | %s |\n", ceilingStr)
+	fmt.Fprintf(&sb, "| Ceiling reason | %s |\n", inputs.Bench.CeilingReason)
+	fmt.Fprintf(&sb, "| Gate (≥ %d) | ", gateCeilingMinNodes)
 	if inputs.Bench.Vec0Ceiling == 0 || inputs.Bench.Vec0Ceiling >= gateCeilingMinNodes {
 		sb.WriteString("PASS\n")
 	} else {
@@ -313,16 +313,16 @@ func RenderMarkdown(inputs SpikeInputs, v Verdict) string {
 	sb.WriteString("| Population | Load wall time | Disk | Peak RSS |\n")
 	sb.WriteString("|---|---|---|---|\n")
 	if load50k.Population != 0 {
-		sb.WriteString(fmt.Sprintf("| %d | %dms | %s | %s |\n",
+		fmt.Fprintf(&sb, "| %d | %dms | %s | %s |\n",
 			load50k.Population, load50k.LoadWallMs,
 			fmtBytes(load50k.DiskBytes), fmtBytes(load50k.PeakRSSBytes),
-		))
+		)
 	}
 	if load1M.Population != 0 {
-		sb.WriteString(fmt.Sprintf("| %d | %dms | %s | %s |\n",
+		fmt.Fprintf(&sb, "| %d | %dms | %s | %s |\n",
 			load1M.Population, load1M.LoadWallMs,
 			fmtBytes(load1M.DiskBytes), fmtBytes(load1M.PeakRSSBytes),
-		))
+		)
 	}
 	sb.WriteString("\n")
 
@@ -334,7 +334,7 @@ func RenderMarkdown(inputs SpikeInputs, v Verdict) string {
 	if len(notes) > 0 {
 		sb.WriteString("## Measurement Notes\n\n")
 		for _, n := range notes {
-			sb.WriteString(fmt.Sprintf("> **NOTE:** %s\n\n", n))
+			fmt.Fprintf(&sb, "> **NOTE:** %s\n\n", n)
 		}
 	}
 
@@ -342,32 +342,32 @@ func RenderMarkdown(inputs SpikeInputs, v Verdict) string {
 	sb.WriteString("## Exit-Gate Summary\n\n")
 	sb.WriteString("| Gate | Measured | Threshold | Result |\n")
 	sb.WriteString("|---|---|---|---|\n")
-	sb.WriteString(fmt.Sprintf("| 50k warm p95 | %.2fms | ≤ %.0fms | %s |\n",
+	fmt.Fprintf(&sb, "| 50k warm p95 | %.2fms | ≤ %.0fms | %s |\n",
 		bench50k.Warm.P95Ms, gate50kP95Ms,
 		gatePass(bench50k.Warm.P95Ms <= gate50kP95Ms),
-	))
-	sb.WriteString(fmt.Sprintf("| 50k recall@10 | %.4f | ≥ %.2f | %s |\n",
+	)
+	fmt.Fprintf(&sb, "| 50k recall@10 | %.4f | ≥ %.2f | %s |\n",
 		recall50k.RecallAt10, gate50kRecall,
 		gatePass(recall50k.RecallAt10 >= gate50kRecall),
-	))
-	sb.WriteString(fmt.Sprintf("| 1M warm p95 | %.2fms | ≤ %.0fms (green) / ≤ %.0fms (yellow) | %s |\n",
+	)
+	fmt.Fprintf(&sb, "| 1M warm p95 | %.2fms | ≤ %.0fms (green) / ≤ %.0fms (yellow) | %s |\n",
 		bench1M.Warm.P95Ms, gate1MP95GreenMs, gate1MP95YellowMs,
 		p95Band(bench1M.Warm.P95Ms),
-	))
+	)
 	if recall1M.Population != 0 {
-		sb.WriteString(fmt.Sprintf("| 1M recall@10 | %.4f | ≥ %.2f (green) / ≥ %.2f (yellow) | %s |\n",
+		fmt.Fprintf(&sb, "| 1M recall@10 | %.4f | ≥ %.2f (green) / ≥ %.2f (yellow) | %s |\n",
 			recall1M.RecallAt10, gate1MRecallGreen, gate1MRecallYellow,
 			recallBand(recall1M.RecallAt10),
-		))
+		)
 	} else {
-		sb.WriteString(fmt.Sprintf("| 1M recall@10 | N/A (failed) | ≥ %.2f (green) / ≥ %.2f (yellow) | N/A |\n",
+		fmt.Fprintf(&sb, "| 1M recall@10 | N/A (failed) | ≥ %.2f (green) / ≥ %.2f (yellow) | N/A |\n",
 			gate1MRecallGreen, gate1MRecallYellow,
-		))
+		)
 	}
-	sb.WriteString(fmt.Sprintf("| vec0 ceiling | %s | ≥ %d | %s |\n",
+	fmt.Fprintf(&sb, "| vec0 ceiling | %s | ≥ %d | %s |\n",
 		ceilingStr, gateCeilingMinNodes,
 		gatePass(inputs.Bench.Vec0Ceiling == 0 || inputs.Bench.Vec0Ceiling >= gateCeilingMinNodes),
-	))
+	)
 	sb.WriteString("\n")
 
 	return sb.String()
