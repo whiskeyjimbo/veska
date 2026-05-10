@@ -130,10 +130,7 @@ func generate(dbPath string, nBranches, nSymbols, overlapPct int) error {
 		return fmt.Errorf("insert repo: %w", err)
 	}
 
-	symbolsPerBranch := nSymbols / nBranches
-	if symbolsPerBranch < 1 {
-		symbolsPerBranch = 1
-	}
+	symbolsPerBranch := max(1, nSymbols/nBranches)
 
 	baseSymbols := pkloader.GenerateBaseSymbols(symbolsPerBranch, "repo1")
 	ts := time.Now().Unix()
