@@ -77,10 +77,7 @@ func main() {
 			vecs := gen.GenerateVectors(int(pop), rng.Uint64())
 			const batchSize = 10_000
 			for i := 0; i < len(vecs); i += batchSize {
-				end := i + batchSize
-				if end > len(vecs) {
-					end = len(vecs)
-				}
+				end := min(i+batchSize, len(vecs))
 				if err := l.InsertBatch(vecs[i:end]); err != nil {
 					l.Close()
 					log.Fatalf("InsertBatch: %v", err)
