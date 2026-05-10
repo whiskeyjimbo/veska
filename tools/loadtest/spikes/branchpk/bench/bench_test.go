@@ -163,10 +163,8 @@ func TestBenchResultJSON(t *testing.T) {
 func TestBudgetGates(t *testing.T) {
 	// node_p95 = 20ms → node_pass = true (under 25ms budget)
 	passResult := bench.BenchResult{
-		NodeLatency:   bench.LatencyStats{P95Ms: 20.0},
-		EdgesLatency:  bench.LatencyStats{P95Ms: 50.0},
-		NodeBudgetMs:  bench.NodeBudgetMs,
-		EdgesBudgetMs: bench.EdgesBudgetMs,
+		NodeLatency:  bench.LatencyStats{P95Ms: 20.0},
+		EdgesLatency: bench.LatencyStats{P95Ms: 50.0},
 	}
 	passResult.NodePass = passResult.NodeLatency.P95Ms < bench.NodeBudgetMs
 	passResult.EdgesPass = passResult.EdgesLatency.P95Ms < bench.EdgesBudgetMs
@@ -180,10 +178,8 @@ func TestBudgetGates(t *testing.T) {
 
 	// node_p95 = 30ms → node_pass = false (over 25ms budget)
 	failResult := bench.BenchResult{
-		NodeLatency:   bench.LatencyStats{P95Ms: 30.0},
-		EdgesLatency:  bench.LatencyStats{P95Ms: 110.0},
-		NodeBudgetMs:  bench.NodeBudgetMs,
-		EdgesBudgetMs: bench.EdgesBudgetMs,
+		NodeLatency:  bench.LatencyStats{P95Ms: 30.0},
+		EdgesLatency: bench.LatencyStats{P95Ms: 110.0},
 	}
 	failResult.NodePass = failResult.NodeLatency.P95Ms < bench.NodeBudgetMs
 	failResult.EdgesPass = failResult.EdgesLatency.P95Ms < bench.EdgesBudgetMs
