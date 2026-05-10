@@ -151,7 +151,7 @@ func TestBenchResultJSON(t *testing.T) {
 		t.Fatalf("marshal: %v", err)
 	}
 
-	var m map[string]interface{}
+	var m map[string]any
 	if err := json.Unmarshal(data, &m); err != nil {
 		t.Fatalf("unmarshal: %v", err)
 	}
@@ -164,17 +164,17 @@ func TestBenchResultJSON(t *testing.T) {
 	}
 
 	// Check nested latency fields exist.
-	pops, ok := m["populations"].([]interface{})
+	pops, ok := m["populations"].([]any)
 	if !ok || len(pops) == 0 {
 		t.Fatal("populations missing or empty")
 	}
-	pop0 := pops[0].(map[string]interface{})
+	pop0 := pops[0].(map[string]any)
 	for _, k := range []string{"population", "k", "warm", "cold"} {
 		if _, ok := pop0[k]; !ok {
 			t.Errorf("pop missing JSON key: %q", k)
 		}
 	}
-	warm := pop0["warm"].(map[string]interface{})
+	warm := pop0["warm"].(map[string]any)
 	for _, k := range []string{"p50_ms", "p95_ms", "p99_ms", "max_ms", "n"} {
 		if _, ok := warm[k]; !ok {
 			t.Errorf("warm missing JSON key: %q", k)
