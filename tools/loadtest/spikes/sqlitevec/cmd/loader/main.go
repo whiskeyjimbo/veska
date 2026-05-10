@@ -58,10 +58,7 @@ func main() {
 		// Insert in chunks of 10k to keep transaction size manageable.
 		const chunkSize = 10_000
 		for i := 0; i < len(vecs); i += chunkSize {
-			end := i + chunkSize
-			if end > len(vecs) {
-				end = len(vecs)
-			}
+			end := min(i+chunkSize, len(vecs))
 			if err := l.InsertBatch(vecs[i:end]); err != nil {
 				log.Fatalf("InsertBatch chunk %d-%d: %v", i, end, err)
 			}
