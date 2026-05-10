@@ -65,13 +65,7 @@ func Percentiles(durs []time.Duration) LatencyStats {
 // the nearest-rank method (ceiling index).
 func percentileIdx(sorted []time.Duration, n, pct int) time.Duration {
 	// ceiling rank: ceil(pct/100 * n), clamped to [1, n]
-	rank := (pct*n + 99) / 100
-	if rank < 1 {
-		rank = 1
-	}
-	if rank > n {
-		rank = n
-	}
+	rank := max(1, min((pct*n+99)/100, n))
 	return sorted[rank-1]
 }
 
