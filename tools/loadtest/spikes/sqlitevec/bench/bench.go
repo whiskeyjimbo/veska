@@ -8,7 +8,7 @@ import (
 	"fmt"
 	"math/rand/v2"
 	"runtime"
-	"sort"
+	"slices"
 	"time"
 
 	vec "github.com/asg017/sqlite-vec-go-bindings/cgo"
@@ -66,7 +66,7 @@ func Percentiles(durs []time.Duration) LatencyStats {
 
 	sorted := make([]time.Duration, n)
 	copy(sorted, durs)
-	sort.Slice(sorted, func(i, j int) bool { return sorted[i] < sorted[j] })
+	slices.Sort(sorted)
 
 	toMs := func(d time.Duration) float64 { return float64(d) / float64(time.Millisecond) }
 
@@ -200,10 +200,7 @@ func RunCeilingSweep(dbPath string, nQueries int, rng *rand.Rand) (ceiling int64
 		vecs := gen.GenerateVectors(int(pop), rng.Uint64())
 		batchSize := 10_000
 		for i := 0; i < len(vecs); i += batchSize {
-			end := i + batchSize
-			if end > len(vecs) {
-				end = len(vecs)
-			}
+			end := min(i+batchSize, len(vecs))
 			if err := l.InsertBatch(vecs[i:end]); err != nil {
 				l.Close()
 				return 0, "", fmt.Errorf("bench: ceiling sweep insert at pop %d: %w", pop, err)
