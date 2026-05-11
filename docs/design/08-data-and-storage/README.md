@@ -97,6 +97,10 @@ canonical version of the schema is the live `migrations/` tree;
 this section is descriptive. §10 specifies the migration runner,
 failure recovery, and the on-disk contract.
 
+> **M0 measurement note (spike commit `72d6ca4`).** Branch-in-PK schema verified
+> green: node p95 = 0.039 ms, edges p95 = 0.047 ms, 1.68 GiB for 28 branches × 100k
+> symbols. Schema unchanged. m1.08 re-verifies on real-repo data.
+
 ### 3.1 Core tables
 
 ```sql
@@ -780,6 +784,13 @@ pure; cross-repo bookkeeping stays out of it.
 - **OQ-S003:** Does `vec0`'s Hamming/cosine ANN remain accurate
   enough for code-search recall at 1M-node scale? Or do we need
   HNSW via lancedb at that point? **Resolution: mandatory M1 work before m1.03.** M0 measured vec0 ceiling at 100k nodes (below the 250k minimum). The HNSW pivot ADR is not optional — it must be written and accepted before m1.03 begins. See ADR-S0001 §M0 Measurement.
+- **OQ-S006:** Branch-in-PK row growth and GC cost at 50-branch scale.
+  **Resolved (M0).** Spike commit `72d6ca4` (28 branches × 100k symbols, 10% dirty overlap):
+  node p95 = 0.039 ms (PASS ≤ 25 ms); edges p95 = 0.047 ms (PASS ≤ 100 ms);
+  disk = 1.68 GiB for 28 branches (linear growth; 50-branch extrapolation ≈ 3.0 GiB,
+  well under the 5 GiB green threshold). GC sweep deleted 10 of 28 branches in ~519 s
+  with 700 MiB reclaimed (bounded). **Verdict: green.** Schema in §3/§4 stands.
+  m1.08 re-verifies on real-repo data.
 
 These are real questions, not handwaves. Each has a milestone
 gate.
