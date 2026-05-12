@@ -4,15 +4,11 @@
 package loader
 
 import (
-	"bufio"
 	"database/sql"
 	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
-	"runtime"
-	"strconv"
-	"strings"
 
 	vec "github.com/asg017/sqlite-vec-go-bindings/cgo"
 	_ "github.com/mattn/go-sqlite3"
@@ -146,35 +142,6 @@ func (l *Loader) Close() error {
 	return l.db.Close()
 }
 
-// ReadRSSBytes reads the current process's RSS from /proc/self/status (Linux).
-// Returns 0 on non-Linux platforms or if the value cannot be parsed.
-func ReadRSSBytes() int64 {
-	if runtime.GOOS != "linux" {
-		return 0
-	}
-	f, err := os.Open("/proc/self/status")
-	if err != nil {
-		return 0
-	}
-	defer f.Close()
-
-	scanner := bufio.NewScanner(f)
-	for scanner.Scan() {
-		line := scanner.Text()
-		if strings.HasPrefix(line, "VmRSS:") {
-			fields := strings.Fields(line)
-			if len(fields) < 2 {
-				return 0
-			}
-			kb, err := strconv.ParseInt(fields[1], 10, 64)
-			if err != nil {
-				return 0
-			}
-			return kb * 1024 // kB -> bytes
-		}
-	}
-	return 0
-}
 
 // WriteMetricsJSON writes a JSON array of LoadMetrics to the given file path,
 // creating parent directories as needed.
