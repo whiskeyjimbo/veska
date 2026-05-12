@@ -88,7 +88,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	data, err := json.MarshalIndent(result, "", "  ")
+	data, err := json.MarshalIndent([]gcsweep.GCSweepResult{result}, "", "  ")
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "marshal: %v\n", err)
 		os.Exit(1)
