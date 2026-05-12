@@ -29,12 +29,18 @@ I/O. The ceiling is confirmed at ~100k–125k on reference hardware, well below 
 Replace `vec0` with an HNSW-backed index for all vector queries at or above 100k
 embedded nodes. The chosen backing is **to be determined** in m1.03 based on:
 
-1. **Recall floor:** recall@10 ≥ 0.95 at 50k; ≥ 0.85 at 1M.
-2. **Latency budget:** warm p95 ≤ 100ms at k=10 across the full working range.
-3. **Backup story:** must be embeddable in the single `~/.engram/` tarball or
-   `VACUUM INTO` snapshot without requiring external processes.
-4. **Candidate libraries:** `lancedb` (embedded HNSW, Go bindings), `hnswlib` via
-   cgo, or sqlite-vec's own HNSW when available.
+1. **Recall floor:** recall@10 ≥ 0.95 at 50k; ≥ 0.85 at 250k.
+2. **Latency budget:** warm p95 ≤ 100ms at k=10 at 250k vectors on the reference
+   laptop.
+3. **Backup round-trip:** `Save` → tar into `engram backup create` → `Load` must
+   reproduce identical query results. Measured with 5 hold-out queries before and
+   after round-trip. Index file size at 250k recorded for float32, float16, and
+   int8 quantization (usearch supports all three; record recall delta per level).
+4. **Candidate libraries:**
+   - `usearch` (Unum Cloud, cgo, C++17, float32/float16/int8, mmap persistence)
+   - `coder/hnsw` (pure Go, no cgo, float32 only, file persistence)
+   - `lancedb` (embedded columnar + HNSW, Go SDK, Lance format)
+   - sqlite-vec HNSW when available (deferred — no release date)
 
 ## Status
 
