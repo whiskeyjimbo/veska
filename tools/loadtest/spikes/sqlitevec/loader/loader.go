@@ -32,9 +32,15 @@ type Loader struct {
 	path string
 }
 
-// Open opens (or creates) a SQLite database at path, loads the sqlite-vec extension,
-// creates the vec_nodes virtual table (embedding FLOAT[768]), and enables WAL mode.
+// Open opens (or creates) a SQLite database at path with the default page size.
 func Open(path string) (*Loader, error) {
+	return OpenWithPageSize(path, 0)
+}
+
+// OpenWithPageSize opens (or creates) a SQLite database at path.
+// pageSize must be a power of two in [512, 65536], or 0 for the SQLite default (4096).
+// The pragma is only effective on a new database; it is silently ignored on existing ones.
+func OpenWithPageSize(path string, pageSize int) (*Loader, error) {
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return nil, fmt.Errorf("loader: mkdir: %w", err)
 	}
@@ -43,9 +49,14 @@ func Open(path string) (*Loader, error) {
 	if err != nil {
 		return nil, fmt.Errorf("loader: open db: %w", err)
 	}
-
-	// Limit to a single connection so WAL is consistent and extension state is shared.
 	db.SetMaxOpenConns(1)
+
+	if pageSize > 0 {
+		if _, err := db.Exec(fmt.Sprintf(`PRAGMA page_size = %d`, pageSize)); err != nil {
+			db.Close()
+			return nil, fmt.Errorf("loader: set page_size %d: %w", pageSize, err)
+		}
+	}
 
 	if _, err := db.Exec(`CREATE VIRTUAL TABLE IF NOT EXISTS vec_nodes USING vec0(embedding FLOAT[768])`); err != nil {
 		db.Close()
