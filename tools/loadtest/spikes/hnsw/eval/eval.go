@@ -112,10 +112,7 @@ func MeasureRecallAndLatency(idx VectorIndex, corpus [][]float32, holdOut [][]fl
 	}
 
 	sort.Float64s(latencies)
-	p95Idx := int(math.Ceil(float64(len(latencies))*0.95)) - 1
-	if p95Idx < 0 {
-		p95Idx = 0
-	}
+	p95Idx := max(int(math.Ceil(float64(len(latencies))*0.95))-1, 0)
 
 	return RecallResult{
 		Population: idx.Len(),
