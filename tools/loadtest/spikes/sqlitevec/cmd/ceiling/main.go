@@ -11,8 +11,10 @@ import (
 	"math/rand/v2"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	vec "github.com/asg017/sqlite-vec-go-bindings/cgo"
@@ -208,7 +210,7 @@ func loadVectors(dbPath string, n int, rng *rand.Rand) error {
 	}
 	defer l.Close()
 
-	vecs := gen.GenerateVectors(n, rng.Uint64())
+	vecs := generateParallel(n, rng.Uint64())
 	const batchSize = 10_000
 	for i := 0; i < len(vecs); i += batchSize {
 		end := min(i+batchSize, len(vecs))
@@ -217,6 +219,32 @@ func loadVectors(dbPath string, n int, rng *rand.Rand) error {
 		}
 	}
 	return nil
+}
+
+// generateParallel generates n vectors by splitting work across NumCPU goroutines.
+// Each goroutine gets a distinct seed derived from the base seed so results are
+// deterministic but independent.
+func generateParallel(n int, baseSeed uint64) [][]float32 {
+	workers := runtime.NumCPU()
+	vecs := make([][]float32, n)
+
+	chunkSize := (n + workers - 1) / workers
+	var wg sync.WaitGroup
+	for w := range workers {
+		start := w * chunkSize
+		end := min(start+chunkSize, n)
+		if start >= n {
+			break
+		}
+		wg.Add(1)
+		go func(start, end int, seed uint64) {
+			defer wg.Done()
+			chunk := gen.GenerateVectors(end-start, seed)
+			copy(vecs[start:end], chunk)
+		}(start, end, baseSeed^uint64(w)*0x9e3779b97f4a7c15)
+	}
+	wg.Wait()
+	return vecs
 }
 
 func versionsFromScratch(dir string) (vecVer, sqliteVer string, err error) {
