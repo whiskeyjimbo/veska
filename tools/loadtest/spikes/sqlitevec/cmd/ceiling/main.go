@@ -1,0 +1,246 @@
+// Command ceiling sweeps vec0 query latency across user-specified populations to find
+// the node count at which warm p95 first exceeds the SOLO-13 §3.1 budget (100ms).
+// Each population is loaded into a fresh temporary DB so measurements are independent.
+package main
+
+import (
+	"database/sql"
+	"encoding/json"
+	"flag"
+	"fmt"
+	"math/rand/v2"
+	"os"
+	"path/filepath"
+	"strconv"
+	"strings"
+	"time"
+
+	vec "github.com/asg017/sqlite-vec-go-bindings/cgo"
+	_ "github.com/mattn/go-sqlite3"
+
+	"github.com/whiskeyjimbo/engram/solov2/tools/loadtest/spikes/sqlitevec/bench"
+	"github.com/whiskeyjimbo/engram/solov2/tools/loadtest/spikes/sqlitevec/gen"
+	"github.com/whiskeyjimbo/engram/solov2/tools/loadtest/spikes/sqlitevec/loader"
+)
+
+func init() { vec.Auto() }
+
+type popResult struct {
+	Population int64            `json:"population"`
+	Warm       bench.LatencyStats `json:"warm"`
+	RSSBytes   int64            `json:"rss_bytes"`
+	PassLatency bool            `json:"pass_latency"`
+	PassRSS    bool            `json:"pass_rss"`
+}
+
+type ceilingReport struct {
+	Populations      []popResult `json:"populations"`
+	Vec0Ceiling      int64       `json:"vec0_ceiling"`
+	CeilingReason    string      `json:"ceiling_reason"`
+	SqliteVecVersion string      `json:"sqlite_vec_version"`
+	SqliteVersion    string      `json:"sqlite_version"`
+	Platform         string      `json:"platform"`
+}
+
+func main() {
+	popsFlag := flag.String("populations", "50000,100000,200000,400000,800000",
+		"comma-separated node counts to sweep")
+	queries := flag.Int("queries", 200, "warm queries per population")
+	outFlag := flag.String("out", "data/ceiling_metrics.json", "output JSON path")
+	tmpDir := flag.String("tmpdir", "", "directory for temp DBs (default: system temp)")
+	seed := flag.Uint64("seed", 42, "RNG seed")
+	flag.Parse()
+
+	pops, err := parsePops(*popsFlag)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "error: -populations: %v\n", err)
+		os.Exit(1)
+	}
+
+	rng := rand.New(rand.NewPCG(*seed, 0))
+
+	var results []popResult
+	var ceiling int64
+	var ceilingReason = "none"
+
+	// Versions from a scratch DB.
+	vecVer, sqliteVer, err := versionsFromScratch(*tmpDir)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "error: versions: %v\n", err)
+		os.Exit(1)
+	}
+
+	for _, pop := range pops {
+		fmt.Fprintf(os.Stderr, "→ population %d: loading vectors…\n", pop)
+
+		dbPath, cleanup, err := makeTempDB(*tmpDir)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "error: make temp db: %v\n", err)
+			os.Exit(1)
+		}
+
+		if err := loadVectors(dbPath, int(pop), rng); err != nil {
+			cleanup()
+			fmt.Fprintf(os.Stderr, "error: load vectors at %d: %v\n", pop, err)
+			os.Exit(1)
+		}
+
+		db, err := sql.Open("sqlite3", dbPath+"?_journal_mode=WAL")
+		if err != nil {
+			cleanup()
+			fmt.Fprintf(os.Stderr, "error: open bench db at %d: %v\n", pop, err)
+			os.Exit(1)
+		}
+		db.SetMaxOpenConns(1)
+
+		start := time.Now()
+		warm, err := bench.RunQueryBench(db, 10, *queries, rng)
+		db.Close()
+		cleanup()
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "error: bench at %d: %v\n", pop, err)
+			os.Exit(1)
+		}
+
+		rss := loader.ReadRSSBytes()
+		passLat := warm.P95Ms <= bench.BudgetLatencyMs
+		passRSS := rss <= bench.BudgetRSSBytes
+
+		fmt.Fprintf(os.Stderr, "  p95=%.2fms  rss=%.1fMiB  elapsed=%s  %s\n",
+			warm.P95Ms,
+			float64(rss)/float64(1<<20),
+			time.Since(start).Round(time.Millisecond),
+			verdict(passLat, passRSS),
+		)
+
+		results = append(results, popResult{
+			Population:  pop,
+			Warm:        warm,
+			RSSBytes:    rss,
+			PassLatency: passLat,
+			PassRSS:     passRSS,
+		})
+
+		if ceiling == 0 {
+			if !passLat {
+				ceiling = pop
+				ceilingReason = "latency"
+			} else if !passRSS {
+				ceiling = pop
+				ceilingReason = "rss"
+			}
+		}
+	}
+
+	report := ceilingReport{
+		Populations:      results,
+		Vec0Ceiling:      ceiling,
+		CeilingReason:    ceilingReason,
+		SqliteVecVersion: vecVer,
+		SqliteVersion:    sqliteVer,
+		Platform:         bench.PlatformString(),
+	}
+
+	data, err := json.MarshalIndent(report, "", "  ")
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "error: marshal: %v\n", err)
+		os.Exit(1)
+	}
+
+	outPath, _ := filepath.Abs(*outFlag)
+	if err := os.MkdirAll(filepath.Dir(outPath), 0o755); err != nil {
+		fmt.Fprintf(os.Stderr, "error: mkdir: %v\n", err)
+		os.Exit(1)
+	}
+	if err := os.WriteFile(outPath, data, 0o644); err != nil {
+		fmt.Fprintf(os.Stderr, "error: write output: %v\n", err)
+		os.Exit(1)
+	}
+
+	fmt.Fprintf(os.Stdout, "%s\n", data)
+
+	if ceiling > 0 {
+		fmt.Fprintf(os.Stderr, "\nvec0 ceiling: %d nodes (%s)\n", ceiling, ceilingReason)
+	} else {
+		fmt.Fprintf(os.Stderr, "\nvec0 ceiling: not reached across tested populations\n")
+	}
+	fmt.Fprintf(os.Stderr, "Written to %s\n", outPath)
+}
+
+func parsePops(s string) ([]int64, error) {
+	parts := strings.Split(s, ",")
+	out := make([]int64, 0, len(parts))
+	for _, p := range parts {
+		p = strings.TrimSpace(p)
+		if p == "" {
+			continue
+		}
+		n, err := strconv.ParseInt(p, 10, 64)
+		if err != nil || n <= 0 {
+			return nil, fmt.Errorf("invalid population %q", p)
+		}
+		out = append(out, n)
+	}
+	if len(out) == 0 {
+		return nil, fmt.Errorf("at least one population required")
+	}
+	return out, nil
+}
+
+func makeTempDB(dir string) (path string, cleanup func(), err error) {
+	f, err := os.CreateTemp(dir, "ceiling-*.db")
+	if err != nil {
+		return "", nil, err
+	}
+	f.Close()
+	path = f.Name()
+	return path, func() {
+		os.Remove(path)
+		os.Remove(path + "-wal")
+		os.Remove(path + "-shm")
+	}, nil
+}
+
+func loadVectors(dbPath string, n int, rng *rand.Rand) error {
+	l, err := loader.Open(dbPath)
+	if err != nil {
+		return err
+	}
+	defer l.Close()
+
+	vecs := gen.GenerateVectors(n, rng.Uint64())
+	const batchSize = 10_000
+	for i := 0; i < len(vecs); i += batchSize {
+		end := min(i+batchSize, len(vecs))
+		if err := l.InsertBatch(vecs[i:end]); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func versionsFromScratch(dir string) (vecVer, sqliteVer string, err error) {
+	f, err := os.CreateTemp(dir, "ver-*.db")
+	if err != nil {
+		return "", "", err
+	}
+	f.Close()
+	defer os.Remove(f.Name())
+
+	db, err := sql.Open("sqlite3", f.Name())
+	if err != nil {
+		return "", "", err
+	}
+	defer db.Close()
+	return bench.Versions(db)
+}
+
+func verdict(passLat, passRSS bool) string {
+	if passLat && passRSS {
+		return "PASS"
+	}
+	if !passLat {
+		return "FAIL (latency)"
+	}
+	return "FAIL (rss)"
+}
