@@ -41,6 +41,7 @@ type ceilingReport struct {
 	CeilingReason    string      `json:"ceiling_reason"`
 	MmapBytes        int64       `json:"mmap_bytes"`
 	CacheSizeKB      int64       `json:"cache_size_kb"`
+	PageSize         int64       `json:"page_size"`
 	SqliteVecVersion string      `json:"sqlite_vec_version"`
 	SqliteVersion    string      `json:"sqlite_version"`
 	Platform         string      `json:"platform"`
@@ -55,8 +56,9 @@ func main() {
 	seed     := flag.Uint64("seed", 42, "RNG seed")
 	// mmap maps the DB file into virtual memory — major speedup on M1/M2 unified memory.
 	// Default covers 2M vectors × 768 dims × 4 bytes ≈ 6 GiB with headroom.
-	mmapBytes   := flag.Int64("mmap", 4*1024*1024*1024, "mmap_size in bytes (0 to disable)")
-	cacheSizeKB := flag.Int64("cache", 524288, "cache_size in KiB (SQLite page cache)")
+	mmapBytes   := flag.Int64("mmap", 0, "mmap_size in bytes (0 to disable)")
+	cacheSizeKB := flag.Int64("cache", 0, "cache_size in KiB (0 = SQLite default)")
+	pageSize    := flag.Int("pagesize", 0, "page_size in bytes, power-of-two in [512,65536] (0 = SQLite default 4096)")
 	flag.Parse()
 
 	pops, err := parsePops(*popsFlag)
@@ -87,7 +89,7 @@ func main() {
 			os.Exit(1)
 		}
 
-		if err := loadVectors(dbPath, int(pop), rng); err != nil {
+		if err := loadVectors(dbPath, int(pop), *pageSize, rng); err != nil {
 			cleanup()
 			fmt.Fprintf(os.Stderr, "error: load vectors at %d: %v\n", pop, err)
 			os.Exit(1)
@@ -148,6 +150,7 @@ func main() {
 		SqliteVecVersion: vecVer,
 		SqliteVersion:    sqliteVer,
 		Platform:         bench.PlatformString(),
+		PageSize:         int64(*pageSize),
 	}
 
 	data, err := json.MarshalIndent(report, "", "  ")
@@ -230,8 +233,8 @@ func makeTempDB(dir string) (path string, cleanup func(), err error) {
 	}, nil
 }
 
-func loadVectors(dbPath string, n int, rng *rand.Rand) error {
-	l, err := loader.Open(dbPath)
+func loadVectors(dbPath string, n, pageSize int, rng *rand.Rand) error {
+	l, err := loader.OpenWithPageSize(dbPath, pageSize)
 	if err != nil {
 		return err
 	}
