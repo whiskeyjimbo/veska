@@ -16,8 +16,13 @@ ADR-S0001 adopted sqlite-vec (`vec0`) as the vector substrate with a staged-adop
 caveat: if the M0 spike found the vec0 ceiling below 250k embedded nodes, the HNSW
 pivot ADR (OQ-S003) would be promoted from M3 to M1 mandatory work.
 
-M0 measured the ceiling at **100k nodes** on the reference laptop
-(spike commit `4d63d34`). This is below the 250k minimum. The pivot is mandatory.
+M0 measured the ceiling at **100k nodes** on a Linux VM (spike commit `4d63d34`).
+The measurement was subsequently re-verified on the reference laptop (M2 MacBook Air)
+with the same result: p95 crosses 100ms between 100k and 150k nodes regardless of
+SQLite tuning (mmap, page cache, page size from 4KB to 64KB all tested — no meaningful
+difference). The bottleneck is arithmetic throughput on the brute-force L2 scan, not
+I/O. The ceiling is confirmed at ~100k–125k on reference hardware, well below the
+250k minimum. The pivot is mandatory.
 
 ## Decision
 
