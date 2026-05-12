@@ -31,6 +31,12 @@ func TestEmbeddingRowFields(t *testing.T) {
 	if r2.NodeID != "node-1" {
 		t.Errorf("NodeID: want node-1, got %q", r2.NodeID)
 	}
+	if r2.ContentHash != "abc123" {
+		t.Errorf("ContentHash: want abc123, got %q", r2.ContentHash)
+	}
+	if r2.ModelID != "nomic-embed-text" {
+		t.Errorf("ModelID: want nomic-embed-text, got %q", r2.ModelID)
+	}
 	if len(r2.Vector) != 3 {
 		t.Errorf("Vector len: want 3, got %d", len(r2.Vector))
 	}
@@ -71,5 +77,11 @@ func TestFilterFields(t *testing.T) {
 	f2 := domain.Filter{RepoID: "repo-1", Branch: "main", ModelID: "nomic-embed-text"}
 	if f2.RepoID != "repo-1" {
 		t.Errorf("RepoID: want repo-1, got %q", f2.RepoID)
+	}
+	if f2.Branch != "main" {
+		t.Errorf("Branch: want main, got %q", f2.Branch)
+	}
+	if f2.ModelID != "nomic-embed-text" {
+		t.Errorf("ModelID: want nomic-embed-text, got %q", f2.ModelID)
 	}
 }
