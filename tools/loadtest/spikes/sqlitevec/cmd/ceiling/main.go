@@ -39,6 +39,8 @@ type ceilingReport struct {
 	Populations      []popResult `json:"populations"`
 	Vec0Ceiling      int64       `json:"vec0_ceiling"`
 	CeilingReason    string      `json:"ceiling_reason"`
+	MmapBytes        int64       `json:"mmap_bytes"`
+	CacheSizeKB      int64       `json:"cache_size_kb"`
 	SqliteVecVersion string      `json:"sqlite_vec_version"`
 	SqliteVersion    string      `json:"sqlite_version"`
 	Platform         string      `json:"platform"`
@@ -47,10 +49,14 @@ type ceilingReport struct {
 func main() {
 	popsFlag := flag.String("populations", "50000,100000,200000,400000,800000",
 		"comma-separated node counts to sweep")
-	queries := flag.Int("queries", 200, "warm queries per population")
-	outFlag := flag.String("out", "data/ceiling_metrics.json", "output JSON path")
-	tmpDir := flag.String("tmpdir", "", "directory for temp DBs (default: system temp)")
-	seed := flag.Uint64("seed", 42, "RNG seed")
+	queries  := flag.Int("queries", 200, "warm queries per population")
+	outFlag  := flag.String("out", "data/ceiling_metrics.json", "output JSON path")
+	tmpDir   := flag.String("tmpdir", "", "directory for temp DBs (default: system temp)")
+	seed     := flag.Uint64("seed", 42, "RNG seed")
+	// mmap maps the DB file into virtual memory — major speedup on M1/M2 unified memory.
+	// Default covers 2M vectors × 768 dims × 4 bytes ≈ 6 GiB with headroom.
+	mmapBytes   := flag.Int64("mmap", 4*1024*1024*1024, "mmap_size in bytes (0 to disable)")
+	cacheSizeKB := flag.Int64("cache", 524288, "cache_size in KiB (SQLite page cache)")
 	flag.Parse()
 
 	pops, err := parsePops(*popsFlag)
@@ -87,13 +93,12 @@ func main() {
 			os.Exit(1)
 		}
 
-		db, err := sql.Open("sqlite3", dbPath+"?_journal_mode=WAL")
+		db, err := openBenchDB(dbPath, *mmapBytes, *cacheSizeKB)
 		if err != nil {
 			cleanup()
 			fmt.Fprintf(os.Stderr, "error: open bench db at %d: %v\n", pop, err)
 			os.Exit(1)
 		}
-		db.SetMaxOpenConns(1)
 
 		start := time.Now()
 		warm, err := bench.RunQueryBench(db, 10, *queries, rng)
@@ -138,6 +143,8 @@ func main() {
 		Populations:      results,
 		Vec0Ceiling:      ceiling,
 		CeilingReason:    ceilingReason,
+		MmapBytes:        *mmapBytes,
+		CacheSizeKB:      *cacheSizeKB,
 		SqliteVecVersion: vecVer,
 		SqliteVersion:    sqliteVer,
 		Platform:         bench.PlatformString(),
@@ -167,6 +174,26 @@ func main() {
 		fmt.Fprintf(os.Stderr, "\nvec0 ceiling: not reached across tested populations\n")
 	}
 	fmt.Fprintf(os.Stderr, "Written to %s\n", outPath)
+}
+
+func openBenchDB(path string, mmapBytes, cacheSizeKB int64) (*sql.DB, error) {
+	db, err := sql.Open("sqlite3", path+"?_journal_mode=WAL")
+	if err != nil {
+		return nil, err
+	}
+	db.SetMaxOpenConns(1)
+	pragmas := []string{
+		fmt.Sprintf(`PRAGMA mmap_size = %d`, mmapBytes),
+		fmt.Sprintf(`PRAGMA cache_size = -%d`, cacheSizeKB), // negative = KiB units
+		`PRAGMA temp_store = MEMORY`,
+	}
+	for _, p := range pragmas {
+		if _, err := db.Exec(p); err != nil {
+			db.Close()
+			return nil, fmt.Errorf("pragma %q: %w", p, err)
+		}
+	}
+	return db, nil
 }
 
 func parsePops(s string) ([]int64, error) {
