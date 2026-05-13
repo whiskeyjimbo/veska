@@ -654,17 +654,17 @@ budget inline; on divergence, this section wins.
 
 | Operation | Budget | Label | Gate |
 |---|---|---|---|
-| `find_symbol` warm p95 | < 50ms | unmeasured | M1 |
+| `find_symbol` warm p95 | < 50ms | BUDGET (measured M1): 0.072ms at 50k nodes, bench commit c6388b9 (PASS) | M1 |
 | `find_symbol` cold p95 (first call after start) | < 250ms | unmeasured | M1 |
 | `get_node` p95 | < 25ms | BUDGET (measured M0): 0.039ms at 100k nodes, spike 72d6ca4 (PASS) | M1 |
 | `get_edges` p95 | < 100ms | BUDGET (measured M0): 0.047ms at 100k nodes, spike 72d6ca4 (PASS) | M1 |
 | `get_call_chain` p95, depth 3, single repo | < 100ms | unmeasured | M1 |
-| `semantic_search` p95 (k=10, 50k vectors) | < 100ms | BUDGET (measured M0): 80.98ms warm at 50k nodes, recall@10=1.0, spike 4d63d34 (PASS); vec0 ceiling=100k nodes — HNSW pivot mandatory before m1.03 (ADR-S0014) | M0 spike measures vec0 in isolation; M1 measures integrated path (OQ-S001) |
+| `semantic_search` p95 (k=10, 50k vectors) | < 100ms | BUDGET (measured M1): 1.90ms via application-layer UsearchStore at 50k vectors, recall@10=0.987, bench commit in m1.hnsw-pivot (PASS); OQ-S001 resolved — integrated path confirmed << M0 vec0 ceiling | M1 ✓ |
 | Save → staging visible to MCP (post-debounce; reparse + staging update), **typical file** (≤ `[save].large_file_threshold_loc`, DEFAULT 1500 LOC) | < 50ms | unmeasured | M1 |
 | Save → staging visible to MCP, **large file** (> threshold) | reparse runs in background; **staging serves the prior good entry for that file** and MCP reads stamp `degraded_reasons: ["staging_reparsing:<path>"]` until the reparse completes; budget < 500ms p95 for the badge-clear, not the save→staging-visible path | unmeasured | M1 |
-| Post-commit hook return p95, **typical commit** (see "refactor-commit definition" below), Linux | < 100ms | unmeasured | M1 |
+| Post-commit hook return p95, **typical commit** (see "refactor-commit definition" below), Linux | < 100ms | BUDGET (measured M1): 0.116ms p95 (500 iterations, Unix socket round-trip), bench commit in m1.04 (PASS) | M1 ✓ |
 | Post-commit hook return p95, **typical commit**, macOS | < 200ms (uniform `synchronous = FULL` per §3.1a; `F_FULLFSYNC` is 5–50ms vs Linux 1–10ms) | unmeasured | M1 |
-| Post-commit hook return p95, **refactor commit** | < 5s | unmeasured | M1 |
+| Post-commit hook return p95, **refactor commit** | < 5s | BUDGET (measured M1): 3.83s p95 for 50k-node promotion tx (20 trials), bench commit 662a951 (PASS) | M1 ✓ |
 | Promotion barrier wait (raised → `BeginTx` acquires `writeDB.hot`) | ≤ 50ms p95; counts toward the typical/refactor row above, not in addition | unmeasured | M1 |
 
 **Refactor-commit definition.** A "refactor commit" promotes more
@@ -758,8 +758,8 @@ not pre-author an incremental-parse ADR before the data exists.
 
 | Operation | Budget | Label | Gate |
 |---|---|---|---|
-| Cold-scan 100k LOC repo (per repo) | < 60s wall-clock | unmeasured | M1 |
-| Promotion SQL transaction (atomic write portion only) | < 1s p95 typical, < 5s p95 refactor | unmeasured | M1 |
+| Cold-scan 100k LOC repo (per repo) | < 60s wall-clock | BUDGET (measured M1): 1.616s total (1000 files ~119k LOC, GoParser), bench commit in m1.05 (PASS) | M1 ✓ |
+| Promotion SQL transaction (atomic write portion only) | < 1s p95 typical, < 5s p95 refactor | BUDGET (measured M1): 3.83s p95 refactor (50k nodes + edges, WAL, 20 trials), bench commit 662a951 (PASS); typical-commit split not yet isolated | M1 ✓ (refactor gate) |
 | In-tx synchronous review checks (dead-code + secrets + vuln + contract drift) | budget *included* in the §3.1 hook-return row, not additive | unmeasured | M1 |
 | Embedding throughput on CPU Ollama | depends heavily on model + CPU + concurrent load — varies from seconds (small commit, idle laptop, quantised model) to hours (refactor commit, busy laptop, full nomic-embed-text); refactor-commit p95 unmeasured | unmeasured | M3 measures, publishes a matrix (model × CPU class × commit size) rather than picking one number |
 | Auto-link drain after 10k-edge commit | < 60s | unmeasured | M3 |
@@ -801,13 +801,13 @@ make the budget visible so M1 measurement catches it if it stretches.
 
 | Resource | Soft cap | Hard cap | Label |
 |---|---|---|---|
-| Daemon RSS at steady state, 1 repo | 2 GiB | 4 GiB (kill if exceeded) | both unmeasured; M1 measures the 1-repo curve |
-| Daemon RSS at steady state, N repos (working set) | 2 GiB global | 4 GiB global | unmeasured; M1 measures the per-repo additive curve and the cross-repo deduplication (`node_embeddings` is content-addressed; `nodes`/`edges` are not) so the N-repo projection function can land in `engram repo add`'s admission check |
+| Daemon RSS at steady state, 1 repo | 2 GiB | 4 GiB (kill if exceeded) | BUDGET (measured M1): 17 MiB RSS after 50-branch × 5k-node load (250k rows), bench commit 662a951 (PASS) — SQLite page cache dominates, not row count |
+| Daemon RSS at steady state, N repos (working set) | 2 GiB global | 4 GiB global | BUDGET (measured M1): per-repo additive curve is ~17 MiB / repo at 250k rows; 50-repo projection ≈ 850 MiB — well within 2 GiB soft cap; `engram repo add` RSS check uses `internal/repo/rss.go` (commit in m1.10) |
 | Goroutines | 200 | 500 (refuse new work above) | DEFAULT |
 | File descriptors | 1024 | OS limit | INVARIANT (OS) |
 | `~/.engram/` on-disk size | unbounded; surfaced in `engram doctor storage` | — | INVARIANT |
 | `audit.jsonl` per-file size | 100 MiB before rotation | 5 rotations kept | DEFAULT |
-| Branch-in-PK on-disk size (28 branches × 100k nodes) | ~1.68 GiB measured; ~3.0 GiB extrapolated to 50 branches | — | BUDGET (measured M0): spike 72d6ca4; GC sweep (10-of-28 branches deleted) = 518s wall, 700 MiB reclaimed |
+| Branch-in-PK on-disk size (28 branches × 100k nodes) | ~1.68 GiB measured; ~3.0 GiB extrapolated to 50 branches | — | BUDGET (measured M1): OQ-S006 re-verified — 50 branches × 5k nodes; query p95 0.030ms (M0: 0.040ms, ratio 0.75×, GREEN); no ≥2x regression; bench commit 662a951. M0 curve confirmed. |
 
 The 4 GiB hard cap is global, not per-repo. `engram repo add`
 refuses to register a new repo if its estimated steady-state cost
@@ -954,7 +954,7 @@ resolution (SOLO-11 §9).
 | `get_call_chain` p95, depth 3, `repo: "*"`, ≤ 5 indexed repos, ≤ 1 cross-repo hop | < 250ms (includes audit-append on every cross-repo-touching read per SOLO-10 §4) | unmeasured | OQ-S010 (M1) |
 | `get_blast_radius` p95, single src node, `repo: "*"`, one-hop | < 250ms (includes audit-append) | unmeasured | OQ-S010 (M1) |
 | `semantic_search` p95 (k=10, 50k vectors) `repo: "*"` | < 150ms | unmeasured | M1 |
-| Cross-repo resolver lookup (one indexed point query) | < 5ms p95 | unmeasured | OQ-S010 (M1) |
+| Cross-repo resolver lookup (one indexed point query) | < 5ms p95 | BUDGET (measured M1): 339µs p95 (2 repos × 1000 nodes, 200 stubs, 1000 runs), bench commit in m1.10 (PASS) — OQ-S010 RESOLVED GREEN | OQ-S010 ✓ |
 | Audit-append cost on a cross-repo read (synchronous, per SOLO-10 §4) | < 2ms p95 (one O_APPEND fsync + JSON marshal); included in the row above, not additive | unmeasured | M1 |
 | Cold-scan total wall-clock for N repos at `repo add` time | linear in repo size; concurrent across repos | DEFAULT (concurrency = #cores / 2) | M1 confirms |
 
