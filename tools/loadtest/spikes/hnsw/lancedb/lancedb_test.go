@@ -1,3 +1,5 @@
+//go:build hnsw_native
+
 package lancedb_test
 
 import (

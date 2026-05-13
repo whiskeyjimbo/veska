@@ -1,8 +1,11 @@
+//go:build hnsw_native
+
 // Package usearch implements the eval.VectorIndex interface using
 // github.com/unum-cloud/usearch/golang (CGo, C++17, float32/float16/int8 quantization).
 //
 // CGo requirement: yes — requires libusearch_c.so and usearch.h at build time.
 // Quantization: float32, float16, int8 (recorded in eval run).
+// Build with: go build/test -tags hnsw_native
 package usearch
 
 import (
