@@ -79,8 +79,7 @@ func doctorCmd() *cobra.Command {
 		doctorServiceCmd(),
 		doctorSubCmd("pipelines", "Check ingestion pipeline health",
 			func(jsonOut bool, w io.Writer) error { return stubOK("pipelines", jsonOut, w) }),
-		doctorSubCmd("bundle", "Verify MCP context-pack bundle integrity",
-			func(jsonOut bool, w io.Writer) error { return stubOK("bundle", jsonOut, w) }),
+		doctorBundleCmd(),
 		doctorBackupCmd(),
 		doctorResetCrashLoopCmd(),
 	)
@@ -480,6 +479,43 @@ func doctorStorageCmd() *cobra.Command {
 			return nil
 		},
 	}
+	cmd.Flags().BoolVar(&jsonOut, "json", false, "output results as JSON")
+	return cmd
+}
+
+// doctorBundleCmd returns the "doctor bundle" subcommand that writes a diagnostic
+// tarball (manifest, all probe outputs, redacted audit tail) to a temp directory
+// and prints the resulting path.
+func doctorBundleCmd() *cobra.Command {
+	var outputDir string
+	var jsonOut bool
+	cmd := &cobra.Command{
+		Use:          "bundle",
+		Short:        "Write a diagnostic tarball with all probe outputs and audit tail",
+		SilenceUsage: true,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			w := cmd.OutOrStdout()
+			result, err := doctor.CreateBundle(doctor.BundleOptions{
+				EngramHome: config.DefaultVectorDir(),
+				OutputDir:  outputDir,
+				OllamaURL:  defaultOllamaURL,
+				ModelName:  defaultModelName,
+			})
+			if err != nil {
+				return err
+			}
+			if jsonOut {
+				enc := json.NewEncoder(w)
+				return enc.Encode(doctor.NewEnvelope("bundle", "healthy", map[string]any{
+					"path":       result.Path,
+					"file_count": result.FileCount,
+				}))
+			}
+			fmt.Fprintln(w, result.Path)
+			return nil
+		},
+	}
+	cmd.Flags().StringVar(&outputDir, "output-dir", "", "directory to write the tarball (default: system temp dir)")
 	cmd.Flags().BoolVar(&jsonOut, "json", false, "output results as JSON")
 	return cmd
 }
