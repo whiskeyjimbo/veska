@@ -11,19 +11,18 @@ import (
 	"strings"
 
 	usearchlib "github.com/unum-cloud/usearch/golang"
-
-	"github.com/whiskeyjimbo/engram/solov2/internal/core/domain"
 )
 
 // sidecar is the JSON companion to each .hnsw file.
 // It holds the Go-side metadata that usearch itself does not persist.
+// Vectors are intentionally excluded — usearch holds the float16 copy.
 type sidecar struct {
-	RepoID   string                         `json:"repoID"`
-	Branch   string                         `json:"branch"`
-	ModelID  string                         `json:"modelID"`
-	Rows     map[uint64]domain.EmbeddingRow `json:"rows"`
-	NodeToID map[string]uint64              `json:"nodeToID"`
-	NextID   uint64                         `json:"nextID"`
+	RepoID   string             `json:"repoID"`
+	Branch   string             `json:"branch"`
+	ModelID  string             `json:"modelID"`
+	Rows     map[uint64]rowMeta `json:"rows"`
+	NodeToID map[string]uint64  `json:"nodeToID"`
+	NextID   uint64             `json:"nextID"`
 }
 
 // sep is the field separator used in index filenames.
