@@ -1,30 +1,22 @@
 package main
 
 import (
-	"context"
 	"errors"
 	"fmt"
 
 	"github.com/spf13/cobra"
+	"github.com/whiskeyjimbo/engram/solov2/internal/service"
 )
-
-// ServiceStatus describes the current state of the engram daemon service.
-type ServiceStatus struct {
-	Running bool
-	PID     int
-	Message string
-}
 
 // ServiceManager is the port through which the service subcommands drive the
 // platform-specific supervisor (systemd --user on Linux, launchd on macOS).
-type ServiceManager interface {
-	Install(ctx context.Context) error
-	Uninstall(ctx context.Context) error
-	Start(ctx context.Context) error
-	Stop(ctx context.Context) error
-	Restart(ctx context.Context) error
-	Status(ctx context.Context) (ServiceStatus, error)
-}
+// It is an alias for service.Manager so callers in this package need not import
+// the service package directly.
+type ServiceManager = service.Manager
+
+// ServiceStatus describes the current state of the engram daemon service.
+// It is an alias for service.ServiceStatus.
+type ServiceStatus = service.ServiceStatus
 
 // errNoManager is returned when a service subcommand is invoked but no real
 // ServiceManager implementation has been wired in (e.g. during early bootstrap).
