@@ -380,3 +380,217 @@ func TestMigrationSHA_NormalisesLineEndings(t *testing.T) {
 		t.Error("line-ending normalisation failed: SHA differs for CRLF vs LF input")
 	}
 }
+
+// ---------------------------------------------------------------------------
+// Migration 0003: tasks, findings, suppressions
+// ---------------------------------------------------------------------------
+
+// TestMigration0003_TablesAndIndexesExist verifies all three tables and their
+// indexes are created by migration 0003.
+func TestMigration0003_TablesAndIndexesExist(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	dbPath := filepath.Join(dir, "engram.db")
+
+	_ = openTest(t, dbPath)
+
+	raw := openRawDB(t, dbPath)
+
+	expectedTables := []string{"tasks", "findings", "suppressions"}
+	for _, tbl := range expectedTables {
+		if !tableExists(t, raw, tbl) {
+			t.Errorf("table %q not found after migration 0003", tbl)
+		}
+	}
+
+	expectedIndexes := []string{
+		"idx_tasks_active_one_per_repo",
+		"idx_findings_state",
+		"idx_findings_anchor",
+		"idx_findings_repo_branch",
+		"idx_suppressions_target",
+	}
+	for _, idx := range expectedIndexes {
+		if !indexExists(t, raw, idx) {
+			t.Errorf("index %q not found after migration 0003", idx)
+		}
+	}
+}
+
+// TestMigration0003_TasksActivePartialIndex verifies the partial unique index
+// idx_tasks_active_one_per_repo: only one active task per repo is allowed.
+func TestMigration0003_TasksActivePartialIndex(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	dbPath := filepath.Join(dir, "engram.db")
+	backupDir := filepath.Join(t.TempDir(), "backups")
+
+	db, err := sqlite.OpenWithOptions(dbPath, sqlite.Options{BackupDir: backupDir})
+	if err != nil {
+		t.Fatalf("OpenWithOptions: %v", err)
+	}
+	defer db.Close()
+
+	now := time.Now().Unix()
+
+	// Insert a repo first (tasks has FK to repos).
+	if _, err := db.Exec(`INSERT INTO repos (repo_id, root_path, added_at) VALUES (?, ?, ?)`,
+		"repo-1", "/tmp/repo1", now); err != nil {
+		t.Fatalf("insert repo: %v", err)
+	}
+
+	// Insert first active task — must succeed.
+	if _, err := db.Exec(`INSERT INTO tasks (task_id, repo_id, title, active, created_at) VALUES (?, ?, ?, ?, ?)`,
+		"task-1", "repo-1", "First Task", 1, now); err != nil {
+		t.Fatalf("insert first active task: %v", err)
+	}
+
+	// Insert second active task for same repo — must fail (partial unique index).
+	_, err = db.Exec(`INSERT INTO tasks (task_id, repo_id, title, active, created_at) VALUES (?, ?, ?, ?, ?)`,
+		"task-2", "repo-1", "Second Task", 1, now)
+	if err == nil {
+		t.Fatal("expected unique constraint violation for second active task on same repo, got nil")
+	}
+
+	// Insert inactive task for same repo — must succeed.
+	if _, err := db.Exec(`INSERT INTO tasks (task_id, repo_id, title, active, created_at) VALUES (?, ?, ?, ?, ?)`,
+		"task-3", "repo-1", "Inactive Task", 0, now); err != nil {
+		t.Fatalf("insert inactive task should succeed: %v", err)
+	}
+}
+
+// TestMigration0003_FindingsBranchPK verifies that the same finding_id can
+// coexist on two different branches (open on A, closed on B).
+func TestMigration0003_FindingsBranchPK(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	dbPath := filepath.Join(dir, "engram.db")
+	backupDir := filepath.Join(t.TempDir(), "backups")
+
+	db, err := sqlite.OpenWithOptions(dbPath, sqlite.Options{BackupDir: backupDir})
+	if err != nil {
+		t.Fatalf("OpenWithOptions: %v", err)
+	}
+	defer db.Close()
+
+	now := time.Now().Unix()
+
+	// Insert a repo for FK.
+	if _, err := db.Exec(`INSERT INTO repos (repo_id, root_path, added_at) VALUES (?, ?, ?)`,
+		"repo-2", "/tmp/repo2", now); err != nil {
+		t.Fatalf("insert repo: %v", err)
+	}
+
+	const findingID = "finding-abc"
+
+	// Same finding_id open on branch A.
+	if _, err := db.Exec(`INSERT INTO findings
+		(finding_id, branch, repo_id, severity, source_layer, rule, message, state, created_at, actor_id, actor_kind)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		findingID, "branch-a", "repo-2", "warn", "linter", "rule-x", "msg", "open", now, "agent-1", "agent"); err != nil {
+		t.Fatalf("insert finding on branch-a: %v", err)
+	}
+
+	// Same finding_id closed on branch B — must succeed (different PK).
+	if _, err := db.Exec(`INSERT INTO findings
+		(finding_id, branch, repo_id, severity, source_layer, rule, message, state, created_at, actor_id, actor_kind)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		findingID, "branch-b", "repo-2", "warn", "linter", "rule-x", "msg", "closed", now, "agent-1", "agent"); err != nil {
+		t.Fatalf("insert same finding_id on branch-b should succeed: %v", err)
+	}
+
+	// Duplicate (finding_id, branch) must fail.
+	_, err = db.Exec(`INSERT INTO findings
+		(finding_id, branch, repo_id, severity, source_layer, rule, message, state, created_at, actor_id, actor_kind)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		findingID, "branch-a", "repo-2", "warn", "linter", "rule-x", "dup", "open", now, "agent-1", "agent")
+	if err == nil {
+		t.Fatal("expected PK violation for duplicate (finding_id, branch), got nil")
+	}
+
+	// Verify both rows exist with their respective states.
+	var stateA, stateB string
+	if err := db.QueryRow(`SELECT state FROM findings WHERE finding_id=? AND branch=?`, findingID, "branch-a").Scan(&stateA); err != nil {
+		t.Fatalf("query branch-a finding: %v", err)
+	}
+	if err := db.QueryRow(`SELECT state FROM findings WHERE finding_id=? AND branch=?`, findingID, "branch-b").Scan(&stateB); err != nil {
+		t.Fatalf("query branch-b finding: %v", err)
+	}
+	if stateA != "open" {
+		t.Errorf("branch-a finding state: want open, got %s", stateA)
+	}
+	if stateB != "closed" {
+		t.Errorf("branch-b finding state: want closed, got %s", stateB)
+	}
+}
+
+// TestMigration0003_SuppressionsAgnosticVsSpecific verifies branch-agnostic
+// (branch IS NULL) and branch-specific suppressions can coexist.
+func TestMigration0003_SuppressionsAgnosticVsSpecific(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	dbPath := filepath.Join(dir, "engram.db")
+	backupDir := filepath.Join(t.TempDir(), "backups")
+
+	db, err := sqlite.OpenWithOptions(dbPath, sqlite.Options{BackupDir: backupDir})
+	if err != nil {
+		t.Fatalf("OpenWithOptions: %v", err)
+	}
+	defer db.Close()
+
+	now := time.Now().Unix()
+
+	// Branch-agnostic suppression (branch IS NULL).
+	if _, err := db.Exec(`INSERT INTO suppressions
+		(suppression_id, scope, target, branch, rule, reason, created_at, actor_id, actor_kind)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		"sup-1", "rule", "rule-x", nil, "rule-x", "known false positive", now, "agent-1", "agent"); err != nil {
+		t.Fatalf("insert branch-agnostic suppression: %v", err)
+	}
+
+	// Branch-specific suppression (branch = 'feat/x').
+	if _, err := db.Exec(`INSERT INTO suppressions
+		(suppression_id, scope, target, branch, rule, reason, created_at, actor_id, actor_kind)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		"sup-2", "rule", "rule-x", "feat/x", "rule-x", "branch-specific override", now, "agent-1", "agent"); err != nil {
+		t.Fatalf("insert branch-specific suppression: %v", err)
+	}
+
+	// Verify branch-agnostic row has NULL branch.
+	var branchVal sql.NullString
+	if err := db.QueryRow(`SELECT branch FROM suppressions WHERE suppression_id=?`, "sup-1").Scan(&branchVal); err != nil {
+		t.Fatalf("query sup-1: %v", err)
+	}
+	if branchVal.Valid {
+		t.Errorf("sup-1 branch should be NULL, got %q", branchVal.String)
+	}
+
+	// Verify branch-specific row has correct branch.
+	if err := db.QueryRow(`SELECT branch FROM suppressions WHERE suppression_id=?`, "sup-2").Scan(&branchVal); err != nil {
+		t.Fatalf("query sup-2: %v", err)
+	}
+	if !branchVal.Valid || branchVal.String != "feat/x" {
+		t.Errorf("sup-2 branch: want feat/x, got %v", branchVal)
+	}
+
+	// Count suppressions matching target regardless of branch (agnostic lookup).
+	var cnt int
+	if err := db.QueryRow(`SELECT COUNT(*) FROM suppressions WHERE target=?`, "rule-x").Scan(&cnt); err != nil {
+		t.Fatalf("count suppressions: %v", err)
+	}
+	if cnt != 2 {
+		t.Errorf("expected 2 suppressions for target rule-x, got %d", cnt)
+	}
+
+	// Count branch-specific suppressions for feat/x only.
+	if err := db.QueryRow(`SELECT COUNT(*) FROM suppressions WHERE target=? AND branch=?`, "rule-x", "feat/x").Scan(&cnt); err != nil {
+		t.Fatalf("count branch-specific suppressions: %v", err)
+	}
+	if cnt != 1 {
+		t.Errorf("expected 1 branch-specific suppression for feat/x, got %d", cnt)
+	}
+}
