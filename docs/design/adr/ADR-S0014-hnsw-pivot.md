@@ -120,6 +120,38 @@ Hold-out: 100 queries seed=999. 200-query pre-warm before measurement.
 Numbers are within a few ms of the raw spike results (float16: 1.8ms @50k, 4.1ms @250k),
 confirming that the `VectorStorage` adapter overhead is negligible. All DoD floors pass.
 
+### RSS and Scale Sweep
+
+Measured 2026-05-13 via `tools/loadtest/spikes/hnsw/cmd/rss-sweep/` (build tag
+`hnsw_native`, commit `174ed9e`). Each population is a fresh `UsearchStore`; corpus
+vectors are released and `debug.FreeOSMemory()` called before measuring RSS, giving
+production-realistic steady-state numbers. 200 warm hold-out queries at k=10.
+Hardware: Linux amd64, 8 GiB RAM, 2 vCPUs.
+
+| Population | Build Time | RSS (production) | Warm P95 | Representative workload |
+|-----------|-----------|-----------------|---------|------------------------|
+| 50k | 110s | 103 MiB | 1.43ms | 3–10 services |
+| 250k | 873s | 504 MiB | 3.57ms | 15–50 services |
+| 500k | 2123s (35m) | 1015 MiB | 15.55ms | 50–100 services |
+| 1M | ~5000s (83m, projected) | ~2 GiB (projected) | ~50–100ms (projected) | 100–200 services |
+
+RSS scales linearly at ~2 MiB per 1k vectors (768-dim float16 + HNSW graph at
+connectivity=16). The p95 jump from 250k (3.57ms) to 500k (15.55ms) reflects the
+index exceeding L3 cache, causing cache-miss-heavy random access patterns in HNSW
+traversal.
+
+### Scale Ceiling and Migration Path
+
+| Scale | Recommendation |
+|-------|---------------|
+| < 500k nodes | usearch/float16 in-process — no external dependency, ≤ 1 GiB RSS |
+| 500k – 1M nodes | Works but p95 degrades; only justified for very large multi-repo workspaces |
+| > 1M nodes | **Migrate to an external vector store** (Qdrant is already supported in the v1 adapter; see `solov2-zq3` dual-backend feature) |
+
+The original 1.5 GiB RSS budget at 1M is not achievable: 768-dim float16 vectors alone
+consume ~1.5 GiB at 1M, leaving no headroom for the HNSW graph or Go runtime. Revised
+budget: **≤ 1 GiB at 500k** (confirmed), **≤ 2.5 GiB at 1M** (projected).
+
 ## Consequences
 
 - M1's m1.03 may not begin until the implementation choice is ratified.
