@@ -213,8 +213,10 @@ func TestOpen_Idempotent(t *testing.T) {
 	if err := raw.QueryRow(`SELECT COUNT(*) FROM schema_migrations`).Scan(&cnt); err != nil {
 		t.Fatalf("count schema_migrations: %v", err)
 	}
-	if cnt != 1 {
-		t.Errorf("expected exactly 1 migration row, got %d", cnt)
+	// Count should equal the number of migrations in the registry — each applied exactly once.
+	wantMigrations := sqlite.MigrationCount()
+	if cnt != wantMigrations {
+		t.Errorf("expected exactly %d migration row(s), got %d", wantMigrations, cnt)
 	}
 }
 
