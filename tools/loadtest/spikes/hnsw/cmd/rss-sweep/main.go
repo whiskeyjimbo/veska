@@ -33,6 +33,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"runtime/debug"
 	"sort"
 	"strconv"
 	"strings"
@@ -142,6 +143,11 @@ func runSweep(pop int) (sweepResult, error) {
 		}
 	}
 	buildTimeSec := time.Since(buildStart).Seconds()
+
+	// Release corpus before measuring RSS so we get production-realistic numbers.
+	// In production the caller never holds onto the corpus after indexing.
+	corpus = nil
+	debug.FreeOSMemory()
 
 	// RSS after loading, before queries.
 	rssLoad := readRSSMiB()
