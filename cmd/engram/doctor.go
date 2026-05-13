@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -10,6 +11,7 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/whiskeyjimbo/engram/solov2/internal/config"
 	"github.com/whiskeyjimbo/engram/solov2/internal/doctor"
+	"github.com/whiskeyjimbo/engram/solov2/internal/embedderprobe"
 )
 
 const (
@@ -150,7 +152,7 @@ func doctorSubCmd(use, short string, run func(bool, io.Writer) error) *cobra.Com
 	return cmd
 }
 
-// doctorEmbedderCmd returns the "doctor embedder" subcommand backed by internal/doctor.CheckEmbedder.
+// doctorEmbedderCmd returns the "doctor embedder" subcommand backed by embedderprobe.Probe.
 func doctorEmbedderCmd() *cobra.Command {
 	var jsonOut bool
 	cmd := &cobra.Command{
@@ -159,18 +161,22 @@ func doctorEmbedderCmd() *cobra.Command {
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			w := cmd.OutOrStdout()
-			report, err := doctor.CheckEmbedder(defaultOllamaURL, defaultModelName)
+			result, err := embedderprobe.Probe(context.Background(), defaultOllamaURL, defaultModelName)
 			if err != nil {
 				return err
 			}
 			if jsonOut {
 				enc := json.NewEncoder(w)
-				return enc.Encode(doctor.NewEnvelope("embedder", report.Status, report))
+				return enc.Encode(doctor.NewEnvelope("embedder", result.Status, result))
 			}
-			fmt.Fprintf(w, "embedder: %s (url=%s, model=%s)\n",
-				report.Status, report.OllamaURL, report.ModelName)
-			if report.Status != "healthy" {
-				return ProbeStatusError{Subsystem: "embedder", Status: report.Status}
+			fmt.Fprintf(w, "embedder: %s (url=%s, model=%s, reachable=%v, model_present=%v, embed_ok=%v)\n",
+				result.Status, defaultOllamaURL, defaultModelName,
+				result.Reachable, result.ModelPresent, result.EmbedOK)
+			if result.InstallHint != "" && result.Status != "healthy" {
+				fmt.Fprintf(w, "  hint: %s\n", result.InstallHint)
+			}
+			if result.Status != "healthy" {
+				return ProbeStatusError{Subsystem: "embedder", Status: result.Status}
 			}
 			return nil
 		},
@@ -269,7 +275,7 @@ func doctorStatusCmd() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			home := config.DefaultVectorDir()
 
-			embedderReport, _ := doctor.CheckEmbedder(defaultOllamaURL, defaultModelName)
+			embedderResult, _ := embedderprobe.Probe(context.Background(), defaultOllamaURL, defaultModelName)
 			egressReport, _ := doctor.CheckEgress([]string{
 				config.DaemonSockPath(),
 				config.MCPSockPath(),
@@ -296,7 +302,7 @@ func doctorStatusCmd() *cobra.Command {
 			_ = storageReport
 
 			// Roll up: broken if any broken; degraded if any degraded.
-			statuses := []string{embedderReport.Status, egressStatus, configStatus}
+			statuses := []string{embedderResult.Status, egressStatus, configStatus}
 			rollup := "healthy"
 			for _, s := range statuses {
 				switch s {
@@ -317,13 +323,13 @@ func doctorStatusCmd() *cobra.Command {
 				}
 				enc := json.NewEncoder(cmd.OutOrStdout())
 				return enc.Encode(doctor.NewEnvelope("status", rollup, statusRollupData{
-					Embedder: embedderReport.Status,
+					Embedder: embedderResult.Status,
 					Egress:   egressStatus,
 					Config:   configStatus,
 				}))
 			}
 			fmt.Fprintf(cmd.OutOrStdout(), "status: %s (embedder=%s, egress=%s, config=%s)\n",
-				rollup, embedderReport.Status, egressStatus, configStatus)
+				rollup, embedderResult.Status, egressStatus, configStatus)
 			if rollup != "healthy" {
 				return ProbeStatusError{Subsystem: "status", Status: rollup}
 			}
