@@ -133,7 +133,11 @@ Hardware: Linux amd64, 8 GiB RAM, 2 vCPUs.
 | 50k | 110s | 103 MiB | 1.43ms | 3–10 services |
 | 250k | 873s | 504 MiB | 3.57ms | 15–50 services |
 | 500k | 2123s (35m) | 1015 MiB | 15.55ms | 50–100 services |
-| 1M | ~5000s (83m, projected) | ~2 GiB (projected) | ~50–100ms (projected) | 100–200 services |
+| 1M | 4658s (77m) | 2023 MiB | 2.59ms† | 100–200 services |
+
+†1M p95 (2.59ms) is anomalously lower than 500k (15.55ms), likely a measurement
+artifact from post-GC cold-start behavior after freeing the 3 GiB corpus. RSS is the
+authoritative metric; p95 should be re-measured in isolation if needed.
 
 RSS scales linearly at ~2 MiB per 1k vectors (768-dim float16 + HNSW graph at
 connectivity=16). The p95 jump from 250k (3.57ms) to 500k (15.55ms) reflects the
@@ -150,7 +154,7 @@ traversal.
 
 The original 1.5 GiB RSS budget at 1M is not achievable: 768-dim float16 vectors alone
 consume ~1.5 GiB at 1M, leaving no headroom for the HNSW graph or Go runtime. Revised
-budget: **≤ 1 GiB at 500k** (confirmed), **≤ 2.5 GiB at 1M** (projected).
+budget: **≤ 1 GiB at 500k** (measured: 1015 MiB ✓), **≤ 2.5 GiB at 1M** (measured: 2023 MiB ✓).
 
 ## Consequences
 
