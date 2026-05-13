@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"os"
 	"path/filepath"
 
 	"github.com/spf13/cobra"
@@ -80,6 +81,7 @@ func doctorCmd() *cobra.Command {
 			func(jsonOut bool, w io.Writer) error { return stubOK("pipelines", jsonOut, w) }),
 		doctorSubCmd("bundle", "Verify MCP context-pack bundle integrity",
 			func(jsonOut bool, w io.Writer) error { return stubOK("bundle", jsonOut, w) }),
+		doctorBackupCmd(),
 	)
 
 	return cmd
@@ -362,6 +364,54 @@ func doctorServiceCmd() *cobra.Command {
 			}
 			if report.Status != "healthy" {
 				return ProbeStatusError{Subsystem: "service", Status: report.Status}
+			}
+			return nil
+		},
+	}
+	cmd.Flags().BoolVar(&jsonOut, "json", false, "output results as JSON")
+	return cmd
+}
+
+// doctorBackupCmd returns the "doctor backup" subcommand backed by internal/doctor.CheckBackup.
+// Exit codes follow SOLO-13 §2.1:
+//
+//	0 = healthy  (most recent .tar.gz exists and passes gzip verification)
+//	1 = degraded (no backup files found)
+//	2 = broken   (most recent backup fails gzip verification)
+func doctorBackupCmd() *cobra.Command {
+	var jsonOut bool
+	cmd := &cobra.Command{
+		Use:          "backup",
+		Short:        "Verify most recent backup archive and report its age",
+		SilenceUsage: true,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			w := cmd.OutOrStdout()
+			homeDir, err := os.UserHomeDir()
+			if err != nil {
+				return err
+			}
+			backupDir := filepath.Join(homeDir, ".engram-backups")
+			report, err := doctor.CheckBackup(backupDir)
+			if err != nil {
+				return err
+			}
+			if jsonOut {
+				enc := json.NewEncoder(w)
+				return enc.Encode(doctor.NewEnvelope("backup", report.Status, report))
+			}
+			switch report.Status {
+			case "healthy":
+				fmt.Fprintf(w, "backup: %s (latest=%s, age_hours=%.2f, count=%d)\n",
+					report.Status, filepath.Base(report.LatestFile), report.AgeHours, report.FileCount)
+			case "degraded":
+				fmt.Fprintf(w, "backup: %s (no .tar.gz files found in %s)\n",
+					report.Status, report.BackupDir)
+			case "broken":
+				fmt.Fprintf(w, "backup: %s (latest=%s, verify_error=%s)\n",
+					report.Status, filepath.Base(report.LatestFile), report.VerifyError)
+			}
+			if report.Status != "healthy" {
+				return ProbeStatusError{Subsystem: "backup", Status: report.Status}
 			}
 			return nil
 		},
