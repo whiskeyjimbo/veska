@@ -28,12 +28,21 @@ type indexKey struct {
 	modelID string
 }
 
+// rowMeta is the Go-side metadata stored per usearch slot. The Vector field is
+// intentionally absent: usearch holds the float16-quantized copy; keeping a
+// second float32 copy here would double per-vector RSS for no benefit.
+type rowMeta struct {
+	NodeID      string
+	ContentHash string
+	ModelID     string
+}
+
 // indexEntry holds one usearch HNSW index plus the metadata needed to implement
 // LookupContentHashes and to map usearch uint64 IDs back to nodeIDs.
 type indexEntry struct {
 	idx      *usearchlib.Index
-	rows     map[uint64]domain.EmbeddingRow // usearch id → row
-	nodeToID map[string]uint64              // nodeID → current usearch id
+	rows     map[uint64]rowMeta // usearch id → metadata (no vector)
+	nodeToID map[string]uint64  // nodeID → current usearch id
 	nextID   uint64
 	capacity uint
 }
@@ -53,7 +62,7 @@ func newIndexEntry() (*indexEntry, error) {
 	}
 	return &indexEntry{
 		idx:      idx,
-		rows:     make(map[uint64]domain.EmbeddingRow),
+		rows:     make(map[uint64]rowMeta),
 		nodeToID: make(map[string]uint64),
 	}, nil
 }
@@ -89,7 +98,7 @@ func (e *indexEntry) upsert(row domain.EmbeddingRow) error {
 	if err := e.idx.Add(id, row.Vector); err != nil {
 		return fmt.Errorf("usearch: add id=%d nodeID=%q: %w", id, row.NodeID, err)
 	}
-	e.rows[id] = row
+	e.rows[id] = rowMeta{NodeID: row.NodeID, ContentHash: row.ContentHash, ModelID: row.ModelID}
 	e.nodeToID[row.NodeID] = id
 	return nil
 }
