@@ -113,6 +113,23 @@ func (s *StagingArea) Clear(repoID, branch string) {
 	}
 }
 
+// StageIfCurrentGeneration stages the file only if gen matches the gate's current
+// generation. Returns false and discards the write if the generation is stale.
+// This prevents in-flight saves from a prior branch polluting the new branch's staging.
+func (s *StagingArea) StageIfCurrentGeneration(
+	repoID, branch, filePath string,
+	nodes []*domain.Node,
+	edges []*domain.Edge,
+	gen uint64,
+	gate *IngestionGate,
+) bool {
+	if gen != gate.Generation() {
+		return false
+	}
+	s.StageFile(repoID, branch, filePath, nodes, edges)
+	return true
+}
+
 // Snapshot returns a shallow copy of staged nodes keyed by filePath for the
 // given (repoID, branch). Mutating the returned map does not affect the
 // StagingArea; however, the node slices themselves are not deep-copied (callers
