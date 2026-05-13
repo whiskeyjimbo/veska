@@ -465,7 +465,7 @@ func BenchmarkFindSymbol(b *testing.B) {
 	latencies := make([]time.Duration, b.N)
 
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for i := range b.N {
 		p := params()
 		req := &Request{Method: "eng_find_symbol", Params: p}
 		start := time.Now()
