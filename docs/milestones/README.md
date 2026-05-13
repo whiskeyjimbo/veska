@@ -1,0 +1,40 @@
+---
+id: SOLO-MILESTONES
+title: "Milestones — Index"
+status: draft
+last_reviewed: 2026-05-08
+related: [SOLO-14]
+---
+
+# Milestones
+
+Each milestone has a goal, exit gates (measured, not aspirational),
+ordered epics with DoD, and TDD-sized sub-issues. Beads IDs follow
+`engram-v2:m<N>.<NN>-<slug>`.
+
+| Milestone | Theme | Doc |
+|---|---|---|
+| M0 | Substrate spike (entry gate to M1) | [`closed/M0.md`](closed/M0.md) ✓ closed |
+| M1 | Substrate foundation | [`M1.md`](M1.md) |
+| M2 | Identity, observability, plugin scaffolding | [`M2.md`](M2.md) |
+| M3 | Pipelines and embedder | [`M3.md`](M3.md) |
+| M4 | Wiki mechanical kinds | [`M4.md`](M4.md) |
+| M5 | Optional review pipeline | [`M5.md`](M5.md) |
+| M6 | Cutover | [`M6.md`](M6.md) |
+
+The roadmap-level summary is [SOLO-14](../design/14-roadmap/README.md).
+That doc owns the goal-and-exit-gate framing; these per-milestone
+docs own the epic decomposition and the work breakdown.
+
+## Working a milestone
+
+1. Open the milestone doc.
+2. Pick an unclaimed epic. Read its DoD and acceptance criteria.
+3. Each sub-issue is sized for one TDD iteration: tests-first →
+   implement → race-clean → vet/lint → fmt → commit.
+4. When all sub-issues are closed and the DoD ticks, close the epic.
+5. When all epics close and the exit gates are measured, close the
+   milestone.
+
+Exit gates are measurements. A milestone closes when the numbers
+exist, not when the code looks done.
