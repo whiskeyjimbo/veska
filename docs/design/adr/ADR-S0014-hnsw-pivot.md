@@ -104,6 +104,22 @@ levels via the `Quantization` enum.
 Build requirement: install `usearch_linux_amd64_2.25.2.deb` from USearch releases, or
 link against `libusearch_c.so` at compile time. CGo is required.
 
+### Application-Layer Bench
+
+Measured 2026-05-12 via `tools/loadtest/spikes/hnsw/cmd/vector-bench/` (build tag
+`hnsw_native`). Exercises the production `UsearchStore` adapter (`internal/infrastructure/vector`)
+via `UpsertEmbeddings` / `Search` — not the raw spike index adapter used above.
+Corpus: 768-dim synthetic vectors seed=42, float16 quantization (production default).
+Hold-out: 100 queries seed=999. 200-query pre-warm before measurement.
+
+| Population | Recall@10 | P95 (ms) | Recall Floor | P95 Budget | Pass |
+|-----------|-----------|----------|-------------|-----------|------|
+| 50k | 0.9870 | 1.90 | ≥0.95 | ≤100ms | ✓ |
+| 250k | 0.9540 | 4.28 | ≥0.85 | ≤150ms | ✓ |
+
+Numbers are within a few ms of the raw spike results (float16: 1.8ms @50k, 4.1ms @250k),
+confirming that the `VectorStorage` adapter overhead is negligible. All DoD floors pass.
+
 ## Consequences
 
 - M1's m1.03 may not begin until the implementation choice is ratified.
