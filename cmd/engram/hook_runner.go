@@ -2,6 +2,10 @@ package main
 
 import (
 	"bufio"
+	"context"
+	"crypto/sha256"
+	"database/sql"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"net"
@@ -13,6 +17,9 @@ import (
 
 	"github.com/spf13/cobra"
 	"github.com/whiskeyjimbo/engram/solov2/internal/config"
+	"github.com/whiskeyjimbo/engram/solov2/internal/repo"
+
+	_ "modernc.org/sqlite"
 )
 
 // hookRunnerCmd returns the "hook-runner" Cobra command with sub-commands.
@@ -23,6 +30,7 @@ func hookRunnerCmd() *cobra.Command {
 		SilenceUsage: true,
 	}
 	cmd.AddCommand(postCommitCmd())
+	cmd.AddCommand(postCheckoutCmd())
 	return cmd
 }
 
@@ -165,4 +173,75 @@ func debugf(format string, args ...any) {
 	if os.Getenv("ENGRAM_DEBUG") == "1" {
 		fmt.Fprintf(os.Stderr, format, args...)
 	}
+}
+
+// postCheckoutCmd returns the "hook-runner post-checkout" sub-command.
+func postCheckoutCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:          "post-checkout",
+		Short:        "Update active branch after a git checkout (installed by engram init)",
+		SilenceUsage: true,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runPostCheckout()
+		},
+	}
+}
+
+// runPostCheckout is the top-level entry point for the post-checkout hook. It
+// always returns nil so that git never sees a non-zero exit and never blocks a
+// checkout.
+func runPostCheckout() error {
+	gitRoot, err := gitRevParseTopLevel()
+	if err != nil {
+		debugf("hook-runner post-checkout: git rev-parse failed: %v\n", err)
+		return nil
+	}
+
+	if isGitSpecialState(gitRoot) {
+		debugf("hook-runner post-checkout: git special state detected, skipping\n")
+		return nil
+	}
+
+	branch, err := gitCurrentBranch()
+	if err != nil {
+		debugf("hook-runner post-checkout: could not determine branch: %v\n", err)
+		return nil
+	}
+
+	repoID := repoIDFromPath(gitRoot)
+
+	dbPath := filepath.Join(config.DefaultVectorDir(), "engram.db")
+	db, err := sql.Open("sqlite", dbPath)
+	if err != nil {
+		debugf("hook-runner post-checkout: open db: %v\n", err)
+		return nil
+	}
+	defer db.Close()
+
+	if err := repo.SetActiveBranch(context.Background(), db, repoID, branch); err != nil {
+		debugf("hook-runner post-checkout: SetActiveBranch: %v\n", err)
+	}
+
+	sockPath := config.DaemonSockPath()
+	if err := sendSeal(sockPath); err != nil {
+		debugf("hook-runner post-checkout: sendSeal error (ignored): %v\n", err)
+	}
+	return nil
+}
+
+// gitCurrentBranch returns the current branch name via git rev-parse.
+func gitCurrentBranch() (string, error) {
+	out, err := exec.Command("git", "rev-parse", "--abbrev-ref", "HEAD").Output()
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(string(out)), nil
+}
+
+// repoIDFromPath returns the deterministic sha256 hex ID for a canonical path.
+// This mirrors the repoID computation in the repo package.
+func repoIDFromPath(canonicalPath string) string {
+	h := sha256.New()
+	_, _ = fmt.Fprintf(h, "%s", canonicalPath)
+	return hex.EncodeToString(h.Sum(nil))
 }
