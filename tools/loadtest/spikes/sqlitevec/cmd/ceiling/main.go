@@ -28,11 +28,11 @@ import (
 func init() { vec.Auto() }
 
 type popResult struct {
-	Population int64            `json:"population"`
-	Warm       bench.LatencyStats `json:"warm"`
-	RSSBytes   int64            `json:"rss_bytes"`
-	PassLatency bool            `json:"pass_latency"`
-	PassRSS    bool            `json:"pass_rss"`
+	Population  int64              `json:"population"`
+	Warm        bench.LatencyStats `json:"warm"`
+	RSSBytes    int64              `json:"rss_bytes"`
+	PassLatency bool               `json:"pass_latency"`
+	PassRSS     bool               `json:"pass_rss"`
 }
 
 type ceilingReport struct {
@@ -50,15 +50,15 @@ type ceilingReport struct {
 func main() {
 	popsFlag := flag.String("populations", "50000,100000,200000,400000,800000",
 		"comma-separated node counts to sweep")
-	queries  := flag.Int("queries", 200, "warm queries per population")
-	outFlag  := flag.String("out", "data/ceiling_metrics.json", "output JSON path")
-	tmpDir   := flag.String("tmpdir", "", "directory for temp DBs (default: system temp)")
-	seed     := flag.Uint64("seed", 42, "RNG seed")
+	queries := flag.Int("queries", 200, "warm queries per population")
+	outFlag := flag.String("out", "data/ceiling_metrics.json", "output JSON path")
+	tmpDir := flag.String("tmpdir", "", "directory for temp DBs (default: system temp)")
+	seed := flag.Uint64("seed", 42, "RNG seed")
 	// mmap maps the DB file into virtual memory — major speedup on M1/M2 unified memory.
 	// Default covers 2M vectors × 768 dims × 4 bytes ≈ 6 GiB with headroom.
-	mmapBytes   := flag.Int64("mmap", 0, "mmap_size in bytes (0 to disable)")
+	mmapBytes := flag.Int64("mmap", 0, "mmap_size in bytes (0 to disable)")
 	cacheSizeKB := flag.Int64("cache", 0, "cache_size in KiB (0 = SQLite default)")
-	pageSize    := flag.Int("pagesize", 0, "page_size in bytes, power-of-two in [512,65536] (0 = SQLite default 4096)")
+	pageSize := flag.Int("pagesize", 0, "page_size in bytes, power-of-two in [512,65536] (0 = SQLite default 4096)")
 	flag.Parse()
 
 	pops, err := parsePops(*popsFlag)

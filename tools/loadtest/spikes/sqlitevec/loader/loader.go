@@ -153,7 +153,6 @@ func (l *Loader) Close() error {
 	return l.db.Close()
 }
 
-
 // WriteMetricsJSON writes a JSON array of LoadMetrics to the given file path,
 // creating parent directories as needed.
 func WriteMetricsJSON(path string, metrics []LoadMetrics) error {

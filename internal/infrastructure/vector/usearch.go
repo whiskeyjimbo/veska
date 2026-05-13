@@ -17,7 +17,7 @@ import (
 const (
 	indexDim             = 768
 	indexConnectivity    = 16
-	indexExpansionAdd    = 200
+	indexExpansionAdd    = 64 // 64 is the practical default; 200 is 3x slower with negligible recall gain
 	indexExpansionSearch = 100
 )
 
@@ -140,16 +140,33 @@ func (s *UsearchStore) getOrCreate(key indexKey) (*indexEntry, error) {
 
 // UpsertEmbeddings inserts or updates a batch of embedding rows under (repoID, branch).
 // Each row's ModelID determines which HNSW index it is stored in.
+// The full batch capacity is reserved upfront per index to avoid repeated resizes.
 func (s *UsearchStore) UpsertEmbeddings(_ context.Context, repoID, branch string, batch []domain.EmbeddingRow) error {
+	if len(batch) == 0 {
+		return nil
+	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
+
+	// Count rows per model so we can reserve capacity in one shot per index.
+	perModel := make(map[string]uint, 4)
 	for _, row := range batch {
-		key := indexKey{repoID: repoID, branch: branch, modelID: row.ModelID}
+		perModel[row.ModelID] += 1
+	}
+	for modelID, n := range perModel {
+		key := indexKey{repoID: repoID, branch: branch, modelID: modelID}
 		e, err := s.getOrCreate(key)
 		if err != nil {
 			return err
 		}
-		if err := e.upsert(row); err != nil {
+		if err := e.reserve(n); err != nil {
+			return err
+		}
+	}
+
+	for _, row := range batch {
+		key := indexKey{repoID: repoID, branch: branch, modelID: row.ModelID}
+		if err := s.indexes[key].upsert(row); err != nil {
 			return err
 		}
 	}
