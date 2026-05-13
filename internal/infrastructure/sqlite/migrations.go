@@ -100,6 +100,12 @@ func maxVersion() int {
 	return migrations[len(migrations)-1].version
 }
 
+// MigrationCount returns the number of migrations in the embedded registry.
+// Exported primarily for testing idempotency assertions.
+func MigrationCount() int {
+	return len(migrations)
+}
+
 // verifyAppliedSHAs checks that every already-applied migration's recorded
 // migration_sha still matches the embedded SQL text.  Returns an error
 // describing any mismatch (tamper detection per SOLO-08 §10).
