@@ -527,6 +527,242 @@ func TestMigration0003_FindingsBranchPK(t *testing.T) {
 	}
 }
 
+// ---------------------------------------------------------------------------
+// Migration 0004: node_embeddings, node_embedding_refs, node_fts
+// ---------------------------------------------------------------------------
+
+// TestMigration0004_TablesExist verifies migration 0004 creates all three objects.
+func TestMigration0004_TablesExist(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	dbPath := filepath.Join(dir, "engram.db")
+
+	_ = openTest(t, dbPath)
+
+	raw := openRawDB(t, dbPath)
+
+	for _, tbl := range []string{"node_embeddings", "node_embedding_refs"} {
+		if !tableExists(t, raw, tbl) {
+			t.Errorf("table %q not found after migration 0004", tbl)
+		}
+	}
+
+	// node_fts is a virtual table — check via sqlite_master type='table'.
+	var cnt int
+	if err := raw.QueryRow(`SELECT COUNT(*) FROM sqlite_master WHERE name='node_fts'`).Scan(&cnt); err != nil {
+		t.Fatalf("check node_fts: %v", err)
+	}
+	if cnt == 0 {
+		t.Error("virtual table node_fts not found after migration 0004")
+	}
+
+	if !indexExists(t, raw, "idx_node_embedding_refs_state") {
+		t.Error("index idx_node_embedding_refs_state not found after migration 0004")
+	}
+}
+
+// TestMigration0004_ContentAddressedDedup verifies inserting the same content_hash
+// twice into node_embeddings fails (PRIMARY KEY constraint).
+func TestMigration0004_ContentAddressedDedup(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	dbPath := filepath.Join(dir, "engram.db")
+	backupDir := filepath.Join(t.TempDir(), "backups")
+
+	db, err := sqlite.OpenWithOptions(dbPath, sqlite.Options{BackupDir: backupDir})
+	if err != nil {
+		t.Fatalf("OpenWithOptions: %v", err)
+	}
+	defer db.Close()
+
+	now := time.Now().Unix()
+	embedding := []byte{0x01, 0x02, 0x03, 0x04}
+
+	if _, err := db.Exec(`INSERT INTO node_embeddings (content_hash, model, dim, embedding, created_at) VALUES (?, ?, ?, ?, ?)`,
+		"hash-abc", "nomic-embed-text", 768, embedding, now); err != nil {
+		t.Fatalf("first insert into node_embeddings: %v", err)
+	}
+
+	_, err = db.Exec(`INSERT INTO node_embeddings (content_hash, model, dim, embedding, created_at) VALUES (?, ?, ?, ?, ?)`,
+		"hash-abc", "nomic-embed-text", 768, embedding, now)
+	if err == nil {
+		t.Fatal("expected PK violation for duplicate content_hash, got nil")
+	}
+}
+
+// TestMigration0004_TwoNodesShareEmbedding verifies two nodes can reference the same
+// content_hash in node_embedding_refs (the deduplication point).
+func TestMigration0004_TwoNodesShareEmbedding(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	dbPath := filepath.Join(dir, "engram.db")
+	backupDir := filepath.Join(t.TempDir(), "backups")
+
+	db, err := sqlite.OpenWithOptions(dbPath, sqlite.Options{BackupDir: backupDir})
+	if err != nil {
+		t.Fatalf("OpenWithOptions: %v", err)
+	}
+	defer db.Close()
+
+	now := time.Now().Unix()
+
+	// Insert repo and two nodes (migration 0001 tables).
+	if _, err := db.Exec(`INSERT INTO repos (repo_id, root_path, added_at) VALUES (?, ?, ?)`,
+		"repo-emb", "/tmp/repo-emb", now); err != nil {
+		t.Fatalf("insert repo: %v", err)
+	}
+	for _, nodeID := range []string{"node-A", "node-B"} {
+		if _, err := db.Exec(`INSERT INTO nodes (node_id, branch, repo_id, language, kind, symbol_path, file_path, content_hash, last_promoted_at, actor_id, actor_kind) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			nodeID, "main", "repo-emb", "go", "func", "pkg.Sym", "file.go", "chash-xyz", now, "agent-1", "agent"); err != nil {
+			t.Fatalf("insert node %s: %v", nodeID, err)
+		}
+	}
+
+	// Insert a shared embedding.
+	if _, err := db.Exec(`INSERT INTO node_embeddings (content_hash, model, dim, embedding, created_at) VALUES (?, ?, ?, ?, ?)`,
+		"shared-hash", "nomic-embed-text", 768, []byte{0xDE, 0xAD}, now); err != nil {
+		t.Fatalf("insert shared embedding: %v", err)
+	}
+
+	// Both nodes reference the same embedding.
+	for _, nodeID := range []string{"node-A", "node-B"} {
+		if _, err := db.Exec(`INSERT INTO node_embedding_refs (node_id, content_hash, state, enqueued_at, embedded_at) VALUES (?, ?, ?, ?, ?)`,
+			nodeID, "shared-hash", "ready", now, now); err != nil {
+			t.Fatalf("insert node_embedding_refs for %s: %v", nodeID, err)
+		}
+	}
+
+	var cnt int
+	if err := db.QueryRow(`SELECT COUNT(*) FROM node_embedding_refs WHERE content_hash=?`, "shared-hash").Scan(&cnt); err != nil {
+		t.Fatalf("count refs: %v", err)
+	}
+	if cnt != 2 {
+		t.Errorf("expected 2 refs sharing the same embedding, got %d", cnt)
+	}
+}
+
+// TestMigration0004_StateTransitions verifies node_embedding_refs pending->ready
+// transition and FK enforcement on content_hash.
+func TestMigration0004_StateTransitions(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	dbPath := filepath.Join(dir, "engram.db")
+	backupDir := filepath.Join(t.TempDir(), "backups")
+
+	db, err := sqlite.OpenWithOptions(dbPath, sqlite.Options{BackupDir: backupDir})
+	if err != nil {
+		t.Fatalf("OpenWithOptions: %v", err)
+	}
+	defer db.Close()
+
+	now := time.Now().Unix()
+
+	// Insert repo and node.
+	if _, err := db.Exec(`INSERT INTO repos (repo_id, root_path, added_at) VALUES (?, ?, ?)`,
+		"repo-st", "/tmp/repo-st", now); err != nil {
+		t.Fatalf("insert repo: %v", err)
+	}
+	if _, err := db.Exec(`INSERT INTO nodes (node_id, branch, repo_id, language, kind, symbol_path, file_path, content_hash, last_promoted_at, actor_id, actor_kind) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		"node-st", "main", "repo-st", "go", "func", "pkg.F", "f.go", "chash-st", now, "agent-1", "agent"); err != nil {
+		t.Fatalf("insert node: %v", err)
+	}
+
+	// Insert pending (content_hash NULL).
+	if _, err := db.Exec(`INSERT INTO node_embedding_refs (node_id, content_hash, state, enqueued_at) VALUES (?, NULL, ?, ?)`,
+		"node-st", "pending", now); err != nil {
+		t.Fatalf("insert pending ref: %v", err)
+	}
+
+	var state string
+	var contentHash sql.NullString
+	if err := db.QueryRow(`SELECT state, content_hash FROM node_embedding_refs WHERE node_id=?`, "node-st").Scan(&state, &contentHash); err != nil {
+		t.Fatalf("query pending ref: %v", err)
+	}
+	if state != "pending" {
+		t.Errorf("expected state=pending, got %s", state)
+	}
+	if contentHash.Valid {
+		t.Errorf("expected content_hash NULL in pending state, got %s", contentHash.String)
+	}
+
+	// Insert the embedding.
+	if _, err := db.Exec(`INSERT INTO node_embeddings (content_hash, model, dim, embedding, created_at) VALUES (?, ?, ?, ?, ?)`,
+		"hash-st", "nomic-embed-text", 768, []byte{0xFF}, now); err != nil {
+		t.Fatalf("insert embedding: %v", err)
+	}
+
+	// Transition to ready with valid content_hash.
+	if _, err := db.Exec(`UPDATE node_embedding_refs SET state=?, content_hash=?, embedded_at=? WHERE node_id=?`,
+		"ready", "hash-st", now, "node-st"); err != nil {
+		t.Fatalf("transition to ready: %v", err)
+	}
+
+	if err := db.QueryRow(`SELECT state, content_hash FROM node_embedding_refs WHERE node_id=?`, "node-st").Scan(&state, &contentHash); err != nil {
+		t.Fatalf("query ready ref: %v", err)
+	}
+	if state != "ready" {
+		t.Errorf("expected state=ready, got %s", state)
+	}
+	if !contentHash.Valid || contentHash.String != "hash-st" {
+		t.Errorf("expected content_hash=hash-st, got %v", contentHash)
+	}
+
+	// FK violation: update to a non-existent content_hash should fail.
+	_, err = db.Exec(`UPDATE node_embedding_refs SET content_hash=? WHERE node_id=?`, "nonexistent-hash", "node-st")
+	if err == nil {
+		t.Fatal("expected FK violation for nonexistent content_hash, got nil")
+	}
+}
+
+// TestMigration0004_NodeFTSQueryable verifies node_fts can be inserted into and queried.
+func TestMigration0004_NodeFTSQueryable(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	dbPath := filepath.Join(dir, "engram.db")
+	backupDir := filepath.Join(t.TempDir(), "backups")
+
+	db, err := sqlite.OpenWithOptions(dbPath, sqlite.Options{BackupDir: backupDir})
+	if err != nil {
+		t.Fatalf("OpenWithOptions: %v", err)
+	}
+	defer db.Close()
+
+	if _, err := db.Exec(`INSERT INTO node_fts (node_id, branch, repo_id, symbol_path, name) VALUES (?, ?, ?, ?, ?)`,
+		"node-fts-1", "main", "repo-fts", "pkg.SymbolFunc", "SymbolFunc"); err != nil {
+		t.Fatalf("insert node_fts: %v", err)
+	}
+
+	// "symbol*" prefix-matches tokens starting with "symbol" (e.g. "SymbolFunc"
+	// tokenised by unicode61 with remove_diacritics).
+	rows, err := db.Query(`SELECT node_id FROM node_fts WHERE node_fts MATCH ?`, "symbol*")
+	if err != nil {
+		t.Fatalf("node_fts MATCH query: %v", err)
+	}
+	defer rows.Close()
+
+	var found bool
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			t.Fatalf("scan: %v", err)
+		}
+		if id == "node-fts-1" {
+			found = true
+		}
+	}
+	if err := rows.Err(); err != nil {
+		t.Fatalf("rows error: %v", err)
+	}
+	if !found {
+		t.Error("node_fts MATCH 'symbol' did not return the inserted row")
+	}
+}
+
 // TestMigration0003_SuppressionsAgnosticVsSpecific verifies branch-agnostic
 // (branch IS NULL) and branch-specific suppressions can coexist.
 func TestMigration0003_SuppressionsAgnosticVsSpecific(t *testing.T) {
