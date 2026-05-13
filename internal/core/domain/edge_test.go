@@ -118,7 +118,7 @@ func TestEdgeKindValues(t *testing.T) {
 
 // Confidence ordering.
 func TestConfidenceOrdering(t *testing.T) {
-	if !(Unresolved < Probable && Probable < Strong && Strong < Definite) {
+	if Unresolved >= Probable || Probable >= Strong || Strong >= Definite {
 		t.Error("Confidence ordering invariant violated")
 	}
 }

@@ -63,7 +63,7 @@ func WithSourceLine(line int) EdgeOption {
 // edgeID computes the deterministic edge identifier.
 func edgeID(src NodeID, kind EdgeKind, tgt NodeID) string {
 	h := sha256.New()
-	fmt.Fprintf(h, "%s\x00%s\x00%s", src, kind, tgt)
+	_, _ = fmt.Fprintf(h, "%s\x00%s\x00%s", src, kind, tgt)
 	return hex.EncodeToString(h.Sum(nil))[:32]
 }
 
