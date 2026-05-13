@@ -4,6 +4,7 @@ package main
 
 import (
 	"errors"
+	"math"
 	"strconv"
 	"strings"
 )
@@ -94,6 +95,69 @@ func parseMCPLatencyBench(content string) (ms float64, ok bool) {
 		}
 	}
 	return 0, false
+}
+
+// parseMultiBranchBench parses daemon RSS (in bytes) and promotion p95 (in seconds)
+// from multi-branch/RESULTS.md content.
+//
+// It expects table rows like:
+//
+//	| Daemon RSS | 342mb | ≤2GiB | PASS |
+//	| Promotion 50k p95 | 0.82s | <5s | PASS |
+func parseMultiBranchBench(content string) (rssBytes int64, promotionP95Secs float64, ok bool) {
+	rssFound := false
+	p95Found := false
+
+	for _, line := range strings.Split(content, "\n") {
+		if !strings.Contains(line, "|") {
+			continue
+		}
+		fields := strings.Split(line, "|")
+		if len(fields) < 3 {
+			continue
+		}
+		label := strings.TrimSpace(fields[1])
+		value := strings.TrimSpace(fields[2])
+
+		switch {
+		case strings.Contains(label, "Daemon RSS"):
+			rssBytes = parseRSSValue(value)
+			rssFound = true
+		case strings.Contains(label, "Promotion 50k p95"):
+			v := strings.TrimSuffix(value, "s")
+			f, err := strconv.ParseFloat(v, 64)
+			if err == nil {
+				promotionP95Secs = f
+				p95Found = true
+			}
+		}
+	}
+
+	if !rssFound || !p95Found {
+		return 0, 0, false
+	}
+	return rssBytes, promotionP95Secs, true
+}
+
+// parseRSSValue converts an RSS string like "342mb" or "1.50GiB" to bytes.
+func parseRSSValue(s string) int64 {
+	s = strings.TrimSpace(s)
+	switch {
+	case strings.HasSuffix(s, "GiB"):
+		v, err := strconv.ParseFloat(strings.TrimSuffix(s, "GiB"), 64)
+		if err != nil {
+			return 0
+		}
+		return int64(math.Round(v * 1024 * 1024 * 1024))
+	case strings.HasSuffix(s, "mb"):
+		v, err := strconv.ParseInt(strings.TrimSuffix(s, "mb"), 10, 64)
+		if err != nil {
+			return 0
+		}
+		return v * 1024 * 1024
+	default:
+		return 0
+	}
 }
 
 // parseCIGates reads a ci-gates RESULTS.md body and returns
