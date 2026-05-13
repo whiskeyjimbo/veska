@@ -77,10 +77,10 @@ type stubIndex struct {
 	corpus [][]float32
 }
 
-func (s *stubIndex) Add(_ uint64, _ []float32) error    { return nil }
-func (s *stubIndex) Save(_ string) error                { return nil }
-func (s *stubIndex) Load(_ string) error                { return nil }
-func (s *stubIndex) Len() int                           { return len(s.corpus) }
+func (s *stubIndex) Add(_ uint64, _ []float32) error { return nil }
+func (s *stubIndex) Save(_ string) error             { return nil }
+func (s *stubIndex) Load(_ string) error             { return nil }
+func (s *stubIndex) Len() int                        { return len(s.corpus) }
 func (s *stubIndex) Search(q []float32, k int) ([]uint64, error) {
 	return eval.BruteForceKNN(s.corpus, q, k), nil
 }
