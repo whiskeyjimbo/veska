@@ -17,7 +17,7 @@ func writeSidecar(t *testing.T, dir, base string, rowCount int) {
 	t.Helper()
 	// Build a map with rowCount entries.  Keys are uint64 marshalled as strings.
 	rows := make(map[string]json.RawMessage, rowCount)
-	for i := 0; i < rowCount; i++ {
+	for i := range rowCount {
 		rows[string(rune('0'+i))] = json.RawMessage(`{}`)
 	}
 	data, err := json.Marshal(map[string]any{
