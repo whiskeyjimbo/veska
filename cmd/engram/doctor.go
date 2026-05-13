@@ -75,6 +75,7 @@ func doctorCmd() *cobra.Command {
 		doctorEmbedderCmd(),
 		doctorConfigCmd(),
 		doctorPostPromotionQueueCmd(),
+		doctorServiceCmd(),
 		doctorSubCmd("pipelines", "Check ingestion pipeline health",
 			func(jsonOut bool, w io.Writer) error { return stubOK("pipelines", jsonOut, w) }),
 		doctorSubCmd("bundle", "Verify MCP context-pack bundle integrity",
@@ -323,6 +324,44 @@ func doctorStatusCmd() *cobra.Command {
 				rollup, embedderReport.Status, egressStatus, configStatus)
 			if rollup != "healthy" {
 				return ProbeStatusError{Subsystem: "status", Status: rollup}
+			}
+			return nil
+		},
+	}
+	cmd.Flags().BoolVar(&jsonOut, "json", false, "output results as JSON")
+	return cmd
+}
+
+// doctorServiceCmd returns the "doctor service" subcommand backed by internal/doctor.CheckService.
+// Exit codes follow SOLO-13 §2.1:
+//
+//	0 = healthy  (daemon running, no broken marker)
+//	1 = degraded (daemon unreachable, no broken marker)
+//	2 = broken   (broken marker present)
+func doctorServiceCmd() *cobra.Command {
+	var jsonOut bool
+	cmd := &cobra.Command{
+		Use:          "service",
+		Short:        "Check supervisor state and broken-marker presence",
+		SilenceUsage: true,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			w := cmd.OutOrStdout()
+			home := config.DefaultVectorDir()
+			report, err := doctor.CheckService(home)
+			if err != nil {
+				return err
+			}
+			if jsonOut {
+				enc := json.NewEncoder(w)
+				return enc.Encode(doctor.NewEnvelope("service", report.Status, report))
+			}
+			fmt.Fprintf(w, "service: %s (daemon_running=%v, broken_marker=%v)\n",
+				report.Status, report.DaemonRunning, report.BrokenMarkerPresent)
+			if report.BrokenMarkerPresent {
+				fmt.Fprintf(w, "  broken marker: %s\n", report.BrokenMarkerPath)
+			}
+			if report.Status != "healthy" {
+				return ProbeStatusError{Subsystem: "service", Status: report.Status}
 			}
 			return nil
 		},
