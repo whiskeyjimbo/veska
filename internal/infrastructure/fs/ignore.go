@@ -72,12 +72,9 @@ func (il *IgnoreList) ShouldIgnore(path string) bool {
 	normalised := filepath.ToSlash(path)
 
 	for _, pat := range il.patterns {
-		if strings.HasSuffix(pat, "/") {
+		if dir, ok := strings.CutSuffix(pat, "/"); ok {
 			// Directory pattern: match if any path component equals the dir name.
-			dir := strings.TrimSuffix(pat, "/")
-			// Check each component of the path.
-			parts := strings.Split(normalised, "/")
-			for _, part := range parts {
+			for part := range strings.SplitSeq(normalised, "/") {
 				if part == dir {
 					return true
 				}
