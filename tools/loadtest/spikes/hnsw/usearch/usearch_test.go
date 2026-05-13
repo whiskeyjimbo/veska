@@ -1,3 +1,5 @@
+//go:build hnsw_native
+
 package usearch_test
 
 import (

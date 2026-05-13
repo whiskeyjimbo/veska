@@ -1,3 +1,5 @@
+//go:build hnsw_native
+
 // cmd/hnsw-eval runs the full HNSW candidate evaluation sweep at 50k and 250k vectors.
 //
 // It measures:
@@ -22,6 +24,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"sort"
+	"strings"
 	"time"
 
 	usearchlib "github.com/unum-cloud/usearch/golang"
@@ -427,25 +430,26 @@ func dirKB(dir string) int64 {
 }
 
 func renderMarkdown(rows []row) string {
-	out := "# HNSW Backing Library Evaluation Results\n\n"
-	out += fmt.Sprintf("Generated: %s\n\n", time.Now().Format("2006-01-02 15:04:05"))
-	out += "## Evaluation Matrix\n\n"
-	out += "| Library | Quant | Population | Recall@10 | P95 (ms) | File Size (KB) | Backup Round-Trip | CGo |\n"
-	out += "|---------|-------|-----------|-----------|----------|---------------|-------------------|-----|\n"
+	var sb strings.Builder
+	sb.WriteString("# HNSW Backing Library Evaluation Results\n\n")
+	fmt.Fprintf(&sb, "Generated: %s\n\n", time.Now().Format("2006-01-02 15:04:05"))
+	sb.WriteString("## Evaluation Matrix\n\n")
+	sb.WriteString("| Library | Quant | Population | Recall@10 | P95 (ms) | File Size (KB) | Backup Round-Trip | CGo |\n")
+	sb.WriteString("|---------|-------|-----------|-----------|----------|---------------|-------------------|-----|\n")
 	for _, r := range rows {
-		out += fmt.Sprintf("| %s | %s | %dk | %.4f | %.1f | %d | %s | %s |\n",
+		fmt.Fprintf(&sb, "| %s | %s | %dk | %.4f | %.1f | %d | %s | %s |\n",
 			r.library, r.quant, r.pop/1000,
 			r.recall10, r.p95ms, r.fileSizeKB,
 			r.roundTrip, r.cgoNote)
 	}
-	out += "\n## DoD Criteria\n\n"
-	out += "- recall@10 ≥ 0.95 at 50k: check values above\n"
-	out += "- recall@10 ≥ 0.85 at 250k: check values above\n"
-	out += "- p95 warm latency ≤ 100ms at k=10 at 250k: check values above\n"
-	out += "- backup round-trip correctness: PASS/FAIL above\n\n"
-	out += "## Notes\n\n"
-	out += "- usearch: CGo, requires libusearch_c.so (v2.25.2, installed from .deb). Supports float32/float16/int8 quantization.\n"
-	out += "- coder/hnsw: pure Go, no CGo, float32 only. File persistence via Export/Import.\n"
-	out += "- lancedb: CGo via Rust FFI (liblancedb_go.a). Lance columnar directory format. VectorSearch uses brute-force scan (no explicit HNSW index built in-process in v0.1.2).\n"
-	return out
+	sb.WriteString("\n## DoD Criteria\n\n")
+	sb.WriteString("- recall@10 ≥ 0.95 at 50k: check values above\n")
+	sb.WriteString("- recall@10 ≥ 0.85 at 250k: check values above\n")
+	sb.WriteString("- p95 warm latency ≤ 100ms at k=10 at 250k: check values above\n")
+	sb.WriteString("- backup round-trip correctness: PASS/FAIL above\n\n")
+	sb.WriteString("## Notes\n\n")
+	sb.WriteString("- usearch: CGo, requires libusearch_c.so (v2.25.2, installed from .deb). Supports float32/float16/int8 quantization.\n")
+	sb.WriteString("- coder/hnsw: pure Go, no CGo, float32 only. File persistence via Export/Import.\n")
+	sb.WriteString("- lancedb: CGo via Rust FFI (liblancedb_go.a). Lance columnar directory format. VectorSearch uses brute-force scan (no explicit HNSW index built in-process in v0.1.2).\n")
+	return sb.String()
 }
