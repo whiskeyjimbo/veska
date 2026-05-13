@@ -48,14 +48,8 @@ func buildGates(ltRoot string) []GateResult {
 	// Gate 1: Cold-scan 100k LOC < 60s
 	gates = append(gates, gate1ColdScan(ltRoot))
 
-	// Gate 2: find_symbol warm p95 < 50ms (PENDING — m1.08.3)
-	gates = append(gates, GateResult{
-		ID:     2,
-		Name:   "find_symbol warm p95",
-		Budget: "<50ms",
-		Status: StatusPending,
-		Note:   "m1.08.3",
-	})
+	// Gate 2: find_symbol warm p95 < 50ms
+	gates = append(gates, gate2MCPLatency(ltRoot))
 
 	// Gate 3: Post-commit hook return p95 < 100ms
 	gates = append(gates, gate3HookBench(ltRoot))
@@ -108,6 +102,33 @@ func gate1ColdScan(ltRoot string) GateResult {
 	}
 	g.Measured = val
 	if pass {
+		g.Status = StatusPass
+	} else {
+		g.Status = StatusFail
+	}
+	return g
+}
+
+func gate2MCPLatency(ltRoot string) GateResult {
+	g := GateResult{
+		ID:     2,
+		Name:   "find_symbol warm p95",
+		Budget: "<50ms",
+	}
+	content, err := readFile(filepath.Join(ltRoot, "mcp-latency", "RESULTS.md"))
+	if err != nil {
+		g.Status = StatusPending
+		g.Note = "RESULTS.md not found"
+		return g
+	}
+	ms, ok := parseMCPLatencyBench(content)
+	if !ok {
+		g.Status = StatusFail
+		g.Note = "parseMCPLatencyBench: metric line not found"
+		return g
+	}
+	g.Measured = fmt.Sprintf("%.3fms", ms)
+	if ms < 50.0 {
 		g.Status = StatusPass
 	} else {
 		g.Status = StatusFail
