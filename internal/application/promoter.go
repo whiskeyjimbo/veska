@@ -12,6 +12,17 @@ import (
 // workKinds lists the post-promotion work kinds enqueued per file.
 var workKinds = []string{"embed", "auto_link", "revalidate"}
 
+// ErrUnregisteredRepo is returned by Promote when the repoID is not found in
+// the repos table. The daemon must never promote work from an unknown repo.
+type ErrUnregisteredRepo struct{ RepoID string }
+
+func (e ErrUnregisteredRepo) Error() string {
+	return fmt.Sprintf(
+		"promoter: repo %q is not registered — run: engram repo add <path>",
+		e.RepoID,
+	)
+}
+
 // Promoter flushes the in-memory StagingArea to SQLite in a single atomic
 // BEGIN IMMEDIATE transaction and enqueues post-promotion work items.
 type Promoter struct {
@@ -37,6 +48,18 @@ func NewPromoter(staging *StagingArea, writeDB *sql.DB) *Promoter {
 //  5. Commits — all writes land atomically or not at all.
 //  6. Calls StagingArea.DeleteStagedFile for each promoted file after commit.
 func (p *Promoter) Promote(ctx context.Context, repoID, branch, gitSHA string) error {
+	// Reject promotions for repos not in the registry.
+	var exists int
+	err := p.writeDB.QueryRowContext(ctx,
+		`SELECT 1 FROM repos WHERE repo_id = ?`, repoID,
+	).Scan(&exists)
+	if err == sql.ErrNoRows {
+		return ErrUnregisteredRepo{RepoID: repoID}
+	}
+	if err != nil {
+		return fmt.Errorf("promoter: check repo registration: %w", err)
+	}
+
 	snap := p.staging.Snapshot(repoID, branch)
 	if len(snap) == 0 {
 		return nil

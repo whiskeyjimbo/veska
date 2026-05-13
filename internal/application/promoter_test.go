@@ -3,6 +3,8 @@ package application
 import (
 	"context"
 	"database/sql"
+	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -180,6 +182,49 @@ func TestPromote_Idempotent(t *testing.T) {
 	// Queue must have 3 rows per promote call = 6 total.
 	if got := countQueue(t, db); got != 6 {
 		t.Errorf("queue rows after 2 promotes: want 6, got %d", got)
+	}
+}
+
+// TestPromoteUnregisteredRepo verifies that Promote returns ErrUnregisteredRepo
+// when the repoID is not present in the repos table.
+func TestPromoteUnregisteredRepo(t *testing.T) {
+	db := openMemDB(t)
+	// Intentionally do NOT insert a repos row.
+
+	sa := NewStagingArea()
+	p := NewPromoter(sa, db)
+
+	err := p.Promote(context.Background(), "unknown-repo", "main", "sha-abc")
+	if err == nil {
+		t.Fatal("expected ErrUnregisteredRepo, got nil")
+	}
+	var unreg ErrUnregisteredRepo
+	if !errors.As(err, &unreg) {
+		t.Fatalf("expected ErrUnregisteredRepo, got %T: %v", err, err)
+	}
+	if unreg.RepoID != "unknown-repo" {
+		t.Errorf("ErrUnregisteredRepo.RepoID: want %q, got %q", "unknown-repo", unreg.RepoID)
+	}
+	if !strings.Contains(err.Error(), "engram repo add") {
+		t.Errorf("error message should contain 'engram repo add', got: %q", err.Error())
+	}
+	if !strings.Contains(err.Error(), "unknown-repo") {
+		t.Errorf("error message should contain repoID, got: %q", err.Error())
+	}
+}
+
+// TestPromoteRegisteredRepo verifies that Promote proceeds normally (no error)
+// when the repoID exists in the repos table, even with empty staging.
+func TestPromoteRegisteredRepo(t *testing.T) {
+	db := openMemDB(t)
+	insertTestRepo(t, db, "known-repo")
+
+	sa := NewStagingArea()
+	p := NewPromoter(sa, db)
+
+	// Empty staging — should return nil (not ErrUnregisteredRepo).
+	if err := p.Promote(context.Background(), "known-repo", "main", "sha-abc"); err != nil {
+		t.Fatalf("expected no error for registered repo, got: %v", err)
 	}
 }
 
