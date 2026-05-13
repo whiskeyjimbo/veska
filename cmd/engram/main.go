@@ -27,6 +27,7 @@ func newRootCmd() *cobra.Command {
 		mgr, _ = service.New(exe+"-daemon", config.DefaultVectorDir())
 	}
 	root.AddCommand(serviceCmd(mgr))
+	root.AddCommand(upgradeCmd(mgr))
 	return root
 }
 
