@@ -5,8 +5,8 @@
 package ports_test
 
 import (
-	"github.com/whiskeyjimbo/engram/solov2/internal/core/ports"
-	"github.com/whiskeyjimbo/engram/solov2/internal/infrastructure/vector"
+	"github.com/whiskeyjimbo/veska/internal/core/ports"
+	"github.com/whiskeyjimbo/veska/internal/infrastructure/vector"
 )
 
 // Compile-time interface satisfaction check.

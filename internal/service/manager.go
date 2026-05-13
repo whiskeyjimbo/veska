@@ -1,5 +1,5 @@
 // Package service provides platform-specific OS service managers for the
-// engram daemon. Use New to get the correct implementation for the current OS.
+// veska daemon. Use New to get the correct implementation for the current OS.
 package service
 
 import (
@@ -8,14 +8,14 @@ import (
 	"runtime"
 )
 
-// ServiceStatus describes the current state of the engram daemon service.
+// ServiceStatus describes the current state of the veska daemon service.
 type ServiceStatus struct {
 	Running bool
 	PID     int
 	Message string
 }
 
-// Manager is the platform-agnostic interface for controlling the engram daemon
+// Manager is the platform-agnostic interface for controlling the veska daemon
 // as an OS service (systemd --user on Linux, launchd on macOS).
 type Manager interface {
 	Install(ctx context.Context) error
@@ -30,20 +30,20 @@ type Manager interface {
 var errUnsupportedPlatform = errors.New("unsupported platform: no service manager available")
 
 // New returns the Manager appropriate for the current OS.
-// binaryPath is the absolute path to the engram-daemon binary.
-// engramHome is the Engram data root (typically ~/.engram).
-func New(binaryPath, engramHome string) (Manager, error) {
-	return NewForGOOS(runtime.GOOS, binaryPath, engramHome)
+// binaryPath is the absolute path to the veska-daemon binary.
+// veskaHome is the Engram data root (typically ~/.veska).
+func New(binaryPath, veskaHome string) (Manager, error) {
+	return NewForGOOS(runtime.GOOS, binaryPath, veskaHome)
 }
 
 // NewForGOOS returns the Manager for the given GOOS value.
 // It is exported so tests can exercise specific platforms.
-func NewForGOOS(goos, binaryPath, engramHome string) (Manager, error) {
+func NewForGOOS(goos, binaryPath, veskaHome string) (Manager, error) {
 	switch goos {
 	case "darwin":
-		return NewLaunchdManager(binaryPath, engramHome, false), nil
+		return NewLaunchdManager(binaryPath, veskaHome, false), nil
 	case "linux":
-		return NewSystemdManager(binaryPath, engramHome, false), nil
+		return NewSystemdManager(binaryPath, veskaHome, false), nil
 	default:
 		return nil, errUnsupportedPlatform
 	}

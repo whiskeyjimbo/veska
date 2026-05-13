@@ -39,7 +39,7 @@ service). The non-negotiables:
    storage, or call HTTP.
 3. Infrastructure adapters implement port interfaces. One adapter
    per port at V2.0. A second adapter is an ADR.
-4. The composition root is `cmd/engram-daemon/main.go` and
+4. The composition root is `cmd/veska-daemon/main.go` and
    `cmd/engram/main.go`. Manual DI; no DI framework.
 5. Ports speak in domain types or simple serialisable shapes. No
    port method takes an `io.Reader` whose contents are

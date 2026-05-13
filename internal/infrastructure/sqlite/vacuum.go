@@ -1,4 +1,4 @@
-// Package sqlite provides the SQLite substrate for engram v2.
+// Package sqlite provides the SQLite substrate for veska.
 //
 // It opens the database with WAL mode, runs the migration runner defined in
 // migrations.go, and exposes VacuumInto for pre-migration snapshots.

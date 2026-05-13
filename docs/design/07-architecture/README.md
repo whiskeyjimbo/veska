@@ -89,8 +89,8 @@ through `core/ports`.
 engram-v2/
   cmd/
     engram/                     # CLI binary
-    engram-daemon/              # daemon binary
-    engram-mcp/                 # stdio shim binary
+    veska-daemon/              # daemon binary
+    veska-mcp/                 # stdio shim binary
   internal/
     core/
       domain/
@@ -158,7 +158,7 @@ engram-v2/
         hooks.go
       fs/
         watcher.go              # fsnotify FileWatcher
-        ignore.go               # .engramignore
+        ignore.go               # .veskaignore
       trackers/
         bd/
         noop/
@@ -174,7 +174,7 @@ engram-v2/
         osv/                    # OSV.dev with local cache
     config/
       defaults.go
-      paths.go                  # ~/.engram resolution
+      paths.go                  # ~/.veska resolution
     bootstrap/
       daemon.go                 # BuildDaemon
       cli.go                    # BuildCLI
@@ -339,7 +339,7 @@ abstraction; transport variation lives in adapter code.
 
 - **Configuration loading** — plain Go in `config/`. Tests pass a
   struct.
-- **Path resolution** (`~/.engram`) — plain Go in `config/paths.go`.
+- **Path resolution** (`~/.veska`) — plain Go in `config/paths.go`.
 - **Git operations beyond reading** — Engram never writes Git.
 - **MCP transport** — there is one (Unix socket); no abstraction
   needed. Adding a second would be an ADR and would introduce a

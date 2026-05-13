@@ -11,8 +11,8 @@ as historical record; this file is the authoritative list of
 ## ADR-0008 — Transport & Auth for Networked Modes
 
 **Retracted.** The solo product has one transport: Unix-domain
-sockets — `~/.engram/cli.sock` for CLI traffic and
-`~/.engram/mcp.sock` for editor / MCP traffic. The accepting
+sockets — `~/.veska/cli.sock` for CLI traffic and
+`~/.veska/mcp.sock` for editor / MCP traffic. The accepting
 listener determines `actor_kind` (SOLO-10 §1.2), so the trust
 boundary is the file the client connected to. There is no TCP
 listener, no TLS, no token auth, no OIDC. The OS file-permission
@@ -50,7 +50,7 @@ implementation choices that can move without an ADR.
 
 **Retracted; superseded by ADR-S0002.** Plugin ports are plain Go
 interfaces in `core/ports/`. The composition root in
-`cmd/engram-daemon/main.go` wires impls. There is no registry
+`cmd/veska-daemon/main.go` wires impls. There is no registry
 type, no `Capabilities` wire format, no version-resolution logic,
 no `wireclean` lint analyser.
 
@@ -70,7 +70,7 @@ background". Five SQL lines and a CLI subcommand. No FSM. No dual
 writes. No shadow read.
 
 The cost paid during a swap is hours of degraded semantic search
-on a single laptop. The user can read progress in `engram doctor`
+on a single laptop. The user can read progress in `veska doctor`
 and the daemon flips back to full health when the rebuild finishes.
 
 ---
@@ -160,7 +160,7 @@ the new `branch` value.
 
 The prior ADR specified three reapers (active, idle, deleted) and
 a 5,000-branch ceiling sized for canonical-tier deployments.
-Solo has one reaper sweep (`engram gc --branches`) that runs
+Solo has one reaper sweep (`veska gc --branches`) that runs
 nightly and removes rows whose `branch` no longer exists in
 `git branch -a` (with a 7-day grace). No ceiling. No replication.
 No three-tier reaper coordination.

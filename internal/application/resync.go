@@ -44,7 +44,7 @@ type ErrPromotionDivergent struct {
 }
 
 func (e *ErrPromotionDivergent) Error() string {
-	return fmt.Sprintf("engram: promotion divergent for repo %q: SHA %q is not reachable from HEAD", e.RepoID, e.SHA)
+	return fmt.Sprintf("veska: promotion divergent for repo %q: SHA %q is not reachable from HEAD", e.RepoID, e.SHA)
 }
 
 // StartupResync runs the startup resync for all registered repos.

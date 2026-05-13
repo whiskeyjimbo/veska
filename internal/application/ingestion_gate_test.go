@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/whiskeyjimbo/engram/solov2/internal/core/domain"
+	"github.com/whiskeyjimbo/veska/internal/core/domain"
 )
 
 // TestWaitIfPaused_NotPaused verifies that WaitIfPaused returns immediately

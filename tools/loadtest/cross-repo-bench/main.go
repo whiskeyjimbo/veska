@@ -22,7 +22,7 @@ import (
 
 	_ "github.com/mattn/go-sqlite3"
 
-	"github.com/whiskeyjimbo/engram/solov2/internal/infrastructure/sqlite/resolver"
+	"github.com/whiskeyjimbo/veska/internal/infrastructure/sqlite/resolver"
 )
 
 const (

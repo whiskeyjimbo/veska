@@ -10,7 +10,7 @@ import (
 
 	_ "modernc.org/sqlite"
 
-	"github.com/whiskeyjimbo/engram/solov2/internal/backup"
+	"github.com/whiskeyjimbo/veska/internal/backup"
 )
 
 // buildTarball writes a .tar.gz to tarPath containing the files described by
@@ -53,7 +53,7 @@ func buildTarball(t *testing.T, tarPath string, entries map[string][]byte) {
 func minimalSQLiteDB(t *testing.T) []byte {
 	t.Helper()
 	dir := t.TempDir()
-	dbPath := filepath.Join(dir, "engram.db")
+	dbPath := filepath.Join(dir, "veska.db")
 
 	db, err := sql.Open("sqlite", dbPath)
 	if err != nil {
@@ -72,7 +72,7 @@ func minimalSQLiteDB(t *testing.T) []byte {
 	return data
 }
 
-// TestVerifyHealthy builds a tarball with a valid engram.db (and valid
+// TestVerifyHealthy builds a tarball with a valid veska.db (and valid
 // audit.jsonl) and expects Status="healthy", all checks pass.
 func TestVerifyHealthy(t *testing.T) {
 	dir := t.TempDir()
@@ -82,7 +82,7 @@ func TestVerifyHealthy(t *testing.T) {
 	auditBytes := []byte(`{"event":"boot"}` + "\n" + `{"event":"shutdown"}` + "\n")
 
 	buildTarball(t, tarPath, map[string][]byte{
-		"engram.db":   dbBytes,
+		"veska.db":    dbBytes,
 		"audit.jsonl": auditBytes,
 	})
 
@@ -107,14 +107,14 @@ func TestVerifyHealthy(t *testing.T) {
 	}
 }
 
-// TestVerifyBrokenDB builds a tarball containing random bytes as engram.db.
+// TestVerifyBrokenDB builds a tarball containing random bytes as veska.db.
 // Verify should return Status="broken".
 func TestVerifyBrokenDB(t *testing.T) {
 	dir := t.TempDir()
 	tarPath := filepath.Join(dir, "backup.tar.gz")
 
 	buildTarball(t, tarPath, map[string][]byte{
-		"engram.db": []byte("this is not a valid sqlite database"),
+		"veska.db": []byte("this is not a valid sqlite database"),
 	})
 
 	result, err := backup.Verify(tarPath)
@@ -129,7 +129,7 @@ func TestVerifyBrokenDB(t *testing.T) {
 	}
 }
 
-// TestVerifyAuditJSONLMalformed builds a tarball with a valid engram.db but
+// TestVerifyAuditJSONLMalformed builds a tarball with a valid veska.db but
 // an audit.jsonl that has a non-JSON line.  Expects Status="degraded".
 func TestVerifyAuditJSONLMalformed(t *testing.T) {
 	dir := t.TempDir()
@@ -140,7 +140,7 @@ func TestVerifyAuditJSONLMalformed(t *testing.T) {
 	malformedAudit := []byte(`{"event":"ok"}` + "\n" + "this is not json\n")
 
 	buildTarball(t, tarPath, map[string][]byte{
-		"engram.db":   dbBytes,
+		"veska.db":    dbBytes,
 		"audit.jsonl": malformedAudit,
 	})
 
@@ -162,7 +162,7 @@ func TestVerifyAuditJSONLMalformed(t *testing.T) {
 	}
 }
 
-// TestVerifyNoAuditJSONL builds a tarball that only contains engram.db.
+// TestVerifyNoAuditJSONL builds a tarball that only contains veska.db.
 // AuditPresent should be false and Status should be "healthy".
 func TestVerifyNoAuditJSONL(t *testing.T) {
 	dir := t.TempDir()
@@ -171,7 +171,7 @@ func TestVerifyNoAuditJSONL(t *testing.T) {
 	dbBytes := minimalSQLiteDB(t)
 
 	buildTarball(t, tarPath, map[string][]byte{
-		"engram.db": dbBytes,
+		"veska.db": dbBytes,
 	})
 
 	result, err := backup.Verify(tarPath)

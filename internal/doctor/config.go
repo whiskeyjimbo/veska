@@ -5,26 +5,26 @@ import (
 	"path/filepath"
 )
 
-// ConfigReport holds the result of inspecting the engram configuration.
+// ConfigReport holds the result of inspecting the veska configuration.
 type ConfigReport struct {
-	EngramHome    string `json:"engram_home"`
+	EngramHome    string `json:"veska_home"`
 	DBPath        string `json:"db_path"`
 	DBExists      bool   `json:"db_exists"`
-	EngramHomeSet bool   `json:"engram_home_set"`
+	EngramHomeSet bool   `json:"veska_home_set"`
 }
 
-// CheckConfig stats engram.db inside engramHome and checks whether the
-// ENGRAM_HOME environment variable is explicitly set.  It never returns a
+// CheckConfig stats veska.db inside veskaHome and checks whether the
+// VESKA_HOME environment variable is explicitly set.  It never returns a
 // non-nil error.
-func CheckConfig(engramHome string) (ConfigReport, error) {
-	dbPath := filepath.Join(engramHome, "engram.db")
+func CheckConfig(veskaHome string) (ConfigReport, error) {
+	dbPath := filepath.Join(veskaHome, "veska.db")
 	_, err := os.Stat(dbPath)
 	dbExists := err == nil
 
 	return ConfigReport{
-		EngramHome:    engramHome,
+		EngramHome:    veskaHome,
 		DBPath:        dbPath,
 		DBExists:      dbExists,
-		EngramHomeSet: os.Getenv("ENGRAM_HOME") != "",
+		EngramHomeSet: os.Getenv("VESKA_HOME") != "",
 	}, nil
 }

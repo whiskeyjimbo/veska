@@ -3,7 +3,7 @@ package ports
 import (
 	"context"
 
-	"github.com/whiskeyjimbo/engram/solov2/internal/core/domain"
+	"github.com/whiskeyjimbo/veska/internal/core/domain"
 )
 
 // CodeParser is the port for parsing source files into domain graph elements.

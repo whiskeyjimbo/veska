@@ -15,9 +15,9 @@ type ErrBusy struct {
 }
 
 func (e *ErrBusy) Error() string {
-	return fmt.Sprintf("engram: writer busy (cause=%s, in_use=%d, wait_count=%d)", e.Cause, e.InUse, e.WaitCount)
+	return fmt.Sprintf("veska: writer busy (cause=%s, in_use=%d, wait_count=%d)", e.Cause, e.InUse, e.WaitCount)
 }
 
 // ErrDaemonStarting is returned by write operations when the daemon is still
 // running startup resync.
-var ErrDaemonStarting = errors.New("engram: daemon starting (startup resync in progress)")
+var ErrDaemonStarting = errors.New("veska: daemon starting (startup resync in progress)")

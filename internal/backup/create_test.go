@@ -12,7 +12,7 @@ import (
 
 	_ "modernc.org/sqlite"
 
-	"github.com/whiskeyjimbo/engram/solov2/internal/backup"
+	"github.com/whiskeyjimbo/veska/internal/backup"
 )
 
 // seedDB creates a minimal SQLite database at dbPath.
@@ -62,15 +62,15 @@ func tarEntries(t *testing.T, path string) map[string]bool {
 }
 
 func TestCreateBackupBasic(t *testing.T) {
-	engramHome := t.TempDir()
+	veskaHome := t.TempDir()
 	backupDir := t.TempDir()
 
-	dbPath := filepath.Join(engramHome, "engram.db")
+	dbPath := filepath.Join(veskaHome, "veska.db")
 	seedDB(t, dbPath)
 
 	result, err := backup.Create(backup.CreateOptions{
 		DBPath:     dbPath,
-		EngramHome: engramHome,
+		EngramHome: veskaHome,
 		BackupDir:  backupDir,
 	})
 	if err != nil {
@@ -95,21 +95,21 @@ func TestCreateBackupBasic(t *testing.T) {
 }
 
 func TestCreateBackupCopiesAuditLog(t *testing.T) {
-	engramHome := t.TempDir()
+	veskaHome := t.TempDir()
 	backupDir := t.TempDir()
 
-	dbPath := filepath.Join(engramHome, "engram.db")
+	dbPath := filepath.Join(veskaHome, "veska.db")
 	seedDB(t, dbPath)
 
 	// Seed audit.jsonl.
-	auditPath := filepath.Join(engramHome, "audit.jsonl")
+	auditPath := filepath.Join(veskaHome, "audit.jsonl")
 	if err := os.WriteFile(auditPath, []byte(`{"event":"test"}`+"\n"), 0o644); err != nil {
 		t.Fatalf("write audit.jsonl: %v", err)
 	}
 
 	result, err := backup.Create(backup.CreateOptions{
 		DBPath:     dbPath,
-		EngramHome: engramHome,
+		EngramHome: veskaHome,
 		BackupDir:  backupDir,
 	})
 	if err != nil {
@@ -123,16 +123,16 @@ func TestCreateBackupCopiesAuditLog(t *testing.T) {
 }
 
 func TestCreateBackupSkipsMissingConfig(t *testing.T) {
-	engramHome := t.TempDir()
+	veskaHome := t.TempDir()
 	backupDir := t.TempDir()
 
-	dbPath := filepath.Join(engramHome, "engram.db")
+	dbPath := filepath.Join(veskaHome, "veska.db")
 	seedDB(t, dbPath)
 
 	// Deliberately do NOT create config.toml.
 	_, err := backup.Create(backup.CreateOptions{
 		DBPath:     dbPath,
-		EngramHome: engramHome,
+		EngramHome: veskaHome,
 		BackupDir:  backupDir,
 	})
 	if err != nil {
@@ -141,15 +141,15 @@ func TestCreateBackupSkipsMissingConfig(t *testing.T) {
 }
 
 func TestCreateBackupResult(t *testing.T) {
-	engramHome := t.TempDir()
+	veskaHome := t.TempDir()
 	backupDir := t.TempDir()
 
-	dbPath := filepath.Join(engramHome, "engram.db")
+	dbPath := filepath.Join(veskaHome, "veska.db")
 	seedDB(t, dbPath)
 
 	result, err := backup.Create(backup.CreateOptions{
 		DBPath:     dbPath,
-		EngramHome: engramHome,
+		EngramHome: veskaHome,
 		BackupDir:  backupDir,
 	})
 	if err != nil {
@@ -165,15 +165,15 @@ func TestCreateBackupResult(t *testing.T) {
 }
 
 func TestCreateBackupManifestFields(t *testing.T) {
-	engramHome := t.TempDir()
+	veskaHome := t.TempDir()
 	backupDir := t.TempDir()
 
-	dbPath := filepath.Join(engramHome, "engram.db")
+	dbPath := filepath.Join(veskaHome, "veska.db")
 	seedDB(t, dbPath)
 
 	result, err := backup.Create(backup.CreateOptions{
 		DBPath:     dbPath,
-		EngramHome: engramHome,
+		EngramHome: veskaHome,
 		BackupDir:  backupDir,
 	})
 	if err != nil {
@@ -216,8 +216,8 @@ func TestCreateBackupManifestFields(t *testing.T) {
 		if m["created_at"] == "" {
 			t.Error("manifest missing created_at")
 		}
-		if m["engram_home"] == "" {
-			t.Error("manifest missing engram_home")
+		if m["veska_home"] == "" {
+			t.Error("manifest missing veska_home")
 		}
 		if m["go_version"] == "" {
 			t.Error("manifest missing go_version")

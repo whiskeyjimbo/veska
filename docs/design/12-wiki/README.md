@@ -143,7 +143,7 @@ rules:
    in UTC; sub-second jitter is not part of the output.
 
 The renderer goes through a `tools/lint/wikidet` analyser at
-test time that re-runs `engram wiki regenerate` twice in a row
+test time that re-runs `veska wiki regenerate` twice in a row
 and diffs the output bytewise. CI fails on any difference. The
 user can `git add docs/engram/` to commit the pages or add
 `docs/engram/` to `.gitignore`. Engram does not stage them.

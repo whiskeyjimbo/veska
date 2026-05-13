@@ -4,7 +4,7 @@ import (
 	"context"
 	"time"
 
-	"github.com/whiskeyjimbo/engram/solov2/internal/core/domain"
+	"github.com/whiskeyjimbo/veska/internal/core/domain"
 )
 
 // AuditEntry is an immutable record of a single state-changing operation.

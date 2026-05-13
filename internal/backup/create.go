@@ -1,4 +1,4 @@
-// Package backup implements engram backup creation and verification.
+// Package backup implements veska backup creation and verification.
 // See SOLO-08 §9.2 for the full specification.
 package backup
 
@@ -21,12 +21,12 @@ import (
 
 // CreateOptions controls backup creation behaviour.
 type CreateOptions struct {
-	// DBPath is the path to the live engram.db SQLite database.
+	// DBPath is the path to the live veska.db SQLite database.
 	DBPath string
-	// EngramHome is the engram data directory (e.g. ~/.engram).
+	// EngramHome is the veska data directory (e.g. ~/.veska).
 	EngramHome string
 	// BackupDir is the directory where the finished tarball is written.
-	// Typically ~/.engram-backups.
+	// Typically ~/.veska-backups.
 	BackupDir string
 }
 
@@ -42,26 +42,26 @@ type CreateResult struct {
 //
 // Steps:
 //  1. Creates a temp staging directory.
-//  2. Runs VACUUM INTO <staging>/engram.db on opts.DBPath (read-only connection).
+//  2. Runs VACUUM INTO <staging>/veska.db on opts.DBPath (read-only connection).
 //  3. Copies audit.jsonl and rotations (.1–.5) from opts.EngramHome if present.
 //  4. Copies config.toml from opts.EngramHome if present (silently skipped if absent).
 //  5. Copies cache/ directory recursively if present.
-//  6. Writes manifest.json with created_at, engram_home, go_version.
-//  7. Creates <opts.BackupDir>/engram-backup-<timestamp>.tar.gz from staging.
+//  6. Writes manifest.json with created_at, veska_home, go_version.
+//  7. Creates <opts.BackupDir>/veska-backup-<timestamp>.tar.gz from staging.
 //  8. Removes the staging directory.
 //  9. Calls VerifyGzip on the finished tarball.
 //
 // 10. Returns CreateResult{Path, SizeBytes}.
 func Create(opts CreateOptions) (CreateResult, error) {
 	// 1. Staging directory.
-	staging, err := os.MkdirTemp("", "engram-backup-*")
+	staging, err := os.MkdirTemp("", "veska-backup-*")
 	if err != nil {
 		return CreateResult{}, fmt.Errorf("backup: MkdirTemp: %w", err)
 	}
 	defer os.RemoveAll(staging)
 
-	// 2. VACUUM INTO staging/engram.db.
-	stagingDB := filepath.Join(staging, "engram.db")
+	// 2. VACUUM INTO staging/veska.db.
+	stagingDB := filepath.Join(staging, "veska.db")
 	if err := vacuumInto(opts.DBPath, stagingDB); err != nil {
 		return CreateResult{}, fmt.Errorf("backup: VACUUM INTO: %w", err)
 	}
@@ -97,9 +97,9 @@ func Create(opts CreateOptions) (CreateResult, error) {
 
 	// 6. Write manifest.json.
 	manifest := map[string]string{
-		"created_at":  time.Now().UTC().Format(time.RFC3339),
-		"engram_home": opts.EngramHome,
-		"go_version":  runtime.Version(),
+		"created_at": time.Now().UTC().Format(time.RFC3339),
+		"veska_home": opts.EngramHome,
+		"go_version": runtime.Version(),
 	}
 	manifestData, err := json.MarshalIndent(manifest, "", "  ")
 	if err != nil {
@@ -115,7 +115,7 @@ func Create(opts CreateOptions) (CreateResult, error) {
 		return CreateResult{}, fmt.Errorf("backup: mkdir backup dir: %w", err)
 	}
 	timestamp := time.Now().UTC().Format("20060102T150405Z")
-	tarName := fmt.Sprintf("engram-backup-%s.tar.gz", timestamp)
+	tarName := fmt.Sprintf("veska-backup-%s.tar.gz", timestamp)
 	tarPath := filepath.Join(opts.BackupDir, tarName)
 
 	if err := createTarGz(tarPath, staging); err != nil {

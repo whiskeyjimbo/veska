@@ -3,5 +3,5 @@ package vector_test
 
 import (
 	// Import the package to ensure it compiles without hnsw_native.
-	_ "github.com/whiskeyjimbo/engram/solov2/internal/infrastructure/vector"
+	_ "github.com/whiskeyjimbo/veska/internal/infrastructure/vector"
 )

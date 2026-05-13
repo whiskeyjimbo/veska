@@ -3,7 +3,7 @@ package domain_test
 import (
 	"testing"
 
-	"github.com/whiskeyjimbo/engram/solov2/internal/core/domain"
+	"github.com/whiskeyjimbo/veska/internal/core/domain"
 )
 
 // TestEmbeddingRowFields verifies EmbeddingRow has the expected fields and zero values.

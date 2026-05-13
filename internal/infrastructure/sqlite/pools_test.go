@@ -6,7 +6,7 @@ import (
 
 	_ "modernc.org/sqlite"
 
-	"github.com/whiskeyjimbo/engram/solov2/internal/infrastructure/sqlite"
+	"github.com/whiskeyjimbo/veska/internal/infrastructure/sqlite"
 )
 
 const memDSN = "file::memory:?mode=memory&cache=shared"

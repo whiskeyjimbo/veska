@@ -5,7 +5,7 @@ import (
 	"context"
 	"regexp"
 
-	"github.com/whiskeyjimbo/engram/solov2/internal/core/ports"
+	"github.com/whiskeyjimbo/veska/internal/core/ports"
 )
 
 // redacted is the replacement text for any matched secret value.

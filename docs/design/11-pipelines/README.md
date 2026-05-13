@@ -117,7 +117,7 @@ repo's last-promoted view of those edits. This is intentional:
 cross-repo answers always reflect a promoted state (SOLO-04 §5.4
 invariant 2) so the MCP envelope's `as_of` tuple is meaningful.
 The user sees the lag if their target repo has uncommitted
-work; `engram doctor` reports the per-repo
+work; `veska doctor` reports the per-repo
 `active_branch.uncommitted_files` count so the staleness is
 visible.
 
@@ -147,7 +147,7 @@ staging or empty).
 ### 1.3 Branch-switch quiescence (post-checkout hook)
 
 `git checkout <branch>` fires the `post-checkout` hook installed
-by `engram repo add`. The hook calls the daemon's
+by `veska repo add`. The hook calls the daemon's
 `PostCheckout` RPC over `cli.sock`. The daemon's response:
 
 1. **Bump the staging generation counter.** `StagingArea`
@@ -202,7 +202,7 @@ internal. §2.3 covers the promotion-pipeline side of the same story.
 ## 2. Promotion pipeline
 
 Triggered by `git commit` (via the post-commit hook running
-`engram hook-runner post-commit`) or by `engram promote` for headless
+`veska hook-runner post-commit`) or by `engram promote` for headless
 batch runs. Runs synchronously inside the promotion SQL transaction or
 the very next step before the hook returns.
 
@@ -252,9 +252,9 @@ One goroutine per kind drains the table at 250ms poll. Goroutines
 are independent: a stuck embedder does not block auto-link.
 
 When a row exhausts retries (3 attempts), the error is
-preserved and the row stays `state = failed`. `engram doctor
+preserved and the row stays `state = failed`. `veska doctor
 post-promotion-queue` lists every failed row; the user retries via
-`engram doctor post-promotion-queue retry [--kind=K] [--seq=N]`, which moves
+`veska doctor post-promotion-queue retry [--kind=K] [--seq=N]`, which moves
 matching rows back to `pending`. The `review` kind also emits a
 sticky `review-pipeline-failure` finding (rule
 `review-pipeline-failure`, severity `high`,
@@ -276,7 +276,7 @@ embed batches per touched node, and (in the rebase case) fire
 the prior `last_promoted_sha`. The hook handles this by detecting
 the operation in progress and short-circuiting.
 
-**Detection.** Before doing any work, `engram hook-runner
+**Detection.** Before doing any work, `veska hook-runner
 post-commit` checks the working tree for the canonical Git
 markers:
 
@@ -298,9 +298,9 @@ checks above honour `$GIT_DIR` (the hook runner reads markers
 relative to the env var, not the working tree root) so a rebase
 in worktree A does not block a normal commit in the main
 checkout. The daemon registers each worktree as a separate repo
-via `engram repo add <worktree_path>` if the user wants both
+via `veska repo add <worktree_path>` if the user wants both
 indexed; otherwise edits in the unregistered worktree are
-invisible to MCP, which is consistent with `engram repo add`
+invisible to MCP, which is consistent with `veska repo add`
 being explicit.
 
 When any marker is present, the hook returns 0 immediately
@@ -341,12 +341,12 @@ treats this exactly like the rebase divergent case above: log
 tree, set `last_promoted_sha = HEAD`. The orphaned prior commit's
 nodes/edges remain in SQLite attributed to the dead SHA — they
 are not actively pruned (the audit log still references them);
-`engram gc --branches` (SOLO-08 §6) is the eventual collector,
+`veska gc --branches` (SOLO-08 §6) is the eventual collector,
 matching how orphaned-branch findings are swept on a normal
 divergent promotion. Frequent amend
 loops therefore produce graph bloat proportional to the amend
 count; users with heavy amend workflows should expect
-`engram doctor storage` to show drift between graph node count
+`veska doctor storage` to show drift between graph node count
 and reachable-from-`HEAD` node count.
 
 **Bisect is read-only as far as Engram is concerned.** Each
@@ -377,7 +377,7 @@ Off by default. When enabled, runs as goroutines after the promotion
 transaction commits, draining `post_promotion_queue` rows of kind `review`.
 
 ```yaml
-# ~/.engram/config.toml
+# ~/.veska/config.toml
 [review]
 enabled              = false      # default
 specialties          = []         # e.g. ["security", "contract"]
@@ -438,7 +438,7 @@ shape that fits a solo product:
 2. The daemon writes one line to `audit.jsonl`:
    `{"tool":"review-pipeline","result":"paused: tokens_per_day cap reached","args":{"cap":N,"spent":N,"resets_at":"..."}}`.
    No Finding row, no human-action gate.
-3. `engram doctor pipelines` surfaces the paused state, the
+3. `veska doctor pipelines` surfaces the paused state, the
    measured spend, and the next reset time. That is how the user
    sees what happened; it is also where they raise the cap if
    they want to.
@@ -455,11 +455,11 @@ otherwise see the cap reset 8 hours late). The daemon records
 the host's IANA timezone on first daemon start in
 `database_meta.review_cap_tz` and uses that zone for every
 subsequent reset until the user runs `engram review reset-tz`
-to relocate. `engram doctor pipelines` shows the active zone
+to relocate. `veska doctor pipelines` shows the active zone
 and the next reset time as an absolute UTC instant.
 
 USD caps come with hosted providers; today we track tokens only.
-Current spend is visible via `engram doctor pipelines`.
+Current spend is visible via `veska doctor pipelines`.
 
 ### 3.2 No PR comment, no CI integration
 
@@ -505,9 +505,9 @@ numbers they see, even ones labelled "placeholder."
 
 ### 4.1 Manual override
 
-`~/.engram/<repo_id>/active_task` (a one-line file) pins the
+`~/.veska/<repo_id>/active_task` (a one-line file) pins the
 active task. When set, auto-link returns the pinned task
-regardless of score. `engram task bind <id>` writes it; `engram
+regardless of score. `veska task bind <id>` writes it; `engram
 task unbind` removes it.
 
 ### 4.2 Re-link on revalidation
@@ -664,7 +664,7 @@ A branch is eligible when all of:
 |---|---|
 | `engram preflight` CLI | One-shot. Exits non-zero on ineligible. Wrap it in a `pre-push` hook if desired. |
 | MCP `eng_preflight_status` | The editor or agent reads the same view. |
-| `engram doctor preflight` | Human-friendly summary. |
+| `veska doctor preflight` | Human-friendly summary. |
 
 That is the entire enforcement story. There is no GitHub status
 check, no branch-protection wiring, no tracker "blocking issue".
@@ -689,10 +689,10 @@ others.
 | Promotion SQL transaction fails | Hook returns non-zero; user retries the commit (or runs `engram promote --retry`) |
 | Embedder goroutine crashes | Daemon restarts it; pending refs stay `pending`; semantic search degrades |
 | Auto-link goroutine crashes | Findings stay unlinked; user can manually bind tasks |
-| Revalidation overruns its cadence | Skip the next scheduled run; emit warning in `engram doctor` |
+| Revalidation overruns its cadence | Skip the next scheduled run; emit warning in `veska doctor` |
 | Review goroutine times out | The specialty's row in `post_promotion_queue` retries; on final failure, finding `BudgetExceeded` is filed |
 
-`engram doctor pipelines` reports queue depths, last successful
+`veska doctor pipelines` reports queue depths, last successful
 run, and last error per goroutine.
 
 ## 9. Cross-repo resolver chain
@@ -844,7 +844,7 @@ cache ADR is written against measured numbers and ships in M2.
 ## 10. Write serialization (promotion vs. MCP writes vs. embed)
 
 The full rationale is **ADR-S0011**. The shape: three `*sql.DB`
-handles to the same `engram.db` — `readDB` (unlimited), and two
+handles to the same `veska.db` — `readDB` (unlimited), and two
 single-writer pools `writeDB.hot` (promotion + MCP writes + non-embed
 post-promotion queue transitions) and `writeDB.embed` (embed payloads only).
 `MaxOpenConns=1` on each writer pool serializes **transaction
@@ -962,7 +962,7 @@ drain iteration does two writes:
 - The state transition (`pending → in_progress`, then
   `in_progress → done`) goes through `writeDB.hot` because it's
   a tiny SQL update on `post_promotion_queue` and we want it visible
-  fast in `engram doctor post-promotion-queue`.
+  fast in `veska doctor post-promotion-queue`.
 - The payload work — embedding-store insert plus `vec_nodes`
   upsert — goes through `writeDB.embed`.
 
@@ -984,13 +984,13 @@ Two small writes per embed row, on pools sized for them.
   appropriate pool.
 - **Cross-process write coordination.** The CLI shells out to
   the daemon over the Unix socket. There is no other process
-  writing to `engram.db`. If the user opens `sqlite3 engram.db`
+  writing to `veska.db`. If the user opens `sqlite3 veska.db`
   externally and writes, that's their business and may corrupt
   state; we do not defend against it.
 
 ## 11. Configuration
 
-One file: `~/.engram/config.toml`. The pipeline-relevant section:
+One file: `~/.veska/config.toml`. The pipeline-relevant section:
 
 ```toml
 [save]

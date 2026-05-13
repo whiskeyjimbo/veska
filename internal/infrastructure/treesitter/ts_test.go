@@ -4,8 +4,8 @@ import (
 	"context"
 	"testing"
 
-	"github.com/whiskeyjimbo/engram/solov2/internal/core/domain"
-	"github.com/whiskeyjimbo/engram/solov2/internal/infrastructure/treesitter"
+	"github.com/whiskeyjimbo/veska/internal/core/domain"
+	"github.com/whiskeyjimbo/veska/internal/infrastructure/treesitter"
 )
 
 const tsRepoID = "test-repo-ts"

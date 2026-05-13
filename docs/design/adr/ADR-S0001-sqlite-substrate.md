@@ -60,7 +60,7 @@ we already have a promoted graph per commit, indexed by `git_sha`.
 
 ## Decision
 
-The substrate is one SQLite database file at `~/.engram/engram.db`,
+The substrate is one SQLite database file at `~/.veska/veska.db`,
 opened with WAL mode and the `sqlite-vec` extension loaded. Schema is
 documented in SOLO-08; the canonical version lives in
 `internal/infrastructure/sqlite/migrations/`.

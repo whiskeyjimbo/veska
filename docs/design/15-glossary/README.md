@@ -90,7 +90,7 @@ anything the verb has already touched (`promoted_sha`,
 | **Port** | A Go interface in `core/ports/`. SOLO-07 §4 catalogues all 19: 4 repository + 2 storage adjuncts + 12 substrate (Logger non-swappable) + 1 driving port (`RPCHandler`, §4.3a). SOLO-05 covers the 11 substrate ports that are plugin-swappable. Hex direction matters: *driven* ports are called by the application and implemented by adapters; *driving* ports are called by adapters and implemented by the application. Both live in `core/ports/` so the import rule "infrastructure never imports application" stays absolute. `StagingArea` and `PostPromotionQueueDrainer` are not ports — they are plain Go interfaces in `application/` for intra-layer testability (no hex direction crossed). |
 | **Driving port (inbound port)** | A port called by an adapter and implemented by the application. `RPCHandler` is the only one in V2.0: the UDS transport adapter holds the port; the application's top-level router implements it (composing MCP and Control sub-routers internally). A second MCP transport (gRPC, named pipe) would be a second *driving adapter* — not a second port. SOLO-07 §4.3a. |
 | **Token estimator** | The port (SOLO-05 §2.11) that estimates response token counts. Default impl is `chars/4`; documented as approximate. The `ModelHint()` is recorded in audit lines for any truncated response. |
-| **Tracker** | The port for issue-tracker integration. Default: `none` (off). The only shipped non-`none` impl is `bd-cli`, opt-in via `engram init` with a probe for `bd` on `$PATH`. We refer to the integration as "the tracker" or "the bd-cli tracker"; the brand "Beads" never appears in normative prose. |
+| **Tracker** | The port for issue-tracker integration. Default: `none` (off). The only shipped non-`none` impl is `bd-cli`, opt-in via `veska init` with a probe for `bd` on `$PATH`. We refer to the integration as "the tracker" or "the bd-cli tracker"; the brand "Beads" never appears in normative prose. |
 | **Vuln source** | The port for vulnerability-feed integration. Default impl: none (off). |
 | **Embedder** | The port that turns text into a vector. Default impl: Ollama with `nomic-embed-text`. One impl. |
 | **LLM generator** | The port that runs LLM completions. Default impl: Ollama. One impl; hosted providers come behind a future ADR. |
@@ -108,8 +108,8 @@ anything the verb has already touched (`promoted_sha`,
 
 | Term | Meaning |
 |---|---|
-| **`engram doctor`** | The CLI subcommand that reports daemon health, config, and egress. The primary operator surface. |
-| **`audit.jsonl`** | The append-only audit log under `~/.engram/`. Plain JSONL. Forward elsewhere if you need more. |
+| **`veska doctor`** | The CLI subcommand that reports daemon health, config, and egress. The primary operator surface. |
+| **`audit.jsonl`** | The append-only audit log under `~/.veska/`. Plain JSONL. Forward elsewhere if you need more. |
 | **Degraded** | A query that returned partial results because a dependency was unavailable. Carries `degraded_reasons: [...]` in the MCP response. |
 
 ## What is NOT here (and why)

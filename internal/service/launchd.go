@@ -12,7 +12,7 @@ import (
 	"text/template"
 )
 
-const launchdLabel = "com.engram.daemon"
+const launchdLabel = "com.veska.daemon"
 
 // plistTemplate is the embedded launchd plist template content.
 const plistTemplateText = `<?xml version="1.0" encoding="UTF-8"?>
@@ -20,7 +20,7 @@ const plistTemplateText = `<?xml version="1.0" encoding="UTF-8"?>
 <plist version="1.0">
 <dict>
 	<key>Label</key>
-	<string>com.engram.daemon</string>
+	<string>com.veska.daemon</string>
 
 	<key>ProgramArguments</key>
 	<array>
@@ -29,7 +29,7 @@ const plistTemplateText = `<?xml version="1.0" encoding="UTF-8"?>
 
 	<key>EnvironmentVariables</key>
 	<dict>
-		<key>ENGRAM_HOME</key>
+		<key>VESKA_HOME</key>
 		<string>{{.EngramHome}}</string>
 	</dict>
 
@@ -48,20 +48,20 @@ const plistTemplateText = `<?xml version="1.0" encoding="UTF-8"?>
 </plist>
 `
 
-// LaunchdManager manages the engram daemon via launchd on macOS.
+// LaunchdManager manages the veska daemon via launchd on macOS.
 type LaunchdManager struct {
 	binaryPath string
-	engramHome string
+	veskaHome  string
 	dryRun     bool
 }
 
 // NewLaunchdManager creates a LaunchdManager.
 // When dryRun is true, Install/Uninstall/Start/Stop/Restart print what they
 // would do rather than executing any commands.
-func NewLaunchdManager(binaryPath, engramHome string, dryRun bool) *LaunchdManager {
+func NewLaunchdManager(binaryPath, veskaHome string, dryRun bool) *LaunchdManager {
 	return &LaunchdManager{
 		binaryPath: binaryPath,
-		engramHome: engramHome,
+		veskaHome:  veskaHome,
 		dryRun:     dryRun,
 	}
 }
@@ -77,7 +77,7 @@ func (m *LaunchdManager) plistPath() (string, error) {
 
 // RenderPlist renders the launchd plist template for the given binary and home.
 // Exported for testing.
-func RenderPlist(binaryPath, engramHome string) (string, error) {
+func RenderPlist(binaryPath, veskaHome string) (string, error) {
 	tmpl, err := template.New("plist").Parse(plistTemplateText)
 	if err != nil {
 		return "", fmt.Errorf("launchd: parse plist template: %w", err)
@@ -86,7 +86,7 @@ func RenderPlist(binaryPath, engramHome string) (string, error) {
 	if err := tmpl.Execute(&buf, struct {
 		BinaryPath string
 		EngramHome string
-	}{binaryPath, engramHome}); err != nil {
+	}{binaryPath, veskaHome}); err != nil {
 		return "", fmt.Errorf("launchd: render plist: %w", err)
 	}
 	return buf.String(), nil
@@ -98,7 +98,7 @@ func (m *LaunchdManager) Install(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	content, err := RenderPlist(m.binaryPath, m.engramHome)
+	content, err := RenderPlist(m.binaryPath, m.veskaHome)
 	if err != nil {
 		return err
 	}

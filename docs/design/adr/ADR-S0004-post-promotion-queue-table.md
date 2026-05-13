@@ -33,7 +33,7 @@ one SQLite database. The "saga" is a goroutine reading rows.
 
 We want the post-promotion queue to be:
 
-- One table, queryable from `engram doctor`.
+- One table, queryable from `veska doctor`.
 - Recoverable on restart without manual intervention.
 - Bounded in size (no unbounded growth on a long-running daemon).
 - Self-acknowledging on persistent failure (a single-user product
@@ -88,7 +88,7 @@ failed; user retries" model:
 
 | `work_kind` | When the row hits `state = failed` | Rationale |
 |---|---|---|
-| `embed` | Row stays `failed`. Reads against affected nodes carry `degraded_reasons: ["embedding_failed"]` (distinct from `embedding_pending`). User retries via `engram doctor post-promotion-queue retry --kind=embed [--seq=N]`. | Embed failures are usually a model config or pull issue; user is in the loop already, automatic retry hides the cause. |
+| `embed` | Row stays `failed`. Reads against affected nodes carry `degraded_reasons: ["embedding_failed"]` (distinct from `embedding_pending`). User retries via `veska doctor post-promotion-queue retry --kind=embed [--seq=N]`. | Embed failures are usually a model config or pull issue; user is in the loop already, automatic retry hides the cause. |
 | `auto_link` | Row stays `failed`. Diagnostic only — the next promotion re-runs auto-link over the affected nodes, so the failure self-heals on subsequent activity. | Suggestion-shaped; one missed run is not load-bearing. |
 | `revalidate` | Row stays `failed`. The hourly sweep (SOLO-11 §6) re-evaluates every open finding regardless of post-promotion queue state. | Backstop is independent of the post-promotion queue row. |
 | `review` | **Sticky with a finding.** The daemon emits a `Finding` with `source_layer='quality'`, `severity='high'`, `rule='review-pipeline-failure'`, anchored to the promotion's commit. The post-promotion queue row stays `failed` until that finding closes through the human-action gate; closing flips the row to `done`. | No backstop; user with `review.enabled=true` believes review ran. |
@@ -99,7 +99,7 @@ human acknowledgement is recorded in `audit.jsonl` before the
 failure is forgotten. No new operator surface; the human-action-gate
 machinery already designed handles it.
 
-**Retry surface.** `engram doctor post-promotion-queue retry [--kind=K] [--seq=N]`
+**Retry surface.** `veska doctor post-promotion-queue retry [--kind=K] [--seq=N]`
 moves matching `failed` rows back to `pending`, zeroes `attempts`,
 clears `error`, and lets the drain pick them up. Without flags it
 retries every `failed` row. The `review` kind is included only
@@ -120,7 +120,7 @@ are deleted by the same sweeper.
 
 There are no compensating actions and no inverse operations. A
 `failed` row stays failed (or becomes a finding, for `review`);
-the user sees the state via `engram doctor post-promotion-queue` and the
+the user sees the state via `veska doctor post-promotion-queue` and the
 daemon does not block on it.
 
 ## Consequences
@@ -132,8 +132,8 @@ Positive:
   rows in `in_progress` get reset to `pending` on startup.
 - Failures are visible. `embed` failures surface
   `degraded_reasons: ["embedding_failed"]`; everything else
-  surfaces in `engram doctor post-promotion-queue`. Nothing is silently dropped.
-- `engram doctor` has a one-query health view of all post-promotion work.
+  surfaces in `veska doctor post-promotion-queue`. Nothing is silently dropped.
+- `veska doctor` has a one-query health view of all post-promotion work.
 
 Negative:
 
@@ -141,8 +141,8 @@ Negative:
   file corrupted) stays `failed` until the user retries. The
   affected nodes have no embedding; semantic-search responses
   carry `degraded_reasons: ["embedding_failed"]`. The user reads
-  `engram doctor post-promotion-queue`, fixes the cause, runs
-  `engram doctor post-promotion-queue retry --kind=embed`. We accept the manual
+  `veska doctor post-promotion-queue`, fixes the cause, runs
+  `veska doctor post-promotion-queue retry --kind=embed`. We accept the manual
   step in exchange for never silently dropping work.
 - A `review` row that fails persistently emits a finding. This
   adds one rule to the codebase (`review-pipeline-failure`) and
@@ -171,7 +171,7 @@ Negative:
   (`degraded_reasons: ["embedding_pending"]`) keys on
   `state = pending`, so post-ack rows surface as healthy.
 - **Per-row manual ack required for healthy rows.** Fails the
-  "no operator surface beyond `engram doctor`" charter rule.
+  "no operator surface beyond `veska doctor`" charter rule.
   The retry surface here is for `failed` rows only; `done` rows
   GC themselves at the 7-day mark.
 

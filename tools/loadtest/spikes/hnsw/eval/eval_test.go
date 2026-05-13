@@ -3,8 +3,8 @@ package eval_test
 import (
 	"testing"
 
-	"github.com/whiskeyjimbo/engram/solov2/tools/loadtest/spikes/hnsw/eval"
-	"github.com/whiskeyjimbo/engram/solov2/tools/loadtest/spikes/sqlitevec/gen"
+	"github.com/whiskeyjimbo/veska/tools/loadtest/spikes/hnsw/eval"
+	"github.com/whiskeyjimbo/veska/tools/loadtest/spikes/sqlitevec/gen"
 )
 
 // TestBruteForceKNN verifies nearest-neighbor correctness on a tiny hand-crafted corpus.

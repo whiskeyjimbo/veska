@@ -18,7 +18,7 @@ AI agent see the same model of the codebase.
 
 That is the entire product. There is no upstream. There is no
 shared service. There is no multi-tenant tier. The data lives in
-`~/.engram/` on your machine; backup is `engram backup create`
+`~/.veska/` on your machine; backup is `veska backup create`
 (SQLite online snapshot + a tarball; see
 `design/08-data-and-storage/` §9).
 
@@ -64,8 +64,8 @@ shared service. There is no multi-tenant tier. The data lives in
 
 ## How it works
 
-The product is one daemon (`engram-daemon`) plus two thin
-clients. The daemon owns one SQLite file under `~/.engram/`.
+The product is one daemon (`veska-daemon`) plus two thin
+clients. The daemon owns one SQLite file under `~/.veska/`.
 Ollama runs as a separate user process and is the only outbound
 connection in the default config.
 
@@ -87,7 +87,7 @@ connection in the default config.
 │                                           │      │ HTTP │
 │                                           ▼      ▼      │
 │                                    ┌─────────┐ ┌──────┐ │
-│                                    │~/.engram│ │Ollama│ │
+│                                    │~/.veska│ │Ollama│ │
 │                                    └─────────┘ └──────┘ │
 └─────────────────────────────────────────────────────────┘
 ```
@@ -97,8 +97,8 @@ The daemon is the only component with state. Ollama is the only
 outbound connection in the default config.
 
 **Six runtime pieces, one stateful component.** A working
-install runs: `engram-daemon`, the `engram` CLI, the
-`engram-mcp` stdio shim, an OS-level supervisor (launchd /
+install runs: `veska-daemon`, the `engram` CLI, the
+`veska-mcp` stdio shim, an OS-level supervisor (launchd /
 systemd-user / the built-in `engram supervise`), Ollama, and
 your editor. The diagram above collapses CLI + editor into
 "client surfaces" and elides the supervisor for narrative
@@ -147,7 +147,7 @@ post-commit hook ──► daemon drains staging ──► SQLite tx (atomic)
 editor / agent
       │
       ▼
-engram-mcp ──► unix socket ──► router ──┬──► staging (sees unpromoted edits)
+veska-mcp ──► unix socket ──► router ──┬──► staging (sees unpromoted edits)
                                         │
                                         └──► SQLite + sqlite-vec
                                               (promoted state;
@@ -200,7 +200,7 @@ are in [`design/11-pipelines/`](design/11-pipelines/README.md)
 **Zero telemetry leaves your machine by default.** No crash
 reports. No usage analytics. No model-call logs. The flip side:
 **when the daemon misbehaves, no one — including you — has data
-to diagnose unless you opted in.** `engram doctor` and
+to diagnose unless you opted in.** `veska doctor` and
 `engram bundle` are the on-demand operator surfaces; if you want
 proactive "is my daemon OK?" telemetry, you wire it up yourself
 (Prometheus + your own scraper + your own dashboard).
@@ -217,7 +217,7 @@ You opt in to egress explicitly:
   config); USD caps come with hosted providers when they ship.
 - A vuln feed source (configure `vuln-source`; default is none).
 
-`engram doctor` (with `--json` for machine-readable output)
+`veska doctor` (with `--json` for machine-readable output)
 lists every configured outbound destination under its `egress`
 section so you can audit at any time. If something goes wrong
 and you want to share state without uploading anything yourself,
@@ -258,7 +258,7 @@ a foregone conclusion:
   gate slides. M1 will not ship a substrate the design says
   cannot serve a typical working set.
 
-Either way, the runtime guard ships at M1: `engram doctor
+Either way, the runtime guard ships at M1: `veska doctor
 storage` reports headroom from the first day, and
 `semantic_search` returns
 `degraded_reasons: ["vec0_ceiling_warn" | "vec0_ceiling_exceeded"]`
@@ -269,10 +269,10 @@ the user-facing summary.
 ## Getting started
 
 ```
-engram init
+veska init
 ```
 
-Run it from inside a Git working tree. `engram init` writes the
+Run it from inside a Git working tree. `veska init` writes the
 config, probes for Ollama (and offers to `ollama pull
 nomic-embed-text` if the model is missing), registers the daemon
 with your session manager, and registers the current repo. A

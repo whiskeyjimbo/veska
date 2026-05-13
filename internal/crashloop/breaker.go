@@ -1,6 +1,6 @@
-// Package crashloop implements a crash-loop breaker for the engram daemon.
+// Package crashloop implements a crash-loop breaker for the veska daemon.
 //
-// It tracks restart frequency in two files under <engramHome>:
+// It tracks restart frequency in two files under <veskaHome>:
 //   - crash_count        — integer restart counter for the current window
 //   - crash_window_start — Unix timestamp (seconds) when the current window began
 //   - broken             — presence of this file signals the breaker has tripped
@@ -8,7 +8,7 @@
 // When five or more restarts occur within a 10-minute sliding window the
 // breaker trips: it writes the broken marker and returns tripped=true from
 // [Record].  The daemon should call [Check] at startup and exit with
-// [ExitCode] (78) if the marker is present.  Run `engram doctor
+// [ExitCode] (78) if the marker is present.  Run `veska doctor
 // reset-crash-loop` to clear the marker and resume normal operation.
 package crashloop
 
@@ -29,11 +29,11 @@ const maxRestarts = 5
 const windowDuration = 10 * time.Minute
 
 // ErrBroken is returned by [Check] when the broken marker file is present.
-var ErrBroken = errors.New("engram: crash-loop breaker tripped; run `engram doctor reset-crash-loop` to recover")
+var ErrBroken = errors.New("veska: crash-loop breaker tripped; run `veska doctor reset-crash-loop` to recover")
 
-// Check returns [ErrBroken] if <engramHome>/broken exists; otherwise nil.
-func Check(engramHome string) error {
-	_, err := os.Stat(filepath.Join(engramHome, "broken"))
+// Check returns [ErrBroken] if <veskaHome>/broken exists; otherwise nil.
+func Check(veskaHome string) error {
+	_, err := os.Stat(filepath.Join(veskaHome, "broken"))
 	if err == nil {
 		return ErrBroken
 	}
@@ -43,9 +43,9 @@ func Check(engramHome string) error {
 	return err
 }
 
-// Record increments the restart counter for engramHome.
+// Record increments the restart counter for veskaHome.
 //
-// It reads <engramHome>/crash_window_start to determine whether the current
+// It reads <veskaHome>/crash_window_start to determine whether the current
 // count falls within a 10-minute window.  If the window has expired (or never
 // started) the counter and window-start are reset before incrementing.  If the
 // counter reaches [maxRestarts] (5) the broken marker is written and
@@ -53,9 +53,9 @@ func Check(engramHome string) error {
 //
 // After the breaker has tripped every subsequent call to Record also returns
 // tripped=true (the broken file already exists).
-func Record(engramHome string) (tripped bool, err error) {
+func Record(veskaHome string) (tripped bool, err error) {
 	// If already broken, remain tripped.
-	if checkErr := Check(engramHome); checkErr != nil {
+	if checkErr := Check(veskaHome); checkErr != nil {
 		if errors.Is(checkErr, ErrBroken) {
 			return true, nil
 		}
@@ -63,8 +63,8 @@ func Record(engramHome string) (tripped bool, err error) {
 	}
 
 	now := time.Now()
-	windowPath := filepath.Join(engramHome, "crash_window_start")
-	countPath := filepath.Join(engramHome, "crash_count")
+	windowPath := filepath.Join(veskaHome, "crash_window_start")
+	countPath := filepath.Join(veskaHome, "crash_count")
 
 	// Determine whether we are inside the current window.
 	inWindow := false
@@ -96,7 +96,7 @@ func Record(engramHome string) (tripped bool, err error) {
 	}
 
 	if count >= maxRestarts {
-		brokenPath := filepath.Join(engramHome, "broken")
+		brokenPath := filepath.Join(veskaHome, "broken")
 		if writeErr := os.WriteFile(brokenPath, []byte("crash-loop breaker tripped\n"), 0o600); writeErr != nil {
 			return false, writeErr
 		}

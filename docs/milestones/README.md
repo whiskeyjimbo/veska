@@ -10,7 +10,7 @@ related: [SOLO-14]
 
 Each milestone has a goal, exit gates (measured, not aspirational),
 ordered epics with DoD, and TDD-sized sub-issues. Beads IDs follow
-`engram-v2:m<N>.<NN>-<slug>`.
+`veska:m<N>.<NN>-<slug>`.
 
 | Milestone | Theme | Doc |
 |---|---|---|

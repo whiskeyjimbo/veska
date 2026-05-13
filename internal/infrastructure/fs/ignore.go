@@ -8,7 +8,7 @@ import (
 	"strings"
 )
 
-// DefaultIgnorePatterns are always excluded regardless of .engramignore.
+// DefaultIgnorePatterns are always excluded regardless of .veskaignore.
 var DefaultIgnorePatterns = []string{
 	"vendor/",
 	"node_modules/",
@@ -24,7 +24,7 @@ var DefaultIgnorePatterns = []string{
 	"testdata/",
 }
 
-// IgnoreList is the merged result of default patterns and a repo's .engramignore file.
+// IgnoreList is the merged result of default patterns and a repo's .veskaignore file.
 type IgnoreList struct {
 	patterns []string
 }
@@ -37,7 +37,7 @@ func NewIgnoreListFromPatterns(patterns []string) *IgnoreList {
 	return &IgnoreList{patterns: p}
 }
 
-// Load reads .engramignore from repoRoot (if it exists) and returns an IgnoreList
+// Load reads .veskaignore from repoRoot (if it exists) and returns an IgnoreList
 // merging DefaultIgnorePatterns with the file's patterns.
 // Lines starting with # and blank lines are skipped.
 // Returns a list of default patterns only if the file doesn't exist.
@@ -45,7 +45,7 @@ func Load(repoRoot string) (*IgnoreList, error) {
 	patterns := make([]string, len(DefaultIgnorePatterns))
 	copy(patterns, DefaultIgnorePatterns)
 
-	path := filepath.Join(repoRoot, ".engramignore")
+	path := filepath.Join(repoRoot, ".veskaignore")
 	f, err := os.Open(path)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {

@@ -18,7 +18,7 @@ back-reference stories by their `US-NN.MM` ID.
 | ID | Persona | Definition | Surfaces |
 |---|---|---|---|
 | `dev` | **Dev** | The human developer who started the daemon. | `engram` CLI, editor MCP, git hooks |
-| `agent` | **Agent** | An AI coding assistant acting via MCP. | `engram-mcp` stdio shim, Unix-socket MCP |
+| `agent` | **Agent** | An AI coding assistant acting via MCP. | `veska-mcp` stdio shim, Unix-socket MCP |
 
 That is the whole cast. There is no SecEng (the Dev reviews their
 own findings), no Lead (single user), no Ops (the Dev runs their
@@ -56,12 +56,12 @@ place; its ID is not reused.
 **Status:** planned
 **Satisfied by:** SOLO-03
 
-The Dev runs `engram init` in a Git working tree. The daemon
+The Dev runs `veska init` in a Git working tree. The daemon
 starts, the post-commit hook is installed, and a cold scan
 populates the promoted graph in the background.
 
-**Acceptance.** `engram init` exits 0 within one second; the
-daemon's PID file appears at `~/.engram/daemon.pid`; the cold
+**Acceptance.** `veska init` exits 0 within one second; the
+daemon's PID file appears at `~/.veska/daemon.pid`; the cold
 scan completes within the cold-scan budget (SOLO-13 §3.2); the
 user is not asked to log in, configure YAML, or accept a
 network egress prompt.
@@ -189,7 +189,7 @@ the staleness notice clears as the queue drains.
 **Status:** planned
 **Satisfied by:** SOLO-03, SOLO-08
 
-The Dev runs `engram daemon restart` (or the daemon is killed
+The Dev runs `veska daemon restart` (or the daemon is killed
 and respawned). The new daemon process loads promoted state from
 SQLite, discards any stale staging, and resumes the post-promotion queue drain
 where it left off.

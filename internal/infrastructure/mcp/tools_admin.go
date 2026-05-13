@@ -6,9 +6,9 @@ import (
 	"fmt"
 	"strings"
 
-	application "github.com/whiskeyjimbo/engram/solov2/internal/application"
-	"github.com/whiskeyjimbo/engram/solov2/internal/config"
-	"github.com/whiskeyjimbo/engram/solov2/internal/core/domain"
+	application "github.com/whiskeyjimbo/veska/internal/application"
+	"github.com/whiskeyjimbo/veska/internal/config"
+	"github.com/whiskeyjimbo/veska/internal/core/domain"
 )
 
 // StatusProvider is an optional interface for eng_get_status.
@@ -193,7 +193,7 @@ func makeGetConfigHandler(cp ConfigProvider) ToolHandler {
 		}
 
 		return map[string]any{
-			"engram_home":      config.DefaultVectorDir(),
+			"veska_home":       config.DefaultVectorDir(),
 			"schema_version":   1,
 			"included_staging": false,
 			"degraded_reasons": []string{},

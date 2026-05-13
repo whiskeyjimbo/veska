@@ -58,7 +58,7 @@ Two throwaway harnesses; two decisions; numbers feed SOLO-13 §3.
 
 **Goal:** A layered V2 codebase with SQLite + sqlite-vec storage,
 the save/promote split, fsnotify watcher, tree-sitter parsers for Go
-and TypeScript, basic MCP (10 tools), `engram doctor`, and an
+and TypeScript, basic MCP (10 tools), `veska doctor`, and an
 append-only audit log.
 
 | Epic | DoD |
@@ -69,7 +69,7 @@ append-only audit log.
 | **m1.04 — save/promote pipeline** | Staging in-memory; post-commit hook promotions; post-promotion queue drained by goroutines; hook return < 100ms p95 (measured). |
 | **m1.05 — parsers & watcher** | Tree-sitter Go + TypeScript; fsnotify watcher; cold-scan 100k LOC < 60s (measured). |
 | **m1.06 — MCP v0** | 10 tools per `milestones/M1.md` epic m1.06 (canonical names in SOLO-09 §3). |
-| **m1.07 — doctor & audit** | `engram doctor {status,egress,storage,embedder,config}` shipped (SOLO-13 §2.1's section milestone map names which sections land later); `audit.jsonl` written on every state-changing MCP call. |
+| **m1.07 — doctor & audit** | `veska doctor {status,egress,storage,embedder,config}` shipped (SOLO-13 §2.1's section milestone map names which sections land later); `audit.jsonl` written on every state-changing MCP call. |
 
 **Exit gates.** The numeric gates are the rows in SOLO-13 §3
 labelled `BUDGET (unmeasured)` with gate `M1`. M1 closes by
@@ -112,8 +112,8 @@ OTLP and Prometheus.
 | **m2.02 — human-action gate** | `eng_close_finding` for `severity=high` requires `actor_kind = 'human'`; refused otherwise with a clear error. |
 | **m2.03 — MCP expansion** | Adds 9 tools (10 → 19 total) per `milestones/M2.md` epic m2.03; canonical names in SOLO-09 §3. |
 | **m2.04 — plugin slots declared** | Go interfaces for `Tracker`, `VulnSource`, `Embedder`, `LLMGenerator`, `Notifier` in `core/ports/`; default impls in `infrastructure/`. No second impl. |
-| **m2.05 — observability opt-in** | Prometheus `/metrics` (6 metrics, SOLO-13 §1.2), OTLP traces, both off by default; `engram doctor egress` reports listeners. |
-| **m2.06 — HNSW substrate ADR + pivot** | OQ-S003 resolved: the vector-index port abstraction lands; lancedb-embedded vs. hnswlib(cgo) decision recorded; backup-tarball property preserved or regression documented; `engram doctor storage` `embeddings.substrate` flips to `"hnsw"` once the migration completes. Pivot is gated by M1's measured vec0 curves — green on M1 may legitimately defer the pivot to M3 if the ceiling proved generous. |
+| **m2.05 — observability opt-in** | Prometheus `/metrics` (6 metrics, SOLO-13 §1.2), OTLP traces, both off by default; `veska doctor egress` reports listeners. |
+| **m2.06 — HNSW substrate ADR + pivot** | OQ-S003 resolved: the vector-index port abstraction lands; lancedb-embedded vs. hnswlib(cgo) decision recorded; backup-tarball property preserved or regression documented; `veska doctor storage` `embeddings.substrate` flips to `"hnsw"` once the migration completes. Pivot is gated by M1's measured vec0 curves — green on M1 may legitimately defer the pivot to M3 if the ceiling proved generous. |
 
 **Exit gates:**
 
@@ -137,7 +137,7 @@ content drift.
 | Epic | DoD |
 |---|---|
 | **m3.01 — promotion pipeline** | Structural checks (parse, dead-code, contract drift) run inside or immediately after the promotion transaction; findings emitted with `source_layer='structural'`. |
-| **m3.02 — embedder worker** | Goroutine drains `node_embedding_refs` where `state='pending'`; throttled to a configurable rate; respects `engram_embed_queue_depth`. |
+| **m3.02 — embedder worker** | Goroutine drains `node_embedding_refs` where `state='pending'`; throttled to a configurable rate; respects `veska_embed_queue_depth`. |
 | **m3.03 — vec0 search live** | `semantic_search` queries `vec_nodes`; degraded fallback if model missing or vec0 unhealthy. |
 | **m3.04 — auto-link** | post-promotion queue `work_kind='auto_link'` proposes `Edge` rows from embedding similarity above a threshold; surfaces as low-confidence findings until accepted. |
 | **m3.05 — revalidation** | post-promotion queue `work_kind='revalidate'` sweeps open findings whose anchor content has changed; transitions to `closed` with `closed_reason='revalidated_obsolete'` (rule no longer fires) or `closed_reason='superseded_by_revalidation'` (rule fires on new content; new finding linked back). |
@@ -164,7 +164,7 @@ for agents.
 | **m4.01 — context pack** | `eng_context_pack` MCP tool returns a token-bounded bundle of nodes, recent commits, open findings, and tasks for a given symbol or task. |
 | **m4.02 — hot_zone** | Mechanical page kind: top-N files by recent change frequency × blast radius. Rendered to `docs/engram/hot_zones.md`. |
 | **m4.03 — entry_points** | Mechanical page kind: candidate "good first PR" symbols (low blast radius, tests adjacent, no open findings). Rendered to `docs/engram/entry_points.md`. |
-| **m4.04 — wiki refresh** | `engram wiki` regenerates both kinds; runs on promotion via post-promotion queue `work_kind='wiki'`. |
+| **m4.04 — wiki refresh** | `veska wiki` regenerates both kinds; runs on promotion via post-promotion queue `work_kind='wiki'`. |
 
 **Exit gates.** Numeric gates are SOLO-13 §3.5 (`hot_zone`,
 `entry_points`, `eng_get_context_pack`). Non-numeric gate: pages are
@@ -184,13 +184,13 @@ in the docs. Findings surface via MCP; human-action gate applies.
 |---|---|
 | **m5.01 — review goroutine** | post-promotion queue `work_kind='review'`; `LLMGenerator` interface dispatches to local Ollama or configured remote endpoint. |
 | **m5.02 — review prompts** | Versioned prompt set under `internal/application/review/prompts/`; each prompt addresses one finding kind. |
-| **m5.03 — cost & quota** | Per-promotion token-budget cap; refusal with `degraded_reasons: ['review_quota_exceeded']` when over. Daily token total in `engram doctor`. |
+| **m5.03 — cost & quota** | Per-promotion token-budget cap; refusal with `degraded_reasons: ['review_quota_exceeded']` when over. Daily token total in `veska doctor`. |
 | **m5.04 — surface findings** | Review findings carry `source_layer='semantic'`; visible via `eng_list_findings`; suppressible like any other. |
 
 **Exit gates:**
 
 - Review pipeline disabled by default; enabling requires explicit
-  config opt-in and `engram doctor egress` reports the LLM target.
+  config opt-in and `veska doctor egress` reports the LLM target.
 - Token-budget cap enforced; tested with a synthetic over-budget promotion.
 - Documented dollar-cost example for one review of a 100-file commit
   against a hosted vendor LLM.

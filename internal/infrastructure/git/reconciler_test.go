@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/whiskeyjimbo/engram/solov2/internal/infrastructure/fs"
-	"github.com/whiskeyjimbo/engram/solov2/internal/infrastructure/git"
+	"github.com/whiskeyjimbo/veska/internal/infrastructure/fs"
+	"github.com/whiskeyjimbo/veska/internal/infrastructure/git"
 )
 
 // makeReconciler creates a WakeReconciler with a no-op handler suitable for

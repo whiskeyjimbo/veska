@@ -9,9 +9,9 @@ import (
 
 	usearchlib "github.com/unum-cloud/usearch/golang"
 
-	uidx "github.com/whiskeyjimbo/engram/solov2/tools/loadtest/spikes/hnsw/usearch"
-	"github.com/whiskeyjimbo/engram/solov2/tools/loadtest/spikes/sqlitevec/gen"
-	"github.com/whiskeyjimbo/engram/solov2/tools/loadtest/spikes/hnsw/eval"
+	uidx "github.com/whiskeyjimbo/veska/tools/loadtest/spikes/hnsw/usearch"
+	"github.com/whiskeyjimbo/veska/tools/loadtest/spikes/sqlitevec/gen"
+	"github.com/whiskeyjimbo/veska/tools/loadtest/spikes/hnsw/eval"
 )
 
 const smallN = 1000

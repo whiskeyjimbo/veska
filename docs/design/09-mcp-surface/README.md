@@ -17,7 +17,7 @@ no sub-files.
 ## 1. Transport
 
 One transport, two listeners: Unix domain sockets at
-`~/.engram/cli.sock` and `~/.engram/mcp.sock`. Both are created
+`~/.veska/cli.sock` and `~/.veska/mcp.sock`. Both are created
 by the daemon at startup with mode `0600` and ownership matching
 the user that started the daemon. JSON-RPC 2.0 over each. No
 TCP, no TLS, no auth — file-system permissions are the gate. If
@@ -27,7 +27,7 @@ connection error.
 The two listeners speak the same wire protocol; they differ
 only in which `actor_kind` the daemon stamps on requests they
 accept (SOLO-10 §1.2). The CLI connects only to `cli.sock`; the
-`engram-mcp` stdio shim connects only to `mcp.sock`. The shim
+`veska-mcp` stdio shim connects only to `mcp.sock`. The shim
 is a thin process: editors that speak MCP-over-stdio (Cursor,
 Claude Code, Codex, Zed) point at it; it proxies to
 `mcp.sock`. The daemon does not speak stdio directly.
@@ -58,17 +58,17 @@ regardless of which router handles it.
 
 | Verb | Caller | Purpose |
 |---|---|---|
-| `daemon.promotion` | `engram hook-runner post-commit` | Atomically promote staging → SQLite for the repo at the named path. |
-| `daemon.post_checkout` | `engram hook-runner post-checkout` | Branch-switch quiescence (SOLO-11 §1.3). |
-| `daemon.backup_create` | `engram backup create` | Run `VACUUM INTO` + tarball; verify. |
-| `daemon.backup_verify` | `engram backup verify <path>` | Run integrity + foreign-key + JSONL well-formedness checks. |
+| `daemon.promotion` | `veska hook-runner post-commit` | Atomically promote staging → SQLite for the repo at the named path. |
+| `daemon.post_checkout` | `veska hook-runner post-checkout` | Branch-switch quiescence (SOLO-11 §1.3). |
+| `daemon.backup_create` | `veska backup create` | Run `VACUUM INTO` + tarball; verify. |
+| `daemon.backup_verify` | `veska backup verify <path>` | Run integrity + foreign-key + JSONL well-formedness checks. |
 | `daemon.embedder_swap` | `engram embedder swap <model>` | The multi-step procedure in SOLO-03 §3.2. |
 | `daemon.embedder_current` | `engram embedder current` | Read `database_meta.embedder_*`. |
-| `daemon.doctor` | `engram doctor [--json]` and every `engram doctor <section>` | Run the doctor section(s) and return the §2.1 envelope. |
+| `daemon.doctor` | `veska doctor [--json]` and every `veska doctor <section>` | Run the doctor section(s) and return the §2.1 envelope. |
 | `daemon.bundle` | `engram bundle` | Build the `engram-doctor-bundle-*.tgz`. |
-| `daemon.gc_branches` | `engram gc --branches` | Run the branch-GC sweep manually. |
+| `daemon.gc_branches` | `veska gc --branches` | Run the branch-GC sweep manually. |
 | `daemon.supervise_heartbeat` | `engram supervise` | Liveness ping for the built-in supervisor. |
-| `daemon.upgrade_stage` | `engram upgrade <path>` | Stage `*.next` binaries; the running daemon is unaffected until restart. |
+| `daemon.upgrade_stage` | `veska upgrade <path>` | Stage `*.next` binaries; the running daemon is unaffected until restart. |
 
 These verbs do not fit `eng_<verb>_<object>` (they are
 lifecycle, not graph/finding/task operations) and forcing them
@@ -169,9 +169,9 @@ W = write; R = read.
 | Tool | Purpose | Staging | W/R |
 |---|---|---|---|
 | `eng_get_status` | Daemon health, child-proc state (Ollama up?), schema version, queue depths. The "is the daemon ready to serve this call?" check. | yes | R |
-| `eng_get_config` | The daemon's effective config (defaults merged with `~/.engram/config.toml`). Includes every configured outbound destination (LLM provider, OTLP endpoint, vuln-source URLs). **Secrets are redacted** (`***`). The `engram doctor config --show-secrets` CLI is the only path that returns them in clear. | yes | R |
+| `eng_get_config` | The daemon's effective config (defaults merged with `~/.veska/config.toml`). Includes every configured outbound destination (LLM provider, OTLP endpoint, vuln-source URLs). **Secrets are redacted** (`***`). The `veska doctor config --show-secrets` CLI is the only path that returns them in clear. | yes | R |
 
-`doctor` is a CLI noun, not an MCP one — `engram doctor` (and its
+`doctor` is a CLI noun, not an MCP one — `veska doctor` (and its
 subcommands) is the operator surface; the two tools above are the
 agent's window into the same data. Diagnostics that *fix* things
 (repair, gc, embedder swap) are CLI-only on purpose.
@@ -384,7 +384,7 @@ each entry is informative to the operator." Common codes:
 | `staging_unavailable` | — | Staging-overlay read failed; promoted-only result. |
 | `staging_reparsing` | `{path: string}` | Large-file fallback active for `path` (SOLO-11 §1, SOLO-13 §3.1b). |
 | `embedding_pending` | `{node_count: int}` (optional) | Affected nodes' embeddings are still in the post-promotion queue. |
-| `embedding_failed` | `{node_count: int}` (optional) | Affected nodes' embeddings exhausted retries. User retries via `engram doctor post-promotion-queue retry --kind=embed`. (SOLO-08 §3.4, ADR-S0004.) |
+| `embedding_failed` | `{node_count: int}` (optional) | Affected nodes' embeddings exhausted retries. User retries via `veska doctor post-promotion-queue retry --kind=embed`. (SOLO-08 §3.4, ADR-S0004.) |
 | `embedder_offline_lexical_fallback` | — | `eng_search_semantic` returned BM25 from FTS5 (SOLO-08 §3.3) instead of vector recall. The agent should not silently switch reasoning modes. |
 | `post_promotion_queue_deferred` | `{work_kind: string, count: int}` | Rows in `state='deferred'` because queue depth was at high-water at promotion time (SOLO-08 §3.4). |
 | `startup_resync` | `{repos_pending: int}` | Daemon is replaying `git log <last_promoted_sha>..HEAD` (SOLO-03 §5.7). |
@@ -396,7 +396,7 @@ each entry is informative to the operator." Common codes:
 `degraded: true` is required whenever any entry is present. New
 codes must keep the object shape; introducing one does not
 require an ADR. Add it next to the relevant code path; surface
-it via `engram doctor` if the operator should act. Clients
+it via `veska doctor` if the operator should act. Clients
 written against an older code vocabulary MUST tolerate unknown
 codes (forward compat).
 
@@ -412,18 +412,18 @@ shape only:
     "code": -32001,
     "message": "human-readable summary",
     "data": {
-      "engram_code": "<symbolic code>",   // SOLO-16 is the catalogue
+      "veska_code": "<symbolic code>",   // SOLO-16 is the catalogue
       "context":     { /* code-specific */ }
     }
   }
 }
 ```
 
-`engram_code` is an open vocabulary — new codes can land next
+`veska_code` is an open vocabulary — new codes can land next
 to new code paths without ceremony — but every code MUST appear
 in SOLO-16 before it ships. Tooling MUST tolerate unknown
-`engram_code` values (forward compat). The contract callers
-rely on is the envelope shape; the `engram_code` is the key
+`veska_code` values (forward compat). The contract callers
+rely on is the envelope shape; the `veska_code` is the key
 into SOLO-16's catalogue.
 
 ### 4.6a What the editor sees during long-running daemon states
@@ -440,7 +440,7 @@ broken.
 | **Startup-resync** running for ≥1 repo | promoted (pre-resync) data with `degraded_reasons: ["startup_resync"]`; `eng_get_status` carries `commits_total`/`commits_done` per repo | `ErrDaemonStarting` with the same payload; caller may retry | Non-blocking progress chip ("Engram catching up: 5/12 commits"); poll `eng_get_status` every 2s; show read results with a "catching up" badge |
 | **Wake-reconcile** running | promoted + (pre-sweep) staging with `degraded_reasons: ["wake_reconciling"]` | succeed normally; the sweep doesn't write | One-line non-blocking notice ("Engram re-syncing after sleep"); reads usable; clears within seconds |
 | **Embedder-swap** running | promoted reads succeed; `eng_search_semantic` returns FTS5 lexical fallback with `degraded_reasons: ["embedder_swapping", "embedder_offline_lexical_fallback"]` | refused with `ErrUpstreamUnavailable`, `data.context.cause = "embedder_swapping"`; caller may retry once the swap state clears | Show "lexical-only search" badge; allow other reads |
-| **Crash-loop tripped** | shim returns `ErrDaemonNotRunning`; `data.context.cli_command` = `engram doctor reset-crash-loop` | same | Surface the `cli_command` as a copyable block; same paste-handoff pattern as the human-action gate (SOLO-10 §3.3) |
+| **Crash-loop tripped** | shim returns `ErrDaemonNotRunning`; `data.context.cli_command` = `veska doctor reset-crash-loop` | same | Surface the `cli_command` as a copyable block; same paste-handoff pattern as the human-action gate (SOLO-10 §3.3) |
 | **Refuse-to-start** (sqlite-vec missing, schema mismatch, unsupported FS, etc.; SOLO-03 §5.8) | shim returns `ErrDaemonNotRunning` | same | Render `data.context.last_error` with an "open log file" affordance |
 
 **Probe protocol.** The editor's MCP integration SHOULD poll
@@ -578,7 +578,7 @@ daemon, or the daemon's own design replaces them.
 - `eng_describe_platform`, `eng_get_platform_health` — replaced by `eng_get_status`.
 - `eng_estimate_task_complexity` — one-call derivation from `eng_get_dirty_blast_radius`.
 - `eng_get_diff_test_impact` — one-call derivation from `eng_get_diff_blast_radius` filtered by `TESTS` edges.
-- `eng_explain_edge` — debug tool; lives in `engram doctor` logs.
+- `eng_explain_edge` — debug tool; lives in `veska doctor` logs.
 - `eng_list_open_todos` — folded into `eng_find_todos` with a `scope` arg.
 - `eng_onboard_task` — replaced by `eng_get_context_pack`.
 - `eng_get_node_as_of`, `eng_find_changed_symbols` — historical-query tools. Substrate stores latest-promoted only; no per-commit history. Return when (and if) a history substrate ships.
@@ -606,7 +606,7 @@ These come back when a real trigger fires:
 - `eng_find_similar` → `eng_search_similar` (it's ranked; per the verb rule, that's a search).
 - `eng_get_current_workspace` → `eng_get_current_repo` ("workspace" is banned vocab; SOLO-15).
 - `eng_get_doctor_status` → `eng_get_status` (`doctor` is a CLI noun, not an MCP one).
-- `eng_list_doctor_egress` → folded into `eng_get_config` (egress destinations are part of the config; redacted on the MCP path, available in clear via the `engram doctor config --show-secrets` CLI).
+- `eng_list_doctor_egress` → folded into `eng_get_config` (egress destinations are part of the config; redacted on the MCP path, available in clear via the `veska doctor config --show-secrets` CLI).
 
 The §3 inventory is the surface; everything in this section is
 why a tool you might expect is not in §3. Tool-by-milestone

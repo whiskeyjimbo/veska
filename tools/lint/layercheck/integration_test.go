@@ -3,7 +3,7 @@ package layercheck_test
 import (
 	"testing"
 
-	"github.com/whiskeyjimbo/engram/solov2/tools/lint/layercheck"
+	"github.com/whiskeyjimbo/veska/tools/lint/layercheck"
 )
 
 // TestNoViolationsInCurrentCodebase is an integration test that runs the full

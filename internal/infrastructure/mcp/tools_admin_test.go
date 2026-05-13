@@ -5,8 +5,8 @@ import (
 	"encoding/json"
 	"testing"
 
-	application "github.com/whiskeyjimbo/engram/solov2/internal/application"
-	"github.com/whiskeyjimbo/engram/solov2/internal/core/domain"
+	application "github.com/whiskeyjimbo/veska/internal/application"
+	"github.com/whiskeyjimbo/veska/internal/core/domain"
 )
 
 // ---------------------------------------------------------------------------
@@ -235,8 +235,8 @@ func TestAdminTools_GetConfig(t *testing.T) {
 		t.Fatalf("result is not map[string]any, got %T", result)
 	}
 
-	if _, hasHome := m["engram_home"]; !hasHome {
-		t.Error("expected engram_home key in config response")
+	if _, hasHome := m["veska_home"]; !hasHome {
+		t.Error("expected veska_home key in config response")
 	}
 
 	if m["schema_version"] != 1 {

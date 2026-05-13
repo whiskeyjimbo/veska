@@ -11,12 +11,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/whiskeyjimbo/engram/solov2/internal/infrastructure/audit"
+	"github.com/whiskeyjimbo/veska/internal/infrastructure/audit"
 )
 
 // BundleOptions controls the behaviour of CreateBundle.
 type BundleOptions struct {
-	// EngramHome is the engram data directory (e.g. ~/.engram).
+	// EngramHome is the veska data directory (e.g. ~/.veska).
 	EngramHome string
 	// OutputDir is where the tarball is written.
 	// If empty, os.TempDir() is used.
@@ -50,7 +50,7 @@ func CreateBundle(opts BundleOptions) (BundleResult, error) {
 	}
 
 	timestamp := time.Now().UTC().Format("20060102T150405Z")
-	tarName := fmt.Sprintf("engram-bundle-%s.tar.gz", timestamp)
+	tarName := fmt.Sprintf("veska-bundle-%s.tar.gz", timestamp)
 	tarPath := filepath.Join(opts.OutputDir, tarName)
 
 	f, err := os.Create(tarPath)
@@ -85,10 +85,10 @@ func CreateBundle(opts BundleOptions) (BundleResult, error) {
 
 	// 1. manifest.json
 	manifest := map[string]string{
-		"created_at":  time.Now().UTC().Format(time.RFC3339),
-		"engram_home": opts.EngramHome,
-		"go_version":  runtime.Version(),
-		"platform":    runtime.GOOS + "/" + runtime.GOARCH,
+		"created_at": time.Now().UTC().Format(time.RFC3339),
+		"veska_home": opts.EngramHome,
+		"go_version": runtime.Version(),
+		"platform":   runtime.GOOS + "/" + runtime.GOARCH,
 	}
 	manifestJSON, err := json.MarshalIndent(manifest, "", "  ")
 	if err != nil {
@@ -148,7 +148,7 @@ func CreateBundle(opts BundleOptions) (BundleResult, error) {
 	}
 
 	// 7. doctor/post_promotion_queue.json
-	dbPath := filepath.Join(opts.EngramHome, "engram.db")
+	dbPath := filepath.Join(opts.EngramHome, "veska.db")
 	ppqReport, _ := CheckPostPromotionQueue(dbPath)
 	ppqEnv := NewEnvelope("post_promotion_queue", ppqReport.Status, ppqReport)
 	if err := addProbeEntry(tw, &fileCount, "doctor/post_promotion_queue.json", ppqEnv, false); err != nil {

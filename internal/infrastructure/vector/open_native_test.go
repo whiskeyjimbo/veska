@@ -5,7 +5,7 @@ package vector_test
 import (
 	"testing"
 
-	"github.com/whiskeyjimbo/engram/solov2/internal/infrastructure/vector"
+	"github.com/whiskeyjimbo/veska/internal/infrastructure/vector"
 )
 
 // TestOpen_NativeEmptyDirSucceeds verifies that Open on an empty/non-existent

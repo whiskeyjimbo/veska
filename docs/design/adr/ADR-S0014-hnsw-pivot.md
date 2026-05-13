@@ -32,7 +32,7 @@ embedded nodes. The chosen backing is **to be determined** in m1.03 based on:
 1. **Recall floor:** recall@10 ≥ 0.95 at 50k; ≥ 0.85 at 250k.
 2. **Latency budget:** warm p95 ≤ 100ms at k=10 at 250k vectors on the reference
    laptop.
-3. **Backup round-trip:** `Save` → tar into `engram backup create` → `Load` must
+3. **Backup round-trip:** `Save` → tar into `veska backup create` → `Load` must
    reproduce identical query results. Measured with 5 hold-out queries before and
    after round-trip. Index file size at 250k recorded for float32, float16, and
    int8 quantization (usearch supports all three; record recall delta per level).

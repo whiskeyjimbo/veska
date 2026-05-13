@@ -10,7 +10,7 @@ import (
 	"os"
 	"sync"
 
-	"github.com/whiskeyjimbo/engram/solov2/internal/core/domain"
+	"github.com/whiskeyjimbo/veska/internal/core/domain"
 )
 
 // Request is an inbound JSON-RPC 2.0 frame.

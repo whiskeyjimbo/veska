@@ -30,18 +30,18 @@ type VerifyResult struct {
 	// Status is one of "healthy", "degraded", or "broken".
 	//   healthy  — all present checks passed
 	//   degraded — audit.jsonl present but malformed; DB checks passed
-	//   broken   — engram.db could not be extracted or failed integrity checks
+	//   broken   — veska.db could not be extracted or failed integrity checks
 	Status string
 }
 
-// Verify extracts engram.db (and optionally audit.jsonl) from the .tar.gz at
+// Verify extracts veska.db (and optionally audit.jsonl) from the .tar.gz at
 // path, runs PRAGMA integrity_check and PRAGMA foreign_key_check on the
 // database, and validates each line of audit.jsonl as JSON.
 //
 // Exit codes (via caller): 0=healthy, 1=degraded, 2=broken.
 func Verify(path string) (VerifyResult, error) {
 	// Extract files into a temp dir.
-	tmpDir, err := os.MkdirTemp("", "engram-verify-*")
+	tmpDir, err := os.MkdirTemp("", "veska-verify-*")
 	if err != nil {
 		return VerifyResult{}, fmt.Errorf("backup verify: MkdirTemp: %w", err)
 	}
@@ -52,10 +52,10 @@ func Verify(path string) (VerifyResult, error) {
 		return VerifyResult{Status: "broken"}, nil //nolint:nilerr // extraction failure → broken, not a caller error
 	}
 
-	// Write engram.db to temp dir.
-	dbPath := filepath.Join(tmpDir, "engram.db")
+	// Write veska.db to temp dir.
+	dbPath := filepath.Join(tmpDir, "veska.db")
 	if err := os.WriteFile(dbPath, dbBytes, 0o600); err != nil {
-		return VerifyResult{Status: "broken"}, fmt.Errorf("backup verify: write engram.db: %w", err)
+		return VerifyResult{Status: "broken"}, fmt.Errorf("backup verify: write veska.db: %w", err)
 	}
 
 	// Run SQLite integrity checks.
@@ -91,7 +91,7 @@ func Verify(path string) (VerifyResult, error) {
 }
 
 // extractVerifyFiles reads the .tar.gz at path and returns the raw bytes for
-// engram.db and audit.jsonl (if present).  Returns an error if engram.db is
+// veska.db and audit.jsonl (if present).  Returns an error if veska.db is
 // not found in the archive.
 func extractVerifyFiles(path string) (dbBytes []byte, auditBytes []byte, auditPresent bool, err error) {
 	f, err := os.Open(path)
@@ -119,10 +119,10 @@ func extractVerifyFiles(path string) (dbBytes []byte, auditBytes []byte, auditPr
 		}
 
 		switch hdr.Name {
-		case "engram.db":
+		case "veska.db":
 			var buf bytes.Buffer
 			if _, err := io.Copy(&buf, tr); err != nil {
-				return nil, nil, false, fmt.Errorf("read engram.db: %w", err)
+				return nil, nil, false, fmt.Errorf("read veska.db: %w", err)
 			}
 			dbBytes = buf.Bytes()
 			dbFound = true
@@ -138,7 +138,7 @@ func extractVerifyFiles(path string) (dbBytes []byte, auditBytes []byte, auditPr
 	}
 
 	if !dbFound {
-		return nil, nil, false, fmt.Errorf("engram.db not found in archive")
+		return nil, nil, false, fmt.Errorf("veska.db not found in archive")
 	}
 	return dbBytes, auditBytes, auditPresent, nil
 }

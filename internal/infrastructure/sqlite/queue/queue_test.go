@@ -11,15 +11,15 @@ import (
 
 	_ "github.com/mattn/go-sqlite3"
 
-	"github.com/whiskeyjimbo/engram/solov2/internal/infrastructure/sqlite"
-	"github.com/whiskeyjimbo/engram/solov2/internal/infrastructure/sqlite/queue"
+	"github.com/whiskeyjimbo/veska/internal/infrastructure/sqlite"
+	"github.com/whiskeyjimbo/veska/internal/infrastructure/sqlite/queue"
 )
 
 // openTestDB opens a fully-migrated DB using OpenWithOptions with a temp backup dir.
 func openTestDB(t *testing.T) *sql.DB {
 	t.Helper()
 	dir := t.TempDir()
-	dbPath := filepath.Join(dir, "engram.db")
+	dbPath := filepath.Join(dir, "veska.db")
 	backupDir := filepath.Join(dir, "backups")
 	db, err := sqlite.OpenWithOptions(dbPath, sqlite.Options{BackupDir: backupDir})
 	if err != nil {

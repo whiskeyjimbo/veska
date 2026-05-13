@@ -15,17 +15,17 @@ type ServiceReport struct {
 	Status              string `json:"status"`
 }
 
-// CheckService probes the daemon socket and broken marker for engramHome.
-// The daemon socket is expected at <engramHome>/daemon.sock.
-// The broken marker is expected at <engramHome>/broken.
+// CheckService probes the daemon socket and broken marker for veskaHome.
+// The daemon socket is expected at <veskaHome>/daemon.sock.
+// The broken marker is expected at <veskaHome>/broken.
 //
 // Status rules:
 //   - "broken"  — broken marker file is present (regardless of daemon state)
 //   - "degraded" — no broken marker but daemon socket is unreachable
 //   - "healthy"  — daemon running and no broken marker
-func CheckService(engramHome string) (ServiceReport, error) {
-	markerPath := filepath.Join(engramHome, "broken")
-	sockPath := filepath.Join(engramHome, "daemon.sock")
+func CheckService(veskaHome string) (ServiceReport, error) {
+	markerPath := filepath.Join(veskaHome, "broken")
+	sockPath := filepath.Join(veskaHome, "daemon.sock")
 
 	// 1. Check broken marker.
 	_, err := os.Stat(markerPath)

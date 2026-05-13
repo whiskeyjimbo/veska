@@ -8,7 +8,7 @@ import (
 	_ "modernc.org/sqlite"
 )
 
-// Pools holds the three *sql.DB handles for a single engram.db file.
+// Pools holds the three *sql.DB handles for a single veska.db file.
 // ReadDB: unlimited connections, for all read paths.
 // WriteHot: MaxOpenConns=1, for promotion + MCP writes.
 // WriteEmbed: MaxOpenConns=1, for embed worker only.

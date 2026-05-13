@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/whiskeyjimbo/engram/solov2/internal/doctor"
+	"github.com/whiskeyjimbo/veska/internal/doctor"
 )
 
 // writeTarGz writes a minimal valid .tar.gz archive to path.
@@ -23,7 +23,7 @@ func writeTarGz(t *testing.T, path string) {
 	gw := gzip.NewWriter(f)
 	tw := tar.NewWriter(gw)
 
-	content := []byte("engram backup test content")
+	content := []byte("veska backup test content")
 	hdr := &tar.Header{
 		Name:    "test.txt",
 		Mode:    0o644,
