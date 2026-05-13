@@ -110,7 +110,7 @@ func (p *GoParser) ParseFile(ctx context.Context, repoID, path string, src []byt
 	}
 
 	// --- CALLS edges ---
-	callEdges := extractCallEdges(root, src, repoID, path, symbolByName)
+	callEdges := extractCallEdges(root, src, symbolByName)
 	result.Edges = append(result.Edges, callEdges...)
 
 	return result, nil
@@ -225,7 +225,7 @@ func parseTypeDecl(node *sitter.Node, src []byte, repoID, path string) *domain.N
 
 // extractCallEdges walks the entire AST looking for call_expression nodes inside
 // function/method bodies and emits EdgeCalls when the callee is known in the file.
-func extractCallEdges(root *sitter.Node, src []byte, repoID, path string, symbols map[string]*domain.Node) []*domain.Edge {
+func extractCallEdges(root *sitter.Node, src []byte, symbols map[string]*domain.Node) []*domain.Edge {
 	var edges []*domain.Edge
 
 	count := int(root.ChildCount())
