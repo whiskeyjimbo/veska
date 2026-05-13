@@ -20,3 +20,20 @@ func TestDefaultVectorDir_ContainsDotEngram(t *testing.T) {
 		t.Errorf("DefaultVectorDir() = %q; want path containing \".engram\"", dir)
 	}
 }
+
+func TestDaemonSockPath_EndsWithDaemonSock(t *testing.T) {
+	got := config.DaemonSockPath()
+	if !strings.HasSuffix(got, "daemon.sock") {
+		t.Errorf("DaemonSockPath() = %q; want path ending in \"daemon.sock\"", got)
+	}
+}
+
+func TestDaemonSockPath_RespectsEngramHome(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("ENGRAM_HOME", dir)
+	got := config.DaemonSockPath()
+	want := dir + "/daemon.sock"
+	if got != want {
+		t.Errorf("DaemonSockPath() = %q; want %q", got, want)
+	}
+}

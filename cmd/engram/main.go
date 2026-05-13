@@ -8,11 +8,13 @@ import (
 )
 
 func newRootCmd() *cobra.Command {
-	return &cobra.Command{
+	root := &cobra.Command{
 		Use:          "engram",
 		Short:        "Engram code intelligence CLI",
 		SilenceUsage: true,
 	}
+	root.AddCommand(hookRunnerCmd())
+	return root
 }
 
 func main() {
