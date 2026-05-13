@@ -17,3 +17,12 @@ func DefaultVectorDir() string {
 	}
 	return filepath.Join(home, ".engram")
 }
+
+// DaemonSockPath returns the Unix-domain socket path used by the engram daemon.
+// It resolves to $ENGRAM_HOME/daemon.sock, where ENGRAM_HOME defaults to ~/.engram.
+func DaemonSockPath() string {
+	if dir := os.Getenv("ENGRAM_HOME"); dir != "" {
+		return filepath.Join(dir, "daemon.sock")
+	}
+	return filepath.Join(DefaultVectorDir(), "daemon.sock")
+}
