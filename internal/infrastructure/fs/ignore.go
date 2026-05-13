@@ -29,6 +29,14 @@ type IgnoreList struct {
 	patterns []string
 }
 
+// NewIgnoreListFromPatterns creates an IgnoreList from the provided patterns
+// without reading any file. Useful in tests and programmatic construction.
+func NewIgnoreListFromPatterns(patterns []string) *IgnoreList {
+	p := make([]string, len(patterns))
+	copy(p, patterns)
+	return &IgnoreList{patterns: p}
+}
+
 // Load reads .engramignore from repoRoot (if it exists) and returns an IgnoreList
 // merging DefaultIgnorePatterns with the file's patterns.
 // Lines starting with # and blank lines are skipped.
