@@ -202,7 +202,7 @@ internal. §2.3 covers the promotion-pipeline side of the same story.
 ## 2. Promotion pipeline
 
 Triggered by `git commit` (via the post-commit hook running
-`veska hook-runner post-commit`) or by `engram promote` for headless
+`veska hook-runner post-commit`) or by `veska promote` for headless
 batch runs. Runs synchronously inside the promotion SQL transaction or
 the very next step before the hook returns.
 
@@ -306,7 +306,7 @@ being explicit.
 When any marker is present, the hook returns 0 immediately
 without contacting the daemon. No promotion, no post-promotion queue enqueue, no
 `last_promoted_sha` advance. Output: nothing on success; one
-debug-level log line if `ENGRAM_LOG_LEVEL=debug`.
+debug-level log line if `VESKA_LOG_LEVEL=debug`.
 
 **Catch-up at end of operation.** When the operation finishes
 (rebase completes, merge `--continue` succeeds, bisect ends),
@@ -454,7 +454,7 @@ fixed offset, not "local midnight" interpreted at check time
 otherwise see the cap reset 8 hours late). The daemon records
 the host's IANA timezone on first daemon start in
 `database_meta.review_cap_tz` and uses that zone for every
-subsequent reset until the user runs `engram review reset-tz`
+subsequent reset until the user runs `veska review reset-tz`
 to relocate. `veska doctor pipelines` shows the active zone
 and the next reset time as an absolute UTC instant.
 
@@ -507,7 +507,7 @@ numbers they see, even ones labelled "placeholder."
 
 `~/.veska/<repo_id>/active_task` (a one-line file) pins the
 active task. When set, auto-link returns the pinned task
-regardless of score. `veska task bind <id>` writes it; `engram
+regardless of score. `veska task bind <id>` writes it; `veska
 task unbind` removes it.
 
 ### 4.2 Re-link on revalidation
@@ -621,7 +621,7 @@ Revalidation never auto-closes findings with `severity >= high`
 without `actor_kind = 'human'` on the close. The sweep
 proposes a close by writing a `revalidation_proposes_close`
 finding-detail; the human confirms (via MCP `eng_close_finding`
-or CLI `engram finding close`) and the finding closes. Without
+or CLI `veska finding close`) and the finding closes. Without
 confirmation, the proposed close stays as-is until the next
 sweep, which re-confirms the proposal is still valid.
 
@@ -662,7 +662,7 @@ A branch is eligible when all of:
 
 | Surface | Use |
 |---|---|
-| `engram preflight` CLI | One-shot. Exits non-zero on ineligible. Wrap it in a `pre-push` hook if desired. |
+| `veska preflight` CLI | One-shot. Exits non-zero on ineligible. Wrap it in a `pre-push` hook if desired. |
 | MCP `eng_preflight_status` | The editor or agent reads the same view. |
 | `veska doctor preflight` | Human-friendly summary. |
 
@@ -672,7 +672,7 @@ The user (or their `pre-push` hook) is the enforcement.
 
 ### 7.2 Force override
 
-`engram preflight --force` exits zero with a `forced: true` audit
+`veska preflight --force` exits zero with a `forced: true` audit
 entry. Findings stay; the gate just doesn't block. The audit log
 records who forced and why (the `--reason` flag is required when
 `--force` is used).
@@ -686,7 +686,7 @@ others.
 | Failure | Behavior |
 |---|---|
 | Save reparse panics on a file | Log; mark file degraded; staging stays at last-good entry |
-| Promotion SQL transaction fails | Hook returns non-zero; user retries the commit (or runs `engram promote --retry`) |
+| Promotion SQL transaction fails | Hook returns non-zero; user retries the commit (or runs `veska promote --retry`) |
 | Embedder goroutine crashes | Daemon restarts it; pending refs stay `pending`; semantic search degrades |
 | Auto-link goroutine crashes | Findings stay unlinked; user can manually bind tasks |
 | Revalidation overruns its cadence | Skip the next scheduled run; emit warning in `veska doctor` |
@@ -904,7 +904,7 @@ the SOLO-13 §3.1 typical-commit budget honest under agent write
 bursts. ADR-S0011 records the rationale for keeping the rest of
 the writer-pool design flat.
 
-`engram promote` over the Unix socket opens a transaction on
+`veska promote` over the Unix socket opens a transaction on
 `writeDB.hot` and runs the promotion SQL (SOLO-08 §5). It does not
 bypass the pool, and it does not preempt an MCP write *already
 holding* the connection.
@@ -1019,5 +1019,5 @@ require_review_specialties = []
 allow_force = true
 ```
 
-Editing the config is a CLI action (`engram config edit`); the
+Editing the config is a CLI action (`veska config edit`); the
 daemon reloads on next pipeline-tick.

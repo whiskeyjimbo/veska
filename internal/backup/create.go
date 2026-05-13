@@ -23,8 +23,8 @@ import (
 type CreateOptions struct {
 	// DBPath is the path to the live veska.db SQLite database.
 	DBPath string
-	// EngramHome is the veska data directory (e.g. ~/.veska).
-	EngramHome string
+	// VeskaHome is the veska data directory (e.g. ~/.veska).
+	VeskaHome string
 	// BackupDir is the directory where the finished tarball is written.
 	// Typically ~/.veska-backups.
 	BackupDir string
@@ -43,8 +43,8 @@ type CreateResult struct {
 // Steps:
 //  1. Creates a temp staging directory.
 //  2. Runs VACUUM INTO <staging>/veska.db on opts.DBPath (read-only connection).
-//  3. Copies audit.jsonl and rotations (.1–.5) from opts.EngramHome if present.
-//  4. Copies config.toml from opts.EngramHome if present (silently skipped if absent).
+//  3. Copies audit.jsonl and rotations (.1–.5) from opts.VeskaHome if present.
+//  4. Copies config.toml from opts.VeskaHome if present (silently skipped if absent).
 //  5. Copies cache/ directory recursively if present.
 //  6. Writes manifest.json with created_at, veska_home, go_version.
 //  7. Creates <opts.BackupDir>/veska-backup-<timestamp>.tar.gz from staging.
@@ -67,13 +67,13 @@ func Create(opts CreateOptions) (CreateResult, error) {
 	}
 
 	// 3. Copy audit.jsonl + rotations.
-	auditBase := filepath.Join(opts.EngramHome, "audit.jsonl")
+	auditBase := filepath.Join(opts.VeskaHome, "audit.jsonl")
 	if err := copyIfPresent(auditBase, filepath.Join(staging, "audit.jsonl")); err != nil {
 		return CreateResult{}, fmt.Errorf("backup: copy audit.jsonl: %w", err)
 	}
 	for i := 1; i <= 5; i++ {
 		name := fmt.Sprintf("audit.jsonl.%d", i)
-		src := filepath.Join(opts.EngramHome, name)
+		src := filepath.Join(opts.VeskaHome, name)
 		dst := filepath.Join(staging, name)
 		if err := copyIfPresent(src, dst); err != nil {
 			return CreateResult{}, fmt.Errorf("backup: copy %s: %w", name, err)
@@ -81,13 +81,13 @@ func Create(opts CreateOptions) (CreateResult, error) {
 	}
 
 	// 4. Copy config.toml (skip silently if absent).
-	configSrc := filepath.Join(opts.EngramHome, "config.toml")
+	configSrc := filepath.Join(opts.VeskaHome, "config.toml")
 	if err := copyIfPresent(configSrc, filepath.Join(staging, "config.toml")); err != nil {
 		return CreateResult{}, fmt.Errorf("backup: copy config.toml: %w", err)
 	}
 
 	// 5. Copy cache/ recursively if present.
-	cacheSrc := filepath.Join(opts.EngramHome, "cache")
+	cacheSrc := filepath.Join(opts.VeskaHome, "cache")
 	if _, err := os.Stat(cacheSrc); err == nil {
 		cacheDst := filepath.Join(staging, "cache")
 		if err := copyDirRecursive(cacheSrc, cacheDst); err != nil {
@@ -98,7 +98,7 @@ func Create(opts CreateOptions) (CreateResult, error) {
 	// 6. Write manifest.json.
 	manifest := map[string]string{
 		"created_at": time.Now().UTC().Format(time.RFC3339),
-		"veska_home": opts.EngramHome,
+		"veska_home": opts.VeskaHome,
 		"go_version": runtime.Version(),
 	}
 	manifestData, err := json.MarshalIndent(manifest, "", "  ")

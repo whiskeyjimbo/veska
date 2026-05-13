@@ -31,7 +31,7 @@ var errUnsupportedPlatform = errors.New("unsupported platform: no service manage
 
 // New returns the Manager appropriate for the current OS.
 // binaryPath is the absolute path to the veska-daemon binary.
-// veskaHome is the Engram data root (typically ~/.veska).
+// veskaHome is the Veska data root (typically ~/.veska).
 func New(binaryPath, veskaHome string) (Manager, error) {
 	return NewForGOOS(runtime.GOOS, binaryPath, veskaHome)
 }

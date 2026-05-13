@@ -210,7 +210,7 @@ CREATE TABLE tasks (
     task_id       TEXT PRIMARY KEY,
     repo_id       TEXT NOT NULL,         -- task is scoped to one repo
     tracker       TEXT,                  -- 'bd-cli' | 'jira' | 'github' | NULL
-    tracker_ref   TEXT,                  -- e.g. 'bd-cli:engram-42'
+    tracker_ref   TEXT,                  -- e.g. 'bd-cli:veska-42'
     title         TEXT NOT NULL,
     active        INTEGER NOT NULL DEFAULT 0,
     created_at    INTEGER NOT NULL,
@@ -330,7 +330,7 @@ a database, baked at `veska init` time from the embedder's
 `ModelVersion()`. `database_meta` records the provider/model/dim;
 `node_embeddings.dim` per-row is the sanity check that catches
 stale rows after a swap. Boot refuses on mismatch with
-`ErrEmbedderMismatch`. Swaps go through `engram embedder swap`
+`ErrEmbedderMismatch`. Swaps go through `veska embedder swap`
 (SOLO-03 §3.2) — the canonical mechanism.
 
 ### 3.3a Daemon state
@@ -479,7 +479,7 @@ One JSON object per line.
 | `actor_kind` | `"human" \| "agent" \| "system"` | Per SOLO-10 §1.2. |
 | `tool` | string | MCP tool name (`eng_*`) for MCP writes; `cli:<verb>` for CLI invocations; `service:<routine>` for daemon-internal writes. |
 | `args` | object | Tool arguments. Secret-shaped string values redacted at write time: keys matching `*_token`/`*_secret`/`*_password`/`*_key`/`api_key`/`auth*` (case-insensitive) are replaced with `"<redacted>"`, and **every string value is scanned by the SecretsScanner port** (the same scanner promotion uses, SOLO-11 §2.1); content matches are replaced with `"<redacted:<rule>>"`. The scan is finite-rule and doesn't catch novel formats; the audit log is operator data, not sanitised data. |
-| `result` | string | `"ok"`, or `"refused: <reason>"` for human-action-gate / validation refusals, or `"error: <engram_code>"` for handler errors. |
+| `result` | string | `"ok"`, or `"refused: <reason>"` for human-action-gate / validation refusals, or `"error: <veska_code>"` for handler errors. |
 
 #### Optional fields
 
@@ -718,7 +718,7 @@ the daemon may be down across user-side commits, in which case
 | Daemon crashes mid-promotion | `BEGIN IMMEDIATE` was either committed (Git already has SHA → next commit succeeds) or rolled back (next commit retries). Neither leaves partial state. |
 | Power loss / kernel panic between promotion `COMMIT` and next checkpoint | With `synchronous = FULL` (default) the promotion is durable. Operators who overrode to `NORMAL` may lose the most recent promotion; startup resync (SOLO-03 §5.7) replays when `last_promoted_sha < HEAD`. |
 | `last_promoted_sha` not reachable from `HEAD` (force-push, history rewrite) | Startup resync logs `ErrPromotionDivergent`, falls back to a fresh full reparse for the active branch, and records the new `HEAD` as `last_promoted_sha`. Findings on the orphaned branch persist until `veska gc --branches` sweeps them. (SOLO-03 §5.7.) |
-| SQLite database locked by an external writer (e.g. user `sqlite3` shell) | `BEGIN IMMEDIATE` blocks until `busy_timeout` expires (5s hot, 30s embed); the in-flight op then fails. User can `engram promote --retry` after closing the external connection. In-process pools do not contend with each other beyond SQLite's own lock arbitration (SOLO-11 §10, ADR-S0011). |
+| SQLite database locked by an external writer (e.g. user `sqlite3` shell) | `BEGIN IMMEDIATE` blocks until `busy_timeout` expires (5s hot, 30s embed); the in-flight op then fails. User can `veska promote --retry` after closing the external connection. In-process pools do not contend with each other beyond SQLite's own lock arbitration (SOLO-11 §10, ADR-S0011). |
 | Embedding goroutine crashes | Daemon supervisor restarts it; pending refs stay `pending`; semantic search returns `degraded_reasons: ['embedding_pending']`. |
 | Disk full | Promotion fails; hook returns non-zero; daemon refuses new MCP writes until `veska doctor disk` reports OK. The daemon also (a) checkpoints WAL aggressively (`PRAGMA wal_checkpoint(TRUNCATE)`) to release any pending pages, (b) rotates `audit.jsonl` and the daemon log to their retained-set sizes, and (c) refuses to write new pre-migration auto-snapshots until pressure clears (an old pre-migration snapshot is preserved; a new one would have nowhere to land). Backups are not auto-pruned — the user owns retention there (§9.5). |
 | WAL grows unboundedly | Daemon checkpoints WAL on idle (no writes for 5s). `PRAGMA wal_autocheckpoint = 1000` (pages). |
@@ -764,7 +764,7 @@ pure; cross-repo bookkeeping stays out of it.
 ## 7. What this design does NOT include
 
 - **Embedder migration ceremony.** Swapping models is one CLI
-  subcommand against a live daemon (`engram embedder swap`) —
+  subcommand against a live daemon (`veska embedder swap`) —
   see SOLO-03 §3.2 and ADR-S0007. There is no five-phase FSM,
   no per-row migration cursor, no dual-index window.
 - **Cross-database joins.** There is one database. There are no
@@ -856,7 +856,7 @@ veska backup create [--dest <path>]
 
 Default destination: `backup.default_path` from CONFIG-SURFACE.md
 (default `~/.veska-backups/`), filename
-`engram-YYYYMMDD-HHMMSS.tgz`.
+`veska-YYYYMMDD-HHMMSS.tgz`.
 
 Steps:
 
@@ -1049,14 +1049,14 @@ runner hashes it at apply time.
 
 ### 10.3 What this design does NOT include
 
-- **Down migrations.** No `down.sql`, no `engram migrate down`.
+- **Down migrations.** No `down.sql`, no `veska migrate down`.
   Recovery from a bad migration is one command:
-  `engram restore --pre-migration` restores the most recent
+  `veska restore --pre-migration` restores the most recent
   pre-migration snapshot from `~/.veska-backups/.pre-migration/`
   (the snapshot the runner took before the failing migration in
   §10's step 2), prints which version was rolled back to, and
   prints the binary version that pairs with that schema so the
-  user can downgrade. The user runs `brew downgrade engram` (or
+  user can downgrade. The user runs `brew downgrade veska` (or
   the equivalent) and restarts. **This is not auto-restore** —
   auto-restore on a failing migration would mask migration bugs;
   the user issues the explicit restore once they have read the
@@ -1067,7 +1067,7 @@ runner hashes it at apply time.
   run" is the entire downtime story.
 - **Skip / squash.** Migrations always run in order; the runner
   does not consolidate or skip applied versions.
-- **Out-of-band migration.** `engram migrate` as a CLI surface
+- **Out-of-band migration.** `veska migrate` as a CLI surface
   does not exist. Migrations are triggered by daemon start.
   Manual SQL against `veska.db` while the daemon is stopped is
   supported but unsupported (see SOLO-11 §10.4 "What this design does NOT include" — the user is on

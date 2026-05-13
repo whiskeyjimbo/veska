@@ -37,11 +37,11 @@ We want to keep durable writes off the save path entirely.
 Separate save from promotion:
 
 - **Save.** Any interactive write (editor save via fsnotify, agent
-  edit via MCP, `engram index`) writes only to an in-memory
+  edit via MCP, `veska index`) writes only to an in-memory
   `StagingArea` in the application layer. Saves do not touch SQLite.
   StagingArea is volatile by design: no WAL, no persistence across
   daemon restart.
-- **Promotion.** Triggered by the post-commit Git hook (or `engram promote`
+- **Promotion.** Triggered by the post-commit Git hook (or `veska promote`
   for headless runs). Promotion runs one SQL transaction:
   `BEGIN IMMEDIATE`, promote staging deltas to `nodes`/`edges`,
   insert `post_promotion_queue` rows for async work, `COMMIT`. The hook
@@ -76,7 +76,7 @@ Negative:
 
 - Staged edits not yet promoted are lost on daemon crash. Acceptable
   because the editor still owns the file content; re-saving the
-  file or running `engram index` rebuilds staging.
+  file or running `veska index` rebuilds staging.
 - Two read modes (with-staging and promoted-only) is one more
   parameter for MCP tools to carry. The default is sane and
   documented per-tool.

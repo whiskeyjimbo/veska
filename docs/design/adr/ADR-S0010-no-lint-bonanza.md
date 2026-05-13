@@ -63,7 +63,7 @@ that hurts: domain-on-infrastructure coupling.
 Everything else lands on `golangci-lint`:
 
 - `forbidigo` for banned identifiers (e.g., `fmt.Printf` outside
-  `cmd/engram/render/`).
+  `cmd/veska/render/`).
 - `sloglint` for slog attribute hygiene.
 - `gocritic`, `revive`, `staticcheck` for general Go quality.
 - `gosec` for security smells.

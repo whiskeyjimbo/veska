@@ -70,7 +70,7 @@ envelope sets `truncated_at: N` when the budget bites.
 
 ## 3. `hot_zone` page
 
-One page per repo at `docs/engram/hot_zone.md`. Mechanical
+One page per repo at `docs/veska/hot_zone.md`. Mechanical
 derivation:
 
 1. Compute centrality on the promoted graph: PageRank over
@@ -87,7 +87,7 @@ and a one-line header that says when it was generated.
 
 ## 4. `entry_points` page
 
-One page per repo at `docs/engram/entry_points.md`. Mechanical
+One page per repo at `docs/veska/entry_points.md`. Mechanical
 derivation:
 
 1. **Public symbols.** Public-API functions per the language's
@@ -110,9 +110,9 @@ wiki avoids.
 Pages are written to:
 
 ```
-docs/engram/INDEX.md
-docs/engram/hot_zone.md
-docs/engram/entry_points.md
+docs/veska/INDEX.md
+docs/veska/hot_zone.md
+docs/veska/entry_points.md
 ```
 
 `INDEX.md` is a 5-line file linking the two pages and their
@@ -145,8 +145,8 @@ rules:
 The renderer goes through a `tools/lint/wikidet` analyser at
 test time that re-runs `veska wiki regenerate` twice in a row
 and diffs the output bytewise. CI fails on any difference. The
-user can `git add docs/engram/` to commit the pages or add
-`docs/engram/` to `.gitignore`. Engram does not stage them.
+user can `git add docs/veska/` to commit the pages or add
+`docs/veska/` to `.gitignore`. Engram does not stage them.
 
 ## 6. Performance
 

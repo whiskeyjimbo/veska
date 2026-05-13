@@ -16,8 +16,8 @@ import (
 
 // BundleOptions controls the behaviour of CreateBundle.
 type BundleOptions struct {
-	// EngramHome is the veska data directory (e.g. ~/.veska).
-	EngramHome string
+	// VeskaHome is the veska data directory (e.g. ~/.veska).
+	VeskaHome string
 	// OutputDir is where the tarball is written.
 	// If empty, os.TempDir() is used.
 	OutputDir string
@@ -86,7 +86,7 @@ func CreateBundle(opts BundleOptions) (BundleResult, error) {
 	// 1. manifest.json
 	manifest := map[string]string{
 		"created_at": time.Now().UTC().Format(time.RFC3339),
-		"veska_home": opts.EngramHome,
+		"veska_home": opts.VeskaHome,
 		"go_version": runtime.Version(),
 		"platform":   runtime.GOOS + "/" + runtime.GOARCH,
 	}
@@ -99,7 +99,7 @@ func CreateBundle(opts BundleOptions) (BundleResult, error) {
 	}
 
 	// 2. doctor/storage.json
-	storageReport, _ := CheckStorage(opts.EngramHome)
+	storageReport, _ := CheckStorage(opts.VeskaHome)
 	storageEnv := NewEnvelope("storage", "healthy", storageReport)
 	if err := addProbeEntry(tw, &fileCount, "doctor/storage.json", storageEnv, false); err != nil {
 		return BundleResult{}, err
@@ -114,8 +114,8 @@ func CreateBundle(opts BundleOptions) (BundleResult, error) {
 
 	// 4. doctor/egress.json
 	egressReport, _ := CheckEgress([]string{
-		filepath.Join(opts.EngramHome, "daemon.sock"),
-		filepath.Join(opts.EngramHome, "mcp.sock"),
+		filepath.Join(opts.VeskaHome, "daemon.sock"),
+		filepath.Join(opts.VeskaHome, "mcp.sock"),
 	})
 	egressStatus := "healthy"
 	for _, s := range egressReport.Sockets {
@@ -130,7 +130,7 @@ func CreateBundle(opts BundleOptions) (BundleResult, error) {
 	}
 
 	// 5. doctor/config.json (redacted)
-	configReport, _ := CheckConfig(opts.EngramHome)
+	configReport, _ := CheckConfig(opts.VeskaHome)
 	configStatus := "healthy"
 	if !configReport.DBExists {
 		configStatus = "degraded"
@@ -141,14 +141,14 @@ func CreateBundle(opts BundleOptions) (BundleResult, error) {
 	}
 
 	// 6. doctor/service.json
-	serviceReport, _ := CheckService(opts.EngramHome)
+	serviceReport, _ := CheckService(opts.VeskaHome)
 	serviceEnv := NewEnvelope("service", serviceReport.Status, serviceReport)
 	if err := addProbeEntry(tw, &fileCount, "doctor/service.json", serviceEnv, false); err != nil {
 		return BundleResult{}, err
 	}
 
 	// 7. doctor/post_promotion_queue.json
-	dbPath := filepath.Join(opts.EngramHome, "veska.db")
+	dbPath := filepath.Join(opts.VeskaHome, "veska.db")
 	ppqReport, _ := CheckPostPromotionQueue(dbPath)
 	ppqEnv := NewEnvelope("post_promotion_queue", ppqReport.Status, ppqReport)
 	if err := addProbeEntry(tw, &fileCount, "doctor/post_promotion_queue.json", ppqEnv, false); err != nil {
@@ -156,7 +156,7 @@ func CreateBundle(opts BundleOptions) (BundleResult, error) {
 	}
 
 	// 8. audit.tail — last 100 lines, redacted
-	auditTail := readAuditTail(filepath.Join(opts.EngramHome, "audit.jsonl"), 100)
+	auditTail := readAuditTail(filepath.Join(opts.VeskaHome, "audit.jsonl"), 100)
 	auditTail = audit.RedactFile(auditTail)
 	if err := addEntry("audit.tail", auditTail); err != nil {
 		return BundleResult{}, err

@@ -37,7 +37,7 @@ We want the post-promotion queue to be:
 - Recoverable on restart without manual intervention.
 - Bounded in size (no unbounded growth on a long-running daemon).
 - Self-acknowledging on persistent failure (a single-user product
-  cannot rely on the user running `engram post-promotion queue ack`).
+  cannot rely on the user running `veska post-promotion queue ack`).
 
 ## Decision
 

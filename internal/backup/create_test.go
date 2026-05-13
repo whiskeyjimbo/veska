@@ -69,9 +69,9 @@ func TestCreateBackupBasic(t *testing.T) {
 	seedDB(t, dbPath)
 
 	result, err := backup.Create(backup.CreateOptions{
-		DBPath:     dbPath,
-		EngramHome: veskaHome,
-		BackupDir:  backupDir,
+		DBPath:    dbPath,
+		VeskaHome: veskaHome,
+		BackupDir: backupDir,
 	})
 	if err != nil {
 		t.Fatalf("Create: %v", err)
@@ -108,9 +108,9 @@ func TestCreateBackupCopiesAuditLog(t *testing.T) {
 	}
 
 	result, err := backup.Create(backup.CreateOptions{
-		DBPath:     dbPath,
-		EngramHome: veskaHome,
-		BackupDir:  backupDir,
+		DBPath:    dbPath,
+		VeskaHome: veskaHome,
+		BackupDir: backupDir,
 	})
 	if err != nil {
 		t.Fatalf("Create: %v", err)
@@ -131,9 +131,9 @@ func TestCreateBackupSkipsMissingConfig(t *testing.T) {
 
 	// Deliberately do NOT create config.toml.
 	_, err := backup.Create(backup.CreateOptions{
-		DBPath:     dbPath,
-		EngramHome: veskaHome,
-		BackupDir:  backupDir,
+		DBPath:    dbPath,
+		VeskaHome: veskaHome,
+		BackupDir: backupDir,
 	})
 	if err != nil {
 		t.Fatalf("Create should succeed without config.toml: %v", err)
@@ -148,9 +148,9 @@ func TestCreateBackupResult(t *testing.T) {
 	seedDB(t, dbPath)
 
 	result, err := backup.Create(backup.CreateOptions{
-		DBPath:     dbPath,
-		EngramHome: veskaHome,
-		BackupDir:  backupDir,
+		DBPath:    dbPath,
+		VeskaHome: veskaHome,
+		BackupDir: backupDir,
 	})
 	if err != nil {
 		t.Fatalf("Create: %v", err)
@@ -172,9 +172,9 @@ func TestCreateBackupManifestFields(t *testing.T) {
 	seedDB(t, dbPath)
 
 	result, err := backup.Create(backup.CreateOptions{
-		DBPath:     dbPath,
-		EngramHome: veskaHome,
-		BackupDir:  backupDir,
+		DBPath:    dbPath,
+		VeskaHome: veskaHome,
+		BackupDir: backupDir,
 	})
 	if err != nil {
 		t.Fatalf("Create: %v", err)

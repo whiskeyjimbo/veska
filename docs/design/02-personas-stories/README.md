@@ -17,7 +17,7 @@ back-reference stories by their `US-NN.MM` ID.
 
 | ID | Persona | Definition | Surfaces |
 |---|---|---|---|
-| `dev` | **Dev** | The human developer who started the daemon. | `engram` CLI, editor MCP, git hooks |
+| `dev` | **Dev** | The human developer who started the daemon. | `veska` CLI, editor MCP, git hooks |
 | `agent` | **Agent** | An AI coding assistant acting via MCP. | `veska-mcp` stdio shim, Unix-socket MCP |
 
 That is the whole cast. There is no SecEng (the Dev reviews their
@@ -101,7 +101,7 @@ window.
 **Satisfied by:** SOLO-08, SOLO-11
 
 The Dev runs `git commit`. The post-commit hook fires
-`engram promote`, which promotes staging to SQLite atomically and
+`veska promote`, which promotes staging to SQLite atomically and
 writes a `post_promotion_queue` row. The hook returns to Git within the
 hook-return budget. Async drains run after.
 

@@ -58,7 +58,7 @@ Rename throughout the SOLO design set:
 | seal_pipeline | promotion_pipeline |
 | seal barrier | promotion barrier |
 | ErrSealDivergent | ErrPromotionDivergent |
-| `engram seal` (CLI) | `engram promote` |
+| `veska seal` (CLI) | `veska promote` |
 | Seal RPC | Promote RPC |
 | save-vs-seal | save-vs-promote |
 | PostSealQueueRepository | PostPromotionQueueRepository |
@@ -71,7 +71,7 @@ form is *promoted* ("the promoted state"). Three forms, three
 words, one root — the same separation English already gives us
 with commit/committed/committal but without colliding with Git.
 
-The CLI verb is `engram promote` (rare; only used for headless
+The CLI verb is `veska promote` (rare; only used for headless
 batch runs and `--retry`). The post-commit hook continues to
 fire automatically; users mostly never type the verb.
 
@@ -86,7 +86,7 @@ Positive:
   event with a `promotion_id`, a `promoted_sha`, and an audit
   trail; *promoted state* is the durable graph; *to promote* is
   the verb the post-commit hook performs.
-- The CLI command `engram promote` reads as the verb it is.
+- The CLI command `veska promote` reads as the verb it is.
 - "Save vs. Promote" reads more naturally than "Save vs. Seal"
   did — both are verbs, parallel grammatical role.
 

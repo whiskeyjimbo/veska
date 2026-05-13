@@ -104,7 +104,7 @@ not a contract — it is a sketch of where another impl might go.
 |---|---|---|
 | `Tracker` | `none` (no tracker integration); `bd-cli` (the local issue-tracker CLI) is the only shipped non-`none` impl | Ships **off** by default — opt-in via `veska init` or `[tracker] provider = "bd-cli"` |
 | `VulnSource` | `osv` (OSV.dev with a local cache) | Ships off by default |
-| `SecretsScanner` | `engram-builtin` (in-process regex + entropy) | Ships on by default |
+| `SecretsScanner` | `veska-builtin` (in-process regex + entropy) | Ships on by default |
 | `Embedder` | `ollama` with `nomic-embed-text` | Ships on by default |
 | `LLMGenerator` | `ollama` | Ships off by default (needed for review pipeline) |
 | `Notifier` | `stderr` (writes to daemon log) | Ships on by default |
@@ -138,7 +138,7 @@ states onto the `TrackerIssue` struct below.
 
 | Field | Type | Required | Notes |
 |---|---|---|---|
-| `id` | string | yes | Tracker-native ID (e.g. `engram-42`). Stable for the issue's lifetime. |
+| `id` | string | yes | Tracker-native ID (e.g. `veska-42`). Stable for the issue's lifetime. |
 | `title` | string | yes | Short summary. |
 | `type` | `task \| bug \| feature \| epic` | yes | Closed enum; mirrors `bd --type`. Other trackers map their type onto this set; novel types fail closed (`task`). |
 | `priority` | int 0-4 | yes | 0=critical, 4=backlog. Mirrors `bd --priority`. Other trackers map `P0..P4` or "high/medium/low" onto this range. |
@@ -286,7 +286,7 @@ block.
 Ingests a coverage report (Go cover, lcov, cobertura, etc.) and
 emits per-symbol coverage records joined onto the graph. No
 default impl ships — coverage is opt-in and the user wires it via
-`engram coverage import <path>` or a CI hook. A second impl would
+`veska coverage import <path>` or a CI hook. A second impl would
 need to parse its format and return `CoverageRecord` rows keyed
 by `(file_path, line_start, line_end)`; the application layer
 resolves those back to `NodeID`s.

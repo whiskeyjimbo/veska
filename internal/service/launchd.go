@@ -30,7 +30,7 @@ const plistTemplateText = `<?xml version="1.0" encoding="UTF-8"?>
 	<key>EnvironmentVariables</key>
 	<dict>
 		<key>VESKA_HOME</key>
-		<string>{{.EngramHome}}</string>
+		<string>{{.VeskaHome}}</string>
 	</dict>
 
 	<key>RunAtLoad</key>
@@ -40,10 +40,10 @@ const plistTemplateText = `<?xml version="1.0" encoding="UTF-8"?>
 	<true/>
 
 	<key>StandardOutPath</key>
-	<string>{{.EngramHome}}/daemon.log</string>
+	<string>{{.VeskaHome}}/daemon.log</string>
 
 	<key>StandardErrorPath</key>
-	<string>{{.EngramHome}}/daemon.log</string>
+	<string>{{.VeskaHome}}/daemon.log</string>
 </dict>
 </plist>
 `
@@ -85,7 +85,7 @@ func RenderPlist(binaryPath, veskaHome string) (string, error) {
 	var buf bytes.Buffer
 	if err := tmpl.Execute(&buf, struct {
 		BinaryPath string
-		EngramHome string
+		VeskaHome  string
 	}{binaryPath, veskaHome}); err != nil {
 		return "", fmt.Errorf("launchd: render plist: %w", err)
 	}

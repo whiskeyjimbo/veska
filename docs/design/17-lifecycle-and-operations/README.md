@@ -26,9 +26,9 @@ that other docs assume but never own:
 - **Upgrade during run** (§3) — what happens when the user
   replaces the binary while the daemon is up.
 - **Backup and restore** (§4) — how `veska backup` and
-  `engram restore` interact with the substrate.
+  `veska restore` interact with the substrate.
 - **Install and uninstall** (§5) — what `veska init` writes to
-  the filesystem and what `engram uninstall` removes.
+  the filesystem and what `veska uninstall` removes.
 
 Substrate mechanics (WAL, schema rows, vec0 shadow tables) live
 in SOLO-08. The doctor surface that reports state lives in
@@ -106,7 +106,7 @@ plus every snapshot in the last **30 days**. Older auto-snapshots
 are deleted on the next successful migration. User-initiated
 backups (`veska backup create`) are never deleted by this rule.
 
-`engram restore --pre-migration` restores the most recent
+`veska restore --pre-migration` restores the most recent
 auto-pre-migration snapshot. SOLO-13 §2 lists the verb in the
 doctor adjacency.
 
@@ -144,11 +144,11 @@ The check is on `max(version)`, not on file presence: an older
 binary won't have the newer migration files at all. The
 `schema_migrations` table is the canonical record.
 
-There is no `engram migrate --down`. Downgrade is restore.
+There is no `veska migrate --down`. Downgrade is restore.
 
 ## 3. Upgrade during run
 
-The user runs `brew upgrade engram` (or the equivalent on Linux).
+The user runs `brew upgrade veska` (or the equivalent on Linux).
 The new binary lands on disk; the running daemon is still on the
 old binary. What happens next is determined by the supervisor
 (SOLO-03 §5.1) and by the connection lifecycle.
@@ -218,7 +218,7 @@ not** count against the breaker.
 A backup tarball contains:
 
 ```
-engram-backup-<repo-host>-<ts>.tar.gz
+veska-backup-<repo-host>-<ts>.tar.gz
 ├── manifest.json                     # version, ts, file list, hashes
 ├── veska.db                         # SQLite database (online snapshot)
 ├── veska.db-wal                     # WAL at snapshot time (may be empty)
@@ -251,7 +251,7 @@ guarantee a transactionally consistent snapshot of the database
 without pausing writers. The audit log copy is not transactional
 relative to the database; see §4.3.
 
-Default destination: `~/.veska/backups/engram-backup-<hostname>-<ts>.tar.gz`.
+Default destination: `~/.veska/backups/veska-backup-<hostname>-<ts>.tar.gz`.
 `--output <path>` overrides; the parent directory must exist.
 
 Exit codes: 0 on success; 1 on partial (e.g., audit log read
@@ -277,7 +277,7 @@ informational, not corruption.
 ### 4.4 Restore
 
 ```
-engram restore [<path> | --pre-migration | --latest]
+veska restore [<path> | --pre-migration | --latest]
   → if the daemon is running: refuse with ErrDaemonRunning;
     point the user at `veska daemon stop`.
   → verify manifest.json against tarball contents (sha256
@@ -297,8 +297,8 @@ engram restore [<path> | --pre-migration | --latest]
     last_promoted_sha per repo, audit log line count).
 ```
 
-`engram restore --latest` picks the newest backup tarball under
-`~/.veska/backups/`. `engram restore --pre-migration` picks the
+`veska restore --latest` picks the newest backup tarball under
+`~/.veska/backups/`. `veska restore --pre-migration` picks the
 newest auto-pre-migration snapshot (§2.3).
 
 The operation is **non-running only**. There is no live-restore
@@ -352,16 +352,16 @@ installed binary inside a Git working tree:
    to back up).
 6. Register the daemon with the session supervisor
    (SOLO-03 §5.1): `launchctl load` on macOS, `systemctl --user
-   enable --now engram` on Linux with systemd-user, or write the
-   `engram supervise` shim's start script otherwise.
+   enable --now veska` on Linux with systemd-user, or write the
+   `veska supervise` shim's start script otherwise.
 7. Register the current Git repo via `veska repo add .`.
 8. Print the summary (data dir, config path, embedder status,
    service status, registered repos, audit log path).
 
-### 5.2 What `engram uninstall` removes
+### 5.2 What `veska uninstall` removes
 
 ```
-engram uninstall [--keep-data]
+veska uninstall [--keep-data]
   → stop the daemon (SIGTERM, wait grace_seconds, SIGKILL on
     expiry).
   → unregister from the session supervisor (the inverse of
@@ -377,7 +377,7 @@ engram uninstall [--keep-data]
   → exit 0.
 ```
 
-The binary itself is not removed by `engram uninstall` — the
+The binary itself is not removed by `veska uninstall` — the
 package manager (Homebrew, the user's `go install` cache,
 etc.) owns that. The doc notes the asymmetry.
 
@@ -399,7 +399,7 @@ dir, or otherwise needs to re-bootstrap without losing data.
 
 ## 6. Open questions
 
-- **OQ-S017-01:** Should `engram restore` support partial
+- **OQ-S017-01:** Should `veska restore` support partial
   restore (database only, audit log only, config only)? Today's
   answer is no — the tarball is one unit — but if user
   feedback in M3+ shows a real need, this is where the spec

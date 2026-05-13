@@ -113,6 +113,6 @@ A doc transitions to `approved` only when:
 
 ## Repository layout
 
-This set lives at `engram-v2/docs/docsv2solo/`. The prior set at
-`engram-v2/docs/design/` is preserved until M6 cutover, at which
+This set lives at `veska-v2/docs/docsv2solo/`. The prior set at
+`veska-v2/docs/design/` is preserved until M6 cutover, at which
 point this set replaces it and the prior moves to `archive/`.

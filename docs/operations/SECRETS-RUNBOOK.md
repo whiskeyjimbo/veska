@@ -73,8 +73,8 @@ matters.
 ### Step 3 — Acknowledge in Engram
 
 ```bash
-engram findings list --rule secret_leak
-engram findings close <finding_id> --reason "rotated, history rewritten"
+veska findings list --rule secret_leak
+veska findings close <finding_id> --reason "rotated, history rewritten"
 ```
 
 `severity=critical` close requires `actor_kind=human`. The agent

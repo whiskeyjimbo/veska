@@ -69,7 +69,7 @@ anything the verb has already touched (`promoted_sha`,
 
 | Term | Meaning |
 |---|---|
-| **Save** | Any interactive write (editor save, agent edit, `engram index`). Updates staging only. |
+| **Save** | Any interactive write (editor save, agent edit, `veska index`). Updates staging only. |
 | **Commit** | The Git operation. Triggers the post-commit hook, which triggers promotion. |
 | **Hook return** | The post-commit hook returns to Git. Budget rows in SOLO-13 §3.1 (split typical vs. refactor commit). |
 | **Drain** | The async work after promotion: embedding, auto-link, revalidation. |
@@ -100,7 +100,7 @@ anything the verb has already touched (`promoted_sha`,
 
 | Term | Meaning |
 |---|---|
-| **`actor_id`** | A column on every aggregate write. One of `human:<user>`, `agent:<name>`, or `service:engram`. Free-form label; not trusted. |
+| **`actor_id`** | A column on every aggregate write. One of `human:<user>`, `agent:<name>`, or `service:veska`. Free-form label; not trusted. |
 | **`actor_kind`** | An enum column on the same row: `'human' \| 'agent' \| 'system'`. Daemon-set from the accepting listener; a typical MCP client cannot supply or override it. The single human-action-gate input. |
 | **Human-action gate** | `close.finding[severity >= high] requires actor_kind = 'human'`. The only gate. A UX and audit guardrail, not a security boundary against same-user code; the OS user is the privilege boundary. SOLO-10 §3.1. |
 

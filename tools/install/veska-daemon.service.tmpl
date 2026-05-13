@@ -1,14 +1,14 @@
 [Unit]
-Description=Engram code intelligence daemon
+Description=Veska code intelligence daemon
 After=network.target
 
 [Service]
 ExecStart={{.BinaryPath}}
 Restart=on-failure
 RestartSec=5
-Environment=ENGRAM_HOME={{.EngramHome}}
-StandardOutput=append:{{.EngramHome}}/daemon.log
-StandardError=append:{{.EngramHome}}/daemon.log
+Environment=VESKA_HOME={{.VeskaHome}}
+StandardOutput=append:{{.VeskaHome}}/daemon.log
+StandardError=append:{{.VeskaHome}}/daemon.log
 
 [Install]
 WantedBy=default.target

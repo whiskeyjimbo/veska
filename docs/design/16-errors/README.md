@@ -1,6 +1,6 @@
 ---
 id: SOLO-16
-title: "Error Catalogue — engram_code, exit codes, audit shape"
+title: "Error Catalogue — veska_code, exit codes, audit shape"
 status: draft
 version: 0.1.0
 last_reviewed: 2026-05-09
@@ -65,7 +65,7 @@ prose that may improve over time. Tooling MUST key on
   "actor_kind": "...",
   "tool": "<verb>",
   "args": { /* ... */ },
-  "result": "refused: <engram_code>"   // or "error: <engram_code>" for handler errors
+  "result": "refused: <veska_code>"   // or "error: <veska_code>" for handler errors
 }
 ```
 
@@ -93,7 +93,7 @@ in that matrix.
 | `ErrMigrationFailed` | Migration N rolled back | fix migration / downgrade / restore pre-migration snapshot |
 | `ErrSnapshotFailed` | Pre-migration auto-snapshot failed | free disk; fix permissions; restart |
 | `ErrMigrationTampered` | `migration_sha` recorded ≠ binary's embedded sha | investigate; do not blindly clear |
-| `ErrEmbedderMismatch` | `[embedder]` config disagrees with `database_meta` | `engram embedder swap <model>`, or revert config |
+| `ErrEmbedderMismatch` | `[embedder]` config disagrees with `database_meta` | `veska embedder swap <model>`, or revert config |
 | `ErrUnsupportedFilesystem` | `~/.veska/` on NFS, eCryptfs, FUSE, or overlay-upper | move data dir; set `VESKA_HOME` |
 | `ErrBackupRequired` | `[backup].required = true` and no verified backup found | `veska backup create`; restart |
 
@@ -116,13 +116,13 @@ Audit line: not written for the panic (the daemon is dying). Crash details land 
 |---|---|---|---|---|
 | `ErrDaemonNotRunning` | -32000 | Shim cannot reach socket and no supervisor is registered | `{"cli_command": "veska service install"}` | Install the service |
 | `ErrDaemonStarting` | -32000 | Write tool called during startup-resync | `{"resync_state": "running"}` | Wait; resync will complete |
-| `ErrHumanActionRequired` | -32001 | High-severity close from non-human actor (SOLO-10 §3) | `{"gate": "close.finding.high", "finding_id": "...", "severity": "...", "cli_command": "engram finding close ... --reason \"...\""}` | Human pastes the CLI command |
+| `ErrHumanActionRequired` | -32001 | High-severity close from non-human actor (SOLO-10 §3) | `{"gate": "close.finding.high", "finding_id": "...", "severity": "...", "cli_command": "veska finding close ... --reason \"...\""}` | Human pastes the CLI command |
 | `ErrBusy` | -32002 | MCP write `max_wait_ms` deadline expired (SOLO-11 §10) | `{"cause": "seal_in_flight" \| "seal_arriving" \| "pool_wait", "promotion_id"?: "...", "wait_count"?: N, "wait_duration_ms"?: N, "eta_ms"?: N}` | Retry; raise `max_wait_ms` |
 | `ErrRepoNotRegistered` | -32003 | Tool called with a `repo` that is not in `repos` | `{"repo_id_or_path": "..."}` | `veska repo add <path>` |
 | `ErrInvalidArgs` | -32602 | JSON-RPC standard; argument schema violation | `{"field": "...", "reason": "..."}` | Fix the call |
 | `ErrInternal` | -32603 | Unhandled handler panic; logged as a defect | `{"trace_id": "..."}` | File a bug with the trace ID |
 
-Audit line: every refusal and every handler error is logged synchronously per SOLO-10 §4. `result` carries `"refused: <engram_code>"` or `"error: <engram_code>"`.
+Audit line: every refusal and every handler error is logged synchronously per SOLO-10 §4. `result` carries `"refused: <veska_code>"` or `"error: <veska_code>"`.
 
 ### 3.4 Pipeline / async work
 

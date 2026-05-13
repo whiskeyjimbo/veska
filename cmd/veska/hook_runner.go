@@ -168,9 +168,9 @@ func sendSeal(sockPath string) error {
 	return nil
 }
 
-// debugf logs to stderr only when ENGRAM_DEBUG=1 is set.
+// debugf logs to stderr only when VESKA_DEBUG=1 is set.
 func debugf(format string, args ...any) {
-	if os.Getenv("ENGRAM_DEBUG") == "1" {
+	if os.Getenv("VESKA_DEBUG") == "1" {
 		fmt.Fprintf(os.Stderr, format, args...)
 	}
 }

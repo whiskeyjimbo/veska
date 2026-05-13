@@ -45,7 +45,7 @@ suppressions, audit log entries):
   - `human:<os-username>` — the user who started the daemon.
   - `agent:<name>` — e.g., `agent:claude-code`, set by MCP via the
     `actor_id` header on the connection.
-  - `service:engram` — the daemon writing on its own behalf.
+  - `service:veska` — the daemon writing on its own behalf.
 - `actor_kind TEXT NOT NULL CHECK (actor_kind IN ('human','agent','system'))`
   — the trust signal. One of:
   - `'human'` — write originated from a CLI invocation by the
