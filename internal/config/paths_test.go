@@ -37,3 +37,20 @@ func TestDaemonSockPath_RespectsEngramHome(t *testing.T) {
 		t.Errorf("DaemonSockPath() = %q; want %q", got, want)
 	}
 }
+
+func TestMCPSockPath_EndsWithMCPSock(t *testing.T) {
+	got := config.MCPSockPath()
+	if !strings.HasSuffix(got, "mcp.sock") {
+		t.Errorf("MCPSockPath() = %q; want path ending in \"mcp.sock\"", got)
+	}
+}
+
+func TestMCPSockPath_RespectsEngramHome(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("ENGRAM_HOME", dir)
+	got := config.MCPSockPath()
+	want := dir + "/mcp.sock"
+	if got != want {
+		t.Errorf("MCPSockPath() = %q; want %q", got, want)
+	}
+}
