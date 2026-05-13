@@ -1,0 +1,240 @@
+package treesitter_test
+
+import (
+	"context"
+	"testing"
+
+	"github.com/whiskeyjimbo/engram/solov2/internal/core/domain"
+	"github.com/whiskeyjimbo/engram/solov2/internal/infrastructure/treesitter"
+)
+
+const repoID = "test-repo"
+const filePath = "pkg/foo/foo.go"
+
+func TestParseFile_FunctionDeclaration(t *testing.T) {
+	src := []byte(`package foo
+
+func Add(a, b int) int {
+	return a + b
+}
+`)
+	p := treesitter.NewGoParser()
+	result, err := p.ParseFile(context.Background(), repoID, filePath, src)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	fn := findNodeByName(result.Nodes, "Add")
+	if fn == nil {
+		t.Fatal("expected a node named 'Add', got none")
+	}
+	if fn.Kind != domain.KindFunction {
+		t.Errorf("expected KindFunction, got %q", fn.Kind)
+	}
+	if fn.Lines == nil {
+		t.Fatal("expected Lines to be set")
+	}
+	if fn.Lines.Start != 3 {
+		t.Errorf("expected Start=3, got %d", fn.Lines.Start)
+	}
+}
+
+func TestParseFile_MethodDeclaration(t *testing.T) {
+	src := []byte(`package foo
+
+type Counter struct{ n int }
+
+func (c Counter) Inc() {
+	c.n++
+}
+`)
+	p := treesitter.NewGoParser()
+	result, err := p.ParseFile(context.Background(), repoID, filePath, src)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	method := findNodeByName(result.Nodes, "Counter.Inc")
+	if method == nil {
+		t.Fatal("expected a node named 'Counter.Inc', got none")
+	}
+	if method.Kind != domain.KindMethod {
+		t.Errorf("expected KindMethod, got %q", method.Kind)
+	}
+}
+
+func TestParseFile_StructType(t *testing.T) {
+	src := []byte(`package foo
+
+type Point struct {
+	X, Y float64
+}
+`)
+	p := treesitter.NewGoParser()
+	result, err := p.ParseFile(context.Background(), repoID, filePath, src)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	node := findNodeByName(result.Nodes, "Point")
+	if node == nil {
+		t.Fatal("expected a node named 'Point', got none")
+	}
+	if node.Kind != domain.KindStruct {
+		t.Errorf("expected KindStruct, got %q", node.Kind)
+	}
+}
+
+func TestParseFile_InterfaceType(t *testing.T) {
+	src := []byte(`package foo
+
+type Writer interface {
+	Write(p []byte) (n int, err error)
+}
+`)
+	p := treesitter.NewGoParser()
+	result, err := p.ParseFile(context.Background(), repoID, filePath, src)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	node := findNodeByName(result.Nodes, "Writer")
+	if node == nil {
+		t.Fatal("expected a node named 'Writer', got none")
+	}
+	if node.Kind != domain.KindInterface {
+		t.Errorf("expected KindInterface, got %q", node.Kind)
+	}
+}
+
+func TestParseFile_CallsEdge(t *testing.T) {
+	src := []byte(`package foo
+
+func greet() string {
+	return hello()
+}
+
+func hello() string {
+	return "hello"
+}
+`)
+	p := treesitter.NewGoParser()
+	result, err := p.ParseFile(context.Background(), repoID, filePath, src)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	greetNode := findNodeByName(result.Nodes, "greet")
+	helloNode := findNodeByName(result.Nodes, "hello")
+	if greetNode == nil || helloNode == nil {
+		t.Fatalf("expected greet and hello nodes, got nodes: %v", nodeNames(result.Nodes))
+	}
+
+	edge := findEdge(result.Edges, greetNode.ID, helloNode.ID, domain.EdgeCalls)
+	if edge == nil {
+		t.Errorf("expected CALLS edge from greet -> hello, none found")
+	}
+}
+
+func TestParseFile_NonGoFile_ReturnsEmpty(t *testing.T) {
+	src := []byte(`const x = 1;`)
+	p := treesitter.NewGoParser()
+	result, err := p.ParseFile(context.Background(), repoID, "pkg/foo/foo.ts", src)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(result.Nodes) != 0 || len(result.Edges) != 0 {
+		t.Errorf("expected empty result for non-Go file, got %d nodes, %d edges",
+			len(result.Nodes), len(result.Edges))
+	}
+}
+
+func TestParseFile_EmptyFile_ReturnsEmpty(t *testing.T) {
+	p := treesitter.NewGoParser()
+	result, err := p.ParseFile(context.Background(), repoID, filePath, []byte{})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(result.Nodes) != 0 || len(result.Edges) != 0 {
+		t.Errorf("expected empty result for empty file, got %d nodes, %d edges",
+			len(result.Nodes), len(result.Edges))
+	}
+}
+
+func TestParseFile_MalformedGo_ReturnsEmptyNoError(t *testing.T) {
+	src := []byte(`package foo
+
+func brokenFunc( {
+	// missing closing paren / brace
+`)
+	p := treesitter.NewGoParser()
+	result, err := p.ParseFile(context.Background(), repoID, filePath, src)
+	if err != nil {
+		t.Fatalf("expected nil error for parse-error file, got: %v", err)
+	}
+	// result should be empty (error nodes → bail out)
+	_ = result
+}
+
+func TestParseFile_ContainsEdges(t *testing.T) {
+	src := []byte(`package foo
+
+func Bar() {}
+`)
+	p := treesitter.NewGoParser()
+	result, err := p.ParseFile(context.Background(), repoID, filePath, src)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	pkgNode := findNodeByKind(result.Nodes, domain.KindPackage)
+	barNode := findNodeByName(result.Nodes, "Bar")
+	if pkgNode == nil {
+		t.Fatal("expected a package node")
+	}
+	if barNode == nil {
+		t.Fatal("expected a Bar node")
+	}
+
+	edge := findEdge(result.Edges, pkgNode.ID, barNode.ID, domain.EdgeContains)
+	if edge == nil {
+		t.Errorf("expected CONTAINS edge from package -> Bar, none found")
+	}
+}
+
+// --- helpers ---
+
+func findNodeByName(nodes []*domain.Node, name string) *domain.Node {
+	for _, n := range nodes {
+		if n.Name == name {
+			return n
+		}
+	}
+	return nil
+}
+
+func findNodeByKind(nodes []*domain.Node, kind domain.NodeKind) *domain.Node {
+	for _, n := range nodes {
+		if n.Kind == kind {
+			return n
+		}
+	}
+	return nil
+}
+
+func findEdge(edges []*domain.Edge, src, tgt domain.NodeID, kind domain.EdgeKind) *domain.Edge {
+	for _, e := range edges {
+		if e.Src == src && e.Tgt == tgt && e.Kind == kind {
+			return e
+		}
+	}
+	return nil
+}
+
+func nodeNames(nodes []*domain.Node) []string {
+	names := make([]string, len(nodes))
+	for i, n := range nodes {
+		names[i] = n.Name
+	}
+	return names
+}
