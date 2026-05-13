@@ -3,3 +3,15 @@
 .dolt/
 *.db
 .beads-credential-key
+
+# Binaries
+/driver
+/engram
+/engram-daemon
+/gcsweep
+/loader
+/mcp-latency
+/multi-branch
+/recall
+/rss-sweep
+/vector-bench

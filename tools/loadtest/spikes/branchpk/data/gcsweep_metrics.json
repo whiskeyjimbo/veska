@@ -1,0 +1,13 @@
+[
+  {
+    "branches_before": 28,
+    "branches_after": 18,
+    "branches_deleted": 10,
+    "wall_ms": 518551,
+    "disk_before_bytes": 1801351168,
+    "disk_after_bytes": 1098625024,
+    "wal_before_bytes": 0,
+    "wal_after_bytes": 1105058192,
+    "reclaim_bytes": 702726144
+  }
+]
