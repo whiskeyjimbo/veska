@@ -218,5 +218,37 @@ func (r *EmbeddingRefsRepo) Reuse(ctx context.Context, nodeID, contentHash strin
 	return nil
 }
 
+// ContentHashForNode returns the content_hash and ready flag for nodeID
+// scoped to (repoID, branch). A JOIN against nodes enforces the scope so a
+// stale or cross-repo node_id cannot leak a hash out of its origin tree.
+//
+// ready=true requires BOTH state='ready' AND a non-NULL content_hash; either
+// alone returns ready=false. err=nil with ready=false also covers the
+// "no such ref" and "no such node" cases — the caller decides whether to
+// skip or escalate.
+func (r *EmbeddingRefsRepo) ContentHashForNode(ctx context.Context, repoID, branch, nodeID string) (string, bool, error) {
+	var (
+		hash  sql.NullString
+		state string
+	)
+	err := r.readDB.QueryRowContext(ctx, `
+		SELECT r.content_hash, r.state
+		FROM node_embedding_refs r
+		JOIN nodes n ON n.node_id = r.node_id
+		WHERE r.node_id = ? AND n.repo_id = ? AND n.branch = ?`,
+		nodeID, repoID, branch,
+	).Scan(&hash, &state)
+	switch {
+	case err == sql.ErrNoRows:
+		return "", false, nil
+	case err != nil:
+		return "", false, fmt.Errorf("embedding_refs: content hash for node: %w", err)
+	}
+	if state != "ready" || !hash.Valid || hash.String == "" {
+		return "", false, nil
+	}
+	return hash.String, true, nil
+}
+
 // Compile-time check.
 var _ ports.EmbeddingRefRepo = (*EmbeddingRefsRepo)(nil)

@@ -60,6 +60,13 @@ type Metrics struct {
 	// dedup is saving real Embed work (e.g. two nodes projecting to the same
 	// "<kind> <symbol_path>" share one vector).
 	EmbedDedupHits prometheus.Counter
+
+	// AutolinkCandidates counts auto-link candidate edges emitted by the
+	// similarity service (internal/application/autolink). Label: repo_id.
+	// One increment per emitted Candidate, NOT per Linker.Candidates call —
+	// a single call may emit zero or many candidates depending on input
+	// node count and top-k.
+	AutolinkCandidates *prometheus.CounterVec
 }
 
 // NewMetrics constructs a Metrics struct and registers all metrics with reg.
@@ -136,6 +143,14 @@ func NewMetrics(reg prometheus.Registerer) *Metrics {
 		},
 	)
 
+	autolinkCandidates := prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "veska_autolink_candidates_total",
+			Help: "Auto-link candidate edges emitted by the similarity service. Incremented per emitted candidate.",
+		},
+		[]string{"repo_id"},
+	)
+
 	reg.MustRegister(
 		sealLatency,
 		postCommitHookDuration,
@@ -146,6 +161,7 @@ func NewMetrics(reg prometheus.Registerer) *Metrics {
 		checkLatency,
 		embedQueueDepth,
 		embedDedupHits,
+		autolinkCandidates,
 	)
 
 	return &Metrics{
@@ -158,6 +174,7 @@ func NewMetrics(reg prometheus.Registerer) *Metrics {
 		CheckLatency:           checkLatency,
 		EmbedQueueDepth:        embedQueueDepth,
 		EmbedDedupHits:         embedDedupHits,
+		AutolinkCandidates:     autolinkCandidates,
 	}
 }
 
