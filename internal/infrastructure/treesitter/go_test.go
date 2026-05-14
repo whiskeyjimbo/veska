@@ -172,8 +172,24 @@ func brokenFunc( {
 	if err != nil {
 		t.Fatalf("expected nil error for parse-error file, got: %v", err)
 	}
-	// result should be empty (error nodes → bail out)
-	_ = result
+	if len(result.Failures) == 0 {
+		t.Fatalf("expected at least one ParseFailure for malformed Go source")
+	}
+}
+
+func TestParseFile_CleanGo_NoFailures(t *testing.T) {
+	src := []byte(`package foo
+
+func Ok() {}
+`)
+	p := treesitter.NewGoParser()
+	result, err := p.ParseFile(context.Background(), repoID, filePath, src)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(result.Failures) != 0 {
+		t.Errorf("expected zero failures on clean Go parse, got %d", len(result.Failures))
+	}
 }
 
 func TestParseFile_ContainsEdges(t *testing.T) {
