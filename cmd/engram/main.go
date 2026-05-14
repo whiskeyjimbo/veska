@@ -14,6 +14,7 @@ func newRootCmd() *cobra.Command {
 		SilenceUsage: true,
 	}
 	root.AddCommand(hookRunnerCmd())
+	root.AddCommand(doctorCmd())
 	return root
 }
 
