@@ -6,7 +6,7 @@ DAEMON_BIN      := $(BINDIR)/veska-daemon
 MCP_BIN         := $(BINDIR)/veska-mcp
 LAYERCHECK_BIN  := $(BINDIR)/layercheck
 
-.PHONY: all build test lint vet layercheck clean loadtest
+.PHONY: all build test lint vet layercheck clean loadtest eval-recall
 
 all: build test vet lint layercheck
 
@@ -44,3 +44,9 @@ clean:
 loadtest:
 	go build -tags loadtest -o /tmp/veska-loadtest ./tools/loadtest/driver/
 	/tmp/veska-loadtest
+
+# eval-recall: semantic-search recall@10 + p95 harness (m3.03.3). Quick mode
+# (RECALL_POP=1000, fake embedder) is the default and runs in ~1s. Override
+# RECALL_POP for larger runs; see tools/loadtest/recall/README.md.
+eval-recall:
+	RECALL_POP=$${RECALL_POP:-1000} go test -tags=eval -run TestRecall ./tools/loadtest/recall/ -v
