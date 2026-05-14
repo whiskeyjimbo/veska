@@ -6,7 +6,7 @@ DAEMON_BIN      := $(BINDIR)/veska-daemon
 MCP_BIN         := $(BINDIR)/veska-mcp
 LAYERCHECK_BIN  := $(BINDIR)/layercheck
 
-.PHONY: all build test lint vet layercheck clean loadtest eval-recall eval-autolink-fp eval-revalidate-bench
+.PHONY: all build test lint vet layercheck clean loadtest eval-recall eval-autolink-fp eval-revalidate-bench eval-queue-fuzz
 
 all: build test vet lint layercheck
 
@@ -64,3 +64,10 @@ eval-autolink-fp:
 # tools/loadtest/revalidate/README.md.
 eval-revalidate-bench:
 	go test -tags=eval -run TestRevalidateBench ./tools/loadtest/revalidate/ -v -count=1 -timeout=120s
+
+# eval-queue-fuzz: M3 gate-5 — drive N synthetic promotions through Promoter and
+# assert all three M3 work_kind lanes (embed/auto_link/revalidate) drain to done.
+# Override QUEUEFUZZ_PROMOTIONS / QUEUEFUZZ_BUDGET_MS to tune. See
+# tools/loadtest/queuefuzz/README.md.
+eval-queue-fuzz:
+	QUEUEFUZZ_PROMOTIONS=$${QUEUEFUZZ_PROMOTIONS:-100} go test -tags=eval -run TestQueueFuzz ./tools/loadtest/queuefuzz/ -v -timeout=120s
