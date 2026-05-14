@@ -4,6 +4,7 @@ package main
 
 import (
 	"errors"
+	"strconv"
 	"strings"
 )
 
@@ -71,6 +72,28 @@ func parseVectorBench(content string) (string, bool, error) {
 		}
 	}
 	return "", false, errors.New("parseVectorBench: 50k row not found")
+}
+
+// parseMCPLatencyBench parses find_symbol warm p95 from mcp-latency/RESULTS.md content.
+// Returns latency in milliseconds and ok=true on success.
+func parseMCPLatencyBench(content string) (ms float64, ok bool) {
+	for _, line := range strings.Split(content, "\n") {
+		if strings.Contains(line, "find_symbol warm p95") && strings.Contains(line, "|") {
+			fields := strings.Split(line, "|")
+			// fields: ["", " find_symbol warm p95 ", " 0.042ms ", " <50ms ", " PASS ", ""]
+			if len(fields) < 3 {
+				continue
+			}
+			raw := strings.TrimSpace(fields[2])
+			raw = strings.TrimSuffix(raw, "ms")
+			f, err := strconv.ParseFloat(raw, 64)
+			if err != nil {
+				continue
+			}
+			return f, true
+		}
+	}
+	return 0, false
 }
 
 // parseCIGates reads a ci-gates RESULTS.md body and returns

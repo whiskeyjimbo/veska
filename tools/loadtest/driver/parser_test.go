@@ -138,3 +138,43 @@ func TestParseCIGates_Missing(t *testing.T) {
 		t.Error("expected error for missing gate lines")
 	}
 }
+
+func TestParseMCPLatencyBench(t *testing.T) {
+	fixture := `# MCP Latency Benchmark — find_symbol warm p95
+
+Generated: 2026-05-13
+Platform: linux amd64
+Nodes seeded: 50000
+
+| Metric | Value | Gate | Verdict |
+|--------|-------|------|---------|
+| find_symbol warm p95 | 0.042ms | <50ms | PASS |
+
+Gate: PASS (p95 < 50ms)
+`
+	ms, ok := parseMCPLatencyBench(fixture)
+	if !ok {
+		t.Fatal("parseMCPLatencyBench: expected ok=true")
+	}
+	if ms < 0 || ms > 50 {
+		t.Errorf("expected ms in [0,50), got %f", ms)
+	}
+}
+
+func TestParseMCPLatencyBench_Fail(t *testing.T) {
+	fixture := `| find_symbol warm p95 | 75.3ms | <50ms | FAIL |`
+	ms, ok := parseMCPLatencyBench(fixture)
+	if !ok {
+		t.Fatal("parseMCPLatencyBench: expected ok=true (can parse even FAIL result)")
+	}
+	if ms != 75.3 {
+		t.Errorf("want 75.3, got %f", ms)
+	}
+}
+
+func TestParseMCPLatencyBench_Missing(t *testing.T) {
+	_, ok := parseMCPLatencyBench("no relevant lines here")
+	if ok {
+		t.Error("expected ok=false for missing metric line")
+	}
+}
