@@ -42,6 +42,12 @@ const DefaultInterval = 250 * time.Millisecond
 // Set via WithRatePerSec(0) to disable the limiter entirely.
 const DefaultRatePerSec = 10.0
 
+// DefaultMaxAttempts is the per-row retry budget. After this many Embed
+// failures on the same row, MarkAttemptFailed flips the row to
+// state='failed' and FetchPending stops returning it. Overridable via
+// WithMaxAttempts.
+const DefaultMaxAttempts = 3
+
 // Worker drains pending node_embedding_refs, embeds them, and upserts
 // vectors into VectorStorage. It owns no state beyond what's needed to
 // service one tick; all durability lives in the SQLite refs table.
@@ -51,8 +57,9 @@ type Worker struct {
 	vectors  ports.VectorStorage
 	metrics  *observability.Metrics
 
-	batchSize int
-	interval  time.Duration
+	batchSize   int
+	interval    time.Duration
+	maxAttempts int
 
 	// rateExplicit records whether WithRatePerSec was ever called. We need
 	// this so a caller can pass WithRatePerSec(0) to disable the limiter,
@@ -108,6 +115,18 @@ func WithRatePerSec(r float64) Option {
 	}
 }
 
+// WithMaxAttempts overrides the per-row retry budget (default 3).
+// After this many consecutive Embed failures on the same row, the row is
+// flipped to state='failed' and excluded from future FetchPending results.
+// Values <= 0 are ignored — use 1 to fail rows after a single error.
+func WithMaxAttempts(n int) Option {
+	return func(w *Worker) {
+		if n > 0 {
+			w.maxAttempts = n
+		}
+	}
+}
+
 // WithMetrics installs a Metrics struct so the worker can publish
 // veska_embed_queue_depth on every tick. When nil the gauge update is
 // silently skipped — the worker still functions.
@@ -135,12 +154,13 @@ func NewWorker(
 		panic("embedder.NewWorker: vectors is nil")
 	}
 	w := &Worker{
-		refs:      refs,
-		embedder:  embedder,
-		vectors:   vectors,
-		batchSize: DefaultBatchSize,
-		interval:  DefaultInterval,
-		done:      make(chan struct{}),
+		refs:        refs,
+		embedder:    embedder,
+		vectors:     vectors,
+		batchSize:   DefaultBatchSize,
+		interval:    DefaultInterval,
+		maxAttempts: DefaultMaxAttempts,
+		done:        make(chan struct{}),
 	}
 	for _, o := range opts {
 		o(w)
@@ -256,8 +276,14 @@ func (w *Worker) tick(ctx context.Context) {
 		}
 		vec, err := w.embedder.Embed(ctx, ref.Text)
 		if err != nil {
-			// Per-row failure: leave the row in 'pending'. Retry policy
-			// lives in m3.02.3; siblings still proceed.
+			// Per-row failure: bump attempts and (if budget exhausted)
+			// flip the row to state='failed' so FetchPending stops
+			// returning it. Siblings in this batch still proceed —
+			// the MarkAttemptFailed call is isolated to this nodeID.
+			//
+			// Persistence errors here are non-fatal: we lose one
+			// attempts-bump but a later tick will retry the row.
+			_ = w.refs.MarkAttemptFailed(ctx, ref.NodeID, w.maxAttempts)
 			continue
 		}
 		if len(vec) == 0 {

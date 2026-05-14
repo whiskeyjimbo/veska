@@ -66,6 +66,7 @@ CREATE TABLE node_embedding_refs (
     state         TEXT NOT NULL,
     enqueued_at   INTEGER NOT NULL,
     embedded_at   INTEGER,
+    attempts      INTEGER NOT NULL DEFAULT 0,
     FOREIGN KEY (content_hash) REFERENCES node_embeddings(content_hash)
 );
 CREATE INDEX idx_node_embedding_refs_state ON node_embedding_refs(state, enqueued_at);
@@ -572,7 +573,184 @@ func TestWorker_RateLimitZeroMeansUnlimited(t *testing.T) {
 	}
 }
 
+// alwaysErrEmbedder always returns an error for the given target text;
+// other texts succeed. Used to drive the retry counter without affecting
+// siblings.
+type alwaysErrEmbedder struct {
+	calls   atomic.Int64
+	failOn  string
+	vector  []float32
+	modelID string
+	err     error
+}
+
+func (a *alwaysErrEmbedder) Embed(_ context.Context, text string) ([]float32, error) {
+	a.calls.Add(1)
+	if text == a.failOn {
+		return nil, a.err
+	}
+	out := make([]float32, len(a.vector))
+	copy(out, a.vector)
+	return out, nil
+}
+
+func (a *alwaysErrEmbedder) ModelID() string { return a.modelID }
+
+// TestWorker_RetryBumpsAttempts verifies that a single Embed error bumps
+// attempts but leaves state='pending' so the row is drained again.
+func TestWorker_RetryBumpsAttempts(t *testing.T) {
+	db := openSchemaDB(t)
+	repo := infsqlite.NewEmbeddingRefsRepo(db, db)
+
+	seedNode(t, db, "n1", "r1", "main", "pkg.F", "function")
+
+	emb := &alwaysErrEmbedder{
+		failOn:  "function pkg.F",
+		vector:  []float32{1, 2, 3},
+		modelID: "m",
+		err:     errors.New("boom"),
+	}
+	vs := &fakeVectorStore{}
+
+	w := embedder.NewWorker(repo, emb, vs,
+		embedder.WithInterval(5*time.Millisecond),
+		embedder.WithMaxAttempts(3),
+	)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	w.Start(ctx)
+
+	// Wait for at least one attempt to be recorded.
+	if !waitForCondition(t, 2*time.Second, func() bool {
+		var n int
+		_ = db.QueryRow(`SELECT attempts FROM node_embedding_refs WHERE node_id='n1'`).Scan(&n)
+		return n >= 1
+	}) {
+		t.Fatalf("attempts never bumped")
+	}
+
+	// Row must remain pending after a single failure (budget=3).
+	var state string
+	_ = db.QueryRow(`SELECT state FROM node_embedding_refs WHERE node_id='n1'`).Scan(&state)
+	if state != "pending" {
+		t.Errorf("after 1 failure: state want pending, got %q", state)
+	}
+
+	cancel()
+	w.Wait()
+}
+
+// TestWorker_RetryExhaustionFlipsToFailed verifies that after maxAttempts
+// errors the row's state becomes 'failed' and FetchPending excludes it.
+func TestWorker_RetryExhaustionFlipsToFailed(t *testing.T) {
+	db := openSchemaDB(t)
+	repo := infsqlite.NewEmbeddingRefsRepo(db, db)
+
+	seedNode(t, db, "doomed", "r1", "main", "pkg.D", "function")
+
+	emb := &alwaysErrEmbedder{
+		failOn:  "function pkg.D",
+		vector:  []float32{1},
+		modelID: "m",
+		err:     errors.New("permanent"),
+	}
+	vs := &fakeVectorStore{}
+
+	w := embedder.NewWorker(repo, emb, vs,
+		embedder.WithInterval(5*time.Millisecond),
+		embedder.WithMaxAttempts(3),
+	)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	w.Start(ctx)
+
+	if !waitForCondition(t, 2*time.Second, func() bool {
+		var state string
+		_ = db.QueryRow(`SELECT state FROM node_embedding_refs WHERE node_id='doomed'`).Scan(&state)
+		return state == "failed"
+	}) {
+		var state string
+		var attempts int
+		_ = db.QueryRow(`SELECT state, attempts FROM node_embedding_refs WHERE node_id='doomed'`).
+			Scan(&state, &attempts)
+		t.Fatalf("row never flipped to failed; state=%q attempts=%d calls=%d",
+			state, attempts, emb.calls.Load())
+	}
+
+	var attempts int
+	_ = db.QueryRow(`SELECT attempts FROM node_embedding_refs WHERE node_id='doomed'`).Scan(&attempts)
+	if attempts < 3 {
+		t.Errorf("attempts: want >=3, got %d", attempts)
+	}
+
+	// FetchPending must not return failed rows.
+	pending, err := repo.FetchPending(ctx, 10)
+	if err != nil {
+		t.Fatalf("FetchPending: %v", err)
+	}
+	for _, p := range pending {
+		if p.NodeID == "doomed" {
+			t.Errorf("FetchPending returned a failed row: %+v", p)
+		}
+	}
+
+	cancel()
+	w.Wait()
+}
+
+// TestWorker_SiblingsUnaffectedByFailure verifies that a per-row failure
+// in the same batch does not block sibling rows from succeeding (per-row
+// isolation: regression check for 2.1).
+func TestWorker_SiblingsUnaffectedByFailure(t *testing.T) {
+	db := openSchemaDB(t)
+	repo := infsqlite.NewEmbeddingRefsRepo(db, db)
+
+	seedNode(t, db, "ok1", "r1", "main", "pkg.A", "function")
+	seedNode(t, db, "bad", "r1", "main", "pkg.B", "function")
+	seedNode(t, db, "ok2", "r1", "main", "pkg.C", "function")
+
+	emb := &alwaysErrEmbedder{
+		failOn:  "function pkg.B",
+		vector:  []float32{0.1, 0.2, 0.3},
+		modelID: "m",
+		err:     errors.New("transient"),
+	}
+	vs := &fakeVectorStore{}
+
+	w := embedder.NewWorker(repo, emb, vs,
+		embedder.WithInterval(5*time.Millisecond),
+		embedder.WithMaxAttempts(3),
+	)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	w.Start(ctx)
+
+	if !waitForCondition(t, 2*time.Second, func() bool {
+		var n int
+		_ = db.QueryRow(`SELECT COUNT(*) FROM node_embedding_refs WHERE state='ready'`).Scan(&n)
+		return n == 2
+	}) {
+		t.Fatalf("siblings never reached ready; calls=%d", emb.calls.Load())
+	}
+
+	// 'bad' eventually exhausts its budget and flips to failed.
+	if !waitForCondition(t, 2*time.Second, func() bool {
+		var s string
+		_ = db.QueryRow(`SELECT state FROM node_embedding_refs WHERE node_id='bad'`).Scan(&s)
+		return s == "failed"
+	}) {
+		t.Fatalf("bad row never flipped to failed")
+	}
+
+	cancel()
+	w.Wait()
+}
+
 // Compile-time check our embedder satisfies the port.
 var _ ports.EmbeddingProvider = (*fakeEmbedder)(nil)
 var _ ports.EmbeddingProvider = (*blockingEmbedder)(nil)
+var _ ports.EmbeddingProvider = (*alwaysErrEmbedder)(nil)
 var _ ports.VectorStorage = (*fakeVectorStore)(nil)

@@ -872,6 +872,60 @@ func TestMigration0005_AddsSignatureColumns(t *testing.T) {
 	}
 }
 
+// ── Migration 0006: node_embedding_refs.attempts ───────────────────────────
+
+// TestMigration0006_AddsAttemptsColumn verifies migration 0006 adds the
+// attempts column to node_embedding_refs.
+func TestMigration0006_AddsAttemptsColumn(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	dbPath := filepath.Join(dir, "veska.db")
+
+	_ = openTest(t, dbPath)
+	raw := openRawDB(t, dbPath)
+
+	if !columnExists(t, raw, "node_embedding_refs", "attempts") {
+		t.Error("node_embedding_refs.attempts column not found after migration 0006")
+	}
+}
+
+// TestMigration0006_AttemptsDefaultsToZero verifies new rows omitting the
+// attempts column default to 0.
+func TestMigration0006_AttemptsDefaultsToZero(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	dbPath := filepath.Join(dir, "veska.db")
+
+	db := openTest(t, dbPath)
+
+	now := time.Now().UnixMilli()
+	if _, err := db.Exec(`INSERT INTO repos (repo_id, root_path, added_at) VALUES (?,?,?)`,
+		"r1", "/tmp/r1", now); err != nil {
+		t.Fatalf("insert repo: %v", err)
+	}
+	if _, err := db.Exec(`INSERT INTO nodes (
+		node_id, branch, repo_id, language, kind, symbol_path, file_path,
+		content_hash, last_promoted_at, actor_id, actor_kind
+	) VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
+		"n1", "main", "r1", "go", "function", "F", "a.go", "h", now, "test", "system"); err != nil {
+		t.Fatalf("insert node: %v", err)
+	}
+	if _, err := db.Exec(`INSERT INTO node_embedding_refs (node_id, state, enqueued_at) VALUES (?,?,?)`,
+		"n1", "pending", now); err != nil {
+		t.Fatalf("insert ref: %v", err)
+	}
+
+	var attempts int
+	if err := db.QueryRow(`SELECT attempts FROM node_embedding_refs WHERE node_id=?`, "n1").Scan(&attempts); err != nil {
+		t.Fatalf("query attempts: %v", err)
+	}
+	if attempts != 0 {
+		t.Errorf("attempts default: want 0, got %d", attempts)
+	}
+}
+
 // TestMigration0005_DefaultsAreNull verifies that legacy INSERT statements
 // (omitting the new columns) yield NULL for both new columns.
 func TestMigration0005_DefaultsAreNull(t *testing.T) {
