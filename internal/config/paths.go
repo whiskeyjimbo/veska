@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 )
 
-// veskaHome returns the root Engram data directory.
+// veskaHome returns the root Veska data directory.
 // It uses $VESKA_HOME when set; otherwise ~/.veska.
 // Falls back to ".veska" when the home directory cannot be determined.
 func veskaHome() string {

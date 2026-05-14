@@ -35,7 +35,7 @@ reads `actor_kind`, never `actor_id`. By convention:
 |---|---|
 | The user who started the daemon | `human:<$USER>` (e.g. `human:jeff`) |
 | An agent connected via MCP | `agent:<name>` where `<name>` comes from the agent's MCP handshake (e.g. `agent:claude-code`) |
-| The daemon writing on its own behalf (background sweeps, auto-revoke) | `service:engram` |
+| The daemon writing on its own behalf (background sweeps, auto-revoke) | `service:veska` |
 
 The string is opaque to the schema. The daemon does not parse it,
 does not split on `:`, does not look up a directory record.
@@ -59,9 +59,9 @@ well-behaved MCP client cannot present itself as a human by
 lying in a header because there is no header to lie in:
 `actor_kind` is a property of the file the client connected to.
 
-The CLI binary `engram` connects only to `cli.sock`; the stdio
+The CLI binary `veska` connects only to `cli.sock`; the stdio
 shim `veska-mcp` connects only to `mcp.sock`. A user who
-deliberately points the CLI at `mcp.sock` (`engram --socket=...`)
+deliberately points the CLI at `mcp.sock` (`veska --socket=...`)
 is declaring themselves an agent and the human-action gate behaves
 accordingly — that is the intended behavior for scripted use.
 
@@ -131,7 +131,7 @@ on the first message of the connection is:
   "id":      1,
   "method":  "initialize",
   "params": {
-    "client": "engram-cli",
+    "client": "veska-cli",
     "user":   "<value of $USER from the CLI process env>",
     "veska_version": "<x.y.z>"
   }
@@ -144,7 +144,7 @@ field is supplied by the CLI binary at connection time from
 `$USER` is unset in the CLI's env (rare on Linux, possible in a
 headless container), the CLI sends `user: "unknown"` and the
 daemon stamps `actor_id = "human:unknown"` with a logged warning.
-There is no login, no OS keyring, no `engram login`.
+There is no login, no OS keyring, no `veska login`.
 
 `actor_kind` for connections accepted on `cli.sock` is always
 `'human'` regardless of the `params.user` value — the listener
@@ -169,7 +169,7 @@ The handshake's contents do not influence the kind — only the
 
 ### 2.3 Daemon-internal
 
-Background goroutines write under `actor_id = "service:engram"`
+Background goroutines write under `actor_id = "service:veska"`
 with `actor_kind = 'system'`. The revalidation sweep, the
 auto-link re-scorer, the soft-suppression revoker, the embedder
 worker — all of them.
@@ -233,7 +233,7 @@ boundary. Be precise about both halves:
 - It does not stop a process running as the same OS user from
   closing high-severity findings on its own. That process can
   connect to `cli.sock` and present as `actor_kind = 'human'`,
-  or it can shell out to `engram finding close ...` directly.
+  or it can shell out to `veska finding close ...` directly.
   The OS user is the only privilege boundary on the machine;
   Engram does not invent another one.
 - It does not authenticate the human. A second person with shell
@@ -291,7 +291,7 @@ error's `data` payload with a ready-to-paste CLI invocation:
         "gate":        "close.finding.high",
         "finding_id":  "f_01HK...",
         "severity":    "critical",
-        "cli_command": "engram finding close f_01HK... --reason \"false positive: stub credential\""
+        "cli_command": "veska finding close f_01HK... --reason \"false positive: stub credential\""
       }
     }
   }
@@ -322,7 +322,7 @@ reaching the terminal one paste away.
 single invocation:
 
 ```
-engram finding close f_01HK... f_01HL... f_01HM... --reason "..."
+veska finding close f_01HK... f_01HL... f_01HM... --reason "..."
 ```
 
 The single `--reason` applies to every ID. The daemon writes
@@ -411,7 +411,7 @@ the V2 roadmap.
 | **No predicate language.** No CEL, no Rego, no DSL. The gate is one `if` statement. | More than one gate, or a gate that depends on per-finding metadata beyond severity. |
 | **No group-to-role mapping.** No groups. No roles. No `requires: committer`. | A multi-user product with privilege tiers. |
 | **No IDP integration.** No Okta, no Google Workspace, no AD, no GitHub Org. | A server tier with team-managed access. |
-| **No federation.** No `urn:engram:actor:...`, no DIDs, no ActivityPub. | A cross-machine product where multiple Engram instances exchange data. |
+| **No federation.** No `urn:veska:actor:...`, no DIDs, no ActivityPub. | A cross-machine product where multiple Engram instances exchange data. |
 | **No identity merge.** No aliasing across emails, no email-change handling. | A history that needs to track a single person across renames — not relevant when `actor_id` is a label. |
 | **No personal-data scrub.** Right-to-be-forgotten is not a workflow. | A regulatory obligation that applies to a multi-user audit log. |
 | **No fourth `actor_kind` value.** `'human'`, `'agent'`, `'system'` is the closed set. | A new origin category that doesn't fit any of the three (e.g., a federated peer). |

@@ -73,19 +73,19 @@ that could share the same `LLMGenerator` interface with a different prompt set.
 
 ## 4. Interactive HTML graph visualization
 
-**What it is:** `engram visualize` generates a self-contained HTML file with an
+**What it is:** `veska visualize` generates a self-contained HTML file with an
 interactive explorer: search, breadcrumbs, node inspector pane, theme toggle, and
 `vscode://file/...` deep links to jump directly to symbols in the editor.
 
 **Chizu impl:** Static asset bundle embedded in the binary (JS + CSS); data serialized
 as JSON inline in the HTML. Also supports a simpler SVG-only mode.
 
-**v2 overlap:** M4 wiki area — wiki already renders to `docs/engram/`. Visualization
+**v2 overlap:** M4 wiki area — wiki already renders to `docs/veska/`. Visualization
 could be an additional `veska wiki --format=html` output, or a standalone
-`engram visualize` command. Pure read path; just needs a `GraphStorage.Query` call.
+`veska visualize` command. Pure read path; just needs a `GraphStorage.Query` call.
 
 **Sketch:**
-- `engram visualize [--output docs/engram/graph.html]`
+- `veska visualize [--output docs/veska/graph.html]`
 - Serialize nodes + edges to embedded JSON; inline a minimal graph renderer (d3 or
   vanilla canvas)
 - Include `vscode://file/<abs_path>:<line>` links on each node
@@ -117,7 +117,7 @@ index with no quality floor. This is a small, self-contained improvement.
 ## 6. Configurable retrieval weights
 
 **What it is:** Expose per-signal weights (vector, keyword/BM25, name-match, path-match,
-export-bias) in `engram.toml` so repos can tune search quality without code changes.
+export-bias) in `veska.toml` so repos can tune search quality without code changes.
 Weights sum to 1.0; validated at startup.
 
 **Chizu impl:** `[search.rerank_weights]` TOML table with 6 floats; validated at load.
@@ -127,7 +127,7 @@ Weights sum to 1.0; validated at startup.
 land in M3 when the multi-signal search path is built.
 
 **Sketch:**
-- Add `[search]` section to `engram.toml` schema:
+- Add `[search]` section to `veska.toml` schema:
   ```toml
   [search]
   weight_vector   = 0.6

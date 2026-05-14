@@ -16,16 +16,16 @@ const systemdUnit = "veska-daemon"
 
 // unitTemplateText is the embedded systemd unit template.
 const unitTemplateText = `[Unit]
-Description=Engram code intelligence daemon
+Description=Veska code intelligence daemon
 After=network.target
 
 [Service]
 ExecStart={{.BinaryPath}}
 Restart=on-failure
 RestartSec=5
-Environment=VESKA_HOME={{.EngramHome}}
-StandardOutput=append:{{.EngramHome}}/daemon.log
-StandardError=append:{{.EngramHome}}/daemon.log
+Environment=VESKA_HOME={{.VeskaHome}}
+StandardOutput=append:{{.VeskaHome}}/daemon.log
+StandardError=append:{{.VeskaHome}}/daemon.log
 
 [Install]
 WantedBy=default.target
@@ -67,7 +67,7 @@ func RenderUnit(binaryPath, veskaHome string) (string, error) {
 	var buf bytes.Buffer
 	if err := tmpl.Execute(&buf, struct {
 		BinaryPath string
-		EngramHome string
+		VeskaHome  string
 	}{binaryPath, veskaHome}); err != nil {
 		return "", fmt.Errorf("systemd: render unit: %w", err)
 	}

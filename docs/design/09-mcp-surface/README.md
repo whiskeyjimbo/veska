@@ -62,12 +62,12 @@ regardless of which router handles it.
 | `daemon.post_checkout` | `veska hook-runner post-checkout` | Branch-switch quiescence (SOLO-11 §1.3). |
 | `daemon.backup_create` | `veska backup create` | Run `VACUUM INTO` + tarball; verify. |
 | `daemon.backup_verify` | `veska backup verify <path>` | Run integrity + foreign-key + JSONL well-formedness checks. |
-| `daemon.embedder_swap` | `engram embedder swap <model>` | The multi-step procedure in SOLO-03 §3.2. |
-| `daemon.embedder_current` | `engram embedder current` | Read `database_meta.embedder_*`. |
+| `daemon.embedder_swap` | `veska embedder swap <model>` | The multi-step procedure in SOLO-03 §3.2. |
+| `daemon.embedder_current` | `veska embedder current` | Read `database_meta.embedder_*`. |
 | `daemon.doctor` | `veska doctor [--json]` and every `veska doctor <section>` | Run the doctor section(s) and return the §2.1 envelope. |
-| `daemon.bundle` | `engram bundle` | Build the `engram-doctor-bundle-*.tgz`. |
+| `daemon.bundle` | `veska bundle` | Build the `veska-doctor-bundle-*.tgz`. |
 | `daemon.gc_branches` | `veska gc --branches` | Run the branch-GC sweep manually. |
-| `daemon.supervise_heartbeat` | `engram supervise` | Liveness ping for the built-in supervisor. |
+| `daemon.supervise_heartbeat` | `veska supervise` | Liveness ping for the built-in supervisor. |
 | `daemon.upgrade_stage` | `veska upgrade <path>` | Stage `*.next` binaries; the running daemon is unaffected until restart. |
 
 These verbs do not fit `eng_<verb>_<object>` (they are
@@ -76,7 +76,7 @@ into the tool shape would distort the MCP surface. Both surfaces
 are wire-clean per §6 and `wireclean`.
 
 A read-only CLI verb that *does* fit the tool shape (e.g.,
-`engram find-symbol`, `engram blast-radius`) reuses the matching
+`veska find-symbol`, `veska blast-radius`) reuses the matching
 `eng_*` tool over the same socket — no duplicate handler. CLI
 verbs in the design tree are CLI-side verbs; their underlying
 RPC is whichever namespace fits.
@@ -389,7 +389,7 @@ each entry is informative to the operator." Common codes:
 | `post_promotion_queue_deferred` | `{work_kind: string, count: int}` | Rows in `state='deferred'` because queue depth was at high-water at promotion time (SOLO-08 §3.4). |
 | `startup_resync` | `{repos_pending: int}` | Daemon is replaying `git log <last_promoted_sha>..HEAD` (SOLO-03 §5.7). |
 | `wake_reconciling` | — | Daemon detected a suspend/wake gap and is sweeping repos (SOLO-03 §5.2). |
-| `embedder_swapping` | — | Daemon is mid-`engram embedder swap` (SOLO-03 §3.2). |
+| `embedder_swapping` | — | Daemon is mid-`veska embedder swap` (SOLO-03 §3.2). |
 | `vec0_ceiling_warn` | `{headroom_ratio: float}` | Approaching the vec0 substrate ceiling (SOLO-13 §3.3.1). |
 | `vec0_ceiling_exceeded` | `{headroom_ratio: float}` | Past the ceiling; `semantic_search` p95 budget likely missed. |
 

@@ -140,7 +140,7 @@ func writeSocketMissingError(w io.Writer, sockPath string) {
 func newRootCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:          "veska-mcp",
-		Short:        "Engram MCP stdio shim (proxies editor to daemon socket)",
+		Short:        "Veska MCP stdio shim (proxies editor to daemon socket)",
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			sockPath := config.MCPSockPath()

@@ -20,8 +20,8 @@ labelled per the §3 convention (`BUDGET (unmeasured)`,
 ### 1.1 Logs
 
 - **slog** is the only logging library. Always on. Default handler
-  is text on stderr; `ENGRAM_LOG_FORMAT=json` switches to JSON.
-- Default level is `info`. `ENGRAM_LOG_LEVEL=debug` raises it.
+  is text on stderr; `VESKA_LOG_FORMAT=json` switches to JSON.
+- Default level is `info`. `VESKA_LOG_LEVEL=debug` raises it.
 - Standard attribute names (used consistently, not lint-enforced):
   `repo_id`, `branch`, `node_id`, `actor_id`, `actor_kind`, `tool`,
   `promotion_id`, `work_kind`, `error`.
@@ -33,7 +33,7 @@ labelled per the §3 convention (`BUDGET (unmeasured)`,
 ### 1.2 Metrics
 
 Prometheus `/metrics` is **opt-in**. Set `metrics.enabled = true` in
-`config.toml` or `ENGRAM_METRICS_LISTEN=127.0.0.1:9090`. When off, no HTTP
+`config.toml` or `VESKA_METRICS_LISTEN=127.0.0.1:9090`. When off, no HTTP
 listener is bound.
 
 **Port collision behavior.** The default `127.0.0.1:9090` is the
@@ -76,7 +76,7 @@ their own stack.
 
 OTLP traces are **opt-in and off by default**. They stay
 unconfigured unless the user explicitly sets both
-`tracing.enabled = true` *and* `ENGRAM_OTLP_ENDPOINT=...`.
+`tracing.enabled = true` *and* `VESKA_OTLP_ENDPOINT=...`.
 Setting one without the other is a config error caught at
 startup. There is no default endpoint and no default sampler
 ratio: when the operator opts in, they pick both. The pillar
@@ -146,8 +146,8 @@ Two adjacent CLI verbs that are *not* `veska doctor`
 subcommands (because they take action, not report state):
 
 ```
-engram bundle              # writes a sharable diagnostic tarball (§2.2)
-engram restore --pre-migration   # restores the most recent pre-migration auto-snapshot
+veska bundle              # writes a sharable diagnostic tarball (§2.2)
+veska restore --pre-migration   # restores the most recent pre-migration auto-snapshot
                                   # (SOLO-08 §10.3)
 ```
 
@@ -296,7 +296,7 @@ Codes: `ok`, `daemon_down`, `socket_unreachable`.
 "data": {
   "destinations": [
     {"kind": "ollama",     "url": "http://localhost:11434", "configured_via": "default"},
-    {"kind": "otlp",       "url": "http://otel.local:4318", "configured_via": "ENGRAM_OTLP_ENDPOINT"},
+    {"kind": "otlp",       "url": "http://otel.local:4318", "configured_via": "VESKA_OTLP_ENDPOINT"},
     {"kind": "metrics",    "listen": "127.0.0.1:9090",       "configured_via": "config:metrics.listen"},
     {"kind": "vuln_source","url": "https://api.osv.dev",     "configured_via": "config:vuln_source.provider"}
   ]
@@ -314,7 +314,7 @@ is enabled in a config layer the operator may not realise).
 
 ```jsonc
 "data": {
-  "veska_home":     "/home/jeff/.engram",
+  "veska_home":     "/home/jeff/.veska",
   "db_path":         "/home/jeff/.veska/veska.db",
   "db_size_bytes":   1287654321,
   "wal_size_bytes":  8388608,
@@ -350,7 +350,7 @@ non-`ok`, `remediation` carries the platform-specific install or
 "data": {
   "effective": { /* merged config — full struct, secrets redacted */ },
   "sources": [
-    {"key": "metrics.listen", "value": "127.0.0.1:9090", "from": "env:ENGRAM_METRICS_LISTEN"},
+    {"key": "metrics.listen", "value": "127.0.0.1:9090", "from": "env:VESKA_METRICS_LISTEN"},
     {"key": "embedder.model", "value": "nomic-embed-text", "from": "default"}
   ]
 }
@@ -495,7 +495,7 @@ reset).
 
 ### 2.2 Diagnostic bundle
 
-`engram bundle` writes a single tarball — meant for
+`veska bundle` writes a single tarball — meant for
 attaching to a GitHub issue or sharing with another developer —
 that contains every operator-visible diagnostic the daemon can
 produce, with secrets and user content redacted. The command is
@@ -505,17 +505,17 @@ debugging without violating the "zero telemetry by default"
 contract (PRODUCT.md §"Privacy & telemetry").
 
 ```
-engram bundle [-o <path>]
+veska bundle [-o <path>]
 ```
 
-Defaults to `./engram-doctor-bundle-<ts>.tar.gz`. Honors `-o
+Defaults to `./veska-doctor-bundle-<ts>.tar.gz`. Honors `-o
 <path>` for an explicit destination. Exits 0 on a successful
 write; 2 on a write failure (disk full, permission denied).
 
 **Bundle contents:**
 
 ```
-engram-doctor-bundle-2026-05-09T18-42-31Z.tar.gz
+veska-doctor-bundle-2026-05-09T18-42-31Z.tar.gz
 ├── manifest.json                  # what's in the bundle, redaction summary
 ├── doctor/
 │   ├── summary.json               # `veska doctor --json`

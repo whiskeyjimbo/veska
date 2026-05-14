@@ -1,4 +1,4 @@
-# Engram (Solo) — Product Narrative
+# Veska — Product Narrative
 
 > Reader-friendly. The Charter (`design/01-charter/`) is binding;
 > this file is for new readers and anyone deciding whether to use it.
@@ -75,7 +75,7 @@ connection in the default config.
 ┌─ developer machine ─────────────────────────────────────┐
 │                                                         │
 │   ┌──────────────┐    unix sockets    ┌──────────────┐  │
-│   │  client      │ ─────────────────▶ │   engram-    │  │
+│   │  client      │ ─────────────────▶ │   veska-    │  │
 │   │  surfaces    │                    │   daemon     │  │
 │   │              │                    │              │  │
 │   │  • CLI       │                    │  owns SQLite │  │
@@ -97,9 +97,9 @@ The daemon is the only component with state. Ollama is the only
 outbound connection in the default config.
 
 **Six runtime pieces, one stateful component.** A working
-install runs: `veska-daemon`, the `engram` CLI, the
+install runs: `veska-daemon`, the `veska` CLI, the
 `veska-mcp` stdio shim, an OS-level supervisor (launchd /
-systemd-user / the built-in `engram supervise`), Ollama, and
+systemd-user / the built-in `veska supervise`), Ollama, and
 your editor. The diagram above collapses CLI + editor into
 "client surfaces" and elides the supervisor for narrative
 clarity, but the supervisor is **load-bearing** for first-run
@@ -201,13 +201,13 @@ are in [`design/11-pipelines/`](design/11-pipelines/README.md)
 reports. No usage analytics. No model-call logs. The flip side:
 **when the daemon misbehaves, no one — including you — has data
 to diagnose unless you opted in.** `veska doctor` and
-`engram bundle` are the on-demand operator surfaces; if you want
+`veska bundle` are the on-demand operator surfaces; if you want
 proactive "is my daemon OK?" telemetry, you wire it up yourself
 (Prometheus + your own scraper + your own dashboard).
 
 You opt in to egress explicitly:
 
-- An OTLP trace endpoint (`ENGRAM_OTLP_ENDPOINT`).
+- An OTLP trace endpoint (`VESKA_OTLP_ENDPOINT`).
 - A Prometheus `/metrics` endpoint.
 - A vendor LLM. **Ships only the local Ollama generator.**
   Hosted providers (Anthropic, OpenAI, Gemini, OpenAI-compatible)
@@ -221,7 +221,7 @@ You opt in to egress explicitly:
 lists every configured outbound destination under its `egress`
 section so you can audit at any time. If something goes wrong
 and you want to share state without uploading anything yourself,
-`engram bundle` writes a single `.tar.gz` to disk that you can
+`veska bundle` writes a single `.tar.gz` to disk that you can
 attach to a GitHub issue. Source code, node bodies,
 embedding bytes, and LLM payloads are excluded; secret-shaped
 config keys are redacted. The bundle is operator data, not

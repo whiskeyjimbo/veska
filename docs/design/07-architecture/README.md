@@ -86,9 +86,9 @@ through `core/ports`.
 ## 3. Package layout
 
 ```
-engram-v2/
+veska-v2/
   cmd/
-    engram/                     # CLI binary
+    veska/                     # CLI binary
     veska-daemon/              # daemon binary
     veska-mcp/                 # stdio shim binary
   internal/

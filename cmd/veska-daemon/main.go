@@ -27,7 +27,7 @@ const (
 func newRootCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:          "veska-daemon",
-		Short:        "Engram long-running daemon (supervises Dolt + Qdrant)",
+		Short:        "Veska long-running daemon (supervises Dolt + Qdrant)",
 		SilenceUsage: true,
 	}
 }

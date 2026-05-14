@@ -123,7 +123,7 @@ Properties:
    without contending for the writer lock.
 
 8. **The promotion transaction is just a write.** Post-commit hook
-   calls `engram promote` over the Unix socket; the daemon side opens
+   calls `veska promote` over the Unix socket; the daemon side opens
    a transaction on `writeDB.hot`, runs the promotion SQL (SOLO-08 §5),
    commits. There is no "promotion coordinator" type. The promotion pipeline
    in `application/` is plain Go calling repository methods.

@@ -48,9 +48,9 @@ func backupCreateCmd() *cobra.Command {
 			}
 
 			result, err := backup.Create(backup.CreateOptions{
-				DBPath:     dbPath,
-				EngramHome: veskaHome,
-				BackupDir:  outputDir,
+				DBPath:    dbPath,
+				VeskaHome: veskaHome,
+				BackupDir: outputDir,
 			})
 			if err != nil {
 				return fmt.Errorf("backup create: %w", err)

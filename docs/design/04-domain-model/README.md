@@ -27,7 +27,7 @@ sub-tree would obscure rather than help.
 | `Edge` | Graph-scoped entity, written row-shaped (§11) | `(src NodeID, tgt NodeID, kind EdgeKind)` |
 | `Graph` | **Read projection** (§5.3) — *not* an aggregate root | `(repo_id, branch)` |
 | `Repo` | **Aggregate root** | `repo_id` (stable hash of root path) |
-| `Task` | **Aggregate root** | `task_id` (engram-native ULID) |
+| `Task` | **Aggregate root** | `task_id` (veska-native ULID) |
 | `Finding` | **Aggregate root** | `(finding_id, branch)` where `finding_id = stable_hash(rule, anchor)` is itself branch-stable |
 | `Suppression` | Member of `Finding` | `(finding_id, suppressed_at, scope)` |
 
@@ -43,7 +43,7 @@ only. `Suppression` is a member of `Finding`.
 
 - **Actor.** There is no `Actor` aggregate. Actors are represented
   by an `actor_id string` (e.g. `"human:jeff"`, `"agent:claude-code"`,
-  `"service:engram"`) and an `actor_kind` enum (`'human' | 'agent'
+  `"service:veska"`) and an `actor_kind` enum (`'human' | 'agent'
   | 'system'`) on every row that records authorship. That is the
   entire identity model. SOLO-10 has the full story.
 - **Workspace.** The daemon has a session and the user has a
@@ -76,7 +76,7 @@ const (
 )
 
 type ActorStamp struct {
-    ActorID   string    // "human:<user>" | "agent:<name>" | "service:engram"
+    ActorID   string    // "human:<user>" | "agent:<name>" | "service:veska"
     Kind      ActorKind
 }
 ```
@@ -89,14 +89,14 @@ independently.** `Kind` answers "what substrate wrote this row?"
 — the listener that accepted the connection (`cli.sock` →
 `human`, `mcp.sock` → `agent`) or the daemon goroutine
 (`system`). `ActorID` answers "what produced the content?" —
-the user, the named agent client, or `service:engram` for
+the user, the named agent client, or `service:veska` for
 generic daemon work. The pairs that arise in practice:
 
 | `Kind`   | `ActorID` examples | When |
 |---|---|---|
 | `human`  | `human:jeff`, `human:unknown` | CLI connection on `cli.sock` (SOLO-10 §2.1) |
 | `agent`  | `agent:claude-code`, `agent:cursor`, `agent:anon-<rand>` | MCP connection on `mcp.sock` (SOLO-10 §2.2) |
-| `system` | `service:engram` | Daemon-internal goroutines: revalidation sweep, auto-link re-scorer, soft-suppression revoker, embed worker (SOLO-10 §2.3) |
+| `system` | `service:veska` | Daemon-internal goroutines: revalidation sweep, auto-link re-scorer, soft-suppression revoker, embed worker (SOLO-10 §2.3) |
 | `system` | `agent:<llm-generator-name>` | Review pipeline: a daemon goroutine writes the row, but an LLM produced the rationale; both halves are recorded (SOLO-10 §1.2 review-pipeline exception, SOLO-11 §3) |
 
 The last row is the only `Kind`/`ActorID`-prefix mismatch and
@@ -490,10 +490,10 @@ tracker issue.
 
 | Field | Type | Notes |
 |---|---|---|
-| `id` | `string` | engram-native ULID |
+| `id` | `string` | veska-native ULID |
 | `repo_id` | `RepoID` | task is scoped to one repo |
 | `tracker` | `*string` | `"bd"`, `"github"`, `"jira"`, or nil |
-| `tracker_ref` | `*string` | e.g. `"bd:engram-42"` |
+| `tracker_ref` | `*string` | e.g. `"bd:veska-42"` |
 | `title` | `string` | |
 | `active` | `bool` | exactly one task is active per repo |
 | `created_at` | `time.Time` | |

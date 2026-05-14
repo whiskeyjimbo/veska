@@ -1,4 +1,4 @@
-# Engram (Solo) — Design Set
+# Veska — Design Set
 
 > **Naming note.** "Engram" is the product name. "Solo" is the
 > single-user, single-daemon shape this design set covers. Calling

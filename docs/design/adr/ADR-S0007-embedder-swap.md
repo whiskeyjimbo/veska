@@ -34,13 +34,13 @@ daemon does the right thing.
 The user runs:
 
 ```
-engram embedder swap <model>                    # pulls model dim from a probe
-engram embedder swap --provider=ollama --model=mxbai-embed-large
-engram embedder current                          # prints active provider/model/dim
+veska embedder swap <model>                    # pulls model dim from a probe
+veska embedder swap --provider=ollama --model=mxbai-embed-large
+veska embedder current                          # prints active provider/model/dim
 ```
 
 The CLI sends a control RPC to the daemon. The daemon executes
-the sequence specified in **SOLO-03 §3.2 ("`engram embedder
+the sequence specified in **SOLO-03 §3.2 ("`veska embedder
 swap <model>`")**:
 
 1. Probe the new model via Ollama; read its embedding dim.
@@ -114,7 +114,7 @@ Negative:
 
 ## References
 
-- SOLO-03 §3.2 (`engram embedder swap <model>` operational sequence)
+- SOLO-03 §3.2 (`veska embedder swap <model>` operational sequence)
 - SOLO-08 §3.3 (`database_meta` boot consistency check; `vec_nodes` geometry)
 - SOLO-08 §7 (what this design does NOT include — embedder migration ceremony)
 - ADR-S0004 (the post-promotion queue the rebuild drains through)

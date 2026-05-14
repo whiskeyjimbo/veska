@@ -63,7 +63,7 @@ append-only audit log.
 
 | Epic | DoD |
 |---|---|
-| **m1.01 — scaffold** | `engram-v2/` packages declared per SOLO-07; `make build test lint` green; `layercheck` analyser in place. |
+| **m1.01 — scaffold** | `veska-v2/` packages declared per SOLO-07; `make build test lint` green; `layercheck` analyser in place. |
 | **m1.02 — domain & ports** | `Node`, `Edge`, `Graph`, `Task`, `Finding`, `Suppression`, `Actor` with functional-options constructors; ports in `core/ports/`. |
 | **m1.03 — sqlite substrate** | Schema per SOLO-08 §3 migrated; sqlite-vec loaded; `post_promotion_queue` poller running. Daemon refuses to start without sqlite-vec. |
 | **m1.04 — save/promote pipeline** | Staging in-memory; post-commit hook promotions; post-promotion queue drained by goroutines; hook return < 100ms p95 (measured). |
@@ -156,14 +156,14 @@ auto-merge) until calibrated.
 ## M4 — Wiki mechanical kinds
 
 **Goal:** Two mechanical wiki kinds (`hot_zone`, `entry_points`)
-rendered to `docs/engram/`, plus the `eng_context_pack` MCP tool
+rendered to `docs/veska/`, plus the `eng_context_pack` MCP tool
 for agents.
 
 | Epic | DoD |
 |---|---|
 | **m4.01 — context pack** | `eng_context_pack` MCP tool returns a token-bounded bundle of nodes, recent commits, open findings, and tasks for a given symbol or task. |
-| **m4.02 — hot_zone** | Mechanical page kind: top-N files by recent change frequency × blast radius. Rendered to `docs/engram/hot_zones.md`. |
-| **m4.03 — entry_points** | Mechanical page kind: candidate "good first PR" symbols (low blast radius, tests adjacent, no open findings). Rendered to `docs/engram/entry_points.md`. |
+| **m4.02 — hot_zone** | Mechanical page kind: top-N files by recent change frequency × blast radius. Rendered to `docs/veska/hot_zones.md`. |
+| **m4.03 — entry_points** | Mechanical page kind: candidate "good first PR" symbols (low blast radius, tests adjacent, no open findings). Rendered to `docs/veska/entry_points.md`. |
 | **m4.04 — wiki refresh** | `veska wiki` regenerates both kinds; runs on promotion via post-promotion queue `work_kind='wiki'`. |
 
 **Exit gates.** Numeric gates are SOLO-13 §3.5 (`hot_zone`,

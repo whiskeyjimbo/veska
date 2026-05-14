@@ -1,6 +1,6 @@
 ---
 id: SOLO-01
-title: "Scope and principles — Engram (Solo)"
+title: "Scope and principles — Veska"
 status: draft
 version: 0.1.0
 last_reviewed: 2026-05-08
@@ -132,7 +132,7 @@ Known collisions:
 
 - **"Engram"** collides with the keyboard layout, the Engram
   memory-engineering startup, and several neuroscience products.
-  The binary is `engram`, the Go module is `engram`, the data dir
+  The binary is `veska`, the Go module is `veska`, the data dir
   is `~/.veska/`. For a personal, on-device product, discoverability
   is not the goal and the collision is acceptable. **Trademark
   resolution is required before any V2.1 server-tier work begins**

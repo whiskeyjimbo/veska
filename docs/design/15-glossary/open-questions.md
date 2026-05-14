@@ -134,7 +134,7 @@ reference laptop, both required to close OQ-S004 green:
 1. **Rebuild time.** Time the full re-embed of a 1M-node graph
    after swap. If it exceeds 8 hours, file an ADR for a phased
    plan.
-2. **In-transaction rollback safety.** Force step 4 of `engram
+2. **In-transaction rollback safety.** Force step 4 of `veska
    embedder swap` (SOLO-03 §3.2) to fail mid-transaction (e.g.
    provoke disk-full or a constraint violation after the
    `DROP TABLE vec_nodes` and before `COMMIT`). Verify on next
