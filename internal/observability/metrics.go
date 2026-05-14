@@ -38,6 +38,15 @@ type Metrics struct {
 
 	// ErrorCount counts errors by kind (promotion|embed|mcp|parse|watcher).
 	ErrorCount *prometheus.CounterVec
+
+	// CheckLatency measures the wall-clock duration of each structural check
+	// run by the post-promotion check pipeline. Labels: repo_id, check.
+	//
+	// A sibling histogram (rather than a new label on SealLatency) keeps the
+	// end-to-end seal-latency time series clean: SealLatency is a single
+	// observation per Promote() call (repo_id), while CheckLatency cardinality
+	// fans out per registered check.
+	CheckLatency *prometheus.HistogramVec
 }
 
 // NewMetrics constructs a Metrics struct and registers all metrics with reg.
@@ -92,6 +101,14 @@ func NewMetrics(reg prometheus.Registerer) *Metrics {
 		[]string{"kind"},
 	)
 
+	checkLatency := prometheus.NewHistogramVec(
+		prometheus.HistogramOpts{
+			Name: "veska_check_latency_seconds",
+			Help: "Per-structural-check wall-clock duration run by the post-promotion pipeline.",
+		},
+		[]string{"repo_id", "check"},
+	)
+
 	reg.MustRegister(
 		sealLatency,
 		postCommitHookDuration,
@@ -99,6 +116,7 @@ func NewMetrics(reg prometheus.Registerer) *Metrics {
 		mcpRequestDuration,
 		vectorQueryDuration,
 		errorCount,
+		checkLatency,
 	)
 
 	return &Metrics{
@@ -108,6 +126,7 @@ func NewMetrics(reg prometheus.Registerer) *Metrics {
 		MCPRequestDuration:     mcpRequestDuration,
 		VectorQueryDuration:    vectorQueryDuration,
 		ErrorCount:             errorCount,
+		CheckLatency:           checkLatency,
 	}
 }
 
