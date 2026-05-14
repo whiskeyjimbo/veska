@@ -65,6 +65,10 @@ func (p *Promoter) tracerProvider() observability.TracerProvider {
 //  5. Commits — all writes land atomically or not at all.
 //  6. Calls StagingArea.DeleteStagedFile for each promoted file after commit.
 //
+// Node-only promotion: edges are intentionally not promoted here. They are
+// re-derived post-promotion by the auto_link queue worker (work_kind="auto_link").
+// Staged edges remain in the StagingArea solely to serve pre-promotion overlay reads.
+//
 // actor records who triggered the promotion. Hook-triggered paths should pass
 // domain.Actor{ID: "service:veska", Kind: domain.ActorKindSystem}.
 func (p *Promoter) Promote(ctx context.Context, repoID, branch, gitSHA string, actor domain.Actor) error {
