@@ -60,13 +60,28 @@ func makeCloseFindingHandler(db *sql.DB, aw ports.AuditWriter) ToolHandler {
 			return nil, rpcErr
 		}
 
-		// Fetch the finding to check existence and severity.
-		var severity string
-		var state string
-		err := db.QueryRowContext(ctx,
-			`SELECT severity, state FROM findings WHERE finding_id = ? AND branch = ?`,
+		// Open a single transaction so finding-close and any edge-promotion
+		// commit or roll back together.
+		tx, err := db.BeginTx(ctx, nil)
+		if err != nil {
+			return nil, &RPCError{Code: CodeInternalError, Message: fmt.Sprintf("begin tx: %v", err)}
+		}
+		// Ensure rollback on any non-commit return path. After a successful
+		// Commit, Rollback is a no-op per database/sql.
+		defer func() { _ = tx.Rollback() }()
+
+		// Fetch the finding to check existence, severity, rule, and anchor
+		// (node_id, which for auto-link findings carries the edge_id).
+		var (
+			severity string
+			state    string
+			rule     string
+			nodeID   sql.NullString
+		)
+		err = tx.QueryRowContext(ctx,
+			`SELECT severity, state, rule, node_id FROM findings WHERE finding_id = ? AND branch = ?`,
 			p.FindingID, p.Branch,
-		).Scan(&severity, &state)
+		).Scan(&severity, &state, &rule, &nodeID)
 		if err == sql.ErrNoRows {
 			return nil, &RPCError{Code: CodeNotFound, Message: fmt.Sprintf("finding not found: %s on branch %s", p.FindingID, p.Branch)}
 		}
@@ -88,9 +103,29 @@ func makeCloseFindingHandler(db *sql.DB, aw ports.AuditWriter) ToolHandler {
 			}
 		}
 
+		// Accept-flow for auto-link findings promotes the anchored edge from
+		// 'unresolved' to 'definite' in the same tx. Any other (rule, reason)
+		// combination is a regular close.
+		//
+		// Behaviours for edge anchors:
+		//   - Missing/empty node_id: skip promotion silently; finding still closes.
+		//   - Missing edge row: data-corruption-soft-fail — UPDATE affects 0 rows,
+		//     finding still closes (no rollback). Logged via the absence of an
+		//     audit follow-up beyond the standard accept entry.
+		//   - Already 'definite' edge: UPDATE is naturally idempotent.
+		isAccept := rule == "auto-link" && p.Reason == "accept"
+		if isAccept && nodeID.Valid && nodeID.String != "" {
+			if _, err := tx.ExecContext(ctx,
+				`UPDATE edges SET confidence = 'definite' WHERE edge_id = ? AND branch = ?`,
+				nodeID.String, p.Branch,
+			); err != nil {
+				return nil, &RPCError{Code: CodeInternalError, Message: fmt.Sprintf("promote edge: %v", err)}
+			}
+		}
+
 		// Update the finding to closed.
 		closedAt := time.Now().Unix()
-		res, err := db.ExecContext(ctx,
+		res, err := tx.ExecContext(ctx,
 			`UPDATE findings
 			    SET state = 'closed',
 			        closed_reason = ?,
@@ -109,12 +144,20 @@ func makeCloseFindingHandler(db *sql.DB, aw ports.AuditWriter) ToolHandler {
 			return nil, &RPCError{Code: CodeNotFound, Message: fmt.Sprintf("finding not found: %s on branch %s", p.FindingID, p.Branch)}
 		}
 
+		if err := tx.Commit(); err != nil {
+			return nil, &RPCError{Code: CodeInternalError, Message: fmt.Sprintf("commit tx: %v", err)}
+		}
+
 		if aw != nil {
+			op := "finding.close"
+			if isAccept {
+				op = "finding.accept"
+			}
 			_ = aw.Write(ctx, ports.AuditEntry{
 				RepoID:    p.RepoID,
 				ActorID:   actor.ID,
 				ActorKind: actor.Kind,
-				Op:        "finding.close",
+				Op:        op,
 				TargetID:  p.FindingID,
 				Branch:    p.Branch,
 				CreatedAt: time.Now(),
