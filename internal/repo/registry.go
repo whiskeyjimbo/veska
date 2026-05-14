@@ -111,14 +111,23 @@ func removeHooks(root string) {
 	}
 }
 
+// watchesPerRepoEstimate is the estimated number of inotify watches consumed
+// per tracked repository. Used for the Linux inotify budget check.
+const watchesPerRepoEstimate = 128
+
 // Add registers root as a tracked repository. It:
-//  1. Canonicalises the path and generates a sha256 repo_id.
-//  2. Reads the module path from go.mod or package.json.
-//  3. Inserts the row into the repos table (idempotent: ON CONFLICT DO NOTHING).
-//  4. Installs git hooks.
+//  1. Checks the Linux inotify watch budget (no-op on other platforms).
+//  2. Canonicalises the path and generates a sha256 repo_id.
+//  3. Reads the module path from go.mod or package.json.
+//  4. Inserts the row into the repos table (idempotent: ON CONFLICT DO NOTHING).
+//  5. Installs git hooks.
 //
 // Returns the repo_id string.
 func Add(ctx context.Context, db *sql.DB, rootPath string) (string, error) {
+	if _, err := CheckInotifyBudget(0, watchesPerRepoEstimate); err != nil {
+		return "", fmt.Errorf("repo add: %w", err)
+	}
+
 	canonical, err := canonicalise(rootPath)
 	if err != nil {
 		return "", err
