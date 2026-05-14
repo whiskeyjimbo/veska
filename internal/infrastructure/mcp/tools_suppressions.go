@@ -8,16 +8,18 @@ import (
 	"time"
 
 	"github.com/whiskeyjimbo/veska/internal/core/domain"
+	"github.com/whiskeyjimbo/veska/internal/core/ports"
 )
 
 // RegisterSuppressionTools registers suppression management tools on r.
 // db is the SQLite connection that backs the suppressions table.
-func RegisterSuppressionTools(r *Registry, db *sql.DB) {
+// aw is an optional AuditWriter; pass nil to disable audit logging.
+func RegisterSuppressionTools(r *Registry, db *sql.DB, aw ports.AuditWriter) {
 	r.MustRegister(ToolSpec{
 		Name:            "eng_suppress_finding",
 		Description:     "Suppress a finding, inserting a record into the suppressions table.",
 		IncludesStaging: false,
-		Handler:         makeSuppressFindingHandler(db),
+		Handler:         makeSuppressFindingHandler(db, aw),
 	})
 	r.MustRegister(ToolSpec{
 		Name:            "eng_list_suppressions",
@@ -40,23 +42,14 @@ type suppressFindingParams struct {
 	ExpiresAt *int64 `json:"expires_at,omitempty"`
 }
 
-func makeSuppressFindingHandler(db *sql.DB) ToolHandler {
+func makeSuppressFindingHandler(db *sql.DB, aw ports.AuditWriter) ToolHandler {
 	return func(ctx context.Context, actor domain.Actor, raw json.RawMessage) (any, *RPCError) {
 		var p suppressFindingParams
-		if err := json.Unmarshal(raw, &p); err != nil {
-			return nil, &RPCError{Code: CodeInvalidParams, Message: fmt.Sprintf("invalid params: %v", err)}
+		if rpcErr := bindParams(raw, &p); rpcErr != nil {
+			return nil, rpcErr
 		}
-		if p.FindingID == "" {
-			return nil, &RPCError{Code: CodeInvalidParams, Message: "finding_id is required"}
-		}
-		if p.Branch == "" {
-			return nil, &RPCError{Code: CodeInvalidParams, Message: "branch is required"}
-		}
-		if p.RepoID == "" {
-			return nil, &RPCError{Code: CodeInvalidParams, Message: "repo_id is required"}
-		}
-		if p.Reason == "" {
-			return nil, &RPCError{Code: CodeInvalidParams, Message: "reason is required"}
+		if rpcErr := checkRequired("finding_id", p.FindingID, "branch", p.Branch, "repo_id", p.RepoID, "reason", p.Reason); rpcErr != nil {
+			return nil, rpcErr
 		}
 		if p.Scope == "" {
 			p.Scope = "finding"
@@ -74,6 +67,18 @@ func makeSuppressFindingHandler(db *sql.DB) ToolHandler {
 		)
 		if err != nil {
 			return nil, &RPCError{Code: CodeInternalError, Message: fmt.Sprintf("insert suppression: %v", err)}
+		}
+
+		if aw != nil {
+			_ = aw.Write(ctx, ports.AuditEntry{
+				RepoID:    p.RepoID,
+				ActorID:   actor.ID,
+				ActorKind: actor.Kind,
+				Op:        "finding.suppress",
+				TargetID:  p.FindingID,
+				Branch:    p.Branch,
+				CreatedAt: time.Now(),
+			})
 		}
 
 		return map[string]any{
@@ -110,14 +115,11 @@ type suppressionRow struct {
 func makeListSuppressionsHandler(db *sql.DB) ToolHandler {
 	return func(ctx context.Context, _ domain.Actor, raw json.RawMessage) (any, *RPCError) {
 		var p listSuppressionsParams
-		if err := json.Unmarshal(raw, &p); err != nil {
-			return nil, &RPCError{Code: CodeInvalidParams, Message: fmt.Sprintf("invalid params: %v", err)}
+		if rpcErr := bindParams(raw, &p); rpcErr != nil {
+			return nil, rpcErr
 		}
-		if p.RepoID == "" {
-			return nil, &RPCError{Code: CodeInvalidParams, Message: "repo_id is required"}
-		}
-		if p.Branch == "" {
-			return nil, &RPCError{Code: CodeInvalidParams, Message: "branch is required"}
+		if rpcErr := checkRequired("repo_id", p.RepoID, "branch", p.Branch); rpcErr != nil {
+			return nil, rpcErr
 		}
 
 		// Suppressions are scoped by branch. We also include branch-NULL suppressions (repo-wide).

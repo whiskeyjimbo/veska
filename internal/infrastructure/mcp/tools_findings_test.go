@@ -126,7 +126,7 @@ func TestCloseFindings_HumanActionGate(t *testing.T) {
 			seedFinding(t, db, findingID, "main", "repo-1", tc.severity, "open")
 
 			r := NewRegistry()
-			RegisterFindingTools(r, db)
+			RegisterFindingTools(r, db, nil)
 
 			result, rpcErr := dispatchFinding(t, r, tc.actor, map[string]string{
 				"finding_id": findingID,
@@ -182,7 +182,7 @@ func TestCloseFindings_MessageContainsFindingAndSeverity(t *testing.T) {
 	seedFinding(t, db, fid, "main", "repo-1", "critical", "open")
 
 	r := NewRegistry()
-	RegisterFindingTools(r, db)
+	RegisterFindingTools(r, db, nil)
 
 	actor := domain.Actor{ID: "agent:bot", Kind: domain.ActorKindAgent}
 	_, rpcErr := dispatchFinding(t, r, actor, map[string]string{
@@ -195,11 +195,16 @@ func TestCloseFindings_MessageContainsFindingAndSeverity(t *testing.T) {
 	if rpcErr == nil {
 		t.Fatal("expected RPC error")
 	}
-	if !strings.Contains(rpcErr.Message, fid) {
-		t.Errorf("expected finding_id %q in message, got: %q", fid, rpcErr.Message)
+	// finding_id and severity are in Data, not Message.
+	data, ok := rpcErr.Data.(map[string]any)
+	if !ok {
+		t.Fatalf("expected RPCError.Data to be map[string]any, got %T", rpcErr.Data)
 	}
-	if !strings.Contains(rpcErr.Message, "critical") {
-		t.Errorf("expected severity in message, got: %q", rpcErr.Message)
+	if data["finding_id"] != fid {
+		t.Errorf("expected finding_id %q in Data, got %v", fid, data["finding_id"])
+	}
+	if data["severity"] != "critical" {
+		t.Errorf("expected severity=critical in Data, got %v", data["severity"])
 	}
 }
 
@@ -207,7 +212,7 @@ func TestCloseFindings_NotFound(t *testing.T) {
 	db := newFindingsDB(t)
 
 	r := NewRegistry()
-	RegisterFindingTools(r, db)
+	RegisterFindingTools(r, db, nil)
 
 	actor := domain.Actor{ID: "human:alice", Kind: domain.ActorKindHuman}
 	_, rpcErr := dispatchFinding(t, r, actor, map[string]string{
@@ -220,8 +225,8 @@ func TestCloseFindings_NotFound(t *testing.T) {
 	if rpcErr == nil {
 		t.Fatal("expected RPC error for not-found finding")
 	}
-	if rpcErr.Code != CodeInvalidParams {
-		t.Errorf("expected code %d, got %d", CodeInvalidParams, rpcErr.Code)
+	if rpcErr.Code != CodeNotFound {
+		t.Errorf("expected code %d, got %d", CodeNotFound, rpcErr.Code)
 	}
 }
 
@@ -229,7 +234,7 @@ func TestCloseFindings_MissingParams(t *testing.T) {
 	db := newFindingsDB(t)
 
 	r := NewRegistry()
-	RegisterFindingTools(r, db)
+	RegisterFindingTools(r, db, nil)
 
 	actor := domain.Actor{ID: "human:alice", Kind: domain.ActorKindHuman}
 	// Missing finding_id.
@@ -268,7 +273,7 @@ func dispatchListFindings(t *testing.T, r *Registry, actor domain.Actor, params 
 func TestListFindings_Empty(t *testing.T) {
 	db := newFindingsDB(t)
 	r := NewRegistry()
-	RegisterFindingTools(r, db)
+	RegisterFindingTools(r, db, nil)
 
 	actor := domain.Actor{ID: "agent:bot", Kind: domain.ActorKindAgent}
 	result, rpcErr := dispatchListFindings(t, r, actor, map[string]string{
@@ -295,7 +300,7 @@ func TestListFindings_DefaultStateIsOpen(t *testing.T) {
 	seedFinding(t, db, "closed-f", "main", "repo-1", "low", "closed")
 
 	r := NewRegistry()
-	RegisterFindingTools(r, db)
+	RegisterFindingTools(r, db, nil)
 
 	actor := domain.Actor{ID: "agent:bot", Kind: domain.ActorKindAgent}
 	result, rpcErr := dispatchListFindings(t, r, actor, map[string]string{
@@ -323,7 +328,7 @@ func TestListFindings_SeverityFilter(t *testing.T) {
 	seedFinding(t, db, "high-f", "main", "repo-1", "high", "open")
 
 	r := NewRegistry()
-	RegisterFindingTools(r, db)
+	RegisterFindingTools(r, db, nil)
 
 	actor := domain.Actor{ID: "agent:bot", Kind: domain.ActorKindAgent}
 	result, rpcErr := dispatchListFindings(t, r, actor, map[string]string{
@@ -365,7 +370,7 @@ func TestReopenFinding_Basic(t *testing.T) {
 	seedFinding(t, db, "reopen-f", "main", "repo-1", "low", "closed")
 
 	r := NewRegistry()
-	RegisterFindingTools(r, db)
+	RegisterFindingTools(r, db, nil)
 
 	actor := domain.Actor{ID: "agent:bot", Kind: domain.ActorKindAgent}
 	result, rpcErr := dispatchReopenFinding(t, r, actor, map[string]string{
@@ -400,7 +405,7 @@ func TestReopenFinding_AnyActorCanReopen(t *testing.T) {
 	seedFinding(t, db, "reopen-agent", "main", "repo-1", "critical", "closed")
 
 	r := NewRegistry()
-	RegisterFindingTools(r, db)
+	RegisterFindingTools(r, db, nil)
 
 	// An agent should be able to reopen even a critical finding (no human gate).
 	actor := domain.Actor{ID: "agent:bot", Kind: domain.ActorKindAgent}
@@ -417,7 +422,7 @@ func TestReopenFinding_AnyActorCanReopen(t *testing.T) {
 func TestReopenFinding_NotFound(t *testing.T) {
 	db := newFindingsDB(t)
 	r := NewRegistry()
-	RegisterFindingTools(r, db)
+	RegisterFindingTools(r, db, nil)
 
 	actor := domain.Actor{ID: "human:alice", Kind: domain.ActorKindHuman}
 	_, rpcErr := dispatchReopenFinding(t, r, actor, map[string]string{
@@ -428,15 +433,15 @@ func TestReopenFinding_NotFound(t *testing.T) {
 	if rpcErr == nil {
 		t.Fatal("expected RPC error for not-found finding")
 	}
-	if rpcErr.Code != CodeInvalidParams {
-		t.Errorf("expected CodeInvalidParams, got %d", rpcErr.Code)
+	if rpcErr.Code != CodeNotFound {
+		t.Errorf("expected CodeNotFound, got %d", rpcErr.Code)
 	}
 }
 
 func TestReopenFinding_MissingParams(t *testing.T) {
 	db := newFindingsDB(t)
 	r := NewRegistry()
-	RegisterFindingTools(r, db)
+	RegisterFindingTools(r, db, nil)
 
 	actor := domain.Actor{ID: "human:alice", Kind: domain.ActorKindHuman}
 	_, rpcErr := dispatchReopenFinding(t, r, actor, map[string]string{

@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/whiskeyjimbo/veska/internal/core/domain"
+	"github.com/whiskeyjimbo/veska/internal/core/ports"
 )
 
 // CodeHumanRequired is the custom JSON-RPC error code returned when a
@@ -16,12 +17,13 @@ const CodeHumanRequired = -32001
 
 // RegisterFindingTools registers finding management tools on r.
 // db is the SQLite connection that backs the findings table.
-func RegisterFindingTools(r *Registry, db *sql.DB) {
+// aw is an optional AuditWriter; pass nil to disable audit logging.
+func RegisterFindingTools(r *Registry, db *sql.DB, aw ports.AuditWriter) {
 	r.MustRegister(ToolSpec{
 		Name:            "eng_close_finding",
 		Description:     "Close a finding by ID. Severity >= high requires a human actor.",
 		IncludesStaging: false,
-		Handler:         makeCloseFindingHandler(db),
+		Handler:         makeCloseFindingHandler(db, aw),
 	})
 	r.MustRegister(ToolSpec{
 		Name:            "eng_list_findings",
@@ -33,7 +35,7 @@ func RegisterFindingTools(r *Registry, db *sql.DB) {
 		Name:            "eng_reopen_finding",
 		Description:     "Reopen a previously closed finding by ID.",
 		IncludesStaging: false,
-		Handler:         makeReopenFindingHandler(db),
+		Handler:         makeReopenFindingHandler(db, aw),
 	})
 }
 
@@ -48,23 +50,14 @@ type closeFindingParams struct {
 	Reason    string `json:"reason"`
 }
 
-func makeCloseFindingHandler(db *sql.DB) ToolHandler {
+func makeCloseFindingHandler(db *sql.DB, aw ports.AuditWriter) ToolHandler {
 	return func(ctx context.Context, actor domain.Actor, raw json.RawMessage) (any, *RPCError) {
 		var p closeFindingParams
-		if err := json.Unmarshal(raw, &p); err != nil {
-			return nil, &RPCError{Code: CodeInvalidParams, Message: fmt.Sprintf("invalid params: %v", err)}
+		if rpcErr := bindParams(raw, &p); rpcErr != nil {
+			return nil, rpcErr
 		}
-		if p.FindingID == "" {
-			return nil, &RPCError{Code: CodeInvalidParams, Message: "finding_id is required"}
-		}
-		if p.Branch == "" {
-			return nil, &RPCError{Code: CodeInvalidParams, Message: "branch is required"}
-		}
-		if p.RepoID == "" {
-			return nil, &RPCError{Code: CodeInvalidParams, Message: "repo_id is required"}
-		}
-		if p.Reason == "" {
-			return nil, &RPCError{Code: CodeInvalidParams, Message: "reason is required"}
+		if rpcErr := checkRequired("finding_id", p.FindingID, "branch", p.Branch, "repo_id", p.RepoID, "reason", p.Reason); rpcErr != nil {
+			return nil, rpcErr
 		}
 
 		// Fetch the finding to check existence and severity.
@@ -75,7 +68,7 @@ func makeCloseFindingHandler(db *sql.DB) ToolHandler {
 			p.FindingID, p.Branch,
 		).Scan(&severity, &state)
 		if err == sql.ErrNoRows {
-			return nil, &RPCError{Code: CodeInvalidParams, Message: fmt.Sprintf("finding not found: %s on branch %s", p.FindingID, p.Branch)}
+			return nil, &RPCError{Code: CodeNotFound, Message: fmt.Sprintf("finding not found: %s on branch %s", p.FindingID, p.Branch)}
 		}
 		if err != nil {
 			return nil, &RPCError{Code: CodeInternalError, Message: fmt.Sprintf("query finding: %v", err)}
@@ -85,11 +78,13 @@ func makeCloseFindingHandler(db *sql.DB) ToolHandler {
 		sev := domain.Severity(severity)
 		if sev.AtLeast(domain.SeverityHigh) && actor.Kind != domain.ActorKindHuman {
 			return nil, &RPCError{
-				Code: CodeHumanRequired,
-				Message: fmt.Sprintf(
-					`{"reason":"human_required","finding_id":%q,"severity":%q}`,
-					p.FindingID, severity,
-				),
+				Code:    CodeHumanRequired,
+				Message: "human_required",
+				Data: map[string]any{
+					"reason":     "human_required",
+					"finding_id": p.FindingID,
+					"severity":   severity,
+				},
 			}
 		}
 
@@ -111,7 +106,19 @@ func makeCloseFindingHandler(db *sql.DB) ToolHandler {
 		}
 		n, _ := res.RowsAffected()
 		if n == 0 {
-			return nil, &RPCError{Code: CodeInvalidParams, Message: fmt.Sprintf("finding not found: %s on branch %s", p.FindingID, p.Branch)}
+			return nil, &RPCError{Code: CodeNotFound, Message: fmt.Sprintf("finding not found: %s on branch %s", p.FindingID, p.Branch)}
+		}
+
+		if aw != nil {
+			_ = aw.Write(ctx, ports.AuditEntry{
+				RepoID:    p.RepoID,
+				ActorID:   actor.ID,
+				ActorKind: actor.Kind,
+				Op:        "finding.close",
+				TargetID:  p.FindingID,
+				Branch:    p.Branch,
+				CreatedAt: time.Now(),
+			})
 		}
 
 		return map[string]any{
@@ -154,14 +161,11 @@ type findingRow struct {
 func makeListFindingsHandler(db *sql.DB) ToolHandler {
 	return func(ctx context.Context, _ domain.Actor, raw json.RawMessage) (any, *RPCError) {
 		var p listFindingsParams
-		if err := json.Unmarshal(raw, &p); err != nil {
-			return nil, &RPCError{Code: CodeInvalidParams, Message: fmt.Sprintf("invalid params: %v", err)}
+		if rpcErr := bindParams(raw, &p); rpcErr != nil {
+			return nil, rpcErr
 		}
-		if p.RepoID == "" {
-			return nil, &RPCError{Code: CodeInvalidParams, Message: "repo_id is required"}
-		}
-		if p.Branch == "" {
-			return nil, &RPCError{Code: CodeInvalidParams, Message: "branch is required"}
+		if rpcErr := checkRequired("repo_id", p.RepoID, "branch", p.Branch); rpcErr != nil {
+			return nil, rpcErr
 		}
 		if p.State == "" {
 			p.State = "open"
@@ -214,20 +218,14 @@ type reopenFindingParams struct {
 	RepoID    string `json:"repo_id"`
 }
 
-func makeReopenFindingHandler(db *sql.DB) ToolHandler {
-	return func(ctx context.Context, _ domain.Actor, raw json.RawMessage) (any, *RPCError) {
+func makeReopenFindingHandler(db *sql.DB, aw ports.AuditWriter) ToolHandler {
+	return func(ctx context.Context, actor domain.Actor, raw json.RawMessage) (any, *RPCError) {
 		var p reopenFindingParams
-		if err := json.Unmarshal(raw, &p); err != nil {
-			return nil, &RPCError{Code: CodeInvalidParams, Message: fmt.Sprintf("invalid params: %v", err)}
+		if rpcErr := bindParams(raw, &p); rpcErr != nil {
+			return nil, rpcErr
 		}
-		if p.FindingID == "" {
-			return nil, &RPCError{Code: CodeInvalidParams, Message: "finding_id is required"}
-		}
-		if p.Branch == "" {
-			return nil, &RPCError{Code: CodeInvalidParams, Message: "branch is required"}
-		}
-		if p.RepoID == "" {
-			return nil, &RPCError{Code: CodeInvalidParams, Message: "repo_id is required"}
+		if rpcErr := checkRequired("finding_id", p.FindingID, "branch", p.Branch, "repo_id", p.RepoID); rpcErr != nil {
+			return nil, rpcErr
 		}
 
 		res, err := db.ExecContext(ctx,
@@ -240,7 +238,19 @@ func makeReopenFindingHandler(db *sql.DB) ToolHandler {
 		}
 		n, _ := res.RowsAffected()
 		if n == 0 {
-			return nil, &RPCError{Code: CodeInvalidParams, Message: fmt.Sprintf("finding not found: %s on branch %s", p.FindingID, p.Branch)}
+			return nil, &RPCError{Code: CodeNotFound, Message: fmt.Sprintf("finding not found: %s on branch %s", p.FindingID, p.Branch)}
+		}
+
+		if aw != nil {
+			_ = aw.Write(ctx, ports.AuditEntry{
+				RepoID:    p.RepoID,
+				ActorID:   actor.ID,
+				ActorKind: actor.Kind,
+				Op:        "finding.reopen",
+				TargetID:  p.FindingID,
+				Branch:    p.Branch,
+				CreatedAt: time.Now(),
+			})
 		}
 
 		return map[string]any{
