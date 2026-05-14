@@ -17,6 +17,7 @@ func newRootCmd() *cobra.Command {
 	}
 	root.AddCommand(hookRunnerCmd())
 	root.AddCommand(doctorCmd())
+	root.AddCommand(backupCmd())
 
 	// Resolve the daemon binary path at startup. os.Executable returns the path
 	// of the current binary; by convention the daemon lives alongside the CLI
