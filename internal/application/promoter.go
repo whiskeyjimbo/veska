@@ -9,6 +9,7 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/core/domain"
 	"github.com/whiskeyjimbo/veska/internal/core/ports"
 	"github.com/whiskeyjimbo/veska/internal/observability"
+	"github.com/whiskeyjimbo/veska/internal/tokenize"
 	"go.opentelemetry.io/otel/trace"
 )
 
@@ -201,6 +202,52 @@ func (p *Promoter) Promote(ctx context.Context, repoID, branch, gitSHA string, a
 	}
 	defer embedRefStmt.Close()
 
+	// FTS write path (m3.03.2): two virtual tables — node_fts_words holds
+	// the pre-tokenised camelCase/snake_case/`.`/`::`-split form for
+	// unicode61, node_fts_trigrams holds the raw concatenated text for
+	// FTS5's built-in trigram tokenizer. Both must be kept atomic with
+	// the parent node row, which is why the inserts live inside the
+	// promotion tx. Deletes are by (node_id, branch, repo_id) on each
+	// FTS table — FTS5 allows DELETE WHERE-clauses against UNINDEXED
+	// columns even though they're not indexed.
+	delWordsStmt, err := tx.PrepareContext(ctx,
+		`DELETE FROM node_fts_words WHERE node_id = ? AND branch = ? AND repo_id = ?`)
+	if err != nil {
+		_ = tx.Rollback()
+		return fmt.Errorf("promoter: prepare delete fts_words: %w", err)
+	}
+	defer delWordsStmt.Close()
+
+	delTrigramsStmt, err := tx.PrepareContext(ctx,
+		`DELETE FROM node_fts_trigrams WHERE node_id = ? AND branch = ? AND repo_id = ?`)
+	if err != nil {
+		_ = tx.Rollback()
+		return fmt.Errorf("promoter: prepare delete fts_trigrams: %w", err)
+	}
+	defer delTrigramsStmt.Close()
+
+	insWordsStmt, err := tx.PrepareContext(ctx,
+		`INSERT INTO node_fts_words (node_id, branch, repo_id, words) VALUES (?, ?, ?, ?)`)
+	if err != nil {
+		_ = tx.Rollback()
+		return fmt.Errorf("promoter: prepare insert fts_words: %w", err)
+	}
+	defer insWordsStmt.Close()
+
+	insTrigramsStmt, err := tx.PrepareContext(ctx,
+		`INSERT INTO node_fts_trigrams (node_id, branch, repo_id, raw) VALUES (?, ?, ?, ?)`)
+	if err != nil {
+		_ = tx.Rollback()
+		return fmt.Errorf("promoter: prepare insert fts_trigrams: %w", err)
+	}
+	defer insTrigramsStmt.Close()
+
+	// Note on deletes: per-file FTS deletes happen inline below before the
+	// `nodes` DELETE (so the subquery sees the still-present rows). The
+	// prepared per-node DELETE statements are kept as a defensive idempotency
+	// net — a re-promote within the same tx would otherwise duplicate FTS
+	// rows for nodes that survive the parse.
+
 	now := time.Now().UnixMilli()
 
 	for filePath, nodes := range snap {
@@ -239,6 +286,35 @@ func (p *Promoter) Promote(ctx context.Context, repoID, branch, gitSHA string, a
 		if err := prevRows.Close(); err != nil {
 			_ = tx.Rollback()
 			return fmt.Errorf("promoter: close prev signatures for %q: %w", filePath, err)
+		}
+
+		// Delete the FTS rows for every node that currently lives in this
+		// file BEFORE deleting the node rows themselves. Doing it via a
+		// node_id IN (SELECT ...) keeps the FTS in sync even for nodes
+		// that the new parse no longer produces (file shrank / symbol
+		// removed). FTS5 allows DELETE WHERE-clauses over UNINDEXED
+		// columns; the trade-off is a scan rather than an index probe,
+		// which is fine for a per-file write — the per-file row count is
+		// tiny relative to the table.
+		if _, err := tx.ExecContext(ctx,
+			`DELETE FROM node_fts_words
+			 WHERE branch = ? AND repo_id = ?
+			   AND node_id IN (SELECT node_id FROM nodes
+			                   WHERE file_path = ? AND branch = ? AND repo_id = ?)`,
+			branch, repoID, filePath, branch, repoID,
+		); err != nil {
+			_ = tx.Rollback()
+			return fmt.Errorf("promoter: delete fts_words for file %q: %w", filePath, err)
+		}
+		if _, err := tx.ExecContext(ctx,
+			`DELETE FROM node_fts_trigrams
+			 WHERE branch = ? AND repo_id = ?
+			   AND node_id IN (SELECT node_id FROM nodes
+			                   WHERE file_path = ? AND branch = ? AND repo_id = ?)`,
+			branch, repoID, filePath, branch, repoID,
+		); err != nil {
+			_ = tx.Rollback()
+			return fmt.Errorf("promoter: delete fts_trigrams for file %q: %w", filePath, err)
 		}
 
 		// Delete all existing nodes for this file+branch+repo before re-inserting.
@@ -288,6 +364,33 @@ func (p *Promoter) Promote(ctx context.Context, repoID, branch, gitSHA string, a
 			if _, err := embedRefStmt.ExecContext(ctx, string(n.ID), now); err != nil {
 				_ = tx.Rollback()
 				return fmt.Errorf("promoter: enqueue embed ref for %q: %w", n.ID, err)
+			}
+
+			// FTS write: DELETE any prior row for this node_id, then INSERT.
+			// raw = "<kind> <symbol_path>" — what the trigram tokenizer sees.
+			// n.Name is the qualified symbol path stored in the `symbol_path`
+			// column (the domain conflates "name" and "symbol_path" — see
+			// NewNode). The file path is intentionally omitted: it tends to
+			// be long, noisy, and orthogonal to symbol-level lookup.
+			// words = tokenize.Symbol of the same — what the unicode61
+			// tokenizer sees after camelCase/snake_case/`::`/`.` splits.
+			rawFTS := string(n.Kind) + " " + n.Name
+			wordsFTS := tokenize.Symbol(rawFTS)
+			if _, err := delWordsStmt.ExecContext(ctx, string(n.ID), branch, repoID); err != nil {
+				_ = tx.Rollback()
+				return fmt.Errorf("promoter: delete fts_words for %q: %w", n.ID, err)
+			}
+			if _, err := delTrigramsStmt.ExecContext(ctx, string(n.ID), branch, repoID); err != nil {
+				_ = tx.Rollback()
+				return fmt.Errorf("promoter: delete fts_trigrams for %q: %w", n.ID, err)
+			}
+			if _, err := insWordsStmt.ExecContext(ctx, string(n.ID), branch, repoID, wordsFTS); err != nil {
+				_ = tx.Rollback()
+				return fmt.Errorf("promoter: insert fts_words for %q: %w", n.ID, err)
+			}
+			if _, err := insTrigramsStmt.ExecContext(ctx, string(n.ID), branch, repoID, rawFTS); err != nil {
+				_ = tx.Rollback()
+				return fmt.Errorf("promoter: insert fts_trigrams for %q: %w", n.ID, err)
 			}
 		}
 

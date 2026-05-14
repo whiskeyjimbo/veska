@@ -548,13 +548,23 @@ func TestMigration0004_TablesExist(t *testing.T) {
 		}
 	}
 
-	// node_fts is a virtual table — check via sqlite_master type='table'.
+	// node_fts was created in migration 0004 and replaced by
+	// node_fts_words + node_fts_trigrams in migration 0007. Final-state
+	// assertion: the original is gone, the two replacements exist.
 	var cnt int
 	if err := raw.QueryRow(`SELECT COUNT(*) FROM sqlite_master WHERE name='node_fts'`).Scan(&cnt); err != nil {
-		t.Fatalf("check node_fts: %v", err)
+		t.Fatalf("check node_fts absence: %v", err)
 	}
-	if cnt == 0 {
-		t.Error("virtual table node_fts not found after migration 0004")
+	if cnt != 0 {
+		t.Error("legacy node_fts should be dropped by migration 0007")
+	}
+	for _, tbl := range []string{"node_fts_words", "node_fts_trigrams"} {
+		if err := raw.QueryRow(`SELECT COUNT(*) FROM sqlite_master WHERE name=?`, tbl).Scan(&cnt); err != nil {
+			t.Fatalf("check %s: %v", tbl, err)
+		}
+		if cnt == 0 {
+			t.Errorf("virtual table %s not found after migration 0007", tbl)
+		}
 	}
 
 	if !indexExists(t, raw, "idx_node_embedding_refs_state") {
@@ -718,8 +728,10 @@ func TestMigration0004_StateTransitions(t *testing.T) {
 	}
 }
 
-// TestMigration0004_NodeFTSQueryable verifies node_fts can be inserted into and queried.
-func TestMigration0004_NodeFTSQueryable(t *testing.T) {
+// TestMigration0007_FTSWordsAndTrigramsQueryable verifies the m3.03.2 FTS
+// pair can be inserted into and queried for both prefix matches (words) and
+// substring matches (trigrams).
+func TestMigration0007_FTSWordsAndTrigramsQueryable(t *testing.T) {
 	t.Parallel()
 
 	dir := t.TempDir()
@@ -732,34 +744,44 @@ func TestMigration0004_NodeFTSQueryable(t *testing.T) {
 	}
 	defer db.Close()
 
-	if _, err := db.Exec(`INSERT INTO node_fts (node_id, branch, repo_id, symbol_path, name) VALUES (?, ?, ?, ?, ?)`,
-		"node-fts-1", "main", "repo-fts", "pkg.SymbolFunc", "SymbolFunc"); err != nil {
-		t.Fatalf("insert node_fts: %v", err)
+	// Pre-tokenised words: kind + symbol_path + name with camelCase split.
+	if _, err := db.Exec(
+		`INSERT INTO node_fts_words (node_id, branch, repo_id, words) VALUES (?, ?, ?, ?)`,
+		"n1", "main", "repo-fts",
+		"function pkg api closeFinding close Finding",
+	); err != nil {
+		t.Fatalf("insert node_fts_words: %v", err)
 	}
 
-	// "symbol*" prefix-matches tokens starting with "symbol" (e.g. "SymbolFunc"
-	// tokenised by unicode61 with remove_diacritics).
-	rows, err := db.Query(`SELECT node_id FROM node_fts WHERE node_fts MATCH ?`, "symbol*")
-	if err != nil {
-		t.Fatalf("node_fts MATCH query: %v", err)
+	// Raw form for trigrams: substring matchable.
+	if _, err := db.Exec(
+		`INSERT INTO node_fts_trigrams (node_id, branch, repo_id, raw) VALUES (?, ?, ?, ?)`,
+		"n1", "main", "repo-fts", "function pkg/api closeFinding",
+	); err != nil {
+		t.Fatalf("insert node_fts_trigrams: %v", err)
 	}
-	defer rows.Close()
 
-	var found bool
-	for rows.Next() {
-		var id string
-		if err := rows.Scan(&id); err != nil {
-			t.Fatalf("scan: %v", err)
-		}
-		if id == "node-fts-1" {
-			found = true
-		}
+	// Words: prefix match on "close" should hit (camelCase split).
+	var got string
+	if err := db.QueryRow(
+		`SELECT node_id FROM node_fts_words WHERE words MATCH ? LIMIT 1`,
+		"close*",
+	).Scan(&got); err != nil {
+		t.Fatalf("node_fts_words MATCH close*: %v", err)
 	}
-	if err := rows.Err(); err != nil {
-		t.Fatalf("rows error: %v", err)
+	if got != "n1" {
+		t.Errorf("words match: want n1, got %q", got)
 	}
-	if !found {
-		t.Error("node_fts MATCH 'symbol' did not return the inserted row")
+
+	// Trigrams: substring "ind" appears in "closeFinding".
+	if err := db.QueryRow(
+		`SELECT node_id FROM node_fts_trigrams WHERE raw MATCH ? LIMIT 1`,
+		"ind",
+	).Scan(&got); err != nil {
+		t.Fatalf("node_fts_trigrams MATCH ind: %v", err)
+	}
+	if got != "n1" {
+		t.Errorf("trigrams match: want n1, got %q", got)
 	}
 }
 

@@ -85,6 +85,15 @@ CREATE TABLE node_embedding_refs (
     FOREIGN KEY (content_hash) REFERENCES node_embeddings(content_hash)
 );
 CREATE INDEX idx_node_embedding_refs_state ON node_embedding_refs(state, enqueued_at);
+
+CREATE VIRTUAL TABLE node_fts_words USING fts5(
+    node_id UNINDEXED, branch UNINDEXED, repo_id UNINDEXED, words,
+    tokenize = "unicode61 remove_diacritics 2"
+);
+CREATE VIRTUAL TABLE node_fts_trigrams USING fts5(
+    node_id UNINDEXED, branch UNINDEXED, repo_id UNINDEXED, raw,
+    tokenize = "trigram"
+);
 `
 	if _, err := db.Exec(schema); err != nil {
 		t.Fatalf("create schema: %v", err)
@@ -245,6 +254,101 @@ func TestPromoteRegisteredRepo(t *testing.T) {
 	// Empty staging — should return nil (not ErrUnregisteredRepo).
 	if err := p.Promote(context.Background(), "known-repo", "main", "sha-abc", domain.Actor{ID: "service:veska", Kind: domain.ActorKindSystem}); err != nil {
 		t.Fatalf("expected no error for registered repo, got: %v", err)
+	}
+}
+
+// TestPromote_WritesFTS verifies that promoting a node lands rows in
+// both node_fts_words and node_fts_trigrams within the same transaction,
+// using the camelCase-split pre-tokenisation contract from m3.03.2.
+func TestPromote_WritesFTS(t *testing.T) {
+	db := openMemDB(t)
+	insertTestRepo(t, db, "repo-fts")
+
+	sa := NewStagingArea()
+	// Mirror the DoD example: kind=function, symbol path (n.Name) =
+	// "pkg/api/closeFinding". n.Path (file_path) is irrelevant here.
+	n, _ := domain.NewNode("n1", "src/api.go", "pkg/api/closeFinding", domain.KindFunction)
+	sa.StageFile("repo-fts", "main", "src/api.go", []*domain.Node{n}, nil)
+
+	p := NewPromoter(sa, db)
+	if err := p.Promote(context.Background(), "repo-fts", "main", "sha", domain.Actor{ID: "service:veska", Kind: domain.ActorKindSystem}); err != nil {
+		t.Fatalf("Promote: %v", err)
+	}
+
+	var c int
+	if err := db.QueryRow(`SELECT COUNT(*) FROM node_fts_words WHERE node_id=?`, "n1").Scan(&c); err != nil {
+		t.Fatalf("count words: %v", err)
+	}
+	if c != 1 {
+		t.Errorf("node_fts_words rows for n1: want 1, got %d", c)
+	}
+	if err := db.QueryRow(`SELECT COUNT(*) FROM node_fts_trigrams WHERE node_id=?`, "n1").Scan(&c); err != nil {
+		t.Fatalf("count trigrams: %v", err)
+	}
+	if c != 1 {
+		t.Errorf("node_fts_trigrams rows for n1: want 1, got %d", c)
+	}
+
+	// words must contain the camelCase splits.
+	var words string
+	if err := db.QueryRow(`SELECT words FROM node_fts_words WHERE node_id=?`, "n1").Scan(&words); err != nil {
+		t.Fatalf("select words: %v", err)
+	}
+	for _, tok := range []string{"function", "pkg", "api", "closeFinding", "close", "Finding"} {
+		if !strings.Contains(words, tok) {
+			t.Errorf("words column %q missing token %q", words, tok)
+		}
+	}
+
+	// trigram MATCH on a substring inside the camelCased symbol.
+	var got string
+	if err := db.QueryRow(
+		`SELECT node_id FROM node_fts_trigrams WHERE raw MATCH ?`,
+		"ind",
+	).Scan(&got); err != nil {
+		t.Fatalf("trigram MATCH: %v", err)
+	}
+	if got != "n1" {
+		t.Errorf("trigram match returned %q, want n1", got)
+	}
+}
+
+// TestPromote_FTS_RemovesStaleRowsOnReParse verifies that when a file is
+// re-promoted with a smaller node set, the FTS rows for nodes that
+// disappear are also cleared.
+func TestPromote_FTS_RemovesStaleRowsOnReParse(t *testing.T) {
+	db := openMemDB(t)
+	insertTestRepo(t, db, "repo-fts")
+
+	sa := NewStagingArea()
+	a, _ := domain.NewNode("a", "f.go", "closeFinding", domain.KindFunction)
+	b, _ := domain.NewNode("b", "f.go", "openFinding", domain.KindFunction)
+	sa.StageFile("repo-fts", "main", "f.go", []*domain.Node{a, b}, nil)
+
+	p := NewPromoter(sa, db)
+	if err := p.Promote(context.Background(), "repo-fts", "main", "sha-1", domain.Actor{ID: "service:veska", Kind: domain.ActorKindSystem}); err != nil {
+		t.Fatalf("Promote 1: %v", err)
+	}
+
+	// Re-promote with only one of the two nodes.
+	a2, _ := domain.NewNode("a", "f.go", "closeFinding", domain.KindFunction)
+	sa.StageFile("repo-fts", "main", "f.go", []*domain.Node{a2}, nil)
+	if err := p.Promote(context.Background(), "repo-fts", "main", "sha-2", domain.Actor{ID: "service:veska", Kind: domain.ActorKindSystem}); err != nil {
+		t.Fatalf("Promote 2: %v", err)
+	}
+
+	var c int
+	if err := db.QueryRow(`SELECT COUNT(*) FROM node_fts_words`).Scan(&c); err != nil {
+		t.Fatalf("count words: %v", err)
+	}
+	if c != 1 {
+		t.Errorf("node_fts_words after re-parse: want 1 (b removed), got %d", c)
+	}
+	if err := db.QueryRow(`SELECT COUNT(*) FROM node_fts_trigrams`).Scan(&c); err != nil {
+		t.Fatalf("count trigrams: %v", err)
+	}
+	if c != 1 {
+		t.Errorf("node_fts_trigrams after re-parse: want 1 (b removed), got %d", c)
 	}
 }
 

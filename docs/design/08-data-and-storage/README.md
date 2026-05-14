@@ -296,29 +296,86 @@ CREATE VIRTUAL TABLE vec_nodes USING vec0(
     embedding    FLOAT[<dim>]
 );
 
--- FTS5 lexical index on symbol_path and name. This is the
--- documented fallback for `eng_search_semantic` when the
--- embedder is unreachable or the affected nodes are still
--- pending embeddings (SOLO-13 §4). It is always populated;
--- the promotion pipeline writes to it inside the promotion transaction.
-CREATE VIRTUAL TABLE node_fts USING fts5(
+-- Lexical fallback (m3.03.2). Migration 0007 supersedes the original
+-- single `node_fts` table (migration 0004) with a TWO-INDEX design:
+-- one FTS5 virtual table per tokenisation strategy, fused with
+-- Reciprocal Rank Fusion (RRF) at query time. See the amendment
+-- under this code block for the rationale.
+CREATE VIRTUAL TABLE node_fts_words USING fts5(
     node_id        UNINDEXED,
     branch         UNINDEXED,
     repo_id        UNINDEXED,
-    symbol_path,
-    name,
+    words,                                          -- pre-tokenised
     tokenize = "unicode61 remove_diacritics 2"
+);
+
+CREATE VIRTUAL TABLE node_fts_trigrams USING fts5(
+    node_id        UNINDEXED,
+    branch         UNINDEXED,
+    repo_id        UNINDEXED,
+    raw,                                            -- raw kind+symbol
+    tokenize = "trigram"
 );
 ```
 
-The FTS5 index is small relative to `nodes` (BM25 over short
-identifier strings, no body content) and its write cost lands
-inside the promotion transaction's per-node insert path. Lexical
-fallback ranks by FTS5 BM25 over `symbol_path` and `name`; the
-ranking is documented as inferior to vector recall and is
-surfaced to callers via `degraded_reasons:
+The FTS pair is small relative to `nodes` (no body content, only
+`kind` + `symbol_path`) and the write cost lands inside the
+promotion transaction's per-node insert path. Lexical fallback
+fuses the two arms with RRF; the ranking is documented as inferior
+to vector recall and is surfaced to callers via `degraded_reasons:
 ["embedder_offline_lexical_fallback"]` (SOLO-09 §4.5) so an
 agent does not silently switch reasoning modes.
+
+**Amendment (m3.03.2 — 2026-05-14)**: The original §3.3 design
+specified a single `node_fts` table tokenised by `unicode61`,
+ranked by FTS5's default BM25. The implementation supersedes
+that with two FTS5 virtual tables fused at query time. The
+first-principles reasoning:
+
+1. **Identifier tokenisation cannot be done by `unicode61`
+   alone.** Built-in tokenizers split on whitespace and Unicode
+   word boundaries but not on `camelCase`, `snake_case`, `::`,
+   or `.`. A query like "Find" never matches the symbol
+   "closeFinding" stored as a single token. Pre-tokenising on
+   the write path (Go helper `internal/tokenize.Symbol`) is the
+   cheapest fix that keeps the FTS5 layer pure SQLite — no CGo,
+   no custom tokenizer (we use `modernc.org/sqlite`, where
+   registering one is brittle).
+
+2. **Substring / typo tolerance also matters.** "closeFnd" (a
+   typo) and "ind" (a substring) must surface "closeFinding"
+   for agent ergonomics. That is exactly what FTS5's built-in
+   `trigram` tokenizer (SQLite 3.34+) does. A separate
+   trigram-tokenised arm covers that path cheaply.
+
+3. **Fusion via Reciprocal Rank Fusion (RRF, Cormack et al.)**
+   combines the two arms without tuning weights. Score:
+   `score[node] = Σ 1/(60 + rank_arm)` over each arm where the
+   node appears. `60` is the canonical RRF constant; the
+   service pulls `k * 4` candidates per arm before fusing so
+   doubly-ranked nodes can rise above singly-ranked ones.
+
+4. **BM25 bake-off was considered and dropped.** A single
+   `unicode61` BM25 (the original §3.3 design) cannot deliver
+   camelCase or substring matches; layering BM25 weights on
+   top of trigram-only is statistically noisy on short
+   identifier strings. RRF over the two tokenisation arms is
+   the simpler and stronger default. We will revisit if a
+   precision-recall harness (m3.03.3) shows otherwise.
+
+The write path lives in `internal/application/promoter.go`
+(both INSERT and per-file DELETE happen inside the existing
+promotion transaction); the read path lives in
+`internal/infrastructure/sqlite/lexical_repo.go` behind
+`ports.LexicalSearcher`. The application-layer
+`search.Service.Semantic` falls back to the lexical arm ONLY
+when `EmbeddingProvider.Embed` returns
+`ports.ErrEmbedderUnreachable`; every other embedder error
+propagates so we do not mask genuinely actionable failures
+(bad input, malformed config, model mismatch, ...). The
+response carries `degraded_reasons:
+["embedder_offline_lexical_fallback"]` on fallback so the
+caller can render the degraded mode explicitly.
 
 The split (`node_embeddings` content-addressed + `node_embedding_refs`
 per-node) is deliberate: rename and content-equivalent moves don't
