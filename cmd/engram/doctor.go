@@ -82,6 +82,7 @@ func doctorCmd() *cobra.Command {
 		doctorSubCmd("bundle", "Verify MCP context-pack bundle integrity",
 			func(jsonOut bool, w io.Writer) error { return stubOK("bundle", jsonOut, w) }),
 		doctorBackupCmd(),
+		doctorResetCrashLoopCmd(),
 	)
 
 	return cmd
@@ -412,6 +413,43 @@ func doctorBackupCmd() *cobra.Command {
 			}
 			if report.Status != "healthy" {
 				return ProbeStatusError{Subsystem: "backup", Status: report.Status}
+			}
+			return nil
+		},
+	}
+	cmd.Flags().BoolVar(&jsonOut, "json", false, "output results as JSON")
+	return cmd
+}
+
+// doctorResetCrashLoopCmd returns the "doctor reset-crash-loop" subcommand that
+// removes the broken marker and crash-count files from the engram home directory,
+// allowing the daemon to start after a crash-loop trip.
+func doctorResetCrashLoopCmd() *cobra.Command {
+	var jsonOut bool
+	cmd := &cobra.Command{
+		Use:          "reset-crash-loop",
+		Short:        "Clear broken marker and restart counter so the daemon can start again",
+		SilenceUsage: true,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			w := cmd.OutOrStdout()
+			home := config.DefaultVectorDir()
+			report, err := doctor.ResetCrashLoop(home)
+			if err != nil {
+				return err
+			}
+			if jsonOut {
+				enc := json.NewEncoder(w)
+				return enc.Encode(report)
+			}
+			if report.BrokenMarkerCleared {
+				fmt.Fprintln(w, "cleared broken marker")
+			} else {
+				fmt.Fprintln(w, "broken marker not present (nothing to clear)")
+			}
+			if report.CrashCountCleared {
+				fmt.Fprintf(w, "cleared crash count (was %d)\n", report.CrashCountWas)
+			} else {
+				fmt.Fprintln(w, "crash count not present (nothing to clear)")
 			}
 			return nil
 		},
