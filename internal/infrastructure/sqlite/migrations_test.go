@@ -982,3 +982,62 @@ func TestMigration0005_DefaultsAreNull(t *testing.T) {
 		t.Errorf("prev_signature: want NULL, got %q", prev.String)
 	}
 }
+
+// ── Migration 0008: findings.anchor_content_hash ───────────────────────────
+
+// TestMigration0008_AddsAnchorContentHashColumn verifies migration 0008 adds
+// the nullable anchor_content_hash column to findings.
+func TestMigration0008_AddsAnchorContentHashColumn(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	dbPath := filepath.Join(dir, "veska.db")
+
+	_ = openTest(t, dbPath)
+	raw := openRawDB(t, dbPath)
+
+	if !columnExists(t, raw, "findings", "anchor_content_hash") {
+		t.Error("findings.anchor_content_hash column not found after migration 0008")
+	}
+}
+
+// TestMigration0008_PreservesExistingRowsAsNull verifies that an INSERT
+// omitting anchor_content_hash leaves the column NULL — the contract the
+// revalidation sweep relies on for "no hash recorded, fall back to anchor
+// existence check".
+func TestMigration0008_PreservesExistingRowsAsNull(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	dbPath := filepath.Join(dir, "veska.db")
+
+	db := openTest(t, dbPath)
+
+	if _, err := db.Exec(
+		`INSERT INTO repos (repo_id, root_path, added_at) VALUES (?, ?, ?)`,
+		"r1", "/tmp/r1", time.Now().UnixMilli(),
+	); err != nil {
+		t.Fatalf("insert repo: %v", err)
+	}
+	if _, err := db.Exec(`INSERT INTO findings (
+		finding_id, branch, repo_id, file_path,
+		severity, source_layer, rule, message, state,
+		created_at, actor_id, actor_kind
+	) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`,
+		"fid", "main", "r1", "foo.go",
+		"low", "structural", "parse-failure", "msg", "open",
+		time.Now().UnixMilli(), "service:veska", "system",
+	); err != nil {
+		t.Fatalf("insert finding: %v", err)
+	}
+
+	var got sql.NullString
+	if err := db.QueryRow(
+		`SELECT anchor_content_hash FROM findings WHERE finding_id = 'fid'`,
+	).Scan(&got); err != nil {
+		t.Fatalf("query: %v", err)
+	}
+	if got.Valid {
+		t.Errorf("anchor_content_hash should default to NULL, got %q", got.String)
+	}
+}

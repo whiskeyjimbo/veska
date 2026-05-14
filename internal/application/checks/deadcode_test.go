@@ -183,6 +183,51 @@ func TestDeadCodeCheck_QuerierErrorPropagates(t *testing.T) {
 	}
 }
 
+// TestDeadCodeCheck_ThreadsContentHash verifies that the check carries the
+// dead node's nodes.content_hash onto the emitted finding so the revalidation
+// sweep can detect drift.
+func TestDeadCodeCheck_ThreadsContentHash(t *testing.T) {
+	q := &fakeDeadQuerier{
+		dead: []ports.NodeRef{
+			{NodeID: "n-dead", FilePath: "pkg/a.go", Kind: "function", Name: "helper", ContentHash: "h-abc"},
+		},
+	}
+	c := checks.NewDeadCodeCheck(q)
+	findings, err := c.Run(context.Background(), checks.Input{
+		RepoID: "r", Branch: "main", FilePaths: []string{"pkg/a.go"},
+	})
+	if err != nil || len(findings) != 1 {
+		t.Fatalf("Run: err=%v len=%d", err, len(findings))
+	}
+	if findings[0].AnchorContentHash == nil {
+		t.Fatal("AnchorContentHash is nil")
+	}
+	if *findings[0].AnchorContentHash != "h-abc" {
+		t.Errorf("AnchorContentHash = %q, want h-abc", *findings[0].AnchorContentHash)
+	}
+}
+
+// TestDeadCodeCheck_EmptyContentHashStaysNil verifies a NodeRef carrying an
+// empty content hash (older pre-content-hash rows) leaves AnchorContentHash nil.
+func TestDeadCodeCheck_EmptyContentHashStaysNil(t *testing.T) {
+	q := &fakeDeadQuerier{
+		dead: []ports.NodeRef{
+			{NodeID: "n-dead", FilePath: "pkg/a.go", Kind: "function", Name: "helper", ContentHash: ""},
+		},
+	}
+	c := checks.NewDeadCodeCheck(q)
+	findings, err := c.Run(context.Background(), checks.Input{
+		RepoID: "r", Branch: "main", FilePaths: []string{"pkg/a.go"},
+	})
+	if err != nil || len(findings) != 1 {
+		t.Fatalf("Run: err=%v len=%d", err, len(findings))
+	}
+	if findings[0].AnchorContentHash != nil {
+		t.Errorf("AnchorContentHash should stay nil for empty hash, got %q",
+			*findings[0].AnchorContentHash)
+	}
+}
+
 // 4. Branch-stable finding_id is deterministic per (rule, anchor).
 func TestDeadCodeCheck_DeterministicFindingID(t *testing.T) {
 	q := &fakeDeadQuerier{

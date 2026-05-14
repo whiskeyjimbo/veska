@@ -15,6 +15,11 @@ type NodeRef struct {
 	Name      string
 	LineStart int
 	LineEnd   int
+	// ContentHash is the nodes.content_hash captured at query time. The
+	// dead-code check threads it onto the resulting Finding so the
+	// revalidation sweep can detect when the symbol's content has drifted
+	// and supersede the stale finding.
+	ContentHash string
 }
 
 // DeadCodeQuerier is the read-side port used by the dead-code structural check.

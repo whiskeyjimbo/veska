@@ -72,6 +72,35 @@ func (r *NodeLookupRepo) LookupNodes(ctx context.Context, repoID, branch string,
 	return out, nil
 }
 
+// NodeContentHash returns nodes.content_hash for nodeID scoped to
+// (repoID, branch). An unknown node returns ("", nil) — callers (notably the
+// auto-link handler) treat a missing source as "no hash recorded" rather than
+// as an error.
+//
+// This is the per-symbol content_hash on the nodes table; it is intentionally
+// distinct from EmbeddingRefRepo.ContentHashForNode, which returns the
+// embedding-input hash on node_embedding_refs.
+func (r *NodeLookupRepo) NodeContentHash(ctx context.Context, repoID, branch, nodeID string) (string, error) {
+	if nodeID == "" {
+		return "", nil
+	}
+	var hash sql.NullString
+	err := r.readDB.QueryRowContext(ctx,
+		`SELECT content_hash FROM nodes WHERE repo_id = ? AND branch = ? AND node_id = ?`,
+		repoID, branch, nodeID,
+	).Scan(&hash)
+	switch {
+	case err == sql.ErrNoRows:
+		return "", nil
+	case err != nil:
+		return "", fmt.Errorf("node_lookup: node content hash: %w", err)
+	}
+	if !hash.Valid {
+		return "", nil
+	}
+	return hash.String, nil
+}
+
 // NodesInFile returns every node_id in (repoID, branch) whose file_path
 // equals filePath. The query is served by idx_nodes_repo_branch combined
 // with a file_path filter; with the typical "tens of nodes per file" cardinality

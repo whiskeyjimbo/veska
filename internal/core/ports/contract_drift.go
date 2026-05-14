@@ -19,6 +19,10 @@ type DriftedNode struct {
 	NewSig    string
 	LineStart int
 	LineEnd   int
+	// ContentHash is the CURRENT nodes.content_hash (after the drift). The
+	// contract-drift check threads it onto the resulting Finding so the
+	// revalidation sweep can supersede the finding once content drifts again.
+	ContentHash string
 }
 
 // ContractDriftQuerier is the read-side port used by the contract-drift

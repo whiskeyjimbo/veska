@@ -18,8 +18,18 @@ type candidateProducer interface {
 // fileNodeLookup is the narrow port the Handler needs from ports.NodeLookup.
 // Defined here so the autolink package does not import the full NodeLookup
 // surface (which carries the LookupNodes method aimed at the search layer).
+//
+// NodeContentHash returns nodes.content_hash for a single node scoped to
+// (repoID, branch). An unknown node MUST return ("", nil) — the Handler
+// treats a missing source as "no hash recorded" (NULL on the finding) rather
+// than as an error, mirroring the eventual-consistency contract on LookupNodes.
+//
+// NOTE: this is the SOURCE node's content_hash (the dirty side that re-ran
+// auto-link); it is intentionally distinct from the embedding-input hash on
+// node_embedding_refs.content_hash, which is keyed by ports.EmbeddingRefRepo.
 type fileNodeLookup interface {
 	NodesInFile(ctx context.Context, repoID, branch, filePath string) ([]string, error)
+	NodeContentHash(ctx context.Context, repoID, branch, nodeID string) (string, error)
 }
 
 // Handler implements queue.WorkHandler for WorkKindAutoLink rows.
@@ -139,12 +149,32 @@ func (h *Handler) Handle(ctx context.Context, row ports.WorkRow) error {
 		return fmt.Errorf("autolink.Handle: save edges: %w", err)
 	}
 
+	// Cache source-node content hashes across the candidate set so a handful
+	// of source nodes per file do not turn into N look-ups when k >> 1.
+	hashCache := make(map[string]string, len(nodeIDs))
 	for i, c := range cands {
 		e := edges[i]
+		hash, ok := hashCache[c.SourceNodeID]
+		if !ok {
+			h2, err := h.lookup.NodeContentHash(ctx, row.RepoID, row.Branch, c.SourceNodeID)
+			if err != nil {
+				return fmt.Errorf("autolink.Handle: node content hash %q: %w", c.SourceNodeID, err)
+			}
+			hash = h2
+			hashCache[c.SourceNodeID] = hash
+		}
+
 		// Anchor the finding on the edge_id (opaque TEXT in findings.node_id).
 		// This makes (rule, anchor) unique per candidate edge, so finding_id
 		// is unique per candidate and the ON CONFLICT(finding_id, branch)
 		// idempotency in FindingRepo applies cleanly on re-delivery.
+		// The captured content_hash is the SOURCE node's hash so the
+		// revalidation sweep can supersede this finding once the source
+		// drifts (the target side is observed via the edge resolver path).
+		opts := []domain.FindingOption{domain.WithNodeAnchor(e.ID)}
+		if hash != "" {
+			opts = append(opts, domain.WithAnchorContentHash(hash))
+		}
 		f, err := domain.NewFinding(
 			"", // ID intentionally empty: branch-stable finding_id is computed inside NewFinding.
 			row.RepoID,
@@ -153,7 +183,7 @@ func (h *Handler) Handle(ctx context.Context, row ports.WorkRow) error {
 			domain.LayerSemantic,
 			Rule,
 			fmt.Sprintf("Similar to %s (score %.2f)", c.TargetNodeID, c.Score),
-			domain.WithNodeAnchor(e.ID),
+			opts...,
 		)
 		if err != nil {
 			return fmt.Errorf("autolink.Handle: build finding: %w", err)

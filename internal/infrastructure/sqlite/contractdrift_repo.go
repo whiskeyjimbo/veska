@@ -52,7 +52,8 @@ func (r *ContractDriftRepo) DriftedNodesInFiles(ctx context.Context, repoID, bra
 SELECT node_id, file_path, kind, symbol_path,
        COALESCE(prev_signature, ''),
        COALESCE(signature, ''),
-       COALESCE(line_start, 0), COALESCE(line_end, 0)
+       COALESCE(line_start, 0), COALESCE(line_end, 0),
+       COALESCE(content_hash, '')
 FROM nodes
 WHERE repo_id = ?
   AND branch = ?
@@ -72,7 +73,7 @@ ORDER BY file_path, node_id`, strings.Join(placeholders, ","))
 	var out []ports.DriftedNode
 	for rows.Next() {
 		var d ports.DriftedNode
-		if err := rows.Scan(&d.NodeID, &d.FilePath, &d.Kind, &d.Name, &d.PrevSig, &d.NewSig, &d.LineStart, &d.LineEnd); err != nil {
+		if err := rows.Scan(&d.NodeID, &d.FilePath, &d.Kind, &d.Name, &d.PrevSig, &d.NewSig, &d.LineStart, &d.LineEnd, &d.ContentHash); err != nil {
 			return nil, fmt.Errorf("sqlite.ContractDriftRepo.DriftedNodesInFiles: scan: %w", err)
 		}
 		out = append(out, d)
