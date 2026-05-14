@@ -1,0 +1,14 @@
+[
+  {
+    "overlap_pct": 10,
+    "branches": 28,
+    "symbols": 100000,
+    "node_rows": 2800000,
+    "edge_rows": 2800000,
+    "finding_rows": 28000,
+    "db_bytes": 1801351168,
+    "wal_bytes": 0,
+    "peak_rss_bytes": 0,
+    "load_wall_ms": 0
+  }
+]

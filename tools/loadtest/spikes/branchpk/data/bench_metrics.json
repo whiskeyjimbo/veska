@@ -1,0 +1,23 @@
+[
+  {
+    "overlap_pct": 10,
+    "branches": 50,
+    "symbols": 100000,
+    "node_latency": {
+      "p50_ms": 0.028877,
+      "p95_ms": 0.039305,
+      "p99_ms": 0.055751,
+      "n": 200
+    },
+    "edges_latency": {
+      "p50_ms": 0.027087,
+      "p95_ms": 0.047285,
+      "p99_ms": 0.058583,
+      "n": 200
+    },
+    "node_budget_ms": 25,
+    "edges_budget_ms": 100,
+    "node_pass": true,
+    "edges_pass": true
+  }
+]
