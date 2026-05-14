@@ -3,10 +3,36 @@ package application
 import (
 	"context"
 	"errors"
+	"sync"
 	"testing"
 
 	"github.com/whiskeyjimbo/veska/internal/core/domain"
 )
+
+// recordingFindingStorage captures every Save call.
+type recordingFindingStorage struct {
+	mu       sync.Mutex
+	findings []*domain.Finding
+	err      error
+}
+
+func (r *recordingFindingStorage) Save(_ context.Context, f *domain.Finding) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.err != nil {
+		return r.err
+	}
+	r.findings = append(r.findings, f)
+	return nil
+}
+
+func (r *recordingFindingStorage) snapshot() []*domain.Finding {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	out := make([]*domain.Finding, len(r.findings))
+	copy(out, r.findings)
+	return out
+}
 
 // stubParser is an in-test implementation of ports.CodeParser.
 type stubParser struct {
@@ -89,6 +115,105 @@ func TestIngester_DeleteFile_RemovesFromStaging(t *testing.T) {
 	_, staged = staging.GetStagedNodes("repo1", "main", "del.go")
 	if staged {
 		t.Fatal("expected file to be removed from staging after DeleteFile")
+	}
+}
+
+func TestIngester_Save_ParseFailureEmitsFinding(t *testing.T) {
+	parser := &stubParser{
+		result: &domain.ParseResult{
+			Failures: []domain.ParseFailure{{Line: 3, Message: "syntax error"}},
+		},
+	}
+	staging := NewStagingArea()
+	store := &recordingFindingStorage{}
+	ing := NewIngester(parser, staging, NewIngestionGate(staging))
+	ing.SetFindingStorage(store)
+
+	err := ing.Save(context.Background(), "repo1", "main", "src/bad.ts", []byte("broken"))
+	if err != nil {
+		t.Fatalf("Save returned error: %v", err)
+	}
+
+	got := store.snapshot()
+	if len(got) != 1 {
+		t.Fatalf("expected 1 finding, got %d", len(got))
+	}
+	f := got[0]
+	if f.Rule != "parse-failure" {
+		t.Errorf("Rule = %q, want %q", f.Rule, "parse-failure")
+	}
+	if f.SourceLayer != domain.LayerStructural {
+		t.Errorf("SourceLayer = %q, want structural", f.SourceLayer)
+	}
+	if f.FilePath == nil || *f.FilePath != "src/bad.ts" {
+		t.Errorf("FilePath = %v, want pointer to %q", f.FilePath, "src/bad.ts")
+	}
+	if f.RepoID != "repo1" || f.Branch != "main" {
+		t.Errorf("repo/branch = %q/%q, want repo1/main", f.RepoID, f.Branch)
+	}
+	if f.FindingID == "" {
+		t.Error("expected non-empty FindingID")
+	}
+}
+
+func TestIngester_Save_ParseFailureIdempotent(t *testing.T) {
+	parser := &stubParser{
+		result: &domain.ParseResult{
+			Failures: []domain.ParseFailure{{Line: 1, Message: "syntax error"}},
+		},
+	}
+	staging := NewStagingArea()
+	store := &recordingFindingStorage{}
+	ing := NewIngester(parser, staging, NewIngestionGate(staging))
+	ing.SetFindingStorage(store)
+
+	// Ingest the same broken file twice.
+	for i := range 2 {
+		if err := ing.Save(context.Background(), "repo1", "main", "src/bad.ts", []byte("broken")); err != nil {
+			t.Fatalf("Save #%d: %v", i, err)
+		}
+	}
+
+	got := store.snapshot()
+	if len(got) != 2 {
+		t.Fatalf("expected 2 Save calls, got %d", len(got))
+	}
+	// Idempotency means the same FindingID on every call — repo SQL layer
+	// then collapses to one row via ON CONFLICT(finding_id, branch).
+	if got[0].FindingID != got[1].FindingID {
+		t.Errorf("FindingID not deterministic: %q vs %q", got[0].FindingID, got[1].FindingID)
+	}
+}
+
+func TestIngester_Save_CleanParseEmitsNoFinding(t *testing.T) {
+	parser := &stubParser{
+		result: &domain.ParseResult{Nodes: []*domain.Node{{}}},
+	}
+	staging := NewStagingArea()
+	store := &recordingFindingStorage{}
+	ing := NewIngester(parser, staging, NewIngestionGate(staging))
+	ing.SetFindingStorage(store)
+
+	if err := ing.Save(context.Background(), "repo1", "main", "ok.go", []byte("package x")); err != nil {
+		t.Fatalf("Save: %v", err)
+	}
+	if got := store.snapshot(); len(got) != 0 {
+		t.Errorf("expected zero findings, got %d", len(got))
+	}
+}
+
+func TestIngester_Save_ParseFailureWithoutFindingStorage_NoPanic(t *testing.T) {
+	parser := &stubParser{
+		result: &domain.ParseResult{
+			Failures: []domain.ParseFailure{{Line: 1, Message: "syntax error"}},
+		},
+	}
+	staging := NewStagingArea()
+	ing := NewIngester(parser, staging, NewIngestionGate(staging))
+	// Deliberately do NOT call SetFindingStorage.
+
+	if err := ing.Save(context.Background(), "repo1", "main", "src/bad.ts", []byte("broken")); err != nil {
+		t.Fatalf("Save: %v", err)
 	}
 }
 

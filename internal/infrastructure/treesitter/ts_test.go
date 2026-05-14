@@ -192,6 +192,39 @@ function greet(): string {
 	}
 }
 
+func TestTS_ParseFailureSurfaced(t *testing.T) {
+	// Unclosed brace + bogus token — tree-sitter will mark ERROR nodes.
+	src := []byte(`
+function broken(
+  return
+`)
+	p := treesitter.NewTSParser()
+	result, err := p.ParseFile(context.Background(), tsRepoID, "src/bad.ts", src)
+	if err != nil {
+		t.Fatalf("ParseFile should not return a hard error for syntax errors, got: %v", err)
+	}
+	if len(result.Failures) == 0 {
+		t.Fatalf("expected at least one ParseFailure for malformed source, got none")
+	}
+	if result.Failures[0].Message == "" {
+		t.Error("expected non-empty failure message")
+	}
+}
+
+func TestTS_CleanParseHasNoFailures(t *testing.T) {
+	src := []byte(`
+function ok(): string { return "ok"; }
+`)
+	p := treesitter.NewTSParser()
+	result, err := p.ParseFile(context.Background(), tsRepoID, "src/ok.ts", src)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(result.Failures) != 0 {
+		t.Errorf("expected zero failures on clean parse, got %d", len(result.Failures))
+	}
+}
+
 func TestTS_ModuleNode(t *testing.T) {
 	src := []byte(`
 function foo(): void {}
