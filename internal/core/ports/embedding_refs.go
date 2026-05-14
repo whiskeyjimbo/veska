@@ -60,4 +60,18 @@ type EmbeddingRefRepo interface {
 	// Used by the doctor subcommand and the veska_embed_queue_* gauges.
 	// States with zero rows are still present in the map with value 0.
 	CountByState(ctx context.Context) (map[string]int, error)
+
+	// LookupExisting returns the stored embedding bytes and dimension for
+	// contentHash if a row exists in node_embeddings. found=false with no
+	// error means "miss" (the caller must Embed and MarkReady). The hash
+	// here is content-addressed on the EMBED INPUT (modelID + embed_text),
+	// so a hit is a guarantee that an equivalent Embed call has already
+	// produced these bytes for this model — the worker can reuse them.
+	LookupExisting(ctx context.Context, contentHash string) (embedding []byte, dim int, found bool, err error)
+
+	// Reuse marks an existing pending ref as ready against contentHash
+	// WITHOUT writing node_embeddings (the row is already there — see
+	// LookupExisting). Used by the dedup fast-path so we don't redundantly
+	// run the INSERT…ON CONFLICT DO NOTHING from MarkReady on a known hit.
+	Reuse(ctx context.Context, nodeID, contentHash string, at time.Time) error
 }

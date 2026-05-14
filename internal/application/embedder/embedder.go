@@ -3,10 +3,10 @@
 // EmbeddingProvider, persists the bytes to node_embeddings, and upserts
 // them into the VectorStorage so they become searchable in the same tick.
 //
-// Scope (m3.02.1): correctness of the loop. Out of scope:
-//   - rate limiting (m3.02.2),
-//   - retry policy (m3.02.3),
-//   - content_hash dedup before calling Embed (m3.02.4).
+// Scope (m3.02.1): correctness of the loop. m3.02.2 added rate limiting,
+// m3.02.3 added retry policy, m3.02.4 added content-addressed dedup that
+// skips the EmbeddingProvider.Embed call when the (modelID, embed_text)
+// hash already has a row in node_embeddings.
 //
 // Lifecycle mirrors the post_promotion_queue Poller: Start launches one
 // background goroutine; passing a cancelled context (or calling Stop)
@@ -263,12 +263,62 @@ func (w *Worker) tick(ctx context.Context) {
 	now := time.Now()
 	modelID := w.embedder.ModelID()
 
+	// inFlight maps content_hash → vector for hashes produced by Embed in
+	// THIS tick. It services intra-tick dedup: when two siblings in the same
+	// batch project to the same key, the first calls Embed and writes a row,
+	// and subsequent siblings reuse the bytes without a second provider
+	// call. SQLite ON CONFLICT DO NOTHING would handle the row collision
+	// either way, but the in-memory map avoids the redundant Embed itself.
+	inFlight := make(map[string][]float32)
+
 	for _, ref := range pending {
 		if ctx.Err() != nil {
 			return
 		}
-		// Rate-limit Embed calls. limiter.Wait honours ctx — when ctx is
-		// cancelled it returns ctx.Err() and we unwind the tick promptly.
+
+		contentHash := hashEmbedText(modelID, ref.Text)
+
+		// Fast path 1: this tick already embedded this exact key.
+		if vec, ok := inFlight[contentHash]; ok {
+			if err := w.refs.Reuse(ctx, ref.NodeID, contentHash, now); err != nil {
+				continue
+			}
+			if w.metrics != nil && w.metrics.EmbedDedupHits != nil {
+				w.metrics.EmbedDedupHits.Inc()
+			}
+			key := vecKey{repo: ref.RepoID, branch: ref.Branch}
+			vecBatches[key] = append(vecBatches[key], domain.EmbeddingRow{
+				NodeID:      ref.NodeID,
+				ContentHash: contentHash,
+				ModelID:     modelID,
+				Vector:      vec,
+			})
+			continue
+		}
+
+		// Fast path 2: a prior tick already embedded this key — the bytes
+		// are in node_embeddings.
+		if blob, dim, found, err := w.refs.LookupExisting(ctx, contentHash); err == nil && found {
+			vec := decodeFloat32LE(blob, dim)
+			if err := w.refs.Reuse(ctx, ref.NodeID, contentHash, now); err != nil {
+				continue
+			}
+			if w.metrics != nil && w.metrics.EmbedDedupHits != nil {
+				w.metrics.EmbedDedupHits.Inc()
+			}
+			inFlight[contentHash] = vec
+			key := vecKey{repo: ref.RepoID, branch: ref.Branch}
+			vecBatches[key] = append(vecBatches[key], domain.EmbeddingRow{
+				NodeID:      ref.NodeID,
+				ContentHash: contentHash,
+				ModelID:     modelID,
+				Vector:      vec,
+			})
+			continue
+		}
+
+		// Miss — rate-limit and call Embed. limiter.Wait honours ctx — when
+		// ctx is cancelled it returns ctx.Err() and we unwind the tick.
 		if w.limiter != nil {
 			if err := w.limiter.Wait(ctx); err != nil {
 				return
@@ -278,11 +328,7 @@ func (w *Worker) tick(ctx context.Context) {
 		if err != nil {
 			// Per-row failure: bump attempts and (if budget exhausted)
 			// flip the row to state='failed' so FetchPending stops
-			// returning it. Siblings in this batch still proceed —
-			// the MarkAttemptFailed call is isolated to this nodeID.
-			//
-			// Persistence errors here are non-fatal: we lose one
-			// attempts-bump but a later tick will retry the row.
+			// returning it. Siblings in this batch still proceed.
 			_ = w.refs.MarkAttemptFailed(ctx, ref.NodeID, w.maxAttempts)
 			continue
 		}
@@ -290,15 +336,14 @@ func (w *Worker) tick(ctx context.Context) {
 			continue
 		}
 
-		contentHash := hashEmbedding(modelID, vec)
 		blob := encodeFloat32LE(vec)
-
 		if err := w.refs.MarkReady(ctx, ref.NodeID, contentHash, modelID, len(vec), blob, now); err != nil {
 			// Persistence failure for this row — skip the vector upsert
 			// for it so we don't surface a vector hit for a row the SQL
 			// side won't acknowledge.
 			continue
 		}
+		inFlight[contentHash] = vec
 
 		key := vecKey{repo: ref.RepoID, branch: ref.Branch}
 		vecBatches[key] = append(vecBatches[key], domain.EmbeddingRow{
@@ -317,18 +362,19 @@ func (w *Worker) tick(ctx context.Context) {
 	}
 }
 
-// hashEmbedding returns a stable content_hash for (model, vector). The hash
-// is purely a deduplication / PK device for node_embeddings; collisions are
-// astronomically unlikely with SHA-256.
-func hashEmbedding(modelID string, vec []float32) string {
+// hashEmbedText returns a content_hash keyed on the EMBED INPUT — the model
+// identifier and the deterministic embed_text projection. Two refs that hash
+// to the same value are guaranteed to produce the same vector under this
+// model, so the worker can dedup before calling EmbeddingProvider.Embed.
+//
+// The model is mixed into the hash so swapping models invalidates dedup
+// against prior bytes: a re-embed under a new model produces fresh bytes
+// rather than aliasing onto the previous model's vector.
+func hashEmbedText(modelID, embedText string) string {
 	h := sha256.New()
 	_, _ = h.Write([]byte(modelID))
 	_, _ = h.Write([]byte{0})
-	buf := make([]byte, 4)
-	for _, f := range vec {
-		binary.LittleEndian.PutUint32(buf, math.Float32bits(f))
-		_, _ = h.Write(buf)
-	}
+	_, _ = h.Write([]byte(embedText))
 	return hex.EncodeToString(h.Sum(nil))
 }
 
@@ -338,6 +384,21 @@ func encodeFloat32LE(vec []float32) []byte {
 	out := make([]byte, 4*len(vec))
 	for i, f := range vec {
 		binary.LittleEndian.PutUint32(out[i*4:], math.Float32bits(f))
+	}
+	return out
+}
+
+// decodeFloat32LE reverses encodeFloat32LE. dim is the expected element count;
+// if the blob is short, the returned slice is truncated rather than panicking
+// so a malformed row degrades to "skip this hit" at the call site.
+func decodeFloat32LE(blob []byte, dim int) []float32 {
+	have := len(blob) / 4
+	if have < dim {
+		dim = have
+	}
+	out := make([]float32, dim)
+	for i := range dim {
+		out[i] = math.Float32frombits(binary.LittleEndian.Uint32(blob[i*4 : i*4+4]))
 	}
 	return out
 }

@@ -177,5 +177,46 @@ func (r *EmbeddingRefsRepo) CountByState(ctx context.Context) (map[string]int, e
 	return out, nil
 }
 
+// LookupExisting probes node_embeddings for a row keyed by contentHash. A hit
+// returns (bytes, dim, true, nil); a miss returns (nil, 0, false, nil). The
+// hash is content-addressed on the embed INPUT (modelID + embed_text), so a
+// hit means an equivalent Embed call has already produced these bytes for
+// this model — the worker can skip the provider call.
+func (r *EmbeddingRefsRepo) LookupExisting(ctx context.Context, contentHash string) ([]byte, int, bool, error) {
+	var (
+		blob []byte
+		dim  int
+	)
+	err := r.readDB.QueryRowContext(ctx,
+		`SELECT embedding, dim FROM node_embeddings WHERE content_hash = ?`,
+		contentHash,
+	).Scan(&blob, &dim)
+	switch {
+	case err == sql.ErrNoRows:
+		return nil, 0, false, nil
+	case err != nil:
+		return nil, 0, false, fmt.Errorf("embedding_refs: lookup existing: %w", err)
+	}
+	return blob, dim, true, nil
+}
+
+// Reuse flips a pending ref to state='ready' against an existing
+// content_hash WITHOUT touching node_embeddings. Used by the dedup fast-path
+// when LookupExisting reported a hit. Rows not in state='pending' are left
+// alone so a racy second caller observing the same hit cannot regress a
+// row already marked ready.
+func (r *EmbeddingRefsRepo) Reuse(ctx context.Context, nodeID, contentHash string, at time.Time) error {
+	_, err := r.writeDB.ExecContext(ctx, `
+		UPDATE node_embedding_refs
+		SET state='ready', content_hash=?, embedded_at=?
+		WHERE node_id=? AND state='pending'`,
+		contentHash, at.UnixMilli(), nodeID,
+	)
+	if err != nil {
+		return fmt.Errorf("embedding_refs: reuse: %w", err)
+	}
+	return nil
+}
+
 // Compile-time check.
 var _ ports.EmbeddingRefRepo = (*EmbeddingRefsRepo)(nil)
