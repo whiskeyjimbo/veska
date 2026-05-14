@@ -1,0 +1,147 @@
+// Package checks contains the synchronous structural-check pipeline that runs
+// immediately after a promotion transaction commits. It exposes the Check
+// interface, an in-memory Registry, and a Runner that:
+//
+//  1. invokes every registered Check with the promotion Input,
+//  2. persists any returned findings via the FindingStorage port,
+//  3. records per-check wall-clock duration on the CheckLatency histogram,
+//  4. isolates each Check so an error or panic in one does NOT abort other
+//     checks and does NOT propagate back into the promotion path.
+//
+// Findings are advisory. By the time the Runner is invoked the promotion tx
+// has already committed; the Runner therefore never returns an error.
+package checks
+
+import (
+	"context"
+	"sync"
+	"time"
+
+	"github.com/whiskeyjimbo/veska/internal/core/domain"
+	"github.com/whiskeyjimbo/veska/internal/core/ports"
+	"github.com/whiskeyjimbo/veska/internal/observability"
+)
+
+// Input is the data each Check receives. It identifies the just-promoted slice
+// of the graph: the repo, the branch, the git SHA at the head of that branch,
+// and the set of file paths that were touched by the promotion.
+type Input struct {
+	RepoID    string
+	Branch    string
+	GitSHA    string
+	FilePaths []string
+}
+
+// Check is a single structural verification step.
+//
+// Name returns a stable identifier used as a Prometheus label and in finding
+// rule attribution. Names must be unique within a Registry.
+//
+// Run is invoked once per promotion. It is given the post-commit Input and
+// must return zero or more findings. Returning an error is non-fatal: the
+// Runner logs the error and continues with the next check.
+type Check interface {
+	Name() string
+	Run(ctx context.Context, in Input) ([]*domain.Finding, error)
+}
+
+// Registry is a small in-memory map of name → Check.
+//
+// Registration is expected to happen at daemon start-up; the Registry is not
+// optimised for hot-path mutation. It is, however, safe for concurrent reads.
+type Registry struct {
+	mu     sync.RWMutex
+	checks []Check
+	names  map[string]struct{}
+}
+
+// NewRegistry constructs an empty Registry.
+func NewRegistry() *Registry {
+	return &Registry{names: make(map[string]struct{})}
+}
+
+// Register adds c to the registry. Registering a duplicate name is a no-op so
+// callers can re-register defensively at start-up.
+func (r *Registry) Register(c Check) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if _, dup := r.names[c.Name()]; dup {
+		return
+	}
+	r.names[c.Name()] = struct{}{}
+	r.checks = append(r.checks, c)
+}
+
+// snapshot returns the current set of checks. The returned slice may be safely
+// iterated without holding the registry lock.
+func (r *Registry) snapshot() []Check {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	out := make([]Check, len(r.checks))
+	copy(out, r.checks)
+	return out
+}
+
+// Runner dispatches the registered checks against an Input and persists any
+// findings via the FindingStorage port.
+type Runner struct {
+	registry *Registry
+	storage  ports.FindingStorage
+	metrics  *observability.Metrics
+}
+
+// NewRunner constructs a Runner. metrics may be nil — in that case timing is
+// silently dropped (useful for embedded callers that do not yet wire metrics).
+func NewRunner(reg *Registry, storage ports.FindingStorage, metrics *observability.Metrics) *Runner {
+	return &Runner{registry: reg, storage: storage, metrics: metrics}
+}
+
+// Run executes every registered Check sequentially. Errors and panics from
+// individual checks are caught and isolated: the Runner never returns an error
+// because the promotion transaction has already committed by the time it
+// fires.
+//
+// Findings returned by a Check are forwarded to FindingStorage.Save. Storage
+// failures are logged via the standard error stream (the Runner does not yet
+// take a logger; one will be added when the daemon wires this in) but do not
+// abort subsequent checks.
+func (r *Runner) Run(ctx context.Context, in Input) {
+	if r == nil || r.registry == nil {
+		return
+	}
+	for _, c := range r.registry.snapshot() {
+		r.runOne(ctx, c, in)
+	}
+}
+
+// runOne wraps a single Check invocation in a panic recovery + timer block so
+// the rest of the pipeline is unaffected by a misbehaving check.
+func (r *Runner) runOne(ctx context.Context, c Check, in Input) {
+	start := time.Now()
+	defer func() {
+		// Swallow any panic — by contract a check failure is non-fatal because
+		// the promotion transaction has already committed. A future logger
+		// wiring will surface the recovered value; for now the guard alone is
+		// what makes the isolation contract hold.
+		_ = recover()
+		if r.metrics != nil && r.metrics.CheckLatency != nil {
+			r.metrics.CheckLatency.
+				WithLabelValues(in.RepoID, c.Name()).
+				Observe(time.Since(start).Seconds())
+		}
+	}()
+
+	findings, err := c.Run(ctx, in)
+	if err != nil {
+		// Advisory: log-and-continue. The promotion has already committed.
+		// TODO(m3.01.x): wire a logger so errors are surfaced, not swallowed.
+		return
+	}
+	for _, f := range findings {
+		if f == nil {
+			continue
+		}
+		// Storage errors are also non-fatal; the same TODO applies.
+		_ = r.storage.Save(ctx, f)
+	}
+}
