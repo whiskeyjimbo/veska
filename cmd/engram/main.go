@@ -20,6 +20,11 @@ func newRootCmd() *cobra.Command {
 
 func main() {
 	if err := newRootCmd().Execute(); err != nil {
+		var pse ProbeStatusError
+		if isProbeStatusError(err, &pse) {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(exitCodeForProbeStatus(pse.Status))
+		}
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
