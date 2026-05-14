@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/whiskeyjimbo/veska/internal/core/domain"
+	"github.com/whiskeyjimbo/veska/internal/core/ports"
 	"github.com/whiskeyjimbo/veska/internal/observability"
 	"go.opentelemetry.io/otel/trace"
 )
@@ -31,6 +32,7 @@ type Promoter struct {
 	staging *StagingArea
 	writeDB *sql.DB
 	tp      observability.TracerProvider
+	audit   ports.AuditWriter
 }
 
 // NewPromoter constructs a Promoter wired to the provided StagingArea and
@@ -40,6 +42,12 @@ func NewPromoter(staging *StagingArea, writeDB *sql.DB) *Promoter {
 		staging: staging,
 		writeDB: writeDB,
 	}
+}
+
+// SetAuditWriter installs an AuditWriter for promotion audit entries.
+// If not called (or called with nil), audit writes are skipped.
+func (p *Promoter) SetAuditWriter(aw ports.AuditWriter) {
+	p.audit = aw
 }
 
 // SetTracerProvider installs a TracerProvider for promotion.transaction spans.
@@ -178,8 +186,20 @@ func (p *Promoter) Promote(ctx context.Context, repoID, branch, gitSHA string, a
 	}
 
 	// Clear staging entries only after a successful commit.
+	promotedAt := time.Now()
 	for filePath := range snap {
 		p.staging.DeleteStagedFile(repoID, branch, filePath)
+		if p.audit != nil {
+			_ = p.audit.Write(ctx, ports.AuditEntry{
+				RepoID:    repoID,
+				ActorID:   actor.ID,
+				ActorKind: actor.Kind,
+				Op:        "promotion.commit",
+				TargetID:  filePath,
+				Branch:    branch,
+				CreatedAt: promotedAt,
+			})
+		}
 	}
 
 	return nil
