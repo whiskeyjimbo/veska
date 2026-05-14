@@ -13,7 +13,7 @@ import (
 // toolNamePattern enforces the eng_<verb>_<object> naming convention.
 // The object segment must start with a lowercase letter and contain only
 // lowercase letters, digits, and underscores.
-var toolNamePattern = regexp.MustCompile(`^eng_(find|get|list|search|set|close|reopen)_[a-z][a-z0-9_]*$`)
+var toolNamePattern = regexp.MustCompile(`^eng_(find|get|list|search|set|close|reopen|suppress)_[a-z][a-z0-9_]*$`)
 
 const minDescriptionLen = 10
 
@@ -60,7 +60,7 @@ func NewRegistry() *Registry {
 // concurrent use after serving begins.
 func (r *Registry) Register(spec ToolSpec) error {
 	if !toolNamePattern.MatchString(spec.Name) {
-		return fmt.Errorf("mcp: tool name %q does not match eng_<verb>_<object> pattern (allowed verbs: find,get,list,search,set,close,reopen; object must start with [a-z])", spec.Name)
+		return fmt.Errorf("mcp: tool name %q does not match eng_<verb>_<object> pattern (allowed verbs: find,get,list,search,set,close,reopen,suppress; object must start with [a-z])", spec.Name)
 	}
 	if len(spec.Description) < minDescriptionLen {
 		return fmt.Errorf("mcp: tool %q description is %d chars, minimum is %d", spec.Name, len(spec.Description), minDescriptionLen)
