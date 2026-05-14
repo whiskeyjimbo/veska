@@ -1,0 +1,1 @@
+- [solov2 separate git](feedback_solov2_git.md) — solov2 is a nested git repo inside engram; all solov2 commits go to solov2's git

@@ -1,4 +1,4 @@
-//go:build !linux
+//go:build !linux && multi_branch_bench
 
 package main
 

@@ -178,7 +178,6 @@ func TestAuditWriterConcurrentWrites(t *testing.T) {
 	wg.Add(goroutines)
 
 	for g := range goroutines {
-		g := g
 		go func() {
 			defer wg.Done()
 			for i := range writesPerGoroutine {

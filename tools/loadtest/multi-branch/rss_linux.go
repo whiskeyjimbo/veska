@@ -1,3 +1,5 @@
+//go:build multi_branch_bench && linux
+
 package main
 
 import (
