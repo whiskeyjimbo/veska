@@ -55,10 +55,7 @@ func TestIngester_Save_StagesResult(t *testing.T) {
 	staging := NewStagingArea()
 	ing := NewIngester(parser, staging, NewIngestionGate(staging))
 
-	err := ing.Save(context.Background(), "repo1", "main", "foo/bar.go", []byte("package foo"))
-	if err != nil {
-		t.Fatalf("Save returned unexpected error: %v", err)
-	}
+	ing.Save(context.Background(), "repo1", "main", "foo/bar.go", []byte("package foo"))
 	if !parser.called {
 		t.Fatal("expected ParseFile to be called")
 	}
@@ -85,10 +82,7 @@ func TestIngester_Save_ParseErrorIsNonFatal(t *testing.T) {
 	staging := NewStagingArea()
 	ing := NewIngester(parser, staging, NewIngestionGate(staging))
 
-	err := ing.Save(context.Background(), "repo1", "main", "bad.go", []byte("not go"))
-	if err != nil {
-		t.Fatalf("Save should return nil on parse error, got: %v", err)
-	}
+	ing.Save(context.Background(), "repo1", "main", "bad.go", []byte("not go"))
 
 	_, staged := staging.GetStagedNodes("repo1", "main", "bad.go")
 	if staged {
@@ -103,7 +97,7 @@ func TestIngester_DeleteFile_RemovesFromStaging(t *testing.T) {
 	staging := NewStagingArea()
 	ing := NewIngester(parser, staging, NewIngestionGate(staging))
 
-	_ = ing.Save(context.Background(), "repo1", "main", "del.go", []byte("package x"))
+	ing.Save(context.Background(), "repo1", "main", "del.go", []byte("package x"))
 
 	_, staged := staging.GetStagedNodes("repo1", "main", "del.go")
 	if !staged {
@@ -129,10 +123,7 @@ func TestIngester_Save_ParseFailureEmitsFinding(t *testing.T) {
 	ing := NewIngester(parser, staging, NewIngestionGate(staging))
 	ing.SetFindingStorage(store)
 
-	err := ing.Save(context.Background(), "repo1", "main", "src/bad.ts", []byte("broken"))
-	if err != nil {
-		t.Fatalf("Save returned error: %v", err)
-	}
+	ing.Save(context.Background(), "repo1", "main", "src/bad.ts", []byte("broken"))
 
 	got := store.snapshot()
 	if len(got) != 1 {
@@ -168,10 +159,8 @@ func TestIngester_Save_ParseFailureIdempotent(t *testing.T) {
 	ing.SetFindingStorage(store)
 
 	// Ingest the same broken file twice.
-	for i := range 2 {
-		if err := ing.Save(context.Background(), "repo1", "main", "src/bad.ts", []byte("broken")); err != nil {
-			t.Fatalf("Save #%d: %v", i, err)
-		}
+	for range 2 {
+		ing.Save(context.Background(), "repo1", "main", "src/bad.ts", []byte("broken"))
 	}
 
 	got := store.snapshot()
@@ -194,9 +183,7 @@ func TestIngester_Save_CleanParseEmitsNoFinding(t *testing.T) {
 	ing := NewIngester(parser, staging, NewIngestionGate(staging))
 	ing.SetFindingStorage(store)
 
-	if err := ing.Save(context.Background(), "repo1", "main", "ok.go", []byte("package x")); err != nil {
-		t.Fatalf("Save: %v", err)
-	}
+	ing.Save(context.Background(), "repo1", "main", "ok.go", []byte("package x"))
 	if got := store.snapshot(); len(got) != 0 {
 		t.Errorf("expected zero findings, got %d", len(got))
 	}
@@ -212,9 +199,7 @@ func TestIngester_Save_ParseFailureWithoutFindingStorage_NoPanic(t *testing.T) {
 	ing := NewIngester(parser, staging, NewIngestionGate(staging))
 	// Deliberately do NOT call SetFindingStorage.
 
-	if err := ing.Save(context.Background(), "repo1", "main", "src/bad.ts", []byte("broken")); err != nil {
-		t.Fatalf("Save: %v", err)
-	}
+	ing.Save(context.Background(), "repo1", "main", "src/bad.ts", []byte("broken"))
 }
 
 func TestIngester_Save_EmptyParseResultStagesFile(t *testing.T) {
@@ -227,10 +212,7 @@ func TestIngester_Save_EmptyParseResultStagesFile(t *testing.T) {
 	staging.StageFile("repo1", "main", "empty.go", []*domain.Node{{}}, nil)
 
 	ing := NewIngester(parser, staging, NewIngestionGate(staging))
-	err := ing.Save(context.Background(), "repo1", "main", "empty.go", []byte("package x"))
-	if err != nil {
-		t.Fatalf("Save returned unexpected error: %v", err)
-	}
+	ing.Save(context.Background(), "repo1", "main", "empty.go", []byte("package x"))
 
 	gotNodes, ok := staging.GetStagedNodes("repo1", "main", "empty.go")
 	if !ok {

@@ -486,7 +486,7 @@ func TestHandler_BatchUsesSingleApplyCall(t *testing.T) {
 	t.Parallel()
 	const n = 50
 	stale := make([]ports.StaleFinding, 0, n)
-	for i := 0; i < n; i++ {
+	for i := range n {
 		stale = append(stale, ports.StaleFinding{
 			FindingID:   "f-" + itoa(i),
 			Rule:        "auto-link",
