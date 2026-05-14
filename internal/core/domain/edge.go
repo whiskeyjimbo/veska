@@ -16,6 +16,11 @@ const (
 	EdgeContains  EdgeKind = "CONTAINS"
 	EdgeTests     EdgeKind = "TESTS"
 	EdgeDependsOn EdgeKind = "DEPENDS_ON"
+	// EdgeSimilarTo is the auto-link kind: a proposed semantic similarity edge
+	// emitted by the auto-link pipeline (see internal/application/autolink).
+	// These edges are written with Confidence=Unresolved and paired with a
+	// source_layer='semantic' Finding for human review.
+	EdgeSimilarTo EdgeKind = "SIMILAR_TO"
 )
 
 // Confidence is an ordered enum representing how certain an edge relationship is.

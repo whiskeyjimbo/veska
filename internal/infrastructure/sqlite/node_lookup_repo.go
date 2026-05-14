@@ -71,3 +71,34 @@ func (r *NodeLookupRepo) LookupNodes(ctx context.Context, repoID, branch string,
 	}
 	return out, nil
 }
+
+// NodesInFile returns every node_id in (repoID, branch) whose file_path
+// equals filePath. The query is served by idx_nodes_repo_branch combined
+// with a file_path filter; with the typical "tens of nodes per file" cardinality
+// this stays cheap. An unknown path returns (nil, nil).
+func (r *NodeLookupRepo) NodesInFile(ctx context.Context, repoID, branch, filePath string) ([]string, error) {
+	if filePath == "" {
+		return nil, nil
+	}
+	rows, err := r.readDB.QueryContext(ctx,
+		`SELECT node_id FROM nodes WHERE repo_id = ? AND branch = ? AND file_path = ?`,
+		repoID, branch, filePath,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("node_lookup: nodes_in_file query: %w", err)
+	}
+	defer rows.Close()
+
+	var out []string
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return nil, fmt.Errorf("node_lookup: nodes_in_file scan: %w", err)
+		}
+		out = append(out, id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("node_lookup: nodes_in_file iterate: %w", err)
+	}
+	return out, nil
+}
