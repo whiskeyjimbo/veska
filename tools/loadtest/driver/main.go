@@ -54,23 +54,11 @@ func buildGates(ltRoot string) []GateResult {
 	// Gate 3: Post-commit hook return p95 < 100ms
 	gates = append(gates, gate3HookBench(ltRoot))
 
-	// Gate 4: Daemon RSS ≤ 2 GiB (PENDING — m1.08.5)
-	gates = append(gates, GateResult{
-		ID:     4,
-		Name:   "Daemon RSS",
-		Budget: "≤2GiB",
-		Status: StatusPending,
-		Note:   "m1.08.5",
-	})
+	// Gate 4: Daemon RSS ≤ 2 GiB
+	gates = append(gates, gate4RSS(ltRoot))
 
-	// Gate 5: Promotion 50k-symbol refactor < 5s p95 (PENDING — m1.08.5)
-	gates = append(gates, GateResult{
-		ID:     5,
-		Name:   "Promotion 50k-symbol refactor",
-		Budget: "<5s p95",
-		Status: StatusPending,
-		Note:   "m1.08.5",
-	})
+	// Gate 5: Promotion 50k-symbol refactor < 5s p95
+	gates = append(gates, gate5Promotion(ltRoot))
 
 	// Gate 6: semantic_search p95 < 100ms at 50k vectors
 	gates = append(gates, gate6VectorBench(ltRoot))
@@ -156,6 +144,72 @@ func gate3HookBench(ltRoot string) GateResult {
 	}
 	g.Measured = val
 	if pass {
+		g.Status = StatusPass
+	} else {
+		g.Status = StatusFail
+	}
+	return g
+}
+
+func gate4RSS(ltRoot string) GateResult {
+	g := GateResult{
+		ID:     4,
+		Name:   "Daemon RSS",
+		Budget: "≤2GiB",
+	}
+	content, err := readFile(filepath.Join(ltRoot, "multi-branch", "RESULTS.md"))
+	if err != nil {
+		g.Status = StatusPending
+		g.Note = "RESULTS.md not found"
+		return g
+	}
+	rssBytes, _, ok := parseMultiBranchBench(content)
+	if !ok {
+		g.Status = StatusFail
+		g.Note = "parseMultiBranchBench: metric line not found"
+		return g
+	}
+	const gib2 = 2 * 1024 * 1024 * 1024
+	rssMiB := float64(rssBytes) / 1024 / 1024
+	if rssMiB >= 1024 {
+		g.Measured = fmt.Sprintf("%.2fGiB", rssMiB/1024)
+	} else {
+		g.Measured = fmt.Sprintf("%dmb", int64(rssMiB))
+	}
+	if rssBytes == 0 {
+		// Platform returned 0 (non-Linux) — treat as pending.
+		g.Status = StatusPending
+		g.Note = "RSS measurement unavailable on this platform"
+		return g
+	}
+	if rssBytes <= gib2 {
+		g.Status = StatusPass
+	} else {
+		g.Status = StatusFail
+	}
+	return g
+}
+
+func gate5Promotion(ltRoot string) GateResult {
+	g := GateResult{
+		ID:     5,
+		Name:   "Promotion 50k-symbol refactor",
+		Budget: "<5s p95",
+	}
+	content, err := readFile(filepath.Join(ltRoot, "multi-branch", "RESULTS.md"))
+	if err != nil {
+		g.Status = StatusPending
+		g.Note = "RESULTS.md not found"
+		return g
+	}
+	_, p95Secs, ok := parseMultiBranchBench(content)
+	if !ok {
+		g.Status = StatusFail
+		g.Note = "parseMultiBranchBench: metric line not found"
+		return g
+	}
+	g.Measured = fmt.Sprintf("%.2fs", p95Secs)
+	if p95Secs < 5.0 {
 		g.Status = StatusPass
 	} else {
 		g.Status = StatusFail
