@@ -115,7 +115,7 @@ func TestPromote_TwoFiles(t *testing.T) {
 	sa.StageFile("repo1", "main", "b.go", []*domain.Node{n2}, nil)
 
 	p := NewPromoter(sa, db)
-	if err := p.Promote(context.Background(), "repo1", "main", "sha-abc"); err != nil {
+	if err := p.Promote(context.Background(), "repo1", "main", "sha-abc", domain.Actor{ID: "service:veska", Kind: domain.ActorKindSystem}); err != nil {
 		t.Fatalf("Promote: %v", err)
 	}
 
@@ -140,7 +140,7 @@ func TestPromote_ZeroFiles(t *testing.T) {
 
 	sa := NewStagingArea()
 	p := NewPromoter(sa, db)
-	if err := p.Promote(context.Background(), "repo1", "main", "sha-abc"); err != nil {
+	if err := p.Promote(context.Background(), "repo1", "main", "sha-abc", domain.Actor{ID: "service:veska", Kind: domain.ActorKindSystem}); err != nil {
 		t.Fatalf("Promote with empty staging: %v", err)
 	}
 
@@ -164,14 +164,14 @@ func TestPromote_Idempotent(t *testing.T) {
 	n1, _ := domain.NewNode("n1", "a.go", "A", domain.KindFunction)
 	sa.StageFile("repo1", "main", "a.go", []*domain.Node{n1}, nil)
 	p := NewPromoter(sa, db)
-	if err := p.Promote(context.Background(), "repo1", "main", "sha-001"); err != nil {
+	if err := p.Promote(context.Background(), "repo1", "main", "sha-001", domain.Actor{ID: "service:veska", Kind: domain.ActorKindSystem}); err != nil {
 		t.Fatalf("first Promote: %v", err)
 	}
 
 	// Second promote with the same node.
 	n1b, _ := domain.NewNode("n1", "a.go", "A", domain.KindFunction)
 	sa.StageFile("repo1", "main", "a.go", []*domain.Node{n1b}, nil)
-	if err := p.Promote(context.Background(), "repo1", "main", "sha-002"); err != nil {
+	if err := p.Promote(context.Background(), "repo1", "main", "sha-002", domain.Actor{ID: "service:veska", Kind: domain.ActorKindSystem}); err != nil {
 		t.Fatalf("second Promote: %v", err)
 	}
 
@@ -194,7 +194,7 @@ func TestPromoteUnregisteredRepo(t *testing.T) {
 	sa := NewStagingArea()
 	p := NewPromoter(sa, db)
 
-	err := p.Promote(context.Background(), "unknown-repo", "main", "sha-abc")
+	err := p.Promote(context.Background(), "unknown-repo", "main", "sha-abc", domain.Actor{ID: "service:veska", Kind: domain.ActorKindSystem})
 	if err == nil {
 		t.Fatal("expected ErrUnregisteredRepo, got nil")
 	}
@@ -223,7 +223,7 @@ func TestPromoteRegisteredRepo(t *testing.T) {
 	p := NewPromoter(sa, db)
 
 	// Empty staging — should return nil (not ErrUnregisteredRepo).
-	if err := p.Promote(context.Background(), "known-repo", "main", "sha-abc"); err != nil {
+	if err := p.Promote(context.Background(), "known-repo", "main", "sha-abc", domain.Actor{ID: "service:veska", Kind: domain.ActorKindSystem}); err != nil {
 		t.Fatalf("expected no error for registered repo, got: %v", err)
 	}
 }
@@ -250,7 +250,7 @@ func TestPromote_AtomicTransaction(t *testing.T) {
 	sa.StageFile("repo1", "main", "multi.go", nodes, nil)
 
 	p := NewPromoter(sa, db)
-	if err := p.Promote(context.Background(), "repo1", "main", "sha-tx"); err != nil {
+	if err := p.Promote(context.Background(), "repo1", "main", "sha-tx", domain.Actor{ID: "service:veska", Kind: domain.ActorKindSystem}); err != nil {
 		t.Fatalf("Promote: %v", err)
 	}
 

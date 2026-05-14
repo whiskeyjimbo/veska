@@ -15,17 +15,17 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/mcp"
 )
 
-// stubHandler records the actorKind of each call and returns a fixed result or error.
+// stubHandler records the actor of each call and returns a fixed result or error.
 type stubHandler struct {
 	mu     sync.Mutex
-	calls  []domain.ActorKind
+	calls  []domain.Actor
 	result any
 	rpcErr *mcp.RPCError
 }
 
-func (h *stubHandler) Handle(_ context.Context, ak domain.ActorKind, req *mcp.Request) (any, *mcp.RPCError) {
+func (h *stubHandler) Handle(_ context.Context, actor domain.Actor, req *mcp.Request) (any, *mcp.RPCError) {
 	h.mu.Lock()
-	h.calls = append(h.calls, ak)
+	h.calls = append(h.calls, actor)
 	h.mu.Unlock()
 	return h.result, h.rpcErr
 }
@@ -36,7 +36,7 @@ func (h *stubHandler) lastKind() domain.ActorKind {
 	if len(h.calls) == 0 {
 		return ""
 	}
-	return h.calls[len(h.calls)-1]
+	return h.calls[len(h.calls)-1].Kind
 }
 
 // startServer spins up a Server and waits until both sockets exist.

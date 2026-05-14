@@ -42,7 +42,7 @@ func dispatchAdmin(t *testing.T, r *Registry, method string, params any) (any, *
 		Method:  method,
 		Params:  mustMarshal(t, params),
 	}
-	return r.Dispatch(context.Background(), domain.ActorKindAgent, req)
+	return r.Dispatch(context.Background(), domain.Actor{ID: "agent:test", Kind: domain.ActorKindAgent}, req)
 }
 
 // ---------------------------------------------------------------------------
