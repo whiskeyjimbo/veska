@@ -3,6 +3,7 @@ package search_test
 import (
 	"context"
 	"errors"
+	"fmt"
 	"testing"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -90,12 +91,16 @@ func TestSemantic_HappyPath_PreservesHitRank(t *testing.T) {
 	}}
 
 	s := search.NewService(emb, vec, nodes)
-	got, err := s.Semantic(context.Background(), "r1", "main", "find foo", 10, domain.Filter{})
+	resp, err := s.Semantic(context.Background(), "r1", "main", "find foo", 10, domain.Filter{})
 	if err != nil {
 		t.Fatalf("Semantic: %v", err)
 	}
+	got := resp.Results
 	if len(got) != 3 {
 		t.Fatalf("expected 3 results, got %d", len(got))
+	}
+	if len(resp.DegradedReasons) != 0 {
+		t.Errorf("happy path must not set degraded_reasons, got %v", resp.DegradedReasons)
 	}
 	want := []string{"n2", "n1", "n3"}
 	for i, r := range got {
@@ -130,10 +135,11 @@ func TestSemantic_MissingNodesDroppedSilently(t *testing.T) {
 	}}
 
 	s := search.NewService(emb, vec, nodes)
-	got, err := s.Semantic(context.Background(), "r1", "main", "q", 5, domain.Filter{})
+	resp, err := s.Semantic(context.Background(), "r1", "main", "q", 5, domain.Filter{})
 	if err != nil {
 		t.Fatalf("Semantic: %v", err)
 	}
+	got := resp.Results
 	if len(got) != 2 {
 		t.Fatalf("expected 2 results, got %d: %+v", len(got), got)
 	}
@@ -195,10 +201,11 @@ func TestSemantic_EmptyHits_ReturnsEmptyNilError(t *testing.T) {
 	nodes := &fakeNodes{}
 
 	s := search.NewService(emb, vec, nodes)
-	got, err := s.Semantic(context.Background(), "r1", "main", "q", 5, domain.Filter{})
+	resp, err := s.Semantic(context.Background(), "r1", "main", "q", 5, domain.Filter{})
 	if err != nil {
 		t.Fatalf("Semantic: %v", err)
 	}
+	got := resp.Results
 	if got == nil {
 		t.Fatal("expected empty slice, got nil — callers serialize nil as null")
 	}
@@ -220,12 +227,12 @@ func TestSemantic_KZero_ShortCircuits(t *testing.T) {
 		nodes := &fakeNodes{}
 		s := search.NewService(emb, vec, nodes)
 
-		got, err := s.Semantic(context.Background(), "r1", "main", "q", k, domain.Filter{})
+		resp, err := s.Semantic(context.Background(), "r1", "main", "q", k, domain.Filter{})
 		if err != nil {
 			t.Fatalf("k=%d: %v", k, err)
 		}
-		if len(got) != 0 {
-			t.Errorf("k=%d: expected 0 results, got %d", k, len(got))
+		if len(resp.Results) != 0 {
+			t.Errorf("k=%d: expected 0 results, got %d", k, len(resp.Results))
 		}
 		if emb.calls != 0 || vec.calls != 0 || nodes.calls != 0 {
 			t.Errorf("k=%d: dependencies invoked (emb=%d vec=%d nodes=%d)", k, emb.calls, vec.calls, nodes.calls)
@@ -291,6 +298,149 @@ func TestSemantic_ObservesVectorQueryDuration_ErrorPath(t *testing.T) {
 	n := testutil.CollectAndCount(m.VectorQueryDuration)
 	if n < 1 {
 		t.Errorf("expected at least one VectorQueryDuration series after error, got %d", n)
+	}
+}
+
+// --- lexical fallback (m3.03.2) -------------------------------------------
+
+type fakeLexical struct {
+	hits   []ports.LexicalHit
+	err    error
+	calls  int
+	gotQ   string
+	gotK   int
+	gotRep string
+	gotBr  string
+}
+
+func (f *fakeLexical) Search(_ context.Context, repoID, branch, query string, k int) ([]ports.LexicalHit, error) {
+	f.calls++
+	f.gotRep = repoID
+	f.gotBr = branch
+	f.gotQ = query
+	f.gotK = k
+	return f.hits, f.err
+}
+
+// TestSemantic_EmbedderUnreachable_FallsBackToLexical verifies the
+// ErrEmbedderUnreachable sentinel triggers the lexical arm and the
+// envelope carries the canonical degraded_reasons token.
+func TestSemantic_EmbedderUnreachable_FallsBackToLexical(t *testing.T) {
+	t.Parallel()
+	emb := &fakeEmbedder{err: fmt.Errorf("dial: %w", ports.ErrEmbedderUnreachable)}
+	vec := &fakeVectors{}
+	nodes := &fakeNodes{rows: []ports.NodeMeta{
+		{NodeID: "n1", SymbolPath: "pkg.A", FilePath: "a.go", Kind: "function", LineStart: 1, LineEnd: 5},
+	}}
+	lex := &fakeLexical{hits: []ports.LexicalHit{{NodeID: "n1", Score: 0.5}}}
+
+	s := search.NewService(emb, vec, nodes, search.WithLexicalSearcher(lex))
+	resp, err := s.Semantic(context.Background(), "r1", "main", "close", 5, domain.Filter{})
+	if err != nil {
+		t.Fatalf("Semantic with unreachable embedder + lexical: %v", err)
+	}
+	if len(resp.Results) != 1 || resp.Results[0].NodeID != "n1" {
+		t.Errorf("expected lexical hit n1 hydrated, got %+v", resp.Results)
+	}
+	if len(resp.DegradedReasons) != 1 ||
+		resp.DegradedReasons[0] != search.DegradedReasonEmbedderOfflineLexicalFallback {
+		t.Errorf("degraded_reasons = %v, want [%s]",
+			resp.DegradedReasons, search.DegradedReasonEmbedderOfflineLexicalFallback)
+	}
+	if vec.calls != 0 {
+		t.Errorf("vectors must not be invoked on fallback, calls=%d", vec.calls)
+	}
+	if lex.gotQ != "close" || lex.gotK != 5 || lex.gotRep != "r1" || lex.gotBr != "main" {
+		t.Errorf("lexical args: q=%q k=%d repo=%q branch=%q", lex.gotQ, lex.gotK, lex.gotRep, lex.gotBr)
+	}
+}
+
+// TestSemantic_EmbedderUnreachable_NoLexical_PropagatesError verifies
+// that without a LexicalSearcher wired in, ErrEmbedderUnreachable
+// surfaces wrapped to the caller — no silent zero-result return.
+func TestSemantic_EmbedderUnreachable_NoLexical_PropagatesError(t *testing.T) {
+	t.Parallel()
+	emb := &fakeEmbedder{err: fmt.Errorf("dial: %w", ports.ErrEmbedderUnreachable)}
+	vec := &fakeVectors{}
+	nodes := &fakeNodes{}
+
+	s := search.NewService(emb, vec, nodes) // no WithLexicalSearcher
+	_, err := s.Semantic(context.Background(), "r1", "main", "q", 5, domain.Filter{})
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+	if !errors.Is(err, ports.ErrEmbedderUnreachable) {
+		t.Errorf("expected ErrEmbedderUnreachable in chain, got %v", err)
+	}
+}
+
+// TestSemantic_NonSentinelEmbedderError_DoesNotFallBack verifies that a
+// generic embedder error (not ErrEmbedderUnreachable) propagates even
+// when a LexicalSearcher is installed — fallback is restricted to the
+// sentinel so genuinely actionable failures aren't masked.
+func TestSemantic_NonSentinelEmbedderError_DoesNotFallBack(t *testing.T) {
+	t.Parallel()
+	other := errors.New("model bad input")
+	emb := &fakeEmbedder{err: other}
+	vec := &fakeVectors{}
+	nodes := &fakeNodes{}
+	lex := &fakeLexical{}
+
+	s := search.NewService(emb, vec, nodes, search.WithLexicalSearcher(lex))
+	_, err := s.Semantic(context.Background(), "r1", "main", "q", 5, domain.Filter{})
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+	if !errors.Is(err, other) {
+		t.Errorf("expected wrapped non-sentinel error, got %v", err)
+	}
+	if lex.calls != 0 {
+		t.Errorf("lexical must not be invoked for non-sentinel embedder errors, calls=%d", lex.calls)
+	}
+}
+
+// TestLexical_HappyPath verifies the explicit Lexical method runs the
+// LexicalSearcher and hydrates via NodeLookup, no embedder calls.
+func TestLexical_HappyPath(t *testing.T) {
+	t.Parallel()
+	emb := &fakeEmbedder{}
+	vec := &fakeVectors{}
+	nodes := &fakeNodes{rows: []ports.NodeMeta{
+		{NodeID: "n1", SymbolPath: "pkg.A", FilePath: "a.go", Kind: "function"},
+		{NodeID: "n2", SymbolPath: "pkg.B", FilePath: "b.go", Kind: "function"},
+	}}
+	lex := &fakeLexical{hits: []ports.LexicalHit{
+		{NodeID: "n1", Score: 0.9},
+		{NodeID: "n2", Score: 0.5},
+	}}
+
+	s := search.NewService(emb, vec, nodes, search.WithLexicalSearcher(lex))
+	got, err := s.Lexical(context.Background(), "r1", "main", "close", 10)
+	if err != nil {
+		t.Fatalf("Lexical: %v", err)
+	}
+	if len(got) != 2 {
+		t.Fatalf("expected 2 results, got %d", len(got))
+	}
+	if got[0].NodeID != "n1" || got[1].NodeID != "n2" {
+		t.Errorf("rank order lost: %+v", got)
+	}
+	if emb.calls != 0 || vec.calls != 0 {
+		t.Errorf("Lexical must not call embedder/vectors, emb=%d vec=%d", emb.calls, vec.calls)
+	}
+}
+
+// TestLexical_NoLexicalWired_ReturnsNil verifies Lexical short-circuits
+// to nil when no LexicalSearcher option was applied.
+func TestLexical_NoLexicalWired_ReturnsNil(t *testing.T) {
+	t.Parallel()
+	s := search.NewService(&fakeEmbedder{}, &fakeVectors{}, &fakeNodes{})
+	got, err := s.Lexical(context.Background(), "r1", "main", "q", 5)
+	if err != nil {
+		t.Fatalf("Lexical: %v", err)
+	}
+	if got != nil {
+		t.Errorf("expected nil result without lexical wired, got %+v", got)
 	}
 }
 
