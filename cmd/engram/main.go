@@ -5,6 +5,8 @@ import (
 	"os"
 
 	"github.com/spf13/cobra"
+	"github.com/whiskeyjimbo/engram/solov2/internal/config"
+	"github.com/whiskeyjimbo/engram/solov2/internal/service"
 )
 
 func newRootCmd() *cobra.Command {
@@ -15,7 +17,15 @@ func newRootCmd() *cobra.Command {
 	}
 	root.AddCommand(hookRunnerCmd())
 	root.AddCommand(doctorCmd())
-	root.AddCommand(serviceCmd(nil))
+
+	// Resolve the daemon binary path at startup. os.Executable returns the path
+	// of the current binary; by convention the daemon lives alongside the CLI
+	// with the name "engram-daemon".
+	var mgr service.Manager
+	if exe, err := os.Executable(); err == nil {
+		mgr, _ = service.New(exe+"-daemon", config.DefaultVectorDir())
+	}
+	root.AddCommand(serviceCmd(mgr))
 	return root
 }
 
