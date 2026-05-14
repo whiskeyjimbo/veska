@@ -9,7 +9,7 @@ import (
 )
 
 // noopHandler is a minimal ToolHandler for use in tests.
-func noopHandler(_ context.Context, _ domain.ActorKind, _ json.RawMessage) (any, *RPCError) {
+func noopHandler(_ context.Context, _ domain.Actor, _ json.RawMessage) (any, *RPCError) {
 	return nil, nil
 }
 
@@ -128,7 +128,7 @@ func TestDispatch_RoutesToHandler(t *testing.T) {
 	spec := ToolSpec{
 		Name:        "eng_find_symbol",
 		Description: "finds a symbol by name in the graph",
-		Handler: func(_ context.Context, _ domain.ActorKind, _ json.RawMessage) (any, *RPCError) {
+		Handler: func(_ context.Context, _ domain.Actor, _ json.RawMessage) (any, *RPCError) {
 			called = true
 			return "ok", nil
 		},
@@ -138,7 +138,7 @@ func TestDispatch_RoutesToHandler(t *testing.T) {
 	}
 
 	req := &Request{Method: "eng_find_symbol"}
-	_, rpcErr := r.Dispatch(context.Background(), domain.ActorKindHuman, req)
+	_, rpcErr := r.Dispatch(context.Background(), domain.Actor{ID: "human:test", Kind: domain.ActorKindHuman}, req)
 	if rpcErr != nil {
 		t.Fatalf("unexpected rpc error: %+v", rpcErr)
 	}
@@ -150,7 +150,7 @@ func TestDispatch_RoutesToHandler(t *testing.T) {
 func TestDispatch_UnknownMethodReturnsMethodNotFound(t *testing.T) {
 	r := NewRegistry()
 	req := &Request{Method: "eng_get_unknown_xyz"}
-	_, rpcErr := r.Dispatch(context.Background(), domain.ActorKindHuman, req)
+	_, rpcErr := r.Dispatch(context.Background(), domain.Actor{ID: "human:test", Kind: domain.ActorKindHuman}, req)
 	if rpcErr == nil {
 		t.Fatal("expected RPCError for unknown method, got nil")
 	}
@@ -191,7 +191,7 @@ func TestHandle_DelegatesToDispatch(t *testing.T) {
 	spec := ToolSpec{
 		Name:        "eng_get_node",
 		Description: "gets a node by its unique identifier in the graph",
-		Handler: func(_ context.Context, _ domain.ActorKind, _ json.RawMessage) (any, *RPCError) {
+		Handler: func(_ context.Context, _ domain.Actor, _ json.RawMessage) (any, *RPCError) {
 			return "handled", nil
 		},
 	}
@@ -200,7 +200,7 @@ func TestHandle_DelegatesToDispatch(t *testing.T) {
 	}
 
 	req := &Request{Method: "eng_get_node"}
-	result, rpcErr := r.Handle(context.Background(), domain.ActorKindAgent, req)
+	result, rpcErr := r.Handle(context.Background(), domain.Actor{ID: "agent:test", Kind: domain.ActorKindAgent}, req)
 	if rpcErr != nil {
 		t.Fatalf("unexpected rpc error: %+v", rpcErr)
 	}
@@ -245,7 +245,7 @@ func TestAllM106ToolsPassValidation(t *testing.T) {
 		err := r.Register(ToolSpec{
 			Name:        name,
 			Description: "placeholder description for contract test",
-			Handler:     func(_ context.Context, _ domain.ActorKind, _ json.RawMessage) (any, *RPCError) { return nil, nil },
+			Handler:     func(_ context.Context, _ domain.Actor, _ json.RawMessage) (any, *RPCError) { return nil, nil },
 		})
 		if err != nil {
 			t.Errorf("tool %q failed validation: %v", name, err)

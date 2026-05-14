@@ -47,7 +47,10 @@ func NewPromoter(staging *StagingArea, writeDB *sql.DB) *Promoter {
 //     same transaction.
 //  5. Commits — all writes land atomically or not at all.
 //  6. Calls StagingArea.DeleteStagedFile for each promoted file after commit.
-func (p *Promoter) Promote(ctx context.Context, repoID, branch, gitSHA string) error {
+//
+// actor records who triggered the promotion. Hook-triggered paths should pass
+// domain.Actor{ID: "service:veska", Kind: domain.ActorKindSystem}.
+func (p *Promoter) Promote(ctx context.Context, repoID, branch, gitSHA string, actor domain.Actor) error {
 	// Reject promotions for repos not in the registry.
 	var exists int
 	err := p.writeDB.QueryRowContext(ctx,
@@ -83,7 +86,7 @@ func (p *Promoter) Promote(ctx context.Context, repoID, branch, gitSHA string) e
 		INSERT INTO nodes
 			(node_id, branch, repo_id, language, kind, symbol_path, file_path,
 			 line_start, line_end, content_hash, last_promoted_at, actor_id, actor_kind)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'system', 'system')`)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
 	if err != nil {
 		_ = tx.Rollback()
 		return fmt.Errorf("promoter: prepare insert: %w", err)
@@ -127,6 +130,8 @@ func (p *Promoter) Promote(ctx context.Context, repoID, branch, gitSHA string) e
 				lineEnd,
 				contentHash,
 				now,
+				actor.ID,
+				string(actor.Kind),
 			); err != nil {
 				_ = tx.Rollback()
 				return fmt.Errorf("promoter: insert node %q: %w", n.ID, err)

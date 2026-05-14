@@ -71,7 +71,7 @@ type getCurrentRepoParams struct {
 }
 
 func makeGetCurrentRepoHandler(repos application.RepoLister) ToolHandler {
-	return func(ctx context.Context, _ domain.ActorKind, raw json.RawMessage) (any, *RPCError) {
+	return func(ctx context.Context, _ domain.Actor, raw json.RawMessage) (any, *RPCError) {
 		var p getCurrentRepoParams
 		if err := json.Unmarshal(raw, &p); err != nil {
 			return nil, &RPCError{Code: CodeInvalidParams, Message: fmt.Sprintf("invalid params: %v", err)}
@@ -104,7 +104,7 @@ func makeGetCurrentRepoHandler(repos application.RepoLister) ToolHandler {
 // ---------------------------------------------------------------------------
 
 func makeListReposHandler(repos application.RepoLister) ToolHandler {
-	return func(ctx context.Context, _ domain.ActorKind, raw json.RawMessage) (any, *RPCError) {
+	return func(ctx context.Context, _ domain.Actor, raw json.RawMessage) (any, *RPCError) {
 		all, err := repos.ListRepos(ctx)
 		if err != nil {
 			return nil, &RPCError{Code: CodeInternalError, Message: fmt.Sprintf("list repos failed: %v", err)}
@@ -127,7 +127,7 @@ type getRepoParams struct {
 }
 
 func makeGetRepoHandler(repos application.RepoLister) ToolHandler {
-	return func(ctx context.Context, _ domain.ActorKind, raw json.RawMessage) (any, *RPCError) {
+	return func(ctx context.Context, _ domain.Actor, raw json.RawMessage) (any, *RPCError) {
 		var p getRepoParams
 		if err := json.Unmarshal(raw, &p); err != nil {
 			return nil, &RPCError{Code: CodeInvalidParams, Message: fmt.Sprintf("invalid params: %v", err)}
@@ -160,7 +160,7 @@ func makeGetRepoHandler(repos application.RepoLister) ToolHandler {
 // ---------------------------------------------------------------------------
 
 func makeGetStatusHandler(sp StatusProvider) ToolHandler {
-	return func(ctx context.Context, _ domain.ActorKind, raw json.RawMessage) (any, *RPCError) {
+	return func(ctx context.Context, _ domain.Actor, raw json.RawMessage) (any, *RPCError) {
 		if sp != nil {
 			m, err := sp.Status(ctx)
 			if err != nil {
@@ -183,7 +183,7 @@ func makeGetStatusHandler(sp StatusProvider) ToolHandler {
 // ---------------------------------------------------------------------------
 
 func makeGetConfigHandler(cp ConfigProvider) ToolHandler {
-	return func(ctx context.Context, _ domain.ActorKind, raw json.RawMessage) (any, *RPCError) {
+	return func(ctx context.Context, _ domain.Actor, raw json.RawMessage) (any, *RPCError) {
 		if cp != nil {
 			m, err := cp.Config(ctx)
 			if err != nil {

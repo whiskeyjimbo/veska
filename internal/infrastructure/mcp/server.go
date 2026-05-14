@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"net"
 	"os"
+	"os/user"
 	"sync"
 
 	"github.com/whiskeyjimbo/veska/internal/core/domain"
@@ -45,9 +46,9 @@ const (
 )
 
 // Handler processes one JSON-RPC request and returns a result or error.
-// actorKind indicates whether the caller is human (cli.sock) or agent (mcp.sock).
+// actor carries the full attribution stamp derived from the inbound connection.
 type Handler interface {
-	Handle(ctx context.Context, actorKind domain.ActorKind, req *Request) (any, *RPCError)
+	Handle(ctx context.Context, actor domain.Actor, req *Request) (any, *RPCError)
 }
 
 // Server listens on two Unix sockets and dispatches JSON-RPC requests.
@@ -122,6 +123,16 @@ func listenUnix(path string) (net.Listener, error) {
 	return l, nil
 }
 
+// humanActor derives an Actor for a human (cli.sock) connection.
+// It uses the OS username; falls back to "human:unknown" on error.
+func humanActor() domain.Actor {
+	u, err := user.Current()
+	if err != nil || u.Username == "" {
+		return domain.Actor{ID: "human:unknown", Kind: domain.ActorKindHuman}
+	}
+	return domain.Actor{ID: "human:" + u.Username, Kind: domain.ActorKindHuman}
+}
+
 // acceptLoop accepts connections on l until the listener is closed (ctx cancelled).
 func (s *Server) acceptLoop(ctx context.Context, l net.Listener, ak domain.ActorKind) {
 	var wg sync.WaitGroup
@@ -141,10 +152,31 @@ func (s *Server) acceptLoop(ctx context.Context, l net.Listener, ak domain.Actor
 	}
 }
 
+// initializeParams is the subset of the MCP "initialize" request params we care about.
+type initializeParams struct {
+	ClientInfo struct {
+		Name string `json:"name"`
+	} `json:"clientInfo"`
+}
+
 // serveConn handles one client connection: read newline-delimited JSON requests,
 // dispatch to the handler, write JSON-RPC responses.
+//
+// Actor derivation:
+//   - cli.sock connections: ActorKindHuman, ID = "human:<osUser>".
+//   - mcp.sock connections: start as ActorKindAgent, ID = "agent:unknown";
+//     on "initialize" update ID to "agent:<clientInfo.name>".
 func (s *Server) serveConn(ctx context.Context, conn net.Conn, ak domain.ActorKind) {
 	defer conn.Close()
+
+	// Derive the initial actor for this connection.
+	var actor domain.Actor
+	switch ak {
+	case domain.ActorKindHuman:
+		actor = humanActor()
+	default:
+		actor = domain.Actor{ID: "agent:unknown", Kind: domain.ActorKindAgent}
+	}
 
 	enc := json.NewEncoder(conn)
 	scanner := bufio.NewScanner(conn)
@@ -162,7 +194,15 @@ func (s *Server) serveConn(ctx context.Context, conn net.Conn, ak domain.ActorKi
 			return
 		}
 
-		result, rpcErr := s.handler.Handle(ctx, ak, &req)
+		// For agent connections: update actor_id from "initialize" clientInfo.name.
+		if req.Method == "initialize" && actor.Kind == domain.ActorKindAgent {
+			var p initializeParams
+			if err := json.Unmarshal(req.Params, &p); err == nil && p.ClientInfo.Name != "" {
+				actor.ID = "agent:" + p.ClientInfo.Name
+			}
+		}
+
+		result, rpcErr := s.handler.Handle(ctx, actor, &req)
 
 		resp := Response{
 			JSONRPC: "2.0",

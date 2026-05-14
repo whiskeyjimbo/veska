@@ -18,9 +18,9 @@ var toolNamePattern = regexp.MustCompile(`^eng_(find|get|list|search|set|close|r
 const minDescriptionLen = 10
 
 // ToolHandler is called when a tool request arrives.
-// actorKind distinguishes human (CLI) from agent (MCP) callers so handlers
-// can apply different trust or rate-limit policies.
-type ToolHandler func(ctx context.Context, actorKind domain.ActorKind, params json.RawMessage) (any, *RPCError)
+// actor carries the full attribution stamp so handlers can apply trust,
+// rate-limit, or audit policies based on who is calling.
+type ToolHandler func(ctx context.Context, actor domain.Actor, params json.RawMessage) (any, *RPCError)
 
 // ToolSpec describes one MCP tool registered with the server.
 type ToolSpec struct {
@@ -82,7 +82,7 @@ func (r *Registry) MustRegister(spec ToolSpec) {
 // Dispatch routes a JSON-RPC request to the matching tool handler.
 // Returns MethodNotFound (-32601) if no tool matches.
 // Safe for concurrent use provided no further Register calls occur.
-func (r *Registry) Dispatch(ctx context.Context, actorKind domain.ActorKind, req *Request) (any, *RPCError) {
+func (r *Registry) Dispatch(ctx context.Context, actor domain.Actor, req *Request) (any, *RPCError) {
 	spec, ok := r.tools[req.Method]
 	if !ok {
 		return nil, &RPCError{
@@ -90,13 +90,13 @@ func (r *Registry) Dispatch(ctx context.Context, actorKind domain.ActorKind, req
 			Message: fmt.Sprintf("method not found: %s", req.Method),
 		}
 	}
-	return spec.Handler(ctx, actorKind, req.Params)
+	return spec.Handler(ctx, actor, req.Params)
 }
 
 // Handle satisfies the Handler interface so Registry can be passed directly
 // to NewServer. It delegates to Dispatch.
-func (r *Registry) Handle(ctx context.Context, actorKind domain.ActorKind, req *Request) (any, *RPCError) {
-	return r.Dispatch(ctx, actorKind, req)
+func (r *Registry) Handle(ctx context.Context, actor domain.Actor, req *Request) (any, *RPCError) {
+	return r.Dispatch(ctx, actor, req)
 }
 
 // Names returns all registered tool names in sorted order.

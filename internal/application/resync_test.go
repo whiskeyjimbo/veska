@@ -6,6 +6,8 @@ import (
 	"sync"
 	"sync/atomic"
 	"testing"
+
+	"github.com/whiskeyjimbo/veska/internal/core/domain"
 )
 
 // stubRepoLister is an in-test implementation of RepoLister.
@@ -89,8 +91,8 @@ func (c *callTracker) saveFunc() func(ctx context.Context, repoID, branch, path 
 	}
 }
 
-func (c *callTracker) promoteFunc() func(ctx context.Context, repoID, branch, gitSHA string) error {
-	return func(ctx context.Context, repoID, branch, gitSHA string) error {
+func (c *callTracker) promoteFunc() func(ctx context.Context, repoID, branch, gitSHA string, actor domain.Actor) error {
+	return func(ctx context.Context, repoID, branch, gitSHA string, actor domain.Actor) error {
 		c.mu.Lock()
 		defer c.mu.Unlock()
 		c.promoteCalls = append(c.promoteCalls, promoteCall{repoID, branch, gitSHA})
@@ -103,7 +105,7 @@ func newTestResync(
 	repos RepoLister,
 	git GitQuerier,
 	saveFn func(ctx context.Context, repoID, branch, path string, src []byte) error,
-	promoteFn func(ctx context.Context, repoID, branch, gitSHA string) error,
+	promoteFn func(ctx context.Context, repoID, branch, gitSHA string, actor domain.Actor) error,
 	reparserFn func(ctx context.Context, repo RepoRecord) error,
 ) *StartupResync {
 	return &StartupResync{
@@ -325,7 +327,7 @@ func TestResync_IsSyncing(t *testing.T) {
 	var srPtr *StartupResync
 	sr := newTestResync(reposMissed, gitMissed,
 		func(_ context.Context, _, _, _ string, _ []byte) error { return nil },
-		func(_ context.Context, _, _, _ string) error { return nil },
+		func(_ context.Context, _, _, _ string, _ domain.Actor) error { return nil },
 		func(_ context.Context, _ RepoRecord) error {
 			isSyncingDuringRun.Store(srPtr.IsSyncing())
 			close(block)

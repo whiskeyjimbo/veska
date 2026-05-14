@@ -89,7 +89,7 @@ type findSymbolParams struct {
 }
 
 func makeFindSymbolHandler(graph ports.GraphStorage, staging *application.StagingArea) ToolHandler {
-	return func(ctx context.Context, _ domain.ActorKind, raw json.RawMessage) (any, *RPCError) {
+	return func(ctx context.Context, _ domain.Actor, raw json.RawMessage) (any, *RPCError) {
 		var p findSymbolParams
 		if err := json.Unmarshal(raw, &p); err != nil {
 			return nil, &RPCError{Code: CodeInvalidParams, Message: fmt.Sprintf("invalid params: %v", err)}
@@ -153,7 +153,7 @@ type getNodeParams struct {
 }
 
 func makeGetNodeHandler(graph ports.GraphStorage, staging *application.StagingArea) ToolHandler {
-	return func(ctx context.Context, _ domain.ActorKind, raw json.RawMessage) (any, *RPCError) {
+	return func(ctx context.Context, _ domain.Actor, raw json.RawMessage) (any, *RPCError) {
 		var p getNodeParams
 		if err := json.Unmarshal(raw, &p); err != nil {
 			return nil, &RPCError{Code: CodeInvalidParams, Message: fmt.Sprintf("invalid params: %v", err)}
@@ -213,7 +213,7 @@ type getCallChainParams struct {
 const maxCallChainDepth = 10
 
 func makeGetCallChainHandler(graph ports.GraphStorage, resolve ResolveFunc) ToolHandler {
-	return func(ctx context.Context, _ domain.ActorKind, raw json.RawMessage) (any, *RPCError) {
+	return func(ctx context.Context, _ domain.Actor, raw json.RawMessage) (any, *RPCError) {
 		var p getCallChainParams
 		if err := json.Unmarshal(raw, &p); err != nil {
 			return nil, &RPCError{Code: CodeInvalidParams, Message: fmt.Sprintf("invalid params: %v", err)}
@@ -313,7 +313,7 @@ type getFileNodesParams struct {
 }
 
 func makeGetFileNodesHandler(graph ports.GraphStorage, staging *application.StagingArea) ToolHandler {
-	return func(ctx context.Context, _ domain.ActorKind, raw json.RawMessage) (any, *RPCError) {
+	return func(ctx context.Context, _ domain.Actor, raw json.RawMessage) (any, *RPCError) {
 		var p getFileNodesParams
 		if err := json.Unmarshal(raw, &p); err != nil {
 			return nil, &RPCError{Code: CodeInvalidParams, Message: fmt.Sprintf("invalid params: %v", err)}
@@ -422,7 +422,7 @@ func makeGetFileNodesHandler(graph ports.GraphStorage, staging *application.Stag
 // ---------------------------------------------------------------------------
 
 func makeGetNodeAsOfHandler(graph ports.GraphStorage) ToolHandler {
-	return func(ctx context.Context, _ domain.ActorKind, raw json.RawMessage) (any, *RPCError) {
+	return func(ctx context.Context, _ domain.Actor, raw json.RawMessage) (any, *RPCError) {
 		var p getNodeParams
 		if err := json.Unmarshal(raw, &p); err != nil {
 			return nil, &RPCError{Code: CodeInvalidParams, Message: fmt.Sprintf("invalid params: %v", err)}
