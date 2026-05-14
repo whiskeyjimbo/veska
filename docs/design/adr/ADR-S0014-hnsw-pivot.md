@@ -5,7 +5,8 @@ status: accepted
 date: 2026-05-11
 deciders: [whiskeyjimbo]
 supersedes: []
-related: [ADR-S0001, OQ-S003]
+extended_by: [ADR-S0015]
+related: [ADR-S0001, ADR-S0015, OQ-S003]
 ---
 
 # ADR-S0014 — HNSW Vector Index Pivot
