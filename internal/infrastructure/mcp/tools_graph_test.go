@@ -126,7 +126,7 @@ func dispatchGraph(t *testing.T, r *Registry, method string, params any) (GraphR
 		t.Fatalf("marshal params: %v", err)
 	}
 	req := &Request{Method: method, Params: json.RawMessage(raw)}
-	result, rpcErr := r.Dispatch(context.Background(), domain.ActorKindAgent, req)
+	result, rpcErr := r.Dispatch(context.Background(), domain.Actor{ID: "agent:test", Kind: domain.ActorKindAgent}, req)
 	if rpcErr != nil {
 		return GraphResponse{}, rpcErr
 	}
@@ -469,7 +469,7 @@ func BenchmarkFindSymbol(b *testing.B) {
 		p := params()
 		req := &Request{Method: "eng_find_symbol", Params: p}
 		start := time.Now()
-		_, _ = r.Dispatch(context.Background(), domain.ActorKindAgent, req)
+		_, _ = r.Dispatch(context.Background(), domain.Actor{ID: "agent:test", Kind: domain.ActorKindAgent}, req)
 		latencies[i] = time.Since(start)
 	}
 	b.StopTimer()
