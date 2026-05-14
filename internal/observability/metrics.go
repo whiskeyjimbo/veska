@@ -53,6 +53,13 @@ type Metrics struct {
 	// backpressure: a rising series means embedding is falling behind
 	// promotion.
 	EmbedQueueDepth prometheus.Gauge
+
+	// EmbedDedupHits counts the number of pending refs that were resolved
+	// against an existing node_embeddings row (by content_hash) WITHOUT
+	// calling EmbeddingProvider.Embed. A rising series means content-addressed
+	// dedup is saving real Embed work (e.g. two nodes projecting to the same
+	// "<kind> <symbol_path>" share one vector).
+	EmbedDedupHits prometheus.Counter
 }
 
 // NewMetrics constructs a Metrics struct and registers all metrics with reg.
@@ -122,6 +129,13 @@ func NewMetrics(reg prometheus.Registerer) *Metrics {
 		},
 	)
 
+	embedDedupHits := prometheus.NewCounter(
+		prometheus.CounterOpts{
+			Name: "veska_embed_dedup_hits_total",
+			Help: "Pending refs resolved by content_hash without calling EmbeddingProvider.Embed.",
+		},
+	)
+
 	reg.MustRegister(
 		sealLatency,
 		postCommitHookDuration,
@@ -131,6 +145,7 @@ func NewMetrics(reg prometheus.Registerer) *Metrics {
 		errorCount,
 		checkLatency,
 		embedQueueDepth,
+		embedDedupHits,
 	)
 
 	return &Metrics{
@@ -142,6 +157,7 @@ func NewMetrics(reg prometheus.Registerer) *Metrics {
 		ErrorCount:             errorCount,
 		CheckLatency:           checkLatency,
 		EmbedQueueDepth:        embedQueueDepth,
+		EmbedDedupHits:         embedDedupHits,
 	}
 }
 
