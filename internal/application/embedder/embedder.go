@@ -22,6 +22,8 @@ import (
 	"sync"
 	"time"
 
+	"golang.org/x/time/rate"
+
 	"github.com/whiskeyjimbo/veska/internal/core/domain"
 	"github.com/whiskeyjimbo/veska/internal/core/ports"
 	"github.com/whiskeyjimbo/veska/internal/observability"
@@ -34,6 +36,12 @@ const DefaultBatchSize = 32
 // Poller default so back-pressure characteristics line up.
 const DefaultInterval = 250 * time.Millisecond
 
+// DefaultRatePerSec caps the Embed-call rate when no WithRatePerSec is
+// supplied. Chosen to be a conservative default that keeps a local Ollama
+// instance from being hammered while still allowing reasonable throughput.
+// Set via WithRatePerSec(0) to disable the limiter entirely.
+const DefaultRatePerSec = 10.0
+
 // Worker drains pending node_embedding_refs, embeds them, and upserts
 // vectors into VectorStorage. It owns no state beyond what's needed to
 // service one tick; all durability lives in the SQLite refs table.
@@ -45,6 +53,13 @@ type Worker struct {
 
 	batchSize int
 	interval  time.Duration
+
+	// rateExplicit records whether WithRatePerSec was ever called. We need
+	// this so a caller can pass WithRatePerSec(0) to disable the limiter,
+	// while an unset option falls through to DefaultRatePerSec.
+	rateExplicit bool
+	ratePerSec   float64
+	limiter      *rate.Limiter
 
 	mu        sync.Mutex
 	startOnce sync.Once
@@ -73,6 +88,23 @@ func WithInterval(d time.Duration) Option {
 		if d > 0 {
 			w.interval = d
 		}
+	}
+}
+
+// WithRatePerSec installs a token-bucket rate limit on Embed calls. The
+// limiter is checked once per row before invoking EmbeddingProvider.Embed.
+//
+// A value of 0 (or negative) disables the limiter entirely — useful for
+// tests and for backends that handle their own throttling. If the option
+// is not supplied, the worker uses DefaultRatePerSec.
+//
+// The bucket size is fixed at 1: the limiter smooths load rather than
+// allowing bursts. A cold worker issues its first Embed immediately and
+// then waits 1/r seconds between subsequent calls.
+func WithRatePerSec(r float64) Option {
+	return func(w *Worker) {
+		w.rateExplicit = true
+		w.ratePerSec = r
 	}
 }
 
@@ -112,6 +144,17 @@ func NewWorker(
 	}
 	for _, o := range opts {
 		o(w)
+	}
+	// Resolve the limiter after options have been applied. If the caller
+	// never invoked WithRatePerSec, fall back to the default. A zero or
+	// negative rate means "no limiter installed" — the per-row gate is a
+	// nil-check away.
+	effective := w.ratePerSec
+	if !w.rateExplicit {
+		effective = DefaultRatePerSec
+	}
+	if effective > 0 {
+		w.limiter = rate.NewLimiter(rate.Limit(effective), 1)
 	}
 	return w
 }
@@ -203,6 +246,13 @@ func (w *Worker) tick(ctx context.Context) {
 	for _, ref := range pending {
 		if ctx.Err() != nil {
 			return
+		}
+		// Rate-limit Embed calls. limiter.Wait honours ctx — when ctx is
+		// cancelled it returns ctx.Err() and we unwind the tick promptly.
+		if w.limiter != nil {
+			if err := w.limiter.Wait(ctx); err != nil {
+				return
+			}
 		}
 		vec, err := w.embedder.Embed(ctx, ref.Text)
 		if err != nil {

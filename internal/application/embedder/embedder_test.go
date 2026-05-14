@@ -440,6 +440,138 @@ func readGauge(g prometheus.Gauge) float64 {
 	return testutil.ToFloat64(g)
 }
 
+// TestWorker_RateLimitThrottlesEmbedCalls verifies that WithRatePerSec(r)
+// installs a token-bucket limiter that gates each Embed call. With r=5 and
+// >=N pending rows, the wall time to issue N Embed calls must be at least
+// roughly (N-1)/r seconds. We use a coarse lower bound to avoid flakiness:
+// a bucket of size 1 means the first call goes through immediately and the
+// remaining (N-1) calls each wait ~1/r seconds.
+func TestWorker_RateLimitThrottlesEmbedCalls(t *testing.T) {
+	db := openSchemaDB(t)
+	repo := infsqlite.NewEmbeddingRefsRepo(db, db)
+
+	const n = 6
+	for i := range n {
+		seedNode(t, db, "n"+string(rune('a'+i)), "r1", "main", "S"+string(rune('a'+i)), "function")
+	}
+
+	emb := &fakeEmbedder{vector: []float32{1, 2, 3}, modelID: "m"}
+	vs := &fakeVectorStore{}
+
+	const rps = 5.0
+	w := embedder.NewWorker(repo, emb, vs,
+		embedder.WithInterval(5*time.Millisecond),
+		embedder.WithRatePerSec(rps),
+		embedder.WithBatchSize(n),
+	)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	start := time.Now()
+	w.Start(ctx)
+
+	ok := waitForCondition(t, 5*time.Second, func() bool {
+		return emb.calls.Load() >= int64(n)
+	})
+	elapsed := time.Since(start)
+	cancel()
+	w.Wait()
+
+	if !ok {
+		t.Fatalf("only %d Embed calls observed; want >=%d", emb.calls.Load(), n)
+	}
+
+	// Lower bound: bucket size is 1, so (n-1) tokens are awaited at 1/r each.
+	// Allow a generous fudge — assert >= 60% of theoretical minimum.
+	minWant := time.Duration(float64(n-1) / rps * float64(time.Second) * 0.6)
+	if elapsed < minWant {
+		t.Fatalf("rate limiter did not throttle: elapsed=%s want>=%s (n=%d, rps=%v)", elapsed, minWant, n, rps)
+	}
+}
+
+// TestWorker_RateLimitCtxCancelUnwinds verifies that cancelling the ctx
+// while a goroutine is blocked inside limiter.Wait returns cleanly and the
+// worker shuts down promptly.
+func TestWorker_RateLimitCtxCancelUnwinds(t *testing.T) {
+	db := openSchemaDB(t)
+	repo := infsqlite.NewEmbeddingRefsRepo(db, db)
+
+	// Seed many nodes so the limiter must wait between calls.
+	for i := range 20 {
+		seedNode(t, db, "n"+string(rune('a'+i)), "r1", "main", "S"+string(rune('a'+i)), "function")
+	}
+
+	emb := &fakeEmbedder{vector: []float32{1}, modelID: "m"}
+	vs := &fakeVectorStore{}
+
+	// Very slow rate — guarantees the worker is parked in limiter.Wait.
+	w := embedder.NewWorker(repo, emb, vs,
+		embedder.WithInterval(5*time.Millisecond),
+		embedder.WithRatePerSec(0.5), // 1 call per 2 seconds
+		embedder.WithBatchSize(20),
+	)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	w.Start(ctx)
+
+	// Let the worker drain one ref and then sit in Wait for the next token.
+	time.Sleep(100 * time.Millisecond)
+	start := time.Now()
+	cancel()
+
+	exited := make(chan struct{})
+	go func() { w.Wait(); close(exited) }()
+	select {
+	case <-exited:
+	case <-time.After(500 * time.Millisecond):
+		t.Fatalf("worker did not exit promptly after ctx cancel; elapsed=%s", time.Since(start))
+	}
+}
+
+// TestWorker_RateLimitZeroMeansUnlimited verifies that WithRatePerSec(0)
+// disables the limiter entirely (no gating). We assert by issuing many
+// calls and observing they complete much faster than even a generous
+// default rate would allow.
+func TestWorker_RateLimitZeroMeansUnlimited(t *testing.T) {
+	db := openSchemaDB(t)
+	repo := infsqlite.NewEmbeddingRefsRepo(db, db)
+
+	const n = 20
+	for i := range n {
+		seedNode(t, db, "n"+string(rune('a'+i)), "r1", "main", "S"+string(rune('a'+i)), "function")
+	}
+
+	emb := &fakeEmbedder{vector: []float32{1}, modelID: "m"}
+	vs := &fakeVectorStore{}
+
+	w := embedder.NewWorker(repo, emb, vs,
+		embedder.WithInterval(5*time.Millisecond),
+		embedder.WithRatePerSec(0), // unlimited
+		embedder.WithBatchSize(n),
+	)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	start := time.Now()
+	w.Start(ctx)
+
+	if !waitForCondition(t, 2*time.Second, func() bool {
+		return emb.calls.Load() >= int64(n)
+	}) {
+		t.Fatalf("only %d Embed calls observed; want >=%d", emb.calls.Load(), n)
+	}
+	elapsed := time.Since(start)
+	cancel()
+	w.Wait()
+
+	// At default 10/s, 20 calls would take ~1.9s. Unlimited should be well
+	// under 500ms even with SQLite and scheduling jitter.
+	if elapsed > 500*time.Millisecond {
+		t.Fatalf("WithRatePerSec(0) should be unlimited; elapsed=%s", elapsed)
+	}
+}
+
 // Compile-time check our embedder satisfies the port.
 var _ ports.EmbeddingProvider = (*fakeEmbedder)(nil)
 var _ ports.EmbeddingProvider = (*blockingEmbedder)(nil)
