@@ -65,6 +65,24 @@ CREATE TABLE post_promotion_queue (
     completed_at  INTEGER,
     error         TEXT
 );
+
+CREATE TABLE node_embeddings (
+    content_hash  TEXT PRIMARY KEY,
+    model         TEXT NOT NULL,
+    dim           INTEGER NOT NULL,
+    embedding     BLOB NOT NULL,
+    created_at    INTEGER NOT NULL
+);
+
+CREATE TABLE node_embedding_refs (
+    node_id       TEXT PRIMARY KEY,
+    content_hash  TEXT,
+    state         TEXT NOT NULL,
+    enqueued_at   INTEGER NOT NULL,
+    embedded_at   INTEGER,
+    FOREIGN KEY (content_hash) REFERENCES node_embeddings(content_hash)
+);
+CREATE INDEX idx_node_embedding_refs_state ON node_embedding_refs(state, enqueued_at);
 `
 	if _, err := db.Exec(schema); err != nil {
 		t.Fatalf("create schema: %v", err)

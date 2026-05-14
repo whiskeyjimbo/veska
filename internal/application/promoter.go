@@ -165,6 +165,28 @@ func (p *Promoter) Promote(ctx context.Context, repoID, branch, gitSHA string, a
 	}
 	defer queueStmt.Close()
 
+	// Enqueue per-node pending row into node_embedding_refs, committed
+	// atomically with the node upsert. The embedder worker (m3.02.1) drains
+	// state='pending' rows; here we only record the intent.
+	//
+	// node_id is the PK: re-promoting the same node resets its embedding
+	// state back to pending so the worker will re-embed it. content_hash is
+	// NULL until the worker computes the embedding bytes (m3.02 §2).
+	embedRefStmt, err := tx.PrepareContext(ctx, `
+		INSERT INTO node_embedding_refs
+			(node_id, content_hash, state, enqueued_at, embedded_at)
+		VALUES (?, NULL, 'pending', ?, NULL)
+		ON CONFLICT(node_id) DO UPDATE SET
+			content_hash = NULL,
+			state        = 'pending',
+			enqueued_at  = excluded.enqueued_at,
+			embedded_at  = NULL`)
+	if err != nil {
+		_ = tx.Rollback()
+		return fmt.Errorf("promoter: prepare embed ref insert: %w", err)
+	}
+	defer embedRefStmt.Close()
+
 	now := time.Now().UnixMilli()
 
 	for filePath, nodes := range snap {
@@ -197,6 +219,13 @@ func (p *Promoter) Promote(ctx context.Context, repoID, branch, gitSHA string, a
 			); err != nil {
 				_ = tx.Rollback()
 				return fmt.Errorf("promoter: insert node %q: %w", n.ID, err)
+			}
+
+			// Mirror the just-promoted node into node_embedding_refs as
+			// state='pending'. Atomic with the node insert by sharing tx.
+			if _, err := embedRefStmt.ExecContext(ctx, string(n.ID), now); err != nil {
+				_ = tx.Rollback()
+				return fmt.Errorf("promoter: enqueue embed ref for %q: %w", n.ID, err)
 			}
 		}
 
