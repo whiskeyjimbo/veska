@@ -122,5 +122,60 @@ func (r *EmbeddingRefsRepo) MarkReady(
 	return nil
 }
 
+// MarkAttemptFailed bumps the per-row attempts counter and, when the new
+// value reaches maxAttempts, atomically flips state to 'failed'. The
+// bump-and-flip is a single UPDATE so a concurrent FetchPending cannot
+// observe a row with attempts>=maxAttempts that is still 'pending'.
+//
+// Rows not in state='pending' (already 'ready' or 'failed') are left
+// untouched. maxAttempts <= 0 is treated as 1 (any failure is fatal).
+func (r *EmbeddingRefsRepo) MarkAttemptFailed(ctx context.Context, nodeID string, maxAttempts int) error {
+	if maxAttempts < 1 {
+		maxAttempts = 1
+	}
+	// CASE: only flip to 'failed' when the *new* attempts value (attempts+1)
+	// is >= maxAttempts. Otherwise keep state='pending' so the next tick
+	// picks the row back up.
+	_, err := r.writeDB.ExecContext(ctx, `
+		UPDATE node_embedding_refs
+		SET attempts = attempts + 1,
+		    state = CASE
+		        WHEN attempts + 1 >= ? THEN 'failed'
+		        ELSE state
+		    END
+		WHERE node_id = ? AND state = 'pending'`,
+		maxAttempts, nodeID,
+	)
+	if err != nil {
+		return fmt.Errorf("embedding_refs: mark attempt failed: %w", err)
+	}
+	return nil
+}
+
+// CountByState returns row counts for {pending, ready, failed}. Missing
+// states are returned with a 0 value so callers can index without
+// ok-checks.
+func (r *EmbeddingRefsRepo) CountByState(ctx context.Context) (map[string]int, error) {
+	out := map[string]int{"pending": 0, "ready": 0, "failed": 0}
+	rows, err := r.readDB.QueryContext(ctx,
+		`SELECT state, COUNT(*) FROM node_embedding_refs GROUP BY state`)
+	if err != nil {
+		return nil, fmt.Errorf("embedding_refs: count by state: %w", err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var state string
+		var n int
+		if err := rows.Scan(&state, &n); err != nil {
+			return nil, fmt.Errorf("embedding_refs: scan count: %w", err)
+		}
+		out[state] = n
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("embedding_refs: iterate counts: %w", err)
+	}
+	return out, nil
+}
+
 // Compile-time check.
 var _ ports.EmbeddingRefRepo = (*EmbeddingRefsRepo)(nil)
