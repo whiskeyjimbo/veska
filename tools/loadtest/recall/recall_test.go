@@ -24,6 +24,7 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/core/domain"
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/sqlite"
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/vector"
+	"github.com/whiskeyjimbo/veska/tools/loadtest/synthcorpus"
 )
 
 // TestRecall is the end-to-end eval harness. It builds a synthetic
@@ -88,7 +89,7 @@ func TestRecall(t *testing.T) {
 		// Fake embedder: deterministic, no I/O, fast.
 		nodeVecs = make([]float32, 0, pop*dim)
 		for _, n := range corpus.Nodes {
-			nodeVecs = append(nodeVecs, fakeEmbed(n.Text)...)
+			nodeVecs = append(nodeVecs, synthcorpus.FakeEmbed(n.Text)...)
 		}
 		if generate {
 			// Persist for reproducibility — harmless when seeded from

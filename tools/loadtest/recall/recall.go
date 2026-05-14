@@ -29,7 +29,7 @@ func RecallAtK(hits []string, truth map[string]struct{}, k int) float64 {
 	}
 	upper := min(len(hits), k)
 	matched := 0
-	for i := 0; i < upper; i++ {
+	for i := range upper {
 		if _, ok := truth[hits[i]]; ok {
 			matched++
 		}
