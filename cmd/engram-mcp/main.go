@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -101,6 +102,41 @@ func proxyPlain(ctx context.Context, conn net.Conn, in io.Reader, out io.Writer)
 	return nil
 }
 
+// writeSocketMissingError writes a JSON-RPC 2.0 error to w when the daemon socket is missing.
+// The error includes a data object with cli_command and socket_path fields so that
+// editors speaking the MCP protocol receive a structured, actionable response.
+func writeSocketMissingError(w io.Writer, sockPath string) {
+	type errorData struct {
+		CLICommand string `json:"cli_command"`
+		SocketPath string `json:"socket_path"`
+	}
+	type errorBody struct {
+		Code    int       `json:"code"`
+		Message string    `json:"message"`
+		Data    errorData `json:"data"`
+	}
+	type response struct {
+		JSONRPC string    `json:"jsonrpc"`
+		ID      any       `json:"id"`
+		Error   errorBody `json:"error"`
+	}
+
+	resp := response{
+		JSONRPC: "2.0",
+		ID:      nil,
+		Error: errorBody{
+			Code:    -32000,
+			Message: "daemon not running",
+			Data: errorData{
+				CLICommand: "engram service start",
+				SocketPath: sockPath,
+			},
+		},
+	}
+	enc := json.NewEncoder(w)
+	enc.Encode(resp) //nolint:errcheck
+}
+
 func newRootCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:          "engram-mcp",
@@ -110,7 +146,8 @@ func newRootCmd() *cobra.Command {
 			sockPath := config.MCPSockPath()
 			err := runProxy(cmd.Context(), sockPath, os.Stdin, os.Stdout)
 			if err != nil && errors.Is(err, ErrDaemonNotRunning) {
-				fmt.Fprintln(os.Stderr, "engram-mcp: daemon not running. Start it with: engram daemon start")
+				writeSocketMissingError(os.Stdout, sockPath)
+				fmt.Fprintln(os.Stderr, "engram-mcp: daemon not running. Start it with: engram service start")
 				os.Exit(1)
 			}
 			return err
