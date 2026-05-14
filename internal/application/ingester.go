@@ -16,14 +16,17 @@ import (
 type Ingester struct {
 	parser  ports.CodeParser
 	staging *StagingArea
+	gate    *IngestionGate
 	tp      observability.TracerProvider
 }
 
-// NewIngester constructs an Ingester wired to the provided parser and staging area.
-func NewIngester(parser ports.CodeParser, staging *StagingArea) *Ingester {
+// NewIngester constructs an Ingester wired to the provided parser, staging area,
+// and ingestion gate. The gate guards against branch-switch races.
+func NewIngester(parser ports.CodeParser, staging *StagingArea, gate *IngestionGate) *Ingester {
 	return &Ingester{
 		parser:  parser,
 		staging: staging,
+		gate:    gate,
 	}
 }
 
@@ -47,6 +50,11 @@ func (ing *Ingester) tracerProvider() observability.TracerProvider {
 // at WARN level and Save returns nil — the file is simply not staged.
 // Save does NOT touch SQLite.
 func (ing *Ingester) Save(ctx context.Context, repoID, branch, path string, src []byte) error {
+	// Block if a branch switch is in progress; read current generation before parsing
+	// so the generation check in StageIfCurrentGeneration is tight.
+	ing.gate.WaitIfPaused()
+	gen := ing.gate.Generation()
+
 	ctx, span := observability.StartSpan(ctx, ing.tracerProvider(), "parse.file")
 	defer span.End()
 
@@ -60,7 +68,7 @@ func (ing *Ingester) Save(ctx context.Context, repoID, branch, path string, src 
 		)
 		return nil
 	}
-	ing.staging.StageFile(repoID, branch, path, result.Nodes, result.Edges)
+	ing.staging.StageIfCurrentGeneration(repoID, branch, path, result.Nodes, result.Edges, gen, ing.gate)
 	return nil
 }
 

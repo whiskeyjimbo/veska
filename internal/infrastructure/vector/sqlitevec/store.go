@@ -21,7 +21,6 @@ package sqlitevec
 
 import (
 	"context"
-	"math"
 	"sort"
 	"sync"
 
@@ -218,8 +217,10 @@ func (s *SQLiteVecStore) TotalVectorCount() int {
 	return total
 }
 
-// l2sq returns the squared Euclidean distance between a and b.
-// Vectors of different lengths are compared up to the shorter one.
+// l2sq returns the squared Euclidean distance between a and b (sum of squared
+// differences — no square root). Vectors of different lengths are compared up
+// to the shorter one. This matches the usearch L2sq metric and is cheaper than
+// L2 distance for ranking purposes (monotonic, no Sqrt needed).
 func l2sq(a, b []float32) float32 {
 	n := min(len(b), len(a))
 	var sum float64
@@ -227,5 +228,5 @@ func l2sq(a, b []float32) float32 {
 		d := float64(a[i]) - float64(b[i])
 		sum += d * d
 	}
-	return float32(math.Sqrt(sum)) // return L2 distance (not squared) for consistency with usearch
+	return float32(sum)
 }

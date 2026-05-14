@@ -135,6 +135,11 @@ func (s *StagingArea) StageIfCurrentGeneration(
 // StagingArea; however, the node slices themselves are not deep-copied (callers
 // must not mutate the slice elements). Used by the promotion path to flush all
 // staged state to SQLite in a single transaction.
+//
+// Edges are intentionally excluded from the snapshot. Promotion is a node-only
+// operation; edges are re-derived post-promotion by the auto_link queue worker
+// (work_kind="auto_link" enqueued by Promoter). Staged edges are retained in
+// the StagingArea only to serve pre-promotion overlay reads via GetStagedEdges.
 func (s *StagingArea) Snapshot(repoID, branch string) map[string][]*domain.Node {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
