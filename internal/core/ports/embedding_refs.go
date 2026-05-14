@@ -69,6 +69,22 @@ type EmbeddingRefRepo interface {
 	// produced these bytes for this model — the worker can reuse them.
 	LookupExisting(ctx context.Context, contentHash string) (embedding []byte, dim int, found bool, err error)
 
+	// ContentHashForNode returns the content_hash of the embedding for nodeID
+	// scoped to (repoID, branch), with a ready flag.
+	//
+	//   ready=true with a non-empty hash: the ref is in state='ready' and the
+	//     hash points at a row in node_embeddings.
+	//   ready=false: the node has no ref row, the ref is state='pending'
+	//     (no hash yet), state='failed', or the node does not match
+	//     (repoID, branch). All four cases are returned with err=nil — the
+	//     caller decides whether to skip or fail.
+	//
+	// The (repoID, branch) scoping is enforced via a JOIN to the nodes table:
+	// node_embedding_refs is keyed solely by node_id (the nodes table owns the
+	// repo/branch dimension), so a bare ref lookup could leak across repos if
+	// node_ids ever collided. The JOIN closes that hole.
+	ContentHashForNode(ctx context.Context, repoID, branch, nodeID string) (contentHash string, ready bool, err error)
+
 	// Reuse marks an existing pending ref as ready against contentHash
 	// WITHOUT writing node_embeddings (the row is already there — see
 	// LookupExisting). Used by the dedup fast-path so we don't redundantly
