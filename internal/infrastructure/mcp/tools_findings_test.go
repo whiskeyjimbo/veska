@@ -5,12 +5,113 @@ import (
 	"database/sql"
 	"encoding/json"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
 	"github.com/whiskeyjimbo/veska/internal/core/domain"
+	"github.com/whiskeyjimbo/veska/internal/core/ports"
 	_ "modernc.org/sqlite"
 )
+
+// capturingAuditWriter records every AuditEntry passed to Write.
+type capturingAuditWriter struct {
+	mu      sync.Mutex
+	entries []ports.AuditEntry
+}
+
+func (c *capturingAuditWriter) Write(_ context.Context, e ports.AuditEntry) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.entries = append(c.entries, e)
+	return nil
+}
+
+func (c *capturingAuditWriter) ops() []string {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	out := make([]string, len(c.entries))
+	for i, e := range c.entries {
+		out[i] = e.Op
+	}
+	return out
+}
+
+// newFindingsDBWithEdges adds the edges table to the in-memory DB so auto-link
+// promotion tests can verify confidence transitions.
+func newFindingsDBWithEdges(t *testing.T) *sql.DB {
+	t.Helper()
+	db := newFindingsDB(t)
+	// Minimal edges table (no FKs — we don't need node rows for promotion tests).
+	_, err := db.Exec(`
+		CREATE TABLE IF NOT EXISTS edges (
+			edge_id          TEXT NOT NULL,
+			branch           TEXT NOT NULL,
+			repo_id          TEXT NOT NULL,
+			src_node_id      TEXT NOT NULL,
+			dst_node_id      TEXT NOT NULL,
+			kind             TEXT NOT NULL,
+			confidence       TEXT NOT NULL,
+			last_promoted_at INTEGER NOT NULL,
+			PRIMARY KEY (edge_id, branch)
+		)
+	`)
+	if err != nil {
+		t.Fatalf("create edges table: %v", err)
+	}
+	return db
+}
+
+// seedAutoLinkFinding inserts a finding row with rule='auto-link' whose node_id
+// holds the anchored edge_id.
+func seedAutoLinkFinding(t *testing.T, db *sql.DB, findingID, branch, repoID, severity, state, edgeID string) {
+	t.Helper()
+	var nodeID any
+	if edgeID == "" {
+		nodeID = nil
+	} else {
+		nodeID = edgeID
+	}
+	_, err := db.Exec(`
+		INSERT INTO findings
+			(finding_id, branch, repo_id, node_id, file_path, severity, source_layer, rule, message, state, created_at, actor_id, actor_kind)
+		VALUES (?, ?, ?, ?, 'main.go', ?, 'semantic', 'auto-link', 'autolink candidate', ?, ?, 'actor:seed', 'agent')
+	`, findingID, branch, repoID, nodeID, severity, state, time.Now().Unix())
+	if err != nil {
+		t.Fatalf("seed auto-link finding: %v", err)
+	}
+}
+
+func seedEdge(t *testing.T, db *sql.DB, edgeID, branch, repoID, confidence string) {
+	t.Helper()
+	_, err := db.Exec(`
+		INSERT INTO edges (edge_id, branch, repo_id, src_node_id, dst_node_id, kind, confidence, last_promoted_at)
+		VALUES (?, ?, ?, 'n:src', 'n:dst', 'call', ?, ?)
+	`, edgeID, branch, repoID, confidence, time.Now().Unix())
+	if err != nil {
+		t.Fatalf("seed edge: %v", err)
+	}
+}
+
+func edgeConfidence(t *testing.T, db *sql.DB, edgeID, branch string) string {
+	t.Helper()
+	var c string
+	err := db.QueryRow(`SELECT confidence FROM edges WHERE edge_id = ? AND branch = ?`, edgeID, branch).Scan(&c)
+	if err != nil {
+		t.Fatalf("query edge confidence: %v", err)
+	}
+	return c
+}
+
+func findingState(t *testing.T, db *sql.DB, findingID, branch string) string {
+	t.Helper()
+	var s string
+	err := db.QueryRow(`SELECT state FROM findings WHERE finding_id = ? AND branch = ?`, findingID, branch).Scan(&s)
+	if err != nil {
+		t.Fatalf("query finding state: %v", err)
+	}
+	return s
+}
 
 // ---------------------------------------------------------------------------
 // helpers
@@ -435,6 +536,313 @@ func TestReopenFinding_NotFound(t *testing.T) {
 	}
 	if rpcErr.Code != CodeNotFound {
 		t.Errorf("expected CodeNotFound, got %d", rpcErr.Code)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Auto-link accept-flow tests (m3.04.3)
+// ---------------------------------------------------------------------------
+
+// TestCloseFinding_AutoLinkAccept_PromotesEdge verifies the canonical happy
+// path: accept on an auto-link finding promotes its anchored edge from
+// 'unresolved' to 'definite' in the same tx.
+func TestCloseFinding_AutoLinkAccept_PromotesEdge(t *testing.T) {
+	db := newFindingsDBWithEdges(t)
+	seedEdge(t, db, "edge-1", "main", "repo-1", "unresolved")
+	seedAutoLinkFinding(t, db, "f-al-1", "main", "repo-1", "low", "open", "edge-1")
+
+	aw := &capturingAuditWriter{}
+	r := NewRegistry()
+	RegisterFindingTools(r, db, aw)
+
+	actor := domain.Actor{ID: "human:alice", Kind: domain.ActorKindHuman}
+	_, rpcErr := dispatchFinding(t, r, actor, map[string]string{
+		"finding_id": "f-al-1",
+		"branch":     "main",
+		"repo_id":    "repo-1",
+		"reason":     "accept",
+	})
+	if rpcErr != nil {
+		t.Fatalf("unexpected RPC error: %v", rpcErr.Message)
+	}
+
+	if got := findingState(t, db, "f-al-1", "main"); got != "closed" {
+		t.Errorf("expected finding state=closed, got %q", got)
+	}
+	if got := edgeConfidence(t, db, "edge-1", "main"); got != "definite" {
+		t.Errorf("expected edge confidence=definite, got %q", got)
+	}
+
+	ops := aw.ops()
+	if len(ops) != 1 || ops[0] != "finding.accept" {
+		t.Errorf("expected single audit op=finding.accept, got %v", ops)
+	}
+
+	// Verify closed metadata is recorded.
+	var (
+		closedReason sql.NullString
+		closedAt     sql.NullInt64
+		actorID      string
+		actorKind    string
+	)
+	if err := db.QueryRow(
+		`SELECT closed_reason, closed_at, actor_id, actor_kind FROM findings WHERE finding_id = 'f-al-1' AND branch = 'main'`,
+	).Scan(&closedReason, &closedAt, &actorID, &actorKind); err != nil {
+		t.Fatalf("query close metadata: %v", err)
+	}
+	if !closedReason.Valid || closedReason.String != "accept" {
+		t.Errorf("expected closed_reason=accept, got %v", closedReason)
+	}
+	if !closedAt.Valid || closedAt.Int64 == 0 {
+		t.Errorf("expected closed_at to be set, got %v", closedAt)
+	}
+	if actorID != "human:alice" || actorKind != "human" {
+		t.Errorf("expected actor=human:alice/human, got %s/%s", actorID, actorKind)
+	}
+}
+
+// TestCloseFinding_AutoLinkSuppress_LeavesEdgeUnresolved confirms that the
+// suppress-flow on an auto-link finding does NOT touch the edge.
+func TestCloseFinding_AutoLinkSuppress_LeavesEdgeUnresolved(t *testing.T) {
+	db := newFindingsDBWithEdges(t)
+	seedEdge(t, db, "edge-2", "main", "repo-1", "unresolved")
+	seedAutoLinkFinding(t, db, "f-al-2", "main", "repo-1", "low", "open", "edge-2")
+
+	aw := &capturingAuditWriter{}
+	r := NewRegistry()
+	RegisterFindingTools(r, db, aw)
+
+	actor := domain.Actor{ID: "human:alice", Kind: domain.ActorKindHuman}
+	_, rpcErr := dispatchFinding(t, r, actor, map[string]string{
+		"finding_id": "f-al-2",
+		"branch":     "main",
+		"repo_id":    "repo-1",
+		"reason":     "suppress",
+	})
+	if rpcErr != nil {
+		t.Fatalf("unexpected RPC error: %v", rpcErr.Message)
+	}
+
+	if got := findingState(t, db, "f-al-2", "main"); got != "closed" {
+		t.Errorf("expected finding state=closed, got %q", got)
+	}
+	if got := edgeConfidence(t, db, "edge-2", "main"); got != "unresolved" {
+		t.Errorf("expected edge confidence to remain unresolved, got %q", got)
+	}
+
+	ops := aw.ops()
+	if len(ops) != 1 || ops[0] != "finding.close" {
+		t.Errorf("expected audit op=finding.close on suppress, got %v", ops)
+	}
+}
+
+// TestCloseFinding_NonAutoLinkAccept_LeavesEdgesAlone verifies that accept on a
+// non-auto-link rule does not promote anything. We use a distinct rule and
+// ensure that even an edge sharing the finding's node_id is untouched.
+func TestCloseFinding_NonAutoLinkAccept_LeavesEdgesAlone(t *testing.T) {
+	db := newFindingsDBWithEdges(t)
+	// Seed an edge whose id matches what could be misread as an anchor —
+	// this guards against accidental promotion regardless of rule.
+	seedEdge(t, db, "node-123", "main", "repo-1", "unresolved")
+
+	// Seed a regular finding with rule='dead-code'.
+	_, err := db.Exec(`
+		INSERT INTO findings
+			(finding_id, branch, repo_id, node_id, file_path, severity, source_layer, rule, message, state, created_at, actor_id, actor_kind)
+		VALUES ('f-dc-1', 'main', 'repo-1', 'node-123', 'main.go', 'low', 'structural', 'dead-code', 'unused', 'open', ?, 'actor:seed', 'agent')
+	`, time.Now().Unix())
+	if err != nil {
+		t.Fatalf("seed dead-code finding: %v", err)
+	}
+
+	aw := &capturingAuditWriter{}
+	r := NewRegistry()
+	RegisterFindingTools(r, db, aw)
+
+	actor := domain.Actor{ID: "human:alice", Kind: domain.ActorKindHuman}
+	_, rpcErr := dispatchFinding(t, r, actor, map[string]string{
+		"finding_id": "f-dc-1",
+		"branch":     "main",
+		"repo_id":    "repo-1",
+		"reason":     "accept",
+	})
+	if rpcErr != nil {
+		t.Fatalf("unexpected RPC error: %v", rpcErr.Message)
+	}
+
+	if got := findingState(t, db, "f-dc-1", "main"); got != "closed" {
+		t.Errorf("expected finding state=closed, got %q", got)
+	}
+	if got := edgeConfidence(t, db, "node-123", "main"); got != "unresolved" {
+		t.Errorf("expected non-auto-link rule to leave edge alone; got confidence=%q", got)
+	}
+
+	ops := aw.ops()
+	if len(ops) != 1 || ops[0] != "finding.close" {
+		t.Errorf("expected audit op=finding.close for non-auto-link rule, got %v", ops)
+	}
+}
+
+// TestCloseFinding_AutoLinkAccept_NullAnchor closes a finding without crashing
+// when the node_id (anchor) is NULL. No edge promotion runs.
+func TestCloseFinding_AutoLinkAccept_NullAnchor(t *testing.T) {
+	db := newFindingsDBWithEdges(t)
+	seedAutoLinkFinding(t, db, "f-al-null", "main", "repo-1", "low", "open", "")
+
+	aw := &capturingAuditWriter{}
+	r := NewRegistry()
+	RegisterFindingTools(r, db, aw)
+
+	actor := domain.Actor{ID: "human:alice", Kind: domain.ActorKindHuman}
+	_, rpcErr := dispatchFinding(t, r, actor, map[string]string{
+		"finding_id": "f-al-null",
+		"branch":     "main",
+		"repo_id":    "repo-1",
+		"reason":     "accept",
+	})
+	if rpcErr != nil {
+		t.Fatalf("unexpected RPC error: %v", rpcErr.Message)
+	}
+	if got := findingState(t, db, "f-al-null", "main"); got != "closed" {
+		t.Errorf("expected finding to close, got state=%q", got)
+	}
+}
+
+// TestCloseFinding_AutoLinkAccept_MissingEdge documents the soft-fail policy:
+// when the anchor points to an edge_id that does not exist, the UPDATE affects
+// zero rows but the transaction commits, so the finding still closes.
+func TestCloseFinding_AutoLinkAccept_MissingEdge(t *testing.T) {
+	db := newFindingsDBWithEdges(t)
+	// Note: no seedEdge call — anchor points at a missing edge.
+	seedAutoLinkFinding(t, db, "f-al-orphan", "main", "repo-1", "low", "open", "edge-does-not-exist")
+
+	aw := &capturingAuditWriter{}
+	r := NewRegistry()
+	RegisterFindingTools(r, db, aw)
+
+	actor := domain.Actor{ID: "human:alice", Kind: domain.ActorKindHuman}
+	_, rpcErr := dispatchFinding(t, r, actor, map[string]string{
+		"finding_id": "f-al-orphan",
+		"branch":     "main",
+		"repo_id":    "repo-1",
+		"reason":     "accept",
+	})
+	if rpcErr != nil {
+		t.Fatalf("unexpected RPC error for missing-edge soft-fail: %v", rpcErr.Message)
+	}
+	if got := findingState(t, db, "f-al-orphan", "main"); got != "closed" {
+		t.Errorf("expected finding to close despite missing edge, got state=%q", got)
+	}
+
+	ops := aw.ops()
+	if len(ops) != 1 || ops[0] != "finding.accept" {
+		t.Errorf("expected audit op=finding.accept on accept-path (even with missing edge), got %v", ops)
+	}
+}
+
+// TestCloseFinding_AutoLinkAccept_AlreadyDefinite verifies idempotency: an
+// already-definite edge stays definite without error.
+func TestCloseFinding_AutoLinkAccept_AlreadyDefinite(t *testing.T) {
+	db := newFindingsDBWithEdges(t)
+	seedEdge(t, db, "edge-def", "main", "repo-1", "definite")
+	seedAutoLinkFinding(t, db, "f-al-idem", "main", "repo-1", "low", "open", "edge-def")
+
+	r := NewRegistry()
+	RegisterFindingTools(r, db, nil)
+
+	actor := domain.Actor{ID: "human:alice", Kind: domain.ActorKindHuman}
+	_, rpcErr := dispatchFinding(t, r, actor, map[string]string{
+		"finding_id": "f-al-idem",
+		"branch":     "main",
+		"repo_id":    "repo-1",
+		"reason":     "accept",
+	})
+	if rpcErr != nil {
+		t.Fatalf("unexpected RPC error: %v", rpcErr.Message)
+	}
+	if got := findingState(t, db, "f-al-idem", "main"); got != "closed" {
+		t.Errorf("expected finding to close, got state=%q", got)
+	}
+	if got := edgeConfidence(t, db, "edge-def", "main"); got != "definite" {
+		t.Errorf("expected edge to remain definite, got %q", got)
+	}
+}
+
+// TestCloseFinding_AutoLinkAccept_AtomicRollback proves the finding-close and
+// edge-promote share a transaction: forcing the edges table into a state where
+// the promotion UPDATE fails must leave the finding in state='open'.
+//
+// We trigger a failure by dropping the edges table so the UPDATE returns a
+// "no such table" error AFTER the SELECT but BEFORE the finding UPDATE.
+func TestCloseFinding_AutoLinkAccept_AtomicRollback(t *testing.T) {
+	db := newFindingsDBWithEdges(t)
+	seedAutoLinkFinding(t, db, "f-al-rb", "main", "repo-1", "low", "open", "edge-x")
+
+	// Force the next UPDATE edges to fail.
+	if _, err := db.Exec(`DROP TABLE edges`); err != nil {
+		t.Fatalf("drop edges: %v", err)
+	}
+
+	aw := &capturingAuditWriter{}
+	r := NewRegistry()
+	RegisterFindingTools(r, db, aw)
+
+	actor := domain.Actor{ID: "human:alice", Kind: domain.ActorKindHuman}
+	_, rpcErr := dispatchFinding(t, r, actor, map[string]string{
+		"finding_id": "f-al-rb",
+		"branch":     "main",
+		"repo_id":    "repo-1",
+		"reason":     "accept",
+	})
+	if rpcErr == nil {
+		t.Fatal("expected RPC error from failed edge UPDATE")
+	}
+	if rpcErr.Code != CodeInternalError {
+		t.Errorf("expected CodeInternalError, got %d", rpcErr.Code)
+	}
+
+	// Finding must remain open because the tx rolled back.
+	if got := findingState(t, db, "f-al-rb", "main"); got != "open" {
+		t.Errorf("expected finding to roll back to open, got %q", got)
+	}
+
+	// No audit entry on failure.
+	if ops := aw.ops(); len(ops) != 0 {
+		t.Errorf("expected no audit entries on rollback, got %v", ops)
+	}
+}
+
+// TestCloseFinding_HumanGate_AcceptPath confirms the human-action gate still
+// applies when reason=accept on an auto-link finding.
+func TestCloseFinding_HumanGate_AcceptPath(t *testing.T) {
+	db := newFindingsDBWithEdges(t)
+	seedEdge(t, db, "edge-h", "main", "repo-1", "unresolved")
+	seedAutoLinkFinding(t, db, "f-al-h", "main", "repo-1", "high", "open", "edge-h")
+
+	r := NewRegistry()
+	RegisterFindingTools(r, db, nil)
+
+	// Agent attempts to accept a high-severity auto-link finding.
+	actor := domain.Actor{ID: "agent:claude", Kind: domain.ActorKindAgent}
+	_, rpcErr := dispatchFinding(t, r, actor, map[string]string{
+		"finding_id": "f-al-h",
+		"branch":     "main",
+		"repo_id":    "repo-1",
+		"reason":     "accept",
+	})
+	if rpcErr == nil {
+		t.Fatal("expected human_required error")
+	}
+	if rpcErr.Code != CodeHumanRequired {
+		t.Errorf("expected CodeHumanRequired, got %d", rpcErr.Code)
+	}
+
+	// Finding remains open, edge remains unresolved.
+	if got := findingState(t, db, "f-al-h", "main"); got != "open" {
+		t.Errorf("expected finding to remain open, got %q", got)
+	}
+	if got := edgeConfidence(t, db, "edge-h", "main"); got != "unresolved" {
+		t.Errorf("expected edge to remain unresolved, got %q", got)
 	}
 }
 
