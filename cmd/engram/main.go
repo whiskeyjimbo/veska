@@ -15,6 +15,7 @@ func newRootCmd() *cobra.Command {
 	}
 	root.AddCommand(hookRunnerCmd())
 	root.AddCommand(doctorCmd())
+	root.AddCommand(serviceCmd(nil))
 	return root
 }
 
