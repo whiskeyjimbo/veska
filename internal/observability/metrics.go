@@ -47,6 +47,12 @@ type Metrics struct {
 	// observation per Promote() call (repo_id), while CheckLatency cardinality
 	// fans out per registered check.
 	CheckLatency *prometheus.HistogramVec
+
+	// EmbedQueueDepth tracks the number of rows in node_embedding_refs with
+	// state='pending'. Sampled once per embedder worker tick. Used to detect
+	// backpressure: a rising series means embedding is falling behind
+	// promotion.
+	EmbedQueueDepth prometheus.Gauge
 }
 
 // NewMetrics constructs a Metrics struct and registers all metrics with reg.
@@ -109,6 +115,13 @@ func NewMetrics(reg prometheus.Registerer) *Metrics {
 		[]string{"repo_id", "check"},
 	)
 
+	embedQueueDepth := prometheus.NewGauge(
+		prometheus.GaugeOpts{
+			Name: "veska_embed_queue_depth",
+			Help: "Number of node_embedding_refs rows in state='pending'. Sampled per embedder worker tick.",
+		},
+	)
+
 	reg.MustRegister(
 		sealLatency,
 		postCommitHookDuration,
@@ -117,6 +130,7 @@ func NewMetrics(reg prometheus.Registerer) *Metrics {
 		vectorQueryDuration,
 		errorCount,
 		checkLatency,
+		embedQueueDepth,
 	)
 
 	return &Metrics{
@@ -127,6 +141,7 @@ func NewMetrics(reg prometheus.Registerer) *Metrics {
 		VectorQueryDuration:    vectorQueryDuration,
 		ErrorCount:             errorCount,
 		CheckLatency:           checkLatency,
+		EmbedQueueDepth:        embedQueueDepth,
 	}
 }
 
