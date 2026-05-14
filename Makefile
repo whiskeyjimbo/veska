@@ -6,7 +6,7 @@ DAEMON_BIN      := $(BINDIR)/engram-daemon
 MCP_BIN         := $(BINDIR)/engram-mcp
 LAYERCHECK_BIN  := $(BINDIR)/layercheck
 
-.PHONY: all build test lint vet layercheck clean
+.PHONY: all build test lint vet layercheck clean loadtest
 
 all: build test vet lint layercheck
 
@@ -38,3 +38,9 @@ layercheck: $(LAYERCHECK_BIN)
 
 clean:
 	rm -f $(ENGRAM_BIN) $(DAEMON_BIN) $(MCP_BIN) $(LAYERCHECK_BIN)
+
+# loadtest: manual-only — collates M1 exit-gate RESULTS.md files and emits tools/loadtest/REPORT.md.
+# Not included in `all`. Exit 0=all-pass, 1=fail, 2=pending.
+loadtest:
+	go build -tags loadtest -o /tmp/engram-loadtest ./tools/loadtest/driver/
+	/tmp/engram-loadtest
