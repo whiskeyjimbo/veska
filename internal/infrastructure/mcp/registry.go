@@ -8,6 +8,8 @@ import (
 	"sort"
 
 	"github.com/whiskeyjimbo/veska/internal/core/domain"
+	"github.com/whiskeyjimbo/veska/internal/observability"
+	"go.opentelemetry.io/otel/trace"
 )
 
 // toolNamePattern enforces the eng_<verb>_<object> naming convention.
@@ -43,11 +45,26 @@ type ToolSpec struct {
 // Dispatch/Handle the behaviour is undefined.
 type Registry struct {
 	tools map[string]ToolSpec
+	tp    observability.TracerProvider
 }
 
 // NewRegistry creates an empty registry.
 func NewRegistry() *Registry {
 	return &Registry{tools: make(map[string]ToolSpec)}
+}
+
+// SetTracerProvider installs a TracerProvider for mcp.<tool> spans.
+// If not called (or called with nil), a noop provider is used.
+func (r *Registry) SetTracerProvider(tp observability.TracerProvider) {
+	r.tp = tp
+}
+
+// tracerProvider returns the configured provider or a noop if nil.
+func (r *Registry) tracerProvider() observability.TracerProvider {
+	if r.tp == nil {
+		return trace.NewNoopTracerProvider()
+	}
+	return r.tp
 }
 
 // Register adds a tool. Returns an error if:
@@ -90,6 +107,8 @@ func (r *Registry) Dispatch(ctx context.Context, actor domain.Actor, req *Reques
 			Message: fmt.Sprintf("method not found: %s", req.Method),
 		}
 	}
+	ctx, span := observability.StartSpan(ctx, r.tracerProvider(), "mcp."+req.Method)
+	defer span.End()
 	return spec.Handler(ctx, actor, req.Params)
 }
 
