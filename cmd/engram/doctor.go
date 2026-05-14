@@ -3,7 +3,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"os"
+	"io"
 
 	"github.com/spf13/cobra"
 	"github.com/whiskeyjimbo/engram/solov2/internal/config"
@@ -74,41 +74,35 @@ func doctorCmd() *cobra.Command {
 		doctorEmbedderCmd(),
 		doctorConfigCmd(),
 		doctorSubCmd("post_promotion_queue", "Inspect the post-promotion queue depth",
-			func(jsonOut bool) error { return stubOK("post_promotion_queue", jsonOut) }),
+			func(jsonOut bool, w io.Writer) error { return stubOK("post_promotion_queue", jsonOut, w) }),
 		doctorSubCmd("pipelines", "Check ingestion pipeline health",
-			func(jsonOut bool) error { return stubOK("pipelines", jsonOut) }),
+			func(jsonOut bool, w io.Writer) error { return stubOK("pipelines", jsonOut, w) }),
 		doctorSubCmd("bundle", "Verify MCP context-pack bundle integrity",
-			func(jsonOut bool) error { return stubOK("bundle", jsonOut) }),
+			func(jsonOut bool, w io.Writer) error { return stubOK("bundle", jsonOut, w) }),
 	)
 
 	return cmd
 }
 
-// stubResult is the JSON envelope emitted by stub subcommands.
-type stubResult struct {
-	Subsystem string `json:"subsystem"`
-	Status    string `json:"status"`
-}
-
 // stubOK prints an "ok" message for stub subcommands that have no real probe yet.
-func stubOK(subsystem string, jsonOut bool) error {
+func stubOK(subsystem string, jsonOut bool, w io.Writer) error {
 	if jsonOut {
-		enc := json.NewEncoder(os.Stdout)
-		return enc.Encode(stubResult{Subsystem: subsystem, Status: "ok"})
+		enc := json.NewEncoder(w)
+		return enc.Encode(doctor.NewEnvelope(subsystem, "healthy", map[string]any{}))
 	}
-	fmt.Fprintf(os.Stdout, "%s: ok\n", subsystem)
+	fmt.Fprintf(w, "%s: ok\n", subsystem)
 	return nil
 }
 
 // doctorSubCmd creates a generic stub doctor subcommand with a --json flag.
-func doctorSubCmd(use, short string, run func(bool) error) *cobra.Command {
+func doctorSubCmd(use, short string, run func(bool, io.Writer) error) *cobra.Command {
 	var jsonOut bool
 	cmd := &cobra.Command{
 		Use:          use,
 		Short:        short,
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return run(jsonOut)
+			return run(jsonOut, cmd.OutOrStdout())
 		},
 	}
 	cmd.Flags().BoolVar(&jsonOut, "json", false, "output results as JSON")
@@ -123,15 +117,16 @@ func doctorEmbedderCmd() *cobra.Command {
 		Short:        "Verify embedding provider (Ollama) connectivity",
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
+			w := cmd.OutOrStdout()
 			report, err := doctor.CheckEmbedder(defaultOllamaURL, defaultModelName)
 			if err != nil {
 				return err
 			}
 			if jsonOut {
-				enc := json.NewEncoder(os.Stdout)
-				return enc.Encode(report)
+				enc := json.NewEncoder(w)
+				return enc.Encode(doctor.NewEnvelope("embedder", report.Status, report))
 			}
-			fmt.Fprintf(os.Stdout, "embedder: %s (url=%s, model=%s)\n",
+			fmt.Fprintf(w, "embedder: %s (url=%s, model=%s)\n",
 				report.Status, report.OllamaURL, report.ModelName)
 			if report.Status != "healthy" {
 				return ProbeStatusError{Subsystem: "embedder", Status: report.Status}
@@ -151,6 +146,7 @@ func doctorEgressCmd() *cobra.Command {
 		Short:        "Verify daemon socket and control-plane connectivity",
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
+			w := cmd.OutOrStdout()
 			sockPaths := []string{
 				config.DaemonSockPath(),
 				config.MCPSockPath(),
@@ -159,13 +155,21 @@ func doctorEgressCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
+			// Compute egress status.
+			egressStatus := "healthy"
+			for _, s := range report.Sockets {
+				if s.Status == "missing" {
+					egressStatus = "broken"
+					break
+				}
+			}
 			if jsonOut {
-				enc := json.NewEncoder(os.Stdout)
-				return enc.Encode(report)
+				enc := json.NewEncoder(w)
+				return enc.Encode(doctor.NewEnvelope("egress", egressStatus, report))
 			}
 			anyMissing := false
 			for _, s := range report.Sockets {
-				fmt.Fprintf(os.Stdout, "egress: %s (%s)\n", s.Status, s.Path)
+				fmt.Fprintf(w, "egress: %s (%s)\n", s.Status, s.Path)
 				if s.Status == "missing" {
 					anyMissing = true
 				}
@@ -188,15 +192,21 @@ func doctorConfigCmd() *cobra.Command {
 		Short:        "Validate engram configuration values",
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
+			w := cmd.OutOrStdout()
 			report, err := doctor.CheckConfig(config.DefaultVectorDir())
 			if err != nil {
 				return err
 			}
-			if jsonOut {
-				enc := json.NewEncoder(os.Stdout)
-				return enc.Encode(report)
+			// Compute config status.
+			configStatus := "healthy"
+			if !report.DBExists {
+				configStatus = "degraded"
 			}
-			fmt.Fprintf(os.Stdout, "config: engram_home=%s db_exists=%v engram_home_set=%v\n",
+			if jsonOut {
+				enc := json.NewEncoder(w)
+				return enc.Encode(doctor.NewEnvelope("config", configStatus, report))
+			}
+			fmt.Fprintf(w, "config: engram_home=%s db_exists=%v engram_home_set=%v\n",
 				report.EngramHome, report.DBExists, report.EngramHomeSet)
 			if !report.DBExists {
 				return ProbeStatusError{Subsystem: "config", Status: "degraded"}
@@ -259,21 +269,19 @@ func doctorStatusCmd() *cobra.Command {
 			}
 
 			if jsonOut {
-				type statusRollup struct {
-					Status   string `json:"status"`
+				type statusRollupData struct {
 					Embedder string `json:"embedder"`
 					Egress   string `json:"egress"`
 					Config   string `json:"config"`
 				}
-				enc := json.NewEncoder(os.Stdout)
-				return enc.Encode(statusRollup{
-					Status:   rollup,
+				enc := json.NewEncoder(cmd.OutOrStdout())
+				return enc.Encode(doctor.NewEnvelope("status", rollup, statusRollupData{
 					Embedder: embedderReport.Status,
 					Egress:   egressStatus,
 					Config:   configStatus,
-				})
+				}))
 			}
-			fmt.Fprintf(os.Stdout, "status: %s (embedder=%s, egress=%s, config=%s)\n",
+			fmt.Fprintf(cmd.OutOrStdout(), "status: %s (embedder=%s, egress=%s, config=%s)\n",
 				rollup, embedderReport.Status, egressStatus, configStatus)
 			if rollup != "healthy" {
 				return ProbeStatusError{Subsystem: "status", Status: rollup}
@@ -293,15 +301,16 @@ func doctorStorageCmd() *cobra.Command {
 		Short:        "Report filesystem storage metrics for the engram data directory",
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
+			w := cmd.OutOrStdout()
 			report, err := doctor.CheckStorage(config.DefaultVectorDir())
 			if err != nil {
 				return err
 			}
 			if jsonOut {
-				enc := json.NewEncoder(os.Stdout)
-				return enc.Encode(report)
+				enc := json.NewEncoder(w)
+				return enc.Encode(doctor.NewEnvelope("storage", "healthy", report))
 			}
-			fmt.Fprintf(os.Stdout, "storage: ok (db=%d bytes, wal=%d bytes, hnsw=%d bytes, free_ratio=%.2f)\n",
+			fmt.Fprintf(w, "storage: ok (db=%d bytes, wal=%d bytes, hnsw=%d bytes, free_ratio=%.2f)\n",
 				report.DBSizeBytes, report.WALSizeBytes, report.HNSWSizeBytes, report.FreeRatio)
 			return nil
 		},
