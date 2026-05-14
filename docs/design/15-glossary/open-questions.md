@@ -167,7 +167,7 @@ M3 scope (defer to a later milestone with a different design).
 **Question.** With `(node_id, branch)` and `(edge_id, branch)` as
 composite primary keys on `nodes` and `edges` (SOLO-08 §3.1),
 what is the actual disk and row-count cost on a real repo with
-~50 active branches? Does the nightly `engram gc --branches`
+~50 active branches? Does the nightly `veska gc --branches`
 sweep keep growth bounded, or do we need a delta-table scheme?
 
 **Why it matters.** Branch-in-PK is the schema decision that lets

@@ -7,8 +7,8 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/whiskeyjimbo/engram/solov2/internal/core/domain"
-	"github.com/whiskeyjimbo/engram/solov2/internal/infrastructure/vector"
+	"github.com/whiskeyjimbo/veska/internal/core/domain"
+	"github.com/whiskeyjimbo/veska/internal/infrastructure/vector"
 )
 
 // TestSaveLoadRoundTrip inserts 50 vectors, runs 5 hold-out queries on the original

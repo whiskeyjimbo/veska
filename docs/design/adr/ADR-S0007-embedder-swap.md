@@ -49,7 +49,7 @@ swap <model>`")**:
    state). Tag responses with
    `degraded_reasons:["embedder_swapping"]`.
 3. Take an auto-snapshot using the migration runner's snapshot
-   path (SOLO-08 §10) to `~/.engram-backups/pre-swap-...`.
+   path (SOLO-08 §10) to `~/.veska-backups/pre-swap-...`.
 4. In one transaction on `writeDB.hot`:
 
    ```sql
@@ -62,12 +62,12 @@ swap <model>`")**:
    CREATE VIRTUAL TABLE vec_nodes USING vec0(content_hash TEXT PRIMARY KEY, embedding FLOAT[<new_dim>]);
    ```
 
-5. Edit `~/.engram/config.toml` `[embedder]` in place to match
+5. Edit `~/.veska/config.toml` `[embedder]` in place to match
    `database_meta`.
 6. Resume MCP writes.
 
 The standard embed worker drains the `pending` rows at the new
-model's natural throughput. `engram doctor post-promotion-queue` shows
+model's natural throughput. `veska doctor post-promotion-queue` shows
 progress; semantic search responses surface
 `degraded_reasons:["embedding_pending"]` until the queue drains.
 
@@ -96,7 +96,7 @@ Negative:
 - During rebuild, semantic search is degraded. For a 1M-node repo
   on CPU Ollama, that window is hours. We surface the degradation
   via `degraded_reasons` in MCP responses; the user can read
-  progress in `engram doctor`.
+  progress in `veska doctor`.
 - A user who switches models often will pay the rebuild cost often.
   Not our problem; if they need fast switching, they can keep the
   old database and toggle config files.

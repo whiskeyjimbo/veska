@@ -9,8 +9,8 @@ import (
 	"time"
 
 	_ "github.com/mattn/go-sqlite3"
-	"github.com/whiskeyjimbo/engram/solov2/tools/loadtest/spikes/branchpk/gcsweep"
-	"github.com/whiskeyjimbo/engram/solov2/tools/loadtest/spikes/branchpk/pkloader"
+	"github.com/whiskeyjimbo/veska/tools/loadtest/spikes/branchpk/gcsweep"
+	"github.com/whiskeyjimbo/veska/tools/loadtest/spikes/branchpk/pkloader"
 )
 
 // openMemDB opens an in-memory SQLite DB. FK enforcement is applied via PRAGMA

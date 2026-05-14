@@ -27,9 +27,9 @@ how the binaries talk.
 
 | Binary | Role |
 |---|---|
-| `engram-daemon` | Long-running process. Owns SQLite, the embedding worker, the MCP socket, the fsnotify watcher, all background goroutines. One per developer machine. |
-| `engram` | CLI. Sends control commands to the daemon over the same Unix socket. Some commands (`engram init`, `engram doctor`) run without a daemon. |
-| `engram-mcp` | Stdio shim. Editors and agents speak MCP over stdio; the shim proxies frames to the daemon's Unix socket and exits when stdin closes. |
+| `veska-daemon` | Long-running process. Owns SQLite, the embedding worker, the MCP socket, the fsnotify watcher, all background goroutines. One per developer machine. |
+| `engram` | CLI. Sends control commands to the daemon over the same Unix socket. Some commands (`veska init`, `veska doctor`) run without a daemon. |
+| `veska-mcp` | Stdio shim. Editors and agents speak MCP over stdio; the shim proxies frames to the daemon's Unix socket and exits when stdin closes. |
 
 All three ship from one source tree under `cmd/`. The daemon is
 **the** process; the other two are thin clients.
@@ -49,14 +49,14 @@ PRODUCT.md three-box diagram is a simplification of this:
 │   └──────────┘           │      │   engram supervise)         │      │
 │                          ▼      │                             │      │
 │                   ┌──────────┐  │  spawns + restarts          │      │
-│                   │engram-mcp│  └────────────┬────────────────┘      │
+│                   │veska-mcp│  └────────────┬────────────────┘      │
 │                   │ (shim,   │               │                       │
 │                   │  stdio)  │               ▼                       │
 │                   └────┬─────┘     ┌──────────────────┐              │
 │                        │ mcp.sock  │                  │              │
 │                        └──────────▶│                  │              │
 │                                    │                  │              │
-│   ┌──────────┐  cli.sock           │  engram-daemon   │              │
+│   ┌──────────┐  cli.sock           │  veska-daemon   │              │
 │   │  engram  │ ──────────────────▶ │                  │              │
 │   │  (CLI)   │ (MCP tools + ctrl   │  ┌─ SQLite       │              │
 │   └──────────┘  RPC; SOLO-09 §1.3) │  │  + sqlite-vec │              │
@@ -68,29 +68,29 @@ PRODUCT.md three-box diagram is a simplification of this:
 │                                    └────┬───────┬─────┘              │
 │                                         │       │ HTTP               │
 │                                         ▼       ▼                    │
-│                                   ~/.engram/  ┌──────┐               │
+│                                   ~/.veska/  ┌──────┐               │
 │                                               │Ollama│               │
 │                                               └──────┘               │
 └──────────────────────────────────────────────────────────────────────┘
 ```
 
 **Six runtime pieces, one stateful component.** The daemon owns
-the only state (`~/.engram/`); the other five (CLI, shim,
+the only state (`~/.veska/`); the other five (CLI, shim,
 supervisor, Ollama, editor) are stateless from Engram's
 perspective. The supervisor is load-bearing for first-run UX
 (§3.1) and crash-loop semantics (§5.6) and is not optional —
-the no-supervisor "manual mode" (`engram daemon` from a
+the no-supervisor "manual mode" (`veska daemon` from a
 terminal) is a dev convenience, not a supported deployment.
 
-There are **two** Unix sockets: `~/.engram/cli.sock` and
-`~/.engram/mcp.sock`. They are the same wire protocol; they
+There are **two** Unix sockets: `~/.veska/cli.sock` and
+`~/.veska/mcp.sock`. They are the same wire protocol; they
 differ only in which `actor_kind` the daemon stamps on traffic
 that arrives on them. The split is the human-action gate's physical
 substrate (SOLO-10 §1.2): the daemon sets `actor_kind` from the
 listener that accepted the connection, not from anything in the
 request, so an agent cannot present itself as a human by lying
 in a header. The CLI binary `engram` connects only to
-`cli.sock`; the stdio shim `engram-mcp` connects only to
+`cli.sock`; the stdio shim `veska-mcp` connects only to
 `mcp.sock`. There are no external network listeners by default.
 SQLite is in-process (CGO); sqlite-vec loads as an extension
 into the same database file. Ollama runs as a separate user
@@ -114,15 +114,15 @@ outbound connection in the default configuration.
   "CLI daemon" — that would be a federation surface we do not
   want.
 - A user who manually invokes the CLI binary against `mcp.sock`
-  (e.g. `engram --socket=$HOME/.engram/mcp.sock ...`) is
+  (e.g. `engram --socket=$HOME/.veska/mcp.sock ...`) is
   declaring themselves an agent and the human-action gate behaves
   accordingly. The CLI does not expose this knob; you have to
   reach for it deliberately.
 
-Everything durable lives under `~/.engram/`. Backup is
-`engram backup create` (SQLite `VACUUM INTO` + tarball; see
-SOLO-08 §9). Verification is `engram doctor backup` (see SOLO-13
-§2). Reset is `rm -rf ~/.engram/`.
+Everything durable lives under `~/.veska/`. Backup is
+`veska backup create` (SQLite `VACUUM INTO` + tarball; see
+SOLO-08 §9). Verification is `veska doctor backup` (see SOLO-13
+§2). Reset is `rm -rf ~/.veska/`.
 
 ### 3.0 Repo lifecycle and watcher composition
 
@@ -133,21 +133,21 @@ are not config; they are dynamic state in the `repos` table
 
 **Registration.**
 
-- `engram repo add <path>` — registers a repo and atomically:
+- `veska repo add <path>` — registers a repo and atomically:
   installs the `post-commit` and `post-checkout` Git hooks; reads
   the module path (`go.mod`, `package.json`) into `repos.module_path`
   for the cross-repo resolver (SOLO-11 §10); kicks off a cold scan
   in the background.
-- `engram repo remove <id>` — removes hooks, deletes the repo's
+- `veska repo remove <id>` — removes hooks, deletes the repo's
   rows (cascades via foreign keys), drops watcher state.
-- `engram init` in a Git working tree calls `engram repo add` for
+- `veska init` in a Git working tree calls `veska repo add` for
   that tree.
 
 **Per-promotion validation.** The post-commit hook calls
 `engram promote --repo <path>`. The daemon maps `<path>` to a
 registered `repo_id`; if the path is not registered, the hook
 returns non-zero with a `cli_command` pointing at
-`engram repo add`.
+`veska repo add`.
 
 **Watcher composition.** One fsnotify watcher per registered repo,
 each with its own debounce queue. Crashes in one repo's watcher
@@ -162,7 +162,7 @@ do not affect others.
   `[watcher].max_paths_per_repo` (DEFAULT 50 000) and the daemon-
   global `[watcher].max_paths_total` (DEFAULT 200 000); a repo
   whose count exceeds either limit refuses to register with a
-  pointer at `.engramignore` to exclude vendored trees
+  pointer at `.veskaignore` to exclude vendored trees
   (`node_modules/`, `vendor/`, build outputs).** This protects
   against the polling-fallback CPU bomb a half-million-path
   monorepo would otherwise produce.
@@ -176,7 +176,7 @@ do not affect others.
   limit. Branch checkouts that briefly grow the file count past
   the budget (vendored deps on a release branch) are caught by
   the post-checkout reseed rather than silent miss.
-- **macOS.** No reliable probe; `engram doctor watcher` surfaces
+- **macOS.** No reliable probe; `veska doctor watcher` surfaces
   the per-mount FSEvents budget and recommends polling fallback if
   many large repos are watched.
 - **Polling fallback** (per SOLO-11 §1) is per-repo, not global.
@@ -190,28 +190,28 @@ a `repo` arg use it, otherwise default to the current repo.
 **Budget composition.** Performance budgets split between
 per-repo (cold-scan, parse, watcher) and daemon-global (RSS, MCP
 latency, semantic search across `repo: "*"`). The 4 GiB hard cap
-is global; `engram repo add` refuses to register a new repo if its
+is global; `veska repo add` refuses to register a new repo if its
 estimated cold-scan would push projected steady-state RSS past the
 soft cap. See SOLO-13 §3.
 
 ### 3.1 First-run and auto-start
 
-The daemon must be running for `engram-mcp` to do anything. Three
+The daemon must be running for `veska-mcp` to do anything. Three
 paths from "user just installed the binaries" to "daemon is alive":
 
-1. **`engram init`** — interactive on first run. See §3.2 for
+1. **`veska init`** — interactive on first run. See §3.2 for
    the full first-run flow (config, embedder probe, service
    register, repo register).
-2. **`engram service install`** — service registration only,
+2. **`veska service install`** — service registration only,
    non-interactively. Idempotent.
-3. **Manual / dev mode** — `engram-daemon` run from a terminal.
+3. **Manual / dev mode** — `veska-daemon` run from a terminal.
    No supervisor, no auto-restart.
 
-`engram-mcp` (the stdio shim) handles a missing socket cleanly,
+`veska-mcp` (the stdio shim) handles a missing socket cleanly,
 matching the user expectation set by other MCP servers without
 becoming the daemon's parent:
 
-- If `~/.engram/mcp.sock` is missing or the connect fails, the
+- If `~/.veska/mcp.sock` is missing or the connect fails, the
   shim:
   1. Checks whether a supervisor unit is registered for the
      daemon (launchd plist, systemd-user unit, or an
@@ -219,8 +219,8 @@ becoming the daemon's parent:
      §5.1).
   2. **If a supervisor is registered**, the shim asks the
      supervisor to start the daemon:
-     - macOS: `launchctl kickstart gui/$UID/com.engram.daemon`
-     - Linux systemd-user: `systemctl --user start engram-daemon`
+     - macOS: `launchctl kickstart gui/$UID/com.veska.daemon`
+     - Linux systemd-user: `systemctl --user start veska-daemon`
      - Built-in: writes a "start" sentinel that
        `engram supervise` polls.
      The shim then waits up to `[mcp].shim_start_timeout_ms`
@@ -232,29 +232,29 @@ becoming the daemon's parent:
      concerns the prior design called out are still solved.
   3. **If no supervisor is registered**, the shim returns
      `ErrDaemonNotRunning` with `cli_command:
-     "engram service install"` so the editor can render a
+     "veska service install"` so the editor can render a
      one-paste install affordance. Until that runs the editor
      surface is dead, deliberately — the alternative (shim
      forks the daemon) creates the orphan-process problem we
      refused to ship.
-- The shim **never** forks `engram-daemon` itself. The daemon's
+- The shim **never** forks `veska-daemon` itself. The daemon's
   parent is always the supervisor.
-- For dev mode (no supervisor at all), `engram daemon` from a
+- For dev mode (no supervisor at all), `veska daemon` from a
   terminal is the documented flow; the shim picks up the socket
   the next time it tries.
 
 ### 3.2 The first-run flow
 
-`engram init` is the only command a new user is told to run. It
+`veska init` is the only command a new user is told to run. It
 runs interactively and walks the user through every dependency
-the daemon needs. Non-interactive mode (`engram init --yes` or
-`engram init --noninteractive`) accepts every default and skips
+the daemon needs. Non-interactive mode (`veska init --yes` or
+`veska init --noninteractive`) accepts every default and skips
 prompts; the same checks still run and any failure exits non-zero
 with a clear `cli_command` to remediate.
 
 **Steps, in order:**
 
-1. **`~/.engram/` layout.** Create the directory, write a default
+1. **`~/.veska/` layout.** Create the directory, write a default
    `config.toml`, write empty `audit.jsonl`, create `cache/` and
    `models/`. Idempotent: existing files are not overwritten.
 2. **Embedder probe.** Check that Ollama is reachable at the
@@ -274,17 +274,17 @@ with a clear `cli_command` to remediate.
        distro equivalent).
      - WSL2: same as Linux, with a note about Windows host
        limitations.
-     Then prompt the user to re-run `engram init` after Ollama
+     Then prompt the user to re-run `veska init` after Ollama
      is up. Exit non-zero. We do not try to install Ollama
      ourselves; we do not bundle it (license, binary size,
      supervision); we do not ship an alternative embedder
      (SOLO-05 §2.4 is the spec).
-3. **Service register.** Offer `engram service install` (SOLO-03
+3. **Service register.** Offer `veska service install` (SOLO-03
    §5.1). Default yes. On decline, the user is in "manual mode"
-   and must run `engram daemon` themselves; print the dev-mode
+   and must run `veska daemon` themselves; print the dev-mode
    reminder.
 4. **Repo register.** If the current working directory is inside
-   a Git working tree, offer to run `engram repo add <CWD>`
+   a Git working tree, offer to run `veska repo add <CWD>`
    (SOLO-03 §3.0). Default yes. The cold scan starts in the
    background; init does not wait for it.
 5. **Tracker probe (opt-in).** Default tracker is `none`
@@ -304,7 +304,7 @@ with a clear `cli_command` to remediate.
    embedder status, service status, registered repos, tracker
    status, audit log path. Also print the next thing the user
    should do (typically "open your editor and connect via the MCP
-   shim `~/.engram/bin/engram-mcp`").
+   shim `~/.veska/bin/veska-mcp`").
 
 **Failure modes during init:**
 
@@ -312,8 +312,8 @@ with a clear `cli_command` to remediate.
 |---|---|---|
 | 2 | Ollama unreachable | Print install command for the host platform; exit non-zero. Do NOT continue init. |
 | 2 | Ollama reachable, model pull fails (network, disk full, permissions) | Print the failed `ollama pull` command verbatim; exit non-zero. |
-| 3 | `engram service install` fails (e.g. systemd-user missing on a non-systemd Linux and no fallback path could be installed) | Print the manual fallback (`engram daemon --supervise` plus instructions for the host's autostart mechanism); init exits non-zero. The fallback path itself is documented in §5.1. |
-| 4 | `engram repo add` fails (e.g. inotify watch budget on Linux) | Init exits non-zero with the budget-fix command (SOLO-03 §3.0). |
+| 3 | `veska service install` fails (e.g. systemd-user missing on a non-systemd Linux and no fallback path could be installed) | Print the manual fallback (`veska daemon --supervise` plus instructions for the host's autostart mechanism); init exits non-zero. The fallback path itself is documented in §5.1. |
+| 4 | `veska repo add` fails (e.g. inotify watch budget on Linux) | Init exits non-zero with the budget-fix command (SOLO-03 §3.0). |
 | 5 | User opted into `bd-cli` and `bd` is missing on `$PATH` | Print the install command; exit non-zero. Config is left at `provider = "none"` so a retry of init does not assume a half-applied state. |
 
 **No silent degradation.** Init does not write a config that
@@ -321,14 +321,14 @@ points at an unreachable Ollama endpoint and "let the user figure
 it out." If the embedder probe fails, the user is told why and
 how to fix it before init returns success.
 
-**`engram doctor embedder` is the same probe.** The check logic
-in step 2 lives in `engram doctor embedder`; init invokes it as
+**`veska doctor embedder` is the same probe.** The check logic
+in step 2 lives in `veska doctor embedder`; init invokes it as
 a subroutine so the messages and exit codes are identical to the
-ones the user will see later from `engram doctor` (SOLO-13 §2).
+ones the user will see later from `veska doctor` (SOLO-13 §2).
 
-**No `engram model download`.** Pulling models is an Ollama
+**No `veska model download`.** Pulling models is an Ollama
 operation; the daemon does not wrap it. The probe in init and
-`engram doctor embedder` is enough.
+`veska doctor embedder` is enough.
 
 **`engram embedder swap <model>`.** Switching the active model
 warrants a wrapped command because it is not a pure Ollama
@@ -361,7 +361,7 @@ The sequence the daemon runs:
    following, the daemon checks `database_meta.embedder_*`
    against the live `vec_nodes` declared dim. If they disagree
    (a prior swap left the DB inconsistent), the swap aborts
-   with instructions pointing at `engram backup restore` and
+   with instructions pointing at `veska backup restore` and
    the most recent `pre-swap-*` snapshot. The swap will not
    start on top of a broken prior swap.
 2. Stop accepting MCP writes (the Unix socket listener stays
@@ -369,7 +369,7 @@ The sequence the daemon runs:
    `degraded_reasons:["embedder_swapping"]` on responses.
 3. Take an auto-snapshot via the migration runner's snapshot
    mechanism (SOLO-08 §10) — same lifecycle as a pre-migration
-   snapshot, written to `~/.engram-backups/pre-swap-...`. **This
+   snapshot, written to `~/.veska-backups/pre-swap-...`. **This
    is the canonical recovery point.**
 4. Run the storage transitions on `writeDB.hot`. The daemon
    wraps these in a single `BEGIN IMMEDIATE`/`COMMIT` for the
@@ -389,11 +389,11 @@ The sequence the daemon runs:
    - Mark every node's `node_embedding_refs.state = 'pending'`
      so the embed worker re-derives embeddings against the new
      model.
-5. Update `~/.engram/config.toml`'s `[embedder]` block to match
+5. Update `~/.veska/config.toml`'s `[embedder]` block to match
    (in-place edit, preserving comments and unrelated keys).
 6. Resume MCP writes.
 7. Print: "Swapped to <model>; <N> nodes pending re-embed.
-   Track progress with `engram doctor post-promotion-queue`."
+   Track progress with `veska doctor post-promotion-queue`."
 
 Properties:
 
@@ -415,7 +415,7 @@ Properties:
   subsequent restarts.
 
 The CLI subcommand `engram embedder current` prints the active
-provider/model/dim from `database_meta`. `engram doctor
+provider/model/dim from `database_meta`. `veska doctor
 embedder` extends to show the swap state (`idle` |
 `swapping` | `re_embedding`).
 
@@ -435,7 +435,7 @@ embedder` extends to show the swap state (`idle` |
    the only path that writes durable graph state. Staging is
    in-memory and lossy by design.
 5. **Zero telemetry by default.** OTLP and Prometheus are opt-in
-   and surface in `engram doctor egress`.
+   and surface in `veska doctor egress`.
 
 ## 5. Lifecycle
 
@@ -444,16 +444,16 @@ embedder` extends to show the swap state (`idle` |
 The daemon is normally launched by a session-scoped supervisor:
 
 - **macOS:** a `launchd` agent at
-  `~/Library/LaunchAgents/com.engram.daemon.plist`.
+  `~/Library/LaunchAgents/com.veska.daemon.plist`.
 - **Linux with `systemd --user`:** a unit at
-  `~/.config/systemd/user/engram-daemon.service`.
+  `~/.config/systemd/user/veska-daemon.service`.
 - **Linux without `systemd --user` (Alpine, NixOS w/o systemd-user
   enabled, plain devcontainers, WSL2 default):** the built-in
   `engram supervise` subcommand. It is a Go-side supervisor in
   the same binary, sharing the crash-loop breaker (§5.6) with
   the launchd / systemd paths. Usage:
   ```
-  engram supervise [--pidfile=~/.engram/state/supervise.pid]
+  engram supervise [--pidfile=~/.veska/state/supervise.pid]
   ```
   The user puts that line in their shell rc, an init script, a
   tmux session, or a desktop-environment autostart entry. The
@@ -461,7 +461,7 @@ The daemon is normally launched by a session-scoped supervisor:
   registered supervisor (§3.1). It is **not** a bash script;
   the prior 18-line `engram-supervise.sh` is retired. Same
   exit-code discipline (78 = terminal, supervisor halts) as the
-  external supervisors. `engram service install` detects the
+  external supervisors. `veska service install` detects the
   platform and writes the right artifact: a `launchd` plist on
   macOS, a systemd unit on systemd-user Linux, or a shell-rc
   snippet that invokes `engram supervise` on Linux without
@@ -473,26 +473,26 @@ The daemon is normally launched by a session-scoped supervisor:
 - **Windows:** not supported. WSL2 falls under the Linux
   paths above (typically the no-systemd-user fallback).
 
-`engram service install` writes the appropriate artifact for the
-host platform and registers it. `engram service uninstall`
-reverses it. `engram doctor service` reports which supervision
+`veska service install` writes the appropriate artifact for the
+host platform and registers it. `veska service uninstall`
+reverses it. `veska doctor service` reports which supervision
 path is active and whether the daemon is currently running under
 it. The daemon binary is installed to a stable path
-(`~/.engram/bin/engram-daemon`) so artifacts do not need to be
+(`~/.veska/bin/veska-daemon`) so artifacts do not need to be
 rewritten when the binary is upgraded; see §5.5.
 
 On start the daemon:
 
-0. **Opens the log file first** (`~/.engram/logs/daemon.log`)
+0. **Opens the log file first** (`~/.veska/logs/daemon.log`)
    before any other initialisation. A panic in step 1–6 must
    leave a diagnostic trail; opening the log later means early-
    start failures are invisible. The supervisor's stderr capture
    is the fallback if step 0 itself fails.
-1. Loads config from `~/.engram/config.toml`; probes `~/.engram/`
+1. Loads config from `~/.veska/config.toml`; probes `~/.veska/`
    filesystem.
 2. Checks the broken marker and crash-loop breaker (§5.6).
-3. Opens SQLite (`~/.engram/engram.db`); loads sqlite-vec from
-   `~/.engram/lib/vec0.<ext>` (SOLO-08 §1.1); runs the migration
+3. Opens SQLite (`~/.veska/veska.db`); loads sqlite-vec from
+   `~/.veska/lib/vec0.<ext>` (SOLO-08 §1.1); runs the migration
    runner (SOLO-08 §10); checks `database_meta` against
    `[embedder]` config; checks `[backup].required`.
 4. Brings up embedding worker, post-promotion-queue-drain goroutines, fsnotify
@@ -514,7 +514,7 @@ survives editor restarts. RSS soft and hard caps live in SOLO-13
 is enforced via §5.6.
 
 **Daemon log rotation.** Stderr is redirected by the supervisor to
-`~/.engram/logs/daemon.log`. The daemon rotates this file
+`~/.veska/logs/daemon.log`. The daemon rotates this file
 internally (not via external `logrotate`) at 100 MiB, keeping 5
 rotations. On `SIGHUP` the daemon reopens log files — the same
 signal an external rotator would use, in case the user wires one
@@ -572,7 +572,7 @@ freeze, or process pause — the daemon runs `wake reconcile`:
    beyond the first 64 bytes still slip through the wake sweep
    but are caught at the next user save (fsnotify-driven) or the
    next promotion's diff sweep. The known-residual case is
-   surfaced via `engram doctor watcher` rather than ignored.
+   surfaced via `veska doctor watcher` rather than ignored.
 3. Hand each changed file to the parse-on-save pipeline (SOLO-11
    §1) which writes through staging, exactly as a live save
    would.
@@ -666,7 +666,7 @@ cliff").
 
 ### 5.4 Stop
 
-`engram daemon stop` (or SIGTERM):
+`veska daemon stop` (or SIGTERM):
 
 1. Stop accepting new MCP connections.
 2. Drain in-flight requests up to a 30-second deadline.
@@ -682,10 +682,10 @@ A SIGKILL is also survivable — see 5.3.
 **Distribution channel.** V2.0 ships as `tar.gz` from GitHub
 Releases — one archive per platform pair (`linux/amd64`,
 `linux/arm64`, `darwin/amd64`, `darwin/arm64`). Each archive
-contains the three binaries (`engram`, `engram-daemon`,
-`engram-mcp`) and the per-platform sqlite-vec extension
+contains the three binaries (`engram`, `veska-daemon`,
+`veska-mcp`) and the per-platform sqlite-vec extension
 (SOLO-08 §1.1); the daemon writes the extension to
-`~/.engram/lib/` on first start. **No auto-update; no package
+`~/.veska/lib/` on first start. **No auto-update; no package
 manager dependency.** Homebrew tap and a shell installer
 (`curl -fsSL https://engram.sh/install.sh | sh`) are
 M5-or-later work and not required for V2.0. macOS releases are
@@ -695,18 +695,18 @@ against published SHA-256 checksums.
 
 The user has just downloaded a new release.
 
-1. **Replace the binaries.** `engram upgrade <path>` (or the
+1. **Replace the binaries.** `veska upgrade <path>` (or the
    user's package manager) writes the new binaries to
-   `~/.engram/bin/engram-daemon.next`, `engram.next`,
-   `engram-mcp.next`, then atomically `mv` them into place. The
+   `~/.veska/bin/veska-daemon.next`, `engram.next`,
+   `veska-mcp.next`, then atomically `mv` them into place. The
    running daemon is unaffected by the file replacement —
    already-loaded text is in memory.
-2. **Restart the daemon.** `engram service restart` calls
+2. **Restart the daemon.** `veska service restart` calls
    `launchctl kickstart -k` or `systemctl --user restart` so the
    supervisor stops and re-spawns the daemon under its existing
    unit. SIGTERM → drain → SIGKILL after 30s if needed.
-3. **Service unit reconciliation.** `engram upgrade --restart`
-   re-runs `engram service install` before kicking the
+3. **Service unit reconciliation.** `veska upgrade --restart`
+   re-runs `veska service install` before kicking the
    supervisor, so any new env var, signal-handling tweak, or
    `KillMode=` change in the new binary's unit template lands
    without the user needing to remember a separate step. The
@@ -717,25 +717,25 @@ The user has just downloaded a new release.
    pending migrations in order — each in its own transaction —
    and refuses to start on schema mismatch (exit 78) or
    migration failure. The user is never asked to run
-   `engram backup create` manually before an upgrade; the runner
+   `veska backup create` manually before an upgrade; the runner
    does it. **Visibility during the snapshot.** A 5 GiB DB can
    block startup for tens of seconds while `VACUUM INTO` runs;
    during that window the daemon writes
-   `~/.engram/state/upgrading` with the snapshot start time and
+   `~/.veska/state/upgrading` with the snapshot start time and
    estimated remaining bytes. The MCP shim reads the marker
    when `mcp.sock` is missing and returns `ErrDaemonStarting`
-   with a `cli_command` payload pointing at `engram doctor
+   with a `cli_command` payload pointing at `veska doctor
    service` so the editor can render "upgrade in progress" rather
    than "daemon unavailable."
 5. **CLI versions.** The `engram` CLI is stateless; replacing it
-   has no transition. The `engram-mcp` shim is also stateless;
+   has no transition. The `veska-mcp` shim is also stateless;
    the editor reconnects via stdio on its own schedule.
 
-`engram upgrade` is one command for all of the above:
-`engram upgrade --restart` does the binary path + service
+`veska upgrade` is one command for all of the above:
+`veska upgrade --restart` does the binary path + service
 restart; without `--restart` it stages the next-binary files and
 prints the restart command. Backup creation is **not** automatic
-— the user runs `engram backup create` if they want one (the
+— the user runs `veska backup create` if they want one (the
 daemon will refuse the start in step 3 if it needs one and none
 exists).
 
@@ -761,7 +761,7 @@ breaker. §5.8 is the canonical matrix.
 - **Two state surfaces, two readers.** The authoritative breaker
   state is the SQLite row, read by the daemon at start. The
   built-in `engram supervise` cannot read SQLite when the daemon
-  is down, so it reads the `~/.engram/state/broken` marker file
+  is down, so it reads the `~/.veska/state/broken` marker file
   (and `CRASH-LOOP-TRIPPED.txt`) as its halt signal. The daemon
   is responsible for writing both surfaces in step §5.6's exit
   path; `engram supervise` is responsible for honouring the
@@ -770,19 +770,19 @@ breaker. §5.8 is the canonical matrix.
   them to.
 - ≥ `[supervisor].max_restarts_in_window` (default 5) starts in
   `[supervisor].restart_window` (default 10m) ⇒ daemon writes
-  `~/.engram/state/broken` (a sentinel file used only for the
+  `~/.veska/state/broken` (a sentinel file used only for the
   CLI banner check below; the authoritative breaker state is
-  the SQLite row), logs `engram_code: "ErrCrashLoop"`, exits 78.
+  the SQLite row), logs `veska_code: "ErrCrashLoop"`, exits 78.
   Supervisor halts.
 - Stable boot (alive ≥ `stable_boot_after`) resets the counter
   and removes the `broken` marker.
 - The marker blocks daemon start only. CLI repair commands
-  (`engram doctor reset-crash-loop`, `engram backup restore`,
+  (`veska doctor reset-crash-loop`, `veska backup restore`,
   `engram embedder swap`'s daemon-stopped variant) work without
   the daemon.
-- `engram doctor` and `engram doctor service` surface the marker
+- `veska doctor` and `veska doctor service` surface the marker
   as exit 2 with recent log paths.
-- User clears manually: `engram doctor reset-crash-loop`.
+- User clears manually: `veska doctor reset-crash-loop`.
 
 **Notification on trip.** A tripped breaker is otherwise
 silent — the daemon is dead, the supervisor has stopped trying,
@@ -791,9 +791,9 @@ and the editor's MCP connection just times out. Before exiting
 of these is available, in this order, and stops at the first
 that succeeds:
 
-1. **macOS:** `osascript -e 'display notification "Engram daemon stopped (crash-loop). Run: engram doctor reset-crash-loop" with title "Engram"'`
-2. **Linux with `notify-send`:** `notify-send -u critical "Engram" "Daemon stopped (crash-loop). Run: engram doctor reset-crash-loop"`
-3. **Always (fallback):** write `~/.engram/state/CRASH-LOOP-TRIPPED.txt` with the timestamp, the last 50 log lines, and the remediation command.
+1. **macOS:** `osascript -e 'display notification "Engram daemon stopped (crash-loop). Run: veska doctor reset-crash-loop" with title "Engram"'`
+2. **Linux with `notify-send`:** `notify-send -u critical "Engram" "Daemon stopped (crash-loop). Run: veska doctor reset-crash-loop"`
+3. **Always (fallback):** write `~/.veska/state/CRASH-LOOP-TRIPPED.txt` with the timestamp, the last 50 log lines, and the remediation command.
 
 The notifier is best-effort; failure to deliver does not block
 the exit. The fallback file is the contract — it is the place a
@@ -805,7 +805,7 @@ exit 78 *before* the breaker counter increments, so the prior
 "broken marker only on breaker trip" shape gave two equally-
 fatal failure modes (breaker vs §5.8) two completely different
 debug surfaces. The fix: every exit-78 path in §5.8 writes
-`~/.engram/state/broken` with the §5.8 row reason, the
+`~/.veska/state/broken` with the §5.8 row reason, the
 recommended remediation, and the failing-binary version *before
 exiting*. The breaker (this section) writes the same marker
 plus the additional `CRASH-LOOP-TRIPPED.txt` sentinel that
@@ -813,14 +813,14 @@ distinguishes a breaker-trip from a single refuse-to-start.
 
 **CLI banner check is the first thing every `engram` invocation
 does.** Before flag parsing, before subcommand dispatch, before
-any RPC: the CLI checks for `~/.engram/state/CRASH-LOOP-TRIPPED.txt`
-and `~/.engram/state/broken`. If either is present, the CLI
+any RPC: the CLI checks for `~/.veska/state/CRASH-LOOP-TRIPPED.txt`
+and `~/.veska/state/broken`. If either is present, the CLI
 prints a one-line banner to stderr naming the file, the
 trip/refuse timestamp, and the remediation command (the breaker
-banner suggests `engram doctor reset-crash-loop`; the
-refuse-to-start banner suggests `engram doctor` for the §5.8
+banner suggests `veska doctor reset-crash-loop`; the
+refuse-to-start banner suggests `veska doctor` for the §5.8
 diagnosis). The banner fires for **every** subcommand including
-`engram --version` and `engram doctor`. The marker survives
+`engram --version` and `veska doctor`. The marker survives
 until the user clears it (`reset-crash-loop` for the breaker
 case; the daemon's own clean start clears the §5.8 marker once
 the underlying refuse-to-start condition is fixed). The
@@ -847,7 +847,7 @@ but before the MCP listener accepts connections, the daemon:
    |---|---|
    | `HEAD == last_promoted_sha` | No work. |
    | `last_promoted_sha` is an ancestor of `HEAD` (`git merge-base --is-ancestor`) | **Replay path.** Walk `git log <last_promoted_sha>..HEAD --reverse`; for each commit, run the same parse-and-promotion pipeline used by the post-commit hook (SOLO-11 §1, §2). Emit one `promotion_id` per commit. |
-   | `last_promoted_sha` is **not** reachable from `HEAD` (force-push, branch deletion, history rewrite) | **Divergent path.** Log `engram_code: "ErrPromotionDivergent"` with the diverged SHA. Do **not** rewrite history. Set `repos.last_promoted_sha = HEAD` after a fresh full reparse of the working tree (the same flow as `engram repo add`'s cold scan, scoped to one repo). Findings anchored to commits unreachable from `HEAD` remain in the database under their original `branch` value; they are pruned only by `engram gc --branches` once the branch they belong to is gone. |
+   | `last_promoted_sha` is **not** reachable from `HEAD` (force-push, branch deletion, history rewrite) | **Divergent path.** Log `veska_code: "ErrPromotionDivergent"` with the diverged SHA. Do **not** rewrite history. Set `repos.last_promoted_sha = HEAD` after a fresh full reparse of the working tree (the same flow as `veska repo add`'s cold scan, scoped to one repo). Findings anchored to commits unreachable from `HEAD` remain in the database under their original `branch` value; they are pruned only by `veska gc --branches` once the branch they belong to is gone. |
 
 4. Cross-branch state — a sibling branch advanced while another
    was active — is **not** chased. Engram only resyncs the repo's
@@ -878,20 +878,20 @@ caught-up promoted state.
 **Bounded work.** Replay is at worst the same work the
 post-commit hook would have done if the daemon had been alive.
 A user who left the daemon down for a long refactor branch may
-see a multi-second startup; surface that in `engram doctor`.
+see a multi-second startup; surface that in `veska doctor`.
 The replay runs in commit order, so a partial replay (daemon
 killed mid-resync) leaves `last_promoted_sha` advanced to the
 last fully-promoted commit and the next start picks up where this
 one left off.
 
 **Branch GC piggybacks on resync exit.** Once resync finishes
-(or runs as a no-op), the daemon runs `engram gc --branches`
+(or runs as a no-op), the daemon runs `veska gc --branches`
 (SOLO-08 §4) before opening the MCP listener. Branch deletions
 that happened while the daemon was down are reaped here; the
 same routine fires after each wake-reconcile sweep (§5.2).
 There is no nightly cron — laptops sleep through wall clocks.
 
-**Surface.** `engram doctor` reports replay state under
+**Surface.** `veska doctor` reports replay state under
 `pipelines`:
 
 ```jsonc
@@ -918,10 +918,10 @@ zombie reaping are explicit rather than implicit:
 | Caller | Command | When | Lifecycle |
 |---|---|---|---|
 | Startup resync (§5.7) | `git rev-parse HEAD`, `git merge-base --is-ancestor`, `git log <range>` | Every daemon start, per registered repo | Foreground; daemon waits with a 5s deadline; SIGTERM-on-shutdown propagates |
-| Hook runner | `engram hook-runner post-commit` (the daemon does NOT spawn this — Git does, via the installed hook) | On `git commit` / `git checkout` | The daemon is the RPC target, not the parent |
+| Hook runner | `veska hook-runner post-commit` (the daemon does NOT spawn this — Git does, via the installed hook) | On `git commit` / `git checkout` | The daemon is the RPC target, not the parent |
 | Crash-loop notify (§5.6) | `osascript` (macOS) or `notify-send` (Linux) | At most once per breaker trip | Best-effort; failure does not block the daemon's exit |
-| Backup (§9.1, SOLO-08) | `tar -czf ...` after `VACUUM INTO` | On `engram backup create` and pre-migration auto-snapshot | Foreground; daemon waits with a 600s deadline; SIGTERM aborts the backup cleanly |
-| Init (§3.2) | `ollama pull <model>` | Only during `engram init` (the CLI runs this, not the daemon) | The daemon is not the parent |
+| Backup (§9.1, SOLO-08) | `tar -czf ...` after `VACUUM INTO` | On `veska backup create` and pre-migration auto-snapshot | Foreground; daemon waits with a 600s deadline; SIGTERM aborts the backup cleanly |
+| Init (§3.2) | `ollama pull <model>` | Only during `veska init` (the CLI runs this, not the daemon) | The daemon is not the parent |
 
 **Signal propagation.** On daemon SIGTERM (§5.4 stop), every
 spawned child receives SIGTERM via the daemon's `Cmd.Process`
@@ -945,7 +945,7 @@ breaker (§5.6) — 78 is terminal, not retry-eligible.
 
 | # | Reason | Detected at | Stage in §5.1 | Remediation |
 |---|---|---|---|---|
-| 1 | `~/.engram/state/broken` marker present | start, before any work | step 2 | `engram doctor reset-crash-loop` after investigating the prior error log |
+| 1 | `~/.veska/state/broken` marker present | start, before any work | step 2 | `veska doctor reset-crash-loop` after investigating the prior error log |
 | 2 | sqlite-vec extension missing or unloadable | DB open | step 3 | install the extension; restart |
 | 3 | Schema `current < min_schema` (binary too new) | migration runner | step 3 | downgrade binary, or restore a newer backup |
 | 4 | Schema `current > max_schema` (binary too old) | migration runner | step 3 | upgrade binary, or restore a pre-upgrade backup |
@@ -953,8 +953,8 @@ breaker (§5.6) — 78 is terminal, not retry-eligible.
 | 6 | Pre-migration auto-snapshot failed | migration runner | step 3 | free disk / fix permissions; restart |
 | 7 | `migration_sha` recorded ≠ binary's embedded sha (tampering) | migration runner | step 3 | investigate; do not blindly clear |
 | 8 | `ErrEmbedderMismatch` — `[embedder]` config disagrees with `database_meta.embedder_*` | post-migration | step 3 | `engram embedder swap <model>` (SOLO-03 §3.2), or revert the config |
-| 9 | `~/.engram/` on NFS or unsupported fs (SQLite+WAL correctness) | start | step 1 | move data dir to a supported local fs; set `ENGRAM_HOME` |
-| 10 | `[backup].required = true` and no verified backup found | start | step 3 | `engram backup create`; restart |
+| 9 | `~/.veska/` on NFS or unsupported fs (SQLite+WAL correctness) | start | step 1 | move data dir to a supported local fs; set `VESKA_HOME` |
+| 10 | `[backup].required = true` and no verified backup found | start | step 3 | `veska backup create`; restart |
 
 **Breaker-eligible exits** (non-78, run-after-start):
 
@@ -1007,16 +1007,16 @@ drain `post_promotion_queue` independently.
 | Promotion queued behind in-flight MCP writes | Hook's promotion transaction waits on the `writeDB.hot` connection pool (SOLO-11 §10, ADR-S0011). In typical use the pool is idle. | Automatic. |
 | Embedding worker crashes | Restarted by the daemon supervisor. Pending refs stay `pending`. Semantic search returns `degraded_reasons: ["embedding_pending"]`. | Automatic on restart. |
 | Ollama unreachable | Embedding worker logs and backs off. Pending queue grows. | Self-heals when Ollama is back; the worker resumes. |
-| Disk full | Promotion fails; hook returns non-zero; daemon refuses new MCP writes until disk pressure clears. | `engram doctor disk` reports; user frees space. |
+| Disk full | Promotion fails; hook returns non-zero; daemon refuses new MCP writes until disk pressure clears. | `veska doctor disk` reports; user frees space. |
 | sqlite-vec extension missing | Daemon refuses to start; clear error with install instructions. | Install the extension, restart. |
 | WAL grows unboundedly | Daemon checkpoints the WAL when idle (no writes for 5s). `PRAGMA wal_autocheckpoint = 1000` (pages). | Automatic. |
 | Editor connects during staging-recovering window | MCP responses carry `degraded_reasons: ["staging_recovering"]` and serve the promoted view. | Resolves when fsnotify reparse completes (sub-second to seconds). |
-| RSS exceeds 4 GiB hard cap | Daemon exits; supervisor restarts. Crash-loop breaker (§5.6) trips after 5 restarts in 10 minutes. | `engram doctor reset-crash-loop` after fixing the underlying cause; see SUPERVISION-RUNBOOK.md §4. |
-| `engram-mcp` cannot reach the socket | Returns `ErrDaemonNotRunning` with a `cli_command` to start the service. Editor surfaces the message. | User runs `engram service start` (or `engram service install` if not yet registered). See §3.1. |
+| RSS exceeds 4 GiB hard cap | Daemon exits; supervisor restarts. Crash-loop breaker (§5.6) trips after 5 restarts in 10 minutes. | `veska doctor reset-crash-loop` after fixing the underlying cause; see SUPERVISION-RUNBOOK.md §4. |
+| `veska-mcp` cannot reach the socket | Returns `ErrDaemonNotRunning` with a `cli_command` to start the service. Editor surfaces the message. | User runs `veska service start` (or `veska service install` if not yet registered). See §3.1. |
 | Schema migration pending | Daemon takes an auto-snapshot (SOLO-08 §10) and runs the migration in one transaction. | Automatic. |
 | Schema migration fails | Transaction rolls back; daemon refuses start with exit 78 and a pointer to the verified pre-migration snapshot. | Fix the migration and restart, or downgrade the binary, or restore from snapshot. |
 | Schema mismatch (binary too new or too old for on-disk schema) | Daemon refuses start with exit 78 and the recovery commands. | Use a binary whose `min_schema..max_schema` range covers the on-disk version. |
-| Log file `~/.engram/logs/daemon.log` exceeds rotation threshold | Daemon rotates internally at 100 MiB; keeps 5 rotations. | Automatic. `SIGHUP` to force-reopen for external rotators. |
+| Log file `~/.veska/logs/daemon.log` exceeds rotation threshold | Daemon rotates internally at 100 MiB; keeps 5 rotations. | Automatic. `SIGHUP` to force-reopen for external rotators. |
 
 ## 8. What this doc does not cover
 

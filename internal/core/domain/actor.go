@@ -10,7 +10,7 @@ import "errors"
 //
 //	"human:<username>"     — a human developer
 //	"agent:<name>"         — an AI agent
-//	"service:engram"       — the engram system itself
+//	"service:veska"       — the veska system itself
 type Actor struct {
 	ID   string
 	Kind ActorKind

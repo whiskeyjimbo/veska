@@ -5,9 +5,9 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/whiskeyjimbo/engram/solov2/tools/loadtest/spikes/hnsw/cohnsw"
-	"github.com/whiskeyjimbo/engram/solov2/tools/loadtest/spikes/hnsw/eval"
-	"github.com/whiskeyjimbo/engram/solov2/tools/loadtest/spikes/sqlitevec/gen"
+	"github.com/whiskeyjimbo/veska/tools/loadtest/spikes/hnsw/cohnsw"
+	"github.com/whiskeyjimbo/veska/tools/loadtest/spikes/hnsw/eval"
+	"github.com/whiskeyjimbo/veska/tools/loadtest/spikes/sqlitevec/gen"
 )
 
 const smallN = 1000

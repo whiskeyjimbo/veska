@@ -5,7 +5,7 @@ import (
 	"math"
 	"testing"
 
-	"github.com/whiskeyjimbo/engram/solov2/tools/loadtest/spikes/sqlitevec/vecbin"
+	"github.com/whiskeyjimbo/veska/tools/loadtest/spikes/sqlitevec/vecbin"
 )
 
 const dim = 768

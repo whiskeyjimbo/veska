@@ -11,7 +11,7 @@
 One daemon, one developer, one machine. SQLite + sqlite-vec for
 storage; tree-sitter for parsing; Ollama for embeddings; MCP over
 Unix sockets for the editor surface. Everything Engram knows lives
-in `~/.engram/`.
+in `~/.veska/`.
 
 ## Read order
 
@@ -40,7 +40,7 @@ it open in a second pane while reading the rest.
 2. **YAGNI is the default.** The first impl of every port is the only impl. A second impl is a future ADR, not a present abstraction.
 3. **Measure before budget.** Embedding throughput, Ollama warmup, SQLite write contention, and tree-sitter reparse cost get measured before any number commits to the design. Every performance number is labelled (`BUDGET (unmeasured)` / `BUDGET (measured M<N>)` / `INVARIANT` / `DEFAULT`).
 4. **Plain names.** Patterns are named after what they are: goroutines, channels, tables, Go interfaces. Where inherited vocabulary would mislead (e.g., the "transactional outbox" pattern carries microservices/saga connotations that don't apply to a single-process goroutine reading a SQLite table — so we call ours `post_promotion_queue`; the "Actor" stamp is not the Erlang Actor model and the doc says so), the design renames or disambiguates rather than ducking the collision.
-5. **The CLI is the operator surface.** `engram doctor` is the only thing the user actually sees. Spec it before its observability backend.
+5. **The CLI is the operator surface.** `veska doctor` is the only thing the user actually sees. Spec it before its observability backend.
 6. **Small surface.** Ship the surface area you have to maintain. Anything bigger is a future ADR with a measured trigger.
 7. **Deferred work stays out of normative text.** Anything not shipped lives under `deferred/` and is not referenced from normative sections.
 

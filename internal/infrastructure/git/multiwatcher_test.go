@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/whiskeyjimbo/engram/solov2/internal/infrastructure/git"
+	"github.com/whiskeyjimbo/veska/internal/infrastructure/git"
 )
 
 const multiEventTimeout = 500 * time.Millisecond

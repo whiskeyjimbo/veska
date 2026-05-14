@@ -10,7 +10,7 @@ import (
 
 	_ "modernc.org/sqlite"
 
-	"github.com/whiskeyjimbo/engram/solov2/internal/repo"
+	"github.com/whiskeyjimbo/veska/internal/repo"
 )
 
 const createReposTable = `

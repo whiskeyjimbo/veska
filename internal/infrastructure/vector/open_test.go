@@ -5,7 +5,7 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/whiskeyjimbo/engram/solov2/internal/infrastructure/vector"
+	"github.com/whiskeyjimbo/veska/internal/infrastructure/vector"
 )
 
 // TestOpen_StubReturnsErrVectorStoreUnavailable confirms that without the

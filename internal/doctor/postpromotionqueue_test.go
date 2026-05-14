@@ -6,7 +6,7 @@ import (
 
 	_ "modernc.org/sqlite"
 
-	"github.com/whiskeyjimbo/engram/solov2/internal/doctor"
+	"github.com/whiskeyjimbo/veska/internal/doctor"
 )
 
 // createQueueDB creates an in-memory (or file) SQLite DB with the post_promotion_queue schema.
@@ -162,7 +162,7 @@ func TestCheckPostPromotionQueueDegraded(t *testing.T) {
 
 // TestCheckPostPromotionQueueBroken verifies a non-existent DB path yields Status=broken.
 func TestCheckPostPromotionQueueBroken(t *testing.T) {
-	path := t.TempDir() + "/nonexistent/engram.db"
+	path := t.TempDir() + "/nonexistent/veska.db"
 
 	report, err := doctor.CheckPostPromotionQueue(path)
 	if err != nil {

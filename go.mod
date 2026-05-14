@@ -1,4 +1,4 @@
-module github.com/whiskeyjimbo/engram/solov2
+module github.com/whiskeyjimbo/veska
 
 go 1.26.3
 
@@ -38,6 +38,7 @@ require (
 	golang.org/x/mod v0.36.0 // indirect
 	golang.org/x/sync v0.20.0 // indirect
 	golang.org/x/sys v0.44.0 // indirect
+	golang.org/x/telemetry v0.0.0-20260508192327-42602be52be6 // indirect
 	golang.org/x/xerrors v0.0.0-20231012003039-104605ab7028 // indirect
 	modernc.org/libc v1.72.3 // indirect
 	modernc.org/mathutil v1.7.1 // indirect

@@ -6,8 +6,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/whiskeyjimbo/engram/solov2/tools/loadtest/spikes/sqlitevec/gen"
-	"github.com/whiskeyjimbo/engram/solov2/tools/loadtest/spikes/sqlitevec/loader"
+	"github.com/whiskeyjimbo/veska/tools/loadtest/spikes/sqlitevec/gen"
+	"github.com/whiskeyjimbo/veska/tools/loadtest/spikes/sqlitevec/loader"
 )
 
 func TestOpen_CreatesVecNodesTable(t *testing.T) {

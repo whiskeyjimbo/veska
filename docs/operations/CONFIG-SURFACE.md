@@ -7,7 +7,7 @@ related: [SOLO-13]
 
 # Configuration Surface
 
-The whole story. One file (`~/.engram/config.toml`) plus a handful
+The whole story. One file (`~/.veska/config.toml`) plus a handful
 of environment variables. No per-workspace config files, no
 identity policy, no replication policy, no mode selectors.
 
@@ -15,12 +15,12 @@ identity policy, no replication policy, no mode selectors.
 
 | File | Purpose |
 |---|---|
-| `~/.engram/config.toml` | Daemon config. Created by `engram init` if absent. |
-| `~/.engram/audit.jsonl` | Append-only audit log. Owned by Engram. |
-| `<repo>/.engramignore` | Per-repo ignore patterns. Plain `.gitignore` syntax. |
+| `~/.veska/config.toml` | Daemon config. Created by `veska init` if absent. |
+| `~/.veska/audit.jsonl` | Append-only audit log. Owned by Engram. |
+| `<repo>/.veskaignore` | Per-repo ignore patterns. Plain `.gitignore` syntax. |
 | `<repo>/.beads/current_task` | Active-task pin if the `bd-cli` tracker integration is on. |
 
-That's it. Backup is `engram backup create` (SOLO-08 §9), not a
+That's it. Backup is `veska backup create` (SOLO-08 §9), not a
 `tar` of the live directory — tarring a running SQLite database
 captures inconsistent WAL state.
 
@@ -28,8 +28,8 @@ captures inconsistent WAL state.
 
 | Var | Purpose | Default |
 |---|---|---|
-| `ENGRAM_HOME` | Daemon data root. | `~/.engram` |
-| `ENGRAM_CONFIG` | Override the config file path. | `$ENGRAM_HOME/config.toml` |
+| `VESKA_HOME` | Daemon data root. | `~/.veska` |
+| `ENGRAM_CONFIG` | Override the config file path. | `$VESKA_HOME/config.toml` |
 | `ENGRAM_LOG_FORMAT` | `text` or `json`. | `text` |
 | `ENGRAM_LOG_LEVEL` | `debug`, `info`, `warn`, `error`. | `info` |
 | `ENGRAM_OTLP_ENDPOINT` | OTLP exporter target. Enables tracing if set. Overrides `tracing.otlp_endpoint`. | unset |
@@ -38,7 +38,7 @@ captures inconsistent WAL state.
 Env vars override file values. CLI flags override env. No hot
 reload; restart for changes to take effect.
 
-## 3. `~/.engram/config.toml`
+## 3. `~/.veska/config.toml`
 
 A complete example with defaults. The surface is split: a
 **common** set users tune routinely (top of the file) and an
@@ -52,16 +52,16 @@ the file see what is and isn't worth their time.
 ```toml
 # ─── daemon ──────────────────────────────────────────────────
 [daemon]
-cli_socket_path = "~/.engram/cli.sock"      # CLI connections; actor_kind = 'human'
-mcp_socket_path = "~/.engram/mcp.sock"      # MCP shim connections; actor_kind = 'agent'
-pid_file        = "~/.engram/daemon.pid"
+cli_socket_path = "~/.veska/cli.sock"      # CLI connections; actor_kind = 'human'
+mcp_socket_path = "~/.veska/mcp.sock"      # MCP shim connections; actor_kind = 'agent'
+pid_file        = "~/.veska/daemon.pid"
 shutdown_grace  = "5s"                       # graceful-stop window
 
 # ─── logging ─────────────────────────────────────────────────
 [logging]
 format          = "text"                     # "text" | "json"
 level           = "info"                     # debug | info | warn | error
-file            = "~/.engram/logs/daemon.log"  # rotated internally
+file            = "~/.veska/logs/daemon.log"  # rotated internally
 rotate_at_bytes = 104857600                  # 100 MiB
 keep_rotations  = 5                          # daemon.log.1..5
 
@@ -83,7 +83,7 @@ sample_ratio    = 1.0                        # set at opt-in time; lower for noi
 
 # ─── storage ─────────────────────────────────────────────────
 [storage]
-db_path                = "~/.engram/engram.db"
+db_path                = "~/.veska/veska.db"
 journal_mode           = "WAL"               # do not change
 synchronous            = "FULL"              # "FULL" (default) | "NORMAL". See SOLO-08 §5.1.
 wal_autocheckpoint     = 1000                # pages
@@ -145,7 +145,7 @@ timeout                = "60s"
 #   - per_commit overage: skip remaining specialties this commit;
 #                         file `BudgetExceeded` finding (medium)
 #   - daily cap reached:  pause new review jobs until midnight;
-#                         logged via `engram doctor pipelines` and
+#                         logged via `veska doctor pipelines` and
 #                         one line in audit.jsonl. Not a Finding;
 #                         not human-action-gated. (See SOLO-11 §3.1.)
 # USD caps come with hosted LLM providers when they ship. We
@@ -164,7 +164,7 @@ refresh_interval       = "24h"
 
 # ─── tracker integration ─────────────────────────────────────
 # Default is "none" — no tracker integration. Set to "bd-cli" to
-# enable the local `bd` CLI integration; `engram init` probes for
+# enable the local `bd` CLI integration; `veska init` probes for
 # `bd` on $PATH (same shape as the Ollama probe) and refuses
 # silent degradation. We refer to the integration as "the tracker"
 # or "the bd-cli tracker"; the brand "Beads" never appears in
@@ -198,7 +198,7 @@ stable_boot_after      = "60s"               # alive this long → counter reset
 
 # ─── backup ──────────────────────────────────────────────────
 [backup]
-default_path           = "~/.engram-backups/" # where engram backup create writes by default
+default_path           = "~/.veska-backups/" # where veska backup create writes by default
 auto                   = true                 # daily auto-backup at first idle window after local midnight (SOLO-08 §9.5)
 auto_retain            = 7                    # number of auto-backup files retained (older auto-backups pruned; user-initiated backups never auto-pruned)
 staleness_warn         = "24h"                # doctor warns if last backup older than this (with auto on, 24h is reachable; lower the alarm window)
@@ -260,7 +260,7 @@ finding_closed_grace   = "720h"              # 30d
 ## 4. Resolution order
 
 1. Compile-time defaults.
-2. `~/.engram/config.toml` (overlay).
+2. `~/.veska/config.toml` (overlay).
 3. Environment variables (overlay).
 4. CLI flags (overlay; rare; for one-shot commands).
 

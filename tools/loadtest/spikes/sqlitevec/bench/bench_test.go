@@ -10,9 +10,9 @@ import (
 	vec "github.com/asg017/sqlite-vec-go-bindings/cgo"
 	_ "github.com/mattn/go-sqlite3"
 
-	"github.com/whiskeyjimbo/engram/solov2/tools/loadtest/spikes/sqlitevec/bench"
-	"github.com/whiskeyjimbo/engram/solov2/tools/loadtest/spikes/sqlitevec/gen"
-	"github.com/whiskeyjimbo/engram/solov2/tools/loadtest/spikes/sqlitevec/loader"
+	"github.com/whiskeyjimbo/veska/tools/loadtest/spikes/sqlitevec/bench"
+	"github.com/whiskeyjimbo/veska/tools/loadtest/spikes/sqlitevec/gen"
+	"github.com/whiskeyjimbo/veska/tools/loadtest/spikes/sqlitevec/loader"
 )
 
 func init() {

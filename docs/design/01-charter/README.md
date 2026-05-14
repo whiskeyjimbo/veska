@@ -15,7 +15,7 @@ Engram is a **single-process daemon** that turns local Git
 repositories into a queryable graph and a queryable vector index,
 and exposes both through MCP. It runs on the developer's laptop.
 The data is one SQLite file plus a handful of supporting files
-under `~/.engram/`.
+under `~/.veska/`.
 
 **Single-user, not single-contributor.** Engram has one operator —
 the developer running the daemon — but it expects to live inside
@@ -26,8 +26,8 @@ one Engram user on the machine.
 
 **Multi-repo, single-daemon.** The daemon indexes N repos
 simultaneously — a service, its SDK, a docs repo are the typical
-solo working set. Repos are dynamic state: `engram repo add`
-registers; `engram repo remove` reverses. Cross-repo edges (service
+solo working set. Repos are dynamic state: `veska repo add`
+registers; `veska repo remove` reverses. Cross-repo edges (service
 A `CALLS` SDK B) are computed at query time, not stored — see
 SOLO-04 §5.4 and SOLO-11 §9. Cross-repo answers always reflect the
 target repo's current promoted branch; there is no version-pinning.
@@ -104,7 +104,7 @@ Deliberate non-goals:
    / `DEFAULT`. Unmeasured budgets cannot be cited as decisions.
    Other docs cross-reference SOLO-13 instead of repeating
    numbers.
-5. **The CLI is the operator surface.** `engram doctor` is what
+5. **The CLI is the operator surface.** `veska doctor` is what
    the user sees. Spec it before its observability backend.
 6. **Deferred work stays out of normative text.** Anything not
    shipped lives under `deferred/` and is not referenced by
@@ -133,7 +133,7 @@ Known collisions:
 - **"Engram"** collides with the keyboard layout, the Engram
   memory-engineering startup, and several neuroscience products.
   The binary is `engram`, the Go module is `engram`, the data dir
-  is `~/.engram/`. For a personal, on-device product, discoverability
+  is `~/.veska/`. For a personal, on-device product, discoverability
   is not the goal and the collision is acceptable. **Trademark
   resolution is required before any V2.1 server-tier work begins**
   — that is the deadline, not "deferred indefinitely." A server

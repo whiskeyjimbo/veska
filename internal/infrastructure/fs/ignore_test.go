@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	fsignore "github.com/whiskeyjimbo/engram/solov2/internal/infrastructure/fs"
+	fsignore "github.com/whiskeyjimbo/veska/internal/infrastructure/fs"
 )
 
 func TestLoad_NoFile_ReturnsDefaults(t *testing.T) {
@@ -40,7 +40,7 @@ func TestLoad_NoFile_ReturnsDefaults(t *testing.T) {
 func TestLoad_WithFile_MergesDefaultsAndFile(t *testing.T) {
 	dir := t.TempDir()
 	content := "custom-dir/\n# this is a comment\n\n*.tmp\n"
-	if err := os.WriteFile(filepath.Join(dir, ".engramignore"), []byte(content), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, ".veskaignore"), []byte(content), 0o644); err != nil {
 		t.Fatalf("setup: %v", err)
 	}
 
@@ -112,7 +112,7 @@ func TestShouldIgnore_RegularFile_NotIgnored(t *testing.T) {
 
 func TestShouldIgnore_CustomPattern(t *testing.T) {
 	dir := t.TempDir()
-	if err := os.WriteFile(filepath.Join(dir, ".engramignore"), []byte("secrets/\n"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, ".veskaignore"), []byte("secrets/\n"), 0o644); err != nil {
 		t.Fatalf("setup: %v", err)
 	}
 
@@ -132,7 +132,7 @@ func TestShouldIgnore_CustomPattern(t *testing.T) {
 func TestLoad_CommentsAndBlankLinesSkipped(t *testing.T) {
 	dir := t.TempDir()
 	content := "# header comment\n\nkeep-me/\n  # indented comment\n\n"
-	if err := os.WriteFile(filepath.Join(dir, ".engramignore"), []byte(content), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, ".veskaignore"), []byte(content), 0o644); err != nil {
 		t.Fatalf("setup: %v", err)
 	}
 

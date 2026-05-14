@@ -41,7 +41,7 @@ the prior set is preserved as historical record.
 | SOLO-13 | NFR | Observability, perf budgets, degraded modes |
 | SOLO-14 | Roadmap | Milestones M1–M5; cutover at M6 |
 | SOLO-15 | Glossary | Authoritative ubiquitous language |
-| SOLO-16 | Error catalogue | Every `engram_code`, exit code, audit shape |
+| SOLO-16 | Error catalogue | Every `veska_code`, exit code, audit shape |
 | SOLO-17 | Lifecycle & Operations | Schema migrations, upgrade-during-run, restore, install/uninstall |
 | ADR-* | ADRs | Discrete decisions cited from narrative docs |
 

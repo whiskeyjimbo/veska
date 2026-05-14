@@ -42,7 +42,7 @@ func TestNewActor_HappyPath_Agent(t *testing.T) {
 }
 
 func TestNewActor_HappyPath_System(t *testing.T) {
-	a, err := NewActor("service:engram", ActorKindSystem)
+	a, err := NewActor("service:veska", ActorKindSystem)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}

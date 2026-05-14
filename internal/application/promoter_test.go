@@ -10,7 +10,7 @@ import (
 
 	_ "modernc.org/sqlite"
 
-	"github.com/whiskeyjimbo/engram/solov2/internal/core/domain"
+	"github.com/whiskeyjimbo/veska/internal/core/domain"
 )
 
 // openMemDB opens an in-memory SQLite DB with foreign keys enabled and creates
@@ -205,8 +205,8 @@ func TestPromoteUnregisteredRepo(t *testing.T) {
 	if unreg.RepoID != "unknown-repo" {
 		t.Errorf("ErrUnregisteredRepo.RepoID: want %q, got %q", "unknown-repo", unreg.RepoID)
 	}
-	if !strings.Contains(err.Error(), "engram repo add") {
-		t.Errorf("error message should contain 'engram repo add', got: %q", err.Error())
+	if !strings.Contains(err.Error(), "veska repo add") {
+		t.Errorf("error message should contain 'veska repo add', got: %q", err.Error())
 	}
 	if !strings.Contains(err.Error(), "unknown-repo") {
 		t.Errorf("error message should contain repoID, got: %q", err.Error())

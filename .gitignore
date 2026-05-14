@@ -6,8 +6,8 @@
 
 # Binaries
 /driver
-/engram
-/engram-daemon
+/veska
+/veska-daemon
 /gcsweep
 /loader
 /mcp-latency

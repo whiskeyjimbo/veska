@@ -81,7 +81,7 @@ interactive explorer: search, breadcrumbs, node inspector pane, theme toggle, an
 as JSON inline in the HTML. Also supports a simpler SVG-only mode.
 
 **v2 overlap:** M4 wiki area — wiki already renders to `docs/engram/`. Visualization
-could be an additional `engram wiki --format=html` output, or a standalone
+could be an additional `veska wiki --format=html` output, or a standalone
 `engram visualize` command. Pure read path; just needs a `GraphStorage.Query` call.
 
 **Sketch:**

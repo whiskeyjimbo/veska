@@ -8,9 +8,9 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/whiskeyjimbo/engram/solov2/tools/loadtest/spikes/hnsw/eval"
-	ldb "github.com/whiskeyjimbo/engram/solov2/tools/loadtest/spikes/hnsw/lancedb"
-	"github.com/whiskeyjimbo/engram/solov2/tools/loadtest/spikes/sqlitevec/gen"
+	"github.com/whiskeyjimbo/veska/tools/loadtest/spikes/hnsw/eval"
+	ldb "github.com/whiskeyjimbo/veska/tools/loadtest/spikes/hnsw/lancedb"
+	"github.com/whiskeyjimbo/veska/tools/loadtest/spikes/sqlitevec/gen"
 )
 
 const smallN = 500 // lancedb is heavier; keep CI test small

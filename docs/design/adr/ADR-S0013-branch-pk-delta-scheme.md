@@ -138,10 +138,10 @@ If the spike lands red and we trip this ADR:
 3. The promotion pipeline writes trunk + delta in the same
    `BEGIN IMMEDIATE`. Trunk row is upserted (`INSERT ... ON
    CONFLICT DO NOTHING`); delta row is unconditionally inserted.
-4. Branch GC (`engram gc --branches`) removes delta rows whose
+4. Branch GC (`veska gc --branches`) removes delta rows whose
    `branch` is gone, then sweeps trunk rows with no remaining
    delta references.
-5. `engram doctor storage` reports trunk-vs-delta row counts so
+5. `veska doctor storage` reports trunk-vs-delta row counts so
    the operator can see overlap.
 
 ### What stays the same
@@ -180,7 +180,7 @@ If the spike lands red and we trip this ADR:
 ## Alternatives considered
 
 1. **Per-branch shadow tables** (`nodes_branch_<sanitized>`).
-   Rejected: SQLite handles many tables fine but `engram gc
+   Rejected: SQLite handles many tables fine but `veska gc
    --branches` becomes a DDL operation.
 2. **Branch-as-bitmap.** Store `branches BLOB` on each node,
    bit-set per branch. Rejected: branch IDs are strings (refs),

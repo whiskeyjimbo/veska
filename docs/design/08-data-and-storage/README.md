@@ -12,7 +12,7 @@ related: [SOLO-01, SOLO-04, SOLO-11, ADR-S0001]
 ## 1. The decision
 
 Engram Solo stores everything in **one SQLite file** at
-`~/.engram/engram.db`. Vector embeddings live in the same file via
+`~/.veska/veska.db`. Vector embeddings live in the same file via
 the `sqlite-vec` extension. There are no child processes for
 storage. There is no Dolt. There are no Dolt branches mirroring
 Git branches. There is no Qdrant. There is no `_workspace`
@@ -34,7 +34,7 @@ the build system:
   `linux/amd64`, `linux/arm64`, `darwin/amd64`, `darwin/arm64`.
   Each build embeds the matching pre-built sqlite-vec extension
   (`vec0.so` on Linux, `vec0.dylib` on macOS) as a Go `embed.FS`
-  resource and writes it to `~/.engram/lib/vec0.<ext>` on first
+  resource and writes it to `~/.veska/lib/vec0.<ext>` on first
   start (or after a binary upgrade whose embedded sqlite-vec sha
   differs from the on-disk file). The daemon loads the extension
   from that path; no external installation is required.
@@ -42,7 +42,7 @@ the build system:
   `go.mod`-adjacent build metadata; binary upgrades that bump the
   pin run as schema migrations (SOLO-08 §10) when the embedded
   vec0 schema actually changes. Patch-level sqlite-vec upgrades
-  with no DDL change are hot-replaced in `~/.engram/lib/` on next
+  with no DDL change are hot-replaced in `~/.veska/lib/` on next
   daemon start.
 - **Code signing on macOS.** The dylib is signed under the same
   developer certificate as the daemon binary. Loading an
@@ -72,10 +72,10 @@ override per-pool via the `[storage]` config (CONFIG-SURFACE).
 ## 2. What's in the file
 
 ```
-~/.engram/
-  engram.db              ← the database (SQLite + sqlite-vec)
-  engram.db-wal          ← WAL file (managed by SQLite)
-  engram.db-shm          ← shared-memory index (managed by SQLite)
+~/.veska/
+  veska.db              ← the database (SQLite + sqlite-vec)
+  veska.db-wal          ← WAL file (managed by SQLite)
+  veska.db-shm          ← shared-memory index (managed by SQLite)
   audit.jsonl            ← append-only audit log
   config.toml            ← daemon config
   cli.sock               ← Unix socket; CLI traffic; actor_kind=human
@@ -86,7 +86,7 @@ override per-pool via the `[storage]` config (CONFIG-SURFACE).
 ```
 
 That is the entire on-disk footprint. Reset is `rm -rf
-~/.engram/`. Backup is **not** `tar` of the live tree — see §9
+~/.veska/`. Backup is **not** `tar` of the live tree — see §9
 for the mechanism. Restore is documented there.
 
 ## 3. Schema
@@ -105,7 +105,7 @@ failure recovery, and the on-disk contract.
 
 ```sql
 -- Per-database invariants. Single-row-style key/value table.
--- `engram init` populates it from the configured embedder and
+-- `veska init` populates it from the configured embedder and
 -- the schema migration set. Subsequent boots compare config
 -- to these values and refuse inconsistent boot (e.g. config
 -- says model=X but the database was initialised against Y).
@@ -287,7 +287,7 @@ CREATE TABLE node_embedding_refs (
 CREATE INDEX idx_node_embedding_refs_state ON node_embedding_refs(state, enqueued_at);
 
 -- The vec0 virtual table (sqlite-vec) for ANN search.
--- The dim is per-database, baked at `engram init` time from the
+-- The dim is per-database, baked at `veska init` time from the
 -- configured embedder's `ModelVersion()`. The example below shows
 -- the default (nomic-embed-text, 768); a database initialised
 -- against a 1536-dim model would carry FLOAT[1536] here.
@@ -326,7 +326,7 @@ re-embed. The `vec0` table is just the ANN index over the
 content-addressed bytes.
 
 **Per-database dim.** The vec0 dimension is fixed for the life of
-a database, baked at `engram init` time from the embedder's
+a database, baked at `veska init` time from the embedder's
 `ModelVersion()`. `database_meta` records the provider/model/dim;
 `node_embeddings.dim` per-row is the sanity check that catches
 stale rows after a swap. Boot refuses on mismatch with
@@ -351,7 +351,7 @@ CREATE TABLE daemon_state (
 --   restart_count               integer (decimal string)
 -- Updates run inside the breaker's own short transaction on
 -- writeDB.hot before any other goroutine starts. SQLite handles
--- atomicity; no flock dance. Recovery if engram.db itself is
+-- atomicity; no flock dance. Recovery if veska.db itself is
 -- corrupt: the daemon refuses to start at the migration runner
 -- (SOLO-08 §10) and the breaker is moot — there's no daemon to
 -- restart-loop.
@@ -389,7 +389,7 @@ is no 24h auto-acknowledge sweeper. Failure handling is per-
 - `embed`: row stays `failed`. Reads against affected nodes
   surface `degraded_reasons:["embedding_failed"]` (distinct from
   `embedding_pending` — the work is not in flight, it has given
-  up). The user retries via `engram doctor post-promotion-queue retry --kind=embed [--seq=N]`,
+  up). The user retries via `veska doctor post-promotion-queue retry --kind=embed [--seq=N]`,
   which moves matching `failed` rows back to `pending` and
   resets `attempts` to 0. There is no automatic retry; a model
   pull or config fix is the typical resolution and the user is
@@ -407,9 +407,9 @@ is no 24h auto-acknowledge sweeper. Failure handling is per-
   post-promotion queue row stays `failed` until the finding closes through the
   human-action gate. Closing the finding flips the row to `done`.
 
-`engram doctor post-promotion-queue` lists every `failed` row with its seq,
+`veska doctor post-promotion-queue` lists every `failed` row with its seq,
 work_kind, repo, branch, attempts, and last error. The user's
-retry path is uniform: `engram doctor post-promotion-queue retry [--kind=K] [--seq=N]`.
+retry path is uniform: `veska doctor post-promotion-queue retry [--kind=K] [--seq=N]`.
 Without flags it retries every `failed` row across all kinds.
 
 Queue-depth signalling: `post_promotion_queue.high_water` (default 10 000) and
@@ -425,7 +425,7 @@ transaction:
    itself, which proceeds.
 2. Emits `degraded_reasons: ["post_promotion_queue_deferred:embed:<count>"]`
    on subsequent MCP reads until depth drops below low-water.
-3. Surfaces the deferred count in `engram doctor post-promotion-queue`.
+3. Surfaces the deferred count in `veska doctor post-promotion-queue`.
 
 Deferred rows transition to `pending` as soon as queue depth
 drops below `low_water`; the embed worker picks them up on its
@@ -459,7 +459,7 @@ finding's payload carries the deferred-row count and the
 oldest row's age so the user can decide whether to wait,
 swap embedder, or pause indexing on selected repos.
 
-`engram doctor post-promotion-queue` surfaces row counts by state and `work_kind`,
+`veska doctor post-promotion-queue` surfaces row counts by state and `work_kind`,
 and lists the seq IDs of any `failed` row aged past its policy.
 
 ### 3.5 Audit log shape
@@ -601,7 +601,7 @@ shape under M1 deadline pressure.
 
 Branch GC runs at daemon start (after resync) and after every
 wake-reconcile sweep (SOLO-03 §5.2) — never on a wall-clock cron,
-because laptops sleep through wall clocks. `engram gc --branches`
+because laptops sleep through wall clocks. `veska gc --branches`
 is the manual handle for the same routine. It sweeps rows whose
 `branch` value no longer appears in `git branch -a`. Default
 retention: 7 days post-deletion. With branch-in-PK this sweep is
@@ -701,7 +701,7 @@ macOS row carries the cost.
 
 Operators who explicitly want the lower-durability NORMAL mode
 on macOS (or any platform) set `[storage].synchronous = "NORMAL"`
-in `~/.engram/config.toml`. The config is honoured; the doc
+in `~/.veska/config.toml`. The config is honoured; the doc
 defaults are FULL. We do not offer `OFF`.
 
 OQ-S002 (M1) measures actual fsync cost on the reference laptop
@@ -717,10 +717,10 @@ the daemon may be down across user-side commits, in which case
 |---|---|
 | Daemon crashes mid-promotion | `BEGIN IMMEDIATE` was either committed (Git already has SHA → next commit succeeds) or rolled back (next commit retries). Neither leaves partial state. |
 | Power loss / kernel panic between promotion `COMMIT` and next checkpoint | With `synchronous = FULL` (default) the promotion is durable. Operators who overrode to `NORMAL` may lose the most recent promotion; startup resync (SOLO-03 §5.7) replays when `last_promoted_sha < HEAD`. |
-| `last_promoted_sha` not reachable from `HEAD` (force-push, history rewrite) | Startup resync logs `ErrPromotionDivergent`, falls back to a fresh full reparse for the active branch, and records the new `HEAD` as `last_promoted_sha`. Findings on the orphaned branch persist until `engram gc --branches` sweeps them. (SOLO-03 §5.7.) |
+| `last_promoted_sha` not reachable from `HEAD` (force-push, history rewrite) | Startup resync logs `ErrPromotionDivergent`, falls back to a fresh full reparse for the active branch, and records the new `HEAD` as `last_promoted_sha`. Findings on the orphaned branch persist until `veska gc --branches` sweeps them. (SOLO-03 §5.7.) |
 | SQLite database locked by an external writer (e.g. user `sqlite3` shell) | `BEGIN IMMEDIATE` blocks until `busy_timeout` expires (5s hot, 30s embed); the in-flight op then fails. User can `engram promote --retry` after closing the external connection. In-process pools do not contend with each other beyond SQLite's own lock arbitration (SOLO-11 §10, ADR-S0011). |
 | Embedding goroutine crashes | Daemon supervisor restarts it; pending refs stay `pending`; semantic search returns `degraded_reasons: ['embedding_pending']`. |
-| Disk full | Promotion fails; hook returns non-zero; daemon refuses new MCP writes until `engram doctor disk` reports OK. The daemon also (a) checkpoints WAL aggressively (`PRAGMA wal_checkpoint(TRUNCATE)`) to release any pending pages, (b) rotates `audit.jsonl` and the daemon log to their retained-set sizes, and (c) refuses to write new pre-migration auto-snapshots until pressure clears (an old pre-migration snapshot is preserved; a new one would have nowhere to land). Backups are not auto-pruned — the user owns retention there (§9.5). |
+| Disk full | Promotion fails; hook returns non-zero; daemon refuses new MCP writes until `veska doctor disk` reports OK. The daemon also (a) checkpoints WAL aggressively (`PRAGMA wal_checkpoint(TRUNCATE)`) to release any pending pages, (b) rotates `audit.jsonl` and the daemon log to their retained-set sizes, and (c) refuses to write new pre-migration auto-snapshots until pressure clears (an old pre-migration snapshot is preserved; a new one would have nowhere to land). Backups are not auto-pruned — the user owns retention there (§9.5). |
 | WAL grows unboundedly | Daemon checkpoints WAL on idle (no writes for 5s). `PRAGMA wal_autocheckpoint = 1000` (pages). |
 | sqlite-vec extension missing | Daemon fails to start with a clear error pointing at install instructions. No silent degradation. |
 
@@ -797,8 +797,8 @@ gate.
 
 ## 9. Backup, restore, integrity
 
-`tar` of `~/.engram/` while the daemon is running is **unsafe**.
-The triple `engram.db` + `engram.db-wal` + `engram.db-shm` is in
+`tar` of `~/.veska/` while the daemon is running is **unsafe**.
+The triple `veska.db` + `veska.db-wal` + `veska.db-shm` is in
 flux during writes; an archive captured mid-checkpoint can pass
 `PRAGMA integrity_check` after restore and still corrupt
 downstream behaviour. We do not document `tar` as the backup
@@ -814,7 +814,7 @@ backup overlapping a refactor commit visibly slows the refactor.
 The pre-migration auto-snapshot path (§10) inherits this cost:
 upgrading the daemon binary against a 5 GiB DB may block start
 for 60+ seconds before the migration runner begins. The
-`engram upgrade` flow surfaces "snapshot in progress" through
+`veska upgrade` flow surfaces "snapshot in progress" through
 the shim's `cli_command` payload so the editor doesn't appear
 hung. M1 measures actual wall-clock against representative DBs.
 
@@ -840,7 +840,7 @@ Properties that matter:
 
 **Mechanically:** `VACUUM INTO` is a random-read on the source
 pages plus a sequential write to the destination — not a single
-sequential I/O pass. `engram doctor backup` surfaces the age of
+sequential I/O pass. `veska doctor backup` surfaces the age of
 the last successful backup so the user can see drift; we do not
 guarantee a daily cadence on laptops that suspend or are powered
 off (see §9.5).
@@ -848,26 +848,26 @@ off (see §9.5).
 Audit log, config, and cache files are plain files; they are
 copied alongside the snapshot in a tarball.
 
-### 9.2 `engram backup create`
+### 9.2 `veska backup create`
 
 ```
-engram backup create [--dest <path>]
+veska backup create [--dest <path>]
 ```
 
 Default destination: `backup.default_path` from CONFIG-SURFACE.md
-(default `~/.engram-backups/`), filename
+(default `~/.veska-backups/`), filename
 `engram-YYYYMMDD-HHMMSS.tgz`.
 
 Steps:
 
-1. Build a temp directory `~/.engram-backups/.staging/<ts>/`.
-2. Run `VACUUM INTO '.staging/<ts>/engram.db'` against the live
+1. Build a temp directory `~/.veska-backups/.staging/<ts>/`.
+2. Run `VACUUM INTO '.staging/<ts>/veska.db'` against the live
    daemon DB. The daemon executes this; the CLI sends an RPC.
 3. Copy `config.toml`, `audit.jsonl` (and rotated siblings),
    `cache/` into the staging dir. Audit and cache are append-only
    or content-addressed; a plain copy is consistent.
 4. `tar -czf <dest>` over the staging dir.
-5. Run `engram backup verify <dest>` (§9.3) before reporting
+5. Run `veska backup verify <dest>` (§9.3) before reporting
    success.
 6. Remove the staging dir.
 
@@ -875,50 +875,50 @@ The `cli.sock`, `mcp.sock`, and `daemon.pid` are **not** backed
 up — they are runtime sentinels recreated at start. `models/`
 is **not** backed up either; the embedder fetches them on demand.
 
-### 9.3 `engram backup verify`
+### 9.3 `veska backup verify`
 
 ```
-engram backup verify <path>
+veska backup verify <path>
 ```
 
 Steps:
 
 1. Open the tarball without extracting permanent files.
-2. Stream-extract `engram.db` to a fresh temp directory.
+2. Stream-extract `veska.db` to a fresh temp directory.
 3. Open it with SQLite, run `PRAGMA integrity_check;`.
 4. Run `PRAGMA foreign_key_check;` (catches FK violations the
    integrity check doesn't).
 5. Verify `audit.jsonl` is well-formed JSONL (each line parses).
 6. Exit 0 if all pass, 2 on any failure (per SOLO-13 §2 exit
-   codes for `engram doctor backup`).
+   codes for `veska doctor backup`).
 
-`engram doctor backup` runs the same checks against the most
+`veska doctor backup` runs the same checks against the most
 recent file in `backup.default_path` and surfaces age and
 verification result.
 
 ### 9.4 Restore
 
 ```
-engram backup restore <backup.tgz>
+veska backup restore <backup.tgz>
 ```
 
-`engram backup restore` is a first-class command — typing the
-underlying steps by hand into `~/.engram/` is the kind of
+`veska backup restore` is a first-class command — typing the
+underlying steps by hand into `~/.veska/` is the kind of
 operation that ends with "I restored over my live db." The
 command:
 
 1. Refuses to run while the daemon is up. Stderr names
-   `engram daemon stop` as the prerequisite. (No automatic
+   `veska daemon stop` as the prerequisite. (No automatic
    stop — restore is destructive enough that we want the user
    to take that step deliberately.)
 2. Verifies the tarball with the same checks as
-   `engram backup verify` (§9.3) — integrity, foreign keys,
-   audit JSONL well-formedness — *before* touching `~/.engram/`.
+   `veska backup verify` (§9.3) — integrity, foreign keys,
+   audit JSONL well-formedness — *before* touching `~/.veska/`.
    A failed verification leaves the existing data untouched.
-3. Renames the existing `engram.db`, `engram.db-wal`,
-   `engram.db-shm`, `audit.jsonl`, and `cache/` to a sibling
-   `~/.engram/.replaced-<ts>/` directory. Nothing is deleted.
-4. Extracts the tarball into `~/.engram/`.
+3. Renames the existing `veska.db`, `veska.db-wal`,
+   `veska.db-shm`, `audit.jsonl`, and `cache/` to a sibling
+   `~/.veska/.replaced-<ts>/` directory. Nothing is deleted.
+4. Extracts the tarball into `~/.veska/`.
 5. **Audit-log merge.** Appends the lines from
    `.replaced-<ts>/audit.jsonl` (post-backup-cutoff lines) onto
    the freshly-restored `audit.jsonl`, sorted by `ts`. A line
@@ -929,7 +929,7 @@ command:
    it silently would be a compliance footgun.
 6. Prints the path of the `.replaced-<ts>/` directory and the
    command to delete it once the user has confirmed the restore
-   is good (`rm -rf ~/.engram/.replaced-<ts>`).
+   is good (`rm -rf ~/.veska/.replaced-<ts>`).
 7. Exits 0 on success, 2 on verification failure (no changes made),
    3 on partial restore failure (changes rolled back from the
    `.replaced-<ts>/` sidecar).
@@ -955,11 +955,11 @@ automatically.
   the default shape (`[backup].auto = true` ships *off* by
   default until the cadence story is validated;
   `[backup].auto_retain = 7`). When enabled, the daemon attempts
-  `engram backup create` at the first observed idle window after
+  `veska backup create` at the first observed idle window after
   local midnight — but a laptop that is suspended, off, or
   continuously busy at midnight will simply skip days. The doc
   does not promise a guaranteed daily cadence on developer
-  laptops; `engram doctor backup` reports last-successful-backup
+  laptops; `veska doctor backup` reports last-successful-backup
   age so drift is visible. Auto-managed files prune past
   `auto_retain`; user-initiated backups are never auto-pruned.
   Solo developers who want no auto-backups leave
@@ -969,7 +969,7 @@ automatically.
   redacts secret patterns at write time (SOLO-08 §3.5,
   SECRETS-RUNBOOK.md), but the audit log can still contain
   attribution and tool names.
-- **Cloud upload.** `engram backup create` writes to a local
+- **Cloud upload.** `veska backup create` writes to a local
   path. `s3 cp`, `rclone`, etc. are the user's tools.
 
 ## 10. Schema migrations: forward-only, transactional, snapshot-guarded
@@ -985,8 +985,8 @@ Three guarantees:
    rolls back atomically; the on-disk schema version is
    unchanged.
 2. **An auto-snapshot is taken before any migration runs.** The
-   runner calls `engram backup create` (SOLO-08 §9) into
-   `~/.engram-backups/.pre-migration/<from-version>-<to-version>-<ts>.tgz`
+   runner calls `veska backup create` (SOLO-08 §9) into
+   `~/.veska-backups/.pre-migration/<from-version>-<to-version>-<ts>.tgz`
    before applying the first pending migration. The snapshot is
    verified before the migration starts. If the snapshot or its
    verification fails, the migration does not run.
@@ -1004,7 +1004,7 @@ CREATE TABLE schema_migrations (
     applied_at    INTEGER NOT NULL,           -- unix epoch microseconds
     binary_sha    TEXT NOT NULL,              -- the daemon binary that ran the migration
     migration_sha TEXT NOT NULL,              -- sha256 of the migration file at apply time
-    applied_by    TEXT NOT NULL               -- "service:engram-daemon" usually
+    applied_by    TEXT NOT NULL               -- "service:veska-daemon" usually
 );
 ```
 
@@ -1052,7 +1052,7 @@ runner hashes it at apply time.
 - **Down migrations.** No `down.sql`, no `engram migrate down`.
   Recovery from a bad migration is one command:
   `engram restore --pre-migration` restores the most recent
-  pre-migration snapshot from `~/.engram-backups/.pre-migration/`
+  pre-migration snapshot from `~/.veska-backups/.pre-migration/`
   (the snapshot the runner took before the failing migration in
   §10's step 2), prints which version was rolled back to, and
   prints the binary version that pairs with that schema so the
@@ -1069,16 +1069,16 @@ runner hashes it at apply time.
   does not consolidate or skip applied versions.
 - **Out-of-band migration.** `engram migrate` as a CLI surface
   does not exist. Migrations are triggered by daemon start.
-  Manual SQL against `engram.db` while the daemon is stopped is
+  Manual SQL against `veska.db` while the daemon is stopped is
   supported but unsupported (see SOLO-11 §10.4 "What this design does NOT include" — the user is on
   their own).
 
 ### 10.4 The auto-snapshot retention policy
 
 Pre-migration snapshots accumulate in
-`~/.engram-backups/.pre-migration/`. Default retention: keep the
+`~/.veska-backups/.pre-migration/`. Default retention: keep the
 last 5; delete older. Configurable via `[backup].pre_migration_keep`
-(DEFAULT 5; CONFIG-SURFACE.md). `engram doctor backup` lists them
+(DEFAULT 5; CONFIG-SURFACE.md). `veska doctor backup` lists them
 separately from user-initiated backups so the user knows which
 were tool-created and prunable.
 

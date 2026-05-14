@@ -3,7 +3,7 @@ package ports
 import (
 	"context"
 
-	"github.com/whiskeyjimbo/engram/solov2/internal/core/domain"
+	"github.com/whiskeyjimbo/veska/internal/core/domain"
 )
 
 // GraphStorage is the port for persisting and querying the code graph.

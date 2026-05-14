@@ -475,7 +475,7 @@ captured point*"; the write-side scope boundary stays intact
 | `module_path` | `*string` | e.g. Go module path or npm package name; resolver key for cross-repo edges (§5.4) |
 
 Operations are minimal: register, unregister, rename. The
-lifecycle is owned by `engram repo add` / `engram repo remove`
+lifecycle is owned by `veska repo add` / `veska repo remove`
 CLI commands.
 
 Branches are not modelled as entities. They are the `branch`

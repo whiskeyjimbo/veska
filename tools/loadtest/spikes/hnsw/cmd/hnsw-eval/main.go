@@ -29,11 +29,11 @@ import (
 
 	usearchlib "github.com/unum-cloud/usearch/golang"
 
-	"github.com/whiskeyjimbo/engram/solov2/tools/loadtest/spikes/hnsw/cohnsw"
-	"github.com/whiskeyjimbo/engram/solov2/tools/loadtest/spikes/hnsw/eval"
-	ldb "github.com/whiskeyjimbo/engram/solov2/tools/loadtest/spikes/hnsw/lancedb"
-	uidx "github.com/whiskeyjimbo/engram/solov2/tools/loadtest/spikes/hnsw/usearch"
-	"github.com/whiskeyjimbo/engram/solov2/tools/loadtest/spikes/sqlitevec/gen"
+	"github.com/whiskeyjimbo/veska/tools/loadtest/spikes/hnsw/cohnsw"
+	"github.com/whiskeyjimbo/veska/tools/loadtest/spikes/hnsw/eval"
+	ldb "github.com/whiskeyjimbo/veska/tools/loadtest/spikes/hnsw/lancedb"
+	uidx "github.com/whiskeyjimbo/veska/tools/loadtest/spikes/hnsw/usearch"
+	"github.com/whiskeyjimbo/veska/tools/loadtest/spikes/sqlitevec/gen"
 )
 
 const (

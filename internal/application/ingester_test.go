@@ -5,7 +5,7 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/whiskeyjimbo/engram/solov2/internal/core/domain"
+	"github.com/whiskeyjimbo/veska/internal/core/domain"
 )
 
 // stubParser is an in-test implementation of ports.CodeParser.

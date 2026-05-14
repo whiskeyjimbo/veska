@@ -64,7 +64,7 @@ handle.
 
 ## Decision
 
-**Three `*sql.DB` handles to one `engram.db` file.** All three are
+**Three `*sql.DB` handles to one `veska.db` file.** All three are
 opened by `infrastructure/sqlite/pools.go` (`OpenPools`) at
 bootstrap time. The bootstrap call site receives a `*Pools`
 struct of opaque fields and passes it into the sqlite adapter

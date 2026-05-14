@@ -11,7 +11,7 @@ related: [SOLO-01, SOLO-08, SOLO-11, SOLO-14]
 
 One developer, one daemon, one machine. The NFR surface tracks that
 shape: structured logs by default, everything else opt-in, one
-operator command (`engram doctor`), and performance numbers
+operator command (`veska doctor`), and performance numbers
 labelled per the §3 convention (`BUDGET (unmeasured)`,
 `BUDGET (measured M<N>)`, `INVARIANT`, `DEFAULT`).
 
@@ -41,7 +41,7 @@ canonical Prometheus port and collides with a running Prometheus,
 Cockroach UI, and several other dev tools. On `bind: address
 already in use`, the daemon does **not** silently skip metrics —
 it writes a `warn`-level slog line and surfaces a `degraded`
-status in `engram doctor metrics` (exit 1) with the bound port
+status in `veska doctor metrics` (exit 1) with the bound port
 recovered from the OS error and a suggested alternative
 (`127.0.0.1:9091`). The user picks a free port in
 `metrics.listen` and restarts. We do not auto-probe-and-rebind:
@@ -52,21 +52,21 @@ The metric set is the spec, not a starting point. Twelve series:
 
 | Metric | Type | Labels | What it measures |
 |---|---|---|---|
-| `engram_seal_latency_seconds` | histogram | `repo_id` | End-to-end promotion duration: hook entry → SQL commit → post-promotion queue enqueue. |
-| `engram_post_commit_hook_duration_seconds` | histogram | `repo_id`, `commit_size` (`typical` \| `refactor`) | Wall-clock from hook entry to hook return — the user-visible commit latency budget (SOLO-13 §3.1). |
-| `engram_post_promotion_queue_depth` | gauge | `work_kind`, `state` | Rows in `post_promotion_queue` by `(work_kind, state)`. Replaces the prior pending-only gauge; covers `embed`/`auto_link`/`revalidate`/`review` × `pending`/`running`/`failed`. |
-| `engram_post_promotion_queue_oldest_pending_seconds` | gauge | `work_kind` | Age of the oldest `pending` row per work_kind. Surfaces embed lag during catch-up. |
-| `engram_writer_pool_busy_timeout_total` | counter | `pool` (`hot` \| `embed`) | Times `BEGIN IMMEDIATE` hit `busy_timeout` waiting for the SQLite OS lock. Catches embed/hot contention (ADR-S0011). |
-| `engram_writer_pool_wait_seconds` | histogram | `pool` | Time MCP writes spent waiting for an available connection in `writeDB.hot` / `writeDB.embed`. |
-| `engram_mcp_requests_total` | counter | `tool`, `result` | MCP tool call count. `result` is `ok`, `error`, or `degraded`. |
-| `engram_mcp_request_duration_seconds` | histogram | `tool`, `result` | MCP tool handler duration. |
-| `engram_vector_query_duration_seconds` | histogram | `kind` (`semantic_search` \| `find_similar_symbols`) | sqlite-vec ANN query latency. The number that decides whether vec0 is still on-budget at the current node count (ADR-S0001). |
-| `engram_daemon_memory_rss_bytes` | gauge | — | Process RSS from `/proc/self/status`. |
-| `engram_daemon_uptime_seconds` | counter | — | Seconds since daemon start. |
-| `engram_error_count` | counter | `kind` | Errors by kind (`promotion`, `embed`, `mcp`, `parse`, `watcher`). |
-| `engram_disk_free_bytes` | gauge | `mount` | Free bytes on the filesystem hosting `~/.engram/`. Catches disk pressure before it surfaces as a write failure. |
-| `engram_resync_in_flight` | gauge | `repo_id` | 1 while `last_promoted_sha < HEAD` replay is running for the repo, 0 otherwise. Lets the operator see startup-resync dominating cold start. |
-| `engram_branch_row_count` | gauge | `table` (`nodes` \| `edges` \| `findings`) | Row count per per-branch-PK table. Surfaces the OQ-S006 branch-PK growth concern at runtime instead of leaving it spike-only. |
+| `veska_seal_latency_seconds` | histogram | `repo_id` | End-to-end promotion duration: hook entry → SQL commit → post-promotion queue enqueue. |
+| `veska_post_commit_hook_duration_seconds` | histogram | `repo_id`, `commit_size` (`typical` \| `refactor`) | Wall-clock from hook entry to hook return — the user-visible commit latency budget (SOLO-13 §3.1). |
+| `veska_post_promotion_queue_depth` | gauge | `work_kind`, `state` | Rows in `post_promotion_queue` by `(work_kind, state)`. Replaces the prior pending-only gauge; covers `embed`/`auto_link`/`revalidate`/`review` × `pending`/`running`/`failed`. |
+| `veska_post_promotion_queue_oldest_pending_seconds` | gauge | `work_kind` | Age of the oldest `pending` row per work_kind. Surfaces embed lag during catch-up. |
+| `veska_writer_pool_busy_timeout_total` | counter | `pool` (`hot` \| `embed`) | Times `BEGIN IMMEDIATE` hit `busy_timeout` waiting for the SQLite OS lock. Catches embed/hot contention (ADR-S0011). |
+| `veska_writer_pool_wait_seconds` | histogram | `pool` | Time MCP writes spent waiting for an available connection in `writeDB.hot` / `writeDB.embed`. |
+| `veska_mcp_requests_total` | counter | `tool`, `result` | MCP tool call count. `result` is `ok`, `error`, or `degraded`. |
+| `veska_mcp_request_duration_seconds` | histogram | `tool`, `result` | MCP tool handler duration. |
+| `veska_vector_query_duration_seconds` | histogram | `kind` (`semantic_search` \| `find_similar_symbols`) | sqlite-vec ANN query latency. The number that decides whether vec0 is still on-budget at the current node count (ADR-S0001). |
+| `veska_daemon_memory_rss_bytes` | gauge | — | Process RSS from `/proc/self/status`. |
+| `veska_daemon_uptime_seconds` | counter | — | Seconds since daemon start. |
+| `veska_error_count` | counter | `kind` | Errors by kind (`promotion`, `embed`, `mcp`, `parse`, `watcher`). |
+| `veska_disk_free_bytes` | gauge | `mount` | Free bytes on the filesystem hosting `~/.veska/`. Catches disk pressure before it surfaces as a write failure. |
+| `veska_resync_in_flight` | gauge | `repo_id` | 1 while `last_promoted_sha < HEAD` replay is running for the repo, 0 otherwise. Lets the operator see startup-resync dominating cold start. |
+| `veska_branch_row_count` | gauge | `table` (`nodes` \| `edges` \| `findings`) | Row count per per-branch-PK table. Surfaces the OQ-S006 branch-PK growth concern at runtime instead of leaving it spike-only. |
 
 No SLO definitions, burn-rate pages, or alert routing ship in
 the daemon. Operators who want those scrape `/metrics` into
@@ -100,7 +100,7 @@ trace exporters; OTLP only.
 
 ## 2. Health
 
-There is one health surface: `engram doctor`. The CLI presents
+There is one health surface: `veska doctor`. The CLI presents
 **three** commands; everything else is structured data inside
 the JSON output.
 
@@ -109,32 +109,32 @@ scripts must know which command they're consuming.
 
 | Command | Exit | Meaning |
 |---|---|---|
-| `engram doctor`, `engram doctor --json` | 0 | healthy |
+| `veska doctor`, `veska doctor --json` | 0 | healthy |
 | | 1 | degraded (any section non-`ok` and non-broken) |
 | | 2 | broken (any section reports broken; worst-of) |
-| `engram doctor fix` | 0 | every action succeeded or skipped cleanly |
+| `veska doctor fix` | 0 | every action succeeded or skipped cleanly |
 | | 1 | partial (one or more actions returned degraded) |
 | | 2 | failed (one or more actions errored) |
-| `engram-daemon` (start path) | 0 | clean shutdown |
+| `veska-daemon` (start path) | 0 | clean shutdown |
 | | non-78, non-zero | runtime crash; supervisor restarts; counts toward §5.6 breaker |
 | | 78 | refuse-to-start (§5.8 row); supervisor halts; **does not** count toward breaker |
 
-The breaker exits in §5.6 set the `~/.engram/state/broken`
+The breaker exits in §5.6 set the `~/.veska/state/broken`
 marker so subsequent CLI invocations see the banner; the §5.8
 refuse-to-start path also writes the marker (with a different
 remediation hint) per SOLO-03 §5.6.
 
 ```
-engram doctor              # human-readable summary; runs every check, prints a digest
-engram doctor fix          # auto-remediates what it can; see §2.1a for the contract
-engram doctor --json       # full machine-readable bundle, all sections, in one object
-                           # (used by `engram doctor bundle`, by editor integrations,
+veska doctor              # human-readable summary; runs every check, prints a digest
+veska doctor fix          # auto-remediates what it can; see §2.1a for the contract
+veska doctor --json       # full machine-readable bundle, all sections, in one object
+                           # (used by `veska doctor bundle`, by editor integrations,
                            # and by anyone scripting against doctor output)
 ```
 
 The bare summary digest aggregates every section the JSON output
 produces; users who want to see one part run
-`engram doctor --json | jq '.data.<section>'`. We do not ship
+`veska doctor --json | jq '.data.<section>'`. We do not ship
 13 subcommands for the 13 sections — every one of them collected
 maintenance burden out of proportion to a one-developer surface.
 
@@ -142,7 +142,7 @@ Exit code: 0 on healthy, 1 on degraded, 2 on broken. The
 `--json` schema is normative (§2.1); operators and tooling
 consume it as a stable contract.
 
-Two adjacent CLI verbs that are *not* `engram doctor`
+Two adjacent CLI verbs that are *not* `veska doctor`
 subcommands (because they take action, not report state):
 
 ```
@@ -161,7 +161,7 @@ There are **no HTTP health endpoints**. No `/livez`, `/readyz`,
 run in K8s. If `metrics.enabled = true`, the same listener
 serves `/metrics` and nothing else.
 
-`engram doctor` is the user-visible operator surface. Spec it
+`veska doctor` is the user-visible operator surface. Spec it
 before its observability backend; everything else feeds it.
 
 **Section milestone map.** Not every section ships at M1; each
@@ -174,32 +174,32 @@ lands with the feature it covers. The mapping is:
 | `service`, `post_promotion_queue`, `pipelines` | M3 | m3.01–m3.05 (post-promotion queue + drain goroutines) |
 | `backup` | M3 | first auto-snapshot landing (SOLO-08 §10) |
 
-The bare `engram doctor` (no subcommand) reports only the
+The bare `veska doctor` (no subcommand) reports only the
 sections shipped in the current binary — it does not stub
 unimplemented sections. Older binaries reporting a smaller set
 is forward-compatible per §2.1's `data` tolerance rule.
 
-### 2.1a `engram doctor fix`
+### 2.1a `veska doctor fix`
 
-`engram doctor fix` runs every remediation the daemon can
+`veska doctor fix` runs every remediation the daemon can
 perform without ambiguity. The contract:
 
 - **Actions taken without prompt** (idempotent, non-destructive):
   - Retry every `failed` row in `post_promotion_queue` (kind-agnostic;
-    same path as `engram doctor post-promotion-queue retry`).
+    same path as `veska doctor post-promotion-queue retry`).
   - Reopen the daemon log file (`SIGHUP`-equivalent) if it was
     rotated externally.
   - Refresh stale vuln cache if `[vuln_source]` is configured.
 - **Actions taken on confirmation** (interactive only; require
   `y` from a TTY):
-  - Clear the crash-loop marker (`engram doctor reset-crash-loop`).
-  - Write a fresh backup if `engram doctor backup` reports stale.
+  - Clear the crash-loop marker (`veska doctor reset-crash-loop`).
+  - Write a fresh backup if `veska doctor backup` reports stale.
 - **Never taken**: anything that mutates `nodes`, `edges`,
   `findings`, or schema; anything that calls Ollama's pull
   endpoint; anything that touches an unrelated repo.
 
 **No-TTY behaviour.** When stdout is not a TTY (CI, script,
-editor integration), `engram doctor fix` runs only the no-prompt
+editor integration), `veska doctor fix` runs only the no-prompt
 actions and exits 0. Confirmation-required actions are skipped
 with a `messages[]` line listing the skipped action and the
 explicit subcommand to run it manually. `--yes` overrides this
@@ -222,7 +222,7 @@ if any action returned degraded, 2 if any action failed.
     {"action": "reopen_log",                   "ran": true,  "result": "ok",       "details": null},
     {"action": "refresh_vuln_cache",           "ran": false, "result": "skipped",  "details": {"reason": "vuln_source not configured"}},
     {"action": "reset_crash_loop",             "ran": false, "result": "skipped",  "details": {"reason": "no marker present"}},
-    {"action": "fresh_backup",                 "ran": false, "result": "skipped",  "details": {"reason": "no-tty: confirm-required action skipped; run `engram backup create`"}}
+    {"action": "fresh_backup",                 "ran": false, "result": "skipped",  "details": {"reason": "no-tty: confirm-required action skipped; run `veska backup create`"}}
   ]
 }
 ```
@@ -231,7 +231,7 @@ Codes: `ok`, `partial` (degraded), `failed` (broken).
 
 ### 2.1 `--json` output schema
 
-`engram doctor [<subcmd>] --json` writes one JSON object to
+`veska doctor [<subcmd>] --json` writes one JSON object to
 stdout, then exits with the same code as the human-readable form.
 The schema is **stable across patch releases**; additive
 changes (new optional fields, new `messages[].code` values) do
@@ -244,9 +244,9 @@ a minor version bump with a migration note.
 ```jsonc
 {
   "schema_version": 1,                          // bumps on breaking change
-  "command":        "engram doctor storage",    // exact subcommand
+  "command":        "veska doctor storage",    // exact subcommand
   "ts":             "2026-05-09T18:42:31.123Z", // RFC 3339, UTC
-  "engram_version": "v2.0.0-rc1",               // build version
+  "veska_version": "v2.0.0-rc1",               // build version
   "host": {
     "os":     "linux",                          // GOOS
     "arch":   "amd64",                          // GOARCH
@@ -270,7 +270,7 @@ tooling MUST tolerate unknown fields inside `data` (forward
 compat) and unknown `messages[].code` values (parsers ignore
 them rather than fail).
 
-The bare `engram doctor --json` (no subcommand) returns
+The bare `veska doctor --json` (no subcommand) returns
 `status` set to the worst observed across all subcommands and
 `data` set to a map of `{subcommand_name: <its full envelope>}`.
 
@@ -280,8 +280,8 @@ The bare `engram doctor --json` (no subcommand) returns
 "data": {
   "daemon_running":  true,
   "sockets": {
-    "cli": {"path": "/home/jeff/.engram/cli.sock", "reachable": true},
-    "mcp": {"path": "/home/jeff/.engram/mcp.sock", "reachable": true}
+    "cli": {"path": "/home/jeff/.veska/cli.sock", "reachable": true},
+    "mcp": {"path": "/home/jeff/.veska/mcp.sock", "reachable": true}
   },
   "pid":             482711,
   "uptime_s":        14823
@@ -314,8 +314,8 @@ is enabled in a config layer the operator may not realise).
 
 ```jsonc
 "data": {
-  "engram_home":     "/home/jeff/.engram",
-  "db_path":         "/home/jeff/.engram/engram.db",
+  "veska_home":     "/home/jeff/.engram",
+  "db_path":         "/home/jeff/.veska/veska.db",
   "db_size_bytes":   1287654321,
   "wal_size_bytes":  8388608,
   "vec0_size_bytes": 251658240,
@@ -438,14 +438,14 @@ just declining new review work until the next reset.
 ```
 
 Codes: `ok`, `not_running`, `flapping` (restarts_1h ≥ 2),
-`crash_loop_tripped` (broken; `engram doctor reset-crash-loop`
+`crash_loop_tripped` (broken; `veska doctor reset-crash-loop`
 is the remediation).
 
 #### 2.1.8 `backup`
 
 ```jsonc
 "data": {
-  "latest_path":          "/home/jeff/.engram/backups/2026-05-08T03-00-12.tar.gz",
+  "latest_path":          "/home/jeff/.veska/backups/2026-05-08T03-00-12.tar.gz",
   "age_seconds":          129831,
   "size_bytes":           1294857832,
   "tarball_opens":        true,
@@ -469,7 +469,7 @@ Per SOLO-10 §7. Schema:
   "mcp_clients": [
     {"actor_id": "agent:claude-code", "actor_kind": "agent", "connected_since": "2026-05-09T17:01:11Z"}
   ],
-  "audit_log_path":  "/home/jeff/.engram/audit.jsonl",
+  "audit_log_path":  "/home/jeff/.veska/audit.jsonl",
   "audit_log_size":  4218304,
   "refused_writes_24h": [
     {"ts": "2026-05-09T18:30:02Z", "gate": "close.finding.high", "actor_id": "agent:claude-code", "reason": "requires actor_kind=human"}
@@ -485,7 +485,7 @@ client did not declare a name).
 ```jsonc
 "data": {
   "broken_marker_existed": true,
-  "broken_marker_path":    "/home/jeff/.engram/state/broken",
+  "broken_marker_path":    "/home/jeff/.veska/state/broken",
   "removed":               true
 }
 ```
@@ -518,9 +518,9 @@ write; 2 on a write failure (disk full, permission denied).
 engram-doctor-bundle-2026-05-09T18-42-31Z.tar.gz
 ├── manifest.json                  # what's in the bundle, redaction summary
 ├── doctor/
-│   ├── summary.json               # `engram doctor --json`
-│   ├── status.json                # `engram doctor status --json`
-│   ├── egress.json                # `engram doctor egress --json`
+│   ├── summary.json               # `veska doctor --json`
+│   ├── status.json                # `veska doctor status --json`
+│   ├── egress.json                # `veska doctor egress --json`
 │   ├── storage.json
 │   ├── embedder.json
 │   ├── config.json                # secrets redacted (§2.1.5 rule)
@@ -543,12 +543,12 @@ engram-doctor-bundle-2026-05-09T18-42-31Z.tar.gz
 
 **Bundle exclusions** (never included, no flag overrides):
 
-- `engram.db` and `engram.db-wal` — schema, vector bytes, raw
+- `veska.db` and `veska.db-wal` — schema, vector bytes, raw
   node content. Too large; contains source code.
 - Full `audit.jsonl` history (rotations) — only the live tail.
 - Repo contents from any registered `Repo`.
 - Any embedding tensor or LLM prompt/response payload.
-- The user's home directory beyond `~/.engram/` resolved paths.
+- The user's home directory beyond `~/.veska/` resolved paths.
 
 **Redaction rules** (applied in addition to exclusions):
 
@@ -594,33 +594,33 @@ remediation context (free-form string the user supplies via
 The tarball is plain `tar.gz`. No encryption. No signing. The
 user owns where it goes from there.
 
-### 2.3 Filesystem allowlist (the `fs` section of `engram doctor --json`)
+### 2.3 Filesystem allowlist (the `fs` section of `veska doctor --json`)
 
-`~/.engram/` houses a SQLite database in WAL mode plus its
+`~/.veska/` houses a SQLite database in WAL mode plus its
 `-shm` shared-memory segment. Both have hard requirements about
 the underlying filesystem's locking and mmap semantics. The
-allowlist below is normative; `engram doctor fs` checks the
-filesystem under `$ENGRAM_HOME` and exits with code 0/1/2 per
+allowlist below is normative; `veska doctor fs` checks the
+filesystem under `$VESKA_HOME` and exits with code 0/1/2 per
 the §2 contract.
 
 | Filesystem | Status | Notes |
 |---|---|---|
 | **ext4, xfs, btrfs (no COW reflinks on the data dir)** on Linux | supported | The default on every mainstream distribution. |
-| **APFS** on macOS | supported | The default. SQLite WAL+SHM works correctly. Time Machine clones of `~/.engram/` while the daemon is running are unsafe (see SOLO-08 §9 — use `engram backup create` instead). |
+| **APFS** on macOS | supported | The default. SQLite WAL+SHM works correctly. Time Machine clones of `~/.veska/` while the daemon is running are unsafe (see SOLO-08 §9 — use `veska backup create` instead). |
 | **HFS+** on macOS | supported | Legacy; works. |
-| **tmpfs** | supported but discouraged | Loses durability across reboot. Useful for tests; not for a real `~/.engram/`. The daemon does not refuse to run; `engram doctor fs` warns. |
-| **btrfs with `nodatacow` disabled (default)** | supported with a caveat | Copy-on-write of the SQLite file is correct but inflates write amplification under WAL churn. The daemon does not refuse; `engram doctor fs` warns once. Operators with large graphs should `chattr +C ~/.engram` on a fresh dir. |
+| **tmpfs** | supported but discouraged | Loses durability across reboot. Useful for tests; not for a real `~/.veska/`. The daemon does not refuse to run; `veska doctor fs` warns. |
+| **btrfs with `nodatacow` disabled (default)** | supported with a caveat | Copy-on-write of the SQLite file is correct but inflates write amplification under WAL churn. The daemon does not refuse; `veska doctor fs` warns once. Operators with large graphs should `chattr +C ~/.veska` on a fresh dir. |
 | **zfs** on Linux/FreeBSD | supported | Same caveats as btrfs CoW; same warning. |
 | **NFS / SMB / network filesystems** | refused | SQLite WAL requires the same process to hold both the `-wal` and `-shm` mappings; networked filesystems break this. The daemon refuses to start with `ErrUnsupportedFilesystem`. |
-| **eCryptfs** | refused | Inflicts mmap inconsistency on the SHM segment. The daemon refuses to start. Move `$ENGRAM_HOME` to a non-eCryptfs location. (Note: this affects some Ubuntu installs that still use eCryptfs for `$HOME`; the user picks `~/.engram` outside `$HOME` via `ENGRAM_HOME`.) |
-| **overlayfs (devcontainers, Docker bind-mount edge cases)** | refused if `~/.engram/` lands on the upper layer of an overlay; supported on a tmpfs / volume mount | Devcontainers commonly mount the project root as overlayfs. Engram's data must live on a path that is *not* overlay (a named volume, a tmpfs, or a bind-mount). `engram doctor fs` detects overlay and refuses with a remediation pointing at named-volume setup. |
+| **eCryptfs** | refused | Inflicts mmap inconsistency on the SHM segment. The daemon refuses to start. Move `$VESKA_HOME` to a non-eCryptfs location. (Note: this affects some Ubuntu installs that still use eCryptfs for `$HOME`; the user picks `~/.veska` outside `$HOME` via `VESKA_HOME`.) |
+| **overlayfs (devcontainers, Docker bind-mount edge cases)** | refused if `~/.veska/` lands on the upper layer of an overlay; supported on a tmpfs / volume mount | Devcontainers commonly mount the project root as overlayfs. Engram's data must live on a path that is *not* overlay (a named volume, a tmpfs, or a bind-mount). `veska doctor fs` detects overlay and refuses with a remediation pointing at named-volume setup. |
 | **FUSE filesystems generally (sshfs, gcsfuse, s3fs)** | refused | Same WAL/SHM issue as NFS. |
 
 The check uses `statfs(2)` on Linux (`f_type` field) and
 `statfs(2)` on macOS (`f_fstypename`). When the filesystem is in
-the **refused** column, `engram doctor fs` exits 2 and the
+the **refused** column, `veska doctor fs` exits 2 and the
 daemon refuses to start with the same error. The remediation
-text names a supported filesystem and the `ENGRAM_HOME`
+text names a supported filesystem and the `VESKA_HOME`
 override.
 
 This list is not exhaustive — exotic filesystems (gfs2, ocfs2,
@@ -802,19 +802,19 @@ make the budget visible so M1 measurement catches it if it stretches.
 | Resource | Soft cap | Hard cap | Label |
 |---|---|---|---|
 | Daemon RSS at steady state, 1 repo | 2 GiB | 4 GiB (kill if exceeded) | BUDGET (measured M1): 17 MiB RSS after 50-branch × 5k-node load (250k rows), bench commit 662a951 (PASS) — SQLite page cache dominates, not row count |
-| Daemon RSS at steady state, N repos (working set) | 2 GiB global | 4 GiB global | BUDGET (measured M1): per-repo additive curve is ~17 MiB / repo at 250k rows; 50-repo projection ≈ 850 MiB — well within 2 GiB soft cap; `engram repo add` RSS check uses `internal/repo/rss.go` (commit in m1.10) |
+| Daemon RSS at steady state, N repos (working set) | 2 GiB global | 4 GiB global | BUDGET (measured M1): per-repo additive curve is ~17 MiB / repo at 250k rows; 50-repo projection ≈ 850 MiB — well within 2 GiB soft cap; `veska repo add` RSS check uses `internal/repo/rss.go` (commit in m1.10) |
 | Goroutines | 200 | 500 (refuse new work above) | DEFAULT |
 | File descriptors | 1024 | OS limit | INVARIANT (OS) |
-| `~/.engram/` on-disk size | unbounded; surfaced in `engram doctor storage` | — | INVARIANT |
+| `~/.veska/` on-disk size | unbounded; surfaced in `veska doctor storage` | — | INVARIANT |
 | `audit.jsonl` per-file size | 100 MiB before rotation | 5 rotations kept | DEFAULT |
 | Branch-in-PK on-disk size (28 branches × 100k nodes) | ~1.68 GiB measured; ~3.0 GiB extrapolated to 50 branches | — | BUDGET (measured M1): OQ-S006 re-verified — 50 branches × 5k nodes; query p95 0.030ms (M0: 0.040ms, ratio 0.75×, GREEN); no ≥2x regression; bench commit 662a951. M0 curve confirmed. |
 
-The 4 GiB hard cap is global, not per-repo. `engram repo add`
+The 4 GiB hard cap is global, not per-repo. `veska repo add`
 refuses to register a new repo if its estimated steady-state cost
 would push the projection past the soft cap (SOLO-03 §3.0). The
 projection function `f(repo_size_kloc) → bytes` lands at M1 close
 once the 1-repo and N-repo measurements are real numbers; until
-then, `engram repo add` uses a conservative linear estimate
+then, `veska repo add` uses a conservative linear estimate
 (working number: 20 MiB per 10 kLOC indexed) and reports it
 explicitly to the user before committing.
 
@@ -908,7 +908,7 @@ measurement that justifies it.
 
 **Doctor surface for the M1 ship.** When M1 ships with the
 vec0 substrate, the daemon must make the ceiling visible
-*before* the user crosses it, not after. `engram doctor
+*before* the user crosses it, not after. `veska doctor
 storage --json` carries an `embeddings` block:
 
 ```json
@@ -927,7 +927,7 @@ Status thresholds (DEFAULT, CONFIG-SURFACE):
 
 - `ok` — `headroom_ratio ≥ 0.25`.
 - `warn` — `0.05 ≤ headroom_ratio < 0.25`. The warning fires
-  in `engram doctor` digest output and `engram_doctor_status`
+  in `veska doctor` digest output and `veska_doctor_status`
   metric labels (`status="warn"`); MCP reads against
   `semantic_search` add `degraded_reasons:
   ["vec0_ceiling_warn"]`.
@@ -938,7 +938,7 @@ Status thresholds (DEFAULT, CONFIG-SURFACE):
 
 This is the M1 contract that closes the "ship a substrate the
 doc itself says cannot serve the workload" gap: M1 ships vec0,
-the user sees the headroom in `engram doctor` from day one, and
+the user sees the headroom in `veska doctor` from day one, and
 M2's HNSW pivot has a documented landing site (the same
 `embeddings.substrate` field flips to `"hnsw"`). The PRODUCT.md
 "What it costs" section names this contract for buyers.
@@ -1025,19 +1025,19 @@ drafts is replaced by `{"code": "post_promotion_queue_deferred",
 |---|---|
 | Ollama down or unreachable | `semantic_search` falls back to FTS5 BM25 over `node_fts` (SOLO-08 §3.3) with `degraded_reasons: ['embedder_unreachable', 'embedder_offline_lexical_fallback']`. Lexical recall ranks worse than vector recall on synonym/paraphrase queries; the agent sees the reason and should not silently switch reasoning modes. New embeddings stay `pending` until Ollama returns. Promoted structural queries unaffected. |
 | post-promotion queue at high-water with embedder paused (formerly a documented deadlock) | Promotion proceeds; new `embed` rows insert with `state='deferred'` instead of blocking the promotion. `degraded_reasons: ['post_promotion_queue_deferred:embed:<count>']` until depth drops below low-water. (SOLO-08 §3.4.) |
-| Ollama model missing | Daemon refuses to start the embedder worker; `engram doctor embedder` reports the gap. Other tools function. |
-| Disk full | Promotion fails with a clear error; hook returns non-zero; daemon refuses new MCP writes (`degraded_reasons: ['disk_full']`) until `engram doctor storage` reports OK. |
+| Ollama model missing | Daemon refuses to start the embedder worker; `veska doctor embedder` reports the gap. Other tools function. |
+| Disk full | Promotion fails with a clear error; hook returns non-zero; daemon refuses new MCP writes (`degraded_reasons: ['disk_full']`) until `veska doctor storage` reports OK. |
 | sqlite-vec extension missing | **Daemon refuses to start.** Loud failure with install instructions. We do not silently degrade core search. |
 | SQLite database locked by an external writer | `BEGIN IMMEDIATE` blocks until `busy_timeout` expires (5s hot, 30s embed); op then fails. In-process pools (`writeDB.hot`, `writeDB.embed`) serialize via SQLite's lock without contending — this row fires only when the user opens an external `sqlite3` connection or similar (SOLO-11 §10, ADR-S0011). |
-| MCP write tool's `max_wait_ms` deadline expires waiting for `writeDB.hot` | Tool returns `ErrBusy` with `data.context.cause = "seal_in_flight"` (carrying `promotion_id`, `eta_ms`) or `"pool_wait"` (carrying `wait_count`, `wait_duration_ms`, `eta_ms` from `sql.DBStats()`). Surface in `engram doctor pipelines` as `writer_pool_saturated`. (SOLO-09 §4.6.) |
-| Memory pressure (RSS > 2 GiB soft cap) | Goroutine count caps; embedder worker pauses; tree-sitter reparse coalesces. **MCP does not refuse requests.** Surface in `engram doctor`. |
-| RSS > 4 GiB hard cap | Daemon logs and exits non-78; supervisor restarts; counts against the crash-loop breaker (SOLO-03 §5.6). After 5 such exits in 10 min the next start hits SOLO-03 §5.8 row 1 (exit 78, supervisor halts); user clears with `engram doctor reset-crash-loop`. |
+| MCP write tool's `max_wait_ms` deadline expires waiting for `writeDB.hot` | Tool returns `ErrBusy` with `data.context.cause = "seal_in_flight"` (carrying `promotion_id`, `eta_ms`) or `"pool_wait"` (carrying `wait_count`, `wait_duration_ms`, `eta_ms` from `sql.DBStats()`). Surface in `veska doctor pipelines` as `writer_pool_saturated`. (SOLO-09 §4.6.) |
+| Memory pressure (RSS > 2 GiB soft cap) | Goroutine count caps; embedder worker pauses; tree-sitter reparse coalesces. **MCP does not refuse requests.** Surface in `veska doctor`. |
+| RSS > 4 GiB hard cap | Daemon logs and exits non-78; supervisor restarts; counts against the crash-loop breaker (SOLO-03 §5.6). After 5 such exits in 10 min the next start hits SOLO-03 §5.8 row 1 (exit 78, supervisor halts); user clears with `veska doctor reset-crash-loop`. |
 | Daemon refuses to start (sqlite-vec missing, schema mismatch, ErrEmbedderMismatch, NFS, etc.) | Exit 78 at start; supervisor halts. SOLO-03 §5.8 is the full matrix. None of these increment the breaker. |
 | Vuln-source feed timeout | Cached findings remain valid; refresh fails with `degraded_reasons: ['vuln_feed_unreachable']` next surface. |
 | LLM generator (review pipeline) timeout | Review job marked failed in `post_promotion_queue`; retries up to 3 with backoff, then a `review-pipeline-failure` finding (severity `high`) is emitted; the post-promotion queue row stays `failed` until that finding closes through the human-action gate (ADR-S0004). Promoted graph unaffected. |
-| Review pipeline daily token cap reached | Pause new review jobs; queued rows stay `pending`; write one line to `audit.jsonl` describing the pause (cap, spent, resets_at). Surface in `engram doctor pipelines`. Resume at local-midnight automatically — no Finding, no human-action gate. (SOLO-11 §3.1.) |
+| Review pipeline daily token cap reached | Pause new review jobs; queued rows stay `pending`; write one line to `audit.jsonl` describing the pause (cap, spent, resets_at). Surface in `veska doctor pipelines`. Resume at local-midnight automatically — no Finding, no human-action gate. (SOLO-11 §3.1.) |
 | Tree-sitter parse error on a file | File skipped; finding emitted with `source_layer='structural'`, `rule='parse-failure'`. Other files in the promotion proceed. |
-| Watcher (fsnotify) overflow | Daemon falls back to polling at 5s for the affected paths; logs `watcher_overflow`; surface in `engram doctor`. |
+| Watcher (fsnotify) overflow | Daemon falls back to polling at 5s for the affected paths; logs `watcher_overflow`; surface in `veska doctor`. |
 
 The principle: graph queries against promoted state always work.
 Embedder, LLM, and vuln-feed dependencies degrade gracefully.

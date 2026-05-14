@@ -12,7 +12,7 @@ import (
 	"time"
 
 	"github.com/fsnotify/fsnotify"
-	"github.com/whiskeyjimbo/engram/solov2/internal/core/ports"
+	"github.com/whiskeyjimbo/veska/internal/core/ports"
 )
 
 const debounceWindow = 50 * time.Millisecond

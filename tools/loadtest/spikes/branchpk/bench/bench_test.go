@@ -7,8 +7,8 @@ import (
 	"time"
 
 	_ "github.com/mattn/go-sqlite3"
-	"github.com/whiskeyjimbo/engram/solov2/tools/loadtest/spikes/branchpk/bench"
-	"github.com/whiskeyjimbo/engram/solov2/tools/loadtest/spikes/branchpk/pkloader"
+	"github.com/whiskeyjimbo/veska/tools/loadtest/spikes/branchpk/bench"
+	"github.com/whiskeyjimbo/veska/tools/loadtest/spikes/branchpk/pkloader"
 )
 
 // openMemDB creates a fresh in-memory SQLite DB with the branchpk schema and

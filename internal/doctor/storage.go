@@ -1,4 +1,4 @@
-// Package doctor provides health-check and diagnostic utilities for engram.
+// Package doctor provides health-check and diagnostic utilities for veska.
 package doctor
 
 import (
@@ -8,10 +8,10 @@ import (
 	"sort"
 )
 
-// StorageReport holds filesystem metrics for the engram data directory,
+// StorageReport holds filesystem metrics for the veska data directory,
 // matching the SOLO-13 §2.1.3 storage data schema.
 type StorageReport struct {
-	EngramHome      string   `json:"engram_home"`
+	EngramHome      string   `json:"veska_home"`
 	DBPath          string   `json:"db_path"`
 	DBSizeBytes     int64    `json:"db_size_bytes"`
 	WALSizeBytes    int64    `json:"wal_size_bytes"`
@@ -48,18 +48,18 @@ func fileSize(path string) int64 {
 	return info.Size()
 }
 
-// CheckStorage reads the filesystem under engramHome and returns a populated
+// CheckStorage reads the filesystem under veskaHome and returns a populated
 // StorageReport.  It never requires a running UsearchStore — all data is derived
 // from on-disk files.
-func CheckStorage(engramHome string) (StorageReport, error) {
-	dbPath := filepath.Join(engramHome, "engram.db")
-	walPath := filepath.Join(engramHome, "engram.db-wal")
+func CheckStorage(veskaHome string) (StorageReport, error) {
+	dbPath := filepath.Join(veskaHome, "veska.db")
+	walPath := filepath.Join(veskaHome, "veska.db-wal")
 
 	dbSize := fileSize(dbPath)
 	walSize := fileSize(walPath)
 
 	// Collect all *.hnsw files.
-	hnswPaths, err := filepath.Glob(filepath.Join(engramHome, "*.hnsw"))
+	hnswPaths, err := filepath.Glob(filepath.Join(veskaHome, "*.hnsw"))
 	if err != nil {
 		return StorageReport{}, err
 	}
@@ -86,10 +86,10 @@ func CheckStorage(engramHome string) (StorageReport, error) {
 		hnswVectorCount += int64(len(sc.Rows))
 	}
 
-	freeBytes := getFreeBytes(engramHome)
+	freeBytes := getFreeBytes(veskaHome)
 
 	return StorageReport{
-		EngramHome:      engramHome,
+		EngramHome:      veskaHome,
 		DBPath:          dbPath,
 		DBSizeBytes:     dbSize,
 		WALSizeBytes:    walSize,

@@ -48,8 +48,8 @@ shipped binaries) cannot supply or override it.
 
 | Origin | `actor_kind` |
 |---|---|
-| Connection accepted on `~/.engram/cli.sock` | `'human'` |
-| Connection accepted on `~/.engram/mcp.sock` | `'agent'` |
+| Connection accepted on `~/.veska/cli.sock` | `'human'` |
+| Connection accepted on `~/.veska/mcp.sock` | `'agent'` |
 | Daemon background goroutine (revalidation sweep, embedder, auto-revoke) | `'system'` |
 
 The daemon binds two Unix sockets (SOLO-03 §3). The accepting
@@ -60,7 +60,7 @@ lying in a header because there is no header to lie in:
 `actor_kind` is a property of the file the client connected to.
 
 The CLI binary `engram` connects only to `cli.sock`; the stdio
-shim `engram-mcp` connects only to `mcp.sock`. A user who
+shim `veska-mcp` connects only to `mcp.sock`. A user who
 deliberately points the CLI at `mcp.sock` (`engram --socket=...`)
 is declaring themselves an agent and the human-action gate behaves
 accordingly — that is the intended behavior for scripted use.
@@ -122,7 +122,7 @@ review keeps both.
 
 ### 2.1 CLI
 
-CLI invocations connect to `~/.engram/cli.sock`. The wire frame
+CLI invocations connect to `~/.veska/cli.sock`. The wire frame
 on the first message of the connection is:
 
 ```jsonc
@@ -133,7 +133,7 @@ on the first message of the connection is:
   "params": {
     "client": "engram-cli",
     "user":   "<value of $USER from the CLI process env>",
-    "engram_version": "<x.y.z>"
+    "veska_version": "<x.y.z>"
   }
 }
 ```
@@ -152,7 +152,7 @@ is the gate substrate (§1.2), not the request body.
 
 ### 2.2 MCP
 
-When an MCP client connects to `~/.engram/mcp.sock`, the first
+When an MCP client connects to `~/.veska/mcp.sock`, the first
 frame on the connection is an `InitializeParams` payload. The
 daemon reads `clientInfo.name` from that payload and uses it as
 `actor_id = "agent:" + name`. Examples: `agent:claude-code`,
@@ -286,7 +286,7 @@ error's `data` payload with a ready-to-paste CLI invocation:
     "code": -32001,
     "message": "human-action gate refused: close.finding.high requires actor_kind=human",
     "data": {
-      "engram_code": "ErrHumanActionRequired",
+      "veska_code": "ErrHumanActionRequired",
       "context": {
         "gate":        "close.finding.high",
         "finding_id":  "f_01HK...",
@@ -453,7 +453,7 @@ isolation in any other setting.
 
 ## 7. Diagnostics
 
-`engram doctor identity` prints:
+`veska doctor identity` prints:
 
 - The current process owner (`$USER`).
 - The resolved CLI `actor_id`.

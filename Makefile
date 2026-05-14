@@ -1,25 +1,25 @@
 .DEFAULT_GOAL := all
 
 BINDIR := bin
-ENGRAM_BIN      := $(BINDIR)/engram
-DAEMON_BIN      := $(BINDIR)/engram-daemon
-MCP_BIN         := $(BINDIR)/engram-mcp
+VESKA_BIN      := $(BINDIR)/veska
+DAEMON_BIN      := $(BINDIR)/veska-daemon
+MCP_BIN         := $(BINDIR)/veska-mcp
 LAYERCHECK_BIN  := $(BINDIR)/layercheck
 
 .PHONY: all build test lint vet layercheck clean loadtest
 
 all: build test vet lint layercheck
 
-build: $(ENGRAM_BIN) $(DAEMON_BIN) $(MCP_BIN) $(LAYERCHECK_BIN)
+build: $(VESKA_BIN) $(DAEMON_BIN) $(MCP_BIN) $(LAYERCHECK_BIN)
 
-$(ENGRAM_BIN):
-	go build -o $@ ./cmd/engram
+$(VESKA_BIN):
+	go build -o $@ ./cmd/veska
 
 $(DAEMON_BIN):
-	go build -o $@ ./cmd/engram-daemon
+	go build -o $@ ./cmd/veska-daemon
 
 $(MCP_BIN):
-	go build -o $@ ./cmd/engram-mcp
+	go build -o $@ ./cmd/veska-mcp
 
 $(LAYERCHECK_BIN):
 	go build -o $@ ./tools/lint/layercheck/cmd
@@ -37,10 +37,10 @@ layercheck: $(LAYERCHECK_BIN)
 	$(LAYERCHECK_BIN) .
 
 clean:
-	rm -f $(ENGRAM_BIN) $(DAEMON_BIN) $(MCP_BIN) $(LAYERCHECK_BIN)
+	rm -f $(VESKA_BIN) $(DAEMON_BIN) $(MCP_BIN) $(LAYERCHECK_BIN)
 
 # loadtest: manual-only — collates M1 exit-gate RESULTS.md files and emits tools/loadtest/REPORT.md.
 # Not included in `all`. Exit 0=all-pass, 1=fail, 2=pending.
 loadtest:
-	go build -tags loadtest -o /tmp/engram-loadtest ./tools/loadtest/driver/
-	/tmp/engram-loadtest
+	go build -tags loadtest -o /tmp/veska-loadtest ./tools/loadtest/driver/
+	/tmp/veska-loadtest

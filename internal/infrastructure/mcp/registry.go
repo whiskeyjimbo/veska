@@ -7,7 +7,7 @@ import (
 	"regexp"
 	"sort"
 
-	"github.com/whiskeyjimbo/engram/solov2/internal/core/domain"
+	"github.com/whiskeyjimbo/veska/internal/core/domain"
 )
 
 // toolNamePattern enforces the eng_<verb>_<object> naming convention.

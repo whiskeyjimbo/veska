@@ -1,4 +1,4 @@
-// Command layercheck enforces architectural layer boundaries in engram packages.
+// Command layercheck enforces architectural layer boundaries in veska packages.
 //
 // Usage:
 //
@@ -12,7 +12,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/whiskeyjimbo/engram/solov2/tools/lint/layercheck"
+	"github.com/whiskeyjimbo/veska/tools/lint/layercheck"
 )
 
 func main() {

@@ -102,7 +102,7 @@ not a contract — it is a sketch of where another impl might go.
 
 | Port | Default impl | Status |
 |---|---|---|
-| `Tracker` | `none` (no tracker integration); `bd-cli` (the local issue-tracker CLI) is the only shipped non-`none` impl | Ships **off** by default — opt-in via `engram init` or `[tracker] provider = "bd-cli"` |
+| `Tracker` | `none` (no tracker integration); `bd-cli` (the local issue-tracker CLI) is the only shipped non-`none` impl | Ships **off** by default — opt-in via `veska init` or `[tracker] provider = "bd-cli"` |
 | `VulnSource` | `osv` (OSV.dev with a local cache) | Ships off by default |
 | `SecretsScanner` | `engram-builtin` (in-process regex + entropy) | Ships on by default |
 | `Embedder` | `ollama` with `nomic-embed-text` | Ships on by default |
@@ -125,7 +125,7 @@ tracker is configured.
 The only shipped non-`none` impl is `bd-cli`, which shells out
 to the local `bd` CLI binary, parses its JSON output, and
 watches the on-disk issue file for changes. **The daemon does
-not bundle `bd`.** When a user opts into `bd-cli`, `engram init`
+not bundle `bd`.** When a user opts into `bd-cli`, `veska init`
 probes for `bd` on `$PATH` (the same shape as the Ollama probe
 in SOLO-03 §3.2) and, if missing, prints the install command for
 the host platform and exits non-zero. We do not silently degrade
@@ -194,7 +194,7 @@ impl uses `.beads/current_task` (CONFIG-SURFACE.md §1).
 
 Returns advisories for a given dependency set. The default impl
 talks to OSV.dev over HTTP, caches responses in
-`~/.engram/cache/osv/`, and refreshes the cache on a configurable
+`~/.veska/cache/osv/`, and refreshes the cache on a configurable
 cadence (default 24h). At promotion time the impl reads the cache; the
 network is touched only by the refresh goroutine. A second impl
 (GHSA, KEV, EPSS, internal feed) would need to provide
@@ -234,7 +234,7 @@ reasons:
   dimensions (nomic = 768, Gemini = 768, OpenAI 3-small = 1536,
   OpenAI 3-large = 3072). `vec_nodes` has one dim per database;
   switching providers means rebuilding it. We parameterise the
-  dim at `engram init` time (SOLO-08 §3.3) so this becomes a
+  dim at `veska init` time (SOLO-08 §3.3) so this becomes a
   known migration path rather than a schema rewrite.
 
 The trigger to land a second impl is M3 measurement: if Ollama
@@ -309,7 +309,7 @@ recursive-watch logic that Go's standard fsnotify doesn't have.
 A second impl (polling for filesystems where fsnotify is
 unreliable, or a remote watcher for a future networked variant)
 would need to provide `Events() <-chan FileEvent` and respect
-`.engramignore`. There is no pluggable kernel-event API; the
+`.veskaignore`. There is no pluggable kernel-event API; the
 interface is the channel.
 
 ### 2.10 `CodeParser`
@@ -395,7 +395,7 @@ redesign, not a feature.
   Resp]` port, no global rate limiter, no cross-port egress
   allow-list, no `external_cache` table. Each port impl that
   needs HTTP imports `net/http`, talks to its endpoint, and
-  caches into a file under `~/.engram/cache/<port>/`. If we ever
+  caches into a file under `~/.veska/cache/<port>/`. If we ever
   want a uniform egress posture, it can be added later as a
   shared HTTP client; it is not a contract.
 
@@ -421,7 +421,7 @@ a contract.
 
 ## 5. Diagnostics
 
-`engram doctor plugins` reports:
+`veska doctor plugins` reports:
 
 - Each port's configured `kind`.
 - Whether the impl initialized cleanly at startup.

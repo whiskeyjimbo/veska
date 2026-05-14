@@ -9,7 +9,7 @@ import (
 
 	_ "modernc.org/sqlite"
 
-	"github.com/whiskeyjimbo/engram/solov2/internal/infrastructure/sqlite"
+	"github.com/whiskeyjimbo/veska/internal/infrastructure/sqlite"
 )
 
 // openRawDB opens a raw *sql.DB for inspection without running migrations.
@@ -46,7 +46,7 @@ func indexExists(t *testing.T, db *sql.DB, name string) bool {
 }
 
 // openTest opens a DB using OpenWithOptions with a temp backup dir, isolating
-// tests from each other and from ~/.engram-backups.
+// tests from each other and from ~/.veska-backups.
 func openTest(t *testing.T, dbPath string) *sql.DB {
 	t.Helper()
 	backupDir := filepath.Join(t.TempDir(), "backups")
@@ -63,7 +63,7 @@ func TestMigration0001_CreatesAllTables(t *testing.T) {
 	t.Parallel()
 
 	dir := t.TempDir()
-	dbPath := filepath.Join(dir, "engram.db")
+	dbPath := filepath.Join(dir, "veska.db")
 
 	db := openTest(t, dbPath)
 	_ = db
@@ -91,7 +91,7 @@ func TestMigration0001_CreatesIndexes(t *testing.T) {
 	t.Parallel()
 
 	dir := t.TempDir()
-	dbPath := filepath.Join(dir, "engram.db")
+	dbPath := filepath.Join(dir, "veska.db")
 
 	_ = openTest(t, dbPath)
 
@@ -120,7 +120,7 @@ func TestMigration0001_RecordsSchemaVersion(t *testing.T) {
 	t.Parallel()
 
 	dir := t.TempDir()
-	dbPath := filepath.Join(dir, "engram.db")
+	dbPath := filepath.Join(dir, "veska.db")
 
 	_ = openTest(t, dbPath)
 
@@ -153,7 +153,7 @@ func TestOpen_WALModeEnabled(t *testing.T) {
 	t.Parallel()
 
 	dir := t.TempDir()
-	dbPath := filepath.Join(dir, "engram.db")
+	dbPath := filepath.Join(dir, "veska.db")
 
 	_ = openTest(t, dbPath)
 
@@ -173,7 +173,7 @@ func TestOpen_WALAutocheckpoint(t *testing.T) {
 	t.Parallel()
 
 	dir := t.TempDir()
-	dbPath := filepath.Join(dir, "engram.db")
+	dbPath := filepath.Join(dir, "veska.db")
 
 	_ = openTest(t, dbPath)
 
@@ -193,7 +193,7 @@ func TestOpen_Idempotent(t *testing.T) {
 	t.Parallel()
 
 	dir := t.TempDir()
-	dbPath := filepath.Join(dir, "engram.db")
+	dbPath := filepath.Join(dir, "veska.db")
 	backupDir := filepath.Join(t.TempDir(), "backups")
 
 	db1, err := sqlite.OpenWithOptions(dbPath, sqlite.Options{BackupDir: backupDir})
@@ -226,7 +226,7 @@ func TestMigrationSHA_TamperDetected(t *testing.T) {
 	t.Parallel()
 
 	dir := t.TempDir()
-	dbPath := filepath.Join(dir, "engram.db")
+	dbPath := filepath.Join(dir, "veska.db")
 
 	// Open normally to apply migration 0001.
 	db := openTest(t, dbPath)
@@ -251,10 +251,10 @@ func TestAutoSnapshot_CreatedBeforeMigrations(t *testing.T) {
 	t.Parallel()
 
 	dir := t.TempDir()
-	dbPath := filepath.Join(dir, "engram.db")
+	dbPath := filepath.Join(dir, "veska.db")
 	backupDir := filepath.Join(dir, "backups", ".pre-migration")
 
-	// Open with a custom backup dir to avoid touching ~/.engram-backups in tests.
+	// Open with a custom backup dir to avoid touching ~/.veska-backups in tests.
 	db, err := sqlite.OpenWithOptions(dbPath, sqlite.Options{
 		BackupDir: backupDir,
 	})
@@ -288,7 +288,7 @@ func TestWALReplay_KillMidMigration(t *testing.T) {
 	t.Parallel()
 
 	dir := t.TempDir()
-	dbPath := filepath.Join(dir, "engram.db")
+	dbPath := filepath.Join(dir, "veska.db")
 
 	// Open a raw db, set WAL, create schema_migrations table, but do NOT commit 0001.
 	db, err := sql.Open("sqlite3", "file:"+dbPath+"?_journal_mode=WAL&_foreign_keys=on")
@@ -391,7 +391,7 @@ func TestMigration0003_TablesAndIndexesExist(t *testing.T) {
 	t.Parallel()
 
 	dir := t.TempDir()
-	dbPath := filepath.Join(dir, "engram.db")
+	dbPath := filepath.Join(dir, "veska.db")
 
 	_ = openTest(t, dbPath)
 
@@ -424,7 +424,7 @@ func TestMigration0003_TasksActivePartialIndex(t *testing.T) {
 	t.Parallel()
 
 	dir := t.TempDir()
-	dbPath := filepath.Join(dir, "engram.db")
+	dbPath := filepath.Join(dir, "veska.db")
 	backupDir := filepath.Join(t.TempDir(), "backups")
 
 	db, err := sqlite.OpenWithOptions(dbPath, sqlite.Options{BackupDir: backupDir})
@@ -467,7 +467,7 @@ func TestMigration0003_FindingsBranchPK(t *testing.T) {
 	t.Parallel()
 
 	dir := t.TempDir()
-	dbPath := filepath.Join(dir, "engram.db")
+	dbPath := filepath.Join(dir, "veska.db")
 	backupDir := filepath.Join(t.TempDir(), "backups")
 
 	db, err := sqlite.OpenWithOptions(dbPath, sqlite.Options{BackupDir: backupDir})
@@ -536,7 +536,7 @@ func TestMigration0004_TablesExist(t *testing.T) {
 	t.Parallel()
 
 	dir := t.TempDir()
-	dbPath := filepath.Join(dir, "engram.db")
+	dbPath := filepath.Join(dir, "veska.db")
 
 	_ = openTest(t, dbPath)
 
@@ -568,7 +568,7 @@ func TestMigration0004_ContentAddressedDedup(t *testing.T) {
 	t.Parallel()
 
 	dir := t.TempDir()
-	dbPath := filepath.Join(dir, "engram.db")
+	dbPath := filepath.Join(dir, "veska.db")
 	backupDir := filepath.Join(t.TempDir(), "backups")
 
 	db, err := sqlite.OpenWithOptions(dbPath, sqlite.Options{BackupDir: backupDir})
@@ -598,7 +598,7 @@ func TestMigration0004_TwoNodesShareEmbedding(t *testing.T) {
 	t.Parallel()
 
 	dir := t.TempDir()
-	dbPath := filepath.Join(dir, "engram.db")
+	dbPath := filepath.Join(dir, "veska.db")
 	backupDir := filepath.Join(t.TempDir(), "backups")
 
 	db, err := sqlite.OpenWithOptions(dbPath, sqlite.Options{BackupDir: backupDir})
@@ -650,7 +650,7 @@ func TestMigration0004_StateTransitions(t *testing.T) {
 	t.Parallel()
 
 	dir := t.TempDir()
-	dbPath := filepath.Join(dir, "engram.db")
+	dbPath := filepath.Join(dir, "veska.db")
 	backupDir := filepath.Join(t.TempDir(), "backups")
 
 	db, err := sqlite.OpenWithOptions(dbPath, sqlite.Options{BackupDir: backupDir})
@@ -723,7 +723,7 @@ func TestMigration0004_NodeFTSQueryable(t *testing.T) {
 	t.Parallel()
 
 	dir := t.TempDir()
-	dbPath := filepath.Join(dir, "engram.db")
+	dbPath := filepath.Join(dir, "veska.db")
 	backupDir := filepath.Join(t.TempDir(), "backups")
 
 	db, err := sqlite.OpenWithOptions(dbPath, sqlite.Options{BackupDir: backupDir})
@@ -769,7 +769,7 @@ func TestMigration0003_SuppressionsAgnosticVsSpecific(t *testing.T) {
 	t.Parallel()
 
 	dir := t.TempDir()
-	dbPath := filepath.Join(dir, "engram.db")
+	dbPath := filepath.Join(dir, "veska.db")
 	backupDir := filepath.Join(t.TempDir(), "backups")
 
 	db, err := sqlite.OpenWithOptions(dbPath, sqlite.Options{BackupDir: backupDir})

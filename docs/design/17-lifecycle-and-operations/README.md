@@ -12,7 +12,7 @@ related: [SOLO-03, SOLO-08, SOLO-13, SOLO-16]
 ## 1. Purpose
 
 Engram runs on a developer's laptop. The substrate is one SQLite
-file plus a handful of supporting files under `~/.engram/`. That
+file plus a handful of supporting files under `~/.veska/`. That
 single file is the user's only copy of their structural ground
 truth — there is no upstream, no replica, no service tier to
 fall back to. The cost of getting lifecycle wrong on a laptop is
@@ -22,12 +22,12 @@ This section is the normative spec for the operational surfaces
 that other docs assume but never own:
 
 - **Schema migrations** (§2) — applying a new daemon binary's
-  schema to an existing `engram.db`.
+  schema to an existing `veska.db`.
 - **Upgrade during run** (§3) — what happens when the user
   replaces the binary while the daemon is up.
-- **Backup and restore** (§4) — how `engram backup` and
+- **Backup and restore** (§4) — how `veska backup` and
   `engram restore` interact with the substrate.
-- **Install and uninstall** (§5) — what `engram init` writes to
+- **Install and uninstall** (§5) — what `veska init` writes to
   the filesystem and what `engram uninstall` removes.
 
 Substrate mechanics (WAL, schema rows, vec0 shadow tables) live
@@ -93,8 +93,8 @@ safety net the user can ignore until they need it.
 
 ```
 daemon start with pending migrations
-  → write ~/.engram/backups/auto-pre-migration-<from>-to-<to>-<ts>.tar.gz
-    via the same path as `engram backup create` (§4.2)
+  → write ~/.veska/backups/auto-pre-migration-<from>-to-<to>-<ts>.tar.gz
+    via the same path as `veska backup create` (§4.2)
   → if the write fails: refuse to migrate; daemon exits 78 with
     ErrPreMigrationSnapshotFailed (SOLO-16). The user resolves
     disk space, then retries.
@@ -104,7 +104,7 @@ daemon start with pending migrations
 Auto-snapshot retention: keep the most recent **3** auto-snapshots
 plus every snapshot in the last **30 days**. Older auto-snapshots
 are deleted on the next successful migration. User-initiated
-backups (`engram backup create`) are never deleted by this rule.
+backups (`veska backup create`) are never deleted by this rule.
 
 `engram restore --pre-migration` restores the most recent
 auto-pre-migration snapshot. SOLO-13 §2 lists the verb in the
@@ -124,7 +124,7 @@ rows must drain the queue first. The order:
 2. The pre-migration auto-snapshot captures the queue, so the
    user can re-enqueue from the snapshot if a drain was the
    wrong call.
-3. After migration, `engram doctor post_promotion_queue` shows
+3. After migration, `veska doctor post_promotion_queue` shows
    the drain count in `messages[]`.
 
 Migrations that don't touch queue-referenced columns leave the
@@ -157,8 +157,8 @@ old binary. What happens next is determined by the supervisor
 
 | Path | Trigger | What happens |
 |---|---|---|
-| **Restart-driven** (default) | The package manager's post-install hook or the user runs `engram daemon restart` | Old daemon receives `SIGTERM`; drains in-flight requests up to `[shutdown].grace_seconds` (DEFAULT 10); exits clean; supervisor relaunches the new binary; new binary runs §2 migration flow. |
-| **Side-by-side** (rare) | The user runs the new binary manually as `engram daemon` while the old is up | The new binary's `OpenPools` call fails: SQLite's WAL holder is the old process, and `flock(2)` on the database refuses concurrent writers. The new binary exits 78 with `ErrDaemonAlreadyRunning` (SOLO-16) pointing the user at `engram daemon stop`. |
+| **Restart-driven** (default) | The package manager's post-install hook or the user runs `veska daemon restart` | Old daemon receives `SIGTERM`; drains in-flight requests up to `[shutdown].grace_seconds` (DEFAULT 10); exits clean; supervisor relaunches the new binary; new binary runs §2 migration flow. |
+| **Side-by-side** (rare) | The user runs the new binary manually as `veska daemon` while the old is up | The new binary's `OpenPools` call fails: SQLite's WAL holder is the old process, and `flock(2)` on the database refuses concurrent writers. The new binary exits 78 with `ErrDaemonAlreadyRunning` (SOLO-16) pointing the user at `veska daemon stop`. |
 
 ### 3.2 The graceful shutdown contract
 
@@ -204,7 +204,7 @@ If the new binary crashes on start (a corrupt migration file,
 an incompatible OS, a missing sqlite-vec extension), the
 supervisor restarts it. The daemon's crash-loop breaker
 (SOLO-03 §5.6) trips after 5 exits in 10 minutes; the
-supervisor halts; `engram doctor reset-crash-loop` clears the
+supervisor halts; `veska doctor reset-crash-loop` clears the
 breaker after the user investigates.
 
 `ErrSchemaNewer` and `ErrPreMigrationSnapshotFailed` exit with
@@ -220,14 +220,14 @@ A backup tarball contains:
 ```
 engram-backup-<repo-host>-<ts>.tar.gz
 ├── manifest.json                     # version, ts, file list, hashes
-├── engram.db                         # SQLite database (online snapshot)
-├── engram.db-wal                     # WAL at snapshot time (may be empty)
+├── veska.db                         # SQLite database (online snapshot)
+├── veska.db-wal                     # WAL at snapshot time (may be empty)
 ├── audit.jsonl                       # current audit log (rotated logs not included)
 ├── config.toml                       # current config (secrets redacted per SOLO-13 §2.2)
 └── repos.json                        # registered repos: id, root_path, active_branch
 ```
 
-`engram.db` includes the `vec_nodes` virtual-table data because
+`veska.db` includes the `vec_nodes` virtual-table data because
 sqlite-vec stores its shadow tables inside the same SQLite file
 (SOLO-08 §3.3). One file means one snapshot; the backup story
 is intentionally that simple.
@@ -235,9 +235,9 @@ is intentionally that simple.
 ### 4.2 The backup transaction
 
 ```
-engram backup create [-o <path>]
+veska backup create [-o <path>]
   → daemon receives BackupCreate RPC
-  → SQLite online backup API: copy engram.db page-by-page
+  → SQLite online backup API: copy veska.db page-by-page
     while readers and writers continue on the live db.
   → snapshot the current audit.jsonl (filesystem copy of the
     live file's bytes; rotations are not included)
@@ -251,7 +251,7 @@ guarantee a transactionally consistent snapshot of the database
 without pausing writers. The audit log copy is not transactional
 relative to the database; see §4.3.
 
-Default destination: `~/.engram/backups/engram-backup-<hostname>-<ts>.tar.gz`.
+Default destination: `~/.veska/backups/engram-backup-<hostname>-<ts>.tar.gz`.
 `--output <path>` overrides; the parent directory must exist.
 
 Exit codes: 0 on success; 1 on partial (e.g., audit log read
@@ -279,15 +279,15 @@ informational, not corruption.
 ```
 engram restore [<path> | --pre-migration | --latest]
   → if the daemon is running: refuse with ErrDaemonRunning;
-    point the user at `engram daemon stop`.
+    point the user at `veska daemon stop`.
   → verify manifest.json against tarball contents (sha256
     every file). Mismatch → ErrBackupCorrupt (SOLO-16) and
     abort.
-  → move existing ~/.engram/engram.db, .db-wal, .db-shm to
-    ~/.engram/engram.db.before-restore-<ts>.bak (idempotent
+  → move existing ~/.veska/veska.db, .db-wal, .db-shm to
+    ~/.veska/veska.db.before-restore-<ts>.bak (idempotent
     rename; fails if the .bak already exists, prompting the
     user to clear stale rescue copies).
-  → extract the tarball into ~/.engram/.
+  → extract the tarball into ~/.veska/.
   → run integrity check: `PRAGMA integrity_check` plus a
     schema_migrations sanity check (max(version) is consistent
     with the binary's known migrations).
@@ -298,7 +298,7 @@ engram restore [<path> | --pre-migration | --latest]
 ```
 
 `engram restore --latest` picks the newest backup tarball under
-`~/.engram/backups/`. `engram restore --pre-migration` picks the
+`~/.veska/backups/`. `engram restore --pre-migration` picks the
 newest auto-pre-migration snapshot (§2.3).
 
 The operation is **non-running only**. There is no live-restore
@@ -308,7 +308,7 @@ zero (restore is a recovery action, not an everyday operation).
 
 ### 4.5 Backup retention policy
 
-`~/.engram/backups/` accumulates tarballs without bound by
+`~/.veska/backups/` accumulates tarballs without bound by
 default. Two configuration knobs (CONFIG-SURFACE):
 
 | Knob | Default | Effect |
@@ -317,10 +317,10 @@ default. Two configuration knobs (CONFIG-SURFACE):
 | `[backup].keep_max_age` | "30d" | Delete user-initiated backups older than this, subject to `keep_min_count`. |
 
 Auto-pre-migration snapshots have their own retention (§2.3) and
-are tracked separately. `engram backup prune` runs the retention
+are tracked separately. `veska backup prune` runs the retention
 sweep; it is idempotent and does nothing on a clean dir.
 
-### 4.6 The `engram doctor backup` surface
+### 4.6 The `veska doctor backup` surface
 
 SOLO-13 §2.1.8 already enumerates the doctor `backup` section.
 This file does not duplicate it. The relevant additions for
@@ -333,14 +333,14 @@ SOLO-17:
 
 ## 5. Install and uninstall
 
-### 5.1 What `engram init` writes
+### 5.1 What `veska init` writes
 
-`engram init` is the user's first interaction. From a freshly
+`veska init` is the user's first interaction. From a freshly
 installed binary inside a Git working tree:
 
-1. Resolve `ENGRAM_HOME` (DEFAULT `~/.engram`). Create if
+1. Resolve `VESKA_HOME` (DEFAULT `~/.veska`). Create if
    missing; refuse if it exists and is not a directory.
-2. Verify the filesystem under `ENGRAM_HOME` is supported
+2. Verify the filesystem under `VESKA_HOME` is supported
    (SOLO-13 §2.3 allowlist).
 3. Probe for Ollama (SOLO-03 §3.2). On miss, print the install
    command and exit non-zero.
@@ -354,7 +354,7 @@ installed binary inside a Git working tree:
    (SOLO-03 §5.1): `launchctl load` on macOS, `systemctl --user
    enable --now engram` on Linux with systemd-user, or write the
    `engram supervise` shim's start script otherwise.
-7. Register the current Git repo via `engram repo add .`.
+7. Register the current Git repo via `veska repo add .`.
 8. Print the summary (data dir, config path, embedder status,
    service status, registered repos, audit log path).
 
@@ -368,12 +368,12 @@ engram uninstall [--keep-data]
     step 6 above).
   → remove the supervisor's unit file or shim script.
   → if --keep-data is NOT set: prompt for confirmation, then
-    delete ENGRAM_HOME entirely. The prompt lists the size of
+    delete VESKA_HOME entirely. The prompt lists the size of
     the data dir and the count of unsaved (i.e., unpromoted in
     the editor) files according to the most recent staging
     snapshot the daemon wrote on shutdown.
-  → if --keep-data IS set: leave ENGRAM_HOME on disk; print its
-    path. A future `engram init` will adopt it.
+  → if --keep-data IS set: leave VESKA_HOME on disk; print its
+    path. A future `veska init` will adopt it.
   → exit 0.
 ```
 
@@ -383,7 +383,7 @@ etc.) owns that. The doc notes the asymmetry.
 
 ### 5.3 Idempotency
 
-`engram init` re-run on a populated `ENGRAM_HOME`:
+`veska init` re-run on a populated `VESKA_HOME`:
 
 - Detects existing config; does not overwrite.
 - Detects existing schema; runs §2 migration flow if the binary
@@ -393,7 +393,7 @@ etc.) owns that. The doc notes the asymmetry.
   upgrade), no-ops otherwise.
 - Re-registers the current repo if not already registered.
 
-Re-running `engram init` is the supported recovery action when
+Re-running `veska init` is the supported recovery action when
 the user moves their machine, restores from a different home
 dir, or otherwise needs to re-bootstrap without losing data.
 
