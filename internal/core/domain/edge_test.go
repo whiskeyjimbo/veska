@@ -110,9 +110,29 @@ func TestNewEdge_WithSourceLine(t *testing.T) {
 
 // EdgeKind enum values.
 func TestEdgeKindValues(t *testing.T) {
-	kinds := []EdgeKind{EdgeCalls, EdgeImports, EdgeContains, EdgeTests, EdgeDependsOn}
-	if len(kinds) != 5 {
-		t.Errorf("expected 5 EdgeKind values, got %d", len(kinds))
+	kinds := []EdgeKind{EdgeCalls, EdgeImports, EdgeContains, EdgeTests, EdgeDependsOn, EdgeSimilarTo}
+	if len(kinds) != 6 {
+		t.Errorf("expected 6 EdgeKind values, got %d", len(kinds))
+	}
+}
+
+// DoD 6: NewEdge accepts SIMILAR_TO + Unresolved without rejecting the new kind.
+func TestNewEdge_SimilarToUnresolved(t *testing.T) {
+	e, err := NewEdge("nodeA", "nodeB", EdgeSimilarTo, WithConfidence(Unresolved))
+	if err != nil {
+		t.Fatalf("NewEdge with EdgeSimilarTo + Unresolved: %v", err)
+	}
+	if e.Kind != EdgeSimilarTo {
+		t.Errorf("Kind: got %q, want %q", e.Kind, EdgeSimilarTo)
+	}
+	if e.Confidence != Unresolved {
+		t.Errorf("Confidence: got %v, want Unresolved", e.Confidence)
+	}
+	if e.Resolved {
+		t.Error("Resolved must be false for Unresolved confidence")
+	}
+	if len(e.ID) != 32 {
+		t.Errorf("expected ID length 32, got %d", len(e.ID))
 	}
 }
 

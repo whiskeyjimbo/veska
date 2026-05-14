@@ -7,36 +7,28 @@ import (
 	"context"
 	"database/sql"
 	"time"
+
+	"github.com/whiskeyjimbo/veska/internal/core/ports"
 )
 
-// WorkKind identifies the type of post-promotion work to perform.
-type WorkKind string
+// WorkKind / WorkKind* / Row / WorkHandler are aliases of the canonical
+// types defined in the ports layer. They live here too for backwards
+// compatibility with the call sites that originally imported the queue
+// package directly; new code should prefer the ports-layer names.
+type WorkKind = ports.WorkKind
 
 const (
-	WorkKindEmbed      WorkKind = "embed"
-	WorkKindAutoLink   WorkKind = "auto_link"
-	WorkKindRevalidate WorkKind = "revalidate"
-	WorkKindReview     WorkKind = "review"
+	WorkKindEmbed      = ports.WorkKindEmbed
+	WorkKindAutoLink   = ports.WorkKindAutoLink
+	WorkKindRevalidate = ports.WorkKindRevalidate
+	WorkKindReview     = ports.WorkKindReview
 )
 
-// Row represents a single row in the post_promotion_queue table.
-type Row struct {
-	Seq         int64
-	PromotionID string
-	RepoID      string
-	Branch      string
-	GitSHA      string
-	Kind        WorkKind
-	Payload     string
-	State       string
-	Attempts    int
-	EnqueuedAt  int64
-}
+// Row is the historical name for ports.WorkRow.
+type Row = ports.WorkRow
 
-// WorkHandler processes one queue row.
-type WorkHandler interface {
-	Handle(ctx context.Context, row Row) error
-}
+// WorkHandler is the historical name for ports.WorkHandler.
+type WorkHandler = ports.WorkHandler
 
 // Poller polls the post_promotion_queue table and dispatches rows to handlers.
 // One goroutine runs per registered WorkKind.

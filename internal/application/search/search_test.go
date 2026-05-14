@@ -70,6 +70,13 @@ func (f *fakeNodes) LookupNodes(_ context.Context, _, _ string, ids []string) ([
 	return f.rows, f.err
 }
 
+// NodesInFile is required by ports.NodeLookup. The search service does not
+// call it, so the fake's behaviour here is irrelevant to the tests; we keep
+// it returning nil to satisfy the interface.
+func (f *fakeNodes) NodesInFile(_ context.Context, _, _, _ string) ([]string, error) {
+	return nil, nil
+}
+
 // --- tests -----------------------------------------------------------------
 
 // TestSemantic_HappyPath_PreservesHitRank verifies the service returns

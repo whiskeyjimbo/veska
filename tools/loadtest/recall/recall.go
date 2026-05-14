@@ -7,7 +7,7 @@ package recall
 
 import (
 	"math"
-	"sort"
+	"slices"
 	"time"
 )
 
@@ -27,20 +27,14 @@ func RecallAtK(hits []string, truth map[string]struct{}, k int) float64 {
 	if k <= 0 || len(truth) == 0 || len(hits) == 0 {
 		return 0
 	}
-	upper := k
-	if len(hits) < upper {
-		upper = len(hits)
-	}
+	upper := min(len(hits), k)
 	matched := 0
 	for i := 0; i < upper; i++ {
 		if _, ok := truth[hits[i]]; ok {
 			matched++
 		}
 	}
-	denom := k
-	if len(truth) < denom {
-		denom = len(truth)
-	}
+	denom := min(len(truth), k)
 	return float64(matched) / float64(denom)
 }
 
@@ -66,12 +60,9 @@ func P95Latency(samples []time.Duration) time.Duration {
 	}
 	sorted := make([]time.Duration, len(samples))
 	copy(sorted, samples)
-	sort.Slice(sorted, func(i, j int) bool { return sorted[i] < sorted[j] })
+	slices.Sort(sorted)
 	// Nearest-rank: ceil(0.95 * N) - 1 (0-indexed).
-	rank := int(math.Ceil(0.95*float64(len(sorted)))) - 1
-	if rank < 0 {
-		rank = 0
-	}
+	rank := max(int(math.Ceil(0.95*float64(len(sorted))))-1, 0)
 	if rank >= len(sorted) {
 		rank = len(sorted) - 1
 	}
