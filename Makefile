@@ -6,7 +6,7 @@ DAEMON_BIN      := $(BINDIR)/veska-daemon
 MCP_BIN         := $(BINDIR)/veska-mcp
 LAYERCHECK_BIN  := $(BINDIR)/layercheck
 
-.PHONY: all build test lint vet layercheck clean loadtest eval-recall
+.PHONY: all build test lint vet layercheck clean loadtest eval-recall eval-autolink-fp
 
 all: build test vet lint layercheck
 
@@ -50,3 +50,10 @@ loadtest:
 # RECALL_POP for larger runs; see tools/loadtest/recall/README.md.
 eval-recall:
 	RECALL_POP=$${RECALL_POP:-1000} go test -tags=eval -run TestRecall ./tools/loadtest/recall/ -v
+
+# eval-autolink-fp: auto-link false-positive harness (m3.04.4). Quick mode
+# (AUTOLINK_POP=1000, fake embedder) is the default and runs in ~1s. Override
+# AUTOLINK_POP / AUTOLINK_THRESHOLD / AUTOLINK_TOPK for sweeps; see
+# tools/loadtest/autolink/README.md.
+eval-autolink-fp:
+	AUTOLINK_POP=$${AUTOLINK_POP:-1000} go test -tags=eval -run TestAutolinkFP ./tools/loadtest/autolink/ -v
