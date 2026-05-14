@@ -102,7 +102,7 @@ func TestSuppressFinding_Basic(t *testing.T) {
 	seedFindingForSuppression(t, db, "finding-001", "main", "repo-1")
 
 	r := NewRegistry()
-	RegisterSuppressionTools(r, db)
+	RegisterSuppressionTools(r, db, nil)
 
 	actor := domain.Actor{ID: "agent:bot", Kind: domain.ActorKindAgent}
 	result, rpcErr := dispatchSuppression(t, r, "eng_suppress_finding", actor, map[string]any{
@@ -139,7 +139,7 @@ func TestSuppressFinding_DefaultScope(t *testing.T) {
 	seedFindingForSuppression(t, db, "finding-002", "main", "repo-1")
 
 	r := NewRegistry()
-	RegisterSuppressionTools(r, db)
+	RegisterSuppressionTools(r, db, nil)
 
 	actor := domain.Actor{ID: "human:alice", Kind: domain.ActorKindHuman}
 	_, rpcErr := dispatchSuppression(t, r, "eng_suppress_finding", actor, map[string]any{
@@ -167,7 +167,7 @@ func TestSuppressFinding_WithExpiresAt(t *testing.T) {
 	seedFindingForSuppression(t, db, "finding-003", "main", "repo-1")
 
 	r := NewRegistry()
-	RegisterSuppressionTools(r, db)
+	RegisterSuppressionTools(r, db, nil)
 
 	expiry := time.Now().Add(24 * time.Hour).UnixMilli()
 	actor := domain.Actor{ID: "human:alice", Kind: domain.ActorKindHuman}
@@ -194,7 +194,7 @@ func TestSuppressFinding_WithExpiresAt(t *testing.T) {
 func TestSuppressFinding_MissingParams(t *testing.T) {
 	db := newSuppressionsDB(t)
 	r := NewRegistry()
-	RegisterSuppressionTools(r, db)
+	RegisterSuppressionTools(r, db, nil)
 
 	actor := domain.Actor{ID: "human:alice", Kind: domain.ActorKindHuman}
 	_, rpcErr := dispatchSuppression(t, r, "eng_suppress_finding", actor, map[string]any{
@@ -218,7 +218,7 @@ func TestSuppressFinding_MissingParams(t *testing.T) {
 func TestListSuppressions_Empty(t *testing.T) {
 	db := newSuppressionsDB(t)
 	r := NewRegistry()
-	RegisterSuppressionTools(r, db)
+	RegisterSuppressionTools(r, db, nil)
 
 	actor := domain.Actor{ID: "agent:bot", Kind: domain.ActorKindAgent}
 	result, rpcErr := dispatchSuppression(t, r, "eng_list_suppressions", actor, map[string]any{
@@ -244,7 +244,7 @@ func TestListSuppressions_AfterInsert(t *testing.T) {
 	seedFindingForSuppression(t, db, "finding-list-001", "main", "repo-1")
 
 	r := NewRegistry()
-	RegisterSuppressionTools(r, db)
+	RegisterSuppressionTools(r, db, nil)
 
 	actor := domain.Actor{ID: "agent:bot", Kind: domain.ActorKindAgent}
 	// Insert a suppression.

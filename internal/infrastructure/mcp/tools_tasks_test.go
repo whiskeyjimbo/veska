@@ -103,7 +103,7 @@ func TestSetActiveTask_Basic(t *testing.T) {
 	seedTask(t, db, "task-001", "repo-1", "First task", 0)
 
 	r := NewRegistry()
-	RegisterTaskTools(r, db)
+	RegisterTaskTools(r, db, nil)
 
 	actor := domain.Actor{ID: "human:alice", Kind: domain.ActorKindHuman}
 	result, rpcErr := dispatchTask(t, r, "eng_set_active_task", actor, map[string]any{
@@ -139,7 +139,7 @@ func TestSetActiveTask_SwitchesActiveTask(t *testing.T) {
 	seedTask(t, db, "task-B", "repo-1", "Task B", 0)
 
 	r := NewRegistry()
-	RegisterTaskTools(r, db)
+	RegisterTaskTools(r, db, nil)
 
 	actor := domain.Actor{ID: "human:alice", Kind: domain.ActorKindHuman}
 	_, rpcErr := dispatchTask(t, r, "eng_set_active_task", actor, map[string]any{
@@ -165,7 +165,7 @@ func TestSetActiveTask_SwitchesActiveTask(t *testing.T) {
 func TestSetActiveTask_MissingParams(t *testing.T) {
 	db := newTasksDB(t)
 	r := NewRegistry()
-	RegisterTaskTools(r, db)
+	RegisterTaskTools(r, db, nil)
 
 	actor := domain.Actor{ID: "human:alice", Kind: domain.ActorKindHuman}
 	_, rpcErr := dispatchTask(t, r, "eng_set_active_task", actor, map[string]any{
@@ -189,7 +189,7 @@ func TestGetActiveTask_NoActive(t *testing.T) {
 	seedRepo(t, db, "repo-1", "/repos/repo-1")
 
 	r := NewRegistry()
-	RegisterTaskTools(r, db)
+	RegisterTaskTools(r, db, nil)
 
 	actor := domain.Actor{ID: "agent:bot", Kind: domain.ActorKindAgent}
 	result, rpcErr := dispatchTask(t, r, "eng_get_active_task", actor, map[string]any{
@@ -214,7 +214,7 @@ func TestGetActiveTask_WithActive(t *testing.T) {
 	seedTask(t, db, "task-active", "repo-1", "Active task", 1)
 
 	r := NewRegistry()
-	RegisterTaskTools(r, db)
+	RegisterTaskTools(r, db, nil)
 
 	actor := domain.Actor{ID: "agent:bot", Kind: domain.ActorKindAgent}
 	result, rpcErr := dispatchTask(t, r, "eng_get_active_task", actor, map[string]any{
@@ -258,7 +258,7 @@ func TestGetTaskHistory_DefaultLimit(t *testing.T) {
 	}
 
 	r := NewRegistry()
-	RegisterTaskTools(r, db)
+	RegisterTaskTools(r, db, nil)
 
 	actor := domain.Actor{ID: "agent:bot", Kind: domain.ActorKindAgent}
 	result, rpcErr := dispatchTask(t, r, "eng_get_task_history", actor, map[string]any{
@@ -297,7 +297,7 @@ func TestGetTaskHistory_CustomLimit(t *testing.T) {
 	seedTask(t, db, "task-Z", "repo-1", "Task Z", 0)
 
 	r := NewRegistry()
-	RegisterTaskTools(r, db)
+	RegisterTaskTools(r, db, nil)
 
 	actor := domain.Actor{ID: "agent:bot", Kind: domain.ActorKindAgent}
 	result, rpcErr := dispatchTask(t, r, "eng_get_task_history", actor, map[string]any{

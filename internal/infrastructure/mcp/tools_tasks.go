@@ -5,18 +5,21 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"time"
 
 	"github.com/whiskeyjimbo/veska/internal/core/domain"
+	"github.com/whiskeyjimbo/veska/internal/core/ports"
 )
 
 // RegisterTaskTools registers task management tools on r.
 // db is the SQLite connection that backs the tasks table.
-func RegisterTaskTools(r *Registry, db *sql.DB) {
+// aw is an optional AuditWriter; pass nil to disable audit logging.
+func RegisterTaskTools(r *Registry, db *sql.DB, aw ports.AuditWriter) {
 	r.MustRegister(ToolSpec{
 		Name:            "eng_set_active_task",
 		Description:     "Set the active task for a repo, deactivating any previously active task.",
 		IncludesStaging: false,
-		Handler:         makeSetActiveTaskHandler(db),
+		Handler:         makeSetActiveTaskHandler(db, aw),
 	})
 	r.MustRegister(ToolSpec{
 		Name:            "eng_get_active_task",
@@ -41,17 +44,14 @@ type setActiveTaskParams struct {
 	RepoID string `json:"repo_id"`
 }
 
-func makeSetActiveTaskHandler(db *sql.DB) ToolHandler {
-	return func(ctx context.Context, _ domain.Actor, raw json.RawMessage) (any, *RPCError) {
+func makeSetActiveTaskHandler(db *sql.DB, aw ports.AuditWriter) ToolHandler {
+	return func(ctx context.Context, actor domain.Actor, raw json.RawMessage) (any, *RPCError) {
 		var p setActiveTaskParams
-		if err := json.Unmarshal(raw, &p); err != nil {
-			return nil, &RPCError{Code: CodeInvalidParams, Message: fmt.Sprintf("invalid params: %v", err)}
+		if rpcErr := bindParams(raw, &p); rpcErr != nil {
+			return nil, rpcErr
 		}
-		if p.TaskID == "" {
-			return nil, &RPCError{Code: CodeInvalidParams, Message: "task_id is required"}
-		}
-		if p.RepoID == "" {
-			return nil, &RPCError{Code: CodeInvalidParams, Message: "repo_id is required"}
+		if rpcErr := checkRequired("task_id", p.TaskID, "repo_id", p.RepoID); rpcErr != nil {
+			return nil, rpcErr
 		}
 
 		// Deactivate all tasks for this repo, then activate the target task.
@@ -75,11 +75,22 @@ func makeSetActiveTaskHandler(db *sql.DB) ToolHandler {
 		}
 		n, _ := res.RowsAffected()
 		if n == 0 {
-			return nil, &RPCError{Code: CodeInvalidParams, Message: fmt.Sprintf("task not found: %s in repo %s", p.TaskID, p.RepoID)}
+			return nil, &RPCError{Code: CodeNotFound, Message: fmt.Sprintf("task not found: %s in repo %s", p.TaskID, p.RepoID)}
 		}
 
 		if err := tx.Commit(); err != nil {
 			return nil, &RPCError{Code: CodeInternalError, Message: fmt.Sprintf("commit tx: %v", err)}
+		}
+
+		if aw != nil {
+			_ = aw.Write(ctx, ports.AuditEntry{
+				RepoID:    p.RepoID,
+				ActorID:   actor.ID,
+				ActorKind: actor.Kind,
+				Op:        "task.activate",
+				TargetID:  p.TaskID,
+				CreatedAt: time.Now(),
+			})
 		}
 
 		return map[string]any{
@@ -109,11 +120,11 @@ type taskRow struct {
 func makeGetActiveTaskHandler(db *sql.DB) ToolHandler {
 	return func(ctx context.Context, _ domain.Actor, raw json.RawMessage) (any, *RPCError) {
 		var p getActiveTaskParams
-		if err := json.Unmarshal(raw, &p); err != nil {
-			return nil, &RPCError{Code: CodeInvalidParams, Message: fmt.Sprintf("invalid params: %v", err)}
+		if rpcErr := bindParams(raw, &p); rpcErr != nil {
+			return nil, rpcErr
 		}
-		if p.RepoID == "" {
-			return nil, &RPCError{Code: CodeInvalidParams, Message: "repo_id is required"}
+		if rpcErr := checkRequired("repo_id", p.RepoID); rpcErr != nil {
+			return nil, rpcErr
 		}
 
 		var t taskRow
@@ -147,11 +158,11 @@ const defaultTaskHistoryLimit = 20
 func makeGetTaskHistoryHandler(db *sql.DB) ToolHandler {
 	return func(ctx context.Context, _ domain.Actor, raw json.RawMessage) (any, *RPCError) {
 		var p getTaskHistoryParams
-		if err := json.Unmarshal(raw, &p); err != nil {
-			return nil, &RPCError{Code: CodeInvalidParams, Message: fmt.Sprintf("invalid params: %v", err)}
+		if rpcErr := bindParams(raw, &p); rpcErr != nil {
+			return nil, rpcErr
 		}
-		if p.RepoID == "" {
-			return nil, &RPCError{Code: CodeInvalidParams, Message: "repo_id is required"}
+		if rpcErr := checkRequired("repo_id", p.RepoID); rpcErr != nil {
+			return nil, rpcErr
 		}
 		limit := p.Limit
 		if limit <= 0 {
