@@ -830,3 +830,79 @@ func TestMigration0003_SuppressionsAgnosticVsSpecific(t *testing.T) {
 		t.Errorf("expected 1 branch-specific suppression for feat/x, got %d", cnt)
 	}
 }
+
+// ── Migration 0005: nodes.signature + nodes.prev_signature ─────────────────
+
+// columnExists returns true if the named column is present on the table.
+func columnExists(t *testing.T, db *sql.DB, table, col string) bool {
+	t.Helper()
+	rows, err := db.Query(`SELECT name FROM pragma_table_info(?)`, table)
+	if err != nil {
+		t.Fatalf("pragma_table_info(%s): %v", table, err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var n string
+		if err := rows.Scan(&n); err != nil {
+			t.Fatalf("scan column name: %v", err)
+		}
+		if n == col {
+			return true
+		}
+	}
+	return false
+}
+
+// TestMigration0005_AddsSignatureColumns verifies migration 0005 adds the two
+// new columns to nodes with NULL as the default value.
+func TestMigration0005_AddsSignatureColumns(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	dbPath := filepath.Join(dir, "veska.db")
+
+	_ = openTest(t, dbPath)
+	raw := openRawDB(t, dbPath)
+
+	if !columnExists(t, raw, "nodes", "signature") {
+		t.Error("nodes.signature column not found after migration 0005")
+	}
+	if !columnExists(t, raw, "nodes", "prev_signature") {
+		t.Error("nodes.prev_signature column not found after migration 0005")
+	}
+}
+
+// TestMigration0005_DefaultsAreNull verifies that legacy INSERT statements
+// (omitting the new columns) yield NULL for both new columns.
+func TestMigration0005_DefaultsAreNull(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	dbPath := filepath.Join(dir, "veska.db")
+
+	db := openTest(t, dbPath)
+
+	if _, err := db.Exec(`INSERT INTO repos (repo_id, root_path, added_at) VALUES (?,?,?)`,
+		"r1", "/tmp/r1", time.Now().UnixMilli()); err != nil {
+		t.Fatalf("insert repo: %v", err)
+	}
+	if _, err := db.Exec(`INSERT INTO nodes (
+		node_id, branch, repo_id, language, kind, symbol_path, file_path,
+		content_hash, last_promoted_at, actor_id, actor_kind
+	) VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
+		"n1", "main", "r1", "go", "function", "F", "a.go",
+		"h", time.Now().UnixMilli(), "service:veska", "system"); err != nil {
+		t.Fatalf("insert node: %v", err)
+	}
+
+	var sig, prev sql.NullString
+	if err := db.QueryRow(`SELECT signature, prev_signature FROM nodes WHERE node_id=?`, "n1").Scan(&sig, &prev); err != nil {
+		t.Fatalf("query node: %v", err)
+	}
+	if sig.Valid {
+		t.Errorf("signature: want NULL, got %q", sig.String)
+	}
+	if prev.Valid {
+		t.Errorf("prev_signature: want NULL, got %q", prev.String)
+	}
+}
