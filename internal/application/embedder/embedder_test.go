@@ -292,6 +292,12 @@ func TestWorker_PerRowEmbedErrorKeepsSiblingsSucceeding(t *testing.T) {
 	}
 }
 
+// TestWorker_IdempotentSameContentHash is the m3.02.4 semantics check on the
+// pre-existing 2.1 idempotency test: two pending refs whose nodes project to
+// the same "<kind> <symbol_path>" hash to the same content_hash, so the
+// second ref reuses the existing node_embeddings row WITHOUT a second Embed
+// call. Both refs end up state='ready' with the same content_hash; the
+// dedup-hits counter increments exactly once.
 func TestWorker_IdempotentSameContentHash(t *testing.T) {
 	db := openSchemaDB(t)
 	repo := infsqlite.NewEmbeddingRefsRepo(db, db)
@@ -299,15 +305,16 @@ func TestWorker_IdempotentSameContentHash(t *testing.T) {
 	// Two nodes whose Text projections will collide — same kind, same symbol.
 	seedNode(t, db, "a", "r1", "main", "X", "function")
 	seedNode(t, db, "b", "r1", "main", "X", "function")
-	// Make Embed return identical vectors regardless of input length by
-	// pre-padding the input so out[0]=len(text) collides.
-	emb := &fakeEmbedder{vector: []float32{9, 9, 9}, modelID: "m"}
-	// Patch: make vector independent of text length by zeroing out[0].
-	emb.vector = []float32{0, 0, 0}
-	emb.modelID = "m-stable"
+	emb := &fakeEmbedder{vector: []float32{0, 0, 0}, modelID: "m-stable"}
+
+	reg := prometheus.NewRegistry()
+	metrics := observability.NewMetrics(reg)
 
 	vs := &fakeVectorStore{}
-	w := embedder.NewWorker(repo, emb, vs, embedder.WithInterval(5*time.Millisecond))
+	w := embedder.NewWorker(repo, emb, vs,
+		embedder.WithInterval(5*time.Millisecond),
+		embedder.WithMetrics(metrics),
+	)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	w.Start(ctx)
@@ -324,15 +331,192 @@ func TestWorker_IdempotentSameContentHash(t *testing.T) {
 		t.Fatal("expected 2 ready")
 	}
 
-	// Because both nodes hashed to the same content_hash, node_embeddings
-	// has exactly 1 row.
-	// We need to bypass the per-text out[0] = len(text) injection above.
-	// In the fake, Embed sets out[0]=len(text). Both nodes' Text is
-	// "function X" (10 bytes) — same length — so vectors collide.
+	// Exactly one Embed call — second ref deduped against the in-flight hash.
+	if got := emb.calls.Load(); got != 1 {
+		t.Errorf("Embed calls: want 1 (dedup), got %d", got)
+	}
+
+	// node_embeddings has exactly 1 row.
 	var nec int
 	_ = db.QueryRow(`SELECT COUNT(*) FROM node_embeddings`).Scan(&nec)
 	if nec != 1 {
 		t.Errorf("node_embeddings rows: want 1 (dedup by content_hash), got %d", nec)
+	}
+
+	// Both refs share the same content_hash.
+	var hashA, hashB string
+	_ = db.QueryRow(`SELECT content_hash FROM node_embedding_refs WHERE node_id='a'`).Scan(&hashA)
+	_ = db.QueryRow(`SELECT content_hash FROM node_embedding_refs WHERE node_id='b'`).Scan(&hashB)
+	if hashA == "" || hashA != hashB {
+		t.Errorf("content_hash mismatch: a=%q b=%q", hashA, hashB)
+	}
+
+	// Dedup counter incremented exactly once for the second ref.
+	if v := testutil.ToFloat64(metrics.EmbedDedupHits); v != 1 {
+		t.Errorf("EmbedDedupHits: want 1, got %v", v)
+	}
+}
+
+// TestWorker_DedupCrossTick verifies that a ref enqueued AFTER the first
+// embed has completed reuses the existing node_embeddings row without
+// calling Embed (cross-tick dedup; same key, separate batches).
+func TestWorker_DedupCrossTick(t *testing.T) {
+	db := openSchemaDB(t)
+	repo := infsqlite.NewEmbeddingRefsRepo(db, db)
+
+	seedNode(t, db, "a", "r1", "main", "X", "function")
+
+	emb := &fakeEmbedder{vector: []float32{0, 0, 0}, modelID: "m"}
+	reg := prometheus.NewRegistry()
+	metrics := observability.NewMetrics(reg)
+	vs := &fakeVectorStore{}
+
+	w := embedder.NewWorker(repo, emb, vs,
+		embedder.WithInterval(5*time.Millisecond),
+		embedder.WithMetrics(metrics),
+	)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	w.Start(ctx)
+
+	// Wait for first ref to be embedded.
+	if !waitForCondition(t, 2*time.Second, func() bool {
+		var n int
+		_ = db.QueryRow(`SELECT COUNT(*) FROM node_embedding_refs WHERE state='ready'`).Scan(&n)
+		return n == 1
+	}) {
+		t.Fatal("first ref never embedded")
+	}
+	if got := emb.calls.Load(); got != 1 {
+		t.Fatalf("after tick 1: Embed calls want 1, got %d", got)
+	}
+
+	// Now seed a sibling that projects to the same (kind, symbol_path).
+	seedNode(t, db, "b", "r1", "main", "X", "function")
+
+	if !waitForCondition(t, 2*time.Second, func() bool {
+		var n int
+		_ = db.QueryRow(`SELECT COUNT(*) FROM node_embedding_refs WHERE node_id='b' AND state='ready'`).Scan(&n)
+		return n == 1
+	}) {
+		t.Fatal("second ref never marked ready")
+	}
+	cancel()
+	w.Wait()
+
+	// Still exactly one Embed call — the second tick took the LookupExisting hit.
+	if got := emb.calls.Load(); got != 1 {
+		t.Errorf("after tick 2: Embed calls want 1 (cross-tick dedup), got %d", got)
+	}
+	if v := testutil.ToFloat64(metrics.EmbedDedupHits); v != 1 {
+		t.Errorf("EmbedDedupHits: want 1, got %v", v)
+	}
+	var nec int
+	_ = db.QueryRow(`SELECT COUNT(*) FROM node_embeddings`).Scan(&nec)
+	if nec != 1 {
+		t.Errorf("node_embeddings rows: want 1, got %d", nec)
+	}
+}
+
+// TestWorker_DistinctKeysCallEmbedIndependently verifies that distinct
+// (kind, symbol_path) projections each result in their own Embed call (no
+// false-positive dedup).
+func TestWorker_DistinctKeysCallEmbedIndependently(t *testing.T) {
+	db := openSchemaDB(t)
+	repo := infsqlite.NewEmbeddingRefsRepo(db, db)
+
+	seedNode(t, db, "a", "r1", "main", "pkg.A", "function")
+	seedNode(t, db, "b", "r1", "main", "pkg.B", "function")
+	seedNode(t, db, "c", "r1", "main", "pkg.A", "method") // same symbol, different kind
+
+	emb := &fakeEmbedder{vector: []float32{1, 2, 3}, modelID: "m"}
+	reg := prometheus.NewRegistry()
+	metrics := observability.NewMetrics(reg)
+	vs := &fakeVectorStore{}
+
+	w := embedder.NewWorker(repo, emb, vs,
+		embedder.WithInterval(5*time.Millisecond),
+		embedder.WithMetrics(metrics),
+	)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	w.Start(ctx)
+
+	if !waitForCondition(t, 2*time.Second, func() bool {
+		var n int
+		_ = db.QueryRow(`SELECT COUNT(*) FROM node_embedding_refs WHERE state='ready'`).Scan(&n)
+		return n == 3
+	}) {
+		t.Fatalf("not all refs ready; embed=%d", emb.calls.Load())
+	}
+	cancel()
+	w.Wait()
+
+	if got := emb.calls.Load(); got != 3 {
+		t.Errorf("Embed calls: want 3 (distinct keys), got %d", got)
+	}
+	if v := testutil.ToFloat64(metrics.EmbedDedupHits); v != 0 {
+		t.Errorf("EmbedDedupHits: want 0 (no collisions), got %v", v)
+	}
+	var nec int
+	_ = db.QueryRow(`SELECT COUNT(*) FROM node_embeddings`).Scan(&nec)
+	if nec != 3 {
+		t.Errorf("node_embeddings rows: want 3, got %d", nec)
+	}
+}
+
+// TestWorker_ModelIDChangeForcesFreshEmbed verifies that the model ID is
+// part of the content_hash: the same embed_text under a different model
+// produces a fresh Embed call rather than reusing the prior row.
+func TestWorker_ModelIDChangeForcesFreshEmbed(t *testing.T) {
+	db := openSchemaDB(t)
+	repo := infsqlite.NewEmbeddingRefsRepo(db, db)
+
+	seedNode(t, db, "a", "r1", "main", "X", "function")
+
+	// First worker: model="old"
+	embOld := &fakeEmbedder{vector: []float32{0, 0, 0}, modelID: "old"}
+	w1 := embedder.NewWorker(repo, embOld, &fakeVectorStore{},
+		embedder.WithInterval(5*time.Millisecond))
+	ctx1, cancel1 := context.WithCancel(context.Background())
+	w1.Start(ctx1)
+	if !waitForCondition(t, 2*time.Second, func() bool {
+		var n int
+		_ = db.QueryRow(`SELECT COUNT(*) FROM node_embedding_refs WHERE state='ready'`).Scan(&n)
+		return n == 1
+	}) {
+		t.Fatal("tick 1 never completed")
+	}
+	cancel1()
+	w1.Wait()
+
+	// Seed a sibling with identical (kind, symbol_path).
+	seedNode(t, db, "b", "r1", "main", "X", "function")
+
+	// Second worker: model="new" — same embed_text, different modelID.
+	embNew := &fakeEmbedder{vector: []float32{1, 1, 1}, modelID: "new"}
+	w2 := embedder.NewWorker(repo, embNew, &fakeVectorStore{},
+		embedder.WithInterval(5*time.Millisecond))
+	ctx2, cancel2 := context.WithCancel(context.Background())
+	w2.Start(ctx2)
+	if !waitForCondition(t, 2*time.Second, func() bool {
+		var n int
+		_ = db.QueryRow(`SELECT COUNT(*) FROM node_embedding_refs WHERE node_id='b' AND state='ready'`).Scan(&n)
+		return n == 1
+	}) {
+		t.Fatal("tick 2 never completed")
+	}
+	cancel2()
+	w2.Wait()
+
+	// New model must NOT reuse the old row.
+	if got := embNew.calls.Load(); got != 1 {
+		t.Errorf("model change: Embed calls want 1 (fresh), got %d", got)
+	}
+	var nec int
+	_ = db.QueryRow(`SELECT COUNT(*) FROM node_embeddings`).Scan(&nec)
+	if nec != 2 {
+		t.Errorf("node_embeddings rows: want 2 (per-model), got %d", nec)
 	}
 }
 
