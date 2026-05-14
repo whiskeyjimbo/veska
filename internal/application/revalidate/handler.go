@@ -131,75 +131,82 @@ func (h *Handler) Handle(ctx context.Context, row ports.WorkRow) error {
 	}
 
 	at := h.clock().UnixMilli()
+
+	// Phase 1: compute per-rule decisions WITHOUT writing. Reads
+	// (HasInboundEdges, NodeSignaturePair) stay outside the write tx so the
+	// transaction stays as short as possible and only contains UPDATEs.
+	decisions := make([]ports.FindingDecision, 0, len(stale))
+	var refreshed, closed int
 	for _, s := range stale {
-		if err := h.dispatch(ctx, row, s, at); err != nil {
+		d, err := h.decide(ctx, row, s)
+		if err != nil {
 			return err
+		}
+		decisions = append(decisions, d)
+		if d.Kind == ports.DecisionRefresh {
+			refreshed++
+		} else {
+			closed++
+		}
+	}
+
+	// Phase 2: one transaction, one fsync per file. If commit fails, no
+	// metrics are bumped — queue.Poller will retry the row and the same
+	// decisions will be re-derived on the next attempt.
+	if err := h.repo.ApplyDecisions(ctx, row.RepoID, row.Branch, decisions, at); err != nil {
+		return fmt.Errorf("revalidate.Handle: apply decisions on %q: %w", filePath, err)
+	}
+
+	// Phase 3: bump metrics by the counts of each kind in the batch.
+	if h.metrics != nil {
+		if h.metrics.RevalidateRefreshed != nil && refreshed > 0 {
+			h.metrics.RevalidateRefreshed.Add(float64(refreshed))
+		}
+		if h.metrics.RevalidateClosed != nil && closed > 0 {
+			h.metrics.RevalidateClosed.Add(float64(closed))
 		}
 	}
 	return nil
 }
 
-// dispatch routes a single stale finding to either refresh or close based on
-// its rule. Errors are wrapped with the finding ID for log triage.
-func (h *Handler) dispatch(ctx context.Context, row ports.WorkRow, s ports.StaleFinding, at int64) error {
+// decide derives a FindingDecision for one stale finding using per-rule
+// re-run logic. Reads only — no writes happen until ApplyDecisions.
+func (h *Handler) decide(ctx context.Context, row ports.WorkRow, s ports.StaleFinding) (ports.FindingDecision, error) {
 	switch s.Rule {
 	case ruleDeadCode:
 		hasIn, err := h.repo.HasInboundEdges(ctx, row.RepoID, row.Branch, s.NodeID)
 		if err != nil {
-			return fmt.Errorf("revalidate.Handle: inbound edges for %q: %w", s.FindingID, err)
+			return ports.FindingDecision{}, fmt.Errorf("revalidate.Handle: inbound edges for %q: %w", s.FindingID, err)
 		}
 		if hasIn {
 			// rule no longer fires — the node now has callers.
-			return h.close(ctx, row, s, at)
+			return ports.FindingDecision{FindingID: s.FindingID, Kind: ports.DecisionClose}, nil
 		}
 		// still dead — refresh anchor hash in place.
-		return h.refresh(ctx, row, s, at)
+		return ports.FindingDecision{FindingID: s.FindingID, Kind: ports.DecisionRefresh, NewHash: s.CurrentHash}, nil
 
 	case ruleContractDrift:
 		prev, cur, err := h.repo.NodeSignaturePair(ctx, row.RepoID, row.Branch, s.NodeID)
 		if err != nil {
-			return fmt.Errorf("revalidate.Handle: signature pair for %q: %w", s.FindingID, err)
+			return ports.FindingDecision{}, fmt.Errorf("revalidate.Handle: signature pair for %q: %w", s.FindingID, err)
 		}
 		if prev != "" && prev != cur {
 			// still drifting — refresh anchor hash in place.
-			return h.refresh(ctx, row, s, at)
+			return ports.FindingDecision{FindingID: s.FindingID, Kind: ports.DecisionRefresh, NewHash: s.CurrentHash}, nil
 		}
 		// drift resolved (signatures match, or signature absent).
-		return h.close(ctx, row, s, at)
+		return ports.FindingDecision{FindingID: s.FindingID, Kind: ports.DecisionClose}, nil
 
 	case ruleAutoLink:
 		// Re-running similarity is expensive; m3.05 deliberately does not
 		// own that path. Always close stale auto-link findings.
-		return h.close(ctx, row, s, at)
+		return ports.FindingDecision{FindingID: s.FindingID, Kind: ports.DecisionClose}, nil
 
 	default:
 		// Unknown rule: conservative close (matches m3.05.2 behaviour for
 		// rules that have no defined re-run path).
-		return h.close(ctx, row, s, at)
+		return ports.FindingDecision{FindingID: s.FindingID, Kind: ports.DecisionClose}, nil
 	}
-}
-
-// close runs the CloseAsRevalidatedObsolete port and bumps the close metric.
-func (h *Handler) close(ctx context.Context, row ports.WorkRow, s ports.StaleFinding, at int64) error {
-	if err := h.repo.CloseAsRevalidatedObsolete(ctx, row.RepoID, row.Branch, s.FindingID, at); err != nil {
-		return fmt.Errorf("revalidate.Handle: close %q: %w", s.FindingID, err)
-	}
-	if h.metrics != nil && h.metrics.RevalidateClosed != nil {
-		h.metrics.RevalidateClosed.Inc()
-	}
-	return nil
-}
-
-// refresh runs RefreshAnchorHash with the finding's CurrentHash and bumps
-// the refresh metric.
-func (h *Handler) refresh(ctx context.Context, row ports.WorkRow, s ports.StaleFinding, at int64) error {
-	if err := h.repo.RefreshAnchorHash(ctx, row.RepoID, row.Branch, s.FindingID, s.CurrentHash, at); err != nil {
-		return fmt.Errorf("revalidate.Handle: refresh %q: %w", s.FindingID, err)
-	}
-	if h.metrics != nil && h.metrics.RevalidateRefreshed != nil {
-		h.metrics.RevalidateRefreshed.Inc()
-	}
-	return nil
 }
 
 // Compile-time check: *Handler satisfies ports.WorkHandler.

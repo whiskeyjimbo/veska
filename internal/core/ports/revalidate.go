@@ -2,6 +2,39 @@ package ports
 
 import "context"
 
+// DecisionKind tags a FindingDecision as either a refresh-in-place or a
+// close-as-revalidated-obsolete. Using a tagged enum (rather than separate
+// Refresh / Close concrete types) keeps the batch payload a single contiguous
+// slice that the SQLite adapter can iterate over with two prepared statements
+// inside one transaction.
+type DecisionKind uint8
+
+const (
+	// DecisionRefresh rewrites findings.anchor_content_hash to NewHash on the
+	// named open finding. State stays 'open'; closed_reason stays NULL.
+	DecisionRefresh DecisionKind = iota + 1
+	// DecisionClose flips the named open finding to state='closed' with
+	// closed_reason='revalidated_obsolete'. NewHash is ignored.
+	DecisionClose
+)
+
+// FindingDecision is one entry in a batch passed to
+// RevalidateQuerier.ApplyDecisions. The handler builds a slice of these (one
+// per stale finding on a given file) and the SQLite adapter applies all of
+// them under a single transaction — collapsing what was previously O(stale)
+// fsyncs into a single fsync per file.
+//
+// Field semantics:
+//   - FindingID is the row key (combined with (repoID, branch) at the call site).
+//   - Kind selects the SQL path (refresh vs close).
+//   - NewHash carries the new anchor_content_hash for DecisionRefresh; it is
+//     ignored for DecisionClose and may be empty.
+type FindingDecision struct {
+	FindingID string
+	Kind      DecisionKind
+	NewHash   string
+}
+
 // StaleFinding is one open finding whose recorded anchor content hash no longer
 // matches the current content_hash of its anchor node. The revalidation sweep
 // uses this view to drive the per-rule dispatch (refresh vs close).
@@ -88,4 +121,29 @@ type RevalidateQuerier interface {
 	// row (no last_revalidated_at column) but is reserved for future
 	// audit-column work; callers must still pass a meaningful timestamp.
 	RefreshAnchorHash(ctx context.Context, repoID, branch, findingID, newHash string, at int64) error
+
+	// ApplyDecisions applies a batch of refresh and/or close decisions to
+	// open findings on (repoID, branch) in a single transaction. The intent
+	// is to collapse the per-file revalidation sweep — which can produce
+	// thousands of UPDATEs on large commits — into one fsync per file
+	// instead of one fsync per finding.
+	//
+	// Semantics:
+	//   - Empty decisions slice: no-op, no transaction opened, returns nil.
+	//   - Each DecisionRefresh updates findings.anchor_content_hash to
+	//     d.NewHash on (finding_id, branch, repo_id) gated on state='open'.
+	//   - Each DecisionClose flips state='closed' with closed_reason=
+	//     'revalidated_obsolete', closed_at=at, actor_id='service:veska',
+	//     actor_kind='system', gated on state='open'.
+	//   - Per-row UPDATE-matched-zero is NOT an error (a row that was
+	//     already closed by another path is the normal case).
+	//   - If any step of the tx fails (incl. Commit), all decisions in the
+	//     batch roll back and an error is returned wrapping the underlying
+	//     driver error. Callers must NOT increment success metrics until
+	//     ApplyDecisions returns nil.
+	//
+	// The `at` parameter stamps closed_at on close decisions. Refresh
+	// decisions ignore it for now (no last_revalidated_at column), mirroring
+	// RefreshAnchorHash.
+	ApplyDecisions(ctx context.Context, repoID, branch string, decisions []FindingDecision, at int64) error
 }
