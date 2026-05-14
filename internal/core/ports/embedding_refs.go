@@ -46,4 +46,18 @@ type EmbeddingRefRepo interface {
 	//
 	// Both writes are performed inside a single BEGIN IMMEDIATE transaction.
 	MarkReady(ctx context.Context, nodeID, contentHash, modelID string, dim int, embedding []byte, at time.Time) error
+
+	// MarkAttemptFailed records one Embed failure for nodeID:
+	//   - increments node_embedding_refs.attempts by 1,
+	//   - flips state to 'failed' if the new attempts value is >= maxAttempts.
+	//
+	// The bump-and-maybe-flip is performed in a single UPDATE so concurrent
+	// callers cannot observe a torn state. Rows already in state='failed'
+	// or 'ready' are not modified (the WHERE clause restricts to pending).
+	MarkAttemptFailed(ctx context.Context, nodeID string, maxAttempts int) error
+
+	// CountByState returns the row count for each of {pending, ready, failed}.
+	// Used by the doctor subcommand and the veska_embed_queue_* gauges.
+	// States with zero rows are still present in the map with value 0.
+	CountByState(ctx context.Context) (map[string]int, error)
 }
