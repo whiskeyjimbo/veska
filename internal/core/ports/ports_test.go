@@ -24,6 +24,11 @@ var (
 	_ ports.Watcher           = (*stubWatcher)(nil)
 	_ ports.AuditWriter       = (*stubAuditWriter)(nil)
 	_ ports.VectorStorage     = (*stubVectorStorage)(nil)
+	_ ports.Tracker           = (*stubTracker)(nil)
+	_ ports.VulnSource        = (*stubVulnSource)(nil)
+	_ ports.Embedder          = (*stubEmbedder)(nil)
+	_ ports.LLMGenerator      = (*stubLLMGenerator)(nil)
+	_ ports.Notifier          = (*stubNotifier)(nil)
 )
 
 // ── GraphStorage stub ──────────────────────────────────────────────────────
@@ -93,6 +98,41 @@ func (s *stubVectorStorage) Reindex(_ context.Context, _, _ string) error { retu
 func (s *stubVectorStorage) LookupContentHashes(_ context.Context, _, _ string, _ []string) (map[string]string, error) {
 	return nil, nil
 }
+
+// ── Tracker stub ──────────────────────────────────────────────────────────
+
+type stubTracker struct{}
+
+func (s *stubTracker) ActiveTask(_ context.Context, _ string) (*ports.Task, error) { return nil, nil }
+func (s *stubTracker) RecentTasks(_ context.Context, _ string, _ int) ([]ports.Task, error) {
+	return nil, nil
+}
+
+// ── VulnSource stub ────────────────────────────────────────────────────────
+
+type stubVulnSource struct{}
+
+func (s *stubVulnSource) Advisories(_ context.Context, _ string) ([]ports.Advisory, error) {
+	return nil, nil
+}
+
+// ── Embedder stub ──────────────────────────────────────────────────────────
+// Embedder is an alias for EmbeddingProvider; reuse stubEmbeddingProvider.
+type stubEmbedder = stubEmbeddingProvider
+
+// ── LLMGenerator stub ─────────────────────────────────────────────────────
+
+type stubLLMGenerator struct{}
+
+func (s *stubLLMGenerator) Generate(_ context.Context, _ ports.GenerateRequest) (ports.GenerateResponse, error) {
+	return ports.GenerateResponse{}, nil
+}
+
+// ── Notifier stub ──────────────────────────────────────────────────────────
+
+type stubNotifier struct{}
+
+func (s *stubNotifier) Notify(_ context.Context, _ ports.Notification) error { return nil }
 
 // Prevent "imported and not used" errors for packages only referenced by stubs.
 var _ = time.Time{}
