@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"path/filepath"
 
 	"github.com/spf13/cobra"
 	"github.com/whiskeyjimbo/engram/solov2/internal/config"
@@ -73,14 +74,51 @@ func doctorCmd() *cobra.Command {
 		doctorStorageCmd(),
 		doctorEmbedderCmd(),
 		doctorConfigCmd(),
-		doctorSubCmd("post_promotion_queue", "Inspect the post-promotion queue depth",
-			func(jsonOut bool, w io.Writer) error { return stubOK("post_promotion_queue", jsonOut, w) }),
+		doctorPostPromotionQueueCmd(),
 		doctorSubCmd("pipelines", "Check ingestion pipeline health",
 			func(jsonOut bool, w io.Writer) error { return stubOK("pipelines", jsonOut, w) }),
 		doctorSubCmd("bundle", "Verify MCP context-pack bundle integrity",
 			func(jsonOut bool, w io.Writer) error { return stubOK("bundle", jsonOut, w) }),
 	)
 
+	return cmd
+}
+
+// doctorPostPromotionQueueCmd returns the "doctor post_promotion_queue" subcommand
+// backed by internal/doctor.CheckPostPromotionQueue.
+func doctorPostPromotionQueueCmd() *cobra.Command {
+	var jsonOut bool
+	cmd := &cobra.Command{
+		Use:          "post_promotion_queue",
+		Short:        "Inspect the post-promotion queue depth and failed rows",
+		SilenceUsage: true,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			w := cmd.OutOrStdout()
+			dbPath := filepath.Join(config.DefaultVectorDir(), "engram.db")
+			report, err := doctor.CheckPostPromotionQueue(dbPath)
+			if err != nil {
+				return err
+			}
+			if jsonOut {
+				enc := json.NewEncoder(w)
+				return enc.Encode(doctor.NewEnvelope("post_promotion_queue", report.Status, report))
+			}
+			fmt.Fprintf(w, "post_promotion_queue: %s (state_counts=%d, failed=%d)\n",
+				report.Status, len(report.Counts), len(report.FailedRows))
+			for _, c := range report.Counts {
+				fmt.Fprintf(w, "  %s/%s: %d\n", c.State, c.WorkKind, c.Count)
+			}
+			for _, f := range report.FailedRows {
+				fmt.Fprintf(w, "  FAILED seq=%d repo=%s branch=%s kind=%s attempts=%d err=%s\n",
+					f.Seq, f.RepoID, f.Branch, f.WorkKind, f.Attempts, f.Error)
+			}
+			if report.Status != "healthy" {
+				return ProbeStatusError{Subsystem: "post_promotion_queue", Status: report.Status}
+			}
+			return nil
+		},
+	}
+	cmd.Flags().BoolVar(&jsonOut, "json", false, "output results as JSON")
 	return cmd
 }
 
