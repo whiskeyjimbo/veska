@@ -1,0 +1,60 @@
+package doctor
+
+import (
+	"net"
+	"os"
+	"path/filepath"
+	"time"
+)
+
+// ServiceReport holds the results of the service health probe.
+type ServiceReport struct {
+	DaemonRunning       bool   `json:"daemon_running"`
+	BrokenMarkerPresent bool   `json:"broken_marker_present"`
+	BrokenMarkerPath    string `json:"broken_marker_path,omitempty"`
+	Status              string `json:"status"`
+}
+
+// CheckService probes the daemon socket and broken marker for engramHome.
+// The daemon socket is expected at <engramHome>/daemon.sock.
+// The broken marker is expected at <engramHome>/broken.
+//
+// Status rules:
+//   - "broken"  — broken marker file is present (regardless of daemon state)
+//   - "degraded" — no broken marker but daemon socket is unreachable
+//   - "healthy"  — daemon running and no broken marker
+func CheckService(engramHome string) (ServiceReport, error) {
+	markerPath := filepath.Join(engramHome, "broken")
+	sockPath := filepath.Join(engramHome, "daemon.sock")
+
+	// 1. Check broken marker.
+	_, err := os.Stat(markerPath)
+	brokenMarkerPresent := err == nil
+
+	// 2. Dial daemon socket with 200ms timeout.
+	daemonRunning := false
+	conn, err := net.DialTimeout("unix", sockPath, 200*time.Millisecond)
+	if err == nil {
+		conn.Close()
+		daemonRunning = true
+	}
+
+	// 3. Compute status.
+	status := "healthy"
+	switch {
+	case brokenMarkerPresent:
+		status = "broken"
+	case !daemonRunning:
+		status = "degraded"
+	}
+
+	report := ServiceReport{
+		DaemonRunning:       daemonRunning,
+		BrokenMarkerPresent: brokenMarkerPresent,
+		Status:              status,
+	}
+	if brokenMarkerPresent {
+		report.BrokenMarkerPath = markerPath
+	}
+	return report, nil
+}
