@@ -55,7 +55,6 @@ func TestDoctorSubcommandsHaveJSONFlag(t *testing.T) {
 func TestDoctorStubSubcommandsExitZero(t *testing.T) {
 	// These are pure stubs that always return ok.
 	stubNames := []string{
-		"post_promotion_queue",
 		"pipelines",
 		"bundle",
 	}
