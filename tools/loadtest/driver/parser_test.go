@@ -178,3 +178,48 @@ func TestParseMCPLatencyBench_Missing(t *testing.T) {
 		t.Error("expected ok=false for missing metric line")
 	}
 }
+
+func TestParseMultiBranchBench_Pass(t *testing.T) {
+	fixture := `# Multi-Branch Bench
+
+| Metric | Value | Gate | Verdict |
+|--------|-------|------|---------|
+| Daemon RSS | 342mb | ≤2GiB | PASS |
+| Promotion 50k p95 | 0.82s | <5s | PASS |
+`
+	rssBytes, p95Secs, ok := parseMultiBranchBench(fixture)
+	if !ok {
+		t.Fatal("expected ok=true")
+	}
+	wantRSS := int64(342 * 1024 * 1024)
+	if rssBytes != wantRSS {
+		t.Errorf("want rssBytes=%d, got %d", wantRSS, rssBytes)
+	}
+	if p95Secs < 0.81 || p95Secs > 0.83 {
+		t.Errorf("want p95Secs≈0.82, got %f", p95Secs)
+	}
+}
+
+func TestParseMultiBranchBench_GiB(t *testing.T) {
+	fixture := `| Daemon RSS | 1.50GiB | ≤2GiB | PASS |
+| Promotion 50k p95 | 3.14s | <5s | PASS |
+`
+	rssBytes, p95Secs, ok := parseMultiBranchBench(fixture)
+	if !ok {
+		t.Fatal("expected ok=true")
+	}
+	wantRSS := int64(1.50 * 1024 * 1024 * 1024)
+	if rssBytes != wantRSS {
+		t.Errorf("want rssBytes=%d, got %d", wantRSS, rssBytes)
+	}
+	if p95Secs < 3.13 || p95Secs > 3.15 {
+		t.Errorf("want p95Secs≈3.14, got %f", p95Secs)
+	}
+}
+
+func TestParseMultiBranchBench_Missing(t *testing.T) {
+	_, _, ok := parseMultiBranchBench("no relevant lines here")
+	if ok {
+		t.Error("expected ok=false for missing metric lines")
+	}
+}
