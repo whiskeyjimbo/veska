@@ -10,5 +10,5 @@ Generated: 2026-05-13
 | 4. Daemon RSS | ≤2GiB | 17mb | PASS |
 | 5. Promotion 50k-symbol refactor | <5s p95 | 3.83s | PASS |
 | 6. semantic_search p95 @50k vectors | <100ms | 1.90ms | PASS |
-| 7. All tests pass -race | all pass | see CI | PENDING |
-| 8. golangci-lint + layercheck clean | clean | see CI | PENDING |
+| 7. All tests pass -race | all pass | see CI | PASS |
+| 8. golangci-lint + layercheck clean | clean | see CI | PASS |
