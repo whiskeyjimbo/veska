@@ -27,7 +27,7 @@ func TestIngester_Save_StagesResult(t *testing.T) {
 		result: &domain.ParseResult{Nodes: nodes, Edges: edges},
 	}
 	staging := NewStagingArea()
-	ing := NewIngester(parser, staging)
+	ing := NewIngester(parser, staging, NewIngestionGate(staging))
 
 	err := ing.Save(context.Background(), "repo1", "main", "foo/bar.go", []byte("package foo"))
 	if err != nil {
@@ -57,7 +57,7 @@ func TestIngester_Save_StagesResult(t *testing.T) {
 func TestIngester_Save_ParseErrorIsNonFatal(t *testing.T) {
 	parser := &stubParser{err: errors.New("syntax error")}
 	staging := NewStagingArea()
-	ing := NewIngester(parser, staging)
+	ing := NewIngester(parser, staging, NewIngestionGate(staging))
 
 	err := ing.Save(context.Background(), "repo1", "main", "bad.go", []byte("not go"))
 	if err != nil {
@@ -75,7 +75,7 @@ func TestIngester_DeleteFile_RemovesFromStaging(t *testing.T) {
 		result: &domain.ParseResult{Nodes: []*domain.Node{{}}, Edges: nil},
 	}
 	staging := NewStagingArea()
-	ing := NewIngester(parser, staging)
+	ing := NewIngester(parser, staging, NewIngestionGate(staging))
 
 	_ = ing.Save(context.Background(), "repo1", "main", "del.go", []byte("package x"))
 
@@ -101,7 +101,7 @@ func TestIngester_Save_EmptyParseResultStagesFile(t *testing.T) {
 	// Pre-seed staging with an old entry.
 	staging.StageFile("repo1", "main", "empty.go", []*domain.Node{{}}, nil)
 
-	ing := NewIngester(parser, staging)
+	ing := NewIngester(parser, staging, NewIngestionGate(staging))
 	err := ing.Save(context.Background(), "repo1", "main", "empty.go", []byte("package x"))
 	if err != nil {
 		t.Fatalf("Save returned unexpected error: %v", err)
