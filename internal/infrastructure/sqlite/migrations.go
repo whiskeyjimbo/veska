@@ -10,6 +10,8 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	_ "modernc.org/sqlite"
 )
 
 //go:embed migrations/*.sql
@@ -232,7 +234,7 @@ func computeBinarySHA() string {
 // migration SHAs match the embedded SQL.  Returns a non-nil error on mismatch.
 // This is exported primarily for testing.
 func CheckMigrationIntegrity(path string) error {
-	db, err := sql.Open("sqlite3", path)
+	db, err := sql.Open("sqlite", path)
 	if err != nil {
 		return fmt.Errorf("open %s: %w", path, err)
 	}
@@ -251,15 +253,18 @@ func defaultBackupDir() string {
 }
 
 // normaliseDSN returns a file: DSN for the given path with foreign-keys enabled.
+// Uses modernc.org/sqlite URI parameter format (_pragma=foreign_keys=on).
 func normaliseDSN(path string) string {
-	return "file:" + path + "?_foreign_keys=on"
+	return "file:" + path + "?_pragma=foreign_keys%3Don"
 }
 
-// applyPragmas sets WAL mode and autocheckpoint on db.
+// applyPragmas sets WAL mode, autocheckpoint, and foreign-keys on db.
+// Foreign-keys are also set via the DSN; this ensures enforcement on every connection.
 func applyPragmas(db *sql.DB) error {
 	pragmas := []string{
 		`PRAGMA journal_mode=WAL`,
 		`PRAGMA wal_autocheckpoint=1000`,
+		`PRAGMA foreign_keys=ON`,
 	}
 	for _, p := range pragmas {
 		if _, err := db.Exec(p); err != nil {
@@ -271,7 +276,7 @@ func applyPragmas(db *sql.DB) error {
 
 // openAndMigrate is the shared implementation for Open and OpenWithOptions.
 func openAndMigrate(path, backupDir, appliedBy string) (*sql.DB, error) {
-	db, err := sql.Open("sqlite3", normaliseDSN(path))
+	db, err := sql.Open("sqlite", normaliseDSN(path))
 	if err != nil {
 		return nil, fmt.Errorf("sqlite.Open %s: %w", path, err)
 	}

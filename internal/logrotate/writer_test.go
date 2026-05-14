@@ -95,12 +95,8 @@ func TestRotatingWriterMaxFiles(t *testing.T) {
 		}
 	}
 
-	// .5 must not exist (was dropped).
-	if _, err := os.Stat(fmt.Sprintf("%s.5", path)); err == nil {
-		// Check it doesn't have content from old seed (it may exist from shift of .4)
-		// Actually .5 will exist from .4→.5 shift, but old .5 content should be gone.
-		// The key constraint: max 5 rotated copies total, so the oldest is pruned.
-	}
+	// Nothing to assert on .5: rotation shifts .4→.5, so the file may exist.
+	// The key invariant — max 5 rotated copies — is verified by the shift logic itself.
 
 	// .1 must exist.
 	if _, err := os.Stat(path + ".1"); os.IsNotExist(err) {
@@ -169,7 +165,6 @@ func TestRotatingWriterConcurrent(t *testing.T) {
 	var wg sync.WaitGroup
 	wg.Add(goroutines)
 	for g := range goroutines {
-		g := g
 		go func() {
 			defer wg.Done()
 			for i := range writesEach {

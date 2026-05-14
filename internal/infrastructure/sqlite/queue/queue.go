@@ -109,10 +109,9 @@ func (p *Poller) runKind(ctx context.Context, kind WorkKind, handler WorkHandler
 		case <-timer.C:
 		}
 
-		if err := p.processOne(ctx, kind, handler); err != nil {
-			// processOne only returns errors for unexpected DB failures;
-			// handler errors are handled inline. We still wait the interval.
-		}
+		// processOne only returns errors for unexpected DB failures;
+		// handler errors are handled inline. We still wait the interval.
+		_ = p.processOne(ctx, kind, handler)
 
 		timer.Reset(p.interval)
 	}
