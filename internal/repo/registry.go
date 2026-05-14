@@ -117,14 +117,27 @@ const watchesPerRepoEstimate = 128
 
 // Add registers root as a tracked repository. It:
 //  1. Checks the Linux inotify watch budget (no-op on other platforms).
-//  2. Canonicalises the path and generates a sha256 repo_id.
-//  3. Reads the module path from go.mod or package.json.
-//  4. Inserts the row into the repos table (idempotent: ON CONFLICT DO NOTHING).
-//  5. Installs git hooks.
+//  2. Checks the global RSS soft cap; refuses if projected steady-state exceeds 2 GiB.
+//  3. Canonicalises the path and generates a sha256 repo_id.
+//  4. Reads the module path from go.mod or package.json.
+//  5. Inserts the row into the repos table (idempotent: ON CONFLICT DO NOTHING).
+//  6. Installs git hooks.
 //
 // Returns the repo_id string.
 func Add(ctx context.Context, db *sql.DB, rootPath string) (string, error) {
 	if _, err := CheckInotifyBudget(0, watchesPerRepoEstimate); err != nil {
+		return "", fmt.Errorf("repo add: %w", err)
+	}
+
+	currentRSS, err := CurrentRSS()
+	if err != nil {
+		return "", fmt.Errorf("repo add: read RSS: %w", err)
+	}
+	projectedRSS, err := ProjectRepoRSS(rootPath)
+	if err != nil {
+		return "", fmt.Errorf("repo add: project RSS: %w", err)
+	}
+	if err := CheckRSSBudget(currentRSS, projectedRSS, DefaultRSSSoftCap); err != nil {
 		return "", fmt.Errorf("repo add: %w", err)
 	}
 
