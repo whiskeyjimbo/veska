@@ -395,43 +395,6 @@ func TestGetFileNodes_FallsBackToPromotedStore(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// eng_get_node_as_of — skips staging overlay
-// ---------------------------------------------------------------------------
-
-func TestGetNodeAsOf_SkipsStagingOverlay(t *testing.T) {
-	store := newStubGraphStorage()
-	promoted := mustNode(t, "node-99", "pkg/baz.go", "Baz", domain.KindFunction)
-	store.addNode(promoted)
-
-	// Stage a different version of the same node.
-	staged := mustNode(t, "node-99", "pkg/baz.go", "Baz", domain.KindMethod)
-	staging := application.NewStagingArea()
-	staging.StageFile("repo1", "main", "pkg/baz.go", []*domain.Node{staged}, nil)
-
-	r := NewRegistry()
-	RegisterGraphTools(r, store, staging)
-
-	resp, rpcErr := dispatchGraph(t, r, "eng_get_node_as_of", map[string]string{
-		"node_id": "node-99",
-		"repo_id": "repo1",
-		"branch":  "main",
-	})
-	if rpcErr != nil {
-		t.Fatalf("unexpected error: %+v", rpcErr)
-	}
-	if resp.IncludedStaging {
-		t.Error("expected IncludedStaging=false for eng_get_node_as_of")
-	}
-	if len(resp.Nodes) != 1 {
-		t.Fatalf("expected 1 node, got %d", len(resp.Nodes))
-	}
-	// Must return the promoted (KindFunction), not the staged (KindMethod).
-	if resp.Nodes[0].Kind != domain.KindFunction {
-		t.Errorf("expected promoted kind %q, got %q", domain.KindFunction, resp.Nodes[0].Kind)
-	}
-}
-
-// ---------------------------------------------------------------------------
 // p95 benchmark — eng_find_symbol against 1000-node in-memory stub
 // ---------------------------------------------------------------------------
 

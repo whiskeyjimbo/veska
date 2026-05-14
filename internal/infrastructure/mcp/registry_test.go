@@ -233,7 +233,6 @@ func TestAllM106ToolsPassValidation(t *testing.T) {
 		"eng_get_node",
 		"eng_get_call_chain",
 		"eng_get_file_nodes",
-		"eng_get_node_as_of",
 		"eng_get_current_repo",
 		"eng_list_repos",
 		"eng_get_repo",
