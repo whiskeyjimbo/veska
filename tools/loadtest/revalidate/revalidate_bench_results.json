@@ -1,0 +1,14 @@
+{
+  "nodes": 10000,
+  "files": 100,
+  "edges": 10000,
+  "findings_total": 3000,
+  "findings_stale": 3000,
+  "refreshed": 3000,
+  "closed": 0,
+  "elapsed_ms": 69815.101,
+  "p95_handle_ms": 1306.475,
+  "exit_gate_met": false,
+  "backend": "sqlite",
+  "timestamp": "2026-05-14T16:09:37.110134136Z"
+}

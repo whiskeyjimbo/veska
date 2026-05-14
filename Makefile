@@ -6,7 +6,7 @@ DAEMON_BIN      := $(BINDIR)/veska-daemon
 MCP_BIN         := $(BINDIR)/veska-mcp
 LAYERCHECK_BIN  := $(BINDIR)/layercheck
 
-.PHONY: all build test lint vet layercheck clean loadtest eval-recall eval-autolink-fp
+.PHONY: all build test lint vet layercheck clean loadtest eval-recall eval-autolink-fp eval-revalidate-bench
 
 all: build test vet lint layercheck
 
@@ -57,3 +57,10 @@ eval-recall:
 # tools/loadtest/autolink/README.md.
 eval-autolink-fp:
 	AUTOLINK_POP=$${AUTOLINK_POP:-1000} go test -tags=eval -run TestAutolinkFP ./tools/loadtest/autolink/ -v
+
+# eval-revalidate-bench: revalidation wall-time harness against a synthetic
+# 10k-node / 10k-edge / 3k-finding commit (m3.05.4). Asserts the M3 exit-gate
+# target (< 60s). No quick-mode override — the gate IS the 10k case. See
+# tools/loadtest/revalidate/README.md.
+eval-revalidate-bench:
+	go test -tags=eval -run TestRevalidateBench ./tools/loadtest/revalidate/ -v -count=1 -timeout=120s
