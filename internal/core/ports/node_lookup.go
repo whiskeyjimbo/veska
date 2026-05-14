@@ -26,4 +26,11 @@ type NodeMeta struct {
 // eventually-consistent vs the SQL truth and drop dangling hits.
 type NodeLookup interface {
 	LookupNodes(ctx context.Context, repoID, branch string, nodeIDs []string) ([]NodeMeta, error)
+
+	// NodesInFile returns every node_id in (repoID, branch) whose file_path
+	// equals filePath. Used by the auto-link queue handler to translate the
+	// per-file promotion payload into the set of source nodes fed to the
+	// Linker. An unknown file path returns (nil, nil): the queue handler
+	// treats it as a no-op rather than an error.
+	NodesInFile(ctx context.Context, repoID, branch, filePath string) ([]string, error)
 }

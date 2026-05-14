@@ -11,7 +11,7 @@ import (
 	"math"
 	"os"
 	"path/filepath"
-	"sort"
+	"slices"
 	"time"
 )
 
@@ -54,9 +54,9 @@ func GenerateCorpus(clusters, nodesPerCluster int) Corpus {
 		Nodes:           make([]SyntheticNode, 0, clusters*nodesPerCluster),
 		CenterQueries:   make([]string, clusters),
 	}
-	for k := 0; k < clusters; k++ {
+	for k := range clusters {
 		c.CenterQueries[k] = fmt.Sprintf("cluster_%d_centroid", k)
-		for j := 0; j < nodesPerCluster; j++ {
+		for j := range nodesPerCluster {
 			id := fmt.Sprintf("c%d_n%d", k, j)
 			c.Nodes = append(c.Nodes, SyntheticNode{
 				NodeID:     id,
@@ -122,7 +122,7 @@ func (FakeEmbedder) ModelID() string { return "fake-hash-v1" }
 func fakeEmbed(text string) []float32 {
 	vec := make([]float32, FakeEmbeddingDim)
 	h := sha256.Sum256([]byte(text))
-	for i := 0; i < FakeEmbeddingDim; i++ {
+	for i := range FakeEmbeddingDim {
 		// Stretch 32 bytes into FakeEmbeddingDim floats by hashing
 		// successive 8-byte windows reinterpreted as uint64.
 		u := binary.LittleEndian.Uint64(h[(i*8)%32 : (i*8)%32+8])
@@ -282,6 +282,6 @@ func WriteJSON(path string, r Result) error {
 func SortedDurations(samples []time.Duration) []time.Duration {
 	out := make([]time.Duration, len(samples))
 	copy(out, samples)
-	sort.Slice(out, func(i, j int) bool { return out[i] < out[j] })
+	slices.Sort(out)
 	return out
 }

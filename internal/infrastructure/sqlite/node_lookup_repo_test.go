@@ -107,6 +107,74 @@ func TestNodeLookupRepo_EmptyInput(t *testing.T) {
 	}
 }
 
+// TestNodeLookupRepo_NodesInFile_ReturnsMatchingNodes verifies that
+// NodesInFile returns every node_id whose file_path equals the supplied
+// path on the given (repo, branch).
+func TestNodeLookupRepo_NodesInFile_ReturnsMatchingNodes(t *testing.T) {
+	t.Parallel()
+	db, repo := openLookupTestDB(t)
+
+	seedNodeRow(t, db, "r1", "main", "n1", "pkg.A", "x.go", "function", 1, 10)
+	seedNodeRow(t, db, "r1", "main", "n2", "pkg.B", "x.go", "method", 11, 20)
+	seedNodeRow(t, db, "r1", "main", "n3", "pkg.C", "y.go", "function", 1, 5)
+
+	got, err := repo.NodesInFile(context.Background(), "r1", "main", "x.go")
+	if err != nil {
+		t.Fatalf("NodesInFile: %v", err)
+	}
+	sort.Strings(got)
+	if len(got) != 2 || got[0] != "n1" || got[1] != "n2" {
+		t.Fatalf("expected [n1 n2], got %v", got)
+	}
+}
+
+// TestNodeLookupRepo_NodesInFile_UnknownFile returns nil, nil.
+func TestNodeLookupRepo_NodesInFile_UnknownFile(t *testing.T) {
+	t.Parallel()
+	db, repo := openLookupTestDB(t)
+	seedNodeRow(t, db, "r1", "main", "n1", "pkg.A", "x.go", "function", 1, 10)
+
+	got, err := repo.NodesInFile(context.Background(), "r1", "main", "does/not/exist.go")
+	if err != nil {
+		t.Fatalf("NodesInFile: %v", err)
+	}
+	if len(got) != 0 {
+		t.Fatalf("expected zero results, got %v", got)
+	}
+}
+
+// TestNodeLookupRepo_NodesInFile_BranchAndRepoIsolated verifies that
+// NodesInFile is correctly scoped to (repo, branch).
+func TestNodeLookupRepo_NodesInFile_BranchAndRepoIsolated(t *testing.T) {
+	t.Parallel()
+	db, repo := openLookupTestDB(t)
+
+	seedNodeRow(t, db, "r1", "main", "n1", "pkg.A", "x.go", "function", 1, 10)
+	seedNodeRow(t, db, "r1", "feature", "n2", "pkg.A", "x.go", "function", 1, 10)
+	seedNodeRow(t, db, "r2", "main", "n3", "pkg.A", "x.go", "function", 1, 10)
+
+	got, err := repo.NodesInFile(context.Background(), "r1", "main", "x.go")
+	if err != nil {
+		t.Fatalf("NodesInFile: %v", err)
+	}
+	if len(got) != 1 || got[0] != "n1" {
+		t.Fatalf("expected only n1 from r1/main, got %v", got)
+	}
+}
+
+// TestNodeLookupRepo_NodesInFile_EmptyPath returns nil, nil.
+func TestNodeLookupRepo_NodesInFile_EmptyPath(t *testing.T) {
+	t.Parallel()
+	_, repo := openLookupTestDB(t)
+	got, err := repo.NodesInFile(context.Background(), "r1", "main", "")
+	if err != nil {
+		t.Fatalf("NodesInFile: %v", err)
+	}
+	if len(got) != 0 {
+		t.Fatalf("expected nil result for empty path, got %v", got)
+	}
+}
+
 // TestNodeLookupRepo_RepoIsolated verifies repo scoping — a node_id that
 // only exists in another repo must not leak. The (node_id, branch)
 // composite primary key makes "same node_id in two repos on the same
