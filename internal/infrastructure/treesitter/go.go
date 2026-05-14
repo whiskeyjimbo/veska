@@ -39,15 +39,20 @@ func (p *GoParser) ParseFile(ctx context.Context, repoID, path string, src []byt
 
 	tree, err := parser.ParseCtx(ctx, nil, src)
 	if err != nil {
-		return &domain.ParseResult{}, nil
+		return &domain.ParseResult{
+			Failures: []domain.ParseFailure{{Line: 0, Message: "tree-sitter parse error: " + err.Error()}},
+		}, nil
 	}
 	defer tree.Close()
 
 	root := tree.RootNode()
 
-	// If the root itself has errors, bail out gracefully.
+	// If the root itself has errors, surface a parse failure and bail out of
+	// symbol extraction (partial trees produce noisy/incorrect symbols).
 	if hasErrorNode(root) {
-		return &domain.ParseResult{}, nil
+		return &domain.ParseResult{
+			Failures: []domain.ParseFailure{firstErrorFailure(root)},
+		}, nil
 	}
 
 	result := &domain.ParseResult{}
@@ -380,6 +385,33 @@ func hasErrorNode(node *sitter.Node) bool {
 		}
 	}
 	return false
+}
+
+// firstErrorFailure returns a ParseFailure describing the first ERROR or
+// MISSING node found in a depth-first walk of the tree. If no such node is
+// found (defensive — callers gate this with hasErrorNode), it returns a
+// generic failure with Line 0.
+func firstErrorFailure(node *sitter.Node) domain.ParseFailure {
+	if node.IsError() {
+		return domain.ParseFailure{
+			Line:    int(node.StartPoint().Row) + 1,
+			Message: "syntax error",
+		}
+	}
+	if node.IsMissing() {
+		return domain.ParseFailure{
+			Line:    int(node.StartPoint().Row) + 1,
+			Message: "missing token: " + node.Type(),
+		}
+	}
+	count := int(node.ChildCount())
+	for i := range count {
+		child := node.Child(i)
+		if hasErrorNode(child) {
+			return firstErrorFailure(child)
+		}
+	}
+	return domain.ParseFailure{Message: "syntax error"}
 }
 
 // nodeID produces a deterministic identifier for a node.

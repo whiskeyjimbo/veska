@@ -44,13 +44,22 @@ func (p *TSParser) ParseFile(ctx context.Context, repoID, path string, src []byt
 
 	tree, err := parser.ParseCtx(ctx, nil, src)
 	if err != nil {
-		return &domain.ParseResult{}, nil
+		return &domain.ParseResult{
+			Failures: []domain.ParseFailure{{Line: 0, Message: "tree-sitter parse error: " + err.Error()}},
+		}, nil
 	}
 	defer tree.Close()
 
 	root := tree.RootNode()
 
 	result := &domain.ParseResult{}
+
+	// Surface syntax errors as ParseFailures. Unlike the Go parser we still
+	// extract whatever symbols tree-sitter could recover — TS/TSX trees with
+	// localized errors typically still expose valid top-level declarations.
+	if hasErrorNode(root) {
+		result.Failures = append(result.Failures, firstErrorFailure(root))
+	}
 
 	// --- module node (one per file) ---
 	base := filepath.Base(path)
