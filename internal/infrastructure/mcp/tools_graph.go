@@ -8,19 +8,43 @@ import (
 	application "github.com/whiskeyjimbo/engram/solov2/internal/application"
 	"github.com/whiskeyjimbo/engram/solov2/internal/core/domain"
 	"github.com/whiskeyjimbo/engram/solov2/internal/core/ports"
+	"github.com/whiskeyjimbo/engram/solov2/internal/infrastructure/sqlite/resolver"
 )
+
+// CrossRepoEdge represents a synthetic edge that crosses repository boundaries.
+// CrossRepo is always true for edges produced by the resolver.
+type CrossRepoEdge struct {
+	SrcNodeID string `json:"src_node_id"`
+	DstNodeID string `json:"dst_node_id"`
+	DstRepoID string `json:"dst_repo_id"`
+	DstBranch string `json:"dst_branch"`
+	Kind      string `json:"kind"`
+	CrossRepo bool   `json:"cross_repo"` // always true
+}
 
 // GraphResponse is the standard envelope returned by all graph read tools.
 type GraphResponse struct {
-	Nodes           []*domain.Node `json:"nodes,omitempty"`
-	Edges           []*domain.Edge `json:"edges,omitempty"`
-	IncludedStaging bool           `json:"included_staging"`
-	DegradedReasons []string       `json:"degraded_reasons,omitempty"`
+	Nodes           []*domain.Node  `json:"nodes,omitempty"`
+	Edges           []*domain.Edge  `json:"edges,omitempty"`
+	CrossRepoEdges  []CrossRepoEdge `json:"cross_repo_edges,omitempty"`
+	IncludedStaging bool            `json:"included_staging"`
+	DegradedReasons []string        `json:"degraded_reasons,omitempty"`
 }
+
+// ResolveFunc is a function that resolves cross-repo edge stubs for a given
+// node. It is injected into RegisterGraphTools as an optional dependency.
+// If nil, cross-repo resolution is skipped.
+type ResolveFunc func(ctx context.Context, nodeID, branch string, expand bool) ([]resolver.ResolvedEdge, error)
 
 // RegisterGraphTools registers the 5 graph read tools on r.
 // graph and staging are injected dependencies.
-func RegisterGraphTools(r *Registry, graph ports.GraphStorage, staging *application.StagingArea) {
+// An optional ResolveFunc may be supplied as the 4th argument to enable
+// cross-repo synthetic edge resolution in eng_get_call_chain.
+func RegisterGraphTools(r *Registry, graph ports.GraphStorage, staging *application.StagingArea, resolveFns ...ResolveFunc) {
+	var resolve ResolveFunc
+	if len(resolveFns) > 0 {
+		resolve = resolveFns[0]
+	}
 	r.MustRegister(ToolSpec{
 		Name:            "eng_find_symbol",
 		Description:     "Find nodes by symbol name, with staging overlay for in-progress changes.",
@@ -37,7 +61,7 @@ func RegisterGraphTools(r *Registry, graph ports.GraphStorage, staging *applicat
 		Name:            "eng_get_call_chain",
 		Description:     "BFS traversal of CALLS edges up to a configurable depth from a start node.",
 		IncludesStaging: false,
-		Handler:         makeGetCallChainHandler(graph),
+		Handler:         makeGetCallChainHandler(graph, resolve),
 	})
 	r.MustRegister(ToolSpec{
 		Name:            "eng_get_file_nodes",
@@ -179,15 +203,16 @@ func makeGetNodeHandler(graph ports.GraphStorage, staging *application.StagingAr
 // ---------------------------------------------------------------------------
 
 type getCallChainParams struct {
-	NodeID string `json:"node_id"`
-	RepoID string `json:"repo_id"`
-	Branch string `json:"branch"`
-	Depth  int    `json:"depth"`
+	NodeID          string `json:"node_id"`
+	RepoID          string `json:"repo_id"`
+	Branch          string `json:"branch"`
+	Depth           int    `json:"depth"`
+	ExpandCrossRepo bool   `json:"expand_cross_repo"`
 }
 
 const maxCallChainDepth = 10
 
-func makeGetCallChainHandler(graph ports.GraphStorage) ToolHandler {
+func makeGetCallChainHandler(graph ports.GraphStorage, resolve ResolveFunc) ToolHandler {
 	return func(ctx context.Context, _ domain.ActorKind, raw json.RawMessage) (any, *RPCError) {
 		var p getCallChainParams
 		if err := json.Unmarshal(raw, &p); err != nil {
@@ -215,6 +240,7 @@ func makeGetCallChainHandler(graph ports.GraphStorage) ToolHandler {
 		visitedEdges := make(map[string]bool)
 		var resultNodes []*domain.Node
 		var resultEdges []*domain.Edge
+		var crossRepoEdges []CrossRepoEdge
 
 		type bfsItem struct {
 			id   domain.NodeID
@@ -226,6 +252,24 @@ func makeGetCallChainHandler(graph ports.GraphStorage) ToolHandler {
 		for len(queue) > 0 {
 			item := queue[0]
 			queue = queue[1:]
+
+			// Resolve cross-repo stubs for each visited node (including start).
+			if resolve != nil {
+				resolved, resolveErr := resolve(ctx, string(item.id), p.Branch, p.ExpandCrossRepo)
+				if resolveErr == nil {
+					for _, re := range resolved {
+						crossRepoEdges = append(crossRepoEdges, CrossRepoEdge{
+							SrcNodeID: re.SrcNodeID,
+							DstNodeID: re.DstNodeID,
+							DstRepoID: re.DstRepoID,
+							DstBranch: re.DstBranch,
+							Kind:      re.Kind,
+							CrossRepo: true,
+						})
+					}
+				}
+				// Silent miss: resolveErr != nil is ignored; continue BFS.
+			}
 
 			if item.hops >= depth {
 				continue
@@ -252,6 +296,7 @@ func makeGetCallChainHandler(graph ports.GraphStorage) ToolHandler {
 		return GraphResponse{
 			Nodes:           resultNodes,
 			Edges:           resultEdges,
+			CrossRepoEdges:  crossRepoEdges,
 			IncludedStaging: false,
 		}, nil
 	}
