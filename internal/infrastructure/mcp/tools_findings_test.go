@@ -246,3 +246,208 @@ func TestCloseFindings_MissingParams(t *testing.T) {
 		t.Errorf("expected code %d, got %d", CodeInvalidParams, rpcErr.Code)
 	}
 }
+
+// ---------------------------------------------------------------------------
+// eng_list_findings tests
+// ---------------------------------------------------------------------------
+
+func dispatchListFindings(t *testing.T, r *Registry, actor domain.Actor, params map[string]string) (any, *RPCError) {
+	t.Helper()
+	raw, err := json.Marshal(params)
+	if err != nil {
+		t.Fatalf("marshal params: %v", err)
+	}
+	req := &Request{
+		JSONRPC: "2.0",
+		Method:  "eng_list_findings",
+		Params:  raw,
+	}
+	return r.Dispatch(context.Background(), actor, req)
+}
+
+func TestListFindings_Empty(t *testing.T) {
+	db := newFindingsDB(t)
+	r := NewRegistry()
+	RegisterFindingTools(r, db)
+
+	actor := domain.Actor{ID: "agent:bot", Kind: domain.ActorKindAgent}
+	result, rpcErr := dispatchListFindings(t, r, actor, map[string]string{
+		"repo_id": "repo-1",
+		"branch":  "main",
+	})
+	if rpcErr != nil {
+		t.Fatalf("unexpected RPC error: %v", rpcErr.Message)
+	}
+
+	m, ok := result.(map[string]any)
+	if !ok {
+		t.Fatalf("expected map result, got %T", result)
+	}
+	items, _ := m["findings"].([]findingRow)
+	if len(items) != 0 {
+		t.Errorf("expected 0 findings, got %d", len(items))
+	}
+}
+
+func TestListFindings_DefaultStateIsOpen(t *testing.T) {
+	db := newFindingsDB(t)
+	seedFinding(t, db, "open-f", "main", "repo-1", "low", "open")
+	seedFinding(t, db, "closed-f", "main", "repo-1", "low", "closed")
+
+	r := NewRegistry()
+	RegisterFindingTools(r, db)
+
+	actor := domain.Actor{ID: "agent:bot", Kind: domain.ActorKindAgent}
+	result, rpcErr := dispatchListFindings(t, r, actor, map[string]string{
+		"repo_id": "repo-1",
+		"branch":  "main",
+		// no state → defaults to "open"
+	})
+	if rpcErr != nil {
+		t.Fatalf("unexpected RPC error: %v", rpcErr.Message)
+	}
+
+	m := result.(map[string]any)
+	findings, _ := m["findings"].([]findingRow)
+	if len(findings) != 1 {
+		t.Errorf("expected 1 open finding, got %d", len(findings))
+	}
+	if len(findings) == 1 && findings[0].FindingID != "open-f" {
+		t.Errorf("expected finding_id=open-f, got %q", findings[0].FindingID)
+	}
+}
+
+func TestListFindings_SeverityFilter(t *testing.T) {
+	db := newFindingsDB(t)
+	seedFinding(t, db, "low-f", "main", "repo-1", "low", "open")
+	seedFinding(t, db, "high-f", "main", "repo-1", "high", "open")
+
+	r := NewRegistry()
+	RegisterFindingTools(r, db)
+
+	actor := domain.Actor{ID: "agent:bot", Kind: domain.ActorKindAgent}
+	result, rpcErr := dispatchListFindings(t, r, actor, map[string]string{
+		"repo_id":  "repo-1",
+		"branch":   "main",
+		"severity": "high",
+	})
+	if rpcErr != nil {
+		t.Fatalf("unexpected RPC error: %v", rpcErr.Message)
+	}
+
+	m := result.(map[string]any)
+	findings, _ := m["findings"].([]findingRow)
+	if len(findings) != 1 {
+		t.Errorf("expected 1 high finding, got %d", len(findings))
+	}
+}
+
+// ---------------------------------------------------------------------------
+// eng_reopen_finding tests
+// ---------------------------------------------------------------------------
+
+func dispatchReopenFinding(t *testing.T, r *Registry, actor domain.Actor, params map[string]string) (any, *RPCError) {
+	t.Helper()
+	raw, err := json.Marshal(params)
+	if err != nil {
+		t.Fatalf("marshal params: %v", err)
+	}
+	req := &Request{
+		JSONRPC: "2.0",
+		Method:  "eng_reopen_finding",
+		Params:  raw,
+	}
+	return r.Dispatch(context.Background(), actor, req)
+}
+
+func TestReopenFinding_Basic(t *testing.T) {
+	db := newFindingsDB(t)
+	seedFinding(t, db, "reopen-f", "main", "repo-1", "low", "closed")
+
+	r := NewRegistry()
+	RegisterFindingTools(r, db)
+
+	actor := domain.Actor{ID: "agent:bot", Kind: domain.ActorKindAgent}
+	result, rpcErr := dispatchReopenFinding(t, r, actor, map[string]string{
+		"finding_id": "reopen-f",
+		"branch":     "main",
+		"repo_id":    "repo-1",
+	})
+	if rpcErr != nil {
+		t.Fatalf("unexpected RPC error: %v", rpcErr.Message)
+	}
+
+	m, ok := result.(map[string]any)
+	if !ok {
+		t.Fatalf("expected map result, got %T", result)
+	}
+	if m["state"] != "open" {
+		t.Errorf("expected state=open, got %v", m["state"])
+	}
+
+	// Verify DB.
+	var state string
+	if err := db.QueryRow(`SELECT state FROM findings WHERE finding_id = 'reopen-f' AND branch = 'main'`).Scan(&state); err != nil {
+		t.Fatalf("query state: %v", err)
+	}
+	if state != "open" {
+		t.Errorf("expected state=open in DB, got %q", state)
+	}
+}
+
+func TestReopenFinding_AnyActorCanReopen(t *testing.T) {
+	db := newFindingsDB(t)
+	seedFinding(t, db, "reopen-agent", "main", "repo-1", "critical", "closed")
+
+	r := NewRegistry()
+	RegisterFindingTools(r, db)
+
+	// An agent should be able to reopen even a critical finding (no human gate).
+	actor := domain.Actor{ID: "agent:bot", Kind: domain.ActorKindAgent}
+	_, rpcErr := dispatchReopenFinding(t, r, actor, map[string]string{
+		"finding_id": "reopen-agent",
+		"branch":     "main",
+		"repo_id":    "repo-1",
+	})
+	if rpcErr != nil {
+		t.Fatalf("agent should be able to reopen any finding, got error: %v", rpcErr.Message)
+	}
+}
+
+func TestReopenFinding_NotFound(t *testing.T) {
+	db := newFindingsDB(t)
+	r := NewRegistry()
+	RegisterFindingTools(r, db)
+
+	actor := domain.Actor{ID: "human:alice", Kind: domain.ActorKindHuman}
+	_, rpcErr := dispatchReopenFinding(t, r, actor, map[string]string{
+		"finding_id": "no-such",
+		"branch":     "main",
+		"repo_id":    "repo-1",
+	})
+	if rpcErr == nil {
+		t.Fatal("expected RPC error for not-found finding")
+	}
+	if rpcErr.Code != CodeInvalidParams {
+		t.Errorf("expected CodeInvalidParams, got %d", rpcErr.Code)
+	}
+}
+
+func TestReopenFinding_MissingParams(t *testing.T) {
+	db := newFindingsDB(t)
+	r := NewRegistry()
+	RegisterFindingTools(r, db)
+
+	actor := domain.Actor{ID: "human:alice", Kind: domain.ActorKindHuman}
+	_, rpcErr := dispatchReopenFinding(t, r, actor, map[string]string{
+		"branch":  "main",
+		"repo_id": "repo-1",
+		// missing finding_id
+	})
+	if rpcErr == nil {
+		t.Fatal("expected RPC error for missing finding_id")
+	}
+	if rpcErr.Code != CodeInvalidParams {
+		t.Errorf("expected CodeInvalidParams, got %d", rpcErr.Code)
+	}
+}
