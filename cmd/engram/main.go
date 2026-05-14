@@ -15,6 +15,7 @@ func newRootCmd() *cobra.Command {
 		Short:        "Engram code intelligence CLI",
 		SilenceUsage: true,
 	}
+	root.AddCommand(initCmd())
 	root.AddCommand(hookRunnerCmd())
 	root.AddCommand(doctorCmd())
 	root.AddCommand(backupCmd())
