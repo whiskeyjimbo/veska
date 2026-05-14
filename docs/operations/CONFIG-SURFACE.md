@@ -29,11 +29,11 @@ captures inconsistent WAL state.
 | Var | Purpose | Default |
 |---|---|---|
 | `VESKA_HOME` | Daemon data root. | `~/.veska` |
-| `ENGRAM_CONFIG` | Override the config file path. | `$VESKA_HOME/config.toml` |
-| `ENGRAM_LOG_FORMAT` | `text` or `json`. | `text` |
-| `ENGRAM_LOG_LEVEL` | `debug`, `info`, `warn`, `error`. | `info` |
-| `ENGRAM_OTLP_ENDPOINT` | OTLP exporter target. Enables tracing if set. Overrides `tracing.otlp_endpoint`. | unset |
-| `ENGRAM_METRICS_LISTEN` | Prometheus listener address (e.g. `127.0.0.1:9090`). Enables metrics if set. Overrides `metrics.listen`. | unset |
+| `VESKA_CONFIG` | Override the config file path. | `$VESKA_HOME/config.toml` |
+| `VESKA_LOG_FORMAT` | `text` or `json`. | `text` |
+| `VESKA_LOG_LEVEL` | `debug`, `info`, `warn`, `error`. | `info` |
+| `VESKA_OTLP_ENDPOINT` | OTLP exporter target. Enables tracing if set. Overrides `tracing.otlp_endpoint`. | unset |
+| `VESKA_METRICS_LISTEN` | Prometheus listener address (e.g. `127.0.0.1:9090`). Enables metrics if set. Overrides `metrics.listen`. | unset |
 
 Env vars override file values. CLI flags override env. No hot
 reload; restart for changes to take effect.
@@ -68,11 +68,11 @@ keep_rotations  = 5                          # daemon.log.1..5
 # ─── metrics (opt-in) ────────────────────────────────────────
 [metrics]
 enabled         = false
-listen          = "127.0.0.1:9090"           # only bound when enabled; ENGRAM_METRICS_LISTEN overrides
+listen          = "127.0.0.1:9090"           # only bound when enabled; VESKA_METRICS_LISTEN overrides
 
 # ─── tracing (opt-in; off by default) ────────────────────────
 # Both `enabled = true` AND `otlp_endpoint` (or
-# ENGRAM_OTLP_ENDPOINT env var) MUST be set; setting one without
+# VESKA_OTLP_ENDPOINT env var) MUST be set; setting one without
 # the other is a config error caught at startup. Sample ratio
 # is set by the operator at opt-in time; there is no default
 # that ships traces.

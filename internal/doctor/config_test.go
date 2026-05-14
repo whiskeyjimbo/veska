@@ -24,8 +24,8 @@ func TestCheckConfigExists(t *testing.T) {
 	if !report.DBExists {
 		t.Errorf("DBExists: got false, want true")
 	}
-	if report.EngramHome != dir {
-		t.Errorf("EngramHome: got %q, want %q", report.EngramHome, dir)
+	if report.VeskaHome != dir {
+		t.Errorf("VeskaHome: got %q, want %q", report.VeskaHome, dir)
 	}
 	if report.DBPath != dbPath {
 		t.Errorf("DBPath: got %q, want %q", report.DBPath, dbPath)
@@ -43,27 +43,27 @@ func TestCheckConfigMissing(t *testing.T) {
 	if report.DBExists {
 		t.Errorf("DBExists: got true, want false")
 	}
-	if report.EngramHome != dir {
-		t.Errorf("EngramHome: got %q, want %q", report.EngramHome, dir)
+	if report.VeskaHome != dir {
+		t.Errorf("VeskaHome: got %q, want %q", report.VeskaHome, dir)
 	}
 }
 
-func TestCheckConfigEngramHomeSet(t *testing.T) {
+func TestCheckConfigVeskaHomeSet(t *testing.T) {
 	dir := t.TempDir()
 
-	// Set VESKA_HOME to dir so EngramHomeSet should be true.
+	// Set VESKA_HOME to dir so VeskaHomeSet should be true.
 	t.Setenv("VESKA_HOME", dir)
 
 	report, err := doctor.CheckConfig(dir)
 	if err != nil {
 		t.Fatalf("CheckConfig: unexpected error: %v", err)
 	}
-	if !report.EngramHomeSet {
-		t.Errorf("EngramHomeSet: got false, want true when VESKA_HOME is set")
+	if !report.VeskaHomeSet {
+		t.Errorf("VeskaHomeSet: got false, want true when VESKA_HOME is set")
 	}
 }
 
-func TestCheckConfigEngramHomeNotSet(t *testing.T) {
+func TestCheckConfigVeskaHomeNotSet(t *testing.T) {
 	dir := t.TempDir()
 
 	// Ensure VESKA_HOME is unset.
@@ -73,7 +73,7 @@ func TestCheckConfigEngramHomeNotSet(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CheckConfig: unexpected error: %v", err)
 	}
-	if report.EngramHomeSet {
-		t.Errorf("EngramHomeSet: got true, want false when VESKA_HOME is empty")
+	if report.VeskaHomeSet {
+		t.Errorf("VeskaHomeSet: got true, want false when VESKA_HOME is empty")
 	}
 }

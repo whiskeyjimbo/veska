@@ -14,7 +14,7 @@ func TestDefaultVectorDir_NonEmpty(t *testing.T) {
 	}
 }
 
-func TestDefaultVectorDir_ContainsDotEngram(t *testing.T) {
+func TestDefaultVectorDir_ContainsDotVeska(t *testing.T) {
 	dir := config.DefaultVectorDir()
 	if !strings.Contains(dir, ".veska") {
 		t.Errorf("DefaultVectorDir() = %q; want path containing \".veska\"", dir)
@@ -28,7 +28,7 @@ func TestDaemonSockPath_EndsWithDaemonSock(t *testing.T) {
 	}
 }
 
-func TestDaemonSockPath_RespectsEngramHome(t *testing.T) {
+func TestDaemonSockPath_RespectsVeskaHome(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("VESKA_HOME", dir)
 	got := config.DaemonSockPath()
@@ -45,7 +45,7 @@ func TestMCPSockPath_EndsWithMCPSock(t *testing.T) {
 	}
 }
 
-func TestMCPSockPath_RespectsEngramHome(t *testing.T) {
+func TestMCPSockPath_RespectsVeskaHome(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("VESKA_HOME", dir)
 	got := config.MCPSockPath()

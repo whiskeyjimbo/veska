@@ -1,5 +1,5 @@
 // Package resolver provides query-time cross-repo edge resolution for the
-// solov2 graph store. It performs one-hop indexed lookups against the
+// veska graph store. It performs one-hop indexed lookups against the
 // cross_repo_edge_stubs and nodes tables. Multi-hop traversal is deferred to M2+.
 package resolver
 

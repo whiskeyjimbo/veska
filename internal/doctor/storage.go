@@ -11,7 +11,7 @@ import (
 // StorageReport holds filesystem metrics for the veska data directory,
 // matching the SOLO-13 §2.1.3 storage data schema.
 type StorageReport struct {
-	EngramHome      string   `json:"veska_home"`
+	VeskaHome       string   `json:"veska_home"`
 	DBPath          string   `json:"db_path"`
 	DBSizeBytes     int64    `json:"db_size_bytes"`
 	WALSizeBytes    int64    `json:"wal_size_bytes"`
@@ -89,7 +89,7 @@ func CheckStorage(veskaHome string) (StorageReport, error) {
 	freeBytes := getFreeBytes(veskaHome)
 
 	return StorageReport{
-		EngramHome:      veskaHome,
+		VeskaHome:       veskaHome,
 		DBPath:          dbPath,
 		DBSizeBytes:     dbSize,
 		WALSizeBytes:    walSize,

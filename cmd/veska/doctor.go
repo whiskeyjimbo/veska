@@ -254,7 +254,7 @@ func doctorConfigCmd() *cobra.Command {
 				return enc.Encode(doctor.NewEnvelope("config", configStatus, report))
 			}
 			fmt.Fprintf(w, "config: veska_home=%s db_exists=%v veska_home_set=%v\n",
-				report.EngramHome, report.DBExists, report.EngramHomeSet)
+				report.VeskaHome, report.DBExists, report.VeskaHomeSet)
 			if !report.DBExists {
 				return ProbeStatusError{Subsystem: "config", Status: "degraded"}
 			}
@@ -502,10 +502,10 @@ func doctorBundleCmd() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			w := cmd.OutOrStdout()
 			result, err := doctor.CreateBundle(doctor.BundleOptions{
-				EngramHome: config.DefaultVectorDir(),
-				OutputDir:  outputDir,
-				OllamaURL:  defaultOllamaURL,
-				ModelName:  defaultModelName,
+				VeskaHome: config.DefaultVectorDir(),
+				OutputDir: outputDir,
+				OllamaURL: defaultOllamaURL,
+				ModelName: defaultModelName,
 			})
 			if err != nil {
 				return err

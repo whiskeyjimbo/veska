@@ -7,10 +7,10 @@ import (
 
 // ConfigReport holds the result of inspecting the veska configuration.
 type ConfigReport struct {
-	EngramHome    string `json:"veska_home"`
-	DBPath        string `json:"db_path"`
-	DBExists      bool   `json:"db_exists"`
-	EngramHomeSet bool   `json:"veska_home_set"`
+	VeskaHome    string `json:"veska_home"`
+	DBPath       string `json:"db_path"`
+	DBExists     bool   `json:"db_exists"`
+	VeskaHomeSet bool   `json:"veska_home_set"`
 }
 
 // CheckConfig stats veska.db inside veskaHome and checks whether the
@@ -22,9 +22,9 @@ func CheckConfig(veskaHome string) (ConfigReport, error) {
 	dbExists := err == nil
 
 	return ConfigReport{
-		EngramHome:    veskaHome,
-		DBPath:        dbPath,
-		DBExists:      dbExists,
-		EngramHomeSet: os.Getenv("VESKA_HOME") != "",
+		VeskaHome:    veskaHome,
+		DBPath:       dbPath,
+		DBExists:     dbExists,
+		VeskaHomeSet: os.Getenv("VESKA_HOME") != "",
 	}, nil
 }

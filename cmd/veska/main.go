@@ -12,7 +12,7 @@ import (
 func newRootCmd() *cobra.Command {
 	root := &cobra.Command{
 		Use:          "veska",
-		Short:        "Engram code intelligence CLI",
+		Short:        "Veska code intelligence CLI",
 		SilenceUsage: true,
 	}
 	root.AddCommand(initCmd())

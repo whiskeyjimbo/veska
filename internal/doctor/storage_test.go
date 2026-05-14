@@ -50,8 +50,8 @@ func TestCheckStorage_EmptyDir(t *testing.T) {
 		t.Fatalf("CheckStorage: unexpected error: %v", err)
 	}
 
-	if report.EngramHome != dir {
-		t.Errorf("EngramHome: got %q, want %q", report.EngramHome, dir)
+	if report.VeskaHome != dir {
+		t.Errorf("VeskaHome: got %q, want %q", report.VeskaHome, dir)
 	}
 	if report.HNSWSizeBytes != 0 {
 		t.Errorf("HNSWSizeBytes: got %d, want 0", report.HNSWSizeBytes)
@@ -122,7 +122,7 @@ func TestCheckStorage_WithSidecars(t *testing.T) {
 // required JSON key from the SOLO-13 §2.1.3 schema is present.
 func TestStorageReport_JSONKeys(t *testing.T) {
 	r := doctor.StorageReport{
-		EngramHome:      "/home/jeff/.veska",
+		VeskaHome:       "/home/jeff/.veska",
 		DBPath:          "/home/jeff/.veska/veska.db",
 		DBSizeBytes:     1287654321,
 		WALSizeBytes:    8388608,

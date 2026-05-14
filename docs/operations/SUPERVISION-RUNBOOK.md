@@ -44,7 +44,7 @@ Writes `~/Library/LaunchAgents/com.veska.daemon.plist`:
     <key>ExitTimeOut</key>     <integer>30</integer>
     <key>EnvironmentVariables</key>
     <dict>
-      <key>VESKA_HOME</key>   <string>/Users/USER/.engram</string>
+      <key>VESKA_HOME</key>   <string>/Users/USER/.veska</string>
     </dict>
   </dict>
 </plist>
@@ -75,7 +75,7 @@ Restart=on-failure
 RestartSec=2
 StartLimitIntervalSec=600
 StartLimitBurst=5
-Environment=VESKA_HOME=%h/.engram
+Environment=VESKA_HOME=%h/.veska
 StandardOutput=append:%h/.veska/logs/daemon.log
 StandardError=append:%h/.veska/logs/daemon.log
 TimeoutStopSec=30
@@ -92,14 +92,14 @@ own breaker (5 restarts / 10 min) for defense-in-depth.
 ### Linux without `systemd --user` (Alpine, NixOS w/o systemd-user, devcontainers, default WSL2)
 
 Many real Linux installs do not have `systemd --user` enabled.
-The supervisor for these is the **built-in `engram supervise`
+The supervisor for these is the **built-in `veska supervise`
 subcommand** — a Go-side restart loop in the same binary,
 sharing the crash-loop breaker (§4) with the launchd / systemd
 paths. There is no shipped shell script; the prior 18-line
-`engram-supervise.sh` is retired.
+`veska-supervise.sh` is retired.
 
 ```
-engram supervise [--pidfile=$VESKA_HOME/state/supervise.pid]
+veska supervise [--pidfile=$VESKA_HOME/state/supervise.pid]
 ```
 
 Properties:
@@ -117,7 +117,7 @@ Properties:
 - Forwards SIGTERM to the child for clean stop.
 
 `veska service install` on a no-systemd-user host writes a
-shell-rc snippet that invokes `engram supervise` and prints the
+shell-rc snippet that invokes `veska supervise` and prints the
 exact line for the user to add to their autostart mechanism
 (.bashrc/.zshrc, tmux startup, an init.d entry, a desktop-
 environment autostart entry). The installer does not edit shell
@@ -175,7 +175,7 @@ veska service restart
 # 2c. If 2a and 2b are both blocked: restore from the pre-migration
 #     snapshot the runner took before the failing migration
 veska daemon stop
-engram restore --pre-migration   # one command — auto-selects the most recent
+veska restore --pre-migration   # one command — auto-selects the most recent
                                   # pre-migration snapshot, verifies it,
                                   # renames the live DB to .replaced-<ts>/,
                                   # extracts the snapshot, prints the
@@ -192,7 +192,7 @@ on-disk schema) follows the same pattern: install a binary whose
 Symptom: a desktop notification ("Engram daemon stopped
 (crash-loop). Run: veska doctor reset-crash-loop") on macOS or
 Linux with `notify-send`; on platforms without either, the next
-`engram` invocation prints a one-line banner pointing at
+`veska` invocation prints a one-line banner pointing at
 `~/.veska/state/CRASH-LOOP-TRIPPED.txt`. The editor sees the
 MCP socket close with `ErrDaemonNotRunning`; `veska service
 status` shows the supervisor gave up; `veska doctor service`
