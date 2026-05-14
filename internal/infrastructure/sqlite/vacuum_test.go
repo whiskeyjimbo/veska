@@ -9,7 +9,7 @@ import (
 
 	_ "github.com/mattn/go-sqlite3"
 
-	"github.com/whiskeyjimbo/engram/solov2/internal/infrastructure/sqlite"
+	"github.com/whiskeyjimbo/veska/internal/infrastructure/sqlite"
 )
 
 func TestVacuumInto(t *testing.T) {

@@ -12,7 +12,7 @@ import (
 	"text/template"
 )
 
-const systemdUnit = "engram-daemon"
+const systemdUnit = "veska-daemon"
 
 // unitTemplateText is the embedded systemd unit template.
 const unitTemplateText = `[Unit]
@@ -23,7 +23,7 @@ After=network.target
 ExecStart={{.BinaryPath}}
 Restart=on-failure
 RestartSec=5
-Environment=ENGRAM_HOME={{.EngramHome}}
+Environment=VESKA_HOME={{.EngramHome}}
 StandardOutput=append:{{.EngramHome}}/daemon.log
 StandardError=append:{{.EngramHome}}/daemon.log
 
@@ -31,19 +31,19 @@ StandardError=append:{{.EngramHome}}/daemon.log
 WantedBy=default.target
 `
 
-// SystemdManager manages the engram daemon via systemd --user on Linux.
+// SystemdManager manages the veska daemon via systemd --user on Linux.
 type SystemdManager struct {
 	binaryPath string
-	engramHome string
+	veskaHome  string
 	dryRun     bool
 }
 
 // NewSystemdManager creates a SystemdManager.
 // When dryRun is true, mutating operations print what they would do.
-func NewSystemdManager(binaryPath, engramHome string, dryRun bool) *SystemdManager {
+func NewSystemdManager(binaryPath, veskaHome string, dryRun bool) *SystemdManager {
 	return &SystemdManager{
 		binaryPath: binaryPath,
-		engramHome: engramHome,
+		veskaHome:  veskaHome,
 		dryRun:     dryRun,
 	}
 }
@@ -59,7 +59,7 @@ func (m *SystemdManager) unitPath() (string, error) {
 
 // RenderUnit renders the systemd unit template for the given binary and home.
 // Exported for testing.
-func RenderUnit(binaryPath, engramHome string) (string, error) {
+func RenderUnit(binaryPath, veskaHome string) (string, error) {
 	tmpl, err := template.New("unit").Parse(unitTemplateText)
 	if err != nil {
 		return "", fmt.Errorf("systemd: parse unit template: %w", err)
@@ -68,7 +68,7 @@ func RenderUnit(binaryPath, engramHome string) (string, error) {
 	if err := tmpl.Execute(&buf, struct {
 		BinaryPath string
 		EngramHome string
-	}{binaryPath, engramHome}); err != nil {
+	}{binaryPath, veskaHome}); err != nil {
 		return "", fmt.Errorf("systemd: render unit: %w", err)
 	}
 	return buf.String(), nil
@@ -80,7 +80,7 @@ func (m *SystemdManager) Install(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	content, err := RenderUnit(m.binaryPath, m.engramHome)
+	content, err := RenderUnit(m.binaryPath, m.veskaHome)
 	if err != nil {
 		return err
 	}

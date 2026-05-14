@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/whiskeyjimbo/engram/solov2/internal/config"
+	"github.com/whiskeyjimbo/veska/internal/config"
 )
 
 func TestDefaultVectorDir_NonEmpty(t *testing.T) {
@@ -16,8 +16,8 @@ func TestDefaultVectorDir_NonEmpty(t *testing.T) {
 
 func TestDefaultVectorDir_ContainsDotEngram(t *testing.T) {
 	dir := config.DefaultVectorDir()
-	if !strings.Contains(dir, ".engram") {
-		t.Errorf("DefaultVectorDir() = %q; want path containing \".engram\"", dir)
+	if !strings.Contains(dir, ".veska") {
+		t.Errorf("DefaultVectorDir() = %q; want path containing \".veska\"", dir)
 	}
 }
 
@@ -30,7 +30,7 @@ func TestDaemonSockPath_EndsWithDaemonSock(t *testing.T) {
 
 func TestDaemonSockPath_RespectsEngramHome(t *testing.T) {
 	dir := t.TempDir()
-	t.Setenv("ENGRAM_HOME", dir)
+	t.Setenv("VESKA_HOME", dir)
 	got := config.DaemonSockPath()
 	want := dir + "/daemon.sock"
 	if got != want {
@@ -47,7 +47,7 @@ func TestMCPSockPath_EndsWithMCPSock(t *testing.T) {
 
 func TestMCPSockPath_RespectsEngramHome(t *testing.T) {
 	dir := t.TempDir()
-	t.Setenv("ENGRAM_HOME", dir)
+	t.Setenv("VESKA_HOME", dir)
 	got := config.MCPSockPath()
 	want := dir + "/mcp.sock"
 	if got != want {

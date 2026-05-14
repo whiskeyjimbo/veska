@@ -10,7 +10,7 @@ import (
 	"slices"
 	"time"
 
-	"github.com/whiskeyjimbo/engram/solov2/tools/loadtest/spikes/branchpk/pkloader"
+	"github.com/whiskeyjimbo/veska/tools/loadtest/spikes/branchpk/pkloader"
 )
 
 const (

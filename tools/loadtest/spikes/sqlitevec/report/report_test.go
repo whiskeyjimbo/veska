@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/whiskeyjimbo/engram/solov2/tools/loadtest/spikes/sqlitevec/report"
+	"github.com/whiskeyjimbo/veska/tools/loadtest/spikes/sqlitevec/report"
 )
 
 func greenInputs() report.SpikeInputs {

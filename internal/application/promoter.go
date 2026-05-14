@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/whiskeyjimbo/engram/solov2/internal/core/domain"
+	"github.com/whiskeyjimbo/veska/internal/core/domain"
 )
 
 // workKinds lists the post-promotion work kinds enqueued per file.
@@ -18,7 +18,7 @@ type ErrUnregisteredRepo struct{ RepoID string }
 
 func (e ErrUnregisteredRepo) Error() string {
 	return fmt.Sprintf(
-		"promoter: repo %q is not registered — run: engram repo add <path>",
+		"promoter: repo %q is not registered — run: veska repo add <path>",
 		e.RepoID,
 	)
 }

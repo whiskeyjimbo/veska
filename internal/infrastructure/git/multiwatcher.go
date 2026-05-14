@@ -7,7 +7,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/whiskeyjimbo/engram/solov2/internal/core/ports"
+	"github.com/whiskeyjimbo/veska/internal/core/ports"
 )
 
 // RepoFileEvent wraps a ports.FileEvent with the source repo ID.

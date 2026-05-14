@@ -4,7 +4,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/whiskeyjimbo/engram/solov2/internal/core/domain"
+	"github.com/whiskeyjimbo/veska/internal/core/domain"
 )
 
 // helpers

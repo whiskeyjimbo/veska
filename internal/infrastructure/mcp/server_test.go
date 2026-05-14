@@ -11,8 +11,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/whiskeyjimbo/engram/solov2/internal/core/domain"
-	"github.com/whiskeyjimbo/engram/solov2/internal/infrastructure/mcp"
+	"github.com/whiskeyjimbo/veska/internal/core/domain"
+	"github.com/whiskeyjimbo/veska/internal/infrastructure/mcp"
 )
 
 // stubHandler records the actorKind of each call and returns a fixed result or error.

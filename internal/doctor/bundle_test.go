@@ -11,7 +11,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/whiskeyjimbo/engram/solov2/internal/doctor"
+	"github.com/whiskeyjimbo/veska/internal/doctor"
 )
 
 // openTarball opens a .tar.gz file and returns a map of path → contents for all entries.
@@ -48,14 +48,14 @@ func openTarball(t *testing.T, path string) map[string][]byte {
 	return files
 }
 
-// setupEngramHome creates a minimal fake engram home directory with engram.db and audit.jsonl.
+// setupEngramHome creates a minimal fake veska home directory with veska.db and audit.jsonl.
 func setupEngramHome(t *testing.T, auditContent string) string {
 	t.Helper()
 	dir := t.TempDir()
 
-	// Create a minimal engram.db so CheckStorage sees it.
-	if err := os.WriteFile(filepath.Join(dir, "engram.db"), []byte("SQLite format 3"), 0o644); err != nil {
-		t.Fatalf("setupEngramHome: write engram.db: %v", err)
+	// Create a minimal veska.db so CheckStorage sees it.
+	if err := os.WriteFile(filepath.Join(dir, "veska.db"), []byte("SQLite format 3"), 0o644); err != nil {
+		t.Fatalf("setupEngramHome: write veska.db: %v", err)
 	}
 
 	// Write audit.jsonl.
@@ -68,11 +68,11 @@ func setupEngramHome(t *testing.T, auditContent string) string {
 
 // TestCreateBundleContents verifies that the tarball contains all required entries.
 func TestCreateBundleContents(t *testing.T) {
-	engramHome := setupEngramHome(t, `{"op":"sync","repo_id":"test-repo"}`+"\n")
+	veskaHome := setupEngramHome(t, `{"op":"sync","repo_id":"test-repo"}`+"\n")
 	outDir := t.TempDir()
 
 	result, err := doctor.CreateBundle(doctor.BundleOptions{
-		EngramHome: engramHome,
+		EngramHome: veskaHome,
 		OutputDir:  outDir,
 		OllamaURL:  "http://localhost:11434",
 		ModelName:  "nomic-embed-text",
@@ -113,11 +113,11 @@ func TestCreateBundleContents(t *testing.T) {
 
 // TestCreateBundleManifest verifies manifest.json contains expected fields.
 func TestCreateBundleManifest(t *testing.T) {
-	engramHome := setupEngramHome(t, "")
+	veskaHome := setupEngramHome(t, "")
 	outDir := t.TempDir()
 
 	result, err := doctor.CreateBundle(doctor.BundleOptions{
-		EngramHome: engramHome,
+		EngramHome: veskaHome,
 		OutputDir:  outDir,
 	})
 	if err != nil {
@@ -147,8 +147,8 @@ func TestCreateBundleManifest(t *testing.T) {
 		t.Errorf("manifest.created_at %q not RFC3339: %v", createdAt, err)
 	}
 
-	if m["engram_home"] == "" {
-		t.Error("manifest.engram_home is empty")
+	if m["veska_home"] == "" {
+		t.Error("manifest.veska_home is empty")
 	}
 
 	if m["platform"] == "" {
@@ -160,11 +160,11 @@ func TestCreateBundleManifest(t *testing.T) {
 func TestCreateBundleRedaction(t *testing.T) {
 	secret := "sk-abc123"
 	auditLine := `{"op":"sync","token":"` + secret + `"}` + "\n"
-	engramHome := setupEngramHome(t, auditLine)
+	veskaHome := setupEngramHome(t, auditLine)
 	outDir := t.TempDir()
 
 	result, err := doctor.CreateBundle(doctor.BundleOptions{
-		EngramHome: engramHome,
+		EngramHome: veskaHome,
 		OutputDir:  outDir,
 	})
 	if err != nil {
@@ -188,10 +188,10 @@ func TestCreateBundleRedaction(t *testing.T) {
 
 // TestCreateBundleDefaultOutputDir verifies that CreateBundle uses os.TempDir() when OutputDir is empty.
 func TestCreateBundleDefaultOutputDir(t *testing.T) {
-	engramHome := setupEngramHome(t, "")
+	veskaHome := setupEngramHome(t, "")
 
 	result, err := doctor.CreateBundle(doctor.BundleOptions{
-		EngramHome: engramHome,
+		EngramHome: veskaHome,
 		OutputDir:  "", // should default to os.TempDir()
 	})
 	if err != nil {

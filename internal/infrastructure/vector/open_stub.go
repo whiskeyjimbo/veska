@@ -2,7 +2,7 @@
 
 package vector
 
-import "github.com/whiskeyjimbo/engram/solov2/internal/core/ports"
+import "github.com/whiskeyjimbo/veska/internal/core/ports"
 
 // openNative is the stub implementation. It always returns
 // ErrVectorStoreUnavailable when the hnsw_native build tag is absent.

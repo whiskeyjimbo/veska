@@ -12,8 +12,8 @@ import (
 	"context"
 	"time"
 
-	"github.com/whiskeyjimbo/engram/solov2/internal/core/domain"
-	"github.com/whiskeyjimbo/engram/solov2/internal/core/ports"
+	"github.com/whiskeyjimbo/veska/internal/core/domain"
+	"github.com/whiskeyjimbo/veska/internal/core/ports"
 )
 
 // Compile-time interface compliance checks.

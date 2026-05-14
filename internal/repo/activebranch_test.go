@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/whiskeyjimbo/engram/solov2/internal/repo"
+	"github.com/whiskeyjimbo/veska/internal/repo"
 )
 
 // TestSetActiveBranch verifies that SetActiveBranch stores the branch name.
@@ -59,7 +59,7 @@ func TestSetActiveBranchUpdates(t *testing.T) {
 }
 
 // TestSetActiveBranchUnknownRepo verifies that an unknown repoID is a silent no-op.
-// Unregistered repos (e.g. repos that haven't been added with `engram repo add`)
+// Unregistered repos (e.g. repos that haven't been added with `veska repo add`)
 // are ignored — the hook must never block a checkout.
 func TestSetActiveBranchUnknownRepo(t *testing.T) {
 	db := newTestDB(t)

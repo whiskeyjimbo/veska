@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/whiskeyjimbo/engram/solov2/tools/loadtest/spikes/branchpk/report"
+	"github.com/whiskeyjimbo/veska/tools/loadtest/spikes/branchpk/report"
 )
 
 func makeInputs(nodeP95, edgesP95, diskGiB float64, linearGrowth bool) report.SpikeInputs {

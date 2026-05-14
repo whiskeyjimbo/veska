@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/whiskeyjimbo/engram/solov2/internal/doctor"
+	"github.com/whiskeyjimbo/veska/internal/doctor"
 )
 
 func TestCheckServiceHealthy(t *testing.T) {

@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/whiskeyjimbo/engram/solov2/internal/embedderprobe"
+	"github.com/whiskeyjimbo/veska/internal/embedderprobe"
 )
 
 // makeServer creates a test HTTP server that handles /api/tags and /api/embeddings.

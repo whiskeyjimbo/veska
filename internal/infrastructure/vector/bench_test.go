@@ -9,10 +9,10 @@ import (
 	"sort"
 	"testing"
 
-	"github.com/whiskeyjimbo/engram/solov2/internal/core/domain"
-	"github.com/whiskeyjimbo/engram/solov2/internal/infrastructure/vector"
-	"github.com/whiskeyjimbo/engram/solov2/tools/loadtest/spikes/sqlitevec/gen"
-	"github.com/whiskeyjimbo/engram/solov2/tools/loadtest/spikes/sqlitevec/recall"
+	"github.com/whiskeyjimbo/veska/internal/core/domain"
+	"github.com/whiskeyjimbo/veska/internal/infrastructure/vector"
+	"github.com/whiskeyjimbo/veska/tools/loadtest/spikes/sqlitevec/gen"
+	"github.com/whiskeyjimbo/veska/tools/loadtest/spikes/sqlitevec/recall"
 )
 
 const (

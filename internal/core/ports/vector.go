@@ -1,10 +1,10 @@
-// Package ports defines the interface contracts for the engram solov2 infrastructure.
+// Package ports defines the interface contracts for the veska infrastructure.
 package ports
 
 import (
 	"context"
 
-	"github.com/whiskeyjimbo/engram/solov2/internal/core/domain"
+	"github.com/whiskeyjimbo/veska/internal/core/domain"
 )
 
 // VectorStorage is the port for storing and querying vector embeddings.

@@ -9,8 +9,8 @@ import (
 	"testing"
 	"time"
 
-	application "github.com/whiskeyjimbo/engram/solov2/internal/application"
-	"github.com/whiskeyjimbo/engram/solov2/internal/core/domain"
+	application "github.com/whiskeyjimbo/veska/internal/application"
+	"github.com/whiskeyjimbo/veska/internal/core/domain"
 )
 
 // ---------------------------------------------------------------------------

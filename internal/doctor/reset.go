@@ -14,16 +14,16 @@ type ResetReport struct {
 	CrashCountWas       int  `json:"crash_count_was"`
 }
 
-// ResetCrashLoop removes the broken-marker file (<engramHome>/broken) and the
-// crash-count file (<engramHome>/crash_count) if they are present.  It returns
+// ResetCrashLoop removes the broken-marker file (<veskaHome>/broken) and the
+// crash-count file (<veskaHome>/crash_count) if they are present.  It returns
 // a ResetReport describing what was cleared and what the crash count was before
 // deletion.  If neither file exists the call succeeds and both cleared fields
 // are false.
-func ResetCrashLoop(engramHome string) (ResetReport, error) {
+func ResetCrashLoop(veskaHome string) (ResetReport, error) {
 	var report ResetReport
 
-	markerPath := filepath.Join(engramHome, "broken")
-	countPath := filepath.Join(engramHome, "crash_count")
+	markerPath := filepath.Join(veskaHome, "broken")
+	countPath := filepath.Join(veskaHome, "crash_count")
 
 	// Read crash count before removing anything.
 	if raw, err := os.ReadFile(countPath); err == nil {

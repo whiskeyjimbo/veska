@@ -5,10 +5,10 @@ import (
 	"encoding/json"
 	"fmt"
 
-	application "github.com/whiskeyjimbo/engram/solov2/internal/application"
-	"github.com/whiskeyjimbo/engram/solov2/internal/core/domain"
-	"github.com/whiskeyjimbo/engram/solov2/internal/core/ports"
-	"github.com/whiskeyjimbo/engram/solov2/internal/infrastructure/sqlite/resolver"
+	application "github.com/whiskeyjimbo/veska/internal/application"
+	"github.com/whiskeyjimbo/veska/internal/core/domain"
+	"github.com/whiskeyjimbo/veska/internal/core/ports"
+	"github.com/whiskeyjimbo/veska/internal/infrastructure/sqlite/resolver"
 )
 
 // CrossRepoEdge represents a synthetic edge that crosses repository boundaries.

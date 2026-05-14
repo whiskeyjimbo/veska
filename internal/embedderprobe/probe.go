@@ -1,5 +1,5 @@
 // Package embedderprobe provides shared health-check helpers for the Ollama
-// embedding provider.  It is used by both "engram init" and "engram doctor
+// embedding provider.  It is used by both "veska init" and "veska doctor
 // embedder" to avoid duplicating connectivity logic.
 package embedderprobe
 

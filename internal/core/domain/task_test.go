@@ -58,15 +58,15 @@ func TestNewTask_HappyPath(t *testing.T) {
 }
 
 func TestNewTask_WithTracker(t *testing.T) {
-	task, err := NewTask("task-1", "repo1", "Track me", WithTracker("bd", "bd:engram-42"))
+	task, err := NewTask("task-1", "repo1", "Track me", WithTracker("bd", "bd:veska-42"))
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	if task.Tracker == nil || *task.Tracker != "bd" {
 		t.Errorf("Tracker: got %v, want %q", task.Tracker, "bd")
 	}
-	if task.TrackerRef == nil || *task.TrackerRef != "bd:engram-42" {
-		t.Errorf("TrackerRef: got %v, want %q", task.TrackerRef, "bd:engram-42")
+	if task.TrackerRef == nil || *task.TrackerRef != "bd:veska-42" {
+		t.Errorf("TrackerRef: got %v, want %q", task.TrackerRef, "bd:veska-42")
 	}
 }
 

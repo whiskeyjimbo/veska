@@ -243,13 +243,13 @@ func CheckMigrationIntegrity(path string) error {
 }
 
 // defaultBackupDir returns the default auto-snapshot directory.
-// Path: ~/.engram-backups/.pre-migration/
+// Path: ~/.veska-backups/.pre-migration/
 func defaultBackupDir() string {
 	home, err := os.UserHomeDir()
 	if err != nil {
-		return filepath.Join(".engram-backups", ".pre-migration")
+		return filepath.Join(".veska-backups", ".pre-migration")
 	}
-	return filepath.Join(home, ".engram-backups", ".pre-migration")
+	return filepath.Join(home, ".veska-backups", ".pre-migration")
 }
 
 // normaliseDSN returns a file: DSN for the given path with foreign-keys enabled.
@@ -308,19 +308,19 @@ func openAndMigrate(path, backupDir, appliedBy string) (*sql.DB, error) {
 		// Up to date — verify SHAs, then return.
 		if err := verifyAppliedSHAs(db); err != nil {
 			db.Close()
-			fmt.Fprintf(os.Stderr, "engram: migration integrity check failed: %v\n", err)
+			fmt.Fprintf(os.Stderr, "veska: migration integrity check failed: %v\n", err)
 			os.Exit(78)
 		}
 		return db, nil
 
 	case current > target:
 		db.Close()
-		fmt.Fprintf(os.Stderr, "engram: DB schema version %d is newer than binary max %d; refusing to start\n", current, target)
+		fmt.Fprintf(os.Stderr, "veska: DB schema version %d is newer than binary max %d; refusing to start\n", current, target)
 		os.Exit(78)
 
 	case current < minSchemaVersion && current != 0:
 		db.Close()
-		fmt.Fprintf(os.Stderr, "engram: DB schema version %d is below minimum supported %d; refusing to start\n", current, minSchemaVersion)
+		fmt.Fprintf(os.Stderr, "veska: DB schema version %d is below minimum supported %d; refusing to start\n", current, minSchemaVersion)
 		os.Exit(78)
 
 	default:
@@ -329,13 +329,13 @@ func openAndMigrate(path, backupDir, appliedBy string) (*sql.DB, error) {
 		if current > 0 {
 			if err := verifyAppliedSHAs(db); err != nil {
 				db.Close()
-				fmt.Fprintf(os.Stderr, "engram: migration integrity check failed before upgrade: %v\n", err)
+				fmt.Fprintf(os.Stderr, "veska: migration integrity check failed before upgrade: %v\n", err)
 				os.Exit(78)
 			}
 		}
 		if err := runMigrations(db, current, target, backupDir, appliedBy); err != nil {
 			db.Close()
-			fmt.Fprintf(os.Stderr, "engram: migration failed: %v\n", err)
+			fmt.Fprintf(os.Stderr, "veska: migration failed: %v\n", err)
 			os.Exit(78)
 		}
 	}
@@ -346,7 +346,7 @@ func openAndMigrate(path, backupDir, appliedBy string) (*sql.DB, error) {
 // Options controls optional behaviour for OpenWithOptions.
 type Options struct {
 	// BackupDir overrides the default auto-snapshot directory.
-	// Defaults to ~/.engram-backups/.pre-migration/.
+	// Defaults to ~/.veska-backups/.pre-migration/.
 	BackupDir string
 
 	// AppliedBy is recorded in schema_migrations.applied_by.

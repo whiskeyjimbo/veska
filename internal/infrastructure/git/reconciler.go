@@ -10,7 +10,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	infrafs "github.com/whiskeyjimbo/engram/solov2/internal/infrastructure/fs"
+	infrafs "github.com/whiskeyjimbo/veska/internal/infrastructure/fs"
 )
 
 // MtimeEntry records the last-seen mtime and size of a file for change detection.

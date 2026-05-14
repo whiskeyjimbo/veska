@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/whiskeyjimbo/engram/solov2/internal/core/ports"
-	"github.com/whiskeyjimbo/engram/solov2/internal/infrastructure/git"
+	"github.com/whiskeyjimbo/veska/internal/core/ports"
+	"github.com/whiskeyjimbo/veska/internal/infrastructure/git"
 )
 
 const eventTimeout = 2 * time.Second

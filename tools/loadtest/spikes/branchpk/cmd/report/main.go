@@ -10,7 +10,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/whiskeyjimbo/engram/solov2/tools/loadtest/spikes/branchpk/report"
+	"github.com/whiskeyjimbo/veska/tools/loadtest/spikes/branchpk/report"
 )
 
 func main() {

@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/whiskeyjimbo/engram/solov2/internal/application"
+	"github.com/whiskeyjimbo/veska/internal/application"
 )
 
 func TestErrBusy_Error_Format(t *testing.T) {
@@ -16,7 +16,7 @@ func TestErrBusy_Error_Format(t *testing.T) {
 		WaitCount: 3,
 	}
 	got := e.Error()
-	want := "engram: writer busy (cause=seal_in_flight, in_use=1, wait_count=3)"
+	want := "veska: writer busy (cause=seal_in_flight, in_use=1, wait_count=3)"
 	if got != want {
 		t.Errorf("Error() = %q; want %q", got, want)
 	}

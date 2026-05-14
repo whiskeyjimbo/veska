@@ -5,14 +5,14 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/whiskeyjimbo/engram/solov2/internal/doctor"
+	"github.com/whiskeyjimbo/veska/internal/doctor"
 )
 
 func TestCheckConfigExists(t *testing.T) {
 	dir := t.TempDir()
 
-	// Write a fake engram.db to the temp dir.
-	dbPath := filepath.Join(dir, "engram.db")
+	// Write a fake veska.db to the temp dir.
+	dbPath := filepath.Join(dir, "veska.db")
 	if err := os.WriteFile(dbPath, []byte("fake"), 0o644); err != nil {
 		t.Fatalf("WriteFile: %v", err)
 	}
@@ -35,7 +35,7 @@ func TestCheckConfigExists(t *testing.T) {
 func TestCheckConfigMissing(t *testing.T) {
 	dir := t.TempDir()
 
-	// No engram.db written — empty dir.
+	// No veska.db written — empty dir.
 	report, err := doctor.CheckConfig(dir)
 	if err != nil {
 		t.Fatalf("CheckConfig: unexpected error: %v", err)
@@ -51,29 +51,29 @@ func TestCheckConfigMissing(t *testing.T) {
 func TestCheckConfigEngramHomeSet(t *testing.T) {
 	dir := t.TempDir()
 
-	// Set ENGRAM_HOME to dir so EngramHomeSet should be true.
-	t.Setenv("ENGRAM_HOME", dir)
+	// Set VESKA_HOME to dir so EngramHomeSet should be true.
+	t.Setenv("VESKA_HOME", dir)
 
 	report, err := doctor.CheckConfig(dir)
 	if err != nil {
 		t.Fatalf("CheckConfig: unexpected error: %v", err)
 	}
 	if !report.EngramHomeSet {
-		t.Errorf("EngramHomeSet: got false, want true when ENGRAM_HOME is set")
+		t.Errorf("EngramHomeSet: got false, want true when VESKA_HOME is set")
 	}
 }
 
 func TestCheckConfigEngramHomeNotSet(t *testing.T) {
 	dir := t.TempDir()
 
-	// Ensure ENGRAM_HOME is unset.
-	t.Setenv("ENGRAM_HOME", "")
+	// Ensure VESKA_HOME is unset.
+	t.Setenv("VESKA_HOME", "")
 
 	report, err := doctor.CheckConfig(dir)
 	if err != nil {
 		t.Fatalf("CheckConfig: unexpected error: %v", err)
 	}
 	if report.EngramHomeSet {
-		t.Errorf("EngramHomeSet: got true, want false when ENGRAM_HOME is empty")
+		t.Errorf("EngramHomeSet: got true, want false when VESKA_HOME is empty")
 	}
 }

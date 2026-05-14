@@ -10,7 +10,7 @@ import (
 	"os"
 	"sync"
 
-	"github.com/whiskeyjimbo/engram/solov2/internal/core/ports"
+	"github.com/whiskeyjimbo/veska/internal/core/ports"
 )
 
 const (

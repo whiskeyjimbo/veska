@@ -80,10 +80,10 @@ engram findings close <finding_id> --reason "rotated, history rewritten"
 `severity=critical` close requires `actor_kind=human`. The agent
 cannot close a secret-leak finding for you.
 
-## What `engram doctor` shows
+## What `veska doctor` shows
 
 ```
-$ engram doctor
+$ veska doctor
 ...
 warnings:
   - 1 open secret_leak finding (file: src/aws_client.go, age: 2h)

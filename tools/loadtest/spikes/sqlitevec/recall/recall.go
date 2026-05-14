@@ -8,8 +8,8 @@ import (
 	"math"
 	"slices"
 
-	"github.com/whiskeyjimbo/engram/solov2/tools/loadtest/spikes/sqlitevec/bench"
-	"github.com/whiskeyjimbo/engram/solov2/tools/loadtest/spikes/sqlitevec/gen"
+	"github.com/whiskeyjimbo/veska/tools/loadtest/spikes/sqlitevec/bench"
+	"github.com/whiskeyjimbo/veska/tools/loadtest/spikes/sqlitevec/gen"
 )
 
 // RecallResult holds recall@k results for one population.

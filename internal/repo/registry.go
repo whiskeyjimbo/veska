@@ -1,4 +1,4 @@
-// Package repo manages the set of git repositories tracked by engram.
+// Package repo manages the set of git repositories tracked by veska.
 // Add registers a repository, reads its module path, and installs git hooks.
 // Remove deregisters a repository and removes the installed hooks.
 package repo
@@ -17,12 +17,12 @@ import (
 	"time"
 )
 
-// hookNames lists the git hooks that engram installs.
+// hookNames lists the git hooks that veska installs.
 var hookNames = []string{"post-commit", "post-checkout"}
 
 // hookScript returns the shell script content for a named hook.
 func hookScript(hookName string) string {
-	return fmt.Sprintf("#!/bin/sh\nexec engram hook-runner %s \"$@\"\n", hookName)
+	return fmt.Sprintf("#!/bin/sh\nexec veska hook-runner %s \"$@\"\n", hookName)
 }
 
 // repoID returns a deterministic hex ID for a canonical root path.
@@ -76,7 +76,7 @@ func readModulePath(root string) string {
 	return ""
 }
 
-// installHooks writes engram hook scripts into <root>/.git/hooks/ atomically.
+// installHooks writes veska hook scripts into <root>/.git/hooks/ atomically.
 // It is a no-op if the hooks directory does not exist.
 func installHooks(root string) error {
 	hooksDir := filepath.Join(root, ".git", "hooks")
@@ -103,7 +103,7 @@ func installHooks(root string) error {
 	return nil
 }
 
-// removeHooks deletes engram hook scripts from <root>/.git/hooks/ if they exist.
+// removeHooks deletes veska hook scripts from <root>/.git/hooks/ if they exist.
 func removeHooks(root string) {
 	hooksDir := filepath.Join(root, ".git", "hooks")
 	for _, name := range hookNames {

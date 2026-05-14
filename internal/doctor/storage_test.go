@@ -7,7 +7,7 @@ import (
 	"sort"
 	"testing"
 
-	"github.com/whiskeyjimbo/engram/solov2/internal/doctor"
+	"github.com/whiskeyjimbo/veska/internal/doctor"
 )
 
 // writeSidecar writes a minimal JSON sidecar with the given number of rows
@@ -122,11 +122,11 @@ func TestCheckStorage_WithSidecars(t *testing.T) {
 // required JSON key from the SOLO-13 §2.1.3 schema is present.
 func TestStorageReport_JSONKeys(t *testing.T) {
 	r := doctor.StorageReport{
-		EngramHome:      "/home/jeff/.engram",
-		DBPath:          "/home/jeff/.engram/engram.db",
+		EngramHome:      "/home/jeff/.veska",
+		DBPath:          "/home/jeff/.veska/veska.db",
 		DBSizeBytes:     1287654321,
 		WALSizeBytes:    8388608,
-		HNSWIndexPaths:  []string{"/home/jeff/.engram/vec-r1|main|nomic.hnsw"},
+		HNSWIndexPaths:  []string{"/home/jeff/.veska/vec-r1|main|nomic.hnsw"},
 		HNSWSizeBytes:   411261952,
 		HNSWVectorCount: 250000,
 		FreeBytes:       442891534336,
@@ -144,7 +144,7 @@ func TestStorageReport_JSONKeys(t *testing.T) {
 	}
 
 	required := []string{
-		"engram_home",
+		"veska_home",
 		"db_path",
 		"db_size_bytes",
 		"wal_size_bytes",

@@ -9,7 +9,7 @@ import (
 	"github.com/smacker/go-tree-sitter/typescript/tsx"
 	"github.com/smacker/go-tree-sitter/typescript/typescript"
 
-	"github.com/whiskeyjimbo/engram/solov2/internal/core/domain"
+	"github.com/whiskeyjimbo/veska/internal/core/domain"
 )
 
 // TSParser is a tree-sitter-backed implementation of ports.CodeParser for TypeScript

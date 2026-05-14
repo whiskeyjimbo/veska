@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/whiskeyjimbo/engram/solov2/internal/crashloop"
+	"github.com/whiskeyjimbo/veska/internal/crashloop"
 )
 
 func TestCheckNoBroken(t *testing.T) {

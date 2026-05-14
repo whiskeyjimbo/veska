@@ -3,7 +3,7 @@ package application
 import (
 	"sync"
 
-	"github.com/whiskeyjimbo/engram/solov2/internal/core/domain"
+	"github.com/whiskeyjimbo/veska/internal/core/domain"
 )
 
 // stagingKey is the composite key used to look up staged file state.
