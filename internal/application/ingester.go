@@ -4,7 +4,10 @@ import (
 	"context"
 	"log/slog"
 
+	"go.opentelemetry.io/otel/trace"
+
 	"github.com/whiskeyjimbo/veska/internal/core/ports"
+	"github.com/whiskeyjimbo/veska/internal/observability"
 )
 
 // Ingester orchestrates the parse-on-save hot path:
@@ -13,6 +16,7 @@ import (
 type Ingester struct {
 	parser  ports.CodeParser
 	staging *StagingArea
+	tp      observability.TracerProvider
 }
 
 // NewIngester constructs an Ingester wired to the provided parser and staging area.
@@ -23,12 +27,29 @@ func NewIngester(parser ports.CodeParser, staging *StagingArea) *Ingester {
 	}
 }
 
+// SetTracerProvider installs a TracerProvider for parse.file spans.
+// If not called (or called with nil), a noop provider is used.
+func (ing *Ingester) SetTracerProvider(tp observability.TracerProvider) {
+	ing.tp = tp
+}
+
+// tracerProvider returns the configured provider or a noop if nil.
+func (ing *Ingester) tracerProvider() observability.TracerProvider {
+	if ing.tp == nil {
+		return trace.NewNoopTracerProvider()
+	}
+	return ing.tp
+}
+
 // Save parses src for the file at path and stages the result.
 // repoID and branch scope the staging slot.
 // Parse errors are non-fatal: if ParseFile returns an error, the error is logged
 // at WARN level and Save returns nil — the file is simply not staged.
 // Save does NOT touch SQLite.
 func (ing *Ingester) Save(ctx context.Context, repoID, branch, path string, src []byte) error {
+	ctx, span := observability.StartSpan(ctx, ing.tracerProvider(), "parse.file")
+	defer span.End()
+
 	result, err := ing.parser.ParseFile(ctx, repoID, path, src)
 	if err != nil {
 		slog.Warn("ingester: parse error; file not staged",

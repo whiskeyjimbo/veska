@@ -7,6 +7,8 @@ import (
 	"time"
 
 	"github.com/whiskeyjimbo/veska/internal/core/domain"
+	"github.com/whiskeyjimbo/veska/internal/observability"
+	"go.opentelemetry.io/otel/trace"
 )
 
 // workKinds lists the post-promotion work kinds enqueued per file.
@@ -28,6 +30,7 @@ func (e ErrUnregisteredRepo) Error() string {
 type Promoter struct {
 	staging *StagingArea
 	writeDB *sql.DB
+	tp      observability.TracerProvider
 }
 
 // NewPromoter constructs a Promoter wired to the provided StagingArea and
@@ -37,6 +40,20 @@ func NewPromoter(staging *StagingArea, writeDB *sql.DB) *Promoter {
 		staging: staging,
 		writeDB: writeDB,
 	}
+}
+
+// SetTracerProvider installs a TracerProvider for promotion.transaction spans.
+// If not called (or called with nil), a noop provider is used.
+func (p *Promoter) SetTracerProvider(tp observability.TracerProvider) {
+	p.tp = tp
+}
+
+// tracerProvider returns the configured provider or a noop if nil.
+func (p *Promoter) tracerProvider() observability.TracerProvider {
+	if p.tp == nil {
+		return trace.NewNoopTracerProvider()
+	}
+	return p.tp
 }
 
 // Promote is called by the post-commit hook.  It:
@@ -67,6 +84,9 @@ func (p *Promoter) Promote(ctx context.Context, repoID, branch, gitSHA string, a
 	if len(snap) == 0 {
 		return nil
 	}
+
+	ctx, span := observability.StartSpan(ctx, p.tracerProvider(), "promotion.transaction")
+	defer span.End()
 
 	tx, err := p.writeDB.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelSerializable})
 	if err != nil {
