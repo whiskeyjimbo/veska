@@ -47,6 +47,8 @@ CREATE TABLE nodes (
     last_promoted_at INTEGER NOT NULL,
     actor_id       TEXT NOT NULL,
     actor_kind     TEXT NOT NULL CHECK (actor_kind IN ('human','agent','system')),
+    signature      TEXT,
+    prev_signature TEXT,
     PRIMARY KEY (node_id, branch),
     FOREIGN KEY (repo_id) REFERENCES repos(repo_id) ON DELETE CASCADE
 );

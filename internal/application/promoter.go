@@ -147,13 +147,27 @@ func (p *Promoter) Promote(ctx context.Context, repoID, branch, gitSHA string, a
 	insStmt, err := tx.PrepareContext(ctx, `
 		INSERT INTO nodes
 			(node_id, branch, repo_id, language, kind, symbol_path, file_path,
-			 line_start, line_end, content_hash, last_promoted_at, actor_id, actor_kind)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+			 line_start, line_end, content_hash, last_promoted_at, actor_id, actor_kind,
+			 signature, prev_signature)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
 	if err != nil {
 		_ = tx.Rollback()
 		return fmt.Errorf("promoter: prepare insert: %w", err)
 	}
 	defer insStmt.Close()
+
+	// Snapshot the prior signature for each (node_id) in (file, branch, repo)
+	// BEFORE the per-file DELETE so the new row can carry it forward as
+	// prev_signature. This is what powers the contract-drift check without
+	// requiring a separate history table.
+	prevSigSelectStmt, err := tx.PrepareContext(ctx, `
+		SELECT node_id, signature FROM nodes
+		WHERE file_path = ? AND branch = ? AND repo_id = ?`)
+	if err != nil {
+		_ = tx.Rollback()
+		return fmt.Errorf("promoter: prepare prev-sig select: %w", err)
+	}
+	defer prevSigSelectStmt.Close()
 
 	queueStmt, err := tx.PrepareContext(ctx, `
 		INSERT INTO post_promotion_queue
@@ -190,6 +204,43 @@ func (p *Promoter) Promote(ctx context.Context, repoID, branch, gitSHA string, a
 	now := time.Now().UnixMilli()
 
 	for filePath, nodes := range snap {
+		// Capture prior signatures keyed by node_id BEFORE the DELETE clears
+		// them, so we can thread prev_signature into the re-inserted rows.
+		// Nodes with NULL signature in the prior row map to a nil pointer so
+		// the new row's prev_signature remains NULL — equivalent to "no prior
+		// signature known" rather than "" which would falsely register as a
+		// drift to/from the empty string.
+		prevSig := make(map[string]*string)
+		prevRows, err := prevSigSelectStmt.QueryContext(ctx, filePath, branch, repoID)
+		if err != nil {
+			_ = tx.Rollback()
+			return fmt.Errorf("promoter: select prev signatures for %q: %w", filePath, err)
+		}
+		for prevRows.Next() {
+			var nodeID string
+			var sig sql.NullString
+			if err := prevRows.Scan(&nodeID, &sig); err != nil {
+				_ = prevRows.Close()
+				_ = tx.Rollback()
+				return fmt.Errorf("promoter: scan prev signature for %q: %w", filePath, err)
+			}
+			if sig.Valid {
+				v := sig.String
+				prevSig[nodeID] = &v
+			} else {
+				prevSig[nodeID] = nil
+			}
+		}
+		if err := prevRows.Err(); err != nil {
+			_ = prevRows.Close()
+			_ = tx.Rollback()
+			return fmt.Errorf("promoter: iterate prev signatures for %q: %w", filePath, err)
+		}
+		if err := prevRows.Close(); err != nil {
+			_ = tx.Rollback()
+			return fmt.Errorf("promoter: close prev signatures for %q: %w", filePath, err)
+		}
+
 		// Delete all existing nodes for this file+branch+repo before re-inserting.
 		if _, err := delStmt.ExecContext(ctx, filePath, branch, repoID); err != nil {
 			_ = tx.Rollback()
@@ -201,6 +252,15 @@ func (p *Promoter) Promote(ctx context.Context, repoID, branch, gitSHA string, a
 			lang := nodeLanguage(n)
 			lineStart, lineEnd := nodeLines(n)
 			contentHash := nodeContentHash(n)
+			sig := nodeSignature(n)
+			// prev signature: NULL when there was no prior row for this node_id
+			// in (file, branch) — first-time promotions cannot drift.
+			var prev any
+			if ps, ok := prevSig[string(n.ID)]; ok && ps != nil {
+				prev = *ps
+			} else {
+				prev = nil
+			}
 
 			if _, err := insStmt.ExecContext(ctx,
 				string(n.ID),
@@ -216,6 +276,8 @@ func (p *Promoter) Promote(ctx context.Context, repoID, branch, gitSHA string, a
 				now,
 				actor.ID,
 				string(actor.Kind),
+				sig,
+				prev,
 			); err != nil {
 				_ = tx.Rollback()
 				return fmt.Errorf("promoter: insert node %q: %w", n.ID, err)
@@ -301,4 +363,15 @@ func nodeContentHash(n *domain.Node) string {
 		return ""
 	}
 	return string(*n.ContentHash)
+}
+
+// nodeSignature returns the signature string for the INSERT bind, or nil so
+// SQLite writes a NULL when the parser did not populate it. Returning the
+// empty string here would conflate "unknown signature" with "known empty
+// signature" and break the contract-drift comparison.
+func nodeSignature(n *domain.Node) any {
+	if n.Signature == nil {
+		return nil
+	}
+	return *n.Signature
 }
