@@ -1,14 +1,18 @@
 ---
-id: ADR-S0014-vec-pivot-dual-backend
-title: "vec0-to-HNSW pivot and dual-backend vector strategy"
+id: ADR-S0015
+title: "Dual-backend vector strategy (implementation of ADR-S0014 pivot)"
 status: Accepted
 date: 2026-05-14
 deciders: [whiskeyjimbo]
 supersedes: []
+extends: [ADR-S0014]
 related: [ADR-S0014, ADR-S0001, ADR-S0002]
 ---
 
-# ADR-S0014-vec-pivot-dual-backend: vec0-to-HNSW pivot and dual-backend vector strategy
+# ADR-S0015 — Dual-backend vector strategy
+
+Implementation of the HNSW pivot decided in [[ADR-S0014]]: sqlite-vec by default,
+usearch/float16 above the M2-ratified threshold.
 
 ## Status
 
