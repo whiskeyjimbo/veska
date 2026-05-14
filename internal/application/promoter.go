@@ -26,6 +26,28 @@ func (e ErrUnregisteredRepo) Error() string {
 	)
 }
 
+// CheckRunInput is the data the post-commit check pipeline receives. It mirrors
+// internal/application/checks.Input but is declared here so that Promoter can
+// reference the runner without importing the sub-package (preventing an import
+// cycle: checks already depends on observability + ports, and application
+// imports checks would force application's tests to drag in metrics setup for
+// every promoter test).
+type CheckRunInput struct {
+	RepoID    string
+	Branch    string
+	GitSHA    string
+	FilePaths []string
+}
+
+// CheckRunner is the contract Promoter requires from the post-commit
+// structural check pipeline. The concrete implementation lives in
+// internal/application/checks. CheckRunner.Run is invoked AFTER the promotion
+// transaction commits and MUST NOT return an error — findings are advisory and
+// cannot abort a promotion.
+type CheckRunner interface {
+	Run(ctx context.Context, in CheckRunInput)
+}
+
 // Promoter flushes the in-memory StagingArea to SQLite in a single atomic
 // BEGIN IMMEDIATE transaction and enqueues post-promotion work items.
 type Promoter struct {
@@ -33,6 +55,7 @@ type Promoter struct {
 	writeDB *sql.DB
 	tp      observability.TracerProvider
 	audit   ports.AuditWriter
+	checks  CheckRunner
 }
 
 // NewPromoter constructs a Promoter wired to the provided StagingArea and
@@ -48,6 +71,13 @@ func NewPromoter(staging *StagingArea, writeDB *sql.DB) *Promoter {
 // If not called (or called with nil), audit writes are skipped.
 func (p *Promoter) SetAuditWriter(aw ports.AuditWriter) {
 	p.audit = aw
+}
+
+// SetCheckRunner installs the post-commit structural check runner. The runner
+// is invoked after the promotion transaction commits, before Promote returns.
+// If not called (or called with nil), no checks run.
+func (p *Promoter) SetCheckRunner(r CheckRunner) {
+	p.checks = r
 }
 
 // SetTracerProvider installs a TracerProvider for promotion.transaction spans.
@@ -187,7 +217,9 @@ func (p *Promoter) Promote(ctx context.Context, repoID, branch, gitSHA string, a
 
 	// Clear staging entries only after a successful commit.
 	promotedAt := time.Now()
+	filePaths := make([]string, 0, len(snap))
 	for filePath := range snap {
+		filePaths = append(filePaths, filePath)
 		p.staging.DeleteStagedFile(repoID, branch, filePath)
 		if p.audit != nil {
 			_ = p.audit.Write(ctx, ports.AuditEntry{
@@ -200,6 +232,18 @@ func (p *Promoter) Promote(ctx context.Context, repoID, branch, gitSHA string, a
 				CreatedAt: promotedAt,
 			})
 		}
+	}
+
+	// Post-commit: run advisory structural checks against the just-committed
+	// slice of the graph. Findings cannot abort the promotion — by contract
+	// the runner does not return an error.
+	if p.checks != nil {
+		p.checks.Run(ctx, CheckRunInput{
+			RepoID:    repoID,
+			Branch:    branch,
+			GitSHA:    gitSHA,
+			FilePaths: filePaths,
+		})
 	}
 
 	return nil
