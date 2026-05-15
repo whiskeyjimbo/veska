@@ -570,10 +570,21 @@ solo, the distinction does not drive any agent behaviour and
 adds a state machine branch to every consumer. The reason is
 captured in `closed_reason: string` — common values include
 `"user_dismissed"`, `"revalidated_obsolete"`,
-`"superseded_by_revalidation"` (the old `superseded` use case
-expressed as a reason), `"human_actiond_ack"` (closing a sticky
-review-pipeline-failure finding) — but the field is free-form;
-new reasons can be introduced without a state-enum migration.
+`"human_actiond_ack"` (closing a sticky review-pipeline-failure
+finding) — but the field is free-form; new reasons can be
+introduced without a state-enum migration.
+
+**No `"superseded_by_revalidation"` closed_reason.** An earlier
+draft proposed chaining "old finding → new finding" across a
+revalidation when the rule still fires on the new content. That
+chain was dropped: `finding_id` is the branch-stable hash of
+`(rule, anchor)`, so for a node-anchored finding, re-firing the
+rule on new content produces the SAME `finding_id`. There is
+nothing to chain. The revalidation sweep instead REFRESHES
+`anchor_content_hash` in place on the existing open row — state
+stays `open`, `closed_reason` stays NULL, and `actor_id` /
+`actor_kind` are left untouched. `"revalidated_obsolete"` is the
+only closed_reason the sweep ever writes.
 
 #### Invariants
 

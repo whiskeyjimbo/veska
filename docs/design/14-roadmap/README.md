@@ -140,7 +140,7 @@ content drift.
 | **m3.02 — embedder worker** | Goroutine drains `node_embedding_refs` where `state='pending'`; throttled to a configurable rate; respects `veska_embed_queue_depth`. |
 | **m3.03 — vec0 search live** | `semantic_search` queries `vec_nodes`; degraded fallback if model missing or vec0 unhealthy. |
 | **m3.04 — auto-link** | post-promotion queue `work_kind='auto_link'` proposes `Edge` rows from embedding similarity above a threshold; surfaces as low-confidence findings until accepted. |
-| **m3.05 — revalidation** | post-promotion queue `work_kind='revalidate'` sweeps open findings whose anchor content has changed; transitions to `closed` with `closed_reason='revalidated_obsolete'` (rule no longer fires) or `closed_reason='superseded_by_revalidation'` (rule fires on new content; new finding linked back). |
+| **m3.05 — revalidation** | post-promotion queue `work_kind='revalidate'` sweeps open findings whose anchor content has changed; per-rule dispatch refreshes `anchor_content_hash` in place when the rule still fires (dead-code, contract-drift) or transitions the row to `closed` with `closed_reason='revalidated_obsolete'`. No `superseded_by_revalidation` chain — branch-stable `finding_id = hash(rule, anchor)` makes the chain redundant. |
 
 **Exit gates.** Numeric gates are SOLO-13 §3 rows gated `M3`
 (embedder throughput, `semantic_search` recall, auto-link FP,

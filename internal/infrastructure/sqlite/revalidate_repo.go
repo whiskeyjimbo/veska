@@ -45,7 +45,7 @@ func (r *RevalidateRepo) StaleFindingsForFile(
 	ctx context.Context, repoID, branch, filePath string,
 ) ([]ports.StaleFinding, error) {
 	const q = `
-SELECT f.finding_id, f.node_id, f.anchor_content_hash, n.content_hash
+SELECT f.finding_id, f.node_id, f.rule, f.anchor_content_hash, n.content_hash
 FROM findings AS f
 JOIN nodes   AS n
   ON  n.node_id  = f.node_id
@@ -71,7 +71,7 @@ WHERE f.repo_id              = ?
 			anchorHash sql.NullString
 			nodeID     sql.NullString
 		)
-		if err := rows.Scan(&s.FindingID, &nodeID, &anchorHash, &s.CurrentHash); err != nil {
+		if err := rows.Scan(&s.FindingID, &nodeID, &s.Rule, &anchorHash, &s.CurrentHash); err != nil {
 			return nil, fmt.Errorf("sqlite.RevalidateRepo.StaleFindingsForFile: scan: %w", err)
 		}
 		// The IS NOT NULL filter in the WHERE clause guarantees this, but
@@ -118,6 +118,78 @@ WHERE finding_id = ?
 
 	if _, err := r.db.ExecContext(ctx, stmt, closedAt, findingID, branch, repoID); err != nil {
 		return fmt.Errorf("sqlite.RevalidateRepo.CloseAsRevalidatedObsolete: %w", err)
+	}
+	return nil
+}
+
+// HasInboundEdges reports whether the named node currently has at least one
+// inbound edge on (repoID, branch). Uses LIMIT 1 + EXISTS so the query
+// short-circuits at the first matching row; the (dst_node_id, branch, kind)
+// index on edges keeps this constant-time.
+func (r *RevalidateRepo) HasInboundEdges(
+	ctx context.Context, repoID, branch, nodeID string,
+) (bool, error) {
+	const q = `
+SELECT EXISTS (
+    SELECT 1
+    FROM edges
+    WHERE dst_node_id = ?
+      AND branch      = ?
+      AND repo_id     = ?
+    LIMIT 1
+)`
+	var has bool
+	if err := r.db.QueryRowContext(ctx, q, nodeID, branch, repoID).Scan(&has); err != nil {
+		return false, fmt.Errorf("sqlite.RevalidateRepo.HasInboundEdges: %w", err)
+	}
+	return has, nil
+}
+
+// NodeSignaturePair returns (prev_signature, signature) for the node. If the
+// node row is absent, returns ("", "", nil) — the caller treats that as
+// "drift resolved" (close the finding). NULL columns also surface as "".
+func (r *RevalidateRepo) NodeSignaturePair(
+	ctx context.Context, repoID, branch, nodeID string,
+) (prev, current string, err error) {
+	const q = `
+SELECT prev_signature, signature
+FROM nodes
+WHERE node_id = ? AND branch = ? AND repo_id = ?`
+	var p, c sql.NullString
+	row := r.db.QueryRowContext(ctx, q, nodeID, branch, repoID)
+	switch err := row.Scan(&p, &c); {
+	case err == sql.ErrNoRows:
+		return "", "", nil
+	case err != nil:
+		return "", "", fmt.Errorf("sqlite.RevalidateRepo.NodeSignaturePair: %w", err)
+	}
+	if p.Valid {
+		prev = p.String
+	}
+	if c.Valid {
+		current = c.String
+	}
+	return prev, current, nil
+}
+
+// RefreshAnchorHash rewrites findings.anchor_content_hash for the named row
+// so a subsequent revalidation sweep does not re-fire on the same drift.
+// State stays 'open'; closed_reason stays NULL. The UPDATE is gated on
+// state='open' so already-closed rows are not resurrected. `at` is accepted
+// for forward-compat (no audit column today) but is not currently written.
+func (r *RevalidateRepo) RefreshAnchorHash(
+	ctx context.Context, repoID, branch, findingID, newHash string, at int64,
+) error {
+	_ = at // reserved for future audit-column work; see port doc.
+	const stmt = `
+UPDATE findings
+SET anchor_content_hash = ?
+WHERE finding_id = ?
+  AND branch     = ?
+  AND repo_id    = ?
+  AND state      = 'open'`
+	if _, err := r.db.ExecContext(ctx, stmt, newHash, findingID, branch, repoID); err != nil {
+		return fmt.Errorf("sqlite.RevalidateRepo.RefreshAnchorHash: %w", err)
 	}
 	return nil
 }

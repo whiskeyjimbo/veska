@@ -26,8 +26,21 @@ type fakeRepo struct {
 	stale      []ports.StaleFinding
 	staleErr   error
 	closeErr   error
-	closedIDs  []string
-	closedAt   []int64
+	refreshErr error
+	edgesErr   error
+	sigErr     error
+
+	// node_id -> hasInbound (dead-code re-run); default false.
+	hasInbound map[string]bool
+	// node_id -> (prev, current) (contract-drift re-run).
+	sigs map[string][2]string
+
+	closedIDs    []string
+	closedAt     []int64
+	refreshedIDs []string
+	refreshedAt  []int64
+	refreshedHsh []string
+
 	queryCalls int
 }
 
@@ -45,6 +58,31 @@ func (f *fakeRepo) CloseAsRevalidatedObsolete(_ context.Context, _, _, findingID
 	}
 	f.closedIDs = append(f.closedIDs, findingID)
 	f.closedAt = append(f.closedAt, closedAt)
+	return nil
+}
+
+func (f *fakeRepo) HasInboundEdges(_ context.Context, _, _, nodeID string) (bool, error) {
+	if f.edgesErr != nil {
+		return false, f.edgesErr
+	}
+	return f.hasInbound[nodeID], nil
+}
+
+func (f *fakeRepo) NodeSignaturePair(_ context.Context, _, _, nodeID string) (string, string, error) {
+	if f.sigErr != nil {
+		return "", "", f.sigErr
+	}
+	pair := f.sigs[nodeID]
+	return pair[0], pair[1], nil
+}
+
+func (f *fakeRepo) RefreshAnchorHash(_ context.Context, _, _, findingID, newHash string, at int64) error {
+	if f.refreshErr != nil {
+		return f.refreshErr
+	}
+	f.refreshedIDs = append(f.refreshedIDs, findingID)
+	f.refreshedHsh = append(f.refreshedHsh, newHash)
+	f.refreshedAt = append(f.refreshedAt, at)
 	return nil
 }
 
@@ -82,8 +120,8 @@ func TestHandler_NoStaleFindingsIsNoop(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if len(repo.closedIDs) != 0 {
-		t.Errorf("expected no closes, got %v", repo.closedIDs)
+	if len(repo.closedIDs) != 0 || len(repo.refreshedIDs) != 0 {
+		t.Errorf("expected no closes/refreshes, got closed=%v refreshed=%v", repo.closedIDs, repo.refreshedIDs)
 	}
 }
 
@@ -104,7 +142,7 @@ func TestHandler_CloseErrorWraps(t *testing.T) {
 	t.Parallel()
 	sentinel := errors.New("boom-close")
 	repo := &fakeRepo{
-		stale:    []ports.StaleFinding{{FindingID: "fA", NodeID: "n1", AnchorHash: "h-old", CurrentHash: "h-new"}},
+		stale:    []ports.StaleFinding{{FindingID: "fA", Rule: "auto-link", NodeID: "n1", AnchorHash: "h-old", CurrentHash: "h-new"}},
 		closeErr: sentinel,
 	}
 	h := revalidate.NewHandler(repo)
@@ -116,79 +154,300 @@ func TestHandler_CloseErrorWraps(t *testing.T) {
 	}
 }
 
-func TestHandler_ClosesEachStaleFindingWithFixedTimestamp(t *testing.T) {
+func TestHandler_RefreshErrorWraps(t *testing.T) {
 	t.Parallel()
+	sentinel := errors.New("boom-refresh")
 	repo := &fakeRepo{
-		stale: []ports.StaleFinding{
-			{FindingID: "fA", NodeID: "n1", AnchorHash: "h-a-old", CurrentHash: "h-a-new"},
-			{FindingID: "fB", NodeID: "n2", AnchorHash: "h-b-old", CurrentHash: "h-b-new"},
-		},
+		stale:      []ports.StaleFinding{{FindingID: "fA", Rule: "dead-code", NodeID: "n1", AnchorHash: "h-old", CurrentHash: "h-new"}},
+		refreshErr: sentinel,
+		// hasInbound[n1] defaults to false → dead-code path takes refresh.
 	}
-	fixed := time.Unix(1700000000, 0)
-	h := revalidate.NewHandler(repo, revalidate.WithClock(func() time.Time { return fixed }))
-
+	h := revalidate.NewHandler(repo)
 	err := h.Handle(context.Background(), ports.WorkRow{
 		Kind: ports.WorkKindRevalidate, RepoID: "r1", Branch: "main", Payload: "x.go",
 	})
-	if err != nil {
+	if !errors.Is(err, sentinel) {
+		t.Fatalf("expected wrapped sentinel, got %v", err)
+	}
+}
+
+func TestHandler_InboundEdgesErrorWraps(t *testing.T) {
+	t.Parallel()
+	sentinel := errors.New("boom-edges")
+	repo := &fakeRepo{
+		stale:    []ports.StaleFinding{{FindingID: "fA", Rule: "dead-code", NodeID: "n1", AnchorHash: "h-old", CurrentHash: "h-new"}},
+		edgesErr: sentinel,
+	}
+	h := revalidate.NewHandler(repo)
+	err := h.Handle(context.Background(), ports.WorkRow{
+		Kind: ports.WorkKindRevalidate, RepoID: "r1", Branch: "main", Payload: "x.go",
+	})
+	if !errors.Is(err, sentinel) {
+		t.Fatalf("expected wrapped sentinel, got %v", err)
+	}
+}
+
+func TestHandler_SignaturePairErrorWraps(t *testing.T) {
+	t.Parallel()
+	sentinel := errors.New("boom-sig")
+	repo := &fakeRepo{
+		stale:  []ports.StaleFinding{{FindingID: "fA", Rule: "contract-drift", NodeID: "n1", AnchorHash: "h-old", CurrentHash: "h-new"}},
+		sigErr: sentinel,
+	}
+	h := revalidate.NewHandler(repo)
+	err := h.Handle(context.Background(), ports.WorkRow{
+		Kind: ports.WorkKindRevalidate, RepoID: "r1", Branch: "main", Payload: "x.go",
+	})
+	if !errors.Is(err, sentinel) {
+		t.Fatalf("expected wrapped sentinel, got %v", err)
+	}
+}
+
+// ── per-rule dispatch matrix ───────────────────────────────────────────────
+
+func TestHandler_DeadCode_StillFires_Refreshes(t *testing.T) {
+	t.Parallel()
+	repo := &fakeRepo{
+		stale: []ports.StaleFinding{
+			{FindingID: "fA", Rule: "dead-code", NodeID: "n1", AnchorHash: "h-old", CurrentHash: "h-new"},
+		},
+		// hasInbound[n1] absent → false → rule still fires → refresh.
+	}
+	reg := prometheus.NewRegistry()
+	metrics := observability.NewMetrics(reg)
+	h := revalidate.NewHandler(repo, revalidate.WithMetrics(metrics))
+
+	if err := h.Handle(context.Background(), ports.WorkRow{
+		Kind: ports.WorkKindRevalidate, RepoID: "r1", Branch: "main", Payload: "x.go",
+	}); err != nil {
 		t.Fatalf("Handle: %v", err)
 	}
-	if len(repo.closedIDs) != 2 {
-		t.Fatalf("close count = %d, want 2 (%v)", len(repo.closedIDs), repo.closedIDs)
+	if len(repo.refreshedIDs) != 1 || repo.refreshedIDs[0] != "fA" {
+		t.Errorf("refreshedIDs = %v, want [fA]", repo.refreshedIDs)
 	}
-	if repo.closedIDs[0] != "fA" || repo.closedIDs[1] != "fB" {
-		t.Errorf("close order = %v, want [fA fB]", repo.closedIDs)
+	if repo.refreshedHsh[0] != "h-new" {
+		t.Errorf("refreshed hash = %q, want h-new", repo.refreshedHsh[0])
 	}
-	wantMillis := fixed.UnixMilli()
+	if len(repo.closedIDs) != 0 {
+		t.Errorf("closedIDs = %v, want []", repo.closedIDs)
+	}
+	if got := testutil.ToFloat64(metrics.RevalidateRefreshed); got != 1 {
+		t.Errorf("refreshed counter = %v, want 1", got)
+	}
+	if got := testutil.ToFloat64(metrics.RevalidateClosed); got != 0 {
+		t.Errorf("closed counter = %v, want 0", got)
+	}
+}
+
+func TestHandler_DeadCode_NoLongerFires_Closes(t *testing.T) {
+	t.Parallel()
+	repo := &fakeRepo{
+		stale: []ports.StaleFinding{
+			{FindingID: "fA", Rule: "dead-code", NodeID: "n1", AnchorHash: "h-old", CurrentHash: "h-new"},
+		},
+		hasInbound: map[string]bool{"n1": true}, // someone calls it now.
+	}
+	reg := prometheus.NewRegistry()
+	metrics := observability.NewMetrics(reg)
+	h := revalidate.NewHandler(repo, revalidate.WithMetrics(metrics))
+
+	if err := h.Handle(context.Background(), ports.WorkRow{
+		Kind: ports.WorkKindRevalidate, RepoID: "r1", Branch: "main", Payload: "x.go",
+	}); err != nil {
+		t.Fatalf("Handle: %v", err)
+	}
+	if len(repo.closedIDs) != 1 || repo.closedIDs[0] != "fA" {
+		t.Errorf("closedIDs = %v, want [fA]", repo.closedIDs)
+	}
+	if len(repo.refreshedIDs) != 0 {
+		t.Errorf("refreshedIDs = %v, want []", repo.refreshedIDs)
+	}
+	if got := testutil.ToFloat64(metrics.RevalidateClosed); got != 1 {
+		t.Errorf("closed counter = %v, want 1", got)
+	}
+}
+
+func TestHandler_ContractDrift_StillFires_Refreshes(t *testing.T) {
+	t.Parallel()
+	repo := &fakeRepo{
+		stale: []ports.StaleFinding{
+			{FindingID: "fA", Rule: "contract-drift", NodeID: "n1", AnchorHash: "h-old", CurrentHash: "h-new"},
+		},
+		sigs: map[string][2]string{"n1": {"sig-a", "sig-b"}}, // prev != cur and prev != "".
+	}
+	reg := prometheus.NewRegistry()
+	metrics := observability.NewMetrics(reg)
+	h := revalidate.NewHandler(repo, revalidate.WithMetrics(metrics))
+
+	if err := h.Handle(context.Background(), ports.WorkRow{
+		Kind: ports.WorkKindRevalidate, RepoID: "r1", Branch: "main", Payload: "x.go",
+	}); err != nil {
+		t.Fatalf("Handle: %v", err)
+	}
+	if len(repo.refreshedIDs) != 1 || repo.refreshedIDs[0] != "fA" {
+		t.Errorf("refreshedIDs = %v, want [fA]", repo.refreshedIDs)
+	}
+	if got := testutil.ToFloat64(metrics.RevalidateRefreshed); got != 1 {
+		t.Errorf("refreshed counter = %v, want 1", got)
+	}
+}
+
+func TestHandler_ContractDrift_Resolved_Closes(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name    string
+		prev    string
+		current string
+	}{
+		{"signatures_match", "sig-a", "sig-a"},
+		{"no_prev", "", "sig-a"},
+		{"both_empty", "", ""},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			repo := &fakeRepo{
+				stale: []ports.StaleFinding{
+					{FindingID: "fA", Rule: "contract-drift", NodeID: "n1", AnchorHash: "h-old", CurrentHash: "h-new"},
+				},
+				sigs: map[string][2]string{"n1": {tc.prev, tc.current}},
+			}
+			h := revalidate.NewHandler(repo)
+			if err := h.Handle(context.Background(), ports.WorkRow{
+				Kind: ports.WorkKindRevalidate, RepoID: "r1", Branch: "main", Payload: "x.go",
+			}); err != nil {
+				t.Fatalf("Handle: %v", err)
+			}
+			if len(repo.closedIDs) != 1 || repo.closedIDs[0] != "fA" {
+				t.Errorf("closedIDs = %v, want [fA]", repo.closedIDs)
+			}
+			if len(repo.refreshedIDs) != 0 {
+				t.Errorf("refreshedIDs = %v, want []", repo.refreshedIDs)
+			}
+		})
+	}
+}
+
+func TestHandler_AutoLink_AlwaysCloses(t *testing.T) {
+	t.Parallel()
+	repo := &fakeRepo{
+		stale: []ports.StaleFinding{
+			{FindingID: "fA", Rule: "auto-link", NodeID: "n1", AnchorHash: "h-old", CurrentHash: "h-new"},
+		},
+	}
+	h := revalidate.NewHandler(repo)
+	if err := h.Handle(context.Background(), ports.WorkRow{
+		Kind: ports.WorkKindRevalidate, RepoID: "r1", Branch: "main", Payload: "x.go",
+	}); err != nil {
+		t.Fatalf("Handle: %v", err)
+	}
+	if len(repo.closedIDs) != 1 {
+		t.Errorf("closedIDs = %v, want [fA]", repo.closedIDs)
+	}
+	// Auto-link must not consult inbound edges or signatures.
+	if len(repo.refreshedIDs) != 0 {
+		t.Errorf("refreshedIDs = %v, want []", repo.refreshedIDs)
+	}
+}
+
+func TestHandler_UnknownRule_ConservativelyCloses(t *testing.T) {
+	t.Parallel()
+	repo := &fakeRepo{
+		stale: []ports.StaleFinding{
+			{FindingID: "fA", Rule: "some-future-rule", NodeID: "n1", AnchorHash: "h-old", CurrentHash: "h-new"},
+		},
+	}
+	h := revalidate.NewHandler(repo)
+	if err := h.Handle(context.Background(), ports.WorkRow{
+		Kind: ports.WorkKindRevalidate, RepoID: "r1", Branch: "main", Payload: "x.go",
+	}); err != nil {
+		t.Fatalf("Handle: %v", err)
+	}
+	if len(repo.closedIDs) != 1 {
+		t.Errorf("closedIDs = %v, want [fA]", repo.closedIDs)
+	}
+	if len(repo.refreshedIDs) != 0 {
+		t.Errorf("refreshedIDs = %v, want []", repo.refreshedIDs)
+	}
+}
+
+func TestHandler_MixedBatch_DispatchesPerRule(t *testing.T) {
+	t.Parallel()
+	repo := &fakeRepo{
+		stale: []ports.StaleFinding{
+			{FindingID: "fA", Rule: "dead-code", NodeID: "n-dead-refresh", CurrentHash: "h-a"},
+			{FindingID: "fB", Rule: "dead-code", NodeID: "n-dead-close", CurrentHash: "h-b"},
+			{FindingID: "fC", Rule: "contract-drift", NodeID: "n-drift-refresh", CurrentHash: "h-c"},
+			{FindingID: "fD", Rule: "contract-drift", NodeID: "n-drift-close", CurrentHash: "h-d"},
+			{FindingID: "fE", Rule: "auto-link", NodeID: "n-al", CurrentHash: "h-e"},
+			{FindingID: "fF", Rule: "unknown", NodeID: "n-?", CurrentHash: "h-f"},
+		},
+		hasInbound: map[string]bool{"n-dead-close": true}, // refresh has none.
+		sigs: map[string][2]string{
+			"n-drift-refresh": {"old", "new"}, // still drifting.
+			"n-drift-close":   {"same", "same"},
+		},
+	}
+	reg := prometheus.NewRegistry()
+	metrics := observability.NewMetrics(reg)
+	fixed := time.Unix(1700000000, 0)
+	h := revalidate.NewHandler(repo,
+		revalidate.WithClock(func() time.Time { return fixed }),
+		revalidate.WithMetrics(metrics),
+	)
+
+	if err := h.Handle(context.Background(), ports.WorkRow{
+		Kind: ports.WorkKindRevalidate, RepoID: "r1", Branch: "main", Payload: "x.go",
+	}); err != nil {
+		t.Fatalf("Handle: %v", err)
+	}
+
+	wantClosed := []string{"fB", "fD", "fE", "fF"}
+	wantRefreshed := []string{"fA", "fC"}
+	assertStringsEqual(t, "closedIDs", repo.closedIDs, wantClosed)
+	assertStringsEqual(t, "refreshedIDs", repo.refreshedIDs, wantRefreshed)
+
+	if got := testutil.ToFloat64(metrics.RevalidateClosed); got != float64(len(wantClosed)) {
+		t.Errorf("closed counter = %v, want %d", got, len(wantClosed))
+	}
+	if got := testutil.ToFloat64(metrics.RevalidateRefreshed); got != float64(len(wantRefreshed)) {
+		t.Errorf("refreshed counter = %v, want %d", got, len(wantRefreshed))
+	}
+
+	// All timestamps must be the fixed clock value.
+	want := fixed.UnixMilli()
 	for i, ts := range repo.closedAt {
-		if ts != wantMillis {
-			t.Errorf("closedAt[%d] = %d, want %d", i, ts, wantMillis)
+		if ts != want {
+			t.Errorf("closedAt[%d] = %d, want %d", i, ts, want)
+		}
+	}
+	for i, ts := range repo.refreshedAt {
+		if ts != want {
+			t.Errorf("refreshedAt[%d] = %d, want %d", i, ts, want)
 		}
 	}
 }
 
-func TestHandler_MetricsIncrementPerClose(t *testing.T) {
-	t.Parallel()
-	repo := &fakeRepo{
-		stale: []ports.StaleFinding{
-			{FindingID: "fA"}, {FindingID: "fB"}, {FindingID: "fC"},
-		},
+func assertStringsEqual(t *testing.T, name string, got, want []string) {
+	t.Helper()
+	if len(got) != len(want) {
+		t.Errorf("%s len = %d (%v), want %d (%v)", name, len(got), got, len(want), want)
+		return
 	}
-	reg := prometheus.NewRegistry()
-	metrics := observability.NewMetrics(reg)
-	h := revalidate.NewHandler(repo, revalidate.WithMetrics(metrics))
-
-	err := h.Handle(context.Background(), ports.WorkRow{
-		Kind: ports.WorkKindRevalidate, RepoID: "r1", Branch: "main", Payload: "x.go",
-	})
-	if err != nil {
-		t.Fatalf("Handle: %v", err)
-	}
-	got := testutil.ToFloat64(metrics.RevalidateClosed)
-	if got != 3 {
-		t.Errorf("veska_revalidate_closed_total = %v, want 3", got)
-	}
-}
-
-func TestHandler_MetricsNotIncrementedOnNoStale(t *testing.T) {
-	t.Parallel()
-	repo := &fakeRepo{stale: nil}
-	reg := prometheus.NewRegistry()
-	metrics := observability.NewMetrics(reg)
-	h := revalidate.NewHandler(repo, revalidate.WithMetrics(metrics))
-
-	_ = h.Handle(context.Background(), ports.WorkRow{
-		Kind: ports.WorkKindRevalidate, RepoID: "r1", Branch: "main", Payload: "x.go",
-	})
-	if got := testutil.ToFloat64(metrics.RevalidateClosed); got != 0 {
-		t.Errorf("counter = %v, want 0", got)
+	for i := range got {
+		if got[i] != want[i] {
+			t.Errorf("%s[%d] = %q, want %q", name, i, got[i], want[i])
+		}
 	}
 }
 
 func TestHandler_NilMetricsIsFunctional(t *testing.T) {
 	t.Parallel()
 	repo := &fakeRepo{
-		stale: []ports.StaleFinding{{FindingID: "fA"}},
+		stale: []ports.StaleFinding{
+			{FindingID: "fA", Rule: "auto-link"},
+			{FindingID: "fB", Rule: "dead-code"},
+		},
 	}
 	h := revalidate.NewHandler(repo, revalidate.WithMetrics(nil))
 	if err := h.Handle(context.Background(), ports.WorkRow{
@@ -196,8 +455,11 @@ func TestHandler_NilMetricsIsFunctional(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("Handle: %v", err)
 	}
-	if len(repo.closedIDs) != 1 {
-		t.Errorf("closed = %v, want [fA]", repo.closedIDs)
+	if len(repo.closedIDs) != 1 || repo.closedIDs[0] != "fA" {
+		t.Errorf("closedIDs = %v, want [fA]", repo.closedIDs)
+	}
+	if len(repo.refreshedIDs) != 1 || repo.refreshedIDs[0] != "fB" {
+		t.Errorf("refreshedIDs = %v, want [fB]", repo.refreshedIDs)
 	}
 }
 
@@ -213,31 +475,41 @@ func TestNewHandler_NilRepoPanics(t *testing.T) {
 
 // ── integration test against real *sql.DB ──────────────────────────────────
 
-// TestHandler_Integration_ClosesOnlyStaleFinding wires the real SQLite adapter
-// behind the handler. Two findings on the same file: one whose anchor hash
-// matches current content (must stay open), one whose anchor drifted (must
-// close with revalidated_obsolete).
-func TestHandler_Integration_ClosesOnlyStaleFinding(t *testing.T) {
+// TestHandler_Integration_PerRuleDispatch wires the real SQLite adapter
+// behind the handler and exercises the full matrix end-to-end.
+func TestHandler_Integration_PerRuleDispatch(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
 	db := openTestDB(t, filepath.Join(dir, "v.db"))
 
 	insertRepo(t, db, "repo1")
-	// Two nodes on the same file. n-fresh's current hash matches what we'll
-	// record on the finding; n-stale's current hash diverges from the
-	// finding's anchor hash.
+
+	// Nodes:
+	//   n-dead-refresh   — no inbound edges, content changed.
+	//   n-dead-close     — has 1 inbound edge, content changed.
+	//   n-drift-refresh  — prev != current sig, content changed.
+	//   n-drift-close    — sigs match, content changed.
+	//   n-al             — content changed (auto-link gets closed regardless).
+	//   n-fresh          — content matches, finding stays open.
+	insertNode(t, db, "n-dead-refresh", "repo1", "main", "pkg/a.go", "h-cur-dr")
+	insertNode(t, db, "n-dead-close", "repo1", "main", "pkg/a.go", "h-cur-dc")
+	insertNodeWithSig(t, db, "n-drift-refresh", "repo1", "main", "pkg/a.go", "h-cur-drr", "sig-old", "sig-new")
+	insertNodeWithSig(t, db, "n-drift-close", "repo1", "main", "pkg/a.go", "h-cur-dcc", "sig-same", "sig-same")
+	insertNode(t, db, "n-al", "repo1", "main", "pkg/a.go", "h-cur-al")
 	insertNode(t, db, "n-fresh", "repo1", "main", "pkg/a.go", "h-fresh")
-	insertNode(t, db, "n-stale", "repo1", "main", "pkg/a.go", "h-current")
+	// A "caller" node + edge into n-dead-close.
+	insertNode(t, db, "n-caller", "repo1", "main", "pkg/b.go", "h-caller")
+	insertEdge(t, db, "edge-1", "repo1", "main", "n-caller", "n-dead-close")
 
 	findRepo := sqlite.NewFindingRepo(db)
 	revalRepo := sqlite.NewRevalidateRepo(db)
 
-	mustFinding := func(id, nodeID, hash string) *domain.Finding {
+	mustFinding := func(id, rule, nodeID, hash string) *domain.Finding {
 		t.Helper()
 		f, err := domain.NewFinding(
 			id, "repo1", "main",
 			domain.SeverityLow, domain.LayerStructural,
-			"dead-code", "msg-"+id,
+			rule, "msg-"+id,
 			domain.WithNodeAnchor(nodeID),
 			domain.WithAnchorContentHash(hash),
 		)
@@ -247,58 +519,83 @@ func TestHandler_Integration_ClosesOnlyStaleFinding(t *testing.T) {
 		return f
 	}
 
-	fFresh := mustFinding("u-fresh", "n-fresh", "h-fresh")      // matches
-	fStale := mustFinding("u-stale", "n-stale", "h-anchor-old") // drift
+	fDeadRefresh := mustFinding("u-dead-r", "dead-code", "n-dead-refresh", "h-anchor-old")
+	fDeadClose := mustFinding("u-dead-c", "dead-code", "n-dead-close", "h-anchor-old")
+	fDriftRefresh := mustFinding("u-drift-r", "contract-drift", "n-drift-refresh", "h-anchor-old")
+	fDriftClose := mustFinding("u-drift-c", "contract-drift", "n-drift-close", "h-anchor-old")
+	fAutoLink := mustFinding("u-al", "auto-link", "n-al", "h-anchor-old")
+	fFresh := mustFinding("u-fresh", "dead-code", "n-fresh", "h-fresh")
 
-	if err := findRepo.Save(context.Background(), fFresh); err != nil {
-		t.Fatalf("Save fresh: %v", err)
-	}
-	if err := findRepo.Save(context.Background(), fStale); err != nil {
-		t.Fatalf("Save stale: %v", err)
+	for _, fnd := range []*domain.Finding{fDeadRefresh, fDeadClose, fDriftRefresh, fDriftClose, fAutoLink, fFresh} {
+		if err := findRepo.Save(context.Background(), fnd); err != nil {
+			t.Fatalf("Save %s: %v", fnd.FindingID, err)
+		}
 	}
 
 	reg := prometheus.NewRegistry()
 	metrics := observability.NewMetrics(reg)
 	h := revalidate.NewHandler(revalRepo, revalidate.WithMetrics(metrics))
 
-	err := h.Handle(context.Background(), ports.WorkRow{
+	if err := h.Handle(context.Background(), ports.WorkRow{
 		Kind: ports.WorkKindRevalidate, RepoID: "repo1", Branch: "main", Payload: "pkg/a.go",
-	})
-	if err != nil {
+	}); err != nil {
 		t.Fatalf("Handle: %v", err)
 	}
 
+	// Verify per-finding state.
 	type rowState struct {
-		state, reason string
+		state, reason, anchor string
 	}
 	get := func(id, branch string) rowState {
 		t.Helper()
 		var rs rowState
-		var reason sql.NullString
+		var reason, anchor sql.NullString
 		if err := db.QueryRow(
-			`SELECT state, closed_reason FROM findings WHERE finding_id = ? AND branch = ?`,
+			`SELECT state, closed_reason, anchor_content_hash FROM findings WHERE finding_id = ? AND branch = ?`,
 			id, branch,
-		).Scan(&rs.state, &reason); err != nil {
+		).Scan(&rs.state, &reason, &anchor); err != nil {
 			t.Fatalf("query %s: %v", id, err)
 		}
 		if reason.Valid {
 			rs.reason = reason.String
 		}
+		if anchor.Valid {
+			rs.anchor = anchor.String
+		}
 		return rs
 	}
 
-	if got := get(fFresh.FindingID, fFresh.Branch); got.state != "open" {
-		t.Errorf("fresh finding state = %q, want open (reason=%q)", got.state, got.reason)
+	// Refreshes: state open, anchor moved to current hash.
+	if got := get(fDeadRefresh.FindingID, "main"); got.state != "open" || got.anchor != "h-cur-dr" || got.reason != "" {
+		t.Errorf("dead-refresh = %+v, want open/h-cur-dr/no-reason", got)
 	}
-	gotStale := get(fStale.FindingID, fStale.Branch)
-	if gotStale.state != "closed" {
-		t.Errorf("stale finding state = %q, want closed", gotStale.state)
+	if got := get(fDriftRefresh.FindingID, "main"); got.state != "open" || got.anchor != "h-cur-drr" || got.reason != "" {
+		t.Errorf("drift-refresh = %+v, want open/h-cur-drr/no-reason", got)
 	}
-	if gotStale.reason != "revalidated_obsolete" {
-		t.Errorf("stale finding closed_reason = %q, want revalidated_obsolete", gotStale.reason)
+	// Closures.
+	for _, tc := range []struct {
+		id   string
+		desc string
+	}{
+		{fDeadClose.FindingID, "dead-close"},
+		{fDriftClose.FindingID, "drift-close"},
+		{fAutoLink.FindingID, "autolink-close"},
+	} {
+		got := get(tc.id, "main")
+		if got.state != "closed" || got.reason != "revalidated_obsolete" {
+			t.Errorf("%s = %+v, want closed/revalidated_obsolete", tc.desc, got)
+		}
 	}
-	if got := testutil.ToFloat64(metrics.RevalidateClosed); got != 1 {
-		t.Errorf("counter = %v, want 1", got)
+	// Fresh: untouched (not stale).
+	if got := get(fFresh.FindingID, "main"); got.state != "open" || got.anchor != "h-fresh" {
+		t.Errorf("fresh = %+v, want open/h-fresh", got)
+	}
+
+	if got := testutil.ToFloat64(metrics.RevalidateRefreshed); got != 2 {
+		t.Errorf("refreshed counter = %v, want 2", got)
+	}
+	if got := testutil.ToFloat64(metrics.RevalidateClosed); got != 3 {
+		t.Errorf("closed counter = %v, want 3", got)
 	}
 }
 
@@ -336,5 +633,33 @@ func insertNode(t *testing.T, db *sql.DB, nodeID, repoID, branch, filePath, cont
 	)
 	if err != nil {
 		t.Fatalf("insert node %s: %v", nodeID, err)
+	}
+}
+
+func insertNodeWithSig(t *testing.T, db *sql.DB, nodeID, repoID, branch, filePath, contentHash, prevSig, sig string) {
+	t.Helper()
+	_, err := db.Exec(`INSERT INTO nodes (
+        node_id, branch, repo_id, language, kind, symbol_path, file_path,
+        line_start, line_end, content_hash, last_promoted_at, actor_id, actor_kind,
+        signature, prev_signature
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		nodeID, branch, repoID, "go", "function", nodeID, filePath,
+		1, 10, contentHash, time.Now().UnixMilli(), "service:veska", "system",
+		sig, prevSig,
+	)
+	if err != nil {
+		t.Fatalf("insert node %s: %v", nodeID, err)
+	}
+}
+
+func insertEdge(t *testing.T, db *sql.DB, edgeID, repoID, branch, src, dst string) {
+	t.Helper()
+	_, err := db.Exec(`INSERT INTO edges (
+        edge_id, branch, repo_id, src_node_id, dst_node_id, kind, confidence, last_promoted_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+		edgeID, branch, repoID, src, dst, "call", "definite", time.Now().UnixMilli(),
+	)
+	if err != nil {
+		t.Fatalf("insert edge %s: %v", edgeID, err)
 	}
 }
