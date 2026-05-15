@@ -24,6 +24,7 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/sqlite/queue"
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/treesitter"
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/vector"
+	"github.com/whiskeyjimbo/veska/internal/repo"
 )
 
 // ErrMissingDep is returned by newDaemon when a required collaborator cannot
@@ -360,6 +361,19 @@ func (d *Daemon) Start(ctx context.Context) error {
 
 		// fsnotify multiplexer.
 		d.watcher.Start(d.ctx)
+
+		// Seed the watcher with every registered repository. A failed or
+		// empty listing is logged, not fatal — a daemon watching zero repos
+		// is still a valid running daemon.
+		if repos, err := repo.List(d.ctx, d.pools.ReadDB); err != nil {
+			slog.Error("daemon: list repos for watcher", "err", err)
+		} else {
+			for _, r := range repos {
+				if err := d.watcher.Add(r.RepoID, r.RootPath); err != nil {
+					slog.Error("daemon: watch repo", "repo", r.RepoID, "err", err)
+				}
+			}
+		}
 
 		// Bridge filesystem events → Ingester.Save.
 		go func() {

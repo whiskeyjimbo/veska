@@ -211,3 +211,54 @@ func TestRemoveRepoRemovesHooks(t *testing.T) {
 		}
 	}
 }
+
+func TestList_ReturnsRegisteredRepos(t *testing.T) {
+	db := newTestDB(t)
+
+	// One fully-populated row.
+	if _, err := db.Exec(
+		`INSERT INTO repos (repo_id, root_path, added_at, active_branch, last_promoted_sha, module_path)
+		 VALUES (?, ?, ?, ?, ?, ?)`,
+		"id-b", "/path/b", 100, "main", "abc123", "mod/b",
+	); err != nil {
+		t.Fatalf("insert row b: %v", err)
+	}
+	// One row with NULL active_branch + last_promoted_sha.
+	if _, err := db.Exec(
+		`INSERT INTO repos (repo_id, root_path, added_at, module_path)
+		 VALUES (?, ?, ?, ?)`,
+		"id-a", "/path/a", 50, "mod/a",
+	); err != nil {
+		t.Fatalf("insert row a: %v", err)
+	}
+
+	got, err := repo.List(context.Background(), db)
+	if err != nil {
+		t.Fatalf("List: %v", err)
+	}
+	if len(got) != 2 {
+		t.Fatalf("len(List) = %d, want 2", len(got))
+	}
+
+	// ORDER BY repo_id: id-a then id-b.
+	if got[0] != (repo.Record{RepoID: "id-a", RootPath: "/path/a"}) {
+		t.Errorf("got[0] = %+v, want id-a with empty nullable fields", got[0])
+	}
+	if got[1] != (repo.Record{
+		RepoID: "id-b", RootPath: "/path/b", ActiveBranch: "main", LastPromotedSHA: "abc123",
+	}) {
+		t.Errorf("got[1] = %+v, want fully-populated id-b", got[1])
+	}
+}
+
+func TestList_EmptyTable(t *testing.T) {
+	db := newTestDB(t)
+
+	got, err := repo.List(context.Background(), db)
+	if err != nil {
+		t.Fatalf("List: %v", err)
+	}
+	if got != nil {
+		t.Errorf("List on empty table = %+v, want nil slice", got)
+	}
+}

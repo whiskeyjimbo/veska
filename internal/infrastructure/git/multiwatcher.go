@@ -58,6 +58,19 @@ func (m *MultiRepoWatcher) Events() <-chan RepoFileEvent {
 	return m.out
 }
 
+// WatchedRepoIDs returns the IDs of every repository currently being watched.
+// The order is unspecified. It is safe to call concurrently with Add/Remove.
+func (m *MultiRepoWatcher) WatchedRepoIDs() []string {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	ids := make([]string, 0, len(m.repos))
+	for id := range m.repos {
+		ids = append(ids, id)
+	}
+	return ids
+}
+
 // Add starts watching rootPath for repoID. A per-repo FSWatcher is created and
 // a forwarding goroutine is launched that multiplexes its events onto the shared
 // output channel. If the forwarding goroutine panics it is recovered, logged,

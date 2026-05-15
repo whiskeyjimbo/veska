@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/vector"
+	"github.com/whiskeyjimbo/veska/internal/repo"
 )
 
 // testConfig returns a Config whose paths live under a fresh tmp dir so each
@@ -181,5 +182,43 @@ func TestResolveConfig_AppliesDefaults(t *testing.T) {
 	}
 	if got.OllamaURL != "http://localhost:11434" {
 		t.Errorf("OllamaURL = %q; want default", got.OllamaURL)
+	}
+}
+
+// TestWire_StartWatchesRegisteredRepos verifies that a repo registered in the
+// daemon's SQLite repos table before Start is added to the fsnotify watcher.
+func TestWire_StartWatchesRegisteredRepos(t *testing.T) {
+	cfg := testConfig(t)
+	d, err := newDaemon(cfg)
+	if err != nil {
+		t.Fatalf("newDaemon: %v", err)
+	}
+	t.Cleanup(func() { _ = d.Stop() })
+
+	// Register a repo before Start.
+	gitDir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(gitDir, ".git", "hooks"), 0o755); err != nil {
+		t.Fatalf("create .git/hooks: %v", err)
+	}
+	repoID, err := repo.Add(context.Background(), d.pools.WriteHot, gitDir)
+	if err != nil {
+		t.Fatalf("repo.Add: %v", err)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if err := d.Start(ctx); err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+
+	watched := d.watcher.WatchedRepoIDs()
+	found := false
+	for _, id := range watched {
+		if id == repoID {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("watcher does not watch registered repo %q; watched=%v", repoID, watched)
 	}
 }
