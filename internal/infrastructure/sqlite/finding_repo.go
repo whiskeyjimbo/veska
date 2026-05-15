@@ -71,32 +71,44 @@ func (r *FindingRepo) Save(ctx context.Context, f *domain.Finding) error {
 		closedReasonArg = *f.ClosedReason
 	}
 
+	// anchor_content_hash: nil pointer -> NULL; non-nil -> the captured hash.
+	// Using sql.NullString keeps the NULL-vs-empty-string distinction explicit
+	// at the driver boundary so the revalidation sweep can rely on "NULL means
+	// no hash recorded" without coexisting empty strings poisoning the rule.
+	var anchorHashArg sql.NullString
+	if f.AnchorContentHash != nil {
+		anchorHashArg = sql.NullString{String: *f.AnchorContentHash, Valid: true}
+	}
+
 	now := time.Now().UnixMilli()
 
 	const stmt = `
 INSERT INTO findings (
     finding_id, branch, repo_id, node_id, file_path,
     severity, source_layer, rule, message, state,
-    closed_reason, created_at, closed_at, actor_id, actor_kind
-) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    closed_reason, created_at, closed_at, actor_id, actor_kind,
+    anchor_content_hash
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 ON CONFLICT(finding_id, branch) DO UPDATE SET
-    repo_id       = excluded.repo_id,
-    node_id       = excluded.node_id,
-    file_path     = excluded.file_path,
-    severity      = excluded.severity,
-    source_layer  = excluded.source_layer,
-    rule          = excluded.rule,
-    message       = excluded.message,
-    state         = excluded.state,
-    closed_reason = excluded.closed_reason,
-    closed_at     = excluded.closed_at,
-    actor_id      = excluded.actor_id,
-    actor_kind    = excluded.actor_kind`
+    repo_id             = excluded.repo_id,
+    node_id             = excluded.node_id,
+    file_path           = excluded.file_path,
+    severity            = excluded.severity,
+    source_layer        = excluded.source_layer,
+    rule                = excluded.rule,
+    message             = excluded.message,
+    state               = excluded.state,
+    closed_reason       = excluded.closed_reason,
+    closed_at           = excluded.closed_at,
+    actor_id            = excluded.actor_id,
+    actor_kind          = excluded.actor_kind,
+    anchor_content_hash = excluded.anchor_content_hash`
 
 	_, err := r.db.ExecContext(ctx, stmt,
 		f.FindingID, f.Branch, f.RepoID, nodeIDArg, filePathArg,
 		string(f.Severity), string(f.SourceLayer), f.Rule, f.Message, string(f.State),
 		closedReasonArg, now, closedAtArg, actorID, actorKind,
+		anchorHashArg,
 	)
 	if err != nil {
 		return fmt.Errorf("sqlite.FindingRepo.Save: %w", err)

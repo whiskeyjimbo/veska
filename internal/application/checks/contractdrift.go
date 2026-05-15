@@ -63,6 +63,13 @@ func (c *ContractDriftCheck) Run(ctx context.Context, in Input) ([]*domain.Findi
 			"signature of %s %q in %s changed on branch %s: %q -> %q",
 			d.Kind, d.Name, d.FilePath, in.Branch, d.PrevSig, d.NewSig,
 		)
+		// Capture the drifted node's CURRENT content_hash so the revalidation
+		// sweep (m3.05.2) recognises a subsequent drift and supersedes this
+		// finding. An empty hash from the adapter falls back to NULL.
+		opts := []domain.FindingOption{domain.WithNodeAnchor(d.NodeID)}
+		if d.ContentHash != "" {
+			opts = append(opts, domain.WithAnchorContentHash(d.ContentHash))
+		}
 		f, err := domain.NewFinding(
 			"", // per-row PK assigned by storage; FindingID is branch-stable from (rule, node_id).
 			in.RepoID, in.Branch,
@@ -70,7 +77,7 @@ func (c *ContractDriftCheck) Run(ctx context.Context, in Input) ([]*domain.Findi
 			domain.LayerStructural,
 			"contract-drift",
 			msg,
-			domain.WithNodeAnchor(d.NodeID),
+			opts...,
 		)
 		if err != nil {
 			// A malformed node ref should not abort the whole check; skip it.

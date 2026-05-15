@@ -20,9 +20,13 @@ import (
 // ── fakes ──────────────────────────────────────────────────────────────────
 
 type fakeLookup struct {
-	byPath map[string][]string
-	err    error
-	calls  int
+	byPath     map[string][]string
+	contentBy  map[string]string
+	err        error
+	hashErr    error
+	calls      int
+	hashCalls  int
+	gotHashIDs []string
 }
 
 func (f *fakeLookup) NodesInFile(_ context.Context, _, _, filePath string) ([]string, error) {
@@ -31,6 +35,15 @@ func (f *fakeLookup) NodesInFile(_ context.Context, _, _, filePath string) ([]st
 		return nil, f.err
 	}
 	return f.byPath[filePath], nil
+}
+
+func (f *fakeLookup) NodeContentHash(_ context.Context, _, _, nodeID string) (string, error) {
+	f.hashCalls++
+	f.gotHashIDs = append(f.gotHashIDs, nodeID)
+	if f.hashErr != nil {
+		return "", f.hashErr
+	}
+	return f.contentBy[nodeID], nil
 }
 
 type fakeLinker struct {
@@ -241,6 +254,104 @@ func TestHandler_FakesEmitOneEdgeAndOneFindingPerCandidate(t *testing.T) {
 	}
 }
 
+// TestHandler_ThreadsSourceContentHashOntoFinding verifies the handler reads
+// each source node's content_hash via the lookup and threads it onto the
+// emitted finding. Source nodes shared across multiple candidates must only
+// be looked up once (cache hit).
+func TestHandler_ThreadsSourceContentHashOntoFinding(t *testing.T) {
+	t.Parallel()
+	lk := &fakeLookup{
+		byPath:    map[string][]string{"x.go": {"n1", "n2"}},
+		contentBy: map[string]string{"n1": "h-src1", "n2": "h-src2"},
+	}
+	linker := &fakeLinker{out: []autolink.Candidate{
+		{SourceNodeID: "n1", TargetNodeID: "t1", Score: 0.91},
+		{SourceNodeID: "n1", TargetNodeID: "t2", Score: 0.88},
+		{SourceNodeID: "n2", TargetNodeID: "t3", Score: 0.95},
+	}}
+	findings := &fakeFindingStore{}
+	h := autolink.NewHandler(linker, lk, &fakeEdgeStore{}, findings)
+
+	err := h.Handle(context.Background(), queue.Row{
+		Kind: queue.WorkKindAutoLink, RepoID: "r1", Branch: "main", Payload: "x.go",
+	})
+	if err != nil {
+		t.Fatalf("Handle: %v", err)
+	}
+	if len(findings.saved) != 3 {
+		t.Fatalf("expected 3 findings, got %d", len(findings.saved))
+	}
+	wantBySrc := map[string]string{"n1": "h-src1", "n2": "h-src2"}
+	for i, f := range findings.saved {
+		src := linker.out[i].SourceNodeID
+		if f.AnchorContentHash == nil {
+			t.Errorf("finding[%d] (src=%s): AnchorContentHash nil", i, src)
+			continue
+		}
+		if *f.AnchorContentHash != wantBySrc[src] {
+			t.Errorf("finding[%d] (src=%s): AnchorContentHash=%q want %q",
+				i, src, *f.AnchorContentHash, wantBySrc[src])
+		}
+	}
+	// Two distinct source nodes => two distinct lookup calls (cache hit on the
+	// repeated 'n1'). Order is insertion-driven by the candidate list.
+	if lk.hashCalls != 2 {
+		t.Errorf("NodeContentHash call count = %d, want 2 (cached re-use of n1)", lk.hashCalls)
+	}
+}
+
+// TestHandler_MissingSourceHashStaysNil verifies that when the lookup returns
+// "" (unknown source / no hash recorded) the finding's AnchorContentHash stays
+// nil rather than being set to the empty string.
+func TestHandler_MissingSourceHashStaysNil(t *testing.T) {
+	t.Parallel()
+	lk := &fakeLookup{
+		byPath:    map[string][]string{"x.go": {"n1"}},
+		contentBy: map[string]string{}, // no hash recorded
+	}
+	linker := &fakeLinker{out: []autolink.Candidate{
+		{SourceNodeID: "n1", TargetNodeID: "t1", Score: 0.9},
+	}}
+	findings := &fakeFindingStore{}
+	h := autolink.NewHandler(linker, lk, &fakeEdgeStore{}, findings)
+
+	err := h.Handle(context.Background(), queue.Row{
+		Kind: queue.WorkKindAutoLink, RepoID: "r1", Branch: "main", Payload: "x.go",
+	})
+	if err != nil {
+		t.Fatalf("Handle: %v", err)
+	}
+	if len(findings.saved) != 1 {
+		t.Fatalf("expected 1 finding, got %d", len(findings.saved))
+	}
+	if findings.saved[0].AnchorContentHash != nil {
+		t.Errorf("AnchorContentHash should be nil when source has no hash, got %q",
+			*findings.saved[0].AnchorContentHash)
+	}
+}
+
+// TestHandler_NodeContentHashErrorWraps verifies that a failure from the
+// lookup's content-hash method aborts the row with a wrapped error so the
+// queue.Poller can re-queue.
+func TestHandler_NodeContentHashErrorWraps(t *testing.T) {
+	t.Parallel()
+	sentinel := errors.New("boom-hash")
+	lk := &fakeLookup{
+		byPath:  map[string][]string{"x.go": {"n1"}},
+		hashErr: sentinel,
+	}
+	linker := &fakeLinker{out: []autolink.Candidate{
+		{SourceNodeID: "n1", TargetNodeID: "t1", Score: 0.9},
+	}}
+	h := autolink.NewHandler(linker, lk, &fakeEdgeStore{}, &fakeFindingStore{})
+	err := h.Handle(context.Background(), queue.Row{
+		Kind: queue.WorkKindAutoLink, RepoID: "r1", Branch: "main", Payload: "x.go",
+	})
+	if !errors.Is(err, sentinel) {
+		t.Fatalf("expected wrapped sentinel, got %v", err)
+	}
+}
+
 // ── integration test against real SQLite adapters and a fake Linker ────────
 
 // openHandlerIntegrationDB seeds a repo + nodes in (r1, main) and returns
@@ -368,5 +479,34 @@ func TestHandler_Integration_PersistsAndIsIdempotent(t *testing.T) {
 		if anchors[i] != edgeIDs[i] {
 			t.Errorf("anchor[%d]=%q != edge_id[%d]=%q", i, anchors[i], i, edgeIDs[i])
 		}
+	}
+
+	// Anchor content_hash must equal the source node's nodes.content_hash on
+	// every auto-link finding. The integration fixture seeds source nodes with
+	// content_hash = "h-<id>" so we can verify the threading end-to-end.
+	hashRows, err := rawDB.Query(`SELECT anchor_content_hash FROM findings
+		WHERE repo_id='r1' AND branch='main' AND rule='auto-link'`)
+	if err != nil {
+		t.Fatalf("query hashes: %v", err)
+	}
+	defer hashRows.Close()
+	var seen int
+	for hashRows.Next() {
+		var got sql.NullString
+		if err := hashRows.Scan(&got); err != nil {
+			t.Fatalf("scan hash: %v", err)
+		}
+		if !got.Valid {
+			t.Error("anchor_content_hash unexpectedly NULL")
+			continue
+		}
+		// Sources are n1 (twice) and n2 (once); both have h-n1/h-n2 fixtures.
+		if got.String != "h-n1" && got.String != "h-n2" {
+			t.Errorf("unexpected anchor_content_hash %q", got.String)
+		}
+		seen++
+	}
+	if seen != 3 {
+		t.Errorf("expected 3 hash rows, got %d", seen)
 	}
 }

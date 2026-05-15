@@ -186,6 +186,49 @@ func TestNewFinding_OpenStateHasNilClosedFields(t *testing.T) {
 	}
 }
 
+// ── WithAnchorContentHash tests ────────────────────────────────────────────
+
+func TestWithAnchorContentHash_Sets(t *testing.T) {
+	f, err := NewFinding("u1", "repo", "main",
+		SeverityLow, LayerStructural, "dead-code", "msg",
+		WithNodeAnchor("n1"),
+		WithAnchorContentHash("h-abc123"),
+	)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if f.AnchorContentHash == nil {
+		t.Fatal("AnchorContentHash is nil")
+	}
+	if *f.AnchorContentHash != "h-abc123" {
+		t.Errorf("AnchorContentHash = %q, want h-abc123", *f.AnchorContentHash)
+	}
+}
+
+func TestWithAnchorContentHash_DefaultNil(t *testing.T) {
+	f, err := NewFinding("u1", "repo", "main",
+		SeverityLow, LayerStructural, "parse-failure", "msg",
+		WithFileAnchor("foo.go"),
+	)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if f.AnchorContentHash != nil {
+		t.Errorf("AnchorContentHash should default to nil, got %v", *f.AnchorContentHash)
+	}
+}
+
+func TestWithAnchorContentHash_EmptyErrors(t *testing.T) {
+	_, err := NewFinding("u1", "repo", "main",
+		SeverityLow, LayerStructural, "dead-code", "msg",
+		WithNodeAnchor("n1"),
+		WithAnchorContentHash(""),
+	)
+	if err == nil {
+		t.Error("expected error for empty content hash")
+	}
+}
+
 // ── Finding.Close tests ────────────────────────────────────────────────────
 
 func TestFinding_Close_Low_AnyActor(t *testing.T) {

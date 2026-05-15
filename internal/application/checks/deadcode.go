@@ -64,6 +64,14 @@ func (c *DeadCodeCheck) Run(ctx context.Context, in Input) ([]*domain.Finding, e
 		}
 		msg := fmt.Sprintf("symbol %q in %s has no inbound edges on branch %s",
 			n.Name, n.FilePath, in.Branch)
+		// Capture the dead node's content_hash on the finding so the
+		// revalidation sweep (m3.05.2) can detect drift. An empty hash from
+		// the adapter (older rows pre-content-hash) is left off the option
+		// list so the stored column stays NULL.
+		opts := []domain.FindingOption{domain.WithNodeAnchor(n.NodeID)}
+		if n.ContentHash != "" {
+			opts = append(opts, domain.WithAnchorContentHash(n.ContentHash))
+		}
 		f, err := domain.NewFinding(
 			"", // per-row PK assigned by storage; FindingID is branch-stable from (rule, node_id).
 			in.RepoID, in.Branch,
@@ -71,7 +79,7 @@ func (c *DeadCodeCheck) Run(ctx context.Context, in Input) ([]*domain.Finding, e
 			domain.LayerStructural,
 			"dead-code",
 			msg,
-			domain.WithNodeAnchor(n.NodeID),
+			opts...,
 		)
 		if err != nil {
 			// A malformed node ref should not abort the whole check; skip it.
