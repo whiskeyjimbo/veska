@@ -6,7 +6,7 @@ DAEMON_BIN      := $(BINDIR)/veska-daemon
 MCP_BIN         := $(BINDIR)/veska-mcp
 LAYERCHECK_BIN  := $(BINDIR)/layercheck
 
-.PHONY: all build test lint vet layercheck clean loadtest eval-recall eval-autolink-fp eval-revalidate-bench eval-queue-fuzz
+.PHONY: all build test lint vet layercheck clean loadtest eval-recall eval-autolink-fp eval-revalidate-bench eval-queue-fuzz eval-embed-throughput
 
 all: build test vet lint layercheck
 
@@ -71,3 +71,10 @@ eval-revalidate-bench:
 # tools/loadtest/queuefuzz/README.md.
 eval-queue-fuzz:
 	QUEUEFUZZ_PROMOTIONS=$${QUEUEFUZZ_PROMOTIONS:-100} go test -tags=eval -run TestQueueFuzz ./tools/loadtest/queuefuzz/ -v -timeout=120s
+
+# eval-embed-throughput: M3 gate-1 — drive embedder.Worker against real Ollama
+# for a measurement window; assert throughput >= 5 emb/s (gate-1 lower bound).
+# Override EMBED_BENCH_DURATION_S / EMBED_BENCH_SEED_N / VESKA_OLLAMA_URL /
+# VESKA_EMBED_MODEL. Skips if Ollama is unreachable. See README.
+eval-embed-throughput:
+	EMBED_BENCH_DURATION_S=$${EMBED_BENCH_DURATION_S:-60} go test -tags=eval -run TestEmbedderThroughput ./tools/loadtest/embedder/ -v -timeout=180s
