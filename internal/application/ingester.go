@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 	"strings"
-	"sync/atomic"
+	"sync"
 
 	"go.opentelemetry.io/otel/trace"
 
@@ -22,11 +22,13 @@ import (
 // SetFindingStorage) so structural problems are visible to operators before
 // commit-seal time.
 type Ingester struct {
-	parser   ports.CodeParser
-	staging  *StagingArea
-	gate     *IngestionGate
-	tp       observability.TracerProvider
-	findings atomic.Pointer[ports.FindingStorage]
+	parser  ports.CodeParser
+	staging *StagingArea
+	gate    *IngestionGate
+	tp      observability.TracerProvider
+
+	mu       sync.RWMutex
+	findings ports.FindingStorage
 }
 
 // NewIngester constructs an Ingester wired to the provided parser, staging area,
@@ -49,20 +51,16 @@ func (ing *Ingester) SetTracerProvider(tp observability.TracerProvider) {
 // ingest time. Calling with a nil storage clears the sink (no findings will
 // be emitted). The setter is safe for concurrent use.
 func (ing *Ingester) SetFindingStorage(s ports.FindingStorage) {
-	if s == nil {
-		ing.findings.Store(nil)
-		return
-	}
-	ing.findings.Store(&s)
+	ing.mu.Lock()
+	ing.findings = s
+	ing.mu.Unlock()
 }
 
 // findingStorage returns the currently installed FindingStorage, or nil if none.
 func (ing *Ingester) findingStorage() ports.FindingStorage {
-	p := ing.findings.Load()
-	if p == nil {
-		return nil
-	}
-	return *p
+	ing.mu.RLock()
+	defer ing.mu.RUnlock()
+	return ing.findings
 }
 
 // tracerProvider returns the configured provider or a noop if nil.
@@ -75,10 +73,9 @@ func (ing *Ingester) tracerProvider() observability.TracerProvider {
 
 // Save parses src for the file at path and stages the result.
 // repoID and branch scope the staging slot.
-// Parse errors are non-fatal: if ParseFile returns an error, the error is logged
-// at WARN level and Save returns nil — the file is simply not staged.
-// Save does NOT touch SQLite.
-func (ing *Ingester) Save(ctx context.Context, repoID, branch, path string, src []byte) error {
+// Parse errors are non-fatal: a returned error from ParseFile is logged at
+// WARN level and the file is simply not staged. Save does NOT touch SQLite.
+func (ing *Ingester) Save(ctx context.Context, repoID, branch, path string, src []byte) {
 	// Block if a branch switch is in progress; read current generation before parsing
 	// so the generation check in StageIfCurrentGeneration is tight.
 	ing.gate.WaitIfPaused()
@@ -95,12 +92,11 @@ func (ing *Ingester) Save(ctx context.Context, repoID, branch, path string, src 
 			"path", path,
 			"err", err,
 		)
-		return nil
+		return
 	}
 	ing.staging.StageIfCurrentGeneration(repoID, branch, path, result.Nodes, result.Edges, gen, ing.gate)
 	ing.emitParseFailures(ctx, repoID, branch, path, result.Failures)
 	ing.emitTodos(ctx, repoID, branch, path, result.Todos)
-	return nil
 }
 
 // emitParseFailures forwards each ParseFailure to the configured FindingStorage

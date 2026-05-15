@@ -8,6 +8,8 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+
+	"github.com/whiskeyjimbo/veska/internal/core/ports"
 )
 
 // CrossRepoStub carries the fields needed to resolve a single cross-repo edge
@@ -21,16 +23,10 @@ type CrossRepoStub struct {
 	Language   string
 }
 
-// ResolvedEdge is the result of a successful one-hop cross-repo resolution.
-// CrossRepo is always true for edges produced by this package.
-type ResolvedEdge struct {
-	SrcNodeID string
-	DstNodeID string
-	DstRepoID string
-	DstBranch string
-	Kind      string
-	CrossRepo bool
-}
+// ResolvedEdge is re-exported from core/ports. The canonical definition lives
+// in internal/core/ports/resolved_edge.go so that application-layer consumers
+// can reference it without importing this adapter package.
+type ResolvedEdge = ports.ResolvedEdge
 
 // ResolveCrossRepoEdge performs a single indexed lookup to find the destination
 // node for the given stub. It returns nil, nil when no matching node exists

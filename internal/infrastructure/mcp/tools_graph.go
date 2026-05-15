@@ -8,7 +8,6 @@ import (
 	application "github.com/whiskeyjimbo/veska/internal/application"
 	"github.com/whiskeyjimbo/veska/internal/core/domain"
 	"github.com/whiskeyjimbo/veska/internal/core/ports"
-	"github.com/whiskeyjimbo/veska/internal/infrastructure/sqlite/resolver"
 )
 
 // CrossRepoEdge represents a synthetic edge that crosses repository boundaries.
@@ -34,7 +33,7 @@ type GraphResponse struct {
 // ResolveFunc is a function that resolves cross-repo edge stubs for a given
 // node. It is injected into RegisterGraphTools as an optional dependency.
 // If nil, cross-repo resolution is skipped.
-type ResolveFunc func(ctx context.Context, nodeID, branch string, expand bool) ([]resolver.ResolvedEdge, error)
+type ResolveFunc func(ctx context.Context, nodeID, branch string, expand bool) ([]ports.ResolvedEdge, error)
 
 // RegisterGraphTools registers the 5 graph read tools on r.
 // graph and staging are injected dependencies.

@@ -69,7 +69,6 @@ type callTracker struct {
 	mu           sync.Mutex
 	saveCalls    []saveCall
 	promoteCalls []promoteCall
-	saveErr      error
 	promoteErr   error
 }
 
@@ -82,12 +81,11 @@ type promoteCall struct {
 	repoID, branch, gitSHA string
 }
 
-func (c *callTracker) saveFunc() func(ctx context.Context, repoID, branch, path string, src []byte) error {
-	return func(ctx context.Context, repoID, branch, path string, src []byte) error {
+func (c *callTracker) saveFunc() func(ctx context.Context, repoID, branch, path string, src []byte) {
+	return func(ctx context.Context, repoID, branch, path string, src []byte) {
 		c.mu.Lock()
 		defer c.mu.Unlock()
 		c.saveCalls = append(c.saveCalls, saveCall{repoID, branch, path, src})
-		return c.saveErr
 	}
 }
 
@@ -104,7 +102,7 @@ func (c *callTracker) promoteFunc() func(ctx context.Context, repoID, branch, gi
 func newTestResync(
 	repos RepoLister,
 	git GitQuerier,
-	saveFn func(ctx context.Context, repoID, branch, path string, src []byte) error,
+	saveFn func(ctx context.Context, repoID, branch, path string, src []byte),
 	promoteFn func(ctx context.Context, repoID, branch, gitSHA string, actor domain.Actor) error,
 	reparserFn func(ctx context.Context, repo RepoRecord) error,
 ) *StartupResync {
@@ -326,7 +324,7 @@ func TestResync_IsSyncing(t *testing.T) {
 
 	var srPtr *StartupResync
 	sr := newTestResync(reposMissed, gitMissed,
-		func(_ context.Context, _, _, _ string, _ []byte) error { return nil },
+		func(_ context.Context, _, _, _ string, _ []byte) {},
 		func(_ context.Context, _, _, _ string, _ domain.Actor) error { return nil },
 		func(_ context.Context, _ RepoRecord) error {
 			isSyncingDuringRun.Store(srPtr.IsSyncing())
