@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"strings"
 	"sync/atomic"
 
 	"go.opentelemetry.io/otel/trace"
@@ -98,6 +99,7 @@ func (ing *Ingester) Save(ctx context.Context, repoID, branch, path string, src 
 	}
 	ing.staging.StageIfCurrentGeneration(repoID, branch, path, result.Nodes, result.Edges, gen, ing.gate)
 	ing.emitParseFailures(ctx, repoID, branch, path, result.Failures)
+	ing.emitTodos(ctx, repoID, branch, path, result.Todos)
 	return nil
 }
 
@@ -148,6 +150,60 @@ func (ing *Ingester) emitParseFailures(ctx context.Context, repoID, branch, path
 	}
 	if err := sink.Save(ctx, f); err != nil {
 		slog.Warn("ingester: failed to save parse-failure finding",
+			"repoID", repoID, "branch", branch, "path", path, "err", err)
+	}
+}
+
+// emitTodos forwards parser-detected TODO/FIXME markers as a single
+// 'todo' finding anchored on the file. Multiple markers within the same
+// file collapse to one finding row (the finding_id is hashed on (rule,
+// anchor) so re-saving is idempotent); the message body lists every
+// flagged line so callers can route the user straight to it.
+//
+// Emission is best-effort, matching emitParseFailures: a nil sink is a
+// no-op and per-call errors are logged but not propagated.
+func (ing *Ingester) emitTodos(ctx context.Context, repoID, branch, path string, todos []domain.ParseTodo) {
+	if len(todos) == 0 {
+		return
+	}
+	sink := ing.findingStorage()
+	if sink == nil {
+		return
+	}
+
+	// Build a compact summary message. We list up to the first few markers
+	// inline; if there are more we suffix with a count to keep the message
+	// bounded.
+	const inlineCap = 5
+	parts := make([]string, 0, inlineCap)
+	for i, t := range todos {
+		if i >= inlineCap {
+			break
+		}
+		parts = append(parts, fmt.Sprintf("L%d: %s", t.Line, t.Message))
+	}
+	summary := strings.Join(parts, "; ")
+	if len(todos) > inlineCap {
+		summary = fmt.Sprintf("%s; (+%d more)", summary, len(todos)-inlineCap)
+	}
+	msg := fmt.Sprintf("%d TODO/FIXME marker(s) in %s: %s", len(todos), path, summary)
+
+	f, err := domain.NewFinding(
+		"",
+		repoID, branch,
+		domain.SeverityInfo,
+		domain.LayerStructural,
+		"todo",
+		msg,
+		domain.WithFileAnchor(path),
+	)
+	if err != nil {
+		slog.Warn("ingester: failed to construct todo finding",
+			"repoID", repoID, "branch", branch, "path", path, "err", err)
+		return
+	}
+	if err := sink.Save(ctx, f); err != nil {
+		slog.Warn("ingester: failed to save todo finding",
 			"repoID", repoID, "branch", branch, "path", path, "err", err)
 	}
 }

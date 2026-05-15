@@ -118,6 +118,9 @@ func (p *GoParser) ParseFile(ctx context.Context, repoID, path string, src []byt
 	callEdges := extractCallEdges(root, src, symbolByName)
 	result.Edges = append(result.Edges, callEdges...)
 
+	// --- TODO/FIXME markers (language-agnostic lexical scan) ---
+	result.Todos = scanTodos(src)
+
 	return result, nil
 }
 
