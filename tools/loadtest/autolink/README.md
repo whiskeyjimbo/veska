@@ -34,7 +34,7 @@ AUTOLINK_POP=1000 go test -tags=eval -run TestAutolinkFP ./tools/loadtest/autoli
 | `AUTOLINK_POP` | `1000` | Total population. Snapped to a multiple of 100 (clusters). |
 | `AUTOLINK_TOPK` | `5` | Per-source candidate cap, passed through `autolink.WithTopK`. |
 | `AUTOLINK_THRESHOLD` | `0.85` | Minimum `Hit.Score` for a candidate to be emitted (`autolink.WithThreshold`). Score is in [0,1], higher = more similar. |
-| `RECALL_GENERATE` | unset | Reserved for future real-Ollama fixture seeding; current harness is fake-embedder only. |
+| (shared fixture) | — | If `../recall/fixtures/embeddings_<pop>.bin` exists (seeded by the recall harness with `RECALL_GENERATE=1`), this harness replays those vectors instead of using `FakeEmbed`. One generation seeds both gate-2 (recall) and gate-3 (autolink FP). |
 
 ## Output
 
