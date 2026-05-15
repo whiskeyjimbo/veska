@@ -194,5 +194,108 @@ WHERE finding_id = ?
 	return nil
 }
 
+// ApplyDecisions applies a batch of refresh + close decisions inside one
+// transaction, collapsing fsyncs from O(decisions) to one per call. See the
+// port doc for full semantics.
+//
+// Implementation notes:
+//   - Empty input: returns nil without opening a tx.
+//   - Both UPDATE statements are prepared once (lazily, only if the batch
+//     contains decisions of that kind) and reused for every row of the
+//     matching kind.
+//   - state='open' gates on both UPDATEs mean idempotent on already-closed
+//     rows (matched=0 is fine).
+//   - On any error (incl. Commit) the tx rolls back; the caller treats this
+//     as a retryable failure and MUST NOT bump success counters.
+func (r *RevalidateRepo) ApplyDecisions(
+	ctx context.Context, repoID, branch string, decisions []ports.FindingDecision, at int64,
+) error {
+	if len(decisions) == 0 {
+		return nil
+	}
+
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("sqlite.RevalidateRepo.ApplyDecisions: begin: %w", err)
+	}
+	// Track commit success so the deferred rollback is a true cleanup path
+	// (it becomes a no-op once tx.Commit returns nil; calling Rollback
+	// after a successful Commit is a sql.ErrTxDone we deliberately ignore).
+	committed := false
+	defer func() {
+		if !committed {
+			_ = tx.Rollback()
+		}
+	}()
+
+	const refreshStmt = `
+UPDATE findings
+SET anchor_content_hash = ?
+WHERE finding_id = ?
+  AND branch     = ?
+  AND repo_id    = ?
+  AND state      = 'open'`
+
+	const closeStmt = `
+UPDATE findings
+SET state         = 'closed',
+    closed_reason = 'revalidated_obsolete',
+    closed_at     = ?,
+    actor_id      = 'service:veska',
+    actor_kind    = 'system'
+WHERE finding_id = ?
+  AND branch     = ?
+  AND repo_id    = ?
+  AND state      = 'open'`
+
+	var (
+		refreshPS *sql.Stmt
+		closePS   *sql.Stmt
+	)
+	defer func() {
+		if refreshPS != nil {
+			refreshPS.Close()
+		}
+		if closePS != nil {
+			closePS.Close()
+		}
+	}()
+
+	for i, d := range decisions {
+		switch d.Kind {
+		case ports.DecisionRefresh:
+			if refreshPS == nil {
+				ps, perr := tx.PrepareContext(ctx, refreshStmt)
+				if perr != nil {
+					return fmt.Errorf("sqlite.RevalidateRepo.ApplyDecisions: prepare refresh: %w", perr)
+				}
+				refreshPS = ps
+			}
+			if _, exErr := refreshPS.ExecContext(ctx, d.NewHash, d.FindingID, branch, repoID); exErr != nil {
+				return fmt.Errorf("sqlite.RevalidateRepo.ApplyDecisions: refresh #%d (%s): %w", i, d.FindingID, exErr)
+			}
+		case ports.DecisionClose:
+			if closePS == nil {
+				ps, perr := tx.PrepareContext(ctx, closeStmt)
+				if perr != nil {
+					return fmt.Errorf("sqlite.RevalidateRepo.ApplyDecisions: prepare close: %w", perr)
+				}
+				closePS = ps
+			}
+			if _, exErr := closePS.ExecContext(ctx, at, d.FindingID, branch, repoID); exErr != nil {
+				return fmt.Errorf("sqlite.RevalidateRepo.ApplyDecisions: close #%d (%s): %w", i, d.FindingID, exErr)
+			}
+		default:
+			return fmt.Errorf("sqlite.RevalidateRepo.ApplyDecisions: decision #%d (%s): unknown kind %d", i, d.FindingID, d.Kind)
+		}
+	}
+
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("sqlite.RevalidateRepo.ApplyDecisions: commit: %w", err)
+	}
+	committed = true
+	return nil
+}
+
 // Compile-time check: *RevalidateRepo satisfies the port.
 var _ ports.RevalidateQuerier = (*RevalidateRepo)(nil)

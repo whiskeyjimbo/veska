@@ -29,6 +29,10 @@ type fakeRepo struct {
 	refreshErr error
 	edgesErr   error
 	sigErr     error
+	// applyErr is returned from ApplyDecisions to simulate a tx-level
+	// failure (e.g. Commit fails) so callers can assert metrics-only-on-
+	// success.
+	applyErr error
 
 	// node_id -> hasInbound (dead-code re-run); default false.
 	hasInbound map[string]bool
@@ -42,6 +46,11 @@ type fakeRepo struct {
 	refreshedHsh []string
 
 	queryCalls int
+	// applyCalls is bumped by ApplyDecisions; analogous to a BeginTx counter
+	// since the adapter opens exactly one tx per ApplyDecisions invocation
+	// when the batch is non-empty. ApplyDecisions with an empty batch must
+	// NOT bump this counter (mirroring the adapter's no-tx fast path).
+	applyCalls int
 }
 
 func (f *fakeRepo) StaleFindingsForFile(_ context.Context, _, _, _ string) ([]ports.StaleFinding, error) {
@@ -83,6 +92,29 @@ func (f *fakeRepo) RefreshAnchorHash(_ context.Context, _, _, findingID, newHash
 	f.refreshedIDs = append(f.refreshedIDs, findingID)
 	f.refreshedHsh = append(f.refreshedHsh, newHash)
 	f.refreshedAt = append(f.refreshedAt, at)
+	return nil
+}
+
+func (f *fakeRepo) ApplyDecisions(_ context.Context, _, _ string, decisions []ports.FindingDecision, at int64) error {
+	if len(decisions) == 0 {
+		// Mirror adapter contract: empty batch = no tx, no error.
+		return nil
+	}
+	f.applyCalls++
+	if f.applyErr != nil {
+		return f.applyErr
+	}
+	for _, d := range decisions {
+		switch d.Kind {
+		case ports.DecisionRefresh:
+			f.refreshedIDs = append(f.refreshedIDs, d.FindingID)
+			f.refreshedHsh = append(f.refreshedHsh, d.NewHash)
+			f.refreshedAt = append(f.refreshedAt, at)
+		case ports.DecisionClose:
+			f.closedIDs = append(f.closedIDs, d.FindingID)
+			f.closedAt = append(f.closedAt, at)
+		}
+	}
 	return nil
 }
 
@@ -138,29 +170,12 @@ func TestHandler_StaleQueryErrorWraps(t *testing.T) {
 	}
 }
 
-func TestHandler_CloseErrorWraps(t *testing.T) {
+func TestHandler_ApplyDecisionsErrorWraps(t *testing.T) {
 	t.Parallel()
-	sentinel := errors.New("boom-close")
+	sentinel := errors.New("boom-apply")
 	repo := &fakeRepo{
 		stale:    []ports.StaleFinding{{FindingID: "fA", Rule: "auto-link", NodeID: "n1", AnchorHash: "h-old", CurrentHash: "h-new"}},
-		closeErr: sentinel,
-	}
-	h := revalidate.NewHandler(repo)
-	err := h.Handle(context.Background(), ports.WorkRow{
-		Kind: ports.WorkKindRevalidate, RepoID: "r1", Branch: "main", Payload: "x.go",
-	})
-	if !errors.Is(err, sentinel) {
-		t.Fatalf("expected wrapped sentinel, got %v", err)
-	}
-}
-
-func TestHandler_RefreshErrorWraps(t *testing.T) {
-	t.Parallel()
-	sentinel := errors.New("boom-refresh")
-	repo := &fakeRepo{
-		stale:      []ports.StaleFinding{{FindingID: "fA", Rule: "dead-code", NodeID: "n1", AnchorHash: "h-old", CurrentHash: "h-new"}},
-		refreshErr: sentinel,
-		// hasInbound[n1] defaults to false → dead-code path takes refresh.
+		applyErr: sentinel,
 	}
 	h := revalidate.NewHandler(repo)
 	err := h.Handle(context.Background(), ports.WorkRow{
@@ -461,6 +476,102 @@ func TestHandler_NilMetricsIsFunctional(t *testing.T) {
 	if len(repo.refreshedIDs) != 1 || repo.refreshedIDs[0] != "fB" {
 		t.Errorf("refreshedIDs = %v, want [fB]", repo.refreshedIDs)
 	}
+}
+
+// TestHandler_BatchUsesSingleApplyCall asserts the perf invariant:
+// Handle issues exactly one ApplyDecisions call per non-empty file, no
+// matter how many stale findings the file contains. This is the
+// observable analogue of "one BeginTx per file" in the SQLite adapter.
+func TestHandler_BatchUsesSingleApplyCall(t *testing.T) {
+	t.Parallel()
+	const n = 50
+	stale := make([]ports.StaleFinding, 0, n)
+	for i := 0; i < n; i++ {
+		stale = append(stale, ports.StaleFinding{
+			FindingID:   "f-" + itoa(i),
+			Rule:        "auto-link",
+			NodeID:      "n-" + itoa(i),
+			AnchorHash:  "h-old",
+			CurrentHash: "h-new",
+		})
+	}
+	repo := &fakeRepo{stale: stale}
+	h := revalidate.NewHandler(repo)
+	if err := h.Handle(context.Background(), ports.WorkRow{
+		Kind: ports.WorkKindRevalidate, RepoID: "r1", Branch: "main", Payload: "x.go",
+	}); err != nil {
+		t.Fatalf("Handle: %v", err)
+	}
+	if repo.applyCalls != 1 {
+		t.Errorf("applyCalls = %d, want 1 (perf invariant: one tx per file)", repo.applyCalls)
+	}
+	if len(repo.closedIDs) != n {
+		t.Errorf("closedIDs len = %d, want %d", len(repo.closedIDs), n)
+	}
+}
+
+// TestHandler_EmptyStaleSkipsApply asserts that Handle never invokes
+// ApplyDecisions when StaleFindingsForFile returns no rows — no tx is opened
+// on a clean file (the dominant case post-sync).
+func TestHandler_EmptyStaleSkipsApply(t *testing.T) {
+	t.Parallel()
+	repo := &fakeRepo{stale: nil}
+	h := revalidate.NewHandler(repo)
+	if err := h.Handle(context.Background(), ports.WorkRow{
+		Kind: ports.WorkKindRevalidate, RepoID: "r1", Branch: "main", Payload: "x.go",
+	}); err != nil {
+		t.Fatalf("Handle: %v", err)
+	}
+	if repo.applyCalls != 0 {
+		t.Errorf("applyCalls = %d, want 0 (empty stale must skip the tx)", repo.applyCalls)
+	}
+}
+
+// TestHandler_MetricsOnlyBumpAfterApplyCommits ensures that if
+// ApplyDecisions fails (modelling a Commit failure inside the adapter),
+// neither the refreshed nor the closed counter advances. The retry path
+// re-derives decisions on the next Poller delivery.
+func TestHandler_MetricsOnlyBumpAfterApplyCommits(t *testing.T) {
+	t.Parallel()
+	repo := &fakeRepo{
+		stale: []ports.StaleFinding{
+			{FindingID: "fA", Rule: "dead-code", NodeID: "n1", CurrentHash: "h-new"},
+			{FindingID: "fB", Rule: "auto-link", NodeID: "n2", CurrentHash: "h-new"},
+		},
+		applyErr: errors.New("commit-failed"),
+	}
+	reg := prometheus.NewRegistry()
+	metrics := observability.NewMetrics(reg)
+	h := revalidate.NewHandler(repo, revalidate.WithMetrics(metrics))
+
+	err := h.Handle(context.Background(), ports.WorkRow{
+		Kind: ports.WorkKindRevalidate, RepoID: "r1", Branch: "main", Payload: "x.go",
+	})
+	if err == nil {
+		t.Fatal("expected error from ApplyDecisions, got nil")
+	}
+	if got := testutil.ToFloat64(metrics.RevalidateRefreshed); got != 0 {
+		t.Errorf("refreshed counter = %v, want 0 (no commit, no metric)", got)
+	}
+	if got := testutil.ToFloat64(metrics.RevalidateClosed); got != 0 {
+		t.Errorf("closed counter = %v, want 0 (no commit, no metric)", got)
+	}
+}
+
+// itoa is a tiny helper kept local to avoid pulling in strconv just for
+// test-only ID generation.
+func itoa(i int) string {
+	if i == 0 {
+		return "0"
+	}
+	var buf [20]byte
+	n := len(buf)
+	for i > 0 {
+		n--
+		buf[n] = byte('0' + i%10)
+		i /= 10
+	}
+	return string(buf[n:])
 }
 
 func TestNewHandler_NilRepoPanics(t *testing.T) {

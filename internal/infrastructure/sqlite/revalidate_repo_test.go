@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/whiskeyjimbo/veska/internal/core/domain"
+	"github.com/whiskeyjimbo/veska/internal/core/ports"
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/sqlite"
 )
 
@@ -507,5 +508,168 @@ func TestRevalidateRepo_Close_IsIdempotentOnAlreadyClosed(t *testing.T) {
 	}
 	if !gotClosedAt.Valid || gotClosedAt.Int64 != t1 {
 		t.Errorf("closed_at = %+v, want unchanged %d", gotClosedAt, t1)
+	}
+}
+
+// TestRevalidateRepo_ApplyDecisions_MixedBatch_RoundTrips verifies that one
+// ApplyDecisions call applies a mixed refresh+close batch correctly: refreshed
+// rows keep state='open' with their new anchor hash, closed rows transition
+// to state='closed' with closed_reason='revalidated_obsolete'.
+func TestRevalidateRepo_ApplyDecisions_MixedBatch_RoundTrips(t *testing.T) {
+	t.Parallel()
+	f := setupRevalFixture(t)
+
+	f.insertNode(t, "n-r1", f.branch, "pkg/a.go", "h-cur-1")
+	f.insertNode(t, "n-r2", f.branch, "pkg/a.go", "h-cur-2")
+	f.insertNode(t, "n-c1", f.branch, "pkg/a.go", "h-cur-3")
+	f.insertNode(t, "n-c2", f.branch, "pkg/a.go", "h-cur-4")
+	fR1 := f.insertFinding(t, "u-r1", f.branch, "n-r1", new("h-old-r1"))
+	fR2 := f.insertFinding(t, "u-r2", f.branch, "n-r2", new("h-old-r2"))
+	fC1 := f.insertFinding(t, "u-c1", f.branch, "n-c1", new("h-old-c1"))
+	fC2 := f.insertFinding(t, "u-c2", f.branch, "n-c2", new("h-old-c2"))
+
+	at := time.Now().UnixMilli()
+	batch := []ports.FindingDecision{
+		{FindingID: fR1.FindingID, Kind: ports.DecisionRefresh, NewHash: "h-new-r1"},
+		{FindingID: fC1.FindingID, Kind: ports.DecisionClose},
+		{FindingID: fR2.FindingID, Kind: ports.DecisionRefresh, NewHash: "h-new-r2"},
+		{FindingID: fC2.FindingID, Kind: ports.DecisionClose},
+	}
+	if err := f.reval.ApplyDecisions(context.Background(), f.repoID, f.branch, batch, at); err != nil {
+		t.Fatalf("ApplyDecisions: %v", err)
+	}
+
+	type row struct {
+		state, reason, anchor string
+		closedAt              sql.NullInt64
+	}
+	get := func(id string) row {
+		t.Helper()
+		var r row
+		var reason, anchor sql.NullString
+		if err := f.db.QueryRow(
+			`SELECT state, closed_reason, anchor_content_hash, closed_at FROM findings WHERE finding_id=? AND branch=?`,
+			id, f.branch,
+		).Scan(&r.state, &reason, &anchor, &r.closedAt); err != nil {
+			t.Fatalf("query %s: %v", id, err)
+		}
+		if reason.Valid {
+			r.reason = reason.String
+		}
+		if anchor.Valid {
+			r.anchor = anchor.String
+		}
+		return r
+	}
+
+	// Refreshes: state=open, anchor moved, no reason.
+	if r := get(fR1.FindingID); r.state != "open" || r.anchor != "h-new-r1" || r.reason != "" {
+		t.Errorf("u-r1 = %+v, want open/h-new-r1/no-reason", r)
+	}
+	if r := get(fR2.FindingID); r.state != "open" || r.anchor != "h-new-r2" || r.reason != "" {
+		t.Errorf("u-r2 = %+v, want open/h-new-r2/no-reason", r)
+	}
+	// Closes: state=closed, reason set, closed_at stamped.
+	for _, id := range []string{fC1.FindingID, fC2.FindingID} {
+		r := get(id)
+		if r.state != "closed" || r.reason != "revalidated_obsolete" {
+			t.Errorf("%s = %+v, want closed/revalidated_obsolete", id, r)
+		}
+		if !r.closedAt.Valid || r.closedAt.Int64 != at {
+			t.Errorf("%s closed_at = %+v, want %d", id, r.closedAt, at)
+		}
+	}
+}
+
+// TestRevalidateRepo_ApplyDecisions_EmptyBatchNoop ensures that ApplyDecisions
+// with no decisions is a true no-op — no error, no row mutation. The handler
+// relies on this for the (rare-but-real) "all stale findings already closed"
+// race; more importantly it documents the contract.
+func TestRevalidateRepo_ApplyDecisions_EmptyBatchNoop(t *testing.T) {
+	t.Parallel()
+	f := setupRevalFixture(t)
+	f.insertNode(t, "n-x", f.branch, "pkg/a.go", "h-cur")
+	fnd := f.insertFinding(t, "u-x", f.branch, "n-x", new("h-old"))
+
+	if err := f.reval.ApplyDecisions(context.Background(), f.repoID, f.branch, nil, time.Now().UnixMilli()); err != nil {
+		t.Fatalf("ApplyDecisions(nil): %v", err)
+	}
+	var state string
+	var anchor sql.NullString
+	if err := f.db.QueryRow(
+		`SELECT state, anchor_content_hash FROM findings WHERE finding_id=? AND branch=?`,
+		fnd.FindingID, fnd.Branch,
+	).Scan(&state, &anchor); err != nil {
+		t.Fatalf("query: %v", err)
+	}
+	if state != "open" || anchor.String != "h-old" {
+		t.Errorf("post no-op = state=%q anchor=%q, want open/h-old", state, anchor.String)
+	}
+}
+
+// TestRevalidateRepo_ApplyDecisions_RollbackOnError checks that when a single
+// decision errors mid-batch (e.g. unknown kind), no earlier-in-batch UPDATE
+// is visible after the call returns — the tx rolls back atomically.
+func TestRevalidateRepo_ApplyDecisions_RollbackOnError(t *testing.T) {
+	t.Parallel()
+	f := setupRevalFixture(t)
+	f.insertNode(t, "n-r", f.branch, "pkg/a.go", "h-cur-r")
+	fR := f.insertFinding(t, "u-r", f.branch, "n-r", new("h-old-r"))
+
+	// First decision would refresh; second is an invalid kind that triggers
+	// the adapter's error path BEFORE Commit. The refresh must roll back.
+	batch := []ports.FindingDecision{
+		{FindingID: fR.FindingID, Kind: ports.DecisionRefresh, NewHash: "h-new-r"},
+		{FindingID: "bogus", Kind: ports.DecisionKind(99)},
+	}
+	if err := f.reval.ApplyDecisions(context.Background(), f.repoID, f.branch, batch, time.Now().UnixMilli()); err == nil {
+		t.Fatal("expected error from unknown kind, got nil")
+	}
+
+	var anchor sql.NullString
+	if err := f.db.QueryRow(
+		`SELECT anchor_content_hash FROM findings WHERE finding_id=? AND branch=?`,
+		fR.FindingID, fR.Branch,
+	).Scan(&anchor); err != nil {
+		t.Fatalf("query: %v", err)
+	}
+	if anchor.String != "h-old-r" {
+		t.Errorf("anchor after rollback = %q, want unchanged h-old-r", anchor.String)
+	}
+}
+
+// TestRevalidateRepo_ApplyDecisions_GatedOnOpenState ensures the tx-batched
+// path respects the same state='open' gate as the single-row methods:
+// already-closed rows are not resurrected, and refreshing a closed row is a
+// no-op rather than an error.
+func TestRevalidateRepo_ApplyDecisions_GatedOnOpenState(t *testing.T) {
+	t.Parallel()
+	f := setupRevalFixture(t)
+	f.insertNode(t, "n-x", f.branch, "pkg/a.go", "h-cur")
+	fnd := f.insertFinding(t, "u-x", f.branch, "n-x", new("h-old"))
+
+	if _, err := f.db.Exec(
+		`UPDATE findings SET state='closed', closed_reason='manual', closed_at=? WHERE finding_id=? AND branch=?`,
+		time.Now().UnixMilli(), fnd.FindingID, fnd.Branch,
+	); err != nil {
+		t.Fatalf("force-close: %v", err)
+	}
+
+	batch := []ports.FindingDecision{
+		{FindingID: fnd.FindingID, Kind: ports.DecisionRefresh, NewHash: "h-new"},
+	}
+	if err := f.reval.ApplyDecisions(context.Background(), f.repoID, f.branch, batch, time.Now().UnixMilli()); err != nil {
+		t.Fatalf("ApplyDecisions: %v", err)
+	}
+	var state string
+	var anchor sql.NullString
+	if err := f.db.QueryRow(
+		`SELECT state, anchor_content_hash FROM findings WHERE finding_id=? AND branch=?`,
+		fnd.FindingID, fnd.Branch,
+	).Scan(&state, &anchor); err != nil {
+		t.Fatalf("query: %v", err)
+	}
+	if state != "closed" || anchor.String != "h-old" {
+		t.Errorf("post-apply on closed row = state=%q anchor=%q, want unchanged closed/h-old", state, anchor.String)
 	}
 }
