@@ -53,7 +53,8 @@ func (r *DeadCodeRepo) DeadNodesInFiles(ctx context.Context, repoID, branch stri
 	// so cross-branch edges do not satisfy the join.
 	query := fmt.Sprintf(`
 SELECT n.node_id, n.file_path, n.kind, n.symbol_path,
-       COALESCE(n.line_start, 0), COALESCE(n.line_end, 0)
+       COALESCE(n.line_start, 0), COALESCE(n.line_end, 0),
+       COALESCE(n.content_hash, '')
 FROM nodes n
 LEFT JOIN edges e
   ON e.dst_node_id = n.node_id AND e.branch = n.branch
@@ -72,7 +73,7 @@ ORDER BY n.file_path, n.node_id`, strings.Join(placeholders, ","))
 	var out []ports.NodeRef
 	for rows.Next() {
 		var ref ports.NodeRef
-		if err := rows.Scan(&ref.NodeID, &ref.FilePath, &ref.Kind, &ref.Name, &ref.LineStart, &ref.LineEnd); err != nil {
+		if err := rows.Scan(&ref.NodeID, &ref.FilePath, &ref.Kind, &ref.Name, &ref.LineStart, &ref.LineEnd, &ref.ContentHash); err != nil {
 			return nil, fmt.Errorf("sqlite.DeadCodeRepo.DeadNodesInFiles: scan: %w", err)
 		}
 		out = append(out, ref)

@@ -119,6 +119,17 @@ type Finding struct {
 	// Optional actor metadata.
 	ActorID   *string
 	ActorKind *ActorKind
+
+	// AnchorContentHash is the content_hash of the node anchor at the moment
+	// the finding was written. It is populated only when the finding anchors
+	// on a node whose content_hash is known to the producing check (dead-code,
+	// contract-drift, auto-link). File-anchored findings (parse-failure) leave
+	// it nil — the file as a whole has no per-symbol hash.
+	//
+	// The revalidation sweep (m3.05.2) compares this against the node's
+	// current content_hash to detect drift: a finding whose anchor has moved
+	// on is superseded rather than re-fired.
+	AnchorContentHash *string
 }
 
 // FindingOption is a functional option for NewFinding.
@@ -153,6 +164,20 @@ func WithActorKind(ak ActorKind) FindingOption {
 			return errors.New("finding: invalid actor_kind")
 		}
 		f.ActorKind = &ak
+		return nil
+	}
+}
+
+// WithAnchorContentHash sets the content_hash of the node anchor captured at
+// finding-write time. An empty hash is rejected so callers cannot silently
+// confuse "anchor has no hash" (nil) with "anchor's hash is the empty string"
+// — mirrors the empty-anchor validation on WithNodeAnchor / WithFileAnchor.
+func WithAnchorContentHash(hash string) FindingOption {
+	return func(f *Finding) error {
+		if hash == "" {
+			return errors.New("finding: anchor_content_hash must not be empty")
+		}
+		f.AnchorContentHash = &hash
 		return nil
 	}
 }

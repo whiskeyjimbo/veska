@@ -112,6 +112,29 @@ func TestContractDriftCheck_EmitsFindingShape(t *testing.T) {
 	}
 }
 
+// TestContractDriftCheck_ThreadsCurrentContentHash verifies the check carries
+// the drifted node's CURRENT content_hash (not the prev) onto the finding.
+func TestContractDriftCheck_ThreadsCurrentContentHash(t *testing.T) {
+	q := &fakeDriftQuerier{drifted: []ports.DriftedNode{
+		{NodeID: "n-foo", FilePath: "pkg/a.go", Kind: "function", Name: "Foo",
+			PrevSig: "old", NewSig: "new", ContentHash: "h-new"},
+	}}
+	c := checks.NewContractDriftCheck(q)
+	findings, err := c.Run(context.Background(), checks.Input{
+		RepoID: "r", Branch: "main", FilePaths: []string{"pkg/a.go"},
+	})
+	if err != nil || len(findings) != 1 {
+		t.Fatalf("Run: err=%v len=%d", err, len(findings))
+	}
+	if findings[0].AnchorContentHash == nil {
+		t.Fatal("AnchorContentHash is nil")
+	}
+	if *findings[0].AnchorContentHash != "h-new" {
+		t.Errorf("AnchorContentHash = %q, want h-new (current hash)",
+			*findings[0].AnchorContentHash)
+	}
+}
+
 // TestContractDriftCheck_FindingIDStableAcrossRuns verifies idempotency: the
 // branch-stable finding_id depends only on (rule, node_id) so re-running the
 // same input produces the same id.
