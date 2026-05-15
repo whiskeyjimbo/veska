@@ -75,6 +75,15 @@ type Metrics struct {
 	// system-wide signal — repo/branch fanout is observable via the queue
 	// metrics already.
 	RevalidateClosed prometheus.Counter
+
+	// RevalidateRefreshed counts findings whose anchor_content_hash was
+	// rewritten in place by the revalidation sweep because the rule still
+	// fires on the new node content (e.g. dead-code anchor still has no
+	// inbound edges; contract-drift anchor still has prev_signature !=
+	// signature). One increment per refreshed row. Paired with
+	// RevalidateClosed: every stale finding visited resolves to exactly
+	// one of (Refreshed | Closed).
+	RevalidateRefreshed prometheus.Counter
 }
 
 // NewMetrics constructs a Metrics struct and registers all metrics with reg.
@@ -166,6 +175,13 @@ func NewMetrics(reg prometheus.Registerer) *Metrics {
 		},
 	)
 
+	revalidateRefreshed := prometheus.NewCounter(
+		prometheus.CounterOpts{
+			Name: "veska_revalidate_refreshed_total",
+			Help: "Findings whose anchor_content_hash was rewritten in place because the rule still fires on the new node content. Incremented per refreshed row.",
+		},
+	)
+
 	reg.MustRegister(
 		sealLatency,
 		postCommitHookDuration,
@@ -178,6 +194,7 @@ func NewMetrics(reg prometheus.Registerer) *Metrics {
 		embedDedupHits,
 		autolinkCandidates,
 		revalidateClosed,
+		revalidateRefreshed,
 	)
 
 	return &Metrics{
@@ -192,6 +209,7 @@ func NewMetrics(reg prometheus.Registerer) *Metrics {
 		EmbedDedupHits:         embedDedupHits,
 		AutolinkCandidates:     autolinkCandidates,
 		RevalidateClosed:       revalidateClosed,
+		RevalidateRefreshed:    revalidateRefreshed,
 	}
 }
 
