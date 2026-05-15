@@ -55,7 +55,7 @@ func (e *ErrPromotionDivergent) Error() string {
 type StartupResync struct {
 	repos    RepoLister
 	git      GitQuerier
-	save     func(ctx context.Context, repoID, branch, path string, src []byte) error
+	save     func(ctx context.Context, repoID, branch, path string, src []byte)
 	promote  func(ctx context.Context, repoID, branch, gitSHA string, actor domain.Actor) error
 	reparser func(ctx context.Context, repo RepoRecord) error
 
@@ -197,9 +197,7 @@ func (r *StartupResync) replayCommit(ctx context.Context, repo RepoRecord, sha s
 			)
 			continue
 		}
-		if err := r.save(ctx, repo.RepoID, repo.ActiveBranch, f, src); err != nil {
-			return fmt.Errorf("startup resync: save %q@%q: %w", f, sha, err)
-		}
+		r.save(ctx, repo.RepoID, repo.ActiveBranch, f, src)
 	}
 
 	// Startup resync is always system-triggered.

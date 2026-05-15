@@ -14,7 +14,11 @@ import (
 )
 
 // workKinds lists the post-promotion work kinds enqueued per file.
-var workKinds = []string{"embed", "auto_link", "revalidate"}
+var workKinds = []string{
+	string(ports.WorkKindEmbed),
+	string(ports.WorkKindAutoLink),
+	string(ports.WorkKindRevalidate),
+}
 
 // ErrUnregisteredRepo is returned by Promote when the repoID is not found in
 // the repos table. The daemon must never promote work from an unknown repo.
