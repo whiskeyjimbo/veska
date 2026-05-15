@@ -32,13 +32,21 @@ RECALL_POP=1000 go test -tags=eval -run TestRecall ./tools/loadtest/recall/ -v
 
 Larger populations require a cached embedding fixture at
 `fixtures/embeddings_<pop>.bin`. If the fixture is absent and
-`RECALL_GENERATE=1` is not set, the test **skips** (not fails) — the
-50k/250k full runs are deferred to milestone close.
+`RECALL_GENERATE=1` is not set, the test **skips** (not fails). With
+`RECALL_GENERATE=1` and a reachable Ollama, the harness seeds the
+fixture from real Ollama (one POST /api/embeddings per node) before
+running the recall queries. The Ollama URL/model honour the same env
+vars as the embedder bench: `VESKA_OLLAMA_URL` (default
+`http://localhost:11434`) and `VESKA_EMBED_MODEL` (default
+`nomic-embed-text`). If Ollama is not reachable the test skips with a
+clear message rather than burning the whole run.
 
 | Env var | Default | Meaning |
 |---|---|---|
 | `RECALL_POP` | `1000` | Total population. Snapped to a multiple of 100 (clusters). `≤ 5000` is "quick mode" — fake embedder, no fixture required. |
-| `RECALL_GENERATE` | unset | When `1`, allow seeding `fixtures/embeddings_<pop>.bin` if absent. Quick mode persists the fake-generated vectors; large-pop seeding hooks the real-Ollama path. |
+| `RECALL_GENERATE` | unset | When `1`, allow seeding `fixtures/embeddings_<pop>.bin`. Quick mode persists fake vectors; large-pop seeding drives `ollama.Provider` and writes the fixture atomically. |
+| `VESKA_OLLAMA_URL` | `http://localhost:11434` | Ollama base URL used during large-pop fixture generation and during query embedding when replaying an Ollama-seeded fixture. |
+| `VESKA_EMBED_MODEL` | `nomic-embed-text` | Embedding model used during large-pop fixture generation / replay. |
 
 ## Output
 
@@ -67,13 +75,15 @@ directory:
 
 ## Reproducing the M3 close numbers
 
-1. Seed fixtures from a real Ollama instance (deferred to milestone
-   close; the seeding hook lives on the same `RECALL_GENERATE=1`
-   switch but is wired against the production
-   `ports.EmbeddingProvider` adapter, not the fake embedder).
-2. Commit the resulting `fixtures/embeddings_<pop>.bin` artefacts out-
-   of-band (they are gitignored on purpose — they're regenerable and
-   large).
+1. Seed fixtures from a real Ollama instance by running the harness
+   with `RECALL_GENERATE=1 RECALL_POP=50000` (and again at `250000`).
+   The harness drives `ollama.Provider` one request at a time and
+   writes `fixtures/embeddings_<pop>.bin` atomically (temp + rename)
+   so a mid-run Ctrl-C leaves no half-written artefact.
+2. The resulting `fixtures/embeddings_<pop>.bin` artefacts are
+   gitignored on purpose — they're regenerable and large. The same
+   fixture path is replayed by the autolink-FP harness so a single
+   50k generation seeds both gate-2 and gate-3.
 3. Run `RECALL_POP=50000 make eval-recall` and
    `RECALL_POP=250000 make eval-recall`; the JSON outputs feed the
    M3 close report.
