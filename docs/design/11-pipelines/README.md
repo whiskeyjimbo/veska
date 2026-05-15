@@ -605,7 +605,7 @@ every <cadence>:
 The **temporal short-circuit** is an optimisation, not a separate
 plugin: when a finding's anchor symbol has the same `content_hash`
 it had at `detected_commit` (resolvable via the same graph state
-`eng_get_node_as_of` reads), the rule's premise is unchanged and
+`eng_get_node` reads), the rule's premise is unchanged and
 the rule does not need to re-run. Full rule rerun is the fallback.
 This closes the common "the file moved, the symbol didn't change"
 case cheaply — most open findings on a typical branch hit this

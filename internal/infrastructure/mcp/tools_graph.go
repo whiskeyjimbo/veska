@@ -69,12 +69,6 @@ func RegisterGraphTools(r *Registry, graph ports.GraphStorage, staging *applicat
 		IncludesStaging: true,
 		Handler:         makeGetFileNodesHandler(graph, staging),
 	})
-	r.MustRegister(ToolSpec{
-		Name:            "eng_get_node_as_of",
-		Description:     "Get a single node by its ID from promoted state only; no staging overlay applied.",
-		IncludesStaging: false,
-		Handler:         makeGetNodeAsOfHandler(graph),
-	})
 }
 
 // ---------------------------------------------------------------------------
@@ -412,35 +406,6 @@ func makeGetFileNodesHandler(graph ports.GraphStorage, staging *application.Stag
 		// Return empty for now if fileQuerier is not implemented.
 		return GraphResponse{
 			Nodes:           result,
-			IncludedStaging: false,
-		}, nil
-	}
-}
-
-// ---------------------------------------------------------------------------
-// eng_get_node_as_of
-// ---------------------------------------------------------------------------
-
-func makeGetNodeAsOfHandler(graph ports.GraphStorage) ToolHandler {
-	return func(ctx context.Context, _ domain.Actor, raw json.RawMessage) (any, *RPCError) {
-		var p getNodeParams
-		if err := json.Unmarshal(raw, &p); err != nil {
-			return nil, &RPCError{Code: CodeInvalidParams, Message: fmt.Sprintf("invalid params: %v", err)}
-		}
-		if p.NodeID == "" || p.RepoID == "" || p.Branch == "" {
-			return nil, &RPCError{Code: CodeInvalidParams, Message: "node_id, repo_id, and branch are required"}
-		}
-
-		node, err := graph.GetNode(ctx, p.RepoID, p.Branch, domain.NodeID(p.NodeID))
-		if err != nil {
-			return nil, &RPCError{Code: CodeInternalError, Message: fmt.Sprintf("graph lookup failed: %v", err)}
-		}
-		if node == nil {
-			return nil, &RPCError{Code: CodeInvalidParams, Message: fmt.Sprintf("node not found: %s", p.NodeID)}
-		}
-
-		return GraphResponse{
-			Nodes:           []*domain.Node{node},
 			IncludedStaging: false,
 		}, nil
 	}
