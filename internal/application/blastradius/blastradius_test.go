@@ -42,7 +42,9 @@ func (f *fakeEdges) OutboundEdges(_ context.Context, _, _ string, ids []string) 
 }
 
 type fakeNodes struct {
-	metas map[string]ports.NodeMeta
+	metas     map[string]ports.NodeMeta
+	byFile    map[string][]string
+	inFileErr error
 }
 
 func (f *fakeNodes) LookupNodes(_ context.Context, _, _ string, ids []string) ([]ports.NodeMeta, error) {
@@ -55,8 +57,11 @@ func (f *fakeNodes) LookupNodes(_ context.Context, _, _ string, ids []string) ([
 	return out, nil
 }
 
-func (f *fakeNodes) NodesInFile(_ context.Context, _, _, _ string) ([]string, error) {
-	return nil, nil
+func (f *fakeNodes) NodesInFile(_ context.Context, _, _, filePath string) ([]string, error) {
+	if f.inFileErr != nil {
+		return nil, f.inFileErr
+	}
+	return f.byFile[filePath], nil
 }
 
 func TestOf_DefaultDirectionWalksInbound(t *testing.T) {
@@ -243,6 +248,82 @@ func TestDirtyOf_NilStagingReturnsEmpty(t *testing.T) {
 	}
 	if !resp.IncludedStaging {
 		t.Error("IncludedStaging should still be true for the dirty path")
+	}
+}
+
+func TestDiffOf_UnionAcrossChangedFiles(t *testing.T) {
+	edges := &fakeEdges{inbound: map[string][]string{
+		"a": {"caller-of-a"},
+	}}
+	nodes := &fakeNodes{
+		metas: map[string]ports.NodeMeta{
+			"a": {NodeID: "a"}, "b": {NodeID: "b"}, "caller-of-a": {NodeID: "caller-of-a"},
+		},
+		byFile: map[string][]string{
+			"foo.go": {"a"},
+			"bar.go": {"b"},
+		},
+	}
+	s := blastradius.NewService(edges, nodes, nil)
+	changed := func(_ context.Context, _ string) ([]string, error) {
+		return []string{"foo.go", "bar.go"}, nil
+	}
+	resp, err := s.DiffOf(context.Background(), "r", "main", "/tmp/repo", changed, blastradius.Options{MaxDepth: 1})
+	if err != nil {
+		t.Fatalf("DiffOf: %v", err)
+	}
+	got := make(map[string]bool)
+	for _, e := range resp.Entries {
+		got[e.NodeID] = true
+	}
+	for _, id := range []string{"a", "b", "caller-of-a"} {
+		if !got[id] {
+			t.Errorf("expected %s in entries, got %+v", id, resp.Entries)
+		}
+	}
+}
+
+func TestDiffOf_EmptyDiffEmptyResponse(t *testing.T) {
+	s := blastradius.NewService(&fakeEdges{}, &fakeNodes{}, nil)
+	resp, err := s.DiffOf(context.Background(), "r", "main", "/tmp/r", func(_ context.Context, _ string) ([]string, error) {
+		return nil, nil
+	}, blastradius.Options{MaxDepth: 1})
+	if err != nil {
+		t.Fatalf("DiffOf: %v", err)
+	}
+	if len(resp.Entries) != 0 {
+		t.Errorf("expected no entries, got %+v", resp.Entries)
+	}
+}
+
+func TestDiffOf_FilesWithNoNodesShortCircuits(t *testing.T) {
+	s := blastradius.NewService(&fakeEdges{}, &fakeNodes{byFile: map[string][]string{}}, nil)
+	resp, err := s.DiffOf(context.Background(), "r", "main", "/tmp/r", func(_ context.Context, _ string) ([]string, error) {
+		return []string{"new.go", "vendor.go"}, nil
+	}, blastradius.Options{MaxDepth: 1})
+	if err != nil {
+		t.Fatalf("DiffOf: %v", err)
+	}
+	if len(resp.Entries) != 0 {
+		t.Errorf("expected empty (no promoted nodes), got %+v", resp.Entries)
+	}
+}
+
+func TestDiffOf_RejectsNilChangedFilesFunc(t *testing.T) {
+	s := blastradius.NewService(&fakeEdges{}, &fakeNodes{}, nil)
+	_, err := s.DiffOf(context.Background(), "r", "main", "/tmp/r", nil, blastradius.Options{})
+	if err == nil {
+		t.Error("expected error for nil changedFiles")
+	}
+}
+
+func TestDiffOf_RejectsEmptyRepoRoot(t *testing.T) {
+	s := blastradius.NewService(&fakeEdges{}, &fakeNodes{}, nil)
+	_, err := s.DiffOf(context.Background(), "r", "main", "", func(_ context.Context, _ string) ([]string, error) {
+		return nil, nil
+	}, blastradius.Options{})
+	if err == nil {
+		t.Error("expected error for empty repoRoot")
 	}
 }
 
