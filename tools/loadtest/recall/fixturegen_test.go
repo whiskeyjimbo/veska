@@ -3,10 +3,10 @@
 package recall
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"fmt"
+	"math"
 	"os"
 	"path/filepath"
 	"sync"
@@ -85,11 +85,26 @@ func TestGenerateOllamaFixture_WritesRoundTrippableFile(t *testing.T) {
 		t.Fatalf("progress: expected final call equal to total, got %v", progressCalls)
 	}
 
-	// Vector body round-trips: first element of node i should match
-	// first byte of node[i].Text (per stub).
+	// Vector body round-trips. The generator L2-normalises every vector
+	// before writing (see solov2-uug), so the stored value is the unit
+	// form of the stub's raw {text[0], i, 0...}. Verify each stored vector
+	// is unit-norm and matches the expected normalised first element.
 	for i, n := range corpus.Nodes {
-		if want := float32(n.Text[0]); vecs[i*dim] != want {
-			t.Errorf("vec[%d][0]=%v want %v", i, vecs[i*dim], want)
+		// stubProvider sets v[0]=text[0] and v[1]=callIndex (1-based), so
+		// node i was the (i+1)-th Embed call.
+		raw0, raw1 := float64(n.Text[0]), float64(i+1)
+		rawNorm := math.Sqrt(raw0*raw0 + raw1*raw1)
+		var gotNorm float64
+		for d := range dim {
+			v := float64(vecs[i*dim+d])
+			gotNorm += v * v
+		}
+		gotNorm = math.Sqrt(gotNorm)
+		if math.Abs(gotNorm-1.0) > 1e-5 {
+			t.Errorf("vec[%d] not unit-norm: |v|=%v", i, gotNorm)
+		}
+		if want := float32(raw0 / rawNorm); math.Abs(float64(vecs[i*dim]-want)) > 1e-5 {
+			t.Errorf("vec[%d][0]=%v want %v (normalised)", i, vecs[i*dim], want)
 		}
 	}
 }
@@ -172,15 +187,14 @@ func TestGenerateOllamaFixture_HTTPStub(t *testing.T) {
 		t.Fatalf("count: got %d want %d", got, nodeCount)
 	}
 
-	// Bonus: ensure non-zero, non-uniform vectors came through (the
-	// stub varies the first element by request index).
-	var seen = make(map[float32]struct{})
-	for i := 0; i < nodeCount; i++ {
-		seen[vecs[i*d]] = struct{}{}
+	// Ensure distinct vectors came through. The stub points each request
+	// along a different axis, so the full per-node vectors must differ
+	// even after the generator L2-normalises them.
+	seen := make(map[string]struct{})
+	for i := range nodeCount {
+		seen[fmt.Sprintf("%v", vecs[i*d:(i+1)*d])] = struct{}{}
 	}
 	if len(seen) < 2 {
-		buf := &bytes.Buffer{}
-		fmt.Fprintf(buf, "%v", vecs)
-		t.Fatalf("expected varying vectors across nodes, body=%s", buf)
+		t.Fatalf("expected varying vectors across nodes, body=%v", vecs)
 	}
 }
