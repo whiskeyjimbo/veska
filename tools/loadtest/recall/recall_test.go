@@ -181,11 +181,18 @@ func TestRecall(t *testing.T) {
 	)
 	seedNodes(t, db, repoID, branch, corpus.Nodes)
 
-	vstore, err := vector.NewVectorStorage(vector.BackendSQLiteVec, "")
-	if err != nil {
-		t.Fatalf("vector.NewVectorStorage: %v", err)
+	// VESKA_VECTOR_BACKEND selects the backend (default sqlite-vec).
+	// "usearch" requires the hnsw_native build tag and libusearch_c.so at
+	// runtime — see ADR-S0014.
+	backendKind := vector.BackendKind(os.Getenv("VESKA_VECTOR_BACKEND"))
+	if backendKind == "" {
+		backendKind = vector.BackendSQLiteVec
 	}
-	backendName := string(vector.BackendSQLiteVec)
+	vstore, err := vector.NewVectorStorage(backendKind, t.TempDir())
+	if err != nil {
+		t.Fatalf("vector.NewVectorStorage(%s): %v", backendKind, err)
+	}
+	backendName := string(backendKind)
 
 	rows := make([]domain.EmbeddingRow, pop)
 	for i, n := range corpus.Nodes {

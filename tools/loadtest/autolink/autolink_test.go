@@ -91,11 +91,19 @@ func TestAutolinkFP(t *testing.T) {
 	seedEmbeddings(t, db, corpus.Nodes, vecOf)
 
 	// --- VectorStorage ----------------------------------------------------
-	vstore, err := vector.NewVectorStorage(vector.BackendSQLiteVec, "")
-	if err != nil {
-		t.Fatalf("vector.NewVectorStorage: %v", err)
+	// VESKA_VECTOR_BACKEND selects the backend (default sqlite-vec).
+	// "usearch" requires the hnsw_native build tag and libusearch_c.so at
+	// runtime — see ADR-S0014. sqlite-vec is O(N^2) and exceeds budget at
+	// pop > ~10k for the autolink Candidates sweep.
+	backendKind := vector.BackendKind(os.Getenv("VESKA_VECTOR_BACKEND"))
+	if backendKind == "" {
+		backendKind = vector.BackendSQLiteVec
 	}
-	backendName := string(vector.BackendSQLiteVec)
+	vstore, err := vector.NewVectorStorage(backendKind, t.TempDir())
+	if err != nil {
+		t.Fatalf("vector.NewVectorStorage(%s): %v", backendKind, err)
+	}
+	backendName := string(backendKind)
 
 	rows := make([]domain.EmbeddingRow, pop)
 	modelID := "fake-hash-v1"
