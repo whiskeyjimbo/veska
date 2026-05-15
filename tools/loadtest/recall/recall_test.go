@@ -12,9 +12,11 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -22,9 +24,16 @@ import (
 
 	"github.com/whiskeyjimbo/veska/internal/application/search"
 	"github.com/whiskeyjimbo/veska/internal/core/domain"
+	"github.com/whiskeyjimbo/veska/internal/core/ports"
+	"github.com/whiskeyjimbo/veska/internal/infrastructure/embedding/ollama"
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/sqlite"
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/vector"
 	"github.com/whiskeyjimbo/veska/tools/loadtest/synthcorpus"
+)
+
+const (
+	defaultOllamaURL   = "http://localhost:11434"
+	defaultOllamaModel = "nomic-embed-text"
 )
 
 // TestRecall is the end-to-end eval harness. It builds a synthetic
@@ -36,10 +45,12 @@ import (
 //
 // Modes (env):
 //   - RECALL_POP=N             — total population (default 1000)
-//   - RECALL_GENERATE=1        — allow real-Ollama fixture seeding
-//     (NB: ollama path is not implemented in this milestone; setting
-//     RECALL_GENERATE=1 without a fake-compatible fixture is a no-op
-//     for the quick-mode path)
+//   - RECALL_GENERATE=1        — seed the fixture from real Ollama for
+//     non-quick-mode populations (pop > 5000). Honors VESKA_OLLAMA_URL
+//     and VESKA_EMBED_MODEL. If Ollama is unreachable (/api/tags probe
+//     with a 3s timeout) the test SKIPS rather than failing. In quick
+//     mode (pop <= 5000) GENERATE persists the deterministic fake
+//     vectors so the autolink harness can replay the same fixture.
 //
 // The quick-mode (<= 5000) path uses the FakeEmbedder directly without
 // requiring a fixture or Ollama. Larger populations require a fixture
@@ -98,10 +109,54 @@ func TestRecall(t *testing.T) {
 				t.Logf("WriteFixture(%s): %v (continuing in-memory)", fixturePath, err)
 			}
 		}
+	} else if generate {
+		// Large population + opt-in: seed the fixture from real Ollama.
+		// Skip rather than fail if Ollama is unreachable so a missing
+		// local install doesn't burn the whole eval run.
+		ollamaURL := envStr("VESKA_OLLAMA_URL", defaultOllamaURL)
+		model := envStr("VESKA_EMBED_MODEL", defaultOllamaModel)
+
+		probeCtx, probeCancel := context.WithTimeout(context.Background(), 3*time.Second)
+		defer probeCancel()
+		if err := probeOllama(probeCtx, ollamaURL); err != nil {
+			t.Skipf("recall: Ollama not reachable at %s (%v) — skipping real-Ollama fixture seeding",
+				ollamaURL, err)
+			return
+		}
+
+		provider := ollama.New(model, ollama.WithBaseURL(ollamaURL))
+		genStart := time.Now()
+		progress := func(done, total int) {
+			if done%500 != 0 && done != total {
+				return
+			}
+			elapsed := time.Since(genStart).Seconds()
+			rate := float64(done) / elapsed
+			pct := 100.0 * float64(done) / float64(total)
+			var eta time.Duration
+			if rate > 0 {
+				eta = time.Duration(float64(total-done)/rate) * time.Second
+			}
+			fmt.Printf("fixture-gen: %d/%d (%.1f%%) rate=%.2f emb/s eta=%s\n",
+				done, total, pct, rate, eta)
+		}
+		if err := GenerateOllamaFixture(context.Background(), provider, corpus.Nodes, fixturePath, progress); err != nil {
+			t.Fatalf("GenerateOllamaFixture: %v", err)
+		}
+
+		// Read the just-written file back so the rest of the harness
+		// uses the canonical on-disk vectors.
+		d, vecs, rerr := ReadFixture(fixturePath)
+		if rerr != nil {
+			t.Fatalf("ReadFixture(post-generate): %v", rerr)
+		}
+		embedderName = "ollama:" + model
+		dim = d
+		nodeVecs = vecs
 	} else {
 		// Large population, no fixture, no opt-in: this is the
 		// "deferred to milestone close" path. SKIP, don't fail.
-		t.Skipf("recall: fixture %s not present and pop=%d > quick-mode cap; set RECALL_GENERATE=1 + provide ollama-seeded fixture to run",
+		t.Skipf("recall: fixture %s not present and pop=%d > quick-mode cap; set RECALL_GENERATE=1 to seed via Ollama",
 			fixturePath, pop)
 		return
 	}
@@ -146,7 +201,23 @@ func TestRecall(t *testing.T) {
 	}
 
 	// --- run queries through real search.Service ---------------------------
-	embedder := FakeEmbedder{}
+	// When the corpus vectors come from real Ollama (either fresh
+	// generation or replay of an ollama-seeded fixture) queries must
+	// be embedded by the same provider, otherwise recall numbers are
+	// trash. Quick-mode + fake-seeded fixtures keep the FakeEmbedder.
+	var embedder ports.EmbeddingProvider = FakeEmbedder{}
+	if embedderName == "fixture" || strings.HasPrefix(embedderName, "ollama:") {
+		ollamaURL := envStr("VESKA_OLLAMA_URL", defaultOllamaURL)
+		model := envStr("VESKA_EMBED_MODEL", defaultOllamaModel)
+		probeCtx, probeCancel := context.WithTimeout(context.Background(), 3*time.Second)
+		defer probeCancel()
+		if err := probeOllama(probeCtx, ollamaURL); err != nil {
+			t.Skipf("recall: Ollama not reachable at %s (%v) — cannot embed queries for a fixture-seeded run",
+				ollamaURL, err)
+			return
+		}
+		embedder = ollama.New(model, ollama.WithBaseURL(ollamaURL))
+	}
 	nodeLookup := sqlite.NewNodeLookupRepo(db)
 	svc := search.NewService(embedder, vstore, nodeLookup)
 
@@ -174,7 +245,7 @@ func TestRecall(t *testing.T) {
 	p95 := P95Latency(latencies)
 
 	if mean <= 0 {
-		t.Fatalf("mean_recall is zero — fake embedder did not produce cluster-aligned vectors (pop=%d)", pop)
+		t.Fatalf("mean_recall is zero — embedder %q did not produce cluster-aligned vectors (pop=%d)", embedderName, pop)
 	}
 
 	// --- emit JSON + single-line summary -----------------------------------
@@ -199,6 +270,32 @@ func TestRecall(t *testing.T) {
 
 	fmt.Printf("RECALL pop=%d mean_recall=%.2f p95_latency_ms=%.2f embedder=%s backend=%s\n",
 		pop, mean, res.P95LatencyMs, embedderName, backendName)
+}
+
+func envStr(key, def string) string {
+	if v := os.Getenv(key); v != "" {
+		return v
+	}
+	return def
+}
+
+// probeOllama issues a quick GET /api/tags. Any non-2xx response or
+// transport failure is reported as an error so the caller can t.Skip
+// cleanly — mirrors the embedder gate-1 probe (commit f91b51e).
+func probeOllama(ctx context.Context, baseURL string) error {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, baseURL+"/api/tags", nil)
+	if err != nil {
+		return err
+	}
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode/100 != 2 {
+		return fmt.Errorf("status %d", resp.StatusCode)
+	}
+	return nil
 }
 
 func envInt(key string, def int) int {

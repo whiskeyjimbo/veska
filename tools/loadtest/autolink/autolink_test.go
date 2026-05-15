@@ -28,8 +28,14 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/core/domain"
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/sqlite"
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/vector"
+	"github.com/whiskeyjimbo/veska/tools/loadtest/recall"
 	"github.com/whiskeyjimbo/veska/tools/loadtest/synthcorpus"
 )
+
+// sharedFixtureDir is where the recall harness writes its Ollama-seeded
+// fixture. Autolink replays from the same path so a single 50k
+// generation seeds both gate-2 and gate-3.
+const sharedFixtureDir = "../recall/fixtures"
 
 // TestAutolinkFP is the end-to-end auto-link false-positive harness.
 // It builds a synthetic corpus, generates deterministic vectors via
@@ -66,6 +72,11 @@ func TestAutolinkFP(t *testing.T) {
 	corpus := synthcorpus.GenerateCorpus(clusters, nodesPerCluster)
 	clusterOf := corpus.ClusterOf()
 
+	// Resolve the embedding source: prefer the shared on-disk fixture
+	// (so gate-2 + gate-3 share one real-Ollama generation), fall back
+	// to the deterministic FakeEmbed when no fixture is present.
+	vecOf, embedderName := loadEmbeddings(t, corpus.Nodes, pop, "fake")
+
 	// --- wire SQLite + repos ----------------------------------------------
 	tmpDir := t.TempDir()
 	dbPath := filepath.Join(tmpDir, "veska.db")
@@ -77,7 +88,7 @@ func TestAutolinkFP(t *testing.T) {
 	t.Cleanup(func() { _ = db.Close() })
 
 	seedNodes(t, db, repoID, branch, corpus.Nodes)
-	seedEmbeddings(t, db, corpus.Nodes)
+	seedEmbeddings(t, db, corpus.Nodes, vecOf)
 
 	// --- VectorStorage ----------------------------------------------------
 	vstore, err := vector.NewVectorStorage(vector.BackendSQLiteVec, "")
@@ -87,13 +98,16 @@ func TestAutolinkFP(t *testing.T) {
 	backendName := string(vector.BackendSQLiteVec)
 
 	rows := make([]domain.EmbeddingRow, pop)
+	modelID := "fake-hash-v1"
+	if embedderName != "fake" {
+		modelID = embedderName
+	}
 	for i, n := range corpus.Nodes {
-		vec := synthcorpus.FakeEmbed(n.Text)
 		rows[i] = domain.EmbeddingRow{
 			NodeID:      n.NodeID,
 			ContentHash: contentHashFor(n.NodeID),
-			ModelID:     "fake-hash-v1",
-			Vector:      vec,
+			ModelID:     modelID,
+			Vector:      vecOf(i, n),
 		}
 	}
 	if err := vstore.UpsertEmbeddings(context.Background(), repoID, branch, rows); err != nil {
@@ -142,7 +156,7 @@ func TestAutolinkFP(t *testing.T) {
 		FP:                  fp,
 		TP:                  tp,
 		TotalCandidates:     len(pairs),
-		Embedder:            "fake",
+		Embedder:            embedderName,
 		Backend:             backendName,
 		Timestamp:           time.Now().UTC(),
 	}
@@ -221,8 +235,10 @@ func seedNodes(t *testing.T, db *sql.DB, repoID, branch string, nodes []synthcor
 // seedEmbeddings populates node_embeddings (the content-addressed
 // bytes table) and node_embedding_refs (state='ready') so that
 // EmbeddingRefRepo.ContentHashForNode and LookupExisting return real
-// rows. The Linker calls both for every source node.
-func seedEmbeddings(t *testing.T, db *sql.DB, nodes []synthcorpus.SyntheticNode) {
+// rows. The Linker calls both for every source node. vecOf supplies
+// the vector for node index i — either from a shared on-disk fixture
+// or from FakeEmbed.
+func seedEmbeddings(t *testing.T, db *sql.DB, nodes []synthcorpus.SyntheticNode, vecOf func(int, synthcorpus.SyntheticNode) []float32) {
 	t.Helper()
 	now := time.Now().UnixMilli()
 	tx, err := db.Begin()
@@ -246,9 +262,9 @@ func seedEmbeddings(t *testing.T, db *sql.DB, nodes []synthcorpus.SyntheticNode)
 	}
 	defer refStmt.Close()
 
-	for _, n := range nodes {
+	for i, n := range nodes {
 		hash := contentHashFor(n.NodeID)
-		vec := synthcorpus.FakeEmbed(n.Text)
+		vec := vecOf(i, n)
 		blob := encodeF32LE(vec)
 		if _, err := embedStmt.Exec(hash, "fake-hash-v1", len(vec), blob, now); err != nil {
 			t.Fatalf("insert node_embeddings %s: %v", n.NodeID, err)
@@ -260,6 +276,34 @@ func seedEmbeddings(t *testing.T, db *sql.DB, nodes []synthcorpus.SyntheticNode)
 	if err := tx.Commit(); err != nil {
 		t.Fatalf("commit: %v", err)
 	}
+}
+
+// loadEmbeddings resolves the per-node vector source. If the shared
+// recall-harness fixture for the given population exists, it's replayed
+// (Ollama-seeded vectors flow into both harnesses); otherwise the
+// deterministic FakeEmbed path is used. The returned vecOf is the
+// per-node accessor used at the upsert + seed sites.
+func loadEmbeddings(t *testing.T, nodes []synthcorpus.SyntheticNode, pop int, fallbackName string) (func(int, synthcorpus.SyntheticNode) []float32, string) {
+	t.Helper()
+	fixturePath := recall.FixturePath(sharedFixtureDir, pop)
+	if _, err := os.Stat(fixturePath); err != nil {
+		return func(_ int, n synthcorpus.SyntheticNode) []float32 {
+			return synthcorpus.FakeEmbed(n.Text)
+		}, fallbackName
+	}
+	dim, vecs, err := recall.ReadFixture(fixturePath)
+	if err != nil {
+		t.Fatalf("autolink: ReadFixture(%s): %v", fixturePath, err)
+	}
+	if got := len(vecs) / dim; got != len(nodes) {
+		t.Fatalf("autolink: shared fixture %s holds %d vectors, expected %d", fixturePath, got, len(nodes))
+	}
+	t.Logf("autolink: replaying %d vectors (dim=%d) from shared fixture %s", len(nodes), dim, fixturePath)
+	return func(i int, _ synthcorpus.SyntheticNode) []float32 {
+		out := make([]float32, dim)
+		copy(out, vecs[i*dim:(i+1)*dim])
+		return out
+	}, "fixture"
 }
 
 // encodeF32LE mirrors application/embedder.encodeFloat32LE — duplicated
