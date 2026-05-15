@@ -34,6 +34,17 @@ func GenerateCorpus(clusters, nodesPerCluster int) Corpus {
 	return synthcorpus.GenerateCorpus(clusters, nodesPerCluster)
 }
 
+// GenerateSemanticCorpus delegates to synthcorpus.GenerateSemanticCorpus.
+// The semantic corpus is required for the gate-3 auto-link FP measurement
+// against real embedding models; see synthcorpus/semantic.go. Its cluster
+// count is fixed at synthcorpus.SemanticClusterCount.
+func GenerateSemanticCorpus(nodesPerCluster int) Corpus {
+	return synthcorpus.GenerateSemanticCorpus(nodesPerCluster)
+}
+
+// SemanticClusterCount re-exports synthcorpus.SemanticClusterCount.
+var SemanticClusterCount = synthcorpus.SemanticClusterCount
+
 // --- Fixture I/O -----------------------------------------------------------
 
 // FixtureHeader is the on-disk preamble for a cached embedding fixture.

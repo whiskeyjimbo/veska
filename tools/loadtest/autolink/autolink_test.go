@@ -59,23 +59,38 @@ func TestAutolinkFP(t *testing.T) {
 	threshold := envFloat("AUTOLINK_THRESHOLD", float64(autolink.DefaultThreshold))
 
 	const (
-		clusters = 100
-		repoID   = "autolink-eval"
-		branch   = "main"
+		repoID = "autolink-eval"
+		branch = "main"
 	)
+
+	// VESKA_CORPUS=semantic switches to the per-cluster topic-vocabulary
+	// corpus required for a meaningful FP measurement against real
+	// embeddings; its cluster count is fixed by the hand-authored
+	// vocabulary. The legacy corpus uses 100. The shared fixture path is
+	// suffixed for semantic runs so the two corpora don't collide.
+	semantic := os.Getenv("VESKA_CORPUS") == "semantic"
+	clusters := 100
+	if semantic {
+		clusters = synthcorpus.SemanticClusterCount
+	}
 	nodesPerCluster := pop / clusters
 	if nodesPerCluster < 1 {
 		t.Fatalf("AUTOLINK_POP=%d too small: need at least %d (clusters)", pop, clusters)
 	}
 	pop = clusters * nodesPerCluster
 
-	corpus := synthcorpus.GenerateCorpus(clusters, nodesPerCluster)
+	var corpus synthcorpus.Corpus
+	if semantic {
+		corpus = synthcorpus.GenerateSemanticCorpus(nodesPerCluster)
+	} else {
+		corpus = synthcorpus.GenerateCorpus(clusters, nodesPerCluster)
+	}
 	clusterOf := corpus.ClusterOf()
 
 	// Resolve the embedding source: prefer the shared on-disk fixture
 	// (so gate-2 + gate-3 share one real-Ollama generation), fall back
 	// to the deterministic FakeEmbed when no fixture is present.
-	vecOf, embedderName := loadEmbeddings(t, corpus.Nodes, pop, "fake")
+	vecOf, embedderName := loadEmbeddings(t, corpus.Nodes, pop, "fake", semantic)
 
 	// --- wire SQLite + repos ----------------------------------------------
 	tmpDir := t.TempDir()
@@ -172,8 +187,8 @@ func TestAutolinkFP(t *testing.T) {
 		t.Fatalf("WriteJSON: %v", err)
 	}
 
-	fmt.Printf("AUTOLINK_FP pop=%d fp_rate=%.2f tp=%d fp=%d total=%d\n",
-		pop, fpRate, tp, fp, len(pairs))
+	fmt.Printf("AUTOLINK_FP pop=%d fp_rate=%.5f tp=%d fp=%d total=%d threshold=%.2f backend=%s\n",
+		pop, fpRate, tp, fp, len(pairs), threshold, backendName)
 }
 
 func envInt(key string, def int) int {
@@ -291,9 +306,12 @@ func seedEmbeddings(t *testing.T, db *sql.DB, nodes []synthcorpus.SyntheticNode,
 // (Ollama-seeded vectors flow into both harnesses); otherwise the
 // deterministic FakeEmbed path is used. The returned vecOf is the
 // per-node accessor used at the upsert + seed sites.
-func loadEmbeddings(t *testing.T, nodes []synthcorpus.SyntheticNode, pop int, fallbackName string) (func(int, synthcorpus.SyntheticNode) []float32, string) {
+func loadEmbeddings(t *testing.T, nodes []synthcorpus.SyntheticNode, pop int, fallbackName string, semantic bool) (func(int, synthcorpus.SyntheticNode) []float32, string) {
 	t.Helper()
 	fixturePath := recall.FixturePath(sharedFixtureDir, pop)
+	if semantic {
+		fixturePath = filepath.Join(sharedFixtureDir, fmt.Sprintf("embeddings_semantic_%d.bin", pop))
+	}
 	if _, err := os.Stat(fixturePath); err != nil {
 		return func(_ int, n synthcorpus.SyntheticNode) []float32 {
 			return synthcorpus.FakeEmbed(n.Text)
