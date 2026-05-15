@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"math"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -931,6 +932,61 @@ func TestWorker_SiblingsUnaffectedByFailure(t *testing.T) {
 
 	cancel()
 	w.Wait()
+}
+
+// TestWorker_NormalizesVectorsBeforeStorage asserts the worker L2-normalizes
+// every embedding before it reaches VectorStorage and node_embeddings.
+// Embedding models such as nomic-embed-text return vectors with norm far
+// from 1.0; auto-link's score = 1/(1+L2dist) only yields meaningful
+// thresholds for unit vectors. See solov2-uug.
+func TestWorker_NormalizesVectorsBeforeStorage(t *testing.T) {
+	db := openSchemaDB(t)
+	repo := infsqlite.NewEmbeddingRefsRepo(db, db)
+
+	seedNode(t, db, "n1", "r1", "main", "pkg.A", "function")
+
+	// fakeEmbedder yields a clearly non-unit vector (it perturbs index 0
+	// to the text's last rune, so norm is well above 1).
+	emb := &fakeEmbedder{vector: []float32{3, 4}, modelID: "test-model"}
+	vs := &fakeVectorStore{}
+
+	w := embedder.NewWorker(repo, emb, vs, embedder.WithInterval(5*time.Millisecond))
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	w.Start(ctx)
+
+	ok := waitForCondition(t, 2*time.Second, func() bool {
+		var n int
+		_ = db.QueryRow(`SELECT COUNT(*) FROM node_embedding_refs WHERE state='ready'`).Scan(&n)
+		return n == 1
+	})
+	cancel()
+	w.Wait()
+	if !ok {
+		t.Fatalf("ref never reached ready")
+	}
+
+	var sawRow bool
+	for _, c := range vs.snapshot() {
+		for _, r := range c.rows {
+			sawRow = true
+			norm := vectorNorm(r.Vector)
+			if math.Abs(norm-1.0) > 1e-5 {
+				t.Errorf("upserted vector for %s not unit-norm: norm=%v vec=%v", r.NodeID, norm, r.Vector)
+			}
+		}
+	}
+	if !sawRow {
+		t.Fatal("vector store saw no rows")
+	}
+}
+
+func vectorNorm(v []float32) float64 {
+	var sq float64
+	for _, x := range v {
+		sq += float64(x) * float64(x)
+	}
+	return math.Sqrt(sq)
 }
 
 // Compile-time check our embedder satisfies the port.
