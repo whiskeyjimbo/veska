@@ -8,7 +8,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/whiskeyjimbo/veska/internal/infrastructure/mcp"
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/vector"
 	"github.com/whiskeyjimbo/veska/internal/repo"
 )
@@ -196,9 +195,6 @@ func TestWire_RegistersAdminTools(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = d.Stop() })
 
-	r := mcp.NewRegistry()
-	registerMCPTools(r, d.pools, cfg)
-
 	want := []string{
 		"eng_get_current_repo",
 		"eng_list_repos",
@@ -207,12 +203,42 @@ func TestWire_RegistersAdminTools(t *testing.T) {
 		"eng_get_config",
 	}
 	have := make(map[string]bool)
-	for _, n := range r.Names() {
+	for _, n := range d.mcpRegistry().Names() {
 		have[n] = true
 	}
 	for _, n := range want {
 		if !have[n] {
-			t.Errorf("admin tool %q not registered; have=%v", n, r.Names())
+			t.Errorf("admin tool %q not registered; have=%v", n, d.mcpRegistry().Names())
+		}
+	}
+}
+
+// TestWire_RegistersGraphBlastSearchTools verifies the graph, blast-radius,
+// and semantic-search MCP tool families are wired so they resolve instead of
+// surfacing as MethodNotFound.
+func TestWire_RegistersGraphBlastSearchTools(t *testing.T) {
+	cfg := testConfig(t)
+	d, err := newDaemon(cfg)
+	if err != nil {
+		t.Fatalf("newDaemon: %v", err)
+	}
+	t.Cleanup(func() { _ = d.Stop() })
+
+	have := make(map[string]bool)
+	for _, n := range d.mcpRegistry().Names() {
+		have[n] = true
+	}
+	want := []string{
+		// graph
+		"eng_find_symbol", "eng_get_node", "eng_get_call_chain", "eng_get_file_nodes",
+		// blast
+		"eng_get_blast_radius", "eng_get_dirty_blast_radius", "eng_get_diff_blast_radius",
+		// search
+		"eng_search_semantic", "eng_search_similar",
+	}
+	for _, n := range want {
+		if !have[n] {
+			t.Errorf("tool %q not registered; have=%v", n, d.mcpRegistry().Names())
 		}
 	}
 }

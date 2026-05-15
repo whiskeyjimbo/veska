@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -12,9 +13,11 @@ import (
 
 	"github.com/whiskeyjimbo/veska/internal/application"
 	"github.com/whiskeyjimbo/veska/internal/application/autolink"
+	"github.com/whiskeyjimbo/veska/internal/application/blastradius"
 	"github.com/whiskeyjimbo/veska/internal/application/checks"
 	"github.com/whiskeyjimbo/veska/internal/application/embedder"
 	"github.com/whiskeyjimbo/veska/internal/application/revalidate"
+	"github.com/whiskeyjimbo/veska/internal/application/search"
 	"github.com/whiskeyjimbo/veska/internal/config"
 	"github.com/whiskeyjimbo/veska/internal/core/ports"
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/embedding/ollama"
@@ -130,6 +133,7 @@ type Daemon struct {
 	poller  *queue.Poller
 	watcher *gitwatch.MultiRepoWatcher
 	mcpsrv  *mcp.Server
+	mcpReg  *mcp.Registry
 
 	startOnce sync.Once
 	stopOnce  sync.Once
@@ -259,7 +263,14 @@ func newDaemon(cfg Config) (*Daemon, error) {
 
 	// MCP server. The Registry implements mcp.Handler.
 	registry := mcp.NewRegistry()
-	registerMCPTools(registry, pools, cfg)
+	registerMCPTools(registry, mcpDeps{
+		pools:    pools,
+		cfg:      cfg,
+		staging:  staging,
+		vectors:  vec,
+		provider: provider,
+		refs:     refs,
+	})
 	mcpsrv := mcp.NewServer(cfg.CLISockPath, cfg.MCPSockPath, registry)
 
 	return &Daemon{
@@ -274,8 +285,14 @@ func newDaemon(cfg Config) (*Daemon, error) {
 		poller:   poller,
 		watcher:  watcher,
 		mcpsrv:   mcpsrv,
+		mcpReg:   registry,
 	}, nil
 }
+
+// mcpRegistry exposes the daemon's MCP tool registry. It is used by tests to
+// assert which tool families are wired; production code reaches the registry
+// through the MCP server.
+func (d *Daemon) mcpRegistry() *mcp.Registry { return d.mcpReg }
 
 // checkRunnerAdapter bridges *checks.Runner (which uses checks.Input) to the
 // application.CheckRunner interface (which uses application.CheckRunInput).
@@ -302,11 +319,25 @@ type noopEmbedHandler struct{}
 
 func (noopEmbedHandler) Handle(_ context.Context, _ ports.WorkRow) error { return nil }
 
-// registerMCPTools wires every available tool family into the registry.
-// Tool families that require collaborators we have not built yet (e.g. a
-// ports.GraphStorage implementation) are skipped — a missing tool surfaces
-// as MethodNotFound rather than as a daemon-start failure.
-func registerMCPTools(r *mcp.Registry, pools *sqlite.Pools, cfg Config) {
+// mcpDeps bundles the collaborators registerMCPTools needs beyond the SQLite
+// pools and Config. They are all constructed by newDaemon; passing them as a
+// struct keeps the call site readable as the tool surface grows.
+type mcpDeps struct {
+	pools    *sqlite.Pools
+	cfg      Config
+	staging  *application.StagingArea
+	vectors  ports.VectorStorage
+	provider ports.EmbeddingProvider
+	refs     *sqlite.EmbeddingRefsRepo
+}
+
+// registerMCPTools wires every tool family into the registry: findings,
+// suppressions, tasks, owners, todos, admin, plus the graph / blast-radius /
+// semantic-search families backed by the SQLite GraphRepo and the application
+// blastradius + search services.
+func registerMCPTools(r *mcp.Registry, d mcpDeps) {
+	pools := d.pools
+
 	// Tools that only need *sql.DB + AuditWriter.
 	mcp.RegisterFindingTools(r, pools.WriteHot, nil)
 	mcp.RegisterSuppressionTools(r, pools.WriteHot, nil)
@@ -318,12 +349,45 @@ func registerMCPTools(r *mcp.Registry, pools *sqlite.Pools, cfg Config) {
 	mcp.RegisterAdminTools(r,
 		&repoLister{db: pools.ReadDB},
 		&statusProvider{db: pools.ReadDB},
-		&configProvider{cfg: cfg},
+		&configProvider{cfg: d.cfg},
 	)
-	// NOTE: RegisterGraphTools / RegisterBlastTools / RegisterSearchTools are
-	// intentionally omitted — they require collaborators (GraphStorage,
-	// blastradius.Service, etc.) that have no production adapter yet. See
-	// follow-up beads filed alongside this wiring.
+
+	// Graph tools backed by the SQLite GraphRepo adapter. Writes take the
+	// hot-write pool; reads take the read pool.
+	graph := sqlite.NewGraphRepo(pools.ReadDB, pools.WriteHot)
+	mcp.RegisterGraphTools(r, graph, d.staging)
+
+	// Blast-radius tools. The Service walks edge adjacency + staging; the
+	// repoRoot lookup resolves a repoID to its working tree, and changedFiles
+	// is the git HEAD diff.
+	edges := sqlite.NewEdgeReaderRepo(pools.ReadDB)
+	nodes := sqlite.NewNodeLookupRepo(pools.ReadDB)
+	blastSvc := blastradius.NewService(edges, nodes, d.staging)
+	mcp.RegisterBlastTools(r, blastSvc, repoRootFunc(pools.ReadDB), gitwatch.ChangedFiles)
+
+	// Semantic-search tools. The Service orchestrates embed → vector search →
+	// node hydration with lexical fallback.
+	searchSvc := search.NewService(d.provider, d.vectors, nodes)
+	mcp.RegisterSearchTools(r, searchSvc, d.refs, d.vectors, nodes)
+}
+
+// repoRootFunc returns an mcp.RepoRootFunc that resolves a repoID to its
+// registered working-tree path. An unknown repoID yields an error so the
+// blast-radius handler surfaces a clear "repo not registered" message rather
+// than running against an empty path.
+func repoRootFunc(db *sql.DB) mcp.RepoRootFunc {
+	return func(ctx context.Context, repoID string) (string, error) {
+		records, err := repo.List(ctx, db)
+		if err != nil {
+			return "", fmt.Errorf("repo root lookup: %w", err)
+		}
+		for _, rec := range records {
+			if rec.RepoID == repoID {
+				return rec.RootPath, nil
+			}
+		}
+		return "", fmt.Errorf("repo root lookup: repo %q is not registered", repoID)
+	}
 }
 
 // Start launches all background goroutines. It is safe to call multiple times
