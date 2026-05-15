@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -25,11 +26,49 @@ const (
 )
 
 func newRootCmd() *cobra.Command {
-	return &cobra.Command{
+	root := &cobra.Command{
 		Use:          "veska-daemon",
-		Short:        "Veska long-running daemon (supervises Dolt + Qdrant)",
+		Short:        "Veska long-running daemon (MCP server + ingester + workers)",
 		SilenceUsage: true,
+		RunE:         runStart,
 	}
+	root.AddCommand(newStartCmd())
+	return root
+}
+
+func newStartCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:          "start",
+		Short:        "Start the daemon (default action when no subcommand is given)",
+		SilenceUsage: true,
+		RunE:         runStart,
+	}
+}
+
+// runStart constructs the Daemon from environment-defaulted Config, starts
+// the long-running goroutines, and blocks until SIGINT/SIGTERM.
+func runStart(cmd *cobra.Command, _ []string) error {
+	d, err := newDaemon(Config{})
+	if err != nil {
+		return fmt.Errorf("veska-daemon: compose: %w", err)
+	}
+
+	parent := cmd.Context()
+	if parent == nil {
+		parent = context.Background()
+	}
+	ctx, cancel := signal.NotifyContext(parent, syscall.SIGINT, syscall.SIGTERM)
+	defer cancel()
+
+	if err := d.Start(ctx); err != nil {
+		_ = d.Stop()
+		return fmt.Errorf("veska-daemon: start: %w", err)
+	}
+	slog.Info("veska-daemon: running (Ctrl-C to stop)")
+
+	<-ctx.Done()
+	slog.Info("veska-daemon: shutting down")
+	return d.Stop()
 }
 
 func main() {
