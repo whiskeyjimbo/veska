@@ -50,8 +50,13 @@ func WithBaseURL(u string) Option {
 	}
 }
 
+// ErrMissingDependency is returned by New when the model name is empty. It is
+// errors.Is-matchable so callers can distinguish a wiring fault from a runtime
+// failure.
+var ErrMissingDependency = errors.New("ollama: missing required dependency")
+
 // WithModel overrides the embedding model name (default nomic-embed-text).
-// An empty value is ignored; use New with model="" to panic.
+// An empty value is ignored.
 func WithModel(m string) Option {
 	return func(p *Provider) {
 		if m != "" {
@@ -82,12 +87,12 @@ func WithTimeout(d time.Duration) Option {
 	}
 }
 
-// New constructs a Provider. model must be non-empty; otherwise New panics.
-// Apply WithBaseURL / WithModel / WithHTTPClient / WithTimeout to override
-// defaults.
-func New(model string, opts ...Option) *Provider {
+// New constructs a Provider. model must be non-empty; an empty model yields an
+// error wrapping ErrMissingDependency and a nil *Provider. Apply WithBaseURL /
+// WithModel / WithHTTPClient / WithTimeout to override defaults.
+func New(model string, opts ...Option) (*Provider, error) {
 	if model == "" {
-		panic("ollama: model must not be empty")
+		return nil, fmt.Errorf("ollama.New: model must not be empty: %w", ErrMissingDependency)
 	}
 	p := &Provider{
 		baseURL: defaultBaseURL,
@@ -97,7 +102,7 @@ func New(model string, opts ...Option) *Provider {
 	for _, opt := range opts {
 		opt(p)
 	}
-	return p
+	return p, nil
 }
 
 // ModelID returns the configured embedding model name.

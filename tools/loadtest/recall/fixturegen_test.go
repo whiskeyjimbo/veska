@@ -153,7 +153,7 @@ func TestGenerateOllamaFixture_HTTPStub(t *testing.T) {
 	srv := newOllamaStub(t, dim)
 	t.Cleanup(srv.Close)
 
-	prov := newOllamaProvider(srv.URL)
+	prov := newOllamaProvider(t, srv.URL)
 	corpus := synthcorpus.GenerateCorpus(2, nodeCount/2)
 
 	dst := filepath.Join(t.TempDir(), "embeddings.bin")
