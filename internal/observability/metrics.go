@@ -67,6 +67,14 @@ type Metrics struct {
 	// a single call may emit zero or many candidates depending on input
 	// node count and top-k.
 	AutolinkCandidates *prometheus.CounterVec
+
+	// RevalidateClosed counts findings closed by the revalidation sweep
+	// (application/revalidate) as 'revalidated_obsolete'. One increment per
+	// closed finding (NOT per queue row), so the series tracks real anchor
+	// drift, not how often the sweep fires. Unlabeled: revalidation is a
+	// system-wide signal — repo/branch fanout is observable via the queue
+	// metrics already.
+	RevalidateClosed prometheus.Counter
 }
 
 // NewMetrics constructs a Metrics struct and registers all metrics with reg.
@@ -151,6 +159,13 @@ func NewMetrics(reg prometheus.Registerer) *Metrics {
 		[]string{"repo_id"},
 	)
 
+	revalidateClosed := prometheus.NewCounter(
+		prometheus.CounterOpts{
+			Name: "veska_revalidate_closed_total",
+			Help: "Findings closed by the revalidation sweep as 'revalidated_obsolete'. Incremented per closed finding.",
+		},
+	)
+
 	reg.MustRegister(
 		sealLatency,
 		postCommitHookDuration,
@@ -162,6 +177,7 @@ func NewMetrics(reg prometheus.Registerer) *Metrics {
 		embedQueueDepth,
 		embedDedupHits,
 		autolinkCandidates,
+		revalidateClosed,
 	)
 
 	return &Metrics{
@@ -175,6 +191,7 @@ func NewMetrics(reg prometheus.Registerer) *Metrics {
 		EmbedQueueDepth:        embedQueueDepth,
 		EmbedDedupHits:         embedDedupHits,
 		AutolinkCandidates:     autolinkCandidates,
+		RevalidateClosed:       revalidateClosed,
 	}
 }
 
