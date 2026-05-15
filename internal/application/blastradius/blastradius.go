@@ -211,6 +211,57 @@ func (s *Service) Of(ctx context.Context, repoID, branch string, seedIDs []strin
 	return Response{Entries: entries, Truncated: truncated}, nil
 }
 
+// ChangedFilesFunc returns the list of files changed against HEAD for the
+// given repoRoot. It mirrors the signature of git.ChangedFiles so callers
+// can plug the real adapter in while tests pass a deterministic fake.
+type ChangedFilesFunc func(ctx context.Context, repoRoot string) ([]string, error)
+
+// DiffOf computes the blast radius for the union of all nodes whose source
+// file appears in the working-tree diff for repoRoot. The change set is
+// derived from changedFiles; each file is resolved to its node_ids via
+// NodesInFile on the injected NodeLookup; the union forms the seed set
+// for Of.
+//
+// An empty diff returns an empty Response with IncludedStaging=false:
+// "no changes" is a valid answer, not a degraded path.
+func (s *Service) DiffOf(ctx context.Context, repoID, branch, repoRoot string, changedFiles ChangedFilesFunc, opts Options) (Response, error) {
+	if changedFiles == nil {
+		return Response{}, fmt.Errorf("blastradius.DiffOf: changedFiles is nil")
+	}
+	if repoRoot == "" {
+		return Response{}, fmt.Errorf("blastradius.DiffOf: repoRoot is empty")
+	}
+	files, err := changedFiles(ctx, repoRoot)
+	if err != nil {
+		return Response{}, fmt.Errorf("blastradius: list changed files: %w", err)
+	}
+	if len(files) == 0 {
+		return Response{Entries: []Entry{}}, nil
+	}
+
+	seen := make(map[string]struct{})
+	seeds := make([]string, 0, len(files)*4)
+	for _, fp := range files {
+		ids, err := s.nodes.NodesInFile(ctx, repoID, branch, fp)
+		if err != nil {
+			return Response{}, fmt.Errorf("blastradius: nodes in %s: %w", fp, err)
+		}
+		for _, id := range ids {
+			if _, ok := seen[id]; ok {
+				continue
+			}
+			seen[id] = struct{}{}
+			seeds = append(seeds, id)
+		}
+	}
+	if len(seeds) == 0 {
+		// Files changed but none of them have promoted nodes. That can
+		// happen for new files not yet sealed, or for non-source files.
+		return Response{Entries: []Entry{}}, nil
+	}
+	return s.Of(ctx, repoID, branch, seeds, opts)
+}
+
 // DirtyOf runs the BFS from every node currently in the staging overlay
 // for (repoID, branch). It is the eng_get_dirty_blast_radius engine: the
 // "seed" is the in-flight change set, not a single node_id.
