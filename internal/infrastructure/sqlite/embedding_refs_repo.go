@@ -7,6 +7,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/whiskeyjimbo/veska/internal/core/ports"
@@ -33,15 +34,17 @@ func NewEmbeddingRefsRepo(readDB, writeDB *sql.DB) *EmbeddingRefsRepo {
 // fields needed to embed. Rows are ordered by enqueued_at then node_id for
 // deterministic batch composition.
 //
-// The Text field is a deterministic projection: "<kind> <symbol_path>".
-// m3.02.1 intentionally keeps this trivial; m3.02.4 (dedupe) and future tasks
-// may swap in a richer projection without schema change.
+// The Text field is a deterministic projection:
+// "<kind> <symbol_path> <file_path> <language>" (empty trailing fields are
+// omitted). file_path and language disambiguate otherwise-identical symbols so
+// the content-addressed embedding dedup does not collapse genuinely-distinct
+// nodes; re-promoting the same node in the same file still dedups.
 func (r *EmbeddingRefsRepo) FetchPending(ctx context.Context, limit int) ([]ports.PendingEmbedRef, error) {
 	if limit <= 0 {
 		return nil, nil
 	}
 	rows, err := r.readDB.QueryContext(ctx, `
-		SELECT r.node_id, n.repo_id, n.branch, n.symbol_path, n.kind
+		SELECT r.node_id, n.repo_id, n.branch, n.symbol_path, n.kind, n.file_path, n.language
 		FROM node_embedding_refs r
 		JOIN nodes n ON n.node_id = r.node_id
 		WHERE r.state = 'pending'
@@ -55,16 +58,30 @@ func (r *EmbeddingRefsRepo) FetchPending(ctx context.Context, limit int) ([]port
 	out := make([]ports.PendingEmbedRef, 0, limit)
 	for rows.Next() {
 		var p ports.PendingEmbedRef
-		if err := rows.Scan(&p.NodeID, &p.RepoID, &p.Branch, &p.SymbolPath, &p.Kind); err != nil {
+		if err := rows.Scan(&p.NodeID, &p.RepoID, &p.Branch, &p.SymbolPath, &p.Kind, &p.FilePath, &p.Language); err != nil {
 			return nil, fmt.Errorf("embedding_refs: scan pending: %w", err)
 		}
-		p.Text = p.Kind + " " + p.SymbolPath
+		p.Text = embedText(p.Kind, p.SymbolPath, p.FilePath, p.Language)
 		out = append(out, p)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("embedding_refs: iterate pending: %w", err)
 	}
 	return out, nil
+}
+
+// embedText builds the deterministic Embed-input projection for a node,
+// joining the non-empty parts with a single space. kind and symbolPath are
+// always present; filePath and language may be empty (the nodes columns are
+// NOT NULL but the parser may leave language unset).
+func embedText(kind, symbolPath, filePath, language string) string {
+	parts := make([]string, 0, 4)
+	for _, p := range []string{kind, symbolPath, filePath, language} {
+		if p != "" {
+			parts = append(parts, p)
+		}
+	}
+	return strings.Join(parts, " ")
 }
 
 // CountPending returns the count of state='pending' rows.

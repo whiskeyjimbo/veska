@@ -195,3 +195,60 @@ func TestEmbeddingRefsRepo_CountByState_AllZero(t *testing.T) {
 		}
 	}
 }
+
+// TestEmbeddingRefsRepo_FetchPending_TextProjection verifies the embed-input
+// projection includes file_path and language so distinct nodes do not collapse
+// under the content-addressed embedding dedup (solov2-311).
+func TestEmbeddingRefsRepo_FetchPending_TextProjection(t *testing.T) {
+	t.Parallel()
+	db, repo := openTestDB(t)
+	now := time.Now().UnixMilli()
+
+	if _, err := db.Exec(
+		`INSERT OR IGNORE INTO repos (repo_id, root_path, added_at) VALUES (?,?,?)`,
+		"r1", "/tmp/r1", now); err != nil {
+		t.Fatalf("insert repo: %v", err)
+	}
+	insertNode := func(nodeID, kind, symbol, file, lang string) {
+		if _, err := db.Exec(`INSERT INTO nodes (
+			node_id, branch, repo_id, language, kind, symbol_path, file_path,
+			content_hash, last_promoted_at, actor_id, actor_kind
+		) VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
+			nodeID, "main", "r1", lang, kind, symbol, file,
+			"h", now, "test", "system"); err != nil {
+			t.Fatalf("insert node %s: %v", nodeID, err)
+		}
+		if _, err := db.Exec(
+			`INSERT INTO node_embedding_refs (node_id, state, enqueued_at) VALUES (?, 'pending', ?)`,
+			nodeID, now); err != nil {
+			t.Fatalf("insert ref %s: %v", nodeID, err)
+		}
+	}
+	insertNode("n1", "function", "pkg.Foo", "a/b.go", "go")
+	insertNode("n2", "function", "pkg.Foo", "c/d.ts", "typescript")
+	insertNode("n3", "function", "pkg.Bar", "e.go", "")
+
+	pending, err := repo.FetchPending(context.Background(), 10)
+	if err != nil {
+		t.Fatalf("FetchPending: %v", err)
+	}
+	want := map[string]string{
+		"n1": "function pkg.Foo a/b.go go",
+		"n2": "function pkg.Foo c/d.ts typescript",
+		"n3": "function pkg.Bar e.go", // empty language omitted
+	}
+	got := make(map[string]string, len(pending))
+	for _, p := range pending {
+		got[p.NodeID] = p.Text
+	}
+	for id, w := range want {
+		if got[id] != w {
+			t.Errorf("%s: Text = %q, want %q", id, got[id], w)
+		}
+	}
+	// n1 and n2 share (kind, symbol) but differ in file+language — their
+	// projections must differ so the embedding dedup keeps them distinct.
+	if got["n1"] == got["n2"] {
+		t.Error("n1 and n2 collapsed to the same projection")
+	}
+}
