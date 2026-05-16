@@ -1,0 +1,114 @@
+package mcp
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+
+	"github.com/whiskeyjimbo/veska/internal/core/domain"
+	"github.com/whiskeyjimbo/veska/internal/core/ports"
+)
+
+// ---------------------------------------------------------------------------
+// eng_get_call_chain
+// ---------------------------------------------------------------------------
+
+type getCallChainParams struct {
+	NodeID          string `json:"node_id"`
+	RepoID          string `json:"repo_id"`
+	Branch          string `json:"branch"`
+	Depth           int    `json:"depth"`
+	ExpandCrossRepo bool   `json:"expand_cross_repo"`
+}
+
+const maxCallChainDepth = 10
+
+func makeGetCallChainHandler(graph ports.GraphStorage, resolve ResolveFunc) ToolHandler {
+	return func(ctx context.Context, _ domain.Actor, raw json.RawMessage) (any, *RPCError) {
+		var p getCallChainParams
+		if err := json.Unmarshal(raw, &p); err != nil {
+			return nil, &RPCError{Code: CodeInvalidParams, Message: fmt.Sprintf("invalid params: %v", err)}
+		}
+		if p.NodeID == "" || p.RepoID == "" || p.Branch == "" {
+			return nil, &RPCError{Code: CodeInvalidParams, Message: "node_id, repo_id, and branch are required"}
+		}
+		depth := p.Depth
+		if depth <= 0 {
+			depth = 3 // default
+		}
+		if depth > maxCallChainDepth {
+			return nil, &RPCError{Code: CodeInvalidParams, Message: fmt.Sprintf("depth %d exceeds maximum of %d", depth, maxCallChainDepth)}
+		}
+
+		g, err := graph.LoadGraph(ctx, p.RepoID, p.Branch)
+		if err != nil {
+			return nil, &RPCError{Code: CodeInternalError, Message: fmt.Sprintf("load graph failed: %v", err)}
+		}
+
+		// BFS over CALLS edges starting from node_id.
+		startID := domain.NodeID(p.NodeID)
+		visited := make(map[domain.NodeID]bool)
+		visitedEdges := make(map[string]bool)
+		var resultNodes []*domain.Node
+		var resultEdges []*domain.Edge
+		var crossRepoEdges []CrossRepoEdge
+
+		type bfsItem struct {
+			id   domain.NodeID
+			hops int
+		}
+		queue := []bfsItem{{id: startID, hops: 0}}
+		visited[startID] = true
+
+		for len(queue) > 0 {
+			item := queue[0]
+			queue = queue[1:]
+
+			// Resolve cross-repo stubs for each visited node (including start).
+			if resolve != nil {
+				resolved, resolveErr := resolve(ctx, string(item.id), p.Branch, p.ExpandCrossRepo)
+				if resolveErr == nil {
+					for _, re := range resolved {
+						crossRepoEdges = append(crossRepoEdges, CrossRepoEdge{
+							SrcNodeID: re.SrcNodeID,
+							DstNodeID: re.DstNodeID,
+							DstRepoID: re.DstRepoID,
+							DstBranch: re.DstBranch,
+							Kind:      re.Kind,
+							CrossRepo: true,
+						})
+					}
+				}
+				// Silent miss: resolveErr != nil is ignored; continue BFS.
+			}
+
+			if item.hops >= depth {
+				continue
+			}
+
+			for _, e := range g.OutgoingEdges(item.id) {
+				if e.Kind != domain.EdgeCalls {
+					continue
+				}
+				if !visitedEdges[e.ID] {
+					visitedEdges[e.ID] = true
+					resultEdges = append(resultEdges, e)
+				}
+				if !visited[e.Tgt] {
+					visited[e.Tgt] = true
+					if n, ok := g.Node(e.Tgt); ok {
+						resultNodes = append(resultNodes, n)
+					}
+					queue = append(queue, bfsItem{id: e.Tgt, hops: item.hops + 1})
+				}
+			}
+		}
+
+		return GraphResponse{
+			Nodes:           resultNodes,
+			Edges:           resultEdges,
+			CrossRepoEdges:  crossRepoEdges,
+			IncludedStaging: false,
+		}, nil
+	}
+}
