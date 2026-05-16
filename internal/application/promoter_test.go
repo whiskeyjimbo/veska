@@ -141,7 +141,8 @@ func countQueue(t *testing.T, db *sql.DB) int {
 }
 
 // TestPromote_TwoFiles verifies that promoting 2 staged files produces the
-// correct node rows and queue rows (3 work_kinds × 2 files = 6 queue rows).
+// correct node rows and queue rows (3 work_kinds × 2 files + 1 per-promotion
+// wiki row = 7 queue rows).
 func TestPromote_TwoFiles(t *testing.T) {
 	db := openMemDB(t)
 	insertTestRepo(t, db, "repo1")
@@ -160,8 +161,8 @@ func TestPromote_TwoFiles(t *testing.T) {
 	if got := countNodes(t, db); got != 2 {
 		t.Errorf("nodes: want 2, got %d", got)
 	}
-	if got := countQueue(t, db); got != 6 {
-		t.Errorf("queue rows: want 6 (3 work_kinds × 2 files), got %d", got)
+	if got := countQueue(t, db); got != 7 {
+		t.Errorf("queue rows: want 7 (3 work_kinds × 2 files + 1 wiki), got %d", got)
 	}
 
 	// Staging must be cleared after promotion.
@@ -217,9 +218,9 @@ func TestPromote_Idempotent(t *testing.T) {
 	if got := countNodes(t, db); got != 1 {
 		t.Errorf("nodes after idempotent promote: want 1, got %d", got)
 	}
-	// Queue must have 3 rows per promote call = 6 total.
-	if got := countQueue(t, db); got != 6 {
-		t.Errorf("queue rows after 2 promotes: want 6, got %d", got)
+	// Queue must have (3 work_kinds + 1 wiki) rows per promote call = 8 total.
+	if got := countQueue(t, db); got != 8 {
+		t.Errorf("queue rows after 2 promotes: want 8, got %d", got)
 	}
 }
 
@@ -387,11 +388,11 @@ func TestPromote_AtomicTransaction(t *testing.T) {
 		t.Fatalf("Promote: %v", err)
 	}
 
-	// 5 nodes, 3 work_kinds × 1 file = 3 queue rows.
+	// 5 nodes, 3 work_kinds × 1 file + 1 wiki = 4 queue rows.
 	if got := countNodes(t, db); got != 5 {
 		t.Errorf("nodes: want 5, got %d", got)
 	}
-	if got := countQueue(t, db); got != 3 {
-		t.Errorf("queue rows: want 3 (1 file × 3 work_kinds), got %d", got)
+	if got := countQueue(t, db); got != 4 {
+		t.Errorf("queue rows: want 4 (1 file × 3 work_kinds + 1 wiki), got %d", got)
 	}
 }

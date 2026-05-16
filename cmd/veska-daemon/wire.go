@@ -260,9 +260,45 @@ func newDaemon(cfg Config) (*Daemon, error) {
 	revalRepo := sqlite.NewRevalidateRepo(pools.WriteHot)
 	revalH := revalidate.NewHandler(revalRepo)
 
+	// Wiki regeneration handler. The WorkKindWiki lane regenerates both the
+	// hot_zone and entry_points Markdown pages after every promotion and
+	// stamps the last-render time into daemon_state.
+	wikiEdges := sqlite.NewEdgeReaderRepo(pools.ReadDB)
+	wikiGraph := sqlite.NewGraphRepo(pools.ReadDB, pools.WriteHot)
+	wikiFindings := sqlite.NewFindingQuerierRepo(pools.ReadDB)
+	wikiBlast := blastradius.NewService(wikiEdges, nodeLookup, staging)
+	wikiCounts := func(ctx context.Context, repoRoot string) (map[string]int, error) {
+		return gitwatch.ChangeCounts(ctx, repoRoot, 0)
+	}
+	hotZoneSvc, err := wiki.NewHotZoneService(wikiCounts, nodeLookup.NodesInFile, wikiBlast)
+	if err != nil {
+		_ = pools.Close()
+		return nil, fmt.Errorf("daemon: wiki hot-zone service: %w", err)
+	}
+	epSvc, err := wiki.NewEntryPointsService(
+		wikiGraph.LoadGraph, wikiEdges.InboundEdges, wikiFindings.OpenFindingNodeIDs, wikiBlast,
+	)
+	if err != nil {
+		_ = pools.Close()
+		return nil, fmt.Errorf("daemon: wiki entry-points service: %w", err)
+	}
+	wikiRoot := func(ctx context.Context, repoID string) (string, error) {
+		return repoRootFunc(pools.ReadDB)(ctx, repoID)
+	}
+	wikiH, err := wiki.NewHandler(
+		hotZoneSvc, epSvc,
+		sqlite.NewWikiRenderStateRepo(pools.ReadDB, pools.WriteHot),
+		wikiRoot,
+	)
+	if err != nil {
+		_ = pools.Close()
+		return nil, fmt.Errorf("daemon: wiki handler: %w", err)
+	}
+
 	handlers := map[queue.WorkKind]queue.WorkHandler{
 		ports.WorkKindAutoLink:   autoH,
 		ports.WorkKindRevalidate: revalH,
+		ports.WorkKindWiki:       wikiH,
 		ports.WorkKindEmbed:      noopEmbedHandler{}, // drained by embed worker
 	}
 	poller := queue.New(pools.ReadDB, pools.WriteHot, handlers)
