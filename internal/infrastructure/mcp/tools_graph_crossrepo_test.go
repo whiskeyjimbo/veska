@@ -40,7 +40,7 @@ func TestGetCallChainCrossRepoEdges(t *testing.T) {
 	}
 
 	r := NewRegistry()
-	RegisterGraphTools(r, store, application.NewStagingArea(), mockResolve)
+	RegisterGraphTools(r, store, application.NewStagingArea(), WithResolveFunc(mockResolve))
 
 	resp, rpcErr := dispatchGraph(t, r, "eng_get_call_chain", map[string]any{
 		"node_id": "a",
@@ -87,7 +87,7 @@ func TestGetCallChainNoCrossRepoByDefault(t *testing.T) {
 	store.addEdge(mustEdge(t, "a", "b", domain.EdgeCalls))
 
 	r := NewRegistry()
-	RegisterGraphTools(r, store, application.NewStagingArea(), nil)
+	RegisterGraphTools(r, store, application.NewStagingArea())
 
 	resp, rpcErr := dispatchGraph(t, r, "eng_get_call_chain", map[string]any{
 		"node_id": "a",
@@ -124,7 +124,7 @@ func TestGetCallChainCrossRepoSilentMiss(t *testing.T) {
 	}
 
 	r := NewRegistry()
-	RegisterGraphTools(r, store, application.NewStagingArea(), mockResolve)
+	RegisterGraphTools(r, store, application.NewStagingArea(), WithResolveFunc(mockResolve))
 
 	resp, rpcErr := dispatchGraph(t, r, "eng_get_call_chain", map[string]any{
 		"node_id": "a",
@@ -167,7 +167,7 @@ func TestGetCallChainBFSDoesNotFollowCrossRepoEdges(t *testing.T) {
 	}
 
 	r := NewRegistry()
-	RegisterGraphTools(r, store, application.NewStagingArea(), mockResolve)
+	RegisterGraphTools(r, store, application.NewStagingArea(), WithResolveFunc(mockResolve))
 
 	resp, rpcErr := dispatchGraph(t, r, "eng_get_call_chain", map[string]any{
 		"node_id": "a",
