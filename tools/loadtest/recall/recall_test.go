@@ -61,17 +61,33 @@ func TestRecall(t *testing.T) {
 	generate := os.Getenv("RECALL_GENERATE") == "1"
 
 	const (
-		clusters    = 100
 		k           = 10
 		fixtureRoot = "fixtures"
 	)
+
+	// VESKA_CORPUS=semantic switches to the per-cluster topic-vocabulary
+	// corpus required for a meaningful gate-3 auto-link FP measurement
+	// against real embedding models. Its cluster count is fixed by the
+	// hand-authored vocabulary (SemanticClusterCount); the legacy corpus
+	// uses 100. The fixture path is suffixed for semantic runs so the two
+	// corpora don't collide on disk.
+	semantic := os.Getenv("VESKA_CORPUS") == "semantic"
+	clusters := 100
+	if semantic {
+		clusters = SemanticClusterCount
+	}
 	nodesPerCluster := pop / clusters
 	if nodesPerCluster < 1 {
 		t.Fatalf("RECALL_POP=%d too small: need at least %d (clusters)", pop, clusters)
 	}
 	pop = clusters * nodesPerCluster // round to exact multiple
 
-	corpus := GenerateCorpus(clusters, nodesPerCluster)
+	var corpus Corpus
+	if semantic {
+		corpus = GenerateSemanticCorpus(nodesPerCluster)
+	} else {
+		corpus = GenerateCorpus(clusters, nodesPerCluster)
+	}
 
 	// --- choose embedder + obtain vectors ----------------------------------
 	embedderName := "fake"
@@ -80,6 +96,9 @@ func TestRecall(t *testing.T) {
 	dim := FakeEmbeddingDim
 
 	fixturePath := FixturePath(fixtureRoot, pop)
+	if semantic {
+		fixturePath = filepath.Join(fixtureRoot, fmt.Sprintf("embeddings_semantic_%d.bin", pop))
+	}
 	if _, err := os.Stat(fixturePath); err == nil {
 		// Replay cached fixture (could be either fake-seeded or
 		// ollama-seeded — we don't distinguish on disk; the embedder
