@@ -307,7 +307,7 @@ func TestWorker_PerRowEmbedErrorKeepsSiblingsSucceeding(t *testing.T) {
 	emb := &fakeEmbedder{
 		vector:  []float32{1, 2, 3},
 		modelID: "m",
-		errOn:   map[string]error{"function pkg.B": errors.New("boom")},
+		errOn:   map[string]error{"function pkg.B f.go go": errors.New("boom")},
 	}
 	vs := &fakeVectorStore{}
 
@@ -836,7 +836,7 @@ func TestWorker_RetryBumpsAttempts(t *testing.T) {
 	seedNode(t, db, "n1", "r1", "main", "pkg.F", "function")
 
 	emb := &alwaysErrEmbedder{
-		failOn:  "function pkg.F",
+		failOn:  "function pkg.F f.go go",
 		vector:  []float32{1, 2, 3},
 		modelID: "m",
 		err:     errors.New("boom"),
@@ -881,7 +881,7 @@ func TestWorker_RetryExhaustionFlipsToFailed(t *testing.T) {
 	seedNode(t, db, "doomed", "r1", "main", "pkg.D", "function")
 
 	emb := &alwaysErrEmbedder{
-		failOn:  "function pkg.D",
+		failOn:  "function pkg.D f.go go",
 		vector:  []float32{1},
 		modelID: "m",
 		err:     errors.New("permanent"),
@@ -943,7 +943,7 @@ func TestWorker_SiblingsUnaffectedByFailure(t *testing.T) {
 	seedNode(t, db, "ok2", "r1", "main", "pkg.C", "function")
 
 	emb := &alwaysErrEmbedder{
-		failOn:  "function pkg.B",
+		failOn:  "function pkg.B f.go go",
 		vector:  []float32{0.1, 0.2, 0.3},
 		modelID: "m",
 		err:     errors.New("transient"),

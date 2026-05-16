@@ -14,9 +14,15 @@ type PendingEmbedRef struct {
 	Branch     string
 	SymbolPath string
 	Kind       string
-	// Text is the deterministic projection used as Embed input.
-	// m3.02.1 uses "<kind> <symbol_path>"; this is documented in the commit
-	// message and may be refined later without changing the schema.
+	FilePath   string
+	Language   string
+	// Text is the deterministic projection used as Embed input. It is
+	// "<kind> <symbol_path> <file_path> <language>" (empty trailing fields
+	// omitted). file_path and language are included so two otherwise-identical
+	// symbols in different files or languages do not collapse to one
+	// content-addressed embedding row; re-promoting the SAME node in the SAME
+	// file still dedups. Richer semantic projection (signature/snippet) is
+	// tracked separately and gated on a recall measurement.
 	Text string
 }
 
