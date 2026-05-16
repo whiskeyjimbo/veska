@@ -335,6 +335,14 @@ func (w *Worker) tick(ctx context.Context) {
 		if len(vec) == 0 {
 			continue
 		}
+		// L2-normalize before any persistence. Embedding models such as
+		// nomic-embed-text return vectors with norm far from 1.0; the
+		// VectorStorage score (1/(1+L2dist)) and the auto-link threshold
+		// only behave as documented for unit vectors. Normalizing here —
+		// the single point where a fresh vector enters the system —
+		// covers node_embeddings, the in-flight cache, and the
+		// VectorStorage upsert in one place.
+		l2Normalize(vec)
 
 		blob := encodeFloat32LE(vec)
 		if err := w.refs.MarkReady(ctx, ref.NodeID, contentHash, modelID, len(vec), blob, now); err != nil {
@@ -376,6 +384,24 @@ func hashEmbedText(modelID, embedText string) string {
 	_, _ = h.Write([]byte{0})
 	_, _ = h.Write([]byte(embedText))
 	return hex.EncodeToString(h.Sum(nil))
+}
+
+// l2Normalize scales vec in place to unit L2 norm. A zero vector is left
+// unchanged. Keeping every stored embedding unit-length is what makes the
+// VectorStorage score 1/(1+L2dist) — and thus the auto-link threshold —
+// behave as documented regardless of the embedding model's native scale.
+func l2Normalize(vec []float32) {
+	var sq float64
+	for _, f := range vec {
+		sq += float64(f) * float64(f)
+	}
+	if sq == 0 {
+		return
+	}
+	inv := float32(1.0 / math.Sqrt(sq))
+	for i := range vec {
+		vec[i] *= inv
+	}
 }
 
 // encodeFloat32LE returns the little-endian byte representation of vec.
