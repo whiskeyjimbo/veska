@@ -206,8 +206,15 @@ func newDaemon(cfg Config) (*Daemon, error) {
 	findings := sqlite.NewFindingRepo(pools.WriteHot)
 	ingester.SetFindingStorage(findings)
 
-	// Promoter + structural check pipeline.
-	promoter := application.NewPromoter(staging, pools.WriteHot)
+	// Promoter + structural check pipeline. The PromotionStore owns the atomic
+	// promotion transaction; co-transactional sinks (FTS, embedding-refs) are
+	// registered here at start-up — a future sink is one more arg.
+	promotionStore := sqlite.NewPromotionStore(
+		pools.WriteHot,
+		sqlite.NewFTSSink(),
+		sqlite.NewEmbedRefSink(),
+	)
+	promoter := application.NewPromoter(staging, promotionStore)
 	checkReg := checks.NewRegistry()
 	deadcodeRepo := sqlite.NewDeadCodeRepo(pools.ReadDB)
 	contractRepo := sqlite.NewContractDriftRepo(pools.ReadDB)

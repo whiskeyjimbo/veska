@@ -1,4 +1,4 @@
-package application
+package application_test
 
 import (
 	"context"
@@ -10,8 +10,17 @@ import (
 
 	_ "modernc.org/sqlite"
 
+	"github.com/whiskeyjimbo/veska/internal/application"
 	"github.com/whiskeyjimbo/veska/internal/core/domain"
+	"github.com/whiskeyjimbo/veska/internal/infrastructure/sqlite"
 )
+
+// newTestPromoter wires a Promoter to a real sqlite.PromotionStore over the
+// given test DB, with the production FTS + embedding-ref sinks registered.
+func newTestPromoter(sa *application.StagingArea, db *sql.DB) *application.Promoter {
+	store := sqlite.NewPromotionStore(db, sqlite.NewFTSSink(), sqlite.NewEmbedRefSink())
+	return application.NewPromoter(sa, store)
+}
 
 // openMemDB opens an in-memory SQLite DB with foreign keys enabled and creates
 // the minimal schema required by Promoter.
@@ -137,13 +146,13 @@ func TestPromote_TwoFiles(t *testing.T) {
 	db := openMemDB(t)
 	insertTestRepo(t, db, "repo1")
 
-	sa := NewStagingArea()
+	sa := application.NewStagingArea()
 	n1, _ := domain.NewNode("n1", "a.go", "A", domain.KindFunction)
 	n2, _ := domain.NewNode("n2", "b.go", "B", domain.KindFunction)
 	sa.StageFile("repo1", "main", "a.go", []*domain.Node{n1}, nil)
 	sa.StageFile("repo1", "main", "b.go", []*domain.Node{n2}, nil)
 
-	p := NewPromoter(sa, db)
+	p := newTestPromoter(sa, db)
 	if err := p.Promote(context.Background(), "repo1", "main", "sha-abc", domain.Actor{ID: "service:veska", Kind: domain.ActorKindSystem}); err != nil {
 		t.Fatalf("Promote: %v", err)
 	}
@@ -167,8 +176,8 @@ func TestPromote_ZeroFiles(t *testing.T) {
 	db := openMemDB(t)
 	insertTestRepo(t, db, "repo1")
 
-	sa := NewStagingArea()
-	p := NewPromoter(sa, db)
+	sa := application.NewStagingArea()
+	p := newTestPromoter(sa, db)
 	if err := p.Promote(context.Background(), "repo1", "main", "sha-abc", domain.Actor{ID: "service:veska", Kind: domain.ActorKindSystem}); err != nil {
 		t.Fatalf("Promote with empty staging: %v", err)
 	}
@@ -187,12 +196,12 @@ func TestPromote_Idempotent(t *testing.T) {
 	db := openMemDB(t)
 	insertTestRepo(t, db, "repo1")
 
-	sa := NewStagingArea()
+	sa := application.NewStagingArea()
 
 	// First promote.
 	n1, _ := domain.NewNode("n1", "a.go", "A", domain.KindFunction)
 	sa.StageFile("repo1", "main", "a.go", []*domain.Node{n1}, nil)
-	p := NewPromoter(sa, db)
+	p := newTestPromoter(sa, db)
 	if err := p.Promote(context.Background(), "repo1", "main", "sha-001", domain.Actor{ID: "service:veska", Kind: domain.ActorKindSystem}); err != nil {
 		t.Fatalf("first Promote: %v", err)
 	}
@@ -214,25 +223,25 @@ func TestPromote_Idempotent(t *testing.T) {
 	}
 }
 
-// TestPromoteUnregisteredRepo verifies that Promote returns ErrUnregisteredRepo
+// TestPromoteUnregisteredRepo verifies that Promote returns application.ErrUnregisteredRepo
 // when the repoID is not present in the repos table.
 func TestPromoteUnregisteredRepo(t *testing.T) {
 	db := openMemDB(t)
 	// Intentionally do NOT insert a repos row.
 
-	sa := NewStagingArea()
-	p := NewPromoter(sa, db)
+	sa := application.NewStagingArea()
+	p := newTestPromoter(sa, db)
 
 	err := p.Promote(context.Background(), "unknown-repo", "main", "sha-abc", domain.Actor{ID: "service:veska", Kind: domain.ActorKindSystem})
 	if err == nil {
-		t.Fatal("expected ErrUnregisteredRepo, got nil")
+		t.Fatal("expected application.ErrUnregisteredRepo, got nil")
 	}
-	var unreg ErrUnregisteredRepo
+	var unreg application.ErrUnregisteredRepo
 	if !errors.As(err, &unreg) {
-		t.Fatalf("expected ErrUnregisteredRepo, got %T: %v", err, err)
+		t.Fatalf("expected application.ErrUnregisteredRepo, got %T: %v", err, err)
 	}
 	if unreg.RepoID != "unknown-repo" {
-		t.Errorf("ErrUnregisteredRepo.RepoID: want %q, got %q", "unknown-repo", unreg.RepoID)
+		t.Errorf("application.ErrUnregisteredRepo.RepoID: want %q, got %q", "unknown-repo", unreg.RepoID)
 	}
 	if !strings.Contains(err.Error(), "veska repo add") {
 		t.Errorf("error message should contain 'veska repo add', got: %q", err.Error())
@@ -248,10 +257,10 @@ func TestPromoteRegisteredRepo(t *testing.T) {
 	db := openMemDB(t)
 	insertTestRepo(t, db, "known-repo")
 
-	sa := NewStagingArea()
-	p := NewPromoter(sa, db)
+	sa := application.NewStagingArea()
+	p := newTestPromoter(sa, db)
 
-	// Empty staging — should return nil (not ErrUnregisteredRepo).
+	// Empty staging — should return nil (not application.ErrUnregisteredRepo).
 	if err := p.Promote(context.Background(), "known-repo", "main", "sha-abc", domain.Actor{ID: "service:veska", Kind: domain.ActorKindSystem}); err != nil {
 		t.Fatalf("expected no error for registered repo, got: %v", err)
 	}
@@ -264,13 +273,13 @@ func TestPromote_WritesFTS(t *testing.T) {
 	db := openMemDB(t)
 	insertTestRepo(t, db, "repo-fts")
 
-	sa := NewStagingArea()
+	sa := application.NewStagingArea()
 	// Mirror the DoD example: kind=function, symbol path (n.Name) =
 	// "pkg/api/closeFinding". n.Path (file_path) is irrelevant here.
 	n, _ := domain.NewNode("n1", "src/api.go", "pkg/api/closeFinding", domain.KindFunction)
 	sa.StageFile("repo-fts", "main", "src/api.go", []*domain.Node{n}, nil)
 
-	p := NewPromoter(sa, db)
+	p := newTestPromoter(sa, db)
 	if err := p.Promote(context.Background(), "repo-fts", "main", "sha", domain.Actor{ID: "service:veska", Kind: domain.ActorKindSystem}); err != nil {
 		t.Fatalf("Promote: %v", err)
 	}
@@ -320,12 +329,12 @@ func TestPromote_FTS_RemovesStaleRowsOnReParse(t *testing.T) {
 	db := openMemDB(t)
 	insertTestRepo(t, db, "repo-fts")
 
-	sa := NewStagingArea()
+	sa := application.NewStagingArea()
 	a, _ := domain.NewNode("a", "f.go", "closeFinding", domain.KindFunction)
 	b, _ := domain.NewNode("b", "f.go", "openFinding", domain.KindFunction)
 	sa.StageFile("repo-fts", "main", "f.go", []*domain.Node{a, b}, nil)
 
-	p := NewPromoter(sa, db)
+	p := newTestPromoter(sa, db)
 	if err := p.Promote(context.Background(), "repo-fts", "main", "sha-1", domain.Actor{ID: "service:veska", Kind: domain.ActorKindSystem}); err != nil {
 		t.Fatalf("Promote 1: %v", err)
 	}
@@ -359,7 +368,7 @@ func TestPromote_AtomicTransaction(t *testing.T) {
 	db := openMemDB(t)
 	insertTestRepo(t, db, "repo1")
 
-	sa := NewStagingArea()
+	sa := application.NewStagingArea()
 	// Stage several nodes across one file to verify batch atomicity.
 	nodes := make([]*domain.Node, 0, 5)
 	for i := range 5 {
@@ -373,7 +382,7 @@ func TestPromote_AtomicTransaction(t *testing.T) {
 	}
 	sa.StageFile("repo1", "main", "multi.go", nodes, nil)
 
-	p := NewPromoter(sa, db)
+	p := newTestPromoter(sa, db)
 	if err := p.Promote(context.Background(), "repo1", "main", "sha-tx", domain.Actor{ID: "service:veska", Kind: domain.ActorKindSystem}); err != nil {
 		t.Fatalf("Promote: %v", err)
 	}
