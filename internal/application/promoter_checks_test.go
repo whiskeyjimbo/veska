@@ -1,10 +1,11 @@
-package application
+package application_test
 
 import (
 	"context"
 	"sync/atomic"
 	"testing"
 
+	"github.com/whiskeyjimbo/veska/internal/application"
 	"github.com/whiskeyjimbo/veska/internal/core/domain"
 )
 
@@ -16,7 +17,7 @@ type fakeCheckRunner struct {
 	lastN    int
 }
 
-func (f *fakeCheckRunner) Run(_ context.Context, in CheckRunInput) {
+func (f *fakeCheckRunner) Run(_ context.Context, in application.CheckRunInput) {
 	f.calls.Add(1)
 	f.lastRepo = in.RepoID
 	f.lastSHA = in.GitSHA
@@ -29,11 +30,11 @@ func TestPromote_InvokesCheckRunnerPostCommit(t *testing.T) {
 	db := openMemDB(t)
 	insertTestRepo(t, db, "repo1")
 
-	sa := NewStagingArea()
+	sa := application.NewStagingArea()
 	n, _ := domain.NewNode("n1", "a.go", "A", domain.KindFunction)
 	sa.StageFile("repo1", "main", "a.go", []*domain.Node{n}, nil)
 
-	p := NewPromoter(sa, db)
+	p := newTestPromoter(sa, db)
 	fr := &fakeCheckRunner{}
 	p.SetCheckRunner(fr)
 
@@ -67,11 +68,11 @@ func TestPromote_NoCheckRunner(t *testing.T) {
 	db := openMemDB(t)
 	insertTestRepo(t, db, "repo1")
 
-	sa := NewStagingArea()
+	sa := application.NewStagingArea()
 	n, _ := domain.NewNode("n1", "a.go", "A", domain.KindFunction)
 	sa.StageFile("repo1", "main", "a.go", []*domain.Node{n}, nil)
 
-	p := NewPromoter(sa, db)
+	p := newTestPromoter(sa, db)
 	// Intentionally do not call SetCheckRunner.
 
 	if err := p.Promote(context.Background(), "repo1", "main", "sha-xyz",
@@ -90,7 +91,7 @@ func TestPromote_CheckRunnerSkippedWhenNothingStaged(t *testing.T) {
 	db := openMemDB(t)
 	insertTestRepo(t, db, "repo1")
 
-	p := NewPromoter(NewStagingArea(), db)
+	p := newTestPromoter(application.NewStagingArea(), db)
 	fr := &fakeCheckRunner{}
 	p.SetCheckRunner(fr)
 

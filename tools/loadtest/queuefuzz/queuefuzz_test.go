@@ -88,7 +88,8 @@ func TestQueueFuzz(t *testing.T) {
 	})
 
 	staging := application.NewStagingArea()
-	promoter := application.NewPromoter(staging, pools.WriteHot)
+	promotionStore := sqlite.NewPromotionStore(pools.WriteHot, sqlite.NewFTSSink(), sqlite.NewEmbedRefSink())
+	promoter := application.NewPromoter(staging, promotionStore)
 	actor := domain.Actor{ID: "service:queuefuzz", Kind: domain.ActorKindSystem}
 
 	start := time.Now()

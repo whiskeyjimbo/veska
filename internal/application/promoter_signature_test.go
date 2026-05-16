@@ -1,10 +1,11 @@
-package application
+package application_test
 
 import (
 	"context"
 	"database/sql"
 	"testing"
 
+	"github.com/whiskeyjimbo/veska/internal/application"
 	"github.com/whiskeyjimbo/veska/internal/core/domain"
 )
 
@@ -16,12 +17,12 @@ func TestPromote_WritesSignatureAndNilPrevOnFirstPromotion(t *testing.T) {
 	db := openMemDB(t)
 	insertTestRepo(t, db, "repo1")
 
-	sa := NewStagingArea()
+	sa := application.NewStagingArea()
 	n, _ := domain.NewNode("n1", "a.go", "Foo", domain.KindFunction,
 		domain.WithSignature("func Foo() error"))
 	sa.StageFile("repo1", "main", "a.go", []*domain.Node{n}, nil)
 
-	p := NewPromoter(sa, db)
+	p := newTestPromoter(sa, db)
 	if err := p.Promote(context.Background(), "repo1", "main", "sha-1",
 		domain.Actor{ID: "service:veska", Kind: domain.ActorKindSystem}); err != nil {
 		t.Fatalf("Promote: %v", err)
@@ -49,8 +50,8 @@ func TestPromote_ThreadsPrevSignatureAcrossPromotions(t *testing.T) {
 	db := openMemDB(t)
 	insertTestRepo(t, db, "repo1")
 
-	sa := NewStagingArea()
-	p := NewPromoter(sa, db)
+	sa := application.NewStagingArea()
+	p := newTestPromoter(sa, db)
 
 	// Promotion #1: signature = "func Foo() error".
 	n1, _ := domain.NewNode("n1", "a.go", "Foo", domain.KindFunction,
@@ -112,11 +113,11 @@ func TestPromote_NilSignatureWritesNullColumn(t *testing.T) {
 	db := openMemDB(t)
 	insertTestRepo(t, db, "repo1")
 
-	sa := NewStagingArea()
+	sa := application.NewStagingArea()
 	n, _ := domain.NewNode("n-nosig", "a.go", "Foo", domain.KindField)
 	sa.StageFile("repo1", "main", "a.go", []*domain.Node{n}, nil)
 
-	p := NewPromoter(sa, db)
+	p := newTestPromoter(sa, db)
 	if err := p.Promote(context.Background(), "repo1", "main", "sha",
 		domain.Actor{ID: "service:veska", Kind: domain.ActorKindSystem}); err != nil {
 		t.Fatalf("Promote: %v", err)

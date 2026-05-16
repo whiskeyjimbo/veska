@@ -1,10 +1,11 @@
-package application
+package application_test
 
 import (
 	"context"
 	"database/sql"
 	"testing"
 
+	"github.com/whiskeyjimbo/veska/internal/application"
 	"github.com/whiskeyjimbo/veska/internal/core/domain"
 )
 
@@ -15,13 +16,13 @@ func TestPromote_EnqueuesPendingEmbedRefs(t *testing.T) {
 	db := openMemDB(t)
 	insertTestRepo(t, db, "repo1")
 
-	sa := NewStagingArea()
+	sa := application.NewStagingArea()
 	n1, _ := domain.NewNode("n1", "a.go", "A", domain.KindFunction)
 	n2, _ := domain.NewNode("n2", "b.go", "B", domain.KindFunction)
 	sa.StageFile("repo1", "main", "a.go", []*domain.Node{n1}, nil)
 	sa.StageFile("repo1", "main", "b.go", []*domain.Node{n2}, nil)
 
-	p := NewPromoter(sa, db)
+	p := newTestPromoter(sa, db)
 	if err := p.Promote(context.Background(), "repo1", "main", "sha",
 		domain.Actor{ID: "service:veska", Kind: domain.ActorKindSystem}); err != nil {
 		t.Fatalf("Promote: %v", err)
@@ -73,11 +74,11 @@ func TestPromote_RepromoteResetsEmbedRef(t *testing.T) {
 	db := openMemDB(t)
 	insertTestRepo(t, db, "repo1")
 
-	sa := NewStagingArea()
+	sa := application.NewStagingArea()
 	n1, _ := domain.NewNode("n1", "a.go", "A", domain.KindFunction)
 	sa.StageFile("repo1", "main", "a.go", []*domain.Node{n1}, nil)
 
-	p := NewPromoter(sa, db)
+	p := newTestPromoter(sa, db)
 	if err := p.Promote(context.Background(), "repo1", "main", "sha-1",
 		domain.Actor{ID: "service:veska", Kind: domain.ActorKindSystem}); err != nil {
 		t.Fatalf("Promote 1: %v", err)
