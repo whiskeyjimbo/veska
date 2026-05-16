@@ -3,6 +3,7 @@ package domain
 import (
 	"errors"
 	"fmt"
+	"sort"
 )
 
 // Graph is a domain read projection — an in-memory bundle of Nodes and Edges
@@ -63,6 +64,19 @@ func (g *Graph) AddEdge(e *Edge) error {
 	g.outgoing[e.Src] = append(g.outgoing[e.Src], e)
 	g.incoming[e.Tgt] = append(g.incoming[e.Tgt], e)
 	return nil
+}
+
+// Nodes returns every Node in the projection, ordered by ascending NodeID.
+// The deterministic order lets read-time consumers (e.g. the wiki
+// entry_points ranking) enumerate candidates without map-iteration order
+// leaking into their output.
+func (g *Graph) Nodes() []*Node {
+	out := make([]*Node, 0, len(g.nodes))
+	for _, n := range g.nodes {
+		out = append(out, n)
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].ID < out[j].ID })
+	return out
 }
 
 // Node returns the Node for the given ID, or (nil, false) if not present.
