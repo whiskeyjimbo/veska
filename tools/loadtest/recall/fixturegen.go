@@ -7,6 +7,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"math"
 	"os"
 	"path/filepath"
 
@@ -73,6 +74,12 @@ func GenerateOllamaFixture(
 			return fmt.Errorf("recall: GenerateOllamaFixture: dim drift at node %d: got %d want %d",
 				i, len(vec), dim)
 		}
+		// L2-normalize before storing. Embedding models such as
+		// nomic-embed-text return vectors with norm far from 1.0 (~19);
+		// the auto-link score = 1/(1+L2dist) only lands in its documented
+		// [0,1] threshold range for unit vectors. Production must do the
+		// same in the embedder pipeline — see solov2-uug.
+		l2NormalizeInPlace(vec)
 		vectors = append(vectors, vec...)
 		if progress != nil {
 			progress(i+1, len(nodes))
@@ -80,6 +87,22 @@ func GenerateOllamaFixture(
 	}
 
 	return writeFixtureAtomic(dst, dim, vectors)
+}
+
+// l2NormalizeInPlace scales v to unit L2 norm. A zero vector is left
+// unchanged (no division by zero).
+func l2NormalizeInPlace(v []float32) {
+	var sq float64
+	for _, x := range v {
+		sq += float64(x) * float64(x)
+	}
+	if sq == 0 {
+		return
+	}
+	inv := float32(1.0 / math.Sqrt(sq))
+	for i := range v {
+		v[i] *= inv
+	}
 }
 
 // writeFixtureAtomic writes to <dst>.tmp-<pid> then renames into place.
