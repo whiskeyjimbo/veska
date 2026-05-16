@@ -116,8 +116,8 @@ func TestCandidates_HappyPath_ThresholdAndSelfFilter(t *testing.T) {
 		queue: [][]domain.Hit{{
 			{NodeID: "A", Score: 1.0}, // self
 			{NodeID: "B", Score: 0.95},
-			{NodeID: "C", Score: 0.80}, // below default 0.85
-			{NodeID: "D", Score: 0.70},
+			{NodeID: "C", Score: 0.55}, // below default 0.60
+			{NodeID: "D", Score: 0.50}, // below default 0.60
 		}},
 	}
 	reg := prometheus.NewRegistry()
@@ -358,12 +358,12 @@ func TestCandidates_Integration_RealRepo(t *testing.T) {
 		t.Fatalf("ref B: %v", err)
 	}
 
-	// Fake vector store returning [self, B(0.95), C(0.70)].
+	// Fake vector store returning [self, B(0.95), C(0.55) below default].
 	vs := &fakeVectors{
 		queue: [][]domain.Hit{{
 			{NodeID: "A", Score: 1.0},
 			{NodeID: "B", Score: 0.95},
-			{NodeID: "C", Score: 0.70},
+			{NodeID: "C", Score: 0.55},
 		}},
 	}
 	l := autolink.NewLinker(repo, vs)
