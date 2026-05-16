@@ -59,27 +59,27 @@ type Handler struct {
 // breaking constructor change.
 type HandlerOption func(*Handler)
 
-// NewHandler constructs a Handler. All four collaborators are required;
-// nil arguments are programmer errors and reported by panicking at
-// construction time, mirroring the NewLinker contract in this package.
+// NewHandler constructs a Handler. All four collaborators are required; a nil
+// argument yields an error wrapping ErrMissingDependency and a nil *Handler,
+// mirroring the NewLinker contract in this package.
 func NewHandler(
 	linker candidateProducer,
 	lookup fileNodeLookup,
 	edges ports.EdgeStorage,
 	findings ports.FindingStorage,
 	opts ...HandlerOption,
-) *Handler {
+) (*Handler, error) {
 	if linker == nil {
-		panic("autolink.NewHandler: linker is nil")
+		return nil, fmt.Errorf("autolink.NewHandler: linker is nil: %w", ErrMissingDependency)
 	}
 	if lookup == nil {
-		panic("autolink.NewHandler: lookup is nil")
+		return nil, fmt.Errorf("autolink.NewHandler: lookup is nil: %w", ErrMissingDependency)
 	}
 	if edges == nil {
-		panic("autolink.NewHandler: edges is nil")
+		return nil, fmt.Errorf("autolink.NewHandler: edges is nil: %w", ErrMissingDependency)
 	}
 	if findings == nil {
-		panic("autolink.NewHandler: findings is nil")
+		return nil, fmt.Errorf("autolink.NewHandler: findings is nil: %w", ErrMissingDependency)
 	}
 	h := &Handler{
 		linker:   linker,
@@ -90,7 +90,7 @@ func NewHandler(
 	for _, o := range opts {
 		o(h)
 	}
-	return h
+	return h, nil
 }
 
 // Rule is the finding rule emitted by the auto-link handler. Exposed so

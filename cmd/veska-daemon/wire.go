@@ -212,12 +212,20 @@ func newDaemon(cfg Config) (*Daemon, error) {
 	promoter.SetCheckRunner(checkRunnerAdapter{inner: runner})
 
 	// Embedding provider + embedder worker.
-	provider := ollama.New(cfg.EmbedModel, ollama.WithBaseURL(cfg.OllamaURL))
+	provider, err := ollama.New(cfg.EmbedModel, ollama.WithBaseURL(cfg.OllamaURL))
+	if err != nil {
+		_ = pools.Close()
+		return nil, fmt.Errorf("daemon: embedding provider: %w", err)
+	}
 	refs := sqlite.NewEmbeddingRefsRepo(pools.ReadDB, pools.WriteEmbed)
-	embedWorker := embedder.NewWorker(refs, provider, vec,
+	embedWorker, err := embedder.NewWorker(refs, provider, vec,
 		embedder.WithRatePerSec(embedder.DefaultRatePerSec),
 		embedder.WithMaxAttempts(embedder.DefaultMaxAttempts),
 	)
+	if err != nil {
+		_ = pools.Close()
+		return nil, fmt.Errorf("daemon: embedder worker: %w", err)
+	}
 
 	// Queue handlers (autolink + revalidate). The embedder is driven by its
 	// own poll loop today (embedder.Worker), but we still register an embed
@@ -225,8 +233,16 @@ func newDaemon(cfg Config) (*Daemon, error) {
 	// pending if other code paths enqueue them.
 	nodeLookup := sqlite.NewNodeLookupRepo(pools.ReadDB)
 	edgeRepo := sqlite.NewEdgeRepo(pools.WriteHot)
-	linker := autolink.NewLinker(refs, vec)
-	autoH := autolink.NewHandler(linker, nodeLookup, edgeRepo, findings)
+	linker, err := autolink.NewLinker(refs, vec)
+	if err != nil {
+		_ = pools.Close()
+		return nil, fmt.Errorf("daemon: autolink linker: %w", err)
+	}
+	autoH, err := autolink.NewHandler(linker, nodeLookup, edgeRepo, findings)
+	if err != nil {
+		_ = pools.Close()
+		return nil, fmt.Errorf("daemon: autolink handler: %w", err)
+	}
 	revalRepo := sqlite.NewRevalidateRepo(pools.WriteHot)
 	revalH := revalidate.NewHandler(revalRepo)
 

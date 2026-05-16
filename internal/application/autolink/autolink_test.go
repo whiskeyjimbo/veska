@@ -15,6 +15,7 @@ import (
 
 	"github.com/whiskeyjimbo/veska/internal/application/autolink"
 	"github.com/whiskeyjimbo/veska/internal/core/domain"
+	"github.com/whiskeyjimbo/veska/internal/core/ports"
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/sqlite"
 	"github.com/whiskeyjimbo/veska/internal/observability"
 
@@ -106,6 +107,42 @@ func (fv *fakeVectors) Search(_ context.Context, _, _ string, _ []float32, k int
 
 // ---- tests ----
 
+// mustNewLinker constructs a Linker and fails the test if the constructor
+// returns an error. Used by the happy-path tests that pass non-nil deps.
+func mustNewLinker(t *testing.T, refs autolink.EmbeddingLookup, vectors ports.VectorStorage, opts ...autolink.Option) *autolink.Linker {
+	t.Helper()
+	l, err := autolink.NewLinker(refs, vectors, opts...)
+	if err != nil {
+		t.Fatalf("autolink.NewLinker: %v", err)
+	}
+	return l
+}
+
+func TestNewLinker_NilDependencyReturnsTypedError(t *testing.T) {
+	refs := &fakeRefs{}
+	vs := &fakeVectors{}
+
+	cases := []struct {
+		name    string
+		refs    autolink.EmbeddingLookup
+		vectors ports.VectorStorage
+	}{
+		{"nil refs", nil, vs},
+		{"nil vectors", refs, nil},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			l, err := autolink.NewLinker(tc.refs, tc.vectors)
+			if l != nil {
+				t.Errorf("expected nil *Linker, got %v", l)
+			}
+			if !errors.Is(err, autolink.ErrMissingDependency) {
+				t.Fatalf("err = %v, want wraps ErrMissingDependency", err)
+			}
+		})
+	}
+}
+
 func TestCandidates_HappyPath_ThresholdAndSelfFilter(t *testing.T) {
 	t.Parallel()
 	refs := &fakeRefs{
@@ -122,7 +159,7 @@ func TestCandidates_HappyPath_ThresholdAndSelfFilter(t *testing.T) {
 	}
 	reg := prometheus.NewRegistry()
 	m := observability.NewMetrics(reg)
-	l := autolink.NewLinker(refs, vs, autolink.WithMetrics(m))
+	l := mustNewLinker(t, refs, vs, autolink.WithMetrics(m))
 
 	got, err := l.Candidates(context.Background(), "r1", "main", []string{"A"})
 	if err != nil {
@@ -157,7 +194,7 @@ func TestCandidates_TopKCap(t *testing.T) {
 			{NodeID: "D", Score: 0.97},
 		}},
 	}
-	l := autolink.NewLinker(refs, vs, autolink.WithTopK(2), autolink.WithThreshold(0.5))
+	l := mustNewLinker(t, refs, vs, autolink.WithTopK(2), autolink.WithThreshold(0.5))
 
 	got, err := l.Candidates(context.Background(), "r1", "main", []string{"A"})
 	if err != nil {
@@ -178,7 +215,7 @@ func TestCandidates_SkipNotReady(t *testing.T) {
 		notReady: map[string]bool{"A": true},
 	}
 	vs := &fakeVectors{}
-	l := autolink.NewLinker(refs, vs)
+	l := mustNewLinker(t, refs, vs)
 
 	got, err := l.Candidates(context.Background(), "r1", "main", []string{"A"})
 	if err != nil {
@@ -199,7 +236,7 @@ func TestCandidates_SkipMissingEmbedding(t *testing.T) {
 		embedNotF: map[string]bool{"ha": true},
 	}
 	vs := &fakeVectors{}
-	l := autolink.NewLinker(refs, vs)
+	l := mustNewLinker(t, refs, vs)
 
 	got, err := l.Candidates(context.Background(), "r1", "main", []string{"A"})
 	if err != nil {
@@ -217,7 +254,7 @@ func TestCandidates_EmptyInput(t *testing.T) {
 	t.Parallel()
 	refs := &fakeRefs{}
 	vs := &fakeVectors{}
-	l := autolink.NewLinker(refs, vs)
+	l := mustNewLinker(t, refs, vs)
 
 	got, err := l.Candidates(context.Background(), "r1", "main", nil)
 	if err != nil {
@@ -240,7 +277,7 @@ func TestCandidates_MultipleSources_Union(t *testing.T) {
 			{{NodeID: "B", Score: 1.0}, {NodeID: "Y", Score: 0.92}},
 		},
 	}
-	l := autolink.NewLinker(refs, vs, autolink.WithTopK(1))
+	l := mustNewLinker(t, refs, vs, autolink.WithTopK(1))
 
 	got, err := l.Candidates(context.Background(), "r1", "main", []string{"A", "B"})
 	if err != nil {
@@ -265,7 +302,7 @@ func TestCandidates_SearchErrorPropagates(t *testing.T) {
 	}
 	want := errors.New("boom")
 	vs := &fakeVectors{err: want}
-	l := autolink.NewLinker(refs, vs)
+	l := mustNewLinker(t, refs, vs)
 
 	_, err := l.Candidates(context.Background(), "r1", "main", []string{"A"})
 	if err == nil {
@@ -292,7 +329,7 @@ func TestCandidates_CounterIncrementsByEmitted(t *testing.T) {
 	}
 	reg := prometheus.NewRegistry()
 	m := observability.NewMetrics(reg)
-	l := autolink.NewLinker(refs, vs, autolink.WithMetrics(m))
+	l := mustNewLinker(t, refs, vs, autolink.WithMetrics(m))
 
 	_, err := l.Candidates(context.Background(), "r9", "main", []string{"A"})
 	if err != nil {
@@ -366,7 +403,7 @@ func TestCandidates_Integration_RealRepo(t *testing.T) {
 			{NodeID: "C", Score: 0.55},
 		}},
 	}
-	l := autolink.NewLinker(repo, vs)
+	l := mustNewLinker(t, repo, vs)
 
 	got, err := l.Candidates(context.Background(), "r1", "main", []string{"A", "B"})
 	if err != nil {

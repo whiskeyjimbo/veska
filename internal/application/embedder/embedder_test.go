@@ -178,6 +178,52 @@ func waitForCondition(t *testing.T, timeout time.Duration, cond func() bool) boo
 	return cond()
 }
 
+// mustNewWorker constructs a Worker and fails the test if the constructor
+// returns an error. Used by the many happy-path tests that pass non-nil deps.
+func mustNewWorker(
+	t *testing.T,
+	refs ports.EmbeddingRefRepo,
+	emb ports.EmbeddingProvider,
+	vectors ports.VectorStorage,
+	opts ...embedder.Option,
+) *embedder.Worker {
+	t.Helper()
+	w, err := embedder.NewWorker(refs, emb, vectors, opts...)
+	if err != nil {
+		t.Fatalf("embedder.NewWorker: %v", err)
+	}
+	return w
+}
+
+func TestNewWorker_NilDependencyReturnsTypedError(t *testing.T) {
+	db := openSchemaDB(t)
+	repo := infsqlite.NewEmbeddingRefsRepo(db, db)
+	emb := &fakeEmbedder{}
+	vs := &fakeVectorStore{}
+
+	cases := []struct {
+		name     string
+		refs     ports.EmbeddingRefRepo
+		embedder ports.EmbeddingProvider
+		vectors  ports.VectorStorage
+	}{
+		{"nil refs", nil, emb, vs},
+		{"nil embedder", repo, nil, vs},
+		{"nil vectors", repo, emb, nil},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			w, err := embedder.NewWorker(tc.refs, tc.embedder, tc.vectors)
+			if w != nil {
+				t.Errorf("expected nil *Worker, got %v", w)
+			}
+			if !errors.Is(err, embedder.ErrMissingDependency) {
+				t.Fatalf("err = %v, want wraps ErrMissingDependency", err)
+			}
+		})
+	}
+}
+
 func TestWorker_DrainsPendingAndMarksReady(t *testing.T) {
 	db := openSchemaDB(t)
 	repo := infsqlite.NewEmbeddingRefsRepo(db, db)
@@ -188,7 +234,7 @@ func TestWorker_DrainsPendingAndMarksReady(t *testing.T) {
 	emb := &fakeEmbedder{vector: []float32{0.1, 0.2, 0.3}, modelID: "test-model"}
 	vs := &fakeVectorStore{}
 
-	w := embedder.NewWorker(repo, emb, vs,
+	w := mustNewWorker(t, repo, emb, vs,
 		embedder.WithInterval(5*time.Millisecond),
 	)
 
@@ -265,7 +311,7 @@ func TestWorker_PerRowEmbedErrorKeepsSiblingsSucceeding(t *testing.T) {
 	}
 	vs := &fakeVectorStore{}
 
-	w := embedder.NewWorker(repo, emb, vs, embedder.WithInterval(5*time.Millisecond))
+	w := mustNewWorker(t, repo, emb, vs, embedder.WithInterval(5*time.Millisecond))
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	w.Start(ctx)
@@ -312,7 +358,7 @@ func TestWorker_IdempotentSameContentHash(t *testing.T) {
 	metrics := observability.NewMetrics(reg)
 
 	vs := &fakeVectorStore{}
-	w := embedder.NewWorker(repo, emb, vs,
+	w := mustNewWorker(t, repo, emb, vs,
 		embedder.WithInterval(5*time.Millisecond),
 		embedder.WithMetrics(metrics),
 	)
@@ -372,7 +418,7 @@ func TestWorker_DedupCrossTick(t *testing.T) {
 	metrics := observability.NewMetrics(reg)
 	vs := &fakeVectorStore{}
 
-	w := embedder.NewWorker(repo, emb, vs,
+	w := mustNewWorker(t, repo, emb, vs,
 		embedder.WithInterval(5*time.Millisecond),
 		embedder.WithMetrics(metrics),
 	)
@@ -435,7 +481,7 @@ func TestWorker_DistinctKeysCallEmbedIndependently(t *testing.T) {
 	metrics := observability.NewMetrics(reg)
 	vs := &fakeVectorStore{}
 
-	w := embedder.NewWorker(repo, emb, vs,
+	w := mustNewWorker(t, repo, emb, vs,
 		embedder.WithInterval(5*time.Millisecond),
 		embedder.WithMetrics(metrics),
 	)
@@ -477,7 +523,7 @@ func TestWorker_ModelIDChangeForcesFreshEmbed(t *testing.T) {
 
 	// First worker: model="old"
 	embOld := &fakeEmbedder{vector: []float32{0, 0, 0}, modelID: "old"}
-	w1 := embedder.NewWorker(repo, embOld, &fakeVectorStore{},
+	w1 := mustNewWorker(t, repo, embOld, &fakeVectorStore{},
 		embedder.WithInterval(5*time.Millisecond))
 	ctx1, cancel1 := context.WithCancel(context.Background())
 	w1.Start(ctx1)
@@ -496,7 +542,7 @@ func TestWorker_ModelIDChangeForcesFreshEmbed(t *testing.T) {
 
 	// Second worker: model="new" — same embed_text, different modelID.
 	embNew := &fakeEmbedder{vector: []float32{1, 1, 1}, modelID: "new"}
-	w2 := embedder.NewWorker(repo, embNew, &fakeVectorStore{},
+	w2 := mustNewWorker(t, repo, embNew, &fakeVectorStore{},
 		embedder.WithInterval(5*time.Millisecond))
 	ctx2, cancel2 := context.WithCancel(context.Background())
 	w2.Start(ctx2)
@@ -527,7 +573,7 @@ func TestWorker_CtxCancelStopsCleanly(t *testing.T) {
 
 	emb := &fakeEmbedder{vector: []float32{1}, modelID: "m"}
 	vs := &fakeVectorStore{}
-	w := embedder.NewWorker(repo, emb, vs, embedder.WithInterval(5*time.Millisecond))
+	w := mustNewWorker(t, repo, emb, vs, embedder.WithInterval(5*time.Millisecond))
 
 	ctx, cancel := context.WithCancel(context.Background())
 	w.Start(ctx)
@@ -553,7 +599,7 @@ func TestWorker_StopIsIdempotent(t *testing.T) {
 	db := openSchemaDB(t)
 	repo := infsqlite.NewEmbeddingRefsRepo(db, db)
 
-	w := embedder.NewWorker(repo,
+	w := mustNewWorker(t, repo,
 		&fakeEmbedder{vector: []float32{1}, modelID: "m"},
 		&fakeVectorStore{},
 		embedder.WithInterval(5*time.Millisecond))
@@ -578,7 +624,7 @@ func TestWorker_GaugeTracksPending(t *testing.T) {
 	emb := &blockingEmbedder{block: block, modelID: "m", vector: []float32{1, 2}}
 	vs := &fakeVectorStore{}
 
-	w := embedder.NewWorker(repo, emb, vs,
+	w := mustNewWorker(t, repo, emb, vs,
 		embedder.WithInterval(5*time.Millisecond),
 		embedder.WithMetrics(metrics),
 	)
@@ -645,7 +691,7 @@ func TestWorker_RateLimitThrottlesEmbedCalls(t *testing.T) {
 	vs := &fakeVectorStore{}
 
 	const rps = 5.0
-	w := embedder.NewWorker(repo, emb, vs,
+	w := mustNewWorker(t, repo, emb, vs,
 		embedder.WithInterval(5*time.Millisecond),
 		embedder.WithRatePerSec(rps),
 		embedder.WithBatchSize(n),
@@ -692,7 +738,7 @@ func TestWorker_RateLimitCtxCancelUnwinds(t *testing.T) {
 	vs := &fakeVectorStore{}
 
 	// Very slow rate — guarantees the worker is parked in limiter.Wait.
-	w := embedder.NewWorker(repo, emb, vs,
+	w := mustNewWorker(t, repo, emb, vs,
 		embedder.WithInterval(5*time.Millisecond),
 		embedder.WithRatePerSec(0.5), // 1 call per 2 seconds
 		embedder.WithBatchSize(20),
@@ -731,7 +777,7 @@ func TestWorker_RateLimitZeroMeansUnlimited(t *testing.T) {
 	emb := &fakeEmbedder{vector: []float32{1}, modelID: "m"}
 	vs := &fakeVectorStore{}
 
-	w := embedder.NewWorker(repo, emb, vs,
+	w := mustNewWorker(t, repo, emb, vs,
 		embedder.WithInterval(5*time.Millisecond),
 		embedder.WithRatePerSec(0), // unlimited
 		embedder.WithBatchSize(n),
@@ -797,7 +843,7 @@ func TestWorker_RetryBumpsAttempts(t *testing.T) {
 	}
 	vs := &fakeVectorStore{}
 
-	w := embedder.NewWorker(repo, emb, vs,
+	w := mustNewWorker(t, repo, emb, vs,
 		embedder.WithInterval(5*time.Millisecond),
 		embedder.WithMaxAttempts(3),
 	)
@@ -842,7 +888,7 @@ func TestWorker_RetryExhaustionFlipsToFailed(t *testing.T) {
 	}
 	vs := &fakeVectorStore{}
 
-	w := embedder.NewWorker(repo, emb, vs,
+	w := mustNewWorker(t, repo, emb, vs,
 		embedder.WithInterval(5*time.Millisecond),
 		embedder.WithMaxAttempts(3),
 	)
@@ -904,7 +950,7 @@ func TestWorker_SiblingsUnaffectedByFailure(t *testing.T) {
 	}
 	vs := &fakeVectorStore{}
 
-	w := embedder.NewWorker(repo, emb, vs,
+	w := mustNewWorker(t, repo, emb, vs,
 		embedder.WithInterval(5*time.Millisecond),
 		embedder.WithMaxAttempts(3),
 	)
@@ -950,7 +996,7 @@ func TestWorker_NormalizesVectorsBeforeStorage(t *testing.T) {
 	emb := &fakeEmbedder{vector: []float32{3, 4}, modelID: "test-model"}
 	vs := &fakeVectorStore{}
 
-	w := embedder.NewWorker(repo, emb, vs, embedder.WithInterval(5*time.Millisecond))
+	w := mustNewWorker(t, repo, emb, vs, embedder.WithInterval(5*time.Millisecond))
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	w.Start(ctx)

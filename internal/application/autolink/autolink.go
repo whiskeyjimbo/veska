@@ -23,6 +23,7 @@ package autolink
 import (
 	"context"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"math"
 
@@ -118,14 +119,19 @@ func WithMetrics(m *observability.Metrics) Option {
 	return func(l *Linker) { l.metrics = m }
 }
 
-// NewLinker constructs a Linker. refs and vectors are required: nil is a
-// programmer error and is reported by panicking at construction time.
-func NewLinker(refs EmbeddingLookup, vectors ports.VectorStorage, opts ...Option) *Linker {
+// ErrMissingDependency is returned by the autolink constructors (NewLinker,
+// NewHandler) when a required collaborator is nil. It is errors.Is-matchable
+// so callers can distinguish a wiring fault from a runtime failure.
+var ErrMissingDependency = errors.New("autolink: missing required dependency")
+
+// NewLinker constructs a Linker. refs and vectors are required: a nil
+// dependency yields an error wrapping ErrMissingDependency and a nil *Linker.
+func NewLinker(refs EmbeddingLookup, vectors ports.VectorStorage, opts ...Option) (*Linker, error) {
 	if refs == nil {
-		panic("autolink.NewLinker: refs is nil")
+		return nil, fmt.Errorf("autolink.NewLinker: refs is nil: %w", ErrMissingDependency)
 	}
 	if vectors == nil {
-		panic("autolink.NewLinker: vectors is nil")
+		return nil, fmt.Errorf("autolink.NewLinker: vectors is nil: %w", ErrMissingDependency)
 	}
 	l := &Linker{
 		refs:      refs,
@@ -136,7 +142,7 @@ func NewLinker(refs EmbeddingLookup, vectors ports.VectorStorage, opts ...Option
 	for _, o := range opts {
 		o(l)
 	}
-	return l
+	return l, nil
 }
 
 // Candidates computes top-k similarity candidates for every source node in

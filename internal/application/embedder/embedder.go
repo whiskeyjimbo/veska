@@ -18,6 +18,8 @@ import (
 	"crypto/sha256"
 	"encoding/binary"
 	"encoding/hex"
+	"errors"
+	"fmt"
 	"math"
 	"sync"
 	"time"
@@ -134,24 +136,30 @@ func WithMetrics(m *observability.Metrics) Option {
 	return func(w *Worker) { w.metrics = m }
 }
 
+// ErrMissingDependency is returned by NewWorker when a required collaborator
+// (refs, embedder, or vectors) is nil. It is errors.Is-matchable so callers
+// can distinguish a wiring fault from a runtime failure.
+var ErrMissingDependency = errors.New("embedder: missing required dependency")
+
 // NewWorker constructs a Worker. Dependencies are required: all three of
-// refs, embedder, and vectors must be non-nil — a nil dependency is a
-// programmer error and is reported by panicking at construction time
-// (rather than crashing inside a goroutine at first tick).
+// refs, embedder, and vectors must be non-nil. A nil dependency yields an
+// error wrapping ErrMissingDependency and a nil *Worker — surfacing the
+// wiring fault at construction time rather than crashing inside a goroutine
+// at first tick.
 func NewWorker(
 	refs ports.EmbeddingRefRepo,
 	embedder ports.EmbeddingProvider,
 	vectors ports.VectorStorage,
 	opts ...Option,
-) *Worker {
+) (*Worker, error) {
 	if refs == nil {
-		panic("embedder.NewWorker: refs is nil")
+		return nil, fmt.Errorf("embedder.NewWorker: refs is nil: %w", ErrMissingDependency)
 	}
 	if embedder == nil {
-		panic("embedder.NewWorker: embedder is nil")
+		return nil, fmt.Errorf("embedder.NewWorker: embedder is nil: %w", ErrMissingDependency)
 	}
 	if vectors == nil {
-		panic("embedder.NewWorker: vectors is nil")
+		return nil, fmt.Errorf("embedder.NewWorker: vectors is nil: %w", ErrMissingDependency)
 	}
 	w := &Worker{
 		refs:        refs,
@@ -176,7 +184,7 @@ func NewWorker(
 	if effective > 0 {
 		w.limiter = rate.NewLimiter(rate.Limit(effective), 1)
 	}
-	return w
+	return w, nil
 }
 
 // Start launches the poll loop in a new goroutine and returns immediately.

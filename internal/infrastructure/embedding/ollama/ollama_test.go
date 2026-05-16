@@ -15,17 +15,29 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/embedding/ollama"
 )
 
-func TestNew_PanicsOnEmptyModel(t *testing.T) {
-	defer func() {
-		if recover() == nil {
-			t.Fatal("expected panic on empty model")
-		}
-	}()
-	_ = ollama.New("")
+// mustNewOllama constructs a Provider and fails the test if the constructor
+// returns an error. Used by the happy-path tests that pass a non-empty model.
+func mustNewOllama(t *testing.T, model string, opts ...ollama.Option) *ollama.Provider {
+	t.Helper()
+	p, err := ollama.New(model, opts...)
+	if err != nil {
+		t.Fatalf("ollama.New: %v", err)
+	}
+	return p
+}
+
+func TestNew_EmptyModelReturnsTypedError(t *testing.T) {
+	p, err := ollama.New("")
+	if p != nil {
+		t.Errorf("expected nil *Provider, got %v", p)
+	}
+	if !errors.Is(err, ollama.ErrMissingDependency) {
+		t.Fatalf("err = %v, want wraps ErrMissingDependency", err)
+	}
 }
 
 func TestModelID_ReturnsConfiguredModel(t *testing.T) {
-	p := ollama.New("nomic-embed-text")
+	p := mustNewOllama(t, "nomic-embed-text")
 	if got := p.ModelID(); got != "nomic-embed-text" {
 		t.Fatalf("ModelID() = %q, want nomic-embed-text", got)
 	}
@@ -52,7 +64,7 @@ func TestEmbed_HappyPath(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	p := ollama.New("test-model", ollama.WithBaseURL(srv.URL))
+	p := mustNewOllama(t, "test-model", ollama.WithBaseURL(srv.URL))
 	got, err := p.Embed(context.Background(), "hello")
 	if err != nil {
 		t.Fatalf("Embed: %v", err)
@@ -73,7 +85,7 @@ func TestEmbed_5xx_WrapsUnreachable(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	p := ollama.New("test-model", ollama.WithBaseURL(srv.URL))
+	p := mustNewOllama(t, "test-model", ollama.WithBaseURL(srv.URL))
 	_, err := p.Embed(context.Background(), "hello")
 	if err == nil {
 		t.Fatal("expected error on 5xx")
@@ -89,7 +101,7 @@ func TestEmbed_4xx_DoesNotWrapUnreachable(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	p := ollama.New("test-model", ollama.WithBaseURL(srv.URL))
+	p := mustNewOllama(t, "test-model", ollama.WithBaseURL(srv.URL))
 	_, err := p.Embed(context.Background(), "hello")
 	if err == nil {
 		t.Fatal("expected error on 4xx")
@@ -112,7 +124,7 @@ func TestEmbed_ConnectionRefused_WrapsUnreachable(t *testing.T) {
 	addr := l.Addr().String()
 	_ = l.Close()
 
-	p := ollama.New("test-model", ollama.WithBaseURL("http://"+addr))
+	p := mustNewOllama(t, "test-model", ollama.WithBaseURL("http://"+addr))
 	_, err = p.Embed(context.Background(), "hello")
 	if err == nil {
 		t.Fatal("expected error on connection refused")
@@ -132,7 +144,7 @@ func TestEmbed_ContextCancel_DoesNotWrapUnreachable(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	p := ollama.New("test-model", ollama.WithBaseURL(srv.URL))
+	p := mustNewOllama(t, "test-model", ollama.WithBaseURL(srv.URL))
 	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
 	defer cancel()
 
@@ -154,7 +166,7 @@ func TestEmbed_WrongShape_PlainError(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	p := ollama.New("test-model", ollama.WithBaseURL(srv.URL))
+	p := mustNewOllama(t, "test-model", ollama.WithBaseURL(srv.URL))
 	_, err := p.Embed(context.Background(), "hello")
 	if err == nil {
 		t.Fatal("expected decode error")
@@ -170,7 +182,7 @@ func TestEmbed_EmptyEmbedding_Error(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	p := ollama.New("test-model", ollama.WithBaseURL(srv.URL))
+	p := mustNewOllama(t, "test-model", ollama.WithBaseURL(srv.URL))
 	_, err := p.Embed(context.Background(), "hello")
 	if err == nil {
 		t.Fatal("expected error on empty embedding")
