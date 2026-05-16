@@ -16,8 +16,12 @@
 //     signature) pair. If prev != "" && prev != current, drift still
 //     applies → REFRESH. Otherwise → CLOSE as 'revalidated_obsolete'.
 //
-//   - "auto-link": always close (re-run is heavy; rerunning similarity
-//     during revalidation is out of scope for m3.05).
+//   - "auto-link": NOT swept. Auto-link findings store an edge_id in the
+//     findings.node_id column; StaleFindingsForFile joins findings.node_id
+//     to nodes.node_id, which an edge_id never matches — so auto-link
+//     findings are never selected here. Their lifecycle is developer-driven
+//     (accept/suppress); a stale similarity suggestion is low-harm. An
+//     edge-anchored revalidation path would be a separate feature.
 //
 //   - any other rule: conservative default — close. New rules opt into
 //     refresh behaviour by adding a case here.
@@ -50,10 +54,17 @@ import (
 // (not imported from internal/application/checks or autolink) to keep the
 // application/revalidate package free of inbound deps on its sibling
 // packages — the rule name on a stored Finding is the wire contract.
+//
+// "auto-link" is intentionally NOT listed: auto-link findings store an
+// edge_id in the findings.node_id column, but StaleFindingsForFile selects
+// stale findings via JOIN nodes ON nodes.node_id = findings.node_id — an
+// edge_id never matches a nodes row, so auto-link findings are never picked
+// up by this sweep. Their lifecycle is developer-driven (accept/suppress);
+// see solov2-l8y. An edge-anchored revalidation path would be a new feature,
+// not a per-rule case here.
 const (
 	ruleDeadCode      = "dead-code"
 	ruleContractDrift = "contract-drift"
-	ruleAutoLink      = "auto-link"
 )
 
 // Handler implements ports.WorkHandler for WorkKindRevalidate rows.
@@ -197,14 +208,10 @@ func (h *Handler) decide(ctx context.Context, row ports.WorkRow, s ports.StaleFi
 		// drift resolved (signatures match, or signature absent).
 		return ports.FindingDecision{FindingID: s.FindingID, Kind: ports.DecisionClose}, nil
 
-	case ruleAutoLink:
-		// Re-running similarity is expensive; m3.05 deliberately does not
-		// own that path. Always close stale auto-link findings.
-		return ports.FindingDecision{FindingID: s.FindingID, Kind: ports.DecisionClose}, nil
-
 	default:
 		// Unknown rule: conservative close (matches m3.05.2 behaviour for
-		// rules that have no defined re-run path).
+		// rules that have no defined re-run path). Note "auto-link" never
+		// reaches here — see the const block above.
 		return ports.FindingDecision{FindingID: s.FindingID, Kind: ports.DecisionClose}, nil
 	}
 }
