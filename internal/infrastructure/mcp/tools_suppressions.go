@@ -20,6 +20,8 @@ func RegisterSuppressionTools(r *Registry, db *sql.DB, aw ports.AuditWriter) {
 		Description:     "Suppress a finding, inserting a record into the suppressions table.",
 		IncludesStaging: false,
 		Handler:         makeSuppressFindingHandler(db, aw),
+		InputSchema:     suppressFindingInputSchema,
+		OutputSchema:    suppressFindingOutputSchema,
 	})
 	r.MustRegister(ToolSpec{
 		Name:            "eng_list_suppressions",
@@ -41,6 +43,34 @@ type suppressFindingParams struct {
 	Scope     string `json:"scope,omitempty"`
 	ExpiresAt *int64 `json:"expires_at,omitempty"`
 }
+
+// suppressFindingInputSchema describes the params object for eng_suppress_finding.
+var suppressFindingInputSchema = json.RawMessage(`{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "finding_id": {"type": "string", "description": "ID of the finding to suppress."},
+    "branch": {"type": "string", "description": "Branch the finding belongs to."},
+    "repo_id": {"type": "string", "description": "Repository ID for audit attribution."},
+    "reason": {"type": "string", "description": "Reason for the suppression."},
+    "scope": {"type": "string", "description": "Suppression scope; defaults to \"finding\" when omitted."},
+    "expires_at": {"type": ["integer", "null"], "description": "Optional Unix timestamp at which the suppression expires."}
+  },
+  "required": ["finding_id", "branch", "repo_id", "reason"]
+}`)
+
+// suppressFindingOutputSchema describes the result object for eng_suppress_finding.
+var suppressFindingOutputSchema = json.RawMessage(`{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "suppression_id": {"type": "string"},
+    "finding_id": {"type": "string"},
+    "branch": {"type": "string"},
+    "scope": {"type": "string"}
+  },
+  "required": ["suppression_id", "finding_id", "branch", "scope"]
+}`)
 
 func makeSuppressFindingHandler(db *sql.DB, aw ports.AuditWriter) ToolHandler {
 	return func(ctx context.Context, actor domain.Actor, raw json.RawMessage) (any, *RPCError) {
