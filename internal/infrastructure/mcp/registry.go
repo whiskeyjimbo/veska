@@ -34,6 +34,12 @@ type ToolSpec struct {
 	IncludesStaging bool
 	// Handler processes the tool call.
 	Handler ToolHandler
+	// InputSchema is an optional JSON Schema (draft 2020-12) describing the
+	// tool's params object. Empty when the tool publishes no schema.
+	InputSchema json.RawMessage
+	// OutputSchema is an optional JSON Schema describing the tool's result
+	// shape. Empty when the tool publishes no schema.
+	OutputSchema json.RawMessage
 }
 
 // Registry holds the set of registered tools and dispatches incoming tool calls.
@@ -85,6 +91,13 @@ func (r *Registry) Register(spec ToolSpec) error {
 	if _, exists := r.tools[spec.Name]; exists {
 		return fmt.Errorf("mcp: tool %q is already registered", spec.Name)
 	}
+	// Schemas are optional, but a non-empty schema must be valid JSON.
+	if len(spec.InputSchema) > 0 && !json.Valid(spec.InputSchema) {
+		return fmt.Errorf("mcp: tool %q InputSchema is not valid JSON", spec.Name)
+	}
+	if len(spec.OutputSchema) > 0 && !json.Valid(spec.OutputSchema) {
+		return fmt.Errorf("mcp: tool %q OutputSchema is not valid JSON", spec.Name)
+	}
 	r.tools[spec.Name] = spec
 	return nil
 }
@@ -116,6 +129,14 @@ func (r *Registry) Dispatch(ctx context.Context, actor domain.Actor, req *Reques
 // to NewServer. It delegates to Dispatch.
 func (r *Registry) Handle(ctx context.Context, actor domain.Actor, req *Request) (any, *RPCError) {
 	return r.Dispatch(ctx, actor, req)
+}
+
+// Spec returns the registered ToolSpec for name, and whether it was found.
+// It is a read-only accessor, safe for concurrent use provided no further
+// Register calls occur.
+func (r *Registry) Spec(name string) (ToolSpec, bool) {
+	spec, ok := r.tools[name]
+	return spec, ok
 }
 
 // Names returns all registered tool names in sorted order.
