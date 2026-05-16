@@ -259,7 +259,7 @@ func newDaemon(cfg Config) (*Daemon, error) {
 
 	// MCP server. The Registry implements mcp.Handler.
 	registry := mcp.NewRegistry()
-	registerMCPTools(registry, pools)
+	registerMCPTools(registry, pools, cfg)
 	mcpsrv := mcp.NewServer(cfg.CLISockPath, cfg.MCPSockPath, registry)
 
 	return &Daemon{
@@ -306,16 +306,20 @@ func (noopEmbedHandler) Handle(_ context.Context, _ ports.WorkRow) error { retur
 // Tool families that require collaborators we have not built yet (e.g. a
 // ports.GraphStorage implementation) are skipped — a missing tool surfaces
 // as MethodNotFound rather than as a daemon-start failure.
-func registerMCPTools(r *mcp.Registry, pools *sqlite.Pools) {
+func registerMCPTools(r *mcp.Registry, pools *sqlite.Pools, cfg Config) {
 	// Tools that only need *sql.DB + AuditWriter.
 	mcp.RegisterFindingTools(r, pools.WriteHot, nil)
 	mcp.RegisterSuppressionTools(r, pools.WriteHot, nil)
 	mcp.RegisterTaskTools(r, pools.WriteHot, nil)
 	mcp.RegisterOwnerTools(r, pools.WriteHot)
 	mcp.RegisterTodoTools(r, sqlite.NewTodoQuerierRepo(pools.ReadDB))
-	// RegisterAdminTools is omitted — it requires application.RepoLister /
-	// mcp.StatusProvider / mcp.ConfigProvider implementations that have no
-	// production adapter yet (see follow-up beads filed alongside this wiring).
+	// Admin tools: repo listing + live status/config from the read pool and
+	// the resolved daemon Config.
+	mcp.RegisterAdminTools(r,
+		&repoLister{db: pools.ReadDB},
+		&statusProvider{db: pools.ReadDB},
+		&configProvider{cfg: cfg},
+	)
 	// NOTE: RegisterGraphTools / RegisterBlastTools / RegisterSearchTools are
 	// intentionally omitted — they require collaborators (GraphStorage,
 	// blastradius.Service, etc.) that have no production adapter yet. See

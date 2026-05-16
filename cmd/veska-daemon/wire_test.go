@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/whiskeyjimbo/veska/internal/infrastructure/mcp"
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/vector"
 	"github.com/whiskeyjimbo/veska/internal/repo"
 )
@@ -182,6 +183,37 @@ func TestResolveConfig_AppliesDefaults(t *testing.T) {
 	}
 	if got.OllamaURL != "http://localhost:11434" {
 		t.Errorf("OllamaURL = %q; want default", got.OllamaURL)
+	}
+}
+
+// TestWire_RegistersAdminTools verifies registerMCPTools wires the 5 admin
+// MCP tools so they resolve instead of surfacing as MethodNotFound.
+func TestWire_RegistersAdminTools(t *testing.T) {
+	cfg := testConfig(t)
+	d, err := newDaemon(cfg)
+	if err != nil {
+		t.Fatalf("newDaemon: %v", err)
+	}
+	t.Cleanup(func() { _ = d.Stop() })
+
+	r := mcp.NewRegistry()
+	registerMCPTools(r, d.pools, cfg)
+
+	want := []string{
+		"eng_get_current_repo",
+		"eng_list_repos",
+		"eng_get_repo",
+		"eng_get_status",
+		"eng_get_config",
+	}
+	have := make(map[string]bool)
+	for _, n := range r.Names() {
+		have[n] = true
+	}
+	for _, n := range want {
+		if !have[n] {
+			t.Errorf("admin tool %q not registered; have=%v", n, r.Names())
+		}
 	}
 }
 
