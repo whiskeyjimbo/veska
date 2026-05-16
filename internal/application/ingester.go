@@ -95,7 +95,15 @@ func (ing *Ingester) Save(ctx context.Context, repoID, branch, path string, src 
 		return
 	}
 	ing.staging.StageIfCurrentGeneration(repoID, branch, path, result.Nodes, result.Edges, gen, ing.gate)
-	ing.emitParseFailures(ctx, repoID, branch, path, result.Failures)
+	if len(result.Failures) == 0 {
+		// A clean parse closes any parse-failure finding the file carried
+		// from an earlier broken ingest. emitParseFailures has its own
+		// len==0 guard, so calling clearParseFailure here is the symmetric
+		// path rather than an alternative.
+		ing.clearParseFailure(ctx, repoID, branch, path)
+	} else {
+		ing.emitParseFailures(ctx, repoID, branch, path, result.Failures)
+	}
 	ing.emitTodos(ctx, repoID, branch, path, result.Todos)
 }
 
@@ -146,6 +154,43 @@ func (ing *Ingester) emitParseFailures(ctx context.Context, repoID, branch, path
 	}
 	if err := sink.Save(ctx, f); err != nil {
 		slog.Warn("ingester: failed to save parse-failure finding",
+			"repoID", repoID, "branch", branch, "path", path, "err", err)
+	}
+}
+
+// clearParseFailure closes any OPEN parse-failure finding for (repoID, branch,
+// path) once the file parses cleanly. It reconstructs the branch-stable
+// FindingID by building the same finding emitParseFailures would build —
+// domain.NewFinding hashes only (rule, anchor), so the message body is
+// irrelevant — then asks the sink to close it.
+//
+// Emission is best-effort, matching emitParseFailures: a nil sink is a no-op
+// and per-call errors are logged but not propagated — the Save hot path must
+// not fail because a finding could not be closed.
+func (ing *Ingester) clearParseFailure(ctx context.Context, repoID, branch, path string) {
+	sink := ing.findingStorage()
+	if sink == nil {
+		return
+	}
+
+	// Message body is irrelevant to FindingID; use a placeholder so
+	// NewFinding's non-empty validation is satisfied.
+	f, err := domain.NewFinding(
+		"",
+		repoID, branch,
+		domain.SeverityMedium,
+		domain.LayerStructural,
+		"parse-failure",
+		"parse failure cleared",
+		domain.WithFileAnchor(path),
+	)
+	if err != nil {
+		slog.Warn("ingester: failed to construct parse-failure finding for clear",
+			"repoID", repoID, "branch", branch, "path", path, "err", err)
+		return
+	}
+	if err := sink.CloseObsolete(ctx, f.FindingID, branch); err != nil {
+		slog.Warn("ingester: failed to close parse-failure finding",
 			"repoID", repoID, "branch", branch, "path", path, "err", err)
 	}
 }

@@ -115,3 +115,29 @@ ON CONFLICT(finding_id, branch) DO UPDATE SET
 	}
 	return nil
 }
+
+// CloseObsolete closes the OPEN finding identified by (findingID, branch),
+// setting state='closed', closed_reason='revalidated_obsolete', and stamping
+// closed_at with the current wall-clock millis (consistent with how Save
+// records timestamps).
+//
+// The UPDATE is gated on state='open' so re-running it cannot churn a finding
+// that a human or an earlier pass already closed. A no-op UPDATE (zero rows
+// matched — already closed, or no such finding) returns nil; closing a
+// finding that does not exist is not an error.
+func (r *FindingRepo) CloseObsolete(ctx context.Context, findingID, branch string) error {
+	const stmt = `
+UPDATE findings
+SET state         = 'closed',
+    closed_reason = 'revalidated_obsolete',
+    closed_at     = ?
+WHERE finding_id = ?
+  AND branch     = ?
+  AND state      = 'open'`
+
+	now := time.Now().UnixMilli()
+	if _, err := r.db.ExecContext(ctx, stmt, now, findingID, branch); err != nil {
+		return fmt.Errorf("sqlite.FindingRepo.CloseObsolete: %w", err)
+	}
+	return nil
+}

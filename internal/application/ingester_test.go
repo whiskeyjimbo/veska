@@ -9,11 +9,15 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/core/domain"
 )
 
-// recordingFindingStorage captures every Save call.
+// recordingFindingStorage captures every Save call and tracks the open/closed
+// state of stored findings keyed by (finding_id, branch) so tests can assert
+// CloseObsolete behaviour.
 type recordingFindingStorage struct {
 	mu       sync.Mutex
 	findings []*domain.Finding
+	closed   map[string]string // (finding_id|branch) -> closed_reason
 	err      error
+	closeErr error
 }
 
 func (r *recordingFindingStorage) Save(_ context.Context, f *domain.Finding) error {
@@ -24,6 +28,33 @@ func (r *recordingFindingStorage) Save(_ context.Context, f *domain.Finding) err
 	}
 	r.findings = append(r.findings, f)
 	return nil
+}
+
+// CloseObsolete flips the matching open finding to closed in the in-memory
+// store, mirroring the SQLite adapter's no-op-on-no-match semantics.
+func (r *recordingFindingStorage) CloseObsolete(_ context.Context, findingID, branch string) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.closeErr != nil {
+		return r.closeErr
+	}
+	for _, f := range r.findings {
+		if f.FindingID == findingID && f.Branch == branch {
+			if r.closed == nil {
+				r.closed = make(map[string]string)
+			}
+			r.closed[findingID+"|"+branch] = "revalidated_obsolete"
+		}
+	}
+	return nil
+}
+
+// closedReason returns the recorded close reason for a finding, or "" if the
+// finding was never closed.
+func (r *recordingFindingStorage) closedReason(findingID, branch string) string {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.closed[findingID+"|"+branch]
 }
 
 func (r *recordingFindingStorage) snapshot() []*domain.Finding {
@@ -184,6 +215,53 @@ func TestIngester_Save_CleanParseEmitsNoFinding(t *testing.T) {
 	ing.SetFindingStorage(store)
 
 	ing.Save(context.Background(), "repo1", "main", "ok.go", []byte("package x"))
+	if got := store.snapshot(); len(got) != 0 {
+		t.Errorf("expected zero findings, got %d", len(got))
+	}
+}
+
+func TestIngester_Save_CleanReparseClosesParseFailureFinding(t *testing.T) {
+	staging := NewStagingArea()
+	store := &recordingFindingStorage{}
+	parser := &stubParser{}
+	ing := NewIngester(parser, staging, NewIngestionGate(staging))
+	ing.SetFindingStorage(store)
+
+	const path = "src/bad.ts"
+
+	// First ingest: file fails to parse — a parse-failure finding opens.
+	parser.result = &domain.ParseResult{
+		Failures: []domain.ParseFailure{{Line: 3, Message: "syntax error"}},
+	}
+	ing.Save(context.Background(), "repo1", "main", path, []byte("broken"))
+
+	saved := store.snapshot()
+	if len(saved) != 1 {
+		t.Fatalf("expected 1 finding after failing parse, got %d", len(saved))
+	}
+	fid := saved[0].FindingID
+	if r := store.closedReason(fid, "main"); r != "" {
+		t.Fatalf("finding closed prematurely: reason %q", r)
+	}
+
+	// Second ingest: same file now parses cleanly — the finding must close.
+	parser.result = &domain.ParseResult{Nodes: []*domain.Node{{}}}
+	ing.Save(context.Background(), "repo1", "main", path, []byte("package x"))
+
+	if r := store.closedReason(fid, "main"); r != "revalidated_obsolete" {
+		t.Errorf("parse-failure finding closed_reason = %q, want revalidated_obsolete", r)
+	}
+}
+
+func TestIngester_Save_CleanParseNeverFailed_NoFindingCreated(t *testing.T) {
+	staging := NewStagingArea()
+	store := &recordingFindingStorage{}
+	parser := &stubParser{result: &domain.ParseResult{Nodes: []*domain.Node{{}}}}
+	ing := NewIngester(parser, staging, NewIngestionGate(staging))
+	ing.SetFindingStorage(store)
+
+	ing.Save(context.Background(), "repo1", "main", "ok.go", []byte("package x"))
+
 	if got := store.snapshot(); len(got) != 0 {
 		t.Errorf("expected zero findings, got %d", len(got))
 	}

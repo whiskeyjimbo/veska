@@ -17,4 +17,10 @@ type FindingStorage interface {
 	// Save persists f. The caller retains ownership of f and Save must not
 	// mutate it.
 	Save(ctx context.Context, f *domain.Finding) error
+
+	// CloseObsolete closes the OPEN finding identified by (findingID, branch),
+	// setting closed_reason='revalidated_obsolete'. It is a no-op when no open
+	// finding matches — closing an already-closed or absent finding is not an
+	// error.
+	CloseObsolete(ctx context.Context, findingID, branch string) error
 }

@@ -245,3 +245,72 @@ func TestFindingRepo_Idempotent(t *testing.T) {
 		t.Errorf("findings count after 2 saves: got %d, want 1", cnt)
 	}
 }
+
+// TestFindingRepo_CloseObsolete verifies that CloseObsolete flips an open
+// finding to closed with closed_reason='revalidated_obsolete', and is a
+// harmless no-op against a finding_id that does not exist.
+func TestFindingRepo_CloseObsolete(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	db := openTest(t, filepath.Join(dir, "v.db"))
+
+	if _, err := db.Exec(
+		`INSERT INTO repos (repo_id, root_path, added_at) VALUES (?, ?, ?)`,
+		"repo1", "/tmp/repo1", time.Now().UnixMilli(),
+	); err != nil {
+		t.Fatalf("insert repo: %v", err)
+	}
+
+	repo := sqlite.NewFindingRepo(db)
+
+	f, err := domain.NewFinding(
+		"01HXYZ", "repo1", "main",
+		domain.SeverityMedium, domain.LayerStructural,
+		"parse-failure", "tree-sitter could not parse foo.go",
+		domain.WithFileAnchor("foo.go"),
+	)
+	if err != nil {
+		t.Fatalf("NewFinding: %v", err)
+	}
+	if err := repo.Save(context.Background(), f); err != nil {
+		t.Fatalf("Save: %v", err)
+	}
+
+	if err := repo.CloseObsolete(context.Background(), f.FindingID, "main"); err != nil {
+		t.Fatalf("CloseObsolete: %v", err)
+	}
+
+	var (
+		gotState        string
+		gotClosedReason sql.NullString
+		gotClosedAt     sql.NullInt64
+	)
+	err = db.QueryRow(
+		`SELECT state, closed_reason, closed_at FROM findings WHERE finding_id = ? AND branch = ?`,
+		f.FindingID, "main",
+	).Scan(&gotState, &gotClosedReason, &gotClosedAt)
+	if err != nil {
+		t.Fatalf("query findings: %v", err)
+	}
+	if gotState != "closed" {
+		t.Errorf("state = %q, want closed", gotState)
+	}
+	if !gotClosedReason.Valid || gotClosedReason.String != "revalidated_obsolete" {
+		t.Errorf("closed_reason = %v, want revalidated_obsolete", gotClosedReason)
+	}
+	if !gotClosedAt.Valid || gotClosedAt.Int64 <= 0 {
+		t.Errorf("closed_at = %v, want a positive timestamp", gotClosedAt)
+	}
+
+	// Closing a non-existent finding is a no-op: no error, no row created.
+	if err := repo.CloseObsolete(context.Background(), "doesnotexist", "main"); err != nil {
+		t.Fatalf("CloseObsolete(non-existent): %v", err)
+	}
+	var cnt int
+	if err := db.QueryRow(`SELECT COUNT(*) FROM findings`).Scan(&cnt); err != nil {
+		t.Fatalf("count: %v", err)
+	}
+	if cnt != 1 {
+		t.Errorf("findings count after no-op CloseObsolete: got %d, want 1", cnt)
+	}
+}
