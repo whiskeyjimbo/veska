@@ -15,6 +15,8 @@ func RegisterFindingTools(r *Registry, db *sql.DB, aw ports.AuditWriter) {
 		Description:     "Close a finding by ID. Severity >= high requires a human actor.",
 		IncludesStaging: false,
 		Handler:         makeCloseFindingHandler(db, aw),
+		InputSchema:     closeFindingInputSchema,
+		OutputSchema:    closeFindingOutputSchema,
 	})
 	r.MustRegister(ToolSpec{
 		Name:            "eng_list_findings",

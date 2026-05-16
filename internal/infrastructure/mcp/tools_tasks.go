@@ -20,6 +20,8 @@ func RegisterTaskTools(r *Registry, db *sql.DB, aw ports.AuditWriter) {
 		Description:     "Set the active task for a repo, deactivating any previously active task.",
 		IncludesStaging: false,
 		Handler:         makeSetActiveTaskHandler(db, aw),
+		InputSchema:     setActiveTaskInputSchema,
+		OutputSchema:    setActiveTaskOutputSchema,
 	})
 	r.MustRegister(ToolSpec{
 		Name:            "eng_get_active_task",
@@ -43,6 +45,27 @@ type setActiveTaskParams struct {
 	TaskID string `json:"task_id"`
 	RepoID string `json:"repo_id"`
 }
+
+// setActiveTaskInputSchema describes the params object for eng_set_active_task.
+var setActiveTaskInputSchema = json.RawMessage(`{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "task_id": {"type": "string", "description": "ID of the task to activate."},
+    "repo_id": {"type": "string", "description": "Repository the task belongs to."}
+  },
+  "required": ["task_id", "repo_id"]
+}`)
+
+// setActiveTaskOutputSchema describes the result object for eng_set_active_task.
+var setActiveTaskOutputSchema = json.RawMessage(`{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "task_id": {"type": "string"}
+  },
+  "required": ["task_id"]
+}`)
 
 func makeSetActiveTaskHandler(db *sql.DB, aw ports.AuditWriter) ToolHandler {
 	return func(ctx context.Context, actor domain.Actor, raw json.RawMessage) (any, *RPCError) {

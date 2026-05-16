@@ -26,6 +26,31 @@ type closeFindingParams struct {
 	Reason    string `json:"reason"`
 }
 
+// closeFindingInputSchema describes the params object for eng_close_finding.
+var closeFindingInputSchema = json.RawMessage(`{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "finding_id": {"type": "string", "description": "ID of the finding to close."},
+    "branch": {"type": "string", "description": "Branch the finding belongs to."},
+    "repo_id": {"type": "string", "description": "Repository ID for audit attribution."},
+    "reason": {"type": "string", "description": "Close reason; \"accept\" promotes an auto-link edge to definite."}
+  },
+  "required": ["finding_id", "branch", "repo_id", "reason"]
+}`)
+
+// closeFindingOutputSchema describes the result object for eng_close_finding.
+var closeFindingOutputSchema = json.RawMessage(`{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "finding_id": {"type": "string"},
+    "branch": {"type": "string"},
+    "state": {"type": "string", "const": "closed"}
+  },
+  "required": ["finding_id", "branch", "state"]
+}`)
+
 func makeCloseFindingHandler(db *sql.DB, aw ports.AuditWriter) ToolHandler {
 	return func(ctx context.Context, actor domain.Actor, raw json.RawMessage) (any, *RPCError) {
 		var p closeFindingParams
