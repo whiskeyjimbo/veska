@@ -2,7 +2,9 @@
 id: SOLO-MILESTONES
 title: "Milestones — Index"
 status: draft
-last_reviewed: 2026-05-08
+last_reviewed: 2026-05-16
+verified: true
+verified_date: "2026-05-16"
 related: [SOLO-14]
 ---
 
@@ -15,10 +17,10 @@ ordered epics with DoD, and TDD-sized sub-issues. Beads IDs follow
 | Milestone | Theme | Doc |
 |---|---|---|
 | M0 | Substrate spike (entry gate to M1) | [`closed/M0.md`](closed/M0.md) ✓ closed |
-| M1 | Substrate foundation | [`M1.md`](M1.md) |
-| M2 | Identity, observability, plugin scaffolding | [`M2.md`](M2.md) |
-| M3 | Pipelines and embedder | [`M3.md`](M3.md) |
-| M4 | Wiki mechanical kinds | [`M4.md`](M4.md) |
+| M1 | Substrate foundation | [`closed/M1.md`](closed/M1.md) ✓ closed |
+| M2 | Identity, observability, plugin scaffolding | [`closed/M2.md`](closed/M2.md) ✓ closed |
+| M3 | Pipelines and embedder | [`closed/M3.md`](closed/M3.md) ✓ closed |
+| M4 | Wiki mechanical kinds | [`closed/M4.md`](closed/M4.md) ✓ closed |
 | M5 | Optional review pipeline | [`M5.md`](M5.md) |
 | M6 | Cutover | [`M6.md`](M6.md) |
 
