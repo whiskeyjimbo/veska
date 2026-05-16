@@ -104,13 +104,19 @@ func TestEmbedderThroughput(t *testing.T) {
 	seedPending(t, pools.WriteHot, seedN)
 
 	refs := sqlite.NewEmbeddingRefsRepo(pools.ReadDB, pools.WriteHot)
-	provider := ollama.New(model, ollama.WithBaseURL(ollamaURL))
+	provider, err := ollama.New(model, ollama.WithBaseURL(ollamaURL))
+	if err != nil {
+		t.Fatalf("ollama.New: %v", err)
+	}
 	vectors := sqlitevec.New()
 
 	// Use defaults: 10 emb/s limiter, 32 batch, 250ms interval. The point
 	// of gate-1 is to measure the *worker's* sustained output, not to
 	// uncap Ollama.
-	worker := embedder.NewWorker(refs, provider, vectors)
+	worker, err := embedder.NewWorker(refs, provider, vectors)
+	if err != nil {
+		t.Fatalf("embedder.NewWorker: %v", err)
+	}
 
 	// Sanity-check starting depth so a mis-seed surfaces before the run.
 	startingPending, err := refs.CountPending(ctx)

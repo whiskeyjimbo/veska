@@ -38,6 +38,11 @@ func newOllamaStub(t *testing.T, dim int) *httptest.Server {
 
 // newOllamaProvider wires the real ollama.Provider at a custom base URL —
 // the same adapter the daemon uses in production.
-func newOllamaProvider(baseURL string) *ollama.Provider {
-	return ollama.New("nomic-embed-text", ollama.WithBaseURL(baseURL))
+func newOllamaProvider(t *testing.T, baseURL string) *ollama.Provider {
+	t.Helper()
+	p, err := ollama.New("nomic-embed-text", ollama.WithBaseURL(baseURL))
+	if err != nil {
+		t.Fatalf("ollama.New: %v", err)
+	}
+	return p
 }

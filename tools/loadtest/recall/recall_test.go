@@ -143,7 +143,10 @@ func TestRecall(t *testing.T) {
 			return
 		}
 
-		provider := ollama.New(model, ollama.WithBaseURL(ollamaURL))
+		provider, err := ollama.New(model, ollama.WithBaseURL(ollamaURL))
+		if err != nil {
+			t.Fatalf("ollama.New: %v", err)
+		}
 		genStart := time.Now()
 		progress := func(done, total int) {
 			if done%500 != 0 && done != total {
@@ -242,7 +245,11 @@ func TestRecall(t *testing.T) {
 				ollamaURL, err)
 			return
 		}
-		embedder = ollama.New(model, ollama.WithBaseURL(ollamaURL))
+		provider, err := ollama.New(model, ollama.WithBaseURL(ollamaURL))
+		if err != nil {
+			t.Fatalf("ollama.New: %v", err)
+		}
+		embedder = provider
 	}
 	nodeLookup := sqlite.NewNodeLookupRepo(db)
 	svc := search.NewService(embedder, vstore, nodeLookup)

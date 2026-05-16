@@ -139,10 +139,13 @@ func TestAutolinkFP(t *testing.T) {
 
 	// --- Linker -----------------------------------------------------------
 	refs := sqlite.NewEmbeddingRefsRepo(db, db)
-	linker := autolink.NewLinker(refs, vstore,
+	linker, err := autolink.NewLinker(refs, vstore,
 		autolink.WithTopK(topK),
 		autolink.WithThreshold(float32(threshold)),
 	)
+	if err != nil {
+		t.Fatalf("autolink.NewLinker: %v", err)
+	}
 
 	// --- run Candidates for every source node -----------------------------
 	ctx := context.Background()

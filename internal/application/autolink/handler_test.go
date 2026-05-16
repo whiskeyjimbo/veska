@@ -13,6 +13,7 @@ import (
 
 	"github.com/whiskeyjimbo/veska/internal/application/autolink"
 	"github.com/whiskeyjimbo/veska/internal/core/domain"
+	"github.com/whiskeyjimbo/veska/internal/core/ports"
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/sqlite"
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/sqlite/queue"
 )
@@ -91,9 +92,66 @@ func (f *fakeFindingStore) Save(_ context.Context, fnd *domain.Finding) error {
 
 // ── unit-level tests against fakes ─────────────────────────────────────────
 
+// mustHandler unwraps an autolink.NewHandler result, failing the test if the
+// constructor returned an error.
+func mustHandler(t *testing.T, h *autolink.Handler, err error) *autolink.Handler {
+	t.Helper()
+	if err != nil {
+		t.Fatalf("autolink.NewHandler: %v", err)
+	}
+	return h
+}
+
+func TestNewHandler_NilDependencyReturnsTypedError(t *testing.T) {
+	linker := &fakeLinker{}
+	lookup := &fakeLookup{}
+	edges := &fakeEdgeStore{}
+	findings := &fakeFindingStore{}
+
+	cases := []struct {
+		name                  string
+		nilLinker, nilLookup  bool
+		nilEdges, nilFindings bool
+	}{
+		{name: "nil linker", nilLinker: true},
+		{name: "nil lookup", nilLookup: true},
+		{name: "nil edges", nilEdges: true},
+		{name: "nil findings", nilFindings: true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			var (
+				lk                       = linker
+				lu                       = lookup
+				ed  ports.EdgeStorage    = edges
+				fnd ports.FindingStorage = findings
+			)
+			var h *autolink.Handler
+			var err error
+			switch {
+			case tc.nilLinker:
+				h, err = autolink.NewHandler(nil, lu, ed, fnd)
+			case tc.nilLookup:
+				h, err = autolink.NewHandler(lk, nil, ed, fnd)
+			case tc.nilEdges:
+				h, err = autolink.NewHandler(lk, lu, nil, fnd)
+			case tc.nilFindings:
+				h, err = autolink.NewHandler(lk, lu, ed, nil)
+			}
+			if h != nil {
+				t.Errorf("expected nil *Handler, got %v", h)
+			}
+			if !errors.Is(err, autolink.ErrMissingDependency) {
+				t.Fatalf("err = %v, want wraps ErrMissingDependency", err)
+			}
+		})
+	}
+}
+
 func TestHandler_RejectsWrongKind(t *testing.T) {
 	t.Parallel()
-	h := autolink.NewHandler(&fakeLinker{}, &fakeLookup{}, &fakeEdgeStore{}, &fakeFindingStore{})
+	hh, herr := autolink.NewHandler(&fakeLinker{}, &fakeLookup{}, &fakeEdgeStore{}, &fakeFindingStore{})
+	h := mustHandler(t, hh, herr)
 	err := h.Handle(context.Background(), queue.Row{Kind: queue.WorkKindEmbed, Payload: "x.go"})
 	if err == nil {
 		t.Fatal("expected error for wrong kind, got nil")
@@ -103,7 +161,8 @@ func TestHandler_RejectsWrongKind(t *testing.T) {
 func TestHandler_EmptyPayloadIsNoop(t *testing.T) {
 	t.Parallel()
 	lk := &fakeLookup{}
-	h := autolink.NewHandler(&fakeLinker{}, lk, &fakeEdgeStore{}, &fakeFindingStore{})
+	hh, herr := autolink.NewHandler(&fakeLinker{}, lk, &fakeEdgeStore{}, &fakeFindingStore{})
+	h := mustHandler(t, hh, herr)
 	err := h.Handle(context.Background(), queue.Row{Kind: queue.WorkKindAutoLink, Payload: ""})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -119,7 +178,8 @@ func TestHandler_FileWithZeroNodesIsNoop(t *testing.T) {
 	linker := &fakeLinker{}
 	edges := &fakeEdgeStore{}
 	findings := &fakeFindingStore{}
-	h := autolink.NewHandler(linker, lk, edges, findings)
+	hh, herr := autolink.NewHandler(linker, lk, edges, findings)
+	h := mustHandler(t, hh, herr)
 
 	err := h.Handle(context.Background(), queue.Row{
 		Kind: queue.WorkKindAutoLink, RepoID: "r1", Branch: "main", Payload: "x.go",
@@ -141,7 +201,8 @@ func TestHandler_NoCandidatesIsNoop(t *testing.T) {
 	linker := &fakeLinker{out: nil}
 	edges := &fakeEdgeStore{}
 	findings := &fakeFindingStore{}
-	h := autolink.NewHandler(linker, lk, edges, findings)
+	hh, herr := autolink.NewHandler(linker, lk, edges, findings)
+	h := mustHandler(t, hh, herr)
 
 	err := h.Handle(context.Background(), queue.Row{
 		Kind: queue.WorkKindAutoLink, RepoID: "r1", Branch: "main", Payload: "x.go",
@@ -158,7 +219,8 @@ func TestHandler_LookupErrorWraps(t *testing.T) {
 	t.Parallel()
 	sentinel := errors.New("boom-lookup")
 	lk := &fakeLookup{err: sentinel}
-	h := autolink.NewHandler(&fakeLinker{}, lk, &fakeEdgeStore{}, &fakeFindingStore{})
+	hh, herr := autolink.NewHandler(&fakeLinker{}, lk, &fakeEdgeStore{}, &fakeFindingStore{})
+	h := mustHandler(t, hh, herr)
 	err := h.Handle(context.Background(), queue.Row{
 		Kind: queue.WorkKindAutoLink, RepoID: "r1", Branch: "main", Payload: "x.go",
 	})
@@ -171,7 +233,8 @@ func TestHandler_LinkerErrorWraps(t *testing.T) {
 	t.Parallel()
 	sentinel := errors.New("boom-linker")
 	lk := &fakeLookup{byPath: map[string][]string{"x.go": {"n1"}}}
-	h := autolink.NewHandler(&fakeLinker{err: sentinel}, lk, &fakeEdgeStore{}, &fakeFindingStore{})
+	hh, herr := autolink.NewHandler(&fakeLinker{err: sentinel}, lk, &fakeEdgeStore{}, &fakeFindingStore{})
+	h := mustHandler(t, hh, herr)
 	err := h.Handle(context.Background(), queue.Row{
 		Kind: queue.WorkKindAutoLink, RepoID: "r1", Branch: "main", Payload: "x.go",
 	})
@@ -185,7 +248,8 @@ func TestHandler_EdgeStorageErrorWraps(t *testing.T) {
 	sentinel := errors.New("boom-edges")
 	lk := &fakeLookup{byPath: map[string][]string{"x.go": {"n1"}}}
 	linker := &fakeLinker{out: []autolink.Candidate{{SourceNodeID: "n1", TargetNodeID: "n2", Score: 0.9}}}
-	h := autolink.NewHandler(linker, lk, &fakeEdgeStore{err: sentinel}, &fakeFindingStore{})
+	hh, herr := autolink.NewHandler(linker, lk, &fakeEdgeStore{err: sentinel}, &fakeFindingStore{})
+	h := mustHandler(t, hh, herr)
 	err := h.Handle(context.Background(), queue.Row{
 		Kind: queue.WorkKindAutoLink, RepoID: "r1", Branch: "main", Payload: "x.go",
 	})
@@ -199,7 +263,8 @@ func TestHandler_FindingStorageErrorWraps(t *testing.T) {
 	sentinel := errors.New("boom-findings")
 	lk := &fakeLookup{byPath: map[string][]string{"x.go": {"n1"}}}
 	linker := &fakeLinker{out: []autolink.Candidate{{SourceNodeID: "n1", TargetNodeID: "n2", Score: 0.9}}}
-	h := autolink.NewHandler(linker, lk, &fakeEdgeStore{}, &fakeFindingStore{err: sentinel})
+	hh, herr := autolink.NewHandler(linker, lk, &fakeEdgeStore{}, &fakeFindingStore{err: sentinel})
+	h := mustHandler(t, hh, herr)
 	err := h.Handle(context.Background(), queue.Row{
 		Kind: queue.WorkKindAutoLink, RepoID: "r1", Branch: "main", Payload: "x.go",
 	})
@@ -218,7 +283,8 @@ func TestHandler_FakesEmitOneEdgeAndOneFindingPerCandidate(t *testing.T) {
 	}}
 	edges := &fakeEdgeStore{}
 	findings := &fakeFindingStore{}
-	h := autolink.NewHandler(linker, lk, edges, findings)
+	hh, herr := autolink.NewHandler(linker, lk, edges, findings)
+	h := mustHandler(t, hh, herr)
 
 	err := h.Handle(context.Background(), queue.Row{
 		Kind: queue.WorkKindAutoLink, RepoID: "r1", Branch: "main", Payload: "x.go",
@@ -270,7 +336,8 @@ func TestHandler_ThreadsSourceContentHashOntoFinding(t *testing.T) {
 		{SourceNodeID: "n2", TargetNodeID: "t3", Score: 0.95},
 	}}
 	findings := &fakeFindingStore{}
-	h := autolink.NewHandler(linker, lk, &fakeEdgeStore{}, findings)
+	hh, herr := autolink.NewHandler(linker, lk, &fakeEdgeStore{}, findings)
+	h := mustHandler(t, hh, herr)
 
 	err := h.Handle(context.Background(), queue.Row{
 		Kind: queue.WorkKindAutoLink, RepoID: "r1", Branch: "main", Payload: "x.go",
@@ -313,7 +380,8 @@ func TestHandler_MissingSourceHashStaysNil(t *testing.T) {
 		{SourceNodeID: "n1", TargetNodeID: "t1", Score: 0.9},
 	}}
 	findings := &fakeFindingStore{}
-	h := autolink.NewHandler(linker, lk, &fakeEdgeStore{}, findings)
+	hh, herr := autolink.NewHandler(linker, lk, &fakeEdgeStore{}, findings)
+	h := mustHandler(t, hh, herr)
 
 	err := h.Handle(context.Background(), queue.Row{
 		Kind: queue.WorkKindAutoLink, RepoID: "r1", Branch: "main", Payload: "x.go",
@@ -343,7 +411,8 @@ func TestHandler_NodeContentHashErrorWraps(t *testing.T) {
 	linker := &fakeLinker{out: []autolink.Candidate{
 		{SourceNodeID: "n1", TargetNodeID: "t1", Score: 0.9},
 	}}
-	h := autolink.NewHandler(linker, lk, &fakeEdgeStore{}, &fakeFindingStore{})
+	hh, herr := autolink.NewHandler(linker, lk, &fakeEdgeStore{}, &fakeFindingStore{})
+	h := mustHandler(t, hh, herr)
 	err := h.Handle(context.Background(), queue.Row{
 		Kind: queue.WorkKindAutoLink, RepoID: "r1", Branch: "main", Payload: "x.go",
 	})
@@ -403,7 +472,8 @@ func TestHandler_Integration_PersistsAndIsIdempotent(t *testing.T) {
 		{SourceNodeID: "n1", TargetNodeID: "t2", Score: 0.88},
 		{SourceNodeID: "n2", TargetNodeID: "t3", Score: 0.95},
 	}}
-	h := autolink.NewHandler(linker, lookupRepo, edgeRepo, findingRepo)
+	hh, herr := autolink.NewHandler(linker, lookupRepo, edgeRepo, findingRepo)
+	h := mustHandler(t, hh, herr)
 
 	row := queue.Row{Kind: queue.WorkKindAutoLink, RepoID: "r1", Branch: "main", Payload: "x.go"}
 	if err := h.Handle(context.Background(), row); err != nil {
