@@ -13,9 +13,11 @@ import (
 )
 
 // newOllamaStub returns an httptest.Server that responds to
-// POST /api/embeddings with an Ollama-shaped JSON envelope whose first
-// vector element varies per request (so callers can assert variation
-// across nodes).
+// POST /api/embeddings with an Ollama-shaped JSON envelope. Each request
+// gets a vector pointing along a different axis (request idx selects the
+// non-zero dimension), so the vectors stay distinct even after the
+// generator L2-normalises them — magnitude-only variation would collapse
+// to identical unit vectors.
 func newOllamaStub(t *testing.T, dim int) *httptest.Server {
 	t.Helper()
 	var n int64
@@ -27,7 +29,7 @@ func newOllamaStub(t *testing.T, dim int) *httptest.Server {
 		}
 		idx := atomic.AddInt64(&n, 1)
 		vec := make([]float32, dim)
-		vec[0] = float32(idx)
+		vec[(idx-1)%int64(dim)] = float32(idx)
 		_ = json.NewEncoder(w).Encode(map[string]any{"embedding": vec})
 	})
 	mux.HandleFunc("/api/tags", func(w http.ResponseWriter, _ *http.Request) {
