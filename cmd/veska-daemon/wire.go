@@ -18,6 +18,7 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/application/embedder"
 	"github.com/whiskeyjimbo/veska/internal/application/revalidate"
 	"github.com/whiskeyjimbo/veska/internal/application/search"
+	"github.com/whiskeyjimbo/veska/internal/application/wiki"
 	"github.com/whiskeyjimbo/veska/internal/config"
 	"github.com/whiskeyjimbo/veska/internal/core/ports"
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/embedding/ollama"
@@ -371,6 +372,17 @@ func registerMCPTools(r *mcp.Registry, d mcpDeps) {
 	nodes := sqlite.NewNodeLookupRepo(pools.ReadDB)
 	blastSvc := blastradius.NewService(edges, nodes, d.staging)
 	mcp.RegisterBlastTools(r, blastSvc, repoRootFunc(pools.ReadDB), gitwatch.ChangedFiles)
+
+	// Wiki hot_zone surface. Change frequency comes from the git commit-history
+	// reader over the default look-back window; blast radius reuses blastSvc.
+	hotZoneCounts := func(ctx context.Context, repoRoot string) (map[string]int, error) {
+		return gitwatch.ChangeCounts(ctx, repoRoot, 0)
+	}
+	if hotZoneSvc, err := wiki.NewHotZoneService(hotZoneCounts, nodes.NodesInFile, blastSvc); err == nil {
+		mcp.RegisterWikiTools(r, hotZoneSvc, repoRootFunc(pools.ReadDB))
+	} else {
+		mcp.RegisterWikiTools(r, nil, nil)
+	}
 
 	// Semantic-search tools. The Service orchestrates embed → vector search →
 	// node hydration with lexical fallback.
