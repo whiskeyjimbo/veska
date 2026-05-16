@@ -167,6 +167,47 @@ func Add(ctx context.Context, db *sql.DB, rootPath string) (string, error) {
 	return id, nil
 }
 
+// Record is a registered repository as stored in the repos table.
+type Record struct {
+	RepoID          string
+	RootPath        string
+	ActiveBranch    string // may be empty
+	LastPromotedSHA string // may be empty
+}
+
+// List returns every registered repository ordered by repo_id. The nullable
+// active_branch and last_promoted_sha columns are flattened to "". An empty
+// repos table yields a nil slice and a nil error.
+func List(ctx context.Context, db *sql.DB) ([]Record, error) {
+	rows, err := db.QueryContext(ctx,
+		`SELECT repo_id, root_path, active_branch, last_promoted_sha
+		 FROM repos ORDER BY repo_id`,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("list repos: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+
+	var out []Record
+	for rows.Next() {
+		var (
+			rec     Record
+			branch  sql.NullString
+			lastSHA sql.NullString
+		)
+		if err := rows.Scan(&rec.RepoID, &rec.RootPath, &branch, &lastSHA); err != nil {
+			return nil, fmt.Errorf("scan repo row: %w", err)
+		}
+		rec.ActiveBranch = branch.String
+		rec.LastPromotedSHA = lastSHA.String
+		out = append(out, rec)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate repo rows: %w", err)
+	}
+	return out, nil
+}
+
 // Remove deletes the repo row identified by repoID (CASCADE removes nodes/edges)
 // and removes installed git hooks if the git dir still exists.
 func Remove(ctx context.Context, db *sql.DB, repoID string) error {
