@@ -90,6 +90,10 @@ func (f *fakeFindingStore) Save(_ context.Context, fnd *domain.Finding) error {
 	return nil
 }
 
+func (f *fakeFindingStore) CloseObsolete(_ context.Context, _, _ string) error {
+	return f.err
+}
+
 // ── unit-level tests against fakes ─────────────────────────────────────────
 
 // mustHandler unwraps an autolink.NewHandler result, failing the test if the

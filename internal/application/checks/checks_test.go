@@ -33,6 +33,12 @@ func (r *recordingStorage) Save(_ context.Context, f *domain.Finding) error {
 	return nil
 }
 
+func (r *recordingStorage) CloseObsolete(_ context.Context, _, _ string) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.err
+}
+
 func (r *recordingStorage) snapshot() []*domain.Finding {
 	r.mu.Lock()
 	defer r.mu.Unlock()
