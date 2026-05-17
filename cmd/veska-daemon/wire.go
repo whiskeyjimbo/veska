@@ -152,6 +152,14 @@ type Daemon struct {
 func newDaemon(cfg Config) (*Daemon, error) {
 	cfg = ResolveConfig(cfg)
 
+	// Load ~/.veska/config.toml (defaults < config.toml < env vars). A missing
+	// file is not an error. Selected values below are read from this surface
+	// instead of compile-time constants; see docs/operations/CONFIG-SURFACE.md.
+	fileCfg, err := config.Load()
+	if err != nil {
+		return nil, fmt.Errorf("daemon: load config: %w", err)
+	}
+
 	// Validate backend kind early so bad env doesn't surface as a confusing
 	// downstream open error.
 	switch cfg.VectorBackend {
@@ -233,7 +241,7 @@ func newDaemon(cfg Config) (*Daemon, error) {
 	}
 	refs := sqlite.NewEmbeddingRefsRepo(pools.ReadDB, pools.WriteEmbed)
 	embedWorker, err := embedder.NewWorker(refs, provider, vec,
-		embedder.WithRatePerSec(embedder.DefaultRatePerSec),
+		embedder.WithRatePerSec(fileCfg.Embedder.RatePerSec),
 		embedder.WithMaxAttempts(embedder.DefaultMaxAttempts),
 	)
 	if err != nil {
@@ -301,7 +309,13 @@ func newDaemon(cfg Config) (*Daemon, error) {
 		ports.WorkKindWiki:       wikiH,
 		ports.WorkKindEmbed:      noopEmbedHandler{}, // drained by embed worker
 	}
-	poller := queue.New(pools.ReadDB, pools.WriteHot, handlers)
+	// Post-promotion queue poll cadence comes from config.toml; an
+	// unparseable value falls back to the queue package default.
+	pollInterval := 250 * time.Millisecond
+	if d, derr := time.ParseDuration(fileCfg.PostPromotionQueue.PollInterval); derr == nil && d > 0 {
+		pollInterval = d
+	}
+	poller := queue.NewWithInterval(pools.ReadDB, pools.WriteHot, handlers, pollInterval)
 
 	// fsnotify multi-repo watcher.
 	watcher := gitwatch.NewMultiRepoWatcher()

@@ -4,10 +4,27 @@ status: reference
 last_reviewed: 2026-05-08
 related: [SOLO-13]
 verified: true
-verified_date: "2026-05-16"
+verified_date: "2026-05-17"
 ---
 
 # Configuration Surface
+
+> **Loader status (solov2-s5c.6).** `internal/config` now ships a real
+> TOML loader (`config.go`): `Load()` resolves
+> **defaults < `~/.veska/config.toml` < env vars** and `Validate()`
+> enforces the tracing rule. The struct covers `[daemon]`, `[logging]`,
+> `[metrics]`, `[tracing]`, `[storage]`, `[watcher]`, `[embedder]`,
+> `[post_promotion_queue]`, `[budget]`, `[llm_generator]`, `[review]`.
+> **Consumed today (live):** `embedder.rate_per_sec` and
+> `post_promotion_queue.poll_interval` are threaded into
+> `cmd/veska-daemon/wire.go`; the four env vars
+> (`VESKA_OLLAMA_URL`, `VESKA_EMBED_MODEL`, `VESKA_VECTOR_BACKEND`,
+> `VESKA_DEBUG`) override their struct fields. **Planned:** every other
+> key is decoded and available on `Config` but not yet read by the
+> daemon. Sections not in the struct above (`[parser]`, `[branch_pk]`,
+> `[save]`, `[vuln_source]`, `[tracker]`, `[mcp]`, `[memory]`,
+> `[supervisor]`, `[backup]`, `[writer.*]`, `[reader]`, `[tokens]`,
+> `[retention]`, `[autolink]`) remain documented-but-unparsed.
 
 The whole story. One file (`~/.veska/config.toml`) plus a handful
 of environment variables. No per-workspace config files, no
