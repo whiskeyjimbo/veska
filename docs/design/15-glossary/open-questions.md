@@ -6,7 +6,7 @@ version: 0.1.0
 last_reviewed: 2026-05-11
 related: [SOLO-08, SOLO-13, SOLO-14]
 verified: true
-verified_date: "2026-05-16"
+verified_date: "2026-05-17"
 ---
 
 # SOLO-OQ — Open Questions
@@ -14,8 +14,8 @@ verified_date: "2026-05-16"
 Each entry has a milestone gate. When the gate runs, the question
 is resolved by an ADR or a number in SOLO-13.
 
-We do not maintain a longer list. Questions about deferred
-features live in `deferred/`, not here.
+We do not maintain a longer list. Deferred features are tracked
+in the roadmap (`docs/design/14-roadmap/README.md`), not here.
 
 ## OQ-S001 — sqlite-vec p95 and recall, and the vec0 ceiling
 
@@ -51,7 +51,7 @@ outcome (green/yellow/red) determines whether ADR-S0001 stands or
 is amended before M1 implementation begins. If the measured
 vec0 ceiling falls below 250 000 nodes, the HNSW pivot ADR is
 **mandatory before M1 m1.03 begins** (SOLO-13 §3.3.1).
-See `milestones/M0.md`.
+See `docs/milestones/closed/M0.md`.
 
 **RESOLVED — M0 spike (commit 4d63d34). Verdict: RED-CEILING.**
 
@@ -197,7 +197,7 @@ under the row-count distributions we expect? The full bench
 harness (m1.08) re-verifies the same shape on the user's largest
 real repo at M1 close.
 
-**Outcomes:** see `milestones/M0.md` §Outcomes "Branch-in-PK
+**Outcomes:** see `docs/milestones/closed/M0.md` §Outcomes "Branch-in-PK
 schema" for the full green/yellow/red matrix. Summary:
 - **Green.** Linear row growth, bounded GC sweep, disk under
   target (≤ 5 GiB at 50 branches × 100k symbols). Schema stands;
