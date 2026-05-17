@@ -5,6 +5,8 @@ status: draft
 version: 0.1.0
 last_reviewed: 2026-05-08
 related: [SOLO-01, SOLO-04, SOLO-08, SOLO-11]
+verified: true
+verified_date: "2026-05-16"
 ---
 
 # SOLO-05 — Plugin Surface
