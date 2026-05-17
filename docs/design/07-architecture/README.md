@@ -5,6 +5,8 @@ status: draft
 version: 0.1.0
 last_reviewed: 2026-05-08
 related: [SOLO-01, SOLO-03, SOLO-04, SOLO-08]
+verified: true
+verified_date: "2026-05-16"
 ---
 
 # SOLO-07 — Architecture
@@ -508,7 +510,7 @@ One custom analyser, mandatory:
 
 | Rule | Check |
 |---|---|
-| `layercheck` | `core/domain/` imports nothing from `application/` or `infrastructure/`. `core/ports/` imports nothing from `application/` or `infrastructure/`. **`infrastructure/` imports nothing from `application/`** — driving adapters depend on driving ports in `core/ports/`, not on application packages. No allow-list, no carve-out. |
+| `layercheck` | `core/` imports nothing from `application/` or `infrastructure/` (covers both `core/domain/` and `core/ports/`). **`application/` imports nothing from `infrastructure/`** — application code depends on ports in `core/ports/`, not on concrete adapters. `application/` may import only `core/ports/` and `core/domain/`. No allow-list, no carve-out. |
 
 `layercheck` is the only architectural lint. The standard
 `golangci-lint` set covers the rest.
