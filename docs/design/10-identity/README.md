@@ -5,6 +5,8 @@ status: draft
 version: 0.2.0
 last_reviewed: 2026-05-08
 related: [SOLO-01, SOLO-08, SOLO-11, SOLO-15]
+verified: true
+verified_date: "2026-05-16"
 ---
 
 # SOLO-10 — Identity
