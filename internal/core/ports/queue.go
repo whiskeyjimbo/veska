@@ -13,6 +13,7 @@ const (
 	WorkKindAutoLink   WorkKind = "auto_link"
 	WorkKindRevalidate WorkKind = "revalidate"
 	WorkKindReview     WorkKind = "review"
+	WorkKindWiki       WorkKind = "wiki"
 )
 
 // WorkRow is the application-facing view of one row pulled from the

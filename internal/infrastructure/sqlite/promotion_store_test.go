@@ -109,3 +109,53 @@ func TestPromotionStore_RollsBackOnMidTxFailure(t *testing.T) {
 		t.Errorf("queue rows after rollback: want %d (unchanged), got %d", queue, queue2)
 	}
 }
+
+// TestPromotionStore_EnqueuesExactlyOneWikiRow verifies AC1: a promotion
+// enqueues exactly one repo-scoped WorkKindWiki row regardless of how many
+// files the batch touches.
+func TestPromotionStore_EnqueuesExactlyOneWikiRow(t *testing.T) {
+	t.Parallel()
+	db := openTest(t, filepath.Join(t.TempDir(), "v.db"))
+	if _, err := db.Exec(
+		`INSERT INTO repos (repo_id, root_path, added_at) VALUES (?, ?, ?)`,
+		"repo1", "/tmp/repo1", time.Now().UnixMilli(),
+	); err != nil {
+		t.Fatalf("insert repo: %v", err)
+	}
+	store := sqlite.NewPromotionStore(db, sqlite.NewFTSSink(), sqlite.NewEmbedRefSink())
+
+	// Multi-file batch — the wiki lane must still get exactly one row.
+	na, _ := domain.NewNode("na", "a.go", "A", domain.KindFunction)
+	nb, _ := domain.NewNode("nb", "b.go", "B", domain.KindFunction)
+	if err := store.Promote(context.Background(), application.PromotionBatch{
+		RepoID: "repo1", Branch: "main", GitSHA: "sha-1", Actor: systemActor(),
+		PromotedAt: time.Now().UnixMilli(),
+		Files: []application.PromotionFile{
+			{Path: "a.go", Nodes: []*domain.Node{na}},
+			{Path: "b.go", Nodes: []*domain.Node{nb}},
+		},
+	}); err != nil {
+		t.Fatalf("Promote: %v", err)
+	}
+
+	var wikiRows int
+	if err := db.QueryRow(
+		`SELECT COUNT(*) FROM post_promotion_queue WHERE work_kind='wiki'`,
+	).Scan(&wikiRows); err != nil {
+		t.Fatalf("count wiki rows: %v", err)
+	}
+	if wikiRows != 1 {
+		t.Errorf("wiki rows = %d, want exactly 1", wikiRows)
+	}
+
+	// The wiki row carries an empty (repo-scoped) payload.
+	var payload string
+	if err := db.QueryRow(
+		`SELECT payload FROM post_promotion_queue WHERE work_kind='wiki'`,
+	).Scan(&payload); err != nil {
+		t.Fatalf("read wiki payload: %v", err)
+	}
+	if payload != "" {
+		t.Errorf("wiki payload = %q, want empty", payload)
+	}
+}

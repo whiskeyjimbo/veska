@@ -7,6 +7,7 @@ import (
 
 	"github.com/whiskeyjimbo/veska/internal/application"
 	"github.com/whiskeyjimbo/veska/internal/core/domain"
+	"github.com/whiskeyjimbo/veska/internal/core/ports"
 )
 
 // Compile-time assertion that PromotionStore satisfies the application port.
@@ -234,6 +235,17 @@ func (s *PromotionStore) Promote(ctx context.Context, batch application.Promotio
 				return fmt.Errorf("promoter: enqueue %q for %q: %w", wk, filePath, err)
 			}
 		}
+	}
+
+	// Enqueue exactly one repo-scoped WorkKindWiki row per promotion (not
+	// per-file). The wiki lane regenerates the whole hot_zone + entry_points
+	// surfaces, so a single row per promotion is sufficient; the payload is
+	// empty because the handler operates on repo-scoped state.
+	if _, err := queueStmt.ExecContext(ctx,
+		batch.GitSHA, repoID, branch, batch.GitSHA, string(ports.WorkKindWiki), "", now,
+	); err != nil {
+		_ = tx.Rollback()
+		return fmt.Errorf("promoter: enqueue wiki: %w", err)
 	}
 
 	if err := tx.Commit(); err != nil {

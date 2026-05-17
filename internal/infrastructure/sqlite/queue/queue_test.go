@@ -244,3 +244,45 @@ func TestPoller_NoHandlerRowSkipped(t *testing.T) {
 		t.Errorf("expected state=pending (no handler registered), got %q", state)
 	}
 }
+
+// TestPoller_WikiLaneDrains verifies the WorkKindWiki lane: a pending wiki
+// row is picked up by its handler and transitions to state=done.
+func TestPoller_WikiLaneDrains(t *testing.T) {
+	t.Parallel()
+
+	db := openTestDB(t)
+	seq := insertPendingRow(t, db, queue.WorkKindWiki)
+
+	called := make(chan queue.Row, 1)
+	h := &handlerFunc{fn: func(_ context.Context, row queue.Row) error {
+		called <- row
+		return nil
+	}}
+	handlers := map[queue.WorkKind]queue.WorkHandler{
+		queue.WorkKindWiki: h,
+	}
+	p := queue.NewWithInterval(db, db, handlers, 10*time.Millisecond)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	p.Start(ctx)
+
+	select {
+	case row := <-called:
+		if row.Kind != queue.WorkKindWiki {
+			t.Errorf("handler got kind=%q, want wiki", row.Kind)
+		}
+	case <-ctx.Done():
+		t.Fatal("timeout: wiki handler was never called")
+	}
+
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		if state, _ := rowState(t, db, seq); state == "done" {
+			return
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	state, _ := rowState(t, db, seq)
+	t.Errorf("expected wiki row state=done, got %q", state)
+}
