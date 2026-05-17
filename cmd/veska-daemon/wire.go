@@ -15,6 +15,7 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/application/autolink"
 	"github.com/whiskeyjimbo/veska/internal/application/blastradius"
 	"github.com/whiskeyjimbo/veska/internal/application/checks"
+	"github.com/whiskeyjimbo/veska/internal/application/contextpack"
 	"github.com/whiskeyjimbo/veska/internal/application/embedder"
 	"github.com/whiskeyjimbo/veska/internal/application/revalidate"
 	"github.com/whiskeyjimbo/veska/internal/application/search"
@@ -397,10 +398,64 @@ func registerMCPTools(r *mcp.Registry, d mcpDeps) {
 		mcp.RegisterEntryPointsTool(r, nil)
 	}
 
+	// Context-pack surface. Assembles a token-bounded bundle of relevant
+	// nodes / commits / findings / tasks for a symbol or a task; commits
+	// come from the git commit-history reader, the active task from the
+	// tasks table.
+	fileHistory := func(ctx context.Context, repoRoot, path string, window time.Duration) ([]contextpack.CommitInfo, error) {
+		commits, err := gitwatch.FileHistory(ctx, repoRoot, path, window)
+		if err != nil {
+			return nil, err
+		}
+		out := make([]contextpack.CommitInfo, 0, len(commits))
+		for _, c := range commits {
+			out = append(out, contextpack.CommitInfo{
+				Hash: c.Hash, Author: c.Author, When: c.When, Subject: c.Subject,
+			})
+		}
+		return out, nil
+	}
+	if cpAsm, err := contextpack.NewAssembler(
+		graph.FindNodes, blastSvc, fileHistory, findingQuerier.OpenFindingNodeIDs,
+		gitwatch.ChangedFiles, nodes.NodesInFile, activeTaskFunc(pools.ReadDB),
+	); err == nil {
+		mcp.RegisterContextPackTool(r, cpAsm, repoRootFunc(pools.ReadDB))
+	} else {
+		mcp.RegisterContextPackTool(r, nil, nil)
+	}
+
 	// Semantic-search tools. The Service orchestrates embed → vector search →
 	// node hydration with lexical fallback.
 	searchSvc := search.NewService(d.provider, d.vectors, nodes)
 	mcp.RegisterSearchTools(r, searchSvc, d.refs, d.vectors, nodes)
+}
+
+// activeTaskFunc returns a contextpack.ActiveTaskFunc reading the repo's
+// active task from the tasks table — the same table tools_tasks.go owns.
+// No active task yields (nil, nil) rather than an error.
+func activeTaskFunc(db *sql.DB) contextpack.ActiveTaskFunc {
+	return func(ctx context.Context, repoID string) (*contextpack.TaskInfo, error) {
+		var (
+			t                   contextpack.TaskInfo
+			tracker, trackerRef sql.NullString
+			active              int
+		)
+		err := db.QueryRowContext(ctx,
+			`SELECT task_id, repo_id, tracker, tracker_ref, title, active
+			   FROM tasks WHERE repo_id = ? AND active = 1`,
+			repoID,
+		).Scan(&t.TaskID, &t.RepoID, &tracker, &trackerRef, &t.Title, &active)
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, nil
+		}
+		if err != nil {
+			return nil, fmt.Errorf("active task lookup: %w", err)
+		}
+		t.Tracker = tracker.String
+		t.TrackerRef = trackerRef.String
+		t.Active = active != 0
+		return &t, nil
+	}
 }
 
 // repoRootFunc returns an mcp.RepoRootFunc that resolves a repoID to its
