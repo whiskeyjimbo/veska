@@ -5,6 +5,8 @@ status: draft
 version: 0.1.0
 last_reviewed: 2026-05-09
 related: [SOLO-03, SOLO-08, SOLO-09, SOLO-10, SOLO-13]
+verified: true
+verified_date: "2026-05-16"
 ---
 
 # SOLO-16 — Error Catalogue
@@ -123,6 +125,20 @@ Audit line: not written for the panic (the daemon is dying). Crash details land 
 | `ErrInternal` | -32603 | Unhandled handler panic; logged as a defect | `{"trace_id": "..."}` | File a bug with the trace ID |
 
 Audit line: every refusal and every handler error is logged synchronously per SOLO-10 §4. `result` carries `"refused: <veska_code>"` or `"error: <veska_code>"`.
+
+> **Implementation status (M0–M4).** The shipped MCP server
+> (`internal/infrastructure/mcp/server.go`) defines the standard
+> JSON-RPC codes (`CodeParseError -32700`, `CodeInvalidRequest -32600`,
+> `CodeMethodNotFound -32601`, `CodeInvalidParams -32602`,
+> `CodeInternalError -32603`) plus three extensions:
+> `CodeNotFound = -32002`, `CodeFailedPrecondition = -32003`
+> (`tools_search.go`), and `CodeHumanRequired = -32001`
+> (`tool_close_finding.go`). The `-32002`/`-32003` assignments in the
+> table above (`ErrBusy`, `ErrRepoNotRegistered`) and the
+> `veska_code` data envelope are not yet wired — handlers currently
+> return bare `RPCError{Code, Message}` values without a `data` block.
+> This table remains the target catalogue; reconcile when the
+> envelope lands.
 
 ### 3.4 Pipeline / async work
 
