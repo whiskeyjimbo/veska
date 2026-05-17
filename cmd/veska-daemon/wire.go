@@ -5,11 +5,14 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"io"
 	"log/slog"
 	"os"
 	"path/filepath"
 	"sync"
 	"time"
+
+	"github.com/prometheus/client_golang/prometheus"
 
 	"github.com/whiskeyjimbo/veska/internal/application"
 	"github.com/whiskeyjimbo/veska/internal/application/autolink"
@@ -32,6 +35,7 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/sqlite/queue"
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/treesitter"
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/vector"
+	"github.com/whiskeyjimbo/veska/internal/observability"
 	"github.com/whiskeyjimbo/veska/internal/repo"
 )
 
@@ -78,6 +82,15 @@ type Config struct {
 	// nomic-embed-text.
 	OllamaURL  string
 	EmbedModel string
+
+	// MetricsEnabled / MetricsListen override the metrics listener settings
+	// resolved from config.toml ([metrics]). They exist so a caller (notably
+	// tests) can drive the Prometheus listener without writing a config file.
+	// When MetricsEnabled is false the file config still applies; the override
+	// only forces the listener on. MetricsListen, when non-empty, replaces the
+	// configured listen address (use "127.0.0.1:0" to claim a free port).
+	MetricsEnabled bool
+	MetricsListen  string
 }
 
 // ResolveConfig fills in defaults (env, then hard-coded) on a partially
@@ -140,6 +153,19 @@ type Daemon struct {
 	mcpsrv  *mcp.Server
 	mcpReg  *mcp.Registry
 
+	// metrics is the Prometheus metric set, non-nil only when the metrics
+	// listener is enabled. It is threaded into every Metrics-aware consumer.
+	metrics *observability.Metrics
+	// metricsReg is the dedicated registry backing metrics; it is served by
+	// the /metrics HTTP listener. Non-nil exactly when metrics is non-nil.
+	metricsReg *prometheus.Registry
+	// metricsListen is the resolved listen address; metricsCloser shuts the
+	// HTTP listener down on Stop; metricsAddr is the actual bound address
+	// (resolved after Start, so a ":0" listen yields the real port).
+	metricsListen string
+	metricsCloser io.Closer
+	metricsAddr   string
+
 	startOnce sync.Once
 	stopOnce  sync.Once
 	started   bool
@@ -161,6 +187,25 @@ func newDaemon(cfg Config) (*Daemon, error) {
 	fileCfg, err := config.Load()
 	if err != nil {
 		return nil, fmt.Errorf("daemon: load config: %w", err)
+	}
+
+	// Prometheus metrics. The metric set is constructed (and registered on the
+	// default registry) only when metrics are enabled — either via config.toml
+	// ([metrics] enabled) or the Config.MetricsEnabled override. A nil *Metrics
+	// is threaded into the Metrics-aware consumers when disabled; they are all
+	// nil-safe. The HTTP listener itself is bound later, in Start.
+	metricsEnabled := fileCfg.Metrics.Enabled || cfg.MetricsEnabled
+	metricsListen := fileCfg.Metrics.Listen
+	if cfg.MetricsListen != "" {
+		metricsListen = cfg.MetricsListen
+	}
+	var (
+		metrics    *observability.Metrics
+		metricsReg *prometheus.Registry
+	)
+	if metricsEnabled {
+		metricsReg = prometheus.NewRegistry()
+		metrics = observability.NewMetrics(metricsReg)
 	}
 
 	// Gate the review-pipeline LLM provider: only local Ollama is supported in
@@ -243,7 +288,7 @@ func newDaemon(cfg Config) (*Daemon, error) {
 	contractRepo := sqlite.NewContractDriftRepo(pools.ReadDB)
 	checkReg.Register(checks.NewDeadCodeCheck(deadcodeRepo))
 	checkReg.Register(checks.NewContractDriftCheck(contractRepo))
-	runner := checks.NewRunner(checkReg, findings, nil)
+	runner := checks.NewRunner(checkReg, findings, metrics)
 	promoter.SetCheckRunner(checkRunnerAdapter{inner: runner})
 
 	// Embedding provider + embedder worker.
@@ -256,6 +301,7 @@ func newDaemon(cfg Config) (*Daemon, error) {
 	embedWorker, err := embedder.NewWorker(refs, provider, vec,
 		embedder.WithRatePerSec(fileCfg.Embedder.RatePerSec),
 		embedder.WithMaxAttempts(embedder.DefaultMaxAttempts),
+		embedder.WithMetrics(metrics),
 	)
 	if err != nil {
 		_ = pools.Close()
@@ -268,7 +314,7 @@ func newDaemon(cfg Config) (*Daemon, error) {
 	// pending if other code paths enqueue them.
 	nodeLookup := sqlite.NewNodeLookupRepo(pools.ReadDB)
 	edgeRepo := sqlite.NewEdgeRepo(pools.WriteHot)
-	linker, err := autolink.NewLinker(refs, vec)
+	linker, err := autolink.NewLinker(refs, vec, autolink.WithMetrics(metrics))
 	if err != nil {
 		_ = pools.Close()
 		return nil, fmt.Errorf("daemon: autolink linker: %w", err)
@@ -279,7 +325,7 @@ func newDaemon(cfg Config) (*Daemon, error) {
 		return nil, fmt.Errorf("daemon: autolink handler: %w", err)
 	}
 	revalRepo := sqlite.NewRevalidateRepo(pools.WriteHot)
-	revalH := revalidate.NewHandler(revalRepo)
+	revalH := revalidate.NewHandler(revalRepo, revalidate.WithMetrics(metrics))
 
 	// Wiki regeneration handler. The WorkKindWiki lane regenerates both the
 	// hot_zone and entry_points Markdown pages after every promotion and
@@ -357,8 +403,15 @@ func newDaemon(cfg Config) (*Daemon, error) {
 			return nil, fmt.Errorf("daemon: review audit writer: %w", aerr)
 		}
 
+		reviewOpts := []review.HandlerOption{
+			review.WithQuota(quota), review.WithAuditWriter(auditW),
+		}
+		if metrics != nil {
+			reviewOpts = append(reviewOpts,
+				review.WithErrorCounter(metricsErrorCounter{m: metrics}))
+		}
 		reviewH, rerr := review.NewHandler(reviewGen, reviewLoader, reviewRoot, findings,
-			review.WithQuota(quota), review.WithAuditWriter(auditW))
+			reviewOpts...)
 		if rerr != nil {
 			_ = pools.Close()
 			return nil, fmt.Errorf("daemon: review handler: %w", rerr)
@@ -385,23 +438,38 @@ func newDaemon(cfg Config) (*Daemon, error) {
 		vectors:  vec,
 		provider: provider,
 		refs:     refs,
+		metrics:  metrics,
 	})
 	mcpsrv := mcp.NewServer(cfg.CLISockPath, cfg.MCPSockPath, registry)
 
 	return &Daemon{
-		cfg:      cfg,
-		pools:    pools,
-		vectors:  vec,
-		staging:  staging,
-		gate:     gate,
-		ingester: ingester,
-		promoter: promoter,
-		embed:    embedWorker,
-		poller:   poller,
-		watcher:  watcher,
-		mcpsrv:   mcpsrv,
-		mcpReg:   registry,
+		cfg:           cfg,
+		pools:         pools,
+		vectors:       vec,
+		staging:       staging,
+		gate:          gate,
+		ingester:      ingester,
+		promoter:      promoter,
+		embed:         embedWorker,
+		poller:        poller,
+		watcher:       watcher,
+		mcpsrv:        mcpsrv,
+		mcpReg:        registry,
+		metrics:       metrics,
+		metricsReg:    metricsReg,
+		metricsListen: metricsListen,
 	}, nil
+}
+
+// metricsErrorCounter adapts *observability.Metrics to the review.ErrorCounter
+// port: IncError bumps the veska_error_count series for the given kind label.
+// It is only constructed when metrics are enabled, so m is always non-nil.
+type metricsErrorCounter struct {
+	m *observability.Metrics
+}
+
+func (c metricsErrorCounter) IncError(kind string) {
+	c.m.ErrorCount.WithLabelValues(kind).Inc()
 }
 
 // mcpRegistry exposes the daemon's MCP tool registry. It is used by tests to
@@ -444,6 +512,7 @@ type mcpDeps struct {
 	vectors  ports.VectorStorage
 	provider ports.EmbeddingProvider
 	refs     *sqlite.EmbeddingRefsRepo
+	metrics  *observability.Metrics
 }
 
 // registerMCPTools wires every tool family into the registry: findings,
@@ -534,7 +603,8 @@ func registerMCPTools(r *mcp.Registry, d mcpDeps) {
 
 	// Semantic-search tools. The Service orchestrates embed → vector search →
 	// node hydration with lexical fallback.
-	searchSvc := search.NewService(d.provider, d.vectors, nodes)
+	searchSvc := search.NewService(d.provider, d.vectors, nodes,
+		search.WithMetrics(d.metrics))
 	mcp.RegisterSearchTools(r, searchSvc, d.refs, d.vectors, nodes)
 }
 
@@ -594,6 +664,21 @@ func (d *Daemon) Start(ctx context.Context) error {
 		d.ctx, d.cancel = context.WithCancel(ctx)
 		d.mcpDone = make(chan struct{})
 		d.wDone = make(chan struct{})
+
+		// Prometheus metrics HTTP listener. Bound only when metrics are
+		// enabled; the closer is shut down in Stop. A bind failure is logged,
+		// not fatal — a daemon without a metrics endpoint is still a valid
+		// running daemon.
+		if d.metrics != nil {
+			closer, addr, err := observability.StartHTTPListener(d.metricsListen, d.metricsReg)
+			if err != nil {
+				slog.Error("daemon: metrics listener", "addr", d.metricsListen, "err", err)
+			} else {
+				d.metricsCloser = closer
+				d.metricsAddr = addr
+				slog.Info("daemon: metrics listener bound", "addr", addr)
+			}
+		}
 
 		// MCP server (its own goroutine; Start blocks until ctx is done).
 		go func() {
@@ -693,6 +778,14 @@ func (d *Daemon) Stop() error {
 			select {
 			case <-d.wDone:
 			case <-time.After(500 * time.Millisecond):
+			}
+		}
+
+		// Shut the metrics HTTP listener down gracefully so its serve
+		// goroutine exits and the port is released for the next start.
+		if d.metricsCloser != nil {
+			if err := d.metricsCloser.Close(); err != nil {
+				stopErr = errors.Join(stopErr, fmt.Errorf("daemon: close metrics listener: %w", err))
 			}
 		}
 
