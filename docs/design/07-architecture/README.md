@@ -6,7 +6,7 @@ version: 0.1.0
 last_reviewed: 2026-05-08
 related: [SOLO-01, SOLO-03, SOLO-04, SOLO-08]
 verified: true
-verified_date: "2026-05-16"
+verified_date: "2026-05-17"
 ---
 
 # SOLO-07 — Architecture
@@ -26,7 +26,8 @@ ADR, not a present design constraint.
                 └──────────┬──────────┘
                            │
                 ┌──────────▼──────────┐
-                │   bootstrap/        │   composition root (manual DI)
+                │ cmd/veska-daemon/   │   composition root (manual DI;
+                │   wire.go           │   wire.go lives in the binary pkg)
                 └──────────┬──────────┘
                            │
             ┌──────────────┴──────────────┐
@@ -52,11 +53,16 @@ may import only from layers *below* it on the page, not above.
 `core/domain` imports nothing. `core/ports` imports only
 `core/domain`. `application` and `infrastructure` both import
 `core/domain` and `core/ports` — they are sibling layers and
-must not import each other. `bootstrap/` is the only place that
-imports both `application/` and `infrastructure/` (so it can
-wire concrete adapters into use cases). `cmd/` imports
-`bootstrap/` plus standard library; it does not reach into any
-other layer.
+must not import each other. The composition root is the only
+place that imports both `application/` and `infrastructure/`
+(so it can wire concrete adapters into use cases). The
+composition root for the daemon ships *as part of the binary
+package* — `cmd/veska-daemon/wire.go` — rather than in a
+separate `internal/bootstrap/` package. `internal/bootstrap/`
+exists only as a `doc.go` placeholder; the actual wiring lives
+next to `main.go` in each `cmd/` sub-package. `cmd/` is
+therefore the layer that imports both `application/` and
+`infrastructure/`.
 
 This makes "imports flow downward" precise: in the diagram,
 arrows point at what a layer *depends on*. The `application` ↔
@@ -69,9 +75,12 @@ through `core/ports`.
 - **`core/domain/`** — entities, value objects, aggregate roots
   (SOLO-04). Pure functions; no I/O; standard library only.
   Constructors are functional options.
-- **`core/ports/`** — Go interface definitions. One repository
-  port per aggregate root, plus the small set of substrate and
-  service ports listed in §4. No implementations.
+- **`core/ports/`** — Go interface definitions. The full set
+  of storage, substrate, and service ports listed in §4. Files
+  are named for the capability they expose (`graph.go`,
+  `queue.go`, `embedder.go`, `vector.go`, `edge_reader.go`,
+  `node_lookup.go`, `finding_storage.go`, …) — there is no
+  `*_repository.go` naming scheme. No implementations.
 - **`application/`** — use-case orchestrators. The `Ingester`
   (the promotion hot path). The post-promotion-queue-drain goroutines (one per
   `work_kind`). The MCP request router. Talks to ports only;
@@ -79,122 +88,108 @@ through `core/ports`.
 - **`infrastructure/`** — port implementations. SQLite repos,
   the tree-sitter parser, Ollama HTTP clients, the MCP transport,
   fsnotify, slog logger. Never imports `application/`.
-- **`cmd/`** — one sub-package per binary. Flag parsing, signal
-  handling, calling into `bootstrap/`. No business logic.
-- **`bootstrap/`** — the composition root. Manual constructor
-  wiring; no DI container. Reading `bootstrap/daemon.go` shows
-  you the entire wiring.
+- **`cmd/`** — one sub-package per binary (`veska`,
+  `veska-daemon`, `veska-mcp`). Flag parsing, signal handling,
+  and — for the daemon — the composition root itself. The
+  daemon's wiring lives in `cmd/veska-daemon/wire.go` (with
+  `providers.go` alongside it); manual constructor wiring, no
+  DI container. Reading `cmd/veska-daemon/wire.go` shows you the
+  entire daemon wiring.
+- **`internal/bootstrap/`** — a placeholder package containing
+  only `doc.go`. No wiring shipped here; the composition root
+  moved into the `cmd/` binary packages. Other cross-cutting
+  internal packages (`config`, `observability`, `repo`,
+  `backup`, `doctor`, `service`, …) are listed in §3.
 
 ## 3. Package layout
+
+This is the shipped layout. Where a path below differs from an
+earlier draft, the code is canonical (per CLAUDE.md).
 
 ```
 veska-v2/
   cmd/
     veska/                     # CLI binary
-    veska-daemon/              # daemon binary
+    veska-daemon/              # daemon binary; wire.go is the composition root
+      main.go
+      wire.go                  # newDaemon — manual DI wiring
+      providers.go             # per-dependency constructors
     veska-mcp/                 # stdio shim binary
   internal/
     core/
-      domain/
-        node.go                 # Node + NodeKind
-        edge.go                 # Edge + EdgeKind
-        graph.go                # Graph read projection (SOLO-04 §5.3)
-        task.go
-        finding.go              # Finding + Suppression
-        repo.go
-        actor.go                # actor_id + actor_kind helpers
-        confidence.go           # Confidence enum
-        source_layer.go         # SourceLayer enum
-        options.go              # functional-option types
-        errors.go
-    ports/
-      graph_repository.go
-      task_repository.go
-      finding_repository.go
-      repo_repository.go
-      embedding_store.go        # content-addressed embedding bytes
-      vector_index.go           # sqlite-vec ANN port
-      code_parser.go
-      embedder.go               # Ollama (or future swap)
-      llm_generator.go          # Ollama (or future swap)
-      tracker.go                # bd / GitHub / etc.
-      file_watcher.go           # fsnotify
-      logger.go
-      secrets_scanner.go        # builtin regex+entropy (or future swap)
-      ownership_source.go       # CODEOWNERS (or future swap)
-      notifier.go               # stderr (or future swap)
-      vuln_source.go            # OSV (or future swap)
-      coverage_source.go        # no default impl
-      token_estimator.go        # chars/4 default; pluggable
-    application/
-      ingester.go               # promotion hot path
-      staging.go                # in-memory StagingArea
-      graph_reader.go           # staging-overlay-on-promoted reader (§4.4a)
-      cross_repo_resolver.go    # resolves cross_repo_edge_stubs and unresolved edges at query time (SOLO-11 §9)
-      post_promotion_queue_drain.go           # per-work_kind goroutines
-      mcp/
-        router.go
-        handlers/               # one file per tool family
-      promotion_pipeline.go          # post-commit glue (calls repos via writeDB.hot)
-    infrastructure/
-      sqlite/
-        pools.go                # opens readDB / writeDB.hot / writeDB.embed; the only place *sql.DB exists
-        graph_repository.go
-        task_repository.go
-        finding_repository.go
-        repo_repository.go
-        embedding_store.go
-        vector_index.go         # sqlite-vec adapter
-        post_promotion_queue_repository.go    # PostPromotionQueueRepository port impl
+      domain/                  # pure entities: Node, Edge, Graph, Task,
+                               #   Finding, Suppression, Embedding, ParseResult,
+                               #   Actor helpers
+      ports/                   # ~24 Go interface files, named for the
+                               #   capability (NOT *_repository.go):
+                               #   graph.go, edge_storage.go, edge_reader.go,
+                               #   node_lookup.go, queue.go, vector.go,
+                               #   embedder.go, embedding.go, embedding_refs.go,
+                               #   parser.go, lexical.go, watcher.go,
+                               #   notifier.go, tracker.go, llmgenerator.go,
+                               #   vulnsource.go, audit.go, revalidate.go,
+                               #   resolved_edge.go, finding_storage.go,
+                               #   finding_querier.go, todo_querier.go,
+                               #   contract_drift.go, deadcode.go
+    application/               # use-case orchestrators
+      ingester.go              #   promotion hot path
+      promoter.go              #   atomic promotion orchestrator
+      promotion_store.go       #   PromotionStore port (defined here)
+      staging.go               #   in-memory StagingArea
+      ingestion_gate.go
+      resync.go
+      autolink/                #   per-feature sub-packages, each with a
+      blastradius/             #   handler.go + core logic + tests
+      checks/                  #   checks + contractdrift + deadcode
+      contextpack/
+      embedder/
+      revalidate/
+      search/
+      wiki/                    #   hot_zone, entry_points, render
+    infrastructure/            # port implementations (adapters)
+      sqlite/                  #   graph + FTS storage; PromotionStore + sinks
         migrations/
-      treesitter/
-        parser.go
-        bindings/               # generated; one per language
-      ollama/
-        embedder.go             # EmbeddingProvider
-        generator.go            # LLMGenerator
-      mcp/
-        uds/                    # Unix-socket transport
-      git/
-        reader.go
-        hooks.go
-      fs/
-        watcher.go              # fsnotify FileWatcher
-        ignore.go               # .veskaignore
-      trackers/
-        bd/
-        noop/
-      logger/
-        slog/
-      secrets/
-        builtin/                # regex + entropy
-      ownership/
-        codeowners/             # CODEOWNERS parser
-      notifier/
-        stderr/                 # default; logs structured line
-      vuln/
-        osv/                    # OSV.dev with local cache
-    config/
-      defaults.go
-      paths.go                  # ~/.veska resolution
-    bootstrap/
-      daemon.go                 # BuildDaemon
-      cli.go                    # BuildCLI
-      mcp_shim.go               # BuildShim
-      shutdown.go
+        queue/                 #   post-promotion queue store
+        resolver/
+      vector/                  #   dual-backend VectorStorage
+                               #   (sqlite-vec default; usearch HNSW under
+                               #   the hnsw_native build tag)
+      embedding/
+        ollama/                #   Ollama EmbeddingProvider adapter
+      treesitter/              #   CodeParser (Go, TS/TSX/JS/JSX)
+      git/                     #   fsnotify watcher, diff/history readers, hooks
+      mcp/                     #   MCP server, tool registry, overlay
+      llm/                     #   Ollama LLMGenerator adapter
+      audit/                   #   audit-log writer + redaction
+      beads/                   #   bd-cli Tracker adapter
+      fs/                      #   .veskaignore handling
+      notifier/                #   stderr Notifier
+      vulnsource/              #   VulnSource (null impl today)
+    backup/                    # backup create/verify + vector round-trip
+    config/                    # paths.go — ~/.veska resolution
+    crashloop/                 # crash-loop breaker
+    doctor/                    # veska doctor diagnostics
+    embedderprobe/             # Ollama embedder probe
+    logrotate/                 # daemon-log rotation
+    observability/             # metrics, spans, embedder instrumentation
+    repo/                      # repos-table registry + active-branch watch
+    service/                   # systemd / launchd service management
+    tokenize/                  # symbol tokenisation helper
+    bootstrap/                 # placeholder package — doc.go only
   tools/
-    lint/
-      layercheck/               # the one mandatory analyser
-    loadtest/
+    loadtest/                  # eval / load-test harnesses (build tag `eval`)
   docs/
   go.mod
   Makefile
 ```
 
+The `layercheck` tool (the one mandatory architectural analyser)
+lives in its own `tools/` location; see §6.
+
 A few things this layout deliberately does not have:
 
-- **No `[L]` / `[W]` / `[C]` mode branches.** One mode. One
-  binary. `BuildDaemon` takes no mode argument.
+- **No `[L]` / `[W]` / `[C]` mode branches.** One mode. The
+  daemon's `newDaemon` wiring takes no mode argument.
 - **No `ErrCapabilityDeferred`.** A capability is either
   implemented or removed. There are no port methods that compile
   and return "not yet."
@@ -213,8 +208,8 @@ A few things this layout deliberately does not have:
 
 ## 4. Ports map
 
-Nineteen interfaces in `core/ports/`. Hexagonal architecture
-distinguishes two directions:
+`core/ports/` ships roughly two dozen Go interface files.
+Hexagonal architecture distinguishes two directions:
 
 - **Driven (outbound) ports** — the application *calls out*
   through them; infrastructure adapters *implement* them
@@ -242,10 +237,22 @@ substrate primitive whose port exists for testability rather
 than runtime swap; the two driving ports each have one
 in-process implementation because there is one of each surface.
 
-### 4.1 Repository ports
+> **Note on naming.** The tables in §4.1–§4.3 below describe the
+> *roles* the ports play. The actual files in `core/ports/` are
+> named for the capability they expose — `graph.go`,
+> `edge_storage.go`, `finding_storage.go`, `queue.go`,
+> `vector.go`, `embedding.go`, `embedder.go`, `parser.go`,
+> `watcher.go`, etc. — and the adapter files under
+> `infrastructure/sqlite/` follow the same convention
+> (`edge_repo.go`, `edge_reader_repo.go`, …). There is no
+> `<Entity>_repository.go` file-naming scheme on disk; treat the
+> "Impl" column paths below as illustrative of which adapter
+> package owns the implementation, not as literal file names.
 
-Three aggregate-rooted repositories plus one graph-scoped
-repository (SOLO-04 §11):
+### 4.1 Storage ports
+
+Aggregate-rooted storage plus one graph-scoped reader/writer
+(SOLO-04 §11):
 
 | Port | Scope | Shape | Impl |
 |---|---|---|---|
@@ -419,17 +426,18 @@ implementation.
 
 ## 5. Composition root
 
-`bootstrap.BuildDaemon` is the only place dependencies are
-materialised. No mode flags. No conditional adapter selection. The
-function reads top to bottom:
+`newDaemon` in `cmd/veska-daemon/wire.go` is the only place
+dependencies are materialised. No mode flags. No conditional
+adapter selection. It reads top to bottom (sketch — actual
+constructor names live in `wire.go` / `providers.go`):
 
 ```go
-func BuildDaemon(ctx context.Context, cfg Config) (*Daemon, error) {
+func newDaemon(ctx context.Context, cfg Config) (*Daemon, error) {
     // 1. Logger.
     log := slog.New(...)
 
-    // 2. SQLite pools + migrations. The three handles live inside
-    //    the sqlite adapter package; `bootstrap/` sees only ports.
+    // 2. SQLite pools + migrations. The handles live inside
+    //    the sqlite adapter package; wire.go sees only ports.
     pools, err := sqliteinfra.OpenPools(cfg.DBPath)   // readDB + writeDB.hot + writeDB.embed
     if err != nil { return nil, err }
     if err := sqliteinfra.Migrate(pools); err != nil { return nil, err }
@@ -479,30 +487,25 @@ func BuildDaemon(ctx context.Context, cfg Config) (*Daemon, error) {
 `*sql.DB` is created and held inside `infrastructure/sqlite/`.
 Application code holds ports (`PostPromotionQueueRepository`,
 `GraphRepository`, etc.), never the raw handle. The lint
-analyser in §6 enforces this on `core/`; bootstrap is the only
-package permitted to import the sqlite adapter package and
-must pass the resulting ports — not the handle — into
-`application/`.
+analyser in §6 enforces this on `core/`; the `cmd/` binary
+package is the only place permitted to import the sqlite adapter
+package and must pass the resulting ports — not the handle —
+into `application/`.
 
 That is the wiring. Reading it tells you what the daemon does.
 
-The CLI and MCP shim have their own much smaller bootstrap
-functions (`BuildCLI`, `BuildShim`). The shim's job is to proxy
-stdio frames to the daemon's Unix socket; the CLI's bootstrap
-loads config and dials the socket.
+The CLI (`cmd/veska`) and MCP shim (`cmd/veska-mcp`) have their
+own much smaller wiring inside their respective `cmd/`
+sub-packages. The shim's job is to proxy stdio frames to the
+daemon's Unix socket; the CLI loads config and dials the socket.
 
 ### 5.1 Test composition
 
-`bootstrap` has a test helper that takes a struct of overrides:
-
-```go
-func BuildDaemonForTest(t *testing.T, overrides TestOverrides) *Daemon
-```
-
-Tests pass fakes for any port they want to control; everything
-else defaults to the real impl pointing at a temp directory. There
-is no DI magic; the helper is just `BuildDaemon` with parameter
-substitution.
+The daemon package has a test helper that takes a struct of
+overrides; tests pass fakes for any port they want to control
+and everything else defaults to the real impl pointing at a temp
+directory. There is no DI magic; the helper is just `newDaemon`
+with parameter substitution (`wire_test.go`).
 
 ## 6. Lint enforcement
 
@@ -526,7 +529,8 @@ detector is on for `make test`.
 - Tests call constructors with fakes; no DI container to learn.
 - Idiomatic Go.
 
-The cost is some verbosity in `bootstrap/`. Acceptable.
+The cost is some verbosity in `cmd/veska-daemon/wire.go`.
+Acceptable.
 
 ## 8. Adding a port
 

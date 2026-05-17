@@ -6,7 +6,7 @@ version: 0.1.0
 last_reviewed: 2026-05-08
 related: [SOLO-01, SOLO-04, SOLO-08, SOLO-11]
 verified: true
-verified_date: "2026-05-16"
+verified_date: "2026-05-17"
 ---
 
 # SOLO-05 — Plugin Surface
@@ -50,7 +50,7 @@ There is no name lookup. There is no cardinality enum. The
 application code just holds a field of the interface type.
 
 ```go
-// internal/bootstrap/wire.go (sketch)
+// cmd/veska-daemon/wire.go (sketch)
 func buildApp(cfg Config) (*App, error) {
     embedder := ollama.New(cfg.Ollama)
     tracker  := bd.New(cfg.Bd)
@@ -65,8 +65,9 @@ func buildApp(cfg Config) (*App, error) {
 }
 ```
 
-Adding a second impl of any port is a code change in `wire.go` plus
-a config-driven switch. The first time we want that switch is the
+Adding a second impl of any port is a code change in the
+composition root (`cmd/veska-daemon/wire.go`) plus a
+config-driven switch. The first time we want that switch is the
 first time we write a second impl. Until then, the field is just
 the concrete type behind the interface.
 
@@ -411,9 +412,11 @@ the resulting contract.
 
 Three steps:
 
-1. Write the Go interface in `internal/core/ports/`.
+1. Write the Go interface in `internal/core/ports/` (file named
+   for the capability — e.g. `embedder.go`, `vector.go` — not
+   `<port>_repository.go`).
 2. Write the one impl in `internal/infrastructure/<port>/`.
-3. Wire it into `internal/bootstrap/wire.go`.
+3. Wire it into the composition root, `cmd/veska-daemon/wire.go`.
 
 That is the whole process. No ADR is required for the first
 impl; the design lives in the interface comment and the impl
