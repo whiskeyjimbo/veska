@@ -5,6 +5,8 @@ status: draft
 version: 0.1.0
 last_reviewed: 2026-05-11
 related: [SOLO-08, SOLO-13, SOLO-14]
+verified: true
+verified_date: "2026-05-16"
 ---
 
 # SOLO-OQ — Open Questions
@@ -337,3 +339,12 @@ parsers beyond Go and TS.
 
 The cache sketch lives in SOLO-11 §9 as the documented escape;
 this OQ is the trigger for promoting that sketch to a real ADR.
+
+**RESOLVED — M1 cross-repo resolver spike.** The M1 spike
+(sub-issue `m1.10.9-bench`) exercised the service+SDK fixture and
+recorded the per-hop resolver p95 and the cross-repo
+`get_call_chain` / `get_blast_radius` p95 within the SOLO-13 §3.4
+budgets, and resolver recall ≥ 0.95 against the hand-labelled
+cross-repo call set. Verdict: GREEN — all four SOLO-13 §3.4
+budget rows measured within target; the cache fallback stays
+unwritten.
