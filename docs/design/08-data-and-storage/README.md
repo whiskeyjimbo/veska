@@ -4,7 +4,9 @@ title: "Data & Storage — SQLite Substrate"
 status: draft
 version: 0.1.0
 last_reviewed: 2026-05-08
-related: [SOLO-01, SOLO-04, SOLO-11, ADR-S0001]
+related: [SOLO-01, SOLO-04, SOLO-11, ADR-S0001, ADR-S0014, ADR-S0015]
+verified: true
+verified_date: "2026-05-16"
 ---
 
 # SOLO-08 — Data & Storage
@@ -264,6 +266,24 @@ CREATE INDEX idx_suppressions_target ON suppressions(target, branch);
 
 ### 3.3 Embeddings (sqlite-vec)
 
+> **Amendment (vec pivot — dual-backend, 2026-05-14).** The
+> `vec_nodes`/`vec0` virtual table described below is the
+> **default** ANN backend (`VESKA_VECTOR_BACKEND=sqlite-vec`),
+> used for small workspaces. M0 measured the brute-force `vec0`
+> ceiling at ~100k nodes, and M1's evaluation spike ratified a
+> second backend: usearch HNSW with float16 quantisation
+> (`VESKA_VECTOR_BACKEND=usearch`), compiled behind the
+> `hnsw_native` build tag and requiring `libusearch_c.so` at
+> runtime. The usearch index is **not** stored in `veska.db`; it
+> persists to sibling `vec-{repoID}-{branch}-{modelID}.hnsw`
+> files plus a Go-side metadata sidecar. The decision is
+> [ADR-S0014](../adr/ADR-S0014-hnsw-pivot.md) (the pivot) and
+> [ADR-S0015](../adr/ADR-S0015-vec-pivot-dual-backend.md) (the
+> dual-backend implementation). The `node_embeddings` /
+> `node_embedding_refs` split below is unchanged and backend-
+> agnostic; only the ANN index differs between backends. OQ-S003
+> (§8) is resolved by these ADRs.
+
 ```sql
 -- Content-addressed embedding bytes.
 CREATE TABLE node_embeddings (
@@ -275,13 +295,19 @@ CREATE TABLE node_embeddings (
 );
 
 -- Per-node refs into the content-addressed store.
+-- node_id conceptually references nodes(node_id), but nodes has a
+-- composite PK (node_id, branch) so a strict SQLite FK is not
+-- enforceable; the node_id relationship is maintained by the
+-- application layer. Only the content_hash FK is enforced.
+-- A per-row `attempts` counter (migration 0006) backs the embedder
+-- worker's retry policy.
 CREATE TABLE node_embedding_refs (
     node_id       TEXT PRIMARY KEY,
     content_hash  TEXT,                  -- NULL while pending
     state         TEXT NOT NULL,         -- pending|ready|failed
     enqueued_at   INTEGER NOT NULL,
     embedded_at   INTEGER,
-    FOREIGN KEY (node_id) REFERENCES nodes(node_id) ON DELETE CASCADE,
+    attempts      INTEGER NOT NULL DEFAULT 0,
     FOREIGN KEY (content_hash) REFERENCES node_embeddings(content_hash)
 );
 CREATE INDEX idx_node_embedding_refs_state ON node_embedding_refs(state, enqueued_at);
