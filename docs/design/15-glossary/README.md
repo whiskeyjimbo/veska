@@ -4,6 +4,8 @@ title: "Glossary — Engram Solo"
 status: draft
 version: 0.1.0
 last_reviewed: 2026-05-08
+verified: true
+verified_date: "2026-05-16"
 ---
 
 # SOLO-15 — Glossary
@@ -17,7 +19,7 @@ add it via PR.
 | Term | Meaning |
 |---|---|
 | **Node** | A symbol in the codebase: function, method, type, file, or package. Identified by stable hash of `(repo, language, symbol_path)`. |
-| **Edge** | A typed relation between two nodes: `CALLS`, `IMPORTS`, `CONTAINS`, `TESTS`, `DEPENDS_ON`. Five kinds. **Same-Graph, absolute** (SOLO-04 §5.2 invariant 1): every stored `Edge` has both endpoints in the source repo's `nodes` — `dst_node_id` is `NOT NULL` and FK-checked. Cross-repo edges are never stored in `edges`; they are computed at query time (synthetic). |
+| **Edge** | A typed relation between two nodes: `CALLS`, `IMPORTS`, `CONTAINS`, `TESTS`, `DEPENDS_ON`, plus `SIMILAR_TO` — the auto-link kind emitted by the auto-link pipeline (`Confidence=Unresolved`, paired with a `source_layer='semantic'` Finding). Six kinds. **Same-Graph, absolute** (SOLO-04 §5.2 invariant 1): every stored `Edge` has both endpoints in the source repo's `nodes` — `dst_node_id` is `NOT NULL` and FK-checked. Cross-repo edges are never stored in `edges`; they are computed at query time (synthetic). |
 | **CrossRepoStub** | A value object owned by a source `Node` (SOLO-04 §5.2.1), stored in the sibling `cross_repo_edge_stubs` table (SOLO-08 §3.1). Recorded at promotion time when a parser produces a cross-repo reference whose target repo is not yet indexed; carries `(kind, module_path, symbol_path, language)`. The resolver projects stubs into MCP responses as synthetic unresolved edges at read time. **Not an `Edge`** — keeps the `Edge` same-Graph invariant absolute. |
 | **Graph** | The in-memory read projection of `Node` + `Edge` for a given `(repo, branch)` scope (SOLO-04 §5.3). **Not an aggregate root** — `Graph` has no write methods. Writes are row-shaped through `GraphRepository.SaveNode` / `SaveEdge` / `DeleteFile` (SOLO-04 §11.2). The graph-shaped object exists where it earns its keep — the resolver chain (SOLO-11 §9), blast-radius, and call-chain analysis — and is materialised by `GraphRepository.LoadGraph`. The "same-Graph" invariant for edges (SOLO-04 §5.2 inv 1) is enforced at the row level by `(repo_id, branch)` scope plus the SOLO-08 §3.1 FK. |
 | **Cross-repo edge (synthetic)** | A conceptual edge between nodes in different repos (e.g. service A `CALLS` SDK B). Computed at query time by the resolver chain (SOLO-11 §9), under the per-query `as_of` snapshot per target repo (SOLO-04 §5.4 invariant 2). Returned in MCP responses tagged `cross_repo: true` with the snapshot tuples in `as_of`. |
