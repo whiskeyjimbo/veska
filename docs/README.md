@@ -1,3 +1,8 @@
+---
+verified: true
+verified_date: "2026-05-16"
+---
+
 # Veska — Design Set
 
 > **Naming note.** "Engram" is the product name. "Solo" is the

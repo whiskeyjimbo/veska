@@ -1,3 +1,8 @@
+---
+verified: true
+verified_date: "2026-05-16"
+---
+
 # Veska — Product Narrative
 
 > Reader-friendly. The Charter (`design/01-charter/`) is binding;
@@ -121,7 +126,7 @@ editor writes file
                                  answers via MCP (synchronous)
 ```
 
-**Promotion** — durable, on `git commit`. The only path that touches disk for writes. ("Promote" is verb, "promotion" is the transaction, "promoted" is the adjective for durable rows; the [glossary](design/15-glossary/README.md#promotion--the-term-family) is the disambiguation home.)
+**Promotion** — durable, on `git commit`. The only path that touches disk for writes. ("Promote" is verb, "promotion" is the transaction, "promoted" is the adjective for durable rows; the [glossary](design/15-glossary/README.md#promote--the-term-family) is the disambiguation home.)
 
 ```
 git commit
