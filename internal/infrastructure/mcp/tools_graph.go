@@ -33,15 +33,29 @@ type GraphResponse struct {
 // If nil, cross-repo resolution is skipped.
 type ResolveFunc func(ctx context.Context, nodeID, branch string, expand bool) ([]ports.ResolvedEdge, error)
 
+// GraphToolOption configures RegisterGraphTools.
+type GraphToolOption func(*graphToolConfig)
+
+type graphToolConfig struct {
+	resolve ResolveFunc
+}
+
+// WithResolveFunc supplies a ResolveFunc that enables cross-repo synthetic
+// edge resolution in eng_get_call_chain. Without it, call-chain traversal is
+// same-repo only.
+func WithResolveFunc(fn ResolveFunc) GraphToolOption {
+	return func(c *graphToolConfig) { c.resolve = fn }
+}
+
 // RegisterGraphTools registers the 5 graph read tools on r.
-// graph and staging are injected dependencies.
-// An optional ResolveFunc may be supplied as the 4th argument to enable
+// graph and staging are injected dependencies; pass WithResolveFunc to enable
 // cross-repo synthetic edge resolution in eng_get_call_chain.
-func RegisterGraphTools(r *Registry, graph ports.GraphStorage, staging *application.StagingArea, resolveFns ...ResolveFunc) {
-	var resolve ResolveFunc
-	if len(resolveFns) > 0 {
-		resolve = resolveFns[0]
+func RegisterGraphTools(r *Registry, graph ports.GraphStorage, staging *application.StagingArea, opts ...GraphToolOption) {
+	var cfg graphToolConfig
+	for _, o := range opts {
+		o(&cfg)
 	}
+	resolve := cfg.resolve
 	r.MustRegister(ToolSpec{
 		Name:            "eng_find_symbol",
 		Description:     "Find nodes by symbol name, with staging overlay for in-progress changes.",
