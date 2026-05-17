@@ -5,6 +5,8 @@ status: draft
 version: 0.1.0
 last_reviewed: 2026-05-08
 related: [SOLO-01, SOLO-04, SOLO-05, SOLO-08, SOLO-10]
+verified: true
+verified_date: "2026-05-16"
 ---
 
 # SOLO-11 — Pipelines
@@ -246,8 +248,12 @@ way the user gets a finite hook return.
 
 ### 2.2 Async drain (promotion post-promotion queue)
 
-The promotion transaction enqueues four kinds of work in `post_promotion_queue`:
-`embed`, `auto_link`, `revalidate`, and (when enabled) `review`.
+The promotion transaction enqueues five kinds of work in `post_promotion_queue`:
+`embed`, `auto_link`, `revalidate`, `wiki`, and (when enabled) `review`.
+The `embed`, `auto_link`, and `revalidate` kinds are enqueued one row
+per touched file; `wiki` is enqueued as a single repo-scoped row per
+promotion (the wiki lane regenerates the whole `hot_zone` +
+`entry_points` surface, so per-file rows would be redundant).
 One goroutine per kind drains the table at 250ms poll. Goroutines
 are independent: a stuck embedder does not block auto-link.
 
@@ -952,8 +958,8 @@ lock).
 
 ### 10.3 post-promotion queue drains and the two pools
 
-Three of the four post-promotion queue `work_kind`s (`auto_link`,
-`revalidate`, `review`) write findings/state via `writeDB.hot`:
+Four of the five post-promotion queue `work_kind`s (`auto_link`,
+`revalidate`, `review`, `wiki`) write findings/state via `writeDB.hot`:
 their writes are short SQL and rare relative to promotions.
 
 `embed` is the only kind routed to `writeDB.embed`. Each embed
