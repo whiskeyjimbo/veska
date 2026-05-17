@@ -6,7 +6,7 @@ version: 0.1.0
 last_reviewed: 2026-05-09
 related: [SOLO-03, SOLO-08, SOLO-13, SOLO-16]
 verified: true
-verified_date: "2026-05-16"
+verified_date: "2026-05-17"
 ---
 
 # SOLO-17 — Lifecycle and Operations
@@ -159,8 +159,8 @@ old binary. What happens next is determined by the supervisor
 
 | Path | Trigger | What happens |
 |---|---|---|
-| **Restart-driven** (default) | The package manager's post-install hook or the user runs `veska daemon restart` | Old daemon receives `SIGTERM`; drains in-flight requests up to `[shutdown].grace_seconds` (DEFAULT 10); exits clean; supervisor relaunches the new binary; new binary runs §2 migration flow. |
-| **Side-by-side** (rare) | The user runs the new binary manually as `veska daemon` while the old is up | The new binary's `OpenPools` call fails: SQLite's WAL holder is the old process, and `flock(2)` on the database refuses concurrent writers. The new binary exits 78 with `ErrDaemonAlreadyRunning` (SOLO-16) pointing the user at `veska daemon stop`. |
+| **Restart-driven** (default) | The package manager's post-install hook or the user runs `veska service restart` | Old daemon receives `SIGTERM`; drains in-flight requests up to `[shutdown].grace_seconds` (DEFAULT 10); exits clean; supervisor relaunches the new binary; new binary runs §2 migration flow. |
+| **Side-by-side** (rare) | The user runs the new `veska-daemon` binary manually while the old is up | The new binary's `OpenPools` call fails: SQLite's WAL holder is the old process, and `flock(2)` on the database refuses concurrent writers. The new binary exits 78 with `ErrDaemonAlreadyRunning` (SOLO-16) pointing the user at `veska service stop`. |
 
 ### 3.2 The graceful shutdown contract
 
@@ -278,10 +278,13 @@ informational, not corruption.
 
 ### 4.4 Restore
 
+`veska restore` is **planned** — not yet shipped (see s5c.12).
+The spec below is the intended surface.
+
 ```
 veska restore [<path> | --pre-migration | --latest]
   → if the daemon is running: refuse with ErrDaemonRunning;
-    point the user at `veska daemon stop`.
+    point the user at `veska service stop`.
   → verify manifest.json against tarball contents (sha256
     every file). Mismatch → ErrBackupCorrupt (SOLO-16) and
     abort.
@@ -355,7 +358,7 @@ installed binary inside a Git working tree:
 6. Register the daemon with the session supervisor
    (SOLO-03 §5.1): `launchctl load` on macOS, `systemctl --user
    enable --now veska` on Linux with systemd-user, or write the
-   `veska supervise` shim's start script otherwise.
+   start script for the built-in supervisor process otherwise.
 7. Register the current Git repo via `veska repo add .`.
 8. Print the summary (data dir, config path, embedder status,
    service status, registered repos, audit log path).
