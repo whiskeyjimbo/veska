@@ -30,6 +30,59 @@ func RegisterWikiTools(r *Registry, svc *wiki.HotZoneService, repoRoot RepoRootF
 	})
 }
 
+// EntryPointsResponse is the envelope returned by eng_get_entry_points. It
+// carries the same selected list the docs/veska/entry_points.md page is
+// built from, so the tool and the page can never diverge (AC3).
+type EntryPointsResponse struct {
+	RepoID      string            `json:"repo_id"`
+	Branch      string            `json:"branch"`
+	EntryPoints []wiki.EntryPoint `json:"entry_points"`
+}
+
+// RegisterEntryPointsTool registers the eng_get_entry_points wiki tool.
+// svc may be nil — the tool is still registered but returns InternalError
+// on every call, keeping the registry uniform across composition roots
+// that have not wired the entry_points service.
+func RegisterEntryPointsTool(r *Registry, svc *wiki.EntryPointsService) {
+	r.MustRegister(ToolSpec{
+		Name:        "eng_get_entry_points",
+		Description: "Return low-risk symbols a newcomer or agent can safely start from (adjacent test, small blast radius, no open findings).",
+		Handler:     makeEntryPointsHandler(svc),
+	})
+}
+
+type entryPointsParams struct {
+	RepoID string `json:"repo_id"`
+	Branch string `json:"branch"`
+}
+
+func makeEntryPointsHandler(svc *wiki.EntryPointsService) ToolHandler {
+	return func(ctx context.Context, _ domain.Actor, raw json.RawMessage) (any, *RPCError) {
+		if svc == nil {
+			return nil, &RPCError{
+				Code:    CodeInternalError,
+				Message: "entry points is not wired (service missing)",
+			}
+		}
+		var p entryPointsParams
+		if rpcErr := bindParams(raw, &p); rpcErr != nil {
+			return nil, rpcErr
+		}
+		if rpcErr := checkRequired("repo_id", p.RepoID, "branch", p.Branch); rpcErr != nil {
+			return nil, rpcErr
+		}
+		rep, err := svc.Select(ctx, p.RepoID, p.Branch)
+		if err != nil {
+			return nil, &RPCError{Code: CodeInternalError, Message: fmt.Sprintf("entry points: %v", err)}
+		}
+		return EntryPointsResponse{
+			RepoID:      rep.RepoID,
+			Branch:      rep.Branch,
+			EntryPoints: rep.EntryPoints,
+		}, nil
+	}
+}
+
 type hotZoneParams struct {
 	RepoID string `json:"repo_id"`
 	Branch string `json:"branch"`
