@@ -384,6 +384,19 @@ func registerMCPTools(r *mcp.Registry, d mcpDeps) {
 		mcp.RegisterWikiTools(r, nil, nil)
 	}
 
+	// Wiki entry_points surface. Candidates are enumerated from the loaded
+	// graph; the three safety gates draw on edge adjacency, blast radius and
+	// the findings table.
+	graphForEP := sqlite.NewGraphRepo(pools.ReadDB, pools.WriteHot)
+	findingQuerier := sqlite.NewFindingQuerierRepo(pools.ReadDB)
+	if epSvc, err := wiki.NewEntryPointsService(
+		graphForEP.LoadGraph, edges.InboundEdges, findingQuerier.OpenFindingNodeIDs, blastSvc,
+	); err == nil {
+		mcp.RegisterEntryPointsTool(r, epSvc)
+	} else {
+		mcp.RegisterEntryPointsTool(r, nil)
+	}
+
 	// Semantic-search tools. The Service orchestrates embed → vector search →
 	// node hydration with lexical fallback.
 	searchSvc := search.NewService(d.provider, d.vectors, nodes)
