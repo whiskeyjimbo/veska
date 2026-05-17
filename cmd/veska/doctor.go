@@ -7,11 +7,13 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/spf13/cobra"
 	"github.com/whiskeyjimbo/veska/internal/config"
 	"github.com/whiskeyjimbo/veska/internal/doctor"
 	"github.com/whiskeyjimbo/veska/internal/embedderprobe"
+	"github.com/whiskeyjimbo/veska/internal/infrastructure/sqlite"
 )
 
 const (
@@ -78,6 +80,7 @@ func doctorCmd() *cobra.Command {
 		doctorEmbedderCmd(),
 		doctorConfigCmd(),
 		doctorPostPromotionQueueCmd(),
+		doctorWikiRenderCmd(),
 		doctorServiceCmd(),
 		doctorSubCmd("pipelines", "Check ingestion pipeline health",
 			func(jsonOut bool, w io.Writer) error { return stubOK("pipelines", jsonOut, w) }),
@@ -119,6 +122,54 @@ func doctorPostPromotionQueueCmd() *cobra.Command {
 			}
 			if report.Status != "healthy" {
 				return ProbeStatusError{Subsystem: "post_promotion_queue", Status: report.Status}
+			}
+			return nil
+		},
+	}
+	cmd.Flags().BoolVar(&jsonOut, "json", false, "output results as JSON")
+	return cmd
+}
+
+// doctorWikiRenderCmd returns the "doctor wiki_render" subcommand backed by
+// internal/doctor.CheckWikiRender. It reports the age of the last successful
+// wiki render, or that no render has occurred yet (which is not an error).
+func doctorWikiRenderCmd() *cobra.Command {
+	var jsonOut bool
+	cmd := &cobra.Command{
+		Use:          "wiki_render",
+		Short:        "Report the age of the last successful wiki render",
+		SilenceUsage: true,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			w := cmd.OutOrStdout()
+			dbPath := filepath.Join(config.DefaultVectorDir(), "veska.db")
+
+			pools, err := sqlite.OpenPools(dbPath)
+			if err != nil {
+				return fmt.Errorf("wiki_render: open sqlite pools: %w", err)
+			}
+			defer func() { _ = pools.Close() }()
+
+			store := sqlite.NewWikiRenderStateRepo(pools.ReadDB, pools.WriteHot)
+			report, err := doctor.CheckWikiRender(cmd.Context(), store)
+			if err != nil {
+				return err
+			}
+			if jsonOut {
+				enc := json.NewEncoder(w)
+				return enc.Encode(doctor.NewEnvelope("wiki_render", report.Status, report))
+			}
+			switch {
+			case report.Status != "healthy":
+				fmt.Fprintf(w, "wiki_render: %s\n", report.Status)
+			case !report.Rendered:
+				fmt.Fprintf(w, "wiki_render: %s (never rendered)\n", report.Status)
+			default:
+				fmt.Fprintf(w, "wiki_render: %s (last_render_at=%s, age=%s)\n",
+					report.Status, report.LastRenderAt.Format(time.RFC3339),
+					(time.Duration(report.AgeSeconds) * time.Second))
+			}
+			if report.Status != "healthy" {
+				return ProbeStatusError{Subsystem: "wiki_render", Status: report.Status}
 			}
 			return nil
 		},
