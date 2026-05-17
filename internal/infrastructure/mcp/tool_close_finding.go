@@ -15,6 +15,13 @@ import (
 // severity >= high finding is closed by a non-human actor.
 const CodeHumanRequired = -32001
 
+// reviewPipelineFailureRule is the rule string of the sticky finding parked by
+// the review pipeline when a review job exhausts its retries. Closing such a
+// finding flips its parked review-queue rows to 'done'. It mirrors
+// review.FailureRule; the constant is duplicated to keep this infrastructure
+// adapter free of an application-package import.
+const reviewPipelineFailureRule = "review-pipeline-failure"
+
 // ---------------------------------------------------------------------------
 // eng_close_finding
 // ---------------------------------------------------------------------------
@@ -121,6 +128,28 @@ func makeCloseFindingHandler(db *sql.DB, aw ports.AuditWriter) ToolHandler {
 				nodeID.String, p.Branch,
 			); err != nil {
 				return nil, &RPCError{Code: CodeInternalError, Message: fmt.Sprintf("promote edge: %v", err)}
+			}
+		}
+
+		// review-pipeline-failure close-flips-row (solov2-nz2.3 AC2): closing
+		// the sticky review-failure finding clears its parked review jobs by
+		// flipping every still-failed review row anchored on the promotion
+		// commit (node_id carries the git_sha) to state='done', in the same tx.
+		// The human-action gate above already enforces a human closer (the
+		// finding is severity high). A missing/empty anchor or zero matched
+		// rows is a soft no-op — the finding still closes.
+		if rule == reviewPipelineFailureRule && nodeID.Valid && nodeID.String != "" {
+			if _, err := tx.ExecContext(ctx,
+				`UPDATE post_promotion_queue
+				    SET state = 'done'
+				  WHERE work_kind = 'review'
+				    AND repo_id = ?
+				    AND branch = ?
+				    AND git_sha = ?
+				    AND state = 'failed'`,
+				p.RepoID, p.Branch, nodeID.String,
+			); err != nil {
+				return nil, &RPCError{Code: CodeInternalError, Message: fmt.Sprintf("clear review queue rows: %v", err)}
 			}
 		}
 

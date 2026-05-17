@@ -8,6 +8,7 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/whiskeyjimbo/veska/internal/core/domain"
 	"github.com/whiskeyjimbo/veska/internal/core/ports"
 )
 
@@ -44,6 +45,36 @@ func staticRoot(root string) RepoRootFunc {
 	return func(_ context.Context, _ string) (string, error) { return root, nil }
 }
 
+// fakeFindingStorage is an in-memory ports.FindingStorage fixture. It records
+// every Saved finding and is safe for concurrent use.
+type fakeFindingStorage struct {
+	mu    sync.Mutex
+	saved []*domain.Finding
+	err   error
+}
+
+func (f *fakeFindingStorage) Save(_ context.Context, fn *domain.Finding) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.err != nil {
+		return f.err
+	}
+	f.saved = append(f.saved, fn)
+	return nil
+}
+
+func (f *fakeFindingStorage) CloseObsolete(_ context.Context, _, _ string) error {
+	return nil
+}
+
+func (f *fakeFindingStorage) findings() []*domain.Finding {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	out := make([]*domain.Finding, len(f.saved))
+	copy(out, f.saved)
+	return out
+}
+
 // TestNewHandler_NilDependency proves a nil collaborator wraps
 // ErrMissingDependency and yields a nil handler.
 func TestNewHandler_NilDependency(t *testing.T) {
@@ -53,9 +84,12 @@ func TestNewHandler_NilDependency(t *testing.T) {
 		t.Fatalf("NewLoader: %v", err)
 	}
 	cases := map[string]func() (*Handler, error){
-		"nil gen":      func() (*Handler, error) { return NewHandler(nil, loader, staticRoot("/tmp")) },
-		"nil loader":   func() (*Handler, error) { return NewHandler(&fakeGenerator{}, nil, staticRoot("/tmp")) },
-		"nil repoRoot": func() (*Handler, error) { return NewHandler(&fakeGenerator{}, loader, nil) },
+		"nil gen": func() (*Handler, error) { return NewHandler(nil, loader, staticRoot("/tmp"), &fakeFindingStorage{}) },
+		"nil loader": func() (*Handler, error) {
+			return NewHandler(&fakeGenerator{}, nil, staticRoot("/tmp"), &fakeFindingStorage{})
+		},
+		"nil repoRoot": func() (*Handler, error) { return NewHandler(&fakeGenerator{}, loader, nil, &fakeFindingStorage{}) },
+		"nil findings": func() (*Handler, error) { return NewHandler(&fakeGenerator{}, loader, staticRoot("/tmp"), nil) },
 	}
 	for name, build := range cases {
 		t.Run(name, func(t *testing.T) {
@@ -75,7 +109,7 @@ func TestNewHandler_NilDependency(t *testing.T) {
 func TestHandler_WrongKind(t *testing.T) {
 	t.Parallel()
 	loader, _ := NewLoader()
-	h, err := NewHandler(&fakeGenerator{}, loader, staticRoot(t.TempDir()))
+	h, err := NewHandler(&fakeGenerator{}, loader, staticRoot(t.TempDir()), &fakeFindingStorage{})
 	if err != nil {
 		t.Fatalf("NewHandler: %v", err)
 	}
@@ -99,7 +133,7 @@ func TestHandler_DispatchesThroughGenerator(t *testing.T) {
 		t.Fatalf("NewLoader: %v", err)
 	}
 	gen := &fakeGenerator{reply: "NO FINDINGS"}
-	h, err := NewHandler(gen, loader, staticRoot(root))
+	h, err := NewHandler(gen, loader, staticRoot(root), &fakeFindingStorage{})
 	if err != nil {
 		t.Fatalf("NewHandler: %v", err)
 	}
@@ -129,7 +163,7 @@ func TestHandler_EmptyPayload(t *testing.T) {
 	t.Parallel()
 	loader, _ := NewLoader()
 	gen := &fakeGenerator{}
-	h, _ := NewHandler(gen, loader, staticRoot(t.TempDir()))
+	h, _ := NewHandler(gen, loader, staticRoot(t.TempDir()), &fakeFindingStorage{})
 	if err := h.Handle(context.Background(), ports.WorkRow{Kind: ports.WorkKindReview}); err != nil {
 		t.Fatalf("Handle: %v", err)
 	}
@@ -148,11 +182,108 @@ func TestHandler_GeneratorErrorPropagates(t *testing.T) {
 	}
 	loader, _ := NewLoader()
 	sentinel := errors.New("model down")
-	h, _ := NewHandler(&fakeGenerator{err: sentinel}, loader, staticRoot(root))
+	h, _ := NewHandler(&fakeGenerator{err: sentinel}, loader, staticRoot(root), &fakeFindingStorage{})
 	err := h.Handle(context.Background(), ports.WorkRow{
 		Kind: ports.WorkKindReview, RepoID: "repo1", Branch: "main", Payload: "a.go",
 	})
 	if !errors.Is(err, sentinel) {
 		t.Fatalf("err = %v, want wrapped model-down error", err)
+	}
+}
+
+// TestHandler_FinalAttemptEmitsFailureFinding verifies AC1: a review job that
+// fails on its FINAL attempt (row.Attempts >= 3) emits exactly one
+// review-pipeline-failure Finding — severity high, source_layer quality,
+// node_id anchored on the promotion commit — before returning the job error.
+func TestHandler_FinalAttemptEmitsFailureFinding(t *testing.T) {
+	t.Parallel()
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, "a.go"), []byte("package a\nfunc A(){}\n"), 0o644); err != nil {
+		t.Fatalf("write file: %v", err)
+	}
+	loader, _ := NewLoader()
+	sentinel := errors.New("model down")
+	fs := &fakeFindingStorage{}
+	h, _ := NewHandler(&fakeGenerator{err: sentinel}, loader, staticRoot(root), fs)
+
+	err := h.Handle(context.Background(), ports.WorkRow{
+		Kind: ports.WorkKindReview, RepoID: "repo1", Branch: "main",
+		GitSHA: "sha-deadbeef", Payload: "a.go", Attempts: 3,
+	})
+	if !errors.Is(err, sentinel) {
+		t.Fatalf("err = %v, want wrapped model-down error", err)
+	}
+
+	saved := fs.findings()
+	if len(saved) != 1 {
+		t.Fatalf("Save called %d times, want exactly 1 on final attempt", len(saved))
+	}
+	f := saved[0]
+	if f.Rule != FailureRule {
+		t.Errorf("rule = %q, want %q", f.Rule, FailureRule)
+	}
+	if f.Severity != domain.SeverityHigh {
+		t.Errorf("severity = %q, want high", f.Severity)
+	}
+	if f.SourceLayer != domain.LayerQuality {
+		t.Errorf("source_layer = %q, want quality", f.SourceLayer)
+	}
+	if f.NodeID == nil || *f.NodeID != "sha-deadbeef" {
+		t.Errorf("node_id anchor = %v, want sha-deadbeef", f.NodeID)
+	}
+	if f.RepoID != "repo1" || f.Branch != "main" {
+		t.Errorf("repo/branch = %s/%s, want repo1/main", f.RepoID, f.Branch)
+	}
+	if want := FailureFindingID("repo1", "main", "sha-deadbeef"); f.FindingID != want {
+		t.Errorf("finding_id = %q, want %q", f.FindingID, want)
+	}
+}
+
+// TestHandler_NonFinalAttemptDoesNotEmit verifies AC1's negative: a failing
+// attempt that is NOT the final one (row.Attempts < 3) returns the error for
+// the poller to re-queue but does NOT emit a finding.
+func TestHandler_NonFinalAttemptDoesNotEmit(t *testing.T) {
+	t.Parallel()
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, "a.go"), []byte("package a\nfunc A(){}\n"), 0o644); err != nil {
+		t.Fatalf("write file: %v", err)
+	}
+	loader, _ := NewLoader()
+	sentinel := errors.New("model down")
+	fs := &fakeFindingStorage{}
+	h, _ := NewHandler(&fakeGenerator{err: sentinel}, loader, staticRoot(root), fs)
+
+	err := h.Handle(context.Background(), ports.WorkRow{
+		Kind: ports.WorkKindReview, RepoID: "repo1", Branch: "main",
+		GitSHA: "sha-deadbeef", Payload: "a.go", Attempts: 2,
+	})
+	if !errors.Is(err, sentinel) {
+		t.Fatalf("err = %v, want wrapped model-down error", err)
+	}
+	if n := len(fs.findings()); n != 0 {
+		t.Errorf("Save called %d times on non-final attempt, want 0", n)
+	}
+}
+
+// TestHandler_FindingSaveErrorDoesNotMaskJobError verifies a FindingStorage
+// failure on the emit path never hides the original job error: the job error
+// still surfaces so the poller marks the row failed.
+func TestHandler_FindingSaveErrorDoesNotMaskJobError(t *testing.T) {
+	t.Parallel()
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, "a.go"), []byte("package a\nfunc A(){}\n"), 0o644); err != nil {
+		t.Fatalf("write file: %v", err)
+	}
+	loader, _ := NewLoader()
+	sentinel := errors.New("model down")
+	fs := &fakeFindingStorage{err: errors.New("findings db down")}
+	h, _ := NewHandler(&fakeGenerator{err: sentinel}, loader, staticRoot(root), fs)
+
+	err := h.Handle(context.Background(), ports.WorkRow{
+		Kind: ports.WorkKindReview, RepoID: "repo1", Branch: "main",
+		GitSHA: "sha-deadbeef", Payload: "a.go", Attempts: 3,
+	})
+	if !errors.Is(err, sentinel) {
+		t.Fatalf("err = %v, want original job error to survive a Save failure", err)
 	}
 }
