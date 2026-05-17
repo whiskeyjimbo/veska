@@ -4,6 +4,8 @@ title: Server tier is out of scope for the V2.0 doc tree
 status: accepted
 date: 2026-05-08
 deciders: [whiskeyjimbo]
+verified: true
+verified_date: "2026-05-16"
 ---
 
 # ADR-S0009 — Server tier is out of scope for the V2.0 doc tree

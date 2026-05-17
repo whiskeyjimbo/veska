@@ -4,6 +4,8 @@ title: Two-pool single-writer model via database/sql
 status: accepted
 date: 2026-05-09
 deciders: [whiskeyjimbo]
+verified: true
+verified_date: "2026-05-16"
 ---
 
 # ADR-S0011 — Two-pool single-writer model via `database/sql`
@@ -210,7 +212,7 @@ Negative:
   this scenario, *not* against a single-chunk worst case.
   **Fallback path if M1 shows the chain blows the budget:** the
   embed worker yields the OS lock (sleeps a configurable
-  inter-chunk pause) when `seal_pending` is set or when the hot
+  inter-chunk pause) when `promote_pending` is set or when the hot
   pool's `WaitCount` is non-zero — the embed throughput drops,
   the promotion latency holds. Chunk-size shrinking is the secondary
   lever; the yield is the primary one because it preserves

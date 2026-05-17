@@ -7,6 +7,8 @@ deciders: [whiskeyjimbo]
 supersedes: []
 extends: [ADR-S0014]
 related: [ADR-S0014, ADR-S0001, ADR-S0002]
+verified: true
+verified_date: "2026-05-16"
 ---
 
 # ADR-S0015 — Dual-backend vector strategy

@@ -7,6 +7,8 @@ deciders: [whiskeyjimbo]
 supersedes: []
 extended_by: [ADR-S0015]
 related: [ADR-S0001, ADR-S0015, OQ-S003]
+verified: true
+verified_date: "2026-05-16"
 ---
 
 # ADR-S0014 — HNSW Vector Index Pivot

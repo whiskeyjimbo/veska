@@ -4,6 +4,8 @@ title: One post_promotion_queue table, four work-kinds, one goroutine each
 status: accepted
 date: 2026-05-08
 deciders: [whiskeyjimbo]
+verified: true
+verified_date: "2026-05-16"
 ---
 
 # ADR-S0004 — One post_promotion_queue table, four work-kinds, one goroutine each
