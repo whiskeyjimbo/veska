@@ -243,13 +243,21 @@ func applyEnvOverrides(cfg *Config) {
 	if v := os.Getenv("VESKA_DEBUG"); v != "" && v != "0" {
 		cfg.Logging.Level = "debug"
 	}
+	if v := os.Getenv("VESKA_OTLP_ENDPOINT"); v != "" {
+		cfg.Tracing.OTLPEndpoint = v
+	}
 }
 
-// Validate enforces cross-field invariants. Today it covers the documented
-// tracing rule: enabling tracing without an OTLP endpoint is a startup error.
+// Validate enforces cross-field invariants. It covers the documented tracing
+// both-or-neither rule: tracing.enabled requires an OTLP endpoint, and an
+// endpoint without tracing.enabled is a misconfiguration — both are startup
+// errors so the operator's intent is never silently ignored.
 func (c Config) Validate() error {
 	if c.Tracing.Enabled && c.Tracing.OTLPEndpoint == "" {
 		return fmt.Errorf("config: tracing enabled but no otlp_endpoint set (set tracing.otlp_endpoint or VESKA_OTLP_ENDPOINT)")
+	}
+	if !c.Tracing.Enabled && c.Tracing.OTLPEndpoint != "" {
+		return fmt.Errorf("config: otlp_endpoint set but tracing is disabled (set tracing.enabled = true or clear the endpoint)")
 	}
 	return nil
 }

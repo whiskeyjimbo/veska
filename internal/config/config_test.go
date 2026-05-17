@@ -132,6 +132,28 @@ func TestValidateRejectsTracingWithoutEndpoint(t *testing.T) {
 	}
 }
 
+func TestValidateRejectsEndpointWithoutTracing(t *testing.T) {
+	c := DefaultConfig()
+	c.Tracing.Enabled = false
+	c.Tracing.OTLPEndpoint = "localhost:4317"
+	if err := c.Validate(); err == nil {
+		t.Error("otlp_endpoint set with tracing disabled should be a config error")
+	}
+}
+
+func TestEnvOverridesOTLPEndpoint(t *testing.T) {
+	clearOverrideEnv(t)
+	dir := t.TempDir()
+	t.Setenv("VESKA_HOME", dir)
+	t.Setenv("VESKA_OTLP_ENDPOINT", "localhost:4317")
+
+	c := DefaultConfig()
+	applyEnvOverrides(&c)
+	if c.Tracing.OTLPEndpoint != "localhost:4317" {
+		t.Errorf("VESKA_OTLP_ENDPOINT should override otlp_endpoint: got %q", c.Tracing.OTLPEndpoint)
+	}
+}
+
 func clearOverrideEnv(t *testing.T) {
 	t.Helper()
 	for _, k := range []string{"VESKA_OLLAMA_URL", "VESKA_EMBED_MODEL", "VESKA_VECTOR_BACKEND", "VESKA_DEBUG"} {
