@@ -46,9 +46,12 @@ type ollamaGenerateRequest struct {
 }
 
 // ollamaGenerateResponse is the JSON body returned by POST /api/generate
-// when stream is false.
+// when stream is false. PromptEvalCount and EvalCount are the actual token
+// counts Ollama reports for the prompt and the generated completion.
 type ollamaGenerateResponse struct {
-	Response string `json:"response"`
+	Response        string `json:"response"`
+	PromptEvalCount int    `json:"prompt_eval_count"`
+	EvalCount       int    `json:"eval_count"`
 }
 
 // OllamaGenerator is an LLMGenerator backed by a locally running Ollama
@@ -150,11 +153,15 @@ func (g *OllamaGenerator) Generate(ctx context.Context, req ports.GenerateReques
 
 	var lastErr error
 	for attempt := 1; attempt <= maxAttempts; attempt++ {
-		text, genErr := g.doGenerate(ctx, encoded)
+		out, genErr := g.doGenerate(ctx, encoded)
 		if genErr == nil {
 			return ports.GenerateResponse{
-				Text:       text,
+				Text:       out.Response,
 				Provenance: g.provenance(req),
+				Usage: ports.TokenUsage{
+					PromptTokens:     out.PromptEvalCount,
+					CompletionTokens: out.EvalCount,
+				},
 			}, nil
 		}
 		lastErr = genErr
@@ -187,10 +194,10 @@ func (g *OllamaGenerator) Generate(ctx context.Context, req ports.GenerateReques
 
 // doGenerate performs a single POST /api/generate. It returns a *retryableError
 // for HTTP 5xx and transport-level failures so the caller can decide to retry.
-func (g *OllamaGenerator) doGenerate(ctx context.Context, encoded []byte) (string, error) {
+func (g *OllamaGenerator) doGenerate(ctx context.Context, encoded []byte) (ollamaGenerateResponse, error) {
 	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, g.baseURL+"/api/generate", bytes.NewReader(encoded))
 	if err != nil {
-		return "", fmt.Errorf("ollama: build request: %w", err)
+		return ollamaGenerateResponse{}, fmt.Errorf("ollama: build request: %w", err)
 	}
 	httpReq.Header.Set("Content-Type", "application/json")
 
@@ -199,7 +206,7 @@ func (g *OllamaGenerator) doGenerate(ctx context.Context, encoded []byte) (strin
 		// Transport errors (DNS, connection refused, reset) are transient.
 		// A cancelled/expired context surfaces here too; the retry loop
 		// checks ctx.Err() and will not retry it despite the wrapper.
-		return "", &retryableError{fmt.Errorf("ollama: POST /api/generate: %w", err)}
+		return ollamaGenerateResponse{}, &retryableError{fmt.Errorf("ollama: POST /api/generate: %w", err)}
 	}
 	defer func() { _ = resp.Body.Close() }()
 
@@ -208,16 +215,16 @@ func (g *OllamaGenerator) doGenerate(ctx context.Context, encoded []byte) (strin
 		_, _ = io.Copy(io.Discard, resp.Body)
 		statusErr := fmt.Errorf("ollama: POST /api/generate: status %d", resp.StatusCode)
 		if resp.StatusCode >= 500 {
-			return "", &retryableError{statusErr}
+			return ollamaGenerateResponse{}, &retryableError{statusErr}
 		}
-		return "", statusErr
+		return ollamaGenerateResponse{}, statusErr
 	}
 
 	var out ollamaGenerateResponse
 	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
-		return "", fmt.Errorf("ollama: decode response: %w", err)
+		return ollamaGenerateResponse{}, fmt.Errorf("ollama: decode response: %w", err)
 	}
-	return out.Response, nil
+	return out, nil
 }
 
 // provenance builds the Provenance for a successful call: the generator's
