@@ -314,9 +314,33 @@ func doctorEgressCmd() *cobra.Command {
 					break
 				}
 			}
+
+			// Build the observability egress report from config. The review
+			// LLM endpoint is reported only when the review pipeline is
+			// enabled (passing "" otherwise omits the destination).
+			cfg, _ := config.Load()
+			obsParams := doctor.EgressObservabilityParams{}
+			if cfg.Metrics.Enabled {
+				obsParams.MetricsListener = cfg.Metrics.Listen
+				obsParams.MetricsConfiguredVia = "config:metrics.listen"
+			}
+			if cfg.Tracing.Enabled {
+				obsParams.OTLPEndpoint = cfg.Tracing.OTLPEndpoint
+				obsParams.OTLPConfiguredVia = "config:tracing.otlp_endpoint"
+			}
+			if cfg.Review.Enabled {
+				obsParams.ReviewLLMEndpoint = cfg.LLMGenerator.Endpoint
+				obsParams.ReviewLLMConfiguredVia = "config:llm_generator.endpoint"
+			}
+			obsReport := doctor.CheckEgressObservability(obsParams)
+
 			if jsonOut {
 				enc := json.NewEncoder(w)
-				return enc.Encode(doctor.NewEnvelope("egress", egressStatus, report))
+				envelope := struct {
+					doctor.EgressReport
+					Observability doctor.EgressObservabilityReport `json:"observability"`
+				}{EgressReport: report, Observability: obsReport}
+				return enc.Encode(doctor.NewEnvelope("egress", egressStatus, envelope))
 			}
 			anyMissing := false
 			for _, s := range report.Sockets {
@@ -324,6 +348,13 @@ func doctorEgressCmd() *cobra.Command {
 				if s.Status == "missing" {
 					anyMissing = true
 				}
+			}
+			for _, d := range obsReport.Destinations {
+				target := d.URL
+				if target == "" {
+					target = d.Listen
+				}
+				fmt.Fprintf(w, "egress: %s -> %s (%s)\n", d.Kind, target, d.ConfiguredVia)
 			}
 			if anyMissing {
 				return ProbeStatusError{Subsystem: "egress", Status: "broken"}

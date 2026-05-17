@@ -84,3 +84,38 @@ func TestCheckEgressObservability_BothConfigured(t *testing.T) {
 		t.Error("missing 'otlp' destination")
 	}
 }
+
+func TestCheckEgressObservability_ReviewLLMEnabled(t *testing.T) {
+	report := doctor.CheckEgressObservability(doctor.EgressObservabilityParams{
+		ReviewLLMEndpoint:      "http://127.0.0.1:11434",
+		ReviewLLMConfiguredVia: "config:llm_generator.endpoint",
+	})
+
+	if len(report.Destinations) != 1 {
+		t.Fatalf("expected 1 destination, got %d", len(report.Destinations))
+	}
+	d := report.Destinations[0]
+	if d.Kind != "review_llm" {
+		t.Errorf("kind: got %q, want %q", d.Kind, "review_llm")
+	}
+	if d.URL != "http://127.0.0.1:11434" {
+		t.Errorf("url: got %q, want %q", d.URL, "http://127.0.0.1:11434")
+	}
+	if d.ConfiguredVia != "config:llm_generator.endpoint" {
+		t.Errorf("configured_via: got %q, want %q", d.ConfiguredVia, "config:llm_generator.endpoint")
+	}
+}
+
+func TestCheckEgressObservability_ReviewLLMDisabledOmitted(t *testing.T) {
+	// Caller passes an empty endpoint when review.enabled is false, so the
+	// review LLM destination must not appear even though Ollama is configured.
+	report := doctor.CheckEgressObservability(doctor.EgressObservabilityParams{
+		ReviewLLMEndpoint: "",
+	})
+
+	for _, d := range report.Destinations {
+		if d.Kind == "review_llm" {
+			t.Errorf("review_llm destination present when review disabled: %+v", d)
+		}
+	}
+}

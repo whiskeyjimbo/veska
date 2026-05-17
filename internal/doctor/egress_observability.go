@@ -3,11 +3,11 @@ package doctor
 // EgressDestination describes one active outbound endpoint or listener.
 // Matches the SOLO-13 §2.1.2 egress schema.
 type EgressDestination struct {
-	// Kind is one of: "metrics", "otlp".
+	// Kind is one of: "metrics", "otlp", "review_llm".
 	Kind string `json:"kind"`
 	// Listen is set for HTTP listeners (metrics). Empty for dial-out endpoints.
 	Listen string `json:"listen,omitempty"`
-	// URL is set for dial-out endpoints (otlp). Empty for listeners.
+	// URL is set for dial-out endpoints (otlp, review_llm). Empty for listeners.
 	URL string `json:"url,omitempty"`
 	// ConfiguredVia cites the provenance: "default" | env var name | "config:<key>".
 	ConfiguredVia string `json:"configured_via"`
@@ -33,13 +33,20 @@ type EgressObservabilityParams struct {
 	OTLPEndpoint string
 	// OTLPConfiguredVia cites how OTLPEndpoint was set.
 	OTLPConfiguredVia string
+
+	// ReviewLLMEndpoint is the review pipeline's LLM endpoint (e.g. the local
+	// Ollama endpoint "http://127.0.0.1:11434"). The caller passes "" when the
+	// review pipeline is disabled, so the destination is omitted.
+	ReviewLLMEndpoint string
+	// ReviewLLMConfiguredVia cites how ReviewLLMEndpoint was set.
+	ReviewLLMConfiguredVia string
 }
 
 // CheckEgressObservability builds an EgressObservabilityReport from the provided
 // params. It never returns an error — it purely projects configuration state into
 // the report shape.
 func CheckEgressObservability(params EgressObservabilityParams) EgressObservabilityReport {
-	dests := make([]EgressDestination, 0, 2)
+	dests := make([]EgressDestination, 0, 3)
 
 	if params.MetricsListener != "" {
 		via := params.MetricsConfiguredVia
@@ -61,6 +68,18 @@ func CheckEgressObservability(params EgressObservabilityParams) EgressObservabil
 		dests = append(dests, EgressDestination{
 			Kind:          "otlp",
 			URL:           params.OTLPEndpoint,
+			ConfiguredVia: via,
+		})
+	}
+
+	if params.ReviewLLMEndpoint != "" {
+		via := params.ReviewLLMConfiguredVia
+		if via == "" {
+			via = "default"
+		}
+		dests = append(dests, EgressDestination{
+			Kind:          "review_llm",
+			URL:           params.ReviewLLMEndpoint,
 			ConfiguredVia: via,
 		})
 	}
