@@ -3,10 +3,10 @@ id: SOLO-16
 title: "Error Catalogue — veska_code, exit codes, audit shape"
 status: draft
 version: 0.1.0
-last_reviewed: 2026-05-09
+last_reviewed: 2026-05-17
 related: [SOLO-03, SOLO-08, SOLO-09, SOLO-10, SOLO-13]
 verified: true
-verified_date: "2026-05-16"
+verified_date: "2026-05-17"
 ---
 
 # SOLO-16 — Error Catalogue
@@ -29,24 +29,49 @@ rather than re-define it.
 
 ### 2.1 MCP error envelope
 
-JSON-RPC error returned over the socket:
+**Shipped reality.** A JSON-RPC error returned over the socket is a
+bare `RPCError` — an integer `code` and a human-readable `message`,
+with no `data` block:
 
 ```jsonc
 {
   "error": {
-    "code":    -32001,             // JSON-RPC code; see §3
-    "message": "<short, stable>",  // human-readable summary
-    "data": {
-      "veska_code": "ErrXxx",     // stable string id; the catalogue key
-      "context":     { /* code-specific payload */ }
-    }
+    "code":    -32002,             // JSON-RPC code; see §3
+    "message": "finding not found: F-123 on branch main"
   }
 }
 ```
 
-The `veska_code` is the contract. The `message` is friendly
-prose that may improve over time. Tooling MUST key on
-`veska_code`, not `message`.
+Handlers in `internal/infrastructure/mcp/` construct
+`RPCError{Code, Message}` directly (`server.go` defines the type and
+code constants). There is **no `data.veska_code` block** — the
+`veska_code` keys used throughout this catalogue are documentation
+identifiers for the failure conditions, not values carried on the
+wire. Tooling that needs to discriminate failures today must match on
+the integer `code` (and, where codes overlap, the `message` text).
+
+> **Planned — structured `veska_code` envelope (NOT YET IMPLEMENTED).**
+> The target design adds a `data` block carrying a stable string id
+> plus a code-specific `context` payload:
+>
+> ```jsonc
+> {
+>   "error": {
+>     "code":    -32001,             // JSON-RPC code; see §3
+>     "message": "<short, stable>",  // human-readable summary
+>     "data": {
+>       "veska_code": "ErrXxx",      // stable string id; the catalogue key
+>       "context":     { /* code-specific payload */ }
+>     }
+>   }
+> }
+> ```
+>
+> Once it lands, the `veska_code` becomes the contract and the
+> `message` becomes friendly prose; tooling would key on `veska_code`,
+> not `message`. This envelope is design ambition only — no handler
+> emits it. The `context` payloads in §3.3 and the stability rules in
+> §4 describe this future shape, not the current one.
 
 ### 2.2 CLI exit codes
 
@@ -114,7 +139,40 @@ Audit line: not written for the panic (the daemon is dying). Crash details land 
 
 ### 3.3 MCP surface (JSON-RPC errors)
 
-| `veska_code` | JSON-RPC | When | `context` payload | Remediation |
+#### 3.3.1 Shipped JSON-RPC codes
+
+These are the integer codes the MCP server actually emits today.
+Constants live in `internal/infrastructure/mcp/`; handlers return a
+bare `RPCError{Code, Message}` (see §2.1).
+
+| Constant | Code | Defined in | When |
+|---|---|---|---|
+| `CodeParseError` | -32700 | `server.go` | Request body is not valid JSON |
+| `CodeInvalidRequest` | -32600 | `server.go` | Malformed JSON-RPC request object |
+| `CodeMethodNotFound` | -32601 | `server.go` | Unknown method / tool name |
+| `CodeInvalidParams` | -32602 | `server.go` | Argument schema violation, missing required field, or a bound exceeded (e.g. `k` over the search max) |
+| `CodeInternalError` | -32603 | `server.go` | Unhandled failure inside a handler (DB error, tx failure, etc.) |
+| `CodeHumanRequired` | -32001 | `tool_close_finding.go` | High-severity finding close attempted by a non-human actor (SOLO-10 §3) |
+| `CodeNotFound` | -32002 | `server.go` | A referenced entity does not exist — repo, finding, node, or task not found |
+| `CodeFailedPrecondition` | -32003 | `tools_search.go` | A precondition for the operation is not met (e.g. `similar` called on a node with no stored embedding) |
+
+The `message` field is free-form prose built per call site
+(`fmt.Sprintf` of the underlying cause) and is **not** a stable
+contract. Tooling that must discriminate failures keys on the integer
+`code`.
+
+#### 3.3.2 Planned `veska_code` mapping (NOT YET IMPLEMENTED)
+
+The table below is the **target** catalogue for the structured
+envelope described in §2.1 — it pairs each planned `veska_code` with
+the JSON-RPC code it would carry and the `context` payload it would
+attach. None of this is wired today; handlers emit bare `RPCError`
+values per §3.3.1. Note that the shipped `-32002` is `CodeNotFound`
+and `-32003` is `CodeFailedPrecondition`; the `ErrBusy` /
+`ErrRepoNotRegistered` assignments below are design intent that does
+not match the current constants.
+
+| `veska_code` (planned) | JSON-RPC | When | `context` payload | Remediation |
 |---|---|---|---|---|
 | `ErrDaemonNotRunning` | -32000 | Shim cannot reach socket and no supervisor is registered | `{"cli_command": "veska service install"}` | Install the service |
 | `ErrDaemonStarting` | -32000 | Write tool called during startup-resync | `{"resync_state": "running"}` | Wait; resync will complete |
@@ -124,21 +182,9 @@ Audit line: not written for the panic (the daemon is dying). Crash details land 
 | `ErrInvalidArgs` | -32602 | JSON-RPC standard; argument schema violation | `{"field": "...", "reason": "..."}` | Fix the call |
 | `ErrInternal` | -32603 | Unhandled handler panic; logged as a defect | `{"trace_id": "..."}` | File a bug with the trace ID |
 
-Audit line: every refusal and every handler error is logged synchronously per SOLO-10 §4. `result` carries `"refused: <veska_code>"` or `"error: <veska_code>"`.
-
-> **Implementation status (M0–M4).** The shipped MCP server
-> (`internal/infrastructure/mcp/server.go`) defines the standard
-> JSON-RPC codes (`CodeParseError -32700`, `CodeInvalidRequest -32600`,
-> `CodeMethodNotFound -32601`, `CodeInvalidParams -32602`,
-> `CodeInternalError -32603`) plus three extensions:
-> `CodeNotFound = -32002`, `CodeFailedPrecondition = -32003`
-> (`tools_search.go`), and `CodeHumanRequired = -32001`
-> (`tool_close_finding.go`). The `-32002`/`-32003` assignments in the
-> table above (`ErrBusy`, `ErrRepoNotRegistered`) and the
-> `veska_code` data envelope are not yet wired — handlers currently
-> return bare `RPCError{Code, Message}` values without a `data` block.
-> This table remains the target catalogue; reconcile when the
-> envelope lands.
+Audit line (planned): every refusal and every handler error is logged
+synchronously per SOLO-10 §4. `result` would carry
+`"refused: <veska_code>"` or `"error: <veska_code>"`.
 
 ### 3.4 Pipeline / async work
 
@@ -175,6 +221,11 @@ These are not MCP errors — they are *findings* or *degraded reasons*. The `ves
 | `ErrFSEventsBudget` | macOS FSEvents per-mount budget exceeded | warn-level log; `veska doctor watcher` recommends polling |
 
 ## 4. Stability and additions
+
+These rules govern the **planned** `veska_code` envelope (§2.1,
+§3.3.2); they take effect once that envelope ships. The shipped bare
+`RPCError` integer codes are stable JSON-RPC constants and change only
+with a deliberate code edit.
 
 The catalogue follows the same discipline as SOLO-08 §3.5's `v`
 bump rule:
