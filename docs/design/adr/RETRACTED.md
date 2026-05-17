@@ -1,10 +1,15 @@
 # Retracted ADRs
 
 The solo redesign retracts the following ADRs from the prior V2
-set (`docs/design/adr/`). Each retraction has a one-paragraph
-rationale. The original ADR files remain in their original location
-as historical record; this file is the authoritative list of
-"these decisions no longer apply to V2.0".
+set. Each retraction has a one-paragraph rationale. The prior-set
+ADR files (ADR-0001..0023, the old non-`S` numbering) are **not
+present as files** anywhere under `docs/` — they survive only in
+git history. This file is the authoritative list of "these
+decisions no longer apply to V2.0".
+
+This document records **nine retraction entries**: eight ADRs are
+fully retracted, and ADR-0019 is partially retracted (its
+durable-queue decision carries forward; see below).
 
 ---
 

@@ -1,11 +1,11 @@
 ---
 id: ADR-S0006
 title: V2.0 ships five EdgeKinds
-status: accepted
+status: amended
 date: 2026-05-08
 deciders: [whiskeyjimbo]
 verified: true
-verified_date: "2026-05-16"
+verified_date: "2026-05-17"
 ---
 
 # ADR-S0006 — V2.0 ships five EdgeKinds
@@ -137,3 +137,33 @@ roadmap entry.
 - SOLO-04 (domain model — EdgeKind enum)
 - SOLO-15 (glossary — Edge)
 - Prior ADR-0006 (the fifteen-kind set; superseded for V2.0)
+
+## Amendment (2026-05-17)
+
+This ADR is amended in place to record that the shipped `EdgeKind`
+enum has **six** values, not five. The original decision prose above
+is left unchanged — it remains the authoritative record of the
+*structural* edge set and the parser-cost reasoning behind it.
+
+`SIMILAR_TO` (`EdgeSimilarTo` in `internal/core/domain/edge.go`) was
+added in M3 for the auto-link pipeline. Unlike the five structural
+kinds decided above, it is a **non-structural** edge kind:
+
+- It is not produced by a tree-sitter parser pass, so it does not
+  change the per-language parser-authoring scope or the parser-cost
+  argument in the Consequences section.
+- It is written with `Confidence=Unresolved` — a proposed, not
+  resolved, edge — and is paired with a `source_layer='semantic'`
+  Finding. It carries semantic-similarity signal, not a parsed
+  program relationship.
+- It is excluded from the resolver arity matrix used for the
+  structural kinds; its `(src, tgt)` validity is governed by the
+  auto-link pipeline rather than the structural arity table.
+
+Net effect: the shipped enum has six kinds — the five structural
+kinds (`CALLS`, `IMPORTS`, `CONTAINS`, `TESTS`, `DEPENDS_ON`) plus
+the non-structural `SIMILAR_TO`. Where this ADR says "five", read it
+as the structural set; the total enum size is six. This amendment
+supersedes the 2026-05-16 factual-divergence note above, which
+called for a separate amending ADR — that work is now folded in
+here.
