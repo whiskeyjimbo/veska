@@ -5,6 +5,8 @@ status: draft
 version: 0.1.0
 last_reviewed: 2026-05-08
 related: [SOLO-01, SOLO-03, SOLO-09, SOLO-10, SOLO-11, SOLO-12]
+verified: true
+verified_date: "2026-05-16"
 ---
 
 # SOLO-02 — Personas & Stories
