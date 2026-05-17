@@ -5,6 +5,8 @@ status: draft
 version: 0.1.0
 last_reviewed: 2026-05-09
 related: [SOLO-03, SOLO-08, SOLO-13, SOLO-16]
+verified: true
+verified_date: "2026-05-16"
 ---
 
 # SOLO-17 — Lifecycle and Operations
@@ -235,7 +237,7 @@ is intentionally that simple.
 ### 4.2 The backup transaction
 
 ```
-veska backup create [-o <path>]
+veska backup create [--output-dir <dir>]
   → daemon receives BackupCreate RPC
   → SQLite online backup API: copy veska.db page-by-page
     while readers and writers continue on the live db.
@@ -251,8 +253,8 @@ guarantee a transactionally consistent snapshot of the database
 without pausing writers. The audit log copy is not transactional
 relative to the database; see §4.3.
 
-Default destination: `~/.veska/backups/veska-backup-<hostname>-<ts>.tar.gz`.
-`--output <path>` overrides; the parent directory must exist.
+Default destination: `~/.veska-backups/veska-backup-<hostname>-<ts>.tar.gz`.
+`--output-dir <dir>` overrides; the parent directory must exist.
 
 Exit codes: 0 on success; 1 on partial (e.g., audit log read
 failed but database snapshot succeeded); 2 on failure (database
