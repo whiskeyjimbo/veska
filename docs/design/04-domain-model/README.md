@@ -5,6 +5,8 @@ status: draft
 version: 0.1.0
 last_reviewed: 2026-05-08
 related: [SOLO-01, SOLO-07, SOLO-08, SOLO-15]
+verified: true
+verified_date: "2026-05-16"
 ---
 
 # SOLO-04 — Domain Model
@@ -41,11 +43,15 @@ only. `Suppression` is a member of `Finding`.
 
 ### 2.1 What is not an entity
 
-- **Actor.** There is no `Actor` aggregate. Actors are represented
-  by an `actor_id string` (e.g. `"human:jeff"`, `"agent:claude-code"`,
+- **Actor.** There is no `Actor` *aggregate root*. `Actor` exists
+  in `core/domain` only as a lightweight attribution value type
+  (`actor.go`: `Actor{ID string, Kind ActorKind}` with a
+  `NewActor` constructor). It is never persisted as its own row:
+  authorship is recorded on every state-changing row by an
+  `actor_id string` (e.g. `"human:jeff"`, `"agent:claude-code"`,
   `"service:veska"`) and an `actor_kind` enum (`'human' | 'agent'
-  | 'system'`) on every row that records authorship. That is the
-  entire identity model. SOLO-10 has the full story.
+  | 'system'`). That is the entire identity model. SOLO-10 has the
+  full story.
 - **Workspace.** The daemon has a session and the user has a
   repo. We do not need a third concept that overloads both.
 - **Contract.** Endpoint/schema contracts are not modelled as
@@ -75,9 +81,9 @@ const (
     ActorKindSystem ActorKind = "system"
 )
 
-type ActorStamp struct {
-    ActorID   string    // "human:<user>" | "agent:<name>" | "service:veska"
-    Kind      ActorKind
+type Actor struct {
+    ID   string    // "human:<user>" | "agent:<name>" | "service:veska"
+    Kind ActorKind
 }
 ```
 
@@ -229,7 +235,8 @@ Required fields: `src NodeID`, `tgt NodeID`, `kind EdgeKind`.
 
 Optional: `confidence Confidence`, `resolved bool`, `source_line *int`.
 
-`EdgeKind` is closed at five values:
+`EdgeKind` is closed at six values — five parser-derived
+structural kinds plus the auto-link `SIMILAR_TO` kind:
 
 ```go
 const (
@@ -238,16 +245,23 @@ const (
     EdgeContains  EdgeKind = "CONTAINS"
     EdgeTests     EdgeKind = "TESTS"
     EdgeDependsOn EdgeKind = "DEPENDS_ON"
+    EdgeSimilarTo EdgeKind = "SIMILAR_TO"
 )
 ```
 
-Five kinds. Richer kinds (READS, WRITES, MUTATES, INSTANTIATES,
-OVERRIDES, THROWS, CATCHES, DECORATES, IMPLEMENTS, EMBEDS,
-EXTENDS, RETURNS_TYPE, TAKES_PARAM, DOCUMENTS, DEPLOYS, …)
-require parser support that is not specified; the
-blast-radius math is also cleaner with five kinds than with
-twenty. A parser producing an edge that does not fit one of the
-five drops it on the floor until an ADR adds the kind.
+Six kinds. The first five are structural, parser-derived. The
+sixth, `SIMILAR_TO`, is emitted by the auto-link pipeline
+(`internal/application/autolink`) as a proposed semantic
+similarity edge: written with `Confidence = Unresolved` and
+paired with a `source_layer = 'semantic'` `Finding` for human
+review. Richer structural kinds (READS, WRITES, MUTATES,
+INSTANTIATES, OVERRIDES, THROWS, CATCHES, DECORATES, IMPLEMENTS,
+EMBEDS, EXTENDS, RETURNS_TYPE, TAKES_PARAM, DOCUMENTS, DEPLOYS,
+…) require parser support that is not specified; the
+blast-radius math is also cleaner with a small kind set than
+with twenty. A parser producing an edge that does not fit one of
+the structural kinds drops it on the floor until an ADR adds the
+kind.
 
 #### Invariants
 
@@ -312,22 +326,34 @@ bookkeeping is a separate kind of row with a separate lifecycle.
 `Graph` is a **domain read projection** — an in-memory bundle
 of `Node` + `Edge` for a given `(repo_id, branch)` scope, built
 from rows by `GraphRepository.LoadGraph` (§11). It is **not**
-an aggregate root; it has no write methods, and no pipeline
-ever calls one. Writes flow row-shaped through
-`GraphRepository.SaveNode` / `SaveEdge` / `DeleteFile`.
+an aggregate root and never a persistent write seam: durable
+writes flow row-shaped through `GraphRepository.SaveNode` /
+`SaveEdge` / `DeleteFile`. `Graph` does expose `AddNode` /
+`AddEdge` mutators, but only so `LoadGraph` (and tests) can
+populate an in-memory projection from rows — they build the
+read object, they do not persist anything.
 
 Operations:
 
 ```go
+// Population — used by GraphRepository.LoadGraph to build the
+// in-memory projection from rows.  AddEdge requires both
+// endpoint nodes to be present (enforces §5.3 invariant 1).
+func (g *Graph) AddNode(n *Node) error
+func (g *Graph) AddEdge(e *Edge) error
+
 // Read-only traversal helpers used by the resolver chain
-// (SOLO-11 §9), blast-radius, and call-chain analysis.
+// (SOLO-11 §9), blast-radius, call-chain, and the wiki
+// entry_points / hot_zone surfaces.
+func (g *Graph) Nodes() []*Node            // all nodes, sorted by NodeID
 func (g *Graph) Node(id NodeID) (*Node, bool)
 func (g *Graph) OutgoingEdges(id NodeID) []*Edge
 func (g *Graph) IncomingEdges(id NodeID) []*Edge
-func (g *Graph) FindEdges(spec EdgeQuery) []*Edge
-func (g *Graph) BlastRadius(start NodeID, depth int) []NodeID
-func (g *Graph) CallChain(from, to NodeID) ([]NodeID, bool)
 ```
+
+Blast-radius and call-chain are computed by application-layer
+services (`internal/application/blastradius`, search), not by
+methods on `Graph`; they consume the traversal helpers above.
 
 Invariants (of the projection, not of any write path):
 
@@ -673,11 +699,14 @@ new enum value, not a re-overload of `Unresolved`.
 ### 9.2 `ContentHash`
 
 ```go
-type ContentHash [32]byte  // sha256
+type ContentHash string  // hex-encoded sha256 digest
 ```
 
-Computed as `sha256(raw_content || ":" || model_version)`. Used
-as the dedup key in the embedding store.
+The node-level `ContentHash` is the hex-encoded `sha256(raw_content)`
+of a node's source text (validated by `WithContentHash` /
+`WithRawContent`). The embedding store layers `model_version`
+into its own dedup key on top of this (SOLO-08 §3.3); node
+identity itself does not fold in `model_version`.
 
 ### 9.3 `LineRange`
 
@@ -693,33 +722,42 @@ type LineRange struct {
 Every entity uses functional options for optional fields:
 
 ```go
-func NewNode(id NodeID, path, name string, kind NodeKind, opts ...NodeOption) (*Node, error) {
-    n := &Node{ID: id, Path: path, Name: name, Kind: kind}
-    for _, opt := range opts {
-        opt(n)
+func NewNode(id, path, name string, kind NodeKind, opts ...NodeOption) (*Node, error) {
+    if id == "" {
+        return nil, errors.New("domain: Node id must not be empty")
     }
-    if err := n.validate(); err != nil {
-        return nil, err
+    n := &Node{ID: NodeID(id), Path: path, Name: name, Kind: kind}
+    for _, opt := range opts {
+        if err := opt(n); err != nil {
+            return nil, err
+        }
     }
     return n, nil
 }
 
-type NodeOption func(*Node)
+// Options return an error: required-field checks live in the
+// constructor body, but options that carry their own invariants
+// (line ranges, content-hash/raw-content agreement) validate
+// inline and surface the first error.
+type NodeOption func(*Node) error
 
-func WithSignature(sig string) NodeOption    { return func(n *Node) { n.Signature = &sig } }
-func WithLines(start, end int) NodeOption    { return func(n *Node) { n.Lines = &LineRange{start, end} } }
-func WithRawContent(s string) NodeOption     { return func(n *Node) { n.RawContent = &s } }
-func WithContentHash(h ContentHash) NodeOption { return func(n *Node) { n.ContentHash = &h } }
-func WithLanguage(lang string) NodeOption    { return func(n *Node) { n.Language = &lang } }
-func WithExported(b bool) NodeOption         { return func(n *Node) { n.Exported = &b } }
+func WithSignature(sig string) NodeOption      { /* sets n.Signature */ }
+func WithLines(lr LineRange) NodeOption        { /* validates 1≤Start≤End */ }
+func WithRawContent(raw string) NodeOption     { /* sets + cross-checks ContentHash */ }
+func WithContentHash(h ContentHash) NodeOption { /* sets + cross-checks RawContent */ }
+func WithLanguage(lang string) NodeOption      { /* sets n.Language */ }
+func WithExported(b bool) NodeOption           { /* sets n.Exported */ }
 ```
 
 Rules:
 
 1. Required fields are positional.
 2. Optional fields go through `With<Field>`.
-3. Validation runs once, in the constructor, after options
-   apply. Options never validate; they set.
+3. Required-field validation runs in the constructor body.
+   Options have signature `func(*Entity) error`: most simply
+   set, but options whose value carries an invariant
+   (`WithLines`, `WithRawContent`, `WithContentHash`) validate
+   inline and return the first error.
 4. No setters. Once constructed, fields change only through
    aggregate-root methods.
 5. Outside `core/domain/`, entities are constructed only through
@@ -728,15 +766,18 @@ Rules:
    `core/domain` is the only package that knows the struct
    internals.
 
-Entities with constructors:
+Entities with constructors (signatures as shipped in
+`internal/core/domain`):
 
-- `NewNode(id, path, name, kind, ...NodeOption)`
-- `NewEdge(src, tgt, kind, ...EdgeOption)`
-- `NewGraph(repoID, branch, ...GraphOption)`
-- `NewRepo(id, rootPath, ...RepoOption)`
-- `NewTask(id, title, ...TaskOption)`
-- `NewFinding(id, severity, sourceLayer, rule, message, ...FindingOption)`
-- `NewSuppression(id, scope, target, reason, actor, ...SuppressionOption)`
+- `NewNode(id, path, name string, kind NodeKind, ...NodeOption)`
+- `NewEdge(src, tgt NodeID, kind EdgeKind, ...EdgeOption)`
+- `NewGraph(repoID, branch string)` — no options
+- `NewRepo(...)` — see SOLO-07/SOLO-08; the `Repo` aggregate has
+  no `core/domain` constructor yet (its state lives in the
+  repos-table registry, `internal/repo`)
+- `NewTask(id, repoID, title string, ...TaskOption)`
+- `NewFinding(id, repoID, branch string, severity Severity, layer SourceLayer, rule, message string, ...FindingOption)`
+- `NewSuppression(id string, scope SuppressionScope, target, reason, actorID string, actorKind ActorKind, createdAt time.Time, ...SuppressionOption)`
 
 ## 10a. Naming note: `Actor` and `Kind`
 
@@ -804,8 +845,10 @@ type GraphRepository interface {
   (`dst_node_id NOT NULL` + composite FK, SOLO-08 §3.1) is the
   structural backstop.
 - `LoadGraph` is the only place a whole-graph object is ever
-  materialised. It is read-only; the returned `*Graph`
-  exposes traversal helpers (§5.3) and no write methods.
+  materialised for production use. The returned `*Graph` is a
+  read projection — its `AddNode` / `AddEdge` mutators populate
+  the in-memory object during `LoadGraph` but never persist;
+  callers use only the traversal helpers (§5.3).
 - The promotion transaction (SOLO-08 §5) is the one cross-row
   transactional bundle: many `nodes` rows + many `edges` rows
   + the post-promotion queue row, in one `BEGIN IMMEDIATE`. The
