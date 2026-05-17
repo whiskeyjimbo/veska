@@ -3,6 +3,8 @@ title: "Configuration Surface"
 status: reference
 last_reviewed: 2026-05-08
 related: [SOLO-13]
+verified: true
+verified_date: "2026-05-16"
 ---
 
 # Configuration Surface
@@ -204,6 +206,7 @@ auto_retain            = 7                    # number of auto-backup files reta
 staleness_warn         = "24h"                # doctor warns if last backup older than this (with auto on, 24h is reachable; lower the alarm window)
 required               = false                # if true, daemon refuses to start unless a verified backup exists
 pre_migration_keep     = 5                    # auto-snapshots taken by the migration runner (SOLO-08 §10) — last N retained, older pruned
+```
 
 ### 3.2 Advanced
 
@@ -212,6 +215,7 @@ specific behaviour. Most users should never edit them; the
 defaults are picked against the M1 reference workload and any
 divergence should come with a reason.
 
+```toml
 # ─── post_promotion_queue (advanced) ──────────────────────────────────
 [post_promotion_queue]
 high_water             = 10000               # `embed` rows enqueued above this defer instead of pending; promotion proceeds (SOLO-08 §3.4)

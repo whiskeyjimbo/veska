@@ -3,6 +3,8 @@ title: "Secrets Runbook"
 status: reference
 last_reviewed: 2026-05-08
 related: [SOLO-08, SOLO-13]
+verified: true
+verified_date: "2026-05-16"
 ---
 
 # Secrets Runbook

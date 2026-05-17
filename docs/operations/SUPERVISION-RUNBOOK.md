@@ -4,6 +4,8 @@ title: "Supervision Runbook — Install, Upgrade, Crash-loop"
 status: draft
 last_reviewed: 2026-05-08
 related: [SOLO-03, SOLO-13, CONFIG-SURFACE]
+verified: true
+verified_date: "2026-05-16"
 ---
 
 # Supervision Runbook
@@ -174,7 +176,7 @@ veska service restart
 
 # 2c. If 2a and 2b are both blocked: restore from the pre-migration
 #     snapshot the runner took before the failing migration
-veska daemon stop
+veska service stop
 veska restore --pre-migration   # one command — auto-selects the most recent
                                   # pre-migration snapshot, verifies it,
                                   # renames the live DB to .replaced-<ts>/,
@@ -220,7 +222,7 @@ tail -100 ~/.veska/logs/daemon.log
 # 2. Address the cause (free disk, reinstall sqlite-vec, etc.)
 
 # 3. Clear the breaker
-veska doctor fix       # offers to clear the marker after summarising the cause
+veska doctor reset-crash-loop   # clears the breaker marker after summarising the cause
 
 # 4. Ask the supervisor to start
 veska service restart
@@ -236,7 +238,7 @@ indefinitely masks bugs.)
 
 ```
 veska service uninstall   # remove unit file; supervisor forgets the daemon
-veska daemon stop         # if still running outside supervisor
+veska service stop        # if still running outside supervisor
 rm -rf ~/.veska           # full reset; loses all promoted state
 ```
 
