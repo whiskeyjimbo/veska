@@ -4,6 +4,8 @@ title: "Engram Solo Design Set — Conventions"
 status: draft
 version: 0.1.0
 last_reviewed: 2026-05-08
+verified: true
+verified_date: "2026-05-16"
 ---
 
 # Solo Design Set
@@ -11,8 +13,7 @@ last_reviewed: 2026-05-08
 ## Purpose
 
 This set defines Engram's solo architecture: one daemon, one
-developer, one machine. It supersedes the prior `design/` set;
-the prior set is preserved as historical record.
+developer, one machine.
 
 ## How to read this set
 
@@ -113,6 +114,5 @@ A doc transitions to `approved` only when:
 
 ## Repository layout
 
-This set lives at `veska-v2/docs/docsv2solo/`. The prior set at
-`veska-v2/docs/design/` is preserved until M6 cutover, at which
-point this set replaces it and the prior moves to `archive/`.
+This set lives at `solov2/docs/design/`. It is the active design
+tree; there is no separate prior set preserved alongside it.
