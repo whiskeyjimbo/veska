@@ -3,7 +3,8 @@
 This directory holds ADRs cited from the SOLO design set. ADRs are
 MADR-style; each one records a discrete decision worth pinning.
 
-The solo redesign retracts eight ADRs from the prior V2 set. See
+The solo redesign retracts eight prior V2 ADRs fully plus one
+partially (ADR-0019) — nine retraction entries in total. See
 [`RETRACTED.md`](RETRACTED.md) for the list and rationale. The
 remaining prior ADRs that are still relevant carry forward
 unchanged and are referenced by their original numbers.
@@ -39,7 +40,7 @@ and never reused.
 | [ADR-S0003](ADR-S0003-save-vs-promote.md) | Save-vs-promote split with volatile staging | accepted |
 | [ADR-S0004](ADR-S0004-post-promotion-queue-table.md) | One post_promotion_queue table, four work-kinds, one goroutine each | accepted |
 | [ADR-S0005](ADR-S0005-actor-id-and-actor-kind.md) | actor_id + actor_kind is the entire identity model | accepted |
-| [ADR-S0006](ADR-S0006-five-edge-kinds.md) | V2.0 ships five EdgeKinds | accepted |
+| [ADR-S0006](ADR-S0006-five-edge-kinds.md) | V2.0 ships five structural EdgeKinds (amended — shipped enum has six, adding non-structural SIMILAR_TO) | amended |
 | [ADR-S0007](ADR-S0007-embedder-swap.md) | Embedder swap is one CLI subcommand against a live daemon | accepted |
 | [ADR-S0008](ADR-S0008-mcp-naming.md) | MCP tool naming — `eng_<verb>_<object>`, closed verb set | accepted |
 | [ADR-S0009](ADR-S0009-server-tier-out-of-scope.md) | Server tier is out of scope for the V2.0 doc tree | accepted |
@@ -55,16 +56,20 @@ and never reused.
 These prior ADRs are explicitly retracted by the solo redesign.
 See [`RETRACTED.md`](RETRACTED.md) for details.
 
-| Prior ID | Title | Replaced by |
-|---|---|---|
-| ADR-0008 | Transport & Auth for Networked Modes | (none — Unix socket only) |
-| ADR-0009 | Executor Slot Cardinality | (none — no executor slot) |
-| ADR-0011 | `finding-revalidator` slot | (none — revalidation is a goroutine; temporal optimization folded into SOLO-11 §6) |
-| ADR-0012 | `AuditRun` identity and resume | (none — `audit.jsonl` has no aggregate) |
-| ADR-0014 | Typed plugin registry | ADR-S0002 (plain Go interfaces) |
-| ADR-0015 | Embedder migration ceremony | ADR-S0007 |
-| ADR-0018 | Eager attribution | ADR-S0005 (`actor_id` + `actor_kind`) |
-| ADR-0023 | Branch-per-Git-branch policy | ADR-S0001 (`branch` is a column) |
+| Prior ID | Retraction | Title | Replaced by |
+|---|---|---|---|
+| ADR-0008 | full | Transport & Auth for Networked Modes | (none — Unix socket only) |
+| ADR-0009 | full | Executor Slot Cardinality | (none — no executor slot) |
+| ADR-0011 | full | `finding-revalidator` slot | (none — revalidation is a goroutine; temporal optimization folded into SOLO-11 §6) |
+| ADR-0012 | full | `AuditRun` identity and resume | (none — `audit.jsonl` has no aggregate) |
+| ADR-0014 | full | Typed plugin registry | ADR-S0002 (plain Go interfaces) |
+| ADR-0015 | full | Embedder migration ceremony | ADR-S0007 |
+| ADR-0018 | full | Eager attribution | ADR-S0005 (`actor_id` + `actor_kind`) |
+| ADR-0023 | full | Branch-per-Git-branch policy | ADR-S0001 (`branch` is a column) |
+| ADR-0019 | partial | Embedding queue lives in Dolt | ADR-S0004 (queue in SQLite `post_promotion_queue`); durable-queue decision carries forward |
+
+Eight ADRs are fully retracted; ADR-0019 is partially retracted (its
+durable-queue decision carries forward). Nine retraction entries total.
 
 ## Carried forward from prior set
 
