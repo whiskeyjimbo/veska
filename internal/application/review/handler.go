@@ -343,10 +343,22 @@ func (h *Handler) runKind(ctx context.Context, kind ReviewKind, in Input, gitSHA
 		}
 	}
 
-	// Parse validates the response shape. Producing domain.Findings from the
-	// parsed ReviewFindings is solov2-nz2.6 — this handler discards them.
-	if _, err := prompt.Parse(resp.Text); err != nil {
+	// Parse validates the response shape, then each parsed ReviewFinding is
+	// converted to a domain.Finding and persisted. A Save failure surfaces as
+	// a job error so the poller retries: the job is not "done" until its
+	// findings persist.
+	parsed, err := prompt.Parse(resp.Text)
+	if err != nil {
 		return fmt.Errorf("review.Handle: parse response for %q: %w", kind, err)
+	}
+	for _, rf := range parsed {
+		f, ferr := toDomainFinding(rf, in.RepoID, in.Branch, in.FilePath)
+		if ferr != nil {
+			return fmt.Errorf("review.Handle: convert finding for %q: %w", kind, ferr)
+		}
+		if serr := h.findings.Save(ctx, f); serr != nil {
+			return fmt.Errorf("review.Handle: save finding for %q: %w", kind, serr)
+		}
 	}
 	return nil
 }
