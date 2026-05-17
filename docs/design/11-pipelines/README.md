@@ -6,7 +6,7 @@ version: 0.1.0
 last_reviewed: 2026-05-08
 related: [SOLO-01, SOLO-04, SOLO-05, SOLO-08, SOLO-10]
 verified: true
-verified_date: "2026-05-16"
+verified_date: "2026-05-17"
 ---
 
 # SOLO-11 — Pipelines
@@ -228,17 +228,23 @@ measures.
 
 ### 2.1 What runs synchronously
 
-Four checks. All deterministic. All cheap.
+Four checks are designed. All deterministic. All cheap. **Two ship
+today (M3); two are PLANNED.**
 
-| Check | Input | Output |
-|---|---|---|
-| Dead-code | Edge graph diff vs. promoted | Findings: `unreachable_symbol`, `dangling_import` |
-| Secrets-scan | Diff hunks (changed lines only) | Findings: `secret_leak` with rule + redacted snippet |
-| Vuln-scan | Dependency edges, against on-disk cache | Findings: `vuln` with advisory ID, package, range |
-| Contract-drift | Public API edges vs. registered contracts | Findings: `contract_drift` with breaking-vs-additive class |
+| Check | Status | Input | Output |
+|---|---|---|---|
+| Dead-code | **SHIPPED (M3)** — `internal/application/checks/deadcode.go` | Edge graph diff vs. promoted | Findings: `unreachable_symbol`, `dangling_import` |
+| Secrets-scan | **PLANNED** — awaits the `secrets-scanner` port (09-mcp-surface §8.2, deferred) | Diff hunks (changed lines only) | Findings: `secret_leak` with rule + redacted snippet |
+| Vuln-scan | **PLANNED** — awaits the `vuln-source` port (09-mcp-surface §8.2, deferred) | Dependency edges, against on-disk cache | Findings: `vuln` with advisory ID, package, range |
+| Contract-drift | **SHIPPED (M3)** — `internal/application/checks/contractdrift.go` | Public API edges vs. registered contracts | Findings: `contract_drift` with breaking-vs-additive class |
 
-These run inline because they are deterministic and bounded. None
-of them call out to the network at promotion time; vuln-scan reads the
+The two shipped checks (dead-code, contract-drift) run inline because
+they are deterministic and bounded. The two PLANNED checks
+(secrets-scan, vuln-scan) cannot run until their backing ports land:
+secrets-scan depends on the `secrets-scanner` port and vuln-scan on the
+`vuln-source` port, both currently deferred per 09-mcp-surface §8.2.
+When they ship they will run inline on the same terms — none of them
+call out to the network at promotion time; vuln-scan will read the
 cache file (SOLO-05 §VulnSource), which a background goroutine
 refreshes on a configurable interval.
 
@@ -1003,7 +1009,11 @@ One file: `~/.veska/config.toml`. The pipeline-relevant section:
 debounce_ms = 100
 
 [promotion]
-checks = ["dead_code", "secrets", "vuln", "contract_drift"]
+# Shipped (M3): dead_code, contract_drift.
+# PLANNED — secrets, vuln await the secrets-scanner + vuln-source
+# ports (09-mcp-surface §8.2, deferred); listing them has no effect
+# until those ports land.
+checks = ["dead_code", "contract_drift"]   # planned: "secrets", "vuln"
 
 [review]
 enabled               = false
