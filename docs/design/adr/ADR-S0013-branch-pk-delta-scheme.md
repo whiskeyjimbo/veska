@@ -5,6 +5,8 @@ status: proposed
 date: 2026-05-09
 deciders: [whiskeyjimbo]
 related: [ADR-S0001, SOLO-08]
+verified: true
+verified_date: "2026-05-16"
 ---
 
 # ADR-S0013 — Branch-PK delta scheme (fallback)

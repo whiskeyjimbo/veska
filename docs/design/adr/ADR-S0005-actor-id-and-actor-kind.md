@@ -4,6 +4,8 @@ title: actor_id + actor_kind is the entire identity model
 status: accepted
 date: 2026-05-08
 deciders: [whiskeyjimbo]
+verified: true
+verified_date: "2026-05-16"
 ---
 
 # ADR-S0005 — actor_id + actor_kind is the entire identity model

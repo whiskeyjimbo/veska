@@ -34,18 +34,21 @@ and never reused.
 
 | ID | Title | Status |
 |---|---|---|
-| [ADR-S0001](ADR-S0001-sqlite-substrate.md) | SQLite + sqlite-vec as the entire substrate | accepted |
+| [ADR-S0001](ADR-S0001-sqlite-substrate.md) | SQLite + sqlite-vec as the V2.0 substrate (staged adoption) | amended (vector portion superseded by ADR-S0014/S0015) |
 | [ADR-S0002](ADR-S0002-hexagonal.md) | Hexagonal layering, one impl per port at V2.0 | accepted |
 | [ADR-S0003](ADR-S0003-save-vs-promote.md) | Save-vs-promote split with volatile staging | accepted |
 | [ADR-S0004](ADR-S0004-post-promotion-queue-table.md) | One post_promotion_queue table, four work-kinds, one goroutine each | accepted |
 | [ADR-S0005](ADR-S0005-actor-id-and-actor-kind.md) | actor_id + actor_kind is the entire identity model | accepted |
 | [ADR-S0006](ADR-S0006-five-edge-kinds.md) | V2.0 ships five EdgeKinds | accepted |
-| [ADR-S0007](ADR-S0007-embedder-swap.md) | Embedder swap is "stop, drop, restart, rebuild" | accepted |
+| [ADR-S0007](ADR-S0007-embedder-swap.md) | Embedder swap is one CLI subcommand against a live daemon | accepted |
 | [ADR-S0008](ADR-S0008-mcp-naming.md) | MCP tool naming — `eng_<verb>_<object>`, closed verb set | accepted |
 | [ADR-S0009](ADR-S0009-server-tier-out-of-scope.md) | Server tier is out of scope for the V2.0 doc tree | accepted |
 | [ADR-S0010](ADR-S0010-no-lint-bonanza.md) | One custom lint analyser at V2.0 — `layercheck` | accepted |
 | [ADR-S0011](ADR-S0011-writer-pool-model.md) | Two-pool single-writer model via `database/sql` | accepted |
 | [ADR-S0012](ADR-S0012-rename-seal-to-promote.md) | Rename "Seal" to "Promote/Promotion" across the design tree | accepted |
+| [ADR-S0013](ADR-S0013-branch-pk-delta-scheme.md) | Branch-PK delta scheme — fallback storage layout if OQ-S006 lands red | proposed |
+| [ADR-S0014](ADR-S0014-hnsw-pivot.md) | HNSW vector index pivot (replaces vec0 above 100k nodes) | accepted (extended by ADR-S0015) |
+| [ADR-S0015](ADR-S0015-vec-pivot-dual-backend.md) | Dual-backend vector strategy (sqlite-vec default, usearch above threshold) | accepted |
 
 ## Retracted from prior set
 

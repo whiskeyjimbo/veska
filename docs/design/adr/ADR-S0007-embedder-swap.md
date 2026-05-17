@@ -4,6 +4,8 @@ title: Embedder swap is one CLI subcommand against a live daemon
 status: accepted
 date: 2026-05-09
 deciders: [whiskeyjimbo]
+verified: true
+verified_date: "2026-05-16"
 ---
 
 # ADR-S0007 — Embedder swap is one CLI subcommand against a live daemon

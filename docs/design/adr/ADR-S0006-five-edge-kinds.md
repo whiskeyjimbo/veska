@@ -4,9 +4,24 @@ title: V2.0 ships five EdgeKinds
 status: accepted
 date: 2026-05-08
 deciders: [whiskeyjimbo]
+verified: true
+verified_date: "2026-05-16"
 ---
 
 # ADR-S0006 — V2.0 ships five EdgeKinds
+
+> **Factual-divergence note (2026-05-16).** The shipped code in
+> `internal/core/domain/edge.go` defines **six** `EdgeKind`
+> values: the five structural kinds decided here plus
+> `SIMILAR_TO`, added in M3 for the auto-link pipeline. `SIMILAR_TO`
+> is a proposed semantic-similarity edge written with
+> `Confidence=Unresolved` and paired with a `source_layer='semantic'`
+> Finding — it is not a tree-sitter-parsed structural edge, so it
+> does not change the parser-cost reasoning below. This ADR records
+> the structural-edge decision and is not rewritten; the
+> `SIMILAR_TO` addition needs its own amending ADR. Until then, treat
+> the "five" count here as the *structural* set, not the total
+> `EdgeKind` enum size.
 
 ## Context
 

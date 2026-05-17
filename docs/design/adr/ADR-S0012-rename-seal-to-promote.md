@@ -4,6 +4,8 @@ title: Rename "Seal" to "Promote/Promotion" across the design tree
 status: accepted
 date: 2026-05-09
 deciders: [whiskeyjimbo]
+verified: true
+verified_date: "2026-05-16"
 ---
 
 # ADR-S0012 — Rename "Seal" to "Promote/Promotion"

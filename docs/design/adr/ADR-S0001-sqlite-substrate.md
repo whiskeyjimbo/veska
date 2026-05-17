@@ -5,7 +5,21 @@ status: amended
 date: 2026-05-08
 amended_date: 2026-05-11
 deciders: [whiskeyjimbo]
+verified: true
+verified_date: "2026-05-16"
+superseded_by: [ADR-S0014, ADR-S0015]
 ---
+
+> **Vector-substrate update (post-amendment).** The HNSW pivot
+> anticipated below is now recorded: **ADR-S0014** ratifies the
+> pivot and **ADR-S0015** adopts the shipped dual-backend strategy
+> (sqlite-vec by default, usearch/float16 HNSW above the
+> M2-ratified threshold). The vector-storage portion of this ADR
+> is superseded by S0014/S0015; the graph-substrate decision
+> (one SQLite file, WAL, atomic promotion) stands unchanged.
+> Note: S0014 moved the pivot ADR to a mandatory M1 pre-requisite,
+> ahead of the M2 placement described in the staged-adoption note
+> below — see S0014 for the current schedule of record.
 
 > **Staged adoption.** sqlite-vec is the V2.0 substrate up to
 > ~100k embedded nodes (the M0 / M1 working range). Above that,

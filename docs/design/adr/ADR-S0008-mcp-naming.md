@@ -4,6 +4,8 @@ title: MCP tool naming — eng_<verb>_<object>, closed verb set
 status: accepted
 date: 2026-05-08
 deciders: [whiskeyjimbo]
+verified: true
+verified_date: "2026-05-16"
 ---
 
 # ADR-S0008 — MCP tool naming — `eng_<verb>_<object>`, closed verb set

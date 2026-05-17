@@ -4,6 +4,8 @@ title: Hexagonal layering, one impl per port at V2.0
 status: accepted
 date: 2026-05-08
 deciders: [whiskeyjimbo]
+verified: true
+verified_date: "2026-05-16"
 ---
 
 # ADR-S0002 — Hexagonal layering, one impl per port at V2.0
