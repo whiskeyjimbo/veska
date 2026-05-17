@@ -3,7 +3,7 @@ id: SOLO-09
 title: "MCP Surface — Tools, Naming, Transport"
 status: draft
 version: 0.1.0
-last_reviewed: 2026-05-16
+last_reviewed: 2026-05-17
 verified: true
 verified_date: "2026-05-17"
 related: [SOLO-01, SOLO-03, SOLO-04, SOLO-08, SOLO-11, SOLO-12, SOLO-15]
@@ -12,16 +12,15 @@ related: [SOLO-01, SOLO-03, SOLO-04, SOLO-08, SOLO-11, SOLO-12, SOLO-15]
 # SOLO-09 — MCP Surface
 
 The MCP surface is how the editor and the AI agent talk to the
-daemon. 27 registered tools (as of M4), one transport, a flat
+daemon. 32 registered tools (as of M5), one transport, a flat
 naming scheme, and a small output contract. This file is the
 whole surface; there are no sub-files.
 
-> **Verification note (2026-05-16):** 27 tools are registered in
-> `internal/infrastructure/mcp` as of M4 close. Five tools listed
-> in §3 below — `eng_get_finding`, `eng_get_suppression`,
-> `eng_close_suppression`, `eng_add_repo`, `eng_remove_repo` — are
-> **planned but not yet registered**; they are marked `⚠ planned`
-> inline. Tracked for triage in M4.5 (`solov2-s5c`).
+> **Verification note (2026-05-17):** All 32 tools listed in §3
+> below are registered in `internal/infrastructure/mcp` as of M5
+> close. The final five — `eng_get_finding`, `eng_get_suppression`,
+> `eng_close_suppression`, `eng_add_repo`, `eng_remove_repo` — were
+> registered by `solov2-nz2.7`.
 
 ## 1. Transport
 
@@ -111,7 +110,7 @@ or a config flag.
 
 ## 3. Tool inventory
 
-27 registered tools + 5 planned (marked `⚠ planned`), flat table.
+32 registered tools, flat table.
 The "Staging" column is `yes` if the tool
 reads through the staging overlay (sees unpromoted edits) or `no`
 if it reads promoted state only (lags an in-flight save by the
@@ -148,13 +147,13 @@ W = write; R = read.
 | Tool | Purpose | Staging | W/R |
 |---|---|---|---|
 | `eng_list_findings` | List open findings, filterable by source layer / severity / scope. | yes | R |
-| `eng_get_finding` ⚠ planned | One finding by id. *(not yet registered)* | yes | R |
+| `eng_get_finding` | One finding by id. | yes | R |
 | `eng_close_finding` | Close a finding with a reason. | yes | W |
 | `eng_reopen_finding` | Reverse a close. Carries the original close-reason in history. | yes | W |
 | `eng_suppress_finding` | Apply a suppression scoped to symbol / file / repo / finding-id. Optional `expires_at`. Optional `branch` (NULL ⇒ all branches; SOLO-04 §8.2). The agent must pass `branch` explicitly — there is no implicit default to avoid silent cross-branch silencing. | yes | W |
 | `eng_list_suppressions` | List active suppressions in the current scope. | yes | R |
-| `eng_get_suppression` ⚠ planned | One suppression by id. *(not yet registered)* | yes | R |
-| `eng_close_suppression` ⚠ planned | Terminate an active suppression now (sets `expires_at = now`). *(not yet registered)* | yes | W |
+| `eng_get_suppression` | One suppression by id. | yes | R |
+| `eng_close_suppression` | Terminate an active suppression now (sets `expires_at = now`). | yes | W |
 
 ### 3.4 Repos & ownership
 
@@ -163,8 +162,8 @@ W = write; R = read.
 | `eng_get_current_repo` | Resolve the active repo from CWD. | yes | R |
 | `eng_get_repo` | One repo's detail by id (root path, branch, last-promoted SHA, embed-queue depth). | yes | R |
 | `eng_list_repos` | Enumerate every repo the daemon has indexed. | yes | R |
-| `eng_add_repo` ⚠ planned | Register a new repo path; daemon kicks off cold-scan in the background. *(not yet registered — repo registration is currently CLI-only via `veska repo add`)* | yes | W |
-| `eng_remove_repo` ⚠ planned | Unregister a repo and drop its rows. *(not yet registered — CLI-only via `veska repo remove`)* | yes | W |
+| `eng_add_repo` | Register a new repo path; daemon kicks off cold-scan in the background. | yes | W |
+| `eng_remove_repo` | Unregister a repo and drop its rows. | yes | W |
 | `eng_find_owner` | Resolve owners for a file or symbol. Returns both CODEOWNERS-declared owners and `git blame`-derived contributors. See §5.1. | yes | R |
 
 ### 3.5 Wiki
@@ -186,7 +185,7 @@ subcommands) is the operator surface; the two tools above are the
 agent's window into the same data. Diagnostics that *fix* things
 (repair, gc, embedder swap) are CLI-only on purpose.
 
-Total: 27 registered + 5 `⚠ planned` = 32 in the design surface.
+Total: 32 registered tools.
 `eng_context_pack` from SOLO-12 is the same binding as
 `eng_get_context_pack` above; the wiki section references it by
 purpose, this section names it.
