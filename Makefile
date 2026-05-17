@@ -78,3 +78,11 @@ eval-queue-fuzz:
 # VESKA_EMBED_MODEL. Skips if Ollama is unreachable. See README.
 eval-embed-throughput:
 	EMBED_BENCH_DURATION_S=$${EMBED_BENCH_DURATION_S:-60} go test -tags=eval -run TestEmbedderThroughput ./tools/loadtest/embedder/ -v -timeout=180s
+
+# eval-review-timing: M5 exit-gate-5 — drive the review Handler over a synthetic
+# ~100-file commit against a real Ollama and report the wall-clock time budget.
+# Measurement only (no pass/fail gate). Override REVIEW_TIMING_FILE_N /
+# VESKA_OLLAMA_URL / VESKA_REVIEW_MODEL. Skips if Ollama is unreachable. See
+# tools/loadtest/reviewtiming/README.md.
+eval-review-timing:
+	REVIEW_TIMING_FILE_N=$${REVIEW_TIMING_FILE_N:-100} go test -tags=eval -run TestReviewTiming ./tools/loadtest/reviewtiming/ -v -timeout=900s
