@@ -5,7 +5,7 @@ status: draft
 last_reviewed: 2026-05-08
 related: [SOLO-03, SOLO-13, CONFIG-SURFACE]
 verified: true
-verified_date: "2026-05-16"
+verified_date: "2026-05-17"
 ---
 
 # Supervision Runbook
@@ -94,15 +94,13 @@ own breaker (5 restarts / 10 min) for defense-in-depth.
 ### Linux without `systemd --user` (Alpine, NixOS w/o systemd-user, devcontainers, default WSL2)
 
 Many real Linux installs do not have `systemd --user` enabled.
-The supervisor for these is the **built-in `veska supervise`
-subcommand** — a Go-side restart loop in the same binary,
-sharing the crash-loop breaker (§4) with the launchd / systemd
-paths. There is no shipped shell script; the prior 18-line
+The supervisor for these is the **built-in supervisor process**
+— a Go-side restart loop in the same binary, sharing the
+crash-loop breaker (§4) with the launchd / systemd paths. It is
+an internal process spawned by the start script `veska service
+install` writes, not a user-facing verb you invoke directly.
+There is no shipped shell script; the prior 18-line
 `veska-supervise.sh` is retired.
-
-```
-veska supervise [--pidfile=$VESKA_HOME/state/supervise.pid]
-```
 
 Properties:
 
@@ -119,8 +117,8 @@ Properties:
 - Forwards SIGTERM to the child for clean stop.
 
 `veska service install` on a no-systemd-user host writes a
-shell-rc snippet that invokes `veska supervise` and prints the
-exact line for the user to add to their autostart mechanism
+shell-rc snippet that launches the built-in supervisor process
+and prints the exact line for the user to add to their autostart mechanism
 (.bashrc/.zshrc, tmux startup, an init.d entry, a desktop-
 environment autostart entry). The installer does not edit shell
 files itself; it prints what to add.
@@ -177,7 +175,7 @@ veska service restart
 # 2c. If 2a and 2b are both blocked: restore from the pre-migration
 #     snapshot the runner took before the failing migration
 veska service stop
-veska restore --pre-migration   # one command — auto-selects the most recent
+veska restore --pre-migration   # (planned — see s5c.12) auto-selects the most recent
                                   # pre-migration snapshot, verifies it,
                                   # renames the live DB to .replaced-<ts>/,
                                   # extracts the snapshot, prints the
@@ -210,7 +208,7 @@ the last 10 minutes. Common causes:
 | Migration failure | Same log, `veska_code: "ErrMigrationFailed"`. Inspect schema drift. |
 | sqlite-vec extension missing | `veska_code: "ErrVecExtensionMissing"`. Reinstall the extension. |
 | Disk full | `veska doctor storage` exit 2. Free space. |
-| `~/.veska/` on NFS or other unsupported filesystem | `veska doctor fs` exit 2 with `ErrUnsupportedFS`. SQLite + WAL has known correctness issues on NFS. Move `~/.veska/` (`VESKA_HOME`) to a local filesystem. |
+| `~/.veska/` on NFS or other unsupported filesystem | `veska doctor storage` reports `ErrUnsupportedFS`. SQLite + WAL has known correctness issues on NFS. Move `~/.veska/` (`VESKA_HOME`) to a local filesystem. |
 | `daemon_state.restart_count` row missing or invalid | `veska doctor` reports `ErrCounterInvalid`. The daemon treats a missing/invalid row as zero on next start (re-creates the row in its initial-boot transaction), logs a warning, and continues. SQLite handles the atomicity; corruption of this row alone does not require manual file editing. |
 
 Recovery:

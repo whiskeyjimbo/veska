@@ -4,7 +4,7 @@ status: reference
 last_reviewed: 2026-05-08
 related: [SOLO-08, SOLO-13]
 verified: true
-verified_date: "2026-05-16"
+verified_date: "2026-05-17"
 ---
 
 # Secrets Runbook
@@ -74,10 +74,12 @@ matters.
 
 ### Step 3 — Acknowledge in Engram
 
-```bash
-veska findings list --rule secret_leak
-veska findings close <finding_id> --reason "rotated, history rewritten"
-```
+Findings are managed over MCP, not the CLI. Use the MCP tools:
+
+- `eng_list_findings` (filter by `rule=secret_leak`) to locate the
+  open finding.
+- `eng_close_finding` with the `finding_id` and a reason such as
+  "rotated, history rewritten".
 
 `severity=critical` close requires `actor_kind=human`. The agent
 cannot close a secret-leak finding for you.
