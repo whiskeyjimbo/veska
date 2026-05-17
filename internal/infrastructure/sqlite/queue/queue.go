@@ -22,6 +22,7 @@ const (
 	WorkKindAutoLink   = ports.WorkKindAutoLink
 	WorkKindRevalidate = ports.WorkKindRevalidate
 	WorkKindReview     = ports.WorkKindReview
+	WorkKindWiki       = ports.WorkKindWiki
 )
 
 // Row is the historical name for ports.WorkRow.
