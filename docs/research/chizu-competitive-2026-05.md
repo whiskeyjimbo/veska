@@ -1,3 +1,8 @@
+---
+verified: true
+verified_date: "2026-05-16"
+---
+
 # Research: Ideas from Chizu competitive analysis (May 2026)
 
 Source: https://github.com/vectorian-rs/chizu (v0.3.0, last checked 2026-05-13)
