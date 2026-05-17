@@ -8,7 +8,7 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/core/ports"
 )
 
-// workKinds lists the post-promotion work kinds enqueued per file. A
+// workKinds lists the always-on post-promotion work kinds enqueued per file. A
 // PromotionStore enqueues one post_promotion_queue row per file per work kind.
 var workKinds = []string{
 	string(ports.WorkKindEmbed),
@@ -16,13 +16,20 @@ var workKinds = []string{
 	string(ports.WorkKindRevalidate),
 }
 
-// PromotionWorkKinds returns the fixed list of post-promotion work kinds a
+// PromotionWorkKinds returns the list of post-promotion work kinds a
 // PromotionStore enqueues — one queue row per file per kind. It is exported so
 // the infrastructure adapter can drive the queue inserts without re-declaring
 // the canonical list.
-func PromotionWorkKinds() []string {
-	out := make([]string, len(workKinds))
+//
+// reviewEnabled gates the optional WorkKindReview lane: when true, 'review' is
+// appended so a review row is enqueued per changed file; when false (the
+// default), no review row is enqueued. The always-on kinds are unconditional.
+func PromotionWorkKinds(reviewEnabled bool) []string {
+	out := make([]string, len(workKinds), len(workKinds)+1)
 	copy(out, workKinds)
+	if reviewEnabled {
+		out = append(out, string(ports.WorkKindReview))
+	}
 	return out
 }
 

@@ -24,15 +24,36 @@ var _ application.PromotionStore = (*PromotionStore)(nil)
 // editing the transaction body — the store is open for extension, closed for
 // modification.
 type PromotionStore struct {
-	writeDB *sql.DB
-	sinks   []PromotionSink
+	writeDB   *sql.DB
+	sinks     []PromotionSink
+	workKinds []string
+}
+
+// PromotionStoreOption configures a PromotionStore at construction time.
+type PromotionStoreOption func(*PromotionStore)
+
+// WithReviewEnabled gates the optional WorkKindReview lane. When enabled, the
+// store enqueues a per-file 'review' queue row in addition to the always-on
+// post-promotion kinds; when disabled (the default) no review row is enqueued.
+func WithReviewEnabled(enabled bool) PromotionStoreOption {
+	return func(s *PromotionStore) {
+		s.workKinds = application.PromotionWorkKinds(enabled)
+	}
 }
 
 // NewPromotionStore constructs a PromotionStore over the write-capable DB
 // handle and the given co-transactional sinks. Sinks run in registration order
 // inside the promotion transaction.
-func NewPromotionStore(writeDB *sql.DB, sinks ...PromotionSink) *PromotionStore {
-	return &PromotionStore{writeDB: writeDB, sinks: sinks}
+func NewPromotionStore(writeDB *sql.DB, sinks []PromotionSink, opts ...PromotionStoreOption) *PromotionStore {
+	s := &PromotionStore{
+		writeDB:   writeDB,
+		sinks:     sinks,
+		workKinds: application.PromotionWorkKinds(false),
+	}
+	for _, o := range opts {
+		o(s)
+	}
+	return s
 }
 
 // Promote writes the batch in a single atomic transaction. It returns
@@ -227,7 +248,7 @@ func (s *PromotionStore) Promote(ctx context.Context, batch application.Promotio
 		}
 
 		// Enqueue one row per work_kind for this file.
-		for _, wk := range workKinds {
+		for _, wk := range s.workKinds {
 			if _, err := queueStmt.ExecContext(ctx,
 				batch.GitSHA, repoID, branch, batch.GitSHA, wk, filePath, now,
 			); err != nil {
@@ -253,10 +274,6 @@ func (s *PromotionStore) Promote(ctx context.Context, batch application.Promotio
 	}
 	return nil
 }
-
-// workKinds lists the post-promotion work kinds enqueued per file. It mirrors
-// application.workKinds; the store enqueues one queue row per file per kind.
-var workKinds = application.PromotionWorkKinds()
 
 // nodeLanguage returns the language string or "" when not set.
 func nodeLanguage(n *domain.Node) string {
