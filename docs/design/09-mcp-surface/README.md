@@ -5,7 +5,7 @@ status: draft
 version: 0.1.0
 last_reviewed: 2026-05-16
 verified: true
-verified_date: "2026-05-16"
+verified_date: "2026-05-17"
 related: [SOLO-01, SOLO-03, SOLO-04, SOLO-08, SOLO-11, SOLO-12, SOLO-15]
 ---
 
@@ -543,6 +543,57 @@ recently touched what I'm changing" path.
 The two signals are deliberately not merged. CODEOWNERS says "who
 should review"; blame says "who actually knows this code."
 Reviewers want both; agents want both.
+
+### 5.2 `eng_get_context_pack` — bundle schema
+
+`eng_get_context_pack` returns a single token-bounded JSON bundle
+of the context an agent needs to start work. It shipped in M4
+(`internal/application/contextpack`, handler in
+`internal/infrastructure/mcp/tools_contextpack.go`).
+
+**Input.** Beyond the required `repo_id` and `branch`, the caller
+passes **exactly one** of `symbol` or `task_id`. Passing both, or
+neither, is an `InvalidParams` error.
+
+- **`{symbol}` mode** (`mode: "symbol"`) — the symbol name is
+  resolved to its nodes (`FindNodes`); the relevant-nodes section
+  is those seeds plus their blast radius.
+- **`{task_id}` mode** (`mode: "task"`) — `domain.Task` carries no
+  graph link, so the seed set is derived from the repo's
+  **working-tree diff vs HEAD**: every changed file is mapped to
+  the nodes it contains (`NodesInFile`), and the relevant-nodes
+  section is that set plus its blast radius.
+
+In both modes, recent commits, open findings and tasks are
+derived from the resulting node set.
+
+**Bundle shape.** The returned `Pack` carries `repo_id`,
+`branch`, `mode`, `query` (the symbol or task ID), four content
+sections, and the budget fields below:
+
+- `nodes` — relevant nodes (seeds + blast radius), BFS-distance
+  ordered. Each: `node_id`, `name`, `path`, `kind`, `distance`,
+  `seed`, `has_open_finding`.
+- `recent_commits` — distinct commits that touched the relevant
+  nodes' files within the last 30 days, newest first. Each:
+  `hash`, `author`, `when`, `subject`. The file walk is capped at
+  25 files to bound git latency.
+- `open_findings` — node IDs carrying an open finding. Each:
+  `node_id`.
+- `tasks` — the repo's active task, if any. Each: `task_id`,
+  `repo_id`, `tracker`, `tracker_ref`, `title`, `active`.
+
+**Token budget.** The bundle is clipped to a budget
+(`token_budget`; default `DefaultTokenBudget = 8192`, overridable
+at construction via `WithTokenBudget`). The estimate is
+deterministic — `len(json_bytes) / 4` — and reported as
+`estimated_tokens`. When the bundle is over budget, the
+lowest-priority sections are dropped or clipped first, in order:
+**Tasks → OpenFindings → RecentCommits → Nodes** (Tasks is
+dropped whole; the rest are clipped from the tail until the
+estimate fits). An oversized bundle is always truncated, never
+rejected, and the response carries a `truncated` flag recording
+whether anything was cut.
 
 ## 6. Tool descriptions
 
