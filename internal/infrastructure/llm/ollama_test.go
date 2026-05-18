@@ -2,10 +2,14 @@ package llm_test
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/whiskeyjimbo/veska/internal/core/ports"
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/llm"
@@ -40,6 +44,113 @@ func TestOllamaGenerator_Generate_Success(t *testing.T) {
 	}
 }
 
+// AC1: a successful Generate returns provenance with model id, prompt-template
+// version, and an input hash.
+func TestOllamaGenerator_Generate_Provenance(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewEncoder(w).Encode(map[string]string{"response": "ok"})
+	}))
+	defer srv.Close()
+
+	const prompt = "review this commit"
+	const tmplVer = "review/v3"
+
+	gen := llm.NewOllamaGenerator(srv.URL, "llama3.1:8b", srv.Client())
+	resp, err := gen.Generate(context.Background(), ports.GenerateRequest{
+		Prompt:                prompt,
+		PromptTemplateVersion: tmplVer,
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if resp.Provenance.ModelID != "llama3.1:8b" {
+		t.Errorf("ModelID: got %q, want %q", resp.Provenance.ModelID, "llama3.1:8b")
+	}
+	if resp.Provenance.PromptTemplateVersion != tmplVer {
+		t.Errorf("PromptTemplateVersion: got %q, want %q", resp.Provenance.PromptTemplateVersion, tmplVer)
+	}
+	sum := sha256.Sum256([]byte(prompt))
+	wantHash := hex.EncodeToString(sum[:])
+	if resp.Provenance.InputHash != wantHash {
+		t.Errorf("InputHash: got %q, want %q", resp.Provenance.InputHash, wantHash)
+	}
+}
+
+// AC2: a transient 5xx is retried up to 3 attempts total, then succeeds.
+func TestOllamaGenerator_Generate_RetriesTransient(t *testing.T) {
+	t.Parallel()
+
+	var calls int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		n := atomic.AddInt32(&calls, 1)
+		if n < 3 {
+			http.Error(w, "model loading", http.StatusServiceUnavailable)
+			return
+		}
+		_ = json.NewEncoder(w).Encode(map[string]string{"response": "recovered"})
+	}))
+	defer srv.Close()
+
+	gen := llm.NewOllamaGenerator(srv.URL, "llama3", srv.Client(),
+		llm.WithBackoff(time.Millisecond))
+	resp, err := gen.Generate(context.Background(), ports.GenerateRequest{Prompt: "hi"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if resp.Text != "recovered" {
+		t.Fatalf("Text: got %q, want %q", resp.Text, "recovered")
+	}
+	if got := atomic.LoadInt32(&calls); got != 3 {
+		t.Fatalf("call count: got %d, want 3", got)
+	}
+}
+
+// AC2: a 5xx that never recovers is retried exactly 3 times then fails.
+func TestOllamaGenerator_Generate_RetriesExhausted(t *testing.T) {
+	t.Parallel()
+
+	var calls int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		atomic.AddInt32(&calls, 1)
+		http.Error(w, "down", http.StatusInternalServerError)
+	}))
+	defer srv.Close()
+
+	gen := llm.NewOllamaGenerator(srv.URL, "llama3", srv.Client(),
+		llm.WithBackoff(time.Millisecond))
+	_, err := gen.Generate(context.Background(), ports.GenerateRequest{Prompt: "hi"})
+	if err == nil {
+		t.Fatal("expected error after exhausting retries")
+	}
+	if got := atomic.LoadInt32(&calls); got != 3 {
+		t.Fatalf("call count: got %d, want 3 (3 attempts total)", got)
+	}
+}
+
+// AC2: a 4xx is not retried.
+func TestOllamaGenerator_Generate_NoRetryOn4xx(t *testing.T) {
+	t.Parallel()
+
+	var calls int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		atomic.AddInt32(&calls, 1)
+		http.Error(w, "bad request", http.StatusBadRequest)
+	}))
+	defer srv.Close()
+
+	gen := llm.NewOllamaGenerator(srv.URL, "llama3", srv.Client(),
+		llm.WithBackoff(time.Millisecond))
+	_, err := gen.Generate(context.Background(), ports.GenerateRequest{Prompt: "hi"})
+	if err == nil {
+		t.Fatal("expected error for 4xx status")
+	}
+	if got := atomic.LoadInt32(&calls); got != 1 {
+		t.Fatalf("call count: got %d, want 1 (4xx must not retry)", got)
+	}
+}
+
 func TestOllamaGenerator_Generate_NonOKStatus(t *testing.T) {
 	t.Parallel()
 
@@ -48,7 +159,7 @@ func TestOllamaGenerator_Generate_NonOKStatus(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	gen := llm.NewOllamaGenerator(srv.URL, "llama3", srv.Client())
+	gen := llm.NewOllamaGenerator(srv.URL, "llama3", srv.Client(), llm.WithBackoff(time.Millisecond))
 	_, err := gen.Generate(context.Background(), ports.GenerateRequest{Prompt: "hello"})
 	if err == nil {
 		t.Fatal("expected error for non-200 status, got nil")
@@ -74,11 +185,64 @@ func TestOllamaGenerator_Generate_ContextCancelled(t *testing.T) {
 	}
 }
 
+// A cancelled context must not trigger retries.
+func TestOllamaGenerator_Generate_ContextCancelNoRetry(t *testing.T) {
+	t.Parallel()
+
+	var calls int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		atomic.AddInt32(&calls, 1)
+		<-r.Context().Done()
+	}))
+	defer srv.Close()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	gen := llm.NewOllamaGenerator(srv.URL, "llama3", srv.Client(), llm.WithBackoff(time.Millisecond))
+	_, err := gen.Generate(ctx, ports.GenerateRequest{Prompt: "hello"})
+	if err == nil {
+		t.Fatal("expected error for cancelled context")
+	}
+	if got := atomic.LoadInt32(&calls); got > 1 {
+		t.Fatalf("call count: got %d, want <= 1 (cancellation must not retry)", got)
+	}
+}
+
 func TestNewOllamaGenerator_Defaults(t *testing.T) {
 	t.Parallel()
 	// Ensures no panic when empty strings and nil client are passed.
 	gen := llm.NewOllamaGenerator("", "", nil)
 	if gen == nil {
 		t.Fatal("expected non-nil generator")
+	}
+}
+
+// WithTimeout bounds a single Generate call independently of the http.Client.
+func TestOllamaGenerator_Generate_PerCallTimeout(t *testing.T) {
+	t.Parallel()
+
+	release := make(chan struct{})
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Block until either the client disconnects or the test ends, so the
+		// per-call timeout is what unblocks the client.
+		select {
+		case <-r.Context().Done():
+		case <-release:
+		}
+	}))
+	// Cleanups run LIFO: release the handler first, then Close can return.
+	t.Cleanup(srv.Close)
+	t.Cleanup(func() { close(release) })
+
+	gen := llm.NewOllamaGenerator(srv.URL, "llama3", srv.Client(),
+		llm.WithTimeout(50*time.Millisecond), llm.WithBackoff(time.Millisecond))
+	start := time.Now()
+	_, err := gen.Generate(context.Background(), ports.GenerateRequest{Prompt: "hi"})
+	if err == nil {
+		t.Fatal("expected timeout error")
+	}
+	if elapsed := time.Since(start); elapsed > 3*time.Second {
+		t.Fatalf("Generate took %v; per-call timeout not honored", elapsed)
 	}
 }

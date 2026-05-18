@@ -160,6 +160,13 @@ func newDaemon(cfg Config) (*Daemon, error) {
 		return nil, fmt.Errorf("daemon: load config: %w", err)
 	}
 
+	// Gate the review-pipeline LLM provider: only local Ollama is supported in
+	// V2.0; hosted providers are deferred to V2.0.1. A misconfigured provider
+	// fails fast here rather than surfacing as a confusing downstream error.
+	if err := checkLLMProvider(fileCfg); err != nil {
+		return nil, err
+	}
+
 	// Validate backend kind early so bad env doesn't surface as a confusing
 	// downstream open error.
 	switch cfg.VectorBackend {
