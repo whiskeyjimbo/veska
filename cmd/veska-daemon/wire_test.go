@@ -243,6 +243,36 @@ func TestWire_RegistersGraphBlastSearchTools(t *testing.T) {
 	}
 }
 
+// TestWire_RegistersFinalFiveTools verifies the SOLO-09 record/repo tools
+// (eng_get_finding, eng_get_suppression, eng_close_suppression, eng_add_repo,
+// eng_remove_repo) resolve, and that the full registered surface is 32 tools.
+func TestWire_RegistersFinalFiveTools(t *testing.T) {
+	cfg := testConfig(t)
+	d, err := newDaemon(cfg)
+	if err != nil {
+		t.Fatalf("newDaemon: %v", err)
+	}
+	t.Cleanup(func() { _ = d.Stop() })
+
+	names := d.mcpRegistry().Names()
+	have := make(map[string]bool, len(names))
+	for _, n := range names {
+		have[n] = true
+	}
+	for _, n := range []string{
+		"eng_get_finding", "eng_get_suppression", "eng_close_suppression",
+		"eng_add_repo", "eng_remove_repo",
+	} {
+		if !have[n] {
+			t.Errorf("tool %q not registered; have=%v", n, names)
+		}
+	}
+
+	if got := len(names); got != 32 {
+		t.Errorf("registered tool count = %d; want 32; have=%v", got, names)
+	}
+}
+
 // TestWire_StartWatchesRegisteredRepos verifies that a repo registered in the
 // daemon's SQLite repos table before Start is added to the fsnotify watcher.
 func TestWire_StartWatchesRegisteredRepos(t *testing.T) {

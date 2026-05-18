@@ -456,6 +456,8 @@ func registerMCPTools(r *mcp.Registry, d mcpDeps) {
 	// Tools that only need *sql.DB + AuditWriter.
 	mcp.RegisterFindingTools(r, pools.WriteHot, nil)
 	mcp.RegisterSuppressionTools(r, pools.WriteHot, nil)
+	mcp.RegisterRecordTools(r, pools.WriteHot, nil)
+	mcp.RegisterRepoTools(r, &repoRegistrar{db: pools.WriteHot})
 	mcp.RegisterTaskTools(r, pools.WriteHot, nil)
 	mcp.RegisterOwnerTools(r, pools.WriteHot)
 	mcp.RegisterTodoTools(r, sqlite.NewTodoQuerierRepo(pools.ReadDB))
