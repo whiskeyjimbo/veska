@@ -137,9 +137,12 @@ func TestStartHTTPListener_BindsAndCloses(t *testing.T) {
 	reg := prometheus.NewRegistry()
 	_ = observability.NewMetrics(reg)
 
-	closer, err := observability.StartHTTPListener("127.0.0.1:0", reg)
+	closer, addr, err := observability.StartHTTPListener("127.0.0.1:0", reg)
 	if err != nil {
 		t.Fatalf("StartHTTPListener: %v", err)
+	}
+	if addr == "" {
+		t.Error("StartHTTPListener returned empty bound address")
 	}
 	if err := closer.Close(); err != nil {
 		t.Errorf("Close: %v", err)

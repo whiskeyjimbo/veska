@@ -230,17 +230,18 @@ func (c *httpCloser) Close() error {
 }
 
 // StartHTTPListener binds an HTTP listener on addr and serves /metrics from reg.
-// The returned io.Closer shuts the listener down gracefully.
-// addr may be "127.0.0.1:0" to let the OS pick a free port.
+// It returns the io.Closer that shuts the listener down gracefully and the
+// actual bound address — when addr is "127.0.0.1:0" the OS picks a free port,
+// so callers learn the real address from the returned string rather than addr.
 // The caller is responsible for checking config before calling this function —
 // it binds immediately.
 func StartHTTPListener(addr string, reg interface {
 	prometheus.Registerer
 	prometheus.Gatherer
-}) (io.Closer, error) {
+}) (io.Closer, string, error) {
 	ln, err := net.Listen("tcp", addr)
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
 
 	mux := http.NewServeMux()
@@ -249,5 +250,5 @@ func StartHTTPListener(addr string, reg interface {
 	srv := &http.Server{Handler: mux}
 	go func() { _ = srv.Serve(ln) }()
 
-	return &httpCloser{srv: srv}, nil
+	return &httpCloser{srv: srv}, ln.Addr().String(), nil
 }
