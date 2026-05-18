@@ -75,7 +75,7 @@ func (c *stubCheck) Run(_ context.Context, _ checks.Input) ([]*domain.Finding, e
 func mustFinding(t *testing.T, rule, repoID, branch, filePath string) *domain.Finding {
 	t.Helper()
 	f, err := domain.NewFinding(
-		"f-"+rule+"-"+filePath, repoID, branch,
+		repoID, branch,
 		domain.SeverityLow, domain.LayerStructural, rule, "msg",
 		domain.WithFileAnchor(filePath),
 	)

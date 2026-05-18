@@ -71,7 +71,6 @@ func (c *ContractDriftCheck) Run(ctx context.Context, in Input) ([]*domain.Findi
 			opts = append(opts, domain.WithAnchorContentHash(d.ContentHash))
 		}
 		f, err := domain.NewFinding(
-			"", // per-row PK assigned by storage; FindingID is branch-stable from (rule, node_id).
 			in.RepoID, in.Branch,
 			domain.SeverityMedium,
 			domain.LayerStructural,
