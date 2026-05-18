@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"os"
 	"path/filepath"
 	"sync/atomic"
 	"testing"
@@ -11,6 +12,8 @@ import (
 
 	_ "github.com/mattn/go-sqlite3"
 
+	"github.com/whiskeyjimbo/veska/internal/application/review"
+	"github.com/whiskeyjimbo/veska/internal/core/ports"
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/sqlite"
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/sqlite/queue"
 )
@@ -285,4 +288,66 @@ func TestPoller_WikiLaneDrains(t *testing.T) {
 	}
 	state, _ := rowState(t, db, seq)
 	t.Errorf("expected wiki row state=done, got %q", state)
+}
+
+// fakeReviewGenerator is an in-memory ports.LLMGenerator that replies with the
+// no-findings sentinel so the review prompt parsers succeed.
+type fakeReviewGenerator struct{}
+
+func (fakeReviewGenerator) Generate(_ context.Context, _ ports.GenerateRequest) (ports.GenerateResponse, error) {
+	return ports.GenerateResponse{Text: "NO FINDINGS"}, nil
+}
+
+// TestPoller_ReviewLaneDrains verifies AC1: a pending work_kind='review' row is
+// drained to state='done' by the real review.Handler dispatching through a
+// fake LLMGenerator.
+func TestPoller_ReviewLaneDrains(t *testing.T) {
+	t.Parallel()
+
+	db := openTestDB(t)
+
+	// The review handler reads the changed file off disk under the repo root.
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, "a.go"), []byte("package a\nfunc A(){}\n"), 0o644); err != nil {
+		t.Fatalf("write file: %v", err)
+	}
+
+	res, err := db.Exec(`
+		INSERT INTO post_promotion_queue
+			(promotion_id, repo_id, branch, git_sha, work_kind, payload, state, enqueued_at)
+		VALUES (?, ?, ?, ?, 'review', 'a.go', 'pending', ?)`,
+		"promo-1", "repo-1", "main", "abc123", time.Now().Unix())
+	if err != nil {
+		t.Fatalf("insert review row: %v", err)
+	}
+	seq, _ := res.LastInsertId()
+
+	loader, err := review.NewLoader()
+	if err != nil {
+		t.Fatalf("review.NewLoader: %v", err)
+	}
+	repoRoot := func(_ context.Context, _ string) (string, error) { return root, nil }
+	reviewH, err := review.NewHandler(fakeReviewGenerator{}, loader, repoRoot)
+	if err != nil {
+		t.Fatalf("review.NewHandler: %v", err)
+	}
+
+	handlers := map[queue.WorkKind]queue.WorkHandler{
+		queue.WorkKindReview: reviewH,
+	}
+	p := queue.NewWithInterval(db, db, handlers, 10*time.Millisecond)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	p.Start(ctx)
+
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		if state, _ := rowState(t, db, seq); state == "done" {
+			return
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	state, _ := rowState(t, db, seq)
+	t.Errorf("expected review row state=done, got %q", state)
 }

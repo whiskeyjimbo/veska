@@ -18,7 +18,7 @@ import (
 // newTestPromoter wires a Promoter to a real sqlite.PromotionStore over the
 // given test DB, with the production FTS + embedding-ref sinks registered.
 func newTestPromoter(sa *application.StagingArea, db *sql.DB) *application.Promoter {
-	store := sqlite.NewPromotionStore(db, sqlite.NewFTSSink(), sqlite.NewEmbedRefSink())
+	store := sqlite.NewPromotionStore(db, []sqlite.PromotionSink{sqlite.NewFTSSink(), sqlite.NewEmbedRefSink()})
 	return application.NewPromoter(sa, store)
 }
 

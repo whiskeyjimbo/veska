@@ -18,12 +18,14 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/application/contextpack"
 	"github.com/whiskeyjimbo/veska/internal/application/embedder"
 	"github.com/whiskeyjimbo/veska/internal/application/revalidate"
+	"github.com/whiskeyjimbo/veska/internal/application/review"
 	"github.com/whiskeyjimbo/veska/internal/application/search"
 	"github.com/whiskeyjimbo/veska/internal/application/wiki"
 	"github.com/whiskeyjimbo/veska/internal/config"
 	"github.com/whiskeyjimbo/veska/internal/core/ports"
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/embedding/ollama"
 	gitwatch "github.com/whiskeyjimbo/veska/internal/infrastructure/git"
+	"github.com/whiskeyjimbo/veska/internal/infrastructure/llm"
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/mcp"
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/sqlite"
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/sqlite/queue"
@@ -228,8 +230,11 @@ func newDaemon(cfg Config) (*Daemon, error) {
 	// registered here at start-up — a future sink is one more arg.
 	promotionStore := sqlite.NewPromotionStore(
 		pools.WriteHot,
-		sqlite.NewFTSSink(),
-		sqlite.NewEmbedRefSink(),
+		[]sqlite.PromotionSink{
+			sqlite.NewFTSSink(),
+			sqlite.NewEmbedRefSink(),
+		},
+		sqlite.WithReviewEnabled(fileCfg.Review.Enabled),
 	)
 	promoter := application.NewPromoter(staging, promotionStore)
 	checkReg := checks.NewRegistry()
@@ -315,6 +320,32 @@ func newDaemon(cfg Config) (*Daemon, error) {
 		ports.WorkKindRevalidate: revalH,
 		ports.WorkKindWiki:       wikiH,
 		ports.WorkKindEmbed:      noopEmbedHandler{}, // drained by embed worker
+	}
+
+	// Optional review lane. The WorkKindReview handler is registered only when
+	// review is enabled; the promotion store enqueues review rows under the
+	// same gate, so a disabled review pipeline has neither producer nor lane.
+	if fileCfg.Review.Enabled {
+		reviewLoader, lerr := review.NewLoader()
+		if lerr != nil {
+			_ = pools.Close()
+			return nil, fmt.Errorf("daemon: review prompt loader: %w", lerr)
+		}
+		var genOpts []llm.Option
+		if d, derr := time.ParseDuration(fileCfg.LLMGenerator.Timeout); derr == nil && d > 0 {
+			genOpts = append(genOpts, llm.WithTimeout(d))
+		}
+		reviewGen := llm.NewOllamaGenerator(
+			fileCfg.LLMGenerator.Endpoint, fileCfg.LLMGenerator.Model, nil, genOpts...)
+		reviewRoot := func(ctx context.Context, repoID string) (string, error) {
+			return repoRootFunc(pools.ReadDB)(ctx, repoID)
+		}
+		reviewH, rerr := review.NewHandler(reviewGen, reviewLoader, reviewRoot)
+		if rerr != nil {
+			_ = pools.Close()
+			return nil, fmt.Errorf("daemon: review handler: %w", rerr)
+		}
+		handlers[ports.WorkKindReview] = reviewH
 	}
 	// Post-promotion queue poll cadence comes from config.toml; an
 	// unparseable value falls back to the queue package default.
