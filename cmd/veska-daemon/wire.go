@@ -23,6 +23,7 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/application/wiki"
 	"github.com/whiskeyjimbo/veska/internal/config"
 	"github.com/whiskeyjimbo/veska/internal/core/ports"
+	"github.com/whiskeyjimbo/veska/internal/infrastructure/audit"
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/embedding/ollama"
 	gitwatch "github.com/whiskeyjimbo/veska/internal/infrastructure/git"
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/llm"
@@ -340,7 +341,24 @@ func newDaemon(cfg Config) (*Daemon, error) {
 		reviewRoot := func(ctx context.Context, repoID string) (string, error) {
 			return repoRootFunc(pools.ReadDB)(ctx, repoID)
 		}
-		reviewH, rerr := review.NewHandler(reviewGen, reviewLoader, reviewRoot, findings)
+
+		// Token-quota enforcement (solov2-nz2.5): the per-day total persists
+		// in daemon_state; the audit writer records the one-line entry when
+		// the daily-cap pause trips.
+		tokenStore := sqlite.NewReviewTokenStore(pools.ReadDB, pools.WriteHot)
+		quota := review.NewQuota(
+			fileCfg.Review.MaxTokensPerCommit,
+			fileCfg.Review.MaxTokensPerDay,
+			tokenStore, nil)
+		auditW, aerr := audit.NewAuditFileWriter(
+			filepath.Join(config.DefaultVectorDir(), "audit.jsonl"))
+		if aerr != nil {
+			_ = pools.Close()
+			return nil, fmt.Errorf("daemon: review audit writer: %w", aerr)
+		}
+
+		reviewH, rerr := review.NewHandler(reviewGen, reviewLoader, reviewRoot, findings,
+			review.WithQuota(quota), review.WithAuditWriter(auditW))
 		if rerr != nil {
 			_ = pools.Close()
 			return nil, fmt.Errorf("daemon: review handler: %w", rerr)
