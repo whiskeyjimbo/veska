@@ -37,12 +37,16 @@ const (
 	defaultTimeout = 60 * time.Second
 )
 
-// ollamaGenerateRequest is the JSON body for POST /api/generate.
+// ollamaGenerateRequest is the JSON body for POST /api/generate. Format, when
+// set, is Ollama's structured-output 'format' parameter — a JSON Schema the
+// model output is constrained to; it is omitted when empty so plain-text
+// generation is unaffected.
 type ollamaGenerateRequest struct {
-	Model      string `json:"model"`
-	Prompt     string `json:"prompt"`
-	NumPredict int    `json:"num_predict,omitempty"`
-	Stream     bool   `json:"stream"`
+	Model      string          `json:"model"`
+	Prompt     string          `json:"prompt"`
+	NumPredict int             `json:"num_predict,omitempty"`
+	Stream     bool            `json:"stream"`
+	Format     json.RawMessage `json:"format,omitempty"`
 }
 
 // ollamaGenerateResponse is the JSON body returned by POST /api/generate
@@ -145,6 +149,7 @@ func (g *OllamaGenerator) Generate(ctx context.Context, req ports.GenerateReques
 		Prompt:     req.Prompt,
 		NumPredict: req.MaxTokens,
 		Stream:     false,
+		Format:     req.Format,
 	}
 	encoded, err := json.Marshal(body)
 	if err != nil {

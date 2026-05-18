@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"os"
 	"path/filepath"
@@ -148,7 +149,7 @@ func TestHandler_DispatchesThroughGenerator(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewLoader: %v", err)
 	}
-	gen := &fakeGenerator{reply: "NO FINDINGS"}
+	gen := &fakeGenerator{reply: `{"findings":[]}`}
 	h, err := NewHandler(gen, loader, staticRoot(root), &fakeFindingStorage{})
 	if err != nil {
 		t.Fatalf("NewHandler: %v", err)
@@ -281,10 +282,24 @@ func TestHandler_NonFinalAttemptDoesNotEmit(t *testing.T) {
 	}
 }
 
-// reviewBlock is a model response in the package's block format that the
+// reviewBlock is a model response in the package's JSON contract that the
 // parser turns into one ReviewFinding of the given severity.
 func reviewBlock(severity, title, message string) string {
-	return "SEVERITY: " + severity + "\nTITLE: " + title + "\nMESSAGE: " + message
+	b, err := json.Marshal(struct {
+		Findings []struct {
+			Severity string `json:"severity"`
+			Title    string `json:"title"`
+			Message  string `json:"message"`
+		} `json:"findings"`
+	}{Findings: []struct {
+		Severity string `json:"severity"`
+		Title    string `json:"title"`
+		Message  string `json:"message"`
+	}{{Severity: severity, Title: title, Message: message}}})
+	if err != nil {
+		panic(err)
+	}
+	return string(b)
 }
 
 // TestHandler_EmitsReviewFindings verifies AC1: a review job whose model
