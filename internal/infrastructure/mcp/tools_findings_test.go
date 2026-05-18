@@ -933,6 +933,131 @@ func reviewRowState(t *testing.T, db *sql.DB, repoID, branch, gitSHA string) str
 	return s
 }
 
+// seedReviewSemanticFinding inserts a review-produced finding row: a
+// file-anchored finding carrying source_layer='semantic', a review-* rule, and
+// actor_kind='system' — the row shape the review Handler persists (nz2.6).
+func seedReviewSemanticFinding(t *testing.T, db *sql.DB, findingID, branch, repoID, rule, severity string) {
+	t.Helper()
+	_, err := db.Exec(`
+		INSERT INTO findings
+			(finding_id, branch, repo_id, node_id, file_path, severity, source_layer, rule, message, state, created_at, actor_id, actor_kind)
+		VALUES (?, ?, ?, NULL, 'pkg/svc/auth.go', ?, 'semantic', ?, 'review finding', 'open', ?, 'service:veska', 'system')
+	`, findingID, branch, repoID, severity, rule, time.Now().Unix())
+	if err != nil {
+		t.Fatalf("seed review semantic finding: %v", err)
+	}
+}
+
+// TestListFindings_SurfacesReviewSemanticFinding verifies AC1: a review-produced
+// finding (source_layer='semantic') is returned by eng_list_findings like any
+// structural finding.
+func TestListFindings_SurfacesReviewSemanticFinding(t *testing.T) {
+	db := newFindingsDB(t)
+	seedReviewSemanticFinding(t, db, "f-rev-sec", "main", "repo-1", "review-security", "high")
+
+	r := NewRegistry()
+	RegisterFindingTools(r, db, nil)
+
+	actor := domain.Actor{ID: "agent:bot", Kind: domain.ActorKindAgent}
+	result, rpcErr := dispatchListFindings(t, r, actor, map[string]string{
+		"repo_id": "repo-1",
+		"branch":  "main",
+	})
+	if rpcErr != nil {
+		t.Fatalf("unexpected RPC error: %v", rpcErr.Message)
+	}
+	m := result.(map[string]any)
+	findings, _ := m["findings"].([]findingRow)
+	if len(findings) != 1 {
+		t.Fatalf("expected 1 review finding listed, got %d", len(findings))
+	}
+	if findings[0].SourceLayer != "semantic" {
+		t.Errorf("source_layer = %q, want semantic", findings[0].SourceLayer)
+	}
+	if findings[0].Rule != "review-security" {
+		t.Errorf("rule = %q, want review-security", findings[0].Rule)
+	}
+}
+
+// TestSuppressFinding_ReviewSemanticFinding verifies AC2: a review finding is
+// suppressible via eng_suppress_finding like any structural finding.
+func TestSuppressFinding_ReviewSemanticFinding(t *testing.T) {
+	db := newSuppressionsDB(t)
+	seedReviewSemanticFinding(t, db, "f-rev-cd", "main", "repo-1", "review-contract-drift", "medium")
+
+	r := NewRegistry()
+	RegisterSuppressionTools(r, db, nil)
+
+	actor := domain.Actor{ID: "agent:bot", Kind: domain.ActorKindAgent}
+	result, rpcErr := dispatchSuppression(t, r, "eng_suppress_finding", actor, map[string]any{
+		"finding_id": "f-rev-cd",
+		"branch":     "main",
+		"repo_id":    "repo-1",
+		"reason":     "accepted risk",
+	})
+	if rpcErr != nil {
+		t.Fatalf("unexpected RPC error: code=%d message=%q", rpcErr.Code, rpcErr.Message)
+	}
+	supID, _ := result.(map[string]any)["suppression_id"].(string)
+	if supID == "" {
+		t.Fatal("expected non-empty suppression_id for a suppressed review finding")
+	}
+	var count int
+	if err := db.QueryRow(`SELECT COUNT(*) FROM suppressions WHERE suppression_id = ?`, supID).Scan(&count); err != nil {
+		t.Fatalf("query suppression: %v", err)
+	}
+	if count != 1 {
+		t.Errorf("expected 1 suppression row, got %d", count)
+	}
+}
+
+// TestCloseFinding_ReviewSemanticFinding_HumanGate verifies AC3: closing a
+// high-severity review finding is refused for a non-human actor and succeeds
+// for a human actor.
+func TestCloseFinding_ReviewSemanticFinding_HumanGate(t *testing.T) {
+	t.Run("agent refused", func(t *testing.T) {
+		db := newFindingsDB(t)
+		seedReviewSemanticFinding(t, db, "f-rev-hi", "main", "repo-1", "review-security", "high")
+		r := NewRegistry()
+		RegisterFindingTools(r, db, nil)
+
+		actor := domain.Actor{ID: "agent:bot", Kind: domain.ActorKindAgent}
+		_, rpcErr := dispatchFinding(t, r, actor, map[string]string{
+			"finding_id": "f-rev-hi",
+			"branch":     "main",
+			"repo_id":    "repo-1",
+			"reason":     "resolved",
+		})
+		if rpcErr == nil || rpcErr.Code != CodeHumanRequired {
+			t.Fatalf("expected human-required RPC error, got %v", rpcErr)
+		}
+		if got := findingState(t, db, "f-rev-hi", "main"); got != "open" {
+			t.Errorf("expected finding to remain open, got %q", got)
+		}
+	})
+
+	t.Run("human accepted", func(t *testing.T) {
+		db := newFindingsDB(t)
+		seedReviewSemanticFinding(t, db, "f-rev-hi2", "main", "repo-1", "review-security", "high")
+		r := NewRegistry()
+		RegisterFindingTools(r, db, nil)
+
+		actor := domain.Actor{ID: "human:alice", Kind: domain.ActorKindHuman}
+		_, rpcErr := dispatchFinding(t, r, actor, map[string]string{
+			"finding_id": "f-rev-hi2",
+			"branch":     "main",
+			"repo_id":    "repo-1",
+			"reason":     "resolved",
+		})
+		if rpcErr != nil {
+			t.Fatalf("unexpected RPC error: %v", rpcErr.Message)
+		}
+		if got := findingState(t, db, "f-rev-hi2", "main"); got != "closed" {
+			t.Errorf("expected finding state=closed, got %q", got)
+		}
+	})
+}
+
 // TestCloseFinding_ReviewFailure_FlipsRowToDone verifies AC2: closing a
 // review-pipeline-failure finding flips the anchored failed review row(s) to
 // state='done' in the same tx.
