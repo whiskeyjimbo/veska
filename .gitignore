@@ -17,3 +17,8 @@
 /recall
 /rss-sweep
 /vector-bench
+
+bin/
+
+# Eval-harness output artefacts
+tools/loadtest/recallprojection/recall_projection_results.json

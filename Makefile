@@ -6,7 +6,7 @@ DAEMON_BIN      := $(BINDIR)/veska-daemon
 MCP_BIN         := $(BINDIR)/veska-mcp
 LAYERCHECK_BIN  := $(BINDIR)/layercheck
 
-.PHONY: all build test lint vet layercheck clean loadtest eval-recall eval-autolink-fp eval-revalidate-bench eval-queue-fuzz eval-embed-throughput
+.PHONY: all build test lint vet layercheck clean loadtest eval-recall eval-recall-projection eval-autolink-fp eval-revalidate-bench eval-queue-fuzz eval-embed-throughput
 
 all: build test vet lint layercheck
 
@@ -51,6 +51,17 @@ loadtest:
 eval-recall:
 	RECALL_POP=$${RECALL_POP:-1000} go test -tags=eval -run TestRecall ./tools/loadtest/recall/ -v
 
+# eval-recall-projection: recall@10 + p95 sweep over embed-text PROJECTION
+# variants (baseline / +signature / +snippet / +both). The corpus is built
+# from node-shaped inputs run through the production domain.EmbedText
+# projection, so a variant change moves the measured recall number.
+# Requires a reachable Ollama; skips cleanly if absent. Override RECALL_POP
+# (default 1000) and RECALL_PROJECTION_VARIANT to restrict to one variant.
+# A full 4-variant sweep at pop=1000 is reference-laptop work — raise the
+# timeout accordingly. See tools/loadtest/recallprojection/README.md.
+eval-recall-projection:
+	RECALL_POP=$${RECALL_POP:-1000} go test -tags=eval -run TestRecallProjectionSweep ./tools/loadtest/recallprojection/ -v -timeout=3600s
+
 # eval-autolink-fp: auto-link false-positive harness (m3.04.4). Quick mode
 # (AUTOLINK_POP=1000, fake embedder) is the default and runs in ~1s. Override
 # AUTOLINK_POP / AUTOLINK_THRESHOLD / AUTOLINK_TOPK for sweeps; see
@@ -85,4 +96,4 @@ eval-embed-throughput:
 # VESKA_OLLAMA_URL / VESKA_REVIEW_MODEL. Skips if Ollama is unreachable. See
 # tools/loadtest/reviewtiming/README.md.
 eval-review-timing:
-	REVIEW_TIMING_FILE_N=$${REVIEW_TIMING_FILE_N:-100} go test -tags=eval -run TestReviewTiming ./tools/loadtest/reviewtiming/ -v -timeout=900s
+	REVIEW_TIMING_FILE_N=$${REVIEW_TIMING_FILE_N:-100} go test -tags=eval -run TestReviewTiming ./tools/loadtest/reviewtiming/ -v -timeout=12000s

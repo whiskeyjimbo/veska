@@ -7,9 +7,9 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"strings"
 	"time"
 
+	"github.com/whiskeyjimbo/veska/internal/core/domain"
 	"github.com/whiskeyjimbo/veska/internal/core/ports"
 )
 
@@ -74,14 +74,19 @@ func (r *EmbeddingRefsRepo) FetchPending(ctx context.Context, limit int) ([]port
 // joining the non-empty parts with a single space. kind and symbolPath are
 // always present; filePath and language may be empty (the nodes columns are
 // NOT NULL but the parser may leave language unset).
+//
+// The projection logic itself lives in domain.EmbedText so the recall
+// eval harness (tools/loadtest/recallprojection) measures projection
+// variants against exactly what production emits. Production always uses
+// the baseline variant; signature/snippet enrichment is sweep-only until
+// a measured variant is promoted (solov2-7ma).
 func embedText(kind, symbolPath, filePath, language string) string {
-	parts := make([]string, 0, 4)
-	for _, p := range []string{kind, symbolPath, filePath, language} {
-		if p != "" {
-			parts = append(parts, p)
-		}
-	}
-	return strings.Join(parts, " ")
+	return domain.EmbedText(domain.EmbedTextInput{
+		Kind:       kind,
+		SymbolPath: symbolPath,
+		FilePath:   filePath,
+		Language:   language,
+	}, domain.EmbedVariantBaseline)
 }
 
 // CountPending returns the count of state='pending' rows.
