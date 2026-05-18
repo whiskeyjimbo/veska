@@ -63,6 +63,12 @@ func (ing *Ingester) findingStorage() ports.FindingStorage {
 	return ing.findings
 }
 
+// TracerProvider returns the installed TracerProvider, or nil if none has
+// been set. It is the read companion to SetTracerProvider.
+func (ing *Ingester) TracerProvider() observability.TracerProvider {
+	return ing.tp
+}
+
 // tracerProvider returns the configured provider or a noop if nil.
 func (ing *Ingester) tracerProvider() observability.TracerProvider {
 	if ing.tp == nil {

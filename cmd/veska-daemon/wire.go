@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
+	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 
 	"github.com/whiskeyjimbo/veska/internal/application"
 	"github.com/whiskeyjimbo/veska/internal/application/autolink"
@@ -91,6 +92,15 @@ type Config struct {
 	// configured listen address (use "127.0.0.1:0" to claim a free port).
 	MetricsEnabled bool
 	MetricsListen  string
+
+	// TracingEnabled / TracingEndpoint override the OTLP tracing settings
+	// resolved from config.toml ([tracing]). They exist so a caller (notably
+	// tests) can drive the tracer without writing a config file. When
+	// TracingEnabled is false the file config still applies; the override only
+	// forces tracing on. TracingEndpoint, when non-empty, replaces the
+	// configured OTLP endpoint.
+	TracingEnabled  bool
+	TracingEndpoint string
 }
 
 // ResolveConfig fills in defaults (env, then hard-coded) on a partially
@@ -166,6 +176,11 @@ type Daemon struct {
 	metricsCloser io.Closer
 	metricsAddr   string
 
+	// tracerProvider is the OTLP TracerProvider, non-nil only when tracing is
+	// enabled and an endpoint is configured. It is threaded into every
+	// tracing-aware consumer and shut down (flush + exporter close) in Stop.
+	tracerProvider *sdktrace.TracerProvider
+
 	startOnce sync.Once
 	stopOnce  sync.Once
 	started   bool
@@ -206,6 +221,35 @@ func newDaemon(cfg Config) (*Daemon, error) {
 	if metricsEnabled {
 		metricsReg = prometheus.NewRegistry()
 		metrics = observability.NewMetrics(metricsReg)
+	}
+
+	// OTLP tracing. The TracerProvider is constructed only when tracing is
+	// enabled — either via config.toml ([tracing] enabled) or the
+	// Config.TracingEnabled override — AND an OTLP endpoint is set. The
+	// both-or-neither rule is a fatal startup error: enabling tracing with no
+	// endpoint, or setting an endpoint with tracing disabled, both fail here
+	// so the operator's intent is never silently ignored. config.Validate
+	// covers the file surface; this re-check also covers the test overrides.
+	tracingEnabled := fileCfg.Tracing.Enabled || cfg.TracingEnabled
+	tracingEndpoint := fileCfg.Tracing.OTLPEndpoint
+	if cfg.TracingEndpoint != "" {
+		tracingEndpoint = cfg.TracingEndpoint
+	}
+	if tracingEnabled && tracingEndpoint == "" {
+		return nil, &ErrMissingDep{Name: "tracing.otlp_endpoint",
+			Why: "tracing is enabled but no OTLP endpoint is set (set tracing.otlp_endpoint or VESKA_OTLP_ENDPOINT)"}
+	}
+	if !tracingEnabled && tracingEndpoint != "" {
+		return nil, &ErrMissingDep{Name: "tracing.enabled",
+			Why: "an OTLP endpoint is set but tracing is disabled (set tracing.enabled = true or clear the endpoint)"}
+	}
+	var tracerProvider *sdktrace.TracerProvider
+	if tracingEnabled {
+		tp, terr := observability.NewTracerProvider(tracingEndpoint)
+		if terr != nil {
+			return nil, fmt.Errorf("daemon: construct tracer provider: %w", terr)
+		}
+		tracerProvider = tp
 	}
 
 	// Gate the review-pipeline LLM provider: only local Ollama is supported in
@@ -291,11 +335,19 @@ func newDaemon(cfg Config) (*Daemon, error) {
 	runner := checks.NewRunner(checkReg, findings, metrics)
 	promoter.SetCheckRunner(checkRunnerAdapter{inner: runner})
 
-	// Embedding provider + embedder worker.
-	provider, err := ollama.New(cfg.EmbedModel, ollama.WithBaseURL(cfg.OllamaURL))
+	// Embedding provider + embedder worker. When tracing is enabled the raw
+	// provider is wrapped in an InstrumentedEmbedder so every Embed call emits
+	// an "embed.run" span; the wrapped provider is used everywhere downstream
+	// (embedder worker, MCP search tools).
+	var provider ports.EmbeddingProvider
+	ollamaProvider, err := ollama.New(cfg.EmbedModel, ollama.WithBaseURL(cfg.OllamaURL))
 	if err != nil {
 		_ = pools.Close()
 		return nil, fmt.Errorf("daemon: embedding provider: %w", err)
+	}
+	provider = ollamaProvider
+	if tracerProvider != nil {
+		provider = observability.NewInstrumentedEmbedder(provider, tracerProvider)
 	}
 	refs := sqlite.NewEmbeddingRefsRepo(pools.ReadDB, pools.WriteEmbed)
 	embedWorker, err := embedder.NewWorker(refs, provider, vec,
@@ -442,22 +494,34 @@ func newDaemon(cfg Config) (*Daemon, error) {
 	})
 	mcpsrv := mcp.NewServer(cfg.CLISockPath, cfg.MCPSockPath, registry)
 
+	// Thread the TracerProvider into every tracing-aware consumer. When
+	// tracing is disabled tracerProvider is nil and the consumers keep their
+	// noop providers, so no spans are emitted. The InstrumentedEmbedder is
+	// wired by construction above (it wraps the provider rather than exposing
+	// a setter).
+	if tracerProvider != nil {
+		ingester.SetTracerProvider(tracerProvider)
+		promoter.SetTracerProvider(tracerProvider)
+		registry.SetTracerProvider(tracerProvider)
+	}
+
 	return &Daemon{
-		cfg:           cfg,
-		pools:         pools,
-		vectors:       vec,
-		staging:       staging,
-		gate:          gate,
-		ingester:      ingester,
-		promoter:      promoter,
-		embed:         embedWorker,
-		poller:        poller,
-		watcher:       watcher,
-		mcpsrv:        mcpsrv,
-		mcpReg:        registry,
-		metrics:       metrics,
-		metricsReg:    metricsReg,
-		metricsListen: metricsListen,
+		cfg:            cfg,
+		pools:          pools,
+		vectors:        vec,
+		staging:        staging,
+		gate:           gate,
+		ingester:       ingester,
+		promoter:       promoter,
+		embed:          embedWorker,
+		poller:         poller,
+		watcher:        watcher,
+		mcpsrv:         mcpsrv,
+		mcpReg:         registry,
+		metrics:        metrics,
+		metricsReg:     metricsReg,
+		metricsListen:  metricsListen,
+		tracerProvider: tracerProvider,
 	}, nil
 }
 
@@ -787,6 +851,17 @@ func (d *Daemon) Stop() error {
 			if err := d.metricsCloser.Close(); err != nil {
 				stopErr = errors.Join(stopErr, fmt.Errorf("daemon: close metrics listener: %w", err))
 			}
+		}
+
+		// Shut the OTLP TracerProvider down: this flushes any batched spans
+		// and closes the exporter's gRPC connection so no goroutine leaks.
+		// A bounded context keeps a stuck collector from wedging shutdown.
+		if d.tracerProvider != nil {
+			shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			if err := d.tracerProvider.Shutdown(shutdownCtx); err != nil {
+				stopErr = errors.Join(stopErr, fmt.Errorf("daemon: shutdown tracer provider: %w", err))
+			}
+			cancel()
 		}
 
 		if d.started && d.embed != nil {
