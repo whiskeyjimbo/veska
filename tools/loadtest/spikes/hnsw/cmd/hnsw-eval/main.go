@@ -37,11 +37,11 @@ import (
 )
 
 const (
-	nHoldOut      = 100
-	nWarmQueries  = 200
-	nRoundTrip    = 5
-	nSmall        = 50_000
-	nLarge        = 250_000
+	nHoldOut     = 100
+	nWarmQueries = 200
+	nRoundTrip   = 5
+	nSmall       = 50_000
+	nLarge       = 250_000
 )
 
 type row struct {

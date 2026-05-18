@@ -27,11 +27,11 @@ import (
 )
 
 const (
-	tableName  = "vectors"
-	colID      = "id"
-	colVec     = "embedding"
-	vectorDim  = 768
-	batchSize  = 1000
+	tableName = "vectors"
+	colID     = "id"
+	colVec    = "embedding"
+	vectorDim = 768
+	batchSize = 1000
 )
 
 // Index wraps a lancedb connection + table to implement eval.VectorIndex.
