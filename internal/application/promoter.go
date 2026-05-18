@@ -77,6 +77,12 @@ func (p *Promoter) SetTracerProvider(tp observability.TracerProvider) {
 	p.tp = tp
 }
 
+// TracerProvider returns the installed TracerProvider, or nil if none has
+// been set. It is the read companion to SetTracerProvider.
+func (p *Promoter) TracerProvider() observability.TracerProvider {
+	return p.tp
+}
+
 // tracerProvider returns the configured provider or a noop if nil.
 func (p *Promoter) tracerProvider() observability.TracerProvider {
 	if p.tp == nil {
