@@ -40,6 +40,12 @@ without a model. To run it for real, pull a generation model first
 | `REVIEW_TIMING_FILE_N` | `100` | Number of synthetic files in the commit fixture. |
 | `VESKA_OLLAMA_URL` | `http://localhost:11434` | Ollama base URL. |
 | `VESKA_REVIEW_MODEL` | `llama3` | Review LLM model name. |
+| `REVIEW_TIMING_LLM_TIMEOUT` | `5m` | Per-call LLM timeout. The llm-package default (60s) is too tight for a structured-JSON review generation on CPU Ollama; this generous default avoids per-call deadline failures. Accepts a Go duration (e.g. `10m`). |
+
+> **Note on the overall test timeout.** A full 100-file pass on CPU Ollama can
+> run for a long time (per-file latency × `REVIEW_TIMING_FILE_N`). For a quick
+> first measurement, run with a smaller `REVIEW_TIMING_FILE_N` (e.g. 10) and
+> multiply, or raise the `-timeout` on the `make eval-review-timing` target.
 
 ## Output
 
