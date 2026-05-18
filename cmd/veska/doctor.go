@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
+	"github.com/whiskeyjimbo/veska/internal/application/review"
 	"github.com/whiskeyjimbo/veska/internal/config"
 	"github.com/whiskeyjimbo/veska/internal/doctor"
 	"github.com/whiskeyjimbo/veska/internal/embedderprobe"
@@ -82,8 +83,7 @@ func doctorCmd() *cobra.Command {
 		doctorPostPromotionQueueCmd(),
 		doctorWikiRenderCmd(),
 		doctorServiceCmd(),
-		doctorSubCmd("pipelines", "Check ingestion pipeline health",
-			func(jsonOut bool, w io.Writer) error { return stubOK("pipelines", jsonOut, w) }),
+		doctorPipelinesCmd(),
 		doctorBundleCmd(),
 		doctorBackupCmd(),
 		doctorResetCrashLoopCmd(),
@@ -170,6 +170,59 @@ func doctorWikiRenderCmd() *cobra.Command {
 			}
 			if report.Status != "healthy" {
 				return ProbeStatusError{Subsystem: "wiki_render", Status: report.Status}
+			}
+			return nil
+		},
+	}
+	cmd.Flags().BoolVar(&jsonOut, "json", false, "output results as JSON")
+	return cmd
+}
+
+// doctorPipelinesCmd returns the "doctor pipelines" subcommand backed by
+// internal/doctor.CheckPipelines. It reports the review pipeline's cumulative
+// token usage for the current local day against the configured caps. A
+// degraded status means the per-day cap is reached and the review pipeline is
+// paused until the local-midnight window reset.
+func doctorPipelinesCmd() *cobra.Command {
+	var jsonOut bool
+	cmd := &cobra.Command{
+		Use:          "pipelines",
+		Short:        "Report review-pipeline token usage against the configured caps",
+		SilenceUsage: true,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			w := cmd.OutOrStdout()
+			fileCfg, err := config.Load()
+			if err != nil {
+				return fmt.Errorf("pipelines: load config: %w", err)
+			}
+
+			dbPath := filepath.Join(config.DefaultVectorDir(), "veska.db")
+			pools, err := sqlite.OpenPools(dbPath)
+			if err != nil {
+				return fmt.Errorf("pipelines: open sqlite pools: %w", err)
+			}
+			defer func() { _ = pools.Close() }()
+
+			tokenStore := sqlite.NewReviewTokenStore(pools.ReadDB, pools.WriteHot)
+			quota := review.NewQuota(
+				fileCfg.Review.MaxTokensPerCommit,
+				fileCfg.Review.MaxTokensPerDay,
+				tokenStore, nil)
+
+			report, err := doctor.CheckPipelines(cmd.Context(), quota,
+				fileCfg.Review.MaxTokensPerDay, fileCfg.Review.MaxTokensPerCommit)
+			if err != nil {
+				return err
+			}
+			if jsonOut {
+				enc := json.NewEncoder(w)
+				return enc.Encode(doctor.NewEnvelope("pipelines", report.Status, report))
+			}
+			fmt.Fprintf(w, "pipelines: %s (tokens_today=%d, max_per_day=%d, max_per_commit=%d, paused=%v)\n",
+				report.Status, report.TokensToday, report.MaxTokensPerDay,
+				report.MaxTokensPerCommit, report.Paused)
+			if report.Status != "healthy" {
+				return ProbeStatusError{Subsystem: "pipelines", Status: report.Status}
 			}
 			return nil
 		},

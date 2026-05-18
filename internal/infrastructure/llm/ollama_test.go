@@ -246,3 +246,34 @@ func TestOllamaGenerator_Generate_PerCallTimeout(t *testing.T) {
 		t.Fatalf("Generate took %v; per-call timeout not honored", elapsed)
 	}
 }
+
+// TestOllamaGenerator_Generate_Usage verifies the adapter surfaces Ollama's
+// prompt_eval_count and eval_count as ports.TokenUsage (solov2-nz2.5).
+func TestOllamaGenerator_Generate_Usage(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"response":          "hello",
+			"prompt_eval_count": 42,
+			"eval_count":        17,
+		})
+	}))
+	defer srv.Close()
+
+	gen := llm.NewOllamaGenerator(srv.URL, "llama3", srv.Client())
+	resp, err := gen.Generate(context.Background(), ports.GenerateRequest{Prompt: "hi"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if resp.Usage.PromptTokens != 42 {
+		t.Errorf("PromptTokens: got %d, want 42", resp.Usage.PromptTokens)
+	}
+	if resp.Usage.CompletionTokens != 17 {
+		t.Errorf("CompletionTokens: got %d, want 17", resp.Usage.CompletionTokens)
+	}
+	if resp.Usage.Total() != 59 {
+		t.Errorf("Total: got %d, want 59", resp.Usage.Total())
+	}
+}

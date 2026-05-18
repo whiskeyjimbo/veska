@@ -59,6 +59,12 @@ func (f *fakeFindingStorage) Save(_ context.Context, fn *domain.Finding) error {
 	if f.err != nil {
 		return f.err
 	}
+	// Mirror production FindingStorage idempotency on (finding_id, branch).
+	for _, ex := range f.saved {
+		if ex.FindingID == fn.FindingID && ex.Branch == fn.Branch {
+			return nil
+		}
+	}
 	f.saved = append(f.saved, fn)
 	return nil
 }
