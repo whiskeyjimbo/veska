@@ -18,6 +18,7 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/application"
 	"github.com/whiskeyjimbo/veska/internal/application/autolink"
 	"github.com/whiskeyjimbo/veska/internal/application/blastradius"
+	"github.com/whiskeyjimbo/veska/internal/application/changedsymbols"
 	"github.com/whiskeyjimbo/veska/internal/application/checks"
 	"github.com/whiskeyjimbo/veska/internal/application/contextpack"
 	"github.com/whiskeyjimbo/veska/internal/application/embedder"
@@ -614,6 +615,18 @@ func registerMCPTools(r *mcp.Registry, d mcpDeps) {
 	nodes := sqlite.NewNodeLookupRepo(pools.ReadDB)
 	blastSvc := blastradius.NewService(edges, nodes, d.staging)
 	mcp.RegisterBlastTools(r, blastSvc, repoRootFunc(pools.ReadDB), gitwatch.ChangedFiles)
+
+	// eng_find_changed_symbols: parses each file changed between two git
+	// refs at both refs and diffs the symbol sets. It reads git + the
+	// tree-sitter parser on demand and never touches the promoted graph,
+	// so it needs no per-commit history substrate.
+	if csSvc, err := changedsymbols.NewService(
+		treesitter.NewGoParser(), gitwatch.ChangedFilesBetween, gitwatch.FileAtRef,
+	); err == nil {
+		mcp.RegisterChangedSymbolsTool(r, csSvc, repoRootFunc(pools.ReadDB))
+	} else {
+		mcp.RegisterChangedSymbolsTool(r, nil, nil)
+	}
 
 	// Wiki hot_zone surface. Change frequency comes from the git commit-history
 	// reader over the default look-back window; blast radius reuses blastSvc.

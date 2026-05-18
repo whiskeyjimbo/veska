@@ -5,22 +5,23 @@ status: draft
 version: 0.1.0
 last_reviewed: 2026-05-17
 verified: true
-verified_date: "2026-05-17"
+verified_date: "2026-05-18"
 related: [SOLO-01, SOLO-03, SOLO-04, SOLO-08, SOLO-11, SOLO-12, SOLO-15]
 ---
 
 # SOLO-09 — MCP Surface
 
 The MCP surface is how the editor and the AI agent talk to the
-daemon. 32 registered tools (as of M5), one transport, a flat
+daemon. 33 registered tools (as of M5), one transport, a flat
 naming scheme, and a small output contract. This file is the
 whole surface; there are no sub-files.
 
-> **Verification note (2026-05-17):** All 32 tools listed in §3
+> **Verification note (2026-05-18):** All 33 tools listed in §3
 > below are registered in `internal/infrastructure/mcp` as of M5
-> close. The final five — `eng_get_finding`, `eng_get_suppression`,
-> `eng_close_suppression`, `eng_add_repo`, `eng_remove_repo` — were
-> registered by `solov2-nz2.7`.
+> close. The record/repo tools — `eng_get_finding`,
+> `eng_get_suppression`, `eng_close_suppression`, `eng_add_repo`,
+> `eng_remove_repo` — were registered by `solov2-nz2.7`;
+> `eng_find_changed_symbols` was added by `solov2-4j5`.
 
 ## 1. Transport
 
@@ -110,7 +111,7 @@ or a config flag.
 
 ## 3. Tool inventory
 
-32 registered tools, flat table.
+33 registered tools, flat table.
 The "Staging" column is `yes` if the tool
 reads through the staging overlay (sees unpromoted edits) or `no`
 if it reads promoted state only (lags an in-flight save by the
@@ -131,6 +132,7 @@ W = write; R = read.
 | `eng_get_blast_radius` | Blast radius for a node (promoted graph). Cross-repo via `repo` arg — your service signature change → who in your other indexed repos calls it. | no | R |
 | `eng_get_dirty_blast_radius` | Blast radius including staging-area edits. | yes | R |
 | `eng_get_diff_blast_radius` | Blast radius union over a working-tree diff (staging vs promoted `HEAD`). | yes | R |
+| `eng_find_changed_symbols` | Symbols added/removed/modified between two git refs (`ref_a`, `ref_b`). Parses the changed files at each ref on demand — no history substrate; never reads the promoted graph. Single-repo. | no | R |
 
 ### 3.2 Task
 
@@ -185,17 +187,20 @@ subcommands) is the operator surface; the two tools above are the
 agent's window into the same data. Diagnostics that *fix* things
 (repair, gc, embedder swap) are CLI-only on purpose.
 
-Total: 32 registered tools.
+Total: 33 registered tools.
 `eng_context_pack` from SOLO-12 is the same binding as
 `eng_get_context_pack` above; the wiki section references it by
 purpose, this section names it.
 
-Time-travel tools (`eng_get_node_as_of`, `eng_find_changed_symbols`)
-are not present. The substrate stores only the latest promoted state
-per branch — there is no per-commit history of node bodies — so
-queries against arbitrary SHAs would require a re-parse pipeline
-that does not exist. They land when (and if) historical query
-substrate does, behind an ADR.
+The time-travel tool `eng_get_node_as_of` is not present. The
+substrate stores only the latest promoted state per branch — there
+is no per-commit history of node bodies — so a point-in-time node
+query against an arbitrary SHA would require a stored-history
+substrate that does not exist. It lands when (and if) one does,
+behind an ADR. `eng_find_changed_symbols` (§3.1) sidesteps this:
+rather than reading stored history it parses the changed files at
+two refs on demand and diffs the symbol sets, so it needs no
+substrate.
 
 ### 3.7 The cross-repo argument
 
@@ -644,7 +649,7 @@ daemon, or the daemon's own design replaces them.
 - `eng_explain_edge` — debug tool; lives in `veska doctor` logs.
 - `eng_list_open_todos` — folded into `eng_find_todos` with a `scope` arg.
 - `eng_onboard_task` — replaced by `eng_get_context_pack`.
-- `eng_get_node_as_of`, `eng_find_changed_symbols` — historical-query tools. Substrate stores latest-promoted only; no per-commit history. Return when (and if) a history substrate ships.
+- `eng_get_node_as_of` — historical-query tool. Substrate stores latest-promoted only; no per-commit history. Returns when (and if) a history substrate ships. (`eng_find_changed_symbols`, originally deferred here, was reactivated by `solov2-4j5` — it parses two refs on demand and needs no substrate; it now lives in §3.1.)
 
 ### 8.2 Deferred until a port or feature lands
 

@@ -1,0 +1,78 @@
+// refdiff.go exposes thin os/exec wrappers used by the
+// eng_find_changed_symbols MCP tool to compare two arbitrary git refs
+// on demand: ChangedFilesBetween lists the files that differ between
+// two refs, and FileAtRef reads a single file's content at a ref.
+//
+// Like diff.go, paths are relative to repoRoot — that is what
+// `git diff --name-only` emits and what `git show <ref>:<path>` expects.
+package git
+
+import (
+	"bytes"
+	"context"
+	"errors"
+	"fmt"
+	"os/exec"
+	"strings"
+)
+
+// ErrFileNotAtRef is returned by FileAtRef when the requested path does
+// not exist at the given ref (e.g. the file was added after ref_a or
+// deleted before ref_b). Callers treat this as "symbol set is empty at
+// that ref" rather than a hard failure.
+var ErrFileNotAtRef = errors.New("git show: file not present at ref")
+
+// ChangedFilesBetween returns the list of files that differ between
+// refA and refB, as `git diff --name-only <refA> <refB>` reports them.
+// Paths are relative to repoRoot.
+//
+// An empty repoRoot or an empty ref returns an error rather than
+// silently shelling out against the process cwd or HEAD.
+func ChangedFilesBetween(ctx context.Context, repoRoot, refA, refB string) ([]string, error) {
+	if repoRoot == "" {
+		return nil, fmt.Errorf("git diff: repoRoot is empty")
+	}
+	if refA == "" || refB == "" {
+		return nil, fmt.Errorf("git diff: both refs must be non-empty (got %q, %q)", refA, refB)
+	}
+	cmd := exec.CommandContext(ctx, "git", "-C", repoRoot, "diff", "--name-only", refA, refB)
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+	if err := cmd.Run(); err != nil {
+		return nil, fmt.Errorf("git diff %s..%s in %s: %w: %s",
+			refA, refB, repoRoot, err, strings.TrimSpace(stderr.String()))
+	}
+	out := strings.Split(strings.TrimRight(stdout.String(), "\n"), "\n")
+	if len(out) == 1 && out[0] == "" {
+		return nil, nil
+	}
+	return out, nil
+}
+
+// FileAtRef returns the content of path as it existed at ref, via
+// `git show <ref>:<path>`. Path is relative to repoRoot.
+//
+// When the file does not exist at ref, ErrFileNotAtRef is returned and
+// the content is nil — this is expected for files added or deleted
+// between the two refs being compared.
+func FileAtRef(ctx context.Context, repoRoot, ref, path string) ([]byte, error) {
+	if repoRoot == "" {
+		return nil, fmt.Errorf("git show: repoRoot is empty")
+	}
+	if ref == "" || path == "" {
+		return nil, fmt.Errorf("git show: ref and path must be non-empty (got %q, %q)", ref, path)
+	}
+	cmd := exec.CommandContext(ctx, "git", "-C", repoRoot, "show", ref+":"+path)
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+	if err := cmd.Run(); err != nil {
+		// `git show` fails with a non-zero exit when the path is absent
+		// at the ref; treat that as ErrFileNotAtRef so callers can skip
+		// the missing side of an added/deleted file gracefully.
+		return nil, fmt.Errorf("%w: %s:%s in %s: %v: %s",
+			ErrFileNotAtRef, ref, path, repoRoot, err, strings.TrimSpace(stderr.String()))
+	}
+	return stdout.Bytes(), nil
+}

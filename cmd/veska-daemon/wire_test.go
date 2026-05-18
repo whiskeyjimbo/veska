@@ -245,7 +245,8 @@ func TestWire_RegistersGraphBlastSearchTools(t *testing.T) {
 
 // TestWire_RegistersFinalFiveTools verifies the SOLO-09 record/repo tools
 // (eng_get_finding, eng_get_suppression, eng_close_suppression, eng_add_repo,
-// eng_remove_repo) resolve, and that the full registered surface is 32 tools.
+// eng_remove_repo) resolve, and that the full registered surface is 33 tools
+// (32 + eng_find_changed_symbols, added by solov2-4j5).
 func TestWire_RegistersFinalFiveTools(t *testing.T) {
 	cfg := testConfig(t)
 	d, err := newDaemon(cfg)
@@ -261,15 +262,15 @@ func TestWire_RegistersFinalFiveTools(t *testing.T) {
 	}
 	for _, n := range []string{
 		"eng_get_finding", "eng_get_suppression", "eng_close_suppression",
-		"eng_add_repo", "eng_remove_repo",
+		"eng_add_repo", "eng_remove_repo", "eng_find_changed_symbols",
 	} {
 		if !have[n] {
 			t.Errorf("tool %q not registered; have=%v", n, names)
 		}
 	}
 
-	if got := len(names); got != 32 {
-		t.Errorf("registered tool count = %d; want 32; have=%v", got, names)
+	if got := len(names); got != 33 {
+		t.Errorf("registered tool count = %d; want 33; have=%v", got, names)
 	}
 }
 
