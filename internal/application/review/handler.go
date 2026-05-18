@@ -4,9 +4,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"os"
 	"path/filepath"
 
+	"github.com/whiskeyjimbo/veska/internal/core/domain"
 	"github.com/whiskeyjimbo/veska/internal/core/ports"
 )
 
@@ -38,12 +40,17 @@ type Handler struct {
 	gen      ports.LLMGenerator
 	loader   *Loader
 	repoRoot RepoRootFunc
+	findings ports.FindingStorage
 }
 
-// NewHandler constructs a review Handler. gen, loader and repoRoot are all
-// required; a nil dependency yields an error wrapping ErrMissingDependency and
-// a nil *Handler.
-func NewHandler(gen ports.LLMGenerator, loader *Loader, repoRoot RepoRootFunc) (*Handler, error) {
+// NewHandler constructs a review Handler. gen, loader, repoRoot and findings
+// are all required; a nil dependency yields an error wrapping
+// ErrMissingDependency and a nil *Handler.
+//
+// findings is the port the Handler uses to park a review-pipeline-failure
+// Finding when a job exhausts its retries (the review failure contract,
+// solov2-nz2.3).
+func NewHandler(gen ports.LLMGenerator, loader *Loader, repoRoot RepoRootFunc, findings ports.FindingStorage) (*Handler, error) {
 	if gen == nil {
 		return nil, fmt.Errorf("review.NewHandler: gen is nil: %w", ErrMissingDependency)
 	}
@@ -53,7 +60,10 @@ func NewHandler(gen ports.LLMGenerator, loader *Loader, repoRoot RepoRootFunc) (
 	if repoRoot == nil {
 		return nil, fmt.Errorf("review.NewHandler: repoRoot is nil: %w", ErrMissingDependency)
 	}
-	return &Handler{gen: gen, loader: loader, repoRoot: repoRoot}, nil
+	if findings == nil {
+		return nil, fmt.Errorf("review.NewHandler: findings is nil: %w", ErrMissingDependency)
+	}
+	return &Handler{gen: gen, loader: loader, repoRoot: repoRoot, findings: findings}, nil
 }
 
 // Handle processes one ports.WorkRow of kind WorkKindReview.
@@ -68,8 +78,29 @@ func NewHandler(gen ports.LLMGenerator, loader *Loader, repoRoot RepoRootFunc) (
 //   - On success: nil — the row drains to 'done'.
 func (h *Handler) Handle(ctx context.Context, row ports.WorkRow) error {
 	if row.Kind != ports.WorkKindReview {
+		// A misrouted row is a wiring bug, not a review failure — no finding.
 		return fmt.Errorf("review.Handle: unexpected kind %q", row.Kind)
 	}
+
+	err := h.review(ctx, row)
+	if err == nil {
+		return nil
+	}
+
+	// Review failure contract (solov2-nz2.3): on the FINAL failing attempt the
+	// job will be marked state='failed' by the poller. Park a sticky
+	// review-pipeline-failure Finding so the failure does not silently vanish.
+	// Earlier attempts just return the error for the poller to re-queue.
+	if row.Attempts >= maxReviewAttempts {
+		h.emitFailureFinding(ctx, row, err)
+	}
+	return err
+}
+
+// review runs the review job for one queue row. The returned error is the
+// job failure the poller acts on; emitting the failure Finding is the caller's
+// concern.
+func (h *Handler) review(ctx context.Context, row ports.WorkRow) error {
 	filePath := row.Payload
 	if filePath == "" {
 		return nil
@@ -98,6 +129,33 @@ func (h *Handler) Handle(ctx context.Context, row ports.WorkRow) error {
 		}
 	}
 	return nil
+}
+
+// emitFailureFinding parks a review-pipeline-failure Finding anchored on the
+// promotion commit (row.GitSHA). FindingStorage.Save is idempotent on
+// (finding_id, branch), so multiple failed review files in one commit collapse
+// to a single finding. A Save error must never mask the original job failure:
+// it is logged and the job error still propagates.
+func (h *Handler) emitFailureFinding(ctx context.Context, row ports.WorkRow, jobErr error) {
+	msg := fmt.Sprintf("review pipeline failed for %q after %d attempts: %v",
+		row.Payload, row.Attempts, jobErr)
+
+	f, err := domain.NewFinding(
+		"", row.RepoID, row.Branch,
+		domain.SeverityHigh, domain.LayerQuality,
+		FailureRule, msg,
+		domain.WithNodeAnchor(row.GitSHA),
+		domain.WithActorKind(domain.ActorKindSystem),
+	)
+	if err != nil {
+		slog.Error("review: build failure finding",
+			"repo_id", row.RepoID, "branch", row.Branch, "git_sha", row.GitSHA, "err", err)
+		return
+	}
+	if err := h.findings.Save(ctx, f); err != nil {
+		slog.Error("review: save failure finding",
+			"repo_id", row.RepoID, "branch", row.Branch, "git_sha", row.GitSHA, "err", err)
+	}
 }
 
 // runKind dispatches a single review kind over the code-under-review: load the
