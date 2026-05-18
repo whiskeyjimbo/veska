@@ -228,7 +228,7 @@ func (h *Handler) emitBudgetFinding(ctx context.Context, row ports.WorkRow) {
 		row.Payload, row.GitSHA)
 
 	f, err := domain.NewFinding(
-		"", row.RepoID, row.Branch,
+		row.RepoID, row.Branch,
 		domain.SeverityMedium, domain.LayerQuality,
 		BudgetRule, msg,
 		domain.WithNodeAnchor(row.GitSHA),
@@ -289,7 +289,7 @@ func (h *Handler) emitFailureFinding(ctx context.Context, row ports.WorkRow, job
 		row.Payload, row.Attempts, jobErr)
 
 	f, err := domain.NewFinding(
-		"", row.RepoID, row.Branch,
+		row.RepoID, row.Branch,
 		domain.SeverityHigh, domain.LayerQuality,
 		FailureRule, msg,
 		domain.WithNodeAnchor(row.GitSHA),

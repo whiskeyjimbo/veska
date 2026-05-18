@@ -29,7 +29,7 @@ func TestFindingRepo_SaveRoundTrip(t *testing.T) {
 	repo := sqlite.NewFindingRepo(db)
 
 	f, err := domain.NewFinding(
-		"01HXYZ", "repo1", "main",
+		"repo1", "main",
 		domain.SeverityLow, domain.LayerStructural,
 		"parse-failure", "tree-sitter could not parse foo.go",
 		domain.WithFileAnchor("foo.go"),
@@ -89,7 +89,7 @@ func TestFindingRepo_AnchorContentHash_RoundTrip(t *testing.T) {
 
 	// With hash.
 	fWith, err := domain.NewFinding(
-		"u-with", "repo1", "main",
+		"repo1", "main",
 		domain.SeverityLow, domain.LayerStructural,
 		"dead-code", "msg",
 		domain.WithNodeAnchor("n-with"),
@@ -104,7 +104,7 @@ func TestFindingRepo_AnchorContentHash_RoundTrip(t *testing.T) {
 
 	// Without hash (parse-failure style).
 	fWithout, err := domain.NewFinding(
-		"u-no", "repo1", "main",
+		"repo1", "main",
 		domain.SeverityLow, domain.LayerStructural,
 		"parse-failure", "msg",
 		domain.WithFileAnchor("foo.go"),
@@ -157,7 +157,7 @@ func TestFindingRepo_AnchorContentHash_OnConflictRefreshes(t *testing.T) {
 
 	build := func(hash string) *domain.Finding {
 		f, err := domain.NewFinding(
-			"u", "repo1", "main",
+			"repo1", "main",
 			domain.SeverityLow, domain.LayerStructural,
 			"dead-code", "msg",
 			domain.WithNodeAnchor("n-x"),
@@ -222,7 +222,7 @@ func TestFindingRepo_Idempotent(t *testing.T) {
 	repo := sqlite.NewFindingRepo(db)
 
 	f, _ := domain.NewFinding(
-		"id1", "repo1", "main",
+		"repo1", "main",
 		domain.SeverityMedium, domain.LayerStructural,
 		"dead-code", "no inbound edges",
 		domain.WithNodeAnchor("n1"),
@@ -264,7 +264,7 @@ func TestFindingRepo_CloseObsolete(t *testing.T) {
 	repo := sqlite.NewFindingRepo(db)
 
 	f, err := domain.NewFinding(
-		"01HXYZ", "repo1", "main",
+		"repo1", "main",
 		domain.SeverityMedium, domain.LayerStructural,
 		"parse-failure", "tree-sitter could not parse foo.go",
 		domain.WithFileAnchor("foo.go"),

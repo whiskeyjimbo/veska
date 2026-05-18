@@ -65,7 +65,7 @@ func (f *revalFixture) insertFinding(t *testing.T, id, branch, nodeID string, an
 		opts = append(opts, domain.WithAnchorContentHash(*anchorHash))
 	}
 	fnd, err := domain.NewFinding(
-		id, f.repoID, branch,
+		f.repoID, branch,
 		domain.SeverityLow, domain.LayerStructural,
 		"dead-code", "msg",
 		opts...,
@@ -224,7 +224,7 @@ func TestRevalidateRepo_StaleFindings_RepoScoped(t *testing.T) {
 	_ = f.insertFinding(t, "u-r1", f.branch, "n-r1", new("h-old-1"))
 	// Finding in repo2 — emulate via direct insert because the helper is keyed on repo1.
 	fndR2, err := domain.NewFinding(
-		"u-r2", "repo2", f.branch,
+		"repo2", f.branch,
 		domain.SeverityLow, domain.LayerStructural, "dead-code", "msg",
 		domain.WithNodeAnchor("n-r2"), domain.WithAnchorContentHash("h-old-2"),
 	)
