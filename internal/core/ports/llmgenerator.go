@@ -1,6 +1,9 @@
 package ports
 
-import "context"
+import (
+	"context"
+	"encoding/json"
+)
 
 // GenerateRequest carries the inputs for a single text-generation call.
 type GenerateRequest struct {
@@ -16,6 +19,14 @@ type GenerateRequest struct {
 	// echoed verbatim into GenerateResponse.Provenance so a stored review can
 	// be traced back to the exact template that produced it.
 	PromptTemplateVersion string
+
+	// Format optionally requests structured output. When non-empty it is a
+	// JSON Schema (a json.RawMessage) the model output must conform to;
+	// generators that support structured output (e.g. Ollama's /api/generate
+	// 'format' parameter) constrain the model to schema-valid JSON. A zero
+	// value means plain-text output — the default — so existing callers and
+	// generators are unaffected.
+	Format json.RawMessage
 }
 
 // Provenance records how a GenerateResponse was produced so a downstream

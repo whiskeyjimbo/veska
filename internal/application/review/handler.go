@@ -329,6 +329,7 @@ func (h *Handler) runKind(ctx context.Context, kind ReviewKind, in Input, gitSHA
 	resp, err := h.gen.Generate(ctx, ports.GenerateRequest{
 		Prompt:                rendered,
 		PromptTemplateVersion: prompt.Version(),
+		Format:                prompt.Format(),
 	})
 	if err != nil {
 		return fmt.Errorf("review.Handle: generate for %q: %w", kind, err)

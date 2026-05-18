@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -75,6 +76,72 @@ func TestOllamaGenerator_Generate_Provenance(t *testing.T) {
 	wantHash := hex.EncodeToString(sum[:])
 	if resp.Provenance.InputHash != wantHash {
 		t.Errorf("InputHash: got %q, want %q", resp.Provenance.InputHash, wantHash)
+	}
+}
+
+// AC1: when GenerateRequest.Format is set, OllamaGenerator forwards it as the
+// /api/generate 'format' parameter so the model is constrained to schema-valid
+// JSON.
+func TestOllamaGenerator_Generate_StructuredFormat(t *testing.T) {
+	t.Parallel()
+
+	schema := json.RawMessage(`{"type":"object","properties":{"findings":{"type":"array"}}}`)
+
+	var gotFormat json.RawMessage
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var body struct {
+			Format json.RawMessage `json:"format"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Errorf("decode request body: %v", err)
+		}
+		gotFormat = body.Format
+		_ = json.NewEncoder(w).Encode(map[string]string{"response": `{"findings":[]}`})
+	}))
+	defer srv.Close()
+
+	gen := llm.NewOllamaGenerator(srv.URL, "llama3", srv.Client())
+	if _, err := gen.Generate(context.Background(), ports.GenerateRequest{
+		Prompt: "review this",
+		Format: schema,
+	}); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	var got, want any
+	if err := json.Unmarshal(gotFormat, &got); err != nil {
+		t.Fatalf("request had no/invalid 'format' field: %q: %v", gotFormat, err)
+	}
+	if err := json.Unmarshal(schema, &want); err != nil {
+		t.Fatalf("schema: %v", err)
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("format: got %v, want %v", got, want)
+	}
+}
+
+// AC1: a plain-text GenerateRequest (zero Format) omits the 'format' field, so
+// existing callers and plain-text generation are unaffected.
+func TestOllamaGenerator_Generate_NoFormatByDefault(t *testing.T) {
+	t.Parallel()
+
+	var hasFormat bool
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var raw map[string]json.RawMessage
+		if err := json.NewDecoder(r.Body).Decode(&raw); err != nil {
+			t.Errorf("decode request body: %v", err)
+		}
+		_, hasFormat = raw["format"]
+		_ = json.NewEncoder(w).Encode(map[string]string{"response": "ok"})
+	}))
+	defer srv.Close()
+
+	gen := llm.NewOllamaGenerator(srv.URL, "llama3", srv.Client())
+	if _, err := gen.Generate(context.Background(), ports.GenerateRequest{Prompt: "hi"}); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if hasFormat {
+		t.Error("plain-text request unexpectedly carried a 'format' field")
 	}
 }
 

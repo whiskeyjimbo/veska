@@ -17,8 +17,8 @@ type promptSpec struct {
 // version strings are bumped whenever the corresponding template file's
 // wording changes so cached model outputs can be invalidated.
 var registeredPrompts = []promptSpec{
-	{kind: KindSecurity, version: "security.v1", file: "security.v1.tmpl"},
-	{kind: KindContractDrift, version: "contract_drift.v1", file: "contract_drift.v1.tmpl"},
+	{kind: KindSecurity, version: "security.v2", file: "security.v2.tmpl"},
+	{kind: KindContractDrift, version: "contract_drift.v2", file: "contract_drift.v2.tmpl"},
 }
 
 // Loader returns versioned review prompts by kind. It is constructed once and
