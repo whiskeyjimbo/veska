@@ -15,9 +15,9 @@ import (
 )
 
 const (
-	dim            = 768
-	connectivity   = 16
-	expansionAdd   = 200
+	dim             = 768
+	connectivity    = 16
+	expansionAdd    = 200
 	expansionSearch = 100
 )
 
