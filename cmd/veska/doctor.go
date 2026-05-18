@@ -299,7 +299,7 @@ func doctorEgressCmd() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			w := cmd.OutOrStdout()
 			sockPaths := []string{
-				config.DaemonSockPath(),
+				config.CLISockPath(),
 				config.MCPSockPath(),
 			}
 			report, err := doctor.CheckEgress(sockPaths)
@@ -412,7 +412,7 @@ func doctorStatusCmd() *cobra.Command {
 
 			embedderResult, _ := embedderprobe.Probe(context.Background(), defaultOllamaURL, defaultModelName)
 			egressReport, _ := doctor.CheckEgress([]string{
-				config.DaemonSockPath(),
+				config.CLISockPath(),
 				config.MCPSockPath(),
 			})
 			configReport, _ := doctor.CheckConfig(home)

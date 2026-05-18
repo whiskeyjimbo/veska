@@ -61,7 +61,7 @@ func runPostCommit() error {
 		return nil
 	}
 
-	sockPath := config.DaemonSockPath()
+	sockPath := config.CLISockPath()
 	if err := sendSeal(sockPath); err != nil {
 		debugf("hook-runner: sendSeal error (ignored): %v\n", err)
 	}
@@ -222,7 +222,7 @@ func runPostCheckout() error {
 		debugf("hook-runner post-checkout: SetActiveBranch: %v\n", err)
 	}
 
-	sockPath := config.DaemonSockPath()
+	sockPath := config.CLISockPath()
 	if err := sendSeal(sockPath); err != nil {
 		debugf("hook-runner post-checkout: sendSeal error (ignored): %v\n", err)
 	}

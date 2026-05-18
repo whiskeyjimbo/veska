@@ -11,7 +11,7 @@ import (
 
 func TestCheckServiceHealthy(t *testing.T) {
 	dir := t.TempDir()
-	sockPath := filepath.Join(dir, "daemon.sock")
+	sockPath := filepath.Join(dir, "cli.sock")
 
 	ln, err := net.Listen("unix", sockPath)
 	if err != nil {
@@ -77,7 +77,7 @@ func TestCheckServiceBroken(t *testing.T) {
 
 func TestCheckServiceBrokenTakesPriority(t *testing.T) {
 	dir := t.TempDir()
-	sockPath := filepath.Join(dir, "daemon.sock")
+	sockPath := filepath.Join(dir, "cli.sock")
 
 	ln, err := net.Listen("unix", sockPath)
 	if err != nil {

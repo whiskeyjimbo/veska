@@ -28,10 +28,10 @@ func DefaultVectorDir() string {
 	return veskaHome()
 }
 
-// DaemonSockPath returns the Unix-domain socket path used by the veska daemon.
-// It resolves to $VESKA_HOME/daemon.sock, where VESKA_HOME defaults to ~/.veska.
-func DaemonSockPath() string {
-	return filepath.Join(veskaHome(), "daemon.sock")
+// CLISockPath returns the Unix-domain socket path the CLI uses to reach the daemon.
+// It resolves to $VESKA_HOME/cli.sock, where VESKA_HOME defaults to ~/.veska.
+func CLISockPath() string {
+	return filepath.Join(veskaHome(), "cli.sock")
 }
 
 // MCPSockPath returns the path of the MCP Unix socket (~/.veska/mcp.sock).

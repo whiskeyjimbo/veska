@@ -114,7 +114,7 @@ func CreateBundle(opts BundleOptions) (BundleResult, error) {
 
 	// 4. doctor/egress.json
 	egressReport, _ := CheckEgress([]string{
-		filepath.Join(opts.VeskaHome, "daemon.sock"),
+		filepath.Join(opts.VeskaHome, "cli.sock"),
 		filepath.Join(opts.VeskaHome, "mcp.sock"),
 	})
 	egressStatus := "healthy"

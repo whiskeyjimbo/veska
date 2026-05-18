@@ -70,7 +70,7 @@ type Config struct {
 	SQLitePath string
 
 	// CLISockPath / MCPSockPath are the Unix sockets for the JSON-RPC server.
-	// Defaults to config.DaemonSockPath() and config.MCPSockPath().
+	// Defaults to config.CLISockPath() and config.MCPSockPath().
 	CLISockPath string
 	MCPSockPath string
 
@@ -114,7 +114,7 @@ func ResolveConfig(c Config) Config {
 		c.SQLitePath = filepath.Join(c.VeskaHome, "veska.db")
 	}
 	if c.CLISockPath == "" {
-		c.CLISockPath = config.DaemonSockPath()
+		c.CLISockPath = config.CLISockPath()
 	}
 	if c.MCPSockPath == "" {
 		c.MCPSockPath = config.MCPSockPath()

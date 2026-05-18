@@ -124,7 +124,7 @@ type ReviewConfig struct {
 func DefaultConfig() Config {
 	return Config{
 		Daemon: DaemonConfig{
-			CLISocketPath: "~/.veska/daemon.sock",
+			CLISocketPath: "~/.veska/cli.sock",
 			MCPSocketPath: "~/.veska/mcp.sock",
 			PIDFile:       "~/.veska/daemon.pid",
 			ShutdownGrace: "5s",
