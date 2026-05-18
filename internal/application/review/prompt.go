@@ -2,6 +2,7 @@ package review
 
 import (
 	"embed"
+	"encoding/json"
 	"fmt"
 	"strings"
 	"text/template"
@@ -54,10 +55,14 @@ func (p *templatedPrompt) Render(in Input) (string, error) {
 	return b.String(), nil
 }
 
-// Parse interprets a model response into structured findings using the
-// package's shared block-format parser.
+// Format reports the JSON Schema the prompt constrains the model output to.
+// Every review kind shares the findings schema.
+func (p *templatedPrompt) Format() json.RawMessage { return findingsSchema }
+
+// Parse interprets a model's JSON response into structured findings using the
+// package's shared json.Unmarshal-based parser.
 func (p *templatedPrompt) Parse(modelOutput string) ([]ReviewFinding, error) {
-	return parseBlocks(p.kind, modelOutput)
+	return parseJSON(p.kind, modelOutput)
 }
 
 // Compile-time check: *templatedPrompt satisfies Prompt.

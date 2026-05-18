@@ -1,6 +1,7 @@
 package review_test
 
 import (
+	"encoding/json"
 	"errors"
 	"flag"
 	"os"
@@ -84,7 +85,7 @@ func TestRecordReplay(t *testing.T) {
 			kind:        review.KindSecurity,
 			goldenFile:  "security.rendered.golden",
 			outputFile:  "security.model_output.txt",
-			wantVersion: "security.v1",
+			wantVersion: "security.v2",
 			want: []review.ReviewFinding{
 				{
 					Title:    "SQL injection in user lookup",
@@ -104,7 +105,7 @@ func TestRecordReplay(t *testing.T) {
 			kind:        review.KindContractDrift,
 			goldenFile:  "contract_drift.rendered.golden",
 			outputFile:  "contract_drift.model_output.txt",
-			wantVersion: "contract_drift.v1",
+			wantVersion: "contract_drift.v2",
 			want: []review.ReviewFinding{
 				{
 					Title:    "Return type changed on exported Fetch",
@@ -184,28 +185,61 @@ func TestRender_EmptyCodeErrors(t *testing.T) {
 	}
 }
 
-func TestParse_NoFindingsSentinel(t *testing.T) {
+// AC2: an empty findings array (the model found nothing) is success — zero
+// findings, no error — not a magic sentinel string.
+func TestParse_EmptyFindings(t *testing.T) {
 	l := newLoader(t)
 	p, _ := l.LoadPrompt(review.KindSecurity)
-	got, err := p.Parse("NO FINDINGS")
-	if err != nil {
-		t.Fatalf("Parse(NO FINDINGS): %v", err)
+	cases := map[string]string{
+		"compact":          `{"findings":[]}`,
+		"whitespace":       "\n  {\n  \"findings\": []\n}\n  ",
+		"prose-surrounded": "Here is the result:\n{\"findings\": []}\nDone.",
 	}
-	if len(got) != 0 {
-		t.Errorf("Parse(NO FINDINGS) = %+v, want empty", got)
+	for name, in := range cases {
+		t.Run(name, func(t *testing.T) {
+			got, err := p.Parse(in)
+			if err != nil {
+				t.Fatalf("Parse(%q): %v", name, err)
+			}
+			if len(got) != 0 {
+				t.Errorf("Parse(%q) = %+v, want empty", name, got)
+			}
+		})
 	}
 }
 
+// AC2: a realistic JSON response with surrounding prose/whitespace parses
+// without ErrMalformedResponse.
+func TestParse_ProseWrappedJSON(t *testing.T) {
+	l := newLoader(t)
+	p, _ := l.LoadPrompt(review.KindSecurity)
+	in := "Sure! Here is the review:\n\n```json\n" +
+		`{"findings":[{"severity":"low","title":"t","message":"m"}]}` +
+		"\n```\nHope that helps."
+	got, err := p.Parse(in)
+	if err != nil {
+		t.Fatalf("Parse: %v", err)
+	}
+	if len(got) != 1 || got[0].Title != "t" || got[0].Severity != domain.SeverityLow {
+		t.Errorf("Parse = %+v, want one low finding", got)
+	}
+}
+
+// AC4: a genuinely unparseable response yields ErrMalformedResponse, never a
+// panic; never a silent success.
 func TestParse_Malformed(t *testing.T) {
 	l := newLoader(t)
 	p, _ := l.LoadPrompt(review.KindSecurity)
 	cases := map[string]string{
-		"empty":            "",
-		"missing severity": "TITLE: x\nMESSAGE: y",
-		"missing title":    "SEVERITY: high\nMESSAGE: y",
-		"missing message":  "SEVERITY: high\nTITLE: x",
-		"invalid severity": "SEVERITY: catastrophic\nTITLE: x\nMESSAGE: y",
-		"garbage":          "the model said something unstructured",
+		"empty":             "",
+		"no json":           "the model said something unstructured",
+		"truncated json":    `{"findings": [{"severity": "high"`,
+		"missing severity":  `{"findings":[{"title":"x","message":"y"}]}`,
+		"missing title":     `{"findings":[{"severity":"high","message":"y"}]}`,
+		"missing message":   `{"findings":[{"severity":"high","title":"x"}]}`,
+		"invalid severity":  `{"findings":[{"severity":"catastrophic","title":"x","message":"y"}]}`,
+		"unknown field":     `{"findings":[{"severity":"high","title":"x","message":"y","extra":1}]}`,
+		"findings not list": `{"findings":"nope"}`,
 	}
 	for name, in := range cases {
 		t.Run(name, func(t *testing.T) {
@@ -213,5 +247,21 @@ func TestParse_Malformed(t *testing.T) {
 				t.Fatalf("Parse(%q) err = %v, want ErrMalformedResponse", name, err)
 			}
 		})
+	}
+}
+
+// AC1/AC2: every prompt exposes a non-empty JSON Schema as its Format.
+func TestPrompt_FormatIsJSONSchema(t *testing.T) {
+	l := newLoader(t)
+	for _, kind := range []review.ReviewKind{review.KindSecurity, review.KindContractDrift} {
+		p, _ := l.LoadPrompt(kind)
+		f := p.Format()
+		if len(f) == 0 {
+			t.Fatalf("Format() for %s is empty", kind)
+		}
+		var schema map[string]any
+		if err := json.Unmarshal(f, &schema); err != nil {
+			t.Fatalf("Format() for %s is not valid JSON: %v", kind, err)
+		}
 	}
 }

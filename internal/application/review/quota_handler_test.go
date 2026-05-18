@@ -96,7 +96,7 @@ func TestHandler_CommitOverageRefusesRemaining(t *testing.T) {
 	loader, _ := NewLoader()
 	// Each Generate call reports a large token usage so the first job's
 	// kinds blow the per-commit cap.
-	gen := &usageGenerator{reply: "NO FINDINGS", perCall: 10_000}
+	gen := &usageGenerator{reply: `{"findings":[]}`, perCall: 10_000}
 	fs := &fakeFindingStorage{}
 	metrics := newFakeErrorCounter()
 	q := NewQuota(100, 0, newFakeDailyStore(), nil)
@@ -172,7 +172,7 @@ func TestHandler_CommitCapZeroUnlimited(t *testing.T) {
 	root := t.TempDir()
 	writeReviewFile(t, root)
 	loader, _ := NewLoader()
-	gen := &usageGenerator{reply: "NO FINDINGS", perCall: 10_000_000}
+	gen := &usageGenerator{reply: `{"findings":[]}`, perCall: 10_000_000}
 	fs := &fakeFindingStorage{}
 	q := NewQuota(0, 0, newFakeDailyStore(), nil)
 	h, _ := NewHandler(gen, loader, staticRoot(root), fs, WithQuota(q))
@@ -193,7 +193,7 @@ func TestHandler_DailyCapPauses(t *testing.T) {
 	root := t.TempDir()
 	writeReviewFile(t, root)
 	loader, _ := NewLoader()
-	gen := &usageGenerator{reply: "NO FINDINGS", perCall: 100}
+	gen := &usageGenerator{reply: `{"findings":[]}`, perCall: 100}
 	fs := &fakeFindingStorage{}
 	audit := &fakeAuditWriter{}
 	store := newFakeDailyStore()
@@ -232,7 +232,7 @@ func TestHandler_NoQuotaBehavesAsBefore(t *testing.T) {
 	root := t.TempDir()
 	writeReviewFile(t, root)
 	loader, _ := NewLoader()
-	gen := &usageGenerator{reply: "NO FINDINGS", perCall: 10_000_000}
+	gen := &usageGenerator{reply: `{"findings":[]}`, perCall: 10_000_000}
 	h, _ := NewHandler(gen, loader, staticRoot(root), &fakeFindingStorage{})
 	row := ports.WorkRow{Kind: ports.WorkKindReview, RepoID: "r", Branch: "main", GitSHA: "s", Payload: "a.go"}
 	if err := h.Handle(context.Background(), row); err != nil {

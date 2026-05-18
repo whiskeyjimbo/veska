@@ -291,12 +291,12 @@ func TestPoller_WikiLaneDrains(t *testing.T) {
 	t.Errorf("expected wiki row state=done, got %q", state)
 }
 
-// fakeReviewGenerator is an in-memory ports.LLMGenerator that replies with the
-// no-findings sentinel so the review prompt parsers succeed.
+// fakeReviewGenerator is an in-memory ports.LLMGenerator that replies with an
+// empty JSON findings list so the review prompt parsers succeed.
 type fakeReviewGenerator struct{}
 
 func (fakeReviewGenerator) Generate(_ context.Context, _ ports.GenerateRequest) (ports.GenerateResponse, error) {
-	return ports.GenerateResponse{Text: "NO FINDINGS"}, nil
+	return ports.GenerateResponse{Text: `{"findings":[]}`}, nil
 }
 
 // noopFindingStorage is a ports.FindingStorage stub for review-lane tests that

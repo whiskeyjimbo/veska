@@ -12,11 +12,11 @@ Prior signature: {{.PriorSignature}}
 {{.Code}}
 --- END CODE ---
 
-Report each instance of drift as a block in exactly this format, blocks
-separated by a line containing only "---":
+Respond with a single JSON object and nothing else. The object has one
+field, "findings": a JSON array of drift objects. Each drift object has:
 
-SEVERITY: <info|low|medium|high|critical>
-TITLE: <one-line summary>
-MESSAGE: <full description, single line>
+  "severity": one of "info", "low", "medium", "high", "critical"
+  "title":    a one-line summary of the drift
+  "message":  the full description of the drift
 
-If you find no contract drift, reply with exactly: NO FINDINGS
+If you find no contract drift, return an empty array: {"findings": []}
