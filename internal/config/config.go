@@ -24,6 +24,7 @@ type Config struct {
 	Budget             BudgetConfig             `toml:"budget"`
 	LLMGenerator       LLMGeneratorConfig       `toml:"llm_generator"`
 	Review             ReviewConfig             `toml:"review"`
+	Backup             BackupConfig             `toml:"backup"`
 }
 
 // DaemonConfig holds socket paths and the graceful-stop window.
@@ -118,6 +119,17 @@ type ReviewConfig struct {
 	MaxTokensPerDay    int  `toml:"max_tokens_per_day"`
 }
 
+// BackupConfig holds the retention policy for veska backup prune (SOLO-17 §4.5).
+type BackupConfig struct {
+	// KeepMinCount is the number of most-recent user-initiated backups always
+	// kept regardless of age.
+	KeepMinCount int `toml:"keep_min_count"`
+	// KeepMaxAge deletes user-initiated backups older than this duration,
+	// subject to KeepMinCount. Expressed as a Go duration string (e.g. "30d"
+	// is normalised to hours; "720h").
+	KeepMaxAge string `toml:"keep_max_age"`
+}
+
 // DefaultConfig returns the compile-time defaults. These mirror the Go
 // constants currently spread across the daemon (embedder.DefaultRatePerSec,
 // queue's 250ms poll interval, the chars/4 token budgets, etc.).
@@ -192,6 +204,10 @@ func DefaultConfig() Config {
 			Enabled:            false,
 			MaxTokensPerCommit: 100000,
 			MaxTokensPerDay:    500000,
+		},
+		Backup: BackupConfig{
+			KeepMinCount: 3,
+			KeepMaxAge:   "30d",
 		},
 	}
 }
