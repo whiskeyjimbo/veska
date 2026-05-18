@@ -1,0 +1,7 @@
+SEVERITY: high
+TITLE: SQL injection in user lookup
+MESSAGE: The query is built by string concatenation of the untrusted id parameter; use a parameterized query instead.
+---
+SEVERITY: medium
+TITLE: Hardcoded credential
+MESSAGE: An API token is embedded as a string literal; move it to configuration or a secret store.

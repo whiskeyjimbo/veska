@@ -1,0 +1,3 @@
+SEVERITY: high
+TITLE: Return type changed on exported Fetch
+MESSAGE: Fetch previously returned (string, error) and now returns ([]byte, error); this breaks every existing caller.
