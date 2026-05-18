@@ -236,7 +236,6 @@ func TestParse_Malformed(t *testing.T) {
 		"truncated json":    `{"findings": [{"severity": "high"`,
 		"missing severity":  `{"findings":[{"title":"x","message":"y"}]}`,
 		"missing title":     `{"findings":[{"severity":"high","message":"y"}]}`,
-		"missing message":   `{"findings":[{"severity":"high","title":"x"}]}`,
 		"invalid severity":  `{"findings":[{"severity":"catastrophic","title":"x","message":"y"}]}`,
 		"unknown field":     `{"findings":[{"severity":"high","title":"x","message":"y","extra":1}]}`,
 		"findings not list": `{"findings":"nope"}`,
@@ -247,6 +246,21 @@ func TestParse_Malformed(t *testing.T) {
 				t.Fatalf("Parse(%q) err = %v, want ErrMalformedResponse", name, err)
 			}
 		})
+	}
+}
+
+// solov2-spb: a finding object with no "message" is not a parse failure —
+// message falls back to the title (a real model omits message ~1% of the time
+// even under structured output, and failing the whole job over it is wrong).
+func TestParse_MissingMessageFallsBackToTitle(t *testing.T) {
+	l := newLoader(t)
+	p, _ := l.LoadPrompt(review.KindSecurity)
+	got, err := p.Parse(`{"findings":[{"severity":"high","title":"hardcoded secret"}]}`)
+	if err != nil {
+		t.Fatalf("Parse: %v", err)
+	}
+	if len(got) != 1 || got[0].Message != "hardcoded secret" {
+		t.Errorf("Parse = %+v, want one finding with message defaulted to title", got)
 	}
 }
 
