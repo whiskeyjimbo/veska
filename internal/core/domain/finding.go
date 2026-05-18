@@ -92,11 +92,11 @@ var validActorKinds = map[ActorKind]struct{}{
 // ── Finding ────────────────────────────────────────────────────────────────
 
 // Finding represents a detected code issue anchored to a symbol or file.
-// The finding_id is branch-stable: same rule + anchor → same finding_id on every branch.
+// The finding_id is branch-stable: same rule + anchor (+ optional discriminator
+// key) → same finding_id on every branch.
 type Finding struct {
-	// Per-row primary key (ULID).
-	ID string
-	// Branch-stable identifier: hex(sha256(rule+"\x00"+anchor))[:32].
+	// Branch-stable identifier and primary-key component (with Branch):
+	// hex(sha256(rule+"\x00"+anchor+"\x00"+key))[:32].
 	FindingID string
 
 	RepoID  string
@@ -119,6 +119,12 @@ type Finding struct {
 	// Optional actor metadata.
 	ActorID   *string
 	ActorKind *ActorKind
+
+	// findingKey is an optional discriminator folded into the finding_id hash.
+	// It lets a caller emit several findings sharing the same (rule, anchor)
+	// — e.g. multiple review-code findings in one file — without their
+	// finding_ids colliding. It defaults to "" and is not persisted.
+	findingKey string
 
 	// AnchorContentHash is the content_hash of the node anchor at the moment
 	// the finding was written. It is populated only when the finding anchors
@@ -182,6 +188,18 @@ func WithAnchorContentHash(hash string) FindingOption {
 	}
 }
 
+// WithFindingKey sets an optional discriminator folded into the finding_id
+// hash. Two findings with identical (rule, anchor) but different keys get
+// distinct finding_ids; an unset key (the default "") reproduces the plain
+// rule+anchor derivation. Use it when one anchor can carry several distinct
+// findings under the same rule (e.g. multiple review-code findings per file).
+func WithFindingKey(key string) FindingOption {
+	return func(f *Finding) error {
+		f.findingKey = key
+		return nil
+	}
+}
+
 // WithActorID sets the actor_id on the finding.
 func WithActorID(id string) FindingOption {
 	return func(f *Finding) error {
@@ -191,7 +209,8 @@ func WithActorID(id string) FindingOption {
 }
 
 // NewFinding constructs a validated Finding. The finding_id is computed from
-// rule and anchor; it is not accepted as a parameter.
+// rule, the anchor, and an optional discriminator key (see WithFindingKey);
+// it is never accepted as a parameter.
 //
 // Invariants enforced:
 //  1. rule non-empty.
@@ -199,7 +218,7 @@ func WithActorID(id string) FindingOption {
 //  3. severity and source_layer must be valid enum values.
 //  4. State defaults to open; closed_at and closed_reason are nil.
 func NewFinding(
-	id, repoID, branch string,
+	repoID, branch string,
 	severity Severity,
 	layer SourceLayer,
 	rule, message string,
@@ -216,7 +235,6 @@ func NewFinding(
 	}
 
 	f := &Finding{
-		ID:          id,
 		RepoID:      repoID,
 		Branch:      branch,
 		Severity:    severity,
@@ -244,7 +262,7 @@ func NewFinding(
 	} else {
 		anchor = *f.FilePath
 	}
-	h := sha256.Sum256([]byte(rule + "\x00" + anchor))
+	h := sha256.Sum256([]byte(rule + "\x00" + anchor + "\x00" + f.findingKey))
 	f.FindingID = hex.EncodeToString(h[:])[:32]
 
 	return f, nil

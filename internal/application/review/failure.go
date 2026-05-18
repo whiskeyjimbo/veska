@@ -24,13 +24,15 @@ const FailureRule = "review-pipeline-failure"
 // The Finding anchors its node_id on gitSHA, so this MUST mirror
 // domain.NewFinding's finding_id derivation exactly:
 //
-//	hex(sha256(rule + "\x00" + anchor))[:32]
+//	hex(sha256(rule + "\x00" + anchor + "\x00" + key))[:32]
 //
-// with rule = FailureRule and anchor = gitSHA. repoID and branch are not part
-// of the hash — they are scoped by the (finding_id, branch) primary key and
-// the repo_id column — but are accepted here so callers pass the full triple
-// and the contract is documented at the call site.
+// with rule = FailureRule, anchor = gitSHA, and an empty discriminator key — a
+// review-pipeline-failure finding is one-per-commit, so it sets no
+// WithFindingKey. repoID and branch are not part of the hash — they are scoped
+// by the (finding_id, branch) primary key and the repo_id column — but are
+// accepted here so callers pass the full triple and the contract is documented
+// at the call site.
 func FailureFindingID(repoID, branch, gitSHA string) string {
-	h := sha256.Sum256([]byte(FailureRule + "\x00" + gitSHA))
+	h := sha256.Sum256([]byte(FailureRule + "\x00" + gitSHA + "\x00"))
 	return hex.EncodeToString(h[:])[:32]
 }

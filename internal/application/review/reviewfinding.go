@@ -1,8 +1,6 @@
 package review
 
 import (
-	"crypto/sha256"
-	"encoding/hex"
 	"fmt"
 
 	"github.com/whiskeyjimbo/veska/internal/core/domain"
@@ -36,45 +34,32 @@ func ruleForKind(kind ReviewKind) (string, error) {
 	}
 }
 
-// reviewFindingID derives the branch-stable finding_id for a review-produced
-// finding. Unlike a pipeline-failure finding (one per commit), a single file
-// can yield several review findings under the same rule, so the finding's
-// Title is folded into the hash to keep each one distinct:
-//
-//	hex(sha256(rule + "\x00" + filePath + "\x00" + title))[:32]
-//
-// Re-reviewing an unchanged file reproduces the same (rule, filePath, title)
-// triple and therefore the same id, so FindingStorage.Save is idempotent on
-// (finding_id, branch). repoID and branch are not part of the hash — they are
-// scoped by the (finding_id, branch) primary key and the repo_id column.
-func reviewFindingID(rule, filePath, title string) string {
-	h := sha256.Sum256([]byte(rule + "\x00" + filePath + "\x00" + title))
-	return hex.EncodeToString(h[:])[:32]
-}
-
 // toDomainFinding converts one parsed ReviewFinding into a validated
 // domain.Finding anchored on the reviewed file. The finding carries
-// source_layer='semantic' and actor_kind='system'; its finding_id is the
-// deterministic reviewFindingID so re-review is idempotent.
+// source_layer='semantic' and actor_kind='system'.
 //
-// domain.NewFinding derives a finding_id from rule+anchor alone, which would
-// collide for multiple findings sharing a file; the Title-folded id is applied
-// after construction to keep each finding distinct.
+// Unlike a pipeline-failure finding (one per commit), a single file can yield
+// several review findings under the same rule, so the finding's Title is
+// passed as the WithFindingKey discriminator: domain.NewFinding folds it into
+// the finding_id hash so each finding stays distinct. Re-reviewing an
+// unchanged file reproduces the same (rule, filePath, title) triple — and
+// therefore the same finding_id — so FindingStorage.Save is idempotent on
+// (finding_id, branch).
 func toDomainFinding(rf ReviewFinding, repoID, branch, filePath string) (*domain.Finding, error) {
 	rule, err := ruleForKind(rf.Kind)
 	if err != nil {
 		return nil, err
 	}
 	f, err := domain.NewFinding(
-		"", repoID, branch,
+		repoID, branch,
 		rf.Severity, domain.LayerSemantic,
 		rule, rf.Message,
 		domain.WithFileAnchor(filePath),
 		domain.WithActorKind(domain.ActorKindSystem),
+		domain.WithFindingKey(rf.Title),
 	)
 	if err != nil {
 		return nil, fmt.Errorf("review: build finding %q: %w", rf.Title, err)
 	}
-	f.FindingID = reviewFindingID(rule, filePath, rf.Title)
 	return f, nil
 }

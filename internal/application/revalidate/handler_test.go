@@ -618,7 +618,7 @@ func TestHandler_Integration_PerRuleDispatch(t *testing.T) {
 	mustFinding := func(id, rule, nodeID, hash string) *domain.Finding {
 		t.Helper()
 		f, err := domain.NewFinding(
-			id, "repo1", "main",
+			"repo1", "main",
 			domain.SeverityLow, domain.LayerStructural,
 			rule, "msg-"+id,
 			domain.WithNodeAnchor(nodeID),

@@ -73,7 +73,6 @@ func (c *DeadCodeCheck) Run(ctx context.Context, in Input) ([]*domain.Finding, e
 			opts = append(opts, domain.WithAnchorContentHash(n.ContentHash))
 		}
 		f, err := domain.NewFinding(
-			"", // per-row PK assigned by storage; FindingID is branch-stable from (rule, node_id).
 			in.RepoID, in.Branch,
 			domain.SeverityLow,
 			domain.LayerStructural,

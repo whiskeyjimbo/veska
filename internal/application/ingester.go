@@ -145,7 +145,6 @@ func (ing *Ingester) emitParseFailures(ctx context.Context, repoID, branch, path
 	}
 
 	f, err := domain.NewFinding(
-		"", // ID: per-row PK is assigned by the storage layer; FindingID (branch-stable) is what matters here.
 		repoID, branch,
 		domain.SeverityMedium,
 		domain.LayerStructural,
@@ -182,7 +181,6 @@ func (ing *Ingester) clearParseFailure(ctx context.Context, repoID, branch, path
 	// Message body is irrelevant to FindingID; use a placeholder so
 	// NewFinding's non-empty validation is satisfied.
 	f, err := domain.NewFinding(
-		"",
 		repoID, branch,
 		domain.SeverityMedium,
 		domain.LayerStructural,
@@ -236,7 +234,6 @@ func (ing *Ingester) emitTodos(ctx context.Context, repoID, branch, path string,
 	msg := fmt.Sprintf("%d TODO/FIXME marker(s) in %s: %s", len(todos), path, summary)
 
 	f, err := domain.NewFinding(
-		"",
 		repoID, branch,
 		domain.SeverityInfo,
 		domain.LayerStructural,

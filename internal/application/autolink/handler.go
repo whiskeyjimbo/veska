@@ -176,7 +176,6 @@ func (h *Handler) Handle(ctx context.Context, row ports.WorkRow) error {
 			opts = append(opts, domain.WithAnchorContentHash(hash))
 		}
 		f, err := domain.NewFinding(
-			"", // ID intentionally empty: branch-stable finding_id is computed inside NewFinding.
 			row.RepoID,
 			row.Branch,
 			domain.SeverityLow,

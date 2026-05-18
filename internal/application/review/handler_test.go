@@ -2,6 +2,8 @@ package review
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"os"
 	"path/filepath"
@@ -11,6 +13,14 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/core/domain"
 	"github.com/whiskeyjimbo/veska/internal/core/ports"
 )
+
+// expectReviewFindingID mirrors domain.NewFinding's finding_id derivation for
+// a review-code finding: the rule, the file anchor, and the finding Title (the
+// WithFindingKey discriminator) folded into one hash.
+func expectReviewFindingID(rule, filePath, title string) string {
+	h := sha256.Sum256([]byte(rule + "\x00" + filePath + "\x00" + title))
+	return hex.EncodeToString(h[:])[:32]
+}
 
 // fakeGenerator is an in-memory ports.LLMGenerator fixture. It records every
 // request it receives and is safe for concurrent use so it can be exercised
@@ -321,13 +331,47 @@ func TestHandler_EmitsReviewFindings(t *testing.T) {
 		if f.Severity != domain.SeverityMedium {
 			t.Errorf("severity = %q, want medium", f.Severity)
 		}
-		if want := reviewFindingID(f.Rule, "a.go", "SQL injection"); f.FindingID != want {
+		if want := expectReviewFindingID(f.Rule, "a.go", "SQL injection"); f.FindingID != want {
 			t.Errorf("finding_id = %q, want %q", f.FindingID, want)
 		}
 		rules[f.Rule] = true
 	}
 	if !rules[RuleSecurity] || !rules[RuleContractDrift] {
 		t.Errorf("rules = %v, want both %q and %q", rules, RuleSecurity, RuleContractDrift)
+	}
+}
+
+// TestToDomainFinding_DistinctTitlesDistinctIDs verifies AC4: two review-code
+// findings in the same file under the same rule but with different Titles get
+// distinct finding_ids — the Title is passed to NewFinding as the discriminator
+// key rather than overriding f.FindingID after construction.
+func TestToDomainFinding_DistinctTitlesDistinctIDs(t *testing.T) {
+	t.Parallel()
+	rf1 := ReviewFinding{Title: "SQL injection", Message: "m1", Severity: domain.SeverityHigh, Kind: KindSecurity}
+	rf2 := ReviewFinding{Title: "Hardcoded secret", Message: "m2", Severity: domain.SeverityHigh, Kind: KindSecurity}
+
+	f1, err := toDomainFinding(rf1, "repo1", "main", "a.go")
+	if err != nil {
+		t.Fatalf("toDomainFinding rf1: %v", err)
+	}
+	f2, err := toDomainFinding(rf2, "repo1", "main", "a.go")
+	if err != nil {
+		t.Fatalf("toDomainFinding rf2: %v", err)
+	}
+	if f1.FindingID == f2.FindingID {
+		t.Errorf("distinct titles must yield distinct finding_ids: both %q", f1.FindingID)
+	}
+	if want := expectReviewFindingID(RuleSecurity, "a.go", "SQL injection"); f1.FindingID != want {
+		t.Errorf("finding_id = %q, want %q", f1.FindingID, want)
+	}
+
+	// Same (rule, file, title) → same id (idempotent re-review).
+	f1again, err := toDomainFinding(rf1, "repo1", "main", "a.go")
+	if err != nil {
+		t.Fatalf("toDomainFinding rf1 again: %v", err)
+	}
+	if f1.FindingID != f1again.FindingID {
+		t.Errorf("re-review must reproduce finding_id: %q != %q", f1.FindingID, f1again.FindingID)
 	}
 }
 
@@ -346,7 +390,7 @@ func TestHandler_ReviewFindingsAreIdempotent(t *testing.T) {
 	h, _ := NewHandler(gen, loader, staticRoot(root), fs)
 
 	row := ports.WorkRow{Kind: ports.WorkKindReview, RepoID: "repo1", Branch: "main", Payload: "a.go"}
-	for i := 0; i < 3; i++ {
+	for i := range 3 {
 		if err := h.Handle(context.Background(), row); err != nil {
 			t.Fatalf("Handle attempt %d: %v", i, err)
 		}
