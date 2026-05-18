@@ -172,3 +172,93 @@ func TestCheckPostPromotionQueueBroken(t *testing.T) {
 		t.Errorf("Status: got %q, want %q", report.Status, "broken")
 	}
 }
+
+// addFindingsTable adds the findings table to a queue test DB so the
+// review-pipeline-failure companion-finding invariant can be exercised.
+func addFindingsTable(t *testing.T, db *sql.DB) {
+	t.Helper()
+	_, err := db.Exec(`CREATE TABLE findings (
+		finding_id    TEXT NOT NULL,
+		branch        TEXT NOT NULL,
+		repo_id       TEXT NOT NULL,
+		node_id       TEXT,
+		file_path     TEXT,
+		severity      TEXT NOT NULL,
+		source_layer  TEXT NOT NULL,
+		rule          TEXT NOT NULL,
+		message       TEXT NOT NULL,
+		state         TEXT NOT NULL,
+		closed_reason TEXT,
+		created_at    INTEGER NOT NULL,
+		closed_at     INTEGER,
+		actor_id      TEXT NOT NULL,
+		actor_kind    TEXT NOT NULL,
+		PRIMARY KEY (finding_id, branch)
+	)`)
+	if err != nil {
+		t.Fatalf("addFindingsTable: %v", err)
+	}
+}
+
+// TestCheckPostPromotionQueue_FailedReviewNoFinding verifies AC3: a failed
+// review row with no open companion review-pipeline-failure finding makes the
+// probe report Status=broken (exit 2).
+func TestCheckPostPromotionQueue_FailedReviewNoFinding(t *testing.T) {
+	path := t.TempDir() + "/test.db"
+	db := createQueueDB(t, path)
+	addFindingsTable(t, db)
+
+	_, err := db.Exec(
+		`INSERT INTO post_promotion_queue (repo_id, branch, git_sha, work_kind, state, attempts, error)
+		 VALUES (?, ?, ?, ?, ?, ?, ?)`,
+		"repo-abc", "main", "sha-1", "review", "failed", 3, "model down",
+	)
+	if err != nil {
+		t.Fatalf("insert: %v", err)
+	}
+	db.Close()
+
+	report, err := doctor.CheckPostPromotionQueue(path)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if report.Status != "broken" {
+		t.Errorf("Status: got %q, want %q (failed review row has no companion finding)", report.Status, "broken")
+	}
+}
+
+// TestCheckPostPromotionQueue_FailedReviewWithFinding verifies AC3's expected
+// sticky state: a failed review row WITH an open companion finding is the
+// designed parked state and must NOT escalate to broken.
+func TestCheckPostPromotionQueue_FailedReviewWithFinding(t *testing.T) {
+	path := t.TempDir() + "/test.db"
+	db := createQueueDB(t, path)
+	addFindingsTable(t, db)
+
+	const repoID, branch, gitSHA = "repo-abc", "main", "sha-1"
+	if _, err := db.Exec(
+		`INSERT INTO post_promotion_queue (repo_id, branch, git_sha, work_kind, state, attempts, error)
+		 VALUES (?, ?, ?, ?, ?, ?, ?)`,
+		repoID, branch, gitSHA, "review", "failed", 3, "model down",
+	); err != nil {
+		t.Fatalf("insert queue row: %v", err)
+	}
+	fid := doctor.ReviewFailureFindingID(repoID, branch, gitSHA)
+	if _, err := db.Exec(
+		`INSERT INTO findings
+			(finding_id, branch, repo_id, node_id, severity, source_layer, rule, message, state, created_at, actor_id, actor_kind)
+		 VALUES (?, ?, ?, ?, 'high', 'quality', 'review-pipeline-failure', 'failed', 'open', 0, 'service:veska', 'system')`,
+		fid, branch, repoID, gitSHA,
+	); err != nil {
+		t.Fatalf("insert finding: %v", err)
+	}
+	db.Close()
+
+	report, err := doctor.CheckPostPromotionQueue(path)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if report.Status == "broken" {
+		t.Errorf("Status: got broken, want non-broken (failed review row with open companion finding is the expected sticky state)")
+	}
+}

@@ -340,7 +340,7 @@ func newDaemon(cfg Config) (*Daemon, error) {
 		reviewRoot := func(ctx context.Context, repoID string) (string, error) {
 			return repoRootFunc(pools.ReadDB)(ctx, repoID)
 		}
-		reviewH, rerr := review.NewHandler(reviewGen, reviewLoader, reviewRoot)
+		reviewH, rerr := review.NewHandler(reviewGen, reviewLoader, reviewRoot, findings)
 		if rerr != nil {
 			_ = pools.Close()
 			return nil, fmt.Errorf("daemon: review handler: %w", rerr)

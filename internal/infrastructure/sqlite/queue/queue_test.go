@@ -13,6 +13,7 @@ import (
 	_ "github.com/mattn/go-sqlite3"
 
 	"github.com/whiskeyjimbo/veska/internal/application/review"
+	"github.com/whiskeyjimbo/veska/internal/core/domain"
 	"github.com/whiskeyjimbo/veska/internal/core/ports"
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/sqlite"
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/sqlite/queue"
@@ -298,6 +299,13 @@ func (fakeReviewGenerator) Generate(_ context.Context, _ ports.GenerateRequest) 
 	return ports.GenerateResponse{Text: "NO FINDINGS"}, nil
 }
 
+// noopFindingStorage is a ports.FindingStorage stub for review-lane tests that
+// exercise the happy path (no failure finding is ever emitted).
+type noopFindingStorage struct{}
+
+func (noopFindingStorage) Save(_ context.Context, _ *domain.Finding) error    { return nil }
+func (noopFindingStorage) CloseObsolete(_ context.Context, _, _ string) error { return nil }
+
 // TestPoller_ReviewLaneDrains verifies AC1: a pending work_kind='review' row is
 // drained to state='done' by the real review.Handler dispatching through a
 // fake LLMGenerator.
@@ -327,7 +335,7 @@ func TestPoller_ReviewLaneDrains(t *testing.T) {
 		t.Fatalf("review.NewLoader: %v", err)
 	}
 	repoRoot := func(_ context.Context, _ string) (string, error) { return root, nil }
-	reviewH, err := review.NewHandler(fakeReviewGenerator{}, loader, repoRoot)
+	reviewH, err := review.NewHandler(fakeReviewGenerator{}, loader, repoRoot, noopFindingStorage{})
 	if err != nil {
 		t.Fatalf("review.NewHandler: %v", err)
 	}

@@ -864,3 +864,139 @@ func TestReopenFinding_MissingParams(t *testing.T) {
 		t.Errorf("expected CodeInvalidParams, got %d", rpcErr.Code)
 	}
 }
+
+// ---------------------------------------------------------------------------
+// review-pipeline-failure: close-flips-row contract (solov2-nz2.3 AC2)
+// ---------------------------------------------------------------------------
+
+// newFindingsDBWithQueue adds the post_promotion_queue table so the
+// review-pipeline-failure close path can flip a failed review row to done.
+func newFindingsDBWithQueue(t *testing.T) *sql.DB {
+	t.Helper()
+	db := newFindingsDB(t)
+	_, err := db.Exec(`
+		CREATE TABLE IF NOT EXISTS post_promotion_queue (
+			seq          INTEGER PRIMARY KEY AUTOINCREMENT,
+			promotion_id TEXT NOT NULL,
+			repo_id      TEXT NOT NULL,
+			branch       TEXT NOT NULL,
+			git_sha      TEXT NOT NULL,
+			work_kind    TEXT NOT NULL,
+			payload      TEXT NOT NULL,
+			state        TEXT NOT NULL,
+			attempts     INTEGER NOT NULL DEFAULT 0,
+			enqueued_at  INTEGER NOT NULL,
+			completed_at INTEGER,
+			error        TEXT
+		)
+	`)
+	if err != nil {
+		t.Fatalf("create post_promotion_queue table: %v", err)
+	}
+	return db
+}
+
+func seedReviewRow(t *testing.T, db *sql.DB, repoID, branch, gitSHA, payload, state string) {
+	t.Helper()
+	_, err := db.Exec(`
+		INSERT INTO post_promotion_queue
+			(promotion_id, repo_id, branch, git_sha, work_kind, payload, state, attempts, enqueued_at)
+		VALUES ('promo-1', ?, ?, ?, 'review', ?, ?, 3, ?)
+	`, repoID, branch, gitSHA, payload, state, time.Now().Unix())
+	if err != nil {
+		t.Fatalf("seed review row: %v", err)
+	}
+}
+
+func seedReviewFailureFinding(t *testing.T, db *sql.DB, findingID, branch, repoID, gitSHA string) {
+	t.Helper()
+	_, err := db.Exec(`
+		INSERT INTO findings
+			(finding_id, branch, repo_id, node_id, file_path, severity, source_layer, rule, message, state, created_at, actor_id, actor_kind)
+		VALUES (?, ?, ?, ?, NULL, 'high', 'quality', 'review-pipeline-failure', 'review pipeline failed', 'open', ?, 'service:veska', 'system')
+	`, findingID, branch, repoID, gitSHA, time.Now().Unix())
+	if err != nil {
+		t.Fatalf("seed review-pipeline-failure finding: %v", err)
+	}
+}
+
+func reviewRowState(t *testing.T, db *sql.DB, repoID, branch, gitSHA string) string {
+	t.Helper()
+	var s string
+	err := db.QueryRow(
+		`SELECT state FROM post_promotion_queue WHERE work_kind='review' AND repo_id=? AND branch=? AND git_sha=?`,
+		repoID, branch, gitSHA,
+	).Scan(&s)
+	if err != nil {
+		t.Fatalf("query review row state: %v", err)
+	}
+	return s
+}
+
+// TestCloseFinding_ReviewFailure_FlipsRowToDone verifies AC2: closing a
+// review-pipeline-failure finding flips the anchored failed review row(s) to
+// state='done' in the same tx.
+func TestCloseFinding_ReviewFailure_FlipsRowToDone(t *testing.T) {
+	db := newFindingsDBWithQueue(t)
+	const gitSHA = "sha-deadbeef"
+	// Two failed review files in one commit collapse to one finding.
+	seedReviewRow(t, db, "repo-1", "main", gitSHA, "a.go", "failed")
+	seedReviewRow(t, db, "repo-1", "main", gitSHA, "b.go", "failed")
+	seedReviewFailureFinding(t, db, "f-rpf-1", "main", "repo-1", gitSHA)
+
+	aw := &capturingAuditWriter{}
+	r := NewRegistry()
+	RegisterFindingTools(r, db, aw)
+
+	actor := domain.Actor{ID: "human:alice", Kind: domain.ActorKindHuman}
+	_, rpcErr := dispatchFinding(t, r, actor, map[string]string{
+		"finding_id": "f-rpf-1",
+		"branch":     "main",
+		"repo_id":    "repo-1",
+		"reason":     "resolved",
+	})
+	if rpcErr != nil {
+		t.Fatalf("unexpected RPC error: %v", rpcErr.Message)
+	}
+	if got := findingState(t, db, "f-rpf-1", "main"); got != "closed" {
+		t.Errorf("expected finding state=closed, got %q", got)
+	}
+
+	var done int
+	if err := db.QueryRow(
+		`SELECT COUNT(*) FROM post_promotion_queue WHERE work_kind='review' AND repo_id='repo-1' AND branch='main' AND git_sha=? AND state='done'`,
+		gitSHA,
+	).Scan(&done); err != nil {
+		t.Fatalf("count done rows: %v", err)
+	}
+	if done != 2 {
+		t.Errorf("expected both failed review rows flipped to done, got %d", done)
+	}
+}
+
+// TestCloseFinding_ReviewFailure_NonHumanRejected confirms the human-action
+// gate fires for the high-severity review-pipeline-failure finding before any
+// row is flipped.
+func TestCloseFinding_ReviewFailure_NonHumanRejected(t *testing.T) {
+	db := newFindingsDBWithQueue(t)
+	const gitSHA = "sha-cafe"
+	seedReviewRow(t, db, "repo-1", "main", gitSHA, "a.go", "failed")
+	seedReviewFailureFinding(t, db, "f-rpf-2", "main", "repo-1", gitSHA)
+
+	r := NewRegistry()
+	RegisterFindingTools(r, db, nil)
+
+	actor := domain.Actor{ID: "agent:bot", Kind: domain.ActorKindAgent}
+	_, rpcErr := dispatchFinding(t, r, actor, map[string]string{
+		"finding_id": "f-rpf-2",
+		"branch":     "main",
+		"repo_id":    "repo-1",
+		"reason":     "resolved",
+	})
+	if rpcErr == nil || rpcErr.Code != CodeHumanRequired {
+		t.Fatalf("expected human-required RPC error, got %v", rpcErr)
+	}
+	if got := reviewRowState(t, db, "repo-1", "main", gitSHA); got != "failed" {
+		t.Errorf("expected review row to remain failed, got %q", got)
+	}
+}
