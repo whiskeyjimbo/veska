@@ -16,7 +16,29 @@ var (
 	_ application.RepoLister = (*repoLister)(nil)
 	_ mcp.StatusProvider     = (*statusProvider)(nil)
 	_ mcp.ConfigProvider     = (*configProvider)(nil)
+	_ mcp.RepoRegistrar      = (*repoRegistrar)(nil)
 )
+
+// repoRegistrar adapts internal/repo's Add/Remove to the mcp.RepoRegistrar
+// port consumed by eng_add_repo / eng_remove_repo. It lives in the composition
+// root so internal/repo need not be imported by the MCP layer directly.
+type repoRegistrar struct {
+	db *sql.DB
+}
+
+// AddRepo registers rootPath and returns the repo_id. repo.Add inserts the
+// repos row and installs git hooks, then returns; the cold scan is driven
+// asynchronously by the daemon's queue/watcher, so this call does not block on
+// it.
+func (rr *repoRegistrar) AddRepo(ctx context.Context, rootPath string) (string, error) {
+	return repo.Add(ctx, rr.db, rootPath)
+}
+
+// RemoveRepo deregisters the repo identified by repoID. repo.Remove deletes
+// the repos row (CASCADE drops nodes/edges) and removes installed hooks.
+func (rr *repoRegistrar) RemoveRepo(ctx context.Context, repoID string) error {
+	return repo.Remove(ctx, rr.db, repoID)
+}
 
 // repoLister adapts internal/repo's registry List to the
 // application.RepoLister port consumed by the admin MCP tools. It lives in the
