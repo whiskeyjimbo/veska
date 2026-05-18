@@ -39,6 +39,13 @@ const (
 	defaultOllamaURL = "http://localhost:11434"
 	defaultModel     = "llama3"
 
+	// defaultLLMTimeout bounds a single review LLM call. The llm package
+	// default is 60s, which is too tight for a structured-JSON review
+	// generation on CPU Ollama — a real call routinely exceeds it. This
+	// generous default keeps the measurement from dying on per-call
+	// deadlines; override with REVIEW_TIMING_LLM_TIMEOUT.
+	defaultLLMTimeout = 5 * time.Minute
+
 	repoID = "review-timing-eval"
 	branch = "main"
 	gitSHA = "review-timing-commit"
@@ -92,7 +99,8 @@ func TestReviewTiming(t *testing.T) {
 	if err != nil {
 		t.Fatalf("review.NewLoader: %v", err)
 	}
-	gen := llm.NewOllamaGenerator(ollamaURL, model, nil)
+	llmTimeout := envDuration("REVIEW_TIMING_LLM_TIMEOUT", defaultLLMTimeout)
+	gen := llm.NewOllamaGenerator(ollamaURL, model, nil, llm.WithTimeout(llmTimeout))
 	repoRoot := func(context.Context, string) (string, error) { return root, nil }
 
 	handler, err := review.NewHandler(gen, loader, repoRoot, nopFindings{})
@@ -242,4 +250,16 @@ func envStr(key, def string) string {
 		return v
 	}
 	return def
+}
+
+func envDuration(key string, def time.Duration) time.Duration {
+	v := os.Getenv(key)
+	if v == "" {
+		return def
+	}
+	d, err := time.ParseDuration(v)
+	if err != nil || d <= 0 {
+		return def
+	}
+	return d
 }
