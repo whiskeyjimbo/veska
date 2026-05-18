@@ -21,7 +21,7 @@ ordered epics with DoD, and TDD-sized sub-issues. Beads IDs follow
 | M2 | Identity, observability, plugin scaffolding | [`closed/M2.md`](closed/M2.md) ✓ closed |
 | M3 | Pipelines and embedder | [`closed/M3.md`](closed/M3.md) ✓ closed |
 | M4 | Wiki mechanical kinds | [`closed/M4.md`](closed/M4.md) ✓ closed |
-| M5 | Optional review pipeline | [`M5.md`](M5.md) |
+| M5 | Optional review pipeline | [`closed/M5.md`](closed/M5.md) ✓ closed |
 | M6 | Cutover | [`M6.md`](M6.md) |
 
 The roadmap-level summary is [SOLO-14](../design/14-roadmap/README.md).
