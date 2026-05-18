@@ -63,9 +63,13 @@ func (mf modelFinding) toReviewFinding(kind ReviewKind) (ReviewFinding, error) {
 	if title == "" {
 		return ReviewFinding{}, fmt.Errorf("missing title")
 	}
+	// message is optional: a real model occasionally returns a finding object
+	// with no "message" even under structured output. Rather than fail the
+	// whole review job over it (~1% of responses — solov2-spb), fall back to
+	// the title, which is always present.
 	message := strings.TrimSpace(mf.Message)
 	if message == "" {
-		return ReviewFinding{}, fmt.Errorf("missing message")
+		message = title
 	}
 	sev, err := parseSeverity(mf.Severity)
 	if err != nil {
