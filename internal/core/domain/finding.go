@@ -262,10 +262,27 @@ func NewFinding(
 	} else {
 		anchor = *f.FilePath
 	}
-	h := sha256.Sum256([]byte(rule + "\x00" + anchor + "\x00" + f.findingKey))
-	f.FindingID = hex.EncodeToString(h[:])[:32]
+	f.FindingID = DeriveFindingID(rule, anchor, f.findingKey)
 
 	return f, nil
+}
+
+// DeriveFindingID computes the branch-stable finding_id for a Finding:
+// hex(sha256(rule + "\x00" + anchor + "\x00" + key))[:32].
+//
+// It is the single source of truth for finding_id derivation. NewFinding uses
+// it internally; any code that must reconstruct a finding_id without a Finding
+// in hand (e.g. a doctor probe correlating a queue row to its companion
+// finding) MUST call this rather than re-implementing the hash — the two must
+// stay byte-identical or correlation silently breaks.
+//
+// anchor is the finding's node_id or file_path. key is the optional
+// discriminator set via WithFindingKey ("" when the finding is one-per-anchor).
+// repoID and branch are intentionally NOT part of the hash — a finding is
+// scoped by the (finding_id, branch) primary key and the repo_id column.
+func DeriveFindingID(rule, anchor, key string) string {
+	h := sha256.Sum256([]byte(rule + "\x00" + anchor + "\x00" + key))
+	return hex.EncodeToString(h[:])[:32]
 }
 
 // Close transitions the finding to the closed state.
