@@ -35,10 +35,10 @@ import (
 )
 
 const (
-	repoID   = "bench"
-	branch   = "main"
-	modelID  = "nomic-embed-text"
-	batchSz  = 1000
+	repoID  = "bench"
+	branch  = "main"
+	modelID = "nomic-embed-text"
+	batchSz = 1000
 
 	nHoldOut     = 100
 	nWarmQueries = 200
