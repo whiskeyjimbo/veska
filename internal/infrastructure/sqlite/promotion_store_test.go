@@ -21,7 +21,7 @@ func systemActor() domain.Actor {
 func TestPromotionStore_UnregisteredRepo(t *testing.T) {
 	t.Parallel()
 	db := openTest(t, filepath.Join(t.TempDir(), "v.db"))
-	store := sqlite.NewPromotionStore(db, sqlite.NewFTSSink(), sqlite.NewEmbedRefSink())
+	store := sqlite.NewPromotionStore(db, []sqlite.PromotionSink{sqlite.NewFTSSink(), sqlite.NewEmbedRefSink()})
 
 	n, _ := domain.NewNode("n1", "a.go", "A", domain.KindFunction)
 	err := store.Promote(context.Background(), application.PromotionBatch{
@@ -51,7 +51,7 @@ func TestPromotionStore_RollsBackOnMidTxFailure(t *testing.T) {
 	); err != nil {
 		t.Fatalf("insert repo: %v", err)
 	}
-	store := sqlite.NewPromotionStore(db, sqlite.NewFTSSink(), sqlite.NewEmbedRefSink())
+	store := sqlite.NewPromotionStore(db, []sqlite.PromotionSink{sqlite.NewFTSSink(), sqlite.NewEmbedRefSink()})
 
 	// First promotion commits cleanly: 1 node.
 	n1, _ := domain.NewNode("n1", "a.go", "A", domain.KindFunction)
@@ -122,7 +122,7 @@ func TestPromotionStore_EnqueuesExactlyOneWikiRow(t *testing.T) {
 	); err != nil {
 		t.Fatalf("insert repo: %v", err)
 	}
-	store := sqlite.NewPromotionStore(db, sqlite.NewFTSSink(), sqlite.NewEmbedRefSink())
+	store := sqlite.NewPromotionStore(db, []sqlite.PromotionSink{sqlite.NewFTSSink(), sqlite.NewEmbedRefSink()})
 
 	// Multi-file batch — the wiki lane must still get exactly one row.
 	na, _ := domain.NewNode("na", "a.go", "A", domain.KindFunction)
@@ -157,5 +157,91 @@ func TestPromotionStore_EnqueuesExactlyOneWikiRow(t *testing.T) {
 	}
 	if payload != "" {
 		t.Errorf("wiki payload = %q, want empty", payload)
+	}
+}
+
+// TestPromotionStore_ReviewEnabled_EnqueuesPerFileReviewRow verifies AC1: with
+// review enabled, a promotion enqueues a work_kind='review' row per changed
+// file, payloaded with the file path.
+func TestPromotionStore_ReviewEnabled_EnqueuesPerFileReviewRow(t *testing.T) {
+	t.Parallel()
+	db := openTest(t, filepath.Join(t.TempDir(), "v.db"))
+	if _, err := db.Exec(
+		`INSERT INTO repos (repo_id, root_path, added_at) VALUES (?, ?, ?)`,
+		"repo1", "/tmp/repo1", time.Now().UnixMilli(),
+	); err != nil {
+		t.Fatalf("insert repo: %v", err)
+	}
+	store := sqlite.NewPromotionStore(
+		db,
+		[]sqlite.PromotionSink{sqlite.NewFTSSink(), sqlite.NewEmbedRefSink()},
+		sqlite.WithReviewEnabled(true),
+	)
+
+	na, _ := domain.NewNode("na", "a.go", "A", domain.KindFunction)
+	nb, _ := domain.NewNode("nb", "b.go", "B", domain.KindFunction)
+	if err := store.Promote(context.Background(), application.PromotionBatch{
+		RepoID: "repo1", Branch: "main", GitSHA: "sha-1", Actor: systemActor(),
+		PromotedAt: time.Now().UnixMilli(),
+		Files: []application.PromotionFile{
+			{Path: "a.go", Nodes: []*domain.Node{na}},
+			{Path: "b.go", Nodes: []*domain.Node{nb}},
+		},
+	}); err != nil {
+		t.Fatalf("Promote: %v", err)
+	}
+
+	rows, err := db.Query(
+		`SELECT payload FROM post_promotion_queue WHERE work_kind='review' ORDER BY payload`)
+	if err != nil {
+		t.Fatalf("query review rows: %v", err)
+	}
+	defer rows.Close()
+	var payloads []string
+	for rows.Next() {
+		var p string
+		if err := rows.Scan(&p); err != nil {
+			t.Fatalf("scan: %v", err)
+		}
+		payloads = append(payloads, p)
+	}
+	if got, want := payloads, []string{"a.go", "b.go"}; len(got) != len(want) ||
+		got[0] != want[0] || got[1] != want[1] {
+		t.Errorf("review payloads = %v, want %v (one per file)", got, want)
+	}
+}
+
+// TestPromotionStore_ReviewDisabled_NoReviewRow verifies AC3: with review
+// disabled (the default), no work_kind='review' row is enqueued.
+func TestPromotionStore_ReviewDisabled_NoReviewRow(t *testing.T) {
+	t.Parallel()
+	db := openTest(t, filepath.Join(t.TempDir(), "v.db"))
+	if _, err := db.Exec(
+		`INSERT INTO repos (repo_id, root_path, added_at) VALUES (?, ?, ?)`,
+		"repo1", "/tmp/repo1", time.Now().UnixMilli(),
+	); err != nil {
+		t.Fatalf("insert repo: %v", err)
+	}
+	// Default construction: review disabled.
+	store := sqlite.NewPromotionStore(
+		db, []sqlite.PromotionSink{sqlite.NewFTSSink(), sqlite.NewEmbedRefSink()})
+
+	na, _ := domain.NewNode("na", "a.go", "A", domain.KindFunction)
+	if err := store.Promote(context.Background(), application.PromotionBatch{
+		RepoID: "repo1", Branch: "main", GitSHA: "sha-1", Actor: systemActor(),
+		PromotedAt: time.Now().UnixMilli(),
+		Files:      []application.PromotionFile{{Path: "a.go", Nodes: []*domain.Node{na}}},
+	}); err != nil {
+		t.Fatalf("Promote: %v", err)
+	}
+
+	var reviewRows int
+	if err := db.QueryRow(
+		`SELECT COUNT(*) FROM post_promotion_queue WHERE work_kind='review'`,
+	).Scan(&reviewRows); err != nil {
+		t.Fatalf("count review rows: %v", err)
+	}
+	if reviewRows != 0 {
+		t.Errorf("review rows = %d, want 0 when review disabled", reviewRows)
 	}
 }
