@@ -31,6 +31,7 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/core/ports"
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/audit"
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/embedding/ollama"
+	fsignore "github.com/whiskeyjimbo/veska/internal/infrastructure/fs"
 	gitwatch "github.com/whiskeyjimbo/veska/internal/infrastructure/git"
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/llm"
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/mcp"
@@ -166,6 +167,12 @@ type Daemon struct {
 	mcpsrv  *mcp.Server
 	mcpReg  *mcp.Registry
 
+	// resync is the startup-resync orchestrator: on Start it walks every
+	// registered repo and either replays missed commits or full-reparses
+	// (never-promoted / divergent SHA). Its Run is launched in its own
+	// goroutine so it never blocks Start; Stop waits on resyncDone.
+	resync *application.StartupResync
+
 	// vulnRefresher keeps the OSV advisory cache fresh. It is non-nil only
 	// when [vuln_source] provider="osv"; Start launches its blocking Run on
 	// the daemon's lifetime context.
@@ -196,6 +203,10 @@ type Daemon struct {
 	cancel    context.CancelFunc
 	mcpDone   chan struct{}
 	wDone     chan struct{}
+	// resyncDone is closed when the startup-resync goroutine returns.
+	// Stop waits on it with the same bounded budget as wDone so a slow
+	// resync cannot wedge shutdown.
+	resyncDone chan struct{}
 }
 
 // newDaemon builds the full collaborator graph from cfg. Every dep is
@@ -578,6 +589,28 @@ func newDaemon(cfg Config) (*Daemon, error) {
 		registry.SetTracerProvider(tracerProvider)
 	}
 
+	// Startup-resync wiring (solov2-0z1.2). The cold-scan reparser walks a
+	// repo's working tree honouring .veskaignore (loaded via the fs adapter
+	// below) and feeds it into Ingester.Save + Promoter.Promote. The
+	// StartupResync orchestrator routes every registered repo through it on
+	// daemon Start — either replaying missed commits (sha..HEAD) or full
+	// cold-scanning (never-promoted / divergent SHA).
+	ignoreAdapter := func(repoRoot string) (application.IgnoreMatcher, error) {
+		return fsignore.Load(repoRoot)
+	}
+	gitQ := gitwatch.Querier{}
+	reparser, err := application.NewColdScanReparser(
+		ingester, promoter, gitQ,
+		application.WithIgnoreLoader(ignoreAdapter),
+	)
+	if err != nil {
+		_ = pools.Close()
+		return nil, fmt.Errorf("daemon: build cold-scan reparser: %w", err)
+	}
+	resync := application.NewStartupResync(
+		&repoLister{db: pools.ReadDB}, gitQ, ingester, promoter, reparser,
+	)
+
 	return &Daemon{
 		cfg:            cfg,
 		pools:          pools,
@@ -596,6 +629,7 @@ func newDaemon(cfg Config) (*Daemon, error) {
 		metricsListen:  metricsListen,
 		tracerProvider: tracerProvider,
 		vulnRefresher:  vulnRefresher,
+		resync:         resync,
 	}, nil
 }
 
@@ -826,6 +860,7 @@ func (d *Daemon) Start(ctx context.Context) error {
 		d.ctx, d.cancel = context.WithCancel(ctx)
 		d.mcpDone = make(chan struct{})
 		d.wDone = make(chan struct{})
+		d.resyncDone = make(chan struct{})
 
 		// Prometheus metrics HTTP listener. Bound only when metrics are
 		// enabled; the closer is shut down in Stop. A bind failure is logged,
@@ -891,6 +926,21 @@ func (d *Daemon) Start(ctx context.Context) error {
 			d.runWatchLoop(d.ctx)
 		}()
 
+		// Startup resync (solov2-0z1.2). Runs in its own goroutine so a
+		// long cold-scan over a large repo cannot block Start from
+		// returning — the epic constraint explicitly forbids that. The
+		// goroutine respects ctx cancellation; ctx.Canceled on shutdown
+		// is the expected exit path and not logged as an error.
+		go func() {
+			defer close(d.resyncDone)
+			if d.resync == nil {
+				return
+			}
+			if err := d.resync.Run(d.ctx); err != nil && !errors.Is(err, context.Canceled) {
+				slog.Error("daemon: startup resync", "err", err)
+			}
+		}()
+
 		// OSV advisory-cache refresher. Run blocks until d.ctx is cancelled,
 		// so it owns its own goroutine on the daemon's lifetime context.
 		// Non-nil only when [vuln_source] provider="osv".
@@ -947,6 +997,12 @@ func (d *Daemon) Stop() error {
 			select {
 			case <-d.wDone:
 			case <-time.After(500 * time.Millisecond):
+			}
+		}
+		if d.resyncDone != nil {
+			select {
+			case <-d.resyncDone:
+			case <-timeout.C:
 			}
 		}
 

@@ -1,0 +1,124 @@
+package git_test
+
+import (
+	"path/filepath"
+	"testing"
+
+	veskagit "github.com/whiskeyjimbo/veska/internal/infrastructure/git"
+)
+
+// TestQuerier_HEAD verifies the Querier reports the working-tree HEAD SHA
+// for an initialised repo.
+func TestQuerier_HEAD(t *testing.T) {
+	dir := initRepoWithFile(t)
+	want := runGitOut(t, dir, "rev-parse", "HEAD")
+
+	var q veskagit.Querier
+	got, err := q.HEAD(dir)
+	if err != nil {
+		t.Fatalf("HEAD: %v", err)
+	}
+	if got != want {
+		t.Fatalf("HEAD = %q; want %q", got, want)
+	}
+}
+
+// TestQuerier_HEAD_EmptyRoot ensures an empty repoRoot surfaces a clear
+// error rather than silently shelling out against the process cwd.
+func TestQuerier_HEAD_EmptyRoot(t *testing.T) {
+	var q veskagit.Querier
+	if _, err := q.HEAD(""); err == nil {
+		t.Fatal("expected error on empty repoRoot")
+	}
+}
+
+// TestQuerier_IsAncestor exercises the two branches: a SHA that is an
+// ancestor of HEAD reports true; an unrelated SHA reports false.
+func TestQuerier_IsAncestor(t *testing.T) {
+	dir := initRepoWithFile(t)
+	first := runGitOut(t, dir, "rev-parse", "HEAD")
+	// Add a second commit so first is a proper ancestor of HEAD.
+	mustWriteFile(t, filepath.Join(dir, "b.txt"), "second\n")
+	runGit(t, dir, "add", "b.txt")
+	runGit(t, dir, "commit", "-q", "-m", "second")
+	head := runGitOut(t, dir, "rev-parse", "HEAD")
+
+	var q veskagit.Querier
+	ok, err := q.IsAncestor(dir, first, head)
+	if err != nil {
+		t.Fatalf("IsAncestor: %v", err)
+	}
+	if !ok {
+		t.Fatalf("IsAncestor(first, HEAD) = false; want true")
+	}
+
+	// Create a divergent branch off the first commit; its tip is a real
+	// commit in the repo but is NOT an ancestor of main's HEAD.
+	runGit(t, dir, "checkout", "-q", "-b", "other", first)
+	mustWriteFile(t, filepath.Join(dir, "z.txt"), "divergent\n")
+	runGit(t, dir, "add", "z.txt")
+	runGit(t, dir, "commit", "-q", "-m", "divergent")
+	other := runGitOut(t, dir, "rev-parse", "HEAD")
+	runGit(t, dir, "checkout", "-q", "main")
+
+	ok, err = q.IsAncestor(dir, other, head)
+	if err != nil {
+		t.Fatalf("IsAncestor divergent: %v", err)
+	}
+	if ok {
+		t.Fatalf("IsAncestor(divergent, HEAD) = true; want false")
+	}
+}
+
+// TestQuerier_CommitsSince_AndChangedFiles checks that CommitsSince returns
+// oldest-first commits and that ChangedFiles reports per-commit file paths.
+func TestQuerier_CommitsSince_AndChangedFiles(t *testing.T) {
+	dir := initRepoWithFile(t)
+	first := runGitOut(t, dir, "rev-parse", "HEAD")
+
+	mustWriteFile(t, filepath.Join(dir, "b.txt"), "second\n")
+	runGit(t, dir, "add", "b.txt")
+	runGit(t, dir, "commit", "-q", "-m", "second")
+	second := runGitOut(t, dir, "rev-parse", "HEAD")
+
+	mustWriteFile(t, filepath.Join(dir, "c.txt"), "third\n")
+	runGit(t, dir, "add", "c.txt")
+	runGit(t, dir, "commit", "-q", "-m", "third")
+	head := runGitOut(t, dir, "rev-parse", "HEAD")
+
+	var q veskagit.Querier
+	commits, err := q.CommitsSince(dir, first, head)
+	if err != nil {
+		t.Fatalf("CommitsSince: %v", err)
+	}
+	if len(commits) != 2 {
+		t.Fatalf("commits = %v; want 2 entries", commits)
+	}
+	if commits[0] != second || commits[1] != head {
+		t.Fatalf("commits = %v; want [%s %s]", commits, second, head)
+	}
+
+	files, err := q.ChangedFiles(dir, second)
+	if err != nil {
+		t.Fatalf("ChangedFiles: %v", err)
+	}
+	if len(files) != 1 || files[0] != "b.txt" {
+		t.Fatalf("ChangedFiles(second) = %v; want [b.txt]", files)
+	}
+}
+
+// TestQuerier_ReadFileAtCommit returns committed file contents for a known
+// SHA.
+func TestQuerier_ReadFileAtCommit(t *testing.T) {
+	dir := initRepoWithFile(t)
+	head := runGitOut(t, dir, "rev-parse", "HEAD")
+
+	var q veskagit.Querier
+	got, err := q.ReadFileAtCommit(dir, head, "a.txt")
+	if err != nil {
+		t.Fatalf("ReadFileAtCommit: %v", err)
+	}
+	if string(got) != "hello\n" {
+		t.Fatalf("contents = %q; want %q", string(got), "hello\n")
+	}
+}

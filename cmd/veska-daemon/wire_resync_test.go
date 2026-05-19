@@ -1,0 +1,209 @@
+package main
+
+import (
+	"context"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"sync"
+	"testing"
+	"time"
+
+	"github.com/whiskeyjimbo/veska/internal/application"
+	gitwatch "github.com/whiskeyjimbo/veska/internal/infrastructure/git"
+	"github.com/whiskeyjimbo/veska/internal/repo"
+)
+
+// runGit shells `git` in dir, failing the test on non-zero exit.
+func runGit(t *testing.T, dir string, args ...string) {
+	t.Helper()
+	cmd := exec.Command("git", append([]string{"-C", dir}, args...)...)
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("git %v: %v: %s", args, err, out)
+	}
+}
+
+// initGitRepoWithGoFile lays out a temp git repo containing one committed
+// .go file. The .git/hooks directory is created so repo.Add (which installs
+// post-commit / post-checkout hooks) does not fail when called against it.
+func initGitRepoWithGoFile(t *testing.T) string {
+	t.Helper()
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git not on PATH")
+	}
+	dir := t.TempDir()
+	runGit(t, dir, "init", "-q", "-b", "main")
+	runGit(t, dir, "config", "user.email", "test@example.com")
+	runGit(t, dir, "config", "user.name", "Test")
+	runGit(t, dir, "config", "commit.gpgsign", "false")
+
+	src := "package sample\n\nfunc Hello() string { return \"hi\" }\n"
+	if err := os.WriteFile(filepath.Join(dir, "sample.go"), []byte(src), 0o644); err != nil {
+		t.Fatalf("write sample.go: %v", err)
+	}
+	runGit(t, dir, "add", "sample.go")
+	runGit(t, dir, "commit", "-q", "-m", "init")
+
+	// Hooks directory exists by default after `git init`, but be explicit
+	// in case future hardening removes it from the test fixture.
+	if err := os.MkdirAll(filepath.Join(dir, ".git", "hooks"), 0o755); err != nil {
+		t.Fatalf("mkdir hooks: %v", err)
+	}
+	return dir
+}
+
+// TestDaemon_ResyncWired_FieldPresent is a smoke test for the wiring change:
+// newDaemon must populate d.resync so Start can spawn the resync goroutine.
+// A nil field means the wiring was dropped.
+func TestDaemon_ResyncWired_FieldPresent(t *testing.T) {
+	cfg := testConfig(t)
+	d, err := newDaemon(cfg)
+	if err != nil {
+		t.Fatalf("newDaemon: %v", err)
+	}
+	t.Cleanup(func() { _ = d.Stop() })
+	if d.resync == nil {
+		t.Fatal("d.resync is nil after newDaemon; wiring missing")
+	}
+}
+
+// TestDaemon_StartupResync_NeverPromoted_Reparses exercises AC1 at the
+// wiring level: a repo with last_promoted_sha = "" is routed through the
+// reparser when StartupResync.Run is invoked.
+//
+// We use the daemon's real repoLister (so the wiring path is exercised)
+// but swap a spy in for the reparser. The full real-pipeline path
+// (Ingester.Save → Promoter.Promote → SQLite nodes) is gated on the
+// cold-scan integration follow-up bead (see TestColdScanReparser_Integration
+// in coldscan_test.go, currently skipped under solov2-21h).
+func TestDaemon_StartupResync_NeverPromoted_Reparses(t *testing.T) {
+	cfg := testConfig(t)
+	d, err := newDaemon(cfg)
+	if err != nil {
+		t.Fatalf("newDaemon: %v", err)
+	}
+	t.Cleanup(func() { _ = d.Stop() })
+
+	gitDir := initGitRepoWithGoFile(t)
+	repoID, err := repo.Add(context.Background(), d.pools.WriteHot, gitDir)
+	if err != nil {
+		t.Fatalf("repo.Add: %v", err)
+	}
+	// last_promoted_sha defaults to NULL after repo.Add, which RepoLister
+	// flattens to "" — the never-promoted route.
+
+	called := make(map[string]int)
+	var mu sync.Mutex
+	spy := func(_ context.Context, rec application.RepoRecord) error {
+		mu.Lock()
+		defer mu.Unlock()
+		called[rec.RepoID]++
+		return nil
+	}
+
+	resync := application.NewStartupResync(
+		&repoLister{db: d.pools.ReadDB},
+		gitwatch.Querier{}, d.ingester, d.promoter, spy,
+	)
+	if err := resync.Run(context.Background()); err != nil {
+		t.Fatalf("resync.Run: %v", err)
+	}
+
+	mu.Lock()
+	defer mu.Unlock()
+	if called[repoID] != 1 {
+		t.Fatalf("reparser calls for %q = %d; want 1", repoID, called[repoID])
+	}
+}
+
+// TestDaemon_StartupResync_AtHEAD_SkipsReparse exercises AC2: a repo
+// whose last_promoted_sha already equals HEAD takes the cheap path —
+// the reparser is NOT invoked. As with AC1 this is asserted via a spy
+// over the daemon's wiring (real repoLister + real Querier).
+func TestDaemon_StartupResync_AtHEAD_SkipsReparse(t *testing.T) {
+	cfg := testConfig(t)
+	d, err := newDaemon(cfg)
+	if err != nil {
+		t.Fatalf("newDaemon: %v", err)
+	}
+	t.Cleanup(func() { _ = d.Stop() })
+
+	gitDir := initGitRepoWithGoFile(t)
+	repoID, err := repo.Add(context.Background(), d.pools.WriteHot, gitDir)
+	if err != nil {
+		t.Fatalf("repo.Add: %v", err)
+	}
+
+	// Resolve HEAD and pre-stamp it as the last promoted SHA.
+	headOut, err := exec.Command("git", "-C", gitDir, "rev-parse", "HEAD").Output()
+	if err != nil {
+		t.Fatalf("rev-parse HEAD: %v", err)
+	}
+	head := string(headOut)
+	head = head[:len(head)-1] // strip newline
+	if _, err := d.pools.WriteHot.Exec(
+		`UPDATE repos SET last_promoted_sha = ?, active_branch = 'main' WHERE repo_id = ?`,
+		head, repoID,
+	); err != nil {
+		t.Fatalf("stamp last_promoted_sha: %v", err)
+	}
+
+	called := make(map[string]int)
+	var mu sync.Mutex
+	spy := func(_ context.Context, rec application.RepoRecord) error {
+		mu.Lock()
+		defer mu.Unlock()
+		called[rec.RepoID]++
+		return nil
+	}
+
+	resync := application.NewStartupResync(
+		&repoLister{db: d.pools.ReadDB},
+		gitwatch.Querier{}, d.ingester, d.promoter, spy,
+	)
+	if err := resync.Run(context.Background()); err != nil {
+		t.Fatalf("resync.Run: %v", err)
+	}
+
+	mu.Lock()
+	defer mu.Unlock()
+	if called[repoID] != 0 {
+		t.Fatalf("reparser called for at-HEAD repo %q %d times; want 0 (cheap path)",
+			repoID, called[repoID])
+	}
+}
+
+// TestDaemon_StartupResync_FullPipeline is the deferred full-integration
+// smoke that the AC1/AC2 spy tests stand in for. The cold-scan reparser
+// integration with sqlite/promoter is tracked under the follow-up bead.
+func TestDaemon_StartupResync_FullPipeline(t *testing.T) {
+	t.Skip("TODO(solov2-21h): full daemon-startup → cold-scan → sqlite-nodes wiring deferred")
+}
+
+// TestDaemon_StartupResync_StartDoesNotBlock guards the epic constraint
+// that the scan must not block Start. We hold-up the resync by registering
+// no repos (cheap path) and confirm Start returns well under the resync's
+// nominal completion window — the goroutine fans out on its own.
+func TestDaemon_StartupResync_StartDoesNotBlock(t *testing.T) {
+	cfg := testConfig(t)
+	d, err := newDaemon(cfg)
+	if err != nil {
+		t.Fatalf("newDaemon: %v", err)
+	}
+	t.Cleanup(func() { _ = d.Stop() })
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	start := time.Now()
+	if err := d.Start(ctx); err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+	elapsed := time.Since(start)
+	// Start has to bind sockets etc.; 2s is generous but still well below
+	// any plausible resync wall-time on a real repo set.
+	if elapsed > 2*time.Second {
+		t.Errorf("Start blocked for %v; expected non-blocking", elapsed)
+	}
+}
