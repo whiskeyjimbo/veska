@@ -24,6 +24,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -62,27 +63,46 @@ type variantResult struct {
 // that single variant runs.
 //
 // Env knobs:
-//   - RECALL_POP                  total population (default 1000)
+//   - RECALL_POP                  synthetic-corpus population (default 1000)
+//   - RECALL_PROJECTION_CORPUS    "real:<path>" builds the corpus from a
+//     real Go module (faithful snippet/query; solov2-ok0); unset uses the
+//     synthetic corpus
 //   - RECALL_PROJECTION_VARIANT   restrict to one variant (baseline|
 //     +signature|+snippet|+both); unset sweeps all four
 //   - VESKA_OLLAMA_URL            Ollama base URL (probe + embed)
 //   - VESKA_EMBED_MODEL           embedding model
 //   - VESKA_VECTOR_BACKEND        vector backend (default sqlite-vec)
 func TestRecallProjectionSweep(t *testing.T) {
+	var corpus ProjectionCorpus
 	pop := envInt("RECALL_POP", 1000)
 
-	clusters := synthcorpus.SemanticClusterCount
-	nodesPerCluster := pop / clusters
-	if nodesPerCluster < 1 {
-		t.Fatalf("RECALL_POP=%d too small: need at least %d (clusters)", pop, clusters)
-	}
-	pop = clusters * nodesPerCluster
+	if spec := os.Getenv("RECALL_PROJECTION_CORPUS"); strings.HasPrefix(spec, "real:") {
+		// Faithful corpus: real source bodies (snippet) and doc-comment
+		// queries written independently of them — no synthSnippet circularity.
+		path := strings.TrimPrefix(spec, "real:")
+		rc, err := BuildRealCorpus(path)
+		if err != nil {
+			t.Fatalf("BuildRealCorpus(%s): %v", path, err)
+		}
+		if len(rc.Nodes) == 0 || len(rc.CenterQueries) == 0 {
+			t.Fatalf("real corpus at %s has no documented symbols to query", path)
+		}
+		corpus = rc
+		pop = len(rc.Nodes)
+	} else {
+		clusters := synthcorpus.SemanticClusterCount
+		nodesPerCluster := pop / clusters
+		if nodesPerCluster < 1 {
+			t.Fatalf("RECALL_POP=%d too small: need at least %d (clusters)", pop, clusters)
+		}
+		pop = clusters * nodesPerCluster
 
-	// The semantic corpus carries disjoint per-cluster topic vocabularies,
-	// so a real embedding model can separate clusters — required for the
-	// projection delta to be visible above embedder noise.
-	src := synthcorpus.GenerateSemanticCorpus(nodesPerCluster)
-	corpus := BuildProjectionCorpus(src)
+		// The semantic corpus carries disjoint per-cluster topic
+		// vocabularies, so a real embedding model can separate clusters —
+		// required for the projection delta to be visible above noise.
+		src := synthcorpus.GenerateSemanticCorpus(nodesPerCluster)
+		corpus = BuildProjectionCorpus(src)
+	}
 
 	ollamaURL := envStr("VESKA_OLLAMA_URL", defaultOllamaURL)
 	model := envStr("VESKA_EMBED_MODEL", defaultOllamaModel)
