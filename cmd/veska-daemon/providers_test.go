@@ -3,10 +3,17 @@ package main
 import (
 	"context"
 	"database/sql"
+	"errors"
+	"os"
+	"path/filepath"
+	"sync"
+	"sync/atomic"
 	"testing"
+	"time"
 
 	_ "modernc.org/sqlite"
 
+	"github.com/whiskeyjimbo/veska/internal/application"
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/vector"
 )
 
@@ -164,5 +171,192 @@ func TestConfigProvider_ReflectsConfig(t *testing.T) {
 	}
 	if _, ok := m["degraded_reasons"].([]string); !ok {
 		t.Errorf("degraded_reasons missing or wrong type: %v", m["degraded_reasons"])
+	}
+}
+
+// newAddRepoTestEnv builds an on-disk SQLite (repo.Add insists on a real DB)
+// with the minimal `repos` schema plus a temp git-shaped directory that
+// repo.Add will accept.
+func newAddRepoTestEnv(t *testing.T) (*sql.DB, string) {
+	t.Helper()
+	dir := t.TempDir()
+	dbPath := filepath.Join(dir, "veska.db")
+	db, err := sql.Open("sqlite", dbPath)
+	if err != nil {
+		t.Fatalf("open sqlite: %v", err)
+	}
+	t.Cleanup(func() { _ = db.Close() })
+	if _, err := db.Exec(`CREATE TABLE repos (
+		repo_id           TEXT PRIMARY KEY,
+		root_path         TEXT NOT NULL UNIQUE,
+		added_at          INTEGER NOT NULL,
+		active_branch     TEXT,
+		last_promoted_sha TEXT,
+		module_path       TEXT
+	)`); err != nil {
+		t.Fatalf("create repos: %v", err)
+	}
+
+	root := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(root, ".git", "hooks"), 0o755); err != nil {
+		t.Fatalf("make .git/hooks: %v", err)
+	}
+	return db, root
+}
+
+// TestRepoRegistrar_AddRepo_TriggersReparser asserts that a successful repo.Add
+// dispatches the cold-scan reparser exactly once in the background, with the
+// looked-up RepoRecord, and that AddRepo itself returns promptly without
+// blocking on the scan.
+func TestRepoRegistrar_AddRepo_TriggersReparser(t *testing.T) {
+	db, root := newAddRepoTestEnv(t)
+
+	var (
+		wg          sync.WaitGroup
+		gotRec      application.RepoRecord
+		gotRecMu    sync.Mutex
+		invocations atomic.Int32
+		release     = make(chan struct{})
+	)
+	reparser := func(_ context.Context, rec application.RepoRecord) error {
+		invocations.Add(1)
+		gotRecMu.Lock()
+		gotRec = rec
+		gotRecMu.Unlock()
+		<-release // hold so we can prove AddRepo did not block on the scan
+		return nil
+	}
+
+	wantBranch := "trunk"
+	wantSHA := "deadbeef"
+	recordFor := func(_ context.Context, repoID string) (application.RepoRecord, error) {
+		return application.RepoRecord{
+			RepoID:          repoID,
+			RootPath:        root,
+			ActiveBranch:    wantBranch,
+			LastPromotedSHA: wantSHA,
+		}, nil
+	}
+
+	rr := &repoRegistrar{
+		db:        db,
+		reparser:  reparser,
+		recordFor: recordFor,
+		daemonCtx: context.Background(),
+		scanWG:    &wg,
+	}
+
+	start := time.Now()
+	repoID, err := rr.AddRepo(context.Background(), root)
+	addElapsed := time.Since(start)
+	if err != nil {
+		t.Fatalf("AddRepo: %v", err)
+	}
+	if repoID == "" {
+		t.Fatalf("AddRepo returned empty repoID")
+	}
+	if addElapsed > 200*time.Millisecond {
+		t.Errorf("AddRepo blocked for %s (>200ms), should be non-blocking", addElapsed)
+	}
+
+	// Let the dispatched reparser return.
+	close(release)
+
+	// Wait for the goroutine via the WaitGroup, bounded by a 2s timeout.
+	done := make(chan struct{})
+	go func() { wg.Wait(); close(done) }()
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("reparser goroutine did not finish within 2s")
+	}
+
+	if got := invocations.Load(); got != 1 {
+		t.Errorf("reparser invocations = %d, want 1", got)
+	}
+	gotRecMu.Lock()
+	defer gotRecMu.Unlock()
+	if gotRec.RepoID != repoID {
+		t.Errorf("reparser RepoID = %q, want %q", gotRec.RepoID, repoID)
+	}
+	if gotRec.RootPath != root {
+		t.Errorf("reparser RootPath = %q, want %q", gotRec.RootPath, root)
+	}
+	if gotRec.ActiveBranch != wantBranch || gotRec.LastPromotedSHA != wantSHA {
+		t.Errorf("reparser record metadata mismatch: %+v", gotRec)
+	}
+}
+
+// TestRepoRegistrar_AddRepo_ReparserErrorIsNonFatal asserts that a reparser
+// failure is logged (not returned) — AddRepo's contract is success on a
+// successful registration regardless of the background scan outcome.
+func TestRepoRegistrar_AddRepo_ReparserErrorIsNonFatal(t *testing.T) {
+	db, root := newAddRepoTestEnv(t)
+
+	var wg sync.WaitGroup
+	rr := &repoRegistrar{
+		db: db,
+		reparser: func(_ context.Context, _ application.RepoRecord) error {
+			return errors.New("boom")
+		},
+		recordFor: func(_ context.Context, repoID string) (application.RepoRecord, error) {
+			return application.RepoRecord{RepoID: repoID, RootPath: root}, nil
+		},
+		daemonCtx: context.Background(),
+		scanWG:    &wg,
+	}
+
+	if _, err := rr.AddRepo(context.Background(), root); err != nil {
+		t.Fatalf("AddRepo returned err for reparser failure: %v", err)
+	}
+
+	done := make(chan struct{})
+	go func() { wg.Wait(); close(done) }()
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("reparser goroutine did not finish within 2s")
+	}
+}
+
+// TestRepoRegistrar_AddRepo_ContextCanceled asserts that a daemonCtx cancelled
+// before dispatch yields a clean exit (no panic, no error from AddRepo). The
+// reparser observes ctx.Err and returns context.Canceled, which the registrar
+// swallows.
+func TestRepoRegistrar_AddRepo_ContextCanceled(t *testing.T) {
+	db, root := newAddRepoTestEnv(t)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel() // pre-cancelled
+
+	var wg sync.WaitGroup
+	rr := &repoRegistrar{
+		db: db,
+		reparser: func(ctx context.Context, _ application.RepoRecord) error {
+			if err := ctx.Err(); err != nil {
+				return err
+			}
+			return nil
+		},
+		recordFor: func(ctx context.Context, repoID string) (application.RepoRecord, error) {
+			if err := ctx.Err(); err != nil {
+				return application.RepoRecord{}, err
+			}
+			return application.RepoRecord{RepoID: repoID, RootPath: root}, nil
+		},
+		daemonCtx: ctx,
+		scanWG:    &wg,
+	}
+
+	if _, err := rr.AddRepo(context.Background(), root); err != nil {
+		t.Fatalf("AddRepo returned err under cancelled daemonCtx: %v", err)
+	}
+
+	done := make(chan struct{})
+	go func() { wg.Wait(); close(done) }()
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("reparser goroutine did not finish within 2s after cancel")
 	}
 }

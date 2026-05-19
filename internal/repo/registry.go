@@ -208,6 +208,32 @@ func List(ctx context.Context, db *sql.DB) ([]Record, error) {
 	return out, nil
 }
 
+// Get returns the Record for repoID. A missing row yields (zero Record, nil)
+// so callers can distinguish a query error from a not-found row by checking
+// the returned RepoID; both nullable columns are flattened to "" exactly as
+// List does.
+func Get(ctx context.Context, db *sql.DB, repoID string) (Record, error) {
+	var (
+		rec     Record
+		branch  sql.NullString
+		lastSHA sql.NullString
+	)
+	err := db.QueryRowContext(ctx,
+		`SELECT repo_id, root_path, active_branch, last_promoted_sha
+		 FROM repos WHERE repo_id = ?`,
+		repoID,
+	).Scan(&rec.RepoID, &rec.RootPath, &branch, &lastSHA)
+	if err == sql.ErrNoRows {
+		return Record{}, nil
+	}
+	if err != nil {
+		return Record{}, fmt.Errorf("get repo: %w", err)
+	}
+	rec.ActiveBranch = branch.String
+	rec.LastPromotedSHA = lastSHA.String
+	return rec, nil
+}
+
 // Remove deletes the repo row identified by repoID (CASCADE removes nodes/edges)
 // and removes installed git hooks if the git dir still exists.
 func Remove(ctx context.Context, db *sql.DB, repoID string) error {

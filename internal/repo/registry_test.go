@@ -262,3 +262,54 @@ func TestList_EmptyTable(t *testing.T) {
 		t.Errorf("List on empty table = %+v, want nil slice", got)
 	}
 }
+
+func TestGet_ReturnsRegisteredRepo(t *testing.T) {
+	db := newTestDB(t)
+	if _, err := db.Exec(
+		`INSERT INTO repos (repo_id, root_path, added_at, active_branch, last_promoted_sha, module_path)
+		 VALUES (?, ?, ?, ?, ?, ?)`,
+		"id-x", "/path/x", 7, "main", "sha-x", "mod/x",
+	); err != nil {
+		t.Fatalf("insert: %v", err)
+	}
+
+	got, err := repo.Get(context.Background(), db, "id-x")
+	if err != nil {
+		t.Fatalf("Get: %v", err)
+	}
+	want := repo.Record{
+		RepoID: "id-x", RootPath: "/path/x", ActiveBranch: "main", LastPromotedSHA: "sha-x",
+	}
+	if got != want {
+		t.Errorf("Get = %+v, want %+v", got, want)
+	}
+}
+
+func TestGet_NullableColumnsFlattened(t *testing.T) {
+	db := newTestDB(t)
+	if _, err := db.Exec(
+		`INSERT INTO repos (repo_id, root_path, added_at) VALUES (?, ?, ?)`,
+		"id-n", "/path/n", 1,
+	); err != nil {
+		t.Fatalf("insert: %v", err)
+	}
+
+	got, err := repo.Get(context.Background(), db, "id-n")
+	if err != nil {
+		t.Fatalf("Get: %v", err)
+	}
+	if got.ActiveBranch != "" || got.LastPromotedSHA != "" {
+		t.Errorf("Get nullable fields not flattened: %+v", got)
+	}
+}
+
+func TestGet_MissingRowReturnsZero(t *testing.T) {
+	db := newTestDB(t)
+	got, err := repo.Get(context.Background(), db, "nope")
+	if err != nil {
+		t.Fatalf("Get: %v", err)
+	}
+	if got != (repo.Record{}) {
+		t.Errorf("Get missing = %+v, want zero Record", got)
+	}
+}
