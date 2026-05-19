@@ -21,6 +21,60 @@ func backupCmd() *cobra.Command {
 	}
 	cmd.AddCommand(backupCreateCmd())
 	cmd.AddCommand(backupVerifyCmd())
+	cmd.AddCommand(backupPruneCmd())
+	return cmd
+}
+
+// backupPruneCmd returns the "backup prune" subcommand.  It applies the
+// SOLO-17 §4.5 retention policy over ~/.veska-backups: it keeps the
+// [backup].keep_min_count most-recent user-initiated backups regardless of
+// age and deletes the rest if they are older than [backup].keep_max_age.
+// Auto-pre-migration snapshots are never pruned.  Idempotent.
+func backupPruneCmd() *cobra.Command {
+	var backupDir string
+
+	cmd := &cobra.Command{
+		Use:          "prune",
+		Short:        "Apply the backup retention policy, deleting old backups",
+		SilenceUsage: true,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			w := cmd.OutOrStdout()
+
+			if backupDir == "" {
+				dir, err := defaultBackupDir()
+				if err != nil {
+					return fmt.Errorf("backup prune: %w", err)
+				}
+				backupDir = dir
+			}
+
+			cfg, err := config.Load()
+			if err != nil {
+				return fmt.Errorf("backup prune: load config: %w", err)
+			}
+			maxAge, err := backup.ParseRetentionAge(cfg.Backup.KeepMaxAge)
+			if err != nil {
+				return fmt.Errorf("backup prune: %w", err)
+			}
+
+			result, err := backup.Prune(backup.PruneOptions{
+				BackupDir:    backupDir,
+				KeepMinCount: cfg.Backup.KeepMinCount,
+				MaxAge:       maxAge,
+			})
+			if err != nil {
+				return fmt.Errorf("backup prune: %w", err)
+			}
+
+			fmt.Fprintf(w, "backup prune: kept %d, deleted %d\n", result.Kept, len(result.Deleted))
+			for _, p := range result.Deleted {
+				fmt.Fprintf(w, "  deleted %s\n", p)
+			}
+			return nil
+		},
+	}
+
+	cmd.Flags().StringVar(&backupDir, "backup-dir", "", "directory to prune (default: ~/.veska-backups)")
 	return cmd
 }
 
