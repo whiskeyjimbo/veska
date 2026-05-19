@@ -39,3 +39,9 @@ func CLISockPath() string {
 func MCPSockPath() string {
 	return filepath.Join(veskaHome(), "mcp.sock")
 }
+
+// DefaultOSVCacheDir returns the default directory for the OSV advisory cache.
+// It resolves to $VESKA_HOME/cache/osv, where VESKA_HOME defaults to ~/.veska.
+func DefaultOSVCacheDir() string {
+	return filepath.Join(veskaHome(), "cache", "osv")
+}
