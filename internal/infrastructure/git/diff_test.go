@@ -5,6 +5,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"sort"
+	"strings"
 	"testing"
 
 	veskagit "github.com/whiskeyjimbo/veska/internal/infrastructure/git"
@@ -18,6 +19,18 @@ func runGit(t *testing.T, dir string, args ...string) {
 	if err != nil {
 		t.Fatalf("git %v: %v: %s", args, err, out)
 	}
+}
+
+// runGitOut runs a git command in dir, fails on error, and returns the
+// trimmed stdout.
+func runGitOut(t *testing.T, dir string, args ...string) string {
+	t.Helper()
+	cmd := exec.Command("git", append([]string{"-C", dir}, args...)...)
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("git %v: %v: %s", args, err, out)
+	}
+	return strings.TrimSpace(string(out))
 }
 
 func mustWriteFile(t *testing.T, path, content string) {
