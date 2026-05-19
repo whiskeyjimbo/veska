@@ -77,11 +77,12 @@ func (r *EmbeddingRefsRepo) FetchPending(ctx context.Context, limit int) ([]port
 //
 // The projection logic itself lives in domain.EmbedText so the recall
 // eval harness (tools/loadtest/recallprojection) measures projection
-// variants against exactly what production emits. Production uses the
-// baseline variant. The solov2-7ma sweep (pop=1000) measured +signature
-// at no recall lift over baseline (0.913 vs 0.917) and rejected it; the
-// +snippet variant showed a lift but is not promotable here because the
-// nodes table stores no body to project — see solov2-ok0.
+// variants against exactly what production emits. Production currently
+// uses the baseline variant. A faithful real-code recall sweep (solov2-ok0)
+// across veska, golang.org/x/mod and BurntSushi/toml — real source-body
+// snippets, doc-comment queries — showed +snippet roughly doubles recall@10
+// over baseline at flat p95. Promoting it needs a persisted node body;
+// tracked in solov2-ok0.
 func embedText(kind, symbolPath, filePath, language string) string {
 	return domain.EmbedText(domain.EmbedTextInput{
 		Kind:       kind,
