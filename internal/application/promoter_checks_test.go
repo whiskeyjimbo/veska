@@ -11,10 +11,11 @@ import (
 
 // fakeCheckRunner records each invocation and the input it received.
 type fakeCheckRunner struct {
-	calls    atomic.Int32
-	lastRepo string
-	lastSHA  string
-	lastN    int
+	calls     atomic.Int32
+	lastRepo  string
+	lastSHA   string
+	lastN     int
+	lastAdded map[string][]application.Line
 }
 
 func (f *fakeCheckRunner) Run(_ context.Context, in application.CheckRunInput) {
@@ -22,6 +23,7 @@ func (f *fakeCheckRunner) Run(_ context.Context, in application.CheckRunInput) {
 	f.lastRepo = in.RepoID
 	f.lastSHA = in.GitSHA
 	f.lastN = len(in.FilePaths)
+	f.lastAdded = in.AddedLines
 }
 
 // TestPromote_InvokesCheckRunnerPostCommit verifies that when a CheckRunner is
@@ -59,6 +61,71 @@ func TestPromote_InvokesCheckRunnerPostCommit(t *testing.T) {
 	// Sanity: the tx still committed.
 	if got := countNodes(t, db); got != 1 {
 		t.Errorf("nodes: want 1, got %d", got)
+	}
+}
+
+// TestPromote_PopulatesAddedLinesFromSeam verifies that when an
+// AddedLinesFunc seam is installed, Promote calls it for the promoted
+// commit and forwards the resulting per-file added lines on CheckRunInput.
+func TestPromote_PopulatesAddedLinesFromSeam(t *testing.T) {
+	db := openMemDB(t)
+	insertTestRepo(t, db, "repo1")
+
+	sa := application.NewStagingArea()
+	n, _ := domain.NewNode("n1", "a.go", "A", domain.KindFunction)
+	sa.StageFile("repo1", "main", "a.go", []*domain.Node{n}, nil)
+
+	p := newTestPromoter(sa, db)
+	fr := &fakeCheckRunner{}
+	p.SetCheckRunner(fr)
+
+	want := map[string][]application.Line{
+		"a.go": {{Number: 1, Text: "package a"}, {Number: 2, Text: "func A() {}"}},
+	}
+	var gotRepo, gotSHA string
+	p.SetAddedLinesFunc(func(_ context.Context, repoID, gitSHA string) (map[string][]application.Line, error) {
+		gotRepo, gotSHA = repoID, gitSHA
+		return want, nil
+	})
+
+	if err := p.Promote(context.Background(), "repo1", "main", "sha-xyz",
+		domain.Actor{ID: "service:veska", Kind: domain.ActorKindSystem}); err != nil {
+		t.Fatalf("Promote: %v", err)
+	}
+
+	if gotRepo != "repo1" || gotSHA != "sha-xyz" {
+		t.Errorf("AddedLinesFunc args = (%q,%q), want (repo1,sha-xyz)", gotRepo, gotSHA)
+	}
+	got := fr.lastAdded["a.go"]
+	if len(got) != 2 {
+		t.Fatalf("AddedLines[a.go] = %v, want 2 lines", got)
+	}
+	if got[0] != (application.Line{Number: 1, Text: "package a"}) ||
+		got[1] != (application.Line{Number: 2, Text: "func A() {}"}) {
+		t.Errorf("AddedLines[a.go] = %+v, want %+v", got, want["a.go"])
+	}
+}
+
+// TestPromote_NoAddedLinesFunc verifies that without the seam installed
+// AddedLines is simply nil and Promote behaves unchanged.
+func TestPromote_NoAddedLinesFunc(t *testing.T) {
+	db := openMemDB(t)
+	insertTestRepo(t, db, "repo1")
+
+	sa := application.NewStagingArea()
+	n, _ := domain.NewNode("n1", "a.go", "A", domain.KindFunction)
+	sa.StageFile("repo1", "main", "a.go", []*domain.Node{n}, nil)
+
+	p := newTestPromoter(sa, db)
+	fr := &fakeCheckRunner{}
+	p.SetCheckRunner(fr)
+
+	if err := p.Promote(context.Background(), "repo1", "main", "sha-xyz",
+		domain.Actor{ID: "service:veska", Kind: domain.ActorKindSystem}); err != nil {
+		t.Fatalf("Promote: %v", err)
+	}
+	if fr.lastAdded != nil {
+		t.Errorf("AddedLines = %v, want nil", fr.lastAdded)
 	}
 }
 

@@ -45,7 +45,7 @@ Spawn **one** Agent with the template below, filling in `$issue_id`, the full `b
 > ```
 > $prior_context_block
 >
-> Work directory: /home/jrose/src/engram. Follow Sub-agent Steps 1–8. Return only the Result Block.
+> Work directory: /home/jrose/src/engram/solov2. Follow Sub-agent Steps 1–8. Return only the Result Block.
 
 ### Step 2 — Close Bead (orchestrator)
 
@@ -85,7 +85,7 @@ go vet ./... && staticcheck ./... 2>/dev/null || true
 Fix all `go vet` errors. Fix staticcheck except `SA1019` unless unavoidable. Re-run Step 4 if non-test code changed.
 
 **Step 6 — Concurrency & stdlib review (inner sub-agent)**
-> Review the following Go diff for: (a) concurrency bugs — TOCTOU races, close-of-closed-channel, nil deref on shared state, goroutine leaks; (b) reinvented stdlib or internal helpers — anything in `sync`, `io`, `os`, `path/filepath`, `slices`, `maps`, or an existing engram internal package, any std lib rewrites (re-invent wheel). (c) CLEAN/SOLID violations, functional options violations. (d) ddd-lite violations. Return numbered findings with file:line. If nothing found, return "LGTM".
+> Review the following Go diff for: (a) concurrency bugs — TOCTOU races, close-of-closed-channel, nil deref on shared state, goroutine leaks; (b) reinvented stdlib or internal helpers — anything in `sync`, `io`, `os`, `path/filepath`, `slices`, `maps`, or an existing veska internal package, any std lib rewrites (re-invent wheel). (c) CLEAN/SOLID violations, functional options violations. (d) ddd-lite violations. Return numbered findings with file:line. If nothing found, return "LGTM".
 
 Apply every finding. Re-run Step 4 if non-trivial changes result.
 

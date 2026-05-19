@@ -30,6 +30,21 @@ type Input struct {
 	Branch    string
 	GitSHA    string
 	FilePaths []string
+	// AddedLines holds the newly-added ("+") lines introduced by the
+	// promoted commit, keyed by repo-root-relative file path. The
+	// promotion path populates it once; checks that need per-line diff
+	// data (e.g. secrets-scan) read it, others ignore it. May be nil.
+	AddedLines map[string][]Line
+}
+
+// Line is a single newly-added line of a commit's diff: its line number
+// in the post-commit revision plus the line text (no leading "+" marker,
+// no trailing newline). It mirrors application.Line and git.Line; the
+// type is re-declared here so the application package need not import the
+// checks sub-package — consistent with how Input mirrors CheckRunInput.
+type Line struct {
+	Number int
+	Text   string
 }
 
 // Check is a single structural verification step.
