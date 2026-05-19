@@ -23,7 +23,7 @@ ordered epics with DoD, and TDD-sized sub-issues. Beads IDs follow
 | M4 | Wiki mechanical kinds | [`closed/M4.md`](closed/M4.md) ✓ closed |
 | M5 | Optional review pipeline | [`closed/M5.md`](closed/M5.md) ✓ closed |
 | M6 | Cutover | [`closed/M6.md`](closed/M6.md) ✓ closed |
-| M7 | Vuln + secrets scanning | [`M7.md`](M7.md) |
+| M7 | Vuln + secrets scanning | [`closed/M7.md`](closed/M7.md) ✓ closed |
 
 The roadmap-level summary is [SOLO-14](../design/14-roadmap/README.md).
 That doc owns the goal-and-exit-gate framing; these per-milestone
