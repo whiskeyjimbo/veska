@@ -19,6 +19,7 @@ func newRootCmd() *cobra.Command {
 	root.AddCommand(hookRunnerCmd())
 	root.AddCommand(doctorCmd())
 	root.AddCommand(backupCmd())
+	root.AddCommand(restoreCmd())
 	root.AddCommand(repoCmd(nil))
 	root.AddCommand(wikiCmd())
 
