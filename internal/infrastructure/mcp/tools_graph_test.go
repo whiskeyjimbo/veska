@@ -250,6 +250,7 @@ func TestGetNode_NotFound(t *testing.T) {
 	})
 	if rpcErr == nil {
 		t.Fatal("expected RPCError for not-found node")
+		return
 	}
 	if rpcErr.Code != CodeInvalidParams {
 		t.Errorf("expected code %d, got %d", CodeInvalidParams, rpcErr.Code)
@@ -318,6 +319,7 @@ func TestGetCallChain_DepthTooLarge(t *testing.T) {
 	})
 	if rpcErr == nil {
 		t.Fatal("expected RPCError for depth > 10")
+		return
 	}
 	if rpcErr.Code != CodeInvalidParams {
 		t.Errorf("expected code %d, got %d", CodeInvalidParams, rpcErr.Code)

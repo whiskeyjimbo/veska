@@ -128,6 +128,7 @@ func TestContractDriftCheck_ThreadsCurrentContentHash(t *testing.T) {
 	}
 	if findings[0].AnchorContentHash == nil {
 		t.Fatal("AnchorContentHash is nil")
+		return
 	}
 	if *findings[0].AnchorContentHash != "h-new" {
 		t.Errorf("AnchorContentHash = %q, want h-new (current hash)",
@@ -200,6 +201,7 @@ func TestContractDriftCheck_QuerierErrorPropagates(t *testing.T) {
 	})
 	if err == nil {
 		t.Fatalf("expected error")
+		return
 	}
 	if !strings.Contains(err.Error(), "contract-drift") {
 		t.Errorf("error not annotated with check name: %v", err)
@@ -213,6 +215,7 @@ func TestContractDriftCheck_NilQuerierReturnsError(t *testing.T) {
 	})
 	if err == nil {
 		t.Fatalf("expected error from nil querier")
+		return
 	}
 }
 

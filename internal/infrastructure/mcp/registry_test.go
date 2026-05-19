@@ -42,6 +42,7 @@ func TestRegister_NoPrefixRejectsName(t *testing.T) {
 	err := r.Register(makeSpec("find_symbol", "finds a symbol by name in the graph"))
 	if err == nil {
 		t.Fatal("expected error for missing eng_ prefix, got nil")
+		return
 	}
 }
 
@@ -50,6 +51,7 @@ func TestRegister_UnknownVerbRejectsName(t *testing.T) {
 	err := r.Register(makeSpec("eng_delete_node", "deletes a node from the graph forcibly"))
 	if err == nil {
 		t.Fatal("expected error for unknown verb 'delete', got nil")
+		return
 	}
 }
 
@@ -71,6 +73,7 @@ func TestRegister_EmptyObjectSegmentRejectsName(t *testing.T) {
 	err := r.Register(makeSpec("eng_get_", "some valid description here ok"))
 	if err == nil {
 		t.Fatal("expected error for missing object segment, got nil")
+		return
 	}
 }
 
@@ -79,6 +82,7 @@ func TestRegister_ObjectStartsWithDigitRejectsName(t *testing.T) {
 	err := r.Register(makeSpec("eng_get_1thing", "some valid description here ok"))
 	if err == nil {
 		t.Fatal("expected error for object starting with digit, got nil")
+		return
 	}
 }
 
@@ -92,6 +96,7 @@ func TestRegister_ShortDescriptionRejected(t *testing.T) {
 	err := r.Register(makeSpec("eng_get_node", "too short"))
 	if err == nil {
 		t.Fatal("expected error for description < 10 chars, got nil")
+		return
 	}
 }
 
@@ -115,6 +120,7 @@ func TestRegister_DuplicateNameRejected(t *testing.T) {
 	}
 	if err := r.Register(spec); err == nil {
 		t.Fatal("expected error for duplicate name, got nil")
+		return
 	}
 }
 
@@ -153,6 +159,7 @@ func TestDispatch_UnknownMethodReturnsMethodNotFound(t *testing.T) {
 	_, rpcErr := r.Dispatch(context.Background(), domain.Actor{ID: "human:test", Kind: domain.ActorKindHuman}, req)
 	if rpcErr == nil {
 		t.Fatal("expected RPCError for unknown method, got nil")
+		return
 	}
 	if rpcErr.Code != CodeMethodNotFound {
 		t.Fatalf("expected code %d, got %d", CodeMethodNotFound, rpcErr.Code)
@@ -217,6 +224,7 @@ func TestMustRegister_PanicsOnBadSpec(t *testing.T) {
 	defer func() {
 		if r := recover(); r == nil {
 			t.Fatal("expected panic for bad spec, got none")
+			return
 		}
 	}()
 	r := NewRegistry()

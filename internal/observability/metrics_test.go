@@ -18,6 +18,7 @@ func TestNewMetrics_AllMetricsRegistered(t *testing.T) {
 	m := observability.NewMetrics(reg)
 	if m == nil {
 		t.Fatal("NewMetrics returned nil")
+		return
 	}
 }
 

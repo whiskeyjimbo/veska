@@ -33,6 +33,7 @@ func TestNewGraph_ValidArgs(t *testing.T) {
 	}
 	if g == nil {
 		t.Fatal("expected non-nil Graph")
+		return
 	}
 }
 
@@ -40,6 +41,7 @@ func TestNewGraph_EmptyRepoID(t *testing.T) {
 	_, err := NewGraph("", "main")
 	if err == nil {
 		t.Fatal("expected error for empty repoID")
+		return
 	}
 }
 
@@ -47,6 +49,7 @@ func TestNewGraph_EmptyBranch(t *testing.T) {
 	_, err := NewGraph("repo-1", "")
 	if err == nil {
 		t.Fatal("expected error for empty branch")
+		return
 	}
 }
 
@@ -88,6 +91,7 @@ func TestGraph_AddNode_DuplicateID(t *testing.T) {
 	n2 := makeNode(t, "dup")
 	if err := g.AddNode(n2); err == nil {
 		t.Fatal("expected error for duplicate node ID")
+		return
 	}
 }
 
@@ -125,6 +129,7 @@ func TestGraph_AddEdge_MissingSrc(t *testing.T) {
 	e := makeEdge(t, "missing-src", "b")
 	if err := g.AddEdge(e); err == nil {
 		t.Fatal("expected error when src node not in graph")
+		return
 	}
 }
 
@@ -136,6 +141,7 @@ func TestGraph_AddEdge_MissingTgt(t *testing.T) {
 	e := makeEdge(t, "a", "missing-tgt")
 	if err := g.AddEdge(e); err == nil {
 		t.Fatal("expected error when tgt node not in graph")
+		return
 	}
 }
 
@@ -144,6 +150,7 @@ func TestGraph_AddEdge_BothEndpointsMissing(t *testing.T) {
 	e := makeEdge(t, "x", "y")
 	if err := g.AddEdge(e); err == nil {
 		t.Fatal("expected error when both endpoints missing")
+		return
 	}
 }
 
@@ -174,6 +181,7 @@ func TestGraph_OutgoingEdges_EmptySliceNotNil(t *testing.T) {
 	out := g.OutgoingEdges(NodeID("lonely"))
 	if out == nil {
 		t.Fatal("OutgoingEdges must return empty slice, not nil")
+		return
 	}
 	if len(out) != 0 {
 		t.Fatalf("expected 0 outgoing edges, got %d", len(out))
@@ -185,6 +193,7 @@ func TestGraph_OutgoingEdges_NodeNotInGraph(t *testing.T) {
 	out := g.OutgoingEdges(NodeID("ghost"))
 	if out == nil {
 		t.Fatal("OutgoingEdges must return empty slice, not nil")
+		return
 	}
 }
 
@@ -215,6 +224,7 @@ func TestGraph_IncomingEdges_EmptySliceNotNil(t *testing.T) {
 	in := g.IncomingEdges(NodeID("root"))
 	if in == nil {
 		t.Fatal("IncomingEdges must return empty slice, not nil")
+		return
 	}
 	if len(in) != 0 {
 		t.Fatalf("expected 0 incoming edges, got %d", len(in))
@@ -226,5 +236,6 @@ func TestGraph_IncomingEdges_NodeNotInGraph(t *testing.T) {
 	in := g.IncomingEdges(NodeID("ghost"))
 	if in == nil {
 		t.Fatal("IncomingEdges must return empty slice, not nil")
+		return
 	}
 }

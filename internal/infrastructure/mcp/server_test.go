@@ -180,6 +180,7 @@ func TestMalformedJSONParseError(t *testing.T) {
 	}
 	if resp.Error == nil {
 		t.Fatal("expected error in response")
+		return
 	}
 	if resp.Error.Code != mcp.CodeParseError {
 		t.Errorf("error code = %d, want %d", resp.Error.Code, mcp.CodeParseError)
@@ -196,6 +197,7 @@ func TestHandlerRPCErrorForwarded(t *testing.T) {
 
 	if resp.Error == nil {
 		t.Fatal("expected error response")
+		return
 	}
 	if resp.Error.Code != mcp.CodeMethodNotFound {
 		t.Errorf("error code = %d, want %d", resp.Error.Code, mcp.CodeMethodNotFound)

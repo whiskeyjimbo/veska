@@ -130,6 +130,7 @@ func TestVulnScanCheck_NilSource(t *testing.T) {
 	c := NewVulnScanCheck(nil, writeGoMod(t, goModFixture))
 	if _, err := c.Run(context.Background(), Input{FilePaths: []string{"go.mod"}}); err == nil {
 		t.Fatal("want error on nil source")
+		return
 	}
 }
 
@@ -140,6 +141,7 @@ func TestVulnScanCheck_GoModReadFailure(t *testing.T) {
 	c := NewVulnScanCheck(&fakeVulnSource{}, root)
 	if _, err := c.Run(context.Background(), Input{FilePaths: []string{"go.mod"}}); err == nil {
 		t.Fatal("want error on missing go.mod")
+		return
 	}
 }
 

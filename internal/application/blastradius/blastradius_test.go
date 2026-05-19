@@ -184,6 +184,7 @@ func TestOf_PropagatesEdgeError(t *testing.T) {
 	_, err := s.Of(context.Background(), "r", "main", []string{"seed"}, blastradius.Options{MaxDepth: 1})
 	if err == nil {
 		t.Fatal("expected error, got nil")
+		return
 	}
 }
 

@@ -9,7 +9,7 @@ import (
 
 	"github.com/whiskeyjimbo/veska/internal/core/domain"
 	"github.com/whiskeyjimbo/veska/internal/observability"
-	"go.opentelemetry.io/otel/trace"
+	"go.opentelemetry.io/otel/trace/noop"
 )
 
 // toolNamePattern enforces the eng_<verb>_<object> naming convention.
@@ -74,7 +74,7 @@ func (r *Registry) TracerProvider() observability.TracerProvider {
 // tracerProvider returns the configured provider or a noop if nil.
 func (r *Registry) tracerProvider() observability.TracerProvider {
 	if r.tp == nil {
-		return trace.NewNoopTracerProvider()
+		return noop.NewTracerProvider()
 	}
 	return r.tp
 }

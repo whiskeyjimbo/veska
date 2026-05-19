@@ -86,6 +86,7 @@ func TestHandler_WrongKind(t *testing.T) {
 	err := h.Handle(context.Background(), ports.WorkRow{Kind: ports.WorkKindEmbed})
 	if err == nil {
 		t.Fatal("want error on wrong kind, got nil")
+		return
 	}
 }
 
@@ -134,6 +135,7 @@ func TestHandler_StoreFailurePropagates(t *testing.T) {
 	})
 	if err == nil {
 		t.Fatal("want error when store fails, got nil")
+		return
 	}
 }
 

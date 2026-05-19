@@ -4,10 +4,11 @@ import (
 	"context"
 
 	"go.opentelemetry.io/otel/trace"
+	"go.opentelemetry.io/otel/trace/noop"
 )
 
 // TracerProvider is satisfied by both *sdktrace.TracerProvider and
-// trace.NewNoopTracerProvider(), allowing callers to use a no-op when
+// noop.NewTracerProvider(), allowing callers to use a no-op when
 // tracing is disabled.
 type TracerProvider interface {
 	Tracer(instrumentationName string, opts ...trace.TracerOption) trace.Tracer
@@ -20,7 +21,7 @@ type TracerProvider interface {
 // When tp is nil, a noop span is returned so production code never panics.
 func StartSpan(ctx context.Context, tp TracerProvider, name string, opts ...trace.SpanStartOption) (context.Context, trace.Span) {
 	if tp == nil {
-		return trace.NewNoopTracerProvider().Tracer("").Start(ctx, name, opts...)
+		return noop.NewTracerProvider().Tracer("").Start(ctx, name, opts...)
 	}
 	return tp.Tracer("github.com/whiskeyjimbo/veska").Start(ctx, name, opts...)
 }

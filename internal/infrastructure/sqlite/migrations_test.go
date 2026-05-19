@@ -242,6 +242,7 @@ func TestMigrationSHA_TamperDetected(t *testing.T) {
 	err := sqlite.CheckMigrationIntegrity(dbPath)
 	if err == nil {
 		t.Fatal("expected integrity error for tampered migration_sha, got nil")
+		return
 	}
 }
 
@@ -452,6 +453,7 @@ func TestMigration0003_TasksActivePartialIndex(t *testing.T) {
 		"task-2", "repo-1", "Second Task", 1, now)
 	if err == nil {
 		t.Fatal("expected unique constraint violation for second active task on same repo, got nil")
+		return
 	}
 
 	// Insert inactive task for same repo — must succeed.
@@ -509,6 +511,7 @@ func TestMigration0003_FindingsBranchPK(t *testing.T) {
 		findingID, "branch-a", "repo-2", "warn", "linter", "rule-x", "dup", "open", now, "agent-1", "agent")
 	if err == nil {
 		t.Fatal("expected PK violation for duplicate (finding_id, branch), got nil")
+		return
 	}
 
 	// Verify both rows exist with their respective states.
@@ -599,6 +602,7 @@ func TestMigration0004_ContentAddressedDedup(t *testing.T) {
 		"hash-abc", "nomic-embed-text", 768, embedding, now)
 	if err == nil {
 		t.Fatal("expected PK violation for duplicate content_hash, got nil")
+		return
 	}
 }
 
@@ -725,6 +729,7 @@ func TestMigration0004_StateTransitions(t *testing.T) {
 	_, err = db.Exec(`UPDATE node_embedding_refs SET content_hash=? WHERE node_id=?`, "nonexistent-hash", "node-st")
 	if err == nil {
 		t.Fatal("expected FK violation for nonexistent content_hash, got nil")
+		return
 	}
 }
 

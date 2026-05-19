@@ -25,8 +25,8 @@ func RenderHotZones(r Report) string {
 	b.WriteString("| Rank | File | Recent Changes | Blast Radius | Score |\n")
 	b.WriteString("| ---- | ---- | -------------- | ------------ | ----- |\n")
 	for i, z := range r.Zones {
-		b.WriteString(fmt.Sprintf("| %d | %s | %d | %d | %d |\n",
-			i+1, z.FilePath, z.RecentChangeFrequency, z.BlastRadius, z.Score))
+		fmt.Fprintf(&b, "| %d | %s | %d | %d | %d |\n",
+			i+1, z.FilePath, z.RecentChangeFrequency, z.BlastRadius, z.Score)
 	}
 	return b.String()
 }
@@ -52,8 +52,8 @@ func RenderEntryPoints(r EntryPointsReport) string {
 	b.WriteString("| Symbol | File | Kind | Blast Radius |\n")
 	b.WriteString("| ------ | ---- | ---- | ------------ |\n")
 	for _, e := range r.EntryPoints {
-		b.WriteString(fmt.Sprintf("| %s | %s | %s | %d |\n",
-			e.SymbolName, e.FilePath, e.Kind, e.BlastRadius))
+		fmt.Fprintf(&b, "| %s | %s | %s | %d |\n",
+			e.SymbolName, e.FilePath, e.Kind, e.BlastRadius)
 	}
 	return b.String()
 }

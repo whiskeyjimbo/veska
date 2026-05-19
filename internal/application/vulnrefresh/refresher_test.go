@@ -81,6 +81,7 @@ func TestDefaultInterval(t *testing.T) {
 	}
 	if r == nil {
 		t.Fatal("expected non-nil Refresher")
+		return
 	}
 }
 

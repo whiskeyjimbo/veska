@@ -27,12 +27,14 @@ func Add(a, b int) int {
 	fn := findNodeByName(result.Nodes, "Add")
 	if fn == nil {
 		t.Fatal("expected a node named 'Add', got none")
+		return
 	}
 	if fn.Kind != domain.KindFunction {
 		t.Errorf("expected KindFunction, got %q", fn.Kind)
 	}
 	if fn.Lines == nil {
 		t.Fatal("expected Lines to be set")
+		return
 	}
 	if fn.Lines.Start != 3 {
 		t.Errorf("expected Start=3, got %d", fn.Lines.Start)
@@ -57,6 +59,7 @@ func (c Counter) Inc() {
 	method := findNodeByName(result.Nodes, "Counter.Inc")
 	if method == nil {
 		t.Fatal("expected a node named 'Counter.Inc', got none")
+		return
 	}
 	if method.Kind != domain.KindMethod {
 		t.Errorf("expected KindMethod, got %q", method.Kind)
@@ -79,6 +82,7 @@ type Point struct {
 	node := findNodeByName(result.Nodes, "Point")
 	if node == nil {
 		t.Fatal("expected a node named 'Point', got none")
+		return
 	}
 	if node.Kind != domain.KindStruct {
 		t.Errorf("expected KindStruct, got %q", node.Kind)
@@ -101,6 +105,7 @@ type Writer interface {
 	node := findNodeByName(result.Nodes, "Writer")
 	if node == nil {
 		t.Fatal("expected a node named 'Writer', got none")
+		return
 	}
 	if node.Kind != domain.KindInterface {
 		t.Errorf("expected KindInterface, got %q", node.Kind)
@@ -128,6 +133,7 @@ func hello() string {
 	helloNode := findNodeByName(result.Nodes, "hello")
 	if greetNode == nil || helloNode == nil {
 		t.Fatalf("expected greet and hello nodes, got nodes: %v", nodeNames(result.Nodes))
+		return
 	}
 
 	edge := findEdge(result.Edges, greetNode.ID, helloNode.ID, domain.EdgeCalls)
@@ -207,9 +213,11 @@ func Bar() {}
 	barNode := findNodeByName(result.Nodes, "Bar")
 	if pkgNode == nil {
 		t.Fatal("expected a package node")
+		return
 	}
 	if barNode == nil {
 		t.Fatal("expected a Bar node")
+		return
 	}
 
 	edge := findEdge(result.Edges, pkgNode.ID, barNode.ID, domain.EdgeContains)

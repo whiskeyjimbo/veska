@@ -16,6 +16,7 @@ func TestNewNode_EmptyID(t *testing.T) {
 	_, err := NewNode("", "pkg/foo.go", "Foo", KindFunction)
 	if err == nil {
 		t.Fatal("expected error for empty id, got nil")
+		return
 	}
 }
 
@@ -27,6 +28,7 @@ func TestNewNode_ValidRequired(t *testing.T) {
 	}
 	if n == nil {
 		t.Fatal("expected non-nil Node")
+		return
 	}
 	if n.ID != NodeID("abc") {
 		t.Errorf("ID: got %q, want %q", n.ID, "abc")
@@ -63,6 +65,7 @@ func TestNewNode_ContentHashMismatch(t *testing.T) {
 	)
 	if err == nil {
 		t.Fatal("expected error for mismatched content hash, got nil")
+		return
 	}
 }
 
@@ -83,6 +86,7 @@ func TestNewNode_LinesStartAfterEnd(t *testing.T) {
 	)
 	if err == nil {
 		t.Fatal("expected error for start > end in LineRange, got nil")
+		return
 	}
 }
 
@@ -103,6 +107,7 @@ func TestNewNode_LinesZeroIndexed(t *testing.T) {
 	)
 	if err == nil {
 		t.Fatal("expected error for 0-indexed start, got nil")
+		return
 	}
 }
 
