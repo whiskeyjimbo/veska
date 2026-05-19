@@ -187,6 +187,38 @@ refresh_interval = "6h"
 	}
 }
 
+func TestPromotionDefaultsNoDisabledChecks(t *testing.T) {
+	c := DefaultConfig()
+	if len(c.Promotion.DisabledChecks) != 0 {
+		t.Errorf("promotion.disabled_checks should default to empty, got %v", c.Promotion.DisabledChecks)
+	}
+}
+
+func TestLoadDecodesPromotionDisabledChecks(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("VESKA_HOME", dir)
+	clearOverrideEnv(t)
+
+	toml := `
+[promotion]
+disabled_checks = ["secrets-scan"]
+`
+	if err := os.WriteFile(filepath.Join(dir, "config.toml"), []byte(toml), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	c, err := Load()
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if !c.Promotion.CheckDisabled("secrets-scan") {
+		t.Errorf("promotion.CheckDisabled(secrets-scan): got false, want true")
+	}
+	if c.Promotion.CheckDisabled("dead-code") {
+		t.Errorf("promotion.CheckDisabled(dead-code): got true, want false")
+	}
+}
+
 func clearOverrideEnv(t *testing.T) {
 	t.Helper()
 	for _, k := range []string{"VESKA_OLLAMA_URL", "VESKA_EMBED_MODEL", "VESKA_VECTOR_BACKEND", "VESKA_DEBUG"} {
