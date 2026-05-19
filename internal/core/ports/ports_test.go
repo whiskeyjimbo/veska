@@ -29,6 +29,7 @@ var (
 	_ ports.Embedder          = (*stubEmbedder)(nil)
 	_ ports.LLMGenerator      = (*stubLLMGenerator)(nil)
 	_ ports.Notifier          = (*stubNotifier)(nil)
+	_ ports.SecretsScanner    = (*stubSecretsScanner)(nil)
 )
 
 // ── GraphStorage stub ──────────────────────────────────────────────────────
@@ -135,6 +136,14 @@ func (s *stubLLMGenerator) Generate(_ context.Context, _ ports.GenerateRequest) 
 type stubNotifier struct{}
 
 func (s *stubNotifier) Notify(_ context.Context, _ ports.Notification) error { return nil }
+
+// ── SecretsScanner stub ────────────────────────────────────────────────────
+
+type stubSecretsScanner struct{}
+
+func (s *stubSecretsScanner) Scan(_ ports.ScanInput) ([]ports.SecretFinding, error) {
+	return nil, nil
+}
 
 // Prevent "imported and not used" errors for packages only referenced by stubs.
 var _ = time.Time{}
