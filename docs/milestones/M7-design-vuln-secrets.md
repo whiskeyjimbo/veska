@@ -91,7 +91,7 @@ type Input struct {
 |---|---|---|
 | A1 | Reshape `ports.VulnSource`; add `Dependency`/`VulnFinding`; update `NullVulnSource` | — |
 | A2 | `go.mod` manifest reader → `[]Dependency` (`modfile`) | — |
-| A3 | OSV adapter — `POST /v1/querybatch`, cache `~/.veska/cache/osv/`; `Refresh()` writes, `Scan()` reads | A1 |
+| A3 | OSV adapter — `Refresh()` downloads OSV's full Go-ecosystem advisory dump (`osv-vulnerabilities.storage.googleapis.com/Go/all.zip`) to `~/.veska/cache/osv/`; `Scan()` matches deps against the local dump, offline | A1 |
 | A4 | Refresh goroutine — daemon-owned, 24h cadence, kicked on start | A3 |
 | A5 | `vulnscan` check — `go.mod` in `FilePaths` → read deps → `Scan` → emit `vuln` findings | A1, A2, A3 |
 | A6 | Wiring: `wire.go`, `[vuln_source] provider="osv"`, egress allow-list, `veska doctor egress` | A3, A5 |
