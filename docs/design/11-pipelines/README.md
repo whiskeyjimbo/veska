@@ -3,10 +3,10 @@ id: SOLO-11
 title: "Pipelines — Save, Promotion, Review"
 status: draft
 version: 0.1.0
-last_reviewed: 2026-05-08
+last_reviewed: 2026-05-19
 related: [SOLO-01, SOLO-04, SOLO-05, SOLO-08, SOLO-10]
 verified: true
-verified_date: "2026-05-17"
+verified_date: "2026-05-19"
 ---
 
 # SOLO-11 — Pipelines
@@ -228,25 +228,23 @@ measures.
 
 ### 2.1 What runs synchronously
 
-Four checks are designed. All deterministic. All cheap. **Two ship
-today (M3); two are PLANNED.**
+Four checks are designed. All deterministic. All cheap. **All four
+ship today** (dead-code + contract-drift in M3; secrets-scan +
+vuln-scan in M7).
 
 | Check | Status | Input | Output |
 |---|---|---|---|
 | Dead-code | **SHIPPED (M3)** — `internal/application/checks/deadcode.go` | Edge graph diff vs. promoted | Findings: `unreachable_symbol`, `dangling_import` |
-| Secrets-scan | **PLANNED** — awaits the `secrets-scanner` port (09-mcp-surface §8.2, deferred) | Diff hunks (changed lines only) | Findings: `secret_leak` with rule + redacted snippet |
-| Vuln-scan | **PLANNED** — awaits the `vuln-source` port (09-mcp-surface §8.2, deferred) | Dependency edges, against on-disk cache | Findings: `vuln` with advisory ID, package, range |
+| Secrets-scan | **SHIPPED (M7)** — `internal/application/checks/secretsscan.go` | `Input.AddedLines` (newly-added lines only) | Findings: `secret_leak` with rule + redacted snippet |
+| Vuln-scan | **SHIPPED (M7)** — `internal/application/checks/vulnscan.go` | `go.mod` dependency set, against the OSV disk cache | Findings: `vuln` with advisory ID, package, range |
 | Contract-drift | **SHIPPED (M3)** — `internal/application/checks/contractdrift.go` | Public API edges vs. registered contracts | Findings: `contract_drift` with breaking-vs-additive class |
 
-The two shipped checks (dead-code, contract-drift) run inline because
-they are deterministic and bounded. The two PLANNED checks
-(secrets-scan, vuln-scan) cannot run until their backing ports land:
-secrets-scan depends on the `secrets-scanner` port and vuln-scan on the
-`vuln-source` port, both currently deferred per 09-mcp-surface §8.2.
-When they ship they will run inline on the same terms — none of them
-call out to the network at promotion time; vuln-scan will read the
-cache file (SOLO-05 §VulnSource), which a background goroutine
-refreshes on a configurable interval.
+All four checks run inline because they are deterministic and bounded.
+None calls out to the network at promotion time: vuln-scan reads the
+OSV cache file (SOLO-05 §2.2), which a daemon background goroutine
+refreshes on a configurable interval (default 24h). Vuln-scan ships
+off by default (enabled via `[vuln_source]`); secrets-scan ships on by
+default and is disablable via `[promotion]`.
 
 A check failure does not abort the promotion. Findings are advisory.
 The `BEGIN IMMEDIATE` either commits cleanly or rolls back; either
