@@ -15,6 +15,7 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/doctor"
 	"github.com/whiskeyjimbo/veska/internal/embedderprobe"
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/sqlite"
+	"github.com/whiskeyjimbo/veska/internal/infrastructure/vulnsource/osv"
 )
 
 const (
@@ -331,6 +332,12 @@ func doctorEgressCmd() *cobra.Command {
 			if cfg.Review.Enabled {
 				obsParams.ReviewLLMEndpoint = cfg.LLMGenerator.Endpoint
 				obsParams.ReviewLLMConfiguredVia = "config:llm_generator.endpoint"
+			}
+			// The OSV advisory dump is reported only when [vuln_source] is
+			// configured with the osv provider (the feature is off by default).
+			if cfg.VulnSource.Provider == "osv" {
+				obsParams.VulnSourceEndpoint = osv.DumpURL
+				obsParams.VulnSourceConfiguredVia = "config:vuln_source.provider"
 			}
 			obsReport := doctor.CheckEgressObservability(obsParams)
 

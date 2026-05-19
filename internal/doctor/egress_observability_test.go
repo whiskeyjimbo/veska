@@ -106,6 +106,41 @@ func TestCheckEgressObservability_ReviewLLMEnabled(t *testing.T) {
 	}
 }
 
+func TestCheckEgressObservability_VulnSourceConfigured(t *testing.T) {
+	report := doctor.CheckEgressObservability(doctor.EgressObservabilityParams{
+		VulnSourceEndpoint:      "https://osv-vulnerabilities.storage.googleapis.com/Go/all.zip",
+		VulnSourceConfiguredVia: "config:vuln_source.provider",
+	})
+
+	if len(report.Destinations) != 1 {
+		t.Fatalf("expected 1 destination, got %d", len(report.Destinations))
+	}
+	d := report.Destinations[0]
+	if d.Kind != "vuln_source" {
+		t.Errorf("kind: got %q, want %q", d.Kind, "vuln_source")
+	}
+	if d.URL != "https://osv-vulnerabilities.storage.googleapis.com/Go/all.zip" {
+		t.Errorf("url: got %q", d.URL)
+	}
+	if d.ConfiguredVia != "config:vuln_source.provider" {
+		t.Errorf("configured_via: got %q, want %q", d.ConfiguredVia, "config:vuln_source.provider")
+	}
+}
+
+func TestCheckEgressObservability_VulnSourceDisabledOmitted(t *testing.T) {
+	// Caller passes an empty endpoint when [vuln_source] is absent, so the
+	// vuln_source destination must not appear.
+	report := doctor.CheckEgressObservability(doctor.EgressObservabilityParams{
+		VulnSourceEndpoint: "",
+	})
+
+	for _, d := range report.Destinations {
+		if d.Kind == "vuln_source" {
+			t.Errorf("vuln_source destination present when feature off: %+v", d)
+		}
+	}
+}
+
 func TestCheckEgressObservability_ReviewLLMDisabledOmitted(t *testing.T) {
 	// Caller passes an empty endpoint when review.enabled is false, so the
 	// review LLM destination must not appear even though Ollama is configured.

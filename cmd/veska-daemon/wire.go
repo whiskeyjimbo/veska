@@ -25,6 +25,7 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/application/revalidate"
 	"github.com/whiskeyjimbo/veska/internal/application/review"
 	"github.com/whiskeyjimbo/veska/internal/application/search"
+	"github.com/whiskeyjimbo/veska/internal/application/vulnrefresh"
 	"github.com/whiskeyjimbo/veska/internal/application/wiki"
 	"github.com/whiskeyjimbo/veska/internal/config"
 	"github.com/whiskeyjimbo/veska/internal/core/ports"
@@ -164,6 +165,11 @@ type Daemon struct {
 	mcpsrv  *mcp.Server
 	mcpReg  *mcp.Registry
 
+	// vulnRefresher keeps the OSV advisory cache fresh. It is non-nil only
+	// when [vuln_source] provider="osv"; Start launches its blocking Run on
+	// the daemon's lifetime context.
+	vulnRefresher *vulnrefresh.Refresher
+
 	// metrics is the Prometheus metric set, non-nil only when the metrics
 	// listener is enabled. It is threaded into every Metrics-aware consumer.
 	metrics *observability.Metrics
@@ -260,6 +266,13 @@ func newDaemon(cfg Config) (*Daemon, error) {
 		return nil, err
 	}
 
+	// Gate the vulnerability advisory source provider. Only OSV is supported;
+	// an unknown provider fails fast here. An absent [vuln_source] section
+	// leaves the feature off (NullVulnSource, no refresher, no check).
+	if err := checkVulnProvider(fileCfg); err != nil {
+		return nil, err
+	}
+
 	// Validate backend kind early so bad env doesn't surface as a confusing
 	// downstream open error.
 	switch cfg.VectorBackend {
@@ -333,6 +346,32 @@ func newDaemon(cfg Config) (*Daemon, error) {
 	contractRepo := sqlite.NewContractDriftRepo(pools.ReadDB)
 	checkReg.Register(checks.NewDeadCodeCheck(deadcodeRepo))
 	checkReg.Register(checks.NewContractDriftCheck(contractRepo))
+
+	// Vulnerability-scan feature (M7). Off by default: an absent [vuln_source]
+	// section yields the NullVulnSource, registers no vulnscan check, and
+	// starts no refresher. provider="osv" builds the OSV adapter, registers
+	// the VulnScanCheck alongside the structural checks, and arms the
+	// refresher goroutine launched in Start.
+	vulnSource, vulnEnabled := buildVulnSource(fileCfg)
+	var vulnRefresher *vulnrefresh.Refresher
+	if vulnEnabled {
+		vulnRoot := func(ctx context.Context, repoID string) (string, error) {
+			return repoRootFunc(pools.ReadDB)(ctx, repoID)
+		}
+		checkReg.Register(checks.NewVulnScanCheck(vulnSource, vulnRoot))
+
+		var refreshOpts []vulnrefresh.Option
+		if iv := vulnRefreshInterval(fileCfg); iv > 0 {
+			refreshOpts = append(refreshOpts, vulnrefresh.WithInterval(iv))
+		}
+		refresher, rerr := vulnrefresh.NewRefresher(vulnSource, refreshOpts...)
+		if rerr != nil {
+			_ = pools.Close()
+			return nil, fmt.Errorf("daemon: vuln refresher: %w", rerr)
+		}
+		vulnRefresher = refresher
+	}
+
 	runner := checks.NewRunner(checkReg, findings, metrics)
 	promoter.SetCheckRunner(checkRunnerAdapter{inner: runner})
 
@@ -523,6 +562,7 @@ func newDaemon(cfg Config) (*Daemon, error) {
 		metricsReg:     metricsReg,
 		metricsListen:  metricsListen,
 		tracerProvider: tracerProvider,
+		vulnRefresher:  vulnRefresher,
 	}, nil
 }
 
@@ -805,6 +845,13 @@ func (d *Daemon) Start(ctx context.Context) error {
 			defer close(d.wDone)
 			d.runWatchLoop(d.ctx)
 		}()
+
+		// OSV advisory-cache refresher. Run blocks until d.ctx is cancelled,
+		// so it owns its own goroutine on the daemon's lifetime context.
+		// Non-nil only when [vuln_source] provider="osv".
+		if d.vulnRefresher != nil {
+			go d.vulnRefresher.Run(d.ctx)
+		}
 	})
 	return startErr
 }
