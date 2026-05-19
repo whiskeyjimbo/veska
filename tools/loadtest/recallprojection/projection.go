@@ -138,7 +138,7 @@ func synthSnippet(n synthcorpus.SyntheticNode) string {
 // trimmed, non-empty phrases.
 func splitPhrases(text string) []string {
 	out := make([]string, 0, 8)
-	for _, p := range strings.Split(text, ".") {
+	for p := range strings.SplitSeq(text, ".") {
 		if p = strings.TrimSpace(p); p != "" {
 			out = append(out, p)
 		}
