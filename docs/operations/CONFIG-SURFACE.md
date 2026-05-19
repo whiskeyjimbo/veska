@@ -175,11 +175,26 @@ enabled               = false
 max_tokens_per_commit = 100000
 max_tokens_per_day    = 500000
 
-# ─── vuln source (off by default) ────────────────────────────
+# ─── vuln source (off by default; SOLO-11 §2.1, M7) ──────────
+# Drives the `vuln-scan` promotion check. An empty `provider`
+# (the default) keeps the feature off — the daemon uses the
+# no-op NullVulnSource. Set `provider = "osv"` to enable the
+# OSV.dev adapter; any other value is a fatal startup error.
+# `refresh_interval` overrides the advisory-cache refresh
+# cadence (Go duration); empty falls back to the 24h default.
 [vuln_source]
-enabled                = false
-provider               = "osv"               # "osv" | "ghsa"
+provider               = ""                  # "" (off, default) | "osv"
 refresh_interval       = "24h"
+
+# ─── promotion checks (M7) ───────────────────────────────────
+# `disabled_checks` names structural checks to skip; each entry
+# matches a check's Name() — "dead-code", "contract-drift",
+# "vuln-scan", "secrets-scan". An empty list (the default) keeps
+# every registered check on. `vuln-scan` is only registered when
+# `[vuln_source]` is configured; `secrets-scan` ships on by
+# default and is the usual reason to set this.
+[promotion]
+disabled_checks        = []                   # e.g. ["secrets-scan"]
 
 # ─── tracker integration ─────────────────────────────────────
 # Default is "none" — no tracker integration. Set to "bd-cli" to
