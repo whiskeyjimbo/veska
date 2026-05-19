@@ -28,10 +28,12 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/core/ports"
 )
 
-const (
-	// dumpURL is the OSV full Go-ecosystem advisory dump.
-	dumpURL = "https://osv-vulnerabilities.storage.googleapis.com/Go/all.zip"
+// DumpURL is the OSV full Go-ecosystem advisory dump. It is the single
+// outbound endpoint this adapter dials and is exported so the daemon's egress
+// observability report can cite it without re-deriving the literal.
+const DumpURL = "https://osv-vulnerabilities.storage.googleapis.com/Go/all.zip"
 
+const (
 	defaultTimeout = 5 * time.Minute
 
 	// ecosystemGo is the OSV ecosystem label this adapter understands.
@@ -93,7 +95,7 @@ func WithDumpURL(u string) Option {
 func New(opts ...Option) *Adapter {
 	a := &Adapter{
 		cacheDir: config.DefaultOSVCacheDir(),
-		dumpURL:  dumpURL,
+		dumpURL:  DumpURL,
 		client:   &http.Client{Timeout: defaultTimeout},
 	}
 	for _, opt := range opts {

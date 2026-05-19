@@ -3,11 +3,12 @@ package doctor
 // EgressDestination describes one active outbound endpoint or listener.
 // Matches the SOLO-13 §2.1.2 egress schema.
 type EgressDestination struct {
-	// Kind is one of: "metrics", "otlp", "review_llm".
+	// Kind is one of: "metrics", "otlp", "review_llm", "vuln_source".
 	Kind string `json:"kind"`
 	// Listen is set for HTTP listeners (metrics). Empty for dial-out endpoints.
 	Listen string `json:"listen,omitempty"`
-	// URL is set for dial-out endpoints (otlp, review_llm). Empty for listeners.
+	// URL is set for dial-out endpoints (otlp, review_llm, vuln_source).
+	// Empty for listeners.
 	URL string `json:"url,omitempty"`
 	// ConfiguredVia cites the provenance: "default" | env var name | "config:<key>".
 	ConfiguredVia string `json:"configured_via"`
@@ -40,13 +41,20 @@ type EgressObservabilityParams struct {
 	ReviewLLMEndpoint string
 	// ReviewLLMConfiguredVia cites how ReviewLLMEndpoint was set.
 	ReviewLLMConfiguredVia string
+
+	// VulnSourceEndpoint is the vulnerability advisory source's dump URL (the
+	// OSV.dev Go-ecosystem dump). The caller passes "" when [vuln_source] is
+	// not configured, so the destination is omitted.
+	VulnSourceEndpoint string
+	// VulnSourceConfiguredVia cites how VulnSourceEndpoint was set.
+	VulnSourceConfiguredVia string
 }
 
 // CheckEgressObservability builds an EgressObservabilityReport from the provided
 // params. It never returns an error — it purely projects configuration state into
 // the report shape.
 func CheckEgressObservability(params EgressObservabilityParams) EgressObservabilityReport {
-	dests := make([]EgressDestination, 0, 3)
+	dests := make([]EgressDestination, 0, 4)
 
 	if params.MetricsListener != "" {
 		via := params.MetricsConfiguredVia
@@ -80,6 +88,18 @@ func CheckEgressObservability(params EgressObservabilityParams) EgressObservabil
 		dests = append(dests, EgressDestination{
 			Kind:          "review_llm",
 			URL:           params.ReviewLLMEndpoint,
+			ConfiguredVia: via,
+		})
+	}
+
+	if params.VulnSourceEndpoint != "" {
+		via := params.VulnSourceConfiguredVia
+		if via == "" {
+			via = "default"
+		}
+		dests = append(dests, EgressDestination{
+			Kind:          "vuln_source",
+			URL:           params.VulnSourceEndpoint,
 			ConfiguredVia: via,
 		})
 	}
