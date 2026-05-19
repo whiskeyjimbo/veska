@@ -120,6 +120,7 @@ func TestResolveCrossRepoEdgeHit(t *testing.T) {
 	}
 	if edge == nil {
 		t.Fatal("expected resolved edge, got nil")
+		return
 	}
 	if edge.DstNodeID != "node-b-1" {
 		t.Errorf("DstNodeID: got %q, want %q", edge.DstNodeID, "node-b-1")

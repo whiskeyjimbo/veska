@@ -33,6 +33,7 @@ func TestMultiRepoWatcherAdd(t *testing.T) {
 	ch := mw.Events()
 	if ch == nil {
 		t.Fatal("Events() returned nil channel")
+		return
 	}
 
 	if err := mw.Close(); err != nil {

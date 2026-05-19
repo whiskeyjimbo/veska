@@ -174,6 +174,7 @@ func TestSetActiveTask_MissingParams(t *testing.T) {
 	})
 	if rpcErr == nil {
 		t.Fatal("expected RPC error")
+		return
 	}
 	if rpcErr.Code != CodeInvalidParams {
 		t.Errorf("expected CodeInvalidParams, got %d", rpcErr.Code)

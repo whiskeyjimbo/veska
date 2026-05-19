@@ -180,6 +180,7 @@ func TestDeadCodeCheck_QuerierErrorPropagates(t *testing.T) {
 	})
 	if err == nil {
 		t.Fatalf("expected error, got nil")
+		return
 	}
 }
 
@@ -201,6 +202,7 @@ func TestDeadCodeCheck_ThreadsContentHash(t *testing.T) {
 	}
 	if findings[0].AnchorContentHash == nil {
 		t.Fatal("AnchorContentHash is nil")
+		return
 	}
 	if *findings[0].AnchorContentHash != "h-abc" {
 		t.Errorf("AnchorContentHash = %q, want h-abc", *findings[0].AnchorContentHash)

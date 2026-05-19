@@ -168,6 +168,7 @@ func TestSemantic_EmbedderError_PropagatesWrapped(t *testing.T) {
 	_, err := s.Semantic(context.Background(), "r1", "main", "q", 5, domain.Filter{})
 	if err == nil {
 		t.Fatal("expected error")
+		return
 	}
 	if !errors.Is(err, sentinel) {
 		t.Errorf("error not wrapped: %v", err)
@@ -190,6 +191,7 @@ func TestSemantic_VectorStorageError_PropagatesWrapped(t *testing.T) {
 	_, err := s.Semantic(context.Background(), "r1", "main", "q", 5, domain.Filter{})
 	if err == nil {
 		t.Fatal("expected error")
+		return
 	}
 	if !errors.Is(err, sentinel) {
 		t.Errorf("error not wrapped: %v", err)
@@ -215,6 +217,7 @@ func TestSemantic_EmptyHits_ReturnsEmptyNilError(t *testing.T) {
 	got := resp.Results
 	if got == nil {
 		t.Fatal("expected empty slice, got nil — callers serialize nil as null")
+		return
 	}
 	if len(got) != 0 {
 		t.Errorf("expected 0 results, got %d", len(got))
@@ -260,6 +263,7 @@ func TestSemantic_NodeLookupError_PropagatesWrapped(t *testing.T) {
 	_, err := s.Semantic(context.Background(), "r1", "main", "q", 5, domain.Filter{})
 	if err == nil {
 		t.Fatal("expected error")
+		return
 	}
 	if !errors.Is(err, sentinel) {
 		t.Errorf("error not wrapped: %v", err)
@@ -300,6 +304,7 @@ func TestSemantic_ObservesVectorQueryDuration_ErrorPath(t *testing.T) {
 	s := search.NewService(emb, vec, nodes, search.WithMetrics(m))
 	if _, err := s.Semantic(context.Background(), "r1", "main", "q", 5, domain.Filter{}); err == nil {
 		t.Fatal("expected error")
+		return
 	}
 
 	n := testutil.CollectAndCount(m.VectorQueryDuration)
@@ -375,6 +380,7 @@ func TestSemantic_EmbedderUnreachable_NoLexical_PropagatesError(t *testing.T) {
 	_, err := s.Semantic(context.Background(), "r1", "main", "q", 5, domain.Filter{})
 	if err == nil {
 		t.Fatal("expected error, got nil")
+		return
 	}
 	if !errors.Is(err, ports.ErrEmbedderUnreachable) {
 		t.Errorf("expected ErrEmbedderUnreachable in chain, got %v", err)
@@ -397,6 +403,7 @@ func TestSemantic_NonSentinelEmbedderError_DoesNotFallBack(t *testing.T) {
 	_, err := s.Semantic(context.Background(), "r1", "main", "q", 5, domain.Filter{})
 	if err == nil {
 		t.Fatal("expected error, got nil")
+		return
 	}
 	if !errors.Is(err, other) {
 		t.Errorf("expected wrapped non-sentinel error, got %v", err)

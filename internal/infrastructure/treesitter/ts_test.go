@@ -25,6 +25,7 @@ function greet(name: string): string {
 	fn := findNodeByName(result.Nodes, "greet")
 	if fn == nil {
 		t.Fatalf("expected node named 'greet', got nodes: %v", nodeNames(result.Nodes))
+		return
 	}
 	if fn.Kind != domain.KindFunction {
 		t.Errorf("expected KindFunction, got %q", fn.Kind)
@@ -50,6 +51,7 @@ class Animal {
 	cls := findNodeByName(result.Nodes, "Animal")
 	if cls == nil {
 		t.Fatalf("expected node named 'Animal', got nodes: %v", nodeNames(result.Nodes))
+		return
 	}
 	if cls.Kind != domain.KindClass {
 		t.Errorf("expected KindClass, got %q", cls.Kind)
@@ -73,6 +75,7 @@ class Dog {
 	method := findNodeByName(result.Nodes, "Dog.bark")
 	if method == nil {
 		t.Fatalf("expected node named 'Dog.bark', got nodes: %v", nodeNames(result.Nodes))
+		return
 	}
 	if method.Kind != domain.KindMethod {
 		t.Errorf("expected KindMethod, got %q", method.Kind)
@@ -94,6 +97,7 @@ interface Shape {
 	iface := findNodeByName(result.Nodes, "Shape")
 	if iface == nil {
 		t.Fatalf("expected node named 'Shape', got nodes: %v", nodeNames(result.Nodes))
+		return
 	}
 	if iface.Kind != domain.KindInterface {
 		t.Errorf("expected KindInterface, got %q", iface.Kind)
@@ -119,6 +123,7 @@ export default Greeting;
 	fn := findNodeByName(result.Nodes, "Greeting")
 	if fn == nil {
 		t.Fatalf("expected node named 'Greeting', got nodes: %v", nodeNames(result.Nodes))
+		return
 	}
 	if fn.Kind != domain.KindFunction {
 		t.Errorf("expected KindFunction, got %q", fn.Kind)
@@ -184,6 +189,7 @@ function greet(): string {
 	greetNode := findNodeByName(result.Nodes, "greet")
 	if helloNode == nil || greetNode == nil {
 		t.Fatalf("expected hello and greet nodes, got: %v", nodeNames(result.Nodes))
+		return
 	}
 
 	edge := findEdge(result.Edges, greetNode.ID, helloNode.ID, domain.EdgeCalls)
@@ -238,6 +244,7 @@ function foo(): void {}
 	mod := findNodeByKind(result.Nodes, domain.KindModule)
 	if mod == nil {
 		t.Fatal("expected a module node")
+		return
 	}
 	if mod.Name != "utils" {
 		t.Errorf("expected module name 'utils', got %q", mod.Name)
@@ -246,6 +253,7 @@ function foo(): void {}
 	fooNode := findNodeByName(result.Nodes, "foo")
 	if fooNode == nil {
 		t.Fatal("expected foo node")
+		return
 	}
 
 	edge := findEdge(result.Edges, mod.ID, fooNode.ID, domain.EdgeContains)

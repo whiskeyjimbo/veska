@@ -154,6 +154,7 @@ func TestSecretsScanCheck_ScannerError(t *testing.T) {
 	}
 	if _, err := c.Run(context.Background(), in); err == nil {
 		t.Fatal("want error when scanner fails")
+		return
 	}
 }
 
@@ -167,6 +168,7 @@ func TestSecretsScanCheck_NilScanner(t *testing.T) {
 	in := Input{AddedLines: map[string][]Line{"f.go": {{Number: 1, Text: "x"}}}}
 	if _, err := c.Run(context.Background(), in); err == nil {
 		t.Fatal("want error on nil scanner")
+		return
 	}
 }
 

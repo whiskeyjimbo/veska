@@ -34,5 +34,6 @@ func TestStderrNotifier_Notify_CancelledContext(t *testing.T) {
 	err := n.Notify(ctx, ports.Notification{Level: "WARN", Message: "cancelled"})
 	if err == nil {
 		t.Fatal("expected error for cancelled context, got nil")
+		return
 	}
 }

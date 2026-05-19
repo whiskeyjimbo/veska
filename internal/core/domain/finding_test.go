@@ -239,6 +239,7 @@ func TestWithAnchorContentHash_Sets(t *testing.T) {
 	}
 	if f.AnchorContentHash == nil {
 		t.Fatal("AnchorContentHash is nil")
+		return
 	}
 	if *f.AnchorContentHash != "h-abc123" {
 		t.Errorf("AnchorContentHash = %q, want h-abc123", *f.AnchorContentHash)

@@ -375,6 +375,7 @@ func TestResync_ErrPromotionDivergent_Error(t *testing.T) {
 func TestResync_ErrDaemonStarting(t *testing.T) {
 	if ErrDaemonStarting == nil {
 		t.Fatal("ErrDaemonStarting must not be nil")
+		return
 	}
 	if !errors.Is(ErrDaemonStarting, ErrDaemonStarting) {
 		t.Fatal("ErrDaemonStarting must satisfy errors.Is against itself")

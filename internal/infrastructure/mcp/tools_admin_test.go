@@ -102,6 +102,7 @@ func TestAdminTools_GetCurrentRepo_NotFound(t *testing.T) {
 
 	if rpcErr == nil {
 		t.Fatal("expected RPC error, got nil")
+		return
 	}
 	if rpcErr.Code != CodeInvalidParams {
 		t.Errorf("expected code -32602, got %d", rpcErr.Code)
@@ -116,6 +117,7 @@ func TestAdminTools_GetCurrentRepo_MissingCwd(t *testing.T) {
 
 	if rpcErr == nil {
 		t.Fatal("expected RPC error for missing cwd")
+		return
 	}
 	if rpcErr.Code != CodeInvalidParams {
 		t.Errorf("expected -32602, got %d", rpcErr.Code)
@@ -190,6 +192,7 @@ func TestAdminTools_GetRepo_NotFound(t *testing.T) {
 
 	if rpcErr == nil {
 		t.Fatal("expected RPC error, got nil")
+		return
 	}
 	if rpcErr.Code != CodeInvalidParams {
 		t.Errorf("expected -32602, got %d", rpcErr.Code)

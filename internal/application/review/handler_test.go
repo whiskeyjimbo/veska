@@ -132,6 +132,7 @@ func TestHandler_WrongKind(t *testing.T) {
 	}
 	if err := h.Handle(context.Background(), ports.WorkRow{Kind: ports.WorkKindWiki}); err == nil {
 		t.Fatal("expected error for wrong kind, got nil")
+		return
 	}
 }
 

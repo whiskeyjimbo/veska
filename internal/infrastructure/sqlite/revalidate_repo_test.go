@@ -79,9 +79,6 @@ func (f *revalFixture) insertFinding(t *testing.T, id, branch, nodeID string, an
 	return fnd
 }
 
-//go:fix inline
-func ptr(s string) *string { return new(s) }
-
 func TestRevalidateRepo_StaleFindings_ReturnsOnlyDrift(t *testing.T) {
 	t.Parallel()
 	f := setupRevalFixture(t)
@@ -624,6 +621,7 @@ func TestRevalidateRepo_ApplyDecisions_RollbackOnError(t *testing.T) {
 	}
 	if err := f.reval.ApplyDecisions(context.Background(), f.repoID, f.branch, batch, time.Now().UnixMilli()); err == nil {
 		t.Fatal("expected error from unknown kind, got nil")
+		return
 	}
 
 	var anchor sql.NullString

@@ -76,6 +76,7 @@ func TestVacuumInto_FailsIfDestExists(t *testing.T) {
 	err = sqlite.VacuumInto(context.Background(), db, dstPath)
 	if err == nil {
 		t.Fatal("expected error when dest already exists, got nil")
+		return
 	}
 }
 
@@ -98,5 +99,6 @@ func TestVacuumInto_ContextCancel(t *testing.T) {
 	err = sqlite.VacuumInto(ctx, db, dstPath)
 	if err == nil {
 		t.Fatal("expected error for cancelled context, got nil")
+		return
 	}
 }

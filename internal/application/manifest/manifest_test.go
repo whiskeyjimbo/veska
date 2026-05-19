@@ -65,6 +65,7 @@ go 1.26
 			if tt.wantErr {
 				if err == nil {
 					t.Fatalf("expected error, got nil")
+					return
 				}
 				return
 			}

@@ -8,6 +8,7 @@ func TestNewActor_EmptyID(t *testing.T) {
 	_, err := NewActor("", ActorKindHuman)
 	if err == nil {
 		t.Fatal("expected error for empty id, got nil")
+		return
 	}
 }
 
@@ -15,6 +16,7 @@ func TestNewActor_InvalidKind(t *testing.T) {
 	_, err := NewActor("human:alice", ActorKind("wizard"))
 	if err == nil {
 		t.Fatal("expected error for invalid ActorKind, got nil")
+		return
 	}
 }
 
