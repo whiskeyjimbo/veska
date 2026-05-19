@@ -240,6 +240,7 @@ func TestFindOwner_MissingParams(t *testing.T) {
 	})
 	if rpcErr == nil {
 		t.Fatal("expected RPC error for missing file_path")
+		return
 	}
 	if rpcErr.Code != CodeInvalidParams {
 		t.Errorf("expected CodeInvalidParams, got %d", rpcErr.Code)

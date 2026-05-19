@@ -7,7 +7,7 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/core/domain"
 	"github.com/whiskeyjimbo/veska/internal/core/ports"
 	"github.com/whiskeyjimbo/veska/internal/observability"
-	"go.opentelemetry.io/otel/trace"
+	"go.opentelemetry.io/otel/trace/noop"
 )
 
 // CheckRunInput is the data the post-commit check pipeline receives. It mirrors
@@ -118,7 +118,7 @@ func (p *Promoter) TracerProvider() observability.TracerProvider {
 // tracerProvider returns the configured provider or a noop if nil.
 func (p *Promoter) tracerProvider() observability.TracerProvider {
 	if p.tp == nil {
-		return trace.NewNoopTracerProvider()
+		return noop.NewTracerProvider()
 	}
 	return p.tp
 }

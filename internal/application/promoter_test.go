@@ -236,6 +236,7 @@ func TestPromoteUnregisteredRepo(t *testing.T) {
 	err := p.Promote(context.Background(), "unknown-repo", "main", "sha-abc", domain.Actor{ID: "service:veska", Kind: domain.ActorKindSystem})
 	if err == nil {
 		t.Fatal("expected application.ErrUnregisteredRepo, got nil")
+		return
 	}
 	var unreg application.ErrUnregisteredRepo
 	if !errors.As(err, &unreg) {

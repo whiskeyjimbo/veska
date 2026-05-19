@@ -7,7 +7,7 @@ import (
 	"strings"
 	"sync"
 
-	"go.opentelemetry.io/otel/trace"
+	"go.opentelemetry.io/otel/trace/noop"
 
 	"github.com/whiskeyjimbo/veska/internal/core/domain"
 	"github.com/whiskeyjimbo/veska/internal/core/ports"
@@ -72,7 +72,7 @@ func (ing *Ingester) TracerProvider() observability.TracerProvider {
 // tracerProvider returns the configured provider or a noop if nil.
 func (ing *Ingester) tracerProvider() observability.TracerProvider {
 	if ing.tp == nil {
-		return trace.NewNoopTracerProvider()
+		return noop.NewTracerProvider()
 	}
 	return ing.tp
 }

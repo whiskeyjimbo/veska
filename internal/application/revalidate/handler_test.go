@@ -126,6 +126,7 @@ func TestHandler_RejectsWrongKind(t *testing.T) {
 	err := h.Handle(context.Background(), ports.WorkRow{Kind: ports.WorkKindEmbed, Payload: "x.go"})
 	if err == nil {
 		t.Fatal("expected error for wrong kind, got nil")
+		return
 	}
 }
 
@@ -549,6 +550,7 @@ func TestHandler_MetricsOnlyBumpAfterApplyCommits(t *testing.T) {
 	})
 	if err == nil {
 		t.Fatal("expected error from ApplyDecisions, got nil")
+		return
 	}
 	if got := testutil.ToFloat64(metrics.RevalidateRefreshed); got != 0 {
 		t.Errorf("refreshed counter = %v, want 0 (no commit, no metric)", got)
@@ -579,6 +581,7 @@ func TestNewHandler_NilRepoPanics(t *testing.T) {
 	defer func() {
 		if r := recover(); r == nil {
 			t.Fatal("expected panic on nil repo")
+			return
 		}
 	}()
 	_ = revalidate.NewHandler(nil)

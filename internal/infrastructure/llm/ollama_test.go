@@ -190,6 +190,7 @@ func TestOllamaGenerator_Generate_RetriesExhausted(t *testing.T) {
 	_, err := gen.Generate(context.Background(), ports.GenerateRequest{Prompt: "hi"})
 	if err == nil {
 		t.Fatal("expected error after exhausting retries")
+		return
 	}
 	if got := atomic.LoadInt32(&calls); got != 3 {
 		t.Fatalf("call count: got %d, want 3 (3 attempts total)", got)
@@ -212,6 +213,7 @@ func TestOllamaGenerator_Generate_NoRetryOn4xx(t *testing.T) {
 	_, err := gen.Generate(context.Background(), ports.GenerateRequest{Prompt: "hi"})
 	if err == nil {
 		t.Fatal("expected error for 4xx status")
+		return
 	}
 	if got := atomic.LoadInt32(&calls); got != 1 {
 		t.Fatalf("call count: got %d, want 1 (4xx must not retry)", got)
@@ -230,6 +232,7 @@ func TestOllamaGenerator_Generate_NonOKStatus(t *testing.T) {
 	_, err := gen.Generate(context.Background(), ports.GenerateRequest{Prompt: "hello"})
 	if err == nil {
 		t.Fatal("expected error for non-200 status, got nil")
+		return
 	}
 }
 
@@ -249,6 +252,7 @@ func TestOllamaGenerator_Generate_ContextCancelled(t *testing.T) {
 	_, err := gen.Generate(ctx, ports.GenerateRequest{Prompt: "hello"})
 	if err == nil {
 		t.Fatal("expected error for cancelled context, got nil")
+		return
 	}
 }
 
@@ -270,6 +274,7 @@ func TestOllamaGenerator_Generate_ContextCancelNoRetry(t *testing.T) {
 	_, err := gen.Generate(ctx, ports.GenerateRequest{Prompt: "hello"})
 	if err == nil {
 		t.Fatal("expected error for cancelled context")
+		return
 	}
 	if got := atomic.LoadInt32(&calls); got > 1 {
 		t.Fatalf("call count: got %d, want <= 1 (cancellation must not retry)", got)
@@ -282,6 +287,7 @@ func TestNewOllamaGenerator_Defaults(t *testing.T) {
 	gen := llm.NewOllamaGenerator("", "", nil)
 	if gen == nil {
 		t.Fatal("expected non-nil generator")
+		return
 	}
 }
 
@@ -308,6 +314,7 @@ func TestOllamaGenerator_Generate_PerCallTimeout(t *testing.T) {
 	_, err := gen.Generate(context.Background(), ports.GenerateRequest{Prompt: "hi"})
 	if err == nil {
 		t.Fatal("expected timeout error")
+		return
 	}
 	if elapsed := time.Since(start); elapsed > 3*time.Second {
 		t.Fatalf("Generate took %v; per-call timeout not honored", elapsed)

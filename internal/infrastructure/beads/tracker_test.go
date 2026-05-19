@@ -65,6 +65,7 @@ func TestFileTracker_ActiveTask_WithID(t *testing.T) {
 	}
 	if task == nil {
 		t.Fatal("expected non-nil task")
+		return
 	}
 	if task.ID != wantID {
 		t.Fatalf("ID: got %q, want %q", task.ID, wantID)

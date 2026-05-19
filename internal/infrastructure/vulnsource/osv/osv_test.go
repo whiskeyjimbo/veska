@@ -276,5 +276,6 @@ func TestRefresh_Non200ReturnsError(t *testing.T) {
 	a := osv.New(osv.WithCacheDir(t.TempDir()), osv.WithDumpURL(srv.URL))
 	if err := a.Refresh(context.Background()); err == nil {
 		t.Fatal("expected error on non-200 response")
+		return
 	}
 }

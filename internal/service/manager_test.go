@@ -32,6 +32,7 @@ func TestNewUnsupported(t *testing.T) {
 	_, err := service.NewForGOOS("windows", "/bin/veska-daemon", "/home/user/.veska")
 	if err == nil {
 		t.Fatal("expected error for unsupported platform, got nil")
+		return
 	}
 }
 

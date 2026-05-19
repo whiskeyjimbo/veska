@@ -19,6 +19,7 @@ func TestOpen_NativeEmptyDirSucceeds(t *testing.T) {
 	}
 	if store == nil {
 		t.Fatal("Open returned nil store without error")
+		return
 	}
 	// Caller is responsible for Destroy; cast to *UsearchStore if needed.
 	// Nothing to call here in the test as the interface does not expose Destroy.

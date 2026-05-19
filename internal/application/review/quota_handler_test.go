@@ -124,6 +124,7 @@ func TestHandler_CommitOverageRefusesRemaining(t *testing.T) {
 	err = h.Handle(context.Background(), row)
 	if err == nil {
 		t.Fatal("second job should be refused with an error")
+		return
 	}
 	if !strings.Contains(err.Error(), quotaExceeded) {
 		t.Errorf("refusal error = %q, want it to carry %q", err.Error(), quotaExceeded)
@@ -205,6 +206,7 @@ func TestHandler_DailyCapPauses(t *testing.T) {
 	row := ports.WorkRow{Kind: ports.WorkKindReview, RepoID: "r", Branch: "main", GitSHA: "s", Payload: "a.go"}
 	if err := h.Handle(context.Background(), row); err == nil {
 		t.Fatal("paused handler should return an error, got nil")
+		return
 	}
 	if gen.callCount() != 0 {
 		t.Errorf("paused handler called the LLM %d times, want 0", gen.callCount())

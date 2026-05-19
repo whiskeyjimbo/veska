@@ -12,6 +12,7 @@ func TestNewTask_EmptyID(t *testing.T) {
 	_, err := NewTask("", "repo1", "My Task")
 	if err == nil {
 		t.Fatal("expected error for empty id, got nil")
+		return
 	}
 }
 
@@ -19,6 +20,7 @@ func TestNewTask_EmptyRepoID(t *testing.T) {
 	_, err := NewTask("task-1", "", "My Task")
 	if err == nil {
 		t.Fatal("expected error for empty repoID, got nil")
+		return
 	}
 }
 
@@ -26,6 +28,7 @@ func TestNewTask_EmptyTitle(t *testing.T) {
 	_, err := NewTask("task-1", "repo1", "")
 	if err == nil {
 		t.Fatal("expected error for empty title, got nil")
+		return
 	}
 }
 

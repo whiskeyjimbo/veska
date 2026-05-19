@@ -246,6 +246,7 @@ func TestStagedFiles_EmptySlice(t *testing.T) {
 	files := sa.StagedFiles("repo1", "main")
 	if files == nil {
 		t.Fatal("StagedFiles must return non-nil empty slice, not nil")
+		return
 	}
 }
 

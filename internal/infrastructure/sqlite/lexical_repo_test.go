@@ -142,9 +142,6 @@ func TestLexical_RRFCombinesArms(t *testing.T) {
 	for i, h := range hits {
 		pos[h.NodeID] = i
 	}
-	if pos["n1"] >= pos["n2"] && pos["n2"] != 0 {
-		// pos==0 for n2 only when n1 absent, which is its own failure.
-	}
 	if _, ok := pos["n1"]; !ok {
 		t.Errorf("n1 missing from results: %+v", hits)
 	}

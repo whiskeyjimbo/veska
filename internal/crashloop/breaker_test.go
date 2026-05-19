@@ -25,6 +25,7 @@ func TestCheckBroken(t *testing.T) {
 	err := crashloop.Check(dir)
 	if err == nil {
 		t.Fatal("expected ErrBroken, got nil")
+		return
 	}
 	if err != crashloop.ErrBroken {
 		t.Fatalf("expected ErrBroken sentinel, got %v", err)

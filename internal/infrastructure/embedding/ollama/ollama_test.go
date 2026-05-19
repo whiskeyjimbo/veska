@@ -89,6 +89,7 @@ func TestEmbed_5xx_WrapsUnreachable(t *testing.T) {
 	_, err := p.Embed(context.Background(), "hello")
 	if err == nil {
 		t.Fatal("expected error on 5xx")
+		return
 	}
 	if !errors.Is(err, ports.ErrEmbedderUnreachable) {
 		t.Fatalf("err = %v, want wraps ErrEmbedderUnreachable", err)
@@ -105,6 +106,7 @@ func TestEmbed_4xx_DoesNotWrapUnreachable(t *testing.T) {
 	_, err := p.Embed(context.Background(), "hello")
 	if err == nil {
 		t.Fatal("expected error on 4xx")
+		return
 	}
 	if errors.Is(err, ports.ErrEmbedderUnreachable) {
 		t.Fatalf("err = %v, must NOT wrap ErrEmbedderUnreachable (caller fault)", err)
@@ -128,6 +130,7 @@ func TestEmbed_ConnectionRefused_WrapsUnreachable(t *testing.T) {
 	_, err = p.Embed(context.Background(), "hello")
 	if err == nil {
 		t.Fatal("expected error on connection refused")
+		return
 	}
 	if !errors.Is(err, ports.ErrEmbedderUnreachable) {
 		t.Fatalf("err = %v, want wraps ErrEmbedderUnreachable", err)
@@ -151,6 +154,7 @@ func TestEmbed_ContextCancel_DoesNotWrapUnreachable(t *testing.T) {
 	_, err := p.Embed(ctx, "hello")
 	if err == nil {
 		t.Fatal("expected error on ctx cancel")
+		return
 	}
 	if errors.Is(err, ports.ErrEmbedderUnreachable) {
 		t.Fatalf("err = %v, must NOT wrap ErrEmbedderUnreachable (caller cancel)", err)
@@ -170,6 +174,7 @@ func TestEmbed_WrongShape_PlainError(t *testing.T) {
 	_, err := p.Embed(context.Background(), "hello")
 	if err == nil {
 		t.Fatal("expected decode error")
+		return
 	}
 	if errors.Is(err, ports.ErrEmbedderUnreachable) {
 		t.Fatalf("err = %v, must NOT wrap ErrEmbedderUnreachable (server bug)", err)
@@ -186,5 +191,6 @@ func TestEmbed_EmptyEmbedding_Error(t *testing.T) {
 	_, err := p.Embed(context.Background(), "hello")
 	if err == nil {
 		t.Fatal("expected error on empty embedding")
+		return
 	}
 }

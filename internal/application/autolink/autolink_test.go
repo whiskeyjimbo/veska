@@ -307,6 +307,7 @@ func TestCandidates_SearchErrorPropagates(t *testing.T) {
 	_, err := l.Candidates(context.Background(), "r1", "main", []string{"A"})
 	if err == nil {
 		t.Fatal("want error, got nil")
+		return
 	}
 	if !errors.Is(err, want) {
 		t.Errorf("error chain wrong: %v", err)

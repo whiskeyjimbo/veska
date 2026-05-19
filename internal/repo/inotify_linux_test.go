@@ -36,6 +36,7 @@ func TestCheckInotifyBudgetShort(t *testing.T) {
 	_, err := CheckInotifyBudget(5, 128)
 	if err == nil {
 		t.Fatal("expected error for short budget, got nil")
+		return
 	}
 	if !strings.Contains(err.Error(), "sysctl") {
 		t.Errorf("error %q does not contain 'sysctl'", err.Error())

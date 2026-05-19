@@ -87,6 +87,7 @@ func TestPromotionStore_RollsBackOnMidTxFailure(t *testing.T) {
 	})
 	if err == nil {
 		t.Fatal("expected mid-tx failure, got nil")
+		return
 	}
 
 	// The prior committed state must be intact: still exactly 1 node, the

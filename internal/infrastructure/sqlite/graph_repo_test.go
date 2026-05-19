@@ -65,6 +65,7 @@ func TestGraphRepo_SaveNode_GetNode_RoundTrip(t *testing.T) {
 	}
 	if got == nil {
 		t.Fatal("GetNode returned nil for a saved node")
+		return
 	}
 	if got.ID != in.ID || got.Path != in.Path || got.Name != in.Name || got.Kind != in.Kind {
 		t.Errorf("node mismatch: got %+v want %+v", got, in)
@@ -96,6 +97,7 @@ func TestGraphRepo_SaveNode_Upserts(t *testing.T) {
 	got, err := r.GetNode(ctx, "r1", "main", "n1")
 	if err != nil || got == nil {
 		t.Fatalf("GetNode: %v / %v", got, err)
+		return
 	}
 	if got.Name != "AlphaRenamed" || got.Kind != domain.KindMethod {
 		t.Errorf("upsert did not replace row: got %+v", got)
@@ -179,6 +181,7 @@ func TestGraphRepo_SaveEdge_LoadGraph(t *testing.T) {
 	}
 	if g == nil {
 		t.Fatal("LoadGraph returned nil graph")
+		return
 	}
 	if _, ok := g.Node("src"); !ok {
 		t.Error("graph missing src node")
@@ -272,6 +275,7 @@ func TestGraphRepo_LoadGraph_UnknownReturnsEmptyNonNil(t *testing.T) {
 	}
 	if g == nil {
 		t.Fatal("LoadGraph returned nil for unknown branch; want empty non-nil Graph")
+		return
 	}
 	if _, ok := g.Node("anything"); ok {
 		t.Error("empty graph reported a node")

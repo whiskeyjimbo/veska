@@ -159,6 +159,7 @@ func TestHandler_RejectsWrongKind(t *testing.T) {
 	err := h.Handle(context.Background(), queue.Row{Kind: queue.WorkKindEmbed, Payload: "x.go"})
 	if err == nil {
 		t.Fatal("expected error for wrong kind, got nil")
+		return
 	}
 }
 
@@ -308,6 +309,7 @@ func TestHandler_FakesEmitOneEdgeAndOneFindingPerCandidate(t *testing.T) {
 	for _, f := range findings.saved {
 		if f.NodeID == nil {
 			t.Fatalf("finding missing node anchor: %+v", f)
+			return
 		}
 		if !wantAnchors[*f.NodeID] {
 			t.Errorf("finding anchor %q does not match any edge ID", *f.NodeID)

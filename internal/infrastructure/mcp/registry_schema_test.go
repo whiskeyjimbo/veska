@@ -40,6 +40,7 @@ func TestRegister_MalformedSchemaRejected(t *testing.T) {
 	spec.InputSchema = json.RawMessage(`{`)
 	if err := r.Register(spec); err == nil {
 		t.Fatal("expected error for malformed InputSchema, got nil")
+		return
 	}
 }
 
@@ -49,6 +50,7 @@ func TestRegister_MalformedOutputSchemaRejected(t *testing.T) {
 	spec.OutputSchema = json.RawMessage(`{"type":`)
 	if err := r.Register(spec); err == nil {
 		t.Fatal("expected error for malformed OutputSchema, got nil")
+		return
 	}
 }
 

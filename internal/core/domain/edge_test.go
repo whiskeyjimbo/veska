@@ -85,6 +85,7 @@ func TestNewEdge_EmptySrc(t *testing.T) {
 	_, err := NewEdge("", "nodeB", EdgeCalls)
 	if err == nil {
 		t.Fatal("expected error for empty src, got nil")
+		return
 	}
 }
 
@@ -93,6 +94,7 @@ func TestNewEdge_EmptyTgt(t *testing.T) {
 	_, err := NewEdge("nodeA", "", EdgeCalls)
 	if err == nil {
 		t.Fatal("expected error for empty tgt, got nil")
+		return
 	}
 }
 

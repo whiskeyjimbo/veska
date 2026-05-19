@@ -205,6 +205,7 @@ func TestSuppressFinding_MissingParams(t *testing.T) {
 	})
 	if rpcErr == nil {
 		t.Fatal("expected RPC error for missing finding_id")
+		return
 	}
 	if rpcErr.Code != CodeInvalidParams {
 		t.Errorf("expected code %d, got %d", CodeInvalidParams, rpcErr.Code)

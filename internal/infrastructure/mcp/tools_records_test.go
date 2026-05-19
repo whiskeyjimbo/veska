@@ -52,6 +52,7 @@ func TestGetFinding(t *testing.T) {
 			if tc.wantErr {
 				if rpcErr == nil {
 					t.Fatal("expected RPC error, got nil")
+					return
 				}
 				if rpcErr.Code != tc.wantCode {
 					t.Fatalf("expected code %d, got %d", tc.wantCode, rpcErr.Code)

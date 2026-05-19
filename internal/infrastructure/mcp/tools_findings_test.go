@@ -240,6 +240,7 @@ func TestCloseFindings_HumanActionGate(t *testing.T) {
 				// Expect an RPC error.
 				if rpcErr == nil {
 					t.Fatalf("expected RPC error with code %d, got result: %v", tc.wantCode, result)
+					return
 				}
 				if rpcErr.Code != tc.wantCode {
 					t.Errorf("expected code %d, got %d", tc.wantCode, rpcErr.Code)
@@ -295,6 +296,7 @@ func TestCloseFindings_MessageContainsFindingAndSeverity(t *testing.T) {
 
 	if rpcErr == nil {
 		t.Fatal("expected RPC error")
+		return
 	}
 	// finding_id and severity are in Data, not Message.
 	data, ok := rpcErr.Data.(map[string]any)
@@ -325,6 +327,7 @@ func TestCloseFindings_NotFound(t *testing.T) {
 
 	if rpcErr == nil {
 		t.Fatal("expected RPC error for not-found finding")
+		return
 	}
 	if rpcErr.Code != CodeNotFound {
 		t.Errorf("expected code %d, got %d", CodeNotFound, rpcErr.Code)
@@ -347,6 +350,7 @@ func TestCloseFindings_MissingParams(t *testing.T) {
 
 	if rpcErr == nil {
 		t.Fatal("expected RPC error for missing finding_id")
+		return
 	}
 	if rpcErr.Code != CodeInvalidParams {
 		t.Errorf("expected code %d, got %d", CodeInvalidParams, rpcErr.Code)
@@ -533,6 +537,7 @@ func TestReopenFinding_NotFound(t *testing.T) {
 	})
 	if rpcErr == nil {
 		t.Fatal("expected RPC error for not-found finding")
+		return
 	}
 	if rpcErr.Code != CodeNotFound {
 		t.Errorf("expected CodeNotFound, got %d", rpcErr.Code)
@@ -796,6 +801,7 @@ func TestCloseFinding_AutoLinkAccept_AtomicRollback(t *testing.T) {
 	})
 	if rpcErr == nil {
 		t.Fatal("expected RPC error from failed edge UPDATE")
+		return
 	}
 	if rpcErr.Code != CodeInternalError {
 		t.Errorf("expected CodeInternalError, got %d", rpcErr.Code)
@@ -832,6 +838,7 @@ func TestCloseFinding_HumanGate_AcceptPath(t *testing.T) {
 	})
 	if rpcErr == nil {
 		t.Fatal("expected human_required error")
+		return
 	}
 	if rpcErr.Code != CodeHumanRequired {
 		t.Errorf("expected CodeHumanRequired, got %d", rpcErr.Code)
@@ -859,6 +866,7 @@ func TestReopenFinding_MissingParams(t *testing.T) {
 	})
 	if rpcErr == nil {
 		t.Fatal("expected RPC error for missing finding_id")
+		return
 	}
 	if rpcErr.Code != CodeInvalidParams {
 		t.Errorf("expected CodeInvalidParams, got %d", rpcErr.Code)

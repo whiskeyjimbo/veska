@@ -13,6 +13,7 @@ func TestNewVectorStorage_SQLiteVec(t *testing.T) {
 	}
 	if store == nil {
 		t.Fatal("NewVectorStorage(sqlite-vec): returned nil store")
+		return
 	}
 }
 
@@ -23,6 +24,7 @@ func TestNewVectorStorage_EmptyKindDefaultsSQLiteVec(t *testing.T) {
 	}
 	if store == nil {
 		t.Fatal("NewVectorStorage(empty): returned nil store")
+		return
 	}
 }
 
@@ -30,6 +32,7 @@ func TestNewVectorStorage_UnknownKindError(t *testing.T) {
 	_, err := vector.NewVectorStorage("qdrant", "")
 	if err == nil {
 		t.Fatal("NewVectorStorage(unknown): expected error, got nil")
+		return
 	}
 }
 
@@ -43,5 +46,6 @@ func TestNewVectorStorage_Usearch_StubReturnsError(t *testing.T) {
 	_, err := vector.NewVectorStorage(vector.BackendUsearch, t.TempDir())
 	if err == nil {
 		t.Fatal("NewVectorStorage(usearch) without hnsw_native: expected error, got nil")
+		return
 	}
 }
