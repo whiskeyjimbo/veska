@@ -49,6 +49,18 @@ const textAdvisory = `{
   }]
 }`
 
+// fooV2Advisory is a fixture OSV advisory affecting a v2 module across the
+// v2.0.0–v2.2.0 range, used to exercise +incompatible version matching.
+const fooV2Advisory = `{
+  "id": "GO-2024-0002",
+  "summary": "Example issue in example.com/foo v2",
+  "severity": [{"type": "CVSS_V3", "score": "6.1"}],
+  "affected": [{
+    "package": {"ecosystem": "Go", "name": "example.com/foo"},
+    "ranges": [{"type": "SEMVER", "events": [{"introduced": "2.0.0"}, {"fixed": "2.2.0"}]}]
+  }]
+}`
+
 // writeFixtureCache builds an OSV cache directory containing the given advisory
 // JSON documents, keyed by filename.
 func writeFixtureCache(t *testing.T, advisories map[string]string) string {
@@ -92,6 +104,43 @@ func TestScan_KnownVulnerableDepYieldsFinding(t *testing.T) {
 	}
 	if f.AffectedRange == "" || f.Summary == "" {
 		t.Errorf("AffectedRange/Summary should be populated: %+v", f)
+	}
+}
+
+// TestScan_PseudoVersionAndIncompatible verifies Scan matches dependencies
+// pinned at a Go pseudo-version or a +incompatible version. Both are valid
+// semver and must compare correctly against OSV affected ranges — they are
+// not silently dropped as unparseable.
+func TestScan_PseudoVersionAndIncompatible(t *testing.T) {
+	t.Parallel()
+	dir := writeFixtureCache(t, map[string]string{
+		"GO-2023-9999.json": xnetAdvisory,
+		"GO-2024-0002.json": fooV2Advisory,
+	})
+	a := osv.New(osv.WithCacheDir(dir))
+
+	deps := []ports.Dependency{
+		// Pseudo-version below x/net v0.17.0 → inside the affected range.
+		{Ecosystem: "Go", Name: "golang.org/x/net", Version: "v0.16.1-0.20240115120000-abcdef123456"},
+		// +incompatible version inside foo's v2.0.0–v2.2.0 range.
+		{Ecosystem: "Go", Name: "example.com/foo", Version: "v2.1.0+incompatible"},
+	}
+	got, err := a.Scan(context.Background(), deps)
+	if err != nil {
+		t.Fatalf("Scan: %v", err)
+	}
+	if len(got) != 2 {
+		t.Fatalf("expected 2 findings (pseudo-version + incompatible), got %d: %+v", len(got), got)
+	}
+	byPkg := map[string]bool{}
+	for _, f := range got {
+		byPkg[f.Package] = true
+	}
+	if !byPkg["golang.org/x/net"] {
+		t.Error("pseudo-version dependency was not matched")
+	}
+	if !byPkg["example.com/foo"] {
+		t.Error("+incompatible dependency was not matched")
 	}
 }
 
