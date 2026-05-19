@@ -34,6 +34,7 @@ import (
 	gitwatch "github.com/whiskeyjimbo/veska/internal/infrastructure/git"
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/llm"
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/mcp"
+	"github.com/whiskeyjimbo/veska/internal/infrastructure/secretsscanner"
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/sqlite"
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/sqlite/queue"
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/treesitter"
@@ -370,6 +371,14 @@ func newDaemon(cfg Config) (*Daemon, error) {
 	contractRepo := sqlite.NewContractDriftRepo(pools.ReadDB)
 	checkReg.Register(checks.NewDeadCodeCheck(deadcodeRepo))
 	checkReg.Register(checks.NewContractDriftCheck(contractRepo))
+
+	// Secrets-scan check (M7). Unlike vuln-scan it ships on by default — the
+	// builtin scanner has no required dependency. A [promotion] config entry
+	// listing "secrets-scan" in disabled_checks suppresses its registration.
+	if !fileCfg.Promotion.CheckDisabled("secrets-scan") {
+		secretsCheck := checks.NewSecretsScanCheck(secretsscanner.New())
+		checkReg.Register(secretsCheck)
+	}
 
 	// Vulnerability-scan feature (M7). Off by default: an absent [vuln_source]
 	// section yields the NullVulnSource, registers no vulnscan check, and
