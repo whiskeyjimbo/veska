@@ -2,9 +2,9 @@
 id: SOLO-MILESTONES
 title: "Milestones — Index"
 status: draft
-last_reviewed: 2026-05-16
+last_reviewed: 2026-05-18
 verified: true
-verified_date: "2026-05-16"
+verified_date: "2026-05-18"
 related: [SOLO-14]
 ---
 
@@ -22,7 +22,7 @@ ordered epics with DoD, and TDD-sized sub-issues. Beads IDs follow
 | M3 | Pipelines and embedder | [`closed/M3.md`](closed/M3.md) ✓ closed |
 | M4 | Wiki mechanical kinds | [`closed/M4.md`](closed/M4.md) ✓ closed |
 | M5 | Optional review pipeline | [`closed/M5.md`](closed/M5.md) ✓ closed |
-| M6 | Cutover | [`M6.md`](M6.md) |
+| M6 | Cutover | [`closed/M6.md`](closed/M6.md) ✓ closed |
 
 The roadmap-level summary is [SOLO-14](../design/14-roadmap/README.md).
 That doc owns the goal-and-exit-gate framing; these per-milestone
