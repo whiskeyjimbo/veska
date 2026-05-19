@@ -21,20 +21,20 @@ func TestDefaultVectorDir_ContainsDotVeska(t *testing.T) {
 	}
 }
 
-func TestDaemonSockPath_EndsWithDaemonSock(t *testing.T) {
-	got := config.DaemonSockPath()
-	if !strings.HasSuffix(got, "daemon.sock") {
-		t.Errorf("DaemonSockPath() = %q; want path ending in \"daemon.sock\"", got)
+func TestCLISockPath_EndsWithCLISock(t *testing.T) {
+	got := config.CLISockPath()
+	if !strings.HasSuffix(got, "cli.sock") {
+		t.Errorf("CLISockPath() = %q; want path ending in \"cli.sock\"", got)
 	}
 }
 
-func TestDaemonSockPath_RespectsVeskaHome(t *testing.T) {
+func TestCLISockPath_RespectsVeskaHome(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("VESKA_HOME", dir)
-	got := config.DaemonSockPath()
-	want := dir + "/daemon.sock"
+	got := config.CLISockPath()
+	want := dir + "/cli.sock"
 	if got != want {
-		t.Errorf("DaemonSockPath() = %q; want %q", got, want)
+		t.Errorf("CLISockPath() = %q; want %q", got, want)
 	}
 }
 

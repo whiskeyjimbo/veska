@@ -16,7 +16,7 @@ type ServiceReport struct {
 }
 
 // CheckService probes the daemon socket and broken marker for veskaHome.
-// The daemon socket is expected at <veskaHome>/daemon.sock.
+// The daemon socket is expected at <veskaHome>/cli.sock.
 // The broken marker is expected at <veskaHome>/broken.
 //
 // Status rules:
@@ -25,7 +25,7 @@ type ServiceReport struct {
 //   - "healthy"  — daemon running and no broken marker
 func CheckService(veskaHome string) (ServiceReport, error) {
 	markerPath := filepath.Join(veskaHome, "broken")
-	sockPath := filepath.Join(veskaHome, "daemon.sock")
+	sockPath := filepath.Join(veskaHome, "cli.sock")
 
 	// 1. Check broken marker.
 	_, err := os.Stat(markerPath)
