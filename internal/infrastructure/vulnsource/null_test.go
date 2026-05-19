@@ -11,28 +11,40 @@ import (
 // Compile-time interface satisfaction check.
 var _ ports.VulnSource = (*vulnsource.NullVulnSource)(nil)
 
-func TestNullVulnSource_AdvisoriesReturnsNil(t *testing.T) {
+func TestNullVulnSource_RefreshReturnsNil(t *testing.T) {
 	t.Parallel()
 	vs := vulnsource.NewNullVulnSource()
 
-	got, err := vs.Advisories(context.Background(), "golang.org/x/net")
-	if err != nil {
+	if err := vs.Refresh(context.Background()); err != nil {
 		t.Fatalf("unexpected error: %v", err)
-	}
-	if got != nil {
-		t.Fatalf("expected nil advisories, got %v", got)
 	}
 }
 
-func TestNullVulnSource_AdvisoriesEmptyPkg(t *testing.T) {
+func TestNullVulnSource_ScanReturnsNil(t *testing.T) {
 	t.Parallel()
 	vs := vulnsource.NewNullVulnSource()
 
-	got, err := vs.Advisories(context.Background(), "")
+	deps := []ports.Dependency{
+		{Ecosystem: "Go", Name: "golang.org/x/net", Version: "0.17.0"},
+	}
+	got, err := vs.Scan(context.Background(), deps)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	if got != nil {
-		t.Fatalf("expected nil advisories, got %v", got)
+		t.Fatalf("expected nil findings, got %v", got)
+	}
+}
+
+func TestNullVulnSource_ScanEmptyDeps(t *testing.T) {
+	t.Parallel()
+	vs := vulnsource.NewNullVulnSource()
+
+	got, err := vs.Scan(context.Background(), nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got != nil {
+		t.Fatalf("expected nil findings, got %v", got)
 	}
 }

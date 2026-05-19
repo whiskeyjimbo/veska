@@ -112,7 +112,9 @@ func (s *stubTracker) RecentTasks(_ context.Context, _ string, _ int) ([]ports.T
 
 type stubVulnSource struct{}
 
-func (s *stubVulnSource) Advisories(_ context.Context, _ string) ([]ports.Advisory, error) {
+func (s *stubVulnSource) Refresh(_ context.Context) error { return nil }
+
+func (s *stubVulnSource) Scan(_ context.Context, _ []ports.Dependency) ([]ports.VulnFinding, error) {
 	return nil, nil
 }
 
