@@ -1046,3 +1046,54 @@ func TestMigration0008_PreservesExistingRowsAsNull(t *testing.T) {
 		t.Errorf("anchor_content_hash should default to NULL, got %q", got.String)
 	}
 }
+
+// ── Migration 0009: nodes.snippet ──────────────────────────────────────────
+
+// TestMigration0009_AddsSnippetColumn verifies migration 0009 adds the
+// nullable snippet column to nodes.
+func TestMigration0009_AddsSnippetColumn(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	dbPath := filepath.Join(dir, "veska.db")
+
+	_ = openTest(t, dbPath)
+	raw := openRawDB(t, dbPath)
+
+	if !columnExists(t, raw, "nodes", "snippet") {
+		t.Error("nodes.snippet column not found after migration 0009")
+	}
+}
+
+// TestMigration0009_DefaultsToNull verifies that an INSERT omitting snippet
+// leaves the column NULL — the contract the +snippet embed-text projection
+// relies on (domain.EmbedText skips empty parts, degrading to baseline).
+func TestMigration0009_DefaultsToNull(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	dbPath := filepath.Join(dir, "veska.db")
+
+	db := openTest(t, dbPath)
+
+	if _, err := db.Exec(`INSERT INTO repos (repo_id, root_path, added_at) VALUES (?,?,?)`,
+		"r1", "/tmp/r1", time.Now().UnixMilli()); err != nil {
+		t.Fatalf("insert repo: %v", err)
+	}
+	if _, err := db.Exec(`INSERT INTO nodes (
+		node_id, branch, repo_id, language, kind, symbol_path, file_path,
+		content_hash, last_promoted_at, actor_id, actor_kind
+	) VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
+		"n1", "main", "r1", "go", "function", "F", "a.go",
+		"h", time.Now().UnixMilli(), "service:veska", "system"); err != nil {
+		t.Fatalf("insert node: %v", err)
+	}
+
+	var got sql.NullString
+	if err := db.QueryRow(`SELECT snippet FROM nodes WHERE node_id = 'n1'`).Scan(&got); err != nil {
+		t.Fatalf("query: %v", err)
+	}
+	if got.Valid {
+		t.Errorf("snippet should default to NULL, got %q", got.String)
+	}
+}
