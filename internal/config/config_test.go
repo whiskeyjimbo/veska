@@ -154,6 +154,39 @@ func TestEnvOverridesOTLPEndpoint(t *testing.T) {
 	}
 }
 
+func TestVulnSourceDefaultsOff(t *testing.T) {
+	c := DefaultConfig()
+	if c.VulnSource.Provider != "" {
+		t.Errorf("vuln_source.provider should default to empty (off), got %q", c.VulnSource.Provider)
+	}
+}
+
+func TestLoadDecodesVulnSourceSection(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("VESKA_HOME", dir)
+	clearOverrideEnv(t)
+
+	toml := `
+[vuln_source]
+provider = "osv"
+refresh_interval = "6h"
+`
+	if err := os.WriteFile(filepath.Join(dir, "config.toml"), []byte(toml), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	c, err := Load()
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if c.VulnSource.Provider != "osv" {
+		t.Errorf("vuln_source.provider: got %q want osv", c.VulnSource.Provider)
+	}
+	if c.VulnSource.RefreshInterval != "6h" {
+		t.Errorf("vuln_source.refresh_interval: got %q want 6h", c.VulnSource.RefreshInterval)
+	}
+}
+
 func clearOverrideEnv(t *testing.T) {
 	t.Helper()
 	for _, k := range []string{"VESKA_OLLAMA_URL", "VESKA_EMBED_MODEL", "VESKA_VECTOR_BACKEND", "VESKA_DEBUG"} {

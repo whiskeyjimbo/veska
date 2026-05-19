@@ -25,6 +25,7 @@ type Config struct {
 	LLMGenerator       LLMGeneratorConfig       `toml:"llm_generator"`
 	Review             ReviewConfig             `toml:"review"`
 	Backup             BackupConfig             `toml:"backup"`
+	VulnSource         VulnSourceConfig         `toml:"vuln_source"`
 }
 
 // DaemonConfig holds socket paths and the graceful-stop window.
@@ -128,6 +129,20 @@ type BackupConfig struct {
 	// subject to KeepMinCount. Expressed as a Go duration string (e.g. "30d"
 	// is normalised to hours; "720h").
 	KeepMaxAge string `toml:"keep_max_age"`
+}
+
+// VulnSourceConfig configures the vulnerability advisory source (M7). The
+// feature ships off by default: an empty Provider leaves the daemon on the
+// NullVulnSource — no refresher goroutine, no vulnscan check. Setting
+// Provider = "osv" turns on the OSV.dev-backed adapter.
+type VulnSourceConfig struct {
+	// Provider selects the VulnSource implementation. "" (default) keeps the
+	// feature off; "osv" enables the OSV.dev adapter. Any other value is a
+	// fatal startup error.
+	Provider string `toml:"provider"`
+	// RefreshInterval overrides the advisory-cache refresh cadence as a Go
+	// duration string (e.g. "6h"). Empty falls back to the refresher default.
+	RefreshInterval string `toml:"refresh_interval"`
 }
 
 // DefaultConfig returns the compile-time defaults. These mirror the Go

@@ -2,8 +2,63 @@ package main
 
 import (
 	"bytes"
+	"os"
+	"path/filepath"
+	"strings"
 	"testing"
 )
+
+// runDoctorEgress executes `veska doctor egress` and returns the combined
+// output. A ProbeStatusError from a missing socket is expected in CI and not
+// treated as a failure.
+func runDoctorEgress(t *testing.T) string {
+	t.Helper()
+	root := newRootCmd()
+	var out bytes.Buffer
+	root.SetOut(&out)
+	root.SetErr(&out)
+	root.SetArgs([]string{"doctor", "egress"})
+	if err := root.Execute(); err != nil {
+		var pse ProbeStatusError
+		if !isProbeStatusError(err, &pse) {
+			t.Fatalf("doctor egress: unexpected error: %v", err)
+		}
+	}
+	return out.String()
+}
+
+// TestDoctorEgressOmitsVulnSourceWhenUnconfigured verifies the OSV endpoint
+// does not appear when [vuln_source] is absent.
+func TestDoctorEgressOmitsVulnSourceWhenUnconfigured(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("VESKA_HOME", dir)
+	t.Setenv("VESKA_CONFIG", filepath.Join(dir, "config.toml")) // missing file → defaults
+
+	out := runDoctorEgress(t)
+	if strings.Contains(out, "vuln_source") {
+		t.Errorf("vuln_source endpoint listed when [vuln_source] unconfigured:\n%s", out)
+	}
+}
+
+// TestDoctorEgressListsVulnSourceWhenConfigured verifies the OSV endpoint is
+// listed when [vuln_source] provider="osv".
+func TestDoctorEgressListsVulnSourceWhenConfigured(t *testing.T) {
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, "config.toml")
+	if err := os.WriteFile(cfgPath, []byte("[vuln_source]\nprovider = \"osv\"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("VESKA_HOME", dir)
+	t.Setenv("VESKA_CONFIG", cfgPath)
+
+	out := runDoctorEgress(t)
+	if !strings.Contains(out, "vuln_source") {
+		t.Errorf("vuln_source endpoint missing when [vuln_source] configured:\n%s", out)
+	}
+	if !strings.Contains(out, "osv-vulnerabilities.storage.googleapis.com") {
+		t.Errorf("OSV dump URL missing from egress output:\n%s", out)
+	}
+}
 
 // TestDoctorCmdName verifies doctorCmd returns a command named "doctor".
 func TestDoctorCmdName(t *testing.T) {
