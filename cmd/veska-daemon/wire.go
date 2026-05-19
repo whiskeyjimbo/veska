@@ -341,6 +341,30 @@ func newDaemon(cfg Config) (*Daemon, error) {
 		sqlite.WithReviewEnabled(fileCfg.Review.Enabled),
 	)
 	promoter := application.NewPromoter(staging, promotionStore)
+
+	// AddedLines seam: resolve a promoted commit's newly-added lines by
+	// parsing `git diff` for the repo's working tree. Keeps Promoter free
+	// of an infrastructure import — git.AddedLinesForCommit is injected.
+	promoter.SetAddedLinesFunc(func(ctx context.Context, repoID, gitSHA string) (map[string][]application.Line, error) {
+		root, err := repoRootFunc(pools.ReadDB)(ctx, repoID)
+		if err != nil {
+			return nil, err
+		}
+		raw, err := gitwatch.AddedLinesForCommit(ctx, root, gitSHA)
+		if err != nil {
+			return nil, err
+		}
+		out := make(map[string][]application.Line, len(raw))
+		for path, lines := range raw {
+			al := make([]application.Line, len(lines))
+			for i, l := range lines {
+				al[i] = application.Line{Number: l.Number, Text: l.Text}
+			}
+			out[path] = al
+		}
+		return out, nil
+	})
+
 	checkReg := checks.NewRegistry()
 	deadcodeRepo := sqlite.NewDeadCodeRepo(pools.ReadDB)
 	contractRepo := sqlite.NewContractDriftRepo(pools.ReadDB)
@@ -591,11 +615,23 @@ type checkRunnerAdapter struct {
 }
 
 func (a checkRunnerAdapter) Run(ctx context.Context, in application.CheckRunInput) {
+	var added map[string][]checks.Line
+	if in.AddedLines != nil {
+		added = make(map[string][]checks.Line, len(in.AddedLines))
+		for path, lines := range in.AddedLines {
+			cl := make([]checks.Line, len(lines))
+			for i, l := range lines {
+				cl[i] = checks.Line{Number: l.Number, Text: l.Text}
+			}
+			added[path] = cl
+		}
+	}
 	a.inner.Run(ctx, checks.Input{
-		RepoID:    in.RepoID,
-		Branch:    in.Branch,
-		GitSHA:    in.GitSHA,
-		FilePaths: in.FilePaths,
+		RepoID:     in.RepoID,
+		Branch:     in.Branch,
+		GitSHA:     in.GitSHA,
+		FilePaths:  in.FilePaths,
+		AddedLines: added,
 	})
 }
 

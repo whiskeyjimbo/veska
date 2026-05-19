@@ -1,4 +1,18 @@
 {
+  "permissions": {
+    "allow": [
+      "Bash(go vet *)",
+      "Bash(go list *)",
+      "Bash(bd memories *)",
+      "Bash(bd where *)",
+      "Bash(bd query *)",
+      "Bash(bd version)",
+      "Bash(bd prime)",
+      "Bash(bd recall *)",
+      "Bash(staticcheck *)",
+      "Bash(sed -n '*p' *)"
+    ]
+  },
   "hooks": {
     "PreCompact": [
       {

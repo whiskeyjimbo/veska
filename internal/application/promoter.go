@@ -21,7 +21,30 @@ type CheckRunInput struct {
 	Branch    string
 	GitSHA    string
 	FilePaths []string
+	// AddedLines holds the newly-added ("+") lines introduced by the
+	// promoted commit, keyed by repo-root-relative file path. It is
+	// populated once by the promotion path (via an AddedLinesFunc seam)
+	// so each check stays a pure function of its input; checks that do
+	// not need diff data simply ignore it. May be nil when no seam is
+	// installed.
+	AddedLines map[string][]Line
 }
+
+// Line is a single newly-added line of a commit's diff: its line number
+// in the post-commit revision plus the line text (no leading "+" marker,
+// no trailing newline). It mirrors checks.Line and git.Line; the type is
+// re-declared here so the application package need not import either —
+// consistent with how CheckRunInput mirrors checks.Input.
+type Line struct {
+	Number int
+	Text   string
+}
+
+// AddedLinesFunc resolves the newly-added lines of a promoted commit.
+// It is the application-layer seam over git diff parsing: the concrete
+// implementation (git.AddedLinesForCommit) lives in infrastructure and is
+// injected in wire.go, keeping Promoter free of infrastructure imports.
+type AddedLinesFunc func(ctx context.Context, repoID, gitSHA string) (map[string][]Line, error)
 
 // CheckRunner is the contract Promoter requires from the post-commit
 // structural check pipeline. The concrete implementation lives in
@@ -46,6 +69,7 @@ type Promoter struct {
 	tp      observability.TracerProvider
 	audit   ports.AuditWriter
 	checks  CheckRunner
+	added   AddedLinesFunc
 }
 
 // NewPromoter constructs a Promoter wired to the provided StagingArea and
@@ -69,6 +93,14 @@ func (p *Promoter) SetAuditWriter(aw ports.AuditWriter) {
 // If not called (or called with nil), no checks run.
 func (p *Promoter) SetCheckRunner(r CheckRunner) {
 	p.checks = r
+}
+
+// SetAddedLinesFunc installs the seam that resolves the newly-added lines
+// of a promoted commit. When set, Promote calls it after commit and passes
+// the result on CheckRunInput.AddedLines. If not called (or called with
+// nil), AddedLines is left nil and checks that need diff data are skipped.
+func (p *Promoter) SetAddedLinesFunc(f AddedLinesFunc) {
+	p.added = f
 }
 
 // SetTracerProvider installs a TracerProvider for promotion.transaction spans.
@@ -161,11 +193,21 @@ func (p *Promoter) Promote(ctx context.Context, repoID, branch, gitSHA string, a
 	// slice of the graph. Findings cannot abort the promotion — by contract
 	// the runner does not return an error.
 	if p.checks != nil {
+		// Resolve the commit's added lines via the injected seam. A seam
+		// error is non-fatal — like findings, diff data is advisory: the
+		// checks still run, just without per-line diff context.
+		var addedLines map[string][]Line
+		if p.added != nil {
+			if al, err := p.added(ctx, repoID, gitSHA); err == nil {
+				addedLines = al
+			}
+		}
 		p.checks.Run(ctx, CheckRunInput{
-			RepoID:    repoID,
-			Branch:    branch,
-			GitSHA:    gitSHA,
-			FilePaths: filePaths,
+			RepoID:     repoID,
+			Branch:     branch,
+			GitSHA:     gitSHA,
+			FilePaths:  filePaths,
+			AddedLines: addedLines,
 		})
 	}
 
