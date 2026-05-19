@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 
 	"github.com/BurntSushi/toml"
 )
@@ -26,6 +27,21 @@ type Config struct {
 	Review             ReviewConfig             `toml:"review"`
 	Backup             BackupConfig             `toml:"backup"`
 	VulnSource         VulnSourceConfig         `toml:"vuln_source"`
+	Promotion          PromotionConfig          `toml:"promotion"`
+}
+
+// PromotionConfig tunes the synchronous promotion-pipeline checks (M7). Every
+// structural check ships on by default; listing a check's Name() in
+// DisabledChecks suppresses its registration in the daemon composition root.
+type PromotionConfig struct {
+	// DisabledChecks names structural checks to skip. Each entry matches a
+	// check's Name() (e.g. "secrets-scan"). An empty list keeps every check on.
+	DisabledChecks []string `toml:"disabled_checks"`
+}
+
+// CheckDisabled reports whether the named check appears in DisabledChecks.
+func (c PromotionConfig) CheckDisabled(name string) bool {
+	return slices.Contains(c.DisabledChecks, name)
 }
 
 // DaemonConfig holds socket paths and the graceful-stop window.
