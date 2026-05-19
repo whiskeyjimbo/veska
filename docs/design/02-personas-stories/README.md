@@ -160,13 +160,17 @@ window; the agent can opt in to unresolved edges with
 
 ### US-05.01 — Dev: Surface a vuln finding from a feed
 
-**Status:** shipped
+**Status:** planned
 **Satisfied by:** SOLO-05, SOLO-11
 
 The Dev has configured a vuln source. The daemon polls the feed
 on its cadence; new findings land as `Finding` rows with
 `source_layer: "security"`. The editor's MCP client lists them
 via `eng_list_findings`.
+
+> **Not yet shipped.** The `VulnSource` port exists but only the
+> `NullVulnSource` no-op adapter is wired; there is no vuln-scan
+> promotion check. Tracked by `solov2-s5c.11`.
 
 **Acceptance.** A new finding appears in `eng_list_findings`
 within one poll cycle of the feed publishing it; each finding
@@ -322,8 +326,10 @@ restart daemons; the Dev does not drive findings generation).
 
 ## 6. Status
 
-All sixteen stories are `shipped`: milestones M0–M6 have closed,
-and every story's satisfying SOLO section is in the field. A story
-transitions to `shipped` once its satisfying SOLO section ships and
-the milestone WBS closes the matching epic; future stories added
-here start at `planned`.
+Fifteen of sixteen stories are `shipped`: milestones M0–M6 have
+closed and their satisfying SOLO sections are in the field. The
+exception is US-05.01 (vuln feed), still `planned` — the
+`VulnSource` port shipped but only a no-op adapter is wired. A
+story transitions to `shipped` once its satisfying SOLO section
+ships and the milestone WBS closes the matching epic; future
+stories added here start at `planned`.
