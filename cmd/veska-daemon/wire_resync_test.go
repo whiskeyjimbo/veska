@@ -174,11 +174,59 @@ func TestDaemon_StartupResync_AtHEAD_SkipsReparse(t *testing.T) {
 	}
 }
 
-// TestDaemon_StartupResync_FullPipeline is the deferred full-integration
-// smoke that the AC1/AC2 spy tests stand in for. The cold-scan reparser
-// integration with sqlite/promoter is tracked under the follow-up bead.
+// TestDaemon_StartupResync_FullPipeline exercises the full daemon-wired
+// pipeline: newDaemon's cold-scan reparser closure → real Ingester → real
+// Promoter → SQLite nodes. We invoke d.resync.Run synchronously so the
+// assertion is not racing the resync goroutine that Start would have spawned.
+// The companion application-layer integration test
+// (TestColdScanReparser_Integration_RealPipeline) verifies the pipeline in
+// isolation; this test verifies it through the daemon's actual wiring.
 func TestDaemon_StartupResync_FullPipeline(t *testing.T) {
-	t.Skip("TODO(solov2-21h): full daemon-startup → cold-scan → sqlite-nodes wiring deferred")
+	cfg := testConfig(t)
+	d, err := newDaemon(cfg)
+	if err != nil {
+		t.Fatalf("newDaemon: %v", err)
+	}
+	t.Cleanup(func() { _ = d.Stop() })
+
+	gitDir := initGitRepoWithGoFile(t)
+	repoID, err := repo.Add(context.Background(), d.pools.WriteHot, gitDir)
+	if err != nil {
+		t.Fatalf("repo.Add: %v", err)
+	}
+
+	// Drive the daemon's real resync (with the daemon's real cold-scan
+	// reparser closure) synchronously — no goroutine race.
+	if err := d.resync.Run(context.Background()); err != nil {
+		t.Fatalf("d.resync.Run: %v", err)
+	}
+
+	var nodeCount int
+	if err := d.pools.ReadDB.QueryRow(
+		`SELECT COUNT(*) FROM nodes WHERE repo_id = ?`, repoID,
+	).Scan(&nodeCount); err != nil {
+		t.Fatalf("count nodes: %v", err)
+	}
+	if nodeCount < 1 {
+		t.Fatalf("nodes for repo %q after full-pipeline resync: got %d, want >= 1",
+			repoID, nodeCount)
+	}
+
+	// Post-promotion queue rows must exist (one per work_kind × file + wiki).
+	var queueCount int
+	if err := d.pools.ReadDB.QueryRow(
+		`SELECT COUNT(*) FROM post_promotion_queue WHERE repo_id = ?`, repoID,
+	).Scan(&queueCount); err != nil {
+		t.Fatalf("count queue: %v", err)
+	}
+	if queueCount == 0 {
+		t.Error("post_promotion_queue: got 0 rows for repo; promotion sinks did not run")
+	}
+
+	// NOTE: we intentionally do NOT assert repos.last_promoted_sha advanced
+	// here. That contract is broken in production — Promoter.Promote never
+	// writes it. Tracked as solov2-c47; assertion will be added when that
+	// bead lands.
 }
 
 // TestDaemon_StartupResync_StartDoesNotBlock guards the epic constraint
