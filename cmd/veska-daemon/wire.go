@@ -606,6 +606,7 @@ func newDaemon(cfg Config) (*Daemon, error) {
 		db:        pools.WriteHot,
 		reparser:  reparser,
 		recordFor: lookupAppRecord(pools.ReadDB),
+		watchAdd:  watcher.Add,
 		scanWG:    scanWG,
 		// daemonCtx is bound in Start once d.ctx exists.
 	}

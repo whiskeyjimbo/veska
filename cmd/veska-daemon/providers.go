@@ -27,18 +27,21 @@ var (
 // root so internal/repo need not be imported by the MCP layer directly.
 //
 // AddRepo also fires a background cold scan against the freshly-registered
-// repo so its working tree is indexed without a daemon restart (solov2-0z1.3).
-// The scan runs under daemonCtx (not the caller's ctx) so a short-lived MCP
-// request does not cancel the scan as soon as it returns. Outstanding scans
-// are tracked on scanWG so the daemon's Stop can drain them under its budget.
-//
-// NOTE: this does not currently re-seed the fsnotify watcher with the new
-// repo; the watcher is only seeded at Daemon.Start. Live-watching a repo
-// added mid-run is a separate pre-existing gap tracked under solov2-id3.
+// repo so its working tree is indexed without a daemon restart (solov2-0z1.3)
+// and seeds the fsnotify multi-repo watcher so subsequent live edits flow
+// through Ingester.Save without a restart (solov2-id3). The scan runs under
+// daemonCtx (not the caller's ctx) so a short-lived MCP request does not
+// cancel the scan as soon as it returns. Outstanding scans are tracked on
+// scanWG so the daemon's Stop can drain them under its budget.
 type repoRegistrar struct {
 	db        *sql.DB
 	reparser  func(ctx context.Context, repo application.RepoRecord) error
 	recordFor func(ctx context.Context, repoID string) (application.RepoRecord, error)
+	// watchAdd seeds the live fsnotify watcher with a freshly-registered repo
+	// so post-registration file edits are observed without a daemon restart.
+	// Method-value of gitwatch.MultiRepoWatcher.Add in production wiring; nil
+	// in legacy test wiring (the AddRepo path tolerates a nil watchAdd).
+	watchAdd  func(repoID, rootPath string) error
 	daemonCtx context.Context
 	scanWG    *sync.WaitGroup
 }
@@ -54,6 +57,20 @@ func (rr *repoRegistrar) AddRepo(ctx context.Context, rootPath string) (string, 
 	if err != nil {
 		return "", err
 	}
+
+	// Seed the live fsnotify watcher before kicking off the cold scan so a
+	// rapid edit between the cold scan finishing and the next loop iteration
+	// is not lost. The watcher is idempotent (already-watched repos are a
+	// no-op) so a redundant call from a future code path is safe. A failure
+	// here is logged but not fatal — the cold scan still runs and live
+	// watching can be recovered on the next daemon restart.
+	if rr.watchAdd != nil {
+		if werr := rr.watchAdd(repoID, rootPath); werr != nil {
+			slog.Error("add-repo: live-watch seed",
+				"repo_id", repoID, "root", rootPath, "err", werr)
+		}
+	}
+
 	if rr.reparser == nil || rr.recordFor == nil {
 		return repoID, nil
 	}
