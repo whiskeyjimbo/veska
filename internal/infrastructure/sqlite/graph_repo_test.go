@@ -2,14 +2,39 @@ package sqlite_test
 
 import (
 	"context"
+	"database/sql"
 	"path/filepath"
+	"strings"
 	"testing"
+	"unicode/utf8"
 
 	_ "modernc.org/sqlite"
 
 	"github.com/whiskeyjimbo/veska/internal/core/domain"
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/sqlite"
 )
+
+// openGraphRepoTestDBWithHandle is openGraphRepoTestDB but also returns the
+// underlying *sql.DB so tests can assert directly on table columns the read
+// path does not hydrate (e.g. nodes.snippet).
+func openGraphRepoTestDBWithHandle(t *testing.T) (*sqlite.GraphRepo, *sql.DB) {
+	t.Helper()
+	dir := t.TempDir()
+	dbPath := filepath.Join(dir, "veska.db")
+	backupDir := filepath.Join(t.TempDir(), "backups")
+	db, err := sqlite.OpenWithOptions(dbPath, sqlite.Options{BackupDir: backupDir})
+	if err != nil {
+		t.Fatalf("OpenWithOptions: %v", err)
+	}
+	t.Cleanup(func() { _ = db.Close() })
+
+	if _, err := db.Exec(
+		`INSERT INTO repos (repo_id, root_path, added_at) VALUES (?,?,?)`,
+		"r1", "/tmp/r1", 1); err != nil {
+		t.Fatalf("insert repo: %v", err)
+	}
+	return sqlite.NewGraphRepo(db, db), db
+}
 
 // openGraphRepoTestDB opens an isolated DB with the real migrated schema,
 // seeds a repos row, and returns a constructed GraphRepo. The same *sql.DB
@@ -279,5 +304,114 @@ func TestGraphRepo_LoadGraph_UnknownReturnsEmptyNonNil(t *testing.T) {
 	}
 	if _, ok := g.Node("anything"); ok {
 		t.Error("empty graph reported a node")
+	}
+}
+
+// snippetOf reads the raw nodes.snippet column for a node — the read path does
+// not hydrate it, so tests must query it directly.
+func snippetOf(t *testing.T, db *sql.DB, repoID, branch, id string) sql.NullString {
+	t.Helper()
+	var s sql.NullString
+	err := db.QueryRow(
+		`SELECT snippet FROM nodes WHERE repo_id = ? AND branch = ? AND node_id = ?`,
+		repoID, branch, id).Scan(&s)
+	if err != nil {
+		t.Fatalf("query snippet for %q: %v", id, err)
+	}
+	return s
+}
+
+// TestGraphRepo_SaveNode_PersistsRawContentSnippet verifies a node saved with
+// RawContent stores that body in nodes.snippet, and a node without RawContent
+// stores SQL NULL.
+func TestGraphRepo_SaveNode_PersistsRawContentSnippet(t *testing.T) {
+	t.Parallel()
+	r, db := openGraphRepoTestDBWithHandle(t)
+	ctx := context.Background()
+
+	body := "func Alpha() { return 42 }"
+	withBody := mustNode(t, "n1", "pkg/a.go", "Alpha", domain.KindFunction,
+		domain.WithRawContent(body))
+	without := mustNode(t, "n2", "pkg/b.go", "Beta", domain.KindFunction)
+
+	if err := r.SaveNode(ctx, "r1", "main", withBody); err != nil {
+		t.Fatalf("SaveNode(withBody): %v", err)
+	}
+	if err := r.SaveNode(ctx, "r1", "main", without); err != nil {
+		t.Fatalf("SaveNode(without): %v", err)
+	}
+
+	if got := snippetOf(t, db, "r1", "main", "n1"); !got.Valid || got.String != body {
+		t.Errorf("snippet for n1 = %#v, want %q", got, body)
+	}
+	if got := snippetOf(t, db, "r1", "main", "n2"); got.Valid {
+		t.Errorf("snippet for n2 = %#v, want NULL", got)
+	}
+}
+
+// TestGraphRepo_SaveNode_CapsSnippetOnRuneBoundary verifies an over-limit body
+// is capped at the byte limit on a UTF-8 rune boundary (no broken runes).
+func TestGraphRepo_SaveNode_CapsSnippetOnRuneBoundary(t *testing.T) {
+	t.Parallel()
+	r, db := openGraphRepoTestDBWithHandle(t)
+	ctx := context.Background()
+
+	// 3-byte runes ensure the 2000-byte cap does not land on a boundary.
+	body := strings.Repeat("世", 1000) // 3000 bytes
+	n := mustNode(t, "n1", "pkg/a.go", "Alpha", domain.KindFunction,
+		domain.WithRawContent(body))
+	if err := r.SaveNode(ctx, "r1", "main", n); err != nil {
+		t.Fatalf("SaveNode: %v", err)
+	}
+
+	got := snippetOf(t, db, "r1", "main", "n1")
+	if !got.Valid {
+		t.Fatal("snippet is NULL, want capped body")
+	}
+	if !utf8.ValidString(got.String) {
+		t.Error("capped snippet is not valid UTF-8")
+	}
+	if len(got.String) > 2000 {
+		t.Errorf("capped snippet is %d bytes, want <= 2000", len(got.String))
+	}
+	if len(got.String) <= 2000-3 {
+		t.Errorf("capped snippet is %d bytes, want as close to 2000 as a rune boundary allows", len(got.String))
+	}
+	if !strings.HasPrefix(body, got.String) {
+		t.Error("capped snippet is not a prefix of the original body")
+	}
+}
+
+// TestGraphRepo_SaveNode_RoundTripUnaffectedBySnippet verifies persisting a
+// snippet does not change the GetNode/LoadGraph round-trip.
+func TestGraphRepo_SaveNode_RoundTripUnaffectedBySnippet(t *testing.T) {
+	t.Parallel()
+	r, _ := openGraphRepoTestDBWithHandle(t)
+	ctx := context.Background()
+
+	in := mustNode(t, "n1", "pkg/a.go", "Alpha", domain.KindFunction,
+		domain.WithLanguage("go"),
+		domain.WithRawContent("func Alpha() {}"))
+	if err := r.SaveNode(ctx, "r1", "main", in); err != nil {
+		t.Fatalf("SaveNode: %v", err)
+	}
+
+	got, err := r.GetNode(ctx, "r1", "main", "n1")
+	if err != nil {
+		t.Fatalf("GetNode: %v", err)
+	}
+	if got == nil {
+		t.Fatal("GetNode returned nil for a saved node")
+	}
+	if got.ID != in.ID || got.Path != in.Path || got.Name != in.Name || got.Kind != in.Kind {
+		t.Errorf("GetNode round-trip mismatch: got %+v", got)
+	}
+
+	g, err := r.LoadGraph(ctx, "r1", "main")
+	if err != nil {
+		t.Fatalf("LoadGraph: %v", err)
+	}
+	if _, ok := g.Node("n1"); !ok {
+		t.Error("LoadGraph did not return the saved node")
 	}
 }

@@ -79,6 +79,24 @@ func scanNode(s interface {
 	return n, nil
 }
 
+// maxSnippetBytes bounds the node body persisted into nodes.snippet. The body
+// feeds embed-text projection, so it is capped to keep embed cost and snippet
+// storage bounded and uniform — matching the recallprojection harness cap.
+const maxSnippetBytes = 2000
+
+// capSnippet trims s to at most maxSnippetBytes on a UTF-8 rune boundary so the
+// stored snippet never contains a broken rune.
+func capSnippet(s string) string {
+	if len(s) <= maxSnippetBytes {
+		return s
+	}
+	cut := maxSnippetBytes
+	for cut > 0 && s[cut]&0xC0 == 0x80 {
+		cut--
+	}
+	return s[:cut]
+}
+
 // SaveNode inserts or replaces a node row keyed on (node_id, branch). The
 // column set and ON CONFLICT clause mirror the Promoter so a GraphRepo write
 // is interchangeable with a promotion write.
@@ -90,8 +108,8 @@ func (r *GraphRepo) SaveNode(ctx context.Context, repoID, branch string, n *doma
 INSERT INTO nodes
 	(node_id, branch, repo_id, language, kind, symbol_path, file_path,
 	 line_start, line_end, content_hash, last_promoted_at, actor_id, actor_kind,
-	 signature, prev_signature)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)
+	 signature, snippet, prev_signature)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)
 ON CONFLICT(node_id, branch) DO UPDATE SET
 	repo_id          = excluded.repo_id,
 	language         = excluded.language,
@@ -104,7 +122,8 @@ ON CONFLICT(node_id, branch) DO UPDATE SET
 	last_promoted_at = excluded.last_promoted_at,
 	actor_id         = excluded.actor_id,
 	actor_kind       = excluded.actor_kind,
-	signature        = excluded.signature`
+	signature        = excluded.signature,
+	snippet          = excluded.snippet`
 
 	var lineStart, lineEnd any
 	if n.Lines != nil {
@@ -124,13 +143,18 @@ ON CONFLICT(node_id, branch) DO UPDATE SET
 	if n.Signature != nil {
 		signature = *n.Signature
 	}
+	// RawContent is captured by the parser; a node without it stores NULL.
+	var snippet any
+	if n.RawContent != nil {
+		snippet = capSnippet(*n.RawContent)
+	}
 
 	now := time.Now().UnixMilli()
 	if _, err := r.writeDB.ExecContext(ctx, stmt,
 		string(n.ID), branch, repoID, language, string(n.Kind),
 		n.Name, n.Path, lineStart, lineEnd, contentHash, now,
 		string(domain.ActorKindSystem), string(domain.ActorKindSystem),
-		signature,
+		signature, snippet,
 	); err != nil {
 		return fmt.Errorf("graph_repo: save node %q: %w", n.ID, err)
 	}
