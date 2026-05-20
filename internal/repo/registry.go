@@ -71,10 +71,28 @@ func resolveVeskaBinary(exe string) string {
 
 // hookScript returns the shell script content for a named hook. The veska
 // binary is resolved by absolute path so the hook works regardless of the
-// caller's $PATH at commit time (e.g. /opt/veska/bin/veska or a dev tree's
-// bin/veska — both must work).
+// caller's $PATH at commit time (solov2-v7q). The current VESKA_HOME is
+// also baked in (solov2-g50) so the hook reaches the right daemon socket
+// regardless of the shell environment 'git commit' runs under — users with
+// non-default VESKA_HOME rarely export it, and an unset VESKA_HOME would
+// route the hook to ~/.veska/cli.sock and silently fail.
 func hookScript(hookName string) string {
-	return fmt.Sprintf("#!/bin/sh\nexec %s hook-runner %s \"$@\"\n", veskaBinary(), hookName)
+	return fmt.Sprintf("#!/bin/sh\nexport VESKA_HOME=%q\nexec %s hook-runner %s \"$@\"\n",
+		veskaHome(), veskaBinary(), hookName)
+}
+
+// veskaHome returns the resolved VESKA_HOME for baking into hook scripts.
+// We don't import internal/config here (repo is lower in the layer chain),
+// so this mirrors config.veskaHome's logic locally. Kept small and obvious;
+// drift between the two would surface in the integration tests.
+func veskaHome() string {
+	if dir := os.Getenv("VESKA_HOME"); dir != "" {
+		return dir
+	}
+	if home, err := os.UserHomeDir(); err == nil {
+		return filepath.Join(home, ".veska")
+	}
+	return ".veska"
 }
 
 // detectActiveBranch reads the current branch from a working tree via

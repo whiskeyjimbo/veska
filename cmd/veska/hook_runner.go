@@ -61,9 +61,24 @@ func runPostCommit() error {
 		return nil
 	}
 
-	sockPath := config.CLISockPath()
-	if err := sendSeal(sockPath); err != nil {
-		debugf("hook-runner: sendSeal error (ignored): %v\n", err)
+	// Belt-and-braces (solov2-g50): try the VESKA_HOME-derived socket
+	// first, then fall back to ~/.veska/cli.sock so a stale baked
+	// VESKA_HOME in the hook script (or an unset env) still finds a
+	// running daemon on the default path.
+	candidates := []string{config.CLISockPath()}
+	if home, err := os.UserHomeDir(); err == nil {
+		def := filepath.Join(home, ".veska", "cli.sock")
+		if def != candidates[0] {
+			candidates = append(candidates, def)
+		}
+	}
+	for _, sockPath := range candidates {
+		if err := sendSeal(sockPath); err != nil {
+			debugf("hook-runner: sendSeal %s (ignored): %v\n", sockPath, err)
+			continue
+		}
+		debugf("hook-runner: sendSeal %s OK\n", sockPath)
+		return nil
 	}
 	return nil
 }
@@ -130,8 +145,11 @@ func sendSeal(sockPath string) error {
 
 	conn, err := net.DialTimeout("unix", sockPath, dialTimeout)
 	if err != nil {
-		debugf("hook-runner: dial %s: %v\n", sockPath, err)
-		return nil
+		// Dial failure is the signal the caller uses to try the next
+		// candidate socket (solov2-g50). All other errors after a
+		// successful dial are still swallowed so a misbehaving daemon
+		// cannot block git.
+		return err
 	}
 	defer conn.Close()
 	_ = conn.SetDeadline(time.Now().Add(ioTimeout))
