@@ -12,6 +12,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
@@ -20,9 +21,40 @@ import (
 // hookNames lists the git hooks that veska installs.
 var hookNames = []string{"post-commit", "post-checkout"}
 
-// hookScript returns the shell script content for a named hook.
+// veskaBinary resolves the absolute path of the currently-running veska
+// binary so installed hooks invoke it directly instead of relying on $PATH
+// (solov2-v7q). Falls back to bare "veska" only if os.Executable cannot
+// resolve a path — same broken behaviour as before, never worse.
+func veskaBinary() string {
+	if exe, err := os.Executable(); err == nil {
+		if resolved, err := filepath.EvalSymlinks(exe); err == nil {
+			return resolved
+		}
+		return exe
+	}
+	return "veska"
+}
+
+// hookScript returns the shell script content for a named hook. The veska
+// binary is resolved by absolute path so the hook works regardless of the
+// caller's $PATH at commit time (e.g. /opt/veska/bin/veska or a dev tree's
+// bin/veska — both must work).
 func hookScript(hookName string) string {
-	return fmt.Sprintf("#!/bin/sh\nexec veska hook-runner %s \"$@\"\n", hookName)
+	return fmt.Sprintf("#!/bin/sh\nexec %s hook-runner %s \"$@\"\n", veskaBinary(), hookName)
+}
+
+// detectActiveBranch reads the current branch from a working tree via
+// 'git symbolic-ref --short HEAD'. Returns "" when the directory is not a
+// git working tree, is in a detached-HEAD state, or git is unavailable —
+// the caller decides how to handle that (Add defaults to "main"). Bounded
+// to a short timeout so a hung git invocation cannot stall registration.
+func detectActiveBranch(ctx context.Context, root string) string {
+	cmd := exec.CommandContext(ctx, "git", "-C", root, "symbolic-ref", "--short", "-q", "HEAD")
+	out, err := cmd.Output()
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(string(out))
 }
 
 // repoID returns a deterministic hex ID for a canonical root path.
@@ -150,11 +182,23 @@ func Add(ctx context.Context, db *sql.DB, rootPath string) (string, error) {
 	modPath := readModulePath(canonical)
 	now := time.Now().Unix()
 
+	// Detect the current branch from the working tree (solov2-f8p). Without
+	// this every downstream write (Ingester.Save, Promoter.Promote, FTS, vec)
+	// is keyed by branch="" and every query API rejects "branch is required"
+	// — i.e. a silently-unqueryable graph. Default to "main" when detection
+	// fails (no git, detached HEAD, freshly-init'd repo with no commits) so
+	// the rest of the pipeline has a usable key.
+	branch := detectActiveBranch(ctx, canonical)
+	if branch == "" {
+		branch = "main"
+	}
+
 	_, err = db.ExecContext(ctx,
-		`INSERT INTO repos (repo_id, root_path, added_at, module_path)
-		 VALUES (?, ?, ?, ?)
+		`INSERT INTO repos (repo_id, root_path, added_at, active_branch, module_path)
+		 VALUES (?, ?, ?, ?, ?)
 		 ON CONFLICT(repo_id) DO NOTHING`,
-		id, canonical, now, sql.NullString{String: modPath, Valid: modPath != ""},
+		id, canonical, now, branch,
+		sql.NullString{String: modPath, Valid: modPath != ""},
 	)
 	if err != nil {
 		return "", fmt.Errorf("insert repo: %w", err)
