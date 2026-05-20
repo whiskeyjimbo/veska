@@ -22,6 +22,7 @@ func newRootCmd() *cobra.Command {
 	root.AddCommand(restoreCmd())
 	root.AddCommand(repoCmd(nil))
 	root.AddCommand(wikiCmd())
+	root.AddCommand(reindexCmd())
 
 	// Resolve the daemon binary path at startup. os.Executable returns the path
 	// of the current binary; by convention the daemon lives alongside the CLI
