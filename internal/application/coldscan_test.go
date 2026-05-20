@@ -284,10 +284,6 @@ func TestNewColdScanReparser_NilDeps(t *testing.T) {
 	}
 }
 
-func TestColdScanReparser_Integration(t *testing.T) {
-	t.Skip("TODO(solov2-7ox): integration wiring deferred — see follow-up bead for full sqlite/promoter wiring")
-}
-
 func equalStringSlice(a, b []string) bool {
 	if len(a) != len(b) {
 		return false
