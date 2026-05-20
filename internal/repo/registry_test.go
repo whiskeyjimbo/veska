@@ -5,7 +5,9 @@ import (
 	"database/sql"
 	"encoding/json"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	_ "modernc.org/sqlite"
@@ -159,6 +161,101 @@ func TestAddRepoInstallsHooks(t *testing.T) {
 		if info.Mode()&0o111 == 0 {
 			t.Errorf("hook %s is not executable (mode %v)", hook, info.Mode())
 		}
+	}
+}
+
+// TestAddRepoDetectsActiveBranch covers solov2-f8p: a real `git init -b <name>`
+// working tree records its branch in repos.active_branch. Without this every
+// downstream write keys by branch="" and the graph becomes unqueryable.
+func TestAddRepoDetectsActiveBranch(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git not on PATH")
+	}
+	for _, branch := range []string{"main", "trunk", "feature/x"} {
+		t.Run(branch, func(t *testing.T) {
+			db := newTestDB(t)
+			dir := t.TempDir()
+			runGitTest(t, dir, "init", "-q", "-b", branch)
+			// symbolic-ref needs an initial commit to anchor the branch
+			// on some git versions; create a no-op commit.
+			runGitTest(t, dir, "config", "user.email", "t@t")
+			runGitTest(t, dir, "config", "user.name", "T")
+			runGitTest(t, dir, "commit", "-q", "--allow-empty", "-m", "init")
+
+			repoID, err := repo.Add(context.Background(), db, dir)
+			if err != nil {
+				t.Fatalf("Add: %v", err)
+			}
+			var got sql.NullString
+			if err := db.QueryRow(
+				`SELECT active_branch FROM repos WHERE repo_id = ?`, repoID,
+			).Scan(&got); err != nil {
+				t.Fatalf("query active_branch: %v", err)
+			}
+			if got.String != branch {
+				t.Errorf("active_branch = %q, want %q", got.String, branch)
+			}
+		})
+	}
+}
+
+// TestAddRepoDefaultsBranchWhenDetectionFails covers the "freshly-init'd repo
+// with no commits / not actually a git tree" path: detection fails, but Add
+// must still produce a usable branch so the downstream pipeline is not
+// silently broken. The existing newGitRepo helper creates only .git/hooks
+// (no real git init), so this path is what every other test in this file
+// exercises by construction.
+func TestAddRepoDefaultsBranchWhenDetectionFails(t *testing.T) {
+	db := newTestDB(t)
+	dir := newGitRepo(t)
+
+	repoID, err := repo.Add(context.Background(), db, dir)
+	if err != nil {
+		t.Fatalf("Add: %v", err)
+	}
+	var got sql.NullString
+	if err := db.QueryRow(
+		`SELECT active_branch FROM repos WHERE repo_id = ?`, repoID,
+	).Scan(&got); err != nil {
+		t.Fatalf("query active_branch: %v", err)
+	}
+	if got.String != "main" {
+		t.Errorf("active_branch = %q, want %q (fallback)", got.String, "main")
+	}
+}
+
+// TestAddRepoHookUsesAbsoluteBinaryPath covers solov2-v7q: installed hooks
+// must invoke the absolute path of the veska binary, not bare "veska" which
+// fails for any non-PATH install (dev tree, /opt, custom prefix).
+func TestAddRepoHookUsesAbsoluteBinaryPath(t *testing.T) {
+	db := newTestDB(t)
+	dir := newGitRepo(t)
+
+	if _, err := repo.Add(context.Background(), db, dir); err != nil {
+		t.Fatalf("Add: %v", err)
+	}
+
+	body, err := os.ReadFile(filepath.Join(dir, ".git", "hooks", "post-commit"))
+	if err != nil {
+		t.Fatalf("read post-commit: %v", err)
+	}
+	script := string(body)
+	if strings.Contains(script, "exec veska hook-runner") {
+		t.Errorf("post-commit invokes bare 'veska'; want absolute path. Body:\n%s", script)
+	}
+	// Whatever absolute path was resolved must at least look like a path
+	// (start with '/' on this platform).
+	if !strings.Contains(script, "exec /") {
+		t.Errorf("post-commit does not invoke an absolute path. Body:\n%s", script)
+	}
+}
+
+// runGitTest shells `git -C dir <args>`, failing the test on non-zero exit.
+func runGitTest(t *testing.T, dir string, args ...string) {
+	t.Helper()
+	cmd := exec.Command("git", append([]string{"-C", dir}, args...)...)
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("git %v: %v: %s", args, err, out)
 	}
 }
 
