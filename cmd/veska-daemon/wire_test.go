@@ -312,3 +312,67 @@ func TestWire_StartWatchesRegisteredRepos(t *testing.T) {
 		t.Errorf("watcher does not watch registered repo %q; watched=%v", repoID, watched)
 	}
 }
+
+// TestWire_WatchLoopRoutesEditsToStaging exercises the end-to-end fsnotify
+// chain we cared about in solov2-7c4: file write in a watched repo →
+// MultiRepoWatcher → runWatchLoop → Ingester.Save → StagingArea contains the
+// file under the repo's active_branch. Parameterised over branch to make sure
+// the hardcoded "main" regression doesn't reappear.
+func TestWire_WatchLoopRoutesEditsToStaging(t *testing.T) {
+	for _, branch := range []string{"main", "trunk"} {
+		t.Run(branch, func(t *testing.T) {
+			cfg := testConfig(t)
+			d, err := newDaemon(cfg)
+			if err != nil {
+				t.Fatalf("newDaemon: %v", err)
+			}
+			t.Cleanup(func() { _ = d.Stop() })
+
+			gitDir := t.TempDir()
+			if err := os.MkdirAll(filepath.Join(gitDir, ".git", "hooks"), 0o755); err != nil {
+				t.Fatalf("create .git/hooks: %v", err)
+			}
+			repoID, err := repo.Add(context.Background(), d.pools.WriteHot, gitDir)
+			if err != nil {
+				t.Fatalf("repo.Add: %v", err)
+			}
+			// repo.Add defaults to "main" when HEAD detection fails (this
+			// fixture has no real git init). Force the recorded branch so
+			// runWatchLoop's lookup must honour something other than "main".
+			if _, err := d.pools.WriteHot.Exec(
+				`UPDATE repos SET active_branch = ? WHERE repo_id = ?`,
+				branch, repoID,
+			); err != nil {
+				t.Fatalf("force active_branch: %v", err)
+			}
+
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancel()
+			if err := d.Start(ctx); err != nil {
+				t.Fatalf("Start: %v", err)
+			}
+
+			src := "package g\n\nfunc Hello() string { return \"hi\" }\n"
+			abs := filepath.Join(gitDir, "hello.go")
+			if err := os.WriteFile(abs, []byte(src), 0o644); err != nil {
+				t.Fatalf("write hello.go: %v", err)
+			}
+
+			deadline := time.Now().Add(3 * time.Second)
+			for time.Now().Before(deadline) {
+				files := d.staging.StagedFiles(repoID, branch)
+				for _, f := range files {
+					if f == abs {
+						return // success — staged under correct branch
+					}
+				}
+				time.Sleep(50 * time.Millisecond)
+			}
+			t.Errorf("staging[branch=%q] did not receive hello.go within 3s; main=%v empty=%v %s=%v",
+				branch,
+				d.staging.StagedFiles(repoID, "main"),
+				d.staging.StagedFiles(repoID, ""),
+				branch, d.staging.StagedFiles(repoID, branch))
+		})
+	}
+}
