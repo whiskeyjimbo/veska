@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"net/http"
 	"runtime"
+	"strings"
 	"time"
 )
 
@@ -89,8 +90,13 @@ func Probe(ctx context.Context, ollamaURL, modelName string) (*ProbeResult, erro
 	resp.Body.Close()
 
 	// ── Check 2: model present ───────────────────────────────────────────────
+	// Ollama tags models like "nomic-embed-text:latest" but callers typically
+	// pass the bare model name. Match either an exact equality (caller passed
+	// "name:tag") or a prefix on "name:" (caller passed bare "name" — accept
+	// any tag the user happens to have pulled). Ollama's /api/embeddings does
+	// the same resolution server-side, so this mirrors what actually works.
 	for _, m := range tags.Models {
-		if m.Name == modelName {
+		if m.Name == modelName || strings.HasPrefix(m.Name, modelName+":") {
 			result.ModelPresent = true
 			break
 		}
