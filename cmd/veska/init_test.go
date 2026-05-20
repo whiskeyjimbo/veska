@@ -114,3 +114,41 @@ func TestInitSummaryContainsKeyLines(t *testing.T) {
 		}
 	}
 }
+
+// TestInitHintsResolveToRealCommands pins solov2-0ib: every "run: veska …"
+// hint the post-init summary prints must name an actual cobra sub-command.
+// Drift previously suggested 'veska workspace add .', which never existed.
+func TestInitHintsResolveToRealCommands(t *testing.T) {
+	tmp := t.TempDir()
+	fakeProbe := func(_ context.Context, _, _ string) (*embedderprobe.ProbeResult, error) {
+		return &embedderprobe.ProbeResult{
+			Reachable: true, ModelPresent: true, EmbedOK: true, Status: "healthy",
+		}, nil
+	}
+	deps := initDeps{veskaHome: tmp, probe: fakeProbe, goos: "linux"}
+
+	var buf bytes.Buffer
+	if err := runInit(context.Background(), deps, true, &buf); err != nil {
+		t.Fatalf("runInit: %v", err)
+	}
+
+	root := newRootCmd()
+	available := map[string]bool{}
+	for _, c := range root.Commands() {
+		available[c.Name()] = true
+	}
+
+	// Each hint must reference a real top-level command. Add hints here as
+	// they appear in the summary.
+	for _, want := range []string{"veska repo", "veska service"} {
+		if !strings.Contains(buf.String(), want) {
+			t.Errorf("summary missing hint %q; output:\n%s", want, buf.String())
+		}
+		// "veska repo" → command "repo"; "veska service" → command "service".
+		cmd := strings.TrimPrefix(want, "veska ")
+		if !available[cmd] {
+			t.Errorf("hint %q references missing sub-command %q (available: %v)",
+				want, cmd, available)
+		}
+	}
+}
