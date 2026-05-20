@@ -52,6 +52,8 @@ CREATE TABLE nodes (
     last_promoted_at INTEGER NOT NULL,
     actor_id       TEXT NOT NULL,
     actor_kind     TEXT NOT NULL,
+    signature      TEXT,
+    snippet        TEXT,
     PRIMARY KEY (node_id, branch)
 );
 CREATE TABLE node_embeddings (
