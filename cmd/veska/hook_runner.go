@@ -109,62 +109,60 @@ func gitRevParseTopLevel() (string, error) {
 	return strings.TrimSpace(string(out)), nil
 }
 
-// sealMessage is the JSON payload sent to the daemon.
-type sealMessage struct {
-	Cmd string `json:"cmd"`
-}
-
-// sealResponse is the expected JSON response from the daemon.
-type sealResponse struct {
-	OK bool `json:"ok"`
-}
-
-// sendSeal dials the daemon Unix socket, sends {"cmd":"promote"}, and reads
-// the response. All errors are silently swallowed — the hook must never block
-// a commit.
+// sendSeal dials the daemon CLI socket and invokes the eng_promote MCP tool
+// for the current git working tree. The daemon re-stages files changed in
+// HEAD and promotes. All errors are silently swallowed — the hook must
+// never block a commit (git would surface a non-zero exit to the user).
+//
+// Solov2-3vv: this used to send a legacy {"cmd":"promote"} payload that the
+// JSON-RPC listener rejected with method-not-found, so post-commit
+// promotion was silently dead. Now it speaks the same JSON-RPC the rest of
+// the MCP surface does.
 func sendSeal(sockPath string) error {
-	const dialTimeout = 50 * time.Millisecond
-	const readTimeout = 50 * time.Millisecond
+	const dialTimeout = 250 * time.Millisecond
+	const ioTimeout = 5 * time.Second
+
+	gitRoot, err := gitRevParseTopLevel()
+	if err != nil {
+		debugf("hook-runner: git rev-parse failed: %v\n", err)
+		return nil
+	}
 
 	conn, err := net.DialTimeout("unix", sockPath, dialTimeout)
 	if err != nil {
-		// Socket unavailable — daemon not running. This is expected.
 		debugf("hook-runner: dial %s: %v\n", sockPath, err)
 		return nil
 	}
 	defer conn.Close()
+	_ = conn.SetDeadline(time.Now().Add(ioTimeout))
 
-	msg := sealMessage{Cmd: "promote"}
-	payload, err := json.Marshal(msg)
-	if err != nil {
-		return nil // should never happen
+	type rpcReq struct {
+		JSONRPC string `json:"jsonrpc"`
+		ID      int    `json:"id"`
+		Method  string `json:"method"`
+		Params  any    `json:"params,omitempty"`
 	}
-	payload = append(payload, '\n')
-
-	if _, err := conn.Write(payload); err != nil {
+	body, err := json.Marshal(rpcReq{
+		JSONRPC: "2.0", ID: 1, Method: "eng_promote_repo",
+		Params: map[string]string{"root_path": gitRoot},
+	})
+	if err != nil {
+		return nil
+	}
+	body = append(body, '\n')
+	if _, err := conn.Write(body); err != nil {
 		debugf("hook-runner: write: %v\n", err)
 		return nil
 	}
-
-	// Signal EOF on the write side so the daemon knows the message is complete.
-	if tc, ok := conn.(*net.UnixConn); ok {
-		tc.CloseWrite() //nolint:errcheck
-	}
-
-	// Read response with deadline.
-	if err := conn.SetReadDeadline(time.Now().Add(readTimeout)); err != nil {
-		return nil
+	if uc, ok := conn.(*net.UnixConn); ok {
+		_ = uc.CloseWrite()
 	}
 
 	scanner := bufio.NewScanner(conn)
+	scanner.Buffer(make([]byte, 0, 8*1024), 64*1024)
 	if scanner.Scan() {
-		var resp sealResponse
-		if err := json.Unmarshal(scanner.Bytes(), &resp); err != nil {
-			debugf("hook-runner: parse response: %v\n", err)
-		}
-		// resp.OK == true is the happy path; anything else is still ok — we exit 0.
+		debugf("hook-runner: eng_promote response: %s\n", scanner.Text())
 	}
-	// Read timeout or EOF — both are fine.
 	return nil
 }
 
