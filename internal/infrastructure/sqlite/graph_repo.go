@@ -318,6 +318,33 @@ func (r *GraphRepo) FindNodes(ctx context.Context, repoID, branch, symbolName st
 	return out, nil
 }
 
+// NodesForFile returns every node whose file_path equals filePath for
+// (repoID, branch). Backs eng_get_file_nodes. Returns an empty slice (not an
+// error) when the file has no promoted nodes, matching the port contract.
+func (r *GraphRepo) NodesForFile(ctx context.Context, repoID, branch, filePath string) ([]*domain.Node, error) {
+	rows, err := r.readDB.QueryContext(ctx,
+		`SELECT `+nodeColumns+` FROM nodes
+		 WHERE repo_id = ? AND branch = ? AND file_path = ?`,
+		repoID, branch, filePath)
+	if err != nil {
+		return nil, fmt.Errorf("graph_repo: nodes for file %q: %w", filePath, err)
+	}
+	defer rows.Close()
+
+	var out []*domain.Node
+	for rows.Next() {
+		n, err := scanNode(rows)
+		if err != nil {
+			return nil, fmt.Errorf("graph_repo: scan node for file %q: %w", filePath, err)
+		}
+		out = append(out, n)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("graph_repo: iterate nodes for file %q: %w", filePath, err)
+	}
+	return out, nil
+}
+
 // GetNode retrieves a single node by ID for (repoID, branch). A missing node
 // returns (nil, nil) — the caller treats absence as a normal outcome.
 func (r *GraphRepo) GetNode(ctx context.Context, repoID, branch string, id domain.NodeID) (*domain.Node, error) {
