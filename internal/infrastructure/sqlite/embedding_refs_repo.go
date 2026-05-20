@@ -44,7 +44,7 @@ func (r *EmbeddingRefsRepo) FetchPending(ctx context.Context, limit int) ([]port
 		return nil, nil
 	}
 	rows, err := r.readDB.QueryContext(ctx, `
-		SELECT r.node_id, n.repo_id, n.branch, n.symbol_path, n.kind, n.file_path, n.language
+		SELECT r.node_id, n.repo_id, n.branch, n.symbol_path, n.kind, n.file_path, n.language, n.snippet
 		FROM node_embedding_refs r
 		JOIN nodes n ON n.node_id = r.node_id
 		WHERE r.state = 'pending'
@@ -58,10 +58,11 @@ func (r *EmbeddingRefsRepo) FetchPending(ctx context.Context, limit int) ([]port
 	out := make([]ports.PendingEmbedRef, 0, limit)
 	for rows.Next() {
 		var p ports.PendingEmbedRef
-		if err := rows.Scan(&p.NodeID, &p.RepoID, &p.Branch, &p.SymbolPath, &p.Kind, &p.FilePath, &p.Language); err != nil {
+		var snippet sql.NullString
+		if err := rows.Scan(&p.NodeID, &p.RepoID, &p.Branch, &p.SymbolPath, &p.Kind, &p.FilePath, &p.Language, &snippet); err != nil {
 			return nil, fmt.Errorf("embedding_refs: scan pending: %w", err)
 		}
-		p.Text = embedText(p.Kind, p.SymbolPath, p.FilePath, p.Language)
+		p.Text = embedText(p.Kind, p.SymbolPath, p.FilePath, p.Language, snippet.String)
 		out = append(out, p)
 	}
 	if err := rows.Err(); err != nil {
@@ -72,24 +73,26 @@ func (r *EmbeddingRefsRepo) FetchPending(ctx context.Context, limit int) ([]port
 
 // embedText builds the deterministic Embed-input projection for a node,
 // joining the non-empty parts with a single space. kind and symbolPath are
-// always present; filePath and language may be empty (the nodes columns are
-// NOT NULL but the parser may leave language unset).
+// always present; filePath and language may be empty (the parser may leave
+// language unset), and snippet may be empty when nodes.snippet is NULL.
 //
 // The projection logic itself lives in domain.EmbedText so the recall
 // eval harness (tools/loadtest/recallprojection) measures projection
-// variants against exactly what production emits. Production currently
-// uses the baseline variant. A faithful real-code recall sweep (solov2-ok0)
+// variants against exactly what production emits. Production uses
+// EmbedVariantSnippet: a faithful real-code recall sweep (solov2-ok0)
 // across veska, golang.org/x/mod and BurntSushi/toml — real source-body
 // snippets, doc-comment queries — showed +snippet roughly doubles recall@10
-// over baseline at flat p95. Promoting it needs a persisted node body;
-// tracked in solov2-ok0.
-func embedText(kind, symbolPath, filePath, language string) string {
+// over baseline at flat p95. An empty snippet degrades gracefully:
+// domain.EmbedText skips empty parts, so a NULL-snippet node yields exactly
+// the baseline "<kind> <symbol_path> <file_path> <language>" projection.
+func embedText(kind, symbolPath, filePath, language, snippet string) string {
 	return domain.EmbedText(domain.EmbedTextInput{
 		Kind:       kind,
 		SymbolPath: symbolPath,
 		FilePath:   filePath,
 		Language:   language,
-	}, domain.EmbedVariantBaseline)
+		Snippet:    snippet,
+	}, domain.EmbedVariantSnippet)
 }
 
 // CountPending returns the count of state='pending' rows.
