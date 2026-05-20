@@ -79,23 +79,9 @@ func scanNode(s interface {
 	return n, nil
 }
 
-// maxSnippetBytes bounds the node body persisted into nodes.snippet. The body
-// feeds embed-text projection, so it is capped to keep embed cost and snippet
-// storage bounded and uniform — matching the recallprojection harness cap.
-const maxSnippetBytes = 2000
-
-// capSnippet trims s to at most maxSnippetBytes on a UTF-8 rune boundary so the
-// stored snippet never contains a broken rune.
-func capSnippet(s string) string {
-	if len(s) <= maxSnippetBytes {
-		return s
-	}
-	cut := maxSnippetBytes
-	for cut > 0 && s[cut]&0xC0 == 0x80 {
-		cut--
-	}
-	return s[:cut]
-}
+// (maxSnippetBytes / capSnippet moved to snippet.go and shared with the
+// Promoter so both write paths bind the same body into nodes.snippet —
+// solov2-sxa.)
 
 // SaveNode inserts or replaces a node row keyed on (node_id, branch). The
 // column set and ON CONFLICT clause mirror the Promoter so a GraphRepo write
@@ -143,11 +129,7 @@ ON CONFLICT(node_id, branch) DO UPDATE SET
 	if n.Signature != nil {
 		signature = *n.Signature
 	}
-	// RawContent is captured by the parser; a node without it stores NULL.
-	var snippet any
-	if n.RawContent != nil {
-		snippet = capSnippet(*n.RawContent)
-	}
+	snippet := nodeSnippet(n)
 
 	now := time.Now().UnixMilli()
 	if _, err := r.writeDB.ExecContext(ctx, stmt,
