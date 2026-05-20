@@ -255,8 +255,13 @@ func TestRepoRegistrar_AddRepo_TriggersReparser(t *testing.T) {
 	if repoID == "" {
 		t.Fatalf("AddRepo returned empty repoID")
 	}
-	if addElapsed > 200*time.Millisecond {
-		t.Errorf("AddRepo blocked for %s (>200ms), should be non-blocking", addElapsed)
+	// 1s is a generous ceiling for "non-blocking" — under -race the harness
+	// overhead alone can push a fully-async dispatch into the high-hundreds
+	// of milliseconds. The point is to catch a *synchronous wait* on the
+	// reparser, which would be many seconds (the blocked reparser holds the
+	// goroutine until release is closed below).
+	if addElapsed > 1*time.Second {
+		t.Errorf("AddRepo blocked for %s (>1s), should be non-blocking", addElapsed)
 	}
 
 	// Let the dispatched reparser return.

@@ -122,6 +122,13 @@ func TestColdScanReparser_Integration_RealPipeline(t *testing.T) {
 	if sample == "" {
 		t.Error("sample node symbol_path empty — parser likely produced no useful nodes")
 	}
+
+	// The promotion transaction advances repos.last_promoted_sha and
+	// repos.active_branch (solov2-c47). Without this the daemon's cheap-path
+	// check would never engage.
+	if sha, br := readRepoSHA(t, db, "repo1"); sha != "sha-1" || br != "main" {
+		t.Errorf("repos row: sha=%q branch=%q, want sha-1/main", sha, br)
+	}
 }
 
 func countEmbedRefs(t *testing.T, db *sql.DB) int {

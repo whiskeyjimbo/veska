@@ -223,10 +223,39 @@ func TestDaemon_StartupResync_FullPipeline(t *testing.T) {
 		t.Error("post_promotion_queue: got 0 rows for repo; promotion sinks did not run")
 	}
 
-	// NOTE: we intentionally do NOT assert repos.last_promoted_sha advanced
-	// here. That contract is broken in production — Promoter.Promote never
-	// writes it. Tracked as solov2-c47; assertion will be added when that
-	// bead lands.
+	// repos.last_promoted_sha must advance to HEAD — the promotion
+	// transaction writes it atomically with the node rows (solov2-c47).
+	headOut, err := exec.Command("git", "-C", gitDir, "rev-parse", "HEAD").Output()
+	if err != nil {
+		t.Fatalf("rev-parse HEAD: %v", err)
+	}
+	wantSHA := string(headOut[:len(headOut)-1])
+
+	var gotSHA string
+	if err := d.pools.ReadDB.QueryRow(
+		`SELECT COALESCE(last_promoted_sha, '') FROM repos WHERE repo_id = ?`, repoID,
+	).Scan(&gotSHA); err != nil {
+		t.Fatalf("read last_promoted_sha: %v", err)
+	}
+	if gotSHA != wantSHA {
+		t.Errorf("last_promoted_sha = %q, want %q", gotSHA, wantSHA)
+	}
+
+	// End-to-end demonstration of the c47 fix: re-running resync now takes
+	// the cheap path. We re-route the reparser through a spy and assert it
+	// is NOT invoked, because LastPromotedSHA == HEAD on the second pass.
+	spyCalls := 0
+	cheapResync := application.NewStartupResync(
+		&repoLister{db: d.pools.ReadDB},
+		gitwatch.Querier{}, d.ingester, d.promoter,
+		func(context.Context, application.RepoRecord) error { spyCalls++; return nil },
+	)
+	if err := cheapResync.Run(context.Background()); err != nil {
+		t.Fatalf("cheap-path resync: %v", err)
+	}
+	if spyCalls != 0 {
+		t.Errorf("second resync invoked reparser %d times; want 0 (cheap path expected after c47 fix)", spyCalls)
+	}
 }
 
 // TestDaemon_StartupResync_StartDoesNotBlock guards the epic constraint

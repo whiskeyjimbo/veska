@@ -269,6 +269,35 @@ func (s *PromotionStore) Promote(ctx context.Context, batch application.Promotio
 		return fmt.Errorf("promoter: enqueue wiki: %w", err)
 	}
 
+	// Advance repos.last_promoted_sha (and repos.active_branch when the
+	// caller supplied one) atomically with the node writes. Without this,
+	// StartupResync's cheap-path check (LastPromotedSHA == HEAD) has nothing
+	// to compare against — every daemon restart treats every repo as
+	// never-promoted and re-runs the full reparser (solov2-c47).
+	//
+	// An empty SHA is treated as caller error and skipped so we don't clobber
+	// a known-good value with "". An empty branch is a real production case
+	// (repo.Add does not set active_branch), so we write the SHA alone in
+	// that case and leave active_branch untouched.
+	if batch.GitSHA != "" {
+		var execErr error
+		if branch != "" {
+			_, execErr = tx.ExecContext(ctx,
+				`UPDATE repos SET last_promoted_sha = ?, active_branch = ? WHERE repo_id = ?`,
+				batch.GitSHA, branch, repoID,
+			)
+		} else {
+			_, execErr = tx.ExecContext(ctx,
+				`UPDATE repos SET last_promoted_sha = ? WHERE repo_id = ?`,
+				batch.GitSHA, repoID,
+			)
+		}
+		if execErr != nil {
+			_ = tx.Rollback()
+			return fmt.Errorf("promoter: advance last_promoted_sha: %w", execErr)
+		}
+	}
+
 	if err := tx.Commit(); err != nil {
 		return fmt.Errorf("promoter: commit: %w", err)
 	}
