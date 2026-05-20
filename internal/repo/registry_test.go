@@ -225,8 +225,9 @@ func TestAddRepoDefaultsBranchWhenDetectionFails(t *testing.T) {
 }
 
 // TestAddRepoHookUsesAbsoluteBinaryPath covers solov2-v7q: installed hooks
-// must invoke the absolute path of the veska binary, not bare "veska" which
-// fails for any non-PATH install (dev tree, /opt, custom prefix).
+// must invoke the absolute path of the veska CLI binary, not bare "veska"
+// (broken for any non-PATH install) and NOT the daemon path either (which
+// has no 'hook-runner' subcommand — exposed by the second journey pass).
 func TestAddRepoHookUsesAbsoluteBinaryPath(t *testing.T) {
 	db := newTestDB(t)
 	dir := newGitRepo(t)
@@ -243,10 +244,41 @@ func TestAddRepoHookUsesAbsoluteBinaryPath(t *testing.T) {
 	if strings.Contains(script, "exec veska hook-runner") {
 		t.Errorf("post-commit invokes bare 'veska'; want absolute path. Body:\n%s", script)
 	}
-	// Whatever absolute path was resolved must at least look like a path
-	// (start with '/' on this platform).
 	if !strings.Contains(script, "exec /") {
 		t.Errorf("post-commit does not invoke an absolute path. Body:\n%s", script)
+	}
+	// The hook must point at the CLI binary, not at veska-daemon /
+	// veska-mcp — those have no 'hook-runner' subcommand. When the test
+	// binary itself has neither suffix this is trivially true; the
+	// daemon-suffix case is exercised by TestVeskaBinary_StripsDaemonSuffix
+	// below.
+	if strings.Contains(script, "veska-daemon hook-runner") ||
+		strings.Contains(script, "veska-mcp hook-runner") {
+		t.Errorf("post-commit invokes a non-CLI sibling. Body:\n%s", script)
+	}
+}
+
+// TestVeskaBinary_StripsDaemonSuffix covers the daemon-side of v7q exposed
+// during the second journey pass: when repo.Add runs inside veska-daemon,
+// os.Executable returns ".../veska-daemon" — but the post-commit hook MUST
+// invoke ".../veska hook-runner …" because veska-daemon has no hook-runner
+// subcommand. We simulate this by symlinking the test binary as both
+// "veska" (the sibling we want resolved) and "veska-daemon" (the running
+// process) and asserting the hook script picks the CLI path.
+func TestVeskaBinary_StripsDaemonSuffix(t *testing.T) {
+	dir := t.TempDir()
+	cliPath := filepath.Join(dir, "veska")
+	daemonPath := filepath.Join(dir, "veska-daemon")
+	// The two siblings must both exist for the resolver to pick the CLI.
+	if err := os.WriteFile(cliPath, []byte("#!/bin/sh\nexit 0\n"), 0o755); err != nil {
+		t.Fatalf("write cli stub: %v", err)
+	}
+	if err := os.WriteFile(daemonPath, []byte("#!/bin/sh\nexit 0\n"), 0o755); err != nil {
+		t.Fatalf("write daemon stub: %v", err)
+	}
+	got := repo.ResolveVeskaBinaryForTest(daemonPath)
+	if got != cliPath {
+		t.Errorf("ResolveVeskaBinaryForTest(%q) = %q, want %q", daemonPath, got, cliPath)
 	}
 }
 
