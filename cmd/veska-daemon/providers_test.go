@@ -365,3 +365,92 @@ func TestRepoRegistrar_AddRepo_ContextCanceled(t *testing.T) {
 		t.Fatal("reparser goroutine did not finish within 2s after cancel")
 	}
 }
+
+// TestRepoRegistrar_AddRepo_SeedsLiveWatcher asserts that a successful
+// repo.Add invokes watchAdd with the new repoID + rootPath synchronously
+// (before AddRepo returns), so subsequent file edits on the freshly-registered
+// repo flow through the running fsnotify watcher without a daemon restart
+// (solov2-id3).
+func TestRepoRegistrar_AddRepo_SeedsLiveWatcher(t *testing.T) {
+	db, root := newAddRepoTestEnv(t)
+
+	var (
+		gotRepoID string
+		gotRoot   string
+		called    atomic.Int32
+		mu        sync.Mutex
+	)
+	watchAdd := func(repoID, rootPath string) error {
+		called.Add(1)
+		mu.Lock()
+		gotRepoID, gotRoot = repoID, rootPath
+		mu.Unlock()
+		return nil
+	}
+
+	rr := &repoRegistrar{
+		db:        db,
+		watchAdd:  watchAdd,
+		daemonCtx: context.Background(),
+		// nil reparser/recordFor exercises the early-return path so this
+		// test focuses on the watcher-seed contract alone.
+	}
+
+	repoID, err := rr.AddRepo(context.Background(), root)
+	if err != nil {
+		t.Fatalf("AddRepo: %v", err)
+	}
+	if got := called.Load(); got != 1 {
+		t.Fatalf("watchAdd invocations = %d, want 1", got)
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	if gotRepoID != repoID {
+		t.Errorf("watchAdd repoID = %q, want %q", gotRepoID, repoID)
+	}
+	if gotRoot != root {
+		t.Errorf("watchAdd rootPath = %q, want %q", gotRoot, root)
+	}
+}
+
+// TestRepoRegistrar_AddRepo_WatcherErrorIsNonFatal asserts that a watchAdd
+// failure is logged (not returned) — registration succeeds and the cold scan
+// still dispatches even when seeding the live watcher fails. Reasoning:
+// daemon restart can recover the watch, but losing registration over a
+// transient inotify error would be a worse user-facing failure.
+func TestRepoRegistrar_AddRepo_WatcherErrorIsNonFatal(t *testing.T) {
+	db, root := newAddRepoTestEnv(t)
+
+	var wg sync.WaitGroup
+	reparserCalled := atomic.Int32{}
+	rr := &repoRegistrar{
+		db: db,
+		watchAdd: func(string, string) error {
+			return errors.New("inotify watch limit reached")
+		},
+		reparser: func(_ context.Context, _ application.RepoRecord) error {
+			reparserCalled.Add(1)
+			return nil
+		},
+		recordFor: func(_ context.Context, repoID string) (application.RepoRecord, error) {
+			return application.RepoRecord{RepoID: repoID, RootPath: root}, nil
+		},
+		daemonCtx: context.Background(),
+		scanWG:    &wg,
+	}
+
+	if _, err := rr.AddRepo(context.Background(), root); err != nil {
+		t.Fatalf("AddRepo returned err on watchAdd failure: %v", err)
+	}
+
+	done := make(chan struct{})
+	go func() { wg.Wait(); close(done) }()
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("reparser goroutine did not finish within 2s")
+	}
+	if got := reparserCalled.Load(); got != 1 {
+		t.Errorf("reparser invocations after watchAdd failure = %d, want 1", got)
+	}
+}
