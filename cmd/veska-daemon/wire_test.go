@@ -263,14 +263,15 @@ func TestWire_RegistersFinalFiveTools(t *testing.T) {
 	for _, n := range []string{
 		"eng_get_finding", "eng_get_suppression", "eng_close_suppression",
 		"eng_add_repo", "eng_remove_repo", "eng_find_changed_symbols",
+		"eng_promote_repo", // solov2-3vv post-commit hook target
 	} {
 		if !have[n] {
 			t.Errorf("tool %q not registered; have=%v", n, names)
 		}
 	}
 
-	if got := len(names); got != 33 {
-		t.Errorf("registered tool count = %d; want 33; have=%v", got, names)
+	if got := len(names); got != 34 {
+		t.Errorf("registered tool count = %d; want 34; have=%v", got, names)
 	}
 }
 

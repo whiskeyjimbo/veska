@@ -621,6 +621,8 @@ func newDaemon(cfg Config) (*Daemon, error) {
 		provider: provider,
 		refs:     refs,
 		metrics:  metrics,
+		ingester: ingester,
+		promoter: promoter,
 		regSvc:   regSvc,
 	})
 	mcpsrv := mcp.NewServer(cfg.CLISockPath, cfg.MCPSockPath, registry)
@@ -733,6 +735,10 @@ type mcpDeps struct {
 	provider ports.EmbeddingProvider
 	refs     *sqlite.EmbeddingRefsRepo
 	metrics  *observability.Metrics
+	// ingester + promoter drive eng_promote (post-commit hook target,
+	// solov2-3vv). When either is nil eng_promote is skipped at wire time.
+	ingester *application.Ingester
+	promoter *application.Promoter
 	// regSvc is the live cold-scan-aware repoRegistrar (solov2-0z1.3).
 	// When nil (legacy / test callers that don't drive registration) a
 	// fallback registrar with no cold-scan dispatch is wired so the MCP
@@ -756,6 +762,18 @@ func registerMCPTools(r *mcp.Registry, d mcpDeps) {
 		reg = &repoRegistrar{db: pools.WriteHot}
 	}
 	mcp.RegisterRepoTools(r, reg)
+
+	// eng_promote (solov2-3vv): post-commit hook target. Requires ingester
+	// + promoter + a GitQuerier — when any are missing we skip registration
+	// so the tool surface degrades cleanly rather than panicking at startup.
+	if d.ingester != nil && d.promoter != nil {
+		mcp.RegisterPromoteTool(r, mcp.PromoteDeps{
+			Repos:    &repoLister{db: pools.ReadDB},
+			Git:      gitwatch.Querier{},
+			Ingester: d.ingester,
+			Promoter: d.promoter,
+		})
+	}
 	mcp.RegisterTaskTools(r, pools.WriteHot, nil)
 	mcp.RegisterOwnerTools(r, pools.WriteHot)
 	mcp.RegisterTodoTools(r, sqlite.NewTodoQuerierRepo(pools.ReadDB))
