@@ -207,6 +207,18 @@ type Daemon struct {
 	// Stop waits on it with the same bounded budget as wDone so a slow
 	// resync cannot wedge shutdown.
 	resyncDone chan struct{}
+
+	// regSvc is the live repoRegistrar wired with the cold-scan reparser
+	// and the post-Start daemonCtx. It is built in newDaemon (the closure
+	// graph is available there) and re-bound to d.ctx in Start so the
+	// dispatched cold-scan goroutine outlives any single MCP request ctx.
+	regSvc *repoRegistrar
+
+	// scanWG tracks in-flight AddRepo cold-scan goroutines so Stop can
+	// drain them under the same bounded budget as the other background
+	// workers. Pointer so it can be shared with regSvc (built before the
+	// Daemon struct itself in newDaemon).
+	scanWG *sync.WaitGroup
 }
 
 // newDaemon builds the full collaborator graph from cfg. Every dep is
@@ -565,6 +577,39 @@ func newDaemon(cfg Config) (*Daemon, error) {
 	// fsnotify multi-repo watcher.
 	watcher := gitwatch.NewMultiRepoWatcher()
 
+	// Startup-resync wiring (solov2-0z1.2). The cold-scan reparser walks a
+	// repo's working tree honouring .veskaignore (loaded via the fs adapter
+	// below) and feeds it into Ingester.Save + Promoter.Promote. It is
+	// shared with the cold-scan-aware repoRegistrar (solov2-0z1.3) so that
+	// a newly-registered repo is indexed without a daemon restart.
+	ignoreAdapter := func(repoRoot string) (application.IgnoreMatcher, error) {
+		return fsignore.Load(repoRoot)
+	}
+	gitQ := gitwatch.Querier{}
+	reparser, err := application.NewColdScanReparser(
+		ingester, promoter, gitQ,
+		application.WithIgnoreLoader(ignoreAdapter),
+	)
+	if err != nil {
+		_ = pools.Close()
+		return nil, fmt.Errorf("daemon: build cold-scan reparser: %w", err)
+	}
+
+	// Cold-scan-aware repo registrar (solov2-0z1.3). eng_add_repo /
+	// `veska repo add` route through this; on a successful repo.Add the
+	// registrar fires a background reparser run so a newly-registered repo
+	// is fully indexed without a daemon restart. daemonCtx is bound in
+	// Start (Daemon.ctx is unset at construction time); scanWG drains
+	// in-flight scans during Stop.
+	scanWG := &sync.WaitGroup{}
+	regSvc := &repoRegistrar{
+		db:        pools.WriteHot,
+		reparser:  reparser,
+		recordFor: lookupAppRecord(pools.ReadDB),
+		scanWG:    scanWG,
+		// daemonCtx is bound in Start once d.ctx exists.
+	}
+
 	// MCP server. The Registry implements mcp.Handler.
 	registry := mcp.NewRegistry()
 	registerMCPTools(registry, mcpDeps{
@@ -575,6 +620,7 @@ func newDaemon(cfg Config) (*Daemon, error) {
 		provider: provider,
 		refs:     refs,
 		metrics:  metrics,
+		regSvc:   regSvc,
 	})
 	mcpsrv := mcp.NewServer(cfg.CLISockPath, cfg.MCPSockPath, registry)
 
@@ -589,29 +635,15 @@ func newDaemon(cfg Config) (*Daemon, error) {
 		registry.SetTracerProvider(tracerProvider)
 	}
 
-	// Startup-resync wiring (solov2-0z1.2). The cold-scan reparser walks a
-	// repo's working tree honouring .veskaignore (loaded via the fs adapter
-	// below) and feeds it into Ingester.Save + Promoter.Promote. The
-	// StartupResync orchestrator routes every registered repo through it on
-	// daemon Start — either replaying missed commits (sha..HEAD) or full
-	// cold-scanning (never-promoted / divergent SHA).
-	ignoreAdapter := func(repoRoot string) (application.IgnoreMatcher, error) {
-		return fsignore.Load(repoRoot)
-	}
-	gitQ := gitwatch.Querier{}
-	reparser, err := application.NewColdScanReparser(
-		ingester, promoter, gitQ,
-		application.WithIgnoreLoader(ignoreAdapter),
-	)
-	if err != nil {
-		_ = pools.Close()
-		return nil, fmt.Errorf("daemon: build cold-scan reparser: %w", err)
-	}
+	// StartupResync wiring (solov2-0z1.2). Shares the reparser closure
+	// constructed above with the cold-scan-aware repoRegistrar so the
+	// same code path handles both startup scans and post-registration
+	// scans.
 	resync := application.NewStartupResync(
 		&repoLister{db: pools.ReadDB}, gitQ, ingester, promoter, reparser,
 	)
 
-	return &Daemon{
+	d := &Daemon{
 		cfg:            cfg,
 		pools:          pools,
 		vectors:        vec,
@@ -630,7 +662,10 @@ func newDaemon(cfg Config) (*Daemon, error) {
 		tracerProvider: tracerProvider,
 		vulnRefresher:  vulnRefresher,
 		resync:         resync,
-	}, nil
+		regSvc:         regSvc,
+		scanWG:         scanWG,
+	}
+	return d, nil
 }
 
 // metricsErrorCounter adapts *observability.Metrics to the review.ErrorCounter
@@ -697,6 +732,11 @@ type mcpDeps struct {
 	provider ports.EmbeddingProvider
 	refs     *sqlite.EmbeddingRefsRepo
 	metrics  *observability.Metrics
+	// regSvc is the live cold-scan-aware repoRegistrar (solov2-0z1.3).
+	// When nil (legacy / test callers that don't drive registration) a
+	// fallback registrar with no cold-scan dispatch is wired so the MCP
+	// tool surface still functions.
+	regSvc *repoRegistrar
 }
 
 // registerMCPTools wires every tool family into the registry: findings,
@@ -710,7 +750,11 @@ func registerMCPTools(r *mcp.Registry, d mcpDeps) {
 	mcp.RegisterFindingTools(r, pools.WriteHot, nil)
 	mcp.RegisterSuppressionTools(r, pools.WriteHot, nil)
 	mcp.RegisterRecordTools(r, pools.WriteHot, nil)
-	mcp.RegisterRepoTools(r, &repoRegistrar{db: pools.WriteHot})
+	reg := d.regSvc
+	if reg == nil {
+		reg = &repoRegistrar{db: pools.WriteHot}
+	}
+	mcp.RegisterRepoTools(r, reg)
 	mcp.RegisterTaskTools(r, pools.WriteHot, nil)
 	mcp.RegisterOwnerTools(r, pools.WriteHot)
 	mcp.RegisterTodoTools(r, sqlite.NewTodoQuerierRepo(pools.ReadDB))
@@ -862,6 +906,14 @@ func (d *Daemon) Start(ctx context.Context) error {
 		d.wDone = make(chan struct{})
 		d.resyncDone = make(chan struct{})
 
+		// Bind the cold-scan registrar's daemonCtx now that it exists.
+		// Any AddRepo invoked before Start falls back to context.Background
+		// (see repoRegistrar.AddRepo); after Start the dispatched scan is
+		// tied to the daemon's lifetime context so Stop's cancel reaches it.
+		if d.regSvc != nil {
+			d.regSvc.daemonCtx = d.ctx
+		}
+
 		// Prometheus metrics HTTP listener. Bound only when metrics are
 		// enabled; the closer is shut down in Stop. A bind failure is logged,
 		// not fatal — a daemon without a metrics endpoint is still a valid
@@ -1002,6 +1054,23 @@ func (d *Daemon) Stop() error {
 		if d.resyncDone != nil {
 			select {
 			case <-d.resyncDone:
+			case <-timeout.C:
+			}
+		}
+
+		// Drain in-flight AddRepo cold-scan goroutines (solov2-0z1.3).
+		// Use the same 5s budget as the other background workers; ctx
+		// has already been cancelled so a well-behaved reparser exits
+		// promptly. A stuck scan does not wedge shutdown — we fall
+		// through after the deadline and proceed with pool close.
+		if d.scanWG != nil {
+			scanDone := make(chan struct{})
+			go func() {
+				d.scanWG.Wait()
+				close(scanDone)
+			}()
+			select {
+			case <-scanDone:
 			case <-timeout.C:
 			}
 		}
