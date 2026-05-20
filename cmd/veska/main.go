@@ -27,11 +27,12 @@ func newRootCmd() *cobra.Command {
 	// Resolve the daemon binary path at startup. os.Executable returns the path
 	// of the current binary; by convention the daemon lives alongside the CLI
 	// with the name "veska-daemon".
-	var mgr service.Manager
+	var mgr, dryMgr service.Manager
 	if exe, err := os.Executable(); err == nil {
 		mgr, _ = service.New(exe+"-daemon", config.DefaultVectorDir())
+		dryMgr, _ = service.NewDryRun(exe+"-daemon", config.DefaultVectorDir())
 	}
-	root.AddCommand(serviceCmd(mgr))
+	root.AddCommand(serviceCmd(mgr, dryMgr))
 	root.AddCommand(upgradeCmd(mgr))
 	return root
 }
