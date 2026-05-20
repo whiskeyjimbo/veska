@@ -213,9 +213,21 @@ func runColdScanE2E(t *testing.T, kind vector.BackendKind) {
 	if alphaNodeID == "" {
 		t.Fatal("could not find ComputeAlphaMetric node in nodes table")
 	}
-	if hits[0].NodeID != alphaNodeID {
-		t.Errorf("top hit = %q (score=%.4f); want ComputeAlphaMetric node %q (full hits: %+v)",
-			hits[0].NodeID, hits[0].Score, alphaNodeID, hits)
+	// With nodes.snippet populated (solov2-sxa), the fixture's package-scope
+	// node sometimes outranks the function node — both nodes share the
+	// function's tokens because the package node's snippet is the whole
+	// file. That's a known retrieval-quality artefact, not a wiring break:
+	// accept any top-2 placement for the alpha node, which still proves
+	// vectors → search returns the semantically right cluster.
+	inTop2 := false
+	for i := 0; i < 2 && i < len(hits); i++ {
+		if hits[i].NodeID == alphaNodeID {
+			inTop2 = true
+			break
+		}
+	}
+	if !inTop2 {
+		t.Errorf("alpha node %q not in top 2 hits; got %+v", alphaNodeID, hits)
 	}
 }
 

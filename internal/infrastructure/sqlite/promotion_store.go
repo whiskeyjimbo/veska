@@ -98,8 +98,8 @@ func (s *PromotionStore) Promote(ctx context.Context, batch application.Promotio
 		INSERT INTO nodes
 			(node_id, branch, repo_id, language, kind, symbol_path, file_path,
 			 line_start, line_end, content_hash, last_promoted_at, actor_id, actor_kind,
-			 signature, prev_signature)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+			 signature, snippet, prev_signature)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
 	if err != nil {
 		_ = tx.Rollback()
 		return fmt.Errorf("promoter: prepare insert: %w", err)
@@ -225,6 +225,8 @@ func (s *PromotionStore) Promote(ctx context.Context, batch application.Promotio
 				batch.Actor.ID,
 				string(batch.Actor.Kind),
 				sig,
+				nodeSnippet(n), // solov2-sxa: bind the capped RawContent so
+				// embed-text picks up the body via FetchPending's join.
 				prev,
 			); err != nil {
 				_ = tx.Rollback()
