@@ -6,7 +6,7 @@ DAEMON_BIN      := $(BINDIR)/veska-daemon
 MCP_BIN         := $(BINDIR)/veska-mcp
 LAYERCHECK_BIN  := $(BINDIR)/layercheck
 
-.PHONY: all build test lint vet layercheck clean loadtest test-mcp test-mcp-deep eval-recall eval-recall-projection eval-autolink-fp eval-revalidate-bench eval-queue-fuzz eval-embed-throughput
+.PHONY: all build test lint vet layercheck clean loadtest test-mcp test-mcp-deep test-mcp-bootstrap eval-recall eval-recall-projection eval-autolink-fp eval-revalidate-bench eval-queue-fuzz eval-embed-throughput
 
 all: build test vet lint layercheck
 
@@ -46,12 +46,18 @@ clean:
 # Set VESKA_HOME inline, e.g.:
 #   VESKA_HOME=/tmp/x make test-mcp
 test-mcp: $(MCP_BIN)
-	PYTHONPATH=. python3 -m pytest tests/mcp -v -s -m 'not deep'
+	PYTHONPATH=. python3 -m pytest tests/mcp -v -s -m 'not deep and not bootstrap'
 
 # test-mcp-deep: like test-mcp but also runs cross-validation tests that
 # read the live SQLite directly and compare against MCP-returned shapes.
 test-mcp-deep: $(MCP_BIN)
-	PYTHONPATH=. python3 -m pytest tests/mcp -v -s
+	PYTHONPATH=. python3 -m pytest tests/mcp -v -s -m 'not bootstrap'
+
+# test-mcp-bootstrap: spawns its own daemon in a tmp VESKA_HOME and walks
+# the full zero-state journey (~15s). Needs Ollama + the three binaries
+# built. Doesn't touch the live daemon's state.
+test-mcp-bootstrap: $(VESKA_BIN) $(DAEMON_BIN) $(MCP_BIN)
+	PYTHONPATH=. python3 -m pytest tests/mcp -v -s -m bootstrap
 
 # loadtest: manual-only — collates M1 exit-gate RESULTS.md files and emits tools/loadtest/REPORT.md.
 # Not included in `all`. Exit 0=all-pass, 1=fail, 2=pending.

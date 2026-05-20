@@ -258,13 +258,22 @@ func normaliseDSN(path string) string {
 	return "file:" + path + "?_pragma=foreign_keys%3Don"
 }
 
-// applyPragmas sets WAL mode, autocheckpoint, and foreign-keys on db.
-// Foreign-keys are also set via the DSN; this ensures enforcement on every connection.
+// applyPragmas sets WAL mode, autocheckpoint, foreign-keys, and a 5s
+// busy_timeout on db. Foreign-keys are also set via the DSN; this
+// ensures enforcement on every connection.
+//
+// The busy_timeout matches the daemon's read+writeHot pools (pools.go).
+// Without it, any CLI command opening the same db while the daemon is
+// writing (e.g. `veska reindex` racing the embedder worker) fails
+// immediately with SQLITE_BUSY. The 5s ceiling is long enough to ride
+// out the embedder's batch commits but short enough that a wedged
+// daemon surfaces as a clear error rather than an indefinite hang.
 func applyPragmas(db *sql.DB) error {
 	pragmas := []string{
 		`PRAGMA journal_mode=WAL`,
 		`PRAGMA wal_autocheckpoint=1000`,
 		`PRAGMA foreign_keys=ON`,
+		`PRAGMA busy_timeout=5000`,
 	}
 	for _, p := range pragmas {
 		if _, err := db.Exec(p); err != nil {
