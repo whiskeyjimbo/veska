@@ -224,6 +224,87 @@ func TestPromote_Idempotent(t *testing.T) {
 	}
 }
 
+// TestPromote_AdvancesLastPromotedSHA verifies that a successful Promote writes
+// repos.last_promoted_sha and repos.active_branch atomically with the node
+// rows — the contract that StartupResync's cheap-path check depends on
+// (solov2-c47). The first promote stamps the SHA; a second promote with a
+// different SHA overwrites it; an empty-batch (no-op) promote leaves it
+// unchanged; a promote with an empty SHA does NOT clobber a known-good value.
+func TestPromote_AdvancesLastPromotedSHA(t *testing.T) {
+	db := openMemDB(t)
+	insertTestRepo(t, db, "repo1")
+
+	sa := application.NewStagingArea()
+	p := newTestPromoter(sa, db)
+	actor := domain.Actor{ID: "service:veska", Kind: domain.ActorKindSystem}
+
+	n1, _ := domain.NewNode("n1", "a.go", "A", domain.KindFunction)
+	sa.StageFile("repo1", "main", "a.go", []*domain.Node{n1}, nil)
+	if err := p.Promote(context.Background(), "repo1", "main", "sha-001", actor); err != nil {
+		t.Fatalf("first Promote: %v", err)
+	}
+	if sha, br := readRepoSHA(t, db, "repo1"); sha != "sha-001" || br != "main" {
+		t.Fatalf("after first promote: sha=%q branch=%q, want sha-001/main", sha, br)
+	}
+
+	// Second promote on a different branch+sha overwrites both columns.
+	n2, _ := domain.NewNode("n2", "b.go", "B", domain.KindFunction)
+	sa.StageFile("repo1", "topic", "b.go", []*domain.Node{n2}, nil)
+	if err := p.Promote(context.Background(), "repo1", "topic", "sha-002", actor); err != nil {
+		t.Fatalf("second Promote: %v", err)
+	}
+	if sha, br := readRepoSHA(t, db, "repo1"); sha != "sha-002" || br != "topic" {
+		t.Fatalf("after second promote: sha=%q branch=%q, want sha-002/topic", sha, br)
+	}
+
+	// Empty-batch promote (registered repo, nothing staged) returns nil and
+	// must not touch the row — the early-return guards before BEGIN TX.
+	if err := p.Promote(context.Background(), "repo1", "topic", "sha-noop", actor); err != nil {
+		t.Fatalf("empty-batch Promote: %v", err)
+	}
+	if sha, br := readRepoSHA(t, db, "repo1"); sha != "sha-002" || br != "topic" {
+		t.Errorf("empty-batch promote clobbered repo row: sha=%q branch=%q", sha, br)
+	}
+
+	// Defensive: a promote with an empty SHA must NOT clobber the stored value
+	// (caller-error guard inside the transaction body).
+	n3, _ := domain.NewNode("n3", "c.go", "C", domain.KindFunction)
+	sa.StageFile("repo1", "topic", "c.go", []*domain.Node{n3}, nil)
+	if err := p.Promote(context.Background(), "repo1", "topic", "", actor); err != nil {
+		t.Fatalf("empty-sha Promote: %v", err)
+	}
+	if sha, _ := readRepoSHA(t, db, "repo1"); sha != "sha-002" {
+		t.Errorf("empty-sha promote clobbered last_promoted_sha: got %q, want sha-002", sha)
+	}
+
+	// Production case: cold-scan reparser on a freshly repo.Add-ed repo
+	// passes branch="" (active_branch is NULL after repo.Add). The SHA must
+	// still advance so the next startup takes the cheap path; active_branch
+	// is left untouched.
+	insertTestRepo(t, db, "repo2")
+	n4, _ := domain.NewNode("n4", "d.go", "D", domain.KindFunction)
+	sa.StageFile("repo2", "", "d.go", []*domain.Node{n4}, nil)
+	if err := p.Promote(context.Background(), "repo2", "", "sha-emptybr", actor); err != nil {
+		t.Fatalf("empty-branch Promote: %v", err)
+	}
+	if sha, br := readRepoSHA(t, db, "repo2"); sha != "sha-emptybr" || br != "" {
+		t.Errorf("empty-branch promote: sha=%q branch=%q, want sha-emptybr/empty", sha, br)
+	}
+}
+
+// readRepoSHA returns (last_promoted_sha, active_branch) for repoID, with
+// NULL flattened to "". Used by SHA-advance tests.
+func readRepoSHA(t *testing.T, db *sql.DB, repoID string) (sha, branch string) {
+	t.Helper()
+	var s, b sql.NullString
+	if err := db.QueryRow(
+		`SELECT last_promoted_sha, active_branch FROM repos WHERE repo_id = ?`, repoID,
+	).Scan(&s, &b); err != nil {
+		t.Fatalf("readRepoSHA: %v", err)
+	}
+	return s.String, b.String
+}
+
 // TestPromoteUnregisteredRepo verifies that Promote returns application.ErrUnregisteredRepo
 // when the repoID is not present in the repos table.
 func TestPromoteUnregisteredRepo(t *testing.T) {
