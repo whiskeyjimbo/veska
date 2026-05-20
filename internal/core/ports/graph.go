@@ -31,4 +31,11 @@ type GraphStorage interface {
 
 	// GetNode retrieves a single Node by its NodeID. Returns nil, nil when not found.
 	GetNode(ctx context.Context, repoID, branch string, id domain.NodeID) (*domain.Node, error)
+
+	// NodesForFile returns every Node whose file_path equals filePath in the
+	// given repository and branch. Returns an empty slice (not an error) when
+	// the file has no promoted nodes. This is the primary read for
+	// eng_get_file_nodes; promoting it to the port retires the optional
+	// type-assertion dance the handler used to do (solov2-8ex).
+	NodesForFile(ctx context.Context, repoID, branch, filePath string) ([]*domain.Node, error)
 }
