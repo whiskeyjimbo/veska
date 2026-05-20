@@ -21,18 +21,52 @@ import (
 // hookNames lists the git hooks that veska installs.
 var hookNames = []string{"post-commit", "post-checkout"}
 
-// veskaBinary resolves the absolute path of the currently-running veska
-// binary so installed hooks invoke it directly instead of relying on $PATH
-// (solov2-v7q). Falls back to bare "veska" only if os.Executable cannot
-// resolve a path — same broken behaviour as before, never worse.
+// veskaBinary resolves the absolute path of the 'veska' CLI binary so
+// installed hooks invoke it directly instead of relying on $PATH
+// (solov2-v7q). The hook MUST point at the CLI, not the running process —
+// when eng_add_repo runs inside veska-daemon, os.Executable() returns the
+// daemon's path, which has no 'hook-runner' subcommand. By convention the
+// CLI lives alongside the daemon and mcp shim with these names:
+//
+//	veska         (the CLI)
+//	veska-daemon  (the long-running process)
+//	veska-mcp     (the stdio shim)
+//
+// So we resolve the running binary, strip the '-daemon' / '-mcp' suffix
+// from its basename, and check that the sibling exists. If anything fails
+// we fall back to bare 'veska' — same $PATH-dependent behaviour as before,
+// never worse.
 func veskaBinary() string {
-	if exe, err := os.Executable(); err == nil {
-		if resolved, err := filepath.EvalSymlinks(exe); err == nil {
-			return resolved
-		}
-		return exe
+	exe, err := os.Executable()
+	if err != nil {
+		return "veska"
 	}
-	return "veska"
+	if resolved, err := filepath.EvalSymlinks(exe); err == nil {
+		exe = resolved
+	}
+	return resolveVeskaBinary(exe)
+}
+
+// resolveVeskaBinary is the pure path-shaping half of veskaBinary, split out
+// for testability. Given the absolute path of the running binary, it returns
+// the path of the sibling 'veska' CLI when one exists. If the sibling cannot
+// be found (split install, unusual layout) it returns exe verbatim — better
+// to print 'unknown command hook-runner' from the running binary than to
+// silently emit a broken 'veska' on $PATH.
+func resolveVeskaBinary(exe string) string {
+	dir, base := filepath.Split(exe)
+	cliName := base
+	switch {
+	case strings.HasSuffix(base, "-daemon"):
+		cliName = strings.TrimSuffix(base, "-daemon")
+	case strings.HasSuffix(base, "-mcp"):
+		cliName = strings.TrimSuffix(base, "-mcp")
+	}
+	candidate := filepath.Join(dir, cliName)
+	if _, err := os.Stat(candidate); err == nil {
+		return candidate
+	}
+	return exe
 }
 
 // hookScript returns the shell script content for a named hook. The veska
