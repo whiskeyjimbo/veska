@@ -252,3 +252,53 @@ func TestEmbeddingRefsRepo_FetchPending_TextProjection(t *testing.T) {
 		t.Error("n1 and n2 collapsed to the same projection")
 	}
 }
+
+// TestEmbeddingRefsRepo_FetchPending_SnippetProjection verifies the embed-input
+// projection uses EmbedVariantSnippet: a node with a persisted snippet projects
+// "<kind> <symbol_path> <file> <language> <snippet>", while a node with a NULL
+// snippet degrades gracefully to the exact baseline projection (solov2-ok0.6).
+func TestEmbeddingRefsRepo_FetchPending_SnippetProjection(t *testing.T) {
+	t.Parallel()
+	db, repo := openTestDB(t)
+	now := time.Now().UnixMilli()
+
+	if _, err := db.Exec(
+		`INSERT OR IGNORE INTO repos (repo_id, root_path, added_at) VALUES (?,?,?)`,
+		"r1", "/tmp/r1", now); err != nil {
+		t.Fatalf("insert repo: %v", err)
+	}
+	insertNode := func(nodeID, kind, symbol, file, lang string, snippet sql.NullString) {
+		if _, err := db.Exec(`INSERT INTO nodes (
+			node_id, branch, repo_id, language, kind, symbol_path, file_path,
+			content_hash, last_promoted_at, actor_id, actor_kind, snippet
+		) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`,
+			nodeID, "main", "r1", lang, kind, symbol, file,
+			"h", now, "test", "system", snippet); err != nil {
+			t.Fatalf("insert node %s: %v", nodeID, err)
+		}
+		if _, err := db.Exec(
+			`INSERT INTO node_embedding_refs (node_id, state, enqueued_at) VALUES (?, 'pending', ?)`,
+			nodeID, now); err != nil {
+			t.Fatalf("insert ref %s: %v", nodeID, err)
+		}
+	}
+	insertNode("s1", "function", "pkg.Foo", "a/b.go", "go",
+		sql.NullString{String: "func Foo() {}", Valid: true})
+	insertNode("s2", "function", "pkg.Bar", "c.go", "go",
+		sql.NullString{}) // NULL snippet
+
+	pending, err := repo.FetchPending(context.Background(), 10)
+	if err != nil {
+		t.Fatalf("FetchPending: %v", err)
+	}
+	got := make(map[string]string, len(pending))
+	for _, p := range pending {
+		got[p.NodeID] = p.Text
+	}
+	if want := "function pkg.Foo a/b.go go func Foo() {}"; got["s1"] != want {
+		t.Errorf("s1: Text = %q, want %q", got["s1"], want)
+	}
+	if want := "function pkg.Bar c.go go"; got["s2"] != want {
+		t.Errorf("s2: Text = %q, want %q (baseline)", got["s2"], want)
+	}
+}
