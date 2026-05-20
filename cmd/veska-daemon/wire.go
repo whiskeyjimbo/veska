@@ -1025,8 +1025,17 @@ func (d *Daemon) Start(ctx context.Context) error {
 // runWatchLoop reads from the multi-repo watcher and forwards each file event
 // to Ingester.Save. The loop terminates when ctx is cancelled or Events()
 // closes.
+//
+// Branch resolution (solov2-7c4): we look up each event's repo via repo.Get
+// to use its recorded active_branch instead of the previous hardcoded "main".
+// A non-main repo would otherwise have its live edits silently saved under
+// the wrong branch key, never to be promoted (Promoter.Promote would scan an
+// empty staging slice for the actual branch). A small per-event cache keeps
+// the lookup cost off the hot path.
 func (d *Daemon) runWatchLoop(ctx context.Context) {
 	events := d.watcher.Events()
+	branchOf := make(map[string]string)
+
 	for {
 		select {
 		case <-ctx.Done():
@@ -1037,9 +1046,25 @@ func (d *Daemon) runWatchLoop(ctx context.Context) {
 			}
 			data, err := os.ReadFile(ev.Event.Path)
 			if err != nil {
+				slog.Debug("watch loop: read failed",
+					"repo_id", ev.RepoID, "path", ev.Event.Path, "err", err)
 				continue
 			}
-			d.ingester.Save(ctx, ev.RepoID, "main", ev.Event.Path, data)
+			branch, ok := branchOf[ev.RepoID]
+			if !ok {
+				rec, gerr := repo.Get(ctx, d.pools.ReadDB, ev.RepoID)
+				if gerr != nil {
+					slog.Warn("watch loop: lookup repo failed",
+						"repo_id", ev.RepoID, "err", gerr)
+					continue
+				}
+				branch = rec.ActiveBranch
+				if branch == "" {
+					branch = "main"
+				}
+				branchOf[ev.RepoID] = branch
+			}
+			d.ingester.Save(ctx, ev.RepoID, branch, ev.Event.Path, data)
 		}
 	}
 }
