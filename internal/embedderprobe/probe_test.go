@@ -40,6 +40,35 @@ func makeServer(t *testing.T, modelName string, modelPresent bool, embedResp str
 	}))
 }
 
+// TestProbeHealthy_TagMatching covers the realistic case where Ollama tags
+// the installed model (e.g. "nomic-embed-text:latest") but the caller passes
+// the bare name. solov2-2be: the original exact-string match failed every
+// vanilla 'ollama pull' install.
+func TestProbeHealthy_TagMatching(t *testing.T) {
+	for _, tc := range []struct{ installed, requested string }{
+		{"nomic-embed-text", "nomic-embed-text"},               // exact bare
+		{"nomic-embed-text:latest", "nomic-embed-text"},        // tagged vs bare
+		{"nomic-embed-text:v1.5", "nomic-embed-text"},          // arbitrary tag
+		{"nomic-embed-text:latest", "nomic-embed-text:latest"}, // exact tagged
+	} {
+		t.Run(tc.installed+"_vs_"+tc.requested, func(t *testing.T) {
+			srv := makeServer(t, tc.installed, true, `{"embedding":[0.1,0.2]}`)
+			defer srv.Close()
+
+			r, err := embedderprobe.Probe(context.Background(), srv.URL, tc.requested)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if !r.ModelPresent {
+				t.Errorf("ModelPresent=false (installed=%q requested=%q)", tc.installed, tc.requested)
+			}
+			if r.Status != "healthy" {
+				t.Errorf("Status=%q want healthy", r.Status)
+			}
+		})
+	}
+}
+
 func TestProbeHealthy(t *testing.T) {
 	srv := makeServer(t, "nomic-embed-text", true, `{"embedding":[0.1,0.2]}`)
 	defer srv.Close()
