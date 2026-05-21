@@ -9,6 +9,8 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"net/http/pprof"
+	"os"
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -246,6 +248,19 @@ func StartHTTPListener(addr string, reg interface {
 
 	mux := http.NewServeMux()
 	mux.Handle("/metrics", MetricsHandler(reg))
+
+	// Gated pprof: VESKA_PPROF=1 mounts /debug/pprof/* on the metrics
+	// listener. Off by default so production hosts don't expose profile
+	// endpoints. Used for ad-hoc perf investigation (solov2-pc3 and
+	// similar). The metrics listener already binds to a config-chosen
+	// address, so pprof inherits that address policy.
+	if os.Getenv("VESKA_PPROF") == "1" {
+		mux.HandleFunc("/debug/pprof/", pprof.Index)
+		mux.HandleFunc("/debug/pprof/cmdline", pprof.Cmdline)
+		mux.HandleFunc("/debug/pprof/profile", pprof.Profile)
+		mux.HandleFunc("/debug/pprof/symbol", pprof.Symbol)
+		mux.HandleFunc("/debug/pprof/trace", pprof.Trace)
+	}
 
 	srv := &http.Server{Handler: mux}
 	go func() { _ = srv.Serve(ln) }()
