@@ -33,17 +33,31 @@ var errUnsupportedPlatform = errors.New("unsupported platform: no service manage
 // binaryPath is the absolute path to the veska-daemon binary.
 // veskaHome is the Veska data root (typically ~/.veska).
 func New(binaryPath, veskaHome string) (Manager, error) {
-	return NewForGOOS(runtime.GOOS, binaryPath, veskaHome)
+	return newForGOOS(runtime.GOOS, binaryPath, veskaHome, false)
+}
+
+// NewDryRun mirrors New but returns a Manager whose mutating operations
+// print what they would do instead of executing them. Used by the
+// `veska service * --dry-run` subcommands so users see the concrete file
+// paths and supervisor commands that would run (solov2-kqp).
+func NewDryRun(binaryPath, veskaHome string) (Manager, error) {
+	return newForGOOS(runtime.GOOS, binaryPath, veskaHome, true)
 }
 
 // NewForGOOS returns the Manager for the given GOOS value.
 // It is exported so tests can exercise specific platforms.
 func NewForGOOS(goos, binaryPath, veskaHome string) (Manager, error) {
+	return newForGOOS(goos, binaryPath, veskaHome, false)
+}
+
+// newForGOOS is the shared internal constructor that both New and
+// NewDryRun delegate to. Keeps the platform switch in one place.
+func newForGOOS(goos, binaryPath, veskaHome string, dryRun bool) (Manager, error) {
 	switch goos {
 	case "darwin":
-		return NewLaunchdManager(binaryPath, veskaHome, false), nil
+		return NewLaunchdManager(binaryPath, veskaHome, dryRun), nil
 	case "linux":
-		return NewSystemdManager(binaryPath, veskaHome, false), nil
+		return NewSystemdManager(binaryPath, veskaHome, dryRun), nil
 	default:
 		return nil, errUnsupportedPlatform
 	}
