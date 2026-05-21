@@ -45,10 +45,15 @@ func (e ErrUnregisteredRepo) Error() string {
 	)
 }
 
-// PromotionFile is the set of nodes parsed for a single staged file.
+// PromotionFile is the set of nodes (and parser-produced edges) parsed for a
+// single staged file. Edges carry structural relationships the parser can
+// determine at parse time (CALLS, IMPORTS, etc., per solov2-ijg).
+// Vector-similarity edges (SIMILAR_TO) are NOT in this set — those are
+// derived post-promotion by the autolink queue worker.
 type PromotionFile struct {
 	Path  string
 	Nodes []*domain.Node
+	Edges []*domain.Edge
 }
 
 // PromotionBatch is the plain-data description of one promotion. It carries no

@@ -130,28 +130,36 @@ func (s *StagingArea) StageIfCurrentGeneration(
 	return true
 }
 
-// Snapshot returns a shallow copy of staged nodes keyed by filePath for the
-// given (repoID, branch). Mutating the returned map does not affect the
-// StagingArea; however, the node slices themselves are not deep-copied (callers
-// must not mutate the slice elements). Used by the promotion path to flush all
-// staged state to SQLite in a single transaction.
+// StagedFile is the per-file snapshot the promotion path consumes — nodes
+// AND parser-produced edges. SIMILAR_TO edges (autolink) are NOT included
+// here; only structural edges the parser determined at parse time
+// (solov2-ijg).
+type StagedFile struct {
+	Nodes []*domain.Node
+	Edges []*domain.Edge
+}
+
+// Snapshot returns a shallow copy of staged nodes + edges keyed by filePath
+// for the given (repoID, branch). Mutating the returned map does not affect
+// the StagingArea; the slices themselves are not deep-copied (callers must
+// not mutate elements). Used by the promotion path to flush all staged
+// state to SQLite in a single transaction.
 //
-// Edges are intentionally excluded from the snapshot. Promotion is a node-only
-// operation; edges are re-derived post-promotion by the auto_link queue worker
-// (work_kind="auto_link" enqueued by Promoter). Staged edges are retained in
-// the StagingArea only to serve pre-promotion overlay reads via GetStagedEdges.
-func (s *StagingArea) Snapshot(repoID, branch string) map[string][]*domain.Node {
+// Parser-produced edges (CALLS, IMPORTS, etc.) ride with their file's
+// nodes. Post-promotion SIMILAR_TO edges are produced separately by the
+// autolink queue worker.
+func (s *StagingArea) Snapshot(repoID, branch string) map[string]StagedFile {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	snap := make(map[string][]*domain.Node)
+	snap := make(map[string]StagedFile)
 	for k, e := range s.entries {
 		if k.repoID == repoID && k.branch == branch {
-			// Shallow-copy the slice so callers can append/delete without
-			// affecting the staging store's slice header.
 			ns := make([]*domain.Node, len(e.nodes))
 			copy(ns, e.nodes)
-			snap[k.filePath] = ns
+			es := make([]*domain.Edge, len(e.edges))
+			copy(es, e.edges)
+			snap[k.filePath] = StagedFile{Nodes: ns, Edges: es}
 		}
 	}
 	return snap

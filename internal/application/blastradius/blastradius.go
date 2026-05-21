@@ -276,8 +276,8 @@ func (s *Service) DirtyOf(ctx context.Context, repoID, branch string, opts Optio
 	}
 	snap := s.staging.Snapshot(repoID, branch)
 	seeds := make([]string, 0, len(snap))
-	for _, nodes := range snap {
-		for _, n := range nodes {
+	for _, sf := range snap {
+		for _, n := range sf.Nodes {
 			if n == nil {
 				continue
 			}

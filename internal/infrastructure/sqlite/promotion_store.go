@@ -271,6 +271,43 @@ func (s *PromotionStore) Promote(ctx context.Context, batch application.Promotio
 		return fmt.Errorf("promoter: enqueue wiki: %w", err)
 	}
 
+	// Persist parser-produced edges (CALLS, IMPORTS, etc.) atomically with
+	// the node writes (solov2-ijg). Cross-file edges (e.g. main.go's
+	// NewServer → store.go's NewNoteStore) require both files' nodes to
+	// exist in the table, so the edge insert runs AFTER the per-file node
+	// loop completes. INSERT OR IGNORE matches the autolink path's
+	// idempotency — re-promoting the same content is a no-op.
+	//
+	// Autolink-produced SIMILAR_TO edges still arrive separately via the
+	// post-promotion queue; they don't conflict with this insert (different
+	// edge_id by construction).
+	edgeStmt, eerr := tx.PrepareContext(ctx, `
+		INSERT INTO edges
+			(edge_id, branch, repo_id, src_node_id, dst_node_id, kind, confidence, last_promoted_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+		ON CONFLICT(edge_id, branch) DO NOTHING`)
+	if eerr != nil {
+		_ = tx.Rollback()
+		return fmt.Errorf("promoter: prepare edge insert: %w", eerr)
+	}
+	defer edgeStmt.Close()
+
+	for _, file := range batch.Files {
+		for _, e := range file.Edges {
+			if e == nil {
+				continue
+			}
+			if _, ierr := edgeStmt.ExecContext(ctx,
+				e.ID, branch, repoID,
+				string(e.Src), string(e.Tgt),
+				string(e.Kind), confidenceText(e.Confidence), now,
+			); ierr != nil {
+				_ = tx.Rollback()
+				return fmt.Errorf("promoter: insert edge %q: %w", e.ID, ierr)
+			}
+		}
+	}
+
 	// Advance repos.last_promoted_sha (and repos.active_branch when the
 	// caller supplied one) atomically with the node writes. Without this,
 	// StartupResync's cheap-path check (LastPromotedSHA == HEAD) has nothing
