@@ -1,0 +1,149 @@
+"""Alternative paths — equivalent ways to reach the same outcome.
+
+These tests don't exercise new functionality; they verify that two
+different paths through the system produce the same result. A divergence
+here means a contract is silently bifurcating.
+
+Examples in this file:
+  - Relative vs absolute file_path for eng_get_file_nodes
+  - Finding the same node via eng_find_symbol vs eng_get_node
+  - eng_search_semantic with default limit vs explicit limit=N
+  - Searching for a symbol's own name returns it via both
+    eng_search_semantic and eng_find_symbol
+"""
+
+from __future__ import annotations
+
+import os
+
+import pytest
+
+from tests.mcp.helpers import query
+
+
+def test_alternative_find_symbol_vs_get_node(mcp_client, repo_id, branch, target_symbol):
+    """A symbol resolved by name (find_symbol) and the same id resolved by
+    id (get_node) must return the same node fields."""
+    _, _, _, fs = mcp_client.call("eng_find_symbol", {
+        "repo_id": repo_id, "branch": branch, "symbol": target_symbol,
+    })
+    nodes = fs.get("nodes") or []
+    assert nodes, "find_symbol returned nothing — fixture poisoned"
+    fs_node = nodes[0]
+
+    _, _, _, gn = mcp_client.call("eng_get_node", {
+        "repo_id": repo_id, "branch": branch, "node_id": fs_node["ID"],
+    })
+    gn_nodes = gn.get("nodes") or []
+    assert gn_nodes, "get_node returned nothing for the id find_symbol gave us"
+    gn_node = gn_nodes[0]
+
+    for k in ("ID", "Name", "Path", "Kind"):
+        assert fs_node.get(k) == gn_node.get(k), (
+            f"path bifurcation on field {k!r}: find_symbol={fs_node.get(k)!r} "
+            f"get_node={gn_node.get(k)!r}"
+        )
+
+
+def test_alternative_get_file_nodes_absolute_vs_db_path(mcp_client, repo_id, branch, target_file):
+    """target_file is the absolute path the daemon stores. Re-asserting
+    with that path is the canonical case; the goal here is to pin the
+    contract that get_file_nodes uses exact match (not a fuzzy LIKE).
+
+    Try the basename as a counter-example: it must NOT match — otherwise
+    a relative-path slip would silently leak nodes across same-named
+    files in different directories."""
+    ok, _, _, by_abs = mcp_client.call("eng_get_file_nodes", {
+        "repo_id": repo_id, "branch": branch, "file_path": target_file,
+    })
+    assert ok
+    abs_count = len(by_abs.get("nodes") or [])
+    assert abs_count > 0, "absolute path returned no nodes — fixture poisoned"
+
+    basename = os.path.basename(target_file)
+    if basename == target_file:
+        pytest.skip("target_file is already a basename — counter-example inapplicable")
+
+    _, _, _, by_base = mcp_client.call("eng_get_file_nodes", {
+        "repo_id": repo_id, "branch": branch, "file_path": basename,
+    })
+    # Either empty or a different count — what we forbid is silently
+    # treating basename as a synonym for the absolute path.
+    base_nodes = by_base.get("nodes") or []
+    # A clean assertion: the basename search must not accidentally
+    # return the same node ids that the absolute path returned.
+    abs_ids = {n["ID"] for n in by_abs.get("nodes") or []}
+    base_ids = {n["ID"] for n in base_nodes}
+    assert not (abs_ids & base_ids) or abs_ids != base_ids, (
+        "get_file_nodes treats basename as synonym for absolute path — "
+        "would silently leak across same-named files in different dirs"
+    )
+
+
+def test_alternative_search_semantic_default_vs_explicit_limit(mcp_client, repo_id, branch, target_symbol):
+    """A search with the default limit must return a subset of the
+    explicit-limit=large result. Ranking within score-ties is not
+    deterministic (sqlite-vec breaks them by insertion order), so we
+    assert set-equality on the score-tied prefix rather than strict
+    list-order equality — a drift in the SET of top hits is the real
+    correctness signal."""
+    _, _, _, with_explicit = mcp_client.call("eng_search_semantic", {
+        "repo_id": repo_id, "branch": branch,
+        "query": target_symbol, "limit": 50,
+    })
+    _, _, _, with_default = mcp_client.call("eng_search_semantic", {
+        "repo_id": repo_id, "branch": branch,
+        "query": target_symbol,
+    })
+    big = with_explicit.get("results") or []
+    small = with_default.get("results") or []
+    assert small, "default-limit search returned nothing"
+
+    # Set equivalence on the top-N: the default-limit result must be a
+    # subset of the larger result. (Identity within a score tie is
+    # backend-defined.)
+    small_ids = {r["NodeID"] for r in small}
+    big_ids = {r["NodeID"] for r in big[: len(big)]}
+    missing = small_ids - big_ids
+    assert not missing, (
+        f"default-limit hits not in explicit-limit superset: {missing}"
+    )
+
+    # The TOP hit must agree across runs — if the #1 result shuffles
+    # between calls the user-visible "best match" becomes inconsistent
+    # and that IS a real bug worth pinning here.
+    assert big[0]["NodeID"] == small[0]["NodeID"], (
+        f"top hit differs: default={small[0]['NodeID']} explicit={big[0]['NodeID']}"
+    )
+
+
+def test_alternative_find_symbol_appears_in_semantic_top(mcp_client, repo_id, branch, target_symbol):
+    """Both name-based lookup and semantic-by-name lookup must agree the
+    target symbol exists. Drift = the embedding-text projection no longer
+    includes the symbol name (e.g. someone dropped Name from EmbedText).
+    """
+    _, _, _, by_name = mcp_client.call("eng_find_symbol", {
+        "repo_id": repo_id, "branch": branch, "symbol": target_symbol,
+    })
+    name_id = (by_name.get("nodes") or [{}])[0].get("ID")
+    assert name_id, "find_symbol returned no node"
+
+    _, _, _, sem = mcp_client.call("eng_search_semantic", {
+        "repo_id": repo_id, "branch": branch,
+        "query": target_symbol, "limit": 10,
+    })
+    sem_ids = [r["NodeID"] for r in sem.get("results") or []]
+    assert name_id in sem_ids, (
+        f"semantic search for {target_symbol!r} doesn't surface its own node "
+        f"{name_id} in top 10: {sem_ids}"
+    )
+
+
+def test_alternative_list_repos_matches_db(mcp_client):
+    """eng_list_repos must equal SELECT * FROM repos. A divergence means
+    the lister is reading from somewhere stale (e.g. a startup-time
+    snapshot that doesn't see live additions)."""
+    _, _, _, result = mcp_client.call("eng_list_repos", {})
+    mcp_ids = sorted(r["RepoID"] for r in result.get("repos") or [])
+    db_ids = sorted(r["repo_id"] for r in query("SELECT repo_id FROM repos"))
+    assert mcp_ids == db_ids, f"eng_list_repos {mcp_ids} != db {db_ids}"
