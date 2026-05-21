@@ -30,7 +30,9 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/config"
 	"github.com/whiskeyjimbo/veska/internal/core/ports"
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/audit"
+	"github.com/whiskeyjimbo/veska/internal/infrastructure/embedding/composite"
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/embedding/ollama"
+	embedstatic "github.com/whiskeyjimbo/veska/internal/infrastructure/embedding/static"
 	fsignore "github.com/whiskeyjimbo/veska/internal/infrastructure/fs"
 	gitwatch "github.com/whiskeyjimbo/veska/internal/infrastructure/git"
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/llm"
@@ -472,7 +474,23 @@ func newDaemon(cfg Config) (*Daemon, error) {
 		_ = pools.Close()
 		return nil, fmt.Errorf("daemon: embedding provider: %w", err)
 	}
-	provider = ollamaProvider
+	// Composite EmbeddingProvider (solov2-soc): try Ollama first, fall
+	// back to the in-process static embedder when Ollama is unreachable
+	// so a fresh-machine setup (no Ollama installed) still indexes and
+	// searches. The static embedder produces lower-quality vectors —
+	// the composite ModelID combines both IDs so swapping configuration
+	// invalidates the embedding cache.
+	staticProvider, err := embedstatic.New()
+	if err != nil {
+		_ = pools.Close()
+		return nil, fmt.Errorf("daemon: static embedder: %w", err)
+	}
+	composedProvider, err := composite.New(ollamaProvider, staticProvider)
+	if err != nil {
+		_ = pools.Close()
+		return nil, fmt.Errorf("daemon: composite embedder: %w", err)
+	}
+	provider = composedProvider
 	if tracerProvider != nil {
 		provider = observability.NewInstrumentedEmbedder(provider, tracerProvider)
 	}
