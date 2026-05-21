@@ -104,12 +104,23 @@ func (r *StartupResync) Run(ctx context.Context) error {
 		return fmt.Errorf("startup resync: list repos: %w", err)
 	}
 
+	// Per-repo errors are LOGGED and SKIPPED — a single failure (e.g.
+	// SQLITE_BUSY against the post-promotion queue, a missing working
+	// tree, a parser crash) must not abort the rest of the resync.
+	// Otherwise repos registered AFTER the failing one never get
+	// indexed at all (solov2-8ga: pflag+cobra promoted, logrus errored
+	// on a sink-before-delete race, and sam-repo never started).
 	for _, repo := range repos {
 		if ctx.Err() != nil {
 			return ctx.Err()
 		}
 		if err := r.resyncRepo(ctx, repo); err != nil {
-			return err
+			slog.Error("startup resync: repo failed; continuing with remaining repos",
+				"repo_id", repo.RepoID,
+				"root", repo.RootPath,
+				"err", err,
+			)
+			continue
 		}
 	}
 
