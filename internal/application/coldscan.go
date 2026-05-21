@@ -1,3 +1,7 @@
+// Package application contains use-case services that orchestrate the
+// domain entities. Implementations of side-effecting ports (storage,
+// parsers, embedding providers) are wired in from the infrastructure
+// layer via constructors defined elsewhere in this package.
 package application
 
 import (
@@ -15,73 +19,61 @@ import (
 )
 
 // ErrMissingDependency is returned by NewColdScanReparser when a required
-// collaborator (ingester, promoter, git querier) is nil. It is the
-// application-package sentinel used by the cold-scan constructor; other
-// services inside the package re-use it as the layer-wide convention.
+// dependency is nil. It is a package-wide sentinel so callers can use
+// errors.Is to distinguish a wiring fault from a runtime failure.
 var ErrMissingDependency = errors.New("application: missing required dependency")
 
-// IgnoreMatcher decides whether a repo-root-relative path should be skipped
-// by the cold-scan walker. Directory matches are signalled by the caller
-// passing a trailing-slash form ("vendor/"); concrete implementations live
-// in infrastructure (see internal/infrastructure/fs.IgnoreList) — the
-// application layer references only this contract to keep the dependency
-// graph pointing inward.
+// IgnoreMatcher is the application-layer port that decides whether a path
+// should be excluded from the cold scan. The default ignores nothing; the
+// daemon wires in an adapter over internal/infrastructure/fs.IgnoreList.
 type IgnoreMatcher interface {
 	ShouldIgnore(path string) bool
 }
 
-// IgnoreLoader resolves the IgnoreMatcher for a given repo working tree.
-// The default loader used by NewColdScanReparser is a no-op (no ignores);
-// production wiring in cmd/veska-daemon injects an adapter over
-// infrastructure/fs.Load so the application layer never imports it directly.
+// IgnoreLoader builds an IgnoreMatcher for a given repository root. It is
+// invoked once per cold scan so per-repo .veskaignore files can shape the
+// resulting IgnoreMatcher.
 type IgnoreLoader func(repoRoot string) (IgnoreMatcher, error)
 
-// coldScanSaveFn matches Ingester.Save. Declared as a type alias so the
-// cold-scan internal seam can be driven directly in unit tests without
-// constructing a full Ingester.
-type coldScanSaveFn = func(ctx context.Context, repoID, branch, path string, src []byte)
-
-// coldScanPromoteFn matches Promoter.Promote. Declared for the same reason
-// as coldScanSaveFn.
-type coldScanPromoteFn = func(ctx context.Context, repoID, branch, gitSHA string, actor domain.Actor) error
-
-// ColdScanOption configures NewColdScanReparser. Currently the only knob is
-// WithIgnoreLoader, but the functional-options shape leaves room for adding
-// e.g. a custom file reader without rewriting the constructor.
-type ColdScanOption func(*coldScanConfig)
-
+// coldScanConfig holds the runtime knobs accumulated from ColdScanOptions.
 type coldScanConfig struct {
 	loader IgnoreLoader
 }
 
-// WithIgnoreLoader installs a non-default IgnoreLoader. Production wiring
-// passes an adapter over infrastructure/fs.Load; tests pass an in-memory
-// matcher built from explicit patterns.
+// ColdScanOption configures NewColdScanReparser at construction time.
+type ColdScanOption func(*coldScanConfig)
+
+// WithIgnoreLoader sets the IgnoreLoader used to build a per-repo
+// IgnoreMatcher at scan time. Defaults to defaultIgnoreLoader (allow-all)
+// when not supplied.
 func WithIgnoreLoader(l IgnoreLoader) ColdScanOption {
 	return func(c *coldScanConfig) { c.loader = l }
 }
 
-// allowAllMatcher matches nothing — used as the safe default loader so
-// callers that forget to inject one still get a working reparser (it will
-// just index every file). Production wiring always overrides this.
+// allowAllMatcher is the zero-value IgnoreMatcher: it never ignores
+// anything. Used as a safe fallback when no IgnoreLoader is wired.
 type allowAllMatcher struct{}
 
 func (allowAllMatcher) ShouldIgnore(string) bool { return false }
 
+// defaultIgnoreLoader returns the zero IgnoreMatcher for any path. Wired
+// when no WithIgnoreLoader was supplied so tests get a deterministic
+// "ignore nothing" default.
 func defaultIgnoreLoader(string) (IgnoreMatcher, error) { return allowAllMatcher{}, nil }
 
-// NewColdScanReparser returns a reparser closure that satisfies
-// StartupResync's `reparser func(ctx, RepoRecord) error` hook contract. The
-// closure walks a repo's working tree, streams every non-ignored regular
-// file through ingester.Save, then promotes the resulting staging slot at
-// HEAD with a system actor.
-//
-// The reparser is sequential — no goroutine fan-out — and honours ctx
-// cancellation between file visits. Promotion is skipped when ctx is
-// cancelled or when HEAD lookup fails.
-//
-// Returns an error wrapping ErrMissingDependency if any required dependency
-// is nil.
+// coldScanSaveFn is the narrow surface NewColdScanReparser needs from
+// Ingester.Save. Keeping the seam small makes test fakes trivial.
+type coldScanSaveFn func(ctx context.Context, repoID, branch, path string, src []byte)
+
+// coldScanPromoteFn is the narrow surface NewColdScanReparser needs from
+// Promoter.Promote.
+type coldScanPromoteFn func(ctx context.Context, repoID, branch, gitSHA string, actor domain.Actor) error
+
+// NewColdScanReparser returns the closure that StartupResync.reparser and
+// repoRegistrar.AddRepo both invoke for a full-reparse path. It walks the
+// repo's working tree, parses every non-ignored source file through the
+// given Ingester, and finalises by promoting at HEAD with the system
+// actor (solov2-0z1.1).
 func NewColdScanReparser(ingester *Ingester, promoter *Promoter, git GitQuerier, opts ...ColdScanOption) (func(ctx context.Context, repo RepoRecord) error, error) {
 	if ingester == nil {
 		return nil, fmt.Errorf("application.NewColdScanReparser: ingester is nil: %w", ErrMissingDependency)
@@ -176,8 +168,12 @@ func newColdScanReparserFromFns(save coldScanSaveFn, promote coldScanPromoteFn, 
 }
 
 // walkAndSave performs the filesystem walk and feeds each surviving file
-// into save. It is factored out of the closure for testability and to keep
-// the closure body readable.
+// into save. Serial by design: parallelising the walker on a real repo
+// (solov2-pc3 investigation) made wall time slightly worse because the
+// daemon's per-file workload contends with the embedder / queue / wiki
+// workers via the WriteHot pool and (likely) the page cache. A worker
+// pool just spreads that contention across more goroutines without
+// improving total throughput. The fix lives upstream of this walker.
 func walkAndSave(ctx context.Context, repo RepoRecord, ignore IgnoreMatcher, save coldScanSaveFn) error {
 	root := repo.RootPath
 	return filepath.WalkDir(root, func(path string, d fs.DirEntry, walkErr error) error {
