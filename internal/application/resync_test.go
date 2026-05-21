@@ -3,6 +3,7 @@ package application
 import (
 	"context"
 	"errors"
+	"fmt"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -379,6 +380,38 @@ func TestResync_ErrDaemonStarting(t *testing.T) {
 	}
 	if !errors.Is(ErrDaemonStarting, ErrDaemonStarting) {
 		t.Fatal("ErrDaemonStarting must satisfy errors.Is against itself")
+	}
+}
+
+// TestResync_PerRepoFailureSkipsAndContinues pins solov2-8ga: when one
+// repo errors during resync (e.g. SQLITE_BUSY on its cold-scan
+// promote), the loop must log + continue so repos registered AFTER the
+// failing one still get indexed.
+func TestResync_PerRepoFailureSkipsAndContinues(t *testing.T) {
+	repos := &stubRepoLister{repos: []RepoRecord{
+		{RepoID: "good1", RootPath: "/tmp/good1", ActiveBranch: "main"},
+		{RepoID: "bad", RootPath: "/tmp/bad", ActiveBranch: "main"},
+		{RepoID: "good2", RootPath: "/tmp/good2", ActiveBranch: "main"},
+	}}
+	git := &stubGitQuerier{
+		headFn: func(_ string) (string, error) { return "some-sha", nil },
+	}
+	tracker := &callTracker{}
+	var reparsed []string
+	sr := newTestResync(repos, git, tracker.saveFunc(), tracker.promoteFunc(),
+		func(_ context.Context, repo RepoRecord) error {
+			if repo.RepoID == "bad" {
+				return fmt.Errorf("simulated SQLITE_BUSY for repo %s", repo.RepoID)
+			}
+			reparsed = append(reparsed, repo.RepoID)
+			return nil
+		})
+
+	if err := sr.Run(context.Background()); err != nil {
+		t.Fatalf("Run must NOT return per-repo errors; got: %v", err)
+	}
+	if len(reparsed) != 2 || reparsed[0] != "good1" || reparsed[1] != "good2" {
+		t.Errorf("expected good1+good2 to reparse despite bad failing; got %v", reparsed)
 	}
 }
 
