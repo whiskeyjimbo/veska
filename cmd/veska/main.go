@@ -23,6 +23,9 @@ func newRootCmd() *cobra.Command {
 	root.AddCommand(repoCmd())
 	root.AddCommand(wikiCmd())
 	root.AddCommand(reindexCmd())
+	// Top-level alias for `veska doctor savings` so the marketing-y
+	// shortcut works without the doctor prefix (solov2-3bu).
+	root.AddCommand(doctorSavingsCmd())
 
 	// Resolve the daemon binary path at startup. os.Executable returns the path
 	// of the current binary; by convention the daemon lives alongside the CLI

@@ -89,6 +89,7 @@ func doctorCmd() *cobra.Command {
 		doctorBundleCmd(),
 		doctorBackupCmd(),
 		doctorResetCrashLoopCmd(),
+		doctorSavingsCmd(),
 	)
 
 	return cmd
