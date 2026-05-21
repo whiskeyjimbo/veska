@@ -30,7 +30,7 @@ they reason from the same structural ground truth instead of guessing.
 
 | Binary | Role |
 |---|---|
-| `veska` | CLI — `init`, `status`, `doctor`, `backup`, `wiki`, … |
+| `veska` | CLI — `init`, `repo`, `reindex`, `service`, `doctor`, `backup`, `wiki`, … Run `veska --help` for the full list. |
 | `veska-daemon` | Long-running process — owns the SQLite store, the fsnotify watcher, the embedder, and the post-promotion queue. Composition root: `cmd/veska-daemon/wire.go`. |
 | `veska-mcp` | Thin stdio shim proxying an editor's MCP connection to the daemon's Unix socket. |
 
@@ -38,9 +38,25 @@ they reason from the same structural ground truth instead of guessing.
 
 - **Go 1.26+**
 - **[Ollama](https://ollama.com)** running locally with an embedding model
-  (default `nomic-embed-text`). The only outbound connection in the default
-  config. The optional review pipeline also uses Ollama.
+  (default `nomic-embed-text`, ~274 MB). The only outbound connection in the
+  default config. The optional review pipeline also uses Ollama.
 - SQLite and the vector index are in-process — no server to run.
+
+Install Ollama:
+
+```sh
+# macOS:
+brew install ollama && ollama serve &
+
+# Linux (snap):
+sudo snap install ollama && ollama serve &
+
+# Linux (any distro, curl-pipe-sh):
+curl -fsSL https://ollama.com/install.sh | sh && ollama serve &
+
+# Then on all platforms:
+ollama pull nomic-embed-text   # ~274 MB
+```
 
 ## Build
 
@@ -51,27 +67,105 @@ make all          # build + test + vet + lint + layercheck
 make layercheck   # enforce hexagonal layering (domain/ports must not import infra)
 ```
 
+Binaries land in `./bin/`. Either `export PATH="$PWD/bin:$PATH"` or use the
+`./bin/` prefix in the Quick Start below.
+
 ## Quick start
 
 ```sh
-ollama serve &                       # if not already running
-ollama pull nomic-embed-text
-veska init                           # creates ~/.veska/, probes the embedder
-veska-daemon &                       # start the long-running daemon
-veska repo add /path/to/your/repo    # register; cold-scan kicks off in the background
+# 1. Ollama is up and the model is pulled (see Requirements above).
+
+# 2. Initialise veska's data directory at ~/.veska/.
+./bin/veska init
+
+# 3. Start the daemon. For a quick try, background it:
+./bin/veska-daemon &
+# For a real install, run it as a real OS service (systemd --user on Linux,
+# launchd on macOS):
+./bin/veska service install
+./bin/veska service start
+
+# 4. Register a repo. The CLI dials the daemon's MCP socket so the cold
+#    scan kicks off in the background. Tail ~/.veska/logs/daemon.log to
+#    watch progress — every scan brackets a "cold scan: starting" and
+#    "cold scan: complete" line.
+./bin/veska repo add /path/to/your/repo
+
+# 5. Sanity-check.
+./bin/veska doctor status
 ```
 
 The first `veska repo add` registers the repo, installs the git post-commit
 hook with an absolute path to the `veska` binary, and dispatches a cold scan
 through the daemon. Subsequent commits drive promotion via `eng_promote_repo`
-on the daemon's MCP socket. Point your editor's MCP client at `veska-mcp`.
-Check health with `veska doctor status` and the MCP `eng_get_status` tool.
+on the daemon's MCP socket.
 
 To force a re-scan of an already-registered repo (e.g. after a model swap):
 
 ```sh
-veska reindex /path/to/your/repo
+./bin/veska reindex /path/to/your/repo
 ```
+
+### Editor integration
+
+Point your MCP client at `bin/veska-mcp` as a stdio command. Replace
+`/abs/path/to/bin/veska-mcp` with the actual path on your machine.
+
+**Claude Desktop** (`~/Library/Application Support/Claude/claude_desktop_config.json` on macOS;
+`%APPDATA%\Claude\claude_desktop_config.json` on Windows):
+
+```json
+{
+  "mcpServers": {
+    "veska": {
+      "command": "/abs/path/to/bin/veska-mcp"
+    }
+  }
+}
+```
+
+**Cursor** (`~/.cursor/mcp.json`) and **Zed** (`~/.config/zed/settings.json`,
+under `context_servers`) accept the same `command` shape.
+
+**Continue** (`~/.continue/config.yaml`):
+
+```yaml
+mcpServers:
+  - name: veska
+    command: /abs/path/to/bin/veska-mcp
+```
+
+If your `VESKA_HOME` is non-default, pass it through:
+
+```json
+{
+  "mcpServers": {
+    "veska": {
+      "command": "/abs/path/to/bin/veska-mcp",
+      "env": { "VESKA_HOME": "/path/to/veska/home" }
+    }
+  }
+}
+```
+
+### Calling tools from the shell
+
+Skip the editor and drive `veska-mcp` directly — handy for debugging or
+scripting. The protocol is newline-delimited JSON-RPC; the method IS the
+tool name (no `tools/call` envelope):
+
+```sh
+printf '{"jsonrpc":"2.0","id":1,"method":"eng_get_status","params":{}}\n' \
+  | ./bin/veska-mcp \
+  | jq .
+
+printf '{"jsonrpc":"2.0","id":1,"method":"eng_find_symbol",
+        "params":{"repo_id":"<id>","branch":"main","symbol":"Foo"}}\n' \
+  | ./bin/veska-mcp | jq .result
+```
+
+Get `<id>` from `eng_list_repos`. The full tool surface is in
+[MCP tools](#mcp-tools) below.
 
 ### Configuration
 
