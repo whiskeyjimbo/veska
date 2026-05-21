@@ -97,6 +97,63 @@ func dispatchSuppression(t *testing.T, r *Registry, method string, actor domain.
 // eng_suppress_finding
 // ---------------------------------------------------------------------------
 
+// TestSuppressFinding_RejectsUnknownFinding covers solov2-b36: when scope is
+// "finding" (the default) the handler must validate that (finding_id,
+// branch, repo_id) actually exists in findings before inserting. Otherwise
+// the suppressions table accumulates orphan rows that point at nothing
+// and pollute eng_list_suppressions forever.
+func TestSuppressFinding_RejectsUnknownFinding(t *testing.T) {
+	db := newSuppressionsDB(t)
+	// No finding seeded — only suppressions schema exists.
+
+	r := NewRegistry()
+	RegisterSuppressionTools(r, db, nil)
+
+	actor := domain.Actor{ID: "agent:bot", Kind: domain.ActorKindAgent}
+	_, rpcErr := dispatchSuppression(t, r, "eng_suppress_finding", actor, map[string]any{
+		"finding_id": "does-not-exist-xyz",
+		"branch":     "main",
+		"repo_id":    "repo-1",
+		"reason":     "should reject",
+	})
+	if rpcErr == nil {
+		t.Fatal("expected RPC error for unknown finding_id; got nil")
+	}
+	if rpcErr.Code != CodeInvalidParams {
+		t.Errorf("error code = %d, want CodeInvalidParams (%d)", rpcErr.Code, CodeInvalidParams)
+	}
+	// No suppression row should have been inserted on the rejected path.
+	var n int
+	if err := db.QueryRow(`SELECT COUNT(*) FROM suppressions`).Scan(&n); err != nil {
+		t.Fatalf("count suppressions: %v", err)
+	}
+	if n != 0 {
+		t.Errorf("expected 0 suppressions after rejected call, got %d", n)
+	}
+}
+
+// TestSuppressFinding_AllowsNonFindingScopes covers the carve-out: when
+// scope != "finding" (e.g. "rule" or "file") the target carries a
+// different kind of identifier, so the finding-existence guard does not
+// apply. The handler must let those calls through unchanged.
+func TestSuppressFinding_AllowsNonFindingScopes(t *testing.T) {
+	db := newSuppressionsDB(t)
+	r := NewRegistry()
+	RegisterSuppressionTools(r, db, nil)
+
+	actor := domain.Actor{ID: "human:alice", Kind: domain.ActorKindHuman}
+	_, rpcErr := dispatchSuppression(t, r, "eng_suppress_finding", actor, map[string]any{
+		"finding_id": "my-rule",
+		"branch":     "main",
+		"repo_id":    "repo-1",
+		"reason":     "wholesale silence the rule",
+		"scope":      "rule",
+	})
+	if rpcErr != nil {
+		t.Fatalf("scope=rule should not be validated against findings: %v", rpcErr.Message)
+	}
+}
+
 func TestSuppressFinding_Basic(t *testing.T) {
 	db := newSuppressionsDB(t)
 	seedFindingForSuppression(t, db, "finding-001", "main", "repo-1")

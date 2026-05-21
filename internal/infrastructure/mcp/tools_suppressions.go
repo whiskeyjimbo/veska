@@ -85,6 +85,33 @@ func makeSuppressFindingHandler(db *sql.DB, aw ports.AuditWriter) ToolHandler {
 			p.Scope = "finding"
 		}
 
+		// For scope='finding' the FindingID must reference an actual row in
+		// findings keyed by (finding_id, branch, repo_id). Without this guard
+		// any string is accepted and the row ends up as a permanent orphan
+		// surfaced by eng_list_suppressions forever (solov2-b36). Other
+		// scopes carry a different kind of target (rule name, file path)
+		// and are passed through unchanged — validation for them belongs
+		// with the consumer that interprets the target.
+		if p.Scope == "finding" {
+			var exists int
+			err := db.QueryRowContext(ctx,
+				`SELECT 1 FROM findings WHERE finding_id = ? AND branch = ? AND repo_id = ? LIMIT 1`,
+				p.FindingID, p.Branch, p.RepoID,
+			).Scan(&exists)
+			switch {
+			case err == sql.ErrNoRows:
+				return nil, &RPCError{
+					Code: CodeInvalidParams,
+					Message: fmt.Sprintf(
+						"finding not found: finding_id=%q branch=%q repo_id=%q",
+						p.FindingID, p.Branch, p.RepoID,
+					),
+				}
+			case err != nil:
+				return nil, &RPCError{Code: CodeInternalError, Message: fmt.Sprintf("lookup finding: %v", err)}
+			}
+		}
+
 		supID := fmt.Sprintf("sup_%d", time.Now().UnixNano())
 		createdAt := time.Now().Unix()
 
