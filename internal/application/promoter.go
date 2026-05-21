@@ -148,8 +148,12 @@ func (p *Promoter) Promote(ctx context.Context, repoID, branch, gitSHA string, a
 		PromotedAt: now,
 		Files:      make([]PromotionFile, 0, len(snap)),
 	}
-	for filePath, nodes := range snap {
-		batch.Files = append(batch.Files, PromotionFile{Path: filePath, Nodes: nodes})
+	for filePath, sf := range snap {
+		batch.Files = append(batch.Files, PromotionFile{
+			Path:  filePath,
+			Nodes: sf.Nodes,
+			Edges: sf.Edges,
+		})
 	}
 
 	// The promotion.transaction span wraps the atomic store write. The store

@@ -78,6 +78,20 @@ CREATE TABLE post_promotion_queue (
     error         TEXT
 );
 
+CREATE TABLE edges (
+    edge_id          TEXT NOT NULL,
+    branch           TEXT NOT NULL,
+    repo_id          TEXT NOT NULL,
+    src_node_id      TEXT NOT NULL,
+    dst_node_id      TEXT NOT NULL,
+    kind             TEXT NOT NULL,
+    confidence       TEXT NOT NULL,
+    last_promoted_at INTEGER NOT NULL,
+    PRIMARY KEY (edge_id, branch),
+    FOREIGN KEY (src_node_id, branch) REFERENCES nodes(node_id, branch) ON DELETE CASCADE,
+    FOREIGN KEY (dst_node_id, branch) REFERENCES nodes(node_id, branch) ON DELETE CASCADE
+);
+
 CREATE TABLE node_embeddings (
     content_hash  TEXT PRIMARY KEY,
     model         TEXT NOT NULL,
