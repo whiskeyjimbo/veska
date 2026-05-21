@@ -30,7 +30,94 @@ func repoCmd() *cobra.Command {
 	}
 	cmd.AddCommand(repoAddCmd())
 	cmd.AddCommand(repoRemoveCmd())
+	cmd.AddCommand(repoListCmd())
 	return cmd
+}
+
+// repoView is the row shape used by both the daemon path (decoded from
+// eng_list_repos) and the direct-DB fallback path. Field names match the
+// MCP response so json.Unmarshal works as-is.
+type repoView struct {
+	RepoID          string `json:"RepoID"`
+	RootPath        string `json:"RootPath"`
+	ActiveBranch    string `json:"ActiveBranch"`
+	LastPromotedSHA string `json:"LastPromotedSHA"`
+}
+
+// repoListCmd prints every registered repo (solov2-0pq). Prefers the
+// running daemon's eng_list_repos so the listing matches what the daemon
+// sees (including any in-flight scan state surfaced via degraded_reasons);
+// falls back to a direct SQLite read so the CLI still works when the
+// daemon is down.
+func repoListCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:          "list",
+		Short:        "List registered git repositories",
+		Args:         cobra.NoArgs,
+		SilenceUsage: true,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			ctx := cmd.Context()
+			w := cmd.OutOrStdout()
+
+			type listResult struct {
+				Repos []repoView `json:"repos"`
+			}
+			var lr listResult
+			if err := callMCP(ctx, "eng_list_repos", map[string]any{}, &lr); err == nil {
+				printRepoTable(w, lr.Repos)
+				return nil
+			}
+
+			// Direct fallback.
+			db, closeFn, err := openLocalDB()
+			if err != nil {
+				return fmt.Errorf("repo list: %w", err)
+			}
+			defer closeFn()
+			recs, err := repo.List(ctx, db)
+			if err != nil {
+				return fmt.Errorf("repo list: %w", err)
+			}
+			views := make([]repoView, 0, len(recs))
+			for _, r := range recs {
+				views = append(views, repoView{
+					RepoID:          r.RepoID,
+					RootPath:        r.RootPath,
+					ActiveBranch:    r.ActiveBranch,
+					LastPromotedSHA: r.LastPromotedSHA,
+				})
+			}
+			printRepoTable(w, views)
+			return nil
+		},
+	}
+}
+
+// printRepoTable renders the repo list as REPO_ID + ROOT + BRANCH + STATUS.
+// A short repo_id (first 12 chars) is shown so the column is readable; the
+// full id is still present in any tool output, and `veska repo remove`
+// accepts the full id.
+func printRepoTable(w io.Writer, repos []repoView) {
+	if len(repos) == 0 {
+		fmt.Fprintln(w, "no repositories registered — run: veska repo add <path>")
+		return
+	}
+	fmt.Fprintf(w, "%-14s  %-8s  %-10s  %s\n", "REPO_ID", "BRANCH", "STATUS", "ROOT")
+	for _, r := range repos {
+		short := r.RepoID
+		if len(short) > 12 {
+			short = short[:12]
+		}
+		branch := r.ActiveBranch
+		if branch == "" {
+			branch = "-"
+		}
+		status := "promoted"
+		if r.LastPromotedSHA == "" {
+			status = "(unindexed)"
+		}
+		fmt.Fprintf(w, "%-14s  %-8s  %-10s  %s\n", short, branch, status, r.RootPath)
+	}
 }
 
 func repoAddCmd() *cobra.Command {
