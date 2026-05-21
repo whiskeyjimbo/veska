@@ -56,13 +56,17 @@ def test_critical_nodes_carry_snippet(repo_id, branch):
     )
 
 
-def test_critical_vectors_match_embedding_count(mcp_client, repo_id, branch):
+def test_critical_vector_store_serves_ready_refs(mcp_client, repo_id, branch):
     """The vector store rehydrated from node_embeddings (solov2-249) must
-    surface the same population semantic search sees. We can't introspect
-    sqlite-vec directly, but we can assert:
-        len(eng_search_semantic results, limit=BIG) >= COUNT(ready refs)
-    A vector-store count below the ready count means rehydration is
-    incomplete or has lost rows."""
+    actually serve queries. eng_search_semantic caps k at 100 server-side
+    (maxSearchK in tools_search.go) so we can't introspect the full vector
+    population through the search API — instead we assert non-zero hits
+    plus that 'scans_in_flight' is empty (otherwise the snapshot is mid-
+    rehydrate and the count would be racy).
+
+    The full 'every ready ref ⇒ vector exists' invariant lives in the
+    in-process Go test TestDaemon_VectorStoreRehydratesOnSecondStart;
+    this harness sibling verifies the surface behaves at all."""
     ready_count = scalar(
         """SELECT COUNT(*) FROM node_embedding_refs r
            JOIN nodes n ON n.node_id = r.node_id
@@ -71,15 +75,20 @@ def test_critical_vectors_match_embedding_count(mcp_client, repo_id, branch):
     )
     assert ready_count and ready_count > 0, "no ready refs — populate the repo first"
 
+    # Quiescence check — bail rather than race a mid-rehydrate snapshot.
+    _, _, _, status = mcp_client.call("eng_get_status", {})
+    if status.get("scans_in_flight"):
+        pytest.skip(f"scan in flight: {status['scans_in_flight']}")
+
     ok, _, _, result = mcp_client.call("eng_search_semantic", {
         "repo_id": repo_id, "branch": branch,
-        "query": "any text at all", "limit": 1000,
+        "query": "any text at all", "k": 50,
     })
     assert ok
     hits = result.get("results") or []
-    assert len(hits) >= ready_count, (
-        f"vector store has {len(hits)} hits but DB has {ready_count} ready refs — "
-        "249 regression (rehydration dropped rows)"
+    assert len(hits) > 0, (
+        f"vector store returned 0 hits despite {ready_count} ready refs — "
+        "249 regression (rehydration dropped all rows) OR embedder hasn't run yet"
     )
 
 

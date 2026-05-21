@@ -4,7 +4,7 @@ Files ranked by change risk: recent change frequency multiplied by blast radius.
 
 | Rank | File | Recent Changes | Blast Radius | Score |
 | ---- | ---- | -------------- | ------------ | ----- |
-| 1 | internal/application/coldscan.go | 3 | 16 | 48 |
+| 1 | internal/application/coldscan.go | 4 | 16 | 64 |
 | 2 | .beads/.gitignore | 1 | 0 | 0 |
 | 3 | .beads/README.md | 1 | 0 | 0 |
 | 4 | .beads/config.yaml | 1 | 0 | 0 |
@@ -13,7 +13,7 @@ Files ranked by change risk: recent change frequency multiplied by blast radius.
 | 7 | .beads/hooks/pre-commit | 1 | 0 | 0 |
 | 8 | .beads/hooks/pre-push | 1 | 0 | 0 |
 | 9 | .beads/hooks/prepare-commit-msg | 1 | 0 | 0 |
-| 10 | .beads/issues.jsonl | 275 | 0 | 0 |
+| 10 | .beads/issues.jsonl | 277 | 0 | 0 |
 | 11 | .beads/metadata.json | 1 | 0 | 0 |
 | 12 | .claude/memories/MEMORY.md | 1 | 0 | 0 |
 | 13 | .claude/memories/feedback_solov2_git.md | 2 | 0 | 0 |

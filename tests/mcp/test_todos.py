@@ -9,9 +9,11 @@ def test_find_todos_responds(mcp_client, repo_id, branch):
     })
     assert ok, f"eng_find_todos failed: {text}"
     assert isinstance(result, dict)
-    # Each todo (when present) carries Author, Body, FilePath at minimum.
+    # Each todo (when present) carries the storage-shape fields the
+    # sqlite TodoQuerierRepo scan returns: FindingID, FilePath, Message,
+    # State, etc. (No JSON tags → Go's default Capitalized names.)
     for t in result.get("todos", []) or []:
-        assert "Body" in t or "body" in t
+        assert "FilePath" in t and "Message" in t, f"unexpected todo shape: {t}"
 
 
 def test_find_todos_include_closed(mcp_client, repo_id, branch):
