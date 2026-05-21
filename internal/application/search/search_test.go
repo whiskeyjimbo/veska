@@ -115,13 +115,21 @@ func TestSemantic_HappyPath_PreservesHitRank(t *testing.T) {
 			t.Errorf("rank %d: got %q want %q", i, r.NodeID, want[i])
 		}
 	}
-	if got[0].SymbolPath != "pkg.B" || got[0].Score != 0.99 {
+	// Score is now the fused RRF score (1/(60+rank), summed across
+	// retrievers) — vector-only fusion still places n2 at rank 1 with
+	// the largest RRF contribution. SymbolPath hydration is unchanged.
+	if got[0].SymbolPath != "pkg.B" {
 		t.Errorf("top hit not hydrated correctly: %+v", got[0])
+	}
+	if got[0].Score <= got[1].Score {
+		t.Errorf("expected fused score to preserve rank ordering; got %+v / %+v", got[0], got[1])
 	}
 	if emb.gotText != "find foo" {
 		t.Errorf("embedder text = %q want %q", emb.gotText, "find foo")
 	}
-	if vec.gotK != 10 || vec.gotRepo != "r1" || vec.gotBranch != "main" {
+	// Vector retriever is over-requested by fusionFanout=3 so RRF has
+	// headroom; k=10 caller → k*3=30 to the vector backend.
+	if vec.gotK != 30 || vec.gotRepo != "r1" || vec.gotBranch != "main" {
 		t.Errorf("vectors got repo=%q branch=%q k=%d", vec.gotRepo, vec.gotBranch, vec.gotK)
 	}
 }
@@ -364,6 +372,72 @@ func TestSemantic_EmbedderUnreachable_FallsBackToLexical(t *testing.T) {
 	}
 	if lex.gotQ != "close" || lex.gotK != 5 || lex.gotRep != "r1" || lex.gotBr != "main" {
 		t.Errorf("lexical args: q=%q k=%d repo=%q branch=%q", lex.gotQ, lex.gotK, lex.gotRep, lex.gotBr)
+	}
+}
+
+// TestSemantic_HybridFusion_LiftsLexicalOnlyHit pins solov2-2su:
+// when a node ranks #1 in lexical (e.g. exact identifier match) but is
+// missing from the vector top — typical on small corpora where vector
+// scores cluster — RRF fusion still lifts it ahead of vector-only
+// candidates. Without the fusion, the right answer never surfaces.
+func TestSemantic_HybridFusion_LiftsLexicalOnlyHit(t *testing.T) {
+	t.Parallel()
+	emb := &fakeEmbedder{vec: []float32{0.1}}
+	// Vector ranks v1..v4 in that order with tight scores — typical of
+	// a small corpus where the cosine distances barely discriminate.
+	// NAMEMATCH appears at vector rank 4 (the tail) but lexical rank 1.
+	vec := &fakeVectors{hits: []domain.Hit{
+		{NodeID: "v1", Score: 0.0021},
+		{NodeID: "v2", Score: 0.0020},
+		{NodeID: "v3", Score: 0.0020},
+		{NodeID: "NAMEMATCH", Score: 0.0020},
+	}}
+	lex := &fakeLexical{hits: []ports.LexicalHit{
+		{NodeID: "NAMEMATCH", Score: 99},
+	}}
+	nodes := &fakeNodes{rows: []ports.NodeMeta{
+		{NodeID: "NAMEMATCH", SymbolPath: "pkg.NameMatch", FilePath: "a.go", Kind: "function", LineStart: 1, LineEnd: 5},
+		{NodeID: "v1", SymbolPath: "pkg.V1", FilePath: "b.go", Kind: "function", LineStart: 1, LineEnd: 5},
+		{NodeID: "v2", SymbolPath: "pkg.V2", FilePath: "c.go", Kind: "function", LineStart: 1, LineEnd: 5},
+		{NodeID: "v3", SymbolPath: "pkg.V3", FilePath: "d.go", Kind: "function", LineStart: 1, LineEnd: 5},
+	}}
+	s := search.NewService(emb, vec, nodes, search.WithLexicalSearcher(lex))
+	resp, err := s.Semantic(context.Background(), "r1", "main", "NameMatch", 5, domain.Filter{})
+	if err != nil {
+		t.Fatalf("Semantic: %v", err)
+	}
+	if len(resp.Results) == 0 || resp.Results[0].NodeID != "NAMEMATCH" {
+		t.Errorf("hybrid fusion should put NAMEMATCH (lexical #1) at top; got %+v", resp.Results)
+	}
+	if lex.calls != 1 {
+		t.Errorf("expected exactly 1 lexical call, got %d", lex.calls)
+	}
+	// fanout = 3 so k=5 caller → k=15 to each retriever.
+	if lex.gotK != 15 {
+		t.Errorf("expected k=15 to lexical (caller k=5 × fanout=3), got %d", lex.gotK)
+	}
+}
+
+// TestSemantic_HybridFusion_LexicalError_DegradesGracefully verifies
+// that a lexical-side failure falls back to vector-only ordering
+// rather than failing the whole call (solov2-2su).
+func TestSemantic_HybridFusion_LexicalError_DegradesGracefully(t *testing.T) {
+	t.Parallel()
+	emb := &fakeEmbedder{vec: []float32{0.1}}
+	vec := &fakeVectors{hits: []domain.Hit{
+		{NodeID: "v1", Score: 0.9},
+	}}
+	lex := &fakeLexical{err: fmt.Errorf("FTS index missing")}
+	nodes := &fakeNodes{rows: []ports.NodeMeta{
+		{NodeID: "v1", SymbolPath: "pkg.V1", FilePath: "a.go", Kind: "function", LineStart: 1, LineEnd: 5},
+	}}
+	s := search.NewService(emb, vec, nodes, search.WithLexicalSearcher(lex))
+	resp, err := s.Semantic(context.Background(), "r1", "main", "q", 5, domain.Filter{})
+	if err != nil {
+		t.Fatalf("Semantic: %v", err)
+	}
+	if len(resp.Results) != 1 || resp.Results[0].NodeID != "v1" {
+		t.Errorf("lexical-error fallback should return vector-only; got %+v", resp.Results)
 	}
 }
 
