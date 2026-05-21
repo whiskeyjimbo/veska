@@ -127,6 +127,32 @@ func (f *fakeEmbedder) Embed(_ context.Context, text string) ([]float32, error) 
 
 func (f *fakeEmbedder) ModelID() string { return f.modelID }
 
+// fakeBatchEmbedder implements ports.BatchEmbeddingProvider in addition
+// to the per-text Embed surface. Tracks distinct batch and single
+// call counts so the test can assert which path was used (solov2-ucp).
+type fakeBatchEmbedder struct {
+	fakeEmbedder
+	batchCalls atomic.Int64
+	batchSizes []int
+	mu         sync.Mutex
+}
+
+func (f *fakeBatchEmbedder) EmbedBatch(ctx context.Context, texts []string) ([][]float32, error) {
+	f.batchCalls.Add(1)
+	f.mu.Lock()
+	f.batchSizes = append(f.batchSizes, len(texts))
+	f.mu.Unlock()
+	out := make([][]float32, len(texts))
+	for i, t := range texts {
+		v, err := f.fakeEmbedder.Embed(ctx, t)
+		if err != nil {
+			return nil, err
+		}
+		out[i] = v
+	}
+	return out, nil
+}
+
 // fakeVectorStore records every UpsertEmbeddings call.
 type fakeVectorStore struct {
 	mu      sync.Mutex
@@ -297,6 +323,43 @@ func TestWorker_DrainsPendingAndMarksReady(t *testing.T) {
 	if !saw["n1"] || !saw["n2"] {
 		t.Errorf("vector store missing nodes: %v", saw)
 	}
+}
+
+// TestWorker_BatchEmbedderUsedForMultipleRefs pins solov2-ucp: when
+// the embedder satisfies BatchEmbeddingProvider AND a tick has > 1
+// unique text to embed, the worker calls EmbedBatch once instead of
+// looping Embed. The serial Embed path stays the per-row fallback.
+func TestWorker_BatchEmbedderUsedForMultipleRefs(t *testing.T) {
+	db := openSchemaDB(t)
+	repo := infsqlite.NewEmbeddingRefsRepo(db, db)
+	seedNode(t, db, "n1", "r1", "main", "pkg.A", "function")
+	seedNode(t, db, "n2", "r1", "main", "pkg.B", "function")
+	seedNode(t, db, "n3", "r1", "main", "pkg.C", "function")
+
+	emb := &fakeBatchEmbedder{fakeEmbedder: fakeEmbedder{vector: []float32{0.1, 0.2, 0.3}, modelID: "test-model"}}
+	vs := &fakeVectorStore{}
+	w := mustNewWorker(t, repo, emb, vs, embedder.WithInterval(5*time.Millisecond))
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	w.Start(ctx)
+
+	ok := waitForCondition(t, 2*time.Second, func() bool {
+		var n int
+		_ = db.QueryRow(`SELECT COUNT(*) FROM node_embedding_refs WHERE state='ready'`).Scan(&n)
+		return n == 3
+	})
+	cancel()
+	w.Wait()
+	if !ok {
+		t.Fatalf("expected 3 refs ready, embed calls=%d batch=%d", emb.calls.Load(), emb.batchCalls.Load())
+	}
+	if emb.batchCalls.Load() == 0 {
+		t.Errorf("expected EmbedBatch to be used (got 0 batch calls, %d per-text calls)", emb.calls.Load())
+	}
+	// Per-text calls happen INSIDE the batch (via fakeBatchEmbedder's
+	// pass-through to fakeEmbedder.Embed), so calls > 0 is expected;
+	// what matters is the path was a batch.
 }
 
 // TestWorker_PauserSkipsTick pins solov2-181: when the injected pauser
