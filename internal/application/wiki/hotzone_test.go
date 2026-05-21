@@ -61,8 +61,10 @@ func fixtureService(t *testing.T, opts ...Option) *HotZoneService {
 			"a": {NodeID: "a"}, "b": {NodeID: "b"}, "c": {NodeID: "c"},
 			"x": {NodeID: "x"}, "y": {NodeID: "y"},
 		},
+		// Keys match what HotZoneService passes to NodesInFile, i.e.
+		// repoRoot-joined absolute paths (solov2-eb2 fix).
 		byFile: map[string][]string{
-			"a.go": {"a"}, "b.go": {"b"}, "c.go": {"c"},
+			"/tmp/r/a.go": {"a"}, "/tmp/r/b.go": {"b"}, "/tmp/r/c.go": {"c"},
 		},
 	}
 	blast := blastradius.NewService(edges, nodes, nil)
