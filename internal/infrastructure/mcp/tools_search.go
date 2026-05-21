@@ -66,7 +66,11 @@ type searchSemanticParams struct {
 	Query  string `json:"query"`
 	RepoID string `json:"repo_id"`
 	Branch string `json:"branch"`
-	K      int    `json:"k,omitempty"`
+	// K is the result count. 'limit' is accepted as an alias because
+	// every other MCP tool we expose uses 'limit' and callers naturally
+	// reach for it first (solov2-8rm). When both are set, K wins.
+	K     int `json:"k,omitempty"`
+	Limit int `json:"limit,omitempty"`
 }
 
 func makeSearchSemanticHandler(svc *search.Service) ToolHandler {
@@ -79,6 +83,9 @@ func makeSearchSemanticHandler(svc *search.Service) ToolHandler {
 			return nil, rpcErr
 		}
 		k := p.K
+		if k <= 0 {
+			k = p.Limit
+		}
 		if k <= 0 {
 			k = defaultSearchK
 		}
@@ -102,7 +109,10 @@ type searchSimilarParams struct {
 	NodeID string `json:"node_id"`
 	RepoID string `json:"repo_id"`
 	Branch string `json:"branch"`
-	K      int    `json:"k,omitempty"`
+	// K is the neighbour count. 'limit' accepted as an alias — see
+	// searchSemanticParams for rationale (solov2-8rm).
+	K     int `json:"k,omitempty"`
+	Limit int `json:"limit,omitempty"`
 }
 
 func makeSearchSimilarHandler(lookup SimilarLookup, vectors ports.VectorStorage, nodes ports.NodeLookup) ToolHandler {
@@ -115,6 +125,9 @@ func makeSearchSimilarHandler(lookup SimilarLookup, vectors ports.VectorStorage,
 			return nil, rpcErr
 		}
 		k := p.K
+		if k <= 0 {
+			k = p.Limit
+		}
 		if k <= 0 {
 			k = defaultSearchK
 		}

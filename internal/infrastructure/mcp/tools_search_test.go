@@ -169,6 +169,39 @@ func TestSearchSemantic_ReturnsHydratedResults(t *testing.T) {
 	}
 }
 
+// TestSearchSemantic_LimitAliasHonoured pins solov2-8rm: callers
+// naturally try 'limit' (the convention used by every other MCP tool we
+// expose). When 'k' is absent we honour 'limit' so a request with
+// limit=3 actually returns at most 3 rows instead of silently defaulting
+// to k=10.
+func TestSearchSemantic_LimitAliasHonoured(t *testing.T) {
+	emb := &stubEmbedder{vec: []float32{0.1, 0.2}}
+	hits := []domain.Hit{
+		{NodeID: "n1", Score: 0.9}, {NodeID: "n2", Score: 0.8},
+		{NodeID: "n3", Score: 0.7}, {NodeID: "n4", Score: 0.6},
+		{NodeID: "n5", Score: 0.5},
+	}
+	vecs := &stubVectors{hits: hits}
+	nodes := &stubNodes{}
+	svc := search.NewService(emb, vecs, nodes)
+
+	r := NewRegistry()
+	RegisterSearchTools(r, svc, &stubSimilarLookup{}, vecs, nodes)
+
+	_, rpcErr := dispatchSearch(t, r, "eng_search_semantic", map[string]any{
+		"query":   "x",
+		"repo_id": "repo1",
+		"branch":  "main",
+		"limit":   3,
+	})
+	if rpcErr != nil {
+		t.Fatalf("unexpected error: %+v", rpcErr)
+	}
+	if vecs.gotK != 3 {
+		t.Errorf("expected vectors.Search called with k=3 (from 'limit' alias), got k=%d", vecs.gotK)
+	}
+}
+
 func TestSearchSemantic_MissingParamsRejected(t *testing.T) {
 	emb := &stubEmbedder{vec: []float32{0.1}}
 	vecs := &stubVectors{}
