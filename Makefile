@@ -6,7 +6,7 @@ DAEMON_BIN      := $(BINDIR)/veska-daemon
 MCP_BIN         := $(BINDIR)/veska-mcp
 LAYERCHECK_BIN  := $(BINDIR)/layercheck
 
-.PHONY: all build test lint vet layercheck clean loadtest eval-recall eval-recall-projection eval-autolink-fp eval-revalidate-bench eval-queue-fuzz eval-embed-throughput
+.PHONY: all build test lint vet layercheck clean loadtest test-mcp test-mcp-deep eval-recall eval-recall-projection eval-autolink-fp eval-revalidate-bench eval-queue-fuzz eval-embed-throughput
 
 all: build test vet lint layercheck
 
@@ -38,6 +38,20 @@ layercheck: $(LAYERCHECK_BIN)
 
 clean:
 	rm -f $(VESKA_BIN) $(DAEMON_BIN) $(MCP_BIN) $(LAYERCHECK_BIN)
+
+# test-mcp: black-box pytest harness against a running daemon. Needs:
+#   - VESKA_HOME pointing at the daemon's data dir (or default ~/.veska)
+#   - bin/veska-mcp built
+#   - At least one repo registered (`veska repo add <path>`)
+# Set VESKA_HOME inline, e.g.:
+#   VESKA_HOME=/tmp/x make test-mcp
+test-mcp: $(MCP_BIN)
+	PYTHONPATH=. python3 -m pytest tests/mcp -v -s -m 'not deep'
+
+# test-mcp-deep: like test-mcp but also runs cross-validation tests that
+# read the live SQLite directly and compare against MCP-returned shapes.
+test-mcp-deep: $(MCP_BIN)
+	PYTHONPATH=. python3 -m pytest tests/mcp -v -s
 
 # loadtest: manual-only — collates M1 exit-gate RESULTS.md files and emits tools/loadtest/REPORT.md.
 # Not included in `all`. Exit 0=all-pass, 1=fail, 2=pending.
