@@ -75,42 +75,63 @@ class MCPClient:
         )
         self._id = 0
 
-    def call(self, name: str, args: dict | None = None) -> tuple[bool, str, float, dict]:
+    def call(self, name: str, args: dict | None = None, retries: int = 3) -> tuple[bool, str, float, dict]:
         """Send one JSON-RPC call. Returns (ok, text, elapsed_ms, result_obj).
+
+        Retries on transient SQLITE_BUSY: SQLite serialises writes through
+        a single connection in the daemon's WriteHot pool, and back-to-back
+        writes from rapid tests can collide with the embedder / queue
+        / wiki workers that share the same lock. A 50ms backoff per attempt
+        is plenty in practice.
 
         text is a pretty-printed JSON dump of the result (or error) for the
         on-screen transcript. result_obj is the parsed dict for assertions.
         """
-        self._id += 1
-        msg = {"jsonrpc": "2.0", "id": self._id, "method": name}
-        if args is not None:
-            msg["params"] = args
-
         t0 = time.monotonic()
-        try:
-            self.proc.stdin.write(json.dumps(msg) + "\n")
-            self.proc.stdin.flush()
-            line = self.proc.stdout.readline()
-        except (BrokenPipeError, ValueError) as e:
+        last_text = ""
+        last_err: dict = {}
+        for attempt in range(retries):
+            self._id += 1
+            msg = {"jsonrpc": "2.0", "id": self._id, "method": name}
+            if args is not None:
+                msg["params"] = args
+            try:
+                self.proc.stdin.write(json.dumps(msg) + "\n")
+                self.proc.stdin.flush()
+                line = self.proc.stdout.readline()
+            except (BrokenPipeError, ValueError) as e:
+                elapsed = (time.monotonic() - t0) * 1000
+                _print_call(name, args or {}, False, f"<io-error: {e}>", elapsed)
+                return False, str(e), elapsed, {}
+
+            if not line:
+                elapsed = (time.monotonic() - t0) * 1000
+                _print_call(name, args or {}, False, "<empty response>", elapsed)
+                return False, "<empty response>", elapsed, {}
+
+            resp = json.loads(line)
+            if "error" in resp:
+                last_text = json.dumps(resp["error"], indent=2)
+                last_err = resp["error"]
+                # Transient locking — retry without surfacing the failure
+                # to the transcript so a successful retry reads cleanly.
+                if "database is locked" in last_text.lower() and attempt < retries - 1:
+                    time.sleep(0.05 * (attempt + 1))
+                    continue
+                elapsed = (time.monotonic() - t0) * 1000
+                _print_call(name, args or {}, False, last_text, elapsed)
+                return False, last_text, elapsed, last_err
+
+            result = resp.get("result", {})
             elapsed = (time.monotonic() - t0) * 1000
-            _print_call(name, args or {}, False, f"<io-error: {e}>", elapsed)
-            return False, str(e), elapsed, {}
+            text = json.dumps(result, indent=2)
+            _print_call(name, args or {}, True, text, elapsed)
+            return True, text, elapsed, result if isinstance(result, dict) else {}
 
+        # Exhausted retries — return the last error.
         elapsed = (time.monotonic() - t0) * 1000
-        if not line:
-            _print_call(name, args or {}, False, "<empty response>", elapsed)
-            return False, "<empty response>", elapsed, {}
-
-        resp = json.loads(line)
-        if "error" in resp:
-            text = json.dumps(resp["error"], indent=2)
-            _print_call(name, args or {}, False, text, elapsed)
-            return False, text, elapsed, resp["error"]
-
-        result = resp.get("result", {})
-        text = json.dumps(result, indent=2)
-        _print_call(name, args or {}, True, text, elapsed)
-        return True, text, elapsed, result if isinstance(result, dict) else {}
+        _print_call(name, args or {}, False, last_text, elapsed)
+        return False, last_text, elapsed, last_err
 
     def close(self) -> None:
         try:
