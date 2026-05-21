@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/whiskeyjimbo/veska/internal/core/domain"
@@ -226,6 +227,15 @@ func TestFindOwner_BothFail(t *testing.T) {
 	}
 	if m["source"] != nil {
 		t.Errorf("expected source=nil, got %v", m["source"])
+	}
+	// solov2-xjg: null path must include a reason so callers can tell
+	// 'no CODEOWNERS file' from 'CODEOWNERS exists but no match'.
+	reason, _ := m["reason"].(string)
+	if reason == "" {
+		t.Errorf("expected non-empty reason on null path, got %q", reason)
+	}
+	if !strings.Contains(reason, "CODEOWNERS") {
+		t.Errorf("reason should mention CODEOWNERS for diagnosability, got: %q", reason)
 	}
 }
 

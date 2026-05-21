@@ -791,7 +791,15 @@ func registerMCPTools(r *mcp.Registry, d mcpDeps) {
 			Promoter: d.promoter,
 		})
 	}
-	mcp.RegisterTaskTools(r, pools.WriteHot, nil)
+	// Task tools (eng_set_active_task / get_active_task / get_task_history)
+	// are PARKED (solov2-6m1). There's no MCP-side path to create a task —
+	// set_active_task requires the row to already exist, and no external
+	// integration (Jira / Linear / GitHub) currently populates the table.
+	// Exposing these tools surfaces dead-end UX (every user attempt fails
+	// with 'task not found'). When a backend lands, re-enable here.
+	//
+	// mcp.RegisterTaskTools(r, pools.WriteHot, nil)
+	_ = mcp.RegisterTaskTools // keep the symbol reachable for the future re-enable
 	mcp.RegisterOwnerTools(r, pools.WriteHot)
 	mcp.RegisterTodoTools(r, sqlite.NewTodoQuerierRepo(pools.ReadDB))
 	// Admin tools: repo listing + live status/config from the read pool and
