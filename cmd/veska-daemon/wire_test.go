@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"slices"
 	"testing"
 	"time"
 
@@ -371,10 +372,8 @@ func TestWire_WatchLoopRoutesEditsToStaging(t *testing.T) {
 			deadline := time.Now().Add(3 * time.Second)
 			for time.Now().Before(deadline) {
 				files := d.staging.StagedFiles(repoID, branch)
-				for _, f := range files {
-					if f == abs {
-						return // success — staged under correct branch
-					}
+				if slices.Contains(files, abs) {
+					return // success — staged under correct branch
 				}
 				time.Sleep(50 * time.Millisecond)
 			}
