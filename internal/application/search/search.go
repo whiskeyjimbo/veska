@@ -15,6 +15,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sort"
+	"strings"
 	"time"
 
 	"github.com/whiskeyjimbo/veska/internal/core/domain"
@@ -207,7 +209,101 @@ func (s *Service) Semantic(ctx context.Context, repoID, branch, query string, k 
 			LineEnd:    m.LineEnd,
 		})
 	}
+	// Lexical name-match boost (solov2-x35): bare-name queries on small
+	// corpora produce vector scores that cluster tight (e.g. 0.0021±1e-5),
+	// drowning out the right answer in a 10-node repo. Apply a small
+	// post-hoc boost when query tokens appear in the node's symbol path
+	// or file basename — re-sorting puts an obvious match above an
+	// arbitrary one without affecting larger-corpus rankings where vector
+	// scores already discriminate well.
+	out = applyNameMatchBoost(out, query)
 	return Response{Results: out}, nil
+}
+
+// applyNameMatchBoost re-ranks results by adding a small bonus per
+// query token that appears (case-insensitive substring) in the node's
+// symbol path or file basename. The bonus is proportional to the
+// max-vector-score in the result set, so the boost is meaningful even
+// when all raw scores are tiny.
+//
+// Design notes:
+//   - We only inspect symbol_path + basename(file_path) — full path
+//     would over-weight directory tokens like "internal" that match
+//     half the corpus.
+//   - Bonus per match = 0.25 × max_vector_score. Two-match: 0.5×.
+//     Empirically this is enough to lift an exact-name match from the
+//     middle of a flat-distribution tail into the top, but small
+//     enough that on a real corpus where vector scores already span
+//     orders of magnitude the boost is noise.
+//   - Stable-sort by descending final score so equal-score input order
+//     (which IS vector-rank) is preserved as the tiebreaker.
+func applyNameMatchBoost(results []Result, query string) []Result {
+	if len(results) == 0 || query == "" {
+		return results
+	}
+	tokens := tokenizeQuery(query)
+	if len(tokens) == 0 {
+		return results
+	}
+
+	var maxScore float32
+	for _, r := range results {
+		if r.Score > maxScore {
+			maxScore = r.Score
+		}
+	}
+	if maxScore == 0 {
+		return results
+	}
+	const perMatchBonusFrac = 0.25
+	bonus := perMatchBonusFrac * maxScore
+
+	boosted := make([]Result, len(results))
+	for i, r := range results {
+		matches := countTokenMatches(tokens, r.SymbolPath, basename(r.FilePath))
+		r.Score += bonus * float32(matches)
+		boosted[i] = r
+	}
+	sort.SliceStable(boosted, func(i, j int) bool {
+		return boosted[i].Score > boosted[j].Score
+	})
+	return boosted
+}
+
+func tokenizeQuery(q string) []string {
+	fields := strings.Fields(strings.ToLower(q))
+	out := make([]string, 0, len(fields))
+	for _, f := range fields {
+		// Strip surrounding punctuation, skip tokens shorter than 3
+		// chars — words like "a", "to", "of" produce too many spurious
+		// matches.
+		f = strings.Trim(f, `.,;:!?"'()[]{}`)
+		if len(f) < 3 {
+			continue
+		}
+		out = append(out, f)
+	}
+	return out
+}
+
+func countTokenMatches(tokens []string, fields ...string) int {
+	hay := strings.ToLower(strings.Join(fields, " "))
+	n := 0
+	for _, t := range tokens {
+		if strings.Contains(hay, t) {
+			n++
+		}
+	}
+	return n
+}
+
+func basename(p string) string {
+	for i := len(p) - 1; i >= 0; i-- {
+		if p[i] == '/' || p[i] == '\\' {
+			return p[i+1:]
+		}
+	}
+	return p
 }
 
 // Lexical performs a pure FTS5 lookup (words+trigrams RRF fusion) without

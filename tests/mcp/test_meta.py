@@ -37,10 +37,8 @@ ALL_TOOLS = {
     "eng_find_todos",
     # owner
     "eng_find_owner",
-    # tasks
-    "eng_get_active_task",
-    "eng_set_active_task",
-    "eng_get_task_history",
+    # tasks (PARKED — solov2-6m1; no MCP path to create a task, so the
+    # set/get/history tools are unregistered until a backend lands).
     # findings
     "eng_list_findings",
     "eng_get_finding",
@@ -73,7 +71,8 @@ def test_tool_count_matches_expectation(mcp_client):
     """If a new tool lands in wire.go but not in ALL_TOOLS, this test fails
     loudly so a contributor remembers to add coverage for it. The count
     comes from wire_test.go's TestWire_RegistersFinalFiveTools assertion."""
-    assert len(ALL_TOOLS) == 34, (
-        f"ALL_TOOLS has {len(ALL_TOOLS)} entries; wire.go registers 34. "
+    assert len(ALL_TOOLS) == 31, (
+        f"ALL_TOOLS has {len(ALL_TOOLS)} entries; wire.go registers 31 "
+        "(34 minus the parked task trio — solov2-6m1). "
         "Update tests/mcp/test_meta.ALL_TOOLS and add a per-tool test file."
     )

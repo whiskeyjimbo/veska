@@ -63,12 +63,32 @@ func makeFindOwnerHandler() ToolHandler {
 			}, nil
 		}
 
-		// Step 3: both failed.
+		// Step 3: both failed. Surface a 'reason' so the caller can tell
+		// 'no CODEOWNERS file' from 'file exists but covers nothing' from
+		// 'git blame failed' (solov2-xjg). Cheap stat: just check whether
+		// a CODEOWNERS file is present at either of the canonical paths.
+		reason := codeownersAbsenceReason(p.RepoID)
 		return map[string]any{
 			"owner":  nil,
 			"source": nil,
+			"reason": reason,
 		}, nil
 	}
+}
+
+// codeownersAbsenceReason explains why find_owner produced no owner.
+// Used only on the null path; the message is for human / agent
+// consumption, not parsed as a structured enum.
+func codeownersAbsenceReason(repoRoot string) string {
+	for _, path := range []string{
+		filepath.Join(repoRoot, "CODEOWNERS"),
+		filepath.Join(repoRoot, ".github", "CODEOWNERS"),
+	} {
+		if _, err := os.Stat(path); err == nil {
+			return "CODEOWNERS exists but no rule matched this file; git blame also yielded no author"
+		}
+	}
+	return "no CODEOWNERS file in repo root or .github/; git blame also yielded no author"
 }
 
 // lookupCodeowners searches for a CODEOWNERS file at repoRoot or repoRoot/.github,
