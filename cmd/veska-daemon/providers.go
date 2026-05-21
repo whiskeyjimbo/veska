@@ -171,8 +171,14 @@ func lookupAppRecord(db *sql.DB) func(ctx context.Context, repoID string) (appli
 // from the SQLite read pool. The returned key set is a superset of the static
 // fallback in tools_admin.go (status, schema_version, degraded_reasons), so
 // callers that previously relied on the fallback keep working.
+//
+// scans is the optional in-flight cold-scan registry (solov2-pm5). When set,
+// Status surfaces a 'scans_in_flight' key so programmatic consumers can see
+// when a cold scan is running without tailing the log. Nil-safe — a zero
+// scans field surfaces an empty list.
 type statusProvider struct {
-	db *sql.DB
+	db    *sql.DB
+	scans *application.ScanTracker
 }
 
 // Status reports liveness, schema version, and queue depth. Any query error is
@@ -201,11 +207,20 @@ func (sp *statusProvider) Status(ctx context.Context) (map[string]any, error) {
 		return nil, fmt.Errorf("query pending embeds: %w", err)
 	}
 
+	// scans_in_flight: snapshot of cold scans the reparser is currently
+	// running, populated via solov2-pm5's ScanTracker. Empty slice when
+	// nothing is running OR when no tracker is wired (test / legacy
+	// callers). Programmatic consumers can use this to display a "scan
+	// in progress" spinner without tailing daemon.log for the
+	// 'cold scan: starting' line.
+	scansInFlight := sp.scans.Snapshot()
+
 	return map[string]any{
 		"status":           "ok",
 		"schema_version":   int(ver.Int64), // NULL -> 0
 		"repo_count":       repoCount,
 		"pending_embeds":   pendingEmbeds,
+		"scans_in_flight":  scansInFlight,
 		"degraded_reasons": []string{},
 	}, nil
 }
