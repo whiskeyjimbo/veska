@@ -270,8 +270,18 @@ func TestWire_RegistersFinalFiveTools(t *testing.T) {
 		}
 	}
 
-	if got := len(names); got != 34 {
-		t.Errorf("registered tool count = %d; want 34; have=%v", got, names)
+	// solov2-6m1: the task tools (eng_set_active_task / get_active_task /
+	// get_task_history) are parked until a backend exists. 34 → 31.
+	if got := len(names); got != 31 {
+		t.Errorf("registered tool count = %d; want 31; have=%v", got, names)
+	}
+	// Negative-check: parked tools must NOT appear.
+	for _, parked := range []string{
+		"eng_set_active_task", "eng_get_active_task", "eng_get_task_history",
+	} {
+		if have[parked] {
+			t.Errorf("parked tool %q unexpectedly registered (solov2-6m1)", parked)
+		}
 	}
 }
 
