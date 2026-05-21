@@ -155,18 +155,32 @@ def mcp_client(veska_home):
 
 @pytest.fixture(scope="session")
 def repo_id(mcp_client) -> str:
-    """Return a known repo_id to query against. Reads the live daemon's
-    eng_list_repos. If no repos are registered we skip — the harness is for
-    verifying an already-populated install, not for bootstrapping one."""
+    """Return a known repo_id with promoted content. Reads the live daemon's
+    eng_list_repos and prefers the repo with the most promoted nodes — this
+    avoids the trap of selecting an empty or orphaned entry (e.g. a stale
+    row from a test that crashed before its eng_remove_repo cleanup ran).
+    Skips when nothing is registered."""
     ok, _, _, result = mcp_client.call("eng_list_repos", {})
     if not ok:
         pytest.skip("eng_list_repos failed")
     repos = result.get("repos", []) if isinstance(result, dict) else []
     if not repos:
         pytest.skip("No repos registered — run `veska repo add <path>` first")
-    # Pick the first repo; tests cross-validate against SQLite for whatever
-    # this resolves to.
-    return repos[0]["RepoID"]
+
+    # Rank by node count to skip empty/orphaned rows.
+    best, best_n = None, -1
+    for r in repos:
+        rid = r["RepoID"]
+        row = query("SELECT COUNT(*) AS c FROM nodes WHERE repo_id = ?", (rid,))
+        n = row[0]["c"] if row else 0
+        if n > best_n:
+            best, best_n = rid, n
+    if best_n <= 0:
+        pytest.skip(
+            "No repo has promoted nodes — run `veska reindex <path>` against a "
+            "registered repo first"
+        )
+    return best
 
 
 @pytest.fixture(scope="session")
