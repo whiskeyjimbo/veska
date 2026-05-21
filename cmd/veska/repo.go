@@ -46,25 +46,28 @@ func repoAddCmd() *cobra.Command {
 
 			// Prefer the daemon when up — it triggers cold scan and seeds
 			// the live watcher in one call (parity with eng_add_repo).
-			if id, err := dialAddRepo(ctx, root); err == nil {
+			id, dialErr := dialAddRepo(ctx, root)
+			if dialErr == nil {
 				fmt.Fprintf(w, "added repo %s (via daemon)\n", id)
 				return nil
 			}
 
 			// Direct fallback: insert the row + install hooks. The next
 			// daemon start will cold-scan it via StartupResync; live-watching
-			// kicks in at that point too.
+			// kicks in at that point too. Surface the dial error so the user
+			// can tell 'daemon really is down' from 'daemon up but I can't
+			// reach it' (solov2-0cg).
 			db, closeFn, err := openLocalDB()
 			if err != nil {
 				return fmt.Errorf("repo add: %w", err)
 			}
 			defer closeFn()
 
-			id, err := repo.Add(ctx, db, root)
+			id, err = repo.Add(ctx, db, root)
 			if err != nil {
 				return fmt.Errorf("repo add: %w", err)
 			}
-			fmt.Fprintf(w, "added repo %s (direct write; daemon offline — restart to cold-scan/live-watch)\n", id)
+			fmt.Fprintf(w, "added repo %s (direct write; daemon dial failed: %v — restart daemon to cold-scan/live-watch)\n", id, dialErr)
 			return nil
 		},
 	}
@@ -144,16 +147,40 @@ func dialRemoveRepo(ctx context.Context, repoID string) error {
 //
 // The MCP server here speaks a direct flat protocol (method = tool name),
 // not the standard MCP "tools/call" wrapper — see internal/infrastructure/mcp.
+//
+// Dialing retries 3× with 200ms backoff: a daemon restart binds the
+// socket in two steps (listenUnix removes the stale path, then net.Listen
+// creates a new one), and a CLI call racing that window used to fall
+// straight through to the direct-write path even with the daemon up
+// (solov2-0cg). 2s per-attempt + 3 attempts = ~6s ceiling, still well
+// under any human-perceptible wait.
 func callMCP(ctx context.Context, method string, params any, out any) error {
-	const dialTimeout = 250 * time.Millisecond
+	const dialTimeout = 2 * time.Second
+	const dialBackoff = 200 * time.Millisecond
+	const dialAttempts = 3
 	const ioTimeout = 5 * time.Second
 
 	sockPath := config.MCPSockPath()
-	var d net.Dialer
+	var (
+		conn    net.Conn
+		dialErr error
+		d       net.Dialer
+	)
 	d.Timeout = dialTimeout
-	conn, err := d.DialContext(ctx, "unix", sockPath)
-	if err != nil {
-		return fmt.Errorf("dial %s: %w", sockPath, err)
+	for attempt := 0; attempt < dialAttempts; attempt++ {
+		conn, dialErr = d.DialContext(ctx, "unix", sockPath)
+		if dialErr == nil {
+			break
+		}
+		if attempt < dialAttempts-1 {
+			time.Sleep(dialBackoff)
+		}
+	}
+	if dialErr != nil {
+		// Include the underlying dial error so 'daemon offline' messages
+		// can tell the user what really happened (connection refused vs.
+		// no such file vs. permission denied — solov2-0cg).
+		return fmt.Errorf("dial %s after %d attempts: %w", sockPath, dialAttempts, dialErr)
 	}
 	defer conn.Close()
 	_ = conn.SetDeadline(time.Now().Add(ioTimeout))

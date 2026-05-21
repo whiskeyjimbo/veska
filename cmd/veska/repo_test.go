@@ -53,9 +53,15 @@ func TestRepoAddCmd_DirectFallback(t *testing.T) {
 		t.Errorf("stdout missing 'added repo': %q", out.String())
 	}
 	// Daemon offline → fallback path must announce itself so users know
-	// the daemon-restart caveat applies.
-	if !strings.Contains(out.String(), "daemon offline") {
-		t.Errorf("stdout missing 'daemon offline' note (fallback path): %q", out.String())
+	// the daemon-restart caveat applies. Post-0cg the message now includes
+	// the underlying dial error so users can tell 'daemon down' from
+	// 'daemon up but unreachable'.
+	o := out.String()
+	if !strings.Contains(o, "daemon dial failed") {
+		t.Errorf("stdout missing 'daemon dial failed' note: %q", o)
+	}
+	if !strings.Contains(o, "restart daemon") {
+		t.Errorf("stdout missing 'restart daemon' guidance: %q", o)
 	}
 
 	// Sanity: the DB exists at the expected path.
