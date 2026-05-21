@@ -62,6 +62,19 @@ func (t *ScanTracker) End(repoID string) {
 	delete(t.scans, repoID)
 }
 
+// IsAnyScanRunning reports whether at least one scan is currently
+// in flight. Cheaper than Snapshot for callers that only need a
+// yes/no (e.g. the post-promotion queue gate in solov2-pc3 #1).
+// Nil-safe — returns false when the tracker is unset.
+func (t *ScanTracker) IsAnyScanRunning() bool {
+	if t == nil {
+		return false
+	}
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+	return len(t.scans) > 0
+}
+
 // Snapshot returns a copy of every in-flight scan, ordered by RepoID
 // for stable consumption. Empty slice (never nil) when no scans are
 // running.
