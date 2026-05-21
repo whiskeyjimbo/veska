@@ -181,10 +181,7 @@ func (s *Service) Semantic(ctx context.Context, repoID, branch, query string, k 
 	// name-match boost would have nothing to lift.
 	const fusionFanout = 3
 	const fanoutFloor = 30
-	fanK := k * fusionFanout
-	if fanK < fanoutFloor {
-		fanK = fanoutFloor
-	}
+	fanK := max(k*fusionFanout, fanoutFloor)
 	vecHits, err := s.vectors.Search(ctx, repoID, branch, vec, fanK, filter)
 	if err != nil {
 		return Response{}, fmt.Errorf("search: vector search: %w", err)
@@ -252,14 +249,12 @@ func (s *Service) Semantic(ctx context.Context, repoID, branch, query string, k 
 			Snippet:    m.Snippet,
 		})
 	}
-	// Lexical name-match boost (solov2-x35): bare-name queries on small
-	// corpora produce vector scores that cluster tight (e.g. 0.0021±1e-5),
-	// drowning out the right answer in a 10-node repo. Apply a small
-	// post-hoc boost when query tokens appear in the node's symbol path
-	// or file basename — re-sorting puts an obvious match above an
-	// arbitrary one without affecting larger-corpus rankings where vector
-	// scores already discriminate well.
-	out = applyNameMatchBoost(out, query)
+	// Post-fusion reranking (solov2-2sf): definition boost, identifier
+	// stems, file coherence, noise penalty. Subsumes the earlier
+	// name-match boost (solov2-x35). All signals scale by the candidate
+	// set's maxScore so they bite on tight-clustered small-corpus
+	// distributions yet stay sub-noise on real corpora.
+	out = rerank(out, query)
 	if len(out) > k {
 		out = out[:k]
 	}
@@ -282,10 +277,9 @@ const rrfConstant = 60
 // contribute (so the fusion never demotes a strong unique hit below a
 // weak common one). Returns the top-k by fused score. The Score field
 // on each returned domain.Hit holds the fused score so downstream
-// callers (e.g. applyNameMatchBoost) can scale relative to a sensible
-// max.
+// callers (e.g. rerank) can scale relative to a sensible max.
 // k <= 0 means "no truncation, return all fused candidates" — used by
-// the Semantic() path so the post-fusion boost has full visibility.
+// the Semantic() path so the post-fusion rerank has full visibility.
 func rrfFuse(vec []domain.Hit, lex []ports.LexicalHit, k int) []domain.Hit {
 	if len(vec) == 0 && len(lex) == 0 {
 		return nil
@@ -313,56 +307,6 @@ func rrfFuse(vec []domain.Hit, lex []ports.LexicalHit, k int) []domain.Hit {
 	return out
 }
 
-// applyNameMatchBoost re-ranks results by adding a small bonus per
-// query token that appears (case-insensitive substring) in the node's
-// symbol path or file basename. The bonus is proportional to the
-// max-vector-score in the result set, so the boost is meaningful even
-// when all raw scores are tiny.
-//
-// Design notes:
-//   - We only inspect symbol_path + basename(file_path) — full path
-//     would over-weight directory tokens like "internal" that match
-//     half the corpus.
-//   - Bonus per match = 0.25 × max_vector_score. Two-match: 0.5×.
-//     Empirically this is enough to lift an exact-name match from the
-//     middle of a flat-distribution tail into the top, but small
-//     enough that on a real corpus where vector scores already span
-//     orders of magnitude the boost is noise.
-//   - Stable-sort by descending final score so equal-score input order
-//     (which IS vector-rank) is preserved as the tiebreaker.
-func applyNameMatchBoost(results []Result, query string) []Result {
-	if len(results) == 0 || query == "" {
-		return results
-	}
-	tokens := tokenizeQuery(query)
-	if len(tokens) == 0 {
-		return results
-	}
-
-	var maxScore float32
-	for _, r := range results {
-		if r.Score > maxScore {
-			maxScore = r.Score
-		}
-	}
-	if maxScore == 0 {
-		return results
-	}
-	const perMatchBonusFrac = 0.25
-	bonus := perMatchBonusFrac * maxScore
-
-	boosted := make([]Result, len(results))
-	for i, r := range results {
-		matches := countTokenMatches(tokens, r.SymbolPath, basename(r.FilePath))
-		r.Score += bonus * float32(matches)
-		boosted[i] = r
-	}
-	sort.SliceStable(boosted, func(i, j int) bool {
-		return boosted[i].Score > boosted[j].Score
-	})
-	return boosted
-}
-
 func tokenizeQuery(q string) []string {
 	fields := strings.Fields(strings.ToLower(q))
 	out := make([]string, 0, len(fields))
@@ -377,17 +321,6 @@ func tokenizeQuery(q string) []string {
 		out = append(out, f)
 	}
 	return out
-}
-
-func countTokenMatches(tokens []string, fields ...string) int {
-	hay := strings.ToLower(strings.Join(fields, " "))
-	n := 0
-	for _, t := range tokens {
-		if strings.Contains(hay, t) {
-			n++
-		}
-	}
-	return n
 }
 
 func basename(p string) string {
