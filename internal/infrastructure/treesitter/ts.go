@@ -323,6 +323,56 @@ func parseTSArrowFunctions(
 	}
 }
 
+// collectTSCallsFromClassBody walks each method_definition under a
+// class body and emits CALLS edges. Calls of the form this.foo() are
+// rewritten to className.foo and resolved against the file's symbol
+// map — bare-identifier calls (e.g. helper()) resolve directly. This
+// is the TS analogue of the Go receiver-selector rewrite (solov2-q9p)
+// and is what makes intra-class dependencies show up in eng_get_call_chain
+// for TS code (solov2-gv6).
+func collectTSCallsFromClassBody(body *sitter.Node, src []byte, symbols map[string]*domain.Node, className string) []*domain.Edge {
+	var edges []*domain.Edge
+	seen := make(map[string]bool)
+	count := int(body.ChildCount())
+	for i := range count {
+		child := body.Child(i)
+		if child.Type() != "method_definition" {
+			continue
+		}
+		nameNode := child.ChildByFieldName("name")
+		if nameNode == nil {
+			continue
+		}
+		methodName := string(src[nameNode.StartByte():nameNode.EndByte()])
+		caller := symbols[className+"."+methodName]
+		if caller == nil {
+			continue
+		}
+		bodyNode := child.ChildByFieldName("body")
+		if bodyNode == nil {
+			continue
+		}
+		for _, callee := range collectCallNames(bodyNode, src, "this", className) {
+			calleeNode, ok := symbols[callee]
+			if !ok {
+				continue
+			}
+			key := string(caller.ID) + "->" + string(calleeNode.ID)
+			if seen[key] {
+				continue
+			}
+			seen[key] = true
+			e, err := domain.NewEdge(caller.ID, calleeNode.ID, domain.EdgeCalls,
+				domain.WithConfidence(domain.Probable),
+			)
+			if err == nil {
+				edges = append(edges, e)
+			}
+		}
+	}
+	return edges
+}
+
 // extractTSCallEdges walks the entire AST finding call_expression nodes inside
 // function/method bodies and emits EdgeCalls when the callee is known in the file.
 func extractTSCallEdges(root *sitter.Node, src []byte, symbols map[string]*domain.Node) []*domain.Edge {
@@ -347,6 +397,22 @@ func collectTSCallsFromTopLevel(node *sitter.Node, src []byte, symbols map[strin
 		if nameNode != nil {
 			callerNode = symbols[string(src[nameNode.StartByte():nameNode.EndByte()])]
 		}
+	case "class_declaration":
+		// Each method inside the class is its own caller. Resolve
+		// this.foo() against the class's own method namespace via
+		// collectCallNames(recvName="this", recvType=className) —
+		// mirrors Go's receiver-selector resolution (solov2-gv6).
+		nameNode := node.ChildByFieldName("name")
+		if nameNode == nil {
+			return edges
+		}
+		className := string(src[nameNode.StartByte():nameNode.EndByte()])
+		bodyNode := node.ChildByFieldName("body")
+		if bodyNode == nil {
+			return edges
+		}
+		edges = append(edges, collectTSCallsFromClassBody(bodyNode, src, symbols, className)...)
+		return edges
 	case "export_statement":
 		// recurse into the declaration
 		inner := node.ChildByFieldName("declaration")
