@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	"github.com/whiskeyjimbo/veska/internal/application/wiki"
 	"github.com/whiskeyjimbo/veska/internal/core/domain"
@@ -54,6 +55,11 @@ func RegisterEntryPointsTool(r *Registry, svc *wiki.EntryPointsService) {
 type entryPointsParams struct {
 	RepoID string `json:"repo_id"`
 	Branch string `json:"branch"`
+	// IncludeTests opts the caller back in to Test*/Benchmark*/Example*/
+	// Fuzz* functions and *_test.go entries. Default false — on a real
+	// library the test corpus drowns out the actual public-API entry
+	// points (solov2-bos: cobra returned ~hundreds of TestX funcs).
+	IncludeTests bool `json:"include_tests,omitempty"`
 }
 
 func makeEntryPointsHandler(svc *wiki.EntryPointsService) ToolHandler {
@@ -75,12 +81,39 @@ func makeEntryPointsHandler(svc *wiki.EntryPointsService) ToolHandler {
 		if err != nil {
 			return nil, &RPCError{Code: CodeInternalError, Message: fmt.Sprintf("entry points: %v", err)}
 		}
+		entries := rep.EntryPoints
+		if !p.IncludeTests {
+			entries = filterTestEntries(entries)
+		}
 		return EntryPointsResponse{
 			RepoID:      rep.RepoID,
 			Branch:      rep.Branch,
-			EntryPoints: rep.EntryPoints,
+			EntryPoints: entries,
 		}, nil
 	}
+}
+
+// filterTestEntries drops entry points whose file path ends in _test.go
+// (Go convention) or whose symbol name carries a Test/Benchmark/Example/
+// Fuzz prefix. Applied at the MCP layer so the wiki page generation
+// (which renders the same list) can keep its current behaviour
+// independently — solov2-bos affects the tool consumers, not the docs.
+func filterTestEntries(in []wiki.EntryPoint) []wiki.EntryPoint {
+	out := make([]wiki.EntryPoint, 0, len(in))
+	for _, e := range in {
+		if strings.HasSuffix(e.FilePath, "_test.go") {
+			continue
+		}
+		name := e.SymbolName
+		if strings.HasPrefix(name, "Test") ||
+			strings.HasPrefix(name, "Benchmark") ||
+			strings.HasPrefix(name, "Example") ||
+			strings.HasPrefix(name, "Fuzz") {
+			continue
+		}
+		out = append(out, e)
+	}
+	return out
 }
 
 type hotZoneParams struct {
