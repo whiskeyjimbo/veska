@@ -10,6 +10,18 @@ def test_context_pack_by_symbol(mcp_client, repo_id, branch, target_symbol):
     })
     assert ok, f"eng_get_context_pack failed: {text}"
     assert isinstance(result, dict)
+    # Real-content assertions: the pack carries the seed node, a token
+    # budget, and the resolved repo_id + branch.
+    assert result.get("repo_id") == repo_id
+    assert result.get("branch") == branch
+    assert result.get("mode") == "symbol"
+    assert result.get("query") == target_symbol
+    nodes = result.get("nodes") or []
+    assert nodes, "expected at least the seed node"
+    # The first node is the seed.
+    assert nodes[0].get("seed") is True
+    assert nodes[0].get("name") == target_symbol or target_symbol in nodes[0].get("path", "")
+    assert result.get("token_budget", 0) > 0
 
 
 def test_context_pack_requires_branch(mcp_client, repo_id, target_symbol):
