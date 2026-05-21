@@ -175,10 +175,10 @@ func TestSnapshot(t *testing.T) {
 	if len(snap) != 2 {
 		t.Fatalf("expected 2 entries in snapshot, got %d", len(snap))
 	}
-	if snap["a.go"][0].ID != "n1" {
+	if snap["a.go"].Nodes[0].ID != "n1" {
 		t.Fatalf("unexpected node in snapshot for a.go: %+v", snap["a.go"])
 	}
-	if snap["b.go"][0].ID != "n2" {
+	if snap["b.go"].Nodes[0].ID != "n2" {
 		t.Fatalf("unexpected node in snapshot for b.go: %+v", snap["b.go"])
 	}
 }
