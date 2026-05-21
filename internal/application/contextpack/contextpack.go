@@ -44,6 +44,16 @@ var ErrMissingDependency = errors.New("contextpack: missing required dependency"
 // option is set. It mirrors a comfortable LLM context slice.
 const DefaultTokenBudget = 8192
 
+// PerNodeSnippetBytes is the per-node ceiling on inline source bytes
+// (solov2-dya). 1500 bytes ≈ ~375 tokens by the 4-bytes-per-token
+// heuristic — enough to capture a typical function body in full,
+// small enough that a 200-node blast radius (HardMaxNodes-ish) still
+// fits in DefaultTokenBudget after JSON overhead. The whole-pack
+// budget is enforced separately by clip(), so this is just a per-row
+// guard against a single 50KB monster symbol drowning out everything
+// else before clip() even gets a chance to drop sections.
+const PerNodeSnippetBytes = 1500
+
 // defaultCommitWindow is the look-back applied to FileHistory.
 const defaultCommitWindow = 30 * 24 * time.Hour
 
@@ -106,6 +116,11 @@ type NodeInfo struct {
 	Distance int    `json:"distance"`
 	Seed     bool   `json:"seed"`
 	HasOpen  bool   `json:"has_open_finding"`
+	// Snippet is the symbol's source, trimmed to PerNodeSnippetBytes so
+	// a single huge symbol cannot eat the bundle (solov2-dya). Omitted
+	// from JSON when empty so legacy callers and unsnapshotted nodes
+	// don't get a noisy empty field.
+	Snippet string `json:"snippet,omitempty"`
 }
 
 // FindingInfo is one open finding reference in the bundle.
@@ -301,6 +316,7 @@ func (a *Assembler) assemble(ctx context.Context, repoID, branch, repoRoot strin
 			Distance: e.Distance,
 			Seed:     isSeed,
 			HasOpen:  hasOpen,
+			Snippet:  trimSnippet(e.Snippet, PerNodeSnippetBytes),
 		})
 		if e.FilePath != "" {
 			fileSet[e.FilePath] = struct{}{}
@@ -416,6 +432,23 @@ func estimateTokens(p *Pack) int {
 		return 0
 	}
 	return len(b) / 4
+}
+
+// trimSnippet caps s at max bytes, preserving UTF-8 by backing off to
+// the last rune boundary, and appends a single trailing newline +
+// "...\n" marker so consumers can tell the body was truncated. An
+// empty input is passed through unchanged.
+func trimSnippet(s string, max int) string {
+	if len(s) <= max {
+		return s
+	}
+	// Back off to a UTF-8 boundary: the byte at [max] must not be a
+	// continuation byte (10xxxxxx). Walk back until it isn't.
+	cut := max
+	for cut > 0 && s[cut]&0xC0 == 0x80 {
+		cut--
+	}
+	return s[:cut] + "\n...\n"
 }
 
 // symbolLeaf returns the trailing segment of a dotted/slashed symbol

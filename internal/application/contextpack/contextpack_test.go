@@ -214,6 +214,83 @@ func percentile(d []time.Duration, p int) time.Duration {
 	return cp[idx]
 }
 
+// TestForSymbol_IncludesSnippets covers solov2-dya: NodeInfo entries
+// must carry the symbol's raw_content inline so the agent can answer
+// from the pack alone instead of doing a follow-up Read per node.
+func TestForSymbol_IncludesSnippets(t *testing.T) {
+	edges := &fakeEdges{}
+	nodes := &fakeNodes{
+		metas: map[string]ports.NodeMeta{
+			"seed": {NodeID: "seed", SymbolPath: "pkg.Target", FilePath: "a.go", Kind: "function",
+				Snippet: "func Target() { return 42 }"},
+		},
+	}
+	blast := blastradius.NewService(edges, nodes, nil)
+	findNodes := func(_ context.Context, _, _, sym string) ([]*domain.Node, error) {
+		n, _ := domain.NewNode("seed", "a.go", "Target", domain.KindFunction)
+		return []*domain.Node{n}, nil
+	}
+	a, _ := contextpack.NewAssembler(findNodes, blast,
+		func(_ context.Context, _, _ string, _ time.Duration) ([]contextpack.CommitInfo, error) {
+			return nil, nil
+		},
+		func(_ context.Context, _, _ string) (map[string]bool, error) { return nil, nil },
+		func(_ context.Context, _ string) ([]string, error) { return nil, nil },
+		nodes.NodesInFile,
+		func(_ context.Context, _ string) (*contextpack.TaskInfo, error) { return nil, nil },
+	)
+	p, err := a.ForSymbol(context.Background(), "r", "main", "/repo", "Target")
+	if err != nil {
+		t.Fatalf("ForSymbol: %v", err)
+	}
+	if len(p.Nodes) != 1 {
+		t.Fatalf("want 1 node, got %d", len(p.Nodes))
+	}
+	if p.Nodes[0].Snippet != "func Target() { return 42 }" {
+		t.Errorf("snippet not propagated: got %q", p.Nodes[0].Snippet)
+	}
+}
+
+// TestForSymbol_SnippetTrimmedToBudget covers AC2 (per-node budget):
+// a snippet larger than PerNodeSnippetBytes is truncated rather than
+// allowed to dominate the bundle, with a marker so the agent knows
+// the body was cut.
+func TestForSymbol_SnippetTrimmedToBudget(t *testing.T) {
+	huge := strings.Repeat("x", contextpack.PerNodeSnippetBytes*3)
+	edges := &fakeEdges{}
+	nodes := &fakeNodes{
+		metas: map[string]ports.NodeMeta{
+			"seed": {NodeID: "seed", SymbolPath: "pkg.Big", FilePath: "a.go", Kind: "function", Snippet: huge},
+		},
+	}
+	blast := blastradius.NewService(edges, nodes, nil)
+	findNodes := func(_ context.Context, _, _, _ string) ([]*domain.Node, error) {
+		n, _ := domain.NewNode("seed", "a.go", "Big", domain.KindFunction)
+		return []*domain.Node{n}, nil
+	}
+	a, _ := contextpack.NewAssembler(findNodes, blast,
+		func(_ context.Context, _, _ string, _ time.Duration) ([]contextpack.CommitInfo, error) {
+			return nil, nil
+		},
+		func(_ context.Context, _, _ string) (map[string]bool, error) { return nil, nil },
+		func(_ context.Context, _ string) ([]string, error) { return nil, nil },
+		nodes.NodesInFile,
+		func(_ context.Context, _ string) (*contextpack.TaskInfo, error) { return nil, nil },
+	)
+	p, _ := a.ForSymbol(context.Background(), "r", "main", "/repo", "Big")
+	if len(p.Nodes) != 1 {
+		t.Fatalf("want 1 node, got %d", len(p.Nodes))
+	}
+	got := p.Nodes[0].Snippet
+	if len(got) > contextpack.PerNodeSnippetBytes+len("\n...\n") {
+		t.Errorf("snippet not trimmed to budget: len=%d", len(got))
+	}
+	if !strings.HasSuffix(got, "...\n") {
+		t.Errorf("trimmed snippet should end with truncation marker, got tail %q",
+			got[max(0, len(got)-10):])
+	}
+}
+
 func TestSymbolLeaf_Untouched(t *testing.T) {
 	// Guard: symbolLeaf behaviour is exercised via NodeInfo.Name.
 	a := newAssembler(t)

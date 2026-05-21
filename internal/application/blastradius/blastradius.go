@@ -66,6 +66,12 @@ type Entry struct {
 	Kind       string
 	LineStart  int
 	LineEnd    int
+	// Snippet is the symbol's stored raw_content (nodes.snippet column),
+	// propagated from ports.NodeMeta so downstream consumers like
+	// contextpack can return source inline without a separate Read
+	// (solov2-dya). Empty when the underlying node row has no snippet
+	// (legacy rows before the column was added).
+	Snippet string
 }
 
 // Response is the envelope returned by Service.Of and friends.
@@ -205,6 +211,7 @@ func (s *Service) Of(ctx context.Context, repoID, branch string, seedIDs []strin
 			Kind:       m.Kind,
 			LineStart:  m.LineStart,
 			LineEnd:    m.LineEnd,
+			Snippet:    m.Snippet,
 		})
 		_ = ok
 	}
