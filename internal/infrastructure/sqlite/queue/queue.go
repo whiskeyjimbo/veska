@@ -39,6 +39,13 @@ type Poller struct {
 	handlers map[WorkKind]WorkHandler
 	interval time.Duration
 	done     chan struct{}
+
+	// Pauser, when set and returning true, makes runKind skip its tick
+	// without consuming a row. Wired to the daemon's ScanTracker so the
+	// post-promotion queue yields the WriteHot lock while a cold scan
+	// is in flight (solov2-pc3). When nil the poller never pauses —
+	// production wiring sets it after New().
+	Pauser func() bool
 }
 
 // New creates a Poller with the default 250ms poll interval.
@@ -100,6 +107,17 @@ func (p *Poller) runKind(ctx context.Context, kind WorkKind, handler WorkHandler
 		case <-ctx.Done():
 			return
 		case <-timer.C:
+		}
+
+		// Skip the tick if a cold scan is in flight — the post-
+		// promotion queue's work routinely takes the WriteHot lock
+		// for tens-to-hundreds of ms per processOne, and contending
+		// with a serial cold-scan promote turns a 1-minute scan into
+		// a 9-minute one (solov2-pc3 pprof). The skip preserves the
+		// same poll cadence so resumption is immediate after End.
+		if p.Pauser != nil && p.Pauser() {
+			timer.Reset(p.interval)
+			continue
 		}
 
 		// processOne only returns errors for unexpected DB failures;

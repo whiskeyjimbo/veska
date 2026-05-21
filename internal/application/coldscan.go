@@ -93,7 +93,11 @@ func NewColdScanReparser(ingester *Ingester, promoter *Promoter, git GitQuerier,
 	if git == nil {
 		return nil, fmt.Errorf("application.NewColdScanReparser: git is nil: %w", ErrMissingDependency)
 	}
-	return newColdScanReparserFromFns(ingester.Save, promoter.Promote, git, opts...)
+	// Wire the cold-scan-specific Save variant (solov2-pc3 #2): it
+	// skips clearParseFailure for clean parses since there's nothing
+	// to clear on a first-ever scan, removing one UPDATE per file on
+	// the contended WriteHot pool.
+	return newColdScanReparserFromFns(ingester.SaveColdScan, promoter.Promote, git, opts...)
 }
 
 // newColdScanReparserFromFns is the internal seam: it composes a reparser

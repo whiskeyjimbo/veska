@@ -80,8 +80,30 @@ func (ing *Ingester) tracerProvider() observability.TracerProvider {
 // Save parses src for the file at path and stages the result.
 // repoID and branch scope the staging slot.
 // Parse errors are non-fatal: a returned error from ParseFile is logged at
-// WARN level and the file is simply not staged. Save does NOT touch SQLite.
+// WARN level and the file is simply not staged. Save itself does NOT touch
+// SQLite for staging, but it does emit parse-failure / parse-clear /
+// per-file todo findings via the configured FindingStorage.
 func (ing *Ingester) Save(ctx context.Context, repoID, branch, path string, src []byte) {
+	ing.save(ctx, repoID, branch, path, src, false /*coldScan*/)
+}
+
+// SaveColdScan is the cold-scan variant of Save. It still parses and
+// stages and still emits parse-failure findings for syntactically broken
+// files, but it skips clearParseFailure — the per-file no-op UPDATE that
+// the regular Save path issues to revalidate an already-clean file
+// (solov2-pc3 fix #2). On a 646-file cold scan against a fresh repo,
+// this eliminates 646 needless writes through the contended WriteHot
+// pool. Per-file TODOs are still emitted because emitTodos has its own
+// len==0 guard and is genuinely free for files without TODO markers.
+func (ing *Ingester) SaveColdScan(ctx context.Context, repoID, branch, path string, src []byte) {
+	ing.save(ctx, repoID, branch, path, src, true /*coldScan*/)
+}
+
+// save is the shared body. coldScan, when true, skips the
+// clearParseFailure call on a successful clean parse — there's nothing
+// to clear during a first-ever scan of a repo, and the per-file UPDATE
+// dominates per-Save wall time under WriteHot contention.
+func (ing *Ingester) save(ctx context.Context, repoID, branch, path string, src []byte, coldScan bool) {
 	// Block if a branch switch is in progress; read current generation before parsing
 	// so the generation check in StageIfCurrentGeneration is tight.
 	ing.gate.WaitIfPaused()
@@ -102,11 +124,14 @@ func (ing *Ingester) Save(ctx context.Context, repoID, branch, path string, src 
 	}
 	ing.staging.StageIfCurrentGeneration(repoID, branch, path, result.Nodes, result.Edges, gen, ing.gate)
 	if len(result.Failures) == 0 {
-		// A clean parse closes any parse-failure finding the file carried
-		// from an earlier broken ingest. emitParseFailures has its own
-		// len==0 guard, so calling clearParseFailure here is the symmetric
-		// path rather than an alternative.
-		ing.clearParseFailure(ctx, repoID, branch, path)
+		// fsnotify-driven Save path: a clean parse closes any
+		// parse-failure finding the file carried from an earlier
+		// broken ingest. Cold-scan path skips: there's no prior
+		// finding to clear on a first-ever scan, and the per-file
+		// UPDATE is the dominant cost (solov2-pc3 #2).
+		if !coldScan {
+			ing.clearParseFailure(ctx, repoID, branch, path)
+		}
 	} else {
 		ing.emitParseFailures(ctx, repoID, branch, path, result.Failures)
 	}
