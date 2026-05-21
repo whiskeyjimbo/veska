@@ -5,16 +5,10 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"unicode"
 
-	"github.com/whiskeyjimbo/veska/internal/application/blastradius"
 	"github.com/whiskeyjimbo/veska/internal/core/domain"
 )
-
-// DefaultMaxBlastRadius is the blast-radius entry-count ceiling a symbol
-// must stay under to qualify as an entry point when no WithMaxBlastRadius
-// option is set. A low ceiling keeps the surface to genuinely low-risk
-// starting points.
-const DefaultMaxBlastRadius = 10
 
 // LoadGraphFunc loads the full in-memory code graph for (repoID, branch).
 // It mirrors ports.GraphStorage.LoadGraph so the real adapter plugs in
@@ -30,13 +24,16 @@ type InboundEdgesFunc func(ctx context.Context, repoID, branch string, nodeIDs [
 // It mirrors ports.FindingQuerier.OpenFindingNodeIDs.
 type OpenFindingsFunc func(ctx context.Context, repoID, branch string) (map[string]bool, error)
 
-// EntryPoint is one selected low-risk symbol a newcomer or agent can
-// safely start from: its name, source location and measured blast radius.
+// EntryPoint is one selected entry-point symbol: its name, source
+// location, and the ranking signals that put it where it landed. The
+// JSON shape is the eng_get_entry_points tool surface (solov2-73f).
 type EntryPoint struct {
-	SymbolName  string `json:"symbol_name"`
-	FilePath    string `json:"file_path"`
-	Kind        string `json:"kind"`
-	BlastRadius int    `json:"blast_radius"`
+	SymbolName      string `json:"symbol_name"`
+	FilePath        string `json:"file_path"`
+	Kind            string `json:"kind"`
+	InboundCount    int    `json:"inbound_count"`
+	Exported        bool   `json:"exported"`
+	HasAdjacentTest bool   `json:"has_adjacent_test"`
 }
 
 // EntryPointsReport is the selected entry_points surface. It is the
@@ -51,31 +48,34 @@ type EntryPointsReport struct {
 // EntryPointsService selects entry-point symbols. It is stateless; the
 // same instance is safe for concurrent callers.
 type EntryPointsService struct {
-	loadGraph      LoadGraphFunc
-	inboundEdges   InboundEdgesFunc
-	openFindings   OpenFindingsFunc
-	blast          *blastradius.Service
-	maxBlastRadius int
+	loadGraph    LoadGraphFunc
+	inboundEdges InboundEdgesFunc
+	openFindings OpenFindingsFunc
+	maxResults   int
 }
 
 // EntryPointOption configures an EntryPointsService at construction time.
 type EntryPointOption func(*EntryPointsService)
 
-// WithMaxBlastRadius sets the blast-radius entry-count ceiling a symbol
-// must stay under to qualify. Non-positive values are ignored so the
-// DefaultMaxBlastRadius stays in effect.
-func WithMaxBlastRadius(k int) EntryPointOption {
+// DefaultMaxResults caps the rendered entry_points list. The page is a
+// human-facing surface — beyond ~50 rows the table stops being a useful
+// "where do I start" guide.
+const DefaultMaxResults = 50
+
+// WithMaxResults caps how many entry points the report returns.
+// Non-positive values are ignored so DefaultMaxResults stays in effect.
+func WithMaxResults(k int) EntryPointOption {
 	return func(s *EntryPointsService) {
 		if k > 0 {
-			s.maxBlastRadius = k
+			s.maxResults = k
 		}
 	}
 }
 
-// NewEntryPointsService constructs an EntryPointsService. loadGraph,
-// inboundEdges, openFindings and blast are all required; a nil dependency
-// yields an error wrapping ErrMissingDependency and a nil service.
-func NewEntryPointsService(loadGraph LoadGraphFunc, inboundEdges InboundEdgesFunc, openFindings OpenFindingsFunc, blast *blastradius.Service, opts ...EntryPointOption) (*EntryPointsService, error) {
+// NewEntryPointsService constructs an EntryPointsService. All function
+// dependencies are required; a nil dependency yields an error wrapping
+// ErrMissingDependency and a nil service.
+func NewEntryPointsService(loadGraph LoadGraphFunc, inboundEdges InboundEdgesFunc, openFindings OpenFindingsFunc, opts ...EntryPointOption) (*EntryPointsService, error) {
 	if loadGraph == nil {
 		return nil, fmt.Errorf("wiki.NewEntryPointsService: loadGraph is nil: %w", ErrMissingDependency)
 	}
@@ -85,15 +85,11 @@ func NewEntryPointsService(loadGraph LoadGraphFunc, inboundEdges InboundEdgesFun
 	if openFindings == nil {
 		return nil, fmt.Errorf("wiki.NewEntryPointsService: openFindings is nil: %w", ErrMissingDependency)
 	}
-	if blast == nil {
-		return nil, fmt.Errorf("wiki.NewEntryPointsService: blast is nil: %w", ErrMissingDependency)
-	}
 	s := &EntryPointsService{
-		loadGraph:      loadGraph,
-		inboundEdges:   inboundEdges,
-		openFindings:   openFindings,
-		blast:          blast,
-		maxBlastRadius: DefaultMaxBlastRadius,
+		loadGraph:    loadGraph,
+		inboundEdges: inboundEdges,
+		openFindings: openFindings,
+		maxResults:   DefaultMaxResults,
 	}
 	for _, opt := range opts {
 		opt(s)
@@ -105,26 +101,31 @@ func NewEntryPointsService(loadGraph LoadGraphFunc, inboundEdges InboundEdgesFun
 // matches what almost every caller wants: exclude Test*/Benchmark*/
 // Example*/Fuzz*-named symbols and *_test.go files from the candidate
 // set so the result lists real public-API entry points, not test
-// helpers (solov2-m8d). Callers that genuinely want the test corpus —
-// e.g. a 'where do tests start exercising this codebase' view — set
-// IncludeTests=true.
+// helpers (solov2-m8d).
 type SelectOptions struct {
 	IncludeTests bool
 }
 
-// Select computes the entry_points report for (repoID, branch). A symbol
-// qualifies as an entry point when all three gates hold:
+// Select computes the entry_points report for (repoID, branch).
 //
-//   - it has an adjacent test: an inbound edge from a node whose file path
-//     ends in "_test.go";
-//   - its blast radius (blastradius.Service entry count) is at or below
-//     the configured maximum;
-//   - it carries no open finding.
+// Real entry points have HIGH inbound fan-in: lots of call sites depend
+// on them. Exported (capitalised) names in non-test files are likelier
+// entry points than internal helpers. The previous gate — "must have
+// an adjacent test, must have small blast radius" — selected leaves,
+// not entry points (solov2-m8d's close-reason flagged this). Adjacent
+// tests are now a tiebreaker bonus, not a hard requirement.
 //
-// Entry points are ordered by ascending blast radius, then by ascending
-// symbol name, so rendering a fixed promoted state twice is byte-identical.
+// Ranking (solov2-73f):
+//  1. inbound_count desc          (the moat: real fan-in)
+//  2. exported desc               (capitalised symbols rank above unexported)
+//  3. has_adjacent_test desc      (testedness as a tiebreaker)
+//  4. symbol_name asc             (final determinism)
 //
-// Equivalent to SelectWith(ctx, repoID, branch, SelectOptions{}).
+// Gates remain:
+//   - symbol-shaped kind only (function / method / type / struct /
+//     interface / class); files/packages/fields excluded;
+//   - no open finding on the node;
+//   - not a Test*/Benchmark*/Example*/Fuzz* symbol (unless IncludeTests=true).
 func (s *EntryPointsService) Select(ctx context.Context, repoID, branch string) (EntryPointsReport, error) {
 	return s.SelectWith(ctx, repoID, branch, SelectOptions{})
 }
@@ -139,15 +140,13 @@ func (s *EntryPointsService) SelectWith(ctx context.Context, repoID, branch stri
 		return EntryPointsReport{RepoID: repoID, Branch: branch}, nil
 	}
 
-	nodes := graph.Nodes() // deterministic ascending-ID order
+	nodes := graph.Nodes()
 
 	flagged, err := s.openFindings(ctx, repoID, branch)
 	if err != nil {
 		return EntryPointsReport{}, fmt.Errorf("wiki: open findings: %w", err)
 	}
 
-	// Only symbol-bearing nodes are candidates — files/packages/fields are
-	// not "symbols a newcomer starts from".
 	candidates := make([]*domain.Node, 0, len(nodes))
 	ids := make([]string, 0, len(nodes))
 	for _, n := range nodes {
@@ -171,32 +170,33 @@ func (s *EntryPointsService) SelectWith(ctx context.Context, repoID, branch stri
 
 	entries := make([]EntryPoint, 0, len(candidates))
 	for _, n := range candidates {
-		if !hasAdjacentTest(graph, inbound[string(n.ID)]) {
-			continue
-		}
-		resp, err := s.blast.Of(ctx, repoID, branch, []string{string(n.ID)}, blastradius.Options{})
-		if err != nil {
-			return EntryPointsReport{}, fmt.Errorf("wiki: blast radius for %s: %w", n.ID, err)
-		}
-		radius := len(resp.Entries)
-		if radius > s.maxBlastRadius {
-			continue
-		}
+		srcIDs := inbound[string(n.ID)]
 		entries = append(entries, EntryPoint{
-			SymbolName:  n.Name,
-			FilePath:    n.Path,
-			Kind:        string(n.Kind),
-			BlastRadius: radius,
+			SymbolName:      n.Name,
+			FilePath:        n.Path,
+			Kind:            string(n.Kind),
+			InboundCount:    len(srcIDs),
+			Exported:        isExported(n.Name),
+			HasAdjacentTest: hasAdjacentTest(graph, srcIDs),
 		})
 	}
 
-	// Ascending radius; ascending symbol name on ties — fully deterministic.
 	sort.Slice(entries, func(i, j int) bool {
-		if entries[i].BlastRadius != entries[j].BlastRadius {
-			return entries[i].BlastRadius < entries[j].BlastRadius
+		a, b := entries[i], entries[j]
+		if a.InboundCount != b.InboundCount {
+			return a.InboundCount > b.InboundCount
 		}
-		return entries[i].SymbolName < entries[j].SymbolName
+		if a.Exported != b.Exported {
+			return a.Exported
+		}
+		if a.HasAdjacentTest != b.HasAdjacentTest {
+			return a.HasAdjacentTest
+		}
+		return a.SymbolName < b.SymbolName
 	})
+	if len(entries) > s.maxResults {
+		entries = entries[:s.maxResults]
+	}
 	return EntryPointsReport{RepoID: repoID, Branch: branch, EntryPoints: entries}, nil
 }
 
@@ -231,6 +231,19 @@ func isTestSymbol(n *domain.Node) bool {
 		return true
 	}
 	return false
+}
+
+// isExported mirrors Go's capitalised-identifier convention but is
+// applied uniformly across languages: a symbol whose first letter is
+// uppercase is the language-agnostic signal for "public API surface".
+// TS/JS classes (PascalCase) and exported Python functions follow the
+// same convention; unexported (lowercase-leading) helpers do not.
+func isExported(name string) bool {
+	if name == "" {
+		return false
+	}
+	r := []rune(name)[0]
+	return unicode.IsUpper(r)
 }
 
 // hasAdjacentTest reports whether any inbound src node lives in a Go test

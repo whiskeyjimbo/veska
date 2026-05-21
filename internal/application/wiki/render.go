@@ -36,6 +36,13 @@ func RenderHotZones(r Report) string {
 // task) resolve this against the repo working tree.
 const EntryPointsPagePath = "docs/veska/entry_points.md"
 
+func boolMark(b bool) string {
+	if b {
+		return "✓"
+	}
+	return "·"
+}
+
 // RenderEntryPoints renders an EntryPointsReport to a Markdown page. The
 // output is a pure function of the report: iteration is over the
 // already-sorted EntryPoints slice only, so rendering the same promoted
@@ -43,17 +50,19 @@ const EntryPointsPagePath = "docs/veska/entry_points.md"
 func RenderEntryPoints(r EntryPointsReport) string {
 	var b strings.Builder
 	b.WriteString("# Entry Points\n\n")
-	b.WriteString("Low-risk symbols a newcomer or agent can safely start from: ")
-	b.WriteString("each has an adjacent test, a small blast radius, and no open findings.\n\n")
+	b.WriteString("High-fan-in symbols an agent should start from: ranked by ")
+	b.WriteString("inbound call count, with exported symbols and symbols having ")
+	b.WriteString("adjacent tests breaking ties (solov2-73f).\n\n")
 	if len(r.EntryPoints) == 0 {
-		b.WriteString("_No entry points: no symbol currently meets all three safety gates._\n")
+		b.WriteString("_No entry points: no symbols currently qualify._\n")
 		return b.String()
 	}
-	b.WriteString("| Symbol | File | Kind | Blast Radius |\n")
-	b.WriteString("| ------ | ---- | ---- | ------------ |\n")
+	b.WriteString("| Symbol | File | Kind | Inbound | Exported | Tested |\n")
+	b.WriteString("| ------ | ---- | ---- | ------- | -------- | ------ |\n")
 	for _, e := range r.EntryPoints {
-		fmt.Fprintf(&b, "| %s | %s | %s | %d |\n",
-			e.SymbolName, e.FilePath, e.Kind, e.BlastRadius)
+		fmt.Fprintf(&b, "| %s | %s | %s | %d | %s | %s |\n",
+			e.SymbolName, e.FilePath, e.Kind, e.InboundCount,
+			boolMark(e.Exported), boolMark(e.HasAdjacentTest))
 	}
 	return b.String()
 }
