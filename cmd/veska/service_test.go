@@ -45,14 +45,14 @@ func (s *stubServiceManager) Status(ctx context.Context) (ServiceStatus, error) 
 }
 
 func TestServiceCmdName(t *testing.T) {
-	cmd := serviceCmd(nil)
+	cmd := serviceCmd(nil, nil)
 	if cmd.Use != "service" {
 		t.Errorf("expected Use=service, got %q", cmd.Use)
 	}
 }
 
 func TestServiceSubcommands(t *testing.T) {
-	cmd := serviceCmd(nil)
+	cmd := serviceCmd(nil, nil)
 	want := []string{"install", "uninstall", "start", "stop", "restart", "status"}
 	got := make(map[string]bool)
 	for _, sub := range cmd.Commands() {
@@ -69,7 +69,7 @@ func TestServiceSubcommands(t *testing.T) {
 }
 
 func TestServiceSubcommandsHaveDryRun(t *testing.T) {
-	cmd := serviceCmd(nil)
+	cmd := serviceCmd(nil, nil)
 	for _, sub := range cmd.Commands() {
 		f := sub.Flags().Lookup("dry-run")
 		if f == nil {
@@ -86,7 +86,7 @@ func TestServiceStatusWithStub(t *testing.T) {
 			Message: "daemon is running",
 		},
 	}
-	cmd := serviceCmd(stub)
+	cmd := serviceCmd(stub, nil)
 	var buf bytes.Buffer
 	cmd.SetOut(&buf)
 	cmd.SetErr(&buf)
@@ -109,7 +109,7 @@ func TestServiceNilManagerReturnsError(t *testing.T) {
 	subcommands := []string{"install", "uninstall", "start", "stop", "restart", "status"}
 	for _, sub := range subcommands {
 		t.Run(sub, func(t *testing.T) {
-			cmd := serviceCmd(nil)
+			cmd := serviceCmd(nil, nil)
 			var buf bytes.Buffer
 			cmd.SetOut(&buf)
 			cmd.SetErr(&buf)

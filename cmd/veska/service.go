@@ -23,9 +23,13 @@ type ServiceStatus = service.ServiceStatus
 var errNoManager = errors.New("service manager not available")
 
 // serviceCmd returns the "service" Cobra command tree.
-// mgr may be nil; every subcommand guards against a nil manager and returns a
-// descriptive error rather than panicking.
-func serviceCmd(mgr ServiceManager) *cobra.Command {
+//
+// mgr is the real-side manager that actually mutates supervisor state.
+// dryMgr is the dry-run-mode sibling: every mutating call on it prints the
+// concrete file paths and supervisor commands it WOULD run (solov2-kqp).
+// Both may be nil; every subcommand guards against a nil manager and
+// returns a descriptive error rather than panicking.
+func serviceCmd(mgr, dryMgr ServiceManager) *cobra.Command {
 	root := &cobra.Command{
 		Use:          "service",
 		Short:        "Manage the veska daemon OS service (install, start, stop, …)",
@@ -33,137 +37,130 @@ func serviceCmd(mgr ServiceManager) *cobra.Command {
 	}
 
 	root.AddCommand(
-		serviceInstallCmd(mgr),
-		serviceUninstallCmd(mgr),
-		serviceStartCmd(mgr),
-		serviceStopCmd(mgr),
-		serviceRestartCmd(mgr),
-		serviceStatusCmd(mgr),
+		serviceInstallCmd(mgr, dryMgr),
+		serviceUninstallCmd(mgr, dryMgr),
+		serviceStartCmd(mgr, dryMgr),
+		serviceStopCmd(mgr, dryMgr),
+		serviceRestartCmd(mgr, dryMgr),
+		serviceStatusCmd(mgr, dryMgr),
 	)
 
 	return root
 }
 
-func serviceInstallCmd(mgr ServiceManager) *cobra.Command {
+// pick returns the manager that should service a request given the
+// --dry-run flag. mgr/dryMgr may be nil; pick falls back to mgr when
+// dryMgr wasn't wired, so dry-run still does something useful in test
+// callsites that only supply one.
+func pick(mgr, dryMgr ServiceManager, dryRun bool) ServiceManager {
+	if dryRun && dryMgr != nil {
+		return dryMgr
+	}
+	return mgr
+}
+
+func serviceInstallCmd(mgr, dryMgr ServiceManager) *cobra.Command {
 	var dryRun bool
 	cmd := &cobra.Command{
 		Use:          "install",
 		Short:        "Install the veska daemon as an OS service",
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if mgr == nil {
+			useMgr := pick(mgr, dryMgr, dryRun)
+			if useMgr == nil {
 				return errNoManager
 			}
-			if dryRun {
-				fmt.Fprintln(cmd.OutOrStdout(), "dry-run: would install service")
-				return nil
-			}
-			return mgr.Install(cmd.Context())
+			return useMgr.Install(cmd.Context())
 		},
 	}
 	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "print what would be done without making changes")
 	return cmd
 }
 
-func serviceUninstallCmd(mgr ServiceManager) *cobra.Command {
+func serviceUninstallCmd(mgr, dryMgr ServiceManager) *cobra.Command {
 	var dryRun bool
 	cmd := &cobra.Command{
 		Use:          "uninstall",
 		Short:        "Uninstall the veska daemon OS service",
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if mgr == nil {
+			useMgr := pick(mgr, dryMgr, dryRun)
+			if useMgr == nil {
 				return errNoManager
 			}
-			if dryRun {
-				fmt.Fprintln(cmd.OutOrStdout(), "dry-run: would uninstall service")
-				return nil
-			}
-			return mgr.Uninstall(cmd.Context())
+			return useMgr.Uninstall(cmd.Context())
 		},
 	}
 	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "print what would be done without making changes")
 	return cmd
 }
 
-func serviceStartCmd(mgr ServiceManager) *cobra.Command {
+func serviceStartCmd(mgr, dryMgr ServiceManager) *cobra.Command {
 	var dryRun bool
 	cmd := &cobra.Command{
 		Use:          "start",
 		Short:        "Start the veska daemon OS service",
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if mgr == nil {
+			useMgr := pick(mgr, dryMgr, dryRun)
+			if useMgr == nil {
 				return errNoManager
 			}
-			if dryRun {
-				fmt.Fprintln(cmd.OutOrStdout(), "dry-run: would start service")
-				return nil
-			}
-			return mgr.Start(cmd.Context())
+			return useMgr.Start(cmd.Context())
 		},
 	}
 	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "print what would be done without making changes")
 	return cmd
 }
 
-func serviceStopCmd(mgr ServiceManager) *cobra.Command {
+func serviceStopCmd(mgr, dryMgr ServiceManager) *cobra.Command {
 	var dryRun bool
 	cmd := &cobra.Command{
 		Use:          "stop",
 		Short:        "Stop the veska daemon OS service",
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if mgr == nil {
+			useMgr := pick(mgr, dryMgr, dryRun)
+			if useMgr == nil {
 				return errNoManager
 			}
-			if dryRun {
-				fmt.Fprintln(cmd.OutOrStdout(), "dry-run: would stop service")
-				return nil
-			}
-			return mgr.Stop(cmd.Context())
+			return useMgr.Stop(cmd.Context())
 		},
 	}
 	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "print what would be done without making changes")
 	return cmd
 }
 
-func serviceRestartCmd(mgr ServiceManager) *cobra.Command {
+func serviceRestartCmd(mgr, dryMgr ServiceManager) *cobra.Command {
 	var dryRun bool
 	cmd := &cobra.Command{
 		Use:          "restart",
 		Short:        "Restart the veska daemon OS service",
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if mgr == nil {
+			useMgr := pick(mgr, dryMgr, dryRun)
+			if useMgr == nil {
 				return errNoManager
 			}
-			if dryRun {
-				fmt.Fprintln(cmd.OutOrStdout(), "dry-run: would restart service")
-				return nil
-			}
-			return mgr.Restart(cmd.Context())
+			return useMgr.Restart(cmd.Context())
 		},
 	}
 	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "print what would be done without making changes")
 	return cmd
 }
 
-func serviceStatusCmd(mgr ServiceManager) *cobra.Command {
+func serviceStatusCmd(mgr, dryMgr ServiceManager) *cobra.Command {
 	var dryRun bool
 	cmd := &cobra.Command{
 		Use:          "status",
 		Short:        "Show the current state of the veska daemon OS service",
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if mgr == nil {
+			useMgr := pick(mgr, dryMgr, dryRun)
+			if useMgr == nil {
 				return errNoManager
 			}
-			if dryRun {
-				fmt.Fprintln(cmd.OutOrStdout(), "dry-run: would query service status")
-				return nil
-			}
-			st, err := mgr.Status(cmd.Context())
+			st, err := useMgr.Status(cmd.Context())
 			if err != nil {
 				return err
 			}
