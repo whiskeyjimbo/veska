@@ -72,6 +72,19 @@ def test_suppress_then_close_roundtrip(mcp_client, repo_id, branch, open_finding
         })
 
 
+def test_suppress_finding_rejects_unknown_id(mcp_client, repo_id, branch):
+    """solov2-b36: scope='finding' (the default) must verify the finding
+    actually exists. Previously this silently inserted an orphan row that
+    polluted eng_list_suppressions forever."""
+    ok, text, _, _ = mcp_client.call("eng_suppress_finding", {
+        "repo_id": repo_id, "branch": branch,
+        "finding_id": "definitely-not-real-zzz",
+        "reason": "harness orphan-probe",
+    })
+    assert not ok, "expected finding-not-found error"
+    assert "finding not found" in text.lower()
+
+
 def test_get_suppression_missing_id_errors(mcp_client):
     ok, text, _, _ = mcp_client.call("eng_get_suppression", {})
     assert not ok and "required" in text.lower()
