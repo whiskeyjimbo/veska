@@ -54,15 +54,15 @@ def test_search_similar_returns_results(mcp_client, repo_id, branch, target_symb
 
 
 @pytest.mark.requires_ollama
-def test_search_semantic_quality(mcp_client, repo_id, branch):
-    """A coarse smoke for embedding quality: query a phrase a human would
-    use and verify the system returns ranked results. We can't pin specific
-    rankings without knowing the corpus, but length>0 confirms the embedder
-    + vector backend are wired and Ollama is reachable."""
+def test_search_semantic_quality(mcp_client, repo_id, branch, target_symbol):
+    """Coarse smoke for embedding quality: query for target_symbol's name
+    and verify the system returns ranked results. The previous canned query
+    'function that returns a string greeting' returned zero hits for the
+    small journey corpus — using target_symbol guarantees vocabulary overlap."""
     ok, _, _, result = mcp_client.call("eng_search_semantic", {
         "repo_id": repo_id,
         "branch": branch,
-        "query": "function that returns a string greeting",
+        "query": target_symbol,
         "limit": 5,
     })
     assert ok
