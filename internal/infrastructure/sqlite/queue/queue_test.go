@@ -143,6 +143,57 @@ func TestPoller_PicksUpPendingRow(t *testing.T) {
 	t.Errorf("expected state=done, got %q", state)
 }
 
+// TestPoller_PauserBlocksProcessing covers solov2-pc3 fix #1: when
+// Pauser returns true, the poll loop skips its tick without consuming
+// a pending row. When Pauser flips back to false, the row is picked
+// up on the next tick. This is the gate that keeps the post-promotion
+// queue off the WriteHot pool while a cold scan is in flight.
+func TestPoller_PauserBlocksProcessing(t *testing.T) {
+	t.Parallel()
+
+	db := openTestDB(t)
+	seq := insertPendingRow(t, db, queue.WorkKindEmbed)
+
+	called := make(chan queue.Row, 1)
+	h := &handlerFunc{fn: func(_ context.Context, row queue.Row) error {
+		called <- row
+		return nil
+	}}
+
+	var paused atomic.Bool
+	paused.Store(true)
+	p := queue.NewWithInterval(db, db, map[queue.WorkKind]queue.WorkHandler{
+		queue.WorkKindEmbed: h,
+	}, 25*time.Millisecond)
+	p.Pauser = paused.Load
+
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	p.Start(ctx)
+
+	// With Pauser=true, no work should fire for the next ~250ms (10
+	// poll intervals).
+	select {
+	case row := <-called:
+		t.Fatalf("handler fired while Pauser=true: row=%+v", row)
+	case <-time.After(250 * time.Millisecond):
+	}
+	if state, _ := rowState(t, db, seq); state != "pending" {
+		t.Errorf("row state changed while paused: %q (want pending)", state)
+	}
+
+	// Release the pause; the next tick must pick up the row.
+	paused.Store(false)
+	select {
+	case row := <-called:
+		if row.Seq != seq {
+			t.Errorf("handler got seq=%d, want %d", row.Seq, seq)
+		}
+	case <-ctx.Done():
+		t.Fatal("handler never fired after Pauser flipped to false")
+	}
+}
+
 // TestPoller_RetryAndFail verifies that a handler error increments attempts,
 // re-queues as pending, and after 3 attempts transitions to failed.
 func TestPoller_RetryAndFail(t *testing.T) {

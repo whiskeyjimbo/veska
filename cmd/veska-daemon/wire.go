@@ -594,8 +594,10 @@ func newDaemon(cfg Config) (*Daemon, error) {
 	gitQ := gitwatch.Querier{}
 	// Shared scan tracker — the reparser Start/End-s into it, the status
 	// handler Snapshots from it for eng_get_status's scans_in_flight
-	// field (solov2-pm5).
+	// field (solov2-pm5), and the post-promotion queue uses it as a
+	// pause gate while a scan is in flight (solov2-pc3 fix #1).
 	scanTracker := application.NewScanTracker()
+	poller.Pauser = scanTracker.IsAnyScanRunning
 	reparser, err := application.NewColdScanReparser(
 		ingester, promoter, gitQ,
 		application.WithIgnoreLoader(ignoreAdapter),
