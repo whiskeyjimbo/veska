@@ -153,6 +153,68 @@ func TestDispatch_RoutesToHandler(t *testing.T) {
 	}
 }
 
+// TestDispatch_ToolsListReturnsCatalog pins solov2-kw4: tools/list is
+// recognised and returns every registered tool's name/description.
+func TestDispatch_ToolsListReturnsCatalog(t *testing.T) {
+	r := NewRegistry()
+	r.MustRegister(ToolSpec{Name: "eng_get_node", Description: "fetch a graph node",
+		Handler: func(context.Context, domain.Actor, json.RawMessage) (any, *RPCError) { return nil, nil }})
+	r.MustRegister(ToolSpec{Name: "eng_find_symbol", Description: "find symbol by name",
+		Handler: func(context.Context, domain.Actor, json.RawMessage) (any, *RPCError) { return nil, nil }})
+
+	result, rpcErr := r.Dispatch(context.Background(), domain.Actor{}, &Request{Method: "tools/list"})
+	if rpcErr != nil {
+		t.Fatalf("tools/list error: %+v", rpcErr)
+	}
+	resp, ok := result.(ToolListResponse)
+	if !ok {
+		t.Fatalf("unexpected result type: %T", result)
+	}
+	if len(resp.Tools) != 2 {
+		t.Fatalf("expected 2 tools, got %d", len(resp.Tools))
+	}
+	if resp.Tools[0].Name != "eng_find_symbol" || resp.Tools[1].Name != "eng_get_node" {
+		t.Errorf("expected sorted [eng_find_symbol, eng_get_node]; got %+v", resp.Tools)
+	}
+}
+
+// TestDispatch_ToolsCallRoutesByName pins solov2-kw4: tools/call with
+// {"name":"eng_find_symbol","arguments":{...}} dispatches to the tool
+// handler with the unwrapped arguments.
+func TestDispatch_ToolsCallRoutesByName(t *testing.T) {
+	r := NewRegistry()
+	var gotParams json.RawMessage
+	r.MustRegister(ToolSpec{
+		Name: "eng_find_symbol", Description: "find symbol by name",
+		Handler: func(_ context.Context, _ domain.Actor, p json.RawMessage) (any, *RPCError) {
+			gotParams = p
+			return "found", nil
+		},
+	})
+
+	args := json.RawMessage(`{"symbol":"Foo","repo_id":"r","branch":"main"}`)
+	wrapped, _ := json.Marshal(map[string]any{"name": "eng_find_symbol", "arguments": json.RawMessage(args)})
+	result, rpcErr := r.Dispatch(context.Background(), domain.Actor{}, &Request{Method: "tools/call", Params: wrapped})
+	if rpcErr != nil {
+		t.Fatalf("tools/call error: %+v", rpcErr)
+	}
+	if result != "found" {
+		t.Errorf("expected handler return 'found', got %v", result)
+	}
+	if string(gotParams) != string(args) {
+		t.Errorf("handler got params %s, want %s", gotParams, args)
+	}
+}
+
+func TestDispatch_ToolsCallUnknownToolReturnsNotFound(t *testing.T) {
+	r := NewRegistry()
+	wrapped, _ := json.Marshal(map[string]any{"name": "eng_get_missing", "arguments": json.RawMessage(`{}`)})
+	_, rpcErr := r.Dispatch(context.Background(), domain.Actor{}, &Request{Method: "tools/call", Params: wrapped})
+	if rpcErr == nil || rpcErr.Code != CodeMethodNotFound {
+		t.Fatalf("expected MethodNotFound, got %+v", rpcErr)
+	}
+}
+
 func TestDispatch_UnknownMethodReturnsMethodNotFound(t *testing.T) {
 	r := NewRegistry()
 	req := &Request{Method: "eng_get_unknown_xyz"}
