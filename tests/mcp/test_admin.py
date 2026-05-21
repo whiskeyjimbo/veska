@@ -17,13 +17,26 @@ def test_list_repos_includes_target(mcp_client, repo_id):
     assert repo_id in ids, f"target repo {repo_id} not in {ids}"
 
 
-def test_get_current_repo_responds(mcp_client):
-    # eng_get_current_repo resolves the cwd to a registered repo if one
-    # matches. We don't assert success because the pytest cwd is unlikely
-    # to BE a registered repo — but the call should not crash or return
-    # an unexpected error code.
-    _, text, _, _ = mcp_client.call("eng_get_current_repo", {})
-    assert isinstance(text, str)
+def test_get_current_repo_requires_cwd(mcp_client):
+    """eng_get_current_repo errors when cwd is omitted."""
+    ok, text, _, _ = mcp_client.call("eng_get_current_repo", {})
+    assert not ok and "cwd" in text.lower()
+
+
+def test_get_current_repo_resolves_known_root(mcp_client, repo_id):
+    """When cwd is set to a registered repo's RootPath, the returned
+    repo's RepoID matches."""
+    from tests.mcp.helpers import query
+    root = query("SELECT root_path FROM repos WHERE repo_id = ?", (repo_id,))[0]["root_path"]
+    ok, text, _, result = mcp_client.call("eng_get_current_repo", {"cwd": root})
+    assert ok, f"eng_get_current_repo failed: {text}"
+    rec = result.get("repo") if isinstance(result, dict) else None
+    assert rec and rec.get("RepoID") == repo_id
+
+
+def test_get_repo_unknown_id_errors(mcp_client):
+    ok, text, _, _ = mcp_client.call("eng_get_repo", {"repo_id": "definitely-not-a-real-repo"})
+    assert not ok and "not found" in text.lower()
 
 
 def test_get_config_responds(mcp_client):

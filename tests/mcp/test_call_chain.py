@@ -17,6 +17,23 @@ def test_call_chain_for_target_node(mcp_client, repo_id, branch, target_symbol):
     })
     assert ok, f"eng_get_call_chain failed: {text}"
     assert isinstance(result, dict)
+    # included_staging is always set — pin it as a structure smoke.
+    assert "included_staging" in result
+
+
+def test_call_chain_unknown_node_soft_fails(mcp_client, repo_id, branch):
+    """The journey test confirmed eng_get_call_chain returns success with
+    an empty body when the node_id doesn't exist — not an error. Pin
+    that contract so a future change that 'helpfully' errors on missing
+    nodes shows up here."""
+    ok, _, _, result = mcp_client.call("eng_get_call_chain", {
+        "repo_id": repo_id, "branch": branch,
+        "node_id": "definitely-not-a-real-node-deadbeef",
+        "depth": 2,
+    })
+    assert ok, "unknown node should soft-fail with empty body, not error"
+    # No nodes/edges keys means an empty body — acceptable here.
+    assert not result.get("nodes") and not result.get("edges")
 
 
 def test_call_chain_requires_node_id(mcp_client, repo_id, branch):

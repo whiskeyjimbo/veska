@@ -56,12 +56,22 @@ make layercheck   # enforce hexagonal layering (domain/ports must not import inf
 ```sh
 ollama serve &                       # if not already running
 ollama pull nomic-embed-text
-veska init                           # run inside a git working tree
+veska init                           # creates ~/.veska/, probes the embedder
+veska-daemon &                       # start the long-running daemon
+veska repo add /path/to/your/repo    # register; cold-scan kicks off in the background
 ```
 
-`veska init` starts the daemon, installs the git post-commit hook, and kicks
-off a background cold scan. Point your editor's MCP client at `veska-mcp`.
-Check health with `veska status` and `veska doctor`.
+The first `veska repo add` registers the repo, installs the git post-commit
+hook with an absolute path to the `veska` binary, and dispatches a cold scan
+through the daemon. Subsequent commits drive promotion via `eng_promote_repo`
+on the daemon's MCP socket. Point your editor's MCP client at `veska-mcp`.
+Check health with `veska doctor status` and the MCP `eng_get_status` tool.
+
+To force a re-scan of an already-registered repo (e.g. after a model swap):
+
+```sh
+veska reindex /path/to/your/repo
+```
 
 ### Configuration
 
@@ -97,6 +107,38 @@ docs/                 design set (SOLO-NN sections), milestones, operations runb
 Design decisions of note: functional options for domain constructors;
 constructors return typed errors (never panic) on missing dependencies; atomic
 promotion behind the `PromotionStore` port; L2-normalised embeddings.
+
+## MCP tools
+
+The daemon exposes 34 tools over a Unix-socket JSON-RPC server (forwarded to
+editors by `veska-mcp`). Tool names follow `eng_<verb>_<object>`. Quick map:
+
+| Family | Tools |
+|---|---|
+| Admin | `eng_get_status`, `eng_get_config`, `eng_get_current_repo`, `eng_get_repo`, `eng_list_repos` |
+| Repo lifecycle | `eng_add_repo`, `eng_remove_repo`, `eng_promote_repo` |
+| Graph | `eng_find_symbol`, `eng_get_node`, `eng_get_file_nodes`, `eng_get_call_chain` |
+| Search | `eng_search_semantic`, `eng_search_similar` |
+| Blast radius | `eng_get_blast_radius`, `eng_get_diff_blast_radius`, `eng_get_dirty_blast_radius` |
+| Context | `eng_get_context_pack`, `eng_find_changed_symbols` |
+| Misc | `eng_find_owner`, `eng_find_todos` |
+| Tasks | `eng_get_active_task`, `eng_set_active_task`, `eng_get_task_history` |
+| Findings | `eng_list_findings`, `eng_get_finding`, `eng_close_finding`, `eng_reopen_finding` |
+| Suppressions | `eng_list_suppressions`, `eng_get_suppression`, `eng_suppress_finding`, `eng_close_suppression` |
+| Wiki | `eng_get_hot_zone`, `eng_get_entry_points` |
+
+## Testing
+
+```sh
+make test          # go test ./... — unit + integration suites
+make test-mcp      # python pytest harness against a running daemon (fast)
+make test-mcp-deep # add cross-validation against the live SQLite
+```
+
+`tests/mcp/` spawns `bin/veska-mcp` as a subprocess, drives every registered
+tool with happy/bad/edge inputs, and pretty-prints each call's transcript so
+the suite doubles as a human-readable smoke. Requires `VESKA_HOME` to point
+at a running daemon's data dir and at least one `veska repo add`'d repo.
 
 ## Documentation
 
