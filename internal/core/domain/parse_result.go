@@ -19,6 +19,24 @@ type ParseResult struct {
 	// comment to a containing symbol. The Ingester collapses the list into
 	// a single file-anchored finding per (repo, branch, file).
 	Todos []ParseTodo
+	// UnresolvedCalls carries call sites whose callee is named by the
+	// source but is not in the file's symbol map — typically because
+	// the callee lives in another file of the same Go package. The
+	// promoter resolves these against a per-package map built from the
+	// whole batch and emits CALLS edges in the same transaction
+	// (solov2-2at).
+	UnresolvedCalls []UnresolvedCall
+}
+
+// UnresolvedCall is one call site the parser saw but could not bind to
+// a target within the same file. CallerID is the in-file node that
+// contains the call; CalleeName is the lookup key for the package-wide
+// resolver — either "foo" for a plain-identifier call or "Type.foo" for
+// a receiver-method call (the receiver type having been determined from
+// the enclosing method_declaration).
+type UnresolvedCall struct {
+	CallerID   NodeID
+	CalleeName string
 }
 
 // ParseFailure describes a single syntax-error region surfaced by the parser.

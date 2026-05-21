@@ -150,9 +150,10 @@ func (p *Promoter) Promote(ctx context.Context, repoID, branch, gitSHA string, a
 	}
 	for filePath, sf := range snap {
 		batch.Files = append(batch.Files, PromotionFile{
-			Path:  filePath,
-			Nodes: sf.Nodes,
-			Edges: sf.Edges,
+			Path:            filePath,
+			Nodes:           sf.Nodes,
+			Edges:           sf.Edges,
+			UnresolvedCalls: sf.UnresolvedCalls,
 		})
 	}
 
