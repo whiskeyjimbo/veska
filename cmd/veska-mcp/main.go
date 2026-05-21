@@ -139,8 +139,23 @@ func writeSocketMissingError(w io.Writer, sockPath string) {
 
 func newRootCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:          "veska-mcp",
-		Short:        "Veska MCP stdio shim (proxies editor to daemon socket)",
+		Use:   "veska-mcp",
+		Short: "Veska MCP stdio shim (proxies editor to daemon socket)",
+		Long: `veska-mcp is the editor-facing shim. It reads newline-delimited
+JSON-RPC requests on stdin, forwards them to the daemon's MCP socket
+($VESKA_HOME/mcp.sock), and writes responses back to stdout.
+
+Protocol: flat JSON-RPC. The method IS the tool name; there is no
+"tools/call" envelope. Parameters go in the standard "params" field.
+
+Example (from a shell, with the daemon running):
+
+  printf '{"jsonrpc":"2.0","id":1,"method":"eng_get_status","params":{}}\n' \
+    | veska-mcp
+
+Editor integration: point your MCP client at this binary as a stdio
+command. Examples for Claude Desktop / Cursor / Continue / Zed live in
+README.md → "Editor integration".`,
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			sockPath := config.MCPSockPath()
