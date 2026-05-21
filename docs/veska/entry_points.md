@@ -15,7 +15,6 @@ Low-risk symbols a newcomer or agent can safely start from: each has an adjacent
 | TestGetActiveTask_NoActive | /home/jrose/src/engram/solov2/internal/infrastructure/mcp/tools_tasks_test.go | function | 2 |
 | TestGetTaskHistory_CustomLimit | /home/jrose/src/engram/solov2/internal/infrastructure/mcp/tools_tasks_test.go | function | 2 |
 | TestGetTaskHistory_DefaultLimit | /home/jrose/src/engram/solov2/internal/infrastructure/mcp/tools_tasks_test.go | function | 2 |
-| TestLoader_Kinds | /home/jrose/src/engram/solov2/internal/application/review/review_test.go | function | 2 |
 | TestNewFinding_StableFindingID_AcrossBranches | /home/jrose/src/engram/solov2/internal/core/domain/finding_test.go | function | 2 |
 | TestNewOllamaGenerator_Defaults | /home/jrose/src/engram/solov2/internal/infrastructure/llm/ollama_test.go | function | 2 |
 | TestNoViolationsInCurrentCodebase | /home/jrose/src/engram/solov2/tools/lint/layercheck/integration_test.go | function | 2 |
@@ -89,6 +88,9 @@ Low-risk symbols a newcomer or agent can safely start from: each has an adjacent
 | TestRecallFloor250k | /home/jrose/src/engram/solov2/internal/infrastructure/vector/bench_test.go | function | 4 |
 | TestRecallFloor50k | /home/jrose/src/engram/solov2/internal/infrastructure/vector/bench_test.go | function | 4 |
 | TestRenderMarkdown | /home/jrose/src/engram/solov2/tools/loadtest/spikes/branchpk/report/report_test.go | function | 4 |
+| TestScanTracker_ConcurrentStartEnd | /home/jrose/src/engram/solov2/internal/application/scan_tracker_test.go | function | 4 |
+| TestScanTracker_NilSafe | /home/jrose/src/engram/solov2/internal/application/scan_tracker_test.go | function | 4 |
+| TestScanTracker_StartEndSnapshotLifecycle | /home/jrose/src/engram/solov2/internal/application/scan_tracker_test.go | function | 4 |
 | TestScan_CleanDepYieldsNoFinding | /home/jrose/src/engram/solov2/internal/infrastructure/vulnsource/osv/osv_test.go | function | 4 |
 | TestScan_IsOffline | /home/jrose/src/engram/solov2/internal/infrastructure/vulnsource/osv/osv_test.go | function | 4 |
 | FakeEmbedder.Embed | /home/jrose/src/engram/solov2/tools/loadtest/synthcorpus/synthcorpus.go | method | 5 |
@@ -112,7 +114,6 @@ Low-risk symbols a newcomer or agent can safely start from: each has an adjacent
 | TestEdgeReaderRepo_OutboundEdges | /home/jrose/src/engram/solov2/internal/infrastructure/sqlite/edge_reader_repo_test.go | function | 5 |
 | TestEdgeReaderRepo_ScopedByRepoAndBranch | /home/jrose/src/engram/solov2/internal/infrastructure/sqlite/edge_reader_repo_test.go | function | 5 |
 | TestEntryPointsPagePath_IsUnderDocsVeska | /home/jrose/src/engram/solov2/internal/application/wiki/entrypoints_test.go | function | 5 |
-| TestList_EmptyTable | /home/jrose/src/engram/solov2/internal/repo/registry_test.go | function | 5 |
 | TestMigration0001_CreatesAllTables | /home/jrose/src/engram/solov2/internal/infrastructure/sqlite/migrations_test.go | function | 5 |
 | TestNew_EmptyModelReturnsTypedError | /home/jrose/src/engram/solov2/internal/infrastructure/embedding/ollama/ollama_test.go | function | 5 |
 | TestOllamaGenerator_Generate_NoFormatByDefault | /home/jrose/src/engram/solov2/internal/infrastructure/llm/ollama_test.go | function | 5 |
@@ -123,11 +124,12 @@ Low-risk symbols a newcomer or agent can safely start from: each has an adjacent
 | TestOpenPools_WriteHandles_MaxOneConn | /home/jrose/src/engram/solov2/internal/infrastructure/sqlite/pools_test.go | function | 5 |
 | TestPromote_ZeroFiles | /home/jrose/src/engram/solov2/internal/application/promoter_test.go | function | 5 |
 | TestPrompt_FormatIsJSONSchema | /home/jrose/src/engram/solov2/internal/application/review/review_test.go | function | 5 |
+| TestResync_ErrPromotionDivergent_Error | /home/jrose/src/engram/solov2/internal/application/resync_test.go | function | 5 |
 | TestWorker_DedupCrossTick | /home/jrose/src/engram/solov2/internal/application/embedder/embedder_test.go | function | 5 |
-| init | /home/jrose/src/engram/solov2/tools/loadtest/spikes/sqlitevec/cmd/bench/main.go | function | 5 |
-| init | /home/jrose/src/engram/solov2/tools/loadtest/spikes/sqlitevec/bench/bench_test.go | function | 5 |
 | init | /home/jrose/src/engram/solov2/tools/loadtest/spikes/sqlitevec/bench/bench.go | function | 5 |
 | init | /home/jrose/src/engram/solov2/tools/loadtest/spikes/sqlitevec/cmd/ceiling/main.go | function | 5 |
+| init | /home/jrose/src/engram/solov2/tools/loadtest/spikes/sqlitevec/cmd/bench/main.go | function | 5 |
+| init | /home/jrose/src/engram/solov2/tools/loadtest/spikes/sqlitevec/bench/bench_test.go | function | 5 |
 | AssignVerdict | /home/jrose/src/engram/solov2/tools/loadtest/spikes/branchpk/report/report.go | function | 6 |
 | CheckPipelines | /home/jrose/src/engram/solov2/internal/doctor/pipelines.go | function | 6 |
 | FileAtRefFunc | /home/jrose/src/engram/solov2/internal/application/changedsymbols/changedsymbols.go | type | 6 |
@@ -143,6 +145,7 @@ Low-risk symbols a newcomer or agent can safely start from: each has an adjacent
 | TestDoctorJSONEnvelopeStub | /home/jrose/src/engram/solov2/cmd/veska/doctor_json_test.go | function | 6 |
 | TestFreeRatio_ZeroDenominator | /home/jrose/src/engram/solov2/internal/doctor/storage_test.go | function | 6 |
 | TestInstallHintDarwin | /home/jrose/src/engram/solov2/internal/embedderprobe/probe_test.go | function | 6 |
+| TestLoader_Kinds | /home/jrose/src/engram/solov2/internal/application/review/review_test.go | function | 6 |
 | TestMain | /home/jrose/src/engram/solov2/tools/loadtest/mcp-latency/bench_test.go | function | 6 |
 | TestPromote_CheckRunnerSkippedWhenNothingStaged | /home/jrose/src/engram/solov2/internal/application/promoter_checks_test.go | function | 6 |
 | TestQueueFuzz | /home/jrose/src/engram/solov2/tools/loadtest/queuefuzz/queuefuzz_test.go | function | 6 |
@@ -157,8 +160,8 @@ Low-risk symbols a newcomer or agent can safely start from: each has an adjacent
 | TestUpgradeWithRestart | /home/jrose/src/engram/solov2/cmd/veska/upgrade_test.go | function | 6 |
 | WakeReconciler.IsReconciling | /home/jrose/src/engram/solov2/internal/infrastructure/git/reconciler.go | method | 6 |
 | WakeReconciler.runSweep | /home/jrose/src/engram/solov2/internal/infrastructure/git/reconciler.go | method | 6 |
-| init | /home/jrose/src/engram/solov2/tools/loadtest/spikes/sqlitevec/cmd/recall/main.go | function | 6 |
 | init | /home/jrose/src/engram/solov2/tools/loadtest/spikes/sqlitevec/loader/loader.go | function | 6 |
+| init | /home/jrose/src/engram/solov2/tools/loadtest/spikes/sqlitevec/cmd/recall/main.go | function | 6 |
 | ExtractSampler | /home/jrose/src/engram/solov2/internal/observability/tracing.go | function | 7 |
 | Poller | /home/jrose/src/engram/solov2/internal/infrastructure/sqlite/queue/queue.go | struct | 7 |
 | Probe | /home/jrose/src/engram/solov2/internal/embedderprobe/probe.go | function | 7 |
@@ -189,8 +192,8 @@ Low-risk symbols a newcomer or agent can safely start from: each has an adjacent
 | WriteJSON | /home/jrose/src/engram/solov2/tools/loadtest/recall/harness.go | function | 7 |
 | Index.Add | /home/jrose/src/engram/solov2/tools/loadtest/spikes/hnsw/cohnsw/cohnsw.go | method | 8 |
 | P95Latency | /home/jrose/src/engram/solov2/tools/loadtest/recall/recall.go | function | 8 |
-| Percentiles | /home/jrose/src/engram/solov2/tools/loadtest/spikes/sqlitevec/bench/bench.go | function | 8 |
 | Percentiles | /home/jrose/src/engram/solov2/tools/loadtest/spikes/branchpk/bench/bench.go | function | 8 |
+| Percentiles | /home/jrose/src/engram/solov2/tools/loadtest/spikes/sqlitevec/bench/bench.go | function | 8 |
 | Provider.ModelID | /home/jrose/src/engram/solov2/internal/infrastructure/embedding/ollama/ollama.go | method | 8 |
 | Service.parseAtRef | /home/jrose/src/engram/solov2/internal/application/changedsymbols/changedsymbols.go | method | 8 |
 | TestCheckStorageBackend_SQLiteVec_Empty | /home/jrose/src/engram/solov2/internal/doctor/storage_backend_test.go | function | 8 |
@@ -202,6 +205,7 @@ Low-risk symbols a newcomer or agent can safely start from: each has an adjacent
 | TestInitOllamaDownExitsNonZero | /home/jrose/src/engram/solov2/cmd/veska/init_test.go | function | 8 |
 | TestInitSummaryContainsKeyLines | /home/jrose/src/engram/solov2/cmd/veska/init_test.go | function | 8 |
 | TestLexical_NoLexicalWired_ReturnsNil | /home/jrose/src/engram/solov2/internal/application/search/search_test.go | function | 8 |
+| TestList_EmptyTable | /home/jrose/src/engram/solov2/internal/repo/registry_test.go | function | 8 |
 | TestLoadMetrics_JSONShape | /home/jrose/src/engram/solov2/tools/loadtest/spikes/sqlitevec/loader/loader_test.go | function | 8 |
 | TestLoader_VersionedPromptPerKind | /home/jrose/src/engram/solov2/internal/application/review/review_test.go | function | 8 |
 | TestNewNode_ValidRequired | /home/jrose/src/engram/solov2/internal/core/domain/node_test.go | function | 8 |
@@ -269,7 +273,6 @@ Low-risk symbols a newcomer or agent can safely start from: each has an adjacent
 | TestScanTodos_HtmlCommentClosers | /home/jrose/src/engram/solov2/internal/infrastructure/treesitter/todos_test.go | function | 9 |
 | TestScanTodos_ShellAndScriptStyle | /home/jrose/src/engram/solov2/internal/infrastructure/treesitter/todos_test.go | function | 9 |
 | TestSocketMissingJSONError | /home/jrose/src/engram/solov2/cmd/veska-mcp/main_test.go | function | 9 |
-| TestStageFile_Concurrent | /home/jrose/src/engram/solov2/internal/application/staging_test.go | function | 9 |
 | TestTruthByCluster | /home/jrose/src/engram/solov2/tools/loadtest/synthcorpus/synthcorpus_test.go | function | 9 |
 | DriftedNode | /home/jrose/src/engram/solov2/internal/core/ports/contract_drift.go | struct | 10 |
 | NodeRef | /home/jrose/src/engram/solov2/internal/core/ports/deadcode.go | struct | 10 |

@@ -18,7 +18,7 @@ def test_search_semantic_returns_results(mcp_client, repo_id, branch, target_sym
         "repo_id": repo_id,
         "branch": branch,
         "query": target_symbol,
-        "limit": 5,
+        "k": 5,
     })
     assert ok, f"eng_search_semantic failed: {text}"
     results = result.get("results", [])
@@ -37,7 +37,7 @@ def test_search_similar_unknown_node_errors(mcp_client, repo_id, branch):
     ok, text, _, _ = mcp_client.call("eng_search_similar", {
         "repo_id": repo_id, "branch": branch,
         "node_id": "definitely-not-a-real-node-id-zzz",
-        "limit": 3,
+        "k": 3,
     })
     assert not ok
     assert "embedding" in text.lower() or "not embedded" in text.lower()
@@ -58,7 +58,7 @@ def test_search_similar_returns_results(mcp_client, repo_id, branch, target_symb
         "repo_id": repo_id,
         "branch": branch,
         "node_id": node_id,
-        "limit": 5,
+        "k": 5,
     })
     assert ok, f"eng_search_similar failed: {text}"
     # similar tends to put the node itself at rank 1; assert non-empty.
@@ -75,7 +75,7 @@ def test_search_semantic_quality(mcp_client, repo_id, branch, target_symbol):
         "repo_id": repo_id,
         "branch": branch,
         "query": target_symbol,
-        "limit": 5,
+        "k": 5,
     })
     assert ok
     assert len(result.get("results", [])) > 0
