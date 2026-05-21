@@ -219,6 +219,12 @@ type Daemon struct {
 	// workers. Pointer so it can be shared with regSvc (built before the
 	// Daemon struct itself in newDaemon).
 	scanWG *sync.WaitGroup
+
+	// scanTracker is the in-memory registry of cold scans currently in
+	// flight. Wired into the cold-scan reparser closure for Start/End
+	// and into statusProvider for eng_get_status's scans_in_flight
+	// surface (solov2-pm5).
+	scanTracker *application.ScanTracker
 }
 
 // newDaemon builds the full collaborator graph from cfg. Every dep is
@@ -586,9 +592,14 @@ func newDaemon(cfg Config) (*Daemon, error) {
 		return fsignore.Load(repoRoot)
 	}
 	gitQ := gitwatch.Querier{}
+	// Shared scan tracker — the reparser Start/End-s into it, the status
+	// handler Snapshots from it for eng_get_status's scans_in_flight
+	// field (solov2-pm5).
+	scanTracker := application.NewScanTracker()
 	reparser, err := application.NewColdScanReparser(
 		ingester, promoter, gitQ,
 		application.WithIgnoreLoader(ignoreAdapter),
+		application.WithScanTracker(scanTracker),
 	)
 	if err != nil {
 		_ = pools.Close()
@@ -614,16 +625,17 @@ func newDaemon(cfg Config) (*Daemon, error) {
 	// MCP server. The Registry implements mcp.Handler.
 	registry := mcp.NewRegistry()
 	registerMCPTools(registry, mcpDeps{
-		pools:    pools,
-		cfg:      cfg,
-		staging:  staging,
-		vectors:  vec,
-		provider: provider,
-		refs:     refs,
-		metrics:  metrics,
-		ingester: ingester,
-		promoter: promoter,
-		regSvc:   regSvc,
+		pools:       pools,
+		cfg:         cfg,
+		staging:     staging,
+		vectors:     vec,
+		provider:    provider,
+		refs:        refs,
+		metrics:     metrics,
+		ingester:    ingester,
+		promoter:    promoter,
+		regSvc:      regSvc,
+		scanTracker: scanTracker,
 	})
 	mcpsrv := mcp.NewServer(cfg.CLISockPath, cfg.MCPSockPath, registry)
 
@@ -744,6 +756,9 @@ type mcpDeps struct {
 	// fallback registrar with no cold-scan dispatch is wired so the MCP
 	// tool surface still functions.
 	regSvc *repoRegistrar
+	// scanTracker surfaces in-flight cold scans to eng_get_status
+	// (solov2-pm5). Nil-safe — statusProvider tolerates a nil tracker.
+	scanTracker *application.ScanTracker
 }
 
 // registerMCPTools wires every tool family into the registry: findings,
@@ -781,7 +796,7 @@ func registerMCPTools(r *mcp.Registry, d mcpDeps) {
 	// the resolved daemon Config.
 	mcp.RegisterAdminTools(r,
 		&repoLister{db: pools.ReadDB},
-		&statusProvider{db: pools.ReadDB},
+		&statusProvider{db: pools.ReadDB, scans: d.scanTracker},
 		&configProvider{cfg: d.cfg},
 	)
 

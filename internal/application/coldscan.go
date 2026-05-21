@@ -37,7 +37,8 @@ type IgnoreLoader func(repoRoot string) (IgnoreMatcher, error)
 
 // coldScanConfig holds the runtime knobs accumulated from ColdScanOptions.
 type coldScanConfig struct {
-	loader IgnoreLoader
+	loader  IgnoreLoader
+	tracker *ScanTracker
 }
 
 // ColdScanOption configures NewColdScanReparser at construction time.
@@ -48,6 +49,14 @@ type ColdScanOption func(*coldScanConfig)
 // when not supplied.
 func WithIgnoreLoader(l IgnoreLoader) ColdScanOption {
 	return func(c *coldScanConfig) { c.loader = l }
+}
+
+// WithScanTracker registers a ScanTracker the reparser will Start at scan
+// entry and End at scan exit (solov2-pm5). The daemon's status handler
+// reads the same tracker so eng_get_status can surface scans_in_flight.
+// Nil-safe: when no tracker is wired the calls are no-ops.
+func WithScanTracker(t *ScanTracker) ColdScanOption {
+	return func(c *coldScanConfig) { c.tracker = t }
 }
 
 // allowAllMatcher is the zero-value IgnoreMatcher: it never ignores
@@ -120,6 +129,13 @@ func newColdScanReparserFromFns(save coldScanSaveFn, promote coldScanPromoteFn, 
 			"root", repo.RootPath,
 			"branch", repo.ActiveBranch,
 		)
+
+		// Surface the in-flight state to eng_get_status (solov2-pm5).
+		// The defer guarantees End fires on every exit path so a
+		// failed scan doesn't pin the tracker entry forever. Nil-safe
+		// when no tracker is wired (legacy / test callers).
+		cfg.tracker.Start(repo.RepoID)
+		defer cfg.tracker.End(repo.RepoID)
 
 		head, err := git.HEAD(repo.RootPath)
 		if err != nil {
