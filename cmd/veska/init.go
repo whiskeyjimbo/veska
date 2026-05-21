@@ -50,7 +50,7 @@ func runInit(ctx context.Context, deps initDeps, yes bool, out io.Writer) error 
 	fmt.Fprintf(out, "data:     %s\n", deps.veskaHome)
 	fmt.Fprintf(out, "embedder: %s (%s @ %s)\n", result.Status, defaultModelName, defaultOllamaURL)
 	fmt.Fprintln(out, "service:  not installed (run: veska service install)")
-	fmt.Fprintln(out, "repo:     not added (run: veska workspace add .)")
+	fmt.Fprintln(out, "repo:     not added (run: veska repo add <path>)")
 	fmt.Fprintln(out, "ready")
 
 	return nil
