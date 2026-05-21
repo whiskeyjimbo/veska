@@ -969,6 +969,19 @@ func (d *Daemon) Start(ctx context.Context) error {
 			time.Sleep(10 * time.Millisecond)
 		}
 
+		// Rehydrate VectorStorage from the durable node_embeddings table
+		// (solov2-249). sqlite-vec is in-memory only; without this step a
+		// daemon restart would leave the vector store empty until a content
+		// change forces re-embedding, and semantic search would silently
+		// return ≤ 0 hits. Run synchronously before the embedder worker
+		// starts so a query landing in the first tick after Start sees a
+		// consistent store.
+		if counts, err := embedder.RehydrateVectors(d.ctx, d.pools.ReadDB, d.vectors); err != nil {
+			slog.Error("daemon: rehydrate vector store", "err", err)
+		} else if total := sumCounts(counts); total > 0 {
+			slog.Info("daemon: rehydrated vectors", "rows", total, "buckets", len(counts))
+		}
+
 		// Embedder worker.
 		d.embed.Start(d.ctx)
 
@@ -1020,6 +1033,17 @@ func (d *Daemon) Start(ctx context.Context) error {
 		}
 	})
 	return startErr
+}
+
+// sumCounts returns the total row count across all buckets — used to gate
+// the "rehydrated vectors" log line to non-zero hydrates so a fresh install
+// doesn't emit a misleading "rehydrated 0" message.
+func sumCounts(counts map[string]int) int {
+	t := 0
+	for _, n := range counts {
+		t += n
+	}
+	return t
 }
 
 // runWatchLoop reads from the multi-repo watcher and forwards each file event

@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"math"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -10,6 +11,7 @@ import (
 	"time"
 
 	"github.com/whiskeyjimbo/veska/internal/application"
+	"github.com/whiskeyjimbo/veska/internal/core/domain"
 	gitwatch "github.com/whiskeyjimbo/veska/internal/infrastructure/git"
 	"github.com/whiskeyjimbo/veska/internal/repo"
 )
@@ -256,6 +258,123 @@ func TestDaemon_StartupResync_FullPipeline(t *testing.T) {
 	if spyCalls != 0 {
 		t.Errorf("second resync invoked reparser %d times; want 0 (cheap path expected after c47 fix)", spyCalls)
 	}
+}
+
+// TestDaemon_VectorStoreRehydratesOnSecondStart covers solov2-249: the
+// in-memory vector store is repopulated from node_embeddings on a fresh
+// Daemon.Start. We simulate "daemon restart" by running newDaemon twice
+// over the same VESKA_HOME; the second instance's vector store is empty
+// before Start, then Start triggers the rehydrate path and the count
+// reaches the persisted ready-ref count.
+func TestDaemon_VectorStoreRehydratesOnSecondStart(t *testing.T) {
+	cfg := testConfig(t)
+
+	// First daemon: register a repo + drive a cold scan so node_embeddings
+	// gets populated. We don't need a real embedder run — directly seed
+	// the durable tables via the same daemon's write pool.
+	d1, err := newDaemon(cfg)
+	if err != nil {
+		t.Fatalf("newDaemon #1: %v", err)
+	}
+
+	gitDir := initGitRepoWithGoFile(t)
+	repoID, err := repo.Add(context.Background(), d1.pools.WriteHot, gitDir)
+	if err != nil {
+		_ = d1.Stop()
+		t.Fatalf("repo.Add: %v", err)
+	}
+	if err := d1.resync.Run(context.Background()); err != nil {
+		_ = d1.Stop()
+		t.Fatalf("d1.resync.Run: %v", err)
+	}
+
+	// Seed a single known embedding directly into the durable tables — the
+	// real embedder requires Ollama which we don't have in unit tests.
+	// The vec is L2-normalised (magnitude 1) so any score comparison
+	// downstream behaves as the production code expects.
+	vec := []float32{1, 0, 0}
+	blob := encodeVecLE(vec)
+	const hash = "h-test-rehydrate"
+	const model = "m-test"
+	if _, err := d1.pools.WriteHot.Exec(
+		`INSERT INTO node_embeddings (content_hash, model, dim, embedding, created_at) VALUES (?, ?, ?, ?, 0)`,
+		hash, model, len(vec), blob,
+	); err != nil {
+		_ = d1.Stop()
+		t.Fatalf("seed node_embeddings: %v", err)
+	}
+	// Pick the first node we just promoted and point its ref at the seeded hash.
+	var nodeID string
+	if err := d1.pools.ReadDB.QueryRow(
+		`SELECT node_id FROM nodes WHERE repo_id = ? LIMIT 1`, repoID,
+	).Scan(&nodeID); err != nil {
+		_ = d1.Stop()
+		t.Fatalf("lookup node_id: %v", err)
+	}
+	if _, err := d1.pools.WriteHot.Exec(
+		`UPDATE node_embedding_refs SET state='ready', content_hash=? WHERE node_id=?`,
+		hash, nodeID,
+	); err != nil {
+		_ = d1.Stop()
+		t.Fatalf("mark ref ready: %v", err)
+	}
+
+	// Stop the first daemon. The in-memory sqlite-vec contents are gone.
+	if err := d1.Stop(); err != nil {
+		t.Fatalf("d1.Stop: %v", err)
+	}
+
+	// Second daemon — same VESKA_HOME, fresh sqlite-vec. Search before Start
+	// returns nothing (memory empty). Start triggers rehydrate and Search
+	// returns the seeded row.
+	d2, err := newDaemon(cfg)
+	if err != nil {
+		t.Fatalf("newDaemon #2: %v", err)
+	}
+	t.Cleanup(func() { _ = d2.Stop() })
+
+	preHits, err := d2.vectors.Search(context.Background(), repoID, "main", vec, 5, domain.Filter{})
+	if err != nil {
+		t.Fatalf("pre-Start search: %v", err)
+	}
+	if len(preHits) != 0 {
+		t.Errorf("pre-Start vector store unexpectedly non-empty: %+v", preHits)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if err := d2.Start(ctx); err != nil {
+		t.Fatalf("d2.Start: %v", err)
+	}
+
+	hits, err := d2.vectors.Search(context.Background(), repoID, "main", vec, 5, domain.Filter{})
+	if err != nil {
+		t.Fatalf("post-Start search: %v", err)
+	}
+	found := false
+	for _, h := range hits {
+		if h.NodeID == nodeID {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Errorf("rehydrated vector store does not contain seeded node %q; hits=%+v", nodeID, hits)
+	}
+}
+
+// encodeVecLE mirrors embedder.encodeFloat32LE for the rehydrate test —
+// duplicated locally so this test does not depend on an unexported helper.
+func encodeVecLE(vec []float32) []byte {
+	buf := make([]byte, 4*len(vec))
+	for i, v := range vec {
+		bits := math.Float32bits(v)
+		buf[i*4+0] = byte(bits)
+		buf[i*4+1] = byte(bits >> 8)
+		buf[i*4+2] = byte(bits >> 16)
+		buf[i*4+3] = byte(bits >> 24)
+	}
+	return buf
 }
 
 // TestDaemon_StartupResync_StartDoesNotBlock guards the epic constraint
