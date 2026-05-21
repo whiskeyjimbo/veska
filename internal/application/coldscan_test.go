@@ -1,11 +1,14 @@
 package application
 
 import (
+	"bytes"
 	"context"
 	"errors"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 	"sync"
 	"testing"
 
@@ -142,6 +145,44 @@ func TestColdScanReparser_IndexesNonIgnoredFiles(t *testing.T) {
 	}
 	if c.promotes[0].SHA != "deadbeef" {
 		t.Fatalf("promote SHA = %q, want deadbeef", c.promotes[0].SHA)
+	}
+}
+
+// TestColdScanReparser_LogsStartAndComplete pins solov2-6ip: every scan
+// emits a 'cold scan: starting' INFO at entry and a 'cold scan: complete'
+// INFO at exit, with repo_id + git_sha + files_saved + elapsed. A newbie
+// tailing ~/.veska/logs/daemon.log relies on these to know the scan is
+// running and to see it finish.
+func TestColdScanReparser_LogsStartAndComplete(t *testing.T) {
+	var buf bytes.Buffer
+	prev := slog.Default()
+	slog.SetDefault(slog.New(slog.NewJSONHandler(&buf, &slog.HandlerOptions{Level: slog.LevelInfo})))
+	t.Cleanup(func() { slog.SetDefault(prev) })
+
+	root := t.TempDir()
+	writeFile(t, root, "a.go", "package a")
+	writeFile(t, root, "b.go", "package b")
+
+	c := &captureFakes{}
+	rep := newReparser(t, c, "sha-test")
+	if err := rep(context.Background(), RepoRecord{
+		RepoID: "repo-x", RootPath: root, ActiveBranch: "main",
+	}); err != nil {
+		t.Fatalf("reparser: %v", err)
+	}
+
+	out := buf.String()
+	for _, want := range []string{
+		`"cold scan: starting"`,
+		`"cold scan: complete"`,
+		`"repo_id":"repo-x"`,
+		`"git_sha":"sha-test"`,
+		`"files_saved":2`,
+		`"elapsed_ms"`,
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("log output missing %q; got:\n%s", want, out)
+		}
 	}
 }
 

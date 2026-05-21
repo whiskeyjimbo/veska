@@ -6,8 +6,10 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"log/slog"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/whiskeyjimbo/veska/internal/core/domain"
 )
@@ -114,21 +116,62 @@ func newColdScanReparserFromFns(save coldScanSaveFn, promote coldScanPromoteFn, 
 	systemActor := domain.Actor{ID: "service:veska", Kind: domain.ActorKindSystem}
 
 	return func(ctx context.Context, repo RepoRecord) error {
+		// Bracket every scan with start + complete INFO logs so an
+		// operator tailing ~/.veska/logs/daemon.log can tell that work
+		// is in flight and observe completion (solov2-6ip). Previously
+		// the cold-scan path was silent end-to-end; a newbie running
+		// 'veska repo add <big repo>' saw nothing and assumed it had
+		// hung.
+		start := time.Now()
+		slog.Info("cold scan: starting",
+			"repo_id", repo.RepoID,
+			"root", repo.RootPath,
+			"branch", repo.ActiveBranch,
+		)
+
 		head, err := git.HEAD(repo.RootPath)
 		if err != nil {
+			slog.Warn("cold scan: HEAD lookup failed",
+				"repo_id", repo.RepoID, "err", err)
 			return fmt.Errorf("cold scan: HEAD for repo %q: %w", repo.RepoID, err)
 		}
 
 		ignore, err := cfg.loader(repo.RootPath)
 		if err != nil {
+			slog.Warn("cold scan: load ignore list failed",
+				"repo_id", repo.RepoID, "err", err)
 			return fmt.Errorf("cold scan: load ignore list for repo %q: %w", repo.RepoID, err)
 		}
 
-		if err := walkAndSave(ctx, repo, ignore, save); err != nil {
+		// Wrap save so we can report files_saved at completion. The
+		// wrapper is cheap (a counter increment on the same goroutine
+		// the walk runs on, no locking) and keeps walkAndSave's
+		// signature unchanged.
+		filesSaved := 0
+		countingSave := func(ctx context.Context, repoID, branch, path string, src []byte) {
+			save(ctx, repoID, branch, path, src)
+			filesSaved++
+		}
+
+		if err := walkAndSave(ctx, repo, ignore, countingSave); err != nil {
+			slog.Warn("cold scan: walk failed",
+				"repo_id", repo.RepoID, "files_saved", filesSaved, "err", err)
 			return err
 		}
 
-		return promote(ctx, repo.RepoID, repo.ActiveBranch, head, systemActor)
+		if err := promote(ctx, repo.RepoID, repo.ActiveBranch, head, systemActor); err != nil {
+			slog.Warn("cold scan: promote failed",
+				"repo_id", repo.RepoID, "files_saved", filesSaved, "err", err)
+			return err
+		}
+
+		slog.Info("cold scan: complete",
+			"repo_id", repo.RepoID,
+			"files_saved", filesSaved,
+			"git_sha", head,
+			"elapsed_ms", time.Since(start).Milliseconds(),
+		)
+		return nil
 	}, nil
 }
 
