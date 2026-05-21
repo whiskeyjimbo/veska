@@ -12,7 +12,7 @@ Files ranked by change risk: recent change frequency multiplied by blast radius.
 | 6 | .beads/hooks/pre-commit | 1 | 0 | 0 |
 | 7 | .beads/hooks/pre-push | 1 | 0 | 0 |
 | 8 | .beads/hooks/prepare-commit-msg | 1 | 0 | 0 |
-| 9 | .beads/issues.jsonl | 264 | 0 | 0 |
+| 9 | .beads/issues.jsonl | 274 | 0 | 0 |
 | 10 | .beads/metadata.json | 1 | 0 | 0 |
 | 11 | .claude/memories/MEMORY.md | 1 | 0 | 0 |
 | 12 | .claude/memories/feedback_solov2_git.md | 2 | 0 | 0 |
