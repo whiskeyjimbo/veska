@@ -116,6 +116,48 @@ func newReparser(t *testing.T, c *captureFakes, head string) func(context.Contex
 	return r
 }
 
+// TestColdScanReparser_TrackerSeesScanInFlight covers solov2-pm5: when
+// the reparser is built with WithScanTracker, the tracker reports the
+// repo as in-flight while save is running, and empty after the
+// reparser returns. We hook the saveHook to take a Snapshot mid-scan.
+func TestColdScanReparser_TrackerSeesScanInFlight(t *testing.T) {
+	tracker := NewScanTracker()
+	root := t.TempDir()
+	writeFile(t, root, "a.go", "package a")
+
+	c := &captureFakes{}
+	midSnapshot := make([]ScanState, 0)
+	c.saveHook = func(_ context.Context, _, _, _ string, _ []byte) {
+		midSnapshot = tracker.Snapshot()
+	}
+
+	r, err := newColdScanReparserFromFns(
+		c.save, c.promote, &fakeGitQuerier{head: "h"},
+		WithIgnoreLoader(realIgnoreLoader),
+		WithScanTracker(tracker),
+	)
+	if err != nil {
+		t.Fatalf("newColdScanReparserFromFns: %v", err)
+	}
+
+	if got := tracker.Snapshot(); len(got) != 0 {
+		t.Fatalf("pre-run tracker non-empty: %+v", got)
+	}
+
+	if err := r(context.Background(), RepoRecord{
+		RepoID: "repo-z", RootPath: root, ActiveBranch: "main",
+	}); err != nil {
+		t.Fatalf("reparser: %v", err)
+	}
+
+	if len(midSnapshot) != 1 || midSnapshot[0].RepoID != "repo-z" {
+		t.Errorf("mid-scan snapshot = %+v, want one entry for repo-z", midSnapshot)
+	}
+	if got := tracker.Snapshot(); len(got) != 0 {
+		t.Errorf("post-run tracker non-empty: %+v", got)
+	}
+}
+
 func TestColdScanReparser_IndexesNonIgnoredFiles(t *testing.T) {
 	root := t.TempDir()
 	writeFile(t, root, "a.go", "package a")

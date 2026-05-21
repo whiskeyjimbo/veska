@@ -8,6 +8,13 @@ def test_get_status_responds(mcp_client, fixture_summary):
     assert ok, f"eng_get_status failed: {text}"
     assert result.get("status") == "ok"
     assert result.get("schema_version", 0) >= 9
+    # scans_in_flight (solov2-pm5) is always present. Idle daemons return
+    # an empty list; while a cold scan is running it lists the repo_id.
+    assert "scans_in_flight" in result, "expected scans_in_flight key in get_status"
+    sif = result["scans_in_flight"]
+    assert isinstance(sif, list)
+    for s in sif:
+        assert "repo_id" in s and "phase" in s and "started_at" in s
 
 
 def test_list_repos_includes_target(mcp_client, repo_id):
