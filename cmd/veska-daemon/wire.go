@@ -597,7 +597,20 @@ func newDaemon(cfg Config) (*Daemon, error) {
 	// field (solov2-pm5), and the post-promotion queue uses it as a
 	// pause gate while a scan is in flight (solov2-pc3 fix #1).
 	scanTracker := application.NewScanTracker()
-	poller.Pauser = scanTracker.IsAnyScanRunning
+	// The poller is paused for the entire startup-resync window (not
+	// just per-scan via scanTracker) so a queue tick fired between
+	// repos cannot race the next repo's promotion tx into SQLITE_BUSY
+	// (solov2-8ga). resyncRef is set below once StartupResync is built.
+	var resyncRef *application.StartupResync
+	poller.Pauser = func() bool {
+		if scanTracker.IsAnyScanRunning() {
+			return true
+		}
+		if resyncRef != nil && resyncRef.IsSyncing() {
+			return true
+		}
+		return false
+	}
 	reparser, err := application.NewColdScanReparser(
 		ingester, promoter, gitQ,
 		application.WithIgnoreLoader(ignoreAdapter),
@@ -659,6 +672,7 @@ func newDaemon(cfg Config) (*Daemon, error) {
 	resync := application.NewStartupResync(
 		&repoLister{db: pools.ReadDB}, gitQ, ingester, promoter, reparser,
 	)
+	resyncRef = resync
 
 	d := &Daemon{
 		cfg:            cfg,
