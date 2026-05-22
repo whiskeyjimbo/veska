@@ -427,6 +427,44 @@ func TestListFindings_DefaultStateIsOpen(t *testing.T) {
 	}
 }
 
+// TestListFindings_AcceptsShortID pins solov2-s7k0: eng_list_findings must
+// resolve a 12-char short_id prefix the same way the graph tools do, instead
+// of querying findings by the raw prefix and silently returning [].
+func TestListFindings_AcceptsShortID(t *testing.T) {
+	const fullID = "62d72fa222a0193f8fa927f95dd6a3575c7566964c8b8f6ba14aafc5a1ea871f"
+	db := newFindingsDB(t)
+	if _, err := db.Exec(`CREATE TABLE repos (repo_id TEXT PRIMARY KEY, root_path TEXT, added_at INTEGER)`); err != nil {
+		t.Fatalf("create repos: %v", err)
+	}
+	if _, err := db.Exec(`INSERT INTO repos (repo_id, root_path, added_at) VALUES (?, '/tmp/r', 0)`, fullID); err != nil {
+		t.Fatalf("insert repo: %v", err)
+	}
+	seedFinding(t, db, "f1", "main", fullID, "low", "open")
+
+	r := NewRegistry()
+	RegisterFindingTools(r, db, nil)
+	actor := domain.Actor{ID: "agent:bot", Kind: domain.ActorKindAgent}
+
+	// Short id resolves to the finding.
+	result, rpcErr := dispatchListFindings(t, r, actor, map[string]string{
+		"repo_id": ShortRepoID(fullID), "branch": "main",
+	})
+	if rpcErr != nil {
+		t.Fatalf("short_id rejected: %v", rpcErr.Message)
+	}
+	if findings, _ := result.(map[string]any)["findings"].([]findingRow); len(findings) != 1 {
+		t.Fatalf("short_id: want 1 finding, got %d", len(findings))
+	}
+
+	// Unknown id errors loudly (not silent empty).
+	_, rpcErr = dispatchListFindings(t, r, actor, map[string]string{
+		"repo_id": "deadbeef0000", "branch": "main",
+	})
+	if rpcErr == nil || rpcErr.Code != CodeNotFound {
+		t.Fatalf("unknown repo_id: want CodeNotFound, got %+v", rpcErr)
+	}
+}
+
 func TestListFindings_SeverityFilter(t *testing.T) {
 	db := newFindingsDB(t)
 	seedFinding(t, db, "low-f", "main", "repo-1", "low", "open")
