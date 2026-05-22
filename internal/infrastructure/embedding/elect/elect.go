@@ -151,8 +151,24 @@ func pick(cfg Config, modelName string) (ports.EmbeddingProvider, error) {
 	}
 }
 
+// Ollama-branch defaults, applied only when Ollama is the elected
+// embedder and the value was left unset — so they live with the one path
+// that uses them, not as a daemon-wide implied default.
+const (
+	defaultOllamaEmbedModel = "nomic-embed-text"
+	defaultOllamaURL        = "http://localhost:11434"
+)
+
 func newOllama(cfg Config) (ports.EmbeddingProvider, error) {
-	p, err := ollama.New(cfg.EmbedModel, ollama.WithBaseURL(cfg.OllamaURL))
+	model := cfg.EmbedModel
+	if model == "" {
+		model = defaultOllamaEmbedModel
+	}
+	baseURL := cfg.OllamaURL
+	if baseURL == "" {
+		baseURL = defaultOllamaURL
+	}
+	p, err := ollama.New(model, ollama.WithBaseURL(baseURL))
 	if err != nil {
 		return nil, fmt.Errorf("elect: ollama provider: %w", err)
 	}
