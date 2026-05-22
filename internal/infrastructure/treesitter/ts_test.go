@@ -198,6 +198,60 @@ function greet(): string {
 	}
 }
 
+// TestTS_ThisCallsEdge_IntraClass covers solov2-gv6: a `this.foo()`
+// call inside a method on class C must emit a CALLS edge to C.foo,
+// matching the Go parser's receiver-selector resolution.
+func TestTS_ThisCallsEdge_IntraClass(t *testing.T) {
+	src := []byte(`
+class Server {
+  start(): void {
+    this.listen();
+  }
+  listen(): void {}
+}
+`)
+	p := treesitter.NewTSParser()
+	result, err := p.ParseFile(context.Background(), tsRepoID, "src/server.ts", src)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	start := findNodeByName(result.Nodes, "Server.start")
+	listen := findNodeByName(result.Nodes, "Server.listen")
+	if start == nil || listen == nil {
+		t.Fatalf("expected Server.start and Server.listen nodes, got: %v", nodeNames(result.Nodes))
+	}
+	if findEdge(result.Edges, start.ID, listen.ID, domain.EdgeCalls) == nil {
+		t.Errorf("expected CALLS edge Server.start -> Server.listen; got edges: %d", len(result.Edges))
+	}
+}
+
+// TestTS_ThisCallsEdge_FromConstructor covers AC2: the constructor of a
+// class is itself a method whose this.foo() calls must resolve. Without
+// this, the most common "wire dependencies" pattern is invisible.
+func TestTS_ThisCallsEdge_FromConstructor(t *testing.T) {
+	src := []byte(`
+class App {
+  constructor() {
+    this.boot();
+  }
+  boot(): void {}
+}
+`)
+	p := treesitter.NewTSParser()
+	result, err := p.ParseFile(context.Background(), tsRepoID, "src/app.ts", src)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	ctor := findNodeByName(result.Nodes, "App.constructor")
+	boot := findNodeByName(result.Nodes, "App.boot")
+	if ctor == nil || boot == nil {
+		t.Fatalf("expected App.constructor and App.boot nodes, got: %v", nodeNames(result.Nodes))
+	}
+	if findEdge(result.Edges, ctor.ID, boot.ID, domain.EdgeCalls) == nil {
+		t.Errorf("expected CALLS edge App.constructor -> App.boot")
+	}
+}
+
 func TestTS_ParseFailureSurfaced(t *testing.T) {
 	// Unclosed brace + bogus token — tree-sitter will mark ERROR nodes.
 	src := []byte(`
