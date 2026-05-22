@@ -46,6 +46,38 @@ func TestEnsureModel_FreshDownload(t *testing.T) {
 	}
 }
 
+// TestInstall_WritesToModelDir: the exported Install wrapper resolves
+// the <veskaHome>/static-model/<modelName>/ layout, fetches via
+// ensureModel, and returns that directory.
+func TestInstall_WritesToModelDir(t *testing.T) {
+	tokJSON := []byte(`{"model":{"type":"WordPiece","unk_token":"[UNK]","vocab":{"[UNK]":0}}}`)
+	stBytes := []byte("safetensors-bytes")
+	srv := newFakeHFServer(map[string][]byte{
+		"/tokenizer.json":    tokJSON,
+		"/model.safetensors": stBytes,
+	})
+	defer srv.Close()
+
+	veskaHome := t.TempDir()
+	spec := ModelSpec{
+		BaseURL: srv.URL,
+		Files: []FileSpec{
+			{Name: "tokenizer.json", SHA256: sha256Hex(tokJSON)},
+			{Name: "model.safetensors", SHA256: sha256Hex(stBytes)},
+		},
+	}
+	dir, err := Install(context.Background(), veskaHome, "potion-test", spec)
+	if err != nil {
+		t.Fatalf("Install: %v", err)
+	}
+	if want := ModelDir(veskaHome, "potion-test"); dir != want {
+		t.Errorf("Install dir: got %q want %q", dir, want)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "model.safetensors")); err != nil {
+		t.Errorf("model.safetensors not present in returned dir: %v", err)
+	}
+}
+
 // TestEnsureModel_ReusesCachedFiles: on a subsequent invocation
 // against the same dir, files already present with matching sha
 // are NOT re-fetched — the HTTP handler counts hits to prove it.

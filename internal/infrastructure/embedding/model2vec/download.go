@@ -36,6 +36,20 @@ type ModelSpec struct {
 	Files   []FileSpec
 }
 
+// Install downloads and sha-verifies the files in spec into
+// <veskaHome>/static-model/<modelName>/ and returns that directory. It
+// is idempotent: a file already present with a matching sha is left
+// alone, so re-running is cheap. The concrete spec (HF base URL + per-
+// file shas) is supplied by the caller — this package stays
+// model-agnostic. errDownloadFailed wraps transport/sha failures.
+func Install(ctx context.Context, veskaHome, modelName string, spec ModelSpec) (string, error) {
+	dir := ModelDir(veskaHome, modelName)
+	if err := ensureModel(ctx, dir, spec); err != nil {
+		return "", err
+	}
+	return dir, nil
+}
+
 // ensureModel guarantees that every file in spec is present in dir
 // and hashes to its declared sha256. Files already present with a
 // matching sha are left alone. Files missing or wrong are
