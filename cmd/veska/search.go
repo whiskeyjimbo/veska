@@ -21,7 +21,9 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/application/search"
 	"github.com/whiskeyjimbo/veska/internal/config"
 	"github.com/whiskeyjimbo/veska/internal/core/domain"
+	"github.com/whiskeyjimbo/veska/internal/infrastructure/embedding/composite"
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/embedding/ollama"
+	embedstatic "github.com/whiskeyjimbo/veska/internal/infrastructure/embedding/static"
 	fsignore "github.com/whiskeyjimbo/veska/internal/infrastructure/fs"
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/sqlite"
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/vector"
@@ -246,7 +248,11 @@ func drainEmbedderQueue(ctx context.Context, pools *sqlite.Pools, w io.Writer) e
 	}
 }
 
-func buildEmbeddingProvider() (*ollama.Provider, error) {
+// buildEmbeddingProvider returns the same composite (Ollama→static)
+// the daemon uses (solov2-soc), so the CLI's standalone mode produces
+// vectors compatible with what the daemon would have written into
+// the same index.
+func buildEmbeddingProvider() (*composite.Provider, error) {
 	baseURL := os.Getenv("VESKA_OLLAMA_URL")
 	if baseURL == "" {
 		baseURL = defaultOllamaURL
@@ -255,9 +261,17 @@ func buildEmbeddingProvider() (*ollama.Provider, error) {
 	if model == "" {
 		model = defaultModelName
 	}
-	prov, err := ollama.New(model, ollama.WithBaseURL(baseURL))
+	ollamaProv, err := ollama.New(model, ollama.WithBaseURL(baseURL))
 	if err != nil {
 		return nil, fmt.Errorf("search: ollama embedder: %w", err)
+	}
+	staticProv, err := embedstatic.New()
+	if err != nil {
+		return nil, fmt.Errorf("search: static embedder: %w", err)
+	}
+	prov, err := composite.New(ollamaProv, staticProv)
+	if err != nil {
+		return nil, fmt.Errorf("search: composite embedder: %w", err)
 	}
 	return prov, nil
 }

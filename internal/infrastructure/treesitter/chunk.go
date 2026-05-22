@@ -46,10 +46,7 @@ func chunkFile(repoID, path string, src []byte, symbols []*domain.Node) []*domai
 	var chunks []*domain.Node
 	for _, r := range uncovered {
 		for start := r.Start; start <= r.End; start += chunkLineWindow {
-			end := start + chunkLineWindow - 1
-			if end > r.End {
-				end = r.End
-			}
+			end := min(start+chunkLineWindow-1, r.End)
 			startByte := lineStarts[start-1]
 			var endByte int
 			if end < totalLines {
