@@ -42,23 +42,21 @@ shared service. There is no multi-tenant tier. The data lives in
   drops unpromoted parses, which the next save reproduces.
 - **Eventually-consistent semantic answers.** `semantic_search`
   is the one part of the surface that runs on a different clock.
-  Embedding throughput depends on (a) which Ollama model you
-  configured, (b) your CPU class, (c) what else is running. A
-  small commit on an idle laptop with a quantised model
-  embeds in seconds; a refactor commit on a busy laptop with
-  full `nomic-embed-text` can run for minutes to hours. During
-  the lag window `semantic_search` falls back to a BM25 lexical
-  index over symbol names and tags the response
-  `degraded_reasons: ["embedding_pending"]` or
-  `["embedder_offline_lexical_fallback"]`. SOLO-13 §3.2 carries
-  the matrix once M3 measures it. We do not promise
-  point-in-time semantic recall; we promise structural recall
-  is always current and semantic recall catches up **when Ollama
-  can keep pace**. If your refactor velocity sustainedly exceeds
-  your CPU's embedding throughput, expect a perpetual lag — the
-  daemon emits a sticky `embed-deferred-saturated` finding when
-  the deferred-embed queue's oldest row ages past 24h
-  (SOLO-08 §3.4) so the condition is visible rather than silent.
+  With the default in-process embedder (model2vec), embedding is
+  fast — microseconds per symbol — so the lag is bounded mainly by
+  how quickly the post-promotion queue drains, typically seconds.
+  (The *optional* Ollama embedder is far slower: a refactor commit
+  can take minutes to hours, depending on the model and CPU.) During
+  the lag window `semantic_search` falls back to a BM25 lexical index
+  over symbol names and tags the response `degraded_reasons:
+  ["embedding_pending"]` or `["embedder_offline_lexical_fallback"]`.
+  We do not promise point-in-time semantic recall; we promise
+  structural recall is always current and semantic recall catches up
+  quickly. If embedding throughput is sustainedly outpaced (the
+  Ollama path on a busy machine), the daemon emits a sticky
+  `embed-deferred-saturated` finding when the deferred-embed queue's
+  oldest row ages past 24h (SOLO-08 §3.4) so the condition is visible
+  rather than silent.
 - **Cross-actor attribution.** When the agent edits a file and you
   edit a file, the audit log can tell them apart. (One enum:
   `actor_kind: human | agent | system`. That is the entire
@@ -70,9 +68,12 @@ shared service. There is no multi-tenant tier. The data lives in
 ## How it works
 
 The product is one daemon (`veska-daemon`) plus two thin
-clients. The daemon owns one SQLite file under `~/.veska/`.
-Ollama runs as a separate user process and is the only outbound
-connection in the default config.
+clients. The daemon owns one SQLite file under `~/.veska/`. The
+default embedder runs **in-process** (model2vec), so the default
+config makes **no outbound connection at all**. Ollama is optional
+— it backs the off-by-default LLM review pipeline (and an opt-in
+embedder override) — and is the only outbound connection *when
+enabled*.
 
 **System view — three boxes.**
 
@@ -97,15 +98,16 @@ connection in the default config.
 └─────────────────────────────────────────────────────────┘
 ```
 
-**[client surfaces] ↔ [daemon] → [SQLite file] + [Ollama].**
-The daemon is the only component with state. Ollama is the only
-outbound connection in the default config.
+**[client surfaces] ↔ [daemon] → [SQLite file] (+ optional Ollama).**
+The daemon is the only component with state. In the default config
+there is no outbound connection; the `Ollama` box above appears only
+when the review pipeline or a forced Ollama embedder is enabled.
 
-**Six runtime pieces, one stateful component.** A working
-install runs: `veska-daemon`, the `veska` CLI, the
+**A working install runs:** `veska-daemon`, the `veska` CLI, the
 `veska-mcp` stdio shim, an OS-level supervisor (launchd /
-systemd-user / the built-in `veska supervise`), Ollama, and
-your editor. The diagram above collapses CLI + editor into
+systemd-user / the built-in `veska supervise`), and your editor —
+**plus Ollama only if you enable the LLM review pipeline.** The
+diagram above collapses CLI + editor into
 "client surfaces" and elides the supervisor for narrative
 clarity, but the supervisor is **load-bearing** for first-run
 UX, the orphan-process refusal, and the crash-loop story — it is
@@ -278,17 +280,19 @@ veska init
 ```
 
 Run it from inside a Git working tree. `veska init` writes the
-config, probes for Ollama (and offers to `ollama pull
-nomic-embed-text` if the model is missing), registers the daemon
-with your session manager, and registers the current repo. A
-short summary at the end (data dir, config path, embedder
-status, service status, registered repos, tracker status, audit
-log path) tells you what happened.
+config, reports the **elected in-process embedder** (model2vec if
+installed or embedded in the binary, else the built-in static-v2
+fallback), registers the daemon with your session manager, and
+registers the current repo. A short summary at the end (data dir,
+embedder, service status, registered repos) tells you what
+happened.
 
-If Ollama isn't installed, init prints the install command for
-your platform and exits non-zero. Engram does not bundle Ollama;
-it does not ship an alternative embedder. The dependency is real
-and explicit.
+**No external service is required.** If only the static-v2 fallback
+is available, init suggests `veska install model2vec` for
+higher-quality code search — a one-time ~62 MB download, or compile
+it into the binary with `make build-fat`. Only an explicit
+`VESKA_EMBEDDER=ollama` makes init probe Ollama and exit non-zero
+when it is unreachable.
 
 ## Platforms
 
