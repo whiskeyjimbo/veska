@@ -70,6 +70,14 @@ type Worker struct {
 	ratePerSec   float64
 	limiter      *rate.Limiter
 
+	// pauser, when non-nil and returning true, causes tick to skip its
+	// FetchPending+Embed pass. The poll loop still runs at interval so
+	// the worker resumes promptly when the gate clears. Used by the
+	// daemon to hold the embedder off the WriteEmbed pool while the
+	// resync path is committing on WriteHot (solov2-181 — closes the
+	// race solov2-8ga's queue-poller pause only partially fixed).
+	pauser func() bool
+
 	mu        sync.Mutex
 	startOnce sync.Once
 	stopOnce  sync.Once
@@ -127,6 +135,14 @@ func WithMaxAttempts(n int) Option {
 			w.maxAttempts = n
 		}
 	}
+}
+
+// WithPauser installs a predicate the worker consults at every tick.
+// When it returns true the tick is a no-op — no FetchPending, no
+// Embed, no writes. Used by the daemon to hold the embedder off the
+// db while resync / cold-scan is committing (solov2-181).
+func WithPauser(p func() bool) Option {
+	return func(w *Worker) { w.pauser = p }
 }
 
 // WithMetrics installs a Metrics struct so the worker can publish
@@ -253,6 +269,14 @@ func (w *Worker) run(ctx context.Context) {
 // to that row; sibling rows in the same batch still succeed. The depth
 // gauge is updated once per tick whether or not work was processed.
 func (w *Worker) tick(ctx context.Context) {
+	if w.pauser != nil && w.pauser() {
+		// While paused we deliberately do NOT touch the refs table — not
+		// even the count probe — so the WriteEmbed pool stays idle and
+		// can't race the WriteHot promotion tx into SQLITE_BUSY
+		// (solov2-181). The next tick re-checks; the daemon clears the
+		// pause when resync finishes.
+		return
+	}
 	if depth, err := w.refs.CountPending(ctx); err == nil && w.metrics != nil && w.metrics.EmbedQueueDepth != nil {
 		w.metrics.EmbedQueueDepth.Set(float64(depth))
 	}

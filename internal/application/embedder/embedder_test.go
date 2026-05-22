@@ -299,6 +299,57 @@ func TestWorker_DrainsPendingAndMarksReady(t *testing.T) {
 	}
 }
 
+// TestWorker_PauserSkipsTick pins solov2-181: when the injected pauser
+// returns true, tick is a complete no-op (no FetchPending, no Embed, no
+// writes). When the pauser flips to false, the worker resumes and
+// drains the backlog. The contract matters because the daemon uses
+// this to keep the embedder off the WriteEmbed pool while a cold-scan
+// promotion is committing on WriteHot.
+func TestWorker_PauserSkipsTick(t *testing.T) {
+	db := openSchemaDB(t)
+	repo := infsqlite.NewEmbeddingRefsRepo(db, db)
+	seedNode(t, db, "n1", "r1", "main", "pkg.A", "function")
+	seedNode(t, db, "n2", "r1", "main", "pkg.B", "function")
+
+	emb := &fakeEmbedder{vector: []float32{0.1, 0.2, 0.3}, modelID: "test-model"}
+	vs := &fakeVectorStore{}
+
+	var paused atomic.Bool
+	paused.Store(true)
+	w := mustNewWorker(t, repo, emb, vs,
+		embedder.WithInterval(5*time.Millisecond),
+		embedder.WithPauser(paused.Load),
+	)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	w.Start(ctx)
+
+	// While paused, no Embed calls should happen even after a few ticks.
+	time.Sleep(80 * time.Millisecond)
+	if calls := emb.calls.Load(); calls != 0 {
+		t.Errorf("paused worker still called Embed %d times", calls)
+	}
+	var readyWhilePaused int
+	_ = db.QueryRow(`SELECT COUNT(*) FROM node_embedding_refs WHERE state='ready'`).Scan(&readyWhilePaused)
+	if readyWhilePaused != 0 {
+		t.Errorf("paused worker still drained %d refs to ready", readyWhilePaused)
+	}
+
+	// Lift the pause and the backlog should drain.
+	paused.Store(false)
+	ok := waitForCondition(t, 2*time.Second, func() bool {
+		var n int
+		_ = db.QueryRow(`SELECT COUNT(*) FROM node_embedding_refs WHERE state='ready'`).Scan(&n)
+		return n == 2
+	})
+	cancel()
+	w.Wait()
+	if !ok {
+		t.Fatalf("after pause lifted, expected both refs ready; embed calls=%d", emb.calls.Load())
+	}
+}
+
 func TestWorker_PerRowEmbedErrorKeepsSiblingsSucceeding(t *testing.T) {
 	db := openSchemaDB(t)
 	repo := infsqlite.NewEmbeddingRefsRepo(db, db)
