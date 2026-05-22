@@ -21,9 +21,8 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/application/search"
 	"github.com/whiskeyjimbo/veska/internal/config"
 	"github.com/whiskeyjimbo/veska/internal/core/domain"
-	"github.com/whiskeyjimbo/veska/internal/infrastructure/embedding/composite"
-	"github.com/whiskeyjimbo/veska/internal/infrastructure/embedding/ollama"
-	embedstatic "github.com/whiskeyjimbo/veska/internal/infrastructure/embedding/static"
+	"github.com/whiskeyjimbo/veska/internal/core/ports"
+	"github.com/whiskeyjimbo/veska/internal/infrastructure/embedding/elect"
 	fsignore "github.com/whiskeyjimbo/veska/internal/infrastructure/fs"
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/sqlite"
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/vector"
@@ -248,11 +247,12 @@ func drainEmbedderQueue(ctx context.Context, pools *sqlite.Pools, w io.Writer) e
 	}
 }
 
-// buildEmbeddingProvider returns the same composite (Ollama→static)
-// the daemon uses (solov2-soc), so the CLI's standalone mode produces
-// vectors compatible with what the daemon would have written into
-// the same index.
-func buildEmbeddingProvider() (*composite.Provider, error) {
+// buildEmbeddingProvider resolves the SAME embedder the daemon elects
+// (solov2-1az) — model2vec if installed, else static-v2, or Ollama when
+// VESKA_EMBEDDER=ollama — so the CLI's standalone mode embeds queries in
+// the same vector space the daemon's index was built in. It uses the
+// marker-free Resolve: the daemon owns the sticky election marker.
+func buildEmbeddingProvider() (ports.EmbeddingProvider, error) {
 	baseURL := os.Getenv("VESKA_OLLAMA_URL")
 	if baseURL == "" {
 		baseURL = defaultOllamaURL
@@ -261,17 +261,15 @@ func buildEmbeddingProvider() (*composite.Provider, error) {
 	if model == "" {
 		model = defaultModelName
 	}
-	ollamaProv, err := ollama.New(model, ollama.WithBaseURL(baseURL))
+	prov, err := elect.Resolve(elect.Config{
+		VeskaHome:     config.DefaultVectorDir(),
+		Override:      os.Getenv("VESKA_EMBEDDER"),
+		Model2VecName: "potion-code-16M",
+		OllamaURL:     baseURL,
+		EmbedModel:    model,
+	})
 	if err != nil {
-		return nil, fmt.Errorf("search: ollama embedder: %w", err)
-	}
-	staticProv, err := embedstatic.New()
-	if err != nil {
-		return nil, fmt.Errorf("search: static embedder: %w", err)
-	}
-	prov, err := composite.New(ollamaProv, staticProv)
-	if err != nil {
-		return nil, fmt.Errorf("search: composite embedder: %w", err)
+		return nil, fmt.Errorf("search: resolve embedder: %w", err)
 	}
 	return prov, nil
 }
