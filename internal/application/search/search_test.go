@@ -412,9 +412,11 @@ func TestSemantic_HybridFusion_LiftsLexicalOnlyHit(t *testing.T) {
 	if lex.calls != 1 {
 		t.Errorf("expected exactly 1 lexical call, got %d", lex.calls)
 	}
-	// fanout = 3 so k=5 caller → k=15 to each retriever.
-	if lex.gotK != 15 {
-		t.Errorf("expected k=15 to lexical (caller k=5 × fanout=3), got %d", lex.gotK)
+	// fanout=3 with floor=30 so k=5 caller still requests k=30 of
+	// each retriever — floor protects small-k callers from losing
+	// recall to the post-fusion boost having no candidates to lift.
+	if lex.gotK != 30 {
+		t.Errorf("expected k=30 to lexical (floor for small caller k=5), got %d", lex.gotK)
 	}
 }
 
