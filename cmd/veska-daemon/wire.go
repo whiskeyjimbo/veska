@@ -31,7 +31,6 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/core/ports"
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/audit"
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/embedding/composite"
-	"github.com/whiskeyjimbo/veska/internal/infrastructure/embedding/model2vec"
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/embedding/ollama"
 	embedstatic "github.com/whiskeyjimbo/veska/internal/infrastructure/embedding/static"
 	fsignore "github.com/whiskeyjimbo/veska/internal/infrastructure/fs"
@@ -475,48 +474,18 @@ func newDaemon(cfg Config) (*Daemon, error) {
 		_ = pools.Close()
 		return nil, fmt.Errorf("daemon: embedding provider: %w", err)
 	}
-	// Composite EmbeddingProvider chain (solov2-soc / solov2-vn0):
-	//
-	//   ollama  →  model2vec  →  hash-static
-	//
-	// Ollama is preferred when reachable. When unreachable we fall
-	// through to model2vec (real static embeddings — quality close to
-	// Ollama) IF its model files are installed at
-	// <VeskaHome>/static-model/<name>/; otherwise we fall through to
-	// the hash-static embedder (subword n-gram hashing — works on a
-	// totally fresh machine). Each layer is gated on
-	// ErrEmbedderUnreachable so a non-connectivity error from Ollama
-	// still propagates instead of silently degrading quality.
-	// defaultStaticModelName is the directory under
-	// <VeskaHome>/static-model/ checked for a preinstalled model2vec
-	// drop. Bumping this name swaps in a different distilled model and
-	// invalidates the static-side embedding cache via the composite
-	// ModelID. Auto-download (with sha verification — already plumbed
-	// in internal/infrastructure/embedding/model2vec/download.go) is
-	// gated on a future config flag; today users opt in by manually
-	// placing the model files.
-	const defaultStaticModelName = "potion-code-16M"
-
-	hashStatic, err := embedstatic.New()
+	// Composite EmbeddingProvider (solov2-soc): try Ollama first, fall
+	// back to the in-process static embedder when Ollama is unreachable
+	// so a fresh-machine setup (no Ollama installed) still indexes and
+	// searches. The static embedder produces lower-quality vectors —
+	// the composite ModelID combines both IDs so swapping configuration
+	// invalidates the embedding cache.
+	staticProvider, err := embedstatic.New()
 	if err != nil {
 		_ = pools.Close()
 		return nil, fmt.Errorf("daemon: static embedder: %w", err)
 	}
-	var secondary ports.EmbeddingProvider = hashStatic
-	if m2v, err := model2vec.TryLoad(cfg.VeskaHome, defaultStaticModelName); err == nil {
-		// Model2Vec files present: layer it ahead of hash-static.
-		layered, lerr := composite.New(m2v, hashStatic)
-		if lerr != nil {
-			_ = pools.Close()
-			return nil, fmt.Errorf("daemon: composite model2vec+hash: %w", lerr)
-		}
-		secondary = layered
-	} else if !errors.Is(err, model2vec.ErrModelNotPresent) {
-		// A corrupt model file is louder than missing — surface it.
-		_ = pools.Close()
-		return nil, fmt.Errorf("daemon: model2vec load: %w", err)
-	}
-	composedProvider, err := composite.New(ollamaProvider, secondary)
+	composedProvider, err := composite.New(ollamaProvider, staticProvider)
 	if err != nil {
 		_ = pools.Close()
 		return nil, fmt.Errorf("daemon: composite embedder: %w", err)
