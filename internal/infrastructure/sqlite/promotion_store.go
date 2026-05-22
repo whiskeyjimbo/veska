@@ -4,11 +4,37 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"path/filepath"
 
 	"github.com/whiskeyjimbo/veska/internal/application"
 	"github.com/whiskeyjimbo/veska/internal/core/domain"
 	"github.com/whiskeyjimbo/veska/internal/core/ports"
 )
+
+// buildPackageSymbolMap groups symbol-name → node_id by file directory.
+// Go's "one package per directory" convention means a single map per
+// dir is sufficient for resolving same-package, cross-file calls
+// (solov2-2at). The values shadow on conflict (last file wins) — only
+// matters when two files in the same dir export the same symbol name,
+// which is illegal Go anyway.
+func buildPackageSymbolMap(batch application.PromotionBatch) map[string]map[string]domain.NodeID {
+	out := make(map[string]map[string]domain.NodeID)
+	for _, file := range batch.Files {
+		dir := filepath.Dir(file.Path)
+		bucket, ok := out[dir]
+		if !ok {
+			bucket = make(map[string]domain.NodeID)
+			out[dir] = bucket
+		}
+		for _, n := range file.Nodes {
+			if n == nil {
+				continue
+			}
+			bucket[n.Name] = n.ID
+		}
+	}
+	return out
+}
 
 // Compile-time assertion that PromotionStore satisfies the application port.
 var _ application.PromotionStore = (*PromotionStore)(nil)
@@ -304,6 +330,52 @@ func (s *PromotionStore) Promote(ctx context.Context, batch application.Promotio
 			); ierr != nil {
 				_ = tx.Rollback()
 				return fmt.Errorf("promoter: insert edge %q: %w", e.ID, ierr)
+			}
+		}
+	}
+
+	// Cross-file intra-package CALLS resolution (solov2-2at). The parser
+	// emits UnresolvedCalls when a call site names a symbol absent from
+	// the file's own symbol map; typically the callee lives in another
+	// file of the same Go package (foo.go calling NewBar() defined in
+	// bar.go). Build a per-directory map of name → node_id from the
+	// batch and resolve. Same-directory = same Go package by
+	// convention. Misses (e.g. cross-package, stdlib) stay unresolved.
+	//
+	// CALLS edges from this pass are written through the same prepared
+	// stmt as parser-produced edges so confidence + idempotency match.
+	pkgMaps := buildPackageSymbolMap(batch)
+	for _, file := range batch.Files {
+		if len(file.UnresolvedCalls) == 0 {
+			continue
+		}
+		pkgKey := filepath.Dir(file.Path)
+		names := pkgMaps[pkgKey]
+		if len(names) == 0 {
+			continue
+		}
+		for _, uc := range file.UnresolvedCalls {
+			targetID, ok := names[uc.CalleeName]
+			if !ok {
+				continue
+			}
+			if uc.CallerID == targetID {
+				// Self-call (recursion) — skip.
+				continue
+			}
+			e, eerr := domain.NewEdge(uc.CallerID, targetID, domain.EdgeCalls,
+				domain.WithConfidence(domain.Probable),
+			)
+			if eerr != nil {
+				continue
+			}
+			if _, ierr := edgeStmt.ExecContext(ctx,
+				e.ID, branch, repoID,
+				string(e.Src), string(e.Tgt),
+				string(e.Kind), confidenceText(e.Confidence), now,
+			); ierr != nil {
+				_ = tx.Rollback()
+				return fmt.Errorf("promoter: insert cross-file edge %q: %w", e.ID, ierr)
 			}
 		}
 	}
