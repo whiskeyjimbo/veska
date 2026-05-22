@@ -14,9 +14,10 @@ verified_date: "2026-05-16"
 > SOLO-01 §6 applies.
 
 One daemon, one developer, one machine. SQLite + sqlite-vec for
-storage; tree-sitter for parsing; Ollama for embeddings; MCP over
-Unix sockets for the editor surface. Everything Engram knows lives
-in `~/.veska/`.
+storage; tree-sitter for parsing; an in-process embedder (model2vec
+by default, no external service) for embeddings; MCP over Unix
+sockets for the editor surface. Everything Engram knows lives in
+`~/.veska/`.
 
 ## Read order
 

@@ -52,7 +52,10 @@ func TestInitCreatesLayout(t *testing.T) {
 	}
 }
 
-func TestInitOllamaDownExitsNonZero(t *testing.T) {
+// TestInitOllamaOverrideDownExitsNonZero: when the user EXPLICITLY forces
+// VESKA_EMBEDDER=ollama, init still probes and hard-fails (with the install
+// hint) if Ollama is down — the only path that requires Ollama.
+func TestInitOllamaOverrideDownExitsNonZero(t *testing.T) {
 	tmp := t.TempDir()
 
 	hint := embedderprobe.InstallHint("linux", "nomic-embed-text")
@@ -69,6 +72,7 @@ func TestInitOllamaDownExitsNonZero(t *testing.T) {
 
 	deps := initDeps{
 		veskaHome: tmp,
+		override:  "ollama",
 		probe:     fakeProbe,
 		goos:      "linux",
 	}
@@ -76,11 +80,44 @@ func TestInitOllamaDownExitsNonZero(t *testing.T) {
 	var buf bytes.Buffer
 	err := runInit(context.Background(), deps, true, &buf)
 	if err == nil {
-		t.Fatal("expected non-nil error when Ollama is down, got nil")
+		t.Fatal("expected non-nil error when forced Ollama is down, got nil")
 	}
 
 	if !strings.Contains(err.Error(), hint) {
 		t.Fatalf("expected error to contain install hint %q, got: %v", hint, err)
+	}
+}
+
+// TestInitAutoSucceedsWithoutOllama: the default (auto) path never touches
+// Ollama. With no model installed it elects static-v2, succeeds, and prints
+// the model2vec install tip — the probe must NOT be called.
+func TestInitAutoSucceedsWithoutOllama(t *testing.T) {
+	tmp := t.TempDir()
+
+	probeCalled := false
+	deps := initDeps{
+		veskaHome: tmp,
+		override:  "", // auto
+		probe: func(_ context.Context, _, _ string) (*embedderprobe.ProbeResult, error) {
+			probeCalled = true
+			return &embedderprobe.ProbeResult{Status: "broken"}, nil
+		},
+		goos: "linux",
+	}
+
+	var buf bytes.Buffer
+	if err := runInit(context.Background(), deps, true, &buf); err != nil {
+		t.Fatalf("auto init should not fail without Ollama: %v", err)
+	}
+	if probeCalled {
+		t.Error("auto path must not probe Ollama")
+	}
+	out := buf.String()
+	if !strings.Contains(out, "static-v2") {
+		t.Errorf("expected static-v2 embedder in output, got:\n%s", out)
+	}
+	if !strings.Contains(out, "veska install model2vec") {
+		t.Errorf("expected model2vec install tip, got:\n%s", out)
 	}
 }
 
