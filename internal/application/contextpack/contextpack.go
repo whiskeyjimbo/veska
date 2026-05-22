@@ -267,10 +267,16 @@ func (a *Assembler) assemble(ctx context.Context, repoID, branch, repoRoot strin
 		seedSet[id] = struct{}{}
 	}
 
-	// Relevant nodes = seeds + blast radius.
+	// Relevant nodes = seeds + blast radius. Walk BOTH directions so
+	// the pack covers "what this symbol calls" AND "who calls this
+	// symbol" — the default callers-only walk left Command.Execute
+	// returning just 2-3 nodes on cobra (solov2-85n). MaxDepth/MaxNodes
+	// keep their service defaults (3 / 200).
 	var entries []blastradius.Entry
 	if len(seedIDs) > 0 {
-		resp, err := a.blast.Of(ctx, repoID, branch, seedIDs, blastradius.Options{})
+		resp, err := a.blast.Of(ctx, repoID, branch, seedIDs, blastradius.Options{
+			Direction: blastradius.DirBoth,
+		})
 		if err != nil {
 			return Pack{}, fmt.Errorf("contextpack: blast radius: %w", err)
 		}
