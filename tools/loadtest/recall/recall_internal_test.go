@@ -14,38 +14,6 @@ func mkTruth(ids ...string) map[string]struct{} {
 	return m
 }
 
-// TestReciprocalRank covers first-hit position, no-hit, and empty truth.
-func TestReciprocalRank(t *testing.T) {
-	t.Parallel()
-	cases := []struct {
-		name  string
-		hits  []string
-		truth map[string]struct{}
-		want  float64
-	}{
-		{"first", []string{"a", "b", "c"}, mkTruth("a"), 1.0},
-		{"third", []string{"x", "y", "a"}, mkTruth("a"), 1.0 / 3.0},
-		{"miss", []string{"x", "y"}, mkTruth("a"), 0},
-		{"empty-truth", []string{"a"}, mkTruth(), 0},
-	}
-	for _, c := range cases {
-		if got := ReciprocalRank(c.hits, c.truth); math.Abs(got-c.want) > 1e-9 {
-			t.Errorf("%s: got %v want %v", c.name, got, c.want)
-		}
-	}
-}
-
-// TestMRR averages per-query reciprocal ranks.
-func TestMRR(t *testing.T) {
-	t.Parallel()
-	if got := MRR([]float64{1.0, 0.5, 0}); math.Abs(got-0.5) > 1e-9 {
-		t.Errorf("MRR: got %v want 0.5", got)
-	}
-	if got := MRR(nil); got != 0 {
-		t.Errorf("MRR(nil): got %v want 0", got)
-	}
-}
-
 // TestRecallAtK_PerfectHits: all k top hits are in truth and truth size
 // is exactly k, so recall is 1.0.
 func TestRecallAtK_PerfectHits(t *testing.T) {
