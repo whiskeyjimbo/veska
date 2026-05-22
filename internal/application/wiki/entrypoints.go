@@ -101,6 +101,17 @@ func NewEntryPointsService(loadGraph LoadGraphFunc, inboundEdges InboundEdgesFun
 	return s, nil
 }
 
+// SelectOptions tunes Select per-call. The zero value (IncludeTests=false)
+// matches what almost every caller wants: exclude Test*/Benchmark*/
+// Example*/Fuzz*-named symbols and *_test.go files from the candidate
+// set so the result lists real public-API entry points, not test
+// helpers (solov2-m8d). Callers that genuinely want the test corpus —
+// e.g. a 'where do tests start exercising this codebase' view — set
+// IncludeTests=true.
+type SelectOptions struct {
+	IncludeTests bool
+}
+
 // Select computes the entry_points report for (repoID, branch). A symbol
 // qualifies as an entry point when all three gates hold:
 //
@@ -112,7 +123,14 @@ func NewEntryPointsService(loadGraph LoadGraphFunc, inboundEdges InboundEdgesFun
 //
 // Entry points are ordered by ascending blast radius, then by ascending
 // symbol name, so rendering a fixed promoted state twice is byte-identical.
+//
+// Equivalent to SelectWith(ctx, repoID, branch, SelectOptions{}).
 func (s *EntryPointsService) Select(ctx context.Context, repoID, branch string) (EntryPointsReport, error) {
+	return s.SelectWith(ctx, repoID, branch, SelectOptions{})
+}
+
+// SelectWith is Select with an explicit SelectOptions; see SelectOptions.
+func (s *EntryPointsService) SelectWith(ctx context.Context, repoID, branch string, opts SelectOptions) (EntryPointsReport, error) {
 	graph, err := s.loadGraph(ctx, repoID, branch)
 	if err != nil {
 		return EntryPointsReport{}, fmt.Errorf("wiki: load graph: %w", err)
@@ -137,6 +155,9 @@ func (s *EntryPointsService) Select(ctx context.Context, repoID, branch string) 
 			continue
 		}
 		if flagged[string(n.ID)] {
+			continue
+		}
+		if !opts.IncludeTests && isTestSymbol(n) {
 			continue
 		}
 		candidates = append(candidates, n)
@@ -190,6 +211,26 @@ func isEntryPointKind(k domain.NodeKind) bool {
 	default:
 		return false
 	}
+}
+
+// isTestSymbol reports whether a node looks like a Go test/benchmark/
+// example/fuzz harness function rather than a real symbol. We check both
+// the file path (*_test.go) and the name prefix (Test/Benchmark/Example/
+// Fuzz) because either alone leaks: a helper like 'newTestServer' in
+// foo_test.go IS in a test file, and a function called 'TestPriority'
+// in production code is NOT (solov2-m8d).
+func isTestSymbol(n *domain.Node) bool {
+	if strings.HasSuffix(n.Path, "_test.go") {
+		return true
+	}
+	switch {
+	case strings.HasPrefix(n.Name, "Test"),
+		strings.HasPrefix(n.Name, "Benchmark"),
+		strings.HasPrefix(n.Name, "Example"),
+		strings.HasPrefix(n.Name, "Fuzz"):
+		return true
+	}
+	return false
 }
 
 // hasAdjacentTest reports whether any inbound src node lives in a Go test
