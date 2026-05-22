@@ -352,13 +352,18 @@ func extractReceiverBinding(receiverNode *sitter.Node, src []byte) (name, typ st
 
 // collectCallNames does a depth-first walk of node and returns the lookup
 // keys for every call_expression we can resolve against the file's symbol
-// map. Two forms are recognised:
+// map. Three forms are recognised:
 //
-//   - identifier call:        foo()         → "foo"
-//   - receiver-method call:   recvName.X()  → "recvType.X"  (only when
-//     recvName and recvType are non-empty, i.e. we are inside a
-//     method_declaration whose receiver is bound to a named variable
-//     of a named type)
+//   - identifier call:        foo()             → "foo"
+//   - Go selector call:       recvName.X()      → "recvType.X"   (only when
+//     recvName and recvType are non-empty and the operand is an identifier
+//     equal to recvName — Go uses selector_expression)
+//   - TS member call:         this.X() / r.X()  → "recvType.X"   (only when
+//     recvName and recvType are non-empty and the object text equals
+//     recvName — TS/TSX tree-sitter uses member_expression with a "this"
+//     literal child rather than an identifier, so matching by text covers
+//     both r.X() with recvName="r" and this.X() with recvName="this".
+//     solov2-gv6.)
 //
 // Cross-package selector calls (pkg.Bar(), or chained s.field.X())
 // cannot be resolved without cross-repo type info, so they are skipped
@@ -381,6 +386,15 @@ func collectCallNames(node *sitter.Node, src []byte, recvName, recvType string) 
 							operand.Type() == "identifier" &&
 							string(src[operand.StartByte():operand.EndByte()]) == recvName {
 							names = append(names, recvType+"."+string(src[field.StartByte():field.EndByte()]))
+						}
+					}
+				case "member_expression":
+					if recvName != "" && recvType != "" {
+						object := fn.ChildByFieldName("object")
+						property := fn.ChildByFieldName("property")
+						if object != nil && property != nil &&
+							string(src[object.StartByte():object.EndByte()]) == recvName {
+							names = append(names, recvType+"."+string(src[property.StartByte():property.EndByte()]))
 						}
 					}
 				}
