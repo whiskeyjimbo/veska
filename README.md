@@ -11,7 +11,8 @@ they reason from the same structural ground truth instead of guessing.
   to a node, edge, or commit. Structural recall stays current within the
   save → staging freshness budget.
 - **Eventually-consistent semantic search.** `semantic_search` embeds the graph
-  via Ollama; during the lag window it falls back to a BM25 lexical index and
+  with an in-process embedder (model2vec by default — no external service);
+  during the indexing lag window it falls back to a BM25 lexical index and
   flags the response `degraded_reasons`.
 - **Promotion checks.** On every commit, synchronous checks emit advisory
   `Finding`s: dead code, contract drift, vulnerable `go.mod` dependencies
@@ -33,42 +34,64 @@ they reason from the same structural ground truth instead of guessing.
 ## Requirements
 
 - **Go 1.26+**
-- **[Ollama](https://ollama.com)** running locally with an embedding model
-  (default `nomic-embed-text`, ~274 MB). The only outbound connection in the
-  default config. The optional review pipeline also uses Ollama.
-- SQLite and the vector index are in-process — no server to run.
+- **No external services for core use.** SQLite, the vector index, and the
+  default embedder all run in-process. A fresh machine indexes and searches
+  with nothing else installed or running.
 
-Install Ollama:
+### Embedder
+
+Semantic search needs an embedder. Veska **elects one at boot** in preference
+order — it never mixes vector spaces, so exactly one embedder owns the index
+at a time:
+
+1. **model2vec** (`potion-code-16M`) — a fast, in-process static *code*
+   embedder. The default and recommended choice. Get it either way:
+   - **Fat binary** (`make build-fat`) — the model is compiled into the
+     binary. Zero setup: nothing to install, no download, no network.
+   - **Thin binary** (`make build`) + `veska install model2vec` — a one-time
+     ~62 MB download into `~/.veska/`.
+2. **static-v2** — an in-binary fallback that works with no model files at
+   all (lower quality). Used only when model2vec is unavailable.
+
+No Ollama, no network, and no separate process is required for search.
+
+### Optional: Ollama
+
+Ollama is **only** for the optional **LLM review pipeline** (off by default).
+It is **not** used for embeddings in the default config. (Power users can force
+an Ollama embedding model with `VESKA_EMBEDDER=ollama`, but model2vec is faster
+and higher-quality on code, so this is rarely worthwhile.)
+
+Install Ollama only if you want the review pipeline:
 
 ```sh
-# macOS:
-brew install ollama && ollama serve &
-
-# Linux (snap):
-sudo snap install ollama && ollama serve &
-
-# Linux (any distro, curl-pipe-sh):
-curl -fsSL https://ollama.com/install.sh | sh && ollama serve &
-
-# Then on all platforms:
-ollama pull nomic-embed-text   # ~274 MB
+# macOS:        brew install ollama && ollama serve &
+# Linux (snap): sudo snap install ollama && ollama serve &
+# Linux (curl): curl -fsSL https://ollama.com/install.sh | sh && ollama serve &
 ```
 
 ## Build
 
 ```sh
-make build        # build veska, veska-daemon, veska-mcp (+ layercheck tool)
+make build        # thin: veska, veska-daemon, veska-mcp (+ layercheck tool)
+make build-fat    # fat: same, but the model2vec model is embedded in the
+                  #      binary — a zero-setup embedder (larger binaries)
 make test         # go test ./...
 make all          # build + test + vet + lint + layercheck
 ```
 
 Binaries land in `./bin/`. Either `export PATH="$PWD/bin:$PATH"` or use the
-`./bin/` prefix in the Quick Start below.
+`./bin/` prefix in the Quick Start below. Use `make build-fat` for the
+zero-setup default embedder; plain `make build` keeps binaries small and
+relies on `veska install model2vec` (or the static-v2 fallback).
 
 ## Quick start
 
 ```sh
-# 1. Ollama is up and the model is pulled (see Requirements above).
+# 1. Make sure an embedder is available (see Requirements):
+#    - fat binary (make build-fat): nothing to do — the model is built in.
+#    - thin binary: ./bin/veska install model2vec   (one-time ~62 MB)
+#    With neither, search still works via the static-v2 fallback.
 
 # 2. Initialise veska's data directory at ~/.veska/.
 ./bin/veska init
@@ -171,9 +194,14 @@ Key environment variables:
 | Var | Purpose | Default |
 |---|---|---|
 | `VESKA_HOME` | Data root | `~/.veska` |
-| `VESKA_OLLAMA_URL` | Ollama endpoint | `http://localhost:11434` |
-| `VESKA_EMBED_MODEL` | Embedding model | `nomic-embed-text` |
+| `VESKA_EMBEDDER` | Embedder election: `auto` (model2vec→static-v2), or force `model2vec` / `static` / `ollama` | `auto` |
 | `VESKA_VECTOR_BACKEND` | `sqlite-vec` or `usearch` | `sqlite-vec` |
+| `VESKA_OLLAMA_URL` | Ollama endpoint — review pipeline, and `VESKA_EMBEDDER=ollama` | `http://localhost:11434` |
+| `VESKA_EMBED_MODEL` | Ollama embedding model — only when `VESKA_EMBEDDER=ollama` | `nomic-embed-text` |
+
+The elected embedder is recorded in `~/.veska/embedder.locked`. Switching
+embedders requires a re-index (`veska reindex`) since their vectors aren't
+comparable.
 
 ## Architecture
 
@@ -184,7 +212,7 @@ internal/
     domain/           pure entities: Node, Edge, Graph, Task, Finding
     ports/            interface contracts (GraphStorage, VectorStorage, VulnSource, …)
   application/        use-case services: ingester, promoter, embedder, checks, review, wiki
-  infrastructure/     adapters: sqlite, vector, embedding/ollama, treesitter, mcp, git
+  infrastructure/     adapters: sqlite, vector, embedding/{model2vec,static,ollama,elect}, treesitter, mcp, git
   repo/               repos-table registry
 docs/                 design set (SOLO-NN sections), milestones, operations runbooks
 ```
