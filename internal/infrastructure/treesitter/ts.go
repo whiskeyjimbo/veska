@@ -355,8 +355,11 @@ func collectTSCallsFromClassBody(body *sitter.Node, src []byte, symbols map[stri
 		if bodyNode == nil {
 			continue
 		}
-		for _, callee := range collectCallNames(bodyNode, src, "this", className) {
-			calleeNode, ok := symbols[callee]
+		for _, ref := range collectCallNames(bodyNode, src, "this", className) {
+			if ref.pkg != "" {
+				continue
+			}
+			calleeNode, ok := symbols[ref.name]
 			if !ok {
 				continue
 			}
@@ -448,8 +451,11 @@ func collectTSCallsFromTopLevel(node *sitter.Node, src []byte, symbols map[strin
 				continue
 			}
 			callNames := collectCallNames(bodyNode, src, "", "")
-			for _, callee := range callNames {
-				calleeNode, ok := symbols[callee]
+			for _, ref := range callNames {
+				if ref.pkg != "" {
+					continue
+				}
+				calleeNode, ok := symbols[ref.name]
 				if !ok {
 					continue
 				}
@@ -474,8 +480,11 @@ func collectTSCallsFromTopLevel(node *sitter.Node, src []byte, symbols map[strin
 	}
 
 	callNames := collectCallNames(bodyNode, src, "", "")
-	for _, callee := range callNames {
-		calleeNode, ok := symbols[callee]
+	for _, ref := range callNames {
+		if ref.pkg != "" {
+			continue
+		}
+		calleeNode, ok := symbols[ref.name]
 		if !ok {
 			continue
 		}

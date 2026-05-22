@@ -26,6 +26,12 @@ type ParseResult struct {
 	// whole batch and emits CALLS edges in the same transaction
 	// (solov2-2at).
 	UnresolvedCalls []UnresolvedCall
+	// Imports maps a file's local package identifiers to their full import
+	// paths (alias -> path; for unaliased imports the key is the path's last
+	// segment, matching the common case where the package name equals it).
+	// Promotion uses this to resolve package-qualified UnresolvedCalls
+	// (solov2-xc51). nil/empty when the file imports nothing.
+	Imports map[string]string
 }
 
 // UnresolvedCall is one call site the parser saw but could not bind to
@@ -34,9 +40,17 @@ type ParseResult struct {
 // resolver — either "foo" for a plain-identifier call or "Type.foo" for
 // a receiver-method call (the receiver type having been determined from
 // the enclosing method_declaration).
+//
+// PkgQualifier, when non-empty, names the selector operand of a
+// package-qualified call (the "cmd" in cmd.Execute()). At promotion time it
+// is resolved against the file's import map ([[ParseResult]].Imports) to a
+// package — intra-module packages bind to a concrete CALLS edge, external
+// modules become a cross-repo edge stub (solov2-xc51). When PkgQualifier is
+// empty the call is plain/receiver-local as before.
 type UnresolvedCall struct {
-	CallerID   NodeID
-	CalleeName string
+	CallerID     NodeID
+	CalleeName   string
+	PkgQualifier string
 }
 
 // ParseFailure describes a single syntax-error region surfaced by the parser.

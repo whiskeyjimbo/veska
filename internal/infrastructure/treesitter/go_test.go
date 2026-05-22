@@ -142,6 +142,61 @@ func hello() string {
 	}
 }
 
+// TestParseFile_ImportsAndQualifiedCalls pins solov2-xc51.1: the parser must
+// surface the file's import map and capture package-qualified calls
+// (cmd.Execute()) as UnresolvedCalls carrying a PkgQualifier — the foundation
+// for cross-package CALLS resolution at promotion.
+func TestParseFile_ImportsAndQualifiedCalls(t *testing.T) {
+	src := []byte(`package main
+
+import (
+	"fmt"
+	"github.com/acme/mycli/cmd"
+	flag "github.com/spf13/pflag"
+	_ "embed"
+)
+
+func main() {
+	cmd.Execute()
+	flag.Parse()
+	fmt.Println("hi")
+}
+`)
+	p := treesitter.NewGoParser()
+	result, err := p.ParseFile(context.Background(), repoID, filePath, src)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// Import map: aliased + unaliased; blank import excluded.
+	if got := result.Imports["cmd"]; got != "github.com/acme/mycli/cmd" {
+		t.Errorf("imports[cmd] = %q, want github.com/acme/mycli/cmd", got)
+	}
+	if got := result.Imports["flag"]; got != "github.com/spf13/pflag" {
+		t.Errorf("imports[flag] = %q (alias), want github.com/spf13/pflag", got)
+	}
+	if got := result.Imports["fmt"]; got != "fmt" {
+		t.Errorf("imports[fmt] = %q, want fmt", got)
+	}
+	if _, ok := result.Imports["embed"]; ok {
+		t.Errorf("blank import should not appear in import map: %v", result.Imports)
+	}
+
+	// Qualified calls captured with PkgQualifier.
+	wantQ := map[string]string{"Execute": "cmd", "Parse": "flag", "Println": "fmt"}
+	gotQ := map[string]string{}
+	for _, uc := range result.UnresolvedCalls {
+		if uc.PkgQualifier != "" {
+			gotQ[uc.CalleeName] = uc.PkgQualifier
+		}
+	}
+	for callee, pkg := range wantQ {
+		if gotQ[callee] != pkg {
+			t.Errorf("qualified call %s: qualifier = %q, want %q (all: %v)", callee, gotQ[callee], pkg, gotQ)
+		}
+	}
+}
+
 // TestParseFile_ReceiverSelectorCallsEdge pins solov2-q9p: when a method
 // on *Server has body 's.foo()', the parser emits a CALLS edge from
 // Server.Bar -> Server.foo. Without this, idiomatic Go (s.x() / s.y())

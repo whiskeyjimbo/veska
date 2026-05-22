@@ -59,6 +59,10 @@ type PromotionFile struct {
 	// against a package-wide map built from the batch and writes the
 	// resulting CALLS edges in the same transaction (solov2-2at).
 	UnresolvedCalls []domain.UnresolvedCall
+	// Imports maps the file's local package identifiers to import paths,
+	// used to resolve package-qualified UnresolvedCalls into intra-repo
+	// CALLS edges or cross-repo edge stubs at promotion (solov2-xc51).
+	Imports map[string]string
 }
 
 // PromotionBatch is the plain-data description of one promotion. It carries no

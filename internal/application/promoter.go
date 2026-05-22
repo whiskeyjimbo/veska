@@ -154,6 +154,7 @@ func (p *Promoter) Promote(ctx context.Context, repoID, branch, gitSHA string, a
 			Nodes:           sf.Nodes,
 			Edges:           sf.Edges,
 			UnresolvedCalls: sf.UnresolvedCalls,
+			Imports:         sf.Imports,
 		})
 	}
 
