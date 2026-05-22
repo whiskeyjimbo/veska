@@ -75,7 +75,7 @@ func dispatchEntryPoints(t *testing.T, r *Registry, params any) (EntryPointsResp
 func TestEntryPoints_ReturnsSelectedData(t *testing.T) {
 	svc := entryPointsFixtureService(t)
 	r := NewRegistry()
-	RegisterEntryPointsTool(r, svc)
+	RegisterEntryPointsTool(r, svc, nil)
 
 	resp, rpcErr := dispatchEntryPoints(t, r, map[string]any{
 		"repo_id": "r1",
@@ -125,7 +125,7 @@ func TestFilterTestEntries_DefaultDropsTestSymbols(t *testing.T) {
 func TestEntryPoints_IncludeTestsFlagRoundtrips(t *testing.T) {
 	svc := entryPointsFixtureService(t)
 	r := NewRegistry()
-	RegisterEntryPointsTool(r, svc)
+	RegisterEntryPointsTool(r, svc, nil)
 
 	// Default (no include_tests) — fixture's only entry is 'low' (not a
 	// test name, not in *_test.go) so it must survive.
@@ -154,7 +154,7 @@ func TestEntryPoints_IncludeTestsFlagRoundtrips(t *testing.T) {
 func TestEntryPoints_RequiresParams(t *testing.T) {
 	svc := entryPointsFixtureService(t)
 	r := NewRegistry()
-	RegisterEntryPointsTool(r, svc)
+	RegisterEntryPointsTool(r, svc, nil)
 
 	_, rpcErr := dispatchEntryPoints(t, r, map[string]any{"repo_id": "r1"})
 	if rpcErr == nil || rpcErr.Code != CodeInvalidParams {
@@ -164,7 +164,7 @@ func TestEntryPoints_RequiresParams(t *testing.T) {
 
 func TestEntryPoints_NotWiredReturnsInternalError(t *testing.T) {
 	r := NewRegistry()
-	RegisterEntryPointsTool(r, nil)
+	RegisterEntryPointsTool(r, nil, nil)
 
 	_, rpcErr := dispatchEntryPoints(t, r, map[string]any{"repo_id": "r1", "branch": "main"})
 	if rpcErr == nil || rpcErr.Code != CodeInternalError {

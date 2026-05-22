@@ -862,7 +862,7 @@ func registerMCPTools(r *mcp.Registry, d mcpDeps) {
 	// mcp.RegisterTaskTools(r, pools.WriteHot, nil)
 	_ = mcp.RegisterTaskTools // keep the symbol reachable for the future re-enable
 	mcp.RegisterOwnerTools(r, pools.WriteHot)
-	mcp.RegisterTodoTools(r, sqlite.NewTodoQuerierRepo(pools.ReadDB))
+	mcp.RegisterTodoTools(r, sqlite.NewTodoQuerierRepo(pools.ReadDB), &repoLister{db: pools.ReadDB})
 	// Admin tools: repo listing + live status/config from the read pool and
 	// the resolved daemon Config.
 	mcp.RegisterAdminTools(r,
@@ -891,9 +891,9 @@ func registerMCPTools(r *mcp.Registry, d mcpDeps) {
 	if csSvc, err := changedsymbols.NewService(
 		treesitter.NewGoParser(), gitwatch.ChangedFilesBetween, gitwatch.FileAtRef,
 	); err == nil {
-		mcp.RegisterChangedSymbolsTool(r, csSvc, repoRootFunc(pools.ReadDB))
+		mcp.RegisterChangedSymbolsTool(r, csSvc, repoRootFunc(pools.ReadDB), &repoLister{db: pools.ReadDB})
 	} else {
-		mcp.RegisterChangedSymbolsTool(r, nil, nil)
+		mcp.RegisterChangedSymbolsTool(r, nil, nil, &repoLister{db: pools.ReadDB})
 	}
 
 	// Wiki hot_zone surface. Change frequency comes from the git commit-history
@@ -902,9 +902,9 @@ func registerMCPTools(r *mcp.Registry, d mcpDeps) {
 		return gitwatch.ChangeCounts(ctx, repoRoot, 0)
 	}
 	if hotZoneSvc, err := wiki.NewHotZoneService(hotZoneCounts, nodes.NodesInFile, blastSvc); err == nil {
-		mcp.RegisterWikiTools(r, hotZoneSvc, repoRootFunc(pools.ReadDB))
+		mcp.RegisterWikiTools(r, hotZoneSvc, repoRootFunc(pools.ReadDB), &repoLister{db: pools.ReadDB})
 	} else {
-		mcp.RegisterWikiTools(r, nil, nil)
+		mcp.RegisterWikiTools(r, nil, nil, &repoLister{db: pools.ReadDB})
 	}
 
 	// Wiki entry_points surface. Candidates are enumerated from the loaded
@@ -915,9 +915,9 @@ func registerMCPTools(r *mcp.Registry, d mcpDeps) {
 	if epSvc, err := wiki.NewEntryPointsService(
 		graphForEP.LoadGraph, edges.InboundEdges, findingQuerier.OpenFindingNodeIDs,
 	); err == nil {
-		mcp.RegisterEntryPointsTool(r, epSvc)
+		mcp.RegisterEntryPointsTool(r, epSvc, &repoLister{db: pools.ReadDB})
 	} else {
-		mcp.RegisterEntryPointsTool(r, nil)
+		mcp.RegisterEntryPointsTool(r, nil, &repoLister{db: pools.ReadDB})
 	}
 
 	// Context-pack surface. Assembles a token-bounded bundle of relevant
@@ -941,9 +941,9 @@ func registerMCPTools(r *mcp.Registry, d mcpDeps) {
 		graph.FindNodes, blastSvc, fileHistory, findingQuerier.OpenFindingNodeIDs,
 		gitwatch.ChangedFiles, nodes.NodesInFile, activeTaskFunc(pools.ReadDB),
 	); err == nil {
-		mcp.RegisterContextPackTool(r, cpAsm, repoRootFunc(pools.ReadDB))
+		mcp.RegisterContextPackTool(r, cpAsm, repoRootFunc(pools.ReadDB), &repoLister{db: pools.ReadDB})
 	} else {
-		mcp.RegisterContextPackTool(r, nil, nil)
+		mcp.RegisterContextPackTool(r, nil, nil, &repoLister{db: pools.ReadDB})
 	}
 
 	// Semantic-search tools. The Service orchestrates embed → vector search →

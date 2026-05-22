@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	application "github.com/whiskeyjimbo/veska/internal/application"
 	"github.com/whiskeyjimbo/veska/internal/application/blastradius"
 	"github.com/whiskeyjimbo/veska/internal/application/contextpack"
 	"github.com/whiskeyjimbo/veska/internal/core/domain"
@@ -80,7 +81,7 @@ func stubRepoRoot(string) RepoRootFunc {
 
 func TestContextPack_SymbolMode(t *testing.T) {
 	r := NewRegistry()
-	RegisterContextPackTool(r, contextPackFixture(t), stubRepoRoot(""))
+	RegisterContextPackTool(r, contextPackFixture(t), stubRepoRoot(""), nil)
 	pack, rpcErr := dispatchContextPack(t, r, map[string]any{
 		"repo_id": "r", "branch": "main", "symbol": "Target",
 	})
@@ -95,9 +96,28 @@ func TestContextPack_SymbolMode(t *testing.T) {
 	}
 }
 
+// TestContextPack_AcceptsShortID guards the README contract that a short_id
+// prefix resolves anywhere a repo_id is required (solov2-eki3). Before the fix
+// context_pack rejected the prefix with "repo not found".
+func TestContextPack_AcceptsShortID(t *testing.T) {
+	const fullID = "62d72fa222a0193f8fa927f95dd6a3575c7566964c8b8f6ba14aafc5a1ea871f"
+	r := NewRegistry()
+	repos := &fakeRepoLister{recs: []application.RepoRecord{{RepoID: fullID, RootPath: "/repo", ActiveBranch: "main"}}}
+	RegisterContextPackTool(r, contextPackFixture(t), stubRepoRoot(""), repos)
+	pack, rpcErr := dispatchContextPack(t, r, map[string]any{
+		"repo_id": ShortRepoID(fullID), "branch": "main", "symbol": "Target",
+	})
+	if rpcErr != nil {
+		t.Fatalf("short_id rejected: %+v", rpcErr)
+	}
+	if pack.Mode != "symbol" {
+		t.Fatalf("want symbol mode via short_id, got %q", pack.Mode)
+	}
+}
+
 func TestContextPack_TaskMode(t *testing.T) {
 	r := NewRegistry()
-	RegisterContextPackTool(r, contextPackFixture(t), stubRepoRoot(""))
+	RegisterContextPackTool(r, contextPackFixture(t), stubRepoRoot(""), nil)
 	pack, rpcErr := dispatchContextPack(t, r, map[string]any{
 		"repo_id": "r", "branch": "main", "task_id": "t1",
 	})
@@ -111,7 +131,7 @@ func TestContextPack_TaskMode(t *testing.T) {
 
 func TestContextPack_RejectsBothOrNeither(t *testing.T) {
 	r := NewRegistry()
-	RegisterContextPackTool(r, contextPackFixture(t), stubRepoRoot(""))
+	RegisterContextPackTool(r, contextPackFixture(t), stubRepoRoot(""), nil)
 	for _, params := range []map[string]any{
 		{"repo_id": "r", "branch": "main"},
 		{"repo_id": "r", "branch": "main", "symbol": "Target", "task_id": "t1"},
@@ -125,7 +145,7 @@ func TestContextPack_RejectsBothOrNeither(t *testing.T) {
 
 func TestContextPack_Truncation(t *testing.T) {
 	r := NewRegistry()
-	RegisterContextPackTool(r, contextPackFixture(t, contextpack.WithTokenBudget(1)), stubRepoRoot(""))
+	RegisterContextPackTool(r, contextPackFixture(t, contextpack.WithTokenBudget(1)), stubRepoRoot(""), nil)
 	pack, rpcErr := dispatchContextPack(t, r, map[string]any{
 		"repo_id": "r", "branch": "main", "symbol": "Target",
 	})
@@ -139,7 +159,7 @@ func TestContextPack_Truncation(t *testing.T) {
 
 func TestContextPack_NotWired(t *testing.T) {
 	r := NewRegistry()
-	RegisterContextPackTool(r, nil, nil)
+	RegisterContextPackTool(r, nil, nil, nil)
 	_, rpcErr := dispatchContextPack(t, r, map[string]any{
 		"repo_id": "r", "branch": "main", "symbol": "Target",
 	})
@@ -150,7 +170,7 @@ func TestContextPack_NotWired(t *testing.T) {
 
 func TestContextPack_P95Latency(t *testing.T) {
 	r := NewRegistry()
-	RegisterContextPackTool(r, contextPackFixture(t), stubRepoRoot(""))
+	RegisterContextPackTool(r, contextPackFixture(t), stubRepoRoot(""), nil)
 	const iter = 200
 	durs := make([]time.Duration, iter)
 	for i := range durs {

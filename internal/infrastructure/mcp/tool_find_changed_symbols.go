@@ -5,8 +5,17 @@ import (
 	"encoding/json"
 	"fmt"
 
+	application "github.com/whiskeyjimbo/veska/internal/application"
 	"github.com/whiskeyjimbo/veska/internal/application/changedsymbols"
 	"github.com/whiskeyjimbo/veska/internal/core/domain"
+)
+
+// Default git refs for eng_find_changed_symbols when the caller omits both:
+// the most recent commit against its parent — the common "what did the last
+// commit change?" query (solov2-npjs).
+const (
+	defaultChangedRefA = "HEAD~1"
+	defaultChangedRefB = "HEAD"
 )
 
 // ---------------------------------------------------------------------------
@@ -24,12 +33,12 @@ import (
 // registered but returns InternalError on every call, keeping the
 // registry uniform across composition roots that have not wired the
 // parser/git adapters.
-func RegisterChangedSymbolsTool(r *Registry, svc *changedsymbols.Service, repoRoot RepoRootFunc) {
+func RegisterChangedSymbolsTool(r *Registry, svc *changedsymbols.Service, repoRoot RepoRootFunc, repos application.RepoLister) {
 	r.MustRegister(ToolSpec{
 		Name:            "eng_find_changed_symbols",
-		Description:     "Report symbols added/removed/modified between two git refs by parsing the changed files at each ref.",
+		Description:     "Report symbols added/removed/modified between two git refs (ref_a=base, ref_b=tip) by parsing the changed files at each ref. ref_a/ref_b default to HEAD~1/HEAD (the last commit) when both are omitted.",
 		IncludesStaging: false,
-		Handler:         makeChangedSymbolsHandler(svc, repoRoot),
+		Handler:         makeChangedSymbolsHandler(svc, repoRoot, repos),
 	})
 }
 
@@ -40,7 +49,7 @@ type changedSymbolsParams struct {
 	RefB   string `json:"ref_b"`
 }
 
-func makeChangedSymbolsHandler(svc *changedsymbols.Service, repoRoot RepoRootFunc) ToolHandler {
+func makeChangedSymbolsHandler(svc *changedsymbols.Service, repoRoot RepoRootFunc, repos application.RepoLister) ToolHandler {
 	return func(ctx context.Context, _ domain.Actor, raw json.RawMessage) (any, *RPCError) {
 		if svc == nil || repoRoot == nil {
 			return nil, &RPCError{
@@ -52,11 +61,22 @@ func makeChangedSymbolsHandler(svc *changedsymbols.Service, repoRoot RepoRootFun
 		if rpcErr := bindParams(raw, &p); rpcErr != nil {
 			return nil, rpcErr
 		}
-		if rpcErr := checkRequired(
-			"repo_id", p.RepoID, "branch", p.Branch, "ref_a", p.RefA, "ref_b", p.RefB,
-		); rpcErr != nil {
+		if rpcErr := checkRequired("repo_id", p.RepoID, "branch", p.Branch); rpcErr != nil {
 			return nil, rpcErr
 		}
+		// ref_a/ref_b default to the last commit (HEAD~1..HEAD) when both are
+		// omitted; supplying only one is ambiguous and rejected (solov2-npjs).
+		switch {
+		case p.RefA == "" && p.RefB == "":
+			p.RefA, p.RefB = defaultChangedRefA, defaultChangedRefB
+		case p.RefA == "" || p.RefB == "":
+			return nil, &RPCError{Code: CodeInvalidParams, Message: "ref_a and ref_b must be provided together (or both omitted to default to HEAD~1..HEAD)"}
+		}
+		repoID, rpcErr := resolveRepoID(ctx, repos, p.RepoID)
+		if rpcErr != nil {
+			return nil, rpcErr
+		}
+		p.RepoID = repoID
 		root, err := repoRoot(ctx, p.RepoID)
 		if err != nil {
 			return nil, &RPCError{Code: CodeNotFound, Message: fmt.Sprintf("repo not found: %s", p.RepoID)}

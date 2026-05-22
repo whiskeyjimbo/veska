@@ -71,6 +71,7 @@ func makeGetFindingHandler(db *sql.DB) ToolHandler {
 		if err != nil {
 			return nil, &RPCError{Code: CodeInternalError, Message: fmt.Sprintf("query finding: %v", err)}
 		}
+		f.FilePath = relativizeFindingPath(f.FilePath, findingRepoRoot(ctx, db, f.RepoID))
 
 		return map[string]any{"finding": f}, nil
 	}
