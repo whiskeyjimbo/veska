@@ -303,6 +303,25 @@ func (w *Worker) tick(ctx context.Context) {
 	// either way, but the in-memory map avoids the redundant Embed itself.
 	inFlight := make(map[string][]float32)
 
+	// Pass 1: classify each ref. Fast paths (in-flight cache, prior-tick
+	// lookup) finish immediately. Cache-misses are queued for a single
+	// batched Embed call below (solov2-ucp) so cobra cold-scan doesn't
+	// pay 67 sequential Ollama roundtrips.
+	type pendingRef struct {
+		ref         ports.PendingEmbedRef
+		contentHash string
+	}
+	var needsEmbed []pendingRef
+	enqueueVec := func(ref ports.PendingEmbedRef, contentHash string, vec []float32) {
+		key := vecKey{repo: ref.RepoID, branch: ref.Branch}
+		vecBatches[key] = append(vecBatches[key], domain.EmbeddingRow{
+			NodeID:      ref.NodeID,
+			ContentHash: contentHash,
+			ModelID:     modelID,
+			Vector:      vec,
+		})
+	}
+
 	for _, ref := range pending {
 		if ctx.Err() != nil {
 			return
@@ -318,13 +337,7 @@ func (w *Worker) tick(ctx context.Context) {
 			if w.metrics != nil && w.metrics.EmbedDedupHits != nil {
 				w.metrics.EmbedDedupHits.Inc()
 			}
-			key := vecKey{repo: ref.RepoID, branch: ref.Branch}
-			vecBatches[key] = append(vecBatches[key], domain.EmbeddingRow{
-				NodeID:      ref.NodeID,
-				ContentHash: contentHash,
-				ModelID:     modelID,
-				Vector:      vec,
-			})
+			enqueueVec(ref, contentHash, vec)
 			continue
 		}
 
@@ -339,59 +352,116 @@ func (w *Worker) tick(ctx context.Context) {
 				w.metrics.EmbedDedupHits.Inc()
 			}
 			inFlight[contentHash] = vec
-			key := vecKey{repo: ref.RepoID, branch: ref.Branch}
-			vecBatches[key] = append(vecBatches[key], domain.EmbeddingRow{
-				NodeID:      ref.NodeID,
-				ContentHash: contentHash,
-				ModelID:     modelID,
-				Vector:      vec,
-			})
+			enqueueVec(ref, contentHash, vec)
 			continue
 		}
 
-		// Miss — rate-limit and call Embed. limiter.Wait honours ctx — when
-		// ctx is cancelled it returns ctx.Err() and we unwind the tick.
+		needsEmbed = append(needsEmbed, pendingRef{ref: ref, contentHash: contentHash})
+	}
+
+	// Pass 2: deduplicate by content_hash within needsEmbed so two refs
+	// with identical text only cost one Embed call. Order matters for
+	// EmbedBatch's contract — preserve first-seen order.
+	uniqueByHash := make(map[string]int, len(needsEmbed))
+	var uniqueTexts []string
+	for _, p := range needsEmbed {
+		if _, seen := uniqueByHash[p.contentHash]; seen {
+			continue
+		}
+		uniqueByHash[p.contentHash] = len(uniqueTexts)
+		uniqueTexts = append(uniqueTexts, p.ref.Text)
+	}
+
+	// Pass 3: call Embed (batch when the provider supports it, otherwise
+	// loop). Rate limiter counts each unique text — preserves the
+	// per-second cap callers expect (a batch of 32 unique texts is
+	// still 32 'requests' under the limiter's accounting).
+	uniqueVecs := make([][]float32, len(uniqueTexts))
+	failedTexts := make(map[int]bool)
+	usedBatch := false
+	if batchProv, ok := w.embedder.(ports.BatchEmbeddingProvider); ok && len(uniqueTexts) > 1 {
+		// A batch is ONE network roundtrip → one rate-limit event.
+		// Accounting for it as N would make WaitN(32) hang for ~3s on
+		// a 10rps cap with burst=1, defeating the batch optimization.
+		// The serial fallback below still does per-text Wait so the
+		// per-second cap still backstops a misbehaving embedder.
 		if w.limiter != nil {
 			if err := w.limiter.Wait(ctx); err != nil {
 				return
 			}
 		}
-		vec, err := w.embedder.Embed(ctx, ref.Text)
-		if err != nil {
-			// Per-row failure: bump attempts and (if budget exhausted)
-			// flip the row to state='failed' so FetchPending stops
-			// returning it. Siblings in this batch still proceed.
-			_ = w.refs.MarkAttemptFailed(ctx, ref.NodeID, w.maxAttempts)
+		vecs, err := batchProv.EmbedBatch(ctx, uniqueTexts)
+		switch {
+		case err == nil:
+			for i, vec := range vecs {
+				uniqueVecs[i] = vec
+			}
+			usedBatch = true
+		case errors.Is(err, ports.ErrBatchEmbedNotSupported):
+			// Wrapped provider didn't actually support batch — fall
+			// through to the serial path below. usedBatch stays false.
+		default:
+			// Real batch failure (ErrEmbedderUnreachable, etc.) — mark
+			// every unique text as failed; MarkAttemptFailed below will
+			// bump attempts and (eventually) flip to state='failed'.
+			for i := range uniqueTexts {
+				failedTexts[i] = true
+			}
+			usedBatch = true
+		}
+	}
+	if !usedBatch {
+		for i, text := range uniqueTexts {
+			if ctx.Err() != nil {
+				return
+			}
+			if w.limiter != nil {
+				if err := w.limiter.Wait(ctx); err != nil {
+					return
+				}
+			}
+			vec, err := w.embedder.Embed(ctx, text)
+			if err != nil {
+				failedTexts[i] = true
+				continue
+			}
+			uniqueVecs[i] = vec
+		}
+	}
+
+	// Pass 4: persist + distribute. Each pending ref looks up the unique
+	// slot for its content_hash and either persists the new vector or
+	// marks attempt-failed.
+	for _, p := range needsEmbed {
+		slot := uniqueByHash[p.contentHash]
+		if failedTexts[slot] {
+			_ = w.refs.MarkAttemptFailed(ctx, p.ref.NodeID, w.maxAttempts)
 			continue
 		}
+		vec := uniqueVecs[slot]
 		if len(vec) == 0 {
 			continue
 		}
-		// L2-normalize before any persistence. Embedding models such as
-		// nomic-embed-text return vectors with norm far from 1.0; the
-		// VectorStorage score (1/(1+L2dist)) and the auto-link threshold
-		// only behave as documented for unit vectors. Normalizing here —
-		// the single point where a fresh vector enters the system —
-		// covers node_embeddings, the in-flight cache, and the
-		// VectorStorage upsert in one place.
-		l2Normalize(vec)
-
-		blob := encodeFloat32LE(vec)
-		if err := w.refs.MarkReady(ctx, ref.NodeID, contentHash, modelID, len(vec), blob, now); err != nil {
-			// Persistence failure for this row — skip the vector upsert
-			// for it so we don't surface a vector hit for a row the SQL
-			// side won't acknowledge.
-			continue
+		// First time we see this content_hash, do the L2 normalize +
+		// node_embeddings INSERT. Siblings reuse via the inFlight cache.
+		existing, cached := inFlight[p.contentHash]
+		if !cached {
+			l2Normalize(vec)
+			blob := encodeFloat32LE(vec)
+			if err := w.refs.MarkReady(ctx, p.ref.NodeID, p.contentHash, modelID, len(vec), blob, now); err != nil {
+				continue
+			}
+			inFlight[p.contentHash] = vec
+			existing = vec
+		} else {
+			if err := w.refs.Reuse(ctx, p.ref.NodeID, p.contentHash, now); err != nil {
+				continue
+			}
+			if w.metrics != nil && w.metrics.EmbedDedupHits != nil {
+				w.metrics.EmbedDedupHits.Inc()
+			}
 		}
-		inFlight[contentHash] = vec
-
-		key := vecKey{repo: ref.RepoID, branch: ref.Branch}
-		vecBatches[key] = append(vecBatches[key], domain.EmbeddingRow{
-			NodeID:      ref.NodeID,
-			ContentHash: contentHash,
-			ModelID:     modelID,
-			Vector:      vec,
-		})
+		enqueueVec(p.ref, p.contentHash, existing)
 	}
 
 	for k, batch := range vecBatches {
