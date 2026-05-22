@@ -255,6 +255,7 @@ class Server {
 	listen := findNodeByName(result.Nodes, "Server.listen")
 	if start == nil || listen == nil {
 		t.Fatalf("expected Server.start and Server.listen nodes, got: %v", nodeNames(result.Nodes))
+		return
 	}
 	if findEdge(result.Edges, start.ID, listen.ID, domain.EdgeCalls) == nil {
 		t.Errorf("expected CALLS edge Server.start -> Server.listen; got edges: %d", len(result.Edges))
@@ -282,6 +283,7 @@ class App {
 	boot := findNodeByName(result.Nodes, "App.boot")
 	if ctor == nil || boot == nil {
 		t.Fatalf("expected App.constructor and App.boot nodes, got: %v", nodeNames(result.Nodes))
+		return
 	}
 	if findEdge(result.Edges, ctor.ID, boot.ID, domain.EdgeCalls) == nil {
 		t.Errorf("expected CALLS edge App.constructor -> App.boot")

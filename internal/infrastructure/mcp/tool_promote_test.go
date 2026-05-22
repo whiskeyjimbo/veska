@@ -114,6 +114,7 @@ func TestPromoteHandler_RepoNotRegistered(t *testing.T) {
 	_, rpcErr := dispatchPromoteRaw(t, deps, map[string]string{"root_path": "/nowhere"})
 	if rpcErr == nil {
 		t.Fatal("expected error for unregistered root_path; got nil")
+		return
 	}
 	if rpcErr.Code != CodeInvalidParams {
 		t.Errorf("error code = %d, want CodeInvalidParams (%d)", rpcErr.Code, CodeInvalidParams)

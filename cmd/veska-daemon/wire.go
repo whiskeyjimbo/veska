@@ -225,12 +225,6 @@ type Daemon struct {
 	// workers. Pointer so it can be shared with regSvc (built before the
 	// Daemon struct itself in newDaemon).
 	scanWG *sync.WaitGroup
-
-	// scanTracker is the in-memory registry of cold scans currently in
-	// flight. Wired into the cold-scan reparser closure for Start/End
-	// and into statusProvider for eng_get_status's scans_in_flight
-	// surface (solov2-pm5).
-	scanTracker *application.ScanTracker
 }
 
 // newDaemon builds the full collaborator graph from cfg. Every dep is
