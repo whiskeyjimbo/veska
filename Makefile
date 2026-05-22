@@ -6,7 +6,7 @@ DAEMON_BIN      := $(BINDIR)/veska-daemon
 MCP_BIN         := $(BINDIR)/veska-mcp
 LAYERCHECK_BIN  := $(BINDIR)/layercheck
 
-.PHONY: all build build-fat fetch-embed-assets test lint vet layercheck clean loadtest test-mcp test-mcp-deep test-mcp-bootstrap eval-recall eval-recall-projection eval-autolink-fp eval-revalidate-bench eval-queue-fuzz eval-embed-throughput
+.PHONY: all build build-fat fetch-embed-assets test lint vet layercheck clean loadtest test-mcp test-mcp-deep test-mcp-bootstrap eval-recall eval-recall-projection eval-autolink-fp eval-revalidate-bench eval-queue-fuzz eval-embed-throughput eval-embedder-bench
 
 all: build test vet lint layercheck
 
@@ -139,6 +139,15 @@ eval-queue-fuzz:
 # VESKA_EMBED_MODEL. Skips if Ollama is unreachable. See README.
 eval-embed-throughput:
 	EMBED_BENCH_DURATION_S=$${EMBED_BENCH_DURATION_S:-60} go test -tags=eval -run TestEmbedderThroughput ./tools/loadtest/embedder/ -v -timeout=180s
+
+# eval-embedder-bench: per-embed throughput + load-cost micro-benchmarks
+# across the election ladder (static-v2 / model2vec disk / model2vec
+# embedded) — informed the fat/thin packaging decision (solov2-si1).
+# Disk arms skip without an installed model; the embedded arm needs the
+# fat build tag, so this target builds with `-tags 'eval embed_model'`
+# (run `make build-fat` once so the embed assets exist). See README.
+eval-embedder-bench:
+	go test -tags='eval embed_model' -run '^$$' -bench 'Load|Embed' -benchmem ./tools/loadtest/embedder/
 
 # eval-review-timing: M5 exit-gate-5 — drive the review Handler over a synthetic
 # ~100-file commit against a real Ollama and report the wall-clock time budget.
