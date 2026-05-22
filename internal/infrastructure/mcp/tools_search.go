@@ -6,10 +6,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
+	"time"
 
 	"github.com/whiskeyjimbo/veska/internal/application/search"
 	"github.com/whiskeyjimbo/veska/internal/core/domain"
 	"github.com/whiskeyjimbo/veska/internal/core/ports"
+	"github.com/whiskeyjimbo/veska/internal/savings"
 )
 
 // CodeFailedPrecondition is returned when a tool cannot proceed because a
@@ -37,19 +39,21 @@ type SimilarLookup interface {
 
 // RegisterSearchTools registers eng_search_semantic and eng_search_similar.
 // svc is required and orchestrates the semantic + lexical-fallback path.
-// lookup + vectors + nodes drive the similar-by-node-id path.
+// lookup + vectors + nodes drive the similar-by-node-id path. rec is
+// optional: a nil recorder disables savings telemetry (solov2-3bu).
 func RegisterSearchTools(
 	r *Registry,
 	svc *search.Service,
 	lookup SimilarLookup,
 	vectors ports.VectorStorage,
 	nodes ports.NodeLookup,
+	rec *savings.Recorder,
 ) {
 	r.MustRegister(ToolSpec{
 		Name:            "eng_search_semantic",
 		Description:     "Semantic search over embedded symbols with lexical fallback when the embedder is offline.",
 		IncludesStaging: false,
-		Handler:         makeSearchSemanticHandler(svc),
+		Handler:         makeSearchSemanticHandler(svc, rec),
 	})
 	r.MustRegister(ToolSpec{
 		Name:            "eng_search_similar",
@@ -73,7 +77,7 @@ type searchSemanticParams struct {
 	Limit int `json:"limit,omitempty"`
 }
 
-func makeSearchSemanticHandler(svc *search.Service) ToolHandler {
+func makeSearchSemanticHandler(svc *search.Service, rec *savings.Recorder) ToolHandler {
 	return func(ctx context.Context, _ domain.Actor, raw json.RawMessage) (any, *RPCError) {
 		var p searchSemanticParams
 		if rpcErr := bindParams(raw, &p); rpcErr != nil {
@@ -101,8 +105,24 @@ func makeSearchSemanticHandler(svc *search.Service) ToolHandler {
 		if results == nil {
 			results = []search.Result{}
 		}
+		recordSavings(rec, p.Query, results)
 		return SearchResponse{Results: results, DegradedReasons: resp.DegradedReasons}, nil
 	}
+}
+
+// recordSavings is the savings-telemetry side-effect for a successful
+// semantic search. It is intentionally fire-and-forget: a write error
+// is silently dropped so the search hot path never fails for telemetry
+// reasons, and a nil recorder is a no-op (handled inside Record).
+func recordSavings(rec *savings.Recorder, query string, results []search.Result) {
+	if rec == nil {
+		return
+	}
+	rf := make([]savings.ResultFile, len(results))
+	for i, r := range results {
+		rf[i] = savings.ResultFile{FilePath: r.FilePath, SnippetLen: len(r.Snippet)}
+	}
+	_ = rec.Record(savings.EntryFor(query, rf, time.Now()))
 }
 
 type searchSimilarParams struct {
