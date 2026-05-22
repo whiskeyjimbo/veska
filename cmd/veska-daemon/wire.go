@@ -42,6 +42,7 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/vector"
 	"github.com/whiskeyjimbo/veska/internal/observability"
 	"github.com/whiskeyjimbo/veska/internal/repo"
+	"github.com/whiskeyjimbo/veska/internal/savings"
 )
 
 // ErrMissingDep is returned by newDaemon when a required collaborator cannot
@@ -195,6 +196,11 @@ type Daemon struct {
 	// enabled and an endpoint is configured. It is threaded into every
 	// tracing-aware consumer and shut down (flush + exporter close) in Stop.
 	tracerProvider *sdktrace.TracerProvider
+
+	// savingsRec records per-search token-savings telemetry to
+	// <VeskaHome>/savings.jsonl (solov2-3bu). Nil disables recording.
+	// Closed on Stop so the underlying file handle is released.
+	savingsRec *savings.Recorder
 
 	startOnce sync.Once
 	stopOnce  sync.Once
@@ -644,6 +650,16 @@ func newDaemon(cfg Config) (*Daemon, error) {
 
 	// MCP server. The Registry implements mcp.Handler.
 	registry := mcp.NewRegistry()
+
+	// Savings telemetry: best-effort. A failure to open the JSONL file
+	// (read-only home dir, etc.) logs and continues with recording
+	// disabled — telemetry is never load-bearing for search itself.
+	savingsRec, err := savings.NewRecorder(filepath.Join(cfg.VeskaHome, "savings.jsonl"))
+	if err != nil {
+		slog.Warn("savings: recorder disabled", "err", err)
+		savingsRec = nil
+	}
+
 	registerMCPTools(registry, mcpDeps{
 		pools:       pools,
 		cfg:         cfg,
@@ -656,6 +672,7 @@ func newDaemon(cfg Config) (*Daemon, error) {
 		promoter:    promoter,
 		regSvc:      regSvc,
 		scanTracker: scanTracker,
+		savings:     savingsRec,
 	})
 	mcpsrv := mcp.NewServer(cfg.CLISockPath, cfg.MCPSockPath, registry)
 
@@ -696,6 +713,7 @@ func newDaemon(cfg Config) (*Daemon, error) {
 		metricsReg:     metricsReg,
 		metricsListen:  metricsListen,
 		tracerProvider: tracerProvider,
+		savingsRec:     savingsRec,
 		vulnRefresher:  vulnRefresher,
 		resync:         resync,
 		regSvc:         regSvc,
@@ -768,6 +786,9 @@ type mcpDeps struct {
 	provider ports.EmbeddingProvider
 	refs     *sqlite.EmbeddingRefsRepo
 	metrics  *observability.Metrics
+	// savings records per-search token-savings telemetry (solov2-3bu).
+	// Nil disables recording — RegisterSearchTools is nil-safe.
+	savings *savings.Recorder
 	// ingester + promoter drive eng_promote (post-commit hook target,
 	// solov2-3vv). When either is nil eng_promote is skipped at wire time.
 	ingester *application.Ingester
@@ -908,7 +929,7 @@ func registerMCPTools(r *mcp.Registry, d mcpDeps) {
 	// node hydration with lexical fallback.
 	searchSvc := search.NewService(d.provider, d.vectors, nodes,
 		search.WithMetrics(d.metrics))
-	mcp.RegisterSearchTools(r, searchSvc, d.refs, d.vectors, nodes)
+	mcp.RegisterSearchTools(r, searchSvc, d.refs, d.vectors, nodes, d.savings)
 }
 
 // activeTaskFunc returns a contextpack.ActiveTaskFunc reading the repo's
@@ -1211,6 +1232,10 @@ func (d *Daemon) Stop() error {
 		}
 		if d.started && d.poller != nil {
 			d.poller.Wait()
+		}
+
+		if err := d.savingsRec.Close(); err != nil {
+			stopErr = errors.Join(stopErr, fmt.Errorf("daemon: close savings recorder: %w", err))
 		}
 
 		if d.pools != nil {
