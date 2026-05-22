@@ -6,11 +6,41 @@ DAEMON_BIN      := $(BINDIR)/veska-daemon
 MCP_BIN         := $(BINDIR)/veska-mcp
 LAYERCHECK_BIN  := $(BINDIR)/layercheck
 
-.PHONY: all build test lint vet layercheck clean loadtest test-mcp test-mcp-deep test-mcp-bootstrap eval-recall eval-recall-projection eval-autolink-fp eval-revalidate-bench eval-queue-fuzz eval-embed-throughput
+.PHONY: all build build-fat fetch-embed-assets test lint vet layercheck clean loadtest test-mcp test-mcp-deep test-mcp-bootstrap eval-recall eval-recall-projection eval-autolink-fp eval-revalidate-bench eval-queue-fuzz eval-embed-throughput
 
 all: build test vet lint layercheck
 
 build: $(VESKA_BIN) $(DAEMON_BIN) $(MCP_BIN) $(LAYERCHECK_BIN)
+
+# Embed-asset dir for fat builds (solov2-si1). Contents are .gitignore'd —
+# the ~62MB weights are never committed.
+EMBED_ASSET_DIR := internal/infrastructure/embedding/model2vec/assets/potion-code-16M
+
+# build-fat: build veska + veska-daemon with the model2vec weights compiled
+# in (//go:embed, build tag `embed_model`) for a zero-setup, no-network
+# default embedder. veska-mcp stays thin — the stdio shim never embeds.
+# The thin `build` target is unchanged; ship fat for end users, thin for
+# CI / size-sensitive installs.
+build-fat: fetch-embed-assets
+	go build -tags embed_model -o $(VESKA_BIN) ./cmd/veska
+	go build -tags embed_model -o $(DAEMON_BIN) ./cmd/veska-daemon
+	go build -o $(MCP_BIN) ./cmd/veska-mcp
+	go build -o $(LAYERCHECK_BIN) ./tools/lint/layercheck/cmd
+
+# fetch-embed-assets: populate the //go:embed asset dir using the SAME
+# pinned ModelSpec + sha verification `veska install model2vec` uses, so
+# there is one source of truth for the model revision. Runs the installer
+# from current source (go run) — not a prebuilt bin, which may be stale —
+# into a temp home, then copies the verified files into place. `set -e`
+# aborts the recipe if the download/verify fails (rather than building a
+# binary with no embedded model).
+fetch-embed-assets:
+	@set -e; tmp=$$(mktemp -d); \
+	VESKA_HOME=$$tmp go run ./cmd/veska install model2vec; \
+	mkdir -p $(EMBED_ASSET_DIR); \
+	cp $$tmp/static-model/potion-code-16M/tokenizer.json $$tmp/static-model/potion-code-16M/model.safetensors $(EMBED_ASSET_DIR)/; \
+	rm -rf $$tmp; \
+	echo "embed assets ready in $(EMBED_ASSET_DIR)"
 
 $(VESKA_BIN):
 	go build -o $@ ./cmd/veska

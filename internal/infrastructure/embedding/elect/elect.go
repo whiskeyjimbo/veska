@@ -127,23 +127,23 @@ func pick(cfg Config, modelName string) (ports.EmbeddingProvider, error) {
 	case OverrideStatic:
 		return embedstatic.New()
 	case OverrideModel2Vec:
-		p, err := model2vec.TryLoad(cfg.VeskaHome, modelName)
+		p, err := tryModel2Vec(cfg, modelName)
 		if err != nil {
-			if errors.Is(err, model2vec.ErrModelNotPresent) {
-				return nil, fmt.Errorf("VESKA_EMBEDDER=model2vec but %q is not installed — run 'veska install model2vec': %w", modelName, err)
-			}
-			return nil, fmt.Errorf("elect: load model2vec: %w", err)
+			return nil, err
+		}
+		if p == nil {
+			return nil, fmt.Errorf("VESKA_EMBEDDER=model2vec but %q is not installed and this binary has no embedded model — run 'veska install model2vec'", modelName)
 		}
 		return p, nil
 	case OverrideAuto:
-		// Default direction: model2vec if installed, else static-v2.
+		// Default direction: model2vec if available, else static-v2.
 		// Ollama is NOT auto-elected — it is opt-in via the override.
-		p, err := model2vec.TryLoad(cfg.VeskaHome, modelName)
-		if err == nil {
-			return p, nil
+		p, err := tryModel2Vec(cfg, modelName)
+		if err != nil {
+			return nil, err
 		}
-		if !errors.Is(err, model2vec.ErrModelNotPresent) {
-			return nil, fmt.Errorf("elect: load model2vec: %w", err)
+		if p != nil {
+			return p, nil
 		}
 		return embedstatic.New()
 	default:
@@ -158,6 +158,25 @@ const (
 	defaultOllamaEmbedModel = "nomic-embed-text"
 	defaultOllamaURL        = "http://localhost:11434"
 )
+
+// tryModel2Vec resolves the model2vec provider with on-disk precedence:
+// an explicitly installed model (`veska install model2vec`, or a newer
+// model the user dropped in) wins over the binary's embedded copy (fat
+// build, solov2-si1). Returns (nil, nil) when neither source has it — the
+// caller then falls back down the ladder (auto) or errors (override).
+func tryModel2Vec(cfg Config, modelName string) (ports.EmbeddingProvider, error) {
+	p, err := model2vec.TryLoad(cfg.VeskaHome, modelName)
+	if err == nil {
+		return p, nil
+	}
+	if !errors.Is(err, model2vec.ErrModelNotPresent) {
+		return nil, fmt.Errorf("elect: load model2vec: %w", err)
+	}
+	if embedded, ok := model2vec.Embedded(); ok {
+		return embedded, nil
+	}
+	return nil, nil
+}
 
 func newOllama(cfg Config) (ports.EmbeddingProvider, error) {
 	model := cfg.EmbedModel

@@ -218,6 +218,45 @@ func buildSafetensorsEmbedWeights(t *testing.T, shape []int, emb []float32, weig
 	return buf.Bytes()
 }
 
+// TestNewFromBytes builds a Provider from in-memory bytes (the embedded
+// fat-binary path) and confirms it embeds and reports the name-derived
+// ModelID — which must match the on-disk New() ID for the same model so
+// fat/thin builds share a model_id.
+func TestNewFromBytes(t *testing.T) {
+	vocab := map[string]int{"[UNK]": 0, "parse": 1, "config": 2}
+	tokSpec := map[string]any{
+		"normalizer":    map[string]any{"type": "BertNormalizer", "lowercase": true},
+		"pre_tokenizer": map[string]any{"type": "BertPreTokenizer"},
+		"model": map[string]any{
+			"type": "WordPiece", "unk_token": "[UNK]",
+			"continuing_subword_prefix": "##", "vocab": vocab,
+		},
+	}
+	tokBytes, err := json.Marshal(tokSpec)
+	if err != nil {
+		t.Fatalf("marshal tokenizer: %v", err)
+	}
+	st := buildSafetensorsFile(t, "embeddings", []int{3, 4}, []float32{
+		0.1, 0.1, 0.1, 0.1,
+		1.0, 0.0, 0.0, 0.0,
+		0.0, 1.0, 0.0, 0.0,
+	})
+	p, err := NewFromBytes("potion-code-16M", tokBytes, st)
+	if err != nil {
+		t.Fatalf("NewFromBytes: %v", err)
+	}
+	if p.ModelID() != "model2vec(potion-code-16M)" {
+		t.Errorf("ModelID = %q, want model2vec(potion-code-16M)", p.ModelID())
+	}
+	v, err := p.Embed(context.Background(), "parse config")
+	if err != nil {
+		t.Fatalf("Embed: %v", err)
+	}
+	if len(v) != p.OutputDim() {
+		t.Errorf("dim = %d, want %d", len(v), p.OutputDim())
+	}
+}
+
 // writeTokenizerFixture writes a synthetic tokenizer.json to path
 // using the same BertNormalizer+BertPreTokenizer+WordPiece pipeline
 // the real model uses.
