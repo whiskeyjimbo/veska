@@ -139,12 +139,18 @@ func TestAdminTools_ListRepos(t *testing.T) {
 		t.Fatalf("result is not map[string]any, got %T", result)
 	}
 
-	repos, ok := m["repos"].([]application.RepoRecord)
+	repos, ok := m["repos"].([]RepoView)
 	if !ok {
 		t.Fatalf("repos missing or wrong type: %T", m["repos"])
 	}
 	if len(repos) != 2 {
 		t.Errorf("expected 2 repos, got %d", len(repos))
+	}
+	// Every returned view must have a non-empty 'status' (solov2-b9y).
+	for _, r := range repos {
+		if r.Status == "" {
+			t.Errorf("repo %q missing status field", r.RepoID)
+		}
 	}
 
 	degraded, ok := m["degraded_reasons"].([]string)

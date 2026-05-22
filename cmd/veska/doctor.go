@@ -16,6 +16,7 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/embedderprobe"
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/sqlite"
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/vulnsource/osv"
+	"github.com/whiskeyjimbo/veska/internal/repo"
 )
 
 const (
@@ -424,6 +425,7 @@ func doctorStatusCmd() *cobra.Command {
 			})
 			configReport, _ := doctor.CheckConfig(home)
 			storageReport, _ := doctor.CheckStorage(home)
+			ingestionStatus, ingestionDetail := checkIngestion(context.Background())
 
 			// Compute egress status: broken if any socket is missing.
 			egressStatus := "healthy"
@@ -444,7 +446,7 @@ func doctorStatusCmd() *cobra.Command {
 			_ = storageReport
 
 			// Roll up: broken if any broken; degraded if any degraded.
-			statuses := []string{embedderResult.Status, egressStatus, configStatus}
+			statuses := []string{embedderResult.Status, egressStatus, configStatus, ingestionStatus}
 			rollup := "healthy"
 			for _, s := range statuses {
 				switch s {
@@ -459,19 +461,27 @@ func doctorStatusCmd() *cobra.Command {
 
 			if jsonOut {
 				type statusRollupData struct {
-					Embedder string `json:"embedder"`
-					Egress   string `json:"egress"`
-					Config   string `json:"config"`
+					Embedder        string `json:"embedder"`
+					Egress          string `json:"egress"`
+					Config          string `json:"config"`
+					Ingestion       string `json:"ingestion"`
+					IngestionDetail string `json:"ingestion_detail,omitempty"`
 				}
 				enc := json.NewEncoder(cmd.OutOrStdout())
 				return enc.Encode(doctor.NewEnvelope("status", rollup, statusRollupData{
-					Embedder: embedderResult.Status,
-					Egress:   egressStatus,
-					Config:   configStatus,
+					Embedder:        embedderResult.Status,
+					Egress:          egressStatus,
+					Config:          configStatus,
+					Ingestion:       ingestionStatus,
+					IngestionDetail: ingestionDetail,
 				}))
 			}
-			fmt.Fprintf(cmd.OutOrStdout(), "status: %s (embedder=%s, egress=%s, config=%s)\n",
-				rollup, embedderResult.Status, egressStatus, configStatus)
+			detail := ""
+			if ingestionDetail != "" {
+				detail = " — " + ingestionDetail
+			}
+			fmt.Fprintf(cmd.OutOrStdout(), "status: %s (embedder=%s, egress=%s, config=%s, ingestion=%s)%s\n",
+				rollup, embedderResult.Status, egressStatus, configStatus, ingestionStatus, detail)
 			if rollup != "healthy" {
 				return ProbeStatusError{Subsystem: "status", Status: rollup}
 			}
@@ -480,6 +490,46 @@ func doctorStatusCmd() *cobra.Command {
 	}
 	cmd.Flags().BoolVar(&jsonOut, "json", false, "output results as JSON")
 	return cmd
+}
+
+// checkIngestion inspects the repos table for never-promoted entries
+// (last_promoted_sha IS NULL or ”). A repo that has been registered
+// but is still unindexed is real degraded state — the daemon either is
+// not running, is mid-cold-scan, or hit a per-repo failure during
+// startup-resync (solov2-8ga's continue-on-error path) — and 'doctor
+// status' should not report 'healthy' while that's true (solov2-b9y).
+//
+// Returns ("healthy"|"degraded", detail). detail is "" when healthy.
+// Database open errors are reported as 'degraded' with the err message
+// so the user gets a hint rather than a silent miss.
+func checkIngestion(ctx context.Context) (string, string) {
+	db, closeFn, err := openLocalDB()
+	if err != nil {
+		return "degraded", fmt.Sprintf("repos db unreadable: %v", err)
+	}
+	defer closeFn()
+
+	recs, err := repo.List(ctx, db)
+	if err != nil {
+		return "degraded", fmt.Sprintf("repos list failed: %v", err)
+	}
+	if len(recs) == 0 {
+		return "healthy", ""
+	}
+	var unindexed []string
+	for _, r := range recs {
+		if r.LastPromotedSHA == "" {
+			short := r.RepoID
+			if len(short) > 12 {
+				short = short[:12]
+			}
+			unindexed = append(unindexed, short)
+		}
+	}
+	if len(unindexed) == 0 {
+		return "healthy", ""
+	}
+	return "degraded", fmt.Sprintf("%d unindexed repo(s): %v", len(unindexed), unindexed)
 }
 
 // doctorServiceCmd returns the "doctor service" subcommand backed by internal/doctor.CheckService.
