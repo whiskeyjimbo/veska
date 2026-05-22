@@ -27,7 +27,7 @@ func wikiFixtureService(t *testing.T) *wiki.HotZoneService {
 			"x": {NodeID: "x"}, "y": {NodeID: "y"},
 		},
 		byFile: map[string][]string{
-			"a.go": {"a"}, "b.go": {"b"}, "c.go": {"c"},
+			"/tmp/r/a.go": {"a"}, "/tmp/r/b.go": {"b"}, "/tmp/r/c.go": {"c"},
 		},
 	}
 	blast := blastradius.NewService(edges, nodes, nil)

@@ -167,10 +167,39 @@ func (s *Service) Semantic(ctx context.Context, repoID, branch, query string, k 
 		return Response{}, fmt.Errorf("search: embed query: %w", err)
 	}
 
-	hits, err := s.vectors.Search(ctx, repoID, branch, vec, k, filter)
+	// Over-request from each retriever so RRF has headroom — fusing two
+	// top-K lists where the second-best in one only appears at rank K+1
+	// in the other still produces a sensible top-K. 3× is the sweet spot
+	// in the semble paper and a reasonable upper bound on call cost.
+	const fusionFanout = 3
+	vecHits, err := s.vectors.Search(ctx, repoID, branch, vec, k*fusionFanout, filter)
 	if err != nil {
 		return Response{}, fmt.Errorf("search: vector search: %w", err)
 	}
+
+	// Hybrid: when a LexicalSearcher is wired, run BM25/FTS5 in parallel
+	// and fuse with Reciprocal Rank Fusion (solov2-2su). Vector cosine
+	// alone is too thin on small corpora — Sam's notes-API session
+	// returned scores in a ~0.00004 range across the top-10 — so the
+	// "right" answer routinely lost to neighbours by a rounding error.
+	// RRF is rank-only so the two retrievers' incompatible score
+	// distributions don't need normalising.
+	//
+	// When lexical is absent (no FTS5 wired, or empty corpus on that
+	// side), the fusion path degrades to pure vector ordering.
+	var lexHits []ports.LexicalHit
+	if s.lexical != nil {
+		lh, lerr := s.lexical.Search(ctx, repoID, branch, query, k*fusionFanout)
+		if lerr == nil {
+			lexHits = lh
+		}
+		// A lexical-side failure is non-fatal: degrade to vector-only.
+	}
+	// rrfFuse keeps the FULL candidate pool so the post-fusion name-match
+	// boost has room to reorder (otherwise a high-name-match candidate
+	// sitting at fused rank k+1 gets truncated before it can win). Final
+	// truncation to caller-k happens after the boost.
+	hits := rrfFuse(vecHits, lexHits, 0)
 	if len(hits) == 0 {
 		return Response{Results: []Result{}}, nil
 	}
@@ -217,7 +246,57 @@ func (s *Service) Semantic(ctx context.Context, repoID, branch, query string, k 
 	// arbitrary one without affecting larger-corpus rankings where vector
 	// scores already discriminate well.
 	out = applyNameMatchBoost(out, query)
+	if len(out) > k {
+		out = out[:k]
+	}
 	return Response{Results: out}, nil
+}
+
+// rrfConstant is the standard Reciprocal Rank Fusion smoothing term.
+// 60 is the value the original Cormack et al. paper recommends and what
+// most production hybrid-retrieval systems (including semble) use. It
+// dampens the dominance of rank-1 so a candidate that appears at rank
+// 3 in both lists outranks one that appears at rank 1 in only one list.
+const rrfConstant = 60
+
+// rrfFuse merges vector hits and lexical hits with Reciprocal Rank
+// Fusion. The merged score per node is sum over each retriever of
+//
+//	1 / (rrfConstant + rank_in_that_retriever)
+//
+// where rank is 1-indexed. Nodes appearing in only one list still
+// contribute (so the fusion never demotes a strong unique hit below a
+// weak common one). Returns the top-k by fused score. The Score field
+// on each returned domain.Hit holds the fused score so downstream
+// callers (e.g. applyNameMatchBoost) can scale relative to a sensible
+// max.
+// k <= 0 means "no truncation, return all fused candidates" — used by
+// the Semantic() path so the post-fusion boost has full visibility.
+func rrfFuse(vec []domain.Hit, lex []ports.LexicalHit, k int) []domain.Hit {
+	if len(vec) == 0 && len(lex) == 0 {
+		return nil
+	}
+	scores := make(map[string]float32, len(vec)+len(lex))
+	for rank, h := range vec {
+		scores[h.NodeID] += 1.0 / float32(rrfConstant+rank+1)
+	}
+	for rank, h := range lex {
+		scores[h.NodeID] += 1.0 / float32(rrfConstant+rank+1)
+	}
+	out := make([]domain.Hit, 0, len(scores))
+	for id, s := range scores {
+		out = append(out, domain.Hit{NodeID: id, Score: s})
+	}
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].Score != out[j].Score {
+			return out[i].Score > out[j].Score
+		}
+		return out[i].NodeID < out[j].NodeID
+	})
+	if k > 0 && len(out) > k {
+		out = out[:k]
+	}
+	return out
 }
 
 // applyNameMatchBoost re-ranks results by adding a small bonus per
