@@ -35,6 +35,42 @@ function greet(name: string): string {
 	}
 }
 
+// TestTS_ExportedFlag pins solov2-xp1u: TS declarations under an
+// export_statement carry Exported=true; unexported ones Exported=false (not
+// nil). Methods inherit their class's export status.
+func TestTS_ExportedFlag(t *testing.T) {
+	src := []byte(`
+export function pub(): void {}
+function priv(): void {}
+export class Widget {
+  render(): void {}
+}
+export const arrow = () => {};
+`)
+	p := treesitter.NewTSParser()
+	result, err := p.ParseFile(context.Background(), tsRepoID, "src/x.ts", src)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	want := map[string]bool{
+		"pub": true, "priv": false, "Widget": true, "Widget.render": true, "arrow": true,
+	}
+	for name, exp := range want {
+		n := findNodeByName(result.Nodes, name)
+		if n == nil {
+			t.Errorf("missing node %q (got %v)", name, nodeNames(result.Nodes))
+			continue
+		}
+		if n.Exported == nil {
+			t.Errorf("%s: Exported is nil, want %v", name, exp)
+			continue
+		}
+		if *n.Exported != exp {
+			t.Errorf("%s: Exported = %v, want %v", name, *n.Exported, exp)
+		}
+	}
+}
+
 func TestTS_ClassDeclaration(t *testing.T) {
 	src := []byte(`
 class Animal {
