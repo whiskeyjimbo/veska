@@ -103,6 +103,43 @@ func makeGetCurrentRepoHandler(repos application.RepoLister) ToolHandler {
 // eng_list_repos
 // ---------------------------------------------------------------------------
 
+// RepoView decorates an application.RepoRecord with a derived 'status'
+// field so callers (`veska repo list`, `doctor status`, AI tools) can
+// distinguish a freshly-registered repo from a fully-indexed one
+// without reverse-engineering empty strings (solov2-b9y).
+//
+// Status values:
+//   - "promoted"   — last_promoted_sha is set; repo is queryable.
+//   - "unindexed"  — last_promoted_sha is empty; repo was registered
+//     but the daemon has not (yet) cold-scanned it. Either the daemon
+//     is off, the daemon is mid-scan, or startup-resync errored on it
+//     (solov2-8ga's per-repo continue-on-error path).
+type RepoView struct {
+	RepoID          string `json:"RepoID"`
+	RootPath        string `json:"RootPath"`
+	ActiveBranch    string `json:"ActiveBranch"`
+	LastPromotedSHA string `json:"LastPromotedSHA"`
+	Status          string `json:"status"`
+}
+
+func decorateRepos(in []application.RepoRecord) []RepoView {
+	out := make([]RepoView, 0, len(in))
+	for _, r := range in {
+		status := "promoted"
+		if r.LastPromotedSHA == "" {
+			status = "unindexed"
+		}
+		out = append(out, RepoView{
+			RepoID:          r.RepoID,
+			RootPath:        r.RootPath,
+			ActiveBranch:    r.ActiveBranch,
+			LastPromotedSHA: r.LastPromotedSHA,
+			Status:          status,
+		})
+	}
+	return out
+}
+
 func makeListReposHandler(repos application.RepoLister) ToolHandler {
 	return func(ctx context.Context, _ domain.Actor, raw json.RawMessage) (any, *RPCError) {
 		all, err := repos.ListRepos(ctx)
@@ -111,7 +148,7 @@ func makeListReposHandler(repos application.RepoLister) ToolHandler {
 		}
 
 		return map[string]any{
-			"repos":            all,
+			"repos":            decorateRepos(all),
 			"included_staging": false,
 			"degraded_reasons": []string{},
 		}, nil
