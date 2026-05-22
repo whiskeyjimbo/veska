@@ -142,6 +142,37 @@ func hello() string {
 	}
 }
 
+// TestParseFile_ReceiverSelectorCallsEdge pins solov2-q9p: when a method
+// on *Server has body 's.foo()', the parser emits a CALLS edge from
+// Server.Bar -> Server.foo. Without this, idiomatic Go (s.x() / s.y())
+// produces zero call edges and the call graph is useless.
+func TestParseFile_ReceiverSelectorCallsEdge(t *testing.T) {
+	src := []byte(`package foo
+
+type Server struct{}
+
+func (s *Server) Foo() {
+	s.bar()
+}
+
+func (s *Server) bar() {}
+`)
+	p := treesitter.NewGoParser()
+	result, err := p.ParseFile(context.Background(), repoID, filePath, src)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	fooNode := findNodeByName(result.Nodes, "Server.Foo")
+	barNode := findNodeByName(result.Nodes, "Server.bar")
+	if fooNode == nil || barNode == nil {
+		t.Fatalf("expected Server.Foo + Server.bar nodes, got: %v", nodeNames(result.Nodes))
+	}
+	if findEdge(result.Edges, fooNode.ID, barNode.ID, domain.EdgeCalls) == nil {
+		t.Errorf("expected CALLS edge Server.Foo -> Server.bar (selector call on receiver); edges=%+v", result.Edges)
+	}
+}
+
 func TestParseFile_NonGoFile_ReturnsEmpty(t *testing.T) {
 	src := []byte(`const x = 1;`)
 	p := treesitter.NewGoParser()

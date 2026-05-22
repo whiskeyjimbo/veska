@@ -235,11 +235,13 @@ func parseTypeDecl(node *sitter.Node, src []byte, repoID, path string) *domain.N
 // function/method bodies and emits EdgeCalls when the callee is known in the file.
 func extractCallEdges(root *sitter.Node, src []byte, symbols map[string]*domain.Node) []*domain.Edge {
 	var edges []*domain.Edge
+	seen := make(map[string]bool) // dedupe same caller→callee within a file
 
 	count := int(root.ChildCount())
 	for i := range count {
 		child := root.Child(i)
 		var callerNode *domain.Node
+		var recvName, recvType string
 
 		switch child.Type() {
 		case "function_declaration":
@@ -254,8 +256,8 @@ func extractCallEdges(root *sitter.Node, src []byte, symbols map[string]*domain.
 			if receiverNode == nil || nameNode == nil {
 				continue
 			}
-			rt := extractReceiverType(receiverNode, src)
-			name := rt + "." + string(src[nameNode.StartByte():nameNode.EndByte()])
+			recvName, recvType = extractReceiverBinding(receiverNode, src)
+			name := recvType + "." + string(src[nameNode.StartByte():nameNode.EndByte()])
 			callerNode = symbols[name]
 		default:
 			continue
@@ -270,12 +272,23 @@ func extractCallEdges(root *sitter.Node, src []byte, symbols map[string]*domain.
 			continue
 		}
 
-		callNames := collectCallNames(bodyNode, src)
+		// Identifier calls (foo()) — resolve directly against the file's
+		// symbol map. Selector calls on the receiver (s.foo() inside
+		// a method on *Server) — rewrite as Server.foo and resolve too
+		// (solov2-q9p). Cross-package selector calls (pkg.Bar) are not
+		// resolved here; they need a cross-repo IMPORTS graph
+		// (solov2-1gj) before we can attach a target.
+		callNames := collectCallNames(bodyNode, src, recvName, recvType)
 		for _, callee := range callNames {
 			calleeNode, ok := symbols[callee]
 			if !ok {
 				continue
 			}
+			key := string(callerNode.ID) + "->" + string(calleeNode.ID)
+			if seen[key] {
+				continue
+			}
+			seen[key] = true
 			e, err := domain.NewEdge(callerNode.ID, calleeNode.ID, domain.EdgeCalls,
 				domain.WithConfidence(domain.Probable),
 			)
@@ -287,16 +300,71 @@ func extractCallEdges(root *sitter.Node, src []byte, symbols map[string]*domain.
 	return edges
 }
 
-// collectCallNames does a depth-first walk of node and returns the names of all
-// call_expression targets that are plain identifiers (i.e. same-package calls).
-func collectCallNames(node *sitter.Node, src []byte) []string {
+// extractReceiverBinding returns the receiver's parameter name and type
+// from a method_declaration receiver_node. For `func (s *Server) Foo()`,
+// returns ("s", "Server"). Either may be empty (anonymous receiver, or
+// no type identifier found); callers should skip when recvName is empty.
+func extractReceiverBinding(receiverNode *sitter.Node, src []byte) (name, typ string) {
+	typ = extractReceiverType(receiverNode, src)
+
+	// Receiver is a parameter_list with a single parameter_declaration.
+	// The parameter_declaration has 'name' (identifier) + 'type'. Walk
+	// for the first identifier under a parameter_declaration.
+	var walk func(*sitter.Node)
+	walk = func(n *sitter.Node) {
+		if name != "" {
+			return
+		}
+		if n.Type() == "parameter_declaration" {
+			nameNode := n.ChildByFieldName("name")
+			if nameNode != nil {
+				name = string(src[nameNode.StartByte():nameNode.EndByte()])
+				return
+			}
+		}
+		count := int(n.ChildCount())
+		for i := range count {
+			walk(n.Child(i))
+		}
+	}
+	walk(receiverNode)
+	return name, typ
+}
+
+// collectCallNames does a depth-first walk of node and returns the lookup
+// keys for every call_expression we can resolve against the file's symbol
+// map. Two forms are recognised:
+//
+//   - identifier call:        foo()         → "foo"
+//   - receiver-method call:   recvName.X()  → "recvType.X"  (only when
+//     recvName and recvType are non-empty, i.e. we are inside a
+//     method_declaration whose receiver is bound to a named variable
+//     of a named type)
+//
+// Cross-package selector calls (pkg.Bar(), or chained s.field.X())
+// cannot be resolved without cross-repo type info, so they are skipped
+// here. Adding them is solov2-1gj (cross-repo IMPORTS edges).
+func collectCallNames(node *sitter.Node, src []byte, recvName, recvType string) []string {
 	var names []string
 	var walk func(*sitter.Node)
 	walk = func(n *sitter.Node) {
 		if n.Type() == "call_expression" {
 			fn := n.ChildByFieldName("function")
-			if fn != nil && fn.Type() == "identifier" {
-				names = append(names, string(src[fn.StartByte():fn.EndByte()]))
+			if fn != nil {
+				switch fn.Type() {
+				case "identifier":
+					names = append(names, string(src[fn.StartByte():fn.EndByte()]))
+				case "selector_expression":
+					if recvName != "" && recvType != "" {
+						operand := fn.ChildByFieldName("operand")
+						field := fn.ChildByFieldName("field")
+						if operand != nil && field != nil &&
+							operand.Type() == "identifier" &&
+							string(src[operand.StartByte():operand.EndByte()]) == recvName {
+							names = append(names, recvType+"."+string(src[field.StartByte():field.EndByte()]))
+						}
+					}
+				}
 			}
 		}
 		count := int(n.ChildCount())
