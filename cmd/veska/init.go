@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 
 	"github.com/spf13/cobra"
 	"github.com/whiskeyjimbo/veska/internal/config"
@@ -59,12 +60,23 @@ func runInit(ctx context.Context, deps initDeps, yes bool, out io.Writer) error 
 // initCmd returns the "init" Cobra command that runs the first-run flow.
 func initCmd() *cobra.Command {
 	var yes bool
+	var agent string
 
 	cmd := &cobra.Command{
 		Use:          "init",
-		Short:        "First-run setup: create ~/.veska/ layout, probe embedder, and print summary",
+		Short:        "First-run setup, or write per-agent instruction snippet with --agent",
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
+			// --agent is project-scoped and short-circuits the
+			// machine-scoped first-run flow: the two intentionally
+			// don't co-execute (solov2-m81).
+			if agent != "" {
+				cwd, err := os.Getwd()
+				if err != nil {
+					return fmt.Errorf("init --agent: cwd: %w", err)
+				}
+				return writeAgentSnippet(cwd, agent, cmd.OutOrStdout())
+			}
 			deps := initDeps{
 				veskaHome: config.DefaultVectorDir(),
 				probe:     embedderprobe.Probe,
@@ -75,5 +87,8 @@ func initCmd() *cobra.Command {
 	}
 
 	cmd.Flags().BoolVarP(&yes, "yes", "y", false, "auto-accept all prompts (non-interactive mode)")
+	cmd.Flags().StringVar(&agent, "agent", "",
+		"write a per-agent instruction snippet to the current project ("+
+			strings.Join(supportedFlavorNames(), ", ")+")")
 	return cmd
 }
