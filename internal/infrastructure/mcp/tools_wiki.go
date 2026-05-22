@@ -77,10 +77,15 @@ func makeEntryPointsHandler(svc *wiki.EntryPointsService) ToolHandler {
 		if rpcErr := checkRequired("repo_id", p.RepoID, "branch", p.Branch); rpcErr != nil {
 			return nil, rpcErr
 		}
-		rep, err := svc.Select(ctx, p.RepoID, p.Branch)
+		rep, err := svc.SelectWith(ctx, p.RepoID, p.Branch, wiki.SelectOptions{
+			IncludeTests: p.IncludeTests,
+		})
 		if err != nil {
 			return nil, &RPCError{Code: CodeInternalError, Message: fmt.Sprintf("entry points: %v", err)}
 		}
+		// Defence-in-depth: even when the service excludes test
+		// candidates, prior promotions may have left test entries
+		// in the surface. Filter again here unless the caller opted in.
 		entries := rep.EntryPoints
 		if !p.IncludeTests {
 			entries = filterTestEntries(entries)

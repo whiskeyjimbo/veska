@@ -180,6 +180,80 @@ func TestSelect_AppliesAllThreeCandidateGates(t *testing.T) {
 	}
 }
 
+// TestSelect_TestSymbolsExcludedByDefault pins solov2-m8d: a
+// Test/Benchmark/Example/Fuzz-named symbol (or any symbol in a *_test.go
+// file) is dropped from the candidate set unless IncludeTests=true. On
+// real Go libraries (cobra) test helpers were swamping the result.
+func TestSelect_TestSymbolsExcludedByDefault(t *testing.T) {
+	g := epFixtureGraph(t)
+	// Inject a TestFoo-named function in a real path AND a regular helper
+	// in a _test.go path. Both should be excluded by default.
+	mk := func(id, path string, kind domain.NodeKind) {
+		n, _ := domain.NewNode(id, path, id, kind)
+		_ = g.AddNode(n)
+	}
+	mk("TestFoo", "app/foo.go", domain.KindFunction)
+	mk("helperInTest", "app/util_test.go", domain.KindFunction)
+	mk("TestFoo_test", "app/foo_test.go", domain.KindTest)
+	mk("helperInTest_caller", "app/util_test.go", domain.KindTest)
+
+	loadGraph := func(_ context.Context, _, _ string) (*domain.Graph, error) { return g, nil }
+	inbound := map[string][]string{
+		"low":          {"low_test"},
+		"TestFoo":      {"TestFoo_test"},
+		"helperInTest": {"helperInTest_caller"},
+		"heavy":        heavyCallerIDs,
+		"untested":     {"prod_caller"},
+		"flagged":      {"flagged_test"},
+	}
+	inboundEdges := func(_ context.Context, _, _ string, ids []string) (map[string][]string, error) {
+		out := make(map[string][]string, len(ids))
+		for _, id := range ids {
+			out[id] = append([]string(nil), inbound[id]...)
+		}
+		return out, nil
+	}
+	openFindings := func(_ context.Context, _, _ string) (map[string]bool, error) {
+		return map[string]bool{"flagged": true}, nil
+	}
+	metas := map[string]ports.NodeMeta{
+		"low":                 {NodeID: "low"},
+		"TestFoo":             {NodeID: "TestFoo"},
+		"helperInTest":        {NodeID: "helperInTest"},
+		"TestFoo_test":        {NodeID: "TestFoo_test"},
+		"helperInTest_caller": {NodeID: "helperInTest_caller"},
+	}
+	blast := blastradius.NewService(&epFakeEdges{inbound: inbound}, &epFakeNodes{metas: metas}, nil)
+	svc, err := NewEntryPointsService(loadGraph, inboundEdges, openFindings, blast)
+	if err != nil {
+		t.Fatalf("NewEntryPointsService: %v", err)
+	}
+
+	// Default — TestFoo + helperInTest must NOT appear.
+	rep, err := svc.Select(context.Background(), "r1", "main")
+	if err != nil {
+		t.Fatalf("Select: %v", err)
+	}
+	for _, ep := range rep.EntryPoints {
+		if ep.SymbolName == "TestFoo" || ep.SymbolName == "helperInTest" {
+			t.Errorf("default Select must exclude test-shape symbol %q", ep.SymbolName)
+		}
+	}
+
+	// IncludeTests=true — they should come back.
+	rep2, err := svc.SelectWith(context.Background(), "r1", "main", SelectOptions{IncludeTests: true})
+	if err != nil {
+		t.Fatalf("SelectWith: %v", err)
+	}
+	have := map[string]bool{}
+	for _, ep := range rep2.EntryPoints {
+		have[ep.SymbolName] = true
+	}
+	if !have["TestFoo"] || !have["helperInTest"] {
+		t.Errorf("IncludeTests=true should surface TestFoo + helperInTest; got %+v", rep2.EntryPoints)
+	}
+}
+
 // AC1: the low-blast-radius threshold is configurable.
 func TestSelect_MaxBlastRadiusIsConfigurable(t *testing.T) {
 	// Raise the cap so "heavy" (radius 12: seed + 11 callers) also qualifies.
