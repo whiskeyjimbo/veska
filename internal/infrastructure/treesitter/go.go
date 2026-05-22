@@ -123,6 +123,11 @@ func (p *GoParser) ParseFile(ctx context.Context, repoID, path string, src []byt
 	result.Edges = append(result.Edges, callEdges...)
 	result.UnresolvedCalls = unresolved
 
+	// --- chunk index over non-declaration regions (solov2-jyt) ---
+	// Emitted AFTER CALLS so the symbol set used for CALLS resolution
+	// stays purely declarative — chunks aren't callable symbols.
+	result.Nodes = append(result.Nodes, chunkFile(repoID, path, src, result.Nodes)...)
+
 	// --- TODO/FIXME markers (language-agnostic lexical scan) ---
 	result.Todos = scanTodos(src)
 

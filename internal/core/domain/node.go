@@ -25,6 +25,13 @@ const (
 	KindFile      NodeKind = "file"
 	KindField     NodeKind = "field"
 	KindTest      NodeKind = "test"
+	// KindChunk is a non-declaration source region — package-level
+	// vars, file-top comments, init() guts, anything between symbol
+	// declarations. Chunks live alongside symbol nodes so the existing
+	// embedder / FTS / search pipeline picks them up without special
+	// casing, but they are excluded from entry_points and the
+	// rerank definition-boost (solov2-jyt).
+	KindChunk NodeKind = "chunk"
 )
 
 // ContentHash is a hex-encoded SHA-256 digest of a node's raw content.

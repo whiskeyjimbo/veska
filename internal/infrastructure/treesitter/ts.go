@@ -96,6 +96,9 @@ func (p *TSParser) ParseFile(ctx context.Context, repoID, path string, src []byt
 	callEdges := extractTSCallEdges(root, src, symbolByName)
 	result.Edges = append(result.Edges, callEdges...)
 
+	// --- chunk index over non-declaration regions (solov2-jyt) ---
+	result.Nodes = append(result.Nodes, chunkFile(repoID, path, src, result.Nodes)...)
+
 	// --- TODO/FIXME markers (language-agnostic lexical scan) ---
 	result.Todos = scanTodos(src)
 
