@@ -13,6 +13,12 @@ type NodeMeta struct {
 	Kind       string
 	LineStart  int
 	LineEnd    int
+	// Snippet is the symbol's stored raw_content (nodes.snippet column).
+	// Populated by adapters that select the column; empty when the
+	// caller is on a code path that did not request it. Search hydrates
+	// this through to Result.Snippet so agents get the bytes inline and
+	// can skip a separate Read call (solov2-7kz).
+	Snippet string
 }
 
 // NodeLookup is the port for hydrating a set of node IDs into their

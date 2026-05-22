@@ -202,6 +202,7 @@ func makeSearchSimilarHandler(lookup SimilarLookup, vectors ports.VectorStorage,
 				Kind:       m.Kind,
 				LineStart:  m.LineStart,
 				LineEnd:    m.LineEnd,
+				Snippet:    m.Snippet,
 			})
 		}
 		return SearchResponse{Results: out}, nil

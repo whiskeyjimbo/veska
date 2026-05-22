@@ -47,7 +47,8 @@ func (r *NodeLookupRepo) LookupNodes(ctx context.Context, repoID, branch string,
 		args = append(args, id)
 	}
 	query := `SELECT node_id, symbol_path, file_path, kind,
-		COALESCE(line_start, 0), COALESCE(line_end, 0)
+		COALESCE(line_start, 0), COALESCE(line_end, 0),
+		COALESCE(snippet, '')
 		FROM nodes
 		WHERE repo_id = ? AND branch = ?
 		  AND node_id IN (` + strings.Join(placeholders, ",") + `)`
@@ -61,7 +62,7 @@ func (r *NodeLookupRepo) LookupNodes(ctx context.Context, repoID, branch string,
 	out := make([]ports.NodeMeta, 0, len(nodeIDs))
 	for rows.Next() {
 		var m ports.NodeMeta
-		if err := rows.Scan(&m.NodeID, &m.SymbolPath, &m.FilePath, &m.Kind, &m.LineStart, &m.LineEnd); err != nil {
+		if err := rows.Scan(&m.NodeID, &m.SymbolPath, &m.FilePath, &m.Kind, &m.LineStart, &m.LineEnd, &m.Snippet); err != nil {
 			return nil, fmt.Errorf("node_lookup: scan: %w", err)
 		}
 		out = append(out, m)

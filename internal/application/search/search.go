@@ -42,6 +42,11 @@ type Result struct {
 	Kind       string
 	LineStart  int
 	LineEnd    int
+	// Snippet is the symbol's source code, populated from the nodes
+	// table's snippet column. Lets agents skip a follow-up Read of the
+	// file (solov2-7kz). Empty when the underlying node has no stored
+	// content (legacy rows from before the snippet column existed).
+	Snippet string
 }
 
 // Response is the envelope returned by Semantic. It carries the hydrated
@@ -167,12 +172,20 @@ func (s *Service) Semantic(ctx context.Context, repoID, branch, query string, k 
 		return Response{}, fmt.Errorf("search: embed query: %w", err)
 	}
 
-	// Over-request from each retriever so RRF has headroom — fusing two
-	// top-K lists where the second-best in one only appears at rank K+1
-	// in the other still produces a sensible top-K. 3× is the sweet spot
-	// in the semble paper and a reasonable upper bound on call cost.
+	// Over-request from each retriever so RRF + the post-fusion
+	// name-match boost have headroom — fusing two top-K lists where the
+	// second-best in one only appears at rank K+1 in the other still
+	// produces a sensible top-K. 3× is the sweet spot in the semble
+	// paper. A minimum floor of 30 protects small-k callers: with k=1
+	// + fanout=3 we'd only see 3 candidates per retriever and the
+	// name-match boost would have nothing to lift.
 	const fusionFanout = 3
-	vecHits, err := s.vectors.Search(ctx, repoID, branch, vec, k*fusionFanout, filter)
+	const fanoutFloor = 30
+	fanK := k * fusionFanout
+	if fanK < fanoutFloor {
+		fanK = fanoutFloor
+	}
+	vecHits, err := s.vectors.Search(ctx, repoID, branch, vec, fanK, filter)
 	if err != nil {
 		return Response{}, fmt.Errorf("search: vector search: %w", err)
 	}
@@ -189,7 +202,7 @@ func (s *Service) Semantic(ctx context.Context, repoID, branch, query string, k 
 	// side), the fusion path degrades to pure vector ordering.
 	var lexHits []ports.LexicalHit
 	if s.lexical != nil {
-		lh, lerr := s.lexical.Search(ctx, repoID, branch, query, k*fusionFanout)
+		lh, lerr := s.lexical.Search(ctx, repoID, branch, query, fanK)
 		if lerr == nil {
 			lexHits = lh
 		}
@@ -236,6 +249,7 @@ func (s *Service) Semantic(ctx context.Context, repoID, branch, query string, k 
 			Kind:       m.Kind,
 			LineStart:  m.LineStart,
 			LineEnd:    m.LineEnd,
+			Snippet:    m.Snippet,
 		})
 	}
 	// Lexical name-match boost (solov2-x35): bare-name queries on small
@@ -438,6 +452,7 @@ func (s *Service) lexicalFallback(ctx context.Context, repoID, branch, query str
 			Kind:       m.Kind,
 			LineStart:  m.LineStart,
 			LineEnd:    m.LineEnd,
+			Snippet:    m.Snippet,
 		})
 	}
 	return out, nil
