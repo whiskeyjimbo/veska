@@ -343,6 +343,25 @@ func newDaemon(cfg Config) (*Daemon, error) {
 		return nil, fmt.Errorf("daemon: migrate sqlite: %w", err)
 	}
 
+	// Shared ingestion-busy predicate (solov2-181 + 8ga). Both the
+	// post-promotion queue poller AND the embedder worker consult this
+	// to hold their writes off the db while a cold-scan or startup
+	// resync is committing. The scanTracker is constructed here (no
+	// deps) so it can be captured by closures defined later; resyncRef
+	// is filled in once NewStartupResync runs. Returns true when ANY
+	// ingestion-side write is in flight.
+	scanTracker := application.NewScanTracker()
+	var resyncRef *application.StartupResync
+	ingestionBusy := func() bool {
+		if scanTracker.IsAnyScanRunning() {
+			return true
+		}
+		if resyncRef != nil && resyncRef.IsSyncing() {
+			return true
+		}
+		return false
+	}
+
 	// Vector backend.
 	vec, err := vector.NewVectorStorage(cfg.VectorBackend, cfg.VeskaHome)
 	if err != nil {
@@ -456,6 +475,7 @@ func newDaemon(cfg Config) (*Daemon, error) {
 		embedder.WithRatePerSec(fileCfg.Embedder.RatePerSec),
 		embedder.WithMaxAttempts(embedder.DefaultMaxAttempts),
 		embedder.WithMetrics(metrics),
+		embedder.WithPauser(ingestionBusy),
 	)
 	if err != nil {
 		_ = pools.Close()
@@ -592,25 +612,10 @@ func newDaemon(cfg Config) (*Daemon, error) {
 		return fsignore.Load(repoRoot)
 	}
 	gitQ := gitwatch.Querier{}
-	// Shared scan tracker — the reparser Start/End-s into it, the status
-	// handler Snapshots from it for eng_get_status's scans_in_flight
-	// field (solov2-pm5), and the post-promotion queue uses it as a
-	// pause gate while a scan is in flight (solov2-pc3 fix #1).
-	scanTracker := application.NewScanTracker()
-	// The poller is paused for the entire startup-resync window (not
-	// just per-scan via scanTracker) so a queue tick fired between
-	// repos cannot race the next repo's promotion tx into SQLITE_BUSY
-	// (solov2-8ga). resyncRef is set below once StartupResync is built.
-	var resyncRef *application.StartupResync
-	poller.Pauser = func() bool {
-		if scanTracker.IsAnyScanRunning() {
-			return true
-		}
-		if resyncRef != nil && resyncRef.IsSyncing() {
-			return true
-		}
-		return false
-	}
+	// scanTracker + resyncRef + ingestionBusy are declared earlier (just
+	// after pools open) so embedder.WithPauser can share the same
+	// predicate; the queue poller plugs into it here.
+	poller.Pauser = ingestionBusy
 	reparser, err := application.NewColdScanReparser(
 		ingester, promoter, gitQ,
 		application.WithIgnoreLoader(ignoreAdapter),
