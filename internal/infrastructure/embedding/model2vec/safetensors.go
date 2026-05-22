@@ -49,9 +49,12 @@ type safetensorsHeaderEntry struct {
 // one decoded Tensor per named entry. The "__metadata__" key is
 // silently skipped — it carries optional model metadata, not tensors.
 //
-// Only F32 and F16 are accepted; everything else surfaces as an error.
-// Model2Vec embedding matrices are one of those two types; refusing
-// the rest keeps a corrupt file from quietly producing garbage floats.
+// Float tensors (F32/F16/F64) are decoded to float32. Tensors with an
+// integer dtype (e.g. the identity I64 "mapping" tensor potion models
+// ship) are skipped rather than rejected — they aren't used in the
+// float pooling math, and erroring on a perfectly valid model file is
+// worse than ignoring an unused tensor. A genuinely corrupt float
+// tensor still surfaces via the decode error path below.
 func readSafetensors(r io.Reader) (map[string]Tensor, error) {
 	var hdrLen uint64
 	if err := binary.Read(r, binary.LittleEndian, &hdrLen); err != nil {
@@ -101,6 +104,9 @@ func readSafetensors(r io.Reader) (map[string]Tensor, error) {
 
 	out := make(map[string]Tensor, len(entries))
 	for _, e := range entries {
+		if !isFloatDtype(e.Dtype) {
+			continue // skip integer/aux tensors (e.g. identity "mapping")
+		}
 		raw := dataBuf[e.DataOffsets[0]:e.DataOffsets[1]]
 		floats, err := decodeTensorBytes(e.Dtype, raw)
 		if err != nil {
@@ -115,9 +121,21 @@ func readSafetensors(r io.Reader) (map[string]Tensor, error) {
 	return out, nil
 }
 
+// isFloatDtype reports whether dtype is one decodeTensorBytes can turn
+// into float32. Non-float tensors are skipped at load time.
+func isFloatDtype(dtype string) bool {
+	switch dtype {
+	case "F16", "F32", "F64":
+		return true
+	default:
+		return false
+	}
+}
+
 // decodeTensorBytes interprets raw bytes as a flat float32 slice. F16
-// values are promoted to float32 (the cost is one widen per element,
-// happens once at model load).
+// and F64 values are converted to float32 (the cost is one widen/narrow
+// per element, happens once at model load). potion-* models store the
+// per-token "weights" tensor as F64.
 func decodeTensorBytes(dtype string, raw []byte) ([]float32, error) {
 	switch dtype {
 	case "F32":
@@ -127,6 +145,15 @@ func decodeTensorBytes(dtype string, raw []byte) ([]float32, error) {
 		out := make([]float32, len(raw)/4)
 		for i := range out {
 			out[i] = math.Float32frombits(binary.LittleEndian.Uint32(raw[i*4:]))
+		}
+		return out, nil
+	case "F64":
+		if len(raw)%8 != 0 {
+			return nil, fmt.Errorf("F64 byte length %d not divisible by 8", len(raw))
+		}
+		out := make([]float32, len(raw)/8)
+		for i := range out {
+			out[i] = float32(math.Float64frombits(binary.LittleEndian.Uint64(raw[i*8:])))
 		}
 		return out, nil
 	case "F16":

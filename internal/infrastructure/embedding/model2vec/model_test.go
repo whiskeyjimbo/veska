@@ -1,7 +1,9 @@
 package model2vec
 
 import (
+	"bytes"
 	"context"
+	"encoding/binary"
 	"encoding/json"
 	"math"
 	"os"
@@ -148,6 +150,72 @@ func TestEmbed_EmptyInputReturnsZeroVector(t *testing.T) {
 			break
 		}
 	}
+}
+
+// TestEmbed_AppliesPerTokenWeights: when a "weights" tensor is present
+// the pool is a weighted mean, matching the reference model2vec library
+// (potion-* models ship these weights; a plain mean lands ~0.91 cosine
+// off the reference, which would invalidate any recall comparison).
+// vocab: parse=1, config=2 with rows e1=[1,0,0,0], e2=[0,1,0,0] and
+// weights w1=1, w2=3 ⇒ weighted mean of "parse config" is
+// [0.25,0.75,0,0], so after L2-normalize slot[1] == 3*slot[0]. A plain
+// (unweighted) mean would make the two slots equal.
+func TestEmbed_AppliesPerTokenWeights(t *testing.T) {
+	tmp := t.TempDir()
+	vocab := map[string]int{"[UNK]": 0, "parse": 1, "config": 2}
+	dim, rows := 4, 3
+	matrix := []float32{
+		0.1, 0.1, 0.1, 0.1, // [UNK]
+		1.0, 0.0, 0.0, 0.0, // parse
+		0.0, 1.0, 0.0, 0.0, // config
+	}
+	weights := []float64{1, 1, 3} // w[parse]=1, w[config]=3
+	writeTokenizerFixture(t, filepath.Join(tmp, "tokenizer.json"), vocab)
+	blob := buildSafetensorsEmbedWeights(t, []int{rows, dim}, matrix, weights)
+	if err := os.WriteFile(filepath.Join(tmp, "model.safetensors"), blob, 0o644); err != nil {
+		t.Fatalf("write safetensors: %v", err)
+	}
+	p, err := New(tmp)
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	v, err := p.Embed(context.Background(), "parse config")
+	if err != nil {
+		t.Fatalf("Embed: %v", err)
+	}
+	if v[0] <= 0 {
+		t.Fatalf("parse slot should be positive: %v", v[:4])
+	}
+	if ratio := v[1] / v[0]; math.Abs(float64(ratio)-3.0) > 1e-4 {
+		t.Errorf("config/parse slot ratio = %v, want 3.0 (weighted pool); %v", ratio, v[:4])
+	}
+}
+
+// buildSafetensorsEmbedWeights builds a two-tensor safetensors blob:
+// "embeddings" (F32, shape rows×dim) + "weights" (F64, length rows),
+// the layout real potion-* models ship.
+func buildSafetensorsEmbedWeights(t *testing.T, shape []int, emb []float32, weights []float64) []byte {
+	t.Helper()
+	embBytes := make([]byte, 4*len(emb))
+	for i, v := range emb {
+		binary.LittleEndian.PutUint32(embBytes[i*4:], math.Float32bits(v))
+	}
+	wBytes := make([]byte, 8*len(weights))
+	for i, v := range weights {
+		binary.LittleEndian.PutUint64(wBytes[i*8:], math.Float64bits(v))
+	}
+	embEnd := len(embBytes)
+	wEnd := embEnd + len(wBytes)
+	header := `{"embeddings":{"dtype":"F32","shape":` + intsToJSON(shape) +
+		`,"data_offsets":[0,` + intToStr(embEnd) + `]},` +
+		`"weights":{"dtype":"F64","shape":[` + intToStr(len(weights)) +
+		`],"data_offsets":[` + intToStr(embEnd) + `,` + intToStr(wEnd) + `]}}`
+	var buf bytes.Buffer
+	_ = binary.Write(&buf, binary.LittleEndian, uint64(len(header)))
+	buf.WriteString(header)
+	buf.Write(embBytes)
+	buf.Write(wBytes)
+	return buf.Bytes()
 }
 
 // writeTokenizerFixture writes a synthetic tokenizer.json to path
