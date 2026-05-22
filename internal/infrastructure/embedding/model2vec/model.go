@@ -34,8 +34,10 @@
 package model2vec
 
 import (
+	"bytes"
 	"context"
 	"fmt"
+	"io"
 	"math"
 	"os"
 	"path/filepath"
@@ -79,16 +81,31 @@ func New(modelDir string) (*Provider, error) {
 	if err != nil {
 		return nil, fmt.Errorf("model2vec: read tokenizer.json: %w", err)
 	}
-	tk, err := newTokenizer(tkBytes)
-	if err != nil {
-		return nil, err
-	}
 	stf, err := os.Open(filepath.Join(modelDir, "model.safetensors"))
 	if err != nil {
 		return nil, fmt.Errorf("model2vec: open model.safetensors: %w", err)
 	}
 	defer stf.Close()
-	tensors, err := readSafetensors(stf)
+	return newFromParts(filepath.Base(modelDir), tkBytes, stf)
+}
+
+// NewFromBytes builds a Provider from in-memory tokenizer + safetensors
+// bytes — the embedded-model path (//go:embed) for fat binary builds
+// (solov2-si1). name becomes the ModelID suffix, so it MUST match the
+// on-disk directory name for the same model version: fat and thin builds
+// then share one model_id and switching binary flavor triggers no reindex.
+func NewFromBytes(name string, tokenizerJSON, safetensors []byte) (*Provider, error) {
+	return newFromParts(name, tokenizerJSON, bytes.NewReader(safetensors))
+}
+
+// newFromParts is the shared constructor for the on-disk (New) and
+// embedded (NewFromBytes) paths.
+func newFromParts(name string, tkBytes []byte, safetensors io.Reader) (*Provider, error) {
+	tk, err := newTokenizer(tkBytes)
+	if err != nil {
+		return nil, err
+	}
+	tensors, err := readSafetensors(safetensors)
 	if err != nil {
 		return nil, err
 	}
@@ -120,7 +137,7 @@ func New(modelDir string) (*Provider, error) {
 		weights:   weights,
 		vocabSize: vocabSize,
 		nativeDim: emb.Shape[1],
-		modelID:   "model2vec(" + filepath.Base(modelDir) + ")",
+		modelID:   "model2vec(" + name + ")",
 	}, nil
 }
 

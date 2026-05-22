@@ -1,0 +1,4 @@
+# Build-time model assets fetched by `make build-fat` (solov2-si1).
+# Never commit the ~62MB weights to git.
+*
+!.gitignore
