@@ -108,19 +108,29 @@ func TestReadSafetensors_TruncatedHeaderErrors(t *testing.T) {
 	}
 }
 
-// TestReadSafetensors_UnsupportedDtypeErrors: we only decode F32 / F16
-// for now (the dtypes Model2Vec models actually use). An I64
-// label tensor or BF16 should surface a clear error rather than
-// returning garbage floats.
-func TestReadSafetensors_UnsupportedDtypeErrors(t *testing.T) {
-	header := `{"labels":{"dtype":"I64","shape":[2],"data_offsets":[0,16]}}`
+// TestReadSafetensors_SkipsIntegerTensors: real potion-* models ship an
+// identity I64 "mapping" tensor alongside the float matrix. We decode
+// only float dtypes and skip integer/aux tensors rather than erroring —
+// erroring on a valid model file is worse than ignoring an unused
+// tensor. The float entry alongside it must still decode.
+func TestReadSafetensors_SkipsIntegerTensors(t *testing.T) {
+	// "mapping" is I64 (skipped); "embeddings" is F32 (kept).
+	header := `{"mapping":{"dtype":"I64","shape":[2],"data_offsets":[0,16]},` +
+		`"embeddings":{"dtype":"F32","shape":[1,2],"data_offsets":[16,24]}}`
 	var buf bytes.Buffer
 	_ = binary.Write(&buf, binary.LittleEndian, uint64(len(header)))
 	buf.WriteString(header)
-	buf.Write(make([]byte, 16))
-	_, err := readSafetensors(bytes.NewReader(buf.Bytes()))
-	if err == nil {
-		t.Error("expected unsupported-dtype error, got nil")
+	buf.Write(make([]byte, 16)) // mapping payload
+	_ = binary.Write(&buf, binary.LittleEndian, []float32{1, 2})
+	out, err := readSafetensors(bytes.NewReader(buf.Bytes()))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if _, ok := out["mapping"]; ok {
+		t.Error("integer mapping tensor should have been skipped")
+	}
+	if _, ok := out["embeddings"]; !ok {
+		t.Error("float embeddings tensor should have been decoded")
 	}
 }
 

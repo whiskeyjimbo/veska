@@ -52,10 +52,19 @@ const OutputDim = 768
 // against random data.
 const embeddingsTensorName = "embeddings"
 
+// weightsTensorName is the optional per-token weight vector potion-*
+// models ship (F64, length vocabSize). When present, Embed does a
+// weighted mean-pool — this is what the reference model2vec library
+// does, and matching it is required for a valid recall comparison
+// (plain mean-pool lands ~0.91 cosine off the reference). Models that
+// omit it fall back to a uniform (plain) mean.
+const weightsTensorName = "weights"
+
 // Provider is the model2vec EmbeddingProvider adapter.
 type Provider struct {
 	tk        *tokenizer
 	matrix    []float32 // flat row-major
+	weights   []float32 // optional per-token pooling weights; nil ⇒ uniform
 	vocabSize int
 	nativeDim int
 	modelID   string
@@ -93,10 +102,23 @@ func New(modelDir string) (*Provider, error) {
 	if emb.Shape[1] > OutputDim {
 		return nil, fmt.Errorf("model2vec: native dim %d exceeds OutputDim %d", emb.Shape[1], OutputDim)
 	}
+	vocabSize := emb.Shape[0]
+
+	// Optional per-token weights. If present they must cover the vocab;
+	// a length mismatch means the file is internally inconsistent.
+	var weights []float32
+	if w, ok := tensors[weightsTensorName]; ok {
+		if len(w.Data) != vocabSize {
+			return nil, fmt.Errorf("model2vec: weights length %d != vocab %d", len(w.Data), vocabSize)
+		}
+		weights = w.Data
+	}
+
 	return &Provider{
 		tk:        tk,
 		matrix:    emb.Data,
-		vocabSize: emb.Shape[0],
+		weights:   weights,
+		vocabSize: vocabSize,
 		nativeDim: emb.Shape[1],
 		modelID:   "model2vec(" + filepath.Base(modelDir) + ")",
 	}, nil
@@ -124,21 +146,25 @@ func (p *Provider) Embed(_ context.Context, text string) ([]float32, error) {
 	}
 
 	acc := make([]float32, p.nativeDim)
-	var count int
+	var wsum float32
 	for _, id := range ids {
 		if id < 0 || id >= p.vocabSize {
 			continue // safety — shouldn't happen with a self-consistent model
 		}
+		w := float32(1)
+		if p.weights != nil {
+			w = p.weights[id]
+		}
 		row := p.matrix[id*p.nativeDim : (id+1)*p.nativeDim]
 		for i := range p.nativeDim {
-			acc[i] += row[i]
+			acc[i] += w * row[i]
 		}
-		count++
+		wsum += w
 	}
-	if count == 0 {
+	if wsum == 0 {
 		return make([]float32, OutputDim), nil
 	}
-	inv := 1.0 / float32(count)
+	inv := 1.0 / wsum
 	for i := range p.nativeDim {
 		acc[i] *= inv
 	}
