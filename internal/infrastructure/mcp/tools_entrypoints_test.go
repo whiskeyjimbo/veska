@@ -112,6 +112,54 @@ func TestEntryPoints_ReturnsSelectedData(t *testing.T) {
 	}
 }
 
+// TestFilterTestEntries_DefaultDropsTestSymbols pins solov2-bos: the
+// default response excludes _test.go files and Test/Benchmark/Example/
+// Fuzz-prefixed funcs. include_tests=true opts back in.
+func TestFilterTestEntries_DefaultDropsTestSymbols(t *testing.T) {
+	in := []wiki.EntryPoint{
+		{SymbolName: "Execute", FilePath: "cobra/command.go"},
+		{SymbolName: "TestExecute", FilePath: "cobra/command_test.go"},
+		{SymbolName: "BenchmarkAddCommand", FilePath: "cobra/command_test.go"},
+		{SymbolName: "ExampleCommand", FilePath: "cobra/example_test.go"},
+		{SymbolName: "FuzzParseFlag", FilePath: "cobra/fuzz_test.go"},
+		{SymbolName: "AddCommand", FilePath: "cobra/command.go"},
+		{SymbolName: "helper", FilePath: "cobra/command_test.go"}, // dropped on path
+	}
+	out := filterTestEntries(in)
+	if len(out) != 2 || out[0].SymbolName != "Execute" || out[1].SymbolName != "AddCommand" {
+		t.Errorf("filter dropped wrong entries; kept: %+v", out)
+	}
+}
+
+func TestEntryPoints_IncludeTestsFlagRoundtrips(t *testing.T) {
+	svc := entryPointsFixtureService(t)
+	r := NewRegistry()
+	RegisterEntryPointsTool(r, svc)
+
+	// Default (no include_tests) — fixture's only entry is 'low' (not a
+	// test name, not in *_test.go) so it must survive.
+	resp, rpcErr := dispatchEntryPoints(t, r, map[string]any{
+		"repo_id": "r1", "branch": "main",
+	})
+	if rpcErr != nil {
+		t.Fatalf("err: %+v", rpcErr)
+	}
+	if len(resp.EntryPoints) != 1 {
+		t.Fatalf("default: expected 1 entry, got %d", len(resp.EntryPoints))
+	}
+
+	// include_tests=true must not break anything.
+	resp2, rpcErr := dispatchEntryPoints(t, r, map[string]any{
+		"repo_id": "r1", "branch": "main", "include_tests": true,
+	})
+	if rpcErr != nil {
+		t.Fatalf("err: %+v", rpcErr)
+	}
+	if len(resp2.EntryPoints) != 1 {
+		t.Fatalf("include_tests=true: expected 1 entry, got %d", len(resp2.EntryPoints))
+	}
+}
+
 func TestEntryPoints_RequiresParams(t *testing.T) {
 	svc := entryPointsFixtureService(t)
 	r := NewRegistry()
