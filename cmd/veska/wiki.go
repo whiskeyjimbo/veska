@@ -132,7 +132,7 @@ func buildWikiHandler(pools *sqlite.Pools) (*wiki.Handler, error) {
 		return nil, fmt.Errorf("wiki: hot-zone service: %w", err)
 	}
 	epSvc, err := wiki.NewEntryPointsService(
-		wikiGraph.LoadGraph, wikiEdges.InboundEdges, wikiFindings.OpenFindingNodeIDs, wikiBlast,
+		wikiGraph.LoadGraph, wikiEdges.InboundEdges, wikiFindings.OpenFindingNodeIDs,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("wiki: entry-points service: %w", err)

@@ -523,7 +523,7 @@ func newDaemon(cfg Config) (*Daemon, error) {
 		return nil, fmt.Errorf("daemon: wiki hot-zone service: %w", err)
 	}
 	epSvc, err := wiki.NewEntryPointsService(
-		wikiGraph.LoadGraph, wikiEdges.InboundEdges, wikiFindings.OpenFindingNodeIDs, wikiBlast,
+		wikiGraph.LoadGraph, wikiEdges.InboundEdges, wikiFindings.OpenFindingNodeIDs,
 	)
 	if err != nil {
 		_ = pools.Close()
@@ -892,7 +892,7 @@ func registerMCPTools(r *mcp.Registry, d mcpDeps) {
 	graphForEP := sqlite.NewGraphRepo(pools.ReadDB, pools.WriteHot)
 	findingQuerier := sqlite.NewFindingQuerierRepo(pools.ReadDB)
 	if epSvc, err := wiki.NewEntryPointsService(
-		graphForEP.LoadGraph, edges.InboundEdges, findingQuerier.OpenFindingNodeIDs, blastSvc,
+		graphForEP.LoadGraph, edges.InboundEdges, findingQuerier.OpenFindingNodeIDs,
 	); err == nil {
 		mcp.RegisterEntryPointsTool(r, epSvc)
 	} else {
