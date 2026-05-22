@@ -197,8 +197,12 @@ func TestSearchSemantic_LimitAliasHonoured(t *testing.T) {
 	if rpcErr != nil {
 		t.Fatalf("unexpected error: %+v", rpcErr)
 	}
-	if vecs.gotK != 3 {
-		t.Errorf("expected vectors.Search called with k=3 (from 'limit' alias), got k=%d", vecs.gotK)
+	// search.Service over-requests by a fusionFanout=3 multiplier
+	// (solov2-2su hybrid retrieval) — so a caller k=3 means k*3=9 to
+	// the vector backend. The contract under test is that the alias
+	// got threaded through; the fanout is an internal detail.
+	if vecs.gotK != 9 {
+		t.Errorf("expected vectors.Search called with k=9 (3 × fusionFanout from 'limit' alias), got k=%d", vecs.gotK)
 	}
 }
 
