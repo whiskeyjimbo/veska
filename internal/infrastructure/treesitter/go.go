@@ -115,8 +115,13 @@ func (p *GoParser) ParseFile(ctx context.Context, repoID, path string, src []byt
 	}
 
 	// --- CALLS edges ---
-	callEdges := extractCallEdges(root, src, symbolByName)
+	// Resolved-locally calls become edges; calls naming a symbol that's
+	// not in this file's map (likely another file in the same Go package)
+	// surface as UnresolvedCalls and get bound at promotion time
+	// (solov2-2at).
+	callEdges, unresolved := extractCallEdges(root, src, symbolByName)
 	result.Edges = append(result.Edges, callEdges...)
+	result.UnresolvedCalls = unresolved
 
 	// --- TODO/FIXME markers (language-agnostic lexical scan) ---
 	result.Todos = scanTodos(src)
@@ -233,9 +238,11 @@ func parseTypeDecl(node *sitter.Node, src []byte, repoID, path string) *domain.N
 
 // extractCallEdges walks the entire AST looking for call_expression nodes inside
 // function/method bodies and emits EdgeCalls when the callee is known in the file.
-func extractCallEdges(root *sitter.Node, src []byte, symbols map[string]*domain.Node) []*domain.Edge {
+func extractCallEdges(root *sitter.Node, src []byte, symbols map[string]*domain.Node) ([]*domain.Edge, []domain.UnresolvedCall) {
 	var edges []*domain.Edge
+	var unresolved []domain.UnresolvedCall
 	seen := make(map[string]bool) // dedupe same caller→callee within a file
+	seenU := make(map[string]bool)
 
 	count := int(root.ChildCount())
 	for i := range count {
@@ -282,6 +289,18 @@ func extractCallEdges(root *sitter.Node, src []byte, symbols map[string]*domain.
 		for _, callee := range callNames {
 			calleeNode, ok := symbols[callee]
 			if !ok {
+				// Stash for cross-file resolution at promotion time
+				// (solov2-2at). Dedupe per (caller, callee-name) so
+				// repeated call sites yield one resolution attempt.
+				key := string(callerNode.ID) + "→" + callee
+				if seenU[key] {
+					continue
+				}
+				seenU[key] = true
+				unresolved = append(unresolved, domain.UnresolvedCall{
+					CallerID:   callerNode.ID,
+					CalleeName: callee,
+				})
 				continue
 			}
 			key := string(callerNode.ID) + "->" + string(calleeNode.ID)
@@ -297,7 +316,7 @@ func extractCallEdges(root *sitter.Node, src []byte, symbols map[string]*domain.
 			}
 		}
 	}
-	return edges
+	return edges, unresolved
 }
 
 // extractReceiverBinding returns the receiver's parameter name and type

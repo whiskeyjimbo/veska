@@ -54,6 +54,11 @@ type PromotionFile struct {
 	Path  string
 	Nodes []*domain.Node
 	Edges []*domain.Edge
+	// UnresolvedCalls are parser hints whose callee lives in another
+	// file of the same Go package; the PromotionStore resolves them
+	// against a package-wide map built from the batch and writes the
+	// resulting CALLS edges in the same transaction (solov2-2at).
+	UnresolvedCalls []domain.UnresolvedCall
 }
 
 // PromotionBatch is the plain-data description of one promotion. It carries no
