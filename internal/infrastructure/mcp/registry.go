@@ -118,7 +118,24 @@ func (r *Registry) MustRegister(spec ToolSpec) {
 // Dispatch routes a JSON-RPC request to the matching tool handler.
 // Returns MethodNotFound (-32601) if no tool matches.
 // Safe for concurrent use provided no further Register calls occur.
+//
+// Three method-name forms are accepted (solov2-kw4):
+//
+//   - "eng_<verb>_<object>" — flat dialect, original; method == tool name.
+//   - "tools/list"          — MCP standard discovery; returns the catalog.
+//   - "tools/call"          — MCP standard invocation; req.Params must
+//     carry {"name": "<tool>", "arguments": {...}}.
+//
+// Existing flat callers (the veska-mcp shim, the CLI's callMCP) keep
+// working unchanged; new AI clients speaking standard MCP get the
+// expected surface.
 func (r *Registry) Dispatch(ctx context.Context, actor domain.Actor, req *Request) (any, *RPCError) {
+	switch req.Method {
+	case "tools/list":
+		return r.handleToolsList(), nil
+	case "tools/call":
+		return r.handleToolsCall(ctx, actor, req.Params)
+	}
 	spec, ok := r.tools[req.Method]
 	if !ok {
 		return nil, &RPCError{
@@ -129,6 +146,65 @@ func (r *Registry) Dispatch(ctx context.Context, actor domain.Actor, req *Reques
 	ctx, span := observability.StartSpan(ctx, r.tracerProvider(), "mcp."+req.Method)
 	defer span.End()
 	return spec.Handler(ctx, actor, req.Params)
+}
+
+// ToolListEntry is one row in the tools/list response. Matches the MCP
+// spec shape (name + description + inputSchema; outputSchema is included
+// when the tool publishes one).
+type ToolListEntry struct {
+	Name         string          `json:"name"`
+	Description  string          `json:"description"`
+	InputSchema  json.RawMessage `json:"inputSchema,omitempty"`
+	OutputSchema json.RawMessage `json:"outputSchema,omitempty"`
+}
+
+// ToolListResponse envelopes the catalog under the MCP-spec key "tools".
+type ToolListResponse struct {
+	Tools []ToolListEntry `json:"tools"`
+}
+
+func (r *Registry) handleToolsList() ToolListResponse {
+	names := r.Names()
+	out := make([]ToolListEntry, 0, len(names))
+	for _, n := range names {
+		spec := r.tools[n]
+		out = append(out, ToolListEntry{
+			Name:         spec.Name,
+			Description:  spec.Description,
+			InputSchema:  spec.InputSchema,
+			OutputSchema: spec.OutputSchema,
+		})
+	}
+	return ToolListResponse{Tools: out}
+}
+
+func (r *Registry) handleToolsCall(ctx context.Context, actor domain.Actor, raw json.RawMessage) (any, *RPCError) {
+	var p struct {
+		Name      string          `json:"name"`
+		Arguments json.RawMessage `json:"arguments"`
+	}
+	if err := json.Unmarshal(raw, &p); err != nil {
+		return nil, &RPCError{
+			Code:    CodeInvalidParams,
+			Message: fmt.Sprintf("tools/call: invalid params: %v", err),
+		}
+	}
+	if p.Name == "" {
+		return nil, &RPCError{
+			Code:    CodeInvalidParams,
+			Message: "tools/call: 'name' is required",
+		}
+	}
+	spec, ok := r.tools[p.Name]
+	if !ok {
+		return nil, &RPCError{
+			Code:    CodeMethodNotFound,
+			Message: fmt.Sprintf("tools/call: tool not found: %s", p.Name),
+		}
+	}
+	ctx, span := observability.StartSpan(ctx, r.tracerProvider(), "mcp."+p.Name)
+	defer span.End()
+	return spec.Handler(ctx, actor, p.Arguments)
 }
 
 // Handle satisfies the Handler interface so Registry can be passed directly
