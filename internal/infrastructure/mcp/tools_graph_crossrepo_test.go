@@ -42,7 +42,7 @@ func TestGetCallChainCrossRepoEdges(t *testing.T) {
 	r := NewRegistry()
 	RegisterGraphTools(r, store, application.NewStagingArea(), WithResolveFunc(mockResolve))
 
-	resp, rpcErr := dispatchGraph(t, r, "eng_get_call_chain", map[string]any{
+	resp, rpcErr := dispatchCallChain(t, r, "eng_get_call_chain", map[string]any{
 		"node_id": "a",
 		"repo_id": "repo1",
 		"branch":  "main",
@@ -89,7 +89,7 @@ func TestGetCallChainNoCrossRepoByDefault(t *testing.T) {
 	r := NewRegistry()
 	RegisterGraphTools(r, store, application.NewStagingArea())
 
-	resp, rpcErr := dispatchGraph(t, r, "eng_get_call_chain", map[string]any{
+	resp, rpcErr := dispatchCallChain(t, r, "eng_get_call_chain", map[string]any{
 		"node_id": "a",
 		"repo_id": "repo1",
 		"branch":  "main",
@@ -126,7 +126,7 @@ func TestGetCallChainCrossRepoSilentMiss(t *testing.T) {
 	r := NewRegistry()
 	RegisterGraphTools(r, store, application.NewStagingArea(), WithResolveFunc(mockResolve))
 
-	resp, rpcErr := dispatchGraph(t, r, "eng_get_call_chain", map[string]any{
+	resp, rpcErr := dispatchCallChain(t, r, "eng_get_call_chain", map[string]any{
 		"node_id": "a",
 		"repo_id": "repo1",
 		"branch":  "main",
@@ -169,7 +169,7 @@ func TestGetCallChainBFSDoesNotFollowCrossRepoEdges(t *testing.T) {
 	r := NewRegistry()
 	RegisterGraphTools(r, store, application.NewStagingArea(), WithResolveFunc(mockResolve))
 
-	resp, rpcErr := dispatchGraph(t, r, "eng_get_call_chain", map[string]any{
+	resp, rpcErr := dispatchCallChain(t, r, "eng_get_call_chain", map[string]any{
 		"node_id": "a",
 		"repo_id": "repo1",
 		"branch":  "main",
@@ -182,7 +182,7 @@ func TestGetCallChainBFSDoesNotFollowCrossRepoEdges(t *testing.T) {
 	// In-repo: should see node b but NOT ext-node-x in Nodes.
 	nodeIDs := make(map[string]bool)
 	for _, n := range resp.Nodes {
-		nodeIDs[string(n.ID)] = true
+		nodeIDs[n.NodeID] = true
 	}
 	if nodeIDs["ext-node-x"] {
 		t.Error("BFS must not follow cross-repo edges; ext-node-x should not be in Nodes")

@@ -59,6 +59,7 @@ CREATE TABLE nodes (
     signature      TEXT,
     snippet        TEXT,
     prev_signature TEXT,
+    exported       INTEGER,
     PRIMARY KEY (node_id, branch),
     FOREIGN KEY (repo_id) REFERENCES repos(repo_id) ON DELETE CASCADE
 );

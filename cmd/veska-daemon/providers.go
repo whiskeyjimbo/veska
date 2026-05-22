@@ -9,6 +9,7 @@ import (
 	"sync"
 
 	"github.com/whiskeyjimbo/veska/internal/application"
+	"github.com/whiskeyjimbo/veska/internal/infrastructure/embedding/elect"
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/mcp"
 	"github.com/whiskeyjimbo/veska/internal/repo"
 )
@@ -236,14 +237,18 @@ type configProvider struct {
 // credential field be added later, redact it here before returning.
 func (cp *configProvider) Config(_ context.Context) (map[string]any, error) {
 	return map[string]any{
-		"veska_home":       cp.cfg.VeskaHome,
-		"sqlite_path":      cp.cfg.SQLitePath,
-		"cli_sock":         cp.cfg.CLISockPath,
-		"mcp_sock":         cp.cfg.MCPSockPath,
-		"vector_backend":   string(cp.cfg.VectorBackend),
-		"ollama_url":       cp.cfg.OllamaURL,
-		"embed_model":      cp.cfg.EmbedModel,
-		"schema_version":   1,
-		"degraded_reasons": []string{},
+		"veska_home":     cp.cfg.VeskaHome,
+		"sqlite_path":    cp.cfg.SQLitePath,
+		"cli_sock":       cp.cfg.CLISockPath,
+		"mcp_sock":       cp.cfg.MCPSockPath,
+		"vector_backend": string(cp.cfg.VectorBackend),
+		"embedder":       elect.Marker(cp.cfg.VeskaHome),
+		"ollama_url":     cp.cfg.OllamaURL,
+		"embed_model":    cp.cfg.EmbedModel,
+		// config_schema_version is the version of THIS config payload's
+		// shape — distinct from eng_get_status's schema_version, which is
+		// the SQLite migration version of the data store (solov2-d2x).
+		"config_schema_version": 1,
+		"degraded_reasons":      []string{},
 	}, nil
 }

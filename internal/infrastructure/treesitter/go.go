@@ -7,12 +7,22 @@ import (
 	"fmt"
 	"path/filepath"
 	"strings"
+	"unicode"
+	"unicode/utf8"
 
 	sitter "github.com/smacker/go-tree-sitter"
 	"github.com/smacker/go-tree-sitter/golang"
 
 	"github.com/whiskeyjimbo/veska/internal/core/domain"
 )
+
+// goExported reports whether a Go identifier is exported — its first rune is an
+// uppercase letter. Names like "Receiver.Method" should be passed as the bare
+// method-name segment by the caller.
+func goExported(name string) bool {
+	r, _ := utf8.DecodeRuneInString(name)
+	return r != utf8.RuneError && unicode.IsUpper(r)
+}
 
 // GoParser is a tree-sitter-backed implementation of ports.CodeParser for Go source files.
 // Each ParseFile call is stateless: a fresh sitter.Parser is created per call.
@@ -151,6 +161,7 @@ func parseFunctionDecl(node *sitter.Node, src []byte, repoID, path string) *doma
 		domain.WithLanguage("go"),
 		domain.WithLines(lr),
 		domain.WithRawContent(raw),
+		domain.WithExported(goExported(name)),
 	}
 
 	sig := extractSignature(node, src)
@@ -185,6 +196,9 @@ func parseMethodDecl(node *sitter.Node, src []byte, repoID, path string) *domain
 		domain.WithLanguage("go"),
 		domain.WithLines(lr),
 		domain.WithRawContent(raw),
+		// A method is exported when its method name (after "Receiver.") is
+		// capitalised; the receiver type's casing is irrelevant.
+		domain.WithExported(goExported(methodName)),
 	}
 
 	sig := extractSignature(node, src)
@@ -230,6 +244,7 @@ func parseTypeDecl(node *sitter.Node, src []byte, repoID, path string) *domain.N
 			domain.WithLanguage("go"),
 			domain.WithLines(lr),
 			domain.WithRawContent(raw),
+			domain.WithExported(goExported(name)),
 		)
 		if err != nil {
 			return nil

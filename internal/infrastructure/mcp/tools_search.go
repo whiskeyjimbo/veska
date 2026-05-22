@@ -8,6 +8,7 @@ import (
 	"math"
 	"time"
 
+	application "github.com/whiskeyjimbo/veska/internal/application"
 	"github.com/whiskeyjimbo/veska/internal/application/search"
 	"github.com/whiskeyjimbo/veska/internal/core/domain"
 	"github.com/whiskeyjimbo/veska/internal/core/ports"
@@ -24,8 +25,8 @@ const CodeFailedPrecondition = -32003
 // from search.Service unchanged so callers can branch on the mode that
 // actually serviced the query.
 type SearchResponse struct {
-	Results         []search.Result `json:"results"`
-	DegradedReasons []string        `json:"degraded_reasons,omitempty"`
+	Results         []searchHitDTO `json:"results"`
+	DegradedReasons []string       `json:"degraded_reasons,omitempty"`
 }
 
 // SimilarLookup is the narrow port the eng_search_similar handler needs from
@@ -48,18 +49,19 @@ func RegisterSearchTools(
 	vectors ports.VectorStorage,
 	nodes ports.NodeLookup,
 	rec *savings.Recorder,
+	repos application.RepoLister,
 ) {
 	r.MustRegister(ToolSpec{
 		Name:            "eng_search_semantic",
 		Description:     "Semantic search over embedded symbols with lexical fallback when the embedder is offline.",
 		IncludesStaging: false,
-		Handler:         makeSearchSemanticHandler(svc, rec),
+		Handler:         makeSearchSemanticHandler(svc, rec, repos),
 	})
 	r.MustRegister(ToolSpec{
 		Name:            "eng_search_similar",
 		Description:     "Find symbols similar to a given node by vector neighbourhood over its stored embedding.",
 		IncludesStaging: false,
-		Handler:         makeSearchSimilarHandler(lookup, vectors, nodes),
+		Handler:         makeSearchSimilarHandler(lookup, vectors, nodes, repos),
 	})
 }
 
@@ -77,7 +79,7 @@ type searchSemanticParams struct {
 	Limit int `json:"limit,omitempty"`
 }
 
-func makeSearchSemanticHandler(svc *search.Service, rec *savings.Recorder) ToolHandler {
+func makeSearchSemanticHandler(svc *search.Service, rec *savings.Recorder, repos application.RepoLister) ToolHandler {
 	return func(ctx context.Context, _ domain.Actor, raw json.RawMessage) (any, *RPCError) {
 		var p searchSemanticParams
 		if rpcErr := bindParams(raw, &p); rpcErr != nil {
@@ -86,6 +88,11 @@ func makeSearchSemanticHandler(svc *search.Service, rec *savings.Recorder) ToolH
 		if rpcErr := checkRequired("query", p.Query, "repo_id", p.RepoID, "branch", p.Branch); rpcErr != nil {
 			return nil, rpcErr
 		}
+		repoID, rpcErr := resolveRepoID(ctx, repos, p.RepoID)
+		if rpcErr != nil {
+			return nil, rpcErr
+		}
+		p.RepoID = repoID
 		k := p.K
 		if k <= 0 {
 			k = p.Limit
@@ -106,7 +113,7 @@ func makeSearchSemanticHandler(svc *search.Service, rec *savings.Recorder) ToolH
 			results = []search.Result{}
 		}
 		recordSavings(rec, p.Query, results)
-		return SearchResponse{Results: results, DegradedReasons: resp.DegradedReasons}, nil
+		return SearchResponse{Results: searchResultsToDTO(results), DegradedReasons: resp.DegradedReasons}, nil
 	}
 }
 
@@ -135,7 +142,7 @@ type searchSimilarParams struct {
 	Limit int `json:"limit,omitempty"`
 }
 
-func makeSearchSimilarHandler(lookup SimilarLookup, vectors ports.VectorStorage, nodes ports.NodeLookup) ToolHandler {
+func makeSearchSimilarHandler(lookup SimilarLookup, vectors ports.VectorStorage, nodes ports.NodeLookup, repos application.RepoLister) ToolHandler {
 	return func(ctx context.Context, _ domain.Actor, raw json.RawMessage) (any, *RPCError) {
 		var p searchSimilarParams
 		if rpcErr := bindParams(raw, &p); rpcErr != nil {
@@ -144,6 +151,11 @@ func makeSearchSimilarHandler(lookup SimilarLookup, vectors ports.VectorStorage,
 		if rpcErr := checkRequired("node_id", p.NodeID, "repo_id", p.RepoID, "branch", p.Branch); rpcErr != nil {
 			return nil, rpcErr
 		}
+		repoID, rpcErr := resolveRepoID(ctx, repos, p.RepoID)
+		if rpcErr != nil {
+			return nil, rpcErr
+		}
+		p.RepoID = repoID
 		k := p.K
 		if k <= 0 {
 			k = p.Limit
@@ -225,7 +237,7 @@ func makeSearchSimilarHandler(lookup SimilarLookup, vectors ports.VectorStorage,
 				Snippet:    m.Snippet,
 			})
 		}
-		return SearchResponse{Results: out}, nil
+		return SearchResponse{Results: searchResultsToDTO(out)}, nil
 	}
 }
 

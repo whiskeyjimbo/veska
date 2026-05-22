@@ -41,7 +41,7 @@ def test_add_and_remove_repo_roundtrip(mcp_client):
         ok2, text2, _, gr = mcp_client.call("eng_get_repo", {"repo_id": repo_id})
         assert ok2, f"eng_get_repo failed: {text2}"
         nested = gr.get("repo") if isinstance(gr, dict) else None
-        got_id = (nested or gr).get("RepoID") if isinstance(nested or gr, dict) else None
+        got_id = (nested or gr).get("repo_id") if isinstance(nested or gr, dict) else None
         assert got_id == repo_id, f"eng_get_repo returned wrong id: {gr}"
 
         # Remove.

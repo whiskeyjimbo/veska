@@ -276,9 +276,9 @@ def test_bootstrap_golden_zero_to_working_install(tmp_path: Path):
             # ── P5: queries surface seeded symbols ──────────────────
             print("[P5] queries return seeded symbols")
             repo_id = next(
-                r["RepoID"] for r in
+                r["repo_id"] for r in
                 mcp.call("eng_list_repos", {})["result"]["repos"]
-                if r["RootPath"] == git_repo
+                if r["root_path"] == git_repo
             )
 
             fs = mcp.call("eng_find_symbol", {
@@ -298,7 +298,7 @@ def test_bootstrap_golden_zero_to_working_install(tmp_path: Path):
                 "repo_id": repo_id, "branch": branch,
                 "query": "GreetUser", "limit": 5,
             })
-            sem_syms = [r.get("SymbolPath") for r in sem["result"].get("results") or []]
+            sem_syms = [r.get("name") for r in sem["result"].get("results") or []]
             assert "GreetUser" in sem_syms, f"semantic miss: {sem_syms}"
 
             # ── P6: commit + hook drives promotion ──────────────────

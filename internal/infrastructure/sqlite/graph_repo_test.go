@@ -181,6 +181,52 @@ func TestGraphRepo_FindNodes_ExactMatch(t *testing.T) {
 	}
 }
 
+// TestGraphRepo_FindNodes_UnqualifiedSuffix pins solov2-d2x: an unqualified
+// name matches the trailing segment of a qualified symbol_path, so "Start"
+// finds "Server.Start" instead of silently returning nothing. Exact matches
+// still sort ahead of suffix matches.
+func TestGraphRepo_FindNodes_UnqualifiedSuffix(t *testing.T) {
+	t.Parallel()
+	r := openGraphRepoTestDB(t)
+	ctx := context.Background()
+
+	for _, n := range []*domain.Node{
+		mustNode(t, "n1", "a.go", "Server.Start", domain.KindMethod),
+		mustNode(t, "n2", "b.go", "Client.Start", domain.KindMethod),
+		mustNode(t, "n3", "c.go", "Start", domain.KindFunction),
+		mustNode(t, "n4", "d.go", "Restart", domain.KindFunction), // must NOT match
+	} {
+		if err := r.SaveNode(ctx, "r1", "main", n); err != nil {
+			t.Fatalf("SaveNode %s: %v", n.ID, err)
+		}
+	}
+
+	got, err := r.FindNodes(ctx, "r1", "main", "Start")
+	if err != nil {
+		t.Fatalf("FindNodes: %v", err)
+	}
+	if len(got) != 3 {
+		t.Fatalf("FindNodes(Start) = %d nodes (%v); want 3 (Start, Server.Start, Client.Start)", len(got), names(got))
+	}
+	// The exact match sorts first (ORDER BY exact DESC).
+	if got[0].Name != "Start" {
+		t.Errorf("expected exact match 'Start' first, got %q", got[0].Name)
+	}
+	for _, n := range got {
+		if n.Name == "Restart" {
+			t.Errorf("FindNodes(Start) wrongly matched 'Restart' — '.' anchor missing")
+		}
+	}
+}
+
+func names(ns []*domain.Node) []string {
+	out := make([]string, len(ns))
+	for i, n := range ns {
+		out[i] = n.Name
+	}
+	return out
+}
+
 // TestGraphRepo_SaveEdge_LoadGraph verifies SaveEdge then LoadGraph includes
 // the edge with its endpoints.
 func TestGraphRepo_SaveEdge_LoadGraph(t *testing.T) {

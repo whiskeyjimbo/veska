@@ -70,7 +70,7 @@ def test_get_node_by_id(mcp_client, repo_id, branch, target_symbol):
     })
     nodes = find_result.get("nodes", [])
     assert nodes, "find_symbol returned nothing — cannot test get_node"
-    node_id = nodes[0]["ID"]
+    node_id = nodes[0]["node_id"]
 
     ok, text, _, result = mcp_client.call("eng_get_node", {
         "repo_id": repo_id,
@@ -81,4 +81,4 @@ def test_get_node_by_id(mcp_client, repo_id, branch, target_symbol):
     # get_node returns a GraphResponse with a single-node nodes array.
     returned = result.get("nodes", [])
     assert returned, "expected one node"
-    assert returned[0]["ID"] == node_id
+    assert returned[0]["node_id"] == node_id

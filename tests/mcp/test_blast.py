@@ -13,7 +13,7 @@ def test_blast_radius_for_target_node(mcp_client, repo_id, branch, target_symbol
     })
     nodes = find_result.get("nodes", [])
     assert nodes, "cannot test blast radius without a target node"
-    node_id = nodes[0]["ID"]
+    node_id = nodes[0]["node_id"]
 
     ok, text, _, result = mcp_client.call("eng_get_blast_radius", {
         "repo_id": repo_id, "branch": branch,

@@ -21,15 +21,20 @@ type findSymbolParams struct {
 	Kind   string `json:"kind,omitempty"`
 }
 
-func makeFindSymbolHandler(graph ports.GraphStorage, staging *application.StagingArea) ToolHandler {
+func makeFindSymbolHandler(graph ports.GraphStorage, staging *application.StagingArea, repos application.RepoLister) ToolHandler {
 	return func(ctx context.Context, _ domain.Actor, raw json.RawMessage) (any, *RPCError) {
 		var p findSymbolParams
 		if err := json.Unmarshal(raw, &p); err != nil {
 			return nil, &RPCError{Code: CodeInvalidParams, Message: fmt.Sprintf("invalid params: %v", err)}
 		}
-		if p.Symbol == "" || p.RepoID == "" || p.Branch == "" {
-			return nil, &RPCError{Code: CodeInvalidParams, Message: "symbol, repo_id, and branch are required"}
+		if rpcErr := checkRequired("symbol", p.Symbol, "repo_id", p.RepoID, "branch", p.Branch); rpcErr != nil {
+			return nil, rpcErr
 		}
+		repoID, rpcErr := resolveRepoID(ctx, repos, p.RepoID)
+		if rpcErr != nil {
+			return nil, rpcErr
+		}
+		p.RepoID = repoID
 
 		promoted, err := graph.FindNodes(ctx, p.RepoID, p.Branch, p.Symbol)
 		if err != nil {
@@ -69,7 +74,7 @@ func makeFindSymbolHandler(graph ports.GraphStorage, staging *application.Stagin
 		}
 
 		return GraphResponse{
-			Nodes:           result,
+			Nodes:           nodesToDTO(result),
 			IncludedStaging: includedStaging,
 		}, nil
 	}

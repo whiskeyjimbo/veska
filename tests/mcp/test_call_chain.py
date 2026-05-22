@@ -9,7 +9,7 @@ def test_call_chain_for_target_node(mcp_client, repo_id, branch, target_symbol):
     })
     nodes = find_result.get("nodes", [])
     assert nodes, "no nodes for target_symbol"
-    node_id = nodes[0]["ID"]
+    node_id = nodes[0]["node_id"]
 
     ok, text, _, result = mcp_client.call("eng_get_call_chain", {
         "repo_id": repo_id, "branch": branch,

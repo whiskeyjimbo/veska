@@ -30,6 +30,26 @@ type candidateProducer interface {
 type fileNodeLookup interface {
 	NodesInFile(ctx context.Context, repoID, branch, filePath string) ([]string, error)
 	NodeContentHash(ctx context.Context, repoID, branch, nodeID string) (string, error)
+	// LookupNodes hydrates node IDs into their minimal metadata, scoped to
+	// (repoID, branch). Used to (a) drop non-symbol container nodes from the
+	// auto-link source set and (b) render the target by name/path in the
+	// finding message instead of an opaque node ID (solov2-wh0). IDs absent
+	// from storage are omitted, mirroring ports.NodeLookup.
+	LookupNodes(ctx context.Context, repoID, branch string, nodeIDs []string) ([]ports.NodeMeta, error)
+}
+
+// nonSymbolKinds are container / sub-symbol node kinds for which a
+// nearest-neighbour "similar to" link is noise: package and chunk nodes embed
+// near-identical boilerplate across files and flood the findings list
+// (solov2-wh0). A blocklist (rather than a symbol allowlist) keeps unknown or
+// future symbol kinds eligible by default.
+var nonSymbolKinds = map[string]bool{
+	"package": true,
+	"chunk":   true,
+	"file":    true,
+	"module":  true,
+	"field":   true,
+	"import":  true,
 }
 
 // Handler implements queue.WorkHandler for WorkKindAutoLink rows.
@@ -123,7 +143,29 @@ func (h *Handler) Handle(ctx context.Context, row ports.WorkRow) error {
 		return nil
 	}
 
-	cands, err := h.linker.Candidates(ctx, row.RepoID, row.Branch, nodeIDs)
+	// Drop container/sub-symbol source nodes (package, chunk, …): linking them
+	// is noise. Nodes whose metadata is missing (index lag) are kept — this is
+	// best-effort discovery, not a correctness invariant.
+	srcMeta, err := h.lookup.LookupNodes(ctx, row.RepoID, row.Branch, nodeIDs)
+	if err != nil {
+		return fmt.Errorf("autolink.Handle: lookup source nodes: %w", err)
+	}
+	kindByID := make(map[string]string, len(srcMeta))
+	for _, m := range srcMeta {
+		kindByID[m.NodeID] = m.Kind
+	}
+	sources := make([]string, 0, len(nodeIDs))
+	for _, id := range nodeIDs {
+		if nonSymbolKinds[kindByID[id]] {
+			continue
+		}
+		sources = append(sources, id)
+	}
+	if len(sources) == 0 {
+		return nil
+	}
+
+	cands, err := h.linker.Candidates(ctx, row.RepoID, row.Branch, sources)
 	if err != nil {
 		return fmt.Errorf("autolink.Handle: linker: %w", err)
 	}
@@ -147,6 +189,21 @@ func (h *Handler) Handle(ctx context.Context, row ports.WorkRow) error {
 
 	if err := h.edges.SaveEdges(ctx, row.RepoID, row.Branch, edges); err != nil {
 		return fmt.Errorf("autolink.Handle: save edges: %w", err)
+	}
+
+	// Hydrate the target nodes so the finding names the symbol+file it links
+	// to, rather than an opaque node ID (solov2-wh0).
+	targetIDs := make([]string, 0, len(cands))
+	for _, c := range cands {
+		targetIDs = append(targetIDs, c.TargetNodeID)
+	}
+	tgtMeta, err := h.lookup.LookupNodes(ctx, row.RepoID, row.Branch, targetIDs)
+	if err != nil {
+		return fmt.Errorf("autolink.Handle: lookup target nodes: %w", err)
+	}
+	displayByID := make(map[string]string, len(tgtMeta))
+	for _, m := range tgtMeta {
+		displayByID[m.NodeID] = m.SymbolPath + " in " + m.FilePath
 	}
 
 	// Cache source-node content hashes across the candidate set so a handful
@@ -175,13 +232,17 @@ func (h *Handler) Handle(ctx context.Context, row ports.WorkRow) error {
 		if hash != "" {
 			opts = append(opts, domain.WithAnchorContentHash(hash))
 		}
+		target := displayByID[c.TargetNodeID]
+		if target == "" {
+			target = c.TargetNodeID
+		}
 		f, err := domain.NewFinding(
 			row.RepoID,
 			row.Branch,
 			domain.SeverityLow,
 			domain.LayerSemantic,
 			Rule,
-			fmt.Sprintf("Similar to %s (score %.2f)", c.TargetNodeID, c.Score),
+			fmt.Sprintf("Similar to %s (score %.2f)", target, c.Score),
 			opts...,
 		)
 		if err != nil {

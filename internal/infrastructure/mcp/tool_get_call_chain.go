@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 
+	application "github.com/whiskeyjimbo/veska/internal/application"
 	"github.com/whiskeyjimbo/veska/internal/core/domain"
 	"github.com/whiskeyjimbo/veska/internal/core/ports"
 )
@@ -23,15 +24,20 @@ type getCallChainParams struct {
 
 const maxCallChainDepth = 10
 
-func makeGetCallChainHandler(graph ports.GraphStorage, resolve ResolveFunc) ToolHandler {
+func makeGetCallChainHandler(graph ports.GraphStorage, resolve ResolveFunc, repos application.RepoLister) ToolHandler {
 	return func(ctx context.Context, _ domain.Actor, raw json.RawMessage) (any, *RPCError) {
 		var p getCallChainParams
 		if err := json.Unmarshal(raw, &p); err != nil {
 			return nil, &RPCError{Code: CodeInvalidParams, Message: fmt.Sprintf("invalid params: %v", err)}
 		}
-		if p.NodeID == "" || p.RepoID == "" || p.Branch == "" {
-			return nil, &RPCError{Code: CodeInvalidParams, Message: "node_id, repo_id, and branch are required"}
+		if rpcErr := checkRequired("node_id", p.NodeID, "repo_id", p.RepoID, "branch", p.Branch); rpcErr != nil {
+			return nil, rpcErr
 		}
+		repoID, rpcErr := resolveRepoID(ctx, repos, p.RepoID)
+		if rpcErr != nil {
+			return nil, rpcErr
+		}
+		p.RepoID = repoID
 		depth := p.Depth
 		if depth <= 0 {
 			depth = 3 // default
@@ -104,9 +110,9 @@ func makeGetCallChainHandler(graph ports.GraphStorage, resolve ResolveFunc) Tool
 			}
 		}
 
-		return GraphResponse{
-			Nodes:           resultNodes,
-			Edges:           resultEdges,
+		return callChainResponse{
+			Nodes:           nodesToDTO(resultNodes),
+			Edges:           edgesToDTO(resultEdges),
 			CrossRepoEdges:  crossRepoEdges,
 			IncludedStaging: false,
 		}, nil
