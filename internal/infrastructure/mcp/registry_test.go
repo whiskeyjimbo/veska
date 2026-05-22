@@ -172,7 +172,7 @@ func TestDispatch_UnknownMethodReturnsMethodNotFound(t *testing.T) {
 
 func TestNames_ReturnsSortedList(t *testing.T) {
 	r := NewRegistry()
-	for _, name := range []string{"eng_search_nodes", "eng_get_node", "eng_find_symbol"} {
+	for _, name := range []string{"eng_search_aaaa", "eng_get_node", "eng_find_symbol"} {
 		if err := r.Register(makeSpec(name, "placeholder description for names test")); err != nil {
 			t.Fatalf("register %q: %v", name, err)
 		}
@@ -181,7 +181,7 @@ func TestNames_ReturnsSortedList(t *testing.T) {
 	if len(names) != 3 {
 		t.Fatalf("expected 3 names, got %d", len(names))
 	}
-	want := []string{"eng_find_symbol", "eng_get_node", "eng_search_nodes"}
+	want := []string{"eng_find_symbol", "eng_get_node", "eng_search_aaaa"}
 	for i, w := range want {
 		if names[i] != w {
 			t.Errorf("names[%d] = %q, want %q", i, names[i], w)
