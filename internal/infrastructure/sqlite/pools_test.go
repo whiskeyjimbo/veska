@@ -2,7 +2,9 @@ package sqlite_test
 
 import (
 	"database/sql"
+	"path/filepath"
 	"testing"
+	"time"
 
 	_ "modernc.org/sqlite"
 
@@ -10,6 +12,51 @@ import (
 )
 
 const memDSN = "file::memory:?mode=memory&cache=shared"
+
+// TestOpenPools_ForeignKeyCascade pins solov2-d78r: deleting a repos row must
+// cascade-delete its child rows. This only works if foreign_keys is ON for the
+// connection running the DELETE — and the pool opens many connections, so the
+// pragma must be in the DSN (applied per-connection), not a one-shot Exec.
+func TestOpenPools_ForeignKeyCascade(t *testing.T) {
+	t.Parallel()
+	dbPath := filepath.Join(t.TempDir(), "v.db")
+
+	// Create + migrate the schema, then close that handle.
+	mdb, err := sqlite.Open(dbPath)
+	if err != nil {
+		t.Fatalf("Open (migrate): %v", err)
+	}
+	_ = mdb.Close()
+
+	pools, err := sqlite.OpenPools(dbPath)
+	if err != nil {
+		t.Fatalf("OpenPools: %v", err)
+	}
+	t.Cleanup(func() { _ = pools.Close() })
+
+	now := time.Now().UnixMilli()
+	if _, err := pools.WriteHot.Exec(`INSERT INTO repos (repo_id, root_path, added_at) VALUES (?,?,?)`, "r1", "/tmp/r1", now); err != nil {
+		t.Fatalf("insert repo: %v", err)
+	}
+	if _, err := pools.WriteHot.Exec(`INSERT INTO nodes
+		(node_id, branch, repo_id, language, kind, symbol_path, file_path, content_hash, last_promoted_at, actor_id, actor_kind)
+		VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
+		"n1", "main", "r1", "go", "function", "Foo", "foo.go", "h", now, "service:veska", "system"); err != nil {
+		t.Fatalf("insert node: %v", err)
+	}
+
+	if _, err := pools.WriteHot.Exec(`DELETE FROM repos WHERE repo_id = ?`, "r1"); err != nil {
+		t.Fatalf("delete repo: %v", err)
+	}
+
+	var n int
+	if err := pools.ReadDB.QueryRow(`SELECT COUNT(*) FROM nodes WHERE repo_id = ?`, "r1").Scan(&n); err != nil {
+		t.Fatalf("count nodes: %v", err)
+	}
+	if n != 0 {
+		t.Errorf("ON DELETE CASCADE did not fire: %d node rows orphaned after repo delete", n)
+	}
+}
 
 func TestOpenPools_ReturnsThreeHandles(t *testing.T) {
 	t.Parallel()
