@@ -105,6 +105,36 @@ func TestProvider_EmptyInputDoesNotPanic(t *testing.T) {
 	}
 }
 
+// TestProvider_SubwordSimilarity_BeatsUnrelated covers the central
+// quality upgrade from v1 (per-token hash) to v2 (character-n-gram
+// hashing, FastText-style): identifiers that share subword morphology
+// should land closer in vector space than unrelated identifiers.
+// Without this property the static embedder cannot retrieve
+// "configParser" when the query mentions "parseConfig" — the exact
+// failure mode that motivated solov2-soc's quality follow-up.
+func TestProvider_SubwordSimilarity_BeatsUnrelated(t *testing.T) {
+	p, _ := static.New()
+	a, _ := p.Embed(context.Background(), "parseConfig")
+	b, _ := p.Embed(context.Background(), "configParser")
+	c, _ := p.Embed(context.Background(), "renderTemplate")
+
+	abSim := cosine(a, b)
+	acSim := cosine(a, c)
+	if abSim <= acSim {
+		t.Errorf("subword-sharing identifiers should be more similar than unrelated; cos(parseConfig,configParser)=%v cos(parseConfig,renderTemplate)=%v",
+			abSim, acSim)
+	}
+}
+
+func cosine(a, b []float32) float64 {
+	// Both vectors are L2-normalised, so cosine = dot product.
+	var dot float64
+	for i := range a {
+		dot += float64(a[i]) * float64(b[i])
+	}
+	return dot
+}
+
 // TestProvider_ModelIDStable: the model identifier participates in
 // the embedding cache key (nodes refresh when it changes), so it
 // must NOT include user input or system state.
