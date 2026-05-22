@@ -5,10 +5,8 @@ import (
 	"encoding/json"
 	"testing"
 
-	"github.com/whiskeyjimbo/veska/internal/application/blastradius"
 	"github.com/whiskeyjimbo/veska/internal/application/wiki"
 	"github.com/whiskeyjimbo/veska/internal/core/domain"
-	"github.com/whiskeyjimbo/veska/internal/core/ports"
 )
 
 // entryPointsFixtureService builds an EntryPointsService over a fixed
@@ -44,14 +42,7 @@ func entryPointsFixtureService(t *testing.T) *wiki.EntryPointsService {
 	openFindings := func(context.Context, string, string) (map[string]bool, error) {
 		return map[string]bool{}, nil
 	}
-	blast := blastradius.NewService(
-		&blastFakeEdges{inbound: inbound},
-		&blastFakeNodes{metas: map[string]ports.NodeMeta{
-			"low": {NodeID: "low"}, "low_test": {NodeID: "low_test"},
-		}},
-		nil,
-	)
-	svc, err := wiki.NewEntryPointsService(loadGraph, inboundEdges, openFindings, blast)
+	svc, err := wiki.NewEntryPointsService(loadGraph, inboundEdges, openFindings)
 	if err != nil {
 		t.Fatalf("NewEntryPointsService: %v", err)
 	}
