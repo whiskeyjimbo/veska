@@ -22,7 +22,6 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/config"
 	"github.com/whiskeyjimbo/veska/internal/core/domain"
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/embedding/composite"
-	"github.com/whiskeyjimbo/veska/internal/infrastructure/embedding/model2vec"
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/embedding/ollama"
 	embedstatic "github.com/whiskeyjimbo/veska/internal/infrastructure/embedding/static"
 	fsignore "github.com/whiskeyjimbo/veska/internal/infrastructure/fs"
@@ -249,10 +248,10 @@ func drainEmbedderQueue(ctx context.Context, pools *sqlite.Pools, w io.Writer) e
 	}
 }
 
-// buildEmbeddingProvider returns the same composite chain the daemon
-// uses (ollama → model2vec? → hash-static), so the CLI's standalone
-// mode produces vectors compatible with what the daemon would have
-// written into the same index.
+// buildEmbeddingProvider returns the same composite (Ollama→static)
+// the daemon uses (solov2-soc), so the CLI's standalone mode produces
+// vectors compatible with what the daemon would have written into
+// the same index.
 func buildEmbeddingProvider() (*composite.Provider, error) {
 	baseURL := os.Getenv("VESKA_OLLAMA_URL")
 	if baseURL == "" {
@@ -266,22 +265,11 @@ func buildEmbeddingProvider() (*composite.Provider, error) {
 	if err != nil {
 		return nil, fmt.Errorf("search: ollama embedder: %w", err)
 	}
-	hashStatic, err := embedstatic.New()
+	staticProv, err := embedstatic.New()
 	if err != nil {
 		return nil, fmt.Errorf("search: static embedder: %w", err)
 	}
-	var secondary interface {
-		Embed(ctx context.Context, text string) ([]float32, error)
-		ModelID() string
-	} = hashStatic
-	if m2v, err := model2vec.TryLoad(config.DefaultVectorDir(), "potion-code-16M"); err == nil {
-		layered, lerr := composite.New(m2v, hashStatic)
-		if lerr != nil {
-			return nil, fmt.Errorf("search: composite model2vec+hash: %w", lerr)
-		}
-		secondary = layered
-	}
-	prov, err := composite.New(ollamaProv, secondary)
+	prov, err := composite.New(ollamaProv, staticProv)
 	if err != nil {
 		return nil, fmt.Errorf("search: composite embedder: %w", err)
 	}
