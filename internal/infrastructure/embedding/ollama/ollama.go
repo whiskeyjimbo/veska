@@ -164,6 +164,68 @@ func (p *Provider) Embed(ctx context.Context, text string) ([]float32, error) {
 	return out.Embedding, nil
 }
 
+type batchRequest struct {
+	Model string   `json:"model"`
+	Input []string `json:"input"`
+}
+
+type batchResponse struct {
+	Embeddings [][]float32 `json:"embeddings"`
+}
+
+// EmbedBatch sends multiple texts to Ollama's POST /api/embed in a
+// single request and returns embeddings in the same order. One network
+// roundtrip instead of N — primary lever for solov2-ucp's cobra
+// cold-scan dropping from ~15s to <3s. Empty input is a no-op.
+//
+// Failure modes mirror Embed: 5xx / net errors are wrapped with
+// ErrEmbedderUnreachable so callers can fall back; 4xx propagates as
+// a plain error. A short response (fewer embeddings than texts) is
+// treated as malformed.
+func (p *Provider) EmbedBatch(ctx context.Context, texts []string) ([][]float32, error) {
+	if len(texts) == 0 {
+		return nil, nil
+	}
+	body, err := json.Marshal(batchRequest{Model: p.model, Input: texts})
+	if err != nil {
+		return nil, fmt.Errorf("ollama embed_batch: marshal request: %w", err)
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, p.baseURL+"/api/embed", bytes.NewReader(body))
+	if err != nil {
+		return nil, fmt.Errorf("ollama embed_batch: build request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := p.client.Do(req)
+	if err != nil {
+		if ctxErr := ctx.Err(); ctxErr != nil {
+			return nil, fmt.Errorf("ollama embed_batch: %w", ctxErr)
+		}
+		return nil, fmt.Errorf("ollama embed_batch: %w: %w", ports.ErrEmbedderUnreachable, err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode >= 500 {
+		return nil, fmt.Errorf("ollama embed_batch: status %d: %w", resp.StatusCode, ports.ErrEmbedderUnreachable)
+	}
+	if resp.StatusCode >= 400 {
+		snippet, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
+		return nil, fmt.Errorf("ollama embed_batch: status %d: %s", resp.StatusCode, bytes.TrimSpace(snippet))
+	}
+
+	var out batchResponse
+	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
+		if isNetworkErr(err) {
+			return nil, fmt.Errorf("ollama embed_batch: decode: %w: %w", ports.ErrEmbedderUnreachable, err)
+		}
+		return nil, fmt.Errorf("ollama embed_batch: decode response: %w", err)
+	}
+	if len(out.Embeddings) != len(texts) {
+		return nil, fmt.Errorf("ollama embed_batch: expected %d embeddings, got %d", len(texts), len(out.Embeddings))
+	}
+	return out.Embeddings, nil
+}
+
 // isNetworkErr classifies wire-level failures (net.OpError, EOF, URL transport
 // errors) as unreachable so the search service falls back to lexical mode.
 func isNetworkErr(err error) bool {
