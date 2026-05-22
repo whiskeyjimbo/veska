@@ -65,10 +65,7 @@ const savingsBarWidth = 30
 // check.
 func formatSavingsRow(p savings.Period) string {
 	ratio := p.SavingsRatio()
-	filled := max(int(ratio*float64(savingsBarWidth)), 0)
-	if filled > savingsBarWidth {
-		filled = savingsBarWidth
-	}
+	filled := min(max(int(ratio*float64(savingsBarWidth)), 0), savingsBarWidth)
 	bar := strings.Repeat("█", filled) + strings.Repeat("·", savingsBarWidth-filled)
 	return fmt.Sprintf("  %-9s [%s] %5.1f%%  (%d calls, %s -> %s)",
 		p.Label, bar, ratio*100, p.Calls,
