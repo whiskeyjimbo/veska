@@ -67,7 +67,7 @@ func TestScanTracker_NilSafe(t *testing.T) {
 func TestScanTracker_ConcurrentStartEnd(t *testing.T) {
 	tr := application.NewScanTracker()
 	var wg sync.WaitGroup
-	for i := 0; i < 50; i++ {
+	for i := range 50 {
 		wg.Add(2)
 		go func(i int) { defer wg.Done(); tr.Start(repoKey(i)) }(i)
 		go func(i int) { defer wg.Done(); tr.End(repoKey(i)) }(i)

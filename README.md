@@ -5,10 +5,6 @@ your repository into a code graph (nodes + edges), embeds that graph
 semantically, and serves both to your editor and your AI agent over MCP — so
 they reason from the same structural ground truth instead of guessing.
 
-> "Engram" is the product name; "Veska" is the implementation and the binary
-> name. One daemon, one developer, one machine. There is no upstream, no shared
-> service, no multi-tenant tier — everything Veska knows lives in `~/.veska/`.
-
 ## What it gives you
 
 - **Grounded structural answers.** Every function, type, file, and call traces
@@ -64,7 +60,6 @@ ollama pull nomic-embed-text   # ~274 MB
 make build        # build veska, veska-daemon, veska-mcp (+ layercheck tool)
 make test         # go test ./...
 make all          # build + test + vet + lint + layercheck
-make layercheck   # enforce hexagonal layering (domain/ports must not import infra)
 ```
 
 Binaries land in `./bin/`. Either `export PATH="$PWD/bin:$PATH"` or use the
@@ -182,12 +177,8 @@ Key environment variables:
 
 ## Architecture
 
-Veska follows **DDD-lite inside a hexagonal / ports-and-adapters shell**: the
-core domain never imports infrastructure — coupling flows inward through
-interfaces, and `make layercheck` enforces it.
-
 ```
-cmd/                  the three binaries; veska-daemon/wire.go is the composition root
+cmd/                  the three binaries
 internal/
   core/
     domain/           pure entities: Node, Edge, Graph, Task, Finding
@@ -197,10 +188,6 @@ internal/
   repo/               repos-table registry
 docs/                 design set (SOLO-NN sections), milestones, operations runbooks
 ```
-
-Design decisions of note: functional options for domain constructors;
-constructors return typed errors (never panic) on missing dependencies; atomic
-promotion behind the `PromotionStore` port; L2-normalised embeddings.
 
 ## MCP tools
 

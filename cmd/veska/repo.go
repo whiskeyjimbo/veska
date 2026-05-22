@@ -254,7 +254,7 @@ func callMCP(ctx context.Context, method string, params any, out any) error {
 		d       net.Dialer
 	)
 	d.Timeout = dialTimeout
-	for attempt := 0; attempt < dialAttempts; attempt++ {
+	for attempt := range dialAttempts {
 		conn, dialErr = d.DialContext(ctx, "unix", sockPath)
 		if dialErr == nil {
 			break
