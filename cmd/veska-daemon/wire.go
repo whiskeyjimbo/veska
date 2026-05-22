@@ -30,9 +30,7 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/config"
 	"github.com/whiskeyjimbo/veska/internal/core/ports"
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/audit"
-	"github.com/whiskeyjimbo/veska/internal/infrastructure/embedding/composite"
-	"github.com/whiskeyjimbo/veska/internal/infrastructure/embedding/ollama"
-	embedstatic "github.com/whiskeyjimbo/veska/internal/infrastructure/embedding/static"
+	"github.com/whiskeyjimbo/veska/internal/infrastructure/embedding/elect"
 	fsignore "github.com/whiskeyjimbo/veska/internal/infrastructure/fs"
 	gitwatch "github.com/whiskeyjimbo/veska/internal/infrastructure/git"
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/llm"
@@ -468,29 +466,33 @@ func newDaemon(cfg Config) (*Daemon, error) {
 	// provider is wrapped in an InstrumentedEmbedder so every Embed call emits
 	// an "embed.run" span; the wrapped provider is used everywhere downstream
 	// (embedder worker, MCP search tools).
+	// Embedder election (solov2-1az): pick exactly ONE embedder for this
+	// boot — model2vec if installed, else the in-binary static embedder;
+	// Ollama only when VESKA_EMBEDDER=ollama. Vectors from different models
+	// occupy incompatible spaces and must never be mixed, so this replaces
+	// the old Ollama→static composite chain (solov2-soc), which did mix.
 	var provider ports.EmbeddingProvider
-	ollamaProvider, err := ollama.New(cfg.EmbedModel, ollama.WithBaseURL(cfg.OllamaURL))
+	election, err := elect.Elect(elect.Config{
+		VeskaHome:     cfg.VeskaHome,
+		Override:      os.Getenv("VESKA_EMBEDDER"),
+		Model2VecName: "potion-code-16M",
+		OllamaURL:     cfg.OllamaURL,
+		EmbedModel:    cfg.EmbedModel,
+	})
 	if err != nil {
 		_ = pools.Close()
-		return nil, fmt.Errorf("daemon: embedding provider: %w", err)
+		return nil, fmt.Errorf("daemon: embedder election: %w", err)
 	}
-	// Composite EmbeddingProvider (solov2-soc): try Ollama first, fall
-	// back to the in-process static embedder when Ollama is unreachable
-	// so a fresh-machine setup (no Ollama installed) still indexes and
-	// searches. The static embedder produces lower-quality vectors —
-	// the composite ModelID combines both IDs so swapping configuration
-	// invalidates the embedding cache.
-	staticProvider, err := embedstatic.New()
-	if err != nil {
-		_ = pools.Close()
-		return nil, fmt.Errorf("daemon: static embedder: %w", err)
+	slog.Info("daemon: embedder elected", "model_id", election.Name)
+	if election.SwitchedModel {
+		// A different embedder than the index was built with. The
+		// background reindex that re-embeds under the new model_id is a
+		// deferred 1az follow-up; until it lands, old-model vectors and
+		// new-model vectors coexist and cross-model queries are unreliable.
+		slog.Warn("daemon: embedder changed since last boot; existing embeddings were built with the previous model and must be reindexed (automatic reindex not yet implemented)",
+			"previous", election.Previous, "current", election.Name)
 	}
-	composedProvider, err := composite.New(ollamaProvider, staticProvider)
-	if err != nil {
-		_ = pools.Close()
-		return nil, fmt.Errorf("daemon: composite embedder: %w", err)
-	}
-	provider = composedProvider
+	provider = election.Provider
 	if tracerProvider != nil {
 		provider = observability.NewInstrumentedEmbedder(provider, tracerProvider)
 	}
