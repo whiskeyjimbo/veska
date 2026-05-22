@@ -1,23 +1,30 @@
 // Package static is a CPU-only, in-process EmbeddingProvider that
 // requires zero external services — no Ollama, no Python sidecar, no
-// network. Search works on a fresh machine without setup
-// (solov2-soc).
+// network, no model file (solov2-soc).
 //
-// It is NOT a faithful Model2Vec port: the design memo locks in a
-// real static-embedding model as the long-term goal (see memory
-// "soc-design"), but this MVP ships a deterministic hash-based
-// embedder that produces stable, L2-normalised vectors at the same
-// 768-dim shape as nomic-embed-text so the existing vector index and
-// search service drop in unchanged.
+// Algorithm (v2, FastText-style subword hashing):
 //
-// Quality trade-off: hash-derived token vectors carry no semantic
-// information, so two semantically related symbols (ParseConfig and
-// configParser) won't cluster the way they would under a real static
-// model. The reranker (solov2-2sf), hybrid retrieval (solov2-2su),
-// and chunk index (solov2-jyt) layers above compensate by surfacing
-// lexically-similar matches even when the vector cosine is noisy.
-// Setting up Ollama remains the recommended path for production
-// quality; the static embedder unblocks first-run evaluation.
+//  1. Tokenise into camelCase / snake_case / non-alphanumeric subwords.
+//  2. For each token, derive character n-grams (3..6) plus the token
+//     itself, with explicit boundary markers ('<' / '>') so prefix and
+//     suffix morphology contributes — FastText's trick.
+//  3. Hash each n-gram to a Dim-length float32 vector via SHA-256
+//     expansion mapped into [-1, 1].
+//  4. Sum all n-gram vectors across all tokens; divide by count
+//     (mean-pool); L2-normalise.
+//
+// This is NOT a faithful Model2Vec / potion-code-16M port — that work
+// is filed as solov2-vn0 and requires a HuggingFace tokenizer +
+// safetensors loader. The v2 subword scheme captures the property the
+// v1 per-token hash could not: identifiers sharing morphology
+// ("parseConfig" vs "configParser") land closer in vector space than
+// unrelated ones. That's the recall floor a static embedder needs to
+// be useful at all on code.
+//
+// Production-quality embeddings still come from Ollama. The static
+// embedder is the secondary in a composite (see internal/infrastructure/
+// embedding/composite) — it unblocks first-run setup and survives an
+// Ollama outage; it doesn't replace Ollama for serious work.
 package static
 
 import (
@@ -30,11 +37,18 @@ import (
 )
 
 // ModelID is the embedding-cache key reported by Provider.ModelID().
-// Bumping the suffix invalidates every static-embedded vector — do so
-// only when the math changes (different hash, different dim, different
-// pooling). The "veska-" prefix prevents collision with any external
-// model name.
-const ModelID = "veska-static-v1"
+// Bumping the suffix invalidates every static-embedded vector — done
+// here moving from v1 (per-token hash) to v2 (subword n-gram hash).
+// The "veska-" prefix prevents collision with any external model name.
+const ModelID = "veska-static-v2"
+
+// ngramMin and ngramMax bound the character-n-gram window applied per
+// token. 3..6 matches FastText's defaults; on code identifiers
+// (typically 4..16 chars) this captures enough overlap to give
+// "parseConfig" / "configParser" a meaningful cosine without
+// exploding the per-token n-gram count.
+const ngramMin = 3
+const ngramMax = 6
 
 // Dim is the output dimensionality. 768 matches nomic-embed-text so
 // the static embedder is a drop-in replacement at the vector-storage
@@ -53,74 +67,123 @@ func New() (*Provider, error) {
 // ModelID returns the stable identifier of the embedding model in use.
 func (*Provider) ModelID() string { return ModelID }
 
-// Embed returns a deterministic L2-normalised vector for text:
-//
-//  1. tokenise — lowercase, split on non-alphanumeric;
-//  2. per-token hash — SHA-256 expanded into Dim float32 components
-//     scaled into [-1, 1];
-//  3. mean-pool the token vectors;
-//  4. L2-normalise.
-//
+// Embed returns a deterministic L2-normalised vector for text.
 // Empty / whitespace-only input still returns a finite normalised
 // vector (the empty-string hash) so callers don't have to special-case
 // a NaN result.
 func (*Provider) Embed(_ context.Context, text string) ([]float32, error) {
 	tokens := tokenize(text)
 	if len(tokens) == 0 {
-		return l2Normalize(tokenVector("")), nil
+		return l2Normalize(hashVector("")), nil
 	}
 	acc := make([]float32, Dim)
+	var count int
 	for _, tok := range tokens {
-		tv := tokenVector(tok)
-		for i := range Dim {
-			acc[i] += tv[i]
+		for _, ng := range subwordNgrams(tok) {
+			v := hashVector(ng)
+			for i := range Dim {
+				acc[i] += v[i]
+			}
+			count++
 		}
 	}
-	inv := 1.0 / float32(len(tokens))
+	if count == 0 {
+		// Defensive: every non-empty token yields at least one n-gram
+		// (the whole token), but a degenerate input would otherwise
+		// land at all-zero → l2Normalize handles that branch too.
+		return l2Normalize(acc), nil
+	}
+	inv := 1.0 / float32(count)
 	for i := range Dim {
 		acc[i] *= inv
 	}
 	return l2Normalize(acc), nil
 }
 
-// tokenize lower-cases and splits on non-alphanumeric runes. Cheap and
-// language-agnostic — sufficient for the hash-pooling scheme where the
-// vector quality bottleneck is the per-token hash, not the tokeniser.
+// subwordNgrams returns the FastText-style subword set for tok: every
+// character n-gram with length in [ngramMin, ngramMax] over the token
+// surrounded by '<' and '>' boundary markers, plus the whole token as
+// a standalone n-gram (so single-letter shared tokens still match).
+// The boundary markers let "<par" only match identifiers that start
+// with "par", giving the model a notion of prefix vs suffix.
+func subwordNgrams(tok string) []string {
+	if tok == "" {
+		return nil
+	}
+	bounded := "<" + tok + ">"
+	bounds := []byte(bounded)
+	// Code identifiers are ASCII in the overwhelming majority of cases;
+	// byte-indexed n-grams are correct for them. Non-ASCII identifiers
+	// (rare) still get the whole-token fallback below.
+	var out []string
+	for n := ngramMin; n <= ngramMax; n++ {
+		if len(bounds) < n {
+			break
+		}
+		for i := 0; i+n <= len(bounds); i++ {
+			out = append(out, string(bounds[i:i+n]))
+		}
+	}
+	out = append(out, tok)
+	return out
+}
+
+// tokenize splits s on non-alphanumeric runes AND on camelCase /
+// PascalCase boundaries (Foo|Bar, HTTP|Server) so subword n-grams
+// reflect the natural morphology of code identifiers. Output is
+// lowercased so case never participates in the cosine.
 func tokenize(s string) []string {
 	if s == "" {
 		return nil
 	}
 	var out []string
 	var cur strings.Builder
-	for _, r := range s {
-		if unicode.IsLetter(r) || unicode.IsDigit(r) {
-			cur.WriteRune(unicode.ToLower(r))
-			continue
-		}
+	flush := func() {
 		if cur.Len() > 0 {
 			out = append(out, cur.String())
 			cur.Reset()
 		}
 	}
-	if cur.Len() > 0 {
-		out = append(out, cur.String())
+	runes := []rune(s)
+	for i, r := range runes {
+		if !unicode.IsLetter(r) && !unicode.IsDigit(r) {
+			flush()
+			continue
+		}
+		if unicode.IsUpper(r) && i > 0 {
+			prev := runes[i-1]
+			next := rune(0)
+			if i+1 < len(runes) {
+				next = runes[i+1]
+			}
+			// Boundary forms (mirrors the rerank splitIdentifier):
+			//   - prev lower / digit, this upper      : camelCase  (Foo|Bar)
+			//   - prev upper, next lower (in an acronym run)        : HTTP|Server
+			if unicode.IsLower(prev) || unicode.IsDigit(prev) ||
+				(unicode.IsUpper(prev) && next != 0 && unicode.IsLower(next)) {
+				flush()
+			}
+		}
+		cur.WriteRune(unicode.ToLower(r))
 	}
+	flush()
 	return out
 }
 
-// tokenVector derives a Dim-length pseudo-vector from token by
-// expanding SHA-256 of the token across Dim/8 hash rounds, packing
-// 8 float32 components per round. Each component is mapped into
-// [-1, 1] via (uint32 → float64 / max → 2x - 1). Cheap, deterministic,
-// dimension-stable.
-func tokenVector(token string) []float32 {
+// hashVector derives a Dim-length pseudo-vector from key by expanding
+// SHA-256 across Dim/8 hash rounds, packing 8 float32 components per
+// round. Each component is mapped into [-1, 1] via
+// (uint32 → float64 / max → 2x - 1). Cheap, deterministic, dimension-
+// stable. Used for both per-token and per-n-gram hashing — same math,
+// just different inputs.
+func hashVector(key string) []float32 {
 	out := make([]float32, Dim)
 	const wordsPerRound = 8 // 8 uint32s per SHA-256
 	rounds := (Dim + wordsPerRound - 1) / wordsPerRound
 	for r := range rounds {
 		h := sha256.New()
 		h.Write([]byte{byte(r), byte(r >> 8)})
-		h.Write([]byte(token))
+		h.Write([]byte(key))
 		sum := h.Sum(nil)
 		for w := range wordsPerRound {
 			idx := r*wordsPerRound + w
