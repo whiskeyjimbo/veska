@@ -138,12 +138,12 @@ func ResolveConfig(c Config) Config {
 			c.OllamaURL = "http://localhost:11434"
 		}
 	}
+	// EmbedModel is only consulted when the elected embedder is Ollama; it
+	// is no longer defaulted to nomic-embed-text here, since that implied
+	// Ollama-embedding was the daemon default (it isn't — see elect). When
+	// VESKA_EMBEDDER=ollama and this is unset, elect supplies the default.
 	if c.EmbedModel == "" {
-		if env := os.Getenv("VESKA_EMBED_MODEL"); env != "" {
-			c.EmbedModel = env
-		} else {
-			c.EmbedModel = "nomic-embed-text"
-		}
+		c.EmbedModel = os.Getenv("VESKA_EMBED_MODEL")
 	}
 	return c
 }
@@ -328,9 +328,10 @@ func newDaemon(cfg Config) (*Daemon, error) {
 	if cfg.MCPSockPath == "" {
 		return nil, &ErrMissingDep{Name: "mcp_sock_path"}
 	}
-	if cfg.EmbedModel == "" {
-		return nil, &ErrMissingDep{Name: "embed_model"}
-	}
+	// EmbedModel is intentionally NOT required here: it only matters when
+	// the elected embedder is Ollama (VESKA_EMBEDDER=ollama). With the
+	// default model2vec/static election the daemon needs no Ollama embed
+	// model to boot — elect.pick supplies the Ollama default if chosen.
 
 	// Make sure the SQLite parent directory exists; sqlite.Open does not
 	// mkdir for us.

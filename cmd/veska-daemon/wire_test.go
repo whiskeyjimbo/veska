@@ -178,8 +178,11 @@ func TestResolveConfig_AppliesDefaults(t *testing.T) {
 	if got.VectorBackend != vector.BackendSQLiteVec {
 		t.Errorf("VectorBackend = %q; want %q", got.VectorBackend, vector.BackendSQLiteVec)
 	}
-	if got.EmbedModel != "nomic-embed-text" {
-		t.Errorf("EmbedModel = %q; want %q", got.EmbedModel, "nomic-embed-text")
+	// EmbedModel is intentionally NOT defaulted daemon-wide anymore: it
+	// only matters when the elected embedder is Ollama, and elect supplies
+	// the nomic default there. Unset env ⇒ empty here.
+	if got.EmbedModel != "" {
+		t.Errorf("EmbedModel = %q; want empty (no daemon-wide default)", got.EmbedModel)
 	}
 	if got.OllamaURL != "http://localhost:11434" {
 		t.Errorf("OllamaURL = %q; want default", got.OllamaURL)
