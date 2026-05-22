@@ -6,7 +6,7 @@ DAEMON_BIN      := $(BINDIR)/veska-daemon
 MCP_BIN         := $(BINDIR)/veska-mcp
 LAYERCHECK_BIN  := $(BINDIR)/layercheck
 
-.PHONY: all build test lint vet layercheck clean loadtest test-mcp test-mcp-deep test-mcp-bootstrap eval-recall eval-recall-projection eval-embedder-recall eval-autolink-fp eval-revalidate-bench eval-queue-fuzz eval-embed-throughput
+.PHONY: all build test lint vet layercheck clean loadtest test-mcp test-mcp-deep test-mcp-bootstrap eval-recall eval-recall-projection eval-autolink-fp eval-revalidate-bench eval-queue-fuzz eval-embed-throughput
 
 all: build test vet lint layercheck
 
@@ -81,19 +81,6 @@ eval-recall:
 # timeout accordingly. See tools/loadtest/recallprojection/README.md.
 eval-recall-projection:
 	RECALL_POP=$${RECALL_POP:-1000} go test -tags=eval -run TestRecallProjectionSweep ./tools/loadtest/recallprojection/ -v -timeout=3600s
-
-# eval-embedder-recall: solov2-hd0 DECISION GATE — runs the same corpus +
-# query set through both embedders (Ollama nomic-embed-text vs model2vec
-# potion-code-16M) and reports recall@10 / recall@5 / MRR / p95 embed latency
-# for each, then prints a verdict per the decision rule (model2vec within
-# ~10% recall AND comparable-or-better latency ⇒ make it the default).
-# Needs a reachable Ollama AND the model2vec model files under
-# $$VESKA_HOME/static-model/<model>/ (default ~/.veska, potion-code-16M);
-# each arm SKIPS with a clear message when its dependency is absent.
-# Override RECALL_POP / RECALL_PROJECTION_CORPUS (real:<path>) /
-# RECALL_PROJECTION_VARIANT / VESKA_STATIC_MODEL. See README.
-eval-embedder-recall:
-	RECALL_POP=$${RECALL_POP:-1000} go test -tags=eval -run TestEmbedderRecallCompare ./tools/loadtest/recallprojection/ -v -timeout=3600s
 
 # eval-autolink-fp: auto-link false-positive harness (m3.04.4). Quick mode
 # (AUTOLINK_POP=1000, fake embedder) is the default and runs in ~1s. Override

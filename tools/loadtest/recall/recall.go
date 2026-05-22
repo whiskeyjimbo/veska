@@ -51,27 +51,6 @@ func MeanRecall(perQuery []float64) float64 {
 	return sum / float64(len(perQuery))
 }
 
-// ReciprocalRank returns 1/(rank+1) for the first hit that is a member
-// of truth, scanning hits best-first; it returns 0 when no hit is in
-// truth. This is the per-query term MRR averages over.
-func ReciprocalRank(hits []string, truth map[string]struct{}) float64 {
-	if len(truth) == 0 {
-		return 0
-	}
-	for i, h := range hits {
-		if _, ok := truth[h]; ok {
-			return 1.0 / float64(i+1)
-		}
-	}
-	return 0
-}
-
-// MRR returns the mean reciprocal rank over the supplied per-query
-// reciprocal ranks. An empty input returns zero.
-func MRR(perQuery []float64) float64 {
-	return MeanRecall(perQuery) // identical arithmetic: mean of per-query values
-}
-
 // P95Latency returns the 95th-percentile latency from the supplied
 // durations using nearest-rank interpolation. An empty slice returns
 // zero; a single-element slice returns that element.
