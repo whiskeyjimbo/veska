@@ -16,6 +16,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"path/filepath"
 	"sort"
 
 	"github.com/whiskeyjimbo/veska/internal/application/blastradius"
@@ -120,7 +121,15 @@ func (s *HotZoneService) Rank(ctx context.Context, repoID, branch, repoRoot stri
 
 	zones := make([]HotZone, 0, len(counts))
 	for path, freq := range counts {
-		seedIDs, err := s.nodesInFile(ctx, repoID, branch, path)
+		// git ChangeCounts returns repo-root-relative paths, but the
+		// nodes table stores absolute file_paths. Without this join,
+		// nodesInFile returns [] for every entry and every zone scores
+		// 0, so .github/dependabot.yml ties with command.go (solov2-eb2).
+		lookupPath := path
+		if !filepath.IsAbs(lookupPath) {
+			lookupPath = filepath.Join(repoRoot, path)
+		}
+		seedIDs, err := s.nodesInFile(ctx, repoID, branch, lookupPath)
 		if err != nil {
 			return Report{}, fmt.Errorf("wiki: nodes in %s: %w", path, err)
 		}
