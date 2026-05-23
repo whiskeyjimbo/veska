@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 
+	application "github.com/whiskeyjimbo/veska/internal/application"
 	"github.com/whiskeyjimbo/veska/internal/application/contextpack"
 	"github.com/whiskeyjimbo/veska/internal/core/domain"
 )
@@ -13,11 +14,11 @@ import (
 // are required; when either is nil the tool is still registered but
 // returns InternalError on every call, keeping the registry uniform
 // across composition roots that have not wired the context-pack service.
-func RegisterContextPackTool(r *Registry, asm *contextpack.Assembler, repoRoot RepoRootFunc) {
+func RegisterContextPackTool(r *Registry, asm *contextpack.Assembler, repoRoot RepoRootFunc, repos application.RepoLister) {
 	r.MustRegister(ToolSpec{
 		Name:        "eng_get_context_pack",
 		Description: "Return a token-bounded JSON bundle of relevant nodes, recent commits, open findings and tasks for a symbol or a task.",
-		Handler:     makeContextPackHandler(asm, repoRoot),
+		Handler:     makeContextPackHandler(asm, repoRoot, repos),
 	})
 }
 
@@ -28,7 +29,7 @@ type contextPackParams struct {
 	TaskID string `json:"task_id,omitempty"`
 }
 
-func makeContextPackHandler(asm *contextpack.Assembler, repoRoot RepoRootFunc) ToolHandler {
+func makeContextPackHandler(asm *contextpack.Assembler, repoRoot RepoRootFunc, repos application.RepoLister) ToolHandler {
 	return func(ctx context.Context, _ domain.Actor, raw json.RawMessage) (any, *RPCError) {
 		if asm == nil || repoRoot == nil {
 			return nil, &RPCError{
@@ -50,6 +51,11 @@ func makeContextPackHandler(asm *contextpack.Assembler, repoRoot RepoRootFunc) T
 				Message: "exactly one of symbol or task_id is required",
 			}
 		}
+		repoID, rpcErr := resolveRepoID(ctx, repos, p.RepoID)
+		if rpcErr != nil {
+			return nil, rpcErr
+		}
+		p.RepoID = repoID
 		root, err := repoRoot(ctx, p.RepoID)
 		if err != nil {
 			return nil, &RPCError{Code: CodeNotFound, Message: fmt.Sprintf("repo not found: %s", p.RepoID)}

@@ -229,7 +229,7 @@ editors by `veska-mcp`). Tool names follow `eng_<verb>_<object>`. Quick map:
 | Graph | `eng_find_symbol`, `eng_get_node`, `eng_get_file_nodes`, `eng_get_call_chain` |
 | Search | `eng_search_semantic`, `eng_search_similar` |
 | Blast radius | `eng_get_blast_radius`, `eng_get_diff_blast_radius`, `eng_get_dirty_blast_radius` |
-| Context | `eng_get_context_pack`, `eng_find_changed_symbols` |
+| Context | `eng_get_context_pack`, `eng_find_changed_symbols` (takes `ref_a`/`ref_b`; defaults to `HEAD~1..HEAD`) |
 | Misc | `eng_find_owner`, `eng_find_todos` |
 | Findings | `eng_list_findings`, `eng_get_finding`, `eng_close_finding`, `eng_reopen_finding` |
 | Suppressions | `eng_list_suppressions`, `eng_get_suppression`, `eng_suppress_finding`, `eng_close_suppression` |

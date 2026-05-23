@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"strings"
 	"testing"
 
 	"github.com/whiskeyjimbo/veska/internal/core/domain"
@@ -52,7 +53,7 @@ func TestFindTodos_ReturnsOpenByDefault(t *testing.T) {
 		{FindingID: "t1", RepoID: "r", Branch: "main", FilePath: "a.go", Message: "TODO: x", State: "open"},
 	}}
 	r := NewRegistry()
-	RegisterTodoTools(r, q)
+	RegisterTodoTools(r, q, nil)
 
 	resp, rpcErr := dispatchTodos(t, r, map[string]string{"repo_id": "r", "branch": "main"})
 	if rpcErr != nil {
@@ -66,10 +67,40 @@ func TestFindTodos_ReturnsOpenByDefault(t *testing.T) {
 	}
 }
 
+// TestFindTodos_EmitsSnakeCaseKeys guards the snake_case surface contract:
+// the response must not leak the PascalCase Go field names of ports.TodoEntry
+// (solov2-unem).
+func TestFindTodos_EmitsSnakeCaseKeys(t *testing.T) {
+	q := &stubTodoQuerier{entries: []ports.TodoEntry{
+		{FindingID: "t1", RepoID: "r", Branch: "main", FilePath: "a.go", Message: "TODO: x", State: "open", CreatedAt: 42},
+	}}
+	r := NewRegistry()
+	RegisterTodoTools(r, q, nil)
+
+	raw, _ := json.Marshal(map[string]string{"repo_id": "r", "branch": "main"})
+	req := &Request{Method: "eng_find_todos", Params: json.RawMessage(raw)}
+	result, rpcErr := r.Dispatch(context.Background(), domain.Actor{ID: "agent:test", Kind: domain.ActorKindAgent}, req)
+	if rpcErr != nil {
+		t.Fatalf("dispatch: %+v", rpcErr)
+	}
+	b, _ := json.Marshal(result)
+	js := string(b)
+	for _, want := range []string{"finding_id", "repo_id", "file_path", "created_at"} {
+		if !strings.Contains(js, want) {
+			t.Errorf("response missing snake_case key %q: %s", want, js)
+		}
+	}
+	for _, bad := range []string{"FindingID", "RepoID", "FilePath", "CreatedAt"} {
+		if strings.Contains(js, bad) {
+			t.Errorf("response leaked PascalCase key %q: %s", bad, js)
+		}
+	}
+}
+
 func TestFindTodos_IncludeClosedFlipsOnlyOpen(t *testing.T) {
 	q := &stubTodoQuerier{}
 	r := NewRegistry()
-	RegisterTodoTools(r, q)
+	RegisterTodoTools(r, q, nil)
 
 	_, rpcErr := dispatchTodos(t, r, map[string]any{
 		"repo_id": "r", "branch": "main", "include_closed": true,
@@ -84,7 +115,7 @@ func TestFindTodos_IncludeClosedFlipsOnlyOpen(t *testing.T) {
 
 func TestFindTodos_RequiresParams(t *testing.T) {
 	r := NewRegistry()
-	RegisterTodoTools(r, &stubTodoQuerier{})
+	RegisterTodoTools(r, &stubTodoQuerier{}, nil)
 
 	_, rpcErr := dispatchTodos(t, r, map[string]string{"repo_id": "r"}) // missing branch
 	if rpcErr == nil || rpcErr.Code != CodeInvalidParams {
@@ -95,7 +126,7 @@ func TestFindTodos_RequiresParams(t *testing.T) {
 func TestFindTodos_PropagatesError(t *testing.T) {
 	q := &stubTodoQuerier{err: errors.New("disk full")}
 	r := NewRegistry()
-	RegisterTodoTools(r, q)
+	RegisterTodoTools(r, q, nil)
 
 	_, rpcErr := dispatchTodos(t, r, map[string]string{"repo_id": "r", "branch": "main"})
 	if rpcErr == nil || rpcErr.Code != CodeInternalError {
@@ -105,7 +136,7 @@ func TestFindTodos_PropagatesError(t *testing.T) {
 
 func TestFindTodos_RegistersOneTool(t *testing.T) {
 	r := NewRegistry()
-	RegisterTodoTools(r, &stubTodoQuerier{})
+	RegisterTodoTools(r, &stubTodoQuerier{}, nil)
 	got := r.Names()
 	if len(got) != 1 || got[0] != "eng_find_todos" {
 		t.Fatalf("expected [eng_find_todos], got %v", got)

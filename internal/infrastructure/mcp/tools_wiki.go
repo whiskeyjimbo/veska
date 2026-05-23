@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strings"
 
+	application "github.com/whiskeyjimbo/veska/internal/application"
 	"github.com/whiskeyjimbo/veska/internal/application/wiki"
 	"github.com/whiskeyjimbo/veska/internal/core/domain"
 )
@@ -23,11 +24,11 @@ type HotZoneResponse struct {
 // required; when either is nil the tool is still registered but returns
 // InternalError on every call, keeping the registry uniform across
 // composition roots that have not wired the git adapter.
-func RegisterWikiTools(r *Registry, svc *wiki.HotZoneService, repoRoot RepoRootFunc) {
+func RegisterWikiTools(r *Registry, svc *wiki.HotZoneService, repoRoot RepoRootFunc, repos application.RepoLister) {
 	r.MustRegister(ToolSpec{
 		Name:        "eng_get_hot_zone",
 		Description: "Return the top-N files ranked by change risk (recent change frequency multiplied by blast radius).",
-		Handler:     makeHotZoneHandler(svc, repoRoot),
+		Handler:     makeHotZoneHandler(svc, repoRoot, repos),
 	})
 }
 
@@ -44,11 +45,11 @@ type EntryPointsResponse struct {
 // svc may be nil — the tool is still registered but returns InternalError
 // on every call, keeping the registry uniform across composition roots
 // that have not wired the entry_points service.
-func RegisterEntryPointsTool(r *Registry, svc *wiki.EntryPointsService) {
+func RegisterEntryPointsTool(r *Registry, svc *wiki.EntryPointsService, repos application.RepoLister) {
 	r.MustRegister(ToolSpec{
 		Name:        "eng_get_entry_points",
 		Description: "Return low-risk symbols a newcomer or agent can safely start from (adjacent test, small blast radius, no open findings).",
-		Handler:     makeEntryPointsHandler(svc),
+		Handler:     makeEntryPointsHandler(svc, repos),
 	})
 }
 
@@ -62,7 +63,7 @@ type entryPointsParams struct {
 	IncludeTests bool `json:"include_tests,omitempty"`
 }
 
-func makeEntryPointsHandler(svc *wiki.EntryPointsService) ToolHandler {
+func makeEntryPointsHandler(svc *wiki.EntryPointsService, repos application.RepoLister) ToolHandler {
 	return func(ctx context.Context, _ domain.Actor, raw json.RawMessage) (any, *RPCError) {
 		if svc == nil {
 			return nil, &RPCError{
@@ -77,6 +78,11 @@ func makeEntryPointsHandler(svc *wiki.EntryPointsService) ToolHandler {
 		if rpcErr := checkRequired("repo_id", p.RepoID, "branch", p.Branch); rpcErr != nil {
 			return nil, rpcErr
 		}
+		repoID, rpcErr := resolveRepoID(ctx, repos, p.RepoID)
+		if rpcErr != nil {
+			return nil, rpcErr
+		}
+		p.RepoID = repoID
 		rep, err := svc.SelectWith(ctx, p.RepoID, p.Branch, wiki.SelectOptions{
 			IncludeTests: p.IncludeTests,
 		})
@@ -126,7 +132,7 @@ type hotZoneParams struct {
 	Branch string `json:"branch"`
 }
 
-func makeHotZoneHandler(svc *wiki.HotZoneService, repoRoot RepoRootFunc) ToolHandler {
+func makeHotZoneHandler(svc *wiki.HotZoneService, repoRoot RepoRootFunc, repos application.RepoLister) ToolHandler {
 	return func(ctx context.Context, _ domain.Actor, raw json.RawMessage) (any, *RPCError) {
 		if svc == nil || repoRoot == nil {
 			return nil, &RPCError{
@@ -141,6 +147,11 @@ func makeHotZoneHandler(svc *wiki.HotZoneService, repoRoot RepoRootFunc) ToolHan
 		if rpcErr := checkRequired("repo_id", p.RepoID, "branch", p.Branch); rpcErr != nil {
 			return nil, rpcErr
 		}
+		repoID, rpcErr := resolveRepoID(ctx, repos, p.RepoID)
+		if rpcErr != nil {
+			return nil, rpcErr
+		}
+		p.RepoID = repoID
 		root, err := repoRoot(ctx, p.RepoID)
 		if err != nil {
 			return nil, &RPCError{Code: CodeNotFound, Message: fmt.Sprintf("repo not found: %s", p.RepoID)}
