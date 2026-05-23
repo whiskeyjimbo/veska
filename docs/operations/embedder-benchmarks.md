@@ -8,7 +8,11 @@ Latency is per-query embed time. **model2vec rows measure in-process CPU compute
 
 | Model | Type | Size | Code R@10 | Prose R@10 | Query ms | Recommended for |
 |---|---|---|---|---|---|---|
-| `potion-code-16M` | model2vec | 62MB | 0.600 | 0.633 | 0.003 | code, prose, smallest footprint, fastest query |
+| `potion-base-2M` | model2vec | 7MB | 0.200 | 0.533 | 0.003 | smallest footprint, fastest query |
+| `potion-base-8M` | model2vec | 29MB | 0.350 | 0.600 | 0.004 | — |
+| `potion-code-16M` | model2vec | 62MB | 0.600 | 0.633 | 0.004 | code |
+| `potion-base-32M` | model2vec | 124MB | 0.300 | 0.667 | 0.006 | prose |
+| `potion-retrieval-32M` | model2vec | 124MB | 0.350 | 0.667 | 0.006 | prose |
 
 ## Notes
 
