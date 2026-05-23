@@ -15,7 +15,6 @@ import (
 	"context"
 	"math"
 
-	"github.com/whiskeyjimbo/veska/internal/infrastructure/embedding/model2vec"
 )
 
 // RecallScores holds the per-source metric output.
@@ -36,7 +35,7 @@ type RecallScores struct {
 // contribute 0 to every metric — the bench measures how well the model
 // surfaces a target that's known to be in the corpus, so a missing
 // target is a real failure of the corpus or pair set).
-func ComputeRecall(provider *model2vec.Provider, pairs []Pair, docs []doc) RecallScores {
+func ComputeRecall(provider Embedder, pairs []Pair, docs []doc) RecallScores {
 	if len(pairs) == 0 || len(docs) == 0 {
 		return RecallScores{}
 	}

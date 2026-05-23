@@ -19,12 +19,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/whiskeyjimbo/veska/internal/infrastructure/embedding/model2vec"
 )
 
 // embedProseCorpus walks .md files under root, splits each into
 // sections, and embeds each section as one doc. Capped at maxDocs.
-func embedProseCorpus(p *model2vec.Provider, root string, maxDocs int) ([]doc, embedStats) {
+func embedProseCorpus(p Embedder, root string, maxDocs int) ([]doc, embedStats) {
 	var docs []doc
 	start := time.Now()
 	var totalEmbedNS int64

@@ -32,6 +32,7 @@ import (
 	"fmt"
 	"io/fs"
 	"math"
+	"net/http"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -42,6 +43,7 @@ import (
 	"time"
 
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/embedding/model2vec"
+	"github.com/whiskeyjimbo/veska/internal/infrastructure/embedding/ollama"
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/treesitter"
 )
 
@@ -54,6 +56,24 @@ var BenchModels = []string{
 	"potion-retrieval-32M",
 	"potion-base-32M",
 	"potion-base-128M",
+}
+
+// BenchOllamaModels lists the Ollama embedders the -full variant
+// of the bench targets (0k5h.5). Enabled by EMBED_BENCH_INCLUDE_OLLAMA=1
+// and only when an Ollama service is reachable at $VESKA_OLLAMA_URL.
+var BenchOllamaModels = []string{
+	"nomic-embed-text",
+	"bge-m3",
+	"snowflake-arctic-embed",
+	"mxbai-embed-large",
+}
+
+// Embedder is the minimum surface every bench-target provider satisfies
+// — both model2vec.Provider and ollama.Provider implement this exact
+// signature. Keeps the corpus walkers and the recall metric independent
+// of the concrete provider type.
+type Embedder interface {
+	Embed(ctx context.Context, text string) ([]float32, error)
 }
 
 // BenchCorpora lists the corpus names the bench targets. veska is
@@ -95,6 +115,7 @@ type corpusEntry struct {
 // written to results.json and consumed by 0k5h.6's table generator.
 type runResult struct {
 	Model        string                  `json:"model"`
+	ModelType    string                  `json:"model_type"` // "model2vec" (in-process) or "ollama" (network)
 	Corpus       string                  `json:"corpus"`
 	DocCount     int                     `json:"doc_count"`
 	EmbedTotal   string                  `json:"embed_total"`    // human-readable duration
@@ -121,10 +142,6 @@ type benchResults struct {
 
 func TestEmbedModelsBenchmark(t *testing.T) {
 	models := discoverModels(t)
-	if len(models) == 0 {
-		t.Fatalf("no model2vec models found under %s; run scripts/install-bench-models.sh", modelRoot())
-	}
-
 	corpora := discoverCorpora(t)
 	if len(corpora) == 0 {
 		t.Fatalf("no corpora available (veska self-corpus should always resolve)")
@@ -133,12 +150,94 @@ func TestEmbedModelsBenchmark(t *testing.T) {
 	query := envOr("EMBED_BENCH_QUERY", "load config")
 	topK := envInt("EMBED_BENCH_TOPK", 10)
 	maxDocs := envInt("EMBED_BENCH_MAX_DOCS", 5000)
+	ollamaMaxDocs := envInt("EMBED_BENCH_OLLAMA_MAX_DOCS", 500)
 
-	t.Logf("models found: %d (%v)", len(models), modelNames(models))
+	t.Logf("model2vec found: %d (%v)", len(models), modelNames(models))
 	t.Logf("corpora found: %d (%v)", len(corpora), corpusNames(corpora))
 	t.Logf("query=%q topK=%d max_docs=%d", query, topK, maxDocs)
 
+	includeOllama := os.Getenv("EMBED_BENCH_INCLUDE_OLLAMA") == "1"
+	var ollamaModels []string
+	if includeOllama {
+		if reachable, url := ollamaReachable(); reachable {
+			ollamaModels = BenchOllamaModels
+			t.Logf("ollama reachable at %s — including %d models (max_docs=%d)", url, len(ollamaModels), ollamaMaxDocs)
+		} else {
+			t.Logf("WARN: EMBED_BENCH_INCLUDE_OLLAMA=1 but ollama unreachable at %s — skipping ollama subset", url)
+		}
+	}
+
+	if len(models) == 0 && len(ollamaModels) == 0 {
+		t.Fatalf("no embedders available (model2vec set empty AND ollama subset disabled or unreachable)")
+	}
+
 	var results []runResult
+	runOne := func(modelName, modelType string, provider Embedder, c corpusEntry, mxDocs int) {
+		t.Logf("--- run: model=%s [%s] corpus=%s (%s) ---", modelName, modelType, c.name, c.kind)
+		var (
+			docs  []doc
+			stats embedStats
+		)
+		switch c.kind {
+		case "prose":
+			docs, stats = embedProseCorpus(provider, c.root, mxDocs)
+		default:
+			docs, stats = embedCorpus(t, provider, c.root, mxDocs)
+		}
+		if len(docs) == 0 {
+			t.Logf("  no docs from %s — skip", c.root)
+			return
+		}
+		qStart := time.Now()
+		qvec, err := provider.Embed(context.Background(), query)
+		if err != nil {
+			t.Logf("  embed query failed: %v — skip", err)
+			return
+		}
+		qElapsed := time.Since(qStart)
+		hits := rank(qvec, docs)
+		k := topK
+		if k > len(hits) {
+			k = len(hits)
+		}
+		top := make([]topHit, 0, k)
+		for i := 0; i < k; i++ {
+			rel, _ := filepath.Rel(c.root, hits[i].doc.file)
+			if rel == "" {
+				rel = hits[i].doc.file
+			}
+			top = append(top, topHit{Name: hits[i].doc.name, File: rel, Score: hits[i].score})
+		}
+		t.Logf("  docs=%d embed_total=%s avg=%.2fms query_embed=%s top1=%s(%.3f)",
+			len(docs), stats.total, stats.avgMS, qElapsed, top[0].Name, top[0].Score)
+
+		gtSources := CollectGroundTruth(c.name, c.root, fixturesDir(), c.kind)
+		recallByGT := make(map[string]RecallScores, len(gtSources))
+		for _, gt := range gtSources {
+			if len(gt.Pairs) == 0 {
+				recallByGT[gt.Name] = RecallScores{}
+				continue
+			}
+			scores := ComputeRecall(provider, gt.Pairs, docs)
+			recallByGT[gt.Name] = scores
+			t.Logf("  recall[%s] n=%d @1=%.3f @5=%.3f @10=%.3f mrr=%.3f miss=%d not_in_corpus=%d",
+				gt.Name, scores.N, scores.At1, scores.At5, scores.At10, scores.MRR, scores.Miss, scores.NotInCorpus)
+		}
+
+		results = append(results, runResult{
+			Model:        modelName,
+			ModelType:    modelType,
+			Corpus:       c.name,
+			DocCount:     len(docs),
+			EmbedTotal:   stats.total.String(),
+			EmbedTotalMS: float64(stats.total.Nanoseconds()) / 1e6,
+			EmbedAvgMS:   stats.avgMS,
+			QueryMS:      float64(qElapsed.Nanoseconds()) / 1e6,
+			TopHits:      top,
+			Recall:       recallByGT,
+		})
+	}
+
 	for _, m := range models {
 		provider, err := model2vec.New(m.dir)
 		if err != nil {
@@ -146,68 +245,18 @@ func TestEmbedModelsBenchmark(t *testing.T) {
 			continue
 		}
 		for _, c := range corpora {
-			t.Logf("--- run: model=%s corpus=%s (%s) ---", m.name, c.name, c.kind)
-			var (
-				docs  []doc
-				stats embedStats
-			)
-			switch c.kind {
-			case "prose":
-				docs, stats = embedProseCorpus(provider, c.root, maxDocs)
-			default:
-				docs, stats = embedCorpus(t, provider, c.root, maxDocs)
-			}
-			if len(docs) == 0 {
-				t.Logf("  no docs from %s — skip", c.root)
-				continue
-			}
-			qStart := time.Now()
-			qvec, err := provider.Embed(context.Background(), query)
-			if err != nil {
-				t.Logf("  embed query failed: %v — skip", err)
-				continue
-			}
-			qElapsed := time.Since(qStart)
-			hits := rank(qvec, docs)
-			if topK > len(hits) {
-				topK = len(hits)
-			}
-			top := make([]topHit, 0, topK)
-			for i := 0; i < topK; i++ {
-				rel, _ := filepath.Rel(c.root, hits[i].doc.file)
-				if rel == "" {
-					rel = hits[i].doc.file
-				}
-				top = append(top, topHit{Name: hits[i].doc.name, File: rel, Score: hits[i].score})
-			}
-			t.Logf("  docs=%d embed_total=%s avg=%.2fms query_embed=%s top1=%s(%.3f)",
-				len(docs), stats.total, stats.avgMS, qElapsed, top[0].Name, top[0].Score)
+			runOne(m.name, "model2vec", provider, c, maxDocs)
+		}
+	}
 
-			// Recall per ground-truth source (headline / doc / test-name).
-			gtSources := CollectGroundTruth(c.name, c.root, fixturesDir(), c.kind)
-			recallByGT := make(map[string]RecallScores, len(gtSources))
-			for _, gt := range gtSources {
-				if len(gt.Pairs) == 0 {
-					recallByGT[gt.Name] = RecallScores{}
-					continue
-				}
-				scores := ComputeRecall(provider, gt.Pairs, docs)
-				recallByGT[gt.Name] = scores
-				t.Logf("  recall[%s] n=%d @1=%.3f @5=%.3f @10=%.3f mrr=%.3f miss=%d not_in_corpus=%d",
-					gt.Name, scores.N, scores.At1, scores.At5, scores.At10, scores.MRR, scores.Miss, scores.NotInCorpus)
-			}
-
-			results = append(results, runResult{
-				Model:        m.name,
-				Corpus:       c.name,
-				DocCount:     len(docs),
-				EmbedTotal:   stats.total.String(),
-				EmbedTotalMS: float64(stats.total.Nanoseconds()) / 1e6,
-				EmbedAvgMS:   stats.avgMS,
-				QueryMS:      float64(qElapsed.Nanoseconds()) / 1e6,
-				TopHits:      top,
-				Recall:       recallByGT,
-			})
+	for _, om := range ollamaModels {
+		provider, err := ollama.New(om, ollama.WithBaseURL(ollamaURL()))
+		if err != nil {
+			t.Logf("WARN: ollama.New %s: %v — skipping", om, err)
+			continue
+		}
+		for _, c := range corpora {
+			runOne(om, "ollama", provider, c, ollamaMaxDocs)
 		}
 	}
 
@@ -220,6 +269,30 @@ func TestEmbedModelsBenchmark(t *testing.T) {
 // ───────────────────────────────────────────────────────────────────────
 // Discovery
 // ───────────────────────────────────────────────────────────────────────
+
+// ollamaURL returns the bench's Ollama base URL. Defaults to the
+// production VESKA_OLLAMA_URL or localhost.
+func ollamaURL() string {
+	if u := os.Getenv("VESKA_OLLAMA_URL"); u != "" {
+		return u
+	}
+	return "http://localhost:11434"
+}
+
+// ollamaReachable probes the Ollama service with a short timeout. Used
+// to skip the Ollama subset cleanly when the service isn't running,
+// rather than failing the whole bench. Returns the URL we tried so the
+// caller can log it on either branch.
+func ollamaReachable() (bool, string) {
+	u := ollamaURL()
+	client := &http.Client{Timeout: 2 * time.Second}
+	resp, err := client.Get(u + "/api/tags")
+	if err != nil {
+		return false, u
+	}
+	resp.Body.Close()
+	return resp.StatusCode >= 200 && resp.StatusCode < 500, u
+}
 
 // fixturesDir resolves the bench's hand-curated ground-truth directory.
 // Override with EMBED_BENCH_FIXTURES; default is fixtures/ under the
@@ -320,7 +393,7 @@ type embedStats struct {
 // declaration's name+raw_content as a single document. Capped at
 // maxDocs to bound runtime when iterating over many (model × corpus)
 // combinations.
-func embedCorpus(t *testing.T, p *model2vec.Provider, root string, maxDocs int) ([]doc, embedStats) {
+func embedCorpus(t *testing.T, p Embedder, root string, maxDocs int) ([]doc, embedStats) {
 	t.Helper()
 	parser := treesitter.NewGoParser()
 	var docs []doc
@@ -432,7 +505,7 @@ func writeResults(rows []runResult) error {
 		return err
 	}
 	r := benchResults{
-		Phase:       "0k5h.4",
+		Phase:       "0k5h.5",
 		GeneratedAt: time.Now().UTC().Format(time.RFC3339),
 		Runs:        rows,
 	}
