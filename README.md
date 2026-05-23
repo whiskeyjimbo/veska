@@ -219,7 +219,7 @@ docs/                 design set (SOLO-NN sections), milestones, operations runb
 
 ## MCP tools
 
-The daemon exposes 34 tools over a Unix-socket JSON-RPC server (forwarded to
+The daemon exposes 31 tools over a Unix-socket JSON-RPC server (forwarded to
 editors by `veska-mcp`). Tool names follow `eng_<verb>_<object>`. Quick map:
 
 | Family | Tools |
@@ -231,10 +231,37 @@ editors by `veska-mcp`). Tool names follow `eng_<verb>_<object>`. Quick map:
 | Blast radius | `eng_get_blast_radius`, `eng_get_diff_blast_radius`, `eng_get_dirty_blast_radius` |
 | Context | `eng_get_context_pack`, `eng_find_changed_symbols` |
 | Misc | `eng_find_owner`, `eng_find_todos` |
-| Tasks | `eng_get_active_task`, `eng_set_active_task`, `eng_get_task_history` |
 | Findings | `eng_list_findings`, `eng_get_finding`, `eng_close_finding`, `eng_reopen_finding` |
 | Suppressions | `eng_list_suppressions`, `eng_get_suppression`, `eng_suppress_finding`, `eng_close_suppression` |
 | Wiki | `eng_get_hot_zone`, `eng_get_entry_points` |
+
+**Conventions across the tool surface:**
+
+- **Responses are `snake_case`.** Every tool emits the same node shape —
+  `{node_id, name, kind, file_path, line_start, line_end, signature?,
+  language?, exported?}` — plus `score`/`distance`/`snippet` on search and
+  blast hits. Empty result collections serialize as `[]`, never omitted.
+- **`repo_id` accepts a short alias.** `eng_list_repos` returns a 12-char
+  `short_id` for each repo; anywhere a `repo_id` is required you may pass the
+  full id or that short prefix. An unknown `repo_id` is a loud `NotFound`
+  error, not an empty result.
+- **Required params are reported together.** A call missing several required
+  fields gets one error naming all of them.
+- **Param names are canonical:** `file_path` (for node/file lookups, with
+  `path` accepted as an alias), `node_id`, `symbol`. `eng_get_context_pack`
+  takes exactly one of `symbol` or `task_id` (not `node_id`).
+- **`eng_find_symbol` matches unqualified names:** searching `Start` finds
+  `Server.Start`; exact matches rank first.
+- **Embedder quality is in-band:** when the daemon is on the low-quality
+  static-v2 fallback (no model2vec installed), every `eng_search_semantic`
+  response carries `low_quality_static_embedder` in `degraded_reasons` — run
+  `veska install model2vec` to clear it.
+
+A task family (`eng_get_active_task`, `eng_set_active_task`,
+`eng_get_task_history`) is implemented but currently **parked** — it is not
+registered on the socket until a task backend (Jira / Linear / GitHub) lands to
+populate the table (`wire.go`, solov2-6m1). Calling these returns
+`method not found`.
 
 ## Testing
 

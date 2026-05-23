@@ -128,6 +128,12 @@ func TestDeadCodeCheck_AppliesAllowlistFilters(t *testing.T) {
 		{"unrelated kind: lowercase 'foo' reported", "foo", "type", false},
 		// non-Go-named entry: function named 'main' is filtered regardless of casing.
 		{"function literally named 'init' excluded", "init", "method", true},
+		// Non-symbol kinds carry no inbound edges by construction and must
+		// never be reported, regardless of name casing (solov2-xpb).
+		{"package kind excluded", "server", "package", true},
+		{"chunk kind excluded", "chunk:1-4", "chunk", true},
+		{"file kind excluded", "main.go", "file", true},
+		{"field kind excluded", "addr", "field", true},
 	}
 
 	for _, tc := range cases {

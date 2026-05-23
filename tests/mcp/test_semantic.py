@@ -23,7 +23,7 @@ def test_search_semantic_returns_results(mcp_client, repo_id, branch, target_sym
     assert ok, f"eng_search_semantic failed: {text}"
     results = result.get("results", [])
     assert results, "expected at least one hit"
-    syms = [r.get("SymbolPath") for r in results]
+    syms = [r.get("name") for r in results]
     if not any(target_symbol in (s or "") for s in syms):
         pytest.xfail(
             f"target {target_symbol!r} not in top 5 {syms} — likely solov2-249 "
@@ -52,7 +52,7 @@ def test_search_similar_returns_results(mcp_client, repo_id, branch, target_symb
     })
     nodes = find_result.get("nodes", [])
     assert nodes, "no nodes for target_symbol — cannot test similar"
-    node_id = nodes[0]["ID"]
+    node_id = nodes[0]["node_id"]
 
     ok, text, _, result = mcp_client.call("eng_search_similar", {
         "repo_id": repo_id,

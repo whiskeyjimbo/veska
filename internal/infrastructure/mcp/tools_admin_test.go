@@ -71,9 +71,9 @@ func TestAdminTools_GetCurrentRepo_Found(t *testing.T) {
 		t.Fatalf("result is not map[string]any, got %T", result)
 	}
 
-	repo, ok := m["repo"].(application.RepoRecord)
+	repo, ok := m["repo"].(RepoView)
 	if !ok {
-		t.Fatalf("result[\"repo\"] is not RepoRecord, got %T", m["repo"])
+		t.Fatalf("result[\"repo\"] is not RepoView, got %T", m["repo"])
 	}
 	if repo.RepoID != "repo-1" {
 		t.Errorf("expected repo-1, got %q", repo.RepoID)
@@ -179,9 +179,9 @@ func TestAdminTools_GetRepo_Found(t *testing.T) {
 		t.Fatalf("result is not map[string]any, got %T", result)
 	}
 
-	repo, ok := m["repo"].(application.RepoRecord)
+	repo, ok := m["repo"].(RepoView)
 	if !ok {
-		t.Fatalf("result[\"repo\"] is not RepoRecord, got %T", m["repo"])
+		t.Fatalf("result[\"repo\"] is not RepoView, got %T", m["repo"])
 	}
 	if repo.RepoID != "repo-2" {
 		t.Errorf("expected repo-2, got %q", repo.RepoID)
@@ -248,7 +248,7 @@ func TestAdminTools_GetConfig(t *testing.T) {
 		t.Error("expected veska_home key in config response")
 	}
 
-	if m["schema_version"] != 1 {
-		t.Errorf("expected schema_version=1, got %v", m["schema_version"])
+	if m["config_schema_version"] != 1 {
+		t.Errorf("expected config_schema_version=1, got %v", m["config_schema_version"])
 	}
 }

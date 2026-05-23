@@ -142,6 +142,80 @@ func dispatchGraph(t *testing.T, r *Registry, method string, params any) (GraphR
 	return resp, nil
 }
 
+// dispatchCallChain dispatches eng_get_call_chain and decodes the
+// callChainResponse envelope (nodes + edges + cross-repo edges).
+func dispatchCallChain(t *testing.T, r *Registry, method string, params any) (callChainResponse, *RPCError) {
+	t.Helper()
+	raw, err := json.Marshal(params)
+	if err != nil {
+		t.Fatalf("marshal params: %v", err)
+	}
+	req := &Request{Method: method, Params: json.RawMessage(raw)}
+	result, rpcErr := r.Dispatch(context.Background(), domain.Actor{ID: "agent:test", Kind: domain.ActorKindAgent}, req)
+	if rpcErr != nil {
+		return callChainResponse{}, rpcErr
+	}
+	b, err := json.Marshal(result)
+	if err != nil {
+		t.Fatalf("marshal result: %v", err)
+	}
+	var resp callChainResponse
+	if err := json.Unmarshal(b, &resp); err != nil {
+		t.Fatalf("unmarshal callChainResponse: %v", err)
+	}
+	return resp, nil
+}
+
+// TestFindSymbol_UnknownRepoIDErrors pins solov2-5rh: an unknown repo_id
+// must return a loud NotFound error, not a silently-empty result, so a
+// stale/typo'd id is distinguishable from a genuine no-match.
+func TestFindSymbol_UnknownRepoIDErrors(t *testing.T) {
+	store := newStubGraphStorage()
+	store.addNode(mustNode(t, "n1", "pkg/foo.go", "Foo", domain.KindFunction))
+
+	r := NewRegistry()
+	RegisterGraphTools(r, store, application.NewStagingArea(),
+		WithRepoLister(&stubRepoLister{repos: sampleRepos}))
+
+	_, rpcErr := dispatchGraph(t, r, "eng_find_symbol", map[string]string{
+		"symbol":  "Foo",
+		"repo_id": "does-not-exist",
+		"branch":  "main",
+	})
+	if rpcErr == nil {
+		t.Fatal("expected NotFound error for unknown repo_id, got nil")
+	}
+	if rpcErr.Code != CodeNotFound {
+		t.Errorf("expected CodeNotFound (%d), got %d: %s", CodeNotFound, rpcErr.Code, rpcErr.Message)
+	}
+}
+
+// TestFindSymbol_ShortRepoIDAccepted pins solov2-d2x: a 12-char short_id
+// prefix resolves to the full repo_id.
+func TestFindSymbol_ShortRepoIDAccepted(t *testing.T) {
+	store := newStubGraphStorage()
+	store.addNode(mustNode(t, "n1", "pkg/foo.go", "Foo", domain.KindFunction))
+
+	repos := []application.RepoRecord{
+		{RepoID: "0123456789abcdef0123456789abcdef", RootPath: "/p", ActiveBranch: "main", LastPromotedSHA: "x"},
+	}
+	r := NewRegistry()
+	RegisterGraphTools(r, store, application.NewStagingArea(),
+		WithRepoLister(&stubRepoLister{repos: repos}))
+
+	resp, rpcErr := dispatchGraph(t, r, "eng_find_symbol", map[string]string{
+		"symbol":  "Foo",
+		"repo_id": "0123456789ab", // 12-char short_id
+		"branch":  "main",
+	})
+	if rpcErr != nil {
+		t.Fatalf("unexpected error for short repo_id: %+v", rpcErr)
+	}
+	if len(resp.Nodes) != 1 {
+		t.Fatalf("expected 1 node via short_id, got %d", len(resp.Nodes))
+	}
+}
+
 // ---------------------------------------------------------------------------
 // eng_find_symbol — finds nodes from graph store
 // ---------------------------------------------------------------------------
@@ -165,8 +239,8 @@ func TestFindSymbol_ReturnsNodesFromGraphStore(t *testing.T) {
 	if len(resp.Nodes) != 1 {
 		t.Fatalf("expected 1 node, got %d", len(resp.Nodes))
 	}
-	if string(resp.Nodes[0].ID) != "node-1" {
-		t.Errorf("expected node-1, got %q", resp.Nodes[0].ID)
+	if resp.Nodes[0].NodeID != "node-1" {
+		t.Errorf("expected node-1, got %q", resp.Nodes[0].NodeID)
 	}
 }
 
@@ -201,7 +275,7 @@ func TestFindSymbol_StagingOverridesPromotedNode(t *testing.T) {
 		t.Fatalf("expected 1 node after merge, got %d", len(resp.Nodes))
 	}
 	// Staged version should win.
-	if resp.Nodes[0].Kind != domain.KindMethod {
+	if resp.Nodes[0].Kind != string(domain.KindMethod) {
 		t.Errorf("expected staged kind %q, got %q", domain.KindMethod, resp.Nodes[0].Kind)
 	}
 }
@@ -229,8 +303,8 @@ func TestGetNode_Found(t *testing.T) {
 	if len(resp.Nodes) != 1 {
 		t.Fatalf("expected 1 node, got %d", len(resp.Nodes))
 	}
-	if string(resp.Nodes[0].ID) != "node-42" {
-		t.Errorf("wrong node: %q", resp.Nodes[0].ID)
+	if resp.Nodes[0].NodeID != "node-42" {
+		t.Errorf("wrong node: %q", resp.Nodes[0].NodeID)
 	}
 }
 
@@ -276,7 +350,7 @@ func TestGetCallChain_TraversesCallsEdges(t *testing.T) {
 	r := NewRegistry()
 	RegisterGraphTools(r, store, application.NewStagingArea())
 
-	resp, rpcErr := dispatchGraph(t, r, "eng_get_call_chain", map[string]any{
+	resp, rpcErr := dispatchCallChain(t, r, "eng_get_call_chain", map[string]any{
 		"node_id": "a",
 		"repo_id": "repo1",
 		"branch":  "main",
@@ -289,7 +363,7 @@ func TestGetCallChain_TraversesCallsEdges(t *testing.T) {
 	// Should include b and c (reachable via CALLS from a), possibly a itself.
 	nodeIDs := make(map[string]bool)
 	for _, n := range resp.Nodes {
-		nodeIDs[string(n.ID)] = true
+		nodeIDs[n.NodeID] = true
 	}
 	if !nodeIDs["b"] {
 		t.Error("expected node b in call chain")
@@ -358,8 +432,8 @@ func TestGetFileNodes_ReturnsStagedNodesWhenPresent(t *testing.T) {
 	if len(resp.Nodes) != 1 {
 		t.Fatalf("expected 1 staged node, got %d", len(resp.Nodes))
 	}
-	if string(resp.Nodes[0].ID) != "s1" {
-		t.Errorf("expected staged node s1, got %q", resp.Nodes[0].ID)
+	if resp.Nodes[0].NodeID != "s1" {
+		t.Errorf("expected staged node s1, got %q", resp.Nodes[0].NodeID)
 	}
 }
 
@@ -391,8 +465,33 @@ func TestGetFileNodes_FallsBackToPromotedStore(t *testing.T) {
 	if len(resp.Nodes) != 1 {
 		t.Fatalf("expected 1 promoted node, got %d", len(resp.Nodes))
 	}
-	if string(resp.Nodes[0].ID) != "n1" {
-		t.Errorf("expected node n1, got %q", resp.Nodes[0].ID)
+	if resp.Nodes[0].NodeID != "n1" {
+		t.Errorf("expected node n1, got %q", resp.Nodes[0].NodeID)
+	}
+}
+
+// TestGetFileNodes_ResolvesRelativePath verifies a repo-relative file_path is
+// joined to the repo root before lookup, instead of silently matching nothing
+// (solov2-829). Also exercises the "path" alias (solov2-3p1).
+func TestGetFileNodes_ResolvesRelativePath(t *testing.T) {
+	store := newStubGraphStorage()
+	n1 := mustNode(t, "n1", "/abs/repo/internal/server.go", "Serve", domain.KindFunction)
+	store.addNode(n1)
+
+	r := NewRegistry()
+	RegisterGraphTools(r, store, application.NewStagingArea(),
+		WithRepoLister(&stubRepoLister{repos: []application.RepoRecord{{RepoID: "repo1", RootPath: "/abs/repo"}}}))
+
+	resp, rpcErr := dispatchGraph(t, r, "eng_get_file_nodes", map[string]string{
+		"path":    "internal/server.go", // relative + alias
+		"repo_id": "repo1",
+		"branch":  "main",
+	})
+	if rpcErr != nil {
+		t.Fatalf("unexpected error: %+v", rpcErr)
+	}
+	if len(resp.Nodes) != 1 || resp.Nodes[0].NodeID != "n1" {
+		t.Fatalf("expected node n1 from resolved relative path, got %+v", resp.Nodes)
 	}
 }
 

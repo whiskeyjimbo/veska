@@ -59,11 +59,13 @@ func TestRenderSearchResults_JSONMatchesMCPEnvelope(t *testing.T) {
 	if len(got.Results) != 1 {
 		t.Fatalf("results count: got %d, want 1", len(got.Results))
 	}
-	// search.Result currently uses Go field names in its JSON output
-	// (no struct tags). The CLI must match whatever the MCP tool emits;
-	// when MCP gains snake_case tags, this test will catch the drift.
-	if got.Results[0]["NodeID"] != "n1" {
-		t.Errorf("NodeID field missing or wrong: %+v", got.Results[0])
+	// The CLI emits the same snake_case node DTO as eng_search_semantic
+	// (solov2-elt): node_id, name, file_path, ...
+	if got.Results[0]["node_id"] != "n1" {
+		t.Errorf("node_id field missing or wrong: %+v", got.Results[0])
+	}
+	if got.Results[0]["name"] != "pkg.Foo" {
+		t.Errorf("name field missing or wrong: %+v", got.Results[0])
 	}
 	if len(got.DegradedReasons) != 1 || got.DegradedReasons[0] != "embedder_offline_lexical_fallback" {
 		t.Errorf("degraded_reasons not preserved: %+v", got.DegradedReasons)

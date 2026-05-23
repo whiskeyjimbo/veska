@@ -87,8 +87,7 @@ func TestBlastRadius_DefaultsToCallers(t *testing.T) {
 	}}
 	svc := blastradius.NewService(edges, nodes, nil)
 	r := NewRegistry()
-	RegisterBlastTools(r, svc, nil, nil)
-
+	RegisterBlastTools(r, svc, nil, nil, nil)
 	resp, rpcErr := dispatchBlast(t, r, "eng_get_blast_radius", map[string]any{
 		"node_id":   "seed",
 		"repo_id":   "r1",
@@ -116,8 +115,7 @@ func TestBlastRadius_HonoursCalleesDirection(t *testing.T) {
 	}}
 	svc := blastradius.NewService(edges, nodes, nil)
 	r := NewRegistry()
-	RegisterBlastTools(r, svc, nil, nil)
-
+	RegisterBlastTools(r, svc, nil, nil, nil)
 	resp, rpcErr := dispatchBlast(t, r, "eng_get_blast_radius", map[string]any{
 		"node_id":   "seed",
 		"repo_id":   "r1",
@@ -136,8 +134,7 @@ func TestBlastRadius_HonoursCalleesDirection(t *testing.T) {
 func TestBlastRadius_BadDirectionRejected(t *testing.T) {
 	svc := blastradius.NewService(&blastFakeEdges{}, &blastFakeNodes{}, nil)
 	r := NewRegistry()
-	RegisterBlastTools(r, svc, nil, nil)
-
+	RegisterBlastTools(r, svc, nil, nil, nil)
 	_, rpcErr := dispatchBlast(t, r, "eng_get_blast_radius", map[string]any{
 		"node_id":   "seed",
 		"repo_id":   "r",
@@ -152,8 +149,7 @@ func TestBlastRadius_BadDirectionRejected(t *testing.T) {
 func TestBlastRadius_RequiresParams(t *testing.T) {
 	svc := blastradius.NewService(&blastFakeEdges{}, &blastFakeNodes{}, nil)
 	r := NewRegistry()
-	RegisterBlastTools(r, svc, nil, nil)
-
+	RegisterBlastTools(r, svc, nil, nil, nil)
 	_, rpcErr := dispatchBlast(t, r, "eng_get_blast_radius", map[string]any{
 		"repo_id": "r",
 		"branch":  "main",
@@ -175,8 +171,7 @@ func TestDirtyBlastRadius_FlagsIncludedStaging(t *testing.T) {
 	}}
 	svc := blastradius.NewService(edges, nodes, staging)
 	r := NewRegistry()
-	RegisterBlastTools(r, svc, nil, nil)
-
+	RegisterBlastTools(r, svc, nil, nil, nil)
 	resp, rpcErr := dispatchBlast(t, r, "eng_get_dirty_blast_radius", map[string]any{
 		"repo_id":   "r1",
 		"branch":    "main",
@@ -196,8 +191,7 @@ func TestDirtyBlastRadius_FlagsIncludedStaging(t *testing.T) {
 func TestBlastTools_RegistersThreeTools(t *testing.T) {
 	svc := blastradius.NewService(&blastFakeEdges{}, &blastFakeNodes{}, nil)
 	r := NewRegistry()
-	RegisterBlastTools(r, svc, nil, nil)
-
+	RegisterBlastTools(r, svc, nil, nil, nil)
 	got := r.Names()
 	want := []string{"eng_get_blast_radius", "eng_get_diff_blast_radius", "eng_get_dirty_blast_radius"}
 	if len(got) != len(want) {
@@ -213,8 +207,7 @@ func TestBlastTools_RegistersThreeTools(t *testing.T) {
 func TestDiffBlastRadius_NotWiredReturnsInternalError(t *testing.T) {
 	svc := blastradius.NewService(&blastFakeEdges{}, &blastFakeNodes{}, nil)
 	r := NewRegistry()
-	RegisterBlastTools(r, svc, nil, nil)
-
+	RegisterBlastTools(r, svc, nil, nil, nil)
 	_, rpcErr := dispatchBlast(t, r, "eng_get_diff_blast_radius", map[string]any{
 		"repo_id": "r", "branch": "main",
 	})
@@ -242,8 +235,7 @@ func TestDiffBlastRadius_HappyPath(t *testing.T) {
 	}
 
 	r := NewRegistry()
-	RegisterBlastTools(r, svc, repoRoot, changed)
-
+	RegisterBlastTools(r, svc, repoRoot, changed, nil)
 	resp, rpcErr := dispatchBlast(t, r, "eng_get_diff_blast_radius", map[string]any{
 		"repo_id":   "r1",
 		"branch":    "main",
@@ -266,8 +258,7 @@ func TestDiffBlastRadius_UnknownRepo(t *testing.T) {
 		return nil, nil
 	}
 	r := NewRegistry()
-	RegisterBlastTools(r, svc, repoRoot, changed)
-
+	RegisterBlastTools(r, svc, repoRoot, changed, nil)
 	_, rpcErr := dispatchBlast(t, r, "eng_get_diff_blast_radius", map[string]any{
 		"repo_id": "ghost", "branch": "main",
 	})

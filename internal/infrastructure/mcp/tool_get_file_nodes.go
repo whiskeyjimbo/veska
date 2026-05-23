@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"path/filepath"
 
 	application "github.com/whiskeyjimbo/veska/internal/application"
 	"github.com/whiskeyjimbo/veska/internal/core/domain"
@@ -16,8 +17,12 @@ import (
 
 type getFileNodesParams struct {
 	FilePath string `json:"file_path"`
-	RepoID   string `json:"repo_id"`
-	Branch   string `json:"branch"`
+	// Path is an accepted alias for FilePath. Node file paths are keyed on
+	// "file_path"; "path" is a common caller guess, so we honour both rather
+	// than silently returning nothing (solov2-3p1).
+	Path   string `json:"path"`
+	RepoID string `json:"repo_id"`
+	Branch string `json:"branch"`
 }
 
 // makeGetFileNodesHandler returns every node for (repo, branch, file_path).
@@ -27,25 +32,59 @@ type getFileNodesParams struct {
 //
 // solov2-8ex retired the previous in-handler type-assertion to an optional
 // fileQuerier interface; NodesForFile is now part of the port contract.
-func makeGetFileNodesHandler(graph ports.GraphStorage, staging *application.StagingArea) ToolHandler {
+func makeGetFileNodesHandler(graph ports.GraphStorage, staging *application.StagingArea, repos application.RepoLister) ToolHandler {
 	return func(ctx context.Context, _ domain.Actor, raw json.RawMessage) (any, *RPCError) {
 		var p getFileNodesParams
 		if err := json.Unmarshal(raw, &p); err != nil {
 			return nil, &RPCError{Code: CodeInvalidParams, Message: fmt.Sprintf("invalid params: %v", err)}
 		}
-		if p.FilePath == "" || p.RepoID == "" || p.Branch == "" {
-			return nil, &RPCError{Code: CodeInvalidParams, Message: "file_path, repo_id, and branch are required"}
+		filePath := p.FilePath
+		if filePath == "" {
+			filePath = p.Path
+		}
+		if filePath == "" || p.RepoID == "" || p.Branch == "" {
+			return nil, &RPCError{Code: CodeInvalidParams, Message: "file_path (or path), repo_id, and branch are required"}
+		}
+		repoID, rpcErr := resolveRepoID(ctx, repos, p.RepoID)
+		if rpcErr != nil {
+			return nil, rpcErr
+		}
+		p.RepoID = repoID
+
+		// Node paths are stored absolute. Resolve a repo-relative file_path
+		// against the repo root so callers don't have to pass an absolute path
+		// (and don't get a silent empty result when they pass a relative one).
+		if !filepath.IsAbs(filePath) && repos != nil {
+			if root, ok := repoRoot(ctx, repos, p.RepoID); ok {
+				filePath = filepath.Join(root, filePath)
+			}
 		}
 
 		// Staging overlay wins when present.
-		if stagedNodes, ok := staging.GetStagedNodes(p.RepoID, p.Branch, p.FilePath); ok {
-			return GraphResponse{Nodes: stagedNodes, IncludedStaging: true}, nil
+		if stagedNodes, ok := staging.GetStagedNodes(p.RepoID, p.Branch, filePath); ok {
+			return GraphResponse{Nodes: nodesToDTO(stagedNodes), IncludedStaging: true}, nil
 		}
 
-		nodes, err := graph.NodesForFile(ctx, p.RepoID, p.Branch, p.FilePath)
+		nodes, err := graph.NodesForFile(ctx, p.RepoID, p.Branch, filePath)
 		if err != nil {
 			return nil, &RPCError{Code: CodeInternalError, Message: fmt.Sprintf("query failed: %v", err)}
 		}
-		return GraphResponse{Nodes: nodes, IncludedStaging: false}, nil
+		return GraphResponse{Nodes: nodesToDTO(nodes), IncludedStaging: false}, nil
 	}
+}
+
+// repoRoot looks up the absolute working-tree root for repoID. ok is false when
+// the repo is unknown or the registry errors — callers then leave the path as
+// given rather than failing the request.
+func repoRoot(ctx context.Context, repos application.RepoLister, repoID string) (string, bool) {
+	all, err := repos.ListRepos(ctx)
+	if err != nil {
+		return "", false
+	}
+	for _, rec := range all {
+		if rec.RepoID == repoID {
+			return rec.RootPath, true
+		}
+	}
+	return "", false
 }

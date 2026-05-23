@@ -150,7 +150,7 @@ func TestSearchSemantic_ReturnsHydratedResults(t *testing.T) {
 	svc := search.NewService(emb, vecs, nodes)
 
 	r := NewRegistry()
-	RegisterSearchTools(r, svc, &stubSimilarLookup{}, vecs, nodes, nil)
+	RegisterSearchTools(r, svc, &stubSimilarLookup{}, vecs, nodes, nil, nil)
 
 	resp, rpcErr := dispatchSearch(t, r, "eng_search_semantic", map[string]any{
 		"query":   "find foo",
@@ -164,8 +164,8 @@ func TestSearchSemantic_ReturnsHydratedResults(t *testing.T) {
 	if len(resp.Results) != 1 || resp.Results[0].NodeID != "n1" {
 		t.Fatalf("got %+v", resp.Results)
 	}
-	if resp.Results[0].SymbolPath != "pkg.Foo" {
-		t.Errorf("expected hydrated symbol_path, got %q", resp.Results[0].SymbolPath)
+	if resp.Results[0].Name != "pkg.Foo" {
+		t.Errorf("expected hydrated name, got %q", resp.Results[0].Name)
 	}
 }
 
@@ -186,7 +186,7 @@ func TestSearchSemantic_LimitAliasHonoured(t *testing.T) {
 	svc := search.NewService(emb, vecs, nodes)
 
 	r := NewRegistry()
-	RegisterSearchTools(r, svc, &stubSimilarLookup{}, vecs, nodes, nil)
+	RegisterSearchTools(r, svc, &stubSimilarLookup{}, vecs, nodes, nil, nil)
 
 	_, rpcErr := dispatchSearch(t, r, "eng_search_semantic", map[string]any{
 		"query":   "x",
@@ -215,7 +215,7 @@ func TestSearchSemantic_MissingParamsRejected(t *testing.T) {
 	svc := search.NewService(emb, vecs, nodes)
 
 	r := NewRegistry()
-	RegisterSearchTools(r, svc, &stubSimilarLookup{}, vecs, nodes, nil)
+	RegisterSearchTools(r, svc, &stubSimilarLookup{}, vecs, nodes, nil, nil)
 
 	_, rpcErr := dispatchSearch(t, r, "eng_search_semantic", map[string]string{
 		"query":  "x",
@@ -234,7 +234,7 @@ func TestSearchSemantic_KExceedsMax(t *testing.T) {
 	svc := search.NewService(emb, vecs, nodes)
 
 	r := NewRegistry()
-	RegisterSearchTools(r, svc, &stubSimilarLookup{}, vecs, nodes, nil)
+	RegisterSearchTools(r, svc, &stubSimilarLookup{}, vecs, nodes, nil, nil)
 
 	_, rpcErr := dispatchSearch(t, r, "eng_search_semantic", map[string]any{
 		"query":   "x",
@@ -254,7 +254,7 @@ func TestSearchSemantic_PropagatesEmbedError(t *testing.T) {
 	svc := search.NewService(emb, vecs, nodes)
 
 	r := NewRegistry()
-	RegisterSearchTools(r, svc, &stubSimilarLookup{}, vecs, nodes, nil)
+	RegisterSearchTools(r, svc, &stubSimilarLookup{}, vecs, nodes, nil, nil)
 
 	_, rpcErr := dispatchSearch(t, r, "eng_search_semantic", map[string]any{
 		"query":   "x",
@@ -294,7 +294,7 @@ func TestSearchSimilar_ReturnsNeighboursExcludingSeed(t *testing.T) {
 	}
 
 	r := NewRegistry()
-	RegisterSearchTools(r, svc, lookup, vecs, nodes, nil)
+	RegisterSearchTools(r, svc, lookup, vecs, nodes, nil, nil)
 
 	resp, rpcErr := dispatchSearch(t, r, "eng_search_similar", map[string]any{
 		"node_id": "seed",
@@ -329,7 +329,7 @@ func TestSearchSimilar_NodeNotEmbedded(t *testing.T) {
 	lookup := &stubSimilarLookup{ready: false}
 
 	r := NewRegistry()
-	RegisterSearchTools(r, svc, lookup, vecs, nodes, nil)
+	RegisterSearchTools(r, svc, lookup, vecs, nodes, nil, nil)
 
 	_, rpcErr := dispatchSearch(t, r, "eng_search_similar", map[string]any{
 		"node_id": "n",
@@ -348,7 +348,7 @@ func TestSearchSimilar_MissingParams(t *testing.T) {
 	svc := search.NewService(emb, vecs, nodes)
 
 	r := NewRegistry()
-	RegisterSearchTools(r, svc, &stubSimilarLookup{}, vecs, nodes, nil)
+	RegisterSearchTools(r, svc, &stubSimilarLookup{}, vecs, nodes, nil, nil)
 
 	_, rpcErr := dispatchSearch(t, r, "eng_search_similar", map[string]string{
 		"repo_id": "r",
@@ -367,7 +367,7 @@ func TestSearchTools_RegistersTwoTools(t *testing.T) {
 	svc := search.NewService(emb, vecs, nodes)
 
 	r := NewRegistry()
-	RegisterSearchTools(r, svc, &stubSimilarLookup{}, vecs, nodes, nil)
+	RegisterSearchTools(r, svc, &stubSimilarLookup{}, vecs, nodes, nil, nil)
 
 	got := r.Names()
 	want := []string{"eng_search_semantic", "eng_search_similar"}

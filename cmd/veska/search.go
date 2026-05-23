@@ -73,6 +73,19 @@ type runSearchOpts struct {
 }
 
 func runSearch(ctx context.Context, w io.Writer, opts runSearchOpts) error {
+	// Daemon-first: when a daemon is up and already tracks the target repo,
+	// run the query through its eng_search_semantic so the CLI shares the
+	// daemon's hybrid (vector + lexical) retrieval pipeline and never opens
+	// a second writer on veska.db (solov2-b1q, solov2-xkm). The in-process
+	// path below is the fallback for when the daemon is down or the repo is
+	// not yet registered (it clones/indexes synchronously).
+	if env, handled, err := daemonSearch(ctx, opts); handled {
+		if err != nil {
+			return err
+		}
+		return renderSearchEnvelope(w, env, opts.jsonOut)
+	}
+
 	dbPath := filepath.Join(config.DefaultVectorDir(), "veska.db")
 	if _, err := sqlite.OpenWithOptions(dbPath, sqlite.Options{}); err != nil {
 		return fmt.Errorf("search: migrate sqlite: %w", err)
@@ -330,28 +343,160 @@ func isGitURL(s string) bool {
 	return false
 }
 
-// renderSearchResults emits the response in the same JSON shape as the
-// MCP eng_search_semantic tool (AC3) or a tabular fallback for human
-// use. The MCP envelope is {results: [...], degraded_reasons: [...]}.
+// searchHitView is the CLI's wire shape for one hit. It mirrors the MCP
+// eng_search_semantic node DTO (snake_case) so `veska search --json` and
+// the tool emit byte-identical envelopes (solov2-elt, AC3).
+type searchHitView struct {
+	NodeID    string  `json:"node_id"`
+	Name      string  `json:"name"`
+	Kind      string  `json:"kind"`
+	FilePath  string  `json:"file_path"`
+	LineStart int     `json:"line_start,omitempty"`
+	LineEnd   int     `json:"line_end,omitempty"`
+	Score     float32 `json:"score"`
+	Snippet   string  `json:"snippet,omitempty"`
+}
+
+// searchEnvelope is the {results, degraded_reasons} wrapper shared by the
+// daemon-dial path (decoded from eng_search_semantic) and the in-process
+// fallback (mapped from search.Response).
+type searchEnvelope struct {
+	Results         []searchHitView `json:"results"`
+	DegradedReasons []string        `json:"degraded_reasons,omitempty"`
+}
+
+// renderSearchResults maps an in-process search.Response into the wire
+// envelope and renders it.
 func renderSearchResults(w io.Writer, resp search.Response, jsonOut bool) error {
-	envelope := struct {
-		Results         []search.Result `json:"results"`
-		DegradedReasons []string        `json:"degraded_reasons,omitempty"`
-	}{Results: resp.Results, DegradedReasons: resp.DegradedReasons}
-	if envelope.Results == nil {
-		envelope.Results = []search.Result{}
+	env := searchEnvelope{DegradedReasons: resp.DegradedReasons}
+	env.Results = make([]searchHitView, 0, len(resp.Results))
+	for _, r := range resp.Results {
+		env.Results = append(env.Results, searchHitView{
+			NodeID:    r.NodeID,
+			Name:      r.SymbolPath,
+			Kind:      r.Kind,
+			FilePath:  r.FilePath,
+			LineStart: r.LineStart,
+			LineEnd:   r.LineEnd,
+			Score:     r.Score,
+			Snippet:   r.Snippet,
+		})
+	}
+	return renderSearchEnvelope(w, env, jsonOut)
+}
+
+// renderSearchEnvelope emits the envelope as indented JSON (--json) or a
+// greppable one-line-per-hit table. Results is always a non-nil slice so
+// the JSON carries "results": [] on a miss (solov2-elt).
+func renderSearchEnvelope(w io.Writer, env searchEnvelope, jsonOut bool) error {
+	if env.Results == nil {
+		env.Results = []searchHitView{}
 	}
 	if jsonOut {
 		enc := json.NewEncoder(w)
 		enc.SetIndent("", "  ")
-		return enc.Encode(envelope)
+		return enc.Encode(env)
 	}
-	for _, r := range envelope.Results {
+	for _, r := range env.Results {
 		fmt.Fprintf(w, "%-8s %s:%d-%d  %s  (score=%.4f)\n",
-			r.Kind, r.FilePath, r.LineStart, r.LineEnd, r.SymbolPath, r.Score)
+			r.Kind, r.FilePath, r.LineStart, r.LineEnd, r.Name, r.Score)
 	}
-	for _, d := range envelope.DegradedReasons {
+	for _, d := range env.DegradedReasons {
 		fmt.Fprintf(w, "[degraded: %s]\n", d)
 	}
 	return nil
+}
+
+// daemonSearch resolves the target repo through a running daemon and runs
+// the query via eng_search_semantic. handled is false when the daemon is
+// unreachable or the target repo is not yet tracked — the caller then
+// falls back to the in-process clone/index/query path. This keeps the
+// common "search my already-indexed repo" case on the daemon's hybrid
+// pipeline and avoids a second writer on veska.db (solov2-b1q, solov2-xkm).
+func daemonSearch(ctx context.Context, opts runSearchOpts) (searchEnvelope, bool, error) {
+	// A git-URL target needs a clone+index pass the daemon-dial path does
+	// not perform; leave it to the in-process path.
+	if isGitURL(opts.target) {
+		return searchEnvelope{}, false, nil
+	}
+
+	repoID, branch, ok := resolveRepoViaDaemon(ctx, opts.target)
+	if !ok {
+		return searchEnvelope{}, false, nil
+	}
+
+	k := opts.k
+	if k <= 0 {
+		k = 10
+	}
+	var env searchEnvelope
+	if err := callMCP(ctx, "eng_search_semantic", map[string]any{
+		"repo_id": repoID,
+		"branch":  branch,
+		"query":   opts.query,
+		"k":       k,
+	}, &env); err != nil {
+		// Daemon was reachable enough to resolve the repo but the search
+		// call failed — surface it rather than silently re-running a
+		// divergent in-process query.
+		return searchEnvelope{}, true, fmt.Errorf("search: daemon eng_search_semantic: %w", err)
+	}
+	return env, true, nil
+}
+
+// resolveRepoViaDaemon maps the search target to a (repo_id, branch) the
+// daemon already tracks. An empty target resolves the cwd via
+// eng_get_current_repo; a filesystem path is matched against eng_list_repos
+// by canonical root. ok is false (caller falls back) when the daemon is
+// down or the repo is unknown.
+func resolveRepoViaDaemon(ctx context.Context, target string) (repoID, branch string, ok bool) {
+	type repoRow struct {
+		RepoID       string `json:"repo_id"`
+		RootPath     string `json:"root_path"`
+		ActiveBranch string `json:"active_branch"`
+	}
+
+	if target == "" {
+		cwd, err := os.Getwd()
+		if err != nil {
+			return "", "", false
+		}
+		var res struct {
+			Repo repoRow `json:"repo"`
+		}
+		if err := callMCP(ctx, "eng_get_current_repo", map[string]any{"cwd": cwd}, &res); err != nil {
+			return "", "", false
+		}
+		if res.Repo.RepoID == "" {
+			return "", "", false
+		}
+		return res.Repo.RepoID, branchOrMain(res.Repo.ActiveBranch), true
+	}
+
+	canonical, err := filepath.Abs(target)
+	if err != nil {
+		return "", "", false
+	}
+	if resolved, err := filepath.EvalSymlinks(canonical); err == nil {
+		canonical = resolved
+	}
+	var list struct {
+		Repos []repoRow `json:"repos"`
+	}
+	if err := callMCP(ctx, "eng_list_repos", map[string]any{}, &list); err != nil {
+		return "", "", false
+	}
+	for _, r := range list.Repos {
+		if r.RootPath == canonical {
+			return r.RepoID, branchOrMain(r.ActiveBranch), true
+		}
+	}
+	return "", "", false
+}
+
+func branchOrMain(b string) string {
+	if b == "" {
+		return "main"
+	}
+	return b
 }

@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -14,6 +15,7 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/config"
 	"github.com/whiskeyjimbo/veska/internal/doctor"
 	"github.com/whiskeyjimbo/veska/internal/embedderprobe"
+	"github.com/whiskeyjimbo/veska/internal/infrastructure/embedding/elect"
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/sqlite"
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/vulnsource/osv"
 	"github.com/whiskeyjimbo/veska/internal/repo"
@@ -259,31 +261,69 @@ func doctorSubCmd(use, short string, run func(bool, io.Writer) error) *cobra.Com
 	return cmd
 }
 
-// doctorEmbedderCmd returns the "doctor embedder" subcommand backed by embedderprobe.Probe.
+// embedderHealth describes the elected embedder's health for doctor output.
+//
+// The elected embedder — not Ollama unconditionally — is what doctor must
+// report. For the in-process embedders (model2vec / static-v2) the provider
+// is constructed locally and is healthy whenever election succeeds; no network
+// probe applies. Only VESKA_EMBEDDER=ollama probes a remote Ollama instance.
+type embedderHealth struct {
+	Status string                     // healthy | degraded | broken
+	Detail string                     // human-readable one-liner
+	Probe  *embedderprobe.ProbeResult // non-nil only on the ollama path
+}
+
+// checkEmbedderHealth resolves the elected embedder the same way the daemon
+// and `veska init` do, and reports its health. It mirrors init's
+// resolveInitEmbedder so the two never disagree about which embedder is live.
+func checkEmbedderHealth(ctx context.Context, home string) embedderHealth {
+	override := os.Getenv("VESKA_EMBEDDER")
+	if strings.EqualFold(override, elect.OverrideOllama) {
+		url := envOrDefault("VESKA_OLLAMA_URL", defaultOllamaURL)
+		model := envOrDefault("VESKA_EMBED_MODEL", defaultModelName)
+		res, err := embedderprobe.Probe(ctx, url, model)
+		if err != nil {
+			return embedderHealth{Status: "broken", Detail: fmt.Sprintf("ollama probe error: %v", err)}
+		}
+		return embedderHealth{
+			Status: res.Status,
+			Detail: fmt.Sprintf("ollama %s @ %s (reachable=%v, model_present=%v, embed_ok=%v)",
+				model, url, res.Reachable, res.ModelPresent, res.EmbedOK),
+			Probe: res,
+		}
+	}
+	prov, err := elect.Resolve(elect.Config{VeskaHome: home, Override: override})
+	if err != nil {
+		return embedderHealth{Status: "broken", Detail: fmt.Sprintf("election failed: %v", err)}
+	}
+	return embedderHealth{Status: "healthy", Detail: prov.ModelID() + ", in-process"}
+}
+
+// doctorEmbedderCmd returns the "doctor embedder" subcommand. It verifies the
+// embedder the daemon actually elected — in-process by default, Ollama only
+// when VESKA_EMBEDDER=ollama.
 func doctorEmbedderCmd() *cobra.Command {
 	var jsonOut bool
 	cmd := &cobra.Command{
 		Use:          "embedder",
-		Short:        "Verify embedding provider (Ollama) connectivity",
+		Short:        "Verify the elected embedding provider",
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			w := cmd.OutOrStdout()
-			result, err := embedderprobe.Probe(context.Background(), defaultOllamaURL, defaultModelName)
-			if err != nil {
-				return err
-			}
+			h := checkEmbedderHealth(context.Background(), config.DefaultVectorDir())
 			if jsonOut {
 				enc := json.NewEncoder(w)
-				return enc.Encode(doctor.NewEnvelope("embedder", result.Status, result))
+				if h.Probe != nil {
+					return enc.Encode(doctor.NewEnvelope("embedder", h.Status, h.Probe))
+				}
+				return enc.Encode(doctor.NewEnvelope("embedder", h.Status, map[string]any{"detail": h.Detail}))
 			}
-			fmt.Fprintf(w, "embedder: %s (url=%s, model=%s, reachable=%v, model_present=%v, embed_ok=%v)\n",
-				result.Status, defaultOllamaURL, defaultModelName,
-				result.Reachable, result.ModelPresent, result.EmbedOK)
-			if result.InstallHint != "" && result.Status != "healthy" {
-				fmt.Fprintf(w, "  hint: %s\n", result.InstallHint)
+			fmt.Fprintf(w, "embedder: %s (%s)\n", h.Status, h.Detail)
+			if h.Probe != nil && h.Probe.InstallHint != "" && h.Status != "healthy" {
+				fmt.Fprintf(w, "  hint: %s\n", h.Probe.InstallHint)
 			}
-			if result.Status != "healthy" {
-				return ProbeStatusError{Subsystem: "embedder", Status: result.Status}
+			if h.Status != "healthy" {
+				return ProbeStatusError{Subsystem: "embedder", Status: h.Status}
 			}
 			return nil
 		},
@@ -419,7 +459,7 @@ func doctorStatusCmd() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			home := config.DefaultVectorDir()
 
-			embedderResult, _ := embedderprobe.Probe(context.Background(), defaultOllamaURL, defaultModelName)
+			embedderResult := checkEmbedderHealth(context.Background(), home)
 			egressReport, _ := doctor.CheckEgress([]string{
 				config.CLISockPath(),
 				config.MCPSockPath(),

@@ -20,15 +20,20 @@ type getNodeParams struct {
 	Branch string `json:"branch"`
 }
 
-func makeGetNodeHandler(graph ports.GraphStorage, staging *application.StagingArea) ToolHandler {
+func makeGetNodeHandler(graph ports.GraphStorage, staging *application.StagingArea, repos application.RepoLister) ToolHandler {
 	return func(ctx context.Context, _ domain.Actor, raw json.RawMessage) (any, *RPCError) {
 		var p getNodeParams
 		if err := json.Unmarshal(raw, &p); err != nil {
 			return nil, &RPCError{Code: CodeInvalidParams, Message: fmt.Sprintf("invalid params: %v", err)}
 		}
-		if p.NodeID == "" || p.RepoID == "" || p.Branch == "" {
-			return nil, &RPCError{Code: CodeInvalidParams, Message: "node_id, repo_id, and branch are required"}
+		if rpcErr := checkRequired("node_id", p.NodeID, "repo_id", p.RepoID, "branch", p.Branch); rpcErr != nil {
+			return nil, rpcErr
 		}
+		repoID, rpcErr := resolveRepoID(ctx, repos, p.RepoID)
+		if rpcErr != nil {
+			return nil, rpcErr
+		}
+		p.RepoID = repoID
 
 		node, err := graph.GetNode(ctx, p.RepoID, p.Branch, domain.NodeID(p.NodeID))
 		if err != nil {
@@ -60,7 +65,7 @@ func makeGetNodeHandler(graph ports.GraphStorage, staging *application.StagingAr
 		}
 
 		return GraphResponse{
-			Nodes:           []*domain.Node{node},
+			Nodes:           nodesToDTO([]*domain.Node{node}),
 			IncludedStaging: includedStaging,
 		}, nil
 	}

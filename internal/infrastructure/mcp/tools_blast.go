@@ -5,15 +5,16 @@ import (
 	"encoding/json"
 	"fmt"
 
+	application "github.com/whiskeyjimbo/veska/internal/application"
 	"github.com/whiskeyjimbo/veska/internal/application/blastradius"
 	"github.com/whiskeyjimbo/veska/internal/core/domain"
 )
 
 // BlastResponse is the envelope returned by the eng_get_*_blast_radius tools.
 type BlastResponse struct {
-	Entries         []blastradius.Entry `json:"entries"`
-	Truncated       bool                `json:"truncated"`
-	IncludedStaging bool                `json:"included_staging"`
+	Entries         []blastEntryDTO `json:"entries"`
+	Truncated       bool            `json:"truncated"`
+	IncludedStaging bool            `json:"included_staging"`
 }
 
 // RepoRootFunc returns the absolute path of the working tree for a given
@@ -28,18 +29,18 @@ type RepoRootFunc func(ctx context.Context, repoID string) (string, error)
 // When either is nil the tool is still registered but will return
 // InternalError on every call — this keeps the registry uniform across
 // composition roots that have not wired the git adapter.
-func RegisterBlastTools(r *Registry, svc *blastradius.Service, repoRoot RepoRootFunc, changedFiles blastradius.ChangedFilesFunc) {
+func RegisterBlastTools(r *Registry, svc *blastradius.Service, repoRoot RepoRootFunc, changedFiles blastradius.ChangedFilesFunc, repos application.RepoLister) {
 	r.MustRegister(ToolSpec{
 		Name:            "eng_get_blast_radius",
 		Description:     "Compute the blast radius (callers/callees/both) of a single node via BFS over the edges table.",
 		IncludesStaging: false,
-		Handler:         makeBlastRadiusHandler(svc),
+		Handler:         makeBlastRadiusHandler(svc, repos),
 	})
 	r.MustRegister(ToolSpec{
 		Name:            "eng_get_dirty_blast_radius",
 		Description:     "Compute the blast radius of all symbols currently in the in-memory staging overlay.",
 		IncludesStaging: true,
-		Handler:         makeDirtyBlastRadiusHandler(svc),
+		Handler:         makeDirtyBlastRadiusHandler(svc, repos),
 	})
 	r.MustRegister(ToolSpec{
 		Name:            "eng_get_diff_blast_radius",
@@ -58,7 +59,7 @@ type blastRadiusParams struct {
 	Direction string `json:"direction,omitempty"`
 }
 
-func makeBlastRadiusHandler(svc *blastradius.Service) ToolHandler {
+func makeBlastRadiusHandler(svc *blastradius.Service, repos application.RepoLister) ToolHandler {
 	return func(ctx context.Context, _ domain.Actor, raw json.RawMessage) (any, *RPCError) {
 		var p blastRadiusParams
 		if rpcErr := bindParams(raw, &p); rpcErr != nil {
@@ -67,6 +68,11 @@ func makeBlastRadiusHandler(svc *blastradius.Service) ToolHandler {
 		if rpcErr := checkRequired("node_id", p.NodeID, "repo_id", p.RepoID, "branch", p.Branch); rpcErr != nil {
 			return nil, rpcErr
 		}
+		repoID, rpcErr := resolveRepoID(ctx, repos, p.RepoID)
+		if rpcErr != nil {
+			return nil, rpcErr
+		}
+		p.RepoID = repoID
 		dir, err := blastradius.ParseDirection(p.Direction)
 		if err != nil {
 			return nil, &RPCError{Code: CodeInvalidParams, Message: err.Error()}
@@ -80,7 +86,7 @@ func makeBlastRadiusHandler(svc *blastradius.Service) ToolHandler {
 			return nil, &RPCError{Code: CodeInternalError, Message: fmt.Sprintf("blast radius: %v", err)}
 		}
 		return BlastResponse{
-			Entries:         resp.Entries,
+			Entries:         blastEntriesToDTO(resp.Entries),
 			Truncated:       resp.Truncated,
 			IncludedStaging: resp.IncludedStaging,
 		}, nil
@@ -136,7 +142,7 @@ func makeDiffBlastRadiusHandler(svc *blastradius.Service, repoRoot RepoRootFunc,
 			return nil, &RPCError{Code: CodeInternalError, Message: fmt.Sprintf("diff blast radius: %v", err)}
 		}
 		return BlastResponse{
-			Entries:         resp.Entries,
+			Entries:         blastEntriesToDTO(resp.Entries),
 			Truncated:       resp.Truncated,
 			IncludedStaging: resp.IncludedStaging,
 		}, nil
@@ -151,7 +157,7 @@ type dirtyBlastRadiusParams struct {
 	Direction string `json:"direction,omitempty"`
 }
 
-func makeDirtyBlastRadiusHandler(svc *blastradius.Service) ToolHandler {
+func makeDirtyBlastRadiusHandler(svc *blastradius.Service, repos application.RepoLister) ToolHandler {
 	return func(ctx context.Context, _ domain.Actor, raw json.RawMessage) (any, *RPCError) {
 		var p dirtyBlastRadiusParams
 		if rpcErr := bindParams(raw, &p); rpcErr != nil {
@@ -160,6 +166,11 @@ func makeDirtyBlastRadiusHandler(svc *blastradius.Service) ToolHandler {
 		if rpcErr := checkRequired("repo_id", p.RepoID, "branch", p.Branch); rpcErr != nil {
 			return nil, rpcErr
 		}
+		repoID, rpcErr := resolveRepoID(ctx, repos, p.RepoID)
+		if rpcErr != nil {
+			return nil, rpcErr
+		}
+		p.RepoID = repoID
 		dir, err := blastradius.ParseDirection(p.Direction)
 		if err != nil {
 			return nil, &RPCError{Code: CodeInvalidParams, Message: err.Error()}
@@ -173,7 +184,7 @@ func makeDirtyBlastRadiusHandler(svc *blastradius.Service) ToolHandler {
 			return nil, &RPCError{Code: CodeInternalError, Message: fmt.Sprintf("dirty blast radius: %v", err)}
 		}
 		return BlastResponse{
-			Entries:         resp.Entries,
+			Entries:         blastEntriesToDTO(resp.Entries),
 			Truncated:       resp.Truncated,
 			IncludedStaging: resp.IncludedStaging,
 		}, nil
