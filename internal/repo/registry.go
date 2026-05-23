@@ -332,18 +332,22 @@ func Get(ctx context.Context, db *sql.DB, repoID string) (Record, error) {
 
 // Remove deletes the repo row identified by repoID (CASCADE removes nodes/edges)
 // and removes installed git hooks if the git dir still exists.
+//
+// repoID may be the full id or a unique short prefix (as printed by
+// `veska repo add` / `veska repo list`). Without prefix resolution a short id
+// matched nothing and the DELETE silently no-op'd, leaving the repo — and,
+// since CASCADE then never ran, its child rows — in place (solov2-d78r).
 func Remove(ctx context.Context, db *sql.DB, repoID string) error {
-	// Look up root_path before deleting so we can clean up hooks.
-	var rootPath string
-	err := db.QueryRowContext(ctx,
-		`SELECT root_path FROM repos WHERE repo_id = ?`, repoID,
-	).Scan(&rootPath)
-	if err != nil && err != sql.ErrNoRows {
-		return fmt.Errorf("lookup repo: %w", err)
+	canonical, rootPath, found, err := resolveRepoForRemoval(ctx, db, repoID)
+	if err != nil {
+		return err
+	}
+	if !found {
+		return fmt.Errorf("repo not found: %s", repoID)
 	}
 
 	if _, err := db.ExecContext(ctx,
-		`DELETE FROM repos WHERE repo_id = ?`, repoID,
+		`DELETE FROM repos WHERE repo_id = ?`, canonical,
 	); err != nil {
 		return fmt.Errorf("delete repo: %w", err)
 	}
@@ -352,4 +356,47 @@ func Remove(ctx context.Context, db *sql.DB, repoID string) error {
 		removeHooks(rootPath)
 	}
 	return nil
+}
+
+// resolveRepoForRemoval maps repoID (full id or unique short prefix) to its
+// canonical id and root_path. found is false when nothing matches; an
+// ambiguous prefix is an error.
+func resolveRepoForRemoval(ctx context.Context, db *sql.DB, repoID string) (canonical, rootPath string, found bool, err error) {
+	// Exact match first.
+	err = db.QueryRowContext(ctx,
+		`SELECT repo_id, root_path FROM repos WHERE repo_id = ?`, repoID,
+	).Scan(&canonical, &rootPath)
+	if err == nil {
+		return canonical, rootPath, true, nil
+	}
+	if err != sql.ErrNoRows {
+		return "", "", false, fmt.Errorf("lookup repo: %w", err)
+	}
+
+	// Unique prefix match.
+	rows, qerr := db.QueryContext(ctx,
+		`SELECT repo_id, root_path FROM repos WHERE repo_id LIKE ?`, repoID+"%",
+	)
+	if qerr != nil {
+		return "", "", false, fmt.Errorf("lookup repo: %w", qerr)
+	}
+	defer rows.Close()
+	n := 0
+	for rows.Next() {
+		if err := rows.Scan(&canonical, &rootPath); err != nil {
+			return "", "", false, fmt.Errorf("lookup repo: %w", err)
+		}
+		n++
+	}
+	if err := rows.Err(); err != nil {
+		return "", "", false, fmt.Errorf("lookup repo: %w", err)
+	}
+	switch n {
+	case 0:
+		return "", "", false, nil
+	case 1:
+		return canonical, rootPath, true, nil
+	default:
+		return "", "", false, fmt.Errorf("ambiguous repo id %q matches %d repos", repoID, n)
+	}
 }
