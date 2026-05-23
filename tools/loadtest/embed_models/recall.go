@@ -20,13 +20,14 @@ import (
 
 // RecallScores holds the per-source metric output.
 type RecallScores struct {
-	N     int     `json:"n"`      // number of pairs evaluated
-	At1   float64 `json:"at_1"`   // recall@1
-	At5   float64 `json:"at_5"`   // recall@5
-	At10  float64 `json:"at_10"`  // recall@10
-	MRR   float64 `json:"mrr"`    // mean reciprocal rank (0 when not in top 100)
-	Miss  int     `json:"miss"`   // pairs where expected was not in top 100
-	Total int     `json:"total"`  // same as N; kept for explicit table output
+	N            int     `json:"n"`      // number of pairs evaluated
+	At1          float64 `json:"at_1"`   // recall@1
+	At5          float64 `json:"at_5"`   // recall@5
+	At10         float64 `json:"at_10"`  // recall@10
+	MRR          float64 `json:"mrr"`    // mean reciprocal rank (0 when not in top 100)
+	Miss         int     `json:"miss"`   // pairs where expected was not in top 100
+	Total        int     `json:"total"`  // same as N; kept for explicit table output
+	NotInCorpus  int     `json:"not_in_corpus"` // pairs whose expected name is absent from the embedded docs entirely — fixture bug signal, distinct from a model-recall miss
 }
 
 // ComputeRecall embeds every pair.Query with provider, ranks against
@@ -43,18 +44,27 @@ func ComputeRecall(provider *model2vec.Provider, pairs []Pair, docs []doc) Recal
 	var s RecallScores
 	s.N = len(pairs)
 	s.Total = len(pairs)
+	// Precompute the set of names present in the corpus so we can
+	// distinguish "fixture references a name that doesn't exist" from
+	// "model failed to rank the right name highly" — different
+	// remediation paths for the bench curator.
+	corpusNames := make(map[string]bool, len(docs))
+	for _, d := range docs {
+		corpusNames[d.name] = true
+	}
 	for _, p := range pairs {
+		if !corpusNames[p.Expected] {
+			s.NotInCorpus++
+			s.Miss++
+			continue
+		}
 		qvec, err := provider.Embed(context.Background(), p.Query)
 		if err != nil {
 			s.Miss++
 			continue
 		}
 		// Brute-force top-probe by dot product (vectors are L2-normalised).
-		bestRank := -1
-		topK := topKByDot(qvec, docs, probe, p.Expected)
-		if topK >= 0 {
-			bestRank = topK
-		}
+		bestRank := topKByDot(qvec, docs, probe, p.Expected)
 		if bestRank < 0 {
 			s.Miss++
 			continue
