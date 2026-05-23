@@ -94,7 +94,7 @@ func supportedFlavorNames() []string {
 // rootDir and reports the action taken to out. Idempotent: a second
 // call against the same rootDir+flavor detects the sentinel already
 // present and reports "already present" without modifying the file.
-func writeAgentSnippet(rootDir, flavor string, out io.Writer) error {
+func writeAgentSnippet(rootDir, flavor string, out io.Writer, updateGitignore bool) error {
 	f, ok := lookupFlavor(flavor)
 	if !ok {
 		return fmt.Errorf("unknown agent flavor %q (supported: %s)",
@@ -126,16 +126,18 @@ func writeAgentSnippet(rootDir, flavor string, out io.Writer) error {
 		fmt.Fprintf(out, "veska: appended %s instructions to %s\n", flavor, target)
 	}
 
-	// Keep veska-generated artifacts out of the user's git history by default
-	// (solov2-t8re). The agent snippet is the natural place to do this — if a
-	// user has opted into Veska's per-project instruction file, they almost
-	// certainly want the generated wiki and any future agent-side artifacts
-	// gitignored too. Bracketed by the same sentinel as the snippet so a
-	// re-run leaves an already-managed block alone.
-	if err := ensureGitignoreStanza(rootDir, out); err != nil {
-		// Non-fatal: the snippet is what the user asked for; gitignore
-		// upkeep is opportunistic.
-		fmt.Fprintf(out, "veska: warning: could not update .gitignore: %v\n", err)
+	// Opt-in .gitignore management (solov2-zm6i): silently modifying a tracked
+	// file surprises users who only asked for the instruction file. Pass
+	// --update-gitignore to opt in. The block is still bracketed by sentinels
+	// so a re-run leaves an already-managed block alone (solov2-t8re).
+	if updateGitignore {
+		if err := ensureGitignoreStanza(rootDir, out); err != nil {
+			// Non-fatal: the snippet is what the user asked for; gitignore
+			// upkeep is opportunistic.
+			fmt.Fprintf(out, "veska: warning: could not update .gitignore: %v\n", err)
+		}
+	} else {
+		fmt.Fprintln(out, "veska: tip: pass --update-gitignore to also add a veska-managed .gitignore block (covers generated artifacts under docs/veska/)")
 	}
 	return nil
 }
