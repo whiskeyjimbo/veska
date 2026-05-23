@@ -369,6 +369,8 @@ func collectTSCallsFromClassBody(body *sitter.Node, src []byte, symbols map[stri
 			continue
 		}
 		for _, ref := range collectCallNames(bodyNode, src, "this", className) {
+			// TS has no promotion-time cross-package resolution (that path is
+			// Go-only, solov2-xc51), so package-qualified calls are skipped here.
 			if ref.pkg != "" {
 				continue
 			}
