@@ -8,6 +8,8 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"path/filepath"
+	"strings"
 
 	"github.com/whiskeyjimbo/veska/internal/core/ports"
 )
@@ -28,39 +30,93 @@ type CrossRepoStub struct {
 // can reference it without importing this adapter package.
 type ResolvedEdge = ports.ResolvedEdge
 
-// ResolveCrossRepoEdge performs a single indexed lookup to find the destination
-// node for the given stub. It returns nil, nil when no matching node exists
-// (silent miss). expandCrossRepo is accepted for API symmetry with M2+ multi-hop
-// expansion; for now both values produce the same single-hop result.
+// ResolveCrossRepoEdge resolves a single stub to its destination node, if one
+// is indexed. nil, nil indicates a silent miss (no registered repo owns the
+// target module, or no node in the target subpackage matches the symbol).
+//
+// The matcher is two-step so subpackage imports of multi-package modules
+// resolve (solov2-hkr9): step 1 finds the most-specific repo whose module_path
+// is a prefix of stub.module_path (longest prefix wins — so import
+// github.com/x/y/z prefers a repo with module_path github.com/x/y/z over one
+// with github.com/x/y); step 2 looks up the symbol in that repo, constrained
+// to the subpackage dir derived from the prefix gap. expandCrossRepo is
+// accepted for API symmetry with M2+ multi-hop expansion; for now both values
+// produce the same single-hop result.
 func ResolveCrossRepoEdge(ctx context.Context, db *sql.DB, stub CrossRepoStub, expandCrossRepo bool) (*ResolvedEdge, error) {
-	const q = `
-		SELECT n.node_id, n.repo_id, n.branch
-		FROM nodes n
-		JOIN repos r ON r.repo_id = n.repo_id
-		WHERE r.module_path = ?
-		  AND n.symbol_path = ?
-		  AND n.language    = ?
-		  AND n.branch      = r.active_branch
+	const repoQ = `
+		SELECT repo_id, module_path, root_path, active_branch
+		FROM repos
+		WHERE module_path != ''
+		  AND (module_path = ? OR ? LIKE module_path || '/%')
+		ORDER BY LENGTH(module_path) DESC
 		LIMIT 1`
 
-	var dstNodeID, dstRepoID, dstBranch string
-	err := db.QueryRowContext(ctx, q, stub.ModulePath, stub.SymbolPath, stub.Language).
-		Scan(&dstNodeID, &dstRepoID, &dstBranch)
+	var dstRepoID, modulePath, rootPath, activeBranch string
+	err := db.QueryRowContext(ctx, repoQ, stub.ModulePath, stub.ModulePath).
+		Scan(&dstRepoID, &modulePath, &rootPath, &activeBranch)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return nil, nil // silent miss
+			return nil, nil
 		}
-		return nil, fmt.Errorf("resolver: lookup stub %s: %w", stub.StubID, err)
+		return nil, fmt.Errorf("resolver: locate repo for stub %s: %w", stub.StubID, err)
 	}
 
-	return &ResolvedEdge{
-		SrcNodeID: stub.SrcNodeID,
-		DstNodeID: dstNodeID,
-		DstRepoID: dstRepoID,
-		DstBranch: dstBranch,
-		Kind:      stub.Kind,
-		CrossRepo: true,
-	}, nil
+	// Subpackage directory relative to the matched repo's module root.
+	// Empty when the import path is the module root (leaf-package case).
+	var subDir string
+	if stub.ModulePath != modulePath {
+		subDir = strings.TrimPrefix(stub.ModulePath, modulePath+"/")
+	}
+
+	const nodeQ = `
+		SELECT node_id, branch, file_path
+		FROM nodes
+		WHERE repo_id = ? AND symbol_path = ? AND language = ? AND branch = ?`
+	rows, err := db.QueryContext(ctx, nodeQ, dstRepoID, stub.SymbolPath, stub.Language, activeBranch)
+	if err != nil {
+		return nil, fmt.Errorf("resolver: lookup symbol for stub %s: %w", stub.StubID, err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var nodeID, branch, filePath string
+		if err := rows.Scan(&nodeID, &branch, &filePath); err != nil {
+			return nil, fmt.Errorf("resolver: scan symbol row: %w", err)
+		}
+		if moduleRelDir(filePath, rootPath) != subDir {
+			continue
+		}
+		return &ResolvedEdge{
+			SrcNodeID: stub.SrcNodeID,
+			DstNodeID: nodeID,
+			DstRepoID: dstRepoID,
+			DstBranch: branch,
+			Kind:      stub.Kind,
+			CrossRepo: true,
+		}, nil
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("resolver: iterate symbol rows: %w", err)
+	}
+	return nil, nil
+}
+
+// moduleRelDir returns filePath's directory relative to the repo's working-tree
+// root, in slash form. Promoted file_path values reach the resolver in a mix of
+// absolute (cold-scan) and repo-relative (incremental promotion) forms;
+// stripping a known root harmonises both into the module-relative key space the
+// subpackage match needs. The module-root package maps to "".
+func moduleRelDir(filePath, root string) string {
+	p := filepath.ToSlash(filePath)
+	if root != "" {
+		if rest, ok := strings.CutPrefix(p, filepath.ToSlash(root)+"/"); ok {
+			p = rest
+		}
+	}
+	dir := filepath.ToSlash(filepath.Dir(p))
+	if dir == "." || dir == "/" {
+		return ""
+	}
+	return dir
 }
 
 // ResolveStubsForNode fetches all cross_repo_edge_stubs whose src_node_id
