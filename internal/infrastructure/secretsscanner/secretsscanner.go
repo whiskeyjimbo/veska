@@ -7,11 +7,36 @@ package secretsscanner
 
 import (
 	"math"
+	"path/filepath"
 	"regexp"
 	"strings"
 
 	"github.com/whiskeyjimbo/veska/internal/core/ports"
 )
+
+// excludedBaseNames are file names whose contents are inherently high-entropy
+// but never carry user secrets — language/package lockfiles and manifests.
+// Scanning these produces only false positives.
+var excludedBaseNames = map[string]struct{}{
+	"go.sum":            {},
+	"go.mod":            {},
+	"package-lock.json": {},
+	"yarn.lock":         {},
+	"pnpm-lock.yaml":    {},
+	"Cargo.lock":        {},
+	"poetry.lock":       {},
+	"Pipfile.lock":      {},
+	"composer.lock":     {},
+	"Gemfile.lock":      {},
+	"flake.lock":        {},
+}
+
+// isExcludedPath reports whether path's basename matches a known lockfile or
+// manifest whose entropy is structural, not secret-bearing.
+func isExcludedPath(path string) bool {
+	_, ok := excludedBaseNames[filepath.Base(path)]
+	return ok
+}
 
 // rule pairs a detection name with the pattern that recognises a secret shape.
 // The submatch group, when present, isolates the sensitive value to redact;
@@ -126,6 +151,9 @@ func (s *BuiltinScanner) Scan(in ports.ScanInput) ([]ports.SecretFinding, error)
 	}
 	var findings []ports.SecretFinding
 	for path, lines := range in.AddedLines {
+		if isExcludedPath(path) {
+			continue
+		}
 		for _, line := range lines {
 			findings = append(findings, s.scanLine(path, line)...)
 		}

@@ -118,7 +118,7 @@ func makeListFindingsHandler(db *sql.DB) ToolHandler {
 		if rpcErr := bindParams(raw, &p); rpcErr != nil {
 			return nil, rpcErr
 		}
-		if rpcErr := checkRequired("repo_id", p.RepoID, "branch", p.Branch); rpcErr != nil {
+		if rpcErr := checkRequired("repo_id", p.RepoID); rpcErr != nil {
 			return nil, rpcErr
 		}
 		repoID, rpcErr := resolveRepoIDDB(ctx, db, p.RepoID)
@@ -130,10 +130,15 @@ func makeListFindingsHandler(db *sql.DB) ToolHandler {
 			p.State = "open"
 		}
 
+		// branch is an optional filter; when omitted, list across all branches.
 		query := `SELECT finding_id, branch, repo_id, node_id, file_path, severity, source_layer,
 			rule, message, state, closed_reason, created_at, closed_at, actor_id, actor_kind
-			FROM findings WHERE repo_id = ? AND branch = ? AND state = ?`
-		args := []any{p.RepoID, p.Branch, p.State}
+			FROM findings WHERE repo_id = ? AND state = ?`
+		args := []any{p.RepoID, p.State}
+		if p.Branch != "" {
+			query += ` AND branch = ?`
+			args = append(args, p.Branch)
+		}
 		if p.Severity != "" {
 			query += ` AND severity = ?`
 			args = append(args, p.Severity)

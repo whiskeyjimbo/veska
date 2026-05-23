@@ -8,8 +8,11 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"net"
+	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -124,6 +127,14 @@ func printRepoTable(w io.Writer, repos []repoView) {
 		if r.LastPromotedSHA == "" {
 			status = "(unindexed)"
 		}
+		// Flag repos whose root path no longer exists on disk so users can see
+		// stale registrations at a glance (solov2-76px). `repo remove <id>` is
+		// still the cleanup path.
+		if r.RootPath != "" {
+			if _, err := os.Stat(r.RootPath); errors.Is(err, fs.ErrNotExist) {
+				status = "(missing)"
+			}
+		}
 		fmt.Fprintf(w, "%-14s  %-8s  %-10s  %s\n", short, branch, status, r.RootPath)
 	}
 }
@@ -144,6 +155,7 @@ func repoAddCmd() *cobra.Command {
 			id, dialErr := dialAddRepo(ctx, root)
 			if dialErr == nil {
 				fmt.Fprintf(w, "added repo %s (via daemon)\n", shortRepoID(id))
+				fmt.Fprintln(w, "  cold scan running in the background — `veska repo list` shows status, `tail ~/.veska/logs/daemon.log` shows progress")
 				return nil
 			}
 
@@ -274,7 +286,15 @@ func callMCP(ctx context.Context, method string, params any, out any) error {
 	if dialErr != nil {
 		// Include the underlying dial error so 'daemon offline' messages
 		// can tell the user what really happened (connection refused vs.
-		// no such file vs. permission denied — solov2-0cg).
+		// no such file vs. permission denied — solov2-0cg). When the cause
+		// is "daemon not running", append an actionable hint pointing at
+		// `veska service start` (solov2-j68l).
+		es := dialErr.Error()
+		if strings.Contains(es, "connection refused") ||
+			strings.Contains(es, "no such file") ||
+			strings.Contains(es, "no such file or directory") {
+			return fmt.Errorf("dial %s: daemon not running (start it with `veska service start`, or run `veska-daemon &` for a quick try): %w", sockPath, dialErr)
+		}
 		return fmt.Errorf("dial %s after %d attempts: %w", sockPath, dialAttempts, dialErr)
 	}
 	defer conn.Close()

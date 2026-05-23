@@ -178,7 +178,7 @@ func TestResolveCrossRepoEdge_Subpackage(t *testing.T) {
 	// Single repo whose module root covers multiple packages.
 	seedRepo(t, db, "repo-cobra", "github.com/spf13/cobra", "main")
 	// Same-named symbol exists in TWO subpackages — only the right one must bind.
-	seedNode(t, db, "node-doc",  "main", "repo-cobra", "go", "function", "Render", "doc/util.go")
+	seedNode(t, db, "node-doc", "main", "repo-cobra", "go", "function", "Render", "doc/util.go")
 	seedNode(t, db, "node-root", "main", "repo-cobra", "go", "function", "Render", "command.go")
 
 	stub := resolver.CrossRepoStub{
@@ -210,9 +210,9 @@ func TestResolveCrossRepoEdge_LongestPrefixWins(t *testing.T) {
 
 	// Two nested module roots; the more-specific (sub) repo is the right target.
 	seedRepo(t, db, "repo-parent", "github.com/acme/parent", "main")
-	seedRepo(t, db, "repo-sub",    "github.com/acme/parent/sub", "main")
+	seedRepo(t, db, "repo-sub", "github.com/acme/parent/sub", "main")
 	seedNode(t, db, "node-parent", "main", "repo-parent", "go", "function", "Foo", "sub/x.go")
-	seedNode(t, db, "node-sub",    "main", "repo-sub",    "go", "function", "Foo", "x.go")
+	seedNode(t, db, "node-sub", "main", "repo-sub", "go", "function", "Foo", "x.go")
 
 	stub := resolver.CrossRepoStub{
 		StubID:     "stub-lpw",
