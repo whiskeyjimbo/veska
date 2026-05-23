@@ -21,6 +21,7 @@ type stagedEntry struct {
 	nodes      []*domain.Node
 	edges      []*domain.Edge
 	unresolved []domain.UnresolvedCall
+	imports    map[string]string
 }
 
 // StagingArea is a thread-safe, in-memory store of pending (not-yet-promoted)
@@ -47,7 +48,7 @@ func NewStagingArea() *StagingArea {
 // StageFile replaces all staged nodes and edges for (repoID, branch, filePath).
 // Calling this twice for the same key overwrites the first entry.
 func (s *StagingArea) StageFile(repoID, branch, filePath string, nodes []*domain.Node, edges []*domain.Edge) {
-	s.StageFileWithUnresolved(repoID, branch, filePath, nodes, edges, nil)
+	s.StageFileWithParseData(repoID, branch, filePath, nodes, edges, nil, nil)
 }
 
 // StageFileWithUnresolved is StageFile plus the parser's unresolved
@@ -55,9 +56,16 @@ func (s *StagingArea) StageFile(repoID, branch, filePath string, nodes []*domain
 // resolution (solov2-2at). Existing callers that don't have parser
 // access (tests, manual paths) keep using StageFile.
 func (s *StagingArea) StageFileWithUnresolved(repoID, branch, filePath string, nodes []*domain.Node, edges []*domain.Edge, unresolved []domain.UnresolvedCall) {
+	s.StageFileWithParseData(repoID, branch, filePath, nodes, edges, unresolved, nil)
+}
+
+// StageFileWithParseData is the full-fidelity stage: nodes, edges, unresolved
+// calls, and the file's import map (alias -> path) used to resolve
+// package-qualified calls at promotion (solov2-xc51).
+func (s *StagingArea) StageFileWithParseData(repoID, branch, filePath string, nodes []*domain.Node, edges []*domain.Edge, unresolved []domain.UnresolvedCall, imports map[string]string) {
 	key := stagingKey{repoID: repoID, branch: branch, filePath: filePath}
 	s.mu.Lock()
-	s.entries[key] = stagedEntry{nodes: nodes, edges: edges, unresolved: unresolved}
+	s.entries[key] = stagedEntry{nodes: nodes, edges: edges, unresolved: unresolved, imports: imports}
 	s.mu.Unlock()
 }
 
@@ -135,7 +143,7 @@ func (s *StagingArea) StageIfCurrentGeneration(
 	gen uint64,
 	gate *IngestionGate,
 ) bool {
-	return s.StageIfCurrentGenerationWithUnresolved(repoID, branch, filePath, nodes, edges, nil, gen, gate)
+	return s.StageIfCurrentGenerationWithParseData(repoID, branch, filePath, nodes, edges, nil, nil, gen, gate)
 }
 
 // StageIfCurrentGenerationWithUnresolved is the unresolved-aware variant
@@ -148,10 +156,24 @@ func (s *StagingArea) StageIfCurrentGenerationWithUnresolved(
 	gen uint64,
 	gate *IngestionGate,
 ) bool {
+	return s.StageIfCurrentGenerationWithParseData(repoID, branch, filePath, nodes, edges, unresolved, nil, gen, gate)
+}
+
+// StageIfCurrentGenerationWithParseData stages full parse data (incl. the
+// import map) only if gen matches the gate's current generation (solov2-xc51).
+func (s *StagingArea) StageIfCurrentGenerationWithParseData(
+	repoID, branch, filePath string,
+	nodes []*domain.Node,
+	edges []*domain.Edge,
+	unresolved []domain.UnresolvedCall,
+	imports map[string]string,
+	gen uint64,
+	gate *IngestionGate,
+) bool {
 	if gen != gate.Generation() {
 		return false
 	}
-	s.StageFileWithUnresolved(repoID, branch, filePath, nodes, edges, unresolved)
+	s.StageFileWithParseData(repoID, branch, filePath, nodes, edges, unresolved, imports)
 	return true
 }
 
@@ -163,6 +185,7 @@ type StagedFile struct {
 	Nodes           []*domain.Node
 	Edges           []*domain.Edge
 	UnresolvedCalls []domain.UnresolvedCall
+	Imports         map[string]string
 }
 
 // Snapshot returns a shallow copy of staged nodes + edges keyed by filePath
@@ -187,7 +210,7 @@ func (s *StagingArea) Snapshot(repoID, branch string) map[string]StagedFile {
 			copy(es, e.edges)
 			us := make([]domain.UnresolvedCall, len(e.unresolved))
 			copy(us, e.unresolved)
-			snap[k.filePath] = StagedFile{Nodes: ns, Edges: es, UnresolvedCalls: us}
+			snap[k.filePath] = StagedFile{Nodes: ns, Edges: es, UnresolvedCalls: us, Imports: e.imports}
 		}
 	}
 	return snap

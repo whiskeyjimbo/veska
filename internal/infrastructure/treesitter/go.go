@@ -133,6 +133,9 @@ func (p *GoParser) ParseFile(ctx context.Context, repoID, path string, src []byt
 	result.Edges = append(result.Edges, callEdges...)
 	result.UnresolvedCalls = unresolved
 
+	// --- import map for cross-package call resolution (solov2-xc51) ---
+	result.Imports = extractImports(root, src)
+
 	// --- chunk index over non-declaration regions (solov2-jyt) ---
 	// Emitted AFTER CALLS so the symbol set used for CALLS resolution
 	// stays purely declarative — chunks aren't callable symbols.
@@ -305,21 +308,37 @@ func extractCallEdges(root *sitter.Node, src []byte, symbols map[string]*domain.
 		// (solov2-q9p). Cross-package selector calls (pkg.Bar) are not
 		// resolved here; they need a cross-repo IMPORTS graph
 		// (solov2-1gj) before we can attach a target.
-		callNames := collectCallNames(bodyNode, src, recvName, recvType)
-		for _, callee := range callNames {
-			calleeNode, ok := symbols[callee]
+		callRefs := collectCallNames(bodyNode, src, recvName, recvType)
+		for _, ref := range callRefs {
+			// Package-qualified calls (cmd.Execute) can never bind in-file;
+			// stash for promotion-time cross-package / cross-repo resolution
+			// against the import map (solov2-xc51).
+			if ref.pkg != "" {
+				key := string(callerNode.ID) + "→" + ref.pkg + "." + ref.name
+				if seenU[key] {
+					continue
+				}
+				seenU[key] = true
+				unresolved = append(unresolved, domain.UnresolvedCall{
+					CallerID:     callerNode.ID,
+					CalleeName:   ref.name,
+					PkgQualifier: ref.pkg,
+				})
+				continue
+			}
+			calleeNode, ok := symbols[ref.name]
 			if !ok {
 				// Stash for cross-file resolution at promotion time
 				// (solov2-2at). Dedupe per (caller, callee-name) so
 				// repeated call sites yield one resolution attempt.
-				key := string(callerNode.ID) + "→" + callee
+				key := string(callerNode.ID) + "→" + ref.name
 				if seenU[key] {
 					continue
 				}
 				seenU[key] = true
 				unresolved = append(unresolved, domain.UnresolvedCall{
 					CallerID:   callerNode.ID,
-					CalleeName: callee,
+					CalleeName: ref.name,
 				})
 				continue
 			}
@@ -388,8 +407,17 @@ func extractReceiverBinding(receiverNode *sitter.Node, src []byte) (name, typ st
 // Cross-package selector calls (pkg.Bar(), or chained s.field.X())
 // cannot be resolved without cross-repo type info, so they are skipped
 // here. Adding them is solov2-1gj (cross-repo IMPORTS edges).
-func collectCallNames(node *sitter.Node, src []byte, recvName, recvType string) []string {
-	var names []string
+// callRef is one call site collected from a function/method body. name is the
+// callee identifier (or "Receiver.method" for a resolved receiver call); pkg is
+// the selector operand for a package-qualified call (the "cmd" in cmd.Execute()),
+// empty for plain or receiver-local calls.
+type callRef struct {
+	name string
+	pkg  string
+}
+
+func collectCallNames(node *sitter.Node, src []byte, recvName, recvType string) []callRef {
+	var refs []callRef
 	var walk func(*sitter.Node)
 	walk = func(n *sitter.Node) {
 		if n.Type() == "call_expression" {
@@ -397,15 +425,22 @@ func collectCallNames(node *sitter.Node, src []byte, recvName, recvType string) 
 			if fn != nil {
 				switch fn.Type() {
 				case "identifier":
-					names = append(names, string(src[fn.StartByte():fn.EndByte()]))
+					refs = append(refs, callRef{name: string(src[fn.StartByte():fn.EndByte()])})
 				case "selector_expression":
-					if recvName != "" && recvType != "" {
-						operand := fn.ChildByFieldName("operand")
-						field := fn.ChildByFieldName("field")
-						if operand != nil && field != nil &&
-							operand.Type() == "identifier" &&
-							string(src[operand.StartByte():operand.EndByte()]) == recvName {
-							names = append(names, recvType+"."+string(src[field.StartByte():field.EndByte()]))
+					operand := fn.ChildByFieldName("operand")
+					field := fn.ChildByFieldName("field")
+					if operand != nil && field != nil && operand.Type() == "identifier" {
+						op := string(src[operand.StartByte():operand.EndByte()])
+						fld := string(src[field.StartByte():field.EndByte()])
+						if recvName != "" && recvType != "" && op == recvName {
+							// s.foo() inside a method on *Server -> Server.foo (local).
+							refs = append(refs, callRef{name: recvType + "." + fld})
+						} else {
+							// pkg.Foo() — package-qualified; resolved at
+							// promotion via the import map (solov2-xc51). The
+							// operand may also be a local variable; a
+							// non-import qualifier simply misses there.
+							refs = append(refs, callRef{name: fld, pkg: op})
 						}
 					}
 				case "member_expression":
@@ -414,7 +449,7 @@ func collectCallNames(node *sitter.Node, src []byte, recvName, recvType string) 
 						property := fn.ChildByFieldName("property")
 						if object != nil && property != nil &&
 							string(src[object.StartByte():object.EndByte()]) == recvName {
-							names = append(names, recvType+"."+string(src[property.StartByte():property.EndByte()]))
+							refs = append(refs, callRef{name: recvType + "." + string(src[property.StartByte():property.EndByte()])})
 						}
 					}
 				}
@@ -426,7 +461,57 @@ func collectCallNames(node *sitter.Node, src []byte, recvName, recvType string) 
 		}
 	}
 	walk(node)
-	return names
+	return refs
+}
+
+// extractImports walks the file's import declarations and returns a map from
+// the local package identifier to its import path. For an explicit alias
+// (import foo "x/y") the key is the alias; otherwise it is the path's last
+// segment (import "x/y" -> "y"), which equals the package name in the common
+// case. Blank ("_") and dot (".") imports are skipped — neither yields a
+// usable qualifier (solov2-xc51).
+func extractImports(root *sitter.Node, src []byte) map[string]string {
+	imports := map[string]string{}
+	var walk func(*sitter.Node)
+	walk = func(n *sitter.Node) {
+		if n.Type() == "import_spec" {
+			pathNode := n.ChildByFieldName("path")
+			if pathNode != nil {
+				path := strings.Trim(string(src[pathNode.StartByte():pathNode.EndByte()]), `"`)
+				if path != "" {
+					local := ""
+					if nameNode := n.ChildByFieldName("name"); nameNode != nil {
+						local = string(src[nameNode.StartByte():nameNode.EndByte()])
+					}
+					switch local {
+					case "_", ".":
+						// no usable qualifier
+					case "":
+						imports[lastPathSegment(path)] = path
+					default:
+						imports[local] = path
+					}
+				}
+			}
+		}
+		count := int(n.ChildCount())
+		for i := range count {
+			walk(n.Child(i))
+		}
+	}
+	walk(root)
+	if len(imports) == 0 {
+		return nil
+	}
+	return imports
+}
+
+// lastPathSegment returns the final "/"-separated segment of an import path.
+func lastPathSegment(path string) string {
+	if i := strings.LastIndex(path, "/"); i >= 0 {
+		return path[i+1:]
+	}
+	return path
 }
 
 // ----- misc helpers -----
