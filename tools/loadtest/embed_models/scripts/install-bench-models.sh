@@ -18,11 +18,11 @@ set -euo pipefail
 
 MODELS=(
     potion-base-2M
+    potion-base-4M
     potion-base-8M
     potion-code-16M
     potion-retrieval-32M
     potion-base-32M
-    potion-base-128M
 )
 
 base="https://huggingface.co/minishlab"
