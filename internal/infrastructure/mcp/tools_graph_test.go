@@ -85,6 +85,14 @@ func (s *stubGraphStorage) GetNode(_ context.Context, _, _ string, id domain.Nod
 	return n, nil
 }
 
+func (s *stubGraphStorage) FindNodeByID(_ context.Context, id domain.NodeID) (*domain.Node, error) {
+	n, ok := s.nodes[string(id)]
+	if !ok {
+		return nil, nil
+	}
+	return n, nil
+}
+
 // NodesForFile implements the optional fileQuerier extension used by
 // makeGetFileNodesHandler when the storage implements it.
 func (s *stubGraphStorage) NodesForFile(_ context.Context, _, _, filePath string) ([]*domain.Node, error) {
@@ -355,6 +363,28 @@ func TestGetNode_NotFound(t *testing.T) {
 	}
 	if rpcErr.Code != CodeInvalidParams {
 		t.Errorf("expected code %d, got %d", CodeInvalidParams, rpcErr.Code)
+	}
+}
+
+// TestGetNode_OmitRepoIDAndBranch guards solov2-v4ob: node_id is a globally
+// unique content hash, so repo_id and branch must be optional. When both are
+// omitted the handler falls back to FindNodeByID (cross-repo lookup).
+func TestGetNode_OmitRepoIDAndBranch(t *testing.T) {
+	store := newStubGraphStorage()
+	n := mustNode(t, "node-42", "pkg/bar.go", "Bar", domain.KindStruct)
+	store.addNode(n)
+
+	r := NewRegistry()
+	RegisterGraphTools(r, store, application.NewStagingArea())
+
+	resp, rpcErr := dispatchGraph(t, r, "eng_get_node", map[string]string{
+		"node_id": "node-42",
+	})
+	if rpcErr != nil {
+		t.Fatalf("unexpected error: %+v", rpcErr)
+	}
+	if len(resp.Nodes) != 1 || resp.Nodes[0].NodeID != "node-42" {
+		t.Fatalf("expected node-42, got %+v", resp.Nodes)
 	}
 }
 
