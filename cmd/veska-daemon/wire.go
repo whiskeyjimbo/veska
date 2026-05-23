@@ -29,6 +29,7 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/application/wiki"
 	"github.com/whiskeyjimbo/veska/internal/config"
 	"github.com/whiskeyjimbo/veska/internal/core/ports"
+	"github.com/whiskeyjimbo/veska/internal/infrastructure/sqlite/resolver"
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/audit"
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/embedding/elect"
 	fsignore "github.com/whiskeyjimbo/veska/internal/infrastructure/fs"
@@ -875,9 +876,18 @@ func registerMCPTools(r *mcp.Registry, d mcpDeps) {
 	)
 
 	// Graph tools backed by the SQLite GraphRepo adapter. Writes take the
-	// hot-write pool; reads take the read pool.
+	// hot-write pool; reads take the read pool. The cross-repo resolver
+	// turns cross_repo_edge_stubs into synthetic ResolvedEdges for
+	// call_chain (and blast_radius below); without it the stub producer in
+	// xc51.3 has no consumer (solov2-1gj).
 	graph := sqlite.NewGraphRepo(pools.ReadDB, pools.WriteHot)
-	mcp.RegisterGraphTools(r, graph, d.staging, mcp.WithRepoLister(&repoLister{db: pools.ReadDB}))
+	resolveStubs := func(ctx context.Context, nodeID, branch string, expand bool) ([]ports.ResolvedEdge, error) {
+		return resolver.ResolveStubsForNode(ctx, pools.ReadDB, nodeID, branch, expand)
+	}
+	mcp.RegisterGraphTools(r, graph, d.staging,
+		mcp.WithRepoLister(&repoLister{db: pools.ReadDB}),
+		mcp.WithResolveFunc(resolveStubs),
+	)
 
 	// Blast-radius tools. The Service walks edge adjacency + staging; the
 	// repoRoot lookup resolves a repoID to its working tree, and changedFiles
@@ -885,7 +895,8 @@ func registerMCPTools(r *mcp.Registry, d mcpDeps) {
 	edges := sqlite.NewEdgeReaderRepo(pools.ReadDB)
 	nodes := sqlite.NewNodeLookupRepo(pools.ReadDB)
 	blastSvc := blastradius.NewService(edges, nodes, d.staging)
-	mcp.RegisterBlastTools(r, blastSvc, repoRootFunc(pools.ReadDB), gitwatch.ChangedFiles, &repoLister{db: pools.ReadDB})
+	mcp.RegisterBlastTools(r, blastSvc, repoRootFunc(pools.ReadDB), gitwatch.ChangedFiles, &repoLister{db: pools.ReadDB},
+		mcp.WithBlastResolveFunc(resolveStubs))
 
 	// eng_find_changed_symbols: parses each file changed between two git
 	// refs at both refs and diffs the symbol sets. It reads git + the
