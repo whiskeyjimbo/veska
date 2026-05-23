@@ -480,12 +480,21 @@ func newDaemon(cfg Config) (*Daemon, error) {
 	}
 	slog.Info("daemon: embedder elected", "model_id", election.Name)
 	if election.SwitchedModel {
-		// A different embedder than the index was built with. The
-		// background reindex that re-embeds under the new model_id is a
-		// deferred 1az follow-up; until it lands, old-model vectors and
-		// new-model vectors coexist and cross-model queries are unreliable.
-		slog.Warn("daemon: embedder changed since last boot; existing embeddings were built with the previous model and must be reindexed (automatic reindex not yet implemented)",
-			"previous", election.Previous, "current", election.Name)
+		// The elected embedder differs from what the index was last built
+		// with. Wipe the content-addressed embedding store and flip every
+		// ref back to pending so the embedder worker re-embeds all
+		// promoted nodes under the new model. Runs synchronously here,
+		// before the sqlite-vec store rehydrates, so the in-memory store
+		// starts empty and search is consistent at first tick
+		// (solov2-fz8). Old-model vectors are never readable again, which
+		// is correct — they occupy an incompatible space.
+		n, rqErr := embedder.RequeueAllUnderNewModel(context.Background(), pools.WriteEmbed)
+		if rqErr != nil {
+			_ = pools.Close()
+			return nil, fmt.Errorf("daemon: requeue embeddings after model switch: %w", rqErr)
+		}
+		slog.Info("daemon: embedder changed since last boot; queued background re-embed under new model",
+			"previous", election.Previous, "current", election.Name, "nodes_pending", n)
 	}
 	provider = election.Provider
 	if tracerProvider != nil {
