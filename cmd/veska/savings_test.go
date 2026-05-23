@@ -33,8 +33,18 @@ func TestRunSavings_RendersBarsAndPercentages(t *testing.T) {
 	jsonl := filepath.Join(dir, "savings.jsonl")
 
 	now := time.Date(2026, 5, 20, 12, 0, 0, 0, time.UTC)
-	entries := []savings.Entry{
-		{Timestamp: now.Add(-1 * time.Hour), Query: "q", FileChars: 10000, SnippetChars: 200, Results: 1},
+	// Use savingsMinSampleCalls entries so the percent renders (solov2-qjhg);
+	// below that threshold the row reads "warming up" and intentionally hides
+	// noisy small-sample ratios.
+	entries := make([]savings.Entry, savingsMinSampleCalls)
+	for i := range entries {
+		entries[i] = savings.Entry{
+			Timestamp:    now.Add(-1 * time.Hour),
+			Query:        "q",
+			FileChars:    10000,
+			SnippetChars: 200,
+			Results:      1,
+		}
 	}
 	f, err := os.Create(jsonl)
 	if err != nil {

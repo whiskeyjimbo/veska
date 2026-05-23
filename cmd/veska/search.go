@@ -133,7 +133,19 @@ func resolveSearchTarget(ctx context.Context, pools *sqlite.Pools, target string
 		if err != nil {
 			return repo.Record{}, fmt.Errorf("search: getwd: %w", err)
 		}
-		return findOrRegisterRepo(ctx, pools, cwd)
+		// Empty target: only run against an already-registered repo. Auto-
+		// registering cwd here is a footgun — running `veska search` from
+		// /tmp or any non-git directory would otherwise cold-scan a random
+		// path (solov2-bbgj). The user must explicitly pass <path> or run
+		// `veska repo add` first.
+		rec, err := matchByPath(ctx, pools.ReadDB, cwd)
+		if err != nil {
+			if _, statErr := os.Stat(filepath.Join(cwd, ".git")); statErr != nil {
+				return repo.Record{}, fmt.Errorf("search: cwd %q is not a git repository; pass <path> or cd to a registered repo", cwd)
+			}
+			return repo.Record{}, fmt.Errorf("search: %q is not registered; run `veska repo add %s` or pass it as <path>", cwd, cwd)
+		}
+		return rec, nil
 	}
 	if isGitURL(target) {
 		local, err := cloneOrReuse(ctx, target, w)

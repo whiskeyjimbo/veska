@@ -50,13 +50,13 @@ var suppressFindingInputSchema = json.RawMessage(`{
   "type": "object",
   "properties": {
     "finding_id": {"type": "string", "description": "ID of the finding to suppress."},
-    "branch": {"type": "string", "description": "Branch the finding belongs to."},
-    "repo_id": {"type": "string", "description": "Repository ID for audit attribution."},
+    "branch": {"type": "string", "description": "Branch the finding belongs to (optional; derived from finding_id when scope='finding')."},
+    "repo_id": {"type": "string", "description": "Repository ID for audit attribution (optional; derived from finding_id when scope='finding')."},
     "reason": {"type": "string", "description": "Reason for the suppression."},
     "scope": {"type": "string", "description": "Suppression scope; defaults to \"finding\" when omitted."},
     "expires_at": {"type": ["integer", "null"], "description": "Optional Unix timestamp at which the suppression expires."}
   },
-  "required": ["finding_id", "branch", "repo_id", "reason"]
+  "required": ["finding_id", "reason"]
 }`)
 
 // suppressFindingOutputSchema describes the result object for eng_suppress_finding.
@@ -78,7 +78,7 @@ func makeSuppressFindingHandler(db *sql.DB, aw ports.AuditWriter) ToolHandler {
 		if rpcErr := bindParams(raw, &p); rpcErr != nil {
 			return nil, rpcErr
 		}
-		if rpcErr := checkRequired("finding_id", p.FindingID, "branch", p.Branch, "repo_id", p.RepoID, "reason", p.Reason); rpcErr != nil {
+		if rpcErr := checkRequired("finding_id", p.FindingID, "reason", p.Reason); rpcErr != nil {
 			return nil, rpcErr
 		}
 		if p.Scope == "" {
@@ -86,30 +86,42 @@ func makeSuppressFindingHandler(db *sql.DB, aw ports.AuditWriter) ToolHandler {
 		}
 
 		// For scope='finding' the FindingID must reference an actual row in
-		// findings keyed by (finding_id, branch, repo_id). Without this guard
-		// any string is accepted and the row ends up as a permanent orphan
-		// surfaced by eng_list_suppressions forever (solov2-b36). Other
-		// scopes carry a different kind of target (rule name, file path)
-		// and are passed through unchanged — validation for them belongs
-		// with the consumer that interprets the target.
+		// findings. branch/repo_id are derived from the row when omitted, so
+		// callers can address a finding by id alone (solov2-6ctm). When the
+		// caller supplies them, they must match the row's values. Other scopes
+		// carry a different kind of target (rule name, file path) and require
+		// the caller to provide branch/repo_id explicitly.
 		if p.Scope == "finding" {
-			var exists int
+			var rowBranch, rowRepoID string
 			err := db.QueryRowContext(ctx,
-				`SELECT 1 FROM findings WHERE finding_id = ? AND branch = ? AND repo_id = ? LIMIT 1`,
-				p.FindingID, p.Branch, p.RepoID,
-			).Scan(&exists)
+				`SELECT branch, repo_id FROM findings WHERE finding_id = ? LIMIT 1`,
+				p.FindingID,
+			).Scan(&rowBranch, &rowRepoID)
 			switch {
 			case err == sql.ErrNoRows:
 				return nil, &RPCError{
-					Code: CodeInvalidParams,
-					Message: fmt.Sprintf(
-						"finding not found: finding_id=%q branch=%q repo_id=%q",
-						p.FindingID, p.Branch, p.RepoID,
-					),
+					Code:    CodeInvalidParams,
+					Message: fmt.Sprintf("finding not found: %s", p.FindingID),
 				}
 			case err != nil:
 				return nil, &RPCError{Code: CodeInternalError, Message: fmt.Sprintf("lookup finding: %v", err)}
 			}
+			if p.Branch != "" && p.Branch != rowBranch {
+				return nil, &RPCError{
+					Code:    CodeInvalidParams,
+					Message: fmt.Sprintf("finding %s is on branch %s, not %s", p.FindingID, rowBranch, p.Branch),
+				}
+			}
+			if p.RepoID != "" && p.RepoID != rowRepoID {
+				return nil, &RPCError{
+					Code:    CodeInvalidParams,
+					Message: fmt.Sprintf("finding %s belongs to repo %s, not %s", p.FindingID, rowRepoID, p.RepoID),
+				}
+			}
+			p.Branch = rowBranch
+			p.RepoID = rowRepoID
+		} else if rpcErr := checkRequired("branch", p.Branch, "repo_id", p.RepoID); rpcErr != nil {
+			return nil, rpcErr
 		}
 
 		supID := fmt.Sprintf("sup_%d", time.Now().UnixNano())
@@ -175,18 +187,22 @@ func makeListSuppressionsHandler(db *sql.DB) ToolHandler {
 		if rpcErr := bindParams(raw, &p); rpcErr != nil {
 			return nil, rpcErr
 		}
-		if rpcErr := checkRequired("repo_id", p.RepoID, "branch", p.Branch); rpcErr != nil {
+		if rpcErr := checkRequired("repo_id", p.RepoID); rpcErr != nil {
 			return nil, rpcErr
 		}
 
-		// Suppressions are scoped by branch. We also include branch-NULL suppressions (repo-wide).
-		rows, err := db.QueryContext(ctx,
-			`SELECT suppression_id, scope, target, branch, rule, reason, expires_at, created_at, actor_id, actor_kind
-			   FROM suppressions
-			  WHERE branch = ? OR branch IS NULL
-			  ORDER BY created_at DESC`,
-			p.Branch,
-		)
+		// Suppressions are scoped by branch. branch-NULL rows (repo-wide) are
+		// always included. When the caller omits Branch, all branches are
+		// listed (solov2-6ctm).
+		query := `SELECT suppression_id, scope, target, branch, rule, reason, expires_at, created_at, actor_id, actor_kind
+			   FROM suppressions`
+		var args []any
+		if p.Branch != "" {
+			query += ` WHERE branch = ? OR branch IS NULL`
+			args = append(args, p.Branch)
+		}
+		query += ` ORDER BY created_at DESC`
+		rows, err := db.QueryContext(ctx, query, args...)
 		if err != nil {
 			return nil, &RPCError{Code: CodeInternalError, Message: fmt.Sprintf("query suppressions: %v", err)}
 		}

@@ -71,7 +71,7 @@ func RegisterBlastTools(r *Registry, svc *blastradius.Service, repoRoot RepoRoot
 		Name:            "eng_get_diff_blast_radius",
 		Description:     "Compute the blast radius for all symbols in files changed in the working-tree diff vs HEAD.",
 		IncludesStaging: false,
-		Handler:         makeDiffBlastRadiusHandler(svc, repoRoot, changedFiles, cfg.resolve),
+		Handler:         makeDiffBlastRadiusHandler(svc, repoRoot, changedFiles, repos, cfg.resolve),
 	})
 }
 
@@ -164,7 +164,7 @@ type diffBlastRadiusParams struct {
 	ExpandCrossRepo bool   `json:"expand_cross_repo,omitempty"`
 }
 
-func makeDiffBlastRadiusHandler(svc *blastradius.Service, repoRoot RepoRootFunc, changedFiles blastradius.ChangedFilesFunc, resolve ResolveFunc) ToolHandler {
+func makeDiffBlastRadiusHandler(svc *blastradius.Service, repoRoot RepoRootFunc, changedFiles blastradius.ChangedFilesFunc, repos application.RepoLister, resolve ResolveFunc) ToolHandler {
 	return func(ctx context.Context, _ domain.Actor, raw json.RawMessage) (any, *RPCError) {
 		if repoRoot == nil || changedFiles == nil {
 			return nil, &RPCError{
@@ -179,6 +179,11 @@ func makeDiffBlastRadiusHandler(svc *blastradius.Service, repoRoot RepoRootFunc,
 		if rpcErr := checkRequired("repo_id", p.RepoID, "branch", p.Branch); rpcErr != nil {
 			return nil, rpcErr
 		}
+		repoID, rpcErr := resolveRepoID(ctx, repos, p.RepoID)
+		if rpcErr != nil {
+			return nil, rpcErr
+		}
+		p.RepoID = repoID
 		dir, err := blastradius.ParseDirection(p.Direction)
 		if err != nil {
 			return nil, &RPCError{Code: CodeInvalidParams, Message: err.Error()}

@@ -41,6 +41,13 @@ func installCmd() *cobra.Command {
 		Use:          "install",
 		Short:        "Install optional models for veska",
 		SilenceUsage: true,
+		// No subcommand is a usage error, not a no-op. Cobra would print help
+		// and exit 0 by default; instead return an error so scripts that
+		// expect a successful install see a non-zero exit code (solov2-1qf8).
+		RunE: func(cmd *cobra.Command, args []string) error {
+			_ = cmd.Help()
+			return fmt.Errorf("install: missing subcommand (try `veska install model2vec`)")
+		},
 	}
 	cmd.AddCommand(installModel2vecCmd())
 	return cmd

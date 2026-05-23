@@ -56,6 +56,13 @@ func runSavings(w io.Writer, veskaHome string, now time.Time, jsonOut bool) erro
 
 const savingsBarWidth = 30
 
+// savingsMinSampleCalls is the minimum number of recorded search calls before
+// the savings ratio is rendered as a number. Below this, the small sample is
+// noise — a single short snippet can drive the ratio negative and alarm a
+// first-time user (solov2-qjhg). The row still renders so the call count is
+// visible.
+const savingsMinSampleCalls = 20
+
 // formatSavingsRow renders one period as a fixed-width row:
 //
 //	today    [████████████████████████....] 87.3%  (42 calls, 1.2MB → 156KB)
@@ -67,6 +74,11 @@ func formatSavingsRow(p savings.Period) string {
 	ratio := p.SavingsRatio()
 	filled := min(max(int(ratio*float64(savingsBarWidth)), 0), savingsBarWidth)
 	bar := strings.Repeat("█", filled) + strings.Repeat("·", savingsBarWidth-filled)
+	if p.Calls < savingsMinSampleCalls {
+		return fmt.Sprintf("  %-9s [%s]  warming up  (%d/%d calls, %s -> %s)",
+			p.Label, bar, p.Calls, savingsMinSampleCalls,
+			humanBytes(p.FileChars), humanBytes(p.SnippetChars))
+	}
 	return fmt.Sprintf("  %-9s [%s] %5.1f%%  (%d calls, %s -> %s)",
 		p.Label, bar, ratio*100, p.Calls,
 		humanBytes(p.FileChars), humanBytes(p.SnippetChars))

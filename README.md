@@ -18,8 +18,10 @@ they reason from the same structural ground truth instead of guessing.
   `Finding`s: dead code, contract drift, vulnerable `go.mod` dependencies
   (OSV), and leaked secrets.
 - **Optional LLM review.** An off-by-default post-promotion review pipeline.
-- **Mechanical wiki.** Hot-zone and entry-point pages plus a context-pack tool,
-  computed from the graph — no LLM in the path.
+- **Mechanical wiki.** Hot-zones and entry-points surfaced through the
+  `eng_get_hot_zone` and `eng_get_entry_points` MCP tools (no files written
+  to disk), plus a context-pack tool — all computed from the graph, no LLM
+  in the path.
 - **Cross-actor attribution.** A single `actor_kind: human | agent | system`
   enum distinguishes who changed what in the audit log.
 
@@ -152,6 +154,21 @@ mcpServers:
   - name: veska
     command: /abs/path/to/bin/veska-mcp
 ```
+
+### Per-agent instruction snippets
+
+`veska init --agent <name>` writes (or safely appends to) an agent-specific
+instruction file inside the current project so the agent knows the Veska tool
+surface is available. Supported agents:
+`claude`, `codex`, `copilot`, `cursor`, `gemini`, `kiro`, `opencode`.
+
+```sh
+cd /path/to/your/repo
+./bin/veska init --agent claude    # creates or updates CLAUDE.md
+```
+
+The snippet is bracketed with `<!-- veska:init -->` markers so re-running the
+command updates only the Veska section and leaves the rest of the file alone.
 
 If your `VESKA_HOME` is non-default, pass it through:
 
