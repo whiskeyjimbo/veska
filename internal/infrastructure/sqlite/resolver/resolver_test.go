@@ -167,6 +167,74 @@ func TestResolveCrossRepoEdgeMiss(t *testing.T) {
 	}
 }
 
+// TestResolveCrossRepoEdge_Subpackage pins solov2-hkr9: an import path that is
+// a subpackage of a registered multi-package module resolves via longest-
+// prefix-match (e.g. github.com/spf13/cobra/doc binds to the cobra repo when
+// only github.com/spf13/cobra is registered) and the symbol lookup is
+// constrained to the subpackage directory.
+func TestResolveCrossRepoEdge_Subpackage(t *testing.T) {
+	db := setupTestDB(t)
+
+	// Single repo whose module root covers multiple packages.
+	seedRepo(t, db, "repo-cobra", "github.com/spf13/cobra", "main")
+	// Same-named symbol exists in TWO subpackages — only the right one must bind.
+	seedNode(t, db, "node-doc",  "main", "repo-cobra", "go", "function", "Render", "doc/util.go")
+	seedNode(t, db, "node-root", "main", "repo-cobra", "go", "function", "Render", "command.go")
+
+	stub := resolver.CrossRepoStub{
+		StubID:     "stub-sub",
+		SrcNodeID:  "caller",
+		Kind:       "CALLS",
+		ModulePath: "github.com/spf13/cobra/doc",
+		SymbolPath: "Render",
+		Language:   "go",
+	}
+	edge, err := resolver.ResolveCrossRepoEdge(context.Background(), db, stub, false)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if edge == nil {
+		t.Fatal("expected resolved edge for subpackage import, got nil")
+		return
+	}
+	if edge.DstNodeID != "node-doc" {
+		t.Errorf("DstNodeID = %q, want node-doc (the doc-subpackage Render, not the root-package one)", edge.DstNodeID)
+	}
+}
+
+// TestResolveCrossRepoEdge_LongestPrefixWins pins the disambiguation rule: when
+// two registered repos could prefix-match (one is a parent module of the other),
+// the more-specific repo binds.
+func TestResolveCrossRepoEdge_LongestPrefixWins(t *testing.T) {
+	db := setupTestDB(t)
+
+	// Two nested module roots; the more-specific (sub) repo is the right target.
+	seedRepo(t, db, "repo-parent", "github.com/acme/parent", "main")
+	seedRepo(t, db, "repo-sub",    "github.com/acme/parent/sub", "main")
+	seedNode(t, db, "node-parent", "main", "repo-parent", "go", "function", "Foo", "sub/x.go")
+	seedNode(t, db, "node-sub",    "main", "repo-sub",    "go", "function", "Foo", "x.go")
+
+	stub := resolver.CrossRepoStub{
+		StubID:     "stub-lpw",
+		SrcNodeID:  "caller",
+		Kind:       "CALLS",
+		ModulePath: "github.com/acme/parent/sub",
+		SymbolPath: "Foo",
+		Language:   "go",
+	}
+	edge, err := resolver.ResolveCrossRepoEdge(context.Background(), db, stub, false)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if edge == nil {
+		t.Fatal("expected resolved edge from longest-prefix repo, got nil")
+		return
+	}
+	if edge.DstRepoID != "repo-sub" {
+		t.Errorf("DstRepoID = %q, want repo-sub (more specific module_path)", edge.DstRepoID)
+	}
+}
+
 // TestResolveStubsForNode verifies that two stubs for a node yield one resolved edge (one miss).
 func TestResolveStubsForNode(t *testing.T) {
 	db := setupTestDB(t)
