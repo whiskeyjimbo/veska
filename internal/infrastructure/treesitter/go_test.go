@@ -41,6 +41,51 @@ func Add(a, b int) int {
 	}
 }
 
+// TestParseFile_TopLevelVarDecl guards solov2-b7wt: top-level var
+// declarations (the dominant API-surface pattern in cobra CLIs) must be
+// extracted as KindVariable nodes. Without this, eng_find_symbol returns
+// empty for `rootCmd` etc.
+func TestParseFile_TopLevelVarDecl(t *testing.T) {
+	src := []byte(`package main
+
+import "github.com/spf13/cobra"
+
+var rootCmd = &cobra.Command{
+	Use:   "tool",
+	Short: "demo",
+}
+
+var (
+	verbose bool
+	logFile string
+)
+
+const _hidden = "skip me"
+`)
+	p := treesitter.NewGoParser()
+	result, err := p.ParseFile(context.Background(), repoID, filePath, src)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	want := []string{"rootCmd", "verbose", "logFile"}
+	for _, name := range want {
+		n := findNodeByName(result.Nodes, name)
+		if n == nil {
+			t.Errorf("expected var %q to be extracted; got none", name)
+			continue
+		}
+		if n.Kind != domain.KindVariable {
+			t.Errorf("var %q: kind = %q, want %q", name, n.Kind, domain.KindVariable)
+		}
+	}
+	// Raw content must include the cobra struct body so semantic search
+	// indexes the Use:/Short: strings.
+	if n := findNodeByName(result.Nodes, "rootCmd"); n != nil && n.RawContent == nil {
+		t.Errorf("rootCmd.RawContent must be populated for semantic-search visibility")
+	}
+}
+
 func TestParseFile_MethodDeclaration(t *testing.T) {
 	src := []byte(`package foo
 
