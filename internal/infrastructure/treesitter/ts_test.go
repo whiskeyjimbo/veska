@@ -35,6 +35,30 @@ function greet(name: string): string {
 	}
 }
 
+// TestTS_ErrorRecovery pins solov2-rbb7: a syntax error in one declaration
+// must not erase the file's other symbols. The clean function survives, a
+// ParseFailure is reported, and the broken declaration is skipped.
+func TestTS_ErrorRecovery(t *testing.T) {
+	src := []byte(`
+function good(): number { return 1; }
+
+function broken( {  // syntax error: unclosed param list
+
+function alsoGood(): string { return "ok"; }
+`)
+	p := treesitter.NewTSParser()
+	result, err := p.ParseFile(context.Background(), tsRepoID, "src/x.ts", src)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(result.Failures) == 0 {
+		t.Error("expected a ParseFailure for the broken declaration")
+	}
+	if findNodeByName(result.Nodes, "good") == nil {
+		t.Errorf("clean fn good was discarded; nodes: %v", nodeNames(result.Nodes))
+	}
+}
+
 // TestTS_ExportedFlag pins solov2-xp1u: TS declarations under an
 // export_statement carry Exported=true; unexported ones Exported=false (not
 // nil). Methods inherit their class's export status.
