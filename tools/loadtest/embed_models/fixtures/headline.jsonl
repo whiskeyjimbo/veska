@@ -1,0 +1,29 @@
+// headline.jsonl — hand-curated ground truth for the embed-models bench.
+// Each line: {"corpus": "<name>", "query": "<natural-language>", "expected": "<symbol-name>"}.
+// Symbol naming follows the treesitter parser's convention (methods are
+// "Receiver.Method"; top-level decls are bare). The recall metric on this
+// set is the bench's PUBLISHED headline number (solov2-0k5h.3).
+//
+// Comment lines (//) and blank lines are skipped by the loader.
+
+// ─── veska self-corpus (20 queries) ─────────────────────────────────────
+{"corpus":"veska","query":"register a git repository in the workspace","expected":"Add"}
+{"corpus":"veska","query":"deregister a repo and remove git hooks","expected":"Remove"}
+{"corpus":"veska","query":"promote staged nodes into durable sqlite storage","expected":"Promoter.Promote"}
+{"corpus":"veska","query":"parse a Go source file into nodes and edges","expected":"GoParser.ParseFile"}
+{"corpus":"veska","query":"compute the blast radius of a node","expected":"Service.Of"}
+{"corpus":"veska","query":"assemble a context pack for a symbol","expected":"Assembler.ForSymbol"}
+{"corpus":"veska","query":"rehydrate the in-memory vector store at boot","expected":"RehydrateVectors"}
+{"corpus":"veska","query":"resolve a cross-repo edge stub to a node","expected":"ResolveCrossRepoEdge"}
+{"corpus":"veska","query":"find dead code nodes with no inbound calls","expected":"DeadNodesInFiles"}
+{"corpus":"veska","query":"embed text with a model2vec provider","expected":"Provider.Embed"}
+{"corpus":"veska","query":"requeue every embedding under a new model","expected":"RequeueAllUnderNewModel"}
+{"corpus":"veska","query":"install a model2vec model from disk","expected":"TryLoad"}
+{"corpus":"veska","query":"track in-flight cold scans","expected":"ScanTracker"}
+{"corpus":"veska","query":"emit a TODO finding from parsed source","expected":"emitTodos"}
+{"corpus":"veska","query":"extract Go call edges from an AST","expected":"extractCallEdges"}
+{"corpus":"veska","query":"detect leaked secrets in source code","expected":"SecretScanner"}
+{"corpus":"veska","query":"check what files changed between two git refs","expected":"ChangedFilesBetween"}
+{"corpus":"veska","query":"resolve a short repository id to its canonical form","expected":"resolveRepoID"}
+{"corpus":"veska","query":"open the three sqlite connection pools","expected":"OpenPools"}
+{"corpus":"veska","query":"build a registry of MCP tools","expected":"Registry"}
