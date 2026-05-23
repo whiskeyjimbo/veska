@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"path/filepath"
 	"strings"
 
 	application "github.com/whiskeyjimbo/veska/internal/application"
@@ -163,10 +164,23 @@ func makeHotZoneHandler(svc *wiki.HotZoneService, repoRoot RepoRootFunc, repos a
 		if err != nil {
 			return nil, &RPCError{Code: CodeInternalError, Message: fmt.Sprintf("hot zone: %v", err)}
 		}
+		// Canonicalise file_path to absolute on the wire so every tool in
+		// the eng_* surface returns the same shape (solov2-4aka). The wiki
+		// markdown still renders the relative form via the same Report
+		// (the Markdown is built before this loop runs).
+		zones := make([]wiki.HotZone, len(rep.Zones))
+		for i, z := range rep.Zones {
+			abs := z.FilePath
+			if !filepath.IsAbs(abs) {
+				abs = filepath.Join(root, abs)
+			}
+			z.FilePath = abs
+			zones[i] = z
+		}
 		return HotZoneResponse{
 			RepoID: rep.RepoID,
 			Branch: rep.Branch,
-			Zones:  rep.Zones,
+			Zones:  zones,
 		}, nil
 	}
 }

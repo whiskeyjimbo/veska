@@ -230,6 +230,16 @@ restart_window         = "10m"               # window for crash-loop counter
 max_restarts_in_window = 5                   # exits with code 78 after this; supervisor stops retrying
 stable_boot_after      = "60s"               # alive this long → counter resets
 
+# ─── wiki ────────────────────────────────────────────────────
+# The developer-wiki Markdown pages (hot_zones.md + entry_points.md).
+# Off by default — the product contract is that veska writes no
+# files into user repos. Set write_pages = true to materialise the
+# pages under <repo>/docs/veska/ on every promotion. The eng_get_hot_zone
+# and eng_get_entry_points MCP tools serve the same data either way
+# (solov2-ocnn).
+[wiki]
+write_pages            = false
+
 # ─── backup ──────────────────────────────────────────────────
 [backup]
 default_path           = "~/.veska-backups/" # where veska backup create writes by default

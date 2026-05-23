@@ -95,7 +95,10 @@ func TestHandler_WrongKind(t *testing.T) {
 func TestHandler_RegeneratesBothPages(t *testing.T) {
 	store := &fakeRenderStore{}
 	stamp := time.Date(2026, 5, 16, 12, 0, 0, 0, time.UTC)
-	h, root := fixtureHandler(t, store, WithHandlerClock(func() time.Time { return stamp }))
+	h, root := fixtureHandler(t, store,
+		WithHandlerClock(func() time.Time { return stamp }),
+		WithWritePages(true),
+	)
 
 	err := h.Handle(context.Background(), ports.WorkRow{
 		Kind: ports.WorkKindWiki, RepoID: "r1", Branch: "main",
