@@ -264,6 +264,11 @@ func TestEmbedModelsBenchmark(t *testing.T) {
 		t.Fatalf("write results: %v", err)
 	}
 	t.Logf("wrote %d run rows", len(results))
+	if err := writeMarkdownTable(results); err != nil {
+		t.Logf("WARN: write markdown table: %v", err)
+	} else {
+		t.Logf("refreshed docs/operations/embedder-benchmarks.md")
+	}
 }
 
 // ───────────────────────────────────────────────────────────────────────
@@ -505,7 +510,7 @@ func writeResults(rows []runResult) error {
 		return err
 	}
 	r := benchResults{
-		Phase:       "0k5h.5",
+		Phase:       "0k5h.6",
 		GeneratedAt: time.Now().UTC().Format(time.RFC3339),
 		Runs:        rows,
 	}
