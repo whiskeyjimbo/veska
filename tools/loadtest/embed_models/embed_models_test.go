@@ -47,15 +47,18 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/treesitter"
 )
 
-// BenchModels lists the model2vec variants the bench targets (0k5h.2).
+// BenchModels lists the model2vec variants the bench targets.
 // Order is footprint-ascending so output is easier to scan.
+// Note: minishlab's lineup tops out at 32M for the English-monolingual
+// variants — the 128M tier exists only as potion-multilingual-128M
+// (different use case, deferred to a follow-up).
 var BenchModels = []string{
 	"potion-base-2M",
+	"potion-base-4M",
 	"potion-base-8M",
 	"potion-code-16M",
 	"potion-retrieval-32M",
 	"potion-base-32M",
-	"potion-base-128M",
 }
 
 // BenchOllamaModels lists the Ollama embedders the -full variant
