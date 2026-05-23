@@ -136,6 +136,15 @@ func processTopLevelNode(
 	classNames map[string]bool,
 	exported bool,
 ) {
+	// Skip declarations whose own subtree carries a syntax error — their
+	// extracted name/signature/body would be unreliable. Sibling declarations
+	// that parsed cleanly still index, so a transiently-broken TS file
+	// mid-edit doesn't erase its other symbols (solov2-rbb7, mirrors the Go
+	// fix in solov2-7nkm). export_statement wrappers re-enter this function,
+	// so the guard applies at every recursion level.
+	if hasErrorNode(node) {
+		return
+	}
 	switch node.Type() {
 	case "function_declaration":
 		n := parseTSFunctionDecl(node, src, repoID, path, exported)
