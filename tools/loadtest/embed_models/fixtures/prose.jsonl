@@ -1,38 +1,41 @@
 // prose.jsonl — hand-curated ground truth for the prose corpora.
 // Each line: {"corpus":"<name>","query":"<natural-language>","expected":"<file.md>#<heading-slug>"}.
-// The expected key matches the prose-corpus doc-name produced by
-// embedProseCorpus: <path-relative-to-corpus-root> + "#" + slugified H1/H2 heading.
+// Expected keys match embedProseCorpus's doc-name format:
+//   <path-relative-to-corpus-root> + "#" + slugified H1/H2 heading.
 // Slug rules: lowercase; runs of non-[a-z0-9] become single "-"; trim leading/trailing dashes.
-// e.g. "## 1. Purpose" → "1-purpose"; "## Privacy & telemetry" → "privacy-telemetry".
+//
+// Queries are written WITHOUT library/identifier vocabulary (0k5h.8) so a
+// model that simply memorised Go identifiers can't shortcut to the answer.
+// A reader unfamiliar with this project should still be able to guess
+// which document section the query targets.
 //
 // Comment lines (//) and blank lines are skipped by the loader.
 
 // ─── veska-docs corpus ──────────────────────────────────────────────────
-// Targets real H2 sections under docs/ — discovered by `grep ^## docs/...`.
-{"corpus":"veska-docs","query":"what veska gives you compared to alternatives","expected":"PRODUCT.md#what-it-gives-you"}
-{"corpus":"veska-docs","query":"how veska works under the hood","expected":"PRODUCT.md#how-it-works"}
-{"corpus":"veska-docs","query":"what veska deliberately is not","expected":"PRODUCT.md#what-it-is-not"}
-{"corpus":"veska-docs","query":"environment variables veska reads at startup","expected":"operations/CONFIG-SURFACE.md#2-environment-variables"}
-{"corpus":"veska-docs","query":"the config.toml file format and keys","expected":"operations/CONFIG-SURFACE.md#3-veska-config-toml"}
-{"corpus":"veska-docs","query":"the three binaries that make up veska","expected":"design/03-the-daemon/README.md#2-the-three-binaries"}
-{"corpus":"veska-docs","query":"daemon lifecycle from start to shutdown","expected":"design/03-the-daemon/README.md#5-lifecycle"}
-{"corpus":"veska-docs","query":"the inventory of mcp tools the daemon exposes","expected":"design/09-mcp-surface/README.md#3-tool-inventory"}
-{"corpus":"veska-docs","query":"the shape of mcp tool responses","expected":"design/09-mcp-surface/README.md#4-output-contract"}
-{"corpus":"veska-docs","query":"promotion pipeline that handles staged nodes","expected":"design/11-pipelines/README.md#2-promotion-pipeline"}
-{"corpus":"veska-docs","query":"auto-link suggestion pipeline","expected":"design/11-pipelines/README.md#4-auto-link"}
-{"corpus":"veska-docs","query":"how revalidation removes stale findings","expected":"design/11-pipelines/README.md#6-revalidation-sweep"}
-{"corpus":"veska-docs","query":"performance budgets and latency goals","expected":"design/13-nfr/README.md#3-performance-budgets"}
-{"corpus":"veska-docs","query":"how veska behaves in degraded modes","expected":"design/13-nfr/README.md#4-degraded-modes"}
-{"corpus":"veska-docs","query":"the daemon's audit log behaviour","expected":"design/13-nfr/README.md#6-audit-log"}
+{"corpus":"veska-docs","query":"the benefits a user gets from this product","expected":"PRODUCT.md#what-it-gives-you"}
+{"corpus":"veska-docs","query":"the internal design of how the system works","expected":"PRODUCT.md#how-it-works"}
+{"corpus":"veska-docs","query":"what the product deliberately is not trying to do","expected":"PRODUCT.md#what-it-is-not"}
+{"corpus":"veska-docs","query":"settings configured through the shell environment","expected":"operations/CONFIG-SURFACE.md#2-environment-variables"}
+{"corpus":"veska-docs","query":"the configuration file format and available options","expected":"operations/CONFIG-SURFACE.md#3-veska-config-toml"}
+{"corpus":"veska-docs","query":"the executable components that make up the system","expected":"design/03-the-daemon/README.md#2-the-three-binaries"}
+{"corpus":"veska-docs","query":"how a long-running background process starts and stops","expected":"design/03-the-daemon/README.md#5-lifecycle"}
+{"corpus":"veska-docs","query":"the available tools the service exposes to clients","expected":"design/09-mcp-surface/README.md#3-tool-inventory"}
+{"corpus":"veska-docs","query":"the structure of responses the service returns","expected":"design/09-mcp-surface/README.md#4-output-contract"}
+{"corpus":"veska-docs","query":"how the system saves changes from temporary to permanent storage","expected":"design/11-pipelines/README.md#2-promotion-pipeline"}
+{"corpus":"veska-docs","query":"how the system suggests connections between related items","expected":"design/11-pipelines/README.md#4-auto-link"}
+{"corpus":"veska-docs","query":"how outdated alerts are cleaned up over time","expected":"design/11-pipelines/README.md#6-revalidation-sweep"}
+{"corpus":"veska-docs","query":"the speed targets and resource limits the system aims for","expected":"design/13-nfr/README.md#3-performance-budgets"}
+{"corpus":"veska-docs","query":"how the system behaves when something is broken","expected":"design/13-nfr/README.md#4-degraded-modes"}
+{"corpus":"veska-docs","query":"how the system records a history of actions taken","expected":"design/13-nfr/README.md#6-audit-log"}
 
 // ─── cobra-docs corpus ──────────────────────────────────────────────────
-{"corpus":"cobra-docs","query":"a brief overview of the cobra library","expected":"README.md#overview"}
-{"corpus":"cobra-docs","query":"installing cobra into your project","expected":"README.md#installing"}
-{"corpus":"cobra-docs","query":"basic usage of cobra commands","expected":"README.md#usage"}
-{"corpus":"cobra-docs","query":"how to file a bug report or feature request","expected":"CONTRIBUTING.md#filing-a-bug-or-feature"}
-{"corpus":"cobra-docs","query":"submitting code changes via pull request","expected":"CONTRIBUTING.md#submitting-changes"}
-{"corpus":"cobra-docs","query":"using the cobra-cli code generator","expected":"site/content/user_guide.md#using-the-cobra-generator"}
-{"corpus":"cobra-docs","query":"using the cobra library directly","expected":"site/content/user_guide.md#using-the-cobra-library"}
-{"corpus":"cobra-docs","query":"defining persistent and local flags","expected":"site/content/user_guide.md#working-with-flags"}
-{"corpus":"cobra-docs","query":"positional and custom argument validation","expected":"site/content/user_guide.md#positional-and-custom-arguments"}
-{"corpus":"cobra-docs","query":"customizing the version flag output","expected":"site/content/user_guide.md#version-flag"}
+{"corpus":"cobra-docs","query":"a short introduction to this library","expected":"README.md#overview"}
+{"corpus":"cobra-docs","query":"how to set up the library in a new project","expected":"README.md#installing"}
+{"corpus":"cobra-docs","query":"the basic way to use this library","expected":"README.md#usage"}
+{"corpus":"cobra-docs","query":"how to report a problem or request a new feature","expected":"CONTRIBUTING.md#filing-a-bug-or-feature"}
+{"corpus":"cobra-docs","query":"the process for contributing code changes","expected":"CONTRIBUTING.md#submitting-changes"}
+{"corpus":"cobra-docs","query":"using the code generation tool","expected":"site/content/user_guide.md#using-the-cobra-generator"}
+{"corpus":"cobra-docs","query":"using the library directly without code generation","expected":"site/content/user_guide.md#using-the-cobra-library"}
+{"corpus":"cobra-docs","query":"how to define long-lasting and one-time-use options","expected":"site/content/user_guide.md#working-with-flags"}
+{"corpus":"cobra-docs","query":"checking positional and custom inputs","expected":"site/content/user_guide.md#positional-and-custom-arguments"}
+{"corpus":"cobra-docs","query":"how to display the current product version","expected":"site/content/user_guide.md#version-flag"}
