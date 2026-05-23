@@ -85,14 +85,15 @@ type corpusEntry struct {
 // runResult captures per-(model × corpus) bench data — what gets
 // written to results.json and consumed by 0k5h.6's table generator.
 type runResult struct {
-	Model       string    `json:"model"`
-	Corpus      string    `json:"corpus"`
-	DocCount    int       `json:"doc_count"`
-	EmbedTotal  string    `json:"embed_total"`     // human-readable duration
-	EmbedTotalMS float64  `json:"embed_total_ms"`  // machine-readable
-	EmbedAvgMS  float64   `json:"embed_avg_ms"`
-	QueryMS     float64   `json:"query_ms"`        // query embed time
-	TopHits     []topHit  `json:"top_hits"`        // sanity-check top-K for the printed query
+	Model        string                  `json:"model"`
+	Corpus       string                  `json:"corpus"`
+	DocCount     int                     `json:"doc_count"`
+	EmbedTotal   string                  `json:"embed_total"`    // human-readable duration
+	EmbedTotalMS float64                 `json:"embed_total_ms"` // machine-readable
+	EmbedAvgMS   float64                 `json:"embed_avg_ms"`
+	QueryMS      float64                 `json:"query_ms"`       // query embed time
+	TopHits      []topHit                `json:"top_hits"`       // sanity-check top-K for the printed query
+	Recall       map[string]RecallScores `json:"recall"`         // gt-source → scores (headline / doc / test-name)
 }
 
 type topHit struct {
@@ -164,6 +165,20 @@ func TestEmbedModelsBenchmark(t *testing.T) {
 			t.Logf("  docs=%d embed_total=%s avg=%.2fms query_embed=%s top1=%s(%.3f)",
 				len(docs), stats.total, stats.avgMS, qElapsed, top[0].Name, top[0].Score)
 
+			// Recall per ground-truth source (headline / doc / test-name).
+			gtSources := CollectGroundTruth(c.name, c.root, headlinePath())
+			recallByGT := make(map[string]RecallScores, len(gtSources))
+			for _, gt := range gtSources {
+				if len(gt.Pairs) == 0 {
+					recallByGT[gt.Name] = RecallScores{}
+					continue
+				}
+				scores := ComputeRecall(provider, gt.Pairs, docs)
+				recallByGT[gt.Name] = scores
+				t.Logf("  recall[%s] n=%d @1=%.3f @5=%.3f @10=%.3f mrr=%.3f miss=%d",
+					gt.Name, scores.N, scores.At1, scores.At5, scores.At10, scores.MRR, scores.Miss)
+			}
+
 			results = append(results, runResult{
 				Model:        m.name,
 				Corpus:       c.name,
@@ -173,6 +188,7 @@ func TestEmbedModelsBenchmark(t *testing.T) {
 				EmbedAvgMS:   stats.avgMS,
 				QueryMS:      float64(qElapsed.Nanoseconds()) / 1e6,
 				TopHits:      top,
+				Recall:       recallByGT,
 			})
 		}
 	}
@@ -186,6 +202,17 @@ func TestEmbedModelsBenchmark(t *testing.T) {
 // ───────────────────────────────────────────────────────────────────────
 // Discovery
 // ───────────────────────────────────────────────────────────────────────
+
+// headlinePath resolves the bench's hand-curated ground-truth file.
+// Override with EMBED_BENCH_HEADLINE; default lives under the package
+// (committed in fixtures/) so it ships with the repo.
+func headlinePath() string {
+	if p := os.Getenv("EMBED_BENCH_HEADLINE"); p != "" {
+		return p
+	}
+	_, file, _, _ := runtime.Caller(0)
+	return filepath.Join(filepath.Dir(file), "fixtures", "headline.jsonl")
+}
 
 // modelRoot is the directory the bench scans for installed models.
 func modelRoot() string {
@@ -378,7 +405,7 @@ func writeResults(rows []runResult) error {
 		return err
 	}
 	r := benchResults{
-		Phase:       "0k5h.2",
+		Phase:       "0k5h.3",
 		GeneratedAt: time.Now().UTC().Format(time.RFC3339),
 		Runs:        rows,
 	}
