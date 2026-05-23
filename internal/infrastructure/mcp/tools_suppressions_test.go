@@ -118,6 +118,7 @@ func TestSuppressFinding_RejectsUnknownFinding(t *testing.T) {
 	})
 	if rpcErr == nil {
 		t.Fatal("expected RPC error for unknown finding_id; got nil")
+		return
 	}
 	if rpcErr.Code != CodeInvalidParams {
 		t.Errorf("error code = %d, want CodeInvalidParams (%d)", rpcErr.Code, CodeInvalidParams)

@@ -25,6 +25,7 @@ func TestCheckRequired_ReportsAllMissing(t *testing.T) {
 		err := checkRequired("query", "", "repo_id", "", "branch", "main")
 		if err == nil {
 			t.Fatal("expected error")
+			return
 		}
 		if err.Message != "missing required params: query, repo_id" {
 			t.Errorf("expected both names in one message, got %q", err.Message)

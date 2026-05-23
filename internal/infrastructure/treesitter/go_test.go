@@ -222,6 +222,7 @@ func (s *Server) bar() {}
 	barNode := findNodeByName(result.Nodes, "Server.bar")
 	if fooNode == nil || barNode == nil {
 		t.Fatalf("expected Server.Foo + Server.bar nodes, got: %v", nodeNames(result.Nodes))
+		return
 	}
 	if findEdge(result.Edges, fooNode.ID, barNode.ID, domain.EdgeCalls) == nil {
 		t.Errorf("expected CALLS edge Server.Foo -> Server.bar (selector call on receiver); edges=%+v", result.Edges)

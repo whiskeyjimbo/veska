@@ -184,6 +184,7 @@ func TestFindSymbol_UnknownRepoIDErrors(t *testing.T) {
 	})
 	if rpcErr == nil {
 		t.Fatal("expected NotFound error for unknown repo_id, got nil")
+		return
 	}
 	if rpcErr.Code != CodeNotFound {
 		t.Errorf("expected CodeNotFound (%d), got %d: %s", CodeNotFound, rpcErr.Code, rpcErr.Message)
