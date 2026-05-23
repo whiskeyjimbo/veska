@@ -72,6 +72,37 @@ func resolveRepoIDOrSingleton(ctx context.Context, repos application.RepoLister,
 	}
 }
 
+// resolveBranchOrActive returns branch when non-empty, otherwise the registered
+// active_branch of repoID. Used so callers can omit `branch` when they are
+// operating against the repo's current branch — overwhelmingly the common
+// case (solov2-5vu1). Returns an InvalidParams when branch is empty and the
+// repo's active_branch is also unset.
+//
+// repoID MUST already be resolved (full id, not a short prefix). When repos
+// is nil the helper is a no-op pass-through (returns branch unchanged); the
+// caller is responsible for checking emptiness in that mode.
+func resolveBranchOrActive(ctx context.Context, repos application.RepoLister, repoID, branch string) (string, *RPCError) {
+	if branch != "" {
+		return branch, nil
+	}
+	if repos == nil {
+		return "", &RPCError{Code: CodeInvalidParams, Message: "branch is required"}
+	}
+	all, err := repos.ListRepos(ctx)
+	if err != nil {
+		return "", &RPCError{Code: CodeInternalError, Message: fmt.Sprintf("list repos failed: %v", err)}
+	}
+	for _, rec := range all {
+		if rec.RepoID == repoID {
+			if rec.ActiveBranch == "" {
+				return "", &RPCError{Code: CodeInvalidParams, Message: fmt.Sprintf("branch is required (repo %s has no recorded active_branch)", ShortRepoID(repoID))}
+			}
+			return rec.ActiveBranch, nil
+		}
+	}
+	return "", &RPCError{Code: CodeInvalidParams, Message: "branch is required"}
+}
+
 // bindParams unmarshals raw into dst, returning an InvalidParams RPCError on failure.
 func bindParams(raw json.RawMessage, dst any) *RPCError {
 	if err := json.Unmarshal(raw, dst); err != nil {

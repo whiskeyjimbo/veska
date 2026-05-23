@@ -41,7 +41,7 @@ func makeContextPackHandler(asm *contextpack.Assembler, repoRoot RepoRootFunc, r
 		if rpcErr := bindParams(raw, &p); rpcErr != nil {
 			return nil, rpcErr
 		}
-		if rpcErr := checkRequired("repo_id", p.RepoID, "branch", p.Branch); rpcErr != nil {
+		if rpcErr := checkRequired("repo_id", p.RepoID); rpcErr != nil {
 			return nil, rpcErr
 		}
 		// Exactly one of symbol / task_id is required.
@@ -56,6 +56,11 @@ func makeContextPackHandler(asm *contextpack.Assembler, repoRoot RepoRootFunc, r
 			return nil, rpcErr
 		}
 		p.RepoID = repoID
+		if br, rpcErr := resolveBranchOrActive(ctx, repos, p.RepoID, p.Branch); rpcErr != nil {
+			return nil, rpcErr
+		} else {
+			p.Branch = br
+		}
 		root, err := repoRoot(ctx, p.RepoID)
 		if err != nil {
 			return nil, &RPCError{Code: CodeNotFound, Message: fmt.Sprintf("repo not found: %s", p.RepoID)}

@@ -91,7 +91,7 @@ func makeBlastRadiusHandler(svc *blastradius.Service, repos application.RepoList
 		if rpcErr := bindParams(raw, &p); rpcErr != nil {
 			return nil, rpcErr
 		}
-		if rpcErr := checkRequired("node_id", p.NodeID, "repo_id", p.RepoID, "branch", p.Branch); rpcErr != nil {
+		if rpcErr := checkRequired("node_id", p.NodeID, "repo_id", p.RepoID); rpcErr != nil {
 			return nil, rpcErr
 		}
 		repoID, rpcErr := resolveRepoID(ctx, repos, p.RepoID)
@@ -99,6 +99,11 @@ func makeBlastRadiusHandler(svc *blastradius.Service, repos application.RepoList
 			return nil, rpcErr
 		}
 		p.RepoID = repoID
+		if br, rpcErr := resolveBranchOrActive(ctx, repos, p.RepoID, p.Branch); rpcErr != nil {
+			return nil, rpcErr
+		} else {
+			p.Branch = br
+		}
 		dir, err := blastradius.ParseDirection(p.Direction)
 		if err != nil {
 			return nil, &RPCError{Code: CodeInvalidParams, Message: err.Error()}
@@ -176,7 +181,7 @@ func makeDiffBlastRadiusHandler(svc *blastradius.Service, repoRoot RepoRootFunc,
 		if rpcErr := bindParams(raw, &p); rpcErr != nil {
 			return nil, rpcErr
 		}
-		if rpcErr := checkRequired("repo_id", p.RepoID, "branch", p.Branch); rpcErr != nil {
+		if rpcErr := checkRequired("repo_id", p.RepoID); rpcErr != nil {
 			return nil, rpcErr
 		}
 		repoID, rpcErr := resolveRepoID(ctx, repos, p.RepoID)
@@ -184,6 +189,11 @@ func makeDiffBlastRadiusHandler(svc *blastradius.Service, repoRoot RepoRootFunc,
 			return nil, rpcErr
 		}
 		p.RepoID = repoID
+		if br, rpcErr := resolveBranchOrActive(ctx, repos, p.RepoID, p.Branch); rpcErr != nil {
+			return nil, rpcErr
+		} else {
+			p.Branch = br
+		}
 		dir, err := blastradius.ParseDirection(p.Direction)
 		if err != nil {
 			return nil, &RPCError{Code: CodeInvalidParams, Message: err.Error()}
@@ -233,7 +243,7 @@ func makeDirtyBlastRadiusHandler(svc *blastradius.Service, repos application.Rep
 		if rpcErr := bindParams(raw, &p); rpcErr != nil {
 			return nil, rpcErr
 		}
-		if rpcErr := checkRequired("repo_id", p.RepoID, "branch", p.Branch); rpcErr != nil {
+		if rpcErr := checkRequired("repo_id", p.RepoID); rpcErr != nil {
 			return nil, rpcErr
 		}
 		repoID, rpcErr := resolveRepoID(ctx, repos, p.RepoID)
@@ -241,6 +251,11 @@ func makeDirtyBlastRadiusHandler(svc *blastradius.Service, repos application.Rep
 			return nil, rpcErr
 		}
 		p.RepoID = repoID
+		if br, rpcErr := resolveBranchOrActive(ctx, repos, p.RepoID, p.Branch); rpcErr != nil {
+			return nil, rpcErr
+		} else {
+			p.Branch = br
+		}
 		dir, err := blastradius.ParseDirection(p.Direction)
 		if err != nil {
 			return nil, &RPCError{Code: CodeInvalidParams, Message: err.Error()}
