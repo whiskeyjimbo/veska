@@ -71,6 +71,17 @@ func writeMarkdownTable(rows []runResult) error {
 		sumR10P   float64
 		sumQ      float64
 		nQ        int
+		// Condensation axis (oo4q.2). Populated only when ANY row in
+		// rows has CondensedRecall set, which happens under
+		// EMBED_BENCH_CONDENSE=on. The Lift columns and condensation
+		// section in the markdown are emitted only when hasCond.
+		hasCond      bool
+		codeR10Cond  float64
+		proseR10Cond float64
+		nCodeCond    int
+		nProseCond   int
+		sumR10Cc     float64
+		sumR10Pc     float64
 	}
 
 	byModel := map[string]*agg{}
@@ -102,6 +113,23 @@ func writeMarkdownTable(rows []runResult) error {
 			a.sumR10P += fair
 			a.nProse++
 		}
+		// Condensed series (only when the run actually produced one).
+		if r.CondensedRecall != nil {
+			a.hasCond = true
+			if chl, ok := r.CondensedRecall["headline"]; ok && chl.N > 0 {
+				cfair := chl.FairAt10
+				if chl.FairN == 0 {
+					cfair = chl.At10
+				}
+				if codeCorporaSet[r.Corpus] {
+					a.sumR10Cc += cfair
+					a.nCodeCond++
+				} else if proseCorporaSet[r.Corpus] {
+					a.sumR10Pc += cfair
+					a.nProseCond++
+				}
+			}
+		}
 	}
 
 	// Average + resolve disk footprint.
@@ -111,6 +139,12 @@ func writeMarkdownTable(rows []runResult) error {
 		}
 		if a.nProse > 0 {
 			a.proseR10 = a.sumR10P / float64(a.nProse)
+		}
+		if a.nCodeCond > 0 {
+			a.codeR10Cond = a.sumR10Cc / float64(a.nCodeCond)
+		}
+		if a.nProseCond > 0 {
+			a.proseR10Cond = a.sumR10Pc / float64(a.nProseCond)
 		}
 		if a.nQ > 0 {
 			a.queryMS = a.sumQ / float64(a.nQ)
@@ -202,6 +236,45 @@ func writeMarkdownTable(rows []runResult) error {
 		}
 		fmt.Fprintf(&sb, "| `%s` | %s | %s | %s | %s | %.3f | %s |\n",
 			a.model, a.modelType, size, codeStr, proseStr, a.queryMS, recommend)
+	}
+
+	// Condensation lift table (oo4q.2): only when at least one model
+	// has a condensed series. Reports the per-model lift (condensed -
+	// raw) on code and prose headline R@10, plus the share of corpus
+	// docs that actually got condensed (the rest were below the
+	// minLen gate and embedded raw — so they cap the achievable lift).
+	anyCond := false
+	for _, a := range models {
+		if a.hasCond {
+			anyCond = true
+			break
+		}
+	}
+	if anyCond {
+		sb.WriteString("\n## Condensation lift (EMBED_BENCH_CONDENSE=on)\n\n")
+		sb.WriteString("Extractive condensation: per doc, split into pieces (lines), embed each, ")
+		sb.WriteString("keep top-K most-central by cosine-centroid, concatenate, re-embed. ")
+		sb.WriteString("Docs below `EMBED_BENCH_CONDENSE_MIN_LEN` are embedded raw — the gated subset caps the achievable lift. ")
+		sb.WriteString("Positive lift = condensed beats raw.\n\n")
+		sb.WriteString("| Model | Code R@10 (cond) | Code Lift | Prose R@10 (cond) | Prose Lift |\n")
+		sb.WriteString("|---|---|---|---|---|\n")
+		for _, a := range models {
+			if !a.hasCond {
+				continue
+			}
+			codeCondStr := fmtRecall(a.codeR10Cond, a.nCodeCond)
+			proseCondStr := fmtRecall(a.proseR10Cond, a.nProseCond)
+			codeLift := "—"
+			if a.nCode > 0 && a.nCodeCond > 0 {
+				codeLift = fmt.Sprintf("%+.3f", a.codeR10Cond-a.codeR10)
+			}
+			proseLift := "—"
+			if a.nProse > 0 && a.nProseCond > 0 {
+				proseLift = fmt.Sprintf("%+.3f", a.proseR10Cond-a.proseR10)
+			}
+			fmt.Fprintf(&sb, "| `%s` | %s | %s | %s | %s |\n",
+				a.model, codeCondStr, codeLift, proseCondStr, proseLift)
+		}
 	}
 
 	sb.WriteString("\n## Notes\n\n")

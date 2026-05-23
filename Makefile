@@ -6,7 +6,7 @@ DAEMON_BIN      := $(BINDIR)/veska-daemon
 MCP_BIN         := $(BINDIR)/veska-mcp
 LAYERCHECK_BIN  := $(BINDIR)/layercheck
 
-.PHONY: all build build-fat fetch-embed-assets test lint vet layercheck clean loadtest test-mcp test-mcp-deep test-mcp-bootstrap eval-recall eval-recall-projection eval-autolink-fp eval-revalidate-bench eval-queue-fuzz eval-embed-throughput eval-embedder-bench eval-embed-models eval-embed-models-full
+.PHONY: all build build-fat fetch-embed-assets test lint vet layercheck clean loadtest test-mcp test-mcp-deep test-mcp-bootstrap eval-recall eval-recall-projection eval-autolink-fp eval-revalidate-bench eval-queue-fuzz eval-embed-throughput eval-embedder-bench eval-embed-models eval-embed-models-full eval-embed-models-condense
 
 all: build test vet lint layercheck
 
@@ -165,6 +165,17 @@ eval-embed-models:
 # failing — keeps the contributor experience smooth.
 eval-embed-models-full:
 	EMBED_BENCH_INCLUDE_OLLAMA=1 go test -tags=eval -run TestEmbedModelsBenchmark ./tools/loadtest/embed_models/ -v -timeout=3600s
+
+# eval-embed-models-condense: same as eval-embed-models but with the
+# condensation axis enabled (oo4q.2). Each (model × corpus) cell gets
+# a second condensed-vec embed; results.json + the published markdown
+# table emit a Lift column. Adds ~3min to a full model2vec sweep.
+# Knobs: EMBED_BENCH_CONDENSE_K (default 5) — top-K pieces kept per doc.
+#        EMBED_BENCH_CONDENSE_MIN_LEN (default 500) — skip docs shorter.
+# DO NOT combine with EMBED_BENCH_INCLUDE_OLLAMA — Ollama per-piece
+# embeds would balloon runtime to hours.
+eval-embed-models-condense:
+	EMBED_BENCH_CONDENSE=on go test -tags=eval -run TestEmbedModelsBenchmark ./tools/loadtest/embed_models/ -v -timeout=1200s
 
 # eval-review-timing: M5 exit-gate-5 — drive the review Handler over a synthetic
 # ~100-file commit against a real Ollama and report the wall-clock time budget.
