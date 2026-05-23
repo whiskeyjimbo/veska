@@ -23,8 +23,12 @@ import (
 
 // embedProseCorpus walks .md files under root, splits each into
 // sections, and embeds each section as one doc. Capped at maxDocs.
-func embedProseCorpus(p Embedder, root string, maxDocs int) ([]doc, embedStats) {
+//
+// When cfg.enabled, ALSO computes a condensed-input embedding per
+// section. Returns the count of sections that were condensed.
+func embedProseCorpus(p Embedder, root string, maxDocs int, cfg condenseConfig) ([]doc, embedStats, int) {
 	var docs []doc
+	var condApplied int
 	start := time.Now()
 	var totalEmbedNS int64
 	var nEmbeds int
@@ -72,7 +76,20 @@ func embedProseCorpus(p Embedder, root string, maxDocs int) ([]doc, embedStats) 
 			if err != nil {
 				continue
 			}
-			docs = append(docs, doc{name: name, file: path, vec: v})
+			d := doc{name: name, file: path, vec: v}
+			if cfg.enabled {
+				cText, applied, cerr := condenseInput(context.Background(), p, cfg, sec.heading, sec.body)
+				if cerr == nil {
+					cv, cerr := p.Embed(context.Background(), cText)
+					if cerr == nil {
+						d.vecCondensed = cv
+						if applied {
+							condApplied++
+						}
+					}
+				}
+			}
+			docs = append(docs, d)
 		}
 		return nil
 	})
@@ -81,7 +98,7 @@ func embedProseCorpus(p Embedder, root string, maxDocs int) ([]doc, embedStats) 
 	if nEmbeds > 0 {
 		stats.avgMS = float64(totalEmbedNS) / float64(nEmbeds) / 1e6
 	}
-	return docs, stats
+	return docs, stats, condApplied
 }
 
 // section is one markdown H1/H2-delimited region.
