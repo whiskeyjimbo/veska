@@ -9,11 +9,24 @@ import (
 	application "github.com/whiskeyjimbo/veska/internal/application"
 )
 
+// minRepoIDPrefix is the shortest prefix accepted as a repo_id alias. Below
+// this length almost any input would match every registered repo by chance;
+// keeping it >= 4 means callers either pass the full id, a deliberate
+// short_id, or a long-enough prefix to be meaningful (solov2-rkbc).
+const minRepoIDPrefix = 4
+
 // resolveRepoID validates that repoID names a repo the daemon tracks and
-// returns its canonical full id. A short_id prefix (see ShortRepoID) is
-// accepted as an alias (solov2-d2x). When no repo matches, a NotFound
-// RPCError is returned so a stale or mistyped id surfaces as a loud error
-// instead of a silently-empty result (solov2-5rh).
+// returns its canonical full id. The match progression is:
+//
+//  1. exact full-id match
+//  2. exact short_id (ShortRepoIDLen chars) match
+//  3. unambiguous prefix (>= minRepoIDPrefix chars) of any registered full id
+//
+// Step 3 honours the README contract that "anywhere a repo_id is required
+// you may pass the full id or that short prefix" (solov2-rkbc) — previously
+// only step 2 worked, and an 8-char prefix returned NotFound. When no repo
+// matches, a NotFound RPCError is returned so a stale or mistyped id
+// surfaces as a loud error instead of a silently-empty result (solov2-5rh).
 //
 // repos may be nil in composition roots that did not wire the registry; in
 // that case validation is skipped and repoID is returned unchanged (never
@@ -31,20 +44,28 @@ func resolveRepoID(ctx context.Context, repos application.RepoLister, repoID str
 			return rec.RepoID, nil
 		}
 	}
-	// Fall back to a unique short_id prefix match.
-	var matched string
+	// Step 2: exact ShortRepoIDLen-char short_id match.
 	for _, rec := range all {
 		if ShortRepoID(rec.RepoID) == repoID {
-			if matched != "" {
-				return "", &RPCError{Code: CodeInvalidParams, Message: fmt.Sprintf("ambiguous short repo_id %q matches multiple repos", repoID)}
-			}
-			matched = rec.RepoID
+			return rec.RepoID, nil
 		}
 	}
-	if matched != "" {
-		return matched, nil
+	// Step 3: unambiguous prefix of any full id, minRepoIDPrefix chars or longer.
+	if len(repoID) >= minRepoIDPrefix {
+		var matched string
+		for _, rec := range all {
+			if strings.HasPrefix(rec.RepoID, repoID) {
+				if matched != "" {
+					return "", &RPCError{Code: CodeInvalidParams, Message: fmt.Sprintf("ambiguous repo_id prefix %q matches multiple repos", repoID)}
+				}
+				matched = rec.RepoID
+			}
+		}
+		if matched != "" {
+			return matched, nil
+		}
 	}
-	return "", &RPCError{Code: CodeNotFound, Message: fmt.Sprintf("unknown repo_id: %s (run eng_list_repos)", repoID)}
+	return "", &RPCError{Code: CodeNotFound, Message: fmt.Sprintf("unknown repo_id: %s (run eng_list_repos; prefixes must be >= %d chars)", repoID, minRepoIDPrefix)}
 }
 
 // resolveRepoIDOrSingleton behaves like resolveRepoID, but when repoID is
