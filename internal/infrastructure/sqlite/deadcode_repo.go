@@ -24,8 +24,15 @@ func NewDeadCodeRepo(db *sql.DB) *DeadCodeRepo {
 }
 
 // DeadNodesInFiles returns nodes in (repoID, branch) whose file_path is one of
-// filePaths and which have ZERO matching rows in edges where dst_node_id =
-// node_id AND branch = branch.
+// filePaths and which have ZERO inbound CALLS edges on that branch.
+//
+// Liveness is measured against CALLS edges ONLY — not every edge kind. Every
+// symbol has an inbound CONTAINS edge from its package and may have SIMILAR_TO
+// edges from autolink; counting those made the check inert (nothing was ever
+// "dead"), which is solov2-jdok. "No inbound CALLS" is the meaningful
+// uncalled-symbol signal. Exported symbols (callable from other packages /
+// repos, where call edges may be invisible) are excluded upstream by the
+// application-layer DeadCodeCheck allowlist, so this does not mis-flag them.
 //
 // Empty filePaths is a no-op (returns nil, nil) — this avoids building a
 // degenerate "IN ()" clause that SQLite rejects and is also a cheap fast-path
@@ -49,15 +56,16 @@ func (r *DeadCodeRepo) DeadNodesInFiles(ctx context.Context, repoID, branch stri
 
 	// LEFT JOIN keeps every candidate node; the WHERE e.dst_node_id IS NULL
 	// filter selects rows whose join produced no edge match — i.e. zero inbound
-	// edges on this branch. The join condition pins both dst_node_id AND branch
-	// so cross-branch edges do not satisfy the join.
+	// CALLS edges on this branch. The join pins dst_node_id, branch AND the
+	// CALLS kind (case-insensitive) so containment/similarity edges and
+	// cross-branch edges never count as liveness.
 	query := fmt.Sprintf(`
 SELECT n.node_id, n.file_path, n.kind, n.symbol_path,
        COALESCE(n.line_start, 0), COALESCE(n.line_end, 0),
        COALESCE(n.content_hash, '')
 FROM nodes n
 LEFT JOIN edges e
-  ON e.dst_node_id = n.node_id AND e.branch = n.branch
+  ON e.dst_node_id = n.node_id AND e.branch = n.branch AND UPPER(e.kind) = 'CALLS'
 WHERE n.repo_id = ?
   AND n.branch = ?
   AND n.file_path IN (%s)
