@@ -38,6 +38,51 @@ func findingRepoRoot(ctx context.Context, db *sql.DB, repoID string) string {
 	return root
 }
 
+// resolveRepoIDDB canonicalizes repoID against the repos table the same way
+// resolveRepoID does for RepoLister-backed tools (solov2-s7k0): an exact match
+// wins; otherwise a unique short_id (ShortRepoIDLen-char) prefix is accepted.
+// Findings-family tools query the DB directly and have no RepoLister, so this
+// keeps the short_id contract uniform across the surface. Unknown/ambiguous
+// ids surface as a loud RPCError rather than a silently-empty result.
+func resolveRepoIDDB(ctx context.Context, db *sql.DB, repoID string) (string, *RPCError) {
+	var exact string
+	err := db.QueryRowContext(ctx, `SELECT repo_id FROM repos WHERE repo_id = ?`, repoID).Scan(&exact)
+	if err == nil {
+		return exact, nil
+	}
+	if err != sql.ErrNoRows {
+		// repos table unavailable (e.g. a minimal test DB) — skip validation
+		// and pass the id through unchanged, never worse than pre-resolution.
+		return repoID, nil
+	}
+	// Fall back to a unique short_id prefix match.
+	rows, qerr := db.QueryContext(ctx, `SELECT repo_id FROM repos`)
+	if qerr != nil {
+		return repoID, nil
+	}
+	defer rows.Close()
+	var matched string
+	for rows.Next() {
+		var id string
+		if serr := rows.Scan(&id); serr != nil {
+			return "", &RPCError{Code: CodeInternalError, Message: fmt.Sprintf("resolve repo_id: %v", serr)}
+		}
+		if ShortRepoID(id) == repoID {
+			if matched != "" {
+				return "", &RPCError{Code: CodeInvalidParams, Message: fmt.Sprintf("ambiguous short repo_id %q matches multiple repos", repoID)}
+			}
+			matched = id
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return "", &RPCError{Code: CodeInternalError, Message: fmt.Sprintf("resolve repo_id: %v", err)}
+	}
+	if matched != "" {
+		return matched, nil
+	}
+	return "", &RPCError{Code: CodeNotFound, Message: fmt.Sprintf("unknown repo_id: %s (run eng_list_repos)", repoID)}
+}
+
 // ---------------------------------------------------------------------------
 // eng_list_findings
 // ---------------------------------------------------------------------------
@@ -76,6 +121,11 @@ func makeListFindingsHandler(db *sql.DB) ToolHandler {
 		if rpcErr := checkRequired("repo_id", p.RepoID, "branch", p.Branch); rpcErr != nil {
 			return nil, rpcErr
 		}
+		repoID, rpcErr := resolveRepoIDDB(ctx, db, p.RepoID)
+		if rpcErr != nil {
+			return nil, rpcErr
+		}
+		p.RepoID = repoID
 		if p.State == "" {
 			p.State = "open"
 		}
