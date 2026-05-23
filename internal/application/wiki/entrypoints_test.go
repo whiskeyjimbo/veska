@@ -133,7 +133,7 @@ func TestSelect_ExportedBeatsUnexportedOnTie(t *testing.T) {
 	}
 	// lowFanCaps and helper both have InboundCount=1 (1 caller each).
 	// lowFanCaps is exported, helper is not — lowFanCaps must rank higher.
-	var lowIdx, helperIdx int = -1, -1
+	var lowIdx, helperIdx = -1, -1
 	for i, ep := range rep.EntryPoints {
 		switch ep.SymbolName {
 		case "lowFanCaps":

@@ -144,7 +144,7 @@ func (f *fakeBatchEmbedder) EmbedBatch(ctx context.Context, texts []string) ([][
 	f.mu.Unlock()
 	out := make([][]float32, len(texts))
 	for i, t := range texts {
-		v, err := f.fakeEmbedder.Embed(ctx, t)
+		v, err := f.Embed(ctx, t)
 		if err != nil {
 			return nil, err
 		}

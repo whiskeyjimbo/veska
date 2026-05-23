@@ -448,6 +448,7 @@ func TestGraphRepo_SaveNode_RoundTripUnaffectedBySnippet(t *testing.T) {
 	}
 	if got == nil {
 		t.Fatal("GetNode returned nil for a saved node")
+		return
 	}
 	if got.ID != in.ID || got.Path != in.Path || got.Name != in.Name || got.Kind != in.Kind {
 		t.Errorf("GetNode round-trip mismatch: got %+v", got)

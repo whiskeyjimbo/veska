@@ -393,9 +393,7 @@ func (w *Worker) tick(ctx context.Context) {
 		vecs, err := batchProv.EmbedBatch(ctx, uniqueTexts)
 		switch {
 		case err == nil:
-			for i, vec := range vecs {
-				uniqueVecs[i] = vec
-			}
+			copy(uniqueVecs, vecs)
 			usedBatch = true
 		case errors.Is(err, ports.ErrBatchEmbedNotSupported):
 			// Wrapped provider didn't actually support batch — fall
