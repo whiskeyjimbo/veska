@@ -81,13 +81,15 @@ type Embedder interface {
 
 // BenchCorpora lists the corpus names the bench targets. veska is
 // always present (this repo); the rest live under out/repos/<name>/
-// after scripts/fetch-corpora.sh runs. Prose corpora (suffix "-docs")
-// walk .md files instead of .go files; see embedProseCorpus.
+// after scripts/fetch-corpora.sh runs. Prose corpora (suffix "-docs"
+// or "wikipedia-*") walk .md files via embedProseCorpus.
 var BenchCorpora = []string{
 	// Code corpora
 	"veska", "cobra", "pflag", "testify", "gin",
-	// Prose corpora
+	// Prose corpora — dense-technical
 	"veska-docs", "cobra-docs",
+	// Prose corpora — genuine natural prose (Wikipedia software-topic articles)
+	"wikipedia-tech",
 }
 
 // doc is one embedded corpus document.
@@ -373,6 +375,12 @@ func discoverCorpora(t *testing.T) []corpusEntry {
 			kind = "prose"
 		case "cobra-docs":
 			root = filepath.Join(fetchedRoot, "cobra")
+			kind = "prose"
+		case "wikipedia-tech":
+			// Pulled by scripts/fetch-wikipedia-corpus.sh from Wikipedia's
+			// MediaWiki API. CC-BY-SA 3.0 content; out/ is gitignored.
+			_, file, _, _ := runtime.Caller(0)
+			root = filepath.Join(filepath.Dir(file), "out", "wikipedia-tech")
 			kind = "prose"
 		default:
 			root = filepath.Join(fetchedRoot, name)

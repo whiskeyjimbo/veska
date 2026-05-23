@@ -28,6 +28,32 @@
 {"corpus":"veska-docs","query":"how the system behaves when something is broken","expected":"design/13-nfr/README.md#4-degraded-modes"}
 {"corpus":"veska-docs","query":"how the system records a history of actions taken","expected":"design/13-nfr/README.md#6-audit-log"}
 
+// ─── wikipedia-tech corpus ──────────────────────────────────────────────
+// Targets sections of Wikipedia software/CS articles fetched by
+// scripts/fetch-wikipedia-corpus.sh. Queries are deliberately phrased
+// without library-specific identifiers — this is the genuine-natural-
+// prose corpus (solov2-0k5h.7).
+{"corpus":"wikipedia-tech","query":"how a compiler differs from an interpreter","expected":"compiler.md#comparison-with-interpreter"}
+{"corpus":"wikipedia-tech","query":"the history of how programming languages came to be compiled","expected":"compiler.md#history"}
+{"corpus":"wikipedia-tech","query":"different ways to resolve collisions when two keys hash the same","expected":"hash-table.md#collision-resolution"}
+{"corpus":"wikipedia-tech","query":"resizing a data structure on the fly as it grows","expected":"hash-table.md#dynamic-resizing"}
+{"corpus":"wikipedia-tech","query":"the explanation of trade-offs in distributed systems between consistency availability and partition tolerance","expected":"cap-theorem.md#explanation"}
+{"corpus":"wikipedia-tech","query":"how concurrent processes get stuck waiting for each other forever","expected":"deadlock-computer-science.md#deadlock-computer-science"}
+{"corpus":"wikipedia-tech","query":"a bug where the output depends on which thread runs first","expected":"race-condition.md#race-condition"}
+{"corpus":"wikipedia-tech","query":"when one mutex implementation locks more than another smaller lock","expected":"mutex.md#granularity"}
+{"corpus":"wikipedia-tech","query":"the downsides and limitations of using locks","expected":"mutex.md#disadvantages"}
+{"corpus":"wikipedia-tech","query":"the different versions of the web protocol over its history","expected":"hypertext-transfer-protocol.md#versions"}
+{"corpus":"wikipedia-tech","query":"how programs send and receive messages reliably across the network","expected":"transmission-control-protocol.md#transmission-control-protocol"}
+{"corpus":"wikipedia-tech","query":"how computers turn domain names into addresses","expected":"domain-name-system.md#domain-name-system"}
+{"corpus":"wikipedia-tech","query":"the main characteristics of object-oriented programming","expected":"object-oriented-programming.md#features"}
+{"corpus":"wikipedia-tech","query":"common reusable solutions to recurring programming problems","expected":"object-oriented-programming.md#design-patterns"}
+{"corpus":"wikipedia-tech","query":"the description of how asymmetric cryptography works","expected":"public-key-cryptography.md#description"}
+{"corpus":"wikipedia-tech","query":"vulnerabilities and weaknesses in cryptographic key systems","expected":"public-key-cryptography.md#weaknesses"}
+{"corpus":"wikipedia-tech","query":"a tree representation of source code structure","expected":"abstract-syntax-tree.md#abstract-syntax-tree"}
+{"corpus":"wikipedia-tech","query":"breaking source code into tokens during compilation","expected":"lexical-analysis.md#lexical-analysis"}
+{"corpus":"wikipedia-tech","query":"reaching agreement in a distributed system despite failures","expected":"paxos-computer-science.md#paxos-computer-science"}
+{"corpus":"wikipedia-tech","query":"a system where data eventually becomes consistent without immediate synchronization","expected":"eventual-consistency.md#eventual-consistency"}
+
 // ─── cobra-docs corpus ──────────────────────────────────────────────────
 {"corpus":"cobra-docs","query":"a short introduction to this library","expected":"README.md#overview"}
 {"corpus":"cobra-docs","query":"how to set up the library in a new project","expected":"README.md#installing"}

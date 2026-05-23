@@ -45,7 +45,7 @@ var codeCorporaSet = map[string]bool{
 
 // proseCorporaSet — mirror for prose.
 var proseCorporaSet = map[string]bool{
-	"veska-docs": true, "cobra-docs": true,
+	"veska-docs": true, "cobra-docs": true, "wikipedia-tech": true,
 }
 
 // writeMarkdownTable aggregates the in-memory results and produces the
