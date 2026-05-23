@@ -2,6 +2,7 @@ package treesitter
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/whiskeyjimbo/veska/internal/core/domain"
 )
@@ -55,6 +56,12 @@ func chunkFile(repoID, path string, src []byte, symbols []*domain.Node) []*domai
 				endByte = len(src)
 			}
 			body := string(src[startByte:endByte])
+			// Skip whitespace-only windows (blank-line gaps between
+			// symbols). They embed to near-anything and pollute search
+			// results, ranking above real code (solov2-wh7u).
+			if strings.TrimSpace(body) == "" {
+				continue
+			}
 			name := fmt.Sprintf("chunk:%d-%d", start, end)
 			id := nodeID(repoID, path, domain.KindChunk, name)
 			n, err := domain.NewNode(id, path, name, domain.KindChunk,

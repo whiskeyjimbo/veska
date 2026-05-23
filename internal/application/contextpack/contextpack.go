@@ -111,7 +111,7 @@ type TaskInfo struct {
 type NodeInfo struct {
 	NodeID   string `json:"node_id"`
 	Name     string `json:"name"`
-	Path     string `json:"path"`
+	FilePath string `json:"file_path"`
 	Kind     string `json:"kind"`
 	Distance int    `json:"distance"`
 	Seed     bool   `json:"seed"`
@@ -310,8 +310,8 @@ func (a *Assembler) assemble(ctx context.Context, repoID, branch, repoRoot strin
 		hasOpen := flagged[e.NodeID]
 		pack.Nodes = append(pack.Nodes, NodeInfo{
 			NodeID:   e.NodeID,
-			Name:     symbolLeaf(e.SymbolPath),
-			Path:     e.FilePath,
+			Name:     e.SymbolPath,
+			FilePath: e.FilePath,
 			Kind:     e.Kind,
 			Distance: e.Distance,
 			Seed:     isSeed,
@@ -449,15 +449,4 @@ func trimSnippet(s string, max int) string {
 		cut--
 	}
 	return s[:cut] + "\n...\n"
-}
-
-// symbolLeaf returns the trailing segment of a dotted/slashed symbol
-// path, or the whole string when it has no separator.
-func symbolLeaf(symPath string) string {
-	for i := len(symPath) - 1; i >= 0; i-- {
-		if symPath[i] == '.' || symPath[i] == '/' || symPath[i] == ':' {
-			return symPath[i+1:]
-		}
-	}
-	return symPath
 }

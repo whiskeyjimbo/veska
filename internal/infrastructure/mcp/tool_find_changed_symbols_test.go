@@ -33,7 +33,7 @@ func newChangedSymbolsRegistry(t *testing.T, m csMemFiles) *Registry {
 	r := NewRegistry()
 	RegisterChangedSymbolsTool(r, svc, func(context.Context, string) (string, error) {
 		return "/root", nil
-	})
+	}, nil)
 	return r
 }
 
@@ -83,6 +83,25 @@ func TestChangedSymbols_ReturnsThreeBuckets(t *testing.T) {
 	}
 }
 
+// TestChangedSymbols_DefaultsToLastCommit guards solov2-npjs: omitting both
+// refs must default to HEAD~1..HEAD rather than erroring on missing params.
+func TestChangedSymbols_DefaultsToLastCommit(t *testing.T) {
+	m := csMemFiles{
+		"HEAD~1:code.go": "package p\nfunc Old() {}\n",
+		"HEAD:code.go":   "package p\nfunc Old() {}\nfunc New() {}\n",
+	}
+	r := newChangedSymbolsRegistry(t, m)
+	resp, rpcErr := dispatchChangedSymbols(t, r, map[string]string{
+		"repo_id": "repo1", "branch": "main",
+	})
+	if rpcErr != nil {
+		t.Fatalf("default refs rejected: %+v", rpcErr)
+	}
+	if len(resp.Added) != 1 || resp.Added[0].Name != "New" {
+		t.Errorf("added = %+v, want [New] from HEAD~1..HEAD default", resp.Added)
+	}
+}
+
 func TestChangedSymbols_RequiredParams(t *testing.T) {
 	m := csMemFiles{}
 	r := newChangedSymbolsRegistry(t, m)
@@ -102,7 +121,7 @@ func TestChangedSymbols_RequiredParams(t *testing.T) {
 
 func TestChangedSymbols_NotWiredReturnsInternalError(t *testing.T) {
 	r := NewRegistry()
-	RegisterChangedSymbolsTool(r, nil, nil)
+	RegisterChangedSymbolsTool(r, nil, nil, nil)
 	_, rpcErr := dispatchChangedSymbols(t, r, map[string]string{
 		"repo_id": "r", "branch": "main", "ref_a": "a", "ref_b": "b",
 	})

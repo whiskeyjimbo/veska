@@ -93,6 +93,17 @@ func repoListCmd() *cobra.Command {
 	}
 }
 
+// shortRepoID returns the first 12 chars of a repo id — the alias shown by
+// `veska repo list` and accepted anywhere a repo_id is required. The CLI
+// surfaces this form so users copy the same token the tools expect, instead
+// of the unwieldy 64-char canonical id (solov2-ow4b).
+func shortRepoID(id string) string {
+	if len(id) > 12 {
+		return id[:12]
+	}
+	return id
+}
+
 // printRepoTable renders the repo list as REPO_ID + ROOT + BRANCH + STATUS.
 // A short repo_id (first 12 chars) is shown so the column is readable; the
 // full id is still present in any tool output, and `veska repo remove`
@@ -104,10 +115,7 @@ func printRepoTable(w io.Writer, repos []repoView) {
 	}
 	fmt.Fprintf(w, "%-14s  %-8s  %-10s  %s\n", "REPO_ID", "BRANCH", "STATUS", "ROOT")
 	for _, r := range repos {
-		short := r.RepoID
-		if len(short) > 12 {
-			short = short[:12]
-		}
+		short := shortRepoID(r.RepoID)
 		branch := r.ActiveBranch
 		if branch == "" {
 			branch = "-"
@@ -135,7 +143,7 @@ func repoAddCmd() *cobra.Command {
 			// the live watcher in one call (parity with eng_add_repo).
 			id, dialErr := dialAddRepo(ctx, root)
 			if dialErr == nil {
-				fmt.Fprintf(w, "added repo %s (via daemon)\n", id)
+				fmt.Fprintf(w, "added repo %s (via daemon)\n", shortRepoID(id))
 				return nil
 			}
 
@@ -154,7 +162,7 @@ func repoAddCmd() *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("repo add: %w", err)
 			}
-			fmt.Fprintf(w, "added repo %s (direct write; daemon dial failed: %v — restart daemon to cold-scan/live-watch)\n", id, dialErr)
+			fmt.Fprintf(w, "added repo %s (direct write; daemon dial failed: %v — restart daemon to cold-scan/live-watch)\n", shortRepoID(id), dialErr)
 			return nil
 		},
 	}

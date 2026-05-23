@@ -132,7 +132,7 @@ W = write; R = read.
 | `eng_get_blast_radius` | Blast radius for a node (promoted graph). Cross-repo via `repo` arg — your service signature change → who in your other indexed repos calls it. | no | R |
 | `eng_get_dirty_blast_radius` | Blast radius including staging-area edits. | yes | R |
 | `eng_get_diff_blast_radius` | Blast radius union over a working-tree diff (staging vs promoted `HEAD`). | yes | R |
-| `eng_find_changed_symbols` | Symbols added/removed/modified between two git refs (`ref_a`, `ref_b`). Parses the changed files at each ref on demand — no history substrate; never reads the promoted graph. Single-repo. | no | R |
+| `eng_find_changed_symbols` | Symbols added/removed/modified between two git refs (`ref_a`=base, `ref_b`=tip). Both default to `HEAD~1`/`HEAD` (the last commit) when omitted; supplying only one is rejected. Parses the changed files at each ref on demand — no history substrate; never reads the promoted graph. Single-repo. | no | R |
 
 ### 3.2 Task
 

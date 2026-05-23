@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"testing"
 
+	application "github.com/whiskeyjimbo/veska/internal/application"
 	"github.com/whiskeyjimbo/veska/internal/application/blastradius"
 	"github.com/whiskeyjimbo/veska/internal/application/wiki"
 	"github.com/whiskeyjimbo/veska/internal/core/domain"
@@ -69,7 +70,7 @@ func TestHotZone_ReturnsRankedData(t *testing.T) {
 	repoRoot := func(context.Context, string) (string, error) { return "/tmp/r", nil }
 
 	r := NewRegistry()
-	RegisterWikiTools(r, svc, repoRoot)
+	RegisterWikiTools(r, svc, repoRoot, nil)
 
 	resp, rpcErr := dispatchHotZone(t, r, map[string]any{
 		"repo_id": "r1",
@@ -100,11 +101,36 @@ func TestHotZone_ReturnsRankedData(t *testing.T) {
 	}
 }
 
+// TestHotZone_AcceptsShortID guards the README contract that a short_id
+// prefix is accepted anywhere a repo_id is required (solov2-eki3). Before the
+// fix hot_zone bypassed resolveRepoID and rejected the prefix as "repo not
+// found".
+func TestHotZone_AcceptsShortID(t *testing.T) {
+	const fullID = "62d72fa222a0193f8fa927f95dd6a3575c7566964c8b8f6ba14aafc5a1ea871f"
+	svc := wikiFixtureService(t)
+	repoRoot := func(context.Context, string) (string, error) { return "/tmp/r", nil }
+	repos := &fakeRepoLister{recs: []application.RepoRecord{{RepoID: fullID, RootPath: "/tmp/r", ActiveBranch: "main"}}}
+
+	r := NewRegistry()
+	RegisterWikiTools(r, svc, repoRoot, repos)
+
+	resp, rpcErr := dispatchHotZone(t, r, map[string]any{
+		"repo_id": ShortRepoID(fullID),
+		"branch":  "main",
+	})
+	if rpcErr != nil {
+		t.Fatalf("short_id rejected: %+v", rpcErr)
+	}
+	if len(resp.Zones) != 3 {
+		t.Fatalf("expected 3 zones via short_id, got %d", len(resp.Zones))
+	}
+}
+
 func TestHotZone_RequiresParams(t *testing.T) {
 	svc := wikiFixtureService(t)
 	repoRoot := func(context.Context, string) (string, error) { return "/tmp/r", nil }
 	r := NewRegistry()
-	RegisterWikiTools(r, svc, repoRoot)
+	RegisterWikiTools(r, svc, repoRoot, nil)
 
 	_, rpcErr := dispatchHotZone(t, r, map[string]any{"repo_id": "r1"})
 	if rpcErr == nil || rpcErr.Code != CodeInvalidParams {
@@ -118,7 +144,7 @@ func TestHotZone_UnknownRepo(t *testing.T) {
 		return "", fmt.Errorf("no such repo")
 	}
 	r := NewRegistry()
-	RegisterWikiTools(r, svc, repoRoot)
+	RegisterWikiTools(r, svc, repoRoot, nil)
 
 	_, rpcErr := dispatchHotZone(t, r, map[string]any{"repo_id": "ghost", "branch": "main"})
 	if rpcErr == nil || rpcErr.Code != CodeNotFound {
@@ -128,7 +154,7 @@ func TestHotZone_UnknownRepo(t *testing.T) {
 
 func TestHotZone_NotWiredReturnsInternalError(t *testing.T) {
 	r := NewRegistry()
-	RegisterWikiTools(r, nil, nil)
+	RegisterWikiTools(r, nil, nil, nil)
 
 	_, rpcErr := dispatchHotZone(t, r, map[string]any{"repo_id": "r1", "branch": "main"})
 	if rpcErr == nil || rpcErr.Code != CodeInternalError {

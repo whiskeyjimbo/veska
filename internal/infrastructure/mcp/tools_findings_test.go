@@ -1133,3 +1133,23 @@ func TestCloseFinding_ReviewFailure_NonHumanRejected(t *testing.T) {
 		t.Errorf("expected review row to remain failed, got %q", got)
 	}
 }
+
+func TestRelativizeFindingPath(t *testing.T) {
+	root := "/tmp/mycli"
+	abs := "/tmp/mycli/internal/server/server.go"
+	rel := "internal/server/secrets.go"
+
+	if got := relativizeFindingPath(&abs, root); got == nil || *got != "internal/server/server.go" {
+		t.Errorf("absolute under root: got %v, want internal/server/server.go", got)
+	}
+	if got := relativizeFindingPath(&rel, root); got == nil || *got != rel {
+		t.Errorf("already-relative left untouched: got %v, want %q", got, rel)
+	}
+	if got := relativizeFindingPath(nil, root); got != nil {
+		t.Errorf("nil path (auto-link) must stay nil, got %v", got)
+	}
+	outside := "/etc/passwd"
+	if got := relativizeFindingPath(&outside, root); got == nil || *got != outside {
+		t.Errorf("path outside root left untouched: got %v", got)
+	}
+}

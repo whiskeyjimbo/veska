@@ -5,9 +5,38 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"path/filepath"
+	"strings"
 
 	"github.com/whiskeyjimbo/veska/internal/core/domain"
 )
+
+// relativizeFindingPath normalizes a finding's stored file_path to a
+// repo-root-relative form. Findings are anchored at different layers — the
+// checks pipeline stores repo-relative paths while the ingester (cold scan)
+// stores absolute ones — so the wire contract is unified here at the read
+// boundary instead (solov2-62gc). A nil path (e.g. auto-link findings, which
+// anchor on an edge, not a file) is left untouched.
+func relativizeFindingPath(path *string, root string) *string {
+	if path == nil || root == "" || !filepath.IsAbs(*path) {
+		return path
+	}
+	rel, err := filepath.Rel(root, *path)
+	if err != nil || strings.HasPrefix(rel, "..") {
+		return path
+	}
+	return &rel
+}
+
+// findingRepoRoot looks up the working-tree root for repoID from the repos
+// table; "" when unknown so relativizeFindingPath is a no-op.
+func findingRepoRoot(ctx context.Context, db *sql.DB, repoID string) string {
+	var root string
+	if err := db.QueryRowContext(ctx, `SELECT root_path FROM repos WHERE repo_id = ?`, repoID).Scan(&root); err != nil {
+		return ""
+	}
+	return root
+}
 
 // ---------------------------------------------------------------------------
 // eng_list_findings
@@ -60,6 +89,11 @@ func makeListFindingsHandler(db *sql.DB) ToolHandler {
 			args = append(args, p.Severity)
 		}
 
+		// Resolve the repo root BEFORE opening the findings cursor: on the
+		// single-connection write pool, a second query while rows is open
+		// deadlocks (the cursor holds the only connection).
+		root := findingRepoRoot(ctx, db, p.RepoID)
+
 		rows, err := db.QueryContext(ctx, query, args...)
 		if err != nil {
 			return nil, &RPCError{Code: CodeInternalError, Message: fmt.Sprintf("query findings: %v", err)}
@@ -76,6 +110,7 @@ func makeListFindingsHandler(db *sql.DB) ToolHandler {
 			); err != nil {
 				return nil, &RPCError{Code: CodeInternalError, Message: fmt.Sprintf("scan finding: %v", err)}
 			}
+			f.FilePath = relativizeFindingPath(f.FilePath, root)
 			findings = append(findings, f)
 		}
 		if err := rows.Err(); err != nil {

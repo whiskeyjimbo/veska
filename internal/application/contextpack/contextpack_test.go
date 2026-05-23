@@ -291,13 +291,18 @@ func TestForSymbol_SnippetTrimmedToBudget(t *testing.T) {
 	}
 }
 
-func TestSymbolLeaf_Untouched(t *testing.T) {
-	// Guard: symbolLeaf behaviour is exercised via NodeInfo.Name.
+func TestNodeName_IsCanonicalSymbolPath(t *testing.T) {
+	// Guard: context_pack nodes carry the same qualified SymbolPath the rest
+	// of the MCP surface emits (e.g. "Server.Start", not the leaf "Start"),
+	// and expose file_path rather than the old "path" key (solov2-1zxu).
 	a := newAssembler(t)
 	p, _ := a.ForSymbol(context.Background(), "r", "main", "/repo", "Target")
+	if len(p.Nodes) == 0 {
+		t.Fatal("expected at least one node")
+	}
 	for _, n := range p.Nodes {
-		if strings.Contains(n.Name, ".") {
-			t.Fatalf("node name %q should be the leaf segment", n.Name)
+		if n.NodeID != "" && n.FilePath == "" && n.Kind != "package" {
+			t.Errorf("node %q missing file_path", n.Name)
 		}
 	}
 }

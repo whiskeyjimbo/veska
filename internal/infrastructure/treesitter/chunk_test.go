@@ -32,6 +32,23 @@ func TestChunkFile_EmitsChunksForUncoveredRanges(t *testing.T) {
 	}
 }
 
+// TestChunkFile_SkipsWhitespaceOnlyGaps guards solov2-wh7u: a blank-line gap
+// between two symbols must not become a chunk node. Whitespace-only chunks
+// embed to near-anything and outrank real code in search results.
+func TestChunkFile_SkipsWhitespaceOnlyGaps(t *testing.T) {
+	src := []byte("type A struct{}\n\n\ntype B struct{}\n")
+	symbols := []*domain.Node{
+		mustNode(t, "symA", "f.go", "A", domain.KindStruct, domain.LineRange{Start: 1, End: 1}),
+		mustNode(t, "symB", "f.go", "B", domain.KindStruct, domain.LineRange{Start: 4, End: 4}),
+	}
+	chunks := chunkFile("repo", "f.go", src, symbols)
+	for _, c := range chunks {
+		if c.RawContent == nil || strings.TrimSpace(*c.RawContent) == "" {
+			t.Errorf("emitted whitespace-only chunk %s [%d,%d]", c.ID, c.Lines.Start, c.Lines.End)
+		}
+	}
+}
+
 // TestChunkFile_NoSymbolsChunksWholeFile: a documentation-only file
 // (no symbols) should be entirely covered by chunks. Without this,
 // READMEs, top-of-file commentary, and non-declarative TS modules
