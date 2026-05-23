@@ -4,11 +4,25 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"sort"
 
 	application "github.com/whiskeyjimbo/veska/internal/application"
 	"github.com/whiskeyjimbo/veska/internal/core/domain"
 	"github.com/whiskeyjimbo/veska/internal/core/ports"
 )
+
+// isContainerKind reports whether a node kind is a structural container rather
+// than a callable/declaration symbol. Container nodes (package/file/module/
+// chunk) carry no CALLS edges, so eng_find_symbol ranks them below real
+// declarations for the same name (solov2-rd0l).
+func isContainerKind(k domain.NodeKind) bool {
+	switch k {
+	case domain.KindPackage, domain.KindFile, domain.KindModule, domain.KindChunk:
+		return true
+	default:
+		return false
+	}
+}
 
 // ---------------------------------------------------------------------------
 // eng_find_symbol
@@ -72,6 +86,26 @@ func makeFindSymbolHandler(graph ports.GraphStorage, staging *application.Stagin
 			}
 			result = append(result, n)
 		}
+
+		// Deterministic ranking (merged is a map, so iteration order is
+		// otherwise random). Exact-name matches first; then declaration /
+		// callable kinds ahead of container kinds (package/file/module/chunk)
+		// — a caller taking nodes[0] for call_chain/blast_radius wants the
+		// function "main", not the package "main" (solov2-rd0l). Name then
+		// node_id break ties so output is stable.
+		sort.SliceStable(result, func(i, j int) bool {
+			a, b := result[i], result[j]
+			if ae, be := a.Name == p.Symbol, b.Name == p.Symbol; ae != be {
+				return ae
+			}
+			if ac, bc := isContainerKind(a.Kind), isContainerKind(b.Kind); ac != bc {
+				return !ac
+			}
+			if a.Name != b.Name {
+				return a.Name < b.Name
+			}
+			return a.ID < b.ID
+		})
 
 		return GraphResponse{
 			Nodes:           nodesToDTO(result),
