@@ -259,6 +259,18 @@ func parseTypeDecl(node *sitter.Node, src []byte, repoID, path string) *domain.N
 
 // ----- CALLS extraction -----
 
+// callKeySep separates the parts of an in-file call-dedup key. A NUL byte
+// cannot appear in a node id or identifier, so it is unambiguous and shared by
+// both the resolved-edge (seen) and unresolved-call (seenU) maps (solov2-2efk).
+const callKeySep = "\x00"
+
+// Cross-package call handling (solov2-xc51): collectCallNames returns
+// package-qualified calls (pkg.Bar()) with callRef.pkg set. extractCallEdges
+// cannot bind them in-file, so it stashes them as UnresolvedCalls carrying the
+// qualifier; the promotion store resolves each against the file's import map —
+// to a concrete CALLS edge for intra-module targets, or a cross-repo edge stub
+// for external modules (which the query-time resolver later binds, solov2-1gj).
+
 // extractCallEdges walks the entire AST looking for call_expression nodes inside
 // function/method bodies and emits EdgeCalls when the callee is known in the file.
 func extractCallEdges(root *sitter.Node, src []byte, symbols map[string]*domain.Node) ([]*domain.Edge, []domain.UnresolvedCall) {
@@ -302,19 +314,16 @@ func extractCallEdges(root *sitter.Node, src []byte, symbols map[string]*domain.
 			continue
 		}
 
-		// Identifier calls (foo()) — resolve directly against the file's
-		// symbol map. Selector calls on the receiver (s.foo() inside
-		// a method on *Server) — rewrite as Server.foo and resolve too
-		// (solov2-q9p). Cross-package selector calls (pkg.Bar) are not
-		// resolved here; they need a cross-repo IMPORTS graph
-		// (solov2-1gj) before we can attach a target.
+		// Identifier calls (foo()) resolve directly against the file's symbol
+		// map; receiver selector calls (s.foo() in a method on *Server) are
+		// rewritten as Server.foo and resolved too (solov2-q9p). Package-
+		// qualified calls (pkg.Bar) cannot bind in-file — they are stashed as
+		// UnresolvedCalls for promotion-time resolution (see the cross-package
+		// note above).
 		callRefs := collectCallNames(bodyNode, src, recvName, recvType)
 		for _, ref := range callRefs {
-			// Package-qualified calls (cmd.Execute) can never bind in-file;
-			// stash for promotion-time cross-package / cross-repo resolution
-			// against the import map (solov2-xc51).
 			if ref.pkg != "" {
-				key := string(callerNode.ID) + "→" + ref.pkg + "." + ref.name
+				key := string(callerNode.ID) + callKeySep + ref.pkg + "." + ref.name
 				if seenU[key] {
 					continue
 				}
@@ -328,10 +337,10 @@ func extractCallEdges(root *sitter.Node, src []byte, symbols map[string]*domain.
 			}
 			calleeNode, ok := symbols[ref.name]
 			if !ok {
-				// Stash for cross-file resolution at promotion time
-				// (solov2-2at). Dedupe per (caller, callee-name) so
+				// Stash for cross-file (same-package) resolution at promotion
+				// time (solov2-2at). Dedupe per (caller, callee-name) so
 				// repeated call sites yield one resolution attempt.
-				key := string(callerNode.ID) + "→" + ref.name
+				key := string(callerNode.ID) + callKeySep + ref.name
 				if seenU[key] {
 					continue
 				}
@@ -342,7 +351,7 @@ func extractCallEdges(root *sitter.Node, src []byte, symbols map[string]*domain.
 				})
 				continue
 			}
-			key := string(callerNode.ID) + "->" + string(calleeNode.ID)
+			key := string(callerNode.ID) + callKeySep + string(calleeNode.ID)
 			if seen[key] {
 				continue
 			}
@@ -404,9 +413,10 @@ func extractReceiverBinding(receiverNode *sitter.Node, src []byte) (name, typ st
 //     both r.X() with recvName="r" and this.X() with recvName="this".
 //     solov2-gv6.)
 //
-// Cross-package selector calls (pkg.Bar(), or chained s.field.X())
-// cannot be resolved without cross-repo type info, so they are skipped
-// here. Adding them is solov2-1gj (cross-repo IMPORTS edges).
+// Package-qualified selector calls (pkg.Bar()) are returned with callRef.pkg
+// set so promotion can resolve them via the import map (see the cross-package
+// note on extractCallEdges, solov2-xc51). Chained selectors (s.field.X()) whose
+// operand is not a plain identifier are still skipped.
 // callRef is one call site collected from a function/method body. name is the
 // callee identifier (or "Receiver.method" for a resolved receiver call); pkg is
 // the selector operand for a package-qualified call (the "cmd" in cmd.Execute()),
