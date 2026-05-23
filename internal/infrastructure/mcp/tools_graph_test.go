@@ -244,6 +244,32 @@ func TestFindSymbol_ReturnsNodesFromGraphStore(t *testing.T) {
 	}
 }
 
+// TestFindSymbol_RanksDeclarationAboveContainer pins solov2-rd0l: when a name
+// matches both a package and a function (Go 'package main' + 'func main'), the
+// callable declaration must rank first so nodes[0] is usable for
+// call_chain/blast_radius.
+func TestFindSymbol_RanksDeclarationAboveContainer(t *testing.T) {
+	store := newStubGraphStorage()
+	store.addNode(mustNode(t, "pkg-main", "main.go", "main", domain.KindPackage))
+	store.addNode(mustNode(t, "func-main", "main.go", "main", domain.KindFunction))
+
+	r := NewRegistry()
+	RegisterGraphTools(r, store, application.NewStagingArea())
+
+	resp, rpcErr := dispatchGraph(t, r, "eng_find_symbol", map[string]string{
+		"symbol": "main", "repo_id": "repo1", "branch": "main",
+	})
+	if rpcErr != nil {
+		t.Fatalf("unexpected error: %+v", rpcErr)
+	}
+	if len(resp.Nodes) != 2 {
+		t.Fatalf("expected 2 nodes, got %d", len(resp.Nodes))
+	}
+	if resp.Nodes[0].NodeID != "func-main" {
+		t.Errorf("nodes[0] = %q (kind %q), want the function node func-main", resp.Nodes[0].NodeID, resp.Nodes[0].Kind)
+	}
+}
+
 // ---------------------------------------------------------------------------
 // eng_find_symbol — staging overlay overrides promoted node
 // ---------------------------------------------------------------------------
