@@ -18,15 +18,33 @@ import (
 )
 
 // RecallScores holds the per-source metric output.
+//
+// Two recall series are reported. RAW recall@k uses N (all pairs) as the
+// denominator — penalises models whose target docs weren't embedded at all
+// (e.g. an Ollama run capped at max_docs=500 against a 2489-doc corpus
+// where the headline target lives outside the first 500). FAIR recall@k
+// uses (N - NotInCorpus) — recall over pairs whose target was actually
+// in the embedded subset, so cross-type comparisons (model2vec vs ollama,
+// where the corpus caps differ by design) aren't biased by the cap.
+//
+// Reporters should prefer FairAt10 when comparing models with different
+// embed-time corpora sizes; the raw numbers stay useful for tracking
+// fixture quality (not_in_corpus shifting between runs == fixture or
+// model changes).
 type RecallScores struct {
-	N            int     `json:"n"`      // number of pairs evaluated
-	At1          float64 `json:"at_1"`   // recall@1
-	At5          float64 `json:"at_5"`   // recall@5
-	At10         float64 `json:"at_10"`  // recall@10
-	MRR          float64 `json:"mrr"`    // mean reciprocal rank (0 when not in top 100)
-	Miss         int     `json:"miss"`   // pairs where expected was not in top 100
-	Total        int     `json:"total"`  // same as N; kept for explicit table output
-	NotInCorpus  int     `json:"not_in_corpus"` // pairs whose expected name is absent from the embedded docs entirely — fixture bug signal, distinct from a model-recall miss
+	N           int     `json:"n"`             // number of pairs evaluated (incl. not-in-corpus)
+	At1         float64 `json:"at_1"`          // recall@1 (raw, denom=N)
+	At5         float64 `json:"at_5"`          // recall@5 (raw, denom=N)
+	At10        float64 `json:"at_10"`         // recall@10 (raw, denom=N)
+	MRR         float64 `json:"mrr"`           // mean reciprocal rank (raw)
+	FairAt1     float64 `json:"fair_at_1"`     // recall@1 over pairs whose target IS in the embedded subset
+	FairAt5     float64 `json:"fair_at_5"`     // recall@5 (fair denom = N - NotInCorpus)
+	FairAt10    float64 `json:"fair_at_10"`    // recall@10 (fair)
+	FairMRR     float64 `json:"fair_mrr"`      // MRR (fair)
+	FairN       int     `json:"fair_n"`        // N - NotInCorpus (pairs that COULD have matched)
+	Miss        int     `json:"miss"`          // pairs where expected was not in top 100
+	Total       int     `json:"total"`         // same as N; kept for explicit table output
+	NotInCorpus int     `json:"not_in_corpus"` // pairs whose expected name is absent from the embedded docs entirely
 }
 
 // ComputeRecall embeds every pair.Query with provider, ranks against
@@ -79,11 +97,27 @@ func ComputeRecall(provider Embedder, pairs []Pair, docs []doc) RecallScores {
 		}
 		s.MRR += 1.0 / float64(bestRank+1)
 	}
+	// Raw series: denominator = N (includes not-in-corpus).
 	denom := float64(s.N)
-	s.At1 /= denom
-	s.At5 /= denom
-	s.At10 /= denom
-	s.MRR /= denom
+	// Stash counts of in-top-K hits before normalising so we can also
+	// compute the fair series with a different denominator.
+	hits1, hits5, hits10, sumRR := s.At1, s.At5, s.At10, s.MRR
+	s.At1 = hits1 / denom
+	s.At5 = hits5 / denom
+	s.At10 = hits10 / denom
+	s.MRR = sumRR / denom
+
+	// Fair series: denominator excludes pairs whose target wasn't in
+	// the embedded subset — measures "how well does the model rank
+	// targets that actually exist among the embedded docs?"
+	s.FairN = s.N - s.NotInCorpus
+	if s.FairN > 0 {
+		fdenom := float64(s.FairN)
+		s.FairAt1 = hits1 / fdenom
+		s.FairAt5 = hits5 / fdenom
+		s.FairAt10 = hits10 / fdenom
+		s.FairMRR = sumRR / fdenom
+	}
 	return s
 }
 

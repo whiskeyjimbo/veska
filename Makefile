@@ -164,7 +164,7 @@ eval-embed-models:
 # and gracefully drops the Ollama subset if unreachable rather than
 # failing — keeps the contributor experience smooth.
 eval-embed-models-full:
-	EMBED_BENCH_INCLUDE_OLLAMA=1 go test -tags=eval -run TestEmbedModelsBenchmark ./tools/loadtest/embed_models/ -v -timeout=1800s
+	EMBED_BENCH_INCLUDE_OLLAMA=1 go test -tags=eval -run TestEmbedModelsBenchmark ./tools/loadtest/embed_models/ -v -timeout=3600s
 
 # eval-review-timing: M5 exit-gate-5 — drive the review Handler over a synthetic
 # ~100-file commit against a real Ollama and report the wall-clock time budget.
