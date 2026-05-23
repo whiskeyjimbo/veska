@@ -98,7 +98,15 @@ func (s *Service) Diff(ctx context.Context, repoID, repoRoot, refA, refB string)
 		// single-commit repo) from a generic git failure (solov2-dr31).
 		return Result{}, fmt.Errorf("changedsymbols: list changed files: %w", err)
 	}
-	var res Result
+	// Initialise with empty (non-nil) slices so JSON marshaling renders
+	// each field as [] when no symbols changed in that bucket. The MCP
+	// surface contract guarantees "empty result collections serialize as
+	// [], never omitted" (solov2-jbgt).
+	res := Result{
+		Added:    []SymbolChange{},
+		Removed:  []SymbolChange{},
+		Modified: []SymbolChange{},
+	}
 	for _, path := range files {
 		nodesA, err := s.parseAtRef(ctx, repoID, repoRoot, refA, path)
 		if err != nil {
