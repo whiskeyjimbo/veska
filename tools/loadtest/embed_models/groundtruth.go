@@ -41,18 +41,22 @@ type GTSource struct {
 }
 
 // CollectGroundTruth returns every available source for the corpus, in
-// order: headline (load from fixture), doc (auto-extracted), test-name
-// (auto-extracted). Empty sources are returned with an empty Pairs
-// slice so per-source recall rows are still emitted.
-func CollectGroundTruth(corpusName, corpusRoot, headlinePath string) []GTSource {
-	headline, _ := loadHeadline(headlinePath, corpusName)
-	doc := docDerived(corpusRoot)
-	testname := testNameDerived(corpusRoot)
-	return []GTSource{
-		{Name: "headline", Pairs: headline},
-		{Name: "doc", Pairs: doc},
-		{Name: "test-name", Pairs: testname},
+// order: headline (loaded from every *.jsonl file in fixturesDir), doc
+// (auto-extracted from Go source — code corpora only), test-name
+// (auto-extracted from _test.go — code corpora only). Empty sources
+// are returned with an empty Pairs slice so per-source recall rows are
+// still emitted. kind toggles the doc/test-name sources on/off — they
+// only make sense for code corpora.
+func CollectGroundTruth(corpusName, corpusRoot, fixturesDir, kind string) []GTSource {
+	headline, _ := loadHeadlineDir(fixturesDir, corpusName)
+	sources := []GTSource{{Name: "headline", Pairs: headline}}
+	if kind == "code" {
+		sources = append(sources,
+			GTSource{Name: "doc", Pairs: docDerived(corpusRoot)},
+			GTSource{Name: "test-name", Pairs: testNameDerived(corpusRoot)},
+		)
 	}
+	return sources
 }
 
 // ──────────────────────────────────────────────────────────────────────
@@ -198,10 +202,34 @@ type headlineEntry struct {
 	Expected string `json:"expected"`
 }
 
-// loadHeadline reads fixtures/headline.jsonl and returns the pairs
-// scoped to corpusName. Missing file is a non-error (returns empty
-// slice) so the bench is runnable before headline curation lands per
-// corpus.
+// loadHeadlineDir reads every *.jsonl file in fixturesDir and returns
+// the union of pairs scoped to corpusName. Missing files / dirs are
+// non-errors (returns empty slice) so the bench is runnable before
+// hand-curated fixtures exist for a corpus.
+func loadHeadlineDir(fixturesDir, corpusName string) ([]Pair, error) {
+	entries, err := os.ReadDir(fixturesDir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	var out []Pair
+	for _, e := range entries {
+		if e.IsDir() || !strings.HasSuffix(e.Name(), ".jsonl") {
+			continue
+		}
+		pairs, err := loadHeadline(filepath.Join(fixturesDir, e.Name()), corpusName)
+		if err != nil {
+			continue // tolerate per-file failures
+		}
+		out = append(out, pairs...)
+	}
+	return out, nil
+}
+
+// loadHeadline reads a single .jsonl file and returns the pairs scoped
+// to corpusName. Missing file is a non-error.
 func loadHeadline(path, corpusName string) ([]Pair, error) {
 	f, err := os.Open(path)
 	if err != nil {
