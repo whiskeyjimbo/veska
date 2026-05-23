@@ -33,3 +33,28 @@ Extractive condensation: per doc, split into pieces (lines), embed each, keep to
 - An empty Code or Prose cell means no headline GT pairs ran for that model on the corresponding corpora.
 - A model's full per-corpus, per-GT-source recall (including the auto-generated doc-derived and test-name-derived sets) lives in `tools/loadtest/embed_models/out/results.json`.
 - Reproduce by installing the model2vec set (`tools/loadtest/embed_models/scripts/install-bench-models.sh`), fetching corpora (`tools/loadtest/embed_models/scripts/fetch-corpora.sh`), then running `make eval-embed-models` (or `-full` to add the Ollama set).
+
+<!-- BEGIN FUSION-8hka -->
+
+## Dual-model fusion (solov2-8hka)
+
+Compares four ranking strategies on the SAME headline ground-truth pairs using two model2vec variants embedded per doc:
+
+- **code-only**: `potion-code-16M` cosine alone (baseline).
+- **prose-only**: `potion-base-32M` cosine alone (baseline).
+- **concat**: rank by mean of the two cosines (equivalent to L2-norm `[code‖prose]` concat).
+- **RRF**: rank docs in each model's space; fuse via `Σ 1/(K+rank)`, K=60.
+
+Fair-R@10 on the `headline` ground-truth set per corpus:
+
+| Corpus | code-only | prose-only | concat | RRF | Best vs single |
+|---|---|---|---|---|---|
+| `veska` | 0.706 | 0.353 | 0.588 | 0.588 | ✗ fusion loses |
+| `veska-docs` | 0.267 | 0.467 | 0.333 | 0.333 | ✗ fusion loses |
+| `cobra-docs` | 0.700 | 0.700 | 0.800 | 0.900 | ✓ RRF wins |
+| `wikipedia-tech` | 0.850 | 0.850 | 0.850 | 0.900 | ✓ RRF wins |
+
+*A corpus is counted as a fusion-win only if the best of (concat, RRF) beats the best single-model baseline by ≥+0.05 absolute R@10.*
+
+<!-- END FUSION-8hka -->
+
