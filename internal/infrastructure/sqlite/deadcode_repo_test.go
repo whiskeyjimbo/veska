@@ -91,6 +91,44 @@ func TestDeadCodeRepo_ReturnsOnlyNodesWithZeroInbound(t *testing.T) {
 	}
 }
 
+// TestDeadCodeRepo_ContainsAndSimilarDoNotCountAsLiveness pins solov2-jdok:
+// only inbound CALLS edges keep a node alive. A node with only a CONTAINS edge
+// (every symbol has one from its package) or a SIMILAR_TO edge (autolink) must
+// still be reported dead — otherwise the check is inert on real repos.
+func TestDeadCodeRepo_ContainsAndSimilarDoNotCountAsLiveness(t *testing.T) {
+	t.Parallel()
+	f := setupDeadCodeFixture(t)
+
+	f.insertNode(t, "n-pkg", "pkg/a.go", "package", "a")
+	f.insertNode(t, "n-uncalled", "pkg/a.go", "function", "unusedHelper")
+	f.insertNode(t, "n-called", "pkg/a.go", "function", "used")
+	f.insertNode(t, "n-caller", "pkg/a.go", "function", "caller")
+
+	// Package contains the uncalled func; autolink links it to a sibling.
+	f.insertEdge(t, "e-contains", "n-pkg", "n-uncalled", "CONTAINS")
+	f.insertEdge(t, "e-similar", "n-called", "n-uncalled", "SIMILAR_TO")
+	// A real call keeps n-called alive.
+	f.insertEdge(t, "e-call", "n-caller", "n-called", "CALLS")
+
+	repo := sqlite.NewDeadCodeRepo(f.db)
+	got, err := repo.DeadNodesInFiles(context.Background(), f.repoID, f.branch, []string{"pkg/a.go"})
+	if err != nil {
+		t.Fatalf("DeadNodesInFiles: %v", err)
+	}
+	gotIDs := make([]string, 0, len(got))
+	for _, n := range got {
+		gotIDs = append(gotIDs, n.NodeID)
+	}
+	sort.Strings(gotIDs)
+	// n-uncalled is dead (only CONTAINS/SIMILAR_TO inbound); n-caller is dead
+	// (no inbound CALLS); n-pkg is a package (dead by this query, filtered by
+	// the application-layer kind allowlist); n-called is live.
+	want := []string{"n-caller", "n-pkg", "n-uncalled"}
+	if !equalStrings(gotIDs, want) {
+		t.Errorf("dead nodes = %v, want %v", gotIDs, want)
+	}
+}
+
 func TestDeadCodeRepo_EmptyFilePathsReturnsEmpty(t *testing.T) {
 	t.Parallel()
 	f := setupDeadCodeFixture(t)
