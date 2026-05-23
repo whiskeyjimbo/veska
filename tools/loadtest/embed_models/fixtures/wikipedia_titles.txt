@@ -1,0 +1,54 @@
+# wikipedia_titles.txt — software/CS Wikipedia articles fetched by
+# scripts/fetch-wikipedia-corpus.sh into out/wikipedia-tech/. Curated to
+# span the breadth of topics a developer might semantic-search for —
+# ~25 titles is enough to drive headline-set recall comparisons without
+# bloating fetch time. (solov2-0k5h.7)
+#
+# Content is CC-BY-SA 3.0 / GFDL (Wikipedia license). out/ is gitignored.
+
+# Computing fundamentals
+Compiler
+Operating system
+Algorithm
+Hash table
+Cache (computing)
+Garbage collection (computer science)
+
+# Distributed systems
+Consensus (computer science)
+CAP theorem
+Paxos (computer science)
+Raft (algorithm)
+Eventual consistency
+
+# Concurrency
+Deadlock (computer science)
+Race condition
+Mutex
+Semaphore (programming)
+
+# Web / networking
+Hypertext Transfer Protocol
+Representational state transfer
+Transmission Control Protocol
+Domain Name System
+
+# Programming concepts
+Object-oriented programming
+Functional programming
+Type system
+
+# Software engineering
+Version control
+Code review
+Refactoring (computer science)
+
+# Security
+Public-key cryptography
+
+# Compilers / parsing
+Abstract syntax tree
+Lexical analysis
+
+# ML / data
+Word embedding
