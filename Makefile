@@ -6,7 +6,7 @@ DAEMON_BIN      := $(BINDIR)/veska-daemon
 MCP_BIN         := $(BINDIR)/veska-mcp
 LAYERCHECK_BIN  := $(BINDIR)/layercheck
 
-.PHONY: all build build-fat fetch-embed-assets test lint vet layercheck clean loadtest test-mcp test-mcp-deep test-mcp-bootstrap eval-recall eval-recall-projection eval-autolink-fp eval-revalidate-bench eval-queue-fuzz eval-embed-throughput eval-embedder-bench eval-embed-models eval-embed-models-full eval-embed-models-condense
+.PHONY: all build build-fat fetch-embed-assets test lint vet layercheck clean loadtest test-mcp test-mcp-deep test-mcp-bootstrap eval-recall eval-recall-projection eval-autolink-fp eval-revalidate-bench eval-queue-fuzz eval-embed-throughput eval-embedder-bench eval-embed-models eval-embed-models-full eval-embed-models-condense eval-embed-models-fuse
 
 all: build test vet lint layercheck
 
@@ -176,6 +176,17 @@ eval-embed-models-full:
 # embeds would balloon runtime to hours.
 eval-embed-models-condense:
 	EMBED_BENCH_CONDENSE=on go test -tags=eval -run TestEmbedModelsBenchmark ./tools/loadtest/embed_models/ -v -timeout=1200s
+
+# eval-embed-models-fuse: dual-model fusion bench (solov2-8hka). Embeds
+# every doc with TWO model2vec variants (defaults: potion-code-16M as
+# the code-side, potion-base-32M as the prose-side) and compares four
+# ranking strategies on the same headline GT: code-only, prose-only,
+# concat (mean of the two cosines), RRF (reciprocal rank fusion).
+# Output: tools/loadtest/embed_models/out/fuse-results.json + a fusion
+# section appended to docs/operations/embedder-benchmarks.md. Knobs:
+# FUSE_MODEL_CODE, FUSE_MODEL_PROSE, FUSE_RRF_K, EMBED_BENCH_MAX_DOCS.
+eval-embed-models-fuse:
+	go test -tags=eval -run TestEmbedModelsFusion ./tools/loadtest/embed_models/ -v -timeout=600s
 
 # eval-review-timing: M5 exit-gate-5 — drive the review Handler over a synthetic
 # ~100-file commit against a real Ollama and report the wall-clock time budget.
