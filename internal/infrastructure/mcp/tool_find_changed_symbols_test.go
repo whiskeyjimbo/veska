@@ -75,6 +75,12 @@ func TestChangedSymbols_ReturnsThreeBuckets(t *testing.T) {
 	if len(resp.Added) != 1 || resp.Added[0].Name != "Fresh" {
 		t.Errorf("added = %+v, want [Fresh]", resp.Added)
 	}
+	// solov2-w8nr: file_path must be absolute, matching the contract used by
+	// every other node-emitting tool. The MCP handler rewrites the service's
+	// repo-relative paths against the resolved root ("/root" in this test).
+	if resp.Added[0].FilePath != "/root/code.go" {
+		t.Errorf("added[0].file_path = %q, want absolute /root/code.go", resp.Added[0].FilePath)
+	}
 	if len(resp.Removed) != 1 || resp.Removed[0].Name != "Gone" {
 		t.Errorf("removed = %+v, want [Gone]", resp.Removed)
 	}
