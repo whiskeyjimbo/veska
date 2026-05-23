@@ -58,8 +58,14 @@ var BenchModels = []string{
 
 // BenchCorpora lists the corpus names the bench targets. veska is
 // always present (this repo); the rest live under out/repos/<name>/
-// after scripts/fetch-corpora.sh runs.
-var BenchCorpora = []string{"veska", "cobra", "pflag", "testify", "gin"}
+// after scripts/fetch-corpora.sh runs. Prose corpora (suffix "-docs")
+// walk .md files instead of .go files; see embedProseCorpus.
+var BenchCorpora = []string{
+	// Code corpora
+	"veska", "cobra", "pflag", "testify", "gin",
+	// Prose corpora
+	"veska-docs", "cobra-docs",
+}
 
 // doc is one embedded corpus document.
 type doc struct {
@@ -76,10 +82,13 @@ type modelEntry struct {
 	dir  string
 }
 
-// corpusEntry pairs a corpus name with its root directory.
+// corpusEntry pairs a corpus name with its root directory and its kind
+// ("code" walks .go files via tree-sitter; "prose" walks .md files via
+// the section splitter in prose.go).
 type corpusEntry struct {
 	name string
 	root string
+	kind string
 }
 
 // runResult captures per-(model × corpus) bench data — what gets
@@ -137,8 +146,17 @@ func TestEmbedModelsBenchmark(t *testing.T) {
 			continue
 		}
 		for _, c := range corpora {
-			t.Logf("--- run: model=%s corpus=%s ---", m.name, c.name)
-			docs, stats := embedCorpus(t, provider, c.root, maxDocs)
+			t.Logf("--- run: model=%s corpus=%s (%s) ---", m.name, c.name, c.kind)
+			var (
+				docs  []doc
+				stats embedStats
+			)
+			switch c.kind {
+			case "prose":
+				docs, stats = embedProseCorpus(provider, c.root, maxDocs)
+			default:
+				docs, stats = embedCorpus(t, provider, c.root, maxDocs)
+			}
 			if len(docs) == 0 {
 				t.Logf("  no docs from %s — skip", c.root)
 				continue
@@ -166,7 +184,7 @@ func TestEmbedModelsBenchmark(t *testing.T) {
 				len(docs), stats.total, stats.avgMS, qElapsed, top[0].Name, top[0].Score)
 
 			// Recall per ground-truth source (headline / doc / test-name).
-			gtSources := CollectGroundTruth(c.name, c.root, headlinePath())
+			gtSources := CollectGroundTruth(c.name, c.root, fixturesDir(), c.kind)
 			recallByGT := make(map[string]RecallScores, len(gtSources))
 			for _, gt := range gtSources {
 				if len(gt.Pairs) == 0 {
@@ -175,8 +193,8 @@ func TestEmbedModelsBenchmark(t *testing.T) {
 				}
 				scores := ComputeRecall(provider, gt.Pairs, docs)
 				recallByGT[gt.Name] = scores
-				t.Logf("  recall[%s] n=%d @1=%.3f @5=%.3f @10=%.3f mrr=%.3f miss=%d",
-					gt.Name, scores.N, scores.At1, scores.At5, scores.At10, scores.MRR, scores.Miss)
+				t.Logf("  recall[%s] n=%d @1=%.3f @5=%.3f @10=%.3f mrr=%.3f miss=%d not_in_corpus=%d",
+					gt.Name, scores.N, scores.At1, scores.At5, scores.At10, scores.MRR, scores.Miss, scores.NotInCorpus)
 			}
 
 			results = append(results, runResult{
@@ -203,15 +221,16 @@ func TestEmbedModelsBenchmark(t *testing.T) {
 // Discovery
 // ───────────────────────────────────────────────────────────────────────
 
-// headlinePath resolves the bench's hand-curated ground-truth file.
-// Override with EMBED_BENCH_HEADLINE; default lives under the package
-// (committed in fixtures/) so it ships with the repo.
-func headlinePath() string {
-	if p := os.Getenv("EMBED_BENCH_HEADLINE"); p != "" {
+// fixturesDir resolves the bench's hand-curated ground-truth directory.
+// Override with EMBED_BENCH_FIXTURES; default is fixtures/ under the
+// package (committed). Every *.jsonl file inside is loaded and merged
+// — see CollectGroundTruth.
+func fixturesDir() string {
+	if p := os.Getenv("EMBED_BENCH_FIXTURES"); p != "" {
 		return p
 	}
 	_, file, _, _ := runtime.Caller(0)
-	return filepath.Join(filepath.Dir(file), "fixtures", "headline.jsonl")
+	return filepath.Join(filepath.Dir(file), "fixtures")
 }
 
 // modelRoot is the directory the bench scans for installed models.
@@ -260,21 +279,29 @@ func discoverCorpora(t *testing.T) []corpusEntry {
 
 	var out []corpusEntry
 	for _, name := range BenchCorpora {
-		var root string
+		var root, kind string
 		switch name {
 		case "veska":
 			// Scope to internal/ — covers application + infrastructure
 			// + domain. Excludes cmd/ (which is small and CLI-shaped)
 			// and tools/ (eval harnesses, not "production" content).
 			root = filepath.Join(repoRoot, "internal")
+			kind = "code"
+		case "veska-docs":
+			root = filepath.Join(repoRoot, "docs")
+			kind = "prose"
+		case "cobra-docs":
+			root = filepath.Join(fetchedRoot, "cobra")
+			kind = "prose"
 		default:
 			root = filepath.Join(fetchedRoot, name)
+			kind = "code"
 		}
 		if !dirExists(root) {
 			t.Logf("WARN: corpus %s not present at %s — skip (run scripts/fetch-corpora.sh)", name, root)
 			continue
 		}
-		out = append(out, corpusEntry{name: name, root: root})
+		out = append(out, corpusEntry{name: name, root: root, kind: kind})
 	}
 	return out
 }
@@ -405,7 +432,7 @@ func writeResults(rows []runResult) error {
 		return err
 	}
 	r := benchResults{
-		Phase:       "0k5h.3",
+		Phase:       "0k5h.4",
 		GeneratedAt: time.Now().UTC().Format(time.RFC3339),
 		Runs:        rows,
 	}
