@@ -225,8 +225,10 @@ func TestEmbedModelsBenchmark(t *testing.T) {
 			}
 			scores := ComputeRecall(provider, gt.Pairs, docs)
 			recallByGT[gt.Name] = scores
-			t.Logf("  recall[%s] n=%d @1=%.3f @5=%.3f @10=%.3f mrr=%.3f miss=%d not_in_corpus=%d",
-				gt.Name, scores.N, scores.At1, scores.At5, scores.At10, scores.MRR, scores.Miss, scores.NotInCorpus)
+			t.Logf("  recall[%s] n=%d @10=%.3f mrr=%.3f  fair_n=%d fair_@10=%.3f fair_mrr=%.3f  miss=%d not_in_corpus=%d",
+				gt.Name, scores.N, scores.At10, scores.MRR,
+				scores.FairN, scores.FairAt10, scores.FairMRR,
+				scores.Miss, scores.NotInCorpus)
 		}
 
 		results = append(results, runResult{
@@ -241,6 +243,18 @@ func TestEmbedModelsBenchmark(t *testing.T) {
 			TopHits:      top,
 			Recall:       recallByGT,
 		})
+		// Incremental persistence: write results + markdown after EVERY
+		// (model × corpus) run, not just at end of test. A long bench
+		// that times out mid-Ollama then keeps every completed row
+		// instead of losing them all. Negligible cost (file size is
+		// tens of KB; writes are infrequent relative to the per-embed
+		// loop). Errors are logged but non-fatal.
+		if err := writeResults(results); err != nil {
+			t.Logf("WARN: incremental write results: %v", err)
+		}
+		if err := writeMarkdownTable(results); err != nil {
+			t.Logf("WARN: incremental write table: %v", err)
+		}
 	}
 
 	for _, m := range models {
@@ -258,6 +272,17 @@ func TestEmbedModelsBenchmark(t *testing.T) {
 		provider, err := ollama.New(om, ollama.WithBaseURL(ollamaURL()))
 		if err != nil {
 			t.Logf("WARN: ollama.New %s: %v — skipping", om, err)
+			continue
+		}
+		// Per-model probe: ollama.New does not validate the model is
+		// pulled — that fails on first Embed. Probe with a tiny query
+		// so a model the user hasn't `ollama pull`'d skips cleanly
+		// instead of failing every corpus run.
+		probeCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		_, perr := provider.Embed(probeCtx, "probe")
+		cancel()
+		if perr != nil {
+			t.Logf("WARN: ollama %s probe failed: %v — skipping (run 'ollama pull %s' to include)", om, perr, om)
 			continue
 		}
 		for _, c := range corpora {
