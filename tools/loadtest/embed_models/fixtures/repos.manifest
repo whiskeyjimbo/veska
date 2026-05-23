@@ -1,0 +1,11 @@
+# repos.manifest — sha-pinned external Go repositories that make up the
+# embed-models bench corpus. Format: name<TAB>url<TAB>tag-or-sha.
+# Tags are treated as immutable; the fetch script does a shallow clone at
+# the listed ref so we get a deterministic checkout per bench run.
+#
+# Source: solov2-0k5h.2.
+
+cobra	https://github.com/spf13/cobra.git	v1.8.0
+pflag	https://github.com/spf13/pflag.git	v1.0.5
+testify	https://github.com/stretchr/testify.git	v1.9.0
+gin	https://github.com/gin-gonic/gin.git	v1.10.0

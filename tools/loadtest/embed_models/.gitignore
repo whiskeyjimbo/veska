@@ -1,0 +1,4 @@
+# Fetched external corpora (pulled by scripts/fetch-corpora.sh from
+# fixtures/repos.manifest). Sha-pinned upstream — checking them in would
+# bloat the repo and tangle their licenses with ours.
+/out/
