@@ -118,12 +118,15 @@ func extractTSSymbols(
 	count := int(root.ChildCount())
 	for i := range count {
 		child := root.Child(i)
-		processTopLevelNode(child, src, repoID, path, result, symbolByName, classNames)
+		// Top-level declarations are unexported unless wrapped by an
+		// export_statement, which flips the flag on recursion (solov2-xp1u).
+		processTopLevelNode(child, src, repoID, path, result, symbolByName, classNames, false)
 	}
 }
 
 // processTopLevelNode handles a single top-level AST node, recursing through
-// export_statement wrappers as needed.
+// export_statement wrappers as needed. exported is true when this node was
+// reached by unwrapping an export_statement.
 func processTopLevelNode(
 	node *sitter.Node,
 	src []byte,
@@ -131,30 +134,32 @@ func processTopLevelNode(
 	result *domain.ParseResult,
 	symbolByName map[string]*domain.Node,
 	classNames map[string]bool,
+	exported bool,
 ) {
 	switch node.Type() {
 	case "function_declaration":
-		n := parseTSFunctionDecl(node, src, repoID, path)
+		n := parseTSFunctionDecl(node, src, repoID, path, exported)
 		if n != nil {
 			result.Nodes = append(result.Nodes, n)
 			symbolByName[n.Name] = n
 		}
 
 	case "class_declaration":
-		className, classNode := parseTSClassDecl(node, src, repoID, path)
+		className, classNode := parseTSClassDecl(node, src, repoID, path, exported)
 		if classNode != nil {
 			result.Nodes = append(result.Nodes, classNode)
 			symbolByName[classNode.Name] = classNode
 			classNames[className] = true
 		}
-		// extract methods from the class body
+		// extract methods from the class body; a method is reachable outside
+		// the module when its class is exported (TS access modifiers aside).
 		bodyNode := node.ChildByFieldName("body")
 		if bodyNode != nil && className != "" {
-			parseTSClassBody(bodyNode, src, repoID, path, className, result, symbolByName)
+			parseTSClassBody(bodyNode, src, repoID, path, className, result, symbolByName, exported)
 		}
 
 	case "interface_declaration":
-		n := parseTSInterfaceDecl(node, src, repoID, path)
+		n := parseTSInterfaceDecl(node, src, repoID, path, exported)
 		if n != nil {
 			result.Nodes = append(result.Nodes, n)
 			symbolByName[n.Name] = n
@@ -170,17 +175,17 @@ func processTopLevelNode(
 			}
 		}
 		if inner != nil {
-			processTopLevelNode(inner, src, repoID, path, result, symbolByName, classNames)
+			processTopLevelNode(inner, src, repoID, path, result, symbolByName, classNames, true)
 		}
 
 	case "lexical_declaration", "variable_declaration":
 		// const Foo = () => { ... }  arrow function assigned to variable
-		parseTSArrowFunctions(node, src, repoID, path, result, symbolByName)
+		parseTSArrowFunctions(node, src, repoID, path, result, symbolByName, exported)
 	}
 }
 
 // parseTSFunctionDecl extracts a function_declaration node.
-func parseTSFunctionDecl(node *sitter.Node, src []byte, repoID, path string) *domain.Node {
+func parseTSFunctionDecl(node *sitter.Node, src []byte, repoID, path string, exported bool) *domain.Node {
 	nameNode := node.ChildByFieldName("name")
 	if nameNode == nil {
 		return nil
@@ -193,6 +198,7 @@ func parseTSFunctionDecl(node *sitter.Node, src []byte, repoID, path string) *do
 		domain.WithLanguage("typescript"),
 		domain.WithLines(lr),
 		domain.WithRawContent(raw),
+		domain.WithExported(exported),
 	)
 	if err != nil {
 		return nil
@@ -201,7 +207,7 @@ func parseTSFunctionDecl(node *sitter.Node, src []byte, repoID, path string) *do
 }
 
 // parseTSClassDecl extracts a class_declaration node. Returns className and node.
-func parseTSClassDecl(node *sitter.Node, src []byte, repoID, path string) (string, *domain.Node) {
+func parseTSClassDecl(node *sitter.Node, src []byte, repoID, path string, exported bool) (string, *domain.Node) {
 	nameNode := node.ChildByFieldName("name")
 	if nameNode == nil {
 		return "", nil
@@ -214,6 +220,7 @@ func parseTSClassDecl(node *sitter.Node, src []byte, repoID, path string) (strin
 		domain.WithLanguage("typescript"),
 		domain.WithLines(lr),
 		domain.WithRawContent(raw),
+		domain.WithExported(exported),
 	)
 	if err != nil {
 		return name, nil
@@ -222,18 +229,20 @@ func parseTSClassDecl(node *sitter.Node, src []byte, repoID, path string) (strin
 }
 
 // parseTSClassBody walks a class_body and extracts method_definition nodes.
+// classExported propagates the enclosing class's export status to its methods.
 func parseTSClassBody(
 	body *sitter.Node,
 	src []byte,
 	repoID, path, className string,
 	result *domain.ParseResult,
 	symbolByName map[string]*domain.Node,
+	classExported bool,
 ) {
 	count := int(body.ChildCount())
 	for i := range count {
 		child := body.Child(i)
 		if child.Type() == "method_definition" {
-			n := parseTSMethodDef(child, src, repoID, path, className)
+			n := parseTSMethodDef(child, src, repoID, path, className, classExported)
 			if n != nil {
 				result.Nodes = append(result.Nodes, n)
 				symbolByName[n.Name] = n
@@ -243,7 +252,7 @@ func parseTSClassBody(
 }
 
 // parseTSMethodDef extracts a method_definition inside a class body.
-func parseTSMethodDef(node *sitter.Node, src []byte, repoID, path, className string) *domain.Node {
+func parseTSMethodDef(node *sitter.Node, src []byte, repoID, path, className string, exported bool) *domain.Node {
 	nameNode := node.ChildByFieldName("name")
 	if nameNode == nil {
 		return nil
@@ -257,6 +266,7 @@ func parseTSMethodDef(node *sitter.Node, src []byte, repoID, path, className str
 		domain.WithLanguage("typescript"),
 		domain.WithLines(lr),
 		domain.WithRawContent(raw),
+		domain.WithExported(exported),
 	)
 	if err != nil {
 		return nil
@@ -265,7 +275,7 @@ func parseTSMethodDef(node *sitter.Node, src []byte, repoID, path, className str
 }
 
 // parseTSInterfaceDecl extracts an interface_declaration node.
-func parseTSInterfaceDecl(node *sitter.Node, src []byte, repoID, path string) *domain.Node {
+func parseTSInterfaceDecl(node *sitter.Node, src []byte, repoID, path string, exported bool) *domain.Node {
 	nameNode := node.ChildByFieldName("name")
 	if nameNode == nil {
 		return nil
@@ -278,6 +288,7 @@ func parseTSInterfaceDecl(node *sitter.Node, src []byte, repoID, path string) *d
 		domain.WithLanguage("typescript"),
 		domain.WithLines(lr),
 		domain.WithRawContent(raw),
+		domain.WithExported(exported),
 	)
 	if err != nil {
 		return nil
@@ -294,6 +305,7 @@ func parseTSArrowFunctions(
 	repoID, path string,
 	result *domain.ParseResult,
 	symbolByName map[string]*domain.Node,
+	exported bool,
 ) {
 	count := int(node.ChildCount())
 	for i := range count {
@@ -317,6 +329,7 @@ func parseTSArrowFunctions(
 			domain.WithLanguage("typescript"),
 			domain.WithLines(lr),
 			domain.WithRawContent(raw),
+			domain.WithExported(exported),
 		)
 		if err != nil {
 			continue
