@@ -11,7 +11,6 @@ import (
 	"unicode/utf8"
 
 	sitter "github.com/smacker/go-tree-sitter"
-	"github.com/smacker/go-tree-sitter/golang"
 
 	"github.com/whiskeyjimbo/veska/internal/core/domain"
 )
@@ -25,7 +24,9 @@ func goExported(name string) bool {
 }
 
 // GoParser is a tree-sitter-backed implementation of ports.CodeParser for Go source files.
-// Each ParseFile call is stateless: a fresh sitter.Parser is created per call.
+// Each ParseFile call borrows a parser from goParserPool (solov2-0ung), so the
+// per-language CGO setup amortises across the watcher's re-parse churn and
+// bulk re-index passes.
 type GoParser struct{}
 
 // NewGoParser returns a new GoParser.
@@ -44,8 +45,8 @@ func (p *GoParser) ParseFile(ctx context.Context, repoID, path string, src []byt
 		return &domain.ParseResult{}, nil
 	}
 
-	parser := sitter.NewParser()
-	parser.SetLanguage(golang.GetLanguage())
+	parser := goParserPool.Get().(*sitter.Parser)
+	defer goParserPool.Put(parser)
 
 	tree, err := parser.ParseCtx(ctx, nil, src)
 	if err != nil {

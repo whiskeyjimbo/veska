@@ -6,15 +6,14 @@ import (
 	"strings"
 
 	sitter "github.com/smacker/go-tree-sitter"
-	"github.com/smacker/go-tree-sitter/typescript/tsx"
-	"github.com/smacker/go-tree-sitter/typescript/typescript"
 
 	"github.com/whiskeyjimbo/veska/internal/core/domain"
 )
 
-// TSParser is a tree-sitter-backed implementation of ports.CodeParser for TypeScript
-// and TSX source files. Each ParseFile call is stateless: a fresh sitter.Parser is
-// created per call.
+// TSParser is a tree-sitter-backed implementation of ports.CodeParser for
+// TypeScript and TSX source files. Each ParseFile call borrows a parser from
+// the per-language pool (tsParserPool / tsxParserPool, solov2-0ung); parsers
+// are reused across files to amortise the CGO setup cost.
 type TSParser struct{}
 
 // NewTSParser returns a new TSParser.
@@ -34,13 +33,12 @@ func (p *TSParser) ParseFile(ctx context.Context, repoID, path string, src []byt
 		return &domain.ParseResult{}, nil
 	}
 
-	lang := typescript.GetLanguage()
+	pool := tsParserPool
 	if ext == ".tsx" {
-		lang = tsx.GetLanguage()
+		pool = tsxParserPool
 	}
-
-	parser := sitter.NewParser()
-	parser.SetLanguage(lang)
+	parser := pool.Get().(*sitter.Parser)
+	defer pool.Put(parser)
 
 	tree, err := parser.ParseCtx(ctx, nil, src)
 	if err != nil {
