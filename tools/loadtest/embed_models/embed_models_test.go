@@ -92,11 +92,15 @@ var BenchCorpora = []string{
 	"wikipedia-tech",
 }
 
-// doc is one embedded corpus document.
+// doc is one embedded corpus document. vecCondensed is populated only
+// when EMBED_BENCH_CONDENSE=on; otherwise nil and the second recall
+// pass is skipped. The two vectors share name/file because they
+// describe the same source node — only the embed input differs.
 type doc struct {
-	name string
-	file string
-	vec  []float32
+	name          string
+	file          string
+	vec           []float32
+	vecCondensed  []float32
 }
 
 // modelEntry pairs a model name with its on-disk dir, used for
@@ -129,6 +133,14 @@ type runResult struct {
 	QueryMS      float64                 `json:"query_ms"`       // query embed time
 	TopHits      []topHit                `json:"top_hits"`       // sanity-check top-K for the printed query
 	Recall       map[string]RecallScores `json:"recall"`         // gt-source → scores (headline / doc / test-name)
+	// Condensation axis (solov2-oo4q.2). Populated only when
+	// EMBED_BENCH_CONDENSE=on. CondensedRecall is the recall produced
+	// when ranking docs by their condensed vector; raw Recall is
+	// preserved so the lift is row-comparable.
+	CondensedRecall      map[string]RecallScores `json:"condensed_recall,omitempty"`
+	CondenseK            int                     `json:"condense_k,omitempty"`
+	CondenseMinLen       int                     `json:"condense_min_len,omitempty"`
+	CondenseAppliedCount int                     `json:"condense_applied_count,omitempty"`
 }
 
 type topHit struct {
@@ -161,6 +173,12 @@ func TestEmbedModelsBenchmark(t *testing.T) {
 	t.Logf("corpora found: %d (%v)", len(corpora), corpusNames(corpora))
 	t.Logf("query=%q topK=%d max_docs=%d", query, topK, maxDocs)
 
+	condenseCfg := loadCondenseConfig()
+	if condenseCfg.enabled {
+		t.Logf("condensation: ON (k=%d min_len=%d) — each doc gets a second condensed-vec embed; recall computed for both",
+			condenseCfg.k, condenseCfg.minLen)
+	}
+
 	includeOllama := os.Getenv("EMBED_BENCH_INCLUDE_OLLAMA") == "1"
 	var ollamaModels []string
 	if includeOllama {
@@ -180,14 +198,15 @@ func TestEmbedModelsBenchmark(t *testing.T) {
 	runOne := func(modelName, modelType string, provider Embedder, c corpusEntry, mxDocs int) {
 		t.Logf("--- run: model=%s [%s] corpus=%s (%s) ---", modelName, modelType, c.name, c.kind)
 		var (
-			docs  []doc
-			stats embedStats
+			docs       []doc
+			stats      embedStats
+			condCount  int
 		)
 		switch c.kind {
 		case "prose":
-			docs, stats = embedProseCorpus(provider, c.root, mxDocs)
+			docs, stats, condCount = embedProseCorpus(provider, c.root, mxDocs, condenseCfg)
 		default:
-			docs, stats = embedCorpus(t, provider, c.root, mxDocs)
+			docs, stats, condCount = embedCorpus(t, provider, c.root, mxDocs, condenseCfg)
 		}
 		if len(docs) == 0 {
 			t.Logf("  no docs from %s — skip", c.root)
@@ -231,7 +250,38 @@ func TestEmbedModelsBenchmark(t *testing.T) {
 				scores.Miss, scores.NotInCorpus)
 		}
 
-		results = append(results, runResult{
+		// Condensation pass: build a parallel docs slice whose .vec is
+		// the condensed vector (where one was computed) and re-run
+		// recall. Docs without a condensed vec are kept with the raw
+		// vec — that's the natural "below the minLen gate" behavior:
+		// short docs participate in the index unchanged, just not
+		// condensed. The query vec is unchanged (queries are short,
+		// condensation makes no sense for them).
+		var condensedRecall map[string]RecallScores
+		if condenseCfg.enabled {
+			condDocs := make([]doc, len(docs))
+			copy(condDocs, docs)
+			for i := range condDocs {
+				if condDocs[i].vecCondensed != nil {
+					condDocs[i].vec = condDocs[i].vecCondensed
+				}
+			}
+			condensedRecall = make(map[string]RecallScores, len(gtSources))
+			for _, gt := range gtSources {
+				if len(gt.Pairs) == 0 {
+					condensedRecall[gt.Name] = RecallScores{}
+					continue
+				}
+				scores := ComputeRecall(provider, gt.Pairs, condDocs)
+				condensedRecall[gt.Name] = scores
+				raw := recallByGT[gt.Name]
+				lift := scores.FairAt10 - raw.FairAt10
+				t.Logf("  CONDENSED recall[%s] @10=%.3f fair_@10=%.3f  LIFT=%+.3f  applied=%d/%d",
+					gt.Name, scores.At10, scores.FairAt10, lift, condCount, len(docs))
+			}
+		}
+
+		row := runResult{
 			Model:        modelName,
 			ModelType:    modelType,
 			Corpus:       c.name,
@@ -242,7 +292,14 @@ func TestEmbedModelsBenchmark(t *testing.T) {
 			QueryMS:      float64(qElapsed.Nanoseconds()) / 1e6,
 			TopHits:      top,
 			Recall:       recallByGT,
-		})
+		}
+		if condenseCfg.enabled {
+			row.CondensedRecall = condensedRecall
+			row.CondenseK = condenseCfg.k
+			row.CondenseMinLen = condenseCfg.minLen
+			row.CondenseAppliedCount = condCount
+		}
+		results = append(results, row)
 		// Incremental persistence: write results + markdown after EVERY
 		// (model × corpus) run, not just at end of test. A long bench
 		// that times out mid-Ollama then keeps every completed row
@@ -434,10 +491,15 @@ type embedStats struct {
 // declaration's name+raw_content as a single document. Capped at
 // maxDocs to bound runtime when iterating over many (model × corpus)
 // combinations.
-func embedCorpus(t *testing.T, p Embedder, root string, maxDocs int) ([]doc, embedStats) {
+//
+// When cfg.enabled, ALSO computes a condensed-input embedding per doc
+// and stores it in doc.vecCondensed. Returns the count of docs that
+// were actually condensed (vs skipped by minLen gate).
+func embedCorpus(t *testing.T, p Embedder, root string, maxDocs int, cfg condenseConfig) ([]doc, embedStats, int) {
 	t.Helper()
 	parser := treesitter.NewGoParser()
 	var docs []doc
+	var condApplied int
 	start := time.Now()
 	var totalEmbedNS int64
 	var nEmbeds int
@@ -483,7 +545,20 @@ func embedCorpus(t *testing.T, p Embedder, root string, maxDocs int) ([]doc, emb
 			if err != nil {
 				continue
 			}
-			docs = append(docs, doc{name: n.Name, file: path, vec: v})
+			d := doc{name: n.Name, file: path, vec: v}
+			if cfg.enabled {
+				cText, applied, cerr := condenseInput(context.Background(), p, cfg, n.Name, *n.RawContent)
+				if cerr == nil {
+					cv, cerr := p.Embed(context.Background(), cText)
+					if cerr == nil {
+						d.vecCondensed = cv
+						if applied {
+							condApplied++
+						}
+					}
+				}
+			}
+			docs = append(docs, d)
 		}
 		return nil
 	})
@@ -494,7 +569,7 @@ func embedCorpus(t *testing.T, p Embedder, root string, maxDocs int) ([]doc, emb
 	if nEmbeds > 0 {
 		stats.avgMS = float64(totalEmbedNS) / float64(nEmbeds) / 1e6
 	}
-	return docs, stats
+	return docs, stats, condApplied
 }
 
 // ───────────────────────────────────────────────────────────────────────
