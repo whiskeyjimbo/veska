@@ -101,7 +101,7 @@ func assertSchemaKeys(t *testing.T, raw json.RawMessage, wantKeys []string) {
 func TestStateChangingToolsPublishSchemas(t *testing.T) {
 	r := NewRegistry()
 	RegisterFindingTools(r, nil, nil)
-	RegisterSuppressionTools(r, nil, nil)
+	RegisterSuppressionTools(r, nil, nil, nil)
 	RegisterTaskTools(r, nil, nil)
 
 	cases := []struct {

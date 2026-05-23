@@ -47,6 +47,31 @@ func resolveRepoID(ctx context.Context, repos application.RepoLister, repoID str
 	return "", &RPCError{Code: CodeNotFound, Message: fmt.Sprintf("unknown repo_id: %s (run eng_list_repos)", repoID)}
 }
 
+// resolveRepoIDOrSingleton behaves like resolveRepoID, but when repoID is
+// empty and exactly one repo is registered it returns that repo's id (no
+// caller-side scoping needed). When repoID is empty and there are zero or
+// many repos it returns an actionable InvalidParams (solov2-7tz1).
+func resolveRepoIDOrSingleton(ctx context.Context, repos application.RepoLister, repoID string) (string, *RPCError) {
+	if repoID != "" {
+		return resolveRepoID(ctx, repos, repoID)
+	}
+	if repos == nil {
+		return "", &RPCError{Code: CodeInvalidParams, Message: "repo_id is required"}
+	}
+	all, err := repos.ListRepos(ctx)
+	if err != nil {
+		return "", &RPCError{Code: CodeInternalError, Message: fmt.Sprintf("list repos failed: %v", err)}
+	}
+	switch len(all) {
+	case 0:
+		return "", &RPCError{Code: CodeInvalidParams, Message: "repo_id is required (no repos registered — run `veska repo add <path>` first)"}
+	case 1:
+		return all[0].RepoID, nil
+	default:
+		return "", &RPCError{Code: CodeInvalidParams, Message: fmt.Sprintf("repo_id is required (%d repos registered; pass eng_list_repos to find the id)", len(all))}
+	}
+}
+
 // bindParams unmarshals raw into dst, returning an InvalidParams RPCError on failure.
 func bindParams(raw json.RawMessage, dst any) *RPCError {
 	if err := json.Unmarshal(raw, dst); err != nil {
