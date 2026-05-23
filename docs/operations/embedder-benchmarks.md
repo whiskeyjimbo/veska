@@ -8,12 +8,25 @@ Latency is per-query embed time. **model2vec rows measure in-process CPU compute
 
 | Model | Type | Size | Code R@10 | Prose R@10 | Query ms | Recommended for |
 |---|---|---|---|---|---|---|
-| `potion-base-2M` | model2vec | 7MB | 0.235 | 0.400 | 0.004 | smallest footprint, fastest query |
-| `potion-base-4M` | model2vec | 15MB | 0.412 | 0.472 | 0.004 | fastest query |
-| `potion-base-8M` | model2vec | 29MB | 0.412 | 0.533 | 0.004 | fastest query |
-| `potion-code-16M` | model2vec | 62MB | 0.706 | 0.606 | 0.004 | code, fastest query |
-| `potion-base-32M` | model2vec | 124MB | 0.353 | 0.672 | 0.008 | prose |
-| `potion-retrieval-32M` | model2vec | 124MB | 0.412 | 0.561 | 0.007 | — |
+| `potion-base-2M` | model2vec | 7MB | 0.235 | 0.400 | 0.003 | smallest footprint, fastest query |
+| `potion-base-4M` | model2vec | 15MB | 0.412 | 0.472 | 0.003 | fastest query |
+| `potion-base-8M` | model2vec | 29MB | 0.412 | 0.533 | 0.006 | — |
+| `potion-code-16M` | model2vec | 62MB | 0.706 | 0.606 | 0.003 | code, fastest query |
+| `potion-base-32M` | model2vec | 124MB | 0.353 | 0.672 | 0.005 | prose |
+| `potion-retrieval-32M` | model2vec | 124MB | 0.412 | 0.561 | 0.004 | — |
+
+## Condensation lift (EMBED_BENCH_CONDENSE=on)
+
+Extractive condensation: per doc, split into pieces (lines), embed each, keep top-K most-central by cosine-centroid, concatenate, re-embed. Docs below `EMBED_BENCH_CONDENSE_MIN_LEN` are embedded raw — the gated subset caps the achievable lift. Positive lift = condensed beats raw.
+
+| Model | Code R@10 (cond) | Code Lift | Prose R@10 (cond) | Prose Lift |
+|---|---|---|---|---|
+| `potion-base-2M` | 0.118 | -0.118 | 0.333 | -0.067 |
+| `potion-base-4M` | 0.471 | +0.059 | 0.400 | -0.072 |
+| `potion-base-8M` | 0.471 | +0.059 | 0.506 | -0.028 |
+| `potion-code-16M` | 0.647 | -0.059 | 0.544 | -0.061 |
+| `potion-base-32M` | 0.294 | -0.059 | 0.517 | -0.156 |
+| `potion-retrieval-32M` | 0.412 | +0.000 | 0.583 | +0.022 |
 
 ## Notes
 
