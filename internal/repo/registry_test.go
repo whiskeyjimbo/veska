@@ -313,6 +313,37 @@ func TestRemoveRepo(t *testing.T) {
 	}
 }
 
+// TestRemoveRepoByShortPrefix pins solov2-d78r: Remove must accept a unique
+// short id prefix (as printed by `veska repo add`). Before the fix the
+// exact-match DELETE silently no-op'd on a short id, leaving the repo (and its
+// CASCADE-able children) in place.
+func TestRemoveRepoByShortPrefix(t *testing.T) {
+	db := newTestDB(t)
+	dir := newGitRepo(t)
+
+	repoID, err := repo.Add(context.Background(), db, dir)
+	if err != nil {
+		t.Fatalf("Add: %v", err)
+	}
+
+	short := repoID[:12]
+	if err := repo.Remove(context.Background(), db, short); err != nil {
+		t.Fatalf("Remove by short prefix: %v", err)
+	}
+	var count int
+	if err := db.QueryRow("SELECT COUNT(*) FROM repos WHERE repo_id = ?", repoID).Scan(&count); err != nil {
+		t.Fatalf("count: %v", err)
+	}
+	if count != 0 {
+		t.Errorf("expected repo removed via short prefix, got %d rows", count)
+	}
+
+	// An unknown id is now a loud error, not a silent success.
+	if err := repo.Remove(context.Background(), db, "ffffffffffff"); err == nil {
+		t.Error("expected error removing unknown repo id, got nil")
+	}
+}
+
 func TestRemoveRepoRemovesHooks(t *testing.T) {
 	db := newTestDB(t)
 	dir := newGitRepo(t)
