@@ -155,8 +155,12 @@ func repoAddCmd() *cobra.Command {
 
 			// Prefer the daemon when up — it triggers cold scan and seeds
 			// the live watcher in one call (parity with eng_add_repo).
-			id, dialErr := dialAddRepo(ctx, root)
+			id, existed, dialErr := dialAddRepo(ctx, root)
 			if dialErr == nil {
+				if existed {
+					fmt.Fprintf(w, "repo already registered: %s (via daemon)\n", shortRepoID(id))
+					return nil
+				}
 				fmt.Fprintf(w, "added repo %s (via daemon)\n", shortRepoID(id))
 				logPath := filepath.Join(config.DefaultVectorDir(), "logs", "daemon.log")
 				fmt.Fprintf(w, "  cold scan running in the background — `veska repo list` shows status, `tail %s` shows progress\n", logPath)
@@ -174,11 +178,16 @@ func repoAddCmd() *cobra.Command {
 			}
 			defer closeFn()
 
-			id, err = repo.Add(ctx, db, root)
+			var existedLocal bool
+			id, existedLocal, err = repo.Add(ctx, db, root)
 			if err != nil {
 				return fmt.Errorf("repo add: %w", err)
 			}
-			fmt.Fprintf(w, "added repo %s (direct write; daemon dial failed: %v — restart daemon to cold-scan/live-watch)\n", shortRepoID(id), dialErr)
+			verb := "added"
+			if existedLocal {
+				verb = "already registered"
+			}
+			fmt.Fprintf(w, "%s repo %s (direct write; daemon dial failed: %v — restart daemon to cold-scan/live-watch)\n", verb, shortRepoID(id), dialErr)
 			return nil
 		},
 	}
@@ -230,19 +239,20 @@ func openLocalDB() (*sql.DB, func(), error) {
 // dialAddRepo sends eng_add_repo over the daemon's MCP unix socket. Returns
 // the assigned repo_id on success. Errors are translated into context — a
 // dial failure means "daemon not running" and the caller should fall back.
-func dialAddRepo(ctx context.Context, rootPath string) (string, error) {
+func dialAddRepo(ctx context.Context, rootPath string) (string, bool, error) {
 	type result struct {
-		RepoID      string `json:"repo_id"`
-		ScanPending bool   `json:"scan_pending"`
+		RepoID            string `json:"repo_id"`
+		ScanPending       bool   `json:"scan_pending"`
+		AlreadyRegistered bool   `json:"already_registered"`
 	}
 	var r result
 	if err := callMCP(ctx, "eng_add_repo", map[string]any{"root_path": rootPath}, &r); err != nil {
-		return "", err
+		return "", false, err
 	}
 	if r.RepoID == "" {
-		return "", errors.New("daemon returned empty repo_id")
+		return "", false, errors.New("daemon returned empty repo_id")
 	}
-	return r.RepoID, nil
+	return r.RepoID, r.AlreadyRegistered, nil
 }
 
 // dialRemoveRepo sends eng_remove_repo over the daemon's MCP unix socket.

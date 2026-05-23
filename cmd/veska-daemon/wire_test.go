@@ -304,7 +304,7 @@ func TestWire_StartWatchesRegisteredRepos(t *testing.T) {
 	if err := os.MkdirAll(filepath.Join(gitDir, ".git", "hooks"), 0o755); err != nil {
 		t.Fatalf("create .git/hooks: %v", err)
 	}
-	repoID, err := repo.Add(context.Background(), d.pools.WriteHot, gitDir)
+	repoID, _, err := repo.Add(context.Background(), d.pools.WriteHot, gitDir)
 	if err != nil {
 		t.Fatalf("repo.Add: %v", err)
 	}
@@ -346,7 +346,7 @@ func TestWire_WatchLoopRoutesEditsToStaging(t *testing.T) {
 			if err := os.MkdirAll(filepath.Join(gitDir, ".git", "hooks"), 0o755); err != nil {
 				t.Fatalf("create .git/hooks: %v", err)
 			}
-			repoID, err := repo.Add(context.Background(), d.pools.WriteHot, gitDir)
+			repoID, _, err := repo.Add(context.Background(), d.pools.WriteHot, gitDir)
 			if err != nil {
 				t.Fatalf("repo.Add: %v", err)
 			}

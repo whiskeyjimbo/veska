@@ -88,7 +88,7 @@ func TestDaemon_StartupResync_NeverPromoted_Reparses(t *testing.T) {
 	t.Cleanup(func() { _ = d.Stop() })
 
 	gitDir := initGitRepoWithGoFile(t)
-	repoID, err := repo.Add(context.Background(), d.pools.WriteHot, gitDir)
+	repoID, _, err := repo.Add(context.Background(), d.pools.WriteHot, gitDir)
 	if err != nil {
 		t.Fatalf("repo.Add: %v", err)
 	}
@@ -132,7 +132,7 @@ func TestDaemon_StartupResync_AtHEAD_SkipsReparse(t *testing.T) {
 	t.Cleanup(func() { _ = d.Stop() })
 
 	gitDir := initGitRepoWithGoFile(t)
-	repoID, err := repo.Add(context.Background(), d.pools.WriteHot, gitDir)
+	repoID, _, err := repo.Add(context.Background(), d.pools.WriteHot, gitDir)
 	if err != nil {
 		t.Fatalf("repo.Add: %v", err)
 	}
@@ -192,7 +192,7 @@ func TestDaemon_StartupResync_FullPipeline(t *testing.T) {
 	t.Cleanup(func() { _ = d.Stop() })
 
 	gitDir := initGitRepoWithGoFile(t)
-	repoID, err := repo.Add(context.Background(), d.pools.WriteHot, gitDir)
+	repoID, _, err := repo.Add(context.Background(), d.pools.WriteHot, gitDir)
 	if err != nil {
 		t.Fatalf("repo.Add: %v", err)
 	}
@@ -278,7 +278,7 @@ func TestDaemon_VectorStoreRehydratesOnSecondStart(t *testing.T) {
 	}
 
 	gitDir := initGitRepoWithGoFile(t)
-	repoID, err := repo.Add(context.Background(), d1.pools.WriteHot, gitDir)
+	repoID, _, err := repo.Add(context.Background(), d1.pools.WriteHot, gitDir)
 	if err != nil {
 		_ = d1.Stop()
 		t.Fatalf("repo.Add: %v", err)

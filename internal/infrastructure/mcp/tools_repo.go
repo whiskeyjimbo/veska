@@ -17,7 +17,7 @@ import (
 // the daemon's queue/watcher). Remove drops the repo's rows in one
 // transaction (CASCADE removes nodes/edges).
 type RepoRegistrar interface {
-	AddRepo(ctx context.Context, rootPath string) (repoID string, err error)
+	AddRepo(ctx context.Context, rootPath string) (repoID string, existed bool, err error)
 	RemoveRepo(ctx context.Context, repoID string) error
 }
 
@@ -62,15 +62,19 @@ func makeAddRepoHandler(reg RepoRegistrar) ToolHandler {
 
 		// Add returns once the repo row is inserted and hooks are installed;
 		// the cold scan is driven asynchronously by the daemon's queue/watcher.
-		id, err := reg.AddRepo(ctx, p.RootPath)
+		// already_registered=true means the row already existed and no scan was
+		// dispatched (solov2-khjd) — the CLI uses this to print an idempotency
+		// message instead of a misleading 'added'.
+		id, existed, err := reg.AddRepo(ctx, p.RootPath)
 		if err != nil {
 			return nil, &RPCError{Code: CodeInternalError, Message: fmt.Sprintf("add repo: %v", err)}
 		}
 
 		return map[string]any{
-			"repo_id":      id,
-			"root_path":    p.RootPath,
-			"scan_pending": true,
+			"repo_id":            id,
+			"root_path":          p.RootPath,
+			"scan_pending":       !existed,
+			"already_registered": existed,
 		}, nil
 	}
 }
