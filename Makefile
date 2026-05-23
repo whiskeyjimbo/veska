@@ -6,7 +6,7 @@ DAEMON_BIN      := $(BINDIR)/veska-daemon
 MCP_BIN         := $(BINDIR)/veska-mcp
 LAYERCHECK_BIN  := $(BINDIR)/layercheck
 
-.PHONY: all build build-fat fetch-embed-assets test lint vet layercheck clean loadtest test-mcp test-mcp-deep test-mcp-bootstrap eval-recall eval-recall-projection eval-autolink-fp eval-revalidate-bench eval-queue-fuzz eval-embed-throughput eval-embedder-bench eval-embed-models
+.PHONY: all build build-fat fetch-embed-assets test lint vet layercheck clean loadtest test-mcp test-mcp-deep test-mcp-bootstrap eval-recall eval-recall-projection eval-autolink-fp eval-revalidate-bench eval-queue-fuzz eval-embed-throughput eval-embedder-bench eval-embed-models eval-embed-models-full
 
 all: build test vet lint layercheck
 
@@ -149,13 +149,22 @@ eval-embed-throughput:
 eval-embedder-bench:
 	go test -tags='eval embed_model' -run '^$$' -bench 'Load|Embed' -benchmem ./tools/loadtest/embedder/
 
-# eval-embed-models: phased benchmark of embedding model variants
-# (model2vec + later Ollama) over real codebase corpora. Used to inform
-# hi5's defaults and publish a comparison table (solov2-0k5h). Phase 0k5h.1
-# is the vertical slice: one model, one corpus, one query. See env knobs
-# at the top of embed_models_test.go.
+# eval-embed-models: phased benchmark of embedding model variants over
+# real codebase corpora. Used to inform hi5's defaults and publish a
+# comparison table (solov2-0k5h). Default runs the model2vec subset only
+# — no external service required. See env knobs at the top of
+# embed_models_test.go.
 eval-embed-models:
 	go test -tags=eval -run TestEmbedModelsBenchmark ./tools/loadtest/embed_models/ -v -timeout=300s
+
+# eval-embed-models-full: same harness as eval-embed-models, but adds
+# the Ollama model set (nomic-embed-text, bge-m3, snowflake-arctic-embed,
+# mxbai-embed-large). Requires Ollama running and the models pulled
+# via `ollama pull <name>`. The harness probes /api/tags once at start
+# and gracefully drops the Ollama subset if unreachable rather than
+# failing — keeps the contributor experience smooth.
+eval-embed-models-full:
+	EMBED_BENCH_INCLUDE_OLLAMA=1 go test -tags=eval -run TestEmbedModelsBenchmark ./tools/loadtest/embed_models/ -v -timeout=1800s
 
 # eval-review-timing: M5 exit-gate-5 — drive the review Handler over a synthetic
 # ~100-file commit against a real Ollama and report the wall-clock time budget.
