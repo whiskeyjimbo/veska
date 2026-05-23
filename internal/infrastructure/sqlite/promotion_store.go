@@ -2,9 +2,12 @@ package sqlite
 
 import (
 	"context"
+	"crypto/sha256"
 	"database/sql"
+	"encoding/hex"
 	"fmt"
 	"path/filepath"
+	"strings"
 
 	"github.com/whiskeyjimbo/veska/internal/application"
 	"github.com/whiskeyjimbo/veska/internal/core/domain"
@@ -34,6 +37,117 @@ func buildPackageSymbolMap(batch application.PromotionBatch) map[string]map[stri
 		}
 	}
 	return out
+}
+
+// moduleRelDir returns path's directory relative to the repo's working-tree
+// root, in slash form. Node/file paths reach promotion in a mix of absolute
+// (cold scan) and repo-relative (incremental commit) forms; normalising both
+// against root gives a single package-key space for cross-package resolution
+// (solov2-xc51). The module-root package maps to "".
+func moduleRelDir(path, root string) string {
+	p := filepath.ToSlash(path)
+	if root != "" {
+		if rest, ok := strings.CutPrefix(p, filepath.ToSlash(root)+"/"); ok {
+			p = rest
+		}
+	}
+	dir := filepath.ToSlash(filepath.Dir(p))
+	if dir == "." || dir == "/" {
+		return ""
+	}
+	return dir
+}
+
+// modulePackageDir maps a Go import path to its package directory relative to
+// the module root. inModule is false when importPath is not under modulePath
+// (stdlib or another module — handled as a cross-repo stub instead).
+func modulePackageDir(modulePath, importPath string) (relDir string, inModule bool) {
+	if modulePath == "" {
+		return "", false
+	}
+	if importPath == modulePath {
+		return "", true
+	}
+	if rest, ok := strings.CutPrefix(importPath, modulePath+"/"); ok {
+		return rest, true
+	}
+	return "", false
+}
+
+// buildModuleRelSymbolMap groups batch symbol names by their module-relative
+// package directory (see moduleRelDir), the key space cross-package resolution
+// uses. Last writer wins on name conflict — illegal within one Go package.
+func buildModuleRelSymbolMap(batch application.PromotionBatch, root string) map[string]map[string]domain.NodeID {
+	out := make(map[string]map[string]domain.NodeID)
+	for _, file := range batch.Files {
+		dir := moduleRelDir(file.Path, root)
+		bucket, ok := out[dir]
+		if !ok {
+			bucket = make(map[string]domain.NodeID)
+			out[dir] = bucket
+		}
+		for _, n := range file.Nodes {
+			if n != nil {
+				bucket[n.Name] = n.ID
+			}
+		}
+	}
+	return out
+}
+
+// lookupPromotedSymbolDir finds the already-promoted node for symbol `name`
+// living in module-relative package dir `relDir`. It scans candidates by
+// symbol_path (indexed) and disambiguates by directory in Go, since promoted
+// file paths may be absolute or repo-relative. The cursor is fully drained
+// before returning so callers may safely write on the same tx afterwards
+// (solov2-xc51). found is false on no match.
+func lookupPromotedSymbolDir(ctx context.Context, tx *sql.Tx, repoID, branch, root, relDir, name string) (domain.NodeID, bool, error) {
+	rows, err := tx.QueryContext(ctx,
+		`SELECT node_id, file_path FROM nodes
+		   WHERE repo_id = ? AND branch = ? AND symbol_path = ?`,
+		repoID, branch, name,
+	)
+	if err != nil {
+		return "", false, err
+	}
+	defer rows.Close()
+
+	var match domain.NodeID
+	found := false
+	for rows.Next() {
+		var nodeID, filePath string
+		if err := rows.Scan(&nodeID, &filePath); err != nil {
+			return "", false, err
+		}
+		if found {
+			continue // drain remaining rows; ambiguity handled below
+		}
+		if moduleRelDir(filePath, root) == relDir {
+			match = domain.NodeID(nodeID)
+			found = true
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return "", false, err
+	}
+	return match, found, nil
+}
+
+// isExternalModulePath reports whether importPath looks like a third-party Go
+// module (its first segment contains a "." — a hostname like github.com),
+// rather than a standard-library package (fmt, net/http). Only external
+// modules can match another registered repo, so stdlib calls get no stub.
+func isExternalModulePath(importPath string) bool {
+	first, _, _ := strings.Cut(importPath, "/")
+	return strings.Contains(first, ".")
+}
+
+// stubID derives a deterministic id for a cross-repo edge stub from its source
+// node, target module path and symbol, so re-promoting the same call is a
+// no-op under the ON CONFLICT clause.
+func stubID(srcNodeID, modulePath, symbol string) string {
+	h := sha256.Sum256([]byte(srcNodeID + "\x00" + modulePath + "\x00" + symbol))
+	return hex.EncodeToString(h[:])
 }
 
 // Compile-time assertion that PromotionStore satisfies the application port.
@@ -88,11 +202,13 @@ func (s *PromotionStore) Promote(ctx context.Context, batch application.Promotio
 	repoID := batch.RepoID
 	branch := batch.Branch
 
-	// Reject promotions for repos not in the registry.
-	var exists int
+	// Reject promotions for repos not in the registry. Capture the repo's
+	// working-tree root and go-module path here too: both feed cross-package
+	// CALLS resolution below (solov2-xc51). module_path may be NULL/empty.
+	var rootPath, modulePath sql.NullString
 	err := s.writeDB.QueryRowContext(ctx,
-		`SELECT 1 FROM repos WHERE repo_id = ?`, repoID,
-	).Scan(&exists)
+		`SELECT root_path, module_path FROM repos WHERE repo_id = ?`, repoID,
+	).Scan(&rootPath, &modulePath)
 	if err == sql.ErrNoRows {
 		return application.ErrUnregisteredRepo{RepoID: repoID}
 	}
@@ -356,6 +472,13 @@ func (s *PromotionStore) Promote(ctx context.Context, batch application.Promotio
 			continue
 		}
 		for _, uc := range file.UnresolvedCalls {
+			// Package-qualified calls (cmd.Execute) are resolved by the
+			// cross-package pass via the import map, never by bare name
+			// against the local package — otherwise a same-named symbol in
+			// the caller's package would bind falsely (solov2-xc51).
+			if uc.PkgQualifier != "" {
+				continue
+			}
 			targetID, ok := names[uc.CalleeName]
 			if !ok {
 				continue
@@ -377,6 +500,101 @@ func (s *PromotionStore) Promote(ctx context.Context, batch application.Promotio
 			); ierr != nil {
 				_ = tx.Rollback()
 				return fmt.Errorf("promoter: insert cross-file edge %q: %w", e.ID, ierr)
+			}
+		}
+	}
+
+	// Cross-package CALLS resolution within the same Go module (solov2-xc51).
+	// A package-qualified call (cmd.Execute) binds by resolving the import
+	// alias to a package directory under this repo's module, then matching the
+	// callee name to a node in that package — first in the current batch, then
+	// in the already-promoted graph so incremental single-file commits still
+	// bind. Imports outside this module fall through to xc51.3 (cross-repo
+	// stubs). Ambiguity/misses are skipped: this pass never emits a false edge.
+	if modulePath.Valid && modulePath.String != "" {
+		mod := modulePath.String
+		root := rootPath.String
+		byPkgDir := buildModuleRelSymbolMap(batch, root)
+
+		// Cross-repo edge stubs for package-qualified calls into other modules
+		// (solov2-xc51.3 / solov2-1gj). Prepared lazily here so promotions for
+		// repos without a module_path never touch the table. The query-time
+		// resolver binds these to a node in whatever registered repo owns the
+		// module_path. Idempotent on the deterministic stub_id.
+		stubStmt, serr := tx.PrepareContext(ctx, `
+			INSERT INTO cross_repo_edge_stubs
+				(stub_id, branch, repo_id, src_node_id, kind, module_path, symbol_path, language, last_promoted_at)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+			ON CONFLICT(stub_id, branch) DO NOTHING`)
+		if serr != nil {
+			_ = tx.Rollback()
+			return fmt.Errorf("promoter: prepare stub insert: %w", serr)
+		}
+		defer stubStmt.Close()
+		for _, file := range batch.Files {
+			if len(file.UnresolvedCalls) == 0 || len(file.Imports) == 0 {
+				continue
+			}
+			for _, uc := range file.UnresolvedCalls {
+				if uc.PkgQualifier == "" {
+					continue
+				}
+				importPath, ok := file.Imports[uc.PkgQualifier]
+				if !ok {
+					continue // qualifier is a local var, not an import
+				}
+				relDir, inModule := modulePackageDir(mod, importPath)
+				if !inModule {
+					// Import resolves to another module. Record a cross-repo
+					// edge stub the query-time resolver binds to whichever
+					// registered repo owns module_path == importPath. Stdlib
+					// (no domain in the first path segment) can never match a
+					// repo, so it is skipped to keep the table lean.
+					if isExternalModulePath(importPath) {
+						sid := stubID(string(uc.CallerID), importPath, uc.CalleeName)
+						if _, ierr := stubStmt.ExecContext(ctx,
+							sid, branch, repoID, string(uc.CallerID), string(domain.EdgeCalls),
+							importPath, uc.CalleeName, "go", now,
+						); ierr != nil {
+							_ = tx.Rollback()
+							return fmt.Errorf("promoter: insert cross-repo stub %q: %w", sid, ierr)
+						}
+					}
+					continue
+				}
+				targetID, ok := byPkgDir[relDir][uc.CalleeName]
+				if !ok {
+					// Fall back to the promoted graph (callee's file not in
+					// this batch). Must fully drain the cursor before the
+					// edge insert: a query open during ExecContext deadlocks
+					// the single write connection.
+					tid, found, qerr := lookupPromotedSymbolDir(ctx, tx, repoID, branch, root, relDir, uc.CalleeName)
+					if qerr != nil {
+						_ = tx.Rollback()
+						return fmt.Errorf("promoter: cross-package lookup %q: %w", uc.CalleeName, qerr)
+					}
+					if !found {
+						continue
+					}
+					targetID = tid
+				}
+				if uc.CallerID == targetID {
+					continue
+				}
+				e, eerr := domain.NewEdge(uc.CallerID, targetID, domain.EdgeCalls,
+					domain.WithConfidence(domain.Probable),
+				)
+				if eerr != nil {
+					continue
+				}
+				if _, ierr := edgeStmt.ExecContext(ctx,
+					e.ID, branch, repoID,
+					string(e.Src), string(e.Tgt),
+					string(e.Kind), confidenceText(e.Confidence), now,
+				); ierr != nil {
+					_ = tx.Rollback()
+					return fmt.Errorf("promoter: insert cross-package edge %q: %w", e.ID, ierr)
+				}
 			}
 		}
 	}
