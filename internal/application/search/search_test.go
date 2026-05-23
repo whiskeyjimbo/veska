@@ -22,6 +22,7 @@ type fakeEmbedder struct {
 	err     error
 	calls   int
 	gotText string
+	modelID string
 }
 
 func (f *fakeEmbedder) Embed(_ context.Context, text string) ([]float32, error) {
@@ -29,7 +30,12 @@ func (f *fakeEmbedder) Embed(_ context.Context, text string) ([]float32, error) 
 	f.gotText = text
 	return f.vec, f.err
 }
-func (f *fakeEmbedder) ModelID() string { return "test-model" }
+func (f *fakeEmbedder) ModelID() string {
+	if f.modelID != "" {
+		return f.modelID
+	}
+	return "test-model"
+}
 
 type fakeVectors struct {
 	hits      []domain.Hit
@@ -78,6 +84,35 @@ func (f *fakeNodes) NodesInFile(_ context.Context, _, _, _ string) ([]string, er
 }
 
 // --- tests -----------------------------------------------------------------
+
+// TestSemantic_StaticEmbedderFlagsLowQuality pins solov2-d2x: when the
+// elected embedder is the static-v2 fallback, every response carries the
+// low_quality_static_embedder degraded reason so the quality cliff is
+// visible in-band.
+func TestSemantic_StaticEmbedderFlagsLowQuality(t *testing.T) {
+	t.Parallel()
+	emb := &fakeEmbedder{vec: []float32{0.1, 0.2}, modelID: "veska-static-v2"}
+	vec := &fakeVectors{hits: []domain.Hit{{NodeID: "n1", Score: 0.5}}}
+	nodes := &fakeNodes{rows: []ports.NodeMeta{
+		{NodeID: "n1", SymbolPath: "pkg.A", FilePath: "a.go", Kind: "function", LineStart: 1, LineEnd: 10},
+	}}
+
+	s := search.NewService(emb, vec, nodes)
+	resp, err := s.Semantic(context.Background(), "r1", "main", "q", 10, domain.Filter{})
+	if err != nil {
+		t.Fatalf("Semantic: %v", err)
+	}
+	found := false
+	for _, d := range resp.DegradedReasons {
+		if d == search.DegradedReasonLowQualityStaticEmbedder {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("expected %q in degraded_reasons, got %v",
+			search.DegradedReasonLowQualityStaticEmbedder, resp.DegradedReasons)
+	}
+}
 
 // TestSemantic_HappyPath_PreservesHitRank verifies the service returns
 // hydrated Results in the order VectorStorage.Search produced — even

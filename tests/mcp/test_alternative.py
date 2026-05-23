@@ -32,13 +32,13 @@ def test_alternative_find_symbol_vs_get_node(mcp_client, repo_id, branch, target
     fs_node = nodes[0]
 
     _, _, _, gn = mcp_client.call("eng_get_node", {
-        "repo_id": repo_id, "branch": branch, "node_id": fs_node["ID"],
+        "repo_id": repo_id, "branch": branch, "node_id": fs_node["node_id"],
     })
     gn_nodes = gn.get("nodes") or []
     assert gn_nodes, "get_node returned nothing for the id find_symbol gave us"
     gn_node = gn_nodes[0]
 
-    for k in ("ID", "Name", "Path", "Kind"):
+    for k in ("node_id", "name", "file_path", "kind"):
         assert fs_node.get(k) == gn_node.get(k), (
             f"path bifurcation on field {k!r}: find_symbol={fs_node.get(k)!r} "
             f"get_node={gn_node.get(k)!r}"
@@ -72,8 +72,8 @@ def test_alternative_get_file_nodes_absolute_vs_db_path(mcp_client, repo_id, bra
     base_nodes = by_base.get("nodes") or []
     # A clean assertion: the basename search must not accidentally
     # return the same node ids that the absolute path returned.
-    abs_ids = {n["ID"] for n in by_abs.get("nodes") or []}
-    base_ids = {n["ID"] for n in base_nodes}
+    abs_ids = {n["node_id"] for n in by_abs.get("nodes") or []}
+    base_ids = {n["node_id"] for n in base_nodes}
     assert not (abs_ids & base_ids) or abs_ids != base_ids, (
         "get_file_nodes treats basename as synonym for absolute path — "
         "would silently leak across same-named files in different dirs"
@@ -102,8 +102,8 @@ def test_alternative_search_semantic_default_vs_explicit_limit(mcp_client, repo_
     # Set equivalence on the top-N: the default-limit result must be a
     # subset of the larger result. (Identity within a score tie is
     # backend-defined.)
-    small_ids = {r["NodeID"] for r in small}
-    big_ids = {r["NodeID"] for r in big[: len(big)]}
+    small_ids = {r["node_id"] for r in small}
+    big_ids = {r["node_id"] for r in big[: len(big)]}
     missing = small_ids - big_ids
     assert not missing, (
         f"default-limit hits not in explicit-limit superset: {missing}"
@@ -112,8 +112,8 @@ def test_alternative_search_semantic_default_vs_explicit_limit(mcp_client, repo_
     # The TOP hit must agree across runs — if the #1 result shuffles
     # between calls the user-visible "best match" becomes inconsistent
     # and that IS a real bug worth pinning here.
-    assert big[0]["NodeID"] == small[0]["NodeID"], (
-        f"top hit differs: default={small[0]['NodeID']} explicit={big[0]['NodeID']}"
+    assert big[0]["node_id"] == small[0]["node_id"], (
+        f"top hit differs: default={small[0]["node_id"]} explicit={big[0]["node_id"]}"
     )
 
 
@@ -145,6 +145,6 @@ def test_alternative_list_repos_matches_db(mcp_client):
     the lister is reading from somewhere stale (e.g. a startup-time
     snapshot that doesn't see live additions)."""
     _, _, _, result = mcp_client.call("eng_list_repos", {})
-    mcp_ids = sorted(r["RepoID"] for r in result.get("repos") or [])
+    mcp_ids = sorted(r["repo_id"] for r in result.get("repos") or [])
     db_ids = sorted(r["repo_id"] for r in query("SELECT repo_id FROM repos"))
     assert mcp_ids == db_ids, f"eng_list_repos {mcp_ids} != db {db_ids}"

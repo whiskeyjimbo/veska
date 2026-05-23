@@ -194,6 +194,14 @@ func newOllama(cfg Config) (ports.EmbeddingProvider, error) {
 	return p, nil
 }
 
+// Marker returns the elected embedder's ModelID recorded in the sticky
+// marker, or "" when no election has happened yet. Read-only consumers (e.g.
+// the daemon's config tool) use it to report which embedder owns the index.
+func Marker(veskaHome string) string {
+	name, _ := readMarker(veskaHome)
+	return name
+}
+
 // readMarker returns the current marker contents, or "" when absent.
 func readMarker(veskaHome string) (string, error) {
 	b, err := os.ReadFile(filepath.Join(veskaHome, markerFile))

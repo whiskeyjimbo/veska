@@ -38,10 +38,10 @@ func repoCmd() *cobra.Command {
 // eng_list_repos) and the direct-DB fallback path. Field names match the
 // MCP response so json.Unmarshal works as-is.
 type repoView struct {
-	RepoID          string `json:"RepoID"`
-	RootPath        string `json:"RootPath"`
-	ActiveBranch    string `json:"ActiveBranch"`
-	LastPromotedSHA string `json:"LastPromotedSHA"`
+	RepoID          string `json:"repo_id"`
+	RootPath        string `json:"root_path"`
+	ActiveBranch    string `json:"active_branch"`
+	LastPromotedSHA string `json:"last_promoted_sha"`
 }
 
 // repoListCmd prints every registered repo (solov2-0pq). Prefers the

@@ -874,7 +874,7 @@ func registerMCPTools(r *mcp.Registry, d mcpDeps) {
 	// Graph tools backed by the SQLite GraphRepo adapter. Writes take the
 	// hot-write pool; reads take the read pool.
 	graph := sqlite.NewGraphRepo(pools.ReadDB, pools.WriteHot)
-	mcp.RegisterGraphTools(r, graph, d.staging)
+	mcp.RegisterGraphTools(r, graph, d.staging, mcp.WithRepoLister(&repoLister{db: pools.ReadDB}))
 
 	// Blast-radius tools. The Service walks edge adjacency + staging; the
 	// repoRoot lookup resolves a repoID to its working tree, and changedFiles
@@ -882,7 +882,7 @@ func registerMCPTools(r *mcp.Registry, d mcpDeps) {
 	edges := sqlite.NewEdgeReaderRepo(pools.ReadDB)
 	nodes := sqlite.NewNodeLookupRepo(pools.ReadDB)
 	blastSvc := blastradius.NewService(edges, nodes, d.staging)
-	mcp.RegisterBlastTools(r, blastSvc, repoRootFunc(pools.ReadDB), gitwatch.ChangedFiles)
+	mcp.RegisterBlastTools(r, blastSvc, repoRootFunc(pools.ReadDB), gitwatch.ChangedFiles, &repoLister{db: pools.ReadDB})
 
 	// eng_find_changed_symbols: parses each file changed between two git
 	// refs at both refs and diffs the symbol sets. It reads git + the
@@ -950,7 +950,7 @@ func registerMCPTools(r *mcp.Registry, d mcpDeps) {
 	// node hydration with lexical fallback.
 	searchSvc := search.NewService(d.provider, d.vectors, nodes,
 		search.WithMetrics(d.metrics))
-	mcp.RegisterSearchTools(r, searchSvc, d.refs, d.vectors, nodes, d.savings)
+	mcp.RegisterSearchTools(r, searchSvc, d.refs, d.vectors, nodes, d.savings, &repoLister{db: pools.ReadDB})
 }
 
 // activeTaskFunc returns a contextpack.ActiveTaskFunc reading the repo's

@@ -191,7 +191,7 @@ def repo_id(mcp_client) -> str:
     # Rank by node count to skip empty/orphaned rows.
     best, best_n = None, -1
     for r in repos:
-        rid = r["RepoID"]
+        rid = r["repo_id"]
         row = query("SELECT COUNT(*) AS c FROM nodes WHERE repo_id = ?", (rid,))
         n = row[0]["c"] if row else 0
         if n > best_n:

@@ -2,11 +2,34 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 )
+
+// TestCheckEmbedderHealthDefaultIsInProcess verifies the default (no override)
+// embedder health reports the elected in-process embedder and never claims to
+// be probing Ollama — the bug behind solov2-rrm, where doctor reported
+// "nomic-embed-text @ ollama" on the documented zero-dependency path.
+func TestCheckEmbedderHealthDefaultIsInProcess(t *testing.T) {
+	t.Setenv("VESKA_EMBEDDER", "")
+	home := t.TempDir()
+	h := checkEmbedderHealth(context.Background(), home)
+	if h.Status != "healthy" {
+		t.Fatalf("default embedder status = %q, want healthy", h.Status)
+	}
+	if !strings.Contains(h.Detail, "in-process") {
+		t.Errorf("default embedder detail = %q, want it to mention in-process", h.Detail)
+	}
+	if strings.Contains(strings.ToLower(h.Detail), "ollama") {
+		t.Errorf("default embedder detail = %q, must not mention ollama", h.Detail)
+	}
+	if h.Probe != nil {
+		t.Errorf("default embedder should not run an Ollama probe, got %+v", h.Probe)
+	}
+}
 
 // runDoctorEgress executes `veska doctor egress` and returns the combined
 // output. A ProbeStatusError from a missing socket is expected in CI and not

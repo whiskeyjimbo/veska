@@ -20,7 +20,7 @@ def test_get_status_responds(mcp_client, fixture_summary):
 def test_list_repos_includes_target(mcp_client, repo_id):
     ok, text, _, result = mcp_client.call("eng_list_repos", {})
     assert ok, f"eng_list_repos failed: {text}"
-    ids = [r["RepoID"] for r in result.get("repos", [])]
+    ids = [r["repo_id"] for r in result.get("repos", [])]
     assert repo_id in ids, f"target repo {repo_id} not in {ids}"
 
 
@@ -38,7 +38,7 @@ def test_get_current_repo_resolves_known_root(mcp_client, repo_id):
     ok, text, _, result = mcp_client.call("eng_get_current_repo", {"cwd": root})
     assert ok, f"eng_get_current_repo failed: {text}"
     rec = result.get("repo") if isinstance(result, dict) else None
-    assert rec and rec.get("RepoID") == repo_id
+    assert rec and rec.get("repo_id") == repo_id
 
 
 def test_get_repo_unknown_id_errors(mcp_client):

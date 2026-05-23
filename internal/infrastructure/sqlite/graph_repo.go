@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/whiskeyjimbo/veska/internal/core/domain"
@@ -35,7 +36,7 @@ func NewGraphRepo(readDB, writeDB *sql.DB) *GraphRepo {
 // nodeColumns is the SELECT column list shared by GetNode and FindNodes. It
 // matches the subset of `nodes` columns needed to rehydrate a domain.Node.
 const nodeColumns = `node_id, symbol_path, file_path, kind, language,
-	line_start, line_end, content_hash, signature`
+	line_start, line_end, content_hash, signature, exported`
 
 // scanNode rehydrates a domain.Node from a row selected with nodeColumns.
 // Nullable columns (line_start/line_end, language, signature) are read into
@@ -49,9 +50,10 @@ func scanNode(s interface {
 		lineStart, lineEnd             sql.NullInt64
 		contentHash                    sql.NullString
 		signature                      sql.NullString
+		exported                       sql.NullBool
 	)
 	if err := s.Scan(&id, &symbolPath, &filePath, &kind, &language,
-		&lineStart, &lineEnd, &contentHash, &signature); err != nil {
+		&lineStart, &lineEnd, &contentHash, &signature, &exported); err != nil {
 		return nil, err
 	}
 
@@ -70,6 +72,9 @@ func scanNode(s interface {
 	}
 	if signature.Valid {
 		opts = append(opts, domain.WithSignature(signature.String))
+	}
+	if exported.Valid {
+		opts = append(opts, domain.WithExported(exported.Bool))
 	}
 
 	n, err := domain.NewNode(id, filePath, symbolPath, domain.NodeKind(kind), opts...)
@@ -94,8 +99,8 @@ func (r *GraphRepo) SaveNode(ctx context.Context, repoID, branch string, n *doma
 INSERT INTO nodes
 	(node_id, branch, repo_id, language, kind, symbol_path, file_path,
 	 line_start, line_end, content_hash, last_promoted_at, actor_id, actor_kind,
-	 signature, snippet, prev_signature)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)
+	 signature, snippet, prev_signature, exported)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?)
 ON CONFLICT(node_id, branch) DO UPDATE SET
 	repo_id          = excluded.repo_id,
 	language         = excluded.language,
@@ -109,7 +114,8 @@ ON CONFLICT(node_id, branch) DO UPDATE SET
 	actor_id         = excluded.actor_id,
 	actor_kind       = excluded.actor_kind,
 	signature        = excluded.signature,
-	snippet          = excluded.snippet`
+	snippet          = excluded.snippet,
+	exported         = excluded.exported`
 
 	var lineStart, lineEnd any
 	if n.Lines != nil {
@@ -136,7 +142,7 @@ ON CONFLICT(node_id, branch) DO UPDATE SET
 		string(n.ID), branch, repoID, language, string(n.Kind),
 		n.Name, n.Path, lineStart, lineEnd, contentHash, now,
 		string(domain.ActorKindSystem), string(domain.ActorKindSystem),
-		signature, snippet,
+		signature, snippet, nodeExported(n),
 	); err != nil {
 		return fmt.Errorf("graph_repo: save node %q: %w", n.ID, err)
 	}
@@ -276,11 +282,27 @@ func (r *GraphRepo) LoadGraph(ctx context.Context, repoID, branch string) (*doma
 
 // FindNodes returns every node whose symbol name (symbol_path column) exactly
 // equals symbolName for (repoID, branch).
+// escapeLike escapes the SQLite LIKE metacharacters (%, _, and the escape
+// char itself) with a backslash so a literal identifier can be embedded in a
+// LIKE pattern used with `ESCAPE '\'`.
+func escapeLike(s string) string {
+	r := strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`)
+	return r.Replace(s)
+}
+
 func (r *GraphRepo) FindNodes(ctx context.Context, repoID, branch, symbolName string) ([]*domain.Node, error) {
+	// Match the fully-qualified symbol_path exactly, OR an unqualified name
+	// against the trailing segment so "Start" finds "Server.Start" instead
+	// of silently returning nothing (solov2-d2x). Exact matches sort first.
+	// LIKE wildcards in the query are escaped so identifiers containing '_'
+	// don't behave as single-char wildcards.
+	suffixPattern := `%.` + escapeLike(symbolName)
 	rows, err := r.readDB.QueryContext(ctx,
 		`SELECT `+nodeColumns+` FROM nodes
-		 WHERE repo_id = ? AND branch = ? AND symbol_path = ?`,
-		repoID, branch, symbolName)
+		 WHERE repo_id = ? AND branch = ?
+		   AND (symbol_path = ? OR symbol_path LIKE ? ESCAPE '\')
+		 ORDER BY (symbol_path = ?) DESC, symbol_path`,
+		repoID, branch, symbolName, suffixPattern, symbolName)
 	if err != nil {
 		return nil, fmt.Errorf("graph_repo: find nodes: %w", err)
 	}

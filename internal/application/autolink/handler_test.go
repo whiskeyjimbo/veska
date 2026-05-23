@@ -23,11 +23,25 @@ import (
 type fakeLookup struct {
 	byPath     map[string][]string
 	contentBy  map[string]string
+	meta       map[string]ports.NodeMeta
 	err        error
 	hashErr    error
 	calls      int
 	hashCalls  int
 	gotHashIDs []string
+}
+
+func (f *fakeLookup) LookupNodes(_ context.Context, _, _ string, nodeIDs []string) ([]ports.NodeMeta, error) {
+	if f.meta == nil {
+		return nil, nil
+	}
+	out := make([]ports.NodeMeta, 0, len(nodeIDs))
+	for _, id := range nodeIDs {
+		if m, ok := f.meta[id]; ok {
+			out = append(out, m)
+		}
+	}
+	return out, nil
 }
 
 func (f *fakeLookup) NodesInFile(_ context.Context, _, _, filePath string) ([]string, error) {
@@ -48,13 +62,15 @@ func (f *fakeLookup) NodeContentHash(_ context.Context, _, _, nodeID string) (st
 }
 
 type fakeLinker struct {
-	out   []autolink.Candidate
-	err   error
-	calls int
+	out        []autolink.Candidate
+	err        error
+	calls      int
+	gotSources []string
 }
 
-func (f *fakeLinker) Candidates(_ context.Context, _, _ string, _ []string) ([]autolink.Candidate, error) {
+func (f *fakeLinker) Candidates(_ context.Context, _, _ string, sources []string) ([]autolink.Candidate, error) {
 	f.calls++
+	f.gotSources = append(f.gotSources, sources...)
 	if f.err != nil {
 		return nil, f.err
 	}
@@ -275,6 +291,46 @@ func TestHandler_FindingStorageErrorWraps(t *testing.T) {
 	})
 	if !errors.Is(err, sentinel) {
 		t.Fatalf("expected wrapped sentinel, got %v", err)
+	}
+}
+
+// TestHandler_SkipsNonSymbolSourcesAndNamesTarget covers solov2-wh0: package /
+// chunk source nodes are dropped before linking, and the finding message names
+// the target symbol + file instead of an opaque node ID.
+func TestHandler_SkipsNonSymbolSourcesAndNamesTarget(t *testing.T) {
+	t.Parallel()
+	lk := &fakeLookup{
+		byPath: map[string][]string{"x.go": {"fn1", "pkg1", "chunk1"}},
+		meta: map[string]ports.NodeMeta{
+			"fn1":    {NodeID: "fn1", Kind: "function", SymbolPath: "DoThing"},
+			"pkg1":   {NodeID: "pkg1", Kind: "package", SymbolPath: "server"},
+			"chunk1": {NodeID: "chunk1", Kind: "chunk", SymbolPath: "chunk:1-4"},
+			"t1":     {NodeID: "t1", Kind: "function", SymbolPath: "OtherThing", FilePath: "y.go"},
+		},
+	}
+	// The linker should only ever be asked about the symbol source (fn1).
+	linker := &fakeLinker{out: []autolink.Candidate{
+		{SourceNodeID: "fn1", TargetNodeID: "t1", Score: 0.91},
+	}}
+	edges := &fakeEdgeStore{}
+	findings := &fakeFindingStore{}
+	hh, herr := autolink.NewHandler(linker, lk, edges, findings)
+	h := mustHandler(t, hh, herr)
+
+	if err := h.Handle(context.Background(), queue.Row{
+		Kind: queue.WorkKindAutoLink, RepoID: "r1", Branch: "main", Payload: "x.go",
+	}); err != nil {
+		t.Fatalf("Handle: %v", err)
+	}
+	if len(linker.gotSources) != 1 || linker.gotSources[0] != "fn1" {
+		t.Fatalf("linker sources = %v, want only [fn1] (package/chunk dropped)", linker.gotSources)
+	}
+	if len(findings.saved) != 1 {
+		t.Fatalf("expected 1 finding, got %d", len(findings.saved))
+	}
+	want := "Similar to OtherThing in y.go (score 0.91)"
+	if findings.saved[0].Message != want {
+		t.Errorf("message = %q, want %q", findings.saved[0].Message, want)
 	}
 }
 

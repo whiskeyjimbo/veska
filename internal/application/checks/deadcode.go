@@ -59,7 +59,7 @@ func (c *DeadCodeCheck) Run(ctx context.Context, in Input) ([]*domain.Finding, e
 
 	out := make([]*domain.Finding, 0, len(dead))
 	for _, n := range dead {
-		if isExternalEntry(n) {
+		if !isDeadCodeCandidate(n) || isExternalEntry(n) {
 			continue
 		}
 		msg := fmt.Sprintf("symbol %q in %s has no inbound edges on branch %s",
@@ -87,6 +87,26 @@ func (c *DeadCodeCheck) Run(ctx context.Context, in Input) ([]*domain.Finding, e
 		out = append(out, f)
 	}
 	return out, nil
+}
+
+// deadCodeKinds is the set of node kinds for which "no inbound edges" is a
+// meaningful deadness signal — callable or referenceable symbols. Container
+// and sub-symbol kinds (package, file, module, chunk, field, …) carry no
+// inbound CALLS/REFERENCES edges by construction, so flagging them produced
+// pure noise (solov2-xpb). Anything not in this set is never reported.
+var deadCodeKinds = map[string]bool{
+	"function":  true,
+	"method":    true,
+	"type":      true,
+	"struct":    true,
+	"interface": true,
+	"class":     true,
+}
+
+// isDeadCodeCandidate reports whether n's kind is one the dead-code check
+// should reason about. Unknown/empty kinds are excluded conservatively.
+func isDeadCodeCandidate(n ports.NodeRef) bool {
+	return deadCodeKinds[n.Kind]
 }
 
 // isExternalEntry reports whether n looks like a node that could be invoked by

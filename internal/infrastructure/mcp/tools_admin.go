@@ -77,7 +77,7 @@ func makeGetCurrentRepoHandler(repos application.RepoLister) ToolHandler {
 			return nil, &RPCError{Code: CodeInvalidParams, Message: fmt.Sprintf("invalid params: %v", err)}
 		}
 		if p.CWD == "" {
-			return nil, &RPCError{Code: CodeInvalidParams, Message: "cwd is required"}
+			return nil, &RPCError{Code: CodeInvalidParams, Message: `cwd is required (an absolute path, e.g. {"cwd": "/abs/path/to/checkout"})`}
 		}
 
 		all, err := repos.ListRepos(ctx)
@@ -88,7 +88,7 @@ func makeGetCurrentRepoHandler(repos application.RepoLister) ToolHandler {
 		for _, rec := range all {
 			if strings.HasPrefix(p.CWD, rec.RootPath) {
 				return map[string]any{
-					"repo":             rec,
+					"repo":             decorateRepo(rec),
 					"included_staging": true,
 					"degraded_reasons": []string{},
 				}, nil
@@ -115,27 +115,47 @@ func makeGetCurrentRepoHandler(repos application.RepoLister) ToolHandler {
 //     is off, the daemon is mid-scan, or startup-resync errored on it
 //     (solov2-8ga's per-repo continue-on-error path).
 type RepoView struct {
-	RepoID          string `json:"RepoID"`
-	RootPath        string `json:"RootPath"`
-	ActiveBranch    string `json:"ActiveBranch"`
-	LastPromotedSHA string `json:"LastPromotedSHA"`
+	RepoID          string `json:"repo_id"`
+	ShortID         string `json:"short_id"`
+	RootPath        string `json:"root_path"`
+	ActiveBranch    string `json:"active_branch"`
+	LastPromotedSHA string `json:"last_promoted_sha"`
 	Status          string `json:"status"`
+}
+
+// ShortRepoIDLen is the number of leading hex chars of a repo_id that the
+// CLI and tools accept as a human-friendly alias (solov2-d2x). 12 chars of
+// sha256 is collision-safe for any realistic number of tracked repos.
+const ShortRepoIDLen = 12
+
+// ShortRepoID returns the first ShortRepoIDLen chars of id, or id unchanged
+// when it is already short.
+func ShortRepoID(id string) string {
+	if len(id) <= ShortRepoIDLen {
+		return id
+	}
+	return id[:ShortRepoIDLen]
+}
+
+func decorateRepo(r application.RepoRecord) RepoView {
+	status := "promoted"
+	if r.LastPromotedSHA == "" {
+		status = "unindexed"
+	}
+	return RepoView{
+		RepoID:          r.RepoID,
+		ShortID:         ShortRepoID(r.RepoID),
+		RootPath:        r.RootPath,
+		ActiveBranch:    r.ActiveBranch,
+		LastPromotedSHA: r.LastPromotedSHA,
+		Status:          status,
+	}
 }
 
 func decorateRepos(in []application.RepoRecord) []RepoView {
 	out := make([]RepoView, 0, len(in))
 	for _, r := range in {
-		status := "promoted"
-		if r.LastPromotedSHA == "" {
-			status = "unindexed"
-		}
-		out = append(out, RepoView{
-			RepoID:          r.RepoID,
-			RootPath:        r.RootPath,
-			ActiveBranch:    r.ActiveBranch,
-			LastPromotedSHA: r.LastPromotedSHA,
-			Status:          status,
-		})
+		out = append(out, decorateRepo(r))
 	}
 	return out
 }
@@ -179,9 +199,9 @@ func makeGetRepoHandler(repos application.RepoLister) ToolHandler {
 		}
 
 		for _, rec := range all {
-			if rec.RepoID == p.RepoID {
+			if rec.RepoID == p.RepoID || ShortRepoID(rec.RepoID) == p.RepoID {
 				return map[string]any{
-					"repo":             rec,
+					"repo":             decorateRepo(rec),
 					"included_staging": false,
 					"degraded_reasons": []string{},
 				}, nil
@@ -230,10 +250,10 @@ func makeGetConfigHandler(cp ConfigProvider) ToolHandler {
 		}
 
 		return map[string]any{
-			"veska_home":       config.DefaultVectorDir(),
-			"schema_version":   1,
-			"included_staging": false,
-			"degraded_reasons": []string{},
+			"veska_home":            config.DefaultVectorDir(),
+			"config_schema_version": 1,
+			"included_staging":      false,
+			"degraded_reasons":      []string{},
 		}, nil
 	}
 }

@@ -31,6 +31,21 @@ import (
 // can forward it unchanged.
 const DegradedReasonEmbedderOfflineLexicalFallback = "embedder_offline_lexical_fallback"
 
+// DegradedReasonLowQualityStaticEmbedder is emitted on every Semantic
+// response when the elected embedder is the in-binary static-v2 fallback —
+// a low-quality last resort used only when model2vec is unavailable. It
+// surfaces the quality cliff in-band so an agent (or `veska search`) can
+// tell the user to run `veska install model2vec` instead of silently
+// trusting near-noise scores (solov2-d2x).
+const DegradedReasonLowQualityStaticEmbedder = "low_quality_static_embedder"
+
+// staticEmbedderModelID mirrors the static adapter's ModelID. It is a
+// literal rather than an import because the application layer must not
+// depend on an infrastructure adapter (enforced by `make layercheck`); the
+// value is a stable wire identifier, and the matching test in the static
+// package pins it so drift is caught.
+const staticEmbedderModelID = "veska-static-v2"
+
 // Result is a hydrated semantic-search hit. The Score is the raw value
 // returned by VectorStorage.Search (distance-derived, higher = better);
 // callers preserve the ordering imposed by VectorStorage.
@@ -164,10 +179,10 @@ func (s *Service) Semantic(ctx context.Context, repoID, branch, query string, k 
 			if lerr != nil {
 				return Response{}, fmt.Errorf("search: lexical fallback after embedder unreachable: %w", lerr)
 			}
-			return Response{
+			return s.withEmbedderCaveat(Response{
 				Results:         results,
 				DegradedReasons: []string{DegradedReasonEmbedderOfflineLexicalFallback},
-			}, nil
+			}), nil
 		}
 		return Response{}, fmt.Errorf("search: embed query: %w", err)
 	}
@@ -211,7 +226,7 @@ func (s *Service) Semantic(ctx context.Context, repoID, branch, query string, k 
 	// truncation to caller-k happens after the boost.
 	hits := rrfFuse(vecHits, lexHits, 0)
 	if len(hits) == 0 {
-		return Response{Results: []Result{}}, nil
+		return s.withEmbedderCaveat(Response{Results: []Result{}}), nil
 	}
 
 	ids := make([]string, len(hits))
@@ -258,7 +273,17 @@ func (s *Service) Semantic(ctx context.Context, repoID, branch, query string, k 
 	if len(out) > k {
 		out = out[:k]
 	}
-	return Response{Results: out}, nil
+	return s.withEmbedderCaveat(Response{Results: out}), nil
+}
+
+// withEmbedderCaveat appends DegradedReasonLowQualityStaticEmbedder to resp
+// when the active embedder is the static-v2 fallback, so the quality cliff
+// rides along with every result set (solov2-d2x).
+func (s *Service) withEmbedderCaveat(resp Response) Response {
+	if s.embedder.ModelID() == staticEmbedderModelID {
+		resp.DegradedReasons = append(resp.DegradedReasons, DegradedReasonLowQualityStaticEmbedder)
+	}
+	return resp
 }
 
 // rrfConstant is the standard Reciprocal Rank Fusion smoothing term.

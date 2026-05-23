@@ -41,12 +41,12 @@ def test_golden_user_journey(mcp_client, repo_id, branch, target_symbol, target_
     # ── 2. Repo listing ──────────────────────────────────────────────
     _, _, _, repos = mcp_client.call("eng_list_repos", {})
     record = next(
-        (r for r in repos.get("repos") or [] if r["RepoID"] == repo_id),
+        (r for r in repos.get("repos") or [] if r["repo_id"] == repo_id),
         None,
     )
     assert record, f"repo {repo_id} not in eng_list_repos"
-    assert record["ActiveBranch"], "active_branch is empty — f8p regression"
-    assert record["LastPromotedSHA"], "last_promoted_sha empty — c47 regression"
+    assert record["active_branch"], "active_branch is empty — f8p regression"
+    assert record["last_promoted_sha"], "last_promoted_sha empty — c47 regression"
 
     # ── 3. Structural lookup by name ─────────────────────────────────
     _, _, _, fs = mcp_client.call("eng_find_symbol", {
@@ -54,7 +54,7 @@ def test_golden_user_journey(mcp_client, repo_id, branch, target_symbol, target_
     })
     nodes = fs.get("nodes") or []
     assert nodes, f"find_symbol({target_symbol!r}) returned nothing"
-    node_id = nodes[0]["ID"]
+    node_id = nodes[0]["node_id"]
 
     # ── 4. File-scoped lookup ────────────────────────────────────────
     _, _, _, fn = mcp_client.call("eng_get_file_nodes", {
@@ -88,7 +88,7 @@ def test_golden_user_journey(mcp_client, repo_id, branch, target_symbol, target_
         "node_id": node_id, "max_depth": 2, "max_nodes": 50,
     })
     entries = br.get("entries") or []
-    assert any(e.get("NodeID") == node_id and e.get("Distance") == 0 for e in entries), (
+    assert any(e.get("node_id") == node_id and e.get("distance") == 0 for e in entries), (
         f"blast_radius did not include the seed node at distance=0: {entries}"
     )
 
@@ -103,7 +103,7 @@ def test_golden_user_journey(mcp_client, repo_id, branch, target_symbol, target_
     # ── 9. Promotion (idempotent) ────────────────────────────────────
     root = query("SELECT root_path FROM repos WHERE repo_id = ?", (repo_id,))[0]["root_path"]
     _, _, _, pr = mcp_client.call("eng_promote_repo", {"root_path": root})
-    assert pr.get("git_sha") == record["LastPromotedSHA"], (
+    assert pr.get("git_sha") == record["last_promoted_sha"], (
         "post-promote SHA differs from pre-promote SHA without an intervening "
         "commit — promotion is not idempotent"
     )

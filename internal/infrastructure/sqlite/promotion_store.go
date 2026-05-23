@@ -124,8 +124,8 @@ func (s *PromotionStore) Promote(ctx context.Context, batch application.Promotio
 		INSERT INTO nodes
 			(node_id, branch, repo_id, language, kind, symbol_path, file_path,
 			 line_start, line_end, content_hash, last_promoted_at, actor_id, actor_kind,
-			 signature, snippet, prev_signature)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+			 signature, snippet, prev_signature, exported)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
 	if err != nil {
 		_ = tx.Rollback()
 		return fmt.Errorf("promoter: prepare insert: %w", err)
@@ -254,6 +254,7 @@ func (s *PromotionStore) Promote(ctx context.Context, batch application.Promotio
 				nodeSnippet(n), // solov2-sxa: bind the capped RawContent so
 				// embed-text picks up the body via FetchPending's join.
 				prev,
+				nodeExported(n),
 			); err != nil {
 				_ = tx.Rollback()
 				return fmt.Errorf("promoter: insert node %q: %w", n.ID, err)
@@ -449,4 +450,17 @@ func nodeSignature(n *domain.Node) any {
 		return nil
 	}
 	return *n.Signature
+}
+
+// nodeExported returns 1/0 for the INSERT bind, or nil so SQLite writes NULL
+// when the parser did not set the flag — keeping "unknown" (e.g. a language
+// with no export concept) distinct from "known unexported".
+func nodeExported(n *domain.Node) any {
+	if n.Exported == nil {
+		return nil
+	}
+	if *n.Exported {
+		return 1
+	}
+	return 0
 }
