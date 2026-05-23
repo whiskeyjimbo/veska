@@ -57,15 +57,17 @@ func (p *GoParser) ParseFile(ctx context.Context, repoID, path string, src []byt
 
 	root := tree.RootNode()
 
-	// If the root itself has errors, surface a parse failure and bail out of
-	// symbol extraction (partial trees produce noisy/incorrect symbols).
-	if hasErrorNode(root) {
-		return &domain.ParseResult{
-			Failures: []domain.ParseFailure{firstErrorFailure(root)},
-		}, nil
-	}
-
 	result := &domain.ParseResult{}
+
+	// Error recovery (solov2-7nkm): a syntax error somewhere in the file no
+	// longer discards the whole file. Surface the parse failure, but still
+	// extract every well-formed top-level declaration — per-declaration error
+	// subtrees are skipped below so a function broken mid-edit doesn't erase
+	// its siblings (the watcher re-parses on save, exactly when files are
+	// transiently broken).
+	if hasErrorNode(root) {
+		result.Failures = append(result.Failures, firstErrorFailure(root))
+	}
 
 	// --- package node ---
 	pkgName := extractPackageName(root, src)
@@ -87,6 +89,12 @@ func (p *GoParser) ParseFile(ctx context.Context, repoID, path string, src []byt
 	count := int(root.ChildCount())
 	for i := range count {
 		child := root.Child(i)
+		// Skip declarations whose own subtree contains a syntax error — their
+		// extracted name/signature/body would be unreliable. Sibling
+		// declarations that parsed cleanly are still indexed (solov2-7nkm).
+		if hasErrorNode(child) {
+			continue
+		}
 		switch child.Type() {
 		case "function_declaration":
 			n := parseFunctionDecl(child, src, repoID, path)

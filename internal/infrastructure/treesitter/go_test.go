@@ -142,6 +142,32 @@ func hello() string {
 	}
 }
 
+// TestParseFile_ErrorRecovery pins solov2-7nkm: a syntax error in one
+// declaration must not erase the file's other symbols. The clean function is
+// still extracted, a ParseFailure is reported, and the broken declaration is
+// skipped.
+func TestParseFile_ErrorRecovery(t *testing.T) {
+	src := []byte(`package foo
+
+func Good() string { return "ok" }
+
+func Broken( {  // syntax error: unclosed param list
+
+func AlsoGood() int { return 1 }
+`)
+	p := treesitter.NewGoParser()
+	result, err := p.ParseFile(context.Background(), repoID, filePath, src)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(result.Failures) == 0 {
+		t.Error("expected a ParseFailure for the broken declaration")
+	}
+	if findNodeByName(result.Nodes, "Good") == nil {
+		t.Errorf("clean func Good was discarded; nodes: %v", nodeNames(result.Nodes))
+	}
+}
+
 // TestParseFile_ImportsAndQualifiedCalls pins solov2-xc51.1: the parser must
 // surface the file's import map and capture package-qualified calls
 // (cmd.Execute()) as UnresolvedCalls carrying a PkgQualifier — the foundation
