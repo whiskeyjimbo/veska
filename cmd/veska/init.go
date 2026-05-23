@@ -13,6 +13,7 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/config"
 	"github.com/whiskeyjimbo/veska/internal/embedderprobe"
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/embedding/elect"
+	"github.com/whiskeyjimbo/veska/internal/infrastructure/embedding/model2vec"
 	embedstatic "github.com/whiskeyjimbo/veska/internal/infrastructure/embedding/static"
 )
 
@@ -84,11 +85,34 @@ func resolveInitEmbedder(ctx context.Context, deps initDeps) (line, tip string, 
 	if rerr != nil {
 		return "", "", fmt.Errorf("embedder election: %w", rerr)
 	}
-	line = prov.ModelID() + " (in-process)"
+	line = prov.ModelID() + " " + embedderProvenance(deps.veskaHome, prov.ModelID())
 	if prov.ModelID() == embedstatic.ModelID {
 		tip = "tip: run 'veska install model2vec' for higher-quality code search"
 	}
 	return line, tip, nil
+}
+
+// embedderProvenance reports where the elected provider's weights came from,
+// so `veska init` can disambiguate fat (compiled in), downloaded (~/.veska),
+// and static-v2 fallback (solov2-veci). The model name is extracted from
+// ModelID — model2vec providers render as "model2vec(<name>)".
+func embedderProvenance(veskaHome, modelID string) string {
+	if modelID == embedstatic.ModelID {
+		return "(in-process, fallback)"
+	}
+	name := modelID
+	if i := strings.Index(modelID, "("); i >= 0 {
+		if j := strings.LastIndex(modelID, ")"); j > i {
+			name = modelID[i+1 : j]
+		}
+	}
+	if p, err := model2vec.TryLoad(veskaHome, name); err == nil && p != nil {
+		return "(in-process, downloaded)"
+	}
+	if _, ok := model2vec.Embedded(); ok {
+		return "(in-process, fat)"
+	}
+	return "(in-process)"
 }
 
 // envOrDefault returns the env var when non-empty, else def.

@@ -141,6 +141,25 @@ func TestBuiltinScanner_EmptyInput(t *testing.T) {
 	}
 }
 
+func TestBuiltinScanner_ExcludesLockfiles(t *testing.T) {
+	t.Parallel()
+	s := secretsscanner.New()
+	// A real go.sum line: high-entropy hash, but never a secret.
+	const goSumLine = "github.com/spf13/cobra v1.10.2 h1:DM3sOC6FYNAhJ8K0jK3K7vKQ8gQXl8Rh+nQ7eAQpQyU="
+	for _, path := range []string{"go.sum", "go.mod", "vendor/foo/go.sum", "package-lock.json", "Cargo.lock"} {
+		in := ports.ScanInput{AddedLines: map[string][]ports.Line{
+			path: {{Number: 1, Text: goSumLine}},
+		}}
+		got, err := s.Scan(in)
+		if err != nil {
+			t.Fatalf("Scan(%s) error: %v", path, err)
+		}
+		if len(got) != 0 {
+			t.Errorf("Scan(%s) produced %d findings, want 0", path, len(got))
+		}
+	}
+}
+
 func TestBuiltinScanner_RedactionMasksValue(t *testing.T) {
 	t.Parallel()
 	const awsKey = "AKIAIOSFODNN7EXAMPLE"

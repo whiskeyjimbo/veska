@@ -15,14 +15,45 @@ import (
 )
 
 // RegisterOwnerTools registers the eng_find_owner tool on r.
-// db is accepted for consistency with other Register* functions but is not used.
-func RegisterOwnerTools(r *Registry, _ *sql.DB) {
+// db, when non-nil, is used to resolve a repo_id to its working-tree root
+// (the repos table has root_path). When db is nil — the test path — repo_id
+// is treated as a literal filesystem root.
+func RegisterOwnerTools(r *Registry, db *sql.DB) {
 	r.MustRegister(ToolSpec{
 		Name:            "eng_find_owner",
 		Description:     "Find the owner of a file via CODEOWNERS lookup or git blame fallback.",
 		IncludesStaging: false,
-		Handler:         makeFindOwnerHandler(),
+		Handler:         makeFindOwnerHandler(db),
 	})
+}
+
+// resolveOwnerRoot turns a repo_id into the on-disk working-tree path used
+// for CODEOWNERS and git blame. The repos table has the canonical mapping;
+// when the db lookup fails (no db, or repo_id is an unknown id), the input
+// is returned as-is so direct callers that pass a path still work. Short
+// repo_id (12 char) prefixes are accepted for parity with other tools
+// (solov2-mha4).
+func resolveOwnerRoot(db *sql.DB, repoID string) string {
+	if db == nil {
+		return repoID
+	}
+	var root string
+	err := db.QueryRow(`SELECT root_path FROM repos WHERE repo_id = ?`, repoID).Scan(&root)
+	if err == nil && root != "" {
+		return root
+	}
+	// Try short_id prefix match (mirrors resolveRepoIDDB).
+	rows, qerr := db.Query(`SELECT repo_id, root_path FROM repos`)
+	if qerr == nil {
+		defer rows.Close()
+		for rows.Next() {
+			var id, rp string
+			if rows.Scan(&id, &rp) == nil && ShortRepoID(id) == repoID && rp != "" {
+				return rp
+			}
+		}
+	}
+	return repoID
 }
 
 // ---------------------------------------------------------------------------
@@ -34,7 +65,7 @@ type findOwnerParams struct {
 	RepoID   string `json:"repo_id"`
 }
 
-func makeFindOwnerHandler() ToolHandler {
+func makeFindOwnerHandler(db *sql.DB) ToolHandler {
 	return func(_ context.Context, _ domain.Actor, raw json.RawMessage) (any, *RPCError) {
 		var p findOwnerParams
 		if err := json.Unmarshal(raw, &p); err != nil {
@@ -47,8 +78,10 @@ func makeFindOwnerHandler() ToolHandler {
 			return nil, &RPCError{Code: CodeInvalidParams, Message: "repo_id is required"}
 		}
 
+		root := resolveOwnerRoot(db, p.RepoID)
+
 		// Step 1: try CODEOWNERS.
-		if owner, ok := lookupCodeowners(p.RepoID, p.FilePath); ok {
+		if owner, ok := lookupCodeowners(root, p.FilePath); ok {
 			return map[string]any{
 				"owner":  owner,
 				"source": "codeowners",
@@ -56,7 +89,7 @@ func makeFindOwnerHandler() ToolHandler {
 		}
 
 		// Step 2: git blame fallback.
-		if email, ok := gitBlameEmail(p.RepoID, p.FilePath); ok {
+		if email, ok := gitBlameEmail(root, p.FilePath); ok {
 			return map[string]any{
 				"owner":  email,
 				"source": "git_blame",
@@ -67,7 +100,7 @@ func makeFindOwnerHandler() ToolHandler {
 		// 'no CODEOWNERS file' from 'file exists but covers nothing' from
 		// 'git blame failed' (solov2-xjg). Cheap stat: just check whether
 		// a CODEOWNERS file is present at either of the canonical paths.
-		reason := codeownersAbsenceReason(p.RepoID)
+		reason := codeownersAbsenceReason(root)
 		return map[string]any{
 			"owner":  nil,
 			"source": nil,

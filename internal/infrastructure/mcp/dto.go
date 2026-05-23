@@ -129,6 +129,14 @@ func searchResultToDTO(r search.Result) searchHitDTO {
 func searchResultsToDTO(in []search.Result) []searchHitDTO {
 	out := make([]searchHitDTO, 0, len(in))
 	for _, r := range in {
+		// chunk:* pseudo-nodes are internal file-fragment embeddings used to
+		// give un-symbolized code coverage in vector space. They confuse
+		// human-facing search consumers ("what do I do with chunk:1-26?")
+		// so the wire DTO drops them — real symbols are the contract
+		// (solov2-4v0x).
+		if r.Kind == string(domain.KindChunk) {
+			continue
+		}
 		out = append(out, searchResultToDTO(r))
 	}
 	return out

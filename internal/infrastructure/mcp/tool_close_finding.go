@@ -39,11 +39,11 @@ var closeFindingInputSchema = json.RawMessage(`{
   "type": "object",
   "properties": {
     "finding_id": {"type": "string", "description": "ID of the finding to close."},
-    "branch": {"type": "string", "description": "Branch the finding belongs to."},
-    "repo_id": {"type": "string", "description": "Repository ID for audit attribution."},
+    "branch": {"type": "string", "description": "Branch the finding belongs to (optional; derived from finding_id when omitted)."},
+    "repo_id": {"type": "string", "description": "Repository ID for audit attribution (optional; derived from finding_id when omitted)."},
     "reason": {"type": "string", "description": "Close reason; \"accept\" promotes an auto-link edge to definite."}
   },
-  "required": ["finding_id", "branch", "repo_id", "reason"]
+  "required": ["finding_id", "reason"]
 }`)
 
 // closeFindingOutputSchema describes the result object for eng_close_finding.
@@ -64,7 +64,7 @@ func makeCloseFindingHandler(db *sql.DB, aw ports.AuditWriter) ToolHandler {
 		if rpcErr := bindParams(raw, &p); rpcErr != nil {
 			return nil, rpcErr
 		}
-		if rpcErr := checkRequired("finding_id", p.FindingID, "branch", p.Branch, "repo_id", p.RepoID, "reason", p.Reason); rpcErr != nil {
+		if rpcErr := checkRequired("finding_id", p.FindingID, "reason", p.Reason); rpcErr != nil {
 			return nil, rpcErr
 		}
 
@@ -80,21 +80,34 @@ func makeCloseFindingHandler(db *sql.DB, aw ports.AuditWriter) ToolHandler {
 
 		// Fetch the finding to check existence, severity, rule, and anchor
 		// (node_id, which for auto-link findings carries the edge_id).
+		// finding_id is globally unique; branch/repo_id are looked up when not
+		// supplied so callers can address findings by id alone.
 		var (
-			severity string
-			state    string
-			rule     string
-			nodeID   sql.NullString
+			severity  string
+			state     string
+			rule      string
+			nodeID    sql.NullString
+			rowBranch string
+			rowRepoID string
 		)
 		err = tx.QueryRowContext(ctx,
-			`SELECT severity, state, rule, node_id FROM findings WHERE finding_id = ? AND branch = ?`,
-			p.FindingID, p.Branch,
-		).Scan(&severity, &state, &rule, &nodeID)
+			`SELECT severity, state, rule, node_id, branch, repo_id FROM findings WHERE finding_id = ?`,
+			p.FindingID,
+		).Scan(&severity, &state, &rule, &nodeID, &rowBranch, &rowRepoID)
 		if err == sql.ErrNoRows {
-			return nil, &RPCError{Code: CodeNotFound, Message: fmt.Sprintf("finding not found: %s on branch %s", p.FindingID, p.Branch)}
+			return nil, &RPCError{Code: CodeNotFound, Message: fmt.Sprintf("finding not found: %s", p.FindingID)}
 		}
 		if err != nil {
 			return nil, &RPCError{Code: CodeInternalError, Message: fmt.Sprintf("query finding: %v", err)}
+		}
+		// If caller passed branch/repo_id, honor them as a consistency check;
+		// otherwise fall back to the row's own values.
+		if p.Branch != "" && p.Branch != rowBranch {
+			return nil, &RPCError{Code: CodeNotFound, Message: fmt.Sprintf("finding not found: %s on branch %s", p.FindingID, p.Branch)}
+		}
+		p.Branch = rowBranch
+		if p.RepoID == "" {
+			p.RepoID = rowRepoID
 		}
 
 		// Human-action gate: severity >= high requires a human actor.
