@@ -74,26 +74,30 @@ Install Ollama only if you want the review pipeline:
 
 ## Build
 
+End users should default to **`make build-fat`** — it embeds the model2vec
+weights into the binary so the install is zero-setup: no separate download,
+no network, no static-v2 fallback at boot.
+
 ```sh
-make build        # thin: veska, veska-daemon, veska-mcp (+ layercheck tool)
-make build-fat    # fat: same, but the model2vec model is embedded in the
-                  #      binary — a zero-setup embedder (larger binaries)
+make build-fat    # recommended: model2vec embedded in the binary (~62 MB larger)
+make build        # thin: veska, veska-daemon, veska-mcp (+ layercheck tool).
+                  # Use this only when you want size-sensitive binaries
+                  # (CI, containers); you must then run `veska install model2vec`
+                  # to avoid booting on the low-quality static-v2 fallback.
 make test         # go test ./...
-make all          # build + test + vet + lint + layercheck
+make all          # build + test + vet + lint + layercheck (builds the thin variant)
 ```
 
 Binaries land in `./bin/`. Either `export PATH="$PWD/bin:$PATH"` or use the
-`./bin/` prefix in the Quick Start below. Use `make build-fat` for the
-zero-setup default embedder; plain `make build` keeps binaries small and
-relies on `veska install model2vec` (or the static-v2 fallback).
+`./bin/` prefix in the Quick Start below.
 
 ## Quick start
 
 ```sh
-# 1. Make sure an embedder is available (see Requirements):
-#    - fat binary (make build-fat): nothing to do — the model is built in.
-#    - thin binary: ./bin/veska install model2vec   (one-time ~62 MB)
-#    With neither, search still works via the static-v2 fallback.
+# 1. Build the fat binary (zero-setup embedder; recommended for end users).
+make build-fat
+# Size-sensitive builds can `make build` instead, then run
+# `./bin/veska install model2vec` to avoid the low-quality static-v2 fallback.
 
 # 2. Initialise veska's data directory at ~/.veska/.
 ./bin/veska init
