@@ -80,9 +80,16 @@ func nodeToDTO(n *domain.Node) nodeDTO {
 
 // nodesToDTO maps a slice of domain nodes, always returning a non-nil slice
 // so empty results serialize as [] rather than null/omitted (solov2-elt).
+// chunk:* pseudo-nodes are filtered out: they are internal file-fragment
+// embeddings used to give un-symbolised code coverage in vector space, and
+// surfacing them on a tool that promises "symbols" leaks the abstraction
+// (solov2-wbqe).
 func nodesToDTO(in []*domain.Node) []nodeDTO {
 	out := make([]nodeDTO, 0, len(in))
 	for _, n := range in {
+		if n != nil && n.Kind == domain.KindChunk {
+			continue
+		}
 		out = append(out, nodeToDTO(n))
 	}
 	return out
@@ -160,6 +167,13 @@ func blastEntryToDTO(e blastradius.Entry) blastEntryDTO {
 func blastEntriesToDTO(in []blastradius.Entry) []blastEntryDTO {
 	out := make([]blastEntryDTO, 0, len(in))
 	for _, e := range in {
+		// Filter chunk:* pseudo-nodes (solov2-wbqe) — same reasoning as
+		// searchResultsToDTO. Real symbols are the contract; the blast-radius
+		// path runs across the graph and would otherwise expose chunk nodes
+		// at distance>=1 from any seed in a chunked file.
+		if e.Kind == string(domain.KindChunk) {
+			continue
+		}
 		out = append(out, blastEntryToDTO(e))
 	}
 	return out

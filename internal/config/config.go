@@ -28,6 +28,22 @@ type Config struct {
 	Backup             BackupConfig             `toml:"backup"`
 	VulnSource         VulnSourceConfig         `toml:"vuln_source"`
 	Promotion          PromotionConfig          `toml:"promotion"`
+	Wiki               WikiConfig               `toml:"wiki"`
+}
+
+// WikiConfig controls the developer-wiki Markdown pages. The README's product
+// contract is that veska "writes no files to disk" by default; the
+// hot_zone / entry_points pages are an opt-in convenience for users who want
+// them committed alongside their source. They're computed from the graph
+// either way, and the MCP tools eng_get_hot_zone / eng_get_entry_points
+// surface the same data on demand regardless of this flag (solov2-ocnn).
+type WikiConfig struct {
+	// WritePages, when true, makes the wiki handler write docs/veska/*.md
+	// into the user's repo working tree on every promotion. Default false —
+	// no files are written, matching the README's "no files written to disk"
+	// claim. Flip on per-repo via a docs/veska/.veska-wiki sentinel file once
+	// that flow lands; for now this is a global daemon switch.
+	WritePages bool `toml:"write_pages"`
 }
 
 // PromotionConfig tunes the synchronous promotion-pipeline checks (M7). Every

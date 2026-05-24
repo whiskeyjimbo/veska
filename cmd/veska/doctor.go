@@ -53,23 +53,24 @@ func isProbeStatusError(err error, out *ProbeStatusError) bool {
 // exitCodeForProbeStatus returns the conventional exit code for a probe status.
 //
 //	healthy  → 0
-//	degraded → 1
+//	degraded → 0 (informational; the human-readable line is still printed to stderr)
 //	broken   → 2
+//
+// Treating "degraded" as a non-failure keeps CI pipelines green when veska is
+// merely in a transient warning state (e.g. a single unindexed repo, embedder
+// warming up). Callers that want strict gating can re-introduce failure
+// downstream by grepping the textual output or by parsing `--json` envelopes.
 func exitCodeForProbeStatus(status string) int {
-	switch status {
-	case "degraded":
-		return 1
-	case "broken":
+	if status == "broken" {
 		return 2
 	}
 	return 0
 }
 
 // doctorCmd returns the "doctor" Cobra command with health-check subcommands.
-// Exit codes follow the SOLO-13 §2.1 convention:
+// Exit codes:
 //
-//	0 = healthy
-//	1 = degraded
+//	0 = healthy or degraded (degraded is informational; check stderr for detail)
 //	2 = broken
 func doctorCmd() *cobra.Command {
 	cmd := &cobra.Command{

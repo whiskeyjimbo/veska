@@ -22,6 +22,14 @@ import (
 // that ref" rather than a hard failure.
 var ErrFileNotAtRef = errors.New("git show: file not present at ref")
 
+// ErrUnknownRevision is returned by ChangedFilesBetween when one of the
+// refs does not resolve in the repo — most commonly HEAD~1 on a
+// freshly-init'd repo with a single commit, but also typos and stale
+// branch names. Callers (e.g. the eng_find_changed_symbols MCP tool)
+// translate this into a typed invalid-params response rather than
+// leaking raw git stderr to the wire (solov2-dr31).
+var ErrUnknownRevision = errors.New("git diff: unknown revision")
+
 // ChangedFilesBetween returns the list of files that differ between
 // refA and refB, as `git diff --name-only <refA> <refB>` reports them.
 // Paths are relative to repoRoot.
@@ -40,8 +48,15 @@ func ChangedFilesBetween(ctx context.Context, repoRoot, refA, refB string) ([]st
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
 	if err := cmd.Run(); err != nil {
+		// Map the common "ref doesn't resolve" failure (ambiguous argument /
+		// unknown revision) to a typed error so callers can return a clean
+		// invalid-params response instead of leaking raw git stderr.
+		stderrStr := stderr.String()
+		if strings.Contains(stderrStr, "ambiguous argument") || strings.Contains(stderrStr, "unknown revision") {
+			return nil, fmt.Errorf("%w: refs=%s..%s", ErrUnknownRevision, refA, refB)
+		}
 		return nil, fmt.Errorf("git diff %s..%s in %s: %w: %s",
-			refA, refB, repoRoot, err, strings.TrimSpace(stderr.String()))
+			refA, refB, repoRoot, err, strings.TrimSpace(stderrStr))
 	}
 	out := strings.Split(strings.TrimRight(stdout.String(), "\n"), "\n")
 	if len(out) == 1 && out[0] == "" {

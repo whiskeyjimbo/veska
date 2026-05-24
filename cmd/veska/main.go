@@ -11,9 +11,10 @@ import (
 
 func newRootCmd() *cobra.Command {
 	root := &cobra.Command{
-		Use:          "veska",
-		Short:        "Veska code intelligence CLI",
-		SilenceUsage: true,
+		Use:           "veska",
+		Short:         "Veska code intelligence CLI",
+		SilenceUsage:  true,
+		SilenceErrors: true,
 	}
 	root.AddCommand(initCmd())
 	root.AddCommand(hookRunnerCmd())

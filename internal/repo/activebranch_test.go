@@ -2,15 +2,28 @@ package repo_test
 
 import (
 	"context"
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/whiskeyjimbo/veska/internal/repo"
 )
 
+// gitInit creates an empty .git/hooks directory inside dir so that
+// repo.Add accepts it as a git work-tree (matches the helper used by
+// registry_test.go).
+func gitInit(t *testing.T, dir string) {
+	t.Helper()
+	if err := os.MkdirAll(filepath.Join(dir, ".git", "hooks"), 0o755); err != nil {
+		t.Fatalf("create .git/hooks: %v", err)
+	}
+}
+
 // TestSetActiveBranch verifies that SetActiveBranch stores the branch name.
 func TestSetActiveBranch(t *testing.T) {
 	db := newTestDB(t)
 	dir := t.TempDir()
+	gitInit(t, dir)
 	id, err := repo.Add(context.Background(), db, dir)
 	if err != nil {
 		t.Fatalf("Add: %v", err)
@@ -35,6 +48,7 @@ func TestSetActiveBranch(t *testing.T) {
 func TestSetActiveBranchUpdates(t *testing.T) {
 	db := newTestDB(t)
 	dir := t.TempDir()
+	gitInit(t, dir)
 	id, err := repo.Add(context.Background(), db, dir)
 	if err != nil {
 		t.Fatalf("Add: %v", err)

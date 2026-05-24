@@ -151,10 +151,13 @@ func buildWikiHandler(pools *sqlite.Pools) (*wiki.Handler, error) {
 		return "", fmt.Errorf("wiki: repo %q is not registered", repoID)
 	}
 
+	// `veska wiki` is the explicit, user-invoked render path; always write
+	// pages regardless of the daemon's [wiki] write_pages default (solov2-ocnn).
 	handler, err := wiki.NewHandler(
 		hotZoneSvc, epSvc,
 		sqlite.NewWikiRenderStateRepo(pools.ReadDB, pools.WriteHot),
 		wikiRoot,
+		wiki.WithWritePages(true),
 	)
 	if err != nil {
 		return nil, fmt.Errorf("wiki: handler: %w", err)

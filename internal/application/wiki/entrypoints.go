@@ -27,7 +27,14 @@ type OpenFindingsFunc func(ctx context.Context, repoID, branch string) (map[stri
 // EntryPoint is one selected entry-point symbol: its name, source
 // location, and the ranking signals that put it where it landed. The
 // JSON shape is the eng_get_entry_points tool surface (solov2-73f).
+//
+// The Name field is emitted as the canonical "name" key (matching the
+// node-shape contract documented in README §Conventions). SymbolName is
+// kept as a dual-emit for back-compat with any caller written against
+// the original v0 surface (solov2-4aka); both fields always hold the
+// same value.
 type EntryPoint struct {
+	Name            string `json:"name"`
 	SymbolName      string `json:"symbol_name"`
 	FilePath        string `json:"file_path"`
 	Kind            string `json:"kind"`
@@ -172,6 +179,7 @@ func (s *EntryPointsService) SelectWith(ctx context.Context, repoID, branch stri
 	for _, n := range candidates {
 		srcIDs := inbound[string(n.ID)]
 		entries = append(entries, EntryPoint{
+			Name:            n.Name,
 			SymbolName:      n.Name,
 			FilePath:        n.Path,
 			Kind:            string(n.Kind),

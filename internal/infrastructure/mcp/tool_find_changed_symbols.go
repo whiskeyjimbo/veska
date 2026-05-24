@@ -3,11 +3,13 @@ package mcp
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 
 	application "github.com/whiskeyjimbo/veska/internal/application"
 	"github.com/whiskeyjimbo/veska/internal/application/changedsymbols"
 	"github.com/whiskeyjimbo/veska/internal/core/domain"
+	gitinfra "github.com/whiskeyjimbo/veska/internal/infrastructure/git"
 )
 
 // Default git refs for eng_find_changed_symbols when the caller omits both:
@@ -86,6 +88,16 @@ func makeChangedSymbolsHandler(svc *changedsymbols.Service, repoRoot RepoRootFun
 		}
 		res, err := svc.Diff(ctx, p.RepoID, root, p.RefA, p.RefB)
 		if err != nil {
+			// An unresolvable ref (most commonly HEAD~1 on a single-commit
+			// repo) is a caller problem, not an internal failure — return a
+			// friendly invalid-params instead of leaking raw git stderr
+			// (solov2-dr31).
+			if errors.Is(err, gitinfra.ErrUnknownRevision) {
+				return nil, &RPCError{
+					Code:    CodeInvalidParams,
+					Message: fmt.Sprintf("ref_a=%q or ref_b=%q does not resolve in the repo (insufficient history? try omitting both refs or pass an explicit pair)", p.RefA, p.RefB),
+				}
+			}
 			return nil, &RPCError{Code: CodeInternalError, Message: fmt.Sprintf("find changed symbols: %v", err)}
 		}
 		return res, nil

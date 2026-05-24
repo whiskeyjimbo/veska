@@ -151,8 +151,10 @@ func (h *Handler) Handle(ctx context.Context, row ports.WorkRow) error {
 		return fmt.Errorf("autolink.Handle: lookup source nodes: %w", err)
 	}
 	kindByID := make(map[string]string, len(srcMeta))
+	srcFileByID := make(map[string]string, len(srcMeta))
 	for _, m := range srcMeta {
 		kindByID[m.NodeID] = m.Kind
+		srcFileByID[m.NodeID] = m.FilePath
 	}
 	sources := make([]string, 0, len(nodeIDs))
 	for _, id := range nodeIDs {
@@ -169,6 +171,42 @@ func (h *Handler) Handle(ctx context.Context, row ports.WorkRow) error {
 	if err != nil {
 		return fmt.Errorf("autolink.Handle: linker: %w", err)
 	}
+	if len(cands) == 0 {
+		return nil
+	}
+
+	// Drop candidates whose target is a container/sub-symbol kind or whose
+	// target lives in the same file as the source (solov2-nz1v). Without
+	// these filters a tiny repo immediately gets a noise finding like
+	// "Similar to chunk:1-22 in main.go" — useless to the user and leaks
+	// the internal chunk artifact name. Filtering at the candidate level
+	// (after the linker call) keeps the linker's vector-space logic generic
+	// while ensuring the user-visible side is clean.
+	targetIDs := make([]string, 0, len(cands))
+	for _, c := range cands {
+		targetIDs = append(targetIDs, c.TargetNodeID)
+	}
+	tgtMeta, err := h.lookup.LookupNodes(ctx, row.RepoID, row.Branch, targetIDs)
+	if err != nil {
+		return fmt.Errorf("autolink.Handle: lookup target nodes: %w", err)
+	}
+	tgtKindByID := make(map[string]string, len(tgtMeta))
+	tgtFileByID := make(map[string]string, len(tgtMeta))
+	for _, m := range tgtMeta {
+		tgtKindByID[m.NodeID] = m.Kind
+		tgtFileByID[m.NodeID] = m.FilePath
+	}
+	filtered := cands[:0]
+	for _, c := range cands {
+		if nonSymbolKinds[tgtKindByID[c.TargetNodeID]] {
+			continue
+		}
+		if tgtFileByID[c.TargetNodeID] != "" && tgtFileByID[c.TargetNodeID] == srcFileByID[c.SourceNodeID] {
+			continue
+		}
+		filtered = append(filtered, c)
+	}
+	cands = filtered
 	if len(cands) == 0 {
 		return nil
 	}
@@ -191,16 +229,9 @@ func (h *Handler) Handle(ctx context.Context, row ports.WorkRow) error {
 		return fmt.Errorf("autolink.Handle: save edges: %w", err)
 	}
 
-	// Hydrate the target nodes so the finding names the symbol+file it links
-	// to, rather than an opaque node ID (solov2-wh0).
-	targetIDs := make([]string, 0, len(cands))
-	for _, c := range cands {
-		targetIDs = append(targetIDs, c.TargetNodeID)
-	}
-	tgtMeta, err := h.lookup.LookupNodes(ctx, row.RepoID, row.Branch, targetIDs)
-	if err != nil {
-		return fmt.Errorf("autolink.Handle: lookup target nodes: %w", err)
-	}
+	// Build display labels for the (already-hydrated above) target metadata,
+	// so the finding names the symbol+file rather than an opaque node ID
+	// (solov2-wh0).
 	displayByID := make(map[string]string, len(tgtMeta))
 	for _, m := range tgtMeta {
 		displayByID[m.NodeID] = m.SymbolPath + " in " + m.FilePath
