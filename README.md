@@ -255,6 +255,7 @@ editors by `veska-mcp`). Tool names follow `eng_<verb>_<object>`. Quick map:
 | Findings | `eng_list_findings`, `eng_get_finding`, `eng_close_finding`, `eng_reopen_finding` |
 | Suppressions | `eng_list_suppressions`, `eng_get_suppression`, `eng_suppress_finding`, `eng_close_suppression` |
 | Wiki | `eng_get_hot_zone`, `eng_get_entry_points` |
+| **Not yet wired** | `eng_get_active_task`, `eng_set_active_task`, `eng_get_task_history` — parked; calls return `method not found` (see note below) |
 
 **Conventions across the tool surface:**
 
