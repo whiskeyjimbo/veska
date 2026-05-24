@@ -36,8 +36,23 @@ def test_call_chain_unknown_node_soft_fails(mcp_client, repo_id, branch):
     assert not result.get("nodes") and not result.get("edges")
 
 
-def test_call_chain_requires_node_id(mcp_client, repo_id, branch):
+def test_call_chain_requires_node_id_or_symbol(mcp_client, repo_id, branch):
+    """solov2-lcz6: call_chain now accepts node_id OR symbol; supplying
+    neither must still error with a 'required' message."""
     ok, text, _, _ = mcp_client.call("eng_get_call_chain", {
         "repo_id": repo_id, "branch": branch, "depth": 2,
     })
     assert not ok and "required" in text.lower()
+
+
+def test_call_chain_accepts_symbol(mcp_client, repo_id, branch, target_symbol):
+    """solov2-lcz6: passing 'symbol' instead of 'node_id' must resolve via
+    FindNodes and return the same shape as the node_id path. Ambiguous
+    symbols are rejected (separate case)."""
+    ok, text, _, result = mcp_client.call("eng_get_call_chain", {
+        "repo_id": repo_id, "branch": branch,
+        "symbol": target_symbol, "depth": 2,
+    })
+    assert ok, f"call_chain with symbol={target_symbol!r} should succeed, got: {text}"
+    assert isinstance(result, dict)
+    assert "included_staging" in result

@@ -36,6 +36,20 @@ def test_list_suppressions_responds(mcp_client, repo_id, branch):
     assert isinstance(result, dict)
 
 
+def test_list_suppressions_repo_id_defaults_with_single_repo(mcp_client):
+    """solov2-7tz1: when exactly one repo is registered, eng_list_suppressions
+    must auto-resolve repo_id from the singleton instead of erroring."""
+    ok, _, _, list_result = mcp_client.call("eng_list_repos", {})
+    assert ok
+    repos = list_result.get("repos", []) if isinstance(list_result, dict) else []
+    if len(repos) != 1:
+        import pytest
+        pytest.skip(f"single-repo defaulting requires exactly 1 repo, fixture has {len(repos)}")
+    ok2, text2, _, result = mcp_client.call("eng_list_suppressions", {})
+    assert ok2, f"eng_list_suppressions without repo_id should auto-resolve, got: {text2}"
+    assert isinstance(result, dict)
+
+
 def test_suppress_then_close_roundtrip(mcp_client, repo_id, branch, open_finding):
     """suppress_finding → list shows it → get_suppression returns the
     record → close_suppression sets expires_at. The created suppression

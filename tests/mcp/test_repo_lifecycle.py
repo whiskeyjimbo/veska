@@ -49,6 +49,32 @@ def test_add_and_remove_repo_roundtrip(mcp_client):
         assert ok3, f"eng_remove_repo failed: {text3}"
 
 
+def test_add_repo_idempotency_returns_already_registered(mcp_client):
+    """solov2-khjd: a second eng_add_repo against the same root_path must
+    report already_registered=true + scan_pending=false (no duplicate
+    cold-scan dispatched) while still returning the original repo_id."""
+    with tempfile.TemporaryDirectory(prefix="veska-mcp-test-") as tmp:
+        _init_repo(tmp)
+        try:
+            ok, text, _, first = mcp_client.call("eng_add_repo", {"root_path": tmp})
+            assert ok, f"first add failed: {text}"
+            assert first.get("scan_pending") is True
+            assert first.get("already_registered") in (False, None)
+            repo_id = first["repo_id"]
+
+            ok2, text2, _, second = mcp_client.call("eng_add_repo", {"root_path": tmp})
+            assert ok2, f"second add failed: {text2}"
+            assert second["repo_id"] == repo_id, "idempotent add returned a different id"
+            assert second.get("already_registered") is True, (
+                f"second add should report already_registered=True, got {second!r}"
+            )
+            assert second.get("scan_pending") is False, (
+                f"second add should report scan_pending=False (no duplicate cold scan), got {second!r}"
+            )
+        finally:
+            mcp_client.call("eng_remove_repo", {"repo_id": repo_id})
+
+
 def test_add_repo_requires_root_path(mcp_client):
     ok, text, _, _ = mcp_client.call("eng_add_repo", {})
     assert not ok and ("required" in text.lower() or "root_path" in text.lower())
