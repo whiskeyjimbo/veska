@@ -8,10 +8,16 @@ import (
 // ScanState describes one cold scan currently in flight. Returned by
 // ScanTracker.Snapshot so callers (e.g. statusProvider) can surface
 // progress without coupling to the tracker's internals.
+//
+// FilesSeen / FilesTotal are best-effort progress counters updated by
+// the scanner via Progress(). They are omitted from the JSON shape when
+// zero so older clients see the same envelope (solov2-u9h9).
 type ScanState struct {
-	RepoID    string    `json:"repo_id"`
-	Phase     string    `json:"phase"`
-	StartedAt time.Time `json:"started_at"`
+	RepoID     string    `json:"repo_id"`
+	Phase      string    `json:"phase"`
+	StartedAt  time.Time `json:"started_at"`
+	FilesSeen  int       `json:"files_seen,omitempty"`
+	FilesTotal int       `json:"files_total,omitempty"`
 }
 
 // ScanTracker is the in-memory registry of cold-scan reparser runs
@@ -48,6 +54,24 @@ func (t *ScanTracker) Start(repoID string) {
 		Phase:     "running",
 		StartedAt: time.Now(),
 	}
+}
+
+// Progress updates the files_seen / files_total counters for an
+// in-flight scan. Nil-safe and no-op if the scan was never Started
+// (handles tracker-less unit tests).
+func (t *ScanTracker) Progress(repoID string, filesSeen, filesTotal int) {
+	if t == nil {
+		return
+	}
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	st, ok := t.scans[repoID]
+	if !ok {
+		return
+	}
+	st.FilesSeen = filesSeen
+	st.FilesTotal = filesTotal
+	t.scans[repoID] = st
 }
 
 // End removes the scan record for repoID. Idempotent — calling End for
