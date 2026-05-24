@@ -51,6 +51,9 @@ func runSavings(w io.Writer, veskaHome string, now time.Time, jsonOut bool) erro
 	for _, p := range []savings.Period{rep.Today, rep.Last7d, rep.AllTime} {
 		fmt.Fprintln(w, formatSavingsRow(p))
 	}
+	if rep.AllTime.Calls < savingsMinSampleCalls {
+		fmt.Fprintf(w, "  (ratio reported once a period has >= %d calls; below that the row reads 'warming up')\n", savingsMinSampleCalls)
+	}
 	return nil
 }
 
