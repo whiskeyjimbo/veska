@@ -4,10 +4,24 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"strings"
 	"sync/atomic"
 
 	"github.com/whiskeyjimbo/veska/internal/core/domain"
 )
+
+// isMissingRoot reports whether the resync error is the expected
+// "registered repo whose working tree is gone" case. The git CLI
+// emits "cannot change to '<path>': No such file or directory" via
+// rev-parse when the root is missing; matching on that substring
+// keeps the check decoupled from the exact wrapped-error chain.
+func isMissingRoot(err error) bool {
+	if err == nil {
+		return false
+	}
+	s := err.Error()
+	return strings.Contains(s, "No such file or directory") || strings.Contains(s, "no such file or directory")
+}
 
 // RepoRecord is the minimal view of a repos row needed for resync.
 type RepoRecord struct {
@@ -115,10 +129,21 @@ func (r *StartupResync) Run(ctx context.Context) error {
 			return ctx.Err()
 		}
 		if err := r.resyncRepo(ctx, repo); err != nil {
-			slog.Error("startup resync: repo failed; continuing with remaining repos",
+			// solov2-s0t0: a missing root is an expected, recurring state
+			// (registered repo whose checkout has since moved or been
+			// deleted). Log it as WARN so it doesn't cry wolf at every
+			// boot; reserve ERROR for genuinely unexpected failures.
+			level := slog.LevelError
+			hint := ""
+			if isMissingRoot(err) {
+				level = slog.LevelWarn
+				hint = "run `veska repo prune` or `veska repo remove " + string(repo.RepoID) + "` to clear"
+			}
+			slog.Log(ctx, level, "startup resync: repo failed; continuing with remaining repos",
 				"repo_id", repo.RepoID,
 				"root", repo.RootPath,
 				"err", err,
+				"hint", hint,
 			)
 			continue
 		}
