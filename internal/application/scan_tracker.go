@@ -74,6 +74,26 @@ func (t *ScanTracker) Progress(repoID string, filesSeen, filesTotal int) {
 	t.scans[repoID] = st
 }
 
+// SetPhase updates the human-readable phase string on an in-flight scan
+// ("walking", "promoting", etc.) so a user watching a long scan can tell
+// the slow promotion phase apart from the fast walk phase (solov2-u9h9).
+// Otherwise files_seen jumps to N during the sub-second walk, then sits
+// frozen for the duration of promotion — reading as "stuck".
+// Nil-safe; no-op when the scan was never Started.
+func (t *ScanTracker) SetPhase(repoID, phase string) {
+	if t == nil {
+		return
+	}
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	st, ok := t.scans[repoID]
+	if !ok {
+		return
+	}
+	st.Phase = phase
+	t.scans[repoID] = st
+}
+
 // End removes the scan record for repoID. Idempotent — calling End for
 // a repo that isn't tracked is a no-op (handles the failed-start path
 // where reparser dispatch races with the start log).
