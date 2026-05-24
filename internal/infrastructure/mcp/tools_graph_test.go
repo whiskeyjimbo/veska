@@ -225,6 +225,33 @@ func TestFindSymbol_ShortRepoIDAccepted(t *testing.T) {
 	}
 }
 
+// TestFindSymbol_BranchDefaultsToActiveBranch guards solov2-5vu1: when the
+// caller omits branch, the handler resolves it from the registered
+// active_branch instead of erroring.
+func TestFindSymbol_BranchDefaultsToActiveBranch(t *testing.T) {
+	store := newStubGraphStorage()
+	store.addNode(mustNode(t, "n1", "pkg/foo.go", "Foo", domain.KindFunction))
+
+	repos := []application.RepoRecord{
+		{RepoID: "abcdef0123456789abcdef0123456789", RootPath: "/p", ActiveBranch: "develop"},
+	}
+	r := NewRegistry()
+	RegisterGraphTools(r, store, application.NewStagingArea(),
+		WithRepoLister(&stubRepoLister{repos: repos}))
+
+	resp, rpcErr := dispatchGraph(t, r, "eng_find_symbol", map[string]string{
+		"symbol":  "Foo",
+		"repo_id": "abcdef012345",
+		// branch intentionally omitted
+	})
+	if rpcErr != nil {
+		t.Fatalf("expected branch auto-resolution, got %+v", rpcErr)
+	}
+	if len(resp.Nodes) != 1 {
+		t.Fatalf("expected 1 node with default branch, got %d", len(resp.Nodes))
+	}
+}
+
 // ---------------------------------------------------------------------------
 // eng_find_symbol — finds nodes from graph store
 // ---------------------------------------------------------------------------

@@ -76,7 +76,7 @@ func makeEntryPointsHandler(svc *wiki.EntryPointsService, repos application.Repo
 		if rpcErr := bindParams(raw, &p); rpcErr != nil {
 			return nil, rpcErr
 		}
-		if rpcErr := checkRequired("repo_id", p.RepoID, "branch", p.Branch); rpcErr != nil {
+		if rpcErr := checkRequired("repo_id", p.RepoID); rpcErr != nil {
 			return nil, rpcErr
 		}
 		repoID, rpcErr := resolveRepoID(ctx, repos, p.RepoID)
@@ -84,6 +84,11 @@ func makeEntryPointsHandler(svc *wiki.EntryPointsService, repos application.Repo
 			return nil, rpcErr
 		}
 		p.RepoID = repoID
+		if br, rpcErr := resolveBranchOrActive(ctx, repos, p.RepoID, p.Branch); rpcErr != nil {
+			return nil, rpcErr
+		} else {
+			p.Branch = br
+		}
 		rep, err := svc.SelectWith(ctx, p.RepoID, p.Branch, wiki.SelectOptions{
 			IncludeTests: p.IncludeTests,
 		})
@@ -145,7 +150,7 @@ func makeHotZoneHandler(svc *wiki.HotZoneService, repoRoot RepoRootFunc, repos a
 		if rpcErr := bindParams(raw, &p); rpcErr != nil {
 			return nil, rpcErr
 		}
-		if rpcErr := checkRequired("repo_id", p.RepoID, "branch", p.Branch); rpcErr != nil {
+		if rpcErr := checkRequired("repo_id", p.RepoID); rpcErr != nil {
 			return nil, rpcErr
 		}
 		repoID, rpcErr := resolveRepoID(ctx, repos, p.RepoID)
@@ -153,6 +158,11 @@ func makeHotZoneHandler(svc *wiki.HotZoneService, repoRoot RepoRootFunc, repos a
 			return nil, rpcErr
 		}
 		p.RepoID = repoID
+		if br, rpcErr := resolveBranchOrActive(ctx, repos, p.RepoID, p.Branch); rpcErr != nil {
+			return nil, rpcErr
+		} else {
+			p.Branch = br
+		}
 		root, err := repoRoot(ctx, p.RepoID)
 		if err != nil {
 			return nil, &RPCError{Code: CodeNotFound, Message: fmt.Sprintf("repo not found: %s", p.RepoID)}

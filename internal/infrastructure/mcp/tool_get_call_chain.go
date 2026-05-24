@@ -34,7 +34,7 @@ func makeGetCallChainHandler(graph ports.GraphStorage, resolve ResolveFunc, repo
 		if p.NodeID == "" && p.Symbol == "" {
 			return nil, &RPCError{Code: CodeInvalidParams, Message: "missing required params: node_id or symbol"}
 		}
-		if rpcErr := checkRequired("repo_id", p.RepoID, "branch", p.Branch); rpcErr != nil {
+		if rpcErr := checkRequired("repo_id", p.RepoID); rpcErr != nil {
 			return nil, rpcErr
 		}
 		repoID, rpcErr := resolveRepoID(ctx, repos, p.RepoID)
@@ -42,6 +42,11 @@ func makeGetCallChainHandler(graph ports.GraphStorage, resolve ResolveFunc, repo
 			return nil, rpcErr
 		}
 		p.RepoID = repoID
+		if br, rpcErr := resolveBranchOrActive(ctx, repos, p.RepoID, p.Branch); rpcErr != nil {
+			return nil, rpcErr
+		} else {
+			p.Branch = br
+		}
 
 		// solov2-lcz6: accept 'symbol' as an alternative to 'node_id' to give
 		// parity with eng_find_symbol. When both are supplied node_id wins —

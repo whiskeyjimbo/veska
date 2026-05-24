@@ -68,7 +68,7 @@ func makeFindTodosHandler(querier ports.TodoQuerier, repos application.RepoListe
 		if rpcErr := bindParams(raw, &p); rpcErr != nil {
 			return nil, rpcErr
 		}
-		if rpcErr := checkRequired("repo_id", p.RepoID, "branch", p.Branch); rpcErr != nil {
+		if rpcErr := checkRequired("repo_id", p.RepoID); rpcErr != nil {
 			return nil, rpcErr
 		}
 		repoID, rpcErr := resolveRepoID(ctx, repos, p.RepoID)
@@ -76,6 +76,11 @@ func makeFindTodosHandler(querier ports.TodoQuerier, repos application.RepoListe
 			return nil, rpcErr
 		}
 		p.RepoID = repoID
+		if br, rpcErr := resolveBranchOrActive(ctx, repos, p.RepoID, p.Branch); rpcErr != nil {
+			return nil, rpcErr
+		} else {
+			p.Branch = br
+		}
 		entries, err := querier.FindTodos(ctx, p.RepoID, p.Branch, !p.IncludeClosed)
 		if err != nil {
 			return nil, &RPCError{Code: CodeInternalError, Message: fmt.Sprintf("find todos: %v", err)}
