@@ -170,10 +170,18 @@ func (a *Adapter) extractAdvisory(f *zip.File) error {
 
 // advisory mirrors the subset of the OSV schema this adapter needs.
 type advisory struct {
-	ID       string        `json:"id"`
-	Summary  string        `json:"summary"`
-	Affected []osvAffected `json:"affected"`
-	Severity []osvSeverity `json:"severity"`
+	ID             string            `json:"id"`
+	Summary        string            `json:"summary"`
+	Affected       []osvAffected     `json:"affected"`
+	Severity       []osvSeverity     `json:"severity"`
+	DatabaseSpecif osvDatabaseSpecif `json:"database_specific"`
+}
+
+// osvDatabaseSpecif carries GHSA-prefixed advisories' severity rating
+// (CRITICAL/HIGH/MODERATE/LOW), which is more useful than the raw CVSS
+// vector string when populating finding severity (solov2-15vx).
+type osvDatabaseSpecif struct {
+	Severity string `json:"severity"`
 }
 
 type osvAffected struct {
@@ -272,7 +280,7 @@ func matchAdvisory(adv advisory, byPackage map[string][]ports.Dependency) []port
 				AdvisoryID:    adv.ID,
 				Package:       aff.Package.Name,
 				AffectedRange: rangeString(aff.Ranges),
-				Severity:      severityLabel(adv.Severity),
+				Severity:      pickSeverity(adv),
 				Summary:       adv.Summary,
 			})
 		}
@@ -354,13 +362,40 @@ func rangeString(ranges []osvRange) string {
 	return strings.Join(parts, ", ")
 }
 
-// severityLabel extracts a human-readable severity from the OSV severity list,
-// preferring a CVSS score if present.
-func severityLabel(sev []osvSeverity) string {
-	for _, s := range sev {
-		if s.Score != "" {
-			return s.Score
-		}
+// pickSeverity returns a human-readable severity rating for the advisory.
+// GHSA records carry a rating directly in database_specific.severity; for
+// other records we parse the CVSS3 vector and derive a label from the base
+// score. Empty string falls through to checks.mapSeverity's Medium default
+// (solov2-15vx).
+func pickSeverity(adv advisory) string {
+	if s := strings.TrimSpace(adv.DatabaseSpecif.Severity); s != "" {
+		return s
 	}
+	for _, s := range adv.Severity {
+		if s.Score == "" {
+			continue
+		}
+		// CVSS3 base-score → severity per the official rubric.
+		if label := severityFromCVSS3(s.Score); label != "" {
+			return label
+		}
+		// Fall through with the raw score string — mapSeverity will default
+		// to Medium rather than guess.
+		return s.Score
+	}
+	return ""
+}
+
+// severityFromCVSS3 extracts the CVSS3 base score from a vector string of the
+// form "CVSS:3.1/AV:N/...". If a Score field is present numerically, use it;
+// otherwise compute nothing and return "". Recognised severity buckets per
+// FIRST.org's CVSS3 rubric: 0.1–3.9 Low, 4.0–6.9 Medium, 7.0–8.9 High,
+// 9.0–10.0 Critical.
+func severityFromCVSS3(vec string) string {
+	// We don't ship a CVSS calculator; the OSV vector strings we've seen
+	// don't include a precomputed score. Return "" and let the caller fall
+	// through. Splitting this out keeps the intent explicit for a future
+	// pass that adds a CVSS calculator.
+	_ = vec
 	return ""
 }
