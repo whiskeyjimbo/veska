@@ -82,7 +82,7 @@ func RegisterGraphTools(r *Registry, graph ports.GraphStorage, staging *applicat
 	})
 	r.MustRegister(ToolSpec{
 		Name:            "eng_get_node",
-		Description:     "Get a single node by its ID, with staging overlay applied.",
+		Description:     "Get a single node by its ID. node_id is a content-hashed sha256 and globally unique, so repo_id and branch are optional — when omitted the lookup scans across all (repo, branch) pairs. Pass both to apply the staging overlay (only the scoped path can observe an uncommitted staged version).",
 		IncludesStaging: true,
 		Handler:         makeGetNodeHandler(graph, staging, cfg.repos),
 	})
