@@ -54,6 +54,15 @@ known repos: ` + "`eng_list_repos`" + `; to discover the current one from cwd:
 
 If a search returns no hits, the index may be stale or the repo may not be
 registered. Run ` + "`veska doctor status`" + ` to check.
+
+**Cold-start handling.** When ` + "`eng_search_semantic`" + ` returns
+` + "`embeddings_pending`" + ` in ` + "`degraded_reasons`" + `, the daemon is still
+embedding nodes — results are partial. Call ` + "`eng_get_status`" + ` and inspect
+` + "`scans_in_flight[]`" + `: ` + "`phase=walking`" + ` or ` + "`phase=promoting`" + ` means
+"wait a bit and retry"; an empty ` + "`scans_in_flight`" + ` plus a non-zero
+` + "`pending_embeds`" + ` means the embedder worker is draining the queue (also
+worth a retry). No in-flight scan and ` + "`pending_embeds=0`" + ` means the
+query genuinely matched nothing — don't loop.
 <!-- /veska:init -->
 `
 

@@ -316,7 +316,8 @@ func printRepoTableWithProgress(w io.Writer, repos []repoView, progress map[stri
 }
 
 func repoAddCmd() *cobra.Command {
-	return &cobra.Command{
+	var wait bool
+	cmd := &cobra.Command{
 		Use:          "add <path>",
 		Short:        "Register a git repository and install hooks",
 		Args:         cobra.ExactArgs(1),
@@ -335,8 +336,11 @@ func repoAddCmd() *cobra.Command {
 					return nil
 				}
 				fmt.Fprintf(w, "added repo %s (via daemon)\n", shortRepoID(id))
+				if wait {
+					return waitForScanComplete(ctx, w, id)
+				}
 				logPath := filepath.Join(config.DefaultVectorDir(), "logs", "daemon.log")
-				fmt.Fprintf(w, "  cold scan running in the background — `veska repo list` shows status, `tail %s` shows progress\n", logPath)
+				fmt.Fprintf(w, "  cold scan running in the background — `veska repo list` shows status (pass --wait to block here), `tail %s` shows progress\n", logPath)
 				return nil
 			}
 
@@ -363,6 +367,58 @@ func repoAddCmd() *cobra.Command {
 			fmt.Fprintf(w, "%s repo %s (direct write; daemon dial failed: %v — restart daemon to cold-scan/live-watch)\n", verb, shortRepoID(id), dialErr)
 			return nil
 		},
+	}
+	cmd.Flags().BoolVar(&wait, "wait", false, "block until the cold scan completes; print live progress")
+	return cmd
+}
+
+// waitForScanComplete polls eng_get_status until the named repo's scan
+// has left scans_in_flight, printing one progress line per phase change
+// or files-seen jump so the user has a continuous signal instead of a
+// silent background scan.
+func waitForScanComplete(ctx context.Context, w io.Writer, repoID string) error {
+	start := time.Now()
+	var lastPhase string
+	var lastFiles int
+	for {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		default:
+		}
+		progress := fetchScanProgress(ctx)
+		row, inFlight := progress[repoID]
+		if !inFlight {
+			// Either the scan finished (no entry in scans_in_flight) or the
+			// daemon went away. Distinguish by checking the repo's status —
+			// promoted means done.
+			type listResult struct {
+				Repos []repoView `json:"repos"`
+			}
+			var lr listResult
+			if err := callMCP(ctx, "eng_list_repos", map[string]any{}, &lr); err == nil {
+				for _, r := range lr.Repos {
+					if r.RepoID == repoID && r.LastPromotedSHA != "" {
+						fmt.Fprintf(w, "  ✓ cold scan complete (%.1fs)\n", time.Since(start).Seconds())
+						return nil
+					}
+				}
+			}
+			// Not promoted and no in-flight entry — scan likely failed.
+			// Surface a short note rather than blocking forever.
+			fmt.Fprintf(w, "  scan no longer in flight; check `~/.veska/logs/daemon.log` for errors\n")
+			return nil
+		}
+		if row.Phase != lastPhase || row.FilesSeen != lastFiles {
+			phase := row.Phase
+			if phase == "" {
+				phase = "running"
+			}
+			fmt.Fprintf(w, "  %s → %d files (%.1fs)\n", phase, row.FilesSeen, time.Since(start).Seconds())
+			lastPhase = row.Phase
+			lastFiles = row.FilesSeen
+		}
+		time.Sleep(500 * time.Millisecond)
 	}
 }
 
