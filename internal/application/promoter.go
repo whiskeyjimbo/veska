@@ -2,6 +2,7 @@ package application
 
 import (
 	"context"
+	"log/slog"
 	"time"
 
 	"github.com/whiskeyjimbo/veska/internal/core/domain"
@@ -137,7 +138,17 @@ func (p *Promoter) tracerProvider() observability.TracerProvider {
 // actor records who triggered the promotion. Hook-triggered paths should pass
 // domain.Actor{ID: "service:veska", Kind: domain.ActorKindSystem}.
 func (p *Promoter) Promote(ctx context.Context, repoID, branch, gitSHA string, actor domain.Actor) error {
+	// Operators tail daemon.log to confirm "did my last commit get picked
+	// up?". Mirror coldscan's 'starting' / 'complete' INFO pair so that
+	// signal exists for promotions too (solov2-aiid).
+	promoteStart := time.Now()
 	snap := p.staging.Snapshot(repoID, branch)
+	slog.Info("promotion: starting",
+		"repo_id", repoID,
+		"branch", branch,
+		"git_sha", gitSHA,
+		"files", len(snap),
+	)
 
 	now := time.Now().UnixMilli()
 	batch := PromotionBatch{
@@ -167,12 +178,22 @@ func (p *Promoter) Promote(ctx context.Context, repoID, branch, gitSHA string, a
 	err := p.store.Promote(ctx, batch)
 	span.End()
 	if err != nil {
+		slog.Error("promotion: failed",
+			"repo_id", repoID, "branch", branch, "git_sha", gitSHA,
+			"err", err,
+			"elapsed_ms", time.Since(promoteStart).Milliseconds(),
+		)
 		return err
 	}
 
 	// Nothing was staged: registration was confirmed, but there is no
 	// post-commit work to do — skip staging cleanup, audit, and checks.
 	if len(batch.Files) == 0 {
+		slog.Info("promotion: complete",
+			"repo_id", repoID, "branch", branch, "git_sha", gitSHA,
+			"files", 0,
+			"elapsed_ms", time.Since(promoteStart).Milliseconds(),
+		)
 		return nil
 	}
 
@@ -217,5 +238,10 @@ func (p *Promoter) Promote(ctx context.Context, repoID, branch, gitSHA string, a
 		})
 	}
 
+	slog.Info("promotion: complete",
+		"repo_id", repoID, "branch", branch, "git_sha", gitSHA,
+		"files", len(batch.Files),
+		"elapsed_ms", time.Since(promoteStart).Milliseconds(),
+	)
 	return nil
 }
