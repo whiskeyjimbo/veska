@@ -88,7 +88,7 @@ func RegisterGraphTools(r *Registry, graph ports.GraphStorage, staging *applicat
 	})
 	r.MustRegister(ToolSpec{
 		Name:            "eng_get_call_chain",
-		Description:     "BFS traversal of CALLS edges up to a configurable depth from a start node. NOTE: calls inside anonymous functions assigned to struct fields (e.g. cobra Command{Run: func(...){...}} var initializers) are not currently captured by the tree-sitter extractor and will not appear as edges — falling back to eng_search_semantic or eng_find_symbol is recommended for that pattern (solov2-vkmi).",
+		Description:     "BFS traversal of CALLS edges up to a configurable depth from a start node. Pass either node_id (exact) or symbol (resolved via eng_find_symbol; rejected as ambiguous when multiple matches exist). NOTE: calls inside anonymous functions assigned to struct fields (e.g. cobra Command{Run: func(...){...}} var initializers) are not currently captured by the tree-sitter extractor and will not appear as edges — falling back to eng_search_semantic or eng_find_symbol is recommended for that pattern (solov2-vkmi).",
 		IncludesStaging: false,
 		Handler:         makeGetCallChainHandler(graph, resolve, cfg.repos),
 	})
