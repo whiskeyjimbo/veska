@@ -29,7 +29,7 @@ func TestWriteAgentSnippet_KnownFlavorsCreateExpectedPath(t *testing.T) {
 		t.Run(c.flavor, func(t *testing.T) {
 			root := t.TempDir()
 			var buf bytes.Buffer
-			if err := writeAgentSnippet(root, c.flavor, &buf); err != nil {
+			if err := writeAgentSnippet(root, c.flavor, &buf, true); err != nil {
 				t.Fatalf("writeAgentSnippet(%q): %v", c.flavor, err)
 			}
 			abs := filepath.Join(root, c.wantPath)
@@ -60,13 +60,13 @@ func TestWriteAgentSnippet_Idempotent(t *testing.T) {
 	root := t.TempDir()
 	var buf bytes.Buffer
 
-	if err := writeAgentSnippet(root, "claude", &buf); err != nil {
+	if err := writeAgentSnippet(root, "claude", &buf, true); err != nil {
 		t.Fatalf("first call: %v", err)
 	}
 	first, _ := os.ReadFile(filepath.Join(root, "CLAUDE.md"))
 
 	buf.Reset()
-	if err := writeAgentSnippet(root, "claude", &buf); err != nil {
+	if err := writeAgentSnippet(root, "claude", &buf, true); err != nil {
 		t.Fatalf("second call: %v", err)
 	}
 	second, _ := os.ReadFile(filepath.Join(root, "CLAUDE.md"))
@@ -94,7 +94,7 @@ func TestWriteAgentSnippet_AppendsToExistingFile(t *testing.T) {
 	}
 
 	var buf bytes.Buffer
-	if err := writeAgentSnippet(root, "claude", &buf); err != nil {
+	if err := writeAgentSnippet(root, "claude", &buf, true); err != nil {
 		t.Fatalf("writeAgentSnippet: %v", err)
 	}
 	body, _ := os.ReadFile(existing)
@@ -106,13 +106,36 @@ func TestWriteAgentSnippet_AppendsToExistingFile(t *testing.T) {
 	}
 }
 
+// TestWriteAgentSnippet_GitignoreOptIn guards solov2-zm6i: the default call
+// (updateGitignore=false) must NOT create or modify .gitignore; only the
+// explicit opt-in path writes the veska-managed block.
+func TestWriteAgentSnippet_GitignoreOptIn(t *testing.T) {
+	root := t.TempDir()
+	var buf bytes.Buffer
+	if err := writeAgentSnippet(root, "claude", &buf, false); err != nil {
+		t.Fatalf("writeAgentSnippet: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(root, ".gitignore")); !os.IsNotExist(err) {
+		t.Errorf("expected no .gitignore created on default path, got err=%v", err)
+	}
+
+	root2 := t.TempDir()
+	buf.Reset()
+	if err := writeAgentSnippet(root2, "claude", &buf, true); err != nil {
+		t.Fatalf("writeAgentSnippet (opt-in): %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(root2, ".gitignore")); err != nil {
+		t.Errorf("expected .gitignore created with --update-gitignore, got %v", err)
+	}
+}
+
 // TestWriteAgentSnippet_UnknownFlavorErrors: an unknown flavor must
 // surface a helpful error listing the supported flavors — otherwise
 // the user has no way to discover what they typed wrong.
 func TestWriteAgentSnippet_UnknownFlavorErrors(t *testing.T) {
 	root := t.TempDir()
 	var buf bytes.Buffer
-	err := writeAgentSnippet(root, "vim-fugitive", &buf)
+	err := writeAgentSnippet(root, "vim-fugitive", &buf, true)
 	if err == nil {
 		t.Fatal("expected error for unknown flavor")
 	}
