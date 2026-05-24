@@ -27,17 +27,25 @@ const agentSnippetBody = agentSnippetSentinel + `
 This repo is indexed by Veska. Prefer these MCP tools over re-grepping the
 tree — they reason from the parsed graph, not raw text.
 
+**` + "`repo_id`" + ` and ` + "`branch`" + ` are usually optional.** When exactly one repo
+is registered the daemon auto-resolves ` + "`repo_id`" + `; when ` + "`branch`" + ` is omitted
+it defaults to the repo's active branch. Pass them explicitly only when
+operating across multiple repos or against a non-current branch. To list the
+known repos: ` + "`eng_list_repos`" + `; to discover the current one from cwd:
+` + "`eng_get_current_repo`" + `.
+
 - ` + "`eng_search_semantic`" + ` — natural-language → ranked code chunks. Use when
   the user describes behavior ("where do we validate session tokens"). Inline
   snippets are returned; you usually don't need a follow-up Read.
-  Example: ` + "`{query: \"parse config\", repo_id: \"<id>\", branch: \"main\"}`" + `
+  Example: ` + "`{query: \"parse config\"}`" + ` (or pass ` + "`repo_id`" + `/` + "`branch`" + ` explicitly).
 
 - ` + "`eng_find_symbol`" + ` — exact symbol lookup by name or symbol_path. Use
   when you know the identifier ("show me ParseConfig").
 
-- ` + "`eng_get_call_chain`" + ` — incoming/outgoing CALLS edges for a node. Use
-  to answer "what calls this" or "what does this reach" without manually
-  tracing through files.
+- ` + "`eng_get_call_chain`" + ` — incoming/outgoing CALLS edges for a node. Accepts
+  either ` + "`node_id`" + ` or ` + "`symbol`" + ` (parity with ` + "`eng_find_symbol`" + `). Use to
+  answer "what calls this" or "what does this reach" without manually tracing
+  through files.
 
 - ` + "`eng_get_context_pack`" + ` — bundles a seed node with its callers,
   callees, and tests into a single payload. Use at the start of a non-trivial
