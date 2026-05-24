@@ -17,8 +17,12 @@ func TestCheckEmbedderHealthDefaultIsInProcess(t *testing.T) {
 	t.Setenv("VESKA_EMBEDDER", "")
 	home := t.TempDir()
 	h := checkEmbedderHealth(context.Background(), home)
-	if h.Status != "healthy" {
-		t.Fatalf("default embedder status = %q, want healthy", h.Status)
+	// solov2-yql1: a fresh home with no model2vec installed elects static-v2,
+	// which is reported as 'degraded' so users see the fallback in `doctor
+	// status` instead of only discovering it per-search. 'healthy' is also
+	// acceptable here (e.g. when run from a fat build with model2vec embedded).
+	if h.Status != "degraded" && h.Status != "healthy" {
+		t.Fatalf("default embedder status = %q, want degraded or healthy", h.Status)
 	}
 	if !strings.Contains(h.Detail, "in-process") {
 		t.Errorf("default embedder detail = %q, want it to mention in-process", h.Detail)
