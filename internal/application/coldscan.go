@@ -159,10 +159,22 @@ func newColdScanReparserFromFns(save coldScanSaveFn, promote coldScanPromoteFn, 
 		// wrapper is cheap (a counter increment on the same goroutine
 		// the walk runs on, no locking) and keeps walkAndSave's
 		// signature unchanged.
+		// Also publish files_seen to the scan tracker after each save so
+		// eng_get_status / veska repo list can show progress for long
+		// scans (solov2-u9h9). files_total is left 0 until we have a
+		// cheap upfront count — wiring that here would double-walk the
+		// tree. Showing files_seen alone is still enough to tell hung
+		// from progressing.
 		filesSaved := 0
 		countingSave := func(ctx context.Context, repoID, branch, path string, src []byte) {
 			save(ctx, repoID, branch, path, src)
 			filesSaved++
+			// Throttle tracker updates: every 25 files is plenty for a
+			// 'is it still moving?' signal and keeps tracker contention
+			// negligible on the hot path.
+			if filesSaved%25 == 0 {
+				cfg.tracker.Progress(repo.RepoID, filesSaved, 0)
+			}
 		}
 
 		if err := walkAndSave(ctx, repo, ignore, countingSave); err != nil {

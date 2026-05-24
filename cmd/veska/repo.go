@@ -154,7 +154,8 @@ func repoListCmd() *cobra.Command {
 			}
 			var lr listResult
 			if err := callMCP(ctx, "eng_list_repos", map[string]any{}, &lr); err == nil {
-				printRepoTable(w, lr.Repos)
+				progress := fetchScanProgress(ctx)
+				printRepoTableWithProgress(w, lr.Repos, progress)
 				return nil
 			}
 
@@ -231,11 +232,38 @@ func resolveCLIRepoID(records []repo.Record, repoID string) (repo.Record, error)
 	return repo.Record{}, fmt.Errorf("repo %q is not registered (prefixes must be >= %d chars)", repoID, cliMinRepoIDPrefix)
 }
 
+// fetchScanProgress pulls scans_in_flight from eng_get_status and returns
+// a map repo_id → files_seen. Best-effort: nil if the call fails or the
+// daemon is too old to surface files_seen (solov2-u9h9).
+func fetchScanProgress(ctx context.Context) map[string]int {
+	var status struct {
+		ScansInFlight []struct {
+			RepoID    string `json:"repo_id"`
+			FilesSeen int    `json:"files_seen"`
+		} `json:"scans_in_flight"`
+	}
+	if err := callMCP(ctx, "eng_get_status", map[string]any{}, &status); err != nil {
+		return nil
+	}
+	m := make(map[string]int, len(status.ScansInFlight))
+	for _, s := range status.ScansInFlight {
+		m[s.RepoID] = s.FilesSeen
+	}
+	return m
+}
+
 // printRepoTable renders the repo list as REPO_ID + ROOT + BRANCH + STATUS.
 // A short repo_id (first 12 chars) is shown so the column is readable; the
 // full id is still present in any tool output, and `veska repo remove`
 // accepts the full id.
 func printRepoTable(w io.Writer, repos []repoView) {
+	printRepoTableWithProgress(w, repos, nil)
+}
+
+// printRepoTableWithProgress overlays in-flight scan progress onto the
+// (unindexed) rows so a user watching a long cold scan can tell hung
+// from progressing (solov2-u9h9). progress maps repo_id → files_seen.
+func printRepoTableWithProgress(w io.Writer, repos []repoView, progress map[string]int) {
 	if len(repos) == 0 {
 		fmt.Fprintln(w, "no repositories registered — run: veska repo add <path>")
 		return
@@ -251,6 +279,9 @@ func printRepoTable(w io.Writer, repos []repoView) {
 		status := "promoted"
 		if r.LastPromotedSHA == "" {
 			status = "(unindexed)"
+			if n, ok := progress[r.RepoID]; ok && n > 0 {
+				status = fmt.Sprintf("(scanning, %d files)", n)
+			}
 		}
 		// Flag repos whose root path no longer exists on disk so users can see
 		// stale registrations at a glance (solov2-76px). `repo remove <id>` is
