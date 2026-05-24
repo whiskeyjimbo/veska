@@ -54,9 +54,12 @@ func runProxy(ctx context.Context, sockPath string, in io.Reader, out io.Writer)
 
 	// stdin → socket: when in is exhausted, half-close the write side so the
 	// server sees EOF without closing the read side of the connection.
+	// solov2-k8zc: also inject the shim's cwd into eng_get_current_repo
+	// requests that omit it, since stdio MCP clients usually have no way to
+	// pass cwd through. Everything else is passed through verbatim.
 	go func() {
 		defer wg.Done()
-		io.Copy(unixConn, in) //nolint:errcheck
+		injectCwdAndCopy(unixConn, in)
 		unixConn.CloseWrite() //nolint:errcheck
 	}()
 
