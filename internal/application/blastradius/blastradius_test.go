@@ -328,6 +328,79 @@ func TestDiffOf_RejectsEmptyRepoRoot(t *testing.T) {
 	}
 }
 
+// TestOf_HubDegreeThresholdSuppressesFanout guards solov2-l2f5: when a node
+// in the BFS frontier has more neighbours than HubDegreeThreshold, the
+// walker does NOT expand through it. The node itself still appears in the
+// result with IsHub=true so callers see the structural fact; what's
+// excluded is the irrelevant fan-out. This models cobra's rootCmd
+// (every command's init adds to it → 100+ inbound edges).
+func TestOf_HubDegreeThresholdSuppressesFanout(t *testing.T) {
+	// hub has 6 inbound edges. cmd-a (a leaf with 1 inbound) reaches hub
+	// via init-a. Without gating, the rest of the cmd-* siblings would be
+	// pulled in at distance 2.
+	edges := &fakeEdges{inbound: map[string][]string{
+		"hub":    {"init-a", "init-b", "init-c", "init-d", "init-e", "init-f"},
+		"init-a": {"cmd-a"},
+		"init-b": {"cmd-b"},
+		"init-c": {"cmd-c"},
+		"init-d": {"cmd-d"},
+		"init-e": {"cmd-e"},
+		"init-f": {"cmd-f"},
+		"cmd-a":  {"hub"}, // seed reaches hub via 1-hop inbound
+	}}
+	nodes := &fakeNodes{metas: map[string]ports.NodeMeta{
+		"cmd-a": {NodeID: "cmd-a"}, "hub": {NodeID: "hub"},
+		"init-a": {NodeID: "init-a"}, "init-b": {NodeID: "init-b"},
+		"init-c": {NodeID: "init-c"}, "init-d": {NodeID: "init-d"},
+		"init-e": {NodeID: "init-e"}, "init-f": {NodeID: "init-f"},
+	}}
+	s := blastradius.NewService(edges, nodes, nil)
+
+	// With gating (threshold 3): hub appears as IsHub=true; init-b..f are
+	// NOT in the result because BFS didn't expand through hub.
+	gated, err := s.Of(context.Background(), "r", "main", []string{"cmd-a"},
+		blastradius.Options{MaxDepth: 3, HubDegreeThreshold: 3})
+	if err != nil {
+		t.Fatalf("Of(gated): %v", err)
+	}
+	ids := map[string]bool{}
+	hubMarked := false
+	for _, e := range gated.Entries {
+		ids[e.NodeID] = true
+		if e.NodeID == "hub" && e.IsHub {
+			hubMarked = true
+		}
+	}
+	if !ids["cmd-a"] || !ids["hub"] {
+		t.Errorf("expected cmd-a and hub in gated result, got %+v", ids)
+	}
+	if !hubMarked {
+		t.Errorf("expected hub entry to carry IsHub=true")
+	}
+	for _, sib := range []string{"init-b", "init-c", "init-d", "init-e", "init-f"} {
+		if ids[sib] {
+			t.Errorf("gated BFS expanded through hub: %s should be absent", sib)
+		}
+	}
+
+	// With gating disabled (threshold -1): legacy behaviour — every sibling
+	// init-* is pulled in at distance 3 (cmd-a → hub → init-b → ...).
+	wide, err := s.Of(context.Background(), "r", "main", []string{"cmd-a"},
+		blastradius.Options{MaxDepth: 3, HubDegreeThreshold: -1})
+	if err != nil {
+		t.Fatalf("Of(wide): %v", err)
+	}
+	wideIDs := map[string]bool{}
+	for _, e := range wide.Entries {
+		wideIDs[e.NodeID] = true
+	}
+	for _, sib := range []string{"init-b", "init-c", "init-d", "init-e", "init-f"} {
+		if !wideIDs[sib] {
+			t.Errorf("ungated BFS should reach %s via hub; missing", sib)
+		}
+	}
+}
+
 func TestParseDirection(t *testing.T) {
 	for _, tc := range []struct {
 		in   string

@@ -41,6 +41,15 @@ type edgeDTO struct {
 }
 
 // searchHitDTO is a node plus its retrieval score and inline snippet.
+//
+// Score is the post-fusion RRF score, NOT a similarity. Hybrid search runs
+// vector + lexical retrieval and fuses with Reciprocal Rank Fusion (RRF),
+// summing 1/(60+rank) across both lists. A single-list rank-1 hit scores
+// ~0.0164; the strongest possible hit (rank 1 in both lists) is ~0.0328.
+// The raw vector similarity (1/(1+L2dist)) is therefore NOT exposed on
+// this field — RRF is the only signal that's comparable across hits in
+// the same query. Compare hits relative to each other; absolute values
+// don't map onto a 0..1 similarity scale (solov2-vee5).
 type searchHitDTO struct {
 	nodeDTO
 	Score   float32 `json:"score"`
@@ -52,6 +61,11 @@ type blastEntryDTO struct {
 	nodeDTO
 	Distance int    `json:"distance"`
 	Snippet  string `json:"snippet,omitempty"`
+	// IsHub flags nodes whose neighbour count exceeded the hub-degree
+	// threshold during BFS — BFS reported the node but did NOT expand
+	// through it, so the entry is informational (the framework registry
+	// node itself) rather than the start of a chain (solov2-l2f5).
+	IsHub bool `json:"is_hub,omitempty"`
 }
 
 func nodeToDTO(n *domain.Node) nodeDTO {
@@ -161,6 +175,7 @@ func blastEntryToDTO(e blastradius.Entry) blastEntryDTO {
 		},
 		Distance: e.Distance,
 		Snippet:  e.Snippet,
+		IsHub:    e.IsHub,
 	}
 }
 
