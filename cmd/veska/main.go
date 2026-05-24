@@ -27,6 +27,7 @@ func newRootCmd() *cobra.Command {
 	root.AddCommand(searchCmd())
 	root.AddCommand(symbolCmd())
 	root.AddCommand(contextCmd())
+	root.AddCommand(findingsCmd())
 	root.AddCommand(installCmd())
 	root.AddCommand(versionCmd())
 	// Top-level alias for `veska doctor savings` so the marketing-y

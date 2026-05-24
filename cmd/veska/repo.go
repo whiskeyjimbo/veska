@@ -35,6 +35,92 @@ func repoCmd() *cobra.Command {
 	cmd.AddCommand(repoAddCmd())
 	cmd.AddCommand(repoRemoveCmd())
 	cmd.AddCommand(repoListCmd())
+	cmd.AddCommand(repoPruneCmd())
+	return cmd
+}
+
+// repoPruneCmd removes registered repos whose root directory is gone — a
+// recurring state when checkouts move or get cleaned up. Without prune,
+// the daemon logs a WARN every boot for each missing repo (solov2-s0t0).
+// --dry-run lists the candidates without removing them (solov2-47yj).
+func repoPruneCmd() *cobra.Command {
+	var dryRun bool
+	cmd := &cobra.Command{
+		Use:          "prune",
+		Short:        "Remove registered repos whose root directory no longer exists",
+		Args:         cobra.NoArgs,
+		SilenceUsage: true,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			ctx := cmd.Context()
+			w := cmd.OutOrStdout()
+
+			type listResult struct {
+				Repos []repoView `json:"repos"`
+			}
+			var lr listResult
+			useDaemon := callMCP(ctx, "eng_list_repos", map[string]any{}, &lr) == nil
+			var repos []repoView
+			var db *sql.DB
+			var closeFn func()
+			if !useDaemon {
+				var err error
+				db, closeFn, err = openLocalDB()
+				if err != nil {
+					return fmt.Errorf("repo prune: %w", err)
+				}
+				defer closeFn()
+				recs, err := repo.List(ctx, db)
+				if err != nil {
+					return fmt.Errorf("repo prune: %w", err)
+				}
+				for _, r := range recs {
+					repos = append(repos, repoView{
+						RepoID: r.RepoID, RootPath: r.RootPath,
+						ActiveBranch: r.ActiveBranch, LastPromotedSHA: r.LastPromotedSHA,
+					})
+				}
+			} else {
+				repos = lr.Repos
+			}
+
+			var missing []repoView
+			for _, r := range repos {
+				if _, err := os.Stat(r.RootPath); os.IsNotExist(err) {
+					missing = append(missing, r)
+				}
+			}
+			if len(missing) == 0 {
+				fmt.Fprintln(w, "no missing repos — nothing to prune")
+				return nil
+			}
+			for _, r := range missing {
+				prefix := "would remove"
+				if !dryRun {
+					prefix = "removing"
+				}
+				fmt.Fprintf(w, "%s %s  %s\n", prefix, shortRepoID(r.RepoID), r.RootPath)
+				if dryRun {
+					continue
+				}
+				if useDaemon {
+					if err := dialRemoveRepo(ctx, r.RepoID); err != nil {
+						fmt.Fprintf(w, "  failed: %v\n", err)
+					}
+				} else {
+					if err := repo.Remove(ctx, db, r.RepoID); err != nil {
+						fmt.Fprintf(w, "  failed: %v\n", err)
+					}
+				}
+			}
+			if dryRun {
+				fmt.Fprintf(w, "%d candidate(s) — rerun without --dry-run to apply\n", len(missing))
+			} else {
+				fmt.Fprintf(w, "pruned %d repo(s)\n", len(missing))
+			}
+			return nil
+		},
+	}
+	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "list candidates without removing them")
 	return cmd
 }
 
