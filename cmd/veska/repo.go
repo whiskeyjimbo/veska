@@ -158,7 +158,8 @@ func repoAddCmd() *cobra.Command {
 			id, dialErr := dialAddRepo(ctx, root)
 			if dialErr == nil {
 				fmt.Fprintf(w, "added repo %s (via daemon)\n", shortRepoID(id))
-				fmt.Fprintln(w, "  cold scan running in the background — `veska repo list` shows status, `tail ~/.veska/logs/daemon.log` shows progress")
+				logPath := filepath.Join(config.DefaultVectorDir(), "logs", "daemon.log")
+				fmt.Fprintf(w, "  cold scan running in the background — `veska repo list` shows status, `tail %s` shows progress\n", logPath)
 				return nil
 			}
 
