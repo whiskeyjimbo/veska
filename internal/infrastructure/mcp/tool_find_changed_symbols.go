@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"path/filepath"
 
 	application "github.com/whiskeyjimbo/veska/internal/application"
 	"github.com/whiskeyjimbo/veska/internal/application/changedsymbols"
@@ -87,6 +88,18 @@ func makeChangedSymbolsHandler(svc *changedsymbols.Service, repoRoot RepoRootFun
 			return nil, &RPCError{Code: CodeNotFound, Message: fmt.Sprintf("repo has no root path: %s", p.RepoID)}
 		}
 		res, err := svc.Diff(ctx, p.RepoID, root, p.RefA, p.RefB)
+		// Rewrite file_path to absolute form so it matches the contract used
+		// by every other node-emitting tool (eng_find_symbol,
+		// eng_get_file_nodes, etc.). The service stores repo-relative paths
+		// because git diff yields them that way; the wire surface must be
+		// uniform (solov2-w8nr).
+		absolutiseChangedSymbols := func(slice []changedsymbols.SymbolChange) {
+			for i := range slice {
+				if slice[i].FilePath != "" && !filepath.IsAbs(slice[i].FilePath) {
+					slice[i].FilePath = filepath.Join(root, slice[i].FilePath)
+				}
+			}
+		}
 		if err != nil {
 			// An unresolvable ref (most commonly HEAD~1 on a single-commit
 			// repo) is a caller problem, not an internal failure — return a
@@ -100,6 +113,9 @@ func makeChangedSymbolsHandler(svc *changedsymbols.Service, repoRoot RepoRootFun
 			}
 			return nil, &RPCError{Code: CodeInternalError, Message: fmt.Sprintf("find changed symbols: %v", err)}
 		}
+		absolutiseChangedSymbols(res.Added)
+		absolutiseChangedSymbols(res.Removed)
+		absolutiseChangedSymbols(res.Modified)
 		return res, nil
 	}
 }
