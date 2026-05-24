@@ -21,6 +21,44 @@ import (
 // hookNames lists the git hooks that veska installs.
 var hookNames = []string{"post-commit", "post-checkout"}
 
+// execWithBusyRetry runs an ExecContext, retrying on SQLITE_BUSY a bounded
+// number of times with a fixed delay between attempts. SQLite's per-handle
+// busy_timeout already absorbs short contention; this loop covers the
+// pathological case where a long-running scan/embedder write holds the
+// write lock past that ceiling. Non-busy errors return immediately.
+func execWithBusyRetry(ctx context.Context, db *sql.DB, attempts int, delay time.Duration, query string, args ...any) (sql.Result, error) {
+	var lastErr error
+	for i := range attempts {
+		res, err := db.ExecContext(ctx, query, args...)
+		if err == nil {
+			return res, nil
+		}
+		lastErr = err
+		if !isSQLiteBusy(err) {
+			return nil, err
+		}
+		if i < attempts-1 {
+			select {
+			case <-time.After(delay):
+			case <-ctx.Done():
+				return nil, ctx.Err()
+			}
+		}
+	}
+	return nil, lastErr
+}
+
+// isSQLiteBusy reports whether the error is a SQLITE_BUSY-class lock
+// contention. modernc.org/sqlite formats it as "(5) (SQLITE_BUSY)" in
+// the error text; string-matching keeps the helper driver-agnostic.
+func isSQLiteBusy(err error) bool {
+	if err == nil {
+		return false
+	}
+	s := err.Error()
+	return strings.Contains(s, "SQLITE_BUSY") || strings.Contains(s, "database is locked")
+}
+
 // veskaBinary resolves the absolute path of the 'veska' CLI binary so
 // installed hooks invoke it directly instead of relying on $PATH
 // (solov2-v7q). The hook MUST point at the CLI, not the running process —
@@ -291,7 +329,14 @@ func Add(ctx context.Context, db *sql.DB, rootPath string) (string, bool, error)
 		branch = "main"
 	}
 
-	res, err := db.ExecContext(ctx,
+	// solov2-6c04: a concurrent cold-scan can hold the WriteHot lock long
+	// enough to outlast SQLite's busy_timeout (5s), surfacing SQLITE_BUSY
+	// to the user even though the INSERT itself is trivial. Wrap the
+	// single statement in a short app-level retry loop so the natural
+	// "register a second repo while the first is scanning" flow never
+	// fails on transient contention. 5 attempts × 500ms = 2.5s additional
+	// budget on top of the per-attempt busy_timeout.
+	res, err := execWithBusyRetry(ctx, db, 5, 500*time.Millisecond,
 		`INSERT INTO repos (repo_id, root_path, added_at, active_branch, module_path)
 		 VALUES (?, ?, ?, ?, ?)
 		 ON CONFLICT(repo_id) DO NOTHING`,
