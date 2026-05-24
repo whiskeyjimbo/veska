@@ -94,16 +94,14 @@ func resolveWikiTarget(ctx context.Context, db *sql.DB, repoID, branch string) (
 			return "", "", fmt.Errorf("wiki: %d repos registered — pass --repo to choose one", len(records))
 		}
 	} else {
-		found := false
-		for _, r := range records {
-			if r.RepoID == repoID {
-				rec, found = r, true
-				break
-			}
+		// Match the MCP resolveRepoID progression so the CLI honours the same
+		// short_id / prefix contract (solov2-c7lq): exact full id, then
+		// ShortRepoIDLen-char short_id, then unambiguous >= 4-char prefix.
+		matched, rerr := resolveCLIRepoID(records, repoID)
+		if rerr != nil {
+			return "", "", fmt.Errorf("wiki: %w", rerr)
 		}
-		if !found {
-			return "", "", fmt.Errorf("wiki: repo %q is not registered", repoID)
-		}
+		rec = matched
 	}
 
 	if branch == "" {
@@ -143,12 +141,19 @@ func buildWikiHandler(pools *sqlite.Pools) (*wiki.Handler, error) {
 		if err != nil {
 			return "", fmt.Errorf("wiki: repo root lookup: %w", err)
 		}
+		// resolveWikiTarget already canonicalised repoID to the full sha, so
+		// equality is the expected hit. Keep the prefix resolver as a defensive
+		// fallback for any caller that bypasses it (solov2-c7lq).
 		for _, rec := range records {
 			if rec.RepoID == repoID {
 				return rec.RootPath, nil
 			}
 		}
-		return "", fmt.Errorf("wiki: repo %q is not registered", repoID)
+		matched, rerr := resolveCLIRepoID(records, repoID)
+		if rerr != nil {
+			return "", fmt.Errorf("wiki: %w", rerr)
+		}
+		return matched.RootPath, nil
 	}
 
 	// `veska wiki` is the explicit, user-invoked render path; always write

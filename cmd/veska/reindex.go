@@ -144,10 +144,12 @@ func resolveReindexTarget(ctx context.Context, db *sql.DB, target string) (repo.
 		return matchByPath(ctx, db, cwd)
 	}
 
-	// Try as id first.
-	if rec, err := repo.Get(ctx, db, target); err != nil {
-		return repo.Record{}, fmt.Errorf("reindex: get repo: %w", err)
-	} else if rec.RepoID != "" {
+	// Try as a full id, short_id, or unambiguous prefix (solov2-c7lq).
+	records, lerr := repo.List(ctx, db)
+	if lerr != nil {
+		return repo.Record{}, fmt.Errorf("reindex: list repos: %w", lerr)
+	}
+	if rec, rerr := resolveCLIRepoID(records, target); rerr == nil {
 		return rec, nil
 	}
 

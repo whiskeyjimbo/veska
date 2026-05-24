@@ -108,6 +108,43 @@ func shortRepoID(id string) string {
 	return id
 }
 
+// cliMinRepoIDPrefix mirrors mcp.minRepoIDPrefix — see that constant for the
+// reasoning (solov2-rkbc).
+const cliMinRepoIDPrefix = 4
+
+// resolveCLIRepoID matches the MCP resolveRepoID progression for CLI callers:
+// exact full id, then 12-char short_id, then unambiguous prefix (>= 4 chars).
+// Returns a typed error so CLI commands can wrap it with their own prefix
+// ("wiki: ", "reindex: ", etc.) (solov2-c7lq).
+func resolveCLIRepoID(records []repo.Record, repoID string) (repo.Record, error) {
+	for _, r := range records {
+		if r.RepoID == repoID {
+			return r, nil
+		}
+	}
+	for _, r := range records {
+		if shortRepoID(r.RepoID) == repoID {
+			return r, nil
+		}
+	}
+	if len(repoID) >= cliMinRepoIDPrefix {
+		var matched repo.Record
+		found := false
+		for _, r := range records {
+			if strings.HasPrefix(r.RepoID, repoID) {
+				if found {
+					return repo.Record{}, fmt.Errorf("ambiguous repo_id prefix %q matches multiple repos", repoID)
+				}
+				matched, found = r, true
+			}
+		}
+		if found {
+			return matched, nil
+		}
+	}
+	return repo.Record{}, fmt.Errorf("repo %q is not registered (prefixes must be >= %d chars)", repoID, cliMinRepoIDPrefix)
+}
+
 // printRepoTable renders the repo list as REPO_ID + ROOT + BRANCH + STATUS.
 // A short repo_id (first 12 chars) is shown so the column is readable; the
 // full id is still present in any tool output, and `veska repo remove`
