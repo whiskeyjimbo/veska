@@ -167,7 +167,7 @@ func findOrRegisterRepo(ctx context.Context, pools *sqlite.Pools, path string) (
 	}
 	// Not registered yet — add. Subsequent runs find the existing
 	// registration (AC2: reuse the index).
-	id, addErr := repo.Add(ctx, pools.WriteHot, path)
+	id, _, addErr := repo.Add(ctx, pools.WriteHot, path)
 	if addErr != nil {
 		return repo.Record{}, fmt.Errorf("search: register repo %q: %w", path, addErr)
 	}

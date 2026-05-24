@@ -45,7 +45,7 @@ func setupReindexEnv(t *testing.T) (repoRoot, repoID string) {
 	}
 	t.Cleanup(func() { _ = db.Close() })
 
-	id, err := repo.Add(context.Background(), db, repoRoot)
+	id, _, err := repo.Add(context.Background(), db, repoRoot)
 	if err != nil {
 		t.Fatalf("repo.Add: %v", err)
 	}

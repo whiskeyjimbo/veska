@@ -53,10 +53,10 @@ type repoRegistrar struct {
 // not blocked on potentially-long indexing work. A nil reparser or recordFor
 // silently skips the dispatch (used in legacy wiring and in tests that do not
 // exercise the cold-scan path).
-func (rr *repoRegistrar) AddRepo(ctx context.Context, rootPath string) (string, error) {
-	repoID, err := repo.Add(ctx, rr.db, rootPath)
+func (rr *repoRegistrar) AddRepo(ctx context.Context, rootPath string) (string, bool, error) {
+	repoID, existed, err := repo.Add(ctx, rr.db, rootPath)
 	if err != nil {
-		return "", err
+		return "", false, err
 	}
 
 	// Seed the live fsnotify watcher before kicking off the cold scan so a
@@ -73,7 +73,15 @@ func (rr *repoRegistrar) AddRepo(ctx context.Context, rootPath string) (string, 
 	}
 
 	if rr.reparser == nil || rr.recordFor == nil {
-		return repoID, nil
+		return repoID, existed, nil
+	}
+
+	// Skip the cold-scan dispatch for an already-registered repo: the existing
+	// row already drove a scan on its original add (and continues to be kept
+	// fresh by the post-commit hook / live watcher), so re-scanning here is
+	// pure waste. (solov2-khjd)
+	if existed {
+		return repoID, existed, nil
 	}
 
 	// daemonCtx outlives any single request ctx, so the goroutine survives
@@ -110,7 +118,7 @@ func (rr *repoRegistrar) AddRepo(ctx context.Context, rootPath string) (string, 
 				"repo_id", repoID, "err", serr)
 		}
 	}()
-	return repoID, nil
+	return repoID, existed, nil
 }
 
 // RemoveRepo deregisters the repo identified by repoID. repo.Remove deletes

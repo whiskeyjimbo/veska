@@ -52,7 +52,7 @@ func TestAddRepo(t *testing.T) {
 	db := newTestDB(t)
 	dir := newGitRepo(t)
 
-	repoID, err := repo.Add(context.Background(), db, dir)
+	repoID, _, err := repo.Add(context.Background(), db, dir)
 	if err != nil {
 		t.Fatalf("Add: %v", err)
 	}
@@ -76,13 +76,19 @@ func TestAddRepoIdempotent(t *testing.T) {
 	db := newTestDB(t)
 	dir := newGitRepo(t)
 
-	id1, err := repo.Add(context.Background(), db, dir)
+	id1, existed1, err := repo.Add(context.Background(), db, dir)
 	if err != nil {
 		t.Fatalf("first Add: %v", err)
 	}
-	id2, err := repo.Add(context.Background(), db, dir)
+	if existed1 {
+		t.Errorf("first Add: existed=true, want false")
+	}
+	id2, existed2, err := repo.Add(context.Background(), db, dir)
 	if err != nil {
 		t.Fatalf("second Add: %v", err)
+	}
+	if !existed2 {
+		t.Errorf("second Add: existed=false, want true (solov2-khjd)")
 	}
 	if id1 != id2 {
 		t.Errorf("idempotent: id1=%s id2=%s differ", id1, id2)
@@ -106,7 +112,7 @@ func TestAddRepoReadsGoMod(t *testing.T) {
 		t.Fatalf("write go.mod: %v", err)
 	}
 
-	repoID, err := repo.Add(context.Background(), db, dir)
+	repoID, _, err := repo.Add(context.Background(), db, dir)
 	if err != nil {
 		t.Fatalf("Add: %v", err)
 	}
@@ -129,7 +135,7 @@ func TestAddRepoReadsPackageJSON(t *testing.T) {
 		t.Fatalf("write package.json: %v", err)
 	}
 
-	repoID, err := repo.Add(context.Background(), db, dir)
+	repoID, _, err := repo.Add(context.Background(), db, dir)
 	if err != nil {
 		t.Fatalf("Add: %v", err)
 	}
@@ -147,7 +153,7 @@ func TestAddRepoInstallsHooks(t *testing.T) {
 	db := newTestDB(t)
 	dir := newGitRepo(t)
 
-	if _, err := repo.Add(context.Background(), db, dir); err != nil {
+	if _, _, err := repo.Add(context.Background(), db, dir); err != nil {
 		t.Fatalf("Add: %v", err)
 	}
 
@@ -182,7 +188,7 @@ func TestAddRepoDetectsActiveBranch(t *testing.T) {
 			runGitTest(t, dir, "config", "user.name", "T")
 			runGitTest(t, dir, "commit", "-q", "--allow-empty", "-m", "init")
 
-			repoID, err := repo.Add(context.Background(), db, dir)
+			repoID, _, err := repo.Add(context.Background(), db, dir)
 			if err != nil {
 				t.Fatalf("Add: %v", err)
 			}
@@ -209,7 +215,7 @@ func TestAddRepoDefaultsBranchWhenDetectionFails(t *testing.T) {
 	db := newTestDB(t)
 	dir := newGitRepo(t)
 
-	repoID, err := repo.Add(context.Background(), db, dir)
+	repoID, _, err := repo.Add(context.Background(), db, dir)
 	if err != nil {
 		t.Fatalf("Add: %v", err)
 	}
@@ -232,7 +238,7 @@ func TestAddRepoHookUsesAbsoluteBinaryPath(t *testing.T) {
 	db := newTestDB(t)
 	dir := newGitRepo(t)
 
-	if _, err := repo.Add(context.Background(), db, dir); err != nil {
+	if _, _, err := repo.Add(context.Background(), db, dir); err != nil {
 		t.Fatalf("Add: %v", err)
 	}
 
@@ -295,7 +301,7 @@ func TestRemoveRepo(t *testing.T) {
 	db := newTestDB(t)
 	dir := newGitRepo(t)
 
-	repoID, err := repo.Add(context.Background(), db, dir)
+	repoID, _, err := repo.Add(context.Background(), db, dir)
 	if err != nil {
 		t.Fatalf("Add: %v", err)
 	}
@@ -321,7 +327,7 @@ func TestRemoveRepoByShortPrefix(t *testing.T) {
 	db := newTestDB(t)
 	dir := newGitRepo(t)
 
-	repoID, err := repo.Add(context.Background(), db, dir)
+	repoID, _, err := repo.Add(context.Background(), db, dir)
 	if err != nil {
 		t.Fatalf("Add: %v", err)
 	}
@@ -348,7 +354,7 @@ func TestRemoveRepoRemovesHooks(t *testing.T) {
 	db := newTestDB(t)
 	dir := newGitRepo(t)
 
-	repoID, err := repo.Add(context.Background(), db, dir)
+	repoID, _, err := repo.Add(context.Background(), db, dir)
 	if err != nil {
 		t.Fatalf("Add: %v", err)
 	}

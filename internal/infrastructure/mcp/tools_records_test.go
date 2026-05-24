@@ -198,15 +198,15 @@ type stubRepoRegistrar struct {
 	rmErr   error
 }
 
-func (s *stubRepoRegistrar) AddRepo(_ context.Context, rootPath string) (string, error) {
+func (s *stubRepoRegistrar) AddRepo(_ context.Context, rootPath string) (string, bool, error) {
 	s.added = append(s.added, rootPath)
 	if s.addErr != nil {
-		return "", s.addErr
+		return "", false, s.addErr
 	}
 	if s.addID != "" {
-		return s.addID, nil
+		return s.addID, false, nil
 	}
-	return "repo-" + rootPath, nil
+	return "repo-" + rootPath, false, nil
 }
 
 func (s *stubRepoRegistrar) RemoveRepo(_ context.Context, repoID string) error {
