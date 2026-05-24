@@ -433,6 +433,39 @@ func TestGetCallChain_TraversesCallsEdges(t *testing.T) {
 	}
 }
 
+// TestGetCallChain_AcceptsSymbol guards solov2-lcz6: callers can pass
+// 'symbol' instead of 'node_id' for parity with eng_find_symbol.
+func TestGetCallChain_AcceptsSymbol(t *testing.T) {
+	store := newStubGraphStorage()
+	a := mustNode(t, "a", "pkg/a.go", "Alpha", domain.KindFunction)
+	b := mustNode(t, "b", "pkg/b.go", "Beta", domain.KindFunction)
+	store.addNode(a)
+	store.addNode(b)
+	store.addEdge(mustEdge(t, "a", "b", domain.EdgeCalls))
+
+	r := NewRegistry()
+	RegisterGraphTools(r, store, application.NewStagingArea())
+
+	resp, rpcErr := dispatchCallChain(t, r, "eng_get_call_chain", map[string]any{
+		"symbol":  "Alpha",
+		"repo_id": "repo1",
+		"branch":  "main",
+		"depth":   2,
+	})
+	if rpcErr != nil {
+		t.Fatalf("unexpected error: %+v", rpcErr)
+	}
+	found := false
+	for _, n := range resp.Nodes {
+		if n.NodeID == "b" {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("expected node b reached via symbol=Alpha, got %+v", resp.Nodes)
+	}
+}
+
 // ---------------------------------------------------------------------------
 // eng_get_call_chain — depth > 10 → -32602
 // ---------------------------------------------------------------------------

@@ -16,6 +16,7 @@ import (
 
 type getCallChainParams struct {
 	NodeID          string `json:"node_id"`
+	Symbol          string `json:"symbol"`
 	RepoID          string `json:"repo_id"`
 	Branch          string `json:"branch"`
 	Depth           int    `json:"depth"`
@@ -30,7 +31,10 @@ func makeGetCallChainHandler(graph ports.GraphStorage, resolve ResolveFunc, repo
 		if err := json.Unmarshal(raw, &p); err != nil {
 			return nil, &RPCError{Code: CodeInvalidParams, Message: fmt.Sprintf("invalid params: %v", err)}
 		}
-		if rpcErr := checkRequired("node_id", p.NodeID, "repo_id", p.RepoID, "branch", p.Branch); rpcErr != nil {
+		if p.NodeID == "" && p.Symbol == "" {
+			return nil, &RPCError{Code: CodeInvalidParams, Message: "missing required params: node_id or symbol"}
+		}
+		if rpcErr := checkRequired("repo_id", p.RepoID, "branch", p.Branch); rpcErr != nil {
 			return nil, rpcErr
 		}
 		repoID, rpcErr := resolveRepoID(ctx, repos, p.RepoID)
@@ -38,6 +42,25 @@ func makeGetCallChainHandler(graph ports.GraphStorage, resolve ResolveFunc, repo
 			return nil, rpcErr
 		}
 		p.RepoID = repoID
+
+		// solov2-lcz6: accept 'symbol' as an alternative to 'node_id' to give
+		// parity with eng_find_symbol. When both are supplied node_id wins —
+		// it is the more specific selector. When only symbol is given, look it
+		// up via FindNodes; ambiguity (multiple matches) is rejected so the
+		// caller has to disambiguate explicitly with node_id.
+		if p.NodeID == "" {
+			matches, ferr := graph.FindNodes(ctx, p.RepoID, p.Branch, p.Symbol)
+			if ferr != nil {
+				return nil, &RPCError{Code: CodeInternalError, Message: fmt.Sprintf("find symbol %q: %v", p.Symbol, ferr)}
+			}
+			if len(matches) == 0 {
+				return nil, &RPCError{Code: CodeNotFound, Message: fmt.Sprintf("symbol not found: %s", p.Symbol)}
+			}
+			if len(matches) > 1 {
+				return nil, &RPCError{Code: CodeInvalidParams, Message: fmt.Sprintf("symbol %q is ambiguous (%d matches); pass node_id to disambiguate", p.Symbol, len(matches))}
+			}
+			p.NodeID = string(matches[0].ID)
+		}
 		depth := p.Depth
 		if depth <= 0 {
 			depth = 3 // default
