@@ -469,14 +469,19 @@ func doctorStatusCmd() *cobra.Command {
 			storageReport, _ := doctor.CheckStorage(home)
 			ingestionStatus, ingestionDetail := checkIngestion(context.Background())
 
-			// Compute egress status: broken if any socket is missing.
+			// Compute egress status: broken if any socket is missing. Track
+			// whether BOTH sockets are missing — that is the unambiguous
+			// "daemon never started" signal and warrants a friendlier message
+			// than the generic "broken" rollup (solov2-eluk).
 			egressStatus := "healthy"
+			missing := 0
 			for _, s := range egressReport.Sockets {
 				if s.Status == "missing" {
 					egressStatus = "broken"
-					break
+					missing++
 				}
 			}
+			daemonNotRunning := missing == len(egressReport.Sockets) && len(egressReport.Sockets) > 0
 
 			// Compute config status.
 			configStatus := "healthy"
@@ -524,6 +529,9 @@ func doctorStatusCmd() *cobra.Command {
 			}
 			fmt.Fprintf(cmd.OutOrStdout(), "status: %s (embedder=%s, egress=%s, config=%s, ingestion=%s)%s\n",
 				rollup, embedderResult.Status, egressStatus, configStatus, ingestionStatus, detail)
+			if daemonNotRunning {
+				fmt.Fprintln(cmd.OutOrStdout(), "  hint: daemon socket not present — start it with `veska service start` (or `veska-daemon &` for a quick try)")
+			}
 			if rollup != "healthy" {
 				return ProbeStatusError{Subsystem: "status", Status: rollup}
 			}
