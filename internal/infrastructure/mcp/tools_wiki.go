@@ -19,6 +19,11 @@ type HotZoneResponse struct {
 	RepoID string         `json:"repo_id"`
 	Branch string         `json:"branch"`
 	Zones  []wiki.HotZone `json:"zones"`
+	// DegradedReasons surfaces in-band hints when the response is sparse for
+	// non-obvious reasons (e.g. an empty zones list because no commits have
+	// landed since registration). Tools shouldn't have to read the wiki
+	// markdown to learn why the call returned nothing (solov2-636y).
+	DegradedReasons []string `json:"degraded_reasons,omitempty"`
 }
 
 // RegisterWikiTools registers the wiki surface tools. svc and repoRoot are
@@ -76,10 +81,8 @@ func makeEntryPointsHandler(svc *wiki.EntryPointsService, repos application.Repo
 		if rpcErr := bindParams(raw, &p); rpcErr != nil {
 			return nil, rpcErr
 		}
-		if rpcErr := checkRequired("repo_id", p.RepoID); rpcErr != nil {
-			return nil, rpcErr
-		}
-		repoID, rpcErr := resolveRepoID(ctx, repos, p.RepoID)
+		// solov2-ktz0: shim-injected cwd resolves repo_id when omitted.
+		repoID, rpcErr := resolveRepoIDFromParams(ctx, repos, raw, p.RepoID)
 		if rpcErr != nil {
 			return nil, rpcErr
 		}
@@ -150,10 +153,8 @@ func makeHotZoneHandler(svc *wiki.HotZoneService, repoRoot RepoRootFunc, repos a
 		if rpcErr := bindParams(raw, &p); rpcErr != nil {
 			return nil, rpcErr
 		}
-		if rpcErr := checkRequired("repo_id", p.RepoID); rpcErr != nil {
-			return nil, rpcErr
-		}
-		repoID, rpcErr := resolveRepoID(ctx, repos, p.RepoID)
+		// solov2-ktz0: shim-injected cwd resolves repo_id when omitted.
+		repoID, rpcErr := resolveRepoIDFromParams(ctx, repos, raw, p.RepoID)
 		if rpcErr != nil {
 			return nil, rpcErr
 		}
@@ -187,10 +188,20 @@ func makeHotZoneHandler(svc *wiki.HotZoneService, repoRoot RepoRootFunc, repos a
 			z.FilePath = abs
 			zones[i] = z
 		}
+		// solov2-636y: when ranking returns no zones, the most common reason
+		// is "no commits have landed since this repo was registered" — hot
+		// zone scoring is per-commit-frequency-driven. Surface the hint
+		// in-band so callers don't conclude the tool is broken or that the
+		// repo is uninteresting.
+		var degraded []string
+		if len(zones) == 0 {
+			degraded = []string{"no_post_registration_commits"}
+		}
 		return HotZoneResponse{
-			RepoID: rep.RepoID,
-			Branch: rep.Branch,
-			Zones:  zones,
+			RepoID:          rep.RepoID,
+			Branch:          rep.Branch,
+			Zones:           zones,
+			DegradedReasons: degraded,
 		}, nil
 	}
 }

@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/whiskeyjimbo/veska/internal/application"
 	"github.com/whiskeyjimbo/veska/internal/core/domain"
 	"github.com/whiskeyjimbo/veska/internal/core/ports"
 )
@@ -140,5 +141,55 @@ func TestFindTodos_RegistersOneTool(t *testing.T) {
 	got := r.Names()
 	if len(got) != 1 || got[0] != "eng_find_todos" {
 		t.Fatalf("expected [eng_find_todos], got %v", got)
+	}
+}
+
+// TestFindTodos_RelativizesAbsolutePath guards solov2-v7dq: eng_find_todos
+// emits repo-relative file_path so it agrees with eng_list_findings per
+// solov2-62gc. Without the RepoLister we can't relativize, so the absolute
+// path passes through unchanged — both behaviours are tested.
+func TestFindTodos_RelativizesAbsolutePath(t *testing.T) {
+	q := &stubTodoQuerier{entries: []ports.TodoEntry{
+		{
+			FindingID: "t1", RepoID: "r", Branch: "main",
+			FilePath: "/abs/repo/internal/server/server.go",
+			Message:  "TODO: x", State: "open",
+		},
+	}}
+	r := NewRegistry()
+	repos := &fakeRepoLister{recs: []application.RepoRecord{
+		{RepoID: "r", RootPath: "/abs/repo", ActiveBranch: "main"},
+	}}
+	RegisterTodoTools(r, q, repos)
+
+	resp, rpcErr := dispatchTodos(t, r, map[string]string{"repo_id": "r"})
+	if rpcErr != nil {
+		t.Fatalf("err: %+v", rpcErr)
+	}
+	if len(resp.Todos) != 1 {
+		t.Fatalf("expected 1 todo, got %d", len(resp.Todos))
+	}
+	want := "internal/server/server.go"
+	if got := resp.Todos[0].FilePath; got != want {
+		t.Errorf("file_path = %q, want %q (repo-relative per solov2-62gc/v7dq)", got, want)
+	}
+}
+
+func TestFindTodos_LeavesAlreadyRelativePath(t *testing.T) {
+	q := &stubTodoQuerier{entries: []ports.TodoEntry{
+		{FindingID: "t1", RepoID: "r", Branch: "main", FilePath: "pkg/x.go", State: "open"},
+	}}
+	r := NewRegistry()
+	repos := &fakeRepoLister{recs: []application.RepoRecord{
+		{RepoID: "r", RootPath: "/abs/repo", ActiveBranch: "main"},
+	}}
+	RegisterTodoTools(r, q, repos)
+
+	resp, rpcErr := dispatchTodos(t, r, map[string]string{"repo_id": "r"})
+	if rpcErr != nil {
+		t.Fatalf("err: %+v", rpcErr)
+	}
+	if got := resp.Todos[0].FilePath; got != "pkg/x.go" {
+		t.Errorf("file_path = %q, want pkg/x.go (already relative)", got)
 	}
 }

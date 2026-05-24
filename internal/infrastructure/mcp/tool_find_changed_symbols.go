@@ -64,9 +64,6 @@ func makeChangedSymbolsHandler(svc *changedsymbols.Service, repoRoot RepoRootFun
 		if rpcErr := bindParams(raw, &p); rpcErr != nil {
 			return nil, rpcErr
 		}
-		if rpcErr := checkRequired("repo_id", p.RepoID); rpcErr != nil {
-			return nil, rpcErr
-		}
 		// ref_a/ref_b default to the last commit (HEAD~1..HEAD) when both are
 		// omitted; supplying only one is ambiguous and rejected (solov2-npjs).
 		switch {
@@ -75,7 +72,8 @@ func makeChangedSymbolsHandler(svc *changedsymbols.Service, repoRoot RepoRootFun
 		case p.RefA == "" || p.RefB == "":
 			return nil, &RPCError{Code: CodeInvalidParams, Message: "ref_a and ref_b must be provided together (or both omitted to default to HEAD~1..HEAD)"}
 		}
-		repoID, rpcErr := resolveRepoID(ctx, repos, p.RepoID)
+		// solov2-ktz0: shim-injected cwd resolves repo_id when omitted.
+		repoID, rpcErr := resolveRepoIDFromParams(ctx, repos, raw, p.RepoID)
 		if rpcErr != nil {
 			return nil, rpcErr
 		}

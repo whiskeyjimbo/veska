@@ -167,16 +167,21 @@ func makeCloseFindingHandler(db *sql.DB, aw ports.AuditWriter) ToolHandler {
 		}
 
 		// Update the finding to closed.
+		//
+		// solov2-iyog: do NOT overwrite actor_id/actor_kind on close. The
+		// finding's actor columns mean "who created/last-saved this finding"
+		// — clobbering them with the closer caused TODO findings (created by
+		// service:veska) to surface as actor_id=agent:unknown after an MCP
+		// caller closed them, even though the creator never changed. The
+		// audit log below already records who performed the close.
 		closedAt := time.Now().Unix()
 		res, err := tx.ExecContext(ctx,
 			`UPDATE findings
 			    SET state = 'closed',
 			        closed_reason = ?,
-			        closed_at = ?,
-			        actor_id = ?,
-			        actor_kind = ?
+			        closed_at = ?
 			  WHERE finding_id = ? AND branch = ?`,
-			p.Reason, closedAt, actor.ID, string(actor.Kind),
+			p.Reason, closedAt,
 			p.FindingID, p.Branch,
 		)
 		if err != nil {

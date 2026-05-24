@@ -75,7 +75,8 @@ func makeGetNodeHandler(graph ports.GraphStorage, staging *application.StagingAr
 		}
 
 		if node == nil {
-			return nil, &RPCError{Code: CodeInvalidParams, Message: fmt.Sprintf("node not found: %s", p.NodeID)}
+			// solov2-byxy: not-found is a domain error, not a malformed-params error.
+			return nil, &RPCError{Code: CodeNotFound, Message: fmt.Sprintf("node not found: %s", p.NodeID)}
 		}
 
 		return GraphResponse{

@@ -91,10 +91,11 @@ func makeBlastRadiusHandler(svc *blastradius.Service, repos application.RepoList
 		if rpcErr := bindParams(raw, &p); rpcErr != nil {
 			return nil, rpcErr
 		}
-		if rpcErr := checkRequired("node_id", p.NodeID, "repo_id", p.RepoID); rpcErr != nil {
+		if rpcErr := checkRequired("node_id", p.NodeID); rpcErr != nil {
 			return nil, rpcErr
 		}
-		repoID, rpcErr := resolveRepoID(ctx, repos, p.RepoID)
+		// solov2-ktz0: shim-injected cwd resolves repo_id when omitted.
+		repoID, rpcErr := resolveRepoIDFromParams(ctx, repos, raw, p.RepoID)
 		if rpcErr != nil {
 			return nil, rpcErr
 		}
@@ -181,10 +182,8 @@ func makeDiffBlastRadiusHandler(svc *blastradius.Service, repoRoot RepoRootFunc,
 		if rpcErr := bindParams(raw, &p); rpcErr != nil {
 			return nil, rpcErr
 		}
-		if rpcErr := checkRequired("repo_id", p.RepoID); rpcErr != nil {
-			return nil, rpcErr
-		}
-		repoID, rpcErr := resolveRepoID(ctx, repos, p.RepoID)
+		// solov2-ktz0: shim-injected cwd resolves repo_id when omitted.
+		repoID, rpcErr := resolveRepoIDFromParams(ctx, repos, raw, p.RepoID)
 		if rpcErr != nil {
 			return nil, rpcErr
 		}
@@ -243,10 +242,8 @@ func makeDirtyBlastRadiusHandler(svc *blastradius.Service, repos application.Rep
 		if rpcErr := bindParams(raw, &p); rpcErr != nil {
 			return nil, rpcErr
 		}
-		if rpcErr := checkRequired("repo_id", p.RepoID); rpcErr != nil {
-			return nil, rpcErr
-		}
-		repoID, rpcErr := resolveRepoID(ctx, repos, p.RepoID)
+		// solov2-ktz0: shim-injected cwd resolves repo_id when omitted.
+		repoID, rpcErr := resolveRepoIDFromParams(ctx, repos, raw, p.RepoID)
 		if rpcErr != nil {
 			return nil, rpcErr
 		}

@@ -1,12 +1,37 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
+	"os"
 
 	"github.com/spf13/cobra"
 )
+
+// resolveRepoFromCWD asks the daemon (via eng_get_current_repo) which repo
+// the caller's cwd belongs to. Used by CLI wrappers (symbol, context, ...)
+// to bridge the gap when the daemon has multiple repos registered and the
+// user hasn't passed --repo. Empty string + no error means "couldn't
+// resolve"; the caller should still pass the request through and let the
+// daemon's "repo_id is required" error surface (solov2-zukc).
+func resolveRepoFromCWD(ctx context.Context) (string, error) {
+	cwd, err := os.Getwd()
+	if err != nil {
+		return "", nil // cwd lookup failed; don't fail the whole command
+	}
+	var res struct {
+		Repo struct {
+			RepoID string `json:"repo_id"`
+		} `json:"repo"`
+	}
+	if err := callMCP(ctx, "eng_get_current_repo", map[string]any{"cwd": cwd}, &res); err != nil {
+		// Daemon down or no match — caller falls through with no auto-resolve.
+		return "", nil
+	}
+	return res.Repo.RepoID, nil
+}
 
 // symbolCmd wraps eng_find_symbol so users can drive the same lookup their
 // editor would, without typing the JSON-RPC envelope. repo_id auto-resolves
@@ -33,6 +58,10 @@ ranked first.`,
 			params := map[string]any{"symbol": args[0]}
 			if repoFlag != "" {
 				params["repo_id"] = repoFlag
+			} else if rid, _ := resolveRepoFromCWD(cmd.Context()); rid != "" {
+				// solov2-zukc: auto-resolve from cwd so a junior user inside a
+				// registered repo doesn't have to look up a short_id.
+				params["repo_id"] = rid
 			}
 			var resp struct {
 				Nodes []struct {
@@ -108,6 +137,10 @@ change so you (or an agent) get the whole neighbourhood in one shot.`,
 			params := map[string]any{"symbol": args[0]}
 			if repoFlag != "" {
 				params["repo_id"] = repoFlag
+			} else if rid, _ := resolveRepoFromCWD(cmd.Context()); rid != "" {
+				// solov2-zukc: auto-resolve from cwd so a junior user inside a
+				// registered repo doesn't have to look up a short_id.
+				params["repo_id"] = rid
 			}
 			var resp json.RawMessage
 			if err := callMCP(cmd.Context(), "eng_get_context_pack", params, &resp); err != nil {

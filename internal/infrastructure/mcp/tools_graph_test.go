@@ -436,8 +436,9 @@ func TestGetNode_NotFound(t *testing.T) {
 		t.Fatal("expected RPCError for not-found node")
 		return
 	}
-	if rpcErr.Code != CodeInvalidParams {
-		t.Errorf("expected code %d, got %d", CodeInvalidParams, rpcErr.Code)
+	// solov2-byxy: not-found is a domain error (CodeNotFound), not -32602.
+	if rpcErr.Code != CodeNotFound {
+		t.Errorf("expected code %d, got %d", CodeNotFound, rpcErr.Code)
 	}
 }
 
@@ -657,6 +658,88 @@ func TestGetFileNodes_ResolvesRelativePath(t *testing.T) {
 	}
 	if len(resp.Nodes) != 1 || resp.Nodes[0].NodeID != "n1" {
 		t.Fatalf("expected node n1 from resolved relative path, got %+v", resp.Nodes)
+	}
+}
+
+// TestFindSymbol_ResolvesRepoFromCwdWhenOmitted guards solov2-ktz0: when
+// repo_id is omitted but the shim-injected cwd matches a registered repo's
+// RootPath (or sits inside one), the handler resolves to that repo instead
+// of rejecting with "repo_id is required". Critical for multi-repo users.
+func TestFindSymbol_ResolvesRepoFromCwdWhenOmitted(t *testing.T) {
+	store := newStubGraphStorage()
+	store.addNode(mustNode(t, "n-cwd", "/home/u/projects/alpha/main.go", "Foo", domain.KindFunction))
+
+	repos := []application.RepoRecord{
+		{RepoID: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", RootPath: "/home/u/projects/alpha", ActiveBranch: "main"},
+		{RepoID: "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", RootPath: "/home/u/projects/beta", ActiveBranch: "main"},
+	}
+	r := NewRegistry()
+	RegisterGraphTools(r, store, application.NewStagingArea(),
+		WithRepoLister(&stubRepoLister{repos: repos}))
+
+	// repo_id omitted, but cwd is inside alpha — should resolve.
+	resp, rpcErr := dispatchGraph(t, r, "eng_find_symbol", map[string]string{
+		"symbol": "Foo",
+		"cwd":    "/home/u/projects/alpha/sub/dir",
+	})
+	if rpcErr != nil {
+		t.Fatalf("expected cwd-based resolution, got %+v", rpcErr)
+	}
+	if len(resp.Nodes) != 1 || resp.Nodes[0].NodeID != "n-cwd" {
+		t.Fatalf("expected n-cwd, got %+v", resp.Nodes)
+	}
+}
+
+// TestFindSymbol_MissingRepoIDAndCwdMismatchErrors verifies the helpful
+// multi-repo error message still surfaces when cwd doesn't match any
+// registered root.
+func TestFindSymbol_MissingRepoIDAndCwdMismatchErrors(t *testing.T) {
+	store := newStubGraphStorage()
+	repos := []application.RepoRecord{
+		{RepoID: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", RootPath: "/home/u/projects/alpha", ActiveBranch: "main"},
+		{RepoID: "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", RootPath: "/home/u/projects/beta", ActiveBranch: "main"},
+	}
+	r := NewRegistry()
+	RegisterGraphTools(r, store, application.NewStagingArea(),
+		WithRepoLister(&stubRepoLister{repos: repos}))
+
+	_, rpcErr := dispatchGraph(t, r, "eng_find_symbol", map[string]string{
+		"symbol": "Foo",
+		"cwd":    "/tmp/somewhere/else",
+	})
+	if rpcErr == nil {
+		t.Fatal("expected error when cwd doesn't match any repo")
+	}
+	if rpcErr.Code != CodeInvalidParams {
+		t.Errorf("expected CodeInvalidParams, got %d", rpcErr.Code)
+	}
+}
+
+// TestGetFileNodes_BranchDefaultsToActiveBranch guards solov2-gp2k: when the
+// caller omits branch, the handler resolves it from the registered
+// active_branch instead of erroring — matching find_symbol et al.
+func TestGetFileNodes_BranchDefaultsToActiveBranch(t *testing.T) {
+	store := newStubGraphStorage()
+	n1 := mustNode(t, "n1", "/abs/repo/pkg/promoted.go", "PromotedFunc", domain.KindFunction)
+	store.addNode(n1)
+
+	repos := []application.RepoRecord{
+		{RepoID: "abcdef0123456789abcdef0123456789", RootPath: "/abs/repo", ActiveBranch: "develop"},
+	}
+	r := NewRegistry()
+	RegisterGraphTools(r, store, application.NewStagingArea(),
+		WithRepoLister(&stubRepoLister{repos: repos}))
+
+	resp, rpcErr := dispatchGraph(t, r, "eng_get_file_nodes", map[string]string{
+		"file_path": "/abs/repo/pkg/promoted.go",
+		"repo_id":   "abcdef012345",
+		// branch intentionally omitted
+	})
+	if rpcErr != nil {
+		t.Fatalf("expected branch auto-resolution, got %+v", rpcErr)
+	}
+	if len(resp.Nodes) != 1 || resp.Nodes[0].NodeID != "n1" {
+		t.Fatalf("expected node n1 with default branch, got %+v", resp.Nodes)
 	}
 }
 

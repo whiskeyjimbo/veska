@@ -226,7 +226,8 @@ func makeGetRepoHandler(repos application.RepoLister) ToolHandler {
 			}
 		}
 
-		return nil, &RPCError{Code: CodeInvalidParams, Message: fmt.Sprintf("repo not found: %s", p.RepoID)}
+		// solov2-byxy: not-found is a domain error, not a malformed-params error.
+		return nil, &RPCError{Code: CodeNotFound, Message: fmt.Sprintf("repo not found: %s", p.RepoID)}
 	}
 }
 

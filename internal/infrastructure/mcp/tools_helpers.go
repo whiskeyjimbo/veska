@@ -73,6 +73,20 @@ func resolveRepoID(ctx context.Context, repos application.RepoLister, repoID str
 // caller-side scoping needed). When repoID is empty and there are zero or
 // many repos it returns an actionable InvalidParams (solov2-7tz1).
 func resolveRepoIDOrSingleton(ctx context.Context, repos application.RepoLister, repoID string) (string, *RPCError) {
+	return resolveRepoIDOrCwd(ctx, repos, repoID, "")
+}
+
+// resolveRepoIDOrCwd extends resolveRepoIDOrSingleton with a third
+// fallback: when repoID is empty AND multiple repos are registered, if cwd
+// matches a registered repo's RootPath (or sits inside one), return that
+// repo. This bridges the gap for callers running inside a registered repo
+// who would otherwise have to look up a short_id even though the daemon
+// has the cwd context (solov2-ktz0).
+//
+// Callers extract cwd from their params struct (a `cwd` field injected by
+// the veska-mcp shim — see cmd/veska-mcp/cwd_inject.go) and pass it in.
+// Empty cwd reproduces the singleton-only behaviour.
+func resolveRepoIDOrCwd(ctx context.Context, repos application.RepoLister, repoID, cwd string) (string, *RPCError) {
 	if repoID != "" {
 		return resolveRepoID(ctx, repos, repoID)
 	}
@@ -88,9 +102,52 @@ func resolveRepoIDOrSingleton(ctx context.Context, repos application.RepoLister,
 		return "", &RPCError{Code: CodeInvalidParams, Message: "repo_id is required (no repos registered — run `veska repo add <path>` first)"}
 	case 1:
 		return all[0].RepoID, nil
-	default:
-		return "", &RPCError{Code: CodeInvalidParams, Message: fmt.Sprintf("repo_id is required (%d repos registered; pass eng_list_repos to find the id)", len(all))}
 	}
+	// Multi-repo: try cwd before erroring. We accept either exact RootPath
+	// equality OR cwd sitting inside a registered RootPath, so a call from
+	// a subdirectory of the repo resolves the same as a call from the root.
+	if cwd != "" {
+		for _, rec := range all {
+			if rec.RootPath == "" {
+				continue
+			}
+			if cwd == rec.RootPath || strings.HasPrefix(cwd, rec.RootPath+"/") {
+				return rec.RepoID, nil
+			}
+		}
+	}
+	return "", &RPCError{Code: CodeInvalidParams, Message: fmt.Sprintf("repo_id is required (%d repos registered; pass eng_list_repos to find the id)", len(all))}
+}
+
+// cwdFromParams unmarshals just the "cwd" field from a raw JSON-RPC params
+// blob. Used by query tools to pick up the cwd hint injected by the
+// veska-mcp shim without adding a `cwd` field to every params struct
+// (solov2-ktz0). Returns "" when the field is missing, blank, or the blob
+// is malformed — none of which should fail the caller, since cwd is a
+// best-effort hint.
+func cwdFromParams(raw json.RawMessage) string {
+	if len(raw) == 0 {
+		return ""
+	}
+	var probe struct {
+		Cwd string `json:"cwd"`
+	}
+	if err := json.Unmarshal(raw, &probe); err != nil {
+		return ""
+	}
+	return probe.Cwd
+}
+
+// resolveRepoIDFromParams is the convenience used by repo-scoped query tools
+// (solov2-ktz0): if requestedID is non-empty resolve it normally; otherwise
+// fall back to the cwd hint extracted from raw. Tools call this in place of
+// the older `checkRequired("repo_id", ...) + resolveRepoID(...)` pair so
+// requests omitting repo_id resolve from the caller's cwd when possible.
+func resolveRepoIDFromParams(ctx context.Context, repos application.RepoLister, raw json.RawMessage, requestedID string) (string, *RPCError) {
+	if requestedID != "" {
+		return resolveRepoID(ctx, repos, requestedID)
+	}
+	return resolveRepoIDOrCwd(ctx, repos, "", cwdFromParams(raw))
 }
 
 // resolveBranchOrActive returns branch when non-empty, otherwise the registered
