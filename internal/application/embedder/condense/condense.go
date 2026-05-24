@@ -95,7 +95,7 @@ func Condense(ctx context.Context, embedder ports.EmbeddingProvider, pieces []st
 		return scores[i].idx < scores[j].idx
 	})
 	keep := make(map[int]bool, k)
-	for i := 0; i < k; i++ {
+	for i := range k {
 		keep[scores[i].idx] = true
 	}
 
@@ -109,10 +109,7 @@ func Condense(ctx context.Context, embedder ports.EmbeddingProvider, pieces []st
 }
 
 func dot(a, b []float32) float32 {
-	n := len(a)
-	if len(b) < n {
-		n = len(b)
-	}
+	n := min(len(b), len(a))
 	var s float32
 	for i := 0; i < n; i++ {
 		s += a[i] * b[i]
