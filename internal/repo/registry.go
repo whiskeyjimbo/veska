@@ -116,6 +116,39 @@ func repoID(canonicalPath string) string {
 	return hex.EncodeToString(h.Sum(nil))
 }
 
+// validateRepoRoot rejects paths that should never be registered as a
+// veska repo:
+//   - non-existent paths
+//   - non-directory paths
+//   - directories with no `.git` entry AND no parent .git work-tree marker
+//
+// The .git lookup also walks parents so registering a subdirectory of a
+// real repo would still be accepted (veska canonicalises to the path the
+// user passed; this preserves that behaviour).
+func validateRepoRoot(canonical string) error {
+	info, err := os.Stat(canonical)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return fmt.Errorf("path does not exist: %s", canonical)
+		}
+		return fmt.Errorf("stat %s: %w", canonical, err)
+	}
+	if !info.IsDir() {
+		return fmt.Errorf("not a directory: %s", canonical)
+	}
+	dir := canonical
+	for {
+		if _, err := os.Stat(filepath.Join(dir, ".git")); err == nil {
+			return nil
+		}
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			return fmt.Errorf("not inside a git work-tree: %s (run `git init` first)", canonical)
+		}
+		dir = parent
+	}
+}
+
 // canonicalise returns the absolute, symlink-resolved path for root.
 func canonicalise(root string) (string, error) {
 	abs, err := filepath.Abs(root)
@@ -228,6 +261,16 @@ func Add(ctx context.Context, db *sql.DB, rootPath string) (string, error) {
 	canonical, err := canonicalise(rootPath)
 	if err != nil {
 		return "", err
+	}
+
+	// Refuse to register a path that is not inside a git work-tree
+	// (solov2-fro3). Without this check `veska repo add /tmp` silently
+	// succeeded, the cold scan failed (no commits / nothing to parse), and
+	// the repos table held a permanently-unindexed entry that pinned
+	// `doctor status` to "degraded" until the user noticed and manually
+	// removed it.
+	if err := validateRepoRoot(canonical); err != nil {
+		return "", fmt.Errorf("repo add: %w", err)
 	}
 
 	id := repoID(canonical)

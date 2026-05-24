@@ -561,6 +561,7 @@ func newDaemon(cfg Config) (*Daemon, error) {
 		hotZoneSvc, epSvc,
 		sqlite.NewWikiRenderStateRepo(pools.ReadDB, pools.WriteHot),
 		wikiRoot,
+		wiki.WithWritePages(fileCfg.Wiki.WritePages),
 	)
 	if err != nil {
 		_ = pools.Close()

@@ -142,6 +142,19 @@ func (p *GoParser) ParseFile(ctx context.Context, repoID, path string, src []byt
 	result.Edges = append(result.Edges, callEdges...)
 	result.UnresolvedCalls = unresolved
 
+	// Anonymous functions used as values in top-level var/const declarations
+	// (the cobra `var serveCmd = &cobra.Command{Run: func() { Serve() }}`
+	// pattern) have no enclosing named function for extractCallEdges to
+	// attach calls to — without this pass they were invisible to call_chain,
+	// which is the dominant call pattern in any cobra-based CLI (solov2-kzxh).
+	// Attribute their calls to the package node so call_chain answers
+	// "what eventually gets reached when this file initialises" correctly.
+	if pkgNode != nil {
+		varEdges, varUnresolved := extractTopLevelVarInitCalls(root, src, symbolByName, pkgNode)
+		result.Edges = append(result.Edges, varEdges...)
+		result.UnresolvedCalls = append(result.UnresolvedCalls, varUnresolved...)
+	}
+
 	// --- import map for cross-package call resolution (solov2-xc51) ---
 	result.Imports = extractImports(root, src)
 
@@ -374,6 +387,96 @@ func extractCallEdges(root *sitter.Node, src []byte, symbols map[string]*domain.
 		}
 	}
 	return edges, unresolved
+}
+
+// extractTopLevelVarInitCalls walks top-level var_declaration and const_declaration
+// children, finds function_literal bodies anywhere inside them, and emits CALLS
+// edges from pkgNode (the file's package node) to every callable target in those
+// bodies. This makes cobra-style anonymous-function call patterns visible to
+// call_chain and blast_radius (solov2-kzxh).
+//
+// Only identifier-form calls are bound here; package-qualified and selector
+// calls follow the same paths as extractCallEdges (UnresolvedCalls for
+// cross-package, in-file symbol map for selectors on a known receiver).
+func extractTopLevelVarInitCalls(root *sitter.Node, src []byte, symbols map[string]*domain.Node, pkgNode *domain.Node) ([]*domain.Edge, []domain.UnresolvedCall) {
+	var edges []*domain.Edge
+	var unresolved []domain.UnresolvedCall
+	seen := make(map[string]bool)
+	seenU := make(map[string]bool)
+
+	count := int(root.ChildCount())
+	for i := range count {
+		child := root.Child(i)
+		switch child.Type() {
+		case "var_declaration", "const_declaration":
+			// Find every function_literal anywhere inside this declaration's
+			// subtree and collect calls from each body.
+			collectAnonCalls(child, src, symbols, pkgNode, &edges, &unresolved, seen, seenU)
+		}
+	}
+	return edges, unresolved
+}
+
+// collectAnonCalls walks node looking for function_literal subtrees; for each
+// one it harvests identifier and package-qualified calls in the body and
+// attributes them to callerNode. Recursive so nested closures
+// (func(){ go func(){ Foo() }() }) are reached too.
+func collectAnonCalls(node *sitter.Node, src []byte, symbols map[string]*domain.Node, callerNode *domain.Node, edges *[]*domain.Edge, unresolved *[]domain.UnresolvedCall, seen, seenU map[string]bool) {
+	if node == nil {
+		return
+	}
+	if node.Type() == "function_literal" {
+		bodyNode := node.ChildByFieldName("body")
+		if bodyNode != nil {
+			// Receiver name/type are empty: a function_literal does not bind
+			// a receiver in Go, so selector calls like x.Y() inside the body
+			// are filtered out by collectCallNames' recvName check. Anything
+			// resolvable (identifier or pkg.X) still lands.
+			for _, ref := range collectCallNames(bodyNode, src, "", "") {
+				if ref.pkg != "" {
+					key := string(callerNode.ID) + callKeySep + ref.pkg + "." + ref.name
+					if seenU[key] {
+						continue
+					}
+					seenU[key] = true
+					*unresolved = append(*unresolved, domain.UnresolvedCall{
+						CallerID:     callerNode.ID,
+						CalleeName:   ref.name,
+						PkgQualifier: ref.pkg,
+					})
+					continue
+				}
+				calleeNode, ok := symbols[ref.name]
+				if !ok {
+					key := string(callerNode.ID) + callKeySep + ref.name
+					if seenU[key] {
+						continue
+					}
+					seenU[key] = true
+					*unresolved = append(*unresolved, domain.UnresolvedCall{
+						CallerID:   callerNode.ID,
+						CalleeName: ref.name,
+					})
+					continue
+				}
+				key := string(callerNode.ID) + callKeySep + string(calleeNode.ID)
+				if seen[key] {
+					continue
+				}
+				seen[key] = true
+				if e, err := domain.NewEdge(callerNode.ID, calleeNode.ID, domain.EdgeCalls,
+					domain.WithConfidence(domain.Probable),
+				); err == nil {
+					*edges = append(*edges, e)
+				}
+			}
+		}
+	}
+	// Always descend; function_literals can nest.
+	count := int(node.ChildCount())
+	for i := range count {
+		collectAnonCalls(node.Child(i), src, symbols, callerNode, edges, unresolved, seen, seenU)
+	}
 }
 
 // extractReceiverBinding returns the receiver's parameter name and type

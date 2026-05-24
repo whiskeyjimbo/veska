@@ -39,11 +39,12 @@ type RepoRootFunc func(ctx context.Context, repoID string) (string, error)
 // The handler is stateless beyond its injected dependencies and is safe for
 // concurrent use; the poller runs it in its own goroutine.
 type Handler struct {
-	hotZone  *HotZoneService
-	entry    *EntryPointsService
-	store    RenderTimeStore
-	repoRoot RepoRootFunc
-	clock    func() time.Time
+	hotZone    *HotZoneService
+	entry      *EntryPointsService
+	store      RenderTimeStore
+	repoRoot   RepoRootFunc
+	clock      func() time.Time
+	writePages bool
 }
 
 // HandlerOption configures a Handler at construction time.
@@ -56,6 +57,17 @@ func WithHandlerClock(c func() time.Time) HandlerOption {
 		if c != nil {
 			h.clock = c
 		}
+	}
+}
+
+// WithWritePages enables Markdown page writes under docs/veska/ in the
+// user's repo work-tree. Off by default — the README contract is that
+// veska does not write to user repos. The MCP tools eng_get_hot_zone and
+// eng_get_entry_points still serve the same ranked data when this is off
+// (solov2-ocnn).
+func WithWritePages(enabled bool) HandlerOption {
+	return func(h *Handler) {
+		h.writePages = enabled
 	}
 }
 
@@ -115,12 +127,21 @@ func (h *Handler) Handle(ctx context.Context, row ports.WorkRow) error {
 		return fmt.Errorf("wiki.Handle: select entry points: %w", err)
 	}
 
-	if err := writePage(filepath.Join(root, HotZonesPagePath), RenderHotZones(report)); err != nil {
-		return fmt.Errorf("wiki.Handle: write hot zones page: %w", err)
+	if h.writePages {
+		if err := writePage(filepath.Join(root, HotZonesPagePath), RenderHotZones(report)); err != nil {
+			return fmt.Errorf("wiki.Handle: write hot zones page: %w", err)
+		}
+		if err := writePage(filepath.Join(root, EntryPointsPagePath), RenderEntryPoints(epReport)); err != nil {
+			return fmt.Errorf("wiki.Handle: write entry points page: %w", err)
+		}
 	}
-	if err := writePage(filepath.Join(root, EntryPointsPagePath), RenderEntryPoints(epReport)); err != nil {
-		return fmt.Errorf("wiki.Handle: write entry points page: %w", err)
-	}
+	// When writePages is false the report is still ranked and the
+	// last-render stamp is bumped — the MCP tools eng_get_hot_zone /
+	// eng_get_entry_points serve the same data on demand. We keep the
+	// rank pass to populate any caches and to surface ranking errors at
+	// the same point in the queue lifecycle (solov2-ocnn).
+	_ = report
+	_ = epReport
 
 	// Both pages written — stamp the last-render time. A stamp failure is
 	// still a handler failure (the render is recorded as incomplete) so the

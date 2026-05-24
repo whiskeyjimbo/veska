@@ -93,6 +93,9 @@ func NewService(parser ports.CodeParser, changedFiles ChangedFilesBetweenFunc, f
 func (s *Service) Diff(ctx context.Context, repoID, repoRoot, refA, refB string) (Result, error) {
 	files, err := s.changedFiles(ctx, repoRoot, refA, refB)
 	if err != nil {
+		// Pass the wrapped error through unchanged so callers can use
+		// errors.Is to distinguish "unknown revision" (e.g. HEAD~1 on a
+		// single-commit repo) from a generic git failure (solov2-dr31).
 		return Result{}, fmt.Errorf("changedsymbols: list changed files: %w", err)
 	}
 	var res Result

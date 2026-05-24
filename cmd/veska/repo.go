@@ -13,6 +13,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"text/tabwriter"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -116,7 +117,8 @@ func printRepoTable(w io.Writer, repos []repoView) {
 		fmt.Fprintln(w, "no repositories registered — run: veska repo add <path>")
 		return
 	}
-	fmt.Fprintf(w, "%-14s  %-8s  %-10s  %s\n", "REPO_ID", "BRANCH", "STATUS", "ROOT")
+	tw := tabwriter.NewWriter(w, 0, 0, 2, ' ', 0)
+	fmt.Fprintln(tw, "REPO_ID\tBRANCH\tSTATUS\tROOT")
 	for _, r := range repos {
 		short := shortRepoID(r.RepoID)
 		branch := r.ActiveBranch
@@ -135,8 +137,9 @@ func printRepoTable(w io.Writer, repos []repoView) {
 				status = "(missing)"
 			}
 		}
-		fmt.Fprintf(w, "%-14s  %-8s  %-10s  %s\n", short, branch, status, r.RootPath)
+		fmt.Fprintf(tw, "%s\t%s\t%s\t%s\n", short, branch, status, r.RootPath)
 	}
+	_ = tw.Flush()
 }
 
 func repoAddCmd() *cobra.Command {

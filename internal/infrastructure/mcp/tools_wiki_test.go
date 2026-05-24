@@ -82,21 +82,29 @@ func TestHotZone_ReturnsRankedData(t *testing.T) {
 	if len(resp.Zones) != 3 {
 		t.Fatalf("expected 3 zones, got %d (%+v)", len(resp.Zones), resp.Zones)
 	}
-	if resp.Zones[0].FilePath != "a.go" || resp.Zones[0].Score != 15 {
-		t.Errorf("zone[0]: got %+v, want a.go score 15", resp.Zones[0])
+	// solov2-4aka: the wire shape now canonicalises file_path to absolute
+	// so every eng_* tool returns the same shape. The wiki Markdown page
+	// still uses the relative form internally (see TestHotZone_PageAgrees
+	// below for that guarantee).
+	if resp.Zones[0].FilePath != "/tmp/r/a.go" || resp.Zones[0].Score != 15 {
+		t.Errorf("zone[0]: got %+v, want /tmp/r/a.go score 15", resp.Zones[0])
 	}
-	if resp.Zones[2].FilePath != "b.go" {
-		t.Errorf("zone[2]: got %+v, want b.go", resp.Zones[2])
+	if resp.Zones[2].FilePath != "/tmp/r/b.go" {
+		t.Errorf("zone[2]: got %+v, want /tmp/r/b.go", resp.Zones[2])
 	}
 
-	// The tool data must match what the page renders.
+	// The tool data must match what the page renders, modulo the
+	// absolute-vs-relative file_path normalisation (solov2-4aka).
 	rep, err := svc.Rank(context.Background(), "r1", "main", "/tmp/r")
 	if err != nil {
 		t.Fatalf("Rank: %v", err)
 	}
 	for i := range rep.Zones {
-		if resp.Zones[i] != rep.Zones[i] {
-			t.Errorf("zone %d diverges: tool=%+v page=%+v", i, resp.Zones[i], rep.Zones[i])
+		got := resp.Zones[i]
+		want := rep.Zones[i]
+		want.FilePath = "/tmp/r/" + want.FilePath
+		if got != want {
+			t.Errorf("zone %d diverges: tool=%+v page=%+v", i, got, want)
 		}
 	}
 }

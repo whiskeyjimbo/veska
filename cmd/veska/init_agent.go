@@ -125,6 +125,79 @@ func writeAgentSnippet(rootDir, flavor string, out io.Writer) error {
 	} else {
 		fmt.Fprintf(out, "veska: appended %s instructions to %s\n", flavor, target)
 	}
+
+	// Keep veska-generated artifacts out of the user's git history by default
+	// (solov2-t8re). The agent snippet is the natural place to do this — if a
+	// user has opted into Veska's per-project instruction file, they almost
+	// certainly want the generated wiki and any future agent-side artifacts
+	// gitignored too. Bracketed by the same sentinel as the snippet so a
+	// re-run leaves an already-managed block alone.
+	if err := ensureGitignoreStanza(rootDir, out); err != nil {
+		// Non-fatal: the snippet is what the user asked for; gitignore
+		// upkeep is opportunistic.
+		fmt.Fprintf(out, "veska: warning: could not update .gitignore: %v\n", err)
+	}
+	return nil
+}
+
+// gitignoreSentinelBegin / gitignoreSentinelEnd bracket the veska-managed
+// block in a repo's .gitignore. Re-running `veska init --agent` finds the
+// block, leaves user-added lines outside it alone, and rewrites only what
+// lives between the sentinels.
+const gitignoreSentinelBegin = "# >>> veska-managed (do not edit between these markers) >>>"
+const gitignoreSentinelEnd = "# <<< veska-managed <<<"
+
+// gitignoreStanza is the body veska maintains inside the sentinel block.
+// Kept minimal: only paths veska itself writes. Edit this list (and bump the
+// sentinel format if you must) rather than appending one-off entries — the
+// re-run logic relies on the block being a single atomic unit.
+const gitignoreStanza = gitignoreSentinelBegin + `
+docs/veska/
+` + gitignoreSentinelEnd + "\n"
+
+// ensureGitignoreStanza writes (or refreshes) the veska-managed block in
+// <rootDir>/.gitignore. Idempotent: a second call against the same rootDir
+// is a no-op when the block content already matches.
+func ensureGitignoreStanza(rootDir string, out io.Writer) error {
+	target := filepath.Join(rootDir, ".gitignore")
+	existing, err := os.ReadFile(target)
+	if err != nil && !os.IsNotExist(err) {
+		return fmt.Errorf("read %s: %w", target, err)
+	}
+	text := string(existing)
+	if i := strings.Index(text, gitignoreSentinelBegin); i >= 0 {
+		j := strings.Index(text[i:], gitignoreSentinelEnd)
+		if j < 0 {
+			return fmt.Errorf("%s contains an unterminated veska-managed block", target)
+		}
+		// Replace the existing block (including the end sentinel and the
+		// trailing newline if present).
+		end := i + j + len(gitignoreSentinelEnd)
+		if end < len(text) && text[end] == '\n' {
+			end++
+		}
+		newText := text[:i] + gitignoreStanza + text[end:]
+		if newText == text {
+			return nil
+		}
+		return os.WriteFile(target, []byte(newText), 0o644)
+	}
+	// No existing block — append (with a separating newline if needed).
+	prefix := text
+	if len(prefix) > 0 && !strings.HasSuffix(prefix, "\n") {
+		prefix += "\n"
+	}
+	if len(prefix) > 0 && !strings.HasSuffix(prefix, "\n\n") {
+		prefix += "\n"
+	}
+	if err := os.WriteFile(target, []byte(prefix+gitignoreStanza), 0o644); err != nil {
+		return fmt.Errorf("write %s: %w", target, err)
+	}
+	if len(existing) == 0 {
+		fmt.Fprintf(out, "veska: wrote .gitignore at %s\n", target)
+	} else {
+		fmt.Fprintf(out, "veska: appended veska-managed block to %s\n", target)
+	}
 	return nil
 }
 
