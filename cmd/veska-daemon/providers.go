@@ -224,13 +224,24 @@ func (sp *statusProvider) Status(ctx context.Context) (map[string]any, error) {
 	// 'cold scan: starting' line.
 	scansInFlight := sp.scans.Snapshot()
 
+	// solov2-30sa: keep the rollup status aligned with the eng_search_semantic
+	// 'embeddings_pending' signal. Returning {status: "ok", pending_embeds:
+	// 4699} alongside search responses that already flag 'embeddings_pending'
+	// is contradictory — the same backlog drove both, so both should reflect it.
+	reasons := []string{}
+	rollup := "ok"
+	if pendingEmbeds > 0 {
+		reasons = append(reasons, mcp.DegradedReasonEmbeddingsPending)
+		rollup = "degraded"
+	}
+
 	return map[string]any{
-		"status":           "ok",
+		"status":           rollup,
 		"schema_version":   int(ver.Int64), // NULL -> 0
 		"repo_count":       repoCount,
 		"pending_embeds":   pendingEmbeds,
 		"scans_in_flight":  scansInFlight,
-		"degraded_reasons": []string{},
+		"degraded_reasons": reasons,
 	}, nil
 }
 
