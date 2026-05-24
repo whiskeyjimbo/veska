@@ -24,8 +24,12 @@ def test_context_pack_by_symbol(mcp_client, repo_id, branch, target_symbol):
     assert result.get("token_budget", 0) > 0
 
 
-def test_context_pack_requires_branch(mcp_client, repo_id, target_symbol):
-    ok, text, _, _ = mcp_client.call("eng_get_context_pack", {
+def test_context_pack_branch_defaults_to_active(mcp_client, repo_id, target_symbol):
+    """branch was required pre-solov2-5vu1; now it defaults to the
+    registered active_branch when omitted. Omitting branch should
+    succeed (not error)."""
+    ok, text, _, result = mcp_client.call("eng_get_context_pack", {
         "repo_id": repo_id, "symbol": target_symbol,
     })
-    assert not ok and "required" in text.lower()
+    assert ok, f"eng_get_context_pack without branch should default to active_branch, got error: {text}"
+    assert isinstance(result, dict)
