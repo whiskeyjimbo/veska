@@ -439,7 +439,10 @@ func Remove(ctx context.Context, db *sql.DB, repoID string) error {
 		return fmt.Errorf("repo not found: %s", repoID)
 	}
 
-	if _, err := db.ExecContext(ctx,
+	// solov2-6c04 follow-up: a concurrent promotion/scan can hold the
+	// WriteHot lock long enough to outlast SQLite's busy_timeout, surfacing
+	// SQLITE_BUSY on user-initiated removes. Same retry envelope as Add.
+	if _, err := execWithBusyRetry(ctx, db, 5, 500*time.Millisecond,
 		`DELETE FROM repos WHERE repo_id = ?`, canonical,
 	); err != nil {
 		return fmt.Errorf("delete repo: %w", err)
