@@ -55,32 +55,46 @@ func resolveRepoIDDB(ctx context.Context, db *sql.DB, repoID string) (string, *R
 		// and pass the id through unchanged, never worse than pre-resolution.
 		return repoID, nil
 	}
-	// Fall back to a unique short_id prefix match.
+	// Pull the full set once so we can run both the short_id match and the
+	// prefix match against the same snapshot (solov2-rkbc).
 	rows, qerr := db.QueryContext(ctx, `SELECT repo_id FROM repos`)
 	if qerr != nil {
 		return repoID, nil
 	}
 	defer rows.Close()
-	var matched string
+	var allIDs []string
 	for rows.Next() {
 		var id string
 		if serr := rows.Scan(&id); serr != nil {
 			return "", &RPCError{Code: CodeInternalError, Message: fmt.Sprintf("resolve repo_id: %v", serr)}
 		}
-		if ShortRepoID(id) == repoID {
-			if matched != "" {
-				return "", &RPCError{Code: CodeInvalidParams, Message: fmt.Sprintf("ambiguous short repo_id %q matches multiple repos", repoID)}
-			}
-			matched = id
-		}
+		allIDs = append(allIDs, id)
 	}
 	if err := rows.Err(); err != nil {
 		return "", &RPCError{Code: CodeInternalError, Message: fmt.Sprintf("resolve repo_id: %v", err)}
 	}
-	if matched != "" {
-		return matched, nil
+	// Exact short_id match.
+	for _, id := range allIDs {
+		if ShortRepoID(id) == repoID {
+			return id, nil
+		}
 	}
-	return "", &RPCError{Code: CodeNotFound, Message: fmt.Sprintf("unknown repo_id: %s (run eng_list_repos)", repoID)}
+	// Unambiguous prefix (>= minRepoIDPrefix chars).
+	if len(repoID) >= minRepoIDPrefix {
+		var matched string
+		for _, id := range allIDs {
+			if strings.HasPrefix(id, repoID) {
+				if matched != "" {
+					return "", &RPCError{Code: CodeInvalidParams, Message: fmt.Sprintf("ambiguous repo_id prefix %q matches multiple repos", repoID)}
+				}
+				matched = id
+			}
+		}
+		if matched != "" {
+			return matched, nil
+		}
+	}
+	return "", &RPCError{Code: CodeNotFound, Message: fmt.Sprintf("unknown repo_id: %s (run eng_list_repos; prefixes must be >= %d chars)", repoID, minRepoIDPrefix)}
 }
 
 // ---------------------------------------------------------------------------
