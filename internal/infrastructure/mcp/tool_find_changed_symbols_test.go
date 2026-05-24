@@ -83,6 +83,45 @@ func TestChangedSymbols_ReturnsThreeBuckets(t *testing.T) {
 	}
 }
 
+// TestChangedSymbols_EmptyBucketsSerializeAsArrays guards solov2-jbgt: empty
+// added/removed/modified must JSON-render as [] (not null) to match the MCP
+// surface contract.
+func TestChangedSymbols_EmptyBucketsSerializeAsArrays(t *testing.T) {
+	m := csMemFiles{
+		"refA:code.go": "package p\nfunc Same() {}\n",
+		"refB:code.go": "package p\nfunc Same() {}\n",
+	}
+	r := newChangedSymbolsRegistry(t, m)
+	raw, _ := json.Marshal(map[string]string{
+		"repo_id": "repo1", "branch": "main", "ref_a": "refA", "ref_b": "refB",
+	})
+	req := &Request{Method: "eng_find_changed_symbols", Params: json.RawMessage(raw)}
+	result, rpcErr := r.Dispatch(context.Background(),
+		domain.Actor{ID: "agent:test", Kind: domain.ActorKindAgent}, req)
+	if rpcErr != nil {
+		t.Fatalf("dispatch: %v", rpcErr)
+	}
+	b, err := json.Marshal(result)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	got := string(b)
+	for _, field := range []string{`"added":[]`, `"removed":[]`, `"modified":[]`} {
+		if !contains(got, field) {
+			t.Errorf("expected %s in JSON, got: %s", field, got)
+		}
+	}
+}
+
+func contains(haystack, needle string) bool {
+	for i := 0; i+len(needle) <= len(haystack); i++ {
+		if haystack[i:i+len(needle)] == needle {
+			return true
+		}
+	}
+	return false
+}
+
 // TestChangedSymbols_DefaultsToLastCommit guards solov2-npjs: omitting both
 // refs must default to HEAD~1..HEAD rather than erroring on missing params.
 func TestChangedSymbols_DefaultsToLastCommit(t *testing.T) {
