@@ -24,10 +24,21 @@ def test_list_repos_includes_target(mcp_client, repo_id):
     assert repo_id in ids, f"target repo {repo_id} not in {ids}"
 
 
-def test_get_current_repo_requires_cwd(mcp_client):
-    """eng_get_current_repo errors when cwd is omitted."""
-    ok, text, _, _ = mcp_client.call("eng_get_current_repo", {})
-    assert not ok and "cwd" in text.lower()
+def test_get_current_repo_cwd_required_only_with_multiple_repos(mcp_client):
+    """eng_get_current_repo requires cwd ONLY when multiple repos are
+    registered. With a single repo the daemon auto-resolves to it. This
+    test inspects eng_list_repos first to assert the correct contract
+    for the live fixture."""
+    ok, _, _, list_result = mcp_client.call("eng_list_repos", {})
+    assert ok
+    repos = list_result.get("repos", []) if isinstance(list_result, dict) else []
+    if len(repos) <= 1:
+        ok, text, _, result = mcp_client.call("eng_get_current_repo", {})
+        assert ok, f"with one repo, eng_get_current_repo should auto-resolve, got: {text}"
+        assert isinstance(result, dict)
+    else:
+        ok, text, _, _ = mcp_client.call("eng_get_current_repo", {})
+        assert not ok and "cwd" in text.lower()
 
 
 def test_get_current_repo_resolves_known_root(mcp_client, repo_id):

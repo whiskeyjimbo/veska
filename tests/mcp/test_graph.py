@@ -14,7 +14,9 @@ def test_find_symbol_returns_target(mcp_client, repo_id, branch, target_symbol):
         "symbol": target_symbol,
     })
     assert ok, f"eng_find_symbol failed: {text}"
-    names = [n.get("Name") for n in result.get("nodes", [])]
+    # Wire-shape keys are snake_case (internal/infrastructure/mcp/dto.go);
+    # target_symbol is the symbol_path which maps to the 'name' field.
+    names = [n.get("name") for n in result.get("nodes", [])]
     assert target_symbol in names, f"{target_symbol!r} missing from {names}"
 
 
@@ -44,7 +46,7 @@ def test_get_file_nodes_returns_file_content(mcp_client, repo_id, branch, target
     assert nodes, "expected at least one node (solov2-8ex regression check)"
     # Every node returned must belong to the requested file.
     for n in nodes:
-        assert n.get("Path") == target_file, f"node {n} has wrong file_path"
+        assert n.get("file_path") == target_file, f"node {n} has wrong file_path"
 
 
 @pytest.mark.deep
