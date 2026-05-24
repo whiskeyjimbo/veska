@@ -409,9 +409,22 @@ func renderSearchEnvelope(w io.Writer, env searchEnvelope, jsonOut bool) error {
 		enc.SetIndent("", "  ")
 		return enc.Encode(env)
 	}
+	// Per-query normalise the raw vector score to a confidence tier so the
+	// CLI surfaces a human-meaningful signal instead of the bare 0.018x
+	// dot-product numbers the embedder emits (solov2-6spa). The raw score is
+	// still shown for power users and `--json` consumers, but a tier (top /
+	// strong / weak) gives a junior something to filter on. Tiers are
+	// relative to the top hit within this single query.
+	var top float32
 	for _, r := range env.Results {
-		fmt.Fprintf(w, "%-8s %s:%d-%d  %s  (score=%.4f)\n",
-			r.Kind, r.FilePath, r.LineStart, r.LineEnd, r.Name, r.Score)
+		if r.Score > top {
+			top = r.Score
+		}
+	}
+	for _, r := range env.Results {
+		tier := scoreTier(r.Score, top)
+		fmt.Fprintf(w, "%-8s %s:%d-%d  %s  (%s, score=%.4f)\n",
+			r.Kind, r.FilePath, r.LineStart, r.LineEnd, r.Name, tier, r.Score)
 	}
 	for _, d := range env.DegradedReasons {
 		fmt.Fprintf(w, "[degraded: %s]\n", d)
@@ -504,6 +517,27 @@ func resolveRepoViaDaemon(ctx context.Context, target string) (repoID, branch st
 		}
 	}
 	return "", "", false
+}
+
+// scoreTier maps a raw vector score relative to the top hit in this query
+// into a human label. The thresholds are deliberately loose — the embedder's
+// absolute score depends on model, query length, and corpus, so any fixed
+// cut-off is wrong on some corpus. A relative tier ("the top hit is 100% of
+// the top hit; this one is 88% of it") gives the user something to act on
+// without pretending to be calibrated.
+func scoreTier(s, top float32) string {
+	if top <= 0 {
+		return "weak"
+	}
+	ratio := s / top
+	switch {
+	case ratio >= 0.95:
+		return "top"
+	case ratio >= 0.80:
+		return "strong"
+	default:
+		return "weak"
+	}
 }
 
 func branchOrMain(b string) string {

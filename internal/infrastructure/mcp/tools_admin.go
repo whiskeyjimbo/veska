@@ -76,13 +76,31 @@ func makeGetCurrentRepoHandler(repos application.RepoLister) ToolHandler {
 		if err := json.Unmarshal(raw, &p); err != nil {
 			return nil, &RPCError{Code: CodeInvalidParams, Message: fmt.Sprintf("invalid params: %v", err)}
 		}
-		if p.CWD == "" {
-			return nil, &RPCError{Code: CodeInvalidParams, Message: `cwd is required (an absolute path, e.g. {"cwd": "/abs/path/to/checkout"})`}
-		}
 
 		all, err := repos.ListRepos(ctx)
 		if err != nil {
 			return nil, &RPCError{Code: CodeInternalError, Message: fmt.Sprintf("list repos failed: %v", err)}
+		}
+
+		// When cwd is omitted, fall back to the sole-registered-repo case
+		// (solov2-w56f). Editors and MCP clients can't easily inject their
+		// project root automatically, and a junior tooling with exactly one
+		// repo in flight gets the right answer without needing to know
+		// about cwd at all. Multiple repos and no cwd is ambiguous — we
+		// keep the loud invalid-params error so the caller learns it must
+		// pass one.
+		if p.CWD == "" {
+			if len(all) == 1 {
+				return map[string]any{
+					"repo":             decorateRepo(all[0]),
+					"included_staging": true,
+					"degraded_reasons": []string{"defaulted_to_sole_repo"},
+				}, nil
+			}
+			return nil, &RPCError{
+				Code:    CodeInvalidParams,
+				Message: `cwd is required when more than one repo is registered (pass {"cwd": "/abs/path/to/checkout"}; with a single registered repo, cwd may be omitted)`,
+			}
 		}
 
 		for _, rec := range all {
