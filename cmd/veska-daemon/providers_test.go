@@ -247,7 +247,7 @@ func TestRepoRegistrar_AddRepo_TriggersReparser(t *testing.T) {
 	}
 
 	start := time.Now()
-	repoID, err := rr.AddRepo(context.Background(), root)
+	repoID, _, err := rr.AddRepo(context.Background(), root)
 	addElapsed := time.Since(start)
 	if err != nil {
 		t.Fatalf("AddRepo: %v", err)
@@ -311,7 +311,7 @@ func TestRepoRegistrar_AddRepo_ReparserErrorIsNonFatal(t *testing.T) {
 		scanWG:    &wg,
 	}
 
-	if _, err := rr.AddRepo(context.Background(), root); err != nil {
+	if _, _, err := rr.AddRepo(context.Background(), root); err != nil {
 		t.Fatalf("AddRepo returned err for reparser failure: %v", err)
 	}
 
@@ -353,7 +353,7 @@ func TestRepoRegistrar_AddRepo_ContextCanceled(t *testing.T) {
 		scanWG:    &wg,
 	}
 
-	if _, err := rr.AddRepo(context.Background(), root); err != nil {
+	if _, _, err := rr.AddRepo(context.Background(), root); err != nil {
 		t.Fatalf("AddRepo returned err under cancelled daemonCtx: %v", err)
 	}
 
@@ -396,7 +396,7 @@ func TestRepoRegistrar_AddRepo_SeedsLiveWatcher(t *testing.T) {
 		// test focuses on the watcher-seed contract alone.
 	}
 
-	repoID, err := rr.AddRepo(context.Background(), root)
+	repoID, _, err := rr.AddRepo(context.Background(), root)
 	if err != nil {
 		t.Fatalf("AddRepo: %v", err)
 	}
@@ -439,7 +439,7 @@ func TestRepoRegistrar_AddRepo_WatcherErrorIsNonFatal(t *testing.T) {
 		scanWG:    &wg,
 	}
 
-	if _, err := rr.AddRepo(context.Background(), root); err != nil {
+	if _, _, err := rr.AddRepo(context.Background(), root); err != nil {
 		t.Fatalf("AddRepo returned err on watchAdd failure: %v", err)
 	}
 

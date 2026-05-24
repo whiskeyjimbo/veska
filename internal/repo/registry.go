@@ -240,27 +240,30 @@ const watchesPerRepoEstimate = 128
 //  5. Inserts the row into the repos table (idempotent: ON CONFLICT DO NOTHING).
 //  6. Installs git hooks.
 //
-// Returns the repo_id string.
-func Add(ctx context.Context, db *sql.DB, rootPath string) (string, error) {
+// Returns the repo_id string and a flag indicating whether the row was
+// already present (idempotent re-add): existed=true means the INSERT was a
+// no-op so callers can surface 'already registered' instead of a misleading
+// 'added' message (solov2-khjd).
+func Add(ctx context.Context, db *sql.DB, rootPath string) (string, bool, error) {
 	if _, err := CheckInotifyBudget(0, watchesPerRepoEstimate); err != nil {
-		return "", fmt.Errorf("repo add: %w", err)
+		return "", false, fmt.Errorf("repo add: %w", err)
 	}
 
 	currentRSS, err := CurrentRSS()
 	if err != nil {
-		return "", fmt.Errorf("repo add: read RSS: %w", err)
+		return "", false, fmt.Errorf("repo add: read RSS: %w", err)
 	}
 	projectedRSS, err := ProjectRepoRSS(rootPath)
 	if err != nil {
-		return "", fmt.Errorf("repo add: project RSS: %w", err)
+		return "", false, fmt.Errorf("repo add: project RSS: %w", err)
 	}
 	if err := CheckRSSBudget(currentRSS, projectedRSS, DefaultRSSSoftCap); err != nil {
-		return "", fmt.Errorf("repo add: %w", err)
+		return "", false, fmt.Errorf("repo add: %w", err)
 	}
 
 	canonical, err := canonicalise(rootPath)
 	if err != nil {
-		return "", err
+		return "", false, err
 	}
 
 	// Refuse to register a path that is not inside a git work-tree
@@ -270,7 +273,7 @@ func Add(ctx context.Context, db *sql.DB, rootPath string) (string, error) {
 	// `doctor status` to "degraded" until the user noticed and manually
 	// removed it.
 	if err := validateRepoRoot(canonical); err != nil {
-		return "", fmt.Errorf("repo add: %w", err)
+		return "", false, fmt.Errorf("repo add: %w", err)
 	}
 
 	id := repoID(canonical)
@@ -288,7 +291,7 @@ func Add(ctx context.Context, db *sql.DB, rootPath string) (string, error) {
 		branch = "main"
 	}
 
-	_, err = db.ExecContext(ctx,
+	res, err := db.ExecContext(ctx,
 		`INSERT INTO repos (repo_id, root_path, added_at, active_branch, module_path)
 		 VALUES (?, ?, ?, ?, ?)
 		 ON CONFLICT(repo_id) DO NOTHING`,
@@ -296,14 +299,16 @@ func Add(ctx context.Context, db *sql.DB, rootPath string) (string, error) {
 		sql.NullString{String: modPath, Valid: modPath != ""},
 	)
 	if err != nil {
-		return "", fmt.Errorf("insert repo: %w", err)
+		return "", false, fmt.Errorf("insert repo: %w", err)
 	}
+	rows, _ := res.RowsAffected()
+	existed := rows == 0
 
 	if err := installHooks(canonical); err != nil {
-		return "", fmt.Errorf("install hooks: %w", err)
+		return "", false, fmt.Errorf("install hooks: %w", err)
 	}
 
-	return id, nil
+	return id, existed, nil
 }
 
 // Record is a registered repository as stored in the repos table.

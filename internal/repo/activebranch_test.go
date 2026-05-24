@@ -24,7 +24,7 @@ func TestSetActiveBranch(t *testing.T) {
 	db := newTestDB(t)
 	dir := t.TempDir()
 	gitInit(t, dir)
-	id, err := repo.Add(context.Background(), db, dir)
+	id, _, err := repo.Add(context.Background(), db, dir)
 	if err != nil {
 		t.Fatalf("Add: %v", err)
 	}
@@ -49,7 +49,7 @@ func TestSetActiveBranchUpdates(t *testing.T) {
 	db := newTestDB(t)
 	dir := t.TempDir()
 	gitInit(t, dir)
-	id, err := repo.Add(context.Background(), db, dir)
+	id, _, err := repo.Add(context.Background(), db, dir)
 	if err != nil {
 		t.Fatalf("Add: %v", err)
 	}
