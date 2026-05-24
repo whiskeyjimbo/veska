@@ -162,6 +162,36 @@ func TestAdminTools_ListRepos(t *testing.T) {
 	}
 }
 
+// TestAdminTools_ListRepos_MissingRoot guards solov2-cwjj: when a repo's
+// root_path no longer exists on disk, MCP eng_list_repos surfaces
+// status="missing", matching the CLI's "(missing)" rendering.
+func TestAdminTools_ListRepos_MissingRoot(t *testing.T) {
+	live := t.TempDir()
+	gone := t.TempDir() + "/never-existed"
+	repos := []application.RepoRecord{
+		{RepoID: "live-repo-id", RootPath: live, ActiveBranch: "main", LastPromotedSHA: "sha"},
+		{RepoID: "gone-repo-id", RootPath: gone, ActiveBranch: "main", LastPromotedSHA: "sha"},
+	}
+	r := NewRegistry()
+	RegisterAdminTools(r, &stubRepoLister{repos: repos}, nil, nil)
+
+	result, rpcErr := dispatchAdmin(t, r, "eng_list_repos", map[string]any{})
+	if rpcErr != nil {
+		t.Fatalf("err: %+v", rpcErr)
+	}
+	views := result.(map[string]any)["repos"].([]RepoView)
+	byID := map[string]string{}
+	for _, v := range views {
+		byID[v.RepoID] = v.Status
+	}
+	if byID["live-repo-id"] != "promoted" {
+		t.Errorf("live repo status = %q, want promoted", byID["live-repo-id"])
+	}
+	if byID["gone-repo-id"] != "missing" {
+		t.Errorf("gone repo status = %q, want missing", byID["gone-repo-id"])
+	}
+}
+
 func TestAdminTools_GetRepo_Found(t *testing.T) {
 	r := NewRegistry()
 	RegisterAdminTools(r, &stubRepoLister{repos: sampleRepos}, nil, nil)

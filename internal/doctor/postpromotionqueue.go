@@ -148,6 +148,39 @@ func queryQueueCounts(db *sql.DB) ([]QueueCount, error) {
 	return counts, rows.Err()
 }
 
+// PurgeOrphanFailedRows deletes failed post-promotion-queue rows whose
+// repo_id is no longer present in the repos table — the only case where a
+// failed row can never make progress because the repo it targets has been
+// deregistered. Returns the number of rows deleted.
+//
+// solov2-zmzc: without this, removing a repo via `veska repo remove` leaves
+// its failed wiki/auto_link rows behind, permanently dragging the
+// doctor-status rollup to "degraded".
+//
+// Opens the DB read/write (not the read-only DSN CheckPostPromotionQueue
+// uses) so the DELETE can run. Safe to call when no orphans exist (returns 0).
+func PurgeOrphanFailedRows(dbPath string) (int64, error) {
+	dsn := fmt.Sprintf("file:%s?_busy_timeout=5000", dbPath)
+	db, err := sql.Open("sqlite", dsn)
+	if err != nil {
+		return 0, fmt.Errorf("open db: %w", err)
+	}
+	defer db.Close()
+	if err := db.Ping(); err != nil {
+		return 0, fmt.Errorf("ping db: %w", err)
+	}
+	res, err := db.Exec(
+		`DELETE FROM post_promotion_queue
+		  WHERE state = 'failed'
+		    AND repo_id NOT IN (SELECT repo_id FROM repos)`,
+	)
+	if err != nil {
+		return 0, fmt.Errorf("delete orphans: %w", err)
+	}
+	n, _ := res.RowsAffected()
+	return n, nil
+}
+
 func queryFailedRows(db *sql.DB) ([]FailedRow, error) {
 	rows, err := db.Query(
 		`SELECT seq, repo_id, branch, git_sha, work_kind, attempts, COALESCE(error, '')
