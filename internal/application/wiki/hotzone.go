@@ -141,11 +141,22 @@ func (s *HotZoneService) Rank(ctx context.Context, repoID, branch, repoRoot stri
 			}
 			radius = len(resp.Entries)
 		}
+		// solov2-i3pm: drop zones whose score is zero. A file that was
+		// touched in-window but has zero downstream blast radius
+		// (lockfiles, READMEs, generated assets, hand-edited go.mod
+		// without graph nodes) is not "hot" by any meaningful
+		// definition and crowds out genuinely hot files — or, on a
+		// quiet repo with one churn file, produces a single
+		// score=0 entry that contradicts the surface's promise.
+		score := freq * radius
+		if score == 0 {
+			continue
+		}
 		zones = append(zones, HotZone{
 			FilePath:              path,
 			RecentChangeFrequency: freq,
 			BlastRadius:           radius,
-			Score:                 freq * radius,
+			Score:                 score,
 		})
 	}
 

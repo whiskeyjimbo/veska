@@ -59,7 +59,7 @@ func (c *DeadCodeCheck) Run(ctx context.Context, in Input) ([]*domain.Finding, e
 
 	out := make([]*domain.Finding, 0, len(dead))
 	for _, n := range dead {
-		if !isDeadCodeCandidate(n) || isExternalEntry(n) {
+		if !isDeadCodeCandidate(n) || isExternalEntry(n) || isTestFile(n.FilePath) {
 			continue
 		}
 		msg := fmt.Sprintf("symbol %q in %s has no inbound edges on branch %s",
@@ -107,6 +107,37 @@ var deadCodeKinds = map[string]bool{
 // should reason about. Unknown/empty kinds are excluded conservatively.
 func isDeadCodeCandidate(n ports.NodeRef) bool {
 	return deadCodeKinds[n.Kind]
+}
+
+// isTestFile reports whether path is a unit-test source by file-name
+// convention across the languages veska indexes. Test-only helpers
+// (fixtures, mocks, table builders) are commonly referenced only by
+// their tests and as function values — neither of which produces a
+// CALLS edge today (solov2-ix3k). Skipping symbols defined in test
+// files cuts a noisy class of false positives without weakening the
+// signal for production code.
+func isTestFile(path string) bool {
+	if path == "" {
+		return false
+	}
+	base := path
+	if i := strings.LastIndexAny(path, "/\\"); i >= 0 {
+		base = path[i+1:]
+	}
+	switch {
+	case strings.HasSuffix(base, "_test.go"): // Go
+		return true
+	case strings.HasPrefix(base, "test_") && strings.HasSuffix(base, ".py"): // pytest
+		return true
+	case strings.HasSuffix(base, "_test.py"): // pytest alt
+		return true
+	case strings.HasSuffix(base, ".test.ts"), strings.HasSuffix(base, ".test.tsx"),
+		strings.HasSuffix(base, ".test.js"), strings.HasSuffix(base, ".test.jsx"),
+		strings.HasSuffix(base, ".spec.ts"), strings.HasSuffix(base, ".spec.tsx"),
+		strings.HasSuffix(base, ".spec.js"), strings.HasSuffix(base, ".spec.jsx"):
+		return true
+	}
+	return false
 }
 
 // isExternalEntry reports whether n looks like a node that could be invoked by

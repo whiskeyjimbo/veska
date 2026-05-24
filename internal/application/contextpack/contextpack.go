@@ -133,10 +133,14 @@ type FindingInfo struct {
 // ascending truncation priority — Tasks and Findings are clipped before
 // Commits, which is clipped before Nodes.
 type Pack struct {
-	RepoID          string        `json:"repo_id"`
-	Branch          string        `json:"branch"`
-	Mode            string        `json:"mode"`
-	Query           string        `json:"query"`
+	RepoID string `json:"repo_id"`
+	Branch string `json:"branch"`
+	Mode   string `json:"mode"`
+	Query  string `json:"query"`
+	// Focus is the seed node — a convenience pointer to the same NodeInfo
+	// the agent would otherwise find via Nodes[?Seed==true]. Nil when no
+	// node matched the query (solov2-liua).
+	Focus           *NodeInfo     `json:"focus,omitempty"`
 	Nodes           []NodeInfo    `json:"nodes"`
 	RecentCommits   []CommitInfo  `json:"recent_commits"`
 	OpenFindings    []FindingInfo `json:"open_findings"`
@@ -308,7 +312,7 @@ func (a *Assembler) assemble(ctx context.Context, repoID, branch, repoRoot strin
 	for _, e := range entries {
 		_, isSeed := seedSet[e.NodeID]
 		hasOpen := flagged[e.NodeID]
-		pack.Nodes = append(pack.Nodes, NodeInfo{
+		ni := NodeInfo{
 			NodeID:   e.NodeID,
 			Name:     e.SymbolPath,
 			FilePath: e.FilePath,
@@ -317,7 +321,14 @@ func (a *Assembler) assemble(ctx context.Context, repoID, branch, repoRoot strin
 			Seed:     isSeed,
 			HasOpen:  hasOpen,
 			Snippet:  trimSnippet(e.Snippet, PerNodeSnippetBytes),
-		})
+		}
+		pack.Nodes = append(pack.Nodes, ni)
+		// solov2-liua: expose the first seed as a convenience pointer so
+		// callers don't have to scan Nodes for Seed==true.
+		if isSeed && pack.Focus == nil {
+			seedCopy := ni
+			pack.Focus = &seedCopy
+		}
 		if e.FilePath != "" {
 			fileSet[e.FilePath] = struct{}{}
 		}
