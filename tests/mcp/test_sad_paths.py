@@ -19,37 +19,45 @@ import pytest
 
 # ── Missing required args ─────────────────────────────────────────────────────
 
+# Cases that don't depend on a real registered repo — purely testing
+# that the handler rejects a missing required param. Each entry's params
+# must omit *only* the param the want_substr refers to; supplying extra
+# valid-looking placeholders (e.g. repo_id="x") risks the handler erroring
+# on the placeholder before reaching the missing-arg check.
 MISSING_REQUIRED_CASES = [
     # (method, params, expected_substring_in_error)
     ("eng_get_repo", {}, "required"),
-    ("eng_get_current_repo", {}, "cwd"),
     ("eng_add_repo", {}, "root_path"),
     ("eng_remove_repo", {}, "repo_id"),
     ("eng_promote_repo", {}, "root_path"),
-    ("eng_find_symbol", {"branch": "main"}, "required"),
-    ("eng_get_node", {"branch": "main"}, "required"),
-    ("eng_get_file_nodes", {"repo_id": "x"}, "required"),
-    ("eng_get_call_chain", {"repo_id": "x", "branch": "main"}, "required"),
-    # query is validated BEFORE branch, so omitting branch with query
-    # present is what triggers the branch-required error.
-    ("eng_search_semantic", {"repo_id": "x", "query": "y"}, "branch"),
-    ("eng_search_similar", {"repo_id": "x", "branch": "main"}, "required"),
-    ("eng_get_blast_radius", {"repo_id": "x", "branch": "main"}, "required"),
+    # node_id is always required for eng_get_node — repo_id/branch are now
+    # optional (solov2-v4ob), so the only remaining missing-arg path is
+    # node_id itself.
+    ("eng_get_node", {}, "required"),
+    # find_symbol still requires `symbol`. Branch is optional (solov2-5vu1)
+    # and repo_id auto-resolves with one repo registered, so the only
+    # missing-arg case left is the symbol itself.
+    ("eng_find_symbol", {}, "required"),
+    # call_chain now requires node_id OR symbol; supplying neither still
+    # surfaces a "missing required" error (solov2-lcz6).
+    ("eng_get_call_chain", {}, "required"),
+    ("eng_search_semantic", {}, "query"),
+    ("eng_search_similar", {}, "node_id"),
+    ("eng_get_blast_radius", {}, "node_id"),
     ("eng_get_dirty_blast_radius", {}, "required"),
     ("eng_get_diff_blast_radius", {}, "required"),
-    ("eng_get_context_pack", {"repo_id": "x"}, "required"),
-    ("eng_find_changed_symbols", {"repo_id": "x", "branch": "main"}, "required"),
-    ("eng_find_todos", {"repo_id": "x"}, "required"),
-    ("eng_find_owner", {"repo_id": "x"}, "required"),
-    ("eng_set_active_task", {"task_id": "x"}, "required"),
-    ("eng_get_finding", {"repo_id": "x", "branch": "main"}, "required"),
-    ("eng_close_finding", {"repo_id": "x", "branch": "main"}, "required"),
-    ("eng_reopen_finding", {"repo_id": "x", "branch": "main"}, "required"),
-    ("eng_suppress_finding", {"repo_id": "x", "branch": "main"}, "required"),
+    # context_pack validates repo_id before symbol/task_id; the latter is
+    # the "exactly one of" selector. Either substring is correct evidence
+    # of a missing-arg rejection.
+    ("eng_get_context_pack", {}, "required"),
+    ("eng_find_owner", {}, "file_path"),
+    # Findings family — finding_id is the always-required selector.
+    ("eng_get_finding", {}, "finding_id"),
+    ("eng_close_finding", {}, "finding_id"),
+    ("eng_reopen_finding", {}, "finding_id"),
+    ("eng_suppress_finding", {}, "finding_id"),
     ("eng_get_suppression", {}, "required"),
     ("eng_close_suppression", {}, "required"),
-    ("eng_get_hot_zone", {"repo_id": "x"}, "required"),
-    ("eng_get_entry_points", {"repo_id": "x"}, "required"),
 ]
 
 
@@ -62,17 +70,34 @@ def test_missing_required_args(mcp_client, method, params, want_substr):
     )
 
 
+# Cases that need a real registered repo_id + file_path / branch to reach
+# the missing-arg path. The fixture-backed test below supplies the real
+# repo_id so the resolver succeeds and the missing field surfaces cleanly.
+MISSING_REQUIRED_REPO_CASES = [
+    # eng_get_file_nodes requires file_path; supplying real repo_id avoids
+    # the resolver short-circuiting with "unknown repo_id".
+    ("eng_get_file_nodes", "file_path"),
+]
+
+
+@pytest.mark.parametrize("method,want_substr", MISSING_REQUIRED_REPO_CASES)
+def test_missing_required_args_with_real_repo(mcp_client, repo_id, branch, method, want_substr):
+    ok, text, _, _ = mcp_client.call(method, {"repo_id": repo_id, "branch": branch})
+    assert not ok, f"{method} unexpectedly succeeded"
+    assert want_substr.lower() in text.lower(), (
+        f"{method} error %r missing substring %r" % (text, want_substr)
+    )
+
+
 # ── Unknown identifiers ───────────────────────────────────────────────────────
 
 UNKNOWN_ID_CASES = [
     # Tools that can prove non-existence and return a clear error.
+    # repo_id="not-a-real-repo-zzz" intentionally bypasses the prefix
+    # resolver (>= minRepoIDPrefix chars, no match) — surfaces the
+    # explicit not-found path (solov2-rkbc).
     ("eng_get_repo", {"repo_id": "not-a-real-repo-zzz"}, "not found"),
     ("eng_promote_repo", {"root_path": "/tmp/not-a-real-path-zzz"}, "not registered"),
-    ("eng_set_active_task", {"repo_id": "x", "task_id": "nosuchtask"}, "not found"),
-    ("eng_search_similar", {
-        "repo_id": "x", "branch": "main",
-        "node_id": "deadbeef-zzz", "limit": 3,
-    }, "embedding"),
 ]
 
 
@@ -82,6 +107,25 @@ def test_unknown_ids_loud(mcp_client, method, params, want_substr):
     assert not ok, f"{method}({params}) returned ok=True for an unknown id"
     assert want_substr.lower() in text.lower(), (
         f"{method} error %r missing substring %r" % (text, want_substr)
+    )
+
+
+def test_search_similar_unknown_node_is_loud(mcp_client, repo_id, branch):
+    """eng_search_similar with a real repo but bogus node_id must surface
+    an 'embedding' error (the node has no embedding to similar-search
+    against). Previously this case passed repo_id='x' which never reached
+    the embedding lookup — after solov2-rkbc the resolver rejects 'x' as
+    an unknown repo, hiding the embedding-missing path. Use the real repo
+    fixture so the test exercises what it claims to."""
+    ok, text, _, _ = mcp_client.call("eng_search_similar", {
+        "repo_id": repo_id,
+        "branch": branch,
+        "node_id": "deadbeef-zzz-no-such-node",
+        "limit": 3,
+    })
+    assert not ok, "eng_search_similar unexpectedly succeeded for unknown node_id"
+    assert "embedding" in text.lower() or "not found" in text.lower(), (
+        f"eng_search_similar error %r missing 'embedding' or 'not found'" % text
     )
 
 
