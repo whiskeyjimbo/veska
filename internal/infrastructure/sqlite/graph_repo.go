@@ -366,6 +366,24 @@ func (r *GraphRepo) GetNode(ctx context.Context, repoID, branch string, id domai
 	return n, nil
 }
 
+// FindNodeByID retrieves the first node matching the content-hashed id across
+// every (repo_id, branch). node_id is a sha256 content hash so collisions
+// across repos/branches are vanishingly rare; LIMIT 1 returns one
+// deterministic row. Returns (nil, nil) when no node matches (solov2-v4ob).
+func (r *GraphRepo) FindNodeByID(ctx context.Context, id domain.NodeID) (*domain.Node, error) {
+	row := r.readDB.QueryRowContext(ctx,
+		`SELECT `+nodeColumns+` FROM nodes WHERE node_id = ? LIMIT 1`,
+		string(id))
+	n, err := scanNode(row)
+	switch {
+	case err == sql.ErrNoRows:
+		return nil, nil
+	case err != nil:
+		return nil, fmt.Errorf("graph_repo: find node %q: %w", id, err)
+	}
+	return n, nil
+}
+
 // confidenceValue is the inverse of confidenceText: it maps the TEXT column
 // value back onto the domain Confidence enum. An unknown string maps to
 // Unresolved.
