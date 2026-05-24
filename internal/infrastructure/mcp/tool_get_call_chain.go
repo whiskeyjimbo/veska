@@ -21,6 +21,12 @@ type getCallChainParams struct {
 	Branch          string `json:"branch"`
 	Depth           int    `json:"depth"`
 	ExpandCrossRepo bool   `json:"expand_cross_repo"`
+	// Direction selects which CALLS edges to traverse: "out" (default —
+	// callees, what this reaches), "in" (callers, what reaches this), or
+	// "both". Default preserves prior behaviour; "in"/"both" close
+	// solov2-2n33 where docs promised incoming traversal but only
+	// outgoing was wired.
+	Direction string `json:"direction"`
 }
 
 const maxCallChainDepth = 10
@@ -73,6 +79,17 @@ func makeGetCallChainHandler(graph ports.GraphStorage, resolve ResolveFunc, repo
 		if depth > maxCallChainDepth {
 			return nil, &RPCError{Code: CodeInvalidParams, Message: fmt.Sprintf("depth %d exceeds maximum of %d", depth, maxCallChainDepth)}
 		}
+		dirOut, dirIn := true, false
+		switch p.Direction {
+		case "", "out":
+			// defaults
+		case "in":
+			dirOut, dirIn = false, true
+		case "both":
+			dirOut, dirIn = true, true
+		default:
+			return nil, &RPCError{Code: CodeInvalidParams, Message: fmt.Sprintf("invalid direction %q (want out|in|both)", p.Direction)}
+		}
 
 		g, err := graph.LoadGraph(ctx, p.RepoID, p.Branch)
 		if err != nil {
@@ -120,20 +137,40 @@ func makeGetCallChainHandler(graph ports.GraphStorage, resolve ResolveFunc, repo
 				continue
 			}
 
-			for _, e := range g.OutgoingEdges(item.id) {
-				if e.Kind != domain.EdgeCalls {
-					continue
-				}
-				if !visitedEdges[e.ID] {
-					visitedEdges[e.ID] = true
-					resultEdges = append(resultEdges, e)
-				}
-				if !visited[e.Tgt] {
-					visited[e.Tgt] = true
-					if n, ok := g.Node(e.Tgt); ok {
-						resultNodes = append(resultNodes, n)
+			if dirOut {
+				for _, e := range g.OutgoingEdges(item.id) {
+					if e.Kind != domain.EdgeCalls {
+						continue
 					}
-					queue = append(queue, bfsItem{id: e.Tgt, hops: item.hops + 1})
+					if !visitedEdges[e.ID] {
+						visitedEdges[e.ID] = true
+						resultEdges = append(resultEdges, e)
+					}
+					if !visited[e.Tgt] {
+						visited[e.Tgt] = true
+						if n, ok := g.Node(e.Tgt); ok {
+							resultNodes = append(resultNodes, n)
+						}
+						queue = append(queue, bfsItem{id: e.Tgt, hops: item.hops + 1})
+					}
+				}
+			}
+			if dirIn {
+				for _, e := range g.IncomingEdges(item.id) {
+					if e.Kind != domain.EdgeCalls {
+						continue
+					}
+					if !visitedEdges[e.ID] {
+						visitedEdges[e.ID] = true
+						resultEdges = append(resultEdges, e)
+					}
+					if !visited[e.Src] {
+						visited[e.Src] = true
+						if n, ok := g.Node(e.Src); ok {
+							resultNodes = append(resultNodes, n)
+						}
+						queue = append(queue, bfsItem{id: e.Src, hops: item.hops + 1})
+					}
 				}
 			}
 		}

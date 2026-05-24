@@ -42,10 +42,11 @@ known repos: ` + "`eng_list_repos`" + `; to discover the current one from cwd:
 - ` + "`eng_find_symbol`" + ` — exact symbol lookup by name or symbol_path. Use
   when you know the identifier ("show me ParseConfig").
 
-- ` + "`eng_get_call_chain`" + ` — incoming/outgoing CALLS edges for a node. Accepts
-  either ` + "`node_id`" + ` or ` + "`symbol`" + ` (parity with ` + "`eng_find_symbol`" + `). Use to
-  answer "what calls this" or "what does this reach" without manually tracing
-  through files.
+- ` + "`eng_get_call_chain`" + ` — CALLS-edge BFS for a node. Accepts either
+  ` + "`node_id`" + ` or ` + "`symbol`" + ` (parity with ` + "`eng_find_symbol`" + `), and
+  ` + "`direction`" + ` = ` + "`out`" + ` (default, callees) / ` + "`in`" + ` (callers) /
+  ` + "`both`" + `. Use to answer "what does this reach" (` + "`out`" + `) or "what calls
+  this" (` + "`in`" + `) without manually tracing through files.
 
 - ` + "`eng_get_context_pack`" + ` — bundles a seed node with its callers,
   callees, and tests into a single payload. Use at the start of a non-trivial
