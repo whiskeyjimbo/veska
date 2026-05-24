@@ -122,8 +122,9 @@ func renderNodeList(w io.Writer, resp any, jsonOut bool) error {
 // (solov2-kzhe).
 func contextCmd() *cobra.Command {
 	var (
-		repoFlag string
-		jsonOut  bool
+		repoFlag   string
+		jsonOut    bool
+		symbolFlag string
 	)
 	cmd := &cobra.Command{
 		Use:   "context <symbol>",
@@ -131,10 +132,25 @@ func contextCmd() *cobra.Command {
 		Long: `Print the context pack for a symbol: the seed node plus surrounding
 callers, callees, and adjacent tests. Useful at the start of a non-trivial
 change so you (or an agent) get the whole neighbourhood in one shot.`,
-		Args:         cobra.ExactArgs(1),
+		// solov2-bvis: accept the symbol as either a positional arg or
+		// a --symbol flag. The MCP tool's JSON param is "symbol" so
+		// users naturally try --symbol; reject only when both or neither
+		// are supplied.
+		Args:         cobra.MaximumNArgs(1),
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			params := map[string]any{"symbol": args[0]}
+			var sym string
+			switch {
+			case len(args) == 1 && symbolFlag == "":
+				sym = args[0]
+			case len(args) == 0 && symbolFlag != "":
+				sym = symbolFlag
+			case len(args) == 1 && symbolFlag != "":
+				return fmt.Errorf("context: pass symbol as positional arg OR --symbol, not both")
+			default:
+				return fmt.Errorf("context: a symbol is required (positional or --symbol)")
+			}
+			params := map[string]any{"symbol": sym}
 			if repoFlag != "" {
 				params["repo_id"] = repoFlag
 			} else if rid, _ := resolveRepoFromCWD(cmd.Context()); rid != "" {
@@ -184,5 +200,6 @@ change so you (or an agent) get the whole neighbourhood in one shot.`,
 	}
 	cmd.Flags().StringVar(&repoFlag, "repo", "", "repo id or short_id (default: the sole registered repo)")
 	cmd.Flags().BoolVar(&jsonOut, "json", false, "emit JSON (eng_get_context_pack shape)")
+	cmd.Flags().StringVar(&symbolFlag, "symbol", "", "symbol name (alternative to the positional arg)")
 	return cmd
 }

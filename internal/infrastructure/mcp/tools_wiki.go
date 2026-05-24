@@ -67,6 +67,10 @@ type entryPointsParams struct {
 	// library the test corpus drowns out the actual public-API entry
 	// points (solov2-bos: cobra returned ~hundreds of TestX funcs).
 	IncludeTests bool `json:"include_tests,omitempty"`
+	// Limit truncates the returned slice. 0 or unset returns the service
+	// default. Values larger than the service default are silently capped
+	// (solov2-tc23).
+	Limit int `json:"limit,omitempty"`
 }
 
 func makeEntryPointsHandler(svc *wiki.EntryPointsService, repos application.RepoLister) ToolHandler {
@@ -105,6 +109,9 @@ func makeEntryPointsHandler(svc *wiki.EntryPointsService, repos application.Repo
 		if !p.IncludeTests {
 			entries = filterTestEntries(entries)
 		}
+		if p.Limit > 0 && p.Limit < len(entries) {
+			entries = entries[:p.Limit]
+		}
 		return EntryPointsResponse{
 			RepoID:      rep.RepoID,
 			Branch:      rep.Branch,
@@ -139,6 +146,9 @@ func filterTestEntries(in []wiki.EntryPoint) []wiki.EntryPoint {
 type hotZoneParams struct {
 	RepoID string `json:"repo_id"`
 	Branch string `json:"branch"`
+	// Limit truncates the returned slice. 0 or unset returns the service
+	// default (solov2-tc23).
+	Limit int `json:"limit,omitempty"`
 }
 
 func makeHotZoneHandler(svc *wiki.HotZoneService, repoRoot RepoRootFunc, repos application.RepoLister) ToolHandler {
@@ -179,8 +189,12 @@ func makeHotZoneHandler(svc *wiki.HotZoneService, repoRoot RepoRootFunc, repos a
 		// the eng_* surface returns the same shape (solov2-4aka). The wiki
 		// markdown still renders the relative form via the same Report
 		// (the Markdown is built before this loop runs).
-		zones := make([]wiki.HotZone, len(rep.Zones))
-		for i, z := range rep.Zones {
+		src := rep.Zones
+		if p.Limit > 0 && p.Limit < len(src) {
+			src = src[:p.Limit]
+		}
+		zones := make([]wiki.HotZone, len(src))
+		for i, z := range src {
 			abs := z.FilePath
 			if !filepath.IsAbs(abs) {
 				abs = filepath.Join(root, abs)

@@ -128,10 +128,14 @@ func (h *Handler) Handle(ctx context.Context, row ports.WorkRow) error {
 	}
 
 	if h.writePages {
-		if err := writePage(filepath.Join(root, HotZonesPagePath), RenderHotZones(report)); err != nil {
+		// solov2-2q2a: committed Markdown carries repo-relative file_path
+		// so the docs stay portable across machines and contributors.
+		// The MCP tool responses still canonicalise to absolute (see
+		// tools_wiki.go).
+		if err := writePage(filepath.Join(root, HotZonesPagePath), RenderHotZones(relativizeHotZoneReport(report, root))); err != nil {
 			return fmt.Errorf("wiki.Handle: write hot zones page: %w", err)
 		}
-		if err := writePage(filepath.Join(root, EntryPointsPagePath), RenderEntryPoints(epReport)); err != nil {
+		if err := writePage(filepath.Join(root, EntryPointsPagePath), RenderEntryPoints(relativizeEntryPointsReport(epReport, root))); err != nil {
 			return fmt.Errorf("wiki.Handle: write entry points page: %w", err)
 		}
 	}
@@ -150,6 +154,43 @@ func (h *Handler) Handle(ctx context.Context, row ports.WorkRow) error {
 		return fmt.Errorf("wiki.Handle: persist last render time: %w", err)
 	}
 	return nil
+}
+
+// relativizeHotZoneReport returns a copy of report with each Zone.FilePath
+// rewritten to a repoRoot-relative slash-form path when possible. Used when
+// rendering the committed Markdown page so the output is portable across
+// machines (solov2-2q2a).
+func relativizeHotZoneReport(r Report, root string) Report {
+	out := r
+	out.Zones = make([]HotZone, len(r.Zones))
+	for i, z := range r.Zones {
+		z.FilePath = relPath(root, z.FilePath)
+		out.Zones[i] = z
+	}
+	return out
+}
+
+// relativizeEntryPointsReport mirrors relativizeHotZoneReport for the
+// EntryPointsReport (solov2-2q2a).
+func relativizeEntryPointsReport(r EntryPointsReport, root string) EntryPointsReport {
+	out := r
+	out.EntryPoints = make([]EntryPoint, len(r.EntryPoints))
+	for i, e := range r.EntryPoints {
+		e.FilePath = relPath(root, e.FilePath)
+		out.EntryPoints[i] = e
+	}
+	return out
+}
+
+func relPath(root, p string) string {
+	if root == "" || !filepath.IsAbs(p) {
+		return p
+	}
+	rel, err := filepath.Rel(root, p)
+	if err != nil {
+		return p
+	}
+	return filepath.ToSlash(rel)
 }
 
 // writePage writes content to an absolute path, creating the parent
