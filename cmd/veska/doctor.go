@@ -752,6 +752,7 @@ func doctorBundleCmd() *cobra.Command {
 				}))
 			}
 			fmt.Fprintln(w, result.Path)
+			fmt.Fprintln(w, "attach this tarball to support / issue reports — contains probe outputs and recent audit log")
 			return nil
 		},
 	}
