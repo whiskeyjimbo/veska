@@ -50,6 +50,10 @@ type PostPromotionQueueReport struct {
 	Counts     []QueueCount `json:"counts"`
 	FailedRows []FailedRow  `json:"failed_rows"`
 	Status     string       `json:"status"`
+	// OrphanCount is the number of failed rows whose repo_id is no longer
+	// registered — the exact set `--purge-orphans` would clear. Surfaced so
+	// the textual probe can point operators at the remediation (solov2-261t).
+	OrphanCount int `json:"orphan_count,omitempty"`
 }
 
 // CheckPostPromotionQueue opens the SQLite DB at dbPath read-only and
@@ -93,10 +97,16 @@ func CheckPostPromotionQueue(dbPath string) (PostPromotionQueueReport, error) {
 		status = "broken"
 	}
 
+	orphans, err := queryOrphanCount(db)
+	if err != nil {
+		return PostPromotionQueueReport{Status: "broken"}, nil
+	}
+
 	return PostPromotionQueueReport{
-		Counts:     counts,
-		FailedRows: failedRows,
-		Status:     status,
+		Counts:      counts,
+		FailedRows:  failedRows,
+		Status:      status,
+		OrphanCount: orphans,
 	}, nil
 }
 
@@ -178,6 +188,30 @@ func PurgeOrphanFailedRows(dbPath string) (int64, error) {
 		return 0, fmt.Errorf("delete orphans: %w", err)
 	}
 	n, _ := res.RowsAffected()
+	return n, nil
+}
+
+// queryOrphanCount returns the count of failed rows whose repo_id is no
+// longer in the repos table — the set --purge-orphans would clear
+// (solov2-261t). A DB that doesn't carry the repos table (e.g. some test
+// fixtures) yields 0 rather than an error, since the orphan concept
+// requires the repos table to be meaningful.
+func queryOrphanCount(db *sql.DB) (int, error) {
+	var present int
+	if err := db.QueryRow(
+		`SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='repos'`,
+	).Scan(&present); err != nil || present == 0 {
+		return 0, nil
+	}
+	var n int
+	err := db.QueryRow(
+		`SELECT COUNT(*) FROM post_promotion_queue
+		  WHERE state = 'failed'
+		    AND repo_id NOT IN (SELECT repo_id FROM repos)`,
+	).Scan(&n)
+	if err != nil {
+		return 0, fmt.Errorf("count orphans: %w", err)
+	}
 	return n, nil
 }
 
