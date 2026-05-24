@@ -478,6 +478,17 @@ func doctorStatusCmd() *cobra.Command {
 			configReport, _ := doctor.CheckConfig(home)
 			storageReport, _ := doctor.CheckStorage(home)
 			ingestionStatus, ingestionDetail := checkIngestion(context.Background())
+			// solov2-j5ki: roll in post_promotion_queue health so the top-level
+			// status doesn't report 'healthy' while a background pipeline
+			// (auto_link, embed, revalidate, wiki) has failed rows or a deep
+			// backlog. CheckPostPromotionQueue already classifies state.
+			queueStatus, queueDetail := "healthy", ""
+			if qr, qerr := doctor.CheckPostPromotionQueue(filepath.Join(home, "veska.db")); qerr == nil {
+				queueStatus = qr.Status
+				if queueStatus != "healthy" {
+					queueDetail = fmt.Sprintf("queue: %d failed row(s), %d state bucket(s)", len(qr.FailedRows), len(qr.Counts))
+				}
+			}
 
 			// Compute egress status: broken if any socket is missing. Track
 			// whether BOTH sockets are missing — that is the unambiguous
@@ -503,7 +514,7 @@ func doctorStatusCmd() *cobra.Command {
 			_ = storageReport
 
 			// Roll up: broken if any broken; degraded if any degraded.
-			statuses := []string{embedderResult.Status, egressStatus, configStatus, ingestionStatus}
+			statuses := []string{embedderResult.Status, egressStatus, configStatus, ingestionStatus, queueStatus}
 			rollup := "healthy"
 			for _, s := range statuses {
 				switch s {
@@ -523,6 +534,8 @@ func doctorStatusCmd() *cobra.Command {
 					Config          string `json:"config"`
 					Ingestion       string `json:"ingestion"`
 					IngestionDetail string `json:"ingestion_detail,omitempty"`
+					Queue           string `json:"queue"`
+					QueueDetail     string `json:"queue_detail,omitempty"`
 				}
 				enc := json.NewEncoder(cmd.OutOrStdout())
 				return enc.Encode(doctor.NewEnvelope("status", rollup, statusRollupData{
@@ -531,14 +544,24 @@ func doctorStatusCmd() *cobra.Command {
 					Config:          configStatus,
 					Ingestion:       ingestionStatus,
 					IngestionDetail: ingestionDetail,
+					Queue:           queueStatus,
+					QueueDetail:     queueDetail,
 				}))
 			}
 			detail := ""
 			if ingestionDetail != "" {
 				detail = " — " + ingestionDetail
 			}
-			fmt.Fprintf(cmd.OutOrStdout(), "status: %s (embedder=%s, egress=%s, config=%s, ingestion=%s)%s\n",
-				rollup, embedderResult.Status, egressStatus, configStatus, ingestionStatus, detail)
+			if queueDetail != "" {
+				if detail == "" {
+					detail = " — "
+				} else {
+					detail += "; "
+				}
+				detail += queueDetail
+			}
+			fmt.Fprintf(cmd.OutOrStdout(), "status: %s (embedder=%s, egress=%s, config=%s, ingestion=%s, queue=%s)%s\n",
+				rollup, embedderResult.Status, egressStatus, configStatus, ingestionStatus, queueStatus, detail)
 			if daemonNotRunning {
 				fmt.Fprintln(cmd.OutOrStdout(), "  hint: daemon socket not present — start it with `veska service start` (or `veska-daemon &` for a quick try)")
 			}
