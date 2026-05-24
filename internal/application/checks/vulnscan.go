@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"slices"
 	"strings"
 
 	"github.com/whiskeyjimbo/veska/internal/application/manifest"
@@ -93,11 +92,20 @@ func (c *VulnScanCheck) Run(ctx context.Context, in Input) ([]*domain.Finding, e
 	return out, nil
 }
 
-// touchesGoMod reports whether any changed path is the module's go.mod.
-// FilePaths entries are repo-root-relative, so an exact match identifies the
-// root go.mod.
+// touchesGoMod reports whether any changed path is a go.mod. FilePaths is
+// populated from PromotionBatch.Files[].Path, which (depending on the source)
+// carries either a repo-root-relative path (git diff seam) or a full
+// filesystem path (cold-scan walker). Matching by basename catches both. A
+// nested vendor/.../go.mod would also trigger; that's acceptable because the
+// scan itself only reads {repoRoot}/go.mod — at worst we run an extra scan
+// against the root, never on the wrong manifest.
 func touchesGoMod(paths []string) bool {
-	return slices.Contains(paths, "go.mod")
+	for _, p := range paths {
+		if filepath.Base(p) == "go.mod" {
+			return true
+		}
+	}
+	return false
 }
 
 // mapSeverity translates an OSV severity label onto the domain Severity enum.
