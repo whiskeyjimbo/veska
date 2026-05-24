@@ -140,6 +140,7 @@ func newColdScanReparserFromFns(save coldScanSaveFn, promote coldScanPromoteFn, 
 		// when no tracker is wired (legacy / test callers).
 		cfg.tracker.Start(repo.RepoID)
 		defer cfg.tracker.End(repo.RepoID)
+		cfg.tracker.SetPhase(repo.RepoID, "walking")
 
 		head, err := git.HEAD(repo.RootPath)
 		if err != nil {
@@ -182,6 +183,12 @@ func newColdScanReparserFromFns(save coldScanSaveFn, promote coldScanPromoteFn, 
 				"repo_id", repo.RepoID, "files_saved", filesSaved, "err", err)
 			return err
 		}
+		// Publish the final walk count before flipping to promoting so a
+		// user polling eng_get_status sees the true files_seen rather than
+		// a multiple-of-25 snapshot, then learns we've entered the slow
+		// promotion phase (solov2-u9h9).
+		cfg.tracker.Progress(repo.RepoID, filesSaved, 0)
+		cfg.tracker.SetPhase(repo.RepoID, "promoting")
 
 		if err := promote(ctx, repo.RepoID, repo.ActiveBranch, head, systemActor); err != nil {
 			slog.Warn("cold scan: promote failed",
