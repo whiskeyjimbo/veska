@@ -480,6 +480,15 @@ func newDaemon(cfg Config) (*Daemon, error) {
 		return nil, fmt.Errorf("daemon: embedder election: %w", err)
 	}
 	slog.Info("daemon: embedder elected", "model_id", election.Name)
+	// solov2-yql1: static-v2 is functional but every eng_search_semantic
+	// call returns 'low_quality_static_embedder' in degraded_reasons until
+	// model2vec is installed. Surface a one-shot WARN at election time so
+	// operators tailing daemon.log see the cause instead of discovering it
+	// per-call.
+	if election.Name == "veska-static-v2" {
+		slog.Warn("daemon: low-quality static-v2 embedder elected — run `veska install model2vec` for higher-quality code search",
+			"model_id", election.Name)
+	}
 	if election.SwitchedModel {
 		// The elected embedder differs from what the index was last built
 		// with. Wipe the content-addressed embedding store and flip every
