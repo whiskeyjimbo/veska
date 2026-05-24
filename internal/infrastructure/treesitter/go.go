@@ -115,6 +115,18 @@ func (p *GoParser) ParseFile(ctx context.Context, repoID, path string, src []byt
 				result.Nodes = append(result.Nodes, n)
 				symbolByName[n.Name] = n
 			}
+		case "var_declaration", "const_declaration":
+			// solov2-b7wt: extract top-level (package-scope) var/const
+			// names so framework-config patterns where the API surface
+			// lives in initialised vars — cobra command trees, gin/echo
+			// router globals, viper config singletons — are discoverable
+			// via eng_find_symbol / eng_get_file_nodes.
+			for _, n := range parseTopLevelVarDecl(child, src, repoID, path) {
+				result.Nodes = append(result.Nodes, n)
+				if _, exists := symbolByName[n.Name]; !exists {
+					symbolByName[n.Name] = n
+				}
+			}
 		}
 	}
 
@@ -277,6 +289,74 @@ func parseTypeDecl(node *sitter.Node, src []byte, repoID, path string) *domain.N
 		return n
 	}
 	return nil
+}
+
+// parseTopLevelVarDecl extracts every name declared by a top-level
+// var_declaration or const_declaration as a KindVariable node. Tree-sitter's
+// grammar nests one or more var_spec / const_spec children inside the
+// declaration; each spec may itself bind multiple identifiers
+// (`var a, b = 1, 2`). Underscore names (`_`) are skipped — they aren't
+// addressable.
+//
+// Captured for framework-config patterns where the API surface lives in
+// initialised package-scope vars: cobra `var rootCmd = &cobra.Command{...}`,
+// gin/echo router globals, viper config singletons. Without this pass the
+// graph misses the entire command tree of any cobra-based CLI and
+// eng_find_symbol returns empty for the var names users actually search
+// for (solov2-b7wt).
+func parseTopLevelVarDecl(node *sitter.Node, src []byte, repoID, path string) []*domain.Node {
+	var out []*domain.Node
+	specKind := "var_spec"
+	if node.Type() == "const_declaration" {
+		specKind = "const_spec"
+	}
+	// tree-sitter Go represents a `var ( ... )` block either as a
+	// var_declaration whose direct children are var_specs OR (in newer
+	// grammar versions) as a var_declaration -> var_spec_list -> var_spec.
+	// Walk both shapes to stay grammar-version-tolerant.
+	var visit func(n *sitter.Node)
+	visit = func(n *sitter.Node) {
+		for i := range int(n.ChildCount()) {
+			c := n.Child(i)
+			switch c.Type() {
+			case specKind:
+				parseTopLevelVarSpec(c, src, repoID, path, node, &out)
+			case "var_spec_list", "const_spec_list":
+				visit(c)
+			}
+		}
+	}
+	visit(node)
+	return out
+}
+
+func parseTopLevelVarSpec(spec *sitter.Node, src []byte, repoID, path string, decl *sitter.Node, out *[]*domain.Node) {
+	for j := range int(spec.ChildCount()) {
+		nameNode := spec.Child(j)
+		if nameNode.Type() != "identifier" {
+			continue
+		}
+		name := string(src[nameNode.StartByte():nameNode.EndByte()])
+		if name == "" || name == "_" {
+			continue
+		}
+		id := nodeID(repoID, path, domain.KindVariable, name)
+		lr := lineRange(decl)
+		// Capture the whole declaration text — including any struct
+		// literal initialiser — so eng_search_semantic indexes the
+		// cobra Use:/Short:/Long: strings that describe the command.
+		raw := string(src[decl.StartByte():decl.EndByte()])
+		n, err := domain.NewNode(id, path, name, domain.KindVariable,
+			domain.WithLanguage("go"),
+			domain.WithLines(lr),
+			domain.WithRawContent(raw),
+			domain.WithExported(goExported(name)),
+		)
+		if err != nil {
+			continue
+		}
+		*out = append(*out, n)
+	}
 }
 
 // ----- CALLS extraction -----

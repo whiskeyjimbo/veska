@@ -25,6 +25,12 @@ const (
 	KindFile      NodeKind = "file"
 	KindField     NodeKind = "field"
 	KindTest      NodeKind = "test"
+	// KindVariable is a top-level (package-scope) var declaration. Captured
+	// so framework patterns where the API surface lives in initialised vars
+	// — cobra command trees (`var rootCmd = &cobra.Command{...}`), gin/echo
+	// router globals, viper config singletons — appear in eng_find_symbol /
+	// eng_get_file_nodes and become navigable from agent tools (solov2-b7wt).
+	KindVariable NodeKind = "variable"
 	// KindChunk is a non-declaration source region — package-level
 	// vars, file-top comments, init() guts, anything between symbol
 	// declarations. Chunks live alongside symbol nodes so the existing
