@@ -170,10 +170,13 @@ func newColdScanReparserFromFns(save coldScanSaveFn, promote coldScanPromoteFn, 
 		countingSave := func(ctx context.Context, repoID, branch, path string, src []byte) {
 			save(ctx, repoID, branch, path, src)
 			filesSaved++
-			// Throttle tracker updates: every 25 files is plenty for a
-			// 'is it still moving?' signal and keeps tracker contention
-			// negligible on the hot path.
-			if filesSaved%25 == 0 {
+			// Update every 5 files so a user polling eng_get_status sees
+			// fresh progress within a few seconds even on a large repo —
+			// the previous 25-file throttle could plateau visibly between
+			// updates and read as 'stuck' (solov2-asl9). The tracker
+			// Progress call is a single map write under a short mutex, so
+			// per-5-files cost is negligible on the save hot path.
+			if filesSaved%5 == 0 {
 				cfg.tracker.Progress(repo.RepoID, filesSaved, 0)
 			}
 		}
