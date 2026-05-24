@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/binary"
 	"math"
+	"strings"
 	"testing"
 )
 
@@ -28,14 +29,15 @@ func buildSafetensorsFile(t *testing.T, name string, shape []int, data []float32
 }
 
 func intsToJSON(xs []int) string {
-	out := "["
+	var out strings.Builder
+	out.WriteString("[")
 	for i, x := range xs {
 		if i > 0 {
-			out += ","
+			out.WriteString(",")
 		}
-		out += intToStr(x)
+		out.WriteString(intToStr(x))
 	}
-	return out + "]"
+	return out.String() + "]"
 }
 
 func intToStr(x int) string {
