@@ -199,6 +199,54 @@ func TestFindSymbol_UnknownRepoIDErrors(t *testing.T) {
 	}
 }
 
+// TestFindSymbol_AmbiguousPrefixRejected guards solov2-rkbc: a 4+ char prefix
+// that matches multiple repos must return a clear ambiguous-prefix error
+// instead of silently picking one.
+func TestFindSymbol_AmbiguousPrefixRejected(t *testing.T) {
+	store := newStubGraphStorage()
+	store.addNode(mustNode(t, "n1", "pkg/foo.go", "Foo", domain.KindFunction))
+	repos := []application.RepoRecord{
+		{RepoID: "deadbeef111111111111111111111111", RootPath: "/p1", ActiveBranch: "main"},
+		{RepoID: "deadbeef222222222222222222222222", RootPath: "/p2", ActiveBranch: "main"},
+	}
+	r := NewRegistry()
+	RegisterGraphTools(r, store, application.NewStagingArea(),
+		WithRepoLister(&stubRepoLister{repos: repos}))
+	_, rpcErr := dispatchGraph(t, r, "eng_find_symbol", map[string]string{
+		"symbol":  "Foo",
+		"repo_id": "deadbeef", // 8 chars but matches both
+		"branch":  "main",
+	})
+	if rpcErr == nil || rpcErr.Code != CodeInvalidParams {
+		t.Fatalf("expected InvalidParams for ambiguous prefix, got %+v", rpcErr)
+	}
+}
+
+// TestFindSymbol_ArbitraryPrefixAccepted guards solov2-rkbc: a 4+ char prefix
+// that unambiguously matches one repo resolves like the full id (README
+// contract).
+func TestFindSymbol_ArbitraryPrefixAccepted(t *testing.T) {
+	store := newStubGraphStorage()
+	store.addNode(mustNode(t, "n1", "pkg/foo.go", "Foo", domain.KindFunction))
+	repos := []application.RepoRecord{
+		{RepoID: "deadbeefcafebabe1111222233334444", RootPath: "/p", ActiveBranch: "main"},
+	}
+	r := NewRegistry()
+	RegisterGraphTools(r, store, application.NewStagingArea(),
+		WithRepoLister(&stubRepoLister{repos: repos}))
+	resp, rpcErr := dispatchGraph(t, r, "eng_find_symbol", map[string]string{
+		"symbol":  "Foo",
+		"repo_id": "deadbeef", // 8-char prefix, not exact short_id length
+		"branch":  "main",
+	})
+	if rpcErr != nil {
+		t.Fatalf("expected 8-char prefix to resolve, got %+v", rpcErr)
+	}
+	if len(resp.Nodes) != 1 {
+		t.Fatalf("expected 1 node, got %d", len(resp.Nodes))
+	}
+}
+
 // TestFindSymbol_ShortRepoIDAccepted pins solov2-d2x: a 12-char short_id
 // prefix resolves to the full repo_id.
 func TestFindSymbol_ShortRepoIDAccepted(t *testing.T) {
