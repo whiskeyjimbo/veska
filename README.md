@@ -102,10 +102,15 @@ make build-fat
 # 2. Initialise veska's data directory at ~/.veska/.
 ./bin/veska init
 
-# 3. Start the daemon. For a quick try, background it:
-./bin/veska-daemon &
-# For a real install, run it as a real OS service (systemd --user on Linux,
-# launchd on macOS):
+# 3. Start the daemon.
+#
+#    Pick one:
+#      - Just kicking the tyres? Background it:    ./bin/veska-daemon &
+#      - Want it on every boot, auto-restart on
+#        crash, logs under ~/.veska/logs?           use the service form below.
+#
+#    For a real install, run it as an OS service (systemd --user on Linux,
+#    launchd on macOS). Uninstall with `./bin/veska service uninstall`.
 ./bin/veska service install
 ./bin/veska service start
 
@@ -129,6 +134,30 @@ To force a re-scan of an already-registered repo (e.g. after a model swap):
 ```sh
 ./bin/veska reindex /path/to/your/repo
 ```
+
+### First call — 60 second sanity check
+
+Once `cold scan: complete` shows in `~/.veska/logs/daemon.log`, drive two
+MCP tools from the shell so you've seen real output before pointing an
+editor at the daemon:
+
+```sh
+# Find a symbol by name. Unqualified matches are fine — "Run" finds
+# Server.Run, Command.Run, etc., with exact matches ranked first.
+printf '{"jsonrpc":"2.0","id":1,"method":"eng_find_symbol","params":{"symbol":"Run"}}\n' \
+  | ./bin/veska-mcp | jq '.result.nodes[0]'
+
+# Natural-language search; results carry inline snippets so a follow-up
+# Read is usually unnecessary.
+printf '{"jsonrpc":"2.0","id":1,"method":"eng_search_semantic","params":{"query":"parse config"}}\n' \
+  | ./bin/veska-mcp | jq '.result.results[:3]'
+```
+
+Either tool's response should contain `file_path`, `line_start/line_end`,
+and a `name` — if you see those, the daemon is parsing and serving your
+repo correctly. `eng_search_semantic` may return `[]` on a freshly
+registered repo while embeddings finish populating; check
+`eng_get_status`'s `pending_embeds` count.
 
 ### Editor integration
 
@@ -255,7 +284,10 @@ editors by `veska-mcp`). Tool names follow `eng_<verb>_<object>`. Quick map:
 | Findings | `eng_list_findings`, `eng_get_finding`, `eng_close_finding`, `eng_reopen_finding` |
 | Suppressions | `eng_list_suppressions`, `eng_get_suppression`, `eng_suppress_finding`, `eng_close_suppression` |
 | Wiki | `eng_get_hot_zone`, `eng_get_entry_points` |
-| **Not yet wired** | `eng_get_active_task`, `eng_set_active_task`, `eng_get_task_history` — parked; calls return `method not found` (see note below) |
+<!-- Parked task family (eng_get_active_task, eng_set_active_task, eng_get_task_history)
+     is intentionally omitted from this table — it is unregistered and would
+     return `method not found` if called. See "Parked tools" note further below. -->
+
 
 **Conventions across the tool surface:**
 
@@ -279,11 +311,12 @@ editors by `veska-mcp`). Tool names follow `eng_<verb>_<object>`. Quick map:
   response carries `low_quality_static_embedder` in `degraded_reasons` — run
   `veska install model2vec` to clear it.
 
-A task family (`eng_get_active_task`, `eng_set_active_task`,
-`eng_get_task_history`) is implemented but currently **parked** — it is not
-registered on the socket until a task backend (Jira / Linear / GitHub) lands to
-populate the table (`wire.go`, solov2-6m1). Calling these returns
-`method not found`.
+**Parked tools.** A task family (`eng_get_active_task`,
+`eng_set_active_task`, `eng_get_task_history`) is implemented in the tree
+but **not** registered on the socket — calling it returns `method not
+found`. It stays parked until a task backend (Jira / Linear / GitHub) lands
+to populate the underlying table (`wire.go`, solov2-6m1). Treat it as
+non-existent for now; agent instruction snippets do not advertise it.
 
 ## Testing
 
