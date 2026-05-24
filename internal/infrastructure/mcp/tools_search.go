@@ -29,6 +29,20 @@ type SearchResponse struct {
 	DegradedReasons []string       `json:"degraded_reasons,omitempty"`
 }
 
+// PendingEmbedsCounter exposes the global pending-embeds depth so the
+// semantic handler can tag responses with 'embeddings_pending' while the
+// index is still warming. nil is a no-op (solov2-hjw9).
+type PendingEmbedsCounter interface {
+	CountPending(ctx context.Context) (int, error)
+}
+
+// DegradedReasonEmbeddingsPending is the canonical token emitted on
+// eng_search_semantic responses when the daemon still has un-embedded
+// nodes queued. A junior running a search against a freshly-registered
+// repo and getting [] otherwise has no signal that the index is warming
+// rather than the query being wrong.
+const DegradedReasonEmbeddingsPending = "embeddings_pending"
+
 // SimilarLookup is the narrow port the eng_search_similar handler needs from
 // EmbeddingRefRepo: given a node, return its content_hash if ready, and given
 // a content_hash, return the stored embedding bytes + dimension. This
@@ -51,11 +65,18 @@ func RegisterSearchTools(
 	rec *savings.Recorder,
 	repos application.RepoLister,
 ) {
+	// solov2-hjw9: opportunistically extract a PendingEmbedsCounter from the
+	// SimilarLookup. *sqlite.EmbeddingRefsRepo satisfies both interfaces; test
+	// stubs that don't can ignore the signal (handler treats nil as "no info").
+	var pending PendingEmbedsCounter
+	if pc, ok := lookup.(PendingEmbedsCounter); ok {
+		pending = pc
+	}
 	r.MustRegister(ToolSpec{
 		Name:            "eng_search_semantic",
 		Description:     "Semantic search over embedded symbols with lexical fallback when the embedder is offline.",
 		IncludesStaging: false,
-		Handler:         makeSearchSemanticHandler(svc, rec, repos),
+		Handler:         makeSearchSemanticHandler(svc, rec, repos, pending),
 	})
 	r.MustRegister(ToolSpec{
 		Name:            "eng_search_similar",
@@ -79,7 +100,7 @@ type searchSemanticParams struct {
 	Limit int `json:"limit,omitempty"`
 }
 
-func makeSearchSemanticHandler(svc *search.Service, rec *savings.Recorder, repos application.RepoLister) ToolHandler {
+func makeSearchSemanticHandler(svc *search.Service, rec *savings.Recorder, repos application.RepoLister, pending PendingEmbedsCounter) ToolHandler {
 	return func(ctx context.Context, _ domain.Actor, raw json.RawMessage) (any, *RPCError) {
 		var p searchSemanticParams
 		if rpcErr := bindParams(raw, &p); rpcErr != nil {
@@ -118,7 +139,13 @@ func makeSearchSemanticHandler(svc *search.Service, rec *savings.Recorder, repos
 			results = []search.Result{}
 		}
 		recordSavings(rec, p.Query, results)
-		return SearchResponse{Results: searchResultsToDTO(results), DegradedReasons: resp.DegradedReasons}, nil
+		reasons := resp.DegradedReasons
+		if pending != nil {
+			if n, perr := pending.CountPending(ctx); perr == nil && n > 0 {
+				reasons = append(reasons, DegradedReasonEmbeddingsPending)
+			}
+		}
+		return SearchResponse{Results: searchResultsToDTO(results), DegradedReasons: reasons}, nil
 	}
 }
 
