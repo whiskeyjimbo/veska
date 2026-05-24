@@ -599,6 +599,10 @@ func checkIngestion(ctx context.Context) (string, string) {
 	if len(recs) == 0 {
 		return "healthy", ""
 	}
+	// Pull scan progress so unindexed repos that are actively scanning
+	// surface as e.g. "9092cd5e0cff promoting/300" — tells the user the
+	// degraded state is progressing vs. idle (solov2-u9h9 follow-up).
+	progress := fetchScanProgress(ctx)
 	var unindexed []string
 	for _, r := range recs {
 		if r.LastPromotedSHA == "" {
@@ -606,7 +610,11 @@ func checkIngestion(ctx context.Context) (string, string) {
 			if len(short) > 12 {
 				short = short[:12]
 			}
-			unindexed = append(unindexed, short)
+			if p, ok := progress[r.RepoID]; ok && p.Phase != "" {
+				unindexed = append(unindexed, fmt.Sprintf("%s %s/%d", short, p.Phase, p.FilesSeen))
+			} else {
+				unindexed = append(unindexed, short)
+			}
 		}
 	}
 	if len(unindexed) == 0 {
