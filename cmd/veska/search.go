@@ -421,6 +421,21 @@ func renderSearchEnvelope(w io.Writer, env searchEnvelope, jsonOut bool) error {
 		enc.SetIndent("", "  ")
 		return enc.Encode(env)
 	}
+	if len(env.Results) == 0 {
+		// solov2-ffi3: a silent miss reads as broken to a new user. Hint
+		// at warming embeddings when we can see the daemon's pending count;
+		// otherwise print a plain "no results" so the command never exits
+		// without any text feedback.
+		if pending, ok := pendingEmbedsHint(); ok && pending > 0 {
+			fmt.Fprintf(w, "no results (%d embeds pending — try again shortly)\n", pending)
+		} else {
+			fmt.Fprintln(w, "no results")
+		}
+		for _, d := range env.DegradedReasons {
+			fmt.Fprintf(w, "[degraded: %s]\n", d)
+		}
+		return nil
+	}
 	// Per-query normalise the raw vector score to a confidence tier so the
 	// CLI surfaces a human-meaningful signal instead of the bare 0.018x
 	// dot-product numbers the embedder emits (solov2-6spa). The raw score is
@@ -550,6 +565,23 @@ func scoreTier(s, top float32) string {
 	default:
 		return "weak"
 	}
+}
+
+// pendingEmbedsHint asks the daemon (if reachable) how many embeds are still
+// queued so a zero-result search can tell the user "the index is still
+// warming up" instead of staying silent. Returns ok=false if the daemon is
+// down or doesn't expose the field — the caller falls back to a plain "no
+// results" line (solov2-ffi3).
+func pendingEmbedsHint() (int, bool) {
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	var status struct {
+		PendingEmbeds int `json:"pending_embeds"`
+	}
+	if err := callMCP(ctx, "eng_get_status", map[string]any{}, &status); err != nil {
+		return 0, false
+	}
+	return status.PendingEmbeds, true
 }
 
 func branchOrMain(b string) string {
