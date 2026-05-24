@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"time"
 
+	application "github.com/whiskeyjimbo/veska/internal/application"
 	"github.com/whiskeyjimbo/veska/internal/core/domain"
 	"github.com/whiskeyjimbo/veska/internal/core/ports"
 )
@@ -14,7 +15,9 @@ import (
 // RegisterSuppressionTools registers suppression management tools on r.
 // db is the SQLite connection that backs the suppressions table.
 // aw is an optional AuditWriter; pass nil to disable audit logging.
-func RegisterSuppressionTools(r *Registry, db *sql.DB, aw ports.AuditWriter) {
+// repos is an optional RepoLister; when supplied, eng_list_suppressions
+// auto-resolves repo_id from the single registered repo (solov2-7tz1).
+func RegisterSuppressionTools(r *Registry, db *sql.DB, aw ports.AuditWriter, repos application.RepoLister) {
 	r.MustRegister(ToolSpec{
 		Name:            "eng_suppress_finding",
 		Description:     "Suppress a finding, inserting a record into the suppressions table.",
@@ -25,9 +28,9 @@ func RegisterSuppressionTools(r *Registry, db *sql.DB, aw ports.AuditWriter) {
 	})
 	r.MustRegister(ToolSpec{
 		Name:            "eng_list_suppressions",
-		Description:     "List suppressions for a given repo and branch.",
+		Description:     "List suppressions for a given repo and branch. repo_id is optional when exactly one repo is registered (it auto-resolves); otherwise it is required.",
 		IncludesStaging: false,
-		Handler:         makeListSuppressionsHandler(db),
+		Handler:         makeListSuppressionsHandler(db, repos),
 	})
 }
 
@@ -181,13 +184,17 @@ type suppressionRow struct {
 	ActorKind     string  `json:"actor_kind"`
 }
 
-func makeListSuppressionsHandler(db *sql.DB) ToolHandler {
+func makeListSuppressionsHandler(db *sql.DB, repos application.RepoLister) ToolHandler {
 	return func(ctx context.Context, _ domain.Actor, raw json.RawMessage) (any, *RPCError) {
 		var p listSuppressionsParams
 		if rpcErr := bindParams(raw, &p); rpcErr != nil {
 			return nil, rpcErr
 		}
-		if rpcErr := checkRequired("repo_id", p.RepoID); rpcErr != nil {
+		// solov2-7tz1: when exactly one repo is registered, auto-resolve
+		// repo_id so the caller does not have to look it up. The id is
+		// retained (even though the current schema does not key suppressions
+		// by repo) so a future repo-scoped column tightens cleanly.
+		if _, rpcErr := resolveRepoIDOrSingleton(ctx, repos, p.RepoID); rpcErr != nil {
 			return nil, rpcErr
 		}
 

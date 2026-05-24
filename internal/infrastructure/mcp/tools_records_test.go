@@ -81,7 +81,7 @@ func TestGetSuppression(t *testing.T) {
 
 	r := NewRegistry()
 	RegisterRecordTools(r, db, nil)
-	RegisterSuppressionTools(r, db, nil)
+	RegisterSuppressionTools(r, db, nil, nil)
 	actor := domain.Actor{ID: "human:alice", Kind: domain.ActorKindHuman}
 
 	res, rpcErr := dispatchSuppression(t, r, "eng_suppress_finding", actor, map[string]any{
@@ -132,7 +132,7 @@ func TestCloseSuppression(t *testing.T) {
 
 	r := NewRegistry()
 	RegisterRecordTools(r, db, nil)
-	RegisterSuppressionTools(r, db, nil)
+	RegisterSuppressionTools(r, db, nil, nil)
 	actor := domain.Actor{ID: "human:alice", Kind: domain.ActorKindHuman}
 
 	res, rpcErr := dispatchSuppression(t, r, "eng_suppress_finding", actor, map[string]any{

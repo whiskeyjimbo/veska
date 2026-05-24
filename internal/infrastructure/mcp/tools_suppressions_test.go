@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	application "github.com/whiskeyjimbo/veska/internal/application"
 	"github.com/whiskeyjimbo/veska/internal/core/domain"
 	_ "modernc.org/sqlite"
 )
@@ -107,7 +108,7 @@ func TestSuppressFinding_RejectsUnknownFinding(t *testing.T) {
 	// No finding seeded — only suppressions schema exists.
 
 	r := NewRegistry()
-	RegisterSuppressionTools(r, db, nil)
+	RegisterSuppressionTools(r, db, nil, nil)
 
 	actor := domain.Actor{ID: "agent:bot", Kind: domain.ActorKindAgent}
 	_, rpcErr := dispatchSuppression(t, r, "eng_suppress_finding", actor, map[string]any{
@@ -140,7 +141,7 @@ func TestSuppressFinding_RejectsUnknownFinding(t *testing.T) {
 func TestSuppressFinding_AllowsNonFindingScopes(t *testing.T) {
 	db := newSuppressionsDB(t)
 	r := NewRegistry()
-	RegisterSuppressionTools(r, db, nil)
+	RegisterSuppressionTools(r, db, nil, nil)
 
 	actor := domain.Actor{ID: "human:alice", Kind: domain.ActorKindHuman}
 	_, rpcErr := dispatchSuppression(t, r, "eng_suppress_finding", actor, map[string]any{
@@ -160,7 +161,7 @@ func TestSuppressFinding_Basic(t *testing.T) {
 	seedFindingForSuppression(t, db, "finding-001", "main", "repo-1")
 
 	r := NewRegistry()
-	RegisterSuppressionTools(r, db, nil)
+	RegisterSuppressionTools(r, db, nil, nil)
 
 	actor := domain.Actor{ID: "agent:bot", Kind: domain.ActorKindAgent}
 	result, rpcErr := dispatchSuppression(t, r, "eng_suppress_finding", actor, map[string]any{
@@ -197,7 +198,7 @@ func TestSuppressFinding_DefaultScope(t *testing.T) {
 	seedFindingForSuppression(t, db, "finding-002", "main", "repo-1")
 
 	r := NewRegistry()
-	RegisterSuppressionTools(r, db, nil)
+	RegisterSuppressionTools(r, db, nil, nil)
 
 	actor := domain.Actor{ID: "human:alice", Kind: domain.ActorKindHuman}
 	_, rpcErr := dispatchSuppression(t, r, "eng_suppress_finding", actor, map[string]any{
@@ -225,7 +226,7 @@ func TestSuppressFinding_WithExpiresAt(t *testing.T) {
 	seedFindingForSuppression(t, db, "finding-003", "main", "repo-1")
 
 	r := NewRegistry()
-	RegisterSuppressionTools(r, db, nil)
+	RegisterSuppressionTools(r, db, nil, nil)
 
 	expiry := time.Now().Add(24 * time.Hour).UnixMilli()
 	actor := domain.Actor{ID: "human:alice", Kind: domain.ActorKindHuman}
@@ -252,7 +253,7 @@ func TestSuppressFinding_WithExpiresAt(t *testing.T) {
 func TestSuppressFinding_MissingParams(t *testing.T) {
 	db := newSuppressionsDB(t)
 	r := NewRegistry()
-	RegisterSuppressionTools(r, db, nil)
+	RegisterSuppressionTools(r, db, nil, nil)
 
 	actor := domain.Actor{ID: "human:alice", Kind: domain.ActorKindHuman}
 	_, rpcErr := dispatchSuppression(t, r, "eng_suppress_finding", actor, map[string]any{
@@ -274,10 +275,29 @@ func TestSuppressFinding_MissingParams(t *testing.T) {
 // eng_list_suppressions
 // ---------------------------------------------------------------------------
 
+// TestListSuppressions_SingleRepoDefaultsRepoID guards solov2-7tz1: when a
+// RepoLister is wired and exactly one repo is registered, eng_list_suppressions
+// must auto-resolve repo_id from the singleton rather than rejecting the call.
+func TestListSuppressions_SingleRepoDefaultsRepoID(t *testing.T) {
+	db := newSuppressionsDB(t)
+	r := NewRegistry()
+	repos := &stubRepoLister{repos: []application.RepoRecord{{RepoID: "only-repo"}}}
+	RegisterSuppressionTools(r, db, nil, repos)
+
+	actor := domain.Actor{ID: "agent:bot", Kind: domain.ActorKindAgent}
+	_, rpcErr := dispatchSuppression(t, r, "eng_list_suppressions", actor, map[string]any{
+		"branch": "main",
+		// repo_id intentionally omitted
+	})
+	if rpcErr != nil {
+		t.Fatalf("expected auto-resolution, got %+v", rpcErr)
+	}
+}
+
 func TestListSuppressions_Empty(t *testing.T) {
 	db := newSuppressionsDB(t)
 	r := NewRegistry()
-	RegisterSuppressionTools(r, db, nil)
+	RegisterSuppressionTools(r, db, nil, nil)
 
 	actor := domain.Actor{ID: "agent:bot", Kind: domain.ActorKindAgent}
 	result, rpcErr := dispatchSuppression(t, r, "eng_list_suppressions", actor, map[string]any{
@@ -303,7 +323,7 @@ func TestListSuppressions_AfterInsert(t *testing.T) {
 	seedFindingForSuppression(t, db, "finding-list-001", "main", "repo-1")
 
 	r := NewRegistry()
-	RegisterSuppressionTools(r, db, nil)
+	RegisterSuppressionTools(r, db, nil, nil)
 
 	actor := domain.Actor{ID: "agent:bot", Kind: domain.ActorKindAgent}
 	// Insert a suppression.

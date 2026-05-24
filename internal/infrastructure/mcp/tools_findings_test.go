@@ -1032,7 +1032,7 @@ func TestSuppressFinding_ReviewSemanticFinding(t *testing.T) {
 	seedReviewSemanticFinding(t, db, "f-rev-cd", "main", "repo-1", "review-contract-drift", "medium")
 
 	r := NewRegistry()
-	RegisterSuppressionTools(r, db, nil)
+	RegisterSuppressionTools(r, db, nil, nil)
 
 	actor := domain.Actor{ID: "agent:bot", Kind: domain.ActorKindAgent}
 	result, rpcErr := dispatchSuppression(t, r, "eng_suppress_finding", actor, map[string]any{
