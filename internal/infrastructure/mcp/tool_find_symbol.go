@@ -41,7 +41,7 @@ func makeFindSymbolHandler(graph ports.GraphStorage, staging *application.Stagin
 		if err := json.Unmarshal(raw, &p); err != nil {
 			return nil, &RPCError{Code: CodeInvalidParams, Message: fmt.Sprintf("invalid params: %v", err)}
 		}
-		if rpcErr := checkRequired("symbol", p.Symbol, "repo_id", p.RepoID, "branch", p.Branch); rpcErr != nil {
+		if rpcErr := checkRequired("symbol", p.Symbol, "repo_id", p.RepoID); rpcErr != nil {
 			return nil, rpcErr
 		}
 		repoID, rpcErr := resolveRepoID(ctx, repos, p.RepoID)
@@ -49,6 +49,11 @@ func makeFindSymbolHandler(graph ports.GraphStorage, staging *application.Stagin
 			return nil, rpcErr
 		}
 		p.RepoID = repoID
+		if br, rpcErr := resolveBranchOrActive(ctx, repos, p.RepoID, p.Branch); rpcErr != nil {
+			return nil, rpcErr
+		} else {
+			p.Branch = br
+		}
 
 		promoted, err := graph.FindNodes(ctx, p.RepoID, p.Branch, p.Symbol)
 		if err != nil {

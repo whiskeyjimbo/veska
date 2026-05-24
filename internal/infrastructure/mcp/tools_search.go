@@ -85,7 +85,7 @@ func makeSearchSemanticHandler(svc *search.Service, rec *savings.Recorder, repos
 		if rpcErr := bindParams(raw, &p); rpcErr != nil {
 			return nil, rpcErr
 		}
-		if rpcErr := checkRequired("query", p.Query, "repo_id", p.RepoID, "branch", p.Branch); rpcErr != nil {
+		if rpcErr := checkRequired("query", p.Query, "repo_id", p.RepoID); rpcErr != nil {
 			return nil, rpcErr
 		}
 		repoID, rpcErr := resolveRepoID(ctx, repos, p.RepoID)
@@ -93,6 +93,11 @@ func makeSearchSemanticHandler(svc *search.Service, rec *savings.Recorder, repos
 			return nil, rpcErr
 		}
 		p.RepoID = repoID
+		if br, rpcErr := resolveBranchOrActive(ctx, repos, p.RepoID, p.Branch); rpcErr != nil {
+			return nil, rpcErr
+		} else {
+			p.Branch = br
+		}
 		k := p.K
 		if k <= 0 {
 			k = p.Limit
@@ -148,7 +153,7 @@ func makeSearchSimilarHandler(lookup SimilarLookup, vectors ports.VectorStorage,
 		if rpcErr := bindParams(raw, &p); rpcErr != nil {
 			return nil, rpcErr
 		}
-		if rpcErr := checkRequired("node_id", p.NodeID, "repo_id", p.RepoID, "branch", p.Branch); rpcErr != nil {
+		if rpcErr := checkRequired("node_id", p.NodeID, "repo_id", p.RepoID); rpcErr != nil {
 			return nil, rpcErr
 		}
 		repoID, rpcErr := resolveRepoID(ctx, repos, p.RepoID)
@@ -156,6 +161,11 @@ func makeSearchSimilarHandler(lookup SimilarLookup, vectors ports.VectorStorage,
 			return nil, rpcErr
 		}
 		p.RepoID = repoID
+		if br, rpcErr := resolveBranchOrActive(ctx, repos, p.RepoID, p.Branch); rpcErr != nil {
+			return nil, rpcErr
+		} else {
+			p.Branch = br
+		}
 		k := p.K
 		if k <= 0 {
 			k = p.Limit
