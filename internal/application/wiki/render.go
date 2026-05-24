@@ -19,7 +19,7 @@ func RenderHotZones(r Report) string {
 	b.WriteString("# Hot Zones\n\n")
 	b.WriteString("Files ranked by change risk: recent change frequency multiplied by blast radius.\n\n")
 	if len(r.Zones) == 0 {
-		b.WriteString("_No hot zones: no files changed in the look-back window._\n")
+		b.WriteString("_No hot zones yet — files appear here once commits land while the repo is registered with veska. Re-run `veska wiki` after a few commits to populate this page._\n")
 		return b.String()
 	}
 	b.WriteString("| Rank | File | Recent Changes | Blast Radius | Score |\n")
@@ -54,7 +54,7 @@ func RenderEntryPoints(r EntryPointsReport) string {
 	b.WriteString("inbound call count, with exported symbols and symbols having ")
 	b.WriteString("adjacent tests breaking ties (solov2-73f).\n\n")
 	if len(r.EntryPoints) == 0 {
-		b.WriteString("_No entry points: no symbols currently qualify._\n")
+		b.WriteString("_No entry points yet — symbols appear here once the auto-link pipeline has built inbound CALLS edges. Check `veska doctor post_promotion_queue`; if pending/auto_link is large the index is still warming up._\n")
 		return b.String()
 	}
 	b.WriteString("| Symbol | File | Kind | Inbound | Exported | Tested |\n")
