@@ -42,8 +42,20 @@ func searchCmd() *cobra.Command {
 	var k int
 	var jsonOut bool
 	cmd := &cobra.Command{
-		Use:          "search <query> [path-or-url]",
-		Short:        "Semantic search; optionally clone+index a repo first",
+		Use:   "search <query> [path-or-url]",
+		Short: "Semantic search; optionally clone+index a repo first",
+		Long: `Semantic search against an indexed repo.
+
+The optional second argument selects the repo to search:
+  - omitted        — auto-detect from cwd (must be a registered repo)
+  - local path     — registered local repo (absolute or relative)
+  - git URL        — clones the repo into ~/.veska/clones, indexes it, then searches
+
+Examples:
+  veska search "parse config"                       # search the repo containing cwd
+  veska search "parse config" /path/to/myrepo       # search a specific registered local repo
+  veska search "parse config" https://github.com/x  # clone, index, then search a remote repo
+`,
 		Args:         cobra.RangeArgs(1, 2),
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
