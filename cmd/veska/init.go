@@ -127,6 +127,7 @@ func envOrDefault(key, def string) string {
 func initCmd() *cobra.Command {
 	var yes bool
 	var agent string
+	var updateGitignore bool
 
 	cmd := &cobra.Command{
 		Use:          "init",
@@ -141,7 +142,7 @@ func initCmd() *cobra.Command {
 				if err != nil {
 					return fmt.Errorf("init --agent: cwd: %w", err)
 				}
-				return writeAgentSnippet(cwd, agent, cmd.OutOrStdout())
+				return writeAgentSnippet(cwd, agent, cmd.OutOrStdout(), updateGitignore)
 			}
 			deps := initDeps{
 				veskaHome: config.DefaultVectorDir(),
@@ -157,5 +158,7 @@ func initCmd() *cobra.Command {
 	cmd.Flags().StringVar(&agent, "agent", "",
 		"write a per-agent instruction snippet to the current project ("+
 			strings.Join(supportedFlavorNames(), ", ")+")")
+	cmd.Flags().BoolVar(&updateGitignore, "update-gitignore", false,
+		"with --agent: also write a veska-managed block to .gitignore covering generated artifacts (solov2-zm6i; off by default)")
 	return cmd
 }
