@@ -39,10 +39,17 @@ func TestGetFinding(t *testing.T) {
 			wantCode: CodeNotFound,
 		},
 		{
-			name:     "missing branch",
-			params:   map[string]any{"finding_id": "finding-get-1"},
+			// solov2-qwpt: branch is now optional — finding_id is globally
+			// unique, so omitting branch resolves the row by id alone.
+			name:   "branch omitted resolves by id",
+			params: map[string]any{"finding_id": "finding-get-1"},
+			wantID: "finding-get-1",
+		},
+		{
+			name:     "wrong branch",
+			params:   map[string]any{"finding_id": "finding-get-1", "branch": "other"},
 			wantErr:  true,
-			wantCode: CodeInvalidParams,
+			wantCode: CodeNotFound,
 		},
 	}
 
