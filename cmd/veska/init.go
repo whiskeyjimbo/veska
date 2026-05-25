@@ -43,6 +43,14 @@ func runInit(ctx context.Context, deps initDeps, yes bool, out io.Writer) error 
 		}
 	}
 
+	// solov2-w1ng: CONFIG-SURFACE.md promises `veska init` writes
+	// ~/.veska/config.toml when absent. Honour that — drop a commented
+	// starter file so a junior can grep, uncomment, restart, and go.
+	// Never overwrites an existing file.
+	if err := writeDefaultConfigIfAbsent(deps.veskaHome); err != nil {
+		return fmt.Errorf("write config.toml: %w", err)
+	}
+
 	// ── 2. Embedder ──────────────────────────────────────────────────────────
 	embedderLine, tip, err := resolveInitEmbedder(ctx, deps)
 	if err != nil {
@@ -113,6 +121,40 @@ func embedderProvenance(veskaHome, modelID string) string {
 		return "(in-process, fat)"
 	}
 	return "(in-process)"
+}
+
+// defaultConfigTemplate is the file written by `veska init` when
+// ~/.veska/config.toml is absent. Every section is commented so the
+// daemon keeps using its built-in defaults; uncommenting a block is
+// the affordance for enabling it. Keep this short — CONFIG-SURFACE.md
+// is the canonical reference.
+const defaultConfigTemplate = `# Veska daemon config.
+# Written by ` + "`veska init`" + ` when this file is absent.
+# Full surface: docs/operations/CONFIG-SURFACE.md.
+#
+# Every block below is commented out — the daemon falls back to its
+# built-in defaults for anything missing. Uncomment a block and
+# restart (` + "`veska service restart`" + `) to apply.
+
+# OSV.dev vulnerability scanner (off by default; opt-in).
+# After enabling, run ` + "`veska reindex <path>`" + ` to scan
+# already-promoted repos.
+# [vuln_source]
+# provider         = "osv"
+# refresh_interval = "24h"
+`
+
+// writeDefaultConfigIfAbsent writes defaultConfigTemplate to
+// ~/.veska/config.toml only if it does not already exist. Idempotent on
+// re-init.
+func writeDefaultConfigIfAbsent(veskaHome string) error {
+	path := filepath.Join(veskaHome, "config.toml")
+	if _, err := os.Stat(path); err == nil {
+		return nil
+	} else if !os.IsNotExist(err) {
+		return err
+	}
+	return os.WriteFile(path, []byte(defaultConfigTemplate), 0o644)
 }
 
 // envOrDefault returns the env var when non-empty, else def.
