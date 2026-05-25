@@ -64,6 +64,8 @@ func exitCodeForProbeStatus(status string) int {
 	if status == "broken" {
 		return 2
 	}
+	// "degraded" and "stopped" (solov2-bwly) are both informational —
+	// non-zero status label, exit 0.
 	return 0
 }
 
@@ -518,6 +520,18 @@ func doctorStatusCmd() *cobra.Command {
 			}
 			daemonNotRunning := missing == len(egressReport.Sockets) && len(egressReport.Sockets) > 0
 
+			// solov2-bwly: distinguish "the daemon has never been started"
+			// (benign — operator just hasn't run `veska service start` yet)
+			// from "the daemon crash-looped" (a real fault flagged by the
+			// `<veskaHome>/broken` marker). The marker-less not-running
+			// case should not be labelled "broken", which a fresh user sees
+			// between `veska init` and `veska service start`.
+			svcReport, _ := doctor.CheckService(home)
+			daemonStopped := daemonNotRunning && !svcReport.BrokenMarkerPresent
+			if daemonStopped {
+				egressStatus = "stopped"
+			}
+
 			// Compute config status.
 			configStatus := "healthy"
 			if !configReport.DBExists {
@@ -537,6 +551,10 @@ func doctorStatusCmd() *cobra.Command {
 				case "degraded":
 					if rollup != "broken" {
 						rollup = "degraded"
+					}
+				case "stopped":
+					if rollup == "healthy" {
+						rollup = "stopped"
 					}
 				}
 			}
@@ -581,7 +599,12 @@ func doctorStatusCmd() *cobra.Command {
 			// fine. The rollup is already 'broken' in that case; this just
 			// clarifies WHY the other labels say what they say.
 			if daemonNotRunning {
-				fmt.Fprintf(cmd.OutOrStdout(), "status: broken — daemon is not running (egress=broken)\n")
+				// Lead with the rollup, not a hard-coded "broken". When the
+				// only non-healthy thing is "daemon not started yet", the
+				// rollup is "stopped" and that's what the user should see.
+				// When another subsystem is independently broken, the rollup
+				// (and lead) is still "broken" — a real fault.
+				fmt.Fprintf(cmd.OutOrStdout(), "status: %s — daemon is not running (egress=%s)\n", rollup, egressStatus)
 				fmt.Fprintf(cmd.OutOrStdout(), "  on-disk checks (independent of daemon): embedder=%s, config=%s, ingestion=%s, queue=%s%s\n",
 					embedderResult.Status, configStatus, ingestionStatus, queueStatus, detail)
 				fmt.Fprintln(cmd.OutOrStdout(), "  hint: start it with `veska service start` (or `veska-daemon &` for a quick try)")
@@ -589,8 +612,14 @@ func doctorStatusCmd() *cobra.Command {
 				fmt.Fprintf(cmd.OutOrStdout(), "status: %s (embedder=%s, egress=%s, config=%s, ingestion=%s, queue=%s)%s\n",
 					rollup, embedderResult.Status, egressStatus, configStatus, ingestionStatus, queueStatus, detail)
 			}
-			if rollup != "healthy" {
+			// "stopped" reports a benign operator state (daemon never
+			// started, no broken marker) and uses the same exit semantics as
+			// "degraded": non-zero rollup label, zero exit (solov2-bwly).
+			if rollup != "healthy" && rollup != "stopped" {
 				return ProbeStatusError{Subsystem: "status", Status: rollup}
+			}
+			if rollup == "stopped" {
+				return ProbeStatusError{Subsystem: "status", Status: "stopped"}
 			}
 			return nil
 		},
