@@ -175,6 +175,16 @@ type Daemon struct {
 	// goroutine so it never blocks Start; Stop waits on resyncDone.
 	resync *application.StartupResync
 
+	// vulnScanCheck is the registered post-promotion vulnerability check
+	// (non-nil iff [vuln_source] is enabled). Captured here so the
+	// on-first-refresh-ok callback can run it against every registered repo
+	// once the OSV cache becomes hot (solov2-jtl5.4).
+	vulnScanCheck *checks.VulnScanCheck
+	// findings is the FindingStorage handle used by the post-commit check
+	// runner. Captured here so the same persistence path is reused when
+	// scanAllReposForVuln runs synthetic checks outside the promote flow.
+	findings ports.FindingStorage
+
 	// vulnRefresher keeps the OSV advisory cache fresh. It is non-nil only
 	// when [vuln_source] provider="osv"; Start launches its blocking Run on
 	// the daemon's lifetime context.
@@ -437,11 +447,13 @@ func newDaemon(cfg Config) (*Daemon, error) {
 	// refresher goroutine launched in Start.
 	vulnSource, vulnEnabled := buildVulnSource(fileCfg)
 	var vulnRefresher *vulnrefresh.Refresher
+	var vulnScanCheck *checks.VulnScanCheck
 	if vulnEnabled {
 		vulnRoot := func(ctx context.Context, repoID string) (string, error) {
 			return repoRootFunc(pools.ReadDB)(ctx, repoID)
 		}
-		checkReg.Register(checks.NewVulnScanCheck(vulnSource, vulnRoot))
+		vulnScanCheck = checks.NewVulnScanCheck(vulnSource, vulnRoot)
+		checkReg.Register(vulnScanCheck)
 
 		var refreshOpts []vulnrefresh.Option
 		if iv := vulnRefreshInterval(fileCfg); iv > 0 {
@@ -750,6 +762,8 @@ func newDaemon(cfg Config) (*Daemon, error) {
 		tracerProvider: tracerProvider,
 		savingsRec:     savingsRec,
 		vulnRefresher:  vulnRefresher,
+		vulnScanCheck:  vulnScanCheck,
+		findings:       findings,
 		resync:         resync,
 		regSvc:         regSvc,
 		scanWG:         scanWG,
@@ -1138,7 +1152,14 @@ func (d *Daemon) Start(ctx context.Context) error {
 		// OSV advisory-cache refresher. Run blocks until d.ctx is cancelled,
 		// so it owns its own goroutine on the daemon's lifetime context.
 		// Non-nil only when [vuln_source] provider="osv".
+		//
+		// solov2-jtl5.4: on the *first* successful refresh, kick a one-shot
+		// vuln-scan sweep over every registered repo so promotions that ran
+		// against a cold cache get retroactive findings. Without this a
+		// fresh `config reload` after enabling [vuln_source] silently
+		// scores 0 findings across the board.
 		if d.vulnRefresher != nil {
+			d.vulnRefresher.SetOnFirstRefreshOk(d.scanAllReposForVuln)
 			go d.vulnRefresher.Run(d.ctx)
 		}
 	})

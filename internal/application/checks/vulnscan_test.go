@@ -122,7 +122,12 @@ require (
 
 func startsWith(s, prefix string) bool { return len(s) >= len(prefix) && s[:len(prefix)] == prefix }
 
-func TestVulnScanCheck_GoModNotTouched_NoFindings(t *testing.T) {
+// TestVulnScanCheck_GoModNotTouched_StillScans pins solov2-jtl5.4: a
+// promotion whose changed file set does not include go.mod must still
+// run vuln-scan against the on-disk go.mod, so retroactive scans after
+// enabling [vuln_source] (via partial re-promote in `config reload`)
+// surface findings.
+func TestVulnScanCheck_GoModNotTouched_StillScans(t *testing.T) {
 	src := &fakeVulnSource{findings: []ports.VulnFinding{
 		{AdvisoryID: "GHSA-aaaa-bbbb-cccc", Package: "p", Severity: "HIGH"},
 	}}
@@ -133,8 +138,27 @@ func TestVulnScanCheck_GoModNotTouched_NoFindings(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Run: %v", err)
 	}
+	if len(got) != 1 {
+		t.Fatalf("want 1 finding (scan must run despite go.mod not in FilePaths), got %d", len(got))
+	}
+}
+
+// TestVulnScanCheck_NoGoModOnDisk_NoFindings pins the non-Go-repo case
+// after the touchesGoMod gate was dropped: a repo with no go.mod at all
+// is a no-op, not an error.
+func TestVulnScanCheck_NoGoModOnDisk_NoFindings(t *testing.T) {
+	src := &fakeVulnSource{}
+	// repoRoot points at an empty dir — no go.mod present.
+	emptyRoot := t.TempDir()
+	repoRoot := func(_ context.Context, _ string) (string, error) { return emptyRoot, nil }
+	c := NewVulnScanCheck(src, repoRoot)
+
+	got, err := c.Run(context.Background(), Input{RepoID: "r", Branch: "main"})
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
 	if len(got) != 0 {
-		t.Fatalf("want no findings, got %d", len(got))
+		t.Errorf("want 0 findings on no-go.mod repo, got %d", len(got))
 	}
 }
 
@@ -170,14 +194,22 @@ func TestVulnScanCheck_NilSource(t *testing.T) {
 	}
 }
 
+// TestVulnScanCheck_GoModReadFailure pins solov2-jtl5.4: a missing go.mod
+// is no longer an error after the touchesGoMod gate removal — non-Go repos
+// are a normal case (TestVulnScanCheck_NoGoModOnDisk_NoFindings covers that).
+// This test now pins the residual error path: a read failure that ISN'T
+// os.IsNotExist (e.g. a directory at the go.mod path) still surfaces.
 func TestVulnScanCheck_GoModReadFailure(t *testing.T) {
-	root := func(ctx context.Context, repoID string) (string, error) {
-		return t.TempDir(), nil // no go.mod written
+	dir := t.TempDir()
+	// Create a *directory* at go.mod so os.ReadFile errors with EISDIR,
+	// which is not IsNotExist.
+	if err := os.Mkdir(filepath.Join(dir, "go.mod"), 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
 	}
+	root := func(ctx context.Context, repoID string) (string, error) { return dir, nil }
 	c := NewVulnScanCheck(&fakeVulnSource{}, root)
-	if _, err := c.Run(context.Background(), Input{FilePaths: []string{"go.mod"}}); err == nil {
-		t.Fatal("want error on missing go.mod")
-		return
+	if _, err := c.Run(context.Background(), Input{RepoID: "r", Branch: "main"}); err == nil {
+		t.Fatal("want error when go.mod is unreadable (directory at that path)")
 	}
 }
 
