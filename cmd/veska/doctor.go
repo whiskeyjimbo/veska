@@ -75,14 +75,25 @@ func exitCodeForProbeStatus(status string) int {
 //	0 = healthy or degraded (degraded is informational; check stderr for detail)
 //	2 = broken
 func doctorCmd() *cobra.Command {
+	statusSub := doctorStatusCmd()
 	cmd := &cobra.Command{
 		Use:          "doctor",
 		Short:        "Health checks for the veska runtime",
+		Long:         "Health checks for the veska runtime.\n\nWith no subcommand, runs the 'status' rollup across all subsystems.",
 		SilenceUsage: true,
+		// solov2-jtl5.2: bare `veska doctor` now runs the status rollup
+		// instead of just printing help. The rollup is what users actually
+		// want as a first-call health probe; the per-subsystem probes
+		// (embedder, egress, storage, …) remain explicit subcommands.
+		Args: cobra.NoArgs,
+		RunE: statusSub.RunE,
 	}
+	// Preserve --json on the parent so `veska doctor --json` behaves like
+	// `veska doctor status --json`.
+	cmd.Flags().AddFlagSet(statusSub.Flags())
 
 	cmd.AddCommand(
-		doctorStatusCmd(),
+		statusSub,
 		doctorEgressCmd(),
 		doctorStorageCmd(),
 		doctorEmbedderCmd(),
