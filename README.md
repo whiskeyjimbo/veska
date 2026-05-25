@@ -21,10 +21,13 @@ they reason from the same structural ground truth instead of guessing.
   [`docs/operations/CONFIG-SURFACE.md`](docs/operations/CONFIG-SURFACE.md));
   the other three ship on by default.
 - **Optional LLM review.** An off-by-default post-promotion review pipeline.
-- **Mechanical wiki.** Hot-zones and entry-points surfaced through the
-  `eng_get_hot_zone` and `eng_get_entry_points` MCP tools (no files written
-  to disk), plus a context-pack tool — all computed from the graph, no LLM
-  in the path.
+- **Mechanical wiki.** Hot-zones and entry-points computed from the graph,
+  no LLM in the path. The `eng_get_hot_zone` and `eng_get_entry_points`
+  MCP tools return data in-memory and write nothing; the `veska wiki`
+  CLI renders the same data into `docs/veska/{hot_zones,entry_points}.md`
+  inside the repo (re-runnable, idempotent — bracket markers in each
+  page preserve any hand edits outside the managed block). A context-pack
+  tool sits alongside.
 - **Cross-actor attribution.** A single `actor_kind: human | agent | system`
   enum distinguishes who changed what in the audit log.
 
