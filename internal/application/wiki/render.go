@@ -19,7 +19,17 @@ func RenderHotZones(r Report) string {
 	b.WriteString("# Hot Zones\n\n")
 	b.WriteString("Files ranked by change risk: recent change frequency multiplied by blast radius.\n\n")
 	if len(r.Zones) == 0 {
-		b.WriteString("_No hot zones yet — files appear here once commits land while the repo is registered with veska. Re-run `veska wiki` after a few commits to populate this page._\n")
+		// solov2-z5o0: explain *why* this page is empty so the reader
+		// doesn't have to read the source. The same two cases as the
+		// MCP tool's degraded_reasons.
+		switch {
+		case r.CandidatesScanned == 0:
+			b.WriteString("_No commits in the past 30 days. Hot-zone ranking is per-commit-frequency-driven — commit some changes and re-run `veska wiki`._\n")
+		case r.CandidatesScored == 0:
+			fmt.Fprintf(&b, "_%d file(s) changed in the last 30 days, but none have graph nodes (lockfiles, READMEs, generated assets). Nothing to rank._\n", r.CandidatesScanned)
+		default:
+			b.WriteString("_No hot zones yet — re-run `veska wiki` after more commits land._\n")
+		}
 		return b.String()
 	}
 	b.WriteString("| Rank | File | Recent Changes | Blast Radius | Score |\n")

@@ -190,9 +190,12 @@ func TestRank_DropsZeroScoreZones(t *testing.T) {
 }
 
 func TestRenderHotZones_EmptyReport(t *testing.T) {
+	// solov2-z5o0: empty render now picks one of three reasons. The
+	// zero-Report case has CandidatesScanned=0, so the "No commits in
+	// the past 30 days" message wins.
 	out := RenderHotZones(Report{RepoID: "r1", Branch: "main"})
-	if !contains(out, "No hot zones") {
-		t.Errorf("empty report should render a placeholder, got:\n%s", out)
+	if !contains(out, "No commits in the past 30 days") {
+		t.Errorf("empty report should render the no-recent-commits placeholder, got:\n%s", out)
 	}
 }
 
