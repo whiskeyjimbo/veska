@@ -40,7 +40,7 @@ func defaultReparserFactory(pools *sqlite.Pools, loader application.IgnoreLoader
 	// EmbedRefSink would silently break AC2 ("re-enqueued for embedding"),
 	// so this set must stay in lock-step with cmd/veska-daemon/wire.go.
 	promotionStore := sqlite.NewPromotionStore(
-		pools.WriteHot,
+		pools.Write,
 		[]sqlite.PromotionSink{
 			sqlite.NewFTSSink(),
 			sqlite.NewEmbedRefSink(),

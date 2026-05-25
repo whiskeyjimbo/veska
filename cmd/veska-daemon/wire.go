@@ -377,14 +377,14 @@ func newDaemon(cfg Config) (*Daemon, error) {
 
 	parser := treesitter.NewGoParser()
 	ingester := application.NewIngester(parser, staging, gate)
-	findings := sqlite.NewFindingRepo(pools.WriteHot)
+	findings := sqlite.NewFindingRepo(pools.Write)
 	ingester.SetFindingStorage(findings)
 
 	// Promoter + structural check pipeline. The PromotionStore owns the atomic
 	// promotion transaction; co-transactional sinks (FTS, embedding-refs) are
 	// registered here at start-up — a future sink is one more arg.
 	promotionStore := sqlite.NewPromotionStore(
-		pools.WriteHot,
+		pools.Write,
 		[]sqlite.PromotionSink{
 			sqlite.NewFTSSink(),
 			sqlite.NewEmbedRefSink(),
@@ -498,7 +498,7 @@ func newDaemon(cfg Config) (*Daemon, error) {
 		// starts empty and search is consistent at first tick
 		// (solov2-fz8). Old-model vectors are never readable again, which
 		// is correct — they occupy an incompatible space.
-		n, rqErr := embedder.RequeueAllUnderNewModel(context.Background(), pools.WriteEmbed)
+		n, rqErr := embedder.RequeueAllUnderNewModel(context.Background(), pools.Write)
 		if rqErr != nil {
 			_ = pools.Close()
 			return nil, fmt.Errorf("daemon: requeue embeddings after model switch: %w", rqErr)
@@ -510,7 +510,7 @@ func newDaemon(cfg Config) (*Daemon, error) {
 	if tracerProvider != nil {
 		provider = observability.NewInstrumentedEmbedder(provider, tracerProvider)
 	}
-	refs := sqlite.NewEmbeddingRefsRepo(pools.ReadDB, pools.WriteEmbed)
+	refs := sqlite.NewEmbeddingRefsRepo(pools.ReadDB, pools.Write)
 	embedWorker, err := embedder.NewWorker(refs, provider, vec,
 		embedder.WithRatePerSec(fileCfg.Embedder.RatePerSec),
 		embedder.WithMaxAttempts(embedder.DefaultMaxAttempts),
@@ -527,7 +527,7 @@ func newDaemon(cfg Config) (*Daemon, error) {
 	// handler so the Poller's WorkKindEmbed lane drains without leaving rows
 	// pending if other code paths enqueue them.
 	nodeLookup := sqlite.NewNodeLookupRepo(pools.ReadDB)
-	edgeRepo := sqlite.NewEdgeRepo(pools.WriteHot)
+	edgeRepo := sqlite.NewEdgeRepo(pools.Write)
 	linker, err := autolink.NewLinker(refs, vec, autolink.WithMetrics(metrics))
 	if err != nil {
 		_ = pools.Close()
@@ -538,14 +538,14 @@ func newDaemon(cfg Config) (*Daemon, error) {
 		_ = pools.Close()
 		return nil, fmt.Errorf("daemon: autolink handler: %w", err)
 	}
-	revalRepo := sqlite.NewRevalidateRepo(pools.WriteHot)
+	revalRepo := sqlite.NewRevalidateRepo(pools.Write)
 	revalH := revalidate.NewHandler(revalRepo, revalidate.WithMetrics(metrics))
 
 	// Wiki regeneration handler. The WorkKindWiki lane regenerates both the
 	// hot_zone and entry_points Markdown pages after every promotion and
 	// stamps the last-render time into daemon_state.
 	wikiEdges := sqlite.NewEdgeReaderRepo(pools.ReadDB)
-	wikiGraph := sqlite.NewGraphRepo(pools.ReadDB, pools.WriteHot)
+	wikiGraph := sqlite.NewGraphRepo(pools.ReadDB, pools.Write)
 	wikiFindings := sqlite.NewFindingQuerierRepo(pools.ReadDB)
 	wikiBlast := blastradius.NewService(wikiEdges, nodeLookup, staging)
 	wikiCounts := func(ctx context.Context, repoRoot string) (map[string]int, error) {
@@ -568,7 +568,7 @@ func newDaemon(cfg Config) (*Daemon, error) {
 	}
 	wikiH, err := wiki.NewHandler(
 		hotZoneSvc, epSvc,
-		sqlite.NewWikiRenderStateRepo(pools.ReadDB, pools.WriteHot),
+		sqlite.NewWikiRenderStateRepo(pools.ReadDB, pools.Write),
 		wikiRoot,
 		wiki.WithWritePages(fileCfg.Wiki.WritePages),
 	)
@@ -606,7 +606,7 @@ func newDaemon(cfg Config) (*Daemon, error) {
 		// Token-quota enforcement (solov2-nz2.5): the per-day total persists
 		// in daemon_state; the audit writer records the one-line entry when
 		// the daily-cap pause trips.
-		tokenStore := sqlite.NewReviewTokenStore(pools.ReadDB, pools.WriteHot)
+		tokenStore := sqlite.NewReviewTokenStore(pools.ReadDB, pools.Write)
 		quota := review.NewQuota(
 			fileCfg.Review.MaxTokensPerCommit,
 			fileCfg.Review.MaxTokensPerDay,
@@ -639,7 +639,7 @@ func newDaemon(cfg Config) (*Daemon, error) {
 	if d, derr := time.ParseDuration(fileCfg.PostPromotionQueue.PollInterval); derr == nil && d > 0 {
 		pollInterval = d
 	}
-	poller := queue.NewWithInterval(pools.ReadDB, pools.WriteHot, handlers, pollInterval)
+	poller := queue.NewWithInterval(pools.ReadDB, pools.Write, handlers, pollInterval)
 
 	// fsnotify multi-repo watcher.
 	watcher := gitwatch.NewMultiRepoWatcher()
@@ -675,7 +675,7 @@ func newDaemon(cfg Config) (*Daemon, error) {
 	// in-flight scans during Stop.
 	scanWG := &sync.WaitGroup{}
 	regSvc := &repoRegistrar{
-		db:        pools.WriteHot,
+		db:        pools.Write,
 		reparser:  reparser,
 		recordFor: lookupAppRecord(pools.ReadDB),
 		watchAdd:  watcher.Add,
@@ -846,12 +846,12 @@ func registerMCPTools(r *mcp.Registry, d mcpDeps) {
 	pools := d.pools
 
 	// Tools that only need *sql.DB + AuditWriter.
-	mcp.RegisterFindingTools(r, pools.WriteHot, nil, &repoLister{db: pools.ReadDB})
-	mcp.RegisterSuppressionTools(r, pools.WriteHot, nil, &repoLister{db: pools.ReadDB})
-	mcp.RegisterRecordTools(r, pools.WriteHot, nil)
+	mcp.RegisterFindingTools(r, pools.Write, nil, &repoLister{db: pools.ReadDB})
+	mcp.RegisterSuppressionTools(r, pools.Write, nil, &repoLister{db: pools.ReadDB})
+	mcp.RegisterRecordTools(r, pools.Write, nil)
 	reg := d.regSvc
 	if reg == nil {
-		reg = &repoRegistrar{db: pools.WriteHot}
+		reg = &repoRegistrar{db: pools.Write}
 	}
 	mcp.RegisterRepoTools(r, reg)
 
@@ -873,9 +873,9 @@ func registerMCPTools(r *mcp.Registry, d mcpDeps) {
 	// Exposing these tools surfaces dead-end UX (every user attempt fails
 	// with 'task not found'). When a backend lands, re-enable here.
 	//
-	// mcp.RegisterTaskTools(r, pools.WriteHot, nil)
+	// mcp.RegisterTaskTools(r, pools.Write, nil)
 	_ = mcp.RegisterTaskTools // keep the symbol reachable for the future re-enable
-	mcp.RegisterOwnerTools(r, pools.WriteHot)
+	mcp.RegisterOwnerTools(r, pools.Write)
 	mcp.RegisterTodoTools(r, sqlite.NewTodoQuerierRepo(pools.ReadDB), &repoLister{db: pools.ReadDB})
 	// Admin tools: repo listing + live status/config from the read pool and
 	// the resolved daemon Config.
@@ -890,7 +890,7 @@ func registerMCPTools(r *mcp.Registry, d mcpDeps) {
 	// turns cross_repo_edge_stubs into synthetic ResolvedEdges for
 	// call_chain (and blast_radius below); without it the stub producer in
 	// xc51.3 has no consumer (solov2-1gj).
-	graph := sqlite.NewGraphRepo(pools.ReadDB, pools.WriteHot)
+	graph := sqlite.NewGraphRepo(pools.ReadDB, pools.Write)
 	resolveStubs := func(ctx context.Context, nodeID, branch string, expand bool) ([]ports.ResolvedEdge, error) {
 		return resolver.ResolveStubsForNode(ctx, pools.ReadDB, nodeID, branch, expand)
 	}
@@ -934,7 +934,7 @@ func registerMCPTools(r *mcp.Registry, d mcpDeps) {
 	// Wiki entry_points surface. Candidates are enumerated from the loaded
 	// graph; the three safety gates draw on edge adjacency, blast radius and
 	// the findings table.
-	graphForEP := sqlite.NewGraphRepo(pools.ReadDB, pools.WriteHot)
+	graphForEP := sqlite.NewGraphRepo(pools.ReadDB, pools.Write)
 	findingQuerier := sqlite.NewFindingQuerierRepo(pools.ReadDB)
 	if epSvc, err := wiki.NewEntryPointsService(
 		graphForEP.LoadGraph, edges.InboundEdges, findingQuerier.OpenFindingNodeIDs,

@@ -67,7 +67,7 @@ func TestQueueFuzz(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = pools.Close() })
 
-	seedRepo(t, pools.WriteHot)
+	seedRepo(t, pools.Write)
 
 	// Stub handlers: succeed for every kind. Optional artificial latency
 	// (random 0..latencyMS) exercises real concurrency across lanes.
@@ -80,7 +80,7 @@ func TestQueueFuzz(t *testing.T) {
 
 	// Tight poll interval keeps the fuzz responsive without hammering the
 	// DB. 25ms is well below the budget granularity.
-	poller := queue.NewWithInterval(pools.ReadDB, pools.WriteHot, handlers, 25*time.Millisecond)
+	poller := queue.NewWithInterval(pools.ReadDB, pools.Write, handlers, 25*time.Millisecond)
 	poller.Start(ctx)
 	t.Cleanup(func() {
 		cancel()
@@ -88,7 +88,7 @@ func TestQueueFuzz(t *testing.T) {
 	})
 
 	staging := application.NewStagingArea()
-	promotionStore := sqlite.NewPromotionStore(pools.WriteHot, []sqlite.PromotionSink{sqlite.NewFTSSink(), sqlite.NewEmbedRefSink()})
+	promotionStore := sqlite.NewPromotionStore(pools.Write, []sqlite.PromotionSink{sqlite.NewFTSSink(), sqlite.NewEmbedRefSink()})
 	promoter := application.NewPromoter(staging, promotionStore)
 	actor := domain.Actor{ID: "service:queuefuzz", Kind: domain.ActorKindSystem}
 

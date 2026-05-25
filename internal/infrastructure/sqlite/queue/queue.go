@@ -42,7 +42,7 @@ type Poller struct {
 
 	// Pauser, when set and returning true, makes runKind skip its tick
 	// without consuming a row. Wired to the daemon's ScanTracker so the
-	// post-promotion queue yields the WriteHot lock while a cold scan
+	// post-promotion queue yields the Write lock while a cold scan
 	// is in flight (solov2-pc3). When nil the poller never pauses —
 	// production wiring sets it after New().
 	Pauser func() bool
@@ -110,7 +110,7 @@ func (p *Poller) runKind(ctx context.Context, kind WorkKind, handler WorkHandler
 		}
 
 		// Skip the tick if a cold scan is in flight — the post-
-		// promotion queue's work routinely takes the WriteHot lock
+		// promotion queue's work routinely takes the Write lock
 		// for tens-to-hundreds of ms per processOne, and contending
 		// with a serial cold-scan promote turns a 1-minute scan into
 		// a 9-minute one (solov2-pc3 pprof). The skip preserves the

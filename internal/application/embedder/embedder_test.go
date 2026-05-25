@@ -366,8 +366,8 @@ func TestWorker_BatchEmbedderUsedForMultipleRefs(t *testing.T) {
 // returns true, tick is a complete no-op (no FetchPending, no Embed, no
 // writes). When the pauser flips to false, the worker resumes and
 // drains the backlog. The contract matters because the daemon uses
-// this to keep the embedder off the WriteEmbed pool while a cold-scan
-// promotion is committing on WriteHot.
+// this to keep the embedder off the Write pool while a cold-scan
+// promotion is committing on Write.
 func TestWorker_PauserSkipsTick(t *testing.T) {
 	db := openSchemaDB(t)
 	repo := infsqlite.NewEmbeddingRefsRepo(db, db)
