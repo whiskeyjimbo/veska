@@ -3,6 +3,8 @@ package main
 import (
 	"context"
 	"fmt"
+	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -76,7 +78,12 @@ func installModel2vecCmd() *cobra.Command {
 				return fmt.Errorf("install model2vec: %w", err)
 			}
 			fmt.Fprintf(w, "Installed %s to %s\n", potionCode16M, dir)
-			fmt.Fprintln(w, "Restart the daemon to elect it as the embedder.")
+			// solov2-mel2: only print the restart hint when a daemon is
+			// likely running — on a fresh build there is no socket yet
+			// and the message confuses first-time users.
+			if _, statErr := os.Stat(filepath.Join(veskaHome, "mcp.sock")); statErr == nil {
+				fmt.Fprintln(w, "Restart the daemon to elect it as the embedder.")
+			}
 			return nil
 		},
 	}
