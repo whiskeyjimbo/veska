@@ -141,6 +141,12 @@ func doctorPostPromotionQueueCmd() *cobra.Command {
 				fmt.Fprintf(w, "  FAILED seq=%d repo=%s branch=%s kind=%s attempts=%d err=%s\n",
 					f.Seq, f.RepoID, f.Branch, f.WorkKind, f.Attempts, f.Error)
 			}
+			// solov2-261t: when the failed set includes rows pointing at
+			// deregistered repos, tell the operator what to run instead of
+			// leaving them to grep the error messages for "is not registered".
+			if report.OrphanCount > 0 {
+				fmt.Fprintf(w, "  hint: %d failed row(s) point at a deregistered repo — run `veska doctor post_promotion_queue --purge-orphans` to clear them\n", report.OrphanCount)
+			}
 			if report.Status != "healthy" {
 				return ProbeStatusError{Subsystem: "post_promotion_queue", Status: report.Status}
 			}
