@@ -535,7 +535,13 @@ func callMCP(ctx context.Context, method string, params any, out any) error {
 	const dialTimeout = 2 * time.Second
 	const dialBackoff = 200 * time.Millisecond
 	const dialAttempts = 3
-	const ioTimeout = 5 * time.Second
+	// solov2-d37i: the first call after `veska service start` (cold daemon)
+	// can take ~10s as SQLite opens, the embedder hot-loads, and registries
+	// fully initialise. The previous 5s ceiling occasionally tripped on
+	// eng_add_repo and the CLI fell through to the direct-write path with
+	// a confusing 'restart daemon' hint. 30s is well within human patience
+	// for a one-shot CLI call and absorbs the cold-start jitter.
+	const ioTimeout = 30 * time.Second
 
 	sockPath := config.MCPSockPath()
 	var (
