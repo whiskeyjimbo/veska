@@ -190,6 +190,42 @@ func TestColdScanReparser_IndexesNonIgnoredFiles(t *testing.T) {
 	}
 }
 
+// TestColdScanReparser_SkipsNonSourceNonManifest pins solov2-8x7r: the
+// walker only feeds the ingester files the parsers can read (.go, .ts,
+// .tsx) or known manifests downstream checks gate on (go.mod). README,
+// .yml, etc. are skipped so staging isn't bloated with empty parse
+// results.
+func TestColdScanReparser_SkipsNonSourceNonManifest(t *testing.T) {
+	root := t.TempDir()
+	writeFile(t, root, "a.go", "package a")
+	writeFile(t, root, "go.mod", "module example.com/x\n\ngo 1.22\n")
+	writeFile(t, root, "README.md", "# hi")
+	writeFile(t, root, "config.yaml", "k: v")
+	writeFile(t, root, "data.json", `{"k":"v"}`)
+	writeFile(t, root, "b.ts", "export const x = 1")
+
+	c := &captureFakes{}
+	rep := newReparser(t, c, "deadbeef")
+
+	if err := rep(context.Background(), RepoRecord{
+		RepoID:       "r1",
+		RootPath:     root,
+		ActiveBranch: "main",
+	}); err != nil {
+		t.Fatalf("reparser: %v", err)
+	}
+
+	got := c.savedPaths()
+	want := []string{
+		filepath.Join(root, "a.go"),
+		filepath.Join(root, "b.ts"),
+		filepath.Join(root, "go.mod"),
+	}
+	if !equalStringSlice(got, want) {
+		t.Fatalf("saved paths = %v, want %v (README/.yaml/.json must be filtered)", got, want)
+	}
+}
+
 // TestColdScanReparser_LogsStartAndComplete pins solov2-6ip: every scan
 // emits a 'cold scan: starting' INFO at entry and a 'cold scan: complete'
 // INFO at exit, with repo_id + git_sha + files_saved + elapsed. A newbie

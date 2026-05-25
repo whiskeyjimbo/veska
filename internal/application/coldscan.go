@@ -269,9 +269,48 @@ func walkAndSave(ctx context.Context, repo RepoRecord, ignore IgnoreMatcher, sav
 			return nil
 		}
 
+		// solov2-8x7r: skip files the parsers can't handle AND that aren't
+		// a known manifest some downstream check needs by basename
+		// (vuln-scan reads go.mod). Without this filter the cold scan
+		// staged a row for every README, .yml, .json, etc. — the result
+		// was a wide PromotionBatch.Files list that bloated staging and
+		// confused filename-gated checks.
+		if !isInterestingForStaging(path) {
+			return nil
+		}
+
 		save(ctx, repo.RepoID, repo.ActiveBranch, path, src)
 		return nil
 	})
+}
+
+// parseableExtensions enumerates the source-file extensions the wired
+// parsers know how to read. Keep in sync with the treesitter parsers
+// (treesitter.GoParser handles ".go"; TSParser handles ".ts" / ".tsx").
+// Centralising it here avoids a circular dependency between the
+// application layer and the parser adapter.
+var parseableExtensions = map[string]struct{}{
+	".go":  {},
+	".ts":  {},
+	".tsx": {},
+}
+
+// manifestBaseNames enumerates non-source files some structural check
+// gates on by basename. Currently only go.mod (vuln-scan); other entries
+// (package.json, Cargo.toml, …) can be added as scanners arrive.
+var manifestBaseNames = map[string]struct{}{
+	"go.mod": {},
+}
+
+// isInterestingForStaging reports whether a file should be fed to the
+// ingester. Returns true for any source file whose extension a parser
+// can read, or any manifest a downstream check gates on by basename.
+func isInterestingForStaging(path string) bool {
+	if _, ok := manifestBaseNames[filepath.Base(path)]; ok {
+		return true
+	}
+	_, ok := parseableExtensions[filepath.Ext(path)]
+	return ok
 }
 
 // isLikelyBinary reports whether src contains an embedded NUL in its first
