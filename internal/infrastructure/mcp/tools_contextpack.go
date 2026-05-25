@@ -41,9 +41,6 @@ func makeContextPackHandler(asm *contextpack.Assembler, repoRoot RepoRootFunc, r
 		if rpcErr := bindParams(raw, &p); rpcErr != nil {
 			return nil, rpcErr
 		}
-		if rpcErr := checkRequired("repo_id", p.RepoID); rpcErr != nil {
-			return nil, rpcErr
-		}
 		// Exactly one of symbol / task_id is required.
 		if (p.Symbol == "") == (p.TaskID == "") {
 			return nil, &RPCError{
@@ -51,7 +48,8 @@ func makeContextPackHandler(asm *contextpack.Assembler, repoRoot RepoRootFunc, r
 				Message: "exactly one of symbol or task_id is required",
 			}
 		}
-		repoID, rpcErr := resolveRepoID(ctx, repos, p.RepoID)
+		// solov2-ktz0: shim-injected cwd resolves repo_id when omitted.
+		repoID, rpcErr := resolveRepoIDFromParams(ctx, repos, raw, p.RepoID)
 		if rpcErr != nil {
 			return nil, rpcErr
 		}

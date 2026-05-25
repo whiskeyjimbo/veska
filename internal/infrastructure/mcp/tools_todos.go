@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"path/filepath"
+	"strings"
 
 	application "github.com/whiskeyjimbo/veska/internal/application"
 	"github.com/whiskeyjimbo/veska/internal/core/domain"
@@ -29,20 +31,35 @@ type TodosResponse struct {
 	Todos []TodoDTO `json:"todos"`
 }
 
-func todosToDTO(in []ports.TodoEntry) []TodoDTO {
+func todosToDTO(in []ports.TodoEntry, repoRoot string) []TodoDTO {
 	out := make([]TodoDTO, 0, len(in))
 	for _, e := range in {
 		out = append(out, TodoDTO{
 			FindingID: e.FindingID,
 			RepoID:    e.RepoID,
 			Branch:    e.Branch,
-			FilePath:  e.FilePath,
+			FilePath:  relativizeToRoot(e.FilePath, repoRoot),
 			Message:   e.Message,
 			State:     e.State,
 			CreatedAt: e.CreatedAt,
 		})
 	}
 	return out
+}
+
+// relativizeToRoot is the value-typed twin of relativizeFindingPath used by
+// list_findings: TodoDTO.FilePath is a plain string (todos always have a
+// path), but eng_find_todos and eng_list_findings must agree on the wire
+// convention — repo-relative (solov2-62gc / solov2-v7dq).
+func relativizeToRoot(path, root string) string {
+	if path == "" || root == "" || !filepath.IsAbs(path) {
+		return path
+	}
+	rel, err := filepath.Rel(root, path)
+	if err != nil || strings.HasPrefix(rel, "..") {
+		return path
+	}
+	return rel
 }
 
 // RegisterTodoTools registers eng_find_todos on r.
@@ -68,10 +85,8 @@ func makeFindTodosHandler(querier ports.TodoQuerier, repos application.RepoListe
 		if rpcErr := bindParams(raw, &p); rpcErr != nil {
 			return nil, rpcErr
 		}
-		if rpcErr := checkRequired("repo_id", p.RepoID); rpcErr != nil {
-			return nil, rpcErr
-		}
-		repoID, rpcErr := resolveRepoID(ctx, repos, p.RepoID)
+		// solov2-ktz0: shim-injected cwd resolves repo_id when omitted.
+		repoID, rpcErr := resolveRepoIDFromParams(ctx, repos, raw, p.RepoID)
 		if rpcErr != nil {
 			return nil, rpcErr
 		}
@@ -85,6 +100,14 @@ func makeFindTodosHandler(querier ports.TodoQuerier, repos application.RepoListe
 		if err != nil {
 			return nil, &RPCError{Code: CodeInternalError, Message: fmt.Sprintf("find todos: %v", err)}
 		}
-		return TodosResponse{Todos: todosToDTO(entries)}, nil
+		// solov2-v7dq: emit repo-relative file_path so eng_find_todos and
+		// eng_list_findings agree on shape per solov2-62gc.
+		var root string
+		if repos != nil {
+			if r, ok := repoRoot(ctx, repos, p.RepoID); ok {
+				root = r
+			}
+		}
+		return TodosResponse{Todos: todosToDTO(entries, root)}, nil
 	}
 }

@@ -41,10 +41,13 @@ func makeFindSymbolHandler(graph ports.GraphStorage, staging *application.Stagin
 		if err := json.Unmarshal(raw, &p); err != nil {
 			return nil, &RPCError{Code: CodeInvalidParams, Message: fmt.Sprintf("invalid params: %v", err)}
 		}
-		if rpcErr := checkRequired("symbol", p.Symbol, "repo_id", p.RepoID); rpcErr != nil {
+		if rpcErr := checkRequired("symbol", p.Symbol); rpcErr != nil {
 			return nil, rpcErr
 		}
-		repoID, rpcErr := resolveRepoID(ctx, repos, p.RepoID)
+		// solov2-ktz0: allow repo_id to be omitted when the shim-injected cwd
+		// matches a registered repo. Falls back to the single-repo case when
+		// only one repo is registered.
+		repoID, rpcErr := resolveRepoIDFromParams(ctx, repos, raw, p.RepoID)
 		if rpcErr != nil {
 			return nil, rpcErr
 		}

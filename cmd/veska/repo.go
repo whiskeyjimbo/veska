@@ -504,6 +504,33 @@ func dialRemoveRepo(ctx context.Context, repoID string) error {
 // straight through to the direct-write path even with the daemon up
 // (solov2-0cg). 2s per-attempt + 3 attempts = ~6s ceiling, still well
 // under any human-perceptible wait.
+
+// withCwdInjected adds a "cwd" field to params for eng_* methods so the
+// daemon can resolve repo_id from the caller's working directory when
+// omitted (solov2-ktz0). Non-eng_* methods and frames that already carry
+// cwd pass through unchanged.
+func withCwdInjected(method string, params any) any {
+	if !strings.HasPrefix(method, "eng_") {
+		return params
+	}
+	cwd, err := os.Getwd()
+	if err != nil || cwd == "" {
+		return params
+	}
+	if params == nil {
+		return map[string]any{"cwd": cwd}
+	}
+	m, ok := params.(map[string]any)
+	if !ok {
+		return params
+	}
+	if existing, _ := m["cwd"].(string); existing != "" {
+		return m
+	}
+	m["cwd"] = cwd
+	return m
+}
+
 func callMCP(ctx context.Context, method string, params any, out any) error {
 	const dialTimeout = 2 * time.Second
 	const dialBackoff = 200 * time.Millisecond
@@ -549,6 +576,12 @@ func callMCP(ctx context.Context, method string, params any, out any) error {
 		Method  string `json:"method"`
 		Params  any    `json:"params,omitempty"`
 	}
+	// solov2-ktz0 / solov2-zukc: inject cwd into eng_* params so the daemon
+	// can fall back to it when repo_id is omitted. Mirrors what veska-mcp
+	// does for editor-driven clients (cmd/veska-mcp/cwd_inject.go) — without
+	// this, CLI wrappers (veska symbol, veska context, …) would still have
+	// to plumb cwd themselves.
+	params = withCwdInjected(method, params)
 	body, err := json.Marshal(req{JSONRPC: "2.0", ID: 1, Method: method, Params: params})
 	if err != nil {
 		return fmt.Errorf("marshal request: %w", err)

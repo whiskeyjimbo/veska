@@ -106,10 +106,11 @@ func makeSearchSemanticHandler(svc *search.Service, rec *savings.Recorder, repos
 		if rpcErr := bindParams(raw, &p); rpcErr != nil {
 			return nil, rpcErr
 		}
-		if rpcErr := checkRequired("query", p.Query, "repo_id", p.RepoID); rpcErr != nil {
+		if rpcErr := checkRequired("query", p.Query); rpcErr != nil {
 			return nil, rpcErr
 		}
-		repoID, rpcErr := resolveRepoID(ctx, repos, p.RepoID)
+		// solov2-ktz0: fall back to shim-injected cwd when repo_id omitted.
+		repoID, rpcErr := resolveRepoIDFromParams(ctx, repos, raw, p.RepoID)
 		if rpcErr != nil {
 			return nil, rpcErr
 		}
@@ -180,10 +181,11 @@ func makeSearchSimilarHandler(lookup SimilarLookup, vectors ports.VectorStorage,
 		if rpcErr := bindParams(raw, &p); rpcErr != nil {
 			return nil, rpcErr
 		}
-		if rpcErr := checkRequired("node_id", p.NodeID, "repo_id", p.RepoID); rpcErr != nil {
+		if rpcErr := checkRequired("node_id", p.NodeID); rpcErr != nil {
 			return nil, rpcErr
 		}
-		repoID, rpcErr := resolveRepoID(ctx, repos, p.RepoID)
+		// solov2-ktz0: fall back to shim-injected cwd when repo_id omitted.
+		repoID, rpcErr := resolveRepoIDFromParams(ctx, repos, raw, p.RepoID)
 		if rpcErr != nil {
 			return nil, rpcErr
 		}
