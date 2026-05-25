@@ -340,7 +340,7 @@ func repoAddCmd() *cobra.Command {
 					return waitForScanComplete(ctx, w, id)
 				}
 				logPath := filepath.Join(config.DefaultVectorDir(), "logs", "daemon.log")
-				fmt.Fprintf(w, "  cold scan running in the background — `veska repo list` shows status (pass --wait to block here), `tail %s` shows progress\n", logPath)
+				fmt.Fprintf(w, "  cold scan running in the background — `veska repo list` shows status; re-run with `--wait` to block until it finishes, or `tail %s` for live progress\n", logPath)
 				return nil
 			}
 
