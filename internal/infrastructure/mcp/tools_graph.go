@@ -78,24 +78,28 @@ func RegisterGraphTools(r *Registry, graph ports.GraphStorage, staging *applicat
 		Name:            "eng_find_symbol",
 		Description:     "Find nodes by symbol name, with staging overlay for in-progress changes.",
 		IncludesStaging: true,
+		InputSchema:     findSymbolInputSchema,
 		Handler:         makeFindSymbolHandler(graph, staging, cfg.repos),
 	})
 	r.MustRegister(ToolSpec{
 		Name:            "eng_get_node",
 		Description:     "Get a single node by its ID. node_id is a content-hashed sha256 and globally unique, so repo_id and branch are optional — when omitted the lookup scans across all (repo, branch) pairs. Pass both to apply the staging overlay (only the scoped path can observe an uncommitted staged version).",
 		IncludesStaging: true,
+		InputSchema:     getNodeInputSchema,
 		Handler:         makeGetNodeHandler(graph, staging, cfg.repos),
 	})
 	r.MustRegister(ToolSpec{
 		Name:            "eng_get_call_chain",
 		Description:     "BFS traversal of CALLS edges up to a configurable depth from a start node. Pass either node_id (exact) or symbol (resolved via eng_find_symbol; rejected as ambiguous when multiple matches exist). Pass direction=out (default — callees), in (callers), or both. NOTE: calls inside anonymous functions assigned to struct fields (e.g. cobra Command{Run: func(...){...}} var initializers) are not currently captured by the tree-sitter extractor and will not appear as edges — falling back to eng_search_semantic or eng_find_symbol is recommended for that pattern (solov2-vkmi).",
 		IncludesStaging: false,
+		InputSchema:     getCallChainInputSchema,
 		Handler:         makeGetCallChainHandler(graph, resolve, cfg.repos),
 	})
 	r.MustRegister(ToolSpec{
 		Name:            "eng_get_file_nodes",
 		Description:     "Return all nodes for a file path (absolute, or repo-relative when repo_id is given); staged nodes take precedence when available.",
 		IncludesStaging: true,
+		InputSchema:     getFileNodesInputSchema,
 		Handler:         makeGetFileNodesHandler(graph, staging, cfg.repos),
 	})
 }

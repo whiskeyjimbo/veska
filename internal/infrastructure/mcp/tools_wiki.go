@@ -37,6 +37,7 @@ func RegisterWikiTools(r *Registry, svc *wiki.HotZoneService, repoRoot RepoRootF
 	r.MustRegister(ToolSpec{
 		Name:        "eng_get_hot_zone",
 		Description: "Return the top-N files ranked by change risk (recent change frequency multiplied by blast radius).",
+		InputSchema: hotZoneInputSchema,
 		Handler:     makeHotZoneHandler(svc, repoRoot, repos),
 	})
 }
@@ -58,6 +59,7 @@ func RegisterEntryPointsTool(r *Registry, svc *wiki.EntryPointsService, repos ap
 	r.MustRegister(ToolSpec{
 		Name:        "eng_get_entry_points",
 		Description: "Return low-risk symbols a newcomer or agent can safely start from (adjacent test, small blast radius, no open findings).",
+		InputSchema: entryPointsInputSchema,
 		Handler:     makeEntryPointsHandler(svc, repos),
 	})
 }

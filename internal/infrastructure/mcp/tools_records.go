@@ -19,18 +19,21 @@ func RegisterRecordTools(r *Registry, db *sql.DB, aw ports.AuditWriter) {
 		Name:            "eng_get_finding",
 		Description:     "Get a single finding by finding_id and branch.",
 		IncludesStaging: false,
+		InputSchema:     getFindingInputSchema,
 		Handler:         makeGetFindingHandler(db),
 	})
 	r.MustRegister(ToolSpec{
 		Name:            "eng_get_suppression",
 		Description:     "Get a single suppression by suppression_id.",
 		IncludesStaging: false,
+		InputSchema:     getSuppressionInputSchema,
 		Handler:         makeGetSuppressionHandler(db),
 	})
 	r.MustRegister(ToolSpec{
 		Name:            "eng_close_suppression",
 		Description:     "Terminate an active suppression now by setting expires_at to the current time.",
 		IncludesStaging: false,
+		InputSchema:     closeSuppressionInputSchema,
 		Handler:         makeCloseSuppressionHandler(db, aw),
 	})
 }

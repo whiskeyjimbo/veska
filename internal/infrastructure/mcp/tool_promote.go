@@ -80,6 +80,7 @@ func RegisterPromoteTool(r *Registry, deps PromoteDeps) {
 	r.MustRegister(ToolSpec{
 		Name:        "eng_promote_repo",
 		Description: "Re-stage and promote files changed in HEAD. Accepts repo_id (full or short) or root_path.",
+		InputSchema: promoteRepoInputSchema,
 		Handler:     makePromoteHandler(deps),
 	})
 }

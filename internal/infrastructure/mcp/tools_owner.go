@@ -23,6 +23,7 @@ func RegisterOwnerTools(r *Registry, db *sql.DB) {
 		Name:            "eng_find_owner",
 		Description:     "Find the owner of a file via CODEOWNERS lookup or git blame fallback.",
 		IncludesStaging: false,
+		InputSchema:     findOwnerInputSchema,
 		Handler:         makeFindOwnerHandler(db),
 	})
 }
