@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"path/filepath"
 	"strings"
+	"time"
 
 	application "github.com/whiskeyjimbo/veska/internal/application"
 	"github.com/whiskeyjimbo/veska/internal/core/domain"
@@ -107,6 +108,10 @@ type listFindingsParams struct {
 	Branch   string `json:"branch"`
 	State    string `json:"state,omitempty"`
 	Severity string `json:"severity,omitempty"`
+	// IncludeSuppressed surfaces findings hidden by an active suppression
+	// row. Default false matches the user expectation that
+	// eng_suppress_finding actually suppresses (solov2-2ye2).
+	IncludeSuppressed bool `json:"include_suppressed,omitempty"`
 }
 
 type findingRow struct {
@@ -125,6 +130,10 @@ type findingRow struct {
 	ClosedAt     *int64  `json:"closed_at,omitempty"`
 	ActorID      string  `json:"actor_id"`
 	ActorKind    string  `json:"actor_kind"`
+	// SuppressedBy carries the suppression_id when an active suppression
+	// is hiding this finding. Populated only when IncludeSuppressed=true
+	// (solov2-2ye2).
+	SuppressedBy *string `json:"suppressed_by,omitempty"`
 }
 
 func makeListFindingsHandler(db *sql.DB, repos application.RepoLister) ToolHandler {
@@ -156,17 +165,30 @@ func makeListFindingsHandler(db *sql.DB, repos application.RepoLister) ToolHandl
 			p.State = "open"
 		}
 
-		// branch is an optional filter; when omitted, list across all branches.
-		query := `SELECT finding_id, branch, repo_id, node_id, file_path, severity, source_layer,
-			rule, message, state, closed_reason, created_at, closed_at, actor_id, actor_kind
-			FROM findings WHERE repo_id = ? AND state = ?`
-		args := []any{p.RepoID, p.State}
+		// LEFT JOIN against active suppressions so we can either filter out
+		// suppressed findings (default) or surface them with a suppressed_by
+		// hint (when include_suppressed=true). An "active" suppression is one
+		// whose expires_at is NULL or in the future — eng_close_suppression
+		// terminates by setting expires_at = now (solov2-2ye2).
+		nowMS := time.Now().UnixMilli()
+		query := `SELECT f.finding_id, f.branch, f.repo_id, f.node_id, f.file_path, f.severity, f.source_layer,
+			f.rule, f.message, f.state, f.closed_reason, f.created_at, f.closed_at, f.actor_id, f.actor_kind,
+			s.suppression_id
+			FROM findings f
+			LEFT JOIN suppressions s
+			  ON s.scope = 'finding' AND s.target = f.finding_id
+			 AND (s.expires_at IS NULL OR s.expires_at > ?)
+			WHERE f.repo_id = ? AND f.state = ?`
+		args := []any{nowMS, p.RepoID, p.State}
+		if !p.IncludeSuppressed {
+			query += ` AND s.suppression_id IS NULL`
+		}
 		if p.Branch != "" {
-			query += ` AND branch = ?`
+			query += ` AND f.branch = ?`
 			args = append(args, p.Branch)
 		}
 		if p.Severity != "" {
-			query += ` AND severity = ?`
+			query += ` AND f.severity = ?`
 			args = append(args, p.Severity)
 		}
 
@@ -188,6 +210,7 @@ func makeListFindingsHandler(db *sql.DB, repos application.RepoLister) ToolHandl
 				&f.FindingID, &f.Branch, &f.RepoID, &f.NodeID, &f.FilePath,
 				&f.Severity, &f.SourceLayer, &f.Rule, &f.Message, &f.State,
 				&f.ClosedReason, &f.CreatedAt, &f.ClosedAt, &f.ActorID, &f.ActorKind,
+				&f.SuppressedBy,
 			); err != nil {
 				return nil, &RPCError{Code: CodeInternalError, Message: fmt.Sprintf("scan finding: %v", err)}
 			}

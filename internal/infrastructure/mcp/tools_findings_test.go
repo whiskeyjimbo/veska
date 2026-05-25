@@ -150,6 +150,26 @@ func newFindingsDB(t *testing.T) *sql.DB {
 	if err != nil {
 		t.Fatalf("create findings table: %v", err)
 	}
+	// Minimal suppressions table so eng_list_findings' LEFT JOIN compiles
+	// (solov2-2ye2). Tests that don't seed suppressions get the empty-join
+	// case automatically.
+	_, err = db.Exec(`
+		CREATE TABLE IF NOT EXISTS suppressions (
+			suppression_id TEXT PRIMARY KEY,
+			scope          TEXT NOT NULL,
+			target         TEXT NOT NULL,
+			branch         TEXT,
+			rule           TEXT,
+			reason         TEXT NOT NULL,
+			expires_at     INTEGER,
+			created_at     INTEGER NOT NULL,
+			actor_id       TEXT NOT NULL,
+			actor_kind     TEXT NOT NULL
+		)
+	`)
+	if err != nil {
+		t.Fatalf("create suppressions table: %v", err)
+	}
 	return db
 }
 
