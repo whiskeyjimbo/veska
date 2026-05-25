@@ -50,23 +50,33 @@ func makeGetFindingHandler(db *sql.DB) ToolHandler {
 		if rpcErr := bindParams(raw, &p); rpcErr != nil {
 			return nil, rpcErr
 		}
-		if rpcErr := checkRequired("finding_id", p.FindingID, "branch", p.Branch); rpcErr != nil {
+		if rpcErr := checkRequired("finding_id", p.FindingID); rpcErr != nil {
 			return nil, rpcErr
 		}
 
-		var f findingRow
-		err := db.QueryRowContext(ctx,
-			`SELECT finding_id, branch, repo_id, node_id, file_path, severity, source_layer,
+		// solov2-qwpt: finding_id is globally unique. Treat branch as an
+		// optional consistency hint — look the row up by id alone, then
+		// reject only when a supplied branch disagrees with the row.
+		query := `SELECT finding_id, branch, repo_id, node_id, file_path, severity, source_layer,
 				rule, message, state, closed_reason, created_at, closed_at, actor_id, actor_kind
-			   FROM findings WHERE finding_id = ? AND branch = ?`,
-			p.FindingID, p.Branch,
-		).Scan(
+			   FROM findings WHERE finding_id = ?`
+		args := []any{p.FindingID}
+		if p.Branch != "" {
+			query += ` AND branch = ?`
+			args = append(args, p.Branch)
+		}
+
+		var f findingRow
+		err := db.QueryRowContext(ctx, query, args...).Scan(
 			&f.FindingID, &f.Branch, &f.RepoID, &f.NodeID, &f.FilePath,
 			&f.Severity, &f.SourceLayer, &f.Rule, &f.Message, &f.State,
 			&f.ClosedReason, &f.CreatedAt, &f.ClosedAt, &f.ActorID, &f.ActorKind,
 		)
 		if err == sql.ErrNoRows {
-			return nil, &RPCError{Code: CodeNotFound, Message: fmt.Sprintf("finding not found: %s on branch %s", p.FindingID, p.Branch)}
+			if p.Branch != "" {
+				return nil, &RPCError{Code: CodeNotFound, Message: fmt.Sprintf("finding not found: %s on branch %s", p.FindingID, p.Branch)}
+			}
+			return nil, &RPCError{Code: CodeNotFound, Message: fmt.Sprintf("finding not found: %s", p.FindingID)}
 		}
 		if err != nil {
 			return nil, &RPCError{Code: CodeInternalError, Message: fmt.Sprintf("query finding: %v", err)}
