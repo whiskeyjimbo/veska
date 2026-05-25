@@ -109,11 +109,10 @@ func TestHotZone_ReturnsRankedData(t *testing.T) {
 	}
 }
 
-// TestHotZone_EmptyZonesSurfacesDegradedReason guards solov2-636y: when
-// ranking returns no zones (the common cause is "no commits have landed
-// since this repo was registered"), the response carries
-// degraded_reasons=["no_post_registration_commits"] so callers don't have
-// to grep the wiki markdown for the explanation.
+// TestHotZone_EmptyZonesSurfacesDegradedReason guards solov2-636y/z5o0:
+// when ranking returns no zones because the change-count window is empty,
+// the response carries degraded_reasons=["no_recent_commits"] plus a
+// human-readable hint so callers don't have to grep the wiki markdown.
 func TestHotZone_EmptyZonesSurfacesDegradedReason(t *testing.T) {
 	edges := &blastFakeEdges{}
 	nodes := &blastFakeNodes{metas: map[string]ports.NodeMeta{}, byFile: map[string][]string{}}
@@ -138,8 +137,11 @@ func TestHotZone_EmptyZonesSurfacesDegradedReason(t *testing.T) {
 	if len(resp.Zones) != 0 {
 		t.Fatalf("expected zero zones, got %d", len(resp.Zones))
 	}
-	if len(resp.DegradedReasons) != 1 || resp.DegradedReasons[0] != "no_post_registration_commits" {
-		t.Fatalf("expected degraded_reasons=[no_post_registration_commits], got %v", resp.DegradedReasons)
+	if len(resp.DegradedReasons) != 1 || resp.DegradedReasons[0] != "no_recent_commits" {
+		t.Fatalf("expected degraded_reasons=[no_recent_commits], got %v", resp.DegradedReasons)
+	}
+	if resp.Hint == "" {
+		t.Fatalf("expected non-empty hint on empty zones, got %q", resp.Hint)
 	}
 }
 
