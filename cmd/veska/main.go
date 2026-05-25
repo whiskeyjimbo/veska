@@ -43,6 +43,7 @@ func newRootCmd() *cobra.Command {
 		dryMgr, _ = service.NewDryRun(exe+"-daemon", config.DefaultVectorDir())
 	}
 	root.AddCommand(serviceCmd(mgr, dryMgr))
+	root.AddCommand(configCmd(mgr))
 	root.AddCommand(upgradeCmd(mgr))
 	return root
 }
