@@ -3,6 +3,7 @@ package main
 import (
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/spf13/cobra"
 	"github.com/whiskeyjimbo/veska/internal/service"
@@ -59,6 +60,25 @@ func pick(mgr, dryMgr ServiceManager, dryRun bool) ServiceManager {
 	return mgr
 }
 
+// printServiceStarted reports the post-start state by polling Status briefly.
+// The supervisor returns from start before the unit transitions to active, so
+// without a short wait the pid is still 0 and the message reads "activating".
+func printServiceStarted(cmd *cobra.Command, mgr ServiceManager) {
+	deadline := time.Now().Add(2 * time.Second)
+	for {
+		st, err := mgr.Status(cmd.Context())
+		if err == nil && st.Running && st.PID != 0 {
+			fmt.Fprintf(cmd.OutOrStdout(), "service started: pid=%d (run 'veska service status' to verify)\n", st.PID)
+			return
+		}
+		if time.Now().After(deadline) {
+			fmt.Fprintln(cmd.OutOrStdout(), "service start requested (run 'veska service status' to verify)")
+			return
+		}
+		time.Sleep(150 * time.Millisecond)
+	}
+}
+
 func serviceInstallCmd(mgr, dryMgr ServiceManager) *cobra.Command {
 	var dryRun bool
 	cmd := &cobra.Command{
@@ -70,7 +90,13 @@ func serviceInstallCmd(mgr, dryMgr ServiceManager) *cobra.Command {
 			if useMgr == nil {
 				return errNoManager
 			}
-			return useMgr.Install(cmd.Context())
+			if err := useMgr.Install(cmd.Context()); err != nil {
+				return err
+			}
+			if !dryRun {
+				fmt.Fprintln(cmd.OutOrStdout(), "service installed (run 'veska service start' to start the daemon)")
+			}
+			return nil
 		},
 	}
 	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "print what would be done without making changes")
@@ -88,7 +114,13 @@ func serviceUninstallCmd(mgr, dryMgr ServiceManager) *cobra.Command {
 			if useMgr == nil {
 				return errNoManager
 			}
-			return useMgr.Uninstall(cmd.Context())
+			if err := useMgr.Uninstall(cmd.Context()); err != nil {
+				return err
+			}
+			if !dryRun {
+				fmt.Fprintln(cmd.OutOrStdout(), "service uninstalled")
+			}
+			return nil
 		},
 	}
 	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "print what would be done without making changes")
@@ -106,7 +138,13 @@ func serviceStartCmd(mgr, dryMgr ServiceManager) *cobra.Command {
 			if useMgr == nil {
 				return errNoManager
 			}
-			return useMgr.Start(cmd.Context())
+			if err := useMgr.Start(cmd.Context()); err != nil {
+				return err
+			}
+			if !dryRun {
+				printServiceStarted(cmd, useMgr)
+			}
+			return nil
 		},
 	}
 	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "print what would be done without making changes")
@@ -124,7 +162,13 @@ func serviceStopCmd(mgr, dryMgr ServiceManager) *cobra.Command {
 			if useMgr == nil {
 				return errNoManager
 			}
-			return useMgr.Stop(cmd.Context())
+			if err := useMgr.Stop(cmd.Context()); err != nil {
+				return err
+			}
+			if !dryRun {
+				fmt.Fprintln(cmd.OutOrStdout(), "service stopped")
+			}
+			return nil
 		},
 	}
 	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "print what would be done without making changes")
@@ -142,7 +186,13 @@ func serviceRestartCmd(mgr, dryMgr ServiceManager) *cobra.Command {
 			if useMgr == nil {
 				return errNoManager
 			}
-			return useMgr.Restart(cmd.Context())
+			if err := useMgr.Restart(cmd.Context()); err != nil {
+				return err
+			}
+			if !dryRun {
+				printServiceStarted(cmd, useMgr)
+			}
+			return nil
 		},
 	}
 	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "print what would be done without making changes")
