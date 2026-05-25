@@ -1,13 +1,17 @@
 package main
 
 import (
+	"context"
 	"fmt"
+	"log/slog"
 	"time"
 
+	"github.com/whiskeyjimbo/veska/internal/application/checks"
 	"github.com/whiskeyjimbo/veska/internal/config"
 	"github.com/whiskeyjimbo/veska/internal/core/ports"
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/vulnsource"
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/vulnsource/osv"
+	"github.com/whiskeyjimbo/veska/internal/repo"
 )
 
 // checkVulnProvider gates daemon startup on the [vuln_source] provider.
@@ -54,4 +58,53 @@ func vulnRefreshInterval(cfg config.Config) time.Duration {
 		return 0
 	}
 	return d
+}
+
+// scanAllReposForVuln runs the vuln-scan check against every registered repo
+// using the captured *VulnScanCheck and FindingStorage. Wired as the
+// Refresher's first-refresh-ok callback so a freshly enabled [vuln_source]
+// (or a freshly started daemon catching up on a stale cache) doesn't leave
+// existing repos at "0 findings" until their next commit (solov2-jtl5.4).
+//
+// Per-repo failures are logged and swallowed — the sweep is best-effort and
+// must never crash the refresher goroutine. The active branch falls back to
+// "main" so a repo that hasn't been promoted yet (active_branch="") still
+// gets scanned.
+func (d *Daemon) scanAllReposForVuln(ctx context.Context) {
+	if d.vulnScanCheck == nil || d.findings == nil {
+		return
+	}
+	records, err := repo.List(ctx, d.pools.ReadDB)
+	if err != nil {
+		slog.Warn("vuln-scan: scan-all-repos: list failed", "err", err)
+		return
+	}
+	scanned := 0
+	for _, rec := range records {
+		branch := rec.ActiveBranch
+		if branch == "" {
+			branch = "main"
+		}
+		out, runErr := d.vulnScanCheck.Run(ctx, checks.Input{
+			RepoID: rec.RepoID,
+			Branch: branch,
+		})
+		if runErr != nil {
+			slog.Warn("vuln-scan: scan-all-repos: check run failed",
+				"repo_id", rec.RepoID, "err", runErr)
+			continue
+		}
+		for _, f := range out {
+			if f == nil {
+				continue
+			}
+			if saveErr := d.findings.Save(ctx, f); saveErr != nil {
+				slog.Warn("vuln-scan: scan-all-repos: persist finding failed",
+					"repo_id", rec.RepoID, "err", saveErr)
+			}
+		}
+		scanned++
+	}
+	slog.Info("vuln-scan: scan-all-repos complete",
+		"repos_scanned", scanned, "repos_total", len(records))
 }

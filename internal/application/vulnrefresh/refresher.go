@@ -38,6 +38,13 @@ var ErrMissingDependency = errors.New("vulnrefresh: missing required dependency"
 type Refresher struct {
 	source   ports.VulnSource
 	interval time.Duration
+
+	// onFirstRefreshOk fires exactly once, after the first successful Refresh.
+	// Wired by the daemon to kick a one-shot vuln-scan pass over every
+	// registered repo so the cache going hot doesn't leave existing repos
+	// stuck at "scanned with empty cache → 0 findings" (solov2-jtl5.4).
+	onFirstRefreshOk func(context.Context)
+	firstRefreshDone bool
 }
 
 // Option configures a Refresher.
@@ -52,6 +59,14 @@ func WithInterval(d time.Duration) Option {
 			r.interval = d
 		}
 	}
+}
+
+// WithOnFirstRefreshOk registers a callback fired exactly once, on the first
+// successful Refresh. The daemon uses it to trigger a scan-all-repos sweep so
+// repos that were promoted while the OSV advisory cache was still cold get
+// their findings retroactively (solov2-jtl5.4). A nil callback is a no-op.
+func WithOnFirstRefreshOk(cb func(context.Context)) Option {
+	return func(r *Refresher) { r.onFirstRefreshOk = cb }
 }
 
 // NewRefresher constructs a Refresher. The VulnSource is required: a nil
@@ -75,6 +90,16 @@ func NewRefresher(source ports.VulnSource, opts ...Option) (*Refresher, error) {
 // Interval reports the resolved refresh cadence. Exposed for tests and for
 // callers that want to log the effective schedule.
 func (r *Refresher) Interval() time.Duration { return r.interval }
+
+// SetOnFirstRefreshOk installs the first-refresh-ok callback after construction.
+// Equivalent to WithOnFirstRefreshOk but usable from sites that get the
+// Refresher fully built (e.g. the daemon composition root, where the callback
+// closes over the Daemon struct that doesn't exist at NewRefresher time).
+// Calling this after the first refresh has already completed is a no-op —
+// the firing was a one-shot.
+func (r *Refresher) SetOnFirstRefreshOk(cb func(context.Context)) {
+	r.onFirstRefreshOk = cb
+}
 
 // Run blocks, refreshing the advisory cache once immediately and then on every
 // tick of the configured interval. It returns when ctx is cancelled. A Refresh
@@ -119,4 +144,10 @@ func (r *Refresher) refresh(ctx context.Context) {
 	slog.Info("vulnrefresh: refresh complete",
 		"elapsed_ms", time.Since(start).Milliseconds(),
 	)
+	if !r.firstRefreshDone {
+		r.firstRefreshDone = true
+		if r.onFirstRefreshOk != nil {
+			r.onFirstRefreshOk(ctx)
+		}
+	}
 }
