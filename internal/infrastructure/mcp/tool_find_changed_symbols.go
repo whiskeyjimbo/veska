@@ -41,6 +41,7 @@ func RegisterChangedSymbolsTool(r *Registry, svc *changedsymbols.Service, repoRo
 		Name:            "eng_find_changed_symbols",
 		Description:     "Report symbols added/removed/modified between two git refs (ref_a=base, ref_b=tip) by parsing the changed files at each ref. ref_a/ref_b default to HEAD~1/HEAD (the last commit) when both are omitted.",
 		IncludesStaging: false,
+		InputSchema:     findChangedSymbolsInputSchema,
 		Handler:         makeChangedSymbolsHandler(svc, repoRoot, repos),
 	})
 }

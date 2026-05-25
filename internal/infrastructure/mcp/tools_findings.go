@@ -26,12 +26,14 @@ func RegisterFindingTools(r *Registry, db *sql.DB, aw ports.AuditWriter, repos a
 		Name:            "eng_list_findings",
 		Description:     "List findings for a repo and branch, optionally filtered by state or severity.",
 		IncludesStaging: false,
+		InputSchema:     listFindingsInputSchema,
 		Handler:         makeListFindingsHandler(db, repos),
 	})
 	r.MustRegister(ToolSpec{
 		Name:            "eng_reopen_finding",
 		Description:     "Reopen a previously closed finding by ID.",
 		IncludesStaging: false,
+		InputSchema:     reopenFindingInputSchema,
 		Handler:         makeReopenFindingHandler(db, aw),
 	})
 }

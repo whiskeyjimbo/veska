@@ -69,6 +69,7 @@ func RegisterTodoTools(r *Registry, querier ports.TodoQuerier, repos application
 		Name:            "eng_find_todos",
 		Description:     "List parser-detected TODO/FIXME markers for the given (repo, branch).",
 		IncludesStaging: false,
+		InputSchema:     findTodosInputSchema,
 		Handler:         makeFindTodosHandler(querier, repos),
 	})
 }

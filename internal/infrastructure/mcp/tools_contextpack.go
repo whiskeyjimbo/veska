@@ -18,6 +18,7 @@ func RegisterContextPackTool(r *Registry, asm *contextpack.Assembler, repoRoot R
 	r.MustRegister(ToolSpec{
 		Name:        "eng_get_context_pack",
 		Description: "Return a token-bounded JSON bundle of relevant nodes, recent commits, open findings and tasks for a symbol or a task.",
+		InputSchema: contextPackInputSchema,
 		Handler:     makeContextPackHandler(asm, repoRoot, repos),
 	})
 }
