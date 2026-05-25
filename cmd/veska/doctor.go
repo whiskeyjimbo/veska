@@ -493,6 +493,85 @@ func doctorConfigCmd() *cobra.Command {
 	return cmd
 }
 
+// statusRollupInputs is the pure-data input to computeStatusRollup. It carries
+// every per-subsystem signal the rollup considers, including the embedding
+// backlog snapshot (solov2-34rl) which is surfaced but NOT permitted to
+// promote the rollup status — see computeStatusRollup for the contract.
+type statusRollupInputs struct {
+	EmbedderStatus   string
+	EgressStatus     string
+	ConfigStatus     string
+	IngestionStatus  string
+	IngestionDetail  string
+	QueueStatus      string
+	QueueDetail      string
+	DaemonNotRunning bool
+	EmbeddingBacklog doctor.EmbeddingBacklogReport
+}
+
+// statusRollupJSONData is the JSON payload shape inside the `data` field of
+// the `doctor status --json` envelope.
+type statusRollupJSONData struct {
+	Embedder         string `json:"embedder"`
+	Egress           string `json:"egress"`
+	Config           string `json:"config"`
+	Ingestion        string `json:"ingestion"`
+	IngestionDetail  string `json:"ingestion_detail,omitempty"`
+	Queue            string `json:"queue"`
+	QueueDetail      string `json:"queue_detail,omitempty"`
+	EmbeddingBacklog string `json:"embedding_backlog"`
+	PendingEmbeds    int    `json:"pending_embeds"`
+}
+
+// computeStatusRollup decides the rollup status from the per-subsystem signals.
+//
+// Rollup precedence (highest wins): broken > degraded > stopped > healthy.
+//
+// solov2-34rl: the embedding_backlog signal is INTENTIONALLY OMITTED from
+// rollup classification. A non-zero backlog drives `eng_get_status`'s
+// `degraded_reasons:[embeddings_pending]` because agents need that signal to
+// pick between semantic and lexical search paths — but the daemon (embedder
+// worker, queue, ingestion) is still healthy, work just isn't finished. A
+// junior running `veska doctor` wants a go/no-go on the daemon, not a
+// warmup-aware classification. The backlog is reported in the formatted
+// output and the JSON payload as a separate field so both surfaces agree on
+// the count (matching the README contract for `eng_search_semantic`).
+func computeStatusRollup(in statusRollupInputs) string {
+	statuses := []string{
+		in.EmbedderStatus, in.EgressStatus, in.ConfigStatus,
+		in.IngestionStatus, in.QueueStatus,
+	}
+	rollup := "healthy"
+	for _, s := range statuses {
+		switch s {
+		case "broken":
+			rollup = "broken"
+		case "degraded":
+			if rollup != "broken" {
+				rollup = "degraded"
+			}
+		case "stopped":
+			if rollup == "healthy" {
+				rollup = "stopped"
+			}
+		}
+	}
+	return rollup
+}
+
+// backlogLabel renders the embedding backlog summary for the textual doctor
+// output. Format examples:
+//
+//	embedding_backlog=drained
+//	embedding_backlog=backfilling (6480 pending)
+//	embedding_backlog=unknown
+func backlogLabel(r doctor.EmbeddingBacklogReport) string {
+	if r.Status == "backfilling" {
+		return fmt.Sprintf("embedding_backlog=backfilling (%d pending)", r.Pending)
+	}
+	return "embedding_backlog=" + r.Status
+}
+
 // doctorStatusCmd returns the "doctor status" subcommand that rolls up all probes.
 func doctorStatusCmd() *cobra.Command {
 	var jsonOut bool
@@ -522,6 +601,11 @@ func doctorStatusCmd() *cobra.Command {
 					queueDetail = fmt.Sprintf("queue: %d failed row(s), %d state bucket(s)", len(qr.FailedRows), len(qr.Counts))
 				}
 			}
+
+			// solov2-34rl: surface embedder backfill depth so doctor and
+			// eng_get_status agree on the number. The backlog is informational
+			// — it does NOT promote the rollup. See computeStatusRollup.
+			backlog := probeEmbeddingBacklog(context.Background(), home)
 
 			// Compute egress status: broken if any socket is missing. Track
 			// whether BOTH sockets are missing — that is the unambiguous
@@ -558,43 +642,31 @@ func doctorStatusCmd() *cobra.Command {
 			// Storage is always healthy (no failure mode currently).
 			_ = storageReport
 
-			// Roll up: broken if any broken; degraded if any degraded.
-			statuses := []string{embedderResult.Status, egressStatus, configStatus, ingestionStatus, queueStatus}
-			rollup := "healthy"
-			for _, s := range statuses {
-				switch s {
-				case "broken":
-					rollup = "broken"
-				case "degraded":
-					if rollup != "broken" {
-						rollup = "degraded"
-					}
-				case "stopped":
-					if rollup == "healthy" {
-						rollup = "stopped"
-					}
-				}
+			inputs := statusRollupInputs{
+				EmbedderStatus:   embedderResult.Status,
+				EgressStatus:     egressStatus,
+				ConfigStatus:     configStatus,
+				IngestionStatus:  ingestionStatus,
+				IngestionDetail:  ingestionDetail,
+				QueueStatus:      queueStatus,
+				QueueDetail:      queueDetail,
+				DaemonNotRunning: daemonNotRunning,
+				EmbeddingBacklog: backlog,
 			}
+			rollup := computeStatusRollup(inputs)
 
 			if jsonOut {
-				type statusRollupData struct {
-					Embedder        string `json:"embedder"`
-					Egress          string `json:"egress"`
-					Config          string `json:"config"`
-					Ingestion       string `json:"ingestion"`
-					IngestionDetail string `json:"ingestion_detail,omitempty"`
-					Queue           string `json:"queue"`
-					QueueDetail     string `json:"queue_detail,omitempty"`
-				}
 				enc := json.NewEncoder(cmd.OutOrStdout())
-				return enc.Encode(doctor.NewEnvelope("status", rollup, statusRollupData{
-					Embedder:        embedderResult.Status,
-					Egress:          egressStatus,
-					Config:          configStatus,
-					Ingestion:       ingestionStatus,
-					IngestionDetail: ingestionDetail,
-					Queue:           queueStatus,
-					QueueDetail:     queueDetail,
+				return enc.Encode(doctor.NewEnvelope("status", rollup, statusRollupJSONData{
+					Embedder:         inputs.EmbedderStatus,
+					Egress:           inputs.EgressStatus,
+					Config:           inputs.ConfigStatus,
+					Ingestion:        inputs.IngestionStatus,
+					IngestionDetail:  inputs.IngestionDetail,
+					Queue:            inputs.QueueStatus,
+					QueueDetail:      inputs.QueueDetail,
+					EmbeddingBacklog: backlog.Status,
+					PendingEmbeds:    backlog.Pending,
 				}))
 			}
 			detail := ""
@@ -609,6 +681,7 @@ func doctorStatusCmd() *cobra.Command {
 				}
 				detail += queueDetail
 			}
+			backlogStr := backlogLabel(backlog)
 			// solov2-e141: when the daemon is down, lead with that fact and
 			// flag the other subsystem labels as on-disk checks. Their
 			// 'healthy' (embedder weights present, config readable, DB query
@@ -622,12 +695,12 @@ func doctorStatusCmd() *cobra.Command {
 				// When another subsystem is independently broken, the rollup
 				// (and lead) is still "broken" — a real fault.
 				fmt.Fprintf(cmd.OutOrStdout(), "status: %s — daemon is not running (egress=%s)\n", rollup, egressStatus)
-				fmt.Fprintf(cmd.OutOrStdout(), "  on-disk checks (independent of daemon): embedder=%s, config=%s, ingestion=%s, queue=%s%s\n",
-					embedderResult.Status, configStatus, ingestionStatus, queueStatus, detail)
+				fmt.Fprintf(cmd.OutOrStdout(), "  on-disk checks (independent of daemon): embedder=%s, config=%s, ingestion=%s, queue=%s, %s%s\n",
+					embedderResult.Status, configStatus, ingestionStatus, queueStatus, backlogStr, detail)
 				fmt.Fprintln(cmd.OutOrStdout(), "  hint: start it with `veska service start` (or `veska-daemon &` for a quick try)")
 			} else {
-				fmt.Fprintf(cmd.OutOrStdout(), "status: %s (embedder=%s, egress=%s, config=%s, ingestion=%s, queue=%s)%s\n",
-					rollup, embedderResult.Status, egressStatus, configStatus, ingestionStatus, queueStatus, detail)
+				fmt.Fprintf(cmd.OutOrStdout(), "status: %s (embedder=%s, egress=%s, config=%s, ingestion=%s, queue=%s, %s)%s\n",
+					rollup, embedderResult.Status, egressStatus, configStatus, ingestionStatus, queueStatus, backlogStr, detail)
 			}
 			// "stopped" reports a benign operator state (daemon never
 			// started, no broken marker) and uses the same exit semantics as
@@ -643,6 +716,23 @@ func doctorStatusCmd() *cobra.Command {
 	}
 	cmd.Flags().BoolVar(&jsonOut, "json", false, "output results as JSON")
 	return cmd
+}
+
+// probeEmbeddingBacklog opens the local sqlite DB and runs the embedding
+// backlog probe. Falls back to an "unknown" report if the DB cannot be
+// opened (e.g. fresh `veska init` hasn't created it yet, or the daemon
+// holds the lock) — never returns an error, since this signal is purely
+// informational (solov2-34rl).
+func probeEmbeddingBacklog(ctx context.Context, home string) doctor.EmbeddingBacklogReport {
+	db, closeFn, err := openLocalDB()
+	if err != nil {
+		return doctor.EmbeddingBacklogReport{Status: "unknown"}
+	}
+	defer closeFn()
+	refs := sqlite.NewEmbeddingRefsRepo(db, db)
+	rep, _ := doctor.CheckEmbeddingBacklog(ctx, refs)
+	_ = home
+	return rep
 }
 
 // checkIngestion inspects the repos table for never-promoted entries
