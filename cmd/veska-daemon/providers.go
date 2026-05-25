@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"strings"
 	"sync"
 
 	"github.com/whiskeyjimbo/veska/internal/application"
@@ -255,19 +256,44 @@ type configProvider struct {
 // no secret fields today (OllamaURL is a local, unauthenticated URL); should a
 // credential field be added later, redact it here before returning.
 func (cp *configProvider) Config(_ context.Context) (map[string]any, error) {
+	embedder := elect.Marker(cp.cfg.VeskaHome)
+	// solov2-ebvg: cfg.EmbedModel is only populated when the operator
+	// explicitly sets VESKA_EMBED_MODEL (Ollama path). For the default
+	// model2vec/static path it's "", which surfaces as an empty field
+	// even though `embedder` carries the model id. Derive the model name
+	// from the embedder marker when the explicit field is empty so the
+	// two columns stay consistent.
+	embedModel := cp.cfg.EmbedModel
+	if embedModel == "" {
+		embedModel = modelNameFromMarker(embedder)
+	}
 	return map[string]any{
 		"veska_home":     cp.cfg.VeskaHome,
 		"sqlite_path":    cp.cfg.SQLitePath,
 		"cli_sock":       cp.cfg.CLISockPath,
 		"mcp_sock":       cp.cfg.MCPSockPath,
 		"vector_backend": string(cp.cfg.VectorBackend),
-		"embedder":       elect.Marker(cp.cfg.VeskaHome),
+		"embedder":       embedder,
 		"ollama_url":     cp.cfg.OllamaURL,
-		"embed_model":    cp.cfg.EmbedModel,
+		"embed_model":    embedModel,
 		// config_schema_version is the version of THIS config payload's
 		// shape — distinct from eng_get_status's schema_version, which is
 		// the SQLite migration version of the data store (solov2-d2x).
 		"config_schema_version": 1,
 		"degraded_reasons":      []string{},
 	}, nil
+}
+
+// modelNameFromMarker extracts the model name from an embedder marker
+// like "model2vec(potion-code-16M)" → "potion-code-16M". Returns the
+// whole marker on no parens (e.g. "static-v2"), and "" for an empty
+// input. Lives here, not on elect, because it's a presentation concern
+// specific to eng_get_config's wire shape (solov2-ebvg).
+func modelNameFromMarker(marker string) string {
+	open := strings.IndexByte(marker, '(')
+	close := strings.LastIndexByte(marker, ')')
+	if open >= 0 && close > open {
+		return marker[open+1 : close]
+	}
+	return marker
 }
