@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	application "github.com/whiskeyjimbo/veska/internal/application"
 	"github.com/whiskeyjimbo/veska/internal/core/domain"
 )
 
@@ -126,11 +127,22 @@ type findingRow struct {
 	ActorKind    string  `json:"actor_kind"`
 }
 
-func makeListFindingsHandler(db *sql.DB) ToolHandler {
+func makeListFindingsHandler(db *sql.DB, repos application.RepoLister) ToolHandler {
 	return func(ctx context.Context, _ domain.Actor, raw json.RawMessage) (any, *RPCError) {
 		var p listFindingsParams
 		if rpcErr := bindParams(raw, &p); rpcErr != nil {
 			return nil, rpcErr
+		}
+		// solov2-ig2x: fall back to a cwd-injected hint when repo_id is
+		// omitted, matching the other repo-scoped query tools. A nil
+		// RepoLister preserves the old "repo_id is required" behaviour so
+		// test sites that don't care about resolution can still pass nil.
+		if p.RepoID == "" && repos != nil {
+			resolved, rpcErr := resolveRepoIDFromParams(ctx, repos, raw, "")
+			if rpcErr != nil {
+				return nil, rpcErr
+			}
+			p.RepoID = resolved
 		}
 		if rpcErr := checkRequired("repo_id", p.RepoID); rpcErr != nil {
 			return nil, rpcErr

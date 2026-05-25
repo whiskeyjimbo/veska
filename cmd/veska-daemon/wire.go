@@ -846,7 +846,7 @@ func registerMCPTools(r *mcp.Registry, d mcpDeps) {
 	pools := d.pools
 
 	// Tools that only need *sql.DB + AuditWriter.
-	mcp.RegisterFindingTools(r, pools.WriteHot, nil)
+	mcp.RegisterFindingTools(r, pools.WriteHot, nil, &repoLister{db: pools.ReadDB})
 	mcp.RegisterSuppressionTools(r, pools.WriteHot, nil, &repoLister{db: pools.ReadDB})
 	mcp.RegisterRecordTools(r, pools.WriteHot, nil)
 	reg := d.regSvc
