@@ -130,7 +130,7 @@ func findingsListCmd() *cobra.Command {
 	cmd.Flags().StringVar(&repoFlag, "repo", "", "repo id or short_id (default: the sole registered repo)")
 	cmd.Flags().StringVar(&state, "state", "", "filter by state (open|closed; default open)")
 	cmd.Flags().StringVar(&severity, "severity", "", "filter by severity")
-	cmd.Flags().StringVar(&rule, "rule", "", "filter by rule (e.g. vuln, dead-code, secret_leak, auto-link)")
+	cmd.Flags().StringVar(&rule, "rule", "", "filter by rule (e.g. vulnerable_dependency, dead-code, secret_leak, auto-link)")
 	cmd.Flags().IntVar(&limit, "limit", 25, "maximum rows to print (0 = no limit)")
 	cmd.Flags().BoolVar(&jsonOut, "json", false, "emit JSON")
 	return cmd
