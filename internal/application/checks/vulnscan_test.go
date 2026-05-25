@@ -68,8 +68,8 @@ func TestVulnScanCheck_GoModTouched_EmitsFindings(t *testing.T) {
 		if f.SourceLayer != domain.LayerSecurity {
 			t.Errorf("source_layer = %q, want security", f.SourceLayer)
 		}
-		if f.Rule != "vuln" {
-			t.Errorf("rule = %q, want vuln", f.Rule)
+		if f.Rule != "vulnerable_dependency" {
+			t.Errorf("rule = %q, want vulnerable_dependency", f.Rule)
 		}
 		if f.FilePath == nil || *f.FilePath != "go.mod" {
 			t.Errorf("file anchor = %v, want go.mod", f.FilePath)
