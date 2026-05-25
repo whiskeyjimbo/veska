@@ -17,9 +17,13 @@ they reason from the same structural ground truth instead of guessing.
 - **Promotion checks.** On every commit, synchronous checks emit advisory
   `Finding`s: dead code, contract drift, leaked secrets, and — opt-in —
   vulnerable `go.mod` dependencies via the OSV.dev advisory database. The
-  vuln check is gated behind a `[vuln_source]` config block (see
+  vuln check is gated behind a `[vuln_source]` config block in
+  `~/.veska/config.toml` (see
   [`docs/operations/CONFIG-SURFACE.md`](docs/operations/CONFIG-SURFACE.md));
-  the other three ship on by default.
+  the other three ship on by default. **Lifecycle:** the block is read at
+  daemon start, so add it before `veska service start` (or restart the
+  service after editing). New scans pick it up automatically; to scan
+  already-promoted repos retroactively, run `veska reindex <path>`.
 - **Optional LLM review.** An off-by-default post-promotion review pipeline.
 - **Mechanical wiki.** Hot-zones and entry-points computed from the graph,
   no LLM in the path. The `eng_get_hot_zone` and `eng_get_entry_points`

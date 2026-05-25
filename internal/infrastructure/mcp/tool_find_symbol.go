@@ -118,6 +118,7 @@ func makeFindSymbolHandler(graph ports.GraphStorage, staging *application.Stagin
 		return GraphResponse{
 			Nodes:           nodesToDTO(result),
 			IncludedStaging: includedStaging,
+			DegradedReasons: []string{},
 		}, nil
 	}
 }

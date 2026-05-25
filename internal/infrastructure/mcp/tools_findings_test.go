@@ -561,6 +561,51 @@ func TestListFindings_AcceptsShortID(t *testing.T) {
 	}
 }
 
+// seedFindingRule inserts a finding with an explicit rule so tests can
+// exercise the rule filter (solov2-c7sy).
+func seedFindingRule(t *testing.T, db *sql.DB, findingID, branch, repoID, severity, state, rule string) {
+	t.Helper()
+	_, err := db.Exec(`
+		INSERT INTO findings
+			(finding_id, branch, repo_id, node_id, file_path, severity, source_layer, rule, message, state, created_at, actor_id, actor_kind)
+		VALUES (?, ?, ?, NULL, 'main.go', ?, 'security', ?, 'test message', ?, ?, 'actor:seed', 'human')
+	`, findingID, branch, repoID, severity, rule, state, time.Now().Unix())
+	if err != nil {
+		t.Fatalf("seed finding: %v", err)
+	}
+}
+
+// TestListFindings_RuleFilter pins solov2-c7sy: the rule param must narrow
+// results to that rule. Before the fix the param was silently ignored and
+// the full unfiltered list came back.
+func TestListFindings_RuleFilter(t *testing.T) {
+	db := newFindingsDB(t)
+	seedFindingRule(t, db, "vuln-f", "main", "repo-1", "high", "open", "vuln")
+	seedFindingRule(t, db, "dead-f", "main", "repo-1", "low", "open", "dead-code")
+	seedFindingRule(t, db, "secret-f", "main", "repo-1", "high", "open", "secret_leak")
+
+	r := NewRegistry()
+	RegisterFindingTools(r, db, nil, nil)
+
+	actor := domain.Actor{ID: "agent:bot", Kind: domain.ActorKindAgent}
+	result, rpcErr := dispatchListFindings(t, r, actor, map[string]string{
+		"repo_id": "repo-1",
+		"branch":  "main",
+		"rule":    "vuln",
+	})
+	if rpcErr != nil {
+		t.Fatalf("unexpected RPC error: %v", rpcErr.Message)
+	}
+	m := result.(map[string]any)
+	findings, _ := m["findings"].([]findingRow)
+	if len(findings) != 1 {
+		t.Fatalf("expected 1 vuln finding, got %d", len(findings))
+	}
+	if findings[0].Rule != "vuln" {
+		t.Errorf("expected rule=vuln, got %q", findings[0].Rule)
+	}
+}
+
 func TestListFindings_SeverityFilter(t *testing.T) {
 	db := newFindingsDB(t)
 	seedFinding(t, db, "low-f", "main", "repo-1", "low", "open")

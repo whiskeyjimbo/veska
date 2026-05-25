@@ -23,7 +23,8 @@ func resolveRepoFromCWD(ctx context.Context) (string, error) {
 	}
 	var res struct {
 		Repo struct {
-			RepoID string `json:"repo_id"`
+			RepoID   string `json:"repo_id"`
+			RootPath string `json:"root_path"`
 		} `json:"repo"`
 	}
 	if err := callMCP(ctx, "eng_get_current_repo", map[string]any{"cwd": cwd}, &res); err != nil {
@@ -31,6 +32,43 @@ func resolveRepoFromCWD(ctx context.Context) (string, error) {
 		return "", nil
 	}
 	return res.Repo.RepoID, nil
+}
+
+// autoResolveRepo wraps resolveRepoFromCWD with a stderr breadcrumb so the
+// user is never surprised when --repo defaulted to a repo other than the
+// one they were thinking of. Multi-repo silent fallback was the
+// #1 first-impression bug in the junior-journey walk-through (solov2-dqwh).
+// errOut may be nil to suppress the hint (e.g. JSON-output paths where a
+// stray stderr line could clutter pipelines — callers there pay the
+// no-hint cost knowingly).
+func autoResolveRepo(ctx context.Context, errOut io.Writer) string {
+	rid, _ := resolveRepoFromCWD(ctx)
+	if rid == "" {
+		return ""
+	}
+	// Only emit the hint when we know there's more than one repo to choose
+	// between — solo-repo users don't need the noise.
+	var list struct {
+		Repos []struct {
+			RepoID   string `json:"repo_id"`
+			ShortID  string `json:"short_id"`
+			RootPath string `json:"root_path"`
+		} `json:"repos"`
+	}
+	if err := callMCP(ctx, "eng_list_repos", map[string]any{}, &list); err == nil && len(list.Repos) > 1 && errOut != nil {
+		short, root := rid[:12], ""
+		for _, rec := range list.Repos {
+			if rec.RepoID == rid {
+				if rec.ShortID != "" {
+					short = rec.ShortID
+				}
+				root = rec.RootPath
+				break
+			}
+		}
+		fmt.Fprintf(errOut, "veska: scoped to repo %s (%s); pass --repo to override\n", short, root)
+	}
+	return rid
 }
 
 // symbolCmd wraps eng_find_symbol so users can drive the same lookup their
@@ -58,9 +96,11 @@ ranked first.`,
 			params := map[string]any{"symbol": args[0]}
 			if repoFlag != "" {
 				params["repo_id"] = repoFlag
-			} else if rid, _ := resolveRepoFromCWD(cmd.Context()); rid != "" {
+			} else if rid := autoResolveRepo(cmd.Context(), cmd.ErrOrStderr()); rid != "" {
 				// solov2-zukc: auto-resolve from cwd so a junior user inside a
 				// registered repo doesn't have to look up a short_id.
+				// solov2-dqwh: autoResolveRepo prints a breadcrumb when
+				// multiple repos are registered.
 				params["repo_id"] = rid
 			}
 			var resp struct {
@@ -153,9 +193,10 @@ change so you (or an agent) get the whole neighbourhood in one shot.`,
 			params := map[string]any{"symbol": sym}
 			if repoFlag != "" {
 				params["repo_id"] = repoFlag
-			} else if rid, _ := resolveRepoFromCWD(cmd.Context()); rid != "" {
+			} else if rid := autoResolveRepo(cmd.Context(), cmd.ErrOrStderr()); rid != "" {
 				// solov2-zukc: auto-resolve from cwd so a junior user inside a
 				// registered repo doesn't have to look up a short_id.
+				// solov2-dqwh: hint via stderr when multiple repos are registered.
 				params["repo_id"] = rid
 			}
 			var resp json.RawMessage

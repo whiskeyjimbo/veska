@@ -23,7 +23,7 @@ type HotZoneResponse struct {
 	// non-obvious reasons (e.g. an empty zones list because no commits have
 	// landed since registration). Tools shouldn't have to read the wiki
 	// markdown to learn why the call returned nothing (solov2-636y).
-	DegradedReasons []string `json:"degraded_reasons,omitempty"`
+	DegradedReasons []string `json:"degraded_reasons"`
 }
 
 // RegisterWikiTools registers the wiki surface tools. svc and repoRoot are
@@ -207,9 +207,10 @@ func makeHotZoneHandler(svc *wiki.HotZoneService, repoRoot RepoRootFunc, repos a
 		// zone scoring is per-commit-frequency-driven. Surface the hint
 		// in-band so callers don't conclude the tool is broken or that the
 		// repo is uninteresting.
-		var degraded []string
+		// Non-nil so the field serializes as [] when empty (solov2-2bdj).
+		degraded := []string{}
 		if len(zones) == 0 {
-			degraded = []string{"no_post_registration_commits"}
+			degraded = append(degraded, "no_post_registration_commits")
 		}
 		return HotZoneResponse{
 			RepoID:          rep.RepoID,

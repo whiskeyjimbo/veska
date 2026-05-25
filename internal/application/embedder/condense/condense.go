@@ -111,7 +111,7 @@ func Condense(ctx context.Context, embedder ports.EmbeddingProvider, pieces []st
 func dot(a, b []float32) float32 {
 	n := min(len(b), len(a))
 	var s float32
-	for i := 0; i < n; i++ {
+	for i := range n {
 		s += a[i] * b[i]
 	}
 	return s

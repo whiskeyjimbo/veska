@@ -2,9 +2,13 @@ package mcp
 
 // Envelope is the standard MCP response wrapper for all tool responses.
 // Tools embed or compose this struct in their specific response types.
+// DegradedReasons is intentionally non-omitempty so the empty case
+// serializes as [] per the README's "empty collections serialize as []"
+// contract (solov2-2bdj). IncludedStaging is a scalar default-false flag
+// so omitempty is fine there.
 type Envelope struct {
 	IncludedStaging bool     `json:"included_staging,omitempty"`
-	DegradedReasons []string `json:"degraded_reasons,omitempty"`
+	DegradedReasons []string `json:"degraded_reasons"`
 }
 
 // DaemonState provides the current degradation state to the overlay helper.
@@ -38,14 +42,11 @@ func BuildEnvelope(stagingRead bool, stagingOK bool, state DaemonState) Envelope
 		includedStaging = true
 	}
 
-	var degraded []string
-	if len(reasons) > 0 {
-		degraded = reasons
-	}
-
+	// Always emit a non-nil slice so json.Marshal renders [] not null
+	// (solov2-2bdj).
 	return Envelope{
 		IncludedStaging: includedStaging,
-		DegradedReasons: degraded,
+		DegradedReasons: reasons,
 	}
 }
 

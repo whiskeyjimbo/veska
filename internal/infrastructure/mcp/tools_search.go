@@ -24,9 +24,12 @@ const CodeFailedPrecondition = -32003
 // eng_search_similar. DegradedReasons forwards lexical-fallback markers
 // from search.Service unchanged so callers can branch on the mode that
 // actually serviced the query.
+// SearchResponse fields use non-omitempty tags so the wire shape is
+// stable across calls — empty collections serialize as [] per the
+// README's "Conventions across the tool surface" contract (solov2-2bdj).
 type SearchResponse struct {
 	Results         []searchHitDTO `json:"results"`
-	DegradedReasons []string       `json:"degraded_reasons,omitempty"`
+	DegradedReasons []string       `json:"degraded_reasons"`
 }
 
 // PendingEmbedsCounter exposes the global pending-embeds depth so the
@@ -145,6 +148,9 @@ func makeSearchSemanticHandler(svc *search.Service, rec *savings.Recorder, repos
 			if n, perr := pending.CountPending(ctx); perr == nil && n > 0 {
 				reasons = append(reasons, DegradedReasonEmbeddingsPending)
 			}
+		}
+		if reasons == nil {
+			reasons = []string{}
 		}
 		return SearchResponse{Results: searchResultsToDTO(results), DegradedReasons: reasons}, nil
 	}
@@ -276,7 +282,7 @@ func makeSearchSimilarHandler(lookup SimilarLookup, vectors ports.VectorStorage,
 				Snippet:    m.Snippet,
 			})
 		}
-		return SearchResponse{Results: searchResultsToDTO(out)}, nil
+		return SearchResponse{Results: searchResultsToDTO(out), DegradedReasons: []string{}}, nil
 	}
 }
 
