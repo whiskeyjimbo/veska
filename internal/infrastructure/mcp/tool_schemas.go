@@ -45,10 +45,14 @@ var promoteRepoInputSchema = json.RawMessage(`{
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "type": "object",
   "additionalProperties": false,
-  "description": "Re-promote the latest commit of a registered repo. One of repo_id or root_path is required; when both are passed, repo_id wins.",
+  "description": "Re-promote the latest commit of a registered repo. One of repo_id or root_path is required; when both are passed, repo_id wins. branch, git_sha, and actor_kind/actor_id are optional overrides for callers (e.g. agents) that want to attribute the promotion to themselves or pin a specific SHA; when omitted the handler reads HEAD from git and stamps the system actor (solov2-cyww).",
   "properties": {
-    "repo_id":   {"type": "string", "description": "Full repo_id or short_id prefix."},
-    "root_path": {"type": "string", "description": "Absolute filesystem path; canonicalised via EvalSymlinks before lookup."}
+    "repo_id":    {"type": "string", "description": "Full repo_id or short_id prefix."},
+    "root_path":  {"type": "string", "description": "Absolute filesystem path; canonicalised via EvalSymlinks before lookup."},
+    "branch":     {"type": "string", "description": "Optional branch override; defaults to the repo's active_branch (or 'main')."},
+    "git_sha":    {"type": "string", "description": "Optional commit SHA to promote at; defaults to git HEAD of the resolved root_path."},
+    "actor_kind": {"type": "string", "enum": ["human", "agent", "system"], "description": "Attribution kind for the promotion stamp; defaults to 'system'. Must be paired with actor_id."},
+    "actor_id":   {"type": "string", "description": "Attribution id (e.g. 'agent:claude', 'human:alice'); defaults to 'service:veska'. Must be paired with actor_kind."}
   }
 }`)
 
