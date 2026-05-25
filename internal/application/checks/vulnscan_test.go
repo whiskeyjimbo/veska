@@ -145,6 +145,30 @@ func TestVulnScanCheck_GoModReadFailure(t *testing.T) {
 	}
 }
 
+// TestVulnScanCheck_GoModTouched_AbsolutePath is the regression for
+// solov2-3tqb: the cold-scan / fsnotify Save path passes full filesystem
+// paths through to PromotionBatch.Files[].Path, so the gate must match
+// "/abs/path/to/repo/go.mod" the same way it matches "go.mod".
+func TestVulnScanCheck_GoModTouched_AbsolutePath(t *testing.T) {
+	src := &fakeVulnSource{findings: []ports.VulnFinding{
+		{AdvisoryID: "GHSA-aaaa-bbbb-cccc", Package: "github.com/vulnerable/pkg",
+			AffectedRange: "<1.2.0", Severity: "HIGH", Summary: "rce"},
+	}}
+	c := NewVulnScanCheck(src, writeGoMod(t, goModFixture))
+
+	in := Input{RepoID: "repo1", Branch: "main", FilePaths: []string{
+		"/home/example/src/myrepo/go.mod",
+		"/home/example/src/myrepo/main.go",
+	}}
+	got, err := c.Run(context.Background(), in)
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if len(got) != 1 {
+		t.Fatalf("want 1 finding from absolute-path go.mod, got %d", len(got))
+	}
+}
+
 func TestVulnScanCheck_Name(t *testing.T) {
 	c := NewVulnScanCheck(&fakeVulnSource{}, writeGoMod(t, goModFixture))
 	if c.Name() != "vuln-scan" {
