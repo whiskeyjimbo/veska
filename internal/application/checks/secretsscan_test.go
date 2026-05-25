@@ -178,3 +178,28 @@ func TestSecretsScanCheck_Name(t *testing.T) {
 		t.Errorf("Name() = %q, want secrets-scan", c.Name())
 	}
 }
+
+// TestSecretsScanCheck_IgnoresBeadsTracker pins solov2-jtl5.3: high-entropy
+// memory keys inside .beads/issues.jsonl must not surface as findings. The
+// scanner must never see lines from that path, so the canonical scanner-stub
+// records-input check is also asserted.
+func TestSecretsScanCheck_IgnoresBeadsTracker(t *testing.T) {
+	scanner := &fakeSecretsScanner{}
+	c := NewSecretsScanCheck(scanner)
+	in := Input{
+		RepoID: "repo1", Branch: "main",
+		AddedLines: map[string][]Line{
+			".beads/issues.jsonl": {{Number: 586, Text: `{"_type":"memory","key":"high-entropy-slug-here"}`}},
+		},
+	}
+	got, err := c.Run(context.Background(), in)
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if len(got) != 0 {
+		t.Errorf("want 0 findings on ignored beads tracker, got %d", len(got))
+	}
+	if _, present := scanner.scanned.AddedLines[".beads/issues.jsonl"]; present {
+		t.Error("scanner received .beads/issues.jsonl input; ignore filter did not run before scan")
+	}
+}
