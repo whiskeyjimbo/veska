@@ -356,6 +356,9 @@ type noopFindingStorage struct{}
 
 func (noopFindingStorage) Save(_ context.Context, _ *domain.Finding) error    { return nil }
 func (noopFindingStorage) CloseObsolete(_ context.Context, _, _ string) error { return nil }
+func (noopFindingStorage) CloseSupersededAutoLinks(_ context.Context, _, _ string, _ []string) error {
+	return nil
+}
 
 // TestPoller_ReviewLaneDrains verifies AC1: a pending work_kind='review' row is
 // drained to state='done' by the real review.Handler dispatching through a

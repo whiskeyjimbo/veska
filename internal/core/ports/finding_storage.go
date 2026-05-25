@@ -23,4 +23,20 @@ type FindingStorage interface {
 	// finding matches — closing an already-closed or absent finding is not an
 	// error.
 	CloseObsolete(ctx context.Context, findingID, branch string) error
+
+	// CloseSupersededAutoLinks closes every OPEN finding with rule='auto-link'
+	// in (repoID, branch) whose anchor (findings.node_id) is an edge_id of a
+	// SIMILAR_TO edge whose src_node_id is in sourceNodeIDs.
+	//
+	// This is the supersession step the auto-link handler runs before writing
+	// a fresh batch of candidates for a given source-file: prior auto-link
+	// findings whose target choice has since drifted (a different nearest
+	// neighbour, dropped below threshold, …) are explicitly closed so the
+	// "open findings" surface does not balloon across re-promotions
+	// (solov2-ok7y).
+	//
+	// closed_reason is set to 'revalidated_obsolete' for parity with
+	// CloseObsolete. An empty sourceNodeIDs slice is a no-op. The call is
+	// idempotent: already-closed findings are left untouched.
+	CloseSupersededAutoLinks(ctx context.Context, repoID, branch string, sourceNodeIDs []string) error
 }

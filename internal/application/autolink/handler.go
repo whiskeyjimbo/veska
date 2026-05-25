@@ -167,6 +167,22 @@ func (h *Handler) Handle(ctx context.Context, row ports.WorkRow) error {
 		return nil
 	}
 
+	// Supersede any prior open auto-link findings whose source node is in this
+	// file: re-promoting a file can yield a different set of nearest-neighbour
+	// targets (embeddings drift, vector backend tie-breaks reorder), so older
+	// (now-orphaned) auto-link findings would otherwise accumulate alongside
+	// the fresh ones and the "open findings" surface would balloon across
+	// reindexes (solov2-ok7y). Auto-link findings anchor on edge_id, not
+	// node_id, so the revalidation sweep cannot reach them — the supersession
+	// has to happen at write time.
+	//
+	// The close runs BEFORE the linker call so the new finding-Save's
+	// ON CONFLICT path correctly re-opens (closed_at NULL, state='open') any
+	// finding that survived from the previous round on the same edge.
+	if err := h.findings.CloseSupersededAutoLinks(ctx, row.RepoID, row.Branch, sources); err != nil {
+		return fmt.Errorf("autolink.Handle: close superseded findings: %w", err)
+	}
+
 	cands, err := h.linker.Candidates(ctx, row.RepoID, row.Branch, sources)
 	if err != nil {
 		return fmt.Errorf("autolink.Handle: linker: %w", err)

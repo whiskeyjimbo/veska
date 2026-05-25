@@ -39,6 +39,12 @@ func (r *recordingStorage) CloseObsolete(_ context.Context, _, _ string) error {
 	return r.err
 }
 
+func (r *recordingStorage) CloseSupersededAutoLinks(_ context.Context, _, _ string, _ []string) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.err
+}
+
 func (r *recordingStorage) snapshot() []*domain.Finding {
 	r.mu.Lock()
 	defer r.mu.Unlock()
