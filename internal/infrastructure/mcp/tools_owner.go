@@ -63,7 +63,11 @@ func resolveOwnerRoot(db *sql.DB, repoID string) string {
 
 type findOwnerParams struct {
 	FilePath string `json:"file_path"`
-	RepoID   string `json:"repo_id"`
+	// Path is an accepted alias for FilePath, matching the precedent set by
+	// eng_get_file_nodes. Users naturally reach for "path"; honouring both
+	// keeps the MCP surface internally consistent (solov2-jtl5.10).
+	Path   string `json:"path"`
+	RepoID string `json:"repo_id"`
 }
 
 func makeFindOwnerHandler(db *sql.DB) ToolHandler {
@@ -73,7 +77,10 @@ func makeFindOwnerHandler(db *sql.DB) ToolHandler {
 			return nil, &RPCError{Code: CodeInvalidParams, Message: fmt.Sprintf("invalid params: %v", err)}
 		}
 		if p.FilePath == "" {
-			return nil, &RPCError{Code: CodeInvalidParams, Message: "file_path is required"}
+			p.FilePath = p.Path
+		}
+		if p.FilePath == "" {
+			return nil, &RPCError{Code: CodeInvalidParams, Message: "file_path (or alias 'path') is required"}
 		}
 		if p.RepoID == "" {
 			return nil, &RPCError{Code: CodeInvalidParams, Message: "repo_id is required"}
