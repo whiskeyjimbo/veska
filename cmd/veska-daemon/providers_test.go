@@ -14,6 +14,7 @@ import (
 	_ "modernc.org/sqlite"
 
 	"github.com/whiskeyjimbo/veska/internal/application"
+	"github.com/whiskeyjimbo/veska/internal/infrastructure/mcp"
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/vector"
 )
 
@@ -111,8 +112,11 @@ func TestStatusProvider_ReportsDBState(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Status: %v", err)
 	}
-	if m["status"] != "ok" {
-		t.Errorf("status = %v; want ok", m["status"])
+	// solov2-30sa: a non-zero pending_embeds count flips status to degraded
+	// and adds embeddings_pending to degraded_reasons (matches what
+	// eng_search_semantic already emits for the same backlog).
+	if m["status"] != "degraded" {
+		t.Errorf("status = %v; want degraded (pending_embeds > 0)", m["status"])
 	}
 	if m["schema_version"] != 3 {
 		t.Errorf("schema_version = %v; want 3", m["schema_version"])
@@ -123,8 +127,35 @@ func TestStatusProvider_ReportsDBState(t *testing.T) {
 	if m["pending_embeds"] != 2 {
 		t.Errorf("pending_embeds = %v; want 2", m["pending_embeds"])
 	}
-	if _, ok := m["degraded_reasons"].([]string); !ok {
-		t.Errorf("degraded_reasons missing or wrong type: %v", m["degraded_reasons"])
+	reasons, ok := m["degraded_reasons"].([]string)
+	if !ok {
+		t.Fatalf("degraded_reasons missing or wrong type: %v", m["degraded_reasons"])
+	}
+	if len(reasons) != 1 || reasons[0] != mcp.DegradedReasonEmbeddingsPending {
+		t.Errorf("degraded_reasons = %v; want [embeddings_pending]", reasons)
+	}
+}
+
+// TestStatusProvider_HealthyWhenNoPending pins the matched-pair: with zero
+// pending embeds, status stays "ok" and degraded_reasons is empty (solov2-30sa).
+func TestStatusProvider_HealthyWhenNoPending(t *testing.T) {
+	db := providersTestDB(t)
+	if _, err := db.Exec(`INSERT INTO repos (repo_id, root_path, added_at, active_branch) VALUES ('r1', '/r1', 1, 'main')`); err != nil {
+		t.Fatalf("seed repo: %v", err)
+	}
+	if _, err := db.Exec(`INSERT INTO schema_migrations (version) VALUES (1)`); err != nil {
+		t.Fatalf("seed migrations: %v", err)
+	}
+	sp := &statusProvider{db: db}
+	m, err := sp.Status(context.Background())
+	if err != nil {
+		t.Fatalf("Status: %v", err)
+	}
+	if m["status"] != "ok" {
+		t.Errorf("status = %v; want ok (no pending embeds)", m["status"])
+	}
+	if reasons, _ := m["degraded_reasons"].([]string); len(reasons) != 0 {
+		t.Errorf("degraded_reasons = %v; want []", reasons)
 	}
 }
 
