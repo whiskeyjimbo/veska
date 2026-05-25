@@ -718,6 +718,7 @@ func newDaemon(cfg Config) (*Daemon, error) {
 		ingester:    ingester,
 		promoter:    promoter,
 		regSvc:      regSvc,
+		reparser:    reparser,
 		scanTracker: scanTracker,
 		savings:     savingsRec,
 	})
@@ -847,6 +848,11 @@ type mcpDeps struct {
 	// fallback registrar with no cold-scan dispatch is wired so the MCP
 	// tool surface still functions.
 	regSvc *repoRegistrar
+	// reparser is the cold-scan closure shared with regSvc and StartupResync.
+	// Routed to eng_reindex_repo (solov2-4d7b) so `veska reindex` can dispatch
+	// the scan in-daemon instead of needing the daemon stopped. Nil when not
+	// wired (legacy / test callers); the tool degrades cleanly in that case.
+	reparser func(ctx context.Context, rec application.RepoRecord) error
 	// scanTracker surfaces in-flight cold scans to eng_get_status
 	// (solov2-pm5). Nil-safe — statusProvider tolerates a nil tracker.
 	scanTracker *application.ScanTracker
@@ -878,6 +884,18 @@ func registerMCPTools(r *mcp.Registry, d mcpDeps) {
 			Git:      gitwatch.Querier{},
 			Ingester: d.ingester,
 			Promoter: d.promoter,
+		})
+	}
+
+	// eng_reindex_repo (solov2-4d7b): in-daemon cold-scan reparse. Shares the
+	// same reparser closure StartupResync + repoRegistrar use so daemon.log
+	// emits the standard cold scan: starting/complete pair. When the reparser
+	// is nil (legacy / test wiring) we skip registration; the CLI's direct-
+	// mode fallback still handles those callers.
+	if d.reparser != nil {
+		mcp.RegisterReindexTool(r, mcp.ReindexDeps{
+			Repos:    &repoLister{db: pools.ReadDB},
+			Reparser: d.reparser,
 		})
 	}
 	// Task tools (eng_set_active_task / get_active_task / get_task_history)
