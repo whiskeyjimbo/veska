@@ -440,14 +440,24 @@ func waitForScanComplete(ctx context.Context, w io.Writer, repoID string) error 
 
 func repoRemoveCmd() *cobra.Command {
 	return &cobra.Command{
-		Use:          "remove <id>",
+		Use:          "remove <id-or-path>",
 		Short:        "Deregister a repository and remove hooks",
 		Args:         cobra.ExactArgs(1),
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()
 			w := cmd.OutOrStdout()
-			id := args[0]
+			arg := args[0]
+
+			// solov2-jtl5.2: accept the same identifiers `repo add` does.
+			// If arg looks like a filesystem path, resolve it to a repo_id
+			// via the registry before dialing the daemon. A repo_id (or
+			// short_id prefix) is passed through unchanged so existing
+			// usage isn't affected.
+			id, resolveErr := resolveRepoArg(ctx, arg)
+			if resolveErr != nil {
+				return fmt.Errorf("repo remove: %w", resolveErr)
+			}
 
 			if err := dialRemoveRepo(ctx, id); err == nil {
 				fmt.Fprintln(w, "removed (via daemon)")
@@ -467,6 +477,53 @@ func repoRemoveCmd() *cobra.Command {
 			return nil
 		},
 	}
+}
+
+// resolveRepoArg returns the canonical repo_id for arg. A hex-only string
+// (repo_id or short_id prefix) is returned unchanged — the registry already
+// resolves prefixes. Anything else is treated as a filesystem path: it is
+// resolved to absolute form and matched against the RootPath of every
+// registered repo. The not-found error mentions the resolved abs path so
+// the user sees what we actually looked up.
+func resolveRepoArg(ctx context.Context, arg string) (string, error) {
+	if looksLikeRepoID(arg) {
+		return arg, nil
+	}
+	abs, err := filepath.Abs(arg)
+	if err != nil {
+		return "", fmt.Errorf("resolve path %q: %w", arg, err)
+	}
+	db, closeFn, err := openLocalDB()
+	if err != nil {
+		return "", err
+	}
+	defer closeFn()
+	records, err := repo.List(ctx, db)
+	if err != nil {
+		return "", fmt.Errorf("list registered repos: %w", err)
+	}
+	for _, r := range records {
+		if r.RootPath == abs {
+			return r.RepoID, nil
+		}
+	}
+	return "", fmt.Errorf("no registered repo with root %q (use `veska repo list` to see registered repos)", abs)
+}
+
+// looksLikeRepoID reports whether arg is plausibly a repo_id or short_id
+// prefix — a non-empty hex-only string. Repo IDs are SHA-256 hex; even a
+// 4-char prefix is uniquely identifying in practice. Filesystem paths almost
+// always contain a non-hex character (`/`, `.`, `-`).
+func looksLikeRepoID(arg string) bool {
+	if arg == "" {
+		return false
+	}
+	for _, c := range arg {
+		if !((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F')) {
+			return false
+		}
+	}
+	return true
 }
 
 // openLocalDB opens the on-disk sqlite database with full migrations applied
