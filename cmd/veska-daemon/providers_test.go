@@ -159,6 +159,49 @@ func TestStatusProvider_HealthyWhenNoPending(t *testing.T) {
 	}
 }
 
+// TestStatusProvider_BacklogStaysDegradedForAgentContract pins solov2-34rl:
+// even though `doctor status` no longer escalates a non-zero backlog to
+// "degraded" (it now reports the backlog as a separate informational line),
+// `eng_get_status` MUST keep reporting `degraded_reasons:[embeddings_pending]`
+// while pending_embeds > 0. Agents rely on that signal to choose between the
+// semantic and lexical search paths during the indexing-lag window — that
+// contract predates the doctor reconciliation and must not regress.
+func TestStatusProvider_BacklogStaysDegradedForAgentContract(t *testing.T) {
+	db := providersTestDB(t)
+	if _, err := db.Exec(
+		`INSERT INTO repos (repo_id, root_path, added_at) VALUES ('r1','/a',1)`,
+	); err != nil {
+		t.Fatalf("seed repo: %v", err)
+	}
+	if _, err := db.Exec(
+		`INSERT INTO node_embedding_refs (node_id, state) VALUES ('n1','pending')`,
+	); err != nil {
+		t.Fatalf("seed refs: %v", err)
+	}
+	sp := &statusProvider{db: db}
+	m, err := sp.Status(context.Background())
+	if err != nil {
+		t.Fatalf("Status: %v", err)
+	}
+	if m["status"] != "degraded" {
+		t.Fatalf("eng_get_status rollup = %v; want degraded (agent contract: see solov2-34rl)", m["status"])
+	}
+	reasons, _ := m["degraded_reasons"].([]string)
+	hasPending := false
+	for _, r := range reasons {
+		if r == mcp.DegradedReasonEmbeddingsPending {
+			hasPending = true
+			break
+		}
+	}
+	if !hasPending {
+		t.Errorf("eng_get_status degraded_reasons = %v; must include embeddings_pending (agents pick semantic-vs-lexical from this)", reasons)
+	}
+	if m["pending_embeds"] != 1 {
+		t.Errorf("pending_embeds = %v; want 1", m["pending_embeds"])
+	}
+}
+
 func TestStatusProvider_EmptySchemaTreatedAsZero(t *testing.T) {
 	db := providersTestDB(t) // schema_migrations empty -> MAX is NULL
 	sp := &statusProvider{db: db}

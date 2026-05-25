@@ -141,7 +141,6 @@ func (c *VulnScanCheck) Run(ctx context.Context, in Input) ([]*domain.Finding, e
 	return out, nil
 }
 
-
 // mapSeverity translates an OSV severity label onto the domain Severity enum.
 // Unknown labels fall back to Medium so an advisory is never silently dropped
 // for want of a recognised label.
