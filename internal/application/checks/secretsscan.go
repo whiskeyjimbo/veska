@@ -4,10 +4,24 @@ import (
 	"context"
 	"fmt"
 	"strconv"
+	"strings"
 
 	"github.com/whiskeyjimbo/veska/internal/core/domain"
 	"github.com/whiskeyjimbo/veska/internal/core/ports"
 )
+
+// secretsScanIgnoredPrefixes are file-path prefixes the secrets scanner skips
+// by default. These name on-disk caches for issue trackers and similar tools
+// whose payloads routinely contain high-entropy slugs (memory keys, sequence
+// hashes) that are not credentials. Without this filter the high-entropy
+// heuristic fires repeatedly on the project's own tracker file — exactly the
+// failure mode that hit on .beads/issues.jsonl during junior-journey round 3
+// (solov2-jtl5.3). Paths are matched as prefixes against the promotion's
+// repo-relative file path.
+var secretsScanIgnoredPrefixes = []string{
+	".beads/", // beads issue tracker (https://github.com/steveyegge/beads)
+	".bd/",    // legacy beads layout
+}
 
 // SecretsScanCheck is a structural check that turns SecretsScanner output into
 // findings on promotion. It scans only the lines newly added by the promoted
@@ -46,11 +60,17 @@ func (c *SecretsScanCheck) Run(ctx context.Context, in Input) ([]*domain.Finding
 
 	scanInput := ports.ScanInput{AddedLines: make(map[string][]ports.Line, len(in.AddedLines))}
 	for path, lines := range in.AddedLines {
+		if isSecretsScanIgnored(path) {
+			continue
+		}
 		converted := make([]ports.Line, len(lines))
 		for i, l := range lines {
 			converted[i] = ports.Line{Number: l.Number, Text: l.Text}
 		}
 		scanInput.AddedLines[path] = converted
+	}
+	if len(scanInput.AddedLines) == 0 {
+		return nil, nil
 	}
 
 	secrets, err := c.scanner.Scan(scanInput)
@@ -77,6 +97,18 @@ func (c *SecretsScanCheck) Run(ctx context.Context, in Input) ([]*domain.Finding
 		out = append(out, f)
 	}
 	return out, nil
+}
+
+// isSecretsScanIgnored reports whether path lives under a tracker/cache
+// directory whose payloads routinely look secret-shaped to the high-entropy
+// heuristic but never actually contain credentials.
+func isSecretsScanIgnored(path string) bool {
+	for _, prefix := range secretsScanIgnoredPrefixes {
+		if strings.HasPrefix(path, prefix) {
+			return true
+		}
+	}
+	return false
 }
 
 // secretSeverity maps a scanner confidence score onto the domain Severity
