@@ -239,6 +239,7 @@ func resolveCLIRepoID(records []repo.Record, repoID string) (repo.Record, error)
 type scanProgressRow struct {
 	Phase     string
 	FilesSeen int
+	StartedAt time.Time
 }
 
 // fetchScanProgress pulls scans_in_flight from eng_get_status and returns
@@ -247,9 +248,10 @@ type scanProgressRow struct {
 func fetchScanProgress(ctx context.Context) map[string]scanProgressRow {
 	var status struct {
 		ScansInFlight []struct {
-			RepoID    string `json:"repo_id"`
-			Phase     string `json:"phase"`
-			FilesSeen int    `json:"files_seen"`
+			RepoID    string    `json:"repo_id"`
+			Phase     string    `json:"phase"`
+			FilesSeen int       `json:"files_seen"`
+			StartedAt time.Time `json:"started_at"`
 		} `json:"scans_in_flight"`
 	}
 	if err := callMCP(ctx, "eng_get_status", map[string]any{}, &status); err != nil {
@@ -257,9 +259,33 @@ func fetchScanProgress(ctx context.Context) map[string]scanProgressRow {
 	}
 	m := make(map[string]scanProgressRow, len(status.ScansInFlight))
 	for _, s := range status.ScansInFlight {
-		m[s.RepoID] = scanProgressRow{Phase: s.Phase, FilesSeen: s.FilesSeen}
+		m[s.RepoID] = scanProgressRow{
+			Phase:     s.Phase,
+			FilesSeen: s.FilesSeen,
+			StartedAt: s.StartedAt,
+		}
 	}
 	return m
+}
+
+// formatScanElapsed renders ScanState.StartedAt → "1m23s" / "12s". A zero
+// StartedAt yields "" so older daemons (no started_at in scans_in_flight)
+// quietly omit the suffix.
+func formatScanElapsed(startedAt time.Time) string {
+	if startedAt.IsZero() {
+		return ""
+	}
+	d := time.Since(startedAt)
+	if d < 0 {
+		return ""
+	}
+	d = d.Round(time.Second)
+	if d < time.Minute {
+		return d.String()
+	}
+	mins := int(d / time.Minute)
+	secs := int((d % time.Minute) / time.Second)
+	return fmt.Sprintf("%dm%ds", mins, secs)
 }
 
 // printRepoTable renders the repo list as REPO_ID + ROOT + BRANCH + STATUS.
@@ -290,6 +316,7 @@ func printRepoTableWithProgress(w io.Writer, repos []repoView, progress map[stri
 		if r.LastPromotedSHA == "" {
 			status = "(unindexed)"
 			if p, ok := progress[r.RepoID]; ok {
+				elapsed := formatScanElapsed(p.StartedAt)
 				switch {
 				case p.Phase == "promoting":
 					status = fmt.Sprintf("(promoting, %d files)", p.FilesSeen)
@@ -299,6 +326,13 @@ func printRepoTableWithProgress(w io.Writer, repos []repoView, progress map[stri
 					status = fmt.Sprintf("(%s)", p.Phase)
 				case p.FilesSeen > 0:
 					status = fmt.Sprintf("(scanning, %d files)", p.FilesSeen)
+				}
+				// solov2-jtl5.1: append elapsed so a user can tell a slow-but-
+				// progressing scan from a hung one even when files_seen plateaus
+				// on a single large file. Older daemons omit started_at and the
+				// suffix is suppressed.
+				if elapsed != "" && status != "(unindexed)" {
+					status = status[:len(status)-1] + ", " + elapsed + ")"
 				}
 			}
 		}
