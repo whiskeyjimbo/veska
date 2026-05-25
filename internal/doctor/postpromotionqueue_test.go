@@ -262,3 +262,80 @@ func TestCheckPostPromotionQueue_FailedReviewWithFinding(t *testing.T) {
 		t.Errorf("Status: got broken, want non-broken (failed review row with open companion finding is the expected sticky state)")
 	}
 }
+
+// TestPurgeOrphanFailedRows guards solov2-zmzc: failed queue rows whose
+// repo_id is no longer in the repos table are deleted by PurgeOrphanFailedRows.
+// Rows for still-registered repos and non-failed orphan rows are preserved
+// (only "failed" state qualifies — pending/in_progress/done rows might still
+// belong to an in-flight or completed promotion of a re-registered repo).
+func TestPurgeOrphanFailedRows(t *testing.T) {
+	path := t.TempDir() + "/test.db"
+	db := createQueueDB(t, path)
+	if _, err := db.Exec(`CREATE TABLE repos (repo_id TEXT PRIMARY KEY, root_path TEXT NOT NULL)`); err != nil {
+		t.Fatalf("create repos: %v", err)
+	}
+	if _, err := db.Exec(`INSERT INTO repos VALUES ('live-repo', '/tmp/r')`); err != nil {
+		t.Fatalf("seed repo: %v", err)
+	}
+	cases := []struct {
+		repoID, state, workKind string
+	}{
+		{"live-repo", "failed", "wiki"},        // keep: repo still exists
+		{"orphan-repo", "failed", "wiki"},      // delete: orphan failed
+		{"orphan-repo", "failed", "auto_link"}, // delete: orphan failed
+		{"orphan-repo", "pending", "embed"},    // keep: pending, not failed
+		{"orphan-repo", "done", "revalidate"},  // keep: done, not failed
+	}
+	for _, c := range cases {
+		if _, err := db.Exec(
+			`INSERT INTO post_promotion_queue (repo_id, state, work_kind) VALUES (?, ?, ?)`,
+			c.repoID, c.state, c.workKind,
+		); err != nil {
+			t.Fatalf("insert: %v", err)
+		}
+	}
+	db.Close()
+
+	n, err := doctor.PurgeOrphanFailedRows(path)
+	if err != nil {
+		t.Fatalf("PurgeOrphanFailedRows: %v", err)
+	}
+	if n != 2 {
+		t.Errorf("deleted %d rows, want 2", n)
+	}
+
+	// Re-open and count remaining.
+	db, _ = sql.Open("sqlite", path)
+	defer db.Close()
+	var remaining int
+	if err := db.QueryRow(`SELECT COUNT(*) FROM post_promotion_queue`).Scan(&remaining); err != nil {
+		t.Fatalf("count: %v", err)
+	}
+	if remaining != 3 {
+		t.Errorf("remaining rows = %d, want 3 (live-repo failed + 2 non-failed orphans)", remaining)
+	}
+}
+
+// TestPurgeOrphanFailedRows_Idempotent: calling twice deletes nothing the
+// second time. Guards against PRAGMAs/transactions leaving the DB in a state
+// where a re-run miscounts.
+func TestPurgeOrphanFailedRows_Idempotent(t *testing.T) {
+	path := t.TempDir() + "/test.db"
+	db := createQueueDB(t, path)
+	if _, err := db.Exec(`CREATE TABLE repos (repo_id TEXT PRIMARY KEY, root_path TEXT NOT NULL)`); err != nil {
+		t.Fatalf("create repos: %v", err)
+	}
+	if _, err := db.Exec(
+		`INSERT INTO post_promotion_queue (repo_id, state, work_kind) VALUES ('gone', 'failed', 'wiki')`,
+	); err != nil {
+		t.Fatalf("insert: %v", err)
+	}
+	db.Close()
+
+	if n, err := doctor.PurgeOrphanFailedRows(path); err != nil || n != 1 {
+		t.Fatalf("first call: n=%d err=%v, want 1/nil", n, err)
+	}
+	if n, err := doctor.PurgeOrphanFailedRows(path); err != nil || n != 0 {
+		t.Fatalf("second call: n=%d err=%v, want 0/nil", n, err)
+	}
+}

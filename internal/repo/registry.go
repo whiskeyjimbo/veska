@@ -447,6 +447,19 @@ func Remove(ctx context.Context, db *sql.DB, repoID string) error {
 	); err != nil {
 		return fmt.Errorf("delete repo: %w", err)
 	}
+	// solov2-zmzc: post_promotion_queue has no FK to repos, so the CASCADE
+	// fan-out skips it. Manually drop any rows targeting the removed repo
+	// so they don't sit in 'failed'/'pending' forever, dragging doctor
+	// rollups to "degraded". --purge-orphans on the doctor command cleans
+	// up rows left by older versions.
+	if _, err := execWithBusyRetry(ctx, db, 5, 500*time.Millisecond,
+		`DELETE FROM post_promotion_queue WHERE repo_id = ?`, canonical,
+	); err != nil {
+		// Best-effort: the repo row is already gone, so leaving queue rows
+		// behind is recoverable via `veska doctor post_promotion_queue
+		// --purge-orphans`. Don't fail the user-facing remove for it.
+		_ = err
+	}
 
 	if rootPath != "" {
 		removeHooks(rootPath)
