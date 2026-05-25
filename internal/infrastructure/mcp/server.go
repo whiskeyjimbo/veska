@@ -211,6 +211,13 @@ func (s *Server) serveConn(ctx context.Context, conn net.Conn, ak domain.ActorKi
 
 		result, rpcErr := s.handler.Handle(ctx, actor, &req)
 
+		// JSON-RPC 2.0: requests without an id are notifications and MUST
+		// NOT receive a response. The MCP lifecycle uses notifications/*
+		// for one-way signals (notifications/initialized, etc.).
+		if req.ID == nil {
+			continue
+		}
+
 		resp := Response{
 			JSONRPC: "2.0",
 			ID:      req.ID,
