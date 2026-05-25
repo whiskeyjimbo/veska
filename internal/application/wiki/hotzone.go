@@ -52,10 +52,17 @@ type HotZone struct {
 // Report is the ranked hot_zone surface: the top-N files ordered by
 // descending score. It is the structure both the Markdown page and the
 // eng_get_hot_zone MCP tool are built from, so the two never diverge.
+//
+// CandidatesScanned and CandidatesScored let callers distinguish two
+// empty-Zones cases (solov2-z5o0): no commits in the look-back window
+// (CandidatesScanned == 0) vs. commits exist but every touched file
+// scored 0 because it has no graph nodes (lockfiles, READMEs, …).
 type Report struct {
-	RepoID string    `json:"repo_id"`
-	Branch string    `json:"branch"`
-	Zones  []HotZone `json:"zones"`
+	RepoID            string    `json:"repo_id"`
+	Branch            string    `json:"branch"`
+	Zones             []HotZone `json:"zones"`
+	CandidatesScanned int       `json:"-"` // files touched in window
+	CandidatesScored  int       `json:"-"` // files with score > 0
 }
 
 // HotZoneService ranks files by change risk. It is stateless; the same
@@ -167,8 +174,15 @@ func (s *HotZoneService) Rank(ctx context.Context, repoID, branch, repoRoot stri
 		}
 		return zones[i].FilePath < zones[j].FilePath
 	})
+	scored := len(zones)
 	if len(zones) > s.topN {
 		zones = zones[:s.topN]
 	}
-	return Report{RepoID: repoID, Branch: branch, Zones: zones}, nil
+	return Report{
+		RepoID:            repoID,
+		Branch:            branch,
+		Zones:             zones,
+		CandidatesScanned: len(counts),
+		CandidatesScored:  scored,
+	}, nil
 }

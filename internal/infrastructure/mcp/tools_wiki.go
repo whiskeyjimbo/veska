@@ -24,6 +24,9 @@ type HotZoneResponse struct {
 	// landed since registration). Tools shouldn't have to read the wiki
 	// markdown to learn why the call returned nothing (solov2-636y).
 	DegradedReasons []string `json:"degraded_reasons"`
+	// Hint is a one-line, caller-facing string explaining sparse output
+	// (solov2-z5o0). Populated only when zones is empty.
+	Hint string `json:"hint,omitempty"`
 }
 
 // RegisterWikiTools registers the wiki surface tools. svc and repoRoot are
@@ -202,21 +205,35 @@ func makeHotZoneHandler(svc *wiki.HotZoneService, repoRoot RepoRootFunc, repos a
 			z.FilePath = abs
 			zones[i] = z
 		}
-		// solov2-636y: when ranking returns no zones, the most common reason
-		// is "no commits have landed since this repo was registered" — hot
-		// zone scoring is per-commit-frequency-driven. Surface the hint
-		// in-band so callers don't conclude the tool is broken or that the
-		// repo is uninteresting.
+		// solov2-636y/solov2-z5o0: when ranking returns no zones, explain
+		// why precisely instead of guessing — Rank reports both how many
+		// files were touched in the look-back window (scanned) and how
+		// many of those produced a non-zero score (scored). The two
+		// numbers separate the "quiet repo" case from the "only lockfile
+		// churn" case.
 		// Non-nil so the field serializes as [] when empty (solov2-2bdj).
 		degraded := []string{}
+		hint := ""
 		if len(zones) == 0 {
-			degraded = append(degraded, "no_post_registration_commits")
+			switch {
+			case rep.CandidatesScanned == 0:
+				degraded = append(degraded, "no_recent_commits")
+				hint = "no commits in the past 30 days — hot-zone ranking is per-commit-frequency-driven, so commit some changes and re-run"
+			case rep.CandidatesScored == 0:
+				degraded = append(degraded, "no_scored_zones")
+				hint = fmt.Sprintf("%d file(s) changed in the last 30 days but none have graph nodes (lockfiles, READMEs, generated assets) — hot-zone scores them at 0 and drops them", rep.CandidatesScanned)
+			default:
+				// Should be unreachable — if scored>0 we'd have zones. Be
+				// defensive so the caller still gets a hint.
+				degraded = append(degraded, "no_post_registration_commits")
+			}
 		}
 		return HotZoneResponse{
 			RepoID:          rep.RepoID,
 			Branch:          rep.Branch,
 			Zones:           zones,
 			DegradedReasons: degraded,
+			Hint:            hint,
 		}, nil
 	}
 }
