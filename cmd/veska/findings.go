@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"sort"
+	"strings"
 	"text/tabwriter"
 	"time"
 
@@ -46,6 +48,7 @@ func findingsListCmd() *cobra.Command {
 		state    string
 		severity string
 		rule     string
+		limit    int
 		jsonOut  bool
 	)
 	cmd := &cobra.Command{
@@ -87,28 +90,122 @@ func findingsListCmd() *cobra.Command {
 				fmt.Fprintln(w, "no findings")
 				return nil
 			}
+
+			// solov2-7ata: severity breakdown header so 100-row dumps don't
+			// hide a single critical among many mediums. Sort by severity
+			// then rule for stable, scannable output.
+			sortFindingsBySeverity(resp.Findings)
+			counts := countSeverities(resp.Findings)
+			fmt.Fprintln(w, summariseFindings(len(resp.Findings), counts))
+
+			shown := resp.Findings
+			truncated := 0
+			if limit > 0 && len(shown) > limit {
+				truncated = len(shown) - limit
+				shown = shown[:limit]
+			}
+
 			tw := tabwriter.NewWriter(w, 0, 0, 2, ' ', 0)
 			fmt.Fprintln(tw, "FINDING_ID\tSEVERITY\tRULE\tFILE\tMESSAGE")
-			for _, f := range resp.Findings {
+			for _, f := range shown {
 				path := ""
 				if f.FilePath != nil {
 					path = *f.FilePath
 				}
-				msg := f.Message
+				msg := trimRedundantFilePrefix(f.Message, path)
 				if len(msg) > 80 {
 					msg = msg[:77] + "..."
 				}
 				fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\n", f.FindingID, f.Severity, f.Rule, path, msg)
 			}
-			return tw.Flush()
+			if err := tw.Flush(); err != nil {
+				return err
+			}
+			if truncated > 0 {
+				fmt.Fprintf(w, "... %d more (raise --limit to see all)\n", truncated)
+			}
+			return nil
 		},
 	}
 	cmd.Flags().StringVar(&repoFlag, "repo", "", "repo id or short_id (default: the sole registered repo)")
 	cmd.Flags().StringVar(&state, "state", "", "filter by state (open|closed; default open)")
 	cmd.Flags().StringVar(&severity, "severity", "", "filter by severity")
 	cmd.Flags().StringVar(&rule, "rule", "", "filter by rule (e.g. vuln, dead-code, secret_leak, auto-link)")
+	cmd.Flags().IntVar(&limit, "limit", 25, "maximum rows to print (0 = no limit)")
 	cmd.Flags().BoolVar(&jsonOut, "json", false, "emit JSON")
 	return cmd
+}
+
+// severityOrder ranks severities for sortFindingsBySeverity; lower = more
+// severe. Unknown severities sort last.
+var severityOrder = map[string]int{
+	"critical": 0,
+	"high":     1,
+	"medium":   2,
+	"low":      3,
+	"info":     4,
+}
+
+func sortFindingsBySeverity(fs []findingView) {
+	sort.SliceStable(fs, func(i, j int) bool {
+		si, oki := severityOrder[fs[i].Severity]
+		sj, okj := severityOrder[fs[j].Severity]
+		if !oki {
+			si = 99
+		}
+		if !okj {
+			sj = 99
+		}
+		if si != sj {
+			return si < sj
+		}
+		return fs[i].Rule < fs[j].Rule
+	})
+}
+
+func countSeverities(fs []findingView) map[string]int {
+	out := map[string]int{}
+	for _, f := range fs {
+		out[f.Severity]++
+	}
+	return out
+}
+
+func summariseFindings(total int, counts map[string]int) string {
+	parts := []string{}
+	for _, s := range []string{"critical", "high", "medium", "low", "info"} {
+		if n := counts[s]; n > 0 {
+			parts = append(parts, fmt.Sprintf("%d %s", n, s))
+		}
+	}
+	if len(parts) == 0 {
+		return fmt.Sprintf("showing %d finding(s)", total)
+	}
+	return fmt.Sprintf("showing %d finding(s): %s", total, joinComma(parts))
+}
+
+func joinComma(parts []string) string {
+	return strings.Join(parts, ", ")
+}
+
+// trimRedundantFilePrefix drops a leading "<file>:<line>" / "<file> " from
+// the message when the file column already shows the same file — vuln
+// messages embed "go.mod:151 [GHSA-…] …" but the FILE column already says
+// "go.mod" (solov2-7ata).
+func trimRedundantFilePrefix(msg, file string) string {
+	if file == "" {
+		return msg
+	}
+	if !strings.HasPrefix(msg, file) {
+		return msg
+	}
+	rest := msg[len(file):]
+	// Accept "<file>:<n> ", "<file>: ", or "<file> " — trim through the
+	// first space, then any leading whitespace on what remains.
+	if _, after, ok := strings.Cut(rest, " "); ok {
+		return strings.TrimLeft(after, " ")
+	}
+	return msg
 }
 
 func findingsShowCmd() *cobra.Command {
