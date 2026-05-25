@@ -96,7 +96,7 @@ func NewColdScanReparser(ingester *Ingester, promoter *Promoter, git GitQuerier,
 	// Wire the cold-scan-specific Save variant (solov2-pc3 #2): it
 	// skips clearParseFailure for clean parses since there's nothing
 	// to clear on a first-ever scan, removing one UPDATE per file on
-	// the contended WriteHot pool.
+	// the contended Write pool.
 	return newColdScanReparserFromFns(ingester.SaveColdScan, promoter.Promote, git, opts...)
 }
 
@@ -213,7 +213,7 @@ func newColdScanReparserFromFns(save coldScanSaveFn, promote coldScanPromoteFn, 
 // into save. Serial by design: parallelising the walker on a real repo
 // (solov2-pc3 investigation) made wall time slightly worse because the
 // daemon's per-file workload contends with the embedder / queue / wiki
-// workers via the WriteHot pool and (likely) the page cache. A worker
+// workers via the Write pool and (likely) the page cache. A worker
 // pool just spreads that contention across more goroutines without
 // improving total throughput. The fix lives upstream of this walker.
 func walkAndSave(ctx context.Context, repo RepoRecord, ignore IgnoreMatcher, save coldScanSaveFn) error {

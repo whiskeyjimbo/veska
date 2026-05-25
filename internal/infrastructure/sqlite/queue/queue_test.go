@@ -147,7 +147,7 @@ func TestPoller_PicksUpPendingRow(t *testing.T) {
 // Pauser returns true, the poll loop skips its tick without consuming
 // a pending row. When Pauser flips back to false, the row is picked
 // up on the next tick. This is the gate that keeps the post-promotion
-// queue off the WriteHot pool while a cold scan is in flight.
+// queue off the Write pool while a cold scan is in flight.
 func TestPoller_PauserBlocksProcessing(t *testing.T) {
 	t.Parallel()
 

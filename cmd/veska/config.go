@@ -95,4 +95,3 @@ func configReloadCmd(mgr service.Manager) *cobra.Command {
 		},
 	}
 }
-

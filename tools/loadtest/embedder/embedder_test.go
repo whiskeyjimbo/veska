@@ -101,9 +101,9 @@ func TestEmbedderThroughput(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = pools.Close() })
 
-	seedPending(t, pools.WriteHot, seedN)
+	seedPending(t, pools.Write, seedN)
 
-	refs := sqlite.NewEmbeddingRefsRepo(pools.ReadDB, pools.WriteHot)
+	refs := sqlite.NewEmbeddingRefsRepo(pools.ReadDB, pools.Write)
 	provider, err := ollama.New(model, ollama.WithBaseURL(ollamaURL))
 	if err != nil {
 		t.Fatalf("ollama.New: %v", err)

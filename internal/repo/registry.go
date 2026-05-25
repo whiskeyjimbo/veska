@@ -329,7 +329,7 @@ func Add(ctx context.Context, db *sql.DB, rootPath string) (string, bool, error)
 		branch = "main"
 	}
 
-	// solov2-6c04: a concurrent cold-scan can hold the WriteHot lock long
+	// solov2-6c04: a concurrent cold-scan can hold the Write lock long
 	// enough to outlast SQLite's busy_timeout (5s), surfacing SQLITE_BUSY
 	// to the user even though the INSERT itself is trivial. Wrap the
 	// single statement in a short app-level retry loop so the natural
@@ -440,7 +440,7 @@ func Remove(ctx context.Context, db *sql.DB, repoID string) error {
 	}
 
 	// solov2-6c04 follow-up: a concurrent promotion/scan can hold the
-	// WriteHot lock long enough to outlast SQLite's busy_timeout, surfacing
+	// Write lock long enough to outlast SQLite's busy_timeout, surfacing
 	// SQLITE_BUSY on user-initiated removes. Same retry envelope as Add.
 	if _, err := execWithBusyRetry(ctx, db, 5, 500*time.Millisecond,
 		`DELETE FROM repos WHERE repo_id = ?`, canonical,
