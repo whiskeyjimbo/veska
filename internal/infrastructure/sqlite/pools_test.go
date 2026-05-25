@@ -1,8 +1,12 @@
 package sqlite_test
 
 import (
+	"context"
 	"database/sql"
+	"errors"
 	"path/filepath"
+	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -35,17 +39,17 @@ func TestOpenPools_ForeignKeyCascade(t *testing.T) {
 	t.Cleanup(func() { _ = pools.Close() })
 
 	now := time.Now().UnixMilli()
-	if _, err := pools.WriteHot.Exec(`INSERT INTO repos (repo_id, root_path, added_at) VALUES (?,?,?)`, "r1", "/tmp/r1", now); err != nil {
+	if _, err := pools.Write.Exec(`INSERT INTO repos (repo_id, root_path, added_at) VALUES (?,?,?)`, "r1", "/tmp/r1", now); err != nil {
 		t.Fatalf("insert repo: %v", err)
 	}
-	if _, err := pools.WriteHot.Exec(`INSERT INTO nodes
+	if _, err := pools.Write.Exec(`INSERT INTO nodes
 		(node_id, branch, repo_id, language, kind, symbol_path, file_path, content_hash, last_promoted_at, actor_id, actor_kind)
 		VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
 		"n1", "main", "r1", "go", "function", "Foo", "foo.go", "h", now, "service:veska", "system"); err != nil {
 		t.Fatalf("insert node: %v", err)
 	}
 
-	if _, err := pools.WriteHot.Exec(`DELETE FROM repos WHERE repo_id = ?`, "r1"); err != nil {
+	if _, err := pools.Write.Exec(`DELETE FROM repos WHERE repo_id = ?`, "r1"); err != nil {
 		t.Fatalf("delete repo: %v", err)
 	}
 
@@ -58,7 +62,7 @@ func TestOpenPools_ForeignKeyCascade(t *testing.T) {
 	}
 }
 
-func TestOpenPools_ReturnsThreeHandles(t *testing.T) {
+func TestOpenPools_ReturnsBothHandles(t *testing.T) {
 	t.Parallel()
 
 	pools, err := sqlite.OpenPools(memDSN)
@@ -70,11 +74,8 @@ func TestOpenPools_ReturnsThreeHandles(t *testing.T) {
 	if pools.ReadDB == nil {
 		t.Error("ReadDB is nil")
 	}
-	if pools.WriteHot == nil {
-		t.Error("WriteHot is nil")
-	}
-	if pools.WriteEmbed == nil {
-		t.Error("WriteEmbed is nil")
+	if pools.Write == nil {
+		t.Error("Write is nil")
 	}
 }
 
@@ -93,7 +94,7 @@ func TestOpenPools_ReadDB_UnlimitedConnections(t *testing.T) {
 	}
 }
 
-func TestOpenPools_WriteHandles_MaxOneConn(t *testing.T) {
+func TestOpenPools_WriteHandle_MaxOneConn(t *testing.T) {
 	t.Parallel()
 
 	pools, err := sqlite.OpenPools(memDSN)
@@ -102,11 +103,8 @@ func TestOpenPools_WriteHandles_MaxOneConn(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = pools.Close() })
 
-	if got := pools.WriteHot.Stats().MaxOpenConnections; got != 1 {
-		t.Errorf("WriteHot.MaxOpenConnections = %d; want 1", got)
-	}
-	if got := pools.WriteEmbed.Stats().MaxOpenConnections; got != 1 {
-		t.Errorf("WriteEmbed.MaxOpenConnections = %d; want 1", got)
+	if got := pools.Write.Stats().MaxOpenConnections; got != 1 {
+		t.Errorf("Write.MaxOpenConnections = %d; want 1", got)
 	}
 }
 
@@ -124,8 +122,7 @@ func TestOpenPools_WALMode(t *testing.T) {
 		db   *sql.DB
 	}{
 		{"ReadDB", pools.ReadDB},
-		{"WriteHot", pools.WriteHot},
-		{"WriteEmbed", pools.WriteEmbed},
+		{"Write", pools.Write},
 	}
 	for _, h := range handles {
 		var mode string
@@ -137,6 +134,82 @@ func TestOpenPools_WALMode(t *testing.T) {
 		// available for file-backed databases.  Accept both.
 		if mode != "wal" && mode != "memory" {
 			t.Errorf("%s: journal_mode = %q; want \"wal\" or \"memory\"", h.name, mode)
+		}
+	}
+}
+
+// TestOpenPools_ConcurrentWrites_NoSQLITEBUSY pins solov2-jtl5.5: concurrent
+// writers (formerly via separate WriteHot/WriteEmbed pools) must not surface
+// SQLITE_BUSY mid-transaction. The single Write pool's MaxOpenConns=1 forces
+// in-process writers to queue on the *sql.DB conn rather than racing for the
+// SQLite-file writer slot, which was the source of the BUSY_SNAPSHOT errors
+// the user kept hitting on `config reload` and fast cold-scan completions.
+func TestOpenPools_ConcurrentWrites_NoSQLITEBUSY(t *testing.T) {
+	t.Parallel()
+	dbPath := filepath.Join(t.TempDir(), "v.db")
+
+	mdb, err := sqlite.Open(dbPath)
+	if err != nil {
+		t.Fatalf("Open (migrate): %v", err)
+	}
+	_ = mdb.Close()
+
+	pools, err := sqlite.OpenPools(dbPath)
+	if err != nil {
+		t.Fatalf("OpenPools: %v", err)
+	}
+	t.Cleanup(func() { _ = pools.Close() })
+
+	const writers = 8
+	const txnsPerWriter = 25
+
+	var wg sync.WaitGroup
+	errs := make(chan error, writers*txnsPerWriter)
+	ctx := context.Background()
+	now := time.Now().UnixMilli()
+
+	for w := range writers {
+		wg.Add(1)
+		go func(id int) {
+			defer wg.Done()
+			for i := range txnsPerWriter {
+				tx, beginErr := pools.Write.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelSerializable})
+				if beginErr != nil {
+					errs <- beginErr
+					return
+				}
+				repoID := "r-" + string(rune('a'+id)) + "-" + string(rune('a'+i%26))
+				if _, execErr := tx.ExecContext(ctx,
+					`INSERT INTO repos (repo_id, root_path, added_at) VALUES (?,?,?)`,
+					repoID, "/tmp/"+repoID, now,
+				); execErr != nil {
+					_ = tx.Rollback()
+					errs <- execErr
+					return
+				}
+				if _, execErr := tx.ExecContext(ctx,
+					`DELETE FROM repos WHERE repo_id = ?`, repoID,
+				); execErr != nil {
+					_ = tx.Rollback()
+					errs <- execErr
+					return
+				}
+				if commitErr := tx.Commit(); commitErr != nil {
+					errs <- commitErr
+				}
+			}
+		}(w)
+	}
+	wg.Wait()
+	close(errs)
+
+	for err := range errs {
+		// SQLITE_BUSY = 5; modernc surfaces it inside a wrapped string. The
+		// invariant under test is that callers never see it.
+		if err != nil && (errors.Is(err, sql.ErrTxDone) || strings.Contains(err.Error(), "SQLITE_BUSY") || strings.Contains(err.Error(), "database is locked")) {
+			t.Errorf("concurrent writer hit SQLITE_BUSY/locked: %v", err)
+		} else if err != nil {
+			t.Errorf("concurrent writer unexpected error: %v", err)
 		}
 	}
 }

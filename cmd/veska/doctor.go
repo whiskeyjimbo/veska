@@ -177,7 +177,7 @@ func doctorWikiRenderCmd() *cobra.Command {
 			}
 			defer func() { _ = pools.Close() }()
 
-			store := sqlite.NewWikiRenderStateRepo(pools.ReadDB, pools.WriteHot)
+			store := sqlite.NewWikiRenderStateRepo(pools.ReadDB, pools.Write)
 			report, err := doctor.CheckWikiRender(cmd.Context(), store)
 			if err != nil {
 				return err
@@ -231,7 +231,7 @@ func doctorPipelinesCmd() *cobra.Command {
 			}
 			defer func() { _ = pools.Close() }()
 
-			tokenStore := sqlite.NewReviewTokenStore(pools.ReadDB, pools.WriteHot)
+			tokenStore := sqlite.NewReviewTokenStore(pools.ReadDB, pools.Write)
 			quota := review.NewQuota(
 				fileCfg.Review.MaxTokensPerCommit,
 				fileCfg.Review.MaxTokensPerDay,

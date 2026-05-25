@@ -10,18 +10,25 @@ import (
 	_ "modernc.org/sqlite"
 )
 
-// Pools holds the three *sql.DB handles for a single veska.db file.
+// Pools holds the two *sql.DB handles for a single veska.db file.
+//
 // ReadDB: unlimited connections, for all read paths.
-// WriteHot: MaxOpenConns=1, for promotion + MCP writes.
-// WriteEmbed: MaxOpenConns=1, for embed worker only.
+// Write:  MaxOpenConns=1, the single writer for promotion, MCP writes, and
+//
+//	the embedder worker. SQLite WAL admits only one writer at the file
+//	level, so a second in-process write pool buys nothing but
+//	SQLITE_BUSY_SNAPSHOT races on transaction commit (solov2-jtl5.5).
+//	Serializing all writes through one Go-level connection lets in-process
+//	contention queue on the *sql.DB conn instead of failing mid-tx.
 type Pools struct {
-	ReadDB     *sql.DB
-	WriteHot   *sql.DB
-	WriteEmbed *sql.DB
+	ReadDB *sql.DB
+	Write  *sql.DB
 }
 
-// OpenPools opens three *sql.DB handles to dbPath with per-role PRAGMA setup.
-// All three handles use WAL mode and foreign keys.
+// OpenPools opens the read and write *sql.DB handles to dbPath with per-role
+// PRAGMA setup. Both handles use WAL mode and foreign keys. The write pool
+// gets a 30s busy_timeout to absorb the embedder's longer-running writes;
+// readers use 5s since they never block writers under WAL.
 // Caller must call pools.Close() when done.
 func OpenPools(dbPath string) (*Pools, error) {
 	readDB, err := openPool(dbPath, 0, 5000)
@@ -29,23 +36,15 @@ func OpenPools(dbPath string) (*Pools, error) {
 		return nil, fmt.Errorf("sqlite.OpenPools ReadDB: %w", err)
 	}
 
-	writeHot, err := openPool(dbPath, 1, 5000)
+	write, err := openPool(dbPath, 1, 30000)
 	if err != nil {
 		_ = readDB.Close()
-		return nil, fmt.Errorf("sqlite.OpenPools WriteHot: %w", err)
-	}
-
-	writeEmbed, err := openPool(dbPath, 1, 30000)
-	if err != nil {
-		_ = readDB.Close()
-		_ = writeHot.Close()
-		return nil, fmt.Errorf("sqlite.OpenPools WriteEmbed: %w", err)
+		return nil, fmt.Errorf("sqlite.OpenPools Write: %w", err)
 	}
 
 	return &Pools{
-		ReadDB:     readDB,
-		WriteHot:   writeHot,
-		WriteEmbed: writeEmbed,
+		ReadDB: readDB,
+		Write:  write,
 	}, nil
 }
 
@@ -103,7 +102,7 @@ func poolDSN(dbPath string, busyTimeoutMS int) string {
 	return base + sep + q.Encode()
 }
 
-// Close closes all three DB handles, collecting all errors.
+// Close closes both DB handles, collecting all errors.
 func (p *Pools) Close() error {
 	var errs []error
 	if p.ReadDB != nil {
@@ -111,14 +110,9 @@ func (p *Pools) Close() error {
 			errs = append(errs, fmt.Errorf("ReadDB.Close: %w", err))
 		}
 	}
-	if p.WriteHot != nil {
-		if err := p.WriteHot.Close(); err != nil {
-			errs = append(errs, fmt.Errorf("WriteHot.Close: %w", err))
-		}
-	}
-	if p.WriteEmbed != nil {
-		if err := p.WriteEmbed.Close(); err != nil {
-			errs = append(errs, fmt.Errorf("WriteEmbed.Close: %w", err))
+	if p.Write != nil {
+		if err := p.Write.Close(); err != nil {
+			errs = append(errs, fmt.Errorf("Write.Close: %w", err))
 		}
 	}
 	return errors.Join(errs...)

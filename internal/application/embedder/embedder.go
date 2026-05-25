@@ -73,8 +73,8 @@ type Worker struct {
 	// pauser, when non-nil and returning true, causes tick to skip its
 	// FetchPending+Embed pass. The poll loop still runs at interval so
 	// the worker resumes promptly when the gate clears. Used by the
-	// daemon to hold the embedder off the WriteEmbed pool while the
-	// resync path is committing on WriteHot (solov2-181 — closes the
+	// daemon to hold the embedder off the Write pool while the
+	// resync path is committing on Write (solov2-181 — closes the
 	// race solov2-8ga's queue-poller pause only partially fixed).
 	pauser func() bool
 
@@ -271,8 +271,8 @@ func (w *Worker) run(ctx context.Context) {
 func (w *Worker) tick(ctx context.Context) {
 	if w.pauser != nil && w.pauser() {
 		// While paused we deliberately do NOT touch the refs table — not
-		// even the count probe — so the WriteEmbed pool stays idle and
-		// can't race the WriteHot promotion tx into SQLITE_BUSY
+		// even the count probe — so the Write pool stays idle and
+		// can't race the Write promotion tx into SQLITE_BUSY
 		// (solov2-181). The next tick re-checks; the daemon clears the
 		// pause when resync finishes.
 		return

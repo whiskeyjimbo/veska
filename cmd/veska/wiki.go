@@ -133,7 +133,7 @@ func buildWikiHandler(pools *sqlite.Pools) (*wiki.Handler, error) {
 
 	nodeLookup := sqlite.NewNodeLookupRepo(pools.ReadDB)
 	wikiEdges := sqlite.NewEdgeReaderRepo(pools.ReadDB)
-	wikiGraph := sqlite.NewGraphRepo(pools.ReadDB, pools.WriteHot)
+	wikiGraph := sqlite.NewGraphRepo(pools.ReadDB, pools.Write)
 	wikiFindings := sqlite.NewFindingQuerierRepo(pools.ReadDB)
 	wikiBlast := blastradius.NewService(wikiEdges, nodeLookup, staging)
 
@@ -175,7 +175,7 @@ func buildWikiHandler(pools *sqlite.Pools) (*wiki.Handler, error) {
 	// pages regardless of the daemon's [wiki] write_pages default (solov2-ocnn).
 	handler, err := wiki.NewHandler(
 		hotZoneSvc, epSvc,
-		sqlite.NewWikiRenderStateRepo(pools.ReadDB, pools.WriteHot),
+		sqlite.NewWikiRenderStateRepo(pools.ReadDB, pools.Write),
 		wikiRoot,
 		wiki.WithWritePages(true),
 	)

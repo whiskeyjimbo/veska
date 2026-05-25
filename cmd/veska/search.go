@@ -179,7 +179,7 @@ func findOrRegisterRepo(ctx context.Context, pools *sqlite.Pools, path string) (
 	}
 	// Not registered yet — add. Subsequent runs find the existing
 	// registration (AC2: reuse the index).
-	id, _, addErr := repo.Add(ctx, pools.WriteHot, path)
+	id, _, addErr := repo.Add(ctx, pools.Write, path)
 	if addErr != nil {
 		return repo.Record{}, fmt.Errorf("search: register repo %q: %w", path, addErr)
 	}
@@ -243,7 +243,7 @@ func drainEmbedderQueue(ctx context.Context, pools *sqlite.Pools, w io.Writer) e
 		return fmt.Errorf("search: open vector storage: %w", err)
 	}
 
-	refs := sqlite.NewEmbeddingRefsRepo(pools.ReadDB, pools.WriteEmbed)
+	refs := sqlite.NewEmbeddingRefsRepo(pools.ReadDB, pools.Write)
 	worker, err := embedder.NewWorker(refs, prov, vec,
 		embedder.WithInterval(100*time.Millisecond),
 	)

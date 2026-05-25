@@ -304,7 +304,7 @@ func TestWire_StartWatchesRegisteredRepos(t *testing.T) {
 	if err := os.MkdirAll(filepath.Join(gitDir, ".git", "hooks"), 0o755); err != nil {
 		t.Fatalf("create .git/hooks: %v", err)
 	}
-	repoID, _, err := repo.Add(context.Background(), d.pools.WriteHot, gitDir)
+	repoID, _, err := repo.Add(context.Background(), d.pools.Write, gitDir)
 	if err != nil {
 		t.Fatalf("repo.Add: %v", err)
 	}
@@ -346,14 +346,14 @@ func TestWire_WatchLoopRoutesEditsToStaging(t *testing.T) {
 			if err := os.MkdirAll(filepath.Join(gitDir, ".git", "hooks"), 0o755); err != nil {
 				t.Fatalf("create .git/hooks: %v", err)
 			}
-			repoID, _, err := repo.Add(context.Background(), d.pools.WriteHot, gitDir)
+			repoID, _, err := repo.Add(context.Background(), d.pools.Write, gitDir)
 			if err != nil {
 				t.Fatalf("repo.Add: %v", err)
 			}
 			// repo.Add defaults to "main" when HEAD detection fails (this
 			// fixture has no real git init). Force the recorded branch so
 			// runWatchLoop's lookup must honour something other than "main".
-			if _, err := d.pools.WriteHot.Exec(
+			if _, err := d.pools.Write.Exec(
 				`UPDATE repos SET active_branch = ? WHERE repo_id = ?`,
 				branch, repoID,
 			); err != nil {

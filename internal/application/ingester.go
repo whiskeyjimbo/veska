@@ -92,7 +92,7 @@ func (ing *Ingester) Save(ctx context.Context, repoID, branch, path string, src 
 // files, but it skips clearParseFailure — the per-file no-op UPDATE that
 // the regular Save path issues to revalidate an already-clean file
 // (solov2-pc3 fix #2). On a 646-file cold scan against a fresh repo,
-// this eliminates 646 needless writes through the contended WriteHot
+// this eliminates 646 needless writes through the contended Write
 // pool. Per-file TODOs are still emitted because emitTodos has its own
 // len==0 guard and is genuinely free for files without TODO markers.
 func (ing *Ingester) SaveColdScan(ctx context.Context, repoID, branch, path string, src []byte) {
@@ -102,7 +102,7 @@ func (ing *Ingester) SaveColdScan(ctx context.Context, repoID, branch, path stri
 // save is the shared body. coldScan, when true, skips the
 // clearParseFailure call on a successful clean parse — there's nothing
 // to clear during a first-ever scan of a repo, and the per-file UPDATE
-// dominates per-Save wall time under WriteHot contention.
+// dominates per-Save wall time under Write contention.
 func (ing *Ingester) save(ctx context.Context, repoID, branch, path string, src []byte, coldScan bool) {
 	// Block if a branch switch is in progress; read current generation before parsing
 	// so the generation check in StageIfCurrentGeneration is tight.
