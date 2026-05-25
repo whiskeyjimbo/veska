@@ -3,9 +3,11 @@ package checks
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/whiskeyjimbo/veska/internal/application/manifest"
 	"github.com/whiskeyjimbo/veska/internal/core/domain"
@@ -66,6 +68,7 @@ func (c *VulnScanCheck) Run(ctx context.Context, in Input) ([]*domain.Finding, e
 		return nil, fmt.Errorf("vuln-scan: parse go.mod: %w", err)
 	}
 
+	start := time.Now()
 	vulns, err := c.src.Scan(ctx, deps)
 	if err != nil {
 		return nil, fmt.Errorf("vuln-scan: scan: %w", err)
@@ -73,7 +76,9 @@ func (c *VulnScanCheck) Run(ctx context.Context, in Input) ([]*domain.Finding, e
 
 	out := make([]*domain.Finding, 0, len(vulns))
 	for _, v := range vulns {
-		msg := fmt.Sprintf("%s: %s (affected range %s)", v.Package, v.Summary, v.AffectedRange)
+		// solov2-fr2a: lead the message with the advisory ID so triage
+		// doesn't need to grep the OSV cache.
+		msg := fmt.Sprintf("[%s] %s: %s (affected range %s)", v.AdvisoryID, v.Package, v.Summary, v.AffectedRange)
 		f, err := domain.NewFinding(
 			in.RepoID, in.Branch,
 			mapSeverity(v.Severity),
@@ -89,6 +94,16 @@ func (c *VulnScanCheck) Run(ctx context.Context, in Input) ([]*domain.Finding, e
 		}
 		out = append(out, f)
 	}
+	// solov2-fw6z: per-promotion log line so operators can confirm the
+	// check ran for a given git_sha. The 'vulnrefresh' log lines only
+	// reflect the OSV cache pull.
+	slog.Info("vuln-scan: scanned",
+		"repo_id", in.RepoID,
+		"branch", in.Branch,
+		"deps", len(deps),
+		"findings", len(out),
+		"elapsed_ms", time.Since(start).Milliseconds(),
+	)
 	return out, nil
 }
 
