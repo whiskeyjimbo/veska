@@ -113,13 +113,16 @@ func makeCloseFindingHandler(db *sql.DB, aw ports.AuditWriter) ToolHandler {
 		// Human-action gate: severity >= high requires a human actor.
 		sev := domain.Severity(severity)
 		if sev.AtLeast(domain.SeverityHigh) && actor.Kind != domain.ActorKindHuman {
+			// solov2-6l6l: include a one-line resolution hint so callers
+			// don't have to read the source to learn how to proceed.
 			return nil, &RPCError{
 				Code:    CodeHumanRequired,
-				Message: "human_required",
+				Message: fmt.Sprintf("human_required: severity=%s requires a human actor — close from the CLI as a human user (veska findings close %s --reason=...) or have a teammate run eng_close_finding", severity, p.FindingID),
 				Data: map[string]any{
 					"reason":     "human_required",
 					"finding_id": p.FindingID,
 					"severity":   severity,
+					"hint":       "close from the human CLI (veska findings close) or have a human actor run eng_close_finding",
 				},
 			}
 		}
