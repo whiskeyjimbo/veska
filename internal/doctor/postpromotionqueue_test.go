@@ -316,6 +316,44 @@ func TestPurgeOrphanFailedRows(t *testing.T) {
 	}
 }
 
+// TestCheckPostPromotionQueue_ReportsOrphanCount is the regression for
+// solov2-261t: doctor should surface the orphan count so the textual probe
+// can point at --purge-orphans instead of leaving operators to grep the
+// FailedRow error messages.
+func TestCheckPostPromotionQueue_ReportsOrphanCount(t *testing.T) {
+	path := t.TempDir() + "/test.db"
+	db := createQueueDB(t, path)
+	if _, err := db.Exec(`CREATE TABLE repos (repo_id TEXT PRIMARY KEY, root_path TEXT NOT NULL)`); err != nil {
+		t.Fatalf("create repos: %v", err)
+	}
+	if _, err := db.Exec(`INSERT INTO repos VALUES ('live-repo', '/tmp/r')`); err != nil {
+		t.Fatalf("seed repo: %v", err)
+	}
+	cases := []struct{ repoID, state, workKind string }{
+		{"live-repo", "failed", "wiki"},     // live: not an orphan
+		{"orphan-a", "failed", "wiki"},      // orphan
+		{"orphan-b", "failed", "auto_link"}, // orphan
+		{"orphan-c", "pending", "embed"},    // not failed → not counted
+	}
+	for _, c := range cases {
+		if _, err := db.Exec(
+			`INSERT INTO post_promotion_queue (repo_id, state, work_kind) VALUES (?, ?, ?)`,
+			c.repoID, c.state, c.workKind,
+		); err != nil {
+			t.Fatalf("insert: %v", err)
+		}
+	}
+	db.Close()
+
+	report, err := doctor.CheckPostPromotionQueue(path)
+	if err != nil {
+		t.Fatalf("CheckPostPromotionQueue: %v", err)
+	}
+	if report.OrphanCount != 2 {
+		t.Errorf("OrphanCount = %d, want 2", report.OrphanCount)
+	}
+}
+
 // TestPurgeOrphanFailedRows_Idempotent: calling twice deletes nothing the
 // second time. Guards against PRAGMAs/transactions leaving the DB in a state
 // where a re-run miscounts.
