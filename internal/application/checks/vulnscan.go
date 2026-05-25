@@ -47,14 +47,22 @@ func NewVulnScanCheck(src ports.VulnSource, repoRoot RepoRootFunc) *VulnScanChec
 func (c *VulnScanCheck) Name() string { return "vuln-scan" }
 
 // Run scans the module dependency set against the advisory cache when go.mod
-// is among the promotion's changed files. When go.mod was not touched it is a
-// no-op returning (nil, nil).
+// is among the promotion's changed files. When the repo has no go.mod at all
+// it is a no-op returning (nil, nil) — no manifest, no scan.
+//
+// Historically this check skipped any promotion that didn't include go.mod in
+// its file list, which collapsed two distinct cases into "no scan": (a) the
+// commit really didn't touch go.mod, and (b) the promotion was a partial
+// re-promote (e.g. `eng_promote_repo` invoked by `veska config reload`, which
+// only restages the latest commit's changed files). Case (b) meant
+// retroactive vuln scans after enabling [vuln_source] never fired on repos
+// whose last commit was unrelated to deps — exactly the gap that hit during
+// junior-journey round 3 (solov2-jtl5.4). The scan against the OSV cache is
+// ~35ms; running it on every promote is cheap, and findings dedup by
+// finding_key so a no-change re-scan is a no-op at the storage layer.
 func (c *VulnScanCheck) Run(ctx context.Context, in Input) ([]*domain.Finding, error) {
 	if c == nil || c.src == nil || c.repoRoot == nil {
 		return nil, fmt.Errorf("vuln-scan: nil dependency")
-	}
-	if !touchesGoMod(in.FilePaths) {
-		return nil, nil
 	}
 
 	root, err := c.repoRoot(ctx, in.RepoID)
@@ -63,6 +71,11 @@ func (c *VulnScanCheck) Run(ctx context.Context, in Input) ([]*domain.Finding, e
 	}
 	content, err := os.ReadFile(filepath.Join(root, "go.mod"))
 	if err != nil {
+		if os.IsNotExist(err) {
+			// No go.mod, nothing to scan. Not an error — non-Go repos are
+			// a normal case once the touchesGoMod gate is gone.
+			return nil, nil
+		}
 		return nil, fmt.Errorf("vuln-scan: read go.mod: %w", err)
 	}
 	deps, err := manifest.ReadGoMod(content)
@@ -128,21 +141,6 @@ func (c *VulnScanCheck) Run(ctx context.Context, in Input) ([]*domain.Finding, e
 	return out, nil
 }
 
-// touchesGoMod reports whether any changed path is a go.mod. FilePaths is
-// populated from PromotionBatch.Files[].Path, which (depending on the source)
-// carries either a repo-root-relative path (git diff seam) or a full
-// filesystem path (cold-scan walker). Matching by basename catches both. A
-// nested vendor/.../go.mod would also trigger; that's acceptable because the
-// scan itself only reads {repoRoot}/go.mod — at worst we run an extra scan
-// against the root, never on the wrong manifest.
-func touchesGoMod(paths []string) bool {
-	for _, p := range paths {
-		if filepath.Base(p) == "go.mod" {
-			return true
-		}
-	}
-	return false
-}
 
 // mapSeverity translates an OSV severity label onto the domain Severity enum.
 // Unknown labels fall back to Medium so an advisory is never silently dropped
