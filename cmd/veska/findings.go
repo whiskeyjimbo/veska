@@ -45,6 +45,7 @@ type findingView struct {
 func findingsListCmd() *cobra.Command {
 	var (
 		repoFlag string
+		allRepos bool
 		state    string
 		severity string
 		rule     string
@@ -57,28 +58,65 @@ func findingsListCmd() *cobra.Command {
 		Args:         cobra.NoArgs,
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			params := map[string]any{}
-			if repoFlag != "" {
-				params["repo_id"] = repoFlag
-			} else if rid := autoResolveRepo(cmd.Context(), cmd.ErrOrStderr()); rid != "" {
-				// solov2-dqwh: surface which repo was picked when multiple are
-				// registered so users don't get silently-scoped empty results.
-				params["repo_id"] = rid
+			if allRepos && repoFlag != "" {
+				return fmt.Errorf("findings list: --all and --repo are mutually exclusive")
 			}
+			// solov2-0vau: --all enumerates every registered repo and
+			// concatenates findings, grouped by repo. Output sorts/limits
+			// across the combined set so the header still reports a
+			// global severity breakdown.
+			baseParams := map[string]any{}
 			if state != "" {
-				params["state"] = state
+				baseParams["state"] = state
 			}
 			if severity != "" {
-				params["severity"] = severity
+				baseParams["severity"] = severity
 			}
 			if rule != "" {
-				params["rule"] = rule
+				baseParams["rule"] = rule
 			}
 			var resp struct {
 				Findings []findingView `json:"findings"`
 			}
-			if err := callMCP(cmd.Context(), "eng_list_findings", params, &resp); err != nil {
-				return fmt.Errorf("findings list: %w", err)
+			if allRepos {
+				var lr struct {
+					Repos []struct {
+						RepoID  string `json:"repo_id"`
+						ShortID string `json:"short_id"`
+					} `json:"repos"`
+				}
+				if err := callMCP(cmd.Context(), "eng_list_repos", map[string]any{}, &lr); err != nil {
+					return fmt.Errorf("findings list --all: list repos: %w", err)
+				}
+				for _, r := range lr.Repos {
+					params := map[string]any{"repo_id": r.RepoID}
+					for k, v := range baseParams {
+						params[k] = v
+					}
+					var part struct {
+						Findings []findingView `json:"findings"`
+					}
+					if err := callMCP(cmd.Context(), "eng_list_findings", params, &part); err != nil {
+						fmt.Fprintf(cmd.ErrOrStderr(), "  warn: %s: %v\n", r.ShortID, err)
+						continue
+					}
+					resp.Findings = append(resp.Findings, part.Findings...)
+				}
+			} else {
+				params := map[string]any{}
+				for k, v := range baseParams {
+					params[k] = v
+				}
+				if repoFlag != "" {
+					params["repo_id"] = repoFlag
+				} else if rid := autoResolveRepo(cmd.Context(), cmd.ErrOrStderr()); rid != "" {
+					// solov2-dqwh: surface which repo was picked when multiple are
+					// registered so users don't get silently-scoped empty results.
+					params["repo_id"] = rid
+				}
+				if err := callMCP(cmd.Context(), "eng_list_findings", params, &resp); err != nil {
+					return fmt.Errorf("findings list: %w", err)
+				}
 			}
 			w := cmd.OutOrStdout()
 			if jsonOut {
@@ -106,7 +144,11 @@ func findingsListCmd() *cobra.Command {
 			}
 
 			tw := tabwriter.NewWriter(w, 0, 0, 2, ' ', 0)
-			fmt.Fprintln(tw, "FINDING_ID\tSEVERITY\tRULE\tFILE\tMESSAGE")
+			if allRepos {
+				fmt.Fprintln(tw, "FINDING_ID\tSEVERITY\tRULE\tREPO\tFILE\tMESSAGE")
+			} else {
+				fmt.Fprintln(tw, "FINDING_ID\tSEVERITY\tRULE\tFILE\tMESSAGE")
+			}
 			for _, f := range shown {
 				path := ""
 				if f.FilePath != nil {
@@ -116,7 +158,15 @@ func findingsListCmd() *cobra.Command {
 				if len(msg) > 80 {
 					msg = msg[:77] + "..."
 				}
-				fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\n", f.FindingID, f.Severity, f.Rule, path, msg)
+				if allRepos {
+					short := f.RepoID
+					if len(short) > 12 {
+						short = short[:12]
+					}
+					fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\t%s\n", f.FindingID, f.Severity, f.Rule, short, path, msg)
+				} else {
+					fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\n", f.FindingID, f.Severity, f.Rule, path, msg)
+				}
 			}
 			if err := tw.Flush(); err != nil {
 				return err
@@ -128,6 +178,7 @@ func findingsListCmd() *cobra.Command {
 		},
 	}
 	cmd.Flags().StringVar(&repoFlag, "repo", "", "repo id or short_id (default: the sole registered repo)")
+	cmd.Flags().BoolVar(&allRepos, "all", false, "list findings across every registered repo (solov2-0vau)")
 	cmd.Flags().StringVar(&state, "state", "", "filter by state (open|closed; default open)")
 	cmd.Flags().StringVar(&severity, "severity", "", "filter by severity")
 	cmd.Flags().StringVar(&rule, "rule", "", "filter by rule (e.g. vulnerable_dependency, dead-code, secret_leak, auto-link)")
