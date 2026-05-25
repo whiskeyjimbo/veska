@@ -315,6 +315,17 @@ func printRepoTableWithProgress(w io.Writer, repos []repoView, progress map[stri
 		status := "promoted"
 		if r.LastPromotedSHA == "" {
 			status = "(unindexed)"
+			// solov2-jtl5.8: a never-promoted repo isn't always 'just hasn't
+			// scanned yet'. A failed cold-scan leaves the repo in this state
+			// too, and the user has no signal until they tail daemon.log. If
+			// the most recent ERROR/WARN line in the log names this repo, surface
+			// 'scan failed' instead of the silently-misleading '(unindexed)'.
+			if _, inFlight := progress[r.RepoID]; !inFlight {
+				logPath := filepath.Join(config.DefaultVectorDir(), "logs", "daemon.log")
+				if reason := tailScanFailureReason(logPath, r.RepoID); reason != "" {
+					status = "(scan failed)"
+				}
+			}
 			if p, ok := progress[r.RepoID]; ok {
 				elapsed := formatScanElapsed(p.StartedAt)
 				switch {
