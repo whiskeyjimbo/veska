@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"regexp"
 	"sort"
+	"strings"
 
 	"github.com/whiskeyjimbo/veska/internal/core/domain"
 	"github.com/whiskeyjimbo/veska/internal/observability"
@@ -250,14 +251,7 @@ func sortedKeys(m map[string]json.RawMessage) string {
 		keys = append(keys, k)
 	}
 	sort.Strings(keys)
-	out := ""
-	for i, k := range keys {
-		if i > 0 {
-			out += ", "
-		}
-		out += k
-	}
-	return out
+	return strings.Join(keys, ", ")
 }
 
 // ToolListEntry is one row in the tools/list response. Matches the MCP
