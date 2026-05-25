@@ -377,9 +377,16 @@ func repoAddCmd() *cobra.Command {
 // or files-seen jump so the user has a continuous signal instead of a
 // silent background scan.
 func waitForScanComplete(ctx context.Context, w io.Writer, repoID string) error {
+	// solov2-en47: when the scanner sits on a slow file the phase + files_seen
+	// don't change, so the original loop printed nothing for tens of seconds.
+	// Heartbeat every 10s with the elapsed-since-last-update so the user can
+	// see we're still working — and so they can correlate the stall with a
+	// specific file via `~/.veska/logs/daemon.log`.
+	const heartbeatEvery = 10 * time.Second
 	start := time.Now()
 	var lastPhase string
 	var lastFiles int
+	lastEvent := time.Now()
 	for {
 		select {
 		case <-ctx.Done():
@@ -417,6 +424,15 @@ func waitForScanComplete(ctx context.Context, w io.Writer, repoID string) error 
 			fmt.Fprintf(w, "  %s → %d files (%.1fs)\n", phase, row.FilesSeen, time.Since(start).Seconds())
 			lastPhase = row.Phase
 			lastFiles = row.FilesSeen
+			lastEvent = time.Now()
+		} else if time.Since(lastEvent) >= heartbeatEvery {
+			phase := row.Phase
+			if phase == "" {
+				phase = "running"
+			}
+			fmt.Fprintf(w, "  %s → %d files (%.1fs, stalled %.0fs — check ~/.veska/logs/daemon.log)\n",
+				phase, row.FilesSeen, time.Since(start).Seconds(), time.Since(lastEvent).Seconds())
+			lastEvent = time.Now()
 		}
 		time.Sleep(500 * time.Millisecond)
 	}
