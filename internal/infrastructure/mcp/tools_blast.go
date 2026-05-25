@@ -9,6 +9,7 @@ import (
 	application "github.com/whiskeyjimbo/veska/internal/application"
 	"github.com/whiskeyjimbo/veska/internal/application/blastradius"
 	"github.com/whiskeyjimbo/veska/internal/core/domain"
+	"github.com/whiskeyjimbo/veska/internal/core/ports"
 )
 
 // BlastResponse is the envelope returned by the eng_get_*_blast_radius tools.
@@ -51,7 +52,7 @@ func WithBlastResolveFunc(fn ResolveFunc) BlastToolOption {
 // When either is nil the tool is still registered but will return
 // InternalError on every call — this keeps the registry uniform across
 // composition roots that have not wired the git adapter.
-func RegisterBlastTools(r *Registry, svc *blastradius.Service, repoRoot RepoRootFunc, changedFiles blastradius.ChangedFilesFunc, repos application.RepoLister, opts ...BlastToolOption) {
+func RegisterBlastTools(r *Registry, svc *blastradius.Service, repoRoot RepoRootFunc, changedFiles blastradius.ChangedFilesFunc, repos application.RepoLister, graph ports.GraphStorage, opts ...BlastToolOption) {
 	cfg := blastToolConfig{}
 	for _, opt := range opts {
 		opt(&cfg)
@@ -61,7 +62,7 @@ func RegisterBlastTools(r *Registry, svc *blastradius.Service, repoRoot RepoRoot
 		Description:     "Compute the blast radius (callers/callees/both) of a single node via BFS over the edges table.",
 		IncludesStaging: false,
 		InputSchema:     blastRadiusInputSchema,
-		Handler:         makeBlastRadiusHandler(svc, repos, cfg.resolve),
+		Handler:         makeBlastRadiusHandler(svc, repos, graph, cfg.resolve),
 	})
 	r.MustRegister(ToolSpec{
 		Name:            "eng_get_dirty_blast_radius",
@@ -81,6 +82,7 @@ func RegisterBlastTools(r *Registry, svc *blastradius.Service, repoRoot RepoRoot
 
 type blastRadiusParams struct {
 	NodeID          string `json:"node_id"`
+	Symbol          string `json:"symbol"`
 	RepoID          string `json:"repo_id"`
 	Branch          string `json:"branch"`
 	MaxDepth        int    `json:"max_depth,omitempty"`
@@ -89,14 +91,14 @@ type blastRadiusParams struct {
 	ExpandCrossRepo bool   `json:"expand_cross_repo,omitempty"`
 }
 
-func makeBlastRadiusHandler(svc *blastradius.Service, repos application.RepoLister, resolve ResolveFunc) ToolHandler {
+func makeBlastRadiusHandler(svc *blastradius.Service, repos application.RepoLister, graph ports.GraphStorage, resolve ResolveFunc) ToolHandler {
 	return func(ctx context.Context, _ domain.Actor, raw json.RawMessage) (any, *RPCError) {
 		var p blastRadiusParams
 		if rpcErr := bindParams(raw, &p); rpcErr != nil {
 			return nil, rpcErr
 		}
-		if rpcErr := checkRequired("node_id", p.NodeID); rpcErr != nil {
-			return nil, rpcErr
+		if p.NodeID == "" && p.Symbol == "" {
+			return nil, &RPCError{Code: CodeInvalidParams, Message: "missing required params: node_id or symbol"}
 		}
 		// solov2-ktz0: shim-injected cwd resolves repo_id when omitted.
 		repoID, rpcErr := resolveRepoIDFromParams(ctx, repos, raw, p.RepoID)
@@ -108,6 +110,28 @@ func makeBlastRadiusHandler(svc *blastradius.Service, repos application.RepoList
 			return nil, rpcErr
 		} else {
 			p.Branch = br
+		}
+
+		// solov2-psdx: accept 'symbol' alongside node_id for parity with
+		// eng_get_call_chain / eng_find_symbol. node_id wins when both are
+		// supplied (more specific selector). Ambiguous symbols are rejected
+		// so the caller must disambiguate explicitly — same shape as
+		// eng_get_call_chain.
+		if p.NodeID == "" {
+			if graph == nil {
+				return nil, &RPCError{Code: CodeInternalError, Message: "symbol lookup not wired (graph storage missing)"}
+			}
+			matches, ferr := graph.FindNodes(ctx, p.RepoID, p.Branch, p.Symbol)
+			if ferr != nil {
+				return nil, &RPCError{Code: CodeInternalError, Message: fmt.Sprintf("find symbol %q: %v", p.Symbol, ferr)}
+			}
+			if len(matches) == 0 {
+				return nil, &RPCError{Code: CodeNotFound, Message: fmt.Sprintf("symbol not found: %s", p.Symbol)}
+			}
+			if len(matches) > 1 {
+				return nil, &RPCError{Code: CodeInvalidParams, Message: fmt.Sprintf("symbol %q is ambiguous (%d matches); pass node_id to disambiguate", p.Symbol, len(matches))}
+			}
+			p.NodeID = string(matches[0].ID)
 		}
 		dir, err := blastradius.ParseDirection(p.Direction)
 		if err != nil {
