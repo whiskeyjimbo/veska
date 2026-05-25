@@ -38,11 +38,38 @@ func TestMaybeInjectCwd_KeepsExplicitCwd(t *testing.T) {
 	}
 }
 
+// TestMaybeInjectCwd_AllEngMethodsRewritten guards solov2-ktz0: every eng_*
+// call gets cwd injected (when missing) so the daemon can fall back to it
+// when repo_id is omitted. Non-eng_* methods (and frames that already carry
+// cwd) still pass through unchanged.
+func TestMaybeInjectCwd_AllEngMethodsRewritten(t *testing.T) {
+	cases := []string{
+		"eng_find_symbol", "eng_get_node", "eng_search_semantic",
+		"eng_list_repos", "eng_get_status",
+	}
+	for _, m := range cases {
+		t.Run(m, func(t *testing.T) {
+			in := []byte(`{"jsonrpc":"2.0","id":1,"method":"` + m + `","params":{}}` + "\n")
+			out, ok := maybeInjectCwd(in, "/abs/work")
+			if !ok {
+				t.Fatalf("expected rewrite for %s", m)
+			}
+			var msg map[string]any
+			_ = json.Unmarshal(out, &msg)
+			p, _ := msg["params"].(map[string]any)
+			if cwd, _ := p["cwd"].(string); cwd != "/abs/work" {
+				t.Fatalf("expected cwd=/abs/work, got %q", cwd)
+			}
+		})
+	}
+}
+
 func TestMaybeInjectCwd_OtherMethodsPassThrough(t *testing.T) {
-	in := []byte(`{"jsonrpc":"2.0","id":1,"method":"eng_list_repos","params":{}}` + "\n")
+	// Non-eng_* methods (tools/list, etc.) are not rewritten.
+	in := []byte(`{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}` + "\n")
 	_, ok := maybeInjectCwd(in, "/abs/work")
 	if ok {
-		t.Fatal("only eng_get_current_repo should be rewritten")
+		t.Fatal("non-eng_* methods should not be rewritten")
 	}
 }
 
@@ -79,11 +106,16 @@ func TestInjectCwdAndCopy_StreamRewritesOnlyTargetFrames(t *testing.T) {
 	if cwd, _ := p["cwd"].(string); cwd == "" {
 		t.Fatalf("eng_get_current_repo frame should now carry cwd, got: %s", lines[1])
 	}
-	// Frames 1 and 3 must round-trip unchanged.
-	if !strings.Contains(lines[0], `"eng_list_repos"`) || strings.Contains(lines[0], `"cwd"`) {
-		t.Fatalf("non-target frame 1 should pass through unchanged: %s", lines[0])
+	// Frames 1 and 3 are also eng_* calls — they should now carry cwd too
+	// (solov2-ktz0 broadened the rewrite from just eng_get_current_repo to
+	// every eng_* method).
+	var frame1, frame3 map[string]any
+	_ = json.Unmarshal([]byte(lines[0]), &frame1)
+	_ = json.Unmarshal([]byte(lines[2]), &frame3)
+	if cwd, _ := frame1["params"].(map[string]any)["cwd"].(string); cwd == "" {
+		t.Fatalf("eng_list_repos frame should also carry cwd post-ktz0: %s", lines[0])
 	}
-	if !strings.Contains(lines[2], `"eng_find_symbol"`) || strings.Contains(lines[2], `"cwd"`) {
-		t.Fatalf("non-target frame 3 should pass through unchanged: %s", lines[2])
+	if cwd, _ := frame3["params"].(map[string]any)["cwd"].(string); cwd == "" {
+		t.Fatalf("eng_find_symbol frame should also carry cwd post-ktz0: %s", lines[2])
 	}
 }

@@ -200,8 +200,9 @@ func TestAdminTools_GetRepo_NotFound(t *testing.T) {
 		t.Fatal("expected RPC error, got nil")
 		return
 	}
-	if rpcErr.Code != CodeInvalidParams {
-		t.Errorf("expected -32602, got %d", rpcErr.Code)
+	// solov2-byxy: not-found is a domain error (CodeNotFound), not -32602.
+	if rpcErr.Code != CodeNotFound {
+		t.Errorf("expected %d, got %d", CodeNotFound, rpcErr.Code)
 	}
 }
 

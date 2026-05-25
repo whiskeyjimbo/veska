@@ -60,6 +60,10 @@ type PromotePromoter interface {
 
 type promoteParams struct {
 	RootPath string `json:"root_path"`
+	// RepoID accepts the full repo_id or a 12-char short_id (solov2-65bk),
+	// matching every other repo-scoped tool. Either RepoID or RootPath is
+	// sufficient; when both are passed, RepoID wins.
+	RepoID string `json:"repo_id"`
 }
 
 type promoteResult struct {
@@ -75,7 +79,7 @@ type promoteResult struct {
 func RegisterPromoteTool(r *Registry, deps PromoteDeps) {
 	r.MustRegister(ToolSpec{
 		Name:        "eng_promote_repo",
-		Description: "Re-stage and promote files changed in HEAD for the repo at root_path.",
+		Description: "Re-stage and promote files changed in HEAD. Accepts repo_id (full or short) or root_path.",
 		Handler:     makePromoteHandler(deps),
 	})
 }
@@ -89,34 +93,51 @@ func makePromoteHandler(deps PromoteDeps) ToolHandler {
 		if err := json.Unmarshal(raw, &p); err != nil {
 			return nil, &RPCError{Code: CodeInvalidParams, Message: fmt.Sprintf("invalid params: %v", err)}
 		}
-		if p.RootPath == "" {
-			return nil, &RPCError{Code: CodeInvalidParams, Message: "root_path is required"}
-		}
-		// Canonicalise so the lookup matches the canonical form repo.Add stored.
-		canon, err := filepath.EvalSymlinks(p.RootPath)
-		if err != nil {
-			// Fall back to an absolute path — repo.Add does the same when
-			// EvalSymlinks fails on a missing directory.
-			if abs, aerr := filepath.Abs(p.RootPath); aerr == nil {
-				canon = abs
-			} else {
-				canon = p.RootPath
-			}
+		if p.RootPath == "" && p.RepoID == "" {
+			return nil, &RPCError{Code: CodeInvalidParams, Message: "root_path or repo_id is required"}
 		}
 
 		repos, err := deps.Repos.ListRepos(ctx)
 		if err != nil {
 			return nil, &RPCError{Code: CodeInternalError, Message: fmt.Sprintf("list repos: %v", err)}
 		}
+
 		var rec application.RepoRecord
-		for _, r := range repos {
-			if r.RootPath == canon {
-				rec = r
-				break
+		var canon string
+		if p.RepoID != "" {
+			// solov2-65bk: resolve by repo_id (full or short prefix) — parity
+			// with every other repo-scoped tool.
+			for _, r := range repos {
+				if r.RepoID == p.RepoID || ShortRepoID(r.RepoID) == p.RepoID {
+					rec = r
+					break
+				}
 			}
-		}
-		if rec.RepoID == "" {
-			return nil, &RPCError{Code: CodeInvalidParams, Message: fmt.Sprintf("repo not registered for root %q", canon)}
+			if rec.RepoID == "" {
+				return nil, &RPCError{Code: CodeNotFound, Message: fmt.Sprintf("repo not found: %s", p.RepoID)}
+			}
+			canon = rec.RootPath
+		} else {
+			// Canonicalise so the lookup matches the canonical form repo.Add stored.
+			canon, err = filepath.EvalSymlinks(p.RootPath)
+			if err != nil {
+				// Fall back to an absolute path — repo.Add does the same when
+				// EvalSymlinks fails on a missing directory.
+				if abs, aerr := filepath.Abs(p.RootPath); aerr == nil {
+					canon = abs
+				} else {
+					canon = p.RootPath
+				}
+			}
+			for _, r := range repos {
+				if r.RootPath == canon {
+					rec = r
+					break
+				}
+			}
+			if rec.RepoID == "" {
+				return nil, &RPCError{Code: CodeNotFound, Message: fmt.Sprintf("repo not registered for root %q", canon)}
+			}
 		}
 		branch := rec.ActiveBranch
 		if branch == "" {

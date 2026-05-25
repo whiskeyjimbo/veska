@@ -109,6 +109,61 @@ func TestHotZone_ReturnsRankedData(t *testing.T) {
 	}
 }
 
+// TestHotZone_EmptyZonesSurfacesDegradedReason guards solov2-636y: when
+// ranking returns no zones (the common cause is "no commits have landed
+// since this repo was registered"), the response carries
+// degraded_reasons=["no_post_registration_commits"] so callers don't have
+// to grep the wiki markdown for the explanation.
+func TestHotZone_EmptyZonesSurfacesDegradedReason(t *testing.T) {
+	edges := &blastFakeEdges{}
+	nodes := &blastFakeNodes{metas: map[string]ports.NodeMeta{}, byFile: map[string][]string{}}
+	blast := blastradius.NewService(edges, nodes, nil)
+	emptyCounts := func(context.Context, string) (map[string]int, error) { return map[string]int{}, nil }
+	svc, err := wiki.NewHotZoneService(emptyCounts, nodes.NodesInFile, blast)
+	if err != nil {
+		t.Fatalf("NewHotZoneService: %v", err)
+	}
+	repoRoot := func(context.Context, string) (string, error) { return "/tmp/r", nil }
+
+	r := NewRegistry()
+	RegisterWikiTools(r, svc, repoRoot, nil)
+
+	resp, rpcErr := dispatchHotZone(t, r, map[string]any{
+		"repo_id": "r1",
+		"branch":  "main",
+	})
+	if rpcErr != nil {
+		t.Fatalf("err: %+v", rpcErr)
+	}
+	if len(resp.Zones) != 0 {
+		t.Fatalf("expected zero zones, got %d", len(resp.Zones))
+	}
+	if len(resp.DegradedReasons) != 1 || resp.DegradedReasons[0] != "no_post_registration_commits" {
+		t.Fatalf("expected degraded_reasons=[no_post_registration_commits], got %v", resp.DegradedReasons)
+	}
+}
+
+// TestHotZone_NonEmptyZonesNoDegradedReason guards solov2-636y: when zones
+// are returned, the degraded_reasons slot is omitted/empty.
+func TestHotZone_NonEmptyZonesNoDegradedReason(t *testing.T) {
+	svc := wikiFixtureService(t)
+	repoRoot := func(context.Context, string) (string, error) { return "/tmp/r", nil }
+
+	r := NewRegistry()
+	RegisterWikiTools(r, svc, repoRoot, nil)
+
+	resp, rpcErr := dispatchHotZone(t, r, map[string]any{
+		"repo_id": "r1",
+		"branch":  "main",
+	})
+	if rpcErr != nil {
+		t.Fatalf("err: %+v", rpcErr)
+	}
+	if len(resp.DegradedReasons) != 0 {
+		t.Errorf("expected no degraded_reasons when zones present, got %v", resp.DegradedReasons)
+	}
+}
+
 // TestHotZone_AcceptsShortID guards the README contract that a short_id
 // prefix is accepted anywhere a repo_id is required (solov2-eki3). Before the
 // fix hot_zone bypassed resolveRepoID and rejected the prefix as "repo not

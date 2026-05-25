@@ -40,10 +40,8 @@ func makeGetCallChainHandler(graph ports.GraphStorage, resolve ResolveFunc, repo
 		if p.NodeID == "" && p.Symbol == "" {
 			return nil, &RPCError{Code: CodeInvalidParams, Message: "missing required params: node_id or symbol"}
 		}
-		if rpcErr := checkRequired("repo_id", p.RepoID); rpcErr != nil {
-			return nil, rpcErr
-		}
-		repoID, rpcErr := resolveRepoID(ctx, repos, p.RepoID)
+		// solov2-ktz0: shim-injected cwd resolves repo_id when omitted.
+		repoID, rpcErr := resolveRepoIDFromParams(ctx, repos, raw, p.RepoID)
 		if rpcErr != nil {
 			return nil, rpcErr
 		}

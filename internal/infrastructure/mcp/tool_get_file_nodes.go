@@ -42,14 +42,22 @@ func makeGetFileNodesHandler(graph ports.GraphStorage, staging *application.Stag
 		if filePath == "" {
 			filePath = p.Path
 		}
-		if filePath == "" || p.RepoID == "" || p.Branch == "" {
-			return nil, &RPCError{Code: CodeInvalidParams, Message: "file_path (or path), repo_id, and branch are required"}
+		if filePath == "" {
+			return nil, &RPCError{Code: CodeInvalidParams, Message: "file_path (or path) is required"}
 		}
-		repoID, rpcErr := resolveRepoID(ctx, repos, p.RepoID)
+		// solov2-ktz0: shim-injected cwd resolves repo_id when omitted.
+		repoID, rpcErr := resolveRepoIDFromParams(ctx, repos, raw, p.RepoID)
 		if rpcErr != nil {
 			return nil, rpcErr
 		}
 		p.RepoID = repoID
+		// Branch defaults to the repo's active branch when omitted (solov2-gp2k),
+		// matching find_symbol, get_call_chain, get_blast_radius, et al.
+		if br, rpcErr := resolveBranchOrActive(ctx, repos, p.RepoID, p.Branch); rpcErr != nil {
+			return nil, rpcErr
+		} else {
+			p.Branch = br
+		}
 
 		// Node paths are stored absolute. Resolve a repo-relative file_path
 		// against the repo root so callers don't have to pass an absolute path

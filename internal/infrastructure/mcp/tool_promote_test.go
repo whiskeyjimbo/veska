@@ -116,11 +116,61 @@ func TestPromoteHandler_RepoNotRegistered(t *testing.T) {
 		t.Fatal("expected error for unregistered root_path; got nil")
 		return
 	}
-	if rpcErr.Code != CodeInvalidParams {
-		t.Errorf("error code = %d, want CodeInvalidParams (%d)", rpcErr.Code, CodeInvalidParams)
+	// solov2-byxy: unregistered root is a domain not-found, not invalid-params.
+	if rpcErr.Code != CodeNotFound {
+		t.Errorf("error code = %d, want CodeNotFound (%d)", rpcErr.Code, CodeNotFound)
 	}
 	if !strings.Contains(rpcErr.Message, "not registered") {
 		t.Errorf("message = %q, want 'not registered'", rpcErr.Message)
+	}
+}
+
+// TestPromoteHandler_AcceptsRepoID guards solov2-65bk: eng_promote_repo accepts
+// repo_id (full or short) in lieu of root_path, matching every other
+// repo-scoped MCP tool. The handler resolves it back to root_path internally.
+func TestPromoteHandler_AcceptsRepoID(t *testing.T) {
+	root := t.TempDir()
+	mustWrite(t, root, "a.go", "package a\n")
+	ing := &fakeIng{}
+	prom := &fakeProm{}
+	const fullID = "abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789"
+	deps := PromoteDeps{
+		Repos: &fakeRepoLister{recs: []application.RepoRecord{
+			{RepoID: fullID, RootPath: realPath(t, root), ActiveBranch: "main"},
+		}},
+		Git:      &fakeGit{head: "sha-rid", files: []string{"a.go"}},
+		Ingester: ing,
+		Promoter: prom,
+	}
+
+	// Short prefix (12 chars).
+	res := dispatchPromote(t, deps, map[string]string{"repo_id": fullID[:12]})
+	if res.RepoID != fullID || res.GitSHA != "sha-rid" {
+		t.Errorf("short-prefix dispatch: result mismatch: %+v", res)
+	}
+
+	// Full id.
+	res = dispatchPromote(t, deps, map[string]string{"repo_id": fullID})
+	if res.RepoID != fullID {
+		t.Errorf("full-id dispatch: result mismatch: %+v", res)
+	}
+}
+
+// TestPromoteHandler_UnknownRepoID returns CodeNotFound (solov2-65bk + byxy).
+func TestPromoteHandler_UnknownRepoID(t *testing.T) {
+	deps := PromoteDeps{
+		Repos:    &fakeRepoLister{recs: nil},
+		Git:      &fakeGit{},
+		Ingester: &fakeIng{},
+		Promoter: &fakeProm{},
+	}
+	_, rpcErr := dispatchPromoteRaw(t, deps, map[string]string{"repo_id": "deadbeef0000"})
+	if rpcErr == nil {
+		t.Fatal("expected error for unknown repo_id")
+		return
+	}
+	if rpcErr.Code != CodeNotFound {
+		t.Errorf("error code = %d, want CodeNotFound (%d)", rpcErr.Code, CodeNotFound)
 	}
 }
 

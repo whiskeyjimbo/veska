@@ -311,6 +311,51 @@ func TestCloseFindings_MessageContainsFindingAndSeverity(t *testing.T) {
 	}
 }
 
+// TestCloseFindings_PreservesCreatorActor guards solov2-iyog: closing a
+// finding must NOT overwrite actor_id/actor_kind on the row. Those columns
+// mean "who created/last-saved this finding"; the closer is recorded
+// independently in the audit log. Previously a service-created TODO surfaced
+// as actor_id=agent:unknown after any MCP-driven close.
+func TestCloseFindings_PreservesCreatorActor(t *testing.T) {
+	db := newFindingsDB(t)
+	const fid = "finding-actor-preserved-001"
+	// Seed with the creator actor — see seedFinding: actor:seed / human.
+	seedFinding(t, db, fid, "main", "repo-1", "low", "open")
+
+	r := NewRegistry()
+	RegisterFindingTools(r, db, &capturingAuditWriter{})
+
+	// A human closes it (admin action allowed even at low severity).
+	closer := domain.Actor{ID: "agent:unknown", Kind: domain.ActorKindAgent}
+	_, rpcErr := dispatchFinding(t, r, closer, map[string]string{
+		"finding_id": fid,
+		"branch":     "main",
+		"repo_id":    "repo-1",
+		"reason":     "not a real issue",
+	})
+	if rpcErr != nil {
+		// Low severity may still require human; if so, run as human.
+		closer = domain.Actor{ID: "human:alice", Kind: domain.ActorKindHuman}
+		_, rpcErr = dispatchFinding(t, r, closer, map[string]string{
+			"finding_id": fid,
+			"branch":     "main",
+			"repo_id":    "repo-1",
+			"reason":     "not a real issue",
+		})
+		if rpcErr != nil {
+			t.Fatalf("dispatch (human): %+v", rpcErr)
+		}
+	}
+
+	var aid, akind string
+	if err := db.QueryRow(`SELECT actor_id, actor_kind FROM findings WHERE finding_id = ? AND branch = ?`, fid, "main").Scan(&aid, &akind); err != nil {
+		t.Fatalf("read finding: %v", err)
+	}
+	if aid != "actor:seed" || akind != "human" {
+		t.Errorf("creator actor clobbered by close: actor_id=%q actor_kind=%q want actor:seed/human", aid, akind)
+	}
+}
+
 func TestCloseFindings_NotFound(t *testing.T) {
 	db := newFindingsDB(t)
 
@@ -639,8 +684,11 @@ func TestCloseFinding_AutoLinkAccept_PromotesEdge(t *testing.T) {
 	if !closedAt.Valid || closedAt.Int64 == 0 {
 		t.Errorf("expected closed_at to be set, got %v", closedAt)
 	}
-	if actorID != "human:alice" || actorKind != "human" {
-		t.Errorf("expected actor=human:alice/human, got %s/%s", actorID, actorKind)
+	// solov2-iyog: close no longer overwrites actor_id/actor_kind. The row
+	// keeps its creator (seeded as actor:seed/agent); the closer is recorded
+	// in the audit log via the finding.accept op asserted above.
+	if actorID != "actor:seed" || actorKind != "agent" {
+		t.Errorf("expected creator actor preserved (actor:seed/agent), got %s/%s", actorID, actorKind)
 	}
 }
 

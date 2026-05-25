@@ -453,10 +453,45 @@ func renderSearchEnvelope(w io.Writer, env searchEnvelope, jsonOut bool) error {
 		fmt.Fprintf(w, "%-8s %s:%d-%d  %s  (%s, score=%.4f)\n",
 			r.Kind, r.FilePath, r.LineStart, r.LineEnd, r.Name, tier, r.Score)
 	}
+	// solov2-gfhq: tiers (top/strong/weak) are relative to this query's top
+	// hit — a query that has no strong absolute match still gets a "top"
+	// label, which reads as confidence the data can't back up. When the
+	// top is below an absolute floor, append a one-liner so the user knows
+	// the labels are relative and the recall is weak.
+	if top > 0 && top < weakTopAbsolute {
+		fmt.Fprintf(w, "note: top match score is low (%.4f) — labels are relative to this query; recall may be weak. Try refining the query.\n", top)
+	}
 	for _, d := range env.DegradedReasons {
-		fmt.Fprintf(w, "[degraded: %s]\n", d)
+		fmt.Fprintf(w, "[degraded: %s%s]\n", d, degradedReasonHint(d))
 	}
 	return nil
+}
+
+// weakTopAbsolute is the absolute-score floor below which a query's top hit
+// is considered weak. The chosen value is loose because absolute scores
+// depend on the embedder and corpus (see scoreTier's note). For the in-tree
+// model2vec/static-v2 backends we observe healthy queries scoring well above
+// 0.1; below that the relative tier labels are misleading by themselves.
+const weakTopAbsolute = 0.05
+
+// degradedReasonHint maps an in-band degraded_reasons code to a one-line
+// actionable hint appended to the rendered line. Empty when no hint applies,
+// so the bare code is still printed (solov2-0qk5). Hints are deliberately
+// short so the table layout stays readable.
+func degradedReasonHint(code string) string {
+	switch code {
+	case "embeddings_pending":
+		if pending, ok := pendingEmbedsHint(); ok && pending > 0 {
+			return fmt.Sprintf(" — ~%d embeds still queued; re-run shortly for fuller recall", pending)
+		}
+		return " — embedder worker is still draining; re-run shortly for fuller recall"
+	case "low_quality_static_embedder":
+		return " — install the model2vec weights for better recall: `veska install model2vec`"
+	case "no_post_registration_commits":
+		return " — only populates after commits land while the repo is registered with veska"
+	default:
+		return ""
+	}
 }
 
 // daemonSearch resolves the target repo through a running daemon and runs
