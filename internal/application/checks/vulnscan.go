@@ -104,7 +104,7 @@ func (c *VulnScanCheck) Run(ctx context.Context, in Input) ([]*domain.Finding, e
 			in.RepoID, in.Branch,
 			mapSeverity(v.Severity),
 			domain.LayerSecurity,
-			"vuln",
+			"vulnerable_dependency",
 			msg,
 			domain.WithFileAnchor("go.mod"),
 			domain.WithFindingKey(v.AdvisoryID+v.Package),
