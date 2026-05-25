@@ -211,6 +211,168 @@ func TestPromoteHandler_PropagatesPromoteError(t *testing.T) {
 	}
 }
 
+// TestPromoteRepoSchema_PublishesAttributionParams guards solov2-cyww:
+// eng_promote_repo's inputSchema must publish branch/git_sha/actor_kind/
+// actor_id alongside repo_id/root_path, restrict actor_kind to the domain
+// enum (human/agent/system), and continue to reject unknown keys via
+// additionalProperties:false (closing the silent-drop bug from solov2-9bzq).
+func TestPromoteRepoSchema_PublishesAttributionParams(t *testing.T) {
+	var s struct {
+		AdditionalProperties any                        `json:"additionalProperties"`
+		Properties           map[string]json.RawMessage `json:"properties"`
+	}
+	if err := json.Unmarshal(promoteRepoInputSchema, &s); err != nil {
+		t.Fatalf("schema is not valid JSON: %v", err)
+	}
+	if ap, ok := s.AdditionalProperties.(bool); !ok || ap {
+		t.Errorf("additionalProperties = %v, want literal false", s.AdditionalProperties)
+	}
+	for _, k := range []string{"repo_id", "root_path", "branch", "git_sha", "actor_kind", "actor_id"} {
+		if _, ok := s.Properties[k]; !ok {
+			t.Errorf("schema.properties missing %q", k)
+		}
+	}
+	// actor_kind must be a string-typed enum restricted to the domain values.
+	var ak struct {
+		Type string   `json:"type"`
+		Enum []string `json:"enum"`
+	}
+	if err := json.Unmarshal(s.Properties["actor_kind"], &ak); err != nil {
+		t.Fatalf("actor_kind sub-schema invalid: %v", err)
+	}
+	if ak.Type != "string" {
+		t.Errorf("actor_kind.type = %q, want \"string\"", ak.Type)
+	}
+	want := map[string]bool{"human": true, "agent": true, "system": true}
+	if len(ak.Enum) != len(want) {
+		t.Errorf("actor_kind.enum = %v, want exactly %v", ak.Enum, want)
+	}
+	for _, v := range ak.Enum {
+		if !want[v] {
+			t.Errorf("actor_kind.enum contains unexpected %q", v)
+		}
+	}
+}
+
+// TestPromoteRepoSchema_RejectsUnknownKeyAtDispatch confirms the dispatch-time
+// validator (solov2-9bzq) still rejects keys that aren't in the published
+// schema after the schema was widened for solov2-cyww. A regression here
+// would re-open the silent-drop bug.
+func TestPromoteRepoSchema_RejectsUnknownKeyAtDispatch(t *testing.T) {
+	rpcErr := validateAgainstSchema("eng_promote_repo", promoteRepoInputSchema,
+		json.RawMessage(`{"repo_id":"x","totally_made_up":"y"}`))
+	if rpcErr == nil {
+		t.Fatal("expected unknown-key rejection, got nil")
+	}
+	if rpcErr.Code != CodeInvalidParams {
+		t.Errorf("code = %d, want CodeInvalidParams (%d)", rpcErr.Code, CodeInvalidParams)
+	}
+	if !strings.Contains(rpcErr.Message, "totally_made_up") {
+		t.Errorf("message = %q, want it to name the offending key", rpcErr.Message)
+	}
+}
+
+// TestPromoteHandler_HonoursActorOverride verifies the attribution params
+// announced in the schema are actually applied (solov2-cyww).
+func TestPromoteHandler_HonoursActorOverride(t *testing.T) {
+	root := t.TempDir()
+	mustWrite(t, root, "a.go", "package a\n")
+	prom := &fakeProm{}
+	deps := PromoteDeps{
+		Repos: &fakeRepoLister{recs: []application.RepoRecord{
+			{RepoID: "r1", RootPath: realPath(t, root), ActiveBranch: "main"},
+		}},
+		Git:      &fakeGit{head: "head-sha", files: []string{"a.go"}},
+		Ingester: &fakeIng{},
+		Promoter: prom,
+	}
+	_ = dispatchPromote(t, deps, map[string]string{
+		"root_path":  root,
+		"actor_kind": "agent",
+		"actor_id":   "agent:claude",
+	})
+	if len(prom.calls) != 1 {
+		t.Fatalf("Promote calls = %d, want 1", len(prom.calls))
+	}
+	if prom.calls[0].ActorKind != domain.ActorKindAgent {
+		t.Errorf("ActorKind = %q, want %q", prom.calls[0].ActorKind, domain.ActorKindAgent)
+	}
+}
+
+// TestPromoteHandler_HonoursBranchAndSHAOverride: branch and git_sha
+// overrides reach the Promoter without consulting git.HEAD (solov2-cyww).
+func TestPromoteHandler_HonoursBranchAndSHAOverride(t *testing.T) {
+	root := t.TempDir()
+	mustWrite(t, root, "a.go", "package a\n")
+	prom := &fakeProm{}
+	deps := PromoteDeps{
+		Repos: &fakeRepoLister{recs: []application.RepoRecord{
+			{RepoID: "r1", RootPath: realPath(t, root), ActiveBranch: "main"},
+		}},
+		// headErr would normally fail the call — proving git.HEAD is
+		// short-circuited when git_sha is supplied is the point of this test.
+		Git:      &fakeGit{headErr: errors.New("git.HEAD must not be called when git_sha is supplied"), files: []string{"a.go"}},
+		Ingester: &fakeIng{},
+		Promoter: prom,
+	}
+	res := dispatchPromote(t, deps, map[string]string{
+		"root_path": root,
+		"branch":    "feature/x",
+		"git_sha":   "pinned-sha",
+	})
+	if res.Branch != "feature/x" || res.GitSHA != "pinned-sha" {
+		t.Errorf("result = %+v; want branch=feature/x git_sha=pinned-sha", res)
+	}
+	if len(prom.calls) != 1 || prom.calls[0].Branch != "feature/x" || prom.calls[0].SHA != "pinned-sha" {
+		t.Errorf("Promote called with %+v; want branch=feature/x sha=pinned-sha", prom.calls)
+	}
+}
+
+// TestPromoteHandler_RejectsInvalidActorKind: an actor_kind outside the
+// domain enum surfaces as CodeInvalidParams (solov2-cyww). The dispatch-time
+// validator covers the schema-side enum check; this guards the handler-side
+// domain.NewActor fallback for clients that bypass schema validation.
+func TestPromoteHandler_RejectsInvalidActorKind(t *testing.T) {
+	root := t.TempDir()
+	deps := PromoteDeps{
+		Repos: &fakeRepoLister{recs: []application.RepoRecord{
+			{RepoID: "r1", RootPath: realPath(t, root), ActiveBranch: "main"},
+		}},
+		Git:      &fakeGit{head: "h", files: nil},
+		Ingester: &fakeIng{},
+		Promoter: &fakeProm{},
+	}
+	_, rpcErr := dispatchPromoteRaw(t, deps, map[string]string{
+		"root_path":  root,
+		"actor_kind": "robot",
+		"actor_id":   "robot:1",
+	})
+	if rpcErr == nil || rpcErr.Code != CodeInvalidParams {
+		t.Fatalf("want CodeInvalidParams for actor_kind=robot, got %+v", rpcErr)
+	}
+}
+
+// TestPromoteHandler_RejectsPartialActor: supplying only one of actor_kind
+// / actor_id is rejected (solov2-cyww).
+func TestPromoteHandler_RejectsPartialActor(t *testing.T) {
+	root := t.TempDir()
+	deps := PromoteDeps{
+		Repos: &fakeRepoLister{recs: []application.RepoRecord{
+			{RepoID: "r1", RootPath: realPath(t, root), ActiveBranch: "main"},
+		}},
+		Git:      &fakeGit{head: "h"},
+		Ingester: &fakeIng{},
+		Promoter: &fakeProm{},
+	}
+	_, rpcErr := dispatchPromoteRaw(t, deps, map[string]string{
+		"root_path":  root,
+		"actor_kind": "agent",
+	})
+	if rpcErr == nil || rpcErr.Code != CodeInvalidParams {
+		t.Fatalf("want CodeInvalidParams for partial actor, got %+v", rpcErr)
+	}
+}
+
 // ---- helpers ----------------------------------------------------------------
 
 func mustWrite(t *testing.T, dir, rel, body string) {

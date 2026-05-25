@@ -64,6 +64,18 @@ type promoteParams struct {
 	// matching every other repo-scoped tool. Either RepoID or RootPath is
 	// sufficient; when both are passed, RepoID wins.
 	RepoID string `json:"repo_id"`
+	// Optional overrides (solov2-cyww). Pre-validator the handler silently
+	// dropped these; agents calling eng_promote_repo with attribution had no
+	// way to learn that. They are now first-class:
+	//   - Branch overrides the repo's active_branch when non-empty.
+	//   - GitSHA pins the commit to promote at; defaults to git HEAD.
+	//   - ActorKind + ActorID stamp attribution on the promotion; default is
+	//     the system actor ('service:veska'). They must be supplied together
+	//     or both omitted.
+	Branch    string `json:"branch"`
+	GitSHA    string `json:"git_sha"`
+	ActorKind string `json:"actor_kind"`
+	ActorID   string `json:"actor_id"`
 }
 
 type promoteResult struct {
@@ -96,6 +108,11 @@ func makePromoteHandler(deps PromoteDeps) ToolHandler {
 		}
 		if p.RootPath == "" && p.RepoID == "" {
 			return nil, &RPCError{Code: CodeInvalidParams, Message: "root_path or repo_id is required"}
+		}
+		// actor_kind / actor_id must be supplied together (solov2-cyww). The
+		// schema can't express "all-or-none", so validate here.
+		if (p.ActorKind == "") != (p.ActorID == "") {
+			return nil, &RPCError{Code: CodeInvalidParams, Message: "actor_kind and actor_id must both be set or both omitted"}
 		}
 
 		repos, err := deps.Repos.ListRepos(ctx)
@@ -144,10 +161,20 @@ func makePromoteHandler(deps PromoteDeps) ToolHandler {
 		if branch == "" {
 			branch = "main"
 		}
+		// solov2-cyww: caller-supplied branch override (e.g. an agent
+		// re-promoting a non-active branch) takes precedence over the
+		// repo-record default.
+		if p.Branch != "" {
+			branch = p.Branch
+		}
 
-		head, err := deps.Git.HEAD(canon)
-		if err != nil {
-			return nil, &RPCError{Code: CodeInternalError, Message: fmt.Sprintf("git HEAD: %v", err)}
+		head := p.GitSHA
+		if head == "" {
+			h, err := deps.Git.HEAD(canon)
+			if err != nil {
+				return nil, &RPCError{Code: CodeInternalError, Message: fmt.Sprintf("git HEAD: %v", err)}
+			}
+			head = h
 		}
 
 		// Re-stage files changed in the HEAD commit. Treating the hook as the
@@ -173,6 +200,17 @@ func makePromoteHandler(deps PromoteDeps) ToolHandler {
 		}
 
 		actor := domain.Actor{ID: "service:veska", Kind: domain.ActorKindSystem}
+		if p.ActorKind != "" {
+			// NewActor enforces the kind enum (human/agent/system) and
+			// rejects an empty id, so an invalid actor_kind surfaces here
+			// as CodeInvalidParams rather than silently degrading to the
+			// system default (solov2-cyww).
+			a, aerr := domain.NewActor(p.ActorID, domain.ActorKind(p.ActorKind))
+			if aerr != nil {
+				return nil, &RPCError{Code: CodeInvalidParams, Message: fmt.Sprintf("invalid actor: %v", aerr)}
+			}
+			actor = *a
+		}
 		if err := deps.Promoter.Promote(ctx, rec.RepoID, branch, head, actor); err != nil {
 			return nil, &RPCError{Code: CodeInternalError, Message: fmt.Sprintf("promote: %v", err)}
 		}
