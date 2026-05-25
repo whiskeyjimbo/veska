@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/spf13/cobra"
 	"github.com/whiskeyjimbo/veska/internal/application"
@@ -76,6 +77,15 @@ func reindexCmd() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			w := cmd.OutOrStdout()
 			ctx := cmd.Context()
+
+			// solov2-mdn3: reindex opens sqlite directly. If the daemon
+			// is running, its embedder worker races us for the write lock
+			// and we hit SQLITE_BUSY mid-promotion (leaving a half-written
+			// state). Refuse with an actionable error instead. Probe the
+			// MCP socket cheaply — a dial-only check, no RPC round-trip.
+			if daemonRunning() {
+				return fmt.Errorf("reindex: daemon is running and would race us for the sqlite write lock.\n  stop it first:  veska service stop && veska reindex %s\n  then restart:   veska service start", strings.Join(args, " "))
+			}
 
 			dbPath := filepath.Join(config.DefaultVectorDir(), "veska.db")
 			// Apply migrations so the schema is present even on a freshly
