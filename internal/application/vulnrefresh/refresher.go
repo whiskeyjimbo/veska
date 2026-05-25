@@ -102,8 +102,21 @@ func (r *Refresher) Run(ctx context.Context) {
 
 // refresh performs a single Refresh and isolates its error. A cancelled
 // context is expected during shutdown and is not logged as a failure.
+// Success and failure are both logged so operators can verify the refresher
+// is alive and confirm the network egress that Refresh implies (solov2-n51k).
 func (r *Refresher) refresh(ctx context.Context) {
-	if err := r.source.Refresh(ctx); err != nil && ctx.Err() == nil {
-		slog.Warn("vulnrefresh: advisory cache refresh failed", "error", err)
+	start := time.Now()
+	slog.Info("vulnrefresh: refresh starting")
+	if err := r.source.Refresh(ctx); err != nil {
+		if ctx.Err() == nil {
+			slog.Warn("vulnrefresh: advisory cache refresh failed",
+				"error", err,
+				"elapsed_ms", time.Since(start).Milliseconds(),
+			)
+		}
+		return
 	}
+	slog.Info("vulnrefresh: refresh complete",
+		"elapsed_ms", time.Since(start).Milliseconds(),
+	)
 }
