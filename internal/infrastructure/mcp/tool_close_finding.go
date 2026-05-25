@@ -37,6 +37,7 @@ type closeFindingParams struct {
 var closeFindingInputSchema = json.RawMessage(`{
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "type": "object",
+  "additionalProperties": false,
   "properties": {
     "finding_id": {"type": "string", "description": "ID of the finding to close."},
     "branch": {"type": "string", "description": "Branch the finding belongs to (optional; derived from finding_id when omitted)."},

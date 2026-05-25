@@ -50,6 +50,7 @@ type setActiveTaskParams struct {
 var setActiveTaskInputSchema = json.RawMessage(`{
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "type": "object",
+  "additionalProperties": false,
   "properties": {
     "task_id": {"type": "string", "description": "ID of the task to activate."},
     "repo_id": {"type": "string", "description": "Repository the task belongs to."}
