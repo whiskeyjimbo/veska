@@ -195,6 +195,14 @@ func (s *BuiltinScanner) scanLine(path string, line ports.Line) []ports.SecretFi
 		if shannonEntropy(tok) < s.entropyThreshold {
 			continue
 		}
+		// solov2-3455: skip tokens that look like ordinary identifiers
+		// (Go method/function/type names commonly cross the entropy
+		// threshold when they're long camelCase strings). Real secrets
+		// almost always include digits or punctuation; pure-alpha
+		// identifiers are noise.
+		if looksLikeIdentifier(tok) {
+			continue
+		}
 		matched[tok] = struct{}{}
 		findings = append(findings, ports.SecretFinding{
 			Rule:       "high-entropy",
@@ -221,6 +229,26 @@ func mask(secret string) string {
 		return strings.Repeat("*", len(secret))
 	}
 	return secret[:2] + strings.Repeat("*", len(secret)-2)
+}
+
+// looksLikeIdentifier reports whether tok has the shape of a programming
+// language identifier (letters and optionally underscores, with no digits
+// and no punctuation). Long camelCase identifiers — e.g.
+// "BenchmarkMemoryDuringPluginDiscovery" — cross the high-entropy
+// threshold because of mixed case, but they are never secrets. Real
+// credential strings (random tokens, base64, hex) virtually always
+// include at least one digit or non-alpha character (solov2-3455).
+func looksLikeIdentifier(tok string) bool {
+	for _, r := range tok {
+		switch {
+		case r >= 'a' && r <= 'z':
+		case r >= 'A' && r <= 'Z':
+		case r == '_':
+		default:
+			return false
+		}
+	}
+	return true
 }
 
 // shannonEntropy returns the Shannon entropy of s in bits per character.
