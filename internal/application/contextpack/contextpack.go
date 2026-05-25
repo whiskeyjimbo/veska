@@ -243,6 +243,21 @@ func (a *Assembler) ForSymbol(ctx context.Context, repoID, branch, repoRoot, sym
 	return pack, nil
 }
 
+// ForNode assembles a context pack seeded on a known node_id. This gives
+// parity with the other graph-anchored MCP tools (call_chain, blast_radius)
+// that accept node_id directly when the caller already has it in hand
+// (solov2-z81b). It skips FindNodes — the seed is exact.
+func (a *Assembler) ForNode(ctx context.Context, repoID, branch, repoRoot, nodeID string) (Pack, error) {
+	pack, err := a.assemble(ctx, repoID, branch, repoRoot, []string{nodeID})
+	if err != nil {
+		return Pack{}, err
+	}
+	pack.Mode = "node"
+	pack.Query = nodeID
+	a.clip(&pack)
+	return pack, nil
+}
+
 // ForTask assembles a context pack for a task. domain.Task has no graph
 // link, so the repo's working-tree diff is used as the seed set: relevant
 // nodes are the nodes in the changed files.

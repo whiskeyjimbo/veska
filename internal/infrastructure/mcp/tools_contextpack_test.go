@@ -135,10 +135,65 @@ func TestContextPack_RejectsBothOrNeither(t *testing.T) {
 	for _, params := range []map[string]any{
 		{"repo_id": "r", "branch": "main"},
 		{"repo_id": "r", "branch": "main", "symbol": "Target", "task_id": "t1"},
+		{"repo_id": "r", "branch": "main", "symbol": "Target", "node_id": "seed"},
+		{"repo_id": "r", "branch": "main", "task_id": "t1", "node_id": "seed"},
+		{"repo_id": "r", "branch": "main", "symbol": "Target", "task_id": "t1", "node_id": "seed"},
 	} {
 		_, rpcErr := dispatchContextPack(t, r, params)
 		if rpcErr == nil || rpcErr.Code != CodeInvalidParams {
 			t.Fatalf("want CodeInvalidParams for %v, got %+v", params, rpcErr)
+		}
+	}
+}
+
+// TestContextPack_NodeMode covers solov2-z81b: agents that already hold a
+// node_id (from eng_find_symbol / eng_search_semantic) can anchor directly
+// without a symbol round-trip.
+func TestContextPack_NodeMode(t *testing.T) {
+	r := NewRegistry()
+	RegisterContextPackTool(r, contextPackFixture(t), stubRepoRoot(""), nil)
+	pack, rpcErr := dispatchContextPack(t, r, map[string]any{
+		"repo_id": "r", "branch": "main", "node_id": "seed",
+	})
+	if rpcErr != nil {
+		t.Fatalf("dispatch: %+v", rpcErr)
+	}
+	if pack.Mode != "node" {
+		t.Fatalf("want node mode, got %q", pack.Mode)
+	}
+	if len(pack.Nodes) != 2 {
+		t.Fatalf("want 2 nodes (seed + caller via blast), got %d: %+v", len(pack.Nodes), pack.Nodes)
+	}
+}
+
+// TestContextPack_SchemaDeclaresNodeID guards the schema-vs-behaviour parity
+// invariant: the inputSchema must declare every accepted param, and the
+// description must name all three anchors so agents discover the option
+// without reading source. additionalProperties:false must remain.
+func TestContextPack_SchemaDeclaresNodeID(t *testing.T) {
+	var schema struct {
+		AdditionalProperties any    `json:"additionalProperties"`
+		Description          string `json:"description"`
+		Properties           map[string]any
+	}
+	if err := json.Unmarshal(contextPackInputSchema, &schema); err != nil {
+		t.Fatalf("unmarshal schema: %v", err)
+	}
+	if _, ok := schema.Properties["node_id"]; !ok {
+		t.Fatal("schema is missing node_id property")
+	}
+	if _, ok := schema.Properties["symbol"]; !ok {
+		t.Fatal("schema is missing symbol property")
+	}
+	if _, ok := schema.Properties["task_id"]; !ok {
+		t.Fatal("schema is missing task_id property")
+	}
+	if b, ok := schema.AdditionalProperties.(bool); !ok || b {
+		t.Fatalf("want additionalProperties:false, got %v", schema.AdditionalProperties)
+	}
+	for _, anchor := range []string{"node_id", "symbol", "task_id"} {
+		if !contains(schema.Description, anchor) {
+			t.Fatalf("schema description must name %q; got %q", anchor, schema.Description)
 		}
 	}
 }

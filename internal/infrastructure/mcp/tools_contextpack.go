@@ -26,6 +26,7 @@ func RegisterContextPackTool(r *Registry, asm *contextpack.Assembler, repoRoot R
 type contextPackParams struct {
 	RepoID string `json:"repo_id"`
 	Branch string `json:"branch"`
+	NodeID string `json:"node_id,omitempty"`
 	Symbol string `json:"symbol,omitempty"`
 	TaskID string `json:"task_id,omitempty"`
 }
@@ -42,11 +43,21 @@ func makeContextPackHandler(asm *contextpack.Assembler, repoRoot RepoRootFunc, r
 		if rpcErr := bindParams(raw, &p); rpcErr != nil {
 			return nil, rpcErr
 		}
-		// Exactly one of symbol / task_id is required.
-		if (p.Symbol == "") == (p.TaskID == "") {
+		// Exactly one of node_id / symbol / task_id is required (solov2-z81b).
+		anchorCount := 0
+		if p.NodeID != "" {
+			anchorCount++
+		}
+		if p.Symbol != "" {
+			anchorCount++
+		}
+		if p.TaskID != "" {
+			anchorCount++
+		}
+		if anchorCount != 1 {
 			return nil, &RPCError{
 				Code:    CodeInvalidParams,
-				Message: "exactly one of symbol or task_id is required",
+				Message: "exactly one of node_id, symbol or task_id is required",
 			}
 		}
 		// solov2-ktz0: shim-injected cwd resolves repo_id when omitted.
@@ -69,9 +80,12 @@ func makeContextPackHandler(asm *contextpack.Assembler, repoRoot RepoRootFunc, r
 		}
 
 		var pack contextpack.Pack
-		if p.Symbol != "" {
+		switch {
+		case p.NodeID != "":
+			pack, err = asm.ForNode(ctx, p.RepoID, p.Branch, root, p.NodeID)
+		case p.Symbol != "":
 			pack, err = asm.ForSymbol(ctx, p.RepoID, p.Branch, root, p.Symbol)
-		} else {
+		default:
 			pack, err = asm.ForTask(ctx, p.RepoID, p.Branch, root, p.TaskID)
 		}
 		if err != nil {
