@@ -6,6 +6,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"slices"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -187,14 +188,7 @@ func TestStatusProvider_BacklogStaysDegradedForAgentContract(t *testing.T) {
 		t.Fatalf("eng_get_status rollup = %v; want degraded (agent contract: see solov2-34rl)", m["status"])
 	}
 	reasons, _ := m["degraded_reasons"].([]string)
-	hasPending := false
-	for _, r := range reasons {
-		if r == mcp.DegradedReasonEmbeddingsPending {
-			hasPending = true
-			break
-		}
-	}
-	if !hasPending {
+	if !slices.Contains(reasons, mcp.DegradedReasonEmbeddingsPending) {
 		t.Errorf("eng_get_status degraded_reasons = %v; must include embeddings_pending (agents pick semantic-vs-lexical from this)", reasons)
 	}
 	if m["pending_embeds"] != 1 {
