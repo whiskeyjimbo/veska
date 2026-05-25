@@ -45,6 +45,7 @@ func findingsListCmd() *cobra.Command {
 		repoFlag string
 		state    string
 		severity string
+		rule     string
 		jsonOut  bool
 	)
 	cmd := &cobra.Command{
@@ -56,12 +57,19 @@ func findingsListCmd() *cobra.Command {
 			params := map[string]any{}
 			if repoFlag != "" {
 				params["repo_id"] = repoFlag
+			} else if rid := autoResolveRepo(cmd.Context(), cmd.ErrOrStderr()); rid != "" {
+				// solov2-dqwh: surface which repo was picked when multiple are
+				// registered so users don't get silently-scoped empty results.
+				params["repo_id"] = rid
 			}
 			if state != "" {
 				params["state"] = state
 			}
 			if severity != "" {
 				params["severity"] = severity
+			}
+			if rule != "" {
+				params["rule"] = rule
 			}
 			var resp struct {
 				Findings []findingView `json:"findings"`
@@ -98,6 +106,7 @@ func findingsListCmd() *cobra.Command {
 	cmd.Flags().StringVar(&repoFlag, "repo", "", "repo id or short_id (default: the sole registered repo)")
 	cmd.Flags().StringVar(&state, "state", "", "filter by state (open|closed; default open)")
 	cmd.Flags().StringVar(&severity, "severity", "", "filter by severity")
+	cmd.Flags().StringVar(&rule, "rule", "", "filter by rule (e.g. vuln, dead-code, secret_leak, auto-link)")
 	cmd.Flags().BoolVar(&jsonOut, "json", false, "emit JSON")
 	return cmd
 }

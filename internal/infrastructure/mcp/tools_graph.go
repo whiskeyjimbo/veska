@@ -25,7 +25,7 @@ type CrossRepoEdge struct {
 type GraphResponse struct {
 	Nodes           []nodeDTO `json:"nodes"`
 	IncludedStaging bool      `json:"included_staging"`
-	DegradedReasons []string  `json:"degraded_reasons,omitempty"`
+	DegradedReasons []string  `json:"degraded_reasons"`
 }
 
 // callChainResponse is the envelope returned by eng_get_call_chain. Both

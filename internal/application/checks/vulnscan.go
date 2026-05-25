@@ -9,6 +9,8 @@ import (
 	"strings"
 	"time"
 
+	"golang.org/x/mod/modfile"
+
 	"github.com/whiskeyjimbo/veska/internal/application/manifest"
 	"github.com/whiskeyjimbo/veska/internal/core/domain"
 	"github.com/whiskeyjimbo/veska/internal/core/ports"
@@ -67,6 +69,18 @@ func (c *VulnScanCheck) Run(ctx context.Context, in Input) ([]*domain.Finding, e
 	if err != nil {
 		return nil, fmt.Errorf("vuln-scan: parse go.mod: %w", err)
 	}
+	// solov2-5dxw: build module->line map so the finding message points
+	// at the offending require line for editor jump-to. A parse error here
+	// would have failed manifest.ReadGoMod already; we ignore it and fall
+	// back to omitting the line if it somehow slips through.
+	lineFor := map[string]int{}
+	if mf, perr := modfile.Parse("go.mod", content, nil); perr == nil {
+		for _, r := range mf.Require {
+			if r.Syntax != nil && r.Syntax.Start.Line > 0 {
+				lineFor[r.Mod.Path] = r.Syntax.Start.Line
+			}
+		}
+	}
 
 	start := time.Now()
 	vulns, err := c.src.Scan(ctx, deps)
@@ -78,7 +92,14 @@ func (c *VulnScanCheck) Run(ctx context.Context, in Input) ([]*domain.Finding, e
 	for _, v := range vulns {
 		// solov2-fr2a: lead the message with the advisory ID so triage
 		// doesn't need to grep the OSV cache.
-		msg := fmt.Sprintf("[%s] %s: %s (affected range %s)", v.AdvisoryID, v.Package, v.Summary, v.AffectedRange)
+		// solov2-5dxw: include the offending go.mod line when known so
+		// the message is editor-clickable (the findings table has no
+		// line column today).
+		loc := "go.mod"
+		if ln, ok := lineFor[v.Package]; ok {
+			loc = fmt.Sprintf("go.mod:%d", ln)
+		}
+		msg := fmt.Sprintf("%s [%s] %s: %s (affected range %s)", loc, v.AdvisoryID, v.Package, v.Summary, v.AffectedRange)
 		f, err := domain.NewFinding(
 			in.RepoID, in.Branch,
 			mapSeverity(v.Severity),

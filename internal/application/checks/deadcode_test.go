@@ -160,6 +160,52 @@ func TestDeadCodeCheck_AppliesAllowlistFilters(t *testing.T) {
 	}
 }
 
+// TestDeadCodeCheck_SkipsTestFiles pins solov2-ix3k: lowercase symbols in
+// test-file conventions (Go _test.go, pytest test_*.py, jest *.test.ts, …)
+// must not produce dead-code findings, since test helpers are often passed
+// as function values or referenced only by their test, neither of which
+// produces a CALLS edge today.
+func TestDeadCodeCheck_SkipsTestFiles(t *testing.T) {
+	cases := []struct {
+		name       string
+		filePath   string
+		wantFilter bool
+	}{
+		{"go _test.go skipped", "internal/cli/groups_test.go", true},
+		{"absolute go _test.go skipped", "/repo/internal/cli/groups_test.go", true},
+		{"pytest test_ prefix skipped", "tests/test_loader.py", true},
+		{"pytest _test suffix skipped", "tests/loader_test.py", true},
+		{"jest .test.ts skipped", "src/foo.test.ts", true},
+		{"jest .test.jsx skipped", "src/Foo.test.jsx", true},
+		{"jasmine .spec.ts skipped", "src/foo.spec.ts", true},
+		{"plain .go reported", "internal/cli/groups.go", false},
+		{"plain .py reported", "lib/loader.py", false},
+		{"plain .ts reported", "src/foo.ts", false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			q := &fakeDeadQuerier{
+				dead: []ports.NodeRef{
+					{NodeID: "n-x", FilePath: tc.filePath, Kind: "function", Name: "helper", LineStart: 1, LineEnd: 2},
+				},
+			}
+			c := checks.NewDeadCodeCheck(q)
+			findings, err := c.Run(context.Background(), checks.Input{
+				RepoID: "r", Branch: "main", FilePaths: []string{tc.filePath},
+			})
+			if err != nil {
+				t.Fatalf("Run: %v", err)
+			}
+			if tc.wantFilter && len(findings) != 0 {
+				t.Errorf("expected %s to be filtered, got %d findings", tc.filePath, len(findings))
+			}
+			if !tc.wantFilter && len(findings) != 1 {
+				t.Errorf("expected %s to produce 1 finding, got %d", tc.filePath, len(findings))
+			}
+		})
+	}
+}
+
 // 7. Empty FilePaths input -> no findings, no panic, querier not invoked with surprises.
 func TestDeadCodeCheck_EmptyFilePathsIsNoOp(t *testing.T) {
 	q := &fakeDeadQuerier{

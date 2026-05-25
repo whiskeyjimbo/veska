@@ -70,14 +70,14 @@ func makeGetFileNodesHandler(graph ports.GraphStorage, staging *application.Stag
 
 		// Staging overlay wins when present.
 		if stagedNodes, ok := staging.GetStagedNodes(p.RepoID, p.Branch, filePath); ok {
-			return GraphResponse{Nodes: nodesToDTO(stagedNodes), IncludedStaging: true}, nil
+			return GraphResponse{Nodes: nodesToDTO(stagedNodes), IncludedStaging: true, DegradedReasons: []string{}}, nil
 		}
 
 		nodes, err := graph.NodesForFile(ctx, p.RepoID, p.Branch, filePath)
 		if err != nil {
 			return nil, &RPCError{Code: CodeInternalError, Message: fmt.Sprintf("query failed: %v", err)}
 		}
-		return GraphResponse{Nodes: nodesToDTO(nodes), IncludedStaging: false}, nil
+		return GraphResponse{Nodes: nodesToDTO(nodes), IncludedStaging: false, DegradedReasons: []string{}}, nil
 	}
 }
 

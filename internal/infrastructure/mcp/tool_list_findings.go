@@ -108,6 +108,7 @@ type listFindingsParams struct {
 	Branch   string `json:"branch"`
 	State    string `json:"state,omitempty"`
 	Severity string `json:"severity,omitempty"`
+	Rule     string `json:"rule,omitempty"`
 	// IncludeSuppressed surfaces findings hidden by an active suppression
 	// row. Default false matches the user expectation that
 	// eng_suppress_finding actually suppresses (solov2-2ye2).
@@ -190,6 +191,10 @@ func makeListFindingsHandler(db *sql.DB, repos application.RepoLister) ToolHandl
 		if p.Severity != "" {
 			query += ` AND f.severity = ?`
 			args = append(args, p.Severity)
+		}
+		if p.Rule != "" {
+			query += ` AND f.rule = ?`
+			args = append(args, p.Rule)
 		}
 
 		// Resolve the repo root BEFORE opening the findings cursor: on the

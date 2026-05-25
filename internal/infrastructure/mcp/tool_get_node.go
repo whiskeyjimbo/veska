@@ -82,6 +82,7 @@ func makeGetNodeHandler(graph ports.GraphStorage, staging *application.StagingAr
 		return GraphResponse{
 			Nodes:           nodesToDTO([]*domain.Node{node}),
 			IncludedStaging: includedStaging,
+			DegradedReasons: []string{},
 		}, nil
 	}
 }

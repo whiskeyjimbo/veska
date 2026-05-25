@@ -155,6 +155,40 @@ func TestRenderHotZones_Deterministic(t *testing.T) {
 	}
 }
 
+// TestRank_DropsZeroScoreZones pins solov2-i3pm: a file that churns
+// in-window but maps to no graph nodes (e.g. lockfile, dependabot config,
+// hand-edited go.mod) yields score 0 and must be excluded — otherwise on
+// a quiet repo the surface returns one useless score=0 entry.
+func TestRank_DropsZeroScoreZones(t *testing.T) {
+	edges := &fakeEdges{inbound: map[string][]string{"a": {"x"}}}
+	nodes := &fakeNodes{
+		metas: map[string]ports.NodeMeta{"a": {NodeID: "a"}, "x": {NodeID: "x"}},
+		byFile: map[string][]string{
+			"/tmp/r/a.go": {"a"},
+			// go.mod has no graph nodes — common in real repos.
+			"/tmp/r/go.mod": nil,
+		},
+	}
+	blast := blastradius.NewService(edges, nodes, nil)
+	counts := func(_ context.Context, _ string) (map[string]int, error) {
+		return map[string]int{"a.go": 3, "go.mod": 7}, nil
+	}
+	svc, err := NewHotZoneService(counts, nodes.NodesInFile, blast)
+	if err != nil {
+		t.Fatalf("NewHotZoneService: %v", err)
+	}
+	rep, err := svc.Rank(context.Background(), "r1", "main", "/tmp/r")
+	if err != nil {
+		t.Fatalf("Rank: %v", err)
+	}
+	if len(rep.Zones) != 1 {
+		t.Fatalf("expected 1 zone (go.mod filtered), got %d: %+v", len(rep.Zones), rep.Zones)
+	}
+	if rep.Zones[0].FilePath != "a.go" {
+		t.Errorf("expected a.go survives, got %s", rep.Zones[0].FilePath)
+	}
+}
+
 func TestRenderHotZones_EmptyReport(t *testing.T) {
 	out := RenderHotZones(Report{RepoID: "r1", Branch: "main"})
 	if !contains(out, "No hot zones") {

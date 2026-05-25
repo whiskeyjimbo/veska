@@ -86,6 +86,42 @@ func TestVulnScanCheck_GoModTouched_EmitsFindings(t *testing.T) {
 	}
 }
 
+// TestVulnScanCheck_MessageCarriesGoModLine pins solov2-5dxw: the
+// finding message must include the go.mod line of the offending require
+// so editors can jump to source. (The findings table has no dedicated
+// line column today — see also the schema note in the issue.)
+func TestVulnScanCheck_MessageCarriesGoModLine(t *testing.T) {
+	const goMod = `module example.com/app
+
+go 1.22
+
+require (
+	github.com/innocent/pkg v1.0.0
+	github.com/vulnerable/pkg v1.0.0
+)
+`
+	src := &fakeVulnSource{findings: []ports.VulnFinding{
+		{AdvisoryID: "GHSA-x", Package: "github.com/vulnerable/pkg",
+			AffectedRange: "<2.0.0", Severity: "HIGH", Summary: "rce"},
+	}}
+	c := NewVulnScanCheck(src, writeGoMod(t, goMod))
+	got, err := c.Run(context.Background(), Input{RepoID: "r", Branch: "main", FilePaths: []string{"go.mod"}})
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if len(got) != 1 {
+		t.Fatalf("want 1 finding, got %d", len(got))
+	}
+	// vulnerable/pkg is on line 7 of the fixture (require keyword on 5,
+	// innocent on 6, vulnerable on 7).
+	const wantPrefix = "go.mod:7 "
+	if !startsWith(got[0].Message, wantPrefix) {
+		t.Errorf("message=%q; want prefix %q", got[0].Message, wantPrefix)
+	}
+}
+
+func startsWith(s, prefix string) bool { return len(s) >= len(prefix) && s[:len(prefix)] == prefix }
+
 func TestVulnScanCheck_GoModNotTouched_NoFindings(t *testing.T) {
 	src := &fakeVulnSource{findings: []ports.VulnFinding{
 		{AdvisoryID: "GHSA-aaaa-bbbb-cccc", Package: "p", Severity: "HIGH"},
