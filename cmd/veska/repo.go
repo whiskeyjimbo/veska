@@ -406,6 +406,59 @@ func repoAddCmd() *cobra.Command {
 	return cmd
 }
 
+// tailScanFailureReason scans the tail of daemon.log for the most recent
+// ERROR/WARN line referencing repoID and returns a short reason string
+// suitable for inline display. Best-effort: returns "" when no matching
+// line is found, the log is unreadable, or the JSONL line cannot be parsed.
+// Only the last ~64 KiB of the log is inspected to keep the wait loop snappy.
+func tailScanFailureReason(logPath, repoID string) string {
+	const tailBytes = 64 * 1024
+	f, err := os.Open(logPath)
+	if err != nil {
+		return ""
+	}
+	defer func() { _ = f.Close() }()
+	info, err := f.Stat()
+	if err != nil {
+		return ""
+	}
+	offset := int64(0)
+	if info.Size() > tailBytes {
+		offset = info.Size() - tailBytes
+	}
+	if _, err := f.Seek(offset, io.SeekStart); err != nil {
+		return ""
+	}
+	scanner := bufio.NewScanner(f)
+	scanner.Buffer(make([]byte, 0, 64*1024), 1<<20)
+	var lastReason string
+	for scanner.Scan() {
+		line := scanner.Text()
+		if !strings.Contains(line, repoID) {
+			continue
+		}
+		if !strings.Contains(line, `"level":"ERROR"`) && !strings.Contains(line, `"level":"WARN"`) {
+			continue
+		}
+		var rec struct {
+			Msg string `json:"msg"`
+			Err string `json:"err"`
+		}
+		if err := json.Unmarshal([]byte(line), &rec); err != nil {
+			continue
+		}
+		switch {
+		case rec.Err != "" && rec.Msg != "":
+			lastReason = rec.Msg + ": " + rec.Err
+		case rec.Err != "":
+			lastReason = rec.Err
+		case rec.Msg != "":
+			lastReason = rec.Msg
+		}
+	}
+	return lastReason
+}
+
 // waitForScanComplete polls eng_get_status until the named repo's scan
 // has left scans_in_flight, printing one progress line per phase change
 // or files-seen jump so the user has a continuous signal instead of a
@@ -445,9 +498,18 @@ func waitForScanComplete(ctx context.Context, w io.Writer, repoID string) error 
 					}
 				}
 			}
-			// Not promoted and no in-flight entry — scan likely failed.
-			// Surface a short note rather than blocking forever.
-			fmt.Fprintf(w, "  scan no longer in flight; check `~/.veska/logs/daemon.log` for errors\n")
+			// Not promoted and no in-flight entry — scan likely failed
+			// (or finished before we got our first poll in). Surface the
+			// daemon log's most recent error for this repo when we can
+			// find one, so the user sees the cause inline instead of
+			// being told to grep (solov2-jtl5.7).
+			logPath := filepath.Join(config.DefaultVectorDir(), "logs", "daemon.log")
+			if reason := tailScanFailureReason(logPath, repoID); reason != "" {
+				fmt.Fprintf(w, "  ✗ cold scan failed: %s\n", reason)
+				fmt.Fprintf(w, "    full context: tail %s\n", logPath)
+				return fmt.Errorf("cold scan failed")
+			}
+			fmt.Fprintf(w, "  scan no longer in flight, repo not yet promoted — tail %s for the cause\n", logPath)
 			return nil
 		}
 		if row.Phase != lastPhase || row.FilesSeen != lastFiles {
