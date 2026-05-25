@@ -110,10 +110,12 @@ func TestDegradedReasonHint_UnknownIsEmpty(t *testing.T) {
 // "top" looks confidently correct.
 func TestRenderSearchEnvelope_LowAbsoluteTopAppendsNote(t *testing.T) {
 	var w bytes.Buffer
+	// 0.0164 corresponds to a single-retriever rank-1 RRF hit (1/(60+1)),
+	// the exact case the warning is meant to catch.
 	env := searchEnvelope{
 		Results: []searchHitView{{
 			NodeID: "n1", Name: "X", Kind: "function", FilePath: "x.go",
-			LineStart: 1, LineEnd: 2, Score: 0.018,
+			LineStart: 1, LineEnd: 2, Score: 0.0164,
 		}},
 	}
 	if err := renderSearchEnvelope(&w, env, false); err != nil {

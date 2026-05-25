@@ -468,11 +468,16 @@ func renderSearchEnvelope(w io.Writer, env searchEnvelope, jsonOut bool) error {
 }
 
 // weakTopAbsolute is the absolute-score floor below which a query's top hit
-// is considered weak. The chosen value is loose because absolute scores
-// depend on the embedder and corpus (see scoreTier's note). For the in-tree
-// model2vec/static-v2 backends we observe healthy queries scoring well above
-// 0.1; below that the relative tier labels are misleading by themselves.
-const weakTopAbsolute = 0.05
+// is considered weak. Score is post-fusion RRF (solov2-vee5):
+//
+//	rank-1 in one list only  → 1/(60+1)            = 0.01639
+//	rank-1 in both lists     → 2 * 1/(60+1)        = 0.03279
+//
+// A top below ~0.018 means even the best hit only made it into ONE
+// retriever's list — the cross-corroboration signal is missing and recall
+// is weak. The floor sits a hair above 0.0164 so a single-list rank-1 (the
+// common small-corpus case) trips the hint and prompts the user to refine.
+const weakTopAbsolute = 0.018
 
 // degradedReasonHint maps an in-band degraded_reasons code to a one-line
 // actionable hint appended to the rendered line. Empty when no hint applies,

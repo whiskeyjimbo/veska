@@ -219,6 +219,37 @@ func TestGraphRepo_FindNodes_UnqualifiedSuffix(t *testing.T) {
 	}
 }
 
+// TestGraphRepo_FindNodes_CaseSensitive guards solov2-xcb1: identifier
+// matching is byte-exact. SQLite LIKE is case-insensitive for ASCII by
+// default, so before the COLLATE BINARY fix, searching "Run" also matched
+// "FSNotifyWatcher.run" — a different symbol. Go (and most supported
+// languages) treats "Run" and "run" as distinct identifiers.
+func TestGraphRepo_FindNodes_CaseSensitive(t *testing.T) {
+	t.Parallel()
+	r := openGraphRepoTestDB(t)
+	ctx := context.Background()
+
+	for _, n := range []*domain.Node{
+		mustNode(t, "n1", "a.go", "Server.Run", domain.KindMethod),          // matches "Run"
+		mustNode(t, "n2", "b.go", "FSNotifyWatcher.run", domain.KindMethod), // distinct lowercase — must NOT match "Run"
+	} {
+		if err := r.SaveNode(ctx, "r1", "main", n); err != nil {
+			t.Fatalf("SaveNode %s: %v", n.ID, err)
+		}
+	}
+
+	got, err := r.FindNodes(ctx, "r1", "main", "Run")
+	if err != nil {
+		t.Fatalf("FindNodes: %v", err)
+	}
+	if len(got) != 1 {
+		t.Fatalf("FindNodes(Run) = %d nodes (%v); want 1 (Server.Run only)", len(got), names(got))
+	}
+	if got[0].Name != "Server.Run" {
+		t.Errorf("expected Server.Run, got %q", got[0].Name)
+	}
+}
+
 func names(ns []*domain.Node) []string {
 	out := make([]string, len(ns))
 	for i, n := range ns {

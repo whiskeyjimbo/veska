@@ -131,8 +131,13 @@ Env: `VESKA_HOME` (data root), `VESKA_VECTOR_BACKEND` (`sqlite-vec`|`usearch`).
   `sqlite.PromotionStore`. Co-transactional writers (FTS, embedding-refs) are
   pluggable `sqlite.PromotionSink`s registered in `wire.go` — adding one needs
   no edit to the transaction body.
-- **Embeddings are L2-normalised** before storage so similarity scores
-  (`1/(1+L2dist)`) land in a usable threshold range.
+- **Embeddings are L2-normalised** before storage so the raw vector
+  similarity `1/(1+L2dist)` lands in a usable threshold range. **That
+  formula governs the autolink threshold only.** `eng_search_semantic`
+  exposes a post-fusion RRF score (sum of `1/(60+rank)` across the vector
+  and lexical lists), not the raw similarity — top scores cluster around
+  ~0.016–0.033 by construction, and are only meaningful relative to other
+  hits in the same query (solov2-vee5).
 
 ## Conventions & Patterns
 
