@@ -69,3 +69,35 @@ func TestRepoAddCmd_DirectFallback(t *testing.T) {
 		t.Errorf("veska.db not created at %s", veskaHome)
 	}
 }
+
+// TestColdScanRunningHint covers solov2-rhaq: the post-`repo add` hint must
+// attribute `--wait` to `veska repo add`, not to `veska repo list`. A junior
+// reading the message will naturally copy-paste; suggesting `repo list --wait`
+// (the prior wording) errors with "unknown flag". The corrected hint embeds
+// the actual <path> so the suggestion is copy-pasteable.
+func TestColdScanRunningHint(t *testing.T) {
+	root := "/some/repo/path"
+	logPath := "/tmp/veska/logs/daemon.log"
+	msg := coldScanRunningHint(root, logPath)
+
+	// Must suggest --wait on `repo add <path>`, with the actual path inlined.
+	wantAdd := "veska repo add " + root + " --wait"
+	if !strings.Contains(msg, wantAdd) {
+		t.Errorf("hint should suggest %q; got %q", wantAdd, msg)
+	}
+
+	// Must NOT suggest `repo list --wait` (the bug we are fixing). Detect the
+	// trap precisely: a backtick-quoted command starting with "veska repo list"
+	// and containing --wait, or a bare "repo list --wait".
+	if strings.Contains(msg, "repo list --wait") || strings.Contains(msg, "repo list` to block") {
+		t.Errorf("hint must not attribute --wait to `repo list`: %q", msg)
+	}
+
+	// Must still mention `veska repo list` (for status) and the log path.
+	if !strings.Contains(msg, "veska repo list") {
+		t.Errorf("hint should mention `veska repo list` for status: %q", msg)
+	}
+	if !strings.Contains(msg, logPath) {
+		t.Errorf("hint should include log path %q: %q", logPath, msg)
+	}
+}
