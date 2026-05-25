@@ -30,6 +30,7 @@ func RegisterSuppressionTools(r *Registry, db *sql.DB, aw ports.AuditWriter, rep
 		Name:            "eng_list_suppressions",
 		Description:     "List suppressions for a given repo and branch. repo_id is optional when exactly one repo is registered (it auto-resolves); otherwise it is required.",
 		IncludesStaging: false,
+		InputSchema:     listSuppressionsInputSchema,
 		Handler:         makeListSuppressionsHandler(db, repos),
 	})
 }

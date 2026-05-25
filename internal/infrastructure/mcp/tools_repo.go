@@ -29,12 +29,14 @@ func RegisterRepoTools(r *Registry, reg RepoRegistrar) {
 		Name:            "eng_add_repo",
 		Description:     "Register a new repo path; the daemon kicks off a cold scan in the background.",
 		IncludesStaging: false,
+		InputSchema:     addRepoInputSchema,
 		Handler:         makeAddRepoHandler(reg),
 	})
 	r.MustRegister(ToolSpec{
 		Name:            "eng_remove_repo",
 		Description:     "Unregister a repo and drop all of its rows in one transaction.",
 		IncludesStaging: false,
+		InputSchema:     removeRepoInputSchema,
 		Handler:         makeRemoveRepoHandler(reg),
 	})
 }

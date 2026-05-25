@@ -37,30 +37,35 @@ func RegisterAdminTools(
 		Name:            "eng_get_current_repo",
 		Description:     "Find the indexed repo whose root contains the given cwd path.",
 		IncludesStaging: true,
+		InputSchema:     getCurrentRepoInputSchema,
 		Handler:         makeGetCurrentRepoHandler(repos),
 	})
 	r.MustRegister(ToolSpec{
 		Name:            "eng_list_repos",
 		Description:     "List all indexed repos registered with the daemon.",
 		IncludesStaging: false,
+		InputSchema:     listReposInputSchema,
 		Handler:         makeListReposHandler(repos),
 	})
 	r.MustRegister(ToolSpec{
 		Name:            "eng_get_repo",
 		Description:     "Get a single indexed repo by its repo_id.",
 		IncludesStaging: false,
+		InputSchema:     getRepoInputSchema,
 		Handler:         makeGetRepoHandler(repos),
 	})
 	r.MustRegister(ToolSpec{
 		Name:            "eng_get_status",
 		Description:     "Return daemon liveness and schema version.",
 		IncludesStaging: true,
+		InputSchema:     getStatusInputSchema,
 		Handler:         makeGetStatusHandler(status),
 	})
 	r.MustRegister(ToolSpec{
 		Name:            "eng_get_config",
 		Description:     "Return effective daemon configuration (secrets redacted).",
 		IncludesStaging: false,
+		InputSchema:     getConfigInputSchema,
 		Handler:         makeGetConfigHandler(cfg),
 	})
 }

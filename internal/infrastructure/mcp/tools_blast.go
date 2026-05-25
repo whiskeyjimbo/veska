@@ -60,18 +60,21 @@ func RegisterBlastTools(r *Registry, svc *blastradius.Service, repoRoot RepoRoot
 		Name:            "eng_get_blast_radius",
 		Description:     "Compute the blast radius (callers/callees/both) of a single node via BFS over the edges table.",
 		IncludesStaging: false,
+		InputSchema:     blastRadiusInputSchema,
 		Handler:         makeBlastRadiusHandler(svc, repos, cfg.resolve),
 	})
 	r.MustRegister(ToolSpec{
 		Name:            "eng_get_dirty_blast_radius",
 		Description:     "Compute the blast radius of all symbols currently in the in-memory staging overlay.",
 		IncludesStaging: true,
+		InputSchema:     dirtyBlastRadiusInputSchema,
 		Handler:         makeDirtyBlastRadiusHandler(svc, repos, cfg.resolve),
 	})
 	r.MustRegister(ToolSpec{
 		Name:            "eng_get_diff_blast_radius",
 		Description:     "Compute the blast radius for all symbols in files changed in the working-tree diff vs HEAD.",
 		IncludesStaging: false,
+		InputSchema:     diffBlastRadiusInputSchema,
 		Handler:         makeDiffBlastRadiusHandler(svc, repoRoot, changedFiles, repos, cfg.resolve),
 	})
 }

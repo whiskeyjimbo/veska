@@ -79,12 +79,14 @@ func RegisterSearchTools(
 		Name:            "eng_search_semantic",
 		Description:     "Semantic search over embedded symbols with lexical fallback when the embedder is offline.",
 		IncludesStaging: false,
+		InputSchema:     searchSemanticInputSchema,
 		Handler:         makeSearchSemanticHandler(svc, rec, repos, pending),
 	})
 	r.MustRegister(ToolSpec{
 		Name:            "eng_search_similar",
 		Description:     "Find symbols similar to a given node by vector neighbourhood over its stored embedding.",
 		IncludesStaging: false,
+		InputSchema:     searchSimilarInputSchema,
 		Handler:         makeSearchSimilarHandler(lookup, vectors, nodes, repos),
 	})
 }
