@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"context"
 	"fmt"
 	"io"
@@ -28,14 +29,25 @@ type initDeps struct {
 	goos     string
 }
 
+// initFlags carries the boolean choices initCmd resolves before calling
+// runInit — separates flag-handling from the core flow and keeps runInit
+// testable without spinning up cobra.
+type initFlags struct {
+	yes    bool // --yes: auto-accept all prompts with the default answer.
+	noVuln bool // --no-vuln: force vuln_source disabled, skip the prompt.
+	stdin  io.Reader
+}
+
 // runInit performs the full first-run initialisation flow:
 //  1. Creates the ~/.veska/ directory layout (logs/, cache/, state/).
 //  2. Resolves the embedder via the same boot-election as the daemon. The
 //     default (model2vec/static) is in-process and needs no external service,
 //     so init never fails for lack of Ollama. Only an explicit
 //     VESKA_EMBEDDER=ollama probes Ollama and hard-fails when it is unhealthy.
-//  3. Prints a short summary to out on success.
-func runInit(ctx context.Context, deps initDeps, yes bool, out io.Writer) error {
+//  3. Prompts to enable [vuln_source] (solov2-pvyo) unless --yes / --no-vuln
+//     short-circuits.
+//  4. Prints a short summary to out on success.
+func runInit(ctx context.Context, deps initDeps, flags initFlags, out io.Writer) error {
 	// ── 1. Create directory layout ───────────────────────────────────────────
 	for _, sub := range []string{"logs", "cache", "state"} {
 		if err := os.MkdirAll(filepath.Join(deps.veskaHome, sub), 0o755); err != nil {
@@ -43,11 +55,20 @@ func runInit(ctx context.Context, deps initDeps, yes bool, out io.Writer) error 
 		}
 	}
 
+	// solov2-pvyo: resolve vuln_source choice BEFORE writing the config so
+	// we write it in its final shape (uncommented when enabled). Defaults
+	// to Y so `veska init -y` opts the user in — junior-journey UX choice,
+	// the scanner ships behind a single feature flag and is safe to enable.
+	vulnEnabled, err := resolveVulnChoice(flags, out)
+	if err != nil {
+		return err
+	}
+
 	// solov2-w1ng: CONFIG-SURFACE.md promises `veska init` writes
-	// ~/.veska/config.toml when absent. Honour that — drop a commented
-	// starter file so a junior can grep, uncomment, restart, and go.
-	// Never overwrites an existing file.
-	if err := writeDefaultConfigIfAbsent(deps.veskaHome); err != nil {
+	// ~/.veska/config.toml when absent. Honour that — drop a starter file
+	// so a junior can grep, edit, restart, and go. Never overwrites an
+	// existing file (the prompt above does NOT mutate an existing config).
+	if err := writeDefaultConfigIfAbsent(deps.veskaHome, vulnEnabled); err != nil {
 		return fmt.Errorf("write config.toml: %w", err)
 	}
 
@@ -77,6 +98,40 @@ func runInit(ctx context.Context, deps initDeps, yes bool, out io.Writer) error 
 	fmt.Fprintln(out, "ready")
 
 	return nil
+}
+
+// resolveVulnChoice asks the user whether to enable OSV vulnerability scanning
+// at init time (solov2-pvyo). Non-interactive paths short-circuit:
+//   - --no-vuln → always disabled.
+//   - --yes (or stdin missing/closed) → accept the default (enabled).
+//   - existing config.toml on disk → skip the prompt entirely; we never
+//     mutate an existing file.
+func resolveVulnChoice(flags initFlags, out io.Writer) (bool, error) {
+	if flags.noVuln {
+		return false, nil
+	}
+	if flags.yes || flags.stdin == nil {
+		return true, nil
+	}
+	fmt.Fprint(out, "Enable OSV vulnerability scanning? [Y/n] ")
+	reader := bufio.NewReader(flags.stdin)
+	line, err := reader.ReadString('\n')
+	if err != nil && line == "" {
+		// EOF without input — treat as default (yes). Avoids breaking
+		// callers that wire init into a non-tty pipeline.
+		return true, nil
+	}
+	switch strings.ToLower(strings.TrimSpace(line)) {
+	case "", "y", "yes":
+		return true, nil
+	case "n", "no":
+		return false, nil
+	default:
+		// Unknown answer — be conservative and don't enable. Print what
+		// we interpreted so the junior knows why scanning is off.
+		fmt.Fprintf(out, "  (answer %q not understood; leaving vuln_source disabled)\n", strings.TrimSpace(line))
+		return false, nil
+	}
 }
 
 // resolveInitEmbedder reports the embedder init will use and an optional tip.
@@ -131,20 +186,30 @@ func embedderProvenance(veskaHome, modelID string) string {
 	return "(in-process)"
 }
 
-// defaultConfigTemplate is the file written by `veska init` when
-// ~/.veska/config.toml is absent. Every section is commented so the
-// daemon keeps using its built-in defaults; uncommenting a block is
-// the affordance for enabling it. Keep this short — CONFIG-SURFACE.md
-// is the canonical reference.
-const defaultConfigTemplate = `# Veska daemon config.
+// configTemplateHeader prefixes every generated config.toml. CONFIG-SURFACE.md
+// is the canonical full surface; this file is the starter sketch.
+const configTemplateHeader = `# Veska daemon config.
 # Written by ` + "`veska init`" + ` when this file is absent.
 # Full surface: docs/operations/CONFIG-SURFACE.md.
 #
-# Every block below is commented out — the daemon falls back to its
-# built-in defaults for anything missing. Uncomment a block and
-# restart (` + "`veska service restart`" + `) to apply.
+# Uncomment a block (or edit a value) and restart
+# (` + "`veska service restart`" + `) to apply.
 
-# OSV.dev vulnerability scanner (off by default; opt-in).
+`
+
+// vulnSourceBlockEnabled is the live (uncommented) [vuln_source] block —
+// written when init resolves the prompt to "yes" (solov2-pvyo).
+const vulnSourceBlockEnabled = `# OSV.dev vulnerability scanner. After re-indexing existing repos
+# (` + "`veska reindex <path>`" + `), findings appear in ` + "`veska findings list`" + `.
+[vuln_source]
+provider         = "osv"
+refresh_interval = "24h"
+`
+
+// vulnSourceBlockDisabled is the commented-out variant. It still appears so
+// a junior who later wants OSV can grep + uncomment without reading the
+// CONFIG-SURFACE doc.
+const vulnSourceBlockDisabled = `# OSV.dev vulnerability scanner (off; opt-in).
 # After enabling, run ` + "`veska reindex <path>`" + ` to scan
 # already-promoted repos.
 # [vuln_source]
@@ -152,17 +217,24 @@ const defaultConfigTemplate = `# Veska daemon config.
 # refresh_interval = "24h"
 `
 
-// writeDefaultConfigIfAbsent writes defaultConfigTemplate to
-// ~/.veska/config.toml only if it does not already exist. Idempotent on
-// re-init.
-func writeDefaultConfigIfAbsent(veskaHome string) error {
+// writeDefaultConfigIfAbsent writes the starter config.toml only when the
+// file does not already exist. vulnEnabled selects whether the
+// [vuln_source] block is written live or commented out (solov2-pvyo).
+// Idempotent on re-init — never overwrites an existing config.
+func writeDefaultConfigIfAbsent(veskaHome string, vulnEnabled bool) error {
 	path := filepath.Join(veskaHome, "config.toml")
 	if _, err := os.Stat(path); err == nil {
 		return nil
 	} else if !os.IsNotExist(err) {
 		return err
 	}
-	return os.WriteFile(path, []byte(defaultConfigTemplate), 0o644)
+	body := configTemplateHeader
+	if vulnEnabled {
+		body += vulnSourceBlockEnabled
+	} else {
+		body += vulnSourceBlockDisabled
+	}
+	return os.WriteFile(path, []byte(body), 0o644)
 }
 
 // envOrDefault returns the env var when non-empty, else def.
@@ -176,6 +248,7 @@ func envOrDefault(key, def string) string {
 // initCmd returns the "init" Cobra command that runs the first-run flow.
 func initCmd() *cobra.Command {
 	var yes bool
+	var noVuln bool
 	var agent string
 	var updateGitignore bool
 
@@ -200,11 +273,13 @@ func initCmd() *cobra.Command {
 				probe:     embedderprobe.Probe,
 				goos:      runtime.GOOS,
 			}
-			return runInit(cmd.Context(), deps, yes, cmd.OutOrStdout())
+			flags := initFlags{yes: yes, noVuln: noVuln, stdin: cmd.InOrStdin()}
+			return runInit(cmd.Context(), deps, flags, cmd.OutOrStdout())
 		},
 	}
 
 	cmd.Flags().BoolVarP(&yes, "yes", "y", false, "auto-accept all prompts (non-interactive mode)")
+	cmd.Flags().BoolVar(&noVuln, "no-vuln", false, "skip the OSV vulnerability-scanner prompt and leave it disabled (solov2-pvyo)")
 	cmd.Flags().StringVar(&agent, "agent", "",
 		"write a per-agent instruction snippet to the current project ("+
 			strings.Join(supportedFlavorNames(), ", ")+")")
