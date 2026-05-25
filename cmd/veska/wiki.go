@@ -4,7 +4,9 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/spf13/cobra"
 	"github.com/whiskeyjimbo/veska/internal/application"
@@ -91,7 +93,20 @@ func resolveWikiTarget(ctx context.Context, db *sql.DB, repoID, branch string) (
 		case 1:
 			rec = records[0]
 		default:
-			return "", "", fmt.Errorf("wiki: %d repos registered — pass --repo to choose one", len(records))
+			// solov2-ig2x: with multiple repos registered, try the caller's
+			// cwd before erroring out. Matches what `veska search` does and
+			// what the MCP resolveRepoIDOrCwd helper does for query tools.
+			if cwd, err := os.Getwd(); err == nil && cwd != "" {
+				for _, r := range records {
+					if r.RootPath != "" && (cwd == r.RootPath || strings.HasPrefix(cwd, r.RootPath+"/")) {
+						rec = r
+						break
+					}
+				}
+			}
+			if rec.RepoID == "" {
+				return "", "", fmt.Errorf("wiki: %d repos registered — pass --repo to choose one, or cd into a registered repo", len(records))
+			}
 		}
 	} else {
 		// Match the MCP resolveRepoID progression so the CLI honours the same

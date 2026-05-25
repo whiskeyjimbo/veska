@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	application "github.com/whiskeyjimbo/veska/internal/application"
 	"github.com/whiskeyjimbo/veska/internal/core/domain"
 	"github.com/whiskeyjimbo/veska/internal/core/ports"
 	_ "modernc.org/sqlite"
@@ -227,7 +228,7 @@ func TestCloseFindings_HumanActionGate(t *testing.T) {
 			seedFinding(t, db, findingID, "main", "repo-1", tc.severity, "open")
 
 			r := NewRegistry()
-			RegisterFindingTools(r, db, nil)
+			RegisterFindingTools(r, db, nil, nil)
 
 			result, rpcErr := dispatchFinding(t, r, tc.actor, map[string]string{
 				"finding_id": findingID,
@@ -284,7 +285,7 @@ func TestCloseFindings_MessageContainsFindingAndSeverity(t *testing.T) {
 	seedFinding(t, db, fid, "main", "repo-1", "critical", "open")
 
 	r := NewRegistry()
-	RegisterFindingTools(r, db, nil)
+	RegisterFindingTools(r, db, nil, nil)
 
 	actor := domain.Actor{ID: "agent:bot", Kind: domain.ActorKindAgent}
 	_, rpcErr := dispatchFinding(t, r, actor, map[string]string{
@@ -323,7 +324,7 @@ func TestCloseFindings_PreservesCreatorActor(t *testing.T) {
 	seedFinding(t, db, fid, "main", "repo-1", "low", "open")
 
 	r := NewRegistry()
-	RegisterFindingTools(r, db, &capturingAuditWriter{})
+	RegisterFindingTools(r, db, &capturingAuditWriter{}, nil)
 
 	// A human closes it (admin action allowed even at low severity).
 	closer := domain.Actor{ID: "agent:unknown", Kind: domain.ActorKindAgent}
@@ -360,7 +361,7 @@ func TestCloseFindings_NotFound(t *testing.T) {
 	db := newFindingsDB(t)
 
 	r := NewRegistry()
-	RegisterFindingTools(r, db, nil)
+	RegisterFindingTools(r, db, nil, nil)
 
 	actor := domain.Actor{ID: "human:alice", Kind: domain.ActorKindHuman}
 	_, rpcErr := dispatchFinding(t, r, actor, map[string]string{
@@ -383,7 +384,7 @@ func TestCloseFindings_MissingParams(t *testing.T) {
 	db := newFindingsDB(t)
 
 	r := NewRegistry()
-	RegisterFindingTools(r, db, nil)
+	RegisterFindingTools(r, db, nil, nil)
 
 	actor := domain.Actor{ID: "human:alice", Kind: domain.ActorKindHuman}
 	// Missing finding_id.
@@ -423,7 +424,7 @@ func dispatchListFindings(t *testing.T, r *Registry, actor domain.Actor, params 
 func TestListFindings_Empty(t *testing.T) {
 	db := newFindingsDB(t)
 	r := NewRegistry()
-	RegisterFindingTools(r, db, nil)
+	RegisterFindingTools(r, db, nil, nil)
 
 	actor := domain.Actor{ID: "agent:bot", Kind: domain.ActorKindAgent}
 	result, rpcErr := dispatchListFindings(t, r, actor, map[string]string{
@@ -450,7 +451,7 @@ func TestListFindings_DefaultStateIsOpen(t *testing.T) {
 	seedFinding(t, db, "closed-f", "main", "repo-1", "low", "closed")
 
 	r := NewRegistry()
-	RegisterFindingTools(r, db, nil)
+	RegisterFindingTools(r, db, nil, nil)
 
 	actor := domain.Actor{ID: "agent:bot", Kind: domain.ActorKindAgent}
 	result, rpcErr := dispatchListFindings(t, r, actor, map[string]string{
@@ -472,6 +473,36 @@ func TestListFindings_DefaultStateIsOpen(t *testing.T) {
 	}
 }
 
+// TestListFindings_ResolvesRepoIDFromCWD pins solov2-ig2x: when the caller
+// omits repo_id but the shim has injected a cwd that matches a registered
+// repo's RootPath, eng_list_findings must resolve via the RepoLister instead
+// of erroring "repo_id is required".
+func TestListFindings_ResolvesRepoIDFromCWD(t *testing.T) {
+	const fullID = "62d72fa222a0193f8fa927f95dd6a3575c7566964c8b8f6ba14aafc5a1ea871f"
+	db := newFindingsDB(t)
+	seedFinding(t, db, "f-cwd", "main", fullID, "low", "open")
+
+	repos := &stubRepoLister{repos: []application.RepoRecord{
+		{RepoID: fullID, ActiveBranch: "main", RootPath: "/tmp/myrepo"},
+	}}
+	r := NewRegistry()
+	RegisterFindingTools(r, db, nil, repos)
+
+	actor := domain.Actor{ID: "agent:bot", Kind: domain.ActorKindAgent}
+	// repo_id omitted; cwd hint inside the registered root.
+	result, rpcErr := dispatchListFindings(t, r, actor, map[string]string{
+		"cwd": "/tmp/myrepo/subdir",
+	})
+	if rpcErr != nil {
+		t.Fatalf("unexpected RPC error: code=%d message=%q", rpcErr.Code, rpcErr.Message)
+	}
+	m := result.(map[string]any)
+	findings, _ := m["findings"].([]findingRow)
+	if len(findings) != 1 || findings[0].FindingID != "f-cwd" {
+		t.Errorf("expected the cwd-resolved finding, got %+v", findings)
+	}
+}
+
 // TestListFindings_AcceptsShortID pins solov2-s7k0: eng_list_findings must
 // resolve a 12-char short_id prefix the same way the graph tools do, instead
 // of querying findings by the raw prefix and silently returning [].
@@ -487,7 +518,7 @@ func TestListFindings_AcceptsShortID(t *testing.T) {
 	seedFinding(t, db, "f1", "main", fullID, "low", "open")
 
 	r := NewRegistry()
-	RegisterFindingTools(r, db, nil)
+	RegisterFindingTools(r, db, nil, nil)
 	actor := domain.Actor{ID: "agent:bot", Kind: domain.ActorKindAgent}
 
 	// Short id resolves to the finding.
@@ -516,7 +547,7 @@ func TestListFindings_SeverityFilter(t *testing.T) {
 	seedFinding(t, db, "high-f", "main", "repo-1", "high", "open")
 
 	r := NewRegistry()
-	RegisterFindingTools(r, db, nil)
+	RegisterFindingTools(r, db, nil, nil)
 
 	actor := domain.Actor{ID: "agent:bot", Kind: domain.ActorKindAgent}
 	result, rpcErr := dispatchListFindings(t, r, actor, map[string]string{
@@ -558,7 +589,7 @@ func TestReopenFinding_Basic(t *testing.T) {
 	seedFinding(t, db, "reopen-f", "main", "repo-1", "low", "closed")
 
 	r := NewRegistry()
-	RegisterFindingTools(r, db, nil)
+	RegisterFindingTools(r, db, nil, nil)
 
 	actor := domain.Actor{ID: "agent:bot", Kind: domain.ActorKindAgent}
 	result, rpcErr := dispatchReopenFinding(t, r, actor, map[string]string{
@@ -593,7 +624,7 @@ func TestReopenFinding_AnyActorCanReopen(t *testing.T) {
 	seedFinding(t, db, "reopen-agent", "main", "repo-1", "critical", "closed")
 
 	r := NewRegistry()
-	RegisterFindingTools(r, db, nil)
+	RegisterFindingTools(r, db, nil, nil)
 
 	// An agent should be able to reopen even a critical finding (no human gate).
 	actor := domain.Actor{ID: "agent:bot", Kind: domain.ActorKindAgent}
@@ -610,7 +641,7 @@ func TestReopenFinding_AnyActorCanReopen(t *testing.T) {
 func TestReopenFinding_NotFound(t *testing.T) {
 	db := newFindingsDB(t)
 	r := NewRegistry()
-	RegisterFindingTools(r, db, nil)
+	RegisterFindingTools(r, db, nil, nil)
 
 	actor := domain.Actor{ID: "human:alice", Kind: domain.ActorKindHuman}
 	_, rpcErr := dispatchReopenFinding(t, r, actor, map[string]string{
@@ -641,7 +672,7 @@ func TestCloseFinding_AutoLinkAccept_PromotesEdge(t *testing.T) {
 
 	aw := &capturingAuditWriter{}
 	r := NewRegistry()
-	RegisterFindingTools(r, db, aw)
+	RegisterFindingTools(r, db, aw, nil)
 
 	actor := domain.Actor{ID: "human:alice", Kind: domain.ActorKindHuman}
 	_, rpcErr := dispatchFinding(t, r, actor, map[string]string{
@@ -701,7 +732,7 @@ func TestCloseFinding_AutoLinkSuppress_LeavesEdgeUnresolved(t *testing.T) {
 
 	aw := &capturingAuditWriter{}
 	r := NewRegistry()
-	RegisterFindingTools(r, db, aw)
+	RegisterFindingTools(r, db, aw, nil)
 
 	actor := domain.Actor{ID: "human:alice", Kind: domain.ActorKindHuman}
 	_, rpcErr := dispatchFinding(t, r, actor, map[string]string{
@@ -748,7 +779,7 @@ func TestCloseFinding_NonAutoLinkAccept_LeavesEdgesAlone(t *testing.T) {
 
 	aw := &capturingAuditWriter{}
 	r := NewRegistry()
-	RegisterFindingTools(r, db, aw)
+	RegisterFindingTools(r, db, aw, nil)
 
 	actor := domain.Actor{ID: "human:alice", Kind: domain.ActorKindHuman}
 	_, rpcErr := dispatchFinding(t, r, actor, map[string]string{
@@ -782,7 +813,7 @@ func TestCloseFinding_AutoLinkAccept_NullAnchor(t *testing.T) {
 
 	aw := &capturingAuditWriter{}
 	r := NewRegistry()
-	RegisterFindingTools(r, db, aw)
+	RegisterFindingTools(r, db, aw, nil)
 
 	actor := domain.Actor{ID: "human:alice", Kind: domain.ActorKindHuman}
 	_, rpcErr := dispatchFinding(t, r, actor, map[string]string{
@@ -809,7 +840,7 @@ func TestCloseFinding_AutoLinkAccept_MissingEdge(t *testing.T) {
 
 	aw := &capturingAuditWriter{}
 	r := NewRegistry()
-	RegisterFindingTools(r, db, aw)
+	RegisterFindingTools(r, db, aw, nil)
 
 	actor := domain.Actor{ID: "human:alice", Kind: domain.ActorKindHuman}
 	_, rpcErr := dispatchFinding(t, r, actor, map[string]string{
@@ -839,7 +870,7 @@ func TestCloseFinding_AutoLinkAccept_AlreadyDefinite(t *testing.T) {
 	seedAutoLinkFinding(t, db, "f-al-idem", "main", "repo-1", "low", "open", "edge-def")
 
 	r := NewRegistry()
-	RegisterFindingTools(r, db, nil)
+	RegisterFindingTools(r, db, nil, nil)
 
 	actor := domain.Actor{ID: "human:alice", Kind: domain.ActorKindHuman}
 	_, rpcErr := dispatchFinding(t, r, actor, map[string]string{
@@ -876,7 +907,7 @@ func TestCloseFinding_AutoLinkAccept_AtomicRollback(t *testing.T) {
 
 	aw := &capturingAuditWriter{}
 	r := NewRegistry()
-	RegisterFindingTools(r, db, aw)
+	RegisterFindingTools(r, db, aw, nil)
 
 	actor := domain.Actor{ID: "human:alice", Kind: domain.ActorKindHuman}
 	_, rpcErr := dispatchFinding(t, r, actor, map[string]string{
@@ -912,7 +943,7 @@ func TestCloseFinding_HumanGate_AcceptPath(t *testing.T) {
 	seedAutoLinkFinding(t, db, "f-al-h", "main", "repo-1", "high", "open", "edge-h")
 
 	r := NewRegistry()
-	RegisterFindingTools(r, db, nil)
+	RegisterFindingTools(r, db, nil, nil)
 
 	// Agent attempts to accept a high-severity auto-link finding.
 	actor := domain.Actor{ID: "agent:claude", Kind: domain.ActorKindAgent}
@@ -942,7 +973,7 @@ func TestCloseFinding_HumanGate_AcceptPath(t *testing.T) {
 func TestReopenFinding_MissingParams(t *testing.T) {
 	db := newFindingsDB(t)
 	r := NewRegistry()
-	RegisterFindingTools(r, db, nil)
+	RegisterFindingTools(r, db, nil, nil)
 
 	actor := domain.Actor{ID: "human:alice", Kind: domain.ActorKindHuman}
 	_, rpcErr := dispatchReopenFinding(t, r, actor, map[string]string{
@@ -1050,7 +1081,7 @@ func TestListFindings_SurfacesReviewSemanticFinding(t *testing.T) {
 	seedReviewSemanticFinding(t, db, "f-rev-sec", "main", "repo-1", "review-security", "high")
 
 	r := NewRegistry()
-	RegisterFindingTools(r, db, nil)
+	RegisterFindingTools(r, db, nil, nil)
 
 	actor := domain.Actor{ID: "agent:bot", Kind: domain.ActorKindAgent}
 	result, rpcErr := dispatchListFindings(t, r, actor, map[string]string{
@@ -1113,7 +1144,7 @@ func TestCloseFinding_ReviewSemanticFinding_HumanGate(t *testing.T) {
 		db := newFindingsDB(t)
 		seedReviewSemanticFinding(t, db, "f-rev-hi", "main", "repo-1", "review-security", "high")
 		r := NewRegistry()
-		RegisterFindingTools(r, db, nil)
+		RegisterFindingTools(r, db, nil, nil)
 
 		actor := domain.Actor{ID: "agent:bot", Kind: domain.ActorKindAgent}
 		_, rpcErr := dispatchFinding(t, r, actor, map[string]string{
@@ -1134,7 +1165,7 @@ func TestCloseFinding_ReviewSemanticFinding_HumanGate(t *testing.T) {
 		db := newFindingsDB(t)
 		seedReviewSemanticFinding(t, db, "f-rev-hi2", "main", "repo-1", "review-security", "high")
 		r := NewRegistry()
-		RegisterFindingTools(r, db, nil)
+		RegisterFindingTools(r, db, nil, nil)
 
 		actor := domain.Actor{ID: "human:alice", Kind: domain.ActorKindHuman}
 		_, rpcErr := dispatchFinding(t, r, actor, map[string]string{
@@ -1165,7 +1196,7 @@ func TestCloseFinding_ReviewFailure_FlipsRowToDone(t *testing.T) {
 
 	aw := &capturingAuditWriter{}
 	r := NewRegistry()
-	RegisterFindingTools(r, db, aw)
+	RegisterFindingTools(r, db, aw, nil)
 
 	actor := domain.Actor{ID: "human:alice", Kind: domain.ActorKindHuman}
 	_, rpcErr := dispatchFinding(t, r, actor, map[string]string{
@@ -1203,7 +1234,7 @@ func TestCloseFinding_ReviewFailure_NonHumanRejected(t *testing.T) {
 	seedReviewFailureFinding(t, db, "f-rpf-2", "main", "repo-1", gitSHA)
 
 	r := NewRegistry()
-	RegisterFindingTools(r, db, nil)
+	RegisterFindingTools(r, db, nil, nil)
 
 	actor := domain.Actor{ID: "agent:bot", Kind: domain.ActorKindAgent}
 	_, rpcErr := dispatchFinding(t, r, actor, map[string]string{
