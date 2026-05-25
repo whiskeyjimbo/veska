@@ -360,6 +360,16 @@ func printRepoTableWithProgress(w io.Writer, repos []repoView, progress map[stri
 	_ = tw.Flush()
 }
 
+// coldScanRunningHint returns the post-`repo add` hint shown when the daemon
+// has accepted a new repo and is cold-scanning it asynchronously. The hint
+// must name `veska repo add <path> --wait` explicitly — `--wait` is a flag on
+// `repo add`, not on `repo list`, and a copy-pasteable suggestion avoids the
+// solov2-rhaq trap where juniors run `veska repo list --wait` and hit
+// "unknown flag".
+func coldScanRunningHint(root, logPath string) string {
+	return fmt.Sprintf("  cold scan running in the background — `veska repo list` shows status; re-run with `veska repo add %s --wait` to block until it finishes, or `tail %s` for live progress", root, logPath)
+}
+
 func repoAddCmd() *cobra.Command {
 	var wait bool
 	cmd := &cobra.Command{
@@ -385,7 +395,7 @@ func repoAddCmd() *cobra.Command {
 					return waitForScanComplete(ctx, w, id)
 				}
 				logPath := filepath.Join(config.DefaultVectorDir(), "logs", "daemon.log")
-				fmt.Fprintf(w, "  cold scan running in the background — `veska repo list` shows status; re-run with `--wait` to block until it finishes, or `tail %s` for live progress\n", logPath)
+				fmt.Fprintln(w, coldScanRunningHint(root, logPath))
 				return nil
 			}
 
