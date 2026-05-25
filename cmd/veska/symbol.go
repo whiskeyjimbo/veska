@@ -228,6 +228,14 @@ change so you (or an agent) get the whole neighbourhood in one shot.`,
 			if err := json.Unmarshal(resp, &pack); err != nil {
 				return err
 			}
+			// solov2-ub9c: a zero-node pack means the symbol didn't resolve.
+			// Say so plainly + point to `veska symbol` for fuzzier lookup
+			// instead of the deadpan "context for X (0 node(s))".
+			if len(pack.Nodes) == 0 {
+				fmt.Fprintf(w, "no symbol named %q found in this repo\n", pack.Query)
+				fmt.Fprintf(w, "hint: try `veska symbol %s` to fuzzy-search, or check --repo\n", pack.Query)
+				return nil
+			}
 			fmt.Fprintf(w, "context for %s (%d node(s))\n", pack.Query, len(pack.Nodes))
 			for _, n := range pack.Nodes {
 				mark := " "
