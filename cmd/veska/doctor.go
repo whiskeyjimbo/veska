@@ -101,7 +101,10 @@ func doctorCmd() *cobra.Command {
 // doctorPostPromotionQueueCmd returns the "doctor post_promotion_queue" subcommand
 // backed by internal/doctor.CheckPostPromotionQueue.
 func doctorPostPromotionQueueCmd() *cobra.Command {
-	var jsonOut bool
+	var (
+		jsonOut      bool
+		purgeOrphans bool
+	)
 	cmd := &cobra.Command{
 		Use:          "post_promotion_queue",
 		Short:        "Inspect the post-promotion queue depth and failed rows",
@@ -109,6 +112,16 @@ func doctorPostPromotionQueueCmd() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			w := cmd.OutOrStdout()
 			dbPath := filepath.Join(config.DefaultVectorDir(), "veska.db")
+			// solov2-zmzc: --purge-orphans deletes failed rows whose repo_id
+			// was deregistered. Without this, removed-repo rows linger
+			// forever and drag the rollup to "degraded".
+			if purgeOrphans {
+				n, err := doctor.PurgeOrphanFailedRows(dbPath)
+				if err != nil {
+					return fmt.Errorf("purge orphan failed rows: %w", err)
+				}
+				fmt.Fprintf(w, "purged %d orphan failed row(s) (repo_id no longer registered)\n", n)
+			}
 			report, err := doctor.CheckPostPromotionQueue(dbPath)
 			if err != nil {
 				return err
@@ -133,6 +146,7 @@ func doctorPostPromotionQueueCmd() *cobra.Command {
 		},
 	}
 	cmd.Flags().BoolVar(&jsonOut, "json", false, "output results as JSON")
+	cmd.Flags().BoolVar(&purgeOrphans, "purge-orphans", false, "delete failed rows whose repo_id is no longer registered (solov2-zmzc)")
 	return cmd
 }
 
@@ -560,10 +574,20 @@ func doctorStatusCmd() *cobra.Command {
 				}
 				detail += queueDetail
 			}
-			fmt.Fprintf(cmd.OutOrStdout(), "status: %s (embedder=%s, egress=%s, config=%s, ingestion=%s, queue=%s)%s\n",
-				rollup, embedderResult.Status, egressStatus, configStatus, ingestionStatus, queueStatus, detail)
+			// solov2-e141: when the daemon is down, lead with that fact and
+			// flag the other subsystem labels as on-disk checks. Their
+			// 'healthy' (embedder weights present, config readable, DB query
+			// succeeded) was confusing readers into thinking the daemon was
+			// fine. The rollup is already 'broken' in that case; this just
+			// clarifies WHY the other labels say what they say.
 			if daemonNotRunning {
-				fmt.Fprintln(cmd.OutOrStdout(), "  hint: daemon socket not present — start it with `veska service start` (or `veska-daemon &` for a quick try)")
+				fmt.Fprintf(cmd.OutOrStdout(), "status: broken — daemon is not running (egress=broken)\n")
+				fmt.Fprintf(cmd.OutOrStdout(), "  on-disk checks (independent of daemon): embedder=%s, config=%s, ingestion=%s, queue=%s%s\n",
+					embedderResult.Status, configStatus, ingestionStatus, queueStatus, detail)
+				fmt.Fprintln(cmd.OutOrStdout(), "  hint: start it with `veska service start` (or `veska-daemon &` for a quick try)")
+			} else {
+				fmt.Fprintf(cmd.OutOrStdout(), "status: %s (embedder=%s, egress=%s, config=%s, ingestion=%s, queue=%s)%s\n",
+					rollup, embedderResult.Status, egressStatus, configStatus, ingestionStatus, queueStatus, detail)
 			}
 			if rollup != "healthy" {
 				return ProbeStatusError{Subsystem: "status", Status: rollup}

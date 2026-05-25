@@ -174,3 +174,31 @@ func TestShouldIgnore_GlobPattern(t *testing.T) {
 		t.Error("expected foo.go to NOT be ignored")
 	}
 }
+
+// TestShouldIgnore_AgentWorktrees guards solov2-v2zx: AI-agent worktree roots
+// (.claude/worktrees/, .cursor/, .aider*/) are skipped by default so cold
+// scans don't index N duplicate copies of every symbol — one per worktree.
+func TestShouldIgnore_AgentWorktrees(t *testing.T) {
+	dir := t.TempDir()
+	il, err := fsignore.Load(dir)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	skip := []string{
+		".claude/worktrees/agent-abc/cmd/foo/main.go",
+		".claude/settings.json",
+		".cursor/rules/main.go",
+		".aider.tags.cache.v3/something.go",
+	}
+	for _, p := range skip {
+		if !il.ShouldIgnore(p) {
+			t.Errorf("expected %q to be ignored under default agent-worktree patterns", p)
+		}
+	}
+	// Sanity: real source files outside those roots still scan.
+	for _, p := range []string{"main.go", "internal/api/server.go"} {
+		if il.ShouldIgnore(p) {
+			t.Errorf("expected %q to NOT be ignored", p)
+		}
+	}
+}

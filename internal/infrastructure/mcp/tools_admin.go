@@ -3,7 +3,10 @@ package mcp
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io/fs"
+	"os"
 	"strings"
 
 	application "github.com/whiskeyjimbo/veska/internal/application"
@@ -132,6 +135,10 @@ func makeGetCurrentRepoHandler(repos application.RepoLister) ToolHandler {
 //     but the daemon has not (yet) cold-scanned it. Either the daemon
 //     is off, the daemon is mid-scan, or startup-resync errored on it
 //     (solov2-8ga's per-repo continue-on-error path).
+//   - "missing"    — root_path no longer exists on disk; the registration
+//     is stale and queries against it will return nothing useful. CLI
+//     `veska repo list` has surfaced this for a while (solov2-76px); MCP
+//     now matches so agents see the same signal (solov2-cwjj).
 type RepoView struct {
 	RepoID          string `json:"repo_id"`
 	ShortID         string `json:"short_id"`
@@ -159,6 +166,13 @@ func decorateRepo(r application.RepoRecord) RepoView {
 	status := "promoted"
 	if r.LastPromotedSHA == "" {
 		status = "unindexed"
+	}
+	// solov2-cwjj: if the working-tree root no longer exists, report
+	// "missing" so MCP callers see the same signal the CLI surfaces.
+	if r.RootPath != "" {
+		if _, err := os.Stat(r.RootPath); errors.Is(err, fs.ErrNotExist) {
+			status = "missing"
+		}
 	}
 	return RepoView{
 		RepoID:          r.RepoID,

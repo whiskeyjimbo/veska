@@ -9,6 +9,14 @@ import (
 )
 
 // DefaultIgnorePatterns are always excluded regardless of .veskaignore.
+//
+// solov2-v2zx: include common AI-agent worktree roots (`.claude/worktrees/`,
+// `.git/worktrees/`, `.cursor/`, `.aider*/`). Without these, a cold scan
+// inside a repo whose tools create per-task worktrees ends up indexing N
+// copies of every symbol — once for the main tree, once for each worktree —
+// which trashes search ranking and inflates the embedder queue. The agent
+// worktree paths are conventional, not hard schema, so they belong with the
+// other "almost always wrong to index" defaults like vendor/ and node_modules/.
 var DefaultIgnorePatterns = []string{
 	"vendor/",
 	"node_modules/",
@@ -22,6 +30,9 @@ var DefaultIgnorePatterns = []string{
 	"*.pb.go",
 	"*.gen.go",
 	"testdata/",
+	".claude/",
+	".cursor/",
+	".aider*/",
 }
 
 // IgnoreList is the merged result of default patterns and a repo's .veskaignore file.
@@ -81,10 +92,19 @@ func (il *IgnoreList) ShouldIgnore(path string) bool {
 
 	for _, pat := range il.patterns {
 		if dir, ok := strings.CutSuffix(pat, "/"); ok {
-			// Directory pattern: match if any path component equals the dir name.
+			// Directory pattern: match if any path component equals the dir
+			// name. When the dir name contains a glob ('*', '?', '['), each
+			// component is matched via filepath.Match so patterns like
+			// ".aider*/" cover .aider.tags.cache.v3/ etc. (solov2-v2zx).
+			hasGlob := strings.ContainsAny(dir, "*?[")
 			for part := range strings.SplitSeq(normalised, "/") {
 				if part == dir {
 					return true
+				}
+				if hasGlob {
+					if matched, _ := filepath.Match(dir, part); matched {
+						return true
+					}
 				}
 			}
 			continue
