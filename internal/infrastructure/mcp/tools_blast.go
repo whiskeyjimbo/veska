@@ -3,6 +3,7 @@ package mcp
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 
 	application "github.com/whiskeyjimbo/veska/internal/application"
@@ -115,6 +116,9 @@ func makeBlastRadiusHandler(svc *blastradius.Service, repos application.RepoList
 			Direction: dir,
 		})
 		if err != nil {
+			if errors.Is(err, blastradius.ErrSeedNotFound) {
+				return nil, &RPCError{Code: CodeNotFound, Message: fmt.Sprintf("node not found in repo=%s branch=%s: %s (pass the full node_id from eng_find_symbol, not the 12-char display prefix)", p.RepoID, p.Branch, p.NodeID)}
+			}
 			return nil, &RPCError{Code: CodeInternalError, Message: fmt.Sprintf("blast radius: %v", err)}
 		}
 		return BlastResponse{

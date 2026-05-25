@@ -11,11 +11,18 @@ package blastradius
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/whiskeyjimbo/veska/internal/application"
 	"github.com/whiskeyjimbo/veska/internal/core/ports"
 )
+
+// ErrSeedNotFound is returned by Service.Of when none of the supplied seed
+// node_ids resolve to a node in (repoID, branch). Handlers should map this to
+// a NotFound-style RPC error so callers get a clear signal instead of an
+// empty-fields response (solov2-2w0u).
+var ErrSeedNotFound = errors.New("blastradius: seed not found")
 
 // Direction selects which adjacency the BFS walks.
 //
@@ -174,6 +181,30 @@ func (o Options) applied() Options {
 // seeds are deduplicated.
 func (s *Service) Of(ctx context.Context, repoID, branch string, seedIDs []string, opts Options) (Response, error) {
 	opts = opts.applied()
+
+	// Seed validation: if NONE of the supplied seed_ids resolve to a real
+	// node in (repoID, branch), that's a user error — the radius is
+	// undefined, and the historical behaviour of returning a single entry
+	// with empty name/kind/file_path silently masked it (solov2-2w0u). A
+	// partial miss is still tolerated: downstream BFS entries may be
+	// eventually-consistent (the comment further down still applies), but
+	// the seed itself is the user's input and we owe them a clear error
+	// when ALL inputs are bogus.
+	cleanSeeds := make([]string, 0, len(seedIDs))
+	for _, id := range seedIDs {
+		if id != "" {
+			cleanSeeds = append(cleanSeeds, id)
+		}
+	}
+	if len(cleanSeeds) > 0 {
+		seedMeta, err := s.nodes.LookupNodes(ctx, repoID, branch, cleanSeeds)
+		if err != nil {
+			return Response{}, fmt.Errorf("blastradius: seed lookup: %w", err)
+		}
+		if len(seedMeta) == 0 {
+			return Response{}, fmt.Errorf("%w: no seed node_id resolved in repo=%s branch=%s", ErrSeedNotFound, repoID, branch)
+		}
+	}
 
 	visited := make(map[string]int, opts.MaxNodes)
 	order := make([]string, 0, opts.MaxNodes)

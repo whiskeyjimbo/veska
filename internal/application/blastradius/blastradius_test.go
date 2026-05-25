@@ -161,7 +161,8 @@ func TestOf_TruncatedAtMaxNodes(t *testing.T) {
 	edges := &fakeEdges{inbound: map[string][]string{
 		"seed": {"a", "b", "c", "d", "e"},
 	}}
-	nodes := &fakeNodes{metas: map[string]ports.NodeMeta{}}
+	// Seed must resolve, even if downstream nodes don't — solov2-2w0u.
+	nodes := &fakeNodes{metas: map[string]ports.NodeMeta{"seed": {NodeID: "seed"}}}
 	s := blastradius.NewService(edges, nodes, nil)
 	resp, err := s.Of(context.Background(), "r", "main", []string{"seed"}, blastradius.Options{
 		MaxDepth: 2, MaxNodes: 3,
@@ -179,12 +180,33 @@ func TestOf_TruncatedAtMaxNodes(t *testing.T) {
 
 func TestOf_PropagatesEdgeError(t *testing.T) {
 	edges := &fakeEdges{err: errors.New("db down")}
-	nodes := &fakeNodes{metas: map[string]ports.NodeMeta{}}
+	// Seed metadata must be present so the new ErrSeedNotFound gate doesn't
+	// short-circuit before we reach the edge query (solov2-2w0u).
+	nodes := &fakeNodes{metas: map[string]ports.NodeMeta{"seed": {NodeID: "seed"}}}
 	s := blastradius.NewService(edges, nodes, nil)
 	_, err := s.Of(context.Background(), "r", "main", []string{"seed"}, blastradius.Options{MaxDepth: 1})
 	if err == nil {
 		t.Fatal("expected error, got nil")
 		return
+	}
+	if errors.Is(err, blastradius.ErrSeedNotFound) {
+		t.Fatalf("got ErrSeedNotFound, wanted the edge-store error to propagate: %v", err)
+	}
+}
+
+func TestOf_SeedNotFound_ReturnsErrSeedNotFound(t *testing.T) {
+	// Regression for solov2-2w0u: when the supplied seed_id doesn't resolve
+	// in (repoID, branch), Of must return ErrSeedNotFound instead of an
+	// empty-fields entry that masked the real cause for MCP callers.
+	edges := &fakeEdges{}
+	nodes := &fakeNodes{metas: map[string]ports.NodeMeta{}}
+	s := blastradius.NewService(edges, nodes, nil)
+	_, err := s.Of(context.Background(), "r", "main", []string{"deadbeef"}, blastradius.Options{MaxDepth: 1})
+	if err == nil {
+		t.Fatal("want error for unknown seed, got nil")
+	}
+	if !errors.Is(err, blastradius.ErrSeedNotFound) {
+		t.Fatalf("want ErrSeedNotFound, got %v", err)
 	}
 }
 
