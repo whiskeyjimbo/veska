@@ -54,6 +54,14 @@ const (
 	DefaultMaxNodes = 200
 	HardMaxDepth    = 10
 	HardMaxNodes    = 10000
+
+	// DefaultHubDegreeThreshold gates BFS expansion through high-degree
+	// "registry" nodes (cobra rootCmd, http muxes, etc.). 50 is a
+	// loose-enough cutoff that legitimate fan-out (a popular
+	// constructor with 20–40 callers) is unaffected, while framework
+	// registry hubs (typically 100+ AddCommand/Handle callers in
+	// real cobra/mux apps) get gated. See solov2-l2f5.
+	DefaultHubDegreeThreshold = 50
 )
 
 // Entry is one node in the radius, tagged with its BFS distance from the
@@ -72,6 +80,12 @@ type Entry struct {
 	// (solov2-dya). Empty when the underlying node row has no snippet
 	// (legacy rows before the column was added).
 	Snippet string
+	// IsHub is true when this node's neighbour count exceeded
+	// HubDegreeThreshold and BFS skipped expanding through it. The node
+	// is still reported (its presence in the blast radius is real) but
+	// its further fan-out was suppressed to avoid drowning the result in
+	// framework registry noise — see solov2-l2f5.
+	IsHub bool `json:"is_hub,omitempty"`
 }
 
 // Response is the envelope returned by Service.Of and friends.
@@ -113,6 +127,22 @@ type Options struct {
 	MaxDepth  int
 	MaxNodes  int
 	Direction Direction
+	// HubDegreeThreshold: nodes whose neighbour count (in the configured
+	// direction) exceeds this value act as hubs and are NOT expanded
+	// through during BFS. They are still included in the result (with
+	// IsHub=true) so callers see the structural fact; what's excluded is
+	// the irrelevant fan-out through them.
+	//
+	// solov2-l2f5 motivation: framework registry nodes like cobra's
+	// rootCmd (every command's init() calls rootCmd.AddCommand) become
+	// star-shaped hubs. Without this gate, a blast radius from any single
+	// command transitively pulls in every other command at distance 2,
+	// drowning the real risk signal. Generalises to mux/gin/echo/chi
+	// routers and any other "central registry" pattern.
+	//
+	// 0 (default) → use DefaultHubDegreeThreshold. <0 disables the gate
+	// (legacy behaviour: expand through everything).
+	HubDegreeThreshold int
 }
 
 // applied returns o with zero-valued fields replaced by defaults and
@@ -132,6 +162,9 @@ func (o Options) applied() Options {
 	}
 	if o.Direction == "" {
 		o.Direction = DirCallers
+	}
+	if o.HubDegreeThreshold == 0 {
+		o.HubDegreeThreshold = DefaultHubDegreeThreshold
 	}
 	return o
 }
@@ -170,18 +203,33 @@ func (s *Service) Of(ctx context.Context, repoID, branch string, seedIDs []strin
 		}
 	}
 
+	// hubs records ids whose per-source fan-out exceeded
+	// HubDegreeThreshold; the BFS does NOT expand through them, but they
+	// still appear in the result with IsHub=true so callers see the fact
+	// (solov2-l2f5). Negative threshold disables the gate entirely.
+	hubs := make(map[string]bool)
+	gateOn := opts.HubDegreeThreshold > 0
+
 	// BFS over the configured direction(s).
 	for hop := 0; hop < opts.MaxDepth && len(frontier) > 0 && !truncated; hop++ {
-		neighbours, err := s.expand(ctx, repoID, branch, frontier, opts.Direction)
+		perSrc, err := s.expandPerSource(ctx, repoID, branch, frontier, opts.Direction)
 		if err != nil {
 			return Response{}, err
 		}
-		next := make([]string, 0, len(neighbours))
-		for _, n := range neighbours {
-			if !enqueue(n, hop+1) {
-				break
+		next := make([]string, 0)
+	frontierLoop:
+		for _, src := range frontier {
+			ns := perSrc[src]
+			if gateOn && len(ns) > opts.HubDegreeThreshold {
+				hubs[src] = true
+				continue
 			}
-			next = append(next, n)
+			for _, n := range ns {
+				if !enqueue(n, hop+1) {
+					break frontierLoop
+				}
+				next = append(next, n)
+			}
 		}
 		frontier = next
 	}
@@ -212,10 +260,38 @@ func (s *Service) Of(ctx context.Context, repoID, branch string, seedIDs []strin
 			LineStart:  m.LineStart,
 			LineEnd:    m.LineEnd,
 			Snippet:    m.Snippet,
+			IsHub:      hubs[id],
 		})
 		_ = ok
 	}
 	return Response{Entries: entries, Truncated: truncated}, nil
+}
+
+// expandPerSource is expand's sibling that preserves per-source neighbour
+// lists so the BFS caller can gate expansion node-by-node (solov2-l2f5
+// hub-degree threshold). Behaviour is otherwise identical to expand: the
+// union of in/outbound neighbours per the configured direction.
+func (s *Service) expandPerSource(ctx context.Context, repoID, branch string, frontier []string, dir Direction) (map[string][]string, error) {
+	out := make(map[string][]string, len(frontier))
+	if dir == DirCallers || dir == DirBoth {
+		m, err := s.edges.InboundEdges(ctx, repoID, branch, frontier)
+		if err != nil {
+			return nil, fmt.Errorf("blastradius: inbound: %w", err)
+		}
+		for _, id := range frontier {
+			out[id] = append(out[id], m[id]...)
+		}
+	}
+	if dir == DirCallees || dir == DirBoth {
+		m, err := s.edges.OutboundEdges(ctx, repoID, branch, frontier)
+		if err != nil {
+			return nil, fmt.Errorf("blastradius: outbound: %w", err)
+		}
+		for _, id := range frontier {
+			out[id] = append(out[id], m[id]...)
+		}
+	}
+	return out, nil
 }
 
 // ChangedFilesFunc returns the list of files changed against HEAD for the
@@ -297,30 +373,4 @@ func (s *Service) DirtyOf(ctx context.Context, repoID, branch string, opts Optio
 	}
 	resp.IncludedStaging = true
 	return resp, nil
-}
-
-// expand returns the union of inbound/outbound neighbours for frontier
-// per the requested direction. The two halves are not deduplicated here
-// — Of's enqueue keeps the visited map authoritative.
-func (s *Service) expand(ctx context.Context, repoID, branch string, frontier []string, dir Direction) ([]string, error) {
-	var out []string
-	if dir == DirCallers || dir == DirBoth {
-		m, err := s.edges.InboundEdges(ctx, repoID, branch, frontier)
-		if err != nil {
-			return nil, fmt.Errorf("blastradius: inbound: %w", err)
-		}
-		for _, id := range frontier {
-			out = append(out, m[id]...)
-		}
-	}
-	if dir == DirCallees || dir == DirBoth {
-		m, err := s.edges.OutboundEdges(ctx, repoID, branch, frontier)
-		if err != nil {
-			return nil, fmt.Errorf("blastradius: outbound: %w", err)
-		}
-		for _, id := range frontier {
-			out = append(out, m[id]...)
-		}
-	}
-	return out, nil
 }

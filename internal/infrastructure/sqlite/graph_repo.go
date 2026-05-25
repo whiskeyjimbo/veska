@@ -280,27 +280,47 @@ func (r *GraphRepo) LoadGraph(ctx context.Context, repoID, branch string) (*doma
 	return g, nil
 }
 
-// FindNodes returns every node whose symbol name (symbol_path column) exactly
-// equals symbolName for (repoID, branch).
-// escapeLike escapes the SQLite LIKE metacharacters (%, _, and the escape
-// char itself) with a backslash so a literal identifier can be embedded in a
-// LIKE pattern used with `ESCAPE '\'`.
-func escapeLike(s string) string {
-	r := strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`)
-	return r.Replace(s)
+// escapeGlob wraps GLOB metacharacters (*, ?, [) in a literal-character
+// class so an identifier embedded in a GLOB pattern matches itself. GLOB
+// has no ESCAPE clause, so the only safe way is the [X] form.
+//
+// Identifiers in supported languages are [A-Za-z0-9_.] (plus a leading $ in
+// some), so the *, ?, and [ characters do not appear inside an identifier in
+// practice; this is defence-in-depth for fuzz inputs / odd languages.
+func escapeGlob(s string) string {
+	var b strings.Builder
+	b.Grow(len(s))
+	for _, r := range s {
+		switch r {
+		case '*', '?', '[':
+			b.WriteByte('[')
+			b.WriteRune(r)
+			b.WriteByte(']')
+		default:
+			b.WriteRune(r)
+		}
+	}
+	return b.String()
 }
 
 func (r *GraphRepo) FindNodes(ctx context.Context, repoID, branch, symbolName string) ([]*domain.Node, error) {
 	// Match the fully-qualified symbol_path exactly, OR an unqualified name
 	// against the trailing segment so "Start" finds "Server.Start" instead
 	// of silently returning nothing (solov2-d2x). Exact matches sort first.
-	// LIKE wildcards in the query are escaped so identifiers containing '_'
-	// don't behave as single-char wildcards.
-	suffixPattern := `%.` + escapeLike(symbolName)
+	//
+	// solov2-xcb1: SQLite LIKE is case-INsensitive for ASCII regardless of
+	// COLLATE, so a search for "Run" used to also match
+	// "FSNotifyWatcher.run" — a distinct symbol. Identifiers are
+	// case-significant in every supported language, so we use GLOB (which
+	// is byte-exact) for the suffix match. GLOB uses *,? wildcards (vs
+	// LIKE's %,_), and treats [ ] as character classes — escape those in
+	// the user-supplied identifier so a literal "[" isn't treated as a
+	// class opener.
+	suffixPattern := `*.` + escapeGlob(symbolName)
 	rows, err := r.readDB.QueryContext(ctx,
 		`SELECT `+nodeColumns+` FROM nodes
 		 WHERE repo_id = ? AND branch = ?
-		   AND (symbol_path = ? OR symbol_path LIKE ? ESCAPE '\')
+		   AND (symbol_path = ? OR symbol_path GLOB ?)
 		 ORDER BY (symbol_path = ?) DESC, symbol_path`,
 		repoID, branch, symbolName, suffixPattern, symbolName)
 	if err != nil {
