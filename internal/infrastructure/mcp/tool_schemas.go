@@ -209,12 +209,13 @@ var contextPackInputSchema = json.RawMessage(`{
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "type": "object",
   "additionalProperties": false,
-  "description": "Bundles a symbol (or active task) with its callers, callees, and tests for LLM prompting.",
+  "description": "Bundles an anchor (one of node_id, symbol, or task_id) with its callers, callees, and tests for LLM prompting. Exactly one of node_id, symbol, or task_id is required.",
   "properties": {
     "repo_id": {"type": "string"},
     "branch":  {"type": "string"},
-    "symbol":  {"type": "string", "description": "Symbol to anchor on. Mutually exclusive with task_id."},
-    "task_id": {"type": "string", "description": "Task to derive the anchor symbol from. Mutually exclusive with symbol."},
+    "node_id": {"type": "string", "description": "Node to anchor on. Mutually exclusive with symbol and task_id."},
+    "symbol":  {"type": "string", "description": "Symbol to anchor on. Mutually exclusive with node_id and task_id."},
+    "task_id": {"type": "string", "description": "Task to derive the anchor symbol from. Mutually exclusive with node_id and symbol."},
     "cwd":     {"type": "string", "description": "Working directory used to resolve the active repo when repo_id is omitted."}
   }
 }`)
