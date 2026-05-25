@@ -341,6 +341,57 @@ func brokenFunc( {
 	}
 }
 
+// TestParseFile_TreeSitterFalsePositive_GoParserAccepts pins solov2-0kv6:
+// the tree-sitter Go grammar (smacker fork) lags behind Go's spec — it
+// flags valid constructs like `new("string-literal")` (Go 1.26+ new-as-
+// converter) as syntax errors. ParseFile must cross-check with go/parser
+// and suppress the spurious parse-failure when go/parser accepts the file.
+func TestParseFile_TreeSitterFalsePositive_GoParserAccepts(t *testing.T) {
+	// Real-world reproducer: `new("h-anchor-old")` is valid Go that the
+	// tree-sitter grammar misreads. go/parser accepts it cleanly.
+	src := []byte(`package foo
+
+func ptr(s string) *string { return new(s) }
+
+func use() *string {
+	return new("h-anchor-old")
+}
+`)
+	p := treesitter.NewGoParser()
+	result, err := p.ParseFile(context.Background(), repoID, filePath, src)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(result.Failures) != 0 {
+		t.Errorf("expected zero failures (go/parser accepts), got %d: %+v",
+			len(result.Failures), result.Failures)
+	}
+	// Siblings must still be extracted — the per-child error-skip should
+	// not have dropped `use` either.
+	if findNodeByName(result.Nodes, "use") == nil {
+		t.Errorf("clean func 'use' was discarded; nodes: %v", nodeNames(result.Nodes))
+	}
+}
+
+// TestParseFile_RealSyntaxError_StillReported guards the other half of
+// solov2-0kv6: when go/parser ALSO rejects the file, ParseFile must keep
+// emitting the parse-failure (and prefer go/parser's more precise message).
+func TestParseFile_RealSyntaxError_StillReported(t *testing.T) {
+	src := []byte(`package foo
+
+func brokenFunc( {
+	// unclosed paren / brace
+`)
+	p := treesitter.NewGoParser()
+	result, err := p.ParseFile(context.Background(), repoID, filePath, src)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(result.Failures) == 0 {
+		t.Fatalf("expected ParseFailure on real syntax error, got none")
+	}
+}
+
 func TestParseFile_CleanGo_NoFailures(t *testing.T) {
 	src := []byte(`package foo
 
