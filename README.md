@@ -15,8 +15,11 @@ they reason from the same structural ground truth instead of guessing.
   during the indexing lag window it falls back to a BM25 lexical index and
   flags the response `degraded_reasons`.
 - **Promotion checks.** On every commit, synchronous checks emit advisory
-  `Finding`s: dead code, contract drift, vulnerable `go.mod` dependencies
-  (OSV), and leaked secrets.
+  `Finding`s: dead code, contract drift, leaked secrets, and — opt-in —
+  vulnerable `go.mod` dependencies via the OSV.dev advisory database. The
+  vuln check is gated behind a `[vuln_source]` config block (see
+  [`docs/operations/CONFIG-SURFACE.md`](docs/operations/CONFIG-SURFACE.md));
+  the other three ship on by default.
 - **Optional LLM review.** An off-by-default post-promotion review pipeline.
 - **Mechanical wiki.** Hot-zones and entry-points surfaced through the
   `eng_get_hot_zone` and `eng_get_entry_points` MCP tools (no files written
