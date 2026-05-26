@@ -17,6 +17,9 @@ import (
 
 // nodeDTO is the canonical node shape returned by all graph/search/blast
 // tools. Name carries the fully-qualified symbol name (e.g. "Server.Start").
+// RepoID is populated only on responses from a cross-repo fanout (solov2-g8fh)
+// so callers can disambiguate hits when the query spans repos; single-repo
+// responses omit it to keep the wire shape byte-stable.
 type nodeDTO struct {
 	NodeID    string `json:"node_id"`
 	Name      string `json:"name"`
@@ -27,6 +30,7 @@ type nodeDTO struct {
 	Signature string `json:"signature,omitempty"`
 	Language  string `json:"language,omitempty"`
 	Exported  *bool  `json:"exported,omitempty"`
+	RepoID    string `json:"repo_id,omitempty"`
 }
 
 // edgeDTO is the canonical edge shape returned by eng_get_call_chain.

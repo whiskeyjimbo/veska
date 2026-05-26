@@ -8,6 +8,7 @@ import (
 	"math"
 	"testing"
 
+	application "github.com/whiskeyjimbo/veska/internal/application"
 	"github.com/whiskeyjimbo/veska/internal/application/search"
 	"github.com/whiskeyjimbo/veska/internal/core/domain"
 	"github.com/whiskeyjimbo/veska/internal/core/ports"
@@ -166,6 +167,72 @@ func TestSearchSemantic_ReturnsHydratedResults(t *testing.T) {
 	}
 	if resp.Results[0].Name != "pkg.Foo" {
 		t.Errorf("expected hydrated name, got %q", resp.Results[0].Name)
+	}
+}
+
+// TestSearchSemantic_FansOutWhenRepoIDOmittedAndCwdMismatch pins solov2-g8fh:
+// the README's quick-start sanity-check example calls eng_search_semantic
+// without a repo_id. With ≥2 repos registered and the shim's cwd outside
+// any registered RootPath, the handler must fan out across every repo
+// instead of rejecting with "repo_id is required".
+func TestSearchSemantic_FansOutWhenRepoIDOmittedAndCwdMismatch(t *testing.T) {
+	emb := &stubEmbedder{vec: []float32{0.1, 0.2}}
+	vecs := &stubVectors{hits: []domain.Hit{{NodeID: "n1", Score: 0.9}}}
+	nodes := &stubNodes{metas: []ports.NodeMeta{
+		{NodeID: "n1", SymbolPath: "pkg.Foo", FilePath: "foo.go", Kind: "function", LineStart: 1, LineEnd: 10},
+	}}
+	svc := search.NewService(emb, vecs, nodes)
+
+	repos := []application.RepoRecord{
+		{RepoID: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", RootPath: "/home/u/projects/alpha", ActiveBranch: "main"},
+		{RepoID: "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", RootPath: "/home/u/projects/beta", ActiveBranch: "main"},
+	}
+	r := NewRegistry()
+	RegisterSearchTools(r, svc, &stubSimilarLookup{}, vecs, nodes, nil, &stubRepoLister{repos: repos})
+
+	resp, rpcErr := dispatchSearch(t, r, "eng_search_semantic", map[string]any{
+		"query": "find foo",
+		"cwd":   "/tmp/somewhere/else",
+	})
+	if rpcErr != nil {
+		t.Fatalf("expected fanout success, got %+v", rpcErr)
+	}
+	if len(resp.Results) == 0 {
+		t.Fatalf("expected hits from fanout, got empty results")
+	}
+	for i, h := range resp.Results {
+		if h.RepoID == "" {
+			t.Errorf("results[%d] missing repo_id on fanout response: %+v", i, h)
+		}
+	}
+}
+
+// TestSearchSemantic_SingleRepoOmitsRepoIDOnHits pins solov2-g8fh: the
+// per-hit repo_id field is only emitted when the response spans repos.
+// Single-repo callers must see byte-stable pre-fanout output.
+func TestSearchSemantic_SingleRepoOmitsRepoIDOnHits(t *testing.T) {
+	emb := &stubEmbedder{vec: []float32{0.1, 0.2}}
+	vecs := &stubVectors{hits: []domain.Hit{{NodeID: "n1", Score: 0.9}}}
+	nodes := &stubNodes{metas: []ports.NodeMeta{
+		{NodeID: "n1", SymbolPath: "pkg.Foo", FilePath: "foo.go", Kind: "function", LineStart: 1, LineEnd: 10},
+	}}
+	svc := search.NewService(emb, vecs, nodes)
+
+	repos := []application.RepoRecord{
+		{RepoID: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", RootPath: "/abs/repo", ActiveBranch: "main"},
+	}
+	r := NewRegistry()
+	RegisterSearchTools(r, svc, &stubSimilarLookup{}, vecs, nodes, nil, &stubRepoLister{repos: repos})
+
+	resp, rpcErr := dispatchSearch(t, r, "eng_search_semantic", map[string]any{"query": "find foo"})
+	if rpcErr != nil {
+		t.Fatalf("unexpected error: %+v", rpcErr)
+	}
+	if len(resp.Results) != 1 {
+		t.Fatalf("expected 1 hit, got %d", len(resp.Results))
+	}
+	if resp.Results[0].RepoID != "" {
+		t.Errorf("single-repo response leaked repo_id=%q", resp.Results[0].RepoID)
 	}
 }
 
