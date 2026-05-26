@@ -17,6 +17,7 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/application"
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/mcp"
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/vector"
+	"github.com/whiskeyjimbo/veska/internal/repo"
 )
 
 // providersTestDB builds an in-memory SQLite with the minimal tables the
@@ -520,5 +521,96 @@ func TestRepoRegistrar_AddRepo_WatcherErrorIsNonFatal(t *testing.T) {
 	}
 	if got := reparserCalled.Load(); got != 1 {
 		t.Errorf("reparser invocations after watchAdd failure = %d, want 1", got)
+	}
+}
+
+// TestRepoRegistrar_AddRepo_ReDispatchesScanForDirectWriteRow covers solov2-0bc1:
+// a repo row inserted via the CLI's direct-write fallback (no daemon
+// running) has no last_promoted_sha and was never indexed. Re-running
+// `veska repo add` after the daemon starts must dispatch a cold-scan for
+// that row, not silently report "already registered" without scanning.
+func TestRepoRegistrar_AddRepo_ReDispatchesScanForDirectWriteRow(t *testing.T) {
+	db, root := newAddRepoTestEnv(t)
+
+	// Pre-insert the repo row (simulates the direct-write fallback path).
+	// The first AddRepo call below sees existed=true.
+	if _, _, err := repo.Add(context.Background(), db, root); err != nil {
+		t.Fatalf("seed direct-write row: %v", err)
+	}
+
+	var wg sync.WaitGroup
+	reparserCalled := atomic.Int32{}
+	rr := &repoRegistrar{
+		db: db,
+		reparser: func(_ context.Context, _ application.RepoRecord) error {
+			reparserCalled.Add(1)
+			return nil
+		},
+		// recordFor returns a record with EMPTY LastPromotedSHA — the
+		// signature of a direct-write row that was never scanned.
+		recordFor: func(_ context.Context, repoID string) (application.RepoRecord, error) {
+			return application.RepoRecord{RepoID: repoID, RootPath: root, LastPromotedSHA: ""}, nil
+		},
+		daemonCtx: context.Background(),
+		scanWG:    &wg,
+	}
+
+	_, existed, err := rr.AddRepo(context.Background(), root)
+	if err != nil {
+		t.Fatalf("AddRepo: %v", err)
+	}
+	if !existed {
+		t.Fatalf("want existed=true on second add, got false")
+	}
+
+	done := make(chan struct{})
+	go func() { wg.Wait(); close(done) }()
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("reparser goroutine did not finish within 2s")
+	}
+	if got := reparserCalled.Load(); got != 1 {
+		t.Errorf("direct-write row must trigger a fresh cold-scan; reparser invocations = %d, want 1", got)
+	}
+}
+
+// TestRepoRegistrar_AddRepo_SkipsScanForPromotedRow guards the
+// other side of the solov2-0bc1 condition: a row with a non-empty
+// last_promoted_sha was already indexed, and re-adding must NOT
+// re-dispatch the cold scan (preserves the prior solov2-khjd skip).
+func TestRepoRegistrar_AddRepo_SkipsScanForPromotedRow(t *testing.T) {
+	db, root := newAddRepoTestEnv(t)
+	if _, _, err := repo.Add(context.Background(), db, root); err != nil {
+		t.Fatalf("seed row: %v", err)
+	}
+
+	var wg sync.WaitGroup
+	reparserCalled := atomic.Int32{}
+	rr := &repoRegistrar{
+		db: db,
+		reparser: func(_ context.Context, _ application.RepoRecord) error {
+			reparserCalled.Add(1)
+			return nil
+		},
+		recordFor: func(_ context.Context, repoID string) (application.RepoRecord, error) {
+			return application.RepoRecord{RepoID: repoID, RootPath: root, LastPromotedSHA: "abc123"}, nil
+		},
+		daemonCtx: context.Background(),
+		scanWG:    &wg,
+	}
+
+	if _, _, err := rr.AddRepo(context.Background(), root); err != nil {
+		t.Fatalf("AddRepo: %v", err)
+	}
+	// Give any erroneous goroutine a beat to start.
+	done := make(chan struct{})
+	go func() { wg.Wait(); close(done) }()
+	select {
+	case <-done:
+	case <-time.After(500 * time.Millisecond):
+	}
+	if got := reparserCalled.Load(); got != 0 {
+		t.Errorf("promoted row must NOT trigger a fresh cold-scan; reparser invocations = %d, want 0", got)
 	}
 }
