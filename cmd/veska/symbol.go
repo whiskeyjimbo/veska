@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strings"
 
 	"github.com/spf13/cobra"
 )
@@ -94,14 +95,17 @@ ranked first.`,
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			params := map[string]any{"symbol": args[0]}
+			scopedRepo := ""
 			if repoFlag != "" {
 				params["repo_id"] = repoFlag
+				scopedRepo = repoFlag
 			} else if rid := autoResolveRepo(cmd.Context(), cmd.ErrOrStderr()); rid != "" {
 				// solov2-zukc: auto-resolve from cwd so a junior user inside a
 				// registered repo doesn't have to look up a short_id.
 				// solov2-dqwh: autoResolveRepo prints a breadcrumb when
 				// multiple repos are registered.
 				params["repo_id"] = rid
+				scopedRepo = rid
 			}
 			var resp struct {
 				Nodes []struct {
@@ -117,12 +121,70 @@ ranked first.`,
 			if err := callMCP(cmd.Context(), "eng_find_symbol", params, &resp); err != nil {
 				return fmt.Errorf("symbol: %w", err)
 			}
+			// solov2-zgwd: when the scoped probe is empty, ask every other
+			// registered repo whether the symbol lives there. Non-empty in
+			// the original scope short-circuits — we never re-walk the
+			// registry for a happy result.
+			if len(resp.Nodes) == 0 && !jsonOut && scopedRepo != "" {
+				printCrossRepoSymbolHint(cmd.Context(), cmd.ErrOrStderr(), args[0], scopedRepo)
+			}
 			return renderNodeList(cmd.OutOrStdout(), resp, jsonOut)
 		},
 	}
 	cmd.Flags().StringVar(&repoFlag, "repo", "", "repo id or short_id (default: the sole registered repo)")
 	cmd.Flags().BoolVar(&jsonOut, "json", false, "emit JSON (eng_find_symbol shape)")
 	return cmd
+}
+
+// printCrossRepoSymbolHint walks every other registered repo and prints
+// a one-line hint when the symbol exists somewhere else (solov2-zgwd).
+// Stays best-effort: any per-repo error is silently skipped — a stuck repo
+// must not turn a successful empty result into a noisy banner. The hint
+// only fires when there's at least one cross-repo match, so the "no
+// matches anywhere" case is unchanged.
+func printCrossRepoSymbolHint(ctx context.Context, errOut io.Writer, symbol, scopedRepoID string) {
+	type repoView struct {
+		RepoID  string `json:"repo_id"`
+		ShortID string `json:"short_id"`
+	}
+	var lr struct {
+		Repos []repoView `json:"repos"`
+	}
+	if err := callMCP(ctx, "eng_list_repos", map[string]any{}, &lr); err != nil {
+		return
+	}
+	type otherHit struct {
+		shortID string
+		count   int
+	}
+	var others []otherHit
+	for _, r := range lr.Repos {
+		if r.RepoID == scopedRepoID || r.ShortID == scopedRepoID {
+			continue
+		}
+		var probe struct {
+			Nodes []struct{} `json:"nodes"`
+		}
+		params := map[string]any{"symbol": symbol, "repo_id": r.RepoID}
+		if err := callMCP(ctx, "eng_find_symbol", params, &probe); err != nil {
+			continue
+		}
+		if len(probe.Nodes) > 0 {
+			id := r.ShortID
+			if id == "" {
+				id = r.RepoID
+			}
+			others = append(others, otherHit{shortID: id, count: len(probe.Nodes)})
+		}
+	}
+	if len(others) == 0 {
+		return
+	}
+	parts := make([]string, 0, len(others))
+	for _, h := range others {
+		parts = append(parts, fmt.Sprintf("%d in %s", h.count, h.shortID))
+	}
+	fmt.Fprintf(errOut, "  hint: %q has no matches here, but matches elsewhere — %s (re-run with --repo <id>)\n", symbol, strings.Join(parts, ", "))
 }
 
 func renderNodeList(w io.Writer, resp any, jsonOut bool) error {
