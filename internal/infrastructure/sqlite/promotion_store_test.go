@@ -169,6 +169,120 @@ func TestPromotionStore_CrossPackageCallsResolution(t *testing.T) {
 	}
 }
 
+// TestPromotionStore_ChainedSelectorMethodCallInModule covers solov2-9rc2
+// Phase B: a chained-selector method call (`g := pkg.New(...); g.Hello()`)
+// whose target package is in the SAME module must bind to the method node
+// via bare-name lookup against `<Receiver>.<Method>`. Parser flags the
+// UnresolvedCall with IsMethodCall=true; promotion resolves it by suffix
+// match within the importing package's relDir.
+func TestPromotionStore_ChainedSelectorMethodCallInModule(t *testing.T) {
+	t.Parallel()
+	db := openTest(t, filepath.Join(t.TempDir(), "v.db"))
+	if _, err := db.Exec(
+		`INSERT INTO repos (repo_id, root_path, added_at, module_path) VALUES (?, ?, ?, ?)`,
+		"repo1", "/tmp/app", time.Now().UnixMilli(), "github.com/acme/app",
+	); err != nil {
+		t.Fatalf("insert repo: %v", err)
+	}
+	store := sqlite.NewPromotionStore(db, []sqlite.PromotionSink{sqlite.NewFTSSink(), sqlite.NewEmbedRefSink()})
+
+	// greet/greet.go defines Greeter.Hello (method) + New (constructor).
+	// runner/runner.go has Run that does `g := greet.New(...); g.Hello(...)`.
+	helloMethod, _ := domain.NewNode("helloID", "/tmp/app/greet/greet.go", "Greeter.Hello", domain.KindMethod, domain.WithExported(true))
+	newFn, _ := domain.NewNode("newID", "/tmp/app/greet/greet.go", "New", domain.KindFunction, domain.WithExported(true))
+	runFn, _ := domain.NewNode("runID", "/tmp/app/runner/runner.go", "Run", domain.KindFunction, domain.WithExported(true))
+
+	err := store.Promote(context.Background(), application.PromotionBatch{
+		RepoID: "repo1", Branch: "main", GitSHA: "sha", Actor: systemActor(),
+		PromotedAt: time.Now().UnixMilli(),
+		Files: []application.PromotionFile{
+			{Path: "/tmp/app/greet/greet.go", Nodes: []*domain.Node{helloMethod, newFn}},
+			{
+				Path:    "/tmp/app/runner/runner.go",
+				Nodes:   []*domain.Node{runFn},
+				Imports: map[string]string{"greet": "github.com/acme/app/greet"},
+				UnresolvedCalls: []domain.UnresolvedCall{
+					// Plain pkg.New from `g := greet.New(...)`.
+					{CallerID: "runID", CalleeName: "New", PkgQualifier: "greet"},
+					// Chained-selector method call from `g.Hello(...)`.
+					{CallerID: "runID", CalleeName: "Hello", PkgQualifier: "greet", IsMethodCall: true},
+				},
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("Promote: %v", err)
+	}
+
+	// Phase B contract: Run -> Greeter.Hello edge must exist.
+	var n int
+	if err := db.QueryRow(
+		`SELECT COUNT(*) FROM edges WHERE kind='CALLS' AND src_node_id='runID' AND dst_node_id='helloID'`,
+	).Scan(&n); err != nil {
+		t.Fatalf("query method edge: %v", err)
+	}
+	if n != 1 {
+		t.Errorf("want 1 CALLS edge Run->Greeter.Hello (chained selector resolved), got %d", n)
+	}
+	// And the plain constructor call should also bind (regression guard for Phase A keying).
+	if err := db.QueryRow(
+		`SELECT COUNT(*) FROM edges WHERE kind='CALLS' AND src_node_id='runID' AND dst_node_id='newID'`,
+	).Scan(&n); err != nil {
+		t.Fatalf("query plain edge: %v", err)
+	}
+	if n != 1 {
+		t.Errorf("want 1 CALLS edge Run->New (plain pkg call), got %d", n)
+	}
+}
+
+// TestPromotionStore_ChainedSelectorAmbiguityIsSkipped guards the
+// no-false-edge invariant: if two receiver types in the target package own
+// a method with the same name, the resolver must skip (not pick one
+// arbitrarily). Phase C will surface this as a cross-repo stub once that
+// path lands.
+func TestPromotionStore_ChainedSelectorAmbiguityIsSkipped(t *testing.T) {
+	t.Parallel()
+	db := openTest(t, filepath.Join(t.TempDir(), "v.db"))
+	if _, err := db.Exec(
+		`INSERT INTO repos (repo_id, root_path, added_at, module_path) VALUES (?, ?, ?, ?)`,
+		"repo1", "/tmp/app", time.Now().UnixMilli(), "github.com/acme/app",
+	); err != nil {
+		t.Fatalf("insert repo: %v", err)
+	}
+	store := sqlite.NewPromotionStore(db, []sqlite.PromotionSink{sqlite.NewFTSSink(), sqlite.NewEmbedRefSink()})
+
+	// Two distinct receiver types each owning a Hello method.
+	helloA, _ := domain.NewNode("helloAID", "/tmp/app/greet/greet.go", "TypeA.Hello", domain.KindMethod, domain.WithExported(true))
+	helloB, _ := domain.NewNode("helloBID", "/tmp/app/greet/greet.go", "TypeB.Hello", domain.KindMethod, domain.WithExported(true))
+	runFn, _ := domain.NewNode("runID", "/tmp/app/runner/runner.go", "Run", domain.KindFunction, domain.WithExported(true))
+
+	err := store.Promote(context.Background(), application.PromotionBatch{
+		RepoID: "repo1", Branch: "main", GitSHA: "sha", Actor: systemActor(),
+		PromotedAt: time.Now().UnixMilli(),
+		Files: []application.PromotionFile{
+			{Path: "/tmp/app/greet/greet.go", Nodes: []*domain.Node{helloA, helloB}},
+			{
+				Path:    "/tmp/app/runner/runner.go",
+				Nodes:   []*domain.Node{runFn},
+				Imports: map[string]string{"greet": "github.com/acme/app/greet"},
+				UnresolvedCalls: []domain.UnresolvedCall{
+					{CallerID: "runID", CalleeName: "Hello", PkgQualifier: "greet", IsMethodCall: true},
+				},
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("Promote: %v", err)
+	}
+
+	// Neither edge should be emitted — ambiguity is skipped.
+	var n int
+	db.QueryRow(`SELECT COUNT(*) FROM edges WHERE kind='CALLS' AND src_node_id='runID'`).Scan(&n)
+	if n != 0 {
+		t.Errorf("want 0 CALLS edges from Run on ambiguous method (both helloA/helloB qualify); got %d", n)
+	}
+}
+
 // TestPromotionStore_CrossPackageResolvesAgainstPromotedGraph pins the
 // incremental-commit half of solov2-xc51.2: when the callee's file is NOT in
 // the current batch (already promoted earlier), the qualified call still binds
