@@ -95,6 +95,72 @@ func buildModuleRelSymbolMap(batch application.PromotionBatch, root string) map[
 	return out
 }
 
+// findInBatchMethod walks the per-pkg-dir bucket looking for any method
+// whose bare name (the suffix after "Receiver.") equals methodName.
+// Returns ("", false) on no match; returns ("", true) [empty id, found=true]
+// on ambiguity (multiple receiver types own a method with that name).
+// solov2-9rc2: lets the promotion-time resolver bind chained-selector
+// calls like `v := pkg.New(...); v.Method()` to the method in pkg, where
+// the receiver type is unknown to the parser.
+func findInBatchMethod(byPkgDir map[string]map[string]domain.NodeID, relDir, methodName string) (domain.NodeID, bool) {
+	bucket, ok := byPkgDir[relDir]
+	if !ok {
+		return "", false
+	}
+	suffix := "." + methodName
+	var match domain.NodeID
+	count := 0
+	for name, id := range bucket {
+		if strings.HasSuffix(name, suffix) {
+			match = id
+			count++
+		}
+	}
+	if count == 1 {
+		return match, true
+	}
+	return "", false
+}
+
+// lookupPromotedMethodInDir is lookupPromotedSymbolDir's method-by-bare-name
+// variant: given a method name like "Hello" and a target package dir, find
+// the unique promoted method node whose symbol_path ends with ".Hello" and
+// whose file lives in relDir. Returns found=false on miss or on ambiguity
+// (multiple receiver types own a Hello method in the same package — rare in
+// well-typed Go but possible). solov2-9rc2.
+func lookupPromotedMethodInDir(ctx context.Context, tx *sql.Tx, repoID, branch, root, relDir, methodName string) (domain.NodeID, bool, error) {
+	rows, err := tx.QueryContext(ctx,
+		`SELECT node_id, file_path FROM nodes
+		   WHERE repo_id = ? AND branch = ? AND kind = 'method' AND symbol_path LIKE ?`,
+		repoID, branch, "%."+methodName,
+	)
+	if err != nil {
+		return "", false, err
+	}
+	defer rows.Close()
+
+	var match domain.NodeID
+	count := 0
+	for rows.Next() {
+		var nodeID, filePath string
+		if err := rows.Scan(&nodeID, &filePath); err != nil {
+			return "", false, err
+		}
+		if moduleRelDir(filePath, root) != relDir {
+			continue
+		}
+		match = domain.NodeID(nodeID)
+		count++
+	}
+	if err := rows.Err(); err != nil {
+		return "", false, err
+	}
+	if count == 1 {
+		return match, true, nil
+	}
+	return "", false, nil
+}
+
 // lookupPromotedSymbolDir finds the already-promoted node for symbol `name`
 // living in module-relative package dir `relDir`. It scans candidates by
 // symbol_path (indexed) and disambiguates by directory in Go, since promoted
@@ -550,7 +616,15 @@ func (s *PromotionStore) Promote(ctx context.Context, batch application.Promotio
 					// registered repo owns module_path == importPath. Stdlib
 					// (no domain in the first path segment) can never match a
 					// repo, so it is skipped to keep the table lean.
-					if isExternalModulePath(importPath) {
+					//
+					// solov2-9rc2 Phase B: chained-selector method calls
+					// (uc.IsMethodCall) skip the stub emission for now — the
+					// existing stub schema keys on exact symbol_path, but a
+					// method call carries only the bare method name and no
+					// receiver type. Phase C will introduce a method-stub
+					// variant; until then dropping these on the external path
+					// preserves correctness (no false binds via stubs).
+					if isExternalModulePath(importPath) && !uc.IsMethodCall {
 						sid := stubID(string(uc.CallerID), importPath, uc.CalleeName)
 						if _, ierr := stubStmt.ExecContext(ctx,
 							sid, branch, repoID, string(uc.CallerID), string(domain.EdgeCalls),
@@ -562,21 +636,44 @@ func (s *PromotionStore) Promote(ctx context.Context, batch application.Promotio
 					}
 					continue
 				}
-				targetID, ok := byPkgDir[relDir][uc.CalleeName]
-				if !ok {
-					// Fall back to the promoted graph (callee's file not in
-					// this batch). Must fully drain the cursor before the
-					// edge insert: a query open during ExecContext deadlocks
-					// the single write connection.
-					tid, found, qerr := lookupPromotedSymbolDir(ctx, tx, repoID, branch, root, relDir, uc.CalleeName)
-					if qerr != nil {
-						_ = tx.Rollback()
-						return fmt.Errorf("promoter: cross-package lookup %q: %w", uc.CalleeName, qerr)
+				// In-module resolution. solov2-9rc2 Phase B: a method call
+				// (uc.IsMethodCall) carries only the bare method name in
+				// CalleeName ("Hello" from `v.Hello(...)`), so look it up by
+				// suffix match against `<Receiver>.Hello` rather than exact
+				// symbol_path. Single-match binds; ambiguity is skipped to
+				// preserve the "no false edges" invariant.
+				var targetID domain.NodeID
+				var inBatch bool
+				if uc.IsMethodCall {
+					targetID, inBatch = findInBatchMethod(byPkgDir, relDir, uc.CalleeName)
+					if !inBatch {
+						tid, found, qerr := lookupPromotedMethodInDir(ctx, tx, repoID, branch, root, relDir, uc.CalleeName)
+						if qerr != nil {
+							_ = tx.Rollback()
+							return fmt.Errorf("promoter: method-call lookup %q: %w", uc.CalleeName, qerr)
+						}
+						if !found {
+							continue
+						}
+						targetID = tid
 					}
-					if !found {
-						continue
+				} else {
+					targetID, inBatch = byPkgDir[relDir][uc.CalleeName]
+					if !inBatch {
+						// Fall back to the promoted graph (callee's file not in
+						// this batch). Must fully drain the cursor before the
+						// edge insert: a query open during ExecContext deadlocks
+						// the single write connection.
+						tid, found, qerr := lookupPromotedSymbolDir(ctx, tx, repoID, branch, root, relDir, uc.CalleeName)
+						if qerr != nil {
+							_ = tx.Rollback()
+							return fmt.Errorf("promoter: cross-package lookup %q: %w", uc.CalleeName, qerr)
+						}
+						if !found {
+							continue
+						}
+						targetID = tid
 					}
-					targetID = tid
 				}
 				if uc.CallerID == targetID {
 					continue

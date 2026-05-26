@@ -443,7 +443,14 @@ func extractCallEdges(root *sitter.Node, src []byte, symbols map[string]*domain.
 		callRefs := collectCallNames(bodyNode, src, recvName, recvType)
 		for _, ref := range callRefs {
 			if ref.pkg != "" {
-				key := string(callerNode.ID) + callKeySep + ref.pkg + "." + ref.name
+				// Dedup key includes the method-flag so a plain pkg.Foo and a
+				// method-call on a local var of the same package both deserve
+				// separate UnresolvedCall entries when they coexist.
+				suffix := ""
+				if ref.method {
+					suffix = "@method"
+				}
+				key := string(callerNode.ID) + callKeySep + ref.pkg + "." + ref.name + suffix
 				if seenU[key] {
 					continue
 				}
@@ -452,6 +459,7 @@ func extractCallEdges(root *sitter.Node, src []byte, symbols map[string]*domain.
 					CallerID:     callerNode.ID,
 					CalleeName:   ref.name,
 					PkgQualifier: ref.pkg,
+					IsMethodCall: ref.method,
 				})
 				continue
 			}
@@ -532,7 +540,11 @@ func collectAnonCalls(node *sitter.Node, src []byte, symbols map[string]*domain.
 			// resolvable (identifier or pkg.X) still lands.
 			for _, ref := range collectCallNames(bodyNode, src, "", "") {
 				if ref.pkg != "" {
-					key := string(callerNode.ID) + callKeySep + ref.pkg + "." + ref.name
+					suffix := ""
+					if ref.method {
+						suffix = "@method"
+					}
+					key := string(callerNode.ID) + callKeySep + ref.pkg + "." + ref.name + suffix
 					if seenU[key] {
 						continue
 					}
@@ -541,6 +553,7 @@ func collectAnonCalls(node *sitter.Node, src []byte, symbols map[string]*domain.
 						CallerID:     callerNode.ID,
 						CalleeName:   ref.name,
 						PkgQualifier: ref.pkg,
+						IsMethodCall: ref.method,
 					})
 					continue
 				}
@@ -634,9 +647,73 @@ func extractReceiverBinding(receiverNode *sitter.Node, src []byte) (name, typ st
 type callRef struct {
 	name string
 	pkg  string
+	// method marks a call site where the operand is a local variable
+	// whose origin is the named package — `v := pkg.New(...); v.Method()`.
+	// pkg holds the originating package qualifier, name holds the method
+	// identifier. The receiver type is unknown to the parser; the
+	// promotion-time resolver binds by method name within pkg. Plain
+	// pkg.Foo() calls keep method=false (solov2-9rc2).
+	method bool
+}
+
+// localVarOrigin tracks variables declared via `v := pkg.X(...)` inside
+// a function body, mapping the local name to its origin package. Used
+// to recognise chained-selector calls like `v.Method()` whose receiver
+// type the parser cannot infer (solov2-9rc2). The map covers the most
+// common Go DI pattern (constructor + method calls); more elaborate
+// inference (var via assignment, method chains through interfaces) is
+// out of scope here — those fall through to the existing unresolved
+// path and stay unbound.
+type localVarOrigin = string
+
+// collectLocalVarOrigins walks a function body and returns the map of
+// short-var-declared identifiers to their originating package qualifier.
+// Only the simplest shape `v := pkg.X(...)` is recognised — `v` an
+// identifier, RHS a call_expression whose function is a
+// selector_expression `pkg.X` where `pkg` is an identifier. Anything
+// else (multi-value returns, type assertions, method chains, struct
+// literals) is intentionally skipped so the map never contains a wrong
+// origin — a missing entry just degrades to existing behaviour.
+func collectLocalVarOrigins(node *sitter.Node, src []byte) map[string]localVarOrigin {
+	origins := map[string]localVarOrigin{}
+	var walk func(*sitter.Node)
+	walk = func(n *sitter.Node) {
+		if n.Type() == "short_var_declaration" {
+			left := n.ChildByFieldName("left")
+			right := n.ChildByFieldName("right")
+			if left != nil && right != nil &&
+				int(left.NamedChildCount()) == 1 &&
+				int(right.NamedChildCount()) == 1 {
+				lhs := left.NamedChild(0)
+				rhs := right.NamedChild(0)
+				if lhs != nil && rhs != nil && lhs.Type() == "identifier" && rhs.Type() == "call_expression" {
+					fn := rhs.ChildByFieldName("function")
+					if fn != nil && fn.Type() == "selector_expression" {
+						operand := fn.ChildByFieldName("operand")
+						if operand != nil && operand.Type() == "identifier" {
+							varName := string(src[lhs.StartByte():lhs.EndByte()])
+							pkgName := string(src[operand.StartByte():operand.EndByte()])
+							origins[varName] = pkgName
+						}
+					}
+				}
+			}
+		}
+		count := int(n.ChildCount())
+		for i := range count {
+			walk(n.Child(i))
+		}
+	}
+	walk(node)
+	return origins
 }
 
 func collectCallNames(node *sitter.Node, src []byte, recvName, recvType string) []callRef {
+	// solov2-9rc2: pre-scan local-var origins so `v := pkg.New(...); v.X()`
+	// is recognised as a method call on a value from pkg instead of being
+	// silently dropped (the old branch treated the operand as if it were
+	// an import qualifier and lost the call at promotion).
+	localOrigins := collectLocalVarOrigins(node, src)
 	var refs []callRef
 	var walk func(*sitter.Node)
 	walk = func(n *sitter.Node) {
@@ -652,10 +729,17 @@ func collectCallNames(node *sitter.Node, src []byte, recvName, recvType string) 
 					if operand != nil && field != nil && operand.Type() == "identifier" {
 						op := string(src[operand.StartByte():operand.EndByte()])
 						fld := string(src[field.StartByte():field.EndByte()])
-						if recvName != "" && recvType != "" && op == recvName {
+						switch {
+						case recvName != "" && recvType != "" && op == recvName:
 							// s.foo() inside a method on *Server -> Server.foo (local).
 							refs = append(refs, callRef{name: recvType + "." + fld})
-						} else {
+						case localOrigins[op] != "":
+							// v.Method() where v := pkg.New(...). solov2-9rc2:
+							// emit as a method call referencing the originating
+							// package; the promotion-time resolver binds by name
+							// within that package.
+							refs = append(refs, callRef{name: fld, pkg: localOrigins[op], method: true})
+						default:
 							// pkg.Foo() — package-qualified; resolved at
 							// promotion via the import map (solov2-xc51). The
 							// operand may also be a local variable; a

@@ -51,6 +51,16 @@ type UnresolvedCall struct {
 	CallerID     NodeID
 	CalleeName   string
 	PkgQualifier string
+	// IsMethodCall marks a call site of the form `v.Method(...)` where the
+	// parser recognised `v` as a local variable assigned from a
+	// package-qualified call (`v := pkg.New(...)` / `v := pkg.Func(...)`).
+	// PkgQualifier holds `pkg`; CalleeName holds `Method`. The receiver
+	// TYPE is intentionally unknown — Go return-type inference is out of
+	// scope for tree-sitter — so the resolver looks up `Method` by name
+	// inside the imported package and binds when the match is unambiguous
+	// (solov2-9rc2 epic). Non-method calls keep IsMethodCall=false and
+	// resolve through the existing PkgQualifier path.
+	IsMethodCall bool
 }
 
 // ParseFailure describes a single syntax-error region surfaced by the parser.
