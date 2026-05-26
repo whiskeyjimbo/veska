@@ -3,6 +3,7 @@ package wiki
 import (
 	"strings"
 	"testing"
+	"time"
 )
 
 // solov2-gdf1 + solov2-z5o0 verification — empty hot_zones and
@@ -35,5 +36,28 @@ func TestRenderEntryPoints_EmptyStateMentionsAutoLinkAndDoctor(t *testing.T) {
 		if !strings.Contains(out, want) {
 			t.Errorf("empty entry_points page missing %q\n--- got ---\n%s", want, out)
 		}
+	}
+}
+
+// TestRender_StampsGeneratedAt covers solov2-otzn: a non-zero GeneratedAt
+// must surface as a "_Generated: ISO8601_" header so a Markdown page on
+// disk doesn't lie about how current it is. A zero GeneratedAt renders an
+// "_unstamped_" hint pointing the reader at `veska wiki`.
+func TestRender_StampsGeneratedAt(t *testing.T) {
+	at := time.Date(2026, 5, 26, 14, 30, 0, 0, time.UTC)
+	hz := RenderHotZones(Report{RepoID: "r", Branch: "main", GeneratedAt: at})
+	if !strings.Contains(hz, "2026-05-26T14:30:00Z") {
+		t.Errorf("hot_zones missing stamped time:\n%s", hz)
+	}
+	if !strings.Contains(hz, "veska wiki") {
+		t.Errorf("hot_zones header must point at refresh command:\n%s", hz)
+	}
+	ep := RenderEntryPoints(EntryPointsReport{RepoID: "r", Branch: "main", GeneratedAt: at})
+	if !strings.Contains(ep, "2026-05-26T14:30:00Z") {
+		t.Errorf("entry_points missing stamped time:\n%s", ep)
+	}
+	hz0 := RenderHotZones(Report{RepoID: "r", Branch: "main"})
+	if !strings.Contains(hz0, "unstamped") {
+		t.Errorf("zero GeneratedAt must render as 'unstamped':\n%s", hz0)
 	}
 }

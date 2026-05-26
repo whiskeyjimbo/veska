@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"time"
 	"unicode"
 
 	"github.com/whiskeyjimbo/veska/internal/core/domain"
@@ -50,6 +51,10 @@ type EntryPointsReport struct {
 	RepoID      string       `json:"repo_id"`
 	Branch      string       `json:"branch"`
 	EntryPoints []EntryPoint `json:"entry_points"`
+	// GeneratedAt is the wall-clock instant the report was rendered.
+	// Populated by the wiki Handler immediately before rendering; the
+	// service itself does not set it (solov2-otzn).
+	GeneratedAt time.Time `json:"generated_at,omitzero"`
 }
 
 // EntryPointsService selects entry-point symbols. It is stateless; the

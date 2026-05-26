@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"path/filepath"
 	"sort"
+	"time"
 
 	"github.com/whiskeyjimbo/veska/internal/application/blastradius"
 )
@@ -63,6 +64,11 @@ type Report struct {
 	Zones             []HotZone `json:"zones"`
 	CandidatesScanned int       `json:"-"` // files touched in window
 	CandidatesScored  int       `json:"-"` // files with score > 0
+	// GeneratedAt is the wall-clock instant the report was rendered.
+	// Populated by the wiki Handler immediately before rendering; the
+	// service itself does not set it, so MCP responses can leave it zero
+	// unless a caller wants staleness info (solov2-otzn).
+	GeneratedAt time.Time `json:"generated_at,omitzero"`
 }
 
 // HotZoneService ranks files by change risk. It is stateless; the same

@@ -3,7 +3,21 @@ package wiki
 import (
 	"fmt"
 	"strings"
+	"time"
 )
+
+// renderGeneratedHeader prints a one-line "Generated: ISO8601" stamp +
+// a refresh hint, so a Markdown page never lies about how current it is
+// (solov2-otzn). Zero time is rendered as "_unstamped_" to keep the
+// page readable when the handler hasn't filled in GeneratedAt — the
+// MCP responses share these renderers and don't necessarily set it.
+func renderGeneratedHeader(b *strings.Builder, at time.Time) {
+	if at.IsZero() {
+		b.WriteString("_Generated: unstamped — re-run `veska wiki` to refresh._\n\n")
+		return
+	}
+	fmt.Fprintf(b, "_Generated: %s — re-run `veska wiki` to refresh._\n\n", at.UTC().Format(time.RFC3339))
+}
 
 // HotZonesPagePath is the repoRoot-relative path the hot_zone Markdown
 // page is written to. Callers that wire regeneration (a separate task)
@@ -17,6 +31,7 @@ const HotZonesPagePath = "docs/veska/hot_zones.md"
 func RenderHotZones(r Report) string {
 	var b strings.Builder
 	b.WriteString("# Hot Zones\n\n")
+	renderGeneratedHeader(&b, r.GeneratedAt)
 	b.WriteString("Files ranked by change risk: recent change frequency multiplied by blast radius.\n\n")
 	if len(r.Zones) == 0 {
 		// solov2-z5o0: explain *why* this page is empty so the reader
@@ -60,6 +75,7 @@ func boolMark(b bool) string {
 func RenderEntryPoints(r EntryPointsReport) string {
 	var b strings.Builder
 	b.WriteString("# Entry Points\n\n")
+	renderGeneratedHeader(&b, r.GeneratedAt)
 	b.WriteString("High-fan-in symbols an agent should start from: ranked by ")
 	b.WriteString("inbound call count, with exported symbols and symbols having ")
 	b.WriteString("adjacent tests breaking ties (solov2-73f).\n\n")
