@@ -58,10 +58,10 @@ at a time:
 
 1. **model2vec** (`potion-code-16M`) — a fast, in-process static *code*
    embedder. The default and recommended choice. Get it either way:
-   - **Fat binary** (`make build-fat`) — the model is compiled into the
+   - **Fat binary** (`make build`, default) — the model is compiled into the
      binary. Zero setup: nothing to install, no download, no network.
-   - **Thin binary** (`make build`) + `veska install model2vec` — a one-time
-     ~62 MB download into `~/.veska/`.
+   - **Thin binary** (`make build-small`) + `veska install model2vec` — a
+     one-time ~62 MB download into `~/.veska/`.
 2. **static-v2** — an in-binary fallback that works with no model files at
    all (lower quality). Used only when model2vec is unavailable.
 
@@ -84,18 +84,19 @@ Install Ollama only if you want the review pipeline:
 
 ## Build
 
-End users should default to **`make build-fat`** — it embeds the model2vec
-weights into the binary so the install is zero-setup: no separate download,
-no network, no static-v2 fallback at boot.
+`make build` is the fat binary by default (solov2-sft7) — it embeds the
+model2vec weights into the binary so the install is zero-setup: no separate
+download, no network, no static-v2 fallback at boot.
 
 ```sh
-make build-fat    # recommended: model2vec embedded in the binary (~62 MB larger)
-make build        # thin: veska, veska-daemon, veska-mcp (+ layercheck tool).
+make build        # default: model2vec embedded in the binary (~62 MB larger)
+make build-small  # thin: veska, veska-daemon, veska-mcp (+ layercheck tool).
                   # Use this only when you want size-sensitive binaries
                   # (CI, containers); you must then run `veska install model2vec`
                   # to avoid booting on the low-quality static-v2 fallback.
 make test         # go test ./...
-make all          # build + test + vet + lint + layercheck (builds the thin variant)
+make all          # build-small + test + vet + lint + layercheck
+                  # (uses the thin build to keep the test loop fast)
 ```
 
 Binaries land in `./bin/`. Either `export PATH="$PWD/bin:$PATH"` or use the
@@ -104,9 +105,9 @@ Binaries land in `./bin/`. Either `export PATH="$PWD/bin:$PATH"` or use the
 ## Quick start
 
 ```sh
-# 1. Build the fat binary (zero-setup embedder; recommended for end users).
-make build-fat
-# Size-sensitive builds can `make build` instead, then run
+# 1. Build veska (default: fat, zero-setup embedder).
+make build
+# Size-sensitive builds can `make build-small` instead, then run
 # `./bin/veska install model2vec` to avoid the low-quality static-v2 fallback.
 
 # 2. Initialise veska's data directory at ~/.veska/.
