@@ -99,8 +99,10 @@ func ResolveCrossRepoEdge(ctx context.Context, db *sql.DB, stub CrossRepoStub, e
 		return nil, fmt.Errorf("resolver: lookup symbol for stub %s: %w", stub.StubID, err)
 	}
 	defer rows.Close()
-	var match *ResolvedEdge
-	count := 0
+	// solov2-9rc2: prefer non-test candidates for method-call disambiguation —
+	// see lookupPromotedMethodInDir for rationale.
+	var prodMatch, testMatch *ResolvedEdge
+	prodCount, testCount := 0, 0
 	for rows.Next() {
 		var nodeID, branch, filePath string
 		if err := rows.Scan(&nodeID, &branch, &filePath); err != nil {
@@ -121,23 +123,36 @@ func ResolveCrossRepoEdge(ctx context.Context, db *sql.DB, stub CrossRepoStub, e
 				CrossRepo: true,
 			}, nil
 		}
-		count++
-		if count == 1 {
-			match = &ResolvedEdge{
-				SrcNodeID: stub.SrcNodeID,
-				DstNodeID: nodeID,
-				DstRepoID: dstRepoID,
-				DstBranch: branch,
-				Kind:      stub.Kind,
-				CrossRepo: true,
+		edge := &ResolvedEdge{
+			SrcNodeID: stub.SrcNodeID,
+			DstNodeID: nodeID,
+			DstRepoID: dstRepoID,
+			DstBranch: branch,
+			Kind:      stub.Kind,
+			CrossRepo: true,
+		}
+		if strings.HasSuffix(filePath, "_test.go") {
+			testCount++
+			if testCount == 1 {
+				testMatch = edge
+			}
+		} else {
+			prodCount++
+			if prodCount == 1 {
+				prodMatch = edge
 			}
 		}
 	}
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("resolver: iterate symbol rows: %w", err)
 	}
-	if stub.MethodCall && count == 1 {
-		return match, nil
+	if stub.MethodCall {
+		switch {
+		case prodCount == 1:
+			return prodMatch, nil
+		case prodCount == 0 && testCount == 1:
+			return testMatch, nil
+		}
 	}
 	return nil, nil
 }

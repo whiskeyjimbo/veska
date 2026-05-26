@@ -132,6 +132,21 @@ func (p *GoParser) ParseFile(ctx context.Context, repoID, path string, src []byt
 			if n != nil {
 				result.Nodes = append(result.Nodes, n)
 				symbolByName[n.Name] = n
+				// solov2-9rc2 phase E v2: when the type is an interface,
+				// emit a method node for each method_spec child. The
+				// method node is named IfaceName.MethodName so chained-
+				// selector calls through interface-typed struct fields
+				// (`p.audit.Write` where audit ports.AuditWriter) resolve
+				// to a concrete graph node via the same suffix-match
+				// machinery used for struct methods (Phase B/C/D).
+				if n.Kind == domain.KindInterface {
+					for _, m := range parseInterfaceMethods(child, src, repoID, path, n.Name) {
+						result.Nodes = append(result.Nodes, m)
+						if _, exists := symbolByName[m.Name]; !exists {
+							symbolByName[m.Name] = m
+						}
+					}
+				}
 			}
 		case "var_declaration", "const_declaration":
 			// solov2-b7wt: extract top-level (package-scope) var/const
@@ -168,7 +183,12 @@ func (p *GoParser) ParseFile(ctx context.Context, repoID, path string, src []byt
 	// not in this file's map (likely another file in the same Go package)
 	// surface as UnresolvedCalls and get bound at promotion time
 	// (solov2-2at).
-	callEdges, unresolved := extractCallEdges(root, src, symbolByName)
+	// solov2-9rc2 phase E: capture struct field types so chained-selector
+	// calls `s.field.M()` whose field is a same-package concrete struct
+	// resolve directly. The map is empty for files with no struct decls;
+	// extractCallEdges propagates it down to collectCallNames.
+	structFields := collectStructFields(root, src)
+	callEdges, unresolved := extractCallEdges(root, src, symbolByName, structFields)
 	result.Edges = append(result.Edges, callEdges...)
 	result.UnresolvedCalls = unresolved
 
@@ -180,7 +200,7 @@ func (p *GoParser) ParseFile(ctx context.Context, repoID, path string, src []byt
 	// Attribute their calls to the package node so call_chain answers
 	// "what eventually gets reached when this file initialises" correctly.
 	if pkgNode != nil {
-		varEdges, varUnresolved := extractTopLevelVarInitCalls(root, src, symbolByName, pkgNode)
+		varEdges, varUnresolved := extractTopLevelVarInitCalls(root, src, symbolByName, pkgNode, structFields)
 		result.Edges = append(result.Edges, varEdges...)
 		result.UnresolvedCalls = append(result.UnresolvedCalls, varUnresolved...)
 	}
@@ -309,6 +329,69 @@ func parseTypeDecl(node *sitter.Node, src []byte, repoID, path string) *domain.N
 	return nil
 }
 
+// parseInterfaceMethods walks an interface_type's method_spec children
+// and returns one KindMethod node per declared method. Each node is
+// named `IfaceName.MethodName` so it shares a key space with concrete
+// methods (parseMethodDecl names methods the same way). Embedded
+// interfaces (which appear as type_identifier under the interface body)
+// are skipped here — capturing them as inheritance would require a
+// new edge kind; the simpler win is just listing the declared methods
+// (solov2-9rc2 phase E v2).
+func parseInterfaceMethods(typeDeclNode *sitter.Node, src []byte, repoID, path, ifaceName string) []*domain.Node {
+	var out []*domain.Node
+	// type_declaration -> type_spec -> type (interface_type) -> method_specs
+	specCount := int(typeDeclNode.ChildCount())
+	for i := range specCount {
+		spec := typeDeclNode.Child(i)
+		if spec.Type() != "type_spec" {
+			continue
+		}
+		typeNode := spec.ChildByFieldName("type")
+		if typeNode == nil || typeNode.Type() != "interface_type" {
+			continue
+		}
+		bodyCount := int(typeNode.ChildCount())
+		for j := range bodyCount {
+			c := typeNode.Child(j)
+			// Tree-sitter Go grammar emits 'method_elem' for each interface
+			// method (older versions used 'method_spec'). The method name
+			// is the first field_identifier child rather than a 'name'
+			// field, so look it up by type rather than by ChildByFieldName.
+			if c.Type() != "method_elem" && c.Type() != "method_spec" {
+				continue
+			}
+			var nameNode *sitter.Node
+			elemCount := int(c.ChildCount())
+			for k := range elemCount {
+				cc := c.Child(k)
+				if cc.Type() == "field_identifier" || cc.Type() == "identifier" {
+					nameNode = cc
+					break
+				}
+			}
+			if nameNode == nil {
+				continue
+			}
+			methodName := string(src[nameNode.StartByte():nameNode.EndByte()])
+			fullName := ifaceName + "." + methodName
+			id := nodeID(repoID, path, domain.KindMethod, fullName)
+			lr := lineRange(c)
+			raw := string(src[c.StartByte():c.EndByte()])
+			n, err := domain.NewNode(id, path, fullName, domain.KindMethod,
+				domain.WithLanguage("go"),
+				domain.WithLines(lr),
+				domain.WithRawContent(raw),
+				domain.WithExported(goExported(methodName)),
+			)
+			if err != nil {
+				continue
+			}
+			out = append(out, n)
+		}
+	}
+	return out
+}
+
 // parseTopLevelVarDecl extracts every name declared by a top-level
 // var_declaration or const_declaration as a KindVariable node. Tree-sitter's
 // grammar nests one or more var_spec / const_spec children inside the
@@ -393,7 +476,7 @@ const callKeySep = "\x00"
 
 // extractCallEdges walks the entire AST looking for call_expression nodes inside
 // function/method bodies and emits EdgeCalls when the callee is known in the file.
-func extractCallEdges(root *sitter.Node, src []byte, symbols map[string]*domain.Node) ([]*domain.Edge, []domain.UnresolvedCall) {
+func extractCallEdges(root *sitter.Node, src []byte, symbols map[string]*domain.Node, structFields map[string]map[string]fieldType) ([]*domain.Edge, []domain.UnresolvedCall) {
 	var edges []*domain.Edge
 	var unresolved []domain.UnresolvedCall
 	seen := make(map[string]bool) // dedupe same caller→callee within a file
@@ -440,7 +523,7 @@ func extractCallEdges(root *sitter.Node, src []byte, symbols map[string]*domain.
 		// qualified calls (pkg.Bar) cannot bind in-file — they are stashed as
 		// UnresolvedCalls for promotion-time resolution (see the cross-package
 		// note above).
-		callRefs := collectCallNames(bodyNode, src, recvName, recvType)
+		callRefs := collectCallNames(bodyNode, src, recvName, recvType, structFields)
 		for _, ref := range callRefs {
 			if ref.pkg != "" {
 				// Dedup key includes the method-flag so a plain pkg.Foo and a
@@ -504,7 +587,7 @@ func extractCallEdges(root *sitter.Node, src []byte, symbols map[string]*domain.
 // Only identifier-form calls are bound here; package-qualified and selector
 // calls follow the same paths as extractCallEdges (UnresolvedCalls for
 // cross-package, in-file symbol map for selectors on a known receiver).
-func extractTopLevelVarInitCalls(root *sitter.Node, src []byte, symbols map[string]*domain.Node, pkgNode *domain.Node) ([]*domain.Edge, []domain.UnresolvedCall) {
+func extractTopLevelVarInitCalls(root *sitter.Node, src []byte, symbols map[string]*domain.Node, pkgNode *domain.Node, structFields map[string]map[string]fieldType) ([]*domain.Edge, []domain.UnresolvedCall) {
 	var edges []*domain.Edge
 	var unresolved []domain.UnresolvedCall
 	seen := make(map[string]bool)
@@ -517,7 +600,7 @@ func extractTopLevelVarInitCalls(root *sitter.Node, src []byte, symbols map[stri
 		case "var_declaration", "const_declaration":
 			// Find every function_literal anywhere inside this declaration's
 			// subtree and collect calls from each body.
-			collectAnonCalls(child, src, symbols, pkgNode, &edges, &unresolved, seen, seenU)
+			collectAnonCalls(child, src, symbols, pkgNode, &edges, &unresolved, seen, seenU, structFields)
 		}
 	}
 	return edges, unresolved
@@ -527,7 +610,7 @@ func extractTopLevelVarInitCalls(root *sitter.Node, src []byte, symbols map[stri
 // one it harvests identifier and package-qualified calls in the body and
 // attributes them to callerNode. Recursive so nested closures
 // (func(){ go func(){ Foo() }() }) are reached too.
-func collectAnonCalls(node *sitter.Node, src []byte, symbols map[string]*domain.Node, callerNode *domain.Node, edges *[]*domain.Edge, unresolved *[]domain.UnresolvedCall, seen, seenU map[string]bool) {
+func collectAnonCalls(node *sitter.Node, src []byte, symbols map[string]*domain.Node, callerNode *domain.Node, edges *[]*domain.Edge, unresolved *[]domain.UnresolvedCall, seen, seenU map[string]bool, structFields map[string]map[string]fieldType) {
 	if node == nil {
 		return
 	}
@@ -538,7 +621,7 @@ func collectAnonCalls(node *sitter.Node, src []byte, symbols map[string]*domain.
 			// a receiver in Go, so selector calls like x.Y() inside the body
 			// are filtered out by collectCallNames' recvName check. Anything
 			// resolvable (identifier or pkg.X) still lands.
-			for _, ref := range collectCallNames(bodyNode, src, "", "") {
+			for _, ref := range collectCallNames(bodyNode, src, "", "", structFields) {
 				if ref.pkg != "" {
 					suffix := ""
 					if ref.method {
@@ -586,7 +669,7 @@ func collectAnonCalls(node *sitter.Node, src []byte, symbols map[string]*domain.
 	// Always descend; function_literals can nest.
 	count := int(node.ChildCount())
 	for i := range count {
-		collectAnonCalls(node.Child(i), src, symbols, callerNode, edges, unresolved, seen, seenU)
+		collectAnonCalls(node.Child(i), src, symbols, callerNode, edges, unresolved, seen, seenU, structFields)
 	}
 }
 
@@ -644,6 +727,145 @@ func extractReceiverBinding(receiverNode *sitter.Node, src []byte) (name, typ st
 // callee identifier (or "Receiver.method" for a resolved receiver call); pkg is
 // the selector operand for a package-qualified call (the "cmd" in cmd.Execute()),
 // empty for plain or receiver-local calls.
+// fieldType describes a struct field's declared type for the limited
+// purpose of resolving chained-selector method calls `s.field.M()`. The
+// parser strips pointer/slice/etc. modifiers and records the base type
+// name plus an optional package qualifier (solov2-9rc2 phase E).
+//
+// Phase E v1 only acts on fields whose pkg=="" (same-package concrete
+// types) — those bind directly to the method node already in the
+// file's symbol map. Cross-package field types and interface-typed
+// fields are captured but the resolver currently ignores them; they
+// remain TODOs for phase E v2.
+type fieldType struct {
+	pkg  string // empty for fields declared with a local type name
+	name string // base type name with *, [], chan etc. stripped
+}
+
+// collectStructFields walks every top-level type_declaration with a
+// struct_type body and returns a map of struct-name -> field-name ->
+// fieldType, keyed by the struct name as it appears in the type_spec
+// (without any pointer/slice prefix). Used by collectCallNames to
+// resolve `s.field.M()` chains where s is the method receiver.
+func collectStructFields(root *sitter.Node, src []byte) map[string]map[string]fieldType {
+	out := map[string]map[string]fieldType{}
+	count := int(root.ChildCount())
+	for i := range count {
+		child := root.Child(i)
+		if child.Type() != "type_declaration" {
+			continue
+		}
+		specCount := int(child.ChildCount())
+		for j := range specCount {
+			spec := child.Child(j)
+			if spec.Type() != "type_spec" {
+				continue
+			}
+			nameNode := spec.ChildByFieldName("name")
+			typeNode := spec.ChildByFieldName("type")
+			if nameNode == nil || typeNode == nil || typeNode.Type() != "struct_type" {
+				continue
+			}
+			structName := string(src[nameNode.StartByte():nameNode.EndByte()])
+			fields := extractStructFields(typeNode, src)
+			if len(fields) > 0 {
+				out[structName] = fields
+			}
+		}
+	}
+	return out
+}
+
+// extractStructFields parses a struct_type node's field_declaration
+// children into a name -> fieldType map. Skips field declarations the
+// parser can't represent cleanly (embedded types without a name, struct
+// tags-only nodes, anonymous fields). Multiple names sharing one type
+// (`a, b int`) each map to the same fieldType.
+func extractStructFields(structNode *sitter.Node, src []byte) map[string]fieldType {
+	out := map[string]fieldType{}
+	// struct_type -> field_declaration_list -> field_declaration
+	walkStructFields(structNode, src, out)
+	return out
+}
+
+func walkStructFields(n *sitter.Node, src []byte, out map[string]fieldType) {
+	if n == nil {
+		return
+	}
+	if n.Type() == "field_declaration" {
+		// field_declaration has 'name' (may be a comma list) and 'type'.
+		typeNode := n.ChildByFieldName("type")
+		if typeNode != nil {
+			ft, ok := classifyFieldType(typeNode, src)
+			if ok {
+				// Field name nodes are the named children typed 'field_identifier'
+				// before the type node. Tree-sitter exposes them under 'name'
+				// when there is one and as separate named children otherwise.
+				namedCount := int(n.NamedChildCount())
+				for i := range namedCount {
+					nc := n.NamedChild(i)
+					if nc == nil {
+						continue
+					}
+					if nc.Type() != "field_identifier" {
+						continue
+					}
+					name := string(src[nc.StartByte():nc.EndByte()])
+					out[name] = ft
+				}
+			}
+		}
+	}
+	count := int(n.ChildCount())
+	for i := range count {
+		walkStructFields(n.Child(i), src, out)
+	}
+}
+
+// classifyFieldType extracts the base type name + optional package
+// qualifier from a struct field's type node. Pointer (`*T`), slice
+// (`[]T`), and channel (`chan T`) prefixes are stripped — for the
+// purpose of method-call resolution we just need the underlying type.
+// Returns ok=false for shapes the resolver can't act on (function
+// types, map types, anonymous struct/interface literals, ...).
+func classifyFieldType(typeNode *sitter.Node, src []byte) (fieldType, bool) {
+	switch typeNode.Type() {
+	case "pointer_type":
+		// pointer_type wraps a type child; recurse.
+		if inner := typeNode.NamedChild(0); inner != nil {
+			return classifyFieldType(inner, src)
+		}
+		return fieldType{}, false
+	case "slice_type", "array_type", "channel_type":
+		// A slice/array of T or channel of T isn't directly method-callable
+		// in the s.field.M() shape we resolve. Skip.
+		return fieldType{}, false
+	case "type_identifier":
+		return fieldType{name: string(src[typeNode.StartByte():typeNode.EndByte()])}, true
+	case "qualified_type":
+		// pkg.Type — operand is the pkg identifier, field-like node is the type name.
+		var pkg, name string
+		count := int(typeNode.NamedChildCount())
+		for i := range count {
+			c := typeNode.NamedChild(i)
+			if c == nil {
+				continue
+			}
+			switch c.Type() {
+			case "package_identifier":
+				pkg = string(src[c.StartByte():c.EndByte()])
+			case "type_identifier":
+				name = string(src[c.StartByte():c.EndByte()])
+			}
+		}
+		if name == "" {
+			return fieldType{}, false
+		}
+		return fieldType{pkg: pkg, name: name}, true
+	}
+	return fieldType{}, false
+}
+
 type callRef struct {
 	name string
 	pkg  string
@@ -708,7 +930,7 @@ func collectLocalVarOrigins(node *sitter.Node, src []byte) map[string]localVarOr
 	return origins
 }
 
-func collectCallNames(node *sitter.Node, src []byte, recvName, recvType string) []callRef {
+func collectCallNames(node *sitter.Node, src []byte, recvName, recvType string, structFields map[string]map[string]fieldType) []callRef {
 	// solov2-9rc2: pre-scan local-var origins so `v := pkg.New(...); v.X()`
 	// is recognised as a method call on a value from pkg instead of being
 	// silently dropped (the old branch treated the operand as if it were
@@ -726,6 +948,42 @@ func collectCallNames(node *sitter.Node, src []byte, recvName, recvType string) 
 				case "selector_expression":
 					operand := fn.ChildByFieldName("operand")
 					field := fn.ChildByFieldName("field")
+					// solov2-9rc2 phase E: chained selector recvName.field.Method.
+					// v1 handles same-package field types (local symbol-map
+					// lookup); v2 emits a cross-package method-call ref so
+					// promotion's existing Phase C/D machinery binds it
+					// against interface/struct method nodes in the imported
+					// package.
+					if operand != nil && field != nil && operand.Type() == "selector_expression" &&
+						recvName != "" && recvType != "" {
+						innerOperand := operand.ChildByFieldName("operand")
+						innerField := operand.ChildByFieldName("field")
+						if innerOperand != nil && innerField != nil && innerOperand.Type() == "identifier" {
+							innerOp := string(src[innerOperand.StartByte():innerOperand.EndByte()])
+							innerFld := string(src[innerField.StartByte():innerField.EndByte()])
+							if innerOp == recvName {
+								if fields, ok := structFields[recvType]; ok {
+									if ft, ok := fields[innerFld]; ok {
+										methodName := string(src[field.StartByte():field.EndByte()])
+										if ft.pkg == "" {
+											// v1: same package. Local symbol-map
+											// lookup will find FieldType.Method
+											// directly (struct or interface method
+											// nodes both live under that key).
+											refs = append(refs, callRef{name: ft.name + "." + methodName})
+										} else {
+											// v2: cross-package. Emit a method
+											// call with the field's package as
+											// the qualifier; Phase C+D handle
+											// the rest (method-call cross-repo
+											// stub, suffix-match resolution).
+											refs = append(refs, callRef{name: methodName, pkg: ft.pkg, method: true})
+										}
+									}
+								}
+							}
+						}
+					}
 					if operand != nil && field != nil && operand.Type() == "identifier" {
 						op := string(src[operand.StartByte():operand.EndByte()])
 						fld := string(src[field.StartByte():field.EndByte()])
