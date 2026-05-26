@@ -71,8 +71,27 @@ func (p *GoQueryParser) ParseFile(ctx context.Context, repoID, path string, src 
 
 	// Package node — the legacy parser emits this; phase 1 keeps parity
 	// so the equivalence harness doesn't trip on its absence.
-	if pkgNode := buildPackageNode(root, src, repoID, path); pkgNode != nil {
+	pkgNode := buildPackageNode(root, src, repoID, path)
+	if pkgNode != nil {
 		result.Nodes = append(result.Nodes, pkgNode)
+	}
+
+	// callerCtx records the (callerNode, bodyNode, optional recv binding)
+	// triple for each named declaration phase 3 needs to extract calls
+	// from. Built during the symbols.scm pass so we don't re-query for
+	// declarations later.
+	type callerCtx struct {
+		caller   *domain.Node
+		body     *sitter.Node
+		recvName string
+		recvType string
+	}
+	var callers []callerCtx
+	symbolByName := map[string]*domain.Node{}
+
+	addSymbol := func(n *domain.Node) {
+		result.Nodes = append(result.Nodes, n)
+		symbolByName[n.Name] = n
 	}
 
 	// Function declarations via the symbols.scm query.
@@ -99,7 +118,8 @@ func (p *GoQueryParser) ParseFile(ctx context.Context, repoID, path string, src 
 				continue
 			}
 			if n := buildFunctionNodeFromCaptures(declNode, nameNode, src, repoID, path); n != nil {
-				result.Nodes = append(result.Nodes, n)
+				addSymbol(n)
+				callers = append(callers, callerCtx{caller: n, body: m.node("function.body")})
 			}
 		case m.node("method.decl") != nil:
 			declNode := m.node("method.decl")
@@ -112,7 +132,14 @@ func (p *GoQueryParser) ParseFile(ctx context.Context, repoID, path string, src 
 				continue
 			}
 			if n := buildMethodNodeFromCaptures(declNode, recvNode, nameNode, src, repoID, path); n != nil {
-				result.Nodes = append(result.Nodes, n)
+				addSymbol(n)
+				recvName, recvType := extractReceiverBinding(recvNode, src)
+				callers = append(callers, callerCtx{
+					caller:   n,
+					body:     m.node("method.body"),
+					recvName: recvName,
+					recvType: recvType,
+				})
 			}
 		case m.node("type.decl") != nil:
 			declNode := m.node("type.decl")
@@ -125,13 +152,13 @@ func (p *GoQueryParser) ParseFile(ctx context.Context, repoID, path string, src 
 				continue
 			}
 			if n := buildTypeNodeFromCaptures(declNode, nameNode, bodyNode, src, repoID, path); n != nil {
-				result.Nodes = append(result.Nodes, n)
+				addSymbol(n)
 				// solov2-9rc2 phase E v2: surface each interface method
 				// as its own KindMethod node so chained-selector calls
 				// through interface fields resolve at promotion time.
 				if n.Kind == domain.KindInterface {
 					for _, im := range parseInterfaceMethods(declNode, src, repoID, path, n.Name) {
-						result.Nodes = append(result.Nodes, im)
+						addSymbol(im)
 					}
 				}
 			}
@@ -142,7 +169,7 @@ func (p *GoQueryParser) ParseFile(ctx context.Context, repoID, path string, src 
 				continue
 			}
 			for _, n := range buildVarNodesFromSpec(spec, decl, src, repoID, path, domain.KindVariable) {
-				result.Nodes = append(result.Nodes, n)
+				addSymbol(n)
 			}
 		case m.node("const.spec") != nil:
 			spec := m.node("const.spec")
@@ -151,12 +178,128 @@ func (p *GoQueryParser) ParseFile(ctx context.Context, repoID, path string, src 
 				continue
 			}
 			for _, n := range buildVarNodesFromSpec(spec, decl, src, repoID, path, domain.KindVariable) {
-				result.Nodes = append(result.Nodes, n)
+				addSymbol(n)
 			}
 		}
 	}
 
+	// CONTAINS edges: package → each non-package symbol. Mirrors the
+	// loop in go.go just after symbol extraction.
+	if pkgNode != nil {
+		for _, n := range result.Nodes {
+			if n == pkgNode {
+				continue
+			}
+			e, err := domain.NewEdge(pkgNode.ID, n.ID, domain.EdgeContains,
+				domain.WithConfidence(domain.Definite),
+			)
+			if err == nil {
+				result.Edges = append(result.Edges, e)
+			}
+		}
+	}
+
+	// CALLS edges: for each captured (caller, body), run calls.scm
+	// scoped to the body subtree. Each call match becomes an edge
+	// (in-file callee found in symbolByName) or an UnresolvedCall
+	// (cross-file / cross-package, resolved at promotion).
+	callsQuery, qerr := compileEmbeddedQuery(tsgo.GetLanguage(), "go", "calls")
+	if qerr != nil {
+		return domain.ParseResult{}, qerr
+	}
+	for _, c := range callers {
+		if c.body == nil {
+			continue
+		}
+		callEdges, callUnresolved := extractCallsFromBody(callsQuery, c.body, src, c.caller, c.recvName, c.recvType, symbolByName)
+		result.Edges = append(result.Edges, callEdges...)
+		result.UnresolvedCalls = append(result.UnresolvedCalls, callUnresolved...)
+	}
+
+	// Import map. extractImports already exists and is the same shape
+	// the legacy parser emits, so reuse it directly.
+	result.Imports = extractImports(root, src)
+
 	return result, nil
+}
+
+// extractCallsFromBody runs calls.scm over a single function/method
+// body and classifies each match into either a resolved CALLS edge
+// (callee found in symbolByName) or an UnresolvedCall stashed for the
+// promotion-time cross-package resolver. recvName/recvType, when
+// non-empty, identify the method's receiver so selector calls of the
+// form `s.foo()` on a known receiver bind to "Receiver.foo" in the
+// in-file map (matching parseMethodDecl naming). Dedup is per-caller
+// on (callee-name) for unresolved and (caller-id, callee-id) for edges
+// to mirror the legacy seen/seenU maps.
+func extractCallsFromBody(q *sitter.Query, body *sitter.Node, src []byte, caller *domain.Node, recvName, recvType string, symbols map[string]*domain.Node) ([]*domain.Edge, []domain.UnresolvedCall) {
+	var edges []*domain.Edge
+	var unresolved []domain.UnresolvedCall
+	seen := map[string]bool{}
+	seenU := map[string]bool{}
+
+	for _, m := range runQuery(q, body) {
+		var ref callRef
+		switch {
+		case m.node("call.identifier") != nil:
+			n := m.node("call.identifier")
+			ref = callRef{name: string(src[n.StartByte():n.EndByte()])}
+		case m.node("call.operand") != nil && m.node("call.field") != nil:
+			op := string(src[m.node("call.operand").StartByte():m.node("call.operand").EndByte()])
+			fld := string(src[m.node("call.field").StartByte():m.node("call.field").EndByte()])
+			switch {
+			case recvName != "" && recvType != "" && op == recvName:
+				// s.foo() inside a method on *Server -> Server.foo (local).
+				ref = callRef{name: recvType + "." + fld}
+			default:
+				// pkg.Foo() — package-qualified; promotion's import
+				// map binds it. Chained-selector and local-var-origin
+				// flavours are deferred to phase 3b.
+				ref = callRef{name: fld, pkg: op}
+			}
+		default:
+			continue
+		}
+
+		if ref.pkg != "" {
+			key := string(caller.ID) + callKeySep + ref.pkg + "." + ref.name
+			if seenU[key] {
+				continue
+			}
+			seenU[key] = true
+			unresolved = append(unresolved, domain.UnresolvedCall{
+				CallerID:     caller.ID,
+				CalleeName:   ref.name,
+				PkgQualifier: ref.pkg,
+			})
+			continue
+		}
+		callee, ok := symbols[ref.name]
+		if !ok {
+			key := string(caller.ID) + callKeySep + ref.name
+			if seenU[key] {
+				continue
+			}
+			seenU[key] = true
+			unresolved = append(unresolved, domain.UnresolvedCall{
+				CallerID:   caller.ID,
+				CalleeName: ref.name,
+			})
+			continue
+		}
+		key := string(caller.ID) + callKeySep + string(callee.ID)
+		if seen[key] {
+			continue
+		}
+		seen[key] = true
+		e, err := domain.NewEdge(caller.ID, callee.ID, domain.EdgeCalls,
+			domain.WithConfidence(domain.Probable),
+		)
+		if err == nil {
+			edges = append(edges, e)
+		}
+	}
+	return edges, unresolved
 }
 
 // buildFunctionNodeFromCaptures mirrors parseFunctionDecl in go.go but

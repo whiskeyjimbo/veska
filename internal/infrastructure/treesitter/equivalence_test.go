@@ -148,6 +148,66 @@ func Run() {
 }
 `,
 	},
+	{
+		name: "in-file calls",
+		// identifier-form calls bind directly to the in-file symbol map.
+		src: `package foo
+
+func one() int { return 1 }
+func two() int { return one() + one() }
+func three() int { return two() + one() }
+`,
+	},
+	{
+		name: "receiver method calls",
+		// s.foo() inside a method on *Server binds to "Server.foo".
+		src: `package foo
+
+type Server struct{}
+
+func (s *Server) helper() string { return "" }
+func (s *Server) Handle() string {
+	return s.helper()
+}
+`,
+	},
+	{
+		name: "package-qualified calls",
+		// pkg.X becomes an UnresolvedCall with PkgQualifier; the import
+		// map tells promotion which module to resolve against.
+		src: `package main
+
+import (
+	"fmt"
+	"github.com/acme/mycli/cmd"
+	flag "github.com/spf13/pflag"
+	_ "embed"
+)
+
+func main() {
+	cmd.Execute()
+	flag.Parse()
+	fmt.Println("hi")
+}
+`,
+	},
+	{
+		name: "mixed calls + nested control flow",
+		// nested if/for/switch — calls.scm should match call_expression
+		// at any depth, not just top-of-body.
+		src: `package foo
+
+func cond() bool { return true }
+func loop() {}
+func work() {
+	if cond() {
+		for i := 0; i < 3; i++ {
+			loop()
+		}
+	}
+}
+`,
+	},
 }
 
 func TestQueryParser_EquivalenceWithLegacy_Phase1(t *testing.T) {
@@ -168,6 +228,20 @@ func TestQueryParser_EquivalenceWithLegacy_Phase1(t *testing.T) {
 			queryNodes := keepKinds(queryResult.Nodes, phase1Kinds)
 			if diff := nodesDiff(legacyNodes, queryNodes); diff != "" {
 				t.Errorf("node-set divergence (phase1 kinds):\n%s", diff)
+			}
+			// Phase 3a adds import + edge + unresolved-call diffs to the
+			// harness. Each is filtered by the same phase scope: we
+			// only compare what the query parser claims to handle today
+			// so partial-phase commits don't fail equivalence on
+			// un-ported behaviour.
+			if diff := importsDiff(legacyResult.Imports, queryResult.Imports); diff != "" {
+				t.Errorf("imports divergence:\n%s", diff)
+			}
+			if diff := edgesDiff(legacyResult.Edges, queryResult.Edges); diff != "" {
+				t.Errorf("edges divergence:\n%s", diff)
+			}
+			if diff := unresolvedDiff(legacyResult.UnresolvedCalls, queryResult.UnresolvedCalls); diff != "" {
+				t.Errorf("unresolved-calls divergence:\n%s", diff)
 			}
 		})
 	}
@@ -252,4 +326,118 @@ func nodesDiff(a, b []*domain.Node) string {
 
 func formatNodesDiff(reason string, a, b any) string {
 	return fmt.Sprintf("%s\n  legacy: %+v\n  query : %+v", reason, a, b)
+}
+
+// importsDiff compares the alias → import-path map both parsers
+// produce. Order-independent (it's a map), missing-on-one-side is
+// surfaced explicitly. Both nil and empty are treated as equivalent
+// so "no imports in this fixture" doesn't trip a false positive.
+func importsDiff(a, b map[string]string) string {
+	if len(a) == 0 && len(b) == 0 {
+		return ""
+	}
+	keys := map[string]bool{}
+	for k := range a {
+		keys[k] = true
+	}
+	for k := range b {
+		keys[k] = true
+	}
+	type entry struct{ K, A, B string }
+	var diffs []entry
+	for k := range keys {
+		if a[k] != b[k] {
+			diffs = append(diffs, entry{k, a[k], b[k]})
+		}
+	}
+	if len(diffs) == 0 {
+		return ""
+	}
+	sort.Slice(diffs, func(i, j int) bool { return diffs[i].K < diffs[j].K })
+	return fmt.Sprintf("%d import entr(y/ies) differ:\n  %+v", len(diffs), diffs)
+}
+
+// edgesDiff compares result.Edges between legacy and query parsers.
+// Edges are unordered, so we hash each by (Src, Tgt, Kind) and compare
+// the multisets. Different counts of the same edge-shape do diverge —
+// the legacy parser dedups within a caller, and the query parser
+// should match that. A single divergence prints both edge sets in
+// canonical order so the difference is visually obvious.
+func edgesDiff(a, b []*domain.Edge) string {
+	type key struct{ Src, Tgt, Kind string }
+	count := func(es []*domain.Edge) map[key]int {
+		out := map[key]int{}
+		for _, e := range es {
+			if e == nil {
+				continue
+			}
+			out[key{string(e.Src), string(e.Tgt), string(e.Kind)}]++
+		}
+		return out
+	}
+	ca, cb := count(a), count(b)
+	keys := map[key]bool{}
+	for k := range ca {
+		keys[k] = true
+	}
+	for k := range cb {
+		keys[k] = true
+	}
+	type entry struct {
+		K    key
+		A, B int
+	}
+	var diffs []entry
+	for k := range keys {
+		if ca[k] != cb[k] {
+			diffs = append(diffs, entry{k, ca[k], cb[k]})
+		}
+	}
+	if len(diffs) == 0 {
+		return ""
+	}
+	sort.Slice(diffs, func(i, j int) bool {
+		if diffs[i].K.Kind != diffs[j].K.Kind {
+			return diffs[i].K.Kind < diffs[j].K.Kind
+		}
+		if diffs[i].K.Src != diffs[j].K.Src {
+			return diffs[i].K.Src < diffs[j].K.Src
+		}
+		return diffs[i].K.Tgt < diffs[j].K.Tgt
+	})
+	return fmt.Sprintf("%d edge(s) differ (counts shown as legacy/query):\n  %+v", len(diffs), diffs)
+}
+
+// unresolvedDiff compares UnresolvedCalls slices. Each UnresolvedCall
+// is unique per (CallerID, CalleeName, PkgQualifier, IsMethodCall);
+// dedup on that key for set comparison.
+func unresolvedDiff(a, b []domain.UnresolvedCall) string {
+	type key struct {
+		Caller, Callee, Pkg string
+		Method              bool
+	}
+	toSet := func(ucs []domain.UnresolvedCall) map[key]bool {
+		out := map[key]bool{}
+		for _, u := range ucs {
+			out[key{string(u.CallerID), u.CalleeName, u.PkgQualifier, u.IsMethodCall}] = true
+		}
+		return out
+	}
+	sa, sb := toSet(a), toSet(b)
+	var only []key
+	for k := range sa {
+		if !sb[k] {
+			only = append(only, k)
+		}
+	}
+	var only2 []key
+	for k := range sb {
+		if !sa[k] {
+			only2 = append(only2, k)
+		}
+	}
+	if len(only) == 0 && len(only2) == 0 {
+		return ""
+	}
+	return fmt.Sprintf("legacy-only: %+v\n  query-only: %+v", only, only2)
 }
