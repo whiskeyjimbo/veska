@@ -21,7 +21,9 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/application/changedsymbols"
 	"github.com/whiskeyjimbo/veska/internal/application/checks"
 	"github.com/whiskeyjimbo/veska/internal/application/contextpack"
+	"github.com/whiskeyjimbo/veska/internal/application/dependencies"
 	"github.com/whiskeyjimbo/veska/internal/application/embedder"
+	"github.com/whiskeyjimbo/veska/internal/application/manifest"
 	"github.com/whiskeyjimbo/veska/internal/application/revalidate"
 	"github.com/whiskeyjimbo/veska/internal/application/review"
 	"github.com/whiskeyjimbo/veska/internal/application/search"
@@ -1019,6 +1021,40 @@ func registerMCPTools(r *mcp.Registry, d mcpDeps) {
 		search.WithMetrics(d.metrics))
 	mcp.RegisterSearchTools(r, searchSvc, d.refs, d.vectors, nodes, d.savings, &repoLister{db: pools.ReadDB},
 		mcp.WithSearchGraph(graph))
+
+	// eng_list_dependencies (solov2-jlws): aggregates per-repo cross-repo
+	// edge stubs into a ranked module list with sample call sites. Versions
+	// come from go.mod via manifest.ReadGoMod; a malformed/absent go.mod
+	// returns an empty version per module rather than failing the call.
+	depsRepo := sqlite.NewDependenciesRepo(pools.ReadDB)
+	depsVersions := func(ctx context.Context, repoRoot, modulePath string) (string, error) {
+		path := filepath.Join(repoRoot, "go.mod")
+		content, rerr := os.ReadFile(path)
+		if rerr != nil {
+			// No go.mod (or unreadable) — return empty so the dep still
+			// ranks. We deliberately swallow this rather than erroring
+			// the whole List call.
+			return "", nil
+		}
+		deps, perr := manifest.ReadGoMod(content)
+		if perr != nil {
+			return "", nil
+		}
+		for _, m := range deps {
+			if m.Name == modulePath {
+				return m.Version, nil
+			}
+		}
+		return "", nil
+	}
+	depsRepoRoot := func(ctx context.Context, repoID string) (string, error) {
+		return repoRootFunc(pools.ReadDB)(ctx, repoID)
+	}
+	if depsSvc, err := dependencies.NewService(depsRepo, depsVersions, depsRepoRoot); err == nil {
+		mcp.RegisterDependenciesTool(r, depsSvc, &repoLister{db: pools.ReadDB})
+	} else {
+		mcp.RegisterDependenciesTool(r, nil, &repoLister{db: pools.ReadDB})
+	}
 }
 
 // activeTaskFunc returns a contextpack.ActiveTaskFunc reading the repo's
