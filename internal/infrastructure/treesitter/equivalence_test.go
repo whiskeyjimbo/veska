@@ -22,9 +22,17 @@ import (
 // emits. Widen this as later phases plug in more extractors; an
 // extractor whose kind isn't listed here is exempt from the diff so we
 // don't fail equivalence on un-ported behaviour.
+//
+// Phase 2 widened the set to include method / struct / interface /
+// type / variable — the query parser now emits all five.
 var phase1Kinds = []domain.NodeKind{
 	domain.KindFunction,
 	domain.KindPackage,
+	domain.KindMethod,
+	domain.KindStruct,
+	domain.KindInterface,
+	domain.KindType,
+	domain.KindVariable,
 }
 
 // equivalenceFixtures is the corpus diff'd in both parsers. Kept small
@@ -70,6 +78,74 @@ func Greet(name string, opts map[string]int) (string, error) {
 func Good() {}
 func Broken( {
 func AlsoGood() {}
+`,
+	},
+	{
+		name: "methods with pointer and value receivers",
+		src: `package foo
+
+type Counter struct{ n int }
+
+func (c *Counter) Inc() { c.n++ }
+func (c Counter) Value() int { return c.n }
+func (c *Counter) reset() { c.n = 0 }
+`,
+	},
+	{
+		name: "type kinds: struct, interface, alias",
+		src: `package foo
+
+type Point struct {
+	X, Y float64
+}
+
+type Writer interface {
+	Write(p []byte) (n int, err error)
+	Close() error
+}
+
+type StringList []string
+
+type ID = int
+`,
+	},
+	{
+		name: "top-level vars and consts",
+		src: `package foo
+
+var rootCmd = "demo"
+
+var (
+	verbose bool
+	logFile string
+	_       = 42
+)
+
+const (
+	Default = "x"
+	max     = 100
+)
+`,
+	},
+	{
+		name: "mixed declarations",
+		src: `package mixed
+
+import "fmt"
+
+type Server struct {
+	addr string
+}
+
+func (s *Server) Start() error { return nil }
+
+var defaultServer = &Server{addr: ":80"}
+
+const port = 8080
+
+func Run() {
+	fmt.Println("hi")
+}
 `,
 	},
 }
