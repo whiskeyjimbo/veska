@@ -106,7 +106,7 @@ func RegisterGraphTools(r *Registry, graph ports.GraphStorage, staging *applicat
 	resolve := cfg.resolve
 	r.MustRegister(ToolSpec{
 		Name:            "eng_find_symbol",
-		Description:     "Find nodes by symbol name, with staging overlay for in-progress changes.",
+		Description:     "Look up nodes by exact symbol name. Use when you already know the identifier (e.g. 'ParseConfig'). Unqualified names also match — 'Run' finds Server.Run, Command.Run, etc., with exact matches first. Returns a stable node_id you can feed to eng_get_call_chain, eng_get_blast_radius, eng_get_context_pack, eng_search_similar without another lookup. Prefer this over eng_search_semantic for known-identifier queries — it's deterministic and exact.",
 		IncludesStaging: true,
 		InputSchema:     findSymbolInputSchema,
 		Handler:         makeFindSymbolHandler(graph, staging, cfg.repos),
@@ -120,7 +120,7 @@ func RegisterGraphTools(r *Registry, graph ports.GraphStorage, staging *applicat
 	})
 	r.MustRegister(ToolSpec{
 		Name:            "eng_get_call_chain",
-		Description:     "BFS traversal of CALLS edges up to a configurable depth from a start node. Pass either node_id (exact) or symbol (resolved via eng_find_symbol; rejected as ambiguous when multiple matches exist). Pass direction=out (default — callees), in (callers), or both. NOTE: calls inside anonymous functions assigned to struct fields (e.g. cobra Command{Run: func(...){...}} var initializers) are not currently captured by the tree-sitter extractor and will not appear as edges — falling back to eng_search_semantic or eng_find_symbol is recommended for that pattern (solov2-vkmi).",
+		Description:     "Walk CALLS edges from a symbol. Use this — not search — when the question is 'what does this reach' (direction=out, default) or 'what calls this' (direction=in). Surfaces cross_repo_edges into other registered repos so library-symbol callers in a multi-repo workspace are visible without separate queries. Pass node_id (exact) or symbol (resolved via eng_find_symbol; ambiguity is rejected). NOTE: calls inside anonymous functions assigned to struct fields (e.g. cobra Command{Run: func(...){...}}) are not yet captured by the parser (solov2-9rc2) — a 'chained_selectors_unresolved' degraded_reason marks this case; fall back to eng_search_semantic or eng_find_symbol.",
 		IncludesStaging: false,
 		InputSchema:     getCallChainInputSchema,
 		Handler:         makeGetCallChainHandler(graph, resolve, cfg.resolveInbound, cfg.repos),
