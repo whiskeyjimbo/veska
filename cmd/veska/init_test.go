@@ -37,7 +37,7 @@ func TestInitCreatesLayout(t *testing.T) {
 	}
 
 	var buf bytes.Buffer
-	if err := runInit(context.Background(), deps, true, &buf); err != nil {
+	if err := runInit(context.Background(), deps, initFlags{yes: true}, &buf); err != nil {
 		t.Fatalf("runInit returned error: %v", err)
 	}
 
@@ -78,7 +78,7 @@ func TestInitOllamaOverrideDownExitsNonZero(t *testing.T) {
 	}
 
 	var buf bytes.Buffer
-	err := runInit(context.Background(), deps, true, &buf)
+	err := runInit(context.Background(), deps, initFlags{yes: true}, &buf)
 	if err == nil {
 		t.Fatal("expected non-nil error when forced Ollama is down, got nil")
 	}
@@ -106,7 +106,7 @@ func TestInitAutoSucceedsWithoutOllama(t *testing.T) {
 	}
 
 	var buf bytes.Buffer
-	if err := runInit(context.Background(), deps, true, &buf); err != nil {
+	if err := runInit(context.Background(), deps, initFlags{yes: true}, &buf); err != nil {
 		t.Fatalf("auto init should not fail without Ollama: %v", err)
 	}
 	if probeCalled {
@@ -140,7 +140,7 @@ func TestInitSummaryContainsKeyLines(t *testing.T) {
 	}
 
 	var buf bytes.Buffer
-	if err := runInit(context.Background(), deps, true, &buf); err != nil {
+	if err := runInit(context.Background(), deps, initFlags{yes: true}, &buf); err != nil {
 		t.Fatalf("runInit returned error: %v", err)
 	}
 
@@ -165,7 +165,7 @@ func TestInitHintsResolveToRealCommands(t *testing.T) {
 	deps := initDeps{veskaHome: tmp, probe: fakeProbe, goos: "linux"}
 
 	var buf bytes.Buffer
-	if err := runInit(context.Background(), deps, true, &buf); err != nil {
+	if err := runInit(context.Background(), deps, initFlags{yes: true}, &buf); err != nil {
 		t.Fatalf("runInit: %v", err)
 	}
 
@@ -187,5 +187,75 @@ func TestInitHintsResolveToRealCommands(t *testing.T) {
 			t.Errorf("hint %q references missing sub-command %q (available: %v)",
 				want, cmd, available)
 		}
+	}
+}
+
+// TestInitVulnPromptYesEnablesBlock pins solov2-pvyo: --yes accepts the
+// default (enabled), so the written config.toml has [vuln_source] live.
+func TestInitVulnPromptYesEnablesBlock(t *testing.T) {
+	tmp := t.TempDir()
+	fakeProbe := func(_ context.Context, _, _ string) (*embedderprobe.ProbeResult, error) {
+		return &embedderprobe.ProbeResult{Reachable: true, ModelPresent: true, EmbedOK: true, Status: "healthy"}, nil
+	}
+	deps := initDeps{veskaHome: tmp, probe: fakeProbe, goos: "linux"}
+
+	var buf bytes.Buffer
+	if err := runInit(context.Background(), deps, initFlags{yes: true}, &buf); err != nil {
+		t.Fatalf("runInit: %v", err)
+	}
+	body, err := os.ReadFile(filepath.Join(tmp, "config.toml"))
+	if err != nil {
+		t.Fatalf("read config.toml: %v", err)
+	}
+	if !strings.Contains(string(body), "\n[vuln_source]\n") {
+		t.Errorf("expected live [vuln_source] block when --yes; got:\n%s", body)
+	}
+}
+
+// TestInitVulnPromptNoVulnFlagSkipsBlock pins solov2-pvyo: --no-vuln forces
+// the disabled (commented-out) shape regardless of --yes.
+func TestInitVulnPromptNoVulnFlagSkipsBlock(t *testing.T) {
+	tmp := t.TempDir()
+	fakeProbe := func(_ context.Context, _, _ string) (*embedderprobe.ProbeResult, error) {
+		return &embedderprobe.ProbeResult{Reachable: true, ModelPresent: true, EmbedOK: true, Status: "healthy"}, nil
+	}
+	deps := initDeps{veskaHome: tmp, probe: fakeProbe, goos: "linux"}
+
+	var buf bytes.Buffer
+	if err := runInit(context.Background(), deps, initFlags{yes: true, noVuln: true}, &buf); err != nil {
+		t.Fatalf("runInit: %v", err)
+	}
+	body, err := os.ReadFile(filepath.Join(tmp, "config.toml"))
+	if err != nil {
+		t.Fatalf("read config.toml: %v", err)
+	}
+	if strings.Contains(string(body), "\n[vuln_source]\n") {
+		t.Errorf("expected commented [vuln_source] when --no-vuln; got:\n%s", body)
+	}
+	if !strings.Contains(string(body), "# [vuln_source]") {
+		t.Errorf("expected commented [vuln_source] hint when --no-vuln; got:\n%s", body)
+	}
+}
+
+// TestInitVulnPromptInteractiveNo pins solov2-pvyo: interactive 'n' answer
+// leaves vuln_source disabled.
+func TestInitVulnPromptInteractiveNo(t *testing.T) {
+	tmp := t.TempDir()
+	fakeProbe := func(_ context.Context, _, _ string) (*embedderprobe.ProbeResult, error) {
+		return &embedderprobe.ProbeResult{Reachable: true, ModelPresent: true, EmbedOK: true, Status: "healthy"}, nil
+	}
+	deps := initDeps{veskaHome: tmp, probe: fakeProbe, goos: "linux"}
+
+	var buf bytes.Buffer
+	flags := initFlags{stdin: strings.NewReader("n\n")}
+	if err := runInit(context.Background(), deps, flags, &buf); err != nil {
+		t.Fatalf("runInit: %v", err)
+	}
+	body, err := os.ReadFile(filepath.Join(tmp, "config.toml"))
+	if err != nil {
+		t.Fatalf("read config.toml: %v", err)
+	}
+	if strings.Contains(string(body), "\n[vuln_source]\n") {
+		t.Errorf("expected commented [vuln_source] after 'n' answer; got:\n%s", body)
 	}
 }
