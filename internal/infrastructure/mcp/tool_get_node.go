@@ -31,21 +31,29 @@ func makeGetNodeHandler(graph ports.GraphStorage, staging *application.StagingAr
 		}
 
 		// node_id is a content-hashed sha256, globally unique by construction,
-		// so repo_id+branch are not needed to locate the node. When both are
-		// supplied we still take the scoped path because that is the only one
-		// that observes a staging-overlay version. When either is omitted, fall
-		// back to a cross-(repo,branch) lookup (solov2-v4ob).
+		// so repo_id+branch are not needed to locate the node. The scoped path
+		// is taken whenever the caller supplied repo_id — branch defaults to
+		// that repo's active_branch (solov2-hb2s). Previously, supplying
+		// repo_id without branch silently dropped to the cross-repo fallback
+		// and ignored repo_id; an unknown or mistyped repo_id never surfaced
+		// to the caller. Only when both repo_id and branch are absent does
+		// the handler take the global FindNodeByID path (solov2-v4ob).
 		var (
 			node            *domain.Node
 			err             error
 			includedStaging bool
 		)
-		if p.RepoID != "" && p.Branch != "" {
+		if p.RepoID != "" {
 			repoID, rpcErr := resolveRepoID(ctx, repos, p.RepoID)
 			if rpcErr != nil {
 				return nil, rpcErr
 			}
 			p.RepoID = repoID
+			branch, rpcErr := resolveBranchOrActive(ctx, repos, p.RepoID, p.Branch)
+			if rpcErr != nil {
+				return nil, rpcErr
+			}
+			p.Branch = branch
 			node, err = graph.GetNode(ctx, p.RepoID, p.Branch, domain.NodeID(p.NodeID))
 			if err != nil {
 				return nil, &RPCError{Code: CodeInternalError, Message: fmt.Sprintf("graph lookup failed: %v", err)}
