@@ -728,7 +728,11 @@ func looksLikeRepoID(arg string) bool {
 		return false
 	}
 	for _, c := range arg {
-		if !((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F')) {
+		switch {
+		case c >= '0' && c <= '9':
+		case c >= 'a' && c <= 'f':
+		case c >= 'A' && c <= 'F':
+		default:
 			return false
 		}
 	}
