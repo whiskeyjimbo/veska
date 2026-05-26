@@ -1,9 +1,11 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -69,9 +71,16 @@ query genuinely matched nothing — don't loop.
 // agentFlavor describes a known AI-agent harness: the canonical name
 // the user passes via --agent, and the relative file path under the
 // project root where its instruction snippet lives.
+//
+// mcpConfigPath, when non-empty, points at a JSON file the harness
+// reads to discover MCP servers (`.mcp.json` for Claude Code project
+// scope, `.cursor/mcp.json` for Cursor). On `veska init --agent X`,
+// veska merges itself into that file's mcpServers map — idempotent,
+// preserves other servers (solov2-zo0w).
 type agentFlavor struct {
-	name string
-	path string
+	name          string
+	path          string
+	mcpConfigPath string // empty when the harness doesn't speak MCP via a JSON config
 }
 
 // agentFlavors are the harnesses solov2-m81 promises to support. The
@@ -79,10 +88,10 @@ type agentFlavor struct {
 // location at the time of writing; harness vendors may move these,
 // in which case we update the table.
 var agentFlavors = []agentFlavor{
-	{name: "claude", path: "CLAUDE.md"},
+	{name: "claude", path: "CLAUDE.md", mcpConfigPath: ".mcp.json"},
 	{name: "codex", path: "AGENTS.md"},
 	{name: "opencode", path: "AGENTS.md"},
-	{name: "cursor", path: ".cursor/rules/veska.mdc"},
+	{name: "cursor", path: ".cursor/rules/veska.mdc", mcpConfigPath: ".cursor/mcp.json"},
 	{name: "copilot", path: ".github/copilot-instructions.md"},
 	{name: "gemini", path: "GEMINI.md"},
 	{name: "kiro", path: ".kiro/steering/veska.md"},
@@ -129,19 +138,38 @@ func writeAgentSnippet(rootDir, flavor string, out io.Writer, updateGitignore bo
 		return fmt.Errorf("read %s: %w", target, err)
 	}
 
-	if strings.Contains(string(existing), agentSnippetSentinel) {
+	instructionsAlreadyPresent := strings.Contains(string(existing), agentSnippetSentinel)
+	if instructionsAlreadyPresent {
 		fmt.Fprintf(out, "veska: %s already present at %s\n", flavor, target)
-		return nil
+	} else {
+		body := buildAppendBody(existing, agentSnippetBody)
+		if err := os.WriteFile(target, body, 0o644); err != nil {
+			return fmt.Errorf("write %s: %w", target, err)
+		}
+		if len(existing) == 0 {
+			fmt.Fprintf(out, "veska: wrote %s instructions to %s\n", flavor, target)
+		} else {
+			fmt.Fprintf(out, "veska: appended %s instructions to %s\n", flavor, target)
+		}
 	}
 
-	body := buildAppendBody(existing, agentSnippetBody)
-	if err := os.WriteFile(target, body, 0o644); err != nil {
-		return fmt.Errorf("write %s: %w", target, err)
-	}
-	if len(existing) == 0 {
-		fmt.Fprintf(out, "veska: wrote %s instructions to %s\n", flavor, target)
-	} else {
-		fmt.Fprintf(out, "veska: appended %s instructions to %s\n", flavor, target)
+	// solov2-zo0w: when the harness reads an MCP-server config JSON,
+	// merge veska in so the user doesn't have to hand-edit. Idempotent:
+	// preserves other servers; skips when veska is already registered
+	// with the same command. Non-fatal on error — the instruction file
+	// (the primary deliverable) is already written.
+	if f.mcpConfigPath != "" {
+		mcpBin, err := resolveVeskaMcpPath()
+		if err != nil {
+			fmt.Fprintf(out, "veska: warning: could not resolve veska-mcp path for MCP config: %v\n", err)
+		} else {
+			cfgPath := filepath.Join(rootDir, f.mcpConfigPath)
+			if action, err := ensureMcpServerEntry(cfgPath, "veska", mcpBin); err != nil {
+				fmt.Fprintf(out, "veska: warning: could not update %s: %v\n", cfgPath, err)
+			} else {
+				fmt.Fprintf(out, "veska: %s %s in %s\n", action, "veska MCP server", cfgPath)
+			}
+		}
 	}
 
 	// Opt-in .gitignore management (solov2-zm6i): silently modifying a tracked
@@ -158,6 +186,90 @@ func writeAgentSnippet(rootDir, flavor string, out io.Writer, updateGitignore bo
 		fmt.Fprintln(out, "veska: tip: pass --update-gitignore to also add a veska-managed .gitignore block (covers generated artifacts under docs/veska/)")
 	}
 	return nil
+}
+
+// resolveVeskaMcpPath returns the absolute path to the veska-mcp binary
+// that the running veska invocation should advertise to MCP harnesses.
+// The lookup goes: PATH (the binary is installed), then the running
+// binary's directory (veska-mcp sits next to veska in dev clones and in
+// the release tarball). solov2-zo0w.
+func resolveVeskaMcpPath() (string, error) {
+	if p, err := exec.LookPath("veska-mcp"); err == nil {
+		// Resolve to an absolute path so the config doesn't break when
+		// the user's PATH changes (e.g. a different shell session).
+		if abs, aerr := filepath.Abs(p); aerr == nil {
+			return abs, nil
+		}
+		return p, nil
+	}
+	exe, err := os.Executable()
+	if err != nil {
+		return "", fmt.Errorf("locate veska binary: %w", err)
+	}
+	candidate := filepath.Join(filepath.Dir(exe), "veska-mcp")
+	if _, err := os.Stat(candidate); err == nil {
+		return candidate, nil
+	}
+	return "", fmt.Errorf("veska-mcp not found on PATH or alongside %s", exe)
+}
+
+// ensureMcpServerEntry merges {name: {command, args:[]}} into cfgPath's
+// mcpServers map. Creates cfgPath when absent; preserves unrelated keys
+// and other server entries when present. Returns the verb used for the
+// status line ("registered", "updated", "already registered"). Errors
+// on JSON parse failure — corruption is surprising and we'd rather the
+// user fix it than silently overwrite their file.
+func ensureMcpServerEntry(cfgPath, name, command string) (string, error) {
+	if err := os.MkdirAll(filepath.Dir(cfgPath), 0o755); err != nil {
+		return "", fmt.Errorf("create dir for %s: %w", cfgPath, err)
+	}
+	var cfg map[string]any
+	existing, err := os.ReadFile(cfgPath)
+	if err != nil && !os.IsNotExist(err) {
+		return "", fmt.Errorf("read %s: %w", cfgPath, err)
+	}
+	if len(existing) > 0 {
+		if uerr := json.Unmarshal(existing, &cfg); uerr != nil {
+			return "", fmt.Errorf("parse %s: %w", cfgPath, uerr)
+		}
+	}
+	if cfg == nil {
+		cfg = map[string]any{}
+	}
+	serversRaw, ok := cfg["mcpServers"]
+	var servers map[string]any
+	if ok {
+		if m, ismap := serversRaw.(map[string]any); ismap {
+			servers = m
+		} else {
+			return "", fmt.Errorf("%s mcpServers is not a JSON object", cfgPath)
+		}
+	} else {
+		servers = map[string]any{}
+		cfg["mcpServers"] = servers
+	}
+
+	verb := "registered"
+	if prior, ok := servers[name].(map[string]any); ok {
+		if prior["command"] == command {
+			return "already registered", nil
+		}
+		verb = "updated"
+	}
+	servers[name] = map[string]any{
+		"command": command,
+		"args":    []string{},
+	}
+
+	out, err := json.MarshalIndent(cfg, "", "  ")
+	if err != nil {
+		return "", fmt.Errorf("marshal %s: %w", cfgPath, err)
+	}
+	out = append(out, '\n')
+	if err := os.WriteFile(cfgPath, out, 0o644); err != nil {
+		return "", fmt.Errorf("write %s: %w", cfgPath, err)
+	}
+	return verb, nil
 }
 
 // gitignoreSentinelBegin / gitignoreSentinelEnd bracket the veska-managed
