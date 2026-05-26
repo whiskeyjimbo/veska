@@ -268,6 +268,78 @@ func main() {
 	}
 }
 
+// TestParseFile_ChainedSelectorMethodCall covers solov2-9rc2 phase A:
+// a local variable assigned from a package-qualified constructor whose
+// subsequent method calls were previously dropped by the parser
+// (`g := greetlib.New(...); g.Hello(...)` only produced Run→New, not
+// Run→Hello). The parser must now emit an UnresolvedCall with
+// IsMethodCall=true so promotion can bind by method name within the
+// originating package.
+func TestParseFile_ChainedSelectorMethodCall(t *testing.T) {
+	src := []byte(`package runner
+
+import "github.com/jrose/greetlib"
+
+func Run(name string) string {
+	g := greetlib.New("Hello")
+	return g.Hello(name)
+}
+`)
+	p := treesitter.NewGoParser()
+	result, err := p.ParseFile(context.Background(), repoID, filePath, src)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	var sawNew, sawHello bool
+	var helloIsMethod bool
+	for _, uc := range result.UnresolvedCalls {
+		switch {
+		case uc.PkgQualifier == "greetlib" && uc.CalleeName == "New" && !uc.IsMethodCall:
+			sawNew = true
+		case uc.PkgQualifier == "greetlib" && uc.CalleeName == "Hello":
+			sawHello = true
+			helloIsMethod = uc.IsMethodCall
+		}
+	}
+	if !sawNew {
+		t.Errorf("UnresolvedCalls missing plain pkg call greetlib.New: %+v", result.UnresolvedCalls)
+	}
+	if !sawHello {
+		t.Errorf("UnresolvedCalls missing chained-selector call g.Hello (greetlib): %+v", result.UnresolvedCalls)
+	}
+	if sawHello && !helloIsMethod {
+		t.Errorf("g.Hello must be flagged IsMethodCall=true so the resolver looks up methods by name in greetlib; got false")
+	}
+}
+
+// TestParseFile_ChainedSelector_UnknownOperandStillFallsThrough guards
+// the negative case: a selector whose operand is NOT a tracked local
+// variable (e.g. a function parameter, a struct field, an unrecognised
+// expression) must keep the prior behaviour — treated as a package
+// qualifier with IsMethodCall=false. Otherwise we'd wrongly bind real
+// pkg.Foo() calls to method-name lookups.
+func TestParseFile_ChainedSelector_UnknownOperandStillFallsThrough(t *testing.T) {
+	src := []byte(`package main
+
+import "fmt"
+
+func main(arg string) {
+	fmt.Println(arg)
+}
+`)
+	p := treesitter.NewGoParser()
+	result, err := p.ParseFile(context.Background(), repoID, filePath, src)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	for _, uc := range result.UnresolvedCalls {
+		if uc.CalleeName == "Println" && uc.IsMethodCall {
+			t.Errorf("fmt.Println must remain a plain pkg call (IsMethodCall=false); got %+v", uc)
+		}
+	}
+}
+
 // TestParseFile_ReceiverSelectorCallsEdge pins solov2-q9p: when a method
 // on *Server has body 's.foo()', the parser emits a CALLS edge from
 // Server.Bar -> Server.foo. Without this, idiomatic Go (s.x() / s.y())
