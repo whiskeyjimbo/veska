@@ -36,6 +36,12 @@ type initFlags struct {
 	yes    bool // --yes: auto-accept all prompts with the default answer.
 	noVuln bool // --no-vuln: force vuln_source disabled, skip the prompt.
 	stdin  io.Reader
+	// interactive reports whether stdin is a TTY. Non-interactive callers
+	// (CI, agent harnesses, install pipelines) get the default answer
+	// silently — the prompt is suppressed entirely and the chosen default
+	// is echoed in the summary so the caller can tell what happened
+	// (solov2-mgyy).
+	interactive bool
 }
 
 // runInit performs the full first-run initialisation flow:
@@ -100,6 +106,19 @@ func runInit(ctx context.Context, deps initDeps, flags initFlags, out io.Writer)
 	return nil
 }
 
+// stdinIsInteractive reports whether os.Stdin is a TTY. Used to decide
+// whether to prompt or silently take the default during `veska init`
+// (solov2-mgyy). On any stat error we conservatively report false — the
+// quiet, non-interactive default behaviour is the right answer when the
+// shape of stdin can't be determined.
+func stdinIsInteractive() bool {
+	info, err := os.Stdin.Stat()
+	if err != nil {
+		return false
+	}
+	return (info.Mode() & os.ModeCharDevice) != 0
+}
+
 // resolveVulnChoice asks the user whether to enable OSV vulnerability scanning
 // at init time (solov2-pvyo). Non-interactive paths short-circuit:
 //   - --no-vuln → always disabled.
@@ -111,6 +130,14 @@ func resolveVulnChoice(flags initFlags, out io.Writer) (bool, error) {
 		return false, nil
 	}
 	if flags.yes || flags.stdin == nil {
+		return true, nil
+	}
+	// solov2-mgyy: when stdin isn't a TTY (CI, piped install, agent
+	// harness) skip the prompt entirely and take the default. Echo what
+	// we chose so the caller can read the summary and know vuln scanning
+	// is on without inspecting config.toml.
+	if !flags.interactive {
+		fmt.Fprintln(out, "OSV vulnerability scanning: enabled (default; non-interactive stdin)")
 		return true, nil
 	}
 	fmt.Fprint(out, "Enable OSV vulnerability scanning? [Y/n] ")
@@ -273,7 +300,12 @@ func initCmd() *cobra.Command {
 				probe:     embedderprobe.Probe,
 				goos:      runtime.GOOS,
 			}
-			flags := initFlags{yes: yes, noVuln: noVuln, stdin: cmd.InOrStdin()}
+			flags := initFlags{
+				yes:         yes,
+				noVuln:      noVuln,
+				stdin:       cmd.InOrStdin(),
+				interactive: stdinIsInteractive(),
+			}
 			return runInit(cmd.Context(), deps, flags, cmd.OutOrStdout())
 		},
 	}
