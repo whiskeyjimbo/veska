@@ -11,6 +11,51 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/embedderprobe"
 )
 
+// TestResolveVulnChoice_NonInteractiveStdinSkipsPromptAndEchoes pins
+// solov2-mgyy: when stdin is non-TTY the prompt must NOT be printed (it
+// can't be answered) and the chosen default must be echoed so the
+// caller can read the summary and tell vuln scanning was enabled.
+func TestResolveVulnChoice_NonInteractiveStdinSkipsPromptAndEchoes(t *testing.T) {
+	var out bytes.Buffer
+	enabled, err := resolveVulnChoice(initFlags{
+		stdin:       strings.NewReader(""),
+		interactive: false,
+	}, &out)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !enabled {
+		t.Errorf("expected default-on for non-interactive, got disabled")
+	}
+	got := out.String()
+	if strings.Contains(got, "[Y/n]") {
+		t.Errorf("non-interactive path must NOT print the prompt; got: %q", got)
+	}
+	if !strings.Contains(got, "OSV") || !strings.Contains(got, "enabled") {
+		t.Errorf("non-interactive path must echo the chosen default; got: %q", got)
+	}
+}
+
+// TestResolveVulnChoice_InteractiveStillPrompts guards that the prompt
+// path is unchanged for real TTY callers — `y\n` still accepts and
+// `n\n` still declines.
+func TestResolveVulnChoice_InteractiveStillPrompts(t *testing.T) {
+	var out bytes.Buffer
+	enabled, err := resolveVulnChoice(initFlags{
+		stdin:       strings.NewReader("n\n"),
+		interactive: true,
+	}, &out)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if enabled {
+		t.Errorf("expected disabled for 'n' answer, got enabled")
+	}
+	if !strings.Contains(out.String(), "[Y/n]") {
+		t.Errorf("interactive path must print the prompt; got: %q", out.String())
+	}
+}
+
 func TestInitCmdName(t *testing.T) {
 	cmd := initCmd()
 	if cmd.Name() != "init" {
@@ -247,7 +292,7 @@ func TestInitVulnPromptInteractiveNo(t *testing.T) {
 	deps := initDeps{veskaHome: tmp, probe: fakeProbe, goos: "linux"}
 
 	var buf bytes.Buffer
-	flags := initFlags{stdin: strings.NewReader("n\n")}
+	flags := initFlags{stdin: strings.NewReader("n\n"), interactive: true}
 	if err := runInit(context.Background(), deps, flags, &buf); err != nil {
 		t.Fatalf("runInit: %v", err)
 	}
