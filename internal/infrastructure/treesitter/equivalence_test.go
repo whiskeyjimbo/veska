@@ -208,6 +208,94 @@ func work() {
 }
 `,
 	},
+	{
+		name: "local-var origin chained call (9rc2 phase A)",
+		// v := pkg.New(...); v.Method() must emit an UnresolvedCall
+		// with PkgQualifier=pkg, CalleeName=Method, IsMethodCall=true.
+		src: `package runner
+
+import "github.com/jrose/greetlib"
+
+func Run(name string) string {
+	g := greetlib.New("Hello")
+	return g.Hello(name)
+}
+`,
+	},
+	{
+		name: "same-package struct field method call (9rc2 phase E v1)",
+		// p.staging.Snapshot() resolves to Staging.Snapshot via the
+		// in-file symbol map.
+		src: `package app
+
+type Staging struct{}
+
+func (s *Staging) Snapshot() string { return "" }
+
+type Promoter struct {
+	staging *Staging
+}
+
+func (p *Promoter) Promote() string {
+	return p.staging.Snapshot()
+}
+`,
+	},
+	{
+		name: "cross-package interface field call (9rc2 phase E v2)",
+		// p.audit.Write() emits UnresolvedCall PkgQualifier=ports,
+		// CalleeName=Write, IsMethodCall=true.
+		src: `package app
+
+import "github.com/example/ports"
+
+type Promoter struct {
+	audit ports.AuditWriter
+}
+
+func (p *Promoter) Promote() {
+	p.audit.Write("event")
+}
+`,
+	},
+	{
+		name: "anonymous-function call in top-level var (cobra-style)",
+		// extractTopLevelVarInitCalls attributes calls inside
+		// function_literals assigned to top-level vars to the package
+		// node. The two function_literals here each contain one
+		// identifier call (serveRoot, validate) — legacy emits two
+		// CALLS edges from the cli package node; phase 3c covers this
+		// shape on the query side.
+		src: `package cli
+
+func serveRoot() {}
+func validate() bool { return true }
+
+var (
+	root = func() { serveRoot() }
+	chk  = func() bool { return validate() }
+)
+`,
+	},
+	{
+		name: "same-package interface field call (9rc2 phase E v2)",
+		// Interface methods become KindMethod nodes named
+		// IfaceName.MethodName; p.store.Promote() resolves locally.
+		src: `package app
+
+type PromotionStore interface {
+	Promote() error
+}
+
+type Promoter struct {
+	store PromotionStore
+}
+
+func (p *Promoter) Promote() error {
+	return p.store.Promote()
+}
+`,
+	},
 }
 
 func TestQueryParser_EquivalenceWithLegacy_Phase1(t *testing.T) {

@@ -203,6 +203,11 @@ func (p *GoQueryParser) ParseFile(ctx context.Context, repoID, path string, src 
 	// scoped to the body subtree. Each call match becomes an edge
 	// (in-file callee found in symbolByName) or an UnresolvedCall
 	// (cross-file / cross-package, resolved at promotion).
+	//
+	// Struct field types are scanned once per file (solov2-9rc2 phase E)
+	// so chained-selector calls `s.field.M()` can look up the field's
+	// declared type. The map is empty for files with no struct decls.
+	structFields := collectStructFields(root, src)
 	callsQuery, qerr := compileEmbeddedQuery(tsgo.GetLanguage(), "go", "calls")
 	if qerr != nil {
 		return domain.ParseResult{}, qerr
@@ -211,7 +216,7 @@ func (p *GoQueryParser) ParseFile(ctx context.Context, repoID, path string, src 
 		if c.body == nil {
 			continue
 		}
-		callEdges, callUnresolved := extractCallsFromBody(callsQuery, c.body, src, c.caller, c.recvName, c.recvType, symbolByName)
+		callEdges, callUnresolved := extractCallsFromBody(callsQuery, c.body, src, c.caller, c.recvName, c.recvType, symbolByName, structFields)
 		result.Edges = append(result.Edges, callEdges...)
 		result.UnresolvedCalls = append(result.UnresolvedCalls, callUnresolved...)
 	}
@@ -232,11 +237,16 @@ func (p *GoQueryParser) ParseFile(ctx context.Context, repoID, path string, src 
 // in-file map (matching parseMethodDecl naming). Dedup is per-caller
 // on (callee-name) for unresolved and (caller-id, callee-id) for edges
 // to mirror the legacy seen/seenU maps.
-func extractCallsFromBody(q *sitter.Query, body *sitter.Node, src []byte, caller *domain.Node, recvName, recvType string, symbols map[string]*domain.Node) ([]*domain.Edge, []domain.UnresolvedCall) {
+func extractCallsFromBody(q *sitter.Query, body *sitter.Node, src []byte, caller *domain.Node, recvName, recvType string, symbols map[string]*domain.Node, structFields map[string]map[string]fieldType) ([]*domain.Edge, []domain.UnresolvedCall) {
 	var edges []*domain.Edge
 	var unresolved []domain.UnresolvedCall
 	seen := map[string]bool{}
 	seenU := map[string]bool{}
+
+	// Per-body local-var origins (solov2-9rc2 phase A): `v := pkg.New(...)`
+	// produces v→pkg so subsequent `v.X()` chained-selector calls are
+	// recognised as method calls on a value from pkg.
+	localOrigins := collectLocalVarOrigins(body, src)
 
 	for _, m := range runQuery(q, body) {
 		var ref callRef
@@ -244,6 +254,35 @@ func extractCallsFromBody(q *sitter.Query, body *sitter.Node, src []byte, caller
 		case m.node("call.identifier") != nil:
 			n := m.node("call.identifier")
 			ref = callRef{name: string(src[n.StartByte():n.EndByte()])}
+		case m.node("call.chain_operand") != nil:
+			// Chained selector: outer.inner.Method(). Classify based on
+			// the inner operand (the leftmost identifier) — either it's
+			// the method receiver (struct field method call, phase E)
+			// or a local variable assigned from pkg.X (phase A).
+			outerOp := string(src[m.node("call.chain_operand").StartByte():m.node("call.chain_operand").EndByte()])
+			innerFld := string(src[m.node("call.chain_field").StartByte():m.node("call.chain_field").EndByte()])
+			methodName := string(src[m.node("call.field").StartByte():m.node("call.field").EndByte()])
+			switch {
+			case recvName != "" && recvType != "" && outerOp == recvName:
+				// `s.field.Method()` — phase E. Look up the field on
+				// the receiver type. Same-package concrete struct
+				// resolves to FieldType.Method via the in-file symbol
+				// map; cross-package emits IsMethodCall=true.
+				if fields, ok := structFields[recvType]; ok {
+					if ft, ok := fields[innerFld]; ok {
+						if ft.pkg == "" {
+							ref = callRef{name: ft.name + "." + methodName}
+						} else {
+							ref = callRef{name: methodName, pkg: ft.pkg, method: true}
+						}
+					}
+				}
+			case localOrigins[outerOp] != "":
+				// `v.M()` follows-through to `local.X.M()` only when
+				// the legacy parser also drops it — neither path
+				// captures the chained variant of local-var origins.
+				// We do nothing here so phase 3b stays equivalent.
+			}
 		case m.node("call.operand") != nil && m.node("call.field") != nil:
 			op := string(src[m.node("call.operand").StartByte():m.node("call.operand").EndByte()])
 			fld := string(src[m.node("call.field").StartByte():m.node("call.field").EndByte()])
@@ -251,18 +290,30 @@ func extractCallsFromBody(q *sitter.Query, body *sitter.Node, src []byte, caller
 			case recvName != "" && recvType != "" && op == recvName:
 				// s.foo() inside a method on *Server -> Server.foo (local).
 				ref = callRef{name: recvType + "." + fld}
+			case localOrigins[op] != "":
+				// v.Method() where v := pkg.New(...) — phase A.
+				ref = callRef{name: fld, pkg: localOrigins[op], method: true}
 			default:
-				// pkg.Foo() — package-qualified; promotion's import
-				// map binds it. Chained-selector and local-var-origin
-				// flavours are deferred to phase 3b.
+				// pkg.Foo() — package-qualified.
 				ref = callRef{name: fld, pkg: op}
 			}
 		default:
 			continue
 		}
 
+		// An unset ref (empty name) means classification skipped — the
+		// chained-selector branch dropped a shape phase 3b doesn't
+		// handle yet.
+		if ref.name == "" {
+			continue
+		}
+
 		if ref.pkg != "" {
-			key := string(caller.ID) + callKeySep + ref.pkg + "." + ref.name
+			suffix := ""
+			if ref.method {
+				suffix = "@method"
+			}
+			key := string(caller.ID) + callKeySep + ref.pkg + "." + ref.name + suffix
 			if seenU[key] {
 				continue
 			}
@@ -271,6 +322,7 @@ func extractCallsFromBody(q *sitter.Query, body *sitter.Node, src []byte, caller
 				CallerID:     caller.ID,
 				CalleeName:   ref.name,
 				PkgQualifier: ref.pkg,
+				IsMethodCall: ref.method,
 			})
 			continue
 		}
