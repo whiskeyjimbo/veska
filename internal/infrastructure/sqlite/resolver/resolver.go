@@ -119,6 +119,101 @@ func moduleRelDir(filePath, root string) string {
 	return dir
 }
 
+// ResolveStubsTargetingNode is the reverse of ResolveStubsForNode: given a
+// node N (a potential CALLEE), it finds every cross_repo_edge_stub whose
+// forward resolution would land on N, and returns one ResolvedEdge per
+// match with DstNodeID=N. This makes "who calls this library symbol?"
+// answerable across repo boundaries (solov2-80hh).
+//
+// Mechanics: stubs are keyed by (language, module_path, symbol_path) at the
+// import-path level — N's import path is N.repo's module_path joined with
+// N's subpackage directory (relative to the repo root). We query the
+// idx_stubs_resolver index, then for each match run the forward resolver
+// and keep edges whose DstNodeID equals N's node_id. Branch matching
+// follows the same model as forward resolution: the stub's branch is the
+// SRC repo's, the dst node carries its own branch, so we filter on the
+// caller's branch arg (the branch of N's containing repo) rather than the
+// stub branch.
+func ResolveStubsTargetingNode(ctx context.Context, db *sql.DB, dstNodeID, branch string) ([]ResolvedEdge, error) {
+	// Step 1: load N's identity (repo_id, file_path, symbol_path, language).
+	const nodeQ = `
+		SELECT n.symbol_path, n.language, n.file_path, n.repo_id, r.module_path, r.root_path
+		FROM nodes n
+		JOIN repos r ON r.repo_id = n.repo_id
+		WHERE n.node_id = ? AND n.branch = ?
+		LIMIT 1`
+	var symPath, lang, filePath, repoID, modulePath, rootPath string
+	if err := db.QueryRowContext(ctx, nodeQ, dstNodeID, branch).
+		Scan(&symPath, &lang, &filePath, &repoID, &modulePath, &rootPath); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("resolver: load dst node %s@%s: %w", dstNodeID, branch, err)
+	}
+	if modulePath == "" {
+		// Repo has no module_path indexed (non-Go module, or never set);
+		// nothing can reverse-resolve to this node by import-path matching.
+		return nil, nil
+	}
+
+	// N's import path = repo.module_path + ("/" + subDir if any).
+	importPath := modulePath
+	if subDir := moduleRelDir(filePath, rootPath); subDir != "" {
+		importPath = modulePath + "/" + subDir
+	}
+
+	// Step 2: fetch candidate stubs. Filter by repo_id != N's repo so we
+	// only return TRUE cross-repo callers; an intra-repo stub (rare; only
+	// happens when a repo imports its own module path before promotion
+	// catches up) is not a cross-repo edge for blast purposes.
+	const stubQ = `
+		SELECT stub_id, branch, src_node_id, kind, module_path, symbol_path, language
+		FROM cross_repo_edge_stubs
+		WHERE language = ? AND module_path = ? AND symbol_path = ?
+		  AND repo_id != ?`
+	rows, err := db.QueryContext(ctx, stubQ, lang, importPath, symPath, repoID)
+	if err != nil {
+		return nil, fmt.Errorf("resolver: fetch inbound stubs for node %s: %w", dstNodeID, err)
+	}
+	defer rows.Close()
+
+	type candidate struct {
+		stub      CrossRepoStub
+		srcBranch string
+	}
+	var cands []candidate
+	for rows.Next() {
+		var c candidate
+		if err := rows.Scan(&c.stub.StubID, &c.srcBranch, &c.stub.SrcNodeID, &c.stub.Kind, &c.stub.ModulePath, &c.stub.SymbolPath, &c.stub.Language); err != nil {
+			return nil, fmt.Errorf("resolver: scan inbound stub row: %w", err)
+		}
+		cands = append(cands, c)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("resolver: iterate inbound stubs: %w", err)
+	}
+
+	// Step 3: forward-resolve each candidate and keep edges that land on
+	// our target node. The forward resolver does the subpackage-dir
+	// disambiguation, so module_path collisions between repos
+	// (rare but possible) are correctly filtered.
+	var edges []ResolvedEdge
+	for _, c := range cands {
+		edge, err := ResolveCrossRepoEdge(ctx, db, c.stub, false)
+		if err != nil {
+			return nil, err
+		}
+		if edge == nil || edge.DstNodeID != dstNodeID {
+			continue
+		}
+		// Flip the perspective: blast/call_chain see this as an edge
+		// pointing IN to dstNodeID. Caller (a callers-direction blast or
+		// a call_chain direction=in) treats the response as inbound.
+		edges = append(edges, *edge)
+	}
+	return edges, nil
+}
+
 // ResolveStubsForNode fetches all cross_repo_edge_stubs whose src_node_id
 // matches nodeID on the given branch, then resolves each with a one-hop lookup.
 // Stubs that do not resolve to an indexed node are silently dropped.

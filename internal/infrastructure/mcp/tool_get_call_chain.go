@@ -31,7 +31,7 @@ type getCallChainParams struct {
 
 const maxCallChainDepth = 10
 
-func makeGetCallChainHandler(graph ports.GraphStorage, resolve ResolveFunc, repos application.RepoLister) ToolHandler {
+func makeGetCallChainHandler(graph ports.GraphStorage, resolve ResolveFunc, resolveInbound InboundResolveFunc, repos application.RepoLister) ToolHandler {
 	return func(ctx context.Context, _ domain.Actor, raw json.RawMessage) (any, *RPCError) {
 		var p getCallChainParams
 		if err := json.Unmarshal(raw, &p); err != nil {
@@ -114,7 +114,10 @@ func makeGetCallChainHandler(graph ports.GraphStorage, resolve ResolveFunc, repo
 			queue = queue[1:]
 
 			// Resolve cross-repo stubs for each visited node (including start).
-			if resolve != nil {
+			// Outbound resolution is gated by dirOut (the node is a caller);
+			// inbound resolution by dirIn (the node is a callee). solov2-80hh
+			// adds the inbound side for parity with eng_get_blast_radius.
+			if resolve != nil && dirOut {
 				resolved, resolveErr := resolve(ctx, string(item.id), p.Branch, p.ExpandCrossRepo)
 				if resolveErr == nil {
 					for _, re := range resolved {
@@ -129,6 +132,21 @@ func makeGetCallChainHandler(graph ports.GraphStorage, resolve ResolveFunc, repo
 					}
 				}
 				// Silent miss: resolveErr != nil is ignored; continue BFS.
+			}
+			if resolveInbound != nil && dirIn {
+				resolved, resolveErr := resolveInbound(ctx, string(item.id), p.Branch)
+				if resolveErr == nil {
+					for _, re := range resolved {
+						crossRepoEdges = append(crossRepoEdges, CrossRepoEdge{
+							SrcNodeID: re.SrcNodeID,
+							DstNodeID: re.DstNodeID,
+							DstRepoID: re.DstRepoID,
+							DstBranch: re.DstBranch,
+							Kind:      re.Kind,
+							CrossRepo: true,
+						})
+					}
+				}
 			}
 
 			if item.hops >= depth {

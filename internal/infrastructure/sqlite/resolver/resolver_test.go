@@ -297,3 +297,85 @@ func TestResolveStubsExpandFalse(t *testing.T) {
 		t.Errorf("mismatch: default=%+v expand=%+v", d, e)
 	}
 }
+
+// TestResolveStubsTargetingNode_FindsInboundCallers covers the solov2-80hh
+// happy path: a library symbol N in repo-b has a stub in repo-a pointing
+// at it. The reverse resolver must surface that stub as an inbound edge
+// (DstNodeID == N), enabling blast_radius/call_chain on a library symbol
+// to find consumers in other repos.
+func TestResolveStubsTargetingNode_FindsInboundCallers(t *testing.T) {
+	db := setupTestDB(t)
+
+	// Library repo with one exported symbol.
+	seedRepo(t, db, "repo-b", "github.com/example/lib", "main")
+	seedNode(t, db, "node-b-target", "main", "repo-b", "go", "func", "pkg.Foo", "file.go")
+
+	// Consumer repo with a stub pointing at lib.pkg.Foo.
+	seedRepo(t, db, "repo-a", "github.com/example/app", "main")
+	seedNode(t, db, "node-a-caller", "main", "repo-a", "go", "func", "main.Run", "main.go")
+	seedStub(t, db, "stub-1", "main", "repo-a", "node-a-caller", "calls",
+		"github.com/example/lib", "pkg.Foo", "go")
+
+	edges, err := resolver.ResolveStubsTargetingNode(context.Background(), db, "node-b-target", "main")
+	if err != nil {
+		t.Fatalf("ResolveStubsTargetingNode: %v", err)
+	}
+	if len(edges) != 1 {
+		t.Fatalf("want 1 inbound edge, got %d: %+v", len(edges), edges)
+	}
+	e := edges[0]
+	if e.SrcNodeID != "node-a-caller" || e.DstNodeID != "node-b-target" || e.DstRepoID != "repo-b" || e.Kind != "calls" || !e.CrossRepo {
+		t.Errorf("inbound edge mismatch: %+v", e)
+	}
+}
+
+// TestResolveStubsTargetingNode_ExcludesIntraRepoStubs guards against
+// returning a stub whose src repo equals the dst node's repo — that's
+// not a cross-repo edge by definition and would leak self-references.
+func TestResolveStubsTargetingNode_ExcludesIntraRepoStubs(t *testing.T) {
+	db := setupTestDB(t)
+	seedRepo(t, db, "repo-b", "github.com/example/lib", "main")
+	seedNode(t, db, "node-b-target", "main", "repo-b", "go", "func", "pkg.Foo", "file.go")
+	seedNode(t, db, "node-b-caller", "main", "repo-b", "go", "func", "pkg.Caller", "caller.go")
+	// Same-repo stub — must NOT be returned.
+	seedStub(t, db, "stub-self", "main", "repo-b", "node-b-caller", "calls",
+		"github.com/example/lib", "pkg.Foo", "go")
+
+	edges, err := resolver.ResolveStubsTargetingNode(context.Background(), db, "node-b-target", "main")
+	if err != nil {
+		t.Fatalf("ResolveStubsTargetingNode: %v", err)
+	}
+	if len(edges) != 0 {
+		t.Fatalf("want 0 edges (intra-repo stub excluded), got %d: %+v", len(edges), edges)
+	}
+}
+
+// TestResolveStubsTargetingNode_NoStubs returns empty when nothing points
+// at the target — the common case for a fresh leaf symbol.
+func TestResolveStubsTargetingNode_NoStubs(t *testing.T) {
+	db := setupTestDB(t)
+	seedRepo(t, db, "repo-b", "github.com/example/lib", "main")
+	seedNode(t, db, "node-b-target", "main", "repo-b", "go", "func", "pkg.Foo", "file.go")
+
+	edges, err := resolver.ResolveStubsTargetingNode(context.Background(), db, "node-b-target", "main")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(edges) != 0 {
+		t.Fatalf("want 0 edges, got %d", len(edges))
+	}
+}
+
+// TestResolveStubsTargetingNode_UnknownNode returns empty silently when
+// the dst node_id doesn't exist — a resolver call from a stale plan must
+// not error the entire blast response.
+func TestResolveStubsTargetingNode_UnknownNode(t *testing.T) {
+	db := setupTestDB(t)
+	edges, err := resolver.ResolveStubsTargetingNode(context.Background(), db, "node-missing", "main")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(edges) != 0 {
+		t.Fatalf("want 0 edges for unknown node, got %d", len(edges))
+	}
+}
