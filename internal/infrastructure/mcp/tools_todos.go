@@ -26,9 +26,13 @@ type TodoDTO struct {
 	CreatedAt int64  `json:"created_at"`
 }
 
-// TodosResponse is the envelope returned by eng_find_todos.
+// TodosResponse is the envelope returned by eng_find_todos. DegradedReasons
+// is always emitted (as [] when nothing is degraded) so the wire shape
+// matches every other query tool per the README's "Conventions across the
+// tool surface" contract (solov2-7cw7).
 type TodosResponse struct {
-	Todos []TodoDTO `json:"todos"`
+	Todos           []TodoDTO `json:"todos"`
+	DegradedReasons []string  `json:"degraded_reasons"`
 }
 
 func todosToDTO(in []ports.TodoEntry, repoRoot string) []TodoDTO {
@@ -109,6 +113,6 @@ func makeFindTodosHandler(querier ports.TodoQuerier, repos application.RepoListe
 				root = r
 			}
 		}
-		return TodosResponse{Todos: todosToDTO(entries, root)}, nil
+		return TodosResponse{Todos: todosToDTO(entries, root), DegradedReasons: []string{}}, nil
 	}
 }

@@ -98,6 +98,28 @@ func TestFindTodos_EmitsSnakeCaseKeys(t *testing.T) {
 	}
 }
 
+// TestFindTodos_EmitsDegradedReasonsAsEmptyArray pins solov2-7cw7: the
+// README's "Conventions across the tool surface" promises every tool
+// includes degraded_reasons (as [] when nothing is degraded). eng_find_todos
+// previously omitted the field entirely.
+func TestFindTodos_EmitsDegradedReasonsAsEmptyArray(t *testing.T) {
+	q := &stubTodoQuerier{entries: nil}
+	r := NewRegistry()
+	RegisterTodoTools(r, q, nil)
+
+	raw, _ := json.Marshal(map[string]string{"repo_id": "r", "branch": "main"})
+	req := &Request{Method: "eng_find_todos", Params: json.RawMessage(raw)}
+	result, rpcErr := r.Dispatch(context.Background(), domain.Actor{ID: "agent:test", Kind: domain.ActorKindAgent}, req)
+	if rpcErr != nil {
+		t.Fatalf("dispatch: %+v", rpcErr)
+	}
+	b, _ := json.Marshal(result)
+	js := string(b)
+	if !strings.Contains(js, `"degraded_reasons":[]`) {
+		t.Errorf("expected degraded_reasons:[] in JSON, got: %s", js)
+	}
+}
+
 func TestFindTodos_IncludeClosedFlipsOnlyOpen(t *testing.T) {
 	q := &stubTodoQuerier{}
 	r := NewRegistry()
