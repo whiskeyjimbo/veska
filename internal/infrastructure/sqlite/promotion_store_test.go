@@ -283,6 +283,74 @@ func TestPromotionStore_ChainedSelectorAmbiguityIsSkipped(t *testing.T) {
 	}
 }
 
+// TestPromotionStore_ChainedSelectorEmitsMethodCallStub covers solov2-9rc2
+// Phase C: when a chained-selector method call (`g := pkg.New(...); g.X()`)
+// imports from a DIFFERENT module (cross-repo), promotion must emit a
+// cross_repo_edge_stub with method_call=1 and symbol_path=bare-method-name.
+// The reverse resolver (phase D) binds this to the receiver method later.
+func TestPromotionStore_ChainedSelectorEmitsMethodCallStub(t *testing.T) {
+	t.Parallel()
+	db := openTest(t, filepath.Join(t.TempDir(), "v.db"))
+	if _, err := db.Exec(
+		`INSERT INTO repos (repo_id, root_path, added_at, module_path) VALUES (?, ?, ?, ?)`,
+		"repo1", "/tmp/app", time.Now().UnixMilli(), "github.com/acme/app",
+	); err != nil {
+		t.Fatalf("insert repo: %v", err)
+	}
+	store := sqlite.NewPromotionStore(db, []sqlite.PromotionSink{sqlite.NewFTSSink(), sqlite.NewEmbedRefSink()})
+
+	runFn, _ := domain.NewNode("runID", "/tmp/app/runner/runner.go", "Run", domain.KindFunction, domain.WithExported(true))
+
+	err := store.Promote(context.Background(), application.PromotionBatch{
+		RepoID: "repo1", Branch: "main", GitSHA: "sha", Actor: systemActor(),
+		PromotedAt: time.Now().UnixMilli(),
+		Files: []application.PromotionFile{
+			{
+				Path:    "/tmp/app/runner/runner.go",
+				Nodes:   []*domain.Node{runFn},
+				Imports: map[string]string{"greetlib": "github.com/jrose/greetlib"},
+				UnresolvedCalls: []domain.UnresolvedCall{
+					// Plain pkg.New(...) — produces a regular stub (method_call=0).
+					{CallerID: "runID", CalleeName: "New", PkgQualifier: "greetlib"},
+					// g.Hello(...) chained selector — produces a method-call stub.
+					{CallerID: "runID", CalleeName: "Hello", PkgQualifier: "greetlib", IsMethodCall: true},
+				},
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("Promote: %v", err)
+	}
+
+	// Two stubs: plain (method_call=0, symbol_path=New) + method-call (method_call=1, symbol_path=Hello).
+	rows, err := db.Query(`SELECT symbol_path, method_call FROM cross_repo_edge_stubs WHERE src_node_id = 'runID' ORDER BY symbol_path`)
+	if err != nil {
+		t.Fatalf("query stubs: %v", err)
+	}
+	defer rows.Close()
+	type stubRow struct {
+		symbolPath string
+		methodCall int
+	}
+	var got []stubRow
+	for rows.Next() {
+		var s stubRow
+		if err := rows.Scan(&s.symbolPath, &s.methodCall); err != nil {
+			t.Fatalf("scan: %v", err)
+		}
+		got = append(got, s)
+	}
+	if len(got) != 2 {
+		t.Fatalf("want 2 stubs, got %d: %+v", len(got), got)
+	}
+	if got[0].symbolPath != "Hello" || got[0].methodCall != 1 {
+		t.Errorf("method-call stub mismatch: %+v", got[0])
+	}
+	if got[1].symbolPath != "New" || got[1].methodCall != 0 {
+		t.Errorf("plain stub mismatch: %+v", got[1])
+	}
+}
+
 // TestPromotionStore_CrossPackageResolvesAgainstPromotedGraph pins the
 // incremental-commit half of solov2-xc51.2: when the callee's file is NOT in
 // the current batch (already promoted earlier), the qualified call still binds
