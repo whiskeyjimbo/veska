@@ -56,6 +56,24 @@ type SimilarLookup interface {
 	LookupExisting(ctx context.Context, contentHash string) (embedding []byte, dim int, found bool, err error)
 }
 
+// SearchToolOption configures RegisterSearchTools. The only knob today is
+// the GraphStorage used by eng_search_similar to resolve a `symbol` param
+// to a node_id (solov2-3ocy); composition roots that don't wire it can
+// still call the tool with node_id directly.
+type SearchToolOption func(*searchToolConfig)
+
+type searchToolConfig struct {
+	graph ports.GraphStorage
+}
+
+// WithSearchGraph supplies the GraphStorage used by eng_search_similar's
+// symbol-to-node_id resolution. Without it, `symbol` is rejected and only
+// node_id is accepted — preserving existing behaviour for callers that
+// don't pass the option.
+func WithSearchGraph(g ports.GraphStorage) SearchToolOption {
+	return func(c *searchToolConfig) { c.graph = g }
+}
+
 // RegisterSearchTools registers eng_search_semantic and eng_search_similar.
 // svc is required and orchestrates the semantic + lexical-fallback path.
 // lookup + vectors + nodes drive the similar-by-node-id path. rec is
@@ -68,7 +86,12 @@ func RegisterSearchTools(
 	nodes ports.NodeLookup,
 	rec *savings.Recorder,
 	repos application.RepoLister,
+	opts ...SearchToolOption,
 ) {
+	var cfg searchToolConfig
+	for _, o := range opts {
+		o(&cfg)
+	}
 	// solov2-hjw9: opportunistically extract a PendingEmbedsCounter from the
 	// SimilarLookup. *sqlite.EmbeddingRefsRepo satisfies both interfaces; test
 	// stubs that don't can ignore the signal (handler treats nil as "no info").
@@ -88,7 +111,7 @@ func RegisterSearchTools(
 		Description:     "Find symbols similar to a given node by vector neighbourhood over its stored embedding.",
 		IncludesStaging: false,
 		InputSchema:     searchSimilarInputSchema,
-		Handler:         makeSearchSimilarHandler(lookup, vectors, nodes, repos),
+		Handler:         makeSearchSimilarHandler(lookup, vectors, nodes, repos, cfg.graph),
 	})
 }
 
@@ -200,6 +223,11 @@ func recordSavings(rec *savings.Recorder, query string, results []search.Result)
 
 type searchSimilarParams struct {
 	NodeID string `json:"node_id"`
+	// Symbol is an alias for node_id, resolved via GraphStorage.FindNodes.
+	// Parity with eng_find_symbol / eng_get_call_chain / eng_get_blast_radius
+	// (solov2-3ocy). Ambiguous matches are rejected so the caller must
+	// disambiguate via node_id.
+	Symbol string `json:"symbol"`
 	RepoID string `json:"repo_id"`
 	Branch string `json:"branch"`
 	// K is the neighbour count. 'limit' accepted as an alias — see
@@ -208,14 +236,14 @@ type searchSimilarParams struct {
 	Limit int `json:"limit,omitempty"`
 }
 
-func makeSearchSimilarHandler(lookup SimilarLookup, vectors ports.VectorStorage, nodes ports.NodeLookup, repos application.RepoLister) ToolHandler {
+func makeSearchSimilarHandler(lookup SimilarLookup, vectors ports.VectorStorage, nodes ports.NodeLookup, repos application.RepoLister, graph ports.GraphStorage) ToolHandler {
 	return func(ctx context.Context, _ domain.Actor, raw json.RawMessage) (any, *RPCError) {
 		var p searchSimilarParams
 		if rpcErr := bindParams(raw, &p); rpcErr != nil {
 			return nil, rpcErr
 		}
-		if rpcErr := checkRequired("node_id", p.NodeID); rpcErr != nil {
-			return nil, rpcErr
+		if p.NodeID == "" && p.Symbol == "" {
+			return nil, &RPCError{Code: CodeInvalidParams, Message: "missing required params: node_id or symbol"}
 		}
 		// solov2-ktz0: fall back to shim-injected cwd when repo_id omitted.
 		repoID, rpcErr := resolveRepoIDFromParams(ctx, repos, raw, p.RepoID)
@@ -227,6 +255,25 @@ func makeSearchSimilarHandler(lookup SimilarLookup, vectors ports.VectorStorage,
 			return nil, rpcErr
 		} else {
 			p.Branch = br
+		}
+		// solov2-3ocy: resolve `symbol` to node_id when supplied. Same
+		// shape as eng_get_blast_radius — node_id wins when both are set;
+		// ambiguity is rejected so callers must disambiguate explicitly.
+		if p.NodeID == "" {
+			if graph == nil {
+				return nil, &RPCError{Code: CodeInternalError, Message: "symbol lookup not wired (graph storage missing); pass node_id"}
+			}
+			matches, ferr := graph.FindNodes(ctx, p.RepoID, p.Branch, p.Symbol)
+			if ferr != nil {
+				return nil, &RPCError{Code: CodeInternalError, Message: fmt.Sprintf("find symbol %q: %v", p.Symbol, ferr)}
+			}
+			if len(matches) == 0 {
+				return nil, &RPCError{Code: CodeNotFound, Message: fmt.Sprintf("symbol not found: %s", p.Symbol)}
+			}
+			if len(matches) > 1 {
+				return nil, &RPCError{Code: CodeInvalidParams, Message: fmt.Sprintf("symbol %q is ambiguous (%d matches); pass node_id to disambiguate", p.Symbol, len(matches))}
+			}
+			p.NodeID = string(matches[0].ID)
 		}
 		k := p.K
 		if k <= 0 {

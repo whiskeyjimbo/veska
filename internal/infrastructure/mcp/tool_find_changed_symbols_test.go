@@ -91,6 +91,49 @@ func TestChangedSymbols_ReturnsThreeBuckets(t *testing.T) {
 	}
 }
 
+// TestChangedSymbols_AcceptsBaseHeadAliases covers solov2-3ocy: git's
+// canonical "base/head" param names must be accepted alongside ref_a/ref_b.
+// Junior agents reach for base/head naturally — pre-fix, the schema's
+// additionalProperties:false rejected them with an "unknown parameter"
+// error before the handler ever ran.
+func TestChangedSymbols_AcceptsBaseHeadAliases(t *testing.T) {
+	m := csMemFiles{
+		"refA:code.go": "package p\nfunc Keep() {}\nfunc Gone() {}\n",
+		"refB:code.go": "package p\nfunc Keep() {}\nfunc Fresh() {}\n",
+	}
+	r := newChangedSymbolsRegistry(t, m)
+	resp, rpcErr := dispatchChangedSymbols(t, r, map[string]string{
+		"repo_id": "repo1", "branch": "main", "base": "refA", "head": "refB",
+	})
+	if rpcErr != nil {
+		t.Fatalf("base/head aliases rejected: %v", rpcErr)
+	}
+	if len(resp.Added) != 1 || resp.Added[0].Name != "Fresh" {
+		t.Errorf("added = %+v, want [Fresh]", resp.Added)
+	}
+	if len(resp.Removed) != 1 || resp.Removed[0].Name != "Gone" {
+		t.Errorf("removed = %+v, want [Gone]", resp.Removed)
+	}
+}
+
+// TestChangedSymbols_RejectsConflictingAliases: when both ref_a and base
+// are supplied with DIFFERENT values, surface a clear param error rather
+// than picking one silently.
+func TestChangedSymbols_RejectsConflictingAliases(t *testing.T) {
+	m := csMemFiles{
+		"refA:code.go": "package p\n",
+		"refB:code.go": "package p\n",
+	}
+	r := newChangedSymbolsRegistry(t, m)
+	_, rpcErr := dispatchChangedSymbols(t, r, map[string]string{
+		"repo_id": "repo1", "branch": "main",
+		"ref_a": "refA", "base": "main", "ref_b": "refB",
+	})
+	if rpcErr == nil || rpcErr.Code != CodeInvalidParams {
+		t.Fatalf("want CodeInvalidParams for conflicting ref_a/base, got %+v", rpcErr)
+	}
+}
+
 // TestChangedSymbols_EmptyBucketsSerializeAsArrays guards solov2-jbgt: empty
 // added/removed/modified must JSON-render as [] (not null) to match the MCP
 // surface contract.
