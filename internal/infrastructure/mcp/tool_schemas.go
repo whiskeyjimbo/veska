@@ -172,7 +172,8 @@ var blastRadiusInputSchema = json.RawMessage(`{
   "type": "object",
   "additionalProperties": false,
   "properties": {
-    "node_id":           {"type": "string", "description": "node_id to fan out from. Use eng_find_symbol to obtain one."},
+    "node_id":           {"type": "string", "description": "node_id to fan out from. Use eng_find_symbol to obtain one. Mutually exclusive with symbol."},
+    "symbol":            {"type": "string", "description": "Symbol name to fan out from (parity with eng_get_call_chain). Ambiguous matches are rejected; pass node_id to disambiguate."},
     "repo_id":           {"type": "string"},
     "branch":            {"type": "string"},
     "max_depth":         {"type": "integer", "minimum": 1},
@@ -180,8 +181,7 @@ var blastRadiusInputSchema = json.RawMessage(`{
     "direction":         {"type": "string", "enum": ["in", "out", "both"]},
     "expand_cross_repo": {"type": "boolean"},
     "cwd":               {"type": "string", "description": "Working directory used to resolve the active repo when repo_id is omitted."}
-  },
-  "required": ["node_id"]
+  }
 }`)
 
 var diffBlastRadiusInputSchema = json.RawMessage(`{
