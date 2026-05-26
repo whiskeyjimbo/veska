@@ -228,13 +228,15 @@ func shortID(id string) string {
 	return id[:12]
 }
 
-// resolveCrossRepoDstName best-effort resolves a cross-repo CALLS edge's
-// destination node_id to its symbol name via eng_get_node, so the CLI can
-// print "Run --CALLS--> greetlib.New" instead of an opaque hash
-// (solov2-7xrw). Returns empty string on any error or empty result — the
-// caller falls back to a 12-char short_id, so a stuck remote repo never
-// fails the primary context output.
-func resolveCrossRepoDstName(ctx context.Context, nodeID, repoID, branch string) string {
+// resolveCrossRepoNodeName best-effort resolves any cross-repo node_id
+// (src or dst) to its symbol name via eng_get_node, so the CLI can print
+// "Run --CALLS--> greetlib.New" instead of opaque hashes (solov2-7xrw,
+// extended for inbound edges in solov2-80hh). Pass repoID/branch empty to
+// let the daemon scan all (repo, branch) pairs — needed for inbound src
+// nodes whose containing repo isn't on the response envelope. Returns
+// empty string on any error or empty result, so a stuck remote repo
+// never fails the primary context output.
+func resolveCrossRepoNodeName(ctx context.Context, nodeID, repoID, branch string) string {
 	if nodeID == "" {
 		return ""
 	}
@@ -371,9 +373,20 @@ change so you (or an agent) get the whole neighbourhood in one shot.`,
 				for _, e := range pack.CrossRepoEdges {
 					src := byNodeID[e.SrcNodeID]
 					if src == "" {
+						// src lives in another repo (inbound edge case,
+						// solov2-80hh) — resolve its symbol name. The dst
+						// branch on the edge points at the current pack's
+						// repo, not the src's, so let eng_get_node scan all
+						// (repo, branch) pairs by omitting both.
+						src = resolveCrossRepoNodeName(cmd.Context(), e.SrcNodeID, "", "")
+					}
+					if src == "" {
 						src = shortID(e.SrcNodeID)
 					}
-					dst := resolveCrossRepoDstName(cmd.Context(), e.DstNodeID, e.DstRepoID, e.DstBranch)
+					dst := byNodeID[e.DstNodeID]
+					if dst == "" {
+						dst = resolveCrossRepoNodeName(cmd.Context(), e.DstNodeID, e.DstRepoID, e.DstBranch)
+					}
 					if dst == "" {
 						dst = shortID(e.DstNodeID)
 					}

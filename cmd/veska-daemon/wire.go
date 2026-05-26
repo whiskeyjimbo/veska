@@ -926,9 +926,17 @@ func registerMCPTools(r *mcp.Registry, d mcpDeps) {
 	resolveStubs := func(ctx context.Context, nodeID, branch string, expand bool) ([]ports.ResolvedEdge, error) {
 		return resolver.ResolveStubsForNode(ctx, pools.ReadDB, nodeID, branch, expand)
 	}
+	// solov2-80hh: reverse-direction resolver — "who in OTHER repos calls
+	// this node?" Closes the library-author journey gap where blast_radius
+	// on an exported symbol returned no cross-repo callers because
+	// cross_repo_edge_stubs is only indexed by src_node_id.
+	resolveInboundStubs := func(ctx context.Context, dstNodeID, branch string) ([]ports.ResolvedEdge, error) {
+		return resolver.ResolveStubsTargetingNode(ctx, pools.ReadDB, dstNodeID, branch)
+	}
 	mcp.RegisterGraphTools(r, graph, d.staging,
 		mcp.WithRepoLister(&repoLister{db: pools.ReadDB}),
 		mcp.WithResolveFunc(resolveStubs),
+		mcp.WithInboundResolveFunc(resolveInboundStubs),
 	)
 
 	// Blast-radius tools. The Service walks edge adjacency + staging; the
@@ -938,7 +946,8 @@ func registerMCPTools(r *mcp.Registry, d mcpDeps) {
 	nodes := sqlite.NewNodeLookupRepo(pools.ReadDB)
 	blastSvc := blastradius.NewService(edges, nodes, d.staging)
 	mcp.RegisterBlastTools(r, blastSvc, repoRootFunc(pools.ReadDB), gitwatch.ChangedFiles, &repoLister{db: pools.ReadDB}, graph,
-		mcp.WithBlastResolveFunc(resolveStubs))
+		mcp.WithBlastResolveFunc(resolveStubs),
+		mcp.WithBlastInboundResolveFunc(resolveInboundStubs))
 
 	// eng_find_changed_symbols: parses each file changed between two git
 	// refs at both refs and diffs the symbol sets. It reads git + the
@@ -998,7 +1007,8 @@ func registerMCPTools(r *mcp.Registry, d mcpDeps) {
 		gitwatch.ChangedFiles, nodes.NodesInFile, activeTaskFunc(pools.ReadDB),
 	); err == nil {
 		mcp.RegisterContextPackTool(r, cpAsm, repoRootFunc(pools.ReadDB), &repoLister{db: pools.ReadDB},
-			mcp.WithContextPackResolveFunc(resolveStubs))
+			mcp.WithContextPackResolveFunc(resolveStubs),
+			mcp.WithContextPackInboundResolveFunc(resolveInboundStubs))
 	} else {
 		mcp.RegisterContextPackTool(r, nil, nil, &repoLister{db: pools.ReadDB})
 	}

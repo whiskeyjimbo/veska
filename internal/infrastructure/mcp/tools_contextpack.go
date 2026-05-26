@@ -16,7 +16,8 @@ import (
 type ContextPackOption func(*contextPackConfig)
 
 type contextPackConfig struct {
-	resolve ResolveFunc
+	resolve        ResolveFunc
+	resolveInbound InboundResolveFunc
 }
 
 // WithContextPackResolveFunc supplies a ResolveFunc so the handler can
@@ -26,6 +27,15 @@ type contextPackConfig struct {
 // agents reading the pack alone cannot see consumers in other repos.
 func WithContextPackResolveFunc(fn ResolveFunc) ContextPackOption {
 	return func(c *contextPackConfig) { c.resolve = fn }
+}
+
+// WithContextPackInboundResolveFunc supplies an InboundResolveFunc so the
+// context-pack response also surfaces cross-repo CALLERS of each node in
+// the pack. The pack's blast walks DirBoth, so the typical user question
+// "show me the surrounding neighbourhood" needs both directions of
+// cross-repo edges to be honest (solov2-80hh).
+func WithContextPackInboundResolveFunc(fn InboundResolveFunc) ContextPackOption {
+	return func(c *contextPackConfig) { c.resolveInbound = fn }
 }
 
 // contextPackResponse embeds the application Pack so the existing JSON
@@ -49,7 +59,7 @@ func RegisterContextPackTool(r *Registry, asm *contextpack.Assembler, repoRoot R
 		Name:        "eng_get_context_pack",
 		Description: "Return a token-bounded JSON bundle of relevant nodes, recent commits, open findings and tasks for a symbol or a task.",
 		InputSchema: contextPackInputSchema,
-		Handler:     makeContextPackHandler(asm, repoRoot, repos, cfg.resolve),
+		Handler:     makeContextPackHandler(asm, repoRoot, repos, cfg.resolve, cfg.resolveInbound),
 	})
 }
 
@@ -61,7 +71,7 @@ type contextPackParams struct {
 	TaskID string `json:"task_id,omitempty"`
 }
 
-func makeContextPackHandler(asm *contextpack.Assembler, repoRoot RepoRootFunc, repos application.RepoLister, resolve ResolveFunc) ToolHandler {
+func makeContextPackHandler(asm *contextpack.Assembler, repoRoot RepoRootFunc, repos application.RepoLister, resolve ResolveFunc, resolveInbound InboundResolveFunc) ToolHandler {
 	return func(ctx context.Context, _ domain.Actor, raw json.RawMessage) (any, *RPCError) {
 		if asm == nil || repoRoot == nil {
 			return nil, &RPCError{
@@ -128,10 +138,48 @@ func makeContextPackHandler(asm *contextpack.Assembler, repoRoot RepoRootFunc, r
 		// workspace gets only same-repo nodes even when the parser
 		// captured the cross-repo edge.
 		return contextPackResponse{
-			Pack:           pack,
-			CrossRepoEdges: resolveCrossRepoForNodes(ctx, resolve, pack.Nodes, p.Branch),
+			Pack: pack,
+			CrossRepoEdges: mergeCrossRepoEdges(
+				resolveCrossRepoForNodes(ctx, resolve, pack.Nodes, p.Branch),
+				resolveCrossRepoInboundForNodes(ctx, resolveInbound, pack.Nodes, p.Branch),
+			),
 		}, nil
 	}
+}
+
+// resolveCrossRepoInboundForNodes is the contextpack analogue of
+// resolveCrossRepoInboundFor: for each node in the pack, ask "who in
+// OTHER repos calls this?" and return the inbound edges (solov2-80hh).
+// The pack always walks DirBoth, so unlike the blast handler there's no
+// direction gating here — both perspectives are always relevant.
+func resolveCrossRepoInboundForNodes(ctx context.Context, resolve InboundResolveFunc, nodes []contextpack.NodeInfo, branch string) []CrossRepoEdge {
+	if resolve == nil || len(nodes) == 0 {
+		return nil
+	}
+	var out []CrossRepoEdge
+	seen := make(map[string]bool)
+	for _, n := range nodes {
+		resolved, err := resolve(ctx, n.NodeID, branch)
+		if err != nil {
+			continue
+		}
+		for _, re := range resolved {
+			key := re.SrcNodeID + "→" + re.DstNodeID + "/" + re.Kind
+			if seen[key] {
+				continue
+			}
+			seen[key] = true
+			out = append(out, CrossRepoEdge{
+				SrcNodeID: re.SrcNodeID,
+				DstNodeID: re.DstNodeID,
+				DstRepoID: re.DstRepoID,
+				DstBranch: re.DstBranch,
+				Kind:      re.Kind,
+				CrossRepo: true,
+			})
+		}
+	}
+	return out
 }
 
 // resolveCrossRepoForNodes mirrors resolveCrossRepoFor in tools_blast.go

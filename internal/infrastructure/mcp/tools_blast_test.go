@@ -131,6 +131,78 @@ func TestBlastRadius_HonoursCalleesDirection(t *testing.T) {
 	}
 }
 
+// TestBlastRadius_InboundResolverSurfacesCrossRepoCallers covers solov2-80hh:
+// when only the inbound resolver is wired (the library-author scenario —
+// the target node is a callee, with no outbound stubs of its own), the
+// response must include a cross_repo_edge per stub in another repo that
+// points at the node.
+func TestBlastRadius_InboundResolverSurfacesCrossRepoCallers(t *testing.T) {
+	edges := &blastFakeEdges{inbound: map[string][]string{}}
+	nodes := &blastFakeNodes{metas: map[string]ports.NodeMeta{
+		"lib-seed": {NodeID: "lib-seed", SymbolPath: "lib.Hello"},
+	}}
+	svc := blastradius.NewService(edges, nodes, nil)
+	r := NewRegistry()
+	inbound := func(_ context.Context, dst, _ string) ([]ports.ResolvedEdge, error) {
+		if dst != "lib-seed" {
+			return nil, nil
+		}
+		return []ports.ResolvedEdge{{
+			SrcNodeID: "app-caller", DstNodeID: "lib-seed",
+			DstRepoID: "lib-repo", DstBranch: "main", Kind: "CALLS",
+		}}, nil
+	}
+	RegisterBlastTools(r, svc, nil, nil, nil, nil,
+		WithBlastInboundResolveFunc(inbound))
+	resp, rpcErr := dispatchBlast(t, r, "eng_get_blast_radius", map[string]any{
+		"node_id":   "lib-seed",
+		"repo_id":   "lib-repo",
+		"branch":    "main",
+		"direction": "callers",
+		"max_depth": 1,
+	})
+	if rpcErr != nil {
+		t.Fatalf("err: %+v", rpcErr)
+	}
+	if len(resp.CrossRepoEdges) != 1 {
+		t.Fatalf("want 1 cross_repo_edge, got %d: %+v", len(resp.CrossRepoEdges), resp.CrossRepoEdges)
+	}
+	e := resp.CrossRepoEdges[0]
+	if e.SrcNodeID != "app-caller" || e.DstNodeID != "lib-seed" || !e.CrossRepo {
+		t.Errorf("edge mismatch: %+v", e)
+	}
+}
+
+// TestBlastRadius_InboundResolverSkippedForCalleesDirection guards the
+// gating in resolveCrossRepoInboundFor: when direction=callees the user
+// asked "what does this reach?" — inbound callers are noise.
+func TestBlastRadius_InboundResolverSkippedForCalleesDirection(t *testing.T) {
+	edges := &blastFakeEdges{outbound: map[string][]string{}}
+	nodes := &blastFakeNodes{metas: map[string]ports.NodeMeta{
+		"seed": {NodeID: "seed"},
+	}}
+	svc := blastradius.NewService(edges, nodes, nil)
+	r := NewRegistry()
+	calls := 0
+	inbound := func(_ context.Context, _ string, _ string) ([]ports.ResolvedEdge, error) {
+		calls++
+		return nil, nil
+	}
+	RegisterBlastTools(r, svc, nil, nil, nil, nil, WithBlastInboundResolveFunc(inbound))
+	_, rpcErr := dispatchBlast(t, r, "eng_get_blast_radius", map[string]any{
+		"node_id":   "seed",
+		"repo_id":   "r1",
+		"branch":    "main",
+		"direction": "callees",
+	})
+	if rpcErr != nil {
+		t.Fatalf("err: %+v", rpcErr)
+	}
+	if calls != 0 {
+		t.Errorf("inbound resolver must not be called for direction=callees; got %d calls", calls)
+	}
+}
+
 func TestBlastRadius_BadDirectionRejected(t *testing.T) {
 	svc := blastradius.NewService(&blastFakeEdges{}, &blastFakeNodes{}, nil)
 	r := NewRegistry()

@@ -35,7 +35,8 @@ type RepoRootFunc func(ctx context.Context, repoID string) (string, error)
 type BlastToolOption func(*blastToolConfig)
 
 type blastToolConfig struct {
-	resolve ResolveFunc
+	resolve        ResolveFunc
+	resolveInbound InboundResolveFunc
 }
 
 // WithBlastResolveFunc supplies a ResolveFunc that the blast handlers use to
@@ -43,6 +44,15 @@ type blastToolConfig struct {
 // response — parity with eng_get_call_chain's WithResolveFunc.
 func WithBlastResolveFunc(fn ResolveFunc) BlastToolOption {
 	return func(c *blastToolConfig) { c.resolve = fn }
+}
+
+// WithBlastInboundResolveFunc supplies an InboundResolveFunc so blast in
+// the callers direction (or DirBoth) also surfaces cross-repo callers in
+// OTHER repos targeting the visited nodes. Without it, blast_radius on a
+// library symbol cannot see consumers in workspace repos — the
+// library-author journey gap closed by solov2-80hh.
+func WithBlastInboundResolveFunc(fn InboundResolveFunc) BlastToolOption {
+	return func(c *blastToolConfig) { c.resolveInbound = fn }
 }
 
 // RegisterBlastTools registers the three blast-radius tools: by-node,
@@ -62,21 +72,21 @@ func RegisterBlastTools(r *Registry, svc *blastradius.Service, repoRoot RepoRoot
 		Description:     "Compute the blast radius (callers/callees/both) of a single node via BFS over the edges table.",
 		IncludesStaging: false,
 		InputSchema:     blastRadiusInputSchema,
-		Handler:         makeBlastRadiusHandler(svc, repos, graph, cfg.resolve),
+		Handler:         makeBlastRadiusHandler(svc, repos, graph, cfg.resolve, cfg.resolveInbound),
 	})
 	r.MustRegister(ToolSpec{
 		Name:            "eng_get_dirty_blast_radius",
 		Description:     "Compute the blast radius of all symbols currently in the in-memory staging overlay.",
 		IncludesStaging: true,
 		InputSchema:     dirtyBlastRadiusInputSchema,
-		Handler:         makeDirtyBlastRadiusHandler(svc, repos, cfg.resolve),
+		Handler:         makeDirtyBlastRadiusHandler(svc, repos, cfg.resolve, cfg.resolveInbound),
 	})
 	r.MustRegister(ToolSpec{
 		Name:            "eng_get_diff_blast_radius",
 		Description:     "Compute the blast radius for all symbols in files changed in the working-tree diff vs HEAD.",
 		IncludesStaging: false,
 		InputSchema:     diffBlastRadiusInputSchema,
-		Handler:         makeDiffBlastRadiusHandler(svc, repoRoot, changedFiles, repos, cfg.resolve),
+		Handler:         makeDiffBlastRadiusHandler(svc, repoRoot, changedFiles, repos, cfg.resolve, cfg.resolveInbound),
 	})
 }
 
@@ -91,7 +101,7 @@ type blastRadiusParams struct {
 	ExpandCrossRepo bool   `json:"expand_cross_repo,omitempty"`
 }
 
-func makeBlastRadiusHandler(svc *blastradius.Service, repos application.RepoLister, graph ports.GraphStorage, resolve ResolveFunc) ToolHandler {
+func makeBlastRadiusHandler(svc *blastradius.Service, repos application.RepoLister, graph ports.GraphStorage, resolve ResolveFunc, resolveInbound InboundResolveFunc) ToolHandler {
 	return func(ctx context.Context, _ domain.Actor, raw json.RawMessage) (any, *RPCError) {
 		var p blastRadiusParams
 		if rpcErr := bindParams(raw, &p); rpcErr != nil {
@@ -152,9 +162,83 @@ func makeBlastRadiusHandler(svc *blastradius.Service, repos application.RepoList
 			Entries:         blastEntriesToDTO(resp.Entries),
 			Truncated:       resp.Truncated,
 			IncludedStaging: resp.IncludedStaging,
-			CrossRepoEdges:  resolveCrossRepoFor(ctx, resolve, resp.Entries, p.Branch, p.ExpandCrossRepo),
+			CrossRepoEdges: mergeCrossRepoEdges(
+				resolveCrossRepoFor(ctx, resolve, resp.Entries, p.Branch, p.ExpandCrossRepo),
+				resolveCrossRepoInboundFor(ctx, resolveInbound, resp.Entries, p.Branch, dir),
+			),
 		}, nil
 	}
+}
+
+// resolveCrossRepoInboundFor mirrors resolveCrossRepoFor but asks the
+// inbound resolver for each entry: "which stubs in OTHER repos point at
+// this node?" Returns nil when direction is callees-only — inbound
+// expansion only makes sense when the user actually wants callers
+// (solov2-80hh). Silent on per-node errors (a stuck remote repo must not
+// break the primary blast result).
+func resolveCrossRepoInboundFor(ctx context.Context, resolve InboundResolveFunc, entries []blastradius.Entry, branch string, dir blastradius.Direction) []CrossRepoEdge {
+	if resolve == nil || len(entries) == 0 {
+		return nil
+	}
+	if dir == blastradius.DirCallees {
+		return nil
+	}
+	var out []CrossRepoEdge
+	seen := make(map[string]bool)
+	for _, e := range entries {
+		resolved, err := resolve(ctx, e.NodeID, branch)
+		if err != nil {
+			continue
+		}
+		for _, re := range resolved {
+			key := re.SrcNodeID + "→" + re.DstNodeID + "/" + re.Kind
+			if seen[key] {
+				continue
+			}
+			seen[key] = true
+			out = append(out, CrossRepoEdge{
+				SrcNodeID: re.SrcNodeID,
+				DstNodeID: re.DstNodeID,
+				DstRepoID: re.DstRepoID,
+				DstBranch: re.DstBranch,
+				Kind:      re.Kind,
+				CrossRepo: true,
+			})
+		}
+	}
+	return out
+}
+
+// mergeCrossRepoEdges concatenates outbound and inbound edge lists while
+// deduping on the (src, dst, kind) triple — the two resolvers can describe
+// the same edge from opposite perspectives and the caller should see it
+// once.
+func mergeCrossRepoEdges(out, in []CrossRepoEdge) []CrossRepoEdge {
+	if len(out) == 0 {
+		return in
+	}
+	if len(in) == 0 {
+		return out
+	}
+	seen := make(map[string]bool, len(out)+len(in))
+	merged := make([]CrossRepoEdge, 0, len(out)+len(in))
+	for _, e := range out {
+		key := e.SrcNodeID + "→" + e.DstNodeID + "/" + e.Kind
+		if seen[key] {
+			continue
+		}
+		seen[key] = true
+		merged = append(merged, e)
+	}
+	for _, e := range in {
+		key := e.SrcNodeID + "→" + e.DstNodeID + "/" + e.Kind
+		if seen[key] {
+			continue
+		}
+		seen[key] = true
+		merged = append(merged, e)
+	}
+	return merged
 }
 
 // resolveCrossRepoFor walks each entry's cross_repo_edge_stubs via the
@@ -201,7 +285,7 @@ type diffBlastRadiusParams struct {
 	ExpandCrossRepo bool   `json:"expand_cross_repo,omitempty"`
 }
 
-func makeDiffBlastRadiusHandler(svc *blastradius.Service, repoRoot RepoRootFunc, changedFiles blastradius.ChangedFilesFunc, repos application.RepoLister, resolve ResolveFunc) ToolHandler {
+func makeDiffBlastRadiusHandler(svc *blastradius.Service, repoRoot RepoRootFunc, changedFiles blastradius.ChangedFilesFunc, repos application.RepoLister, resolve ResolveFunc, resolveInbound InboundResolveFunc) ToolHandler {
 	return func(ctx context.Context, _ domain.Actor, raw json.RawMessage) (any, *RPCError) {
 		if repoRoot == nil || changedFiles == nil {
 			return nil, &RPCError{
@@ -253,7 +337,10 @@ func makeDiffBlastRadiusHandler(svc *blastradius.Service, repoRoot RepoRootFunc,
 			Entries:         blastEntriesToDTO(resp.Entries),
 			Truncated:       resp.Truncated,
 			IncludedStaging: resp.IncludedStaging,
-			CrossRepoEdges:  resolveCrossRepoFor(ctx, resolve, resp.Entries, p.Branch, p.ExpandCrossRepo),
+			CrossRepoEdges: mergeCrossRepoEdges(
+				resolveCrossRepoFor(ctx, resolve, resp.Entries, p.Branch, p.ExpandCrossRepo),
+				resolveCrossRepoInboundFor(ctx, resolveInbound, resp.Entries, p.Branch, dir),
+			),
 		}, nil
 	}
 }
@@ -267,7 +354,7 @@ type dirtyBlastRadiusParams struct {
 	ExpandCrossRepo bool   `json:"expand_cross_repo,omitempty"`
 }
 
-func makeDirtyBlastRadiusHandler(svc *blastradius.Service, repos application.RepoLister, resolve ResolveFunc) ToolHandler {
+func makeDirtyBlastRadiusHandler(svc *blastradius.Service, repos application.RepoLister, resolve ResolveFunc, resolveInbound InboundResolveFunc) ToolHandler {
 	return func(ctx context.Context, _ domain.Actor, raw json.RawMessage) (any, *RPCError) {
 		var p dirtyBlastRadiusParams
 		if rpcErr := bindParams(raw, &p); rpcErr != nil {
@@ -300,7 +387,10 @@ func makeDirtyBlastRadiusHandler(svc *blastradius.Service, repos application.Rep
 			Entries:         blastEntriesToDTO(resp.Entries),
 			Truncated:       resp.Truncated,
 			IncludedStaging: resp.IncludedStaging,
-			CrossRepoEdges:  resolveCrossRepoFor(ctx, resolve, resp.Entries, p.Branch, p.ExpandCrossRepo),
+			CrossRepoEdges: mergeCrossRepoEdges(
+				resolveCrossRepoFor(ctx, resolve, resp.Entries, p.Branch, p.ExpandCrossRepo),
+				resolveCrossRepoInboundFor(ctx, resolveInbound, resp.Entries, p.Branch, dir),
+			),
 		}, nil
 	}
 }
