@@ -65,6 +65,24 @@ func findingsListCmd() *cobra.Command {
 			if allRepos && repoFlag != "" {
 				return fmt.Errorf("findings list: --all and --repo are mutually exclusive")
 			}
+			// solov2-t8v8: when neither --repo nor --all is set AND the
+			// cwd doesn't resolve to a single registered repo, fall back to
+			// 'list across every repo' rather than erroring with 'repo_id
+			// required'. Multi-repo users hit that error constantly; the
+			// daemon already knew the count when it complained. Print a
+			// breadcrumb so the choice is visible.
+			autoAll := false
+			if !allRepos && repoFlag == "" {
+				if rid := autoResolveRepo(cmd.Context(), nil); rid == "" {
+					// No cwd-scoped repo and multiple repos may be
+					// registered. List all.
+					allRepos = true
+					autoAll = true
+				}
+			}
+			if autoAll {
+				fmt.Fprintln(cmd.ErrOrStderr(), "veska: no --repo and cwd outside any registered repo; listing findings across all repos (pass --repo <id> to scope)")
+			}
 			// solov2-0vau: --all enumerates every registered repo and
 			// concatenates findings, grouped by repo. Output sorts/limits
 			// across the combined set so the header still reports a
