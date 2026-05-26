@@ -738,7 +738,7 @@ func TestHandler_Integration_IdenticalCandidatesStableAcrossReruns(t *testing.T)
 	h := mustHandler(t, hh, herr)
 	row := queue.Row{Kind: queue.WorkKindAutoLink, RepoID: "r1", Branch: "main", Payload: "x.go"}
 
-	for i := 0; i < 3; i++ {
+	for i := range 3 {
 		if err := h.Handle(context.Background(), row); err != nil {
 			t.Fatalf("Handle (pass %d): %v", i, err)
 		}

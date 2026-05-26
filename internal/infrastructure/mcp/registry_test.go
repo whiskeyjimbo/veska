@@ -215,6 +215,64 @@ func TestDispatch_ToolsCallUnknownToolReturnsNotFound(t *testing.T) {
 	}
 }
 
+// TestDispatch_InitializeReturnsServerInfo pins solov2-axmt: strict MCP
+// clients require a successful initialize handshake before issuing
+// tools/list, so the registry must answer with protocolVersion + capabilities
+// + serverInfo instead of method-not-found.
+func TestDispatch_InitializeReturnsServerInfo(t *testing.T) {
+	r := NewRegistry()
+	params := json.RawMessage(`{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"test","version":"1"}}`)
+	result, rpcErr := r.Dispatch(context.Background(), domain.Actor{}, &Request{Method: "initialize", Params: params})
+	if rpcErr != nil {
+		t.Fatalf("initialize error: %+v", rpcErr)
+	}
+	res, ok := result.(InitializeResult)
+	if !ok {
+		t.Fatalf("unexpected result type: %T", result)
+	}
+	if res.ProtocolVersion != "2024-11-05" {
+		t.Errorf("ProtocolVersion = %q, want client's %q", res.ProtocolVersion, "2024-11-05")
+	}
+	if res.ServerInfo.Name != "veska" {
+		t.Errorf("ServerInfo.Name = %q, want \"veska\"", res.ServerInfo.Name)
+	}
+	if res.ServerInfo.Version == "" {
+		t.Errorf("ServerInfo.Version is empty")
+	}
+	if _, ok := res.Capabilities["tools"]; !ok {
+		t.Errorf("Capabilities missing \"tools\": %+v", res.Capabilities)
+	}
+}
+
+// TestDispatch_InitializeEmptyParamsDefaultsProtocol covers clients that
+// omit protocolVersion: we must still respond with a usable default rather
+// than echoing an empty string.
+func TestDispatch_InitializeEmptyParamsDefaultsProtocol(t *testing.T) {
+	r := NewRegistry()
+	result, rpcErr := r.Dispatch(context.Background(), domain.Actor{}, &Request{Method: "initialize"})
+	if rpcErr != nil {
+		t.Fatalf("initialize error: %+v", rpcErr)
+	}
+	res := result.(InitializeResult)
+	if res.ProtocolVersion != defaultProtocolVersion {
+		t.Errorf("ProtocolVersion = %q, want default %q", res.ProtocolVersion, defaultProtocolVersion)
+	}
+}
+
+// TestDispatch_NotificationsInitializedReturnsNoError pins the MCP lifecycle
+// notification: it must dispatch without error so serveConn can skip writing
+// a response (notifications carry no id).
+func TestDispatch_NotificationsInitializedReturnsNoError(t *testing.T) {
+	r := NewRegistry()
+	result, rpcErr := r.Dispatch(context.Background(), domain.Actor{}, &Request{Method: "notifications/initialized"})
+	if rpcErr != nil {
+		t.Fatalf("notifications/initialized error: %+v", rpcErr)
+	}
+	if result != nil {
+		t.Errorf("notifications/initialized result = %v, want nil", result)
+	}
+}
+
 func TestDispatch_UnknownMethodReturnsMethodNotFound(t *testing.T) {
 	r := NewRegistry()
 	req := &Request{Method: "eng_get_unknown_xyz"}

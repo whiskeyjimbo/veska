@@ -162,10 +162,7 @@ func (r *FindingRepo) CloseSupersededAutoLinks(ctx context.Context, repoID, bran
 	const chunk = 500
 	now := time.Now().UnixMilli()
 	for start := 0; start < len(sourceNodeIDs); start += chunk {
-		end := start + chunk
-		if end > len(sourceNodeIDs) {
-			end = len(sourceNodeIDs)
-		}
+		end := min(start+chunk, len(sourceNodeIDs))
 		batch := sourceNodeIDs[start:end]
 
 		placeholders := strings.Repeat("?,", len(batch))
