@@ -625,6 +625,70 @@ func TestGetCallChain_DepthTooLarge(t *testing.T) {
 	}
 }
 
+// TestGetCallChain_EmptyEdgesOnCallableEmitsChainedSelectorsHint pins
+// solov2-jojv: when the seed is a function/method but no CALLS edges
+// resolved, the response carries a "chained_selectors_unresolved"
+// degraded_reasons hint so the caller knows the empty result may reflect
+// a parser limitation (epic solov2-9rc2) rather than the symbol genuinely
+// having no callees.
+func TestGetCallChain_EmptyEdgesOnCallableEmitsChainedSelectorsHint(t *testing.T) {
+	store := newStubGraphStorage()
+	// A lone function node with no CALLS edges at all.
+	store.addNode(mustNode(t, "fn-lonely", "pkg/x.go", "Lonely", domain.KindFunction))
+
+	r := NewRegistry()
+	RegisterGraphTools(r, store, application.NewStagingArea())
+
+	resp, rpcErr := dispatchCallChain(t, r, "eng_get_call_chain", map[string]string{
+		"node_id": "fn-lonely",
+		"repo_id": "repo1",
+		"branch":  "main",
+	})
+	if rpcErr != nil {
+		t.Fatalf("unexpected error: %+v", rpcErr)
+	}
+	if len(resp.Edges) != 0 {
+		t.Fatalf("expected zero edges for lonely callable; got %d", len(resp.Edges))
+	}
+	var sawHint bool
+	for _, r := range resp.DegradedReasons {
+		if r == DegradedReasonChainedSelectorsUnresolved {
+			sawHint = true
+			break
+		}
+	}
+	if !sawHint {
+		t.Errorf("expected %q in degraded_reasons; got %+v", DegradedReasonChainedSelectorsUnresolved, resp.DegradedReasons)
+	}
+}
+
+// TestGetCallChain_EdgesPresentSuppressesHint guards that the hint only
+// fires when edges are empty — a working call chain must not carry the
+// chained_selectors_unresolved marker.
+func TestGetCallChain_EdgesPresentSuppressesHint(t *testing.T) {
+	store := newStubGraphStorage()
+	a := mustNode(t, "a", "pkg/a.go", "A", domain.KindFunction)
+	b := mustNode(t, "b", "pkg/b.go", "B", domain.KindFunction)
+	store.addNode(a)
+	store.addNode(b)
+	store.addEdge(mustEdge(t, a.ID, b.ID, domain.EdgeCalls))
+
+	r := NewRegistry()
+	RegisterGraphTools(r, store, application.NewStagingArea())
+
+	resp, rpcErr := dispatchCallChain(t, r, "eng_get_call_chain", map[string]string{
+		"node_id": "a", "repo_id": "repo1", "branch": "main",
+	})
+	if rpcErr != nil {
+		t.Fatalf("unexpected error: %+v", rpcErr)
+	}
+	for _, r := range resp.DegradedReasons {
+		if r == DegradedReasonChainedSelectorsUnresolved {
+			t.Errorf("hint must not fire when edges resolved: %+v", resp.DegradedReasons)
+		}
+	}
+}
+
 // ---------------------------------------------------------------------------
 // eng_get_file_nodes — returns staged nodes when present
 // ---------------------------------------------------------------------------
