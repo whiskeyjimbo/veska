@@ -8,6 +8,21 @@ import (
 	"github.com/spf13/cobra"
 )
 
+// shortVersion returns just the module version string for use with
+// cobra's --version flag template (solov2-fy14). Mirrors the resolution
+// rules in versionCmd: prefer info.Main.Version, fall back to "dev".
+func shortVersion() string {
+	info, ok := debug.ReadBuildInfo()
+	if !ok {
+		return "dev"
+	}
+	v := info.Main.Version
+	if v == "" || v == "(devel)" {
+		return "dev"
+	}
+	return v
+}
+
 // versionCmd prints the binary's build info — module version, VCS revision,
 // commit time, and Go runtime — using runtime/debug.ReadBuildInfo so no
 // ldflag-set version variable is needed.
