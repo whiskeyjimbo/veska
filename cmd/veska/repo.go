@@ -39,85 +39,21 @@ func repoCmd() *cobra.Command {
 	return cmd
 }
 
-// repoPruneCmd removes registered repos whose root directory is gone — a
-// recurring state when checkouts move or get cleaned up. Without prune,
-// the daemon logs a WARN every boot for each missing repo (solov2-s0t0).
-// --dry-run lists the candidates without removing them (solov2-47yj).
+// repoPruneCmd is the deprecated alias for `repo remove --missing`. Hidden
+// from help but kept for one release so existing scripts/muscle memory keep
+// working. solov2-meuk: cleanup verbs were split, junior users had no way
+// to know which one applied. Remove this command after one release cycle.
 func repoPruneCmd() *cobra.Command {
 	var dryRun bool
 	cmd := &cobra.Command{
 		Use:          "prune",
-		Short:        "Remove registered repos whose root directory no longer exists",
+		Short:        "Deprecated: use `veska repo remove --missing`",
+		Hidden:       true,
 		Args:         cobra.NoArgs,
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			ctx := cmd.Context()
-			w := cmd.OutOrStdout()
-
-			type listResult struct {
-				Repos []repoView `json:"repos"`
-			}
-			var lr listResult
-			useDaemon := callMCP(ctx, "eng_list_repos", map[string]any{}, &lr) == nil
-			var repos []repoView
-			var db *sql.DB
-			var closeFn func()
-			if !useDaemon {
-				var err error
-				db, closeFn, err = openLocalDB()
-				if err != nil {
-					return fmt.Errorf("repo prune: %w", err)
-				}
-				defer closeFn()
-				recs, err := repo.List(ctx, db)
-				if err != nil {
-					return fmt.Errorf("repo prune: %w", err)
-				}
-				for _, r := range recs {
-					repos = append(repos, repoView{
-						RepoID: r.RepoID, RootPath: r.RootPath,
-						ActiveBranch: r.ActiveBranch, LastPromotedSHA: r.LastPromotedSHA,
-					})
-				}
-			} else {
-				repos = lr.Repos
-			}
-
-			var missing []repoView
-			for _, r := range repos {
-				if _, err := os.Stat(r.RootPath); os.IsNotExist(err) {
-					missing = append(missing, r)
-				}
-			}
-			if len(missing) == 0 {
-				fmt.Fprintln(w, "no missing repos — nothing to prune")
-				return nil
-			}
-			for _, r := range missing {
-				prefix := "would remove"
-				if !dryRun {
-					prefix = "removing"
-				}
-				fmt.Fprintf(w, "%s %s  %s\n", prefix, shortRepoID(r.RepoID), r.RootPath)
-				if dryRun {
-					continue
-				}
-				if useDaemon {
-					if err := dialRemoveRepo(ctx, r.RepoID); err != nil {
-						fmt.Fprintf(w, "  failed: %v\n", err)
-					}
-				} else {
-					if err := repo.Remove(ctx, db, r.RepoID); err != nil {
-						fmt.Fprintf(w, "  failed: %v\n", err)
-					}
-				}
-			}
-			if dryRun {
-				fmt.Fprintf(w, "%d candidate(s) — rerun without --dry-run to apply\n", len(missing))
-			} else {
-				fmt.Fprintf(w, "pruned %d repo(s)\n", len(missing))
-			}
-			return nil
+			fmt.Fprintln(cmd.ErrOrStderr(), "`veska repo prune` is deprecated; use `veska repo remove --missing`")
+			return removeMissingRepos(cmd.Context(), cmd.OutOrStdout(), dryRun)
 		},
 	}
 	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "list candidates without removing them")
@@ -555,45 +491,201 @@ func waitForScanComplete(ctx context.Context, w io.Writer, repoID string) error 
 	}
 }
 
+// repoRemoveCmd unifies the deregister surface (solov2-meuk):
+//   - `repo remove <id|path>` — remove one (original behavior)
+//   - `repo remove --missing`  — remove every repo whose root dir is gone
+//     (the old `repo prune` behavior)
+//   - `repo remove --all`      — wipe registry (requires --yes confirmation)
+//   - `--dry-run` is honored for --missing and --all.
+//
+// `repo prune` remains as a hidden alias for one release; see repoPruneCmd.
 func repoRemoveCmd() *cobra.Command {
-	return &cobra.Command{
-		Use:          "remove <id-or-path>",
+	var (
+		missing bool
+		all     bool
+		yes     bool
+		dryRun  bool
+	)
+	cmd := &cobra.Command{
+		Use:          "remove [<id-or-path>]",
 		Short:        "Deregister a repository and remove hooks",
-		Args:         cobra.ExactArgs(1),
+		Args:         cobra.MaximumNArgs(1),
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
+			switch {
+			case missing && all:
+				return fmt.Errorf("repo remove: --missing and --all are mutually exclusive")
+			case (missing || all) && len(args) == 1:
+				return fmt.Errorf("repo remove: positional argument not allowed with --missing/--all")
+			case !missing && !all && len(args) == 0:
+				return fmt.Errorf("repo remove: missing repo id-or-path (or pass --missing / --all)")
+			}
 			ctx := cmd.Context()
 			w := cmd.OutOrStdout()
-			arg := args[0]
-
-			// solov2-jtl5.2: accept the same identifiers `repo add` does.
-			// If arg looks like a filesystem path, resolve it to a repo_id
-			// via the registry before dialing the daemon. A repo_id (or
-			// short_id prefix) is passed through unchanged so existing
-			// usage isn't affected.
-			id, resolveErr := resolveRepoArg(ctx, arg)
-			if resolveErr != nil {
-				return fmt.Errorf("repo remove: %w", resolveErr)
+			if missing {
+				return removeMissingRepos(ctx, w, dryRun)
 			}
-
-			if err := dialRemoveRepo(ctx, id); err == nil {
-				fmt.Fprintln(w, "removed (via daemon)")
-				return nil
+			if all {
+				return removeAllRepos(ctx, w, cmd.InOrStdin(), dryRun, yes)
 			}
-
-			db, closeFn, err := openLocalDB()
-			if err != nil {
-				return fmt.Errorf("repo remove: %w", err)
-			}
-			defer closeFn()
-
-			if err := repo.Remove(ctx, db, id); err != nil {
-				return fmt.Errorf("repo remove: %w", err)
-			}
-			fmt.Fprintln(w, "removed (direct write; daemon offline)")
-			return nil
+			return removeOneRepo(ctx, w, args[0])
 		},
 	}
+	cmd.Flags().BoolVar(&missing, "missing", false, "remove every repo whose root directory no longer exists")
+	cmd.Flags().BoolVar(&all, "all", false, "remove every registered repo (requires --yes or interactive confirmation)")
+	cmd.Flags().BoolVar(&yes, "yes", false, "skip interactive confirmation (required for --all in scripts)")
+	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "print what would be removed without changing the registry")
+	return cmd
+}
+
+// removeOneRepo is the original single-repo deregister path.
+func removeOneRepo(ctx context.Context, w io.Writer, arg string) error {
+	// solov2-jtl5.2: accept the same identifiers `repo add` does.
+	id, resolveErr := resolveRepoArg(ctx, arg)
+	if resolveErr != nil {
+		return fmt.Errorf("repo remove: %w", resolveErr)
+	}
+	if err := dialRemoveRepo(ctx, id); err == nil {
+		fmt.Fprintln(w, "removed (via daemon)")
+		return nil
+	}
+	db, closeFn, err := openLocalDB()
+	if err != nil {
+		return fmt.Errorf("repo remove: %w", err)
+	}
+	defer closeFn()
+	if err := repo.Remove(ctx, db, id); err != nil {
+		return fmt.Errorf("repo remove: %w", err)
+	}
+	fmt.Fprintln(w, "removed (direct write; daemon offline)")
+	return nil
+}
+
+// listRegisteredRepos returns the repo set via the daemon when up, falling
+// back to direct DB read. Shared by removeMissingRepos / removeAllRepos so
+// the unified verb sees the same registry the legacy prune did.
+func listRegisteredRepos(ctx context.Context) ([]repoView, error) {
+	type listResult struct {
+		Repos []repoView `json:"repos"`
+	}
+	var lr listResult
+	if err := callMCP(ctx, "eng_list_repos", map[string]any{}, &lr); err == nil {
+		return lr.Repos, nil
+	}
+	db, closeFn, err := openLocalDB()
+	if err != nil {
+		return nil, err
+	}
+	defer closeFn()
+	recs, err := repo.List(ctx, db)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]repoView, 0, len(recs))
+	for _, r := range recs {
+		out = append(out, repoView{
+			RepoID: r.RepoID, RootPath: r.RootPath,
+			ActiveBranch: r.ActiveBranch, LastPromotedSHA: r.LastPromotedSHA,
+		})
+	}
+	return out, nil
+}
+
+// removeMissingRepos is the old `repo prune` body, lifted under the unified
+// verb. Daemon-up uses dialRemoveRepo; daemon-down uses direct repo.Remove.
+func removeMissingRepos(ctx context.Context, w io.Writer, dryRun bool) error {
+	repos, err := listRegisteredRepos(ctx)
+	if err != nil {
+		return fmt.Errorf("repo remove --missing: %w", err)
+	}
+	var missing []repoView
+	for _, r := range repos {
+		if _, statErr := os.Stat(r.RootPath); os.IsNotExist(statErr) {
+			missing = append(missing, r)
+		}
+	}
+	if len(missing) == 0 {
+		fmt.Fprintln(w, "no missing repos — nothing to remove")
+		return nil
+	}
+	return applyBulkRemove(ctx, w, missing, dryRun, "missing")
+}
+
+// removeAllRepos wipes the whole registry. Requires --yes when non-interactive.
+func removeAllRepos(ctx context.Context, w io.Writer, in io.Reader, dryRun, yes bool) error {
+	repos, err := listRegisteredRepos(ctx)
+	if err != nil {
+		return fmt.Errorf("repo remove --all: %w", err)
+	}
+	if len(repos) == 0 {
+		fmt.Fprintln(w, "registry is empty — nothing to remove")
+		return nil
+	}
+	if !dryRun && !yes {
+		fmt.Fprintf(w, "about to remove all %d registered repo(s). Continue? [y/N] ", len(repos))
+		var resp string
+		_, _ = fmt.Fscanln(in, &resp)
+		if !strings.EqualFold(strings.TrimSpace(resp), "y") {
+			fmt.Fprintln(w, "aborted")
+			return nil
+		}
+	}
+	return applyBulkRemove(ctx, w, repos, dryRun, "all")
+}
+
+// applyBulkRemove iterates targets and removes each via daemon-or-direct,
+// printing per-row status and a trailing summary. Errors on individual rows
+// are printed but do not abort the loop — partial cleanup is better than
+// none.
+func applyBulkRemove(ctx context.Context, w io.Writer, targets []repoView, dryRun bool, scope string) error {
+	useDaemon := false
+	if _, err := dialEngStatus(ctx); err == nil {
+		useDaemon = true
+	}
+	var db *sql.DB
+	var closeFn func()
+	if !useDaemon {
+		var err error
+		db, closeFn, err = openLocalDB()
+		if err != nil {
+			return fmt.Errorf("repo remove --%s: %w", scope, err)
+		}
+		defer closeFn()
+	}
+	for _, r := range targets {
+		prefix := "would remove"
+		if !dryRun {
+			prefix = "removing"
+		}
+		fmt.Fprintf(w, "%s %s  %s\n", prefix, shortRepoID(r.RepoID), r.RootPath)
+		if dryRun {
+			continue
+		}
+		var rmErr error
+		if useDaemon {
+			rmErr = dialRemoveRepo(ctx, r.RepoID)
+		} else {
+			rmErr = repo.Remove(ctx, db, r.RepoID)
+		}
+		if rmErr != nil {
+			fmt.Fprintf(w, "  failed: %v\n", rmErr)
+		}
+	}
+	if dryRun {
+		fmt.Fprintf(w, "%d candidate(s) — rerun without --dry-run to apply\n", len(targets))
+	} else {
+		fmt.Fprintf(w, "removed %d repo(s)\n", len(targets))
+	}
+	return nil
+}
+
+// dialEngStatus probes whether the daemon socket is reachable. Used by
+// applyBulkRemove to choose the daemon path vs direct DB without a separate
+// guess.
+func dialEngStatus(ctx context.Context) (any, error) {
+	var resp any
+	err := callMCP(ctx, "eng_get_status", map[string]any{}, &resp)
+	return resp, err
 }
 
 // resolveRepoArg returns the canonical repo_id for arg. A hex-only string
