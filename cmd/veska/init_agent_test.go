@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -126,6 +127,118 @@ func TestWriteAgentSnippet_GitignoreOptIn(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(root2, ".gitignore")); err != nil {
 		t.Errorf("expected .gitignore created with --update-gitignore, got %v", err)
+	}
+}
+
+// TestEnsureMcpServerEntry_CreatesFile covers solov2-zo0w: writing
+// veska into a missing .mcp.json creates the file with the right
+// shape and returns "registered".
+func TestEnsureMcpServerEntry_CreatesFile(t *testing.T) {
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, ".mcp.json")
+	verb, err := ensureMcpServerEntry(cfgPath, "veska", "/usr/local/bin/veska-mcp")
+	if err != nil {
+		t.Fatalf("ensureMcpServerEntry: %v", err)
+	}
+	if verb != "registered" {
+		t.Errorf("verb = %q, want registered", verb)
+	}
+	b, _ := os.ReadFile(cfgPath)
+	var got map[string]any
+	if err := json.Unmarshal(b, &got); err != nil {
+		t.Fatalf("unmarshal: %v\n%s", err, b)
+	}
+	servers, ok := got["mcpServers"].(map[string]any)
+	if !ok {
+		t.Fatalf("mcpServers missing or wrong shape: %v", got)
+	}
+	veskaEntry, ok := servers["veska"].(map[string]any)
+	if !ok {
+		t.Fatalf("veska entry missing: %v", servers)
+	}
+	if veskaEntry["command"] != "/usr/local/bin/veska-mcp" {
+		t.Errorf("command = %v, want /usr/local/bin/veska-mcp", veskaEntry["command"])
+	}
+}
+
+// TestEnsureMcpServerEntry_PreservesOtherServers guards the "don't
+// stomp on other MCP servers" invariant — a project that already
+// registered, say, github + linear must keep both after veska's
+// merge.
+func TestEnsureMcpServerEntry_PreservesOtherServers(t *testing.T) {
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, ".mcp.json")
+	prior := `{
+  "mcpServers": {
+    "github": {"command": "/usr/bin/gh-mcp", "args": []},
+    "linear": {"command": "/usr/bin/linear-mcp", "args": []}
+  },
+  "otherToplevelKey": "preserved"
+}`
+	if err := os.WriteFile(cfgPath, []byte(prior), 0o644); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	if _, err := ensureMcpServerEntry(cfgPath, "veska", "/bin/veska-mcp"); err != nil {
+		t.Fatalf("ensureMcpServerEntry: %v", err)
+	}
+	b, _ := os.ReadFile(cfgPath)
+	var got map[string]any
+	if err := json.Unmarshal(b, &got); err != nil {
+		t.Fatalf("unmarshal: %v\n%s", err, b)
+	}
+	servers := got["mcpServers"].(map[string]any)
+	for _, name := range []string{"github", "linear", "veska"} {
+		if _, ok := servers[name]; !ok {
+			t.Errorf("server %q missing after merge: %v", name, servers)
+		}
+	}
+	if got["otherToplevelKey"] != "preserved" {
+		t.Errorf("top-level key lost: %v", got)
+	}
+}
+
+// TestEnsureMcpServerEntry_IdempotentSameCommand: a second call with
+// the same command must report "already registered" and not bump the
+// file's contents (no spurious diffs in version control).
+func TestEnsureMcpServerEntry_IdempotentSameCommand(t *testing.T) {
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, ".mcp.json")
+	const cmd = "/bin/veska-mcp"
+	if _, err := ensureMcpServerEntry(cfgPath, "veska", cmd); err != nil {
+		t.Fatalf("first: %v", err)
+	}
+	verb, err := ensureMcpServerEntry(cfgPath, "veska", cmd)
+	if err != nil {
+		t.Fatalf("second: %v", err)
+	}
+	if verb != "already registered" {
+		t.Errorf("verb = %q, want already registered", verb)
+	}
+}
+
+// TestEnsureMcpServerEntry_UpdatesChangedCommand: when the user moves
+// the veska-mcp binary (e.g. reinstalled to /usr/local/bin), the
+// re-run should update the entry rather than silently leaving the
+// stale path.
+func TestEnsureMcpServerEntry_UpdatesChangedCommand(t *testing.T) {
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, ".mcp.json")
+	if _, err := ensureMcpServerEntry(cfgPath, "veska", "/old/path/veska-mcp"); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	verb, err := ensureMcpServerEntry(cfgPath, "veska", "/new/path/veska-mcp")
+	if err != nil {
+		t.Fatalf("update: %v", err)
+	}
+	if verb != "updated" {
+		t.Errorf("verb = %q, want updated", verb)
+	}
+	b, _ := os.ReadFile(cfgPath)
+	var got map[string]any
+	_ = json.Unmarshal(b, &got)
+	cmd := got["mcpServers"].(map[string]any)["veska"].(map[string]any)["command"]
+	if cmd != "/new/path/veska-mcp" {
+		t.Errorf("command = %v, want /new/path/veska-mcp", cmd)
 	}
 }
 
