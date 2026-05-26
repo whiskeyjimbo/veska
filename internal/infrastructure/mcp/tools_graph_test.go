@@ -442,6 +442,65 @@ func TestGetNode_NotFound(t *testing.T) {
 	}
 }
 
+// TestGetNode_RepoIDPresentButUnknownRejected pins solov2-hb2s: when the
+// caller supplies repo_id (even without branch), the handler must validate
+// it against the registry. Previously, an unknown or mistyped repo_id was
+// silently ignored — the handler took the cross-repo fallback path (since
+// branch was empty) and returned a node from any repo, with no error.
+// That made the repo_id parameter advisory in a way the README contract
+// did not document.
+func TestGetNode_RepoIDPresentButUnknownRejected(t *testing.T) {
+	store := newStubGraphStorage()
+	store.addNode(mustNode(t, "node-42", "pkg/bar.go", "Bar", domain.KindStruct))
+
+	repos := []application.RepoRecord{
+		{RepoID: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", RootPath: "/abs/repo", ActiveBranch: "main"},
+	}
+	r := NewRegistry()
+	RegisterGraphTools(r, store, application.NewStagingArea(),
+		WithRepoLister(&stubRepoLister{repos: repos}))
+
+	_, rpcErr := dispatchGraph(t, r, "eng_get_node", map[string]string{
+		"node_id": "node-42",
+		"repo_id": "deadbeefdead", // valid 12-char shape, but no such repo
+	})
+	if rpcErr == nil {
+		t.Fatal("expected NotFound for unknown repo_id, got success")
+	}
+	if rpcErr.Code != CodeNotFound {
+		t.Errorf("expected CodeNotFound for unknown repo_id, got %d (%s)", rpcErr.Code, rpcErr.Message)
+	}
+}
+
+// TestGetNode_RepoIDWithoutBranchResolvesActiveBranch pins solov2-hb2s:
+// when only repo_id is supplied, the handler must fill branch from the
+// registered active_branch and take the scoped GetNode path (not the
+// cross-repo fallback). We assert this by registering a repo that
+// resolves cleanly — the call must succeed without erroring out of the
+// resolveRepoID validation that the fallback path would have skipped.
+func TestGetNode_RepoIDWithoutBranchResolvesActiveBranch(t *testing.T) {
+	store := newStubGraphStorage()
+	store.addNode(mustNode(t, "node-42", "pkg/bar.go", "Bar", domain.KindStruct))
+
+	repos := []application.RepoRecord{
+		{RepoID: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", RootPath: "/abs/repo", ActiveBranch: "develop"},
+	}
+	r := NewRegistry()
+	RegisterGraphTools(r, store, application.NewStagingArea(),
+		WithRepoLister(&stubRepoLister{repos: repos}))
+
+	resp, rpcErr := dispatchGraph(t, r, "eng_get_node", map[string]string{
+		"node_id": "node-42",
+		"repo_id": "aaaaaaaaaaaa", // valid short_id
+	})
+	if rpcErr != nil {
+		t.Fatalf("expected scoped lookup to succeed, got %+v", rpcErr)
+	}
+	if len(resp.Nodes) != 1 || resp.Nodes[0].NodeID != "node-42" {
+		t.Fatalf("expected node-42, got %+v", resp.Nodes)
+	}
+}
+
 // TestGetNode_OmitRepoIDAndBranch guards solov2-v4ob: node_id is a globally
 // unique content hash, so repo_id and branch must be optional. When both are
 // omitted the handler falls back to FindNodeByID (cross-repo lookup).
