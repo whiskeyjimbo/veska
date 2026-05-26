@@ -210,8 +210,9 @@ func trimRedundantFilePrefix(msg, file string) string {
 
 func findingsShowCmd() *cobra.Command {
 	var (
-		branch  string
-		jsonOut bool
+		repoFlag string
+		branch   string
+		jsonOut  bool
 	)
 	cmd := &cobra.Command{
 		Use:          "show <finding_id>",
@@ -220,6 +221,15 @@ func findingsShowCmd() *cobra.Command {
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			params := map[string]any{"finding_id": args[0]}
+			// solov2-8kkj: --repo on `findings show` is opt-in scoping only.
+			// finding_id is globally unique, so the lookup succeeds without
+			// it; supplying it asserts "I expect this finding to belong to
+			// repo X" and a mismatch becomes NotFound. We deliberately do
+			// NOT auto-resolve from cwd here — silent scoping would turn a
+			// successful cross-repo lookup into a confusing NotFound.
+			if repoFlag != "" {
+				params["repo_id"] = repoFlag
+			}
 			if branch != "" {
 				params["branch"] = branch
 			}
@@ -245,6 +255,7 @@ func findingsShowCmd() *cobra.Command {
 			return nil
 		},
 	}
+	cmd.Flags().StringVar(&repoFlag, "repo", "", "repo id (full or short) to scope the lookup; parity with `findings list`")
 	cmd.Flags().StringVar(&branch, "branch", "", "branch to scope the lookup (default: active)")
 	cmd.Flags().BoolVar(&jsonOut, "json", false, "emit JSON")
 	return cmd

@@ -321,7 +321,8 @@ var getFindingInputSchema = json.RawMessage(`{
   "additionalProperties": false,
   "properties": {
     "finding_id": {"type": "string"},
-    "branch":     {"type": "string", "description": "Optional; finding_id is globally unique."}
+    "branch":     {"type": "string", "description": "Optional; finding_id is globally unique."},
+    "repo_id":    {"type": "string", "description": "Optional; informational only (finding_id is globally unique)."}
   },
   "required": ["finding_id"]
 }`)

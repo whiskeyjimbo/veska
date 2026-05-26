@@ -51,6 +51,25 @@ func TestGetFinding(t *testing.T) {
 			wantErr:  true,
 			wantCode: CodeNotFound,
 		},
+		{
+			// solov2-8kkj: --repo accepted as opt-in scoping assertion.
+			name:   "matching repo passes through",
+			params: map[string]any{"finding_id": "finding-get-1", "repo_id": "repo-1"},
+			wantID: "finding-get-1",
+		},
+		{
+			// solov2-8kkj: --repo with a wrong repo prefix yields NotFound.
+			name:     "wrong repo returns not-found",
+			params:   map[string]any{"finding_id": "finding-get-1", "repo_id": "different-repo"},
+			wantErr:  true,
+			wantCode: CodeNotFound,
+		},
+		{
+			// solov2-8kkj: prefix match (short repo id) is accepted.
+			name:   "short repo prefix passes through",
+			params: map[string]any{"finding_id": "finding-get-1", "repo_id": "repo"},
+			wantID: "finding-get-1",
+		},
 	}
 
 	for _, tc := range tests {

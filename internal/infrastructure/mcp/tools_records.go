@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/whiskeyjimbo/veska/internal/core/domain"
@@ -45,6 +46,10 @@ func RegisterRecordTools(r *Registry, db *sql.DB, aw ports.AuditWriter) {
 type getFindingParams struct {
 	FindingID string `json:"finding_id"`
 	Branch    string `json:"branch"`
+	// RepoID is accepted for symmetry with eng_list_findings (solov2-8kkj)
+	// but the lookup is by finding_id alone — when supplied it is checked
+	// against the row's repo_id and a mismatch returns NotFound.
+	RepoID string `json:"repo_id"`
 }
 
 func makeGetFindingHandler(db *sql.DB) ToolHandler {
@@ -84,10 +89,26 @@ func makeGetFindingHandler(db *sql.DB) ToolHandler {
 		if err != nil {
 			return nil, &RPCError{Code: CodeInternalError, Message: fmt.Sprintf("query finding: %v", err)}
 		}
+		// solov2-8kkj: when --repo is supplied, ensure it agrees with the
+		// row we loaded; mismatch is a NotFound (the agent asked for "this
+		// finding scoped to repo X" and that pair does not exist).
+		if p.RepoID != "" && !findingRepoMatches(f.RepoID, p.RepoID) {
+			return nil, &RPCError{Code: CodeNotFound, Message: fmt.Sprintf("finding not found: %s in repo %s", p.FindingID, p.RepoID)}
+		}
 		f.FilePath = relativizeFindingPath(f.FilePath, findingRepoRoot(ctx, db, f.RepoID))
 
 		return map[string]any{"finding": f}, nil
 	}
+}
+
+// findingRepoMatches returns true when supplied matches actual exactly or
+// is a prefix of actual (mirrors the short-id matching eng_list_findings
+// and eng_promote_repo already accept).
+func findingRepoMatches(actual, supplied string) bool {
+	if supplied == "" || actual == supplied {
+		return true
+	}
+	return strings.HasPrefix(actual, supplied)
 }
 
 // ---------------------------------------------------------------------------
