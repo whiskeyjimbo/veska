@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
 
 	"github.com/spf13/cobra"
 	"github.com/whiskeyjimbo/veska/internal/application"
@@ -17,6 +16,63 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/treesitter"
 	"github.com/whiskeyjimbo/veska/internal/repo"
 )
+
+// reindexDaemonProbe reports whether the daemon socket is reachable. It is
+// a package-level seam so tests can simulate "daemon up" without standing
+// up a real Unix socket. Production routes through daemonRunning().
+var reindexDaemonProbe = daemonRunning
+
+// dialReindex routes the reindex through the daemon's eng_reindex_repo MCP
+// tool (solov2-4d7b) so the user does not have to stop the daemon before
+// reindexing. Package-level seam so tests can swap a spy.
+var dialReindex = defaultDialReindex
+
+// resolveTargetForDial converts the user-supplied target into a (repoID,
+// rootPath) pair suitable for eng_reindex_repo. When target is empty, the
+// CWD is used as the rootPath (daemon canonicalises). A non-empty target
+// is passed through as repoID first; the daemon falls back to NotFound
+// rather than the CLI guessing, which keeps the resolution rules in one
+// place. A target that exists as a directory is sent as rootPath instead
+// so the daemon resolves by path.
+func resolveTargetForDial(_ context.Context, target string) (repoID, rootPath string, err error) {
+	if target == "" {
+		cwd, werr := os.Getwd()
+		if werr != nil {
+			return "", "", fmt.Errorf("reindex: getwd: %w", werr)
+		}
+		return "", cwd, nil
+	}
+	if info, serr := os.Stat(target); serr == nil && info.IsDir() {
+		abs, aerr := filepath.Abs(target)
+		if aerr != nil {
+			return "", "", fmt.Errorf("reindex: abs %q: %w", target, aerr)
+		}
+		return "", abs, nil
+	}
+	return target, "", nil
+}
+
+// defaultDialReindex sends the eng_reindex_repo RPC to the daemon. Either
+// repoID or rootPath may be empty; the handler accepts either form.
+func defaultDialReindex(ctx context.Context, repoID, rootPath string) (string, error) {
+	type result struct {
+		RepoID string `json:"repo_id"`
+		Branch string `json:"branch"`
+		Status string `json:"status"`
+	}
+	params := map[string]any{}
+	if repoID != "" {
+		params["repo_id"] = repoID
+	}
+	if rootPath != "" {
+		params["root_path"] = rootPath
+	}
+	var r result
+	if err := callMCP(ctx, "eng_reindex_repo", params, &r); err != nil {
+		return "", err
+	}
+	return r.RepoID, nil
+}
 
 // reparserFactory builds a cold-scan reparser closure from an open SQLite
 // pool set and an IgnoreLoader. It is a package-level seam so tests can
@@ -78,13 +134,32 @@ func reindexCmd() *cobra.Command {
 			w := cmd.OutOrStdout()
 			ctx := cmd.Context()
 
-			// solov2-mdn3: reindex opens sqlite directly. If the daemon
-			// is running, its embedder worker races us for the write lock
-			// and we hit SQLITE_BUSY mid-promotion (leaving a half-written
-			// state). Refuse with an actionable error instead. Probe the
-			// MCP socket cheaply — a dial-only check, no RPC round-trip.
-			if daemonRunning() {
-				return fmt.Errorf("reindex: daemon is running and would race us for the sqlite write lock.\n  stop it first:  veska service stop && veska reindex %s\n  then restart:   veska service start", strings.Join(args, " "))
+			// solov2-4d7b: when the daemon is up, route the reindex
+			// through its eng_reindex_repo MCP tool. The previous behaviour
+			// (refuse with a stop-the-daemon hint, solov2-mdn3) disconnects
+			// the editor's MCP session and was a junior-hostile regression
+			// from add-time scans (which run inside the daemon already).
+			// The direct-sqlite fallback below still handles the no-daemon
+			// case.
+			if reindexDaemonProbe() {
+				var target string
+				if len(args) == 1 {
+					target = args[0]
+				}
+				repoID, rootPath, derr := resolveTargetForDial(ctx, target)
+				if derr != nil {
+					return derr
+				}
+				fmt.Fprintf(w, "reindexing via daemon...\n")
+				gotID, err := dialReindex(ctx, repoID, rootPath)
+				if err != nil {
+					return fmt.Errorf("reindex: %w", err)
+				}
+				if gotID == "" {
+					gotID = repoID
+				}
+				fmt.Fprintf(w, "reindex complete: repo %s\n", gotID)
+				return nil
 			}
 
 			dbPath := filepath.Join(config.DefaultVectorDir(), "veska.db")

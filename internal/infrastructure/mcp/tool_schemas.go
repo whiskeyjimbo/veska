@@ -56,6 +56,17 @@ var promoteRepoInputSchema = json.RawMessage(`{
   }
 }`)
 
+var reindexRepoInputSchema = json.RawMessage(`{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "description": "Force a full cold-scan reparse of a registered repo, in-daemon (solov2-4d7b). One of repo_id or root_path is required; when both are passed, repo_id wins. Returns when the scan completes; the daemon's standard 'cold scan: starting' / 'cold scan: complete' log pair is emitted as for the add-repo path.",
+  "properties": {
+    "repo_id":   {"type": "string", "description": "Full repo_id or short_id prefix."},
+    "root_path": {"type": "string", "description": "Absolute filesystem path; canonicalised via EvalSymlinks before lookup."}
+  }
+}`)
+
 var getCurrentRepoInputSchema = json.RawMessage(`{
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "type": "object",

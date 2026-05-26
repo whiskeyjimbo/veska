@@ -145,6 +145,11 @@ To force a re-scan of an already-registered repo (e.g. after a model swap):
 ./bin/veska reindex /path/to/your/repo
 ```
 
+Safe to run while the daemon is up — the CLI dispatches the cold-scan
+through the daemon's `eng_reindex_repo` MCP tool (solov2-4d7b), so your
+editor's MCP connection is not interrupted. With the daemon stopped, the
+same command falls back to a direct in-process reparse.
+
 ### First call — 60 second sanity check
 
 Once `cold scan: complete` shows in `~/.veska/logs/daemon.log`, drive two
