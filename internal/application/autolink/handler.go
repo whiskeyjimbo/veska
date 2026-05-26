@@ -247,10 +247,16 @@ func (h *Handler) Handle(ctx context.Context, row ports.WorkRow) error {
 
 	// Build display labels for the (already-hydrated above) target metadata,
 	// so the finding names the symbol+file rather than an opaque node ID
-	// (solov2-wh0).
+	// (solov2-wh0). solov2-6eqa: also build src labels so the message
+	// names BOTH sides — "X in src.go similar to Y in tgt.go" — instead
+	// of "Similar to Y" with the X side hidden.
 	displayByID := make(map[string]string, len(tgtMeta))
 	for _, m := range tgtMeta {
 		displayByID[m.NodeID] = m.SymbolPath + " in " + m.FilePath
+	}
+	srcDisplayByID := make(map[string]string, len(srcMeta))
+	for _, m := range srcMeta {
+		srcDisplayByID[m.NodeID] = m.SymbolPath + " in " + m.FilePath
 	}
 
 	// Cache source-node content hashes across the candidate set so a handful
@@ -283,13 +289,17 @@ func (h *Handler) Handle(ctx context.Context, row ports.WorkRow) error {
 		if target == "" {
 			target = c.TargetNodeID
 		}
+		src := srcDisplayByID[c.SourceNodeID]
+		if src == "" {
+			src = c.SourceNodeID
+		}
 		f, err := domain.NewFinding(
 			row.RepoID,
 			row.Branch,
 			domain.SeverityLow,
 			domain.LayerSemantic,
 			Rule,
-			fmt.Sprintf("Similar to %s (score %.2f)", target, c.Score),
+			fmt.Sprintf("%s similar to %s (score %.2f)", src, target, c.Score),
 			opts...,
 		)
 		if err != nil {
