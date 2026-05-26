@@ -26,6 +26,8 @@ func findingsCmd() *cobra.Command {
 	cmd.AddCommand(findingsShowCmd())
 	cmd.AddCommand(findingsCloseCmd())
 	cmd.AddCommand(findingsReopenCmd())
+	cmd.AddCommand(findingsSuppressCmd())
+	cmd.AddCommand(findingsSuppressionsCmd())
 	return cmd
 }
 
