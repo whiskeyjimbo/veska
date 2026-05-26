@@ -140,10 +140,10 @@ func LookupByCanonicalURL(ctx context.Context, db *sql.DB, urlOrCanonical string
 		lastSHA sql.NullString
 	)
 	err = db.QueryRowContext(ctx,
-		`SELECT repo_id, root_path, active_branch, last_promoted_sha
+		`SELECT repo_id, root_path, active_branch, last_promoted_sha, kind
 		 FROM repos WHERE canonical_url = ?`,
 		canonical,
-	).Scan(&rec.RepoID, &rec.RootPath, &branch, &lastSHA)
+	).Scan(&rec.RepoID, &rec.RootPath, &branch, &lastSHA, &rec.Kind)
 	if errors.Is(err, sql.ErrNoRows) {
 		return Record{}, false, nil
 	}

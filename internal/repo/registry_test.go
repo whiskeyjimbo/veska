@@ -417,11 +417,11 @@ func TestList_ReturnsRegisteredRepos(t *testing.T) {
 	}
 
 	// ORDER BY repo_id: id-a then id-b.
-	if got[0] != (repo.Record{RepoID: "id-a", RootPath: "/path/a"}) {
+	if got[0] != (repo.Record{RepoID: "id-a", RootPath: "/path/a", Kind: "tracked"}) {
 		t.Errorf("got[0] = %+v, want id-a with empty nullable fields", got[0])
 	}
 	if got[1] != (repo.Record{
-		RepoID: "id-b", RootPath: "/path/b", ActiveBranch: "main", LastPromotedSHA: "abc123",
+		RepoID: "id-b", RootPath: "/path/b", ActiveBranch: "main", LastPromotedSHA: "abc123", Kind: "tracked",
 	}) {
 		t.Errorf("got[1] = %+v, want fully-populated id-b", got[1])
 	}
@@ -455,6 +455,7 @@ func TestGet_ReturnsRegisteredRepo(t *testing.T) {
 	}
 	want := repo.Record{
 		RepoID: "id-x", RootPath: "/path/x", ActiveBranch: "main", LastPromotedSHA: "sha-x",
+		Kind: "tracked", // migration 0013 default
 	}
 	if got != want {
 		t.Errorf("Get = %+v, want %+v", got, want)
