@@ -87,7 +87,7 @@ func TestBlastRadius_DefaultsToCallers(t *testing.T) {
 	}}
 	svc := blastradius.NewService(edges, nodes, nil)
 	r := NewRegistry()
-	RegisterBlastTools(r, svc, nil, nil, nil)
+	RegisterBlastTools(r, svc, nil, nil, nil, nil)
 	resp, rpcErr := dispatchBlast(t, r, "eng_get_blast_radius", map[string]any{
 		"node_id":   "seed",
 		"repo_id":   "r1",
@@ -115,7 +115,7 @@ func TestBlastRadius_HonoursCalleesDirection(t *testing.T) {
 	}}
 	svc := blastradius.NewService(edges, nodes, nil)
 	r := NewRegistry()
-	RegisterBlastTools(r, svc, nil, nil, nil)
+	RegisterBlastTools(r, svc, nil, nil, nil, nil)
 	resp, rpcErr := dispatchBlast(t, r, "eng_get_blast_radius", map[string]any{
 		"node_id":   "seed",
 		"repo_id":   "r1",
@@ -134,7 +134,7 @@ func TestBlastRadius_HonoursCalleesDirection(t *testing.T) {
 func TestBlastRadius_BadDirectionRejected(t *testing.T) {
 	svc := blastradius.NewService(&blastFakeEdges{}, &blastFakeNodes{}, nil)
 	r := NewRegistry()
-	RegisterBlastTools(r, svc, nil, nil, nil)
+	RegisterBlastTools(r, svc, nil, nil, nil, nil)
 	_, rpcErr := dispatchBlast(t, r, "eng_get_blast_radius", map[string]any{
 		"node_id":   "seed",
 		"repo_id":   "r",
@@ -149,7 +149,7 @@ func TestBlastRadius_BadDirectionRejected(t *testing.T) {
 func TestBlastRadius_RequiresParams(t *testing.T) {
 	svc := blastradius.NewService(&blastFakeEdges{}, &blastFakeNodes{}, nil)
 	r := NewRegistry()
-	RegisterBlastTools(r, svc, nil, nil, nil)
+	RegisterBlastTools(r, svc, nil, nil, nil, nil)
 	_, rpcErr := dispatchBlast(t, r, "eng_get_blast_radius", map[string]any{
 		"repo_id": "r",
 		"branch":  "main",
@@ -171,7 +171,7 @@ func TestDirtyBlastRadius_FlagsIncludedStaging(t *testing.T) {
 	}}
 	svc := blastradius.NewService(edges, nodes, staging)
 	r := NewRegistry()
-	RegisterBlastTools(r, svc, nil, nil, nil)
+	RegisterBlastTools(r, svc, nil, nil, nil, nil)
 	resp, rpcErr := dispatchBlast(t, r, "eng_get_dirty_blast_radius", map[string]any{
 		"repo_id":   "r1",
 		"branch":    "main",
@@ -191,7 +191,7 @@ func TestDirtyBlastRadius_FlagsIncludedStaging(t *testing.T) {
 func TestBlastTools_RegistersThreeTools(t *testing.T) {
 	svc := blastradius.NewService(&blastFakeEdges{}, &blastFakeNodes{}, nil)
 	r := NewRegistry()
-	RegisterBlastTools(r, svc, nil, nil, nil)
+	RegisterBlastTools(r, svc, nil, nil, nil, nil)
 	got := r.Names()
 	want := []string{"eng_get_blast_radius", "eng_get_diff_blast_radius", "eng_get_dirty_blast_radius"}
 	if len(got) != len(want) {
@@ -207,7 +207,7 @@ func TestBlastTools_RegistersThreeTools(t *testing.T) {
 func TestDiffBlastRadius_NotWiredReturnsInternalError(t *testing.T) {
 	svc := blastradius.NewService(&blastFakeEdges{}, &blastFakeNodes{}, nil)
 	r := NewRegistry()
-	RegisterBlastTools(r, svc, nil, nil, nil)
+	RegisterBlastTools(r, svc, nil, nil, nil, nil)
 	_, rpcErr := dispatchBlast(t, r, "eng_get_diff_blast_radius", map[string]any{
 		"repo_id": "r", "branch": "main",
 	})
@@ -235,7 +235,7 @@ func TestDiffBlastRadius_HappyPath(t *testing.T) {
 	}
 
 	r := NewRegistry()
-	RegisterBlastTools(r, svc, repoRoot, changed, nil)
+	RegisterBlastTools(r, svc, repoRoot, changed, nil, nil)
 	resp, rpcErr := dispatchBlast(t, r, "eng_get_diff_blast_radius", map[string]any{
 		"repo_id":   "r1",
 		"branch":    "main",
@@ -258,11 +258,74 @@ func TestDiffBlastRadius_UnknownRepo(t *testing.T) {
 		return nil, nil
 	}
 	r := NewRegistry()
-	RegisterBlastTools(r, svc, repoRoot, changed, nil)
+	RegisterBlastTools(r, svc, repoRoot, changed, nil, nil)
 	_, rpcErr := dispatchBlast(t, r, "eng_get_diff_blast_radius", map[string]any{
 		"repo_id": "ghost", "branch": "main",
 	})
 	if rpcErr == nil || rpcErr.Code != CodeNotFound {
 		t.Fatalf("expected CodeNotFound, got %+v", rpcErr)
+	}
+}
+
+// TestBlastRadius_AcceptsSymbol pins solov2-psdx: eng_get_blast_radius must
+// resolve symbol→node_id when only symbol is supplied, matching the parity
+// promise eng_get_call_chain already keeps.
+func TestBlastRadius_AcceptsSymbol(t *testing.T) {
+	edges := &blastFakeEdges{inbound: map[string][]string{
+		"n1": {"caller"},
+	}}
+	nodes := &blastFakeNodes{metas: map[string]ports.NodeMeta{
+		"n1":     {NodeID: "n1", SymbolPath: "Foo"},
+		"caller": {NodeID: "caller", SymbolPath: "C"},
+	}}
+	svc := blastradius.NewService(edges, nodes, nil)
+	graph := newStubGraphStorage()
+	graph.addNode(mustNode(t, "n1", "pkg/foo.go", "Foo", domain.KindFunction))
+	r := NewRegistry()
+	RegisterBlastTools(r, svc, nil, nil, nil, graph)
+
+	resp, rpcErr := dispatchBlast(t, r, "eng_get_blast_radius", map[string]any{
+		"symbol":  "Foo",
+		"repo_id": "r1",
+		"branch":  "main",
+	})
+	if rpcErr != nil {
+		t.Fatalf("unexpected err: %+v", rpcErr)
+	}
+	if len(resp.Entries) != 2 || resp.Entries[0].NodeID != "n1" {
+		t.Errorf("expected seed=n1 + caller, got %+v", resp.Entries)
+	}
+}
+
+// TestBlastRadius_AmbiguousSymbolRejected pins solov2-psdx: multiple matches
+// must yield the same "ambiguous; pass node_id" error eng_get_call_chain does.
+func TestBlastRadius_AmbiguousSymbolRejected(t *testing.T) {
+	svc := blastradius.NewService(&blastFakeEdges{}, &blastFakeNodes{}, nil)
+	graph := newStubGraphStorage()
+	graph.addNode(mustNode(t, "a", "a.go", "Foo", domain.KindFunction))
+	graph.addNode(mustNode(t, "b", "b.go", "Foo", domain.KindFunction))
+	r := NewRegistry()
+	RegisterBlastTools(r, svc, nil, nil, nil, graph)
+
+	_, rpcErr := dispatchBlast(t, r, "eng_get_blast_radius", map[string]any{
+		"symbol":  "Foo",
+		"repo_id": "r1",
+		"branch":  "main",
+	})
+	if rpcErr == nil || rpcErr.Code != CodeInvalidParams {
+		t.Fatalf("expected CodeInvalidParams for ambiguous symbol, got %+v", rpcErr)
+	}
+}
+
+// TestBlastRadius_MissingNodeAndSymbol pins the both-empty rejection.
+func TestBlastRadius_MissingNodeAndSymbol(t *testing.T) {
+	svc := blastradius.NewService(&blastFakeEdges{}, &blastFakeNodes{}, nil)
+	r := NewRegistry()
+	RegisterBlastTools(r, svc, nil, nil, nil, newStubGraphStorage())
+	_, rpcErr := dispatchBlast(t, r, "eng_get_blast_radius", map[string]any{
+		"repo_id": "r1", "branch": "main",
+	})
+	if rpcErr == nil || rpcErr.Code != CodeInvalidParams {
+		t.Fatalf("expected CodeInvalidParams, got %+v", rpcErr)
 	}
 }

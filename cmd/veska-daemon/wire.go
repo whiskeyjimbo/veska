@@ -937,7 +937,7 @@ func registerMCPTools(r *mcp.Registry, d mcpDeps) {
 	edges := sqlite.NewEdgeReaderRepo(pools.ReadDB)
 	nodes := sqlite.NewNodeLookupRepo(pools.ReadDB)
 	blastSvc := blastradius.NewService(edges, nodes, d.staging)
-	mcp.RegisterBlastTools(r, blastSvc, repoRootFunc(pools.ReadDB), gitwatch.ChangedFiles, &repoLister{db: pools.ReadDB},
+	mcp.RegisterBlastTools(r, blastSvc, repoRootFunc(pools.ReadDB), gitwatch.ChangedFiles, &repoLister{db: pools.ReadDB}, graph,
 		mcp.WithBlastResolveFunc(resolveStubs))
 
 	// eng_find_changed_symbols: parses each file changed between two git
