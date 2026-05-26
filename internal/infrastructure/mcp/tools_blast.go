@@ -69,21 +69,21 @@ func RegisterBlastTools(r *Registry, svc *blastradius.Service, repoRoot RepoRoot
 	}
 	r.MustRegister(ToolSpec{
 		Name:            "eng_get_blast_radius",
-		Description:     "Compute the blast radius (callers/callees/both) of a single node via BFS over the edges table.",
+		Description:     "Compute the blast radius (callers/callees/both) of a symbol — 'if I change this, what breaks?' or 'what does this transitively reach?'. Use BEFORE editing an exported symbol, or when scoping a refactor. Walks cross_repo_edges in both directions so a library symbol's consumers in workspace repos are surfaced (solov2-80hh). Pass node_id (exact) or symbol (resolved via eng_find_symbol). For working-tree changes use eng_get_diff_blast_radius; for in-progress staged edits use eng_get_dirty_blast_radius.",
 		IncludesStaging: false,
 		InputSchema:     blastRadiusInputSchema,
 		Handler:         makeBlastRadiusHandler(svc, repos, graph, cfg.resolve, cfg.resolveInbound),
 	})
 	r.MustRegister(ToolSpec{
 		Name:            "eng_get_dirty_blast_radius",
-		Description:     "Compute the blast radius of all symbols currently in the in-memory staging overlay.",
+		Description:     "Blast radius across every symbol currently in the staging overlay (mid-edit, pre-commit). Use during an active session to answer 'what am I about to break with my current edits?' without committing first. Unchanged-but-restaged symbols are filtered via content-hash compare (solov2-iyz2) so a comment-only edit doesn't dirty the whole file.",
 		IncludesStaging: true,
 		InputSchema:     dirtyBlastRadiusInputSchema,
 		Handler:         makeDirtyBlastRadiusHandler(svc, repos, cfg.resolve, cfg.resolveInbound),
 	})
 	r.MustRegister(ToolSpec{
 		Name:            "eng_get_diff_blast_radius",
-		Description:     "Compute the blast radius for all symbols in files changed in the working-tree diff vs HEAD.",
+		Description:     "Blast radius across every symbol in files changed in the working-tree vs HEAD. Use for PR review or 'what does this branch touch?' — the seed is the diff, not a single node.",
 		IncludesStaging: false,
 		InputSchema:     diffBlastRadiusInputSchema,
 		Handler:         makeDiffBlastRadiusHandler(svc, repoRoot, changedFiles, repos, cfg.resolve, cfg.resolveInbound),

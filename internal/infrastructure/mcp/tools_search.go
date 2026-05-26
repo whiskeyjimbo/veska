@@ -101,14 +101,14 @@ func RegisterSearchTools(
 	}
 	r.MustRegister(ToolSpec{
 		Name:            "eng_search_semantic",
-		Description:     "Semantic search over embedded symbols with lexical fallback when the embedder is offline.",
+		Description:     "Natural-language search over embedded symbols (RRF-fused with FTS, lexical fallback when the embedder is offline). Best for behavior-shaped queries ('where do we validate session tokens'). Returns inline snippets so a follow-up Read is usually unnecessary. For known identifiers prefer eng_find_symbol (exact + deterministic); for 'what does this reach / who calls this' escalate to eng_get_call_chain / eng_get_blast_radius. The returned score is intra-query RRF (~0.01–0.03 typical range); use rank, not absolute score, to compare hits.",
 		IncludesStaging: false,
 		InputSchema:     searchSemanticInputSchema,
 		Handler:         makeSearchSemanticHandler(svc, rec, repos, pending),
 	})
 	r.MustRegister(ToolSpec{
 		Name:            "eng_search_similar",
-		Description:     "Find symbols similar to a given node by vector neighbourhood over its stored embedding.",
+		Description:     "Vector-nearest-neighbour search seeded by an existing symbol's embedding — 'what else looks like this?'. Use after eng_find_symbol or eng_search_semantic when you want to find variants, near-duplicates, or candidate refactor targets. Accepts node_id (exact) or symbol (resolved via FindNodes). Excludes the seed itself from results.",
 		IncludesStaging: false,
 		InputSchema:     searchSimilarInputSchema,
 		Handler:         makeSearchSimilarHandler(lookup, vectors, nodes, repos, cfg.graph),

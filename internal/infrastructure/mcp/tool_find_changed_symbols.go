@@ -44,7 +44,7 @@ const (
 func RegisterChangedSymbolsTool(r *Registry, svc *changedsymbols.Service, repoRoot RepoRootFunc, repos application.RepoLister) {
 	r.MustRegister(ToolSpec{
 		Name:            "eng_find_changed_symbols",
-		Description:     "Report symbols added/removed/modified between two git refs (ref_a=base, ref_b=tip) by parsing the changed files at each ref. ref_a/ref_b default to HEAD~1/HEAD (the last commit) when both are omitted.",
+		Description:     "Symbol-grain diff between two git refs — answers 'which functions/methods/structs actually changed?' for PR review, blame, or 'why did this break since yesterday'. ref_a/ref_b (aliases base/head) default to HEAD~1..HEAD. Comment- or whitespace-only changes emit a 'non_symbol_changes_only' degraded_reason so callers know the file changed even when no symbol diff comes back (solov2-u9os). Pair with eng_get_diff_blast_radius for 'what's downstream of these changes'.",
 		IncludesStaging: false,
 		InputSchema:     findChangedSymbolsInputSchema,
 		Handler:         makeChangedSymbolsHandler(svc, repoRoot, repos),

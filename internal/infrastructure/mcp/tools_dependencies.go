@@ -18,7 +18,7 @@ import (
 func RegisterDependenciesTool(r *Registry, svc *dependencies.Service, repos application.RepoLister) {
 	r.MustRegister(ToolSpec{
 		Name:        "eng_list_dependencies",
-		Description: "List external modules the repo imports, ranked by call-site usage count. Each entry carries a small sample of top call sites so an agent can pivot from 'which deps matter?' to 'show me how this dep is used' without an extra tool call.",
+		Description: "List external modules the repo imports, ranked by call-site usage count, with sampled top call sites per module. Use BEFORE grepping go.mod when the question is 'which deps does this repo actually use' or 'show me how this dep is invoked'. Versions come from go.mod's require block. Each top_call_sites entry carries a node_id you can pass to eng_get_context_pack to see how the dependency is integrated.",
 		InputSchema: listDependenciesInputSchema,
 		Handler:     makeListDependenciesHandler(svc, repos),
 	})
