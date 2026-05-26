@@ -226,8 +226,12 @@ func makeListFindingsHandler(db *sql.DB, repos application.RepoLister) ToolHandl
 			return nil, &RPCError{Code: CodeInternalError, Message: fmt.Sprintf("iterate findings: %v", err)}
 		}
 
+		// degraded_reasons is always emitted (as [] when nothing is degraded)
+		// to match the README's "Conventions across the tool surface" contract
+		// (solov2-7cw7).
 		return map[string]any{
-			"findings": findings,
+			"findings":         findings,
+			"degraded_reasons": []string{},
 		}, nil
 	}
 }
