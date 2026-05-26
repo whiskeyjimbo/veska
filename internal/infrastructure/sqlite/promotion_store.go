@@ -139,8 +139,15 @@ func lookupPromotedMethodInDir(ctx context.Context, tx *sql.Tx, repoID, branch, 
 	}
 	defer rows.Close()
 
-	var match domain.NodeID
-	count := 0
+	// solov2-9rc2: prefer non-test candidates. Test files commonly declare
+	// stub implementations of an interface ("type stubX struct {}; func
+	// (s *stubX) Write(...) ...") that share a method name with the
+	// production type. If a production match exists, return it without
+	// failing on the test-vs-production ambiguity; only when production
+	// matches are themselves ambiguous (or absent) do we count test
+	// matches in the disambiguation pass.
+	var prodMatch, testMatch domain.NodeID
+	prodCount, testCount := 0, 0
 	for rows.Next() {
 		var nodeID, filePath string
 		if err := rows.Scan(&nodeID, &filePath); err != nil {
@@ -149,14 +156,22 @@ func lookupPromotedMethodInDir(ctx context.Context, tx *sql.Tx, repoID, branch, 
 		if moduleRelDir(filePath, root) != relDir {
 			continue
 		}
-		match = domain.NodeID(nodeID)
-		count++
+		if strings.HasSuffix(filePath, "_test.go") {
+			testMatch = domain.NodeID(nodeID)
+			testCount++
+			continue
+		}
+		prodMatch = domain.NodeID(nodeID)
+		prodCount++
 	}
 	if err := rows.Err(); err != nil {
 		return "", false, err
 	}
-	if count == 1 {
-		return match, true, nil
+	switch {
+	case prodCount == 1:
+		return prodMatch, true, nil
+	case prodCount == 0 && testCount == 1:
+		return testMatch, true, nil
 	}
 	return "", false, nil
 }

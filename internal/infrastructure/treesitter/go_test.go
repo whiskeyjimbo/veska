@@ -313,6 +313,259 @@ func Run(name string) string {
 	}
 }
 
+// TestParseFile_StructFieldMethodCall covers solov2-9rc2 phase E v1:
+// `s.field.Method()` where the field is declared with a same-package
+// concrete struct type resolves directly to ReceiverType.Method via the
+// file's symbol map. This is the hexagonal/DI shape that the original
+// epic acceptance ("Promoter.Promote ≥ 7 edges") was filed against.
+func TestParseFile_StructFieldMethodCall(t *testing.T) {
+	src := []byte(`package app
+
+type Staging struct{}
+
+func (s *Staging) Snapshot() string { return "" }
+
+type Promoter struct {
+	staging *Staging
+}
+
+func (p *Promoter) Promote() string {
+	return p.staging.Snapshot()
+}
+`)
+	p := treesitter.NewGoParser()
+	result, err := p.ParseFile(context.Background(), repoID, filePath, src)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// Find Promote -> Staging.Snapshot edge in the resolved edges (not in
+	// UnresolvedCalls — same-file/same-package resolves directly).
+	var promoteID, snapshotID string
+	for _, n := range result.Nodes {
+		switch n.Name {
+		case "Promoter.Promote":
+			promoteID = string(n.ID)
+		case "Staging.Snapshot":
+			snapshotID = string(n.ID)
+		}
+	}
+	if promoteID == "" || snapshotID == "" {
+		t.Fatalf("expected Promoter.Promote and Staging.Snapshot nodes, got %+v", result.Nodes)
+	}
+	found := false
+	for _, e := range result.Edges {
+		if e.Kind == domain.EdgeCalls && string(e.Src) == promoteID && string(e.Tgt) == snapshotID {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Errorf("want CALLS edge Promoter.Promote -> Staging.Snapshot (same-package struct field method); have edges: %+v", result.Edges)
+	}
+}
+
+// TestParseFile_InterfaceMethodsAsNodes covers solov2-9rc2 phase E v2:
+// every method declared on an interface type must surface as its own
+// KindMethod node named IfaceName.MethodName, so chained-selector calls
+// through interface-typed fields can resolve to a concrete graph node.
+func TestParseFile_InterfaceMethodsAsNodes(t *testing.T) {
+	src := []byte(`package ports
+
+type AuditWriter interface {
+	Write(ctx string) error
+	Close() error
+}
+`)
+	p := treesitter.NewGoParser()
+	result, err := p.ParseFile(context.Background(), repoID, filePath, src)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	want := map[string]bool{"AuditWriter.Write": false, "AuditWriter.Close": false}
+	for _, n := range result.Nodes {
+		if n.Kind == domain.KindMethod {
+			if _, ok := want[n.Name]; ok {
+				want[n.Name] = true
+			}
+		}
+	}
+	for name, found := range want {
+		if !found {
+			t.Errorf("interface method node %q missing from result; have nodes: %+v", name, result.Nodes)
+		}
+	}
+}
+
+// TestParseFile_SamePackageInterfaceFieldCall covers solov2-9rc2 phase E
+// v2 same-package path: `p.store.Promote()` where store is a field of an
+// interface type declared in the same package resolves to the interface
+// method node IfaceName.Method via the file's symbol map.
+func TestParseFile_SamePackageInterfaceFieldCall(t *testing.T) {
+	src := []byte(`package app
+
+type PromotionStore interface {
+	Promote() error
+}
+
+type Promoter struct {
+	store PromotionStore
+}
+
+func (p *Promoter) Promote() error {
+	return p.store.Promote()
+}
+`)
+	p := treesitter.NewGoParser()
+	result, err := p.ParseFile(context.Background(), repoID, filePath, src)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	var promoterPromoteID, ifacePromoteID string
+	for _, n := range result.Nodes {
+		switch n.Name {
+		case "Promoter.Promote":
+			promoterPromoteID = string(n.ID)
+		case "PromotionStore.Promote":
+			ifacePromoteID = string(n.ID)
+		}
+	}
+	if promoterPromoteID == "" || ifacePromoteID == "" {
+		t.Fatalf("expected Promoter.Promote and PromotionStore.Promote nodes; got %+v", result.Nodes)
+	}
+	found := false
+	for _, e := range result.Edges {
+		if e.Kind == domain.EdgeCalls && string(e.Src) == promoterPromoteID && string(e.Tgt) == ifacePromoteID {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Errorf("want CALLS edge Promoter.Promote -> PromotionStore.Promote through struct field; have edges: %+v", result.Edges)
+	}
+}
+
+// TestParseFile_CrossPackageInterfaceFieldCall covers solov2-9rc2 phase E v2
+// cross-package path: `p.audit.Write()` where audit is an interface-typed
+// field from another package emits an UnresolvedCall with PkgQualifier
+// and IsMethodCall=true, which Phase C/D resolve to the interface method
+// node in the imported package.
+func TestParseFile_CrossPackageInterfaceFieldCall(t *testing.T) {
+	src := []byte(`package app
+
+import "github.com/example/ports"
+
+type Promoter struct {
+	audit ports.AuditWriter
+}
+
+func (p *Promoter) Promote() {
+	p.audit.Write("event")
+}
+`)
+	p := treesitter.NewGoParser()
+	result, err := p.ParseFile(context.Background(), repoID, filePath, src)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	var saw bool
+	for _, uc := range result.UnresolvedCalls {
+		if uc.PkgQualifier == "ports" && uc.CalleeName == "Write" && uc.IsMethodCall {
+			saw = true
+			break
+		}
+	}
+	if !saw {
+		t.Errorf("cross-package interface field call p.audit.Write must emit UnresolvedCall{Pkg:ports, Callee:Write, IsMethodCall:true}; got %+v", result.UnresolvedCalls)
+	}
+}
+
+// TestParseFile_PromoterShape_ChainedFieldCalls is a regression-shape
+// test mirroring the original solov2-9rc2 epic acceptance: a hexagonal
+// Promoter with multiple chained-selector calls through struct fields.
+// Each p.X.M() chain must produce an UnresolvedCall or an in-file edge.
+func TestParseFile_PromoterShape_ChainedFieldCalls(t *testing.T) {
+	src := []byte(`package app
+
+import "github.com/example/ports"
+
+type Staging struct{}
+func (s *Staging) Snapshot() string { return "" }
+func (s *Staging) Delete() {}
+
+type PromotionStore interface { Promote() error }
+type CheckRunner interface { Run() }
+
+type Promoter struct {
+	staging *Staging
+	store   PromotionStore
+	checks  CheckRunner
+	audit   ports.AuditWriter
+}
+
+func (p *Promoter) Promote() {
+	_ = p.staging.Snapshot()
+	_ = p.store.Promote()
+	p.checks.Run()
+	_ = p.audit.Write("event")
+	p.staging.Delete()
+}
+`)
+	p := treesitter.NewGoParser()
+	result, err := p.ParseFile(context.Background(), repoID, filePath, src)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// Map nodes by name.
+	idByName := map[string]string{}
+	for _, n := range result.Nodes {
+		idByName[n.Name] = string(n.ID)
+	}
+	promoterID := idByName["Promoter.Promote"]
+	if promoterID == "" {
+		t.Fatalf("Promoter.Promote node missing")
+	}
+
+	// Same-package field calls must land as in-file edges.
+	wantEdgeTargets := []string{
+		"Staging.Snapshot",       // *Staging field
+		"Staging.Delete",         // *Staging field (second call site)
+		"PromotionStore.Promote", // same-pkg interface field
+		"CheckRunner.Run",        // same-pkg interface field
+	}
+	for _, target := range wantEdgeTargets {
+		targetID := idByName[target]
+		if targetID == "" {
+			t.Errorf("target node %q missing", target)
+			continue
+		}
+		found := false
+		for _, e := range result.Edges {
+			if e.Kind == domain.EdgeCalls && string(e.Src) == promoterID && string(e.Tgt) == targetID {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Errorf("missing CALLS edge Promoter.Promote -> %s", target)
+		}
+	}
+
+	// Cross-package field call must surface as an UnresolvedCall with the
+	// right shape (Phase C+D will bind it at promotion time).
+	sawAuditWrite := false
+	for _, uc := range result.UnresolvedCalls {
+		if string(uc.CallerID) == promoterID && uc.PkgQualifier == "ports" && uc.CalleeName == "Write" && uc.IsMethodCall {
+			sawAuditWrite = true
+			break
+		}
+	}
+	if !sawAuditWrite {
+		t.Errorf("missing UnresolvedCall for cross-package interface field p.audit.Write; have: %+v", result.UnresolvedCalls)
+	}
+}
+
 // TestParseFile_ChainedSelector_UnknownOperandStillFallsThrough guards
 // the negative case: a selector whose operand is NOT a tracked local
 // variable (e.g. a function parameter, a struct field, an unrecognised

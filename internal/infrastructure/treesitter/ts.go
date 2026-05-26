@@ -375,7 +375,7 @@ func collectTSCallsFromClassBody(body *sitter.Node, src []byte, symbols map[stri
 		if bodyNode == nil {
 			continue
 		}
-		for _, ref := range collectCallNames(bodyNode, src, "this", className) {
+		for _, ref := range collectCallNames(bodyNode, src, "this", className, nil) {
 			// TS has no promotion-time cross-package resolution (that path is
 			// Go-only, solov2-xc51), so package-qualified calls are skipped here.
 			if ref.pkg != "" {
@@ -472,7 +472,7 @@ func collectTSCallsFromTopLevel(node *sitter.Node, src []byte, symbols map[strin
 			if bodyNode == nil {
 				continue
 			}
-			callNames := collectCallNames(bodyNode, src, "", "")
+			callNames := collectCallNames(bodyNode, src, "", "", nil)
 			for _, ref := range callNames {
 				if ref.pkg != "" {
 					continue
@@ -501,7 +501,7 @@ func collectTSCallsFromTopLevel(node *sitter.Node, src []byte, symbols map[strin
 		return edges
 	}
 
-	callNames := collectCallNames(bodyNode, src, "", "")
+	callNames := collectCallNames(bodyNode, src, "", "", nil)
 	for _, ref := range callNames {
 		if ref.pkg != "" {
 			continue
