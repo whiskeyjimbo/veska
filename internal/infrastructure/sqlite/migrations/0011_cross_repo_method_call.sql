@@ -1,0 +1,14 @@
+-- solov2-9rc2 (phase C) — Add a method_call flag to cross_repo_edge_stubs so
+-- chained-selector method calls (`v := pkg.New(...); v.Method()`) can produce
+-- cross-repo edge stubs alongside the existing exact-symbol-path stubs.
+--
+-- A method-call stub carries the bare method name in symbol_path (e.g.
+-- "Hello") without the receiver-type prefix the parser does not know. The
+-- query-time resolver matches such stubs by suffix against
+-- `<Receiver>.<Method>` and binds on a unique match within the target
+-- package's import-path-derived subdirectory.
+--
+-- Forward-only: existing rows get method_call=0 (the default), matching
+-- the prior single-mode behaviour. The producer (promotion_store.go) and
+-- both resolver paths (forward + reverse) branch on the flag.
+ALTER TABLE cross_repo_edge_stubs ADD COLUMN method_call INTEGER NOT NULL DEFAULT 0;

@@ -53,6 +53,7 @@ func setupTestDB(t *testing.T) *sql.DB {
 			symbol_path      TEXT NOT NULL,
 			language         TEXT NOT NULL,
 			last_promoted_at INTEGER NOT NULL DEFAULT 0,
+			method_call      INTEGER NOT NULL DEFAULT 0,
 			PRIMARY KEY (stub_id, branch)
 		)`,
 		`CREATE INDEX idx_stubs_resolver ON cross_repo_edge_stubs(language, module_path, symbol_path)`,
@@ -95,6 +96,20 @@ func seedStub(t *testing.T, db *sql.DB, stubID, branch, repoID, srcNodeID, kind,
 	)
 	if err != nil {
 		t.Fatalf("seed stub: %v", err)
+	}
+}
+
+// seedMethodStub inserts a method-call cross-repo stub (solov2-9rc2 Phase C).
+// symbolPath is the bare method name (e.g. "Hello"); the resolver matches
+// it against `<Receiver>.Hello` in the target package.
+func seedMethodStub(t *testing.T, db *sql.DB, stubID, branch, repoID, srcNodeID, modulePath, methodName string) {
+	t.Helper()
+	_, err := db.Exec(
+		`INSERT INTO cross_repo_edge_stubs (stub_id, branch, repo_id, src_node_id, kind, module_path, symbol_path, language, method_call) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1)`,
+		stubID, branch, repoID, srcNodeID, "CALLS", modulePath, methodName, "go",
+	)
+	if err != nil {
+		t.Fatalf("seed method stub: %v", err)
 	}
 }
 
@@ -295,6 +310,92 @@ func TestResolveStubsExpandFalse(t *testing.T) {
 	d, e := edgesDefault[0], edgesExpand[0]
 	if d.DstNodeID != e.DstNodeID || d.CrossRepo != e.CrossRepo || d.Kind != e.Kind {
 		t.Errorf("mismatch: default=%+v expand=%+v", d, e)
+	}
+}
+
+// TestResolveCrossRepoEdge_MethodCallSuffixMatch covers solov2-9rc2 phase D
+// forward path: a stub flagged MethodCall=true with bare symbol_path "Hello"
+// resolves to a method node whose symbol_path is "Greeter.Hello" via
+// suffix match in the destination subpackage.
+func TestResolveCrossRepoEdge_MethodCallSuffixMatch(t *testing.T) {
+	db := setupTestDB(t)
+	seedRepo(t, db, "repo-lib", "github.com/example/lib", "main")
+	seedNode(t, db, "lib-greeter-hello", "main", "repo-lib", "go", "method", "Greeter.Hello", "file.go")
+
+	stub := resolver.CrossRepoStub{
+		StubID:     "stub-method",
+		SrcNodeID:  "app-run",
+		Kind:       "CALLS",
+		ModulePath: "github.com/example/lib",
+		SymbolPath: "Hello", // bare method name from chained-selector emission
+		Language:   "go",
+		MethodCall: true,
+	}
+	edge, err := resolver.ResolveCrossRepoEdge(context.Background(), db, stub, false)
+	if err != nil {
+		t.Fatalf("ResolveCrossRepoEdge: %v", err)
+	}
+	if edge == nil {
+		t.Fatal("expected method-call stub to resolve to Greeter.Hello, got nil")
+	}
+	if edge.DstNodeID != "lib-greeter-hello" {
+		t.Errorf("DstNodeID = %q, want lib-greeter-hello", edge.DstNodeID)
+	}
+}
+
+// TestResolveCrossRepoEdge_MethodCallAmbiguousIsDropped guards the
+// no-false-edges invariant for the cross-repo path: when two receiver
+// types in the destination subpackage share a method name, the stub
+// resolves to nothing rather than picking one arbitrarily.
+func TestResolveCrossRepoEdge_MethodCallAmbiguousIsDropped(t *testing.T) {
+	db := setupTestDB(t)
+	seedRepo(t, db, "repo-lib", "github.com/example/lib", "main")
+	seedNode(t, db, "lib-a-hello", "main", "repo-lib", "go", "method", "TypeA.Hello", "file.go")
+	seedNode(t, db, "lib-b-hello", "main", "repo-lib", "go", "method", "TypeB.Hello", "file.go")
+
+	stub := resolver.CrossRepoStub{
+		StubID:     "stub-ambig",
+		SrcNodeID:  "app-run",
+		Kind:       "CALLS",
+		ModulePath: "github.com/example/lib",
+		SymbolPath: "Hello",
+		Language:   "go",
+		MethodCall: true,
+	}
+	edge, err := resolver.ResolveCrossRepoEdge(context.Background(), db, stub, false)
+	if err != nil {
+		t.Fatalf("ResolveCrossRepoEdge: %v", err)
+	}
+	if edge != nil {
+		t.Errorf("ambiguous method-call stub must not resolve; got %+v", edge)
+	}
+}
+
+// TestResolveStubsTargetingNode_MatchesMethodCallStub covers solov2-9rc2
+// phase D reverse path: a method node Greeter.Hello in repo-lib must
+// surface as the dst of a method-call stub from repo-app whose
+// symbol_path is the bare "Hello".
+func TestResolveStubsTargetingNode_MatchesMethodCallStub(t *testing.T) {
+	db := setupTestDB(t)
+	// Library repo with a method.
+	seedRepo(t, db, "repo-lib", "github.com/example/lib", "main")
+	seedNode(t, db, "lib-greeter-hello", "main", "repo-lib", "go", "method", "Greeter.Hello", "file.go")
+	// Consumer repo with a chained-selector method-call stub.
+	seedRepo(t, db, "repo-app", "github.com/example/app", "main")
+	seedNode(t, db, "app-run", "main", "repo-app", "go", "function", "Run", "main.go")
+	seedMethodStub(t, db, "stub-method-1", "main", "repo-app", "app-run",
+		"github.com/example/lib", "Hello")
+
+	edges, err := resolver.ResolveStubsTargetingNode(context.Background(), db, "lib-greeter-hello", "main")
+	if err != nil {
+		t.Fatalf("ResolveStubsTargetingNode: %v", err)
+	}
+	if len(edges) != 1 {
+		t.Fatalf("want 1 inbound edge from method-call stub, got %d: %+v", len(edges), edges)
+	}
+	e := edges[0]
+	if e.SrcNodeID != "app-run" || e.DstNodeID != "lib-greeter-hello" || !e.CrossRepo {
+		t.Errorf("inbound method-call edge mismatch: %+v", e)
 	}
 }
 
