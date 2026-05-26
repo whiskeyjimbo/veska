@@ -483,6 +483,16 @@ func doctorConfigCmd() *cobra.Command {
 			}
 			fmt.Fprintf(w, "config: veska_home=%s db_exists=%v veska_home_set=%v\n",
 				report.VeskaHome, report.DBExists, report.VeskaHomeSet)
+			// solov2-kxo5.8: surface the ephemeral-cache knobs so the
+			// user can see effective values and where each came from
+			// (default vs env override) without grepping the source.
+			fmt.Fprintf(w, "cache: declined_ttl=%s (%s) max_bytes=%d (%s) max_ephemerals=%d (%s)\n",
+				report.Cache.DeclinedTTL, report.Cache.DeclinedTTLSource,
+				report.Cache.MaxBytes, report.Cache.MaxBytesSource,
+				report.Cache.MaxEphemerals, report.Cache.MaxEphemeralsSource)
+			if report.CacheError != "" {
+				fmt.Fprintf(w, "cache: WARNING %s\n", report.CacheError)
+			}
 			if !report.DBExists {
 				return ProbeStatusError{Subsystem: "config", Status: "degraded"}
 			}
