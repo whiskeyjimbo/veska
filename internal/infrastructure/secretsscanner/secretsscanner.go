@@ -26,6 +26,26 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/core/ports"
 )
 
+// docsExampleSecrets lists well-known credential strings that vendors
+// publish as literal placeholders in their own documentation. Flagging
+// these creates a noise wall on the first-run journey — every junior
+// who copy-pastes AWS's quickstart hits the same canonical key. Real
+// callers never have a reason to ship these literal strings, so a
+// strict-equality allowlist is safe (solov2-j1yz).
+var docsExampleSecrets = map[string]struct{}{
+	// AWS canonical examples published throughout AWS docs and SDKs.
+	"AKIAIOSFODNN7EXAMPLE":                     {},
+	"wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY": {},
+}
+
+// isDocsExampleSecret reports whether raw is one of the canonical vendor
+// documentation placeholders. Used by both detection paths to drop the
+// finding before it reaches the output bucket.
+func isDocsExampleSecret(raw string) bool {
+	_, ok := docsExampleSecrets[raw]
+	return ok
+}
+
 // excludedBaseNames are file names whose contents are inherently high-entropy
 // but never carry user secrets — language/package lockfiles and manifests.
 // Scanning these produces only false positives.
@@ -257,6 +277,10 @@ func (s *BuiltinScanner) scanLineGitleaks(path string, line ports.Line) []ports.
 	}
 	out := make([]ports.SecretFinding, 0, len(leaks))
 	for _, l := range leaks {
+		// solov2-j1yz: drop canonical vendor-docs placeholders.
+		if isDocsExampleSecret(l.Secret) {
+			continue
+		}
 		out = append(out, ports.SecretFinding{
 			Rule:       l.RuleID,
 			FilePath:   path,
@@ -283,6 +307,10 @@ func (s *BuiltinScanner) scanLine(path string, line ports.Line) []ports.SecretFi
 			raw = m[1]
 		}
 		matched[raw] = struct{}{}
+		// solov2-j1yz: drop canonical vendor-docs placeholders.
+		if isDocsExampleSecret(raw) {
+			continue
+		}
 		findings = append(findings, ports.SecretFinding{
 			Rule:       r.name,
 			FilePath:   path,
@@ -313,6 +341,10 @@ func (s *BuiltinScanner) scanLine(path string, line ports.Line) []ports.SecretFi
 		// allowlists; we replicate the most common shape here so the
 		// fallback path (when gitleaks init fails) does not regress.
 		if looksLikeImportPath(tok) {
+			continue
+		}
+		// solov2-j1yz: drop canonical vendor-docs placeholders.
+		if isDocsExampleSecret(tok) {
 			continue
 		}
 		matched[tok] = struct{}{}

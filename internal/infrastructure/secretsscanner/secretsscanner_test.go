@@ -14,7 +14,9 @@ var _ ports.SecretsScanner = (*secretsscanner.BuiltinScanner)(nil)
 func TestBuiltinScanner_Scan(t *testing.T) {
 	t.Parallel()
 
-	const awsKey = "AKIAIOSFODNN7EXAMPLE"
+	// AKIA-shaped synthetic; NOT the AKIAIOSFODNN7EXAMPLE docs placeholder
+	// (the new docs-allowlist drops that one — solov2-j1yz).
+	const awsKey = "AKIAZQ7XFAKE1234ABCD"
 	const ghToken = "ghp_0123456789abcdefghijklmnopqrstuvwxyz"
 	const entropyTok = "h8Kq2Lx9Zp4Wn7Vc3Mb6Td1Rj5Yf0Gs"
 
@@ -213,9 +215,35 @@ func TestBuiltinScanner_ExcludesLockfiles(t *testing.T) {
 	}
 }
 
+// TestBuiltinScanner_DocsExamplesAllowlisted pins solov2-j1yz: well-known
+// vendor documentation placeholders (e.g. AWS's canonical
+// AKIAIOSFODNN7EXAMPLE / wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY) must
+// not surface as findings — they dominate the first-run journey otherwise
+// and erode trust in the scanner.
+func TestBuiltinScanner_DocsExamplesAllowlisted(t *testing.T) {
+	t.Parallel()
+	s := secretsscanner.New()
+	cases := []string{
+		`awsKey := "AKIAIOSFODNN7EXAMPLE"`,
+		`awsSecret := "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"`,
+	}
+	for _, line := range cases {
+		in := ports.ScanInput{AddedLines: map[string][]ports.Line{
+			"creds.go": {{Number: 1, Text: line}},
+		}}
+		got, err := s.Scan(in)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if len(got) != 0 {
+			t.Errorf("docs-example line produced findings: %q -> %+v", line, got)
+		}
+	}
+}
+
 func TestBuiltinScanner_RedactionMasksValue(t *testing.T) {
 	t.Parallel()
-	const awsKey = "AKIAIOSFODNN7EXAMPLE"
+	const awsKey = "AKIAZQ7XFAKE1234ABCD" // synthetic; not the docs allowlist (solov2-j1yz)
 	s := secretsscanner.New()
 	in := ports.ScanInput{AddedLines: map[string][]ports.Line{
 		"creds.go": {{Number: 1, Text: awsKey}},
