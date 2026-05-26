@@ -589,8 +589,8 @@ func (s *PromotionStore) Promote(ctx context.Context, batch application.Promotio
 		// module_path. Idempotent on the deterministic stub_id.
 		stubStmt, serr := tx.PrepareContext(ctx, `
 			INSERT INTO cross_repo_edge_stubs
-				(stub_id, branch, repo_id, src_node_id, kind, module_path, symbol_path, language, last_promoted_at)
-			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+				(stub_id, branch, repo_id, src_node_id, kind, module_path, symbol_path, language, last_promoted_at, method_call)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 			ON CONFLICT(stub_id, branch) DO NOTHING`)
 		if serr != nil {
 			_ = tx.Rollback()
@@ -617,18 +617,28 @@ func (s *PromotionStore) Promote(ctx context.Context, batch application.Promotio
 					// (no domain in the first path segment) can never match a
 					// repo, so it is skipped to keep the table lean.
 					//
-					// solov2-9rc2 Phase B: chained-selector method calls
-					// (uc.IsMethodCall) skip the stub emission for now — the
-					// existing stub schema keys on exact symbol_path, but a
-					// method call carries only the bare method name and no
-					// receiver type. Phase C will introduce a method-stub
-					// variant; until then dropping these on the external path
-					// preserves correctness (no false binds via stubs).
-					if isExternalModulePath(importPath) && !uc.IsMethodCall {
+					// solov2-9rc2 Phase C: both plain pkg.Foo() and method-call
+					// uc.IsMethodCall emit cross-repo stubs. The method_call
+					// column lets the resolver branch on the lookup strategy —
+					// plain stubs match exact symbol_path; method-call stubs
+					// match `<Receiver>.<symbol_path>` suffix.
+					if isExternalModulePath(importPath) {
+						methodFlag := 0
+						if uc.IsMethodCall {
+							methodFlag = 1
+						}
 						sid := stubID(string(uc.CallerID), importPath, uc.CalleeName)
+						if uc.IsMethodCall {
+							// Distinct stub_id namespace so a same-name plain
+							// and method call from the same caller don't
+							// collide on the ON CONFLICT key (sid is
+							// deterministic over caller+pkg+name, which is
+							// identical between the two callsite shapes).
+							sid = stubID(string(uc.CallerID), importPath, "@method:"+uc.CalleeName)
+						}
 						if _, ierr := stubStmt.ExecContext(ctx,
 							sid, branch, repoID, string(uc.CallerID), string(domain.EdgeCalls),
-							importPath, uc.CalleeName, "go", now,
+							importPath, uc.CalleeName, "go", now, methodFlag,
 						); ierr != nil {
 							_ = tx.Rollback()
 							return fmt.Errorf("promoter: insert cross-repo stub %q: %w", sid, ierr)
