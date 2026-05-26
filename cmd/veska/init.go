@@ -64,7 +64,15 @@ func runInit(ctx context.Context, deps initDeps, yes bool, out io.Writer) error 
 	fmt.Fprintln(out, "service:  not installed (run: veska service install)")
 	fmt.Fprintln(out, "repo:     not added (run: veska repo add <path>)")
 	if tip != "" {
-		fmt.Fprintln(out, tip)
+		// solov2-sft7: make this LOUD. The quiet 'tip:' line buried under
+		// 'ready' meant junior users routinely shipped with the low-quality
+		// static-v2 embedder.
+		fmt.Fprintln(out)
+		fmt.Fprintln(out, "  WARNING: booting on the low-quality static-v2 embedder fallback.")
+		fmt.Fprintln(out, "    Semantic search quality will be noticeably degraded.")
+		fmt.Fprintln(out, "    Fix: run `veska install model2vec` (one-time ~62MB download),")
+		fmt.Fprintln(out, "    or rebuild with `make build` (default fat binary).")
+		fmt.Fprintln(out)
 	}
 	fmt.Fprintln(out, "ready")
 

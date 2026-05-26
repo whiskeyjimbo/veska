@@ -6,26 +6,36 @@ DAEMON_BIN      := $(BINDIR)/veska-daemon
 MCP_BIN         := $(BINDIR)/veska-mcp
 LAYERCHECK_BIN  := $(BINDIR)/layercheck
 
-.PHONY: all build build-fat fetch-embed-assets test lint vet layercheck clean loadtest test-mcp test-mcp-deep test-mcp-bootstrap eval-recall eval-recall-projection eval-autolink-fp eval-revalidate-bench eval-queue-fuzz eval-embed-throughput eval-embedder-bench eval-embed-models eval-embed-models-full eval-embed-models-condense eval-embed-models-fuse
+.PHONY: all build build-small build-fat fetch-embed-assets test lint vet layercheck clean loadtest test-mcp test-mcp-deep test-mcp-bootstrap eval-recall eval-recall-projection eval-autolink-fp eval-revalidate-bench eval-queue-fuzz eval-embed-throughput eval-embedder-bench eval-embed-models eval-embed-models-full eval-embed-models-condense eval-embed-models-fuse
 
-all: build test vet lint layercheck
+# `all` uses build-small to keep the test loop fast — the model2vec assets
+# add a network fetch + ~62MB to every CI/dev run. End-user packaging
+# (`make build`) ships fat.
+all: build-small test vet lint layercheck
 
-build: $(VESKA_BIN) $(DAEMON_BIN) $(MCP_BIN) $(LAYERCHECK_BIN)
-
-# Embed-asset dir for fat builds (solov2-si1). Contents are .gitignore'd —
-# the ~62MB weights are never committed.
-EMBED_ASSET_DIR := internal/infrastructure/embedding/model2vec/assets/potion-code-16M
-
-# build-fat: build veska + veska-daemon with the model2vec weights compiled
-# in (//go:embed, build tag `embed_model`) for a zero-setup, no-network
-# default embedder. veska-mcp stays thin — the stdio shim never embeds.
-# The thin `build` target is unchanged; ship fat for end users, thin for
-# CI / size-sensitive installs.
-build-fat: fetch-embed-assets
+# `build` (solov2-sft7): default to the fat binary — model2vec embedded —
+# so a clean clone + `make build` produces a usable veska without the
+# install-model2vec dance. Size-sensitive callers use `build-small`.
+build: fetch-embed-assets
 	go build -tags embed_model -o $(VESKA_BIN) ./cmd/veska
 	go build -tags embed_model -o $(DAEMON_BIN) ./cmd/veska-daemon
 	go build -o $(MCP_BIN) ./cmd/veska-mcp
 	go build -o $(LAYERCHECK_BIN) ./tools/lint/layercheck/cmd
+
+# build-small (solov2-sft7): thin binary, no embedded model. Veska elects
+# the low-quality static-v2 fallback at first boot unless the user runs
+# `veska install model2vec`. Intended for CI / container layers where the
+# ~62MB embed bloat matters more than first-run UX.
+build-small: $(VESKA_BIN) $(DAEMON_BIN) $(MCP_BIN) $(LAYERCHECK_BIN)
+
+# build-fat: deprecated alias for `build` (solov2-sft7). Kept for one
+# release so muscle-memory keeps working; remove next cycle.
+build-fat: build
+	@echo "note: 'make build-fat' is now an alias for 'make build'; update scripts." >&2
+
+# Embed-asset dir for fat builds (solov2-si1). Contents are .gitignore'd —
+# the ~62MB weights are never committed.
+EMBED_ASSET_DIR := internal/infrastructure/embedding/model2vec/assets/potion-code-16M
 
 # fetch-embed-assets: populate the //go:embed asset dir using the SAME
 # pinned ModelSpec + sha verification `veska install model2vec` uses, so
