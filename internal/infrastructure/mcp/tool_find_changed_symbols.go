@@ -56,6 +56,12 @@ type changedSymbolsParams struct {
 	Branch string `json:"branch"`
 	RefA   string `json:"ref_a"`
 	RefB   string `json:"ref_b"`
+	// Base/Head are git's canonical names for ref_a/ref_b. Accepting
+	// both keeps the journey-natural call (base/head) working alongside
+	// the legacy ref_a/ref_b; either alias is honoured but supplying
+	// conflicting values is rejected (solov2-3ocy).
+	Base string `json:"base"`
+	Head string `json:"head"`
 }
 
 func makeChangedSymbolsHandler(svc *changedsymbols.Service, repoRoot RepoRootFunc, repos application.RepoLister) ToolHandler {
@@ -69,6 +75,21 @@ func makeChangedSymbolsHandler(svc *changedsymbols.Service, repoRoot RepoRootFun
 		var p changedSymbolsParams
 		if rpcErr := bindParams(raw, &p); rpcErr != nil {
 			return nil, rpcErr
+		}
+		// solov2-3ocy: collapse base/head aliases into ref_a/ref_b. Reject
+		// only when both names are supplied with DIFFERENT non-empty values
+		// — equality is fine since some agents may set both for safety.
+		if p.Base != "" {
+			if p.RefA != "" && p.RefA != p.Base {
+				return nil, &RPCError{Code: CodeInvalidParams, Message: "ref_a and base are aliases; supply only one (or matching values)"}
+			}
+			p.RefA = p.Base
+		}
+		if p.Head != "" {
+			if p.RefB != "" && p.RefB != p.Head {
+				return nil, &RPCError{Code: CodeInvalidParams, Message: "ref_b and head are aliases; supply only one (or matching values)"}
+			}
+			p.RefB = p.Head
 		}
 		// ref_a/ref_b default to the last commit (HEAD~1..HEAD) when both are
 		// omitted; supplying only one is ambiguous and rejected (solov2-npjs).

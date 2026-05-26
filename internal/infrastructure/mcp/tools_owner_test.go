@@ -257,6 +257,39 @@ func TestFindOwner_MissingParams(t *testing.T) {
 	}
 }
 
+// TestFindOwner_AcceptsPathAlias covers solov2-3ocy: agents naturally
+// reach for "path", and the schema must accept it without a -32602
+// "unknown parameter" rejection. The handler already collapses path into
+// file_path; this test guards the schema's additionalProperties stance.
+func TestFindOwner_AcceptsPathAlias(t *testing.T) {
+	repoRoot, _ := os.Getwd()
+	r := NewRegistry()
+	RegisterOwnerTools(r, nil)
+
+	actor := domain.Actor{ID: "agent:bot", Kind: domain.ActorKindAgent}
+	// "path" alone (no file_path) — schema must let it through, handler
+	// folds it into file_path before the CODEOWNERS / git-blame lookups.
+	res, rpcErr := dispatchOwner(t, r, actor, map[string]any{
+		"repo_id": repoRoot,
+		"path":    "some/file.go",
+	})
+	if rpcErr != nil {
+		t.Fatalf("path alias rejected: %+v", rpcErr)
+	}
+	// Result is permitted to be a null-owner reason (file doesn't exist),
+	// but the response shape must be the find_owner envelope, not an
+	// RPC error.
+	m, ok := res.(map[string]any)
+	if !ok {
+		t.Fatalf("expected map response, got %T: %+v", res, res)
+	}
+	if _, ok := m["owner"]; !ok {
+		if _, hasReason := m["reason"]; !hasReason {
+			t.Errorf("expected owner or reason in response, got %+v", m)
+		}
+	}
+}
+
 // Ensure RegisterOwnerTools accepts a nil db (db is unused, but consistent signature).
 func TestFindOwner_NilDBIsAccepted(t *testing.T) {
 	var db *sql.DB // nil is fine

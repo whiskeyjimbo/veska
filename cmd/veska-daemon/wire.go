@@ -1017,7 +1017,8 @@ func registerMCPTools(r *mcp.Registry, d mcpDeps) {
 	// node hydration with lexical fallback.
 	searchSvc := search.NewService(d.provider, d.vectors, nodes,
 		search.WithMetrics(d.metrics))
-	mcp.RegisterSearchTools(r, searchSvc, d.refs, d.vectors, nodes, d.savings, &repoLister{db: pools.ReadDB})
+	mcp.RegisterSearchTools(r, searchSvc, d.refs, d.vectors, nodes, d.savings, &repoLister{db: pools.ReadDB},
+		mcp.WithSearchGraph(graph))
 }
 
 // activeTaskFunc returns a contextpack.ActiveTaskFunc reading the repo's
