@@ -313,7 +313,7 @@ func TestHandler_SkipsNonSymbolSourcesAndNamesTarget(t *testing.T) {
 	lk := &fakeLookup{
 		byPath: map[string][]string{"x.go": {"fn1", "pkg1", "chunk1"}},
 		meta: map[string]ports.NodeMeta{
-			"fn1":    {NodeID: "fn1", Kind: "function", SymbolPath: "DoThing"},
+			"fn1":    {NodeID: "fn1", Kind: "function", SymbolPath: "DoThing", FilePath: "x.go"},
 			"pkg1":   {NodeID: "pkg1", Kind: "package", SymbolPath: "server"},
 			"chunk1": {NodeID: "chunk1", Kind: "chunk", SymbolPath: "chunk:1-4"},
 			"t1":     {NodeID: "t1", Kind: "function", SymbolPath: "OtherThing", FilePath: "y.go"},
@@ -339,7 +339,8 @@ func TestHandler_SkipsNonSymbolSourcesAndNamesTarget(t *testing.T) {
 	if len(findings.saved) != 1 {
 		t.Fatalf("expected 1 finding, got %d", len(findings.saved))
 	}
-	want := "Similar to OtherThing in y.go (score 0.91)"
+	// solov2-6eqa: message now names both sides explicitly.
+	want := "DoThing in x.go similar to OtherThing in y.go (score 0.91)"
 	if findings.saved[0].Message != want {
 		t.Errorf("message = %q, want %q", findings.saved[0].Message, want)
 	}
