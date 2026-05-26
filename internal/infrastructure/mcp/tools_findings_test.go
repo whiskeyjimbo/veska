@@ -465,6 +465,28 @@ func TestListFindings_Empty(t *testing.T) {
 	}
 }
 
+// TestListFindings_EmitsDegradedReasonsAsEmptyArray pins solov2-7cw7: the
+// README's "Conventions across the tool surface" promises every tool
+// includes degraded_reasons (as [] when nothing is degraded). eng_list_findings
+// previously omitted the field entirely.
+func TestListFindings_EmitsDegradedReasonsAsEmptyArray(t *testing.T) {
+	db := newFindingsDB(t)
+	r := NewRegistry()
+	RegisterFindingTools(r, db, nil, nil)
+
+	actor := domain.Actor{ID: "agent:bot", Kind: domain.ActorKindAgent}
+	result, rpcErr := dispatchListFindings(t, r, actor, map[string]string{
+		"repo_id": "repo-1", "branch": "main",
+	})
+	if rpcErr != nil {
+		t.Fatalf("dispatch: %v", rpcErr.Message)
+	}
+	b, _ := json.Marshal(result)
+	if !strings.Contains(string(b), `"degraded_reasons":[]`) {
+		t.Errorf("expected degraded_reasons:[] in JSON, got: %s", string(b))
+	}
+}
+
 func TestListFindings_DefaultStateIsOpen(t *testing.T) {
 	db := newFindingsDB(t)
 	seedFinding(t, db, "open-f", "main", "repo-1", "low", "open")
