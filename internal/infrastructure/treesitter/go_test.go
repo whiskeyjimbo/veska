@@ -566,6 +566,62 @@ func (p *Promoter) Promote() {
 	}
 }
 
+// TestParseFile_AnonCallsInTopLevelVar covers solov2-y7gu: anonymous
+// functions assigned (directly or inside a struct-literal initialiser)
+// to top-level vars produce CALLS edges from the package node to every
+// in-file target their body invokes. Legacy collectAnonCalls checked
+// the wrong tree-sitter node type ("function_literal" instead of
+// "func_literal") and silently never matched; the query parser
+// extractAnonCallsInTopLevelVars walks for func_literal under
+// var/const declarations and runs calls.scm on each.
+func TestParseFile_AnonCallsInTopLevelVar(t *testing.T) {
+	src := []byte(`package cli
+
+func serveRoot() {}
+func validate() bool { return true }
+
+var (
+	root = func() { serveRoot() }
+	chk  = func() bool { return validate() }
+)
+`)
+	p := treesitter.NewGoParser()
+	result, err := p.ParseFile(context.Background(), repoID, filePath, src)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	var pkgID, serveRootID, validateID string
+	for _, n := range result.Nodes {
+		switch n.Name {
+		case "cli":
+			pkgID = string(n.ID)
+		case "serveRoot":
+			serveRootID = string(n.ID)
+		case "validate":
+			validateID = string(n.ID)
+		}
+	}
+	if pkgID == "" || serveRootID == "" || validateID == "" {
+		t.Fatalf("expected package + function nodes, got %+v", result.Nodes)
+	}
+
+	hasEdge := func(src, tgt string) bool {
+		for _, e := range result.Edges {
+			if e.Kind == domain.EdgeCalls && string(e.Src) == src && string(e.Tgt) == tgt {
+				return true
+			}
+		}
+		return false
+	}
+	if !hasEdge(pkgID, serveRootID) {
+		t.Errorf("missing CALLS edge cli -> serveRoot (from `root` var's func literal)")
+	}
+	if !hasEdge(pkgID, validateID) {
+		t.Errorf("missing CALLS edge cli -> validate (from `chk` var's func literal)")
+	}
+}
+
 // TestParseFile_ChainedSelector_UnknownOperandStillFallsThrough guards
 // the negative case: a selector whose operand is NOT a tracked local
 // variable (e.g. a function parameter, a struct field, an unrecognised
