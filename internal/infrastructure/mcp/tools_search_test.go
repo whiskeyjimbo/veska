@@ -427,6 +427,68 @@ func TestSearchSimilar_MissingParams(t *testing.T) {
 	}
 }
 
+// TestSearchSimilar_AcceptsSymbolAlias covers solov2-3ocy: eng_search_similar
+// must accept `symbol` resolved via FindNodes — parity with eng_find_symbol /
+// eng_get_call_chain / eng_get_blast_radius. Before the fix, the schema
+// rejected `symbol` as an unknown parameter.
+func TestSearchSimilar_AcceptsSymbolAlias(t *testing.T) {
+	seedVec := []float32{0.5, 0.5, 0.5}
+	emb := &stubEmbedder{}
+	vecs := &stubVectors{
+		hits: []domain.Hit{{NodeID: "seed", Score: 1.0}, {NodeID: "n2", Score: 0.8}},
+	}
+	nodes := &stubNodes{metas: []ports.NodeMeta{
+		{NodeID: "n2", SymbolPath: "pkg.N2", FilePath: "n2.go", Kind: "function", LineStart: 1, LineEnd: 3},
+	}}
+	svc := search.NewService(emb, vecs, nodes)
+	lookup := &stubSimilarLookup{hash: "h", ready: true, blob: encodeVec(seedVec), dim: 3, found: true}
+
+	graph := newStubGraphStorage()
+	seedNode, _ := domain.NewNode("seed", "seed.go", "Target", domain.KindFunction)
+	graph.addNode(seedNode)
+
+	r := NewRegistry()
+	RegisterSearchTools(r, svc, lookup, vecs, nodes, nil, nil, WithSearchGraph(graph))
+
+	resp, rpcErr := dispatchSearch(t, r, "eng_search_similar", map[string]any{
+		"symbol":  "Target",
+		"repo_id": "r1",
+		"branch":  "main",
+		"k":       1,
+	})
+	if rpcErr != nil {
+		t.Fatalf("symbol alias rejected: %+v", rpcErr)
+	}
+	if len(resp.Results) != 1 || resp.Results[0].NodeID != "n2" {
+		t.Errorf("expected [n2], got %+v", resp.Results)
+	}
+}
+
+// TestSearchSimilar_AmbiguousSymbolRejected: two nodes with the same name
+// must produce CodeInvalidParams asking the caller to pass node_id.
+func TestSearchSimilar_AmbiguousSymbolRejected(t *testing.T) {
+	emb := &stubEmbedder{}
+	vecs := &stubVectors{}
+	nodes := &stubNodes{}
+	svc := search.NewService(emb, vecs, nodes)
+
+	graph := newStubGraphStorage()
+	a, _ := domain.NewNode("a", "a.go", "Run", domain.KindFunction)
+	b, _ := domain.NewNode("b", "b.go", "Run", domain.KindFunction)
+	graph.addNode(a)
+	graph.addNode(b)
+
+	r := NewRegistry()
+	RegisterSearchTools(r, svc, &stubSimilarLookup{}, vecs, nodes, nil, nil, WithSearchGraph(graph))
+
+	_, rpcErr := dispatchSearch(t, r, "eng_search_similar", map[string]any{
+		"symbol": "Run", "repo_id": "r1", "branch": "main",
+	})
+	if rpcErr == nil || rpcErr.Code != CodeInvalidParams {
+		t.Fatalf("expected CodeInvalidParams for ambiguous symbol, got %+v", rpcErr)
+	}
+}
+
 func TestSearchTools_RegistersTwoTools(t *testing.T) {
 	emb := &stubEmbedder{}
 	vecs := &stubVectors{}

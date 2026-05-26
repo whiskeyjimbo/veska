@@ -251,16 +251,16 @@ var searchSimilarInputSchema = json.RawMessage(`{
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "type": "object",
   "additionalProperties": false,
-  "description": "k-nearest-neighbour vector search seeded by an existing node_id.",
+  "description": "k-nearest-neighbour vector search seeded by an existing node. Accepts node_id (exact) or symbol (resolved via FindNodes; ambiguous matches rejected) — solov2-3ocy.",
   "properties": {
     "node_id": {"type": "string"},
+    "symbol":  {"type": "string", "description": "Alias for node_id by symbol name (resolved like eng_find_symbol). Ambiguity is rejected."},
     "repo_id": {"type": "string"},
     "branch":  {"type": "string"},
     "k":       {"type": "integer", "minimum": 1, "description": "Neighbour count (default 10). 'limit' is accepted as an alias."},
     "limit":   {"type": "integer", "minimum": 1, "description": "Alias for k."},
     "cwd":     {"type": "string", "description": "Working directory used to resolve the active repo when repo_id is omitted."}
-  },
-  "required": ["node_id"]
+  }
 }`)
 
 var findOwnerInputSchema = json.RawMessage(`{
@@ -269,21 +269,24 @@ var findOwnerInputSchema = json.RawMessage(`{
   "additionalProperties": false,
   "properties": {
     "file_path": {"type": "string", "description": "Repo-relative path to the file whose dominant committer should be returned."},
+    "path":      {"type": "string", "description": "Alias for file_path (solov2-3ocy)."},
     "repo_id":   {"type": "string"}
   },
-  "required": ["file_path", "repo_id"]
+  "required": ["repo_id"]
 }`)
 
 var findChangedSymbolsInputSchema = json.RawMessage(`{
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "type": "object",
   "additionalProperties": false,
-  "description": "Diff two git refs and return the added/removed/modified symbols. ref_a/ref_b default to HEAD~1/HEAD when both omitted.",
+  "description": "Diff two git refs and return the added/removed/modified symbols. ref_a/ref_b default to HEAD~1/HEAD when both omitted. base/head are accepted as aliases (solov2-3ocy).",
   "properties": {
     "repo_id": {"type": "string"},
     "branch":  {"type": "string"},
     "ref_a":   {"type": "string", "description": "Base git ref (e.g. 'main', 'HEAD~5', a SHA). Default HEAD~1."},
     "ref_b":   {"type": "string", "description": "Target git ref. Default HEAD."},
+    "base":    {"type": "string", "description": "Alias for ref_a using git's canonical name (solov2-3ocy)."},
+    "head":    {"type": "string", "description": "Alias for ref_b using git's canonical name (solov2-3ocy)."},
     "cwd":     {"type": "string", "description": "Working directory used to resolve the active repo when repo_id is omitted."}
   }
 }`)
