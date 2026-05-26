@@ -258,6 +258,77 @@ func TestDirtyOf_UsesStagedNodes(t *testing.T) {
 	}
 }
 
+// fakeNodesWithHashes adds ContentHasher to fakeNodes for the
+// solov2-iyz2 unchanged-symbol filter test.
+type fakeNodesWithHashes struct {
+	*fakeNodes
+	hashes map[string]string
+}
+
+func (f *fakeNodesWithHashes) NodeContentHash(_ context.Context, _, _, nodeID string) (string, error) {
+	return f.hashes[nodeID], nil
+}
+
+// TestDirtyOf_SkipsUnchangedSymbols covers solov2-iyz2: a re-parse stages
+// every symbol in a touched file, but a node whose ContentHash matches the
+// promoted hash isn't actually dirty (e.g. comment-only edit). DirtyOf
+// must filter such nodes out of the seed set so the response doesn't
+// dirty the whole file.
+func TestDirtyOf_SkipsUnchangedSymbols(t *testing.T) {
+	staging := application.NewStagingArea()
+	// Build nodes with explicit ContentHashes: one matches the promoted
+	// hash ("unchanged"), one differs ("changed").
+	unchanged, err := domain.NewNode("unchanged", "foo.go", "Same", domain.KindFunction,
+		domain.WithContentHash("HASH-A"))
+	if err != nil {
+		t.Fatalf("NewNode unchanged: %v", err)
+	}
+	changed, err := domain.NewNode("changed", "foo.go", "Edited", domain.KindFunction,
+		domain.WithContentHash("HASH-B-NEW"))
+	if err != nil {
+		t.Fatalf("NewNode changed: %v", err)
+	}
+	staging.StageFile("r", "main", "foo.go", []*domain.Node{unchanged, changed}, nil)
+
+	edges := &fakeEdges{inbound: map[string][]string{
+		"unchanged": {"caller-of-same"},
+		"changed":   {"caller-of-edited"},
+	}}
+	nodes := &fakeNodesWithHashes{
+		fakeNodes: &fakeNodes{metas: map[string]ports.NodeMeta{
+			"unchanged":        {NodeID: "unchanged"},
+			"changed":          {NodeID: "changed"},
+			"caller-of-same":   {NodeID: "caller-of-same"},
+			"caller-of-edited": {NodeID: "caller-of-edited"},
+		}},
+		hashes: map[string]string{
+			"unchanged": "HASH-A",     // matches staged → must be skipped
+			"changed":   "HASH-B-OLD", // differs from staged HASH-B-NEW → seeded
+		},
+	}
+	s := blastradius.NewService(edges, nodes, staging)
+	resp, err := s.DirtyOf(context.Background(), "r", "main", blastradius.Options{MaxDepth: 1})
+	if err != nil {
+		t.Fatalf("DirtyOf: %v", err)
+	}
+	ids := make([]string, len(resp.Entries))
+	for i, e := range resp.Entries {
+		ids[i] = e.NodeID
+	}
+	if slices.Contains(ids, "unchanged") {
+		t.Errorf("unchanged symbol must be filtered out of dirty seeds; got %v", ids)
+	}
+	if !slices.Contains(ids, "changed") {
+		t.Errorf("changed symbol must remain a seed; got %v", ids)
+	}
+	if slices.Contains(ids, "caller-of-same") {
+		t.Errorf("BFS must not expand from unchanged; got %v", ids)
+	}
+	if !slices.Contains(ids, "caller-of-edited") {
+		t.Errorf("BFS must expand from changed; got %v", ids)
+	}
+}
+
 func TestDirtyOf_NilStagingReturnsEmpty(t *testing.T) {
 	edges := &fakeEdges{}
 	nodes := &fakeNodes{}
