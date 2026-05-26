@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/whiskeyjimbo/veska/internal/application/changedsymbols"
@@ -88,6 +89,52 @@ func TestChangedSymbols_ReturnsThreeBuckets(t *testing.T) {
 	}
 	if len(resp.Modified) != 1 || resp.Modified[0].Name != "Edit" {
 		t.Errorf("modified = %+v, want [Edit]", resp.Modified)
+	}
+}
+
+// TestChangedSymbols_FiltersChunkEntries covers solov2-u9os: a comment- or
+// whitespace-only change creates a chunk diff (KindChunk) in the parser
+// output, but it isn't a symbol from the user's perspective. The
+// changedsymbols service must filter chunks and surface a
+// "non_symbol_changes_only" degraded reason instead so agents don't see
+// "chunk:N-M" entries leaking into added/removed/modified.
+func TestChangedSymbols_FiltersChunkEntries(t *testing.T) {
+	// Two refs whose only difference is a comment line; symbols are
+	// identical, but the parser will still emit different chunk nodes
+	// because the file body changed.
+	m := csMemFiles{
+		"refA:code.go": "package p\n// old comment\nfunc Keep() {}\n",
+		"refB:code.go": "package p\n// new comment\nfunc Keep() {}\n",
+	}
+	r := newChangedSymbolsRegistry(t, m)
+	resp, rpcErr := dispatchChangedSymbols(t, r, map[string]string{
+		"repo_id": "repo1", "branch": "main", "ref_a": "refA", "ref_b": "refB",
+	})
+	if rpcErr != nil {
+		t.Fatalf("dispatch: %v", rpcErr)
+	}
+	for _, bucket := range [][]changedsymbols.SymbolChange{resp.Added, resp.Removed, resp.Modified} {
+		for _, c := range bucket {
+			if strings.HasPrefix(c.Name, "chunk:") {
+				t.Errorf("chunk leaked into response: %+v", c)
+			}
+		}
+	}
+	// At least one of the buckets must be empty or the degraded reason
+	// signalling 'comments-only changes' must be set so a caller knows
+	// the file did change.
+	if len(resp.Added)+len(resp.Removed)+len(resp.Modified) == 0 {
+		found := false
+		for _, r := range resp.DegradedReasons {
+			if r == changedsymbols.DegradedReasonNonSymbolChangesOnly {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Errorf("comment-only diff must set degraded_reasons=%q, got %+v",
+				changedsymbols.DegradedReasonNonSymbolChangesOnly, resp.DegradedReasons)
+		}
 	}
 }
 
