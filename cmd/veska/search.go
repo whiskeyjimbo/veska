@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -135,7 +136,41 @@ func runSearch(ctx context.Context, w io.Writer, opts runSearchOpts) error {
 		return fmt.Errorf("search: semantic: %w", err)
 	}
 
-	return renderSearchResults(w, resp, opts.jsonOut)
+	if err := renderSearchResults(w, resp, opts.jsonOut); err != nil {
+		return err
+	}
+
+	// solov2-kxo5.7: after a successful ephemeral search, offer the
+	// "keep this indexed?" prompt. No-op for tracked rows, JSON output,
+	// or repos that have already been prompted. Failure to record the
+	// prompt outcome is non-fatal — the search itself succeeded; we
+	// log to stderr so the user knows the row stays ephemeral.
+	if !opts.jsonOut && rec.Kind == "ephemeral" {
+		canonical, _ := lookupCanonicalURL(ctx, pools.ReadDB, rec.RepoID)
+		if canonical == "" {
+			canonical = rec.RootPath
+		}
+		if err := runAcceptancePrompt(ctx, pools.Write, rec, canonical, defaultPromptDeps(w)); err != nil {
+			fmt.Fprintf(os.Stderr, "search: acceptance prompt: %v\n", err)
+		}
+	}
+	return nil
+}
+
+// lookupCanonicalURL fetches canonical_url for repoID; empty string on
+// any read error or NULL. Used by the acceptance prompt to address the
+// user with the URL they actually typed instead of the cache-tier path.
+func lookupCanonicalURL(ctx context.Context, db *sql.DB, repoID string) (string, error) {
+	var s sql.NullString
+	if err := db.QueryRowContext(ctx,
+		`SELECT canonical_url FROM repos WHERE repo_id = ?`, repoID,
+	).Scan(&s); err != nil {
+		return "", err
+	}
+	if !s.Valid {
+		return "", nil
+	}
+	return s.String, nil
 }
 
 // resolveSearchTarget picks the repo the search will run against. The
