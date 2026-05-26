@@ -13,9 +13,13 @@ func newRootCmd() *cobra.Command {
 	root := &cobra.Command{
 		Use:           "veska",
 		Short:         "Veska code intelligence CLI",
+		Version:       shortVersion(),
 		SilenceUsage:  true,
 		SilenceErrors: true,
 	}
+	// Compact one-liner for `veska --version`; `veska version` keeps the
+	// full multi-line build info dump (solov2-fy14).
+	root.SetVersionTemplate("veska {{.Version}}\n")
 	root.AddCommand(initCmd())
 	root.AddCommand(hookRunnerCmd())
 	root.AddCommand(doctorCmd())
