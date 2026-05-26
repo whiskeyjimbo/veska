@@ -20,3 +20,15 @@
   function: (selector_expression
     operand: (identifier) @call.operand
     field: (field_identifier) @call.field)) @call.expr
+
+; chained-selector call: `recvName.field.Method()` or `localVar.X.Y()`.
+; The Go-side extractor uses the file-wide struct-field-type map +
+; per-body local-var-origin map (built once per function) to classify
+; each match into either an in-file FieldType.Method edge or an
+; UnresolvedCall (with PkgQualifier + IsMethodCall=true). solov2-9rc2.
+(call_expression
+  function: (selector_expression
+    operand: (selector_expression
+      operand: (identifier) @call.chain_operand
+      field: (field_identifier) @call.chain_field)
+    field: (field_identifier) @call.field)) @call.expr
