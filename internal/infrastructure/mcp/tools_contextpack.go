@@ -10,16 +10,46 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/core/domain"
 )
 
+// ContextPackOption configures RegisterContextPackTool. Today the only
+// option is the cross-repo resolver; the variadic shape leaves room for
+// future knobs without another signature break.
+type ContextPackOption func(*contextPackConfig)
+
+type contextPackConfig struct {
+	resolve ResolveFunc
+}
+
+// WithContextPackResolveFunc supplies a ResolveFunc so the handler can
+// turn each pack node's cross_repo_edge_stubs into CrossRepoEdges on the
+// response — parity with eng_get_call_chain and eng_get_blast_radius
+// (solov2-7xrw). Without it the response carries no cross_repo_edges and
+// agents reading the pack alone cannot see consumers in other repos.
+func WithContextPackResolveFunc(fn ResolveFunc) ContextPackOption {
+	return func(c *contextPackConfig) { c.resolve = fn }
+}
+
+// contextPackResponse embeds the application Pack so the existing JSON
+// shape is preserved bit-for-bit, then layers CrossRepoEdges on top —
+// keeping the application layer free of an mcp-specific edge type.
+type contextPackResponse struct {
+	contextpack.Pack
+	CrossRepoEdges []CrossRepoEdge `json:"cross_repo_edges,omitempty"`
+}
+
 // RegisterContextPackTool registers eng_get_context_pack. asm and repoRoot
 // are required; when either is nil the tool is still registered but
 // returns InternalError on every call, keeping the registry uniform
 // across composition roots that have not wired the context-pack service.
-func RegisterContextPackTool(r *Registry, asm *contextpack.Assembler, repoRoot RepoRootFunc, repos application.RepoLister) {
+func RegisterContextPackTool(r *Registry, asm *contextpack.Assembler, repoRoot RepoRootFunc, repos application.RepoLister, opts ...ContextPackOption) {
+	var cfg contextPackConfig
+	for _, o := range opts {
+		o(&cfg)
+	}
 	r.MustRegister(ToolSpec{
 		Name:        "eng_get_context_pack",
 		Description: "Return a token-bounded JSON bundle of relevant nodes, recent commits, open findings and tasks for a symbol or a task.",
 		InputSchema: contextPackInputSchema,
-		Handler:     makeContextPackHandler(asm, repoRoot, repos),
+		Handler:     makeContextPackHandler(asm, repoRoot, repos, cfg.resolve),
 	})
 }
 
@@ -31,7 +61,7 @@ type contextPackParams struct {
 	TaskID string `json:"task_id,omitempty"`
 }
 
-func makeContextPackHandler(asm *contextpack.Assembler, repoRoot RepoRootFunc, repos application.RepoLister) ToolHandler {
+func makeContextPackHandler(asm *contextpack.Assembler, repoRoot RepoRootFunc, repos application.RepoLister, resolve ResolveFunc) ToolHandler {
 	return func(ctx context.Context, _ domain.Actor, raw json.RawMessage) (any, *RPCError) {
 		if asm == nil || repoRoot == nil {
 			return nil, &RPCError{
@@ -91,6 +121,49 @@ func makeContextPackHandler(asm *contextpack.Assembler, repoRoot RepoRootFunc, r
 		if err != nil {
 			return nil, &RPCError{Code: CodeInternalError, Message: fmt.Sprintf("context pack: %v", err)}
 		}
-		return pack, nil
+		// solov2-7xrw: resolve cross_repo_edge_stubs for each node in the
+		// pack so an agent (or the CLI wrapper) can see consumers/callees
+		// in other registered repos in the same response. Without this
+		// step a junior asking 'what does Run touch?' on a multi-repo
+		// workspace gets only same-repo nodes even when the parser
+		// captured the cross-repo edge.
+		return contextPackResponse{
+			Pack:           pack,
+			CrossRepoEdges: resolveCrossRepoForNodes(ctx, resolve, pack.Nodes, p.Branch),
+		}, nil
 	}
+}
+
+// resolveCrossRepoForNodes mirrors resolveCrossRepoFor in tools_blast.go
+// but takes a contextpack.NodeInfo slice instead of blastradius.Entry.
+// Silent on per-node errors — a stuck repo must not break the primary
+// pack. nil resolve is a no-op.
+func resolveCrossRepoForNodes(ctx context.Context, resolve ResolveFunc, nodes []contextpack.NodeInfo, branch string) []CrossRepoEdge {
+	if resolve == nil || len(nodes) == 0 {
+		return nil
+	}
+	var out []CrossRepoEdge
+	seen := make(map[string]bool)
+	for _, n := range nodes {
+		resolved, err := resolve(ctx, n.NodeID, branch, false)
+		if err != nil {
+			continue
+		}
+		for _, re := range resolved {
+			key := re.SrcNodeID + "→" + re.DstNodeID + "/" + re.Kind
+			if seen[key] {
+				continue
+			}
+			seen[key] = true
+			out = append(out, CrossRepoEdge{
+				SrcNodeID: re.SrcNodeID,
+				DstNodeID: re.DstNodeID,
+				DstRepoID: re.DstRepoID,
+				DstBranch: re.DstBranch,
+				Kind:      re.Kind,
+				CrossRepo: true,
+			})
+		}
+	}
+	return out
 }

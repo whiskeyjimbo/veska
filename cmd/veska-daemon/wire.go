@@ -997,7 +997,8 @@ func registerMCPTools(r *mcp.Registry, d mcpDeps) {
 		graph.FindNodes, blastSvc, fileHistory, findingQuerier.OpenFindingNodeIDs,
 		gitwatch.ChangedFiles, nodes.NodesInFile, activeTaskFunc(pools.ReadDB),
 	); err == nil {
-		mcp.RegisterContextPackTool(r, cpAsm, repoRootFunc(pools.ReadDB), &repoLister{db: pools.ReadDB})
+		mcp.RegisterContextPackTool(r, cpAsm, repoRootFunc(pools.ReadDB), &repoLister{db: pools.ReadDB},
+			mcp.WithContextPackResolveFunc(resolveStubs))
 	} else {
 		mcp.RegisterContextPackTool(r, nil, nil, &repoLister{db: pools.ReadDB})
 	}
