@@ -127,6 +127,14 @@ func (h *Handler) Handle(ctx context.Context, row ports.WorkRow) error {
 		return fmt.Errorf("wiki.Handle: select entry points: %w", err)
 	}
 
+	// solov2-otzn: stamp GeneratedAt so a Markdown page on disk never
+	// hides how old it is. The render-time stamp lands in the document
+	// header; the persisted SetLastRenderAt below is the source of
+	// truth for staleness checks elsewhere.
+	now := h.clock()
+	report.GeneratedAt = now
+	epReport.GeneratedAt = now
+
 	if h.writePages {
 		// solov2-2q2a: committed Markdown carries repo-relative file_path
 		// so the docs stay portable across machines and contributors.
