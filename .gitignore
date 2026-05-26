@@ -19,6 +19,7 @@
 /vector-bench
 
 bin/
+dist/
 
 # Eval-harness output artefacts
 tools/loadtest/recallprojection/recall_projection_results.json

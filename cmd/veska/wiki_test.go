@@ -105,11 +105,27 @@ func TestWikiCmd_ByteIdenticalOutput(t *testing.T) {
 	hot1, entry1 := run()
 	hot2, entry2 := run()
 
-	if !bytes.Equal(hot1, hot2) {
-		t.Error("hot_zones.md output not byte-identical across runs")
+	// solov2-otzn: the wiki Handler stamps a wall-clock GeneratedAt in
+	// the page header on every render, which is non-deterministic by
+	// design. Strip that single line before the byte-identical
+	// comparison — the data rows (ranking input is the same) must still
+	// match across runs.
+	stripGenerated := func(b []byte) []byte {
+		lines := bytes.Split(b, []byte("\n"))
+		out := lines[:0]
+		for _, l := range lines {
+			if bytes.HasPrefix(l, []byte("_Generated:")) {
+				continue
+			}
+			out = append(out, l)
+		}
+		return bytes.Join(out, []byte("\n"))
 	}
-	if !bytes.Equal(entry1, entry2) {
-		t.Error("entry_points.md output not byte-identical across runs")
+	if !bytes.Equal(stripGenerated(hot1), stripGenerated(hot2)) {
+		t.Error("hot_zones.md output not byte-identical across runs (excluding generated-at line)")
+	}
+	if !bytes.Equal(stripGenerated(entry1), stripGenerated(entry2)) {
+		t.Error("entry_points.md output not byte-identical across runs (excluding generated-at line)")
 	}
 }
 
