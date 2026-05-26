@@ -1,8 +1,0 @@
-[
-  {
-    "population": 50000,
-    "recall_at_10": 1.0,
-    "recall_at_50": 1.0,
-    "hold_out_size": 100
-  }
-]
