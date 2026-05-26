@@ -147,6 +147,24 @@ func detectActiveBranch(ctx context.Context, root string) string {
 	return strings.TrimSpace(string(out))
 }
 
+// detectOriginURL reads `git remote get-url origin` from the working tree
+// and returns the canonicalised form (solov2-kxo5.4). Returns "" when the
+// remote is missing, git is unavailable, or the URL can't be canonicalised
+// — every failure mode is treated identically so `repo add <path>` never
+// fails on a remote-config issue that the user doesn't need to care about.
+func detectOriginURL(ctx context.Context, root string) string {
+	cmd := exec.CommandContext(ctx, "git", "-C", root, "remote", "get-url", "origin")
+	out, err := cmd.Output()
+	if err != nil {
+		return ""
+	}
+	canonical, err := CanonicalURL(strings.TrimSpace(string(out)))
+	if err != nil {
+		return ""
+	}
+	return canonical
+}
+
 // repoID returns a deterministic hex ID for a canonical root path.
 func repoID(canonicalPath string) string {
 	h := sha256.New()
@@ -360,6 +378,28 @@ func Add(ctx context.Context, db *sql.DB, rootPath string) (string, bool, error)
 	}
 	rows, _ := res.RowsAffected()
 	existed := rows == 0
+
+	// Stamp canonical_url from `git remote get-url origin` for fresh
+	// registrations (solov2-kxo5.4). Lets a later `search --repo <url>`
+	// against the same repo resolve to this row via LookupByCanonicalURL
+	// instead of cloning a duplicate. Skipped for re-adds: per design we
+	// do not backfill existing rows. A missing/malformed origin is silent
+	// — canonical_url stays NULL and the row behaves like any other.
+	if !existed {
+		if origin := detectOriginURL(ctx, canonical); origin != "" {
+			if _, err := execWithBusyRetry(ctx, db, 5, 500*time.Millisecond,
+				`UPDATE repos SET canonical_url = ? WHERE repo_id = ?`,
+				origin, id,
+			); err != nil {
+				// solov2-kxo5.4: the canonical_url is an alias — its
+				// absence only forfeits the URL-collision short-circuit,
+				// it does not break registration. Log via the returned
+				// error would be too loud; swallow and move on so
+				// `repo add` itself can't fail on this.
+				_ = err
+			}
+		}
+	}
 
 	if err := installHooks(canonical); err != nil {
 		return "", false, fmt.Errorf("install hooks: %w", err)
