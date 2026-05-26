@@ -57,7 +57,7 @@ func RegisterContextPackTool(r *Registry, asm *contextpack.Assembler, repoRoot R
 	}
 	r.MustRegister(ToolSpec{
 		Name:        "eng_get_context_pack",
-		Description: "Return a token-bounded JSON bundle of relevant nodes, recent commits, open findings and tasks for a symbol or a task.",
+		Description: "Bundle a symbol's neighbourhood (callers, callees, adjacent tests, recent commits, open findings, active task) into one token-bounded JSON payload. Use at the START of a non-trivial change so you don't have to assemble surrounding context piecewise with multiple tool calls. Pass exactly one of node_id, symbol, or task_id as the anchor. Surfaces cross_repo_edges in both directions, so cross-repo callers/callees show up in the same response (solov2-7xrw, solov2-80hh).",
 		InputSchema: contextPackInputSchema,
 		Handler:     makeContextPackHandler(asm, repoRoot, repos, cfg.resolve, cfg.resolveInbound),
 	})

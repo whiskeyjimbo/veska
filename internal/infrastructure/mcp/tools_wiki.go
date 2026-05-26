@@ -36,7 +36,7 @@ type HotZoneResponse struct {
 func RegisterWikiTools(r *Registry, svc *wiki.HotZoneService, repoRoot RepoRootFunc, repos application.RepoLister) {
 	r.MustRegister(ToolSpec{
 		Name:        "eng_get_hot_zone",
-		Description: "Return the top-N files ranked by change risk (recent change frequency multiplied by blast radius).",
+		Description: "Top-N files ranked by change risk = recent-change-frequency × blast-radius. Use during PR review or onboarding to spot the load-bearing files where a small edit fans out the most.",
 		InputSchema: hotZoneInputSchema,
 		Handler:     makeHotZoneHandler(svc, repoRoot, repos),
 	})
@@ -58,7 +58,7 @@ type EntryPointsResponse struct {
 func RegisterEntryPointsTool(r *Registry, svc *wiki.EntryPointsService, repos application.RepoLister) {
 	r.MustRegister(ToolSpec{
 		Name:        "eng_get_entry_points",
-		Description: "Return low-risk symbols a newcomer or agent can safely start from (adjacent test, small blast radius, no open findings).",
+		Description: "High-fan-in symbols ranked by inbound call count — the natural entry points a newcomer (or agent) should read first to understand the repo. Exported, tested symbols rank above unexported untested ones at the same inbound count.",
 		InputSchema: entryPointsInputSchema,
 		Handler:     makeEntryPointsHandler(svc, repos),
 	})
