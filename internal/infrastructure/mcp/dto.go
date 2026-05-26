@@ -64,6 +64,20 @@ type searchHitDTO struct {
 	nodeDTO
 	Score   float32 `json:"score"`
 	Snippet string  `json:"snippet,omitempty"`
+	// ScoreNormalized is the min-max-rescaled score (0..1) within
+	// this single response's result set. Provides a calibrated number
+	// agents can threshold on without interpreting raw RRF — which
+	// clusters in 0.016–0.033 and reads as low-confidence even when
+	// the hit is the strongest available (solov2-hl70). Use Score for
+	// reproducible cross-query comparisons; use ScoreNormalized for
+	// intra-query ranking decisions.
+	ScoreNormalized float32 `json:"score_normalized"`
+	// Tier is the post-rerank confidence band relative to this query's
+	// top hit. "top" / "strong" / "weak"; ScoreTier in
+	// internal/application/search is the source of truth. Pair with
+	// the "weak top absolute" hint on degraded_reasons to detect the
+	// case where every result is weak in absolute terms (solov2-hl70).
+	Tier string `json:"tier,omitempty"`
 }
 
 // blastEntryDTO is a node plus its BFS distance from the nearest seed.
@@ -161,17 +175,30 @@ func searchResultToDTO(r search.Result) searchHitDTO {
 }
 
 func searchResultsToDTO(in []search.Result) []searchHitDTO {
-	out := make([]searchHitDTO, 0, len(in))
+	// solov2-hl70: compute ScoreNormalized + Tier in one pre-pass over
+	// the visible-to-callers result set (chunks excluded — they would
+	// otherwise distort the min/max range and the top-of-set tier
+	// anchor).
+	visible := make([]search.Result, 0, len(in))
 	for _, r := range in {
-		// chunk:* pseudo-nodes are internal file-fragment embeddings used to
-		// give un-symbolized code coverage in vector space. They confuse
-		// human-facing search consumers ("what do I do with chunk:1-26?")
-		// so the wire DTO drops them — real symbols are the contract
-		// (solov2-4v0x).
 		if r.Kind == string(domain.KindChunk) {
 			continue
 		}
-		out = append(out, searchResultToDTO(r))
+		visible = append(visible, r)
+	}
+	normalized := search.NormalizeScores(visible)
+	var topScore float32
+	for _, r := range visible {
+		if r.Score > topScore {
+			topScore = r.Score
+		}
+	}
+	out := make([]searchHitDTO, 0, len(visible))
+	for i, r := range visible {
+		d := searchResultToDTO(r)
+		d.ScoreNormalized = normalized[i]
+		d.Tier = search.ScoreTier(r.Score, topScore)
+		out = append(out, d)
 	}
 	return out
 }
