@@ -115,6 +115,77 @@ func TestContextPack_AcceptsShortID(t *testing.T) {
 	}
 }
 
+// TestContextPack_CrossRepoEdges guards solov2-7xrw: when a resolver is
+// wired and any node in the pack has cross_repo_edge_stubs, the response
+// must surface them in a top-level cross_repo_edges array — parity with
+// eng_get_call_chain and eng_get_blast_radius. Without it the CLI 'context'
+// wrapper has no signal that consumers exist in other repos.
+func TestContextPack_CrossRepoEdges(t *testing.T) {
+	r := NewRegistry()
+	resolve := func(_ context.Context, nodeID, _ string, _ bool) ([]ports.ResolvedEdge, error) {
+		if nodeID != "seed" {
+			return nil, nil
+		}
+		return []ports.ResolvedEdge{{
+			SrcNodeID: "seed",
+			DstNodeID: "remote-node",
+			DstRepoID: "other-repo",
+			DstBranch: "main",
+			Kind:      "CALLS",
+		}}, nil
+	}
+	RegisterContextPackTool(r, contextPackFixture(t), stubRepoRoot(""), nil,
+		WithContextPackResolveFunc(resolve))
+	raw, _ := json.Marshal(map[string]any{"repo_id": "r", "branch": "main", "symbol": "Target"})
+	req := &Request{Method: "eng_get_context_pack", Params: json.RawMessage(raw)}
+	result, rpcErr := r.Dispatch(context.Background(), domain.Actor{ID: "agent:test", Kind: domain.ActorKindAgent}, req)
+	if rpcErr != nil {
+		t.Fatalf("dispatch: %+v", rpcErr)
+	}
+	b, _ := json.Marshal(result)
+	var resp struct {
+		Nodes          []map[string]any  `json:"nodes"`
+		CrossRepoEdges []json.RawMessage `json:"cross_repo_edges"`
+	}
+	if err := json.Unmarshal(b, &resp); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if len(resp.CrossRepoEdges) != 1 {
+		t.Fatalf("want 1 cross_repo_edge, got %d: %s", len(resp.CrossRepoEdges), string(b))
+	}
+	var edge struct {
+		SrcNodeID string `json:"src_node_id"`
+		DstNodeID string `json:"dst_node_id"`
+		DstRepoID string `json:"dst_repo_id"`
+		Kind      string `json:"kind"`
+		CrossRepo bool   `json:"cross_repo"`
+	}
+	if err := json.Unmarshal(resp.CrossRepoEdges[0], &edge); err != nil {
+		t.Fatalf("edge unmarshal: %v", err)
+	}
+	if edge.SrcNodeID != "seed" || edge.DstNodeID != "remote-node" || edge.DstRepoID != "other-repo" || edge.Kind != "CALLS" || !edge.CrossRepo {
+		t.Fatalf("edge mismatch: %+v", edge)
+	}
+}
+
+// TestContextPack_NoResolverOmitsCrossRepo: without WithContextPackResolveFunc
+// the response must NOT include a cross_repo_edges field, so older clients
+// see exactly the same JSON shape they did before solov2-7xrw.
+func TestContextPack_NoResolverOmitsCrossRepo(t *testing.T) {
+	r := NewRegistry()
+	RegisterContextPackTool(r, contextPackFixture(t), stubRepoRoot(""), nil)
+	raw, _ := json.Marshal(map[string]any{"repo_id": "r", "branch": "main", "symbol": "Target"})
+	req := &Request{Method: "eng_get_context_pack", Params: json.RawMessage(raw)}
+	result, rpcErr := r.Dispatch(context.Background(), domain.Actor{ID: "agent:test", Kind: domain.ActorKindAgent}, req)
+	if rpcErr != nil {
+		t.Fatalf("dispatch: %+v", rpcErr)
+	}
+	b, _ := json.Marshal(result)
+	if contains(string(b), "cross_repo_edges") {
+		t.Fatalf("want no cross_repo_edges field when resolver unwired, got %s", string(b))
+	}
+}
+
 func TestContextPack_TaskMode(t *testing.T) {
 	r := NewRegistry()
 	RegisterContextPackTool(r, contextPackFixture(t), stubRepoRoot(""), nil)

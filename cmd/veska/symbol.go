@@ -219,6 +219,46 @@ func renderNodeList(w io.Writer, resp any, jsonOut bool) error {
 	return nil
 }
 
+// shortID returns the first 12 hex chars of a content-hashed node ID for
+// display, leaving shorter or empty inputs untouched.
+func shortID(id string) string {
+	if len(id) <= 12 {
+		return id
+	}
+	return id[:12]
+}
+
+// resolveCrossRepoDstName best-effort resolves a cross-repo CALLS edge's
+// destination node_id to its symbol name via eng_get_node, so the CLI can
+// print "Run --CALLS--> greetlib.New" instead of an opaque hash
+// (solov2-7xrw). Returns empty string on any error or empty result — the
+// caller falls back to a 12-char short_id, so a stuck remote repo never
+// fails the primary context output.
+func resolveCrossRepoDstName(ctx context.Context, nodeID, repoID, branch string) string {
+	if nodeID == "" {
+		return ""
+	}
+	var resp struct {
+		Nodes []struct {
+			Name string `json:"name"`
+		} `json:"nodes"`
+	}
+	params := map[string]any{"node_id": nodeID}
+	if repoID != "" {
+		params["repo_id"] = repoID
+	}
+	if branch != "" {
+		params["branch"] = branch
+	}
+	if err := callMCP(ctx, "eng_get_node", params, &resp); err != nil {
+		return ""
+	}
+	if len(resp.Nodes) == 0 {
+		return ""
+	}
+	return resp.Nodes[0].Name
+}
+
 // contextCmd wraps eng_get_context_pack so users can pull the same
 // caller+callee+test bundle the agent would, without crafting JSON
 // (solov2-kzhe).
@@ -274,11 +314,13 @@ change so you (or an agent) get the whole neighbourhood in one shot.`,
 				return enc.Encode(pretty)
 			}
 			// Text mode: render seed + one-line-per-neighbour. The shape is
-			// {mode, query, nodes:[{name, kind, file_path, distance, seed, snippet}]}.
+			// {mode, query, nodes:[{name, kind, file_path, distance, seed, snippet}],
+			// cross_repo_edges:[{src_node_id, dst_node_id, dst_repo_id, kind}]}.
 			var pack struct {
 				Mode  string `json:"mode"`
 				Query string `json:"query"`
 				Nodes []struct {
+					NodeID   string `json:"node_id"`
 					Name     string `json:"name"`
 					Kind     string `json:"kind"`
 					FilePath string `json:"file_path"`
@@ -286,6 +328,13 @@ change so you (or an agent) get the whole neighbourhood in one shot.`,
 					Seed     bool   `json:"seed"`
 					Snippet  string `json:"snippet,omitempty"`
 				} `json:"nodes"`
+				CrossRepoEdges []struct {
+					SrcNodeID string `json:"src_node_id"`
+					DstNodeID string `json:"dst_node_id"`
+					DstRepoID string `json:"dst_repo_id"`
+					DstBranch string `json:"dst_branch"`
+					Kind      string `json:"kind"`
+				} `json:"cross_repo_edges,omitempty"`
 			}
 			if err := json.Unmarshal(resp, &pack); err != nil {
 				return err
@@ -305,6 +354,35 @@ change so you (or an agent) get the whole neighbourhood in one shot.`,
 					mark = "*"
 				}
 				fmt.Fprintf(w, " %s d=%d %-10s %s  %s\n", mark, n.Distance, n.Kind, n.Name, n.FilePath)
+			}
+			// solov2-7xrw: cross-repo edges that the daemon resolved through
+			// cross_repo_edge_stubs. Surface them so the multi-repo journey
+			// ("what does Run touch in greetlib?") doesn't dead-end at the
+			// current repo's boundary. byNodeID lets us label each edge with
+			// the source symbol the user actually recognises.
+			if len(pack.CrossRepoEdges) > 0 {
+				byNodeID := make(map[string]string, len(pack.Nodes))
+				for _, n := range pack.Nodes {
+					if n.NodeID != "" {
+						byNodeID[n.NodeID] = n.Name
+					}
+				}
+				fmt.Fprintf(w, "cross-repo edges (%d):\n", len(pack.CrossRepoEdges))
+				for _, e := range pack.CrossRepoEdges {
+					src := byNodeID[e.SrcNodeID]
+					if src == "" {
+						src = shortID(e.SrcNodeID)
+					}
+					dst := resolveCrossRepoDstName(cmd.Context(), e.DstNodeID, e.DstRepoID, e.DstBranch)
+					if dst == "" {
+						dst = shortID(e.DstNodeID)
+					}
+					dstRepo := e.DstRepoID
+					if len(dstRepo) > 12 {
+						dstRepo = dstRepo[:12]
+					}
+					fmt.Fprintf(w, "   %s --%s--> %s in %s\n", src, e.Kind, dst, dstRepo)
+				}
 			}
 			return nil
 		},
