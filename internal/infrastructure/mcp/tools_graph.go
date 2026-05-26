@@ -52,17 +52,25 @@ type callChainResponse struct {
 // callable as "parser limitation, may not be authoritative."
 const DegradedReasonChainedSelectorsUnresolved = "chained_selectors_unresolved"
 
-// ResolveFunc is a function that resolves cross-repo edge stubs for a given
-// node. It is injected into RegisterGraphTools as an optional dependency.
-// If nil, cross-repo resolution is skipped.
+// ResolveFunc is a function that resolves cross-repo edge stubs OUTBOUND
+// from a given node (the node is the caller). Injected as an optional
+// dependency; nil = skip outbound resolution.
 type ResolveFunc func(ctx context.Context, nodeID, branch string, expand bool) ([]ports.ResolvedEdge, error)
+
+// InboundResolveFunc resolves cross-repo edge stubs INBOUND to a given
+// node (the node is the callee). Use it to answer "who calls this library
+// symbol from another repo?" — the dual of ResolveFunc. Backed by
+// resolver.ResolveStubsTargetingNode (solov2-80hh). nil = skip inbound
+// resolution.
+type InboundResolveFunc func(ctx context.Context, dstNodeID, branch string) ([]ports.ResolvedEdge, error)
 
 // GraphToolOption configures RegisterGraphTools.
 type GraphToolOption func(*graphToolConfig)
 
 type graphToolConfig struct {
-	resolve ResolveFunc
-	repos   application.RepoLister
+	resolve        ResolveFunc
+	resolveInbound InboundResolveFunc
+	repos          application.RepoLister
 }
 
 // WithResolveFunc supplies a ResolveFunc that enables cross-repo synthetic
@@ -70,6 +78,14 @@ type graphToolConfig struct {
 // same-repo only.
 func WithResolveFunc(fn ResolveFunc) GraphToolOption {
 	return func(c *graphToolConfig) { c.resolve = fn }
+}
+
+// WithInboundResolveFunc supplies an InboundResolveFunc so call_chain
+// direction=in (and direction=both) surfaces callers in OTHER repos —
+// closes the parity gap with eng_get_blast_radius for library symbols
+// (solov2-80hh).
+func WithInboundResolveFunc(fn InboundResolveFunc) GraphToolOption {
+	return func(c *graphToolConfig) { c.resolveInbound = fn }
 }
 
 // WithRepoLister supplies the repos registry so eng_get_file_nodes can resolve
@@ -107,7 +123,7 @@ func RegisterGraphTools(r *Registry, graph ports.GraphStorage, staging *applicat
 		Description:     "BFS traversal of CALLS edges up to a configurable depth from a start node. Pass either node_id (exact) or symbol (resolved via eng_find_symbol; rejected as ambiguous when multiple matches exist). Pass direction=out (default — callees), in (callers), or both. NOTE: calls inside anonymous functions assigned to struct fields (e.g. cobra Command{Run: func(...){...}} var initializers) are not currently captured by the tree-sitter extractor and will not appear as edges — falling back to eng_search_semantic or eng_find_symbol is recommended for that pattern (solov2-vkmi).",
 		IncludesStaging: false,
 		InputSchema:     getCallChainInputSchema,
-		Handler:         makeGetCallChainHandler(graph, resolve, cfg.repos),
+		Handler:         makeGetCallChainHandler(graph, resolve, cfg.resolveInbound, cfg.repos),
 	})
 	r.MustRegister(ToolSpec{
 		Name:            "eng_get_file_nodes",
