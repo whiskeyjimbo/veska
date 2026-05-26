@@ -77,12 +77,22 @@ func (rr *repoRegistrar) AddRepo(ctx context.Context, rootPath string) (string, 
 		return repoID, existed, nil
 	}
 
-	// Skip the cold-scan dispatch for an already-registered repo: the existing
-	// row already drove a scan on its original add (and continues to be kept
-	// fresh by the post-commit hook / live watcher), so re-scanning here is
-	// pure waste. (solov2-khjd)
+	// solov2-0bc1: skip the cold-scan dispatch ONLY when the existing row
+	// already has a last_promoted_sha — i.e. a previous scan ran to
+	// completion. A row inserted via the direct-write fallback (CLI's
+	// no-daemon path) has no SHA and was never indexed, but pre-fix this
+	// branch happily skipped the rescan because the row "existed". The
+	// startup-resync catches this on next boot, but a user who re-runs
+	// `repo add` between daemon start and resync would see "already
+	// registered" with no scan dispatched. Now we look up the record and
+	// re-dispatch when SHA is empty.
 	if existed {
-		return repoID, existed, nil
+		rec, lerr := rr.recordFor(ctx, repoID)
+		if lerr == nil && rec.RepoID != "" && rec.LastPromotedSHA != "" {
+			return repoID, existed, nil
+		}
+		// Fall through to cold-scan dispatch below — either the lookup
+		// failed (treat as needs-scan, idempotent) or the SHA is empty.
 	}
 
 	// daemonCtx outlives any single request ctx, so the goroutine survives
