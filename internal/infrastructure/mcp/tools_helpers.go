@@ -150,6 +150,98 @@ func resolveRepoIDFromParams(ctx context.Context, repos application.RepoLister, 
 	return resolveRepoIDOrCwd(ctx, repos, "", cwdFromParams(raw))
 }
 
+// repoBranch pairs a resolved repo_id with the branch the caller should
+// query on it. Used by the fanout helpers when the same query needs to run
+// across multiple repos with each repo's own active_branch.
+type repoBranch struct {
+	RepoID string
+	Branch string
+}
+
+// resolveRepoFanoutFromParams returns the set of (repo_id, branch) targets a
+// query tool should hit (solov2-g8fh). It generalises resolveRepoIDFromParams:
+//
+//   - requestedID non-empty: single target, branch defaults to that repo's
+//     active_branch when caller-supplied branch is empty.
+//   - empty registry: InvalidParams (same message as the singleton helper).
+//   - exactly one repo registered: single target on that repo.
+//   - cwd matches a registered RootPath (or is inside one): single target
+//     on the matched repo — caller is operating "inside" that repo.
+//   - multiple repos AND no cwd match: fanout across every registered repo,
+//     each using its own active_branch. This is the new behaviour — the
+//     previous error path ("repo_id is required (N repos registered…)") was
+//     a junior-hostile dead end when calling eng_find_symbol / semantic
+//     search from a shell that wasn't `cd`'d into any registered repo.
+//
+// callerBranch is the explicit `branch` field from the params; it only
+// applies to the requestedID path (a single branch can't sensibly span
+// repos). For the fanout case each target gets its own ActiveBranch.
+//
+// fanout reports whether the result contains more than one target so the
+// caller can populate per-hit repo_id only when disambiguation matters.
+func resolveRepoFanoutFromParams(ctx context.Context, repos application.RepoLister, raw json.RawMessage, requestedID, callerBranch string) (targets []repoBranch, fanout bool, rpcErr *RPCError) {
+	if requestedID != "" {
+		full, rerr := resolveRepoID(ctx, repos, requestedID)
+		if rerr != nil {
+			return nil, false, rerr
+		}
+		br, rerr := resolveBranchOrActive(ctx, repos, full, callerBranch)
+		if rerr != nil {
+			return nil, false, rerr
+		}
+		return []repoBranch{{RepoID: full, Branch: br}}, false, nil
+	}
+	if repos == nil {
+		return nil, false, &RPCError{Code: CodeInvalidParams, Message: "repo_id is required"}
+	}
+	all, err := repos.ListRepos(ctx)
+	if err != nil {
+		return nil, false, &RPCError{Code: CodeInternalError, Message: fmt.Sprintf("list repos failed: %v", err)}
+	}
+	if len(all) == 0 {
+		return nil, false, &RPCError{Code: CodeInvalidParams, Message: "repo_id is required (no repos registered — run `veska repo add <path>` first)"}
+	}
+	if len(all) == 1 {
+		br := callerBranch
+		if br == "" {
+			br = all[0].ActiveBranch
+		}
+		if br == "" {
+			return nil, false, &RPCError{Code: CodeInvalidParams, Message: fmt.Sprintf("branch is required (repo %s has no recorded active_branch)", ShortRepoID(all[0].RepoID))}
+		}
+		return []repoBranch{{RepoID: all[0].RepoID, Branch: br}}, false, nil
+	}
+	cwd := cwdFromParams(raw)
+	if cwd != "" {
+		for _, rec := range all {
+			if rec.RootPath == "" {
+				continue
+			}
+			if cwd == rec.RootPath || strings.HasPrefix(cwd, rec.RootPath+"/") {
+				br := callerBranch
+				if br == "" {
+					br = rec.ActiveBranch
+				}
+				return []repoBranch{{RepoID: rec.RepoID, Branch: br}}, false, nil
+			}
+		}
+	}
+	// Multi-repo fanout: every registered repo on its own active_branch.
+	// callerBranch is intentionally ignored here — a single branch name
+	// can't sensibly span heterogenous repos.
+	targets = make([]repoBranch, 0, len(all))
+	for _, rec := range all {
+		if rec.ActiveBranch == "" {
+			continue
+		}
+		targets = append(targets, repoBranch{RepoID: rec.RepoID, Branch: rec.ActiveBranch})
+	}
+	if len(targets) == 0 {
+		return nil, false, &RPCError{Code: CodeInvalidParams, Message: fmt.Sprintf("repo_id is required (%d repos registered; pass eng_list_repos to find the id)", len(all))}
+	}
+	return targets, len(targets) > 1, nil
+}
+
 // resolveBranchOrActive returns branch when non-empty, otherwise the registered
 // active_branch of repoID. Used so callers can omit `branch` when they are
 // operating against the repo's current branch — overwhelmingly the common

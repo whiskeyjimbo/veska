@@ -44,63 +44,67 @@ func makeFindSymbolHandler(graph ports.GraphStorage, staging *application.Stagin
 		if rpcErr := checkRequired("symbol", p.Symbol); rpcErr != nil {
 			return nil, rpcErr
 		}
-		// solov2-ktz0: allow repo_id to be omitted when the shim-injected cwd
-		// matches a registered repo. Falls back to the single-repo case when
-		// only one repo is registered.
-		repoID, rpcErr := resolveRepoIDFromParams(ctx, repos, raw, p.RepoID)
+		// solov2-g8fh: when repo_id is omitted and cwd doesn't match any
+		// registered repo, fan out across every repo instead of erroring.
+		// Single-repo callers (the common case) still get a one-target
+		// result identical to the pre-fanout behaviour.
+		targets, fanout, rpcErr := resolveRepoFanoutFromParams(ctx, repos, raw, p.RepoID, p.Branch)
 		if rpcErr != nil {
 			return nil, rpcErr
 		}
-		p.RepoID = repoID
-		if br, rpcErr := resolveBranchOrActive(ctx, repos, p.RepoID, p.Branch); rpcErr != nil {
-			return nil, rpcErr
-		} else {
-			p.Branch = br
-		}
 
-		promoted, err := graph.FindNodes(ctx, p.RepoID, p.Branch, p.Symbol)
-		if err != nil {
-			return nil, &RPCError{Code: CodeInternalError, Message: fmt.Sprintf("graph lookup failed: %v", err)}
+		// merged keys by (repo_id, node_id) so the same node_id appearing in
+		// two different repos is preserved as two distinct hits.
+		type mergeKey struct {
+			repoID string
+			nodeID domain.NodeID
 		}
-
-		// Build a map of promoted nodes keyed by ID for merge.
-		merged := make(map[domain.NodeID]*domain.Node, len(promoted))
-		for _, n := range promoted {
-			merged[n.ID] = n
+		type hit struct {
+			node   *domain.Node
+			repoID string
 		}
-
-		// Overlay staged nodes from all files that contain the symbol.
+		merged := make(map[mergeKey]hit)
 		includedStaging := false
-		stagedFiles := staging.StagedFiles(p.RepoID, p.Branch)
-		for _, fp := range stagedFiles {
-			stagedNodes, ok := staging.GetStagedNodes(p.RepoID, p.Branch, fp)
-			if !ok {
-				continue
+
+		for _, tgt := range targets {
+			promoted, err := graph.FindNodes(ctx, tgt.RepoID, tgt.Branch, p.Symbol)
+			if err != nil {
+				return nil, &RPCError{Code: CodeInternalError, Message: fmt.Sprintf("graph lookup failed: %v", err)}
 			}
-			for _, sn := range stagedNodes {
-				if sn.Name != p.Symbol {
+			for _, n := range promoted {
+				merged[mergeKey{tgt.RepoID, n.ID}] = hit{node: n, repoID: tgt.RepoID}
+			}
+			for _, fp := range staging.StagedFiles(tgt.RepoID, tgt.Branch) {
+				stagedNodes, ok := staging.GetStagedNodes(tgt.RepoID, tgt.Branch, fp)
+				if !ok {
 					continue
 				}
-				merged[sn.ID] = sn // staged overrides promoted
-				includedStaging = true
+				for _, sn := range stagedNodes {
+					if sn.Name != p.Symbol {
+						continue
+					}
+					merged[mergeKey{tgt.RepoID, sn.ID}] = hit{node: sn, repoID: tgt.RepoID}
+					includedStaging = true
+				}
 			}
 		}
 
-		// Apply optional kind filter and build result slice.
 		result := make([]*domain.Node, 0, len(merged))
-		for _, n := range merged {
-			if p.Kind != "" && string(n.Kind) != p.Kind {
+		repoByNode := make(map[domain.NodeID]string, len(merged))
+		for k, h := range merged {
+			if p.Kind != "" && string(h.node.Kind) != p.Kind {
 				continue
 			}
-			result = append(result, n)
+			result = append(result, h.node)
+			repoByNode[k.nodeID] = h.repoID
 		}
 
 		// Deterministic ranking (merged is a map, so iteration order is
 		// otherwise random). Exact-name matches first; then declaration /
 		// callable kinds ahead of container kinds (package/file/module/chunk)
 		// — a caller taking nodes[0] for call_chain/blast_radius wants the
-		// function "main", not the package "main" (solov2-rd0l). Name then
-		// node_id break ties so output is stable.
+		// function "main", not the package "main" (solov2-rd0l). Name, then
+		// repo_id (for fanout), then node_id break ties so output is stable.
 		sort.SliceStable(result, func(i, j int) bool {
 			a, b := result[i], result[j]
 			if ae, be := a.Name == p.Symbol, b.Name == p.Symbol; ae != be {
@@ -112,11 +116,22 @@ func makeFindSymbolHandler(graph ports.GraphStorage, staging *application.Stagin
 			if a.Name != b.Name {
 				return a.Name < b.Name
 			}
+			if ra, rb := repoByNode[a.ID], repoByNode[b.ID]; ra != rb {
+				return ra < rb
+			}
 			return a.ID < b.ID
 		})
 
+		dtos := nodesToDTO(result)
+		if fanout {
+			// solov2-g8fh: only stamp repo_id when the response actually
+			// spans repos — single-repo responses keep the pre-fanout shape.
+			for i, n := range dtos {
+				dtos[i].RepoID = repoByNode[domain.NodeID(n.NodeID)]
+			}
+		}
 		return GraphResponse{
-			Nodes:           nodesToDTO(result),
+			Nodes:           dtos,
 			IncludedStaging: includedStaging,
 			DegradedReasons: []string{},
 		}, nil
