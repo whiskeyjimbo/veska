@@ -177,6 +177,123 @@ func TestReindexCmd_ForcesReparseAtHEAD(t *testing.T) {
 	_ = time.Now
 }
 
+// TestReindexCmd_DispatchesViaMCPWhenDaemonUp pins solov2-4d7b: when the
+// daemon socket is reachable, reindex dispatches via the eng_reindex_repo
+// MCP tool and never falls through to the direct sqlite path (which would
+// race the daemon for the write lock). Before this change, reindex printed
+// "stop it first" instead of using the daemon.
+func TestReindexCmd_DispatchesViaMCPWhenDaemonUp(t *testing.T) {
+	repoRoot, repoID := setupReindexEnv(t)
+
+	// Spy reparser must NOT be called when the daemon is up — the daemon's
+	// in-process reparser handles the scan instead.
+	var reparserCalls atomic.Int32
+	installSpyReparser(t, &reparserCalls, nil)
+
+	// Simulate daemon-up.
+	prevProbe := reindexDaemonProbe
+	reindexDaemonProbe = func() bool { return true }
+	t.Cleanup(func() { reindexDaemonProbe = prevProbe })
+
+	// Spy dial that records the params it would have sent.
+	var dialCalls atomic.Int32
+	var gotRepoID, gotRootPath string
+	prevDial := dialReindex
+	dialReindex = func(_ context.Context, rid, rp string) (string, error) {
+		dialCalls.Add(1)
+		gotRepoID = rid
+		gotRootPath = rp
+		// Echo back the repo_id like a real daemon does.
+		if rid != "" {
+			return rid, nil
+		}
+		return repoID, nil
+	}
+	t.Cleanup(func() { dialReindex = prevDial })
+
+	chdir(t, repoRoot)
+
+	var buf bytes.Buffer
+	root := newRootCmd()
+	root.SetOut(&buf)
+	root.SetErr(&buf)
+	root.SetArgs([]string{"reindex"})
+	if err := root.Execute(); err != nil {
+		t.Fatalf("veska reindex: %v\n%s", err, buf.String())
+	}
+	if dialCalls.Load() != 1 {
+		t.Errorf("dialReindex calls = %d, want 1; output: %s", dialCalls.Load(), buf.String())
+	}
+	if reparserCalls.Load() != 0 {
+		t.Errorf("direct reparser must NOT run when daemon is up, got %d invocations", reparserCalls.Load())
+	}
+	if gotRootPath != repoRoot {
+		t.Errorf("dial got rootPath = %q, want %q", gotRootPath, repoRoot)
+	}
+	if gotRepoID != "" {
+		t.Errorf("dial got repoID = %q, want empty (cwd resolution)", gotRepoID)
+	}
+}
+
+// TestReindexCmd_DispatchesViaMCPWithRepoIDArg confirms the dispatch fork
+// passes a non-path argument through as repo_id (the daemon resolves it).
+func TestReindexCmd_DispatchesViaMCPWithRepoIDArg(t *testing.T) {
+	_, repoID := setupReindexEnv(t)
+
+	prevProbe := reindexDaemonProbe
+	reindexDaemonProbe = func() bool { return true }
+	t.Cleanup(func() { reindexDaemonProbe = prevProbe })
+
+	var gotRepoID string
+	prevDial := dialReindex
+	dialReindex = func(_ context.Context, rid, _ string) (string, error) {
+		gotRepoID = rid
+		return rid, nil
+	}
+	t.Cleanup(func() { dialReindex = prevDial })
+
+	var buf bytes.Buffer
+	root := newRootCmd()
+	root.SetOut(&buf)
+	root.SetErr(&buf)
+	root.SetArgs([]string{"reindex", repoID})
+	if err := root.Execute(); err != nil {
+		t.Fatalf("veska reindex %s: %v\n%s", repoID, err, buf.String())
+	}
+	if gotRepoID != repoID {
+		t.Errorf("dial got repoID = %q, want %q", gotRepoID, repoID)
+	}
+}
+
+// TestReindexCmd_NoStopItFirstError pins the regression: with the daemon up,
+// reindex must NOT return the legacy "stop it first" error message anywhere
+// in its output. (AC1 of solov2-4d7b.)
+func TestReindexCmd_NoStopItFirstError(t *testing.T) {
+	repoRoot, _ := setupReindexEnv(t)
+
+	prevProbe := reindexDaemonProbe
+	reindexDaemonProbe = func() bool { return true }
+	t.Cleanup(func() { reindexDaemonProbe = prevProbe })
+
+	prevDial := dialReindex
+	dialReindex = func(_ context.Context, _, _ string) (string, error) { return "r1", nil }
+	t.Cleanup(func() { dialReindex = prevDial })
+
+	chdir(t, repoRoot)
+
+	var buf bytes.Buffer
+	root := newRootCmd()
+	root.SetOut(&buf)
+	root.SetErr(&buf)
+	root.SetArgs([]string{"reindex"})
+	if err := root.Execute(); err != nil {
+		t.Fatalf("veska reindex: %v\n%s", err, buf.String())
+	}
+	if strings.Contains(buf.String(), "stop it first") {
+		t.Errorf("output must not contain legacy 'stop it first' message: %s", buf.String())
+	}
+}
+
 func TestReindexCmd_UnknownRepo(t *testing.T) {
 	setupReindexEnv(t)
 	var calls atomic.Int32
