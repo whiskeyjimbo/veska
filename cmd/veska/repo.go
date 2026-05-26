@@ -309,14 +309,20 @@ func coldScanRunningHint(root, logPath string) string {
 func repoAddCmd() *cobra.Command {
 	var wait bool
 	cmd := &cobra.Command{
-		Use:          "add <path>",
-		Short:        "Register a git repository and install hooks",
+		Use:          "add <path-or-url>",
+		Short:        "Register a git repository (local path or remote URL) and install hooks",
 		Args:         cobra.ExactArgs(1),
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()
 			w := cmd.OutOrStdout()
 			root := args[0]
+
+			// URL form: clone to the tracked tier and run the rest of
+			// `repo add` against the cloned path (solov2-kxo5.3).
+			if looksLikeRepoURL(root) {
+				return runRepoAddURL(ctx, cmd, root, wait)
+			}
 
 			// Prefer the daemon when up — it triggers cold scan and seeds
 			// the live watcher in one call (parity with eng_add_repo).
@@ -372,6 +378,125 @@ func repoAddCmd() *cobra.Command {
 	}
 	cmd.Flags().BoolVar(&wait, "wait", false, "block until the cold scan completes; print live progress")
 	return cmd
+}
+
+// looksLikeRepoURL reports whether arg should be treated as a remote git URL
+// by `veska repo add`. A literal filesystem path starting with '/', './',
+// '~/' or an existing path on disk is always treated as a path; anything
+// else that parses cleanly via repo.CanonicalURL is a URL.
+func looksLikeRepoURL(arg string) bool {
+	if arg == "" {
+		return false
+	}
+	if strings.HasPrefix(arg, "/") || strings.HasPrefix(arg, "./") || strings.HasPrefix(arg, "../") || strings.HasPrefix(arg, "~") {
+		return false
+	}
+	if _, err := os.Stat(arg); err == nil {
+		return false
+	}
+	_, err := repo.CanonicalURL(arg)
+	return err == nil
+}
+
+// runRepoAddURL implements `veska repo add <url>`: canonicalise the URL,
+// short-circuit on a matching canonical_url row, clone to the tracked
+// tier with live progress, then register via the daemon (with direct
+// fallback) and stamp canonical_url on the new row (solov2-kxo5.3).
+//
+// Errors during register-or-canonical_url-update roll the clone back so
+// a retry starts clean and no orphan directory pretends to be a repo.
+func runRepoAddURL(ctx context.Context, cmd *cobra.Command, rawURL string, wait bool) error {
+	w := cmd.OutOrStdout()
+	stderr := cmd.ErrOrStderr()
+
+	canonical, err := repo.CanonicalURL(rawURL)
+	if err != nil {
+		return fmt.Errorf("repo add: %w", err)
+	}
+
+	// Short-circuit if the URL is already registered. Open + close the
+	// DB handle for this read so we release the WAL lock before the
+	// network-bound clone.
+	if db, closeFn, err := openLocalDB(); err == nil {
+		existing, ok, lookupErr := repo.LookupByCanonicalURL(ctx, db, canonical)
+		closeFn()
+		if lookupErr != nil {
+			return fmt.Errorf("repo add: %w", lookupErr)
+		}
+		if ok {
+			fmt.Fprintf(w, "repo already registered: %s (%s)\n", shortRepoID(existing.RepoID), existing.RootPath)
+			return nil
+		}
+	}
+
+	dest := repo.TrackedClonePath(config.DefaultVectorDir(), canonical)
+	if err := os.MkdirAll(filepath.Dir(dest), 0o750); err != nil {
+		return fmt.Errorf("repo add: %w", err)
+	}
+	// Clear a stale fragment from a prior failed clone so this run
+	// doesn't trip over an already-exists destination.
+	_ = os.RemoveAll(dest)
+
+	fmt.Fprintf(w, "cloning %s\n", canonical)
+	if _, err := repo.Clone(ctx, canonical, dest, stderr); err != nil {
+		_ = os.RemoveAll(dest)
+		return fmt.Errorf("repo add: %w", err)
+	}
+
+	// Register via daemon when up; fall back to direct write. Mirrors
+	// the path-based branch below so the post-clone UX is identical.
+	id, existed, dialErr := dialAddRepo(ctx, dest)
+	via := "via daemon"
+	if dialErr != nil {
+		if wait {
+			_ = os.RemoveAll(dest)
+			return fmt.Errorf("repo add --wait: daemon unreachable (%v); start it with `veska service start` and re-run, or drop --wait", dialErr)
+		}
+		db, closeFn, err := openLocalDB()
+		if err != nil {
+			_ = os.RemoveAll(dest)
+			return fmt.Errorf("repo add: %w", err)
+		}
+		var addErr error
+		id, existed, addErr = repo.Add(ctx, db, dest)
+		closeFn()
+		if addErr != nil {
+			_ = os.RemoveAll(dest)
+			return fmt.Errorf("repo add: %w", addErr)
+		}
+		via = fmt.Sprintf("direct write; daemon dial failed: %v", dialErr)
+	}
+
+	// Stamp canonical_url on the freshly-registered row. Failure here
+	// rolls back both the row and the clone — a row without canonical_url
+	// looks like a normal path-registered repo and would confuse the
+	// alias-resolution path that kxo5.6 builds on top of this column.
+	db, closeFn, err := openLocalDB()
+	if err != nil {
+		_ = os.RemoveAll(dest)
+		return fmt.Errorf("repo add: %w", err)
+	}
+	defer closeFn()
+	if err := repo.SetCanonicalURL(ctx, db, id, canonical); err != nil {
+		_, _ = db.ExecContext(ctx, `DELETE FROM repos WHERE repo_id = ?`, id)
+		_ = os.RemoveAll(dest)
+		return fmt.Errorf("repo add: %w", err)
+	}
+
+	verb := "added"
+	if existed {
+		verb = "already registered"
+	}
+	fmt.Fprintf(w, "%s repo %s (%s)\n", verb, shortRepoID(id), via)
+
+	if dialErr == nil && wait {
+		return waitForScanComplete(ctx, w, id)
+	}
+	if dialErr == nil && !existed {
+		logPath := filepath.Join(config.DefaultVectorDir(), "logs", "daemon.log")
+		fmt.Fprintln(w, coldScanRunningHint(dest, logPath))
+	}
+	return nil
 }
 
 // tailScanFailureReason scans the tail of daemon.log for the most recent

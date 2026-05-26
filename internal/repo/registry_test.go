@@ -15,6 +15,9 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/repo"
 )
 
+// createReposTable mirrors the schema after migration 0013 (kxo5.2) so
+// tests touching canonical_url / kind / last_accessed_at / prompted_at can
+// exercise the real column set.
 const createReposTable = `
 CREATE TABLE repos (
 	repo_id          TEXT PRIMARY KEY,
@@ -22,8 +25,15 @@ CREATE TABLE repos (
 	added_at         INTEGER NOT NULL,
 	active_branch    TEXT,
 	last_promoted_sha TEXT,
-	module_path      TEXT
-)`
+	module_path      TEXT,
+	kind             TEXT NOT NULL DEFAULT 'tracked',
+	canonical_url    TEXT,
+	last_accessed_at INTEGER,
+	prompted_at      INTEGER
+);
+CREATE UNIQUE INDEX idx_repos_canonical_url
+	ON repos(canonical_url)
+	WHERE canonical_url IS NOT NULL;`
 
 func newTestDB(t *testing.T) *sql.DB {
 	t.Helper()
