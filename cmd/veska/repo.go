@@ -335,6 +335,17 @@ func repoAddCmd() *cobra.Command {
 				return nil
 			}
 
+			// solov2-qnt9: --wait promises to block until cold scan
+			// completes; when the daemon is unreachable there IS no cold
+			// scan to wait on, so silently degrading to the direct-write
+			// fallback would make the flag a lie. Surface a clear error
+			// with the exact daemon-start command so the user can recover
+			// in one step. The non-wait path keeps its bootstrap-friendly
+			// fallback below.
+			if wait {
+				return fmt.Errorf("repo add --wait: daemon unreachable (%v); start it with `veska service start` and re-run, or drop --wait to register the repo offline (next daemon start will cold-scan it)", dialErr)
+			}
+
 			// Direct fallback: insert the row + install hooks. The next
 			// daemon start will cold-scan it via StartupResync; live-watching
 			// kicks in at that point too. Surface the dial error so the user
