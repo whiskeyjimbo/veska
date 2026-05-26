@@ -81,21 +81,78 @@ func (p *GoQueryParser) ParseFile(ctx context.Context, repoID, path string, src 
 		return domain.ParseResult{}, qerr
 	}
 	for _, m := range runQuery(q, root) {
-		declNode := m.node("function.decl")
-		nameNode := m.node("function.name")
-		if declNode == nil || nameNode == nil {
-			continue
-		}
-		// solov2-7nkm / solov2-0kv6: a function inside an ERROR subtree
-		// has unreliable name/body bytes; the legacy parser skips it
-		// UNLESS go/parser accepted the whole file (then ts ERROR nodes
-		// are false positives).
-		if !parseAccepted && hasErrorNode(declNode) {
-			continue
-		}
-		n := buildFunctionNodeFromCaptures(declNode, nameNode, src, repoID, path)
-		if n != nil {
-			result.Nodes = append(result.Nodes, n)
+		// One pattern from symbols.scm fires per match; dispatch on the
+		// capture name set. Each branch mirrors the corresponding
+		// legacy parser function (parseFunctionDecl, parseMethodDecl,
+		// parseTypeDecl, parseTopLevelVarDecl) one-for-one.
+		switch {
+		case m.node("function.decl") != nil:
+			declNode := m.node("function.decl")
+			nameNode := m.node("function.name")
+			if nameNode == nil {
+				continue
+			}
+			// solov2-7nkm / solov2-0kv6: a declaration inside an ERROR
+			// subtree has unreliable bytes; skip UNLESS go/parser
+			// accepted the file (then ts ERROR nodes are false positives).
+			if !parseAccepted && hasErrorNode(declNode) {
+				continue
+			}
+			if n := buildFunctionNodeFromCaptures(declNode, nameNode, src, repoID, path); n != nil {
+				result.Nodes = append(result.Nodes, n)
+			}
+		case m.node("method.decl") != nil:
+			declNode := m.node("method.decl")
+			recvNode := m.node("method.receiver")
+			nameNode := m.node("method.name")
+			if recvNode == nil || nameNode == nil {
+				continue
+			}
+			if !parseAccepted && hasErrorNode(declNode) {
+				continue
+			}
+			if n := buildMethodNodeFromCaptures(declNode, recvNode, nameNode, src, repoID, path); n != nil {
+				result.Nodes = append(result.Nodes, n)
+			}
+		case m.node("type.decl") != nil:
+			declNode := m.node("type.decl")
+			nameNode := m.node("type.name")
+			bodyNode := m.node("type.body")
+			if nameNode == nil || bodyNode == nil {
+				continue
+			}
+			if !parseAccepted && hasErrorNode(declNode) {
+				continue
+			}
+			if n := buildTypeNodeFromCaptures(declNode, nameNode, bodyNode, src, repoID, path); n != nil {
+				result.Nodes = append(result.Nodes, n)
+				// solov2-9rc2 phase E v2: surface each interface method
+				// as its own KindMethod node so chained-selector calls
+				// through interface fields resolve at promotion time.
+				if n.Kind == domain.KindInterface {
+					for _, im := range parseInterfaceMethods(declNode, src, repoID, path, n.Name) {
+						result.Nodes = append(result.Nodes, im)
+					}
+				}
+			}
+		case m.node("var.spec") != nil:
+			spec := m.node("var.spec")
+			decl := m.node("var.decl")
+			if !parseAccepted && hasErrorNode(spec) {
+				continue
+			}
+			for _, n := range buildVarNodesFromSpec(spec, decl, src, repoID, path, domain.KindVariable) {
+				result.Nodes = append(result.Nodes, n)
+			}
+		case m.node("const.spec") != nil:
+			spec := m.node("const.spec")
+			decl := m.node("const.decl")
+			if !parseAccepted && hasErrorNode(spec) {
+				continue
+			}
+			for _, n := range buildVarNodesFromSpec(spec, decl, src, repoID, path, domain.KindVariable) {
+				result.Nodes = append(result.Nodes, n)
+			}
 		}
 	}
 
@@ -127,6 +184,108 @@ func buildFunctionNodeFromCaptures(declNode, nameNode *sitter.Node, src []byte, 
 		return nil
 	}
 	return n
+}
+
+// buildMethodNodeFromCaptures mirrors parseMethodDecl in go.go. The
+// query captured the method_declaration, its receiver parameter_list,
+// and its name (field_identifier); we reuse extractReceiverType to
+// strip pointer/value/etc. and build the canonical "Receiver.Method"
+// node name.
+func buildMethodNodeFromCaptures(declNode, recvNode, nameNode *sitter.Node, src []byte, repoID, path string) *domain.Node {
+	receiverType := extractReceiverType(recvNode, src)
+	methodName := string(src[nameNode.StartByte():nameNode.EndByte()])
+	name := receiverType + "." + methodName
+	id := nodeID(repoID, path, domain.KindMethod, name)
+	lr := lineRange(declNode)
+	raw := string(src[declNode.StartByte():declNode.EndByte()])
+
+	opts := []domain.NodeOption{
+		domain.WithLanguage("go"),
+		domain.WithLines(lr),
+		domain.WithRawContent(raw),
+		// Method is exported when the method name (after "Receiver.")
+		// is capitalised; the receiver's casing is irrelevant.
+		domain.WithExported(goExported(methodName)),
+	}
+	if sig := extractSignature(declNode, src); sig != "" {
+		opts = append(opts, domain.WithSignature(sig))
+	}
+	n, err := domain.NewNode(id, path, name, domain.KindMethod, opts...)
+	if err != nil {
+		return nil
+	}
+	return n
+}
+
+// buildTypeNodeFromCaptures mirrors parseTypeDecl: dispatches between
+// KindStruct / KindInterface / KindType based on the type_spec's body
+// node type. The captured @type.decl is the whole type_declaration
+// (legacy uses it as the lineRange / raw_content source); @type.name
+// gives the identifier; @type.body is the struct_type / interface_type
+// / other.
+func buildTypeNodeFromCaptures(declNode, nameNode, bodyNode *sitter.Node, src []byte, repoID, path string) *domain.Node {
+	name := string(src[nameNode.StartByte():nameNode.EndByte()])
+	kind := domain.KindType
+	switch bodyNode.Type() {
+	case "struct_type":
+		kind = domain.KindStruct
+	case "interface_type":
+		kind = domain.KindInterface
+	}
+	id := nodeID(repoID, path, kind, name)
+	lr := lineRange(declNode)
+	raw := string(src[declNode.StartByte():declNode.EndByte()])
+	n, err := domain.NewNode(id, path, name, kind,
+		domain.WithLanguage("go"),
+		domain.WithLines(lr),
+		domain.WithRawContent(raw),
+		domain.WithExported(goExported(name)),
+	)
+	if err != nil {
+		return nil
+	}
+	return n
+}
+
+// buildVarNodesFromSpec mirrors parseTopLevelVarSpec: one node per
+// declared identifier, skipping anonymous "_" names. Multiple names
+// sharing one spec (`var a, b = 1, 2`) yield two nodes. Lines + raw
+// content come from the ENCLOSING declaration (not the spec) so a
+// grouped var ( ... ) block embeds the whole block in raw_content —
+// the legacy parser does this so semantic search indexes cobra-style
+// struct-literal initialisers (go.go ~L445). When decl is nil (the
+// pattern omitted the @decl capture) we fall back to the spec.
+func buildVarNodesFromSpec(spec, decl *sitter.Node, src []byte, repoID, path string, kind domain.NodeKind) []*domain.Node {
+	src_node := decl
+	if src_node == nil {
+		src_node = spec
+	}
+	lr := lineRange(src_node)
+	raw := string(src[src_node.StartByte():src_node.EndByte()])
+
+	var out []*domain.Node
+	named := int(spec.NamedChildCount())
+	for i := range named {
+		c := spec.NamedChild(i)
+		if c == nil || c.Type() != "identifier" {
+			continue
+		}
+		name := string(src[c.StartByte():c.EndByte()])
+		if name == "" || name == "_" {
+			continue
+		}
+		id := nodeID(repoID, path, kind, name)
+		n, err := domain.NewNode(id, path, name, kind,
+			domain.WithLanguage("go"),
+			domain.WithLines(lr),
+			domain.WithRawContent(raw),
+			domain.WithExported(goExported(name)),
+		)
+		if err == nil {
+			out = append(out, n)
+		}
+	}
+	return out
 }
 
 // buildPackageNode produces the package-clause node the legacy parser
