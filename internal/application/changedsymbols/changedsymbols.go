@@ -62,6 +62,12 @@ type Result struct {
 	Added    []SymbolChange `json:"added"`
 	Removed  []SymbolChange `json:"removed"`
 	Modified []SymbolChange `json:"modified"`
+	// DegradedReasons surfaces advisory hints — currently only
+	// "non_symbol_changes_only" when files were modified but produced no
+	// symbol-level diff (typical for comment/whitespace/import-only
+	// edits). Agents reading {added:[],removed:[],modified:[]} would
+	// otherwise conclude "nothing changed" — solov2-u9os.
+	DegradedReasons []string `json:"degraded_reasons"`
 }
 
 // Service orchestrates the changed-files → parse-both-refs → diff flow.
@@ -103,10 +109,12 @@ func (s *Service) Diff(ctx context.Context, repoID, repoRoot, refA, refB string)
 	// surface contract guarantees "empty result collections serialize as
 	// [], never omitted" (solov2-jbgt).
 	res := Result{
-		Added:    []SymbolChange{},
-		Removed:  []SymbolChange{},
-		Modified: []SymbolChange{},
+		Added:           []SymbolChange{},
+		Removed:         []SymbolChange{},
+		Modified:        []SymbolChange{},
+		DegradedReasons: []string{},
 	}
+	nonSymbolOnlyFiles := 0
 	for _, path := range files {
 		nodesA, err := s.parseAtRef(ctx, repoID, repoRoot, refA, path)
 		if err != nil {
@@ -116,13 +124,32 @@ func (s *Service) Diff(ctx context.Context, repoID, repoRoot, refA, refB string)
 		if err != nil {
 			return Result{}, err
 		}
+		before := len(res.Added) + len(res.Removed) + len(res.Modified)
 		classifyFile(path, nodesA, nodesB, &res)
+		after := len(res.Added) + len(res.Removed) + len(res.Modified)
+		if before == after {
+			// File was listed as changed but produced no symbol-level
+			// diff — comments, whitespace, imports, or other gaps the
+			// chunk-aware embedder cares about but the symbol-grain
+			// caller does not.
+			nonSymbolOnlyFiles++
+		}
+	}
+	if nonSymbolOnlyFiles > 0 {
+		res.DegradedReasons = append(res.DegradedReasons, DegradedReasonNonSymbolChangesOnly)
 	}
 	sortChanges(res.Added)
 	sortChanges(res.Removed)
 	sortChanges(res.Modified)
 	return res, nil
 }
+
+// DegradedReasonNonSymbolChangesOnly is emitted on Diff results when at
+// least one changed file produced no symbol-level diff — typical for
+// comment, whitespace, or import-only edits. Agents reading empty
+// added/removed/modified buckets would otherwise interpret the result as
+// "nothing changed" (solov2-u9os).
+const DegradedReasonNonSymbolChangesOnly = "non_symbol_changes_only"
 
 // parseAtRef reads path at ref and parses it. A file absent at the ref
 // (e.g. added or deleted between the two refs) yields an empty map and
@@ -140,8 +167,18 @@ func (s *Service) parseAtRef(ctx context.Context, repoID, repoRoot, ref, path st
 	if err != nil {
 		return nil, fmt.Errorf("changedsymbols: parse %s at %s: %w", path, ref, err)
 	}
+	// solov2-u9os: chunks are an embedding-internal concept (KindChunk
+	// covers comment/whitespace/import gaps between symbols so semantic
+	// search can find non-declaration code). Including them here makes
+	// "find_changed_symbols" emit chunk:N-M entries that aren't symbols
+	// from the user's perspective. Filter them out; the degraded reason
+	// "non_symbol_changes_only" still tells the caller the file
+	// changed if NO real symbol differed.
 	out := make(map[string]*domain.Node, len(pr.Nodes))
 	for _, n := range pr.Nodes {
+		if n.Kind == domain.KindChunk {
+			continue
+		}
 		out[symbolKey(n)] = n
 	}
 	return out, nil
