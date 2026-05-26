@@ -30,13 +30,27 @@ type GraphResponse struct {
 
 // callChainResponse is the envelope returned by eng_get_call_chain. Both
 // nodes and edges are always non-nil so a chain with no reachable callees
-// serializes as {"nodes":[],"edges":[]} (solov2-elt).
+// serializes as {"nodes":[],"edges":[]} (solov2-elt). DegradedReasons
+// carries advisory hints — e.g. "chained_selectors_unresolved" when the
+// seed is callable but no CALLS edges resolved (solov2-jojv) — so an
+// agent reading the response knows the empty result may reflect a parser
+// limitation rather than a symbol with no callees.
 type callChainResponse struct {
 	Nodes           []nodeDTO       `json:"nodes"`
 	Edges           []edgeDTO       `json:"edges"`
 	CrossRepoEdges  []CrossRepoEdge `json:"cross_repo_edges,omitempty"`
 	IncludedStaging bool            `json:"included_staging"`
+	DegradedReasons []string        `json:"degraded_reasons"`
 }
+
+// DegradedReasonChainedSelectorsUnresolved is emitted on eng_get_call_chain
+// responses when the seed node is a callable (function/method) but no
+// CALLS edges were resolvable. The most common cause is chained-selector
+// call sites (e.g. cobra's `rootCmd.PersistentFlags().StringVarP(...)`),
+// which the tree-sitter extractor does not yet model as edges — see the
+// epic at solov2-9rc2. Agents should treat an empty edges array on a
+// callable as "parser limitation, may not be authoritative."
+const DegradedReasonChainedSelectorsUnresolved = "chained_selectors_unresolved"
 
 // ResolveFunc is a function that resolves cross-repo edge stubs for a given
 // node. It is injected into RegisterGraphTools as an optional dependency.

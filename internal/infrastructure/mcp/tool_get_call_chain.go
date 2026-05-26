@@ -173,11 +173,28 @@ func makeGetCallChainHandler(graph ports.GraphStorage, resolve ResolveFunc, repo
 			}
 		}
 
+		// solov2-jojv: emit a degraded_reasons hint when the seed is a
+		// callable but no CALLS edges resolved. The dominant cause is
+		// chained-selector call sites the tree-sitter extractor does not
+		// yet model (epic solov2-9rc2); an agent that reads {edges:[]}
+		// without context would incorrectly conclude the symbol has no
+		// callees. We check the seed's kind on the loaded graph rather
+		// than re-fetching it.
+		reasons := []string{}
+		if len(resultEdges) == 0 && len(crossRepoEdges) == 0 && dirOut {
+			if seed, ok := g.Node(startID); ok {
+				switch seed.Kind {
+				case domain.KindFunction, domain.KindMethod:
+					reasons = append(reasons, DegradedReasonChainedSelectorsUnresolved)
+				}
+			}
+		}
 		return callChainResponse{
 			Nodes:           nodesToDTO(resultNodes),
 			Edges:           edgesToDTO(resultEdges),
 			CrossRepoEdges:  crossRepoEdges,
 			IncludedStaging: false,
+			DegradedReasons: reasons,
 		}, nil
 	}
 }
