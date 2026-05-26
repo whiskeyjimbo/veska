@@ -303,6 +303,18 @@ var findTodosInputSchema = json.RawMessage(`{
   }
 }`)
 
+var listDependenciesInputSchema = json.RawMessage(`{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "description": "List external modules the repo imports, ranked by call-site usage count (derived from cross_repo_edge_stubs). Each entry includes a small sample of top call sites so an agent can jump straight into the using code (solov2-jlws).",
+  "properties": {
+    "repo_id": {"type": "string"},
+    "branch":  {"type": "string"},
+    "cwd":     {"type": "string", "description": "Working directory used to resolve the active repo when repo_id is omitted."}
+  }
+}`)
+
 var listFindingsInputSchema = json.RawMessage(`{
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "type": "object",
