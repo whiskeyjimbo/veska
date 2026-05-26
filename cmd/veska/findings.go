@@ -47,13 +47,14 @@ type findingView struct {
 
 func findingsListCmd() *cobra.Command {
 	var (
-		repoFlag string
-		allRepos bool
-		state    string
-		severity string
-		rule     string
-		limit    int
-		jsonOut  bool
+		repoFlag   string
+		allRepos   bool
+		state      string
+		severity   string
+		rule       string
+		limit      int
+		jsonOut    bool
+		includeLow bool
 	)
 	cmd := &cobra.Command{
 		Use:          "list",
@@ -135,7 +136,27 @@ func findingsListCmd() *cobra.Command {
 			counts := countSeverities(resp.Findings)
 			fmt.Fprintln(w, summariseFindings(len(resp.Findings), counts))
 
+			// solov2-h4xm: low-severity rows dominate the default view on
+			// noisy projects (10 auto-link rows for a 4-file demo). Hide
+			// them unless the user asks via --include-low or an explicit
+			// --severity selector. Agents driving MCP directly are
+			// unaffected; this curation is CLI-only.
 			shown := resp.Findings
+			hiddenLow := 0
+			if !includeLow && severity == "" {
+				kept := shown[:0]
+				for _, f := range shown {
+					if f.Severity == "low" {
+						hiddenLow++
+						continue
+					}
+					kept = append(kept, f)
+				}
+				shown = kept
+			}
+			if hiddenLow > 0 {
+				fmt.Fprintf(w, "  (%d low-severity hidden; pass --include-low to show)\n", hiddenLow)
+			}
 			truncated := 0
 			if limit > 0 && len(shown) > limit {
 				truncated = len(shown) - limit
@@ -183,6 +204,7 @@ func findingsListCmd() *cobra.Command {
 	cmd.Flags().StringVar(&rule, "rule", "", "filter by rule (e.g. vulnerable_dependency, dead-code, secret_leak, auto-link)")
 	cmd.Flags().IntVar(&limit, "limit", 25, "maximum rows to print (0 = no limit)")
 	cmd.Flags().BoolVar(&jsonOut, "json", false, "emit JSON")
+	cmd.Flags().BoolVar(&includeLow, "include-low", false, "include low-severity findings (default hides auto-link noise; solov2-h4xm)")
 	return cmd
 }
 
