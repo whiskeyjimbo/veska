@@ -1,15 +1,27 @@
 // Package secretsscanner provides the veska-builtin SecretsScanner: an
-// in-process detector combining named regex rules for well-known secret
-// shapes with a Shannon-entropy heuristic for unrecognised high-entropy
-// tokens. Redaction is built in, so a raw secret value never reaches a
+// in-process detector that runs gitleaks (~140 curated rules with rich
+// allowlists for Go imports, URLs, lockfiles, etc.) and falls back to a
+// small regex + Shannon-entropy heuristic when gitleaks initialization
+// fails. Redaction is built in, so a raw secret value never reaches a
 // finding. It is fast enough to run on every promotion.
+//
+// solov2-j66g: gitleaks replaces the entropy-only detector that produced
+// false positives on Go import paths (subsumes solov2-1rfo) and missed
+// AWS Access Key shapes. Gitleaks' default config carries those exact
+// allowlists/rules; the local regex+entropy path remains as a safety net
+// so a broken gitleaks build/config never silently disables scanning.
 package secretsscanner
 
 import (
+	"log/slog"
 	"math"
 	"path/filepath"
 	"regexp"
 	"strings"
+
+	"github.com/spf13/viper"
+	gitleaksconfig "github.com/zricethezav/gitleaks/v8/config"
+	"github.com/zricethezav/gitleaks/v8/detect"
 
 	"github.com/whiskeyjimbo/veska/internal/core/ports"
 )
@@ -111,9 +123,14 @@ func itoa(n int) string {
 }
 
 // BuiltinScanner is the in-process SecretsScanner. It holds no mutable state
-// and is safe for concurrent use.
+// after construction and is safe for concurrent use — gitleaks'
+// detect.Detector is also concurrency-safe.
 type BuiltinScanner struct {
 	entropyThreshold float64
+	// gitleaks is the primary detector when non-nil. nil means the
+	// gitleaks rules failed to initialize at construction and the scanner
+	// degrades to the local regex + entropy path.
+	gitleaks *detect.Detector
 }
 
 // Compile-time interface satisfaction check.
@@ -132,19 +149,53 @@ func WithEntropyThreshold(bitsPerChar float64) Option {
 	}
 }
 
-// New constructs a BuiltinScanner with the default rule set and entropy
-// threshold, applying any options. It has no required dependencies.
+// New constructs a BuiltinScanner. The default path initializes gitleaks
+// with its bundled rule set; if init fails the scanner falls back to the
+// local regex+entropy heuristic and logs a warning. It has no required
+// external dependencies and never returns an error — secret scanning must
+// not block promotion just because a rule file was malformed.
 func New(opts ...Option) *BuiltinScanner {
 	s := &BuiltinScanner{entropyThreshold: entropyThreshold}
 	for _, opt := range opts {
 		opt(s)
 	}
+	if d, err := newGitleaksDetector(); err == nil {
+		s.gitleaks = d
+	} else {
+		slog.Warn("secretsscanner: gitleaks init failed; falling back to local rules", "error", err)
+	}
 	return s
 }
 
-// Scan inspects every added line, applying the named regex rules first and the
-// entropy heuristic for tokens no rule claimed. A nil/empty input yields
-// (nil, nil).
+// newGitleaksDetector mirrors the reglet pattern (cross-checked at
+// /home/jrose/src/all-reglet/.../redactor.go): load gitleaks' embedded
+// default config through viper, translate it, and build a Detector. The
+// default config carries the allowlists we need — Go import paths, lockfiles,
+// well-known package URLs — so we don't have to re-port them locally.
+func newGitleaksDetector() (*detect.Detector, error) {
+	v := viper.New()
+	v.SetConfigType("toml")
+	if err := v.ReadConfig(strings.NewReader(gitleaksconfig.DefaultConfig)); err != nil {
+		return nil, err
+	}
+	var vc gitleaksconfig.ViperConfig
+	if err := v.Unmarshal(&vc); err != nil {
+		return nil, err
+	}
+	cfg, err := vc.Translate()
+	if err != nil {
+		return nil, err
+	}
+	return detect.NewDetector(cfg), nil
+}
+
+// Scan inspects every added line. Both detection paths run additively when
+// gitleaks initialized — gitleaks catches novel shapes our local regex
+// set misses (and skips known false-positive sources via its allowlists),
+// while the local regex + entropy heuristic remains as a coarse safety
+// net for unknown high-entropy tokens. Findings with the same redacted
+// value on the same line are de-duped so callers don't see a double-hit
+// for tokens both paths claim. A nil/empty input yields (nil, nil).
 func (s *BuiltinScanner) Scan(in ports.ScanInput) ([]ports.SecretFinding, error) {
 	if len(in.AddedLines) == 0 {
 		return nil, nil
@@ -155,13 +206,66 @@ func (s *BuiltinScanner) Scan(in ports.ScanInput) ([]ports.SecretFinding, error)
 			continue
 		}
 		for _, line := range lines {
-			findings = append(findings, s.scanLine(path, line)...)
+			local := s.scanLine(path, line)
+			var gl []ports.SecretFinding
+			if s.gitleaks != nil {
+				gl = s.scanLineGitleaks(path, line)
+			}
+			findings = append(findings, dedupeFindings(local, gl)...)
 		}
 	}
 	if len(findings) == 0 {
 		return nil, nil
 	}
 	return findings, nil
+}
+
+// dedupeFindings merges local and gitleaks findings for the same line,
+// dropping local results whose Redacted text already appears in the
+// gitleaks set. Gitleaks wins when it covers the same secret — its rule
+// ID is more specific (e.g. "aws-access-token" vs our generic
+// "aws-access-key-id") and it carries allowlist context.
+func dedupeFindings(local, gl []ports.SecretFinding) []ports.SecretFinding {
+	if len(gl) == 0 {
+		return local
+	}
+	seen := make(map[string]struct{}, len(gl))
+	for _, f := range gl {
+		seen[f.Redacted] = struct{}{}
+	}
+	out := append([]ports.SecretFinding(nil), gl...)
+	for _, f := range local {
+		if _, dup := seen[f.Redacted]; dup {
+			continue
+		}
+		out = append(out, f)
+	}
+	return out
+}
+
+// scanLineGitleaks runs the gitleaks detector against a single line and
+// converts each gitleaks finding into our ports.SecretFinding shape. We
+// run line-by-line (not file-fragments) to preserve the line-number
+// contract callers rely on; gitleaks' Detect is O(rules × len(input))
+// per call and is fast enough on single-line inputs.
+func (s *BuiltinScanner) scanLineGitleaks(path string, line ports.Line) []ports.SecretFinding {
+	//nolint:staticcheck // SA1019: detect.Fragment is deprecated, will update on gitleaks v9.
+	frag := detect.Fragment{Raw: line.Text, FilePath: path}
+	leaks := s.gitleaks.Detect(frag)
+	if len(leaks) == 0 {
+		return nil
+	}
+	out := make([]ports.SecretFinding, 0, len(leaks))
+	for _, l := range leaks {
+		out = append(out, ports.SecretFinding{
+			Rule:       l.RuleID,
+			FilePath:   path,
+			Line:       line.Number,
+			Redacted:   redactLine(line.Text, l.Secret),
+			Confidence: 0.9, // gitleaks rules are high-precision by design.
+		})
+	}
+	return out
 }
 
 // scanLine returns the findings for a single line.
@@ -203,6 +307,14 @@ func (s *BuiltinScanner) scanLine(path string, line ports.Line) []ports.SecretFi
 		if looksLikeIdentifier(tok) {
 			continue
 		}
+		// solov2-1rfo (subsumed into solov2-j66g): Go import paths and
+		// well-known module URLs cross the entropy threshold but are
+		// never secrets. Gitleaks' default config carries the same
+		// allowlists; we replicate the most common shape here so the
+		// fallback path (when gitleaks init fails) does not regress.
+		if looksLikeImportPath(tok) {
+			continue
+		}
 		matched[tok] = struct{}{}
 		findings = append(findings, ports.SecretFinding{
 			Rule:       "high-entropy",
@@ -229,6 +341,19 @@ func mask(secret string) string {
 		return strings.Repeat("*", len(secret))
 	}
 	return secret[:2] + strings.Repeat("*", len(secret)-2)
+}
+
+// importPathRe matches a token that looks like a Go import path or
+// module URL — host.tld/path/segments. Restricted to common public
+// hosts plus generic <tld>/<path> shapes; private hostnames without
+// dots intentionally do not match so true secrets containing slashes
+// are not over-eagerly allowed.
+var importPathRe = regexp.MustCompile(`^(?:github\.com|gitlab\.com|bitbucket\.org|golang\.org|gopkg\.in|google\.golang\.org|cloud\.google\.com|k8s\.io|sigs\.k8s\.io|go\.uber\.org|go\.opentelemetry\.io)/[A-Za-z0-9._/\-]+$`)
+
+// looksLikeImportPath reports whether tok has the shape of a public
+// Go import path / module URL (solov2-1rfo).
+func looksLikeImportPath(tok string) bool {
+	return importPathRe.MatchString(tok)
 }
 
 // looksLikeIdentifier reports whether tok has the shape of a programming

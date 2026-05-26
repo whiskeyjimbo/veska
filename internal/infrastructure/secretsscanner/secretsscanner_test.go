@@ -120,6 +120,59 @@ func TestBuiltinScanner_Scan(t *testing.T) {
 	}
 }
 
+// TestBuiltinScanner_ImportPathsNotFlagged pins solov2-j66g + solov2-1rfo:
+// Go import paths and well-known module URLs must never produce a finding —
+// they cross the entropy threshold but are never secrets.
+func TestBuiltinScanner_ImportPathsNotFlagged(t *testing.T) {
+	t.Parallel()
+	s := secretsscanner.New()
+	cases := []string{
+		`_ "github.com/dgrijalva/jwt-go"`,
+		`import "go.opentelemetry.io/otel/trace"`,
+		`"google.golang.org/grpc/credentials"`,
+		`"k8s.io/apimachinery/pkg/runtime"`,
+		`"gopkg.in/yaml.v3"`,
+	}
+	for _, txt := range cases {
+		t.Run(txt, func(t *testing.T) {
+			in := ports.ScanInput{AddedLines: map[string][]ports.Line{
+				"file.go": {{Number: 1, Text: txt}},
+			}}
+			got, err := s.Scan(in)
+			if err != nil {
+				t.Fatalf("Scan: %v", err)
+			}
+			if len(got) != 0 {
+				t.Errorf("expected no findings for import-path-like line %q, got %+v", txt, got)
+			}
+		})
+	}
+}
+
+// TestBuiltinScanner_GitleaksAddsStripeRule pins solov2-j66g: gitleaks
+// fires on Stripe test tokens that the previous local-only rules missed.
+// Uses a synthetic-but-realistic shape that gitleaks does not allowlist.
+func TestBuiltinScanner_GitleaksAddsStripeRule(t *testing.T) {
+	t.Parallel()
+	s := secretsscanner.New()
+	in := ports.ScanInput{AddedLines: map[string][]ports.Line{
+		"file.go": {{Number: 1, Text: `pw := "sk_test_4eC39HqLyjWDarjtT1zdp7dc"`}},
+	}}
+	got, err := s.Scan(in)
+	if err != nil {
+		t.Fatalf("Scan: %v", err)
+	}
+	var sawStripe bool
+	for _, f := range got {
+		if strings.Contains(f.Rule, "stripe") {
+			sawStripe = true
+		}
+	}
+	if !sawStripe {
+		t.Errorf("expected a stripe-* rule finding (gitleaks); got %+v", got)
+	}
+}
+
 func TestBuiltinScanner_EmptyInput(t *testing.T) {
 	t.Parallel()
 	s := secretsscanner.New()
