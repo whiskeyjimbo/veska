@@ -575,6 +575,7 @@ func backlogLabel(r doctor.EmbeddingBacklogReport) string {
 // doctorStatusCmd returns the "doctor status" subcommand that rolls up all probes.
 func doctorStatusCmd() *cobra.Command {
 	var jsonOut bool
+	var verbose bool
 	cmd := &cobra.Command{
 		Use:          "status",
 		Short:        "Overall health rollup across all subsystems",
@@ -595,10 +596,16 @@ func doctorStatusCmd() *cobra.Command {
 			// (auto_link, embed, revalidate, wiki) has failed rows or a deep
 			// backlog. CheckPostPromotionQueue already classifies state.
 			queueStatus, queueDetail := "healthy", ""
+			var queueFailedRows []doctor.FailedRow
 			if qr, qerr := doctor.CheckPostPromotionQueue(filepath.Join(home, "veska.db")); qerr == nil {
 				queueStatus = qr.Status
+				queueFailedRows = qr.FailedRows
 				if queueStatus != "healthy" {
-					queueDetail = fmt.Sprintf("queue: %d failed row(s), %d state bucket(s)", len(qr.FailedRows), len(qr.Counts))
+					// solov2-gthm: include a pointer to the drilldown so a
+					// junior who sees 'queue: N failed row(s)' in the rollup
+					// has an obvious next command. The detail line is
+					// printed as part of the status one-liner below.
+					queueDetail = fmt.Sprintf("queue: %d failed row(s), %d state bucket(s); run `veska doctor post_promotion_queue` for details", len(qr.FailedRows), len(qr.Counts))
 				}
 			}
 
@@ -705,6 +712,16 @@ func doctorStatusCmd() *cobra.Command {
 			// "stopped" reports a benign operator state (daemon never
 			// started, no broken marker) and uses the same exit semantics as
 			// "degraded": non-zero rollup label, zero exit (solov2-bwly).
+			// solov2-gthm: --verbose dumps the actual failed queue rows
+			// inline so juniors who hit 'queue: N failed row(s)' do not
+			// have to discover `doctor post_promotion_queue` separately.
+			if verbose && len(queueFailedRows) > 0 {
+				fmt.Fprintln(cmd.OutOrStdout(), "  failed queue rows:")
+				for _, f := range queueFailedRows {
+					fmt.Fprintf(cmd.OutOrStdout(), "    seq=%d repo=%s branch=%s kind=%s attempts=%d err=%s\n",
+						f.Seq, f.RepoID, f.Branch, f.WorkKind, f.Attempts, f.Error)
+				}
+			}
 			if rollup != "healthy" && rollup != "stopped" {
 				return ProbeStatusError{Subsystem: "status", Status: rollup}
 			}
@@ -715,6 +732,7 @@ func doctorStatusCmd() *cobra.Command {
 		},
 	}
 	cmd.Flags().BoolVar(&jsonOut, "json", false, "output results as JSON")
+	cmd.Flags().BoolVarP(&verbose, "verbose", "v", false, "include failed queue rows inline (solov2-gthm)")
 	return cmd
 }
 
