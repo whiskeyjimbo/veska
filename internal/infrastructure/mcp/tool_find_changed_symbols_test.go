@@ -4,10 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"testing"
 
 	"github.com/whiskeyjimbo/veska/internal/application/changedsymbols"
 	"github.com/whiskeyjimbo/veska/internal/core/domain"
+	gitinfra "github.com/whiskeyjimbo/veska/internal/infrastructure/git"
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/treesitter"
 )
 
@@ -144,6 +146,90 @@ func TestChangedSymbols_DefaultsToLastCommit(t *testing.T) {
 	}
 	if len(resp.Added) != 1 || resp.Added[0].Name != "New" {
 		t.Errorf("added = %+v, want [New] from HEAD~1..HEAD default", resp.Added)
+	}
+}
+
+// TestChangedSymbols_SingleCommitRepoFallsBackToEmptyTree pins solov2-wrbn:
+// the default HEAD~1..HEAD pair fails on a freshly-promoted single-commit
+// repo (the literal first-run journey). The handler must detect the
+// unknown-revision error on the default path and retry against the
+// canonical empty-tree SHA, so every symbol in HEAD comes back as
+// "added" instead of the user seeing a self-contradicting "try omitting
+// both refs" message.
+func TestChangedSymbols_SingleCommitRepoFallsBackToEmptyTree(t *testing.T) {
+	const emptyTreeSHA = "4b825dc642cb6eb9a060e54bf8d69288fbee4904"
+	// changedFiles errors when asked about HEAD~1 (single-commit case) and
+	// returns the file when asked against the empty-tree retry.
+	changedFiles := func(_ context.Context, _, refA, _ string) ([]string, error) {
+		if refA == "HEAD~1" {
+			return nil, fmt.Errorf("%w: refs=HEAD~1..HEAD", gitinfra.ErrUnknownRevision)
+		}
+		if refA == emptyTreeSHA {
+			return []string{"code.go"}, nil
+		}
+		return nil, fmt.Errorf("unexpected refA %q", refA)
+	}
+	// fileAtRef: at HEAD the file has one symbol; at the empty tree the
+	// file is absent (handled as empty by the service).
+	fileAtRef := func(_ context.Context, _, ref, _ string) ([]byte, error) {
+		if ref == "HEAD" {
+			return []byte("package p\nfunc Fresh() {}\n"), nil
+		}
+		return nil, errors.New("not present at ref")
+	}
+	svc, err := changedsymbols.NewService(treesitter.NewGoParser(), changedFiles, fileAtRef)
+	if err != nil {
+		t.Fatalf("NewService: %v", err)
+	}
+	r := NewRegistry()
+	RegisterChangedSymbolsTool(r, svc, func(context.Context, string) (string, error) { return "/root", nil }, nil)
+
+	resp, rpcErr := dispatchChangedSymbols(t, r, map[string]string{
+		"repo_id": "repo1", "branch": "main",
+		// ref_a and ref_b intentionally omitted — defaults trigger.
+	})
+	if rpcErr != nil {
+		t.Fatalf("expected empty-tree fallback to succeed, got %+v", rpcErr)
+	}
+	var sawFresh bool
+	for _, a := range resp.Added {
+		if a.Name == "Fresh" {
+			sawFresh = true
+			break
+		}
+	}
+	if !sawFresh {
+		t.Errorf("expected Fresh in added bucket from empty-tree fallback, got %+v", resp.Added)
+	}
+}
+
+// TestChangedSymbols_ExplicitUnknownRefStillErrors pins that the fallback
+// fires only on the implicit-default path; an explicit caller-supplied
+// ref that doesn't resolve still surfaces the friendly invalid-params
+// error (caller typo, stale branch name, etc.).
+func TestChangedSymbols_ExplicitUnknownRefStillErrors(t *testing.T) {
+	changedFiles := func(_ context.Context, _, refA, _ string) ([]string, error) {
+		return nil, fmt.Errorf("%w: refs=%s..HEAD", gitinfra.ErrUnknownRevision, refA)
+	}
+	fileAtRef := func(_ context.Context, _, _, _ string) ([]byte, error) {
+		return nil, errors.New("not present at ref")
+	}
+	svc, err := changedsymbols.NewService(treesitter.NewGoParser(), changedFiles, fileAtRef)
+	if err != nil {
+		t.Fatalf("NewService: %v", err)
+	}
+	r := NewRegistry()
+	RegisterChangedSymbolsTool(r, svc, func(context.Context, string) (string, error) { return "/root", nil }, nil)
+
+	_, rpcErr := dispatchChangedSymbols(t, r, map[string]string{
+		"repo_id": "repo1", "branch": "main",
+		"ref_a": "no-such-branch", "ref_b": "HEAD",
+	})
+	if rpcErr == nil {
+		t.Fatal("expected InvalidParams for explicit unknown ref")
+	}
+	if rpcErr.Code != CodeInvalidParams {
+		t.Errorf("expected InvalidParams, got %d", rpcErr.Code)
 	}
 }
 

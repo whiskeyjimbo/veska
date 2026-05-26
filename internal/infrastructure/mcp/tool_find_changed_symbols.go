@@ -19,6 +19,11 @@ import (
 const (
 	defaultChangedRefA = "HEAD~1"
 	defaultChangedRefB = "HEAD"
+	// gitEmptyTreeSHA is git's canonical empty-tree object. Diffing HEAD
+	// against it yields every file in HEAD as an addition — the right
+	// answer for a single-commit repo where HEAD~1 doesn't exist
+	// (solov2-wrbn).
+	gitEmptyTreeSHA = "4b825dc642cb6eb9a060e54bf8d69288fbee4904"
 )
 
 // ---------------------------------------------------------------------------
@@ -67,9 +72,11 @@ func makeChangedSymbolsHandler(svc *changedsymbols.Service, repoRoot RepoRootFun
 		}
 		// ref_a/ref_b default to the last commit (HEAD~1..HEAD) when both are
 		// omitted; supplying only one is ambiguous and rejected (solov2-npjs).
+		usedDefaults := false
 		switch {
 		case p.RefA == "" && p.RefB == "":
 			p.RefA, p.RefB = defaultChangedRefA, defaultChangedRefB
+			usedDefaults = true
 		case p.RefA == "" || p.RefB == "":
 			return nil, &RPCError{Code: CodeInvalidParams, Message: "ref_a and ref_b must be provided together (or both omitted to default to HEAD~1..HEAD)"}
 		}
@@ -92,6 +99,16 @@ func makeChangedSymbolsHandler(svc *changedsymbols.Service, repoRoot RepoRootFun
 			return nil, &RPCError{Code: CodeNotFound, Message: fmt.Sprintf("repo has no root path: %s", p.RepoID)}
 		}
 		res, err := svc.Diff(ctx, p.RepoID, root, p.RefA, p.RefB)
+		// solov2-wrbn: on a single-commit repo the default HEAD~1 doesn't
+		// resolve. Retry against git's canonical empty-tree SHA so every
+		// symbol in HEAD comes back as "added" instead of the user seeing
+		// a self-contradicting "try omitting both refs" error on a path
+		// where they already did. Only fires when we picked the defaults —
+		// caller-supplied refs that don't resolve are still their problem.
+		if err != nil && usedDefaults && errors.Is(err, gitinfra.ErrUnknownRevision) {
+			p.RefA = gitEmptyTreeSHA
+			res, err = svc.Diff(ctx, p.RepoID, root, p.RefA, p.RefB)
+		}
 		// Rewrite file_path to absolute form so it matches the contract used
 		// by every other node-emitting tool (eng_find_symbol,
 		// eng_get_file_nodes, etc.). The service stores repo-relative paths
