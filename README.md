@@ -295,7 +295,7 @@ editors by `veska-mcp`). Tool names follow `eng_<verb>_<object>`. Quick map:
 | Graph | `eng_find_symbol`, `eng_get_node`, `eng_get_file_nodes`, `eng_get_call_chain` |
 | Search | `eng_search_semantic`, `eng_search_similar` |
 | Blast radius | `eng_get_blast_radius`, `eng_get_diff_blast_radius`, `eng_get_dirty_blast_radius` |
-| Context | `eng_get_context_pack`, `eng_find_changed_symbols` (takes `ref_a`/`ref_b`; defaults to `HEAD~1..HEAD`) |
+| Context | `eng_get_context_pack`, `eng_find_changed_symbols` (takes `ref_a`/`ref_b` or aliases `base`/`head`; defaults to `HEAD~1..HEAD`; chunks filtered, comment-only diffs surface `non_symbol_changes_only` in `degraded_reasons`) |
 | Misc | `eng_find_owner`, `eng_find_todos` |
 | Findings | `eng_list_findings`, `eng_get_finding`, `eng_close_finding`, `eng_reopen_finding` |
 | Suppressions | `eng_list_suppressions`, `eng_get_suppression`, `eng_suppress_finding`, `eng_close_suppression` |
@@ -317,9 +317,20 @@ editors by `veska-mcp`). Tool names follow `eng_<verb>_<object>`. Quick map:
   error, not an empty result.
 - **Required params are reported together.** A call missing several required
   fields gets one error naming all of them.
-- **Param names are canonical:** `file_path` (for node/file lookups, with
-  `path` accepted as an alias), `node_id`, `symbol`. `eng_get_context_pack`
-  takes exactly one of `symbol` or `task_id` (not `node_id`).
+- **Param names are canonical, with journey-natural aliases:** `file_path`
+  (alias `path` on `eng_find_owner` / `eng_get_file_nodes`), `node_id`,
+  `symbol`. `eng_find_changed_symbols` accepts `base`/`head` alongside
+  `ref_a`/`ref_b`; `eng_search_similar` accepts `symbol` alongside `node_id`
+  (resolved via `FindNodes` with the same ambiguity-rejection as
+  `eng_get_blast_radius`). `eng_get_context_pack` takes exactly one of
+  `node_id`, `symbol`, or `task_id`.
+- **Cross-repo edges are uniform.** `eng_get_call_chain`,
+  `eng_get_blast_radius`, and `eng_get_context_pack` all surface a
+  `cross_repo_edges` array when nodes in the response have CALLS edges
+  pointing into another registered repo. Both directions are walked: a
+  blast/call_chain in the callers direction (or context_pack's both)
+  finds consumers of a library symbol in other repos via the reverse
+  stub resolver.
 - **`eng_find_symbol` matches unqualified names:** searching `Start` finds
   `Server.Start`; exact matches rank first.
 - **Embedder quality is in-band:** when the daemon is on the low-quality
