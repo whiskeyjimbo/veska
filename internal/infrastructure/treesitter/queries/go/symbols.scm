@@ -13,8 +13,15 @@
 ; tree-sitter-go tags.scm upstream — both Apache-2.0/MIT — with our
 ; capture names. Vendoring the wider set comes in later phases.
 
+; body captures (@*.body) let the phase 3 call extractor scope its
+; calls.scm query to JUST this declaration's body, so caller identity
+; is implicit (the function/method we're processing) instead of needing
+; a parent walk per call site. body is optional in some interface
+; embeddings and forward declarations, so the extractor checks for
+; presence before scoping.
 (function_declaration
-  name: (identifier) @function.name) @function.decl
+  name: (identifier) @function.name
+  body: (block)? @function.body) @function.decl
 
 ; method_declaration captures the receiver's parameter_list so the Go
 ; extractor can run the existing extractReceiverBinding / extractReceiverType
@@ -22,7 +29,8 @@
 ; binding consistently with parseMethodDecl in the legacy walker.
 (method_declaration
   receiver: (parameter_list) @method.receiver
-  name: (field_identifier) @method.name) @method.decl
+  name: (field_identifier) @method.name
+  body: (block)? @method.body) @method.decl
 
 ; type_declaration covers struct, interface, and plain alias types. The
 ; extractor inspects @type.body.Type() to dispatch between
