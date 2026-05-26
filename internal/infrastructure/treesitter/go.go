@@ -5,6 +5,9 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	goparser "go/parser"
+	goscanner "go/scanner"
+	gotoken "go/token"
 	"path/filepath"
 	"strings"
 	"unicode"
@@ -66,8 +69,20 @@ func (p *GoParser) ParseFile(ctx context.Context, repoID, path string, src []byt
 	// subtrees are skipped below so a function broken mid-edit doesn't erase
 	// its siblings (the watcher re-parses on save, exactly when files are
 	// transiently broken).
+	//
+	// solov2-0kv6: the smacker/go-tree-sitter grammar lags Go's spec
+	// (e.g. it rejects Go 1.26+ `new("literal")`-style conversions), so
+	// it produces ERROR nodes on perfectly valid source. Cross-check with
+	// go/parser: if the standard library accepts the file, the tree-sitter
+	// errors are false positives — suppress the parse-failure AND don't
+	// skip child declarations on that basis below. If go/parser also
+	// rejects, surface its (more precise) position+message.
+	goParserOK := true
 	if hasErrorNode(root) {
-		result.Failures = append(result.Failures, firstErrorFailure(root))
+		if pf, ok := goParserCheck(path, src); ok {
+			goParserOK = false
+			result.Failures = append(result.Failures, pf)
+		}
 	}
 
 	// --- package node ---
@@ -93,7 +108,10 @@ func (p *GoParser) ParseFile(ctx context.Context, repoID, path string, src []byt
 		// Skip declarations whose own subtree contains a syntax error — their
 		// extracted name/signature/body would be unreliable. Sibling
 		// declarations that parsed cleanly are still indexed (solov2-7nkm).
-		if hasErrorNode(child) {
+		// solov2-0kv6: when go/parser accepted the file, tree-sitter's
+		// ERROR nodes are false positives — trust go/parser and index the
+		// declaration anyway.
+		if !goParserOK && hasErrorNode(child) {
 			continue
 		}
 		switch child.Type() {
@@ -783,6 +801,35 @@ func lineRange(node *sitter.Node) domain.LineRange {
 		Start: int(node.StartPoint().Row) + 1,
 		End:   int(node.EndPoint().Row) + 1,
 	}
+}
+
+// goParserCheck re-parses src with the standard library go/parser to validate
+// tree-sitter's claim that the file has a syntax error (solov2-0kv6).
+//
+// Returns (ParseFailure, true) when go/parser ALSO rejects the file — in
+// that case the failure carries go/parser's line + first error message
+// (more precise than tree-sitter's generic "syntax error").
+//
+// Returns (_, false) when go/parser accepts the file — the tree-sitter
+// error is a false positive (the smacker grammar lags Go's spec; e.g. it
+// chokes on Go 1.26+ `new("string-literal")` conversions). Callers should
+// suppress the parse-failure finding in that case.
+func goParserCheck(path string, src []byte) (domain.ParseFailure, bool) {
+	fset := gotoken.NewFileSet()
+	_, err := goparser.ParseFile(fset, path, src, goparser.SkipObjectResolution)
+	if err == nil {
+		return domain.ParseFailure{}, false
+	}
+	// go/parser returns a scanner.ErrorList ([]*scanner.Error) for syntax
+	// errors; pull the earliest position+message for a precise finding.
+	if list, ok := err.(goscanner.ErrorList); ok && len(list) > 0 {
+		first := list[0]
+		return domain.ParseFailure{
+			Line:    first.Pos.Line,
+			Message: first.Msg,
+		}, true
+	}
+	return domain.ParseFailure{Message: err.Error()}, true
 }
 
 func hasErrorNode(node *sitter.Node) bool {
