@@ -101,6 +101,17 @@ func runInit(ctx context.Context, deps initDeps, flags initFlags, out io.Writer)
 		fmt.Fprintln(out, "    or rebuild with `make build` (default fat binary).")
 		fmt.Fprintln(out)
 	}
+	// solov2-0cv6: surface the first-five-minutes walkthrough right at
+	// init so a junior never has to grep --help for the next step. The
+	// three-command block is the minimum to get from 'veska init' to
+	// 'veska search' producing real results.
+	fmt.Fprintln(out)
+	fmt.Fprintln(out, "next steps:")
+	fmt.Fprintln(out, "  1. veska service install && veska service start  # run the indexer daemon")
+	fmt.Fprintln(out, "  2. veska repo add <path> --wait                  # index your first repo")
+	fmt.Fprintln(out, "  3. veska search \"your question\"                  # semantic search the graph")
+	fmt.Fprintln(out, "  see also: veska init --agent claude|cursor|...   # MCP setup for editors")
+	fmt.Fprintln(out)
 	fmt.Fprintln(out, "ready")
 
 	return nil
