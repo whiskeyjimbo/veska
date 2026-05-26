@@ -1,10 +1,14 @@
 package main
 
 import (
+	"bytes"
+	"encoding/json"
 	"fmt"
 	"time"
 
+	"github.com/BurntSushi/toml"
 	"github.com/spf13/cobra"
+	"github.com/whiskeyjimbo/veska/internal/config"
 	"github.com/whiskeyjimbo/veska/internal/service"
 )
 
@@ -23,6 +27,43 @@ func configCmd(mgr service.Manager) *cobra.Command {
 		SilenceUsage: true,
 	}
 	cmd.AddCommand(configReloadCmd(mgr))
+	cmd.AddCommand(configShowCmd())
+	return cmd
+}
+
+// configShowCmd prints the effective resolved config: defaults merged with
+// ~/.veska/config.toml and env-var overrides — same pipeline the daemon
+// uses at boot, so the operator sees the EXACT shape the daemon will
+// observe (solov2-p6rt). Read-only; the write-side subcommands
+// (set/enable/disable) are deferred behind a follow-up bead because
+// BurntSushi/toml v1.6 loses comments on marshal.
+func configShowCmd() *cobra.Command {
+	var jsonOut bool
+	cmd := &cobra.Command{
+		Use:          "show",
+		Short:        "Print the effective veska configuration (defaults + config.toml + env)",
+		Args:         cobra.NoArgs,
+		SilenceUsage: true,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			cfg, err := config.Load()
+			if err != nil {
+				return fmt.Errorf("config show: %w", err)
+			}
+			w := cmd.OutOrStdout()
+			if jsonOut {
+				enc := json.NewEncoder(w)
+				enc.SetIndent("", "  ")
+				return enc.Encode(cfg)
+			}
+			var buf bytes.Buffer
+			if err := toml.NewEncoder(&buf).Encode(cfg); err != nil {
+				return fmt.Errorf("config show: encode toml: %w", err)
+			}
+			_, werr := w.Write(buf.Bytes())
+			return werr
+		},
+	}
+	cmd.Flags().BoolVar(&jsonOut, "json", false, "emit JSON instead of TOML")
 	return cmd
 }
 
