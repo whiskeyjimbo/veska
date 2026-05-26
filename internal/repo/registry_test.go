@@ -479,3 +479,47 @@ func TestGet_MissingRowReturnsZero(t *testing.T) {
 		t.Errorf("Get missing = %+v, want zero Record", got)
 	}
 }
+
+func TestDerivedRepoIDFromURL(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name      string
+		canonical string
+	}{
+		{"github https", "https://github.com/foo/bar"},
+		{"gitlab https", "https://gitlab.com/group/proj"},
+		{"self-hosted https port", "https://git.example.com:8443/team/repo"},
+		{"ssh-normalised form", "https://github.com/foo/bar"},
+	}
+
+	seen := make(map[string]string, len(cases))
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			id := repo.DerivedRepoIDFromURL(tc.canonical)
+			if len(id) != 64 {
+				t.Errorf("id length: want 64 hex chars, got %d (%q)", len(id), id)
+			}
+			for _, c := range id {
+				if !((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f')) {
+					t.Errorf("id contains non-hex char %q in %q", c, id)
+					break
+				}
+			}
+			if again := repo.DerivedRepoIDFromURL(tc.canonical); again != id {
+				t.Errorf("not deterministic: %q vs %q", id, again)
+			}
+			if prev, ok := seen[tc.canonical]; ok && prev != id {
+				t.Errorf("same canonical url produced different ids: %q vs %q", prev, id)
+			}
+			seen[tc.canonical] = id
+		})
+	}
+
+	// Different canonical URLs must produce different ids.
+	a := repo.DerivedRepoIDFromURL("https://github.com/foo/bar")
+	b := repo.DerivedRepoIDFromURL("https://github.com/foo/baz")
+	if a == b {
+		t.Error("distinct urls produced the same id")
+	}
+}

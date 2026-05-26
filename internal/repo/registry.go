@@ -154,6 +154,18 @@ func repoID(canonicalPath string) string {
 	return hex.EncodeToString(h.Sum(nil))
 }
 
+// DerivedRepoIDFromURL returns the deterministic hex ID used as repo_id
+// for an ephemeral, URL-cloned repository (solov2-kxo5.2). The input must
+// already be canonicalised — callers obtain a canonical URL via the
+// CanonicalURL helper that lands in kxo5.1. Keeping both id derivations
+// (path-based repoID, URL-based DerivedRepoIDFromURL) in the same file
+// preserves the invariant that the two id spaces share one hash function.
+func DerivedRepoIDFromURL(canonicalURL string) string {
+	h := sha256.New()
+	_, _ = fmt.Fprintf(h, "%s", canonicalURL)
+	return hex.EncodeToString(h.Sum(nil))
+}
+
 // validateRepoRoot rejects paths that should never be registered as a
 // veska repo:
 //   - non-existent paths
