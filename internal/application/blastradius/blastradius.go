@@ -376,6 +376,15 @@ func (s *Service) DiffOf(ctx context.Context, repoID, branch, repoRoot string, c
 	return s.Of(ctx, repoID, branch, seeds, opts)
 }
 
+// ContentHasher is an optional capability that lets DirtyOf compare a
+// staged node's parser-computed ContentHash against the promoted side's
+// stored hash, filtering out unchanged-but-restaged symbols (solov2-iyz2).
+// *sqlite.NodeLookupRepo satisfies it; stubs that don't simply skip the
+// filter, preserving the prior "every staged node is dirty" behaviour.
+type ContentHasher interface {
+	NodeContentHash(ctx context.Context, repoID, branch, nodeID string) (string, error)
+}
+
 // DirtyOf runs the BFS from every node currently in the staging overlay
 // for (repoID, branch). It is the eng_get_dirty_blast_radius engine: the
 // "seed" is the in-flight change set, not a single node_id.
@@ -384,16 +393,35 @@ func (s *Service) DiffOf(ctx context.Context, repoID, branch, repoRoot string, c
 // only at promotion time), so the BFS expands them via inbound edges
 // only — answering "who currently calls things I am about to change".
 // The direction option is honoured but the canonical use is callers.
+//
+// solov2-iyz2: a re-parse stages every symbol in a file regardless of
+// whether the symbol body actually changed. To avoid claiming the whole
+// file is dirty for a comment-only edit, the seed set is filtered: a
+// staged node whose parser-computed ContentHash matches the promoted
+// content_hash for the same node_id is unchanged and contributes no
+// seed. Filtering requires the optional ContentHasher capability; when
+// the lookup adapter doesn't implement it, behaviour falls back to the
+// prior "every staged node is a seed" semantics.
 func (s *Service) DirtyOf(ctx context.Context, repoID, branch string, opts Options) (Response, error) {
 	if s.staging == nil {
 		return Response{IncludedStaging: true}, nil
 	}
+	hasher, _ := s.nodes.(ContentHasher)
 	snap := s.staging.Snapshot(repoID, branch)
 	seeds := make([]string, 0, len(snap))
 	for _, sf := range snap {
 		for _, n := range sf.Nodes {
 			if n == nil {
 				continue
+			}
+			if hasher != nil && n.ContentHash != nil {
+				promoted, err := hasher.NodeContentHash(ctx, repoID, branch, string(n.ID))
+				if err == nil && promoted != "" && promoted == string(*n.ContentHash) {
+					// Unchanged symbol — re-parsed because its file was
+					// edited, but the body hash matches the promoted
+					// version, so it isn't actually dirty.
+					continue
+				}
 			}
 			seeds = append(seeds, string(n.ID))
 		}
