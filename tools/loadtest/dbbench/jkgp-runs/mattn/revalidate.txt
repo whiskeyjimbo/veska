@@ -1,0 +1,14 @@
+=== revalidate (mattn) ===
+=== RUN   TestRevalidateBench
+=== RUN   TestRevalidateBench/DeadCodeOnly
+REVALIDATE[deadcode] nodes=400 files=4 findings=80 elapsed_ms=5.55 p95_ms=2.00 refreshed=80 closed=0 gate=PASS
+=== RUN   TestRevalidateBench/ContractDriftOnly
+REVALIDATE[drift] nodes=400 files=4 findings=80 elapsed_ms=2.17 p95_ms=0.55 refreshed=80 closed=0 gate=PASS
+=== RUN   TestRevalidateBench/Combined10k
+REVALIDATE[combined] nodes=10000 files=100 findings=3000 elapsed_ms=1695.41 p95_ms=20.86 refreshed=3000 closed=0 gate=PASS
+--- PASS: TestRevalidateBench (2.84s)
+    --- PASS: TestRevalidateBench/DeadCodeOnly (0.28s)
+    --- PASS: TestRevalidateBench/ContractDriftOnly (0.23s)
+    --- PASS: TestRevalidateBench/Combined10k (2.33s)
+PASS
+ok  	github.com/whiskeyjimbo/veska/tools/loadtest/revalidate	2.850s

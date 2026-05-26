@@ -17,9 +17,8 @@ import (
 
 	"github.com/spf13/cobra"
 	"github.com/whiskeyjimbo/veska/internal/config"
+	"github.com/whiskeyjimbo/veska/internal/infrastructure/sqlite/sqldriver"
 	"github.com/whiskeyjimbo/veska/internal/repo"
-
-	_ "modernc.org/sqlite"
 )
 
 // hookRunnerCmd returns the "hook-runner" Cobra command with sub-commands.
@@ -227,7 +226,7 @@ func runPostCheckout() error {
 	repoID := repoIDFromPath(gitRoot)
 
 	dbPath := filepath.Join(config.DefaultVectorDir(), "veska.db")
-	db, err := sql.Open("sqlite", dbPath)
+	db, err := sql.Open(sqldriver.Name, dbPath)
 	if err != nil {
 		debugf("hook-runner post-checkout: open db: %v\n", err)
 		return nil

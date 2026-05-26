@@ -13,7 +13,7 @@ import (
 	"os"
 	"path/filepath"
 
-	_ "modernc.org/sqlite"
+	"github.com/whiskeyjimbo/veska/internal/infrastructure/sqlite/sqldriver"
 )
 
 // VerifyResult summarises the outcome of a backup integrity check.
@@ -147,7 +147,7 @@ func extractVerifyFiles(path string) (dbBytes []byte, auditBytes []byte, auditPr
 // integrity_check and PRAGMA foreign_key_check.  Returns (integrityOK, fkOK,
 // error).  An error is returned only if the database cannot be opened.
 func checkSQLite(dbPath string) (integrityOK bool, fkOK bool, err error) {
-	db, err := sql.Open("sqlite", dbPath)
+	db, err := sql.Open(sqldriver.Name, dbPath)
 	if err != nil {
 		return false, false, err
 	}

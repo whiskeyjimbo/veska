@@ -1,0 +1,33 @@
+            "auto_link": 100,
+            "embed": 100,
+            "revalidate": 100
+          },
+          "done_per_kind": {
+            "auto_link": 100,
+            "embed": 100,
+            "revalidate": 100
+          },
+          "failed_per_kind": {
+            "auto_link": 0,
+            "embed": 0,
+            "revalidate": 0
+          },
+          "stuck_per_kind": {
+            "auto_link": 0,
+            "embed": 0,
+            "revalidate": 0
+          },
+          "elapsed_ms": 60042,
+          "enqueue_elapsed_ms": 291,
+          "budget_ms": 60000,
+          "budget_met": false
+        }
+    queuefuzz_test.go:158: M3 gate-5 FAIL: drain did not complete within budget=60000ms (elapsed=60042ms)
+--- FAIL: TestQueueFuzz (60.28s)
+FAIL
+FAIL	github.com/whiskeyjimbo/veska/tools/loadtest/queuefuzz	60.289s
+FAIL
+make: *** [Makefile:187: eval-queue-fuzz] Error 1
+---
+queuefuzz_test.go
+README.md
