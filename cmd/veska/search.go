@@ -11,6 +11,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 
@@ -369,7 +370,9 @@ func isGitURL(s string) bool {
 
 // searchHitView is the CLI's wire shape for one hit. It mirrors the MCP
 // eng_search_semantic node DTO (snake_case) so `veska search --json` and
-// the tool emit byte-identical envelopes (solov2-elt, AC3).
+// the tool emit byte-identical envelopes (solov2-elt, AC3). RepoID is
+// populated only by the cross-repo fanout (solov2-vm5w); single-repo
+// search omits it so JSON output stays byte-identical with the daemon's.
 type searchHitView struct {
 	NodeID    string  `json:"node_id"`
 	Name      string  `json:"name"`
@@ -379,6 +382,7 @@ type searchHitView struct {
 	LineEnd   int     `json:"line_end,omitempty"`
 	Score     float32 `json:"score"`
 	Snippet   string  `json:"snippet,omitempty"`
+	RepoID    string  `json:"repo_id,omitempty"`
 }
 
 // searchEnvelope is the {results, degraded_reasons} wrapper shared by the
@@ -448,10 +452,28 @@ func renderSearchEnvelope(w io.Writer, env searchEnvelope, jsonOut bool) error {
 			top = r.Score
 		}
 	}
+	// solov2-vm5w: when the fanout populated RepoID, render it as a leading
+	// column so the user can disambiguate hits across repos.
+	multiRepo := false
+	for _, r := range env.Results {
+		if r.RepoID != "" {
+			multiRepo = true
+			break
+		}
+	}
 	for _, r := range env.Results {
 		tier := scoreTier(r.Score, top)
-		fmt.Fprintf(w, "%-8s %s:%d-%d  %s  (%s, score=%.4f)\n",
-			r.Kind, r.FilePath, r.LineStart, r.LineEnd, r.Name, tier, r.Score)
+		if multiRepo {
+			short := r.RepoID
+			if len(short) > 12 {
+				short = short[:12]
+			}
+			fmt.Fprintf(w, "%-12s %-8s %s:%d-%d  %s  (%s, score=%.4f)\n",
+				short, r.Kind, r.FilePath, r.LineStart, r.LineEnd, r.Name, tier, r.Score)
+		} else {
+			fmt.Fprintf(w, "%-8s %s:%d-%d  %s  (%s, score=%.4f)\n",
+				r.Kind, r.FilePath, r.LineStart, r.LineEnd, r.Name, tier, r.Score)
+		}
 	}
 	// solov2-gfhq: tiers (top/strong/weak) are relative to this query's top
 	// hit — a query that has no strong absolute match still gets a "top"
@@ -514,6 +536,18 @@ func daemonSearch(ctx context.Context, opts runSearchOpts) (searchEnvelope, bool
 
 	repoID, branch, ok := resolveRepoViaDaemon(ctx, opts.target)
 	if !ok {
+		// solov2-vm5w: when the cwd isn't part of any registered repo
+		// (junior who registered repos in another dir and ran search
+		// from /tmp), fan out across every registered repo instead of
+		// erroring. Only fires when target is empty — explicit paths /
+		// URLs still go through the in-process path so we don't change
+		// their semantics.
+		if opts.target == "" {
+			env, fanned, ferr := daemonSearchAllRepos(ctx, opts)
+			if fanned {
+				return env, true, ferr
+			}
+		}
 		return searchEnvelope{}, false, nil
 	}
 
@@ -534,6 +568,64 @@ func daemonSearch(ctx context.Context, opts runSearchOpts) (searchEnvelope, bool
 		return searchEnvelope{}, true, fmt.Errorf("search: daemon eng_search_semantic: %w", err)
 	}
 	return env, true, nil
+}
+
+// daemonSearchAllRepos is the cross-repo fanout invoked when target is
+// empty and cwd is not part of a registered repo (solov2-vm5w). It lists
+// every registered repo, runs eng_search_semantic per repo with the same
+// k, merges results, re-sorts by score desc, and trims to k. fanned is
+// false when the registry is empty so the caller surfaces the existing
+// "not registered" error instead of a silent zero-result success.
+func daemonSearchAllRepos(ctx context.Context, opts runSearchOpts) (searchEnvelope, bool, error) {
+	type repoRow struct {
+		RepoID       string `json:"repo_id"`
+		ActiveBranch string `json:"active_branch"`
+	}
+	var lr struct {
+		Repos []repoRow `json:"repos"`
+	}
+	if err := callMCP(ctx, "eng_list_repos", map[string]any{}, &lr); err != nil {
+		return searchEnvelope{}, false, nil
+	}
+	if len(lr.Repos) == 0 {
+		return searchEnvelope{}, false, nil
+	}
+	k := opts.k
+	if k <= 0 {
+		k = 10
+	}
+	var merged searchEnvelope
+	for _, r := range lr.Repos {
+		branch := branchOrMain(r.ActiveBranch)
+		var env searchEnvelope
+		if err := callMCP(ctx, "eng_search_semantic", map[string]any{
+			"repo_id": r.RepoID,
+			"branch":  branch,
+			"query":   opts.query,
+			"k":       k,
+		}, &env); err != nil {
+			// Per-repo failures must not abort the whole fanout — a stuck
+			// repo would otherwise suppress every other repo's hits. Track
+			// it in degraded_reasons so the user still sees something.
+			merged.DegradedReasons = append(merged.DegradedReasons, fmt.Sprintf("repo %s search failed: %v", r.RepoID, err))
+			continue
+		}
+		for _, h := range env.Results {
+			h.RepoID = r.RepoID
+			merged.Results = append(merged.Results, h)
+		}
+		merged.DegradedReasons = append(merged.DegradedReasons, env.DegradedReasons...)
+	}
+	// Score-desc sort across the combined set, then trim to k. The score
+	// is the daemon's post-fusion RRF — same scale across repos because
+	// the embedder is one process — so cross-repo comparison is sound.
+	sort.SliceStable(merged.Results, func(i, j int) bool {
+		return merged.Results[i].Score > merged.Results[j].Score
+	})
+	if len(merged.Results) > k {
+		merged.Results = merged.Results[:k]
+	}
+	return merged, true, nil
 }
 
 // resolveRepoViaDaemon maps the search target to a (repo_id, branch) the
