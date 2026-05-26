@@ -94,8 +94,10 @@ func (f *fakeEdgeStore) SaveEdges(_ context.Context, _, _ string, edges []*domai
 }
 
 type fakeFindingStore struct {
-	saved []*domain.Finding
-	err   error
+	saved           []*domain.Finding
+	supersededCalls [][]string
+	supersededErr   error
+	err             error
 }
 
 func (f *fakeFindingStore) Save(_ context.Context, fnd *domain.Finding) error {
@@ -108,6 +110,15 @@ func (f *fakeFindingStore) Save(_ context.Context, fnd *domain.Finding) error {
 
 func (f *fakeFindingStore) CloseObsolete(_ context.Context, _, _ string) error {
 	return f.err
+}
+
+func (f *fakeFindingStore) CloseSupersededAutoLinks(_ context.Context, _, _ string, sourceNodeIDs []string) error {
+	if f.supersededErr != nil {
+		return f.supersededErr
+	}
+	cp := append([]string(nil), sourceNodeIDs...)
+	f.supersededCalls = append(f.supersededCalls, cp)
+	return nil
 }
 
 // ── unit-level tests against fakes ─────────────────────────────────────────
@@ -640,5 +651,111 @@ func TestHandler_Integration_PersistsAndIsIdempotent(t *testing.T) {
 	}
 	if seen != 3 {
 		t.Errorf("expected 3 hash rows, got %d", seen)
+	}
+}
+
+// TestHandler_Integration_SupersedesPriorAutoLinksWhenTargetsDrift is the
+// solov2-ok7y regression: re-promoting a file whose source nodes now match a
+// DIFFERENT set of nearest-neighbour targets must NOT leave the prior
+// auto-link findings open. Without the supersession step the open
+// "auto-link" surface balloons across reindexes; with it, only the
+// fresh candidates remain open and the obsolete ones flip to
+// state='closed', closed_reason='revalidated_obsolete'.
+func TestHandler_Integration_SupersedesPriorAutoLinksWhenTargetsDrift(t *testing.T) {
+	t.Parallel()
+	rawDB, lookupRepo, edgeRepo, findingRepo := openHandlerIntegrationDB(t)
+
+	// Pass 1: source n1 matches targets t1 and t2.
+	linker := &fakeLinker{out: []autolink.Candidate{
+		{SourceNodeID: "n1", TargetNodeID: "t1", Score: 0.91},
+		{SourceNodeID: "n1", TargetNodeID: "t2", Score: 0.88},
+	}}
+	hh, herr := autolink.NewHandler(linker, lookupRepo, edgeRepo, findingRepo)
+	h := mustHandler(t, hh, herr)
+	row := queue.Row{Kind: queue.WorkKindAutoLink, RepoID: "r1", Branch: "main", Payload: "x.go"}
+	if err := h.Handle(context.Background(), row); err != nil {
+		t.Fatalf("Handle (pass 1): %v", err)
+	}
+
+	// Pass 2: same source n1 now matches only t3 — the t1/t2 picks must be
+	// superseded (closed), not coexist alongside the new finding.
+	linker.out = []autolink.Candidate{
+		{SourceNodeID: "n1", TargetNodeID: "t3", Score: 0.95},
+	}
+	if err := h.Handle(context.Background(), row); err != nil {
+		t.Fatalf("Handle (pass 2): %v", err)
+	}
+
+	// Exactly one OPEN auto-link finding survives.
+	var openCount int
+	if err := rawDB.QueryRow(
+		`SELECT COUNT(*) FROM findings WHERE repo_id='r1' AND branch='main' AND rule='auto-link' AND state='open'`,
+	).Scan(&openCount); err != nil {
+		t.Fatalf("count open: %v", err)
+	}
+	if openCount != 1 {
+		t.Errorf("expected 1 OPEN auto-link finding after drift, got %d", openCount)
+	}
+
+	// The prior two were closed with the revalidated_obsolete reason.
+	var closedCount int
+	if err := rawDB.QueryRow(
+		`SELECT COUNT(*) FROM findings WHERE repo_id='r1' AND branch='main' AND rule='auto-link' AND state='closed' AND closed_reason='revalidated_obsolete'`,
+	).Scan(&closedCount); err != nil {
+		t.Fatalf("count closed: %v", err)
+	}
+	if closedCount != 2 {
+		t.Errorf("expected 2 CLOSED auto-link findings after drift, got %d", closedCount)
+	}
+
+	// Total auto-link finding rows = 3 (the union of both passes, but only
+	// one in state='open').
+	var total int
+	if err := rawDB.QueryRow(
+		`SELECT COUNT(*) FROM findings WHERE repo_id='r1' AND branch='main' AND rule='auto-link'`,
+	).Scan(&total); err != nil {
+		t.Fatalf("count total: %v", err)
+	}
+	if total != 3 {
+		t.Errorf("expected 3 total auto-link rows, got %d", total)
+	}
+}
+
+// TestHandler_Integration_IdenticalCandidatesStableAcrossReruns is a tighter
+// version of TestHandler_Integration_PersistsAndIsIdempotent: when the linker
+// returns the same candidates on a re-run, the supersede-then-save dance must
+// leave the previously-open findings still open (the Save's ON CONFLICT path
+// re-opens what CloseSupersededAutoLinks just closed).
+func TestHandler_Integration_IdenticalCandidatesStableAcrossReruns(t *testing.T) {
+	t.Parallel()
+	rawDB, lookupRepo, edgeRepo, findingRepo := openHandlerIntegrationDB(t)
+
+	linker := &fakeLinker{out: []autolink.Candidate{
+		{SourceNodeID: "n1", TargetNodeID: "t1", Score: 0.91},
+		{SourceNodeID: "n2", TargetNodeID: "t3", Score: 0.95},
+	}}
+	hh, herr := autolink.NewHandler(linker, lookupRepo, edgeRepo, findingRepo)
+	h := mustHandler(t, hh, herr)
+	row := queue.Row{Kind: queue.WorkKindAutoLink, RepoID: "r1", Branch: "main", Payload: "x.go"}
+
+	for i := 0; i < 3; i++ {
+		if err := h.Handle(context.Background(), row); err != nil {
+			t.Fatalf("Handle (pass %d): %v", i, err)
+		}
+	}
+
+	var openCount, totalCount int
+	if err := rawDB.QueryRow(
+		`SELECT COUNT(*) FROM findings WHERE repo_id='r1' AND branch='main' AND rule='auto-link' AND state='open'`,
+	).Scan(&openCount); err != nil {
+		t.Fatalf("count open: %v", err)
+	}
+	if err := rawDB.QueryRow(
+		`SELECT COUNT(*) FROM findings WHERE repo_id='r1' AND branch='main' AND rule='auto-link'`,
+	).Scan(&totalCount); err != nil {
+		t.Fatalf("count total: %v", err)
+	}
+	if openCount != 2 || totalCount != 2 {
+		t.Errorf("stable rerun: open=%d total=%d, want open=2 total=2", openCount, totalCount)
 	}
 }
