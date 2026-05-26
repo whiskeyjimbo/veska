@@ -651,11 +651,8 @@ func TestGetCallChain_EmptyEdgesOnCallableEmitsChainedSelectorsHint(t *testing.T
 		t.Fatalf("expected zero edges for lonely callable; got %d", len(resp.Edges))
 	}
 	var sawHint bool
-	for _, r := range resp.DegradedReasons {
-		if r == DegradedReasonChainedSelectorsUnresolved {
-			sawHint = true
-			break
-		}
+	if slices.Contains(resp.DegradedReasons, DegradedReasonChainedSelectorsUnresolved) {
+		sawHint = true
 	}
 	if !sawHint {
 		t.Errorf("expected %q in degraded_reasons; got %+v", DegradedReasonChainedSelectorsUnresolved, resp.DegradedReasons)
