@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
+	"sort"
 	"time"
 
 	application "github.com/whiskeyjimbo/veska/internal/application"
@@ -114,16 +115,11 @@ func makeSearchSemanticHandler(svc *search.Service, rec *savings.Recorder, repos
 		if rpcErr := checkRequired("query", p.Query); rpcErr != nil {
 			return nil, rpcErr
 		}
-		// solov2-ktz0: fall back to shim-injected cwd when repo_id omitted.
-		repoID, rpcErr := resolveRepoIDFromParams(ctx, repos, raw, p.RepoID)
+		// solov2-g8fh: fanout across registered repos when repo_id is omitted
+		// and cwd doesn't match one. Single-repo callers are unchanged.
+		targets, fanout, rpcErr := resolveRepoFanoutFromParams(ctx, repos, raw, p.RepoID, p.Branch)
 		if rpcErr != nil {
 			return nil, rpcErr
-		}
-		p.RepoID = repoID
-		if br, rpcErr := resolveBranchOrActive(ctx, repos, p.RepoID, p.Branch); rpcErr != nil {
-			return nil, rpcErr
-		} else {
-			p.Branch = br
 		}
 		k := p.K
 		if k <= 0 {
@@ -136,25 +132,54 @@ func makeSearchSemanticHandler(svc *search.Service, rec *savings.Recorder, repos
 			return nil, &RPCError{Code: CodeInvalidParams, Message: fmt.Sprintf("k %d exceeds maximum of %d", k, maxSearchK)}
 		}
 
-		resp, err := svc.Semantic(ctx, p.RepoID, p.Branch, p.Query, k, domain.Filter{})
-		if err != nil {
-			return nil, &RPCError{Code: CodeInternalError, Message: fmt.Sprintf("semantic search: %v", err)}
+		type taggedResult struct {
+			repoID string
+			r      search.Result
 		}
-		results := resp.Results
-		if results == nil {
-			results = []search.Result{}
+		var pooled []taggedResult
+		reasonsSet := map[string]struct{}{}
+		for _, tgt := range targets {
+			resp, err := svc.Semantic(ctx, tgt.RepoID, tgt.Branch, p.Query, k, domain.Filter{})
+			if err != nil {
+				return nil, &RPCError{Code: CodeInternalError, Message: fmt.Sprintf("semantic search: %v", err)}
+			}
+			for _, r := range resp.Results {
+				pooled = append(pooled, taggedResult{repoID: tgt.RepoID, r: r})
+			}
+			for _, reason := range resp.DegradedReasons {
+				reasonsSet[reason] = struct{}{}
+			}
+		}
+		// Re-rank pooled hits by score desc and trim to k. Stable sort so
+		// hits with identical scores keep insertion order (per-repo order).
+		sort.SliceStable(pooled, func(i, j int) bool { return pooled[i].r.Score > pooled[j].r.Score })
+		if len(pooled) > k {
+			pooled = pooled[:k]
+		}
+		results := make([]search.Result, len(pooled))
+		repoByNode := make(map[string]string, len(pooled))
+		for i, p := range pooled {
+			results[i] = p.r
+			repoByNode[p.r.NodeID] = p.repoID
 		}
 		recordSavings(rec, p.Query, results)
-		reasons := resp.DegradedReasons
+		reasons := make([]string, 0, len(reasonsSet))
+		for r := range reasonsSet {
+			reasons = append(reasons, r)
+		}
+		sort.Strings(reasons)
 		if pending != nil {
 			if n, perr := pending.CountPending(ctx); perr == nil && n > 0 {
 				reasons = append(reasons, DegradedReasonEmbeddingsPending)
 			}
 		}
-		if reasons == nil {
-			reasons = []string{}
+		dtos := searchResultsToDTO(results)
+		if fanout {
+			for i := range dtos {
+				dtos[i].RepoID = repoByNode[dtos[i].NodeID]
+			}
 		}
-		return SearchResponse{Results: searchResultsToDTO(results), DegradedReasons: reasons}, nil
+		return SearchResponse{Results: dtos, DegradedReasons: reasons}, nil
 	}
 }
 

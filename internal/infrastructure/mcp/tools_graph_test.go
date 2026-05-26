@@ -690,11 +690,16 @@ func TestFindSymbol_ResolvesRepoFromCwdWhenOmitted(t *testing.T) {
 	}
 }
 
-// TestFindSymbol_MissingRepoIDAndCwdMismatchErrors verifies the helpful
-// multi-repo error message still surfaces when cwd doesn't match any
-// registered root.
-func TestFindSymbol_MissingRepoIDAndCwdMismatchErrors(t *testing.T) {
+// TestFindSymbol_FansOutWhenRepoIDOmittedAndCwdMismatch pins solov2-g8fh:
+// when repo_id is omitted and cwd doesn't match any registered repo, the
+// handler fans out across every registered repo instead of erroring. The
+// README's "60 second sanity check" example works without naming a repo
+// id when the user just spawned veska-mcp from /tmp or similar.
+func TestFindSymbol_FansOutWhenRepoIDOmittedAndCwdMismatch(t *testing.T) {
 	store := newStubGraphStorage()
+	store.addNode(mustNode(t, "n-alpha", "/home/u/projects/alpha/main.go", "Foo", domain.KindFunction))
+	store.addNode(mustNode(t, "n-beta", "/home/u/projects/beta/lib.go", "Foo", domain.KindFunction))
+
 	repos := []application.RepoRecord{
 		{RepoID: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", RootPath: "/home/u/projects/alpha", ActiveBranch: "main"},
 		{RepoID: "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", RootPath: "/home/u/projects/beta", ActiveBranch: "main"},
@@ -703,12 +708,66 @@ func TestFindSymbol_MissingRepoIDAndCwdMismatchErrors(t *testing.T) {
 	RegisterGraphTools(r, store, application.NewStagingArea(),
 		WithRepoLister(&stubRepoLister{repos: repos}))
 
-	_, rpcErr := dispatchGraph(t, r, "eng_find_symbol", map[string]string{
+	resp, rpcErr := dispatchGraph(t, r, "eng_find_symbol", map[string]string{
 		"symbol": "Foo",
 		"cwd":    "/tmp/somewhere/else",
 	})
+	if rpcErr != nil {
+		t.Fatalf("expected fanout success, got %+v", rpcErr)
+	}
+	// Both repos searched (the stub's FindNodes ignores repo_id so each
+	// fanout target returns both nodes; the (repo_id,node_id) merge key
+	// dedupes to 2 entries per repo = 4 hits total).
+	if len(resp.Nodes) == 0 {
+		t.Fatalf("expected nodes from fanout, got empty result")
+	}
+	// repo_id MUST be populated on every hit when fanout is engaged, so
+	// callers can disambiguate which repo each hit belongs to.
+	for i, n := range resp.Nodes {
+		if n.RepoID == "" {
+			t.Errorf("nodes[%d] missing repo_id on fanout response: %+v", i, n)
+		}
+	}
+}
+
+// TestFindSymbol_NoFanoutWhenSingleRepoSoNoRepoIDLeaks pins solov2-g8fh: a
+// single-repo install must keep the pre-fanout wire shape — `repo_id` is
+// only emitted when the response actually crosses repos.
+func TestFindSymbol_NoFanoutWhenSingleRepoSoNoRepoIDLeaks(t *testing.T) {
+	store := newStubGraphStorage()
+	store.addNode(mustNode(t, "n1", "/abs/repo/main.go", "Foo", domain.KindFunction))
+
+	repos := []application.RepoRecord{
+		{RepoID: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", RootPath: "/abs/repo", ActiveBranch: "main"},
+	}
+	r := NewRegistry()
+	RegisterGraphTools(r, store, application.NewStagingArea(),
+		WithRepoLister(&stubRepoLister{repos: repos}))
+
+	resp, rpcErr := dispatchGraph(t, r, "eng_find_symbol", map[string]string{"symbol": "Foo"})
+	if rpcErr != nil {
+		t.Fatalf("unexpected error: %+v", rpcErr)
+	}
+	if len(resp.Nodes) != 1 {
+		t.Fatalf("expected 1 node, got %d", len(resp.Nodes))
+	}
+	if resp.Nodes[0].RepoID != "" {
+		t.Errorf("single-repo response leaked repo_id=%q (must be omitted)", resp.Nodes[0].RepoID)
+	}
+}
+
+// TestFindSymbol_NoReposRegisteredStillErrors guards the empty-registry
+// edge case — fanout has nothing to span, so the original "no repos
+// registered" message must still surface.
+func TestFindSymbol_NoReposRegisteredStillErrors(t *testing.T) {
+	store := newStubGraphStorage()
+	r := NewRegistry()
+	RegisterGraphTools(r, store, application.NewStagingArea(),
+		WithRepoLister(&stubRepoLister{repos: nil}))
+
+	_, rpcErr := dispatchGraph(t, r, "eng_find_symbol", map[string]string{"symbol": "Foo"})
 	if rpcErr == nil {
-		t.Fatal("expected error when cwd doesn't match any repo")
+		t.Fatal("expected error when no repos registered")
 	}
 	if rpcErr.Code != CodeInvalidParams {
 		t.Errorf("expected CodeInvalidParams, got %d", rpcErr.Code)
