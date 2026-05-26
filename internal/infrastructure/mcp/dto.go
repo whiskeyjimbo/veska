@@ -31,6 +31,12 @@ type nodeDTO struct {
 	Language  string `json:"language,omitempty"`
 	Exported  *bool  `json:"exported,omitempty"`
 	RepoID    string `json:"repo_id,omitempty"`
+	// External marks hits from a registered repo's vendored or
+	// module-cache dependency (solov2-bchl). Agents inspecting a hit
+	// can use this to decide "is this our code or someone else's?"
+	// without parsing file_path. Omitted on first-party rows so the
+	// wire shape stays byte-stable for callers that don't care.
+	External bool `json:"external,omitempty"`
 }
 
 // edgeDTO is the canonical edge shape returned by eng_get_call_chain.
@@ -82,6 +88,9 @@ func nodeToDTO(n *domain.Node) nodeDTO {
 		Kind:     string(n.Kind),
 		FilePath: n.Path,
 		Exported: n.Exported,
+	}
+	if n.External != nil && *n.External {
+		d.External = true
 	}
 	if n.Lines != nil {
 		d.LineStart = n.Lines.Start
