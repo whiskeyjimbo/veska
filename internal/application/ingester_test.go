@@ -49,6 +49,12 @@ func (r *recordingFindingStorage) CloseObsolete(_ context.Context, findingID, br
 	return nil
 }
 
+// CloseSupersededAutoLinks is a no-op for the ingester tests: the ingester
+// does not produce auto-link findings.
+func (r *recordingFindingStorage) CloseSupersededAutoLinks(_ context.Context, _, _ string, _ []string) error {
+	return nil
+}
+
 // closedReason returns the recorded close reason for a finding, or "" if the
 // finding was never closed.
 func (r *recordingFindingStorage) closedReason(findingID, branch string) string {

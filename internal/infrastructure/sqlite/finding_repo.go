@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/whiskeyjimbo/veska/internal/core/domain"
@@ -138,6 +139,63 @@ WHERE finding_id = ?
 	now := time.Now().UnixMilli()
 	if _, err := r.db.ExecContext(ctx, stmt, now, findingID, branch); err != nil {
 		return fmt.Errorf("sqlite.FindingRepo.CloseObsolete: %w", err)
+	}
+	return nil
+}
+
+// CloseSupersededAutoLinks closes every OPEN finding with rule='auto-link' in
+// (repoID, branch) whose anchor (findings.node_id) is an edge_id of a
+// SIMILAR_TO edge whose src_node_id appears in sourceNodeIDs.
+//
+// See ports.FindingStorage for the full contract. The implementation issues a
+// single UPDATE whose WHERE filters by an inner SELECT over the edges table,
+// so the supersession is one round-trip irrespective of |sourceNodeIDs|.
+//
+// SQLite's compile-time SQLITE_MAX_VARIABLE_NUMBER caps the IN-list at ~999;
+// to stay safely below that we chunk sourceNodeIDs into batches of 500. An
+// empty input is a no-op (returns nil without touching the DB).
+func (r *FindingRepo) CloseSupersededAutoLinks(ctx context.Context, repoID, branch string, sourceNodeIDs []string) error {
+	if len(sourceNodeIDs) == 0 {
+		return nil
+	}
+
+	const chunk = 500
+	now := time.Now().UnixMilli()
+	for start := 0; start < len(sourceNodeIDs); start += chunk {
+		end := start + chunk
+		if end > len(sourceNodeIDs) {
+			end = len(sourceNodeIDs)
+		}
+		batch := sourceNodeIDs[start:end]
+
+		placeholders := strings.Repeat("?,", len(batch))
+		placeholders = placeholders[:len(placeholders)-1]
+
+		stmt := `
+UPDATE findings
+SET state         = 'closed',
+    closed_reason = 'revalidated_obsolete',
+    closed_at     = ?
+WHERE repo_id    = ?
+  AND branch     = ?
+  AND rule       = 'auto-link'
+  AND state      = 'open'
+  AND node_id IN (
+      SELECT edge_id FROM edges
+      WHERE repo_id = ?
+        AND branch  = ?
+        AND kind    = 'SIMILAR_TO'
+        AND src_node_id IN (` + placeholders + `)
+  )`
+
+		args := make([]any, 0, 5+len(batch))
+		args = append(args, now, repoID, branch, repoID, branch)
+		for _, id := range batch {
+			args = append(args, id)
+		}
+		if _, err := r.db.ExecContext(ctx, stmt, args...); err != nil {
+			return fmt.Errorf("sqlite.FindingRepo.CloseSupersededAutoLinks: %w", err)
+		}
 	}
 	return nil
 }
