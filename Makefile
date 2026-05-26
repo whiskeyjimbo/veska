@@ -6,7 +6,7 @@ DAEMON_BIN      := $(BINDIR)/veska-daemon
 MCP_BIN         := $(BINDIR)/veska-mcp
 LAYERCHECK_BIN  := $(BINDIR)/layercheck
 
-.PHONY: all build build-small build-fat fetch-embed-assets test lint vet layercheck clean loadtest test-mcp test-mcp-deep test-mcp-bootstrap eval-recall eval-recall-projection eval-autolink-fp eval-revalidate-bench eval-queue-fuzz eval-embed-throughput eval-embedder-bench eval-embed-models eval-embed-models-full eval-embed-models-condense eval-embed-models-fuse
+.PHONY: all build build-small build-fat fetch-embed-assets install release-archive test lint vet layercheck clean loadtest test-mcp test-mcp-deep test-mcp-bootstrap eval-recall eval-recall-projection eval-autolink-fp eval-revalidate-bench eval-queue-fuzz eval-embed-throughput eval-embedder-bench eval-embed-models eval-embed-models-full eval-embed-models-condense eval-embed-models-fuse
 
 # `all` uses build-small to keep the test loop fast — the model2vec assets
 # add a network fetch + ~62MB to every CI/dev run. End-user packaging
@@ -64,6 +64,38 @@ $(MCP_BIN):
 $(LAYERCHECK_BIN):
 	go build -o $@ ./tools/lint/layercheck/cmd
 
+# install (solov2-cdw3): copy the just-built fat binaries into the user's
+# bin dir via scripts/install.sh. Mirrors the install.sh path inside the
+# release tarball so the local-build experience matches the distributed
+# one. Destination override via $VESKA_INSTALL_DIR; defaults to
+# ~/.local/bin. Run `make build` first (this target depends on it).
+install: build
+	scripts/install.sh
+
+# release-archive (solov2-cdw3): produce a tarball at
+# dist/veska-<version>-<os>-<arch>.tar.gz containing the fat binaries +
+# install.sh + a top-level README. A user downloading the tarball runs
+# `./install.sh` and gets the same outcome as a developer running
+# `make install` from a clone.
+#
+# Version source is the same `git describe` that produced shortVersion()
+# in cmd/veska/version.go — kept inside the recipe so a dirty tree
+# still gets a meaningful tag and never silently ships unversioned.
+RELEASE_GOOS    := $(shell go env GOOS)
+RELEASE_GOARCH  := $(shell go env GOARCH)
+RELEASE_VERSION := $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
+RELEASE_NAME    := veska-$(RELEASE_VERSION)-$(RELEASE_GOOS)-$(RELEASE_GOARCH)
+RELEASE_DIR     := dist/$(RELEASE_NAME)
+release-archive: build
+	@rm -rf $(RELEASE_DIR) dist/$(RELEASE_NAME).tar.gz
+	@mkdir -p $(RELEASE_DIR)/bin
+	cp $(VESKA_BIN) $(DAEMON_BIN) $(MCP_BIN) $(RELEASE_DIR)/bin/
+	cp scripts/install.sh $(RELEASE_DIR)/install.sh
+	chmod +x $(RELEASE_DIR)/install.sh
+	@printf 'veska %s\n\nThis archive contains the veska binaries (CLI, daemon, MCP shim)\nwith the model2vec embedder weights compiled in.\n\nInstall:\n  ./install.sh                # ~/.local/bin (default)\n  VESKA_INSTALL_DIR=/usr/local/bin sudo ./install.sh\n\nThen:\n  veska init -y && veska service install && veska service start\n\nDocs: https://github.com/whiskeyjimbo/veska\n' "$(RELEASE_VERSION)" > $(RELEASE_DIR)/README.txt
+	cd dist && tar -czf $(RELEASE_NAME).tar.gz $(RELEASE_NAME)
+	@printf 'release archive: dist/%s.tar.gz\n' "$(RELEASE_NAME)"
+
 test:
 	go test ./...
 
@@ -78,6 +110,7 @@ layercheck: $(LAYERCHECK_BIN)
 
 clean:
 	rm -f $(VESKA_BIN) $(DAEMON_BIN) $(MCP_BIN) $(LAYERCHECK_BIN)
+	rm -rf dist
 
 # test-mcp: black-box pytest harness against a running daemon. Needs:
 #   - VESKA_HOME pointing at the daemon's data dir (or default ~/.veska)

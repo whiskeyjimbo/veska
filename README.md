@@ -102,6 +102,21 @@ make all          # build-small + test + vet + lint + layercheck
 Binaries land in `./bin/`. Either `export PATH="$PWD/bin:$PATH"` or use the
 `./bin/` prefix in the Quick Start below.
 
+### Install into your `PATH`
+
+After a `make build`, drop the binaries into a user bin directory in one step:
+
+```sh
+make install                         # → ~/.local/bin (default)
+VESKA_INSTALL_DIR=/usr/local/bin sudo make install   # system-wide
+```
+
+For a self-contained tarball (the three fat binaries + `install.sh` + a
+README), run `make release-archive`. The archive at
+`dist/veska-<version>-<os>-<arch>.tar.gz` is the same shape a future
+GitHub release will ship — `./install.sh` from inside the extracted
+directory does the same thing as `make install` (solov2-cdw3).
+
 ## Quick start
 
 ```sh
