@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"maps"
 	"sort"
 	"strings"
 	"text/tabwriter"
@@ -92,9 +93,7 @@ func findingsListCmd() *cobra.Command {
 				}
 				for _, r := range lr.Repos {
 					params := map[string]any{"repo_id": r.RepoID}
-					for k, v := range baseParams {
-						params[k] = v
-					}
+					maps.Copy(params, baseParams)
 					var part struct {
 						Findings []findingView `json:"findings"`
 					}
@@ -106,9 +105,7 @@ func findingsListCmd() *cobra.Command {
 				}
 			} else {
 				params := map[string]any{}
-				for k, v := range baseParams {
-					params[k] = v
-				}
+				maps.Copy(params, baseParams)
 				if repoFlag != "" {
 					params["repo_id"] = repoFlag
 				} else if rid := autoResolveRepo(cmd.Context(), cmd.ErrOrStderr()); rid != "" {
