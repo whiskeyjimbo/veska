@@ -825,7 +825,14 @@ func callMCP(ctx context.Context, method string, params any, out any) error {
 	// for a one-shot CLI call and absorbs the cold-start jitter.
 	const ioTimeout = 30 * time.Second
 
-	sockPath := config.MCPSockPath()
+	// solov2-7x7l: dial cli.sock, not mcp.sock. The daemon classifies the
+	// actor based on which socket the connection lands on (server.go:104/108):
+	// cli.sock → ActorKindHuman, mcp.sock → ActorKindAgent. Routing CLI
+	// commands through mcp.sock caused every `veska findings close` of a
+	// high-severity finding to fail human_required, even though the user
+	// was on the actual CLI. mcp.sock stays reserved for editor-driven
+	// veska-mcp shim clients.
+	sockPath := config.CLISockPath()
 	var (
 		conn    net.Conn
 		dialErr error
