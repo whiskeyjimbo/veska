@@ -62,8 +62,9 @@ func (s *stubVectors) LookupContentHashes(_ context.Context, _, _ string, _ []st
 }
 
 type stubNodes struct {
-	metas []ports.NodeMeta
-	err   error
+	metas  []ports.NodeMeta
+	err    error
+	byFile map[string][]string // file_path → node_ids; populated by eng_find_related tests
 }
 
 func (s *stubNodes) LookupNodes(_ context.Context, _, _ string, ids []string) ([]ports.NodeMeta, error) {
@@ -84,8 +85,11 @@ func (s *stubNodes) LookupNodes(_ context.Context, _, _ string, ids []string) ([
 	return out, nil
 }
 
-func (s *stubNodes) NodesInFile(_ context.Context, _, _, _ string) ([]string, error) {
-	return nil, nil
+func (s *stubNodes) NodesInFile(_ context.Context, _, _, filePath string) ([]string, error) {
+	if s.byFile == nil {
+		return nil, nil
+	}
+	return s.byFile[filePath], nil
 }
 
 type stubSimilarLookup struct {
@@ -489,7 +493,92 @@ func TestSearchSimilar_AmbiguousSymbolRejected(t *testing.T) {
 	}
 }
 
-func TestSearchTools_RegistersTwoTools(t *testing.T) {
+// TestFindRelated_ResolvesSmallestEnclosingNode covers solov2-2g4r:
+// when multiple nodes overlap a line (e.g. a chunk and a function),
+// the resolver picks the tightest span so the embedding seed is the
+// most specific match the agent could expect.
+func TestFindRelated_ResolvesSmallestEnclosingNode(t *testing.T) {
+	// Three nodes in the same file: a wide function (lines 5-30),
+	// a tight method nested inside (10-20), and an even tighter
+	// helper (15-17). Line 16 should resolve to the helper.
+	nodes := &stubNodes{
+		byFile: map[string][]string{"foo.go": {"wide", "mid", "tight"}},
+		metas: []ports.NodeMeta{
+			{NodeID: "wide", FilePath: "foo.go", LineStart: 5, LineEnd: 30, Kind: "function"},
+			{NodeID: "mid", FilePath: "foo.go", LineStart: 10, LineEnd: 20, Kind: "method"},
+			{NodeID: "tight", FilePath: "foo.go", LineStart: 15, LineEnd: 17, Kind: "function"},
+		},
+	}
+	emb := &stubEmbedder{}
+	vecs := &stubVectors{hits: []domain.Hit{{NodeID: "tight"}, {NodeID: "neighbour"}}}
+	nodes.metas = append(nodes.metas, ports.NodeMeta{NodeID: "neighbour", FilePath: "other.go", LineStart: 1, LineEnd: 3, SymbolPath: "Other"})
+	lookup := &stubSimilarLookup{hash: "h", ready: true, blob: encodeVec([]float32{0.1, 0.2}), dim: 2, found: true}
+	svc := search.NewService(emb, vecs, nodes)
+
+	r := NewRegistry()
+	RegisterSearchTools(r, svc, lookup, vecs, nodes, nil, nil)
+
+	resp, rpcErr := dispatchSearch(t, r, "eng_find_related", map[string]any{
+		"file_path": "foo.go",
+		"line":      16,
+		"repo_id":   "r1",
+		"branch":    "main",
+		"k":         1,
+	})
+	if rpcErr != nil {
+		t.Fatalf("dispatch: %+v", rpcErr)
+	}
+	if len(resp.Results) != 1 || resp.Results[0].NodeID != "neighbour" {
+		t.Errorf("want [neighbour] as the single returned hit, got %+v", resp.Results)
+	}
+}
+
+// TestFindRelated_LineOutsideAnyNodeReturnsNotFound: a line that
+// falls in pre-package whitespace or below the last symbol has no
+// enclosing anchor; the handler returns CodeNotFound with a hint
+// rather than a confusing empty result.
+func TestFindRelated_LineOutsideAnyNodeReturnsNotFound(t *testing.T) {
+	nodes := &stubNodes{
+		byFile: map[string][]string{"foo.go": {"only"}},
+		metas: []ports.NodeMeta{
+			{NodeID: "only", FilePath: "foo.go", LineStart: 5, LineEnd: 10},
+		},
+	}
+	svc := search.NewService(&stubEmbedder{}, &stubVectors{}, nodes)
+	r := NewRegistry()
+	RegisterSearchTools(r, svc, &stubSimilarLookup{}, &stubVectors{}, nodes, nil, nil)
+	_, rpcErr := dispatchSearch(t, r, "eng_find_related", map[string]any{
+		"file_path": "foo.go",
+		"line":      99,
+		"repo_id":   "r1",
+		"branch":    "main",
+	})
+	if rpcErr == nil || rpcErr.Code != CodeNotFound {
+		t.Fatalf("want CodeNotFound for line outside ranges, got %+v", rpcErr)
+	}
+}
+
+// TestFindRelated_RejectsZeroLine: lines are 1-indexed everywhere on
+// the surface; 0 or negative must error as InvalidParams.
+func TestFindRelated_RejectsZeroLine(t *testing.T) {
+	r := NewRegistry()
+	svc := search.NewService(&stubEmbedder{}, &stubVectors{}, &stubNodes{})
+	RegisterSearchTools(r, svc, &stubSimilarLookup{}, &stubVectors{}, &stubNodes{}, nil, nil)
+	_, rpcErr := dispatchSearch(t, r, "eng_find_related", map[string]any{
+		"file_path": "foo.go",
+		"line":      0,
+		"repo_id":   "r1",
+		"branch":    "main",
+	})
+	if rpcErr == nil || rpcErr.Code != CodeInvalidParams {
+		t.Fatalf("want CodeInvalidParams for line=0, got %+v", rpcErr)
+	}
+}
+
+// TestSearchTools_RegistersExpectedTools — count grew from 2 → 3 when
+// solov2-2g4r added eng_find_related. Keep order in sync with the
+// RegisterSearchTools registration block.
+func TestSearchTools_RegistersExpectedTools(t *testing.T) {
 	emb := &stubEmbedder{}
 	vecs := &stubVectors{}
 	nodes := &stubNodes{}
@@ -499,7 +588,8 @@ func TestSearchTools_RegistersTwoTools(t *testing.T) {
 	RegisterSearchTools(r, svc, &stubSimilarLookup{}, vecs, nodes, nil, nil)
 
 	got := r.Names()
-	want := []string{"eng_search_semantic", "eng_search_similar"}
+	// r.Names() returns alphabetical order, not registration order.
+	want := []string{"eng_find_related", "eng_search_semantic", "eng_search_similar"}
 	if len(got) != len(want) {
 		t.Fatalf("expected %d tools, got %d (%v)", len(want), len(got), got)
 	}
