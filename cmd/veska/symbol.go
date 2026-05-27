@@ -116,6 +116,8 @@ ranked first.`,
 					LineStart int    `json:"line_start"`
 					LineEnd   int    `json:"line_end"`
 					Signature string `json:"signature,omitempty"`
+					Exported  *bool  `json:"exported,omitempty"`
+					External  bool   `json:"external,omitempty"`
 				} `json:"nodes"`
 			}
 			if err := callMCP(cmd.Context(), "eng_find_symbol", params, &resp); err != nil {
@@ -204,6 +206,7 @@ func renderNodeList(w io.Writer, resp any, jsonOut bool) error {
 			FilePath  string `json:"file_path"`
 			LineStart int    `json:"line_start"`
 			LineEnd   int    `json:"line_end"`
+			External  bool   `json:"external,omitempty"`
 		} `json:"nodes"`
 	}
 	if err := json.Unmarshal(raw, &any); err != nil {
@@ -214,7 +217,11 @@ func renderNodeList(w io.Writer, resp any, jsonOut bool) error {
 		return nil
 	}
 	for _, n := range any.Nodes {
-		fmt.Fprintf(w, "%-10s %s:%d-%d  %s  (%s)\n", n.Kind, n.FilePath, n.LineStart, n.LineEnd, n.Name, n.NodeID[:12])
+		extMark := ""
+		if n.External {
+			extMark = " [external]"
+		}
+		fmt.Fprintf(w, "%-10s %s:%d-%d  %s  (%s)%s\n", n.Kind, n.FilePath, n.LineStart, n.LineEnd, n.Name, n.NodeID[:12], extMark)
 	}
 	return nil
 }
