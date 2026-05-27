@@ -374,15 +374,17 @@ func isGitURL(s string) bool {
 // populated only by the cross-repo fanout (solov2-vm5w); single-repo
 // search omits it so JSON output stays byte-identical with the daemon's.
 type searchHitView struct {
-	NodeID    string  `json:"node_id"`
-	Name      string  `json:"name"`
-	Kind      string  `json:"kind"`
-	FilePath  string  `json:"file_path"`
-	LineStart int     `json:"line_start,omitempty"`
-	LineEnd   int     `json:"line_end,omitempty"`
-	Score     float32 `json:"score"`
-	Snippet   string  `json:"snippet,omitempty"`
-	RepoID    string  `json:"repo_id,omitempty"`
+	NodeID          string  `json:"node_id"`
+	Name            string  `json:"name"`
+	Kind            string  `json:"kind"`
+	FilePath        string  `json:"file_path"`
+	LineStart       int     `json:"line_start,omitempty"`
+	LineEnd         int     `json:"line_end,omitempty"`
+	Score           float32 `json:"score"`
+	ScoreNormalized float32 `json:"score_normalized"`
+	Tier            string  `json:"tier,omitempty"`
+	Snippet         string  `json:"snippet,omitempty"`
+	RepoID          string  `json:"repo_id,omitempty"`
 }
 
 // searchEnvelope is the {results, degraded_reasons} wrapper shared by the
@@ -440,12 +442,11 @@ func renderSearchEnvelope(w io.Writer, env searchEnvelope, jsonOut bool) error {
 		}
 		return nil
 	}
-	// Per-query normalise the raw vector score to a confidence tier so the
-	// CLI surfaces a human-meaningful signal instead of the bare 0.018x
-	// dot-product numbers the embedder emits (solov2-6spa). The raw score is
-	// still shown for power users and `--json` consumers, but a tier (top /
-	// strong / weak) gives a junior something to filter on. Tiers are
-	// relative to the top hit within this single query.
+	// solov2-hl70: tier + score_normalized arrive on the DTO so the CLI
+	// doesn't recompute them. The MCP / in-process path is the single
+	// source of truth (internal/application/search.ScoreTier +
+	// NormalizeScores). We still need the absolute top for the weak-
+	// top hint below.
 	var top float32
 	for _, r := range env.Results {
 		if r.Score > top {
@@ -462,17 +463,28 @@ func renderSearchEnvelope(w io.Writer, env searchEnvelope, jsonOut bool) error {
 		}
 	}
 	for _, r := range env.Results {
-		tier := scoreTier(r.Score, top)
+		tier := r.Tier
+		if tier == "" {
+			// Fallback for the in-process search path that may set
+			// Score but not Tier yet. Computed in-line matches the
+			// application-layer logic 1:1.
+			tier = "weak"
+			if top > 0 && r.Score/top >= 0.95 {
+				tier = "top"
+			} else if top > 0 && r.Score/top >= 0.80 {
+				tier = "strong"
+			}
+		}
 		if multiRepo {
 			short := r.RepoID
 			if len(short) > 12 {
 				short = short[:12]
 			}
-			fmt.Fprintf(w, "%-12s %-8s %s:%d-%d  %s  (%s, score=%.4f)\n",
-				short, r.Kind, r.FilePath, r.LineStart, r.LineEnd, r.Name, tier, r.Score)
+			fmt.Fprintf(w, "%-12s %-8s %s:%d-%d  %s  (%s, score=%.4f norm=%.2f)\n",
+				short, r.Kind, r.FilePath, r.LineStart, r.LineEnd, r.Name, tier, r.Score, r.ScoreNormalized)
 		} else {
-			fmt.Fprintf(w, "%-8s %s:%d-%d  %s  (%s, score=%.4f)\n",
-				r.Kind, r.FilePath, r.LineStart, r.LineEnd, r.Name, tier, r.Score)
+			fmt.Fprintf(w, "%-8s %s:%d-%d  %s  (%s, score=%.4f norm=%.2f)\n",
+				r.Kind, r.FilePath, r.LineStart, r.LineEnd, r.Name, tier, r.Score, r.ScoreNormalized)
 		}
 	}
 	// solov2-gfhq: tiers (top/strong/weak) are relative to this query's top
