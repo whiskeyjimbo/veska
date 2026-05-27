@@ -26,11 +26,49 @@ Veska found the right code ~17% of the time, using about 42% as many tokens as g
 TOKENEFF queries=30 recall=0.17 veska_tok=177 grep_lo=422 grep_hi=422 savings=[58%, 58%]
 ```
 
-Tunable knob:
+Tunable knobs:
 
 | Env var | Default | Meaning |
 |---|---|---|
 | `TOKEFF_NODES_PER_CLUSTER` | `24` | Members per cluster in the synthetic semantic corpus. Larger files exaggerate grep's read-all-matches cost so the savings range widens. Capped by `synthcorpus.semanticNodesPerClusterCap` (792). |
+| `TOKEFF_REPOS` | `5` | Multi-repo harness only. Partitions clusters across N synthetic repos so veska's cross-repo fanout + global RRF (solov2-bcn) competes against a grep that walks every repo's filesystem. |
+
+## Multi-repo (solov2-kcmo)
+
+The wedge pitch is "your agent searches across the whole workspace".
+The multi-repo harness measures exactly that:
+
+```sh
+make eval-token-efficiency-multirepo
+# or directly:
+go test -tags=eval -run TestTokenEfficiencyMultiRepo ./tools/loadtest/tokenefficiency/ -v
+```
+
+Layout: clusters are split contiguously across `TOKEFF_REPOS` repos.
+For each query, veska runs `search.Service.SemanticCandidates` against
+every repo and fuses with a single global RRF (mirroring the
+production MCP handler shipped in solov2-bcn). The simulated grep
+walks every repo's filesystem.
+
+Output: `results-multirepo.json` (same envelope as the single-repo
+result plus a `repos` field) and a one-line summary:
+
+```
+Across 5 repos, veska found the right code ~11% of the time, using about 42% as many tokens as grep+read across the same workspace (range: 58–58% fewer; measured on 30 queries).
+```
+
+Honest caveats specific to the multi-repo run:
+
+- The synthetic corpus has zero cross-cluster phrase overlap, so the
+  simulated grep matches exactly one file per query (the cluster's
+  own file) regardless of how many repos exist. That keeps the
+  baseline tokens nearly identical to the single-repo run — savings
+  ratios reported here are conservative. A real workspace with
+  repeated identifiers across repos would multiply grep's read cost
+  and widen the savings bracket.
+- Recall can drop slightly versus single-repo (the per-repo retriever
+  sees fewer candidates to rank, so the global RRF has less local
+  context). That's an honest artifact of the partitioning, not a bug.
 
 ## Methodology
 

@@ -267,20 +267,14 @@ func RecallAtK(hits []string, truth map[string]struct{}, k int) float64 {
 	if k <= 0 || len(truth) == 0 || len(hits) == 0 {
 		return 0
 	}
-	upper := len(hits)
-	if upper > k {
-		upper = k
-	}
+	upper := min(len(hits), k)
 	matched := 0
 	for i := range upper {
 		if _, ok := truth[hits[i]]; ok {
 			matched++
 		}
 	}
-	denom := len(truth)
-	if denom > k {
-		denom = k
-	}
+	denom := min(len(truth), k)
 	return float64(matched) / float64(denom)
 }
 
