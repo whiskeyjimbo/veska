@@ -2,6 +2,7 @@ package sqlite_test
 
 import (
 	"database/sql"
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -1095,5 +1096,98 @@ func TestMigration0009_DefaultsToNull(t *testing.T) {
 	}
 	if got.Valid {
 		t.Errorf("snippet should default to NULL, got %q", got.String)
+	}
+}
+
+// ── Migration 0013: repos cache-tier columns (solov2-kxo5.2) ───────────────
+
+func TestMigration0013_AddsCacheTierColumns(t *testing.T) {
+	t.Parallel()
+
+	dbPath := filepath.Join(t.TempDir(), "veska.db")
+	_ = openTest(t, dbPath)
+	raw := openRawDB(t, dbPath)
+
+	for _, col := range []string{"kind", "canonical_url", "last_accessed_at", "prompted_at"} {
+		if !columnExists(t, raw, "repos", col) {
+			t.Errorf("repos.%s missing after migration 0013", col)
+		}
+	}
+	if !indexExists(t, raw, "idx_repos_canonical_url") {
+		t.Error("idx_repos_canonical_url missing after migration 0013")
+	}
+}
+
+func TestMigration0013_DefaultsForExistingRow(t *testing.T) {
+	t.Parallel()
+
+	dbPath := filepath.Join(t.TempDir(), "veska.db")
+	db := openTest(t, dbPath)
+
+	// Insert a row simulating "already-registered before the migration",
+	// using only the pre-0013 columns. The DEFAULT on kind plus the
+	// nullability of the other three columns should let this succeed.
+	if _, err := db.Exec(
+		`INSERT INTO repos (repo_id, root_path, added_at) VALUES (?, ?, ?)`,
+		"abc123", "/tmp/foo", int64(1000),
+	); err != nil {
+		t.Fatalf("insert existing-style row: %v", err)
+	}
+
+	raw := openRawDB(t, dbPath)
+	var kind string
+	var canonical, lastAccessed, promptedAt sql.NullString
+	err := raw.QueryRow(
+		`SELECT kind, canonical_url, last_accessed_at, prompted_at FROM repos WHERE repo_id = ?`,
+		"abc123",
+	).Scan(&kind, &canonical, &lastAccessed, &promptedAt)
+	if err != nil {
+		t.Fatalf("query row: %v", err)
+	}
+	if kind != "tracked" {
+		t.Errorf("kind default: want 'tracked', got %q", kind)
+	}
+	if canonical.Valid {
+		t.Errorf("canonical_url should default to NULL, got %q", canonical.String)
+	}
+	if lastAccessed.Valid {
+		t.Errorf("last_accessed_at should default to NULL, got %q", lastAccessed.String)
+	}
+	if promptedAt.Valid {
+		t.Errorf("prompted_at should default to NULL, got %q", promptedAt.String)
+	}
+}
+
+func TestMigration0013_CanonicalURLUniquePartialIndex(t *testing.T) {
+	t.Parallel()
+
+	dbPath := filepath.Join(t.TempDir(), "veska.db")
+	db := openTest(t, dbPath)
+
+	// Two rows with NULL canonical_url are allowed (partial index excludes NULL).
+	for i, id := range []string{"id-null-1", "id-null-2"} {
+		if _, err := db.Exec(
+			`INSERT INTO repos (repo_id, root_path, added_at) VALUES (?, ?, ?)`,
+			id, fmt.Sprintf("/tmp/null-%d", i), int64(1000+i),
+		); err != nil {
+			t.Fatalf("insert NULL canonical_url row %d: %v", i, err)
+		}
+	}
+
+	// First non-NULL value succeeds.
+	if _, err := db.Exec(
+		`INSERT INTO repos (repo_id, root_path, added_at, canonical_url) VALUES (?, ?, ?, ?)`,
+		"id-url-1", "/tmp/u1", int64(2000), "https://github.com/foo/bar",
+	); err != nil {
+		t.Fatalf("first non-NULL canonical_url: %v", err)
+	}
+
+	// Duplicate non-NULL value must fail.
+	_, err := db.Exec(
+		`INSERT INTO repos (repo_id, root_path, added_at, canonical_url) VALUES (?, ?, ?, ?)`,
+		"id-url-2", "/tmp/u2", int64(2001), "https://github.com/foo/bar",
+	)
+	if err == nil {
+		t.Fatal("duplicate canonical_url should violate unique partial index, got nil")
 	}
 }
