@@ -18,8 +18,6 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/core/ports"
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/sqlite"
 	"github.com/whiskeyjimbo/veska/internal/observability"
-
-	_ "modernc.org/sqlite"
 )
 
 // ---- fakes ----

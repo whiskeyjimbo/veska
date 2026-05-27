@@ -49,8 +49,7 @@ func execWithBusyRetry(ctx context.Context, db *sql.DB, attempts int, delay time
 }
 
 // isSQLiteBusy reports whether the error is a SQLITE_BUSY-class lock
-// contention. modernc.org/sqlite formats it as "(5) (SQLITE_BUSY)" in
-// the error text; string-matching keeps the helper driver-agnostic.
+// contention. String-matching keeps the helper driver-agnostic.
 func isSQLiteBusy(err error) bool {
 	if err == nil {
 		return false

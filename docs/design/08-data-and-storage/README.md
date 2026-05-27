@@ -364,9 +364,9 @@ first-principles reasoning:
    or `.`. A query like "Find" never matches the symbol
    "closeFinding" stored as a single token. Pre-tokenising on
    the write path (Go helper `internal/tokenize.Symbol`) is the
-   cheapest fix that keeps the FTS5 layer pure SQLite — no CGo,
-   no custom tokenizer (we use `modernc.org/sqlite`, where
-   registering one is brittle).
+   cheapest fix that keeps the FTS5 layer pure SQLite, with no
+   custom tokenizer (which would be brittle to wire through
+   `database/sql`).
 
 2. **Substring / typo tolerance also matters.** "closeFnd" (a
    typo) and "ind" (a substring) must surface "closeFinding"

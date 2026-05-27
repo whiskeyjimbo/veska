@@ -18,7 +18,7 @@ import (
 //	DBBENCH_NODES    seed node count (default 10000)
 //	DBBENCH_DB       path to an existing veska.db; if set, the harness
 //	                 reuses it (and DOES NOT seed). Schema-compat is the
-//	                 caller's responsibility — use a fresh modernc-built db.
+//	                 caller's responsibility — use a fresh mattn-built db.
 //	DBBENCH_OUT      output path for RESULTS.md (default: alongside test file)
 //	DBBENCH_QUICK    if set, slashes iter counts ~10× for a smoke run.
 func TestDBBench(t *testing.T) {

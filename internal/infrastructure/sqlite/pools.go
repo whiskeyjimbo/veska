@@ -49,8 +49,8 @@ func OpenPools(dbPath string) (*Pools, error) {
 // openPool opens a single *sql.DB to dbPath with the given MaxOpenConns (0 = unlimited)
 // and applies the provided PRAGMA string.
 func openPool(dbPath string, maxOpen, busyTimeoutMS int) (*sql.DB, error) {
-	// Encode connection-scoped pragmas in the DSN so modernc applies them to
-	// EVERY pooled connection. foreign_keys and busy_timeout are per-connection
+	// Encode connection-scoped pragmas in the DSN so the driver applies them
+	// to EVERY pooled connection. foreign_keys and busy_timeout are per-connection
 	// state; the previous one-shot `db.Exec("PRAGMA …")` only set them on a
 	// single connection, leaving foreign keys OFF on the rest — so ON DELETE
 	// CASCADE silently never fired and `repo remove` orphaned child rows

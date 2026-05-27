@@ -80,12 +80,12 @@ func RenderReport(w io.Writer, drivers []string, results []WorkloadResult, cfg R
 
 // verdict picks the fastest driver per workload (lower p50 wins) and
 // recommends a swap only if one driver wins ≥4 of the 6 workloads by ≥20%
-// at p50 vs current production (modernc).
+// at p50 vs current production (mattn).
 func verdict(byWorkload map[string][]WorkloadResult, drivers []string) string {
-	const incumbent = "modernc"
+	const incumbent = "mattn"
 	var sb strings.Builder
 	wins := map[string]int{}
-	margin := map[string]float64{} // total relative speedup vs modernc
+	margin := map[string]float64{} // total relative speedup vs incumbent
 
 	wls := make([]string, 0, len(byWorkload))
 	for k := range byWorkload {
@@ -123,6 +123,6 @@ func verdict(byWorkload map[string][]WorkloadResult, drivers []string) string {
 	}
 	fmt.Fprintf(&sb, "\n\nRecommendation: hand-review the per-workload table; this harness does not auto-pick a winner. ")
 	fmt.Fprintf(&sb, "If a non-incumbent driver wins ≥4 of 6 workloads with ≥20%% p50 improvement on the write paths ")
-	fmt.Fprintf(&sb, "(promotion_tx, bulk_ingest), file a follow-up to swap. mattn is drop-in; zombiezen needs an adapter rewrite.\n")
+	fmt.Fprintf(&sb, "(promotion_tx, bulk_ingest), file a follow-up to swap. zombiezen would need an adapter rewrite of internal/infrastructure/sqlite/*.\n")
 	return sb.String()
 }

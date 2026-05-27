@@ -8,8 +8,6 @@ import (
 	"testing"
 	"unicode/utf8"
 
-	_ "modernc.org/sqlite"
-
 	"github.com/whiskeyjimbo/veska/internal/core/domain"
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/sqlite"
 )
@@ -38,8 +36,8 @@ func openGraphRepoTestDBWithHandle(t *testing.T) (*sqlite.GraphRepo, *sql.DB) {
 
 // openGraphRepoTestDB opens an isolated DB with the real migrated schema,
 // seeds a repos row, and returns a constructed GraphRepo. The same *sql.DB
-// handle backs both the read and write side — modernc.org/sqlite serialises
-// access internally, which is sufficient for a single-connection test.
+// handle backs both the read and write side — the driver serialises access
+// internally, which is sufficient for a single-connection test.
 func openGraphRepoTestDB(t *testing.T) *sqlite.GraphRepo {
 	t.Helper()
 	dir := t.TempDir()

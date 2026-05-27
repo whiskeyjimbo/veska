@@ -1,8 +1,8 @@
 //go:build eval
 
-// Package dbbench benchmarks the three viable Go SQLite drivers (modernc,
-// mattn, zombiezen) against the workloads veska's storage layer actually
-// runs. See README.md and solov2-6e5r for the motivation.
+// Package dbbench benchmarks Go SQLite drivers (mattn, zombiezen) against
+// the workloads veska's storage layer actually runs. See README.md and
+// solov2-6e5r for the motivation.
 //
 // The package is build-tagged `eval` so `go test ./...` stays fast. The
 // mattn driver additionally requires cgo; its registration lives in a
@@ -50,8 +50,7 @@ var (
 )
 
 // Register adds a driver factory under the given name. Each driver file
-// (driver_modernc.go / driver_mattn.go / driver_zombiezen.go) calls this
-// from its init().
+// (driver_mattn.go / driver_zombiezen.go) calls this from its init().
 func Register(name string, f Factory) {
 	registryMu.Lock()
 	defer registryMu.Unlock()
