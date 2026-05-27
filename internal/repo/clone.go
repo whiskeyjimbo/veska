@@ -155,6 +155,38 @@ func LookupByCanonicalURL(ctx context.Context, db *sql.DB, urlOrCanonical string
 	return rec, true, nil
 }
 
+// PromoteEphemeralToTracked flips an ephemeral row's kind to 'tracked'
+// and stamps prompted_at — the "user said yes" branch of the acceptance
+// prompt (solov2-kxo5.7). In-place: no row replacement, no file move,
+// the clone stays where it is. The WHERE clause guards against running
+// against a row that isn't ephemeral so a stray call can't demote a
+// tracked repo.
+func PromoteEphemeralToTracked(ctx context.Context, db *sql.DB, repoID string) error {
+	_, err := db.ExecContext(ctx,
+		`UPDATE repos SET kind = 'tracked', prompted_at = ? WHERE repo_id = ? AND kind = 'ephemeral'`,
+		nowUnix(), repoID,
+	)
+	if err != nil {
+		return fmt.Errorf("promote ephemeral: %w", err)
+	}
+	return nil
+}
+
+// MarkPromptDeclined stamps prompted_at without changing kind — the "user
+// said no" branch (solov2-kxo5.7). prompted_at is the once-per-row gate
+// for re-prompting; setting it here is what keeps the prompt from
+// re-firing on the next ephemeral query.
+func MarkPromptDeclined(ctx context.Context, db *sql.DB, repoID string) error {
+	_, err := db.ExecContext(ctx,
+		`UPDATE repos SET prompted_at = ? WHERE repo_id = ? AND kind = 'ephemeral'`,
+		nowUnix(), repoID,
+	)
+	if err != nil {
+		return fmt.Errorf("mark prompt declined: %w", err)
+	}
+	return nil
+}
+
 // TouchEphemeral bumps last_accessed_at to now for repoID, but only when
 // the row is kind='ephemeral'. Tracked rows are skipped silently — they
 // are not subject to LRU eviction so the column is meaningless for them
