@@ -107,6 +107,59 @@ func TestSavingsRatio_NegativeWhenVeskaWorse(t *testing.T) {
 	}
 }
 
+func TestFillAbsoluteSavings(t *testing.T) {
+	t.Parallel()
+	r := Result{
+		MeanVeskaTokens:  100,
+		MeanGrepLoTokens: 400,
+		MeanGrepHiTokens: 600,
+	}
+	r.FillAbsoluteSavings(50, 3.0, "test rate")
+	// midpoint(400,600)=500; saved=500-100=400 per query.
+	if r.TokensSavedPerQuery != 400 {
+		t.Errorf("TokensSavedPerQuery = %v; want 400", r.TokensSavedPerQuery)
+	}
+	if r.TokensSavedOverConversation != 20000 {
+		t.Errorf("conversation tokens = %v; want 20000", r.TokensSavedOverConversation)
+	}
+	// 20,000 tokens * $3/M = $0.06.
+	if r.USDSavedOverConversation < 0.0599 || r.USDSavedOverConversation > 0.0601 {
+		t.Errorf("USD = %v; want ~0.06", r.USDSavedOverConversation)
+	}
+	if r.USDPriceLabel != "test rate" {
+		t.Errorf("label = %q", r.USDPriceLabel)
+	}
+}
+
+func TestFillAbsoluteSavings_NegativeClampedToZero(t *testing.T) {
+	t.Parallel()
+	// Pathological: veska used MORE tokens than grep (shouldn't
+	// happen on real corpora but is a clean clamp test).
+	r := Result{
+		MeanVeskaTokens:  1000,
+		MeanGrepLoTokens: 100,
+		MeanGrepHiTokens: 200,
+	}
+	r.FillAbsoluteSavings(50, 3.0, "x")
+	if r.TokensSavedPerQuery != 0 {
+		t.Errorf("expected 0 (clamped), got %v", r.TokensSavedPerQuery)
+	}
+}
+
+func TestFormatThousands(t *testing.T) {
+	t.Parallel()
+	cases := map[int]string{
+		0: "0", 7: "7", 100: "100", 999: "999",
+		1000: "1,000", 12300: "12,300", 1234567: "1,234,567",
+		-12300: "-12,300",
+	}
+	for in, want := range cases {
+		if got := formatThousands(in); got != want {
+			t.Errorf("formatThousands(%d) = %q; want %q", in, got, want)
+		}
+	}
+}
+
 func TestSummaryLine_ShapeMatchesBead(t *testing.T) {
 	t.Parallel()
 	r := Result{
