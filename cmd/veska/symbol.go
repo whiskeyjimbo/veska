@@ -99,14 +99,14 @@ ranked first.`,
 			if repoFlag != "" {
 				params["repo_id"] = repoFlag
 				scopedRepo = repoFlag
-			} else if rid := autoResolveRepo(cmd.Context(), cmd.ErrOrStderr()); rid != "" {
-				// solov2-zukc: auto-resolve from cwd so a junior user inside a
-				// registered repo doesn't have to look up a short_id.
-				// solov2-dqwh: autoResolveRepo prints a breadcrumb when
-				// multiple repos are registered.
-				params["repo_id"] = rid
-				scopedRepo = rid
 			}
+			// solov2-efzv: when --repo is omitted, do NOT auto-scope to the
+			// cwd's repo — let the daemon fan out across every registered
+			// repo. The cobra-CLI-plus-shared-lib pattern is the common
+			// multi-repo case: the user invokes 'veska symbol Hello' from
+			// the CLI repo wanting matches in the library repo too, and
+			// the previous cwd-pinning made that fail silently. The
+			// rendered RepoID column disambiguates fanout hits.
 			var resp struct {
 				Nodes []struct {
 					NodeID    string `json:"node_id"`
@@ -207,6 +207,7 @@ func renderNodeList(w io.Writer, resp any, jsonOut bool) error {
 			LineStart int    `json:"line_start"`
 			LineEnd   int    `json:"line_end"`
 			External  bool   `json:"external,omitempty"`
+			RepoID    string `json:"repo_id,omitempty"`
 		} `json:"nodes"`
 	}
 	if err := json.Unmarshal(raw, &any); err != nil {
@@ -216,12 +217,28 @@ func renderNodeList(w io.Writer, resp any, jsonOut bool) error {
 		fmt.Fprintln(w, "no matches")
 		return nil
 	}
+	// solov2-efzv: when the daemon fanned out across repos (repo_id
+	// populated on at least one hit) render a leading repo column so the
+	// user can disambiguate cross-repo matches without a follow-up query.
+	multiRepo := false
+	for _, n := range any.Nodes {
+		if n.RepoID != "" {
+			multiRepo = true
+			break
+		}
+	}
 	for _, n := range any.Nodes {
 		extMark := ""
 		if n.External {
 			extMark = " [external]"
 		}
-		fmt.Fprintf(w, "%-10s %s:%d-%d  %s  (%s)%s\n", n.Kind, n.FilePath, n.LineStart, n.LineEnd, n.Name, n.NodeID[:12], extMark)
+		if multiRepo {
+			fmt.Fprintf(w, "%-12s %-10s %s:%d-%d  %s  (%s)%s\n",
+				shortID(n.RepoID), n.Kind, n.FilePath, n.LineStart, n.LineEnd, n.Name, n.NodeID[:12], extMark)
+		} else {
+			fmt.Fprintf(w, "%-10s %s:%d-%d  %s  (%s)%s\n",
+				n.Kind, n.FilePath, n.LineStart, n.LineEnd, n.Name, n.NodeID[:12], extMark)
+		}
 	}
 	return nil
 }
@@ -344,12 +361,11 @@ change so you (or an agent) get the whole neighbourhood in one shot.`,
 			params := map[string]any{"symbol": sym}
 			if repoFlag != "" {
 				params["repo_id"] = repoFlag
-			} else if rid := autoResolveRepo(cmd.Context(), cmd.ErrOrStderr()); rid != "" {
-				// solov2-zukc: auto-resolve from cwd so a junior user inside a
-				// registered repo doesn't have to look up a short_id.
-				// solov2-dqwh: hint via stderr when multiple repos are registered.
-				params["repo_id"] = rid
 			}
+			// solov2-efzv: omit repo_id so the daemon fans out by default —
+			// the common cobra-CLI-plus-shared-lib pattern wants
+			// `veska context Greeter.Hello` from the CLI repo to surface
+			// the library's symbol (and its cross-repo edges back).
 			var resp json.RawMessage
 			if err := callMCP(cmd.Context(), "eng_get_context_pack", params, &resp); err != nil {
 				return fmt.Errorf("context: %w", err)
