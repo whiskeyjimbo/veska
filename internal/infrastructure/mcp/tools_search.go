@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"math"
 	"sort"
+	"sync"
 	"time"
 
 	application "github.com/whiskeyjimbo/veska/internal/application"
@@ -101,7 +102,7 @@ func RegisterSearchTools(
 	}
 	r.MustRegister(ToolSpec{
 		Name:            "eng_search_semantic",
-		Description:     "Natural-language search over embedded symbols (RRF-fused with FTS, lexical fallback when the embedder is offline). Best for behavior-shaped queries ('where do we validate session tokens'). Returns inline snippets so a follow-up Read is usually unnecessary. For known identifiers prefer eng_find_symbol (exact + deterministic); for 'what does this reach / who calls this' escalate to eng_get_call_chain / eng_get_blast_radius. The returned score is intra-query RRF (~0.01–0.03 typical range); use rank, not absolute score, to compare hits.",
+		Description:     "Natural-language search over embedded symbols (RRF-fused with FTS, lexical fallback when the embedder is offline). Best for behavior-shaped queries ('where do we validate session tokens'). Returns inline snippets so a follow-up Read is usually unnecessary. For known identifiers prefer eng_find_symbol (exact + deterministic); for 'what does this reach / who calls this' escalate to eng_get_call_chain / eng_get_blast_radius. With repo_id omitted (and cwd outside any registered repo) the query fans out across every registered repo in parallel and is fused with a single GLOBAL RRF so a top hit in one repo competes fairly with a top hit in another; each result then carries 'repo_id' so callers can disambiguate. The returned score is intra-query RRF (~0.01–0.03 typical range); use rank, not absolute score, to compare hits.",
 		IncludesStaging: false,
 		InputSchema:     searchSemanticInputSchema,
 		Handler:         makeSearchSemanticHandler(svc, rec, repos, pending),
@@ -162,35 +163,9 @@ func makeSearchSemanticHandler(svc *search.Service, rec *savings.Recorder, repos
 			return nil, &RPCError{Code: CodeInvalidParams, Message: fmt.Sprintf("k %d exceeds maximum of %d", k, maxSearchK)}
 		}
 
-		type taggedResult struct {
-			repoID string
-			r      search.Result
-		}
-		var pooled []taggedResult
-		reasonsSet := map[string]struct{}{}
-		for _, tgt := range targets {
-			resp, err := svc.Semantic(ctx, tgt.RepoID, tgt.Branch, p.Query, k, domain.Filter{})
-			if err != nil {
-				return nil, &RPCError{Code: CodeInternalError, Message: fmt.Sprintf("semantic search: %v", err)}
-			}
-			for _, r := range resp.Results {
-				pooled = append(pooled, taggedResult{repoID: tgt.RepoID, r: r})
-			}
-			for _, reason := range resp.DegradedReasons {
-				reasonsSet[reason] = struct{}{}
-			}
-		}
-		// Re-rank pooled hits by score desc and trim to k. Stable sort so
-		// hits with identical scores keep insertion order (per-repo order).
-		sort.SliceStable(pooled, func(i, j int) bool { return pooled[i].r.Score > pooled[j].r.Score })
-		if len(pooled) > k {
-			pooled = pooled[:k]
-		}
-		results := make([]search.Result, len(pooled))
-		repoByNode := make(map[string]string, len(pooled))
-		for i, p := range pooled {
-			results[i] = p.r
-			repoByNode[p.r.NodeID] = p.repoID
+		results, repoByNode, reasonsSet, rpcErr := runSemanticFanout(ctx, svc, targets, p.Query, k, fanout)
+		if rpcErr != nil {
+			return nil, rpcErr
 		}
 		recordSavings(rec, p.Query, results)
 		reasons := make([]string, 0, len(reasonsSet))
@@ -211,6 +186,139 @@ func makeSearchSemanticHandler(svc *search.Service, rec *savings.Recorder, repos
 		}
 		return SearchResponse{Results: dtos, DegradedReasons: reasons}, nil
 	}
+}
+
+// runSemanticFanout dispatches a semantic-search query across one or
+// more (repo_id, branch) targets and returns the top-K results.
+//
+// Single-repo (fanout=false): the existing svc.Semantic pipeline runs —
+// intra-repo RRF + post-fusion rerank — and the response is returned
+// verbatim. Byte-stable with the pre-bcn behaviour.
+//
+// Multi-repo (fanout=true, solov2-bcn): every repo is queried in
+// parallel via svc.SemanticCandidates which returns un-fused, hydrated
+// candidates carrying their per-retriever ranks. A single GLOBAL RRF
+// then fuses the pooled candidate set so a rank-1 hit in repo A
+// competes fairly with a rank-1 hit in repo B (per-repo local fusion
+// gives every repo a top hit scoring ~1/61, which renders as a tie).
+//
+// Returns (results, repoByNode, reasons). repoByNode keys hits to the
+// repo they came from so the handler can populate per-hit repo_id.
+func runSemanticFanout(
+	ctx context.Context,
+	svc *search.Service,
+	targets []repoBranch,
+	query string,
+	k int,
+	fanout bool,
+) ([]search.Result, map[string]string, map[string]struct{}, *RPCError) {
+	reasonsSet := map[string]struct{}{}
+
+	if !fanout {
+		// Single target: keep the existing within-repo pipeline.
+		t := targets[0]
+		resp, err := svc.Semantic(ctx, t.RepoID, t.Branch, query, k, domain.Filter{})
+		if err != nil {
+			return nil, nil, nil, &RPCError{Code: CodeInternalError, Message: fmt.Sprintf("semantic search: %v", err)}
+		}
+		for _, r := range resp.DegradedReasons {
+			reasonsSet[r] = struct{}{}
+		}
+		return resp.Results, nil, reasonsSet, nil
+	}
+
+	// Parallel fanout: collect candidates from every repo concurrently
+	// then global-RRF below.
+	type repoResult struct {
+		repoID string
+		resp   search.CandidatesResponse
+		err    error
+	}
+	results := make([]repoResult, len(targets))
+	var wg sync.WaitGroup
+	for i, tgt := range targets {
+		wg.Add(1)
+		go func(i int, tgt repoBranch) {
+			defer wg.Done()
+			resp, err := svc.SemanticCandidates(ctx, tgt.RepoID, tgt.Branch, query, k, domain.Filter{})
+			results[i] = repoResult{repoID: tgt.RepoID, resp: resp, err: err}
+		}(i, tgt)
+	}
+	wg.Wait()
+
+	type pooledCand struct {
+		repoID string
+		cand   search.RankedCandidate
+	}
+	var pool []pooledCand
+	for _, rr := range results {
+		if rr.err != nil {
+			// Per-repo failure mirrors the cross-repo CLI policy
+			// (cmd/veska/search.go daemonSearchAllRepos): degrade,
+			// don't abort. Surface as a degraded reason so the
+			// caller can tell partial-fanout from clean-fanout.
+			reasonsSet[fmt.Sprintf("repo_%s_unavailable", ShortRepoID(rr.repoID))] = struct{}{}
+			continue
+		}
+		for _, c := range rr.resp.Candidates {
+			pool = append(pool, pooledCand{repoID: rr.repoID, cand: c})
+		}
+		for _, r := range rr.resp.DegradedReasons {
+			reasonsSet[r] = struct{}{}
+		}
+	}
+	if len(pool) == 0 {
+		return nil, nil, reasonsSet, nil
+	}
+
+	// Global RRF: every (repo, candidate) tuple contributes its
+	// per-retriever rank as if it were a single global retriever list.
+	// node_id is sha256-derived per node so cross-repo collisions are
+	// not a realistic concern; keying by node_id alone keeps the loop
+	// simple.
+	const rrfConstant = 60
+	scores := make(map[string]float32, len(pool))
+	candByNode := make(map[string]pooledCand, len(pool))
+	for _, pc := range pool {
+		nodeKey := pc.repoID + ":" + pc.cand.NodeID
+		if _, exists := candByNode[nodeKey]; !exists {
+			candByNode[nodeKey] = pc
+		}
+		if pc.cand.VectorRank > 0 {
+			scores[nodeKey] += 1.0 / float32(rrfConstant+pc.cand.VectorRank)
+		}
+		if pc.cand.LexicalRank > 0 {
+			scores[nodeKey] += 1.0 / float32(rrfConstant+pc.cand.LexicalRank)
+		}
+	}
+
+	// Stable sort: deterministic order when scores tie (small per-repo
+	// candidate sets routinely tie at the top).
+	keys := make([]string, 0, len(scores))
+	for k := range scores {
+		keys = append(keys, k)
+	}
+	sort.SliceStable(keys, func(i, j int) bool {
+		si, sj := scores[keys[i]], scores[keys[j]]
+		if si != sj {
+			return si > sj
+		}
+		return keys[i] < keys[j]
+	})
+	if len(keys) > k {
+		keys = keys[:k]
+	}
+
+	out := make([]search.Result, 0, len(keys))
+	repoByNode := make(map[string]string, len(keys))
+	for _, key := range keys {
+		pc := candByNode[key]
+		r := pc.cand.Result
+		r.Score = scores[key]
+		out = append(out, r)
+		repoByNode[r.NodeID] = pc.repoID
+	}
+	return out, repoByNode, reasonsSet, nil
 }
 
 // recordSavings is the savings-telemetry side-effect for a successful
