@@ -1,4 +1,4 @@
-package main
+package daemon
 
 import (
 	"context"
@@ -25,9 +25,11 @@ const (
 	daemonLogKeep = 5
 )
 
-func newRootCmd() *cobra.Command {
+// NewCmd returns the daemon cobra command, suitable for AddCommand under the
+// veska root or for direct Execute via Run.
+func NewCmd() *cobra.Command {
 	root := &cobra.Command{
-		Use:          "veska-daemon",
+		Use:          "daemon",
 		Short:        "Veska long-running daemon (MCP server + ingester + workers)",
 		SilenceUsage: true,
 		RunE:         runStart,
@@ -71,20 +73,21 @@ func runStart(cmd *cobra.Command, _ []string) error {
 	return d.Stop()
 }
 
-func main() {
-	// Set up rotating log writer at ~/.veska/logs/daemon.log.
+// Run is the entry point used when the binary is invoked as veska-daemon
+// (via the argv[0] dispatcher in cmd/veska/main.go). It sets up log
+// rotation, the SIGHUP reopen handler, and the crash-loop breaker before
+// dispatching to NewCmd.
+func Run() int {
 	logPath := filepath.Join(config.DefaultVectorDir(), "logs", "daemon.log")
 	lw, err := logrotate.NewRotatingWriter(logPath, daemonLogSize, daemonLogKeep)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "veska-daemon: open log file: %v\n", err)
-		os.Exit(1)
+		return 1
 	}
 	defer lw.Close()
 
-	// Redirect structured logs to the rotating writer.
 	slog.SetDefault(slog.New(slog.NewJSONHandler(lw, nil)))
 
-	// SIGHUP: reopen the log file (supports external log rotation).
 	go func() {
 		ch := make(chan os.Signal, 1)
 		signal.Notify(ch, syscall.SIGHUP)
@@ -97,18 +100,20 @@ func main() {
 		}
 	}()
 
-	// Crash-loop guard: refuse to start if the breaker has tripped.
 	if err := crashloop.Check(config.DefaultVectorDir()); err != nil {
 		if errors.Is(err, crashloop.ErrBroken) {
 			slog.Error("crash-loop breaker tripped — run `veska doctor reset-crash-loop` to recover")
-			os.Exit(crashloop.ExitCode)
+			return crashloop.ExitCode
 		}
 		slog.Error("crash-loop check failed", "err", err)
-		os.Exit(1)
+		return 1
 	}
 
-	if err := newRootCmd().Execute(); err != nil {
+	cmd := NewCmd()
+	cmd.Use = "veska-daemon"
+	if err := cmd.Execute(); err != nil {
 		slog.Error("daemon command failed", "err", err)
-		os.Exit(1)
+		return 1
 	}
+	return 0
 }

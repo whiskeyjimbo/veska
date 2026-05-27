@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 	"testing"
 
@@ -124,13 +125,7 @@ func TestChangedSymbols_FiltersChunkEntries(t *testing.T) {
 	// signalling 'comments-only changes' must be set so a caller knows
 	// the file did change.
 	if len(resp.Added)+len(resp.Removed)+len(resp.Modified) == 0 {
-		found := false
-		for _, r := range resp.DegradedReasons {
-			if r == changedsymbols.DegradedReasonNonSymbolChangesOnly {
-				found = true
-				break
-			}
-		}
+		found := slices.Contains(resp.DegradedReasons, changedsymbols.DegradedReasonNonSymbolChangesOnly)
 		if !found {
 			t.Errorf("comment-only diff must set degraded_reasons=%q, got %+v",
 				changedsymbols.DegradedReasonNonSymbolChangesOnly, resp.DegradedReasons)

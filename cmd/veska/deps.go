@@ -92,14 +92,14 @@ func depsListCmd() *cobra.Command {
 			tw := tabwriter.NewWriter(w, 0, 0, 2, ' ', 0)
 			fmt.Fprintln(tw, "MODULE\tVERSION\tUSAGE\tTOP_SYMBOLS")
 			for _, d := range shown {
-				symbols := ""
+				var symbols strings.Builder
 				for i, cs := range d.TopCallSites {
 					if i > 0 {
-						symbols += ", "
+						symbols.WriteString(", ")
 					}
-					symbols += cs.SymbolPath
+					symbols.WriteString(cs.SymbolPath)
 				}
-				fmt.Fprintf(tw, "%s\t%s\t%d\t%s\n", d.Module, d.Version, d.UsageCount, symbols)
+				fmt.Fprintf(tw, "%s\t%s\t%d\t%s\n", d.Module, d.Version, d.UsageCount, symbols.String())
 			}
 			if err := tw.Flush(); err != nil {
 				return err

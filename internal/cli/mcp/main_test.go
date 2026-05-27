@@ -1,4 +1,4 @@
-package main
+package mcp
 
 import (
 	"bytes"
@@ -55,7 +55,7 @@ func TestSocketMissingJSONError(t *testing.T) {
 
 // TestRootCmdHelp verifies that --help exits without error.
 func TestRootCmdHelp(t *testing.T) {
-	root := newRootCmd()
+	root := NewCmd()
 	root.SetArgs([]string{"--help"})
 	if err := root.Execute(); err != nil {
 		t.Fatalf("expected nil error from --help, got: %v", err)
