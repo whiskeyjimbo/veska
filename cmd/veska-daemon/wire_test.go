@@ -279,8 +279,9 @@ func TestWire_RegistersFinalFiveTools(t *testing.T) {
 	// get_task_history) are parked until a backend exists. 34 → 31.
 	// solov2-4d7b adds eng_reindex_repo: 31 → 32.
 	// solov2-jlws adds eng_list_dependencies: 32 → 33.
-	if got := len(names); got != 33 {
-		t.Errorf("registered tool count = %d; want 33; have=%v", got, names)
+	// solov2-2g4r adds eng_find_related: 33 → 34.
+	if got := len(names); got != 34 {
+		t.Errorf("registered tool count = %d; want 34; have=%v", got, names)
 	}
 	// Negative-check: parked tools must NOT appear.
 	for _, parked := range []string{
