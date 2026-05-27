@@ -197,10 +197,14 @@ func makeSearchSemanticHandler(svc *search.Service, rec *savings.Recorder, repos
 //
 // Multi-repo (fanout=true, solov2-bcn): every repo is queried in
 // parallel via svc.SemanticCandidates which returns un-fused, hydrated
-// candidates carrying their per-retriever ranks. A single GLOBAL RRF
-// then fuses the pooled candidate set so a rank-1 hit in repo A
-// competes fairly with a rank-1 hit in repo B (per-repo local fusion
-// gives every repo a top hit scoring ~1/61, which renders as a tie).
+// candidates with per-retriever ranks AND raw vector scores. When any
+// candidate carries a vector score — the common case, one daemon =
+// one embedder spanning every repo — the pool is fused by COSINE
+// SIMILARITY (solov2-uuuk) so a stronger match in repo A beats a
+// weaker one in repo B even though both ranked 1 locally. Lexical
+// confirms a candidate via a small multiplier; lexical-only
+// candidates survive via a small RRF baseline. When no vector score
+// is available, falls back to the original global RRF.
 //
 // Returns (results, repoByNode, reasons). repoByNode keys hits to the
 // repo they came from so the handler can populate per-hit repo_id.
@@ -271,11 +275,25 @@ func runSemanticFanout(
 		return nil, nil, reasonsSet, nil
 	}
 
-	// Global RRF: every (repo, candidate) tuple contributes its
-	// per-retriever rank as if it were a single global retriever list.
-	// node_id is sha256-derived per node so cross-repo collisions are
-	// not a realistic concern; keying by node_id alone keeps the loop
-	// simple.
+	// Cross-repo fusion (solov2-uuuk): when the vector arm returned
+	// scores for any candidate — the common case, one daemon = one
+	// embedder spanning every repo — fuse by raw cosine similarity
+	// rather than RRF. RRF is rank-only, so every repo's vector top-1
+	// ties at 1/(60+1) and the cross-repo top-K becomes a coin flip
+	// across repos. Cosine scores ARE comparable across repos when the
+	// embedder is shared, which makes the fusion actually pick the
+	// best match.
+	//
+	// Falls back to the original global RRF when no candidate has a
+	// vector score (every repo's vector arm failed, or every hit came
+	// from the lexical arm only).
+	useCosine := false
+	for _, pc := range pool {
+		if pc.cand.VectorScore > 0 {
+			useCosine = true
+			break
+		}
+	}
 	const rrfConstant = 60
 	scores := make(map[string]float32, len(pool))
 	candByNode := make(map[string]pooledCand, len(pool))
@@ -284,11 +302,30 @@ func runSemanticFanout(
 		if _, exists := candByNode[nodeKey]; !exists {
 			candByNode[nodeKey] = pc
 		}
-		if pc.cand.VectorRank > 0 {
-			scores[nodeKey] += 1.0 / float32(rrfConstant+pc.cand.VectorRank)
-		}
-		if pc.cand.LexicalRank > 0 {
-			scores[nodeKey] += 1.0 / float32(rrfConstant+pc.cand.LexicalRank)
+		if useCosine {
+			// Cosine fusion: vector score is the primary signal;
+			// lexical co-occurrence adds a small bonus so a
+			// candidate confirmed by both retrievers beats a
+			// vector-only candidate of equal score. Lexical-only
+			// candidates (vector miss) get a baseline RRF
+			// contribution so they survive in the pool — they're
+			// rare but useful when the embedder misses a
+			// keyword-heavy query.
+			if pc.cand.VectorScore > 0 {
+				scores[nodeKey] = pc.cand.VectorScore
+				if pc.cand.LexicalRank > 0 {
+					scores[nodeKey] *= 1.05
+				}
+			} else if pc.cand.LexicalRank > 0 {
+				scores[nodeKey] = 1.0 / float32(rrfConstant+pc.cand.LexicalRank)
+			}
+		} else {
+			if pc.cand.VectorRank > 0 {
+				scores[nodeKey] += 1.0 / float32(rrfConstant+pc.cand.VectorRank)
+			}
+			if pc.cand.LexicalRank > 0 {
+				scores[nodeKey] += 1.0 / float32(rrfConstant+pc.cand.LexicalRank)
+			}
 		}
 	}
 

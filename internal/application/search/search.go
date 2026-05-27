@@ -86,10 +86,20 @@ type Response struct {
 // VectorRank and LexicalRank are 1-indexed; 0 means the candidate was
 // absent from that retriever. A candidate always appears in at least
 // one of the two.
+//
+// VectorScore is the raw distance-derived score the VectorStorage
+// returned (higher = better). It is comparable across queries against
+// the same embedder, and — critically for cross-repo fanout — across
+// repos when one embedder spans them (solov2-uuuk). 0 means the
+// candidate didn't appear in the vector retriever, so cosine fusion
+// must either fall back to a baseline contribution or drop it. The
+// MCP cross-repo handler chooses cosine fusion over global RRF
+// whenever non-zero VectorScores are present.
 type RankedCandidate struct {
 	Result
 	VectorRank  int
 	LexicalRank int
+	VectorScore float32
 }
 
 // CandidatesResponse is the un-fused, hydrated cross-repo input shape
@@ -371,8 +381,10 @@ func (s *Service) SemanticCandidates(ctx context.Context, repoID, branch, query 
 
 	// Union of node_ids touched by either retriever.
 	vecRank := make(map[string]int, len(vecHits))
+	vecScore := make(map[string]float32, len(vecHits))
 	for i, h := range vecHits {
 		vecRank[h.NodeID] = i + 1
+		vecScore[h.NodeID] = h.Score
 	}
 	lexRank := make(map[string]int, len(lexHits))
 	for i, h := range lexHits {
@@ -422,6 +434,7 @@ func (s *Service) SemanticCandidates(ctx context.Context, repoID, branch, query 
 			},
 			VectorRank:  vecRank[id],
 			LexicalRank: lexRank[id],
+			VectorScore: vecScore[id],
 		})
 	}
 	return s.withCaveatOnCandidates(CandidatesResponse{Candidates: out}), nil
