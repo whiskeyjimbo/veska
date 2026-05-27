@@ -307,6 +307,7 @@ func validateAgainstSchema(method string, schema, params json.RawMessage) *RPCEr
 	var s struct {
 		Type       string                      `json:"type"`
 		Properties *map[string]json.RawMessage `json:"properties"`
+		Required   []string                    `json:"required"`
 	}
 	if err := json.Unmarshal(schema, &s); err != nil {
 		// Malformed schemas are caught at Register-time; ignore here.
@@ -319,6 +320,10 @@ func validateAgainstSchema(method string, schema, params json.RawMessage) *RPCEr
 		return nil
 	}
 	props := *s.Properties
+	required := make(map[string]bool, len(s.Required))
+	for _, k := range s.Required {
+		required[k] = true
+	}
 	var obj map[string]json.RawMessage
 	if err := json.Unmarshal(params, &obj); err != nil {
 		return &RPCError{
@@ -339,9 +344,15 @@ func validateAgainstSchema(method string, schema, params json.RawMessage) *RPCEr
 			// via cwdFromParams, ones that don't ignore them.
 			continue
 		}
+		// solov2-m5c2: annotate required-ness in the allowed list so an
+		// LLM consumer or junior dev who tried the obvious-but-wrong
+		// param ("node_id" on eng_find_related) learns from the error
+		// which params are mandatory instead of having to fetch the full
+		// schema. The previous error sorted props alphabetically with no
+		// signal at all about which were required vs optional.
 		return &RPCError{
 			Code:    CodeInvalidParams,
-			Message: fmt.Sprintf("%s: unknown parameter %q (allowed: %s)", method, k, sortedKeys(props)),
+			Message: fmt.Sprintf("%s: unknown parameter %q (allowed: %s)", method, k, sortedKeysAnnotated(props, required)),
 		}
 	}
 	return nil
@@ -387,6 +398,28 @@ func sortedKeys(m map[string]json.RawMessage) string {
 	}
 	sort.Strings(keys)
 	return strings.Join(keys, ", ")
+}
+
+// sortedKeysAnnotated returns m's keys joined with ", " in lexical order,
+// suffixing each name in `required` with " (required)". Required props
+// are also listed first so the eye lands on them before scanning the
+// optional ones (solov2-m5c2).
+func sortedKeysAnnotated(m map[string]json.RawMessage, required map[string]bool) string {
+	if len(required) == 0 {
+		return sortedKeys(m)
+	}
+	req := make([]string, 0, len(required))
+	opt := make([]string, 0, len(m))
+	for k := range m {
+		if required[k] {
+			req = append(req, k+" (required)")
+		} else {
+			opt = append(opt, k)
+		}
+	}
+	sort.Strings(req)
+	sort.Strings(opt)
+	return strings.Join(append(req, opt...), ", ")
 }
 
 // ToolListEntry is one row in the tools/list response. Matches the MCP
