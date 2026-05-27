@@ -38,6 +38,12 @@ type VulnFinding struct {
 
 	// Summary is a short description of the vulnerability.
 	Summary string
+
+	// FixedVersion is the lowest version (semver, with leading "v" for Go
+	// modules) that resolves this advisory for the affected range that
+	// matched. Empty when the advisory has no published fix yet. Used by
+	// application/checks to render a remediation hint (solov2-gpvy).
+	FixedVersion string
 }
 
 // VulnSource is the port for vulnerability scanning. It splits cache refresh
