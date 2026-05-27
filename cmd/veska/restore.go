@@ -5,6 +5,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -23,14 +24,48 @@ func daemonRunning() bool {
 	return true
 }
 
-// defaultBackupDir returns the directory veska backup create writes to
-// (~/.veska-backups), matching backupCreateCmd.
+// defaultBackupDir returns the directory `veska backup create` writes to.
+// solov2-n57f moved this under $VESKA_HOME/backups so wiping the data dir
+// also clears backups (previously ~/.veska-backups survived the wipe).
 func defaultBackupDir() (string, error) {
-	homeDir, err := os.UserHomeDir()
-	if err != nil {
-		return "", fmt.Errorf("resolve home dir: %w", err)
+	return config.DefaultBackupDir(), nil
+}
+
+// resolveBackupReadDir returns the directory to READ backups from. Prefer
+// the canonical $VESKA_HOME/backups; fall back to the legacy
+// ~/.veska-backups when the canonical dir is missing or has no tarballs,
+// so users upgrading still see backups they took under the old layout
+// (solov2-n57f).
+func resolveBackupReadDir() (string, error) {
+	canon := config.DefaultBackupDir()
+	if hasBackupTarballs(canon) {
+		return canon, nil
 	}
-	return filepath.Join(homeDir, ".veska-backups"), nil
+	if legacy, ok := config.LegacyBackupDir(); ok && hasBackupTarballs(legacy) {
+		return legacy, nil
+	}
+	// No tarballs anywhere — return the canonical path so error messages
+	// point at the location new writes will land.
+	return canon, nil
+}
+
+// hasBackupTarballs reports whether dir contains at least one *.tar.gz.
+// Used by resolveBackupReadDir to choose between the canonical and legacy
+// locations.
+func hasBackupTarballs(dir string) bool {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return false
+	}
+	for _, e := range entries {
+		if e.IsDir() {
+			continue
+		}
+		if strings.HasSuffix(e.Name(), ".tar.gz") {
+			return true
+		}
+	}
+	return false
 }
 
 // restoreCmd returns the "restore" Cobra command.  It restores a backup
@@ -76,7 +111,10 @@ func restoreCmd() *cobra.Command {
 			case len(args) == 1:
 				tarPath = args[0]
 			case useLatest:
-				dir, err := defaultBackupDir()
+				// solov2-n57f: prefer the canonical $VESKA_HOME/backups
+				// but fall back to ~/.veska-backups if the new dir is
+				// empty so users upgrading still find their tarballs.
+				dir, err := resolveBackupReadDir()
 				if err != nil {
 					return fmt.Errorf("restore: %w", err)
 				}
@@ -110,7 +148,7 @@ func restoreCmd() *cobra.Command {
 		},
 	}
 
-	cmd.Flags().BoolVar(&useLatest, "latest", false, "restore the newest backup tarball in ~/.veska-backups")
+	cmd.Flags().BoolVar(&useLatest, "latest", false, "restore the newest backup tarball in $VESKA_HOME/backups (falls back to ~/.veska-backups; solov2-n57f)")
 	cmd.Flags().BoolVar(&usePreMigration, "pre-migration", false, "restore the newest auto-pre-migration snapshot")
 	return cmd
 }

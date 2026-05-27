@@ -881,11 +881,16 @@ func doctorBackupCmd() *cobra.Command {
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			w := cmd.OutOrStdout()
-			homeDir, err := os.UserHomeDir()
-			if err != nil {
-				return err
+			// solov2-n57f: prefer the canonical $VESKA_HOME/backups; fall
+			// back to legacy ~/.veska-backups so doctor doesn't report
+			// "no backups" right after an upgrade that hasn't run a new
+			// backup yet.
+			backupDir := config.DefaultBackupDir()
+			if !hasBackupTarballs(backupDir) {
+				if legacy, ok := config.LegacyBackupDir(); ok && hasBackupTarballs(legacy) {
+					backupDir = legacy
+				}
 			}
-			backupDir := filepath.Join(homeDir, ".veska-backups")
 			report, err := doctor.CheckBackup(backupDir)
 			if err != nil {
 				return err
