@@ -156,7 +156,11 @@ func resolveVulnChoice(flags initFlags, out io.Writer) (bool, error) {
 	line, err := reader.ReadString('\n')
 	if err != nil && line == "" {
 		// EOF without input — treat as default (yes). Avoids breaking
-		// callers that wire init into a non-tty pipeline.
+		// callers that wire init into a non-tty pipeline. Echo what we
+		// chose so a user piping/redirecting stdin (which presents as a
+		// TTY to the parent shell) still sees the resolved choice
+		// instead of an unanswered prompt (solov2-cgut).
+		fmt.Fprintln(out, "yes (stdin EOF; accepting default)")
 		return true, nil
 	}
 	switch strings.ToLower(strings.TrimSpace(line)) {
