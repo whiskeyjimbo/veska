@@ -117,6 +117,10 @@ func RegisterGraphTools(r *Registry, graph ports.GraphStorage, staging *applicat
 		IncludesStaging: true,
 		InputSchema:     getNodeInputSchema,
 		Handler:         makeGetNodeHandler(graph, staging, cfg.repos),
+
+		CLIExempt: ExemptDeferred,
+
+		ExemptReason: "CLI wrapper deferred (see follow-up tracker referenced in commit history).",
 	})
 	r.MustRegister(ToolSpec{
 		Name:            "eng_get_call_chain",
@@ -131,5 +135,9 @@ func RegisterGraphTools(r *Registry, graph ports.GraphStorage, staging *applicat
 		IncludesStaging: true,
 		InputSchema:     getFileNodesInputSchema,
 		Handler:         makeGetFileNodesHandler(graph, staging, cfg.repos),
+
+		CLIExempt: ExemptDeferred,
+
+		ExemptReason: "CLI wrapper deferred (see follow-up tracker referenced in commit history).",
 	})
 }

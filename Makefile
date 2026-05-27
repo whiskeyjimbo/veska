@@ -12,12 +12,12 @@ LAYERCHECK_BIN  := $(BINDIR)/layercheck
 SQLITE_TAGS    ?= sqlite_fts5
 SQLITE_CGO_ENV ?= CGO_ENABLED=1
 
-.PHONY: all build build-small build-fat fetch-embed-assets install release-archive test lint vet layercheck noidleak clean loadtest test-mcp test-mcp-deep test-mcp-bootstrap eval-recall eval-recall-projection eval-autolink-fp eval-revalidate-bench eval-queue-fuzz eval-embed-throughput eval-embedder-bench eval-embed-models eval-embed-models-full eval-embed-models-condense eval-embed-models-fuse eval-dbbench eval-dbbench-cgo
+.PHONY: all build build-small build-fat fetch-embed-assets install release-archive test lint vet layercheck noidleak cliparity clean loadtest test-mcp test-mcp-deep test-mcp-bootstrap eval-recall eval-recall-projection eval-autolink-fp eval-revalidate-bench eval-queue-fuzz eval-embed-throughput eval-embedder-bench eval-embed-models eval-embed-models-full eval-embed-models-condense eval-embed-models-fuse eval-dbbench eval-dbbench-cgo
 
 # `all` uses build-small to keep the test loop fast — the model2vec assets
 # add a network fetch + ~62MB to every CI/dev run. End-user packaging
 # (`make build`) ships fat.
-all: build-small test vet lint layercheck noidleak
+all: build-small test vet lint layercheck noidleak cliparity
 
 # `build` (solov2-sft7): default to the fat binary — model2vec embedded —
 # so a clean clone + `make build` produces a usable veska without the
@@ -117,6 +117,12 @@ layercheck: $(LAYERCHECK_BIN)
 # (solov2-a0hw). Comments are allowed.
 noidleak:
 	go run ./tools/lint/noidleak
+
+# cliparity: every registered MCP tool must either be wrapped by a
+# cobra subcommand (declared in tools/lint/cliparity/wrapped.txt) or be
+# marked CLIExempt on its ToolSpec literal (solov2-xomk, solov2-4ygz).
+cliparity:
+	go run ./tools/lint/cliparity
 
 clean:
 	rm -f $(VESKA_BIN) $(DAEMON_BIN) $(MCP_BIN) $(LAYERCHECK_BIN)

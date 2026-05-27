@@ -75,6 +75,10 @@ func RegisterTodoTools(r *Registry, querier ports.TodoQuerier, repos application
 		IncludesStaging: false,
 		InputSchema:     findTodosInputSchema,
 		Handler:         makeFindTodosHandler(querier, repos),
+
+		CLIExempt: ExemptDeferred,
+
+		ExemptReason: "CLI wrapper deferred (see follow-up tracker referenced in commit history).",
 	})
 }
 

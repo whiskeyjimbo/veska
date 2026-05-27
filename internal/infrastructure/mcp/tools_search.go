@@ -113,6 +113,10 @@ func RegisterSearchTools(
 		IncludesStaging: false,
 		InputSchema:     searchSimilarInputSchema,
 		Handler:         makeSearchSimilarHandler(lookup, vectors, nodes, repos, cfg.graph),
+
+		CLIExempt: ExemptDeferred,
+
+		ExemptReason: "CLI wrapper deferred (see follow-up tracker referenced in commit history).",
 	})
 	r.MustRegister(ToolSpec{
 		Name:            "eng_find_related",
@@ -120,6 +124,10 @@ func RegisterSearchTools(
 		IncludesStaging: false,
 		InputSchema:     findRelatedInputSchema,
 		Handler:         makeFindRelatedHandler(lookup, vectors, nodes, repos),
+
+		CLIExempt: ExemptDeferred,
+
+		ExemptReason: "CLI wrapper deferred (see follow-up tracker referenced in commit history).",
 	})
 }
 

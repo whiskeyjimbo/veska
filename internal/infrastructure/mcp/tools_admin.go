@@ -39,6 +39,10 @@ func RegisterAdminTools(
 		IncludesStaging: true,
 		InputSchema:     getCurrentRepoInputSchema,
 		Handler:         makeGetCurrentRepoHandler(repos),
+
+		CLIExempt: ExemptDeferred,
+
+		ExemptReason: "CLI wrapper deferred (see follow-up tracker referenced in commit history).",
 	})
 	r.MustRegister(ToolSpec{
 		Name:            "eng_list_repos",
@@ -53,6 +57,10 @@ func RegisterAdminTools(
 		IncludesStaging: false,
 		InputSchema:     getRepoInputSchema,
 		Handler:         makeGetRepoHandler(repos),
+
+		CLIExempt: ExemptDeferred,
+
+		ExemptReason: "CLI wrapper deferred (see follow-up tracker referenced in commit history).",
 	})
 	r.MustRegister(ToolSpec{
 		Name:            "eng_get_status",
