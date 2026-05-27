@@ -343,5 +343,5 @@
   ],
   "corpus_note": "auto-generated semantic synthcorpus; ground truth is by cluster construction; embedder=model2vec:potion-code-16M",
   "embedder": "model2vec:potion-code-16M",
-  "timestamp": "2026-05-27T07:13:19.020194494Z"
+  "timestamp": "2026-05-27T07:16:36.195630581Z"
 }
