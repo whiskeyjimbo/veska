@@ -1064,7 +1064,7 @@ func registerMCPTools(r *mcp.Registry, d mcpDeps) {
 	depsRepoRoot := func(ctx context.Context, repoID string) (string, error) {
 		return repoRootFunc(pools.ReadDB)(ctx, repoID)
 	}
-	if depsSvc, err := dependencies.NewService(depsRepo, depsVersions, depsRepoRoot); err == nil {
+	if depsSvc, err := dependencies.NewService(depsRepo, depsVersions, depsRepoRoot, dependencies.WithImportLister(depsRepo)); err == nil {
 		mcp.RegisterDependenciesTool(r, depsSvc, &repoLister{db: pools.ReadDB})
 	} else {
 		mcp.RegisterDependenciesTool(r, nil, &repoLister{db: pools.ReadDB})

@@ -352,6 +352,30 @@ func (s *PromotionStore) Promote(ctx context.Context, batch application.Promotio
 	}
 	defer queueStmt.Close()
 
+	// solov2-xjm5: persist parsed imports per file so `veska deps list` can
+	// surface modules that are imported but only referenced via struct
+	// literals / type assertions (no resolved CALLS edge into stubs). Like
+	// the nodes table the rows are scoped to (repo_id, branch, file_path)
+	// and re-promotion DELETE+INSERTs so removed imports disappear in the
+	// same commit.
+	delImportsStmt, err := tx.PrepareContext(ctx,
+		`DELETE FROM file_imports WHERE repo_id = ? AND branch = ? AND file_path = ?`)
+	if err != nil {
+		_ = tx.Rollback()
+		return fmt.Errorf("promoter: prepare file_imports delete: %w", err)
+	}
+	defer delImportsStmt.Close()
+	insImportsStmt, err := tx.PrepareContext(ctx, `
+		INSERT INTO file_imports
+			(repo_id, branch, file_path, import_path, alias, language, last_promoted_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?)
+		ON CONFLICT(repo_id, branch, file_path, import_path) DO NOTHING`)
+	if err != nil {
+		_ = tx.Rollback()
+		return fmt.Errorf("promoter: prepare file_imports insert: %w", err)
+	}
+	defer insImportsStmt.Close()
+
 	// Prepare each co-transactional sink once against the tx.
 	for _, sink := range s.sinks {
 		if err := sink.Prepare(ctx, tx); err != nil {
@@ -416,6 +440,29 @@ func (s *PromotionStore) Promote(ctx context.Context, batch application.Promotio
 		if _, err := delStmt.ExecContext(ctx, filePath, branch, repoID); err != nil {
 			_ = tx.Rollback()
 			return fmt.Errorf("promoter: delete nodes for %q: %w", filePath, err)
+		}
+		// solov2-xjm5: same DELETE+re-INSERT lifecycle for file_imports.
+		if _, err := delImportsStmt.ExecContext(ctx, repoID, branch, filePath); err != nil {
+			_ = tx.Rollback()
+			return fmt.Errorf("promoter: delete file_imports for %q: %w", filePath, err)
+		}
+		for alias, importPath := range file.Imports {
+			if importPath == "" {
+				continue
+			}
+			// Skip stdlib (no domain in the first path segment) to mirror
+			// the stub-side filter — deps list is for external deps, and
+			// surfacing every stdlib package would drown the output
+			// (solov2-xjm5).
+			if !isExternalModulePath(importPath) {
+				continue
+			}
+			if _, err := insImportsStmt.ExecContext(ctx,
+				repoID, branch, filePath, importPath, alias, "go", now,
+			); err != nil {
+				_ = tx.Rollback()
+				return fmt.Errorf("promoter: insert file_imports for %q (%s): %w", filePath, importPath, err)
+			}
 		}
 
 		// Upsert all nodes for this file.

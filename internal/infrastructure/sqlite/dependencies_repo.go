@@ -25,6 +25,36 @@ func NewDependenciesRepo(readDB *sql.DB) *DependenciesRepo {
 	return &DependenciesRepo{readDB: readDB}
 }
 
+// ListImports returns one row per (file, import_path) in (repoID, branch),
+// backing dependencies.ImportLister. Ordered by file_path so the
+// application-layer union is deterministic (solov2-xjm5).
+func (r *DependenciesRepo) ListImports(ctx context.Context, repoID, branch string) ([]dependencies.ImportRow, error) {
+	const query = `
+		SELECT file_path, import_path, language
+		FROM file_imports
+		WHERE repo_id = ? AND branch = ?
+		ORDER BY file_path, import_path`
+
+	rows, err := r.readDB.QueryContext(ctx, query, repoID, branch)
+	if err != nil {
+		return nil, fmt.Errorf("dependencies_repo: query imports: %w", err)
+	}
+	defer rows.Close()
+
+	var out []dependencies.ImportRow
+	for rows.Next() {
+		var i dependencies.ImportRow
+		if err := rows.Scan(&i.FilePath, &i.ImportPath, &i.Language); err != nil {
+			return nil, fmt.Errorf("dependencies_repo: scan imports: %w", err)
+		}
+		out = append(out, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("dependencies_repo: iterate imports: %w", err)
+	}
+	return out, nil
+}
+
 // AggregateStubs returns one row per cross_repo_edge_stub in
 // (repoID, branch). Ordered by src_node_id for deterministic
 // "first TopK call sites" sampling on the application side.
