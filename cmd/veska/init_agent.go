@@ -54,6 +54,22 @@ known repos: ` + "`eng_list_repos`" + `; to discover the current one from cwd:
   callees, and tests into a single payload. Use at the start of a non-trivial
   change so you don't have to assemble the surrounding context piecewise.
 
+**Other tools available** — call ` + "`tools/list`" + ` for full schemas; reach
+for these when the four above aren't enough:
+
+- ` + "`eng_get_node`" + `, ` + "`eng_get_file_nodes`" + ` — node-by-id /
+  per-file listing when you already have an identifier.
+- ` + "`eng_find_changed_symbols`" + `, ` + "`eng_get_diff_blast_radius`" + ` — symbol-grain
+  diff and downstream-impact between two git refs, for PR review and regression triage.
+- ` + "`eng_list_repos`" + `, ` + "`eng_get_repo`" + `, ` + "`eng_get_current_repo`" + ` — repo registry inspection.
+- ` + "`eng_list_dependencies`" + ` — modules this repo calls into, with sampled call-sites.
+- ` + "`eng_list_findings`" + `, ` + "`eng_get_finding`" + `, ` + "`eng_close_finding`" + `, ` + "`eng_suppress_finding`" + `,
+  ` + "`eng_list_suppressions`" + `, ` + "`eng_close_suppression`" + ` — promotion-check findings:
+  vuln deps, secret leaks, dead code, auto-link candidates. Use ` + "`eng_close_finding`" + `
+  to record an "accept" / "fixed" decision an agent can defend later.
+- ` + "`eng_add_repo`" + ` — register a new repo path; the daemon kicks off a cold scan.
+- ` + "`eng_get_status`" + ` — daemon health + in-flight scans + pending-embed counts.
+
 If a search returns no hits, the index may be stale or the repo may not be
 registered. Run ` + "`veska doctor status`" + ` to check.
 
