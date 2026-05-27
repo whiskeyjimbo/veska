@@ -2,14 +2,10 @@ package main
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
-	"net/url"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -40,22 +36,26 @@ import (
 //	veska search "<query>" <path>                # ensure indexed, then search
 //	veska search "<query>" https://github.com/x  # clone, index, search
 func searchCmd() *cobra.Command {
-	var k int
-	var jsonOut bool
+	var (
+		k        int
+		jsonOut  bool
+		repoFlag string
+	)
 	cmd := &cobra.Command{
 		Use:   "search <query> [path-or-url]",
 		Short: "Semantic search; optionally clone+index a repo first",
 		Long: `Semantic search against an indexed repo.
 
-The optional second argument selects the repo to search:
+The optional second argument (or --repo flag) selects the repo to search:
   - omitted        — auto-detect from cwd (must be a registered repo)
   - local path     — registered local repo (absolute or relative)
-  - git URL        — clones the repo into ~/.veska/clones, indexes it, then searches
+  - git URL        — clones into the cache tier (~/.cache/veska/repos/<id>),
+                     marks as ephemeral, indexes it, then searches
 
 Examples:
-  veska search "parse config"                       # search the repo containing cwd
-  veska search "parse config" /path/to/myrepo       # search a specific registered local repo
-  veska search "parse config" https://github.com/x  # clone, index, then search a remote repo
+  veska search "parse config"                            # search the repo containing cwd
+  veska search "parse config" /path/to/myrepo            # search a specific registered local repo
+  veska search "parse config" --repo https://github.com/x  # clone (ephemeral), index, search
 `,
 		Args:         cobra.RangeArgs(1, 2),
 		SilenceUsage: true,
@@ -64,6 +64,12 @@ Examples:
 			var target string
 			if len(args) == 2 {
 				target = args[1]
+			}
+			if repoFlag != "" {
+				if target != "" && target != repoFlag {
+					return fmt.Errorf("search: --repo and the positional target both set to different values")
+				}
+				target = repoFlag
 			}
 			return runSearch(cmd.Context(), cmd.OutOrStdout(), runSearchOpts{
 				query:   query,
@@ -75,6 +81,7 @@ Examples:
 	}
 	cmd.Flags().IntVarP(&k, "limit", "k", 10, "max results to return")
 	cmd.Flags().BoolVar(&jsonOut, "json", false, "emit JSON (same shape as eng_search_semantic)")
+	cmd.Flags().StringVar(&repoFlag, "repo", "", "repo target (path, URL, repo_id or short_id) — alias for the positional argument (solov2-kxo5.6)")
 	return cmd
 }
 
@@ -161,11 +168,12 @@ func resolveSearchTarget(ctx context.Context, pools *sqlite.Pools, target string
 		return rec, nil
 	}
 	if isGitURL(target) {
-		local, err := cloneOrReuse(ctx, target, w)
-		if err != nil {
-			return repo.Record{}, err
-		}
-		return findOrRegisterRepo(ctx, pools, local)
+		// solov2-kxo5.6: URL targets route through the cache tier and
+		// land as kind='ephemeral' rows so the eviction story works.
+		// A canonical_url match (tracked or ephemeral) short-circuits
+		// the clone — same code re-used between sessions hits the
+		// warm graph instead of re-parsing.
+		return ephemeralEnsureFromURL(ctx, pools, target, w)
 	}
 	if _, statErr := os.Stat(target); statErr == nil {
 		return findOrRegisterRepo(ctx, pools, target)
@@ -325,47 +333,107 @@ func buildSearchService(pools *sqlite.Pools) (*search.Service, error) {
 	return search.NewService(prov, vec, nodes), nil
 }
 
-// cloneOrReuse keeps an on-disk cache of one-shot clones at
-// ~/.veska-search-cache/<sha-of-url>/repo. AC2 (reuse) falls out of
-// the deterministic path: re-running with the same URL skips the
-// clone and lets ensureIndexed see the repo as already registered.
-func cloneOrReuse(ctx context.Context, gitURL string, w io.Writer) (string, error) {
-	home, err := os.UserHomeDir()
+// ephemeralEnsureFromURL implements the URL-target half of `veska search`
+// (solov2-kxo5.6). Steps:
+//
+//  1. canonicalise the URL
+//  2. consult canonical_url for an existing row (tracked or ephemeral) —
+//     if hit, reuse it (and bump last_accessed_at when ephemeral); no
+//     clone. AC3: ephemeral hit whose cache dir vanished triggers a
+//     silent re-clone instead of erroring.
+//  3. otherwise clone --depth=1 into RepoCachePath, repo.Add, flip kind
+//     to 'ephemeral', stamp canonical_url, touch last_accessed_at
+//
+// Multi-phase progress (AC2) is rendered inline: the "cloning <url>"
+// banner here, git's --progress lines via the Clone helper, the
+// existing "search: indexing …" line from ensureIndexed, and the
+// "search: index ready" line from drainEmbedderQueue.
+func ephemeralEnsureFromURL(ctx context.Context, pools *sqlite.Pools, rawURL string, w io.Writer) (repo.Record, error) {
+	canonical, err := repo.CanonicalURL(rawURL)
 	if err != nil {
-		return "", fmt.Errorf("search: homedir: %w", err)
+		return repo.Record{}, fmt.Errorf("search: %w", err)
 	}
-	sum := sha256.Sum256([]byte(gitURL))
-	cacheDir := filepath.Join(home, ".veska-search-cache", hex.EncodeToString(sum[:])[:16])
-	repoDir := filepath.Join(cacheDir, "repo")
 
-	if _, statErr := os.Stat(filepath.Join(repoDir, ".git")); statErr == nil {
-		fmt.Fprintf(w, "search: reusing cached clone at %s\n", repoDir)
-		return repoDir, nil
+	existing, ok, err := repo.LookupByCanonicalURL(ctx, pools.ReadDB, canonical)
+	if err != nil {
+		return repo.Record{}, fmt.Errorf("search: %w", err)
 	}
-	if err := os.MkdirAll(cacheDir, 0o755); err != nil {
-		return "", fmt.Errorf("search: mkdir cache: %w", err)
+	if ok {
+		if existing.Kind == "ephemeral" {
+			// AC3: cache dir vanished (user wiped ~/.cache, manual
+			// rm, etc.) → re-clone silently. Drop the stale row first
+			// so the re-add doesn't trip the UNIQUE(root_path) index.
+			if _, statErr := os.Stat(existing.RootPath); statErr != nil {
+				_, _ = pools.Write.ExecContext(ctx,
+					`DELETE FROM repos WHERE repo_id = ?`, existing.RepoID)
+				// fall through to clone
+			} else {
+				_ = repo.TouchEphemeral(ctx, pools.Write, existing.RepoID)
+				fmt.Fprintf(w, "search: reusing cached clone at %s\n", existing.RootPath)
+				return existing, nil
+			}
+		} else {
+			// tracked match — the URL points at code the user already
+			// has locally registered. Skip the clone entirely; the
+			// existing index is authoritative.
+			fmt.Fprintf(w, "search: %s is already tracked at %s\n", canonical, existing.RootPath)
+			return existing, nil
+		}
 	}
-	fmt.Fprintf(w, "search: cloning %s -> %s\n", gitURL, repoDir)
-	cmd := exec.CommandContext(ctx, "git", "clone", "--depth=1", gitURL, repoDir)
-	cmd.Stdout = w
-	cmd.Stderr = w
-	if err := cmd.Run(); err != nil {
-		return "", fmt.Errorf("search: git clone: %w", err)
+
+	dest := config.RepoCachePath(repo.DerivedRepoIDFromURL(canonical))
+	if err := os.MkdirAll(filepath.Dir(dest), 0o750); err != nil {
+		return repo.Record{}, fmt.Errorf("search: mkdir cache: %w", err)
 	}
-	return repoDir, nil
+	_ = os.RemoveAll(dest)
+
+	fmt.Fprintf(w, "cloning %s → %s\n", canonical, dest)
+	if _, err := repo.Clone(ctx, canonical, dest, w); err != nil {
+		_ = os.RemoveAll(dest)
+		return repo.Record{}, fmt.Errorf("search: %w", err)
+	}
+
+	id, _, err := repo.Add(ctx, pools.Write, dest)
+	if err != nil {
+		_ = os.RemoveAll(dest)
+		return repo.Record{}, fmt.Errorf("search: register cloned repo: %w", err)
+	}
+	if _, err := pools.Write.ExecContext(ctx,
+		`UPDATE repos SET kind = 'ephemeral' WHERE repo_id = ?`, id); err != nil {
+		return repo.Record{}, fmt.Errorf("search: mark ephemeral: %w", err)
+	}
+	if err := repo.SetCanonicalURL(ctx, pools.Write, id, canonical); err != nil {
+		return repo.Record{}, fmt.Errorf("search: stamp canonical_url: %w", err)
+	}
+	_ = repo.TouchEphemeral(ctx, pools.Write, id)
+
+	rec, err := repo.Get(ctx, pools.ReadDB, id)
+	if err != nil {
+		return repo.Record{}, fmt.Errorf("search: load registered repo: %w", err)
+	}
+	if rec.ActiveBranch == "" {
+		rec.ActiveBranch = "main"
+	}
+	return rec, nil
 }
 
-// isGitURL is a cheap heuristic so an https://... or git@... positional
-// is treated as a clone target, not a filesystem path. We accept
-// anything with a scheme or the SSH-style "user@host:path" form.
+// isGitURL reports whether s should be treated as a remote git URL by the
+// search command. Strings starting with a path prefix or matching an
+// existing filesystem path are always paths; anything else that parses
+// via repo.CanonicalURL is a URL. Mirrors looksLikeRepoURL in repo.go so
+// `veska search` and `veska repo add` agree on what a URL is.
 func isGitURL(s string) bool {
-	if strings.HasPrefix(s, "git@") {
-		return true
+	if s == "" {
+		return false
 	}
-	if u, err := url.Parse(s); err == nil && u.Scheme != "" && u.Host != "" {
-		return true
+	if strings.HasPrefix(s, "/") || strings.HasPrefix(s, "./") || strings.HasPrefix(s, "../") || strings.HasPrefix(s, "~") {
+		return false
 	}
-	return false
+	if _, err := os.Stat(s); err == nil {
+		return false
+	}
+	_, err := repo.CanonicalURL(s)
+	return err == nil
 }
 
 // searchHitView is the CLI's wire shape for one hit. It mirrors the MCP
