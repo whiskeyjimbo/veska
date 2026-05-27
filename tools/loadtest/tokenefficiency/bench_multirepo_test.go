@@ -219,10 +219,13 @@ func TestTokenEfficiencyMultiRepo(t *testing.T) {
 			Timestamp: time.Now().UTC(),
 		},
 	}
+	convQ, rate, label := tokenPricingFromEnv()
+	res.FillAbsoluteSavings(convQ, rate, label)
 	if err := writeJSON("results-multirepo.json", res); err != nil {
 		t.Fatalf("writeJSON: %v", err)
 	}
 	fmt.Println(res.SummaryLine())
+	fmt.Println(res.TokensLine())
 	fmt.Printf("TOKENEFF_MULTI embedder=%s repos=%d queries=%d recall=%.2f veska_tok=%.0f grep_lo=%.0f grep_hi=%.0f savings=[%.0f%%, %.0f%%]\n",
 		embedderName, res.Repos, res.Queries, res.MeanRecall, res.MeanVeskaTokens, res.MeanGrepLoTokens, res.MeanGrepHiTokens,
 		res.MeanSavingsLoVsGrep*100, res.MeanSavingsHiVsGrep*100,

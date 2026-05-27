@@ -122,6 +122,21 @@ type Result struct {
 	// real model).
 	Embedder  string    `json:"embedder"`
 	Timestamp time.Time `json:"timestamp"`
+
+	// Absolute denomination of the savings figure. The ratio fields
+	// above are the right metric for comparing harness runs; these
+	// translate the same data into something concrete a reader can
+	// quote in a doc or budget against.
+	//
+	//   TokensSavedPerQuery = mean(grep_mid - veska)        per query
+	//   TokensSavedOverConversation = TokensSavedPerQuery * ConversationQueries
+	//   USDSavedOverConversation    = TokensSavedOverConversation * USDPerMToken / 1e6
+	TokensSavedPerQuery         float64 `json:"tokens_saved_per_query"`
+	ConversationQueries         int     `json:"conversation_queries"`
+	TokensSavedOverConversation float64 `json:"tokens_saved_over_conversation"`
+	USDPerMToken                float64 `json:"usd_per_mtoken"`
+	USDPriceLabel               string  `json:"usd_price_label"`
+	USDSavedOverConversation    float64 `json:"usd_saved_over_conversation"`
 }
 
 // SummaryLine renders Result into the semble-shaped one-liner the bead
@@ -136,6 +151,63 @@ func (r Result) SummaryLine() string {
 		r.MeanSavingsHiVsGrep*100,
 		r.Queries,
 	)
+}
+
+// TokensLine concretises the savings ratio. Per-query absolute, the
+// per-conversation extrapolation (default 50 searches per chat), and a
+// dollar estimate at a configurable rate. Pricing drifts month to
+// month — the label is printed alongside so a stale number is loud.
+func (r Result) TokensLine() string {
+	return fmt.Sprintf(
+		"~ savings: %s tokens/query · %s tokens over %d searches · $%.4f at $%g/Mtok (%s).",
+		formatThousands(int(r.TokensSavedPerQuery)),
+		formatThousands(int(r.TokensSavedOverConversation)),
+		r.ConversationQueries,
+		r.USDSavedOverConversation,
+		r.USDPerMToken,
+		r.USDPriceLabel,
+	)
+}
+
+// FillAbsoluteSavings populates the concrete-tokens / per-conversation
+// / dollar fields of Result from its already-aggregated ratio fields.
+// conversationQueries is the assumed conversation length (the bead
+// suggested 50; callers can override). usdPerMToken is the model's
+// input-token rate ($ per million tokens); label names the rate for
+// the printed line.
+func (r *Result) FillAbsoluteSavings(conversationQueries int, usdPerMToken float64, label string) {
+	mid := (r.MeanGrepLoTokens + r.MeanGrepHiTokens) / 2
+	perQuery := mid - r.MeanVeskaTokens
+	if perQuery < 0 {
+		perQuery = 0
+	}
+	r.TokensSavedPerQuery = perQuery
+	r.ConversationQueries = conversationQueries
+	r.TokensSavedOverConversation = perQuery * float64(conversationQueries)
+	r.USDPerMToken = usdPerMToken
+	r.USDPriceLabel = label
+	r.USDSavedOverConversation = r.TokensSavedOverConversation * usdPerMToken / 1_000_000
+}
+
+// formatThousands renders n with comma separators ("12,345"). Avoids a
+// dependency on golang.org/x/text/message for a one-shot need.
+func formatThousands(n int) string {
+	if n < 0 {
+		return "-" + formatThousands(-n)
+	}
+	s := fmt.Sprintf("%d", n)
+	if len(s) <= 3 {
+		return s
+	}
+	first := len(s) % 3
+	if first == 0 {
+		first = 3
+	}
+	out := s[:first]
+	for i := first; i < len(s); i += 3 {
+		out += "," + s[i:i+3]
+	}
+	return out
 }
 
 func (r Result) meanVeskaPctOfGrepMidpoint() float64 {
