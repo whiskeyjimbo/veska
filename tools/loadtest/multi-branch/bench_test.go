@@ -8,14 +8,14 @@ import (
 	"testing"
 	"time"
 
-	_ "modernc.org/sqlite"
+	"github.com/whiskeyjimbo/veska/internal/infrastructure/sqlite/sqldriver"
 )
 
 func TestSeedAndQuery(t *testing.T) {
 	dir := t.TempDir()
 	dbPath := fmt.Sprintf("%s/test.db", dir)
 
-	db, err := sql.Open("sqlite", dbPath)
+	db, err := sql.Open(sqldriver.Name, dbPath)
 	if err != nil {
 		t.Fatalf("open db: %v", err)
 	}
@@ -86,7 +86,7 @@ func TestPromotionTrial(t *testing.T) {
 	dir := t.TempDir()
 	dbPath := fmt.Sprintf("%s/promo.db", dir)
 
-	db, err := sql.Open("sqlite", dbPath)
+	db, err := sql.Open(sqldriver.Name, dbPath)
 	if err != nil {
 		t.Fatalf("open db: %v", err)
 	}
