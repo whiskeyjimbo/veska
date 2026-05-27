@@ -18,6 +18,7 @@ package treesitter
 
 import (
 	"context"
+	"fmt"
 	"path/filepath"
 
 	sitter "github.com/smacker/go-tree-sitter"
@@ -397,8 +398,18 @@ func extractCallsFromBody(q *sitter.Query, body *sitter.Node, src []byte, caller
 // contract for phase 1.
 func buildFunctionNodeFromCaptures(declNode, nameNode *sitter.Node, src []byte, repoID, path string) *domain.Node {
 	name := string(src[nameNode.StartByte():nameNode.EndByte()])
-	id := nodeID(repoID, path, domain.KindFunction, name)
 	lr := lineRange(declNode)
+	// Go allows multiple `func init()` per file. Without a per-decl
+	// discriminator they all hash to the same node_id and the promotion
+	// transaction fails with a UNIQUE-PK constraint on (node_id, branch)
+	// — observed on hugo and prometheus, where protobuf-generated .pb.go
+	// files routinely declare two init() (solov2-14lw). The display name
+	// stays "init"; only the ID input is disambiguated.
+	idName := name
+	if name == "init" {
+		idName = fmt.Sprintf("init@L%d", lr.Start)
+	}
+	id := nodeID(repoID, path, domain.KindFunction, idName)
 	raw := string(src[declNode.StartByte():declNode.EndByte()])
 
 	opts := []domain.NodeOption{
