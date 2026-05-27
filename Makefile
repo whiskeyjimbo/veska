@@ -260,4 +260,13 @@ eval-review-timing:
 # summary. Knob: TOKEFF_NODES_PER_CLUSTER (default 24) tunes how big
 # each cluster file gets — larger files widen the savings bracket.
 eval-token-efficiency:
-	$(SQLITE_CGO_ENV) go test -tags "eval $(SQLITE_TAGS)" -run TestTokenEfficiency ./tools/loadtest/tokenefficiency/ -v -count=1 -timeout=120s
+	$(SQLITE_CGO_ENV) go test -tags "eval $(SQLITE_TAGS)" -run '^TestTokenEfficiency$$' ./tools/loadtest/tokenefficiency/ -v -count=1 -timeout=120s
+
+# eval-token-efficiency-multirepo: solov2-kcmo — the WEDGE headline.
+# Partitions the synthcorpus across N repos and measures veska's
+# cross-repo fanout + global RRF (the work shipped in solov2-bcn) vs
+# grep+read across every repo's file tree. Writes
+# tools/loadtest/tokenefficiency/results-multirepo.json + a multi-repo
+# one-line summary. Knobs: TOKEFF_REPOS (default 5), TOKEFF_NODES_PER_CLUSTER.
+eval-token-efficiency-multirepo:
+	$(SQLITE_CGO_ENV) go test -tags "eval $(SQLITE_TAGS)" -run TestTokenEfficiencyMultiRepo ./tools/loadtest/tokenefficiency/ -v -count=1 -timeout=180s
