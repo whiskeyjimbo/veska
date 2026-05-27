@@ -153,6 +153,29 @@ ON CONFLICT(node_id, branch) DO UPDATE SET
 	return nil
 }
 
+// UpsertExternalRepo idempotently writes a synthetic repos row for a
+// vendor-indexed module so the existing cross_repo_edge_stub
+// resolver finds it via module_path match (solov2-yr56). repoID is
+// the synthetic id (caller's responsibility; today's convention is
+// "ext:<module-path>"). rootPath should be the absolute path of the
+// vendor/<module> directory so moduleRelDir in the resolver yields
+// correct subpackage relDirs.
+func (r *GraphRepo) UpsertExternalRepo(ctx context.Context, repoID, rootPath, modulePath, branch string) error {
+	_, err := r.writeDB.ExecContext(ctx,
+		`INSERT INTO repos (repo_id, root_path, added_at, active_branch, module_path)
+		 VALUES (?, ?, ?, ?, ?)
+		 ON CONFLICT(repo_id) DO UPDATE SET
+			root_path     = excluded.root_path,
+			active_branch = excluded.active_branch,
+			module_path   = excluded.module_path`,
+		repoID, rootPath, time.Now().Unix(), branch, modulePath,
+	)
+	if err != nil {
+		return fmt.Errorf("graph_repo: upsert external repo %q: %w", repoID, err)
+	}
+	return nil
+}
+
 // SaveExternalNode inserts/replaces a node from a vendored or
 // module-cache dependency (solov2-bchl). Identical to SaveNode except
 // the external column is set to 1 so the read path can label these
