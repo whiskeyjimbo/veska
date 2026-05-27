@@ -454,7 +454,12 @@ func (s *PromotionStore) Promote(ctx context.Context, batch application.Promotio
 				nodeExported(n),
 			); err != nil {
 				_ = tx.Rollback()
-				return fmt.Errorf("promoter: insert node %q: %w", n.ID, err)
+				// Include kind+name+path+lines: a UNIQUE-PK violation here means
+				// the parser emitted two nodes with the same (repoID, path,
+				// kind, name) tuple, and the bare ID isn't enough to find
+				// which symbol — solov2-14lw was diagnosed via these fields.
+				return fmt.Errorf("promoter: insert node %q (kind=%s name=%q path=%q lines=%v): %w",
+					n.ID, n.Kind, n.Name, n.Path, n.Lines, err)
 			}
 
 			// Per-node co-transactional sink writes (FTS, embedding-refs).

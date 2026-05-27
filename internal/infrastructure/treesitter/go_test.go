@@ -845,6 +845,79 @@ func findEdge(edges []*domain.Edge, src, tgt domain.NodeID, kind domain.EdgeKind
 	return nil
 }
 
+// TestParseFile_FunctionLocalTypesIgnored pins solov2-14lw: Go allows
+// declaring named types inside function bodies, and real codebases (hugo:
+// common/hreflect/helpers_test.go) routinely declare the same local name
+// (`type k string`) inside two different functions. Those are not part of
+// the symbol graph; the parser must skip them so they don't collide on
+// node_id and break the promotion tx with a UNIQUE-PK on nodes (1555).
+func TestParseFile_FunctionLocalTypesIgnored(t *testing.T) {
+	src := []byte(`package foo
+
+func a() {
+	type k string
+	_ = k("")
+}
+
+func b() {
+	type k string
+	_ = k("")
+}
+`)
+	p := treesitter.NewGoParser()
+	result, err := p.ParseFile(context.Background(), repoID, filePath, src)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	for _, n := range result.Nodes {
+		if n.Name == "k" {
+			t.Errorf("expected no node for function-local type 'k', got %#v", n)
+		}
+	}
+}
+
+// TestParseFile_MultipleInitFunctions pins solov2-14lw: Go allows multiple
+// `func init()` per file (protobuf-generated .pb.go files routinely have
+// two). Each must produce a distinct node_id; otherwise the promotion tx
+// fails on the UNIQUE-PK constraint and cold-scan crashes mid-promote.
+func TestParseFile_MultipleInitFunctions(t *testing.T) {
+	src := []byte(`package foo
+
+func init() {
+	_ = 1
+}
+
+func init() {
+	_ = 2
+}
+
+func init() {
+	_ = 3
+}
+`)
+	p := treesitter.NewGoParser()
+	result, err := p.ParseFile(context.Background(), repoID, filePath, src)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	inits := make([]*domain.Node, 0, 3)
+	for _, n := range result.Nodes {
+		if n.Name == "init" {
+			inits = append(inits, n)
+		}
+	}
+	if len(inits) != 3 {
+		t.Fatalf("expected 3 init() nodes, got %d", len(inits))
+	}
+	seen := map[domain.NodeID]int{}
+	for _, n := range inits {
+		seen[n.ID]++
+	}
+	if len(seen) != 3 {
+		t.Errorf("expected 3 distinct node IDs, got %d (duplicates: %v)", len(seen), seen)
+	}
+}
+
 func nodeNames(nodes []*domain.Node) []string {
 	names := make([]string, len(nodes))
 	for i, n := range nodes {
