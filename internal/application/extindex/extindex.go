@@ -48,6 +48,32 @@ type ExternalNodeSaver interface {
 	SaveExternalNode(ctx context.Context, repoID, branch string, n *domain.Node) error
 }
 
+// ExternalRepoUpserter inserts a synthetic repo row for an indexed
+// vendor module (solov2-yr56). The row's module_path lets the
+// existing cross_repo_edge_stubs resolver find vendored destinations
+// for CALLS edges — without it, a stub from myapp.Run targeting
+// greetlib.New would dead-end at the import boundary.
+//
+// Implementations should:
+//   - INSERT … ON CONFLICT DO NOTHING (idempotent re-index)
+//   - use the supplied synthetic repo_id (caller decides the format;
+//     today's convention is "ext:<module-path>" — no version yet)
+type ExternalRepoUpserter interface {
+	UpsertExternalRepo(ctx context.Context, repoID, rootPath, modulePath, branch string) error
+}
+
+// SyntheticRepoIDPrefix marks a repos row that represents an
+// indexed external module rather than a user-registered git repo.
+// CLI consumers (eng_list_repos) filter on this prefix by default.
+const SyntheticRepoIDPrefix = "ext:"
+
+// SyntheticRepoID returns the synthetic repo_id for a vendor-indexed
+// module. Phase 1 ignores version (vendor/ is checkpoint-locked);
+// phase 2 with $GOMODCACHE will extend this to "ext:<module>@<version>".
+func SyntheticRepoID(modulePath string) string {
+	return SyntheticRepoIDPrefix + modulePath
+}
+
 // Result summarises one IndexVendorModule call. Callers print it to
 // stderr / stdout so the user sees what was indexed.
 type Result struct {
@@ -60,20 +86,41 @@ type Result struct {
 // Service is the application-level facade. It is stateless; the same
 // instance is safe for concurrent callers.
 type Service struct {
-	parser ports.CodeParser
-	saver  ExternalNodeSaver
+	parser   ports.CodeParser
+	saver    ExternalNodeSaver
+	upserter ExternalRepoUpserter
 }
 
-// NewService constructs a Service. Both deps required; mirrors the
-// sentinel-wrap pattern other application services use.
-func NewService(parser ports.CodeParser, saver ExternalNodeSaver) (*Service, error) {
+// NewService constructs a Service. parser + saver are required;
+// upserter is optional — when nil, indexed nodes still get written
+// against the importing repo's repo_id (phase 1 fallback) and
+// cross-repo CALLS edges through them do NOT resolve. With an
+// upserter wired, the indexer creates a synthetic repo per module
+// and writes nodes against it, which closes the resolver loop
+// (solov2-yr56).
+func NewService(parser ports.CodeParser, saver ExternalNodeSaver, opts ...Option) (*Service, error) {
 	if parser == nil {
 		return nil, fmt.Errorf("extindex.NewService: parser is nil: %w", ErrMissingDependency)
 	}
 	if saver == nil {
 		return nil, fmt.Errorf("extindex.NewService: saver is nil: %w", ErrMissingDependency)
 	}
-	return &Service{parser: parser, saver: saver}, nil
+	s := &Service{parser: parser, saver: saver}
+	for _, opt := range opts {
+		opt(s)
+	}
+	return s, nil
+}
+
+// Option configures a Service at construction time.
+type Option func(*Service)
+
+// WithExternalRepoUpserter wires the synthetic-repo writer that
+// closes the cross-repo CALLS resolution loop (solov2-yr56). Without
+// this option indexed nodes still appear in eng_find_symbol but
+// cross_repo_edge_stubs targeting them won't bind.
+func WithExternalRepoUpserter(u ExternalRepoUpserter) Option {
+	return func(s *Service) { s.upserter = u }
 }
 
 // IndexVendorModule walks <repoRoot>/vendor/<modulePath> for .go
@@ -100,6 +147,21 @@ func (s *Service) IndexVendorModule(ctx context.Context, repoID, branch, repoRoo
 		return Result{}, fmt.Errorf("extindex: %s is not a directory", modDir)
 	}
 
+	// solov2-yr56: when an upserter is wired, write nodes under a
+	// synthetic per-module repo row so cross_repo_edge_stubs can bind
+	// against module_path. Without it (older callers), fall back to
+	// the importing repo's repo_id — find_symbol still surfaces the
+	// nodes but CALLS edges through them stay unresolved.
+	nodeRepoID := repoID
+	nodeBranch := branch
+	if s.upserter != nil {
+		nodeRepoID = SyntheticRepoID(modulePath)
+		nodeBranch = "main"
+		if err := s.upserter.UpsertExternalRepo(ctx, nodeRepoID, modDir, modulePath, nodeBranch); err != nil {
+			return Result{}, fmt.Errorf("extindex: upsert synthetic repo for %s: %w", modulePath, err)
+		}
+	}
+
 	res := Result{ModulePath: modulePath}
 	walkErr := filepath.WalkDir(modDir, func(path string, d fs.DirEntry, werr error) error {
 		if werr != nil {
@@ -122,10 +184,11 @@ func (s *Service) IndexVendorModule(ctx context.Context, repoID, branch, repoRoo
 			res.Skipped++
 			return nil
 		}
-		// repoID for the parser is the importing repo — keeps the
-		// repo_id constraint on the node row pointing at the parent
-		// repo, so a `veska repo remove <repo>` cascades cleanly.
-		pr, perr := s.parser.ParseFile(ctx, repoID, path, src)
+		// Parser sees the synthetic repo_id when upserter is wired
+		// (yr56) so node_id hashes are deterministic per module —
+		// re-indexing the same vendor tree produces the same IDs
+		// regardless of which importing repo triggered it.
+		pr, perr := s.parser.ParseFile(ctx, nodeRepoID, path, src)
 		if perr != nil {
 			res.Skipped++
 			return nil
@@ -139,7 +202,7 @@ func (s *Service) IndexVendorModule(ctx context.Context, repoID, branch, repoRoo
 			if n == nil {
 				continue
 			}
-			if err := s.saver.SaveExternalNode(ctx, repoID, branch, n); err != nil {
+			if err := s.saver.SaveExternalNode(ctx, nodeRepoID, nodeBranch, n); err != nil {
 				return fmt.Errorf("extindex: save %s: %w", n.ID, err)
 			}
 			res.Nodes++

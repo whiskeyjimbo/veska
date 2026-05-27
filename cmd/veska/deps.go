@@ -163,7 +163,8 @@ func depsIndexCmd() *cobra.Command {
 			}
 
 			graph := sqlite.NewGraphRepo(db, db)
-			svc, err := extindex.NewService(treesitter.NewGoParser(), graph)
+			svc, err := extindex.NewService(treesitter.NewGoParser(), graph,
+				extindex.WithExternalRepoUpserter(graph))
 			if err != nil {
 				return fmt.Errorf("deps index: %w", err)
 			}

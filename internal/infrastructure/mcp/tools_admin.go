@@ -197,11 +197,33 @@ func decorateRepos(in []application.RepoRecord) []RepoView {
 	return out
 }
 
+// listReposParams accepts include_vendored=true to surface synthetic
+// ext: repo rows alongside user-registered ones. Default false hides
+// them so a multi-repo workspace's `eng_list_repos` result doesn't
+// balloon with one entry per indexed dependency (solov2-yr56).
+type listReposParams struct {
+	IncludeVendored bool `json:"include_vendored"`
+}
+
 func makeListReposHandler(repos application.RepoLister) ToolHandler {
 	return func(ctx context.Context, _ domain.Actor, raw json.RawMessage) (any, *RPCError) {
+		var p listReposParams
+		if len(raw) > 0 {
+			_ = json.Unmarshal(raw, &p)
+		}
 		all, err := repos.ListRepos(ctx)
 		if err != nil {
 			return nil, &RPCError{Code: CodeInternalError, Message: fmt.Sprintf("list repos failed: %v", err)}
+		}
+		if !p.IncludeVendored {
+			filtered := all[:0]
+			for _, r := range all {
+				if strings.HasPrefix(r.RepoID, "ext:") {
+					continue
+				}
+				filtered = append(filtered, r)
+			}
+			all = filtered
 		}
 
 		return map[string]any{
