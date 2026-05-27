@@ -11,6 +11,7 @@ require (
 	github.com/lancedb/lancedb-go v0.1.2
 	github.com/mattn/go-isatty v0.0.22
 	github.com/mattn/go-sqlite3 v1.14.44
+	github.com/pkoukk/tiktoken-go v0.1.8
 	github.com/prometheus/client_golang v1.23.2
 	github.com/smacker/go-tree-sitter v0.0.0-20240827094217-dd81d9e9be82
 	github.com/spf13/cobra v1.10.2
@@ -23,7 +24,6 @@ require (
 	golang.org/x/mod v0.36.0
 	golang.org/x/time v0.15.0
 	golang.org/x/tools v0.45.0
-	modernc.org/sqlite v1.50.1
 	zombiezen.com/go/sqlite v1.4.2
 )
 
@@ -133,4 +133,5 @@ require (
 	modernc.org/libc v1.72.3 // indirect
 	modernc.org/mathutil v1.7.1 // indirect
 	modernc.org/memory v1.11.0 // indirect
+	modernc.org/sqlite v1.50.1 // indirect
 )

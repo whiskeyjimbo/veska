@@ -2,13 +2,12 @@
 // strings (kind, symbol_path, name) into a whitespace-joined form suitable
 // for indexing by FTS5's built-in unicode61 tokenizer.
 //
-// Why pre-tokenise in Go rather than register a custom FTS5 tokenizer? The
-// project uses modernc.org/sqlite (pure Go, no CGo); registering a custom
-// tokenizer there is brittle and platform-specific. Pre-tokenising on the
-// write path lets unicode61 do what it already does well — lower-case
-// folding, diacritic stripping, latin-script word splitting — while the
-// upstream Go code is responsible for the splits unicode61 cannot make
-// (camelCase, snake_case, `::`, `.`).
+// Why pre-tokenise in Go rather than register a custom FTS5 tokenizer?
+// Custom tokenizers are platform-specific and brittle to wire through
+// database/sql. Pre-tokenising on the write path lets unicode61 do what
+// it already does well — lower-case folding, diacritic stripping,
+// latin-script word splitting — while the upstream Go code is responsible
+// for the splits unicode61 cannot make (camelCase, snake_case, `::`, `.`).
 package tokenize
 
 import (

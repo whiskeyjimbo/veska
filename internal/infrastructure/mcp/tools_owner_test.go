@@ -11,7 +11,6 @@ import (
 	"testing"
 
 	"github.com/whiskeyjimbo/veska/internal/core/domain"
-	_ "modernc.org/sqlite"
 )
 
 // ---------------------------------------------------------------------------

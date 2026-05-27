@@ -193,7 +193,7 @@ func TestCascadeDelete_RemovesAliases(t *testing.T) {
 	); err != nil {
 		t.Fatal(err)
 	}
-	// Enable FK enforcement (off by default in modernc).
+	// Enable FK enforcement (off by default).
 	if _, err := db.Exec(`PRAGMA foreign_keys = ON`); err != nil {
 		t.Fatal(err)
 	}

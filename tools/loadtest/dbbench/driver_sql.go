@@ -12,8 +12,8 @@ import (
 )
 
 // sqlBench is the shared Bench implementation for any database/sql-backed
-// driver (modernc, mattn). The driver-specific files supply only Name() and
-// the registered driver name passed to sql.Open.
+// driver. The driver-specific files supply only Name() and the registered
+// driver name passed to sql.Open.
 type sqlBench struct {
 	name      string
 	driver    string // sql.Open driver name
@@ -29,11 +29,7 @@ func (b *sqlBench) Name() string { return b.name }
 
 func (b *sqlBench) Open(_ context.Context, path string) error {
 	// Match production: WAL, FK on, busy_timeout. Use DSN-encoded PRAGMA so
-	// every pooled connection gets them. The DSN syntax differs by driver:
-	//   modernc: file:...?_pragma=journal_mode=WAL&_pragma=foreign_keys=on
-	//   mattn:   file:...?_journal=WAL&_fk=true&_busy_timeout=5000
-	// We build both and pick by driver name; trying the wrong DSN on a
-	// driver is silently ignored, but being explicit avoids surprises.
+	// every pooled connection gets them.
 	dsn := buildDSN(b.driver, path)
 	db, err := sql.Open(b.driver, dsn)
 	if err != nil {
@@ -84,13 +80,7 @@ func buildDSN(driver, path string) string {
 	// but mattn picks NORMAL under WAL by default. Without forcing parity the
 	// write-tx workloads show a ~100× gap that's really just an fsync
 	// frequency difference, not a driver-quality difference.
-	switch driver {
-	case "sqlite": // modernc
-		q.Add("_pragma", "journal_mode=WAL")
-		q.Add("_pragma", "foreign_keys=on")
-		q.Add("_pragma", "synchronous=NORMAL")
-		q.Add("_pragma", "busy_timeout=5000")
-	case "sqlite3": // mattn
+	if driver == "sqlite3" { // mattn
 		q.Set("_journal", "WAL")
 		q.Set("_fk", "true")
 		q.Set("_sync", "NORMAL")
