@@ -36,7 +36,7 @@ func NewGraphRepo(readDB, writeDB *sql.DB) *GraphRepo {
 // nodeColumns is the SELECT column list shared by GetNode and FindNodes. It
 // matches the subset of `nodes` columns needed to rehydrate a domain.Node.
 const nodeColumns = `node_id, symbol_path, file_path, kind, language,
-	line_start, line_end, content_hash, signature, exported`
+	line_start, line_end, content_hash, signature, exported, external`
 
 // scanNode rehydrates a domain.Node from a row selected with nodeColumns.
 // Nullable columns (line_start/line_end, language, signature) are read into
@@ -51,9 +51,10 @@ func scanNode(s interface {
 		contentHash                    sql.NullString
 		signature                      sql.NullString
 		exported                       sql.NullBool
+		external                       sql.NullBool
 	)
 	if err := s.Scan(&id, &symbolPath, &filePath, &kind, &language,
-		&lineStart, &lineEnd, &contentHash, &signature, &exported); err != nil {
+		&lineStart, &lineEnd, &contentHash, &signature, &exported, &external); err != nil {
 		return nil, err
 	}
 
@@ -75,6 +76,9 @@ func scanNode(s interface {
 	}
 	if exported.Valid {
 		opts = append(opts, domain.WithExported(exported.Bool))
+	}
+	if external.Valid && external.Bool {
+		opts = append(opts, domain.WithExternal(true))
 	}
 
 	n, err := domain.NewNode(id, filePath, symbolPath, domain.NodeKind(kind), opts...)
@@ -145,6 +149,67 @@ ON CONFLICT(node_id, branch) DO UPDATE SET
 		signature, snippet, nodeExported(n),
 	); err != nil {
 		return fmt.Errorf("graph_repo: save node %q: %w", n.ID, err)
+	}
+	return nil
+}
+
+// SaveExternalNode inserts/replaces a node from a vendored or
+// module-cache dependency (solov2-bchl). Identical to SaveNode except
+// the external column is set to 1 so the read path can label these
+// rows and filter them when first-party-only views are wanted.
+func (r *GraphRepo) SaveExternalNode(ctx context.Context, repoID, branch string, n *domain.Node) error {
+	if n == nil {
+		return nil
+	}
+	const stmt = `
+INSERT INTO nodes
+	(node_id, branch, repo_id, language, kind, symbol_path, file_path,
+	 line_start, line_end, content_hash, last_promoted_at, actor_id, actor_kind,
+	 signature, snippet, prev_signature, exported, external)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, 1)
+ON CONFLICT(node_id, branch) DO UPDATE SET
+	repo_id          = excluded.repo_id,
+	language         = excluded.language,
+	kind             = excluded.kind,
+	symbol_path      = excluded.symbol_path,
+	file_path        = excluded.file_path,
+	line_start       = excluded.line_start,
+	line_end         = excluded.line_end,
+	content_hash     = excluded.content_hash,
+	last_promoted_at = excluded.last_promoted_at,
+	actor_id         = excluded.actor_id,
+	actor_kind       = excluded.actor_kind,
+	signature        = excluded.signature,
+	snippet          = excluded.snippet,
+	exported         = excluded.exported,
+	external         = 1`
+
+	var lineStart, lineEnd any
+	if n.Lines != nil {
+		lineStart, lineEnd = n.Lines.Start, n.Lines.End
+	}
+	language := ""
+	if n.Language != nil {
+		language = *n.Language
+	}
+	contentHash := ""
+	if n.ContentHash != nil {
+		contentHash = string(*n.ContentHash)
+	}
+	var signature any
+	if n.Signature != nil {
+		signature = *n.Signature
+	}
+	snippet := nodeSnippet(n)
+
+	now := time.Now().UnixMilli()
+	if _, err := r.writeDB.ExecContext(ctx, stmt,
+		string(n.ID), branch, repoID, language, string(n.Kind),
+		n.Name, n.Path, lineStart, lineEnd, contentHash, now,
+		string(domain.ActorKindSystem), string(domain.ActorKindSystem),
+		signature, snippet, nodeExported(n),
+	); err != nil {
+		return fmt.Errorf("graph_repo: save external node %q: %w", n.ID, err)
 	}
 	return nil
 }

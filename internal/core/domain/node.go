@@ -61,6 +61,13 @@ type Node struct {
 	ContentHash *ContentHash
 	Language    *string
 	Exported    *bool
+	// External marks a node sourced from a registered repo's vendored
+	// or module-cache dependency rather than its first-party code
+	// (solov2-bchl). Defaults to nil (i.e. first-party / unknown).
+	// Stored as INTEGER 0/1 in the nodes table; read paths set it on
+	// rehydrate so MCP responses can label hits without an extra
+	// lookup.
+	External *bool
 }
 
 // NodeOption is a functional option applied during Node construction.
@@ -134,6 +141,16 @@ func WithLanguage(lang string) NodeOption {
 func WithExported(exported bool) NodeOption {
 	return func(n *Node) error {
 		n.Exported = &exported
+		return nil
+	}
+}
+
+// WithExternal marks the node as sourced from a vendored or
+// module-cache dependency (solov2-bchl). nil keeps the default
+// (first-party / unknown).
+func WithExternal(external bool) NodeOption {
+	return func(n *Node) error {
+		n.External = &external
 		return nil
 	}
 }
