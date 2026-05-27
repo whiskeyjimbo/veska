@@ -62,9 +62,14 @@ func findingsListCmd() *cobra.Command {
 		Args:         cobra.NoArgs,
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if allRepos && repoFlag != "" {
-				return fmt.Errorf("findings list: --all and --repo are mutually exclusive")
-			}
+			// solov2-f3ep: --all + --repo is no longer rejected. The two
+			// flags answer different questions: --repo X scopes to a single
+			// repo; --all asks "include every state, not just open". Combined,
+			// they mean "every finding in repo X regardless of state" — a
+			// natural query the previous mutex error blocked. When --all is
+			// set without --repo, fan out across every registered repo (the
+			// original semantics).
+			fanoutAllRepos := allRepos && repoFlag == ""
 			// solov2-t8v8: when neither --repo nor --all is set AND the
 			// cwd doesn't resolve to a single registered repo, fall back to
 			// 'list across every repo' rather than erroring with 'repo_id
@@ -74,22 +79,31 @@ func findingsListCmd() *cobra.Command {
 			autoAll := false
 			if !allRepos && repoFlag == "" {
 				if rid := autoResolveRepo(cmd.Context(), nil); rid == "" {
-					// No cwd-scoped repo and multiple repos may be
-					// registered. List all.
-					allRepos = true
+					fanoutAllRepos = true
 					autoAll = true
 				}
 			}
 			if autoAll {
 				fmt.Fprintln(cmd.ErrOrStderr(), "veska: no --repo and cwd outside any registered repo; listing findings across all repos (pass --repo <id> to scope)")
 			}
+			// solov2-f3ep: --all clears the default state=open filter so
+			// closed/suppressed findings come back too. The user-visible
+			// rule: "--all means don't restrict" — applies independently to
+			// repo scope (when --repo is absent) and state scope.
+			dropStateFilter := allRepos
 			// solov2-0vau: --all enumerates every registered repo and
 			// concatenates findings, grouped by repo. Output sorts/limits
 			// across the combined set so the header still reports a
 			// global severity breakdown.
 			baseParams := map[string]any{}
+			// solov2-f3ep: --all (with or without --repo) drops the default
+			// state=open scope so closed/resolved findings come back too.
+			// An explicit --state still wins so 'list --all --state=closed'
+			// is unambiguous.
 			if state != "" {
 				baseParams["state"] = state
+			} else if dropStateFilter {
+				baseParams["state"] = "any"
 			}
 			if severity != "" {
 				baseParams["severity"] = severity
@@ -100,7 +114,7 @@ func findingsListCmd() *cobra.Command {
 			var resp struct {
 				Findings []findingView `json:"findings"`
 			}
-			if allRepos {
+			if fanoutAllRepos {
 				var lr struct {
 					Repos []struct {
 						RepoID  string `json:"repo_id"`
