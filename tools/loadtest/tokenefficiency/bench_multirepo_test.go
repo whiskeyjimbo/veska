@@ -260,6 +260,15 @@ func multiRepoFanoutSearch(ctx context.Context, svc *search.Service, repoIDs []s
 		return nil, nil
 	}
 
+	// Mirror the production cross-repo fusion (solov2-uuuk): cosine
+	// when scores are present, RRF fallback otherwise.
+	useCosine := false
+	for _, pc := range pool {
+		if pc.cand.VectorScore > 0 {
+			useCosine = true
+			break
+		}
+	}
 	const rrfConstant = 60
 	scores := make(map[string]float32, len(pool))
 	candByKey := make(map[string]pooled, len(pool))
@@ -268,11 +277,22 @@ func multiRepoFanoutSearch(ctx context.Context, svc *search.Service, repoIDs []s
 		if _, exists := candByKey[key]; !exists {
 			candByKey[key] = pc
 		}
-		if pc.cand.VectorRank > 0 {
-			scores[key] += 1.0 / float32(rrfConstant+pc.cand.VectorRank)
-		}
-		if pc.cand.LexicalRank > 0 {
-			scores[key] += 1.0 / float32(rrfConstant+pc.cand.LexicalRank)
+		if useCosine {
+			if pc.cand.VectorScore > 0 {
+				scores[key] = pc.cand.VectorScore
+				if pc.cand.LexicalRank > 0 {
+					scores[key] *= 1.05
+				}
+			} else if pc.cand.LexicalRank > 0 {
+				scores[key] = 1.0 / float32(rrfConstant+pc.cand.LexicalRank)
+			}
+		} else {
+			if pc.cand.VectorRank > 0 {
+				scores[key] += 1.0 / float32(rrfConstant+pc.cand.VectorRank)
+			}
+			if pc.cand.LexicalRank > 0 {
+				scores[key] += 1.0 / float32(rrfConstant+pc.cand.LexicalRank)
+			}
 		}
 	}
 

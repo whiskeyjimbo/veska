@@ -63,7 +63,7 @@ Output: `results-multirepo.json` (same envelope as the single-repo
 result plus a `repos` field) and a one-line summary:
 
 ```
-Across 5 repos, veska found the right code ~49% of the time, using about 42% as many tokens as grep+read across the same workspace (range: 58–58% fewer; measured on 30 queries).
+Across 5 repos, veska found the right code ~100% of the time, using about 42% as many tokens as grep+read across the same workspace (range: 58–58% fewer; measured on 30 queries).
 ```
 
 Honest caveats specific to the multi-repo run:
@@ -75,15 +75,12 @@ Honest caveats specific to the multi-repo run:
   ratios reported here are conservative. A real workspace with
   repeated identifiers across repos would multiply grep's read cost
   and widen the savings bracket.
-- Recall drops materially versus single-repo (98% → 49% on the
-  reference run). Mechanism: global RRF over N repos has 4 wrong-repo
-  rank-1 candidates competing for slots that would otherwise belong
-  to the right repo's runners-up. Lexical wiring (production-default
-  FTS5) breaks some ties; the residual gap is the cost of fanout
-  fusing local rankings rather than absolute scores. A future
-  refinement could fuse on cosine similarity directly when only one
-  embedder is in play across all repos — tracked in solov2-bcn
-  follow-ups.
+- Multi-repo recall matches (and on this corpus exceeds) single-repo
+  thanks to **cosine fusion** in the cross-repo path (solov2-uuuk):
+  when one embedder spans every repo, raw cosine scores are
+  comparable across repos, so the global fanout picks the actually-
+  best match instead of tying every repo's rank-1 candidate. The
+  earlier RRF-only path was capped near ~49% on the same corpus.
 
 ## Methodology
 
