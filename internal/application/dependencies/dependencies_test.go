@@ -49,7 +49,7 @@ func TestService_GroupsByModuleAndCountsCallSites(t *testing.T) {
 
 func TestService_DefaultTopKCapsCallSites(t *testing.T) {
 	rows := make([]dependencies.StubRow, 0, dependencies.DefaultTopK+3)
-	for i := 0; i < dependencies.DefaultTopK+3; i++ {
+	for i := range dependencies.DefaultTopK + 3 {
 		rows = append(rows, dependencies.StubRow{
 			ModulePath: "github.com/foo/bar",
 			SymbolPath: "Func",

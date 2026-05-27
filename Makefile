@@ -27,15 +27,17 @@ all: build-small test vet lint layercheck
 # install-model2vec dance. Size-sensitive callers use `build-small`.
 build: fetch-embed-assets
 	$(SQLITE_CGO_ENV) go build -tags "embed_model $(SQLITE_TAGS)" -o $(VESKA_BIN) ./cmd/veska
-	$(SQLITE_CGO_ENV) go build -tags "embed_model $(SQLITE_TAGS)" -o $(DAEMON_BIN) ./cmd/veska-daemon
-	$(SQLITE_CGO_ENV) go build -tags "$(SQLITE_TAGS)" -o $(MCP_BIN) ./cmd/veska-mcp
+	ln -sf veska $(DAEMON_BIN)
+	ln -sf veska $(MCP_BIN)
 	go build -o $(LAYERCHECK_BIN) ./tools/lint/layercheck/cmd
 
 # build-small (solov2-sft7): thin binary, no embedded model. Veska elects
 # the low-quality static-v2 fallback at first boot unless the user runs
 # `veska install model2vec`. Intended for CI / container layers where the
 # ~62MB embed bloat matters more than first-run UX.
-build-small: $(VESKA_BIN) $(DAEMON_BIN) $(MCP_BIN) $(LAYERCHECK_BIN)
+build-small: $(VESKA_BIN) $(LAYERCHECK_BIN)
+	ln -sf veska $(DAEMON_BIN)
+	ln -sf veska $(MCP_BIN)
 
 # build-fat: deprecated alias for `build` (solov2-sft7). Kept for one
 # release so muscle-memory keeps working; remove next cycle.
@@ -63,12 +65,6 @@ fetch-embed-assets:
 
 $(VESKA_BIN):
 	$(SQLITE_CGO_ENV) go build -tags "$(SQLITE_TAGS)" -o $@ ./cmd/veska
-
-$(DAEMON_BIN):
-	$(SQLITE_CGO_ENV) go build -tags "$(SQLITE_TAGS)" -o $@ ./cmd/veska-daemon
-
-$(MCP_BIN):
-	$(SQLITE_CGO_ENV) go build -tags "$(SQLITE_TAGS)" -o $@ ./cmd/veska-mcp
 
 $(LAYERCHECK_BIN):
 	go build -o $@ ./tools/lint/layercheck/cmd
@@ -98,7 +94,9 @@ RELEASE_DIR     := dist/$(RELEASE_NAME)
 release-archive: build
 	@rm -rf $(RELEASE_DIR) dist/$(RELEASE_NAME).tar.gz
 	@mkdir -p $(RELEASE_DIR)/bin
-	cp $(VESKA_BIN) $(DAEMON_BIN) $(MCP_BIN) $(RELEASE_DIR)/bin/
+	cp $(VESKA_BIN) $(RELEASE_DIR)/bin/
+	ln -sf veska $(RELEASE_DIR)/bin/veska-daemon
+	ln -sf veska $(RELEASE_DIR)/bin/veska-mcp
 	cp scripts/install.sh $(RELEASE_DIR)/install.sh
 	chmod +x $(RELEASE_DIR)/install.sh
 	@printf 'veska %s\n\nThis archive contains the veska binaries (CLI, daemon, MCP shim)\nwith the model2vec embedder weights compiled in.\n\nInstall:\n  ./install.sh                # ~/.local/bin (default)\n  VESKA_INSTALL_DIR=/usr/local/bin sudo ./install.sh\n\nThen:\n  veska init -y && veska service install && veska service start\n\nDocs: https://github.com/whiskeyjimbo/veska\n' "$(RELEASE_VERSION)" > $(RELEASE_DIR)/README.txt

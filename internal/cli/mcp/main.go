@@ -1,4 +1,4 @@
-package main
+package mcp
 
 import (
 	"context"
@@ -36,11 +36,9 @@ func runProxy(ctx context.Context, sockPath string, in io.Reader, out io.Writer)
 
 	unixConn, ok := rawConn.(*net.UnixConn)
 	if !ok {
-		// Fallback: treat as a plain conn without half-close.
 		return proxyPlain(ctx, rawConn, in, out)
 	}
 
-	// Close the entire connection if ctx is cancelled while goroutines are running.
 	proxyCtx, proxyCancel := context.WithCancel(ctx)
 	defer proxyCancel()
 
@@ -52,19 +50,12 @@ func runProxy(ctx context.Context, sockPath string, in io.Reader, out io.Writer)
 	var wg sync.WaitGroup
 	wg.Add(2)
 
-	// stdin → socket: when in is exhausted, half-close the write side so the
-	// server sees EOF without closing the read side of the connection.
-	// solov2-k8zc: also inject the shim's cwd into eng_get_current_repo
-	// requests that omit it, since stdio MCP clients usually have no way to
-	// pass cwd through. Everything else is passed through verbatim.
 	go func() {
 		defer wg.Done()
 		injectCwdAndCopy(unixConn, in)
 		unixConn.CloseWrite() //nolint:errcheck
 	}()
 
-	// socket → stdout: when the server closes its end, cancel context to unblock
-	// the other goroutine if it is still blocked.
 	go func() {
 		defer wg.Done()
 		defer proxyCancel()
@@ -75,8 +66,6 @@ func runProxy(ctx context.Context, sockPath string, in io.Reader, out io.Writer)
 	return nil
 }
 
-// proxyPlain is a fallback bidirectional copy for non-Unix connections.
-// Either goroutine finishing cancels the other via context.
 func proxyPlain(ctx context.Context, conn net.Conn, in io.Reader, out io.Writer) error {
 	proxyCtx, proxyCancel := context.WithCancel(ctx)
 	defer proxyCancel()
@@ -106,8 +95,6 @@ func proxyPlain(ctx context.Context, conn net.Conn, in io.Reader, out io.Writer)
 }
 
 // writeSocketMissingError writes a JSON-RPC 2.0 error to w when the daemon socket is missing.
-// The error includes a data object with cli_command and socket_path fields so that
-// editors speaking the MCP protocol receive a structured, actionable response.
 func writeSocketMissingError(w io.Writer, sockPath string) {
 	type errorData struct {
 		CLICommand string `json:"cli_command"`
@@ -140,11 +127,13 @@ func writeSocketMissingError(w io.Writer, sockPath string) {
 	enc.Encode(resp) //nolint:errcheck
 }
 
-func newRootCmd() *cobra.Command {
+// NewCmd returns the mcp cobra command, suitable for AddCommand under the
+// veska root or for direct Execute via Run.
+func NewCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "veska-mcp",
+		Use:   "mcp",
 		Short: "Veska MCP stdio shim (proxies editor to daemon socket)",
-		Long: `veska-mcp is the editor-facing shim. It reads newline-delimited
+		Long: `veska mcp is the editor-facing shim. It reads newline-delimited
 JSON-RPC requests on stdin, forwards them to the daemon's MCP socket
 ($VESKA_HOME/mcp.sock), and writes responses back to stdout.
 
@@ -174,9 +163,14 @@ README.md → "Editor integration".`,
 	return cmd
 }
 
-func main() {
-	if err := newRootCmd().Execute(); err != nil {
+// Run is the entry point used when the binary is invoked as veska-mcp via
+// the argv[0] dispatcher in cmd/veska/main.go.
+func Run() int {
+	cmd := NewCmd()
+	cmd.Use = "veska-mcp"
+	if err := cmd.Execute(); err != nil {
 		fmt.Fprintln(os.Stderr, err)
-		os.Exit(1)
+		return 1
 	}
+	return 0
 }
