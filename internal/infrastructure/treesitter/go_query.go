@@ -238,6 +238,19 @@ func (p *GoParser) ParseFile(ctx context.Context, repoID, path string, src []byt
 	// the legacy parser emits, so reuse it directly.
 	result.Imports = extractImports(root, src)
 
+	// solov2-y7gu: anonymous-function calls in top-level var/const
+	// initialisers. The legacy collectAnonCalls checked node.Type() ==
+	// "function_literal" but tree-sitter Go's grammar emits
+	// "func_literal" — so the cobra-style `var rootCmd = func() { ... }`
+	// CALLS extraction was silently broken all along. Attribute the
+	// anon body's calls to the package node so call_chain answers
+	// "what does this file initialisation eventually reach" correctly.
+	if pkgNode != nil {
+		anonEdges, anonUnresolved := extractAnonCallsInTopLevelVars(callsQuery, root, src, symbolByName, pkgNode)
+		result.Edges = append(result.Edges, anonEdges...)
+		result.UnresolvedCalls = append(result.UnresolvedCalls, anonUnresolved...)
+	}
+
 	// Chunk index over non-declaration regions (solov2-jyt). Emitted
 	// AFTER the symbol set is finalised so chunkFile can carve gaps
 	// between symbol line ranges. Mirrors go.go (~L216).
@@ -504,6 +517,73 @@ func buildVarNodesFromSpec(spec, decl *sitter.Node, src []byte, repoID, path str
 		}
 	}
 	return out
+}
+
+// extractAnonCallsInTopLevelVars walks every top-level var_declaration
+// and const_declaration for func_literal subtrees, then runs the
+// existing calls.scm extractor against each literal's body. All
+// matches are attributed to pkgNode so an agent asking "what does this
+// file's initialisation reach" sees the right targets for the
+// cobra-style `var rootCmd = &cobra.Command{ Run: func() { Foo() } }`
+// pattern (solov2-y7gu).
+//
+// Implementation: a single recursive walk over var/const declaration
+// subtrees, calling extractCallsFromBody (no receiver context — anon
+// funcs in var initialisers don't bind a `s`/`this` receiver) when
+// it hits a func_literal. Dedup is per-pkgNode across all anon
+// bodies so two literals calling the same target produce one edge.
+func extractAnonCallsInTopLevelVars(q *sitter.Query, root *sitter.Node, src []byte, symbols map[string]*domain.Node, pkgNode *domain.Node) ([]*domain.Edge, []domain.UnresolvedCall) {
+	var edges []*domain.Edge
+	var unresolved []domain.UnresolvedCall
+	seenEdge := map[string]bool{}
+	seenU := map[string]bool{}
+
+	var walk func(n *sitter.Node)
+	walk = func(n *sitter.Node) {
+		if n == nil {
+			return
+		}
+		if n.Type() == "func_literal" {
+			body := n.ChildByFieldName("body")
+			if body != nil {
+				e, u := extractCallsFromBody(q, body, src, pkgNode, "", "", symbols, nil)
+				for _, edge := range e {
+					key := string(edge.Src) + callKeySep + string(edge.Tgt)
+					if seenEdge[key] {
+						continue
+					}
+					seenEdge[key] = true
+					edges = append(edges, edge)
+				}
+				for _, uc := range u {
+					suffix := ""
+					if uc.IsMethodCall {
+						suffix = "@method"
+					}
+					key := string(uc.CallerID) + callKeySep + uc.PkgQualifier + "." + uc.CalleeName + suffix
+					if seenU[key] {
+						continue
+					}
+					seenU[key] = true
+					unresolved = append(unresolved, uc)
+				}
+			}
+		}
+		count := int(n.ChildCount())
+		for i := range count {
+			walk(n.Child(i))
+		}
+	}
+
+	count := int(root.ChildCount())
+	for i := range count {
+		child := root.Child(i)
+		switch child.Type() {
+		case "var_declaration", "const_declaration":
+			walk(child)
+		}
+	}
+	return edges, unresolved
 }
 
 // buildPackageNode produces the package-clause node the legacy parser
