@@ -37,7 +37,11 @@ func providersTestDB(t *testing.T) *sql.DB {
 			added_at          INTEGER NOT NULL,
 			active_branch     TEXT,
 			last_promoted_sha TEXT,
-			module_path       TEXT
+			module_path       TEXT,
+			kind              TEXT NOT NULL DEFAULT 'tracked',
+			canonical_url     TEXT,
+			last_accessed_at  INTEGER,
+			prompted_at       INTEGER
 		)`,
 		`CREATE TABLE node_embedding_refs (
 			node_id     TEXT PRIMARY KEY,
@@ -261,7 +265,11 @@ func newAddRepoTestEnv(t *testing.T) (*sql.DB, string) {
 		added_at          INTEGER NOT NULL,
 		active_branch     TEXT,
 		last_promoted_sha TEXT,
-		module_path       TEXT
+		module_path       TEXT,
+		kind              TEXT NOT NULL DEFAULT 'tracked',
+		canonical_url     TEXT,
+		last_accessed_at  INTEGER,
+		prompted_at       INTEGER
 	)`); err != nil {
 		t.Fatalf("create repos: %v", err)
 	}
