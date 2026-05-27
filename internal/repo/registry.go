@@ -414,6 +414,7 @@ type Record struct {
 	RootPath        string
 	ActiveBranch    string // may be empty
 	LastPromotedSHA string // may be empty
+	Kind            string // "tracked" (default) or "ephemeral" (solov2-kxo5.9)
 }
 
 // List returns every registered repository ordered by repo_id. The nullable
@@ -421,7 +422,7 @@ type Record struct {
 // repos table yields a nil slice and a nil error.
 func List(ctx context.Context, db *sql.DB) ([]Record, error) {
 	rows, err := db.QueryContext(ctx,
-		`SELECT repo_id, root_path, active_branch, last_promoted_sha
+		`SELECT repo_id, root_path, active_branch, last_promoted_sha, kind
 		 FROM repos ORDER BY repo_id`,
 	)
 	if err != nil {
@@ -436,7 +437,7 @@ func List(ctx context.Context, db *sql.DB) ([]Record, error) {
 			branch  sql.NullString
 			lastSHA sql.NullString
 		)
-		if err := rows.Scan(&rec.RepoID, &rec.RootPath, &branch, &lastSHA); err != nil {
+		if err := rows.Scan(&rec.RepoID, &rec.RootPath, &branch, &lastSHA, &rec.Kind); err != nil {
 			return nil, fmt.Errorf("scan repo row: %w", err)
 		}
 		rec.ActiveBranch = branch.String
@@ -460,10 +461,10 @@ func Get(ctx context.Context, db *sql.DB, repoID string) (Record, error) {
 		lastSHA sql.NullString
 	)
 	err := db.QueryRowContext(ctx,
-		`SELECT repo_id, root_path, active_branch, last_promoted_sha
+		`SELECT repo_id, root_path, active_branch, last_promoted_sha, kind
 		 FROM repos WHERE repo_id = ?`,
 		repoID,
-	).Scan(&rec.RepoID, &rec.RootPath, &branch, &lastSHA)
+	).Scan(&rec.RepoID, &rec.RootPath, &branch, &lastSHA, &rec.Kind)
 	if err == sql.ErrNoRows {
 		return Record{}, nil
 	}

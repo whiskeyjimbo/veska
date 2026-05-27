@@ -151,6 +151,11 @@ type RepoView struct {
 	ActiveBranch    string `json:"active_branch"`
 	LastPromotedSHA string `json:"last_promoted_sha"`
 	Status          string `json:"status"`
+	// Kind is "tracked" (path-registered or `repo add <url>` clones) or
+	// "ephemeral" (search --repo <url> cache-tier clones). Always set;
+	// pre-kxo5.2 rows fall through the migration DEFAULT to 'tracked'
+	// (solov2-kxo5.9).
+	Kind string `json:"kind"`
 }
 
 // ShortRepoIDLen is the number of leading hex chars of a repo_id that the
@@ -179,6 +184,13 @@ func decorateRepo(r application.RepoRecord) RepoView {
 			status = "missing"
 		}
 	}
+	kind := r.Kind
+	if kind == "" {
+		// Defensive: an empty kind on the wire would render as "" in
+		// `repo list`. Default to "tracked" so older callers (or any
+		// row that bypassed the migration default) don't show a blank.
+		kind = "tracked"
+	}
 	return RepoView{
 		RepoID:          r.RepoID,
 		ShortID:         ShortRepoID(r.RepoID),
@@ -186,6 +198,7 @@ func decorateRepo(r application.RepoRecord) RepoView {
 		ActiveBranch:    r.ActiveBranch,
 		LastPromotedSHA: r.LastPromotedSHA,
 		Status:          status,
+		Kind:            kind,
 	}
 }
 

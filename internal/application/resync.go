@@ -29,6 +29,7 @@ type RepoRecord struct {
 	RootPath        string // absolute path to the git working tree
 	ActiveBranch    string
 	LastPromotedSHA string // empty = never promoted
+	Kind            string // "tracked" (default) or "ephemeral" (solov2-kxo5.9)
 }
 
 // RepoLister lists all registered repos.

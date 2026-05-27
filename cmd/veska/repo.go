@@ -68,6 +68,7 @@ type repoView struct {
 	RootPath        string `json:"root_path"`
 	ActiveBranch    string `json:"active_branch"`
 	LastPromotedSHA string `json:"last_promoted_sha"`
+	Kind            string `json:"kind"` // solov2-kxo5.9
 }
 
 // repoListCmd prints every registered repo (solov2-0pq). Prefers the
@@ -112,6 +113,7 @@ func repoListCmd() *cobra.Command {
 					RootPath:        r.RootPath,
 					ActiveBranch:    r.ActiveBranch,
 					LastPromotedSHA: r.LastPromotedSHA,
+					Kind:            r.Kind,
 				})
 			}
 			printRepoTable(w, views)
@@ -241,12 +243,16 @@ func printRepoTableWithProgress(w io.Writer, repos []repoView, progress map[stri
 		return
 	}
 	tw := tabwriter.NewWriter(w, 0, 0, 2, ' ', 0)
-	fmt.Fprintln(tw, "REPO_ID\tBRANCH\tSTATUS\tROOT")
+	fmt.Fprintln(tw, "REPO_ID\tKIND\tBRANCH\tSTATUS\tROOT")
 	for _, r := range repos {
 		short := shortRepoID(r.RepoID)
 		branch := r.ActiveBranch
 		if branch == "" {
 			branch = "-"
+		}
+		kind := r.Kind
+		if kind == "" {
+			kind = "tracked"
 		}
 		status := "promoted"
 		if r.LastPromotedSHA == "" {
@@ -291,7 +297,7 @@ func printRepoTableWithProgress(w io.Writer, repos []repoView, progress map[stri
 				status = "(missing)"
 			}
 		}
-		fmt.Fprintf(tw, "%s\t%s\t%s\t%s\n", short, branch, status, r.RootPath)
+		fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\n", short, kind, branch, status, r.RootPath)
 	}
 	_ = tw.Flush()
 }

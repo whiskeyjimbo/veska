@@ -163,3 +163,52 @@ func TestColdScanRunningHint(t *testing.T) {
 		t.Errorf("hint should include log path %q: %q", logPath, msg)
 	}
 }
+
+func TestPrintRepoTable_ShowsKindColumn(t *testing.T) {
+	var buf bytes.Buffer
+	printRepoTable(&buf, []repoView{
+		{RepoID: "aaaaaaaaaaaaaaaaaa", RootPath: "/tmp/a", ActiveBranch: "main", LastPromotedSHA: "sha", Kind: "tracked"},
+		{RepoID: "bbbbbbbbbbbbbbbbbb", RootPath: "/tmp/b", ActiveBranch: "main", Kind: "ephemeral"},
+	})
+	out := buf.String()
+
+	// AC1: KIND column header between REPO_ID and BRANCH.
+	if !strings.Contains(out, "REPO_ID") || !strings.Contains(out, "KIND") || !strings.Contains(out, "BRANCH") {
+		t.Fatalf("missing expected headers in:\n%s", out)
+	}
+	idIdx := strings.Index(out, "REPO_ID")
+	kindIdx := strings.Index(out, "KIND")
+	branchIdx := strings.Index(out, "BRANCH")
+	if !(idIdx < kindIdx && kindIdx < branchIdx) {
+		t.Errorf("KIND must sit between REPO_ID and BRANCH; got header order:\n%s", out)
+	}
+
+	// Each row's kind value renders verbatim.
+	if !strings.Contains(out, "tracked") {
+		t.Errorf("missing 'tracked' value: %s", out)
+	}
+	if !strings.Contains(out, "ephemeral") {
+		t.Errorf("missing 'ephemeral' value: %s", out)
+	}
+}
+
+func TestPrintRepoTable_BlankKindDefaultsToTracked(t *testing.T) {
+	var buf bytes.Buffer
+	// A row with an empty Kind (e.g. from an older daemon response without
+	// the field) must still render a value — never a blank cell.
+	printRepoTable(&buf, []repoView{
+		{RepoID: "aaaaaaaaaaaaaaaaaa", RootPath: "/tmp/a", ActiveBranch: "main", LastPromotedSHA: "sha"},
+	})
+	if !strings.Contains(buf.String(), "tracked") {
+		t.Errorf("empty Kind should render as 'tracked', got:\n%s", buf.String())
+	}
+}
+
+func TestPrintRepoTable_EmptyMessageUnchanged(t *testing.T) {
+	var buf bytes.Buffer
+	printRepoTable(&buf, nil)
+	want := "no repositories registered — run: veska repo add <path>"
+	if !strings.Contains(buf.String(), want) {
+		t.Errorf("missing empty-message %q; got:\n%s", want, buf.String())
+	}
+}

@@ -169,6 +169,7 @@ func toAppRecord(r repo.Record) application.RepoRecord {
 		RootPath:        r.RootPath,
 		ActiveBranch:    r.ActiveBranch,
 		LastPromotedSHA: r.LastPromotedSHA,
+		Kind:            r.Kind,
 	}
 }
 
