@@ -5,7 +5,7 @@ import (
 	"database/sql"
 	"testing"
 
-	_ "modernc.org/sqlite"
+	"github.com/whiskeyjimbo/veska/internal/infrastructure/sqlite/sqldriver"
 
 	"github.com/whiskeyjimbo/veska/internal/application/embedder"
 )
@@ -16,7 +16,7 @@ import (
 // ON CONFLICT(content_hash) and the old-model vector persists).
 func TestRequeueAllUnderNewModel(t *testing.T) {
 	t.Parallel()
-	db, err := sql.Open("sqlite", "file::memory:?_pragma=foreign_keys(1)")
+	db, err := sql.Open(sqldriver.Name, "file::memory:?_pragma=foreign_keys(1)")
 	if err != nil {
 		t.Fatalf("open: %v", err)
 	}

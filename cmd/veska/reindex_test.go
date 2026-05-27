@@ -14,6 +14,7 @@ import (
 
 	"github.com/whiskeyjimbo/veska/internal/application"
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/sqlite"
+	"github.com/whiskeyjimbo/veska/internal/infrastructure/sqlite/sqldriver"
 	"github.com/whiskeyjimbo/veska/internal/repo"
 )
 
@@ -148,7 +149,7 @@ func TestReindexCmd_ForcesReparseAtHEAD(t *testing.T) {
 	head := strings.TrimSpace(string(out))
 
 	dbPath := filepath.Join(os.Getenv("VESKA_HOME"), "veska.db")
-	db, err := sql.Open("sqlite", dbPath)
+	db, err := sql.Open(sqldriver.Name, dbPath)
 	if err != nil {
 		t.Fatalf("open db: %v", err)
 	}

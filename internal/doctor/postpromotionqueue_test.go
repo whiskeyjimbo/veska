@@ -4,7 +4,7 @@ import (
 	"database/sql"
 	"testing"
 
-	_ "modernc.org/sqlite"
+	"github.com/whiskeyjimbo/veska/internal/infrastructure/sqlite/sqldriver"
 
 	"github.com/whiskeyjimbo/veska/internal/doctor"
 )
@@ -12,7 +12,7 @@ import (
 // createQueueDB creates an in-memory (or file) SQLite DB with the post_promotion_queue schema.
 func createQueueDB(t *testing.T, path string) *sql.DB {
 	t.Helper()
-	db, err := sql.Open("sqlite", path)
+	db, err := sql.Open(sqldriver.Name, path)
 	if err != nil {
 		t.Fatalf("createQueueDB: open: %v", err)
 	}
@@ -305,7 +305,7 @@ func TestPurgeOrphanFailedRows(t *testing.T) {
 	}
 
 	// Re-open and count remaining.
-	db, _ = sql.Open("sqlite", path)
+	db, _ = sql.Open(sqldriver.Name, path)
 	defer db.Close()
 	var remaining int
 	if err := db.QueryRow(`SELECT COUNT(*) FROM post_promotion_queue`).Scan(&remaining); err != nil {

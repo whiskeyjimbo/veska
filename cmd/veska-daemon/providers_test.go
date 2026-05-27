@@ -12,7 +12,7 @@ import (
 	"testing"
 	"time"
 
-	_ "modernc.org/sqlite"
+	"github.com/whiskeyjimbo/veska/internal/infrastructure/sqlite/sqldriver"
 
 	"github.com/whiskeyjimbo/veska/internal/application"
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/mcp"
@@ -24,7 +24,7 @@ import (
 // admin providers query: repos, node_embedding_refs, schema_migrations.
 func providersTestDB(t *testing.T) *sql.DB {
 	t.Helper()
-	db, err := sql.Open("sqlite", ":memory:")
+	db, err := sql.Open(sqldriver.Name, ":memory:")
 	if err != nil {
 		t.Fatalf("open in-memory db: %v", err)
 	}
@@ -254,7 +254,7 @@ func newAddRepoTestEnv(t *testing.T) (*sql.DB, string) {
 	t.Helper()
 	dir := t.TempDir()
 	dbPath := filepath.Join(dir, "veska.db")
-	db, err := sql.Open("sqlite", dbPath)
+	db, err := sql.Open(sqldriver.Name, dbPath)
 	if err != nil {
 		t.Fatalf("open sqlite: %v", err)
 	}

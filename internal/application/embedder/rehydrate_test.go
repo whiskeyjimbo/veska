@@ -8,7 +8,7 @@ import (
 	"math"
 	"testing"
 
-	_ "modernc.org/sqlite"
+	"github.com/whiskeyjimbo/veska/internal/infrastructure/sqlite/sqldriver"
 
 	"github.com/whiskeyjimbo/veska/internal/application/embedder"
 	"github.com/whiskeyjimbo/veska/internal/core/domain"
@@ -116,7 +116,7 @@ func (s *spyVector) Reindex(context.Context, string, string) error { return nil 
 
 func newRehydrateDB(t *testing.T) *sql.DB {
 	t.Helper()
-	db, err := sql.Open("sqlite", "file::memory:?_foreign_keys=on")
+	db, err := sql.Open(sqldriver.Name, "file::memory:?_foreign_keys=on")
 	if err != nil {
 		t.Fatalf("sql.Open: %v", err)
 	}

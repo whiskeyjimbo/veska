@@ -1,4 +1,4 @@
-//go:build !sqlite_mattn
+//go:build sqlite_modernc
 
 package sqldriver
 

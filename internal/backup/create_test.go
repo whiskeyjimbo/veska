@@ -10,7 +10,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	_ "modernc.org/sqlite"
+	"github.com/whiskeyjimbo/veska/internal/infrastructure/sqlite/sqldriver"
 
 	"github.com/whiskeyjimbo/veska/internal/backup"
 )
@@ -18,7 +18,7 @@ import (
 // seedDB creates a minimal SQLite database at dbPath.
 func seedDB(t *testing.T, dbPath string) {
 	t.Helper()
-	db, err := sql.Open("sqlite", dbPath)
+	db, err := sql.Open(sqldriver.Name, dbPath)
 	if err != nil {
 		t.Fatalf("open seed db: %v", err)
 	}

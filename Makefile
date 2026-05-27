@@ -6,6 +6,15 @@ DAEMON_BIN      := $(BINDIR)/veska-daemon
 MCP_BIN         := $(BINDIR)/veska-mcp
 LAYERCHECK_BIN  := $(BINDIR)/layercheck
 
+# solov2-jkgp: production SQLite driver is `github.com/mattn/go-sqlite3`
+# (cgo + sqlite_fts5 are mandatory; the lexical-fallback path uses FTS5
+# virtual tables). Set on every `go build`/`go test` that touches the
+# production sqlite layer. To opt back into the pure-Go modernc driver
+# (e.g. for a CGO_ENABLED=0 cross-compile), set SQLITE_TAGS=sqlite_modernc
+# and SQLITE_CGO_ENV='' from the command line.
+SQLITE_TAGS    ?= sqlite_fts5
+SQLITE_CGO_ENV ?= CGO_ENABLED=1
+
 .PHONY: all build build-small build-fat fetch-embed-assets install release-archive test lint vet layercheck clean loadtest test-mcp test-mcp-deep test-mcp-bootstrap eval-recall eval-recall-projection eval-autolink-fp eval-revalidate-bench eval-queue-fuzz eval-embed-throughput eval-embedder-bench eval-embed-models eval-embed-models-full eval-embed-models-condense eval-embed-models-fuse eval-dbbench eval-dbbench-cgo
 
 # `all` uses build-small to keep the test loop fast — the model2vec assets
@@ -17,9 +26,9 @@ all: build-small test vet lint layercheck
 # so a clean clone + `make build` produces a usable veska without the
 # install-model2vec dance. Size-sensitive callers use `build-small`.
 build: fetch-embed-assets
-	go build -tags embed_model -o $(VESKA_BIN) ./cmd/veska
-	go build -tags embed_model -o $(DAEMON_BIN) ./cmd/veska-daemon
-	go build -o $(MCP_BIN) ./cmd/veska-mcp
+	$(SQLITE_CGO_ENV) go build -tags "embed_model $(SQLITE_TAGS)" -o $(VESKA_BIN) ./cmd/veska
+	$(SQLITE_CGO_ENV) go build -tags "embed_model $(SQLITE_TAGS)" -o $(DAEMON_BIN) ./cmd/veska-daemon
+	$(SQLITE_CGO_ENV) go build -tags "$(SQLITE_TAGS)" -o $(MCP_BIN) ./cmd/veska-mcp
 	go build -o $(LAYERCHECK_BIN) ./tools/lint/layercheck/cmd
 
 # build-small (solov2-sft7): thin binary, no embedded model. Veska elects
@@ -53,13 +62,13 @@ fetch-embed-assets:
 	echo "embed assets ready in $(EMBED_ASSET_DIR)"
 
 $(VESKA_BIN):
-	go build -o $@ ./cmd/veska
+	$(SQLITE_CGO_ENV) go build -tags "$(SQLITE_TAGS)" -o $@ ./cmd/veska
 
 $(DAEMON_BIN):
-	go build -o $@ ./cmd/veska-daemon
+	$(SQLITE_CGO_ENV) go build -tags "$(SQLITE_TAGS)" -o $@ ./cmd/veska-daemon
 
 $(MCP_BIN):
-	go build -o $@ ./cmd/veska-mcp
+	$(SQLITE_CGO_ENV) go build -tags "$(SQLITE_TAGS)" -o $@ ./cmd/veska-mcp
 
 $(LAYERCHECK_BIN):
 	go build -o $@ ./tools/lint/layercheck/cmd
@@ -97,10 +106,10 @@ release-archive: build
 	@printf 'release archive: dist/%s.tar.gz\n' "$(RELEASE_NAME)"
 
 test:
-	go test ./...
+	$(SQLITE_CGO_ENV) go test -tags "$(SQLITE_TAGS)" ./...
 
 vet:
-	go vet ./...
+	$(SQLITE_CGO_ENV) go vet -tags "$(SQLITE_TAGS)" ./...
 
 lint:
 	golangci-lint run ./cmd/... ./internal/...
@@ -167,7 +176,7 @@ eval-autolink-fp:
 # target (< 60s). No quick-mode override — the gate IS the 10k case. See
 # tools/loadtest/revalidate/README.md.
 eval-revalidate-bench:
-	go test -tags=eval -run TestRevalidateBench ./tools/loadtest/revalidate/ -v -count=1 -timeout=120s
+	$(SQLITE_CGO_ENV) go test -tags "eval $(SQLITE_TAGS)" -run TestRevalidateBench ./tools/loadtest/revalidate/ -v -count=1 -timeout=120s
 
 # eval-dbbench: solov2-6e5r — compare Go SQLite drivers (modernc, mattn,
 # zombiezen) against veska's storage workloads. Pure-Go variant (modernc +
@@ -184,7 +193,7 @@ eval-dbbench-cgo:
 # Override QUEUEFUZZ_PROMOTIONS / QUEUEFUZZ_BUDGET_MS to tune. See
 # tools/loadtest/queuefuzz/README.md.
 eval-queue-fuzz:
-	QUEUEFUZZ_PROMOTIONS=$${QUEUEFUZZ_PROMOTIONS:-100} go test -tags=eval -run TestQueueFuzz ./tools/loadtest/queuefuzz/ -v -timeout=120s
+	QUEUEFUZZ_PROMOTIONS=$${QUEUEFUZZ_PROMOTIONS:-100} $(SQLITE_CGO_ENV) go test -tags "eval $(SQLITE_TAGS)" -run TestQueueFuzz ./tools/loadtest/queuefuzz/ -v -timeout=120s
 
 # eval-embed-throughput: M3 gate-1 — drive embedder.Worker against real Ollama
 # for a measurement window; assert throughput >= 5 emb/s (gate-1 lower bound).

@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	_ "modernc.org/sqlite"
+	"github.com/whiskeyjimbo/veska/internal/infrastructure/sqlite/sqldriver"
 
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/sqlite"
 )
@@ -16,7 +16,7 @@ import (
 // openRawDB opens a raw *sql.DB for inspection without running migrations.
 func openRawDB(t *testing.T, path string) *sql.DB {
 	t.Helper()
-	db, err := sql.Open("sqlite", path)
+	db, err := sql.Open(sqldriver.Name, path)
 	if err != nil {
 		t.Fatalf("openRawDB: %v", err)
 	}
