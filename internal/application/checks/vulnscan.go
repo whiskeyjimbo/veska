@@ -46,6 +46,21 @@ func NewVulnScanCheck(src ports.VulnSource, repoRoot RepoRootFunc) *VulnScanChec
 // Name returns the Prometheus / finding-rule attribution name.
 func (c *VulnScanCheck) Name() string { return "vuln-scan" }
 
+// AuthoritativeRule declares VulnScanCheck as the sole authority for
+// findings under rule 'vulnerable_dependency': every Run resolves the
+// complete dep set, so any prior open finding whose advisory no longer
+// matches the resolved version must be auto-closed. See
+// checks.AuthoritativeChecker and solov2-jvrc.
+//
+// Returns ok=false when the scope is ambiguous (missing repo, empty
+// branch) so the Runner does not over-close on a partial input.
+func (c *VulnScanCheck) AuthoritativeRule(in Input) (string, bool) {
+	if in.RepoID == "" || in.Branch == "" {
+		return "", false
+	}
+	return "vulnerable_dependency", true
+}
+
 // Run scans the module dependency set against the advisory cache when go.mod
 // is among the promotion's changed files. When the repo has no go.mod at all
 // it is a no-op returning (nil, nil) — no manifest, no scan.

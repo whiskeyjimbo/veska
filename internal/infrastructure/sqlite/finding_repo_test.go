@@ -421,6 +421,72 @@ func TestFindingRepo_CloseSupersededAutoLinks(t *testing.T) {
 	assertState(t, db, fC, "main", "open")
 }
 
+// TestFindingRepo_CloseSupersededByRule pins solov2-jvrc: a re-scanned
+// authoritative rule (e.g. vulnerable_dependency) closes prior open
+// findings whose IDs are not in the freshly-returned keep set, leaves
+// keeps untouched, and leaves findings under OTHER rules alone.
+func TestFindingRepo_CloseSupersededByRule(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	db := openTest(t, filepath.Join(dir, "v.db"))
+	ctx := context.Background()
+
+	now := time.Now().UnixMilli()
+	if _, err := db.Exec(`INSERT INTO repos (repo_id, root_path, added_at) VALUES (?, ?, ?)`,
+		"r1", "/tmp/r1", now); err != nil {
+		t.Fatalf("insert repo: %v", err)
+	}
+	repo := sqlite.NewFindingRepo(db)
+
+	save := func(rule, key string) string {
+		f, err := domain.NewFinding(
+			"r1", "main",
+			domain.SeverityHigh, domain.LayerSecurity,
+			rule, "msg "+key,
+			domain.WithFileAnchor("go.mod"),
+			domain.WithFindingKey(key),
+		)
+		if err != nil {
+			t.Fatalf("NewFinding: %v", err)
+		}
+		if err := repo.Save(ctx, f); err != nil {
+			t.Fatalf("Save: %v", err)
+		}
+		return f.FindingID
+	}
+
+	// Three vuln findings exist from a prior scan; one will remain
+	// applicable on rescan, two will be superseded.
+	keep := save("vulnerable_dependency", "GHSA-keep-jwt-go")
+	gone1 := save("vulnerable_dependency", "GHSA-gone-yaml-1")
+	gone2 := save("vulnerable_dependency", "GHSA-gone-yaml-2")
+	// A finding under a different rule that must NOT be touched.
+	otherRule := save("secret_leak", "rule-isolation-marker")
+
+	if err := repo.CloseSupersededByRule(ctx, "r1", "main", "vulnerable_dependency", []string{keep}); err != nil {
+		t.Fatalf("CloseSupersededByRule: %v", err)
+	}
+
+	assertState(t, db, keep, "main", "open")
+	assertState(t, db, gone1, "main", "closed")
+	assertState(t, db, gone2, "main", "closed")
+	assertState(t, db, otherRule, "main", "open")
+
+	// Idempotency: a second call with the same keep is a no-op.
+	if err := repo.CloseSupersededByRule(ctx, "r1", "main", "vulnerable_dependency", []string{keep}); err != nil {
+		t.Fatalf("CloseSupersededByRule (idempotent): %v", err)
+	}
+	assertState(t, db, keep, "main", "open")
+
+	// Empty keep closes everything in scope (e.g. dep removed entirely).
+	if err := repo.CloseSupersededByRule(ctx, "r1", "main", "vulnerable_dependency", nil); err != nil {
+		t.Fatalf("CloseSupersededByRule(empty keep): %v", err)
+	}
+	assertState(t, db, keep, "main", "closed")
+	// Other-rule finding still untouched after the wipe.
+	assertState(t, db, otherRule, "main", "open")
+}
+
 func assertState(t *testing.T, db *sql.DB, findingID, branch, want string) {
 	t.Helper()
 	var got string
