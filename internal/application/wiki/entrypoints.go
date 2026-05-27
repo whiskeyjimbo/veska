@@ -171,6 +171,17 @@ func (s *EntryPointsService) SelectWith(ctx context.Context, repoID, branch stri
 		if !opts.IncludeTests && isTestSymbol(n) {
 			continue
 		}
+		// solov2-q5gd: filter Go init() functions. Go's runtime invokes
+		// every init() automatically — they are framework magic, not
+		// "places to start reading the code." cobra-based CLIs use init()
+		// heavily to register subcommands, which would otherwise dominate
+		// the entry_points page (one per command file). Python's __init__
+		// is a constructor and intentionally NOT filtered here. main() is
+		// also left in: the user's mental model of "entry point" naturally
+		// includes the program's main, even though the runtime calls it.
+		if isGoInitFunc(n) {
+			continue
+		}
 		candidates = append(candidates, n)
 		ids = append(ids, string(n.ID))
 	}
@@ -244,6 +255,17 @@ func isTestSymbol(n *domain.Node) bool {
 		return true
 	}
 	return false
+}
+
+// isGoInitFunc reports whether n is a Go init() function — name "init",
+// kind function (not method/etc.), in a .go file. The Go runtime calls
+// every package-scoped init() at startup; they are framework magic, not
+// agent-useful entry points (solov2-q5gd). cobra-based CLIs especially
+// suffer here: each subcommand file has its own init() registering the
+// command, and the inbound-fan-in heuristic ranked them above main()
+// and Execute() on small repos.
+func isGoInitFunc(n *domain.Node) bool {
+	return n.Name == "init" && n.Kind == domain.KindFunction && strings.HasSuffix(n.Path, ".go")
 }
 
 // isExported mirrors Go's capitalised-identifier convention but is

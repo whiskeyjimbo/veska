@@ -238,6 +238,74 @@ func TestEntryPointsPagePath_IsUnderDocsVeska(t *testing.T) {
 	}
 }
 
+// TestEntryPointsService_FiltersGoInitFuncs pins solov2-q5gd: Go's runtime
+// invokes every package-scoped init() automatically, so they aren't
+// "places to start reading" from an agent's perspective. cobra-style CLIs
+// register every subcommand inside init(), which previously dominated the
+// entry_points page on small repos (one init() per command file ranked
+// above main() and Execute()).
+func TestEntryPointsService_FiltersGoInitFuncs(t *testing.T) {
+	g, err := domain.NewGraph("r1", "main")
+	if err != nil {
+		t.Fatalf("NewGraph: %v", err)
+	}
+	mk := func(id, name, path string, kind domain.NodeKind) {
+		n, err := domain.NewNode(id, path, name, kind)
+		if err != nil {
+			t.Fatalf("NewNode %s: %v", id, err)
+		}
+		if err := g.AddNode(n); err != nil {
+			t.Fatalf("AddNode %s: %v", id, err)
+		}
+	}
+	mk("root-init", "init", "cmd/root.go", domain.KindFunction)
+	mk("token-init", "init", "cmd/token.go", domain.KindFunction)
+	mk("Execute", "Execute", "cmd/root.go", domain.KindFunction)
+	// Python __init__ must NOT be filtered — it is a constructor, not a
+	// Go-runtime hook. Keep one in the fixture to lock that contract.
+	mk("py-init", "__init__", "app/server.py", domain.KindFunction)
+
+	inbound := map[string][]string{
+		"root-init":  {"a", "b", "c"}, // high fan-in, would have ranked top
+		"token-init": {"a", "b"},
+		"Execute":    {"main-caller"},
+		"py-init":    {"caller"},
+	}
+	svc, err := NewEntryPointsService(
+		func(context.Context, string, string) (*domain.Graph, error) { return g, nil },
+		func(_ context.Context, _, _ string, _ []string) (map[string][]string, error) { return inbound, nil },
+		func(context.Context, string, string) (map[string]bool, error) { return nil, nil },
+	)
+	if err != nil {
+		t.Fatalf("NewEntryPointsService: %v", err)
+	}
+	rep, err := svc.Select(context.Background(), "r1", "main")
+	if err != nil {
+		t.Fatalf("Select: %v", err)
+	}
+	for _, ep := range rep.EntryPoints {
+		if ep.Name == "init" && strings.HasSuffix(ep.FilePath, ".go") {
+			t.Errorf("Go init() leaked into entry_points: %+v", ep)
+		}
+	}
+	// Sanity: Python __init__ still present, exported Execute still present.
+	hasPyInit, hasExecute := false, false
+	for _, ep := range rep.EntryPoints {
+		if ep.Name == "__init__" {
+			hasPyInit = true
+		}
+		if ep.Name == "Execute" {
+			hasExecute = true
+		}
+	}
+	if !hasPyInit {
+		t.Errorf("Python __init__ was filtered; only Go init() should be")
+	}
+	if !hasExecute {
+		t.Errorf("Execute missing — Go init() filter is too aggressive")
+	}
+}
+
 func TestIsExported(t *testing.T) {
 	cases := []struct {
 		name string
