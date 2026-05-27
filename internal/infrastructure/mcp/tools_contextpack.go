@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	application "github.com/whiskeyjimbo/veska/internal/application"
 	"github.com/whiskeyjimbo/veska/internal/application/contextpack"
@@ -100,6 +101,20 @@ func makeContextPackHandler(asm *contextpack.Assembler, repoRoot RepoRootFunc, r
 				Message: "exactly one of node_id, symbol or task_id is required",
 			}
 		}
+		// solov2-z5cu: parity with eng_find_symbol. When the caller asks
+		// for a symbol-anchored pack and repo_id is omitted, probe every
+		// registered repo and auto-pick if exactly one contains the
+		// symbol. Multi-repo workspaces would otherwise dead-end on
+		// "repo_id is required" even when the symbol is unambiguous.
+		if p.Symbol != "" && p.RepoID == "" {
+			chosen, rpcErr := pickRepoForSymbol(ctx, asm, repoRoot, repos, raw, p.Symbol, p.Branch)
+			if rpcErr != nil {
+				return nil, rpcErr
+			}
+			if chosen != "" {
+				p.RepoID = chosen
+			}
+		}
 		// solov2-ktz0: shim-injected cwd resolves repo_id when omitted.
 		repoID, rpcErr := resolveRepoIDFromParams(ctx, repos, raw, p.RepoID)
 		if rpcErr != nil {
@@ -180,6 +195,60 @@ func resolveCrossRepoInboundForNodes(ctx context.Context, resolve InboundResolve
 		}
 	}
 	return out
+}
+
+// pickRepoForSymbol probes every (repoID, branch) target a fanout would
+// produce and reports the unique repo that contains the symbol, or "" when
+// auto-resolution should not apply. Returns an InvalidParams error listing
+// the candidates when more than one repo contains the symbol — the caller
+// must pass --repo to disambiguate (solov2-z5cu).
+//
+// Errors from any single asm.ForSymbol probe are swallowed so a stuck repo
+// can't poison the auto-resolution for the others.
+func pickRepoForSymbol(ctx context.Context, asm *contextpack.Assembler, repoRoot RepoRootFunc, repos application.RepoLister, raw json.RawMessage, symbol, callerBranch string) (string, *RPCError) {
+	if asm == nil || repoRoot == nil {
+		return "", nil
+	}
+	targets, fanout, rpcErr := resolveRepoFanoutFromParams(ctx, repos, raw, "", callerBranch)
+	if rpcErr != nil {
+		return "", nil // let the normal resolver re-emit a coherent error
+	}
+	if !fanout {
+		// Singleton or cwd already pinned a single repo; let the normal
+		// path handle it.
+		return "", nil
+	}
+	var hits []repoBranch
+	for _, t := range targets {
+		root, err := repoRoot(ctx, t.RepoID)
+		if err != nil || root == "" {
+			continue
+		}
+		pack, perr := asm.ForSymbol(ctx, t.RepoID, t.Branch, root, symbol)
+		if perr != nil {
+			continue
+		}
+		if len(pack.Nodes) > 0 {
+			hits = append(hits, t)
+		}
+	}
+	switch len(hits) {
+	case 0:
+		// No repo contains the symbol — let the normal path emit the
+		// existing "repo_id is required" error.
+		return "", nil
+	case 1:
+		return hits[0].RepoID, nil
+	default:
+		ids := make([]string, len(hits))
+		for i, h := range hits {
+			ids[i] = ShortRepoID(h.RepoID)
+		}
+		return "", &RPCError{
+			Code:    CodeInvalidParams,
+			Message: fmt.Sprintf("symbol %q matches in %d repos (%s); pass repo_id to disambiguate", symbol, len(hits), strings.Join(ids, ", ")),
+		}
+	}
 }
 
 // resolveCrossRepoForNodes mirrors resolveCrossRepoFor in tools_blast.go
