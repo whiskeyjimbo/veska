@@ -8,7 +8,7 @@
 //
 // Construction:
 //
-//	parser := NewGoQueryParser()   // satisfies ports.CodeParser
+//	parser := NewGoParser()   // satisfies ports.CodeParser
 //	// ... same usage as NewGoParser()
 //
 // Until equivalence is validated across the entire fixture corpus, the
@@ -18,9 +18,7 @@ package treesitter
 
 import (
 	"context"
-	"fmt"
-	"go/parser"
-	"go/token"
+	"path/filepath"
 
 	sitter "github.com/smacker/go-tree-sitter"
 	tsgo "github.com/smacker/go-tree-sitter/golang"
@@ -28,17 +26,17 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/core/domain"
 )
 
-// GoQueryParser is the query-driven implementation of ports.CodeParser
+// GoParser is the query-driven implementation of ports.CodeParser
 // for Go. Construction is cheap (no parser pool yet — phase 1 reuses
 // the package-level parserPool from parser_pool.go to keep cgo init
 // cost amortised). It is safe for concurrent use.
-type GoQueryParser struct{}
+type GoParser struct{}
 
-// NewGoQueryParser constructs a query-driven Go parser. Until phase 5
+// NewGoParser constructs a query-driven Go parser. Until phase 5
 // the daemon wires NewGoParser; this constructor exists so the
 // equivalence harness and benchmark suite can exercise the new path.
-func NewGoQueryParser() *GoQueryParser {
-	return &GoQueryParser{}
+func NewGoParser() *GoParser {
+	return &GoParser{}
 }
 
 // ParseFile mirrors GoParser.ParseFile's contract: parse src as Go
@@ -47,27 +45,42 @@ func NewGoQueryParser() *GoQueryParser {
 // declarations via queries/go/symbols.scm. Everything else (methods,
 // types, calls, imports, ...) is produced as empty/nil so the diff
 // harness can compare extractor-by-extractor as phases land.
-func (p *GoQueryParser) ParseFile(ctx context.Context, repoID, path string, src []byte) (domain.ParseResult, error) {
+func (p *GoParser) ParseFile(ctx context.Context, repoID, path string, src []byte) (*domain.ParseResult, error) {
+	// Non-Go files and empty src return an empty ParseResult and nil
+	// error — matches the legacy GoParser contract (go.go ~L44).
+	if filepath.Ext(path) != ".go" {
+		return &domain.ParseResult{}, nil
+	}
+	if len(src) == 0 {
+		return &domain.ParseResult{}, nil
+	}
+
 	tsParser := goParserPool.Get().(*sitter.Parser)
 	defer goParserPool.Put(tsParser)
 
 	tree, err := tsParser.ParseCtx(ctx, nil, src)
 	if err != nil {
-		return domain.ParseResult{}, fmt.Errorf("go_query: parse %s: %w", path, err)
+		// Parse error → surface as a non-fatal Failure, not a Go error.
+		return &domain.ParseResult{
+			Failures: []domain.ParseFailure{{Line: 0, Message: "tree-sitter parse error: " + err.Error()}},
+		}, nil
 	}
 	defer tree.Close()
 	root := tree.RootNode()
 
-	// solov2-0kv6 mirror: when go/parser accepts the file, tree-sitter's
-	// ERROR nodes are false positives. Track parseAccepted so the
-	// per-decl skip can re-include declarations the recursive walker
-	// would have accepted.
-	parseAccepted := true
-	if _, perr := parser.ParseFile(token.NewFileSet(), path, src, parser.SkipObjectResolution); perr != nil {
-		parseAccepted = false
-	}
-
 	result := domain.ParseResult{}
+
+	// solov2-7nkm / solov2-0kv6: a syntax error somewhere in the file
+	// no longer discards everything. Cross-check with go/parser: if
+	// stdlib accepts the file, tree-sitter ERRORs are false positives;
+	// otherwise surface go/parser's (more precise) failure.
+	parseAccepted := true
+	if hasErrorNode(root) {
+		if pf, ok := goParserCheck(path, src); ok {
+			parseAccepted = false
+			result.Failures = append(result.Failures, pf)
+		}
+	}
 
 	// Package node — the legacy parser emits this; phase 1 keeps parity
 	// so the equivalence harness doesn't trip on its absence.
@@ -97,7 +110,7 @@ func (p *GoQueryParser) ParseFile(ctx context.Context, repoID, path string, src 
 	// Function declarations via the symbols.scm query.
 	q, qerr := compileEmbeddedQuery(tsgo.GetLanguage(), "go", "symbols")
 	if qerr != nil {
-		return domain.ParseResult{}, qerr
+		return nil, qerr
 	}
 	for _, m := range runQuery(q, root) {
 		// One pattern from symbols.scm fires per match; dispatch on the
@@ -210,7 +223,7 @@ func (p *GoQueryParser) ParseFile(ctx context.Context, repoID, path string, src 
 	structFields := collectStructFields(root, src)
 	callsQuery, qerr := compileEmbeddedQuery(tsgo.GetLanguage(), "go", "calls")
 	if qerr != nil {
-		return domain.ParseResult{}, qerr
+		return nil, qerr
 	}
 	for _, c := range callers {
 		if c.body == nil {
@@ -225,7 +238,17 @@ func (p *GoQueryParser) ParseFile(ctx context.Context, repoID, path string, src 
 	// the legacy parser emits, so reuse it directly.
 	result.Imports = extractImports(root, src)
 
-	return result, nil
+	// Chunk index over non-declaration regions (solov2-jyt). Emitted
+	// AFTER the symbol set is finalised so chunkFile can carve gaps
+	// between symbol line ranges. Mirrors go.go (~L216).
+	result.Nodes = append(result.Nodes, chunkFile(repoID, path, src, result.Nodes)...)
+
+	// TODO/FIXME markers via the language-agnostic lexical scanner —
+	// parity with go.go (~L217). Walks src once for the closed set of
+	// marker tokens.
+	result.Todos = scanTodos(src)
+
+	return &result, nil
 }
 
 // extractCallsFromBody runs calls.scm over a single function/method
