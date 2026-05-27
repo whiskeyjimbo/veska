@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/whiskeyjimbo/veska/internal/application/pathfilter"
 	"github.com/whiskeyjimbo/veska/internal/core/domain"
 	"github.com/whiskeyjimbo/veska/internal/core/ports"
 )
@@ -132,6 +133,13 @@ func (h *Handler) Handle(ctx context.Context, row ports.WorkRow) error {
 	}
 	filePath := row.Payload
 	if filePath == "" {
+		return nil
+	}
+	// Vendored / third-party files are skipped wholesale: proposing
+	// auto-link edges from cobra internals or node_modules produces pure
+	// noise on a junior's first promotion (solov2-ttsc). The same path
+	// predicate gates the dead-code and secret_leak rules.
+	if pathfilter.IsVendored(filePath) {
 		return nil
 	}
 
