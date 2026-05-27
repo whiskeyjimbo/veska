@@ -415,6 +415,9 @@ type Record struct {
 	ActiveBranch    string // may be empty
 	LastPromotedSHA string // may be empty
 	Kind            string // "tracked" (default) or "ephemeral" (solov2-kxo5.9)
+	// Aliases are user-defined human-friendly names for this repo
+	// (solov2-7w1t). Sorted; nil when no aliases exist.
+	Aliases []string
 }
 
 // List returns every registered repository ordered by repo_id. The nullable
@@ -447,6 +450,14 @@ func List(ctx context.Context, db *sql.DB) ([]Record, error) {
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("iterate repo rows: %w", err)
 	}
+	// solov2-7w1t: decorate every record with its user-defined aliases.
+	aliases, err := AliasesByRepoID(ctx, db)
+	if err != nil {
+		return nil, err
+	}
+	for i := range out {
+		out[i].Aliases = aliases[out[i].RepoID]
+	}
 	return out, nil
 }
 
@@ -473,6 +484,11 @@ func Get(ctx context.Context, db *sql.DB, repoID string) (Record, error) {
 	}
 	rec.ActiveBranch = branch.String
 	rec.LastPromotedSHA = lastSHA.String
+	aliases, err := AliasesForRepo(ctx, db, rec.RepoID)
+	if err != nil {
+		return Record{}, err
+	}
+	rec.Aliases = aliases
 	return rec, nil
 }
 

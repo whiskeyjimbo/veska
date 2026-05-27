@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -33,7 +34,13 @@ CREATE TABLE repos (
 );
 CREATE UNIQUE INDEX idx_repos_canonical_url
 	ON repos(canonical_url)
-	WHERE canonical_url IS NOT NULL;`
+	WHERE canonical_url IS NOT NULL;
+CREATE TABLE repo_aliases (
+	name     TEXT PRIMARY KEY,
+	repo_id  TEXT NOT NULL,
+	FOREIGN KEY (repo_id) REFERENCES repos(repo_id) ON DELETE CASCADE
+);
+CREATE INDEX idx_repo_aliases_repo_id ON repo_aliases(repo_id);`
 
 func newTestDB(t *testing.T) *sql.DB {
 	t.Helper()
@@ -417,10 +424,10 @@ func TestList_ReturnsRegisteredRepos(t *testing.T) {
 	}
 
 	// ORDER BY repo_id: id-a then id-b.
-	if got[0] != (repo.Record{RepoID: "id-a", RootPath: "/path/a", Kind: "tracked"}) {
+	if !reflect.DeepEqual(got[0], repo.Record{RepoID: "id-a", RootPath: "/path/a", Kind: "tracked"}) {
 		t.Errorf("got[0] = %+v, want id-a with empty nullable fields", got[0])
 	}
-	if got[1] != (repo.Record{
+	if !reflect.DeepEqual(got[1], repo.Record{
 		RepoID: "id-b", RootPath: "/path/b", ActiveBranch: "main", LastPromotedSHA: "abc123", Kind: "tracked",
 	}) {
 		t.Errorf("got[1] = %+v, want fully-populated id-b", got[1])
@@ -457,7 +464,7 @@ func TestGet_ReturnsRegisteredRepo(t *testing.T) {
 		RepoID: "id-x", RootPath: "/path/x", ActiveBranch: "main", LastPromotedSHA: "sha-x",
 		Kind: "tracked", // migration 0013 default
 	}
-	if got != want {
+	if !reflect.DeepEqual(got, want) {
 		t.Errorf("Get = %+v, want %+v", got, want)
 	}
 }
@@ -486,7 +493,7 @@ func TestGet_MissingRowReturnsZero(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Get: %v", err)
 	}
-	if got != (repo.Record{}) {
+	if !reflect.DeepEqual(got, repo.Record{}) {
 		t.Errorf("Get missing = %+v, want zero Record", got)
 	}
 }
