@@ -6,7 +6,7 @@ DAEMON_BIN      := $(BINDIR)/veska-daemon
 MCP_BIN         := $(BINDIR)/veska-mcp
 LAYERCHECK_BIN  := $(BINDIR)/layercheck
 
-.PHONY: all build build-small build-fat fetch-embed-assets install release-archive test lint vet layercheck clean loadtest test-mcp test-mcp-deep test-mcp-bootstrap eval-recall eval-recall-projection eval-autolink-fp eval-revalidate-bench eval-queue-fuzz eval-embed-throughput eval-embedder-bench eval-embed-models eval-embed-models-full eval-embed-models-condense eval-embed-models-fuse
+.PHONY: all build build-small build-fat fetch-embed-assets install release-archive test lint vet layercheck clean loadtest test-mcp test-mcp-deep test-mcp-bootstrap eval-recall eval-recall-projection eval-autolink-fp eval-revalidate-bench eval-queue-fuzz eval-embed-throughput eval-embedder-bench eval-embed-models eval-embed-models-full eval-embed-models-condense eval-embed-models-fuse eval-dbbench eval-dbbench-cgo
 
 # `all` uses build-small to keep the test loop fast — the model2vec assets
 # add a network fetch + ~62MB to every CI/dev run. End-user packaging
@@ -168,6 +168,16 @@ eval-autolink-fp:
 # tools/loadtest/revalidate/README.md.
 eval-revalidate-bench:
 	go test -tags=eval -run TestRevalidateBench ./tools/loadtest/revalidate/ -v -count=1 -timeout=120s
+
+# eval-dbbench: solov2-6e5r — compare Go SQLite drivers (modernc, mattn,
+# zombiezen) against veska's storage workloads. Pure-Go variant (modernc +
+# zombiezen). Writes tools/loadtest/dbbench/RESULTS.md. See README.
+eval-dbbench:
+	go test -tags=eval -run TestDBBench ./tools/loadtest/dbbench/ -v -count=1 -timeout=600s
+
+# eval-dbbench-cgo: same harness, including mattn (requires cgo + sqlite_fts5).
+eval-dbbench-cgo:
+	CGO_ENABLED=1 go test -tags="eval sqlite_fts5" -run TestDBBench ./tools/loadtest/dbbench/ -v -count=1 -timeout=600s
 
 # eval-queue-fuzz: M3 gate-5 — drive N synthetic promotions through Promoter and
 # assert all three M3 work_kind lanes (embed/auto_link/revalidate) drain to done.
