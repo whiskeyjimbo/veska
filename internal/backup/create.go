@@ -16,7 +16,7 @@ import (
 	"runtime"
 	"time"
 
-	_ "modernc.org/sqlite"
+	"github.com/whiskeyjimbo/veska/internal/infrastructure/sqlite/sqldriver"
 )
 
 // CreateOptions controls backup creation behaviour.
@@ -163,7 +163,7 @@ func VerifyGzip(path string) error {
 
 // vacuumInto opens the SQLite database at src read-only and runs VACUUM INTO dst.
 func vacuumInto(src, dst string) error {
-	db, err := sql.Open("sqlite", "file:"+src+"?mode=ro")
+	db, err := sql.Open(sqldriver.Name, "file:"+src+"?mode=ro")
 	if err != nil {
 		return err
 	}

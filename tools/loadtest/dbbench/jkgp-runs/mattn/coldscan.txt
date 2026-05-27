@@ -1,0 +1,8 @@
+daemon-ready
+added repo f43242f95b88 (via daemon)
+  walking → 0 files (0.0s)
+  walking → 148 files (0.5s)
+  walking → 296 files (1.0s)
+  promoting → 324 files (1.5s)
+  ✓ cold scan complete (8.0s)
+elapsed=8.05 user=0.00 sys=0.00 maxRSS=17408
