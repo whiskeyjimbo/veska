@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	_ "modernc.org/sqlite"
+	"github.com/whiskeyjimbo/veska/internal/infrastructure/sqlite/sqldriver"
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/testutil"
@@ -30,7 +30,7 @@ func openSchemaDB(t *testing.T) *sql.DB {
 	// parallel/sequential tests don't see each other's rows. Using a
 	// random name in case modernc.org/sqlite ever changes the default.
 	dsn := "file:" + t.Name() + "?mode=memory&_foreign_keys=on"
-	db, err := sql.Open("sqlite", dsn)
+	db, err := sql.Open(sqldriver.Name, dsn)
 	if err != nil {
 		t.Fatalf("sql.Open: %v", err)
 	}

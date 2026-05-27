@@ -10,7 +10,7 @@ import (
 	"strings"
 	"testing"
 
-	_ "modernc.org/sqlite"
+	"github.com/whiskeyjimbo/veska/internal/infrastructure/sqlite/sqldriver"
 
 	"github.com/whiskeyjimbo/veska/internal/repo"
 )
@@ -37,7 +37,7 @@ CREATE UNIQUE INDEX idx_repos_canonical_url
 
 func newTestDB(t *testing.T) *sql.DB {
 	t.Helper()
-	db, err := sql.Open("sqlite", ":memory:")
+	db, err := sql.Open(sqldriver.Name, ":memory:")
 	if err != nil {
 		t.Fatalf("open in-memory db: %v", err)
 	}

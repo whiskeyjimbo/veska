@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	_ "modernc.org/sqlite"
+	"github.com/whiskeyjimbo/veska/internal/infrastructure/sqlite/sqldriver"
 
 	"github.com/whiskeyjimbo/veska/internal/application"
 	"github.com/whiskeyjimbo/veska/internal/core/domain"
@@ -26,7 +26,7 @@ func newTestPromoter(sa *application.StagingArea, db *sql.DB) *application.Promo
 // the minimal schema required by Promoter.
 func openMemDB(t *testing.T) *sql.DB {
 	t.Helper()
-	db, err := sql.Open("sqlite", "file::memory:?_foreign_keys=on")
+	db, err := sql.Open(sqldriver.Name, "file::memory:?_foreign_keys=on")
 	if err != nil {
 		t.Fatalf("sql.Open: %v", err)
 	}

@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	_ "modernc.org/sqlite"
+	"github.com/whiskeyjimbo/veska/internal/infrastructure/sqlite/sqldriver"
 
 	"github.com/whiskeyjimbo/veska/internal/backup"
 )
@@ -55,7 +55,7 @@ func TestRestoreRoundTrip(t *testing.T) {
 	}
 
 	// The restored DB must hold the seeded row.
-	db, err := sql.Open("sqlite", dbPath)
+	db, err := sql.Open(sqldriver.Name, dbPath)
 	if err != nil {
 		t.Fatalf("open restored db: %v", err)
 	}

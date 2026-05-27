@@ -9,7 +9,7 @@ import (
 
 	application "github.com/whiskeyjimbo/veska/internal/application"
 	"github.com/whiskeyjimbo/veska/internal/core/domain"
-	_ "modernc.org/sqlite"
+	"github.com/whiskeyjimbo/veska/internal/infrastructure/sqlite/sqldriver"
 )
 
 // ---------------------------------------------------------------------------
@@ -18,7 +18,7 @@ import (
 
 func newSuppressionsDB(t *testing.T) *sql.DB {
 	t.Helper()
-	db, err := sql.Open("sqlite", ":memory:")
+	db, err := sql.Open(sqldriver.Name, ":memory:")
 	if err != nil {
 		t.Fatalf("open in-memory sqlite: %v", err)
 	}

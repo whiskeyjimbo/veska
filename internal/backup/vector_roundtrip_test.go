@@ -10,7 +10,7 @@ import (
 	"strings"
 	"testing"
 
-	_ "modernc.org/sqlite"
+	"github.com/whiskeyjimbo/veska/internal/infrastructure/sqlite/sqldriver"
 
 	"github.com/whiskeyjimbo/veska/internal/backup"
 )
@@ -175,7 +175,7 @@ func TestBackupUsearchVerifyRoundTrip(t *testing.T) {
 // This simulates what the sqlite-vec backend would write in production.
 func seedSQLiteVecVectors(t *testing.T, dbPath string) {
 	t.Helper()
-	db, err := sql.Open("sqlite", dbPath)
+	db, err := sql.Open(sqldriver.Name, dbPath)
 	if err != nil {
 		t.Fatalf("open db: %v", err)
 	}
@@ -237,7 +237,7 @@ func TestBackupSQLiteVecVectorsInDB(t *testing.T) {
 	// Confirm vec_embeddings table survived by opening the extracted DB.
 	tmpDir := t.TempDir()
 	extractDB(t, result.Path, tmpDir)
-	db, err := sql.Open("sqlite", filepath.Join(tmpDir, "veska.db"))
+	db, err := sql.Open(sqldriver.Name, filepath.Join(tmpDir, "veska.db"))
 	if err != nil {
 		t.Fatalf("open extracted db: %v", err)
 	}

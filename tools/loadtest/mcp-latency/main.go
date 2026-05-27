@@ -19,7 +19,7 @@ import (
 	"sort"
 	"time"
 
-	_ "modernc.org/sqlite"
+	"github.com/whiskeyjimbo/veska/internal/infrastructure/sqlite/sqldriver"
 )
 
 const findSymbolQuery = `
@@ -127,7 +127,7 @@ func main() {
 	defer os.RemoveAll(dir)
 
 	dbPath := filepath.Join(dir, "bench.db")
-	db, err := sql.Open("sqlite", dbPath)
+	db, err := sql.Open(sqldriver.Name, dbPath)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "open db: %v\n", err)
 		os.Exit(1)

@@ -8,7 +8,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	_ "modernc.org/sqlite"
+	"github.com/whiskeyjimbo/veska/internal/infrastructure/sqlite/sqldriver"
 
 	"github.com/whiskeyjimbo/veska/internal/backup"
 )
@@ -55,7 +55,7 @@ func minimalSQLiteDB(t *testing.T) []byte {
 	dir := t.TempDir()
 	dbPath := filepath.Join(dir, "veska.db")
 
-	db, err := sql.Open("sqlite", dbPath)
+	db, err := sql.Open(sqldriver.Name, dbPath)
 	if err != nil {
 		t.Fatalf("open db: %v", err)
 	}
