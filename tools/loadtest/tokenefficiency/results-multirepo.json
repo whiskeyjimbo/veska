@@ -343,6 +343,12 @@
   ],
   "corpus_note": "auto-generated semantic synthcorpus partitioned across 5 repos; ground truth is by cluster construction; embedder=model2vec:potion-code-16M",
   "embedder": "model2vec:potion-code-16M",
-  "timestamp": "2026-05-27T07:16:35.711052262Z",
+  "timestamp": "2026-05-27T07:23:04.474731154Z",
+  "tokens_saved_per_query": 246.1,
+  "conversation_queries": 50,
+  "tokens_saved_over_conversation": 12305,
+  "usd_per_mtoken": 3,
+  "usd_price_label": "Claude Sonnet input",
+  "usd_saved_over_conversation": 0.036915,
   "repos": 5
 }

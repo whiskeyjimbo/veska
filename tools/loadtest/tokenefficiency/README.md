@@ -23,8 +23,19 @@ Output (single-line summary on stdout + JSON envelope at
 
 ```
 Veska found the right code ~98% of the time, using about 42% as many tokens as grep+read would have (range: 58–58% fewer, depending on how aggressively the agent reads grep matches; measured on 30 queries).
+~ savings: 246 tokens/query · 12,300 tokens over 50 searches · $0.0369 at $3/Mtok (Claude Sonnet input).
 TOKENEFF embedder=model2vec:potion-code-16M queries=30 recall=0.98 veska_tok=176 grep_lo=422 grep_hi=422 savings=[58%, 58%]
 ```
+
+The second line denominates the same data in concrete units — useful
+when quoting in a budget or docs blurb. Tunable knobs for the
+extrapolation:
+
+| Env var | Default | Meaning |
+|---|---|---|
+| `TOKEFF_CONVERSATION_QUERIES` | `50` | Assumed searches per agent conversation; multiplier on the per-query savings. |
+| `TOKEFF_USD_PER_MTOKEN` | `3.0` | $ per million input tokens. Defaults to Claude Sonnet input rate. |
+| `TOKEFF_PRICE_LABEL` | `Claude Sonnet input` | Human label printed alongside the $ figure so a stale rate is obvious. |
 
 The harness prefers the in-process **model2vec** embedder
 (`potion-code-16M`, distilled from CodeRankEmbed) when its assets are

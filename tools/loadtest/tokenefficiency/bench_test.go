@@ -223,10 +223,13 @@ func TestTokenEfficiency(t *testing.T) {
 		Embedder:  embedderName,
 		Timestamp: time.Now().UTC(),
 	}
+	convQ, rate, label := tokenPricingFromEnv()
+	res.FillAbsoluteSavings(convQ, rate, label)
 	if err := writeJSON("results.json", res); err != nil {
 		t.Fatalf("writeJSON: %v", err)
 	}
 	fmt.Println(res.SummaryLine())
+	fmt.Println(res.TokensLine())
 	fmt.Printf("TOKENEFF embedder=%s queries=%d recall=%.2f veska_tok=%.0f grep_lo=%.0f grep_hi=%.0f savings=[%.0f%%, %.0f%%]\n",
 		embedderName, res.Queries, res.MeanRecall, res.MeanVeskaTokens, res.MeanGrepLoTokens, res.MeanGrepHiTokens,
 		res.MeanSavingsLoVsGrep*100, res.MeanSavingsHiVsGrep*100,
@@ -323,6 +326,34 @@ func envInt(key string, def int) int {
 		}
 	}
 	return def
+}
+
+func envFloat(key string, def float64) float64 {
+	if v := os.Getenv(key); v != "" {
+		if f, err := strconv.ParseFloat(v, 64); err == nil && f > 0 {
+			return f
+		}
+	}
+	return def
+}
+
+// tokenPricingFromEnv returns (conversationQueries, $/Mtoken, label)
+// for the absolute-savings extrapolation. Defaults: 50 queries per
+// conversation; Claude Sonnet input rate $3/Mtok (defensible
+// mid-range — Haiku is cheaper, Opus more expensive). Pricing drifts;
+// the label travels with the number so a stale figure is obvious.
+//
+//	TOKEFF_CONVERSATION_QUERIES — how many searches per conversation
+//	TOKEFF_USD_PER_MTOKEN       — $/M input tokens
+//	TOKEFF_PRICE_LABEL          — human name for the rate
+func tokenPricingFromEnv() (int, float64, string) {
+	label := os.Getenv("TOKEFF_PRICE_LABEL")
+	if label == "" {
+		label = "Claude Sonnet input"
+	}
+	return envInt("TOKEFF_CONVERSATION_QUERIES", 50),
+		envFloat("TOKEFF_USD_PER_MTOKEN", 3.0),
+		label
 }
 
 func writeJSON(path string, v any) error {
