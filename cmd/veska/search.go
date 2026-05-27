@@ -565,6 +565,11 @@ func renderSearchEnvelope(w io.Writer, env searchEnvelope, jsonOut bool) error {
 			break
 		}
 	}
+	// solov2-36d5: one-line legend so the score/norm/tier columns are not
+	// inscrutable to first-time users. The numbers are post-fusion RRF
+	// (solov2-vee5) — meaningful only relative to other hits in this
+	// query, not as absolute confidence.
+	fmt.Fprintln(w, "# tier: top|strong|weak (relative to this query); score: post-fusion RRF; norm: score / top_hit_score")
 	for _, r := range env.Results {
 		tier := r.Tier
 		if tier == "" {
