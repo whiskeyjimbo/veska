@@ -121,46 +121,44 @@ func TestTokenEfficiencyMultiRepo(t *testing.T) {
 		t.Fatalf("vector.NewVectorStorage: %v", err)
 	}
 
+	embedder, embedderName, _, _ := loadEmbedder()
+	bgCtx := context.Background()
 	for _, repoID := range repoIDs {
 		nodes := nodesByRepo[repoID]
 		if len(nodes) == 0 {
 			continue
 		}
 		seedNodesWithSnippets(t, db, repoID, "main", nodes)
-		rows := make([]domain.EmbeddingRow, len(nodes))
-		for i, n := range nodes {
-			rows[i] = domain.EmbeddingRow{
-				NodeID:      n.NodeID,
-				ContentHash: "h-" + n.NodeID,
-				ModelID:     "fake-hash-v1",
-				Vector:      append([]float32(nil), synthcorpus.FakeEmbed(n.Text)...),
-			}
+		rows, err := embedAllNodes(bgCtx, embedder, embedderName, nodes)
+		if err != nil {
+			t.Fatalf("embedAllNodes(%s): %v", repoID, err)
 		}
-		if err := vstore.UpsertEmbeddings(context.Background(), repoID, "main", rows); err != nil {
+		if err := vstore.UpsertEmbeddings(bgCtx, repoID, "main", rows); err != nil {
 			t.Fatalf("UpsertEmbeddings(%s): %v", repoID, err)
 		}
 	}
 
-	svc := search.NewService(synthcorpus.FakeEmbedder{}, vstore, sqlite.NewNodeLookupRepo(db))
+	svc := search.NewService(embedder, vstore, sqlite.NewNodeLookupRepo(db),
+		search.WithLexicalSearcher(sqlite.NewLexicalRepo(db)),
+	)
 	truth := corpus.TruthByCluster()
 
 	var (
-		perQuery    []PerQuery
-		recalls     []float64
-		veskaTok    []int
-		grepLo      []int
-		grepHi      []int
-		loRecalls   []float64
-		savingsLoV  []float64
-		savingsHiV  []float64
+		perQuery   []PerQuery
+		recalls    []float64
+		veskaTok   []int
+		grepLo     []int
+		grepHi     []int
+		loRecalls  []float64
+		savingsLoV []float64
+		savingsHiV []float64
 	)
 
-	ctx := context.Background()
 	for cluster, q := range corpus.CenterQueries {
 		// Veska cross-repo: SemanticCandidates per repo + global RRF.
 		// Mirrors runSemanticFanout in internal/infrastructure/mcp
 		// (kept local so the eval harness doesn't reach into MCP).
-		results, err := multiRepoFanoutSearch(ctx, svc, repoIDs, "main", q, k)
+		results, err := multiRepoFanoutSearch(bgCtx, svc, repoIDs, "main", q, k)
 		if err != nil {
 			t.Fatalf("multiRepoFanoutSearch(cluster %d): %v", cluster, err)
 		}
@@ -214,9 +212,10 @@ func TestTokenEfficiencyMultiRepo(t *testing.T) {
 			MeanGrepLoRecall:    Mean(loRecalls),
 			PerQuery:            perQuery,
 			CorpusNote: fmt.Sprintf(
-				"auto-generated semantic synthcorpus partitioned across %d repos; ground truth is by cluster construction",
-				repoCount,
+				"auto-generated semantic synthcorpus partitioned across %d repos; ground truth is by cluster construction; embedder=%s",
+				repoCount, embedderName,
 			),
+			Embedder:  embedderName,
 			Timestamp: time.Now().UTC(),
 		},
 	}
@@ -224,8 +223,8 @@ func TestTokenEfficiencyMultiRepo(t *testing.T) {
 		t.Fatalf("writeJSON: %v", err)
 	}
 	fmt.Println(res.SummaryLine())
-	fmt.Printf("TOKENEFF_MULTI repos=%d queries=%d recall=%.2f veska_tok=%.0f grep_lo=%.0f grep_hi=%.0f savings=[%.0f%%, %.0f%%]\n",
-		res.Repos, res.Queries, res.MeanRecall, res.MeanVeskaTokens, res.MeanGrepLoTokens, res.MeanGrepHiTokens,
+	fmt.Printf("TOKENEFF_MULTI embedder=%s repos=%d queries=%d recall=%.2f veska_tok=%.0f grep_lo=%.0f grep_hi=%.0f savings=[%.0f%%, %.0f%%]\n",
+		embedderName, res.Repos, res.Queries, res.MeanRecall, res.MeanVeskaTokens, res.MeanGrepLoTokens, res.MeanGrepHiTokens,
 		res.MeanSavingsLoVsGrep*100, res.MeanSavingsHiVsGrep*100,
 	)
 

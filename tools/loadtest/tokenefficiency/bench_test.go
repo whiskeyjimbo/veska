@@ -15,6 +15,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 	"testing"
@@ -22,10 +23,59 @@ import (
 
 	"github.com/whiskeyjimbo/veska/internal/application/search"
 	"github.com/whiskeyjimbo/veska/internal/core/domain"
+	"github.com/whiskeyjimbo/veska/internal/core/ports"
+	"github.com/whiskeyjimbo/veska/internal/infrastructure/embedding/model2vec"
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/sqlite"
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/vector"
+	"github.com/whiskeyjimbo/veska/internal/tokenize"
 	"github.com/whiskeyjimbo/veska/tools/loadtest/synthcorpus"
 )
+
+// loadEmbedder picks the real model2vec provider when its assets are
+// present on disk and falls back to the deterministic FakeEmbedder
+// otherwise. The FakeEmbedder is hash-based — useful for plumbing
+// smoke-tests but NOT for honest recall numbers on the semantic corpus
+// (its cluster-aligned tuning targets the original GenerateCorpus
+// vocabulary, not the per-topic semantic phrase bags). The returned
+// embedderName is surfaced in the summary line so the recall figure is
+// always reported alongside which model produced it.
+func loadEmbedder() (ports.EmbeddingProvider, string, []float32, int) {
+	if dir := findModel2VecAssets(); dir != "" {
+		if p, err := model2vec.New(dir); err == nil {
+			// Probe one Embed to get the produced dimension so the
+			// vector-store seeding code uses the right size.
+			vec, err := p.Embed(context.Background(), "probe")
+			if err == nil {
+				return p, "model2vec:" + filepath.Base(dir), vec, len(vec)
+			}
+		}
+	}
+	return synthcorpus.FakeEmbedder{}, "fake", nil, synthcorpus.FakeEmbeddingDim
+}
+
+// findModel2VecAssets walks up from this source file looking for the
+// repo's embedded-model assets dir. The assets are gitignored (the
+// ~62MB safetensors blob lives there only after `make fetch-embed-assets`
+// or `make build`), so an empty return is normal in a clean clone.
+func findModel2VecAssets() string {
+	_, file, _, ok := runtime.Caller(0)
+	if !ok {
+		return ""
+	}
+	dir := filepath.Dir(file)
+	for range 8 {
+		candidate := filepath.Join(dir, "internal", "infrastructure", "embedding", "model2vec", "assets", "potion-code-16M")
+		if st, err := os.Stat(filepath.Join(candidate, "model.safetensors")); err == nil && !st.IsDir() {
+			return candidate
+		}
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			return ""
+		}
+		dir = parent
+	}
+	return ""
+}
 
 // TestTokenEfficiency is the headline harness. Wiring mirrors
 // recall.TestRecall — synthetic semantic corpus, fake embedder, real
@@ -45,7 +95,6 @@ func TestTokenEfficiency(t *testing.T) {
 	const k = 10
 
 	corpus := synthcorpus.GenerateSemanticCorpus(nodesPerCluster)
-	pop := len(corpus.Nodes)
 	clusters := corpus.Clusters
 
 	// --- build the simulated filesystem -----------------------------------
@@ -89,23 +138,20 @@ func TestTokenEfficiency(t *testing.T) {
 		t.Fatalf("vector.NewVectorStorage: %v", err)
 	}
 
-	dim := synthcorpus.FakeEmbeddingDim
-	rows := make([]domain.EmbeddingRow, pop)
-	for i, n := range corpus.Nodes {
-		rows[i] = domain.EmbeddingRow{
-			NodeID:      n.NodeID,
-			ContentHash: "h-" + n.NodeID,
-			ModelID:     "fake-hash-v1",
-			Vector:      append([]float32(nil), synthcorpus.FakeEmbed(n.Text)...),
-		}
+	embedder, embedderName, _, _ := loadEmbedder()
+	bgCtx := context.Background()
+	rows, err := embedAllNodes(bgCtx, embedder, embedderName, corpus.Nodes)
+	if err != nil {
+		t.Fatalf("embed nodes: %v", err)
 	}
-	_ = dim
-	if err := vstore.UpsertEmbeddings(context.Background(), repoID, branch, rows); err != nil {
+	if err := vstore.UpsertEmbeddings(bgCtx, repoID, branch, rows); err != nil {
 		t.Fatalf("UpsertEmbeddings: %v", err)
 	}
 
 	// --- run the query loop ----------------------------------------------
-	svc := search.NewService(synthcorpus.FakeEmbedder{}, vstore, sqlite.NewNodeLookupRepo(db))
+	svc := search.NewService(embedder, vstore, sqlite.NewNodeLookupRepo(db),
+		search.WithLexicalSearcher(sqlite.NewLexicalRepo(db)),
+	)
 	truth := corpus.TruthByCluster()
 
 	perQuery := make([]PerQuery, 0, clusters)
@@ -117,9 +163,8 @@ func TestTokenEfficiency(t *testing.T) {
 	savingsLo := make([]float64, 0, clusters)
 	savingsHi := make([]float64, 0, clusters)
 
-	ctx := context.Background()
 	for cluster, q := range corpus.CenterQueries {
-		resp, err := svc.Semantic(ctx, repoID, branch, q, k, domain.Filter{})
+		resp, err := svc.Semantic(bgCtx, repoID, branch, q, k, domain.Filter{})
 		if err != nil {
 			t.Fatalf("Semantic(cluster %d): %v", cluster, err)
 		}
@@ -171,15 +216,19 @@ func TestTokenEfficiency(t *testing.T) {
 		MeanSavingsHiVsGrep: Mean(savingsHi),
 		MeanGrepLoRecall:    Mean(loRecalls),
 		PerQuery:            perQuery,
-		CorpusNote:          "auto-generated semantic synthcorpus; ground truth is by cluster construction (biases recall up vs human-annotated corpora)",
-		Timestamp:           time.Now().UTC(),
+		CorpusNote: fmt.Sprintf(
+			"auto-generated semantic synthcorpus; ground truth is by cluster construction; embedder=%s",
+			embedderName,
+		),
+		Embedder:  embedderName,
+		Timestamp: time.Now().UTC(),
 	}
 	if err := writeJSON("results.json", res); err != nil {
 		t.Fatalf("writeJSON: %v", err)
 	}
 	fmt.Println(res.SummaryLine())
-	fmt.Printf("TOKENEFF queries=%d recall=%.2f veska_tok=%.0f grep_lo=%.0f grep_hi=%.0f savings=[%.0f%%, %.0f%%]\n",
-		res.Queries, res.MeanRecall, res.MeanVeskaTokens, res.MeanGrepLoTokens, res.MeanGrepHiTokens,
+	fmt.Printf("TOKENEFF embedder=%s queries=%d recall=%.2f veska_tok=%.0f grep_lo=%.0f grep_hi=%.0f savings=[%.0f%%, %.0f%%]\n",
+		embedderName, res.Queries, res.MeanRecall, res.MeanVeskaTokens, res.MeanGrepLoTokens, res.MeanGrepHiTokens,
 		res.MeanSavingsLoVsGrep*100, res.MeanSavingsHiVsGrep*100,
 	)
 
@@ -228,6 +277,43 @@ func seedNodesWithSnippets(t *testing.T, db *sql.DB, repoID, branch string, node
 	if err := tx.Commit(); err != nil {
 		t.Fatalf("commit: %v", err)
 	}
+	seedFTS(t, db, repoID, branch, nodes)
+}
+
+// seedFTS pushes each node's Text into the production FTS5 virtual
+// tables (node_fts_words + node_fts_trigrams). Wiring LexicalRepo on
+// top of these tables gives the search.Service a real lexical
+// retriever, which is what makes cross-repo global RRF actually
+// discriminate (vector-only RRF leaves every repo's rank-1 tied at
+// 1/(60+1), and the cross-repo top-K becomes ~uniform across repos).
+func seedFTS(t *testing.T, db *sql.DB, repoID, branch string, nodes []synthcorpus.SyntheticNode) {
+	t.Helper()
+	tx, err := db.Begin()
+	if err != nil {
+		t.Fatalf("fts begin: %v", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+	wordsStmt, err := tx.Prepare(`INSERT INTO node_fts_words (node_id, branch, repo_id, words) VALUES (?, ?, ?, ?)`)
+	if err != nil {
+		t.Fatalf("fts prepare words: %v", err)
+	}
+	defer wordsStmt.Close()
+	triStmt, err := tx.Prepare(`INSERT INTO node_fts_trigrams (node_id, branch, repo_id, raw) VALUES (?, ?, ?, ?)`)
+	if err != nil {
+		t.Fatalf("fts prepare trigrams: %v", err)
+	}
+	defer triStmt.Close()
+	for _, n := range nodes {
+		if _, err := wordsStmt.Exec(n.NodeID, branch, repoID, tokenize.Symbol(n.Text)); err != nil {
+			t.Fatalf("fts words insert: %v", err)
+		}
+		if _, err := triStmt.Exec(n.NodeID, branch, repoID, n.Text); err != nil {
+			t.Fatalf("fts trigrams insert: %v", err)
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		t.Fatalf("fts commit: %v", err)
+	}
 }
 
 func envInt(key string, def int) int {
@@ -245,6 +331,30 @@ func writeJSON(path string, v any) error {
 		return err
 	}
 	return os.WriteFile(path, append(b, '\n'), 0o644)
+}
+
+// embedAllNodes runs embedder.Embed over every node's Text and returns
+// the EmbeddingRow batch ready for VectorStorage.UpsertEmbeddings. The
+// ContentHash is a placeholder ("h-<NodeID>") — these rows never go
+// through the real promotion path. ModelID derives from embedderName so
+// the cached vectors are tagged with the actual model that produced
+// them (sqlite-vec doesn't read ModelID for search, but downstream
+// debugging is much easier when the column isn't lying).
+func embedAllNodes(ctx context.Context, embedder ports.EmbeddingProvider, embedderName string, nodes []synthcorpus.SyntheticNode) ([]domain.EmbeddingRow, error) {
+	out := make([]domain.EmbeddingRow, len(nodes))
+	for i, n := range nodes {
+		vec, err := embedder.Embed(ctx, n.Text)
+		if err != nil {
+			return nil, fmt.Errorf("embed %s: %w", n.NodeID, err)
+		}
+		out[i] = domain.EmbeddingRow{
+			NodeID:      n.NodeID,
+			ContentHash: "h-" + n.NodeID,
+			ModelID:     embedderName,
+			Vector:      vec,
+		}
+	}
+	return out, nil
 }
 
 // Reference _ usage so unused-import linters stay quiet under sparse
