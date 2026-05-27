@@ -41,6 +41,29 @@ var removeRepoInputSchema = json.RawMessage(`{
   "required": ["repo_id"]
 }`)
 
+var setRepoAliasInputSchema = json.RawMessage(`{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "description": "Bind a human-friendly alias to a repo. repo_id may be any form that resolves: full id, short_id, an existing alias, or an unambiguous prefix (>= 4 chars).",
+  "properties": {
+    "name":    {"type": "string", "description": "The alias to set. Rejected if hex-only and >= 4 chars (would shadow the prefix resolver) or if it contains whitespace."},
+    "repo_id": {"type": "string", "description": "Repo to bind. Resolved via the standard repo_id progression."},
+    "force":   {"type": "boolean", "description": "Overwrite an existing alias pointing at a different repo. Default false."}
+  },
+  "required": ["name", "repo_id"]
+}`)
+
+var removeRepoAliasInputSchema = json.RawMessage(`{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "name": {"type": "string", "description": "The alias to remove. Errors if unknown so a typo is loud."}
+  },
+  "required": ["name"]
+}`)
+
 var promoteRepoInputSchema = json.RawMessage(`{
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "type": "object",

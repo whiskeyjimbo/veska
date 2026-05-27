@@ -3,9 +3,12 @@ package mcp
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 
+	application "github.com/whiskeyjimbo/veska/internal/application"
 	"github.com/whiskeyjimbo/veska/internal/core/domain"
+	"github.com/whiskeyjimbo/veska/internal/repo"
 )
 
 // RepoRegistrar registers and deregisters tracked repositories. It is the
@@ -19,12 +22,20 @@ import (
 type RepoRegistrar interface {
 	AddRepo(ctx context.Context, rootPath string) (repoID string, existed bool, err error)
 	RemoveRepo(ctx context.Context, repoID string) error
+	// SetAlias binds name to repoID. force=true overwrites an existing
+	// binding to a different repo; without it, the conflict surfaces as
+	// an ErrAliasExists (solov2-7w1t).
+	SetAlias(ctx context.Context, name, repoID string, force bool) error
+	// RemoveAlias drops the alias name. Unknown names return an error so
+	// a typo is loud (solov2-7w1t).
+	RemoveAlias(ctx context.Context, name string) error
 }
 
-// RegisterRepoTools registers eng_add_repo and eng_remove_repo on r.
-// reg is the RepoRegistrar adapter; when nil, both tools return an
-// internal error so a misconfigured daemon fails loudly rather than silently.
-func RegisterRepoTools(r *Registry, reg RepoRegistrar) {
+// RegisterRepoTools registers eng_add_repo / eng_remove_repo /
+// eng_set_repo_alias / eng_remove_repo_alias on r. reg is the
+// RepoRegistrar adapter; when nil, the tools return an internal error so
+// a misconfigured daemon fails loudly rather than silently.
+func RegisterRepoTools(r *Registry, reg RepoRegistrar, repos application.RepoLister) {
 	r.MustRegister(ToolSpec{
 		Name:            "eng_add_repo",
 		Description:     "Register a new repo path; the daemon kicks off a cold scan in the background.",
@@ -38,6 +49,20 @@ func RegisterRepoTools(r *Registry, reg RepoRegistrar) {
 		IncludesStaging: false,
 		InputSchema:     removeRepoInputSchema,
 		Handler:         makeRemoveRepoHandler(reg),
+	})
+	r.MustRegister(ToolSpec{
+		Name:            "eng_set_repo_alias",
+		Description:     "Bind a human-friendly alias to a repo. Resolves repo_id via the usual progression (full id, short_id, existing alias, prefix). force=true overwrites an existing alias on a different repo.",
+		IncludesStaging: false,
+		InputSchema:     setRepoAliasInputSchema,
+		Handler:         makeSetRepoAliasHandler(reg, repos),
+	})
+	r.MustRegister(ToolSpec{
+		Name:            "eng_remove_repo_alias",
+		Description:     "Remove a user-defined alias by name.",
+		IncludesStaging: false,
+		InputSchema:     removeRepoAliasInputSchema,
+		Handler:         makeRemoveRepoAliasHandler(reg),
 	})
 }
 
@@ -108,6 +133,87 @@ func makeRemoveRepoHandler(reg RepoRegistrar) ToolHandler {
 
 		return map[string]any{
 			"repo_id": p.RepoID,
+			"removed": true,
+		}, nil
+	}
+}
+
+// ---------------------------------------------------------------------------
+// eng_set_repo_alias (solov2-7w1t)
+// ---------------------------------------------------------------------------
+
+type setRepoAliasParams struct {
+	Name   string `json:"name"`
+	RepoID string `json:"repo_id"`
+	Force  bool   `json:"force"`
+}
+
+func makeSetRepoAliasHandler(reg RepoRegistrar, repos application.RepoLister) ToolHandler {
+	return func(ctx context.Context, _ domain.Actor, raw json.RawMessage) (any, *RPCError) {
+		var p setRepoAliasParams
+		if rpcErr := bindParams(raw, &p); rpcErr != nil {
+			return nil, rpcErr
+		}
+		if rpcErr := checkRequired("name", p.Name); rpcErr != nil {
+			return nil, rpcErr
+		}
+		if rpcErr := checkRequired("repo_id", p.RepoID); rpcErr != nil {
+			return nil, rpcErr
+		}
+		if reg == nil {
+			return nil, &RPCError{Code: CodeInternalError, Message: "repo registrar unavailable"}
+		}
+
+		canonical, rpcErr := resolveRepoID(ctx, repos, p.RepoID)
+		if rpcErr != nil {
+			return nil, rpcErr
+		}
+
+		if err := reg.SetAlias(ctx, p.Name, canonical, p.Force); err != nil {
+			switch {
+			case errors.Is(err, repo.ErrAliasExists):
+				return nil, &RPCError{Code: CodeInvalidParams, Message: fmt.Sprintf("%v (pass force=true to overwrite)", err)}
+			case errors.Is(err, repo.ErrAliasInvalid):
+				return nil, &RPCError{Code: CodeInvalidParams, Message: err.Error()}
+			default:
+				return nil, &RPCError{Code: CodeInternalError, Message: fmt.Sprintf("set alias: %v", err)}
+			}
+		}
+		return map[string]any{
+			"name":    p.Name,
+			"repo_id": canonical,
+		}, nil
+	}
+}
+
+// ---------------------------------------------------------------------------
+// eng_remove_repo_alias (solov2-7w1t)
+// ---------------------------------------------------------------------------
+
+type removeRepoAliasParams struct {
+	Name string `json:"name"`
+}
+
+func makeRemoveRepoAliasHandler(reg RepoRegistrar) ToolHandler {
+	return func(ctx context.Context, _ domain.Actor, raw json.RawMessage) (any, *RPCError) {
+		var p removeRepoAliasParams
+		if rpcErr := bindParams(raw, &p); rpcErr != nil {
+			return nil, rpcErr
+		}
+		if rpcErr := checkRequired("name", p.Name); rpcErr != nil {
+			return nil, rpcErr
+		}
+		if reg == nil {
+			return nil, &RPCError{Code: CodeInternalError, Message: "repo registrar unavailable"}
+		}
+		if err := reg.RemoveAlias(ctx, p.Name); err != nil {
+			if errors.Is(err, repo.ErrAliasNotFound) {
+				return nil, &RPCError{Code: CodeNotFound, Message: err.Error()}
+			}
+			return nil, &RPCError{Code: CodeInternalError, Message: fmt.Sprintf("remove alias: %v", err)}
+		}
+		return map[string]any{
+			"name":    p.Name,
 			"removed": true,
 		}, nil
 	}

@@ -240,13 +240,21 @@ func (s *stubRepoRegistrar) RemoveRepo(_ context.Context, repoID string) error {
 	return s.rmErr
 }
 
+func (s *stubRepoRegistrar) SetAlias(_ context.Context, _ string, _ string, _ bool) error {
+	return nil
+}
+
+func (s *stubRepoRegistrar) RemoveAlias(_ context.Context, _ string) error {
+	return nil
+}
+
 func TestAddRepo(t *testing.T) {
 	actor := domain.Actor{ID: "human:alice", Kind: domain.ActorKindHuman}
 
 	t.Run("registers and returns", func(t *testing.T) {
 		reg := &stubRepoRegistrar{addID: "repo-abc"}
 		r := NewRegistry()
-		RegisterRepoTools(r, reg)
+		RegisterRepoTools(r, reg, nil)
 
 		result, rpcErr := dispatchSuppression(t, r, "eng_add_repo", actor, map[string]any{
 			"root_path": "/tmp/proj",
@@ -268,7 +276,7 @@ func TestAddRepo(t *testing.T) {
 
 	t.Run("missing root_path", func(t *testing.T) {
 		r := NewRegistry()
-		RegisterRepoTools(r, &stubRepoRegistrar{})
+		RegisterRepoTools(r, &stubRepoRegistrar{}, nil)
 		_, rpcErr := dispatchSuppression(t, r, "eng_add_repo", actor, map[string]any{})
 		if rpcErr == nil || rpcErr.Code != CodeInvalidParams {
 			t.Fatalf("expected CodeInvalidParams, got %v", rpcErr)
@@ -282,7 +290,7 @@ func TestRemoveRepo(t *testing.T) {
 	t.Run("drops repo rows", func(t *testing.T) {
 		reg := &stubRepoRegistrar{}
 		r := NewRegistry()
-		RegisterRepoTools(r, reg)
+		RegisterRepoTools(r, reg, nil)
 
 		result, rpcErr := dispatchSuppression(t, r, "eng_remove_repo", actor, map[string]any{
 			"repo_id": "repo-xyz",
@@ -300,7 +308,7 @@ func TestRemoveRepo(t *testing.T) {
 
 	t.Run("missing repo_id", func(t *testing.T) {
 		r := NewRegistry()
-		RegisterRepoTools(r, &stubRepoRegistrar{})
+		RegisterRepoTools(r, &stubRepoRegistrar{}, nil)
 		_, rpcErr := dispatchSuppression(t, r, "eng_remove_repo", actor, map[string]any{})
 		if rpcErr == nil || rpcErr.Code != CodeInvalidParams {
 			t.Fatalf("expected CodeInvalidParams, got %v", rpcErr)

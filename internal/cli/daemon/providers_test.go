@@ -43,6 +43,12 @@ func providersTestDB(t *testing.T) *sql.DB {
 			last_accessed_at  INTEGER,
 			prompted_at       INTEGER
 		)`,
+		`CREATE TABLE repo_aliases (
+			name     TEXT PRIMARY KEY,
+			repo_id  TEXT NOT NULL,
+			FOREIGN KEY (repo_id) REFERENCES repos(repo_id) ON DELETE CASCADE
+		)`,
+		`CREATE INDEX idx_repo_aliases_repo_id ON repo_aliases(repo_id)`,
 		`CREATE TABLE node_embedding_refs (
 			node_id     TEXT PRIMARY KEY,
 			state       TEXT NOT NULL,
@@ -272,6 +278,13 @@ func newAddRepoTestEnv(t *testing.T) (*sql.DB, string) {
 		prompted_at       INTEGER
 	)`); err != nil {
 		t.Fatalf("create repos: %v", err)
+	}
+	if _, err := db.Exec(`CREATE TABLE repo_aliases (
+		name     TEXT PRIMARY KEY,
+		repo_id  TEXT NOT NULL,
+		FOREIGN KEY (repo_id) REFERENCES repos(repo_id) ON DELETE CASCADE
+	)`); err != nil {
+		t.Fatalf("create repo_aliases: %v", err)
 	}
 
 	root := t.TempDir()

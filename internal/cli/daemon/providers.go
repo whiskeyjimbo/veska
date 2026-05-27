@@ -138,6 +138,17 @@ func (rr *repoRegistrar) RemoveRepo(ctx context.Context, repoID string) error {
 	return repo.Remove(ctx, rr.db, repoID)
 }
 
+// SetAlias and RemoveAlias adapt internal/repo's alias CRUD to the MCP
+// RepoRegistrar port (solov2-7w1t). SetAlias accepts the already-resolved
+// canonical repo_id; the MCP handler does the resolution step.
+func (rr *repoRegistrar) SetAlias(ctx context.Context, name, repoID string, force bool) error {
+	return repo.SetAlias(ctx, rr.db, name, repoID, force)
+}
+
+func (rr *repoRegistrar) RemoveAlias(ctx context.Context, name string) error {
+	return repo.RemoveAlias(ctx, rr.db, name)
+}
+
 // repoLister adapts internal/repo's registry List to the
 // application.RepoLister port consumed by the admin MCP tools. It lives in the
 // composition root so internal/repo need not import internal/application.
@@ -170,6 +181,7 @@ func toAppRecord(r repo.Record) application.RepoRecord {
 		ActiveBranch:    r.ActiveBranch,
 		LastPromotedSHA: r.LastPromotedSHA,
 		Kind:            r.Kind,
+		Aliases:         r.Aliases,
 	}
 }
 

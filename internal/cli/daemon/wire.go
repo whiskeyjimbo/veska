@@ -875,7 +875,7 @@ func registerMCPTools(r *mcp.Registry, d mcpDeps) {
 	if reg == nil {
 		reg = &repoRegistrar{db: pools.Write}
 	}
-	mcp.RegisterRepoTools(r, reg)
+	mcp.RegisterRepoTools(r, reg, &repoLister{db: pools.ReadDB})
 
 	// eng_promote (solov2-3vv): post-commit hook target. Requires ingester
 	// + promoter + a GitQuerier — when any are missing we skip registration
