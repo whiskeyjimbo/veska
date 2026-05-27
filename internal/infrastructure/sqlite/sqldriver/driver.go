@@ -1,14 +1,41 @@
-// Package sqldriver selects veska's SQLite driver at build time.
+// Package sqldriver pins veska's SQLite driver.
 //
-// Default build: modernc.org/sqlite (pure-Go, no cgo). This is production.
-// Build with `-tags=sqlite_mattn` and `CGO_ENABLED=1` to swap in the cgo
-// driver `github.com/mattn/go-sqlite3` (which additionally needs the
-// `sqlite_fts5` tag, because veska's lexical fallback uses FTS5 virtual
-// tables).
-//
-// The shim exists for solov2-jkgp: end-to-end measurement of whether
-// swapping drivers moves real veska latency enough to justify taking on
-// cgo + losing the CGO_ENABLED=0 cross-compile story. If the answer is
-// no, this package stays and the mattn variant simply rusts; if yes, the
-// build flag flips to default-on and modernc is eventually removed.
+// veska uses github.com/mattn/go-sqlite3 (cgo, with the sqlite_fts5 build
+// tag so the lexical-fallback FTS5 virtual tables work). cgo is required
+// regardless because tree-sitter is cgo, so the historical pure-Go
+// (modernc) opt-in had no remaining value and was removed (solov2-bu1h).
 package sqldriver
+
+import (
+	"fmt"
+	"net/url"
+	"strings"
+
+	_ "github.com/mattn/go-sqlite3"
+)
+
+// Name is the database/sql driver name to pass to sql.Open.
+const Name = "sqlite3"
+
+// Variant is a human-readable label for telemetry / RESULTS.md headers.
+const Variant = "mattn"
+
+// BuildDSN encodes WAL + foreign_keys + synchronous=NORMAL + busy_timeout
+// onto dbPath as DSN-level connection pragmas using mattn's parameter
+// names.
+func BuildDSN(dbPath string, busyTimeoutMS int) string {
+	base := dbPath
+	if !strings.HasPrefix(base, "file:") {
+		base = "file:" + base
+	}
+	sep := "?"
+	if strings.Contains(base, "?") {
+		sep = "&"
+	}
+	q := url.Values{}
+	q.Set("_journal", "WAL")
+	q.Set("_fk", "true")
+	q.Set("_sync", "NORMAL")
+	q.Set("_busy_timeout", fmt.Sprintf("%d", busyTimeoutMS))
+	return base + sep + q.Encode()
+}

@@ -7,8 +7,6 @@ import (
 	"testing"
 	"time"
 
-	_ "modernc.org/sqlite"
-
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/sqlite"
 )
 

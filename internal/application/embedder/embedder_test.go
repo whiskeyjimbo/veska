@@ -27,8 +27,7 @@ import (
 func openSchemaDB(t *testing.T) *sql.DB {
 	t.Helper()
 	// Each test gets its own private in-memory DB (no cache=shared) so
-	// parallel/sequential tests don't see each other's rows. Using a
-	// random name in case modernc.org/sqlite ever changes the default.
+	// parallel/sequential tests don't see each other's rows.
 	dsn := "file:" + t.Name() + "?mode=memory&_foreign_keys=on"
 	db, err := sql.Open(sqldriver.Name, dsn)
 	if err != nil {

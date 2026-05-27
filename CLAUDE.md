@@ -115,7 +115,7 @@ internal/
 
 | Dependency | Purpose | Notes |
 |---|---|---|
-| SQLite (`github.com/mattn/go-sqlite3`, in-proc, cgo + `sqlite_fts5`) | graph + queue + FTS storage | no server process. Driver is selected by the build-tag shim at `internal/infrastructure/sqlite/sqldriver/`; mattn is the default (solov2-jkgp: 1.6–2.5× over modernc on driver-bound workloads). Opt back into the pure-Go `modernc.org/sqlite` for an FTS5-free build via `make SQLITE_TAGS=sqlite_modernc …` — note cgo is still required regardless because tree-sitter needs it. |
+| SQLite (`github.com/mattn/go-sqlite3`, in-proc, cgo + `sqlite_fts5`) | graph + queue + FTS storage | no server process. Pinned via `internal/infrastructure/sqlite/sqldriver/`; chosen for the 1.6–2.5× speedup over modernc on driver-bound workloads (solov2-jkgp). The pure-Go modernc opt-in was removed (solov2-bu1h) because tree-sitter requires cgo anyway, so the no-cgo cross-compile story it preserved did not actually exist. |
 | sqlite-vec / usearch | vector storage | sqlite-vec default; usearch HNSW above the M2 threshold (`hnsw_native` tag + `libusearch_c.so`) |
 | Ollama | local embeddings | `VESKA_OLLAMA_URL` (default `http://localhost:11434`), `VESKA_EMBED_MODEL` (default `nomic-embed-text`) |
 

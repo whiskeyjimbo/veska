@@ -10,8 +10,6 @@ import (
 	"testing"
 	"time"
 
-	_ "modernc.org/sqlite"
-
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/sqlite"
 )
 
@@ -204,8 +202,7 @@ func TestOpenPools_ConcurrentWrites_NoSQLITEBUSY(t *testing.T) {
 	close(errs)
 
 	for err := range errs {
-		// SQLITE_BUSY = 5; modernc surfaces it inside a wrapped string. The
-		// invariant under test is that callers never see it.
+		// SQLITE_BUSY = 5; the invariant under test is that callers never see it.
 		if err != nil && (errors.Is(err, sql.ErrTxDone) || strings.Contains(err.Error(), "SQLITE_BUSY") || strings.Contains(err.Error(), "database is locked")) {
 			t.Errorf("concurrent writer hit SQLITE_BUSY/locked: %v", err)
 		} else if err != nil {

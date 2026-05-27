@@ -8,8 +8,6 @@ import (
 	"path/filepath"
 	"testing"
 
-	_ "modernc.org/sqlite"
-
 	"github.com/whiskeyjimbo/veska/internal/repo"
 )
 

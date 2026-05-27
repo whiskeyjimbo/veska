@@ -6,12 +6,9 @@ DAEMON_BIN      := $(BINDIR)/veska-daemon
 MCP_BIN         := $(BINDIR)/veska-mcp
 LAYERCHECK_BIN  := $(BINDIR)/layercheck
 
-# solov2-jkgp: production SQLite driver is `github.com/mattn/go-sqlite3`
-# (cgo + sqlite_fts5 are mandatory; the lexical-fallback path uses FTS5
-# virtual tables). Set on every `go build`/`go test` that touches the
-# production sqlite layer. To opt back into the pure-Go modernc driver
-# (e.g. for a CGO_ENABLED=0 cross-compile), set SQLITE_TAGS=sqlite_modernc
-# and SQLITE_CGO_ENV='' from the command line.
+# solov2-jkgp: SQLite driver is `github.com/mattn/go-sqlite3` (cgo +
+# sqlite_fts5 are mandatory; the lexical-fallback path uses FTS5 virtual
+# tables). tree-sitter requires cgo anyway, so there is no no-cgo build.
 SQLITE_TAGS    ?= sqlite_fts5
 SQLITE_CGO_ENV ?= CGO_ENABLED=1
 
@@ -176,9 +173,9 @@ eval-autolink-fp:
 eval-revalidate-bench:
 	$(SQLITE_CGO_ENV) go test -tags "eval $(SQLITE_TAGS)" -run TestRevalidateBench ./tools/loadtest/revalidate/ -v -count=1 -timeout=120s
 
-# eval-dbbench: solov2-6e5r — compare Go SQLite drivers (modernc, mattn,
-# zombiezen) against veska's storage workloads. Pure-Go variant (modernc +
-# zombiezen). Writes tools/loadtest/dbbench/RESULTS.md. See README.
+# eval-dbbench: solov2-6e5r — compare Go SQLite drivers (mattn, zombiezen)
+# against veska's storage workloads. Pure-Go variant (zombiezen only).
+# Writes tools/loadtest/dbbench/RESULTS.md. See README.
 eval-dbbench:
 	go test -tags=eval -run TestDBBench ./tools/loadtest/dbbench/ -v -count=1 -timeout=600s
 
