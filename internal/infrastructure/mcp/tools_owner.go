@@ -66,8 +66,14 @@ type findOwnerParams struct {
 	// Path is an accepted alias for FilePath, matching the precedent set by
 	// eng_get_file_nodes. Users naturally reach for "path"; honouring both
 	// keeps the MCP surface internally consistent (solov2-jtl5.10).
-	Path   string `json:"path"`
+	Path string `json:"path"`
+	// Symbol / NodeID resolve to the defining file's path before the
+	// CODEOWNERS / blame lookup. Mirrors the symbol-or-node pattern other
+	// eng_* tools accept (find_symbol, get_blast_radius, ...) — solov2-mmox.
+	Symbol string `json:"symbol"`
+	NodeID string `json:"node_id"`
 	RepoID string `json:"repo_id"`
+	Branch string `json:"branch"`
 }
 
 func makeFindOwnerHandler(db *sql.DB) ToolHandler {
@@ -79,11 +85,18 @@ func makeFindOwnerHandler(db *sql.DB) ToolHandler {
 		if p.FilePath == "" {
 			p.FilePath = p.Path
 		}
-		if p.FilePath == "" {
-			return nil, &RPCError{Code: CodeInvalidParams, Message: "file_path (or alias 'path') is required"}
-		}
 		if p.RepoID == "" {
 			return nil, &RPCError{Code: CodeInvalidParams, Message: "repo_id is required"}
+		}
+		if p.FilePath == "" && (p.Symbol != "" || p.NodeID != "") {
+			fp, ferr := lookupNodeFilePath(db, p.RepoID, p.Branch, p.Symbol, p.NodeID)
+			if ferr != nil {
+				return nil, ferr
+			}
+			p.FilePath = fp
+		}
+		if p.FilePath == "" {
+			return nil, &RPCError{Code: CodeInvalidParams, Message: "file_path (or alias 'path'), or one of symbol/node_id, is required"}
 		}
 
 		root := resolveOwnerRoot(db, p.RepoID)
@@ -114,6 +127,76 @@ func makeFindOwnerHandler(db *sql.DB) ToolHandler {
 			"source": nil,
 			"reason": reason,
 		}, nil
+	}
+}
+
+// lookupNodeFilePath resolves a symbol or node_id to its defining file
+// path under (repoID, branch), so eng_find_owner accepts the same
+// symbol-or-node-id pattern as the rest of the eng_* surface
+// (solov2-mmox). Returns (filePath, nil) on a single match; an empty
+// string + RPCError when no row or ambiguous matches are found. branch
+// may be empty: when so, we pick the row with the largest node_id and
+// don't constrain the branch.
+func lookupNodeFilePath(db *sql.DB, repoID, branch, symbol, nodeID string) (string, *RPCError) {
+	if db == nil {
+		return "", &RPCError{Code: CodeInternalError, Message: "find_owner: no database wired for symbol/node_id resolution"}
+	}
+	// Accept short_id (12-char prefix) for parity with the rest of the
+	// eng_* surface — solov2-mha4 / solov2-mmox.
+	if len(repoID) < 64 {
+		rows, qerr := db.Query(`SELECT repo_id FROM repos`)
+		if qerr == nil {
+			for rows.Next() {
+				var id string
+				if rows.Scan(&id) == nil && (id == repoID || ShortRepoID(id) == repoID) {
+					repoID = id
+					break
+				}
+			}
+			rows.Close()
+		}
+	}
+	if nodeID != "" {
+		// Accept full node_id or a short prefix (>=8 chars), mirroring
+		// how other eng_* tools resolve node ids.
+		var fp string
+		err := db.QueryRow(`SELECT file_path FROM nodes WHERE repo_id = ? AND (node_id = ? OR node_id LIKE ?) LIMIT 1`, repoID, nodeID, nodeID+"%").Scan(&fp)
+		if err == sql.ErrNoRows {
+			return "", &RPCError{Code: CodeNotFound, Message: fmt.Sprintf("find_owner: node_id %s not found in repo %s", nodeID, repoID)}
+		}
+		if err != nil {
+			return "", &RPCError{Code: CodeInternalError, Message: fmt.Sprintf("find_owner: node lookup: %v", err)}
+		}
+		return fp, nil
+	}
+	// Match the bare symbol against either the full symbol_path
+	// ("pkg.Sym") or its trailing component ("Sym").
+	args := []any{repoID, symbol, "%." + symbol}
+	q := `SELECT DISTINCT file_path FROM nodes WHERE repo_id = ? AND (symbol_path = ? OR symbol_path LIKE ?)`
+	if branch != "" {
+		q += ` AND branch = ?`
+		args = append(args, branch)
+	}
+	q += ` LIMIT 2`
+	rows, err := db.Query(q, args...)
+	if err != nil {
+		return "", &RPCError{Code: CodeInternalError, Message: fmt.Sprintf("find_owner: symbol lookup: %v", err)}
+	}
+	defer rows.Close()
+	var paths []string
+	for rows.Next() {
+		var fp string
+		if err := rows.Scan(&fp); err == nil {
+			paths = append(paths, fp)
+		}
+	}
+	switch len(paths) {
+	case 0:
+		return "", &RPCError{Code: CodeNotFound, Message: fmt.Sprintf("find_owner: symbol %q not found in repo %s", symbol, repoID)}
+	case 1:
+		return paths[0], nil
+	default:
+		return "", &RPCError{Code: CodeInvalidParams, Message: fmt.Sprintf("find_owner: symbol %q is ambiguous (multiple files match) — pass file_path or node_id", symbol)}
 	}
 }
 

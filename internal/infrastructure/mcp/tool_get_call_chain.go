@@ -176,6 +176,18 @@ func makeGetCallChainHandler(graph ports.GraphStorage, resolve ResolveFunc, reso
 					if e.Kind != domain.EdgeCalls {
 						continue
 					}
+					// solov2-rkc5: skip CALLS edges that originate from a
+					// package (or other non-callable container) node. The
+					// extractor sometimes attaches a coarse "package calls
+					// function" edge when it can't resolve the call site
+					// to a specific function — surfacing those as
+					// "callers" misleads the user, who expects function-
+					// level call sites. The edge itself is preserved in
+					// the graph for downstream tooling; we just don't
+					// present it here.
+					if src, ok := g.Node(e.Src); ok && !isCallableKind(src.Kind) {
+						continue
+					}
 					if !visitedEdges[e.ID] {
 						visitedEdges[e.ID] = true
 						resultEdges = append(resultEdges, e)
@@ -214,5 +226,19 @@ func makeGetCallChainHandler(graph ports.GraphStorage, resolve ResolveFunc, reso
 			IncludedStaging: false,
 			DegradedReasons: reasons,
 		}, nil
+	}
+}
+
+// isCallableKind reports whether a node kind represents an actual call
+// site source. Containers (package, file, module, chunk) sometimes
+// appear as edge sources when the extractor can't pin a call to a
+// specific function — filter them out of caller-listings so users see
+// real callers (solov2-rkc5).
+func isCallableKind(k domain.NodeKind) bool {
+	switch k {
+	case domain.KindPackage, domain.KindFile, domain.KindModule, domain.KindChunk:
+		return false
+	default:
+		return true
 	}
 }

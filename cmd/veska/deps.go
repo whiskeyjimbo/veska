@@ -47,16 +47,28 @@ func depsListCmd() *cobra.Command {
 		limit    int
 	)
 	cmd := &cobra.Command{
-		Use:          "list",
+		Use:          "list [<id-or-path>]",
 		Short:        "List external modules the repo imports, ranked by call-site usage",
-		Args:         cobra.NoArgs,
+		Args:         cobra.MaximumNArgs(1),
 		SilenceUsage: true,
-		RunE: func(cmd *cobra.Command, _ []string) error {
+		RunE: func(cmd *cobra.Command, args []string) error {
+			// solov2-mtd0: accept the same identifiers `repo add` / `reindex`
+			// do (path, repo_id, short_id) so the CLI is consistent. Falls
+			// back to --repo, then to cwd-resolved repo.
 			params := map[string]any{}
-			if repoFlag != "" {
-				params["repo_id"] = repoFlag
-			} else if rid := autoResolveRepo(cmd.Context(), cmd.ErrOrStderr()); rid != "" {
+			switch {
+			case len(args) == 1:
+				rid, err := resolveRepoArg(cmd.Context(), args[0])
+				if err != nil {
+					return fmt.Errorf("deps: %w", err)
+				}
 				params["repo_id"] = rid
+			case repoFlag != "":
+				params["repo_id"] = repoFlag
+			default:
+				if rid := autoResolveRepo(cmd.Context(), cmd.ErrOrStderr()); rid != "" {
+					params["repo_id"] = rid
+				}
 			}
 			var resp struct {
 				Dependencies []struct {

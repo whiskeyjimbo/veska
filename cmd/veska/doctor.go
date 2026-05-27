@@ -650,10 +650,20 @@ func doctorStatusCmd() *cobra.Command {
 				egressStatus = "stopped"
 			}
 
-			// Compute config status.
+			// Compute config status. solov2-lp44: the DB file is created
+			// on first daemon boot, so a missing veska.db between `veska
+			// init` and `veska service start` is the expected state —
+			// surfacing it as "config=degraded" misled fresh users into
+			// thinking config.toml was broken. Demote that single cause
+			// to "pending" so it doesn't double-report what the
+			// daemon-stopped line already says.
 			configStatus := "healthy"
 			if !configReport.DBExists {
-				configStatus = "degraded"
+				if daemonStopped {
+					configStatus = "pending"
+				} else {
+					configStatus = "degraded"
+				}
 			}
 
 			// Storage is always healthy (no failure mode currently).
