@@ -156,6 +156,10 @@ type RepoView struct {
 	// pre-kxo5.2 rows fall through the migration DEFAULT to 'tracked'
 	// (solov2-kxo5.9).
 	Kind string `json:"kind"`
+	// Aliases is the list of user-defined human-friendly names bound to
+	// this repo (solov2-7w1t). Empty when none are set. Accepted as a
+	// repo_id substitute by every tool that resolves repo_id.
+	Aliases []string `json:"aliases"`
 }
 
 // ShortRepoIDLen is the number of leading hex chars of a repo_id that the
@@ -199,6 +203,7 @@ func decorateRepo(r application.RepoRecord) RepoView {
 		LastPromotedSHA: r.LastPromotedSHA,
 		Status:          status,
 		Kind:            kind,
+		Aliases:         r.Aliases,
 	}
 }
 

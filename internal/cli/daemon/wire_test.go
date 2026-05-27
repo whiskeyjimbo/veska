@@ -280,8 +280,9 @@ func TestWire_RegistersFinalFiveTools(t *testing.T) {
 	// solov2-4d7b adds eng_reindex_repo: 31 → 32.
 	// solov2-jlws adds eng_list_dependencies: 32 → 33.
 	// solov2-2g4r adds eng_find_related: 33 → 34.
-	if got := len(names); got != 34 {
-		t.Errorf("registered tool count = %d; want 34; have=%v", got, names)
+	// solov2-7w1t adds eng_set_repo_alias + eng_remove_repo_alias: 34 → 36.
+	if got := len(names); got != 36 {
+		t.Errorf("registered tool count = %d; want 36; have=%v", got, names)
 	}
 	// Negative-check: parked tools must NOT appear.
 	for _, parked := range []string{

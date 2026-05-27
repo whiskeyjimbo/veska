@@ -12,6 +12,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"text/tabwriter"
 	"time"
@@ -36,7 +37,77 @@ func repoCmd() *cobra.Command {
 	cmd.AddCommand(repoRemoveCmd())
 	cmd.AddCommand(repoListCmd())
 	cmd.AddCommand(repoPruneCmd())
+	cmd.AddCommand(repoAliasCmd())
+	cmd.AddCommand(repoUnaliasCmd())
 	return cmd
+}
+
+// repoAliasCmd: set a user-defined human-friendly name for a repo
+// (solov2-7w1t). Resolves the supplied id against the same progression
+// as every other repo-targeted command: full id, short_id, alias, prefix.
+// --force overwrites an existing alias bound to a different repo so the
+// user gets a loud confirmation prompt by default.
+func repoAliasCmd() *cobra.Command {
+	var force bool
+	cmd := &cobra.Command{
+		Use:          "alias <name> <repo-id-or-prefix-or-alias>",
+		Short:        "Bind a human-friendly name to a repo",
+		Args:         cobra.ExactArgs(2),
+		SilenceUsage: true,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			ctx := cmd.Context()
+			name, target := args[0], args[1]
+
+			db, closeFn, err := openLocalDB()
+			if err != nil {
+				return fmt.Errorf("repo alias: %w", err)
+			}
+			defer closeFn()
+
+			recs, err := repo.List(ctx, db)
+			if err != nil {
+				return fmt.Errorf("repo alias: %w", err)
+			}
+			rec, err := resolveCLIRepoID(recs, target)
+			if err != nil {
+				return fmt.Errorf("repo alias: %w", err)
+			}
+			if err := repo.SetAlias(ctx, db, name, rec.RepoID, force); err != nil {
+				if errors.Is(err, repo.ErrAliasExists) {
+					return fmt.Errorf("repo alias: %w (re-run with --force to overwrite)", err)
+				}
+				return fmt.Errorf("repo alias: %w", err)
+			}
+			fmt.Fprintf(cmd.OutOrStdout(), "aliased %q to %s\n", name, shortRepoID(rec.RepoID))
+			return nil
+		},
+	}
+	cmd.Flags().BoolVar(&force, "force", false, "overwrite an existing alias bound to a different repo")
+	return cmd
+}
+
+// repoUnaliasCmd: remove a user-defined alias (solov2-7w1t). Errors on
+// unknown name so a typo doesn't silently succeed.
+func repoUnaliasCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:          "unalias <name>",
+		Short:        "Remove a user-defined alias",
+		Args:         cobra.ExactArgs(1),
+		SilenceUsage: true,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			ctx := cmd.Context()
+			db, closeFn, err := openLocalDB()
+			if err != nil {
+				return fmt.Errorf("repo unalias: %w", err)
+			}
+			defer closeFn()
+			if err := repo.RemoveAlias(ctx, db, args[0]); err != nil {
+				return fmt.Errorf("repo unalias: %w", err)
+			}
+			fmt.Fprintf(cmd.OutOrStdout(), "removed alias %q\n", args[0])
+			return nil
+		},
+	}
 }
 
 // repoPruneCmd is the deprecated alias for `repo remove --missing`. Hidden
@@ -69,6 +140,10 @@ type repoView struct {
 	ActiveBranch    string `json:"active_branch"`
 	LastPromotedSHA string `json:"last_promoted_sha"`
 	Kind            string `json:"kind"` // solov2-kxo5.9
+	// Aliases is the list of user-defined human-friendly names for this
+	// repo (solov2-7w1t). Surfaced in the ALIAS column of `veska repo
+	// list` and accepted anywhere a repo_id is expected.
+	Aliases []string `json:"aliases"`
 }
 
 // repoListCmd prints every registered repo (solov2-0pq). Prefers the
@@ -114,6 +189,7 @@ func repoListCmd() *cobra.Command {
 					ActiveBranch:    r.ActiveBranch,
 					LastPromotedSHA: r.LastPromotedSHA,
 					Kind:            r.Kind,
+					Aliases:         r.Aliases,
 				})
 			}
 			printRepoTable(w, views)
@@ -138,7 +214,9 @@ func shortRepoID(id string) string {
 const cliMinRepoIDPrefix = 4
 
 // resolveCLIRepoID matches the MCP resolveRepoID progression for CLI callers:
-// exact full id, then 12-char short_id, then unambiguous prefix (>= 4 chars).
+// exact full id, then 12-char short_id, then user-set alias (solov2-7w1t),
+// then unambiguous prefix (>= 4 chars). Aliases beat prefix so a typed
+// alias never gets shadowed by a colliding hex prefix.
 // Returns a typed error so CLI commands can wrap it with their own prefix
 // ("wiki: ", "reindex: ", etc.) (solov2-c7lq).
 func resolveCLIRepoID(records []repo.Record, repoID string) (repo.Record, error) {
@@ -149,6 +227,11 @@ func resolveCLIRepoID(records []repo.Record, repoID string) (repo.Record, error)
 	}
 	for _, r := range records {
 		if shortRepoID(r.RepoID) == repoID {
+			return r, nil
+		}
+	}
+	for _, r := range records {
+		if slices.Contains(r.Aliases, repoID) {
 			return r, nil
 		}
 	}
@@ -243,7 +326,7 @@ func printRepoTableWithProgress(w io.Writer, repos []repoView, progress map[stri
 		return
 	}
 	tw := tabwriter.NewWriter(w, 0, 0, 2, ' ', 0)
-	fmt.Fprintln(tw, "REPO_ID\tKIND\tBRANCH\tSTATUS\tROOT")
+	fmt.Fprintln(tw, "REPO_ID\tKIND\tALIAS\tBRANCH\tSTATUS\tROOT")
 	for _, r := range repos {
 		short := shortRepoID(r.RepoID)
 		branch := r.ActiveBranch
@@ -253,6 +336,10 @@ func printRepoTableWithProgress(w io.Writer, repos []repoView, progress map[stri
 		kind := r.Kind
 		if kind == "" {
 			kind = "tracked"
+		}
+		alias := "-"
+		if len(r.Aliases) > 0 {
+			alias = strings.Join(r.Aliases, ",")
 		}
 		status := "promoted"
 		if r.LastPromotedSHA == "" {
@@ -297,7 +384,7 @@ func printRepoTableWithProgress(w io.Writer, repos []repoView, progress map[stri
 				status = "(missing)"
 			}
 		}
-		fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\n", short, kind, branch, status, r.RootPath)
+		fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\t%s\n", short, kind, alias, branch, status, r.RootPath)
 	}
 	_ = tw.Flush()
 }
@@ -339,6 +426,9 @@ func repoAddCmd() *cobra.Command {
 					return nil
 				}
 				fmt.Fprintf(w, "added repo %s (via daemon)\n", shortRepoID(id))
+				if !wait {
+					promptAliasAfterAdd(ctx, w, id, "", root)
+				}
 				if wait {
 					return waitForScanComplete(ctx, w, id)
 				}
@@ -379,11 +469,30 @@ func repoAddCmd() *cobra.Command {
 				verb = "already registered"
 			}
 			fmt.Fprintf(w, "%s repo %s (direct write; daemon dial failed: %v — restart daemon to cold-scan/live-watch)\n", verb, shortRepoID(id), dialErr)
+			if !existedLocal {
+				promptAliasAfterAdd(ctx, w, id, "", root)
+			}
 			return nil
 		},
 	}
 	cmd.Flags().BoolVar(&wait, "wait", false, "block until the cold scan completes; print live progress")
 	return cmd
+}
+
+// promptAliasAfterAdd is the post-`repo add` auto-suggest helper. Opens a
+// transient DB handle, asks the user if they want to alias the freshly
+// registered repo, and writes the binding (solov2-7w1t). Best-effort —
+// errors are logged and swallowed so a prompt failure never breaks the
+// add flow itself.
+func promptAliasAfterAdd(ctx context.Context, w io.Writer, repoID, canonicalURL, rootPath string) {
+	db, closeFn, err := openLocalDB()
+	if err != nil {
+		return
+	}
+	defer closeFn()
+	if err := runAliasSuggestPrompt(ctx, db, repoID, canonicalURL, rootPath, defaultPromptDeps(w)); err != nil {
+		fmt.Fprintf(w, "alias prompt: %v\n", err)
+	}
 }
 
 // looksLikeRepoURL reports whether arg should be treated as a remote git URL
@@ -494,6 +603,14 @@ func runRepoAddURL(ctx context.Context, cmd *cobra.Command, rawURL string, wait 
 		verb = "already registered"
 	}
 	fmt.Fprintf(w, "%s repo %s (%s)\n", verb, shortRepoID(id), via)
+
+	if !existed && !wait {
+		// db is already open here; reuse it instead of round-tripping
+		// openLocalDB. The prompt is TTY-only and swallows its own errors.
+		if err := runAliasSuggestPrompt(ctx, db, id, canonical, dest, defaultPromptDeps(w)); err != nil {
+			fmt.Fprintf(w, "alias prompt: %v\n", err)
+		}
+	}
 
 	if dialErr == nil && wait {
 		return waitForScanComplete(ctx, w, id)
@@ -728,6 +845,7 @@ func listRegisteredRepos(ctx context.Context) ([]repoView, error) {
 		out = append(out, repoView{
 			RepoID: r.RepoID, RootPath: r.RootPath,
 			ActiveBranch: r.ActiveBranch, LastPromotedSHA: r.LastPromotedSHA,
+			Kind: r.Kind, Aliases: r.Aliases,
 		})
 	}
 	return out, nil

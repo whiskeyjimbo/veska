@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"slices"
 	"strings"
 
 	application "github.com/whiskeyjimbo/veska/internal/application"
@@ -50,7 +51,14 @@ func resolveRepoID(ctx context.Context, repos application.RepoLister, repoID str
 			return rec.RepoID, nil
 		}
 	}
-	// Step 3: unambiguous prefix of any full id, minRepoIDPrefix chars or longer.
+	// Step 3: user-set alias (solov2-7w1t). Beats prefix so an explicit
+	// alias never gets shadowed by a colliding hex prefix.
+	for _, rec := range all {
+		if slices.Contains(rec.Aliases, repoID) {
+			return rec.RepoID, nil
+		}
+	}
+	// Step 4: unambiguous prefix of any full id, minRepoIDPrefix chars or longer.
 	if len(repoID) >= minRepoIDPrefix {
 		var matched string
 		for _, rec := range all {
