@@ -343,6 +343,15 @@ func (s *BuiltinScanner) scanLine(path string, line ports.Line) []ports.SecretFi
 		if looksLikeImportPath(tok) {
 			continue
 		}
+		// Absolute Unix filesystem paths (multi-segment, path-shaped
+		// components only) cross the entropy threshold but are never
+		// secrets. Agent-config files like .mcp.json embed binary
+		// paths (e.g. "/home/user/.local/bin/veska-mcp") that the
+		// entropy heuristic otherwise flags — including the file
+		// veska itself writes during `veska init --agent` (solov2-bptv).
+		if looksLikeFilesystemPath(tok) {
+			continue
+		}
 		// solov2-j1yz: drop canonical vendor-docs placeholders.
 		if isDocsExampleSecret(tok) {
 			continue
@@ -386,6 +395,20 @@ var importPathRe = regexp.MustCompile(`^(?:github\.com|gitlab\.com|bitbucket\.or
 // Go import path / module URL (solov2-1rfo).
 func looksLikeImportPath(tok string) bool {
 	return importPathRe.MatchString(tok)
+}
+
+// filesystemPathRe matches a token shaped like an absolute Unix
+// filesystem path: leading slash, at least three path components,
+// each component built only from path-safe characters (no random
+// alphanumeric runs the way a secret would). Restricting to multi-
+// segment paths means a bare leading-slash token like "/sk_live_…"
+// still trips the entropy rule (solov2-bptv).
+var filesystemPathRe = regexp.MustCompile(`^/[A-Za-z0-9._\-]+(?:/[A-Za-z0-9._\-]+){2,}$`)
+
+// looksLikeFilesystemPath reports whether tok has the shape of an
+// absolute Unix filesystem path.
+func looksLikeFilesystemPath(tok string) bool {
+	return filesystemPathRe.MatchString(tok)
 }
 
 // looksLikeIdentifier reports whether tok has the shape of a programming
