@@ -44,6 +44,13 @@ type VulnFinding struct {
 	// matched. Empty when the advisory has no published fix yet. Used by
 	// application/checks to render a remediation hint (solov2-gpvy).
 	FixedVersion string
+
+	// Aliases lists other advisory IDs that describe the same vulnerability
+	// (e.g. ["GO-2020-0017", "CVE-2020-26160"] alongside a GHSA-prefixed
+	// AdvisoryID). Populated by the OSV adapter when collapsing duplicate
+	// advisories that arrive via the OSV aliases field — kept on the
+	// retained finding so triage can cross-check (solov2-ka54).
+	Aliases []string
 }
 
 // VulnSource is the port for vulnerability scanning. It splits cache refresh
