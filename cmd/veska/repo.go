@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
+	"github.com/whiskeyjimbo/veska/internal/application/extindex"
 	"github.com/whiskeyjimbo/veska/internal/config"
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/sqlite"
 	"github.com/whiskeyjimbo/veska/internal/repo"
@@ -152,7 +153,8 @@ type repoView struct {
 // falls back to a direct SQLite read so the CLI still works when the
 // daemon is down.
 func repoListCmd() *cobra.Command {
-	return &cobra.Command{
+	var includeExternal bool
+	cmd := &cobra.Command{
 		Use:          "list",
 		Short:        "List registered git repositories",
 		Args:         cobra.NoArgs,
@@ -165,7 +167,11 @@ func repoListCmd() *cobra.Command {
 				Repos []repoView `json:"repos"`
 			}
 			var lr listResult
-			if err := callMCP(ctx, "eng_list_repos", map[string]any{}, &lr); err == nil {
+			params := map[string]any{}
+			if includeExternal {
+				params["include_vendored"] = true
+			}
+			if err := callMCP(ctx, "eng_list_repos", params, &lr); err == nil {
 				progress := fetchScanProgress(ctx)
 				printRepoTableWithProgress(w, lr.Repos, progress)
 				return nil
@@ -183,6 +189,9 @@ func repoListCmd() *cobra.Command {
 			}
 			views := make([]repoView, 0, len(recs))
 			for _, r := range recs {
+				if !includeExternal && strings.HasPrefix(r.RepoID, extindex.SyntheticRepoIDPrefix) {
+					continue
+				}
 				views = append(views, repoView{
 					RepoID:          r.RepoID,
 					RootPath:        r.RootPath,
@@ -196,6 +205,9 @@ func repoListCmd() *cobra.Command {
 			return nil
 		},
 	}
+	cmd.Flags().BoolVar(&includeExternal, "include-external", false,
+		"also show synthetic ext:<module> repos created by `veska deps index` (solov2-puga)")
+	return cmd
 }
 
 // shortRepoID returns the first 12 chars of a repo id — the alias shown by

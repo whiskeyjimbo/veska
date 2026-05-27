@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
+	"github.com/whiskeyjimbo/veska/internal/application/extindex"
 	"github.com/whiskeyjimbo/veska/internal/application/review"
 	"github.com/whiskeyjimbo/veska/internal/config"
 	"github.com/whiskeyjimbo/veska/internal/doctor"
@@ -803,6 +804,13 @@ func checkIngestion(ctx context.Context) (string, string) {
 	progress := fetchScanProgress(ctx)
 	var unindexed []string
 	for _, r := range recs {
+		// Synthetic ext:<module> repos never get a LastPromotedSHA — they
+		// have no git history. Skipping them avoids reporting "1 unindexed
+		// repo(s): [ext:github.c]" on a healthy `deps index` workspace
+		// (solov2-puga).
+		if strings.HasPrefix(r.RepoID, extindex.SyntheticRepoIDPrefix) {
+			continue
+		}
 		if r.LastPromotedSHA == "" {
 			short := r.RepoID
 			if len(short) > 12 {
