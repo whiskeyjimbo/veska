@@ -203,3 +203,60 @@ func TestSecretsScanCheck_IgnoresBeadsTracker(t *testing.T) {
 		t.Error("scanner received .beads/issues.jsonl input; ignore filter did not run before scan")
 	}
 }
+
+// TestSecretsScanCheck_IgnoresVendoredDeps pins solov2-l7zd: a freshly
+// vendored cobra (or any Go vendor/ tree) must not trip the high-entropy
+// rule on Apache 2 license URLs and bash-completion boilerplate. The same
+// filter also covers node_modules/, third_party/, and nested-segment matches
+// like apps/foo/vendor/...
+func TestSecretsScanCheck_IgnoresVendoredDeps(t *testing.T) {
+	for _, path := range []string{
+		"vendor/github.com/spf13/cobra/cobra.go",
+		"node_modules/lodash/package.json",
+		"third_party/protobuf/descriptor.proto",
+		"apps/cli/vendor/github.com/spf13/pflag/float64_slice.go",
+		"services/api/node_modules/express/index.js",
+	} {
+		scanner := &fakeSecretsScanner{}
+		c := NewSecretsScanCheck(scanner)
+		in := Input{
+			RepoID: "repo1", Branch: "main",
+			AddedLines: map[string][]Line{
+				path: {{Number: 7, Text: "//      http://www.apache.org/licenses/LICENSE-2.0"}},
+			},
+		}
+		got, err := c.Run(context.Background(), in)
+		if err != nil {
+			t.Fatalf("Run(%s): %v", path, err)
+		}
+		if len(got) != 0 {
+			t.Errorf("%s: want 0 findings, got %d", path, len(got))
+		}
+		if _, present := scanner.scanned.AddedLines[path]; present {
+			t.Errorf("%s: scanner received input; ignore filter did not run before scan", path)
+		}
+	}
+}
+
+// TestSecretsScanCheck_VendorSubstringDoesNotMatch guards against the
+// pathHasSegment check falsely matching e.g. "vendored_data/" or
+// "my_vendor.go" (substring of `vendor`).
+func TestSecretsScanCheck_VendorSubstringDoesNotMatch(t *testing.T) {
+	scanner := &fakeSecretsScanner{findings: []ports.SecretFinding{{
+		FilePath: "vendored_data/keys.txt", Line: 1, Rule: "high-entropy", Redacted: "***", Confidence: 0.5,
+	}}}
+	c := NewSecretsScanCheck(scanner)
+	in := Input{
+		RepoID: "repo1", Branch: "main",
+		AddedLines: map[string][]Line{
+			"vendored_data/keys.txt": {{Number: 1, Text: "AKIA....."}},
+		},
+	}
+	got, err := c.Run(context.Background(), in)
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if len(got) != 1 {
+		t.Errorf("want 1 finding on vendored_data/ (substring of vendor), got %d", len(got))
+	}
+}
