@@ -54,3 +54,52 @@ func TestMCPSockPath_RespectsVeskaHome(t *testing.T) {
 		t.Errorf("MCPSockPath() = %q; want %q", got, want)
 	}
 }
+
+func TestCacheDir_PrecedenceTable(t *testing.T) {
+	cases := []struct {
+		name           string
+		veskaCacheHome string
+		xdgCacheHome   string
+		wantSuffix     string
+		wantExact      string
+	}{
+		{
+			name:           "VESKA_CACHE_HOME wins over XDG_CACHE_HOME",
+			veskaCacheHome: "/explicit/cache",
+			xdgCacheHome:   "/should/be/ignored",
+			wantExact:      "/explicit/cache",
+		},
+		{
+			name:         "XDG_CACHE_HOME used when VESKA_CACHE_HOME unset",
+			xdgCacheHome: "/xdg/cache",
+			wantExact:    "/xdg/cache/veska",
+		},
+		{
+			name:       "fallback to ~/.cache/veska when both unset",
+			wantSuffix: "/.cache/veska",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Setenv("VESKA_CACHE_HOME", tc.veskaCacheHome)
+			t.Setenv("XDG_CACHE_HOME", tc.xdgCacheHome)
+			got := config.CacheDir()
+			if tc.wantExact != "" && got != tc.wantExact {
+				t.Errorf("CacheDir() = %q; want %q", got, tc.wantExact)
+			}
+			if tc.wantSuffix != "" && !strings.HasSuffix(got, tc.wantSuffix) {
+				t.Errorf("CacheDir() = %q; want suffix %q", got, tc.wantSuffix)
+			}
+		})
+	}
+}
+
+func TestRepoCachePath_UnderCacheDirRepos(t *testing.T) {
+	t.Setenv("VESKA_CACHE_HOME", "/cache/root")
+	t.Setenv("XDG_CACHE_HOME", "")
+	got := config.RepoCachePath("abc123")
+	want := "/cache/root/repos/abc123"
+	if got != want {
+		t.Errorf("RepoCachePath(abc123) = %q; want %q", got, want)
+	}
+}
