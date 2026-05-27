@@ -11,6 +11,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"time"
 )
 
 // ErrInvalidURL is returned by CanonicalURL when raw cannot be parsed as a
@@ -153,6 +154,29 @@ func LookupByCanonicalURL(ctx context.Context, db *sql.DB, urlOrCanonical string
 	rec.LastPromotedSHA = lastSHA.String
 	return rec, true, nil
 }
+
+// TouchEphemeral bumps last_accessed_at to now for repoID, but only when
+// the row is kind='ephemeral'. Tracked rows are skipped silently — they
+// are not subject to LRU eviction so the column is meaningless for them
+// (solov2-kxo5.8). The combined WHERE clause is the gate; callers do not
+// need to check kind themselves.
+//
+// Safe to call multiple times within a single query; the UPDATE is
+// idempotent and the second write is a no-op cost-wise.
+func TouchEphemeral(ctx context.Context, db *sql.DB, repoID string) error {
+	_, err := db.ExecContext(ctx,
+		`UPDATE repos SET last_accessed_at = ? WHERE repo_id = ? AND kind = 'ephemeral'`,
+		nowUnix(), repoID,
+	)
+	if err != nil {
+		return fmt.Errorf("touch ephemeral: %w", err)
+	}
+	return nil
+}
+
+// nowUnix is a seam for tests; the actual time source lives here so
+// TouchEphemeral can be tested without injecting a clock.
+var nowUnix = func() int64 { return time.Now().Unix() }
 
 // SetCanonicalURL writes (or rewrites) the canonical_url column for the
 // given repoID. The value is canonicalised inside so callers don't have to
