@@ -168,22 +168,32 @@ func (s *Service) List(ctx context.Context, repoID, branch string) (Result, erro
 		callSites   []CallSite
 	}
 	byModule := make(map[string]*modAgg)
+	// seenSymbol[module] = set of SymbolPaths already represented in
+	// callSites — solov2-tpvr: previously a heavily-called symbol consumed
+	// every TopK slot ("New, Hello, New, Shout"). Dedupe so the user sees
+	// up to TopK *distinct* call-target symbols. UsageCount is still the
+	// raw call-site count (every stub row), so popularity ranking is
+	// unchanged.
+	seenSymbol := make(map[string]map[string]struct{})
 	for _, r := range rows {
 		m, ok := byModule[r.ModulePath]
 		if !ok {
 			m = &modAgg{lang: r.Language}
 			byModule[r.ModulePath] = m
+			seenSymbol[r.ModulePath] = make(map[string]struct{})
 		}
 		m.count++
-		// Cap the per-module call-site sample to keep payloads bounded.
-		// The first TopK stub rows win; deterministic because the
-		// aggregator returns rows ORDER BY src_node_id (adapter contract).
-		if len(m.callSites) < s.topK {
-			m.callSites = append(m.callSites, CallSite{
-				SrcNodeID:  r.SrcNodeID,
-				SymbolPath: r.SymbolPath,
-			})
+		if len(m.callSites) >= s.topK {
+			continue
 		}
+		if _, dup := seenSymbol[r.ModulePath][r.SymbolPath]; dup {
+			continue
+		}
+		seenSymbol[r.ModulePath][r.SymbolPath] = struct{}{}
+		m.callSites = append(m.callSites, CallSite{
+			SrcNodeID:  r.SrcNodeID,
+			SymbolPath: r.SymbolPath,
+		})
 	}
 
 	// solov2-xjm5: union with parsed imports. A module imported in N files
