@@ -3,6 +3,7 @@ package autolink
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/whiskeyjimbo/veska/internal/application/pathfilter"
 	"github.com/whiskeyjimbo/veska/internal/core/domain"
@@ -220,12 +221,30 @@ func (h *Handler) Handle(ctx context.Context, row ports.WorkRow) error {
 		tgtKindByID[m.NodeID] = m.Kind
 		tgtFileByID[m.NodeID] = m.FilePath
 	}
+	// Build a SymbolPath lookup so we can drop idiomatic-name noise pairs
+	// (solov2-7ze1): a tiny repo otherwise produces N×N "similar" findings
+	// for every init() function and every cobra.Command package var, even
+	// though the similarity is structural — these are sibling shapes the
+	// engineer intentionally repeats per file. Filtering before findings
+	// emit keeps the auto-link findings surface useful on small repos.
+	tgtSymByID := make(map[string]string, len(tgtMeta))
+	for _, m := range tgtMeta {
+		tgtSymByID[m.NodeID] = m.SymbolPath
+	}
+	srcSymByID := make(map[string]string, len(srcMeta))
+	for _, m := range srcMeta {
+		srcSymByID[m.NodeID] = m.SymbolPath
+	}
+
 	filtered := cands[:0]
 	for _, c := range cands {
 		if nonSymbolKinds[tgtKindByID[c.TargetNodeID]] {
 			continue
 		}
 		if tgtFileByID[c.TargetNodeID] != "" && tgtFileByID[c.TargetNodeID] == srcFileByID[c.SourceNodeID] {
+			continue
+		}
+		if isIdiomaticAutolinkNoise(srcSymByID[c.SourceNodeID], tgtSymByID[c.TargetNodeID], kindByID[c.SourceNodeID], tgtKindByID[c.TargetNodeID]) {
 			continue
 		}
 		filtered = append(filtered, c)
@@ -324,3 +343,57 @@ func (h *Handler) Handle(ctx context.Context, row ports.WorkRow) error {
 // Compile-time check that *Handler satisfies ports.WorkHandler (and, by
 // type alias, the historical infrastructure/sqlite/queue.WorkHandler).
 var _ ports.WorkHandler = (*Handler)(nil)
+
+// idiomaticIdenticalNames is the set of unqualified symbol names where
+// "src and tgt share the same name" is by-construction true across files
+// and carries no signal: every Go package has its own init(), every
+// runnable program has main(), Stringer-conforming types all define
+// String(), error-bearing types all define Error(), etc. Auto-link
+// candidates that match name-on-name in this set are dropped before the
+// findings emit (solov2-7ze1).
+var idiomaticIdenticalNames = map[string]struct{}{
+	"init":     {},
+	"main":     {},
+	"String":   {},
+	"Error":    {},
+	"TestMain": {},
+}
+
+// isIdiomaticAutolinkNoise reports whether a (src, tgt) auto-link
+// candidate is structurally trivial. Today's rules:
+//
+//  1. Same unqualified name on both sides AND the name is one of the
+//     well-known Go idioms above. A junior eng's tiny CLI repo otherwise
+//     gets a "main similar to Execute" and "init similar to init" pair
+//     for every cobra subcommand.
+//  2. Both sides are package-level variables with names ending in "Cmd"
+//     (e.g. rootCmd, shoutCmd, tokenCmd). These are cobra.Command{...}
+//     literals — the structural similarity is intentional repetition,
+//     not a refactor target.
+//
+// SymbolPaths arrive as full paths (e.g. "Greeter.Hello", "cmd.shoutCmd");
+// we compare the last segment so package qualification doesn't defeat
+// the filter.
+func isIdiomaticAutolinkNoise(srcSym, tgtSym, srcKind, tgtKind string) bool {
+	srcName := lastSymbolSegment(srcSym)
+	tgtName := lastSymbolSegment(tgtSym)
+	if srcName != "" && srcName == tgtName {
+		if _, idiomatic := idiomaticIdenticalNames[srcName]; idiomatic {
+			return true
+		}
+	}
+	if srcKind == "variable" && tgtKind == "variable" &&
+		strings.HasSuffix(srcName, "Cmd") && strings.HasSuffix(tgtName, "Cmd") {
+		return true
+	}
+	return false
+}
+
+// lastSymbolSegment returns the rightmost dot-separated segment of a
+// symbol path. "Greeter.Hello" -> "Hello"; "init" -> "init".
+func lastSymbolSegment(sym string) string {
+	if i := strings.LastIndex(sym, "."); i >= 0 {
+		return sym[i+1:]
+	}
+	return sym
+}
