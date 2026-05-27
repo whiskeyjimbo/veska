@@ -238,7 +238,7 @@ func backupCreateCmd() *cobra.Command {
 		},
 	}
 
-	cmd.Flags().StringVar(&outputDir, "output-dir", "", "directory to write the backup tarball (default: $VESKA_HOME/backups; solov2-n57f)")
+	cmd.Flags().StringVar(&outputDir, "output-dir", "", "directory to write the backup tarball (default: $VESKA_HOME/backups)")
 	return cmd
 }
 

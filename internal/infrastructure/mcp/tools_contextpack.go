@@ -58,7 +58,7 @@ func RegisterContextPackTool(r *Registry, asm *contextpack.Assembler, repoRoot R
 	}
 	r.MustRegister(ToolSpec{
 		Name:        "eng_get_context_pack",
-		Description: "Bundle a symbol's neighbourhood (callers, callees, adjacent tests, recent commits, open findings, active task) into one token-bounded JSON payload. Use at the START of a non-trivial change so you don't have to assemble surrounding context piecewise with multiple tool calls. Pass exactly one of node_id, symbol, or task_id as the anchor. Surfaces cross_repo_edges in both directions, so cross-repo callers/callees show up in the same response (solov2-7xrw, solov2-80hh).",
+		Description: "Bundle a symbol's neighbourhood (callers, callees, adjacent tests, recent commits, open findings, active task) into one token-bounded JSON payload. Use at the START of a non-trivial change so you don't have to assemble surrounding context piecewise with multiple tool calls. Pass exactly one of node_id, symbol, or task_id as the anchor. Surfaces cross_repo_edges in both directions, so cross-repo callers/callees show up in the same response ().",
 		InputSchema: contextPackInputSchema,
 		Handler:     makeContextPackHandler(asm, repoRoot, repos, cfg.resolve, cfg.resolveInbound),
 	})
@@ -246,7 +246,7 @@ func pickRepoForSymbol(ctx context.Context, asm *contextpack.Assembler, repoRoot
 		}
 		return "", &RPCError{
 			Code:    CodeInvalidParams,
-			Message: fmt.Sprintf("symbol %q matches in %d repos (%s); pass repo_id to disambiguate", symbol, len(hits), strings.Join(ids, ", ")),
+			Message: fmt.Sprintf("symbol %q matches in %d repos (%s); pass repo_id to disambiguate", symbol, len(hits), strings.Join(ids, ",")),
 		}
 	}
 }
