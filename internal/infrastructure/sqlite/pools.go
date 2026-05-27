@@ -4,10 +4,8 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"net/url"
-	"strings"
 
-	_ "modernc.org/sqlite"
+	"github.com/whiskeyjimbo/veska/internal/infrastructure/sqlite/sqldriver"
 )
 
 // Pools holds the two *sql.DB handles for a single veska.db file.
@@ -58,7 +56,7 @@ func openPool(dbPath string, maxOpen, busyTimeoutMS int) (*sql.DB, error) {
 	// CASCADE silently never fired and `repo remove` orphaned child rows
 	// (solov2-d78r). journal_mode=WAL is persisted in the db file, so encoding
 	// it per-connection is harmless.
-	db, err := sql.Open("sqlite", poolDSN(dbPath, busyTimeoutMS))
+	db, err := sql.Open(sqldriver.Name, sqldriver.BuildDSN(dbPath, busyTimeoutMS))
 	if err != nil {
 		return nil, err
 	}
@@ -80,26 +78,6 @@ func openPool(dbPath string, maxOpen, busyTimeoutMS int) (*sql.DB, error) {
 	}
 
 	return db, nil
-}
-
-// poolDSN builds a modernc.org/sqlite DSN that enables WAL, foreign keys, and a
-// busy_timeout on every connection the pool opens. dbPath may be a plain
-// filesystem path or an existing file: DSN with query params (e.g. an
-// in-memory shared-cache handle); the pragmas are appended either way.
-func poolDSN(dbPath string, busyTimeoutMS int) string {
-	base := dbPath
-	if !strings.HasPrefix(base, "file:") {
-		base = "file:" + base
-	}
-	sep := "?"
-	if strings.Contains(base, "?") {
-		sep = "&"
-	}
-	q := url.Values{}
-	q.Add("_pragma", "journal_mode=WAL")
-	q.Add("_pragma", "foreign_keys=on")
-	q.Add("_pragma", fmt.Sprintf("busy_timeout=%d", busyTimeoutMS))
-	return base + sep + q.Encode()
 }
 
 // Close closes both DB handles, collecting all errors.

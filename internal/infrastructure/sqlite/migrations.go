@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	_ "modernc.org/sqlite"
+	"github.com/whiskeyjimbo/veska/internal/infrastructure/sqlite/sqldriver"
 )
 
 //go:embed migrations/*.sql
@@ -234,7 +234,7 @@ func computeBinarySHA() string {
 // migration SHAs match the embedded SQL.  Returns a non-nil error on mismatch.
 // This is exported primarily for testing.
 func CheckMigrationIntegrity(path string) error {
-	db, err := sql.Open("sqlite", path)
+	db, err := sql.Open(sqldriver.Name, path)
 	if err != nil {
 		return fmt.Errorf("open %s: %w", path, err)
 	}
@@ -252,10 +252,12 @@ func defaultBackupDir() string {
 	return filepath.Join(home, ".veska-backups", ".pre-migration")
 }
 
-// normaliseDSN returns a file: DSN for the given path with foreign-keys enabled.
-// Uses modernc.org/sqlite URI parameter format (_pragma=foreign_keys=on).
+// normaliseDSN returns a file: DSN for the given path with the build-time
+// driver's standard pragmas (WAL + foreign_keys + synchronous=NORMAL +
+// busy_timeout). Delegates to sqldriver so the URI parameter format matches
+// whichever driver is compiled in.
 func normaliseDSN(path string) string {
-	return "file:" + path + "?_pragma=foreign_keys%3Don"
+	return sqldriver.BuildDSN(path, 5000)
 }
 
 // applyPragmas sets WAL mode, autocheckpoint, foreign-keys, and a 5s
@@ -285,7 +287,7 @@ func applyPragmas(db *sql.DB) error {
 
 // openAndMigrate is the shared implementation for Open and OpenWithOptions.
 func openAndMigrate(path, backupDir, appliedBy string) (*sql.DB, error) {
-	db, err := sql.Open("sqlite", normaliseDSN(path))
+	db, err := sql.Open(sqldriver.Name, normaliseDSN(path))
 	if err != nil {
 		return nil, fmt.Errorf("sqlite.Open %s: %w", path, err)
 	}

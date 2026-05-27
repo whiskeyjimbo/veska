@@ -5,7 +5,7 @@ import (
 	"fmt"
 
 	"github.com/whiskeyjimbo/veska/internal/application/review"
-	_ "modernc.org/sqlite"
+	"github.com/whiskeyjimbo/veska/internal/infrastructure/sqlite/sqldriver"
 )
 
 // ReviewFailureFindingID derives the branch-stable finding_id of the
@@ -61,7 +61,7 @@ type PostPromotionQueueReport struct {
 // If the DB cannot be opened or reached, it returns Status "broken" with a nil error.
 func CheckPostPromotionQueue(dbPath string) (PostPromotionQueueReport, error) {
 	dsn := fmt.Sprintf("file:%s?mode=ro&_busy_timeout=1000", dbPath)
-	db, err := sql.Open("sqlite", dsn)
+	db, err := sql.Open(sqldriver.Name, dsn)
 	if err != nil {
 		return PostPromotionQueueReport{Status: "broken"}, nil
 	}
@@ -171,7 +171,7 @@ func queryQueueCounts(db *sql.DB) ([]QueueCount, error) {
 // uses) so the DELETE can run. Safe to call when no orphans exist (returns 0).
 func PurgeOrphanFailedRows(dbPath string) (int64, error) {
 	dsn := fmt.Sprintf("file:%s?_busy_timeout=5000", dbPath)
-	db, err := sql.Open("sqlite", dsn)
+	db, err := sql.Open(sqldriver.Name, dsn)
 	if err != nil {
 		return 0, fmt.Errorf("open db: %w", err)
 	}

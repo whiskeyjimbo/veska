@@ -1,0 +1,16 @@
+=== eval-revalidate-bench (modernc) ===
+go test -tags=eval -run TestRevalidateBench ./tools/loadtest/revalidate/ -v -count=1 -timeout=120s
+=== RUN   TestRevalidateBench
+=== RUN   TestRevalidateBench/DeadCodeOnly
+REVALIDATE[deadcode] nodes=400 files=4 findings=80 elapsed_ms=11.48 p95_ms=2.96 refreshed=80 closed=0 gate=PASS
+=== RUN   TestRevalidateBench/ContractDriftOnly
+REVALIDATE[drift] nodes=400 files=4 findings=80 elapsed_ms=3.03 p95_ms=0.83 refreshed=80 closed=0 gate=PASS
+=== RUN   TestRevalidateBench/Combined10k
+REVALIDATE[combined] nodes=10000 files=100 findings=3000 elapsed_ms=4297.55 p95_ms=44.87 refreshed=3000 closed=0 gate=PASS
+--- PASS: TestRevalidateBench (5.70s)
+    --- PASS: TestRevalidateBench/DeadCodeOnly (0.33s)
+    --- PASS: TestRevalidateBench/ContractDriftOnly (0.26s)
+    --- PASS: TestRevalidateBench/Combined10k (5.12s)
+PASS
+ok  	github.com/whiskeyjimbo/veska/tools/loadtest/revalidate	5.710s
+revalidate.json
