@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"math"
+	"sync"
 	"testing"
 
 	application "github.com/whiskeyjimbo/veska/internal/application"
@@ -32,7 +33,10 @@ func (s *stubEmbedder) ModelID() string { return "test-model" }
 type stubVectors struct {
 	hits []domain.Hit
 	err  error
-	// captured params from the most recent Search call
+	// captured params from the most recent Search call. Guarded by mu so
+	// the cross-repo parallel fanout path (solov2-bcn) doesn't race the
+	// writes.
+	mu     sync.Mutex
 	gotVec []float32
 	gotK   int
 }
@@ -42,8 +46,10 @@ func (s *stubVectors) UpsertEmbeddings(_ context.Context, _, _ string, _ []domai
 }
 
 func (s *stubVectors) Search(_ context.Context, _, _ string, vec []float32, k int, _ domain.Filter) ([]domain.Hit, error) {
+	s.mu.Lock()
 	s.gotVec = vec
 	s.gotK = k
+	s.mu.Unlock()
 	if s.err != nil {
 		return nil, s.err
 	}
@@ -335,6 +341,69 @@ func TestSearchSemantic_PropagatesEmbedError(t *testing.T) {
 	if rpcErr == nil || rpcErr.Code != CodeInternalError {
 		t.Fatalf("expected InternalError, got %+v", rpcErr)
 	}
+}
+
+// TestSearchSemantic_GlobalRRFAcrossRepos pins solov2-bcn: when fanout is
+// triggered, the handler runs ONE global RRF across every repo's
+// candidate set rather than per-repo RRF + score-sort. A candidate
+// appearing in both the vector AND lexical retrievers of its repo must
+// outrank a candidate appearing in only one retriever, regardless of
+// which repo it came from.
+func TestSearchSemantic_GlobalRRFAcrossRepos(t *testing.T) {
+	// Repo A: vector + lexical hits (double-retriever winner).
+	// Repo B: vector-only hits.
+	// Global RRF: A's nodeA1 should score 2/(60+1) = 0.0328, beating
+	// any B node whose best score is 1/(60+1) = 0.0164.
+	emb := &stubEmbedder{vec: []float32{0.1}}
+	vecs := &stubVectors{hits: []domain.Hit{
+		{NodeID: "nodeA1"}, {NodeID: "nodeA2"},
+	}}
+	lex := &stubLex{hits: []ports.LexicalHit{
+		{NodeID: "nodeA1"},
+	}}
+	nodes := &stubNodes{metas: []ports.NodeMeta{
+		{NodeID: "nodeA1", SymbolPath: "a.A1", FilePath: "a.go"},
+		{NodeID: "nodeA2", SymbolPath: "a.A2", FilePath: "a.go"},
+		{NodeID: "nodeB1", SymbolPath: "b.B1", FilePath: "b.go"},
+	}}
+	svc := search.NewService(emb, vecs, nodes, search.WithLexicalSearcher(lex))
+
+	repos := []application.RepoRecord{
+		{RepoID: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", RootPath: "/r/a", ActiveBranch: "main"},
+		{RepoID: "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", RootPath: "/r/b", ActiveBranch: "main"},
+	}
+	r := NewRegistry()
+	RegisterSearchTools(r, svc, &stubSimilarLookup{}, vecs, nodes, nil, &stubRepoLister{repos: repos})
+
+	resp, rpcErr := dispatchSearch(t, r, "eng_search_semantic", map[string]any{
+		"query": "x",
+		"cwd":   "/elsewhere",
+	})
+	if rpcErr != nil {
+		t.Fatalf("unexpected error: %+v", rpcErr)
+	}
+	if len(resp.Results) == 0 {
+		t.Fatal("expected non-empty results")
+	}
+	// nodeA1 (vector + lexical) must outrank nodeA2 (vector-only).
+	if resp.Results[0].NodeID != "nodeA1" {
+		t.Errorf("expected nodeA1 first (double-retriever winner); got %q", resp.Results[0].NodeID)
+	}
+	// All hits must carry repo_id when fanout fires.
+	for i, h := range resp.Results {
+		if h.RepoID == "" {
+			t.Errorf("results[%d] missing repo_id: %+v", i, h)
+		}
+	}
+}
+
+// stubLex is a minimal LexicalSearcher used by the cross-repo RRF test.
+type stubLex struct {
+	hits []ports.LexicalHit
+}
+
+func (s *stubLex) Search(_ context.Context, _, _, _ string, _ int) ([]ports.LexicalHit, error) {
+	return s.hits, nil
 }
 
 // ---------------------------------------------------------------------------

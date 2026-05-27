@@ -169,6 +169,52 @@ func TestSemantic_HappyPath_PreservesHitRank(t *testing.T) {
 	}
 }
 
+// TestSemanticCandidates_TagsRanksAndUnionsRetrievers pins solov2-bcn:
+// SemanticCandidates returns one hydrated entry per node touched by
+// either retriever, each carrying its 1-indexed per-retriever rank
+// (0 = absent from that list). The MCP cross-repo handler uses these
+// ranks to run a single global RRF over the pooled cross-repo candidate
+// set so a top hit in repo A competes fairly with a top hit in repo B.
+func TestSemanticCandidates_TagsRanksAndUnionsRetrievers(t *testing.T) {
+	t.Parallel()
+	emb := &fakeEmbedder{vec: []float32{0.1}}
+	vec := &fakeVectors{hits: []domain.Hit{
+		{NodeID: "vlex"},  // rank 1 in vector
+		{NodeID: "vonly"}, // rank 2 in vector
+	}}
+	lex := &fakeLexical{hits: []ports.LexicalHit{
+		{NodeID: "vlex"},  // rank 1 in lex
+		{NodeID: "lonly"}, // rank 2 in lex
+	}}
+	nodes := &fakeNodes{rows: []ports.NodeMeta{
+		{NodeID: "vlex", SymbolPath: "v.Lex"},
+		{NodeID: "vonly", SymbolPath: "v.Only"},
+		{NodeID: "lonly", SymbolPath: "l.Only"},
+	}}
+	s := search.NewService(emb, vec, nodes, search.WithLexicalSearcher(lex))
+
+	resp, err := s.SemanticCandidates(context.Background(), "r1", "main", "x", 10, domain.Filter{})
+	if err != nil {
+		t.Fatalf("SemanticCandidates: %v", err)
+	}
+	if len(resp.Candidates) != 3 {
+		t.Fatalf("expected 3 unioned candidates, got %d: %+v", len(resp.Candidates), resp.Candidates)
+	}
+	byID := map[string]search.RankedCandidate{}
+	for _, c := range resp.Candidates {
+		byID[c.NodeID] = c
+	}
+	if vlex := byID["vlex"]; vlex.VectorRank != 1 || vlex.LexicalRank != 1 {
+		t.Errorf("vlex ranks = (%d,%d); want (1,1)", vlex.VectorRank, vlex.LexicalRank)
+	}
+	if vonly := byID["vonly"]; vonly.VectorRank != 2 || vonly.LexicalRank != 0 {
+		t.Errorf("vonly ranks = (%d,%d); want (2,0)", vonly.VectorRank, vonly.LexicalRank)
+	}
+	if lonly := byID["lonly"]; lonly.VectorRank != 0 || lonly.LexicalRank != 2 {
+		t.Errorf("lonly ranks = (%d,%d); want (0,2)", lonly.VectorRank, lonly.LexicalRank)
+	}
+}
+
 // TestSemantic_MissingNodesDroppedSilently verifies a hit whose node row
 // is absent from NodeLookup is omitted from the result without error.
 func TestSemantic_MissingNodesDroppedSilently(t *testing.T) {

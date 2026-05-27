@@ -76,6 +76,30 @@ type Response struct {
 	DegradedReasons []string
 }
 
+// RankedCandidate is a single hydrated search candidate plus the
+// per-retriever ranks it earned in its source repo. The MCP cross-repo
+// fanout (solov2-bcn) uses this to RRF a globally pooled candidate set —
+// without it, each repo's local RRF score is incomparable across repos
+// (every repo has a rank-1 hit scoring ~1/61, so 'top hits' from a
+// 5-repo workspace render as five equally-ranked items).
+//
+// VectorRank and LexicalRank are 1-indexed; 0 means the candidate was
+// absent from that retriever. A candidate always appears in at least
+// one of the two.
+type RankedCandidate struct {
+	Result
+	VectorRank  int
+	LexicalRank int
+}
+
+// CandidatesResponse is the un-fused, hydrated cross-repo input shape
+// returned by SemanticCandidates. Same DegradedReasons semantics as
+// Response.
+type CandidatesResponse struct {
+	Candidates      []RankedCandidate
+	DegradedReasons []string
+}
+
 // Service is the application-layer semantic-search orchestrator. It
 // composes an EmbeddingProvider, a VectorStorage, and a NodeLookup —
 // plus an optional LexicalSearcher used as the fallback path when the
@@ -283,6 +307,132 @@ func (s *Service) withEmbedderCaveat(resp Response) Response {
 	if s.embedder.ModelID() == staticEmbedderModelID {
 		resp.DegradedReasons = append(resp.DegradedReasons, DegradedReasonLowQualityStaticEmbedder)
 	}
+	return resp
+}
+
+// SemanticCandidates returns the per-retriever-ranked, hydrated candidate
+// set for query without applying RRF or the name-match rerank. It is the
+// fan-in primitive used by the MCP cross-repo handler (solov2-bcn) — the
+// handler runs a SINGLE global RRF across every repo's candidates so a
+// rank-1 hit in repo A competes fairly with a rank-1 hit in repo B,
+// rather than the two top hits both scoring ~1/61 in their local fusion.
+//
+// The single-repo Semantic path stays on the existing intra-repo RRF +
+// rerank pipeline for byte-stability.
+//
+// Errors: same contract as Semantic (embedder-unreachable falls back to
+// the lexical path when available; every other embedder error wraps).
+// When the lexical fallback fires the response's DegradedReasons carries
+// DegradedReasonEmbedderOfflineLexicalFallback so the caller can render
+// the same caveat it would for Semantic.
+func (s *Service) SemanticCandidates(ctx context.Context, repoID, branch, query string, k int, filter domain.Filter) (CandidatesResponse, error) {
+	if k <= 0 {
+		return CandidatesResponse{}, nil
+	}
+
+	start := s.now()
+	defer s.observe(start)
+
+	vec, err := s.embedder.Embed(ctx, query)
+	if err != nil {
+		if errors.Is(err, ports.ErrEmbedderUnreachable) && s.lexical != nil {
+			results, lerr := s.lexicalFallback(ctx, repoID, branch, query, k)
+			if lerr != nil {
+				return CandidatesResponse{}, fmt.Errorf("search: lexical fallback after embedder unreachable: %w", lerr)
+			}
+			cands := make([]RankedCandidate, len(results))
+			for i, r := range results {
+				cands[i] = RankedCandidate{Result: r, LexicalRank: i + 1}
+			}
+			return s.withCaveatOnCandidates(CandidatesResponse{
+				Candidates:      cands,
+				DegradedReasons: []string{DegradedReasonEmbedderOfflineLexicalFallback},
+			}), nil
+		}
+		return CandidatesResponse{}, fmt.Errorf("search: embed query: %w", err)
+	}
+
+	const fusionFanout = 3
+	const fanoutFloor = 30
+	fanK := max(k*fusionFanout, fanoutFloor)
+	vecHits, err := s.vectors.Search(ctx, repoID, branch, vec, fanK, filter)
+	if err != nil {
+		return CandidatesResponse{}, fmt.Errorf("search: vector search: %w", err)
+	}
+	var lexHits []ports.LexicalHit
+	if s.lexical != nil {
+		if lh, lerr := s.lexical.Search(ctx, repoID, branch, query, fanK); lerr == nil {
+			lexHits = lh
+		}
+	}
+	if len(vecHits) == 0 && len(lexHits) == 0 {
+		return s.withCaveatOnCandidates(CandidatesResponse{}), nil
+	}
+
+	// Union of node_ids touched by either retriever.
+	vecRank := make(map[string]int, len(vecHits))
+	for i, h := range vecHits {
+		vecRank[h.NodeID] = i + 1
+	}
+	lexRank := make(map[string]int, len(lexHits))
+	for i, h := range lexHits {
+		lexRank[h.NodeID] = i + 1
+	}
+	ids := make([]string, 0, len(vecRank)+len(lexRank))
+	seen := make(map[string]struct{}, len(vecRank)+len(lexRank))
+	for _, h := range vecHits {
+		if _, ok := seen[h.NodeID]; ok {
+			continue
+		}
+		seen[h.NodeID] = struct{}{}
+		ids = append(ids, h.NodeID)
+	}
+	for _, h := range lexHits {
+		if _, ok := seen[h.NodeID]; ok {
+			continue
+		}
+		seen[h.NodeID] = struct{}{}
+		ids = append(ids, h.NodeID)
+	}
+
+	metas, err := s.nodes.LookupNodes(ctx, repoID, branch, ids)
+	if err != nil {
+		return CandidatesResponse{}, fmt.Errorf("search: node lookup: %w", err)
+	}
+	byID := make(map[string]ports.NodeMeta, len(metas))
+	for _, m := range metas {
+		byID[m.NodeID] = m
+	}
+
+	out := make([]RankedCandidate, 0, len(ids))
+	for _, id := range ids {
+		m, ok := byID[id]
+		if !ok {
+			continue
+		}
+		out = append(out, RankedCandidate{
+			Result: Result{
+				NodeID:     id,
+				SymbolPath: m.SymbolPath,
+				FilePath:   m.FilePath,
+				Kind:       m.Kind,
+				LineStart:  m.LineStart,
+				LineEnd:    m.LineEnd,
+				Snippet:    m.Snippet,
+			},
+			VectorRank:  vecRank[id],
+			LexicalRank: lexRank[id],
+		})
+	}
+	return s.withCaveatOnCandidates(CandidatesResponse{Candidates: out}), nil
+}
+
+// withCaveatOnCandidates is the CandidatesResponse twin of
+// withEmbedderCaveat — appends the low-quality static-embedder degraded
+// reason when applicable so cross-repo callers get the same signal.
+func (s *Service) withCaveatOnCandidates(resp CandidatesResponse) CandidatesResponse {
+	stub := s.withEmbedderCaveat(Response{DegradedReasons: resp.DegradedReasons})
+	resp.DegradedReasons = stub.DegradedReasons
 	return resp
 }
 
