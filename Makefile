@@ -255,3 +255,12 @@ eval-embed-models-fuse:
 # tools/loadtest/reviewtiming/README.md.
 eval-review-timing:
 	REVIEW_TIMING_FILE_N=$${REVIEW_TIMING_FILE_N:-100} go test -tags=eval -run TestReviewTiming ./tools/loadtest/reviewtiming/ -v -timeout=12000s
+
+# eval-token-efficiency: solov2-wise — produce the semble-shaped
+# "tokens saved vs grep+read" figure, paired with recall@10 on the same
+# corpus. Pure-Go simulation (no rg subprocess); cl100k_base tokenizer.
+# Writes tools/loadtest/tokenefficiency/results.json + a one-line
+# summary. Knob: TOKEFF_NODES_PER_CLUSTER (default 24) tunes how big
+# each cluster file gets — larger files widen the savings bracket.
+eval-token-efficiency:
+	$(SQLITE_CGO_ENV) go test -tags "eval $(SQLITE_TAGS)" -run TestTokenEfficiency ./tools/loadtest/tokenefficiency/ -v -count=1 -timeout=120s
