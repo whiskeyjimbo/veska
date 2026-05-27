@@ -113,7 +113,15 @@ type Result struct {
 	MeanGrepLoRecall    float64    `json:"mean_grep_lo_recall"`
 	PerQuery            []PerQuery `json:"per_query"`
 	CorpusNote          string     `json:"corpus_note"`
-	Timestamp           time.Time  `json:"timestamp"`
+	// Embedder identifies which provider produced the retrieval-side
+	// vectors. Recall numbers are only comparable across runs with the
+	// same embedder; the harness prefers model2vec when its assets are
+	// present and falls back to the deterministic FakeEmbedder
+	// otherwise (the latter is plumbing-only, not a realistic recall
+	// signal — published recall on the semantic corpus requires the
+	// real model).
+	Embedder  string    `json:"embedder"`
+	Timestamp time.Time `json:"timestamp"`
 }
 
 // SummaryLine renders Result into the semble-shaped one-liner the bead

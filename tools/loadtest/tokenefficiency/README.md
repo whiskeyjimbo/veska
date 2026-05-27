@@ -22,9 +22,18 @@ Output (single-line summary on stdout + JSON envelope at
 `tools/loadtest/tokenefficiency/results.json`):
 
 ```
-Veska found the right code ~17% of the time, using about 42% as many tokens as grep+read would have (range: 58–58% fewer, depending on how aggressively the agent reads grep matches; measured on 30 queries).
-TOKENEFF queries=30 recall=0.17 veska_tok=177 grep_lo=422 grep_hi=422 savings=[58%, 58%]
+Veska found the right code ~98% of the time, using about 42% as many tokens as grep+read would have (range: 58–58% fewer, depending on how aggressively the agent reads grep matches; measured on 30 queries).
+TOKENEFF embedder=model2vec:potion-code-16M queries=30 recall=0.98 veska_tok=176 grep_lo=422 grep_hi=422 savings=[58%, 58%]
 ```
+
+The harness prefers the in-process **model2vec** embedder
+(`potion-code-16M`, distilled from CodeRankEmbed) when its assets are
+present at `internal/infrastructure/embedding/model2vec/assets/`. If the
+assets are missing it falls back to the deterministic FakeEmbedder
+(hash-projection; recall ~17%, plumbing-only). Run `make build` or
+`make fetch-embed-assets` once to populate the assets. The embedder
+name is printed in every summary so the recall number is never quoted
+without context.
 
 Tunable knobs:
 
@@ -54,7 +63,7 @@ Output: `results-multirepo.json` (same envelope as the single-repo
 result plus a `repos` field) and a one-line summary:
 
 ```
-Across 5 repos, veska found the right code ~11% of the time, using about 42% as many tokens as grep+read across the same workspace (range: 58–58% fewer; measured on 30 queries).
+Across 5 repos, veska found the right code ~49% of the time, using about 42% as many tokens as grep+read across the same workspace (range: 58–58% fewer; measured on 30 queries).
 ```
 
 Honest caveats specific to the multi-repo run:
@@ -66,9 +75,15 @@ Honest caveats specific to the multi-repo run:
   ratios reported here are conservative. A real workspace with
   repeated identifiers across repos would multiply grep's read cost
   and widen the savings bracket.
-- Recall can drop slightly versus single-repo (the per-repo retriever
-  sees fewer candidates to rank, so the global RRF has less local
-  context). That's an honest artifact of the partitioning, not a bug.
+- Recall drops materially versus single-repo (98% → 49% on the
+  reference run). Mechanism: global RRF over N repos has 4 wrong-repo
+  rank-1 candidates competing for slots that would otherwise belong
+  to the right repo's runners-up. Lexical wiring (production-default
+  FTS5) breaks some ties; the residual gap is the cost of fanout
+  fusing local rankings rather than absolute scores. A future
+  refinement could fuse on cosine similarity directly when only one
+  embedder is in play across all repos — tracked in solov2-bcn
+  follow-ups.
 
 ## Methodology
 
