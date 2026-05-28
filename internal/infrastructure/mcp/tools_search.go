@@ -32,6 +32,10 @@ const CodeFailedPrecondition = -32003
 type SearchResponse struct {
 	Results         []searchHitDTO `json:"results"`
 	DegradedReasons []string       `json:"degraded_reasons"`
+	// IndexingRepos populates alongside DegradedReason "indexing_in_progress"
+	// when a cold scan is in flight at query time and the result is empty
+	// (solov2-izh6.30). Omitted from JSON when empty.
+	IndexingRepos []string `json:"indexing_repos,omitempty"`
 }
 
 // PendingEmbedsCounter exposes the global pending-embeds depth so the
@@ -65,6 +69,14 @@ type SearchToolOption func(*searchToolConfig)
 
 type searchToolConfig struct {
 	graph ports.GraphStorage
+	scans ScanTrackerReader
+}
+
+// WithSearchScanTracker supplies the daemon's cold-scan tracker so empty
+// search responses can carry an indexing_in_progress hint when a scan is
+// in flight (solov2-izh6.30). Nil disables the hint.
+func WithSearchScanTracker(t ScanTrackerReader) SearchToolOption {
+	return func(c *searchToolConfig) { c.scans = t }
 }
 
 // WithSearchGraph supplies the GraphStorage used by eng_search_similar's
@@ -105,7 +117,7 @@ func RegisterSearchTools(
 		Description:     DescSearchSemantic,
 		IncludesStaging: false,
 		InputSchema:     searchSemanticInputSchema,
-		Handler:         makeSearchSemanticHandler(svc, rec, repos, pending),
+		Handler:         makeSearchSemanticHandler(svc, rec, repos, pending, cfg.scans),
 	})
 	r.MustRegister(ToolSpec{
 		Name:            "eng_search_similar",
@@ -145,7 +157,7 @@ type searchSemanticParams struct {
 	Limit int `json:"limit,omitempty"`
 }
 
-func makeSearchSemanticHandler(svc *search.Service, rec *savings.Recorder, repos application.RepoLister, pending PendingEmbedsCounter) ToolHandler {
+func makeSearchSemanticHandler(svc *search.Service, rec *savings.Recorder, repos application.RepoLister, pending PendingEmbedsCounter, scans ScanTrackerReader) ToolHandler {
 	return func(ctx context.Context, _ domain.Actor, raw json.RawMessage) (any, *RPCError) {
 		var p searchSemanticParams
 		if rpcErr := bindParams(raw, &p); rpcErr != nil {
@@ -192,7 +204,17 @@ func makeSearchSemanticHandler(svc *search.Service, rec *savings.Recorder, repos
 				dtos[i].RepoID = repoByNode[dtos[i].NodeID]
 			}
 		}
-		return SearchResponse{Results: dtos, DegradedReasons: reasons}, nil
+		var indexing []string
+		// solov2-izh6.30: empty search result during an active cold scan
+		// is the indexing window. Surface it so a junior who just ran
+		// 'veska search' on a freshly-added repo knows to retry.
+		if len(dtos) == 0 {
+			if ids, busy := indexingRepoIDs(scans); busy {
+				reasons = append(reasons, DegradedReasonIndexingInProgress)
+				indexing = ids
+			}
+		}
+		return SearchResponse{Results: dtos, DegradedReasons: reasons, IndexingRepos: indexing}, nil
 	}
 }
 
