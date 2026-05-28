@@ -169,17 +169,25 @@ func resolveVulnChoice(flags initFlags, out io.Writer) (bool, error) {
 	// solov2-k4pe: surface that the default makes the daemon query osv.dev
 	// over the network, and point at --no-vuln / --yes so a junior never
 	// has to grep --help to script the install.
+	//
+	// Peek for an immediate EOF before printing anything — some agent
+	// harnesses present a TTY-ish stdin that's already closed, in which
+	// case the prompt + "stdin EOF" parenthetical reads as an error
+	// (solov2-iabr). Skip straight to the non-interactive line so the
+	// output is identical to the !flags.interactive branch.
+	reader := bufio.NewReader(flags.stdin)
+	if _, peekErr := reader.Peek(1); peekErr != nil {
+		fmt.Fprintln(out, "OSV vulnerability scanning: enabled (default; stdin closed — pass --no-vuln to opt out, --yes to silence this line)")
+		return true, nil
+	}
 	fmt.Fprintln(out, "Enable OSV vulnerability scanning? (queries osv.dev over the network)")
 	fmt.Fprint(out, "  [Y/n] (or rerun with --yes / --no-vuln to skip this prompt): ")
-	reader := bufio.NewReader(flags.stdin)
 	line, err := reader.ReadString('\n')
 	if err != nil && line == "" {
-		// EOF without input — treat as default (yes). Avoids breaking
-		// callers that wire init into a non-tty pipeline. Echo what we
-		// chose so a user piping/redirecting stdin (which presents as a
-		// TTY to the parent shell) still sees the resolved choice
-		// instead of an unanswered prompt (solov2-cgut).
-		fmt.Fprintln(out, "yes (stdin EOF; accepting default — pass --no-vuln next time to opt out)")
+		// EOF after the prompt was printed (rare: the peek above caught
+		// the common case). Echo a clean default-accepted line so the
+		// user sees the resolved choice instead of an unanswered prompt.
+		fmt.Fprintln(out, "yes (default; pass --no-vuln next time to opt out)")
 		return true, nil
 	}
 	switch strings.ToLower(strings.TrimSpace(line)) {
