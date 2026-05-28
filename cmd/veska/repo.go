@@ -439,6 +439,15 @@ func repoAddCmd() *cobra.Command {
 				return runRepoAddURL(ctx, cmd, root, wait)
 			}
 
+			// solov2-clgn: '.', '..', or any relative path must be resolved
+			// against the user's cwd here. The daemon's cwd is unrelated and
+			// would otherwise mis-resolve '.' to the daemon's working dir.
+			abs, err := filepath.Abs(root)
+			if err != nil {
+				return fmt.Errorf("repo add: resolve %q: %w", root, err)
+			}
+			root = abs
+
 			// Prefer the daemon when up — it triggers cold scan and seeds
 			// the live watcher in one call (parity with eng_add_repo).
 			id, existed, dialErr := dialAddRepo(ctx, root)
