@@ -312,6 +312,14 @@ func (h *Handler) Handle(ctx context.Context, row ports.WorkRow) error {
 		if hash != "" {
 			opts = append(opts, domain.WithAnchorContentHash(hash))
 		}
+		// solov2-4n7q: surface the source node's file path so `veska
+		// findings list` populates the FILE column. The edge_id anchor in
+		// NodeID is opaque to users; the file_path lets findings be
+		// scanned/grouped by file like vulnerable_dependency rows already
+		// are. NodeAnchor still drives finding_id derivation.
+		if srcFile := srcFileByID[c.SourceNodeID]; srcFile != "" {
+			opts = append(opts, domain.WithFileAnchor(srcFile))
+		}
 		target := displayByID[c.TargetNodeID]
 		if target == "" {
 			target = c.TargetNodeID
