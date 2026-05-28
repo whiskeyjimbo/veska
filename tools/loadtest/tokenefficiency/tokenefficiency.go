@@ -203,11 +203,12 @@ func formatThousands(n int) string {
 	if first == 0 {
 		first = 3
 	}
-	out := s[:first]
+	var out strings.Builder
+	out.WriteString(s[:first])
 	for i := first; i < len(s); i += 3 {
-		out += "," + s[i:i+3]
+		out.WriteString("," + s[i:i+3])
 	}
-	return out
+	return out.String()
 }
 
 func (r Result) meanVeskaPctOfGrepMidpoint() float64 {
