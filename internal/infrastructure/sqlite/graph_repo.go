@@ -474,6 +474,31 @@ func (r *GraphRepo) GetNode(ctx context.Context, repoID, branch string, id domai
 	return n, nil
 }
 
+// GetNodeSnippet returns the persisted (capped) body text for a single
+// node. Returns ("", nil) when the row is missing or the snippet column
+// stored NULL — callers treat the empty result as "no snippet available"
+// and fall back to conservative defaults. The returned text is capped to
+// maxSnippetBytes by the write path, so callers must not assume it equals
+// the full source. Backs the eng_get_call_chain seed-body discriminator
+// (solov2-izh6.22).
+func (r *GraphRepo) GetNodeSnippet(ctx context.Context, repoID, branch string, id domain.NodeID) (string, error) {
+	var snippet sql.NullString
+	err := r.readDB.QueryRowContext(ctx,
+		`SELECT snippet FROM nodes WHERE repo_id = ? AND branch = ? AND node_id = ?`,
+		repoID, branch, string(id),
+	).Scan(&snippet)
+	switch {
+	case err == sql.ErrNoRows:
+		return "", nil
+	case err != nil:
+		return "", fmt.Errorf("graph_repo: get node snippet %q: %w", id, err)
+	}
+	if !snippet.Valid {
+		return "", nil
+	}
+	return snippet.String, nil
+}
+
 // FindNodeByID retrieves the first node matching the content-hashed id across
 // every (repo_id, branch). node_id is a sha256 content hash so collisions
 // across repos/branches are vanishingly rare; LIMIT 1 returns one

@@ -232,6 +232,14 @@ func renderGraphChain(ctx context.Context, w io.Writer, raw json.RawMessage, jso
 				fmt.Fprintln(w, "        so call edges from cobra-style top-level var initialisers are attributed to the package node.")
 				fmt.Fprintln(w, "        try `veska blast <symbol>` or `veska context <symbol>` for a graph-wide view.")
 			}
+			if d == "external_callees_only" {
+				// solov2-izh6.22: the symbol's callees are stdlib /
+				// unregistered modules, not a parser limitation. Tell the
+				// reader so they don't conclude something's broken.
+				fmt.Fprintln(w, "  hint: this symbol only calls into stdlib or unregistered modules, so there are no")
+				fmt.Fprintln(w, "        edges to follow in the indexed graph. try `veska blast <symbol>` for callers,")
+				fmt.Fprintln(w, "        or register the dependency repo so its symbols become first-class nodes.")
+			}
 		}
 		return nil
 	}

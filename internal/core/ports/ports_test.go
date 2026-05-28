@@ -52,6 +52,9 @@ func (s *stubGraphStorage) FindNodes(_ context.Context, _, _, _ string) ([]*doma
 func (s *stubGraphStorage) NodesForFile(_ context.Context, _, _, _ string) ([]*domain.Node, error) {
 	return nil, nil
 }
+func (s *stubGraphStorage) GetNodeSnippet(_ context.Context, _, _ string, _ domain.NodeID) (string, error) {
+	return "", nil
+}
 func (s *stubGraphStorage) GetNode(_ context.Context, _, _ string, _ domain.NodeID) (*domain.Node, error) {
 	return nil, nil
 }

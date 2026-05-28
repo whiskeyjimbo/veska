@@ -44,4 +44,14 @@ type GraphStorage interface {
 	// eng_get_file_nodes; promoting it to the port retires the optional
 	// type-assertion dance the handler used to do (solov2-8ex).
 	NodesForFile(ctx context.Context, repoID, branch, filePath string) ([]*domain.Node, error)
+
+	// GetNodeSnippet returns the persisted capped body for a single node.
+	// Returns "" (not an error) when the row exists but stored NULL, and
+	// "" with sql.ErrNoRows-equivalent treatment when the row is missing.
+	// Implementations cap the returned bytes (sqlite uses maxSnippetBytes)
+	// so callers must not assume the snippet equals the full source.
+	// Used by eng_get_call_chain to discriminate the
+	// chained_selectors_unresolved / external_callees_only degraded reasons
+	// (solov2-izh6.22).
+	GetNodeSnippet(ctx context.Context, repoID, branch string, id domain.NodeID) (string, error)
 }

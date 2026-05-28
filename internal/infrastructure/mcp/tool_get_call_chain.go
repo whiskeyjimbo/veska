@@ -4,11 +4,31 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"regexp"
 
 	application "github.com/whiskeyjimbo/veska/internal/application"
 	"github.com/whiskeyjimbo/veska/internal/core/domain"
 	"github.com/whiskeyjimbo/veska/internal/core/ports"
 )
+
+// chainedSelectorCallRe matches a call expression whose function is a
+// selector chain of at least two dots: `a.b.c(`, `pkg.Type.Method(`,
+// `obj.field.M(` etc. The legacy parser (solov2-9rc2) does not model
+// these as edges, so an empty resolved-edge set on a seed whose body
+// contains this shape is a parser limitation rather than an index gap.
+var chainedSelectorCallRe = regexp.MustCompile(`[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*){2,}\s*\(`)
+
+// seedBodyContainsChainedSelector reports whether the seed body contains
+// a chained selector call. Empty body (snippet unavailable, file truly
+// empty) is treated conservatively as "yes" so the legacy
+// chained_selectors_unresolved hint still fires — the discriminator only
+// narrows when we have evidence the body has no chained selectors.
+func seedBodyContainsChainedSelector(body string) bool {
+	if body == "" {
+		return true
+	}
+	return chainedSelectorCallRe.MatchString(body)
+}
 
 // ---------------------------------------------------------------------------
 // eng_get_call_chain
@@ -186,19 +206,29 @@ func makeGetCallChainHandler(graph ports.GraphStorage, resolve ResolveFunc, reso
 			}
 		}
 
-		// solov2-jojv: emit a degraded_reasons hint when the seed is a
-		// callable but no CALLS edges resolved. The dominant cause is
-		// chained-selector call sites the tree-sitter extractor does not
-		// yet model (epic solov2-9rc2); an agent that reads {edges:[]}
-		// without context would incorrectly conclude the symbol has no
-		// callees. We check the seed's kind on the loaded graph rather
-		// than re-fetching it.
+		// solov2-jojv / solov2-izh6.22: emit a degraded_reasons hint
+		// when the seed is a callable but no CALLS edges resolved.
+		// jojv landed a single chained_selectors_unresolved catch-all;
+		// izh6.22 splits it: only emit that reason when the seed's body
+		// actually contains a chained selector call site (a.b.c(...))
+		// the parser doesn't model (epic solov2-9rc2). Otherwise the
+		// dominant cause is external/stdlib callees outside the graph,
+		// so emit external_callees_only instead — actionable for an
+		// agent ("not a parser bug, just index boundary").
 		reasons := []string{}
 		if len(resultEdges) == 0 && len(crossRepoEdges) == 0 && dirOut {
 			if seed, ok := g.Node(startID); ok {
 				switch seed.Kind {
 				case domain.KindFunction, domain.KindMethod:
-					reasons = append(reasons, DegradedReasonChainedSelectorsUnresolved)
+					// snippet fetch is best-effort — on error we keep the
+					// conservative legacy reason rather than swallow the
+					// failure into a different signal.
+					body, snipErr := graph.GetNodeSnippet(ctx, p.RepoID, p.Branch, startID)
+					if snipErr != nil || seedBodyContainsChainedSelector(body) {
+						reasons = append(reasons, DegradedReasonChainedSelectorsUnresolved)
+					} else {
+						reasons = append(reasons, DegradedReasonExternalCalleesOnly)
+					}
 				}
 			}
 		}
