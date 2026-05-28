@@ -140,6 +140,7 @@ func depsListCmd() *cobra.Command {
 			}
 			tw := tabwriter.NewWriter(w, 0, 0, 2, ' ', 0)
 			fmt.Fprintln(tw, "MODULE\tVERSION\tCALLS\tIMPORTS\tTOP_SYMBOLS")
+			anyZeroCalls := false
 			for _, d := range shown {
 				var symbols strings.Builder
 				for i, cs := range d.TopCallSites {
@@ -148,13 +149,28 @@ func depsListCmd() *cobra.Command {
 					}
 					symbols.WriteString(cs.SymbolPath)
 				}
-				fmt.Fprintf(tw, "%s\t%s\t%d\t%d\t%s\n", d.Module, d.Version, d.UsageCount, d.ImportCount, symbols.String())
+				// solov2-xok5: CALLS=0 with IMPORTS>0 almost always means the
+				// module is used through chained selector expressions (e.g.
+				// cobra `&cobra.Command{...}`, `yaml.Marshal`) that the
+				// parser attributes to the package node, not the calling
+				// function. Without a marker, a junior reads "CALLS=0" as
+				// "unused dep, safe to remove" — dangerous. Tag the row with
+				// "*" and emit a footer explaining the suppression.
+				callsCell := fmt.Sprintf("%d", d.UsageCount)
+				if d.UsageCount == 0 && d.ImportCount > 0 {
+					callsCell = "0 *"
+					anyZeroCalls = true
+				}
+				fmt.Fprintf(tw, "%s\t%s\t%s\t%d\t%s\n", d.Module, d.Version, callsCell, d.ImportCount, symbols.String())
 			}
 			if err := tw.Flush(); err != nil {
 				return err
 			}
 			if truncated > 0 {
 				fmt.Fprintf(w, "... %d more (raise --limit to see all)\n", truncated)
+			}
+			if anyZeroCalls {
+				fmt.Fprintln(w, "* CALLS=0 with IMPORTS>0: call edges suppressed by chained_selectors_unresolved (cobra/yaml-style usage); the module is imported but its use is not 'unused'. Do not infer 'safe to remove' from CALLS=0 alone.")
 			}
 			return nil
 		},
