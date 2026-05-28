@@ -204,11 +204,16 @@ func makeListSuppressionsHandler(db *sql.DB, repos application.RepoLister) ToolH
 			return nil, rpcErr
 		}
 		// solov2-7tz1: when exactly one repo is registered, auto-resolve
-		// repo_id so the caller does not have to look it up. The id is
-		// retained (even though the current schema does not key suppressions
-		// by repo) so a future repo-scoped column tightens cleanly.
-		if _, rpcErr := resolveRepoIDOrSingleton(ctx, repos, p.RepoID); rpcErr != nil {
-			return nil, rpcErr
+		// repo_id so the caller does not have to look it up.
+		// solov2-hlf2: an empty repo_id is no longer fatal — the underlying
+		// query is repo-agnostic, so we mirror eng_list_findings's default
+		// and list across every repo when ambiguous instead of erroring.
+		// Explicit repo_id still validates so callers that pass a typo
+		// learn about it.
+		if p.RepoID != "" {
+			if _, rpcErr := resolveRepoIDOrSingleton(ctx, repos, p.RepoID); rpcErr != nil {
+				return nil, rpcErr
+			}
 		}
 
 		// Suppressions are scoped by branch. branch-NULL rows (repo-wide) are
