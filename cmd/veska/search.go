@@ -749,15 +749,23 @@ func daemonSearchAllRepos(ctx context.Context, opts runSearchOpts) (searchEnvelo
 }
 
 // resolveRepoViaDaemon maps the search target to a (repo_id, branch) the
-// daemon already tracks. An empty target resolves the cwd via
-// eng_get_current_repo; a filesystem path is matched against eng_list_repos
-// by canonical root. ok is false (caller falls back) when the daemon is
-// down or the repo is unknown.
+// daemon already tracks. Resolution order (solov2-q51m):
+//   - empty target → eng_get_current_repo against cwd
+//   - non-empty    → match against eng_list_repos by full repo_id,
+//     short_id, or alias first (cheap), then by canonical
+//     filesystem root.
+//
+// ok is false (caller falls back to the in-process path) when the daemon
+// is down or the repo is unknown. Prior to this change --repo accepted
+// only paths/URLs, so 'veska search --repo lib' rejected a valid alias
+// that 'veska symbol --repo lib' / 'veska context --repo lib' accepted.
 func resolveRepoViaDaemon(ctx context.Context, target string) (repoID, branch string, ok bool) {
 	type repoRow struct {
-		RepoID       string `json:"repo_id"`
-		RootPath     string `json:"root_path"`
-		ActiveBranch string `json:"active_branch"`
+		RepoID       string   `json:"repo_id"`
+		ShortID      string   `json:"short_id"`
+		Aliases      []string `json:"aliases"`
+		RootPath     string   `json:"root_path"`
+		ActiveBranch string   `json:"active_branch"`
 	}
 
 	if target == "" {
@@ -777,18 +785,38 @@ func resolveRepoViaDaemon(ctx context.Context, target string) (repoID, branch st
 		return res.Repo.RepoID, branchOrMain(res.Repo.ActiveBranch), true
 	}
 
+	var list struct {
+		Repos []repoRow `json:"repos"`
+	}
+	if err := callMCP(ctx, "eng_list_repos", map[string]any{}, &list); err != nil {
+		return "", "", false
+	}
+
+	// Registry-identifier match: full repo_id, short_id, or any bound
+	// alias. Path matching can't usefully resolve any of these, so a hit
+	// here saves a filesystem stat round and works for non-path targets
+	// like "lib".
+	for _, r := range list.Repos {
+		if target == r.RepoID || target == r.ShortID {
+			return r.RepoID, branchOrMain(r.ActiveBranch), true
+		}
+		for _, a := range r.Aliases {
+			if target == a {
+				return r.RepoID, branchOrMain(r.ActiveBranch), true
+			}
+		}
+	}
+
+	// Filesystem-root match: target was a path. filepath.Abs turns "lib"
+	// into "$cwd/lib" which wouldn't match anything in the registry — but
+	// that's fine because we already exhausted the identifier-string match
+	// above and a literal alias would never coincide with a real path.
 	canonical, err := filepath.Abs(target)
 	if err != nil {
 		return "", "", false
 	}
 	if resolved, err := filepath.EvalSymlinks(canonical); err == nil {
 		canonical = resolved
-	}
-	var list struct {
-		Repos []repoRow `json:"repos"`
-	}
-	if err := callMCP(ctx, "eng_list_repos", map[string]any{}, &list); err != nil {
-		return "", "", false
 	}
 	for _, r := range list.Repos {
 		if r.RootPath == canonical {
