@@ -71,6 +71,13 @@ func repoAliasCmd() *cobra.Command {
 			}
 			rec, err := resolveCLIRepoID(recs, target)
 			if err != nil {
+				// Likely arg-order mistake: `veska repo alias <id> <name>`
+				// instead of the documented `<name> <id>`. If args[0]
+				// resolves and args[1] does not, surface the swap hint
+				// instead of the generic not-registered error (solov2-fdni).
+				if _, swapErr := resolveCLIRepoID(recs, name); swapErr == nil {
+					return fmt.Errorf("repo alias: %w — did you swap the arguments? usage: `veska repo alias <name> <repo-id-or-prefix-or-alias>` (got name=%q repo=%q)", err, name, target)
+				}
 				return fmt.Errorf("repo alias: %w", err)
 			}
 			if err := repo.SetAlias(ctx, db, name, rec.RepoID, force); err != nil {
@@ -262,7 +269,10 @@ func resolveCLIRepoID(records []repo.Record, repoID string) (repo.Record, error)
 			return matched, nil
 		}
 	}
-	return repo.Record{}, fmt.Errorf("repo %q is not registered (prefixes must be >= %d chars)", repoID, cliMinRepoIDPrefix)
+	if len(repoID) < cliMinRepoIDPrefix {
+		return repo.Record{}, fmt.Errorf("repo %q is not registered (prefixes must be >= %d chars)", repoID, cliMinRepoIDPrefix)
+	}
+	return repo.Record{}, fmt.Errorf("repo %q is not registered (no match by full id, short_id, alias, or prefix)", repoID)
 }
 
 // scanProgressRow is the per-scan progress snapshot surfaced into repo
