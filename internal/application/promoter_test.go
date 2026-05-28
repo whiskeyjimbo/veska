@@ -119,6 +119,18 @@ CREATE VIRTUAL TABLE node_fts_trigrams USING fts5(
     node_id UNINDEXED, branch UNINDEXED, repo_id UNINDEXED, raw,
     tokenize = "trigram"
 );
+
+CREATE TABLE file_imports (
+    repo_id          TEXT NOT NULL,
+    branch           TEXT NOT NULL,
+    file_path        TEXT NOT NULL,
+    import_path      TEXT NOT NULL,
+    alias            TEXT NOT NULL DEFAULT '',
+    language         TEXT NOT NULL,
+    last_promoted_at INTEGER NOT NULL,
+    PRIMARY KEY (repo_id, branch, file_path, import_path),
+    FOREIGN KEY (repo_id) REFERENCES repos(repo_id) ON DELETE CASCADE
+);
 `
 	if _, err := db.Exec(schema); err != nil {
 		t.Fatalf("create schema: %v", err)
