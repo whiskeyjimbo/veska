@@ -401,7 +401,14 @@ func resolveSeedOwner(ctx context.Context, repos application.RepoLister, graph p
 		return all[0].RepoID, br, nid, nil
 	}
 
-	// Path 2: cwd pin.
+	// Path 2: cwd pin. When the cwd belongs to a registered repo AND the seed
+	// resolves there, prefer that owner — it is the user's most likely intent
+	// and avoids the per-repo fan-out walk. When the seed is NOT in the cwd's
+	// repo, fall through to Path 3 fan-out instead of returning NotFound:
+	// the cobra-CLI-plus-shared-lib pattern routinely asks about a symbol
+	// owned by a sibling repo (e.g. `veska calls Hello` from greetcli, where
+	// Hello lives in greetlib). Pre-izh6.14 this returned "symbol not found"
+	// despite `calls --help` advertising fan-out as the documented default.
 	if cwd := cwdFromParams(raw); cwd != "" {
 		for _, rec := range all {
 			if rec.RootPath == "" {
@@ -413,10 +420,18 @@ func resolveSeedOwner(ctx context.Context, repos application.RepoLister, graph p
 					br = rec.ActiveBranch
 				}
 				nid, rerr := resolveInRepo(rec.RepoID, br)
-				if rerr != nil {
+				if rerr == nil {
+					return rec.RepoID, br, nid, nil
+				}
+				// NotFound → the seed lives elsewhere; let Path 3 fan-out
+				// across every registered repo find it. Other error codes
+				// (InvalidParams for ambiguous symbol, InternalError for
+				// storage failures) are real problems specific to the
+				// cwd-pinned repo and must surface verbatim.
+				if rerr.Code != CodeNotFound {
 					return "", "", "", rerr
 				}
-				return rec.RepoID, br, nid, nil
+				break
 			}
 		}
 	}
