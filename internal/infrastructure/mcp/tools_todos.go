@@ -10,6 +10,7 @@ import (
 	application "github.com/whiskeyjimbo/veska/internal/application"
 	"github.com/whiskeyjimbo/veska/internal/core/domain"
 	"github.com/whiskeyjimbo/veska/internal/core/ports"
+	gitinfra "github.com/whiskeyjimbo/veska/internal/infrastructure/git"
 )
 
 // TodoDTO is the snake_case wire shape for a single TODO/FIXME marker. The
@@ -117,6 +118,15 @@ func makeFindTodosHandler(querier ports.TodoQuerier, repos application.RepoListe
 				root = r
 			}
 		}
-		return TodosResponse{Todos: todosToDTO(entries, root), DegradedReasons: []string{}}, nil
+		// solov2-k1jm: TODO scanning is post-promotion (it indexes the last
+		// committed tree). When the result is empty but the working tree
+		// has uncommitted changes, surface a degraded_reason so callers can
+		// say "commit first" instead of "no TODOs". Non-empty results stay
+		// degraded-free — staged TODOs from prior commits remain valid.
+		degraded := []string{}
+		if len(entries) == 0 && root != "" && gitinfra.WorkingTreeHasUncommittedChanges(ctx, root) {
+			degraded = append(degraded, "todos_are_post_promotion")
+		}
+		return TodosResponse{Todos: todosToDTO(entries, root), DegradedReasons: degraded}, nil
 	}
 }
