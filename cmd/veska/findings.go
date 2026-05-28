@@ -83,7 +83,11 @@ func findingsListCmd() *cobra.Command {
 					autoAll = true
 				}
 			}
-			if autoAll {
+			// solov2-w4bd: the advisory rides stderr so it never breaks
+			// stdout-consuming pipes (awk, jq). Under --json we also drop
+			// the breadcrumb entirely so machine consumers don't have to
+			// filter a sometimes-present stderr line out of their logs.
+			if autoAll && !jsonOut {
 				fmt.Fprintln(cmd.ErrOrStderr(), "veska: no --repo and cwd outside any registered repo; listing findings across all repos (pass --repo <id> to scope)")
 			}
 			// solov2-f3ep: --all clears the default state=open filter so
