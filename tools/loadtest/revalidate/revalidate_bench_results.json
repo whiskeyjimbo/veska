@@ -6,9 +6,9 @@
   "findings_stale": 3000,
   "refreshed": 3000,
   "closed": 0,
-  "elapsed_ms": 10953.972,
-  "p95_handle_ms": 200.536,
+  "elapsed_ms": 1565.08,
+  "p95_handle_ms": 16.639,
   "exit_gate_met": true,
   "backend": "sqlite",
-  "timestamp": "2026-05-15T19:51:57.147122012Z"
+  "timestamp": "2026-05-27T03:25:40.337934693Z"
 }

@@ -23,6 +23,23 @@ var secretsScanIgnoredPrefixes = []string{
 	".bd/",    // legacy beads layout
 }
 
+// secretsScanIgnoredSegments are path-segment names whose entire subtree the
+// secrets scanner skips. These are dependency-vendoring directories whose
+// contents are third-party code, license boilerplate (Apache 2 license URLs
+// trip the high-entropy rule), and completion script fragments — none of
+// which are user-authored secrets. Without this filter, a freshly-vendored Go
+// CLI repo (e.g. anything pulling cobra) produced 128 high-sev false
+// positives on first promotion (solov2-l7zd). Matching is segment-anywhere
+// (not prefix-only) so monorepo layouts like `apps/foo/vendor/...` are also
+// covered.
+var secretsScanIgnoredSegments = []string{
+	"vendor",           // Go module vendoring
+	"node_modules",     // npm/yarn/pnpm
+	"third_party",      // common monorepo convention
+	"bower_components", // legacy frontend
+	"jspm_packages",    // legacy frontend
+}
+
 // SecretsScanCheck is a structural check that turns SecretsScanner output into
 // findings on promotion. It scans only the lines newly added by the promoted
 // commit (Input.AddedLines), so a pre-existing secret on an untouched line is
@@ -100,15 +117,40 @@ func (c *SecretsScanCheck) Run(ctx context.Context, in Input) ([]*domain.Finding
 }
 
 // isSecretsScanIgnored reports whether path lives under a tracker/cache
-// directory whose payloads routinely look secret-shaped to the high-entropy
-// heuristic but never actually contain credentials.
+// directory or a dependency-vendoring directory whose payloads routinely look
+// secret-shaped to the high-entropy heuristic but never actually contain
+// credentials.
 func isSecretsScanIgnored(path string) bool {
 	for _, prefix := range secretsScanIgnoredPrefixes {
 		if strings.HasPrefix(path, prefix) {
 			return true
 		}
 	}
+	for _, seg := range secretsScanIgnoredSegments {
+		if pathHasSegment(path, seg) {
+			return true
+		}
+	}
 	return false
+}
+
+// pathHasSegment reports whether seg appears as a full path segment in path
+// (separators are `/`, matching the repo-relative paths emitted by the
+// promotion pipeline).
+func pathHasSegment(path, seg string) bool {
+	for {
+		i := strings.Index(path, seg)
+		if i < 0 {
+			return false
+		}
+		leftOK := i == 0 || path[i-1] == '/'
+		end := i + len(seg)
+		rightOK := end == len(path) || path[end] == '/'
+		if leftOK && rightOK {
+			return true
+		}
+		path = path[i+len(seg):]
+	}
 }
 
 // secretSeverity maps a scanner confidence score onto the domain Severity
