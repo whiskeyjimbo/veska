@@ -181,6 +181,48 @@ func TestResolveSeedOwner_FanoutNotFound(t *testing.T) {
 	}
 }
 
+// TestResolveSeedOwner_CwdPinFallsThroughToFanout pins solov2-izh6.14: when
+// the MCP shim injects a cwd that resolves to a registered repo but the seed
+// symbol/node_id does NOT live in that repo, the helper must fall through
+// to the fan-out path (Path 3) instead of returning NotFound. Otherwise
+// `veska calls Hello` from a sibling repo fails with "symbol not found"
+// despite Hello being registered elsewhere — contradicting the documented
+// "default: fan out across registered repos" contract.
+func TestResolveSeedOwner_CwdPinFallsThroughToFanout(t *testing.T) {
+	repos := &stubRepoLister{repos: []application.RepoRecord{
+		{RepoID: "repo-cli", RootPath: "/tmp/cli", ActiveBranch: "main"},
+		{RepoID: "repo-lib", RootPath: "/tmp/lib", ActiveBranch: "main"},
+	}}
+	graph := newScopedGraphStub()
+	hello := mustNode(t, "n-hello", "greet.go", "Hello", domain.KindMethod)
+	graph.put("repo-lib", "main", hello)
+
+	// cwd is the CLI repo; the symbol lives in the lib repo. Without the
+	// fallthrough fix, this is the failing path that produced
+	// "symbol not found: Hello".
+	params := json.RawMessage(`{"cwd":"/tmp/cli"}`)
+
+	t.Run("by symbol", func(t *testing.T) {
+		rid, br, nid, rpcErr := resolveSeedOwner(context.Background(), repos, graph, params, "", "", "", "Hello")
+		if rpcErr != nil {
+			t.Fatalf("unexpected error: %+v", rpcErr)
+		}
+		if rid != "repo-lib" || br != "main" || nid != "n-hello" {
+			t.Fatalf("got (%q,%q,%q); want (repo-lib,main,n-hello)", rid, br, nid)
+		}
+	})
+
+	t.Run("by node_id", func(t *testing.T) {
+		rid, _, nid, rpcErr := resolveSeedOwner(context.Background(), repos, graph, params, "", "", "n-hello", "")
+		if rpcErr != nil {
+			t.Fatalf("unexpected error: %+v", rpcErr)
+		}
+		if rid != "repo-lib" || nid != "n-hello" {
+			t.Fatalf("got (%q,%q); want (repo-lib,n-hello)", rid, nid)
+		}
+	})
+}
+
 // TestExpandNodeIDPrefix_RejectsBadAndExpandsGood pins solov2-xc7t: when a
 // caller passes a 12-char short_id (the form veska's CLI prints under the
 // "(...)" column), the daemon must NOT silently pass it through to a SQL
