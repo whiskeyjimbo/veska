@@ -180,3 +180,43 @@ func TestResolveSeedOwner_FanoutNotFound(t *testing.T) {
 		t.Fatalf("want NotFound, got %+v", rpcErr)
 	}
 }
+
+// TestExpandNodeIDPrefix_RejectsBadAndExpandsGood pins solov2-xc7t: when a
+// caller passes a 12-char short_id (the form veska's CLI prints under the
+// "(...)" column), the daemon must NOT silently pass it through to a SQL
+// equality lookup and report "node has no embedding" — instead either
+// expand it to the canonical 64-char form (unique prefix), or surface a
+// "no node matches prefix" error so the user knows the id was wrong.
+func TestExpandNodeIDPrefix_RejectsBadAndExpandsGood(t *testing.T) {
+	full := "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+	g := newScopedGraphStub()
+	n, err := domain.NewNode(full, "x.go", "X", domain.KindFunction)
+	if err != nil {
+		t.Fatalf("NewNode: %v", err)
+	}
+	g.put("r1", "main", n)
+
+	t.Run("full id passes through unchanged", func(t *testing.T) {
+		got, rpcErr := expandNodeIDPrefix(context.Background(), g, "r1", "main", full)
+		if rpcErr != nil || got != full {
+			t.Fatalf("got (%q, %+v); want (%q, nil)", got, rpcErr, full)
+		}
+	})
+
+	t.Run("short prefix expands to full", func(t *testing.T) {
+		got, rpcErr := expandNodeIDPrefix(context.Background(), g, "r1", "main", full[:12])
+		if rpcErr != nil {
+			t.Fatalf("unexpected error: %+v", rpcErr)
+		}
+		if got != full {
+			t.Errorf("got %q, want %q", got, full)
+		}
+	})
+
+	t.Run("unknown prefix surfaces NotFound", func(t *testing.T) {
+		_, rpcErr := expandNodeIDPrefix(context.Background(), g, "r1", "main", "deadbeef")
+		if rpcErr == nil || rpcErr.Code != CodeNotFound {
+			t.Errorf("want NotFound, got %+v", rpcErr)
+		}
+	})
+}
