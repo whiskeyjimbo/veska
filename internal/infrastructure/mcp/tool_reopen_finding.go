@@ -31,6 +31,13 @@ func makeReopenFindingHandler(db *sql.DB, aw ports.AuditWriter) ToolHandler {
 			return nil, rpcErr
 		}
 
+		// solov2-zyp4: accept an unambiguous prefix.
+		fullID, rpcErr := resolveFindingPrefix(ctx, db, p.FindingID, p.Branch)
+		if rpcErr != nil {
+			return nil, rpcErr
+		}
+		p.FindingID = fullID
+
 		// solov2-qwpt: align with eng_close_finding — finding_id is globally
 		// unique, so branch and repo_id are looked up from the row when not
 		// supplied. A mismatching caller-supplied branch returns 404 below.
