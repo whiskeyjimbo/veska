@@ -8,6 +8,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -126,18 +127,32 @@ func runSearch(ctx context.Context, w io.Writer, opts runSearchOpts) error {
 		return err
 	}
 
-	svc, err := buildSearchService(pools)
-	if err != nil {
-		return err
-	}
+	// solov2-2etd: once the URL/path target is registered, prefer the
+	// daemon's hybrid (vector + lexical RRF) eng_search_semantic. The
+	// in-process svc.Semantic below is vector-only and was returning
+	// zero results for queries the daemon answers in full. Falls back
+	// to the in-process service only when the daemon is unreachable.
+	if env, ok, derr := daemonSearchByRepoID(ctx, rec.RepoID, rec.ActiveBranch, opts); ok {
+		if derr != nil {
+			return derr
+		}
+		if err := renderSearchEnvelope(w, env, opts.jsonOut); err != nil {
+			return err
+		}
+	} else {
+		svc, err := buildSearchService(pools)
+		if err != nil {
+			return err
+		}
 
-	resp, err := svc.Semantic(ctx, rec.RepoID, rec.ActiveBranch, opts.query, opts.k, domain.Filter{})
-	if err != nil {
-		return fmt.Errorf("search: semantic: %w", err)
-	}
+		resp, err := svc.Semantic(ctx, rec.RepoID, rec.ActiveBranch, opts.query, opts.k, domain.Filter{})
+		if err != nil {
+			return fmt.Errorf("search: semantic: %w", err)
+		}
 
-	if err := renderSearchResults(w, resp, opts.jsonOut); err != nil {
-		return err
+		if err := renderSearchResults(w, resp, opts.jsonOut); err != nil {
+			return err
+		}
 	}
 
 	// solov2-kxo5.7: after a successful ephemeral search, offer the
@@ -690,6 +705,46 @@ func daemonSearch(ctx context.Context, opts runSearchOpts) (searchEnvelope, bool
 	return env, true, nil
 }
 
+// isDaemonUnreachable reports whether a callMCP error indicates the daemon
+// is down (vs. a real call failure). Used to decide between "fall back to
+// in-process" and "surface to user".
+func isDaemonUnreachable(err error) bool {
+	if err == nil {
+		return false
+	}
+	s := err.Error()
+	return strings.Contains(s, "daemon not running") ||
+		strings.Contains(s, "connection refused") ||
+		strings.Contains(s, "no such file")
+}
+
+// daemonSearchByRepoID runs eng_search_semantic against a known repo_id/branch.
+// Returned ok is false when the daemon is unreachable so callers can fall back
+// to the in-process search service. Used by the URL/path path of runSearch
+// after ensureIndexed has registered the repo (solov2-2etd).
+func daemonSearchByRepoID(ctx context.Context, repoID, branch string, opts runSearchOpts) (searchEnvelope, bool, error) {
+	k := opts.k
+	if k <= 0 {
+		k = 10
+	}
+	var env searchEnvelope
+	if err := callMCP(ctx, "eng_search_semantic", map[string]any{
+		"repo_id": repoID,
+		"branch":  branchOrMain(branch),
+		"query":   opts.query,
+		"k":       k,
+	}, &env); err != nil {
+		// Distinguish "daemon down" (fall back) from "daemon up but call
+		// failed" (surface). callMCP returns connection errors which we
+		// treat as unreachable; anything else is a real search failure.
+		if isDaemonUnreachable(err) {
+			return searchEnvelope{}, false, nil
+		}
+		return searchEnvelope{}, true, fmt.Errorf("search: daemon eng_search_semantic: %w", err)
+	}
+	return env, true, nil
+}
+
 // daemonSearchAllRepos is the cross-repo fanout invoked when target is
 // empty and cwd is not part of a registered repo (solov2-vm5w). It lists
 // every registered repo, runs eng_search_semantic per repo with the same
@@ -800,10 +855,8 @@ func resolveRepoViaDaemon(ctx context.Context, target string) (repoID, branch st
 		if target == r.RepoID || target == r.ShortID {
 			return r.RepoID, branchOrMain(r.ActiveBranch), true
 		}
-		for _, a := range r.Aliases {
-			if target == a {
-				return r.RepoID, branchOrMain(r.ActiveBranch), true
-			}
+		if slices.Contains(r.Aliases, target) {
+			return r.RepoID, branchOrMain(r.ActiveBranch), true
 		}
 	}
 
