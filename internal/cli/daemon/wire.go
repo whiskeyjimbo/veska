@@ -1064,7 +1064,24 @@ func registerMCPTools(r *mcp.Registry, d mcpDeps) {
 	depsRepoRoot := func(ctx context.Context, repoID string) (string, error) {
 		return repoRootFunc(pools.ReadDB)(ctx, repoID)
 	}
-	if depsSvc, err := dependencies.NewService(depsRepo, depsVersions, depsRepoRoot, dependencies.WithImportLister(depsRepo)); err == nil {
+	// solov2-6q1q: tell the dependencies service the repo's own module path
+	// so it can filter intra-module imports (the repo's own subpackages) out
+	// of the external-dependency list.
+	depsOwnModule := func(ctx context.Context, repoRoot string) (string, error) {
+		content, rerr := os.ReadFile(filepath.Join(repoRoot, "go.mod"))
+		if rerr != nil {
+			return "", nil
+		}
+		path, perr := manifest.ReadGoModModulePath(content)
+		if perr != nil {
+			return "", nil
+		}
+		return path, nil
+	}
+	if depsSvc, err := dependencies.NewService(depsRepo, depsVersions, depsRepoRoot,
+		dependencies.WithImportLister(depsRepo),
+		dependencies.WithOwnModulePath(depsOwnModule),
+	); err == nil {
 		mcp.RegisterDependenciesTool(r, depsSvc, &repoLister{db: pools.ReadDB})
 	} else {
 		mcp.RegisterDependenciesTool(r, nil, &repoLister{db: pools.ReadDB})

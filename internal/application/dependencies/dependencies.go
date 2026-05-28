@@ -15,6 +15,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 )
 
 // ErrMissingDependency mirrors the sentinel pattern used by sibling
@@ -105,6 +106,7 @@ type Service struct {
 	imports    ImportLister
 	versions   ModuleVersionFunc
 	repoRoot   RepoRootFunc
+	ownModule  OwnModulePathFunc
 	topK       int
 }
 
@@ -145,6 +147,23 @@ type ServiceOption func(*Service)
 func WithImportLister(l ImportLister) ServiceOption {
 	return func(s *Service) {
 		s.imports = l
+	}
+}
+
+// OwnModulePathFunc returns the importing repo's own module path (e.g.
+// "github.com/junior/greetcli") so the service can filter that path and
+// its subpackages out of the external-dependency list (solov2-6q1q). An
+// empty string disables filtering — useful for non-Go repos or when go.mod
+// is absent.
+type OwnModulePathFunc func(ctx context.Context, repoRoot string) (string, error)
+
+// WithOwnModulePath supplies the func used to recognise the repo's own
+// module path. Without it the "external" dependency list ends up including
+// the repo's internal subpackages (anything inside its module tree),
+// which is misleading in `veska deps list` output (solov2-6q1q).
+func WithOwnModulePath(f OwnModulePathFunc) ServiceOption {
+	return func(s *Service) {
+		s.ownModule = f
 	}
 }
 
@@ -229,12 +248,31 @@ func (s *Service) List(ctx context.Context, repoID, branch string) (Result, erro
 
 	// Resolve repo root once for version lookups.
 	var repoRoot string
-	if s.repoRoot != nil && s.versions != nil {
+	if s.repoRoot != nil && (s.versions != nil || s.ownModule != nil) {
 		root, rerr := s.repoRoot(ctx, repoID)
 		if rerr != nil {
 			return Result{}, fmt.Errorf("dependencies: resolve repo root: %w", rerr)
 		}
 		repoRoot = root
+	}
+
+	// solov2-6q1q: filter the repo's own module path (and its
+	// subpackages) out of the external-dependency list. Stub rows can
+	// carry intra-module imports when one subpackage imports another
+	// (e.g. greetcli/main.go importing greetcli/cmd) — those are not
+	// "external" deps and confuse the listing.
+	if s.ownModule != nil && repoRoot != "" {
+		own, oerr := s.ownModule(ctx, repoRoot)
+		if oerr != nil {
+			return Result{}, fmt.Errorf("dependencies: resolve own module: %w", oerr)
+		}
+		if own != "" {
+			for module := range byModule {
+				if module == own || strings.HasPrefix(module, own+"/") {
+					delete(byModule, module)
+				}
+			}
+		}
 	}
 
 	deps := make([]Dependency, 0, len(byModule))

@@ -38,3 +38,19 @@ func ReadGoMod(content []byte) ([]ports.Dependency, error) {
 	}
 	return deps, nil
 }
+
+// ReadGoModModulePath parses go.mod and returns the value of its `module`
+// directive. An empty path with a nil error indicates no module declaration
+// (rare; modfile usually rejects this). Used by eng_list_dependencies to
+// filter the repo's own subpackages out of the external-module list
+// (solov2-6q1q).
+func ReadGoModModulePath(content []byte) (string, error) {
+	f, err := modfile.Parse("go.mod", content, nil)
+	if err != nil {
+		return "", fmt.Errorf("parse go.mod: %w", err)
+	}
+	if f.Module == nil {
+		return "", nil
+	}
+	return f.Module.Mod.Path, nil
+}
