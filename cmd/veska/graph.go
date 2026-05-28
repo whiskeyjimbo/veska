@@ -9,6 +9,19 @@ import (
 	"github.com/spf13/cobra"
 )
 
+// normalizeDirection accepts the user-friendly aliases callers/callees
+// (which match the help-text prose) in addition to the canonical in/out
+// enum the daemon expects. solov2-5out.
+func normalizeDirection(d string) string {
+	switch d {
+	case "callers":
+		return "in"
+	case "callees":
+		return "out"
+	}
+	return d
+}
+
 // callsCmd wraps eng_get_call_chain. One command with --direction
 // (out|in|both) instead of separate `callers` / `callees` verbs — the
 // underlying MCP tool already takes that parameter and a single CLI
@@ -38,7 +51,7 @@ func callsCmd() *cobra.Command {
 				params["repo_id"] = repoFlag
 			}
 			if dir != "" {
-				params["direction"] = dir
+				params["direction"] = normalizeDirection(dir)
 			}
 			if depth > 0 {
 				params["depth"] = depth
@@ -54,7 +67,7 @@ func callsCmd() *cobra.Command {
 		},
 	}
 	cmd.Flags().StringVar(&repoFlag, "repo", "", "repo id, short_id, or alias (default: fan out across registered repos)")
-	cmd.Flags().StringVar(&dir, "direction", "out", "out|in|both — outgoing callees, incoming callers, or both")
+	cmd.Flags().StringVar(&dir, "direction", "out", "out|in|both (aliases: callees|callers) — outgoing callees, incoming callers, or both")
 	cmd.Flags().IntVar(&depth, "depth", 0, "BFS depth limit (0 = daemon default)")
 	cmd.Flags().BoolVar(&expandXR, "expand-cross-repo", true, "follow CALLS edges into other registered repos")
 	cmd.Flags().BoolVar(&jsonOut, "json", false, "emit JSON (eng_get_call_chain shape)")
@@ -85,7 +98,7 @@ func blastCmd() *cobra.Command {
 				params["repo_id"] = repoFlag
 			}
 			if dir != "" {
-				params["direction"] = dir
+				params["direction"] = normalizeDirection(dir)
 			}
 			var resp json.RawMessage
 			if err := callMCP(cmd.Context(), "eng_get_blast_radius", params, &resp); err != nil {
@@ -95,7 +108,7 @@ func blastCmd() *cobra.Command {
 		},
 	}
 	cmd.Flags().StringVar(&repoFlag, "repo", "", "repo id, short_id, or alias (default: fan out across registered repos)")
-	cmd.Flags().StringVar(&dir, "direction", "both", "out|in|both — callees, callers, or both")
+	cmd.Flags().StringVar(&dir, "direction", "both", "out|in|both (aliases: callees|callers) — callees, callers, or both")
 	cmd.Flags().BoolVar(&jsonOut, "json", false, "emit JSON (eng_get_blast_radius shape)")
 	return cmd
 }
