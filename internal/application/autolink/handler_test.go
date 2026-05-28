@@ -792,3 +792,39 @@ func TestHandler_Integration_IdenticalCandidatesStableAcrossReruns(t *testing.T)
 		t.Errorf("stable rerun: open=%d total=%d, want open=2 total=2", openCount, totalCount)
 	}
 }
+
+// TestIsIdiomaticAutolinkNoise pins solov2-7ze1: name-on-name pairs in
+// the Go-idiom set (init/main/String/Error/TestMain) and same-kind
+// cobra command vars (*Cmd) are filtered out before findings emit, so
+// a tiny CLI repo doesn't get flooded with structurally-trivial pairs.
+func TestIsIdiomaticAutolinkNoise(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		src, tgt, srcKind, tgtKind string
+		want                       bool
+		why                        string
+	}{
+		{"init", "init", "function", "function", true, "two package-init funcs"},
+		{"main", "main", "function", "function", true, "two main entrypoints"},
+		{"foo.String", "bar.String", "method", "method", true, "stringer-conforming methods"},
+		{"X.Error", "Y.Error", "method", "method", true, "error-conforming methods"},
+		{"cmd.rootCmd", "cmd.shoutCmd", "variable", "variable", true, "cobra command vars"},
+		{"cmd.fooCmd", "other.barCmd", "variable", "variable", true, "cross-package cobra vars"},
+
+		// Genuine signals must survive.
+		{"foo.Hello", "bar.Hello", "method", "method", false, "non-idiomatic same name — keep"},
+		{"foo.Run", "bar.Run", "method", "method", false, "Run is common but not idiomatic enough"},
+		{"cmd.rootCmd", "cmd.shoutCmd", "function", "function", false, "Cmd-suffix only filtered when both variable"},
+		{"foo.Parse", "bar.Parse", "function", "function", false, "non-idiomatic"},
+		{"init", "main", "function", "function", false, "different names"},
+	}
+	for _, c := range cases {
+		t.Run(c.why, func(t *testing.T) {
+			got := autolink.AutolinkNoiseForTest(c.src, c.tgt, c.srcKind, c.tgtKind)
+			if got != c.want {
+				t.Errorf("isIdiomaticAutolinkNoise(%q,%q,%q,%q) = %v, want %v",
+					c.src, c.tgt, c.srcKind, c.tgtKind, got, c.want)
+			}
+		})
+	}
+}
