@@ -293,7 +293,15 @@ func expandNodeIDPrefix(ctx context.Context, graph ports.GraphStorage, repoID, b
 		matched = id
 	}
 	if matched == "" {
-		return "", &RPCError{Code: CodeNotFound, Message: fmt.Sprintf("no node matches prefix %q in repo=%s branch=%s (pass the full 64-char node_id from eng_find_symbol, not the 12-char display short_id)", nodeID, ShortRepoID(repoID), branch)}
+		// solov2-izh6.2: the previous hint ("pass the full 64-char
+		// node_id, not the 12-char display short_id") was misleading —
+		// after izh6.1 both widths are accepted. When the prefix really
+		// matches nothing here, the common cause is "node lives in a
+		// different registered repo than the one we're scoped to" (the
+		// CLI cwd-pins, so a short_id copied from one repo's output may
+		// be looked up against a different repo when the user has cd'd
+		// elsewhere). Steer them at repo list / --repo instead.
+		return "", &RPCError{Code: CodeNotFound, Message: fmt.Sprintf("node_id %q not in repo=%s branch=%s — the prefix may belong to a different registered repo; run `veska repo list` and retry with --repo <id> (or cd into the owning repo)", nodeID, ShortRepoID(repoID), branch)}
 	}
 	return matched, nil
 }
@@ -328,7 +336,12 @@ func resolveSeedOwner(ctx context.Context, repos application.RepoLister, graph p
 	// the caller learns about ambiguity / typos up front.
 	resolveInRepo := func(repoID, branch string) (string, *RPCError) {
 		if nodeID != "" {
-			return nodeID, nil
+			// solov2-izh6.1: expand short prefixes (e.g. the 12-char
+			// display short_id from `veska symbol`) to the full node_id
+			// before downstream BFS, which does an exact-match SQL lookup.
+			// Without this, `veska calls 66f083714906` was misread as a
+			// symbol name and returned "symbol not found".
+			return expandNodeIDPrefix(ctx, graph, repoID, branch, nodeID)
 		}
 		if graph == nil {
 			return "", &RPCError{Code: CodeInternalError, Message: "symbol lookup not wired (graph storage missing)"}
@@ -425,11 +438,19 @@ func resolveSeedOwner(ctx context.Context, repos application.RepoLister, graph p
 			continue
 		}
 		if nodeID != "" {
-			n, gerr := graph.GetNode(ctx, rec.RepoID, br, domain.NodeID(nodeID))
+			// solov2-izh6.1: expand short prefixes per-repo. A 12-char
+			// short_id is unique within one repo's content hashes but the
+			// downstream GetNode lookup compares exactly, so without
+			// expansion the fanout silently skipped every owning repo.
+			expanded, expErr := expandNodeIDPrefix(ctx, graph, rec.RepoID, br, nodeID)
+			if expErr != nil || expanded == "" {
+				continue
+			}
+			n, gerr := graph.GetNode(ctx, rec.RepoID, br, domain.NodeID(expanded))
 			if gerr != nil || n == nil {
 				continue
 			}
-			hits = append(hits, hit{repoID: rec.RepoID, branch: br, nodeID: nodeID})
+			hits = append(hits, hit{repoID: rec.RepoID, branch: br, nodeID: expanded})
 			continue
 		}
 		matches, gerr := graph.FindNodes(ctx, rec.RepoID, br, symbol)

@@ -746,6 +746,47 @@ func tailScanCompleteFiles(logPath, repoID string) int {
 	return lastFiles
 }
 
+// tailVulnScanResult scans the daemon log for the most-recent
+// "vuln-scan: scanned" entry for repoID and returns (deps, findings,
+// found). found=false when the scanner didn't run (NullVulnSource —
+// [vuln_source] not configured) so callers can omit the summary line
+// rather than print a misleading "0 findings". solov2-izh6.3.
+func tailVulnScanResult(logPath, repoID string) (deps, findings int, found bool) {
+	const tailBytes = 64 * 1024
+	f, err := os.Open(logPath)
+	if err != nil {
+		return 0, 0, false
+	}
+	defer func() { _ = f.Close() }()
+	info, err := f.Stat()
+	if err != nil {
+		return 0, 0, false
+	}
+	offset := int64(0)
+	if info.Size() > tailBytes {
+		offset = info.Size() - tailBytes
+	}
+	if _, err := f.Seek(offset, io.SeekStart); err != nil {
+		return 0, 0, false
+	}
+	scanner := bufio.NewScanner(f)
+	scanner.Buffer(make([]byte, 0, 64*1024), 1<<20)
+	for scanner.Scan() {
+		line := scanner.Text()
+		if !strings.Contains(line, repoID) || !strings.Contains(line, "vuln-scan: scanned") {
+			continue
+		}
+		var rec struct {
+			Deps     int `json:"deps"`
+			Findings int `json:"findings"`
+		}
+		if err := json.Unmarshal([]byte(line), &rec); err == nil {
+			deps, findings, found = rec.Deps, rec.Findings, true
+		}
+	}
+	return deps, findings, found
+}
+
 // waitForScanComplete polls eng_get_status until the named repo's scan
 // has left scans_in_flight, printing one progress line per phase change
 // or files-seen jump so the user has a continuous signal instead of a
@@ -805,8 +846,8 @@ func waitForScanComplete(ctx context.Context, w io.Writer, repoID string) error 
 						// "✓ complete" carries the file count we actually
 						// indexed.
 						files := maxFiles
+						logPath := filepath.Join(config.DefaultVectorDir(), "logs", "daemon.log")
 						if files == 0 {
-							logPath := filepath.Join(config.DefaultVectorDir(), "logs", "daemon.log")
 							files = tailScanCompleteFiles(logPath, repoID)
 						}
 						if files > 0 {
@@ -817,6 +858,13 @@ func waitForScanComplete(ctx context.Context, w io.Writer, repoID string) error 
 							fmt.Fprintf(w, "  ✓ cold scan complete: %d file%s (%.1fs)\n", files, plural, time.Since(start).Seconds())
 						} else {
 							fmt.Fprintf(w, "  ✓ cold scan complete (%.1fs)\n", time.Since(start).Seconds())
+						}
+						// solov2-izh6.3: surface vuln-scan result so a
+						// fresh-init user can see the OSV scanner did run.
+						// Silent when [vuln_source] is off — no log line
+						// to tail.
+						if deps, findings, ok := tailVulnScanResult(logPath, repoID); ok {
+							fmt.Fprintf(w, "  ✓ vuln-scan: %d finding(s) across %d dep(s)\n", findings, deps)
 						}
 						return nil
 					}
@@ -954,12 +1002,17 @@ func removeOneRepo(ctx context.Context, w io.Writer, arg string) error {
 // listRegisteredRepos returns the repo set via the daemon when up, falling
 // back to direct DB read. Shared by removeMissingRepos / removeAllRepos so
 // the unified verb sees the same registry the legacy prune did.
+//
+// solov2-izh6.7: pass include_vendored=true so synthetic ext:<module>
+// rows created by `veska deps index` are surfaced. Without this they
+// stayed invisible to `repo remove --missing` and orphaned when the
+// underlying vendor dir was deleted.
 func listRegisteredRepos(ctx context.Context) ([]repoView, error) {
 	type listResult struct {
 		Repos []repoView `json:"repos"`
 	}
 	var lr listResult
-	if err := callMCP(ctx, "eng_list_repos", map[string]any{}, &lr); err == nil {
+	if err := callMCP(ctx, "eng_list_repos", map[string]any{"include_vendored": true}, &lr); err == nil {
 		return lr.Repos, nil
 	}
 	db, closeFn, err := openLocalDB()

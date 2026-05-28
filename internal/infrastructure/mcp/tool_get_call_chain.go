@@ -37,6 +37,18 @@ func makeGetCallChainHandler(graph ports.GraphStorage, resolve ResolveFunc, reso
 		if err := json.Unmarshal(raw, &p); err != nil {
 			return nil, &RPCError{Code: CodeInvalidParams, Message: fmt.Sprintf("invalid params: %v", err)}
 		}
+		// Param validation that doesn't require seed resolution runs
+		// first so cheap "bad request" errors aren't masked by the more
+		// expensive resolve+expand round trips (solov2-izh6.1 made
+		// resolveSeedOwner expand node_id prefixes, which can now hit
+		// NotFound before depth-validation would have fired).
+		depth := p.Depth
+		if depth <= 0 {
+			depth = 3 // default
+		}
+		if depth > maxCallChainDepth {
+			return nil, &RPCError{Code: CodeInvalidParams, Message: fmt.Sprintf("depth %d exceeds maximum of %d", depth, maxCallChainDepth)}
+		}
 		// solov2-f0zt: when repo_id is omitted, fan-out across registered repos
 		// to find which one owns the seed (node_id or symbol). Matches the
 		// "default: fan out across registered repos" contract in `veska calls
@@ -48,13 +60,6 @@ func makeGetCallChainHandler(graph ports.GraphStorage, resolve ResolveFunc, reso
 			return nil, rpcErr
 		}
 		p.RepoID, p.Branch, p.NodeID = repoID, branch, nid
-		depth := p.Depth
-		if depth <= 0 {
-			depth = 3 // default
-		}
-		if depth > maxCallChainDepth {
-			return nil, &RPCError{Code: CodeInvalidParams, Message: fmt.Sprintf("depth %d exceeds maximum of %d", depth, maxCallChainDepth)}
-		}
 		dirOut, dirIn := true, false
 		switch p.Direction {
 		case "", "out":

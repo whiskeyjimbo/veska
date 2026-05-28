@@ -2,6 +2,8 @@ package main
 
 import (
 	"fmt"
+	"io"
+	"log/slog"
 	"os"
 	"path/filepath"
 
@@ -75,6 +77,15 @@ func main() {
 	case "veska-mcp":
 		os.Exit(mcp.Run())
 	}
+
+	// solov2-izh6.9: silence the default slog handler for CLI runs.
+	// Sub-commands that drive in-process application code (e.g.
+	// `veska search --repo <url>` doing an ephemeral cold scan) would
+	// otherwise dump structured-log INFO lines from the ingester /
+	// promoter / embedder onto stderr alongside the actual results. The
+	// daemon binary configures its own JSON handler in daemon.Run, so
+	// this only affects the CLI process.
+	slog.SetDefault(slog.New(slog.NewTextHandler(io.Discard, nil)))
 
 	if err := newRootCmd().Execute(); err != nil {
 		var pse ProbeStatusError

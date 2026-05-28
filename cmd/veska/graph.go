@@ -109,12 +109,29 @@ func changedCmd() *cobra.Command {
 		jsonOut  bool
 	)
 	cmd := &cobra.Command{
-		Use:          "changed",
-		Short:        "Symbol-grain diff between two git refs (wraps eng_find_changed_symbols)",
-		Long:         `Show added/removed/modified symbols between two refs. With both flags omitted, defaults to HEAD~1..HEAD.`,
-		Args:         cobra.NoArgs,
+		Use:   "changed [ref-a [ref-b]]",
+		Short: "Symbol-grain diff between two git refs (wraps eng_find_changed_symbols)",
+		Long: `Show added/removed/modified symbols between two refs. Positional args match git diff ergonomics:
+
+  veska changed                  # HEAD~1..HEAD (default)
+  veska changed v1.2.0           # v1.2.0..HEAD
+  veska changed v1.2.0 v1.3.0    # v1.2.0..v1.3.0
+
+The --ref-a/--ref-b flags remain accepted and take precedence over positional args (solov2-izh6.4).`,
+		Args:         cobra.MaximumNArgs(2),
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
+			// solov2-izh6.4: positional refs are common muscle memory from
+			// `git diff REF_A REF_B`. Previously these were silently
+			// ignored and the command fell through to the empty-tree
+			// fallback, which looked like a daemon bug. Map positionals
+			// onto the flag values when the flags aren't already set.
+			if refA == "" && len(args) >= 1 {
+				refA = args[0]
+			}
+			if refB == "" && len(args) >= 2 {
+				refB = args[1]
+			}
 			params := map[string]any{}
 			if repoFlag != "" {
 				params["repo_id"] = repoFlag
@@ -292,10 +309,13 @@ func formatSymRow(mark string, r symRow) string {
 }
 
 // looksLikeNodeID reports whether s looks like a hex content-hash node
-// ID (length 32+ hex chars). Used by the graph wrappers to decide
-// whether to send node_id or symbol to the daemon.
+// ID. The threshold is 12 hex chars — the width of the display short_id
+// the CLI prints (see shortID in symbol.go) — so a user copy-pasting the
+// "(66f083714906)" suffix from `veska symbol` output into `veska calls`
+// or `veska blast` is routed through the node_id path and prefix-expanded
+// daemon-side, instead of being misread as a symbol name (solov2-izh6.1).
 func looksLikeNodeID(s string) bool {
-	if len(s) < 32 {
+	if len(s) < 12 {
 		return false
 	}
 	for _, r := range s {
