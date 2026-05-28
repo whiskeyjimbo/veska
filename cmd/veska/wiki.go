@@ -31,12 +31,23 @@ func wikiCmd() *cobra.Command {
 	)
 
 	cmd := &cobra.Command{
-		Use:          "wiki",
+		Use:          "wiki [path|repo-id]",
 		Short:        "Regenerate the veska wiki pages (hot_zones + entry_points)",
+		Args:         cobra.MaximumNArgs(1),
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if allFlag && (repoID != "" || branch != "") {
-				return fmt.Errorf("wiki: --all is mutually exclusive with --repo/--branch")
+			if allFlag && (repoID != "" || branch != "" || len(args) > 0) {
+				return fmt.Errorf("wiki: --all is mutually exclusive with --repo/--branch and positional args")
+			}
+			// solov2-rtql: accept an optional positional path or repo id so
+			// 'veska wiki /path/to/repo' works the same way 'veska reindex'
+			// and 'veska repo add' do. The positional arg and --repo flag
+			// are mutually exclusive — pick one source of truth.
+			if len(args) == 1 {
+				if repoID != "" {
+					return fmt.Errorf("wiki: pass either a positional repo selector or --repo, not both")
+				}
+				repoID = args[0]
 			}
 			w := cmd.OutOrStdout()
 			dbPath := filepath.Join(config.DefaultVectorDir(), "veska.db")
@@ -154,11 +165,31 @@ func resolveWikiTarget(ctx context.Context, db *sql.DB, repoID, branch string) (
 		// Match the MCP resolveRepoID progression so the CLI honours the same
 		// short_id / prefix contract (solov2-c7lq): exact full id, then
 		// ShortRepoIDLen-char short_id, then unambiguous >= 4-char prefix.
-		matched, rerr := resolveCLIRepoID(records, repoID)
-		if rerr != nil {
+		// solov2-rtql: on id miss, try the same value as a filesystem path
+		// against every registered repo's RootPath so the positional arg can
+		// be either an id or a path (matching `veska reindex`).
+		if matched, rerr := resolveCLIRepoID(records, repoID); rerr == nil {
+			rec = matched
+		} else if _, statErr := os.Stat(repoID); statErr == nil {
+			canonical, aerr := filepath.Abs(repoID)
+			if aerr != nil {
+				return "", "", fmt.Errorf("wiki: abs %q: %w", repoID, aerr)
+			}
+			if resolved, serr := filepath.EvalSymlinks(canonical); serr == nil {
+				canonical = resolved
+			}
+			for _, r := range records {
+				if r.RootPath == canonical {
+					rec = r
+					break
+				}
+			}
+			if rec.RepoID == "" {
+				return "", "", fmt.Errorf("wiki: path %q is not a registered repository", canonical)
+			}
+		} else {
 			return "", "", fmt.Errorf("wiki: %w", rerr)
 		}
-		rec = matched
 	}
 
 	if branch == "" {
