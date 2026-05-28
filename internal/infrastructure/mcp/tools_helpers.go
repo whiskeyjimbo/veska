@@ -252,6 +252,52 @@ func resolveRepoFanoutFromParams(ctx context.Context, repos application.RepoList
 	return targets, len(targets) > 1, nil
 }
 
+// fullNodeIDLen is the canonical length of a content-hashed sha256 node
+// ID (64 hex chars). Anything shorter is a display prefix that callers
+// scraped from a previous tool's output (the CLI prints the first 12
+// chars under the "(...)" column).
+const fullNodeIDLen = 64
+
+// expandNodeIDPrefix turns a short node_id prefix into its canonical full
+// id within (repoID, branch). Used by tools whose downstream lookups
+// (eng_search_similar, eng_find_related) compare node_id by exact match
+// in SQL — a short prefix would otherwise produce a misleading
+// "node has no embedding" error when the actual problem is "node not
+// found by that prefix" (solov2-xc7t).
+//
+// Returns nodeID unchanged when it is already 64 hex chars (the canonical
+// length). Returns an ambiguous error if the prefix matches >1 nodes, and
+// a not-found error if it matches none. graph may be nil — the prefix is
+// then returned unchanged so the downstream lookup surfaces its own
+// not-found error.
+func expandNodeIDPrefix(ctx context.Context, graph ports.GraphStorage, repoID, branch, nodeID string) (string, *RPCError) {
+	if graph == nil || len(nodeID) == fullNodeIDLen {
+		return nodeID, nil
+	}
+	g, err := graph.LoadGraph(ctx, repoID, branch)
+	if err != nil {
+		return "", &RPCError{Code: CodeInternalError, Message: fmt.Sprintf("expand node_id: load graph: %v", err)}
+	}
+	if g == nil {
+		return nodeID, nil
+	}
+	var matched string
+	for _, n := range g.Nodes() {
+		id := string(n.ID)
+		if !strings.HasPrefix(id, nodeID) {
+			continue
+		}
+		if matched != "" {
+			return "", &RPCError{Code: CodeInvalidParams, Message: fmt.Sprintf("node_id prefix %q is ambiguous; pass the full id from eng_find_symbol", nodeID)}
+		}
+		matched = id
+	}
+	if matched == "" {
+		return "", &RPCError{Code: CodeNotFound, Message: fmt.Sprintf("no node matches prefix %q in repo=%s branch=%s (pass the full 64-char node_id from eng_find_symbol, not the 12-char display short_id)", nodeID, ShortRepoID(repoID), branch)}
+	}
+	return matched, nil
+}
+
 // resolveSeedOwner picks the (repo_id, branch, node_id) triple for a seeded
 // graph query (eng_get_call_chain, eng_get_blast_radius) when the caller may
 // omit repo_id. It honours the same documented contract as the --repo flag's

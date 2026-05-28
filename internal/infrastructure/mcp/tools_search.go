@@ -435,6 +435,16 @@ func makeSearchSimilarHandler(lookup SimilarLookup, vectors ports.VectorStorage,
 			}
 			p.NodeID = string(matches[0].ID)
 		}
+		// solov2-xc7t: callers commonly scrape the 12-char short_id from a
+		// previous tool's CLI output and feed it straight back. Expand any
+		// non-canonical-length id to its full form before the embedding
+		// lookup so a short_id surfaces as "no node matches prefix" instead
+		// of the misleading "node has no embedding".
+		full, rpcErr := expandNodeIDPrefix(ctx, graph, p.RepoID, p.Branch, p.NodeID)
+		if rpcErr != nil {
+			return nil, rpcErr
+		}
+		p.NodeID = full
 		k := p.K
 		if k <= 0 {
 			k = p.Limit
