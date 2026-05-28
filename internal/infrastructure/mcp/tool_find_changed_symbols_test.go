@@ -345,3 +345,67 @@ func TestChangedSymbols_NotWiredReturnsInternalError(t *testing.T) {
 		t.Errorf("expected InternalError, got %v", rpcErr)
 	}
 }
+
+// TestChangedSymbols_PopulatesLineRanges pins solov2-qu6l: an added symbol
+// must carry line_start/line_end so the CLI renders foo.go:N-M instead of
+// the previous foo.go:0-0.
+func TestChangedSymbols_PopulatesLineRanges(t *testing.T) {
+	m := csMemFiles{
+		"refA:code.go": "package p\n",
+		"refB:code.go": "package p\n\nfunc Whisper() string {\n\treturn \"shh\"\n}\n",
+	}
+	r := newChangedSymbolsRegistry(t, m)
+	resp, rpcErr := dispatchChangedSymbols(t, r, map[string]string{
+		"repo_id": "repo1", "branch": "main", "ref_a": "refA", "ref_b": "refB",
+	})
+	if rpcErr != nil {
+		t.Fatalf("dispatch: %v", rpcErr)
+	}
+	if len(resp.Added) != 1 {
+		t.Fatalf("added = %+v, want one entry", resp.Added)
+	}
+	got := resp.Added[0]
+	if got.LineStart == 0 || got.LineEnd == 0 || got.LineStart > got.LineEnd {
+		t.Errorf("expected populated line range, got start=%d end=%d", got.LineStart, got.LineEnd)
+	}
+}
+
+// TestChangedSymbols_NonSymbolHintSuppressedWhenSymbolsChanged pins
+// solov2-qu6l: the degraded_reason "non_symbol_changes_only" must NOT fire
+// when at least one symbol bucket is non-empty. The old behaviour fired the
+// hint per non-symbol-only file, which produced output like "+ method X
+// [degraded: non_symbol_changes_only]" — directly contradicting itself.
+func TestChangedSymbols_NonSymbolHintSuppressedWhenSymbolsChanged(t *testing.T) {
+	// Two changed files: code.go adds a function (real symbol diff);
+	// notes.md has a textual change but produces no symbol nodes.
+	m := csMemFiles{
+		"refA:code.go":  "package p\n",
+		"refB:code.go":  "package p\n\nfunc Whisper() string { return \"shh\" }\n",
+		"refA:notes.md": "old text\n",
+		"refB:notes.md": "new text\n",
+	}
+	files := func(_ context.Context, _, _, _ string) ([]string, error) {
+		return []string{"code.go", "notes.md"}, nil
+	}
+	svc, err := changedsymbols.NewService(treesitter.NewGoParser(), files, m.fileAtRef)
+	if err != nil {
+		t.Fatalf("NewService: %v", err)
+	}
+	r := NewRegistry()
+	RegisterChangedSymbolsTool(r, svc, func(context.Context, string) (string, error) {
+		return "/root", nil
+	}, nil)
+	resp, rpcErr := dispatchChangedSymbols(t, r, map[string]string{
+		"repo_id": "repo1", "branch": "main", "ref_a": "refA", "ref_b": "refB",
+	})
+	if rpcErr != nil {
+		t.Fatalf("dispatch: %v", rpcErr)
+	}
+	if len(resp.Added) == 0 {
+		t.Fatalf("expected an added symbol, got resp=%+v", resp)
+	}
+	if slices.Contains(resp.DegradedReasons, changedsymbols.DegradedReasonNonSymbolChangesOnly) {
+		t.Errorf("degraded_reason %q must be suppressed when the symbol diff is non-empty; got %+v",
+			changedsymbols.DegradedReasonNonSymbolChangesOnly, resp.DegradedReasons)
+	}
+}
