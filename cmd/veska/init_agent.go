@@ -29,12 +29,12 @@ const agentSnippetBody = agentSnippetSentinel + `
 This repo is indexed by Veska. Prefer these MCP tools over re-grepping the
 tree — they reason from the parsed graph, not raw text.
 
-**` + "`repo_id`" + ` and ` + "`branch`" + ` are usually optional.** When exactly one repo
-is registered the daemon auto-resolves ` + "`repo_id`" + `; when ` + "`branch`" + ` is omitted
-it defaults to the repo's active branch. Pass them explicitly only when
-operating across multiple repos or against a non-current branch. To list the
-known repos: ` + "`eng_list_repos`" + `; to discover the current one from cwd:
-` + "`eng_get_current_repo`" + `.
+**` + "`repo_id`" + ` and ` + "`branch`" + ` are usually optional.** The daemon resolves
+` + "`repo_id`" + ` from cwd (preferred — works in multi-repo setups) or, as a
+fallback, from the single registered repo. ` + "`branch`" + ` defaults to the
+repo's active branch. Pass them explicitly only when operating outside the
+cwd repo or against a non-current branch. Discovery helpers:
+` + "`eng_get_current_repo`" + ` (cwd → repo) and ` + "`eng_list_repos`" + ` (full set).
 
 - ` + "`eng_search_semantic`" + ` — natural-language → ranked code chunks. Use when
   the user describes behavior ("where do we validate session tokens"). Inline
