@@ -296,7 +296,8 @@ var findOwnerInputSchema = json.RawMessage(`{
     "path":      {"type": "string", "description": "Alias for file_path."},
     "symbol":    {"type": "string", "description": "Symbol name; resolved to the defining file's path."},
     "node_id":   {"type": "string", "description": "Node id; resolved to its file path."},
-    "repo_id":   {"type": "string"}
+    "repo_id":   {"type": "string"},
+    "branch":    {"type": "string", "description": "Branch used when resolving symbol/node_id to a file path; ignored when file_path/path is supplied (solov2-fo0e)."}
   },
   "required": ["repo_id"]
 }`)
