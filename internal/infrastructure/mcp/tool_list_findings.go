@@ -177,13 +177,22 @@ func makeListFindingsHandler(db *sql.DB, repos application.RepoLister) ToolHandl
 		// one repo in a single query. Previously the CLI had to choose
 		// either "all repos default-state" or "one repo default-state".
 		nowMS := time.Now().UnixMilli()
-		query := `SELECT f.finding_id, f.branch, f.repo_id, f.node_id, f.file_path, f.severity, f.source_layer,
+		// solov2-izh6.25: COALESCE in the nodes.file_path for node-anchored
+		// findings (dead-code is the dominant case; deadcode.go sets only
+		// WithNodeAnchor) so the CLI's FILE column is never blank when the
+		// path is recoverable. file-anchored findings keep f.file_path
+		// verbatim; rows with neither anchor still serialize as NULL.
+		query := `SELECT f.finding_id, f.branch, f.repo_id, f.node_id,
+			COALESCE(f.file_path, n.file_path) AS file_path,
+			f.severity, f.source_layer,
 			f.rule, f.message, f.state, f.closed_reason, f.created_at, f.closed_at, f.actor_id, f.actor_kind,
 			s.suppression_id
 			FROM findings f
 			LEFT JOIN suppressions s
 			  ON s.scope = 'finding' AND s.target = f.finding_id
 			 AND (s.expires_at IS NULL OR s.expires_at > ?)
+			LEFT JOIN nodes n
+			  ON n.node_id = f.node_id AND n.branch = f.branch
 			WHERE f.repo_id = ?`
 		args := []any{nowMS, p.RepoID}
 		if p.State != "any" {
