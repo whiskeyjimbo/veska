@@ -241,6 +241,56 @@ func TestBuiltinScanner_DocsExamplesAllowlisted(t *testing.T) {
 	}
 }
 
+// TestBuiltinScanner_FilesystemPathsNotFlagged pins solov2-bptv: the
+// .mcp.json file veska itself writes during `veska init --agent` embeds
+// the absolute path of veska-mcp, which previously tripped the
+// high-entropy rule. Filesystem paths must never produce a finding.
+func TestBuiltinScanner_FilesystemPathsNotFlagged(t *testing.T) {
+	t.Parallel()
+	s := secretsscanner.New()
+	cases := []string{
+		`      "command": "/home/jrose/src/engram/solov2/bin/veska-mcp"`,
+		`exec: /usr/local/bin/some-tool-with-a-long-name`,
+		`path = "/var/lib/foo/bar/baz/long-suffix-string"`,
+	}
+	for _, txt := range cases {
+		t.Run(txt, func(t *testing.T) {
+			in := ports.ScanInput{AddedLines: map[string][]ports.Line{
+				".mcp.json": {{Number: 1, Text: txt}},
+			}}
+			got, err := s.Scan(in)
+			if err != nil {
+				t.Fatalf("Scan: %v", err)
+			}
+			for _, f := range got {
+				if f.Rule == "high-entropy" {
+					t.Errorf("filesystem path tripped high-entropy rule: %+v", f)
+				}
+			}
+		})
+	}
+}
+
+// TestBuiltinScanner_FilesystemPathHeuristicStillCatchesSecrets pins
+// the narrow shape of the filesystem-path allowlist: tokens with only
+// one '/' (e.g. base64-with-slash secrets) must still be flagged.
+func TestBuiltinScanner_FilesystemPathHeuristicStillCatchesSecrets(t *testing.T) {
+	t.Parallel()
+	s := secretsscanner.New()
+	// Single-slash, random suffix — base64-ish secret shape.
+	const tok = "wJalrXUtnFEMI/K7MDENGbPxRfiCYZZTopSecret123XYZ"
+	in := ports.ScanInput{AddedLines: map[string][]ports.Line{
+		"file.go": {{Number: 1, Text: `password = "` + tok + `"`}},
+	}}
+	got, err := s.Scan(in)
+	if err != nil {
+		t.Fatalf("Scan: %v", err)
+	}
+	if len(got) == 0 {
+		t.Fatalf("expected a finding for single-slash secret shape, got none")
+	}
+}
+
 func TestBuiltinScanner_RedactionMasksValue(t *testing.T) {
 	t.Parallel()
 	const awsKey = "AKIAZQ7XFAKE1234ABCD" // synthetic; not the docs allowlist (solov2-j1yz)
