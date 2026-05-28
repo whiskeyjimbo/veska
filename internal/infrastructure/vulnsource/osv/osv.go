@@ -171,6 +171,7 @@ func (a *Adapter) extractAdvisory(f *zip.File) error {
 // advisory mirrors the subset of the OSV schema this adapter needs.
 type advisory struct {
 	ID             string            `json:"id"`
+	Aliases        []string          `json:"aliases"`
 	Summary        string            `json:"summary"`
 	Affected       []osvAffected     `json:"affected"`
 	Severity       []osvSeverity     `json:"severity"`
@@ -248,7 +249,134 @@ func (a *Adapter) Scan(ctx context.Context, deps []ports.Dependency) ([]ports.Vu
 		}
 		findings = append(findings, matchAdvisory(adv, byPackage)...)
 	}
-	return findings, nil
+	return dedupeAliased(findings), nil
+}
+
+// dedupeAliased collapses findings that point at the same vulnerability via
+// different advisory IDs (e.g. GHSA-w73w-5m7g-f7qc and GO-2020-0017 both
+// describe the same jwt-go authorization bypass). OSV.dev's `aliases` field
+// names the equivalent IDs; we keep one finding per (package, equivalence
+// class) and prefer GHSA-prefixed IDs (most widely cross-referenced), then
+// CVE, then anything else. The retained finding's Aliases field lists the
+// suppressed IDs so triage can still cross-check (solov2-ka54).
+func dedupeAliased(findings []ports.VulnFinding) []ports.VulnFinding {
+	if len(findings) <= 1 {
+		return findings
+	}
+	// Build per-package index then walk aliases to assign each finding to
+	// an equivalence class. AdvisoryID + Aliases together define edges.
+	byPkg := make(map[string][]int, len(findings))
+	for i, f := range findings {
+		byPkg[f.Package] = append(byPkg[f.Package], i)
+	}
+	keep := make([]bool, len(findings))
+	for _, idxs := range byPkg {
+		// Map every advisory ID we've seen for this package to its
+		// finding-index, then group via union-find over Aliases.
+		idxByID := make(map[string]int, len(idxs)*2)
+		for _, i := range idxs {
+			idxByID[findings[i].AdvisoryID] = i
+		}
+		parent := make([]int, len(findings))
+		for i := range parent {
+			parent[i] = i
+		}
+		var find func(int) int
+		find = func(i int) int {
+			if parent[i] != i {
+				parent[i] = find(parent[i])
+			}
+			return parent[i]
+		}
+		union := func(a, b int) {
+			ra, rb := find(a), find(b)
+			if ra != rb {
+				parent[ra] = rb
+			}
+		}
+		for _, i := range idxs {
+			for _, alias := range findings[i].Aliases {
+				if j, ok := idxByID[alias]; ok {
+					union(i, j)
+				}
+			}
+		}
+		// For each class, pick the canonical representative.
+		bestOfClass := make(map[int]int)
+		for _, i := range idxs {
+			root := find(i)
+			cur, seen := bestOfClass[root]
+			if !seen || advisoryRank(findings[i].AdvisoryID) < advisoryRank(findings[cur].AdvisoryID) {
+				bestOfClass[root] = i
+			}
+		}
+		for _, winner := range bestOfClass {
+			keep[winner] = true
+		}
+	}
+	out := findings[:0]
+	for i, f := range findings {
+		if !keep[i] {
+			continue
+		}
+		// Collect aliases from every member of this equivalence class so
+		// the retained finding still cross-references the suppressed IDs.
+		aliasSet := make(map[string]struct{})
+		for _, alias := range f.Aliases {
+			if alias != "" && alias != f.AdvisoryID {
+				aliasSet[alias] = struct{}{}
+			}
+		}
+		// Add suppressed sibling IDs (they may not appear in our own
+		// Aliases list when the alias relation was unidirectional).
+		for j, other := range findings {
+			if j == i || keep[j] || other.Package != f.Package {
+				continue
+			}
+			for _, alias := range other.Aliases {
+				if alias == f.AdvisoryID {
+					aliasSet[other.AdvisoryID] = struct{}{}
+				}
+			}
+		}
+		merged := make([]string, 0, len(aliasSet))
+		for a := range aliasSet {
+			merged = append(merged, a)
+		}
+		// Deterministic order for tests / diff-stable findings output.
+		sortStrings(merged)
+		f.Aliases = merged
+		out = append(out, f)
+	}
+	return out
+}
+
+// advisoryRank ranks advisory-ID prefixes by usefulness as the canonical ID.
+// Lower is better. GHSA wins because GitHub Security Advisories carry the
+// richest cross-references; CVE is the universal alias; GO-/PYSEC are
+// ecosystem-specific and least portable.
+func advisoryRank(id string) int {
+	switch {
+	case strings.HasPrefix(id, "GHSA-"):
+		return 0
+	case strings.HasPrefix(id, "CVE-"):
+		return 1
+	case strings.HasPrefix(id, "GO-"), strings.HasPrefix(id, "PYSEC-"):
+		return 3
+	default:
+		return 2
+	}
+}
+
+// sortStrings is a tiny in-place insertion sort. Aliases lists hold at most
+// a handful of IDs so the algorithm choice is irrelevant; using a one-line
+// helper keeps the osv package free of "sort" import churn.
+func sortStrings(s []string) {
+	for i := 1; i < len(s); i++ {
+		for j := i; j > 0 && s[j-1] > s[j]; j-- {
+			s[j-1], s[j] = s[j], s[j-1]
+		}
+	}
 }
 
 // loadAdvisory reads and decodes a single advisory file from the cache.
@@ -278,6 +406,7 @@ func matchAdvisory(adv advisory, byPackage map[string][]ports.Dependency) []port
 			}
 			findings = append(findings, ports.VulnFinding{
 				AdvisoryID:    adv.ID,
+				Aliases:       adv.Aliases,
 				Package:       aff.Package.Name,
 				AffectedRange: rangeString(aff.Ranges),
 				Severity:      pickSeverity(adv),
