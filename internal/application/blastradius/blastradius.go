@@ -93,6 +93,13 @@ type Entry struct {
 	// its further fan-out was suppressed to avoid drowning the result in
 	// framework registry noise — see solov2-l2f5.
 	IsHub bool `json:"is_hub,omitempty"`
+	// Pending is true when the node id was reachable from the BFS but
+	// NodeLookup couldn't yet hydrate its metadata — the graph index is
+	// eventually-consistent against the edges table, so a freshly-changed
+	// file may surface an unresolved node for a few hundred ms. Callers
+	// can use this to render "pending" instead of treating the empty
+	// name/kind/file_path as a real symbol (solov2-ppk6).
+	Pending bool `json:"pending,omitempty"`
 }
 
 // Response is the envelope returned by Service.Of and friends.
@@ -279,9 +286,11 @@ func (s *Service) Of(ctx context.Context, repoID, branch string, seedIDs []strin
 	for _, id := range order {
 		m, ok := byID[id]
 		// Missing rows still count toward the radius but appear with
-		// empty metadata: the index is eventually-consistent vs the
-		// authoritative edges + nodes truth, and surfacing the bare ID
-		// is more useful than dropping it silently.
+		// empty metadata + Pending=true: the index is eventually-
+		// consistent vs the authoritative edges + nodes truth, and
+		// surfacing the bare ID is more useful than dropping it silently.
+		// The flag lets callers distinguish "unresolved-pending" from
+		// "real symbol with no name" (solov2-ppk6).
 		entries = append(entries, Entry{
 			NodeID:     id,
 			Distance:   visited[id],
@@ -292,8 +301,8 @@ func (s *Service) Of(ctx context.Context, repoID, branch string, seedIDs []strin
 			LineEnd:    m.LineEnd,
 			Snippet:    m.Snippet,
 			IsHub:      hubs[id],
+			Pending:    !ok,
 		})
-		_ = ok
 	}
 	return Response{Entries: entries, Truncated: truncated}, nil
 }

@@ -290,9 +290,12 @@ var findOwnerInputSchema = json.RawMessage(`{
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "type": "object",
   "additionalProperties": false,
+  "description": "Returns the owner of a file via CODEOWNERS (longest-match) or git blame fallback. Accepts file_path/path, OR symbol/node_id which resolves to the symbol's defining file (solov2-mmox).",
   "properties": {
     "file_path": {"type": "string", "description": "Repo-relative path to the file whose dominant committer should be returned."},
     "path":      {"type": "string", "description": "Alias for file_path (solov2-3ocy)."},
+    "symbol":    {"type": "string", "description": "Symbol name; resolved to the defining file's path (solov2-mmox)."},
+    "node_id":   {"type": "string", "description": "Node id; resolved to its file path (solov2-mmox)."},
     "repo_id":   {"type": "string"}
   },
   "required": ["repo_id"]

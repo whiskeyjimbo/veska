@@ -90,6 +90,12 @@ type blastEntryDTO struct {
 	// through it, so the entry is informational (the framework registry
 	// node itself) rather than the start of a chain (solov2-l2f5).
 	IsHub bool `json:"is_hub,omitempty"`
+	// Pending is true when NodeLookup couldn't hydrate this id at the
+	// time of the call — the BFS reached it via the edges table but the
+	// nodes-table row lags briefly behind during an active reparse. Lets
+	// callers render "unresolved" instead of treating empty name/kind/
+	// file_path as a real symbol (solov2-ppk6).
+	Pending bool `json:"pending,omitempty"`
 }
 
 func nodeToDTO(n *domain.Node) nodeDTO {
@@ -216,6 +222,7 @@ func blastEntryToDTO(e blastradius.Entry) blastEntryDTO {
 		Distance: e.Distance,
 		Snippet:  e.Snippet,
 		IsHub:    e.IsHub,
+		Pending:  e.Pending,
 	}
 }
 
