@@ -94,7 +94,7 @@ func runInit(ctx context.Context, deps initDeps, flags initFlags, out io.Writer)
 	// solov2-yx2y: surface the vuln-scan choice in the summary so
 	// `init -y` users don't get OSV egress silently enabled.
 	if vulnEnabled {
-		fmt.Fprintln(out, "vuln:     OSV scanner enabled (daemon queries osv.dev for go.mod deps; rerun with --no-vuln to disable)")
+		fmt.Fprintln(out, "vuln:     OSV scanner enabled (auto-runs on every repo promotion; results land in `veska findings list`; rerun init with --no-vuln to disable)")
 	} else {
 		fmt.Fprintln(out, "vuln:     OSV scanner disabled (no network egress for vuln scans)")
 	}

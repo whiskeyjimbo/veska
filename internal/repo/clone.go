@@ -294,7 +294,14 @@ func Clone(ctx context.Context, url, destDir string, progressW io.Writer) (strin
 	if progressW == nil {
 		progressW = io.Discard
 	}
-	cmd := exec.CommandContext(ctx, "git", "clone", "--depth=1", "--progress", url, destDir)
+	// solov2-izh6.9: drop --progress so git's own TTY detection picks
+	// between "show progress" (interactive shell) and "quiet" (logs, CI,
+	// background tool capture). With --progress we were dumping dozens
+	// of CR-overwritten "Counting/Compressing/Receiving" lines into
+	// non-TTY captures (background task output files, daemon-driven
+	// fetches), drowning the actual result. On a TTY git still emits
+	// the same progress because TTY is auto-detected.
+	cmd := exec.CommandContext(ctx, "git", "clone", "--depth=1", url, destDir)
 	var captured bytes.Buffer
 	cmd.Stderr = io.MultiWriter(progressW, &captured)
 	if err := cmd.Run(); err != nil {

@@ -22,20 +22,56 @@ import (
 // behaviour); `veska deps index <module>` adds the new vendor-scan
 // indexer (solov2-bchl).
 func depsCmd() *cobra.Command {
+	listCmd := depsListCmd()
 	cmd := &cobra.Command{
 		Use:          "deps",
 		Short:        "Inspect and index a repo's external dependencies",
 		SilenceUsage: true,
+		// solov2-izh6.5: cap positional args at 1 so a bare
+		// `veska deps show github.com/foo` (which silently fell through
+		// to `deps list` when the parent had no Args constraint) is
+		// caught as an unknown subcommand instead. The single permitted
+		// positional preserves the `deps <path-or-id>` ergonomics that
+		// list inherits.
+		Args: cobra.MaximumNArgs(1),
 	}
-	listCmd := depsListCmd()
 	// Preserve the prior `veska deps` (no subcommand) behaviour by
-	// promoting `list` as the default run target. Users typing the
-	// bare form keep the same output.
-	cmd.RunE = listCmd.RunE
+	// promoting `list` as the default run target. When the lone arg
+	// looks like a subcommand name (alphabetic word, no path separator
+	// or dot) we reject it explicitly rather than passing nonsense to
+	// list's repo resolver.
+	cmd.RunE = func(c *cobra.Command, args []string) error {
+		if len(args) == 1 && looksLikeUnknownDepsSubcommand(args[0], c) {
+			return fmt.Errorf("unknown deps subcommand %q — run `veska deps --help` for available subcommands", args[0])
+		}
+		return listCmd.RunE(c, args)
+	}
 	cmd.Flags().AddFlagSet(listCmd.Flags())
 	cmd.AddCommand(listCmd)
 	cmd.AddCommand(depsIndexCmd())
 	return cmd
+}
+
+// looksLikeUnknownDepsSubcommand reports whether arg looks like a
+// subcommand name (alphabetic identifier with no path separator, no dot,
+// no slash) that isn't actually registered under parent. Used to give
+// 'veska deps show foo' a clear error instead of silently routing to
+// 'deps list' where 'show' would be tried as a repo identifier.
+func looksLikeUnknownDepsSubcommand(arg string, parent *cobra.Command) bool {
+	if arg == "" || strings.ContainsAny(arg, "/.@~") {
+		return false
+	}
+	for _, r := range arg {
+		if !((r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || r == '-' || r == '_') {
+			return false
+		}
+	}
+	for _, sub := range parent.Commands() {
+		if sub.Name() == arg {
+			return false
+		}
+	}
+	return true
 }
 
 // depsListCmd wraps eng_list_dependencies — the existing solov2-jlws
@@ -182,6 +218,16 @@ func depsIndexCmd() *cobra.Command {
 				return fmt.Errorf("deps index: %w", err)
 			}
 
+			// solov2-izh6.7: refuse to index a vendored copy of a module
+			// that is already a tracked registered repo — the synthetic
+			// ext:<module> row would shadow the real repo's nodes and
+			// confuse cross-repo CALLS resolution (two repos with the same
+			// module_path become an ambiguity at query time, and removing
+			// the vendor dir later orphans the synthetic row).
+			if existing, lookupErr := findTrackedRepoByModulePath(cmd.Context(), db, modulePath); lookupErr == nil && existing != "" {
+				return fmt.Errorf("deps index: module %s is already a tracked registered repo (%s); indexing its vendored copy would duplicate it. Re-run after `veska repo remove %s` if you really want the vendored snapshot instead, or just rely on the registered repo for cross-repo CALLS", modulePath, existing, existing)
+			}
+
 			res, err := svc.IndexVendorModule(cmd.Context(), repoID, branch, root, modulePath)
 			if err != nil {
 				if errors.Is(err, extindex.ErrModuleNotVendored) {
@@ -205,6 +251,31 @@ func skippedSuffix(n int) string {
 		return ""
 	}
 	return fmt.Sprintf(" (%d file(s) skipped due to parse errors)", n)
+}
+
+// findTrackedRepoByModulePath returns the short_id of any registered
+// tracked (non-synthetic) repo whose module_path equals modulePath, or
+// "" when no such repo exists. Used by `veska deps index` to refuse
+// indexing a vendored copy of an already-tracked module (solov2-izh6.7).
+func findTrackedRepoByModulePath(ctx context.Context, db *sql.DB, modulePath string) (string, error) {
+	if modulePath == "" {
+		return "", nil
+	}
+	const q = `SELECT repo_id FROM repos
+		WHERE module_path = ? AND kind = 'tracked' AND repo_id NOT LIKE 'ext:%'
+		LIMIT 1`
+	var rid string
+	err := db.QueryRowContext(ctx, q, modulePath).Scan(&rid)
+	if errors.Is(err, sql.ErrNoRows) {
+		return "", nil
+	}
+	if err != nil {
+		return "", fmt.Errorf("find tracked repo by module_path: %w", err)
+	}
+	if len(rid) > 12 {
+		rid = rid[:12]
+	}
+	return rid, nil
 }
 
 // lookupRepoRootAndBranch is a thin direct-DB lookup used by `veska

@@ -674,7 +674,24 @@ func (s *PromotionStore) Promote(ctx context.Context, batch application.Promotio
 				}
 				importPath, ok := file.Imports[uc.PkgQualifier]
 				if !ok {
-					continue // qualifier is a local var, not an import
+					// solov2-izh6.6: the import-alias key is the last URL
+					// segment when the source has no explicit alias (Go
+					// convention), but a module's actual package name can
+					// diverge from its URL (e.g. github.com/jrose/greetlib
+					// declares `package greet`). When the alias lookup
+					// misses, fall back to: is there a registered Go module
+					// among this file's imports whose promoted package node
+					// is named uc.PkgQualifier? If exactly one matches, use
+					// its import path so the cross-repo stub still binds.
+					ip, matched, ferr := findImportByPackageName(ctx, tx, file.Imports, uc.PkgQualifier)
+					if ferr != nil {
+						_ = tx.Rollback()
+						return fmt.Errorf("promoter: cross-repo pkg-name lookup %q: %w", uc.PkgQualifier, ferr)
+					}
+					if !matched {
+						continue // qualifier is a local var, an unregistered dep, or stdlib
+					}
+					importPath = ip
 				}
 				relDir, inModule := modulePackageDir(mod, importPath)
 				if !inModule {
@@ -806,6 +823,72 @@ func (s *PromotionStore) Promote(ctx context.Context, batch application.Promotio
 		return fmt.Errorf("promoter: commit: %w", err)
 	}
 	return nil
+}
+
+// findImportByPackageName looks for a registered Go module among the
+// supplied imports whose promoted package node is named pkgName. Used as
+// a fallback when the parser's import-alias key (last URL segment) does
+// not match the call-site qualifier — common when a module's package
+// declaration diverges from its URL (e.g. github.com/jrose/greetlib
+// declares `package greet`). solov2-izh6.6.
+//
+// Returns the matching import path when exactly one registered module
+// matches. Multiple matches are reported as "no match" rather than
+// guessing — emitting a stub against the wrong module would violate the
+// promoter's "no false edges" invariant; ambiguity is a real signal to
+// fix the call site or add an explicit import alias upstream.
+func findImportByPackageName(ctx context.Context, tx *sql.Tx, imports map[string]string, pkgName string) (string, bool, error) {
+	if pkgName == "" || len(imports) == 0 {
+		return "", false, nil
+	}
+	// Collect candidate module paths — only those that look external
+	// (have a '.' in the first segment); stdlib never reverse-resolves to
+	// a registered repo and we want to keep the IN-list short.
+	paths := make([]string, 0, len(imports))
+	args := []any{pkgName}
+	for _, p := range imports {
+		if !isExternalModulePath(p) {
+			continue
+		}
+		paths = append(paths, p)
+		args = append(args, p)
+	}
+	if len(paths) == 0 {
+		return "", false, nil
+	}
+	placeholders := strings.Repeat("?,", len(paths))
+	placeholders = placeholders[:len(placeholders)-1]
+	q := `
+		SELECT DISTINCT r.module_path
+		FROM nodes n
+		JOIN repos r ON r.repo_id = n.repo_id
+		WHERE n.kind = 'package' AND n.symbol_path = ?
+		  AND r.module_path IN (` + placeholders + `)`
+	rows, err := tx.QueryContext(ctx, q, args...)
+	if err != nil {
+		return "", false, fmt.Errorf("find import by pkg name: %w", err)
+	}
+	defer rows.Close()
+	var match string
+	count := 0
+	for rows.Next() {
+		var mp string
+		if scanErr := rows.Scan(&mp); scanErr != nil {
+			return "", false, fmt.Errorf("find import by pkg name: scan: %w", scanErr)
+		}
+		match = mp
+		count++
+		if count > 1 {
+			return "", false, nil // ambiguous — caller will skip
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return "", false, fmt.Errorf("find import by pkg name: iter: %w", err)
+	}
+	if count == 1 {
+		return match, true, nil
+	}
+	return "", false, nil
 }
 
 // nodeLanguage returns the language string or "" when not set.
