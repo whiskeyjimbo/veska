@@ -202,6 +202,36 @@ func TestHandler_EmptyPayloadIsNoop(t *testing.T) {
 	}
 }
 
+// TestHandler_VendoredPathIsNoop pins solov2-ttsc: auto-link must not run
+// against vendored source files. The handler short-circuits before any
+// lookup/linker call so a vendored tree (cobra, node_modules) produces zero
+// findings and zero queue work.
+func TestHandler_VendoredPathIsNoop(t *testing.T) {
+	t.Parallel()
+	for _, p := range []string{
+		"vendor/github.com/spf13/cobra/cobra.go",
+		"node_modules/lodash/index.js",
+		"apps/cli/vendor/github.com/spf13/pflag/x.go",
+	} {
+		lk := &fakeLookup{byPath: map[string][]string{p: {"n1"}}}
+		linker := &fakeLinker{}
+		hh, herr := autolink.NewHandler(linker, lk, &fakeEdgeStore{}, &fakeFindingStore{})
+		h := mustHandler(t, hh, herr)
+		err := h.Handle(context.Background(), queue.Row{
+			Kind: queue.WorkKindAutoLink, RepoID: "r1", Branch: "main", Payload: p,
+		})
+		if err != nil {
+			t.Fatalf("%s: unexpected error: %v", p, err)
+		}
+		if lk.calls != 0 {
+			t.Errorf("%s: expected zero lookup calls, got %d", p, lk.calls)
+		}
+		if linker.calls != 0 {
+			t.Errorf("%s: linker should not be called, got %d", p, linker.calls)
+		}
+	}
+}
+
 func TestHandler_FileWithZeroNodesIsNoop(t *testing.T) {
 	t.Parallel()
 	lk := &fakeLookup{byPath: map[string][]string{}}
