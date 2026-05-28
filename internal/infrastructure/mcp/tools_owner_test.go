@@ -68,6 +68,30 @@ func makeGitRepoWithCommit(t *testing.T, dir, filePath, authorEmail string) {
 // eng_find_owner — CODEOWNERS
 // ---------------------------------------------------------------------------
 
+// solov2-fo0e: the schema must accept "branch" alongside repo_id so the
+// tool surface is consistent with other read-side eng_* tools (find_todos,
+// find_changed_symbols, etc.). The branch is informational for the
+// owner lookup but agents iterating tool schemas pass it uniformly.
+func TestFindOwner_AcceptsBranchParam(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "CODEOWNERS"), []byte("*.go @go-team\n"), 0o644); err != nil {
+		t.Fatalf("write CODEOWNERS: %v", err)
+	}
+
+	r := NewRegistry()
+	RegisterOwnerTools(r, nil)
+
+	actor := domain.Actor{ID: "agent:bot", Kind: domain.ActorKindAgent}
+	_, rpcErr := dispatchOwner(t, r, actor, map[string]any{
+		"file_path": "cmd/main.go",
+		"repo_id":   dir,
+		"branch":    "main",
+	})
+	if rpcErr != nil {
+		t.Fatalf("unexpected RPC error with branch param: %+v", rpcErr)
+	}
+}
+
 func TestFindOwner_CodeownersMatch(t *testing.T) {
 	dir := t.TempDir()
 	// Write CODEOWNERS at repo root.
