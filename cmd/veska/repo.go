@@ -675,6 +675,46 @@ func tailScanFailureReason(logPath, repoID string) string {
 	return lastReason
 }
 
+// tailScanCompleteFiles scans the daemon log for the most-recent
+// "cold scan: complete" entry for repoID and returns its files_saved
+// count. Used as a last-resort source when the scan finished too fast
+// for the CLI's poll loop to observe a non-zero FilesSeen (solov2-a17i).
+func tailScanCompleteFiles(logPath, repoID string) int {
+	const tailBytes = 64 * 1024
+	f, err := os.Open(logPath)
+	if err != nil {
+		return 0
+	}
+	defer func() { _ = f.Close() }()
+	info, err := f.Stat()
+	if err != nil {
+		return 0
+	}
+	offset := int64(0)
+	if info.Size() > tailBytes {
+		offset = info.Size() - tailBytes
+	}
+	if _, err := f.Seek(offset, io.SeekStart); err != nil {
+		return 0
+	}
+	scanner := bufio.NewScanner(f)
+	scanner.Buffer(make([]byte, 0, 64*1024), 1<<20)
+	var lastFiles int
+	for scanner.Scan() {
+		line := scanner.Text()
+		if !strings.Contains(line, repoID) || !strings.Contains(line, "cold scan: complete") {
+			continue
+		}
+		var rec struct {
+			FilesSaved int `json:"files_saved"`
+		}
+		if err := json.Unmarshal([]byte(line), &rec); err == nil && rec.FilesSaved > 0 {
+			lastFiles = rec.FilesSaved
+		}
+	}
+	return lastFiles
+}
+
 // waitForScanComplete polls eng_get_status until the named repo's scan
 // has left scans_in_flight, printing one progress line per phase change
 // or files-seen jump so the user has a continuous signal instead of a
@@ -686,9 +726,16 @@ func waitForScanComplete(ctx context.Context, w io.Writer, repoID string) error 
 	// see we're still working — and so they can correlate the stall with a
 	// specific file via `~/.veska/logs/daemon.log`.
 	const heartbeatEvery = 10 * time.Second
+	// solov2-a17i: poll at 100ms (was 500ms). Small repos walk + promote in
+	// well under 500ms; the old cadence usually missed every intermediate
+	// files_seen update and the user saw "walking → 0 files" then "✓ complete"
+	// with no count. 100ms gives 5x more chances to catch a non-zero count
+	// without meaningfully increasing daemon load (eng_get_status is cheap).
+	const pollInterval = 100 * time.Millisecond
 	start := time.Now()
 	var lastPhase string
 	var lastFiles int
+	var maxFiles int
 	lastEvent := time.Now()
 	for {
 		select {
@@ -709,7 +756,25 @@ func waitForScanComplete(ctx context.Context, w io.Writer, repoID string) error 
 			if err := callMCP(ctx, "eng_list_repos", map[string]any{}, &lr); err == nil {
 				for _, r := range lr.Repos {
 					if r.RepoID == repoID && r.LastPromotedSHA != "" {
-						fmt.Fprintf(w, "  ✓ cold scan complete (%.1fs)\n", time.Since(start).Seconds())
+						// solov2-a17i: scan may have finished before our
+						// first poll caught a non-zero FilesSeen. Fall back
+						// to the daemon log's final files_saved count so
+						// "✓ complete" carries the file count we actually
+						// indexed.
+						files := maxFiles
+						if files == 0 {
+							logPath := filepath.Join(config.DefaultVectorDir(), "logs", "daemon.log")
+							files = tailScanCompleteFiles(logPath, repoID)
+						}
+						if files > 0 {
+							plural := "s"
+							if files == 1 {
+								plural = ""
+							}
+							fmt.Fprintf(w, "  ✓ cold scan complete: %d file%s (%.1fs)\n", files, plural, time.Since(start).Seconds())
+						} else {
+							fmt.Fprintf(w, "  ✓ cold scan complete (%.1fs)\n", time.Since(start).Seconds())
+						}
 						return nil
 					}
 				}
@@ -728,15 +793,25 @@ func waitForScanComplete(ctx context.Context, w io.Writer, repoID string) error 
 			fmt.Fprintf(w, "  scan no longer in flight, repo not yet promoted — tail %s for the cause\n", logPath)
 			return nil
 		}
+		if row.FilesSeen > maxFiles {
+			maxFiles = row.FilesSeen
+		}
+		// solov2-a17i: suppress the "0 files (0.0s)" first tick — it just
+		// reflects the race between scan start and the first poll and
+		// reads as broken. We still report when files_seen first crosses
+		// 0 (real progress) or when phase changes after we've seen files.
 		if row.Phase != lastPhase || row.FilesSeen != lastFiles {
-			phase := row.Phase
-			if phase == "" {
-				phase = "running"
+			meaningful := row.FilesSeen > 0 || (lastPhase != "" && row.Phase != lastPhase)
+			if meaningful {
+				phase := row.Phase
+				if phase == "" {
+					phase = "running"
+				}
+				fmt.Fprintf(w, "  %s → %d files (%.1fs)\n", phase, row.FilesSeen, time.Since(start).Seconds())
+				lastEvent = time.Now()
 			}
-			fmt.Fprintf(w, "  %s → %d files (%.1fs)\n", phase, row.FilesSeen, time.Since(start).Seconds())
 			lastPhase = row.Phase
 			lastFiles = row.FilesSeen
-			lastEvent = time.Now()
 		} else if time.Since(lastEvent) >= heartbeatEvery {
 			phase := row.Phase
 			if phase == "" {
@@ -746,7 +821,7 @@ func waitForScanComplete(ctx context.Context, w io.Writer, repoID string) error 
 				phase, row.FilesSeen, time.Since(start).Seconds(), time.Since(lastEvent).Seconds())
 			lastEvent = time.Now()
 		}
-		time.Sleep(500 * time.Millisecond)
+		time.Sleep(pollInterval)
 	}
 }
 
@@ -1077,6 +1152,17 @@ func withCwdInjected(method string, params any) any {
 	return m
 }
 
+// humanizeMCPError rewrites MCP-protocol-flavored hints into CLI-flavored
+// ones so users running `veska` don't see references to `eng_*` tool names
+// or JSON-RPC error codes they have no way to act on (solov2-luc7).
+func humanizeMCPError(msg string) string {
+	rep := strings.NewReplacer(
+		"pass eng_list_repos to find the id", "run `veska repo list` to see ids",
+		"run eng_list_repos", "run `veska repo list`",
+	)
+	return rep.Replace(msg)
+}
+
 func callMCP(ctx context.Context, method string, params any, out any) error {
 	const dialTimeout = 2 * time.Second
 	const dialBackoff = 200 * time.Millisecond
@@ -1178,7 +1264,7 @@ func callMCP(ctx context.Context, method string, params any, out any) error {
 		return fmt.Errorf("decode response: %w", err)
 	}
 	if r.Error != nil {
-		return fmt.Errorf("daemon: %s (code %d)", r.Error.Message, r.Error.Code)
+		return fmt.Errorf("daemon: %s", humanizeMCPError(r.Error.Message))
 	}
 	if out != nil && len(r.Result) > 0 {
 		if err := json.Unmarshal(r.Result, out); err != nil {
