@@ -206,6 +206,45 @@ func TestDeadCodeCheck_SkipsTestFiles(t *testing.T) {
 	}
 }
 
+// TestDeadCodeCheck_SkipsVendoredFiles pins solov2-ttsc: dead-code must not
+// fire on vendored deps. The path predicate is shared with secret_leak and
+// auto-link via pathfilter.IsVendored.
+func TestDeadCodeCheck_SkipsVendoredFiles(t *testing.T) {
+	cases := []struct {
+		path       string
+		wantFilter bool
+	}{
+		{"vendor/github.com/spf13/cobra/cobra.go", true},
+		{"node_modules/lodash/index.js", true},
+		{"third_party/protobuf/x.proto", true},
+		{"apps/cli/vendor/github.com/spf13/pflag/x.go", true},
+		{"internal/cli/groups.go", false},
+		{"vendored_data/keys.go", false}, // substring; must not filter
+	}
+	for _, tc := range cases {
+		t.Run(tc.path, func(t *testing.T) {
+			q := &fakeDeadQuerier{
+				dead: []ports.NodeRef{
+					{NodeID: "n-x", FilePath: tc.path, Kind: "function", Name: "helper", LineStart: 1, LineEnd: 2},
+				},
+			}
+			c := checks.NewDeadCodeCheck(q)
+			findings, err := c.Run(context.Background(), checks.Input{
+				RepoID: "r", Branch: "main", FilePaths: []string{tc.path},
+			})
+			if err != nil {
+				t.Fatalf("Run: %v", err)
+			}
+			if tc.wantFilter && len(findings) != 0 {
+				t.Errorf("%s: want filtered, got %d findings", tc.path, len(findings))
+			}
+			if !tc.wantFilter && len(findings) != 1 {
+				t.Errorf("%s: want 1 finding, got %d", tc.path, len(findings))
+			}
+		})
+	}
+}
+
 // 7. Empty FilePaths input -> no findings, no panic, querier not invoked with surprises.
 func TestDeadCodeCheck_EmptyFilePathsIsNoOp(t *testing.T) {
 	q := &fakeDeadQuerier{

@@ -7,6 +7,7 @@ import (
 	"unicode"
 	"unicode/utf8"
 
+	"github.com/whiskeyjimbo/veska/internal/application/pathfilter"
 	"github.com/whiskeyjimbo/veska/internal/core/domain"
 	"github.com/whiskeyjimbo/veska/internal/core/ports"
 )
@@ -59,7 +60,7 @@ func (c *DeadCodeCheck) Run(ctx context.Context, in Input) ([]*domain.Finding, e
 
 	out := make([]*domain.Finding, 0, len(dead))
 	for _, n := range dead {
-		if !isDeadCodeCandidate(n) || isExternalEntry(n) || isTestFile(n.FilePath) {
+		if !isDeadCodeCandidate(n) || isExternalEntry(n) || isTestFile(n.FilePath) || pathfilter.IsVendored(n.FilePath) {
 			continue
 		}
 		msg := fmt.Sprintf("symbol %q in %s has no inbound edges on branch %s",
