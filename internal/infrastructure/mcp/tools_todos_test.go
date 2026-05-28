@@ -4,6 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"os"
+	"os/exec"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -194,6 +197,83 @@ func TestFindTodos_RelativizesAbsolutePath(t *testing.T) {
 	want := "internal/server/server.go"
 	if got := resp.Todos[0].FilePath; got != want {
 		t.Errorf("file_path = %q, want %q (repo-relative per solov2-62gc/v7dq)", got, want)
+	}
+}
+
+// TestFindTodos_DegradedWhenWorkingTreeDirty guards solov2-k1jm: an empty
+// todos result paired with an uncommitted edit in the working tree must
+// carry a degraded_reason so the caller can show "commit first to scan"
+// guidance instead of a confusing silent zero. Uses a real on-disk repo
+// because the check shells out to git.
+func TestFindTodos_DegradedWhenWorkingTreeDirty(t *testing.T) {
+	dir := t.TempDir()
+	runGit := func(args ...string) {
+		t.Helper()
+		runCmd := exec.Command("git", append([]string{"-C", dir}, args...)...)
+		if out, err := runCmd.CombinedOutput(); err != nil {
+			t.Fatalf("git %v: %v\n%s", args, err, out)
+		}
+	}
+	runGit("init")
+	runGit("config", "user.email", "j@e")
+	runGit("config", "user.name", "j")
+	if err := os.WriteFile(filepath.Join(dir, "a.go"), []byte("package a\n"), 0o644); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+	runGit("add", "a.go")
+	runGit("commit", "--no-gpg-sign", "-m", "init")
+	// Make a working-tree edit but DON'T commit — todos scan should miss
+	// it but the response should carry todos_are_post_promotion.
+	if err := os.WriteFile(filepath.Join(dir, "a.go"), []byte("package a\n// TODO: pending\n"), 0o644); err != nil {
+		t.Fatalf("write2: %v", err)
+	}
+
+	q := &stubTodoQuerier{entries: nil}
+	r := NewRegistry()
+	repos := &fakeRepoLister{recs: []application.RepoRecord{{RepoID: "r", RootPath: dir, ActiveBranch: "main"}}}
+	RegisterTodoTools(r, q, repos)
+
+	resp, rpcErr := dispatchTodos(t, r, map[string]string{"repo_id": "r"})
+	if rpcErr != nil {
+		t.Fatalf("err: %+v", rpcErr)
+	}
+	if len(resp.Todos) != 0 {
+		t.Fatalf("expected 0 todos, got %d", len(resp.Todos))
+	}
+	found := false
+	for _, d := range resp.DegradedReasons {
+		if d == "todos_are_post_promotion" {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("expected todos_are_post_promotion in degraded_reasons; got %v", resp.DegradedReasons)
+	}
+}
+
+// TestFindTodos_CleanRepoStaysUndegraded: an empty todos result on a
+// clean working tree must NOT carry the degraded hint — that would
+// mislead callers into thinking a commit is pending when there isn't.
+func TestFindTodos_CleanRepoStaysUndegraded(t *testing.T) {
+	dir := t.TempDir()
+	runCmd := exec.Command("git", "-C", dir, "init")
+	if out, err := runCmd.CombinedOutput(); err != nil {
+		t.Fatalf("git init: %v\n%s", err, out)
+	}
+
+	q := &stubTodoQuerier{entries: nil}
+	r := NewRegistry()
+	repos := &fakeRepoLister{recs: []application.RepoRecord{{RepoID: "r", RootPath: dir, ActiveBranch: "main"}}}
+	RegisterTodoTools(r, q, repos)
+
+	resp, rpcErr := dispatchTodos(t, r, map[string]string{"repo_id": "r"})
+	if rpcErr != nil {
+		t.Fatalf("err: %+v", rpcErr)
+	}
+	for _, d := range resp.DegradedReasons {
+		if d == "todos_are_post_promotion" {
+			t.Errorf("clean tree should not carry todos_are_post_promotion; got %v", resp.DegradedReasons)
+		}
 	}
 }
 
