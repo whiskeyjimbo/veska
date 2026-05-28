@@ -27,12 +27,23 @@ import (
 // application layer does not import internal/infrastructure/git.
 type ChangedFilesBetweenFunc func(ctx context.Context, repoRoot, refA, refB string) ([]string, error)
 
-// FileAtRefFunc reads the content of path at the given git ref. When the
-// file does not exist at that ref it must return (nil, err) where err
-// satisfies errors.Is against the adapter's "not present" sentinel —
-// the Service treats any error here as "file absent at that ref" and
-// proceeds with an empty symbol set for that side.
+// FileAtRefFunc reads the content of path at the given git ref. On
+// legitimate absence (file added/deleted between the two refs) adapters
+// must return (nil, err) where err satisfies errors.Is against
+// ErrFileAbsentAtRef — the Service treats that as "empty symbol set for
+// that side" and proceeds. Any OTHER error is interpreted as "this ref's
+// tree was unreadable" and propagated as the baseline_ref_not_indexed
+// degraded reason (solov2-izh6.17).
 type FileAtRefFunc func(ctx context.Context, repoRoot, ref, path string) ([]byte, error)
+
+// ErrFileAbsentAtRef is the sentinel adapters must wrap when reporting
+// that a file does not exist at the requested ref. Distinguishing it
+// from a generic read failure lets the Service tell "file genuinely
+// absent at ref" (an added/deleted file, expected) apart from "ref's
+// tree is unreadable" (e.g. an unfetched commit, corrupted object
+// store, or — in the user-facing rephrasing the bug report uses — a
+// baseline ref whose tree was never indexed) (solov2-izh6.17).
+var ErrFileAbsentAtRef = errors.New("changedsymbols: file absent at ref")
 
 // Change classifies one symbol's fate between ref_a and ref_b.
 type Change string
@@ -120,12 +131,22 @@ func (s *Service) Diff(ctx context.Context, repoID, repoRoot, refA, refB string)
 		DegradedReasons: []string{},
 	}
 	nonSymbolOnlyFiles := 0
+	baselineUnreachable := false
 	for _, path := range files {
-		nodesA, err := s.parseAtRef(ctx, repoID, repoRoot, refA, path)
+		nodesA, aUnreachable, err := s.parseAtRef(ctx, repoID, repoRoot, refA, path)
 		if err != nil {
 			return Result{}, err
 		}
-		nodesB, err := s.parseAtRef(ctx, repoID, repoRoot, refB, path)
+		if aUnreachable {
+			// solov2-izh6.17: refA's tree couldn't be read for this file
+			// via a non-absence error. Treat the baseline side as empty
+			// for diff purposes but remember that we did NOT actually
+			// observe its contents — so a downstream "no symbol diff"
+			// outcome is reported as baseline_ref_not_indexed rather than
+			// the misleading non_symbol_changes_only.
+			baselineUnreachable = true
+		}
+		nodesB, _, err := s.parseAtRef(ctx, repoID, repoRoot, refB, path)
 		if err != nil {
 			return Result{}, err
 		}
@@ -148,8 +169,19 @@ func (s *Service) Diff(ctx context.Context, repoID, repoRoot, refA, refB string)
 	// claimed "non_symbol_changes_only"). The user-visible purpose of the
 	// hint is "the diff is empty, but stuff did change — here's why"; once
 	// the diff is non-empty the hint is just noise.
-	if nonSymbolOnlyFiles > 0 && len(res.Added)+len(res.Removed)+len(res.Modified) == 0 {
-		res.DegradedReasons = append(res.DegradedReasons, DegradedReasonNonSymbolChangesOnly)
+	if len(res.Added)+len(res.Removed)+len(res.Modified) == 0 {
+		switch {
+		case baselineUnreachable:
+			// solov2-izh6.17: when refA's tree was unreadable for at
+			// least one changed file, the empty symbol diff is most
+			// honestly explained as "we never saw the baseline".
+			// Emit this in PLACE of non_symbol_changes_only — the two
+			// reasons are mutually exclusive at this layer (the latter
+			// is a true-negative; this one is a can't-observe).
+			res.DegradedReasons = append(res.DegradedReasons, DegradedReasonBaselineRefNotIndexed)
+		case nonSymbolOnlyFiles > 0:
+			res.DegradedReasons = append(res.DegradedReasons, DegradedReasonNonSymbolChangesOnly)
+		}
 	}
 	sortChanges(res.Added)
 	sortChanges(res.Removed)
@@ -164,6 +196,17 @@ func (s *Service) Diff(ctx context.Context, repoID, repoRoot, refA, refB string)
 // "nothing changed" (solov2-u9os).
 const DegradedReasonNonSymbolChangesOnly = "non_symbol_changes_only"
 
+// DegradedReasonBaselineRefNotIndexed is emitted when ref_a's tree
+// could not be read for at least one changed file via a non-absence
+// error from the FileAtRefFunc adapter. Common causes: an unfetched
+// commit, a corrupted object store, or — in the user-facing phrasing
+// from the original bug report — a baseline ref whose tree was never
+// indexed/promoted on this machine. Distinguishing it from
+// non_symbol_changes_only stops the tool from telling agents "only
+// comments/whitespace changed" when the real story is "we couldn't see
+// the baseline at all" (solov2-izh6.17).
+const DegradedReasonBaselineRefNotIndexed = "baseline_ref_not_indexed"
+
 // DegradedReasonNoParentCommit is emitted when the default HEAD~1 base
 // could not be resolved and the handler fell back to git's empty-tree SHA
 // to diff against. Surfaces the fact that "every symbol shows as added"
@@ -171,21 +214,31 @@ const DegradedReasonNonSymbolChangesOnly = "non_symbol_changes_only"
 // (solov2-g04l).
 const DegradedReasonNoParentCommit = "no_parent_commit_used_empty_tree"
 
-// parseAtRef reads path at ref and parses it. A file absent at the ref
-// (e.g. added or deleted between the two refs) yields an empty map and
-// no error, so the caller still classifies the present side correctly.
-func (s *Service) parseAtRef(ctx context.Context, repoID, repoRoot, ref, path string) (map[string]*domain.Node, error) {
+// parseAtRef reads path at ref and parses it. The second return value
+// reports whether the read failed with a non-absence error (i.e. the
+// ref's tree was unreadable for this file). A legitimately absent file
+// (sentinel-wrapped errors.Is(err, ErrFileAbsentAtRef)) yields an empty
+// map with unreachable=false; an unreachable read also yields an empty
+// map but with unreachable=true so the caller can degrade the result
+// with baseline_ref_not_indexed rather than non_symbol_changes_only
+// (solov2-izh6.17).
+func (s *Service) parseAtRef(ctx context.Context, repoID, repoRoot, ref, path string) (map[string]*domain.Node, bool, error) {
 	content, err := s.fileAtRef(ctx, repoRoot, ref, path)
 	if err != nil {
-		// Any read failure is treated as "file not present at this ref":
-		// the adapter returns a sentinel-wrapped error for genuine
-		// absence, and a missing side is the expected case for an
-		// added/deleted file.
-		return map[string]*domain.Node{}, nil
+		if errors.Is(err, ErrFileAbsentAtRef) {
+			// Sentinel-wrapped absence: file genuinely not present at
+			// this ref (added/deleted between refs). Empty side, no
+			// degraded reason.
+			return map[string]*domain.Node{}, false, nil
+		}
+		// Non-absence read failure: we couldn't see the ref's tree for
+		// this file. Empty side, flag the caller so it can emit
+		// baseline_ref_not_indexed if the overall diff comes back empty.
+		return map[string]*domain.Node{}, true, nil
 	}
 	pr, err := s.parser.ParseFile(ctx, repoID, path, content)
 	if err != nil {
-		return nil, fmt.Errorf("changedsymbols: parse %s at %s: %w", path, ref, err)
+		return nil, false, fmt.Errorf("changedsymbols: parse %s at %s: %w", path, ref, err)
 	}
 	// solov2-u9os: chunks are an embedding-internal concept (KindChunk
 	// covers comment/whitespace/import gaps between symbols so semantic
@@ -201,7 +254,7 @@ func (s *Service) parseAtRef(ctx context.Context, repoID, repoRoot, ref, path st
 		}
 		out[symbolKey(n)] = n
 	}
-	return out, nil
+	return out, false, nil
 }
 
 // classifyFile diffs the two symbol maps of one file into res.
