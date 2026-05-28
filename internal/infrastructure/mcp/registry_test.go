@@ -379,3 +379,51 @@ func TestAllM106ToolsPassValidation(t *testing.T) {
 		}
 	}
 }
+
+// TestRegister_CLIExemptDeferredRequiresReason pins solov2-4ygz: a
+// tool that opts out of CLI parity with ExemptDeferred must justify
+// the choice so the parity lint and future readers know whether to
+// upgrade it. ExemptInternal and ExemptAgentOnly are self-explanatory
+// and need no reason.
+func TestRegister_CLIExemptDeferredRequiresReason(t *testing.T) {
+	r := NewRegistry()
+	spec := makeSpec("eng_get_widget", "gets the widget")
+	spec.CLIExempt = ExemptDeferred
+	if err := r.Register(spec); err == nil {
+		t.Fatal("expected ExemptDeferred without ExemptReason to error")
+	}
+
+	spec.ExemptReason = "wrapping deferred until the use-case stabilises."
+	if err := r.Register(spec); err != nil {
+		t.Fatalf("ExemptDeferred with reason should register, got: %v", err)
+	}
+}
+
+// TestRegister_CLIExemptOtherKindsNoReason confirms ExemptInternal /
+// ExemptAgentOnly tools do not require a reason.
+func TestRegister_CLIExemptOtherKindsNoReason(t *testing.T) {
+	cases := []CLIExempt{ExemptInternal, ExemptAgentOnly}
+	for _, k := range cases {
+		r := NewRegistry()
+		spec := makeSpec("eng_get_widget", "gets the widget")
+		spec.CLIExempt = k
+		if err := r.Register(spec); err != nil {
+			t.Errorf("CLIExempt=%s should register without reason; got: %v", k, err)
+		}
+	}
+}
+
+// TestRegistry_ToolsReturnsSnapshot pins the Tools() accessor that the
+// parity lint (solov2-xomk) relies on.
+func TestRegistry_ToolsReturnsSnapshot(t *testing.T) {
+	r := NewRegistry()
+	_ = r.Register(makeSpec("eng_find_symbol", "finds symbols"))
+	_ = r.Register(makeSpec("eng_get_node", "gets a node by id"))
+	out := r.Tools()
+	if len(out) != 2 {
+		t.Fatalf("Tools() = %d entries, want 2", len(out))
+	}
+	if out[0].Name >= out[1].Name {
+		t.Errorf("Tools() not sorted by name: %v", []string{out[0].Name, out[1].Name})
+	}
+}

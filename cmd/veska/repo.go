@@ -1173,12 +1173,26 @@ func dialRemoveRepo(ctx context.Context, repoID string) error {
 // (solov2-0cg). 2s per-attempt + 3 attempts = ~6s ceiling, still well
 // under any human-perceptible wait.
 
+// methodsSkipCwd lists eng_* methods that must NOT receive an auto-
+// injected cwd. These are tools whose CLI surface intentionally fans
+// out across every registered repo when --repo is omitted (solov2-efzv):
+// auto-injecting cwd would silently pin them to a single repo and
+// break the multi-repo workflow on the cobra-CLI-plus-shared-lib
+// pattern.
+var methodsSkipCwd = map[string]struct{}{
+	"eng_find_symbol":      {},
+	"eng_get_context_pack": {},
+}
+
 // withCwdInjected adds a "cwd" field to params for eng_* methods so the
 // daemon can resolve repo_id from the caller's working directory when
-// omitted (solov2-ktz0). Non-eng_* methods and frames that already carry
-// cwd pass through unchanged.
+// omitted (solov2-ktz0). Non-eng_* methods, frames that already carry
+// cwd, and methods in methodsSkipCwd pass through unchanged.
 func withCwdInjected(method string, params any) any {
 	if !strings.HasPrefix(method, "eng_") {
+		return params
+	}
+	if _, skip := methodsSkipCwd[method]; skip {
 		return params
 	}
 	cwd, err := os.Getwd()
