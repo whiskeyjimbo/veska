@@ -79,6 +79,14 @@ func makeCloseFindingHandler(db *sql.DB, aw ports.AuditWriter) ToolHandler {
 		// Commit, Rollback is a no-op per database/sql.
 		defer func() { _ = tx.Rollback() }()
 
+		// solov2-zyp4: resolve a finding_id prefix to its full id on this
+		// tx so the row is locked through the subsequent SELECT/UPDATE.
+		fullID, rpcErr := resolveFindingPrefix(ctx, tx, p.FindingID, p.Branch)
+		if rpcErr != nil {
+			return nil, rpcErr
+		}
+		p.FindingID = fullID
+
 		// Fetch the finding to check existence, severity, rule, and anchor
 		// (node_id, which for auto-link findings carries the edge_id).
 		// finding_id is globally unique; branch/repo_id are looked up when not

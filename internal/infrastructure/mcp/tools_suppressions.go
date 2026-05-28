@@ -97,6 +97,17 @@ func makeSuppressFindingHandler(db *sql.DB, aw ports.AuditWriter) ToolHandler {
 		// carry a different kind of target (rule name, file path) and require
 		// the caller to provide branch/repo_id explicitly.
 		if p.Scope == "finding" {
+			// solov2-zyp4: accept an unambiguous prefix.
+			fullID, rpcErr := resolveFindingPrefix(ctx, db, p.FindingID, p.Branch)
+			if rpcErr != nil {
+				// suppress historically returned InvalidParams for not-found;
+				// keep that for scope-mismatch cases by translating NotFound.
+				if rpcErr.Code == CodeNotFound {
+					rpcErr.Code = CodeInvalidParams
+				}
+				return nil, rpcErr
+			}
+			p.FindingID = fullID
 			var rowBranch, rowRepoID string
 			err := db.QueryRowContext(ctx,
 				`SELECT branch, repo_id FROM findings WHERE finding_id = ? LIMIT 1`,
