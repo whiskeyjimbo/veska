@@ -127,6 +127,24 @@ func runSearch(ctx context.Context, w io.Writer, opts runSearchOpts) error {
 		return err
 	}
 
+	// solov2-l04m: for ephemeral cache-tier repos, shorten the displayed
+	// file paths so the user sees `pflag/flag.go` instead of
+	// `/home/jrose/.cache/veska/repos/<64-char-sha>/flag.go`. JSON output
+	// (--json) keeps the absolute paths for tooling. Display name comes
+	// from the canonical_url's last segment when available.
+	var pathPrettifier func(*searchEnvelope)
+	if !opts.jsonOut && rec.Kind == "ephemeral" {
+		canonical, _ := lookupCanonicalURL(ctx, pools.ReadDB, rec.RepoID)
+		display := ephemeralDisplayName(canonical, rec.RepoID)
+		// The on-disk clone dir is named by the URL-derived id (see
+		// ephemeralEnsureFromURL), not the path-sha rec.RepoID stored in
+		// the registry — rec.RootPath is the authoritative prefix.
+		cacheRepoDir := rec.RootPath
+		pathPrettifier = func(env *searchEnvelope) {
+			prettifyEphemeralPaths(env, cacheRepoDir, display)
+		}
+	}
+
 	// solov2-2etd: once the URL/path target is registered, prefer the
 	// daemon's hybrid (vector + lexical RRF) eng_search_semantic. The
 	// in-process svc.Semantic below is vector-only and was returning
@@ -135,6 +153,9 @@ func runSearch(ctx context.Context, w io.Writer, opts runSearchOpts) error {
 	if env, ok, derr := daemonSearchByRepoID(ctx, rec.RepoID, rec.ActiveBranch, opts); ok {
 		if derr != nil {
 			return derr
+		}
+		if pathPrettifier != nil {
+			pathPrettifier(&env)
 		}
 		if err := renderSearchEnvelope(w, env, opts.jsonOut); err != nil {
 			return err
@@ -150,7 +171,11 @@ func runSearch(ctx context.Context, w io.Writer, opts runSearchOpts) error {
 			return fmt.Errorf("search: semantic: %w", err)
 		}
 
-		if err := renderSearchResults(w, resp, opts.jsonOut); err != nil {
+		env := buildSearchEnvelope(resp)
+		if pathPrettifier != nil {
+			pathPrettifier(&env)
+		}
+		if err := renderSearchEnvelope(w, env, opts.jsonOut); err != nil {
 			return err
 		}
 	}
@@ -516,6 +541,15 @@ type searchEnvelope struct {
 // renderSearchResults maps an in-process search.Response into the wire
 // envelope and renders it.
 func renderSearchResults(w io.Writer, resp search.Response, jsonOut bool) error {
+	env := buildSearchEnvelope(resp)
+	return renderSearchEnvelope(w, env, jsonOut)
+}
+
+// buildSearchEnvelope maps an in-process search.Response into the wire
+// envelope used by both render paths. Extracted so the searchCmd flow can
+// post-process the envelope (e.g. shortening ephemeral cache-tier paths)
+// before rendering — solov2-l04m.
+func buildSearchEnvelope(resp search.Response) searchEnvelope {
 	env := searchEnvelope{DegradedReasons: resp.DegradedReasons}
 	env.Results = make([]searchHitView, 0, len(resp.Results))
 	for _, r := range resp.Results {
@@ -530,7 +564,50 @@ func renderSearchResults(w io.Writer, resp search.Response, jsonOut bool) error 
 			Snippet:   r.Snippet,
 		})
 	}
-	return renderSearchEnvelope(w, env, jsonOut)
+	return env
+}
+
+// ephemeralDisplayName picks a short, human-readable name for an
+// ephemeral cache-tier repo: the last path segment of canonical_url (e.g.
+// "pflag" from "https://github.com/spf13/pflag.git"), falling back to a
+// 12-char prefix of repoID. solov2-l04m.
+func ephemeralDisplayName(canonicalURL, repoID string) string {
+	if canonicalURL != "" {
+		base := canonicalURL
+		base = strings.TrimSuffix(base, ".git")
+		base = strings.TrimRight(base, "/")
+		if i := strings.LastIndex(base, "/"); i >= 0 {
+			base = base[i+1:]
+		}
+		if base != "" {
+			return base
+		}
+	}
+	if len(repoID) > 12 {
+		return repoID[:12]
+	}
+	return repoID
+}
+
+// prettifyEphemeralPaths rewrites file_path on every hit whose path lives
+// under the ephemeral cache repo dir, replacing the cache prefix with
+// "<displayName>/" so the user sees `pflag/flag.go:194-206` rather than
+// the unscannable 64-char sha. JSON output should skip this — callers
+// gate on jsonOut. solov2-l04m.
+func prettifyEphemeralPaths(env *searchEnvelope, cacheRepoDir, displayName string) {
+	if env == nil || cacheRepoDir == "" || displayName == "" {
+		return
+	}
+	prefix := cacheRepoDir
+	if !strings.HasSuffix(prefix, string(filepath.Separator)) {
+		prefix += string(filepath.Separator)
+	}
+	for i := range env.Results {
+		fp := env.Results[i].FilePath
+		if strings.HasPrefix(fp, prefix) {
+			env.Results[i].FilePath = displayName + "/" + fp[len(prefix):]
+		}
+	}
 }
 
 // renderSearchEnvelope emits the envelope as indented JSON (--json) or a
