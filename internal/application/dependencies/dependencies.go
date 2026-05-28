@@ -30,12 +30,16 @@ type CallSite struct {
 
 // Dependency is one external module the repo imports, with the count of
 // call sites and (up to TopK) example references for an agent to start
-// from.
+// from. ImportCount is the number of files that name this module in an
+// import statement; it can be non-zero even when UsageCount is zero, which
+// is the signal that the module is imported but only referenced via
+// struct literals / type assertions (solov2-xjm5).
 type Dependency struct {
 	Module       string     `json:"module"`
 	Version      string     `json:"version,omitempty"`
 	Language     string     `json:"language"`
 	UsageCount   int        `json:"usage_count"`
+	ImportCount  int        `json:"import_count,omitempty"`
 	TopCallSites []CallSite `json:"top_call_sites"`
 }
 
@@ -51,6 +55,28 @@ type Result struct {
 // adapter and lets tests stub it without spinning up the resolver.
 type StubAggregator interface {
 	AggregateStubs(ctx context.Context, repoID, branch string) ([]StubRow, error)
+}
+
+// ImportLister returns one row per (file, import_path) parsed for the
+// (repoID, branch). It is the second source the service unions with
+// StubAggregator so a module that's imported but only referenced via
+// struct literals / type assertions (no resolved CALLS edge) still
+// surfaces in `veska deps list` (solov2-xjm5).
+//
+// An empty result is normal — repos with no parsed imports (or non-Go
+// repos until the writer is extended) return ([], nil). A nil
+// implementation on the service is treated the same as an empty result.
+type ImportLister interface {
+	ListImports(ctx context.Context, repoID, branch string) ([]ImportRow, error)
+}
+
+// ImportRow is one (file, import_path) entry from file_imports. Language
+// matches StubRow.Language so the two sources can be merged without an
+// inference step.
+type ImportRow struct {
+	FilePath   string
+	ImportPath string
+	Language   string
 }
 
 // StubRow is one (module, symbol, src_node) row from the stubs table.
@@ -76,6 +102,7 @@ type RepoRootFunc func(ctx context.Context, repoID string) (string, error)
 // instance is safe for concurrent callers.
 type Service struct {
 	aggregator StubAggregator
+	imports    ImportLister
 	versions   ModuleVersionFunc
 	repoRoot   RepoRootFunc
 	topK       int
@@ -89,17 +116,36 @@ const DefaultTopK = 5
 
 // NewService constructs a Service. aggregator is required; versions and
 // repoRoot are optional — when nil the dependency's Version field is
-// always empty (still useful for ranking + symbol navigation).
-func NewService(aggregator StubAggregator, versions ModuleVersionFunc, repoRoot RepoRootFunc) (*Service, error) {
+// always empty (still useful for ranking + symbol navigation). Pass an
+// ImportLister via WithImportLister to union bare-import modules with
+// the stub-derived list (solov2-xjm5).
+func NewService(aggregator StubAggregator, versions ModuleVersionFunc, repoRoot RepoRootFunc, opts ...ServiceOption) (*Service, error) {
 	if aggregator == nil {
 		return nil, fmt.Errorf("dependencies.NewService: aggregator is nil: %w", ErrMissingDependency)
 	}
-	return &Service{
+	s := &Service{
 		aggregator: aggregator,
 		versions:   versions,
 		repoRoot:   repoRoot,
 		topK:       DefaultTopK,
-	}, nil
+	}
+	for _, opt := range opts {
+		opt(s)
+	}
+	return s, nil
+}
+
+// ServiceOption configures optional Service collaborators. Functional
+// options keep NewService callable with the original three-arg signature
+// from tests and wire code that don't need the new ports.
+type ServiceOption func(*Service)
+
+// WithImportLister supplies the second data source used to union
+// bare-import modules into Service.List output (solov2-xjm5).
+func WithImportLister(l ImportLister) ServiceOption {
+	return func(s *Service) {
+		s.imports = l
+	}
 }
 
 // List returns the repo's external dependencies, sorted by usage count
@@ -111,11 +157,15 @@ func (s *Service) List(ctx context.Context, repoID, branch string) (Result, erro
 		return Result{}, fmt.Errorf("dependencies: aggregate stubs: %w", err)
 	}
 
-	// Group rows by module_path.
+	// Group rows by module_path. importCount is the file-distinct count
+	// of import statements naming this module (solov2-xjm5); independent
+	// of the call-site count so a module imported but never called still
+	// shows up.
 	type modAgg struct {
-		lang      string
-		count     int
-		callSites []CallSite
+		lang        string
+		count       int
+		importCount int
+		callSites   []CallSite
 	}
 	byModule := make(map[string]*modAgg)
 	for _, r := range rows {
@@ -136,6 +186,37 @@ func (s *Service) List(ctx context.Context, repoID, branch string) (Result, erro
 		}
 	}
 
+	// solov2-xjm5: union with parsed imports. A module imported in N files
+	// but with zero resolved CALLS edges still surfaces with UsageCount=0
+	// and ImportCount=N. Modules already present in the stub-derived map
+	// just gain their ImportCount.
+	if s.imports != nil {
+		impRows, ierr := s.imports.ListImports(ctx, repoID, branch)
+		if ierr != nil {
+			return Result{}, fmt.Errorf("dependencies: list imports: %w", ierr)
+		}
+		seenFile := make(map[string]map[string]struct{}, len(byModule))
+		for _, r := range impRows {
+			if r.ImportPath == "" {
+				continue
+			}
+			files, ok := seenFile[r.ImportPath]
+			if !ok {
+				files = make(map[string]struct{})
+				seenFile[r.ImportPath] = files
+			}
+			files[r.FilePath] = struct{}{}
+			if _, ok := byModule[r.ImportPath]; !ok {
+				byModule[r.ImportPath] = &modAgg{lang: r.Language}
+			}
+		}
+		for module, files := range seenFile {
+			if m, ok := byModule[module]; ok {
+				m.importCount = len(files)
+			}
+		}
+	}
+
 	// Resolve repo root once for version lookups.
 	var repoRoot string
 	if s.repoRoot != nil && s.versions != nil {
@@ -152,6 +233,7 @@ func (s *Service) List(ctx context.Context, repoID, branch string) (Result, erro
 			Module:       module,
 			Language:     agg.lang,
 			UsageCount:   agg.count,
+			ImportCount:  agg.importCount,
 			TopCallSites: agg.callSites,
 		}
 		if s.versions != nil && repoRoot != "" {
@@ -168,7 +250,10 @@ func (s *Service) List(ctx context.Context, repoID, branch string) (Result, erro
 	return Result{Dependencies: deps}, nil
 }
 
-// sortDependencies orders by UsageCount desc, then Module asc.
+// sortDependencies orders by UsageCount desc, then ImportCount desc, then
+// Module asc. ImportCount breaks the tie between two stub-zero modules so
+// a heavily-imported-but-uncalled module ranks ahead of a once-imported
+// one (solov2-xjm5).
 func sortDependencies(deps []Dependency) {
 	// Stable insertion sort — n is tiny (number of distinct imported
 	// modules per repo) and we want deterministic output without
@@ -179,8 +264,13 @@ func sortDependencies(deps []Dependency) {
 			if a.UsageCount > b.UsageCount {
 				break
 			}
-			if a.UsageCount == b.UsageCount && a.Module <= b.Module {
-				break
+			if a.UsageCount == b.UsageCount {
+				if a.ImportCount > b.ImportCount {
+					break
+				}
+				if a.ImportCount == b.ImportCount && a.Module <= b.Module {
+					break
+				}
 			}
 			deps[j-1], deps[j] = deps[j], deps[j-1]
 		}

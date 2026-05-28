@@ -17,6 +17,70 @@ func (s *stubAggregator) AggregateStubs(_ context.Context, _, _ string) ([]depen
 	return s.rows, s.err
 }
 
+type importLister struct {
+	rows []dependencies.ImportRow
+	err  error
+}
+
+func (l *importLister) ListImports(_ context.Context, _, _ string) ([]dependencies.ImportRow, error) {
+	return l.rows, l.err
+}
+
+// TestService_UnionsImportsWithStubs pins solov2-xjm5: a module imported
+// in N files but with zero resolved CALLS still surfaces with UsageCount=0
+// and ImportCount=N. The case mirrors the junior-journey reproduction: a
+// vanilla cobra-based CLI lists github.com/spf13/cobra in deps even
+// before `go mod vendor` (no resolved CALLS yet).
+func TestService_UnionsImportsWithStubs(t *testing.T) {
+	agg := &stubAggregator{rows: []dependencies.StubRow{
+		{ModulePath: "github.com/junior/greetlib", SymbolPath: "Farewell", SrcNodeID: "a", Language: "go"},
+	}}
+	imps := &importLister{rows: []dependencies.ImportRow{
+		// greetlib is both imported AND called.
+		{FilePath: "cmd/root.go", ImportPath: "github.com/junior/greetlib", Language: "go"},
+		// cobra is imported in two files but never resolved as a CALLS edge.
+		{FilePath: "cmd/root.go", ImportPath: "github.com/spf13/cobra", Language: "go"},
+		{FilePath: "cmd/sub.go", ImportPath: "github.com/spf13/cobra", Language: "go"},
+	}}
+	svc, err := dependencies.NewService(agg, nil, nil, dependencies.WithImportLister(imps))
+	if err != nil {
+		t.Fatalf("NewService: %v", err)
+	}
+	res, err := svc.List(context.Background(), "r1", "main")
+	if err != nil {
+		t.Fatalf("List: %v", err)
+	}
+	if len(res.Dependencies) != 2 {
+		t.Fatalf("want 2 modules, got %d: %+v", len(res.Dependencies), res.Dependencies)
+	}
+	// greetlib: UsageCount=1 (stub) and ImportCount=1 → ranks first.
+	if got := res.Dependencies[0]; got.Module != "github.com/junior/greetlib" || got.UsageCount != 1 || got.ImportCount != 1 {
+		t.Errorf("first = %+v, want greetlib UC=1 IC=1", got)
+	}
+	// cobra: UsageCount=0 ImportCount=2 → present, ranks last.
+	if got := res.Dependencies[1]; got.Module != "github.com/spf13/cobra" || got.UsageCount != 0 || got.ImportCount != 2 {
+		t.Errorf("second = %+v, want cobra UC=0 IC=2", got)
+	}
+	if len(res.Dependencies[1].TopCallSites) != 0 {
+		t.Errorf("cobra TopCallSites = %v, want empty (no stubs)", res.Dependencies[1].TopCallSites)
+	}
+}
+
+// TestService_ImportCountDistinctByFile pins that repeated imports of the
+// same module from the same file count as one (file-distinct, not row-
+// count). Prevents accidental double-counting on re-promote.
+func TestService_ImportCountDistinctByFile(t *testing.T) {
+	imps := &importLister{rows: []dependencies.ImportRow{
+		{FilePath: "cmd/root.go", ImportPath: "github.com/spf13/cobra", Language: "go"},
+		{FilePath: "cmd/root.go", ImportPath: "github.com/spf13/cobra", Language: "go"},
+	}}
+	svc, _ := dependencies.NewService(&stubAggregator{}, nil, nil, dependencies.WithImportLister(imps))
+	res, _ := svc.List(context.Background(), "r1", "main")
+	if len(res.Dependencies) != 1 || res.Dependencies[0].ImportCount != 1 {
+		t.Errorf("want 1 module with ImportCount=1; got %+v", res.Dependencies)
+	}
+}
+
 func TestService_GroupsByModuleAndCountsCallSites(t *testing.T) {
 	agg := &stubAggregator{rows: []dependencies.StubRow{
 		{ModulePath: "github.com/spf13/cobra", SymbolPath: "Command", SrcNodeID: "a", Language: "go"},

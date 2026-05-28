@@ -169,6 +169,65 @@ func TestPromotionStore_CrossPackageCallsResolution(t *testing.T) {
 	}
 }
 
+// TestPromotionStore_PersistsFileImports pins solov2-xjm5: imports parsed
+// for each file land in file_imports with the (repo_id, branch, file_path)
+// grain, and a re-promote of the same file replaces rather than duplicates.
+func TestPromotionStore_PersistsFileImports(t *testing.T) {
+	t.Parallel()
+	db := openTest(t, filepath.Join(t.TempDir(), "v.db"))
+	if _, err := db.Exec(
+		`INSERT INTO repos (repo_id, root_path, added_at, module_path) VALUES (?, ?, ?, ?)`,
+		"repo1", "/tmp/app", time.Now().UnixMilli(), "github.com/acme/app",
+	); err != nil {
+		t.Fatalf("insert repo: %v", err)
+	}
+	store := sqlite.NewPromotionStore(db, []sqlite.PromotionSink{sqlite.NewFTSSink(), sqlite.NewEmbedRefSink()})
+	n1, _ := domain.NewNode("n1", "/tmp/app/cmd/root.go", "main", domain.KindFunction)
+
+	// First promotion: 2 imports.
+	if err := store.Promote(context.Background(), application.PromotionBatch{
+		RepoID: "repo1", Branch: "main", GitSHA: "sha1", Actor: systemActor(),
+		PromotedAt: time.Now().UnixMilli(),
+		Files: []application.PromotionFile{{
+			Path: "/tmp/app/cmd/root.go", Nodes: []*domain.Node{n1},
+			Imports: map[string]string{
+				"cobra":    "github.com/spf13/cobra",
+				"greetlib": "github.com/junior/greetlib",
+			},
+		}},
+	}); err != nil {
+		t.Fatalf("promote 1: %v", err)
+	}
+	var n int
+	if err := db.QueryRow(`SELECT COUNT(*) FROM file_imports WHERE repo_id='repo1' AND branch='main'`).Scan(&n); err != nil {
+		t.Fatalf("count: %v", err)
+	}
+	if n != 2 {
+		t.Errorf("after first promote: want 2 file_imports rows, got %d", n)
+	}
+
+	// Re-promote same file with the cobra import removed.
+	if err := store.Promote(context.Background(), application.PromotionBatch{
+		RepoID: "repo1", Branch: "main", GitSHA: "sha2", Actor: systemActor(),
+		PromotedAt: time.Now().UnixMilli(),
+		Files: []application.PromotionFile{{
+			Path: "/tmp/app/cmd/root.go", Nodes: []*domain.Node{n1},
+			Imports: map[string]string{
+				"greetlib": "github.com/junior/greetlib",
+			},
+		}},
+	}); err != nil {
+		t.Fatalf("promote 2: %v", err)
+	}
+	var have string
+	if err := db.QueryRow(`SELECT GROUP_CONCAT(import_path, ',') FROM file_imports WHERE repo_id='repo1' AND branch='main'`).Scan(&have); err != nil {
+		t.Fatalf("scan: %v", err)
+	}
+	if have != "github.com/junior/greetlib" {
+		t.Errorf("after re-promote with cobra removed: got %q, want %q", have, "github.com/junior/greetlib")
+	}
+}
+
 // TestPromotionStore_ChainedSelectorMethodCallInModule covers solov2-9rc2
 // Phase B: a chained-selector method call (`g := pkg.New(...); g.Hello()`)
 // whose target package is in the SAME module must bind to the method node

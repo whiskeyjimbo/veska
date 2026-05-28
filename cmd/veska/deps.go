@@ -76,6 +76,7 @@ func depsListCmd() *cobra.Command {
 					Version      string `json:"version,omitempty"`
 					Language     string `json:"language"`
 					UsageCount   int    `json:"usage_count"`
+					ImportCount  int    `json:"import_count,omitempty"`
 					TopCallSites []struct {
 						SrcNodeID  string `json:"src_node_id"`
 						SymbolPath string `json:"symbol_path"`
@@ -102,7 +103,7 @@ func depsListCmd() *cobra.Command {
 				shown = shown[:limit]
 			}
 			tw := tabwriter.NewWriter(w, 0, 0, 2, ' ', 0)
-			fmt.Fprintln(tw, "MODULE\tVERSION\tUSAGE\tTOP_SYMBOLS")
+			fmt.Fprintln(tw, "MODULE\tVERSION\tCALLS\tIMPORTS\tTOP_SYMBOLS")
 			for _, d := range shown {
 				var symbols strings.Builder
 				for i, cs := range d.TopCallSites {
@@ -111,7 +112,7 @@ func depsListCmd() *cobra.Command {
 					}
 					symbols.WriteString(cs.SymbolPath)
 				}
-				fmt.Fprintf(tw, "%s\t%s\t%d\t%s\n", d.Module, d.Version, d.UsageCount, symbols.String())
+				fmt.Fprintf(tw, "%s\t%s\t%d\t%d\t%s\n", d.Module, d.Version, d.UsageCount, d.ImportCount, symbols.String())
 			}
 			if err := tw.Flush(); err != nil {
 				return err
