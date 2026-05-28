@@ -150,10 +150,26 @@ func makeChangedSymbolsHandler(svc *changedsymbols.Service, repoRoot RepoRootFun
 			// friendly invalid-params instead of leaking raw git stderr
 			// (solov2-dr31).
 			if errors.Is(err, gitinfra.ErrUnknownRevision) {
-				return nil, &RPCError{
-					Code:    CodeInvalidParams,
-					Message: fmt.Sprintf("ref_a=%q or ref_b=%q does not resolve in the repo (insufficient history? try omitting both refs or pass an explicit pair)", p.RefA, p.RefB),
+				// Identify which side failed so the message names the bad
+				// ref instead of blaming both. ResolvesRef shells out twice
+				// only on this error path. solov2-dt6q.
+				aOK := gitinfra.ResolvesRef(ctx, root, p.RefA)
+				bOK := gitinfra.ResolvesRef(ctx, root, p.RefB)
+				var msg string
+				switch {
+				case !aOK && !bOK:
+					msg = fmt.Sprintf("neither ref_a=%q nor ref_b=%q resolves in this repository — check for typos and verify the refs with `git rev-parse <ref>`", p.RefA, p.RefB)
+				case !aOK:
+					msg = fmt.Sprintf("ref_a=%q does not resolve in this repository — if you meant 'the parent of HEAD' note this repo has too few commits for that; omit both refs to diff staged+working-tree against HEAD instead", p.RefA)
+				case !bOK:
+					msg = fmt.Sprintf("ref_b=%q does not resolve in this repository — verify the ref with `git rev-parse %s`", p.RefB, p.RefB)
+				default:
+					// Shouldn't happen — git diff said unknown revision but
+					// both refs resolve individually. Fall back to the raw
+					// error.
+					msg = fmt.Sprintf("git diff %s..%s failed despite both refs resolving — try `git diff %s %s` in the repo for details", p.RefA, p.RefB, p.RefA, p.RefB)
 				}
+				return nil, &RPCError{Code: CodeInvalidParams, Message: msg}
 			}
 			return nil, &RPCError{Code: CodeInternalError, Message: fmt.Sprintf("find changed symbols: %v", err)}
 		}
