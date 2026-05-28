@@ -56,6 +56,35 @@ func TestResolveVulnChoice_InteractiveStillPrompts(t *testing.T) {
 	}
 }
 
+// TestResolveVulnChoice_InteractiveEmptyStdinSkipsPrompt pins solov2-iabr:
+// when stdin LOOKS like a TTY but is actually empty/closed (common under
+// agent harnesses), the prompt must NOT be printed — that "stdin EOF;
+// accepting default" parenthetical reads as an error to scripted callers.
+// Echo a clean default-accepted line instead.
+func TestResolveVulnChoice_InteractiveEmptyStdinSkipsPrompt(t *testing.T) {
+	var out bytes.Buffer
+	enabled, err := resolveVulnChoice(initFlags{
+		stdin:       strings.NewReader(""), // empty: peek returns EOF
+		interactive: true,
+	}, &out)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !enabled {
+		t.Errorf("expected default-on for empty stdin, got disabled")
+	}
+	got := out.String()
+	if strings.Contains(got, "[Y/n]") {
+		t.Errorf("peek-EOF path must NOT print the prompt; got: %q", got)
+	}
+	if strings.Contains(got, "stdin EOF") {
+		t.Errorf("output must not include the confusing 'stdin EOF' wording; got: %q", got)
+	}
+	if !strings.Contains(got, "OSV") || !strings.Contains(got, "enabled") {
+		t.Errorf("peek-EOF path must echo the chosen default; got: %q", got)
+	}
+}
+
 func TestInitCmdName(t *testing.T) {
 	cmd := initCmd()
 	if cmd.Name() != "init" {
