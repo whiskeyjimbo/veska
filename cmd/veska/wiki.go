@@ -24,13 +24,20 @@ import (
 // orchestration (wiki.Handler.Handle) — the same code path the post-promotion
 // queue lane runs, so the output is byte-identical.
 func wikiCmd() *cobra.Command {
-	var repoID, branch string
+	var (
+		repoID  string
+		branch  string
+		allFlag bool
+	)
 
 	cmd := &cobra.Command{
 		Use:          "wiki",
 		Short:        "Regenerate the veska wiki pages (hot_zones + entry_points)",
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
+			if allFlag && (repoID != "" || branch != "") {
+				return fmt.Errorf("wiki: --all is mutually exclusive with --repo/--branch")
+			}
 			w := cmd.OutOrStdout()
 			dbPath := filepath.Join(config.DefaultVectorDir(), "veska.db")
 
@@ -46,12 +53,46 @@ func wikiCmd() *cobra.Command {
 			}
 
 			ctx := cmd.Context()
-			resolvedRepo, resolvedBranch, err := resolveWikiTarget(ctx, pools.ReadDB, repoID, branch)
+			handler, err := buildWikiHandler(pools)
 			if err != nil {
 				return err
 			}
 
-			handler, err := buildWikiHandler(pools)
+			// solov2-drd2: --all renders every registered repo so users with
+			// multi-repo workspaces (the cobra-CLI-plus-shared-lib pattern)
+			// don't have to cd into each repo and re-run. Per-repo failures
+			// are logged inline but don't abort the sweep — a stuck repo
+			// must not suppress the others.
+			if allFlag {
+				records, err := repo.List(ctx, pools.ReadDB)
+				if err != nil {
+					return fmt.Errorf("wiki: list repos: %w", err)
+				}
+				if len(records) == 0 {
+					return fmt.Errorf("wiki: no repos registered — run 'veska repo add <path>' first")
+				}
+				var failed int
+				for _, rec := range records {
+					br := rec.ActiveBranch
+					if br == "" {
+						br = "main"
+					}
+					row := ports.WorkRow{Kind: ports.WorkKindWiki, RepoID: rec.RepoID, Branch: br}
+					if err := handler.Handle(ctx, row); err != nil {
+						fmt.Fprintf(cmd.ErrOrStderr(), "wiki: %s: %v\n", shortRepoID(rec.RepoID), err)
+						failed++
+						continue
+					}
+					fmt.Fprintf(w, "wiki regenerated for %s (%s): %s, %s\n",
+						shortRepoID(rec.RepoID), br, wiki.HotZonesPagePath, wiki.EntryPointsPagePath)
+				}
+				if failed > 0 {
+					return fmt.Errorf("wiki: %d of %d repos failed", failed, len(records))
+				}
+				return nil
+			}
+
+			resolvedRepo, resolvedBranch, err := resolveWikiTarget(ctx, pools.ReadDB, repoID, branch)
 			if err != nil {
 				return err
 			}
@@ -72,6 +113,7 @@ func wikiCmd() *cobra.Command {
 
 	cmd.Flags().StringVar(&repoID, "repo", "", "repo ID to regenerate (default: the sole registered repo)")
 	cmd.Flags().StringVar(&branch, "branch", "", "branch to regenerate (default: the repo's active branch)")
+	cmd.Flags().BoolVar(&allFlag, "all", false, "regenerate the wiki for every registered repo")
 	return cmd
 }
 
