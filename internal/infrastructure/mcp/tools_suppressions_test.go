@@ -294,6 +294,30 @@ func TestListSuppressions_SingleRepoDefaultsRepoID(t *testing.T) {
 	}
 }
 
+// TestListSuppressions_MultiRepoDefaultsToFanOut guards solov2-hlf2:
+// when multiple repos are registered and repo_id is omitted, the call
+// must succeed (listing across all repos) rather than rejecting with
+// "repo_id is required" — mirroring eng_list_findings's default and
+// fixing the find/list inconsistency caught in the junior-journey audit.
+func TestListSuppressions_MultiRepoDefaultsToFanOut(t *testing.T) {
+	db := newSuppressionsDB(t)
+	r := NewRegistry()
+	repos := &stubRepoLister{repos: []application.RepoRecord{
+		{RepoID: "repo-1"},
+		{RepoID: "repo-2"},
+		{RepoID: "repo-3"},
+	}}
+	RegisterSuppressionTools(r, db, nil, repos)
+
+	actor := domain.Actor{ID: "agent:bot", Kind: domain.ActorKindAgent}
+	_, rpcErr := dispatchSuppression(t, r, "eng_list_suppressions", actor, map[string]any{
+		// repo_id intentionally omitted with >1 repos registered
+	})
+	if rpcErr != nil {
+		t.Fatalf("expected fan-out across repos, got %+v", rpcErr)
+	}
+}
+
 func TestListSuppressions_Empty(t *testing.T) {
 	db := newSuppressionsDB(t)
 	r := NewRegistry()
