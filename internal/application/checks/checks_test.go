@@ -18,9 +18,10 @@ import (
 
 // recordingStorage captures Save calls in memory.
 type recordingStorage struct {
-	mu  sync.Mutex
-	got []*domain.Finding
-	err error
+	mu             sync.Mutex
+	got            []*domain.Finding
+	err            error
+	supersedeCalls []supersedeCall
 }
 
 func (r *recordingStorage) Save(_ context.Context, f *domain.Finding) error {
@@ -43,6 +44,19 @@ func (r *recordingStorage) CloseSupersededAutoLinks(_ context.Context, _, _ stri
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	return r.err
+}
+
+func (r *recordingStorage) CloseSupersededByRule(_ context.Context, repoID, branch, rule string, keep []string) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	cp := append([]string(nil), keep...)
+	r.supersedeCalls = append(r.supersedeCalls, supersedeCall{repoID: repoID, branch: branch, rule: rule, keep: cp})
+	return nil
+}
+
+type supersedeCall struct {
+	repoID, branch, rule string
+	keep                 []string
 }
 
 func (r *recordingStorage) snapshot() []*domain.Finding {
@@ -205,5 +219,97 @@ func TestRunner_EmptyRegistryNoOp(t *testing.T) {
 
 	if got := len(store.snapshot()); got != 0 {
 		t.Errorf("expected zero findings saved, got %d", got)
+	}
+}
+
+// authoritativeStub is a stubCheck that also implements
+// checks.AuthoritativeChecker, returning the configured rule.
+type authoritativeStub struct {
+	*stubCheck
+	rule string
+	on   bool
+}
+
+func (a *authoritativeStub) AuthoritativeRule(_ checks.Input) (string, bool) {
+	return a.rule, a.on
+}
+
+// 6. solov2-jvrc: an authoritative check triggers
+// FindingStorage.CloseSupersededByRule with the freshly-returned IDs as
+// the keep-set, so prior findings under the same rule that no longer
+// apply get auto-closed (e.g. a CVE on a dep that has since been bumped).
+func TestRunner_AuthoritativeCheckReconcilesPriorFindings(t *testing.T) {
+	f := mustFinding(t, "vulnerable_dependency", "repo1", "main", "go.mod")
+	c := &authoritativeStub{
+		stubCheck: &stubCheck{name: "vuln-scan", findings: []*domain.Finding{f}},
+		rule:      "vulnerable_dependency",
+		on:        true,
+	}
+	reg := checks.NewRegistry()
+	reg.Register(c)
+
+	store := &recordingStorage{}
+	r := checks.NewRunner(reg, store, observability.NewMetrics(prometheus.NewRegistry()))
+
+	r.Run(context.Background(), checks.Input{RepoID: "repo1", Branch: "main"})
+
+	store.mu.Lock()
+	defer store.mu.Unlock()
+	if len(store.supersedeCalls) != 1 {
+		t.Fatalf("CloseSupersededByRule calls = %d, want 1", len(store.supersedeCalls))
+	}
+	call := store.supersedeCalls[0]
+	if call.rule != "vulnerable_dependency" {
+		t.Errorf("rule = %q, want vulnerable_dependency", call.rule)
+	}
+	if call.repoID != "repo1" || call.branch != "main" {
+		t.Errorf("scope = (%q, %q), want (repo1, main)", call.repoID, call.branch)
+	}
+	if len(call.keep) != 1 || call.keep[0] != f.FindingID {
+		t.Errorf("keep = %v, want [%s]", call.keep, f.FindingID)
+	}
+}
+
+// 7. A non-authoritative check must NOT trigger reconciliation, so legacy
+// checks that return only a delta keep their additive semantics.
+func TestRunner_NonAuthoritativeCheckSkipsReconcile(t *testing.T) {
+	f := mustFinding(t, "rule1", "repo1", "main", "a.go")
+	c := &stubCheck{name: "c1", findings: []*domain.Finding{f}}
+	reg := checks.NewRegistry()
+	reg.Register(c)
+
+	store := &recordingStorage{}
+	r := checks.NewRunner(reg, store, observability.NewMetrics(prometheus.NewRegistry()))
+
+	r.Run(context.Background(), checks.Input{RepoID: "repo1", Branch: "main"})
+
+	store.mu.Lock()
+	defer store.mu.Unlock()
+	if len(store.supersedeCalls) != 0 {
+		t.Errorf("expected no CloseSupersededByRule calls, got %d", len(store.supersedeCalls))
+	}
+}
+
+// 8. AuthoritativeRule may return ok=false to opt out for a specific
+// Input (e.g. ambiguous scope). The Runner must not reconcile in that case.
+func TestRunner_AuthoritativeOptOutHonored(t *testing.T) {
+	f := mustFinding(t, "vulnerable_dependency", "repo1", "main", "go.mod")
+	c := &authoritativeStub{
+		stubCheck: &stubCheck{name: "vuln-scan", findings: []*domain.Finding{f}},
+		rule:      "vulnerable_dependency",
+		on:        false, // opted out
+	}
+	reg := checks.NewRegistry()
+	reg.Register(c)
+
+	store := &recordingStorage{}
+	r := checks.NewRunner(reg, store, observability.NewMetrics(prometheus.NewRegistry()))
+
+	r.Run(context.Background(), checks.Input{RepoID: "repo1", Branch: "main"})
+
+	store.mu.Lock()
+	defer store.mu.Unlock()
+	if len(store.supersedeCalls) != 0 {
+		t.Errorf("opt-out check still triggered reconcile: %+v", store.supersedeCalls)
 	}
 }

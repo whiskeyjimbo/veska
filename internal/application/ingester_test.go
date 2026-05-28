@@ -55,6 +55,10 @@ func (r *recordingFindingStorage) CloseSupersededAutoLinks(_ context.Context, _,
 	return nil
 }
 
+func (r *recordingFindingStorage) CloseSupersededByRule(_ context.Context, _, _, _ string, _ []string) error {
+	return nil
+}
+
 // closedReason returns the recorded close reason for a finding, or "" if the
 // finding was never closed.
 func (r *recordingFindingStorage) closedReason(findingID, branch string) string {
