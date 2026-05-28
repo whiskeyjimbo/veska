@@ -321,6 +321,75 @@ func TestDeadCodeCheck_EmptyContentHashStaysNil(t *testing.T) {
 	}
 }
 
+// TestDeadCodeCheck_SkipsEphemeralRepo pins solov2-izh6.13: an external
+// cache-tier clone (kind == "ephemeral", e.g. a repo registered by
+// `veska search --repo <url>`) must not produce dead-code findings. A 75-
+// file pflag-like clone otherwise emits a wall of low-severity findings on
+// every unused exported helper that is part of the upstream public API,
+// training juniors to ignore the findings surface on day one. Mirrors the
+// autolink short-circuit added in solov2-izh6.8.
+func TestDeadCodeCheck_SkipsEphemeralRepo(t *testing.T) {
+	q := &fakeDeadQuerier{
+		dead: []ports.NodeRef{
+			{NodeID: "n-helper", FilePath: "pkg/a.go", Kind: "function", Name: "helper", LineStart: 1, LineEnd: 2},
+		},
+	}
+	lookup := func(_ context.Context, repoID string) (string, error) {
+		if repoID == "ephem-repo" {
+			return "ephemeral", nil
+		}
+		return "tracked", nil
+	}
+	c := checks.NewDeadCodeCheck(q, checks.WithDeadCodeRepoKindLookup(lookup))
+
+	got, err := c.Run(context.Background(), checks.Input{
+		RepoID: "ephem-repo", Branch: "main", FilePaths: []string{"pkg/a.go"},
+	})
+	if err != nil {
+		t.Fatalf("Run(ephemeral): %v", err)
+	}
+	if len(got) != 0 {
+		t.Errorf("ephemeral repo: want 0 findings, got %d", len(got))
+	}
+	if q.callCount != 0 {
+		t.Errorf("querier should not be invoked for ephemeral repo, got callCount=%d", q.callCount)
+	}
+
+	got, err = c.Run(context.Background(), checks.Input{
+		RepoID: "tracked-repo", Branch: "main", FilePaths: []string{"pkg/a.go"},
+	})
+	if err != nil {
+		t.Fatalf("Run(tracked): %v", err)
+	}
+	if len(got) != 1 {
+		t.Errorf("tracked repo: want 1 finding, got %d", len(got))
+	}
+}
+
+// TestDeadCodeCheck_RepoKindLookupErrorFailsOpen verifies that a lookup
+// error does not suppress findings — we'd rather over-report on a registry
+// glitch than silently skip dead-code on a tracked repo.
+func TestDeadCodeCheck_RepoKindLookupErrorFailsOpen(t *testing.T) {
+	q := &fakeDeadQuerier{
+		dead: []ports.NodeRef{
+			{NodeID: "n-helper", FilePath: "pkg/a.go", Kind: "function", Name: "helper"},
+		},
+	}
+	lookup := func(_ context.Context, _ string) (string, error) {
+		return "", errors.New("registry down")
+	}
+	c := checks.NewDeadCodeCheck(q, checks.WithDeadCodeRepoKindLookup(lookup))
+	got, err := c.Run(context.Background(), checks.Input{
+		RepoID: "r", Branch: "main", FilePaths: []string{"pkg/a.go"},
+	})
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if len(got) != 1 {
+		t.Errorf("lookup error: want 1 finding (fail-open), got %d", len(got))
+	}
+}
+
 // 4. Branch-stable finding_id is deterministic per (rule, anchor).
 func TestDeadCodeCheck_DeterministicFindingID(t *testing.T) {
 	q := &fakeDeadQuerier{
