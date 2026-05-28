@@ -171,6 +171,11 @@ func makeListFindingsHandler(db *sql.DB, repos application.RepoLister) ToolHandl
 		// hint (when include_suppressed=true). An "active" suppression is one
 		// whose expires_at is NULL or in the future — eng_close_suppression
 		// terminates by setting expires_at = now (solov2-2ye2).
+		//
+		// solov2-f3ep: state="any" disables the state filter so callers can
+		// list findings across every lifecycle state (open, closed, …) for
+		// one repo in a single query. Previously the CLI had to choose
+		// either "all repos default-state" or "one repo default-state".
 		nowMS := time.Now().UnixMilli()
 		query := `SELECT f.finding_id, f.branch, f.repo_id, f.node_id, f.file_path, f.severity, f.source_layer,
 			f.rule, f.message, f.state, f.closed_reason, f.created_at, f.closed_at, f.actor_id, f.actor_kind,
@@ -179,8 +184,12 @@ func makeListFindingsHandler(db *sql.DB, repos application.RepoLister) ToolHandl
 			LEFT JOIN suppressions s
 			  ON s.scope = 'finding' AND s.target = f.finding_id
 			 AND (s.expires_at IS NULL OR s.expires_at > ?)
-			WHERE f.repo_id = ? AND f.state = ?`
-		args := []any{nowMS, p.RepoID, p.State}
+			WHERE f.repo_id = ?`
+		args := []any{nowMS, p.RepoID}
+		if p.State != "any" {
+			query += ` AND f.state = ?`
+			args = append(args, p.State)
+		}
 		if !p.IncludeSuppressed {
 			query += ` AND s.suppression_id IS NULL`
 		}
