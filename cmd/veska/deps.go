@@ -48,7 +48,7 @@ func depsListCmd() *cobra.Command {
 	)
 	cmd := &cobra.Command{
 		Use:          "list [<id-or-path>]",
-		Short:        "List external modules the repo CALLS into, ranked by call-site count (solov2-rpbo: import-only modules without resolved calls do not appear yet)",
+		Short:        "List external modules the repo CALLS into, ranked by call-site count (import-only modules without resolved calls do not appear yet)",
 		Args:         cobra.MaximumNArgs(1),
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -143,7 +143,7 @@ func depsIndexCmd() *cobra.Command {
 	var repoFlag string
 	cmd := &cobra.Command{
 		Use:          "index <module-path>",
-		Short:        "Index a vendored Go module's symbols into the graph (solov2-bchl)",
+		Short:        "Index a vendored Go module's symbols into the graph",
 		Args:         cobra.ExactArgs(1),
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {

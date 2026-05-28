@@ -166,7 +166,7 @@ func doctorPostPromotionQueueCmd() *cobra.Command {
 		},
 	}
 	cmd.Flags().BoolVar(&jsonOut, "json", false, "output results as JSON")
-	cmd.Flags().BoolVar(&purgeOrphans, "purge-orphans", false, "delete failed rows whose repo_id is no longer registered (solov2-zmzc)")
+	cmd.Flags().BoolVar(&purgeOrphans, "purge-orphans", false, "delete failed rows whose repo_id is no longer registered")
 	return cmd
 }
 
@@ -753,7 +753,7 @@ func doctorStatusCmd() *cobra.Command {
 		},
 	}
 	cmd.Flags().BoolVar(&jsonOut, "json", false, "output results as JSON")
-	cmd.Flags().BoolVarP(&verbose, "verbose", "v", false, "include failed queue rows inline (solov2-gthm)")
+	cmd.Flags().BoolVarP(&verbose, "verbose", "v", false, "include failed queue rows inline")
 	return cmd
 }
 

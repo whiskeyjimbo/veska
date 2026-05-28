@@ -78,7 +78,7 @@ func RenderEntryPoints(r EntryPointsReport) string {
 	renderGeneratedHeader(&b, r.GeneratedAt)
 	b.WriteString("High-fan-in symbols an agent should start from: ranked by ")
 	b.WriteString("inbound call count, with exported symbols and symbols having ")
-	b.WriteString("adjacent tests breaking ties (solov2-73f).\n\n")
+	b.WriteString("adjacent tests breaking ties.\n\n")
 	if len(r.EntryPoints) == 0 {
 		b.WriteString("_No entry points yet — symbols appear here once the auto-link pipeline has built inbound CALLS edges. Check `veska doctor post_promotion_queue`; if pending/auto_link is large the index is still warming up._\n")
 		return b.String()

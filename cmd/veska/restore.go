@@ -148,7 +148,7 @@ func restoreCmd() *cobra.Command {
 		},
 	}
 
-	cmd.Flags().BoolVar(&useLatest, "latest", false, "restore the newest backup tarball in $VESKA_HOME/backups (falls back to ~/.veska-backups; solov2-n57f)")
+	cmd.Flags().BoolVar(&useLatest, "latest", false, "restore the newest backup tarball in $VESKA_HOME/backups (falls back to ~/.veska-backups)")
 	cmd.Flags().BoolVar(&usePreMigration, "pre-migration", false, "restore the newest auto-pre-migration snapshot")
 	return cmd
 }

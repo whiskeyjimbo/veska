@@ -18,7 +18,7 @@ import (
 func RegisterDependenciesTool(r *Registry, svc *dependencies.Service, repos application.RepoLister) {
 	r.MustRegister(ToolSpec{
 		Name:        "eng_list_dependencies",
-		Description: "List external modules the repo CALLS into, ranked by call-site count, with sampled top call sites per module. Source is the cross_repo_edge_stubs table populated at promotion time, so a module imported but only referenced via struct literals / type assertions (no resolved package-qualified call) will not appear yet — solov2-rpbo tracks the import-side backfill. Versions come from go.mod's require block. Each top_call_sites entry carries a node_id you can pass to eng_get_context_pack to see how the dependency is integrated.",
+		Description: "List external modules the repo CALLS into, ranked by call-site count, with sampled top call sites per module. Source is the cross_repo_edge_stubs table populated at promotion time, so a module imported but only referenced via struct literals / type assertions (no resolved package-qualified call) will not appear yet tracks the import-side backfill. Versions come from go.mod's require block. Each top_call_sites entry carries a node_id you can pass to eng_get_context_pack to see how the dependency is integrated.",
 		InputSchema: listDependenciesInputSchema,
 		Handler:     makeListDependenciesHandler(svc, repos),
 	})

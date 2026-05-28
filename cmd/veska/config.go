@@ -69,7 +69,7 @@ func configShowCmd() *cobra.Command {
 			if liveEmbedder != "" {
 				fmt.Fprintf(w, "# live embedder: %s\n", liveEmbedder)
 				fmt.Fprintf(w, "# the [embedder] block below configures the Ollama branch and is\n")
-				fmt.Fprintf(w, "# unused unless VESKA_EMBEDDER=ollama (solov2-awp6).\n\n")
+				fmt.Fprintf(w, "# unused unless VESKA_EMBEDDER=ollama.\n\n")
 			}
 			var buf bytes.Buffer
 			if err := toml.NewEncoder(&buf).Encode(cfg); err != nil {

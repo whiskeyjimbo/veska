@@ -213,7 +213,7 @@ func repoListCmd() *cobra.Command {
 		},
 	}
 	cmd.Flags().BoolVar(&includeExternal, "include-external", false,
-		"also show synthetic ext:<module> repos created by `veska deps index` (solov2-puga)")
+		"also show synthetic ext:<module> repos created by `veska deps index`")
 	return cmd
 }
 

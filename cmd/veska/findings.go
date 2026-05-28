@@ -216,13 +216,13 @@ func findingsListCmd() *cobra.Command {
 		},
 	}
 	cmd.Flags().StringVar(&repoFlag, "repo", "", "repo id or short_id (default: the sole registered repo)")
-	cmd.Flags().BoolVar(&allRepos, "all", false, "list findings across every registered repo (solov2-0vau)")
+	cmd.Flags().BoolVar(&allRepos, "all", false, "list findings across every registered repo")
 	cmd.Flags().StringVar(&state, "state", "", "filter by state (open|closed; default open)")
 	cmd.Flags().StringVar(&severity, "severity", "", "filter by severity")
 	cmd.Flags().StringVar(&rule, "rule", "", "filter by rule (e.g. vulnerable_dependency, dead-code, secret_leak, auto-link)")
 	cmd.Flags().IntVar(&limit, "limit", 25, "maximum rows to print (0 = no limit)")
 	cmd.Flags().BoolVar(&jsonOut, "json", false, "emit JSON")
-	cmd.Flags().BoolVar(&includeLow, "include-low", false, "include low-severity findings (default hides auto-link noise; solov2-h4xm)")
+	cmd.Flags().BoolVar(&includeLow, "include-low", false, "include low-severity findings (default hides auto-link noise)")
 	return cmd
 }
 
