@@ -46,7 +46,10 @@ func backupListCmd() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			w := cmd.OutOrStdout()
 			if backupDir == "" {
-				dir, err := defaultBackupDir()
+				// solov2-n57f: read from the canonical $VESKA_HOME/backups
+				// but fall back to legacy ~/.veska-backups so existing
+				// tarballs remain listable post-upgrade.
+				dir, err := resolveBackupReadDir()
 				if err != nil {
 					return fmt.Errorf("backup list: %w", err)
 				}
@@ -123,7 +126,7 @@ func backupListCmd() *cobra.Command {
 			return tw.Flush()
 		},
 	}
-	cmd.Flags().StringVar(&backupDir, "backup-dir", "", "directory to list (default: ~/.veska-backups)")
+	cmd.Flags().StringVar(&backupDir, "backup-dir", "", "directory to list (default: $VESKA_HOME/backups, falling back to ~/.veska-backups when empty)")
 	cmd.Flags().BoolVar(&jsonOut, "json", false, "emit JSON")
 	return cmd
 }
@@ -159,6 +162,10 @@ func backupPruneCmd() *cobra.Command {
 			w := cmd.OutOrStdout()
 
 			if backupDir == "" {
+				// solov2-n57f: prune the canonical location;
+				// legacy ~/.veska-backups stays untouched unless --backup-dir
+				// names it explicitly. Retention runs on the dir that NEW
+				// tarballs land in, not on stale legacy state.
 				dir, err := defaultBackupDir()
 				if err != nil {
 					return fmt.Errorf("backup prune: %w", err)
@@ -192,7 +199,7 @@ func backupPruneCmd() *cobra.Command {
 		},
 	}
 
-	cmd.Flags().StringVar(&backupDir, "backup-dir", "", "directory to prune (default: ~/.veska-backups)")
+	cmd.Flags().StringVar(&backupDir, "backup-dir", "", "directory to prune (default: $VESKA_HOME/backups)")
 	return cmd
 }
 
@@ -212,11 +219,9 @@ func backupCreateCmd() *cobra.Command {
 			dbPath := filepath.Join(veskaHome, "veska.db")
 
 			if outputDir == "" {
-				homeDir, err := os.UserHomeDir()
-				if err != nil {
-					return fmt.Errorf("backup create: resolve home dir: %w", err)
-				}
-				outputDir = filepath.Join(homeDir, ".veska-backups")
+				// solov2-n57f: new tarballs go under $VESKA_HOME/backups
+				// so a single `rm -rf $VESKA_HOME` clears all veska state.
+				outputDir = config.DefaultBackupDir()
 			}
 
 			result, err := backup.Create(backup.CreateOptions{
@@ -233,7 +238,7 @@ func backupCreateCmd() *cobra.Command {
 		},
 	}
 
-	cmd.Flags().StringVar(&outputDir, "output-dir", "", "directory to write the backup tarball (default: ~/.veska-backups)")
+	cmd.Flags().StringVar(&outputDir, "output-dir", "", "directory to write the backup tarball (default: $VESKA_HOME/backups; solov2-n57f)")
 	return cmd
 }
 

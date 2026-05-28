@@ -243,13 +243,19 @@ func CheckMigrationIntegrity(path string) error {
 }
 
 // defaultBackupDir returns the default auto-snapshot directory.
-// Path: ~/.veska-backups/.pre-migration/
+// Path: $VESKA_HOME/backups/.pre-migration/ (solov2-n57f co-located with
+// user-initiated backups so a single `rm -rf $VESKA_HOME` clears them
+// too). Falls back to ~/.veska-backups/.pre-migration when VESKA_HOME is
+// unset and the user's home dir cannot be determined.
 func defaultBackupDir() string {
+	if dir := os.Getenv("VESKA_HOME"); dir != "" {
+		return filepath.Join(dir, "backups", ".pre-migration")
+	}
 	home, err := os.UserHomeDir()
 	if err != nil {
-		return filepath.Join(".veska-backups", ".pre-migration")
+		return filepath.Join(".veska", "backups", ".pre-migration")
 	}
-	return filepath.Join(home, ".veska-backups", ".pre-migration")
+	return filepath.Join(home, ".veska", "backups", ".pre-migration")
 }
 
 // normaliseDSN returns a file: DSN for the given path with the build-time
