@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 
@@ -254,7 +255,8 @@ func repoRootByID(db *sql.DB) func(ctx context.Context, repoID string) (string, 
 // lock until the daemon releases it (sqlite WAL allows concurrent reads
 // but one writer at a time).
 func reindexCmd() *cobra.Command {
-	return &cobra.Command{
+	var repoFlag string
+	c := &cobra.Command{
 		Use:          "reindex [<repo-id-or-path>]",
 		Short:        "Force a full cold-scan reparse of a repository",
 		Args:         cobra.MaximumNArgs(1),
@@ -262,6 +264,10 @@ func reindexCmd() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			w := cmd.OutOrStdout()
 			ctx := cmd.Context()
+
+			// resolveReindexFlagTarget: positional arg wins if both supplied
+			// (with a stderr note), --repo is used when no positional given.
+			target := resolveReindexFlagTarget(cmd.ErrOrStderr(), args, repoFlag)
 
 			// solov2-4d7b: when the daemon is up, route the reindex
 			// through its eng_reindex_repo MCP tool. The previous behaviour
@@ -271,10 +277,6 @@ func reindexCmd() *cobra.Command {
 			// The direct-sqlite fallback below still handles the no-daemon
 			// case.
 			if reindexDaemonProbe() {
-				var target string
-				if len(args) == 1 {
-					target = args[0]
-				}
 				repoID, rootPath, derr := resolveTargetForDial(ctx, target)
 				if derr != nil {
 					return derr
@@ -304,10 +306,6 @@ func reindexCmd() *cobra.Command {
 			}
 			defer func() { _ = pools.Close() }()
 
-			var target string
-			if len(args) == 1 {
-				target = args[0]
-			}
 			rec, err := resolveReindexTarget(ctx, pools.ReadDB, target)
 			if err != nil {
 				return err
@@ -343,6 +341,27 @@ func reindexCmd() *cobra.Command {
 			return nil
 		},
 	}
+	c.Flags().StringVar(&repoFlag, "repo", "", "repo id, short_id, alias or path (alias for the positional arg)")
+	return c
+}
+
+// resolveReindexFlagTarget combines the positional arg and --repo flag into a
+// single target string. The positional form wins when both are supplied; a
+// one-line stderr note flags the override so a CI invocation that ends up
+// passing both doesn't silently drop one.
+func resolveReindexFlagTarget(stderr io.Writer, args []string, repoFlag string) string {
+	var positional string
+	if len(args) == 1 {
+		positional = args[0]
+	}
+	if positional != "" && repoFlag != "" && positional != repoFlag {
+		fmt.Fprintf(stderr, "reindex: positional arg %q overrides --repo %q\n", positional, repoFlag)
+		return positional
+	}
+	if positional != "" {
+		return positional
+	}
+	return repoFlag
 }
 
 // resolveReindexTarget picks the repo to reindex. With no arg, the cwd is
