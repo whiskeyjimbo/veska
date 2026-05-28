@@ -152,7 +152,7 @@ func findingsListCmd() *cobra.Command {
 			// then rule for stable, scannable output.
 			sortFindingsBySeverity(resp.Findings)
 			counts := countSeverities(resp.Findings)
-			fmt.Fprintln(w, summariseFindings(len(resp.Findings), counts))
+			fmt.Fprintln(w, summariseFindings(len(resp.Findings), counts, resp.Findings))
 
 			// solov2-h4xm: low-severity rows dominate the default view on
 			// noisy projects (10 auto-link rows for a 4-file demo). Hide
@@ -261,11 +261,35 @@ func countSeverities(fs []findingView) map[string]int {
 	return out
 }
 
-func summariseFindings(total int, counts map[string]int) string {
+func summariseFindings(total int, counts map[string]int, all []findingView) string {
+	// solov2-vpds: when low-severity findings are dominated by a single
+	// rule (typically "auto-link" on small repos), annotate the count so a
+	// new user reading "4 low" doesn't assume they have 4 unrelated minor
+	// issues. Threshold is 80% — if the rule mix is genuinely diverse, we
+	// fall back to the unannotated count.
+	lowAnnotation := ""
+	if counts["low"] > 0 {
+		ruleCounts := map[string]int{}
+		for _, f := range all {
+			if f.Severity == "low" {
+				ruleCounts[f.Rule]++
+			}
+		}
+		for rule, n := range ruleCounts {
+			if n*5 >= counts["low"]*4 { // ≥80%
+				lowAnnotation = " " + rule
+				break
+			}
+		}
+	}
 	parts := []string{}
 	for _, s := range []string{"critical", "high", "medium", "low", "info"} {
 		if n := counts[s]; n > 0 {
-			parts = append(parts, fmt.Sprintf("%d %s", n, s))
+			label := fmt.Sprintf("%d %s", n, s)
+			if s == "low" && lowAnnotation != "" {
+				label += " (" + strings.TrimSpace(lowAnnotation) + ")"
+			}
+			parts = append(parts, label)
 		}
 	}
 	if len(parts) == 0 {

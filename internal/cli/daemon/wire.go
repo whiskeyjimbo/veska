@@ -9,6 +9,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -1040,10 +1041,23 @@ func registerMCPTools(r *mcp.Registry, d mcpDeps) {
 		if perr != nil {
 			return "", nil
 		}
-		for _, m := range deps {
-			if m.Name == modulePath {
-				return m.Version, nil
+		// solov2-w88y: stub rows record the import path (e.g.
+		// "golang.org/x/text/language"), but go.mod's require lines list
+		// the module path ("golang.org/x/text"). Walk back the path
+		// components until a module match falls out so sub-packages
+		// inherit their parent module's version.
+		probe := modulePath
+		for probe != "" && probe != "." {
+			for _, m := range deps {
+				if m.Name == probe {
+					return m.Version, nil
+				}
 			}
+			i := strings.LastIndex(probe, "/")
+			if i <= 0 {
+				break
+			}
+			probe = probe[:i]
 		}
 		return "", nil
 	}
