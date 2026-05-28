@@ -46,6 +46,31 @@ func DefaultOSVCacheDir() string {
 	return filepath.Join(veskaHome(), "cache", "osv")
 }
 
+// DefaultBackupDir returns the directory `veska backup create` writes to:
+// $VESKA_HOME/backups (solov2-n57f). Co-located with the rest of veska's
+// state so a single `rm -rf $VESKA_HOME` clears everything — the original
+// ~/.veska-backups layout left tarballs orphaned after a data wipe.
+//
+// Backward compat: LegacyBackupDir() returns the prior path; callers that
+// read backups (list, restore) should fall back to it when the canonical
+// dir is empty.
+func DefaultBackupDir() string {
+	return filepath.Join(veskaHome(), "backups")
+}
+
+// LegacyBackupDir returns the pre-n57f backup location (~/.veska-backups).
+// It is only used as a read-side fallback so an existing user upgrading
+// keeps access to backups they took before this change. New writes always
+// go to DefaultBackupDir(). Returns ("", false) when the user's home
+// directory cannot be resolved.
+func LegacyBackupDir() (string, bool) {
+	home, err := os.UserHomeDir()
+	if err != nil || home == "" {
+		return "", false
+	}
+	return filepath.Join(home, ".veska-backups"), true
+}
+
 // CacheDir returns the root directory for ephemeral / evictable Veska data
 // (solov2-kxo5.5). Precedence:
 //

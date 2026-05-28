@@ -103,3 +103,24 @@ func TestRepoCachePath_UnderCacheDirRepos(t *testing.T) {
 		t.Errorf("RepoCachePath(abc123) = %q; want %q", got, want)
 	}
 }
+
+// TestDefaultBackupDir_UnderVeskaHome pins solov2-n57f: backup writes
+// land under $VESKA_HOME/backups so a single rm clears all state.
+func TestDefaultBackupDir_UnderVeskaHome(t *testing.T) {
+	t.Setenv("VESKA_HOME", "/tmp/veska-test-home")
+	if got, want := config.DefaultBackupDir(), "/tmp/veska-test-home/backups"; got != want {
+		t.Errorf("DefaultBackupDir() = %q, want %q", got, want)
+	}
+}
+
+// TestLegacyBackupDir_HomeRelative reports the pre-n57f location for
+// read-side fallback.
+func TestLegacyBackupDir_HomeRelative(t *testing.T) {
+	got, ok := config.LegacyBackupDir()
+	if !ok {
+		t.Skip("user home dir not available in this test environment")
+	}
+	if !strings.HasSuffix(got, ".veska-backups") {
+		t.Errorf("LegacyBackupDir() = %q; want path ending in \".veska-backups\"", got)
+	}
+}
