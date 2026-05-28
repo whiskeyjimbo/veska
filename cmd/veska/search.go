@@ -82,7 +82,7 @@ Examples:
 	}
 	cmd.Flags().IntVarP(&k, "limit", "k", 10, "max results to return")
 	cmd.Flags().BoolVar(&jsonOut, "json", false, "emit JSON (same shape as eng_search_semantic)")
-	cmd.Flags().StringVar(&repoFlag, "repo", "", "repo target (path, URL, repo_id or short_id) — alias for the positional argument (solov2-kxo5.6)")
+	cmd.Flags().StringVar(&repoFlag, "repo", "", "repo target (path, URL, repo_id or short_id) — alias for the positional argument")
 	return cmd
 }
 

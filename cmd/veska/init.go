@@ -87,7 +87,7 @@ func runInit(ctx context.Context, deps initDeps, flags initFlags, out io.Writer)
 	// ── 3. Summary ───────────────────────────────────────────────────────────
 	fmt.Fprintln(out, "veska initialized")
 	fmt.Fprintf(out, "data:     %s  (override with VESKA_HOME)\n", deps.veskaHome)
-	fmt.Fprintf(out, "backups:  %s  (co-located under VESKA_HOME; a single `rm -rf %s` clears all state; solov2-n57f)\n", defaultBackupDirHint(), deps.veskaHome)
+	fmt.Fprintf(out, "backups:  %s  (co-located under VESKA_HOME; a single `rm -rf %s` clears all state)\n", defaultBackupDirHint(), deps.veskaHome)
 	fmt.Fprintf(out, "embedder: %s\n", embedderLine)
 	fmt.Fprintln(out, "service:  not installed (run: veska service install)")
 	fmt.Fprintln(out, "repo:     not added (run: veska repo add <path>)")
@@ -334,11 +334,11 @@ func initCmd() *cobra.Command {
 	}
 
 	cmd.Flags().BoolVarP(&yes, "yes", "y", false, "auto-accept all prompts (non-interactive mode)")
-	cmd.Flags().BoolVar(&noVuln, "no-vuln", false, "skip the OSV vulnerability-scanner prompt and leave it disabled (solov2-pvyo)")
+	cmd.Flags().BoolVar(&noVuln, "no-vuln", false, "skip the OSV vulnerability-scanner prompt and leave it disabled")
 	cmd.Flags().StringVar(&agent, "agent", "",
 		"write a per-agent instruction snippet to the current project ("+
 			strings.Join(supportedFlavorNames(), ", ")+")")
 	cmd.Flags().BoolVar(&updateGitignore, "update-gitignore", false,
-		"with --agent: also write a veska-managed block to .gitignore covering generated artifacts (solov2-zm6i; off by default)")
+		"with --agent: also write a veska-managed block to .gitignore covering generated artifacts (off by default)")
 	return cmd
 }

@@ -68,7 +68,7 @@ var promoteRepoInputSchema = json.RawMessage(`{
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "type": "object",
   "additionalProperties": false,
-  "description": "Re-promote the latest commit of a registered repo. One of repo_id or root_path is required; when both are passed, repo_id wins. branch, git_sha, and actor_kind/actor_id are optional overrides for callers (e.g. agents) that want to attribute the promotion to themselves or pin a specific SHA; when omitted the handler reads HEAD from git and stamps the system actor (solov2-cyww).",
+  "description": "Re-promote the latest commit of a registered repo. One of repo_id or root_path is required; when both are passed, repo_id wins. branch, git_sha, and actor_kind/actor_id are optional overrides for callers (e.g. agents) that want to attribute the promotion to themselves or pin a specific SHA; when omitted the handler reads HEAD from git and stamps the system actor.",
   "properties": {
     "repo_id":    {"type": "string", "description": "Full repo_id or short_id prefix."},
     "root_path":  {"type": "string", "description": "Absolute filesystem path; canonicalised via EvalSymlinks before lookup."},
@@ -83,7 +83,7 @@ var reindexRepoInputSchema = json.RawMessage(`{
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "type": "object",
   "additionalProperties": false,
-  "description": "Force a full cold-scan reparse of a registered repo, in-daemon (solov2-4d7b). One of repo_id or root_path is required; when both are passed, repo_id wins. Returns when the scan completes; the daemon's standard 'cold scan: starting' / 'cold scan: complete' log pair is emitted as for the add-repo path.",
+  "description": "Force a full cold-scan reparse of a registered repo, in-daemon. One of repo_id or root_path is required; when both are passed, repo_id wins. Returns when the scan completes; the daemon's standard 'cold scan: starting' / 'cold scan: complete' log pair is emitted as for the add-repo path.",
   "properties": {
     "repo_id":   {"type": "string", "description": "Full repo_id or short_id prefix."},
     "root_path": {"type": "string", "description": "Absolute filesystem path; canonicalised via EvalSymlinks before lookup."}
@@ -274,7 +274,7 @@ var searchSimilarInputSchema = json.RawMessage(`{
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "type": "object",
   "additionalProperties": false,
-  "description": "k-nearest-neighbour vector search seeded by an existing node. Accepts node_id (exact) or symbol (resolved via FindNodes; ambiguous matches rejected) — solov2-3ocy.",
+  "description": "k-nearest-neighbour vector search seeded by an existing node. Accepts node_id (exact) or symbol (resolved via FindNodes; ambiguous matches rejected)",
   "properties": {
     "node_id": {"type": "string"},
     "symbol":  {"type": "string", "description": "Alias for node_id by symbol name (resolved like eng_find_symbol). Ambiguity is rejected."},
@@ -290,12 +290,12 @@ var findOwnerInputSchema = json.RawMessage(`{
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "type": "object",
   "additionalProperties": false,
-  "description": "Returns the owner of a file via CODEOWNERS (longest-match) or git blame fallback. Accepts file_path/path, OR symbol/node_id which resolves to the symbol's defining file (solov2-mmox).",
+  "description": "Returns the owner of a file via CODEOWNERS (longest-match) or git blame fallback. Accepts file_path/path, OR symbol/node_id which resolves to the symbol's defining file.",
   "properties": {
     "file_path": {"type": "string", "description": "Repo-relative path to the file whose dominant committer should be returned."},
-    "path":      {"type": "string", "description": "Alias for file_path (solov2-3ocy)."},
-    "symbol":    {"type": "string", "description": "Symbol name; resolved to the defining file's path (solov2-mmox)."},
-    "node_id":   {"type": "string", "description": "Node id; resolved to its file path (solov2-mmox)."},
+    "path":      {"type": "string", "description": "Alias for file_path."},
+    "symbol":    {"type": "string", "description": "Symbol name; resolved to the defining file's path."},
+    "node_id":   {"type": "string", "description": "Node id; resolved to its file path."},
     "repo_id":   {"type": "string"}
   },
   "required": ["repo_id"]
@@ -305,14 +305,14 @@ var findChangedSymbolsInputSchema = json.RawMessage(`{
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "type": "object",
   "additionalProperties": false,
-  "description": "Diff two git refs and return the added/removed/modified symbols. ref_a/ref_b default to HEAD~1/HEAD when both omitted. base/head are accepted as aliases (solov2-3ocy).",
+  "description": "Diff two git refs and return the added/removed/modified symbols. ref_a/ref_b default to HEAD~1/HEAD when both omitted. base/head are accepted as aliases.",
   "properties": {
     "repo_id": {"type": "string"},
     "branch":  {"type": "string"},
     "ref_a":   {"type": "string", "description": "Base git ref (e.g. 'main', 'HEAD~5', a SHA). Default HEAD~1."},
     "ref_b":   {"type": "string", "description": "Target git ref. Default HEAD."},
-    "base":    {"type": "string", "description": "Alias for ref_a using git's canonical name (solov2-3ocy)."},
-    "head":    {"type": "string", "description": "Alias for ref_b using git's canonical name (solov2-3ocy)."},
+    "base":    {"type": "string", "description": "Alias for ref_a using git's canonical name."},
+    "head":    {"type": "string", "description": "Alias for ref_b using git's canonical name."},
     "cwd":     {"type": "string", "description": "Working directory used to resolve the active repo when repo_id is omitted."}
   }
 }`)
@@ -333,7 +333,7 @@ var listDependenciesInputSchema = json.RawMessage(`{
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "type": "object",
   "additionalProperties": false,
-  "description": "List external modules the repo imports, ranked by call-site usage count (derived from cross_repo_edge_stubs). Each entry includes a small sample of top call sites so an agent can jump straight into the using code (solov2-jlws).",
+  "description": "List external modules the repo imports, ranked by call-site usage count (derived from cross_repo_edge_stubs). Each entry includes a small sample of top call sites so an agent can jump straight into the using code.",
   "properties": {
     "repo_id": {"type": "string"},
     "branch":  {"type": "string"},

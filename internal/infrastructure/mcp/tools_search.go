@@ -116,7 +116,7 @@ func RegisterSearchTools(
 	})
 	r.MustRegister(ToolSpec{
 		Name:            "eng_find_related",
-		Description:     "Find symbols semantically similar to the code at a given (file_path, line). Use as a moat-pivot from a search hit, an error trace, or an open editor cursor: 'what else in the graph looks like this?'. Resolves the smallest enclosing symbol or chunk for the given line, then runs the same vector-neighbourhood search as eng_search_similar — no separate find_symbol round-trip needed (solov2-2g4r).",
+		Description:     "Find symbols semantically similar to the code at a given (file_path, line). Use as a moat-pivot from a search hit, an error trace, or an open editor cursor: 'what else in the graph looks like this?'. Resolves the smallest enclosing symbol or chunk for the given line, then runs the same vector-neighbourhood search as eng_search_similar — no separate find_symbol round-trip needed.",
 		IncludesStaging: false,
 		InputSchema:     findRelatedInputSchema,
 		Handler:         makeFindRelatedHandler(lookup, vectors, nodes, repos),
