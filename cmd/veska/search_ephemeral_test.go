@@ -327,6 +327,73 @@ func TestSearchEphemeral_FirstPromotionRunsSecretCheck(t *testing.T) {
 	}
 }
 
+// TestEphemeralPromotionPrintsCheckSummary guards solov2-izh6.28: after
+// the first ephemeral cold scan completes, the search command emits a
+// one-line per-rule summary so a user who ran `veska search <q> --repo
+// <url>` sees the check chain ran (and what it found) before the search
+// results. Without this signal the user only sees "search: indexing… /
+// search: index ready" and has no idea promotion checks fired.
+func TestEphemeralPromotionPrintsCheckSummary(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("VESKA_HOME", home)
+	t.Setenv("VESKA_CACHE_HOME", filepath.Join(home, "cache"))
+	t.Setenv("XDG_CACHE_HOME", "")
+
+	source := makeSecretSource(t)
+	pools := openPoolsAt(t, home)
+
+	var buf bytes.Buffer
+	rec, err := ephemeralEnsureFromURL(context.Background(), pools, "file://"+source, &buf)
+	if err != nil {
+		t.Fatalf("ephemeralEnsureFromURL: %v", err)
+	}
+
+	loader := func(repoRoot string) (application.IgnoreMatcher, error) {
+		return fsignore.Load(repoRoot)
+	}
+	reparser, err := reparserFactory(pools, loader)
+	if err != nil {
+		t.Fatalf("reparserFactory: %v", err)
+	}
+	appRec := application.RepoRecord{
+		RepoID:       rec.RepoID,
+		RootPath:     rec.RootPath,
+		ActiveBranch: rec.ActiveBranch,
+	}
+	if appRec.ActiveBranch == "" {
+		appRec.ActiveBranch = "main"
+	}
+	if err := reparser(context.Background(), appRec); err != nil {
+		t.Fatalf("reparser: %v", err)
+	}
+
+	buf.Reset()
+	emitColdScanSummary(context.Background(), pools.ReadDB, &buf, appRec.RepoID, appRec.ActiveBranch)
+	got := buf.String()
+	if !strings.Contains(got, "secret_leak") {
+		t.Errorf("expected secret_leak summary line; got %q", got)
+	}
+	if !strings.Contains(got, "finding") {
+		t.Errorf("expected 'finding(s)' wording in summary; got %q", got)
+	}
+}
+
+// TestEmitColdScanSummary_NoFindingsStaysQuiet guards that the helper
+// does not print anything when no findings were produced — a clean
+// promotion should not pollute the search output with empty
+// "0 finding(s)" lines.
+func TestEmitColdScanSummary_NoFindingsStaysQuiet(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("VESKA_HOME", home)
+	pools := openPoolsAt(t, home)
+
+	var buf bytes.Buffer
+	emitColdScanSummary(context.Background(), pools.ReadDB, &buf, "repo-with-nothing", "main")
+	if buf.Len() != 0 {
+		t.Errorf("expected silent helper on empty findings; got %q", buf.String())
+	}
+}
+
 // Sanity check that config.RepoCachePath is the path we end up cloning into.
 // Locks the integration contract between kxo5.5 and kxo5.6.
 func TestEphemeralCacheDirIsRepoCachePath(t *testing.T) {
