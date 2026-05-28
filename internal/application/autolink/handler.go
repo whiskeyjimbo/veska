@@ -74,12 +74,28 @@ type Handler struct {
 	lookup   fileNodeLookup
 	edges    ports.EdgeStorage
 	findings ports.FindingStorage
+
+	// repoKind, when set, returns the registered Kind ("tracked" /
+	// "ephemeral") of a repo. ephemeral repos (search --repo <url>
+	// clones) skip autolink entirely — a 75-file external clone like
+	// spf13/pflag otherwise yields ~100 low-severity findings on the
+	// junior's first 'findings list' (solov2-izh6.8). When the option
+	// is unset (older composition roots), behaviour is unchanged.
+	repoKind func(ctx context.Context, repoID string) (string, error)
 }
 
 // HandlerOption configures a Handler. None are required today; the type is
 // here so future cross-cutting concerns (metrics, clocks) can land without a
 // breaking constructor change.
 type HandlerOption func(*Handler)
+
+// WithRepoKindLookup wires a callback that returns a repo's Kind
+// ("tracked" / "ephemeral"). Used by Handle to skip autolink on
+// ephemeral repos so externally-cloned codebases don't produce a wall
+// of noise findings (solov2-izh6.8).
+func WithRepoKindLookup(fn func(ctx context.Context, repoID string) (string, error)) HandlerOption {
+	return func(h *Handler) { h.repoKind = fn }
+}
 
 // NewHandler constructs a Handler. All four collaborators are required; a nil
 // argument yields an error wrapping ErrMissingDependency and a nil *Handler,
@@ -135,6 +151,16 @@ func (h *Handler) Handle(ctx context.Context, row ports.WorkRow) error {
 	filePath := row.Payload
 	if filePath == "" {
 		return nil
+	}
+	// solov2-izh6.8: ephemeral repos (cache-tier clones from
+	// `veska search --repo <url>`) skip autolink entirely. The user is
+	// exploring an external codebase, not curating its findings; emitting
+	// N×N "similar to" findings on a 75-file pflag clone trains them to
+	// ignore the findings surface from day one.
+	if h.repoKind != nil {
+		if kind, err := h.repoKind(ctx, row.RepoID); err == nil && kind == "ephemeral" {
+			return nil
+		}
 	}
 	// Vendored / third-party files are skipped wholesale: proposing
 	// auto-link edges from cobra internals or node_modules produces pure

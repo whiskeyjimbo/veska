@@ -80,19 +80,27 @@ interfaces, application services) without full strategic DDD. The core domain
 never imports infrastructure — coupling flows inward through interfaces, and
 `make layercheck` enforces it.
 
-### Process topology — three binaries
+### Process topology — one binary, three personalities
 
-- `veska` (`cmd/veska`) — CLI; manual DI wiring.
-- `veska-daemon` (`cmd/veska-daemon`) — long-running process; composition root in
-  `wire.go`; owns the MCP Unix-socket server, fsnotify watcher, embedder worker,
-  and post-promotion queue poller.
-- `veska-mcp` (`cmd/veska-mcp`) — thin stdio shim proxying an editor's MCP
-  connection to the daemon's Unix socket.
+`make build` produces a single Go binary at `bin/veska`; `bin/veska-daemon` and
+`bin/veska-mcp` are symlinks to it. The argv[0] dispatcher in
+`cmd/veska/main.go` routes the daemon and MCP-shim invocations into their own
+packages:
+
+- `veska` — CLI; entry point `cmd/veska/main.go`, manual DI wiring inside each
+  subcommand's `RunE`.
+- `veska-daemon` (symlink) — long-running process; argv[0] dispatch routes
+  into `internal/cli/daemon`, whose `wire.go` is the composition root. Owns
+  the MCP Unix-socket server, fsnotify watcher, embedder worker, and
+  post-promotion queue poller.
+- `veska-mcp` (symlink) — thin stdio shim; argv[0] dispatch routes into
+  `internal/cli/mcp`, which proxies an editor's JSON-RPC frames to the
+  daemon's Unix socket.
 
 ### Layout
 
 ```
-cmd/                      <- the 3 binaries; veska-daemon/wire.go is the composition root
+cmd/veska/                <- single binary entry point; argv[0] dispatcher in main.go
 internal/
   core/
     domain/               <- pure entities: Node, Edge, Graph, Task
@@ -100,6 +108,9 @@ internal/
                              EmbeddingProvider, CodeParser, EdgeReader, NodeLookup, ...)
   application/            <- use-case services: Ingester, Promoter, embedder, autolink,
                              revalidate, search, blastradius, checks
+  cli/
+    daemon/               <- daemon composition root (wire.go); fsnotify+queue+MCP server
+    mcp/                  <- stdio MCP shim that proxies to the daemon's Unix socket
   infrastructure/
     sqlite/               <- graph + queue + FTS storage; PromotionStore + sinks
     vector/               <- dual-backend VectorStorage (sqlite-vec default,

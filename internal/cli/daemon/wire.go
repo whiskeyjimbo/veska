@@ -548,7 +548,17 @@ func newDaemon(cfg Config) (*Daemon, error) {
 		_ = pools.Close()
 		return nil, fmt.Errorf("daemon: autolink linker: %w", err)
 	}
-	autoH, err := autolink.NewHandler(linker, nodeLookup, edgeRepo, findings)
+	// solov2-izh6.8: pass a repo-kind lookup so autolink skips ephemeral
+	// (cache-tier) repos cloned by `veska search --repo <url>`.
+	autoH, err := autolink.NewHandler(linker, nodeLookup, edgeRepo, findings,
+		autolink.WithRepoKindLookup(func(ctx context.Context, repoID string) (string, error) {
+			rec, gerr := repo.Get(ctx, pools.ReadDB, repoID)
+			if gerr != nil {
+				return "", gerr
+			}
+			return rec.Kind, nil
+		}),
+	)
 	if err != nil {
 		_ = pools.Close()
 		return nil, fmt.Errorf("daemon: autolink handler: %w", err)
