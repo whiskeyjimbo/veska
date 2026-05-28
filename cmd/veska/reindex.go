@@ -7,13 +7,20 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/spf13/cobra"
 	"github.com/whiskeyjimbo/veska/internal/application"
+	"github.com/whiskeyjimbo/veska/internal/application/checks"
 	"github.com/whiskeyjimbo/veska/internal/config"
+	"github.com/whiskeyjimbo/veska/internal/core/ports"
 	fsignore "github.com/whiskeyjimbo/veska/internal/infrastructure/fs"
 	gitwatch "github.com/whiskeyjimbo/veska/internal/infrastructure/git"
+	"github.com/whiskeyjimbo/veska/internal/infrastructure/secretsscanner"
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/sqlite"
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/treesitter"
+	"github.com/whiskeyjimbo/veska/internal/infrastructure/vulnsource"
+	"github.com/whiskeyjimbo/veska/internal/infrastructure/vulnsource/osv"
+	"github.com/whiskeyjimbo/veska/internal/observability"
 	"github.com/whiskeyjimbo/veska/internal/repo"
 )
 
@@ -104,6 +111,16 @@ func defaultReparserFactory(pools *sqlite.Pools, loader application.IgnoreLoader
 	)
 	promoter := application.NewPromoter(staging, promotionStore)
 
+	// solov2-izh6.16: install the same post-promotion check pipeline the
+	// daemon wires (secret-scan always, vuln-scan when [vuln_source] is
+	// enabled). Without this, a `veska search --repo <url>` ephemeral
+	// clone — or any `veska reindex` while the daemon is down — promotes
+	// without running vuln/secret checks, so `veska findings list` is
+	// silently empty until the user manually reindexes through the
+	// daemon. Findings flow through the same FindingStorage the daemon
+	// uses, so subsequent `findings list` invocations see the rows.
+	installColdScanCheckPipeline(promoter, pools)
+
 	reparser, err := application.NewColdScanReparser(
 		ingester, promoter, gitwatch.Querier{},
 		application.WithIgnoreLoader(loader),
@@ -112,6 +129,118 @@ func defaultReparserFactory(pools *sqlite.Pools, loader application.IgnoreLoader
 		return nil, fmt.Errorf("reindex: build cold-scan reparser: %w", err)
 	}
 	return reparser, nil
+}
+
+// installColdScanCheckPipeline wires Promoter.SetCheckRunner with the
+// secret-leak + vuln-scan checks (per resolved config) and installs the
+// AddedLinesFunc that drives the secret-scan rule. Mirrors the daemon's
+// wire.go layout so the in-process cold-scan path emits findings on the
+// FIRST promotion of an ephemeral or freshly-added repo (solov2-izh6.16).
+//
+// Errors during config load fall back to "secret-scan only" — vuln-scan is
+// off by default anyway and a malformed config.toml should not silently
+// disable secret detection on the cold-scan path.
+var installColdScanCheckPipeline = func(promoter *application.Promoter, pools *sqlite.Pools) {
+	findings := sqlite.NewFindingRepo(pools.Write)
+
+	// AddedLines seam: the cold-scan promotion path runs against the repo
+	// at its current HEAD, so resolve the diff for that SHA via the same
+	// git.AddedLinesForCommit helper the daemon uses. Failure is non-fatal:
+	// the runner just skips diff-driven checks for this promotion.
+	root := repoRootByID(pools.ReadDB)
+	promoter.SetAddedLinesFunc(func(ctx context.Context, repoID, gitSHA string) (map[string][]application.Line, error) {
+		rp, err := root(ctx, repoID)
+		if err != nil {
+			return nil, err
+		}
+		raw, err := gitwatch.AddedLinesForCommit(ctx, rp, gitSHA)
+		if err != nil {
+			return nil, err
+		}
+		out := make(map[string][]application.Line, len(raw))
+		for path, lines := range raw {
+			al := make([]application.Line, len(lines))
+			for i, l := range lines {
+				al[i] = application.Line{Number: l.Number, Text: l.Text}
+			}
+			out[path] = al
+		}
+		return out, nil
+	})
+
+	reg := checks.NewRegistry()
+
+	// Secrets-scan ships on by default; only respect an explicit
+	// disabled_checks entry. Config load failure falls through to "on".
+	fileCfg, _ := config.Load()
+	if !fileCfg.Promotion.CheckDisabled("secrets-scan") {
+		reg.Register(checks.NewSecretsScanCheck(secretsscanner.New()))
+	}
+
+	// Vuln-scan only when [vuln_source] provider="osv" (matches daemon).
+	if fileCfg.VulnSource.Provider == "osv" {
+		src := buildCLIVulnSource(fileCfg)
+		reg.Register(checks.NewVulnScanCheck(src, checks.RepoRootFunc(root)))
+	}
+
+	metrics := observability.NewMetrics(prometheus.NewRegistry())
+	runner := checks.NewRunner(reg, findings, metrics)
+	promoter.SetCheckRunner(coldScanCheckRunner{inner: runner})
+}
+
+// buildCLIVulnSource mirrors daemon.buildVulnSource for the in-process
+// cold-scan path. Returns NullVulnSource if config doesn't enable osv.
+func buildCLIVulnSource(cfg config.Config) ports.VulnSource {
+	if cfg.VulnSource.Provider != "osv" {
+		return vulnsource.NewNullVulnSource()
+	}
+	return osv.New(osv.WithCacheDir(config.DefaultOSVCacheDir()))
+}
+
+// coldScanCheckRunner bridges checks.Runner to application.CheckRunner —
+// the same adapter the daemon uses, duplicated here so cmd/veska does not
+// depend on the daemon package (mirrors the wiki/reindex duplication
+// already noted in defaultReparserFactory).
+type coldScanCheckRunner struct {
+	inner *checks.Runner
+}
+
+func (a coldScanCheckRunner) Run(ctx context.Context, in application.CheckRunInput) {
+	var added map[string][]checks.Line
+	if in.AddedLines != nil {
+		added = make(map[string][]checks.Line, len(in.AddedLines))
+		for path, lines := range in.AddedLines {
+			cl := make([]checks.Line, len(lines))
+			for i, l := range lines {
+				cl[i] = checks.Line{Number: l.Number, Text: l.Text}
+			}
+			added[path] = cl
+		}
+	}
+	a.inner.Run(ctx, checks.Input{
+		RepoID:     in.RepoID,
+		Branch:     in.Branch,
+		GitSHA:     in.GitSHA,
+		FilePaths:  in.FilePaths,
+		AddedLines: added,
+	})
+}
+
+// repoRootByID resolves a repoID to its registered working-tree path via
+// the repos table — the cold-scan equivalent of daemon.repoRootFunc.
+func repoRootByID(db *sql.DB) func(ctx context.Context, repoID string) (string, error) {
+	return func(ctx context.Context, repoID string) (string, error) {
+		records, err := repo.List(ctx, db)
+		if err != nil {
+			return "", fmt.Errorf("repo root lookup: %w", err)
+		}
+		for _, rec := range records {
+			if rec.RepoID == repoID {
+				return rec.RootPath, nil
+			}
+		}
+		return "", fmt.Errorf("repo root lookup: repo %q is not registered", repoID)
+	}
 }
 
 // reindexCmd returns the "reindex" Cobra command. It runs a full cold-scan
