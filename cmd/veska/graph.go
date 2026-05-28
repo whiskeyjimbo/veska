@@ -214,6 +214,16 @@ func renderGraphChain(ctx context.Context, w io.Writer, raw json.RawMessage, jso
 		fmt.Fprintln(w, "no nodes in chain")
 		for _, d := range env.DegradedReasons {
 			fmt.Fprintf(w, "[degraded: %s]\n", d)
+			if d == "chained_selectors_unresolved" {
+				// solov2-4soa: empty chain + chained_selectors_unresolved is
+				// the common "I called veska calls on a cobra command body"
+				// outcome. The bare degraded tag reads as "veska broke";
+				// surface what it actually means so a junior knows to try
+				// `veska blast` or `veska context` instead.
+				fmt.Fprintln(w, "  hint: parser can't resolve chained selector expressions (e.g. rootCmd.AddCommand(...).Execute()),")
+				fmt.Fprintln(w, "        so call edges from cobra-style top-level var initialisers are attributed to the package node.")
+				fmt.Fprintln(w, "        try `veska blast <symbol>` or `veska context <symbol>` for a graph-wide view.")
+			}
 		}
 		return nil
 	}
