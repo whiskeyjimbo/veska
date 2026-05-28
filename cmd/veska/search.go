@@ -73,7 +73,7 @@ Examples:
 				}
 				target = repoFlag
 			}
-			return runSearch(cmd.Context(), cmd.OutOrStdout(), runSearchOpts{
+			return runSearch(cmd.Context(), cmd.OutOrStdout(), cmd.ErrOrStderr(), runSearchOpts{
 				query:   query,
 				target:  target,
 				k:       k,
@@ -94,14 +94,78 @@ type runSearchOpts struct {
 	jsonOut bool
 }
 
-func runSearch(ctx context.Context, w io.Writer, opts runSearchOpts) error {
+// searchHeaderMode discriminates the three scope-resolution paths the
+// 'searching: ...' stderr header announces (solov2-izh6.15).
+type searchHeaderMode int
+
+const (
+	// searchHeaderModeCwd: empty target, cwd resolved to a registered repo.
+	// The header includes a "(use --repo to override)" hint so the user
+	// knows fan-out is one flag away.
+	searchHeaderModeCwd searchHeaderMode = iota
+	// searchHeaderModeExplicit: --repo (or positional target) selected a
+	// specific repo. The user already named it; no override hint needed.
+	searchHeaderModeExplicit
+	// searchHeaderModeAll: no target, cwd outside any registered repo —
+	// daemon fan-out across every registered repo.
+	searchHeaderModeAll
+)
+
+// searchHeaderInfo carries the data needed to render a 'searching:' header.
+type searchHeaderInfo struct {
+	mode    searchHeaderMode
+	repoID  string
+	shortID string
+	aliases []string
+}
+
+// emitSearchHeader writes a one-line 'searching: <label>' notice to stderr
+// announcing the repo scope. JSON mode suppresses the header entirely so
+// `--json` output stays a clean machine-consumable envelope. solov2-izh6.15.
+func emitSearchHeader(stderr, stdout io.Writer, jsonOut bool, info searchHeaderInfo) {
+	_ = stdout // explicit reminder: header NEVER goes to stdout
+	if jsonOut {
+		return
+	}
+	if stderr == nil {
+		return
+	}
+	switch info.mode {
+	case searchHeaderModeAll:
+		fmt.Fprintln(stderr, "searching: all repos")
+	case searchHeaderModeCwd:
+		label := repoDisplayLabel(info)
+		fmt.Fprintf(stderr, "searching: %s (use --repo to override)\n", label)
+	case searchHeaderModeExplicit:
+		label := repoDisplayLabel(info)
+		fmt.Fprintf(stderr, "searching: %s\n", label)
+	}
+}
+
+// repoDisplayLabel picks the most useful human-readable identifier for a
+// repo header line: first alias if any, else short_id, else a 12-char
+// prefix of repo_id.
+func repoDisplayLabel(info searchHeaderInfo) string {
+	if len(info.aliases) > 0 && info.aliases[0] != "" {
+		return info.aliases[0]
+	}
+	if info.shortID != "" {
+		return info.shortID
+	}
+	if len(info.repoID) > 12 {
+		return info.repoID[:12]
+	}
+	return info.repoID
+}
+
+func runSearch(ctx context.Context, w, stderr io.Writer, opts runSearchOpts) error {
 	// Daemon-first: when a daemon is up and already tracks the target repo,
 	// run the query through its eng_search_semantic so the CLI shares the
 	// daemon's hybrid (vector + lexical) retrieval pipeline and never opens
 	// a second writer on veska.db (solov2-b1q, solov2-xkm). The in-process
 	// path below is the fallback for when the daemon is down or the repo is
 	// not yet registered (it clones/indexes synchronously).
-	if env, handled, err := daemonSearch(ctx, opts); handled {
+	if env, handled, err := daemonSearch(ctx, stderr, w, opts); handled {
 		if err != nil {
 			return err
 		}
@@ -144,6 +208,16 @@ func runSearch(ctx context.Context, w io.Writer, opts runSearchOpts) error {
 			prettifyEphemeralPaths(env, cacheRepoDir, display)
 		}
 	}
+
+	// solov2-izh6.15: announce the resolved repo before running the
+	// search. The in-process / URL-target flow always knows the exact
+	// repo (rec) — show its short_id since aliases aren't loaded on
+	// the Record here. JSON mode suppresses inside emitSearchHeader.
+	emitSearchHeader(stderr, w, opts.jsonOut, searchHeaderInfo{
+		mode:    searchHeaderModeExplicit,
+		repoID:  rec.RepoID,
+		shortID: shortIDOf(rec.RepoID),
+	})
 
 	// solov2-2etd: once the URL/path target is registered, prefer the
 	// daemon's hybrid (vector + lexical RRF) eng_search_semantic. The
@@ -739,14 +813,14 @@ func degradedReasonHint(code string) string {
 // falls back to the in-process clone/index/query path. This keeps the
 // common "search my already-indexed repo" case on the daemon's hybrid
 // pipeline and avoids a second writer on veska.db (solov2-b1q, solov2-xkm).
-func daemonSearch(ctx context.Context, opts runSearchOpts) (searchEnvelope, bool, error) {
+func daemonSearch(ctx context.Context, stderr, stdout io.Writer, opts runSearchOpts) (searchEnvelope, bool, error) {
 	// A git-URL target needs a clone+index pass the daemon-dial path does
 	// not perform; leave it to the in-process path.
 	if isGitURL(opts.target) {
 		return searchEnvelope{}, false, nil
 	}
 
-	repoID, branch, ok := resolveRepoViaDaemon(ctx, opts.target)
+	repoID, branch, info, ok := resolveRepoViaDaemonInfo(ctx, opts.target)
 	if !ok {
 		// solov2-vm5w: when the cwd isn't part of any registered repo
 		// (junior who registered repos in another dir and ran search
@@ -755,13 +829,23 @@ func daemonSearch(ctx context.Context, opts runSearchOpts) (searchEnvelope, bool
 		// URLs still go through the in-process path so we don't change
 		// their semantics.
 		if opts.target == "" {
-			env, fanned, ferr := daemonSearchAllRepos(ctx, opts)
+			env, fanned, ferr := daemonSearchAllRepos(ctx, stderr, stdout, opts)
 			if fanned {
 				return env, true, ferr
 			}
 		}
 		return searchEnvelope{}, false, nil
 	}
+
+	// solov2-izh6.15: announce which repo we're searching so cwd-scoping
+	// isn't silent. cwd-mode adds a '--repo to override' hint; explicit-
+	// mode (user passed --repo / positional) skips the hint.
+	mode := searchHeaderModeCwd
+	if opts.target != "" {
+		mode = searchHeaderModeExplicit
+	}
+	info.mode = mode
+	emitSearchHeader(stderr, stdout, opts.jsonOut, info)
 
 	k := opts.k
 	if k <= 0 {
@@ -828,7 +912,7 @@ func daemonSearchByRepoID(ctx context.Context, repoID, branch string, opts runSe
 // k, merges results, re-sorts by score desc, and trims to k. fanned is
 // false when the registry is empty so the caller surfaces the existing
 // "not registered" error instead of a silent zero-result success.
-func daemonSearchAllRepos(ctx context.Context, opts runSearchOpts) (searchEnvelope, bool, error) {
+func daemonSearchAllRepos(ctx context.Context, stderr, stdout io.Writer, opts runSearchOpts) (searchEnvelope, bool, error) {
 	type repoRow struct {
 		RepoID       string `json:"repo_id"`
 		ActiveBranch string `json:"active_branch"`
@@ -842,6 +926,9 @@ func daemonSearchAllRepos(ctx context.Context, opts runSearchOpts) (searchEnvelo
 	if len(lr.Repos) == 0 {
 		return searchEnvelope{}, false, nil
 	}
+	// solov2-izh6.15: emit the 'searching: all repos' header before the
+	// fanout fires so the user knows we did NOT scope to a single repo.
+	emitSearchHeader(stderr, stdout, opts.jsonOut, searchHeaderInfo{mode: searchHeaderModeAll})
 	k := opts.k
 	if k <= 0 {
 		k = 10
@@ -891,7 +978,10 @@ func daemonSearchAllRepos(ctx context.Context, opts runSearchOpts) (searchEnvelo
 // is down or the repo is unknown. Prior to this change --repo accepted
 // only paths/URLs, so 'veska search --repo lib' rejected a valid alias
 // that 'veska symbol --repo lib' / 'veska context --repo lib' accepted.
-func resolveRepoViaDaemon(ctx context.Context, target string) (repoID, branch string, ok bool) {
+// resolveRepoViaDaemonInfo is the daemon-side repo resolver: it returns
+// (repo_id, branch) plus the display info (short_id, aliases) needed for
+// the 'searching:' header (solov2-izh6.15).
+func resolveRepoViaDaemonInfo(ctx context.Context, target string) (repoID, branch string, info searchHeaderInfo, ok bool) {
 	type repoRow struct {
 		RepoID       string   `json:"repo_id"`
 		ShortID      string   `json:"short_id"`
@@ -900,28 +990,36 @@ func resolveRepoViaDaemon(ctx context.Context, target string) (repoID, branch st
 		ActiveBranch string   `json:"active_branch"`
 	}
 
+	rowInfo := func(r repoRow) searchHeaderInfo {
+		return searchHeaderInfo{
+			repoID:  r.RepoID,
+			shortID: r.ShortID,
+			aliases: r.Aliases,
+		}
+	}
+
 	if target == "" {
 		cwd, err := os.Getwd()
 		if err != nil {
-			return "", "", false
+			return "", "", searchHeaderInfo{}, false
 		}
 		var res struct {
 			Repo repoRow `json:"repo"`
 		}
 		if err := callMCP(ctx, "eng_get_current_repo", map[string]any{"cwd": cwd}, &res); err != nil {
-			return "", "", false
+			return "", "", searchHeaderInfo{}, false
 		}
 		if res.Repo.RepoID == "" {
-			return "", "", false
+			return "", "", searchHeaderInfo{}, false
 		}
-		return res.Repo.RepoID, branchOrMain(res.Repo.ActiveBranch), true
+		return res.Repo.RepoID, branchOrMain(res.Repo.ActiveBranch), rowInfo(res.Repo), true
 	}
 
 	var list struct {
 		Repos []repoRow `json:"repos"`
 	}
 	if err := callMCP(ctx, "eng_list_repos", map[string]any{}, &list); err != nil {
-		return "", "", false
+		return "", "", searchHeaderInfo{}, false
 	}
 
 	// Registry-identifier match: full repo_id, short_id, or any bound
@@ -930,10 +1028,10 @@ func resolveRepoViaDaemon(ctx context.Context, target string) (repoID, branch st
 	// like "lib".
 	for _, r := range list.Repos {
 		if target == r.RepoID || target == r.ShortID {
-			return r.RepoID, branchOrMain(r.ActiveBranch), true
+			return r.RepoID, branchOrMain(r.ActiveBranch), rowInfo(r), true
 		}
 		if slices.Contains(r.Aliases, target) {
-			return r.RepoID, branchOrMain(r.ActiveBranch), true
+			return r.RepoID, branchOrMain(r.ActiveBranch), rowInfo(r), true
 		}
 	}
 
@@ -943,17 +1041,17 @@ func resolveRepoViaDaemon(ctx context.Context, target string) (repoID, branch st
 	// above and a literal alias would never coincide with a real path.
 	canonical, err := filepath.Abs(target)
 	if err != nil {
-		return "", "", false
+		return "", "", searchHeaderInfo{}, false
 	}
 	if resolved, err := filepath.EvalSymlinks(canonical); err == nil {
 		canonical = resolved
 	}
 	for _, r := range list.Repos {
 		if r.RootPath == canonical {
-			return r.RepoID, branchOrMain(r.ActiveBranch), true
+			return r.RepoID, branchOrMain(r.ActiveBranch), rowInfo(r), true
 		}
 	}
-	return "", "", false
+	return "", "", searchHeaderInfo{}, false
 }
 
 // scoreTier maps a raw vector score relative to the top hit in this query
@@ -992,6 +1090,15 @@ func pendingEmbedsHint() (int, bool) {
 		return 0, false
 	}
 	return status.PendingEmbeds, true
+}
+
+// shortIDOf returns the 12-char prefix of a repo_id used in the registry's
+// short_id column, or the input unchanged if it's already shorter.
+func shortIDOf(repoID string) string {
+	if len(repoID) > 12 {
+		return repoID[:12]
+	}
+	return repoID
 }
 
 func branchOrMain(b string) string {
