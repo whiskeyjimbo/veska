@@ -91,6 +91,13 @@ func runInit(ctx context.Context, deps initDeps, flags initFlags, out io.Writer)
 	fmt.Fprintf(out, "embedder: %s\n", embedderLine)
 	fmt.Fprintln(out, "service:  not installed (run: veska service install)")
 	fmt.Fprintln(out, "repo:     not added (run: veska repo add <path>)")
+	// solov2-yx2y: surface the vuln-scan choice in the summary so
+	// `init -y` users don't get OSV egress silently enabled.
+	if vulnEnabled {
+		fmt.Fprintln(out, "vuln:     OSV scanner enabled (daemon queries osv.dev for go.mod deps; rerun with --no-vuln to disable)")
+	} else {
+		fmt.Fprintln(out, "vuln:     OSV scanner disabled (no network egress for vuln scans)")
+	}
 	if tip != "" {
 		// solov2-sft7: make this LOUD. The quiet 'tip:' line buried under
 		// 'ready' meant junior users routinely shipped with the low-quality
