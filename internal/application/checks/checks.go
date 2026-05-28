@@ -60,6 +60,25 @@ type Check interface {
 	Run(ctx context.Context, in Input) ([]*domain.Finding, error)
 }
 
+// AuthoritativeChecker is an optional Check extension declaring that the
+// findings returned by Run represent the COMPLETE set of currently-applicable
+// findings for a given rule on this repo+branch. The Runner reconciles
+// against prior state: any open finding under the declared rule whose
+// finding_id is not in the just-returned set is auto-closed with
+// reason='revalidated_obsolete'.
+//
+// VulnScanCheck implements this: it re-resolves the entire dep set on every
+// run, so a CVE that no longer applies (because the user bumped the dep)
+// must disappear from the findings surface automatically (solov2-jvrc).
+// Without this, fixing a vuln leaves the dashboard screaming forever.
+//
+// AuthoritativeRule returns the rule name to reconcile, or ok=false to
+// opt out for this particular Input (e.g. when the check decided to skip
+// the scan because the manifest was absent).
+type AuthoritativeChecker interface {
+	AuthoritativeRule(in Input) (rule string, ok bool)
+}
+
 // Registry is a small in-memory map of name → Check.
 //
 // Registration is expected to happen at daemon start-up; the Registry is not
@@ -152,11 +171,22 @@ func (r *Runner) runOne(ctx context.Context, c Check, in Input) {
 		// TODO(m3.01.x): wire a logger so errors are surfaced, not swallowed.
 		return
 	}
+	keep := make([]string, 0, len(findings))
 	for _, f := range findings {
 		if f == nil {
 			continue
 		}
 		// Storage errors are also non-fatal; the same TODO applies.
 		_ = r.storage.Save(ctx, f)
+		keep = append(keep, f.FindingID)
+	}
+	// Authoritative checks (solov2-jvrc): close open findings of the
+	// declared rule whose IDs are not in the freshly-returned set, so
+	// state that no longer applies (e.g. a vuln resolved by a dep bump)
+	// disappears from `veska findings list` without manual cleanup.
+	if ac, ok := c.(AuthoritativeChecker); ok && r.storage != nil {
+		if rule, on := ac.AuthoritativeRule(in); on && rule != "" {
+			_ = r.storage.CloseSupersededByRule(ctx, in.RepoID, in.Branch, rule, keep)
+		}
 	}
 }

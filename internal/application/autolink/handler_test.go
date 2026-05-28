@@ -119,6 +119,10 @@ func (f *fakeFindingStore) CloseSupersededAutoLinks(_ context.Context, _, _ stri
 	return nil
 }
 
+func (f *fakeFindingStore) CloseSupersededByRule(_ context.Context, _, _, _ string, _ []string) error {
+	return nil
+}
+
 // ── unit-level tests against fakes ─────────────────────────────────────────
 
 // mustHandler unwraps an autolink.NewHandler result, failing the test if the

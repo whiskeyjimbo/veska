@@ -88,6 +88,10 @@ func (f *fakeFindingStorage) CloseSupersededAutoLinks(_ context.Context, _, _ st
 	return nil
 }
 
+func (f *fakeFindingStorage) CloseSupersededByRule(_ context.Context, _, _, _ string, _ []string) error {
+	return nil
+}
+
 func (f *fakeFindingStorage) findings() []*domain.Finding {
 	f.mu.Lock()
 	defer f.mu.Unlock()

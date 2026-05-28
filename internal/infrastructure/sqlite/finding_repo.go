@@ -143,6 +143,107 @@ WHERE finding_id = ?
 	return nil
 }
 
+// CloseSupersededByRule closes every OPEN finding in (repoID, branch, rule)
+// whose finding_id is NOT in keep.
+//
+// See ports.FindingStorage for the full contract. Implementation: when
+// keep is empty, a single UPDATE closes everything in scope. Otherwise the
+// keep set is chunked (500/batch, below SQLITE_MAX_VARIABLE_NUMBER=999),
+// and the closing UPDATE runs once with NOT IN over the chunked union. For
+// the typical N (<= a few dozen findings per rule per repo), one chunk
+// suffices.
+func (r *FindingRepo) CloseSupersededByRule(ctx context.Context, repoID, branch, rule string, keep []string) error {
+	now := time.Now().UnixMilli()
+
+	if len(keep) == 0 {
+		const stmt = `
+UPDATE findings
+SET state         = 'closed',
+    closed_reason = 'revalidated_obsolete',
+    closed_at     = ?
+WHERE repo_id = ?
+  AND branch  = ?
+  AND rule    = ?
+  AND state   = 'open'`
+		if _, err := r.db.ExecContext(ctx, stmt, now, repoID, branch, rule); err != nil {
+			return fmt.Errorf("sqlite.FindingRepo.CloseSupersededByRule: %w", err)
+		}
+		return nil
+	}
+
+	const maxInline = 500
+	if len(keep) > maxInline {
+		// NOT IN over a chunked union would over-close findings outside
+		// each chunk's window, so for keep sets that overflow the IN-list
+		// budget we fall back to a set-difference path. Unreachable in
+		// practice on today's workloads (vuln/secret findings sit well
+		// below 500 per rule per repo); included so the contract holds.
+		return r.closeSupersededByRuleSetDiff(ctx, repoID, branch, rule, keep, now)
+	}
+
+	placeholders := strings.Repeat("?,", len(keep))
+	placeholders = placeholders[:len(placeholders)-1]
+
+	stmt := `
+UPDATE findings
+SET state         = 'closed',
+    closed_reason = 'revalidated_obsolete',
+    closed_at     = ?
+WHERE repo_id    = ?
+  AND branch     = ?
+  AND rule       = ?
+  AND state      = 'open'
+  AND finding_id NOT IN (` + placeholders + `)`
+
+	args := make([]any, 0, 4+len(keep))
+	args = append(args, now, repoID, branch, rule)
+	for _, id := range keep {
+		args = append(args, id)
+	}
+	if _, err := r.db.ExecContext(ctx, stmt, args...); err != nil {
+		return fmt.Errorf("sqlite.FindingRepo.CloseSupersededByRule: %w", err)
+	}
+	return nil
+}
+
+// closeSupersededByRuleSetDiff is the slow fallback for keep sets larger
+// than a single SQLite IN-list chunk. Loads all open IDs in scope, diffs
+// against keep in Go, closes the difference one CloseObsolete at a time.
+// Unreachable in practice on today's workloads; included so the contract
+// holds for any caller.
+func (r *FindingRepo) closeSupersededByRuleSetDiff(ctx context.Context, repoID, branch, rule string, keep []string, now int64) error {
+	const sel = `SELECT finding_id FROM findings WHERE repo_id=? AND branch=? AND rule=? AND state='open'`
+	rows, err := r.db.QueryContext(ctx, sel, repoID, branch, rule)
+	if err != nil {
+		return fmt.Errorf("sqlite.FindingRepo.CloseSupersededByRule: %w", err)
+	}
+	defer rows.Close()
+	keepSet := make(map[string]struct{}, len(keep))
+	for _, k := range keep {
+		keepSet[k] = struct{}{}
+	}
+	var toClose []string
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return fmt.Errorf("sqlite.FindingRepo.CloseSupersededByRule: %w", err)
+		}
+		if _, k := keepSet[id]; !k {
+			toClose = append(toClose, id)
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return fmt.Errorf("sqlite.FindingRepo.CloseSupersededByRule: %w", err)
+	}
+	const upd = `UPDATE findings SET state='closed', closed_reason='revalidated_obsolete', closed_at=? WHERE finding_id=? AND branch=? AND state='open'`
+	for _, id := range toClose {
+		if _, err := r.db.ExecContext(ctx, upd, now, id, branch); err != nil {
+			return fmt.Errorf("sqlite.FindingRepo.CloseSupersededByRule: %w", err)
+		}
+	}
+	return nil
+}
+
 // CloseSupersededAutoLinks closes every OPEN finding with rule='auto-link' in
 // (repoID, branch) whose anchor (findings.node_id) is an edge_id of a
 // SIMILAR_TO edge whose src_node_id appears in sourceNodeIDs.

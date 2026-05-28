@@ -360,6 +360,10 @@ func (noopFindingStorage) CloseSupersededAutoLinks(_ context.Context, _, _ strin
 	return nil
 }
 
+func (r noopFindingStorage) CloseSupersededByRule(_ context.Context, _, _, _ string, _ []string) error {
+	return nil
+}
+
 // TestPoller_ReviewLaneDrains verifies AC1: a pending work_kind='review' row is
 // drained to state='done' by the real review.Handler dispatching through a
 // fake LLMGenerator.
