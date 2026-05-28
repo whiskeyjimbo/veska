@@ -199,6 +199,7 @@ func renderGraphChain(ctx context.Context, w io.Writer, raw json.RawMessage, jso
 	}
 	if len(env.CrossRepoEdges) > 0 {
 		fmt.Fprintf(w, "cross-repo edges (%d):\n", len(env.CrossRepoEdges))
+		anyPackageSrc := false
 		for _, e := range env.CrossRepoEdges {
 			src, ok := localByID[e.SrcNodeID]
 			if !ok || src.Name == "" {
@@ -208,9 +209,21 @@ func renderGraphChain(ctx context.Context, w io.Writer, raw json.RawMessage, jso
 			if !ok || dst.Name == "" {
 				dst = resolveCrossRepoNode(ctx, e.DstNodeID, e.DstRepoID, e.DstBranch)
 			}
+			if src.Kind == "package" {
+				anyPackageSrc = true
+			}
 			fmt.Fprintf(w, "  %s --%s--> %s in %s\n",
 				formatCrossRepoNode(src, e.SrcNodeID), e.Kind,
 				formatCrossRepoNode(dst, e.DstNodeID), shortID(e.DstRepoID))
+		}
+		if anyPackageSrc {
+			// solov2-urqy: cross-repo CALLS landing on a `package` src
+			// usually means the call lives inside an anonymous function in a
+			// top-level var initialiser (e.g. cobra's `Run: func(...){...}`).
+			// The parser attributes those to the package node, so the user
+			// can't tell which function actually makes the call.
+			fmt.Fprintln(w, "  note: package-grain src means the caller is an anonymous func in a top-level var initialiser (e.g. cobra Run/RunE).")
+			fmt.Fprintln(w, "        run `veska context <caller-symbol>` or grep that file for the dst symbol to pinpoint the call site.")
 		}
 	}
 	for _, d := range env.DegradedReasons {
