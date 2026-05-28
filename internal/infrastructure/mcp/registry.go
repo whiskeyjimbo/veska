@@ -216,7 +216,7 @@ func (r *Registry) Register(spec ToolSpec) error {
 		return fmt.Errorf("mcp: tool %q OutputSchema is not valid JSON", spec.Name)
 	}
 	if spec.CLIExempt == ExemptDeferred && spec.ExemptReason == "" {
-		return fmt.Errorf("mcp: tool %q has CLIExempt=ExemptDeferred but no ExemptReason; either supply a reason or pick ExemptInternal/ExemptAgentOnly (solov2-4ygz)", spec.Name)
+		return fmt.Errorf("mcp: tool %q has CLIExempt=ExemptDeferred but no ExemptReason; either supply a reason or pick ExemptInternal/ExemptAgentOnly", spec.Name)
 	}
 	r.tools[spec.Name] = spec
 	return nil

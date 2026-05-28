@@ -80,6 +80,10 @@ func RegisterBlastTools(r *Registry, svc *blastradius.Service, repoRoot RepoRoot
 		IncludesStaging: true,
 		InputSchema:     dirtyBlastRadiusInputSchema,
 		Handler:         makeDirtyBlastRadiusHandler(svc, repos, cfg.resolve, cfg.resolveInbound),
+
+		CLIExempt: ExemptDeferred,
+
+		ExemptReason: "CLI wrapper deferred (see follow-up tracker referenced in commit history).",
 	})
 	r.MustRegister(ToolSpec{
 		Name:            "eng_get_diff_blast_radius",
@@ -87,6 +91,10 @@ func RegisterBlastTools(r *Registry, svc *blastradius.Service, repoRoot RepoRoot
 		IncludesStaging: false,
 		InputSchema:     diffBlastRadiusInputSchema,
 		Handler:         makeDiffBlastRadiusHandler(svc, repoRoot, changedFiles, repos, cfg.resolve, cfg.resolveInbound),
+
+		CLIExempt: ExemptDeferred,
+
+		ExemptReason: "CLI wrapper deferred (see follow-up tracker referenced in commit history).",
 	})
 }
 
