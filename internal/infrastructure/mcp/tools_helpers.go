@@ -8,6 +8,8 @@ import (
 	"strings"
 
 	application "github.com/whiskeyjimbo/veska/internal/application"
+	"github.com/whiskeyjimbo/veska/internal/core/domain"
+	"github.com/whiskeyjimbo/veska/internal/core/ports"
 )
 
 // minRepoIDPrefix is the shortest prefix accepted as a repo_id alias. Below
@@ -248,6 +250,171 @@ func resolveRepoFanoutFromParams(ctx context.Context, repos application.RepoList
 		return nil, false, &RPCError{Code: CodeInvalidParams, Message: fmt.Sprintf("repo_id is required (%d repos registered; pass eng_list_repos to find the id)", len(all))}
 	}
 	return targets, len(targets) > 1, nil
+}
+
+// resolveSeedOwner picks the (repo_id, branch, node_id) triple for a seeded
+// graph query (eng_get_call_chain, eng_get_blast_radius) when the caller may
+// omit repo_id. It honours the same documented contract as the --repo flag's
+// help text: "default: fan out across registered repos".
+//
+// Resolution order:
+//
+//  1. requestedRepoID given → resolve it; if symbol given resolve to node_id
+//     inside that repo.
+//  2. cwd injected via params → if it matches a registered RootPath, pin
+//     to that repo (same path as resolveRepoIDOrCwd).
+//  3. multi-repo fan-out by seed: walk every registered repo and look up the
+//     seed in each. Exactly one owner → use it. Zero → NotFound. Multiple →
+//     ambiguous, ask the caller to pin --repo.
+//
+// nodeID wins when both seeds are supplied (it is globally unique by
+// construction). graph may be nil only when repos is also nil (composition
+// roots without persistence wired) — fan-out then degrades to "no match".
+func resolveSeedOwner(ctx context.Context, repos application.RepoLister, graph ports.GraphStorage, raw json.RawMessage, requestedRepoID, callerBranch, nodeID, symbol string) (repoID, branch, resolvedNodeID string, rpcErr *RPCError) {
+	if nodeID == "" && symbol == "" {
+		return "", "", "", &RPCError{Code: CodeInvalidParams, Message: "missing required params: node_id or symbol"}
+	}
+
+	// resolveInRepo turns the seed into a node_id within (repoID, branch).
+	// For an explicit node_id we trust the caller — the downstream BFS
+	// (call-chain / blast) surfaces the empty result if the node is absent,
+	// matching the pre-fanout contract. For a symbol we still validate so
+	// the caller learns about ambiguity / typos up front.
+	resolveInRepo := func(repoID, branch string) (string, *RPCError) {
+		if nodeID != "" {
+			return nodeID, nil
+		}
+		if graph == nil {
+			return "", &RPCError{Code: CodeInternalError, Message: "symbol lookup not wired (graph storage missing)"}
+		}
+		matches, err := graph.FindNodes(ctx, repoID, branch, symbol)
+		if err != nil {
+			return "", &RPCError{Code: CodeInternalError, Message: fmt.Sprintf("find symbol %q: %v", symbol, err)}
+		}
+		if len(matches) == 0 {
+			return "", &RPCError{Code: CodeNotFound, Message: fmt.Sprintf("symbol not found: %s", symbol)}
+		}
+		if len(matches) > 1 {
+			return "", &RPCError{Code: CodeInvalidParams, Message: fmt.Sprintf("symbol %q is ambiguous (%d matches); pass node_id to disambiguate", symbol, len(matches))}
+		}
+		return string(matches[0].ID), nil
+	}
+
+	// Path 1: explicit repo_id.
+	if requestedRepoID != "" {
+		full, rerr := resolveRepoID(ctx, repos, requestedRepoID)
+		if rerr != nil {
+			return "", "", "", rerr
+		}
+		br, rerr := resolveBranchOrActive(ctx, repos, full, callerBranch)
+		if rerr != nil {
+			return "", "", "", rerr
+		}
+		nid, rerr := resolveInRepo(full, br)
+		if rerr != nil {
+			return "", "", "", rerr
+		}
+		return full, br, nid, nil
+	}
+
+	if repos == nil {
+		return "", "", "", &RPCError{Code: CodeInvalidParams, Message: "repo_id is required"}
+	}
+	all, err := repos.ListRepos(ctx)
+	if err != nil {
+		return "", "", "", &RPCError{Code: CodeInternalError, Message: fmt.Sprintf("list repos failed: %v", err)}
+	}
+	if len(all) == 0 {
+		return "", "", "", &RPCError{Code: CodeInvalidParams, Message: "repo_id is required (no repos registered — run `veska repo add <path>` first)"}
+	}
+	if len(all) == 1 {
+		br := callerBranch
+		if br == "" {
+			br = all[0].ActiveBranch
+		}
+		if br == "" {
+			return "", "", "", &RPCError{Code: CodeInvalidParams, Message: fmt.Sprintf("branch is required (repo %s has no recorded active_branch)", ShortRepoID(all[0].RepoID))}
+		}
+		nid, rerr := resolveInRepo(all[0].RepoID, br)
+		if rerr != nil {
+			return "", "", "", rerr
+		}
+		return all[0].RepoID, br, nid, nil
+	}
+
+	// Path 2: cwd pin.
+	if cwd := cwdFromParams(raw); cwd != "" {
+		for _, rec := range all {
+			if rec.RootPath == "" {
+				continue
+			}
+			if cwd == rec.RootPath || strings.HasPrefix(cwd, rec.RootPath+"/") {
+				br := callerBranch
+				if br == "" {
+					br = rec.ActiveBranch
+				}
+				nid, rerr := resolveInRepo(rec.RepoID, br)
+				if rerr != nil {
+					return "", "", "", rerr
+				}
+				return rec.RepoID, br, nid, nil
+			}
+		}
+	}
+
+	// Path 3: fan-out by seed. Walk every repo; the seed's owner is the only
+	// repo where lookup succeeds. The ambiguous and not-found cases produce
+	// actionable errors that name the specific candidates so the caller can
+	// retry with --repo.
+	type hit struct {
+		repoID, branch, nodeID string
+	}
+	var hits []hit
+	for _, rec := range all {
+		br := callerBranch
+		if br == "" {
+			br = rec.ActiveBranch
+		}
+		if br == "" {
+			continue
+		}
+		if nodeID != "" {
+			n, gerr := graph.GetNode(ctx, rec.RepoID, br, domain.NodeID(nodeID))
+			if gerr != nil || n == nil {
+				continue
+			}
+			hits = append(hits, hit{repoID: rec.RepoID, branch: br, nodeID: nodeID})
+			continue
+		}
+		matches, gerr := graph.FindNodes(ctx, rec.RepoID, br, symbol)
+		if gerr != nil || len(matches) == 0 {
+			continue
+		}
+		if len(matches) > 1 {
+			return "", "", "", &RPCError{Code: CodeInvalidParams, Message: fmt.Sprintf("symbol %q is ambiguous in repo %s (%d matches); pass node_id to disambiguate", symbol, ShortRepoID(rec.RepoID), len(matches))}
+		}
+		hits = append(hits, hit{repoID: rec.RepoID, branch: br, nodeID: string(matches[0].ID)})
+	}
+	switch len(hits) {
+	case 0:
+		seed := nodeID
+		if seed == "" {
+			seed = symbol
+		}
+		return "", "", "", &RPCError{Code: CodeNotFound, Message: fmt.Sprintf("seed %q not found in any of %d registered repos", seed, len(all))}
+	case 1:
+		return hits[0].repoID, hits[0].branch, hits[0].nodeID, nil
+	default:
+		shorts := make([]string, 0, len(hits))
+		for _, h := range hits {
+			shorts = append(shorts, ShortRepoID(h.repoID))
+		}
+		seed := nodeID
+		if seed == "" {
+			seed = symbol
+		}
+		return "", "", "", &RPCError{Code: CodeInvalidParams, Message: fmt.Sprintf("seed %q exists in multiple repos (%s); pass --repo to disambiguate", seed, strings.Join(shorts, ", "))}
+	}
 }
 
 // resolveBranchOrActive returns branch when non-empty, otherwise the registered

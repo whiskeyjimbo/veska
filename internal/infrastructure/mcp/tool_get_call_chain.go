@@ -37,39 +37,17 @@ func makeGetCallChainHandler(graph ports.GraphStorage, resolve ResolveFunc, reso
 		if err := json.Unmarshal(raw, &p); err != nil {
 			return nil, &RPCError{Code: CodeInvalidParams, Message: fmt.Sprintf("invalid params: %v", err)}
 		}
-		if p.NodeID == "" && p.Symbol == "" {
-			return nil, &RPCError{Code: CodeInvalidParams, Message: "missing required params: node_id or symbol"}
-		}
-		// solov2-ktz0: shim-injected cwd resolves repo_id when omitted.
-		repoID, rpcErr := resolveRepoIDFromParams(ctx, repos, raw, p.RepoID)
+		// solov2-f0zt: when repo_id is omitted, fan-out across registered repos
+		// to find which one owns the seed (node_id or symbol). Matches the
+		// "default: fan out across registered repos" contract in `veska calls
+		// --help`. resolveSeedOwner returns the (repo, branch, node_id) triple
+		// in one call so we can drop the previous repo+branch+symbol-lookup
+		// three-step.
+		repoID, branch, nid, rpcErr := resolveSeedOwner(ctx, repos, graph, raw, p.RepoID, p.Branch, p.NodeID, p.Symbol)
 		if rpcErr != nil {
 			return nil, rpcErr
 		}
-		p.RepoID = repoID
-		if br, rpcErr := resolveBranchOrActive(ctx, repos, p.RepoID, p.Branch); rpcErr != nil {
-			return nil, rpcErr
-		} else {
-			p.Branch = br
-		}
-
-		// solov2-lcz6: accept 'symbol' as an alternative to 'node_id' to give
-		// parity with eng_find_symbol. When both are supplied node_id wins —
-		// it is the more specific selector. When only symbol is given, look it
-		// up via FindNodes; ambiguity (multiple matches) is rejected so the
-		// caller has to disambiguate explicitly with node_id.
-		if p.NodeID == "" {
-			matches, ferr := graph.FindNodes(ctx, p.RepoID, p.Branch, p.Symbol)
-			if ferr != nil {
-				return nil, &RPCError{Code: CodeInternalError, Message: fmt.Sprintf("find symbol %q: %v", p.Symbol, ferr)}
-			}
-			if len(matches) == 0 {
-				return nil, &RPCError{Code: CodeNotFound, Message: fmt.Sprintf("symbol not found: %s", p.Symbol)}
-			}
-			if len(matches) > 1 {
-				return nil, &RPCError{Code: CodeInvalidParams, Message: fmt.Sprintf("symbol %q is ambiguous (%d matches); pass node_id to disambiguate", p.Symbol, len(matches))}
-			}
-			p.NodeID = string(matches[0].ID)
-		}
+		p.RepoID, p.Branch, p.NodeID = repoID, branch, nid
 		depth := p.Depth
 		if depth <= 0 {
 			depth = 3 // default

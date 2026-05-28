@@ -115,42 +115,13 @@ func makeBlastRadiusHandler(svc *blastradius.Service, repos application.RepoList
 		if rpcErr := bindParams(raw, &p); rpcErr != nil {
 			return nil, rpcErr
 		}
-		if p.NodeID == "" && p.Symbol == "" {
-			return nil, &RPCError{Code: CodeInvalidParams, Message: "missing required params: node_id or symbol"}
-		}
-		// solov2-ktz0: shim-injected cwd resolves repo_id when omitted.
-		repoID, rpcErr := resolveRepoIDFromParams(ctx, repos, raw, p.RepoID)
+		// solov2-f0zt: fan-out by seed when repo_id is omitted (same contract
+		// as `veska blast --help`: "default: fan out across registered repos").
+		repoID, branch, nid, rpcErr := resolveSeedOwner(ctx, repos, graph, raw, p.RepoID, p.Branch, p.NodeID, p.Symbol)
 		if rpcErr != nil {
 			return nil, rpcErr
 		}
-		p.RepoID = repoID
-		if br, rpcErr := resolveBranchOrActive(ctx, repos, p.RepoID, p.Branch); rpcErr != nil {
-			return nil, rpcErr
-		} else {
-			p.Branch = br
-		}
-
-		// solov2-psdx: accept 'symbol' alongside node_id for parity with
-		// eng_get_call_chain / eng_find_symbol. node_id wins when both are
-		// supplied (more specific selector). Ambiguous symbols are rejected
-		// so the caller must disambiguate explicitly — same shape as
-		// eng_get_call_chain.
-		if p.NodeID == "" {
-			if graph == nil {
-				return nil, &RPCError{Code: CodeInternalError, Message: "symbol lookup not wired (graph storage missing)"}
-			}
-			matches, ferr := graph.FindNodes(ctx, p.RepoID, p.Branch, p.Symbol)
-			if ferr != nil {
-				return nil, &RPCError{Code: CodeInternalError, Message: fmt.Sprintf("find symbol %q: %v", p.Symbol, ferr)}
-			}
-			if len(matches) == 0 {
-				return nil, &RPCError{Code: CodeNotFound, Message: fmt.Sprintf("symbol not found: %s", p.Symbol)}
-			}
-			if len(matches) > 1 {
-				return nil, &RPCError{Code: CodeInvalidParams, Message: fmt.Sprintf("symbol %q is ambiguous (%d matches); pass node_id to disambiguate", p.Symbol, len(matches))}
-			}
-			p.NodeID = string(matches[0].ID)
-		}
+		p.RepoID, p.Branch, p.NodeID = repoID, branch, nid
 		dir, err := blastradius.ParseDirection(p.Direction)
 		if err != nil {
 			return nil, &RPCError{Code: CodeInvalidParams, Message: err.Error()}
