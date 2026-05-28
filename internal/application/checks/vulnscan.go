@@ -113,6 +113,12 @@ func (c *VulnScanCheck) Run(ctx context.Context, in Input) ([]*domain.Finding, e
 			loc = fmt.Sprintf("go.mod:%d", ln)
 		}
 		msg := fmt.Sprintf("%s [%s] %s: %s (affected range %s)", loc, v.AdvisoryID, v.Package, v.Summary, v.AffectedRange)
+		// solov2-gpvy: append a remediation hint so the finding is
+		// directly actionable from `veska findings show` without a
+		// trip to the advisory website.
+		if v.FixedVersion != "" {
+			msg += fmt.Sprintf("; fix: go get %s@%s", v.Package, v.FixedVersion)
+		}
 		f, err := domain.NewFinding(
 			in.RepoID, in.Branch,
 			mapSeverity(v.Severity),

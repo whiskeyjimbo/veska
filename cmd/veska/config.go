@@ -9,6 +9,7 @@ import (
 	"github.com/BurntSushi/toml"
 	"github.com/spf13/cobra"
 	"github.com/whiskeyjimbo/veska/internal/config"
+	"github.com/whiskeyjimbo/veska/internal/infrastructure/embedding/elect"
 	"github.com/whiskeyjimbo/veska/internal/service"
 )
 
@@ -50,10 +51,25 @@ func configShowCmd() *cobra.Command {
 				return fmt.Errorf("config show: %w", err)
 			}
 			w := cmd.OutOrStdout()
+			liveEmbedder := elect.Marker(config.DefaultVectorDir())
 			if jsonOut {
+				// Sibling key `_live_embedder` carries the daemon's
+				// elected embedder so callers don't read the [embedder]
+				// defaults (which only apply on VESKA_EMBEDDER=ollama)
+				// as the truth. Empty string when no election has run
+				// yet (solov2-awp6).
+				envelope := struct {
+					*config.Config
+					LiveEmbedder string `json:"_live_embedder,omitempty"`
+				}{&cfg, liveEmbedder}
 				enc := json.NewEncoder(w)
 				enc.SetIndent("", "  ")
-				return enc.Encode(cfg)
+				return enc.Encode(envelope)
+			}
+			if liveEmbedder != "" {
+				fmt.Fprintf(w, "# live embedder: %s\n", liveEmbedder)
+				fmt.Fprintf(w, "# the [embedder] block below configures the Ollama branch and is\n")
+				fmt.Fprintf(w, "# unused unless VESKA_EMBEDDER=ollama (solov2-awp6).\n\n")
 			}
 			var buf bytes.Buffer
 			if err := toml.NewEncoder(&buf).Encode(cfg); err != nil {

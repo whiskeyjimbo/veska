@@ -282,6 +282,7 @@ func matchAdvisory(adv advisory, byPackage map[string][]ports.Dependency) []port
 				AffectedRange: rangeString(aff.Ranges),
 				Severity:      pickSeverity(adv),
 				Summary:       adv.Summary,
+				FixedVersion:  minFixedAbove(dep.Version, aff.Ranges),
 			})
 		}
 	}
@@ -327,6 +328,35 @@ func versionAffected(version string, ranges []osvRange) bool {
 		}
 	}
 	return false
+}
+
+// minFixedAbove returns the lowest "fixed" version greater than the current
+// version among the matching ranges, with a leading "v" so it can be passed
+// straight to `go get` (solov2-gpvy). Empty when no published fix exists.
+func minFixedAbove(current string, ranges []osvRange) string {
+	cur := normalizeSemver(current)
+	var best string
+	for _, r := range ranges {
+		if r.Type != "" && r.Type != "SEMVER" {
+			continue
+		}
+		for _, ev := range r.Events {
+			if ev.Fixed == "" {
+				continue
+			}
+			fixed := normalizeSemver(ev.Fixed)
+			if !semver.IsValid(fixed) {
+				continue
+			}
+			if semver.IsValid(cur) && semver.Compare(fixed, cur) <= 0 {
+				continue
+			}
+			if best == "" || semver.Compare(fixed, best) < 0 {
+				best = fixed
+			}
+		}
+	}
+	return best
 }
 
 // normalizeSemver gives a version the leading "v" that golang.org/x/mod/semver
