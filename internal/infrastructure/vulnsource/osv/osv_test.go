@@ -61,6 +61,33 @@ const fooV2Advisory = `{
   }]
 }`
 
+// jwtGHSA + jwtGOAdvisory pin solov2-ka54: OSV ships the same jwt-go
+// auth-bypass vulnerability under both a GHSA and a GO- ID; Scan must
+// emit one finding (GHSA wins), not two.
+const jwtGHSA = `{
+  "id": "GHSA-w73w-5m7g-f7qc",
+  "aliases": ["GO-2020-0017", "CVE-2020-26160"],
+  "summary": "Authorization bypass in github.com/dgrijalva/jwt-go",
+  "severity": [{"type": "CVSS_V3", "score": "7.1"}],
+  "database_specific": {"severity": "HIGH"},
+  "affected": [{
+    "package": {"ecosystem": "Go", "name": "github.com/dgrijalva/jwt-go"},
+    "ranges": [{"type": "SEMVER", "events": [{"introduced": "0"}, {"last_affected": "3.2.0"}]}]
+  }]
+}`
+
+const jwtGOAdvisory = `{
+  "id": "GO-2020-0017",
+  "aliases": ["GHSA-w73w-5m7g-f7qc", "CVE-2020-26160"],
+  "summary": "Authorization bypass in github.com/dgrijalva/jwt-go",
+  "severity": [{"type": "CVSS_V3", "score": "7.1"}],
+  "database_specific": {"severity": "MODERATE"},
+  "affected": [{
+    "package": {"ecosystem": "Go", "name": "github.com/dgrijalva/jwt-go"},
+    "ranges": [{"type": "SEMVER", "events": [{"introduced": "0"}, {"last_affected": "3.2.0"}]}]
+  }]
+}`
+
 // writeFixtureCache builds an OSV cache directory containing the given advisory
 // JSON documents, keyed by filename.
 func writeFixtureCache(t *testing.T, advisories map[string]string) string {
@@ -72,6 +99,40 @@ func writeFixtureCache(t *testing.T, advisories map[string]string) string {
 		}
 	}
 	return dir
+}
+
+// TestScan_DedupesAliasedAdvisories pins solov2-ka54: two OSV advisories that
+// describe the same vuln via different IDs (GHSA + GO-) must collapse to a
+// single finding, with the GHSA-prefixed ID winning and the suppressed IDs
+// surfacing in Aliases.
+func TestScan_DedupesAliasedAdvisories(t *testing.T) {
+	t.Parallel()
+	dir := writeFixtureCache(t, map[string]string{
+		"GHSA-w73w-5m7g-f7qc.json": jwtGHSA,
+		"GO-2020-0017.json":        jwtGOAdvisory,
+	})
+	a := osv.New(osv.WithCacheDir(dir))
+	got, err := a.Scan(context.Background(), []ports.Dependency{
+		{Ecosystem: "Go", Name: "github.com/dgrijalva/jwt-go", Version: "v3.2.0+incompatible"},
+	})
+	if err != nil {
+		t.Fatalf("Scan: %v", err)
+	}
+	if len(got) != 1 {
+		t.Fatalf("want 1 deduped finding, got %d: %v", len(got), got)
+	}
+	if got[0].AdvisoryID != "GHSA-w73w-5m7g-f7qc" {
+		t.Errorf("canonical AdvisoryID = %q, want GHSA-w73w-5m7g-f7qc (GHSA-rank wins)", got[0].AdvisoryID)
+	}
+	wantAliases := []string{"CVE-2020-26160", "GO-2020-0017"} // sorted
+	if len(got[0].Aliases) != len(wantAliases) {
+		t.Fatalf("Aliases = %v, want %v", got[0].Aliases, wantAliases)
+	}
+	for i, a := range wantAliases {
+		if got[0].Aliases[i] != a {
+			t.Errorf("Aliases[%d] = %q, want %q", i, got[0].Aliases[i], a)
+		}
+	}
 }
 
 func TestScan_KnownVulnerableDepYieldsFinding(t *testing.T) {

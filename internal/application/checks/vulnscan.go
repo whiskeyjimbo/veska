@@ -113,6 +113,12 @@ func (c *VulnScanCheck) Run(ctx context.Context, in Input) ([]*domain.Finding, e
 			loc = fmt.Sprintf("go.mod:%d", ln)
 		}
 		msg := fmt.Sprintf("%s [%s] %s: %s (affected range %s)", loc, v.AdvisoryID, v.Package, v.Summary, v.AffectedRange)
+		// solov2-ka54: when the OSV adapter dedupes aliased advisories
+		// (GHSA vs GO- vs CVE for the same vuln), cross-reference the
+		// suppressed IDs so users can still grep their tracker.
+		if len(v.Aliases) > 0 {
+			msg += "; aliases: " + strings.Join(v.Aliases, ", ")
+		}
 		// solov2-gpvy: append a remediation hint so the finding is
 		// directly actionable from `veska findings show` without a
 		// trip to the advisory website.
