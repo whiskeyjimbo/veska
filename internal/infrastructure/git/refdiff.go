@@ -65,6 +65,19 @@ func ChangedFilesBetween(ctx context.Context, repoRoot, refA, refB string) ([]st
 	return out, nil
 }
 
+// ResolvesRef reports whether ref resolves to a commit in repoRoot via
+// `git rev-parse --verify <ref>^{commit}`. Used by callers that need to
+// say "ref_a is the bad one" after ChangedFilesBetween returned
+// ErrUnknownRevision — git's combined error doesn't say which side
+// failed (solov2-dt6q).
+func ResolvesRef(ctx context.Context, repoRoot, ref string) bool {
+	if repoRoot == "" || ref == "" {
+		return false
+	}
+	cmd := exec.CommandContext(ctx, "git", "-C", repoRoot, "rev-parse", "--verify", "--quiet", ref+"^{commit}")
+	return cmd.Run() == nil
+}
+
 // FileAtRef returns the content of path as it existed at ref, via
 // `git show <ref>:<path>`. Path is relative to repoRoot.
 //
