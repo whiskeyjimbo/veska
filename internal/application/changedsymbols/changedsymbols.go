@@ -164,6 +164,13 @@ func (s *Service) Diff(ctx context.Context, repoID, repoRoot, refA, refB string)
 // "nothing changed" (solov2-u9os).
 const DegradedReasonNonSymbolChangesOnly = "non_symbol_changes_only"
 
+// DegradedReasonNoParentCommit is emitted when the default HEAD~1 base
+// could not be resolved and the handler fell back to git's empty-tree SHA
+// to diff against. Surfaces the fact that "every symbol shows as added"
+// is a consequence of a single-commit repo, not a real wholesale change
+// (solov2-g04l).
+const DegradedReasonNoParentCommit = "no_parent_commit_used_empty_tree"
+
 // parseAtRef reads path at ref and parses it. A file absent at the ref
 // (e.g. added or deleted between the two refs) yields an empty map and
 // no error, so the caller still classifies the present side correctly.

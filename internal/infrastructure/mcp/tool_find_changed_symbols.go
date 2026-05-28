@@ -126,9 +126,11 @@ func makeChangedSymbolsHandler(svc *changedsymbols.Service, repoRoot RepoRootFun
 		// a self-contradicting "try omitting both refs" error on a path
 		// where they already did. Only fires when we picked the defaults —
 		// caller-supplied refs that don't resolve are still their problem.
+		usedEmptyTreeFallback := false
 		if err != nil && usedDefaults && errors.Is(err, gitinfra.ErrUnknownRevision) {
 			p.RefA = gitEmptyTreeSHA
 			res, err = svc.Diff(ctx, p.RepoID, root, p.RefA, p.RefB)
+			usedEmptyTreeFallback = true
 		}
 		// Rewrite file_path to absolute form so it matches the contract used
 		// by every other node-emitting tool (eng_find_symbol,
@@ -158,6 +160,11 @@ func makeChangedSymbolsHandler(svc *changedsymbols.Service, repoRoot RepoRootFun
 		absolutiseChangedSymbols(res.Added)
 		absolutiseChangedSymbols(res.Removed)
 		absolutiseChangedSymbols(res.Modified)
+		// solov2-g04l: tag the empty-tree fallback so callers don't
+		// interpret "every symbol added" as a real wholesale change.
+		if usedEmptyTreeFallback {
+			res.DegradedReasons = append(res.DegradedReasons, changedsymbols.DegradedReasonNoParentCommit)
+		}
 		return res, nil
 	}
 }
