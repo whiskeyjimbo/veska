@@ -754,10 +754,19 @@ func waitForScanComplete(ctx context.Context, w io.Writer, repoID string) error 
 	// with no count. 100ms gives 5x more chances to catch a non-zero count
 	// without meaningfully increasing daemon load (eng_get_status is cheap).
 	const pollInterval = 100 * time.Millisecond
+	// startupGrace bounds how long --wait keeps polling while the scan has
+	// not yet appeared in scans_in_flight. Without it the very first poll
+	// can fire before the daemon's scheduler enqueues the scan: the repo
+	// looks "not in flight, not promoted" and we'd surface a misleading
+	// "scan no longer in flight" failure for what is actually the first
+	// repo a junior eng ever adds (solov2-beda). The grace is generous
+	// because the daemon may also be cold-starting embedder election.
+	const startupGrace = 5 * time.Second
 	start := time.Now()
 	var lastPhase string
 	var lastFiles int
 	var maxFiles int
+	var sawInFlight bool
 	lastEvent := time.Now()
 	for {
 		select {
@@ -767,6 +776,9 @@ func waitForScanComplete(ctx context.Context, w io.Writer, repoID string) error 
 		}
 		progress := fetchScanProgress(ctx)
 		row, inFlight := progress[repoID]
+		if inFlight {
+			sawInFlight = true
+		}
 		if !inFlight {
 			// Either the scan finished (no entry in scans_in_flight) or the
 			// daemon went away. Distinguish by checking the repo's status —
@@ -801,16 +813,29 @@ func waitForScanComplete(ctx context.Context, w io.Writer, repoID string) error 
 					}
 				}
 			}
-			// Not promoted and no in-flight entry — scan likely failed
-			// (or finished before we got our first poll in). Surface the
-			// daemon log's most recent error for this repo when we can
-			// find one, so the user sees the cause inline instead of
-			// being told to grep (solov2-jtl5.7).
+			// Not promoted and no in-flight entry. Two distinct cases:
+			//
+			//  (a) The scan never started yet — daemon scheduler hasn't
+			//      enqueued it. Stay in the loop until startupGrace elapses
+			//      so we don't surface a false-negative on the user's very
+			//      first repo (solov2-beda). After grace, treat it as a
+			//      scheduler issue and error out.
+			//  (b) The scan was previously in-flight and has since left
+			//      the set without producing a last_promoted_sha — that's
+			//      a real failure; surface the daemon log's cause.
 			logPath := filepath.Join(config.DefaultVectorDir(), "logs", "daemon.log")
+			if !sawInFlight && time.Since(start) < startupGrace {
+				time.Sleep(pollInterval)
+				continue
+			}
 			if reason := tailScanFailureReason(logPath, repoID); reason != "" {
 				fmt.Fprintf(w, "  ✗ cold scan failed: %s\n", reason)
 				fmt.Fprintf(w, "    full context: tail %s\n", logPath)
 				return fmt.Errorf("cold scan failed")
+			}
+			if !sawInFlight {
+				fmt.Fprintf(w, "  ✗ scan never started after %.0fs — daemon may be wedged; tail %s\n", time.Since(start).Seconds(), logPath)
+				return fmt.Errorf("cold scan did not start")
 			}
 			fmt.Fprintf(w, "  scan no longer in flight, repo not yet promoted — tail %s for the cause\n", logPath)
 			return nil
