@@ -22,19 +22,37 @@ import (
 // eng_search_semantic results saved.
 func doctorSavingsCmd() *cobra.Command {
 	var jsonOut bool
+	var aggregate bool
 	cmd := &cobra.Command{
 		Use:          "savings",
 		Short:        "Show inline-snippet token savings per period",
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runSavings(cmd.OutOrStdout(), config.DefaultVectorDir(), time.Now(), jsonOut)
+			return runSavings(cmd.OutOrStdout(), config.DefaultVectorDir(), time.Now(), jsonOut, aggregate)
 		},
 	}
 	cmd.Flags().BoolVar(&jsonOut, "json", false, "output results as JSON")
+	// --aggregate forces the pooled single-bucket output. Today this is
+	// the only mode (the recorder is not partitioned by repo_id yet —
+	// see solov2-0ql0), so the flag is effectively a no-op alias. It is
+	// introduced now so the eventual per-repo default has a stable
+	// opt-out and scripts written today keep working unchanged.
+	cmd.Flags().BoolVar(&aggregate, "aggregate", false, "pool every registered repo into a single row (current default)")
 	return cmd
 }
 
-func runSavings(w io.Writer, veskaHome string, now time.Time, jsonOut bool) error {
+// runSavings reads the savings.jsonl rollup and renders it.
+//
+// Per-repo breakdown (one row per registered repo plus a total — the
+// goal of solov2-izh6.21) is gated on the recorder learning to tag each
+// Entry with its repo_id; until that follow-up (solov2-0ql0) lands,
+// every entry is in one unlabelled pool. The text mode therefore
+// surfaces the pool under an explicit "all repos" header so the user
+// knows the figure is not specific to one repo, and the --aggregate
+// flag is wired up now so the future per-repo default has a documented
+// opt-out path.
+func runSavings(w io.Writer, veskaHome string, now time.Time, jsonOut, aggregate bool) error {
+	_ = aggregate // see doc comment — single-bucket today, flag is forward-compat.
 	path := filepath.Join(veskaHome, "savings.jsonl")
 	rep, err := savings.Aggregate(path, now)
 	if err != nil {
@@ -48,6 +66,7 @@ func runSavings(w io.Writer, veskaHome string, now time.Time, jsonOut bool) erro
 		return nil
 	}
 	fmt.Fprintln(w, "savings (file_chars vs snippet_chars; higher = more agent-side reads avoided):")
+	fmt.Fprintln(w, "  all repos:")
 	for _, p := range []savings.Period{rep.Today, rep.Last7d, rep.AllTime} {
 		fmt.Fprintln(w, formatSavingsRow(p))
 	}
