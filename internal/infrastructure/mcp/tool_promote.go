@@ -90,10 +90,12 @@ type promoteResult struct {
 // degrades to "promote is unavailable" without taking the daemon down.
 func RegisterPromoteTool(r *Registry, deps PromoteDeps) {
 	r.MustRegister(ToolSpec{
-		Name:        "eng_promote_repo",
-		Description: "Re-stage and promote files changed in HEAD. Accepts repo_id (full or short) or root_path.",
-		InputSchema: promoteRepoInputSchema,
-		Handler:     makePromoteHandler(deps),
+		Name:         "eng_promote_repo",
+		Description:  "Re-stage and promote files changed in HEAD. Accepts repo_id (full or short) or root_path.",
+		InputSchema:  promoteRepoInputSchema,
+		Handler:      makePromoteHandler(deps),
+		CLIExempt:    ExemptDeferred,
+		ExemptReason: "manual promotion is a power-user knob today; CLI surface deferred until the use-case stabilises. Closest equivalent is `veska reindex` (full cold scan).",
 	})
 }
 

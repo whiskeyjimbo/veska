@@ -22,18 +22,24 @@ func RegisterTaskTools(r *Registry, db *sql.DB, aw ports.AuditWriter) {
 		Handler:         makeSetActiveTaskHandler(db, aw),
 		InputSchema:     setActiveTaskInputSchema,
 		OutputSchema:    setActiveTaskOutputSchema,
+		CLIExempt:       ExemptAgentOnly,
+		ExemptReason:    "active-task is a per-MCP-session anchor for context-pack auto-seeding; the CLI's one-shot model doesn't carry the session state this targets.",
 	})
 	r.MustRegister(ToolSpec{
 		Name:            "eng_get_active_task",
 		Description:     "Get the currently active task for a repo, or null if none is active.",
 		IncludesStaging: false,
 		Handler:         makeGetActiveTaskHandler(db),
+		CLIExempt:       ExemptAgentOnly,
+		ExemptReason:    "paired with eng_set_active_task; same session-state argument.",
 	})
 	r.MustRegister(ToolSpec{
 		Name:            "eng_get_task_history",
 		Description:     "Get task history for a repo ordered by creation time, newest first.",
 		IncludesStaging: false,
 		Handler:         makeGetTaskHistoryHandler(db),
+		CLIExempt:       ExemptAgentOnly,
+		ExemptReason:    "task tooling is end-to-end an MCP-session surface; no CLI consumer.",
 	})
 }
 

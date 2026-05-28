@@ -98,6 +98,59 @@ type ToolSpec struct {
 	// OutputSchema is an optional JSON Schema describing the tool's result
 	// shape. Empty when the tool publishes no schema.
 	OutputSchema json.RawMessage
+
+	// CLIExempt declares that this tool intentionally does not have a
+	// corresponding `veska <subcommand>` wrapper. Without a value here, the
+	// CLI/MCP parity lint (tools/lint/cliparity, prereq for solov2-xomk)
+	// flags any tool that ships without a cobra counterpart. Use one of
+	// the CLIExempt* constants below; combine with ExemptReason on
+	// ExemptDeferred to explain the choice.
+	CLIExempt CLIExempt
+	// ExemptReason is a one-line free text justification, required when
+	// CLIExempt is ExemptDeferred (the parity lint enforces it). Optional
+	// otherwise — useful breadcrumbs for ExemptInternal / ExemptAgentOnly
+	// when the reason isn't obvious from the name alone.
+	ExemptReason string
+}
+
+// CLIExempt enumerates the legitimate reasons a registered MCP tool does
+// not get a `veska <subcommand>` wrapper. The parity lint
+// (solov2-xomk) uses this to distinguish "missing CLI" from "MCP-only
+// by design".
+type CLIExempt int
+
+const (
+	// CLIExemptNone is the zero value: the parity lint expects a cobra
+	// subcommand to exist for this tool.
+	CLIExemptNone CLIExempt = iota
+	// ExemptInternal covers tools registered for the daemon's own use,
+	// debugging fixtures, or test-only paths that must not appear in a
+	// user-facing CLI surface (e.g. eng_delete_node, eng_get_legacy).
+	ExemptInternal
+	// ExemptAgentOnly covers tools whose semantics only make sense
+	// inside an MCP session with conversational state — the cobra CLI's
+	// one-shot model can't carry that state (e.g. active-task tools).
+	ExemptAgentOnly
+	// ExemptDeferred is the "we'll wrap this later" exemption. Requires
+	// ExemptReason to be non-empty so future readers know whether to
+	// wrap it or upgrade the reason to ExemptInternal / ExemptAgentOnly.
+	ExemptDeferred
+)
+
+// String renders the CLIExempt value for lint and docs output.
+func (c CLIExempt) String() string {
+	switch c {
+	case CLIExemptNone:
+		return "none"
+	case ExemptInternal:
+		return "internal"
+	case ExemptAgentOnly:
+		return "agent-only"
+	case ExemptDeferred:
+		return "deferred"
+	default:
+		return fmt.Sprintf("CLIExempt(%d)", int(c))
+	}
 }
 
 // Registry holds the set of registered tools and dispatches incoming tool calls.
@@ -162,8 +215,27 @@ func (r *Registry) Register(spec ToolSpec) error {
 	if len(spec.OutputSchema) > 0 && !json.Valid(spec.OutputSchema) {
 		return fmt.Errorf("mcp: tool %q OutputSchema is not valid JSON", spec.Name)
 	}
+	if spec.CLIExempt == ExemptDeferred && spec.ExemptReason == "" {
+		return fmt.Errorf("mcp: tool %q has CLIExempt=ExemptDeferred but no ExemptReason; either supply a reason or pick ExemptInternal/ExemptAgentOnly (solov2-4ygz)", spec.Name)
+	}
 	r.tools[spec.Name] = spec
 	return nil
+}
+
+// Tools returns a snapshot of every registered ToolSpec, ordered by
+// name. Used by the parity lint (solov2-xomk) to walk the catalogue
+// without exposing the internal map.
+func (r *Registry) Tools() []ToolSpec {
+	names := make([]string, 0, len(r.tools))
+	for name := range r.tools {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	out := make([]ToolSpec, 0, len(names))
+	for _, n := range names {
+		out = append(out, r.tools[n])
+	}
+	return out
 }
 
 // MustRegister panics if Register returns an error. Use at init time.
