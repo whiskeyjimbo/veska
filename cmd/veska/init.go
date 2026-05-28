@@ -86,7 +86,7 @@ func runInit(ctx context.Context, deps initDeps, flags initFlags, out io.Writer)
 
 	// ── 3. Summary ───────────────────────────────────────────────────────────
 	fmt.Fprintln(out, "veska initialized")
-	fmt.Fprintf(out, "data:     %s\n", deps.veskaHome)
+	fmt.Fprintf(out, "data:     %s  (override with VESKA_HOME)\n", deps.veskaHome)
 	fmt.Fprintf(out, "embedder: %s\n", embedderLine)
 	fmt.Fprintln(out, "service:  not installed (run: veska service install)")
 	fmt.Fprintln(out, "repo:     not added (run: veska repo add <path>)")
@@ -211,7 +211,7 @@ func resolveInitEmbedder(ctx context.Context, deps initDeps) (line, tip string, 
 // ModelID — model2vec providers render as "model2vec(<name>)".
 func embedderProvenance(veskaHome, modelID string) string {
 	if modelID == embedstatic.ModelID {
-		return "(in-process, fallback)"
+		return "(local CPU, low-quality fallback)"
 	}
 	name := modelID
 	if i := strings.Index(modelID, "("); i >= 0 {
@@ -220,12 +220,12 @@ func embedderProvenance(veskaHome, modelID string) string {
 		}
 	}
 	if p, err := model2vec.TryLoad(veskaHome, name); err == nil && p != nil {
-		return "(in-process, downloaded)"
+		return "(local CPU, downloaded model)"
 	}
 	if _, ok := model2vec.Embedded(); ok {
-		return "(in-process, fat)"
+		return "(local CPU, model baked into the binary; no Ollama required — set VESKA_EMBEDDER=ollama to switch)"
 	}
-	return "(in-process)"
+	return "(local CPU)"
 }
 
 // configTemplateHeader prefixes every generated config.toml. CONFIG-SURFACE.md
