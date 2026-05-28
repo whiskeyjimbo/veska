@@ -7,6 +7,8 @@ import (
 	"io"
 
 	"github.com/spf13/cobra"
+
+	mcpinfra "github.com/whiskeyjimbo/veska/internal/infrastructure/mcp"
 )
 
 // normalizeDirection accepts the user-friendly aliases callers/callees
@@ -35,9 +37,12 @@ func callsCmd() *cobra.Command {
 		expandXR bool
 	)
 	cmd := &cobra.Command{
-		Use:          "calls <symbol-or-node-id>",
-		Short:        "Walk CALLS edges from a symbol (wraps eng_get_call_chain)",
-		Long:         `Walk CALLS edges. --direction=out (default) shows callees ("what does this reach"); --direction=in shows callers ("what calls this"); --direction=both unions them. Pass a symbol name or a node_id.`,
+		Use:   "calls <symbol-or-node-id>",
+		Short: "Walk CALLS edges from a symbol (wraps eng_get_call_chain)",
+		// Long is shared verbatim with the eng_get_call_chain MCP tool
+		// description so the chained_selectors_unresolved fallback
+		// guidance can't drift between CLI and MCP surfaces. solov2-izh6.20.
+		Long:         mcpinfra.DescCallChain,
 		Args:         cobra.ExactArgs(1),
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -82,9 +87,12 @@ func blastCmd() *cobra.Command {
 		jsonOut  bool
 	)
 	cmd := &cobra.Command{
-		Use:          "blast <symbol-or-node-id>",
-		Short:        "Compute blast radius for a symbol (wraps eng_get_blast_radius)",
-		Long:         `Show the set of symbols transitively reached (or reaching) the seed. Use BEFORE editing an exported symbol or scoping a refactor. --direction=both (default) walks callers AND callees.`,
+		Use:   "blast <symbol-or-node-id>",
+		Short: "Compute blast radius for a symbol (wraps eng_get_blast_radius)",
+		// Long is shared verbatim with the eng_get_blast_radius MCP tool
+		// description so the diff/dirty variants and cross-repo fan-out
+		// behaviour can't drift between CLI and MCP surfaces. solov2-izh6.20.
+		Long:         mcpinfra.DescBlastRadius,
 		Args:         cobra.ExactArgs(1),
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
