@@ -87,6 +87,7 @@ func runInit(ctx context.Context, deps initDeps, flags initFlags, out io.Writer)
 	// ── 3. Summary ───────────────────────────────────────────────────────────
 	fmt.Fprintln(out, "veska initialized")
 	fmt.Fprintf(out, "data:     %s  (override with VESKA_HOME)\n", deps.veskaHome)
+	fmt.Fprintf(out, "backups:  %s  (kept separate from data — both must be wiped for a clean reset; solov2-ylgd)\n", defaultBackupDirHint())
 	fmt.Fprintf(out, "embedder: %s\n", embedderLine)
 	fmt.Fprintln(out, "service:  not installed (run: veska service install)")
 	fmt.Fprintln(out, "repo:     not added (run: veska repo add <path>)")
@@ -115,6 +116,18 @@ func runInit(ctx context.Context, deps initDeps, flags initFlags, out io.Writer)
 	fmt.Fprintln(out, "ready")
 
 	return nil
+}
+
+// defaultBackupDirHint returns the user-visible default backup directory
+// path. It mirrors the backup-create / restore default (~/.veska-backups)
+// without importing those packages, so init can name it on the summary
+// without coupling to backup wiring (solov2-ylgd).
+func defaultBackupDirHint() string {
+	home, err := os.UserHomeDir()
+	if err != nil || home == "" {
+		return "~/.veska-backups"
+	}
+	return filepath.Join(home, ".veska-backups")
 }
 
 // stdinIsInteractive reports whether os.Stdin is a TTY. Used to decide
