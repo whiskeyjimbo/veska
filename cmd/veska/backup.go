@@ -263,6 +263,25 @@ func backupVerifyCmd() *cobra.Command {
 			w := cmd.OutOrStdout()
 			tarPath := args[0]
 
+			// solov2-tkqd: resolve a bare backup name (the NAME column from
+			// `backup list`) against the configured backups dir, then stat
+			// the file before calling Verify. Otherwise Verify's "couldn't
+			// open the archive" failure was rendered as "broken
+			// (db_integrity=false, ...)" — indistinguishable from a real
+			// corrupt-DB result, which made fat-fingered paths look like
+			// healthy backups had gone bad.
+			if _, statErr := os.Stat(tarPath); statErr != nil && !filepath.IsAbs(tarPath) && !strings.ContainsRune(tarPath, filepath.Separator) {
+				if dir, derr := defaultBackupDir(); derr == nil {
+					candidate := filepath.Join(dir, tarPath)
+					if _, csErr := os.Stat(candidate); csErr == nil {
+						tarPath = candidate
+					}
+				}
+			}
+			if _, statErr := os.Stat(tarPath); statErr != nil {
+				return fmt.Errorf("backup verify: %w", statErr)
+			}
+
 			result, err := backup.Verify(tarPath)
 			if err != nil {
 				return fmt.Errorf("backup verify: %w", err)
