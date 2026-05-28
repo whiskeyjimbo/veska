@@ -220,3 +220,22 @@ func TestExpandNodeIDPrefix_RejectsBadAndExpandsGood(t *testing.T) {
 		}
 	})
 }
+
+// TestSortedKeysAnnotated_FlagsRequired pins solov2-m5c2: when a tool's
+// schema declares "required" properties, the unknown-parameter error must
+// mark them as such so a caller can correct the call from the error
+// alone. Required keys also sort before optional ones.
+func TestSortedKeysAnnotated_FlagsRequired(t *testing.T) {
+	props := map[string]json.RawMessage{
+		"file_path": json.RawMessage(`{}`),
+		"line":      json.RawMessage(`{}`),
+		"limit":     json.RawMessage(`{}`),
+		"branch":    json.RawMessage(`{}`),
+	}
+	req := map[string]bool{"file_path": true, "line": true}
+	got := sortedKeysAnnotated(props, req)
+	want := "file_path (required), line (required), branch, limit"
+	if got != want {
+		t.Errorf("got %q\nwant %q", got, want)
+	}
+}
