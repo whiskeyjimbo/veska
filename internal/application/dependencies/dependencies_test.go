@@ -3,6 +3,7 @@ package dependencies_test
 import (
 	"context"
 	"errors"
+	"fmt"
 	"testing"
 
 	"github.com/whiskeyjimbo/veska/internal/application/dependencies"
@@ -116,7 +117,7 @@ func TestService_DefaultTopKCapsCallSites(t *testing.T) {
 	for i := range dependencies.DefaultTopK + 3 {
 		rows = append(rows, dependencies.StubRow{
 			ModulePath: "github.com/foo/bar",
-			SymbolPath: "Func",
+			SymbolPath: fmt.Sprintf("Func%d", i),
 			SrcNodeID:  string(rune('a' + i)),
 			Language:   "go",
 		})
@@ -131,6 +132,39 @@ func TestService_DefaultTopKCapsCallSites(t *testing.T) {
 	}
 	if res.Dependencies[0].UsageCount != dependencies.DefaultTopK+3 {
 		t.Errorf("UsageCount = %d, want %d", res.Dependencies[0].UsageCount, dependencies.DefaultTopK+3)
+	}
+}
+
+// TestService_DedupesTopCallSitesBySymbol pins solov2-tpvr: when N stub
+// rows all target the same SymbolPath (the common case for a hot library
+// function called from many sites), TopCallSites must show that symbol
+// exactly once and use the remaining TopK slots for other symbols.
+// Previously the output was "New, Hello, New, Shout" — the same name
+// duplicated across the sample.
+func TestService_DedupesTopCallSitesBySymbol(t *testing.T) {
+	rows := []dependencies.StubRow{
+		{ModulePath: "m", SymbolPath: "New", SrcNodeID: "a", Language: "go"},
+		{ModulePath: "m", SymbolPath: "Hello", SrcNodeID: "b", Language: "go"},
+		{ModulePath: "m", SymbolPath: "New", SrcNodeID: "c", Language: "go"},
+		{ModulePath: "m", SymbolPath: "Shout", SrcNodeID: "d", Language: "go"},
+	}
+	svc, _ := dependencies.NewService(&stubAggregator{rows: rows}, nil, nil)
+	res, _ := svc.List(context.Background(), "r1", "main")
+	if len(res.Dependencies) != 1 {
+		t.Fatalf("want 1 module, got %d", len(res.Dependencies))
+	}
+	got := res.Dependencies[0].TopCallSites
+	seen := map[string]int{}
+	for _, cs := range got {
+		seen[cs.SymbolPath]++
+	}
+	for sym, n := range seen {
+		if n > 1 {
+			t.Errorf("symbol %q appears %d times in TopCallSites; want distinct", sym, n)
+		}
+	}
+	if res.Dependencies[0].UsageCount != 4 {
+		t.Errorf("UsageCount = %d, want 4 (every stub row counts toward popularity)", res.Dependencies[0].UsageCount)
 	}
 }
 
