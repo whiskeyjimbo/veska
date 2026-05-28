@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -169,5 +170,25 @@ func TestResolveWikiTarget(t *testing.T) {
 		}
 	})
 
-	_ = repoRoot
+	// solov2-rtql: positional path arg resolves the repo by RootPath.
+	t.Run("registered path resolves to repo", func(t *testing.T) {
+		gotRepo, _, err := resolveWikiTarget(ctx, db, repoRoot, "")
+		if err != nil {
+			t.Fatalf("resolveWikiTarget(path): %v", err)
+		}
+		if gotRepo != repoID {
+			t.Errorf("repo: got %q want %q", gotRepo, repoID)
+		}
+	})
+
+	t.Run("unregistered existing path errors clearly", func(t *testing.T) {
+		other := t.TempDir()
+		_, _, err := resolveWikiTarget(ctx, db, other, "")
+		if err == nil {
+			t.Fatal("expected error for unregistered path")
+		}
+		if !strings.Contains(err.Error(), "not a registered repository") {
+			t.Errorf("want %q in err, got %v", "not a registered repository", err)
+		}
+	})
 }
