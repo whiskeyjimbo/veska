@@ -156,10 +156,14 @@ func resolveVulnChoice(flags initFlags, out io.Writer) (bool, error) {
 	// we chose so the caller can read the summary and know vuln scanning
 	// is on without inspecting config.toml.
 	if !flags.interactive {
-		fmt.Fprintln(out, "OSV vulnerability scanning: enabled (default; non-interactive stdin)")
+		fmt.Fprintln(out, "OSV vulnerability scanning: enabled (default; non-interactive stdin — pass --no-vuln to opt out, --yes to silence this line)")
 		return true, nil
 	}
-	fmt.Fprint(out, "Enable OSV vulnerability scanning? [Y/n] ")
+	// solov2-k4pe: surface that the default makes the daemon query osv.dev
+	// over the network, and point at --no-vuln / --yes so a junior never
+	// has to grep --help to script the install.
+	fmt.Fprintln(out, "Enable OSV vulnerability scanning? (queries osv.dev over the network)")
+	fmt.Fprint(out, "  [Y/n] (or rerun with --yes / --no-vuln to skip this prompt): ")
 	reader := bufio.NewReader(flags.stdin)
 	line, err := reader.ReadString('\n')
 	if err != nil && line == "" {
@@ -168,7 +172,7 @@ func resolveVulnChoice(flags initFlags, out io.Writer) (bool, error) {
 		// chose so a user piping/redirecting stdin (which presents as a
 		// TTY to the parent shell) still sees the resolved choice
 		// instead of an unanswered prompt (solov2-cgut).
-		fmt.Fprintln(out, "yes (stdin EOF; accepting default)")
+		fmt.Fprintln(out, "yes (stdin EOF; accepting default — pass --no-vuln next time to opt out)")
 		return true, nil
 	}
 	switch strings.ToLower(strings.TrimSpace(line)) {
