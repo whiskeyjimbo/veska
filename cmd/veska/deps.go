@@ -208,22 +208,22 @@ func skippedSuffix(n int) string {
 
 // lookupRepoRootAndBranch is a thin direct-DB lookup used by `veska
 // deps index` when the daemon is offline (and so eng_get_repo isn't
-// available). Accepts the full repo_id or the 12-char short prefix.
-// Returns the canonical root path + active branch for repoID, or an
-// error when the repo isn't registered.
+// available). Accepts everything the unified resolver accepts: full
+// repo_id, 12-char short_id, user alias, or unambiguous prefix
+// (solov2-2kug). Returns the canonical root path + active branch for
+// the resolved repo, or an error when nothing matches.
 func lookupRepoRootAndBranch(ctx context.Context, db *sql.DB, repoID string) (string, string, error) {
 	recs, err := repo.List(ctx, db)
 	if err != nil {
 		return "", "", fmt.Errorf("list repos: %w", err)
 	}
-	for _, rec := range recs {
-		if rec.RepoID == repoID || strings.HasPrefix(rec.RepoID, repoID) {
-			branch := rec.ActiveBranch
-			if branch == "" {
-				branch = "main"
-			}
-			return rec.RootPath, branch, nil
-		}
+	rec, err := resolveCLIRepoID(recs, repoID)
+	if err != nil {
+		return "", "", err
 	}
-	return "", "", fmt.Errorf("repo %q not registered (run `veska repo list` to see registered repos)", repoID)
+	branch := rec.ActiveBranch
+	if branch == "" {
+		branch = "main"
+	}
+	return rec.RootPath, branch, nil
 }
