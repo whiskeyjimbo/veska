@@ -48,7 +48,7 @@ func depsListCmd() *cobra.Command {
 	)
 	cmd := &cobra.Command{
 		Use:          "list [<id-or-path>]",
-		Short:        "List external modules the repo imports, ranked by call-site usage",
+		Short:        "List external modules the repo CALLS into, ranked by call-site count (solov2-rpbo: import-only modules without resolved calls do not appear yet)",
 		Args:         cobra.MaximumNArgs(1),
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
