@@ -515,6 +515,34 @@ func TestListFindings_DefaultStateIsOpen(t *testing.T) {
 	}
 }
 
+// TestListFindings_StateAnyReturnsEveryLifecycleRow pins solov2-f3ep:
+// state="any" disables the per-state WHERE clause so closed/resolved
+// findings come back in the same query as open ones. This is the daemon
+// side of `veska findings list --all --repo <id>` ("all states, one repo")
+// — previously the CLI rejected that combination with a "mutually
+// exclusive" error.
+func TestListFindings_StateAnyReturnsEveryLifecycleRow(t *testing.T) {
+	db := newFindingsDB(t)
+	seedFinding(t, db, "open-f", "main", "repo-1", "low", "open")
+	seedFinding(t, db, "closed-f", "main", "repo-1", "low", "closed")
+
+	r := NewRegistry()
+	RegisterFindingTools(r, db, nil, nil)
+
+	actor := domain.Actor{ID: "agent:bot", Kind: domain.ActorKindAgent}
+	result, rpcErr := dispatchListFindings(t, r, actor, map[string]string{
+		"repo_id": "repo-1", "branch": "main", "state": "any",
+	})
+	if rpcErr != nil {
+		t.Fatalf("unexpected RPC error: %v", rpcErr.Message)
+	}
+	m := result.(map[string]any)
+	findings, _ := m["findings"].([]findingRow)
+	if len(findings) != 2 {
+		t.Errorf("expected 2 findings (open + closed), got %d: %+v", len(findings), findings)
+	}
+}
+
 // TestListFindings_ResolvesRepoIDFromCWD pins solov2-ig2x: when the caller
 // omits repo_id but the shim has injected a cwd that matches a registered
 // repo's RootPath, eng_list_findings must resolve via the RepoLister instead
