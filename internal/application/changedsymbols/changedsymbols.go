@@ -47,12 +47,17 @@ const (
 	ChangeModified Change = "modified"
 )
 
-// SymbolChange describes a single classified symbol.
+// SymbolChange describes a single classified symbol. LineStart/LineEnd are
+// the symbol's line range at the *ref_b* side for added/modified, and at
+// ref_a for removed — i.e. the location an editor should jump to so the
+// user can read the symbol that exists at the surviving ref.
 type SymbolChange struct {
 	SymbolPath string          `json:"symbol_path"`
 	Name       string          `json:"name"`
 	Kind       domain.NodeKind `json:"kind"`
 	FilePath   string          `json:"file_path"`
+	LineStart  int             `json:"line_start"`
+	LineEnd    int             `json:"line_end"`
 	Change     Change          `json:"change"`
 }
 
@@ -135,7 +140,15 @@ func (s *Service) Diff(ctx context.Context, repoID, repoRoot, refA, refB string)
 			nonSymbolOnlyFiles++
 		}
 	}
-	if nonSymbolOnlyFiles > 0 {
+	// solov2-qu6l: only surface the "non_symbol_changes_only" hint when
+	// EVERY symbol bucket is empty. Previously the hint fired any time at
+	// least one changed file had no symbol diff — which contradicted itself
+	// in mixed commits (e.g. one .go file added a method AND a generated
+	// .md file changed: the response had a real symbol diff yet still
+	// claimed "non_symbol_changes_only"). The user-visible purpose of the
+	// hint is "the diff is empty, but stuff did change — here's why"; once
+	// the diff is non-empty the hint is just noise.
+	if nonSymbolOnlyFiles > 0 && len(res.Added)+len(res.Removed)+len(res.Modified) == 0 {
 		res.DegradedReasons = append(res.DegradedReasons, DegradedReasonNonSymbolChangesOnly)
 	}
 	sortChanges(res.Added)
@@ -226,13 +239,18 @@ func contentHash(n *domain.Node) string {
 }
 
 func toChange(path string, n *domain.Node, c Change) SymbolChange {
-	return SymbolChange{
+	sc := SymbolChange{
 		SymbolPath: symbolKey(n),
 		Name:       n.Name,
 		Kind:       n.Kind,
 		FilePath:   path,
 		Change:     c,
 	}
+	if n.Lines != nil {
+		sc.LineStart = n.Lines.Start
+		sc.LineEnd = n.Lines.End
+	}
+	return sc
 }
 
 func sortChanges(cs []SymbolChange) {

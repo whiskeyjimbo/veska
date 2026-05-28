@@ -225,13 +225,13 @@ func renderChangedSymbols(w io.Writer, raw json.RawMessage) error {
 		fmt.Fprintln(w, "no symbol-grain changes")
 	}
 	for _, r := range env.Added {
-		fmt.Fprintf(w, "+ %-10s %s:%d-%d  %s\n", r.Kind, r.FilePath, r.LineStart, r.LineEnd, r.Name)
+		fmt.Fprintln(w, formatSymRow("+", r))
 	}
 	for _, r := range env.Removed {
-		fmt.Fprintf(w, "- %-10s %s:%d-%d  %s\n", r.Kind, r.FilePath, r.LineStart, r.LineEnd, r.Name)
+		fmt.Fprintln(w, formatSymRow("-", r))
 	}
 	for _, r := range env.Modified {
-		fmt.Fprintf(w, "~ %-10s %s:%d-%d  %s\n", r.Kind, r.FilePath, r.LineStart, r.LineEnd, r.Name)
+		fmt.Fprintln(w, formatSymRow("~", r))
 	}
 	for _, d := range env.DegradedReasons {
 		fmt.Fprintf(w, "[degraded: %s]\n", d)
@@ -245,6 +245,16 @@ type symRow struct {
 	FilePath  string `json:"file_path"`
 	LineStart int    `json:"line_start"`
 	LineEnd   int    `json:"line_end"`
+}
+
+// formatSymRow prints one changed-symbol row with mark prefix. When line
+// info is missing (older daemons, or kinds the parser doesn't position)
+// the ":0-0" suffix is dropped so the output stays readable.
+func formatSymRow(mark string, r symRow) string {
+	if r.LineStart == 0 && r.LineEnd == 0 {
+		return fmt.Sprintf("%s %-10s %s  %s", mark, r.Kind, r.FilePath, r.Name)
+	}
+	return fmt.Sprintf("%s %-10s %s:%d-%d  %s", mark, r.Kind, r.FilePath, r.LineStart, r.LineEnd, r.Name)
 }
 
 // looksLikeNodeID reports whether s looks like a hex content-hash node
