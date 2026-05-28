@@ -62,30 +62,23 @@ func makeGetFindingHandler(db *sql.DB) ToolHandler {
 			return nil, rpcErr
 		}
 
-		// solov2-qwpt: finding_id is globally unique. Treat branch as an
-		// optional consistency hint — look the row up by id alone, then
-		// reject only when a supplied branch disagrees with the row.
-		query := `SELECT finding_id, branch, repo_id, node_id, file_path, severity, source_layer,
-				rule, message, state, closed_reason, created_at, closed_at, actor_id, actor_kind
-			   FROM findings WHERE finding_id = ?`
-		args := []any{p.FindingID}
-		if p.Branch != "" {
-			query += ` AND branch = ?`
-			args = append(args, p.Branch)
+		// solov2-zyp4: accept an unambiguous finding_id prefix (12+ chars in
+		// the CLI listing). solov2-qwpt: finding_id is globally unique, so
+		// branch is just a consistency hint; the resolver checks it when set.
+		fullID, rpcErr := resolveFindingPrefix(ctx, db, p.FindingID, p.Branch)
+		if rpcErr != nil {
+			return nil, rpcErr
 		}
-
 		var f findingRow
-		err := db.QueryRowContext(ctx, query, args...).Scan(
+		err := db.QueryRowContext(ctx,
+			`SELECT finding_id, branch, repo_id, node_id, file_path, severity, source_layer,
+			        rule, message, state, closed_reason, created_at, closed_at, actor_id, actor_kind
+			   FROM findings WHERE finding_id = ?`, fullID,
+		).Scan(
 			&f.FindingID, &f.Branch, &f.RepoID, &f.NodeID, &f.FilePath,
 			&f.Severity, &f.SourceLayer, &f.Rule, &f.Message, &f.State,
 			&f.ClosedReason, &f.CreatedAt, &f.ClosedAt, &f.ActorID, &f.ActorKind,
 		)
-		if err == sql.ErrNoRows {
-			if p.Branch != "" {
-				return nil, &RPCError{Code: CodeNotFound, Message: fmt.Sprintf("finding not found: %s on branch %s", p.FindingID, p.Branch)}
-			}
-			return nil, &RPCError{Code: CodeNotFound, Message: fmt.Sprintf("finding not found: %s", p.FindingID)}
-		}
 		if err != nil {
 			return nil, &RPCError{Code: CodeInternalError, Message: fmt.Sprintf("query finding: %v", err)}
 		}
@@ -99,6 +92,60 @@ func makeGetFindingHandler(db *sql.DB) ToolHandler {
 
 		return map[string]any{"finding": f}, nil
 	}
+}
+
+// findingPrefixQuerier is the subset of *sql.DB / *sql.Tx that the prefix
+// resolver needs — lets close/reopen handlers resolve on their own tx so
+// the row is locked through the subsequent UPDATE.
+type findingPrefixQuerier interface {
+	QueryContext(ctx context.Context, query string, args ...any) (*sql.Rows, error)
+}
+
+// resolveFindingPrefix maps a finding_id prefix to its full id. Used so the
+// MCP handlers (eng_get_finding, eng_close_finding, eng_reopen_finding,
+// eng_suppress_finding) accept the 12-char short form `veska findings list`
+// prints, mirroring the short-id resolution other tools already do
+// (solov2-zyp4). Branch, when supplied, scopes the match.
+//
+// Returns the full finding_id when exactly one row matches; CodeNotFound
+// for zero matches and CodeInvalidParams for an ambiguous prefix.
+func resolveFindingPrefix(ctx context.Context, q findingPrefixQuerier, prefix, branch string) (string, *RPCError) {
+	if prefix == "" {
+		return "", &RPCError{Code: CodeInvalidParams, Message: "finding_id is required"}
+	}
+	query := `SELECT finding_id FROM findings WHERE finding_id LIKE ? || '%'`
+	args := []any{prefix}
+	if branch != "" {
+		query += ` AND branch = ?`
+		args = append(args, branch)
+	}
+	query += ` LIMIT 2`
+	rows, err := q.QueryContext(ctx, query, args...)
+	if err != nil {
+		return "", &RPCError{Code: CodeInternalError, Message: fmt.Sprintf("query finding: %v", err)}
+	}
+	defer rows.Close()
+	var matched []string
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return "", &RPCError{Code: CodeInternalError, Message: fmt.Sprintf("scan finding: %v", err)}
+		}
+		matched = append(matched, id)
+	}
+	if err := rows.Err(); err != nil {
+		return "", &RPCError{Code: CodeInternalError, Message: fmt.Sprintf("iterate findings: %v", err)}
+	}
+	if len(matched) == 0 {
+		if branch != "" {
+			return "", &RPCError{Code: CodeNotFound, Message: fmt.Sprintf("finding not found: %s on branch %s", prefix, branch)}
+		}
+		return "", &RPCError{Code: CodeNotFound, Message: fmt.Sprintf("finding not found: %s", prefix)}
+	}
+	if len(matched) > 1 {
+		return "", &RPCError{Code: CodeInvalidParams, Message: fmt.Sprintf("ambiguous finding_id prefix %q: matches multiple findings — supply more characters", prefix)}
+	}
+	return matched[0], nil
 }
 
 // findingRepoMatches returns true when supplied matches actual exactly or
