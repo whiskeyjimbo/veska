@@ -25,6 +25,10 @@ func RegisterOwnerTools(r *Registry, db *sql.DB) {
 		IncludesStaging: false,
 		InputSchema:     findOwnerInputSchema,
 		Handler:         makeFindOwnerHandler(db),
+
+		CLIExempt: ExemptDeferred,
+
+		ExemptReason: "CLI wrapper deferred (see follow-up tracker referenced in commit history).",
 	})
 }
 
