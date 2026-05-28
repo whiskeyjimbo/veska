@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -49,7 +50,7 @@ func callsCmd() *cobra.Command {
 			if err := callMCP(cmd.Context(), "eng_get_call_chain", params, &resp); err != nil {
 				return fmt.Errorf("calls: %w", err)
 			}
-			return renderGraphChain(cmd.OutOrStdout(), resp, jsonOut)
+			return renderGraphChain(cmd.Context(), cmd.OutOrStdout(), resp, jsonOut)
 		},
 	}
 	cmd.Flags().StringVar(&repoFlag, "repo", "", "repo id, short_id, or alias (default: fan out across registered repos)")
@@ -90,7 +91,7 @@ func blastCmd() *cobra.Command {
 			if err := callMCP(cmd.Context(), "eng_get_blast_radius", params, &resp); err != nil {
 				return fmt.Errorf("blast: %w", err)
 			}
-			return renderGraphChain(cmd.OutOrStdout(), resp, jsonOut)
+			return renderGraphChain(cmd.Context(), cmd.OutOrStdout(), resp, jsonOut)
 		},
 	}
 	cmd.Flags().StringVar(&repoFlag, "repo", "", "repo id, short_id, or alias (default: fan out across registered repos)")
@@ -146,8 +147,11 @@ func changedCmd() *cobra.Command {
 }
 
 // renderGraphChain prints a {nodes, edges, cross_repo_edges} envelope as
-// a greppable table. Used by `veska calls` and `veska blast`.
-func renderGraphChain(w io.Writer, raw json.RawMessage, jsonOut bool) error {
+// a greppable table. Used by `veska calls` and `veska blast`. ctx feeds
+// the eng_get_node lookups that resolve cross-repo edge endpoints from
+// opaque hex to "symbol in file:line" form (solov2-y59h) — mirrors the
+// resolution `veska context` already does.
+func renderGraphChain(ctx context.Context, w io.Writer, raw json.RawMessage, jsonOut bool) error {
 	if jsonOut {
 		enc := json.NewEncoder(w)
 		enc.SetIndent("", "  ")
@@ -183,13 +187,30 @@ func renderGraphChain(w io.Writer, raw json.RawMessage, jsonOut bool) error {
 		}
 		return nil
 	}
+	// Build a local lookup so cross-repo edges whose src/dst is already in
+	// the response envelope can be resolved without a round-trip per side.
+	localByID := make(map[string]crossRepoNodeInfo, len(env.Nodes))
 	for _, n := range env.Nodes {
+		if n.NodeID == "" {
+			continue
+		}
+		localByID[n.NodeID] = crossRepoNodeInfo{Name: n.Name, Kind: n.Kind, FilePath: n.FilePath, Line: n.LineStart}
 		fmt.Fprintf(w, "%-10s %s:%d-%d  %s\n", n.Kind, n.FilePath, n.LineStart, n.LineEnd, n.Name)
 	}
 	if len(env.CrossRepoEdges) > 0 {
 		fmt.Fprintf(w, "cross-repo edges (%d):\n", len(env.CrossRepoEdges))
 		for _, e := range env.CrossRepoEdges {
-			fmt.Fprintf(w, "  %s --%s--> %s in %s\n", shortID(e.SrcNodeID), e.Kind, shortID(e.DstNodeID), shortID(e.DstRepoID))
+			src, ok := localByID[e.SrcNodeID]
+			if !ok || src.Name == "" {
+				src = resolveCrossRepoNode(ctx, e.SrcNodeID, "", "")
+			}
+			dst, ok := localByID[e.DstNodeID]
+			if !ok || dst.Name == "" {
+				dst = resolveCrossRepoNode(ctx, e.DstNodeID, e.DstRepoID, e.DstBranch)
+			}
+			fmt.Fprintf(w, "  %s --%s--> %s in %s\n",
+				formatCrossRepoNode(src, e.SrcNodeID), e.Kind,
+				formatCrossRepoNode(dst, e.DstNodeID), shortID(e.DstRepoID))
 		}
 	}
 	for _, d := range env.DegradedReasons {
