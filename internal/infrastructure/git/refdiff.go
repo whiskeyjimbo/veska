@@ -65,6 +65,26 @@ func ChangedFilesBetween(ctx context.Context, repoRoot, refA, refB string) ([]st
 	return out, nil
 }
 
+// WorkingTreeHasUncommittedChanges reports whether repoRoot has any
+// uncommitted modifications (staged, unstaged, or untracked Go-ish source
+// files) by running `git status --porcelain`. Returns false on any
+// shell-out error so callers don't surface a false "dirty" signal from a
+// transient git failure. Used by post-promotion-oriented tools
+// (eng_find_todos, solov2-k1jm) to add a degraded_reason explaining why
+// working-tree edits are invisible to them.
+func WorkingTreeHasUncommittedChanges(ctx context.Context, repoRoot string) bool {
+	if repoRoot == "" {
+		return false
+	}
+	cmd := exec.CommandContext(ctx, "git", "-C", repoRoot, "status", "--porcelain")
+	var stdout bytes.Buffer
+	cmd.Stdout = &stdout
+	if err := cmd.Run(); err != nil {
+		return false
+	}
+	return strings.TrimSpace(stdout.String()) != ""
+}
+
 // ResolvesRef reports whether ref resolves to a commit in repoRoot via
 // `git rev-parse --verify <ref>^{commit}`. Used by callers that need to
 // say "ref_a is the bad one" after ChangedFilesBetween returned
