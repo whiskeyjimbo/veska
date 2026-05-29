@@ -61,6 +61,14 @@ type UnresolvedCall struct {
 	// (solov2-9rc2 epic). Non-method calls keep IsMethodCall=false and
 	// resolve through the existing PkgQualifier path.
 	IsMethodCall bool
+	// SrcLine is the 1-indexed source line of the call_expression. The
+	// promotion-time resolver carries it through to the resulting
+	// cross-repo edge stub (and from there to the resolved Edge) so
+	// renderers attribute the cross-repo edge to the actual call site,
+	// not the caller node's declaration line (solov2-izh6.31). 0 means
+	// unknown (legacy parser output or non-Go parsers that have not
+	// adopted the field yet).
+	SrcLine int
 }
 
 // ParseFailure describes a single syntax-error region surfaced by the parser.

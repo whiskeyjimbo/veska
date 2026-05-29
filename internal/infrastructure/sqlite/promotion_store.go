@@ -14,6 +14,29 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/core/ports"
 )
 
+// edgeSrcLine returns the SQL bind value for the edges.src_line column —
+// the edge's 1-indexed SourceLine when set, NULL otherwise (solov2-izh6.31).
+// Persisting NULL for unknown lines keeps the migration backward-
+// compatible: legacy rows read as NULL and renderers fall back to
+// today's caller-node-line behaviour for both.
+func edgeSrcLine(e *domain.Edge) any {
+	if e == nil || e.SourceLine == nil {
+		return nil
+	}
+	return *e.SourceLine
+}
+
+// ucSrcLine returns the SQL bind value for cross_repo_edge_stubs.src_line
+// — the UnresolvedCall's SrcLine when non-zero, NULL otherwise. The
+// stub-resolution step in graph_repo (cross-repo stub → resolved Edge)
+// copies this value into the resulting Edge.SourceLine (solov2-izh6.31).
+func ucSrcLine(uc domain.UnresolvedCall) any {
+	if uc.SrcLine <= 0 {
+		return nil
+	}
+	return uc.SrcLine
+}
+
 // buildPackageSymbolMap groups symbol-name → node_id by file directory.
 // Go's "one package per directory" convention means a single map per
 // dir is sufficient for resolving same-package, cross-file calls
@@ -559,8 +582,8 @@ func (s *PromotionStore) Promote(ctx context.Context, batch application.Promotio
 	// edge_id by construction).
 	edgeStmt, eerr := tx.PrepareContext(ctx, `
 		INSERT INTO edges
-			(edge_id, branch, repo_id, src_node_id, dst_node_id, kind, confidence, last_promoted_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+			(edge_id, branch, repo_id, src_node_id, dst_node_id, kind, confidence, last_promoted_at, src_line)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT(edge_id, branch) DO NOTHING`)
 	if eerr != nil {
 		_ = tx.Rollback()
@@ -577,6 +600,7 @@ func (s *PromotionStore) Promote(ctx context.Context, batch application.Promotio
 				e.ID, branch, repoID,
 				string(e.Src), string(e.Tgt),
 				string(e.Kind), confidenceText(e.Confidence), now,
+				edgeSrcLine(e),
 			); ierr != nil {
 				_ = tx.Rollback()
 				return fmt.Errorf("promoter: insert edge %q: %w", e.ID, ierr)
@@ -620,9 +644,11 @@ func (s *PromotionStore) Promote(ctx context.Context, batch application.Promotio
 				// Self-call (recursion) — skip.
 				continue
 			}
-			e, eerr := domain.NewEdge(uc.CallerID, targetID, domain.EdgeCalls,
-				domain.WithConfidence(domain.Probable),
-			)
+			eOpts := []domain.EdgeOption{domain.WithConfidence(domain.Probable)}
+			if uc.SrcLine > 0 {
+				eOpts = append(eOpts, domain.WithSourceLine(uc.SrcLine))
+			}
+			e, eerr := domain.NewEdge(uc.CallerID, targetID, domain.EdgeCalls, eOpts...)
 			if eerr != nil {
 				continue
 			}
@@ -630,6 +656,7 @@ func (s *PromotionStore) Promote(ctx context.Context, batch application.Promotio
 				e.ID, branch, repoID,
 				string(e.Src), string(e.Tgt),
 				string(e.Kind), confidenceText(e.Confidence), now,
+				edgeSrcLine(e),
 			); ierr != nil {
 				_ = tx.Rollback()
 				return fmt.Errorf("promoter: insert cross-file edge %q: %w", e.ID, ierr)
@@ -656,8 +683,8 @@ func (s *PromotionStore) Promote(ctx context.Context, batch application.Promotio
 		// module_path. Idempotent on the deterministic stub_id.
 		stubStmt, serr := tx.PrepareContext(ctx, `
 			INSERT INTO cross_repo_edge_stubs
-				(stub_id, branch, repo_id, src_node_id, kind, module_path, symbol_path, language, last_promoted_at, method_call)
-			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+				(stub_id, branch, repo_id, src_node_id, kind, module_path, symbol_path, language, last_promoted_at, method_call, src_line)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 			ON CONFLICT(stub_id, branch) DO NOTHING`)
 		if serr != nil {
 			_ = tx.Rollback()
@@ -723,6 +750,7 @@ func (s *PromotionStore) Promote(ctx context.Context, batch application.Promotio
 						if _, ierr := stubStmt.ExecContext(ctx,
 							sid, branch, repoID, string(uc.CallerID), string(domain.EdgeCalls),
 							importPath, uc.CalleeName, "go", now, methodFlag,
+							ucSrcLine(uc),
 						); ierr != nil {
 							_ = tx.Rollback()
 							return fmt.Errorf("promoter: insert cross-repo stub %q: %w", sid, ierr)
@@ -772,9 +800,11 @@ func (s *PromotionStore) Promote(ctx context.Context, batch application.Promotio
 				if uc.CallerID == targetID {
 					continue
 				}
-				e, eerr := domain.NewEdge(uc.CallerID, targetID, domain.EdgeCalls,
-					domain.WithConfidence(domain.Probable),
-				)
+				eOpts := []domain.EdgeOption{domain.WithConfidence(domain.Probable)}
+				if uc.SrcLine > 0 {
+					eOpts = append(eOpts, domain.WithSourceLine(uc.SrcLine))
+				}
+				e, eerr := domain.NewEdge(uc.CallerID, targetID, domain.EdgeCalls, eOpts...)
 				if eerr != nil {
 					continue
 				}
@@ -782,6 +812,7 @@ func (s *PromotionStore) Promote(ctx context.Context, batch application.Promotio
 					e.ID, branch, repoID,
 					string(e.Src), string(e.Tgt),
 					string(e.Kind), confidenceText(e.Confidence), now,
+					edgeSrcLine(e),
 				); ierr != nil {
 					_ = tx.Rollback()
 					return fmt.Errorf("promoter: insert cross-package edge %q: %w", e.ID, ierr)

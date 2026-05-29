@@ -131,6 +131,7 @@ func makeGetCallChainHandler(graph ports.GraphStorage, resolve ResolveFunc, reso
 							DstBranch: re.DstBranch,
 							Kind:      re.Kind,
 							CrossRepo: true,
+							SrcLine:   re.SrcLine,
 						})
 					}
 				}
@@ -147,6 +148,7 @@ func makeGetCallChainHandler(graph ports.GraphStorage, resolve ResolveFunc, reso
 							DstBranch: re.DstBranch,
 							Kind:      re.Kind,
 							CrossRepo: true,
+							SrcLine:   re.SrcLine,
 						})
 					}
 				}

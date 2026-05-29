@@ -287,6 +287,16 @@ func extractCallsFromBody(q *sitter.Query, body *sitter.Node, src []byte, caller
 
 	for _, m := range runQuery(q, body) {
 		var ref callRef
+		// Capture the call_expression's 1-indexed start line so resolved
+		// edges and UnresolvedCalls carry the actual call-site location,
+		// not the caller node's declaration line (solov2-izh6.31).
+		// tree-sitter Row is 0-indexed; add 1. Missing @call.expr (e.g. a
+		// future calls.scm pattern that omits the wrapper capture) leaves
+		// line at 0 — the renderer falls back to the caller's line.
+		var callLine int
+		if cn := m.node("call.expr"); cn != nil {
+			callLine = int(cn.StartPoint().Row) + 1
+		}
 		switch {
 		case m.node("call.identifier") != nil:
 			n := m.node("call.identifier")
@@ -344,6 +354,7 @@ func extractCallsFromBody(q *sitter.Query, body *sitter.Node, src []byte, caller
 		if ref.name == "" {
 			continue
 		}
+		ref.line = callLine
 
 		if ref.pkg != "" {
 			suffix := ""
@@ -360,6 +371,7 @@ func extractCallsFromBody(q *sitter.Query, body *sitter.Node, src []byte, caller
 				CalleeName:   ref.name,
 				PkgQualifier: ref.pkg,
 				IsMethodCall: ref.method,
+				SrcLine:      ref.line,
 			})
 			continue
 		}
@@ -373,6 +385,7 @@ func extractCallsFromBody(q *sitter.Query, body *sitter.Node, src []byte, caller
 			unresolved = append(unresolved, domain.UnresolvedCall{
 				CallerID:   caller.ID,
 				CalleeName: ref.name,
+				SrcLine:    ref.line,
 			})
 			continue
 		}
@@ -381,9 +394,11 @@ func extractCallsFromBody(q *sitter.Query, body *sitter.Node, src []byte, caller
 			continue
 		}
 		seen[key] = true
-		e, err := domain.NewEdge(caller.ID, callee.ID, domain.EdgeCalls,
-			domain.WithConfidence(domain.Probable),
-		)
+		opts := []domain.EdgeOption{domain.WithConfidence(domain.Probable)}
+		if ref.line > 0 {
+			opts = append(opts, domain.WithSourceLine(ref.line))
+		}
+		e, err := domain.NewEdge(caller.ID, callee.ID, domain.EdgeCalls, opts...)
 		if err == nil {
 			edges = append(edges, e)
 		}

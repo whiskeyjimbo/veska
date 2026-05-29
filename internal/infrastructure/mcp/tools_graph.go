@@ -16,6 +16,13 @@ type CrossRepoEdge struct {
 	DstBranch string `json:"dst_branch"`
 	Kind      string `json:"kind"`
 	CrossRepo bool   `json:"cross_repo"` // always true
+	// SrcLine is the 1-indexed line of the call_expression inside the
+	// source node's file. Renderers prefer this over the caller node's
+	// declaration line when set so a function with N cross-repo calls
+	// shows each at its actual call site (solov2-izh6.31). Omitted when
+	// unknown (pre-migration stubs or non-Go languages without the
+	// adoption).
+	SrcLine int `json:"src_line,omitempty"`
 }
 
 // GraphResponse is the envelope returned by the node-list graph tools

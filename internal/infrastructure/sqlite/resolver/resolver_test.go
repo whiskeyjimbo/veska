@@ -54,6 +54,7 @@ func setupTestDB(t *testing.T) *sql.DB {
 			language         TEXT NOT NULL,
 			last_promoted_at INTEGER NOT NULL DEFAULT 0,
 			method_call      INTEGER NOT NULL DEFAULT 0,
+			src_line         INTEGER,
 			PRIMARY KEY (stub_id, branch)
 		)`,
 		`CREATE INDEX idx_stubs_resolver ON cross_repo_edge_stubs(language, module_path, symbol_path)`,
