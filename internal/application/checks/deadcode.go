@@ -146,18 +146,27 @@ func (c *DeadCodeCheck) Run(ctx context.Context, in Input) ([]*domain.Finding, e
 	return out, nil
 }
 
-// deadCodeKinds is the set of node kinds for which "no inbound edges" is a
-// meaningful deadness signal — callable or referenceable symbols. Container
-// and sub-symbol kinds (package, file, module, chunk, field, …) carry no
-// inbound CALLS/REFERENCES edges by construction, so flagging them produced
-// pure noise (solov2-xpb). Anything not in this set is never reported.
+// deadCodeKinds is the set of node kinds for which "no inbound CALLS
+// edges" is a meaningful deadness signal — i.e. things the language
+// actually CALLS. Container and sub-symbol kinds (package, file,
+// module, chunk, field) carry no inbound CALLS by construction
+// (solov2-xpb).
+//
+// solov2-f1zp: 'type', 'struct', and 'interface' were dropped from this
+// set. A Go struct isn't called; it's referenced by composite literal
+// (&boolSliceValue{...}), function signature, or struct embedding —
+// none of which produce a CALLS edge. An interface is never directly
+// callable. Including them applied a callable test to non-callable
+// kinds and accounted for ~half of the 220 false-positive findings the
+// pflag junior journey hit. The remaining kinds (function, method,
+// class) all have a meaningful CALLS-shaped liveness signal: classes
+// are called as constructors in Python/Java/TS, methods and functions
+// directly. Adding type-aware REFERENCES tracking is the principled
+// expansion path; until then, silence beats noise.
 var deadCodeKinds = map[string]bool{
-	"function":  true,
-	"method":    true,
-	"type":      true,
-	"struct":    true,
-	"interface": true,
-	"class":     true,
+	"function": true,
+	"method":   true,
+	"class":    true,
 }
 
 // isDeadCodeCandidate reports whether n's kind is one the dead-code check
