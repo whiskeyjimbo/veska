@@ -12,13 +12,13 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/whiskeyjimbo/veska/internal/application"
 	"github.com/whiskeyjimbo/veska/internal/application/checks"
+	"github.com/whiskeyjimbo/veska/internal/composition"
 	"github.com/whiskeyjimbo/veska/internal/config"
 	"github.com/whiskeyjimbo/veska/internal/core/ports"
 	fsignore "github.com/whiskeyjimbo/veska/internal/infrastructure/fs"
 	gitwatch "github.com/whiskeyjimbo/veska/internal/infrastructure/git"
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/secretsscanner"
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/sqlite"
-	"github.com/whiskeyjimbo/veska/internal/infrastructure/treesitter"
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/vulnsource"
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/vulnsource/osv"
 	"github.com/whiskeyjimbo/veska/internal/observability"
@@ -95,35 +95,24 @@ func defaultDialReindex(ctx context.Context, repoID, rootPath string) (string, e
 var reparserFactory = defaultReparserFactory
 
 func defaultReparserFactory(pools *sqlite.Pools, loader application.IgnoreLoader) (func(context.Context, application.RepoRecord) error, error) {
-	staging := application.NewStagingArea()
-	gate := application.NewIngestionGate(staging)
-	parser := treesitter.NewGoParser()
-	ingester := application.NewIngester(parser, staging, gate)
+	// Shared ingestion+promotion core (staging→ingester, promotionStore with
+	// the FTS + embedding-ref sinks, promoter). Defined once in
+	// internal/composition so it can no longer drift from the daemon's
+	// cold-scan wiring (solov2-u4mv). reviewEnabled=false: the CLI path never
+	// enqueues review work.
+	core := composition.NewColdScanCore(pools, false)
 
-	// Same sink set the daemon registers: FTSSink + EmbedRefSink. Missing
-	// EmbedRefSink would silently break AC2 ("re-enqueued for embedding"),
-	// so this set must stay in lock-step with cmd/veska-daemon/wire.go.
-	promotionStore := sqlite.NewPromotionStore(
-		pools.Write,
-		[]sqlite.PromotionSink{
-			sqlite.NewFTSSink(),
-			sqlite.NewEmbedRefSink(),
-		},
-	)
-	promoter := application.NewPromoter(staging, promotionStore)
-
-	// solov2-izh6.16: install the same post-promotion check pipeline the
-	// daemon wires (secret-scan always, vuln-scan when [vuln_source] is
-	// enabled). Without this, a `veska search --repo <url>` ephemeral
-	// clone — or any `veska reindex` while the daemon is down — promotes
-	// without running vuln/secret checks, so `veska findings list` is
-	// silently empty until the user manually reindexes through the
-	// daemon. Findings flow through the same FindingStorage the daemon
-	// uses, so subsequent `findings list` invocations see the rows.
-	installColdScanCheckPipeline(promoter, pools)
+	// solov2-izh6.16: install the post-promotion check pipeline (secret-scan
+	// always, vuln-scan when [vuln_source] is enabled). Without this, a
+	// `veska search --repo <url>` ephemeral clone — or any `veska reindex`
+	// while the daemon is down — promotes without running vuln/secret checks,
+	// so `veska findings list` is silently empty until the user reindexes
+	// through the daemon. Findings flow through the same FindingStorage the
+	// daemon uses, so subsequent `findings list` invocations see the rows.
+	installColdScanCheckPipeline(core.Promoter, pools)
 
 	reparser, err := application.NewColdScanReparser(
-		ingester, promoter, gitwatch.Querier{},
+		core.Ingester, core.Promoter, gitwatch.Querier{},
 		application.WithIgnoreLoader(loader),
 	)
 	if err != nil {
@@ -149,25 +138,7 @@ var installColdScanCheckPipeline = func(promoter *application.Promoter, pools *s
 	// git.AddedLinesForCommit helper the daemon uses. Failure is non-fatal:
 	// the runner just skips diff-driven checks for this promotion.
 	root := repoRootByID(pools.ReadDB)
-	promoter.SetAddedLinesFunc(func(ctx context.Context, repoID, gitSHA string) (map[string][]application.Line, error) {
-		rp, err := root(ctx, repoID)
-		if err != nil {
-			return nil, err
-		}
-		raw, err := gitwatch.AddedLinesForCommit(ctx, rp, gitSHA)
-		if err != nil {
-			return nil, err
-		}
-		out := make(map[string][]application.Line, len(raw))
-		for path, lines := range raw {
-			al := make([]application.Line, len(lines))
-			for i, l := range lines {
-				al[i] = application.Line{Number: l.Number, Text: l.Text}
-			}
-			out[path] = al
-		}
-		return out, nil
-	})
+	promoter.SetAddedLinesFunc(composition.GitAddedLinesFunc(root))
 
 	reg := checks.NewRegistry()
 
@@ -186,7 +157,7 @@ var installColdScanCheckPipeline = func(promoter *application.Promoter, pools *s
 
 	metrics := observability.NewMetrics(prometheus.NewRegistry())
 	runner := checks.NewRunner(reg, findings, metrics)
-	promoter.SetCheckRunner(coldScanCheckRunner{inner: runner})
+	promoter.SetCheckRunner(composition.CheckRunnerAdapter{Inner: runner})
 }
 
 // buildCLIVulnSource mirrors daemon.buildVulnSource for the in-process
@@ -196,35 +167,6 @@ func buildCLIVulnSource(cfg config.Config) ports.VulnSource {
 		return vulnsource.NewNullVulnSource()
 	}
 	return osv.New(osv.WithCacheDir(config.DefaultOSVCacheDir()))
-}
-
-// coldScanCheckRunner bridges checks.Runner to application.CheckRunner —
-// the same adapter the daemon uses, duplicated here so cmd/veska does not
-// depend on the daemon package (mirrors the wiki/reindex duplication
-// already noted in defaultReparserFactory).
-type coldScanCheckRunner struct {
-	inner *checks.Runner
-}
-
-func (a coldScanCheckRunner) Run(ctx context.Context, in application.CheckRunInput) {
-	var added map[string][]checks.Line
-	if in.AddedLines != nil {
-		added = make(map[string][]checks.Line, len(in.AddedLines))
-		for path, lines := range in.AddedLines {
-			cl := make([]checks.Line, len(lines))
-			for i, l := range lines {
-				cl[i] = checks.Line{Number: l.Number, Text: l.Text}
-			}
-			added[path] = cl
-		}
-	}
-	a.inner.Run(ctx, checks.Input{
-		RepoID:     in.RepoID,
-		Branch:     in.Branch,
-		GitSHA:     in.GitSHA,
-		FilePaths:  in.FilePaths,
-		AddedLines: added,
-	})
 }
 
 // repoRootByID resolves a repoID to its registered working-tree path via
