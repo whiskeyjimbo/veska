@@ -30,6 +30,7 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/application/search"
 	"github.com/whiskeyjimbo/veska/internal/application/vulnrefresh"
 	"github.com/whiskeyjimbo/veska/internal/application/wiki"
+	"github.com/whiskeyjimbo/veska/internal/composition"
 	"github.com/whiskeyjimbo/veska/internal/config"
 	"github.com/whiskeyjimbo/veska/internal/core/ports"
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/audit"
@@ -384,50 +385,23 @@ func newDaemon(cfg Config) (*Daemon, error) {
 		return nil, fmt.Errorf("daemon: open vector storage: %w", err)
 	}
 
-	// Application core (parse + stage + ingestion gate).
-	staging := application.NewStagingArea()
-	gate := application.NewIngestionGate(staging)
+	// Application core (parse + stage + ingestion gate + promoter). Shared with
+	// the CLI cold-scan path via internal/composition so the FTS + embedding-ref
+	// sink set and the promotion graph can no longer drift between the two
+	// (solov2-u4mv). Local names are retained so downstream wiring is unchanged.
+	core := composition.NewColdScanCore(pools, fileCfg.Review.Enabled)
+	staging := core.Staging
+	gate := core.Gate
+	ingester := core.Ingester
+	promoter := core.Promoter
 
-	parser := treesitter.NewGoParser()
-	ingester := application.NewIngester(parser, staging, gate)
 	findings := sqlite.NewFindingRepo(pools.Write)
 	ingester.SetFindingStorage(findings)
 
-	// Promoter + structural check pipeline. The PromotionStore owns the atomic
-	// promotion transaction; co-transactional sinks (FTS, embedding-refs) are
-	// registered here at start-up — a future sink is one more arg.
-	promotionStore := sqlite.NewPromotionStore(
-		pools.Write,
-		[]sqlite.PromotionSink{
-			sqlite.NewFTSSink(),
-			sqlite.NewEmbedRefSink(),
-		},
-		sqlite.WithReviewEnabled(fileCfg.Review.Enabled),
-	)
-	promoter := application.NewPromoter(staging, promotionStore)
-
-	// AddedLines seam: resolve a promoted commit's newly-added lines by
-	// parsing `git diff` for the repo's working tree. Keeps Promoter free
-	// of an infrastructure import — git.AddedLinesForCommit is injected.
-	promoter.SetAddedLinesFunc(func(ctx context.Context, repoID, gitSHA string) (map[string][]application.Line, error) {
-		root, err := repoRootFunc(pools.ReadDB)(ctx, repoID)
-		if err != nil {
-			return nil, err
-		}
-		raw, err := gitwatch.AddedLinesForCommit(ctx, root, gitSHA)
-		if err != nil {
-			return nil, err
-		}
-		out := make(map[string][]application.Line, len(raw))
-		for path, lines := range raw {
-			al := make([]application.Line, len(lines))
-			for i, l := range lines {
-				al[i] = application.Line{Number: l.Number, Text: l.Text}
-			}
-			out[path] = al
-		}
-		return out, nil
-	})
+	// AddedLines seam: resolve a promoted commit's newly-added lines by parsing
+	// `git diff` for the repo's working tree. Keeps Promoter free of an infra
+	// import; the closure is shared with the CLI cold-scan path.
+	promoter.SetAddedLinesFunc(composition.GitAddedLinesFunc(repoRootFunc(pools.ReadDB)))
 
 	checkReg := checks.NewRegistry()
 	deadcodeRepo := sqlite.NewDeadCodeRepo(pools.ReadDB)
@@ -483,7 +457,7 @@ func newDaemon(cfg Config) (*Daemon, error) {
 	}
 
 	runner := checks.NewRunner(checkReg, findings, metrics)
-	promoter.SetCheckRunner(checkRunnerAdapter{inner: runner})
+	promoter.SetCheckRunner(composition.CheckRunnerAdapter{Inner: runner})
 
 	// Embedding provider + embedder worker. When tracing is enabled the raw
 	// provider is wrapped in an InstrumentedEmbedder so every Embed call emits
@@ -817,31 +791,6 @@ func (d *Daemon) mcpRegistry() *mcp.Registry { return d.mcpReg }
 // application.CheckRunner interface (which uses application.CheckRunInput).
 // The two structs are field-identical; the indirection exists so the
 // application package does not need to import the checks sub-package.
-type checkRunnerAdapter struct {
-	inner *checks.Runner
-}
-
-func (a checkRunnerAdapter) Run(ctx context.Context, in application.CheckRunInput) {
-	var added map[string][]checks.Line
-	if in.AddedLines != nil {
-		added = make(map[string][]checks.Line, len(in.AddedLines))
-		for path, lines := range in.AddedLines {
-			cl := make([]checks.Line, len(lines))
-			for i, l := range lines {
-				cl[i] = checks.Line{Number: l.Number, Text: l.Text}
-			}
-			added[path] = cl
-		}
-	}
-	a.inner.Run(ctx, checks.Input{
-		RepoID:     in.RepoID,
-		Branch:     in.Branch,
-		GitSHA:     in.GitSHA,
-		FilePaths:  in.FilePaths,
-		AddedLines: added,
-	})
-}
-
 // noopEmbedHandler keeps the embed queue lane drained when the embedder
 // worker reads its refs out-of-band. It marks rows as handled without doing
 // any work. Once the embedder is migrated to the Poller this can be replaced
