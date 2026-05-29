@@ -203,6 +203,14 @@ func decorateRepo(r application.RepoRecord) RepoView {
 		// row that bypassed the migration default) don't show a blank.
 		kind = "tracked"
 	}
+	aliases := r.Aliases
+	if aliases == nil {
+		// README convention: empty result collections serialise as []
+		// rather than null. A nil []string from the repo registry
+		// would otherwise reach the wire as `"aliases": null` and
+		// crash agents that iterate the field without a nil-check.
+		aliases = []string{}
+	}
 	return RepoView{
 		RepoID:          r.RepoID,
 		ShortID:         ShortRepoID(r.RepoID),
@@ -211,7 +219,7 @@ func decorateRepo(r application.RepoRecord) RepoView {
 		LastPromotedSHA: r.LastPromotedSHA,
 		Status:          status,
 		Kind:            kind,
-		Aliases:         r.Aliases,
+		Aliases:         aliases,
 	}
 }
 

@@ -3,6 +3,7 @@ package mcp
 import (
 	"context"
 	"encoding/json"
+	"strings"
 	"testing"
 
 	application "github.com/whiskeyjimbo/veska/internal/application"
@@ -159,6 +160,22 @@ func TestAdminTools_ListRepos(t *testing.T) {
 	}
 	if len(degraded) != 0 {
 		t.Errorf("expected empty degraded_reasons")
+	}
+
+	// README convention: empty result collections serialise as [] never
+	// null. Each sampleRepo has Aliases unset (nil), and the registry
+	// reaches the wire through json.Marshal of RepoView — so the decorator
+	// must materialise an empty slice. Round-tripping through json.Marshal
+	// is the only reliable check: a nil []string masquerades as []string
+	// at the Go level but serialises to "null" on the wire.
+	for _, v := range repos {
+		b, err := json.Marshal(v)
+		if err != nil {
+			t.Fatalf("marshal RepoView: %v", err)
+		}
+		if !strings.Contains(string(b), `"aliases":[]`) {
+			t.Errorf("repo %q must serialise aliases as []; got %s", v.RepoID, b)
+		}
 	}
 }
 
