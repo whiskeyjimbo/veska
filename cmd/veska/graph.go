@@ -309,6 +309,15 @@ func renderChangedSymbols(w io.Writer, raw json.RawMessage) error {
 	}
 	for _, d := range env.DegradedReasons {
 		fmt.Fprintf(w, "[degraded: %s]\n", d)
+		if d == "baseline_ref_not_indexed" {
+			// solov2-izh6.17: the bare reason just renames the problem.
+			// Tell the user what it actually means — the baseline ref's
+			// tree was unreadable, so the diff is empty because we never
+			// saw it, not because nothing changed.
+			fmt.Fprintln(w, "  hint: ref_a's tree was unreadable (e.g. an unfetched commit or unindexed baseline),")
+			fmt.Fprintln(w, "        so the empty diff means 'we never saw the baseline', not 'nothing changed'.")
+			fmt.Fprintln(w, "        try `git fetch` and re-run, or pick a ref_a that resolves locally.")
+		}
 	}
 	return nil
 }
