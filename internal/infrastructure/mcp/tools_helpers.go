@@ -126,7 +126,25 @@ func resolveRepoIDOrCwd(ctx context.Context, repos application.RepoLister, repoI
 			}
 		}
 	}
-	return "", &RPCError{Code: CodeInvalidParams, Message: fmt.Sprintf("repo_id is required (%d repos registered; pass eng_list_repos to find the id)", len(all))}
+	return "", &RPCError{Code: CodeInvalidParams, Message: fmt.Sprintf("repo_id is required (%d repos registered; pass eng_list_repos to find the id)", userVisibleRepoCount(all))}
+}
+
+// userVisibleRepoCount returns the number of repos eng_list_repos would
+// show by default — synthetic ext:<module> rows created by
+// `veska deps index` are excluded (they only surface when the caller
+// passes include_vendored=true, see tools_admin.go). The
+// "N repos registered; pass eng_list_repos to find the id" error must
+// agree with that view, otherwise an agent sees a count it cannot
+// reconcile against the listing it's told to run.
+func userVisibleRepoCount(all []application.RepoRecord) int {
+	n := 0
+	for _, r := range all {
+		if strings.HasPrefix(r.RepoID, "ext:") {
+			continue
+		}
+		n++
+	}
+	return n
 }
 
 // cwdFromParams unmarshals just the "cwd" field from a raw JSON-RPC params
@@ -247,7 +265,7 @@ func resolveRepoFanoutFromParams(ctx context.Context, repos application.RepoList
 		targets = append(targets, repoBranch{RepoID: rec.RepoID, Branch: rec.ActiveBranch})
 	}
 	if len(targets) == 0 {
-		return nil, false, &RPCError{Code: CodeInvalidParams, Message: fmt.Sprintf("repo_id is required (%d repos registered; pass eng_list_repos to find the id)", len(all))}
+		return nil, false, &RPCError{Code: CodeInvalidParams, Message: fmt.Sprintf("repo_id is required (%d repos registered; pass eng_list_repos to find the id)", userVisibleRepoCount(all))}
 	}
 	return targets, len(targets) > 1, nil
 }
