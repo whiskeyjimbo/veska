@@ -22,6 +22,7 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/application/embedder"
 	"github.com/whiskeyjimbo/veska/internal/application/revalidate"
 	"github.com/whiskeyjimbo/veska/internal/application/review"
+	"github.com/whiskeyjimbo/veska/internal/application/savings"
 	"github.com/whiskeyjimbo/veska/internal/application/vulnrefresh"
 	"github.com/whiskeyjimbo/veska/internal/application/wiki"
 	"github.com/whiskeyjimbo/veska/internal/composition"
@@ -32,14 +33,13 @@ import (
 	gitwatch "github.com/whiskeyjimbo/veska/internal/infrastructure/git"
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/llm"
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/mcp"
+	"github.com/whiskeyjimbo/veska/internal/infrastructure/repo"
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/secretsscanner"
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/sqlite"
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/sqlite/queue"
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/vector"
 	"github.com/whiskeyjimbo/veska/internal/platform/config"
 	"github.com/whiskeyjimbo/veska/internal/platform/observability"
-	"github.com/whiskeyjimbo/veska/internal/repo"
-	"github.com/whiskeyjimbo/veska/internal/savings"
 )
 
 // ErrMissingDep is returned by newDaemon when a required collaborator cannot

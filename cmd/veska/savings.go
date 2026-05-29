@@ -9,8 +9,8 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
+	"github.com/whiskeyjimbo/veska/internal/application/savings"
 	"github.com/whiskeyjimbo/veska/internal/platform/config"
-	"github.com/whiskeyjimbo/veska/internal/savings"
 )
 
 // doctorSavingsCmd returns the "doctor savings" subcommand. It reads

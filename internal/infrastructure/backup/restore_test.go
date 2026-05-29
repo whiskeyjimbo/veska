@@ -11,7 +11,7 @@ import (
 
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/sqlite/sqldriver"
 
-	"github.com/whiskeyjimbo/veska/internal/backup"
+	"github.com/whiskeyjimbo/veska/internal/infrastructure/backup"
 )
 
 // makeBackup seeds a DB in a fresh home and creates a backup tarball, returning

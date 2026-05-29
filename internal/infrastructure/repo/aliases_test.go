@@ -6,7 +6,7 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/whiskeyjimbo/veska/internal/repo"
+	"github.com/whiskeyjimbo/veska/internal/infrastructure/repo"
 )
 
 func TestSetAlias_Insert(t *testing.T) {

@@ -6,7 +6,7 @@ import (
 
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/sqlite/sqldriver"
 
-	"github.com/whiskeyjimbo/veska/internal/doctor"
+	"github.com/whiskeyjimbo/veska/internal/platform/doctor"
 )
 
 // createQueueDB creates an in-memory (or file) SQLite DB with the post_promotion_queue schema.

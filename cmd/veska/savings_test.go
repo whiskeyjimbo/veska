@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/whiskeyjimbo/veska/internal/savings"
+	"github.com/whiskeyjimbo/veska/internal/application/savings"
 )
 
 // TestRunSavings_NoDataMessage: when the jsonl file is absent (fresh

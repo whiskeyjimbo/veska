@@ -12,7 +12,7 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/application"
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/embedding/elect"
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/mcp"
-	"github.com/whiskeyjimbo/veska/internal/repo"
+	"github.com/whiskeyjimbo/veska/internal/infrastructure/repo"
 )
 
 // Compile-time interface assertions: the three admin-tool collaborators must

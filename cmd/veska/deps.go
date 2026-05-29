@@ -13,9 +13,9 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/cli/mcpclient"
 
 	"github.com/whiskeyjimbo/veska/internal/application/extindex"
+	"github.com/whiskeyjimbo/veska/internal/infrastructure/repo"
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/sqlite"
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/treesitter"
-	"github.com/whiskeyjimbo/veska/internal/repo"
 )
 
 // depsCmd is the `veska deps …` parent. Bare `veska deps` lists

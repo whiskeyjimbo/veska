@@ -13,7 +13,7 @@ import (
 
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/sqlite/sqldriver"
 
-	"github.com/whiskeyjimbo/veska/internal/repo"
+	"github.com/whiskeyjimbo/veska/internal/infrastructure/repo"
 )
 
 // createReposTable mirrors the schema after migration 0013 (kxo5.2) so

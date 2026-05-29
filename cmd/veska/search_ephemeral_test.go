@@ -12,9 +12,9 @@ import (
 
 	"github.com/whiskeyjimbo/veska/internal/application"
 	fsignore "github.com/whiskeyjimbo/veska/internal/infrastructure/fs"
+	"github.com/whiskeyjimbo/veska/internal/infrastructure/repo"
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/sqlite"
 	"github.com/whiskeyjimbo/veska/internal/platform/config"
-	"github.com/whiskeyjimbo/veska/internal/repo"
 )
 
 func startsWith(s, prefix string) bool { return strings.HasPrefix(s, prefix) }

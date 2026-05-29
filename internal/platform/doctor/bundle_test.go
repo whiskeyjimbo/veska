@@ -11,7 +11,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/whiskeyjimbo/veska/internal/doctor"
+	"github.com/whiskeyjimbo/veska/internal/platform/doctor"
 )
 
 // openTarball opens a .tar.gz file and returns a map of path → contents for all entries.

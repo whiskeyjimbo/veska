@@ -9,8 +9,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/whiskeyjimbo/veska/internal/infrastructure/repo"
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/vector"
-	"github.com/whiskeyjimbo/veska/internal/repo"
 )
 
 // testConfig returns a Config whose paths live under a fresh tmp dir so each

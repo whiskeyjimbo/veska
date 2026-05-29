@@ -11,7 +11,7 @@ import (
 
 	"github.com/mattn/go-isatty"
 
-	"github.com/whiskeyjimbo/veska/internal/repo"
+	"github.com/whiskeyjimbo/veska/internal/infrastructure/repo"
 )
 
 // promptDeps is the seam tests use to fake isatty + stdin (solov2-kxo5.7).

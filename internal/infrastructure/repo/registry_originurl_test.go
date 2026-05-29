@@ -8,7 +8,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/whiskeyjimbo/veska/internal/repo"
+	"github.com/whiskeyjimbo/veska/internal/infrastructure/repo"
 )
 
 // gitInitWithRemote initialises a real git working tree at dir, optionally adding an
