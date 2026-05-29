@@ -22,6 +22,12 @@ type BlastResponse struct {
 	// Omitted when no resolver is wired or no stubs match — same convention
 	// as eng_get_call_chain.
 	CrossRepoEdges []CrossRepoEdge `json:"cross_repo_edges,omitempty"`
+	// DegradedReasons / IndexingRepos surface the cold-scan-in-progress
+	// window (solov2-izh6.30) so an empty/sparse blast during indexing is
+	// distinguishable from a genuinely-isolated symbol. Both omitted when
+	// empty so the pre-bead JSON shape is preserved.
+	DegradedReasons []string `json:"degraded_reasons,omitempty"`
+	IndexingRepos   []string `json:"indexing_repos,omitempty"`
 }
 
 // RepoRootFunc returns the absolute path of the working tree for a given
@@ -37,6 +43,14 @@ type BlastToolOption func(*blastToolConfig)
 type blastToolConfig struct {
 	resolve        ResolveFunc
 	resolveInbound InboundResolveFunc
+	scans          ScanTrackerReader
+}
+
+// WithBlastScanTracker supplies the daemon's cold-scan tracker so empty
+// blast responses can carry an indexing_in_progress hint when a scan is
+// in flight (solov2-izh6.30). Nil disables the hint.
+func WithBlastScanTracker(t ScanTrackerReader) BlastToolOption {
+	return func(c *blastToolConfig) { c.scans = t }
 }
 
 // WithBlastResolveFunc supplies a ResolveFunc that the blast handlers use to
@@ -72,7 +86,7 @@ func RegisterBlastTools(r *Registry, svc *blastradius.Service, repoRoot RepoRoot
 		Description:     DescBlastRadius,
 		IncludesStaging: false,
 		InputSchema:     blastRadiusInputSchema,
-		Handler:         makeBlastRadiusHandler(svc, repos, graph, cfg.resolve, cfg.resolveInbound),
+		Handler:         makeBlastRadiusHandler(svc, repos, graph, cfg.resolve, cfg.resolveInbound, cfg.scans),
 	})
 	r.MustRegister(ToolSpec{
 		Name:            "eng_get_dirty_blast_radius",
@@ -109,7 +123,7 @@ type blastRadiusParams struct {
 	ExpandCrossRepo bool   `json:"expand_cross_repo,omitempty"`
 }
 
-func makeBlastRadiusHandler(svc *blastradius.Service, repos application.RepoLister, graph ports.GraphStorage, resolve ResolveFunc, resolveInbound InboundResolveFunc) ToolHandler {
+func makeBlastRadiusHandler(svc *blastradius.Service, repos application.RepoLister, graph ports.GraphStorage, resolve ResolveFunc, resolveInbound InboundResolveFunc, scans ScanTrackerReader) ToolHandler {
 	return func(ctx context.Context, _ domain.Actor, raw json.RawMessage) (any, *RPCError) {
 		var p blastRadiusParams
 		if rpcErr := bindParams(raw, &p); rpcErr != nil {
@@ -137,14 +151,27 @@ func makeBlastRadiusHandler(svc *blastradius.Service, repos application.RepoList
 			}
 			return nil, &RPCError{Code: CodeInternalError, Message: fmt.Sprintf("blast radius: %v", err)}
 		}
+		crossRepoEdges := mergeCrossRepoEdges(
+			resolveCrossRepoFor(ctx, resolve, resp.Entries, p.Branch, p.ExpandCrossRepo),
+			resolveCrossRepoInboundFor(ctx, resolveInbound, resp.Entries, p.Branch, dir),
+		)
+		var reasons, indexing []string
+		// solov2-izh6.30: surface the cold-scan window on a sparse blast
+		// (entries==[seed-only] or empty + no cross-repo). An ongoing scan
+		// may still be populating the target repo's edges.
+		if len(resp.Entries) <= 1 && len(crossRepoEdges) == 0 {
+			if ids, busy := indexingRepoIDs(scans); busy {
+				reasons = append(reasons, DegradedReasonIndexingInProgress)
+				indexing = ids
+			}
+		}
 		return BlastResponse{
 			Entries:         blastEntriesToDTO(resp.Entries),
 			Truncated:       resp.Truncated,
 			IncludedStaging: resp.IncludedStaging,
-			CrossRepoEdges: mergeCrossRepoEdges(
-				resolveCrossRepoFor(ctx, resolve, resp.Entries, p.Branch, p.ExpandCrossRepo),
-				resolveCrossRepoInboundFor(ctx, resolveInbound, resp.Entries, p.Branch, dir),
-			),
+			CrossRepoEdges:  crossRepoEdges,
+			DegradedReasons: reasons,
+			IndexingRepos:   indexing,
 		}, nil
 	}
 }

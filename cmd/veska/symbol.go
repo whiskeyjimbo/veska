@@ -9,6 +9,8 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
+
+	mcpinfra "github.com/whiskeyjimbo/veska/internal/infrastructure/mcp"
 )
 
 // resolveRepoFromCWD asks the daemon (via eng_get_current_repo) which repo
@@ -119,6 +121,8 @@ ranked first.`,
 					Exported  *bool  `json:"exported,omitempty"`
 					External  bool   `json:"external,omitempty"`
 				} `json:"nodes"`
+				DegradedReasons []string `json:"degraded_reasons,omitempty"`
+				IndexingRepos   []string `json:"indexing_repos,omitempty"`
 			}
 			if err := callMCP(cmd.Context(), "eng_find_symbol", params, &resp); err != nil {
 				return fmt.Errorf("symbol: %w", err)
@@ -209,12 +213,24 @@ func renderNodeList(w io.Writer, resp any, jsonOut bool) error {
 			External  bool   `json:"external,omitempty"`
 			RepoID    string `json:"repo_id,omitempty"`
 		} `json:"nodes"`
+		DegradedReasons []string `json:"degraded_reasons,omitempty"`
+		IndexingRepos   []string `json:"indexing_repos,omitempty"`
 	}
 	if err := json.Unmarshal(raw, &any); err != nil {
 		return err
 	}
 	if len(any.Nodes) == 0 {
 		fmt.Fprintln(w, "no matches")
+		// solov2-izh6.30: empty result during an active cold scan is the
+		// indexing-window case; tell the user to retry instead of treating
+		// the empty answer as authoritative.
+		for _, d := range any.DegradedReasons {
+			if d == mcpinfra.DegradedReasonIndexingInProgress {
+				fmt.Fprintf(w, "  hint: %d repo(s) still indexing (%s); retry shortly or rerun the relevant `veska repo add --wait`.\n",
+					len(any.IndexingRepos), strings.Join(any.IndexingRepos, ", "))
+				break
+			}
+		}
 		return nil
 	}
 	// solov2-efzv: when the daemon fanned out across repos (repo_id
