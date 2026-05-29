@@ -932,7 +932,7 @@ func registerMCPTools(r *mcp.Registry, d mcpDeps) {
 	//
 	// mcp.RegisterTaskTools(r, pools.Write, nil)
 	_ = mcp.RegisterTaskTools // keep the symbol reachable for the future re-enable
-	mcp.RegisterOwnerTools(r, pools.Write)
+	mcp.RegisterOwnerTools(r, pools.Write, &repoLister{db: pools.ReadDB})
 	mcp.RegisterTodoTools(r, sqlite.NewTodoQuerierRepo(pools.ReadDB), &repoLister{db: pools.ReadDB})
 	// Admin tools: repo listing + live status/config from the read pool and
 	// the resolved daemon Config.
