@@ -55,6 +55,7 @@ func rerank(results []Result, query string) []Result {
 		if maxScore > 0 && len(tokens) > 0 {
 			bonus := definitionBonus(r, tokens, maxScore)
 			bonus += identifierStemBonus(r, tokens, maxScore)
+			bonus += verbSynonymBonus(r, tokens, maxScore)
 			r.Score += bonus
 		}
 		if maxScore > 0 {
@@ -186,6 +187,81 @@ func splitIdentifier(s string) []string {
 	}
 	flush()
 	return parts
+}
+
+// verbSynonyms maps a query-side verb to API-side verbs callers commonly
+// reach for the same action under. The lexical/embedding pipeline has
+// no model of these clusters — a user types "register subcommand" but
+// cobra exposes "AddCommand", so neither retriever surfaces the
+// canonical answer well (solov2-izh6.26).
+//
+// Conservative on purpose: only well-known API-design clusters that
+// appear repeatedly across Go libraries are listed. Adding a noun
+// (e.g. "subcommand" → "command") would lift entire candidate sets
+// uniformly and is left out.
+var verbSynonyms = map[string][]string{
+	// "register / install / attach X" → AddX
+	"register": {"add", "install", "append"},
+	"install":  {"add", "register"},
+	"attach":   {"add", "append"},
+	// "remove / delete / detach X" → RemoveX / DeleteX
+	"remove": {"delete", "detach"},
+	"delete": {"remove", "destroy"},
+	"detach": {"remove", "detach"},
+	// "retrieve / lookup X" → GetX / FetchX / FindX / ResolveX
+	"lookup":   {"get", "find", "fetch", "resolve"},
+	"retrieve": {"get", "fetch", "load", "read"},
+	"fetch":    {"get", "retrieve", "load"},
+	"find":     {"lookup", "resolve", "search"},
+	// "build / create X" → NewX / MakeX / BuildX
+	"create": {"new", "make", "build"},
+	"make":   {"new", "create", "build"},
+	"build":  {"new", "make", "create"},
+}
+
+// verbSynonymBonus boosts a result when its symbol's HEAD identifier
+// (the leading subword — the "verb position" by Go API convention) is a
+// known synonym of a query token. Gated on the head position so it
+// doesn't false-fire on substring matches deep inside the identifier
+// (e.g. "ItemsToAdd" is not registration).
+//
+// Bonus magnitude equals definitionBonusFrac × maxScore — same weight
+// as an exact trailing-identifier match — so the canonical "AddCommand"
+// for "register subcommand" can leapfrog larger sibling methods that
+// gained a fusion edge from mentioning the noun in their body.
+const verbSynonymBonusFrac = 1.0
+
+func verbSynonymBonus(r Result, tokens []string, maxScore float32) float32 {
+	if !definitionalKinds[r.Kind] {
+		return 0
+	}
+	stems := splitIdentifier(r.SymbolPath)
+	if len(stems) == 0 {
+		return 0
+	}
+	// Head identifier is the FIRST subword of the trailing identifier —
+	// for "Command.AddCommand" splitIdentifier yields ["command","add",
+	// "command"]; the trailing identifier "AddCommand" splits as
+	// ["add","command"], so we take splitIdentifier of trailingIdentifier
+	// to isolate the symbol's own verb position (skipping the receiver).
+	trail := trailingIdentifier(r.SymbolPath)
+	headStems := splitIdentifier(trail)
+	if len(headStems) == 0 {
+		return 0
+	}
+	head := headStems[0]
+	for _, t := range tokens {
+		syns, ok := verbSynonyms[t]
+		if !ok {
+			continue
+		}
+		for _, s := range syns {
+			if head == s {
+				return verbSynonymBonusFrac * maxScore
+			}
+		}
+	}
+	return 0
 }
 
 const fileCoherenceBonusFrac = 0.05

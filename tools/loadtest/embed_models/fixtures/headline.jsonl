@@ -27,3 +27,20 @@
 {"corpus":"veska","query":"resolve a short repository id to its canonical form","expected":"resolveRepoID"}
 {"corpus":"veska","query":"open the three sqlite connection pools","expected":"OpenPools"}
 {"corpus":"veska","query":"build a registry of MCP tools","expected":"Registry"}
+
+// ─── cobra (10 queries) ─────────────────────────────────────────────────
+// Locked in by solov2-izh6.26 — the junior-journey report flagged
+// "register subcommand" landing on ExecuteC / HasHelpSubCommands instead of
+// the canonical Command.AddCommand. The remaining nine round out a
+// minimum cobra headline set so a regression hides the AddCommand case
+// among other plausible canonicals (idempotency check, not just one row).
+{"corpus":"cobra","query":"register a subcommand on the parent command","expected":"Command.AddCommand"}
+{"corpus":"cobra","query":"run a command and parse its flags","expected":"Command.Execute"}
+{"corpus":"cobra","query":"print help text for a command","expected":"Command.Help"}
+{"corpus":"cobra","query":"declare a persistent string flag","expected":"Command.PersistentFlags"}
+{"corpus":"cobra","query":"mark a flag as required","expected":"MarkFlagRequired"}
+{"corpus":"cobra","query":"find a subcommand by name in the tree","expected":"Command.Find"}
+{"corpus":"cobra","query":"generate shell completion script","expected":"Command.GenBashCompletion"}
+{"corpus":"cobra","query":"return the name of the command","expected":"Command.Name"}
+{"corpus":"cobra","query":"set the command usage template","expected":"Command.SetUsageTemplate"}
+{"corpus":"cobra","query":"return the root command of the tree","expected":"Command.Root"}

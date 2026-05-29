@@ -277,11 +277,11 @@ func TestSearchSemantic_LimitAliasHonoured(t *testing.T) {
 	// search.Service over-requests by fusionFanout=3 with a floor of 30
 	// so the post-fusion name-match boost has candidates to reorder
 	// even for small-k callers (solov2-2su / solov2-7kz). caller k=3
-	// hits the floor → 30 to the vector backend. The contract under
-	// test is that the alias got threaded through; the floor/fanout
-	// are internal details.
-	if vecs.gotK != 30 {
-		t.Errorf("expected vectors.Search called with k=30 (floor for small caller k=3 alias), got k=%d", vecs.gotK)
+	// hits the floor → 100 to the vector backend (floor widened in
+	// solov2-izh6.26). The contract under test is that the alias got
+	// threaded through; the floor/fanout are internal details.
+	if vecs.gotK != 100 {
+		t.Errorf("expected vectors.Search called with k=100 (floor for small caller k=3 alias), got k=%d", vecs.gotK)
 	}
 }
 
