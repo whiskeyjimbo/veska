@@ -18,10 +18,9 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/application"
 	"github.com/whiskeyjimbo/veska/internal/application/embedder"
 	"github.com/whiskeyjimbo/veska/internal/application/search"
+	"github.com/whiskeyjimbo/veska/internal/composition"
 	"github.com/whiskeyjimbo/veska/internal/config"
 	"github.com/whiskeyjimbo/veska/internal/core/domain"
-	"github.com/whiskeyjimbo/veska/internal/core/ports"
-	"github.com/whiskeyjimbo/veska/internal/infrastructure/embedding/elect"
 	fsignore "github.com/whiskeyjimbo/veska/internal/infrastructure/fs"
 	mcpinfra "github.com/whiskeyjimbo/veska/internal/infrastructure/mcp"
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/sqlite"
@@ -242,7 +241,7 @@ func runSearch(ctx context.Context, w, stderr io.Writer, opts runSearchOpts) err
 			return err
 		}
 	} else {
-		svc, err := buildSearchService(pools)
+		svc, err := composition.NewCLISearchService(pools)
 		if err != nil {
 			return err
 		}
@@ -443,7 +442,7 @@ func emitColdScanSummary(ctx context.Context, db *sql.DB, w io.Writer, repoID, b
 // not return before vectors are populated — otherwise the search runs
 // against an empty vector index and returns no hits.
 func drainEmbedderQueue(ctx context.Context, pools *sqlite.Pools, w io.Writer) error {
-	prov, err := buildEmbeddingProvider()
+	prov, err := composition.NewCLIEmbeddingProvider()
 	if err != nil {
 		return err
 	}
@@ -491,46 +490,6 @@ func drainEmbedderQueue(ctx context.Context, pools *sqlite.Pools, w io.Writer) e
 		}
 		time.Sleep(250 * time.Millisecond)
 	}
-}
-
-// buildEmbeddingProvider resolves the SAME embedder the daemon elects
-// (solov2-1az) — model2vec if installed, else static-v2, or Ollama when
-// VESKA_EMBEDDER=ollama — so the CLI's standalone mode embeds queries in
-// the same vector space the daemon's index was built in. It uses the
-// marker-free Resolve: the daemon owns the sticky election marker.
-func buildEmbeddingProvider() (ports.EmbeddingProvider, error) {
-	baseURL := os.Getenv("VESKA_OLLAMA_URL")
-	if baseURL == "" {
-		baseURL = defaultOllamaURL
-	}
-	model := os.Getenv("VESKA_EMBED_MODEL")
-	if model == "" {
-		model = defaultModelName
-	}
-	prov, err := elect.Resolve(elect.Config{
-		VeskaHome:     config.DefaultVectorDir(),
-		Override:      os.Getenv("VESKA_EMBEDDER"),
-		Model2VecName: "potion-code-16M",
-		OllamaURL:     baseURL,
-		EmbedModel:    model,
-	})
-	if err != nil {
-		return nil, fmt.Errorf("search: resolve embedder: %w", err)
-	}
-	return prov, nil
-}
-
-func buildSearchService(pools *sqlite.Pools) (*search.Service, error) {
-	prov, err := buildEmbeddingProvider()
-	if err != nil {
-		return nil, err
-	}
-	vec, err := vector.NewVectorStorage("sqlite-vec", config.DefaultVectorDir())
-	if err != nil {
-		return nil, fmt.Errorf("search: open vector storage: %w", err)
-	}
-	nodes := sqlite.NewNodeLookupRepo(pools.ReadDB)
-	return search.NewService(prov, vec, nodes), nil
 }
 
 // ephemeralEnsureFromURL implements the URL-target half of `veska search`
