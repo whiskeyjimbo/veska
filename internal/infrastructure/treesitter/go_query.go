@@ -325,6 +325,26 @@ func extractCallsFromBody(q *sitter.Query, body *sitter.Node, src []byte, caller
 			callLine = int(cn.StartPoint().Row) + 1
 		}
 		switch {
+		case m.node("call.value_arg") != nil && m.node("call.identifier") == nil &&
+			m.node("call.operand") == nil && m.node("call.chain_operand") == nil:
+			// solov2-f1zp: bare identifier passed as a call argument
+			// (helper(boolConv)). Treat as a CALLS edge to boolConv when
+			// the identifier resolves to a same-file function/method —
+			// otherwise it's a local variable or parameter and we skip.
+			// The symbol-map check filters here rather than later because
+			// the regular call branches below all flow through unresolved
+			// emission if the symbol misses, which would generate noise
+			// for every variable passed as an argument.
+			n := m.node("call.value_arg")
+			name := string(src[n.StartByte():n.EndByte()])
+			callee, ok := symbols[name]
+			if !ok || callee == nil {
+				continue
+			}
+			if callee.Kind != domain.KindFunction && callee.Kind != domain.KindMethod {
+				continue
+			}
+			ref = callRef{name: name}
 		case m.node("call.identifier") != nil:
 			n := m.node("call.identifier")
 			ref = callRef{name: string(src[n.StartByte():n.EndByte()])}

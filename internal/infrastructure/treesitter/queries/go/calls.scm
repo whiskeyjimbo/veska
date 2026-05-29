@@ -21,6 +21,16 @@
     operand: (identifier) @call.operand
     field: (field_identifier) @call.field)) @call.expr
 
+; function-value passing: `helper(boolConv)` where boolConv is a same-file
+; function passed as an argument. Treated as a CALLS edge to boolConv —
+; even if not directly invoked here, the function is reachable through
+; the caller and shouldn't appear dead (solov2-f1zp). The capture lands
+; in extractCallsFromBody's @call.value_arg branch which filters to
+; identifiers that resolve to in-file function/method symbols.
+(call_expression
+  arguments: (argument_list
+    (identifier) @call.value_arg)) @call.expr
+
 ; chained-selector call: `recvName.field.Method()` or `localVar.X.Y()`.
 ; The Go-side extractor uses the file-wide struct-field-type map +
 ; per-body local-var-origin map (built once per function) to classify
