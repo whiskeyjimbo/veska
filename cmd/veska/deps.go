@@ -10,6 +10,7 @@ import (
 	"text/tabwriter"
 
 	"github.com/spf13/cobra"
+	"github.com/whiskeyjimbo/veska/internal/cli/mcpclient"
 
 	"github.com/whiskeyjimbo/veska/internal/application/extindex"
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/sqlite"
@@ -119,7 +120,7 @@ func depsListCmd() *cobra.Command {
 					} `json:"top_call_sites"`
 				} `json:"dependencies"`
 			}
-			if err := callMCP(cmd.Context(), "eng_list_dependencies", params, &resp); err != nil {
+			if err := mcpclient.Call(cmd.Context(), "eng_list_dependencies", params, &resp); err != nil {
 				return fmt.Errorf("deps: %w", err)
 			}
 			w := cmd.OutOrStdout()

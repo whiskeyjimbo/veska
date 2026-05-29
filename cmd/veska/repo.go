@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
-	"net"
 	"os"
 	"path/filepath"
 	"slices"
@@ -19,6 +18,7 @@ import (
 
 	"github.com/spf13/cobra"
 	"github.com/whiskeyjimbo/veska/internal/application/extindex"
+	"github.com/whiskeyjimbo/veska/internal/cli/mcpclient"
 	"github.com/whiskeyjimbo/veska/internal/config"
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/sqlite"
 	"github.com/whiskeyjimbo/veska/internal/repo"
@@ -178,7 +178,7 @@ func repoListCmd() *cobra.Command {
 			if includeExternal {
 				params["include_vendored"] = true
 			}
-			if err := callMCP(ctx, "eng_list_repos", params, &lr); err == nil {
+			if err := mcpclient.Call(ctx, "eng_list_repos", params, &lr); err == nil {
 				progress := fetchScanProgress(ctx)
 				printRepoTableWithProgress(w, lr.Repos, progress)
 				return nil
@@ -297,7 +297,7 @@ func fetchScanProgress(ctx context.Context) map[string]scanProgressRow {
 			StartedAt time.Time `json:"started_at"`
 		} `json:"scans_in_flight"`
 	}
-	if err := callMCP(ctx, "eng_get_status", map[string]any{}, &status); err != nil {
+	if err := mcpclient.Call(ctx, "eng_get_status", map[string]any{}, &status); err != nil {
 		return nil
 	}
 	m := make(map[string]scanProgressRow, len(status.ScansInFlight))
@@ -837,7 +837,7 @@ func waitForScanComplete(ctx context.Context, w io.Writer, repoID string) error 
 				Repos []repoView `json:"repos"`
 			}
 			var lr listResult
-			if err := callMCP(ctx, "eng_list_repos", map[string]any{}, &lr); err == nil {
+			if err := mcpclient.Call(ctx, "eng_list_repos", map[string]any{}, &lr); err == nil {
 				for _, r := range lr.Repos {
 					if r.RepoID == repoID && r.LastPromotedSHA != "" {
 						// solov2-a17i: scan may have finished before our
@@ -1012,7 +1012,7 @@ func listRegisteredRepos(ctx context.Context) ([]repoView, error) {
 		Repos []repoView `json:"repos"`
 	}
 	var lr listResult
-	if err := callMCP(ctx, "eng_list_repos", map[string]any{"include_vendored": true}, &lr); err == nil {
+	if err := mcpclient.Call(ctx, "eng_list_repos", map[string]any{"include_vendored": true}, &lr); err == nil {
 		return lr.Repos, nil
 	}
 	db, closeFn, err := openLocalDB()
@@ -1128,7 +1128,7 @@ func applyBulkRemove(ctx context.Context, w io.Writer, targets []repoView, dryRu
 // guess.
 func dialEngStatus(ctx context.Context) (any, error) {
 	var resp any
-	err := callMCP(ctx, "eng_get_status", map[string]any{}, &resp)
+	err := mcpclient.Call(ctx, "eng_get_status", map[string]any{}, &resp)
 	return resp, err
 }
 
@@ -1205,7 +1205,7 @@ func dialAddRepo(ctx context.Context, rootPath string) (string, bool, error) {
 		AlreadyRegistered bool   `json:"already_registered"`
 	}
 	var r result
-	if err := callMCP(ctx, "eng_add_repo", map[string]any{"root_path": rootPath}, &r); err != nil {
+	if err := mcpclient.Call(ctx, "eng_add_repo", map[string]any{"root_path": rootPath}, &r); err != nil {
 		return "", false, err
 	}
 	if r.RepoID == "" {
@@ -1217,182 +1217,5 @@ func dialAddRepo(ctx context.Context, rootPath string) (string, bool, error) {
 // dialRemoveRepo sends eng_remove_repo over the daemon's MCP unix socket.
 func dialRemoveRepo(ctx context.Context, repoID string) error {
 	var r struct{}
-	return callMCP(ctx, "eng_remove_repo", map[string]any{"repo_id": repoID}, &r)
-}
-
-// callMCP performs a single newline-delimited JSON-RPC call against the
-// daemon's MCP socket and decodes result into out. Returns an error if the
-// dial fails (daemon not running), if the response is an error frame, or
-// if decoding fails.
-//
-// The MCP server here speaks a direct flat protocol (method = tool name),
-// not the standard MCP "tools/call" wrapper — see internal/infrastructure/mcp.
-//
-// Dialing retries 3× with 200ms backoff: a daemon restart binds the
-// socket in two steps (listenUnix removes the stale path, then net.Listen
-// creates a new one), and a CLI call racing that window used to fall
-// straight through to the direct-write path even with the daemon up
-// (solov2-0cg). 2s per-attempt + 3 attempts = ~6s ceiling, still well
-// under any human-perceptible wait.
-
-// methodsSkipCwd lists eng_* methods that must NOT receive an auto-
-// injected cwd. These are tools whose CLI surface intentionally fans
-// out across every registered repo when --repo is omitted (solov2-efzv):
-// auto-injecting cwd would silently pin them to a single repo and
-// break the multi-repo workflow on the cobra-CLI-plus-shared-lib
-// pattern.
-var methodsSkipCwd = map[string]struct{}{
-	"eng_find_symbol":      {},
-	"eng_get_context_pack": {},
-}
-
-// withCwdInjected adds a "cwd" field to params for eng_* methods so the
-// daemon can resolve repo_id from the caller's working directory when
-// omitted (solov2-ktz0). Non-eng_* methods, frames that already carry
-// cwd, and methods in methodsSkipCwd pass through unchanged.
-func withCwdInjected(method string, params any) any {
-	if !strings.HasPrefix(method, "eng_") {
-		return params
-	}
-	if _, skip := methodsSkipCwd[method]; skip {
-		return params
-	}
-	cwd, err := os.Getwd()
-	if err != nil || cwd == "" {
-		return params
-	}
-	if params == nil {
-		return map[string]any{"cwd": cwd}
-	}
-	m, ok := params.(map[string]any)
-	if !ok {
-		return params
-	}
-	if existing, _ := m["cwd"].(string); existing != "" {
-		return m
-	}
-	m["cwd"] = cwd
-	return m
-}
-
-// humanizeMCPError rewrites MCP-protocol-flavored hints into CLI-flavored
-// ones so users running `veska` don't see references to `eng_*` tool names
-// or JSON-RPC error codes they have no way to act on (solov2-luc7).
-func humanizeMCPError(msg string) string {
-	rep := strings.NewReplacer(
-		"pass eng_list_repos to find the id", "run `veska repo list` to see ids",
-		"run eng_list_repos", "run `veska repo list`",
-	)
-	return rep.Replace(msg)
-}
-
-func callMCP(ctx context.Context, method string, params any, out any) error {
-	const dialTimeout = 2 * time.Second
-	const dialBackoff = 200 * time.Millisecond
-	const dialAttempts = 3
-	// solov2-d37i: the first call after `veska service start` (cold daemon)
-	// can take ~10s as SQLite opens, the embedder hot-loads, and registries
-	// fully initialise. The previous 5s ceiling occasionally tripped on
-	// eng_add_repo and the CLI fell through to the direct-write path with
-	// a confusing 'restart daemon' hint. 30s is well within human patience
-	// for a one-shot CLI call and absorbs the cold-start jitter.
-	const ioTimeout = 30 * time.Second
-
-	// solov2-7x7l: dial cli.sock, not mcp.sock. The daemon classifies the
-	// actor based on which socket the connection lands on (server.go:104/108):
-	// cli.sock → ActorKindHuman, mcp.sock → ActorKindAgent. Routing CLI
-	// commands through mcp.sock caused every `veska findings close` of a
-	// high-severity finding to fail human_required, even though the user
-	// was on the actual CLI. mcp.sock stays reserved for editor-driven
-	// veska-mcp shim clients.
-	sockPath := config.CLISockPath()
-	var (
-		conn    net.Conn
-		dialErr error
-		d       net.Dialer
-	)
-	d.Timeout = dialTimeout
-	for attempt := range dialAttempts {
-		conn, dialErr = d.DialContext(ctx, "unix", sockPath)
-		if dialErr == nil {
-			break
-		}
-		if attempt < dialAttempts-1 {
-			time.Sleep(dialBackoff)
-		}
-	}
-	if dialErr != nil {
-		// Include the underlying dial error so 'daemon offline' messages
-		// can tell the user what really happened (connection refused vs.
-		// no such file vs. permission denied — solov2-0cg). When the cause
-		// is "daemon not running", append an actionable hint pointing at
-		// `veska service start` (solov2-j68l).
-		es := dialErr.Error()
-		if strings.Contains(es, "connection refused") ||
-			strings.Contains(es, "no such file") ||
-			strings.Contains(es, "no such file or directory") {
-			return fmt.Errorf("dial %s: daemon not running (start it with `veska service start`, or run `veska-daemon &` for a quick try): %w", sockPath, dialErr)
-		}
-		return fmt.Errorf("dial %s after %d attempts: %w", sockPath, dialAttempts, dialErr)
-	}
-	defer conn.Close()
-	_ = conn.SetDeadline(time.Now().Add(ioTimeout))
-
-	type req struct {
-		JSONRPC string `json:"jsonrpc"`
-		ID      int    `json:"id"`
-		Method  string `json:"method"`
-		Params  any    `json:"params,omitempty"`
-	}
-	// solov2-ktz0 / solov2-zukc: inject cwd into eng_* params so the daemon
-	// can fall back to it when repo_id is omitted. Mirrors what veska-mcp
-	// does for editor-driven clients (cmd/veska-mcp/cwd_inject.go) — without
-	// this, CLI wrappers (veska symbol, veska context, …) would still have
-	// to plumb cwd themselves.
-	params = withCwdInjected(method, params)
-	body, err := json.Marshal(req{JSONRPC: "2.0", ID: 1, Method: method, Params: params})
-	if err != nil {
-		return fmt.Errorf("marshal request: %w", err)
-	}
-	body = append(body, '\n')
-	if _, err := conn.Write(body); err != nil {
-		return fmt.Errorf("write request: %w", err)
-	}
-	if uc, ok := conn.(*net.UnixConn); ok {
-		_ = uc.CloseWrite()
-	}
-
-	scanner := bufio.NewScanner(conn)
-	// Allow large embedded results (e.g. find_symbol with many hits).
-	scanner.Buffer(make([]byte, 0, 64*1024), 4*1024*1024)
-	if !scanner.Scan() {
-		if err := scanner.Err(); err != nil && !errors.Is(err, io.EOF) {
-			return fmt.Errorf("read response: %w", err)
-		}
-		return errors.New("no response from daemon")
-	}
-
-	type rpcErr struct {
-		Code    int    `json:"code"`
-		Message string `json:"message"`
-	}
-	type resp struct {
-		JSONRPC string          `json:"jsonrpc"`
-		ID      int             `json:"id"`
-		Result  json.RawMessage `json:"result,omitempty"`
-		Error   *rpcErr         `json:"error,omitempty"`
-	}
-	var r resp
-	if err := json.Unmarshal(scanner.Bytes(), &r); err != nil {
-		return fmt.Errorf("decode response: %w", err)
-	}
-	if r.Error != nil {
-		return fmt.Errorf("daemon: %s", humanizeMCPError(r.Error.Message))
-	}
-	if out != nil && len(r.Result) > 0 {
-		if err := json.Unmarshal(r.Result, out); err != nil {
-			return fmt.Errorf("decode result: %w", err)
-		}
-	}
-	return nil
+	return mcpclient.Call(ctx, "eng_remove_repo", map[string]any{"repo_id": repoID}, &r)
 }

@@ -12,6 +12,7 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/whiskeyjimbo/veska/internal/application"
 	"github.com/whiskeyjimbo/veska/internal/application/checks"
+	"github.com/whiskeyjimbo/veska/internal/cli/mcpclient"
 	"github.com/whiskeyjimbo/veska/internal/composition"
 	"github.com/whiskeyjimbo/veska/internal/config"
 	"github.com/whiskeyjimbo/veska/internal/core/ports"
@@ -76,7 +77,7 @@ func defaultDialReindex(ctx context.Context, repoID, rootPath string) (string, e
 		params["root_path"] = rootPath
 	}
 	var r result
-	if err := callMCP(ctx, "eng_reindex_repo", params, &r); err != nil {
+	if err := mcpclient.Call(ctx, "eng_reindex_repo", params, &r); err != nil {
 		return "", err
 	}
 	return r.RepoID, nil
