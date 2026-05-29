@@ -9,7 +9,6 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
-	"strings"
 	"sync"
 	"time"
 
@@ -19,15 +18,11 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/application"
 	"github.com/whiskeyjimbo/veska/internal/application/autolink"
 	"github.com/whiskeyjimbo/veska/internal/application/blastradius"
-	"github.com/whiskeyjimbo/veska/internal/application/changedsymbols"
 	"github.com/whiskeyjimbo/veska/internal/application/checks"
 	"github.com/whiskeyjimbo/veska/internal/application/contextpack"
-	"github.com/whiskeyjimbo/veska/internal/application/dependencies"
 	"github.com/whiskeyjimbo/veska/internal/application/embedder"
-	"github.com/whiskeyjimbo/veska/internal/application/manifest"
 	"github.com/whiskeyjimbo/veska/internal/application/revalidate"
 	"github.com/whiskeyjimbo/veska/internal/application/review"
-	"github.com/whiskeyjimbo/veska/internal/application/search"
 	"github.com/whiskeyjimbo/veska/internal/application/vulnrefresh"
 	"github.com/whiskeyjimbo/veska/internal/application/wiki"
 	"github.com/whiskeyjimbo/veska/internal/composition"
@@ -42,8 +37,6 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/secretsscanner"
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/sqlite"
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/sqlite/queue"
-	"github.com/whiskeyjimbo/veska/internal/infrastructure/sqlite/resolver"
-	"github.com/whiskeyjimbo/veska/internal/infrastructure/treesitter"
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/vector"
 	"github.com/whiskeyjimbo/veska/internal/observability"
 	"github.com/whiskeyjimbo/veska/internal/repo"
@@ -830,250 +823,6 @@ type mcpDeps struct {
 	// scanTracker surfaces in-flight cold scans to eng_get_status
 	// (solov2-pm5). Nil-safe — statusProvider tolerates a nil tracker.
 	scanTracker *application.ScanTracker
-}
-
-// registerMCPTools wires every tool family into the registry: findings,
-// suppressions, tasks, owners, todos, admin, plus the graph / blast-radius /
-// semantic-search families backed by the SQLite GraphRepo and the application
-// blastradius + search services.
-func registerMCPTools(r *mcp.Registry, d mcpDeps) {
-	pools := d.pools
-
-	// Tools that only need *sql.DB + AuditWriter.
-	mcp.RegisterFindingTools(r, pools.Write, nil, &repoLister{db: pools.ReadDB})
-	mcp.RegisterSuppressionTools(r, pools.Write, nil, &repoLister{db: pools.ReadDB})
-	mcp.RegisterRecordTools(r, pools.Write, nil)
-	reg := d.regSvc
-	if reg == nil {
-		reg = &repoRegistrar{db: pools.Write}
-	}
-	mcp.RegisterRepoTools(r, reg, &repoLister{db: pools.ReadDB})
-
-	// eng_promote (solov2-3vv): post-commit hook target. Requires ingester
-	// + promoter + a GitQuerier — when any are missing we skip registration
-	// so the tool surface degrades cleanly rather than panicking at startup.
-	if d.ingester != nil && d.promoter != nil {
-		mcp.RegisterPromoteTool(r, mcp.PromoteDeps{
-			Repos:    &repoLister{db: pools.ReadDB},
-			Git:      gitwatch.Querier{},
-			Ingester: d.ingester,
-			Promoter: d.promoter,
-		})
-	}
-
-	// eng_reindex_repo (solov2-4d7b): in-daemon cold-scan reparse. Shares the
-	// same reparser closure StartupResync + repoRegistrar use so daemon.log
-	// emits the standard cold scan: starting/complete pair. When the reparser
-	// is nil (legacy / test wiring) we skip registration; the CLI's direct-
-	// mode fallback still handles those callers.
-	if d.reparser != nil {
-		mcp.RegisterReindexTool(r, mcp.ReindexDeps{
-			Repos:    &repoLister{db: pools.ReadDB},
-			Reparser: d.reparser,
-		})
-	}
-	// Task tools (eng_set_active_task / get_active_task / get_task_history)
-	// are PARKED (solov2-6m1). There's no MCP-side path to create a task —
-	// set_active_task requires the row to already exist, and no external
-	// integration (Jira / Linear / GitHub) currently populates the table.
-	// Exposing these tools surfaces dead-end UX (every user attempt fails
-	// with 'task not found'). When a backend lands, re-enable here.
-	//
-	// mcp.RegisterTaskTools(r, pools.Write, nil)
-	_ = mcp.RegisterTaskTools // keep the symbol reachable for the future re-enable
-	mcp.RegisterOwnerTools(r, pools.Write, &repoLister{db: pools.ReadDB})
-	mcp.RegisterTodoTools(r, sqlite.NewTodoQuerierRepo(pools.ReadDB), &repoLister{db: pools.ReadDB})
-	// Admin tools: repo listing + live status/config from the read pool and
-	// the resolved daemon Config.
-	mcp.RegisterAdminTools(r,
-		&repoLister{db: pools.ReadDB},
-		&statusProvider{db: pools.ReadDB, scans: d.scanTracker},
-		&configProvider{cfg: d.cfg},
-	)
-
-	// Graph tools backed by the SQLite GraphRepo adapter. Writes take the
-	// hot-write pool; reads take the read pool. The cross-repo resolver
-	// turns cross_repo_edge_stubs into synthetic ResolvedEdges for
-	// call_chain (and blast_radius below); without it the stub producer in
-	// xc51.3 has no consumer (solov2-1gj).
-	graph := sqlite.NewGraphRepo(pools.ReadDB, pools.Write)
-	resolveStubs := func(ctx context.Context, nodeID, branch string, expand bool) ([]ports.ResolvedEdge, error) {
-		return resolver.ResolveStubsForNode(ctx, pools.ReadDB, nodeID, branch, expand)
-	}
-	// solov2-80hh: reverse-direction resolver — "who in OTHER repos calls
-	// this node?" Closes the library-author journey gap where blast_radius
-	// on an exported symbol returned no cross-repo callers because
-	// cross_repo_edge_stubs is only indexed by src_node_id.
-	resolveInboundStubs := func(ctx context.Context, dstNodeID, branch string) ([]ports.ResolvedEdge, error) {
-		return resolver.ResolveStubsTargetingNode(ctx, pools.ReadDB, dstNodeID, branch)
-	}
-	mcp.RegisterGraphTools(r, graph, d.staging,
-		mcp.WithRepoLister(&repoLister{db: pools.ReadDB}),
-		mcp.WithResolveFunc(resolveStubs),
-		mcp.WithInboundResolveFunc(resolveInboundStubs),
-		mcp.WithScanTracker(d.scanTracker),
-	)
-
-	// Blast-radius tools. The Service walks edge adjacency + staging; the
-	// repoRoot lookup resolves a repoID to its working tree, and changedFiles
-	// is the git HEAD diff.
-	edges := sqlite.NewEdgeReaderRepo(pools.ReadDB)
-	nodes := sqlite.NewNodeLookupRepo(pools.ReadDB)
-	blastSvc := blastradius.NewService(edges, nodes, d.staging)
-	mcp.RegisterBlastTools(r, blastSvc, repoRootFunc(pools.ReadDB), gitwatch.ChangedFiles, &repoLister{db: pools.ReadDB}, graph,
-		mcp.WithBlastResolveFunc(resolveStubs),
-		mcp.WithBlastInboundResolveFunc(resolveInboundStubs),
-		mcp.WithBlastScanTracker(d.scanTracker))
-
-	// eng_find_changed_symbols: parses each file changed between two git
-	// refs at both refs and diffs the symbol sets. It reads git + the
-	// tree-sitter parser on demand and never touches the promoted graph,
-	// so it needs no per-commit history substrate.
-	//
-	// solov2-izh6.17: wrap the git adapter's ErrFileNotAtRef with
-	// changedsymbols.ErrFileAbsentAtRef so the service can distinguish
-	// "file legitimately absent at this ref" (sentinel-wrapped) from
-	// "ref's tree is unreadable" (anything else) and surface the right
-	// degraded reason.
-	fileAtRef := func(ctx context.Context, root, ref, path string) ([]byte, error) {
-		b, err := gitwatch.FileAtRef(ctx, root, ref, path)
-		if err != nil && errors.Is(err, gitwatch.ErrFileNotAtRef) {
-			return nil, fmt.Errorf("%w: %v", changedsymbols.ErrFileAbsentAtRef, err)
-		}
-		return b, err
-	}
-	if csSvc, err := changedsymbols.NewService(
-		treesitter.NewGoParser(), gitwatch.ChangedFilesBetween, fileAtRef,
-	); err == nil {
-		mcp.RegisterChangedSymbolsTool(r, csSvc, repoRootFunc(pools.ReadDB), &repoLister{db: pools.ReadDB})
-	} else {
-		mcp.RegisterChangedSymbolsTool(r, nil, nil, &repoLister{db: pools.ReadDB})
-	}
-
-	// Wiki hot_zone surface. Change frequency comes from the git commit-history
-	// reader over the default look-back window; blast radius reuses blastSvc.
-	hotZoneCounts := func(ctx context.Context, repoRoot string) (map[string]int, error) {
-		return gitwatch.ChangeCounts(ctx, repoRoot, 0)
-	}
-	if hotZoneSvc, err := wiki.NewHotZoneService(hotZoneCounts, nodes.NodesInFile, blastSvc); err == nil {
-		mcp.RegisterWikiTools(r, hotZoneSvc, repoRootFunc(pools.ReadDB), &repoLister{db: pools.ReadDB})
-	} else {
-		mcp.RegisterWikiTools(r, nil, nil, &repoLister{db: pools.ReadDB})
-	}
-
-	// Wiki entry_points surface. Candidates are enumerated from the loaded
-	// graph; the three safety gates draw on edge adjacency, blast radius and
-	// the findings table.
-	graphForEP := sqlite.NewGraphRepo(pools.ReadDB, pools.Write)
-	findingQuerier := sqlite.NewFindingQuerierRepo(pools.ReadDB)
-	if epSvc, err := wiki.NewEntryPointsService(
-		graphForEP.LoadGraph, edges.InboundEdges, findingQuerier.OpenFindingNodeIDs,
-	); err == nil {
-		mcp.RegisterEntryPointsTool(r, epSvc, &repoLister{db: pools.ReadDB})
-	} else {
-		mcp.RegisterEntryPointsTool(r, nil, &repoLister{db: pools.ReadDB})
-	}
-
-	// Context-pack surface. Assembles a token-bounded bundle of relevant
-	// nodes / commits / findings / tasks for a symbol or a task; commits
-	// come from the git commit-history reader, the active task from the
-	// tasks table.
-	fileHistory := func(ctx context.Context, repoRoot, path string, window time.Duration) ([]contextpack.CommitInfo, error) {
-		commits, err := gitwatch.FileHistory(ctx, repoRoot, path, window)
-		if err != nil {
-			return nil, err
-		}
-		out := make([]contextpack.CommitInfo, 0, len(commits))
-		for _, c := range commits {
-			out = append(out, contextpack.CommitInfo{
-				Hash: c.Hash, Author: c.Author, When: c.When, Subject: c.Subject,
-			})
-		}
-		return out, nil
-	}
-	if cpAsm, err := contextpack.NewAssembler(
-		graph.FindNodes, blastSvc, fileHistory, findingQuerier.OpenFindingNodeIDs,
-		gitwatch.ChangedFiles, nodes.NodesInFile, activeTaskFunc(pools.ReadDB),
-	); err == nil {
-		mcp.RegisterContextPackTool(r, cpAsm, repoRootFunc(pools.ReadDB), &repoLister{db: pools.ReadDB},
-			mcp.WithContextPackResolveFunc(resolveStubs),
-			mcp.WithContextPackInboundResolveFunc(resolveInboundStubs),
-			mcp.WithContextPackScanTracker(d.scanTracker))
-	} else {
-		mcp.RegisterContextPackTool(r, nil, nil, &repoLister{db: pools.ReadDB})
-	}
-
-	// Semantic-search tools. The Service orchestrates embed → vector search →
-	// node hydration with lexical fallback.
-	searchSvc := search.NewService(d.provider, d.vectors, nodes,
-		search.WithMetrics(d.metrics))
-	mcp.RegisterSearchTools(r, searchSvc, d.refs, d.vectors, nodes, d.savings, &repoLister{db: pools.ReadDB},
-		mcp.WithSearchGraph(graph),
-		mcp.WithSearchScanTracker(d.scanTracker))
-
-	// eng_list_dependencies (solov2-jlws): aggregates per-repo cross-repo
-	// edge stubs into a ranked module list with sample call sites. Versions
-	// come from go.mod via manifest.ReadGoMod; a malformed/absent go.mod
-	// returns an empty version per module rather than failing the call.
-	depsRepo := sqlite.NewDependenciesRepo(pools.ReadDB)
-	depsVersions := func(ctx context.Context, repoRoot, modulePath string) (string, error) {
-		path := filepath.Join(repoRoot, "go.mod")
-		content, rerr := os.ReadFile(path)
-		if rerr != nil {
-			// No go.mod (or unreadable) — return empty so the dep still
-			// ranks. We deliberately swallow this rather than erroring
-			// the whole List call.
-			return "", nil
-		}
-		deps, perr := manifest.ReadGoMod(content)
-		if perr != nil {
-			return "", nil
-		}
-		// solov2-w88y: stub rows record the import path (e.g.
-		// "golang.org/x/text/language"), but go.mod's require lines list
-		// the module path ("golang.org/x/text"). Walk back the path
-		// components until a module match falls out so sub-packages
-		// inherit their parent module's version.
-		probe := modulePath
-		for probe != "" && probe != "." {
-			for _, m := range deps {
-				if m.Name == probe {
-					return m.Version, nil
-				}
-			}
-			i := strings.LastIndex(probe, "/")
-			if i <= 0 {
-				break
-			}
-			probe = probe[:i]
-		}
-		return "", nil
-	}
-	depsRepoRoot := func(ctx context.Context, repoID string) (string, error) {
-		return repoRootFunc(pools.ReadDB)(ctx, repoID)
-	}
-	// solov2-6q1q: tell the dependencies service the repo's own module path
-	// so it can filter intra-module imports (the repo's own subpackages) out
-	// of the external-dependency list.
-	depsOwnModule := func(ctx context.Context, repoRoot string) (string, error) {
-		content, rerr := os.ReadFile(filepath.Join(repoRoot, "go.mod"))
-		if rerr != nil {
-			return "", nil
-		}
-		path, perr := manifest.ReadGoModModulePath(content)
-		if perr != nil {
-			return "", nil
-		}
-		return path, nil
-	}
-	if depsSvc, err := dependencies.NewService(depsRepo, depsVersions, depsRepoRoot,
-		dependencies.WithImportLister(depsRepo),
-		dependencies.WithOwnModulePath(depsOwnModule),
-	); err == nil {
-		mcp.RegisterDependenciesTool(r, depsSvc, &repoLister{db: pools.ReadDB})
-	} else {
-		mcp.RegisterDependenciesTool(r, nil, &repoLister{db: pools.ReadDB})
-	}
 }
 
 // activeTaskFunc returns a contextpack.ActiveTaskFunc reading the repo's
