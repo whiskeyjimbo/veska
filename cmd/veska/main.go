@@ -16,8 +16,15 @@ import (
 
 func newRootCmd() *cobra.Command {
 	root := &cobra.Command{
-		Use:           "veska",
-		Short:         "Veska code intelligence CLI",
+		Use:   "veska",
+		Short: "Veska code intelligence CLI",
+		// solov2-izh6.19: surface a 'start here' hint above the alphabetised
+		// command list. Cobra renders Long at the top of --help, so this
+		// lands just before "Usage:" / "Available Commands:" and gives a
+		// brand-new user a single obvious next step instead of 30 commands
+		// to scan.
+		Long: "Veska code intelligence CLI.\n\n" +
+			"New here? → run \"veska init\" to set up (use `-y` for non-interactive runs).",
 		Version:       shortVersion(),
 		SilenceUsage:  true,
 		SilenceErrors: true,

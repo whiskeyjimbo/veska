@@ -311,6 +311,68 @@ func TestInitVulnPromptNoVulnFlagSkipsBlock(t *testing.T) {
 	}
 }
 
+// TestInitSummaryMentionsPATH pins solov2-izh6.19 #1: the init summary
+// must include a one-line PATH suggestion so new users don't end up
+// invoking bin/veska by absolute path.
+func TestInitSummaryMentionsPATH(t *testing.T) {
+	tmp := t.TempDir()
+	fakeProbe := func(_ context.Context, _, _ string) (*embedderprobe.ProbeResult, error) {
+		return &embedderprobe.ProbeResult{Reachable: true, ModelPresent: true, EmbedOK: true, Status: "healthy"}, nil
+	}
+	deps := initDeps{veskaHome: tmp, probe: fakeProbe, goos: "linux"}
+
+	var buf bytes.Buffer
+	if err := runInit(context.Background(), deps, initFlags{yes: true}, &buf); err != nil {
+		t.Fatalf("runInit: %v", err)
+	}
+	out := buf.String()
+	// Look for the explicit PATH suggestion line — not just any occurrence of
+	// the literal "PATH", which could collide with other words.
+	if !strings.Contains(out, "on PATH") && !strings.Contains(out, "on your PATH") {
+		t.Errorf("expected summary to suggest putting veska on PATH; got:\n%s", out)
+	}
+}
+
+// TestInitSummaryMentionsYesFlag pins solov2-izh6.19 #10: the init
+// summary (or the EOF-peek path) must mention -y / --yes so CI/Docker
+// users can find the non-interactive flag without reading the source.
+func TestInitSummaryMentionsYesFlag(t *testing.T) {
+	tmp := t.TempDir()
+	fakeProbe := func(_ context.Context, _, _ string) (*embedderprobe.ProbeResult, error) {
+		return &embedderprobe.ProbeResult{Reachable: true, ModelPresent: true, EmbedOK: true, Status: "healthy"}, nil
+	}
+	deps := initDeps{veskaHome: tmp, probe: fakeProbe, goos: "linux"}
+
+	var buf bytes.Buffer
+	if err := runInit(context.Background(), deps, initFlags{yes: true}, &buf); err != nil {
+		t.Fatalf("runInit: %v", err)
+	}
+	out := buf.String()
+	if !strings.Contains(out, "-y") && !strings.Contains(out, "--yes") {
+		t.Errorf("expected summary to mention -y/--yes for non-interactive use; got:\n%s", out)
+	}
+}
+
+// TestRootHelpMentionsInit pins solov2-izh6.19 #2: `veska --help` must
+// surface a "run veska init to set up" hint so a brand-new user knows
+// the entry point without scanning 30 alphabetised sub-commands.
+func TestRootHelpMentionsInit(t *testing.T) {
+	root := newRootCmd()
+	var buf bytes.Buffer
+	root.SetOut(&buf)
+	root.SetErr(&buf)
+	root.SetArgs([]string{"--help"})
+	if err := root.Execute(); err != nil {
+		t.Fatalf("--help returned error: %v", err)
+	}
+	out := buf.String()
+	// The hint must point users at `veska init` as the start-here step —
+	// distinct from `init` merely appearing in the alphabetised command list.
+	if !strings.Contains(out, `run "veska init"`) {
+		t.Errorf("expected --help to include a 'run \"veska init\" to set up' hint; got:\n%s", out)
+	}
+}
+
 // TestInitVulnPromptInteractiveNo pins solov2-pvyo: interactive 'n' answer
 // leaves vuln_source disabled.
 func TestInitVulnPromptInteractiveNo(t *testing.T) {

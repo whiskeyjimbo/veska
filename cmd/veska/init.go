@@ -120,6 +120,13 @@ func runInit(ctx context.Context, deps initDeps, flags initFlags, out io.Writer)
 	fmt.Fprintln(out, "  3. veska search \"your question\"                  # semantic search the graph")
 	fmt.Fprintln(out, "  see also: veska init --agent claude|cursor|...   # MCP setup for editors")
 	fmt.Fprintln(out)
+	// solov2-izh6.19: tiny discoverability hints. New users hit two
+	// papercuts on first contact: invoking bin/veska by absolute path
+	// (no PATH suggestion anywhere), and discovering -y / --yes only by
+	// reading source when scripting init from CI/Docker.
+	fmt.Fprintln(out, "tip: copy or symlink bin/veska to a directory on PATH (e.g. ~/.local/bin/) so you can run `veska` directly.")
+	fmt.Fprintln(out, "tip: for non-interactive use (CI, Docker, agent harnesses) rerun with `-y` (alias --yes) to accept all defaults.")
+	fmt.Fprintln(out)
 	fmt.Fprintln(out, "ready")
 
 	return nil
