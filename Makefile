@@ -66,6 +66,23 @@ $(VESKA_BIN):
 $(LAYERCHECK_BIN):
 	go build -o $@ ./tools/lint/layercheck/cmd
 
+# build-sizes (solov2-izh6.29): measure thin and fat binary sizes so
+# README numbers stay in sync with reality. Cleans bin/veska between
+# runs because $(VESKA_BIN) is the same path for both modes — without
+# the clean, make sees an existing artifact and skips the rebuild.
+.PHONY: build-sizes
+build-sizes:
+	@rm -f $(VESKA_BIN) $(DAEMON_BIN) $(MCP_BIN)
+	@$(MAKE) build > /dev/null 2>&1
+	@fat=$$(stat -L -c%s $(VESKA_BIN)); \
+	rm -f $(VESKA_BIN) $(DAEMON_BIN) $(MCP_BIN); \
+	$(MAKE) build-small > /dev/null 2>&1; \
+	thin=$$(stat -L -c%s $(VESKA_BIN)); \
+	printf 'thin: %d bytes (%d MB)\nfat:  %d bytes (%d MB)\ndelta:%d bytes (%d MB)\n' \
+		$$thin $$((thin/1024/1024)) \
+		$$fat  $$((fat/1024/1024)) \
+		$$((fat-thin)) $$(((fat-thin)/1024/1024))
+
 # install (solov2-cdw3): copy the just-built fat binaries into the user's
 # bin dir via scripts/install.sh. Mirrors the install.sh path inside the
 # release tarball so the local-build experience matches the distributed

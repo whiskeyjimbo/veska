@@ -89,8 +89,9 @@ model2vec weights into the binary so the install is zero-setup: no separate
 download, no network, no static-v2 fallback at boot.
 
 ```sh
-make build        # default: model2vec embedded in the binary (~62 MB larger)
-make build-small  # thin: veska, veska-daemon, veska-mcp (+ layercheck tool).
+make build        # default: ~104 MB fat binary (model2vec ~62 MB embedded
+                  # into a ~42 MB thin build). Zero setup at runtime.
+make build-small  # ~42 MB thin: veska, veska-daemon, veska-mcp (+ layercheck).
                   # Use this only when you want size-sensitive binaries
                   # (CI, containers); you must then run `veska install model2vec`
                   # to avoid booting on the low-quality static-v2 fallback.
