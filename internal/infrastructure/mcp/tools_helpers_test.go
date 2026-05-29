@@ -107,6 +107,14 @@ func (s *scopedGraphStub) NodesForFile(_ context.Context, repoID, branch, path s
 	}
 	return out, nil
 }
+func (s *scopedGraphStub) GetNodeSnippet(_ context.Context, repoID, branch string, id domain.NodeID) (string, error) {
+	if m, ok := s.nodes[repoID+"|"+branch]; ok {
+		if n, ok := m[string(id)]; ok && n.RawContent != nil {
+			return *n.RawContent, nil
+		}
+	}
+	return "", nil
+}
 
 // TestResolveSeedOwner_FanoutFindsUniqueOwner pins solov2-f0zt: when repo_id
 // is omitted and multiple repos are registered, the seed must be located

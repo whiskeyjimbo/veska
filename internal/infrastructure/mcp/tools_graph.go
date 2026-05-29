@@ -44,13 +44,22 @@ type callChainResponse struct {
 }
 
 // DegradedReasonChainedSelectorsUnresolved is emitted on eng_get_call_chain
-// responses when the seed node is a callable (function/method) but no
-// CALLS edges were resolvable. The most common cause is chained-selector
-// call sites (e.g. cobra's `rootCmd.PersistentFlags().StringVarP(...)`),
-// which the tree-sitter extractor does not yet model as edges — see the
-// epic at solov2-9rc2. Agents should treat an empty edges array on a
-// callable as "parser limitation, may not be authoritative."
+// responses when the seed node is a callable whose body contains chained
+// selector call sites (e.g. cobra's `rootCmd.PersistentFlags().StringVarP(...)`,
+// or `s.field.M()`) that the tree-sitter extractor does not yet model as
+// edges — see epic solov2-9rc2. Agents should treat an empty edges array
+// on a callable carrying this reason as "parser limitation, may not be
+// authoritative."
 const DegradedReasonChainedSelectorsUnresolved = "chained_selectors_unresolved"
+
+// DegradedReasonExternalCalleesOnly is emitted when the seed callable's
+// body has no chained selectors but also produced no resolvable CALLS
+// edges. The dominant cause is that every callee lives outside the
+// indexed graph (stdlib like fmt/strings, or third-party packages from
+// unregistered modules). An agent reading this should NOT conclude the
+// parser is buggy — the empty edges set reflects the index boundary,
+// not a parser limitation (solov2-izh6.22).
+const DegradedReasonExternalCalleesOnly = "external_callees_only"
 
 // ResolveFunc is a function that resolves cross-repo edge stubs OUTBOUND
 // from a given node (the node is the caller). Injected as an optional
