@@ -313,3 +313,54 @@ func TestReindexCmd_UnknownRepo(t *testing.T) {
 		t.Errorf("reparser must not run on unknown repo, got %d invocations", calls.Load())
 	}
 }
+
+// TestResolveReindexFlagTarget covers the positional/flag merge rule used by
+// reindexCmd. The DoD for solov2-izh6.18 is that --repo behaves as an alias
+// for the positional arg and the positional wins on conflict.
+func TestResolveReindexFlagTarget(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name       string
+		args       []string
+		flag       string
+		wantTarget string
+		wantStderr string
+	}{
+		{name: "both empty", wantTarget: ""},
+		{name: "flag only", flag: "abcd1234", wantTarget: "abcd1234"},
+		{name: "positional only", args: []string{"abcd1234"}, wantTarget: "abcd1234"},
+		{name: "same value both", args: []string{"abcd1234"}, flag: "abcd1234", wantTarget: "abcd1234"},
+		{
+			name: "conflict: positional wins, note on stderr",
+			args: []string{"abcd1234"}, flag: "deadbeef",
+			wantTarget: "abcd1234",
+			wantStderr: `reindex: positional arg "abcd1234" overrides --repo "deadbeef"`,
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			var stderr strings.Builder
+			got := resolveReindexFlagTarget(&stderr, tc.args, tc.flag)
+			if got != tc.wantTarget {
+				t.Fatalf("target: got %q want %q", got, tc.wantTarget)
+			}
+			gotErr := stderr.String()
+			if tc.wantStderr == "" && gotErr != "" {
+				t.Fatalf("unexpected stderr: %q", gotErr)
+			}
+			if tc.wantStderr != "" && !strings.Contains(gotErr, tc.wantStderr) {
+				t.Fatalf("stderr: got %q want substring %q", gotErr, tc.wantStderr)
+			}
+		})
+	}
+}
+
+// TestReindexCmd_RepoFlagListed asserts --repo appears in the command's flag
+// set (parity with deps/findings/calls/blast/search).
+func TestReindexCmd_RepoFlagListed(t *testing.T) {
+	t.Parallel()
+	c := reindexCmd()
+	if f := c.Flags().Lookup("repo"); f == nil {
+		t.Fatal("reindex command should expose --repo flag for parity with siblings")
+	}
+}
