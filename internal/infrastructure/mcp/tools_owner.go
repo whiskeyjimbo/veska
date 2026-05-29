@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	application "github.com/whiskeyjimbo/veska/internal/application"
 	"github.com/whiskeyjimbo/veska/internal/core/domain"
 )
 
@@ -18,13 +19,17 @@ import (
 // db, when non-nil, is used to resolve a repo_id to its working-tree root
 // (the repos table has root_path). When db is nil — the test path — repo_id
 // is treated as a literal filesystem root.
-func RegisterOwnerTools(r *Registry, db *sql.DB) {
+// repos, when non-nil, is used by the handler to resolve repo_id from cwd
+// or short_id and to give the standard 'N repos registered' hint on a
+// missing-repo_id error (solov2-eq5a). When nil the handler falls back
+// to the bare "repo_id is required" behaviour.
+func RegisterOwnerTools(r *Registry, db *sql.DB, repos application.RepoLister) {
 	r.MustRegister(ToolSpec{
 		Name:            "eng_find_owner",
 		Description:     "Find the owner of a file via CODEOWNERS lookup or git blame fallback.",
 		IncludesStaging: false,
 		InputSchema:     findOwnerInputSchema,
-		Handler:         makeFindOwnerHandler(db),
+		Handler:         makeFindOwnerHandler(db, repos),
 
 		CLIExempt: ExemptDeferred,
 
@@ -80,8 +85,8 @@ type findOwnerParams struct {
 	Branch string `json:"branch"`
 }
 
-func makeFindOwnerHandler(db *sql.DB) ToolHandler {
-	return func(_ context.Context, _ domain.Actor, raw json.RawMessage) (any, *RPCError) {
+func makeFindOwnerHandler(db *sql.DB, repos application.RepoLister) ToolHandler {
+	return func(ctx context.Context, _ domain.Actor, raw json.RawMessage) (any, *RPCError) {
 		var p findOwnerParams
 		if err := json.Unmarshal(raw, &p); err != nil {
 			return nil, &RPCError{Code: CodeInvalidParams, Message: fmt.Sprintf("invalid params: %v", err)}
@@ -89,7 +94,19 @@ func makeFindOwnerHandler(db *sql.DB) ToolHandler {
 		if p.FilePath == "" {
 			p.FilePath = p.Path
 		}
-		if p.RepoID == "" {
+		// solov2-eq5a: when a RepoLister is wired, route through the
+		// shared resolver so the missing-repo_id error carries the same
+		// "N repos registered; pass eng_list_repos to find the id" hint
+		// the peer tools give, and so single-repo callers get
+		// auto-resolution + cwd-pin fallback for free. Test/no-DB
+		// callers (repos == nil) keep the bare contract.
+		if repos != nil {
+			if id, rpcErr := resolveRepoIDOrCwd(ctx, repos, p.RepoID, cwdFromParams(raw)); rpcErr != nil {
+				return nil, rpcErr
+			} else {
+				p.RepoID = id
+			}
+		} else if p.RepoID == "" {
 			return nil, &RPCError{Code: CodeInvalidParams, Message: "repo_id is required"}
 		}
 		if p.FilePath == "" && (p.Symbol != "" || p.NodeID != "") {
