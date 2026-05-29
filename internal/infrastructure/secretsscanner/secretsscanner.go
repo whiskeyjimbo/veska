@@ -445,17 +445,17 @@ func looksLikeURL(tok string) bool {
 // shapes are accepted, all of which routinely cross the high-entropy
 // threshold on Go source and Markdown without being secrets:
 //
-//   1. Bare identifier: letters and underscores, no digits, no
-//      punctuation (the original solov2-3455 rule). Catches
-//      "BenchmarkMemoryDuringPluginDiscovery".
-//   2. Identifier with embedded digits: each separator-delimited word
-//      starts with a letter or underscore, runs over [A-Za-z0-9_]
-//      (solov2-izh6.24). Catches "TestBashCompletionV2WithActiveHelp".
-//   3. Dotted / slashed / hyphenated chain: each component matches
-//      shape (2) above (solov2-izh6.24). Catches
-//      "c.IsAdditionalHelpTopicCommand",
-//      "mutuallyExclusive/oneRequired/requiredAsGroup",
-//      "site/content/projects_using_cobra.md".
+//  1. Bare identifier: letters and underscores, no digits, no
+//     punctuation (the original solov2-3455 rule). Catches
+//     "BenchmarkMemoryDuringPluginDiscovery".
+//  2. Identifier with embedded digits: each separator-delimited word
+//     starts with a letter or underscore, runs over [A-Za-z0-9_]
+//     (solov2-izh6.24). Catches "TestBashCompletionV2WithActiveHelp".
+//  3. Dotted / slashed / hyphenated chain: each component matches
+//     shape (2) above (solov2-izh6.24). Catches
+//     "c.IsAdditionalHelpTopicCommand",
+//     "mutuallyExclusive/oneRequired/requiredAsGroup",
+//     "site/content/projects_using_cobra.md".
 //
 // Real credentials (base64, hex, random tokens) overwhelmingly contain
 // digit-letter runs, '+', '=', or other punctuation NOT in the
@@ -468,8 +468,14 @@ func looksLikeIdentifier(tok string) bool {
 	// Per-component word-shape: every separator-delimited segment must
 	// start with a letter or underscore and contain only [A-Za-z0-9_].
 	// This rejects tokens with stray punctuation that real secrets carry
-	// (base64 '+'/'=', random hex blocks separated by '-', etc.).
+	// (base64 '+'/'=', random hex blocks separated by '-', etc.). Empty
+	// parts come from leading/trailing separators (e.g. sentence-final
+	// periods like "encoding.TextUnmarshaler." in a doc comment) and
+	// must not disqualify an otherwise identifier-shaped token.
 	for _, part := range identifierChainSeparators(tok) {
+		if part == "" {
+			continue
+		}
 		if !isIdentifierWord(part) {
 			return false
 		}
