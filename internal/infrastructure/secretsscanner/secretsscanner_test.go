@@ -151,6 +151,61 @@ func TestBuiltinScanner_ImportPathsNotFlagged(t *testing.T) {
 	}
 }
 
+// TestBuiltinScanner_URLsInCommentsNotFlagged guards solov2-izh6.24:
+// a line whose only secret-shaped token is the path of an http(s) URL
+// (typical SPDX license header, doc cross-references, README links)
+// must not fire the high-entropy rule. The journey report saw 47 of
+// these on a fresh spf13/cobra clone — every Apache-2.0 header line
+// like `//      http://www.apache.org/licenses/LICENSE-2.0` flagged.
+func TestBuiltinScanner_URLsInCommentsNotFlagged(t *testing.T) {
+	t.Parallel()
+	s := secretsscanner.New()
+	cases := []string{
+		// Apache-2.0 SPDX header URL (literal from cobra v1.8.0).
+		"//      http://www.apache.org/licenses/LICENSE-2.0",
+		// HTTPS variant + trailing slash.
+		"// See https://github.com/golang/go/issues/12345/ for context",
+		// Bare hostname + long path with mixed case.
+		"// docs: https://pkg.go.dev/github.com/spf13/cobra#Command.Execute",
+		// Markdown link.
+		"[issue]: https://example.com/path/with/some-long-fragment-12345",
+		// Bare scheme + host (no path) — entropy lower but still not a secret.
+		"// see http://docs.example.com/api/reference for the spec",
+	}
+	for _, txt := range cases {
+		t.Run(txt, func(t *testing.T) {
+			in := ports.ScanInput{AddedLines: map[string][]ports.Line{
+				"file.go": {{Number: 1, Text: txt}},
+			}}
+			got, err := s.Scan(in)
+			if err != nil {
+				t.Fatalf("Scan: %v", err)
+			}
+			if len(got) != 0 {
+				t.Errorf("expected no findings for URL-in-comment %q, got %+v", txt, got)
+			}
+		})
+	}
+}
+
+// TestBuiltinScanner_UrlsDoNotMaskRealSecrets guards that adding the
+// URL allowlist does NOT silently drop a real secret that happens to
+// share a line with a URL — the URL is filtered, the secret still fires.
+func TestBuiltinScanner_UrlsDoNotMaskRealSecrets(t *testing.T) {
+	t.Parallel()
+	s := secretsscanner.New()
+	in := ports.ScanInput{AddedLines: map[string][]ports.Line{
+		"file.go": {{Number: 1, Text: `// docs: http://example.com  token: sk_live_4eC39HqLyjWDarjtT1zdp7dc`}},
+	}}
+	got, err := s.Scan(in)
+	if err != nil {
+		t.Fatalf("Scan: %v", err)
+	}
+	if len(got) == 0 {
+		t.Fatal("expected the stripe-like secret to fire even when the line also contains a URL; got 0 findings")
+	}
+}
+
 // TestBuiltinScanner_GitleaksAddsStripeRule pins solov2-j66g: gitleaks
 // fires on Stripe test tokens that the previous local-only rules missed.
 // Uses a synthetic-but-realistic shape that gitleaks does not allowlist.

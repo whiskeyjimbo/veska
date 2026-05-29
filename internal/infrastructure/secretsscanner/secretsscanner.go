@@ -352,6 +352,15 @@ func (s *BuiltinScanner) scanLine(path string, line ports.Line) []ports.SecretFi
 		if looksLikeFilesystemPath(tok) {
 			continue
 		}
+		// solov2-izh6.24: SPDX license URLs and other http(s) links in
+		// comments / Markdown were producing 47 high-entropy false
+		// positives on a fresh spf13/cobra clone. Skip URL-path-shaped
+		// tokens BEFORE the entropy rule fires. A real secret on the
+		// same line is unaffected — tokenRe captures it as a separate
+		// token.
+		if looksLikeURL(tok) {
+			continue
+		}
 		// solov2-j1yz: drop canonical vendor-docs placeholders.
 		if isDocsExampleSecret(tok) {
 			continue
@@ -411,24 +420,130 @@ func looksLikeFilesystemPath(tok string) bool {
 	return filesystemPathRe.MatchString(tok)
 }
 
+// urlPathRe matches tokens shaped like the path portion of an http(s)
+// URL — after the colon has been stripped by tokenRe. Real-world
+// shapes: "//www.apache.org/licenses/LICENSE-2.0",
+// "//github.com/golang/go/issues/12345/",
+// "//pkg.go.dev/github.com/spf13/cobra". Anchored: head is "//",
+// followed by a hostname-like run (alphanumerics + dots + hyphens),
+// then at least one dot + TLD-ish suffix, optionally followed by a
+// path. The TLD requirement keeps the rule from allowlisting bare
+// "//something" tokens that aren't URLs.
+var urlPathRe = regexp.MustCompile(`^//[A-Za-z0-9\-]+(?:\.[A-Za-z0-9\-]+)+(?:/[A-Za-z0-9._\-+/]*)?$`)
+
+// looksLikeURL reports whether tok has the shape of an http(s) URL
+// after the scheme's colon has been stripped by tokenRe. SPDX license
+// header URLs, README cross-references, and Markdown link targets are
+// the dominant source — flagging them produced 47 high-entropy false
+// positives on a fresh spf13/cobra clone (solov2-izh6.24).
+func looksLikeURL(tok string) bool {
+	return urlPathRe.MatchString(tok)
+}
+
 // looksLikeIdentifier reports whether tok has the shape of a programming
-// language identifier (letters and optionally underscores, with no digits
-// and no punctuation). Long camelCase identifiers — e.g.
-// "BenchmarkMemoryDuringPluginDiscovery" — cross the high-entropy
-// threshold because of mixed case, but they are never secrets. Real
-// credential strings (random tokens, base64, hex) virtually always
-// include at least one digit or non-alpha character (solov2-3455).
+// language identifier or a dotted/slashed chain of identifiers. Three
+// shapes are accepted, all of which routinely cross the high-entropy
+// threshold on Go source and Markdown without being secrets:
+//
+//   1. Bare identifier: letters and underscores, no digits, no
+//      punctuation (the original solov2-3455 rule). Catches
+//      "BenchmarkMemoryDuringPluginDiscovery".
+//   2. Identifier with embedded digits: each separator-delimited word
+//      starts with a letter or underscore, runs over [A-Za-z0-9_]
+//      (solov2-izh6.24). Catches "TestBashCompletionV2WithActiveHelp".
+//   3. Dotted / slashed / hyphenated chain: each component matches
+//      shape (2) above (solov2-izh6.24). Catches
+//      "c.IsAdditionalHelpTopicCommand",
+//      "mutuallyExclusive/oneRequired/requiredAsGroup",
+//      "site/content/projects_using_cobra.md".
+//
+// Real credentials (base64, hex, random tokens) overwhelmingly contain
+// digit-letter runs, '+', '=', or other punctuation NOT in the
+// separator set; the identifier-shape check excludes those by
+// requiring every component to start with a letter or underscore.
 func looksLikeIdentifier(tok string) bool {
-	for _, r := range tok {
+	if tok == "" {
+		return false
+	}
+	// Per-component word-shape: every separator-delimited segment must
+	// start with a letter or underscore and contain only [A-Za-z0-9_].
+	// This rejects tokens with stray punctuation that real secrets carry
+	// (base64 '+'/'=', random hex blocks separated by '-', etc.).
+	for _, part := range identifierChainSeparators(tok) {
+		if !isIdentifierWord(part) {
+			return false
+		}
+	}
+	// Whole-token letter-run: at least one substring of three consecutive
+	// letters anywhere in the token. This is what distinguishes real
+	// identifier chains (Test.Bash.Completion has "Test","Bash",
+	// "Completion") from random alphanumeric secrets ("h8Kq2Lx9Zp4Wn7…"
+	// has no letter run > 2). Checked at token-grain so a short
+	// receiver-like component (e.g. "c" in "c.IsAvailableCommand") does
+	// not disqualify the whole chain — solov2-izh6.24.
+	return hasLetterRun(tok, 3)
+}
+
+// identifierChainSeparators splits tok on '.', '/', and '-' — the three
+// non-underscore separators that appear between Go identifiers in
+// member-access (a.b), paths (a/b), and Markdown link slugs (a-b).
+// Underscore is part of an identifier word, not a separator.
+func identifierChainSeparators(tok string) []string {
+	parts := []string{}
+	start := 0
+	for i, r := range tok {
+		if r == '.' || r == '/' || r == '-' {
+			parts = append(parts, tok[start:i])
+			start = i + len(string(r))
+		}
+	}
+	parts = append(parts, tok[start:])
+	return parts
+}
+
+// isIdentifierWord reports whether s has the shape of a single
+// identifier word: starts with a letter or underscore, then any run of
+// letters/digits/underscores. The letter-run discriminator that
+// distinguishes identifiers from random alphanumeric secrets is
+// checked at token-grain by hasLetterRun — see looksLikeIdentifier.
+func isIdentifierWord(s string) bool {
+	if s == "" {
+		return false
+	}
+	for i, r := range s {
 		switch {
-		case r >= 'a' && r <= 'z':
-		case r >= 'A' && r <= 'Z':
+		case r >= 'a' && r <= 'z', r >= 'A' && r <= 'Z':
 		case r == '_':
+		case r >= '0' && r <= '9':
+			if i == 0 {
+				return false
+			}
 		default:
 			return false
 		}
 	}
 	return true
+}
+
+// hasLetterRun reports whether s contains a substring of n consecutive
+// ASCII letters anywhere. Used by looksLikeIdentifier to discriminate
+// real identifier chains ("TestBashCompletionV2WithActiveHelp" — many
+// long letter runs) from random alphanumeric secrets ("h8Kq2Lx9Zp4..."
+// — no run > 2).
+func hasLetterRun(s string, n int) bool {
+	run := 0
+	for _, r := range s {
+		isLetter := (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z')
+		if isLetter {
+			run++
+			if run >= n {
+				return true
+			}
+		} else {
+			run = 0
+		}
+	}
+	return false
 }
 
 // shannonEntropy returns the Shannon entropy of s in bits per character.
