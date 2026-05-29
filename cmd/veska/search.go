@@ -391,7 +391,51 @@ func ensureIndexed(ctx context.Context, pools *sqlite.Pools, rec repo.Record, w 
 		return fmt.Errorf("search: cold scan: %w", err)
 	}
 
+	// solov2-izh6.28: surface the same per-rule check summary that
+	// `repo add --wait` prints, so a junior running
+	// `veska search <q> --repo <url>` sees what the promotion checks
+	// found before the search results scroll past. Silent on a clean
+	// promotion.
+	emitColdScanSummary(ctx, pools.ReadDB, w, appRec.RepoID, appRec.ActiveBranch)
+
 	return drainEmbedderQueue(ctx, pools, w)
+}
+
+// emitColdScanSummary prints a one-line "✓ <rule>: N finding(s)" entry
+// per non-zero rule for the given (repo, branch), matching the per-rule
+// summary the `repo add --wait` flow surfaces (cmd/veska/repo.go ~L867).
+// Silent when no findings exist so a clean promotion doesn't pollute
+// `veska search --repo <url>` output. Best-effort: any DB error is
+// swallowed — the summary is advisory, not load-bearing (solov2-izh6.28).
+func emitColdScanSummary(ctx context.Context, db *sql.DB, w io.Writer, repoID, branch string) {
+	if db == nil {
+		return
+	}
+	rows, err := db.QueryContext(ctx,
+		`SELECT rule, COUNT(*) FROM findings
+		 WHERE repo_id = ? AND branch = ? AND state = 'open'
+		 GROUP BY rule ORDER BY rule`,
+		repoID, branch,
+	)
+	if err != nil {
+		return
+	}
+	defer func() { _ = rows.Close() }()
+	for rows.Next() {
+		var rule string
+		var n int
+		if err := rows.Scan(&rule, &n); err != nil {
+			return
+		}
+		if n == 0 {
+			continue
+		}
+		plural := "s"
+		if n == 1 {
+			plural = ""
+		}
+		fmt.Fprintf(w, "  ✓ %s: %d finding%s\n", rule, n, plural)
+	}
 }
 
 // drainEmbedderQueue starts an Embedder.Worker, polls the pending-refs
