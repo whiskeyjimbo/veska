@@ -88,6 +88,7 @@ CREATE TABLE edges (
     kind             TEXT NOT NULL,
     confidence       TEXT NOT NULL,
     last_promoted_at INTEGER NOT NULL,
+    src_line         INTEGER,
     PRIMARY KEY (edge_id, branch),
     FOREIGN KEY (src_node_id, branch) REFERENCES nodes(node_id, branch) ON DELETE CASCADE,
     FOREIGN KEY (dst_node_id, branch) REFERENCES nodes(node_id, branch) ON DELETE CASCADE

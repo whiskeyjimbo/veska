@@ -349,6 +349,13 @@ type callRef struct {
 	// promotion-time resolver binds by method name within pkg. Plain
 	// pkg.Foo() calls keep method=false (solov2-9rc2).
 	method bool
+	// line is the 1-indexed start line of the call_expression in the
+	// source file. Carried through to domain.Edge.SourceLine on
+	// resolved edges and domain.UnresolvedCall.SrcLine for the
+	// promotion-time resolver, so cross-repo edge attribution reports
+	// the actual call site instead of the caller node's declaration
+	// line (solov2-izh6.31). 0 = unknown.
+	line int
 }
 
 // localVarOrigin tracks variables declared via `v := pkg.X(...)` inside

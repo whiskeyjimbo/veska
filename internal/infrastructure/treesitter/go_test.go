@@ -187,6 +187,61 @@ func hello() string {
 	}
 }
 
+// TestParseFile_CallsEdgeCarriesSourceLine guards solov2-izh6.31: every
+// CALLS edge must record the 1-indexed line of the call_expression on
+// edge.SourceLine. Without this, renderers fall back to the caller
+// node's declaration line and a 30-line function with three calls
+// reports all three at the same line — exactly the junior-journey
+// surprise on the cobra fixture.
+func TestParseFile_CallsEdgeCarriesSourceLine(t *testing.T) {
+	src := []byte(`package foo
+
+func caller() string {
+	leadingPad()
+	mid()
+	trailing()
+	return ""
+}
+
+func leadingPad() {}
+func mid()        {}
+func trailing()   {}
+`)
+	p := treesitter.NewGoParser()
+	result, err := p.ParseFile(context.Background(), repoID, filePath, src)
+	if err != nil {
+		t.Fatalf("ParseFile: %v", err)
+	}
+	caller := findNodeByName(result.Nodes, "caller")
+	if caller == nil {
+		t.Fatalf("caller node missing")
+	}
+	want := map[string]int{
+		"leadingPad": 4,
+		"mid":        5,
+		"trailing":   6,
+	}
+	for name, line := range want {
+		callee := findNodeByName(result.Nodes, name)
+		if callee == nil {
+			t.Errorf("%s node missing", name)
+			continue
+		}
+		edge := findEdge(result.Edges, caller.ID, callee.ID, domain.EdgeCalls)
+		if edge == nil {
+			t.Errorf("missing CALLS edge caller->%s", name)
+			continue
+		}
+		if edge.SourceLine == nil {
+			t.Errorf("CALLS edge caller->%s has nil SourceLine; want %d", name, line)
+			continue
+		}
+		if *edge.SourceLine != line {
+			t.Errorf("CALLS edge caller->%s SourceLine = %d, want %d", name, *edge.SourceLine, line)
+		}
+	}
+}
+
 // TestParseFile_ErrorRecovery pins solov2-7nkm: a syntax error in one
 // declaration must not erase the file's other symbols. The clean function is
 // still extracted, a ParseFailure is reported, and the broken declaration is

@@ -333,7 +333,7 @@ func (r *GraphRepo) LoadGraph(ctx context.Context, repoID, branch string) (*doma
 	}
 
 	edgeRows, err := r.readDB.QueryContext(ctx,
-		`SELECT src_node_id, dst_node_id, kind, confidence
+		`SELECT src_node_id, dst_node_id, kind, confidence, src_line
 		 FROM edges WHERE repo_id = ? AND branch = ?`,
 		repoID, branch)
 	if err != nil {
@@ -342,11 +342,16 @@ func (r *GraphRepo) LoadGraph(ctx context.Context, repoID, branch string) (*doma
 	defer edgeRows.Close()
 	for edgeRows.Next() {
 		var src, dst, kind, conf string
-		if err := edgeRows.Scan(&src, &dst, &kind, &conf); err != nil {
+		var srcLine sql.NullInt64
+		if err := edgeRows.Scan(&src, &dst, &kind, &conf, &srcLine); err != nil {
 			return nil, fmt.Errorf("graph_repo: scan edge: %w", err)
 		}
+		opts := []domain.EdgeOption{domain.WithConfidence(confidenceValue(conf))}
+		if srcLine.Valid && srcLine.Int64 > 0 {
+			opts = append(opts, domain.WithSourceLine(int(srcLine.Int64)))
+		}
 		e, err := domain.NewEdge(domain.NodeID(src), domain.NodeID(dst),
-			domain.EdgeKind(kind), domain.WithConfidence(confidenceValue(conf)))
+			domain.EdgeKind(kind), opts...)
 		if err != nil {
 			return nil, fmt.Errorf("graph_repo: rehydrate edge: %w", err)
 		}

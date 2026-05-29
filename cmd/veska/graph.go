@@ -278,6 +278,13 @@ func renderGraphChain(ctx context.Context, w io.Writer, raw json.RawMessage, jso
 			if src.Kind == "package" {
 				anyPackageSrc = true
 			}
+			// solov2-izh6.31: prefer the edge's own SrcLine over the caller
+			// node's declaration line so a function with multiple cross-repo
+			// calls renders each at its actual call site instead of all
+			// reporting the same caller-decl line.
+			if e.SrcLine > 0 {
+				src.Line = e.SrcLine
+			}
 			fmt.Fprintf(w, "  %s --%s--> %s in %s\n",
 				formatCrossRepoNode(src, e.SrcNodeID), e.Kind,
 				formatCrossRepoNode(dst, e.DstNodeID), shortID(e.DstRepoID))
@@ -307,6 +314,11 @@ type CrossRepoEdgeDTO struct {
 	DstRepoID string `json:"dst_repo_id"`
 	DstBranch string `json:"dst_branch"`
 	Kind      string `json:"kind"`
+	// SrcLine is the 1-indexed line of the originating call_expression.
+	// When set, the renderer uses it instead of the caller node's
+	// declaration line so each cross-repo edge points to its actual call
+	// site (solov2-izh6.31). 0 = unknown (pre-migration data).
+	SrcLine int `json:"src_line,omitempty"`
 }
 
 // renderChangedSymbols prints the added/removed/modified buckets from
