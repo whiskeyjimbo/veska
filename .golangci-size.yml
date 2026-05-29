@@ -1,0 +1,32 @@
+# Size/complexity guardrail (solov2-u4mv.7). Run SEPARATELY from .golangci.yml
+# and ONLY against changed code (Makefile passes --new-from-merge-base), so the
+# <=50 LOC / <=15 cyclomatic / <=5 args bar applies to new and modified
+# functions without forcing a repo-wide remediation of pre-existing legacy
+# violations (those are explicitly out of scope — see the epic). The main
+# .golangci.yml keeps govet/staticcheck/unused at full coverage.
+version: "2"
+linters:
+  default: none
+  enable:
+    - cyclop
+    - funlen
+    - revive
+  settings:
+    funlen:
+      lines: 50
+      # The agreed bar is LOC; cyclop already covers complexity, so set the
+      # statement cap high enough that the 50-line gate is the binding one
+      # (0 is treated as "use default 40", not "disabled").
+      statements: 200
+      ignore-comments: true
+    cyclop:
+      max-complexity: 15
+    revive:
+      # Only the argument-limit rule; specifying rules disables revive's other
+      # defaults so this config stays focused on the agreed thresholds.
+      rules:
+        - name: argument-limit
+          arguments: [5]
+issues:
+  exclude-dirs:
+    - tools
