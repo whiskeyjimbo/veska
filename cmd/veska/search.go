@@ -23,6 +23,7 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/core/ports"
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/embedding/elect"
 	fsignore "github.com/whiskeyjimbo/veska/internal/infrastructure/fs"
+	mcpinfra "github.com/whiskeyjimbo/veska/internal/infrastructure/mcp"
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/sqlite"
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/vector"
 	"github.com/whiskeyjimbo/veska/internal/repo"
@@ -46,7 +47,13 @@ func searchCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "search <query> [path-or-url]",
 		Short: "Semantic search; optionally clone+index a repo first",
-		Long: `Semantic search against an indexed repo.
+		// Long embeds the eng_search_semantic MCP description verbatim
+		// (DescSearchSemantic) so the RRF score-range guidance — scores
+		// cluster around ~0.01–0.03, use rank not absolute score to
+		// compare hits — can't drift between CLI and MCP surfaces. The
+		// CLI-specific positional/--repo behaviour is appended below.
+		// solov2-izh6.20.
+		Long: mcpinfra.DescSearchSemantic + `
 
 The optional second argument (or --repo flag) selects the repo to search:
   - omitted        — auto-detect from cwd (must be a registered repo)
