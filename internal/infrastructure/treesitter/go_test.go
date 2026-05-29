@@ -990,6 +990,78 @@ func nodeNames(nodes []*domain.Node) []string {
 	return names
 }
 
+// TestParseFile_FunctionPassedAsArgumentEmitsCallsEdge covers the
+// pflag-shaped half of solov2-f1zp: a same-file function passed by
+// value to another call (`f.getFlagType(name, "bool", boolConv)`)
+// must produce a CALLS edge to that function so the dead-code rule
+// doesn't flag it. Before this fix the parser only emitted CALLS for
+// direct invocation (boolConv(...)), so every *Conv helper in pflag
+// appeared dead.
+func TestParseFile_FunctionPassedAsArgumentEmitsCallsEdge(t *testing.T) {
+	src := []byte(`package pflag
+
+func boolConv(s string) bool { return s == "true" }
+
+func getFlagType(name string, conv func(string) bool) {}
+
+func DoIt() {
+	getFlagType("bool", boolConv)
+}
+`)
+	p := treesitter.NewGoParser()
+	result, err := p.ParseFile(context.Background(), repoID, filePath, src)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	var doItID, boolConvID domain.NodeID
+	for _, n := range result.Nodes {
+		switch n.Name {
+		case "DoIt":
+			doItID = n.ID
+		case "boolConv":
+			boolConvID = n.ID
+		}
+	}
+	if doItID == "" || boolConvID == "" {
+		t.Fatalf("missing nodes; got %d", len(result.Nodes))
+	}
+	for _, e := range result.Edges {
+		if e.Src == doItID && e.Tgt == boolConvID && e.Kind == "CALLS" {
+			return
+		}
+	}
+	t.Errorf("missing CALLS edge DoIt → boolConv (function-value passing). Edges: %d, Unresolved: %+v", len(result.Edges), result.UnresolvedCalls)
+}
+
+// TestParseFile_BareIdentifierArg_NonFunctionSkipped guards the
+// negative: a bare identifier argument that is NOT a same-file
+// function/method (e.g. a parameter, a local variable, a constant)
+// must NOT produce a CALLS edge to a phantom node. solov2-f1zp's
+// argument-passing rule is symbol-map-gated for exactly this reason.
+func TestParseFile_BareIdentifierArg_NonFunctionSkipped(t *testing.T) {
+	src := []byte(`package x
+
+func helper(s string) {}
+
+func DoIt(name string) {
+	helper(name)
+}
+`)
+	p := treesitter.NewGoParser()
+	result, err := p.ParseFile(context.Background(), repoID, filePath, src)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	// Should produce DoIt→helper (direct call) and NO edge whose
+	// callee resolves through 'name'. Unresolved calls also should
+	// not contain 'name' as a callee.
+	for _, uc := range result.UnresolvedCalls {
+		if uc.CalleeName == "name" {
+			t.Errorf("'name' parameter passed as arg must not become an UnresolvedCall: %+v", uc)
+		}
+	}
+}
+
 // TestParseFile_AnonFuncInVarInitAttributesToSurroundingVar pins
 // solov2-zuvl: calls inside an anonymous function nested in a
 // top-level var initialiser (the dominant cobra-app shape:

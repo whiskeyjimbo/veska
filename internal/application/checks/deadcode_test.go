@@ -128,10 +128,14 @@ func TestDeadCodeCheck_AppliesAllowlistFilters(t *testing.T) {
 		{"Uppercase-leading (exported) excluded", "DoThing", "function", true},
 		{"lowercase function reported", "helper", "function", false},
 		{"lowercase method reported", "doit", "method", false},
-		// non function/method kinds still subject only to name rules — main on a kind that
-		// is not function/method is still uppercase-rule-eligible (lowercase 'main' would be reported).
-		{"unrelated kind: type 'Foo' still uppercase-excluded", "Foo", "type", true},
-		{"unrelated kind: lowercase 'foo' reported", "foo", "type", false},
+		// solov2-f1zp: 'type', 'struct', 'interface' kinds are no longer
+		// in deadCodeKinds — a CALLS-based liveness test is meaningless
+		// for non-callable kinds. Both cases must filter regardless of
+		// name casing.
+		{"type kind excluded (non-callable, post f1zp)", "Foo", "type", true},
+		{"type kind excluded — lowercase too (post f1zp)", "foo", "type", true},
+		{"struct kind excluded (post f1zp)", "boolValue", "struct", true},
+		{"interface kind excluded (post f1zp)", "Value", "interface", true},
 		// non-Go-named entry: function named 'main' is filtered regardless of casing.
 		{"function literally named 'init' excluded", "init", "method", true},
 		// Non-symbol kinds carry no inbound edges by construction and must
