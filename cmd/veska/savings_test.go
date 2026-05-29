@@ -17,7 +17,7 @@ import (
 // "no calls recorded" line instead of an empty zero-bar chart.
 func TestRunSavings_NoDataMessage(t *testing.T) {
 	var buf bytes.Buffer
-	if err := runSavings(&buf, t.TempDir(), time.Now(), false); err != nil {
+	if err := runSavings(&buf, t.TempDir(), time.Now(), false, false); err != nil {
 		t.Fatalf("runSavings: %v", err)
 	}
 	if !strings.Contains(buf.String(), "no search calls recorded") {
@@ -59,7 +59,7 @@ func TestRunSavings_RendersBarsAndPercentages(t *testing.T) {
 	_ = f.Close()
 
 	var buf bytes.Buffer
-	if err := runSavings(&buf, dir, now, false); err != nil {
+	if err := runSavings(&buf, dir, now, false, false); err != nil {
 		t.Fatalf("runSavings: %v", err)
 	}
 	out := buf.String()
@@ -84,7 +84,7 @@ func TestRunSavings_JSONFlag(t *testing.T) {
 	_ = f.Close()
 
 	var buf bytes.Buffer
-	if err := runSavings(&buf, dir, now, true); err != nil {
+	if err := runSavings(&buf, dir, now, true, false); err != nil {
 		t.Fatalf("runSavings json: %v", err)
 	}
 	var got savings.Report
@@ -93,5 +93,51 @@ func TestRunSavings_JSONFlag(t *testing.T) {
 	}
 	if got.Today.Calls != 1 || got.Today.FileChars != 100 {
 		t.Errorf("today period wrong: %+v", got.Today)
+	}
+}
+
+// TestRunSavings_AllReposLabel: until the recorder is partitioned by
+// repo_id (solov2-0ql0), the text renderer labels its single bucket as
+// "all repos" so the user knows the figure is pooled across every
+// registered repo, not specific to one.
+func TestRunSavings_AllReposLabel(t *testing.T) {
+	dir := t.TempDir()
+	jsonl := filepath.Join(dir, "savings.jsonl")
+	now := time.Date(2026, 5, 20, 12, 0, 0, 0, time.UTC)
+	e := savings.Entry{Timestamp: now, Query: "q", FileChars: 100, SnippetChars: 10, Results: 1}
+	f, _ := os.Create(jsonl)
+	_ = json.NewEncoder(f).Encode(e)
+	_ = f.Close()
+
+	var buf bytes.Buffer
+	if err := runSavings(&buf, dir, now, false, false); err != nil {
+		t.Fatalf("runSavings: %v", err)
+	}
+	if !strings.Contains(buf.String(), "all repos") {
+		t.Errorf("expected 'all repos' bucket label, got:\n%s", buf.String())
+	}
+}
+
+// TestRunSavings_AggregateFlag: --aggregate forces the pooled single-row
+// output. Today it is the only output mode (per-repo split is gated on
+// solov2-0ql0); the flag exists now so the eventual per-repo default
+// has a documented opt-out, and so 'veska savings --aggregate' is a
+// stable command for users who script against it.
+func TestRunSavings_AggregateFlag(t *testing.T) {
+	dir := t.TempDir()
+	jsonl := filepath.Join(dir, "savings.jsonl")
+	now := time.Date(2026, 5, 20, 12, 0, 0, 0, time.UTC)
+	e := savings.Entry{Timestamp: now, Query: "q", FileChars: 100, SnippetChars: 10, Results: 1}
+	f, _ := os.Create(jsonl)
+	_ = json.NewEncoder(f).Encode(e)
+	_ = f.Close()
+
+	var buf bytes.Buffer
+	if err := runSavings(&buf, dir, now, false, true); err != nil {
+		t.Fatalf("runSavings: %v", err)
+	}
+	out := buf.String()
+	if !strings.Contains(out, "today") || !strings.Contains(out, "all_time") {
+		t.Errorf("aggregate output missing standard rows: %s", out)
 	}
 }
