@@ -170,7 +170,6 @@ func findingsListCmd() *cobra.Command {
 			// then rule for stable, scannable output.
 			sortFindingsBySeverity(resp.Findings)
 			counts := countSeverities(resp.Findings)
-			fmt.Fprintln(w, summariseFindings(len(resp.Findings), counts, resp.Findings))
 
 			// solov2-h4xm: low-severity rows dominate the default view on
 			// noisy projects (10 auto-link rows for a 4-file demo). Hide
@@ -190,6 +189,11 @@ func findingsListCmd() *cobra.Command {
 				}
 				shown = kept
 			}
+			// solov2-izh6.25: summary reflects what's actually rendered,
+			// not the unfiltered total. Pre-fix it said 'showing 1' then
+			// printed a header with zero rows — internally consistent but
+			// reads as "veska broke".
+			fmt.Fprintln(w, summariseFindings(len(shown), len(resp.Findings), counts, resp.Findings))
 			if hiddenLow > 0 {
 				fmt.Fprintf(w, "  (%d low-severity hidden; pass --include-low to show)\n", hiddenLow)
 			}
@@ -199,6 +203,12 @@ func findingsListCmd() *cobra.Command {
 				shown = shown[:limit]
 			}
 
+			// Suppress the table header when nothing will render — header
+			// with zero rows is exactly the visual that surprised the
+			// junior journey (solov2-izh6.25).
+			if len(shown) == 0 {
+				return nil
+			}
 			tw := tabwriter.NewWriter(w, 0, 0, 2, ' ', 0)
 			if allRepos {
 				fmt.Fprintln(tw, "FINDING_ID\tSEVERITY\tRULE\tREPO\tFILE\tMESSAGE")
@@ -279,7 +289,12 @@ func countSeverities(fs []findingView) map[string]int {
 	return out
 }
 
-func summariseFindings(total int, counts map[string]int, all []findingView) string {
+// summariseFindings produces the human header. shown is the count the
+// table will render after the low-severity filter; total is the
+// pre-filter count so we can say "showing X of Y" honestly when those
+// differ. counts/all reflect the FULL set so the severity breakdown
+// stays informative even when nothing is rendered (solov2-izh6.25).
+func summariseFindings(shown, total int, counts map[string]int, all []findingView) string {
 	// solov2-vpds: when low-severity findings are dominated by a single
 	// rule (typically "auto-link" on small repos), annotate the count so a
 	// new user reading "4 low" doesn't assume they have 4 unrelated minor
@@ -310,10 +325,17 @@ func summariseFindings(total int, counts map[string]int, all []findingView) stri
 			parts = append(parts, label)
 		}
 	}
-	if len(parts) == 0 {
-		return fmt.Sprintf("showing %d finding(s)", total)
+	// "shown of total" form when the renderer is going to drop rows; the
+	// breakdown that follows is still total-grain so the reader knows
+	// what's hidden, not just that something is.
+	head := fmt.Sprintf("showing %d finding(s)", total)
+	if shown != total {
+		head = fmt.Sprintf("showing %d of %d finding(s)", shown, total)
 	}
-	return fmt.Sprintf("showing %d finding(s): %s", total, joinComma(parts))
+	if len(parts) == 0 {
+		return head
+	}
+	return fmt.Sprintf("%s: %s", head, joinComma(parts))
 }
 
 func joinComma(parts []string) string {

@@ -170,7 +170,41 @@ func newFindingsDB(t *testing.T) *sql.DB {
 	if err != nil {
 		t.Fatalf("create suppressions table: %v", err)
 	}
+	// Minimal nodes table so eng_list_findings' LEFT JOIN can resolve a
+	// file_path from a node-anchored finding (solov2-izh6.25). Dead-code
+	// findings only carry node_id; without the join, the FILE column on
+	// the CLI is empty even though the file path is recoverable.
+	_, err = db.Exec(`
+		CREATE TABLE IF NOT EXISTS nodes (
+			node_id     TEXT NOT NULL,
+			branch      TEXT NOT NULL,
+			file_path   TEXT NOT NULL,
+			PRIMARY KEY (node_id, branch)
+		)
+	`)
+	if err != nil {
+		t.Fatalf("create nodes table: %v", err)
+	}
 	return db
+}
+
+// seedNodeAnchoredFinding inserts a finding row anchored on a node_id
+// (no file_path of its own) plus the matching node row so the resolver
+// in eng_list_findings can recover a path. Used for solov2-izh6.25.
+func seedNodeAnchoredFinding(t *testing.T, db *sql.DB, findingID, branch, repoID, nodeID, nodeFile string) {
+	t.Helper()
+	if _, err := db.Exec(`
+		INSERT INTO nodes (node_id, branch, file_path) VALUES (?, ?, ?)
+	`, nodeID, branch, nodeFile); err != nil {
+		t.Fatalf("seed node: %v", err)
+	}
+	if _, err := db.Exec(`
+		INSERT INTO findings
+			(finding_id, branch, repo_id, node_id, file_path, severity, source_layer, rule, message, state, created_at, actor_id, actor_kind)
+		VALUES (?, ?, ?, ?, NULL, 'low', 'structural', 'dead-code', 'unused symbol', 'open', ?, 'actor:seed', 'system')
+	`, findingID, branch, repoID, nodeID, time.Now().Unix()); err != nil {
+		t.Fatalf("seed node-anchored finding: %v", err)
+	}
 }
 
 // seedFinding inserts a finding row for use in tests.
@@ -484,6 +518,40 @@ func TestListFindings_EmitsDegradedReasonsAsEmptyArray(t *testing.T) {
 	b, _ := json.Marshal(result)
 	if !strings.Contains(string(b), `"degraded_reasons":[]`) {
 		t.Errorf("expected degraded_reasons:[] in JSON, got: %s", string(b))
+	}
+}
+
+// TestListFindings_ResolvesFilePathFromNodeAnchor guards solov2-izh6.25:
+// node-anchored findings (dead-code is the dominant case — see
+// internal/application/checks/deadcode.go: only WithNodeAnchor is set)
+// must surface a file_path in the response by joining nodes.file_path on
+// the anchor. Without this, the CLI's FILE column is empty and the user
+// gets the path crammed into MESSAGE, which is what the junior-journey
+// report flagged.
+func TestListFindings_ResolvesFilePathFromNodeAnchor(t *testing.T) {
+	db := newFindingsDB(t)
+	seedNodeAnchoredFinding(t, db, "dc-1", "main", "repo-1", "node-abc", "internal/foo/bar.go")
+
+	r := NewRegistry()
+	RegisterFindingTools(r, db, nil, nil)
+	actor := domain.Actor{ID: "agent:bot", Kind: domain.ActorKindAgent}
+
+	result, rpcErr := dispatchListFindings(t, r, actor, map[string]string{
+		"repo_id": "repo-1", "branch": "main",
+	})
+	if rpcErr != nil {
+		t.Fatalf("dispatch: %v", rpcErr.Message)
+	}
+	m, _ := result.(map[string]any)
+	rows, _ := m["findings"].([]findingRow)
+	if len(rows) != 1 {
+		t.Fatalf("expected 1 finding; got %d", len(rows))
+	}
+	if rows[0].FilePath == nil {
+		t.Fatalf("expected resolved FilePath for node-anchored finding; got nil")
+	}
+	if *rows[0].FilePath != "internal/foo/bar.go" {
+		t.Errorf("FilePath mismatch: want internal/foo/bar.go, got %q", *rows[0].FilePath)
 	}
 }
 
