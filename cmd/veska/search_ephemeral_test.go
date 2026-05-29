@@ -10,7 +10,9 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/whiskeyjimbo/veska/internal/application"
 	"github.com/whiskeyjimbo/veska/internal/config"
+	fsignore "github.com/whiskeyjimbo/veska/internal/infrastructure/fs"
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/sqlite"
 	"github.com/whiskeyjimbo/veska/internal/repo"
 )
@@ -221,6 +223,107 @@ func TestIsGitURL_PreservesPositionalSemantics(t *testing.T) {
 	tmp := t.TempDir()
 	if isGitURL(tmp) {
 		t.Errorf("isGitURL(%q) = true, want false (existing path)", tmp)
+	}
+}
+
+// makeSecretSource creates a real git repo with a Go file that hard-codes a
+// synthetic AWS access-key — gitleaks's BuiltinScanner detects it and the
+// docs allowlist (solov2-j1yz) does NOT cover this shape, so it survives
+// to the findings table. Returns the absolute path of the new repo.
+func makeSecretSource(t *testing.T) string {
+	t.Helper()
+	dir := t.TempDir()
+	for _, args := range [][]string{
+		{"init", "-q", "-b", "main", dir},
+		{"-C", dir, "config", "user.email", "test@example.invalid"},
+		{"-C", dir, "config", "user.name", "test"},
+	} {
+		if out, err := exec.Command("git", args...).CombinedOutput(); err != nil {
+			t.Skipf("git %v: %v: %s", args, err, out)
+		}
+	}
+	// Synthetic AWS access key shape; not the canonical docs-allowlist key
+	// (mirrors secretsscanner_test.go's awsKey fixture).
+	content := "package leak\n\nconst Key = \"AKIAZQ7XFAKE1234ABCD\"\n"
+	if err := os.WriteFile(filepath.Join(dir, "leak.go"), []byte(content), 0o644); err != nil {
+		t.Fatalf("write leak.go: %v", err)
+	}
+	for _, args := range [][]string{
+		{"-C", dir, "add", "leak.go"},
+		{"-C", dir, "commit", "-q", "-m", "leak"},
+	} {
+		if out, err := exec.Command("git", args...).CombinedOutput(); err != nil {
+			t.Fatalf("git %v: %v: %s", args, err, out)
+		}
+	}
+	return dir
+}
+
+// TestSearchEphemeral_FirstPromotionRunsSecretCheck pins solov2-izh6.16:
+// the in-process `veska search --repo <url>` path (and equivalently a
+// daemon-less `veska reindex`) must register the same post-promotion
+// check chain as `veska repo add --wait`. Before the fix the cold-scan
+// Promoter was built without a CheckRunner, so secret-leak/vuln-scan only
+// fired after a separate `veska reindex` while the daemon was up. This
+// test runs the real defaultReparserFactory against a repo whose HEAD
+// commits a synthetic AWS access key in a Go file and asserts a
+// `secret_leak` finding lands in the findings table on the first promote.
+func TestSearchEphemeral_FirstPromotionRunsSecretCheck(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("VESKA_HOME", home)
+	t.Setenv("VESKA_CACHE_HOME", filepath.Join(home, "cache"))
+	t.Setenv("XDG_CACHE_HOME", "")
+
+	source := makeSecretSource(t)
+	pools := openPoolsAt(t, home)
+
+	var buf bytes.Buffer
+	rec, err := ephemeralEnsureFromURL(context.Background(), pools, "file://"+source, &buf)
+	if err != nil {
+		t.Fatalf("ephemeralEnsureFromURL: %v", err)
+	}
+	if rec.Kind != "ephemeral" {
+		t.Fatalf("kind = %q, want ephemeral", rec.Kind)
+	}
+
+	// Run the same cold-scan reparser that ensureIndexed builds. The
+	// embedder drain is skipped — the check chain runs synchronously
+	// inside Promoter.Promote, before drainEmbedderQueue.
+	loader := func(repoRoot string) (application.IgnoreMatcher, error) {
+		return fsignore.Load(repoRoot)
+	}
+	reparser, err := reparserFactory(pools, loader)
+	if err != nil {
+		t.Fatalf("reparserFactory: %v", err)
+	}
+	appRec := application.RepoRecord{
+		RepoID:       rec.RepoID,
+		RootPath:     rec.RootPath,
+		ActiveBranch: rec.ActiveBranch,
+	}
+	if appRec.ActiveBranch == "" {
+		appRec.ActiveBranch = "main"
+	}
+	if err := reparser(context.Background(), appRec); err != nil {
+		t.Fatalf("reparser: %v", err)
+	}
+
+	// Assertion: a secret_leak finding for the ephemeral repo's leak.go.
+	var (
+		n          int
+		samplePath sql.NullString
+	)
+	if err := pools.ReadDB.QueryRow(
+		`SELECT COUNT(*), MAX(file_path) FROM findings WHERE repo_id = ? AND rule = 'secret_leak'`,
+		rec.RepoID,
+	).Scan(&n, &samplePath); err != nil {
+		t.Fatalf("query findings: %v", err)
+	}
+	if n == 0 {
+		t.Fatalf("want >= 1 secret_leak finding after first promotion, got 0 (ephemeral first-promotion check chain regressed)")
+	}
+	if samplePath.Valid && !strings.Contains(samplePath.String, "leak.go") {
+		t.Errorf("secret_leak file_path = %q, want path containing leak.go", samplePath.String)
 	}
 }
 
