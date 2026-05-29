@@ -225,11 +225,15 @@ func (s *Service) Semantic(ctx context.Context, repoID, branch, query string, k 
 	// name-match boost have headroom — fusing two top-K lists where the
 	// second-best in one only appears at rank K+1 in the other still
 	// produces a sensible top-K. 3× is the sweet spot in the semble
-	// paper. A minimum floor of 30 protects small-k callers: with k=1
-	// + fanout=3 we'd only see 3 candidates per retriever and the
-	// name-match boost would have nothing to lift.
+	// paper. A minimum floor protects small-k callers so the rerank
+	// (definition / stem / verb-synonym signals) has a meaningful pool
+	// to draw from. solov2-izh6.26 widened the floor from 30 to 60 —
+	// the canonical answer for "register subcommand" (cobra's
+	// Command.AddCommand) sits at fused-rank ~22, so a floor of 30 left
+	// it just outside the rerank window even though the synonym signal
+	// would have promoted it to the top.
 	const fusionFanout = 3
-	const fanoutFloor = 30
+	const fanoutFloor = 100
 	fanK := max(k*fusionFanout, fanoutFloor)
 	vecHits, err := s.vectors.Search(ctx, repoID, branch, vec, fanK, filter)
 	if err != nil {
