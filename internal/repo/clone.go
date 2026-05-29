@@ -94,7 +94,7 @@ func splitScheme(raw string) (scheme, rest string, ok bool) {
 	}
 	scheme = strings.ToLower(raw[:idx])
 	for _, c := range scheme {
-		if !((c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '+' || c == '-' || c == '.') {
+		if (c < 'a' || c > 'z') && (c < '0' || c > '9') && c != '+' && c != '-' && c != '.' {
 			return "", "", false
 		}
 	}

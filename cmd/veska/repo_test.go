@@ -179,7 +179,7 @@ func TestPrintRepoTable_ShowsKindColumn(t *testing.T) {
 	idIdx := strings.Index(out, "REPO_ID")
 	kindIdx := strings.Index(out, "KIND")
 	branchIdx := strings.Index(out, "BRANCH")
-	if !(idIdx < kindIdx && kindIdx < branchIdx) {
+	if idIdx >= kindIdx || kindIdx >= branchIdx {
 		t.Errorf("KIND must sit between REPO_ID and BRANCH; got header order:\n%s", out)
 	}
 
