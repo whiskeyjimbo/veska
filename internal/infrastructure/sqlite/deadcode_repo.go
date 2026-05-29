@@ -91,3 +91,45 @@ ORDER BY n.file_path, n.node_id`, strings.Join(placeholders, ","))
 	}
 	return out, nil
 }
+
+// InterfaceMethodNames returns the distinct bare method names declared by
+// every interface type in (repoID, branch). An interface method node has
+// kind='method' and symbol_path '<IfaceName>.<MethodName>'; the parent
+// type's node has kind='interface'. The query joins the two so an
+// orphan method node (e.g. created by a malformed parse) does not bleed
+// into the result. Result strings are bare method names ('Set', 'String')
+// — the dead-code application filter compares against a method's bare
+// suffix.
+func (r *DeadCodeRepo) InterfaceMethodNames(ctx context.Context, repoID, branch string) ([]string, error) {
+	const q = `
+SELECT DISTINCT substr(m.symbol_path, length(i.symbol_path) + 2)
+FROM nodes i
+JOIN nodes m
+  ON m.repo_id = i.repo_id
+ AND m.branch = i.branch
+ AND m.kind = 'method'
+ AND m.symbol_path LIKE i.symbol_path || '.%'
+ AND instr(substr(m.symbol_path, length(i.symbol_path) + 2), '.') = 0
+WHERE i.repo_id = ?
+  AND i.branch = ?
+  AND i.kind = 'interface'`
+	rows, err := r.db.QueryContext(ctx, q, repoID, branch)
+	if err != nil {
+		return nil, fmt.Errorf("sqlite.DeadCodeRepo.InterfaceMethodNames: %w", err)
+	}
+	defer rows.Close()
+	var out []string
+	for rows.Next() {
+		var name string
+		if err := rows.Scan(&name); err != nil {
+			return nil, fmt.Errorf("sqlite.DeadCodeRepo.InterfaceMethodNames: scan: %w", err)
+		}
+		if name != "" {
+			out = append(out, name)
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("sqlite.DeadCodeRepo.InterfaceMethodNames: rows: %w", err)
+	}
+	return out, nil
+}

@@ -94,9 +94,29 @@ func (c *DeadCodeCheck) Run(ctx context.Context, in Input) ([]*domain.Finding, e
 		return nil, fmt.Errorf("dead-code: query: %w", err)
 	}
 
+	// solov2-f1zp: pull the bare names of every interface method declared
+	// in this repo so concrete implementations (boolValue.Set satisfies
+	// pflag.Value's Set) are not reported as dead. Interface dispatch
+	// emits no CALLS edges the static graph can see; without this filter
+	// almost every method on a Value-shaped type in any library repo
+	// (the junior journey hit 220 on pflag) shows up as "no inbound
+	// edges". An error here fails open — we'd rather over-report than
+	// suppress real findings on a tracked repo when the registry briefly
+	// hiccups.
+	var ifaceMethods map[string]struct{}
+	if names, ierr := c.q.InterfaceMethodNames(ctx, in.RepoID, in.Branch); ierr == nil && len(names) > 0 {
+		ifaceMethods = make(map[string]struct{}, len(names))
+		for _, n := range names {
+			ifaceMethods[n] = struct{}{}
+		}
+	}
+
 	out := make([]*domain.Finding, 0, len(dead))
 	for _, n := range dead {
 		if !isDeadCodeCandidate(n) || isExternalEntry(n) || isTestFile(n.FilePath) || pathfilter.IsVendored(n.FilePath) {
+			continue
+		}
+		if n.Kind == "method" && isInterfaceMethodImpl(n.Name, ifaceMethods) {
 			continue
 		}
 		msg := fmt.Sprintf("symbol %q in %s has no inbound edges on branch %s",
@@ -175,6 +195,24 @@ func isTestFile(path string) bool {
 		return true
 	}
 	return false
+}
+
+// isInterfaceMethodImpl reports whether name is a method whose bare
+// suffix matches one of the interface method names declared in the
+// same repo. Used by Run to skip dead-code reports on methods that
+// likely satisfy an interface contract — interface dispatch produces
+// no CALLS edge the static graph can see (solov2-f1zp). Names without
+// a '.' (orphan methods) and an empty ifaceMethods map are no-ops.
+func isInterfaceMethodImpl(name string, ifaceMethods map[string]struct{}) bool {
+	if len(ifaceMethods) == 0 || name == "" {
+		return false
+	}
+	dot := strings.LastIndex(name, ".")
+	if dot < 0 || dot == len(name)-1 {
+		return false
+	}
+	_, ok := ifaceMethods[name[dot+1:]]
+	return ok
 }
 
 // isExternalEntry reports whether n looks like a node that could be invoked by
