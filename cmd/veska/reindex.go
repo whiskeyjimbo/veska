@@ -13,6 +13,7 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/application"
 	"github.com/whiskeyjimbo/veska/internal/application/checks"
 	"github.com/whiskeyjimbo/veska/internal/cli/mcpclient"
+	"github.com/whiskeyjimbo/veska/internal/cli/repocmd"
 	"github.com/whiskeyjimbo/veska/internal/composition"
 	"github.com/whiskeyjimbo/veska/internal/core/ports"
 	fsignore "github.com/whiskeyjimbo/veska/internal/infrastructure/fs"
@@ -325,7 +326,7 @@ func resolveReindexTarget(ctx context.Context, db *sql.DB, target string) (repo.
 	if lerr != nil {
 		return repo.Record{}, fmt.Errorf("reindex: list repos: %w", lerr)
 	}
-	if rec, rerr := resolveCLIRepoID(records, target); rerr == nil {
+	if rec, rerr := repocmd.ResolveCLIRepoID(records, target); rerr == nil {
 		return rec, nil
 	}
 

@@ -19,6 +19,7 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/application"
 	"github.com/whiskeyjimbo/veska/internal/application/embedder"
 	"github.com/whiskeyjimbo/veska/internal/application/search"
+	"github.com/whiskeyjimbo/veska/internal/cli/repocmd"
 	"github.com/whiskeyjimbo/veska/internal/composition"
 	"github.com/whiskeyjimbo/veska/internal/core/domain"
 	fsignore "github.com/whiskeyjimbo/veska/internal/infrastructure/fs"
@@ -271,7 +272,7 @@ func runSearch(ctx context.Context, w, stderr io.Writer, opts runSearchOpts) err
 		if canonical == "" {
 			canonical = rec.RootPath
 		}
-		if err := runAcceptancePrompt(ctx, pools.Write, rec, canonical, defaultPromptDeps(w)); err != nil {
+		if err := runAcceptancePrompt(ctx, pools.Write, rec, canonical, repocmd.DefaultPromptDeps(w)); err != nil {
 			fmt.Fprintf(os.Stderr, "search: acceptance prompt: %v\n", err)
 		}
 	}

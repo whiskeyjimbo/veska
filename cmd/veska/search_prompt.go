@@ -6,34 +6,11 @@ import (
 	"database/sql"
 	"fmt"
 	"io"
-	"os"
 	"strings"
 
-	"github.com/mattn/go-isatty"
-
+	"github.com/whiskeyjimbo/veska/internal/cli/repocmd"
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/repo"
 )
-
-// promptDeps is the seam tests use to fake isatty + stdin (solov2-kxo5.7).
-// In production both are derived from os.Stdin / os.Stdout.
-type promptDeps struct {
-	isTTY  func() bool
-	stdin  io.Reader
-	stdout io.Writer
-}
-
-func defaultPromptDeps(w io.Writer) promptDeps {
-	return promptDeps{
-		isTTY: func() bool {
-			// TTY-only per design: BOTH stdin and stdout must be terminals
-			// so we never block on a closed pipe or paint a prompt at a
-			// file that nobody is watching.
-			return isatty.IsTerminal(os.Stdin.Fd()) && isatty.IsTerminal(os.Stdout.Fd())
-		},
-		stdin:  os.Stdin,
-		stdout: w,
-	}
-}
 
 // runAcceptancePrompt presents the "keep this indexed?" UX after a
 // search against an ephemeral repo (solov2-kxo5.7).
@@ -44,7 +21,7 @@ func defaultPromptDeps(w io.Writer) promptDeps {
 //   - TTY + unprompted → ask y/N; y promotes via PromoteEphemeralToTracked,
 //     n marks declined via MarkPromptDeclined. Promotion is in-place: no
 //     re-clone, no file move (AC4).
-func runAcceptancePrompt(ctx context.Context, db *sql.DB, rec repo.Record, canonicalURL string, deps promptDeps) error {
+func runAcceptancePrompt(ctx context.Context, db *sql.DB, rec repo.Record, canonicalURL string, deps repocmd.PromptDeps) error {
 	if rec.Kind != "ephemeral" {
 		return nil
 	}
@@ -58,13 +35,13 @@ func runAcceptancePrompt(ctx context.Context, db *sql.DB, rec repo.Record, canon
 		return nil
 	}
 
-	if !deps.isTTY() {
-		fmt.Fprintf(deps.stdout, "\nto keep this indexed, run: veska repo add %s\n", canonicalURL)
+	if !deps.IsTTY() {
+		fmt.Fprintf(deps.Stdout, "\nto keep this indexed, run: veska repo add %s\n", canonicalURL)
 		return nil
 	}
 
-	fmt.Fprintf(deps.stdout, "\nkeep %s indexed? [y/N] ", canonicalURL)
-	reader := bufio.NewReader(deps.stdin)
+	fmt.Fprintf(deps.Stdout, "\nkeep %s indexed? [y/N] ", canonicalURL)
+	reader := bufio.NewReader(deps.Stdin)
 	line, err := reader.ReadString('\n')
 	if err != nil && err != io.EOF {
 		return fmt.Errorf("acceptance prompt: read response: %w", err)
@@ -75,7 +52,7 @@ func runAcceptancePrompt(ctx context.Context, db *sql.DB, rec repo.Record, canon
 		if err := repo.PromoteEphemeralToTracked(ctx, db, rec.RepoID); err != nil {
 			return err
 		}
-		fmt.Fprintf(deps.stdout, "promoted %s to tracked\n", shortRepoID(rec.RepoID))
+		fmt.Fprintf(deps.Stdout, "promoted %s to tracked\n", repocmd.ShortRepoID(rec.RepoID))
 	default:
 		if err := repo.MarkPromptDeclined(ctx, db, rec.RepoID); err != nil {
 			return err
