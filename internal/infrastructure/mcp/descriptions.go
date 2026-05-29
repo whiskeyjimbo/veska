@@ -9,10 +9,9 @@ package mcp
 // solov2-izh6.20.
 
 // DescCallChain is the eng_get_call_chain MCP description and the
-// `veska calls` Long help. It documents the chained_selectors_unresolved
-// degraded_reason fallback so junior CLI users learn about the gap
-// without having to hit it first.
-const DescCallChain = "Walk CALLS edges from a symbol. Use this — not search — when the question is 'what does this reach' (direction=out, default) or 'what calls this' (direction=in). Surfaces cross_repo_edges into other registered repos so library-symbol callers in a multi-repo workspace are visible without separate queries. Pass node_id (exact) or symbol (resolved via eng_find_symbol; ambiguity is rejected). NOTE: calls inside anonymous functions assigned to struct fields (e.g. cobra Command{Run: func(...){...}}) are not yet captured by the parser — a 'chained_selectors_unresolved' degraded_reason marks this case; fall back to eng_search_semantic or eng_find_symbol."
+// `veska calls` Long help. It documents both degraded_reason fallbacks
+// so junior CLI users learn about each gap without having to hit it first.
+const DescCallChain = "Walk CALLS edges from a symbol. Use this — not search — when the question is 'what does this reach' (direction=out, default) or 'what calls this' (direction=in). Surfaces cross_repo_edges into other registered repos so library-symbol callers in a multi-repo workspace are visible without separate queries. Pass node_id (exact) or symbol (resolved via eng_find_symbol; ambiguity is rejected). NOTE: empty edges on a function/method seed carry one of two degraded_reasons hints: 'chained_selectors_unresolved' (parser limit — chained selector call sites like rootCmd.AddCommand(...).Execute() or s.field.M() are not yet modelled, epic solov2-9rc2) or 'external_callees_only' (index boundary — callees are stdlib or unregistered modules, NOT a parser bug). Fall back to eng_get_blast_radius, eng_search_semantic, or eng_find_symbol."
 
 // DescBlastRadius is the eng_get_blast_radius MCP description and the
 // `veska blast` Long help. Mentions the diff/dirty variants and the

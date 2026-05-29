@@ -105,6 +105,17 @@ func (s *stubGraphStorage) NodesForFile(_ context.Context, _, _, filePath string
 	return result, nil
 }
 
+// GetNodeSnippet returns the in-memory node's RawContent (if any). Stubbed
+// so the call-chain seed-body discriminator (solov2-izh6.22) sees the same
+// text the test set on the node via WithRawContent.
+func (s *stubGraphStorage) GetNodeSnippet(_ context.Context, _, _ string, id domain.NodeID) (string, error) {
+	n, ok := s.nodes[string(id)]
+	if !ok || n.RawContent == nil {
+		return "", nil
+	}
+	return *n.RawContent, nil
+}
+
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
@@ -683,6 +694,83 @@ func TestGetCallChain_EdgesPresentSuppressesHint(t *testing.T) {
 		if r == DegradedReasonChainedSelectorsUnresolved {
 			t.Errorf("hint must not fire when edges resolved: %+v", resp.DegradedReasons)
 		}
+	}
+}
+
+// TestGetCallChain_StdlibOnlyBodyEmitsExternalCalleesReason guards solov2-izh6.22:
+// when the seed's body only calls into stdlib / unmodeled packages (e.g.
+// fmt.Sprintf, strings.TrimSpace) it has no chained selectors, so the
+// catch-all chained_selectors_unresolved hint must NOT fire. Instead, the
+// narrower external_callees_only reason should communicate that the empty
+// edges set reflects callees outside the graph, not a parser limitation.
+func TestGetCallChain_StdlibOnlyBodyEmitsExternalCalleesReason(t *testing.T) {
+	store := newStubGraphStorage()
+	// Seed body mirrors the cobra-journey Greeter.Greet: only stdlib calls,
+	// no chained selectors at all.
+	raw := `func (g *Greeter) Greet(name string) string {
+	if name == "" { name = "world" }
+	return fmt.Sprintf("%s, %s!", g.Prefix, strings.TrimSpace(name))
+}`
+	seed, err := domain.NewNode("fn-greet", "libfoo/greeter.go", "Greeter.Greet", domain.KindMethod,
+		domain.WithRawContent(raw))
+	if err != nil {
+		t.Fatalf("NewNode: %v", err)
+	}
+	store.addNode(seed)
+
+	r := NewRegistry()
+	RegisterGraphTools(r, store, application.NewStagingArea())
+
+	resp, rpcErr := dispatchCallChain(t, r, "eng_get_call_chain", map[string]string{
+		"node_id": "fn-greet",
+		"repo_id": "repo1",
+		"branch":  "main",
+	})
+	if rpcErr != nil {
+		t.Fatalf("unexpected error: %+v", rpcErr)
+	}
+	if len(resp.Edges) != 0 {
+		t.Fatalf("expected zero edges; got %d", len(resp.Edges))
+	}
+	if slices.Contains(resp.DegradedReasons, DegradedReasonChainedSelectorsUnresolved) {
+		t.Errorf("chained_selectors_unresolved must NOT fire on a body with no chained selectors; got %+v", resp.DegradedReasons)
+	}
+	if !slices.Contains(resp.DegradedReasons, DegradedReasonExternalCalleesOnly) {
+		t.Errorf("expected %q in degraded_reasons; got %+v", DegradedReasonExternalCalleesOnly, resp.DegradedReasons)
+	}
+}
+
+// TestGetCallChain_ChainedSelectorBodyStillEmitsChainedHint guards that the
+// existing chained_selectors_unresolved hint still fires on bodies that
+// actually contain a chained selector pattern (a.b.c() or a.b().c()), so the
+// narrowing in TestGetCallChain_StdlibOnlyBodyEmitsExternalCalleesReason
+// doesn't over-correct.
+func TestGetCallChain_ChainedSelectorBodyStillEmitsChainedHint(t *testing.T) {
+	store := newStubGraphStorage()
+	raw := `func (s *Server) Start() error {
+	s.router.handlers.Register("/x", h)
+	return s.config.tls.Load()
+}`
+	seed, err := domain.NewNode("fn-start", "srv/server.go", "Server.Start", domain.KindMethod,
+		domain.WithRawContent(raw))
+	if err != nil {
+		t.Fatalf("NewNode: %v", err)
+	}
+	store.addNode(seed)
+
+	r := NewRegistry()
+	RegisterGraphTools(r, store, application.NewStagingArea())
+
+	resp, rpcErr := dispatchCallChain(t, r, "eng_get_call_chain", map[string]string{
+		"node_id": "fn-start",
+		"repo_id": "repo1",
+		"branch":  "main",
+	})
+	if rpcErr != nil {
+		t.Fatalf("unexpected error: %+v", rpcErr)
+	}
+	if !slices.Contains(resp.DegradedReasons, DegradedReasonChainedSelectorsUnresolved) {
+		t.Errorf("expected %q on a body with chained selectors; got %+v", DegradedReasonChainedSelectorsUnresolved, resp.DegradedReasons)
 	}
 }
 
