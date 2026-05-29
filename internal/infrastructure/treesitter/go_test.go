@@ -621,14 +621,15 @@ func (p *Promoter) Promote() {
 	}
 }
 
-// TestParseFile_AnonCallsInTopLevelVar covers solov2-y7gu: anonymous
-// functions assigned (directly or inside a struct-literal initialiser)
-// to top-level vars produce CALLS edges from the package node to every
-// in-file target their body invokes. Legacy collectAnonCalls checked
-// the wrong tree-sitter node type ("function_literal" instead of
-// "func_literal") and silently never matched; the query parser
-// extractAnonCallsInTopLevelVars walks for func_literal under
-// var/const declarations and runs calls.scm on each.
+// TestParseFile_AnonCallsInTopLevelVar covers solov2-y7gu (anonymous
+// functions in top-level var initialisers contribute CALLS edges)
+// extended by solov2-zuvl (attribution is the SURROUNDING VAR, not the
+// package node, whenever the var has a resolvable name). Legacy
+// behaviour attributed both calls to the package node — that hid the
+// caller's identity for every cobra-app initialiser. New behaviour:
+// `root = func(){ serveRoot() }` produces root → serveRoot, and
+// `chk = func(){ validate() }` produces chk → validate. The package
+// node is no longer the CALLS src for these.
 func TestParseFile_AnonCallsInTopLevelVar(t *testing.T) {
 	src := []byte(`package cli
 
@@ -646,19 +647,23 @@ var (
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	var pkgID, serveRootID, validateID string
+	var pkgID, rootID, chkID, serveRootID, validateID string
 	for _, n := range result.Nodes {
 		switch n.Name {
 		case "cli":
 			pkgID = string(n.ID)
+		case "root":
+			rootID = string(n.ID)
+		case "chk":
+			chkID = string(n.ID)
 		case "serveRoot":
 			serveRootID = string(n.ID)
 		case "validate":
 			validateID = string(n.ID)
 		}
 	}
-	if pkgID == "" || serveRootID == "" || validateID == "" {
-		t.Fatalf("expected package + function nodes, got %+v", result.Nodes)
+	if pkgID == "" || rootID == "" || chkID == "" || serveRootID == "" || validateID == "" {
+		t.Fatalf("expected package + var + function nodes, got %+v", result.Nodes)
 	}
 
 	hasEdge := func(src, tgt string) bool {
@@ -669,11 +674,15 @@ var (
 		}
 		return false
 	}
-	if !hasEdge(pkgID, serveRootID) {
-		t.Errorf("missing CALLS edge cli -> serveRoot (from `root` var's func literal)")
+	if !hasEdge(rootID, serveRootID) {
+		t.Errorf("missing CALLS edge root -> serveRoot (from var's func literal)")
 	}
-	if !hasEdge(pkgID, validateID) {
-		t.Errorf("missing CALLS edge cli -> validate (from `chk` var's func literal)")
+	if !hasEdge(chkID, validateID) {
+		t.Errorf("missing CALLS edge chk -> validate (from var's func literal)")
+	}
+	// Negative: must NOT attribute to package — solov2-zuvl regression.
+	if hasEdge(pkgID, serveRootID) || hasEdge(pkgID, validateID) {
+		t.Errorf("anon-func calls must attribute to surrounding var, not package node")
 	}
 }
 
@@ -979,6 +988,69 @@ func nodeNames(nodes []*domain.Node) []string {
 		names[i] = n.Name
 	}
 	return names
+}
+
+// TestParseFile_AnonFuncInVarInitAttributesToSurroundingVar pins
+// solov2-zuvl: calls inside an anonymous function nested in a
+// top-level var initialiser (the dominant cobra-app shape:
+// `var helloCmd = &cobra.Command{ RunE: func(){ Foo() } }`) must
+// attribute to the surrounding var node (helloCmd), not the package
+// node. Before the fix, cross-repo blast on Foo named "package cmd"
+// as the caller for every cobra app in the workspace — a known false
+// signal documented with the "package-grain src" disclaimer that
+// shipped with the prior workaround.
+func TestParseFile_AnonFuncInVarInitAttributesToSurroundingVar(t *testing.T) {
+	src := []byte(`package cmd
+
+func Foo() {}
+
+var helloCmd = struct {
+	RunE func()
+}{
+	RunE: func() {
+		Foo()
+	},
+}
+`)
+	p := treesitter.NewGoParser()
+	result, err := p.ParseFile(context.Background(), repoID, filePath, src)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	var helloID, fooID, pkgID domain.NodeID
+	for _, n := range result.Nodes {
+		switch n.Name {
+		case "helloCmd":
+			helloID = n.ID
+		case "Foo":
+			fooID = n.ID
+		case "cmd":
+			pkgID = n.ID
+		}
+	}
+	if helloID == "" || fooID == "" || pkgID == "" {
+		t.Fatalf("missing nodes; got %d", len(result.Nodes))
+	}
+
+	var fromHello, fromPkg bool
+	for _, e := range result.Edges {
+		if e.Tgt != fooID || e.Kind != "CALLS" {
+			continue
+		}
+		switch e.Src {
+		case helloID:
+			fromHello = true
+		case pkgID:
+			fromPkg = true
+		}
+	}
+	if !fromHello {
+		t.Errorf("expected CALLS edge helloCmd → Foo; edges: %+v", result.Edges)
+	}
+	if fromPkg {
+		t.Errorf("anon-func call must NOT attribute to package node; should attribute to surrounding var helloCmd")
+	}
 }
 
 // TestParseFile_SamePackageConstructorMethodCall covers solov2-rlfe:
