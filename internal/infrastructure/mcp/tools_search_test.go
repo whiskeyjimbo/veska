@@ -562,6 +562,55 @@ func TestSearchSimilar_AmbiguousSymbolRejected(t *testing.T) {
 	}
 }
 
+// TestSearchSimilar_SymbolResolvesCrossRepoWithoutRepoID pins solov2-ye6t:
+// eng_search_similar must accept a bare `symbol` without a repo_id and
+// fan out across registered repos, the same way eng_find_symbol,
+// eng_get_blast_radius and eng_get_context_pack do. Before the fix this
+// handler hard-required repo_id via resolveRepoIDFromParams, so a junior
+// caller invoking `search_similar Symbol` from outside any registered
+// cwd got "repo_id is required" — different contract from peer tools
+// the README's conventions block told them all behaved the same.
+func TestSearchSimilar_SymbolResolvesCrossRepoWithoutRepoID(t *testing.T) {
+	seedVec := []float32{0.5, 0.5, 0.5}
+	emb := &stubEmbedder{}
+	vecs := &stubVectors{
+		hits: []domain.Hit{{NodeID: "seed", Score: 1.0}, {NodeID: "n2", Score: 0.8}},
+	}
+	nodes := &stubNodes{metas: []ports.NodeMeta{
+		{NodeID: "n2", SymbolPath: "pkg.N2", FilePath: "n2.go", Kind: "function", LineStart: 1, LineEnd: 3},
+	}}
+	svc := search.NewService(emb, vecs, nodes)
+	lookup := &stubSimilarLookup{hash: "h", ready: true, blob: encodeVec(seedVec), dim: 3, found: true}
+
+	// Single registered repo — the resolveSeedOwner short-circuit
+	// for len(repos)==1 must kick in even though the caller passed
+	// neither repo_id nor cwd. Previously the handler routed through
+	// resolveRepoIDFromParams which raised "repo_id is required" in
+	// this exact shape (no repo_id, no cwd injected).
+	graph := newStubGraphStorage()
+	seedNode, _ := domain.NewNode("seed", "seed.go", "Target", domain.KindFunction)
+	graph.addNode(seedNode)
+	repos := []application.RepoRecord{
+		{RepoID: "r1", RootPath: "/r1", ActiveBranch: "main"},
+	}
+
+	r := NewRegistry()
+	RegisterSearchTools(r, svc, lookup, vecs, nodes, nil, &stubRepoLister{repos: repos}, WithSearchGraph(graph))
+
+	resp, rpcErr := dispatchSearch(t, r, "eng_search_similar", map[string]any{
+		"symbol": "Target",
+		"k":      1,
+		// no repo_id, no branch — must resolve via the single-repo
+		// short-circuit in resolveSeedOwner.
+	})
+	if rpcErr != nil {
+		t.Fatalf("symbol-only call rejected: %+v", rpcErr)
+	}
+	if len(resp.Results) != 1 || resp.Results[0].NodeID != "n2" {
+		t.Errorf("expected [n2], got %+v", resp.Results)
+	}
+}
+
 // TestFindRelated_ResolvesSmallestEnclosingNode covers solov2-2g4r:
 // when multiple nodes overlap a line (e.g. a chunk and a function),
 // the resolver picks the tightest span so the embedding seed is the
