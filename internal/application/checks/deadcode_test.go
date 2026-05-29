@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"sort"
+	"strings"
 	"testing"
 
 	"github.com/whiskeyjimbo/veska/internal/application/checks"
@@ -14,12 +15,17 @@ import (
 // fakeDeadQuerier returns a preconfigured list of "dead" nodes regardless of
 // inputs, and remembers the last call args for assertions.
 type fakeDeadQuerier struct {
-	dead      []ports.NodeRef
-	err       error
-	gotRepo   string
-	gotBranch string
-	gotPaths  []string
-	callCount int
+	dead         []ports.NodeRef
+	ifaceMethods []string
+	err          error
+	gotRepo      string
+	gotBranch    string
+	gotPaths     []string
+	callCount    int
+}
+
+func (f *fakeDeadQuerier) InterfaceMethodNames(_ context.Context, _, _ string) ([]string, error) {
+	return f.ifaceMethods, nil
 }
 
 func (f *fakeDeadQuerier) DeadNodesInFiles(_ context.Context, repoID, branch string, filePaths []string) ([]ports.NodeRef, error) {
@@ -410,5 +416,46 @@ func TestDeadCodeCheck_DeterministicFindingID(t *testing.T) {
 	}
 	if first[0].FindingID != second[0].FindingID {
 		t.Errorf("FindingID not stable across runs: %q vs %q", first[0].FindingID, second[0].FindingID)
+	}
+}
+
+// TestDeadCodeCheck_SkipsInterfaceMethodImplementations covers
+// solov2-f1zp: concrete methods whose bare name matches a same-repo
+// interface method are interface implementations called via dispatch
+// (the static graph cannot see those edges) and must not be flagged
+// dead. The pflag junior-journey concrete: boolValue.Set / .String /
+// .Type satisfy pflag.Value, but they have zero inbound CALLS edges
+// in the graph, so before the fix all three got flagged. Methods
+// whose bare name is NOT an interface method (boolValue.privateHelper)
+// still get reported when otherwise dead.
+func TestDeadCodeCheck_SkipsInterfaceMethodImplementations(t *testing.T) {
+	q := &fakeDeadQuerier{
+		// Same shape pflag produced: lowercase concrete struct
+		// methods that look 'dead' but satisfy the Value interface.
+		dead: []ports.NodeRef{
+			{NodeID: "n1", FilePath: "bool.go", Kind: "method", Name: "boolValue.Set"},
+			{NodeID: "n2", FilePath: "bool.go", Kind: "method", Name: "boolValue.String"},
+			{NodeID: "n3", FilePath: "bool.go", Kind: "method", Name: "boolValue.Type"},
+			{NodeID: "n4", FilePath: "bool.go", Kind: "method", Name: "boolValue.privateHelper"},
+		},
+		ifaceMethods: []string{"Set", "String", "Type", "Replace"},
+	}
+	c := checks.NewDeadCodeCheck(q)
+	got, err := c.Run(context.Background(),
+		checks.Input{RepoID: "r", Branch: "main", FilePaths: []string{"bool.go"}})
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	// Only the helper survives — its bare name "privateHelper" isn't an
+	// interface method declared in this repo.
+	if len(got) != 1 {
+		names := make([]string, 0, len(got))
+		for _, f := range got {
+			names = append(names, f.Message)
+		}
+		t.Fatalf("expected 1 finding (boolValue.privateHelper); got %d: %v", len(got), names)
+	}
+	if !strings.Contains(got[0].Message, "privateHelper") {
+		t.Errorf("expected the privateHelper finding, got %q", got[0].Message)
 	}
 }
