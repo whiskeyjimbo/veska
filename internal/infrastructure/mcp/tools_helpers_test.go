@@ -3,6 +3,7 @@ package mcp
 import (
 	"context"
 	"encoding/json"
+	"strings"
 	"testing"
 
 	application "github.com/whiskeyjimbo/veska/internal/application"
@@ -287,5 +288,36 @@ func TestSortedKeysAnnotated_FlagsRequired(t *testing.T) {
 	want := "file_path (required), line (required), branch, limit"
 	if got != want {
 		t.Errorf("got %q\nwant %q", got, want)
+	}
+}
+
+// TestRequireRepoID_CountExcludesExtRepos pins solov2-dqga: the
+// "N repos registered" hint in the missing-repo_id error must agree
+// with what eng_list_repos shows by default, which hides synthetic
+// ext:<module> rows produced by `veska deps index`. Before the fix
+// the count came from raw len(all) and reported one more than the user
+// could see in eng_list_repos, sending agents looking for a phantom
+// repo. Junior-journey repro: 4 tracked repos + 1 deps-indexed cobra
+// produced "5 repos registered" while eng_list_repos showed 4.
+func TestRequireRepoID_CountExcludesExtRepos(t *testing.T) {
+	repos := []application.RepoRecord{
+		{RepoID: "tracked-1", RootPath: "/a"},
+		{RepoID: "tracked-2", RootPath: "/b"},
+		{RepoID: "ext:github.com/spf13/cobra", RootPath: "/a/vendor/github.com/spf13/cobra"},
+	}
+	if got, want := userVisibleRepoCount(repos), 2; got != want {
+		t.Errorf("userVisibleRepoCount = %d, want %d", got, want)
+	}
+
+	lister := &stubRepoLister{repos: repos}
+	_, rpcErr := resolveRepoIDOrCwd(context.Background(), lister, "", "")
+	if rpcErr == nil {
+		t.Fatal("want RPC error, got nil")
+	}
+	if !strings.Contains(rpcErr.Message, "2 repos registered") {
+		t.Errorf("error must report user-visible count (2), got %q", rpcErr.Message)
+	}
+	if strings.Contains(rpcErr.Message, "3 repos registered") {
+		t.Errorf("error must not include ext: rows in the count, got %q", rpcErr.Message)
 	}
 }
