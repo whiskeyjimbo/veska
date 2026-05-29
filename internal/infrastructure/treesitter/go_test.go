@@ -980,3 +980,83 @@ func nodeNames(nodes []*domain.Node) []string {
 	}
 	return names
 }
+
+// TestParseFile_PackageVarCompositeLiteralOrigin covers the cobra-shaped
+// pattern surfaced in the junior onboarding journey (solov2-8ffo /
+// solov2-zuvl): a package-level var initialised from a composite literal
+// `&pkg.Type{...}` is the dominant cobra app shape, and subsequent
+// `rootCmd.AddCommand(...)` calls must emit method-call UnresolvedCalls
+// against the pkg's import path. Before this fix collectLocalVarOrigins
+// only walked function bodies and only recognised `v := pkg.F(...)`, so
+// package-scoped vars holding a composite literal became
+// PkgQualifier="rootCmd" — an unresolvable bareword that never produced
+// a cross-repo stub.
+func TestParseFile_PackageVarCompositeLiteralOrigin(t *testing.T) {
+	src := []byte(`package cmd
+
+import "github.com/spf13/cobra"
+
+var rootCmd = &cobra.Command{Use: "app"}
+var helloCmd = &cobra.Command{Use: "hello"}
+
+func init() {
+	rootCmd.AddCommand(helloCmd)
+}
+`)
+	p := treesitter.NewGoParser()
+	result, err := p.ParseFile(context.Background(), repoID, filePath, src)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	var sawAddCommand, addCommandIsMethod bool
+	for _, uc := range result.UnresolvedCalls {
+		if uc.CalleeName == "AddCommand" && uc.PkgQualifier == "cobra" {
+			sawAddCommand = true
+			addCommandIsMethod = uc.IsMethodCall
+		}
+	}
+	if !sawAddCommand {
+		t.Fatalf("UnresolvedCalls missing rootCmd.AddCommand resolved to cobra.AddCommand; got %+v", result.UnresolvedCalls)
+	}
+	if !addCommandIsMethod {
+		t.Errorf("rootCmd.AddCommand must be flagged IsMethodCall=true so the resolver suffix-matches Command.AddCommand in cobra")
+	}
+}
+
+// TestParseFile_PackageVarConstructorOrigin guards the package-scope
+// variant of the existing function-scope rule: `var x = pkg.F(...)` at
+// file scope should be treated the same as `x := pkg.F(...)` inside a
+// function body — its method calls must classify as method-call
+// UnresolvedCalls against pkg's import path.
+func TestParseFile_PackageVarConstructorOrigin(t *testing.T) {
+	src := []byte(`package app
+
+import "github.com/jrose/greetlib"
+
+var g = greetlib.New("hi")
+
+func Run() string {
+	return g.Render()
+}
+`)
+	p := treesitter.NewGoParser()
+	result, err := p.ParseFile(context.Background(), repoID, filePath, src)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	var sawRender, renderIsMethod bool
+	for _, uc := range result.UnresolvedCalls {
+		if uc.PkgQualifier == "greetlib" && uc.CalleeName == "Render" {
+			sawRender = true
+			renderIsMethod = uc.IsMethodCall
+		}
+	}
+	if !sawRender {
+		t.Fatalf("UnresolvedCalls missing g.Render → greetlib.Render: %+v", result.UnresolvedCalls)
+	}
+	if !renderIsMethod {
+		t.Errorf("g.Render must be flagged IsMethodCall=true; got false")
+	}
+}

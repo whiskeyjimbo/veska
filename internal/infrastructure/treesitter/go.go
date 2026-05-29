@@ -370,12 +370,15 @@ type localVarOrigin = string
 
 // collectLocalVarOrigins walks a function body and returns the map of
 // short-var-declared identifiers to their originating package qualifier.
-// Only the simplest shape `v := pkg.X(...)` is recognised — `v` an
-// identifier, RHS a call_expression whose function is a
-// selector_expression `pkg.X` where `pkg` is an identifier. Anything
-// else (multi-value returns, type assertions, method chains, struct
-// literals) is intentionally skipped so the map never contains a wrong
-// origin — a missing entry just degrades to existing behaviour.
+// Recognised RHS shapes (see originPkgFromRHS):
+//   - `v := pkg.X(...)`          call_expression with selector function
+//   - `v := pkg.Type{...}`       composite literal with qualified type
+//   - `v := &pkg.Type{...}`      address-of composite literal
+//
+// Unrecognised shapes (multi-value returns, type assertions, method
+// chains, anonymous-type literals) are intentionally skipped so the map
+// never contains a wrong origin — a missing entry just degrades to
+// existing behaviour.
 func collectLocalVarOrigins(node *sitter.Node, src []byte) map[string]localVarOrigin {
 	origins := map[string]localVarOrigin{}
 	var walk func(*sitter.Node)
@@ -388,15 +391,9 @@ func collectLocalVarOrigins(node *sitter.Node, src []byte) map[string]localVarOr
 				int(right.NamedChildCount()) == 1 {
 				lhs := left.NamedChild(0)
 				rhs := right.NamedChild(0)
-				if lhs != nil && rhs != nil && lhs.Type() == "identifier" && rhs.Type() == "call_expression" {
-					fn := rhs.ChildByFieldName("function")
-					if fn != nil && fn.Type() == "selector_expression" {
-						operand := fn.ChildByFieldName("operand")
-						if operand != nil && operand.Type() == "identifier" {
-							varName := string(src[lhs.StartByte():lhs.EndByte()])
-							pkgName := string(src[operand.StartByte():operand.EndByte()])
-							origins[varName] = pkgName
-						}
+				if lhs != nil && rhs != nil && lhs.Type() == "identifier" {
+					if pkg := originPkgFromRHS(rhs, src); pkg != "" {
+						origins[string(src[lhs.StartByte():lhs.EndByte()])] = pkg
 					}
 				}
 			}
@@ -408,6 +405,111 @@ func collectLocalVarOrigins(node *sitter.Node, src []byte) map[string]localVarOr
 	}
 	walk(node)
 	return origins
+}
+
+// collectPackageVarOrigins walks the file root and returns origins for
+// top-level `var x = ...` declarations whose RHS is a package-qualified
+// constructor call or composite literal. Mirrors collectLocalVarOrigins
+// but covers the file-scope shape that drives every cobra app:
+//
+//	var rootCmd = &cobra.Command{...}   // -> rootCmd -> cobra
+//	var defaultPool = pool.New()        // -> defaultPool -> pool
+//
+// Before this collector landed, `rootCmd.AddCommand(helloCmd)` in init()
+// emitted UnresolvedCall{PkgQualifier:"rootCmd"} — an unresolvable
+// bareword — so no cross-repo CALLS stub was ever created against the
+// cobra module (solov2-8ffo / solov2-zuvl, surfaced by the junior
+// onboarding journey).
+//
+// Only single-spec `var x = expr` shapes are recognised; grouped
+// `var ( ... )` blocks and multi-LHS specs are walked through the
+// var_spec_list path so each spec is inspected individually.
+func collectPackageVarOrigins(root *sitter.Node, src []byte) map[string]localVarOrigin {
+	origins := map[string]localVarOrigin{}
+	if root == nil {
+		return origins
+	}
+	count := int(root.ChildCount())
+	for i := range count {
+		child := root.Child(i)
+		if child == nil || child.Type() != "var_declaration" {
+			continue
+		}
+		specCount := int(child.ChildCount())
+		for j := range specCount {
+			spec := child.Child(j)
+			if spec == nil || spec.Type() != "var_spec" {
+				continue
+			}
+			name := spec.ChildByFieldName("name")
+			value := spec.ChildByFieldName("value")
+			if name == nil || value == nil {
+				continue
+			}
+			// Single-name, single-value only — multi-LHS and tuple
+			// returns are intentionally skipped to keep origin
+			// inferences unambiguous.
+			if int(name.NamedChildCount()) > 1 || int(value.NamedChildCount()) != 1 {
+				continue
+			}
+			id := name
+			if id.Type() != "identifier" {
+				id = name.NamedChild(0)
+			}
+			if id == nil || id.Type() != "identifier" {
+				continue
+			}
+			rhs := value.NamedChild(0)
+			if rhs == nil {
+				continue
+			}
+			if pkg := originPkgFromRHS(rhs, src); pkg != "" {
+				origins[string(src[id.StartByte():id.EndByte()])] = pkg
+			}
+		}
+	}
+	return origins
+}
+
+// originPkgFromRHS returns the qualifying package identifier for a
+// var declaration's RHS, or "" when the shape isn't recognised.
+// Handles three shapes that all behave the same way for downstream
+// cross-repo CALLS resolution: a constructor call, a value composite
+// literal, or an address-of composite literal.
+func originPkgFromRHS(rhs *sitter.Node, src []byte) string {
+	if rhs == nil {
+		return ""
+	}
+	switch rhs.Type() {
+	case "call_expression":
+		fn := rhs.ChildByFieldName("function")
+		if fn == nil || fn.Type() != "selector_expression" {
+			return ""
+		}
+		operand := fn.ChildByFieldName("operand")
+		if operand == nil || operand.Type() != "identifier" {
+			return ""
+		}
+		return string(src[operand.StartByte():operand.EndByte()])
+	case "composite_literal":
+		t := rhs.ChildByFieldName("type")
+		if t == nil || t.Type() != "qualified_type" {
+			return ""
+		}
+		pkg := t.ChildByFieldName("package")
+		if pkg == nil || pkg.Type() != "package_identifier" {
+			return ""
+		}
+		return string(src[pkg.StartByte():pkg.EndByte()])
+	case "unary_expression":
+		// &pkg.Type{...} — operand is a composite_literal.
+		operand := rhs.ChildByFieldName("operand")
+		if operand == nil {
+			return ""
+		}
+		return originPkgFromRHS(operand, src)
+	}
+	return ""
 }
 
 // extractImports walks the file's import declarations and returns a map from

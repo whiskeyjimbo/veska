@@ -222,6 +222,11 @@ func (p *GoParser) ParseFile(ctx context.Context, repoID, path string, src []byt
 	// so chained-selector calls `s.field.M()` can look up the field's
 	// declared type. The map is empty for files with no struct decls.
 	structFields := collectStructFields(root, src)
+	// solov2-8ffo / solov2-zuvl: file-scope `var x = &pkg.Type{...}` or
+	// `var x = pkg.New(...)` origins, used by extractCallsFromBody to
+	// classify `x.Method()` as a cross-package method call. Computed
+	// once per file and shared across every function body in the file.
+	pkgVarOrigins := collectPackageVarOrigins(root, src)
 	callsQuery, qerr := compileEmbeddedQuery(tsgo.GetLanguage(), "go", "calls")
 	if qerr != nil {
 		return nil, qerr
@@ -230,7 +235,7 @@ func (p *GoParser) ParseFile(ctx context.Context, repoID, path string, src []byt
 		if c.body == nil {
 			continue
 		}
-		callEdges, callUnresolved := extractCallsFromBody(callsQuery, c.body, src, c.caller, c.recvName, c.recvType, symbolByName, structFields)
+		callEdges, callUnresolved := extractCallsFromBody(callsQuery, c.body, src, c.caller, c.recvName, c.recvType, symbolByName, structFields, pkgVarOrigins)
 		result.Edges = append(result.Edges, callEdges...)
 		result.UnresolvedCalls = append(result.UnresolvedCalls, callUnresolved...)
 	}
@@ -247,7 +252,7 @@ func (p *GoParser) ParseFile(ctx context.Context, repoID, path string, src []byt
 	// anon body's calls to the package node so call_chain answers
 	// "what does this file initialisation eventually reach" correctly.
 	if pkgNode != nil {
-		anonEdges, anonUnresolved := extractAnonCallsInTopLevelVars(callsQuery, root, src, symbolByName, pkgNode)
+		anonEdges, anonUnresolved := extractAnonCallsInTopLevelVars(callsQuery, root, src, symbolByName, pkgNode, pkgVarOrigins)
 		result.Edges = append(result.Edges, anonEdges...)
 		result.UnresolvedCalls = append(result.UnresolvedCalls, anonUnresolved...)
 	}
@@ -274,7 +279,7 @@ func (p *GoParser) ParseFile(ctx context.Context, repoID, path string, src []byt
 // in-file map (matching parseMethodDecl naming). Dedup is per-caller
 // on (callee-name) for unresolved and (caller-id, callee-id) for edges
 // to mirror the legacy seen/seenU maps.
-func extractCallsFromBody(q *sitter.Query, body *sitter.Node, src []byte, caller *domain.Node, recvName, recvType string, symbols map[string]*domain.Node, structFields map[string]map[string]fieldType) ([]*domain.Edge, []domain.UnresolvedCall) {
+func extractCallsFromBody(q *sitter.Query, body *sitter.Node, src []byte, caller *domain.Node, recvName, recvType string, symbols map[string]*domain.Node, structFields map[string]map[string]fieldType, pkgVarOrigins map[string]localVarOrigin) ([]*domain.Edge, []domain.UnresolvedCall) {
 	var edges []*domain.Edge
 	var unresolved []domain.UnresolvedCall
 	seen := map[string]bool{}
@@ -282,8 +287,17 @@ func extractCallsFromBody(q *sitter.Query, body *sitter.Node, src []byte, caller
 
 	// Per-body local-var origins (solov2-9rc2 phase A): `v := pkg.New(...)`
 	// produces v→pkg so subsequent `v.X()` chained-selector calls are
-	// recognised as method calls on a value from pkg.
+	// recognised as method calls on a value from pkg. File-scope `var x =
+	// &pkg.Type{...}` origins (solov2-8ffo / solov2-zuvl) feed the same
+	// lookup; function-body short-var origins shadow them on collision,
+	// matching Go's scoping rules.
 	localOrigins := collectLocalVarOrigins(body, src)
+	for name, pkg := range pkgVarOrigins {
+		if _, shadowed := localOrigins[name]; shadowed {
+			continue
+		}
+		localOrigins[name] = pkg
+	}
 
 	for _, m := range runQuery(q, body) {
 		var ref callRef
@@ -558,7 +572,7 @@ func buildVarNodesFromSpec(spec, decl *sitter.Node, src []byte, repoID, path str
 // funcs in var initialisers don't bind a `s`/`this` receiver) when
 // it hits a func_literal. Dedup is per-pkgNode across all anon
 // bodies so two literals calling the same target produce one edge.
-func extractAnonCallsInTopLevelVars(q *sitter.Query, root *sitter.Node, src []byte, symbols map[string]*domain.Node, pkgNode *domain.Node) ([]*domain.Edge, []domain.UnresolvedCall) {
+func extractAnonCallsInTopLevelVars(q *sitter.Query, root *sitter.Node, src []byte, symbols map[string]*domain.Node, pkgNode *domain.Node, pkgVarOrigins map[string]localVarOrigin) ([]*domain.Edge, []domain.UnresolvedCall) {
 	var edges []*domain.Edge
 	var unresolved []domain.UnresolvedCall
 	seenEdge := map[string]bool{}
@@ -572,7 +586,7 @@ func extractAnonCallsInTopLevelVars(q *sitter.Query, root *sitter.Node, src []by
 		if n.Type() == "func_literal" {
 			body := n.ChildByFieldName("body")
 			if body != nil {
-				e, u := extractCallsFromBody(q, body, src, pkgNode, "", "", symbols, nil)
+				e, u := extractCallsFromBody(q, body, src, pkgNode, "", "", symbols, nil, pkgVarOrigins)
 				for _, edge := range e {
 					key := string(edge.Src) + callKeySep + string(edge.Tgt)
 					if seenEdge[key] {
