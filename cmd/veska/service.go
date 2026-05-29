@@ -6,7 +6,7 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
-	"github.com/whiskeyjimbo/veska/internal/service"
+	"github.com/whiskeyjimbo/veska/internal/platform/service"
 )
 
 // ServiceManager is the port through which the service subcommands drive the

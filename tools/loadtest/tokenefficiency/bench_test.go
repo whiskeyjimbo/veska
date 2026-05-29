@@ -27,7 +27,7 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/embedding/model2vec"
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/sqlite"
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/vector"
-	"github.com/whiskeyjimbo/veska/internal/tokenize"
+	"github.com/whiskeyjimbo/veska/internal/platform/tokenize"
 	"github.com/whiskeyjimbo/veska/tools/loadtest/synthcorpus"
 )
 

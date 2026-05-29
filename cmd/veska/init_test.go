@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/whiskeyjimbo/veska/internal/embedderprobe"
+	"github.com/whiskeyjimbo/veska/internal/platform/embedderprobe"
 )
 
 // TestResolveVulnChoice_NonInteractiveStdinSkipsPromptAndEchoes pins

@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/whiskeyjimbo/veska/internal/config"
+	"github.com/whiskeyjimbo/veska/internal/platform/config"
 )
 
 func TestLoadCacheConfig_Defaults(t *testing.T) {

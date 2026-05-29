@@ -21,7 +21,7 @@ import (
 
 	"github.com/whiskeyjimbo/veska/internal/core/domain"
 	"github.com/whiskeyjimbo/veska/internal/core/ports"
-	"github.com/whiskeyjimbo/veska/internal/observability"
+	"github.com/whiskeyjimbo/veska/internal/platform/observability"
 )
 
 // DegradedReasonEmbedderOfflineLexicalFallback is the canonical token

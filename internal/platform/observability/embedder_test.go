@@ -7,7 +7,7 @@ import (
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	"go.opentelemetry.io/otel/sdk/trace/tracetest"
 
-	"github.com/whiskeyjimbo/veska/internal/observability"
+	"github.com/whiskeyjimbo/veska/internal/platform/observability"
 )
 
 // stubEmbedder is a minimal EmbeddingProvider for testing.

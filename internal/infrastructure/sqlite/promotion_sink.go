@@ -4,7 +4,7 @@ import (
 	"context"
 	"database/sql"
 
-	"github.com/whiskeyjimbo/veska/internal/tokenize"
+	"github.com/whiskeyjimbo/veska/internal/platform/tokenize"
 )
 
 // nodeWrite is the per-node context a PromotionSink receives after a node row

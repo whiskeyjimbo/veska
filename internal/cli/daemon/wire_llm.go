@@ -3,7 +3,7 @@ package daemon
 import (
 	"fmt"
 
-	"github.com/whiskeyjimbo/veska/internal/config"
+	"github.com/whiskeyjimbo/veska/internal/platform/config"
 )
 
 // checkLLMProvider gates daemon startup on the review-pipeline LLM provider.

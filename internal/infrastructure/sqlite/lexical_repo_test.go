@@ -7,7 +7,7 @@ import (
 	"testing"
 
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/sqlite"
-	"github.com/whiskeyjimbo/veska/internal/tokenize"
+	"github.com/whiskeyjimbo/veska/internal/platform/tokenize"
 )
 
 // seedLexical inserts a single (node_id, kind, symbol_path) into the two

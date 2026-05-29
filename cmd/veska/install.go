@@ -8,8 +8,8 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
-	"github.com/whiskeyjimbo/veska/internal/config"
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/embedding/model2vec"
+	"github.com/whiskeyjimbo/veska/internal/platform/config"
 )
 
 // installDownloadTimeout bounds the model fetch. potion-code-16M is ~64MB;

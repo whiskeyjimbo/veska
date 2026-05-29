@@ -19,8 +19,8 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/whiskeyjimbo/veska/internal/application/extindex"
 	"github.com/whiskeyjimbo/veska/internal/cli/mcpclient"
-	"github.com/whiskeyjimbo/veska/internal/config"
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/sqlite"
+	"github.com/whiskeyjimbo/veska/internal/platform/config"
 	"github.com/whiskeyjimbo/veska/internal/repo"
 )
 

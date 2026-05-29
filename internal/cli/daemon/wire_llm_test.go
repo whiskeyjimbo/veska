@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/whiskeyjimbo/veska/internal/config"
+	"github.com/whiskeyjimbo/veska/internal/platform/config"
 )
 
 // AC3: a non-ollama provider is refused with a message naming the V2.0.1

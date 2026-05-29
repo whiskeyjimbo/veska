@@ -10,8 +10,8 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/whiskeyjimbo/veska/internal/cli/daemon"
 	"github.com/whiskeyjimbo/veska/internal/cli/mcp"
-	"github.com/whiskeyjimbo/veska/internal/config"
-	"github.com/whiskeyjimbo/veska/internal/service"
+	"github.com/whiskeyjimbo/veska/internal/platform/config"
+	"github.com/whiskeyjimbo/veska/internal/platform/service"
 )
 
 func newRootCmd() *cobra.Command {

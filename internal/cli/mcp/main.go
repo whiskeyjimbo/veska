@@ -12,7 +12,7 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
-	"github.com/whiskeyjimbo/veska/internal/config"
+	"github.com/whiskeyjimbo/veska/internal/platform/config"
 )
 
 const dialTimeout = 2 * time.Second

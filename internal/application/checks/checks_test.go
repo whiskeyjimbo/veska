@@ -13,7 +13,7 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/application/checks"
 	"github.com/whiskeyjimbo/veska/internal/core/domain"
 	"github.com/whiskeyjimbo/veska/internal/core/ports"
-	"github.com/whiskeyjimbo/veska/internal/observability"
+	"github.com/whiskeyjimbo/veska/internal/platform/observability"
 )
 
 // recordingStorage captures Save calls in memory.

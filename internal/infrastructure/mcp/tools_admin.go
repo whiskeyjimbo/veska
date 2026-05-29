@@ -10,8 +10,8 @@ import (
 	"strings"
 
 	application "github.com/whiskeyjimbo/veska/internal/application"
-	"github.com/whiskeyjimbo/veska/internal/config"
 	"github.com/whiskeyjimbo/veska/internal/core/domain"
+	"github.com/whiskeyjimbo/veska/internal/platform/config"
 )
 
 // StatusProvider is an optional interface for eng_get_status.

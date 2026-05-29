@@ -9,9 +9,9 @@ import (
 	"github.com/BurntSushi/toml"
 	"github.com/spf13/cobra"
 	"github.com/whiskeyjimbo/veska/internal/cli/mcpclient"
-	"github.com/whiskeyjimbo/veska/internal/config"
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/embedding/elect"
-	"github.com/whiskeyjimbo/veska/internal/service"
+	"github.com/whiskeyjimbo/veska/internal/platform/config"
+	"github.com/whiskeyjimbo/veska/internal/platform/service"
 )
 
 // configCmd is the parent for `veska config …`.

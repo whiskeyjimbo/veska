@@ -11,9 +11,9 @@ import (
 	"testing"
 
 	"github.com/whiskeyjimbo/veska/internal/application"
-	"github.com/whiskeyjimbo/veska/internal/config"
 	fsignore "github.com/whiskeyjimbo/veska/internal/infrastructure/fs"
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/sqlite"
+	"github.com/whiskeyjimbo/veska/internal/platform/config"
 	"github.com/whiskeyjimbo/veska/internal/repo"
 )
 

@@ -5,11 +5,11 @@ import (
 	"os"
 
 	"github.com/whiskeyjimbo/veska/internal/application/search"
-	"github.com/whiskeyjimbo/veska/internal/config"
 	"github.com/whiskeyjimbo/veska/internal/core/ports"
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/embedding/elect"
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/sqlite"
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/vector"
+	"github.com/whiskeyjimbo/veska/internal/platform/config"
 )
 
 // NewCLISearchService builds the search service for the one-shot `veska search`
