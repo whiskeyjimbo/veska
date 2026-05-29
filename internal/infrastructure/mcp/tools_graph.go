@@ -26,6 +26,12 @@ type GraphResponse struct {
 	Nodes           []nodeDTO `json:"nodes"`
 	IncludedStaging bool      `json:"included_staging"`
 	DegradedReasons []string  `json:"degraded_reasons"`
+	// IndexingRepos lists repo_ids for which a cold scan was still in flight
+	// at query time. Populated only when DegradedReasons contains
+	// "indexing_in_progress" so callers can decide whether their target
+	// repo is the one being indexed. Omitted from JSON when empty
+	// (solov2-izh6.30).
+	IndexingRepos []string `json:"indexing_repos,omitempty"`
 }
 
 // callChainResponse is the envelope returned by eng_get_call_chain. Both
@@ -41,6 +47,8 @@ type callChainResponse struct {
 	CrossRepoEdges  []CrossRepoEdge `json:"cross_repo_edges,omitempty"`
 	IncludedStaging bool            `json:"included_staging"`
 	DegradedReasons []string        `json:"degraded_reasons"`
+	// IndexingRepos: see GraphResponse.IndexingRepos (solov2-izh6.30).
+	IndexingRepos []string `json:"indexing_repos,omitempty"`
 }
 
 // DegradedReasonChainedSelectorsUnresolved is emitted on eng_get_call_chain
@@ -61,6 +69,45 @@ const DegradedReasonChainedSelectorsUnresolved = "chained_selectors_unresolved"
 // not a parser limitation (solov2-izh6.22).
 const DegradedReasonExternalCalleesOnly = "external_callees_only"
 
+// DegradedReasonIndexingInProgress is emitted on any read tool that
+// returned an empty result while at least one cold scan was still
+// running. A query that hits the daemon during the cold-scan window
+// would otherwise see {nodes:[]} silently and conclude the symbol does
+// not exist; this reason tells the caller to retry once indexing
+// settles (solov2-izh6.30). The accompanying IndexingRepos field, when
+// populated, lists the repo_ids the caller should wait on.
+const DegradedReasonIndexingInProgress = "indexing_in_progress"
+
+// ScanTrackerReader is the minimal read surface mcp tool handlers need
+// from application.ScanTracker. Defined as an interface here so test
+// fixtures can stub it without pulling in the application package's
+// concrete tracker, and so handlers gracefully no-op when no tracker
+// has been wired (nil-safe everywhere).
+type ScanTrackerReader interface {
+	IsAnyScanRunning() bool
+	Snapshot() []application.ScanState
+}
+
+// indexingRepoIDs returns the sorted list of repo_ids with a cold scan
+// in flight at call time, plus the boolean "any scan running" used to
+// decide whether to attach the indexing_in_progress degraded reason.
+// Nil-safe: a nil tracker yields (nil, false), so callers that didn't
+// wire WithScanTracker keep their pre-existing behaviour.
+func indexingRepoIDs(t ScanTrackerReader) ([]string, bool) {
+	if t == nil || !t.IsAnyScanRunning() {
+		return nil, false
+	}
+	snap := t.Snapshot()
+	if len(snap) == 0 {
+		return nil, false
+	}
+	ids := make([]string, 0, len(snap))
+	for _, s := range snap {
+		ids = append(ids, s.RepoID)
+	}
+	return ids, true
+}
+
 // ResolveFunc is a function that resolves cross-repo edge stubs OUTBOUND
 // from a given node (the node is the caller). Injected as an optional
 // dependency; nil = skip outbound resolution.
@@ -80,6 +127,7 @@ type graphToolConfig struct {
 	resolve        ResolveFunc
 	resolveInbound InboundResolveFunc
 	repos          application.RepoLister
+	scans          ScanTrackerReader
 }
 
 // WithResolveFunc supplies a ResolveFunc that enables cross-repo synthetic
@@ -104,6 +152,15 @@ func WithRepoLister(repos application.RepoLister) GraphToolOption {
 	return func(c *graphToolConfig) { c.repos = repos }
 }
 
+// WithScanTracker supplies the daemon-wide cold-scan tracker so empty
+// graph-read responses can carry an "indexing_in_progress" degraded reason
+// when the empty result was likely caused by a scan still in flight rather
+// than the symbol genuinely not existing (solov2-izh6.30). Nil is allowed
+// and disables the hint (matches single-process tests with no daemon).
+func WithScanTracker(t ScanTrackerReader) GraphToolOption {
+	return func(c *graphToolConfig) { c.scans = t }
+}
+
 // RegisterGraphTools registers the 5 graph read tools on r.
 // graph and staging are injected dependencies; pass WithResolveFunc to enable
 // cross-repo synthetic edge resolution in eng_get_call_chain.
@@ -118,7 +175,7 @@ func RegisterGraphTools(r *Registry, graph ports.GraphStorage, staging *applicat
 		Description:     "Look up nodes by exact symbol name. Use when you already know the identifier (e.g. 'ParseConfig'). Unqualified names also match — 'Run' finds Server.Run, Command.Run, etc., with exact matches first. Returns a stable node_id you can feed to eng_get_call_chain, eng_get_blast_radius, eng_get_context_pack, eng_search_similar without another lookup. Prefer this over eng_search_semantic for known-identifier queries — it's deterministic and exact.",
 		IncludesStaging: true,
 		InputSchema:     findSymbolInputSchema,
-		Handler:         makeFindSymbolHandler(graph, staging, cfg.repos),
+		Handler:         makeFindSymbolHandler(graph, staging, cfg.repos, cfg.scans),
 	})
 	r.MustRegister(ToolSpec{
 		Name:            "eng_get_node",
@@ -136,7 +193,7 @@ func RegisterGraphTools(r *Registry, graph ports.GraphStorage, staging *applicat
 		Description:     DescCallChain,
 		IncludesStaging: false,
 		InputSchema:     getCallChainInputSchema,
-		Handler:         makeGetCallChainHandler(graph, resolve, cfg.resolveInbound, cfg.repos),
+		Handler:         makeGetCallChainHandler(graph, resolve, cfg.resolveInbound, cfg.repos, cfg.scans),
 	})
 	r.MustRegister(ToolSpec{
 		Name:            "eng_get_file_nodes",

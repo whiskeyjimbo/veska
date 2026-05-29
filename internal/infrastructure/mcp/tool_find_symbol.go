@@ -35,7 +35,7 @@ type findSymbolParams struct {
 	Kind   string `json:"kind,omitempty"`
 }
 
-func makeFindSymbolHandler(graph ports.GraphStorage, staging *application.StagingArea, repos application.RepoLister) ToolHandler {
+func makeFindSymbolHandler(graph ports.GraphStorage, staging *application.StagingArea, repos application.RepoLister, scans ScanTrackerReader) ToolHandler {
 	return func(ctx context.Context, _ domain.Actor, raw json.RawMessage) (any, *RPCError) {
 		var p findSymbolParams
 		if err := json.Unmarshal(raw, &p); err != nil {
@@ -130,10 +130,24 @@ func makeFindSymbolHandler(graph ports.GraphStorage, staging *application.Stagin
 				dtos[i].RepoID = repoByNode[domain.NodeID(n.NodeID)]
 			}
 		}
+		reasons := []string{}
+		var indexing []string
+		// solov2-izh6.30: empty result during an active cold scan is the
+		// classic "junior just registered the repo and queried" race. Tell
+		// the caller so they retry instead of concluding the symbol doesn't
+		// exist. The hint fires only on empty responses — a non-empty hit
+		// is authoritative even if some OTHER repo is still indexing.
+		if len(dtos) == 0 {
+			if ids, busy := indexingRepoIDs(scans); busy {
+				reasons = append(reasons, DegradedReasonIndexingInProgress)
+				indexing = ids
+			}
+		}
 		return GraphResponse{
 			Nodes:           dtos,
 			IncludedStaging: includedStaging,
-			DegradedReasons: []string{},
+			DegradedReasons: reasons,
+			IndexingRepos:   indexing,
 		}, nil
 	}
 }

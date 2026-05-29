@@ -962,6 +962,7 @@ func registerMCPTools(r *mcp.Registry, d mcpDeps) {
 		mcp.WithRepoLister(&repoLister{db: pools.ReadDB}),
 		mcp.WithResolveFunc(resolveStubs),
 		mcp.WithInboundResolveFunc(resolveInboundStubs),
+		mcp.WithScanTracker(d.scanTracker),
 	)
 
 	// Blast-radius tools. The Service walks edge adjacency + staging; the
@@ -972,7 +973,8 @@ func registerMCPTools(r *mcp.Registry, d mcpDeps) {
 	blastSvc := blastradius.NewService(edges, nodes, d.staging)
 	mcp.RegisterBlastTools(r, blastSvc, repoRootFunc(pools.ReadDB), gitwatch.ChangedFiles, &repoLister{db: pools.ReadDB}, graph,
 		mcp.WithBlastResolveFunc(resolveStubs),
-		mcp.WithBlastInboundResolveFunc(resolveInboundStubs))
+		mcp.WithBlastInboundResolveFunc(resolveInboundStubs),
+		mcp.WithBlastScanTracker(d.scanTracker))
 
 	// eng_find_changed_symbols: parses each file changed between two git
 	// refs at both refs and diffs the symbol sets. It reads git + the
@@ -1046,7 +1048,8 @@ func registerMCPTools(r *mcp.Registry, d mcpDeps) {
 	); err == nil {
 		mcp.RegisterContextPackTool(r, cpAsm, repoRootFunc(pools.ReadDB), &repoLister{db: pools.ReadDB},
 			mcp.WithContextPackResolveFunc(resolveStubs),
-			mcp.WithContextPackInboundResolveFunc(resolveInboundStubs))
+			mcp.WithContextPackInboundResolveFunc(resolveInboundStubs),
+			mcp.WithContextPackScanTracker(d.scanTracker))
 	} else {
 		mcp.RegisterContextPackTool(r, nil, nil, &repoLister{db: pools.ReadDB})
 	}
@@ -1056,7 +1059,8 @@ func registerMCPTools(r *mcp.Registry, d mcpDeps) {
 	searchSvc := search.NewService(d.provider, d.vectors, nodes,
 		search.WithMetrics(d.metrics))
 	mcp.RegisterSearchTools(r, searchSvc, d.refs, d.vectors, nodes, d.savings, &repoLister{db: pools.ReadDB},
-		mcp.WithSearchGraph(graph))
+		mcp.WithSearchGraph(graph),
+		mcp.WithSearchScanTracker(d.scanTracker))
 
 	// eng_list_dependencies (solov2-jlws): aggregates per-repo cross-repo
 	// edge stubs into a ranked module list with sample call sites. Versions

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"strings"
 
 	"github.com/spf13/cobra"
 
@@ -214,6 +215,7 @@ func renderGraphChain(ctx context.Context, w io.Writer, raw json.RawMessage, jso
 		} `json:"edges"`
 		CrossRepoEdges  []CrossRepoEdgeDTO `json:"cross_repo_edges,omitempty"`
 		DegradedReasons []string           `json:"degraded_reasons,omitempty"`
+		IndexingRepos   []string           `json:"indexing_repos,omitempty"`
 	}
 	if err := json.Unmarshal(raw, &env); err != nil {
 		return err
@@ -222,6 +224,14 @@ func renderGraphChain(ctx context.Context, w io.Writer, raw json.RawMessage, jso
 		fmt.Fprintln(w, "no nodes in chain")
 		for _, d := range env.DegradedReasons {
 			fmt.Fprintf(w, "[degraded: %s]\n", d)
+			if d == "indexing_in_progress" {
+				// solov2-izh6.30: empty result while a cold scan is still
+				// populating the graph. Tell the user the empty answer is
+				// likely premature so they don't conclude the symbol doesn't
+				// exist.
+				fmt.Fprintf(w, "  hint: %d repo(s) still indexing (%s); retry shortly or rerun with `veska repo add --wait` to block until ready.\n",
+					len(env.IndexingRepos), strings.Join(env.IndexingRepos, ", "))
+			}
 			if d == "chained_selectors_unresolved" {
 				// solov2-4soa: empty chain + chained_selectors_unresolved is
 				// the common "I called veska calls on a cobra command body"

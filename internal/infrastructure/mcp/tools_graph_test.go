@@ -774,6 +774,110 @@ func TestGetCallChain_ChainedSelectorBodyStillEmitsChainedHint(t *testing.T) {
 	}
 }
 
+// stubScanTracker implements ScanTrackerReader with hand-set state so
+// tests can simulate cold-scan-in-progress windows.
+type stubScanTracker struct {
+	scans []application.ScanState
+}
+
+func (s *stubScanTracker) IsAnyScanRunning() bool { return len(s.scans) > 0 }
+func (s *stubScanTracker) Snapshot() []application.ScanState {
+	out := make([]application.ScanState, len(s.scans))
+	copy(out, s.scans)
+	return out
+}
+
+// TestFindSymbol_EmptyDuringIndexingEmitsHint guards solov2-izh6.30: when
+// eng_find_symbol returns no nodes AND the daemon reports at least one
+// cold scan in flight, the response carries indexing_in_progress in
+// degraded_reasons plus the list of scanning repo_ids in indexing_repos.
+// An agent reading [] without that hint concludes the symbol doesn't
+// exist; the hint tells them to retry once indexing settles.
+func TestFindSymbol_EmptyDuringIndexingEmitsHint(t *testing.T) {
+	store := newStubGraphStorage()
+	tracker := &stubScanTracker{scans: []application.ScanState{
+		{RepoID: "scanning-repo", Phase: "walking"},
+	}}
+
+	r := NewRegistry()
+	RegisterGraphTools(r, store, application.NewStagingArea(), WithScanTracker(tracker))
+
+	resp, rpcErr := dispatchGraph(t, r, "eng_find_symbol", map[string]string{
+		"symbol":  "NothingHere",
+		"repo_id": "scanning-repo",
+		"branch":  "main",
+	})
+	if rpcErr != nil {
+		t.Fatalf("unexpected error: %+v", rpcErr)
+	}
+	if len(resp.Nodes) != 0 {
+		t.Fatalf("expected empty nodes; got %d", len(resp.Nodes))
+	}
+	if !slices.Contains(resp.DegradedReasons, DegradedReasonIndexingInProgress) {
+		t.Errorf("expected %q in degraded_reasons; got %+v", DegradedReasonIndexingInProgress, resp.DegradedReasons)
+	}
+	if !slices.Contains(resp.IndexingRepos, "scanning-repo") {
+		t.Errorf("expected scanning-repo in indexing_repos; got %+v", resp.IndexingRepos)
+	}
+}
+
+// TestFindSymbol_EmptyWithNoScansSuppressesHint guards that the hint
+// does NOT fire when no scan is in flight — an empty result for a real
+// (non-existent) symbol must stay empty so callers don't get a false
+// "retry later" signal.
+func TestFindSymbol_EmptyWithNoScansSuppressesHint(t *testing.T) {
+	store := newStubGraphStorage()
+	tracker := &stubScanTracker{} // empty: no scans running
+
+	r := NewRegistry()
+	RegisterGraphTools(r, store, application.NewStagingArea(), WithScanTracker(tracker))
+
+	resp, rpcErr := dispatchGraph(t, r, "eng_find_symbol", map[string]string{
+		"symbol":  "NothingHere",
+		"repo_id": "repo1",
+		"branch":  "main",
+	})
+	if rpcErr != nil {
+		t.Fatalf("unexpected error: %+v", rpcErr)
+	}
+	if slices.Contains(resp.DegradedReasons, DegradedReasonIndexingInProgress) {
+		t.Errorf("indexing_in_progress must NOT fire when tracker is empty; got %+v", resp.DegradedReasons)
+	}
+	if len(resp.IndexingRepos) != 0 {
+		t.Errorf("indexing_repos must be empty when no scans running; got %+v", resp.IndexingRepos)
+	}
+}
+
+// TestFindSymbol_NonEmptyDuringIndexingSuppressesHint guards that a
+// query which returns real nodes is NOT flagged with the hint, even if
+// a scan is in flight elsewhere — the hint signals "your empty result
+// may be stale", not "the daemon is busy".
+func TestFindSymbol_NonEmptyDuringIndexingSuppressesHint(t *testing.T) {
+	store := newStubGraphStorage()
+	store.addNode(mustNode(t, "n1", "pkg/x.go", "Foo", domain.KindFunction))
+	tracker := &stubScanTracker{scans: []application.ScanState{
+		{RepoID: "scanning-repo", Phase: "walking"},
+	}}
+
+	r := NewRegistry()
+	RegisterGraphTools(r, store, application.NewStagingArea(), WithScanTracker(tracker))
+
+	resp, rpcErr := dispatchGraph(t, r, "eng_find_symbol", map[string]string{
+		"symbol":  "Foo",
+		"repo_id": "repo1",
+		"branch":  "main",
+	})
+	if rpcErr != nil {
+		t.Fatalf("unexpected error: %+v", rpcErr)
+	}
+	if len(resp.Nodes) != 1 {
+		t.Fatalf("expected 1 node; got %d", len(resp.Nodes))
+	}
+	if slices.Contains(resp.DegradedReasons, DegradedReasonIndexingInProgress) {
+		t.Errorf("indexing_in_progress must NOT fire on a non-empty result; got %+v", resp.DegradedReasons)
+	}
+}
+
 // ---------------------------------------------------------------------------
 // eng_get_file_nodes — returns staged nodes when present
 // ---------------------------------------------------------------------------

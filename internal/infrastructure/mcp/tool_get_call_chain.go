@@ -51,7 +51,7 @@ type getCallChainParams struct {
 
 const maxCallChainDepth = 10
 
-func makeGetCallChainHandler(graph ports.GraphStorage, resolve ResolveFunc, resolveInbound InboundResolveFunc, repos application.RepoLister) ToolHandler {
+func makeGetCallChainHandler(graph ports.GraphStorage, resolve ResolveFunc, resolveInbound InboundResolveFunc, repos application.RepoLister, scans ScanTrackerReader) ToolHandler {
 	return func(ctx context.Context, _ domain.Actor, raw json.RawMessage) (any, *RPCError) {
 		var p getCallChainParams
 		if err := json.Unmarshal(raw, &p); err != nil {
@@ -216,6 +216,7 @@ func makeGetCallChainHandler(graph ports.GraphStorage, resolve ResolveFunc, reso
 		// so emit external_callees_only instead — actionable for an
 		// agent ("not a parser bug, just index boundary").
 		reasons := []string{}
+		var indexing []string
 		if len(resultEdges) == 0 && len(crossRepoEdges) == 0 && dirOut {
 			if seed, ok := g.Node(startID); ok {
 				switch seed.Kind {
@@ -231,11 +232,19 @@ func makeGetCallChainHandler(graph ports.GraphStorage, resolve ResolveFunc, reso
 					}
 				}
 			}
+			// solov2-izh6.30: a fully empty chain during an active cold
+			// scan is the indexing-window case; surface it alongside (or
+			// instead of) the seed-based reasons so callers can retry.
+			if ids, busy := indexingRepoIDs(scans); busy {
+				reasons = append(reasons, DegradedReasonIndexingInProgress)
+				indexing = ids
+			}
 		}
 		return callChainResponse{
 			Nodes:           nodesToDTO(resultNodes),
 			Edges:           edgesToDTO(resultEdges),
 			CrossRepoEdges:  crossRepoEdges,
+			IndexingRepos:   indexing,
 			IncludedStaging: false,
 			DegradedReasons: reasons,
 		}, nil

@@ -19,6 +19,14 @@ type ContextPackOption func(*contextPackConfig)
 type contextPackConfig struct {
 	resolve        ResolveFunc
 	resolveInbound InboundResolveFunc
+	scans          ScanTrackerReader
+}
+
+// WithContextPackScanTracker supplies the daemon's cold-scan tracker so
+// sparse context packs can carry an indexing_in_progress hint when a
+// scan is in flight at query time (solov2-izh6.30). Nil disables the hint.
+func WithContextPackScanTracker(t ScanTrackerReader) ContextPackOption {
+	return func(c *contextPackConfig) { c.scans = t }
 }
 
 // WithContextPackResolveFunc supplies a ResolveFunc so the handler can
@@ -45,6 +53,11 @@ func WithContextPackInboundResolveFunc(fn InboundResolveFunc) ContextPackOption 
 type contextPackResponse struct {
 	contextpack.Pack
 	CrossRepoEdges []CrossRepoEdge `json:"cross_repo_edges,omitempty"`
+	// DegradedReasons / IndexingRepos surface the cold-scan-in-progress
+	// window (solov2-izh6.30) so a sparse pack during indexing is
+	// distinguishable from a genuinely isolated symbol.
+	DegradedReasons []string `json:"degraded_reasons,omitempty"`
+	IndexingRepos   []string `json:"indexing_repos,omitempty"`
 }
 
 // RegisterContextPackTool registers eng_get_context_pack. asm and repoRoot
@@ -60,7 +73,7 @@ func RegisterContextPackTool(r *Registry, asm *contextpack.Assembler, repoRoot R
 		Name:        "eng_get_context_pack",
 		Description: "Bundle a symbol's neighbourhood (callers, callees, adjacent tests, recent commits, open findings, active task) into one token-bounded JSON payload. Use at the START of a non-trivial change so you don't have to assemble surrounding context piecewise with multiple tool calls. Pass exactly one of node_id, symbol, or task_id as the anchor. Surfaces cross_repo_edges in both directions, so cross-repo callers/callees show up in the same response ().",
 		InputSchema: contextPackInputSchema,
-		Handler:     makeContextPackHandler(asm, repoRoot, repos, cfg.resolve, cfg.resolveInbound),
+		Handler:     makeContextPackHandler(asm, repoRoot, repos, cfg.resolve, cfg.resolveInbound, cfg.scans),
 	})
 }
 
@@ -72,7 +85,7 @@ type contextPackParams struct {
 	TaskID string `json:"task_id,omitempty"`
 }
 
-func makeContextPackHandler(asm *contextpack.Assembler, repoRoot RepoRootFunc, repos application.RepoLister, resolve ResolveFunc, resolveInbound InboundResolveFunc) ToolHandler {
+func makeContextPackHandler(asm *contextpack.Assembler, repoRoot RepoRootFunc, repos application.RepoLister, resolve ResolveFunc, resolveInbound InboundResolveFunc, scans ScanTrackerReader) ToolHandler {
 	return func(ctx context.Context, _ domain.Actor, raw json.RawMessage) (any, *RPCError) {
 		if asm == nil || repoRoot == nil {
 			return nil, &RPCError{
@@ -152,12 +165,26 @@ func makeContextPackHandler(asm *contextpack.Assembler, repoRoot RepoRootFunc, r
 		// step a junior asking 'what does Run touch?' on a multi-repo
 		// workspace gets only same-repo nodes even when the parser
 		// captured the cross-repo edge.
+		crossRepo := mergeCrossRepoEdges(
+			resolveCrossRepoForNodes(ctx, resolve, pack.Nodes, p.Branch),
+			resolveCrossRepoInboundForNodes(ctx, resolveInbound, pack.Nodes, p.Branch),
+		)
+		var reasons, indexing []string
+		// solov2-izh6.30: a pack with only the seed node and no cross-repo
+		// edges, while a scan is in flight, is the indexing-window case.
+		// Surface so the caller can retry instead of treating the pack as
+		// the final shape.
+		if len(pack.Nodes) <= 1 && len(crossRepo) == 0 {
+			if ids, busy := indexingRepoIDs(scans); busy {
+				reasons = append(reasons, DegradedReasonIndexingInProgress)
+				indexing = ids
+			}
+		}
 		return contextPackResponse{
-			Pack: pack,
-			CrossRepoEdges: mergeCrossRepoEdges(
-				resolveCrossRepoForNodes(ctx, resolve, pack.Nodes, p.Branch),
-				resolveCrossRepoInboundForNodes(ctx, resolveInbound, pack.Nodes, p.Branch),
-			),
+			Pack:            pack,
+			CrossRepoEdges:  crossRepo,
+			DegradedReasons: reasons,
+			IndexingRepos:   indexing,
 		}, nil
 	}
 }
