@@ -966,8 +966,21 @@ func registerMCPTools(r *mcp.Registry, d mcpDeps) {
 	// refs at both refs and diffs the symbol sets. It reads git + the
 	// tree-sitter parser on demand and never touches the promoted graph,
 	// so it needs no per-commit history substrate.
+	//
+	// solov2-izh6.17: wrap the git adapter's ErrFileNotAtRef with
+	// changedsymbols.ErrFileAbsentAtRef so the service can distinguish
+	// "file legitimately absent at this ref" (sentinel-wrapped) from
+	// "ref's tree is unreadable" (anything else) and surface the right
+	// degraded reason.
+	fileAtRef := func(ctx context.Context, root, ref, path string) ([]byte, error) {
+		b, err := gitwatch.FileAtRef(ctx, root, ref, path)
+		if err != nil && errors.Is(err, gitwatch.ErrFileNotAtRef) {
+			return nil, fmt.Errorf("%w: %v", changedsymbols.ErrFileAbsentAtRef, err)
+		}
+		return b, err
+	}
 	if csSvc, err := changedsymbols.NewService(
-		treesitter.NewGoParser(), gitwatch.ChangedFilesBetween, gitwatch.FileAtRef,
+		treesitter.NewGoParser(), gitwatch.ChangedFilesBetween, fileAtRef,
 	); err == nil {
 		mcp.RegisterChangedSymbolsTool(r, csSvc, repoRootFunc(pools.ReadDB), &repoLister{db: pools.ReadDB})
 	} else {
