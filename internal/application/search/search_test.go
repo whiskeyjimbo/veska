@@ -162,9 +162,12 @@ func TestSemantic_HappyPath_PreservesHitRank(t *testing.T) {
 	if emb.gotText != "find foo" {
 		t.Errorf("embedder text = %q want %q", emb.gotText, "find foo")
 	}
-	// Vector retriever is over-requested by fusionFanout=3 so RRF has
-	// headroom; k=10 caller → k*3=30 to the vector backend.
-	if vec.gotK != 30 || vec.gotRepo != "r1" || vec.gotBranch != "main" {
+	// Vector retriever is over-requested by max(k*fusionFanout=30,
+	// fanoutFloor=100); k=10 caller hits the floor → 100 to the vector
+	// backend. The floor was widened from 30 to 100 in solov2-izh6.26 so
+	// rerank-promotable nodes (e.g. cobra's Command.AddCommand at fused
+	// rank ~22 for "register subcommand") enter the candidate pool.
+	if vec.gotK != 100 || vec.gotRepo != "r1" || vec.gotBranch != "main" {
 		t.Errorf("vectors got repo=%q branch=%q k=%d", vec.gotRepo, vec.gotBranch, vec.gotK)
 	}
 }
@@ -493,11 +496,12 @@ func TestSemantic_HybridFusion_LiftsLexicalOnlyHit(t *testing.T) {
 	if lex.calls != 1 {
 		t.Errorf("expected exactly 1 lexical call, got %d", lex.calls)
 	}
-	// fanout=3 with floor=30 so k=5 caller still requests k=30 of
-	// each retriever — floor protects small-k callers from losing
-	// recall to the post-fusion boost having no candidates to lift.
-	if lex.gotK != 30 {
-		t.Errorf("expected k=30 to lexical (floor for small caller k=5), got %d", lex.gotK)
+	// fanout=3 with floor=100 (solov2-izh6.26 widening) so k=5 caller
+	// still requests k=100 of each retriever — floor protects small-k
+	// callers from losing recall to the post-fusion rerank having no
+	// candidates to lift.
+	if lex.gotK != 100 {
+		t.Errorf("expected k=100 to lexical (floor for small caller k=5), got %d", lex.gotK)
 	}
 }
 

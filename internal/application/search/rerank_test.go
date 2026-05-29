@@ -100,6 +100,67 @@ func TestRerank_IdentifierStems_NoPartialWordMatch(t *testing.T) {
 	}
 }
 
+// TestRerank_VerbSynonym_RegisterMatchesAdd guards solov2-izh6.26: the
+// junior-journey query "register subcommand" must surface
+// Command.AddCommand above larger methods like Command.ExecuteC that
+// merely *mention* subcommand handling. The lexical/embedding pipeline
+// has no model of the "register/add/append/insert/install" synonym
+// cluster API designers use; this signal injects that domain knowledge
+// at the rerank layer so canonical "Add<Noun>" methods rise on
+// "register/install <noun>" queries.
+func TestRerank_VerbSynonym_RegisterMatchesAdd(t *testing.T) {
+	in := []Result{
+		// Large method that merely mentions subcommands in its body.
+		{NodeID: "exec", Score: 0.020, SymbolPath: "Command.ExecuteC", FilePath: "/cobra/command.go", Kind: "method"},
+		// Canonical answer — small method whose name is Add<Noun>.
+		{NodeID: "add", Score: 0.011, SymbolPath: "Command.AddCommand", FilePath: "/cobra/command.go", Kind: "method"},
+	}
+	out := rerank(in, "register subcommand")
+	if out[0].NodeID != "add" {
+		t.Errorf("expected Command.AddCommand to rerank above Command.ExecuteC for 'register subcommand'; got order %s,%s",
+			out[0].SymbolPath, out[1].SymbolPath)
+	}
+}
+
+// TestRerank_VerbSynonym_LookupMatchesGet pins the synonym table on the
+// retrieve-verb cluster (get / fetch / lookup / find / resolve) — a
+// query "lookup config" should lift GetConfig above unrelated rows.
+func TestRerank_VerbSynonym_LookupMatchesGet(t *testing.T) {
+	in := []Result{
+		{NodeID: "other", Score: 0.020, SymbolPath: "ParseInput", FilePath: "/x/parse.go", Kind: "function"},
+		{NodeID: "get", Score: 0.011, SymbolPath: "GetConfig", FilePath: "/x/cfg.go", Kind: "function"},
+	}
+	out := rerank(in, "lookup config")
+	if out[0].NodeID != "get" {
+		t.Errorf("expected GetConfig to rerank above ParseInput for 'lookup config'; got order %s,%s",
+			out[0].SymbolPath, out[1].SymbolPath)
+	}
+}
+
+// TestRerank_VerbSynonym_NoFalsePositive guards that the synonym layer
+// does NOT lift a candidate whose leading subword is unrelated to any
+// query token — the boost is gated on the symbol's HEAD identifier (the
+// verb position), not on substring presence anywhere.
+func TestRerank_VerbSynonym_NoFalsePositive(t *testing.T) {
+	in := []Result{
+		// "add" appears mid-identifier as "ToAdd" suffix — not a verb position.
+		{NodeID: "1", Score: 0.5, SymbolPath: "ItemsToAdd", FilePath: "/x/items.go", Kind: "function"},
+		// A plain unrelated function.
+		{NodeID: "2", Score: 0.5, SymbolPath: "Serialize", FilePath: "/x/io.go", Kind: "function"},
+	}
+	out := rerank(in, "register subcommand")
+	// Both started at score 0.5 with no other rerank signals; expect
+	// ItemsToAdd NOT lifted above Serialize (no leading verb match).
+	// We assert by checking neither got a synonym bonus — equal final
+	// scores preserve input order.
+	if out[0].NodeID != "1" {
+		t.Errorf("stable order broken (unexpected lift): got %s,%s", out[0].SymbolPath, out[1].SymbolPath)
+	}
+	if out[0].Score != out[1].Score {
+		t.Errorf("synonym bonus fired on a non-verb-position match; scores %.4f vs %.4f", out[0].Score, out[1].Score)
+	}
+}
+
 // --- fileCoherence ----------------------------------------------------------
 
 // TestRerank_FileCoherence_LiftsClusteredMatches: when multiple
