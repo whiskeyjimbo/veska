@@ -141,11 +141,13 @@ make build
 ./bin/veska service install
 ./bin/veska service start
 
-# 4. Register a repo. The CLI dials the daemon's MCP socket so the cold
-#    scan kicks off in the background. Tail ~/.veska/logs/daemon.log to
-#    watch progress — every scan brackets a "cold scan: starting" and
-#    "cold scan: complete" line.
-./bin/veska repo add /path/to/your/repo
+# 4. Register a repo. --wait blocks until the cold scan finishes (a few
+#    seconds for most repos) so the first search below is already hot.
+#    Without --wait the scan kicks off in the background; the next
+#    `eng_search_semantic` call may then return `[]` with
+#    `degraded_reasons=embeddings_pending` until indexing catches up.
+#    Tail ~/.veska/logs/daemon.log for the "cold scan: complete" line.
+./bin/veska repo add /path/to/your/repo --wait
 
 # 5. Sanity-check.
 ./bin/veska doctor status
