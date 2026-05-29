@@ -27,12 +27,37 @@ import (
 // rules remain easy to evolve and trivial to unit-test without a database.
 type DeadCodeCheck struct {
 	q ports.DeadCodeQuerier
+	// repoKind, when non-nil, returns the kind ("tracked" / "ephemeral")
+	// of a given repoID. Ephemeral cache-tier clones (registered by
+	// `veska search --repo <url>`) short-circuit to zero findings — the
+	// user is exploring an external codebase, not curating its findings,
+	// and a 75-file pflag clone otherwise emits ~220 low-severity
+	// dead-code findings on the upstream public API (solov2-izh6.13).
+	// When unset, behaviour is unchanged.
+	repoKind func(ctx context.Context, repoID string) (string, error)
+}
+
+// DeadCodeOption configures a DeadCodeCheck. None are required today; the
+// type is here so future cross-cutting concerns can land without a breaking
+// constructor change.
+type DeadCodeOption func(*DeadCodeCheck)
+
+// WithDeadCodeRepoKindLookup wires a callback that returns a repo's Kind
+// ("tracked" / "ephemeral"). Used by Run to skip dead-code reporting on
+// ephemeral repos — siblings the autolink short-circuit added in
+// solov2-izh6.8.
+func WithDeadCodeRepoKindLookup(fn func(ctx context.Context, repoID string) (string, error)) DeadCodeOption {
+	return func(c *DeadCodeCheck) { c.repoKind = fn }
 }
 
 // NewDeadCodeCheck constructs a DeadCodeCheck bound to q. The querier is
 // required; passing nil will cause Run to return an error on first invocation.
-func NewDeadCodeCheck(q ports.DeadCodeQuerier) *DeadCodeCheck {
-	return &DeadCodeCheck{q: q}
+func NewDeadCodeCheck(q ports.DeadCodeQuerier, opts ...DeadCodeOption) *DeadCodeCheck {
+	c := &DeadCodeCheck{q: q}
+	for _, o := range opts {
+		o(c)
+	}
+	return c
 }
 
 // Name returns the Prometheus / finding-rule attribution name.
@@ -51,6 +76,17 @@ func (c *DeadCodeCheck) Run(ctx context.Context, in Input) ([]*domain.Finding, e
 	}
 	if len(in.FilePaths) == 0 {
 		return nil, nil
+	}
+	// solov2-izh6.13: ephemeral repos (cache-tier clones from
+	// `veska search --repo <url>`) skip dead-code entirely. Reporting
+	// "unused" symbols on an external library's public API trains the
+	// junior to ignore the findings surface from day one. Lookup errors
+	// fail open (over-report rather than silently suppress on a tracked
+	// repo when the registry briefly hiccups).
+	if c.repoKind != nil {
+		if kind, err := c.repoKind(ctx, in.RepoID); err == nil && kind == "ephemeral" {
+			return nil, nil
+		}
 	}
 
 	dead, err := c.q.DeadNodesInFiles(ctx, in.RepoID, in.Branch, in.FilePaths)
