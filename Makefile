@@ -32,7 +32,17 @@ build: fetch-embed-assets
 # the low-quality static-v2 fallback at first boot unless the user runs
 # `veska install model2vec`. Intended for CI / container layers where the
 # ~62MB embed bloat matters more than first-run UX.
-build-small: $(VESKA_BIN) $(LAYERCHECK_BIN)
+#
+# solov2-izh6.32: 'build' and 'build-small' both produce $(VESKA_BIN), so
+# the file-target rule for $(VESKA_BIN) was skipped when running build-
+# small after build (and vice versa) — make sees an existing artifact and
+# does nothing, leaving the user with the wrong-mode binary they already
+# had. Recipe now removes the artifact unconditionally and invokes the
+# thin go build directly so the mode the user asked for is the mode they
+# get, every time.
+build-small: $(LAYERCHECK_BIN)
+	@rm -f $(VESKA_BIN) $(DAEMON_BIN) $(MCP_BIN)
+	$(SQLITE_CGO_ENV) go build -tags "$(SQLITE_TAGS)" -o $(VESKA_BIN) ./cmd/veska
 	ln -sf veska $(DAEMON_BIN)
 	ln -sf veska $(MCP_BIN)
 
