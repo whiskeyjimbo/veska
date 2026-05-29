@@ -10,6 +10,7 @@ import (
 	"strings"
 	"testing"
 
+	application "github.com/whiskeyjimbo/veska/internal/application"
 	"github.com/whiskeyjimbo/veska/internal/core/domain"
 )
 
@@ -79,7 +80,7 @@ func TestFindOwner_AcceptsBranchParam(t *testing.T) {
 	}
 
 	r := NewRegistry()
-	RegisterOwnerTools(r, nil)
+	RegisterOwnerTools(r, nil, nil)
 
 	actor := domain.Actor{ID: "agent:bot", Kind: domain.ActorKindAgent}
 	_, rpcErr := dispatchOwner(t, r, actor, map[string]any{
@@ -101,7 +102,7 @@ func TestFindOwner_CodeownersMatch(t *testing.T) {
 	}
 
 	r := NewRegistry()
-	RegisterOwnerTools(r, nil)
+	RegisterOwnerTools(r, nil, nil)
 
 	actor := domain.Actor{ID: "agent:bot", Kind: domain.ActorKindAgent}
 	result, rpcErr := dispatchOwner(t, r, actor, map[string]any{
@@ -136,7 +137,7 @@ func TestFindOwner_CodeownersInDotGithub(t *testing.T) {
 	}
 
 	r := NewRegistry()
-	RegisterOwnerTools(r, nil)
+	RegisterOwnerTools(r, nil, nil)
 
 	actor := domain.Actor{ID: "agent:bot", Kind: domain.ActorKindAgent}
 	result, rpcErr := dispatchOwner(t, r, actor, map[string]any{
@@ -168,7 +169,7 @@ func TestFindOwner_CodeownersLongestMatchWins(t *testing.T) {
 	}
 
 	r := NewRegistry()
-	RegisterOwnerTools(r, nil)
+	RegisterOwnerTools(r, nil, nil)
 
 	actor := domain.Actor{ID: "agent:bot", Kind: domain.ActorKindAgent}
 	result, rpcErr := dispatchOwner(t, r, actor, map[string]any{
@@ -198,7 +199,7 @@ func TestFindOwner_GitBlameFallback(t *testing.T) {
 	makeGitRepoWithCommit(t, dir, "internal/app.go", authorEmail)
 
 	r := NewRegistry()
-	RegisterOwnerTools(r, nil)
+	RegisterOwnerTools(r, nil, nil)
 
 	actor := domain.Actor{ID: "agent:bot", Kind: domain.ActorKindAgent}
 	result, rpcErr := dispatchOwner(t, r, actor, map[string]any{
@@ -230,7 +231,7 @@ func TestFindOwner_BothFail(t *testing.T) {
 	// No CODEOWNERS, no git repo.
 
 	r := NewRegistry()
-	RegisterOwnerTools(r, nil)
+	RegisterOwnerTools(r, nil, nil)
 
 	actor := domain.Actor{ID: "agent:bot", Kind: domain.ActorKindAgent}
 	result, rpcErr := dispatchOwner(t, r, actor, map[string]any{
@@ -264,7 +265,7 @@ func TestFindOwner_BothFail(t *testing.T) {
 
 func TestFindOwner_MissingParams(t *testing.T) {
 	r := NewRegistry()
-	RegisterOwnerTools(r, nil)
+	RegisterOwnerTools(r, nil, nil)
 
 	actor := domain.Actor{ID: "agent:bot", Kind: domain.ActorKindAgent}
 	_, rpcErr := dispatchOwner(t, r, actor, map[string]any{
@@ -287,7 +288,7 @@ func TestFindOwner_MissingParams(t *testing.T) {
 func TestFindOwner_AcceptsPathAlias(t *testing.T) {
 	repoRoot, _ := os.Getwd()
 	r := NewRegistry()
-	RegisterOwnerTools(r, nil)
+	RegisterOwnerTools(r, nil, nil)
 
 	actor := domain.Actor{ID: "agent:bot", Kind: domain.ActorKindAgent}
 	// "path" alone (no file_path) — schema must let it through, handler
@@ -317,8 +318,35 @@ func TestFindOwner_AcceptsPathAlias(t *testing.T) {
 func TestFindOwner_NilDBIsAccepted(t *testing.T) {
 	var db *sql.DB // nil is fine
 	r := NewRegistry()
-	RegisterOwnerTools(r, db)
+	RegisterOwnerTools(r, db, nil)
 	if len(r.Names()) != 1 {
 		t.Errorf("expected 1 tool registered, got %d", len(r.Names()))
+	}
+}
+
+// TestFindOwner_MissingRepoIDHintMatchesPeers pins solov2-eq5a: when
+// a RepoLister is wired and the caller omits repo_id, the resulting
+// error message must carry the same "N repos registered; pass
+// eng_list_repos to find the id" suffix that eng_list_findings /
+// eng_find_todos / eng_search_similar surface. Without this nudge,
+// agents have no signal about how to recover.
+func TestFindOwner_MissingRepoIDHintMatchesPeers(t *testing.T) {
+	r := NewRegistry()
+	repos := &stubRepoLister{repos: []application.RepoRecord{
+		{RepoID: "r1", RootPath: "/r1", ActiveBranch: "main"},
+		{RepoID: "r2", RootPath: "/r2", ActiveBranch: "main"},
+	}}
+	RegisterOwnerTools(r, nil, repos)
+
+	_, rpcErr := dispatchOwner(t, r, domain.Actor{}, map[string]any{
+		"file_path": "x.go",
+		// no repo_id, no cwd → multi-repo fanout path raises the hint
+	})
+	if rpcErr == nil {
+		t.Fatal("want RPC error, got nil")
+	}
+	if !strings.Contains(rpcErr.Message, "2 repos registered") ||
+		!strings.Contains(rpcErr.Message, "eng_list_repos") {
+		t.Errorf("missing peer-style hint, got %q", rpcErr.Message)
 	}
 }
