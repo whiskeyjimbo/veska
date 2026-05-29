@@ -582,32 +582,59 @@ func buildVarNodesFromSpec(spec, decl *sitter.Node, src []byte, repoID, path str
 
 // extractAnonCallsInTopLevelVars walks every top-level var_declaration
 // and const_declaration for func_literal subtrees, then runs the
-// existing calls.scm extractor against each literal's body. All
-// matches are attributed to pkgNode so an agent asking "what does this
-// file's initialisation reach" sees the right targets for the
-// cobra-style `var rootCmd = &cobra.Command{ Run: func() { Foo() } }`
-// pattern (solov2-y7gu).
-//
-// Implementation: a single recursive walk over var/const declaration
-// subtrees, calling extractCallsFromBody (no receiver context — anon
-// funcs in var initialisers don't bind a `s`/`this` receiver) when
-// it hits a func_literal. Dedup is per-pkgNode across all anon
-// bodies so two literals calling the same target produce one edge.
+// existing calls.scm extractor against each literal's body. When the
+// surrounding var has a name we can resolve to an extracted Variable
+// node (e.g. `var helloCmd = &cobra.Command{ RunE: func(){ Foo() } }`),
+// the calls attribute to that var node so cross-repo blast can name
+// the actual caller (`helloCmd`) instead of the package node — closing
+// the cobra-app grain gap (solov2-zuvl). Falls back to pkgNode for
+// shapes where no enclosing var is identifiable (const blocks,
+// composite-literal blanket lookups). Dedup is per-(caller, target)
+// across all anon bodies so two literals calling the same target
+// produce one edge per caller.
 func extractAnonCallsInTopLevelVars(q *sitter.Query, root *sitter.Node, src []byte, symbols map[string]*domain.Node, pkgNode *domain.Node, pkgVarOrigins map[string]localVarOrigin, funcReturns map[string]string) ([]*domain.Edge, []domain.UnresolvedCall) {
 	var edges []*domain.Edge
 	var unresolved []domain.UnresolvedCall
 	seenEdge := map[string]bool{}
 	seenU := map[string]bool{}
 
-	var walk func(n *sitter.Node)
-	walk = func(n *sitter.Node) {
+	// walk threads the currently-enclosing var node (if any) through
+	// the descent. When a var_spec with a single name appears we look
+	// it up in symbols by bare name and shadow caller for the subtree.
+	// Hitting another var_spec replaces it; leaving the subtree restores
+	// the caller via the deferred restore.
+	var walk func(n *sitter.Node, caller *domain.Node)
+	walk = func(n *sitter.Node, caller *domain.Node) {
 		if n == nil {
 			return
+		}
+		if n.Type() == "var_spec" {
+			if name := n.ChildByFieldName("name"); name != nil {
+				// var_spec.name is either an identifier directly
+				// (`var x = ...`) or a comma-separated list whose
+				// children are identifiers (`var x, y = ...`).
+				// Only single-name shapes can attribute calls
+				// unambiguously; multi-name var blocks fall through
+				// to pkgNode.
+				id := name
+				if id.Type() != "identifier" {
+					if int(name.NamedChildCount()) == 1 {
+						id = name.NamedChild(0)
+					} else {
+						id = nil
+					}
+				}
+				if id != nil && id.Type() == "identifier" {
+					if v, ok := symbols[string(src[id.StartByte():id.EndByte()])]; ok && v != nil {
+						caller = v
+					}
+				}
+			}
 		}
 		if n.Type() == "func_literal" {
 			body := n.ChildByFieldName("body")
 			if body != nil {
-				e, u := extractCallsFromBody(q, body, src, pkgNode, "", "", symbols, nil, pkgVarOrigins, funcReturns)
+				e, u := extractCallsFromBody(q, body, src, caller, "", "", symbols, nil, pkgVarOrigins, funcReturns)
 				for _, edge := range e {
 					key := string(edge.Src) + callKeySep + string(edge.Tgt)
 					if seenEdge[key] {
@@ -632,7 +659,7 @@ func extractAnonCallsInTopLevelVars(q *sitter.Query, root *sitter.Node, src []by
 		}
 		count := int(n.ChildCount())
 		for i := range count {
-			walk(n.Child(i))
+			walk(n.Child(i), caller)
 		}
 	}
 
@@ -641,7 +668,7 @@ func extractAnonCallsInTopLevelVars(q *sitter.Query, root *sitter.Node, src []by
 		child := root.Child(i)
 		switch child.Type() {
 		case "var_declaration", "const_declaration":
-			walk(child)
+			walk(child, pkgNode)
 		}
 	}
 	return edges, unresolved
