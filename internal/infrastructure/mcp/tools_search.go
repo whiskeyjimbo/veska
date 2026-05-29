@@ -424,49 +424,22 @@ func makeSearchSimilarHandler(lookup SimilarLookup, vectors ports.VectorStorage,
 		if rpcErr := bindParams(raw, &p); rpcErr != nil {
 			return nil, rpcErr
 		}
-		if p.NodeID == "" && p.Symbol == "" {
-			return nil, &RPCError{Code: CodeInvalidParams, Message: "missing required params: node_id or symbol"}
-		}
-		// solov2-ktz0: fall back to shim-injected cwd when repo_id omitted.
-		repoID, rpcErr := resolveRepoIDFromParams(ctx, repos, raw, p.RepoID)
+		// solov2-ye6t: use the same cross-repo resolver as
+		// eng_get_blast_radius / eng_get_context_pack / eng_find_symbol so
+		// a bare `symbol` (or short node_id prefix) resolves across all
+		// registered repos when repo_id is omitted. Before this, the
+		// handler hard-required repo_id (via resolveRepoIDFromParams),
+		// breaking parity with peer tools whose conventions block
+		// promises symbol-only calls. resolveSeedOwner enforces the same
+		// shape: node_id wins; ambiguous symbol matches are rejected so
+		// the caller must disambiguate.
+		repoID, branch, nid, rpcErr := resolveSeedOwner(ctx, repos, graph, raw, p.RepoID, p.Branch, p.NodeID, p.Symbol)
 		if rpcErr != nil {
 			return nil, rpcErr
 		}
 		p.RepoID = repoID
-		if br, rpcErr := resolveBranchOrActive(ctx, repos, p.RepoID, p.Branch); rpcErr != nil {
-			return nil, rpcErr
-		} else {
-			p.Branch = br
-		}
-		// solov2-3ocy: resolve `symbol` to node_id when supplied. Same
-		// shape as eng_get_blast_radius — node_id wins when both are set;
-		// ambiguity is rejected so callers must disambiguate explicitly.
-		if p.NodeID == "" {
-			if graph == nil {
-				return nil, &RPCError{Code: CodeInternalError, Message: "symbol lookup not wired (graph storage missing); pass node_id"}
-			}
-			matches, ferr := graph.FindNodes(ctx, p.RepoID, p.Branch, p.Symbol)
-			if ferr != nil {
-				return nil, &RPCError{Code: CodeInternalError, Message: fmt.Sprintf("find symbol %q: %v", p.Symbol, ferr)}
-			}
-			if len(matches) == 0 {
-				return nil, &RPCError{Code: CodeNotFound, Message: fmt.Sprintf("symbol not found: %s", p.Symbol)}
-			}
-			if len(matches) > 1 {
-				return nil, &RPCError{Code: CodeInvalidParams, Message: fmt.Sprintf("symbol %q is ambiguous (%d matches); pass node_id to disambiguate", p.Symbol, len(matches))}
-			}
-			p.NodeID = string(matches[0].ID)
-		}
-		// solov2-xc7t: callers commonly scrape the 12-char short_id from a
-		// previous tool's CLI output and feed it straight back. Expand any
-		// non-canonical-length id to its full form before the embedding
-		// lookup so a short_id surfaces as "no node matches prefix" instead
-		// of the misleading "node has no embedding".
-		full, rpcErr := expandNodeIDPrefix(ctx, graph, p.RepoID, p.Branch, p.NodeID)
-		if rpcErr != nil {
-			return nil, rpcErr
-		}
-		p.NodeID = full
+		p.Branch = branch
+		p.NodeID = nid
 		k := p.K
 		if k <= 0 {
 			k = p.Limit
