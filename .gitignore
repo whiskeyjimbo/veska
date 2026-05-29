@@ -26,3 +26,4 @@ tools/loadtest/recallprojection/recall_projection_results.json
 # Python pytest cache
 __pycache__/
 .pytest_cache/
+docs/research/cmd_code_review.md
