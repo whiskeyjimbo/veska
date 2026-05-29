@@ -218,6 +218,7 @@ func resolveCrossRepoInboundForNodes(ctx context.Context, resolve InboundResolve
 				DstBranch: re.DstBranch,
 				Kind:      re.Kind,
 				CrossRepo: true,
+				SrcLine:   re.SrcLine,
 			})
 		}
 	}
@@ -306,6 +307,7 @@ func resolveCrossRepoForNodes(ctx context.Context, resolve ResolveFunc, nodes []
 				DstBranch: re.DstBranch,
 				Kind:      re.Kind,
 				CrossRepo: true,
+				SrcLine:   re.SrcLine,
 			})
 		}
 	}

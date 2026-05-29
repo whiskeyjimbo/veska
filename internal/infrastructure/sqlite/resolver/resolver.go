@@ -28,6 +28,11 @@ type CrossRepoStub struct {
 	// method name; the resolver matches it against `<Receiver>.<Method>` in
 	// the target package rather than as an exact symbol_path (solov2-9rc2).
 	MethodCall bool
+	// SrcLine is the 1-indexed source line of the originating
+	// call_expression; threaded into ResolvedEdge.SrcLine so renderers
+	// attribute the cross-repo edge to the actual call site
+	// (solov2-izh6.31). 0 = unknown (pre-migration stub).
+	SrcLine int
 }
 
 // ResolvedEdge is re-exported from core/ports. The canonical definition lives
@@ -121,6 +126,7 @@ func ResolveCrossRepoEdge(ctx context.Context, db *sql.DB, stub CrossRepoStub, e
 				DstBranch: branch,
 				Kind:      stub.Kind,
 				CrossRepo: true,
+				SrcLine:   stub.SrcLine,
 			}, nil
 		}
 		edge := &ResolvedEdge{
@@ -130,6 +136,7 @@ func ResolveCrossRepoEdge(ctx context.Context, db *sql.DB, stub CrossRepoStub, e
 			DstBranch: branch,
 			Kind:      stub.Kind,
 			CrossRepo: true,
+			SrcLine:   stub.SrcLine,
 		}
 		if strings.HasSuffix(filePath, "_test.go") {
 			testCount++
@@ -231,7 +238,7 @@ func ResolveStubsTargetingNode(ctx context.Context, db *sql.DB, dstNodeID, branc
 	// method node with symbol_path "Greeter.Hello" still matches an exact
 	// stub for "Greeter.Hello" if one were emitted.
 	stubQ := `
-		SELECT stub_id, branch, src_node_id, kind, module_path, symbol_path, language, method_call
+		SELECT stub_id, branch, src_node_id, kind, module_path, symbol_path, language, method_call, src_line
 		FROM cross_repo_edge_stubs
 		WHERE language = ? AND module_path = ? AND repo_id != ?
 		  AND (
@@ -258,10 +265,14 @@ func ResolveStubsTargetingNode(ctx context.Context, db *sql.DB, dstNodeID, branc
 	for rows.Next() {
 		var c candidate
 		var methodFlag int
-		if err := rows.Scan(&c.stub.StubID, &c.srcBranch, &c.stub.SrcNodeID, &c.stub.Kind, &c.stub.ModulePath, &c.stub.SymbolPath, &c.stub.Language, &methodFlag); err != nil {
+		var srcLine sql.NullInt64
+		if err := rows.Scan(&c.stub.StubID, &c.srcBranch, &c.stub.SrcNodeID, &c.stub.Kind, &c.stub.ModulePath, &c.stub.SymbolPath, &c.stub.Language, &methodFlag, &srcLine); err != nil {
 			return nil, fmt.Errorf("resolver: scan inbound stub row: %w", err)
 		}
 		c.stub.MethodCall = methodFlag != 0
+		if srcLine.Valid {
+			c.stub.SrcLine = int(srcLine.Int64)
+		}
 		cands = append(cands, c)
 	}
 	if err := rows.Err(); err != nil {
@@ -307,7 +318,7 @@ func lastDot(s string) int {
 // expandCrossRepo is forwarded to ResolveCrossRepoEdge (M2+ extension point).
 func ResolveStubsForNode(ctx context.Context, db *sql.DB, nodeID, branch string, expandCrossRepo bool) ([]ResolvedEdge, error) {
 	const q = `
-		SELECT stub_id, src_node_id, kind, module_path, symbol_path, language, method_call
+		SELECT stub_id, src_node_id, kind, module_path, symbol_path, language, method_call, src_line
 		FROM cross_repo_edge_stubs
 		WHERE src_node_id = ? AND branch = ?`
 
@@ -321,10 +332,14 @@ func ResolveStubsForNode(ctx context.Context, db *sql.DB, nodeID, branch string,
 	for rows.Next() {
 		var s CrossRepoStub
 		var methodFlag int
-		if err := rows.Scan(&s.StubID, &s.SrcNodeID, &s.Kind, &s.ModulePath, &s.SymbolPath, &s.Language, &methodFlag); err != nil {
+		var srcLine sql.NullInt64
+		if err := rows.Scan(&s.StubID, &s.SrcNodeID, &s.Kind, &s.ModulePath, &s.SymbolPath, &s.Language, &methodFlag, &srcLine); err != nil {
 			return nil, fmt.Errorf("resolver: scan stub row: %w", err)
 		}
 		s.MethodCall = methodFlag != 0
+		if srcLine.Valid {
+			s.SrcLine = int(srcLine.Int64)
+		}
 		stubs = append(stubs, s)
 	}
 	if err := rows.Err(); err != nil {
