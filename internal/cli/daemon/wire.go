@@ -926,7 +926,6 @@ func repoRootFunc(db *sql.DB) mcp.RepoRootFunc {
 // Start launches all background goroutines. It is safe to call multiple times
 // — subsequent invocations are no-ops.
 func (d *Daemon) Start(ctx context.Context) error {
-	var startErr error
 	d.startOnce.Do(func() {
 		d.started = true
 		d.ctx, d.cancel = context.WithCancel(ctx)
@@ -934,121 +933,138 @@ func (d *Daemon) Start(ctx context.Context) error {
 		d.wDone = make(chan struct{})
 		d.resyncDone = make(chan struct{})
 
-		// Bind the cold-scan registrar's daemonCtx now that it exists.
-		// Any AddRepo invoked before Start falls back to context.Background
-		// (see repoRegistrar.AddRepo); after Start the dispatched scan is
-		// tied to the daemon's lifetime context so Stop's cancel reaches it.
+		// Bind the cold-scan registrar's daemonCtx now that it exists. Any
+		// AddRepo invoked before Start falls back to context.Background (see
+		// repoRegistrar.AddRepo); after Start the dispatched scan is tied to the
+		// daemon's lifetime context so Stop's cancel reaches it.
 		if d.regSvc != nil {
 			d.regSvc.daemonCtx = d.ctx
 		}
 
-		// Prometheus metrics HTTP listener. Bound only when metrics are
-		// enabled; the closer is shut down in Stop. A bind failure is logged,
-		// not fatal — a daemon without a metrics endpoint is still a valid
-		// running daemon.
-		if d.metrics != nil {
-			closer, addr, err := observability.StartHTTPListener(d.metricsListen, d.metricsReg)
-			if err != nil {
-				slog.Error("daemon: metrics listener", "addr", d.metricsListen, "err", err)
-			} else {
-				d.metricsCloser = closer
-				d.metricsAddr = addr
-				slog.Info("daemon: metrics listener bound", "addr", addr)
-			}
-		}
+		d.startMetricsListener()
+		d.startMCPServer()
+		d.awaitListenerSockets()
+		d.rehydrateVectors()
 
-		// MCP server (its own goroutine; Start blocks until ctx is done).
-		go func() {
-			defer close(d.mcpDone)
-			if err := d.mcpsrv.Start(d.ctx); err != nil && !errors.Is(err, context.Canceled) {
-				slog.Error("daemon: mcp server exited", "err", err)
-			}
-		}()
-
-		// Wait briefly for the listener sockets to appear so callers can rely
-		// on them being present after Start returns. The MCP server creates
-		// them synchronously inside Start, so 250ms is plenty.
-		deadline := time.Now().Add(500 * time.Millisecond)
-		for time.Now().Before(deadline) {
-			_, errCLI := os.Stat(d.cfg.CLISockPath)
-			_, errMCP := os.Stat(d.cfg.MCPSockPath)
-			if errCLI == nil && errMCP == nil {
-				break
-			}
-			time.Sleep(10 * time.Millisecond)
-		}
-
-		// Rehydrate VectorStorage from the durable node_embeddings table
-		// (solov2-249). sqlite-vec is in-memory only; without this step a
-		// daemon restart would leave the vector store empty until a content
-		// change forces re-embedding, and semantic search would silently
-		// return ≤ 0 hits. Run synchronously before the embedder worker
-		// starts so a query landing in the first tick after Start sees a
-		// consistent store.
-		if counts, err := embedder.RehydrateVectors(d.ctx, d.pools.ReadDB, d.vectors); err != nil {
-			slog.Error("daemon: rehydrate vector store", "err", err)
-		} else if total := sumCounts(counts); total > 0 {
-			slog.Info("daemon: rehydrated vectors", "rows", total, "buckets", len(counts))
-		}
-
-		// Embedder worker.
 		d.embed.Start(d.ctx)
-
-		// Queue poller.
 		d.poller.Start(d.ctx)
-
-		// fsnotify multiplexer.
 		d.watcher.Start(d.ctx)
+		d.seedWatcher()
 
-		// Seed the watcher with every registered repository. A failed or
-		// empty listing is logged, not fatal — a daemon watching zero repos
-		// is still a valid running daemon.
-		if repos, err := repo.List(d.ctx, d.pools.ReadDB); err != nil {
-			slog.Error("daemon: list repos for watcher", "err", err)
-		} else {
-			for _, r := range repos {
-				if err := d.watcher.Add(r.RepoID, r.RootPath); err != nil {
-					slog.Error("daemon: watch repo", "repo", r.RepoID, "err", err)
-				}
-			}
-		}
-
-		// Bridge filesystem events → Ingester.Save.
-		go func() {
-			defer close(d.wDone)
-			d.runWatchLoop(d.ctx)
-		}()
-
-		// Startup resync (solov2-0z1.2). Runs in its own goroutine so a
-		// long cold-scan over a large repo cannot block Start from
-		// returning — the epic constraint explicitly forbids that. The
-		// goroutine respects ctx cancellation; ctx.Canceled on shutdown
-		// is the expected exit path and not logged as an error.
-		go func() {
-			defer close(d.resyncDone)
-			if d.resync == nil {
-				return
-			}
-			if err := d.resync.Run(d.ctx); err != nil && !errors.Is(err, context.Canceled) {
-				slog.Error("daemon: startup resync", "err", err)
-			}
-		}()
-
-		// OSV advisory-cache refresher. Run blocks until d.ctx is cancelled,
-		// so it owns its own goroutine on the daemon's lifetime context.
-		// Non-nil only when [vuln_source] provider="osv".
-		//
-		// solov2-jtl5.4: on the *first* successful refresh, kick a one-shot
-		// vuln-scan sweep over every registered repo so promotions that ran
-		// against a cold cache get retroactive findings. Without this a
-		// fresh `config reload` after enabling [vuln_source] silently
-		// scores 0 findings across the board.
-		if d.vulnRefresher != nil {
-			d.vulnRefresher.SetOnFirstRefreshOk(d.scanAllReposForVuln)
-			go d.vulnRefresher.Run(d.ctx)
-		}
+		d.startWatchLoop()
+		d.startResync()
+		d.startVulnRefresher()
 	})
-	return startErr
+	return nil
+}
+
+// startMetricsListener binds the Prometheus metrics HTTP listener when metrics
+// are enabled; its closer is shut down in Stop. A bind failure is logged, not
+// fatal — a daemon without a metrics endpoint is still a valid running daemon.
+func (d *Daemon) startMetricsListener() {
+	if d.metrics == nil {
+		return
+	}
+	closer, addr, err := observability.StartHTTPListener(d.metricsListen, d.metricsReg)
+	if err != nil {
+		slog.Error("daemon: metrics listener", "addr", d.metricsListen, "err", err)
+		return
+	}
+	d.metricsCloser = closer
+	d.metricsAddr = addr
+	slog.Info("daemon: metrics listener bound", "addr", addr)
+}
+
+// startMCPServer launches the MCP server in its own goroutine; its Start blocks
+// until d.ctx is done. mcpDone is closed when the server goroutine exits.
+func (d *Daemon) startMCPServer() {
+	go func() {
+		defer close(d.mcpDone)
+		if err := d.mcpsrv.Start(d.ctx); err != nil && !errors.Is(err, context.Canceled) {
+			slog.Error("daemon: mcp server exited", "err", err)
+		}
+	}()
+}
+
+// awaitListenerSockets waits briefly for the listener sockets to appear so
+// callers can rely on them being present after Start returns. The MCP server
+// creates them synchronously inside Start, so the 500ms ceiling is ample.
+func (d *Daemon) awaitListenerSockets() {
+	deadline := time.Now().Add(500 * time.Millisecond)
+	for time.Now().Before(deadline) {
+		_, errCLI := os.Stat(d.cfg.CLISockPath)
+		_, errMCP := os.Stat(d.cfg.MCPSockPath)
+		if errCLI == nil && errMCP == nil {
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+}
+
+// rehydrateVectors repopulates the in-memory VectorStorage from the durable
+// node_embeddings table (solov2-249). Run synchronously before the embedder
+// worker starts so a query landing in the first tick after Start sees a
+// consistent store; without it a restart leaves search returning ≤ 0 hits until
+// a content change forces re-embedding.
+func (d *Daemon) rehydrateVectors() {
+	if counts, err := embedder.RehydrateVectors(d.ctx, d.pools.ReadDB, d.vectors); err != nil {
+		slog.Error("daemon: rehydrate vector store", "err", err)
+	} else if total := sumCounts(counts); total > 0 {
+		slog.Info("daemon: rehydrated vectors", "rows", total, "buckets", len(counts))
+	}
+}
+
+// seedWatcher registers every known repository with the fsnotify watcher. A
+// failed or empty listing is logged, not fatal — a daemon watching zero repos
+// is still a valid running daemon.
+func (d *Daemon) seedWatcher() {
+	repos, err := repo.List(d.ctx, d.pools.ReadDB)
+	if err != nil {
+		slog.Error("daemon: list repos for watcher", "err", err)
+		return
+	}
+	for _, r := range repos {
+		if err := d.watcher.Add(r.RepoID, r.RootPath); err != nil {
+			slog.Error("daemon: watch repo", "repo", r.RepoID, "err", err)
+		}
+	}
+}
+
+// startWatchLoop bridges filesystem events → Ingester.Save in its own
+// goroutine; wDone is closed when the loop returns.
+func (d *Daemon) startWatchLoop() {
+	go func() {
+		defer close(d.wDone)
+		d.runWatchLoop(d.ctx)
+	}()
+}
+
+// startResync runs the startup resync (solov2-0z1.2) in its own goroutine so a
+// long cold-scan over a large repo cannot block Start from returning. ctx
+// cancellation on shutdown is the expected exit and not logged as an error.
+func (d *Daemon) startResync() {
+	go func() {
+		defer close(d.resyncDone)
+		if d.resync == nil {
+			return
+		}
+		if err := d.resync.Run(d.ctx); err != nil && !errors.Is(err, context.Canceled) {
+			slog.Error("daemon: startup resync", "err", err)
+		}
+	}()
+}
+
+// startVulnRefresher launches the OSV advisory-cache refresher (non-nil only
+// when [vuln_source] provider="osv"); its Run blocks until d.ctx is cancelled.
+// On the first successful refresh it kicks a one-shot vuln-scan sweep over every
+// repo so promotions that ran against a cold cache get retroactive findings
+// (solov2-jtl5.4).
+func (d *Daemon) startVulnRefresher() {
+	if d.vulnRefresher == nil {
+		return
+	}
+	d.vulnRefresher.SetOnFirstRefreshOk(d.scanAllReposForVuln)
+	go d.vulnRefresher.Run(d.ctx)
 }
 
 // sumCounts returns the total row count across all buckets — used to gate
@@ -1117,83 +1133,17 @@ func (d *Daemon) Stop() error {
 		if d.cancel != nil {
 			d.cancel()
 		}
-		// Wait with a bounded budget so a stuck goroutine cannot wedge
-		// shutdown forever; we still close the pool so the next start is
-		// not blocked on a stale lock.
+		// One bounded budget shared across the background-goroutine and
+		// cold-scan drains: a stuck goroutine cannot wedge shutdown forever,
+		// and we still close the pool so the next start isn't blocked on a
+		// stale lock. The single timer is passed to both drains so the 5s is a
+		// shared ceiling, not 5s each.
 		timeout := time.NewTimer(5 * time.Second)
 		defer timeout.Stop()
 
-		if d.mcpDone != nil {
-			select {
-			case <-d.mcpDone:
-			case <-timeout.C:
-			}
-		}
-		if d.wDone != nil {
-			select {
-			case <-d.wDone:
-			case <-time.After(500 * time.Millisecond):
-			}
-		}
-		if d.resyncDone != nil {
-			select {
-			case <-d.resyncDone:
-			case <-timeout.C:
-			}
-		}
-
-		// Drain in-flight AddRepo cold-scan goroutines (solov2-0z1.3).
-		// Use the same 5s budget as the other background workers; ctx
-		// has already been cancelled so a well-behaved reparser exits
-		// promptly. A stuck scan does not wedge shutdown — we fall
-		// through after the deadline and proceed with pool close.
-		if d.scanWG != nil {
-			scanDone := make(chan struct{})
-			go func() {
-				d.scanWG.Wait()
-				close(scanDone)
-			}()
-			select {
-			case <-scanDone:
-			case <-timeout.C:
-			}
-		}
-
-		// Shut the metrics HTTP listener down gracefully so its serve
-		// goroutine exits and the port is released for the next start.
-		if d.metricsCloser != nil {
-			if err := d.metricsCloser.Close(); err != nil {
-				stopErr = errors.Join(stopErr, fmt.Errorf("daemon: close metrics listener: %w", err))
-			}
-		}
-
-		// Shut the OTLP TracerProvider down: this flushes any batched spans
-		// and closes the exporter's gRPC connection so no goroutine leaks.
-		// A bounded context keeps a stuck collector from wedging shutdown.
-		if d.tracerProvider != nil {
-			shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-			if err := d.tracerProvider.Shutdown(shutdownCtx); err != nil {
-				stopErr = errors.Join(stopErr, fmt.Errorf("daemon: shutdown tracer provider: %w", err))
-			}
-			cancel()
-		}
-
-		if d.started && d.embed != nil {
-			d.embed.Stop()
-		}
-		if d.started && d.poller != nil {
-			d.poller.Wait()
-		}
-
-		if err := d.savingsRec.Close(); err != nil {
-			stopErr = errors.Join(stopErr, fmt.Errorf("daemon: close savings recorder: %w", err))
-		}
-
-		if d.pools != nil {
-			if err := d.pools.Close(); err != nil {
-				stopErr = errors.Join(stopErr, fmt.Errorf("daemon: close pools: %w", err))
-			}
-		}
+		d.awaitBackgroundGoroutines(timeout.C)
+		d.drainScans(timeout.C)
+		stopErr = d.closeResources()
 
 		// Best-effort socket cleanup (MCP server already removes them, but
 		// belt-and-braces if it crashed before reaching its defer).
@@ -1201,4 +1151,84 @@ func (d *Daemon) Stop() error {
 		_ = os.Remove(d.cfg.MCPSockPath)
 	})
 	return stopErr
+}
+
+// awaitBackgroundGoroutines waits for the MCP server, watch loop, and startup
+// resync to exit. mcpDone and resyncDone share the caller's bounded budget;
+// wDone gets its own short 500ms wait (the watch loop exits promptly on cancel).
+func (d *Daemon) awaitBackgroundGoroutines(timeoutC <-chan time.Time) {
+	if d.mcpDone != nil {
+		select {
+		case <-d.mcpDone:
+		case <-timeoutC:
+		}
+	}
+	if d.wDone != nil {
+		select {
+		case <-d.wDone:
+		case <-time.After(500 * time.Millisecond):
+		}
+	}
+	if d.resyncDone != nil {
+		select {
+		case <-d.resyncDone:
+		case <-timeoutC:
+		}
+	}
+}
+
+// drainScans waits for in-flight AddRepo cold-scan goroutines (solov2-0z1.3)
+// under the shared budget. ctx is already cancelled so a well-behaved reparser
+// exits promptly; a stuck scan does not wedge shutdown — we fall through after
+// the deadline and proceed with pool close.
+func (d *Daemon) drainScans(timeoutC <-chan time.Time) {
+	if d.scanWG == nil {
+		return
+	}
+	scanDone := make(chan struct{})
+	go func() {
+		d.scanWG.Wait()
+		close(scanDone)
+	}()
+	select {
+	case <-scanDone:
+	case <-timeoutC:
+	}
+}
+
+// closeResources shuts down the metrics listener, tracer provider, embedder,
+// poller, savings recorder, and SQLite pools, joining every close error so a
+// single failure doesn't mask the rest.
+func (d *Daemon) closeResources() error {
+	var err error
+	// Metrics HTTP listener: release the port for the next start.
+	if d.metricsCloser != nil {
+		if cerr := d.metricsCloser.Close(); cerr != nil {
+			err = errors.Join(err, fmt.Errorf("daemon: close metrics listener: %w", cerr))
+		}
+	}
+	// OTLP TracerProvider: flush batched spans + close the exporter so no
+	// goroutine leaks; a bounded context keeps a stuck collector from wedging.
+	if d.tracerProvider != nil {
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		if serr := d.tracerProvider.Shutdown(shutdownCtx); serr != nil {
+			err = errors.Join(err, fmt.Errorf("daemon: shutdown tracer provider: %w", serr))
+		}
+		cancel()
+	}
+	if d.started && d.embed != nil {
+		d.embed.Stop()
+	}
+	if d.started && d.poller != nil {
+		d.poller.Wait()
+	}
+	if cerr := d.savingsRec.Close(); cerr != nil {
+		err = errors.Join(err, fmt.Errorf("daemon: close savings recorder: %w", cerr))
+	}
+	if d.pools != nil {
+		if cerr := d.pools.Close(); cerr != nil {
+			err = errors.Join(err, fmt.Errorf("daemon: close pools: %w", cerr))
+		}
+	}
+	return err
 }
