@@ -238,6 +238,112 @@ func TestSecretsScanCheck_IgnoresVendoredDeps(t *testing.T) {
 	}
 }
 
+// TestSecretsScanCheck_IgnoresTestFixturePEM pins solov2-izh6.13: PEM /
+// key-shaped credentials living under conventional test-fixture paths
+// (testdata/, /test/ subtrees, test/fixtures/) are vanishingly unlikely to
+// be real secrets and routinely flood ephemeral / forked repos like
+// dgrijalva/jwt-go. The path-based filter applies regardless of repo kind
+// (a tracked repo's test fixtures are equally noisy).
+func TestSecretsScanCheck_IgnoresTestFixturePEM(t *testing.T) {
+	for _, path := range []string{
+		"testdata/privateSecure.pem",
+		"internal/foo/testdata/key.pem",
+		"test/fixtures/sample.key",
+		"test/keys/rsa.pem",
+		"pkg/test/fixtures/private.pem",
+		"crypto/testdata/cert.crt",
+	} {
+		scanner := &fakeSecretsScanner{findings: []ports.SecretFinding{
+			{Rule: "private-key", FilePath: path, Line: 1, Redacted: "-----BEGIN ...", Confidence: 0.95},
+		}}
+		c := NewSecretsScanCheck(scanner)
+		in := Input{
+			RepoID: "r", Branch: "main",
+			AddedLines: map[string][]Line{
+				path: {{Number: 1, Text: "-----BEGIN RSA PRIVATE KEY-----"}},
+			},
+		}
+		got, err := c.Run(context.Background(), in)
+		if err != nil {
+			t.Fatalf("Run(%s): %v", path, err)
+		}
+		if len(got) != 0 {
+			t.Errorf("%s: want 0 findings (test-fixture key), got %d", path, len(got))
+		}
+		if _, present := scanner.scanned.AddedLines[path]; present {
+			t.Errorf("%s: scanner received input; fixture filter did not run before scan", path)
+		}
+	}
+}
+
+// TestSecretsScanCheck_NonFixturePEMStillFlags verifies the fixture filter
+// is targeted: a .pem in a production / non-test path still reports.
+func TestSecretsScanCheck_NonFixturePEMStillFlags(t *testing.T) {
+	for _, path := range []string{
+		"config/private.pem",   // production-looking dir
+		"deploy/tls.key",       // ops dir
+		"testify_helper.go",    // substring of "test" but not a fixture path segment
+		"contestdata/file.pem", // substring of "testdata" but not a segment
+	} {
+		scanner := &fakeSecretsScanner{findings: []ports.SecretFinding{
+			{Rule: "private-key", FilePath: path, Line: 1, Redacted: "-----BEGIN ...", Confidence: 0.95},
+		}}
+		c := NewSecretsScanCheck(scanner)
+		in := Input{
+			RepoID: "r", Branch: "main",
+			AddedLines: map[string][]Line{
+				path: {{Number: 1, Text: "-----BEGIN RSA PRIVATE KEY-----"}},
+			},
+		}
+		got, err := c.Run(context.Background(), in)
+		if err != nil {
+			t.Fatalf("Run(%s): %v", path, err)
+		}
+		if len(got) != 1 {
+			t.Errorf("%s: want 1 finding (non-fixture path), got %d", path, len(got))
+		}
+	}
+}
+
+// TestSecretsScanCheck_CollapsesMultiLinePEM verifies that many consecutive
+// line-hits from the same rule on the same file collapse to a single
+// finding with a count suffix in the message. Without this, a 28-line PEM
+// block flagged line-by-line produces 28 separate findings — the dominant
+// failure mode of `veska search --repo` on jwt-go (solov2-izh6.13).
+func TestSecretsScanCheck_CollapsesMultiLinePEM(t *testing.T) {
+	const path = "config/private.pem" // non-fixture path so we reach the scanner
+	var raw []ports.SecretFinding
+	for i := 1; i <= 28; i++ {
+		raw = append(raw, ports.SecretFinding{
+			Rule: "private-key", FilePath: path, Line: i,
+			Redacted: "***", Confidence: 0.95,
+		})
+	}
+	scanner := &fakeSecretsScanner{findings: raw}
+	c := NewSecretsScanCheck(scanner)
+	lines := make([]Line, 0, 28)
+	for i := 1; i <= 28; i++ {
+		lines = append(lines, Line{Number: i, Text: "key"})
+	}
+	in := Input{
+		RepoID: "r", Branch: "main",
+		AddedLines: map[string][]Line{path: lines},
+	}
+	got, err := c.Run(context.Background(), in)
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if len(got) != 1 {
+		t.Fatalf("want 1 collapsed finding for 28-line PEM, got %d", len(got))
+	}
+	// The message should indicate additional matches (collapsed) — either
+	// the raw count of additional lines or a total. We assert the "+27
+	// more" form to pin the chosen surface.
+	if !strings.Contains(got[0].Message, "27") {
+		t.Errorf("collapsed message should mention the additional-match count, got %q", got[0].Message)
+	}
+}
+
 // TestSecretsScanCheck_VendorSubstringDoesNotMatch guards against the
 // pathHasSegment check falsely matching e.g. "vendored_data/" or
 // "my_vendor.go" (substring of `vendor`).

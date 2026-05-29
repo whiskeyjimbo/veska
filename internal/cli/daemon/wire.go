@@ -432,7 +432,19 @@ func newDaemon(cfg Config) (*Daemon, error) {
 	checkReg := checks.NewRegistry()
 	deadcodeRepo := sqlite.NewDeadCodeRepo(pools.ReadDB)
 	contractRepo := sqlite.NewContractDriftRepo(pools.ReadDB)
-	checkReg.Register(checks.NewDeadCodeCheck(deadcodeRepo))
+	// solov2-izh6.13: pass a repo-kind lookup so dead-code skips ephemeral
+	// (cache-tier) repos cloned by `veska search --repo <url>`. Same
+	// reasoning as the autolink short-circuit added in solov2-izh6.8.
+	deadcodeRepoKind := func(ctx context.Context, repoID string) (string, error) {
+		rec, gerr := repo.Get(ctx, pools.ReadDB, repoID)
+		if gerr != nil {
+			return "", gerr
+		}
+		return rec.Kind, nil
+	}
+	checkReg.Register(checks.NewDeadCodeCheck(deadcodeRepo,
+		checks.WithDeadCodeRepoKindLookup(deadcodeRepoKind),
+	))
 	checkReg.Register(checks.NewContractDriftCheck(contractRepo))
 
 	// Secrets-scan check (M7). Unlike vuln-scan it ships on by default — the

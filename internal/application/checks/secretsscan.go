@@ -3,6 +3,7 @@ package checks
 import (
 	"context"
 	"fmt"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -79,9 +80,43 @@ func (c *SecretsScanCheck) Run(ctx context.Context, in Input) ([]*domain.Finding
 		return nil, fmt.Errorf("secrets-scan: scan: %w", err)
 	}
 
-	out := make([]*domain.Finding, 0, len(secrets))
+	// solov2-izh6.13: collapse N consecutive same-rule hits on the same
+	// file into a single finding. A 28-line PEM block flagged line-by-line
+	// otherwise produces 28 separate findings and dominates the surface on
+	// `veska search --repo <url>` of e.g. jwt-go. The keyed first-occurrence
+	// line is retained so the finding still anchors to a real position; the
+	// count is surfaced in the message.
+	type fileRuleKey struct{ file, rule string }
+	type collapsed struct {
+		first ports.SecretFinding
+		count int
+	}
+	bucket := make(map[fileRuleKey]*collapsed, len(secrets))
+	order := make([]fileRuleKey, 0, len(secrets))
 	for _, s := range secrets {
-		msg := fmt.Sprintf("secret detected by rule %q at line %d: %s", s.Rule, s.Line, s.Redacted)
+		k := fileRuleKey{file: s.FilePath, rule: s.Rule}
+		if cur, ok := bucket[k]; ok {
+			cur.count++
+			if s.Line < cur.first.Line {
+				cur.first = s
+			}
+			continue
+		}
+		bucket[k] = &collapsed{first: s, count: 1}
+		order = append(order, k)
+	}
+
+	out := make([]*domain.Finding, 0, len(order))
+	for _, k := range order {
+		c := bucket[k]
+		s := c.first
+		var msg string
+		if c.count > 1 {
+			msg = fmt.Sprintf("secret detected by rule %q at line %d (+%d more line(s) in same file): %s",
+				s.Rule, s.Line, c.count-1, s.Redacted)
+		} else {
+			msg = fmt.Sprintf("secret detected by rule %q at line %d: %s", s.Rule, s.Line, s.Redacted)
+		}
 		f, err := domain.NewFinding(
 			in.RepoID, in.Branch,
 			secretSeverity(s.Confidence),
@@ -104,14 +139,58 @@ func (c *SecretsScanCheck) Run(ctx context.Context, in Input) ([]*domain.Finding
 // directory or a dependency-vendoring directory whose payloads routinely look
 // secret-shaped to the high-entropy heuristic but never actually contain
 // credentials. The vendored-deps half is shared with the dead-code and
-// auto-link rules — see pathfilter.IsVendored.
+// auto-link rules — see pathfilter.IsVendored. Test-fixture credential
+// extensions under conventional test directories are also skipped, since
+// PEM/key files inside testdata/ or test/ subtrees are vanishingly unlikely
+// to be real and dominate the noise on forks of crypto-adjacent projects
+// like jwt-go (solov2-izh6.13).
 func isSecretsScanIgnored(path string) bool {
 	for _, prefix := range secretsScanIgnoredPrefixes {
 		if strings.HasPrefix(path, prefix) {
 			return true
 		}
 	}
-	return pathfilter.IsVendored(path)
+	if pathfilter.IsVendored(path) {
+		return true
+	}
+	return isTestFixtureCredentialPath(path)
+}
+
+// testFixtureSegments are path segments that mark a directory subtree as
+// test fixtures. Match is segment-aware (slash-bounded) so substring
+// collisions like "contestdata/" or "testify_helper.go" do not trigger.
+var testFixtureSegments = []string{"testdata", "test", "tests", "fixtures"}
+
+// testFixtureCredentialExts are file extensions whose appearance under a
+// test-fixture subtree is treated as a fake key for the purpose of the
+// secrets scanner. Real production keys with these extensions live under
+// config/, deploy/, etc., which the segment filter leaves untouched.
+var testFixtureCredentialExts = []string{".pem", ".key", ".crt", ".cer", ".p12", ".pfx"}
+
+// isTestFixtureCredentialPath reports whether path looks like a credential
+// file embedded as a test fixture: a credential-shaped extension AND at
+// least one path segment indicating a test directory. Matching only on
+// segments avoids the "vendored_data/" / "contestdata/" substring trap that
+// already bit the vendored-deps filter (solov2-l7zd).
+func isTestFixtureCredentialPath(path string) bool {
+	lower := strings.ToLower(path)
+	extMatch := false
+	for _, ext := range testFixtureCredentialExts {
+		if strings.HasSuffix(lower, ext) {
+			extMatch = true
+			break
+		}
+	}
+	if !extMatch {
+		return false
+	}
+	segments := strings.SplitSeq(lower, "/")
+	for seg := range segments {
+		if slices.Contains(testFixtureSegments, seg) {
+			return true
+		}
+	}
+	return false
 }
 
 // secretSeverity maps a scanner confidence score onto the domain Severity
