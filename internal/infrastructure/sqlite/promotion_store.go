@@ -303,21 +303,9 @@ func NewPromotionStore(writeDB *sql.DB, sinks []PromotionSink, opts ...Promotion
 // Promote writes the batch in a single atomic transaction. It returns
 // application.ErrUnregisteredRepo when the batch's repo is not registered.
 func (s *PromotionStore) Promote(ctx context.Context, batch application.PromotionBatch) error {
-	repoID := batch.RepoID
-	branch := batch.Branch
-
-	// Reject promotions for repos not in the registry. Capture the repo's
-	// working-tree root and go-module path here too: both feed cross-package
-	// CALLS resolution below (solov2-xc51). module_path may be NULL/empty.
-	var rootPath, modulePath sql.NullString
-	err := s.writeDB.QueryRowContext(ctx,
-		`SELECT root_path, module_path FROM repos WHERE repo_id = ?`, repoID,
-	).Scan(&rootPath, &modulePath)
-	if err == sql.ErrNoRows {
-		return application.ErrUnregisteredRepo{RepoID: repoID}
-	}
+	rootPath, modulePath, err := s.lookupRepo(ctx, batch.RepoID)
 	if err != nil {
-		return fmt.Errorf("promoter: check repo registration: %w", err)
+		return err
 	}
 
 	// An empty batch confirms registration but opens no transaction — there is
@@ -331,527 +319,594 @@ func (s *PromotionStore) Promote(ctx context.Context, batch application.Promotio
 		return fmt.Errorf("promoter: begin tx: %w", err)
 	}
 
-	// Prepare statements within the transaction for efficiency.
-	delStmt, err := tx.PrepareContext(ctx,
-		`DELETE FROM nodes WHERE file_path = ? AND branch = ? AND repo_id = ?`)
+	p, err := s.newPromotion(ctx, tx, batch, rootPath, modulePath)
 	if err != nil {
 		_ = tx.Rollback()
-		return fmt.Errorf("promoter: prepare delete: %w", err)
+		return err
 	}
-	defer delStmt.Close()
+	defer p.closeStmts()
 
-	insStmt, err := tx.PrepareContext(ctx, `
-		INSERT INTO nodes
-			(node_id, branch, repo_id, language, kind, symbol_path, file_path,
-			 line_start, line_end, content_hash, last_promoted_at, actor_id, actor_kind,
-			 signature, snippet, prev_signature, exported)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
-	if err != nil {
-		_ = tx.Rollback()
-		return fmt.Errorf("promoter: prepare insert: %w", err)
-	}
-	defer insStmt.Close()
-
-	// Snapshot the prior signature for each (node_id) in (file, branch, repo)
-	// BEFORE the per-file DELETE so the new row can carry it forward as
-	// prev_signature. This is what powers the contract-drift check without
-	// requiring a separate history table.
-	prevSigSelectStmt, err := tx.PrepareContext(ctx, `
-		SELECT node_id, signature FROM nodes
-		WHERE file_path = ? AND branch = ? AND repo_id = ?`)
-	if err != nil {
-		_ = tx.Rollback()
-		return fmt.Errorf("promoter: prepare prev-sig select: %w", err)
-	}
-	defer prevSigSelectStmt.Close()
-
-	queueStmt, err := tx.PrepareContext(ctx, `
-		INSERT INTO post_promotion_queue
-			(promotion_id, repo_id, branch, git_sha, work_kind, payload, state, enqueued_at)
-		VALUES (?, ?, ?, ?, ?, ?, 'pending', ?)`)
-	if err != nil {
-		_ = tx.Rollback()
-		return fmt.Errorf("promoter: prepare queue insert: %w", err)
-	}
-	defer queueStmt.Close()
-
-	// solov2-xjm5: persist parsed imports per file so `veska deps list` can
-	// surface modules that are imported but only referenced via struct
-	// literals / type assertions (no resolved CALLS edge into stubs). Like
-	// the nodes table the rows are scoped to (repo_id, branch, file_path)
-	// and re-promotion DELETE+INSERTs so removed imports disappear in the
-	// same commit.
-	delImportsStmt, err := tx.PrepareContext(ctx,
-		`DELETE FROM file_imports WHERE repo_id = ? AND branch = ? AND file_path = ?`)
-	if err != nil {
-		_ = tx.Rollback()
-		return fmt.Errorf("promoter: prepare file_imports delete: %w", err)
-	}
-	defer delImportsStmt.Close()
-	insImportsStmt, err := tx.PrepareContext(ctx, `
-		INSERT INTO file_imports
-			(repo_id, branch, file_path, import_path, alias, language, last_promoted_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?)
-		ON CONFLICT(repo_id, branch, file_path, import_path) DO NOTHING`)
-	if err != nil {
-		_ = tx.Rollback()
-		return fmt.Errorf("promoter: prepare file_imports insert: %w", err)
-	}
-	defer insImportsStmt.Close()
-
-	// Prepare each co-transactional sink once against the tx.
-	for _, sink := range s.sinks {
-		if err := sink.Prepare(ctx, tx); err != nil {
+	// Each phase writes through the shared tx and prepared statements; any
+	// error rolls the whole transaction back. Order matters: cross-file edges
+	// require every file's nodes to already exist, so edge resolution runs
+	// after the per-file node loop.
+	for _, phase := range []func(context.Context) error{
+		p.promoteFiles,
+		p.enqueueWiki,
+		p.insertParserEdges,
+		p.resolveIntraPackageCalls,
+		p.resolveCrossPackageCalls,
+		p.advanceRepoSHA,
+	} {
+		if err := phase(ctx); err != nil {
 			_ = tx.Rollback()
-			return fmt.Errorf("promoter: prepare sink: %w", err)
-		}
-	}
-
-	now := batch.PromotedAt
-
-	for _, file := range batch.Files {
-		filePath := file.Path
-
-		// Capture prior signatures keyed by node_id BEFORE the DELETE clears
-		// them, so we can thread prev_signature into the re-inserted rows.
-		// Nodes with NULL signature in the prior row map to a nil pointer so
-		// the new row's prev_signature remains NULL — equivalent to "no prior
-		// signature known" rather than "" which would falsely register as a
-		// drift to/from the empty string.
-		prevSig := make(map[string]*string)
-		prevRows, err := prevSigSelectStmt.QueryContext(ctx, filePath, branch, repoID)
-		if err != nil {
-			_ = tx.Rollback()
-			return fmt.Errorf("promoter: select prev signatures for %q: %w", filePath, err)
-		}
-		for prevRows.Next() {
-			var nodeID string
-			var sig sql.NullString
-			if err := prevRows.Scan(&nodeID, &sig); err != nil {
-				_ = prevRows.Close()
-				_ = tx.Rollback()
-				return fmt.Errorf("promoter: scan prev signature for %q: %w", filePath, err)
-			}
-			if sig.Valid {
-				v := sig.String
-				prevSig[nodeID] = &v
-			} else {
-				prevSig[nodeID] = nil
-			}
-		}
-		if err := prevRows.Err(); err != nil {
-			_ = prevRows.Close()
-			_ = tx.Rollback()
-			return fmt.Errorf("promoter: iterate prev signatures for %q: %w", filePath, err)
-		}
-		if err := prevRows.Close(); err != nil {
-			_ = tx.Rollback()
-			return fmt.Errorf("promoter: close prev signatures for %q: %w", filePath, err)
-		}
-
-		// Sink pre-delete hooks run while the old node rows still exist — e.g.
-		// the FTS sink's node_id IN (SELECT ... FROM nodes ...) deletes MUST
-		// resolve against the pre-DELETE rows.
-		for _, sink := range s.sinks {
-			if err := sink.BeforeNodeDelete(ctx, tx, branch, repoID, filePath); err != nil {
-				_ = tx.Rollback()
-				return fmt.Errorf("promoter: sink before-delete for %q: %w", filePath, err)
-			}
-		}
-
-		// Delete all existing nodes for this file+branch+repo before re-inserting.
-		if _, err := delStmt.ExecContext(ctx, filePath, branch, repoID); err != nil {
-			_ = tx.Rollback()
-			return fmt.Errorf("promoter: delete nodes for %q: %w", filePath, err)
-		}
-		// solov2-xjm5: same DELETE+re-INSERT lifecycle for file_imports.
-		if _, err := delImportsStmt.ExecContext(ctx, repoID, branch, filePath); err != nil {
-			_ = tx.Rollback()
-			return fmt.Errorf("promoter: delete file_imports for %q: %w", filePath, err)
-		}
-		for alias, importPath := range file.Imports {
-			if importPath == "" {
-				continue
-			}
-			// Skip stdlib (no domain in the first path segment) to mirror
-			// the stub-side filter — deps list is for external deps, and
-			// surfacing every stdlib package would drown the output
-			// (solov2-xjm5).
-			if !isExternalModulePath(importPath) {
-				continue
-			}
-			if _, err := insImportsStmt.ExecContext(ctx,
-				repoID, branch, filePath, importPath, alias, "go", now,
-			); err != nil {
-				_ = tx.Rollback()
-				return fmt.Errorf("promoter: insert file_imports for %q (%s): %w", filePath, importPath, err)
-			}
-		}
-
-		// Upsert all nodes for this file.
-		for _, n := range file.Nodes {
-			lang := nodeLanguage(n)
-			lineStart, lineEnd := nodeLines(n)
-			contentHash := nodeContentHash(n)
-			sig := nodeSignature(n)
-			// prev signature: NULL when there was no prior row for this node_id
-			// in (file, branch) — first-time promotions cannot drift.
-			var prev any
-			if ps, ok := prevSig[string(n.ID)]; ok && ps != nil {
-				prev = *ps
-			} else {
-				prev = nil
-			}
-
-			if _, err := insStmt.ExecContext(ctx,
-				string(n.ID),
-				branch,
-				repoID,
-				lang,
-				string(n.Kind),
-				n.Name,
-				n.Path,
-				lineStart,
-				lineEnd,
-				contentHash,
-				now,
-				batch.Actor.ID,
-				string(batch.Actor.Kind),
-				sig,
-				nodeSnippet(n), // solov2-sxa: bind the capped RawContent so
-				// embed-text picks up the body via FetchPending's join.
-				prev,
-				nodeExported(n),
-			); err != nil {
-				_ = tx.Rollback()
-				// Include kind+name+path+lines: a UNIQUE-PK violation here means
-				// the parser emitted two nodes with the same (repoID, path,
-				// kind, name) tuple, and the bare ID isn't enough to find
-				// which symbol — solov2-14lw was diagnosed via these fields.
-				return fmt.Errorf("promoter: insert node %q (kind=%s name=%q path=%q lines=%v): %w",
-					n.ID, n.Kind, n.Name, n.Path, n.Lines, err)
-			}
-
-			// Per-node co-transactional sink writes (FTS, embedding-refs).
-			nw := nodeWrite{
-				NodeID: string(n.ID),
-				Branch: branch,
-				RepoID: repoID,
-				Kind:   string(n.Kind),
-				Symbol: n.Name,
-			}
-			for _, sink := range s.sinks {
-				if err := sink.AfterNodeInsert(ctx, tx, nw, now); err != nil {
-					_ = tx.Rollback()
-					return fmt.Errorf("promoter: sink after-insert for %q: %w", n.ID, err)
-				}
-			}
-		}
-
-		// Enqueue one row per work_kind for this file.
-		for _, wk := range s.workKinds {
-			if _, err := queueStmt.ExecContext(ctx,
-				batch.GitSHA, repoID, branch, batch.GitSHA, wk, filePath, now,
-			); err != nil {
-				_ = tx.Rollback()
-				return fmt.Errorf("promoter: enqueue %q for %q: %w", wk, filePath, err)
-			}
-		}
-	}
-
-	// Enqueue exactly one repo-scoped WorkKindWiki row per promotion (not
-	// per-file). The wiki lane regenerates the whole hot_zone + entry_points
-	// surfaces, so a single row per promotion is sufficient; the payload is
-	// empty because the handler operates on repo-scoped state.
-	if _, err := queueStmt.ExecContext(ctx,
-		batch.GitSHA, repoID, branch, batch.GitSHA, string(ports.WorkKindWiki), "", now,
-	); err != nil {
-		_ = tx.Rollback()
-		return fmt.Errorf("promoter: enqueue wiki: %w", err)
-	}
-
-	// Persist parser-produced edges (CALLS, IMPORTS, etc.) atomically with
-	// the node writes (solov2-ijg). Cross-file edges (e.g. main.go's
-	// NewServer → store.go's NewNoteStore) require both files' nodes to
-	// exist in the table, so the edge insert runs AFTER the per-file node
-	// loop completes. INSERT OR IGNORE matches the autolink path's
-	// idempotency — re-promoting the same content is a no-op.
-	//
-	// Autolink-produced SIMILAR_TO edges still arrive separately via the
-	// post-promotion queue; they don't conflict with this insert (different
-	// edge_id by construction).
-	edgeStmt, eerr := tx.PrepareContext(ctx, `
-		INSERT INTO edges
-			(edge_id, branch, repo_id, src_node_id, dst_node_id, kind, confidence, last_promoted_at, src_line)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-		ON CONFLICT(edge_id, branch) DO NOTHING`)
-	if eerr != nil {
-		_ = tx.Rollback()
-		return fmt.Errorf("promoter: prepare edge insert: %w", eerr)
-	}
-	defer edgeStmt.Close()
-
-	for _, file := range batch.Files {
-		for _, e := range file.Edges {
-			if e == nil {
-				continue
-			}
-			if _, ierr := edgeStmt.ExecContext(ctx,
-				e.ID, branch, repoID,
-				string(e.Src), string(e.Tgt),
-				string(e.Kind), confidenceText(e.Confidence), now,
-				edgeSrcLine(e),
-			); ierr != nil {
-				_ = tx.Rollback()
-				return fmt.Errorf("promoter: insert edge %q: %w", e.ID, ierr)
-			}
-		}
-	}
-
-	// Cross-file intra-package CALLS resolution (solov2-2at). The parser
-	// emits UnresolvedCalls when a call site names a symbol absent from
-	// the file's own symbol map; typically the callee lives in another
-	// file of the same Go package (foo.go calling NewBar() defined in
-	// bar.go). Build a per-directory map of name → node_id from the
-	// batch and resolve. Same-directory = same Go package by
-	// convention. Misses (e.g. cross-package, stdlib) stay unresolved.
-	//
-	// CALLS edges from this pass are written through the same prepared
-	// stmt as parser-produced edges so confidence + idempotency match.
-	pkgMaps := buildPackageSymbolMap(batch)
-	for _, file := range batch.Files {
-		if len(file.UnresolvedCalls) == 0 {
-			continue
-		}
-		pkgKey := filepath.Dir(file.Path)
-		names := pkgMaps[pkgKey]
-		if len(names) == 0 {
-			continue
-		}
-		for _, uc := range file.UnresolvedCalls {
-			// Package-qualified calls (cmd.Execute) are resolved by the
-			// cross-package pass via the import map, never by bare name
-			// against the local package — otherwise a same-named symbol in
-			// the caller's package would bind falsely (solov2-xc51).
-			if uc.PkgQualifier != "" {
-				continue
-			}
-			targetID, ok := names[uc.CalleeName]
-			if !ok {
-				continue
-			}
-			if uc.CallerID == targetID {
-				// Self-call (recursion) — skip.
-				continue
-			}
-			eOpts := []domain.EdgeOption{domain.WithConfidence(domain.Probable)}
-			if uc.SrcLine > 0 {
-				eOpts = append(eOpts, domain.WithSourceLine(uc.SrcLine))
-			}
-			e, eerr := domain.NewEdge(uc.CallerID, targetID, domain.EdgeCalls, eOpts...)
-			if eerr != nil {
-				continue
-			}
-			if _, ierr := edgeStmt.ExecContext(ctx,
-				e.ID, branch, repoID,
-				string(e.Src), string(e.Tgt),
-				string(e.Kind), confidenceText(e.Confidence), now,
-				edgeSrcLine(e),
-			); ierr != nil {
-				_ = tx.Rollback()
-				return fmt.Errorf("promoter: insert cross-file edge %q: %w", e.ID, ierr)
-			}
-		}
-	}
-
-	// Cross-package CALLS resolution within the same Go module (solov2-xc51).
-	// A package-qualified call (cmd.Execute) binds by resolving the import
-	// alias to a package directory under this repo's module, then matching the
-	// callee name to a node in that package — first in the current batch, then
-	// in the already-promoted graph so incremental single-file commits still
-	// bind. Imports outside this module fall through to xc51.3 (cross-repo
-	// stubs). Ambiguity/misses are skipped: this pass never emits a false edge.
-	if modulePath.Valid && modulePath.String != "" {
-		mod := modulePath.String
-		root := rootPath.String
-		byPkgDir := buildModuleRelSymbolMap(batch, root)
-
-		// Cross-repo edge stubs for package-qualified calls into other modules
-		// (solov2-xc51.3 / solov2-1gj). Prepared lazily here so promotions for
-		// repos without a module_path never touch the table. The query-time
-		// resolver binds these to a node in whatever registered repo owns the
-		// module_path. Idempotent on the deterministic stub_id.
-		stubStmt, serr := tx.PrepareContext(ctx, `
-			INSERT INTO cross_repo_edge_stubs
-				(stub_id, branch, repo_id, src_node_id, kind, module_path, symbol_path, language, last_promoted_at, method_call, src_line)
-			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-			ON CONFLICT(stub_id, branch) DO NOTHING`)
-		if serr != nil {
-			_ = tx.Rollback()
-			return fmt.Errorf("promoter: prepare stub insert: %w", serr)
-		}
-		defer stubStmt.Close()
-		for _, file := range batch.Files {
-			if len(file.UnresolvedCalls) == 0 || len(file.Imports) == 0 {
-				continue
-			}
-			for _, uc := range file.UnresolvedCalls {
-				if uc.PkgQualifier == "" {
-					continue
-				}
-				importPath, ok := file.Imports[uc.PkgQualifier]
-				if !ok {
-					// solov2-izh6.6: the import-alias key is the last URL
-					// segment when the source has no explicit alias (Go
-					// convention), but a module's actual package name can
-					// diverge from its URL (e.g. github.com/jrose/greetlib
-					// declares `package greet`). When the alias lookup
-					// misses, fall back to: is there a registered Go module
-					// among this file's imports whose promoted package node
-					// is named uc.PkgQualifier? If exactly one matches, use
-					// its import path so the cross-repo stub still binds.
-					ip, matched, ferr := findImportByPackageName(ctx, tx, file.Imports, uc.PkgQualifier)
-					if ferr != nil {
-						_ = tx.Rollback()
-						return fmt.Errorf("promoter: cross-repo pkg-name lookup %q: %w", uc.PkgQualifier, ferr)
-					}
-					if !matched {
-						continue // qualifier is a local var, an unregistered dep, or stdlib
-					}
-					importPath = ip
-				}
-				relDir, inModule := modulePackageDir(mod, importPath)
-				if !inModule {
-					// Import resolves to another module. Record a cross-repo
-					// edge stub the query-time resolver binds to whichever
-					// registered repo owns module_path == importPath. Stdlib
-					// (no domain in the first path segment) can never match a
-					// repo, so it is skipped to keep the table lean.
-					//
-					// solov2-9rc2 Phase C: both plain pkg.Foo() and method-call
-					// uc.IsMethodCall emit cross-repo stubs. The method_call
-					// column lets the resolver branch on the lookup strategy —
-					// plain stubs match exact symbol_path; method-call stubs
-					// match `<Receiver>.<symbol_path>` suffix.
-					if isExternalModulePath(importPath) {
-						methodFlag := 0
-						if uc.IsMethodCall {
-							methodFlag = 1
-						}
-						sid := stubID(string(uc.CallerID), importPath, uc.CalleeName)
-						if uc.IsMethodCall {
-							// Distinct stub_id namespace so a same-name plain
-							// and method call from the same caller don't
-							// collide on the ON CONFLICT key (sid is
-							// deterministic over caller+pkg+name, which is
-							// identical between the two callsite shapes).
-							sid = stubID(string(uc.CallerID), importPath, "@method:"+uc.CalleeName)
-						}
-						if _, ierr := stubStmt.ExecContext(ctx,
-							sid, branch, repoID, string(uc.CallerID), string(domain.EdgeCalls),
-							importPath, uc.CalleeName, "go", now, methodFlag,
-							ucSrcLine(uc),
-						); ierr != nil {
-							_ = tx.Rollback()
-							return fmt.Errorf("promoter: insert cross-repo stub %q: %w", sid, ierr)
-						}
-					}
-					continue
-				}
-				// In-module resolution. solov2-9rc2 Phase B: a method call
-				// (uc.IsMethodCall) carries only the bare method name in
-				// CalleeName ("Hello" from `v.Hello(...)`), so look it up by
-				// suffix match against `<Receiver>.Hello` rather than exact
-				// symbol_path. Single-match binds; ambiguity is skipped to
-				// preserve the "no false edges" invariant.
-				var targetID domain.NodeID
-				var inBatch bool
-				if uc.IsMethodCall {
-					targetID, inBatch = findInBatchMethod(byPkgDir, relDir, uc.CalleeName)
-					if !inBatch {
-						tid, found, qerr := lookupPromotedMethodInDir(ctx, tx, repoID, branch, root, relDir, uc.CalleeName)
-						if qerr != nil {
-							_ = tx.Rollback()
-							return fmt.Errorf("promoter: method-call lookup %q: %w", uc.CalleeName, qerr)
-						}
-						if !found {
-							continue
-						}
-						targetID = tid
-					}
-				} else {
-					targetID, inBatch = byPkgDir[relDir][uc.CalleeName]
-					if !inBatch {
-						// Fall back to the promoted graph (callee's file not in
-						// this batch). Must fully drain the cursor before the
-						// edge insert: a query open during ExecContext deadlocks
-						// the single write connection.
-						tid, found, qerr := lookupPromotedSymbolDir(ctx, tx, repoID, branch, root, relDir, uc.CalleeName)
-						if qerr != nil {
-							_ = tx.Rollback()
-							return fmt.Errorf("promoter: cross-package lookup %q: %w", uc.CalleeName, qerr)
-						}
-						if !found {
-							continue
-						}
-						targetID = tid
-					}
-				}
-				if uc.CallerID == targetID {
-					continue
-				}
-				eOpts := []domain.EdgeOption{domain.WithConfidence(domain.Probable)}
-				if uc.SrcLine > 0 {
-					eOpts = append(eOpts, domain.WithSourceLine(uc.SrcLine))
-				}
-				e, eerr := domain.NewEdge(uc.CallerID, targetID, domain.EdgeCalls, eOpts...)
-				if eerr != nil {
-					continue
-				}
-				if _, ierr := edgeStmt.ExecContext(ctx,
-					e.ID, branch, repoID,
-					string(e.Src), string(e.Tgt),
-					string(e.Kind), confidenceText(e.Confidence), now,
-					edgeSrcLine(e),
-				); ierr != nil {
-					_ = tx.Rollback()
-					return fmt.Errorf("promoter: insert cross-package edge %q: %w", e.ID, ierr)
-				}
-			}
-		}
-	}
-
-	// Advance repos.last_promoted_sha (and repos.active_branch when the
-	// caller supplied one) atomically with the node writes. Without this,
-	// StartupResync's cheap-path check (LastPromotedSHA == HEAD) has nothing
-	// to compare against — every daemon restart treats every repo as
-	// never-promoted and re-runs the full reparser (solov2-c47).
-	//
-	// An empty SHA is treated as caller error and skipped so we don't clobber
-	// a known-good value with "". An empty branch is a real production case
-	// (repo.Add does not set active_branch), so we write the SHA alone in
-	// that case and leave active_branch untouched.
-	if batch.GitSHA != "" {
-		var execErr error
-		if branch != "" {
-			_, execErr = tx.ExecContext(ctx,
-				`UPDATE repos SET last_promoted_sha = ?, active_branch = ? WHERE repo_id = ?`,
-				batch.GitSHA, branch, repoID,
-			)
-		} else {
-			_, execErr = tx.ExecContext(ctx,
-				`UPDATE repos SET last_promoted_sha = ? WHERE repo_id = ?`,
-				batch.GitSHA, repoID,
-			)
-		}
-		if execErr != nil {
-			_ = tx.Rollback()
-			return fmt.Errorf("promoter: advance last_promoted_sha: %w", execErr)
+			return err
 		}
 	}
 
 	if err := tx.Commit(); err != nil {
 		return fmt.Errorf("promoter: commit: %w", err)
+	}
+	return nil
+}
+
+// lookupRepo rejects promotions for repos not in the registry and returns the
+// repo's working-tree root and go-module path — both feed cross-package CALLS
+// resolution (solov2-xc51). module_path may be NULL/empty, in which case the
+// returned module string is "".
+func (s *PromotionStore) lookupRepo(ctx context.Context, repoID string) (root, module string, err error) {
+	var rootPath, modulePath sql.NullString
+	qerr := s.writeDB.QueryRowContext(ctx,
+		`SELECT root_path, module_path FROM repos WHERE repo_id = ?`, repoID,
+	).Scan(&rootPath, &modulePath)
+	if qerr == sql.ErrNoRows {
+		return "", "", application.ErrUnregisteredRepo{RepoID: repoID}
+	}
+	if qerr != nil {
+		return "", "", fmt.Errorf("promoter: check repo registration: %w", qerr)
+	}
+	return rootPath.String, modulePath.String, nil
+}
+
+// promotion carries the state for a single Promote transaction: the open tx,
+// the statements prepared once and reused across phases, and the batch-scoped
+// scalars. Promote delegates to its phase methods so each stays small and the
+// shared statements live in one place instead of threading through arguments.
+type promotion struct {
+	s          *PromotionStore
+	tx         *sql.Tx
+	batch      application.PromotionBatch
+	repoID     string
+	branch     string
+	now        int64
+	rootPath   string
+	modulePath string // "" when the repo has no go-module path
+
+	del        *sql.Stmt
+	ins        *sql.Stmt
+	prevSigSel *sql.Stmt
+	queue      *sql.Stmt
+	delImports *sql.Stmt
+	insImports *sql.Stmt
+	edge       *sql.Stmt
+}
+
+// newPromotion prepares the per-transaction statements and primes the
+// co-transactional sinks. The caller must defer closeStmts and roll the tx
+// back on error.
+func (s *PromotionStore) newPromotion(ctx context.Context, tx *sql.Tx, batch application.PromotionBatch, root, module string) (*promotion, error) {
+	p := &promotion{
+		s:          s,
+		tx:         tx,
+		batch:      batch,
+		repoID:     batch.RepoID,
+		branch:     batch.Branch,
+		now:        batch.PromotedAt,
+		rootPath:   root,
+		modulePath: module,
+	}
+	if err := p.prepareStmts(ctx); err != nil {
+		return nil, err
+	}
+	for _, sink := range s.sinks {
+		if err := sink.Prepare(ctx, tx); err != nil {
+			return nil, fmt.Errorf("promoter: prepare sink: %w", err)
+		}
+	}
+	return p, nil
+}
+
+// prepare compiles one statement against the tx, wrapping failures with the
+// caller-supplied label to match the original per-statement error messages.
+func prepare(ctx context.Context, tx *sql.Tx, label, query string) (*sql.Stmt, error) {
+	stmt, err := tx.PrepareContext(ctx, query)
+	if err != nil {
+		return nil, fmt.Errorf("promoter: prepare %s: %w", label, err)
+	}
+	return stmt, nil
+}
+
+// prepareStmts compiles the statements reused across the promotion phases. The
+// prev-sig select snapshots prior signatures BEFORE the per-file DELETE so the
+// re-inserted rows can carry prev_signature forward (the contract-drift check).
+// file_imports follows the same DELETE+INSERT lifecycle as nodes (solov2-xjm5).
+func (p *promotion) prepareStmts(ctx context.Context) error {
+	var err error
+	if p.del, err = prepare(ctx, p.tx, "delete",
+		`DELETE FROM nodes WHERE file_path = ? AND branch = ? AND repo_id = ?`); err != nil {
+		return err
+	}
+	if p.ins, err = prepare(ctx, p.tx, "insert", `
+		INSERT INTO nodes
+			(node_id, branch, repo_id, language, kind, symbol_path, file_path,
+			 line_start, line_end, content_hash, last_promoted_at, actor_id, actor_kind,
+			 signature, snippet, prev_signature, exported)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`); err != nil {
+		return err
+	}
+	if p.prevSigSel, err = prepare(ctx, p.tx, "prev-sig select", `
+		SELECT node_id, signature FROM nodes
+		WHERE file_path = ? AND branch = ? AND repo_id = ?`); err != nil {
+		return err
+	}
+	if p.queue, err = prepare(ctx, p.tx, "queue insert", `
+		INSERT INTO post_promotion_queue
+			(promotion_id, repo_id, branch, git_sha, work_kind, payload, state, enqueued_at)
+		VALUES (?, ?, ?, ?, ?, ?, 'pending', ?)`); err != nil {
+		return err
+	}
+	if p.delImports, err = prepare(ctx, p.tx, "file_imports delete",
+		`DELETE FROM file_imports WHERE repo_id = ? AND branch = ? AND file_path = ?`); err != nil {
+		return err
+	}
+	if p.insImports, err = prepare(ctx, p.tx, "file_imports insert", `
+		INSERT INTO file_imports
+			(repo_id, branch, file_path, import_path, alias, language, last_promoted_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?)
+		ON CONFLICT(repo_id, branch, file_path, import_path) DO NOTHING`); err != nil {
+		return err
+	}
+	// Edge insert is executed in later phases but prepared up front so all
+	// reusable statements share one lifecycle. INSERT OR IGNORE matches the
+	// autolink path's idempotency — re-promoting the same content is a no-op.
+	if p.edge, err = prepare(ctx, p.tx, "edge insert", `
+		INSERT INTO edges
+			(edge_id, branch, repo_id, src_node_id, dst_node_id, kind, confidence, last_promoted_at, src_line)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+		ON CONFLICT(edge_id, branch) DO NOTHING`); err != nil {
+		return err
+	}
+	return nil
+}
+
+// closeStmts closes every statement prepareStmts opened. Safe to call when
+// preparation failed partway: nil statements are skipped.
+func (p *promotion) closeStmts() {
+	for _, st := range []*sql.Stmt{p.del, p.ins, p.prevSigSel, p.queue, p.delImports, p.insImports, p.edge} {
+		if st != nil {
+			_ = st.Close()
+		}
+	}
+}
+
+// insertEdge writes one edge through the shared prepared statement. Callers
+// wrap the returned error with the phase-specific context they need.
+func (p *promotion) insertEdge(ctx context.Context, e *domain.Edge) error {
+	_, err := p.edge.ExecContext(ctx,
+		e.ID, p.branch, p.repoID,
+		string(e.Src), string(e.Tgt),
+		string(e.Kind), confidenceText(e.Confidence), p.now,
+		edgeSrcLine(e),
+	)
+	return err
+}
+
+// buildCallEdge constructs a Probable CALLS edge for a resolved call site,
+// carrying the source line when known. Returns ok=false when the domain
+// constructor rejects the inputs, in which case the caller skips the edge.
+func buildCallEdge(uc domain.UnresolvedCall, targetID domain.NodeID) (*domain.Edge, bool) {
+	opts := []domain.EdgeOption{domain.WithConfidence(domain.Probable)}
+	if uc.SrcLine > 0 {
+		opts = append(opts, domain.WithSourceLine(uc.SrcLine))
+	}
+	e, err := domain.NewEdge(uc.CallerID, targetID, domain.EdgeCalls, opts...)
+	if err != nil {
+		return nil, false
+	}
+	return e, true
+}
+
+// promoteFiles re-promotes every file in the batch: prior-signature snapshot,
+// sink pre-delete hooks, node delete + re-insert, import sync, and per-file
+// work enqueue.
+func (p *promotion) promoteFiles(ctx context.Context) error {
+	for _, file := range p.batch.Files {
+		if err := p.promoteFile(ctx, file); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (p *promotion) promoteFile(ctx context.Context, file application.PromotionFile) error {
+	prevSig, err := p.capturePrevSignatures(ctx, file.Path)
+	if err != nil {
+		return err
+	}
+	// Sink pre-delete hooks run while the old node rows still exist — e.g. the
+	// FTS sink's node_id IN (SELECT ... FROM nodes ...) deletes MUST resolve
+	// against the pre-DELETE rows.
+	for _, sink := range p.s.sinks {
+		if err := sink.BeforeNodeDelete(ctx, p.tx, p.branch, p.repoID, file.Path); err != nil {
+			return fmt.Errorf("promoter: sink before-delete for %q: %w", file.Path, err)
+		}
+	}
+	if _, err := p.del.ExecContext(ctx, file.Path, p.branch, p.repoID); err != nil {
+		return fmt.Errorf("promoter: delete nodes for %q: %w", file.Path, err)
+	}
+	if err := p.syncFileImports(ctx, file); err != nil {
+		return err
+	}
+	if err := p.insertFileNodes(ctx, file, prevSig); err != nil {
+		return err
+	}
+	return p.enqueueFileWork(ctx, file.Path)
+}
+
+// capturePrevSignatures snapshots prior signatures keyed by node_id BEFORE the
+// DELETE clears them, so re-inserted rows can thread prev_signature forward. A
+// NULL prior signature maps to a nil pointer (meaning "no prior signature
+// known") rather than "" so it never falsely registers as a drift.
+func (p *promotion) capturePrevSignatures(ctx context.Context, filePath string) (map[string]*string, error) {
+	prevSig := make(map[string]*string)
+	rows, err := p.prevSigSel.QueryContext(ctx, filePath, p.branch, p.repoID)
+	if err != nil {
+		return nil, fmt.Errorf("promoter: select prev signatures for %q: %w", filePath, err)
+	}
+	for rows.Next() {
+		var nodeID string
+		var sig sql.NullString
+		if err := rows.Scan(&nodeID, &sig); err != nil {
+			_ = rows.Close()
+			return nil, fmt.Errorf("promoter: scan prev signature for %q: %w", filePath, err)
+		}
+		if sig.Valid {
+			v := sig.String
+			prevSig[nodeID] = &v
+		} else {
+			prevSig[nodeID] = nil
+		}
+	}
+	if err := rows.Err(); err != nil {
+		_ = rows.Close()
+		return nil, fmt.Errorf("promoter: iterate prev signatures for %q: %w", filePath, err)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, fmt.Errorf("promoter: close prev signatures for %q: %w", filePath, err)
+	}
+	return prevSig, nil
+}
+
+// syncFileImports re-DELETE+INSERTs the file's external imports so removed
+// imports disappear in the same commit (solov2-xjm5). Stdlib is skipped to
+// mirror the stub-side filter — deps list is for external deps only.
+func (p *promotion) syncFileImports(ctx context.Context, file application.PromotionFile) error {
+	if _, err := p.delImports.ExecContext(ctx, p.repoID, p.branch, file.Path); err != nil {
+		return fmt.Errorf("promoter: delete file_imports for %q: %w", file.Path, err)
+	}
+	for alias, importPath := range file.Imports {
+		if importPath == "" || !isExternalModulePath(importPath) {
+			continue
+		}
+		if _, err := p.insImports.ExecContext(ctx,
+			p.repoID, p.branch, file.Path, importPath, alias, "go", p.now,
+		); err != nil {
+			return fmt.Errorf("promoter: insert file_imports for %q (%s): %w", file.Path, importPath, err)
+		}
+	}
+	return nil
+}
+
+func (p *promotion) insertFileNodes(ctx context.Context, file application.PromotionFile, prevSig map[string]*string) error {
+	for _, n := range file.Nodes {
+		if err := p.insertNode(ctx, n, prevSig); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// insertNode upserts one node and runs the per-node co-transactional sink
+// writes (FTS, embedding-refs). prev_signature is NULL when there was no prior
+// row for this node_id in (file, branch) — first-time promotions cannot drift.
+func (p *promotion) insertNode(ctx context.Context, n *domain.Node, prevSig map[string]*string) error {
+	var prev any
+	if ps, ok := prevSig[string(n.ID)]; ok && ps != nil {
+		prev = *ps
+	}
+	lineStart, lineEnd := nodeLines(n)
+	if _, err := p.ins.ExecContext(ctx,
+		string(n.ID),
+		p.branch,
+		p.repoID,
+		nodeLanguage(n),
+		string(n.Kind),
+		n.Name,
+		n.Path,
+		lineStart,
+		lineEnd,
+		nodeContentHash(n),
+		p.now,
+		p.batch.Actor.ID,
+		string(p.batch.Actor.Kind),
+		nodeSignature(n),
+		nodeSnippet(n), // solov2-sxa: bind the capped RawContent so embed-text
+		// picks up the body via FetchPending's join.
+		prev,
+		nodeExported(n),
+	); err != nil {
+		// Include kind+name+path+lines: a UNIQUE-PK violation here means the
+		// parser emitted two nodes with the same (repoID, path, kind, name)
+		// tuple, and the bare ID isn't enough to find which symbol
+		// (solov2-14lw was diagnosed via these fields).
+		return fmt.Errorf("promoter: insert node %q (kind=%s name=%q path=%q lines=%v): %w",
+			n.ID, n.Kind, n.Name, n.Path, n.Lines, err)
+	}
+	nw := nodeWrite{
+		NodeID: string(n.ID),
+		Branch: p.branch,
+		RepoID: p.repoID,
+		Kind:   string(n.Kind),
+		Symbol: n.Name,
+	}
+	for _, sink := range p.s.sinks {
+		if err := sink.AfterNodeInsert(ctx, p.tx, nw, p.now); err != nil {
+			return fmt.Errorf("promoter: sink after-insert for %q: %w", n.ID, err)
+		}
+	}
+	return nil
+}
+
+func (p *promotion) enqueueFileWork(ctx context.Context, filePath string) error {
+	for _, wk := range p.s.workKinds {
+		if _, err := p.queue.ExecContext(ctx,
+			p.batch.GitSHA, p.repoID, p.branch, p.batch.GitSHA, wk, filePath, p.now,
+		); err != nil {
+			return fmt.Errorf("promoter: enqueue %q for %q: %w", wk, filePath, err)
+		}
+	}
+	return nil
+}
+
+// enqueueWiki enqueues exactly one repo-scoped wiki row per promotion (not
+// per-file): the wiki lane regenerates the whole hot_zone + entry_points
+// surfaces, so the payload is empty and a single row suffices.
+func (p *promotion) enqueueWiki(ctx context.Context) error {
+	if _, err := p.queue.ExecContext(ctx,
+		p.batch.GitSHA, p.repoID, p.branch, p.batch.GitSHA, string(ports.WorkKindWiki), "", p.now,
+	); err != nil {
+		return fmt.Errorf("promoter: enqueue wiki: %w", err)
+	}
+	return nil
+}
+
+// insertParserEdges persists parser-produced edges (CALLS, IMPORTS, etc.)
+// atomically with the node writes (solov2-ijg). Autolink SIMILAR_TO edges
+// arrive separately via the post-promotion queue and don't conflict here.
+func (p *promotion) insertParserEdges(ctx context.Context) error {
+	for _, file := range p.batch.Files {
+		for _, e := range file.Edges {
+			if e == nil {
+				continue
+			}
+			if err := p.insertEdge(ctx, e); err != nil {
+				return fmt.Errorf("promoter: insert edge %q: %w", e.ID, err)
+			}
+		}
+	}
+	return nil
+}
+
+// resolveIntraPackageCalls binds UnresolvedCalls whose callee lives in another
+// file of the same Go package (solov2-2at). Package-qualified calls are left to
+// the cross-package pass; same-directory = same package by convention. Misses
+// stay unresolved.
+func (p *promotion) resolveIntraPackageCalls(ctx context.Context) error {
+	pkgMaps := buildPackageSymbolMap(p.batch)
+	for _, file := range p.batch.Files {
+		if len(file.UnresolvedCalls) == 0 {
+			continue
+		}
+		names := pkgMaps[filepath.Dir(file.Path)]
+		if len(names) == 0 {
+			continue
+		}
+		for _, uc := range file.UnresolvedCalls {
+			// Package-qualified calls (cmd.Execute) bind via the import map in
+			// the cross-package pass, never by bare name against the local
+			// package — else a same-named local symbol would bind falsely.
+			if uc.PkgQualifier != "" {
+				continue
+			}
+			targetID, ok := names[uc.CalleeName]
+			if !ok || uc.CallerID == targetID { // miss or self-call (recursion)
+				continue
+			}
+			e, ok := buildCallEdge(uc, targetID)
+			if !ok {
+				continue
+			}
+			if err := p.insertEdge(ctx, e); err != nil {
+				return fmt.Errorf("promoter: insert cross-file edge %q: %w", e.ID, err)
+			}
+		}
+	}
+	return nil
+}
+
+// resolveCrossPackageCalls binds package-qualified calls within the same Go
+// module and records cross-repo edge stubs for calls into other modules
+// (solov2-xc51). Repos without a module_path skip the table entirely.
+// Ambiguity/misses are skipped: this pass never emits a false edge.
+func (p *promotion) resolveCrossPackageCalls(ctx context.Context) error {
+	if p.modulePath == "" {
+		return nil
+	}
+	// Stub statement prepared lazily here so promotions for repos without a
+	// module_path never touch the table. Bound by the query-time resolver to
+	// whichever registered repo owns the module_path (solov2-xc51.3 / 1gj).
+	stubStmt, err := prepare(ctx, p.tx, "stub insert", `
+		INSERT INTO cross_repo_edge_stubs
+			(stub_id, branch, repo_id, src_node_id, kind, module_path, symbol_path, language, last_promoted_at, method_call, src_line)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		ON CONFLICT(stub_id, branch) DO NOTHING`)
+	if err != nil {
+		return err
+	}
+	defer stubStmt.Close()
+
+	byPkgDir := buildModuleRelSymbolMap(p.batch, p.rootPath)
+	for _, file := range p.batch.Files {
+		if len(file.UnresolvedCalls) == 0 || len(file.Imports) == 0 {
+			continue
+		}
+		for _, uc := range file.UnresolvedCalls {
+			if uc.PkgQualifier == "" {
+				continue
+			}
+			if err := p.resolveQualifiedCall(ctx, stubStmt, byPkgDir, file, uc); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+// resolveQualifiedCall resolves the call's package qualifier to an import path
+// (with the package-name fallback of solov2-izh6.6), then either binds an
+// in-module CALLS edge or records a cross-repo stub.
+func (p *promotion) resolveQualifiedCall(ctx context.Context, stubStmt *sql.Stmt, byPkgDir map[string]map[string]domain.NodeID, file application.PromotionFile, uc domain.UnresolvedCall) error {
+	importPath, ok := file.Imports[uc.PkgQualifier]
+	if !ok {
+		// The import-alias key is the last URL segment (Go convention), but a
+		// module's package name can diverge from its URL (e.g.
+		// github.com/jrose/greetlib declares `package greet`). Fall back to a
+		// registered Go module among this file's imports whose promoted package
+		// node is named uc.PkgQualifier; a single match binds (solov2-izh6.6).
+		ip, matched, err := findImportByPackageName(ctx, p.tx, file.Imports, uc.PkgQualifier)
+		if err != nil {
+			return fmt.Errorf("promoter: cross-repo pkg-name lookup %q: %w", uc.PkgQualifier, err)
+		}
+		if !matched {
+			return nil // qualifier is a local var, an unregistered dep, or stdlib
+		}
+		importPath = ip
+	}
+	relDir, inModule := modulePackageDir(p.modulePath, importPath)
+	if !inModule {
+		return p.emitCrossRepoStub(ctx, stubStmt, uc, importPath)
+	}
+	return p.resolveInModuleCall(ctx, byPkgDir, uc, relDir)
+}
+
+// emitCrossRepoStub records a cross-repo edge stub for a package-qualified call
+// into another module. Stdlib (no domain in the first path segment) can never
+// match a repo, so it is skipped to keep the table lean. solov2-9rc2 Phase C:
+// plain and method calls both emit stubs, distinguished by method_call.
+func (p *promotion) emitCrossRepoStub(ctx context.Context, stubStmt *sql.Stmt, uc domain.UnresolvedCall, importPath string) error {
+	if !isExternalModulePath(importPath) {
+		return nil
+	}
+	methodFlag := 0
+	sid := stubID(string(uc.CallerID), importPath, uc.CalleeName)
+	if uc.IsMethodCall {
+		methodFlag = 1
+		// Distinct stub_id namespace so a same-name plain and method call from
+		// the same caller don't collide on the ON CONFLICT key.
+		sid = stubID(string(uc.CallerID), importPath, "@method:"+uc.CalleeName)
+	}
+	if _, err := stubStmt.ExecContext(ctx,
+		sid, p.branch, p.repoID, string(uc.CallerID), string(domain.EdgeCalls),
+		importPath, uc.CalleeName, "go", p.now, methodFlag,
+		ucSrcLine(uc),
+	); err != nil {
+		return fmt.Errorf("promoter: insert cross-repo stub %q: %w", sid, err)
+	}
+	return nil
+}
+
+// resolveInModuleCall binds an in-module package-qualified call to its target
+// node and writes the CALLS edge. Self-calls and misses are skipped.
+func (p *promotion) resolveInModuleCall(ctx context.Context, byPkgDir map[string]map[string]domain.NodeID, uc domain.UnresolvedCall, relDir string) error {
+	targetID, found, err := p.lookupInModuleTarget(ctx, byPkgDir, relDir, uc)
+	if err != nil {
+		return err
+	}
+	if !found || uc.CallerID == targetID {
+		return nil
+	}
+	e, ok := buildCallEdge(uc, targetID)
+	if !ok {
+		return nil
+	}
+	if err := p.insertEdge(ctx, e); err != nil {
+		return fmt.Errorf("promoter: insert cross-package edge %q: %w", e.ID, err)
+	}
+	return nil
+}
+
+// lookupInModuleTarget finds the target node for an in-module call, first in
+// the current batch then in the already-promoted graph (so incremental
+// single-file commits still bind). Method calls (solov2-9rc2 Phase B) carry the
+// bare method name and match by `<Receiver>.<name>` suffix; single-match binds,
+// ambiguity is skipped to preserve the "no false edges" invariant.
+func (p *promotion) lookupInModuleTarget(ctx context.Context, byPkgDir map[string]map[string]domain.NodeID, relDir string, uc domain.UnresolvedCall) (domain.NodeID, bool, error) {
+	if uc.IsMethodCall {
+		if tid, ok := findInBatchMethod(byPkgDir, relDir, uc.CalleeName); ok {
+			return tid, true, nil
+		}
+		tid, found, err := lookupPromotedMethodInDir(ctx, p.tx, p.repoID, p.branch, p.rootPath, relDir, uc.CalleeName)
+		if err != nil {
+			return "", false, fmt.Errorf("promoter: method-call lookup %q: %w", uc.CalleeName, err)
+		}
+		return tid, found, nil
+	}
+	if tid, ok := byPkgDir[relDir][uc.CalleeName]; ok {
+		return tid, true, nil
+	}
+	// Fall back to the promoted graph (callee's file not in this batch). The
+	// cursor must fully drain before the edge insert: a query open during
+	// ExecContext deadlocks the single write connection.
+	tid, found, err := lookupPromotedSymbolDir(ctx, p.tx, p.repoID, p.branch, p.rootPath, relDir, uc.CalleeName)
+	if err != nil {
+		return "", false, fmt.Errorf("promoter: cross-package lookup %q: %w", uc.CalleeName, err)
+	}
+	return tid, found, nil
+}
+
+// advanceRepoSHA advances repos.last_promoted_sha (and active_branch when a
+// branch is supplied) atomically with the node writes (solov2-c47). An empty
+// SHA is treated as caller error and skipped so a known-good value is not
+// clobbered; an empty branch (repo.Add does not set active_branch) writes the
+// SHA alone and leaves active_branch untouched.
+func (p *promotion) advanceRepoSHA(ctx context.Context) error {
+	if p.batch.GitSHA == "" {
+		return nil
+	}
+	var err error
+	if p.branch != "" {
+		_, err = p.tx.ExecContext(ctx,
+			`UPDATE repos SET last_promoted_sha = ?, active_branch = ? WHERE repo_id = ?`,
+			p.batch.GitSHA, p.branch, p.repoID,
+		)
+	} else {
+		_, err = p.tx.ExecContext(ctx,
+			`UPDATE repos SET last_promoted_sha = ? WHERE repo_id = ?`,
+			p.batch.GitSHA, p.repoID,
+		)
+	}
+	if err != nil {
+		return fmt.Errorf("promoter: advance last_promoted_sha: %w", err)
 	}
 	return nil
 }
