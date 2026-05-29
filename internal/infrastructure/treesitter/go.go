@@ -471,6 +471,122 @@ func collectPackageVarOrigins(root *sitter.Node, src []byte) map[string]localVar
 	return origins
 }
 
+// collectInFileFunctionReturns walks the file root for top-level
+// function declarations whose result is a single, simple type (or
+// pointer to one) and returns funcName → bareReturnTypeName. Only
+// shapes the cross-package-CALLS resolver can use downstream are
+// included:
+//
+//	func New() Greeting       -> New -> Greeting
+//	func New() *Greeting      -> New -> Greeting
+//
+// Multi-result returns, named result parameters with non-trivial
+// types, and qualified types (pkg.Other) are intentionally skipped:
+// without same-file binding the resolver has nothing to do, and
+// recording the wrong type would invent false edges (solov2-rlfe).
+func collectInFileFunctionReturns(root *sitter.Node, src []byte) map[string]string {
+	out := map[string]string{}
+	if root == nil {
+		return out
+	}
+	count := int(root.ChildCount())
+	for i := range count {
+		child := root.Child(i)
+		if child == nil || child.Type() != "function_declaration" {
+			continue
+		}
+		nameNode := child.ChildByFieldName("name")
+		resultNode := child.ChildByFieldName("result")
+		if nameNode == nil || resultNode == nil {
+			continue
+		}
+		name := string(src[nameNode.StartByte():nameNode.EndByte()])
+		if t := simpleReturnTypeName(resultNode, src); t != "" {
+			out[name] = t
+		}
+	}
+	return out
+}
+
+// simpleReturnTypeName returns the bare type identifier for a Go
+// function's result node when it is a single type — `Greeting`,
+// `*Greeting`, or `pkg.T` (skipped: see collectInFileFunctionReturns).
+// Returns "" for anything else (parameter_list with >1 entry, tuple
+// returns, generics, channels, slices, maps, …) so that ambiguity is
+// expressed as absence rather than a wrong binding.
+func simpleReturnTypeName(result *sitter.Node, src []byte) string {
+	switch result.Type() {
+	case "type_identifier":
+		return string(src[result.StartByte():result.EndByte()])
+	case "pointer_type":
+		// pointer_type's only child is the pointed-to type expression.
+		// Recurse so `*Greeting` and `**T` both unwrap correctly.
+		if int(result.NamedChildCount()) == 1 {
+			return simpleReturnTypeName(result.NamedChild(0), src)
+		}
+		return ""
+	case "parameter_list":
+		// `func() T` parses as parameter_list with a single
+		// parameter_declaration whose type is T.
+		if int(result.NamedChildCount()) != 1 {
+			return ""
+		}
+		spec := result.NamedChild(0)
+		if spec == nil || spec.Type() != "parameter_declaration" {
+			return ""
+		}
+		typ := spec.ChildByFieldName("type")
+		if typ == nil {
+			return ""
+		}
+		return simpleReturnTypeName(typ, src)
+	}
+	return ""
+}
+
+// collectLocalReceiverTypes walks a function body for `v := F(...)`
+// short-var declarations whose RHS is a bare-identifier call to a
+// function in funcReturns. The returned map binds v to the function's
+// return type so v.Method() downstream resolves to ReceiverType.Method
+// in this same file (solov2-rlfe). Without it, `g := New("x"); g.Render()`
+// in greet_test.go emitted UnresolvedCall{PkgQualifier:"g"} — a bare
+// local-var name promotion could never bind, so test files were
+// invisible to blast/call_chain for in-repo methods.
+func collectLocalReceiverTypes(body *sitter.Node, src []byte, funcReturns map[string]string) map[string]string {
+	out := map[string]string{}
+	if body == nil || len(funcReturns) == 0 {
+		return out
+	}
+	var walk func(*sitter.Node)
+	walk = func(n *sitter.Node) {
+		if n.Type() == "short_var_declaration" {
+			left := n.ChildByFieldName("left")
+			right := n.ChildByFieldName("right")
+			if left != nil && right != nil &&
+				int(left.NamedChildCount()) == 1 &&
+				int(right.NamedChildCount()) == 1 {
+				lhs := left.NamedChild(0)
+				rhs := right.NamedChild(0)
+				if lhs != nil && rhs != nil && lhs.Type() == "identifier" && rhs.Type() == "call_expression" {
+					fn := rhs.ChildByFieldName("function")
+					if fn != nil && fn.Type() == "identifier" {
+						callee := string(src[fn.StartByte():fn.EndByte()])
+						if recvType, ok := funcReturns[callee]; ok {
+							out[string(src[lhs.StartByte():lhs.EndByte()])] = recvType
+						}
+					}
+				}
+			}
+		}
+		count := int(n.ChildCount())
+		for i := range count {
+			walk(n.Child(i))
+		}
+	}
+	walk(body)
+	return out
+}
+
 // originPkgFromRHS returns the qualifying package identifier for a
 // var declaration's RHS, or "" when the shape isn't recognised.
 // Handles three shapes that all behave the same way for downstream

@@ -227,6 +227,13 @@ func (p *GoParser) ParseFile(ctx context.Context, repoID, path string, src []byt
 	// classify `x.Method()` as a cross-package method call. Computed
 	// once per file and shared across every function body in the file.
 	pkgVarOrigins := collectPackageVarOrigins(root, src)
+	// solov2-rlfe: same-file function return types so `v := New(...);
+	// v.Method()` in test files (and any other same-package caller)
+	// binds Method to ReceiverType.Method via the in-file symbol map.
+	// Without this, test functions were invisible to blast/call_chain
+	// for in-repo methods because Render lookups dead-ended on a bare
+	// "g" qualifier promotion could never resolve.
+	funcReturns := collectInFileFunctionReturns(root, src)
 	callsQuery, qerr := compileEmbeddedQuery(tsgo.GetLanguage(), "go", "calls")
 	if qerr != nil {
 		return nil, qerr
@@ -235,7 +242,7 @@ func (p *GoParser) ParseFile(ctx context.Context, repoID, path string, src []byt
 		if c.body == nil {
 			continue
 		}
-		callEdges, callUnresolved := extractCallsFromBody(callsQuery, c.body, src, c.caller, c.recvName, c.recvType, symbolByName, structFields, pkgVarOrigins)
+		callEdges, callUnresolved := extractCallsFromBody(callsQuery, c.body, src, c.caller, c.recvName, c.recvType, symbolByName, structFields, pkgVarOrigins, funcReturns)
 		result.Edges = append(result.Edges, callEdges...)
 		result.UnresolvedCalls = append(result.UnresolvedCalls, callUnresolved...)
 	}
@@ -252,7 +259,7 @@ func (p *GoParser) ParseFile(ctx context.Context, repoID, path string, src []byt
 	// anon body's calls to the package node so call_chain answers
 	// "what does this file initialisation eventually reach" correctly.
 	if pkgNode != nil {
-		anonEdges, anonUnresolved := extractAnonCallsInTopLevelVars(callsQuery, root, src, symbolByName, pkgNode, pkgVarOrigins)
+		anonEdges, anonUnresolved := extractAnonCallsInTopLevelVars(callsQuery, root, src, symbolByName, pkgNode, pkgVarOrigins, funcReturns)
 		result.Edges = append(result.Edges, anonEdges...)
 		result.UnresolvedCalls = append(result.UnresolvedCalls, anonUnresolved...)
 	}
@@ -279,7 +286,7 @@ func (p *GoParser) ParseFile(ctx context.Context, repoID, path string, src []byt
 // in-file map (matching parseMethodDecl naming). Dedup is per-caller
 // on (callee-name) for unresolved and (caller-id, callee-id) for edges
 // to mirror the legacy seen/seenU maps.
-func extractCallsFromBody(q *sitter.Query, body *sitter.Node, src []byte, caller *domain.Node, recvName, recvType string, symbols map[string]*domain.Node, structFields map[string]map[string]fieldType, pkgVarOrigins map[string]localVarOrigin) ([]*domain.Edge, []domain.UnresolvedCall) {
+func extractCallsFromBody(q *sitter.Query, body *sitter.Node, src []byte, caller *domain.Node, recvName, recvType string, symbols map[string]*domain.Node, structFields map[string]map[string]fieldType, pkgVarOrigins map[string]localVarOrigin, funcReturns map[string]string) ([]*domain.Edge, []domain.UnresolvedCall) {
 	var edges []*domain.Edge
 	var unresolved []domain.UnresolvedCall
 	seen := map[string]bool{}
@@ -298,6 +305,12 @@ func extractCallsFromBody(q *sitter.Query, body *sitter.Node, src []byte, caller
 		}
 		localOrigins[name] = pkg
 	}
+	// solov2-rlfe: per-body local-var receiver-type origins (v := New()
+	// where New is a same-file function returning a same-package type).
+	// Kept distinct from localOrigins/pkgVarOrigins because the
+	// downstream lookup binds against the in-file symbol map directly,
+	// not against a cross-repo stub.
+	localRecvTypes := collectLocalReceiverTypes(body, src, funcReturns)
 
 	for _, m := range runQuery(q, body) {
 		var ref callRef
@@ -354,6 +367,14 @@ func extractCallsFromBody(q *sitter.Query, body *sitter.Node, src []byte, caller
 			case localOrigins[op] != "":
 				// v.Method() where v := pkg.New(...) — phase A.
 				ref = callRef{name: fld, pkg: localOrigins[op], method: true}
+			case localRecvTypes[op] != "":
+				// solov2-rlfe: v.Method() where v := SamePkgFunc(...)
+				// and SamePkgFunc returns a same-package type T → bind
+				// to T.Method via the in-file symbol map. Same shape as
+				// the recvName branch above, just with the receiver
+				// type inferred from a local constructor call rather
+				// than a method declaration's receiver.
+				ref = callRef{name: localRecvTypes[op] + "." + fld}
 			default:
 				// pkg.Foo() — package-qualified.
 				ref = callRef{name: fld, pkg: op}
@@ -572,7 +593,7 @@ func buildVarNodesFromSpec(spec, decl *sitter.Node, src []byte, repoID, path str
 // funcs in var initialisers don't bind a `s`/`this` receiver) when
 // it hits a func_literal. Dedup is per-pkgNode across all anon
 // bodies so two literals calling the same target produce one edge.
-func extractAnonCallsInTopLevelVars(q *sitter.Query, root *sitter.Node, src []byte, symbols map[string]*domain.Node, pkgNode *domain.Node, pkgVarOrigins map[string]localVarOrigin) ([]*domain.Edge, []domain.UnresolvedCall) {
+func extractAnonCallsInTopLevelVars(q *sitter.Query, root *sitter.Node, src []byte, symbols map[string]*domain.Node, pkgNode *domain.Node, pkgVarOrigins map[string]localVarOrigin, funcReturns map[string]string) ([]*domain.Edge, []domain.UnresolvedCall) {
 	var edges []*domain.Edge
 	var unresolved []domain.UnresolvedCall
 	seenEdge := map[string]bool{}
@@ -586,7 +607,7 @@ func extractAnonCallsInTopLevelVars(q *sitter.Query, root *sitter.Node, src []by
 		if n.Type() == "func_literal" {
 			body := n.ChildByFieldName("body")
 			if body != nil {
-				e, u := extractCallsFromBody(q, body, src, pkgNode, "", "", symbols, nil, pkgVarOrigins)
+				e, u := extractCallsFromBody(q, body, src, pkgNode, "", "", symbols, nil, pkgVarOrigins, funcReturns)
 				for _, edge := range e {
 					key := string(edge.Src) + callKeySep + string(edge.Tgt)
 					if seenEdge[key] {

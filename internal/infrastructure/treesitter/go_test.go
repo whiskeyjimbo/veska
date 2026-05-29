@@ -981,6 +981,108 @@ func nodeNames(nodes []*domain.Node) []string {
 	return names
 }
 
+// TestParseFile_SamePackageConstructorMethodCall covers solov2-rlfe:
+// when a test (or any same-package caller) does `g := New(...)` followed
+// by `g.Render()`, the Render call must bind to Greeting.Render in the
+// same file. Before this fix the parser emitted UnresolvedCall with
+// PkgQualifier="g" — a bare local-var name that couldn't possibly
+// resolve at promotion. Junior-journey symptom: `veska blast Render`
+// on greetlib showed zero in-repo callers even though greet_test.go
+// literally calls g.Render() twice.
+func TestParseFile_SamePackageConstructorMethodCall(t *testing.T) {
+	src := []byte(`package greetlib
+
+type Greeting struct{ Name string }
+
+func New(name string) Greeting {
+	return Greeting{Name: name}
+}
+
+func (g Greeting) Render() string { return g.Name }
+
+func TestRender() {
+	g := New("world")
+	_ = g.Render()
+}
+`)
+	p := treesitter.NewGoParser()
+	result, err := p.ParseFile(context.Background(), repoID, filePath, src)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// The TestRender → Greeting.Render edge must materialise as a
+	// resolved CALLS edge (both endpoints live in this file), not an
+	// UnresolvedCall — there's no cross-package indirection here.
+	var hasEdge bool
+	var renderNodeID, testRenderNodeID domain.NodeID
+	for _, n := range result.Nodes {
+		switch n.Name {
+		case "Greeting.Render":
+			renderNodeID = n.ID
+		case "TestRender":
+			testRenderNodeID = n.ID
+		}
+	}
+	if renderNodeID == "" || testRenderNodeID == "" {
+		t.Fatalf("missing expected nodes; got %d nodes", len(result.Nodes))
+	}
+	for _, e := range result.Edges {
+		if e.Src == testRenderNodeID && e.Tgt == renderNodeID && e.Kind == "CALLS" {
+			hasEdge = true
+		}
+	}
+	if !hasEdge {
+		t.Errorf("missing CALLS edge TestRender → Greeting.Render. Unresolved instead: %+v", result.UnresolvedCalls)
+	}
+}
+
+// TestParseFile_SamePackageConstructorMethodCall_PointerReturn covers
+// the pointer-return shape of solov2-rlfe: `func New() *Greeting`
+// followed by `g := New(); g.Method()`. simpleReturnTypeName must
+// unwrap *T to T so the in-file lookup binds the same way as the
+// value-return case.
+func TestParseFile_SamePackageConstructorMethodCall_PointerReturn(t *testing.T) {
+	src := []byte(`package greetlib
+
+type Greeting struct{ Name string }
+
+func NewPtr(name string) *Greeting {
+	return &Greeting{Name: name}
+}
+
+func (g *Greeting) Render() string { return g.Name }
+
+func TestRenderPtr() {
+	g := NewPtr("world")
+	_ = g.Render()
+}
+`)
+	p := treesitter.NewGoParser()
+	result, err := p.ParseFile(context.Background(), repoID, filePath, src)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	var renderNodeID, callerNodeID domain.NodeID
+	for _, n := range result.Nodes {
+		switch n.Name {
+		case "Greeting.Render":
+			renderNodeID = n.ID
+		case "TestRenderPtr":
+			callerNodeID = n.ID
+		}
+	}
+	if renderNodeID == "" || callerNodeID == "" {
+		t.Fatalf("missing nodes; got %d", len(result.Nodes))
+	}
+	for _, e := range result.Edges {
+		if e.Src == callerNodeID && e.Tgt == renderNodeID && e.Kind == "CALLS" {
+			return
+		}
+	}
+	t.Errorf("missing TestRenderPtr → Greeting.Render edge. Unresolved: %+v", result.UnresolvedCalls)
+}
+
 // TestParseFile_PackageVarCompositeLiteralOrigin covers the cobra-shaped
 // pattern surfaced in the junior onboarding journey (solov2-8ffo /
 // solov2-zuvl): a package-level var initialised from a composite literal
