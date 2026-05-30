@@ -12,6 +12,23 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/cli/doctorcmd"
 )
 
+// doctorSubCmd builds a generic stub doctor subcommand with a --json flag. It
+// exists only to exercise the JSON-envelope contract a stub probe must satisfy;
+// the real doctor subcommands wire their own flags in doctor.go.
+func doctorSubCmd(use, short string, run func(bool, io.Writer) error) *cobra.Command {
+	var jsonOut bool
+	cmd := &cobra.Command{
+		Use:          use,
+		Short:        short,
+		SilenceUsage: true,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return run(jsonOut, cmd.OutOrStdout())
+		},
+	}
+	cmd.Flags().BoolVar(&jsonOut, "json", false, "output results as JSON")
+	return cmd
+}
+
 // captureJSONOutput executes cmd with --json and returns the parsed envelope.
 func captureJSONOutput(cmd *cobra.Command) (map[string]any, error) {
 	var buf bytes.Buffer
