@@ -5,7 +5,7 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/whiskeyjimbo/veska/internal/doctor"
+	"github.com/whiskeyjimbo/veska/internal/platform/doctor"
 )
 
 type fakeRefs struct {

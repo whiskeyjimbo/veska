@@ -3,7 +3,7 @@ package doctor_test
 import (
 	"testing"
 
-	"github.com/whiskeyjimbo/veska/internal/doctor"
+	"github.com/whiskeyjimbo/veska/internal/platform/doctor"
 )
 
 func TestCheckEgressObservability_NoListeners(t *testing.T) {

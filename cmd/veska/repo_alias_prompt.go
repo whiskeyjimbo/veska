@@ -9,7 +9,7 @@ import (
 	"io"
 	"strings"
 
-	"github.com/whiskeyjimbo/veska/internal/repo"
+	"github.com/whiskeyjimbo/veska/internal/infrastructure/repo"
 )
 
 // runAliasSuggestPrompt offers an auto-suggested alias on `veska repo add`

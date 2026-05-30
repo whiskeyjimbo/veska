@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/whiskeyjimbo/veska/internal/doctor"
+	"github.com/whiskeyjimbo/veska/internal/platform/doctor"
 )
 
 func TestCheckEgressReachable(t *testing.T) {

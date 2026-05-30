@@ -16,8 +16,8 @@ import (
 
 	"github.com/whiskeyjimbo/veska/internal/application"
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/mcp"
+	"github.com/whiskeyjimbo/veska/internal/infrastructure/repo"
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/vector"
-	"github.com/whiskeyjimbo/veska/internal/repo"
 )
 
 // providersTestDB builds an in-memory SQLite with the minimal tables the

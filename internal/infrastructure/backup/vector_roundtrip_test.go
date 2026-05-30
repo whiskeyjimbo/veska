@@ -12,7 +12,7 @@ import (
 
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/sqlite/sqldriver"
 
-	"github.com/whiskeyjimbo/veska/internal/backup"
+	"github.com/whiskeyjimbo/veska/internal/infrastructure/backup"
 )
 
 // TestBackupIncludesVeskaDB verifies that the primary veska.db is always

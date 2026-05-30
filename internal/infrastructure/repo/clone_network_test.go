@@ -2,7 +2,7 @@
 
 // Network-tagged integration tests for the clone helper (solov2-kxo5.1).
 // Excluded from `go test ./...` so the default loop stays offline-safe;
-// run with `go test -tags=network ./internal/repo/`.
+// run with `go test -tags=network ./internal/infrastructure/repo/`.
 
 package repo_test
 
@@ -13,7 +13,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/whiskeyjimbo/veska/internal/repo"
+	"github.com/whiskeyjimbo/veska/internal/infrastructure/repo"
 )
 
 // A small public repo that's unlikely to disappear; pick a fixed commit

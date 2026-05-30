@@ -19,9 +19,9 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/whiskeyjimbo/veska/internal/application/extindex"
 	"github.com/whiskeyjimbo/veska/internal/cli/mcpclient"
+	"github.com/whiskeyjimbo/veska/internal/infrastructure/repo"
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/sqlite"
 	"github.com/whiskeyjimbo/veska/internal/platform/config"
-	"github.com/whiskeyjimbo/veska/internal/repo"
 )
 
 // repoCmd returns the "repo" Cobra command with "add" and "remove" sub-commands.

@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/whiskeyjimbo/veska/internal/doctor"
+	"github.com/whiskeyjimbo/veska/internal/platform/doctor"
 )
 
 // writeTarGz writes a minimal valid .tar.gz archive to path.

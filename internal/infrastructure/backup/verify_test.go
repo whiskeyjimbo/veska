@@ -10,7 +10,7 @@ import (
 
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/sqlite/sqldriver"
 
-	"github.com/whiskeyjimbo/veska/internal/backup"
+	"github.com/whiskeyjimbo/veska/internal/infrastructure/backup"
 )
 
 // buildTarball writes a .tar.gz to tarPath containing the files described by

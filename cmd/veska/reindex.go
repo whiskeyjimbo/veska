@@ -17,13 +17,13 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/core/ports"
 	fsignore "github.com/whiskeyjimbo/veska/internal/infrastructure/fs"
 	gitwatch "github.com/whiskeyjimbo/veska/internal/infrastructure/git"
+	"github.com/whiskeyjimbo/veska/internal/infrastructure/repo"
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/secretsscanner"
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/sqlite"
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/vulnsource"
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/vulnsource/osv"
 	"github.com/whiskeyjimbo/veska/internal/platform/config"
 	"github.com/whiskeyjimbo/veska/internal/platform/observability"
-	"github.com/whiskeyjimbo/veska/internal/repo"
 )
 
 // reindexDaemonProbe reports whether the daemon socket is reachable. It is

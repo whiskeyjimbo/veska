@@ -13,13 +13,13 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/whiskeyjimbo/veska/internal/application/extindex"
 	"github.com/whiskeyjimbo/veska/internal/application/review"
-	"github.com/whiskeyjimbo/veska/internal/doctor"
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/embedding/elect"
+	"github.com/whiskeyjimbo/veska/internal/infrastructure/repo"
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/sqlite"
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/vulnsource/osv"
 	"github.com/whiskeyjimbo/veska/internal/platform/config"
+	"github.com/whiskeyjimbo/veska/internal/platform/doctor"
 	"github.com/whiskeyjimbo/veska/internal/platform/embedderprobe"
-	"github.com/whiskeyjimbo/veska/internal/repo"
 )
 
 const (

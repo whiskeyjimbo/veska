@@ -8,7 +8,7 @@ import (
 
 	application "github.com/whiskeyjimbo/veska/internal/application"
 	"github.com/whiskeyjimbo/veska/internal/core/domain"
-	"github.com/whiskeyjimbo/veska/internal/repo"
+	"github.com/whiskeyjimbo/veska/internal/infrastructure/repo"
 )
 
 // RepoRegistrar registers and deregisters tracked repositories. It is the

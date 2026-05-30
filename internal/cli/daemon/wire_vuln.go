@@ -8,10 +8,10 @@ import (
 
 	"github.com/whiskeyjimbo/veska/internal/application/checks"
 	"github.com/whiskeyjimbo/veska/internal/core/ports"
+	"github.com/whiskeyjimbo/veska/internal/infrastructure/repo"
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/vulnsource"
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/vulnsource/osv"
 	"github.com/whiskeyjimbo/veska/internal/platform/config"
-	"github.com/whiskeyjimbo/veska/internal/repo"
 )
 
 // checkVulnProvider gates daemon startup on the [vuln_source] provider.

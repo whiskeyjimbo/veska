@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/whiskeyjimbo/veska/internal/doctor"
+	"github.com/whiskeyjimbo/veska/internal/platform/doctor"
 )
 
 type fakeRenderState struct {

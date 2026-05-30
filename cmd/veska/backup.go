@@ -11,9 +11,9 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
-	"github.com/whiskeyjimbo/veska/internal/backup"
-	"github.com/whiskeyjimbo/veska/internal/doctor"
+	"github.com/whiskeyjimbo/veska/internal/infrastructure/backup"
 	"github.com/whiskeyjimbo/veska/internal/platform/config"
+	"github.com/whiskeyjimbo/veska/internal/platform/doctor"
 )
 
 // backupCmd returns the top-level "backup" Cobra command with subcommands.
