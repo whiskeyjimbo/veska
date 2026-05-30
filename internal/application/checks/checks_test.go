@@ -94,11 +94,7 @@ func (c *stubCheck) Run(_ context.Context, _ checks.Input) ([]*domain.Finding, e
 
 func mustFinding(t *testing.T, rule, repoID, branch, filePath string) *domain.Finding {
 	t.Helper()
-	f, err := domain.NewFinding(
-		repoID, branch,
-		domain.SeverityLow, domain.LayerStructural, rule, "msg",
-		domain.WithFileAnchor(filePath),
-	)
+	f, err := domain.NewFinding(domain.FindingSpec{RepoID: repoID, Branch: branch, Severity: domain.SeverityLow, Layer: domain.LayerStructural, Rule: rule, Message: "msg"}, domain.WithFileAnchor(filePath))
 	if err != nil {
 		t.Fatalf("NewFinding: %v", err)
 	}

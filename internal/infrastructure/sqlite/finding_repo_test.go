@@ -28,12 +28,7 @@ func TestFindingRepo_SaveRoundTrip(t *testing.T) {
 
 	repo := sqlite.NewFindingRepo(db)
 
-	f, err := domain.NewFinding(
-		"repo1", "main",
-		domain.SeverityLow, domain.LayerStructural,
-		"parse-failure", "tree-sitter could not parse foo.go",
-		domain.WithFileAnchor("foo.go"),
-	)
+	f, err := domain.NewFinding(domain.FindingSpec{RepoID: "repo1", Branch: "main", Severity: domain.SeverityLow, Layer: domain.LayerStructural, Rule: "parse-failure", Message: "tree-sitter could not parse foo.go"}, domain.WithFileAnchor("foo.go"))
 	if err != nil {
 		t.Fatalf("NewFinding: %v", err)
 	}
@@ -88,11 +83,7 @@ func TestFindingRepo_AnchorContentHash_RoundTrip(t *testing.T) {
 	repo := sqlite.NewFindingRepo(db)
 
 	// With hash.
-	fWith, err := domain.NewFinding(
-		"repo1", "main",
-		domain.SeverityLow, domain.LayerStructural,
-		"dead-code", "msg",
-		domain.WithNodeAnchor("n-with"),
+	fWith, err := domain.NewFinding(domain.FindingSpec{RepoID: "repo1", Branch: "main", Severity: domain.SeverityLow, Layer: domain.LayerStructural, Rule: "dead-code", Message: "msg"}, domain.WithNodeAnchor("n-with"),
 		domain.WithAnchorContentHash("h-1"),
 	)
 	if err != nil {
@@ -103,12 +94,7 @@ func TestFindingRepo_AnchorContentHash_RoundTrip(t *testing.T) {
 	}
 
 	// Without hash (parse-failure style).
-	fWithout, err := domain.NewFinding(
-		"repo1", "main",
-		domain.SeverityLow, domain.LayerStructural,
-		"parse-failure", "msg",
-		domain.WithFileAnchor("foo.go"),
-	)
+	fWithout, err := domain.NewFinding(domain.FindingSpec{RepoID: "repo1", Branch: "main", Severity: domain.SeverityLow, Layer: domain.LayerStructural, Rule: "parse-failure", Message: "msg"}, domain.WithFileAnchor("foo.go"))
 	if err != nil {
 		t.Fatalf("NewFinding without hash: %v", err)
 	}
@@ -156,11 +142,7 @@ func TestFindingRepo_AnchorContentHash_OnConflictRefreshes(t *testing.T) {
 	repo := sqlite.NewFindingRepo(db)
 
 	build := func(hash string) *domain.Finding {
-		f, err := domain.NewFinding(
-			"repo1", "main",
-			domain.SeverityLow, domain.LayerStructural,
-			"dead-code", "msg",
-			domain.WithNodeAnchor("n-x"),
+		f, err := domain.NewFinding(domain.FindingSpec{RepoID: "repo1", Branch: "main", Severity: domain.SeverityLow, Layer: domain.LayerStructural, Rule: "dead-code", Message: "msg"}, domain.WithNodeAnchor("n-x"),
 			domain.WithAnchorContentHash(hash),
 		)
 		if err != nil {
@@ -221,12 +203,7 @@ func TestFindingRepo_Idempotent(t *testing.T) {
 
 	repo := sqlite.NewFindingRepo(db)
 
-	f, _ := domain.NewFinding(
-		"repo1", "main",
-		domain.SeverityMedium, domain.LayerStructural,
-		"dead-code", "no inbound edges",
-		domain.WithNodeAnchor("n1"),
-	)
+	f, _ := domain.NewFinding(domain.FindingSpec{RepoID: "repo1", Branch: "main", Severity: domain.SeverityMedium, Layer: domain.LayerStructural, Rule: "dead-code", Message: "no inbound edges"}, domain.WithNodeAnchor("n1"))
 
 	if err := repo.Save(context.Background(), f); err != nil {
 		t.Fatalf("first Save: %v", err)
@@ -263,12 +240,7 @@ func TestFindingRepo_CloseObsolete(t *testing.T) {
 
 	repo := sqlite.NewFindingRepo(db)
 
-	f, err := domain.NewFinding(
-		"repo1", "main",
-		domain.SeverityMedium, domain.LayerStructural,
-		"parse-failure", "tree-sitter could not parse foo.go",
-		domain.WithFileAnchor("foo.go"),
-	)
+	f, err := domain.NewFinding(domain.FindingSpec{RepoID: "repo1", Branch: "main", Severity: domain.SeverityMedium, Layer: domain.LayerStructural, Rule: "parse-failure", Message: "tree-sitter could not parse foo.go"}, domain.WithFileAnchor("foo.go"))
 	if err != nil {
 		t.Fatalf("NewFinding: %v", err)
 	}
@@ -363,12 +335,7 @@ func TestFindingRepo_CloseSupersededAutoLinks(t *testing.T) {
 
 	// Helper that builds + saves an auto-link finding anchored on an edge id.
 	saveAutoLink := func(edgeID string) string {
-		f, err := domain.NewFinding(
-			"r1", "main",
-			domain.SeverityLow, domain.LayerSemantic,
-			"auto-link", "similar to "+edgeID,
-			domain.WithNodeAnchor(edgeID),
-		)
+		f, err := domain.NewFinding(domain.FindingSpec{RepoID: "r1", Branch: "main", Severity: domain.SeverityLow, Layer: domain.LayerSemantic, Rule: "auto-link", Message: "similar to " + edgeID}, domain.WithNodeAnchor(edgeID))
 		if err != nil {
 			t.Fatalf("NewFinding: %v", err)
 		}
@@ -383,12 +350,7 @@ func TestFindingRepo_CloseSupersededAutoLinks(t *testing.T) {
 	fC := saveAutoLink("eC")
 
 	// Insert a non-auto-link finding anchored on eA to verify the rule filter.
-	other, err := domain.NewFinding(
-		"r1", "main",
-		domain.SeverityMedium, domain.LayerStructural,
-		"dead-code", "dead",
-		domain.WithNodeAnchor("eA"),
-	)
+	other, err := domain.NewFinding(domain.FindingSpec{RepoID: "r1", Branch: "main", Severity: domain.SeverityMedium, Layer: domain.LayerStructural, Rule: "dead-code", Message: "dead"}, domain.WithNodeAnchor("eA"))
 	if err != nil {
 		t.Fatalf("NewFinding dead-code: %v", err)
 	}
@@ -439,11 +401,7 @@ func TestFindingRepo_CloseSupersededByRule(t *testing.T) {
 	repo := sqlite.NewFindingRepo(db)
 
 	save := func(rule, key string) string {
-		f, err := domain.NewFinding(
-			"r1", "main",
-			domain.SeverityHigh, domain.LayerSecurity,
-			rule, "msg "+key,
-			domain.WithFileAnchor("go.mod"),
+		f, err := domain.NewFinding(domain.FindingSpec{RepoID: "r1", Branch: "main", Severity: domain.SeverityHigh, Layer: domain.LayerSecurity, Rule: rule, Message: "msg " + key}, domain.WithFileAnchor("go.mod"),
 			domain.WithFindingKey(key),
 		)
 		if err != nil {

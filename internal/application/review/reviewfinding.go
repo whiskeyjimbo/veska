@@ -50,10 +50,14 @@ func toDomainFinding(rf ReviewFinding, repoID, branch, filePath string) (*domain
 	if err != nil {
 		return nil, err
 	}
-	f, err := domain.NewFinding(
-		repoID, branch,
-		rf.Severity, domain.LayerSemantic,
-		rule, rf.Message,
+	f, err := domain.NewFinding(domain.FindingSpec{
+		RepoID:   repoID,
+		Branch:   branch,
+		Severity: rf.Severity,
+		Layer:    domain.LayerSemantic,
+		Rule:     rule,
+		Message:  rf.Message,
+	},
 		domain.WithFileAnchor(filePath),
 		domain.WithActorKind(domain.ActorKindSystem),
 		domain.WithFindingKey(rf.Title),
