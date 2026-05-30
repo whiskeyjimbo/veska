@@ -1,0 +1,40 @@
+# Fat-file LOC ratchet inventory (solov2-0omh.3)
+#
+# Each record is `<path> <maxLOC>`: the recorded ceiling is the file's TOTAL
+# line count (wc -l) at the time it was inventoried. `make fatfile-ratchet`
+# fails if any listed file GROWS past its ceiling. This complements
+# `make lint-size` (per-FUNCTION limits on CHANGED code) by ratcheting the
+# total size of pre-existing fat files DOWN over time — grandfathering can no
+# longer hide them forever.
+#
+# THRESHOLD: seeded with every first-party non-test .go file under cmd/ and
+# internal/ that is >= 500 LOC. (Excludes _test.go, tools/, loadtest corpora,
+# and vendored/embedded assets.)
+#
+# HOW TO UPDATE AN ENTRY:
+#   - After thinning a file (WS-2 tasks .4-.7), run `wc -l <path>` and set the
+#     record to the NEW (smaller) value. The ratchet only ratchets DOWN: never
+#     raise a number to make the gate pass.
+#   - When a file drops below ~500 LOC you may delete its line entirely.
+#   - If a file is renamed/removed, update or delete its line (a stale entry
+#     for a missing file is itself a failure).
+#
+# Blank lines and `#` comments are ignored.
+cmd/veska/doctor.go 1022
+cmd/veska/findings.go 515
+cmd/veska/repo.go 1221
+cmd/veska/search.go 1086
+internal/application/embedder/embedder.go 530
+internal/application/search/search.go 593
+internal/cli/daemon/wire.go 1234
+internal/infrastructure/mcp/registry.go 509
+internal/infrastructure/mcp/tools_helpers.go 577
+internal/infrastructure/mcp/tools_search.go 677
+internal/infrastructure/repo/registry.go 579
+internal/infrastructure/secretsscanner/secretsscanner.go 571
+internal/infrastructure/sqlite/graph_repo.go 539
+internal/infrastructure/sqlite/promotion_store.go 1027
+internal/infrastructure/treesitter/go.go 906
+internal/infrastructure/treesitter/go_query.go 738
+internal/infrastructure/treesitter/ts.go 521
+internal/infrastructure/vulnsource/osv/osv.go 560

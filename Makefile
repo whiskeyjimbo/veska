@@ -12,12 +12,12 @@ LAYERCHECK_BIN  := $(BINDIR)/layercheck
 SQLITE_TAGS    ?= sqlite_fts5
 SQLITE_CGO_ENV ?= CGO_ENABLED=1
 
-.PHONY: all build build-small build-fat fetch-embed-assets install release-archive test lint vet layercheck noidleak cliparity clean loadtest test-mcp test-mcp-deep test-mcp-bootstrap eval-recall eval-recall-projection eval-autolink-fp eval-revalidate-bench eval-queue-fuzz eval-embed-throughput eval-embedder-bench eval-embed-models eval-embed-models-full eval-embed-models-condense eval-embed-models-fuse eval-dbbench eval-dbbench-cgo
+.PHONY: all build build-small build-fat fetch-embed-assets install release-archive test lint vet layercheck fatfile-ratchet noidleak cliparity clean loadtest test-mcp test-mcp-deep test-mcp-bootstrap eval-recall eval-recall-projection eval-autolink-fp eval-revalidate-bench eval-queue-fuzz eval-embed-throughput eval-embedder-bench eval-embed-models eval-embed-models-full eval-embed-models-condense eval-embed-models-fuse eval-dbbench eval-dbbench-cgo
 
 # `all` uses build-small to keep the test loop fast — the model2vec assets
 # add a network fetch + ~62MB to every CI/dev run. End-user packaging
 # (`make build`) ships fat.
-all: build-small test vet lint layercheck noidleak cliparity
+all: build-small test vet lint layercheck fatfile-ratchet noidleak cliparity
 
 # `build` (solov2-sft7): default to the fat binary — model2vec embedded —
 # so a clean clone + `make build` produces a usable veska without the
@@ -146,6 +146,15 @@ lint-size:
 
 layercheck: $(LAYERCHECK_BIN)
 	$(LAYERCHECK_BIN) .
+
+# fatfile-ratchet (solov2-0omh.3): per-FILE total-LOC ratchet. Reads the
+# checked-in inventory (tools/lint/fatfiles/inventory.txt) of already-oversized
+# files and fails if any has GROWN past its recorded ceiling. Complements
+# lint-size (per-function, changed-code-only) by shrinking the fat-file backlog
+# over time instead of grandfathering it. Lower an entry only after the file
+# actually shrinks; never raise it.
+fatfile-ratchet:
+	go run ./tools/lint/fatfiles/cmd
 
 # noidleak: fail when bd issue IDs (solov2-xxxx) appear in user-visible Go
 # string literals — flag descriptions, fmt strings, MCP tool descriptions
