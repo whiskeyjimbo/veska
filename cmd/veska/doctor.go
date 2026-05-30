@@ -1,8 +1,6 @@
 package main
 
 import (
-	"io"
-
 	"github.com/spf13/cobra"
 	"github.com/whiskeyjimbo/veska/internal/cli/doctorcmd"
 )
@@ -136,21 +134,6 @@ func doctorPipelinesCmd() *cobra.Command {
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return doctorcmd.RunPipelines(cmd.Context(), cmd.OutOrStdout(), jsonOut)
-		},
-	}
-	cmd.Flags().BoolVar(&jsonOut, "json", false, "output results as JSON")
-	return cmd
-}
-
-// doctorSubCmd creates a generic stub doctor subcommand with a --json flag.
-func doctorSubCmd(use, short string, run func(bool, io.Writer) error) *cobra.Command {
-	var jsonOut bool
-	cmd := &cobra.Command{
-		Use:          use,
-		Short:        short,
-		SilenceUsage: true,
-		RunE: func(cmd *cobra.Command, args []string) error {
-			return run(jsonOut, cmd.OutOrStdout())
 		},
 	}
 	cmd.Flags().BoolVar(&jsonOut, "json", false, "output results as JSON")

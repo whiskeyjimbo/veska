@@ -1,8 +1,6 @@
 package main
 
 import (
-	"context"
-	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -14,7 +12,6 @@ import (
 
 	"github.com/whiskeyjimbo/veska/internal/application/extindex"
 	"github.com/whiskeyjimbo/veska/internal/cli/repocmd"
-	"github.com/whiskeyjimbo/veska/internal/infrastructure/repo"
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/sqlite"
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/treesitter"
 )
@@ -221,7 +218,7 @@ func depsIndexCmd() *cobra.Command {
 			}
 
 			// Look up the repo's root + active branch directly from the DB.
-			root, branch, err := lookupRepoRootAndBranch(cmd.Context(), db, repoID)
+			root, branch, err := repocmd.LookupRepoRootAndBranch(cmd.Context(), db, repoID)
 			if err != nil {
 				return fmt.Errorf("deps index: %w", err)
 			}
@@ -242,7 +239,7 @@ func depsIndexCmd() *cobra.Command {
 			// confuse cross-repo CALLS resolution (two repos with the same
 			// module_path become an ambiguity at query time, and removing
 			// the vendor dir later orphans the synthetic row).
-			if existing, lookupErr := findTrackedRepoByModulePath(cmd.Context(), db, modulePath); lookupErr == nil && existing != "" {
+			if existing, lookupErr := repocmd.FindTrackedRepoByModulePath(cmd.Context(), db, modulePath); lookupErr == nil && existing != "" {
 				return fmt.Errorf("deps index: module %s is already a tracked registered repo (%s); indexing its vendored copy would duplicate it. Re-run after `veska repo remove %s` if you really want the vendored snapshot instead, or just rely on the registered repo for cross-repo CALLS", modulePath, existing, existing)
 			}
 
@@ -269,51 +266,4 @@ func skippedSuffix(n int) string {
 		return ""
 	}
 	return fmt.Sprintf(" (%d file(s) skipped due to parse errors)", n)
-}
-
-// findTrackedRepoByModulePath returns the short_id of any registered
-// tracked (non-synthetic) repo whose module_path equals modulePath, or
-// "" when no such repo exists. Used by `veska deps index` to refuse
-// indexing a vendored copy of an already-tracked module (solov2-izh6.7).
-func findTrackedRepoByModulePath(ctx context.Context, db *sql.DB, modulePath string) (string, error) {
-	if modulePath == "" {
-		return "", nil
-	}
-	const q = `SELECT repo_id FROM repos
-		WHERE module_path = ? AND kind = 'tracked' AND repo_id NOT LIKE 'ext:%'
-		LIMIT 1`
-	var rid string
-	err := db.QueryRowContext(ctx, q, modulePath).Scan(&rid)
-	if errors.Is(err, sql.ErrNoRows) {
-		return "", nil
-	}
-	if err != nil {
-		return "", fmt.Errorf("find tracked repo by module_path: %w", err)
-	}
-	if len(rid) > 12 {
-		rid = rid[:12]
-	}
-	return rid, nil
-}
-
-// lookupRepoRootAndBranch is a thin direct-DB lookup used by `veska
-// deps index` when the daemon is offline (and so eng_get_repo isn't
-// available). Accepts everything the unified resolver accepts: full
-// repo_id, 12-char short_id, user alias, or unambiguous prefix
-// (solov2-2kug). Returns the canonical root path + active branch for
-// the resolved repo, or an error when nothing matches.
-func lookupRepoRootAndBranch(ctx context.Context, db *sql.DB, repoID string) (string, string, error) {
-	recs, err := repo.List(ctx, db)
-	if err != nil {
-		return "", "", fmt.Errorf("list repos: %w", err)
-	}
-	rec, err := repocmd.ResolveCLIRepoID(recs, repoID)
-	if err != nil {
-		return "", "", err
-	}
-	branch := rec.ActiveBranch
-	if branch == "" {
-		branch = "main"
-	}
-	return rec.RootPath, branch, nil
 }

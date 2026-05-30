@@ -200,7 +200,7 @@ func repoRootByID(db *sql.DB) func(ctx context.Context, repoID string) (string, 
 // but one writer at a time).
 func reindexCmd() *cobra.Command {
 	var repoFlag string
-	c := &cobra.Command{
+	cmd := &cobra.Command{
 		Use:          "reindex [<repo-id-or-path>]",
 		Short:        "Force a full cold-scan reparse of a repository",
 		Args:         cobra.MaximumNArgs(1),
@@ -285,8 +285,8 @@ func reindexCmd() *cobra.Command {
 			return nil
 		},
 	}
-	c.Flags().StringVar(&repoFlag, "repo", "", "repo id, short_id, alias or path (alias for the positional arg)")
-	return c
+	cmd.Flags().StringVar(&repoFlag, "repo", "", "repo id, short_id, alias or path (alias for the positional arg)")
+	return cmd
 }
 
 // resolveReindexFlagTarget combines the positional arg and --repo flag into a
