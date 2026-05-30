@@ -14,7 +14,28 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/platform/service"
 )
 
-func newRootCmd() *cobra.Command {
+// rootOptions carries the injectable seams newRootCmd wires into its
+// subcommands. Today only the cold-scan reparser factory (shared by `reindex`
+// and `search`) is injectable; production uses defaultReparserFactory and
+// tests pass a spy via withReparserFactory rather than mutating a package
+// global.
+type rootOptions struct {
+	reparserFactory reparserFactoryFunc
+}
+
+// rootOption configures newRootCmd.
+type rootOption func(*rootOptions)
+
+// withReparserFactory overrides the cold-scan reparser factory (test seam).
+func withReparserFactory(f reparserFactoryFunc) rootOption {
+	return func(o *rootOptions) { o.reparserFactory = f }
+}
+
+func newRootCmd(opts ...rootOption) *cobra.Command {
+	cfg := rootOptions{reparserFactory: defaultReparserFactory}
+	for _, o := range opts {
+		o(&cfg)
+	}
 	root := &cobra.Command{
 		Use:   "veska",
 		Short: "Veska code intelligence CLI",
@@ -39,8 +60,8 @@ func newRootCmd() *cobra.Command {
 	root.AddCommand(restoreCmd())
 	root.AddCommand(repoCmd())
 	root.AddCommand(wikiCmd())
-	root.AddCommand(reindexCmd())
-	root.AddCommand(searchCmd())
+	root.AddCommand(reindexCmd(cfg.reparserFactory))
+	root.AddCommand(searchCmd(cfg.reparserFactory))
 	root.AddCommand(symbolCmd())
 	root.AddCommand(contextCmd())
 	root.AddCommand(callsCmd())

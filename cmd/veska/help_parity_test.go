@@ -47,7 +47,7 @@ func TestCLILongMatchesMCPDescription_Blast(t *testing.T) {
 // description so CLI users learn the RRF score range and that rank, not
 // absolute score, is the right comparator.
 func TestCLILongMatchesMCPDescription_Search(t *testing.T) {
-	cmd := searchCmd()
+	cmd := searchCmd(defaultReparserFactory)
 	if !strings.Contains(cmd.Long, mcpinfra.DescSearchSemantic) {
 		t.Fatalf("search Long must contain MCP DescSearchSemantic; got: %q", cmd.Long)
 	}
