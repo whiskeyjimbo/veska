@@ -570,8 +570,7 @@ func collectLocalReceiverTypes(body *sitter.Node, src []byte, funcReturns map[st
 				if lhs != nil && rhs != nil && lhs.Type() == "identifier" && rhs.Type() == "call_expression" {
 					fn := rhs.ChildByFieldName("function")
 					if fn != nil && fn.Type() == "identifier" {
-						callee := string(src[fn.StartByte():fn.EndByte()])
-						if recvType, ok := funcReturns[callee]; ok {
+						if recvType, ok := funcReturns[string(src[fn.StartByte():fn.EndByte()])]; ok {
 							out[string(src[lhs.StartByte():lhs.EndByte()])] = recvType
 						}
 					}

@@ -519,7 +519,7 @@ func TestDerivedRepoIDFromURL(t *testing.T) {
 				t.Errorf("id length: want 64 hex chars, got %d (%q)", len(id), id)
 			}
 			for _, c := range id {
-				if !((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f')) {
+				if (c < '0' || c > '9') && (c < 'a' || c > 'f') {
 					t.Errorf("id contains non-hex char %q in %q", c, id)
 					break
 				}

@@ -45,7 +45,7 @@ func NormalizeScores(results []Result) []float32 {
 	if len(results) == 0 {
 		return out
 	}
-	var minS, maxS float32 = results[0].Score, results[0].Score
+	minS, maxS := results[0].Score, results[0].Score
 	for _, r := range results {
 		if r.Score < minS {
 			minS = r.Score

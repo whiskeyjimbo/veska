@@ -62,7 +62,7 @@ func looksLikeUnknownDepsSubcommand(arg string, parent *cobra.Command) bool {
 		return false
 	}
 	for _, r := range arg {
-		if !((r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || r == '-' || r == '_') {
+		if (r < 'a' || r > 'z') && (r < 'A' || r > 'Z') && r != '-' && r != '_' {
 			return false
 		}
 	}
