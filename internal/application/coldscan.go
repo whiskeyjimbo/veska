@@ -7,7 +7,6 @@ package application
 import (
 	"bytes"
 	"context"
-	"errors"
 	"fmt"
 	"io/fs"
 	"log/slog"
@@ -17,11 +16,6 @@ import (
 
 	"github.com/whiskeyjimbo/veska/internal/core/domain"
 )
-
-// ErrMissingDependency is returned by NewColdScanReparser when a required
-// dependency is nil. It is a package-wide sentinel so callers can use
-// errors.Is to distinguish a wiring fault from a runtime failure.
-var ErrMissingDependency = errors.New("application: missing required dependency")
 
 // IgnoreMatcher is the application-layer port that decides whether a path
 // should be excluded from the cold scan. The default ignores nothing; the
