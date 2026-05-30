@@ -17,7 +17,6 @@ import (
 
 	"github.com/whiskeyjimbo/veska/internal/application"
 	"github.com/whiskeyjimbo/veska/internal/application/autolink"
-	"github.com/whiskeyjimbo/veska/internal/application/blastradius"
 	"github.com/whiskeyjimbo/veska/internal/application/checks"
 	"github.com/whiskeyjimbo/veska/internal/application/contextpack"
 	"github.com/whiskeyjimbo/veska/internal/application/embedder"
@@ -649,40 +648,11 @@ func (b *daemonBuilder) buildAutolinkHandler() (*autolink.Handler, error) {
 }
 
 // buildWikiHandler wires the WorkKindWiki regeneration handler (hot_zone +
-// entry_points pages). cmd/veska builds a near-identical handler; unifying the
-// two into internal/composition is solov2-u4mv.4.
+// entry_points pages) via the shared composition constructor. The daemon shares
+// its live staging so blast radius sees in-flight nodes, resolves repo roots
+// through the repos table, and honours the [wiki] write_pages config.
 func (b *daemonBuilder) buildWikiHandler() (*wiki.Handler, error) {
-	wikiEdges := sqlite.NewEdgeReaderRepo(b.pools.ReadDB)
-	wikiGraph := sqlite.NewGraphRepo(b.pools.ReadDB, b.pools.Write)
-	wikiFindings := sqlite.NewFindingQuerierRepo(b.pools.ReadDB)
-	nodeLookup := sqlite.NewNodeLookupRepo(b.pools.ReadDB)
-	wikiBlast := blastradius.NewService(wikiEdges, nodeLookup, b.staging)
-	wikiCounts := func(ctx context.Context, repoRoot string) (map[string]int, error) {
-		return gitwatch.ChangeCounts(ctx, repoRoot, 0)
-	}
-	hotZoneSvc, err := wiki.NewHotZoneService(wikiCounts, nodeLookup.NodesInFile, wikiBlast)
-	if err != nil {
-		return nil, fmt.Errorf("daemon: wiki hot-zone service: %w", err)
-	}
-	epSvc, err := wiki.NewEntryPointsService(
-		wikiGraph.LoadGraph, wikiEdges.InboundEdges, wikiFindings.OpenFindingNodeIDs,
-	)
-	if err != nil {
-		return nil, fmt.Errorf("daemon: wiki entry-points service: %w", err)
-	}
-	wikiRoot := func(ctx context.Context, repoID string) (string, error) {
-		return repoRootFunc(b.pools.ReadDB)(ctx, repoID)
-	}
-	wikiH, err := wiki.NewHandler(
-		hotZoneSvc, epSvc,
-		sqlite.NewWikiRenderStateRepo(b.pools.ReadDB, b.pools.Write),
-		wikiRoot,
-		wiki.WithWritePages(b.fileCfg.Wiki.WritePages),
-	)
-	if err != nil {
-		return nil, fmt.Errorf("daemon: wiki handler: %w", err)
-	}
-	return wikiH, nil
+	return composition.NewWikiHandler(b.pools, b.staging, repoRootFunc(b.pools.ReadDB), b.fileCfg.Wiki.WritePages)
 }
 
 // buildReviewHandler wires the optional WorkKindReview lane: the Ollama
