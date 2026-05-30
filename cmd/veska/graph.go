@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
+	"github.com/whiskeyjimbo/veska/internal/cli/mcpclient"
 
 	mcpinfra "github.com/whiskeyjimbo/veska/internal/infrastructure/mcp"
 )
@@ -66,7 +67,7 @@ func callsCmd() *cobra.Command {
 				params["expand_cross_repo"] = true
 			}
 			var resp json.RawMessage
-			if err := callMCP(cmd.Context(), "eng_get_call_chain", params, &resp); err != nil {
+			if err := mcpclient.Call(cmd.Context(), "eng_get_call_chain", params, &resp); err != nil {
 				return fmt.Errorf("calls: %w", err)
 			}
 			return renderGraphChain(cmd.Context(), cmd.OutOrStdout(), resp, jsonOut)
@@ -110,7 +111,7 @@ func blastCmd() *cobra.Command {
 				params["direction"] = normalizeDirection(dir)
 			}
 			var resp json.RawMessage
-			if err := callMCP(cmd.Context(), "eng_get_blast_radius", params, &resp); err != nil {
+			if err := mcpclient.Call(cmd.Context(), "eng_get_blast_radius", params, &resp); err != nil {
 				return fmt.Errorf("blast: %w", err)
 			}
 			return renderGraphChain(cmd.Context(), cmd.OutOrStdout(), resp, jsonOut)
@@ -165,7 +166,7 @@ The --ref-a/--ref-b flags remain accepted and take precedence over positional ar
 				params["ref_b"] = refB
 			}
 			var resp json.RawMessage
-			if err := callMCP(cmd.Context(), "eng_find_changed_symbols", params, &resp); err != nil {
+			if err := mcpclient.Call(cmd.Context(), "eng_find_changed_symbols", params, &resp); err != nil {
 				return fmt.Errorf("changed: %w", err)
 			}
 			if jsonOut {

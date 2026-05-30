@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
+	"github.com/whiskeyjimbo/veska/internal/cli/mcpclient"
 
 	"github.com/whiskeyjimbo/veska/internal/application"
 	"github.com/whiskeyjimbo/veska/internal/application/embedder"
@@ -862,7 +863,7 @@ func daemonSearch(ctx context.Context, stderr, stdout io.Writer, opts runSearchO
 		k = 10
 	}
 	var env searchEnvelope
-	if err := callMCP(ctx, "eng_search_semantic", map[string]any{
+	if err := mcpclient.Call(ctx, "eng_search_semantic", map[string]any{
 		"repo_id": repoID,
 		"branch":  branch,
 		"query":   opts.query,
@@ -876,19 +877,6 @@ func daemonSearch(ctx context.Context, stderr, stdout io.Writer, opts runSearchO
 	return env, true, nil
 }
 
-// isDaemonUnreachable reports whether a callMCP error indicates the daemon
-// is down (vs. a real call failure). Used to decide between "fall back to
-// in-process" and "surface to user".
-func isDaemonUnreachable(err error) bool {
-	if err == nil {
-		return false
-	}
-	s := err.Error()
-	return strings.Contains(s, "daemon not running") ||
-		strings.Contains(s, "connection refused") ||
-		strings.Contains(s, "no such file")
-}
-
 // daemonSearchByRepoID runs eng_search_semantic against a known repo_id/branch.
 // Returned ok is false when the daemon is unreachable so callers can fall back
 // to the in-process search service. Used by the URL/path path of runSearch
@@ -899,7 +887,7 @@ func daemonSearchByRepoID(ctx context.Context, repoID, branch string, opts runSe
 		k = 10
 	}
 	var env searchEnvelope
-	if err := callMCP(ctx, "eng_search_semantic", map[string]any{
+	if err := mcpclient.Call(ctx, "eng_search_semantic", map[string]any{
 		"repo_id": repoID,
 		"branch":  branchOrMain(branch),
 		"query":   opts.query,
@@ -908,7 +896,7 @@ func daemonSearchByRepoID(ctx context.Context, repoID, branch string, opts runSe
 		// Distinguish "daemon down" (fall back) from "daemon up but call
 		// failed" (surface). callMCP returns connection errors which we
 		// treat as unreachable; anything else is a real search failure.
-		if isDaemonUnreachable(err) {
+		if mcpclient.IsDaemonUnreachable(err) {
 			return searchEnvelope{}, false, nil
 		}
 		return searchEnvelope{}, true, fmt.Errorf("search: daemon eng_search_semantic: %w", err)
@@ -930,7 +918,7 @@ func daemonSearchAllRepos(ctx context.Context, stderr, stdout io.Writer, opts ru
 	var lr struct {
 		Repos []repoRow `json:"repos"`
 	}
-	if err := callMCP(ctx, "eng_list_repos", map[string]any{}, &lr); err != nil {
+	if err := mcpclient.Call(ctx, "eng_list_repos", map[string]any{}, &lr); err != nil {
 		return searchEnvelope{}, false, nil
 	}
 	if len(lr.Repos) == 0 {
@@ -947,7 +935,7 @@ func daemonSearchAllRepos(ctx context.Context, stderr, stdout io.Writer, opts ru
 	for _, r := range lr.Repos {
 		branch := branchOrMain(r.ActiveBranch)
 		var env searchEnvelope
-		if err := callMCP(ctx, "eng_search_semantic", map[string]any{
+		if err := mcpclient.Call(ctx, "eng_search_semantic", map[string]any{
 			"repo_id": r.RepoID,
 			"branch":  branch,
 			"query":   opts.query,
@@ -1016,7 +1004,7 @@ func resolveRepoViaDaemonInfo(ctx context.Context, target string) (repoID, branc
 		var res struct {
 			Repo repoRow `json:"repo"`
 		}
-		if err := callMCP(ctx, "eng_get_current_repo", map[string]any{"cwd": cwd}, &res); err != nil {
+		if err := mcpclient.Call(ctx, "eng_get_current_repo", map[string]any{"cwd": cwd}, &res); err != nil {
 			return "", "", searchHeaderInfo{}, false
 		}
 		if res.Repo.RepoID == "" {
@@ -1028,7 +1016,7 @@ func resolveRepoViaDaemonInfo(ctx context.Context, target string) (repoID, branc
 	var list struct {
 		Repos []repoRow `json:"repos"`
 	}
-	if err := callMCP(ctx, "eng_list_repos", map[string]any{}, &list); err != nil {
+	if err := mcpclient.Call(ctx, "eng_list_repos", map[string]any{}, &list); err != nil {
 		return "", "", searchHeaderInfo{}, false
 	}
 
@@ -1075,7 +1063,7 @@ func pendingEmbedsHint() (int, bool) {
 	var status struct {
 		PendingEmbeds int `json:"pending_embeds"`
 	}
-	if err := callMCP(ctx, "eng_get_status", map[string]any{}, &status); err != nil {
+	if err := mcpclient.Call(ctx, "eng_get_status", map[string]any{}, &status); err != nil {
 		return 0, false
 	}
 	return status.PendingEmbeds, true

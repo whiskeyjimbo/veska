@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
+	"github.com/whiskeyjimbo/veska/internal/cli/mcpclient"
 )
 
 // findingsCmd is the parent for `veska findings …`, wrapping the
@@ -125,7 +126,7 @@ func findingsListCmd() *cobra.Command {
 						ShortID string `json:"short_id"`
 					} `json:"repos"`
 				}
-				if err := callMCP(cmd.Context(), "eng_list_repos", map[string]any{}, &lr); err != nil {
+				if err := mcpclient.Call(cmd.Context(), "eng_list_repos", map[string]any{}, &lr); err != nil {
 					return fmt.Errorf("findings list --all: list repos: %w", err)
 				}
 				for _, r := range lr.Repos {
@@ -134,7 +135,7 @@ func findingsListCmd() *cobra.Command {
 					var part struct {
 						Findings []findingView `json:"findings"`
 					}
-					if err := callMCP(cmd.Context(), "eng_list_findings", params, &part); err != nil {
+					if err := mcpclient.Call(cmd.Context(), "eng_list_findings", params, &part); err != nil {
 						fmt.Fprintf(cmd.ErrOrStderr(), "  warn: %s: %v\n", r.ShortID, err)
 						continue
 					}
@@ -150,7 +151,7 @@ func findingsListCmd() *cobra.Command {
 					// registered so users don't get silently-scoped empty results.
 					params["repo_id"] = rid
 				}
-				if err := callMCP(cmd.Context(), "eng_list_findings", params, &resp); err != nil {
+				if err := mcpclient.Call(cmd.Context(), "eng_list_findings", params, &resp); err != nil {
 					return fmt.Errorf("findings list: %w", err)
 				}
 			}
@@ -388,7 +389,7 @@ func findingsShowCmd() *cobra.Command {
 				params["branch"] = branch
 			}
 			var resp json.RawMessage
-			if err := callMCP(cmd.Context(), "eng_get_finding", params, &resp); err != nil {
+			if err := mcpclient.Call(cmd.Context(), "eng_get_finding", params, &resp); err != nil {
 				return fmt.Errorf("findings show: %w", err)
 			}
 			w := cmd.OutOrStdout()
@@ -428,7 +429,7 @@ func findingsCloseCmd() *cobra.Command {
 			}
 			params := map[string]any{"finding_id": args[0], "reason": reason}
 			var resp json.RawMessage
-			if err := callMCP(cmd.Context(), "eng_close_finding", params, &resp); err != nil {
+			if err := mcpclient.Call(cmd.Context(), "eng_close_finding", params, &resp); err != nil {
 				return fmt.Errorf("findings close: %w", err)
 			}
 			fmt.Fprintln(cmd.OutOrStdout(), "closed")
@@ -470,7 +471,7 @@ func findingsReopenCmd() *cobra.Command {
 					lookupBranch = "main"
 				}
 				var resp json.RawMessage
-				if err := callMCP(cmd.Context(), "eng_get_finding", map[string]any{"finding_id": args[0], "branch": lookupBranch}, &resp); err == nil {
+				if err := mcpclient.Call(cmd.Context(), "eng_get_finding", map[string]any{"finding_id": args[0], "branch": lookupBranch}, &resp); err == nil {
 					var env struct {
 						Finding findingView `json:"finding"`
 					}
@@ -486,7 +487,7 @@ func findingsReopenCmd() *cobra.Command {
 				}
 			}
 			var resp json.RawMessage
-			if err := callMCP(cmd.Context(), "eng_reopen_finding", params, &resp); err != nil {
+			if err := mcpclient.Call(cmd.Context(), "eng_reopen_finding", params, &resp); err != nil {
 				return fmt.Errorf("findings reopen: %w", err)
 			}
 			fmt.Fprintln(cmd.OutOrStdout(), "reopened")

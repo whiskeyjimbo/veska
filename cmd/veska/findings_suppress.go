@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
+	"github.com/whiskeyjimbo/veska/internal/cli/mcpclient"
 )
 
 // findings_suppress.go wires the suppression family of MCP tools
@@ -57,7 +58,7 @@ func findingsSuppressCmd() *cobra.Command {
 				Scope         string `json:"scope"`
 				Branch        string `json:"branch"`
 			}
-			if err := callMCP(cmd.Context(), "eng_suppress_finding", params, &resp); err != nil {
+			if err := mcpclient.Call(cmd.Context(), "eng_suppress_finding", params, &resp); err != nil {
 				return fmt.Errorf("findings suppress: %w", err)
 			}
 			fmt.Fprintf(cmd.OutOrStdout(), "suppressed: %s (scope=%s)\n", resp.SuppressionID, resp.Scope)
@@ -109,7 +110,7 @@ func suppressionsListCmd() *cobra.Command {
 			var resp struct {
 				Suppressions []suppressionView `json:"suppressions"`
 			}
-			if err := callMCP(cmd.Context(), "eng_list_suppressions", params, &resp); err != nil {
+			if err := mcpclient.Call(cmd.Context(), "eng_list_suppressions", params, &resp); err != nil {
 				return fmt.Errorf("findings suppressions list: %w", err)
 			}
 			w := cmd.OutOrStdout()
@@ -155,7 +156,7 @@ func suppressionsShowCmd() *cobra.Command {
 			var resp struct {
 				Suppression suppressionView `json:"suppression"`
 			}
-			if err := callMCP(cmd.Context(), "eng_get_suppression",
+			if err := mcpclient.Call(cmd.Context(), "eng_get_suppression",
 				map[string]any{"suppression_id": args[0]}, &resp); err != nil {
 				return fmt.Errorf("findings suppressions show: %w", err)
 			}
@@ -204,7 +205,7 @@ func suppressionsCloseCmd() *cobra.Command {
 				SuppressionID string `json:"suppression_id"`
 				ExpiresAt     int64  `json:"expires_at"`
 			}
-			if err := callMCP(cmd.Context(), "eng_close_suppression", params, &resp); err != nil {
+			if err := mcpclient.Call(cmd.Context(), "eng_close_suppression", params, &resp); err != nil {
 				return fmt.Errorf("findings suppressions close: %w", err)
 			}
 			fmt.Fprintf(cmd.OutOrStdout(), "closed: %s (expires_at=%d)\n", resp.SuppressionID, resp.ExpiresAt)
