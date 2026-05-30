@@ -579,7 +579,8 @@ func (b *daemonBuilder) electEmbedder() error {
 			"model_id", election.Name)
 	}
 	if election.SwitchedModel {
-		n, rqErr := embedder.RequeueAllUnderNewModel(context.Background(), b.pools.Write)
+		archive := sqlite.NewEmbeddingArchive(b.pools.ReadDB, b.pools.Write)
+		n, rqErr := archive.RequeueAllUnderNewModel(context.Background())
 		if rqErr != nil {
 			return fmt.Errorf("daemon: requeue embeddings after model switch: %w", rqErr)
 		}
