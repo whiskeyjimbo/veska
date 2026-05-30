@@ -90,13 +90,6 @@ type RevalidateQuerier interface {
 	// that's a separate cleanup path that 5.2 deliberately does not own.
 	StaleFindingsForFile(ctx context.Context, repoID, branch, filePath string) ([]StaleFinding, error)
 
-	// CloseAsRevalidatedObsolete flips the named finding to
-	// state='closed', closed_reason='revalidated_obsolete', stamping
-	// closed_at and the system actor. Idempotent: re-closing an
-	// already-closed finding is a no-op (UPDATE matches nothing or
-	// matches an already-closed row; both paths return nil).
-	CloseAsRevalidatedObsolete(ctx context.Context, repoID, branch, findingID string, closedAt int64) error
-
 	// HasInboundEdges reports whether the named node currently has at least
 	// one inbound edge on (repoID, branch). Used by the revalidation
 	// handler's dead-code re-run: if a stale dead-code finding's anchor
@@ -112,15 +105,6 @@ type RevalidateQuerier interface {
 	// finding is closed as obsolete. Returns ("", "", nil) when the node
 	// is absent — caller treats that as "drift resolved" (no longer fires).
 	NodeSignaturePair(ctx context.Context, repoID, branch, nodeID string) (prev, current string, err error)
-
-	// RefreshAnchorHash rewrites findings.anchor_content_hash for the
-	// named open finding so a subsequent revalidation sweep does not
-	// re-fire on the same drift. State stays 'open'; closed_reason stays
-	// NULL. The UPDATE is gated on state='open' so already-closed rows
-	// are not resurrected. The `at` parameter is currently unused on the
-	// row (no last_revalidated_at column) but is reserved for future
-	// audit-column work; callers must still pass a meaningful timestamp.
-	RefreshAnchorHash(ctx context.Context, repoID, branch, findingID, newHash string, at int64) error
 
 	// ApplyDecisions applies a batch of refresh and/or close decisions to
 	// open findings on (repoID, branch) in a single transaction. The intent
