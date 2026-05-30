@@ -135,6 +135,14 @@ vet:
 
 lint:
 	golangci-lint run ./cmd/... ./internal/...
+	$(MAKE) lint-size
+
+# lint-size: enforce the <=50 LOC / <=15 cyclomatic / <=5 args bar on CHANGED
+# code only (solov2-u4mv.7). LINT_SIZE_BASE is the ref the diff is taken
+# against — default 'main'; override (e.g. LINT_SIZE_BASE=origin/main) in CI.
+LINT_SIZE_BASE ?= main
+lint-size:
+	golangci-lint run -c .golangci-size.yml --new-from-merge-base=$(LINT_SIZE_BASE) ./cmd/... ./internal/...
 
 layercheck: $(LAYERCHECK_BIN)
 	$(LAYERCHECK_BIN) .
