@@ -10,11 +10,10 @@ import (
 
 	"github.com/spf13/cobra"
 	"github.com/whiskeyjimbo/veska/internal/application"
-	"github.com/whiskeyjimbo/veska/internal/application/blastradius"
 	"github.com/whiskeyjimbo/veska/internal/application/wiki"
+	"github.com/whiskeyjimbo/veska/internal/composition"
 	"github.com/whiskeyjimbo/veska/internal/config"
 	"github.com/whiskeyjimbo/veska/internal/core/ports"
-	gitwatch "github.com/whiskeyjimbo/veska/internal/infrastructure/git"
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/sqlite"
 	"github.com/whiskeyjimbo/veska/internal/repo"
 )
@@ -202,28 +201,11 @@ func resolveWikiTarget(ctx context.Context, db *sql.DB, repoID, branch string) (
 // cmd/veska-daemon/wire.go) so the CLI produces byte-identical pages without
 // reimplementing render orchestration.
 func buildWikiHandler(pools *sqlite.Pools) (*wiki.Handler, error) {
-	staging := application.NewStagingArea()
-
-	nodeLookup := sqlite.NewNodeLookupRepo(pools.ReadDB)
-	wikiEdges := sqlite.NewEdgeReaderRepo(pools.ReadDB)
-	wikiGraph := sqlite.NewGraphRepo(pools.ReadDB, pools.Write)
-	wikiFindings := sqlite.NewFindingQuerierRepo(pools.ReadDB)
-	wikiBlast := blastradius.NewService(wikiEdges, nodeLookup, staging)
-
-	wikiCounts := func(ctx context.Context, repoRoot string) (map[string]int, error) {
-		return gitwatch.ChangeCounts(ctx, repoRoot, 0)
-	}
-	hotZoneSvc, err := wiki.NewHotZoneService(wikiCounts, nodeLookup.NodesInFile, wikiBlast)
-	if err != nil {
-		return nil, fmt.Errorf("wiki: hot-zone service: %w", err)
-	}
-	epSvc, err := wiki.NewEntryPointsService(
-		wikiGraph.LoadGraph, wikiEdges.InboundEdges, wikiFindings.OpenFindingNodeIDs,
-	)
-	if err != nil {
-		return nil, fmt.Errorf("wiki: entry-points service: %w", err)
-	}
-
+	// `veska wiki` is the explicit, user-invoked render path: a fresh staging
+	// (one-shot CLI — nothing is staged), the CLI prefix-matching repo
+	// resolver, and writePages=true regardless of the daemon's [wiki]
+	// write_pages default (solov2-ocnn). The handler graph itself is built by
+	// the shared composition constructor (solov2-u4mv.4).
 	wikiRoot := func(ctx context.Context, repoID string) (string, error) {
 		records, err := repo.List(ctx, pools.ReadDB)
 		if err != nil {
@@ -243,17 +225,5 @@ func buildWikiHandler(pools *sqlite.Pools) (*wiki.Handler, error) {
 		}
 		return matched.RootPath, nil
 	}
-
-	// `veska wiki` is the explicit, user-invoked render path; always write
-	// pages regardless of the daemon's [wiki] write_pages default (solov2-ocnn).
-	handler, err := wiki.NewHandler(
-		hotZoneSvc, epSvc,
-		sqlite.NewWikiRenderStateRepo(pools.ReadDB, pools.Write),
-		wikiRoot,
-		wiki.WithWritePages(true),
-	)
-	if err != nil {
-		return nil, fmt.Errorf("wiki: handler: %w", err)
-	}
-	return handler, nil
+	return composition.NewWikiHandler(pools, application.NewStagingArea(), wikiRoot, true)
 }
