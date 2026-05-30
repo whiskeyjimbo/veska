@@ -1,4 +1,4 @@
-package main
+package graphcmd
 
 import (
 	"bytes"
@@ -19,8 +19,8 @@ func TestRenderGraphChain_EmptyWithChainedSelectorsHint(t *testing.T) {
 		"degraded_reasons": []string{"chained_selectors_unresolved"},
 	})
 	var buf bytes.Buffer
-	if err := renderGraphChain(context.Background(), &buf, payload, false); err != nil {
-		t.Fatalf("renderGraphChain: %v", err)
+	if err := RenderGraphChain(context.Background(), &buf, payload, false); err != nil {
+		t.Fatalf("RenderGraphChain: %v", err)
 	}
 	out := buf.String()
 	for _, want := range []string{
@@ -36,8 +36,8 @@ func TestRenderGraphChain_EmptyWithChainedSelectorsHint(t *testing.T) {
 	}
 }
 
-// Other degraded reasons should NOT trigger the chained-selector hint —
-// keep the message focused.
+// Other degraded reasons should NOT trigger the chained-selector hint — keep
+// the message focused.
 func TestRenderGraphChain_EmptyWithOtherDegradedNoHint(t *testing.T) {
 	payload, _ := json.Marshal(map[string]any{
 		"nodes":            []any{},
@@ -45,8 +45,8 @@ func TestRenderGraphChain_EmptyWithOtherDegradedNoHint(t *testing.T) {
 		"degraded_reasons": []string{"some_other_reason"},
 	})
 	var buf bytes.Buffer
-	if err := renderGraphChain(context.Background(), &buf, payload, false); err != nil {
-		t.Fatalf("renderGraphChain: %v", err)
+	if err := RenderGraphChain(context.Background(), &buf, payload, false); err != nil {
+		t.Fatalf("RenderGraphChain: %v", err)
 	}
 	if strings.Contains(buf.String(), "veska blast") {
 		t.Errorf("hint leaked for unrelated degraded reason:\n%s", buf.String())

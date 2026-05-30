@@ -2,18 +2,21 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"io"
 	"os"
-	"slices"
-	"strings"
 
 	"github.com/spf13/cobra"
-	"github.com/whiskeyjimbo/veska/internal/cli/mcpclient"
 
-	mcpinfra "github.com/whiskeyjimbo/veska/internal/infrastructure/mcp"
+	"github.com/whiskeyjimbo/veska/internal/cli/mcpclient"
+	"github.com/whiskeyjimbo/veska/internal/cli/symbolcmd"
 )
+
+// The symbol/context command logic lives in internal/cli/symbolcmd; the
+// constructors below are Cobra glue whose RunE bodies are thin delegating
+// calls into that package (solov2-0omh.7). resolveRepoFromCWD/autoResolveRepo
+// stay here because they are shared cmd-level helpers (deps.go, findings.go,
+// graph.go also call them).
 
 // resolveRepoFromCWD asks the daemon (via eng_get_current_repo) which repo
 // the caller's cwd belongs to. Used by CLI wrappers (symbol, context, ...)
@@ -97,247 +100,21 @@ are fine — "Run" finds Server.Run, Command.Run, etc., with exact matches
 ranked first.`,
 		Args:         cobra.ExactArgs(1),
 		SilenceUsage: true,
+		// solov2-efzv: when --repo is omitted, do NOT auto-scope to the cwd's
+		// repo — let the daemon fan out across every registered repo.
 		RunE: func(cmd *cobra.Command, args []string) error {
-			params := map[string]any{"symbol": args[0]}
-			scopedRepo := ""
-			if repoFlag != "" {
-				params["repo_id"] = repoFlag
-				scopedRepo = repoFlag
-			}
-			// solov2-efzv: when --repo is omitted, do NOT auto-scope to the
-			// cwd's repo — let the daemon fan out across every registered
-			// repo. The cobra-CLI-plus-shared-lib pattern is the common
-			// multi-repo case: the user invokes 'veska symbol Hello' from
-			// the CLI repo wanting matches in the library repo too, and
-			// the previous cwd-pinning made that fail silently. The
-			// rendered RepoID column disambiguates fanout hits.
-			var resp struct {
-				Nodes []struct {
-					NodeID    string `json:"node_id"`
-					Name      string `json:"name"`
-					Kind      string `json:"kind"`
-					FilePath  string `json:"file_path"`
-					LineStart int    `json:"line_start"`
-					LineEnd   int    `json:"line_end"`
-					Signature string `json:"signature,omitempty"`
-					Exported  *bool  `json:"exported,omitempty"`
-					External  bool   `json:"external,omitempty"`
-				} `json:"nodes"`
-				DegradedReasons []string `json:"degraded_reasons,omitempty"`
-				IndexingRepos   []string `json:"indexing_repos,omitempty"`
-			}
-			if err := mcpclient.Call(cmd.Context(), "eng_find_symbol", params, &resp); err != nil {
-				return fmt.Errorf("symbol: %w", err)
-			}
-			// solov2-zgwd: when the scoped probe is empty, ask every other
-			// registered repo whether the symbol lives there. Non-empty in
-			// the original scope short-circuits — we never re-walk the
-			// registry for a happy result.
-			if len(resp.Nodes) == 0 && !jsonOut && scopedRepo != "" {
-				printCrossRepoSymbolHint(cmd.Context(), cmd.ErrOrStderr(), args[0], scopedRepo)
-			}
-			return renderNodeList(cmd.OutOrStdout(), resp, jsonOut)
+			return symbolcmd.RunFind(cmd.Context(), symbolcmd.FindParams{
+				Symbol:  args[0],
+				RepoID:  repoFlag,
+				JSONOut: jsonOut,
+				Out:     cmd.OutOrStdout(),
+				ErrOut:  cmd.ErrOrStderr(),
+			})
 		},
 	}
 	cmd.Flags().StringVar(&repoFlag, "repo", "", "repo id or short_id (default: the sole registered repo)")
 	cmd.Flags().BoolVar(&jsonOut, "json", false, "emit JSON (eng_find_symbol shape)")
 	return cmd
-}
-
-// printCrossRepoSymbolHint walks every other registered repo and prints
-// a one-line hint when the symbol exists somewhere else (solov2-zgwd).
-// Stays best-effort: any per-repo error is silently skipped — a stuck repo
-// must not turn a successful empty result into a noisy banner. The hint
-// only fires when there's at least one cross-repo match, so the "no
-// matches anywhere" case is unchanged.
-func printCrossRepoSymbolHint(ctx context.Context, errOut io.Writer, symbol, scopedRepoID string) {
-	type repoView struct {
-		RepoID  string `json:"repo_id"`
-		ShortID string `json:"short_id"`
-	}
-	var lr struct {
-		Repos []repoView `json:"repos"`
-	}
-	if err := mcpclient.Call(ctx, "eng_list_repos", map[string]any{}, &lr); err != nil {
-		return
-	}
-	type otherHit struct {
-		shortID string
-		count   int
-	}
-	var others []otherHit
-	for _, r := range lr.Repos {
-		if r.RepoID == scopedRepoID || r.ShortID == scopedRepoID {
-			continue
-		}
-		var probe struct {
-			Nodes []struct{} `json:"nodes"`
-		}
-		params := map[string]any{"symbol": symbol, "repo_id": r.RepoID}
-		if err := mcpclient.Call(ctx, "eng_find_symbol", params, &probe); err != nil {
-			continue
-		}
-		if len(probe.Nodes) > 0 {
-			id := r.ShortID
-			if id == "" {
-				id = r.RepoID
-			}
-			others = append(others, otherHit{shortID: id, count: len(probe.Nodes)})
-		}
-	}
-	if len(others) == 0 {
-		return
-	}
-	parts := make([]string, 0, len(others))
-	for _, h := range others {
-		parts = append(parts, fmt.Sprintf("%d in %s", h.count, h.shortID))
-	}
-	fmt.Fprintf(errOut, "  hint: %q has no matches here, but matches elsewhere — %s (re-run with --repo <id>)\n", symbol, strings.Join(parts, ", "))
-}
-
-func renderNodeList(w io.Writer, resp any, jsonOut bool) error {
-	if jsonOut {
-		enc := json.NewEncoder(w)
-		enc.SetIndent("", "  ")
-		return enc.Encode(resp)
-	}
-	// Re-marshal+unmarshal into a generic shape so this works for either
-	// {nodes:[...]} or {entries:[...]} envelopes without a dedicated type.
-	raw, _ := json.Marshal(resp)
-	var any struct {
-		Nodes []struct {
-			NodeID    string `json:"node_id"`
-			Name      string `json:"name"`
-			Kind      string `json:"kind"`
-			FilePath  string `json:"file_path"`
-			LineStart int    `json:"line_start"`
-			LineEnd   int    `json:"line_end"`
-			External  bool   `json:"external,omitempty"`
-			RepoID    string `json:"repo_id,omitempty"`
-		} `json:"nodes"`
-		DegradedReasons []string `json:"degraded_reasons,omitempty"`
-		IndexingRepos   []string `json:"indexing_repos,omitempty"`
-	}
-	if err := json.Unmarshal(raw, &any); err != nil {
-		return err
-	}
-	if len(any.Nodes) == 0 {
-		fmt.Fprintln(w, "no matches")
-		// solov2-izh6.30: empty result during an active cold scan is the
-		// indexing-window case; tell the user to retry instead of treating
-		// the empty answer as authoritative.
-		if slices.Contains(any.DegradedReasons, mcpinfra.DegradedReasonIndexingInProgress) {
-			fmt.Fprintf(w, "  hint: %d repo(s) still indexing (%s); retry shortly or rerun the relevant `veska repo add --wait`.\n",
-				len(any.IndexingRepos), strings.Join(any.IndexingRepos, ", "))
-		}
-		return nil
-	}
-	// solov2-efzv: when the daemon fanned out across repos (repo_id
-	// populated on at least one hit) render a leading repo column so the
-	// user can disambiguate cross-repo matches without a follow-up query.
-	multiRepo := false
-	for _, n := range any.Nodes {
-		if n.RepoID != "" {
-			multiRepo = true
-			break
-		}
-	}
-	for _, n := range any.Nodes {
-		extMark := ""
-		if n.External {
-			extMark = " [external]"
-		}
-		if multiRepo {
-			fmt.Fprintf(w, "%-12s %-10s %s:%d-%d  %s  (%s)%s\n",
-				shortID(n.RepoID), n.Kind, n.FilePath, n.LineStart, n.LineEnd, n.Name, n.NodeID[:12], extMark)
-		} else {
-			fmt.Fprintf(w, "%-10s %s:%d-%d  %s  (%s)%s\n",
-				n.Kind, n.FilePath, n.LineStart, n.LineEnd, n.Name, n.NodeID[:12], extMark)
-		}
-	}
-	return nil
-}
-
-// shortID returns the first 12 hex chars of a content-hashed node ID for
-// display, leaving shorter or empty inputs untouched.
-func shortID(id string) string {
-	if len(id) <= 12 {
-		return id
-	}
-	return id[:12]
-}
-
-// crossRepoNodeInfo is the projection resolveCrossRepoNode returns for
-// the CLI's cross-repo edge rendering: the symbol name, the kind (so a
-// package-grain edge can be visibly labelled as such), and a file:line
-// hint so the user can navigate to the call site (solov2-358v).
-type crossRepoNodeInfo struct {
-	Name     string
-	Kind     string
-	FilePath string
-	Line     int
-}
-
-// resolveCrossRepoNode best-effort resolves any cross-repo node_id (src
-// or dst) to its symbol name + file location via eng_get_node, so the
-// CLI can print "RunE in cmd/root.go:18 --CALLS--> greetlib.Greeter.Hello"
-// instead of opaque hashes (extends solov2-7xrw, solov2-80hh; rendering
-// upgrade for solov2-358v). Pass repoID/branch empty to let the daemon
-// scan all (repo, branch) pairs — needed for inbound src nodes whose
-// containing repo isn't on the response envelope. Returns the zero
-// value on any error or empty result so a stuck remote repo never
-// fails the primary context output.
-func resolveCrossRepoNode(ctx context.Context, nodeID, repoID, branch string) crossRepoNodeInfo {
-	if nodeID == "" {
-		return crossRepoNodeInfo{}
-	}
-	var resp struct {
-		Nodes []struct {
-			Name      string `json:"name"`
-			Kind      string `json:"kind"`
-			FilePath  string `json:"file_path"`
-			LineStart int    `json:"line_start,omitempty"`
-		} `json:"nodes"`
-	}
-	params := map[string]any{"node_id": nodeID}
-	if repoID != "" {
-		params["repo_id"] = repoID
-	}
-	if branch != "" {
-		params["branch"] = branch
-	}
-	if err := mcpclient.Call(ctx, "eng_get_node", params, &resp); err != nil {
-		return crossRepoNodeInfo{}
-	}
-	if len(resp.Nodes) == 0 {
-		return crossRepoNodeInfo{}
-	}
-	n := resp.Nodes[0]
-	return crossRepoNodeInfo{Name: n.Name, Kind: n.Kind, FilePath: n.FilePath, Line: n.LineStart}
-}
-
-// formatCrossRepoNode renders one side of a cross-repo edge: the
-// symbol name, optionally with a "package " prefix when the resolved
-// node is a Go package (signalling the parser attributed the call to
-// the package because it couldn't bind the specific function), and
-// appended with "in file_path[:line]" when known. Falls back to a
-// short-id slice of the raw node_id when nothing resolves so the row
-// still has *some* identifier.
-func formatCrossRepoNode(info crossRepoNodeInfo, fallbackID string) string {
-	name := info.Name
-	if name == "" {
-		return shortID(fallbackID)
-	}
-	if info.Kind == "package" {
-		name = "package " + name
-	}
-	if info.FilePath != "" {
-		if info.Line > 0 {
-			return fmt.Sprintf("%s in %s:%d", name, info.FilePath, info.Line)
-		}
-		return fmt.Sprintf("%s in %s", name, info.FilePath)
-	}
-	return name
 }
 
 // contextCmd wraps eng_get_context_pack so users can pull the same
@@ -355,130 +132,42 @@ func contextCmd() *cobra.Command {
 		Long: `Print the context pack for a symbol: the seed node plus surrounding
 callers, callees, and adjacent tests. Useful at the start of a non-trivial
 change so you (or an agent) get the whole neighbourhood in one shot.`,
-		// solov2-bvis: accept the symbol as either a positional arg or
-		// a --symbol flag. The MCP tool's JSON param is "symbol" so
-		// users naturally try --symbol; reject only when both or neither
-		// are supplied.
+		// solov2-bvis: accept the symbol as either a positional arg or a
+		// --symbol flag. The MCP tool's JSON param is "symbol" so users
+		// naturally try --symbol; reject only when both or neither are
+		// supplied.
 		Args:         cobra.MaximumNArgs(1),
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			var sym string
-			switch {
-			case len(args) == 1 && symbolFlag == "":
-				sym = args[0]
-			case len(args) == 0 && symbolFlag != "":
-				sym = symbolFlag
-			case len(args) == 1 && symbolFlag != "":
-				return fmt.Errorf("context: pass symbol as positional arg OR --symbol, not both")
-			default:
-				return fmt.Errorf("context: a symbol is required (positional or --symbol)")
-			}
-			params := map[string]any{"symbol": sym}
-			if repoFlag != "" {
-				params["repo_id"] = repoFlag
-			}
-			// solov2-efzv: omit repo_id so the daemon fans out by default —
-			// the common cobra-CLI-plus-shared-lib pattern wants
-			// `veska context Greeter.Hello` from the CLI repo to surface
-			// the library's symbol (and its cross-repo edges back).
-			var resp json.RawMessage
-			if err := mcpclient.Call(cmd.Context(), "eng_get_context_pack", params, &resp); err != nil {
-				return fmt.Errorf("context: %w", err)
-			}
-			w := cmd.OutOrStdout()
-			if jsonOut {
-				var pretty any
-				_ = json.Unmarshal(resp, &pretty)
-				enc := json.NewEncoder(w)
-				enc.SetIndent("", "  ")
-				return enc.Encode(pretty)
-			}
-			// Text mode: render seed + one-line-per-neighbour. The shape is
-			// {mode, query, nodes:[{name, kind, file_path, distance, seed, snippet}],
-			// cross_repo_edges:[{src_node_id, dst_node_id, dst_repo_id, kind}]}.
-			var pack struct {
-				Mode  string `json:"mode"`
-				Query string `json:"query"`
-				Nodes []struct {
-					NodeID   string `json:"node_id"`
-					Name     string `json:"name"`
-					Kind     string `json:"kind"`
-					FilePath string `json:"file_path"`
-					Distance int    `json:"distance"`
-					Seed     bool   `json:"seed"`
-					Snippet  string `json:"snippet,omitempty"`
-				} `json:"nodes"`
-				CrossRepoEdges []struct {
-					SrcNodeID string `json:"src_node_id"`
-					DstNodeID string `json:"dst_node_id"`
-					DstRepoID string `json:"dst_repo_id"`
-					DstBranch string `json:"dst_branch"`
-					Kind      string `json:"kind"`
-				} `json:"cross_repo_edges,omitempty"`
-			}
-			if err := json.Unmarshal(resp, &pack); err != nil {
+			sym, err := pickSymbolArg(args, symbolFlag)
+			if err != nil {
 				return err
 			}
-			// solov2-ub9c: a zero-node pack means the symbol didn't resolve.
-			// Say so plainly + point to `veska symbol` for fuzzier lookup
-			// instead of the deadpan "context for X (0 node(s))".
-			if len(pack.Nodes) == 0 {
-				fmt.Fprintf(w, "no symbol named %q found in this repo\n", pack.Query)
-				fmt.Fprintf(w, "hint: try `veska symbol %s` to fuzzy-search, or check --repo\n", pack.Query)
-				return nil
-			}
-			fmt.Fprintf(w, "context for %s (%d node(s))\n", pack.Query, len(pack.Nodes))
-			for _, n := range pack.Nodes {
-				mark := " "
-				if n.Seed {
-					mark = "*"
-				}
-				fmt.Fprintf(w, " %s d=%d %-10s %s  %s\n", mark, n.Distance, n.Kind, n.Name, n.FilePath)
-			}
-			// solov2-7xrw: cross-repo edges that the daemon resolved through
-			// cross_repo_edge_stubs. Surface them so the multi-repo journey
-			// ("what does Run touch in greetlib?") doesn't dead-end at the
-			// current repo's boundary. byNodeID lets us label each edge with
-			// the source symbol the user actually recognises.
-			if len(pack.CrossRepoEdges) > 0 {
-				// solov2-358v: label cross-repo edges with the calling
-				// function/method + file:line whenever the graph has it,
-				// instead of the bare package name. When the caller is a
-				// package node (parser couldn't bind the specific function
-				// — see solov2-9rc2 for the underlying parser limitation),
-				// prefix with "package " so the user knows the edge is
-				// attributed at package grain.
-				localByID := make(map[string]crossRepoNodeInfo, len(pack.Nodes))
-				for _, n := range pack.Nodes {
-					if n.NodeID == "" {
-						continue
-					}
-					localByID[n.NodeID] = crossRepoNodeInfo{Name: n.Name, Kind: n.Kind, FilePath: n.FilePath}
-				}
-				fmt.Fprintf(w, "cross-repo edges (%d):\n", len(pack.CrossRepoEdges))
-				for _, e := range pack.CrossRepoEdges {
-					src, ok := localByID[e.SrcNodeID]
-					if !ok || src.Name == "" {
-						src = resolveCrossRepoNode(cmd.Context(), e.SrcNodeID, "", "")
-					}
-					dst, ok := localByID[e.DstNodeID]
-					if !ok || dst.Name == "" {
-						dst = resolveCrossRepoNode(cmd.Context(), e.DstNodeID, e.DstRepoID, e.DstBranch)
-					}
-					dstRepo := e.DstRepoID
-					if len(dstRepo) > 12 {
-						dstRepo = dstRepo[:12]
-					}
-					fmt.Fprintf(w, "   %s --%s--> %s in %s\n",
-						formatCrossRepoNode(src, e.SrcNodeID), e.Kind,
-						formatCrossRepoNode(dst, e.DstNodeID), dstRepo)
-				}
-			}
-			return nil
+			return symbolcmd.RunContext(cmd.Context(), symbolcmd.ContextParams{
+				Symbol:  sym,
+				RepoID:  repoFlag,
+				JSONOut: jsonOut,
+				Out:     cmd.OutOrStdout(),
+			})
 		},
 	}
 	cmd.Flags().StringVar(&repoFlag, "repo", "", "repo id or short_id (default: the sole registered repo)")
 	cmd.Flags().BoolVar(&jsonOut, "json", false, "emit JSON (eng_get_context_pack shape)")
 	cmd.Flags().StringVar(&symbolFlag, "symbol", "", "symbol name (alternative to the positional arg)")
 	return cmd
+}
+
+// pickSymbolArg resolves the symbol from the positional arg or the --symbol
+// flag, rejecting the both-set and neither-set cases (solov2-bvis).
+func pickSymbolArg(args []string, symbolFlag string) (string, error) {
+	switch {
+	case len(args) == 1 && symbolFlag == "":
+		return args[0], nil
+	case len(args) == 0 && symbolFlag != "":
+		return symbolFlag, nil
+	case len(args) == 1 && symbolFlag != "":
+		return "", fmt.Errorf("context: pass symbol as positional arg OR --symbol, not both")
+	default:
+		return "", fmt.Errorf("context: a symbol is required (positional or --symbol)")
+	}
 }
