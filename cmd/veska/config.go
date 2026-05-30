@@ -8,6 +8,7 @@ import (
 
 	"github.com/BurntSushi/toml"
 	"github.com/spf13/cobra"
+	"github.com/whiskeyjimbo/veska/internal/cli/mcpclient"
 	"github.com/whiskeyjimbo/veska/internal/config"
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/embedding/elect"
 	"github.com/whiskeyjimbo/veska/internal/service"
@@ -126,7 +127,7 @@ func configReloadCmd(mgr service.Manager) *cobra.Command {
 				Repos []repoView `json:"repos"`
 			}
 			var lr listResult
-			if err := callMCP(ctx, "eng_list_repos", map[string]any{}, &lr); err != nil {
+			if err := mcpclient.Call(ctx, "eng_list_repos", map[string]any{}, &lr); err != nil {
 				return fmt.Errorf("config reload: list repos: %w", err)
 			}
 			if len(lr.Repos) == 0 {
@@ -136,7 +137,7 @@ func configReloadCmd(mgr service.Manager) *cobra.Command {
 			ok, failed := 0, 0
 			for _, r := range lr.Repos {
 				var resp map[string]any
-				if err := callMCP(ctx, "eng_promote_repo", map[string]any{"repo_id": r.RepoID}, &resp); err != nil {
+				if err := mcpclient.Call(ctx, "eng_promote_repo", map[string]any{"repo_id": r.RepoID}, &resp); err != nil {
 					fmt.Fprintf(w, "  ✗ %s: %v\n", r.ShortID, err)
 					failed++
 					continue

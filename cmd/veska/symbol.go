@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
+	"github.com/whiskeyjimbo/veska/internal/cli/mcpclient"
 
 	mcpinfra "github.com/whiskeyjimbo/veska/internal/infrastructure/mcp"
 )
@@ -30,7 +31,7 @@ func resolveRepoFromCWD(ctx context.Context) (string, error) {
 			RootPath string `json:"root_path"`
 		} `json:"repo"`
 	}
-	if err := callMCP(ctx, "eng_get_current_repo", map[string]any{"cwd": cwd}, &res); err != nil {
+	if err := mcpclient.Call(ctx, "eng_get_current_repo", map[string]any{"cwd": cwd}, &res); err != nil {
 		// Daemon down or no match — caller falls through with no auto-resolve.
 		return "", nil
 	}
@@ -58,7 +59,7 @@ func autoResolveRepo(ctx context.Context, errOut io.Writer) string {
 			RootPath string `json:"root_path"`
 		} `json:"repos"`
 	}
-	if err := callMCP(ctx, "eng_list_repos", map[string]any{}, &list); err == nil && len(list.Repos) > 1 && errOut != nil {
+	if err := mcpclient.Call(ctx, "eng_list_repos", map[string]any{}, &list); err == nil && len(list.Repos) > 1 && errOut != nil {
 		short, root := rid[:12], ""
 		for _, rec := range list.Repos {
 			if rec.RepoID == rid {
@@ -124,7 +125,7 @@ ranked first.`,
 				DegradedReasons []string `json:"degraded_reasons,omitempty"`
 				IndexingRepos   []string `json:"indexing_repos,omitempty"`
 			}
-			if err := callMCP(cmd.Context(), "eng_find_symbol", params, &resp); err != nil {
+			if err := mcpclient.Call(cmd.Context(), "eng_find_symbol", params, &resp); err != nil {
 				return fmt.Errorf("symbol: %w", err)
 			}
 			// solov2-zgwd: when the scoped probe is empty, ask every other
@@ -156,7 +157,7 @@ func printCrossRepoSymbolHint(ctx context.Context, errOut io.Writer, symbol, sco
 	var lr struct {
 		Repos []repoView `json:"repos"`
 	}
-	if err := callMCP(ctx, "eng_list_repos", map[string]any{}, &lr); err != nil {
+	if err := mcpclient.Call(ctx, "eng_list_repos", map[string]any{}, &lr); err != nil {
 		return
 	}
 	type otherHit struct {
@@ -172,7 +173,7 @@ func printCrossRepoSymbolHint(ctx context.Context, errOut io.Writer, symbol, sco
 			Nodes []struct{} `json:"nodes"`
 		}
 		params := map[string]any{"symbol": symbol, "repo_id": r.RepoID}
-		if err := callMCP(ctx, "eng_find_symbol", params, &probe); err != nil {
+		if err := mcpclient.Call(ctx, "eng_find_symbol", params, &probe); err != nil {
 			continue
 		}
 		if len(probe.Nodes) > 0 {
@@ -307,7 +308,7 @@ func resolveCrossRepoNode(ctx context.Context, nodeID, repoID, branch string) cr
 	if branch != "" {
 		params["branch"] = branch
 	}
-	if err := callMCP(ctx, "eng_get_node", params, &resp); err != nil {
+	if err := mcpclient.Call(ctx, "eng_get_node", params, &resp); err != nil {
 		return crossRepoNodeInfo{}
 	}
 	if len(resp.Nodes) == 0 {
@@ -383,7 +384,7 @@ change so you (or an agent) get the whole neighbourhood in one shot.`,
 			// `veska context Greeter.Hello` from the CLI repo to surface
 			// the library's symbol (and its cross-repo edges back).
 			var resp json.RawMessage
-			if err := callMCP(cmd.Context(), "eng_get_context_pack", params, &resp); err != nil {
+			if err := mcpclient.Call(cmd.Context(), "eng_get_context_pack", params, &resp); err != nil {
 				return fmt.Errorf("context: %w", err)
 			}
 			w := cmd.OutOrStdout()
