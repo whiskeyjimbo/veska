@@ -20,7 +20,7 @@ func TestPromote_WritesSignatureAndNilPrevOnFirstPromotion(t *testing.T) {
 	sa := application.NewStagingArea()
 	n, _ := domain.NewNode("n1", "a.go", "Foo", domain.KindFunction,
 		domain.WithSignature("func Foo() error"))
-	sa.StageFile("repo1", "main", "a.go", []*domain.Node{n}, nil)
+	sa.Stage("repo1", "main", "a.go", application.StagedFile{Nodes: []*domain.Node{n}, Edges: nil})
 
 	p := newTestPromoter(sa, db)
 	if err := p.Promote(context.Background(), "repo1", "main", "sha-1",
@@ -59,7 +59,7 @@ func TestPromote_ThreadsPrevSignatureAcrossPromotions(t *testing.T) {
 	// Sibling: a non-drifting node so we exercise multi-row prev-sig threading.
 	n2, _ := domain.NewNode("n2", "a.go", "Bar", domain.KindFunction,
 		domain.WithSignature("func Bar()"))
-	sa.StageFile("repo1", "main", "a.go", []*domain.Node{n1, n2}, nil)
+	sa.Stage("repo1", "main", "a.go", application.StagedFile{Nodes: []*domain.Node{n1, n2}, Edges: nil})
 	if err := p.Promote(context.Background(), "repo1", "main", "sha-1",
 		domain.Actor{ID: "service:veska", Kind: domain.ActorKindSystem}); err != nil {
 		t.Fatalf("Promote 1: %v", err)
@@ -70,7 +70,7 @@ func TestPromote_ThreadsPrevSignatureAcrossPromotions(t *testing.T) {
 		domain.WithSignature("func Foo(ctx context.Context) error"))
 	n2b, _ := domain.NewNode("n2", "a.go", "Bar", domain.KindFunction,
 		domain.WithSignature("func Bar()"))
-	sa.StageFile("repo1", "main", "a.go", []*domain.Node{n1b, n2b}, nil)
+	sa.Stage("repo1", "main", "a.go", application.StagedFile{Nodes: []*domain.Node{n1b, n2b}, Edges: nil})
 	if err := p.Promote(context.Background(), "repo1", "main", "sha-2",
 		domain.Actor{ID: "service:veska", Kind: domain.ActorKindSystem}); err != nil {
 		t.Fatalf("Promote 2: %v", err)
@@ -115,7 +115,7 @@ func TestPromote_NilSignatureWritesNullColumn(t *testing.T) {
 
 	sa := application.NewStagingArea()
 	n, _ := domain.NewNode("n-nosig", "a.go", "Foo", domain.KindField)
-	sa.StageFile("repo1", "main", "a.go", []*domain.Node{n}, nil)
+	sa.Stage("repo1", "main", "a.go", application.StagedFile{Nodes: []*domain.Node{n}, Edges: nil})
 
 	p := newTestPromoter(sa, db)
 	if err := p.Promote(context.Background(), "repo1", "main", "sha",

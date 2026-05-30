@@ -62,7 +62,7 @@ func TestStageFile_RoundTrip(t *testing.T) {
 	n := mustNode(t, "n1", "pkg/foo.go", "Foo", domain.KindFunction)
 	e := mustEdge(t, "n1", "n2", domain.EdgeCalls)
 
-	sa.StageFile("repo1", "main", "pkg/foo.go", []*domain.Node{n}, []*domain.Edge{e})
+	sa.Stage("repo1", "main", "pkg/foo.go", StagedFile{Nodes: []*domain.Node{n}, Edges: []*domain.Edge{e}})
 
 	nodes, ok := sa.GetStagedNodes("repo1", "main", "pkg/foo.go")
 	if !ok {
@@ -88,8 +88,8 @@ func TestStageFile_Replace(t *testing.T) {
 	n1 := mustNode(t, "n1", "pkg/foo.go", "Foo", domain.KindFunction)
 	n2 := mustNode(t, "n2", "pkg/foo.go", "Bar", domain.KindFunction)
 
-	sa.StageFile("repo1", "main", "pkg/foo.go", []*domain.Node{n1}, nil)
-	sa.StageFile("repo1", "main", "pkg/foo.go", []*domain.Node{n2}, nil)
+	sa.Stage("repo1", "main", "pkg/foo.go", StagedFile{Nodes: []*domain.Node{n1}, Edges: nil})
+	sa.Stage("repo1", "main", "pkg/foo.go", StagedFile{Nodes: []*domain.Node{n2}, Edges: nil})
 
 	nodes, ok := sa.GetStagedNodes("repo1", "main", "pkg/foo.go")
 	if !ok {
@@ -105,10 +105,10 @@ func TestStageFile_Replace(t *testing.T) {
 func TestStagedFiles_ListsPaths(t *testing.T) {
 	sa := NewStagingArea()
 
-	sa.StageFile("repo1", "main", "a.go", nil, nil)
-	sa.StageFile("repo1", "main", "b.go", nil, nil)
-	sa.StageFile("repo1", "feat/x", "c.go", nil, nil) // different branch
-	sa.StageFile("repo2", "main", "d.go", nil, nil)   // different repo
+	sa.Stage("repo1", "main", "a.go", StagedFile{Nodes: nil, Edges: nil})
+	sa.Stage("repo1", "main", "b.go", StagedFile{Nodes: nil, Edges: nil})
+	sa.Stage("repo1", "feat/x", "c.go", StagedFile{Nodes: nil, Edges: nil}) // different branch
+	sa.Stage("repo2", "main", "d.go", StagedFile{Nodes: nil, Edges: nil})   // different repo
 
 	files := sa.StagedFiles("repo1", "main")
 	if len(files) != 2 {
@@ -128,7 +128,7 @@ func TestDeleteStagedFile(t *testing.T) {
 	sa := NewStagingArea()
 
 	n := mustNode(t, "n1", "pkg/foo.go", "Foo", domain.KindFunction)
-	sa.StageFile("repo1", "main", "pkg/foo.go", []*domain.Node{n}, nil)
+	sa.Stage("repo1", "main", "pkg/foo.go", StagedFile{Nodes: []*domain.Node{n}, Edges: nil})
 
 	sa.DeleteStagedFile("repo1", "main", "pkg/foo.go")
 
@@ -146,9 +146,9 @@ func TestDeleteStagedFile(t *testing.T) {
 func TestClear(t *testing.T) {
 	sa := NewStagingArea()
 
-	sa.StageFile("repo1", "main", "a.go", nil, nil)
-	sa.StageFile("repo1", "main", "b.go", nil, nil)
-	sa.StageFile("repo1", "feat/x", "c.go", nil, nil) // different branch — must survive
+	sa.Stage("repo1", "main", "a.go", StagedFile{Nodes: nil, Edges: nil})
+	sa.Stage("repo1", "main", "b.go", StagedFile{Nodes: nil, Edges: nil})
+	sa.Stage("repo1", "feat/x", "c.go", StagedFile{Nodes: nil, Edges: nil}) // different branch — must survive
 
 	sa.Clear("repo1", "main")
 
@@ -167,9 +167,9 @@ func TestSnapshot(t *testing.T) {
 
 	n1 := mustNode(t, "n1", "a.go", "A", domain.KindFunction)
 	n2 := mustNode(t, "n2", "b.go", "B", domain.KindFunction)
-	sa.StageFile("repo1", "main", "a.go", []*domain.Node{n1}, nil)
-	sa.StageFile("repo1", "main", "b.go", []*domain.Node{n2}, nil)
-	sa.StageFile("repo1", "feat/x", "c.go", nil, nil) // different branch
+	sa.Stage("repo1", "main", "a.go", StagedFile{Nodes: []*domain.Node{n1}, Edges: nil})
+	sa.Stage("repo1", "main", "b.go", StagedFile{Nodes: []*domain.Node{n2}, Edges: nil})
+	sa.Stage("repo1", "feat/x", "c.go", StagedFile{Nodes: nil, Edges: nil}) // different branch
 
 	snap := sa.Snapshot("repo1", "main")
 	if len(snap) != 2 {
@@ -188,7 +188,7 @@ func TestSnapshot_IsCopy(t *testing.T) {
 	sa := NewStagingArea()
 
 	n := mustNode(t, "n1", "a.go", "A", domain.KindFunction)
-	sa.StageFile("repo1", "main", "a.go", []*domain.Node{n}, nil)
+	sa.Stage("repo1", "main", "a.go", StagedFile{Nodes: []*domain.Node{n}, Edges: nil})
 
 	snap := sa.Snapshot("repo1", "main")
 	delete(snap, "a.go")
@@ -205,7 +205,7 @@ func TestSnapshot_IsCopy(t *testing.T) {
 func TestLossy_NewInstance(t *testing.T) {
 	sa1 := NewStagingArea()
 	n := mustNode(t, "n1", "a.go", "A", domain.KindFunction)
-	sa1.StageFile("repo1", "main", "a.go", []*domain.Node{n}, nil)
+	sa1.Stage("repo1", "main", "a.go", StagedFile{Nodes: []*domain.Node{n}, Edges: nil})
 
 	// Simulate daemon restart by creating a new instance.
 	sa2 := NewStagingArea()
@@ -228,7 +228,7 @@ func TestStageFile_Concurrent(t *testing.T) {
 		go func(i int) {
 			defer wg.Done()
 			n, _ := domain.NewNode("n", "f.go", "F", domain.KindFunction)
-			sa.StageFile("repo", "main", "f.go", []*domain.Node{n}, nil)
+			sa.Stage("repo", "main", "f.go", StagedFile{Nodes: []*domain.Node{n}, Edges: nil})
 			_ = i
 		}(i)
 		go func() {
