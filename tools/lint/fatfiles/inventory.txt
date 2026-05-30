@@ -25,7 +25,6 @@ internal/application/search/search.go 593
 internal/cli/daemon/wire.go 1234
 internal/infrastructure/mcp/registry.go 509
 internal/infrastructure/mcp/tools_helpers.go 577
-internal/infrastructure/mcp/tools_search.go 677
 internal/infrastructure/repo/registry.go 579
 internal/infrastructure/secretsscanner/secretsscanner.go 571
 internal/infrastructure/sqlite/graph_repo.go 539
