@@ -1,4 +1,4 @@
-package main
+package searchcmd
 
 import (
 	"bytes"
@@ -12,11 +12,11 @@ import (
 
 func TestEmitSearchHeader_CwdScopedUsesAliasOrShortID(t *testing.T) {
 	var stderr, stdout bytes.Buffer
-	emitSearchHeader(&stderr, &stdout, false, searchHeaderInfo{
-		mode:    searchHeaderModeCwd,
-		repoID:  "52d6c257dfe2abcdef0011223344556677889900aabbccddeeff001122334455",
-		shortID: "52d6c257dfe2",
-		aliases: []string{"greetcli"},
+	EmitSearchHeader(&stderr, &stdout, false, SearchHeaderInfo{
+		Mode:    SearchHeaderModeCwd,
+		RepoID:  "52d6c257dfe2abcdef0011223344556677889900aabbccddeeff001122334455",
+		ShortID: "52d6c257dfe2",
+		Aliases: []string{"greetcli"},
 	})
 	got := stderr.String()
 	if !strings.Contains(got, "searching:") {
@@ -35,10 +35,10 @@ func TestEmitSearchHeader_CwdScopedUsesAliasOrShortID(t *testing.T) {
 
 func TestEmitSearchHeader_CwdScopedFallsBackToShortID(t *testing.T) {
 	var stderr, stdout bytes.Buffer
-	emitSearchHeader(&stderr, &stdout, false, searchHeaderInfo{
-		mode:    searchHeaderModeCwd,
-		repoID:  "52d6c257dfe2abcdef0011223344556677889900aabbccddeeff001122334455",
-		shortID: "52d6c257dfe2",
+	EmitSearchHeader(&stderr, &stdout, false, SearchHeaderInfo{
+		Mode:    SearchHeaderModeCwd,
+		RepoID:  "52d6c257dfe2abcdef0011223344556677889900aabbccddeeff001122334455",
+		ShortID: "52d6c257dfe2",
 	})
 	got := stderr.String()
 	if !strings.Contains(got, "52d6c257dfe2") {
@@ -48,11 +48,11 @@ func TestEmitSearchHeader_CwdScopedFallsBackToShortID(t *testing.T) {
 
 func TestEmitSearchHeader_ExplicitRepoNoOverrideHint(t *testing.T) {
 	var stderr, stdout bytes.Buffer
-	emitSearchHeader(&stderr, &stdout, false, searchHeaderInfo{
-		mode:    searchHeaderModeExplicit,
-		repoID:  "0e17bc277263abcdef0011223344556677889900aabbccddeeff001122334455",
-		shortID: "0e17bc277263",
-		aliases: []string{"greetlib"},
+	EmitSearchHeader(&stderr, &stdout, false, SearchHeaderInfo{
+		Mode:    SearchHeaderModeExplicit,
+		RepoID:  "0e17bc277263abcdef0011223344556677889900aabbccddeeff001122334455",
+		ShortID: "0e17bc277263",
+		Aliases: []string{"greetlib"},
 	})
 	got := stderr.String()
 	if !strings.Contains(got, "searching:") || !strings.Contains(got, "greetlib") {
@@ -65,8 +65,8 @@ func TestEmitSearchHeader_ExplicitRepoNoOverrideHint(t *testing.T) {
 
 func TestEmitSearchHeader_FanoutAllRepos(t *testing.T) {
 	var stderr, stdout bytes.Buffer
-	emitSearchHeader(&stderr, &stdout, false, searchHeaderInfo{
-		mode: searchHeaderModeAll,
+	EmitSearchHeader(&stderr, &stdout, false, SearchHeaderInfo{
+		Mode: SearchHeaderModeAll,
 	})
 	got := stderr.String()
 	if !strings.Contains(got, "searching: all repos") {
@@ -78,12 +78,12 @@ func TestEmitSearchHeader_FanoutAllRepos(t *testing.T) {
 }
 
 func TestEmitSearchHeader_JSONModeSuppresses(t *testing.T) {
-	for _, mode := range []searchHeaderMode{searchHeaderModeCwd, searchHeaderModeExplicit, searchHeaderModeAll} {
+	for _, mode := range []SearchHeaderMode{SearchHeaderModeCwd, SearchHeaderModeExplicit, SearchHeaderModeAll} {
 		var stderr, stdout bytes.Buffer
-		emitSearchHeader(&stderr, &stdout, true, searchHeaderInfo{
-			mode:    mode,
-			shortID: "52d6c257dfe2",
-			aliases: []string{"greetcli"},
+		EmitSearchHeader(&stderr, &stdout, true, SearchHeaderInfo{
+			Mode:    mode,
+			ShortID: "52d6c257dfe2",
+			Aliases: []string{"greetcli"},
 		})
 		if stderr.Len() != 0 {
 			t.Errorf("mode=%v jsonOut=true should suppress stderr header; got %q", mode, stderr.String())
