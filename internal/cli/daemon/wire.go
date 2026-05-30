@@ -238,174 +238,254 @@ type Daemon struct {
 // newDaemon builds the full collaborator graph from cfg. Every dep is
 // validated; any failure produces a typed *ErrMissingDep without panicking.
 // The returned Daemon is not yet running — call Start.
+//
+// The work is split across daemonBuilder phase methods so each stays small, and
+// the partial-failure cleanup (closing the SQLite pools once they are open) is
+// expressed once as a deferred guard rather than repeated at every error site.
 func newDaemon(cfg Config) (*Daemon, error) {
-	cfg = ResolveConfig(cfg)
+	b := &daemonBuilder{cfg: ResolveConfig(cfg)}
 
-	// Load ~/.veska/config.toml (defaults < config.toml < env vars). A missing
-	// file is not an error. Selected values below are read from this surface
-	// instead of compile-time constants; see docs/operations/CONFIG-SURFACE.md.
+	// Pre-storage phases hold no closable resources, so a failure here just
+	// returns the error.
+	for _, phase := range []func() error{
+		b.loadConfig,
+		b.buildObservability,
+		b.validateConfig,
+	} {
+		if err := phase(); err != nil {
+			return nil, err
+		}
+	}
+
+	if err := b.openStorage(); err != nil {
+		return nil, err
+	}
+	// The SQLite pools are now open. Every later failure must close them; a
+	// single deferred guard replaces the repeated `_ = pools.Close()` that
+	// peppered the original monolith.
+	ok := false
+	defer func() {
+		if !ok {
+			_ = b.pools.Close()
+		}
+	}()
+
+	for _, phase := range []func() error{
+		b.buildCore,
+		b.buildCheckPipeline,
+		b.buildEmbedder,
+		b.buildQueueHandlers,
+		b.buildPollerWatcher,
+		b.buildMCPServer,
+		b.finalize,
+	} {
+		if err := phase(); err != nil {
+			return nil, err
+		}
+	}
+
+	d := b.assemble()
+	ok = true
+	return d, nil
+}
+
+// daemonBuilder accumulates the daemon's collaborator graph across phase
+// methods. Most fields map 1:1 to Daemon fields (assemble copies them); the
+// rest are intermediates shared between phases (fileCfg, the ingestion-busy
+// predicate and its scanTracker/resyncRef, provider/refs/reparser, handlers).
+type daemonBuilder struct {
+	cfg     Config
+	fileCfg config.Config
+
+	metrics       *observability.Metrics
+	metricsReg    *prometheus.Registry
+	metricsListen string
+	tracer        *sdktrace.TracerProvider
+
+	pools *sqlite.Pools
+	vec   ports.VectorStorage
+
+	staging  *application.StagingArea
+	gate     *application.IngestionGate
+	ingester *application.Ingester
+	promoter *application.Promoter
+	findings ports.FindingStorage
+
+	scanTracker   *application.ScanTracker
+	resyncRef     *application.StartupResync
+	ingestionBusy func() bool
+
+	vulnRefresher *vulnrefresh.Refresher
+	vulnScanCheck *checks.VulnScanCheck
+
+	provider    ports.EmbeddingProvider
+	refs        *sqlite.EmbeddingRefsRepo
+	embedWorker *embedder.Worker
+
+	handlers map[queue.WorkKind]queue.WorkHandler
+	poller   *queue.Poller
+	watcher  *gitwatch.MultiRepoWatcher
+	reparser func(ctx context.Context, rec application.RepoRecord) error
+	regSvc   *repoRegistrar
+	scanWG   *sync.WaitGroup
+
+	registry   *mcp.Registry
+	mcpsrv     *mcp.Server
+	savingsRec *savings.Recorder
+	resync     *application.StartupResync
+}
+
+// loadConfig loads ~/.veska/config.toml (defaults < config.toml < env vars). A
+// missing file is not an error; see docs/operations/CONFIG-SURFACE.md.
+func (b *daemonBuilder) loadConfig() error {
 	fileCfg, err := config.Load()
 	if err != nil {
-		return nil, fmt.Errorf("daemon: load config: %w", err)
+		return fmt.Errorf("daemon: load config: %w", err)
 	}
+	b.fileCfg = fileCfg
+	return nil
+}
 
-	// Prometheus metrics. The metric set is constructed (and registered on the
-	// default registry) only when metrics are enabled — either via config.toml
-	// ([metrics] enabled) or the Config.MetricsEnabled override. A nil *Metrics
-	// is threaded into the Metrics-aware consumers when disabled; they are all
-	// nil-safe. The HTTP listener itself is bound later, in Start.
-	metricsEnabled := fileCfg.Metrics.Enabled || cfg.MetricsEnabled
-	metricsListen := fileCfg.Metrics.Listen
-	if cfg.MetricsListen != "" {
-		metricsListen = cfg.MetricsListen
+// buildObservability constructs the Prometheus metric set and the OTLP
+// TracerProvider, each only when enabled. The both-or-neither tracing rule
+// (enabled<->endpoint) is a fatal startup error so operator intent is never
+// silently ignored. config.Validate covers the file surface; this re-check also
+// covers the test overrides.
+func (b *daemonBuilder) buildObservability() error {
+	metricsEnabled := b.fileCfg.Metrics.Enabled || b.cfg.MetricsEnabled
+	b.metricsListen = b.fileCfg.Metrics.Listen
+	if b.cfg.MetricsListen != "" {
+		b.metricsListen = b.cfg.MetricsListen
 	}
-	var (
-		metrics    *observability.Metrics
-		metricsReg *prometheus.Registry
-	)
 	if metricsEnabled {
-		metricsReg = prometheus.NewRegistry()
-		metrics = observability.NewMetrics(metricsReg)
+		b.metricsReg = prometheus.NewRegistry()
+		b.metrics = observability.NewMetrics(b.metricsReg)
 	}
 
-	// OTLP tracing. The TracerProvider is constructed only when tracing is
-	// enabled — either via config.toml ([tracing] enabled) or the
-	// Config.TracingEnabled override — AND an OTLP endpoint is set. The
-	// both-or-neither rule is a fatal startup error: enabling tracing with no
-	// endpoint, or setting an endpoint with tracing disabled, both fail here
-	// so the operator's intent is never silently ignored. config.Validate
-	// covers the file surface; this re-check also covers the test overrides.
-	tracingEnabled := fileCfg.Tracing.Enabled || cfg.TracingEnabled
-	tracingEndpoint := fileCfg.Tracing.OTLPEndpoint
-	if cfg.TracingEndpoint != "" {
-		tracingEndpoint = cfg.TracingEndpoint
+	tracingEnabled := b.fileCfg.Tracing.Enabled || b.cfg.TracingEnabled
+	tracingEndpoint := b.fileCfg.Tracing.OTLPEndpoint
+	if b.cfg.TracingEndpoint != "" {
+		tracingEndpoint = b.cfg.TracingEndpoint
 	}
 	if tracingEnabled && tracingEndpoint == "" {
-		return nil, &ErrMissingDep{Name: "tracing.otlp_endpoint",
+		return &ErrMissingDep{Name: "tracing.otlp_endpoint",
 			Why: "tracing is enabled but no OTLP endpoint is set (set tracing.otlp_endpoint or VESKA_OTLP_ENDPOINT)"}
 	}
 	if !tracingEnabled && tracingEndpoint != "" {
-		return nil, &ErrMissingDep{Name: "tracing.enabled",
+		return &ErrMissingDep{Name: "tracing.enabled",
 			Why: "an OTLP endpoint is set but tracing is disabled (set tracing.enabled = true or clear the endpoint)"}
 	}
-	var tracerProvider *sdktrace.TracerProvider
 	if tracingEnabled {
-		tp, terr := observability.NewTracerProvider(tracingEndpoint)
-		if terr != nil {
-			return nil, fmt.Errorf("daemon: construct tracer provider: %w", terr)
+		tp, err := observability.NewTracerProvider(tracingEndpoint)
+		if err != nil {
+			return fmt.Errorf("daemon: construct tracer provider: %w", err)
 		}
-		tracerProvider = tp
+		b.tracer = tp
 	}
+	return nil
+}
 
-	// Gate the review-pipeline LLM provider: only local Ollama is supported in
-	// V2.0; hosted providers are deferred to V2.0.1. A misconfigured provider
-	// fails fast here rather than surfacing as a confusing downstream error.
-	if err := checkLLMProvider(fileCfg); err != nil {
-		return nil, err
+// validateConfig fails fast on misconfiguration before any resource is opened:
+// the review LLM provider, the vuln advisory provider, the vector backend, the
+// required socket/db paths, and creation of the SQLite parent directory.
+// EmbedModel is intentionally NOT required — it only matters when the elected
+// embedder is Ollama (VESKA_EMBEDDER=ollama).
+func (b *daemonBuilder) validateConfig() error {
+	if err := checkLLMProvider(b.fileCfg); err != nil {
+		return err
 	}
-
-	// Gate the vulnerability advisory source provider. Only OSV is supported;
-	// an unknown provider fails fast here. An absent [vuln_source] section
-	// leaves the feature off (NullVulnSource, no refresher, no check).
-	if err := checkVulnProvider(fileCfg); err != nil {
-		return nil, err
+	if err := checkVulnProvider(b.fileCfg); err != nil {
+		return err
 	}
-
-	// Validate backend kind early so bad env doesn't surface as a confusing
-	// downstream open error.
-	switch cfg.VectorBackend {
+	switch b.cfg.VectorBackend {
 	case vector.BackendSQLiteVec, vector.BackendUsearch:
 	default:
-		return nil, &ErrMissingDep{Name: "vector_backend",
+		return &ErrMissingDep{Name: "vector_backend",
 			Why: fmt.Sprintf("unknown VESKA_VECTOR_BACKEND %q (want %q or %q)",
-				cfg.VectorBackend, vector.BackendSQLiteVec, vector.BackendUsearch)}
+				b.cfg.VectorBackend, vector.BackendSQLiteVec, vector.BackendUsearch)}
 	}
+	if b.cfg.SQLitePath == "" {
+		return &ErrMissingDep{Name: "sqlite_path"}
+	}
+	if b.cfg.CLISockPath == "" {
+		return &ErrMissingDep{Name: "cli_sock_path"}
+	}
+	if b.cfg.MCPSockPath == "" {
+		return &ErrMissingDep{Name: "mcp_sock_path"}
+	}
+	if err := os.MkdirAll(filepath.Dir(b.cfg.SQLitePath), 0o755); err != nil {
+		return fmt.Errorf("daemon: mkdir sqlite dir: %w", err)
+	}
+	return nil
+}
 
-	if cfg.SQLitePath == "" {
-		return nil, &ErrMissingDep{Name: "sqlite_path"}
-	}
-	if cfg.CLISockPath == "" {
-		return nil, &ErrMissingDep{Name: "cli_sock_path"}
-	}
-	if cfg.MCPSockPath == "" {
-		return nil, &ErrMissingDep{Name: "mcp_sock_path"}
-	}
-	// EmbedModel is intentionally NOT required here: it only matters when
-	// the elected embedder is Ollama (VESKA_EMBEDDER=ollama). With the
-	// default model2vec/static election the daemon needs no Ollama embed
-	// model to boot — elect.pick supplies the Ollama default if chosen.
-
-	// Make sure the SQLite parent directory exists; sqlite.Open does not
-	// mkdir for us.
-	if err := os.MkdirAll(filepath.Dir(cfg.SQLitePath), 0o755); err != nil {
-		return nil, fmt.Errorf("daemon: mkdir sqlite dir: %w", err)
-	}
-
-	// Open pools (read + write-hot + write-embed).
-	pools, err := sqlite.OpenPools(cfg.SQLitePath)
+// openStorage opens the SQLite pools, applies migrations, builds the shared
+// ingestion-busy predicate, and opens the vector backend. It closes the pools
+// itself on a post-open failure because the caller installs its deferred
+// pools-close guard only after openStorage returns successfully.
+func (b *daemonBuilder) openStorage() error {
+	pools, err := sqlite.OpenPools(b.cfg.SQLitePath)
 	if err != nil {
-		return nil, fmt.Errorf("daemon: open sqlite pools: %w", err)
+		return fmt.Errorf("daemon: open sqlite pools: %w", err)
 	}
-	// Apply migrations on the hot-write pool.
-	if _, err := sqlite.OpenWithOptions(cfg.SQLitePath, sqlite.Options{}); err != nil {
+	b.pools = pools
+	if _, err := sqlite.OpenWithOptions(b.cfg.SQLitePath, sqlite.Options{}); err != nil {
 		_ = pools.Close()
-		return nil, fmt.Errorf("daemon: migrate sqlite: %w", err)
+		return fmt.Errorf("daemon: migrate sqlite: %w", err)
 	}
 
-	// Shared ingestion-busy predicate (solov2-181 + 8ga). Both the
-	// post-promotion queue poller AND the embedder worker consult this
-	// to hold their writes off the db while a cold-scan or startup
-	// resync is committing. The scanTracker is constructed here (no
-	// deps) so it can be captured by closures defined later; resyncRef
-	// is filled in once NewStartupResync runs. Returns true when ANY
-	// ingestion-side write is in flight.
-	scanTracker := application.NewScanTracker()
-	var resyncRef *application.StartupResync
-	ingestionBusy := func() bool {
-		if scanTracker.IsAnyScanRunning() {
+	// Shared ingestion-busy predicate (solov2-181 + 8ga): the queue poller and
+	// the embedder worker both hold writes off while a cold-scan or startup
+	// resync is committing. resyncRef is filled in by finalize; the closure
+	// reads it through the builder so the later assignment is visible.
+	b.scanTracker = application.NewScanTracker()
+	b.ingestionBusy = func() bool {
+		if b.scanTracker.IsAnyScanRunning() {
 			return true
 		}
-		if resyncRef != nil && resyncRef.IsSyncing() {
+		if b.resyncRef != nil && b.resyncRef.IsSyncing() {
 			return true
 		}
 		return false
 	}
 
-	// Vector backend.
-	vec, err := vector.NewVectorStorage(cfg.VectorBackend, cfg.VeskaHome)
+	vec, err := vector.NewVectorStorage(b.cfg.VectorBackend, b.cfg.VeskaHome)
 	if err != nil {
 		_ = pools.Close()
-		return nil, fmt.Errorf("daemon: open vector storage: %w", err)
+		return fmt.Errorf("daemon: open vector storage: %w", err)
 	}
+	b.vec = vec
+	return nil
+}
 
-	// Application core (parse + stage + ingestion gate + promoter). Shared with
-	// the CLI cold-scan path via internal/composition so the FTS + embedding-ref
-	// sink set and the promotion graph can no longer drift between the two
-	// (solov2-u4mv). Local names are retained so downstream wiring is unchanged.
-	core := composition.NewColdScanCore(pools, fileCfg.Review.Enabled)
-	staging := core.Staging
-	gate := core.Gate
-	ingester := core.Ingester
-	promoter := core.Promoter
+// buildCore wires the shared ingestion+promotion core (internal/composition),
+// the finding storage, and the git-diff AddedLines seam.
+func (b *daemonBuilder) buildCore() error {
+	core := composition.NewColdScanCore(b.pools, b.fileCfg.Review.Enabled)
+	b.staging = core.Staging
+	b.gate = core.Gate
+	b.ingester = core.Ingester
+	b.promoter = core.Promoter
 
-	findings := sqlite.NewFindingRepo(pools.Write)
-	ingester.SetFindingStorage(findings)
+	b.findings = sqlite.NewFindingRepo(b.pools.Write)
+	b.ingester.SetFindingStorage(b.findings)
+	b.promoter.SetAddedLinesFunc(composition.GitAddedLinesFunc(repoRootFunc(b.pools.ReadDB)))
+	return nil
+}
 
-	// AddedLines seam: resolve a promoted commit's newly-added lines by parsing
-	// `git diff` for the repo's working tree. Keeps Promoter free of an infra
-	// import; the closure is shared with the CLI cold-scan path.
-	promoter.SetAddedLinesFunc(composition.GitAddedLinesFunc(repoRootFunc(pools.ReadDB)))
-
+// buildCheckPipeline registers the post-promotion structural checks (dead-code,
+// contract-drift, secrets-scan, and the optional vuln-scan) and installs the
+// check runner on the promoter.
+func (b *daemonBuilder) buildCheckPipeline() error {
 	checkReg := checks.NewRegistry()
-	deadcodeRepo := sqlite.NewDeadCodeRepo(pools.ReadDB)
-	contractRepo := sqlite.NewContractDriftRepo(pools.ReadDB)
-	// solov2-izh6.13: pass a repo-kind lookup so dead-code skips ephemeral
-	// (cache-tier) repos cloned by `veska search --repo <url>`. Same
-	// reasoning as the autolink short-circuit added in solov2-izh6.8.
+	deadcodeRepo := sqlite.NewDeadCodeRepo(b.pools.ReadDB)
+	contractRepo := sqlite.NewContractDriftRepo(b.pools.ReadDB)
+	// solov2-izh6.13: dead-code skips ephemeral (cache-tier) repos cloned by
+	// `veska search --repo <url>`, mirroring the autolink short-circuit.
 	deadcodeRepoKind := func(ctx context.Context, repoID string) (string, error) {
-		rec, gerr := repo.Get(ctx, pools.ReadDB, repoID)
-		if gerr != nil {
-			return "", gerr
+		rec, err := repo.Get(ctx, b.pools.ReadDB, repoID)
+		if err != nil {
+			return "", err
 		}
 		return rec.Kind, nil
 	}
@@ -414,124 +494,148 @@ func newDaemon(cfg Config) (*Daemon, error) {
 	))
 	checkReg.Register(checks.NewContractDriftCheck(contractRepo))
 
-	// Secrets-scan check (M7). Unlike vuln-scan it ships on by default — the
-	// builtin scanner has no required dependency. A [promotion] config entry
-	// listing "secrets-scan" in disabled_checks suppresses its registration.
-	if !fileCfg.Promotion.CheckDisabled("secrets-scan") {
-		secretsCheck := checks.NewSecretsScanCheck(secretsscanner.New())
-		checkReg.Register(secretsCheck)
+	// Secrets-scan ships on by default (no required dependency); a [promotion]
+	// disabled_checks entry listing "secrets-scan" suppresses it.
+	if !b.fileCfg.Promotion.CheckDisabled("secrets-scan") {
+		checkReg.Register(checks.NewSecretsScanCheck(secretsscanner.New()))
 	}
 
-	// Vulnerability-scan feature (M7). Off by default: an absent [vuln_source]
-	// section yields the NullVulnSource, registers no vulnscan check, and
-	// starts no refresher. provider="osv" builds the OSV adapter, registers
-	// the VulnScanCheck alongside the structural checks, and arms the
-	// refresher goroutine launched in Start.
-	vulnSource, vulnEnabled := buildVulnSource(fileCfg)
-	var vulnRefresher *vulnrefresh.Refresher
-	var vulnScanCheck *checks.VulnScanCheck
-	if vulnEnabled {
-		vulnRoot := func(ctx context.Context, repoID string) (string, error) {
-			return repoRootFunc(pools.ReadDB)(ctx, repoID)
-		}
-		vulnScanCheck = checks.NewVulnScanCheck(vulnSource, vulnRoot)
-		checkReg.Register(vulnScanCheck)
-
-		var refreshOpts []vulnrefresh.Option
-		if iv := vulnRefreshInterval(fileCfg); iv > 0 {
-			refreshOpts = append(refreshOpts, vulnrefresh.WithInterval(iv))
-		}
-		refresher, rerr := vulnrefresh.NewRefresher(vulnSource, refreshOpts...)
-		if rerr != nil {
-			_ = pools.Close()
-			return nil, fmt.Errorf("daemon: vuln refresher: %w", rerr)
-		}
-		vulnRefresher = refresher
+	if err := b.registerVulnCheck(checkReg); err != nil {
+		return err
 	}
 
-	runner := checks.NewRunner(checkReg, findings, metrics)
-	promoter.SetCheckRunner(composition.CheckRunnerAdapter{Inner: runner})
+	runner := checks.NewRunner(checkReg, b.findings, b.metrics)
+	b.promoter.SetCheckRunner(composition.CheckRunnerAdapter{Inner: runner})
+	return nil
+}
 
-	// Embedding provider + embedder worker. When tracing is enabled the raw
-	// provider is wrapped in an InstrumentedEmbedder so every Embed call emits
-	// an "embed.run" span; the wrapped provider is used everywhere downstream
-	// (embedder worker, MCP search tools).
-	// Embedder election (solov2-1az): pick exactly ONE embedder for this
-	// boot — model2vec if installed, else the in-binary static embedder;
-	// Ollama only when VESKA_EMBEDDER=ollama. Vectors from different models
-	// occupy incompatible spaces and must never be mixed, so this replaces
-	// the old Ollama→static composite chain (solov2-soc), which did mix.
-	var provider ports.EmbeddingProvider
+// registerVulnCheck arms the vulnerability-scan feature when [vuln_source]
+// provider="osv": it registers the VulnScanCheck and builds the advisory-cache
+// refresher (launched later in Start). Off by default — an absent section
+// yields NullVulnSource, no check, and no refresher.
+func (b *daemonBuilder) registerVulnCheck(checkReg *checks.Registry) error {
+	vulnSource, vulnEnabled := buildVulnSource(b.fileCfg)
+	if !vulnEnabled {
+		return nil
+	}
+	vulnRoot := func(ctx context.Context, repoID string) (string, error) {
+		return repoRootFunc(b.pools.ReadDB)(ctx, repoID)
+	}
+	b.vulnScanCheck = checks.NewVulnScanCheck(vulnSource, vulnRoot)
+	checkReg.Register(b.vulnScanCheck)
+
+	var refreshOpts []vulnrefresh.Option
+	if iv := vulnRefreshInterval(b.fileCfg); iv > 0 {
+		refreshOpts = append(refreshOpts, vulnrefresh.WithInterval(iv))
+	}
+	refresher, err := vulnrefresh.NewRefresher(vulnSource, refreshOpts...)
+	if err != nil {
+		return fmt.Errorf("daemon: vuln refresher: %w", err)
+	}
+	b.vulnRefresher = refresher
+	return nil
+}
+
+// buildEmbedder elects exactly one embedder for this boot and constructs the
+// embedder worker.
+func (b *daemonBuilder) buildEmbedder() error {
+	if err := b.electEmbedder(); err != nil {
+		return err
+	}
+	b.refs = sqlite.NewEmbeddingRefsRepo(b.pools.ReadDB, b.pools.Write)
+	worker, err := embedder.NewWorker(b.refs, b.provider, b.vec,
+		embedder.WithRatePerSec(b.fileCfg.Embedder.RatePerSec),
+		embedder.WithMaxAttempts(embedder.DefaultMaxAttempts),
+		embedder.WithMetrics(b.metrics),
+		embedder.WithPauser(b.ingestionBusy),
+	)
+	if err != nil {
+		return fmt.Errorf("daemon: embedder worker: %w", err)
+	}
+	b.embedWorker = worker
+	return nil
+}
+
+// electEmbedder picks the single embedder for this boot (model2vec if
+// installed, else the in-binary static embedder; Ollama only when
+// VESKA_EMBEDDER=ollama). Vectors from different models occupy incompatible
+// spaces (solov2-soc), so a model switch wipes the embedding store and
+// re-queues every promoted node under the new model (solov2-fz8).
+func (b *daemonBuilder) electEmbedder() error {
 	election, err := elect.Elect(elect.Config{
-		VeskaHome:     cfg.VeskaHome,
+		VeskaHome:     b.cfg.VeskaHome,
 		Override:      os.Getenv("VESKA_EMBEDDER"),
 		Model2VecName: "potion-code-16M",
-		OllamaURL:     cfg.OllamaURL,
-		EmbedModel:    cfg.EmbedModel,
+		OllamaURL:     b.cfg.OllamaURL,
+		EmbedModel:    b.cfg.EmbedModel,
 	})
 	if err != nil {
-		_ = pools.Close()
-		return nil, fmt.Errorf("daemon: embedder election: %w", err)
+		return fmt.Errorf("daemon: embedder election: %w", err)
 	}
 	slog.Info("daemon: embedder elected", "model_id", election.Name)
-	// solov2-yql1: static-v2 is functional but every eng_search_semantic
-	// call returns 'low_quality_static_embedder' in degraded_reasons until
-	// model2vec is installed. Surface a one-shot WARN at election time so
-	// operators tailing daemon.log see the cause instead of discovering it
-	// per-call.
+	// solov2-yql1: surface a one-shot WARN so operators tailing daemon.log see
+	// why eng_search_semantic returns 'low_quality_static_embedder'.
 	if election.Name == "veska-static-v2" {
 		slog.Warn("daemon: low-quality static-v2 embedder elected — run `veska install model2vec` for higher-quality code search",
 			"model_id", election.Name)
 	}
 	if election.SwitchedModel {
-		// The elected embedder differs from what the index was last built
-		// with. Wipe the content-addressed embedding store and flip every
-		// ref back to pending so the embedder worker re-embeds all
-		// promoted nodes under the new model. Runs synchronously here,
-		// before the sqlite-vec store rehydrates, so the in-memory store
-		// starts empty and search is consistent at first tick
-		// (solov2-fz8). Old-model vectors are never readable again, which
-		// is correct — they occupy an incompatible space.
-		n, rqErr := embedder.RequeueAllUnderNewModel(context.Background(), pools.Write)
+		n, rqErr := embedder.RequeueAllUnderNewModel(context.Background(), b.pools.Write)
 		if rqErr != nil {
-			_ = pools.Close()
-			return nil, fmt.Errorf("daemon: requeue embeddings after model switch: %w", rqErr)
+			return fmt.Errorf("daemon: requeue embeddings after model switch: %w", rqErr)
 		}
 		slog.Info("daemon: embedder changed since last boot; queued background re-embed under new model",
 			"previous", election.Previous, "current", election.Name, "nodes_pending", n)
 	}
-	provider = election.Provider
-	if tracerProvider != nil {
-		provider = observability.NewInstrumentedEmbedder(provider, tracerProvider)
+	provider := election.Provider
+	if b.tracer != nil {
+		provider = observability.NewInstrumentedEmbedder(provider, b.tracer)
 	}
-	refs := sqlite.NewEmbeddingRefsRepo(pools.ReadDB, pools.Write)
-	embedWorker, err := embedder.NewWorker(refs, provider, vec,
-		embedder.WithRatePerSec(fileCfg.Embedder.RatePerSec),
-		embedder.WithMaxAttempts(embedder.DefaultMaxAttempts),
-		embedder.WithMetrics(metrics),
-		embedder.WithPauser(ingestionBusy),
-	)
-	if err != nil {
-		_ = pools.Close()
-		return nil, fmt.Errorf("daemon: embedder worker: %w", err)
-	}
+	b.provider = provider
+	return nil
+}
 
-	// Queue handlers (autolink + revalidate). The embedder is driven by its
-	// own poll loop today (embedder.Worker), but we still register an embed
-	// handler so the Poller's WorkKindEmbed lane drains without leaving rows
-	// pending if other code paths enqueue them.
-	nodeLookup := sqlite.NewNodeLookupRepo(pools.ReadDB)
-	edgeRepo := sqlite.NewEdgeRepo(pools.Write)
-	linker, err := autolink.NewLinker(refs, vec, autolink.WithMetrics(metrics))
+// buildQueueHandlers builds the post-promotion work handlers (autolink,
+// revalidate, wiki, the no-op embed drain, and the optional review lane) into
+// the handlers map consumed by the poller.
+func (b *daemonBuilder) buildQueueHandlers() error {
+	autoH, err := b.buildAutolinkHandler()
 	if err != nil {
-		_ = pools.Close()
+		return err
+	}
+	revalH := revalidate.NewHandler(sqlite.NewRevalidateRepo(b.pools.Write), revalidate.WithMetrics(b.metrics))
+	wikiH, err := b.buildWikiHandler()
+	if err != nil {
+		return err
+	}
+	b.handlers = map[queue.WorkKind]queue.WorkHandler{
+		ports.WorkKindAutoLink:   autoH,
+		ports.WorkKindRevalidate: revalH,
+		ports.WorkKindWiki:       wikiH,
+		ports.WorkKindEmbed:      noopEmbedHandler{}, // drained by embed worker
+	}
+	if b.fileCfg.Review.Enabled {
+		reviewH, rerr := b.buildReviewHandler()
+		if rerr != nil {
+			return rerr
+		}
+		b.handlers[ports.WorkKindReview] = reviewH
+	}
+	return nil
+}
+
+// buildAutolinkHandler wires the SIMILAR_TO autolink handler. solov2-izh6.8:
+// the repo-kind lookup skips ephemeral (cache-tier) repos.
+func (b *daemonBuilder) buildAutolinkHandler() (*autolink.Handler, error) {
+	nodeLookup := sqlite.NewNodeLookupRepo(b.pools.ReadDB)
+	edgeRepo := sqlite.NewEdgeRepo(b.pools.Write)
+	linker, err := autolink.NewLinker(b.refs, b.vec, autolink.WithMetrics(b.metrics))
+	if err != nil {
 		return nil, fmt.Errorf("daemon: autolink linker: %w", err)
 	}
-	// solov2-izh6.8: pass a repo-kind lookup so autolink skips ephemeral
-	// (cache-tier) repos cloned by `veska search --repo <url>`.
-	autoH, err := autolink.NewHandler(linker, nodeLookup, edgeRepo, findings,
+	autoH, err := autolink.NewHandler(linker, nodeLookup, edgeRepo, b.findings,
 		autolink.WithRepoKindLookup(func(ctx context.Context, repoID string) (string, error) {
-			rec, gerr := repo.Get(ctx, pools.ReadDB, repoID)
+			rec, gerr := repo.Get(ctx, b.pools.ReadDB, repoID)
 			if gerr != nil {
 				return "", gerr
 			}
@@ -539,229 +643,206 @@ func newDaemon(cfg Config) (*Daemon, error) {
 		}),
 	)
 	if err != nil {
-		_ = pools.Close()
 		return nil, fmt.Errorf("daemon: autolink handler: %w", err)
 	}
-	revalRepo := sqlite.NewRevalidateRepo(pools.Write)
-	revalH := revalidate.NewHandler(revalRepo, revalidate.WithMetrics(metrics))
+	return autoH, nil
+}
 
-	// Wiki regeneration handler. The WorkKindWiki lane regenerates both the
-	// hot_zone and entry_points Markdown pages after every promotion and
-	// stamps the last-render time into daemon_state.
-	wikiEdges := sqlite.NewEdgeReaderRepo(pools.ReadDB)
-	wikiGraph := sqlite.NewGraphRepo(pools.ReadDB, pools.Write)
-	wikiFindings := sqlite.NewFindingQuerierRepo(pools.ReadDB)
-	wikiBlast := blastradius.NewService(wikiEdges, nodeLookup, staging)
+// buildWikiHandler wires the WorkKindWiki regeneration handler (hot_zone +
+// entry_points pages). cmd/veska builds a near-identical handler; unifying the
+// two into internal/composition is solov2-u4mv.4.
+func (b *daemonBuilder) buildWikiHandler() (*wiki.Handler, error) {
+	wikiEdges := sqlite.NewEdgeReaderRepo(b.pools.ReadDB)
+	wikiGraph := sqlite.NewGraphRepo(b.pools.ReadDB, b.pools.Write)
+	wikiFindings := sqlite.NewFindingQuerierRepo(b.pools.ReadDB)
+	nodeLookup := sqlite.NewNodeLookupRepo(b.pools.ReadDB)
+	wikiBlast := blastradius.NewService(wikiEdges, nodeLookup, b.staging)
 	wikiCounts := func(ctx context.Context, repoRoot string) (map[string]int, error) {
 		return gitwatch.ChangeCounts(ctx, repoRoot, 0)
 	}
 	hotZoneSvc, err := wiki.NewHotZoneService(wikiCounts, nodeLookup.NodesInFile, wikiBlast)
 	if err != nil {
-		_ = pools.Close()
 		return nil, fmt.Errorf("daemon: wiki hot-zone service: %w", err)
 	}
 	epSvc, err := wiki.NewEntryPointsService(
 		wikiGraph.LoadGraph, wikiEdges.InboundEdges, wikiFindings.OpenFindingNodeIDs,
 	)
 	if err != nil {
-		_ = pools.Close()
 		return nil, fmt.Errorf("daemon: wiki entry-points service: %w", err)
 	}
 	wikiRoot := func(ctx context.Context, repoID string) (string, error) {
-		return repoRootFunc(pools.ReadDB)(ctx, repoID)
+		return repoRootFunc(b.pools.ReadDB)(ctx, repoID)
 	}
 	wikiH, err := wiki.NewHandler(
 		hotZoneSvc, epSvc,
-		sqlite.NewWikiRenderStateRepo(pools.ReadDB, pools.Write),
+		sqlite.NewWikiRenderStateRepo(b.pools.ReadDB, b.pools.Write),
 		wikiRoot,
-		wiki.WithWritePages(fileCfg.Wiki.WritePages),
+		wiki.WithWritePages(b.fileCfg.Wiki.WritePages),
 	)
 	if err != nil {
-		_ = pools.Close()
 		return nil, fmt.Errorf("daemon: wiki handler: %w", err)
 	}
+	return wikiH, nil
+}
 
-	handlers := map[queue.WorkKind]queue.WorkHandler{
-		ports.WorkKindAutoLink:   autoH,
-		ports.WorkKindRevalidate: revalH,
-		ports.WorkKindWiki:       wikiH,
-		ports.WorkKindEmbed:      noopEmbedHandler{}, // drained by embed worker
+// buildReviewHandler wires the optional WorkKindReview lane: the Ollama
+// generator, prompt loader, per-commit/per-day token quota (persisted in
+// daemon_state), and the audit writer. Only called when review is enabled.
+func (b *daemonBuilder) buildReviewHandler() (queue.WorkHandler, error) {
+	reviewLoader, err := review.NewLoader()
+	if err != nil {
+		return nil, fmt.Errorf("daemon: review prompt loader: %w", err)
 	}
-
-	// Optional review lane. The WorkKindReview handler is registered only when
-	// review is enabled; the promotion store enqueues review rows under the
-	// same gate, so a disabled review pipeline has neither producer nor lane.
-	if fileCfg.Review.Enabled {
-		reviewLoader, lerr := review.NewLoader()
-		if lerr != nil {
-			_ = pools.Close()
-			return nil, fmt.Errorf("daemon: review prompt loader: %w", lerr)
-		}
-		var genOpts []llm.Option
-		if d, derr := time.ParseDuration(fileCfg.LLMGenerator.Timeout); derr == nil && d > 0 {
-			genOpts = append(genOpts, llm.WithTimeout(d))
-		}
-		reviewGen := llm.NewOllamaGenerator(
-			fileCfg.LLMGenerator.Endpoint, fileCfg.LLMGenerator.Model, nil, genOpts...)
-		reviewRoot := func(ctx context.Context, repoID string) (string, error) {
-			return repoRootFunc(pools.ReadDB)(ctx, repoID)
-		}
-
-		// Token-quota enforcement (solov2-nz2.5): the per-day total persists
-		// in daemon_state; the audit writer records the one-line entry when
-		// the daily-cap pause trips.
-		tokenStore := sqlite.NewReviewTokenStore(pools.ReadDB, pools.Write)
-		quota := review.NewQuota(
-			fileCfg.Review.MaxTokensPerCommit,
-			fileCfg.Review.MaxTokensPerDay,
-			tokenStore, nil)
-		auditW, aerr := audit.NewAuditFileWriter(
-			filepath.Join(config.DefaultVectorDir(), "audit.jsonl"))
-		if aerr != nil {
-			_ = pools.Close()
-			return nil, fmt.Errorf("daemon: review audit writer: %w", aerr)
-		}
-
-		reviewOpts := []review.HandlerOption{
-			review.WithQuota(quota), review.WithAuditWriter(auditW),
-		}
-		if metrics != nil {
-			reviewOpts = append(reviewOpts,
-				review.WithErrorCounter(metricsErrorCounter{m: metrics}))
-		}
-		reviewH, rerr := review.NewHandler(reviewGen, reviewLoader, reviewRoot, findings,
-			reviewOpts...)
-		if rerr != nil {
-			_ = pools.Close()
-			return nil, fmt.Errorf("daemon: review handler: %w", rerr)
-		}
-		handlers[ports.WorkKindReview] = reviewH
+	var genOpts []llm.Option
+	if d, derr := time.ParseDuration(b.fileCfg.LLMGenerator.Timeout); derr == nil && d > 0 {
+		genOpts = append(genOpts, llm.WithTimeout(d))
 	}
-	// Post-promotion queue poll cadence comes from config.toml; an
-	// unparseable value falls back to the queue package default.
+	reviewGen := llm.NewOllamaGenerator(
+		b.fileCfg.LLMGenerator.Endpoint, b.fileCfg.LLMGenerator.Model, nil, genOpts...)
+	reviewRoot := func(ctx context.Context, repoID string) (string, error) {
+		return repoRootFunc(b.pools.ReadDB)(ctx, repoID)
+	}
+	// Token-quota enforcement (solov2-nz2.5): the per-day total persists in
+	// daemon_state; the audit writer records the daily-cap pause.
+	tokenStore := sqlite.NewReviewTokenStore(b.pools.ReadDB, b.pools.Write)
+	quota := review.NewQuota(
+		b.fileCfg.Review.MaxTokensPerCommit,
+		b.fileCfg.Review.MaxTokensPerDay,
+		tokenStore, nil)
+	auditW, err := audit.NewAuditFileWriter(
+		filepath.Join(config.DefaultVectorDir(), "audit.jsonl"))
+	if err != nil {
+		return nil, fmt.Errorf("daemon: review audit writer: %w", err)
+	}
+	reviewOpts := []review.HandlerOption{
+		review.WithQuota(quota), review.WithAuditWriter(auditW),
+	}
+	if b.metrics != nil {
+		reviewOpts = append(reviewOpts,
+			review.WithErrorCounter(metricsErrorCounter{m: b.metrics}))
+	}
+	reviewH, err := review.NewHandler(reviewGen, reviewLoader, reviewRoot, b.findings, reviewOpts...)
+	if err != nil {
+		return nil, fmt.Errorf("daemon: review handler: %w", err)
+	}
+	return reviewH, nil
+}
+
+// buildPollerWatcher constructs the post-promotion queue poller, the fsnotify
+// watcher, the shared cold-scan reparser, and the cold-scan-aware repo
+// registrar (solov2-0z1.2/0z1.3). The poller and embedder share ingestionBusy.
+func (b *daemonBuilder) buildPollerWatcher() error {
 	pollInterval := 250 * time.Millisecond
-	if d, derr := time.ParseDuration(fileCfg.PostPromotionQueue.PollInterval); derr == nil && d > 0 {
+	if d, derr := time.ParseDuration(b.fileCfg.PostPromotionQueue.PollInterval); derr == nil && d > 0 {
 		pollInterval = d
 	}
-	poller := queue.NewWithInterval(pools.ReadDB, pools.Write, handlers, pollInterval)
+	b.poller = queue.NewWithInterval(b.pools.ReadDB, b.pools.Write, b.handlers, pollInterval)
+	b.poller.Pauser = b.ingestionBusy
+	b.watcher = gitwatch.NewMultiRepoWatcher()
 
-	// fsnotify multi-repo watcher.
-	watcher := gitwatch.NewMultiRepoWatcher()
-
-	// Startup-resync wiring (solov2-0z1.2). The cold-scan reparser walks a
-	// repo's working tree honouring .veskaignore (loaded via the fs adapter
-	// below) and feeds it into Ingester.Save + Promoter.Promote. It is
-	// shared with the cold-scan-aware repoRegistrar (solov2-0z1.3) so that
-	// a newly-registered repo is indexed without a daemon restart.
 	ignoreAdapter := func(repoRoot string) (application.IgnoreMatcher, error) {
 		return fsignore.Load(repoRoot)
 	}
-	gitQ := gitwatch.Querier{}
-	// scanTracker + resyncRef + ingestionBusy are declared earlier (just
-	// after pools open) so embedder.WithPauser can share the same
-	// predicate; the queue poller plugs into it here.
-	poller.Pauser = ingestionBusy
 	reparser, err := application.NewColdScanReparser(
-		ingester, promoter, gitQ,
+		b.ingester, b.promoter, gitwatch.Querier{},
 		application.WithIgnoreLoader(ignoreAdapter),
-		application.WithScanTracker(scanTracker),
+		application.WithScanTracker(b.scanTracker),
 	)
 	if err != nil {
-		_ = pools.Close()
-		return nil, fmt.Errorf("daemon: build cold-scan reparser: %w", err)
+		return fmt.Errorf("daemon: build cold-scan reparser: %w", err)
 	}
+	b.reparser = reparser
 
-	// Cold-scan-aware repo registrar (solov2-0z1.3). eng_add_repo /
-	// `veska repo add` route through this; on a successful repo.Add the
-	// registrar fires a background reparser run so a newly-registered repo
-	// is fully indexed without a daemon restart. daemonCtx is bound in
-	// Start (Daemon.ctx is unset at construction time); scanWG drains
-	// in-flight scans during Stop.
-	scanWG := &sync.WaitGroup{}
-	regSvc := &repoRegistrar{
-		db:        pools.Write,
+	b.scanWG = &sync.WaitGroup{}
+	b.regSvc = &repoRegistrar{
+		db:        b.pools.Write,
 		reparser:  reparser,
-		recordFor: lookupAppRecord(pools.ReadDB),
-		watchAdd:  watcher.Add,
-		scanWG:    scanWG,
+		recordFor: lookupAppRecord(b.pools.ReadDB),
+		watchAdd:  b.watcher.Add,
+		scanWG:    b.scanWG,
 		// daemonCtx is bound in Start once d.ctx exists.
 	}
+	return nil
+}
 
-	// MCP server. The Registry implements mcp.Handler.
-	registry := mcp.NewRegistry()
+// buildMCPServer builds the MCP registry, opens the best-effort savings
+// recorder, registers every tool family, and constructs the MCP socket server.
+func (b *daemonBuilder) buildMCPServer() error {
+	b.registry = mcp.NewRegistry()
 
-	// Savings telemetry: best-effort. A failure to open the JSONL file
-	// (read-only home dir, etc.) logs and continues with recording
-	// disabled — telemetry is never load-bearing for search itself.
-	savingsRec, err := savings.NewRecorder(filepath.Join(cfg.VeskaHome, "savings.jsonl"))
+	// Savings telemetry is best-effort: a failure to open the JSONL file logs
+	// and continues with recording disabled — never load-bearing for search.
+	rec, err := savings.NewRecorder(filepath.Join(b.cfg.VeskaHome, "savings.jsonl"))
 	if err != nil {
 		slog.Warn("savings: recorder disabled", "err", err)
-		savingsRec = nil
+		rec = nil
 	}
+	b.savingsRec = rec
 
-	registerMCPTools(registry, mcpDeps{
-		pools:       pools,
-		cfg:         cfg,
-		staging:     staging,
-		vectors:     vec,
-		provider:    provider,
-		refs:        refs,
-		metrics:     metrics,
-		ingester:    ingester,
-		promoter:    promoter,
-		regSvc:      regSvc,
-		reparser:    reparser,
-		scanTracker: scanTracker,
-		savings:     savingsRec,
+	registerMCPTools(b.registry, mcpDeps{
+		pools:       b.pools,
+		cfg:         b.cfg,
+		staging:     b.staging,
+		vectors:     b.vec,
+		provider:    b.provider,
+		refs:        b.refs,
+		metrics:     b.metrics,
+		ingester:    b.ingester,
+		promoter:    b.promoter,
+		regSvc:      b.regSvc,
+		reparser:    b.reparser,
+		scanTracker: b.scanTracker,
+		savings:     b.savingsRec,
 	})
-	mcpsrv := mcp.NewServer(cfg.CLISockPath, cfg.MCPSockPath, registry)
+	b.mcpsrv = mcp.NewServer(b.cfg.CLISockPath, b.cfg.MCPSockPath, b.registry)
+	return nil
+}
 
-	// Thread the TracerProvider into every tracing-aware consumer. When
-	// tracing is disabled tracerProvider is nil and the consumers keep their
-	// noop providers, so no spans are emitted. The InstrumentedEmbedder is
-	// wired by construction above (it wraps the provider rather than exposing
-	// a setter).
-	if tracerProvider != nil {
-		ingester.SetTracerProvider(tracerProvider)
-		promoter.SetTracerProvider(tracerProvider)
-		registry.SetTracerProvider(tracerProvider)
+// finalize threads the TracerProvider into the tracing-aware consumers (a no-op
+// when tracing is disabled) and wires the startup-resync orchestrator, sharing
+// the reparser closure with the repo registrar (solov2-0z1.2).
+func (b *daemonBuilder) finalize() error {
+	if b.tracer != nil {
+		b.ingester.SetTracerProvider(b.tracer)
+		b.promoter.SetTracerProvider(b.tracer)
+		b.registry.SetTracerProvider(b.tracer)
 	}
-
-	// StartupResync wiring (solov2-0z1.2). Shares the reparser closure
-	// constructed above with the cold-scan-aware repoRegistrar so the
-	// same code path handles both startup scans and post-registration
-	// scans.
 	resync := application.NewStartupResync(
-		&repoLister{db: pools.ReadDB}, gitQ, ingester, promoter, reparser,
+		&repoLister{db: b.pools.ReadDB}, gitwatch.Querier{}, b.ingester, b.promoter, b.reparser,
 	)
-	resyncRef = resync
+	b.resync = resync
+	b.resyncRef = resync
+	return nil
+}
 
-	d := &Daemon{
-		cfg:            cfg,
-		pools:          pools,
-		vectors:        vec,
-		staging:        staging,
-		gate:           gate,
-		ingester:       ingester,
-		promoter:       promoter,
-		embed:          embedWorker,
-		poller:         poller,
-		watcher:        watcher,
-		mcpsrv:         mcpsrv,
-		mcpReg:         registry,
-		metrics:        metrics,
-		metricsReg:     metricsReg,
-		metricsListen:  metricsListen,
-		tracerProvider: tracerProvider,
-		savingsRec:     savingsRec,
-		vulnRefresher:  vulnRefresher,
-		vulnScanCheck:  vulnScanCheck,
-		findings:       findings,
-		resync:         resync,
-		regSvc:         regSvc,
-		scanWG:         scanWG,
+// assemble builds the Daemon from the populated builder. It cannot fail; the
+// caller marks success so the deferred pools-close guard is disarmed.
+func (b *daemonBuilder) assemble() *Daemon {
+	return &Daemon{
+		cfg:            b.cfg,
+		pools:          b.pools,
+		vectors:        b.vec,
+		staging:        b.staging,
+		gate:           b.gate,
+		ingester:       b.ingester,
+		promoter:       b.promoter,
+		embed:          b.embedWorker,
+		poller:         b.poller,
+		watcher:        b.watcher,
+		mcpsrv:         b.mcpsrv,
+		mcpReg:         b.registry,
+		metrics:        b.metrics,
+		metricsReg:     b.metricsReg,
+		metricsListen:  b.metricsListen,
+		tracerProvider: b.tracer,
+		savingsRec:     b.savingsRec,
+		vulnRefresher:  b.vulnRefresher,
+		vulnScanCheck:  b.vulnScanCheck,
+		findings:       b.findings,
+		resync:         b.resync,
+		regSvc:         b.regSvc,
+		scanWG:         b.scanWG,
 	}
-	return d, nil
 }
 
 // metricsErrorCounter adapts *observability.Metrics to the review.ErrorCounter
