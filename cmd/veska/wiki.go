@@ -11,6 +11,7 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/whiskeyjimbo/veska/internal/application"
 	"github.com/whiskeyjimbo/veska/internal/application/wiki"
+	"github.com/whiskeyjimbo/veska/internal/cli/repocmd"
 	"github.com/whiskeyjimbo/veska/internal/composition"
 	"github.com/whiskeyjimbo/veska/internal/core/ports"
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/repo"
@@ -89,12 +90,12 @@ func wikiCmd() *cobra.Command {
 					}
 					row := ports.WorkRow{Kind: ports.WorkKindWiki, RepoID: rec.RepoID, Branch: br}
 					if err := handler.Handle(ctx, row); err != nil {
-						fmt.Fprintf(cmd.ErrOrStderr(), "wiki: %s: %v\n", shortRepoID(rec.RepoID), err)
+						fmt.Fprintf(cmd.ErrOrStderr(), "wiki: %s: %v\n", repocmd.ShortRepoID(rec.RepoID), err)
 						failed++
 						continue
 					}
 					fmt.Fprintf(w, "wiki regenerated for %s (%s): %s, %s\n",
-						shortRepoID(rec.RepoID), br, wiki.HotZonesPagePath, wiki.EntryPointsPagePath)
+						repocmd.ShortRepoID(rec.RepoID), br, wiki.HotZonesPagePath, wiki.EntryPointsPagePath)
 				}
 				if failed > 0 {
 					return fmt.Errorf("wiki: %d of %d repos failed", failed, len(records))
@@ -167,7 +168,7 @@ func resolveWikiTarget(ctx context.Context, db *sql.DB, repoID, branch string) (
 		// solov2-rtql: on id miss, try the same value as a filesystem path
 		// against every registered repo's RootPath so the positional arg can
 		// be either an id or a path (matching `veska reindex`).
-		if matched, rerr := resolveCLIRepoID(records, repoID); rerr == nil {
+		if matched, rerr := repocmd.ResolveCLIRepoID(records, repoID); rerr == nil {
 			rec = matched
 		} else if _, statErr := os.Stat(repoID); statErr == nil {
 			canonical, aerr := filepath.Abs(repoID)
@@ -219,7 +220,7 @@ func buildWikiHandler(pools *sqlite.Pools) (*wiki.Handler, error) {
 				return rec.RootPath, nil
 			}
 		}
-		matched, rerr := resolveCLIRepoID(records, repoID)
+		matched, rerr := repocmd.ResolveCLIRepoID(records, repoID)
 		if rerr != nil {
 			return "", fmt.Errorf("wiki: %w", rerr)
 		}

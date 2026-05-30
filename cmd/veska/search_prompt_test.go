@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/whiskeyjimbo/veska/internal/cli/repocmd"
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/repo"
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/sqlite"
 )
@@ -43,10 +44,10 @@ func TestRunAcceptancePrompt_YesPromotes(t *testing.T) {
 	rec := seedEphemeral(t, pools, "eph-1", "/tmp/eph-1")
 
 	var out bytes.Buffer
-	deps := promptDeps{
-		isTTY:  func() bool { return true },
-		stdin:  strings.NewReader("y\n"),
-		stdout: &out,
+	deps := repocmd.PromptDeps{
+		IsTTY:  func() bool { return true },
+		Stdin:  strings.NewReader("y\n"),
+		Stdout: &out,
 	}
 	if err := runAcceptancePrompt(context.Background(), pools.Write, rec, "https://example.com/foo/bar", deps); err != nil {
 		t.Fatalf("prompt: %v", err)
@@ -73,10 +74,10 @@ func TestRunAcceptancePrompt_NoKeepsEphemeral(t *testing.T) {
 	pools := openPromptPools(t)
 	rec := seedEphemeral(t, pools, "eph-2", "/tmp/eph-2")
 
-	deps := promptDeps{
-		isTTY:  func() bool { return true },
-		stdin:  strings.NewReader("n\n"),
-		stdout: &bytes.Buffer{},
+	deps := repocmd.PromptDeps{
+		IsTTY:  func() bool { return true },
+		Stdin:  strings.NewReader("n\n"),
+		Stdout: &bytes.Buffer{},
 	}
 	if err := runAcceptancePrompt(context.Background(), pools.Write, rec, "https://example.com/foo/bar", deps); err != nil {
 		t.Fatalf("prompt: %v", err)
@@ -99,10 +100,10 @@ func TestRunAcceptancePrompt_EmptyAnswerTreatedAsNo(t *testing.T) {
 	pools := openPromptPools(t)
 	rec := seedEphemeral(t, pools, "eph-3", "/tmp/eph-3")
 
-	deps := promptDeps{
-		isTTY:  func() bool { return true },
-		stdin:  strings.NewReader("\n"),
-		stdout: &bytes.Buffer{},
+	deps := repocmd.PromptDeps{
+		IsTTY:  func() bool { return true },
+		Stdin:  strings.NewReader("\n"),
+		Stdout: &bytes.Buffer{},
 	}
 	if err := runAcceptancePrompt(context.Background(), pools.Write, rec, "https://example.com/foo/bar", deps); err != nil {
 		t.Fatalf("prompt: %v", err)
@@ -122,10 +123,10 @@ func TestRunAcceptancePrompt_NonTTYPrintsHintNoWrite(t *testing.T) {
 	rec := seedEphemeral(t, pools, "eph-4", "/tmp/eph-4")
 
 	var out bytes.Buffer
-	deps := promptDeps{
-		isTTY:  func() bool { return false }, // pipe / script / MCP
-		stdin:  strings.NewReader(""),
-		stdout: &out,
+	deps := repocmd.PromptDeps{
+		IsTTY:  func() bool { return false }, // pipe / script / MCP
+		Stdin:  strings.NewReader(""),
+		Stdout: &out,
 	}
 	if err := runAcceptancePrompt(context.Background(), pools.Write, rec, "https://example.com/foo/bar", deps); err != nil {
 		t.Fatalf("prompt: %v", err)
@@ -153,10 +154,10 @@ func TestRunAcceptancePrompt_AlreadyPromptedIsNoOp(t *testing.T) {
 
 	var out bytes.Buffer
 	called := false
-	deps := promptDeps{
-		isTTY:  func() bool { called = true; return true },
-		stdin:  strings.NewReader("y\n"),
-		stdout: &out,
+	deps := repocmd.PromptDeps{
+		IsTTY:  func() bool { called = true; return true },
+		Stdin:  strings.NewReader("y\n"),
+		Stdout: &out,
 	}
 	if err := runAcceptancePrompt(context.Background(), pools.Write, rec, "https://example.com/foo/bar", deps); err != nil {
 		t.Fatalf("prompt: %v", err)
@@ -188,13 +189,13 @@ func TestRunAcceptancePrompt_TrackedRowIsNoOp(t *testing.T) {
 	rec := repo.Record{RepoID: "trk", Kind: "tracked"}
 
 	var out bytes.Buffer
-	deps := promptDeps{
-		isTTY: func() bool {
+	deps := repocmd.PromptDeps{
+		IsTTY: func() bool {
 			t.Error("tracked row must not trigger isatty check")
 			return true
 		},
-		stdin:  strings.NewReader(""),
-		stdout: &out,
+		Stdin:  strings.NewReader(""),
+		Stdout: &out,
 	}
 	if err := runAcceptancePrompt(context.Background(), pools.Write, rec, "https://example.com/x", deps); err != nil {
 		t.Fatalf("prompt: %v", err)
@@ -209,10 +210,10 @@ func TestRunAcceptancePrompt_PromotionIsInPlace(t *testing.T) {
 	var beforePath string
 	_ = pools.ReadDB.QueryRow(`SELECT root_path FROM repos WHERE repo_id = ?`, "eph-place").Scan(&beforePath)
 
-	deps := promptDeps{
-		isTTY:  func() bool { return true },
-		stdin:  strings.NewReader("y\n"),
-		stdout: &bytes.Buffer{},
+	deps := repocmd.PromptDeps{
+		IsTTY:  func() bool { return true },
+		Stdin:  strings.NewReader("y\n"),
+		Stdout: &bytes.Buffer{},
 	}
 	_ = runAcceptancePrompt(context.Background(), pools.Write, rec, "https://example.com/foo/bar", deps)
 

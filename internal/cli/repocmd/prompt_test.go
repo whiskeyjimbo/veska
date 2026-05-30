@@ -1,4 +1,4 @@
-package main
+package repocmd
 
 import (
 	"bytes"
@@ -41,13 +41,13 @@ func TestAliasPrompt_YesBindsSuggested(t *testing.T) {
 	seedTrackedRepo(t, pools, "id-1", "/tmp/whatever")
 
 	var out bytes.Buffer
-	deps := promptDeps{
-		isTTY:  func() bool { return true },
-		stdin:  strings.NewReader("y\n"),
-		stdout: &out,
+	deps := PromptDeps{
+		IsTTY:  func() bool { return true },
+		Stdin:  strings.NewReader("y\n"),
+		Stdout: &out,
 	}
-	if err := runAliasSuggestPrompt(context.Background(), pools.Write,
-		"id-1", "https://github.com/foo/bar", "", deps,
+	if err := RunAliasSuggestPrompt(context.Background(), pools.Write,
+		AliasTarget{RepoID: "id-1", CanonicalURL: "https://github.com/foo/bar"}, deps,
 	); err != nil {
 		t.Fatalf("prompt: %v", err)
 	}
@@ -62,13 +62,13 @@ func TestAliasPrompt_NoSkips(t *testing.T) {
 	pools := openAliasPromptPools(t)
 	seedTrackedRepo(t, pools, "id-2", "/tmp/x")
 
-	deps := promptDeps{
-		isTTY:  func() bool { return true },
-		stdin:  strings.NewReader("n\n"),
-		stdout: &bytes.Buffer{},
+	deps := PromptDeps{
+		IsTTY:  func() bool { return true },
+		Stdin:  strings.NewReader("n\n"),
+		Stdout: &bytes.Buffer{},
 	}
-	if err := runAliasSuggestPrompt(context.Background(), pools.Write,
-		"id-2", "https://github.com/foo/bar", "", deps,
+	if err := RunAliasSuggestPrompt(context.Background(), pools.Write,
+		AliasTarget{RepoID: "id-2", CanonicalURL: "https://github.com/foo/bar"}, deps,
 	); err != nil {
 		t.Fatal(err)
 	}
@@ -81,13 +81,13 @@ func TestAliasPrompt_CustomNameAccepted(t *testing.T) {
 	pools := openAliasPromptPools(t)
 	seedTrackedRepo(t, pools, "id-3", "/tmp/x")
 
-	deps := promptDeps{
-		isTTY:  func() bool { return true },
-		stdin:  strings.NewReader("mycustom\n"),
-		stdout: &bytes.Buffer{},
+	deps := PromptDeps{
+		IsTTY:  func() bool { return true },
+		Stdin:  strings.NewReader("mycustom\n"),
+		Stdout: &bytes.Buffer{},
 	}
-	if err := runAliasSuggestPrompt(context.Background(), pools.Write,
-		"id-3", "https://github.com/foo/bar", "", deps,
+	if err := RunAliasSuggestPrompt(context.Background(), pools.Write,
+		AliasTarget{RepoID: "id-3", CanonicalURL: "https://github.com/foo/bar"}, deps,
 	); err != nil {
 		t.Fatal(err)
 	}
@@ -102,13 +102,13 @@ func TestAliasPrompt_NonTTYSkipsSilently(t *testing.T) {
 	seedTrackedRepo(t, pools, "id-4", "/tmp/x")
 
 	var out bytes.Buffer
-	deps := promptDeps{
-		isTTY:  func() bool { return false },
-		stdin:  strings.NewReader("y\n"),
-		stdout: &out,
+	deps := PromptDeps{
+		IsTTY:  func() bool { return false },
+		Stdin:  strings.NewReader("y\n"),
+		Stdout: &out,
 	}
-	if err := runAliasSuggestPrompt(context.Background(), pools.Write,
-		"id-4", "https://github.com/foo/bar", "", deps,
+	if err := RunAliasSuggestPrompt(context.Background(), pools.Write,
+		AliasTarget{RepoID: "id-4", CanonicalURL: "https://github.com/foo/bar"}, deps,
 	); err != nil {
 		t.Fatal(err)
 	}
@@ -130,13 +130,13 @@ func TestAliasPrompt_FallsBackOnCollision(t *testing.T) {
 	}
 
 	var out bytes.Buffer
-	deps := promptDeps{
-		isTTY:  func() bool { return true },
-		stdin:  strings.NewReader("y\n"),
-		stdout: &out,
+	deps := PromptDeps{
+		IsTTY:  func() bool { return true },
+		Stdin:  strings.NewReader("y\n"),
+		Stdout: &out,
 	}
-	if err := runAliasSuggestPrompt(context.Background(), pools.Write,
-		"id-5", "https://github.com/foo/bar", "", deps,
+	if err := RunAliasSuggestPrompt(context.Background(), pools.Write,
+		AliasTarget{RepoID: "id-5", CanonicalURL: "https://github.com/foo/bar"}, deps,
 	); err != nil {
 		t.Fatal(err)
 	}
@@ -161,13 +161,13 @@ func TestAliasPrompt_BothCollideSkips(t *testing.T) {
 	}
 
 	var out bytes.Buffer
-	deps := promptDeps{
-		isTTY:  func() bool { return true },
-		stdin:  strings.NewReader("y\n"),
-		stdout: &out,
+	deps := PromptDeps{
+		IsTTY:  func() bool { return true },
+		Stdin:  strings.NewReader("y\n"),
+		Stdout: &out,
 	}
-	if err := runAliasSuggestPrompt(context.Background(), pools.Write,
-		"id-6", "https://github.com/foo/bar", "", deps,
+	if err := RunAliasSuggestPrompt(context.Background(), pools.Write,
+		AliasTarget{RepoID: "id-6", CanonicalURL: "https://github.com/foo/bar"}, deps,
 	); err != nil {
 		t.Fatal(err)
 	}
@@ -180,13 +180,13 @@ func TestAliasPrompt_PathFormUsesBasename(t *testing.T) {
 	pools := openAliasPromptPools(t)
 	seedTrackedRepo(t, pools, "id-7", "/home/jrose/src/myproj")
 
-	deps := promptDeps{
-		isTTY:  func() bool { return true },
-		stdin:  strings.NewReader("y\n"),
-		stdout: &bytes.Buffer{},
+	deps := PromptDeps{
+		IsTTY:  func() bool { return true },
+		Stdin:  strings.NewReader("y\n"),
+		Stdout: &bytes.Buffer{},
 	}
-	if err := runAliasSuggestPrompt(context.Background(), pools.Write,
-		"id-7", "", "/home/jrose/src/myproj", deps,
+	if err := RunAliasSuggestPrompt(context.Background(), pools.Write,
+		AliasTarget{RepoID: "id-7", RootPath: "/home/jrose/src/myproj"}, deps,
 	); err != nil {
 		t.Fatal(err)
 	}

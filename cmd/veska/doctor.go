@@ -13,6 +13,7 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/whiskeyjimbo/veska/internal/application/extindex"
 	"github.com/whiskeyjimbo/veska/internal/application/review"
+	"github.com/whiskeyjimbo/veska/internal/cli/repocmd"
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/embedding/elect"
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/repo"
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/sqlite"
@@ -763,7 +764,7 @@ func doctorStatusCmd() *cobra.Command {
 // holds the lock) — never returns an error, since this signal is purely
 // informational (solov2-34rl).
 func probeEmbeddingBacklog(ctx context.Context, home string) doctor.EmbeddingBacklogReport {
-	db, closeFn, err := openLocalDB()
+	db, closeFn, err := repocmd.OpenLocalDB()
 	if err != nil {
 		return doctor.EmbeddingBacklogReport{Status: "unknown"}
 	}
@@ -785,7 +786,7 @@ func probeEmbeddingBacklog(ctx context.Context, home string) doctor.EmbeddingBac
 // Database open errors are reported as 'degraded' with the err message
 // so the user gets a hint rather than a silent miss.
 func checkIngestion(ctx context.Context) (string, string) {
-	db, closeFn, err := openLocalDB()
+	db, closeFn, err := repocmd.OpenLocalDB()
 	if err != nil {
 		return "degraded", fmt.Sprintf("repos db unreadable: %v", err)
 	}
@@ -801,7 +802,7 @@ func checkIngestion(ctx context.Context) (string, string) {
 	// Pull scan progress so unindexed repos that are actively scanning
 	// surface as e.g. "9092cd5e0cff promoting/300" — tells the user the
 	// degraded state is progressing vs. idle (solov2-u9h9 follow-up).
-	progress := fetchScanProgress(ctx)
+	progress := repocmd.FetchScanProgress(ctx)
 	var unindexed []string
 	for _, r := range recs {
 		// Synthetic ext:<module> repos never get a LastPromotedSHA — they
