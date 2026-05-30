@@ -31,7 +31,7 @@ func (s *stubEmbedder) Embed(_ context.Context, _ string) ([]float32, error) {
 func (s *stubEmbedder) ModelID() string { return "test-model" }
 
 type stubVectors struct {
-	hits []domain.Hit
+	hits []domain.SearchHit
 	err  error
 	// captured params from the most recent Search call. Guarded by mu so
 	// the cross-repo parallel fanout path (solov2-bcn) doesn't race the
@@ -45,7 +45,7 @@ func (s *stubVectors) UpsertEmbeddings(_ context.Context, _, _ string, _ []domai
 	return nil
 }
 
-func (s *stubVectors) Search(_ context.Context, _, _ string, vec []float32, k int, _ domain.Filter) ([]domain.Hit, error) {
+func (s *stubVectors) Search(_ context.Context, _, _ string, vec []float32, k int, _ domain.VectorFilter) ([]domain.SearchHit, error) {
 	s.mu.Lock()
 	s.gotVec = vec
 	s.gotK = k
@@ -154,7 +154,7 @@ func dispatchSearch(t *testing.T, r *Registry, method string, params any) (Searc
 
 func TestSearchSemantic_ReturnsHydratedResults(t *testing.T) {
 	emb := &stubEmbedder{vec: []float32{0.1, 0.2}}
-	vecs := &stubVectors{hits: []domain.Hit{{NodeID: "n1", Score: 0.9}}}
+	vecs := &stubVectors{hits: []domain.SearchHit{{NodeID: "n1", Score: 0.9}}}
 	nodes := &stubNodes{metas: []ports.NodeMeta{
 		{NodeID: "n1", SymbolPath: "pkg.Foo", FilePath: "foo.go", Kind: "function", LineStart: 1, LineEnd: 10},
 	}}
@@ -187,7 +187,7 @@ func TestSearchSemantic_ReturnsHydratedResults(t *testing.T) {
 // instead of rejecting with "repo_id is required".
 func TestSearchSemantic_FansOutWhenRepoIDOmittedAndCwdMismatch(t *testing.T) {
 	emb := &stubEmbedder{vec: []float32{0.1, 0.2}}
-	vecs := &stubVectors{hits: []domain.Hit{{NodeID: "n1", Score: 0.9}}}
+	vecs := &stubVectors{hits: []domain.SearchHit{{NodeID: "n1", Score: 0.9}}}
 	nodes := &stubNodes{metas: []ports.NodeMeta{
 		{NodeID: "n1", SymbolPath: "pkg.Foo", FilePath: "foo.go", Kind: "function", LineStart: 1, LineEnd: 10},
 	}}
@@ -222,7 +222,7 @@ func TestSearchSemantic_FansOutWhenRepoIDOmittedAndCwdMismatch(t *testing.T) {
 // Single-repo callers must see byte-stable pre-fanout output.
 func TestSearchSemantic_SingleRepoOmitsRepoIDOnHits(t *testing.T) {
 	emb := &stubEmbedder{vec: []float32{0.1, 0.2}}
-	vecs := &stubVectors{hits: []domain.Hit{{NodeID: "n1", Score: 0.9}}}
+	vecs := &stubVectors{hits: []domain.SearchHit{{NodeID: "n1", Score: 0.9}}}
 	nodes := &stubNodes{metas: []ports.NodeMeta{
 		{NodeID: "n1", SymbolPath: "pkg.Foo", FilePath: "foo.go", Kind: "function", LineStart: 1, LineEnd: 10},
 	}}
@@ -253,7 +253,7 @@ func TestSearchSemantic_SingleRepoOmitsRepoIDOnHits(t *testing.T) {
 // to k=10.
 func TestSearchSemantic_LimitAliasHonoured(t *testing.T) {
 	emb := &stubEmbedder{vec: []float32{0.1, 0.2}}
-	hits := []domain.Hit{
+	hits := []domain.SearchHit{
 		{NodeID: "n1", Score: 0.9}, {NodeID: "n2", Score: 0.8},
 		{NodeID: "n3", Score: 0.7}, {NodeID: "n4", Score: 0.6},
 		{NodeID: "n5", Score: 0.5},
@@ -355,7 +355,7 @@ func TestSearchSemantic_GlobalRRFAcrossRepos(t *testing.T) {
 	// Global RRF: A's nodeA1 should score 2/(60+1) = 0.0328, beating
 	// any B node whose best score is 1/(60+1) = 0.0164.
 	emb := &stubEmbedder{vec: []float32{0.1}}
-	vecs := &stubVectors{hits: []domain.Hit{
+	vecs := &stubVectors{hits: []domain.SearchHit{
 		{NodeID: "nodeA1"}, {NodeID: "nodeA2"},
 	}}
 	lex := &stubLex{hits: []ports.LexicalHit{
@@ -414,7 +414,7 @@ func TestSearchSimilar_ReturnsNeighboursExcludingSeed(t *testing.T) {
 	seedVec := []float32{0.5, 0.5, 0.5}
 	emb := &stubEmbedder{}
 	vecs := &stubVectors{
-		hits: []domain.Hit{
+		hits: []domain.SearchHit{
 			{NodeID: "seed", Score: 1.0},
 			{NodeID: "n2", Score: 0.8},
 			{NodeID: "n3", Score: 0.7},
@@ -508,7 +508,7 @@ func TestSearchSimilar_AcceptsSymbolAlias(t *testing.T) {
 	seedVec := []float32{0.5, 0.5, 0.5}
 	emb := &stubEmbedder{}
 	vecs := &stubVectors{
-		hits: []domain.Hit{{NodeID: "seed", Score: 1.0}, {NodeID: "n2", Score: 0.8}},
+		hits: []domain.SearchHit{{NodeID: "seed", Score: 1.0}, {NodeID: "n2", Score: 0.8}},
 	}
 	nodes := &stubNodes{metas: []ports.NodeMeta{
 		{NodeID: "n2", SymbolPath: "pkg.N2", FilePath: "n2.go", Kind: "function", LineStart: 1, LineEnd: 3},
@@ -574,7 +574,7 @@ func TestSearchSimilar_SymbolResolvesCrossRepoWithoutRepoID(t *testing.T) {
 	seedVec := []float32{0.5, 0.5, 0.5}
 	emb := &stubEmbedder{}
 	vecs := &stubVectors{
-		hits: []domain.Hit{{NodeID: "seed", Score: 1.0}, {NodeID: "n2", Score: 0.8}},
+		hits: []domain.SearchHit{{NodeID: "seed", Score: 1.0}, {NodeID: "n2", Score: 0.8}},
 	}
 	nodes := &stubNodes{metas: []ports.NodeMeta{
 		{NodeID: "n2", SymbolPath: "pkg.N2", FilePath: "n2.go", Kind: "function", LineStart: 1, LineEnd: 3},
@@ -628,7 +628,7 @@ func TestFindRelated_ResolvesSmallestEnclosingNode(t *testing.T) {
 		},
 	}
 	emb := &stubEmbedder{}
-	vecs := &stubVectors{hits: []domain.Hit{{NodeID: "tight"}, {NodeID: "neighbour"}}}
+	vecs := &stubVectors{hits: []domain.SearchHit{{NodeID: "tight"}, {NodeID: "neighbour"}}}
 	nodes.metas = append(nodes.metas, ports.NodeMeta{NodeID: "neighbour", FilePath: "other.go", LineStart: 1, LineEnd: 3, SymbolPath: "Other"})
 	lookup := &stubSimilarLookup{hash: "h", ready: true, blob: encodeVec([]float32{0.1, 0.2}), dim: 2, found: true}
 	svc := search.NewService(emb, vecs, nodes)

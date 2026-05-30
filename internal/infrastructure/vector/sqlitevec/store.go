@@ -110,7 +110,7 @@ func (s *SQLiteVecStore) UpsertEmbeddings(_ context.Context, repoID, branch stri
 //
 // If filter.ModelID is non-empty, only the matching partition is searched;
 // otherwise all model partitions for the (repoID, branch) pair are merged.
-func (s *SQLiteVecStore) Search(_ context.Context, repoID, branch string, vec []float32, k int, filter domain.Filter) ([]domain.Hit, error) {
+func (s *SQLiteVecStore) Search(_ context.Context, repoID, branch string, vec []float32, k int, filter domain.VectorFilter) ([]domain.SearchHit, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
@@ -148,9 +148,9 @@ func (s *SQLiteVecStore) Search(_ context.Context, repoID, branch string, vec []
 	}
 	cands = cands[:k]
 
-	hits := make([]domain.Hit, len(cands))
+	hits := make([]domain.SearchHit, len(cands))
 	for i, c := range cands {
-		hits[i] = domain.Hit{
+		hits[i] = domain.SearchHit{
 			NodeID: c.nodeID,
 			Score:  1.0 / (1.0 + c.dist),
 		}

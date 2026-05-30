@@ -75,7 +75,7 @@ type fakeVectors struct {
 	// Hits are returned in queue order — one Search call pops one element.
 	// This keeps multi-source tests deterministic without needing to inspect
 	// the input vector.
-	queue [][]domain.Hit
+	queue [][]domain.SearchHit
 	err   error
 	calls int
 	lastK int
@@ -89,7 +89,7 @@ func (fv *fakeVectors) LookupContentHashes(context.Context, string, string, []st
 	return nil, nil
 }
 
-func (fv *fakeVectors) Search(_ context.Context, _, _ string, _ []float32, k int, _ domain.Filter) ([]domain.Hit, error) {
+func (fv *fakeVectors) Search(_ context.Context, _, _ string, _ []float32, k int, _ domain.VectorFilter) ([]domain.SearchHit, error) {
 	fv.calls++
 	fv.lastK = k
 	if fv.err != nil {
@@ -148,7 +148,7 @@ func TestCandidates_HappyPath_ThresholdAndSelfFilter(t *testing.T) {
 		embeds: map[string][]float32{"ha": {1, 0, 0}},
 	}
 	vs := &fakeVectors{
-		queue: [][]domain.Hit{{
+		queue: [][]domain.SearchHit{{
 			{NodeID: "A", Score: 1.0}, // self
 			{NodeID: "B", Score: 0.95},
 			{NodeID: "C", Score: 0.55}, // below default 0.60
@@ -185,7 +185,7 @@ func TestCandidates_TopKCap(t *testing.T) {
 		embeds: map[string][]float32{"ha": {1, 0}},
 	}
 	vs := &fakeVectors{
-		queue: [][]domain.Hit{{
+		queue: [][]domain.SearchHit{{
 			{NodeID: "A", Score: 1.0},
 			{NodeID: "B", Score: 0.99},
 			{NodeID: "C", Score: 0.98},
@@ -270,7 +270,7 @@ func TestCandidates_MultipleSources_Union(t *testing.T) {
 		embeds: map[string][]float32{"ha": {1, 0}, "hb": {0, 1}},
 	}
 	vs := &fakeVectors{
-		queue: [][]domain.Hit{
+		queue: [][]domain.SearchHit{
 			{{NodeID: "A", Score: 1.0}, {NodeID: "X", Score: 0.91}},
 			{{NodeID: "B", Score: 1.0}, {NodeID: "Y", Score: 0.92}},
 		},
@@ -319,7 +319,7 @@ func TestCandidates_CounterIncrementsByEmitted(t *testing.T) {
 		embeds: map[string][]float32{"ha": {1, 0}},
 	}
 	vs := &fakeVectors{
-		queue: [][]domain.Hit{{
+		queue: [][]domain.SearchHit{{
 			{NodeID: "A", Score: 1.0},
 			{NodeID: "B", Score: 0.95},
 			{NodeID: "C", Score: 0.94},
@@ -396,7 +396,7 @@ func TestCandidates_Integration_RealRepo(t *testing.T) {
 
 	// Fake vector store returning [self, B(0.95), C(0.55) below default].
 	vs := &fakeVectors{
-		queue: [][]domain.Hit{{
+		queue: [][]domain.SearchHit{{
 			{NodeID: "A", Score: 1.0},
 			{NodeID: "B", Score: 0.95},
 			{NodeID: "C", Score: 0.55},

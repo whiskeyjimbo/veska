@@ -185,7 +185,7 @@ func (l *Linker) Candidates(ctx context.Context, repoID, branch string, sourceNo
 		}
 		vec := decodeFloat32LE(blob, dim)
 
-		hits, err := l.vectors.Search(ctx, repoID, branch, vec, l.k+1, domain.Filter{})
+		hits, err := l.vectors.Search(ctx, repoID, branch, vec, l.k+1, domain.VectorFilter{})
 		if err != nil {
 			return nil, fmt.Errorf("autolink: vector search for %s: %w", src, err)
 		}

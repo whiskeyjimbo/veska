@@ -36,7 +36,7 @@ func TestSaveLoadRoundTrip(t *testing.T) {
 
 	// --- Run 5 hold-out queries on original store ---
 	querySeeds := []int64{5001, 5002, 5003, 5004, 5005}
-	filter := domain.Filter{ModelID: "nomic-embed-text"}
+	filter := domain.VectorFilter{ModelID: "nomic-embed-text"}
 
 	originalResults := make([][]string, len(querySeeds))
 	for qi, seed := range querySeeds {

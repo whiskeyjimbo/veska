@@ -191,7 +191,7 @@ func NewService(embedder ports.EmbeddingProvider, vectors ports.VectorStorage, n
 //
 // VectorQueryDuration{kind="semantic_search"} is observed once per
 // call, including error paths (the duration is the time-to-error).
-func (s *Service) Semantic(ctx context.Context, repoID, branch, query string, k int, filter domain.Filter) (Response, error) {
+func (s *Service) Semantic(ctx context.Context, repoID, branch, query string, k int, filter domain.VectorFilter) (Response, error) {
 	if k <= 0 {
 		return Response{}, nil
 	}
@@ -337,7 +337,7 @@ func (s *Service) withEmbedderCaveat(resp Response) Response {
 // When the lexical fallback fires the response's DegradedReasons carries
 // DegradedReasonEmbedderOfflineLexicalFallback so the caller can render
 // the same caveat it would for Semantic.
-func (s *Service) SemanticCandidates(ctx context.Context, repoID, branch, query string, k int, filter domain.Filter) (CandidatesResponse, error) {
+func (s *Service) SemanticCandidates(ctx context.Context, repoID, branch, query string, k int, filter domain.VectorFilter) (CandidatesResponse, error) {
 	if k <= 0 {
 		return CandidatesResponse{}, nil
 	}

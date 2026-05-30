@@ -249,7 +249,7 @@ func multiRepoFanoutSearch(ctx context.Context, svc *search.Service, repoIDs []s
 	}
 	var pool []pooled
 	for _, repoID := range repoIDs {
-		resp, err := svc.SemanticCandidates(ctx, repoID, branch, query, k, domain.Filter{})
+		resp, err := svc.SemanticCandidates(ctx, repoID, branch, query, k, domain.VectorFilter{})
 		if err != nil {
 			// Skip a degraded repo rather than aborting — matches the
 			// production handler's "degrade, don't abort" policy.
