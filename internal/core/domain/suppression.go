@@ -81,8 +81,9 @@ func WithBranch(branch string) SuppressionOption {
 // Invariants enforced:
 //  1. id, target, reason, actorID must be non-empty.
 //  2. scope must be a valid enum value.
-//  3. When scope == ScopeFinding, target must be a non-empty finding_id.
-//  4. expires_at, when set, must be after created_at (enforced by WithExpiresAt).
+//  3. actorKind must be a recognised ActorKind (same check NewActor enforces).
+//  4. When scope == ScopeFinding, target must be a non-empty finding_id.
+//  5. expires_at, when set, must be after created_at (enforced by WithExpiresAt).
 func NewSuppression(
 	id string,
 	scope SuppressionScope,
@@ -105,6 +106,9 @@ func NewSuppression(
 	}
 	if _, ok := validSuppressionScopes[scope]; !ok {
 		return nil, errors.New("suppression: invalid scope")
+	}
+	if _, ok := validActorKinds[actorKind]; !ok {
+		return nil, errors.New("suppression: invalid actor_kind")
 	}
 	if scope == ScopeFinding && target == "" {
 		return nil, errors.New("suppression: scope=finding requires a non-empty finding_id target")
