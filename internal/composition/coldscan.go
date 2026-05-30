@@ -25,12 +25,14 @@ import (
 // the CLI cold-scan (reindex) path: the staging area, the Ingester, the
 // PromotionStore with its FTS + embedding-ref sinks, and the Promoter.
 //
-// Check registration, the reparser, and finding storage are intentionally NOT
-// part of the core — they legitimately differ between callers (the daemon
-// registers dead-code + contract-drift checks the CLI omits, passes a scan
-// tracker to the reparser, and shares a metrics registry). The core is exactly
-// the part that was previously copied verbatim between cmd/veska/reindex.go and
-// internal/cli/daemon/wire.go.
+// The reparser is intentionally NOT part of the core — it legitimately differs
+// between callers (the daemon passes a scan tracker). The Ingester's finding
+// storage and the Promoter's check/added-lines/tracer seams also differ per
+// caller (the daemon registers dead-code + contract-drift checks the CLI omits,
+// and only the daemon emits parse findings), so they are supplied by the caller
+// as construction options via ingesterOpts/promoterOpts rather than mutated
+// afterward. The core is exactly the part that was previously copied verbatim
+// between cmd/veska/reindex.go and internal/cli/daemon/wire.go.
 type ColdScanCore struct {
 	Staging        *application.StagingArea
 	Gate           *application.IngestionGate
@@ -41,12 +43,15 @@ type ColdScanCore struct {
 
 // NewColdScanCore wires the cold-scan core over the given pools. reviewEnabled
 // gates the optional WorkKindReview promotion lane (sqlite.WithReviewEnabled);
-// pass false for the CLI path, which never enqueues review work.
-func NewColdScanCore(pools *sqlite.Pools, reviewEnabled bool) *ColdScanCore {
+// pass false for the CLI path, which never enqueues review work. The
+// caller-specific Ingester and Promoter collaborators (finding storage, check
+// runner, added-lines seam, tracer) are forwarded as ingesterOpts/promoterOpts
+// so the constructed core is fully wired and immutable.
+func NewColdScanCore(pools *sqlite.Pools, reviewEnabled bool, ingesterOpts []application.IngesterOption, promoterOpts []application.PromoterOption) *ColdScanCore {
 	staging := application.NewStagingArea()
 	gate := application.NewIngestionGate(staging)
 	parser := treesitter.NewGoParser()
-	ingester := application.NewIngester(parser, staging, gate)
+	ingester := application.NewIngester(parser, staging, gate, ingesterOpts...)
 
 	promotionStore := sqlite.NewPromotionStore(
 		pools.Write,
@@ -56,7 +61,7 @@ func NewColdScanCore(pools *sqlite.Pools, reviewEnabled bool) *ColdScanCore {
 		},
 		sqlite.WithReviewEnabled(reviewEnabled),
 	)
-	promoter := application.NewPromoter(staging, promotionStore)
+	promoter := application.NewPromoter(staging, promotionStore, promoterOpts...)
 
 	return &ColdScanCore{
 		Staging:        staging,

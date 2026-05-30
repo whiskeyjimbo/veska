@@ -36,9 +36,8 @@ func TestPromote_InvokesCheckRunnerPostCommit(t *testing.T) {
 	n, _ := domain.NewNode("n1", "a.go", "A", domain.KindFunction)
 	sa.Stage("repo1", "main", "a.go", application.StagedFile{Nodes: []*domain.Node{n}, Edges: nil})
 
-	p := newTestPromoter(sa, db)
 	fr := &fakeCheckRunner{}
-	p.SetCheckRunner(fr)
+	p := newTestPromoter(sa, db, application.WithCheckRunner(fr))
 
 	if err := p.Promote(context.Background(), "repo1", "main", "sha-xyz",
 		domain.Actor{ID: "service:veska", Kind: domain.ActorKindSystem}); err != nil {
@@ -75,18 +74,18 @@ func TestPromote_PopulatesAddedLinesFromSeam(t *testing.T) {
 	n, _ := domain.NewNode("n1", "a.go", "A", domain.KindFunction)
 	sa.Stage("repo1", "main", "a.go", application.StagedFile{Nodes: []*domain.Node{n}, Edges: nil})
 
-	p := newTestPromoter(sa, db)
-	fr := &fakeCheckRunner{}
-	p.SetCheckRunner(fr)
-
 	want := map[string][]application.Line{
 		"a.go": {{Number: 1, Text: "package a"}, {Number: 2, Text: "func A() {}"}},
 	}
 	var gotRepo, gotSHA string
-	p.SetAddedLinesFunc(func(_ context.Context, repoID, gitSHA string) (map[string][]application.Line, error) {
-		gotRepo, gotSHA = repoID, gitSHA
-		return want, nil
-	})
+	fr := &fakeCheckRunner{}
+	p := newTestPromoter(sa, db,
+		application.WithCheckRunner(fr),
+		application.WithAddedLinesFunc(func(_ context.Context, repoID, gitSHA string) (map[string][]application.Line, error) {
+			gotRepo, gotSHA = repoID, gitSHA
+			return want, nil
+		}),
+	)
 
 	if err := p.Promote(context.Background(), "repo1", "main", "sha-xyz",
 		domain.Actor{ID: "service:veska", Kind: domain.ActorKindSystem}); err != nil {
@@ -116,9 +115,8 @@ func TestPromote_NoAddedLinesFunc(t *testing.T) {
 	n, _ := domain.NewNode("n1", "a.go", "A", domain.KindFunction)
 	sa.Stage("repo1", "main", "a.go", application.StagedFile{Nodes: []*domain.Node{n}, Edges: nil})
 
-	p := newTestPromoter(sa, db)
 	fr := &fakeCheckRunner{}
-	p.SetCheckRunner(fr)
+	p := newTestPromoter(sa, db, application.WithCheckRunner(fr))
 
 	if err := p.Promote(context.Background(), "repo1", "main", "sha-xyz",
 		domain.Actor{ID: "service:veska", Kind: domain.ActorKindSystem}); err != nil {
@@ -158,9 +156,8 @@ func TestPromote_CheckRunnerSkippedWhenNothingStaged(t *testing.T) {
 	db := openMemDB(t)
 	insertTestRepo(t, db, "repo1")
 
-	p := newTestPromoter(application.NewStagingArea(), db)
 	fr := &fakeCheckRunner{}
-	p.SetCheckRunner(fr)
+	p := newTestPromoter(application.NewStagingArea(), db, application.WithCheckRunner(fr))
 
 	if err := p.Promote(context.Background(), "repo1", "main", "sha-xyz",
 		domain.Actor{ID: "service:veska", Kind: domain.ActorKindSystem}); err != nil {
