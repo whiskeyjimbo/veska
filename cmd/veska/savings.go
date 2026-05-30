@@ -28,7 +28,13 @@ func doctorSavingsCmd() *cobra.Command {
 		Short:        "Show inline-snippet token savings per period",
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runSavings(cmd.OutOrStdout(), config.DefaultVectorDir(), time.Now(), jsonOut, aggregate)
+			return runSavings(savingsParams{
+				Out:       cmd.OutOrStdout(),
+				VeskaHome: config.DefaultVectorDir(),
+				Now:       time.Now(),
+				JSON:      jsonOut,
+				Aggregate: aggregate,
+			})
 		},
 	}
 	cmd.Flags().BoolVar(&jsonOut, "json", false, "output results as JSON")
@@ -41,6 +47,17 @@ func doctorSavingsCmd() *cobra.Command {
 	return cmd
 }
 
+// savingsParams bundles the inputs of runSavings. The two boolean flags
+// (JSON, Aggregate) live in a struct rather than as adjacent positional args
+// so call sites can't transpose them (solov2-w8f9).
+type savingsParams struct {
+	Out       io.Writer
+	VeskaHome string
+	Now       time.Time
+	JSON      bool
+	Aggregate bool
+}
+
 // runSavings reads the savings.jsonl rollup and renders it.
 //
 // Per-repo breakdown (one row per registered repo plus a total — the
@@ -51,14 +68,15 @@ func doctorSavingsCmd() *cobra.Command {
 // knows the figure is not specific to one repo, and the --aggregate
 // flag is wired up now so the future per-repo default has a documented
 // opt-out path.
-func runSavings(w io.Writer, veskaHome string, now time.Time, jsonOut, aggregate bool) error {
-	_ = aggregate // see doc comment — single-bucket today, flag is forward-compat.
-	path := filepath.Join(veskaHome, "savings.jsonl")
-	rep, err := savings.Aggregate(path, now)
+func runSavings(p savingsParams) error {
+	_ = p.Aggregate // see doc comment — single-bucket today, flag is forward-compat.
+	w := p.Out
+	path := filepath.Join(p.VeskaHome, "savings.jsonl")
+	rep, err := savings.Aggregate(path, p.Now)
 	if err != nil {
 		return fmt.Errorf("savings: %w", err)
 	}
-	if jsonOut {
+	if p.JSON {
 		return json.NewEncoder(w).Encode(rep)
 	}
 	if rep.AllTime.Calls == 0 {
@@ -104,21 +122,4 @@ func formatSavingsRow(p savings.Period) string {
 	return fmt.Sprintf("  %-9s [%s] %5.1f%%  (%d calls, %s -> %s)",
 		p.Label, bar, ratio*100, p.Calls,
 		humanBytes(p.FileChars), humanBytes(p.SnippetChars))
-}
-
-// humanBytes renders n in the largest base-1024 unit that keeps the
-// numeric part under 1024. Output stays narrow ("1.2KB", "873B") so
-// the savings row fits comfortably in an 80-column terminal.
-func humanBytes(n int64) string {
-	const k = 1024
-	switch {
-	case n < k:
-		return fmt.Sprintf("%dB", n)
-	case n < k*k:
-		return fmt.Sprintf("%.1fKB", float64(n)/k)
-	case n < k*k*k:
-		return fmt.Sprintf("%.1fMB", float64(n)/(k*k))
-	default:
-		return fmt.Sprintf("%.1fGB", float64(n)/(k*k*k))
-	}
 }

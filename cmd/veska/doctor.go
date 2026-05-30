@@ -26,12 +26,6 @@ func exitCodeForProbeStatus(status string) int {
 	return doctorcmd.ExitCodeForProbeStatus(status)
 }
 
-// In-process embedder defaults, also consumed by init.go.
-const (
-	defaultOllamaURL = doctorcmd.DefaultOllamaURL
-	defaultModelName = doctorcmd.DefaultModelName
-)
-
 // doctorCmd returns the "doctor" Cobra command with health-check subcommands.
 // Exit codes:
 //
@@ -83,7 +77,7 @@ func doctorStatusCmd() *cobra.Command {
 		Short:        "Overall health rollup across all subsystems",
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return doctorcmd.RunStatus(cmd.OutOrStdout(), jsonOut, verbose)
+			return doctorcmd.RunStatus(cmd.OutOrStdout(), doctorcmd.StatusOptions{JSON: jsonOut, Verbose: verbose})
 		},
 	}
 	cmd.Flags().BoolVar(&jsonOut, "json", false, "output results as JSON")
@@ -102,7 +96,7 @@ func doctorPostPromotionQueueCmd() *cobra.Command {
 		Short:        "Inspect the post-promotion queue depth and failed rows",
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return doctorcmd.RunPostPromotionQueue(cmd.OutOrStdout(), jsonOut, purgeOrphans)
+			return doctorcmd.RunPostPromotionQueue(cmd.OutOrStdout(), doctorcmd.QueueOptions{JSON: jsonOut, PurgeOrphans: purgeOrphans})
 		},
 	}
 	cmd.Flags().BoolVar(&jsonOut, "json", false, "output results as JSON")
