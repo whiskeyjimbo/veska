@@ -72,23 +72,6 @@ const (
 	FindingStateClosed FindingState = "closed"
 )
 
-// ── ActorKind ──────────────────────────────────────────────────────────────
-
-// ActorKind distinguishes who or what performed an action.
-type ActorKind string
-
-const (
-	ActorKindHuman  ActorKind = "human"
-	ActorKindAgent  ActorKind = "agent"
-	ActorKindSystem ActorKind = "system"
-)
-
-var validActorKinds = map[ActorKind]struct{}{
-	ActorKindHuman:  {},
-	ActorKindAgent:  {},
-	ActorKindSystem: {},
-}
-
 // ── Finding ────────────────────────────────────────────────────────────────
 
 // Finding represents a detected code issue anchored to a symbol or file.
