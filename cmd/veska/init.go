@@ -11,11 +11,11 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
-	"github.com/whiskeyjimbo/veska/internal/config"
-	"github.com/whiskeyjimbo/veska/internal/embedderprobe"
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/embedding/elect"
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/embedding/model2vec"
 	embedstatic "github.com/whiskeyjimbo/veska/internal/infrastructure/embedding/static"
+	"github.com/whiskeyjimbo/veska/internal/platform/config"
+	"github.com/whiskeyjimbo/veska/internal/platform/embedderprobe"
 )
 
 // initDeps holds injectable dependencies for runInit, enabling testing without

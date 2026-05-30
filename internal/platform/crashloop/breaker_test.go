@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/whiskeyjimbo/veska/internal/crashloop"
+	"github.com/whiskeyjimbo/veska/internal/platform/crashloop"
 )
 
 func TestCheckNoBroken(t *testing.T) {

@@ -9,7 +9,7 @@ import (
 	"fmt"
 
 	"github.com/whiskeyjimbo/veska/internal/core/ports"
-	"github.com/whiskeyjimbo/veska/internal/tokenize"
+	"github.com/whiskeyjimbo/veska/internal/platform/tokenize"
 )
 
 // rrfK is the standard RRF dampener: 1 / (rrfK + rank). 60 is the value

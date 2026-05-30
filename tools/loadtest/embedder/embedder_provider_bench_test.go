@@ -24,7 +24,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/whiskeyjimbo/veska/internal/config"
+	"github.com/whiskeyjimbo/veska/internal/platform/config"
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/embedding/model2vec"
 	embedstatic "github.com/whiskeyjimbo/veska/internal/infrastructure/embedding/static"
 )

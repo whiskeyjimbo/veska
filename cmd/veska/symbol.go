@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"slices"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -225,12 +226,9 @@ func renderNodeList(w io.Writer, resp any, jsonOut bool) error {
 		// solov2-izh6.30: empty result during an active cold scan is the
 		// indexing-window case; tell the user to retry instead of treating
 		// the empty answer as authoritative.
-		for _, d := range any.DegradedReasons {
-			if d == mcpinfra.DegradedReasonIndexingInProgress {
-				fmt.Fprintf(w, "  hint: %d repo(s) still indexing (%s); retry shortly or rerun the relevant `veska repo add --wait`.\n",
-					len(any.IndexingRepos), strings.Join(any.IndexingRepos, ", "))
-				break
-			}
+		if slices.Contains(any.DegradedReasons, mcpinfra.DegradedReasonIndexingInProgress) {
+			fmt.Fprintf(w, "  hint: %d repo(s) still indexing (%s); retry shortly or rerun the relevant `veska repo add --wait`.\n",
+				len(any.IndexingRepos), strings.Join(any.IndexingRepos, ", "))
 		}
 		return nil
 	}

@@ -255,10 +255,8 @@ func verbSynonymBonus(r Result, tokens []string, maxScore float32) float32 {
 		if !ok {
 			continue
 		}
-		for _, s := range syns {
-			if head == s {
-				return verbSynonymBonusFrac * maxScore
-			}
+		if slices.Contains(syns, head) {
+			return verbSynonymBonusFrac * maxScore
 		}
 	}
 	return 0

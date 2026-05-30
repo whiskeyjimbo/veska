@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/whiskeyjimbo/veska/internal/service"
+	"github.com/whiskeyjimbo/veska/internal/platform/service"
 )
 
 func TestNewDarwin(t *testing.T) {

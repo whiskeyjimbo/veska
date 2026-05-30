@@ -12,9 +12,9 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/whiskeyjimbo/veska/internal/config"
-	"github.com/whiskeyjimbo/veska/internal/crashloop"
-	"github.com/whiskeyjimbo/veska/internal/logrotate"
+	"github.com/whiskeyjimbo/veska/internal/platform/config"
+	"github.com/whiskeyjimbo/veska/internal/platform/crashloop"
+	"github.com/whiskeyjimbo/veska/internal/platform/logrotate"
 )
 
 const (

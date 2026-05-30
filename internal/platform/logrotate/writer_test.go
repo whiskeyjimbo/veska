@@ -9,7 +9,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/whiskeyjimbo/veska/internal/logrotate"
+	"github.com/whiskeyjimbo/veska/internal/platform/logrotate"
 )
 
 // TestRotatingWriterBasic writes 3 lines and verifies they all appear in the file.

@@ -5,7 +5,7 @@ import (
 
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 
-	"github.com/whiskeyjimbo/veska/internal/observability"
+	"github.com/whiskeyjimbo/veska/internal/platform/observability"
 )
 
 func TestNewTracerProvider_EmptyEndpointReturnsError(t *testing.T) {
