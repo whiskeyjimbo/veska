@@ -44,8 +44,20 @@ func WithActive() TaskOption {
 	}
 }
 
+// WithCreatedAt overrides the default creation timestamp (time.Now()). It makes
+// NewTask deterministic for tests — mirroring the injected createdAt that
+// NewSuppression takes — without burdening the common call site with a
+// timestamp argument.
+func WithCreatedAt(t time.Time) TaskOption {
+	return func(task *Task) error {
+		task.CreatedAt = t
+		return nil
+	}
+}
+
 // NewTask constructs a validated Task. Returns an error if id, repoID, or
-// title is empty.
+// title is empty. CreatedAt defaults to time.Now(); pass WithCreatedAt to set
+// it deterministically.
 func NewTask(id, repoID, title string, opts ...TaskOption) (*Task, error) {
 	if id == "" {
 		return nil, errors.New("task: id must not be empty")
