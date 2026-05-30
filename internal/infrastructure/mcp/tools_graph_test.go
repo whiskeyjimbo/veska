@@ -17,7 +17,7 @@ import (
 // Stub GraphStorage
 // ---------------------------------------------------------------------------
 
-// stubGraphStorage is an in-test implementation of ports.GraphStorage.
+// stubGraphStorage is an in-test implementation of ports.GraphReader.
 type stubGraphStorage struct {
 	nodes map[string]*domain.Node // keyed by nodeID
 	edges []*domain.Edge

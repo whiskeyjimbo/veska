@@ -33,7 +33,7 @@ type searchSimilarParams struct {
 	Limit int `json:"limit,omitempty"`
 }
 
-func makeSearchSimilarHandler(lookup SimilarLookup, vectors ports.VectorStorage, nodes ports.NodeLookup, repos application.RepoLister, graph ports.GraphStorage) ToolHandler {
+func makeSearchSimilarHandler(lookup SimilarLookup, vectors ports.VectorStorage, nodes ports.NodeLookup, repos application.RepoLister, graph ports.GraphReader) ToolHandler {
 	return func(ctx context.Context, _ domain.Actor, raw json.RawMessage) (any, *RPCError) {
 		var p searchSimilarParams
 		if rpcErr := bindParams(raw, &p); rpcErr != nil {

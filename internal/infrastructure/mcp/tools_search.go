@@ -66,7 +66,7 @@ type SimilarLookup interface {
 type SearchToolOption func(*searchToolConfig)
 
 type searchToolConfig struct {
-	graph ports.GraphStorage
+	graph ports.GraphReader
 	scans ScanTrackerReader
 }
 
@@ -81,7 +81,7 @@ func WithSearchScanTracker(t ScanTrackerReader) SearchToolOption {
 // symbol-to-node_id resolution. Without it, `symbol` is rejected and only
 // node_id is accepted — preserving existing behaviour for callers that
 // don't pass the option.
-func WithSearchGraph(g ports.GraphStorage) SearchToolOption {
+func WithSearchGraph(g ports.GraphReader) SearchToolOption {
 	return func(c *searchToolConfig) { c.graph = g }
 }
 

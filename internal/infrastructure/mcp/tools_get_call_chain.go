@@ -51,7 +51,7 @@ type getCallChainParams struct {
 
 const maxCallChainDepth = 10
 
-func makeGetCallChainHandler(graph ports.GraphStorage, resolve ResolveFunc, resolveInbound InboundResolveFunc, repos application.RepoLister, scans ScanTrackerReader) ToolHandler {
+func makeGetCallChainHandler(graph ports.GraphReader, resolve ResolveFunc, resolveInbound InboundResolveFunc, repos application.RepoLister, scans ScanTrackerReader) ToolHandler {
 	return func(ctx context.Context, _ domain.Actor, raw json.RawMessage) (any, *RPCError) {
 		var p getCallChainParams
 		if err := json.Unmarshal(raw, &p); err != nil {

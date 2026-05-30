@@ -6,8 +6,15 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/core/domain"
 )
 
-// GraphStorage is the port for persisting and querying the code graph.
-// Implementations are provided by infrastructure adapters (e.g. Dolt, SQLite).
+// GraphStorage is the write-side port for the code graph. It mirrors
+// EdgeStorage: a narrow set of mutating operations, kept separate from the
+// read surface (GraphReader) so read-only consumers — the MCP graph tools,
+// blast-radius, call-chain — depend only on what they use. Implementations
+// are provided by infrastructure adapters (e.g. SQLite GraphRepo).
+//
+// Production graph writes flow through application.PromotionStore inside the
+// promotion transaction; these methods exist for the adapter's own
+// round-trip coverage and any future non-promotion writer.
 type GraphStorage interface {
 	// SaveNode inserts or replaces a Node for the given repository and branch.
 	// The node's ID is used as the upsert key.
@@ -20,7 +27,15 @@ type GraphStorage interface {
 	// DeleteFile removes all Nodes and Edges whose source file matches filePath
 	// for the given repository and branch.
 	DeleteFile(ctx context.Context, repoID, branch, filePath string) error
+}
 
+// GraphReader is the read-side companion to GraphStorage, mirroring the
+// EdgeReader/EdgeStorage split. It is the port the MCP graph tools and the
+// graph-walking services (blast-radius, call-chain) depend on; none of them
+// mutate the graph, so they take this narrow interface rather than the full
+// storage port. Implementations are provided by infrastructure adapters
+// (e.g. SQLite GraphRepo).
+type GraphReader interface {
 	// LoadGraph builds and returns the full in-memory Graph for the given
 	// repository and branch. Returns a non-nil empty Graph when no data is stored.
 	LoadGraph(ctx context.Context, repoID, branch string) (*domain.Graph, error)

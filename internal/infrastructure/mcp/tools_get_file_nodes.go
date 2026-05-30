@@ -32,7 +32,7 @@ type getFileNodesParams struct {
 //
 // solov2-8ex retired the previous in-handler type-assertion to an optional
 // fileQuerier interface; NodesForFile is now part of the port contract.
-func makeGetFileNodesHandler(graph ports.GraphStorage, staging *application.StagingArea, repos application.RepoLister) ToolHandler {
+func makeGetFileNodesHandler(graph ports.GraphReader, staging *application.StagingArea, repos application.RepoLister) ToolHandler {
 	return func(ctx context.Context, _ domain.Actor, raw json.RawMessage) (any, *RPCError) {
 		var p getFileNodesParams
 		if err := json.Unmarshal(raw, &p); err != nil {

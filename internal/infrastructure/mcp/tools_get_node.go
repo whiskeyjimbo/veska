@@ -20,7 +20,7 @@ type getNodeParams struct {
 	Branch string `json:"branch"`
 }
 
-func makeGetNodeHandler(graph ports.GraphStorage, staging *application.StagingArea, repos application.RepoLister) ToolHandler {
+func makeGetNodeHandler(graph ports.GraphReader, staging *application.StagingArea, repos application.RepoLister) ToolHandler {
 	return func(ctx context.Context, _ domain.Actor, raw json.RawMessage) (any, *RPCError) {
 		var p getNodeParams
 		if err := json.Unmarshal(raw, &p); err != nil {
