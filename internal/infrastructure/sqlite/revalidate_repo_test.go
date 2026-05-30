@@ -241,44 +241,6 @@ func TestRevalidateRepo_StaleFindings_RepoScoped(t *testing.T) {
 	}
 }
 
-func TestRevalidateRepo_Close_FlipsStateAndSetsActor(t *testing.T) {
-	t.Parallel()
-	f := setupRevalFixture(t)
-	f.insertNode(t, "n-x", f.branch, "pkg/a.go", "h-current")
-	fnd := f.insertFinding(t, "u-x", f.branch, "n-x", new("h-old"))
-
-	closedAt := time.Now().UnixMilli()
-	if err := f.reval.CloseAsRevalidatedObsolete(context.Background(), f.repoID, f.branch, fnd.FindingID, closedAt); err != nil {
-		t.Fatalf("Close: %v", err)
-	}
-
-	var (
-		state, reason, actorID, actorKind string
-		gotClosedAt                       sql.NullInt64
-	)
-	if err := f.db.QueryRow(
-		`SELECT state, closed_reason, actor_id, actor_kind, closed_at FROM findings WHERE finding_id=? AND branch=?`,
-		fnd.FindingID, fnd.Branch,
-	).Scan(&state, &reason, &actorID, &actorKind, &gotClosedAt); err != nil {
-		t.Fatalf("query: %v", err)
-	}
-	if state != "closed" {
-		t.Errorf("state = %q, want closed", state)
-	}
-	if reason != "revalidated_obsolete" {
-		t.Errorf("reason = %q, want revalidated_obsolete", reason)
-	}
-	if actorID != "service:veska" {
-		t.Errorf("actor_id = %q, want service:veska", actorID)
-	}
-	if actorKind != "system" {
-		t.Errorf("actor_kind = %q, want system", actorKind)
-	}
-	if !gotClosedAt.Valid || gotClosedAt.Int64 != closedAt {
-		t.Errorf("closed_at = %+v, want %d", gotClosedAt, closedAt)
-	}
-}
-
 func TestRevalidateRepo_StaleFindings_CarriesRule(t *testing.T) {
 	t.Parallel()
 	f := setupRevalFixture(t)
@@ -403,111 +365,6 @@ func TestRevalidateRepo_NodeSignaturePair_NullsAndMissing(t *testing.T) {
 	}
 }
 
-func TestRevalidateRepo_RefreshAnchorHash_RoundTrip(t *testing.T) {
-	t.Parallel()
-	f := setupRevalFixture(t)
-	f.insertNode(t, "n-x", f.branch, "pkg/a.go", "h-current")
-	fnd := f.insertFinding(t, "u-x", f.branch, "n-x", new("h-A"))
-
-	// Confirm starting state.
-	var anchor sql.NullString
-	if err := f.db.QueryRow(
-		`SELECT anchor_content_hash FROM findings WHERE finding_id=? AND branch=?`,
-		fnd.FindingID, fnd.Branch,
-	).Scan(&anchor); err != nil {
-		t.Fatalf("query before: %v", err)
-	}
-	if !anchor.Valid || anchor.String != "h-A" {
-		t.Fatalf("starting anchor = %+v, want h-A", anchor)
-	}
-
-	if err := f.reval.RefreshAnchorHash(context.Background(), f.repoID, f.branch, fnd.FindingID, "h-B", time.Now().UnixMilli()); err != nil {
-		t.Fatalf("RefreshAnchorHash: %v", err)
-	}
-
-	var state string
-	var newAnchor sql.NullString
-	var reason sql.NullString
-	if err := f.db.QueryRow(
-		`SELECT state, anchor_content_hash, closed_reason FROM findings WHERE finding_id=? AND branch=?`,
-		fnd.FindingID, fnd.Branch,
-	).Scan(&state, &newAnchor, &reason); err != nil {
-		t.Fatalf("query after: %v", err)
-	}
-	if state != "open" {
-		t.Errorf("state = %q, want open", state)
-	}
-	if !newAnchor.Valid || newAnchor.String != "h-B" {
-		t.Errorf("anchor = %+v, want h-B", newAnchor)
-	}
-	if reason.Valid {
-		t.Errorf("closed_reason = %q, want NULL", reason.String)
-	}
-}
-
-func TestRevalidateRepo_RefreshAnchorHash_DoesNotResurrectClosed(t *testing.T) {
-	t.Parallel()
-	f := setupRevalFixture(t)
-	f.insertNode(t, "n-x", f.branch, "pkg/a.go", "h-current")
-	fnd := f.insertFinding(t, "u-x", f.branch, "n-x", new("h-A"))
-
-	// Force-close it.
-	if _, err := f.db.Exec(
-		`UPDATE findings SET state='closed', closed_reason='manual', closed_at=? WHERE finding_id=? AND branch=?`,
-		time.Now().UnixMilli(), fnd.FindingID, fnd.Branch,
-	); err != nil {
-		t.Fatalf("force-close: %v", err)
-	}
-
-	// Refresh must be a no-op (state='open' gate).
-	if err := f.reval.RefreshAnchorHash(context.Background(), f.repoID, f.branch, fnd.FindingID, "h-B", time.Now().UnixMilli()); err != nil {
-		t.Fatalf("RefreshAnchorHash: %v", err)
-	}
-
-	var state string
-	var anchor sql.NullString
-	if err := f.db.QueryRow(
-		`SELECT state, anchor_content_hash FROM findings WHERE finding_id=? AND branch=?`,
-		fnd.FindingID, fnd.Branch,
-	).Scan(&state, &anchor); err != nil {
-		t.Fatalf("query: %v", err)
-	}
-	if state != "closed" {
-		t.Errorf("state = %q, want still closed", state)
-	}
-	if anchor.String != "h-A" {
-		t.Errorf("anchor = %q, want unchanged h-A", anchor.String)
-	}
-}
-
-func TestRevalidateRepo_Close_IsIdempotentOnAlreadyClosed(t *testing.T) {
-	t.Parallel()
-	f := setupRevalFixture(t)
-	f.insertNode(t, "n-x", f.branch, "pkg/a.go", "h-current")
-	fnd := f.insertFinding(t, "u-x", f.branch, "n-x", new("h-old"))
-
-	t1 := time.Now().UnixMilli()
-	if err := f.reval.CloseAsRevalidatedObsolete(context.Background(), f.repoID, f.branch, fnd.FindingID, t1); err != nil {
-		t.Fatalf("first close: %v", err)
-	}
-	// Second call must not error and must not re-stamp closed_at (state='open' gate).
-	t2 := t1 + 9999
-	if err := f.reval.CloseAsRevalidatedObsolete(context.Background(), f.repoID, f.branch, fnd.FindingID, t2); err != nil {
-		t.Fatalf("second close: %v", err)
-	}
-
-	var gotClosedAt sql.NullInt64
-	if err := f.db.QueryRow(
-		`SELECT closed_at FROM findings WHERE finding_id=? AND branch=?`,
-		fnd.FindingID, fnd.Branch,
-	).Scan(&gotClosedAt); err != nil {
-		t.Fatalf("query: %v", err)
-	}
-	if !gotClosedAt.Valid || gotClosedAt.Int64 != t1 {
-		t.Errorf("closed_at = %+v, want unchanged %d", gotClosedAt, t1)
-	}
-}
-
 // TestRevalidateRepo_ApplyDecisions_MixedBatch_RoundTrips verifies that one
 // ApplyDecisions call applies a mixed refresh+close batch correctly: refreshed
 // rows keep state='open' with their new anchor hash, closed rows transition
@@ -538,16 +395,17 @@ func TestRevalidateRepo_ApplyDecisions_MixedBatch_RoundTrips(t *testing.T) {
 
 	type row struct {
 		state, reason, anchor string
+		actorID, actorKind    string
 		closedAt              sql.NullInt64
 	}
 	get := func(id string) row {
 		t.Helper()
 		var r row
-		var reason, anchor sql.NullString
+		var reason, anchor, actorID, actorKind sql.NullString
 		if err := f.db.QueryRow(
-			`SELECT state, closed_reason, anchor_content_hash, closed_at FROM findings WHERE finding_id=? AND branch=?`,
+			`SELECT state, closed_reason, anchor_content_hash, actor_id, actor_kind, closed_at FROM findings WHERE finding_id=? AND branch=?`,
 			id, f.branch,
-		).Scan(&r.state, &reason, &anchor, &r.closedAt); err != nil {
+		).Scan(&r.state, &reason, &anchor, &actorID, &actorKind, &r.closedAt); err != nil {
 			t.Fatalf("query %s: %v", id, err)
 		}
 		if reason.Valid {
@@ -555,6 +413,12 @@ func TestRevalidateRepo_ApplyDecisions_MixedBatch_RoundTrips(t *testing.T) {
 		}
 		if anchor.Valid {
 			r.anchor = anchor.String
+		}
+		if actorID.Valid {
+			r.actorID = actorID.String
+		}
+		if actorKind.Valid {
+			r.actorKind = actorKind.String
 		}
 		return r
 	}
@@ -566,11 +430,14 @@ func TestRevalidateRepo_ApplyDecisions_MixedBatch_RoundTrips(t *testing.T) {
 	if r := get(fR2.FindingID); r.state != "open" || r.anchor != "h-new-r2" || r.reason != "" {
 		t.Errorf("u-r2 = %+v, want open/h-new-r2/no-reason", r)
 	}
-	// Closes: state=closed, reason set, closed_at stamped.
+	// Closes: state=closed, reason set, system actor stamped, closed_at stamped.
 	for _, id := range []string{fC1.FindingID, fC2.FindingID} {
 		r := get(id)
 		if r.state != "closed" || r.reason != "revalidated_obsolete" {
 			t.Errorf("%s = %+v, want closed/revalidated_obsolete", id, r)
+		}
+		if r.actorID != "service:veska" || r.actorKind != "system" {
+			t.Errorf("%s actor = %q/%q, want service:veska/system", id, r.actorID, r.actorKind)
 		}
 		if !r.closedAt.Valid || r.closedAt.Int64 != at {
 			t.Errorf("%s closed_at = %+v, want %d", id, r.closedAt, at)

@@ -90,38 +90,6 @@ WHERE f.repo_id              = ?
 	return out, nil
 }
 
-// CloseAsRevalidatedObsolete flips the named finding row to:
-//
-//	state         = 'closed'
-//	closed_reason = 'revalidated_obsolete'
-//	closed_at     = closedAt
-//	actor_id      = 'service:veska'
-//	actor_kind    = 'system'
-//
-// The UPDATE is gated on state='open' so re-delivery of the same revalidate
-// queue row cannot churn a finding that was already closed by an earlier
-// pass (or by a human). A no-op UPDATE returns nil.
-func (r *RevalidateRepo) CloseAsRevalidatedObsolete(
-	ctx context.Context, repoID, branch, findingID string, closedAt int64,
-) error {
-	const stmt = `
-UPDATE findings
-SET state         = 'closed',
-    closed_reason = 'revalidated_obsolete',
-    closed_at     = ?,
-    actor_id      = 'service:veska',
-    actor_kind    = 'system'
-WHERE finding_id = ?
-  AND branch     = ?
-  AND repo_id    = ?
-  AND state      = 'open'`
-
-	if _, err := r.db.ExecContext(ctx, stmt, closedAt, findingID, branch, repoID); err != nil {
-		return fmt.Errorf("sqlite.RevalidateRepo.CloseAsRevalidatedObsolete: %w", err)
-	}
-	return nil
-}
-
 // HasInboundEdges reports whether the named node currently has at least one
 // inbound edge on (repoID, branch). Uses LIMIT 1 + EXISTS so the query
 // short-circuits at the first matching row; the (dst_node_id, branch, kind)
@@ -170,28 +138,6 @@ WHERE node_id = ? AND branch = ? AND repo_id = ?`
 		current = c.String
 	}
 	return prev, current, nil
-}
-
-// RefreshAnchorHash rewrites findings.anchor_content_hash for the named row
-// so a subsequent revalidation sweep does not re-fire on the same drift.
-// State stays 'open'; closed_reason stays NULL. The UPDATE is gated on
-// state='open' so already-closed rows are not resurrected. `at` is accepted
-// for forward-compat (no audit column today) but is not currently written.
-func (r *RevalidateRepo) RefreshAnchorHash(
-	ctx context.Context, repoID, branch, findingID, newHash string, at int64,
-) error {
-	_ = at // reserved for future audit-column work; see port doc.
-	const stmt = `
-UPDATE findings
-SET anchor_content_hash = ?
-WHERE finding_id = ?
-  AND branch     = ?
-  AND repo_id    = ?
-  AND state      = 'open'`
-	if _, err := r.db.ExecContext(ctx, stmt, newHash, findingID, branch, repoID); err != nil {
-		return fmt.Errorf("sqlite.RevalidateRepo.RefreshAnchorHash: %w", err)
-	}
-	return nil
 }
 
 // ApplyDecisions applies a batch of refresh + close decisions inside one
