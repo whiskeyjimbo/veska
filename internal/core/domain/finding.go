@@ -287,19 +287,25 @@ func DeriveFindingID(rule, anchor, key string) string {
 
 // Close transitions the finding to the closed state.
 //
-// Invariant: severity >= high requires actorKind == human.
-func (f *Finding) Close(reason, actorKindStr, actorID string, now time.Time) error {
+// Invariants:
+//   - actorKind must be a recognised ActorKind (same check NewActor and
+//     WithActorKind enforce — the close path must not be the one place an
+//     unvalidated kind slips onto a Finding).
+//   - severity >= high requires actorKind == human.
+func (f *Finding) Close(reason string, actorKind ActorKind, actorID string, now time.Time) error {
 	if f.State == FindingStateClosed {
 		return errors.New("finding: already closed")
 	}
-	ak := ActorKind(actorKindStr)
-	if f.Severity.AtLeast(SeverityHigh) && ak != ActorKindHuman {
+	if _, ok := validActorKinds[actorKind]; !ok {
+		return errors.New("finding: invalid actor_kind")
+	}
+	if f.Severity.AtLeast(SeverityHigh) && actorKind != ActorKindHuman {
 		return errors.New("finding: severity >= high requires a human actor to close")
 	}
 	f.State = FindingStateClosed
 	f.ClosedAt = &now
 	f.ClosedReason = &reason
-	f.ActorKind = &ak
+	f.ActorKind = &actorKind
 	f.ActorID = &actorID
 	return nil
 }
