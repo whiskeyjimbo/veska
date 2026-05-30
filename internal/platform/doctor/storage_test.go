@@ -7,7 +7,7 @@ import (
 	"sort"
 	"testing"
 
-	"github.com/whiskeyjimbo/veska/internal/doctor"
+	"github.com/whiskeyjimbo/veska/internal/platform/doctor"
 )
 
 // writeSidecar writes a minimal JSON sidecar with the given number of rows

@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/whiskeyjimbo/veska/internal/savings"
+	"github.com/whiskeyjimbo/veska/internal/application/savings"
 )
 
 // TestRecorder_AppendsJSONLPerCall covers acceptance criterion (1): one

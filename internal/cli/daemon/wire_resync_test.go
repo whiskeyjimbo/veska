@@ -13,7 +13,7 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/application"
 	"github.com/whiskeyjimbo/veska/internal/core/domain"
 	gitwatch "github.com/whiskeyjimbo/veska/internal/infrastructure/git"
-	"github.com/whiskeyjimbo/veska/internal/repo"
+	"github.com/whiskeyjimbo/veska/internal/infrastructure/repo"
 )
 
 // runGit shells `git` in dir, failing the test on non-zero exit.

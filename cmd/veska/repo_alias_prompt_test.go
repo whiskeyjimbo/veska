@@ -7,8 +7,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/whiskeyjimbo/veska/internal/infrastructure/repo"
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/sqlite"
-	"github.com/whiskeyjimbo/veska/internal/repo"
 )
 
 func openAliasPromptPools(t *testing.T) *sqlite.Pools {

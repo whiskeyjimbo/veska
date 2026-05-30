@@ -13,9 +13,9 @@ import (
 	"time"
 
 	"github.com/whiskeyjimbo/veska/internal/application"
+	"github.com/whiskeyjimbo/veska/internal/infrastructure/repo"
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/sqlite"
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/sqlite/sqldriver"
-	"github.com/whiskeyjimbo/veska/internal/repo"
 )
 
 // setupReindexEnv creates a temp VESKA_HOME with a migrated veska.db and a

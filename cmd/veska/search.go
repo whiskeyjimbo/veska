@@ -23,10 +23,10 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/core/domain"
 	fsignore "github.com/whiskeyjimbo/veska/internal/infrastructure/fs"
 	mcpinfra "github.com/whiskeyjimbo/veska/internal/infrastructure/mcp"
+	"github.com/whiskeyjimbo/veska/internal/infrastructure/repo"
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/sqlite"
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/vector"
 	"github.com/whiskeyjimbo/veska/internal/platform/config"
-	"github.com/whiskeyjimbo/veska/internal/repo"
 )
 
 // searchCmd is the one-shot eval CLI from solov2-z92: clone+index+query

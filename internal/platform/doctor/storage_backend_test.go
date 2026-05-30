@@ -3,8 +3,8 @@ package doctor_test
 import (
 	"testing"
 
-	"github.com/whiskeyjimbo/veska/internal/doctor"
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/vector/sqlitevec"
+	"github.com/whiskeyjimbo/veska/internal/platform/doctor"
 )
 
 // TestCheckStorageBackend_SQLiteVec_Empty verifies the report for an empty sqlite-vec store.

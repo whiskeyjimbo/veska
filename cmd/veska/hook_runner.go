@@ -16,9 +16,9 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
+	"github.com/whiskeyjimbo/veska/internal/infrastructure/repo"
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/sqlite/sqldriver"
 	"github.com/whiskeyjimbo/veska/internal/platform/config"
-	"github.com/whiskeyjimbo/veska/internal/repo"
 )
 
 // hookRunnerCmd returns the "hook-runner" Cobra command with sub-commands.
