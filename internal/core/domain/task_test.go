@@ -73,6 +73,17 @@ func TestNewTask_WithTracker(t *testing.T) {
 	}
 }
 
+func TestNewTask_WithCreatedAt(t *testing.T) {
+	want := time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC)
+	task, err := NewTask("task-1", "repo1", "Timed", WithCreatedAt(want))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !task.CreatedAt.Equal(want) {
+		t.Errorf("CreatedAt: got %v, want %v", task.CreatedAt, want)
+	}
+}
+
 func TestNewTask_WithActive(t *testing.T) {
 	task, err := NewTask("task-1", "repo1", "Active task", WithActive())
 	if err != nil {
