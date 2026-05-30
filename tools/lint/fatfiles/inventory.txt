@@ -18,14 +18,8 @@
 #   - When a file drops below ~500 LOC you may delete its line entirely.
 #   - If a file is renamed/removed, update or delete its line (a stale entry
 #     for a missing file is itself a failure).
-#   - Rare exception to "only ratchet down": a +1 here on doctor.go
-#     (solov2-0omh.4) reflects a single new cross-package import line added
-#     when shared CLI helpers moved into internal/cli/repocmd — a structural
-#     improvement, not logic growth. doctor.go is thinned by .6, which will
-#     delete its line outright (search.go was thinned + deleted by .5).
 #
 # Blank lines and `#` comments are ignored.
-cmd/veska/doctor.go 1023
 cmd/veska/findings.go 515
 internal/application/embedder/embedder.go 530
 internal/application/search/search.go 593
