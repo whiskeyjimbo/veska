@@ -112,7 +112,10 @@ func (ts *TaskSet) Active(repoID string) *Task {
 
 // SetActive activates t and deactivates any previously active task for t.RepoID.
 // If t is not already in the set it is added.
-func (ts *TaskSet) SetActive(t *Task) error {
+//
+// Unlike Add, SetActive cannot violate the one-active-per-repo invariant — it
+// deactivates the incumbent before promoting t — so it returns no error.
+func (ts *TaskSet) SetActive(t *Task) {
 	// Deactivate the previous active task for this repo, if any.
 	if prev, ok := ts.activeByRepo[t.RepoID]; ok && prev.ID != t.ID {
 		prev.Active = false
@@ -121,5 +124,4 @@ func (ts *TaskSet) SetActive(t *Task) error {
 	t.Active = true
 	ts.activeByRepo[t.RepoID] = t
 	ts.tasks[t.ID] = t
-	return nil
 }

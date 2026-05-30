@@ -277,7 +277,7 @@ func TestFinding_Close_Low_AnyActor(t *testing.T) {
 		SeverityLow, LayerQuality, "rule", "msg",
 		WithNodeAnchor("n1"))
 	now := time.Now()
-	err := f.Close("fixed", string(ActorKindAgent), "agent-007", now)
+	err := f.Close("fixed", ActorKindAgent, "agent-007", now)
 	if err != nil {
 		t.Fatalf("unexpected error closing low finding: %v", err)
 	}
@@ -297,7 +297,7 @@ func TestFinding_Close_High_RequiresHuman(t *testing.T) {
 		SeverityHigh, LayerSecurity, "rule", "msg",
 		WithNodeAnchor("n1"))
 	now := time.Now()
-	err := f.Close("fixed", string(ActorKindAgent), "agent-007", now)
+	err := f.Close("fixed", ActorKindAgent, "agent-007", now)
 	if err == nil {
 		t.Error("expected error: high severity requires human actor to close")
 	}
@@ -308,7 +308,7 @@ func TestFinding_Close_Critical_RequiresHuman(t *testing.T) {
 		SeverityCritical, LayerSecurity, "rule", "msg",
 		WithNodeAnchor("n1"))
 	now := time.Now()
-	err := f.Close("fixed", string(ActorKindHuman), "human-1", now)
+	err := f.Close("fixed", ActorKindHuman, "human-1", now)
 	if err != nil {
 		t.Fatalf("human can close critical: %v", err)
 	}
@@ -317,13 +317,29 @@ func TestFinding_Close_Critical_RequiresHuman(t *testing.T) {
 	}
 }
 
+func TestFinding_Close_RejectsInvalidActorKind(t *testing.T) {
+	// A low-severity finding skips the human-actor gate, so this isolates the
+	// actor_kind enum check: Close must reject an unrecognised kind the same way
+	// NewActor and WithActorKind do, rather than silently storing it.
+	f, _ := NewFinding("repo", "main",
+		SeverityLow, LayerQuality, "rule", "msg",
+		WithNodeAnchor("n1"))
+	now := time.Now()
+	if err := f.Close("fixed", ActorKind("robot"), "x", now); err == nil {
+		t.Error("expected error: invalid actor_kind must be rejected")
+	}
+	if f.State == FindingStateClosed {
+		t.Error("finding must not be closed when actor_kind is invalid")
+	}
+}
+
 func TestFinding_Close_AlreadyClosed(t *testing.T) {
 	f, _ := NewFinding("repo", "main",
 		SeverityLow, LayerQuality, "rule", "msg",
 		WithNodeAnchor("n1"))
 	now := time.Now()
-	_ = f.Close("fixed", string(ActorKindHuman), "h1", now)
-	err := f.Close("again", string(ActorKindHuman), "h1", now)
+	_ = f.Close("fixed", ActorKindHuman, "h1", now)
+	err := f.Close("again", ActorKindHuman, "h1", now)
 	if err == nil {
 		t.Error("expected error closing already-closed finding")
 	}
