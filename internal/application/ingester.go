@@ -122,7 +122,12 @@ func (ing *Ingester) save(ctx context.Context, repoID, branch, path string, src 
 		)
 		return
 	}
-	ing.staging.StageIfCurrentGenerationWithParseData(repoID, branch, path, result.Nodes, result.Edges, result.UnresolvedCalls, result.Imports, gen, ing.gate)
+	ing.staging.Stage(repoID, branch, path, StagedFile{
+		Nodes:           result.Nodes,
+		Edges:           result.Edges,
+		UnresolvedCalls: result.UnresolvedCalls,
+		Imports:         result.Imports,
+	}, WithGenerationGuard(gen, ing.gate))
 	if len(result.Failures) == 0 {
 		// fsnotify-driven Save path: a clean parse closes any
 		// parse-failure finding the file carried from an earlier

@@ -45,28 +45,52 @@ func NewStagingArea() *StagingArea {
 	}
 }
 
-// StageFile replaces all staged nodes and edges for (repoID, branch, filePath).
-// Calling this twice for the same key overwrites the first entry.
-func (s *StagingArea) StageFile(repoID, branch, filePath string, nodes []*domain.Node, edges []*domain.Edge) {
-	s.StageFileWithParseData(repoID, branch, filePath, nodes, edges, nil, nil)
+// stageConfig accumulates the optional behaviour of a Stage call.
+type stageConfig struct {
+	guard bool
+	gen   uint64
+	gate  *IngestionGate
 }
 
-// StageFileWithUnresolved is StageFile plus the parser's unresolved
-// call markers, threaded through to the Promoter for cross-file
-// resolution (solov2-2at). Existing callers that don't have parser
-// access (tests, manual paths) keep using StageFile.
-func (s *StagingArea) StageFileWithUnresolved(repoID, branch, filePath string, nodes []*domain.Node, edges []*domain.Edge, unresolved []domain.UnresolvedCall) {
-	s.StageFileWithParseData(repoID, branch, filePath, nodes, edges, unresolved, nil)
+// StageOption configures a Stage call. The zero set of options is the common
+// case: an unconditional overwrite of the file's staged parse data.
+type StageOption func(*stageConfig)
+
+// WithGenerationGuard makes Stage conditional on the staging generation: the
+// write is discarded (Stage returns false) when gen no longer matches the
+// gate's current generation. The ingest hot path uses it so in-flight saves
+// from a branch that has since been switched away cannot pollute the new
+// branch's staging.
+func WithGenerationGuard(gen uint64, gate *IngestionGate) StageOption {
+	return func(c *stageConfig) {
+		c.guard = true
+		c.gen = gen
+		c.gate = gate
+	}
 }
 
-// StageFileWithParseData is the full-fidelity stage: nodes, edges, unresolved
-// calls, and the file's import map (alias -> path) used to resolve
-// package-qualified calls at promotion (solov2-xc51).
-func (s *StagingArea) StageFileWithParseData(repoID, branch, filePath string, nodes []*domain.Node, edges []*domain.Edge, unresolved []domain.UnresolvedCall, imports map[string]string) {
+// Stage replaces all staged parse data for (repoID, branch, filePath) with f,
+// overwriting any existing entry. It returns true when the data was staged.
+//
+// f carries whatever fidelity the caller has: a bare (Nodes, Edges) pair for
+// tests and manual paths, or the full parser output (UnresolvedCalls + the
+// import map) on the ingest path. Unset fields stage as nil.
+//
+// With WithGenerationGuard, Stage stages nothing and returns false when the
+// supplied generation is stale relative to the gate (solov2-2at, solov2-xc51).
+func (s *StagingArea) Stage(repoID, branch, filePath string, f StagedFile, opts ...StageOption) bool {
+	var cfg stageConfig
+	for _, o := range opts {
+		o(&cfg)
+	}
+	if cfg.guard && cfg.gen != cfg.gate.Generation() {
+		return false
+	}
 	key := stagingKey{repoID: repoID, branch: branch, filePath: filePath}
 	s.mu.Lock()
-	s.entries[key] = stagedEntry{nodes: nodes, edges: edges, unresolved: unresolved, imports: imports}
+	s.entries[key] = stagedEntry{nodes: f.Nodes, edges: f.Edges, unresolved: f.UnresolvedCalls, imports: f.Imports}
 	s.mu.Unlock()
+	return true
 }
 
 // GetStagedNodes returns the staged nodes for (repoID, branch, filePath).
@@ -131,50 +155,6 @@ func (s *StagingArea) Clear(repoID, branch string) {
 			delete(s.entries, k)
 		}
 	}
-}
-
-// StageIfCurrentGeneration stages the file only if gen matches the gate's current
-// generation. Returns false and discards the write if the generation is stale.
-// This prevents in-flight saves from a prior branch polluting the new branch's staging.
-func (s *StagingArea) StageIfCurrentGeneration(
-	repoID, branch, filePath string,
-	nodes []*domain.Node,
-	edges []*domain.Edge,
-	gen uint64,
-	gate *IngestionGate,
-) bool {
-	return s.StageIfCurrentGenerationWithParseData(repoID, branch, filePath, nodes, edges, nil, nil, gen, gate)
-}
-
-// StageIfCurrentGenerationWithUnresolved is the unresolved-aware variant
-// of StageIfCurrentGeneration; see StageFileWithUnresolved.
-func (s *StagingArea) StageIfCurrentGenerationWithUnresolved(
-	repoID, branch, filePath string,
-	nodes []*domain.Node,
-	edges []*domain.Edge,
-	unresolved []domain.UnresolvedCall,
-	gen uint64,
-	gate *IngestionGate,
-) bool {
-	return s.StageIfCurrentGenerationWithParseData(repoID, branch, filePath, nodes, edges, unresolved, nil, gen, gate)
-}
-
-// StageIfCurrentGenerationWithParseData stages full parse data (incl. the
-// import map) only if gen matches the gate's current generation (solov2-xc51).
-func (s *StagingArea) StageIfCurrentGenerationWithParseData(
-	repoID, branch, filePath string,
-	nodes []*domain.Node,
-	edges []*domain.Edge,
-	unresolved []domain.UnresolvedCall,
-	imports map[string]string,
-	gen uint64,
-	gate *IngestionGate,
-) bool {
-	if gen != gate.Generation() {
-		return false
-	}
-	s.StageFileWithParseData(repoID, branch, filePath, nodes, edges, unresolved, imports)
-	return true
 }
 
 // StagedFile is the per-file snapshot the promotion path consumes — nodes

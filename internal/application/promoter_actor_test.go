@@ -44,7 +44,7 @@ func TestPromote_ActorStoredInNodes(t *testing.T) {
 
 			sa := application.NewStagingArea()
 			n, _ := domain.NewNode("n1", "a.go", "A", domain.KindFunction)
-			sa.StageFile("repo1", "main", "a.go", []*domain.Node{n}, nil)
+			sa.Stage("repo1", "main", "a.go", application.StagedFile{Nodes: []*domain.Node{n}, Edges: nil})
 
 			p := newTestPromoter(sa, db)
 			if err := p.Promote(context.Background(), "repo1", "main", "sha-abc", tc.actor); err != nil {

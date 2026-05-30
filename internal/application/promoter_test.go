@@ -179,8 +179,8 @@ func TestPromote_TwoFiles(t *testing.T) {
 	sa := application.NewStagingArea()
 	n1, _ := domain.NewNode("n1", "a.go", "A", domain.KindFunction)
 	n2, _ := domain.NewNode("n2", "b.go", "B", domain.KindFunction)
-	sa.StageFile("repo1", "main", "a.go", []*domain.Node{n1}, nil)
-	sa.StageFile("repo1", "main", "b.go", []*domain.Node{n2}, nil)
+	sa.Stage("repo1", "main", "a.go", application.StagedFile{Nodes: []*domain.Node{n1}, Edges: nil})
+	sa.Stage("repo1", "main", "b.go", application.StagedFile{Nodes: []*domain.Node{n2}, Edges: nil})
 
 	p := newTestPromoter(sa, db)
 	if err := p.Promote(context.Background(), "repo1", "main", "sha-abc", domain.Actor{ID: "service:veska", Kind: domain.ActorKindSystem}); err != nil {
@@ -230,7 +230,7 @@ func TestPromote_Idempotent(t *testing.T) {
 
 	// First promote.
 	n1, _ := domain.NewNode("n1", "a.go", "A", domain.KindFunction)
-	sa.StageFile("repo1", "main", "a.go", []*domain.Node{n1}, nil)
+	sa.Stage("repo1", "main", "a.go", application.StagedFile{Nodes: []*domain.Node{n1}, Edges: nil})
 	p := newTestPromoter(sa, db)
 	if err := p.Promote(context.Background(), "repo1", "main", "sha-001", domain.Actor{ID: "service:veska", Kind: domain.ActorKindSystem}); err != nil {
 		t.Fatalf("first Promote: %v", err)
@@ -238,7 +238,7 @@ func TestPromote_Idempotent(t *testing.T) {
 
 	// Second promote with the same node.
 	n1b, _ := domain.NewNode("n1", "a.go", "A", domain.KindFunction)
-	sa.StageFile("repo1", "main", "a.go", []*domain.Node{n1b}, nil)
+	sa.Stage("repo1", "main", "a.go", application.StagedFile{Nodes: []*domain.Node{n1b}, Edges: nil})
 	if err := p.Promote(context.Background(), "repo1", "main", "sha-002", domain.Actor{ID: "service:veska", Kind: domain.ActorKindSystem}); err != nil {
 		t.Fatalf("second Promote: %v", err)
 	}
@@ -268,7 +268,7 @@ func TestPromote_AdvancesLastPromotedSHA(t *testing.T) {
 	actor := domain.Actor{ID: "service:veska", Kind: domain.ActorKindSystem}
 
 	n1, _ := domain.NewNode("n1", "a.go", "A", domain.KindFunction)
-	sa.StageFile("repo1", "main", "a.go", []*domain.Node{n1}, nil)
+	sa.Stage("repo1", "main", "a.go", application.StagedFile{Nodes: []*domain.Node{n1}, Edges: nil})
 	if err := p.Promote(context.Background(), "repo1", "main", "sha-001", actor); err != nil {
 		t.Fatalf("first Promote: %v", err)
 	}
@@ -278,7 +278,7 @@ func TestPromote_AdvancesLastPromotedSHA(t *testing.T) {
 
 	// Second promote on a different branch+sha overwrites both columns.
 	n2, _ := domain.NewNode("n2", "b.go", "B", domain.KindFunction)
-	sa.StageFile("repo1", "topic", "b.go", []*domain.Node{n2}, nil)
+	sa.Stage("repo1", "topic", "b.go", application.StagedFile{Nodes: []*domain.Node{n2}, Edges: nil})
 	if err := p.Promote(context.Background(), "repo1", "topic", "sha-002", actor); err != nil {
 		t.Fatalf("second Promote: %v", err)
 	}
@@ -298,7 +298,7 @@ func TestPromote_AdvancesLastPromotedSHA(t *testing.T) {
 	// Defensive: a promote with an empty SHA must NOT clobber the stored value
 	// (caller-error guard inside the transaction body).
 	n3, _ := domain.NewNode("n3", "c.go", "C", domain.KindFunction)
-	sa.StageFile("repo1", "topic", "c.go", []*domain.Node{n3}, nil)
+	sa.Stage("repo1", "topic", "c.go", application.StagedFile{Nodes: []*domain.Node{n3}, Edges: nil})
 	if err := p.Promote(context.Background(), "repo1", "topic", "", actor); err != nil {
 		t.Fatalf("empty-sha Promote: %v", err)
 	}
@@ -312,7 +312,7 @@ func TestPromote_AdvancesLastPromotedSHA(t *testing.T) {
 	// is left untouched.
 	insertTestRepo(t, db, "repo2")
 	n4, _ := domain.NewNode("n4", "d.go", "D", domain.KindFunction)
-	sa.StageFile("repo2", "", "d.go", []*domain.Node{n4}, nil)
+	sa.Stage("repo2", "", "d.go", application.StagedFile{Nodes: []*domain.Node{n4}, Edges: nil})
 	if err := p.Promote(context.Background(), "repo2", "", "sha-emptybr", actor); err != nil {
 		t.Fatalf("empty-branch Promote: %v", err)
 	}
@@ -389,7 +389,7 @@ func TestPromote_WritesFTS(t *testing.T) {
 	// Mirror the DoD example: kind=function, symbol path (n.Name) =
 	// "pkg/api/closeFinding". n.Path (file_path) is irrelevant here.
 	n, _ := domain.NewNode("n1", "src/api.go", "pkg/api/closeFinding", domain.KindFunction)
-	sa.StageFile("repo-fts", "main", "src/api.go", []*domain.Node{n}, nil)
+	sa.Stage("repo-fts", "main", "src/api.go", application.StagedFile{Nodes: []*domain.Node{n}, Edges: nil})
 
 	p := newTestPromoter(sa, db)
 	if err := p.Promote(context.Background(), "repo-fts", "main", "sha", domain.Actor{ID: "service:veska", Kind: domain.ActorKindSystem}); err != nil {
@@ -444,7 +444,7 @@ func TestPromote_FTS_RemovesStaleRowsOnReParse(t *testing.T) {
 	sa := application.NewStagingArea()
 	a, _ := domain.NewNode("a", "f.go", "closeFinding", domain.KindFunction)
 	b, _ := domain.NewNode("b", "f.go", "openFinding", domain.KindFunction)
-	sa.StageFile("repo-fts", "main", "f.go", []*domain.Node{a, b}, nil)
+	sa.Stage("repo-fts", "main", "f.go", application.StagedFile{Nodes: []*domain.Node{a, b}, Edges: nil})
 
 	p := newTestPromoter(sa, db)
 	if err := p.Promote(context.Background(), "repo-fts", "main", "sha-1", domain.Actor{ID: "service:veska", Kind: domain.ActorKindSystem}); err != nil {
@@ -453,7 +453,7 @@ func TestPromote_FTS_RemovesStaleRowsOnReParse(t *testing.T) {
 
 	// Re-promote with only one of the two nodes.
 	a2, _ := domain.NewNode("a", "f.go", "closeFinding", domain.KindFunction)
-	sa.StageFile("repo-fts", "main", "f.go", []*domain.Node{a2}, nil)
+	sa.Stage("repo-fts", "main", "f.go", application.StagedFile{Nodes: []*domain.Node{a2}, Edges: nil})
 	if err := p.Promote(context.Background(), "repo-fts", "main", "sha-2", domain.Actor{ID: "service:veska", Kind: domain.ActorKindSystem}); err != nil {
 		t.Fatalf("Promote 2: %v", err)
 	}
@@ -492,7 +492,7 @@ func TestPromote_AtomicTransaction(t *testing.T) {
 		)
 		nodes = append(nodes, n)
 	}
-	sa.StageFile("repo1", "main", "multi.go", nodes, nil)
+	sa.Stage("repo1", "main", "multi.go", application.StagedFile{Nodes: nodes, Edges: nil})
 
 	p := newTestPromoter(sa, db)
 	if err := p.Promote(context.Background(), "repo1", "main", "sha-tx", domain.Actor{ID: "service:veska", Kind: domain.ActorKindSystem}); err != nil {

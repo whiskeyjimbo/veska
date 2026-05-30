@@ -229,7 +229,7 @@ func TestDirtyOf_UsesStagedNodes(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewNode: %v", err)
 	}
-	staging.StageFile("r", "main", "foo.go", []*domain.Node{n}, nil)
+	staging.Stage("r", "main", "foo.go", application.StagedFile{Nodes: []*domain.Node{n}, Edges: nil})
 
 	edges := &fakeEdges{inbound: map[string][]string{
 		"staged-1": {"caller-a"},
@@ -288,7 +288,7 @@ func TestDirtyOf_SkipsUnchangedSymbols(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewNode changed: %v", err)
 	}
-	staging.StageFile("r", "main", "foo.go", []*domain.Node{unchanged, changed}, nil)
+	staging.Stage("r", "main", "foo.go", application.StagedFile{Nodes: []*domain.Node{unchanged, changed}, Edges: nil})
 
 	edges := &fakeEdges{inbound: map[string][]string{
 		"unchanged": {"caller-of-same"},
