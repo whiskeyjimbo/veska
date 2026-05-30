@@ -10,6 +10,7 @@ import (
 
 	"github.com/whiskeyjimbo/veska/internal/application/embedder"
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/repo"
+	"github.com/whiskeyjimbo/veska/internal/infrastructure/sqlite"
 	"github.com/whiskeyjimbo/veska/internal/platform/observability"
 )
 
@@ -103,7 +104,8 @@ func (d *Daemon) awaitListenerSockets() {
 // consistent store; without it a restart leaves search returning ≤ 0 hits until
 // a content change forces re-embedding.
 func (d *Daemon) rehydrateVectors() {
-	if counts, err := embedder.RehydrateVectors(d.ctx, d.pools.ReadDB, d.vectors); err != nil {
+	archive := sqlite.NewEmbeddingArchive(d.pools.ReadDB, d.pools.Write)
+	if counts, err := embedder.RehydrateVectors(d.ctx, archive, d.vectors); err != nil {
 		slog.Error("daemon: rehydrate vector store", "err", err)
 	} else if total := sumCounts(counts); total > 0 {
 		slog.Info("daemon: rehydrated vectors", "rows", total, "buckets", len(counts))
