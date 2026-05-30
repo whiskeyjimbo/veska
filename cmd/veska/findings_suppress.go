@@ -1,33 +1,20 @@
 package main
 
 import (
-	"encoding/json"
 	"fmt"
-	"text/tabwriter"
-	"time"
 
 	"github.com/spf13/cobra"
+
+	"github.com/whiskeyjimbo/veska/internal/cli/findingscmd"
 	"github.com/whiskeyjimbo/veska/internal/cli/mcpclient"
 )
 
 // findings_suppress.go wires the suppression family of MCP tools
 // (eng_suppress_finding, eng_list_suppressions, eng_get_suppression,
-// eng_close_suppression) onto the CLI so users do not have to craft
-// JSON-RPC payloads to suppress findings — parity with `findings list /
-// show / close / reopen` (solov2-nwef).
-
-type suppressionView struct {
-	SuppressionID string  `json:"suppression_id"`
-	Scope         string  `json:"scope"`
-	Target        string  `json:"target"`
-	Branch        *string `json:"branch,omitempty"`
-	Rule          *string `json:"rule,omitempty"`
-	Reason        string  `json:"reason"`
-	ExpiresAt     *int64  `json:"expires_at,omitempty"`
-	CreatedAt     int64   `json:"created_at"`
-	ActorID       string  `json:"actor_id"`
-	ActorKind     string  `json:"actor_kind"`
-}
+// eng_close_suppression) onto the CLI so users do not have to craft JSON-RPC
+// payloads to suppress findings — parity with `findings list / show / close /
+// reopen` (solov2-nwef). The list/show rendering lives in
+// internal/cli/findingscmd; these constructors are Cobra glue (solov2-0omh.7).
 
 // findingsSuppressCmd is `veska findings suppress <finding_id> --reason ...`.
 // Wraps eng_suppress_finding. branch/repo_id are derived from the finding row.
@@ -98,45 +85,14 @@ func suppressionsListCmd() *cobra.Command {
 		Args:         cobra.NoArgs,
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			params := map[string]any{}
-			if repoFlag != "" {
-				params["repo_id"] = repoFlag
-			} else if rid := autoResolveRepo(cmd.Context(), cmd.ErrOrStderr()); rid != "" {
-				params["repo_id"] = rid
-			}
-			if branch != "" {
-				params["branch"] = branch
-			}
-			var resp struct {
-				Suppressions []suppressionView `json:"suppressions"`
-			}
-			if err := mcpclient.Call(cmd.Context(), "eng_list_suppressions", params, &resp); err != nil {
-				return fmt.Errorf("findings suppressions list: %w", err)
-			}
-			w := cmd.OutOrStdout()
-			if jsonOut {
-				enc := json.NewEncoder(w)
-				enc.SetIndent("", "  ")
-				return enc.Encode(resp)
-			}
-			if len(resp.Suppressions) == 0 {
-				fmt.Fprintln(w, "no suppressions")
-				return nil
-			}
-			tw := tabwriter.NewWriter(w, 0, 0, 2, ' ', 0)
-			fmt.Fprintln(tw, "SUPPRESSION_ID\tSCOPE\tTARGET\tBRANCH\tREASON")
-			for _, s := range resp.Suppressions {
-				br := "-"
-				if s.Branch != nil {
-					br = *s.Branch
-				}
-				reason := s.Reason
-				if len(reason) > 60 {
-					reason = reason[:57] + "..."
-				}
-				fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\n", s.SuppressionID, s.Scope, s.Target, br, reason)
-			}
-			return tw.Flush()
+			return findingscmd.RunSuppressionsList(cmd.Context(), findingscmd.SuppressionsListParams{
+				RepoID:      repoFlag,
+				Branch:      branch,
+				JSONOut:     jsonOut,
+				Out:         cmd.OutOrStdout(),
+				ErrOut:      cmd.ErrOrStderr(),
+				ResolveRepo: autoResolveRepo,
+			})
 		},
 	}
 	cmd.Flags().StringVar(&repoFlag, "repo", "", "repo id or short_id (default: the sole registered repo)")
@@ -153,36 +109,7 @@ func suppressionsShowCmd() *cobra.Command {
 		Args:         cobra.ExactArgs(1),
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			var resp struct {
-				Suppression suppressionView `json:"suppression"`
-			}
-			if err := mcpclient.Call(cmd.Context(), "eng_get_suppression",
-				map[string]any{"suppression_id": args[0]}, &resp); err != nil {
-				return fmt.Errorf("findings suppressions show: %w", err)
-			}
-			w := cmd.OutOrStdout()
-			if jsonOut {
-				enc := json.NewEncoder(w)
-				enc.SetIndent("", "  ")
-				return enc.Encode(resp.Suppression)
-			}
-			s := resp.Suppression
-			fmt.Fprintf(w, "suppression_id : %s\n", s.SuppressionID)
-			fmt.Fprintf(w, "scope          : %s\n", s.Scope)
-			fmt.Fprintf(w, "target         : %s\n", s.Target)
-			if s.Branch != nil {
-				fmt.Fprintf(w, "branch         : %s\n", *s.Branch)
-			}
-			if s.Rule != nil {
-				fmt.Fprintf(w, "rule           : %s\n", *s.Rule)
-			}
-			fmt.Fprintf(w, "actor          : %s (%s)\n", s.ActorID, s.ActorKind)
-			fmt.Fprintf(w, "created_at     : %s\n", time.Unix(s.CreatedAt, 0).UTC().Format(time.RFC3339))
-			if s.ExpiresAt != nil {
-				fmt.Fprintf(w, "expires_at     : %s\n", time.Unix(*s.ExpiresAt, 0).UTC().Format(time.RFC3339))
-			}
-			fmt.Fprintf(w, "reason         :\n  %s\n", s.Reason)
-			return nil
+			return findingscmd.RunSuppressionsShow(cmd.Context(), args[0], jsonOut, cmd.OutOrStdout())
 		},
 	}
 	cmd.Flags().BoolVar(&jsonOut, "json", false, "emit JSON")

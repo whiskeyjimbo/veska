@@ -20,7 +20,6 @@
 #     for a missing file is itself a failure).
 #
 # Blank lines and `#` comments are ignored.
-cmd/veska/findings.go 515
 internal/application/embedder/embedder.go 530
 internal/application/search/search.go 593
 internal/cli/daemon/wire.go 1234
