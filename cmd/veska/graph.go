@@ -139,7 +139,7 @@ func changedCmd() *cobra.Command {
   veska changed v1.2.0           # v1.2.0..HEAD
   veska changed v1.2.0 v1.3.0    # v1.2.0..v1.3.0
 
-The --ref-a/--ref-b flags remain accepted and take precedence over positional args (solov2-izh6.4).`,
+The --ref-a/--ref-b flags remain accepted and take precedence over positional args.`,
 		Args:         cobra.MaximumNArgs(2),
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -389,7 +389,7 @@ func looksLikeNodeID(s string) bool {
 		return false
 	}
 	for _, r := range s {
-		if !((r >= '0' && r <= '9') || (r >= 'a' && r <= 'f')) {
+		if (r < '0' || r > '9') && (r < 'a' || r > 'f') {
 			return false
 		}
 	}

@@ -47,10 +47,10 @@ func runAliasSuggestPrompt(ctx context.Context, db *sql.DB, repoID, canonicalURL
 	}
 	resp := strings.TrimSpace(line)
 	lower := strings.ToLower(resp)
-	switch {
-	case lower == "" || lower == "n" || lower == "no":
+	switch lower {
+	case "", "n", "no":
 		return nil
-	case lower == "y" || lower == "yes":
+	case "y", "yes":
 		// Bind the suggested name.
 	default:
 		// Anything else is taken as a custom name.

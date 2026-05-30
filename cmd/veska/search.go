@@ -1105,27 +1105,6 @@ func resolveRepoViaDaemonInfo(ctx context.Context, target string) (repoID, branc
 	return "", "", searchHeaderInfo{}, false
 }
 
-// scoreTier maps a raw vector score relative to the top hit in this query
-// into a human label. The thresholds are deliberately loose — the embedder's
-// absolute score depends on model, query length, and corpus, so any fixed
-// cut-off is wrong on some corpus. A relative tier ("the top hit is 100% of
-// the top hit; this one is 88% of it") gives the user something to act on
-// without pretending to be calibrated.
-func scoreTier(s, top float32) string {
-	if top <= 0 {
-		return "weak"
-	}
-	ratio := s / top
-	switch {
-	case ratio >= 0.95:
-		return "top"
-	case ratio >= 0.80:
-		return "strong"
-	default:
-		return "weak"
-	}
-}
-
 // pendingEmbedsHint asks the daemon (if reachable) how many embeds are still
 // queued so a zero-result search can tell the user "the index is still
 // warming up" instead of staying silent. Returns ok=false if the daemon is
