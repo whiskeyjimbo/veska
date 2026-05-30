@@ -21,12 +21,10 @@ import (
 // ── fake repo ──────────────────────────────────────────────────────────────
 
 type fakeRepo struct {
-	stale      []ports.StaleFinding
-	staleErr   error
-	closeErr   error
-	refreshErr error
-	edgesErr   error
-	sigErr     error
+	stale    []ports.StaleFinding
+	staleErr error
+	edgesErr error
+	sigErr   error
 	// applyErr is returned from ApplyDecisions to simulate a tx-level
 	// failure (e.g. Commit fails) so callers can assert metrics-only-on-
 	// success.
@@ -59,15 +57,6 @@ func (f *fakeRepo) StaleFindingsForFile(_ context.Context, _, _, _ string) ([]po
 	return f.stale, nil
 }
 
-func (f *fakeRepo) CloseAsRevalidatedObsolete(_ context.Context, _, _, findingID string, closedAt int64) error {
-	if f.closeErr != nil {
-		return f.closeErr
-	}
-	f.closedIDs = append(f.closedIDs, findingID)
-	f.closedAt = append(f.closedAt, closedAt)
-	return nil
-}
-
 func (f *fakeRepo) HasInboundEdges(_ context.Context, _, _, nodeID string) (bool, error) {
 	if f.edgesErr != nil {
 		return false, f.edgesErr
@@ -81,16 +70,6 @@ func (f *fakeRepo) NodeSignaturePair(_ context.Context, _, _, nodeID string) (st
 	}
 	pair := f.sigs[nodeID]
 	return pair[0], pair[1], nil
-}
-
-func (f *fakeRepo) RefreshAnchorHash(_ context.Context, _, _, findingID, newHash string, at int64) error {
-	if f.refreshErr != nil {
-		return f.refreshErr
-	}
-	f.refreshedIDs = append(f.refreshedIDs, findingID)
-	f.refreshedHsh = append(f.refreshedHsh, newHash)
-	f.refreshedAt = append(f.refreshedAt, at)
-	return nil
 }
 
 func (f *fakeRepo) ApplyDecisions(_ context.Context, _, _ string, decisions []ports.FindingDecision, at int64) error {
