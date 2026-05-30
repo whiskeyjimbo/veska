@@ -1,4 +1,4 @@
-package main
+package searchcmd
 
 import (
 	"bytes"
@@ -49,7 +49,7 @@ func TestRunAcceptancePrompt_YesPromotes(t *testing.T) {
 		Stdin:  strings.NewReader("y\n"),
 		Stdout: &out,
 	}
-	if err := runAcceptancePrompt(context.Background(), pools.Write, rec, "https://example.com/foo/bar", deps); err != nil {
+	if err := RunAcceptancePrompt(context.Background(), pools.Write, rec, "https://example.com/foo/bar", deps); err != nil {
 		t.Fatalf("prompt: %v", err)
 	}
 
@@ -79,7 +79,7 @@ func TestRunAcceptancePrompt_NoKeepsEphemeral(t *testing.T) {
 		Stdin:  strings.NewReader("n\n"),
 		Stdout: &bytes.Buffer{},
 	}
-	if err := runAcceptancePrompt(context.Background(), pools.Write, rec, "https://example.com/foo/bar", deps); err != nil {
+	if err := RunAcceptancePrompt(context.Background(), pools.Write, rec, "https://example.com/foo/bar", deps); err != nil {
 		t.Fatalf("prompt: %v", err)
 	}
 
@@ -105,7 +105,7 @@ func TestRunAcceptancePrompt_EmptyAnswerTreatedAsNo(t *testing.T) {
 		Stdin:  strings.NewReader("\n"),
 		Stdout: &bytes.Buffer{},
 	}
-	if err := runAcceptancePrompt(context.Background(), pools.Write, rec, "https://example.com/foo/bar", deps); err != nil {
+	if err := RunAcceptancePrompt(context.Background(), pools.Write, rec, "https://example.com/foo/bar", deps); err != nil {
 		t.Fatalf("prompt: %v", err)
 	}
 
@@ -128,7 +128,7 @@ func TestRunAcceptancePrompt_NonTTYPrintsHintNoWrite(t *testing.T) {
 		Stdin:  strings.NewReader(""),
 		Stdout: &out,
 	}
-	if err := runAcceptancePrompt(context.Background(), pools.Write, rec, "https://example.com/foo/bar", deps); err != nil {
+	if err := RunAcceptancePrompt(context.Background(), pools.Write, rec, "https://example.com/foo/bar", deps); err != nil {
 		t.Fatalf("prompt: %v", err)
 	}
 
@@ -159,7 +159,7 @@ func TestRunAcceptancePrompt_AlreadyPromptedIsNoOp(t *testing.T) {
 		Stdin:  strings.NewReader("y\n"),
 		Stdout: &out,
 	}
-	if err := runAcceptancePrompt(context.Background(), pools.Write, rec, "https://example.com/foo/bar", deps); err != nil {
+	if err := RunAcceptancePrompt(context.Background(), pools.Write, rec, "https://example.com/foo/bar", deps); err != nil {
 		t.Fatalf("prompt: %v", err)
 	}
 	if called {
@@ -197,7 +197,7 @@ func TestRunAcceptancePrompt_TrackedRowIsNoOp(t *testing.T) {
 		Stdin:  strings.NewReader(""),
 		Stdout: &out,
 	}
-	if err := runAcceptancePrompt(context.Background(), pools.Write, rec, "https://example.com/x", deps); err != nil {
+	if err := RunAcceptancePrompt(context.Background(), pools.Write, rec, "https://example.com/x", deps); err != nil {
 		t.Fatalf("prompt: %v", err)
 	}
 }
@@ -215,7 +215,7 @@ func TestRunAcceptancePrompt_PromotionIsInPlace(t *testing.T) {
 		Stdin:  strings.NewReader("y\n"),
 		Stdout: &bytes.Buffer{},
 	}
-	_ = runAcceptancePrompt(context.Background(), pools.Write, rec, "https://example.com/foo/bar", deps)
+	_ = RunAcceptancePrompt(context.Background(), pools.Write, rec, "https://example.com/foo/bar", deps)
 
 	// AC4: same repo_id, same root_path, no row replacement.
 	var afterID, afterPath, afterKind string

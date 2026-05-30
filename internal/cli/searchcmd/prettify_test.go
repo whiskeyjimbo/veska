@@ -1,4 +1,4 @@
-package main
+package searchcmd
 
 import (
 	"path/filepath"
@@ -10,7 +10,7 @@ import (
 // rows that actually live under that cache dir.
 func TestPrettifyEphemeralPaths(t *testing.T) {
 	cacheRepoDir := filepath.Join("/home/u/.cache/veska/repos", "3336b2ee32663108e30de97b6c87e528922780c5c73b744e99059049c19f95eb")
-	env := searchEnvelope{Results: []searchHitView{
+	env := SearchEnvelope{Results: []SearchHitView{
 		{FilePath: filepath.Join(cacheRepoDir, "flag.go"), LineStart: 194},
 		{FilePath: filepath.Join(cacheRepoDir, "golangflag.go"), LineStart: 74},
 		{FilePath: "/tmp/junior/greetlib/greet.go", LineStart: 1}, // unrelated row
@@ -30,7 +30,7 @@ func TestPrettifyEphemeralPaths(t *testing.T) {
 }
 
 func TestPrettifyEphemeralPaths_Noops(t *testing.T) {
-	env := searchEnvelope{Results: []searchHitView{{FilePath: "/x/y.go"}}}
+	env := SearchEnvelope{Results: []SearchHitView{{FilePath: "/x/y.go"}}}
 	prettifyEphemeralPaths(&env, "", "pflag")
 	prettifyEphemeralPaths(&env, "/some/cache", "")
 	prettifyEphemeralPaths(nil, "/some/cache", "pflag")

@@ -1,4 +1,4 @@
-package main
+package searchcmd
 
 import (
 	"bytes"
@@ -27,8 +27,8 @@ func TestIsGitURL(t *testing.T) {
 		{"foo-bar", false},
 	}
 	for _, c := range cases {
-		if got := isGitURL(c.in); got != c.want {
-			t.Errorf("isGitURL(%q) = %v, want %v", c.in, got, c.want)
+		if got := IsGitURL(c.in); got != c.want {
+			t.Errorf("IsGitURL(%q) = %v, want %v", c.in, got, c.want)
 		}
 	}
 }
@@ -46,7 +46,7 @@ func TestRenderSearchResults_JSONMatchesMCPEnvelope(t *testing.T) {
 		},
 		DegradedReasons: []string{"embedder_offline_lexical_fallback"},
 	}
-	if err := renderSearchResults(&buf, resp, true); err != nil {
+	if err := RenderSearchResults(&buf, resp, true); err != nil {
 		t.Fatalf("renderSearchResults: %v", err)
 	}
 	var got struct {
@@ -83,7 +83,7 @@ func TestRenderSearchResults_HumanFormatIncludesKey(t *testing.T) {
 			{NodeID: "n1", Score: 0.7, SymbolPath: "pkg.Foo", FilePath: "a.go", Kind: "function", LineStart: 10, LineEnd: 12},
 		},
 	}
-	if err := renderSearchResults(&buf, resp, false); err != nil {
+	if err := RenderSearchResults(&buf, resp, false); err != nil {
 		t.Fatalf("renderSearchResults: %v", err)
 	}
 	out := buf.String()
@@ -100,7 +100,7 @@ func TestRenderSearchResults_HumanFormatIncludesKey(t *testing.T) {
 func TestRenderSearchResults_EmptyResultsJSONHasResultsKey(t *testing.T) {
 	var buf bytes.Buffer
 	resp := search.Response{}
-	if err := renderSearchResults(&buf, resp, true); err != nil {
+	if err := RenderSearchResults(&buf, resp, true); err != nil {
 		t.Fatalf("renderSearchResults: %v", err)
 	}
 	if !strings.Contains(buf.String(), `"results": []`) {
