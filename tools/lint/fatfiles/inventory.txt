@@ -30,7 +30,6 @@ internal/infrastructure/secretsscanner/secretsscanner.go 571
 internal/infrastructure/sqlite/graph_repo.go 539
 internal/infrastructure/sqlite/promotion_callresolve.go 519
 internal/infrastructure/sqlite/promotion_store.go 541
-internal/infrastructure/treesitter/go.go 906
 internal/infrastructure/treesitter/go_query.go 738
 internal/infrastructure/treesitter/ts.go 521
 internal/infrastructure/vulnsource/osv/osv.go 560
