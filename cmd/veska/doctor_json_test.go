@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
+	"github.com/whiskeyjimbo/veska/internal/cli/doctorcmd"
 )
 
 // captureJSONOutput executes cmd with --json and returns the parsed envelope.
@@ -132,7 +133,7 @@ func TestDoctorJSONEnvelopeStatus(t *testing.T) {
 func TestDoctorJSONEnvelopeStub(t *testing.T) {
 	// post_promotion_queue is a stub — data should be an empty object.
 	cmd := doctorSubCmd("post_promotion_queue", "stub", func(jsonOut bool, w io.Writer) error {
-		return stubOK("post_promotion_queue", jsonOut, w)
+		return doctorcmd.StubOK("post_promotion_queue", jsonOut, w)
 	})
 	m, err := captureJSONOutput(cmd)
 	if err != nil {
