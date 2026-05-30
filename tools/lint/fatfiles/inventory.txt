@@ -29,7 +29,8 @@ internal/infrastructure/mcp/tools_search.go 677
 internal/infrastructure/repo/registry.go 579
 internal/infrastructure/secretsscanner/secretsscanner.go 571
 internal/infrastructure/sqlite/graph_repo.go 539
-internal/infrastructure/sqlite/promotion_store.go 1027
+internal/infrastructure/sqlite/promotion_callresolve.go 519
+internal/infrastructure/sqlite/promotion_store.go 541
 internal/infrastructure/treesitter/go.go 906
 internal/infrastructure/treesitter/go_query.go 738
 internal/infrastructure/treesitter/ts.go 521
