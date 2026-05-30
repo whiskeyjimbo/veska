@@ -1,4 +1,4 @@
-package main
+package repocmd
 
 import (
 	"strings"
@@ -29,7 +29,7 @@ func TestResolveCLIRepoID_ErrorWording(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			_, err := resolveCLIRepoID(recs, tc.input)
+			_, err := ResolveCLIRepoID(recs, tc.input)
 			if err == nil {
 				t.Fatalf("expected error, got nil")
 			}
@@ -44,7 +44,7 @@ func TestResolveCLIRepoID_MatchesByAlias(t *testing.T) {
 	recs := []repo.Record{
 		{RepoID: "abcd1234ef567890", Aliases: []string{"greetcli"}},
 	}
-	got, err := resolveCLIRepoID(recs, "greetcli")
+	got, err := ResolveCLIRepoID(recs, "greetcli")
 	if err != nil {
 		t.Fatalf("alias lookup failed: %v", err)
 	}

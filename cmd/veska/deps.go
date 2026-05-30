@@ -13,6 +13,7 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/cli/mcpclient"
 
 	"github.com/whiskeyjimbo/veska/internal/application/extindex"
+	"github.com/whiskeyjimbo/veska/internal/cli/repocmd"
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/repo"
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/sqlite"
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/treesitter"
@@ -95,7 +96,7 @@ func depsListCmd() *cobra.Command {
 			params := map[string]any{}
 			switch {
 			case len(args) == 1:
-				rid, err := resolveRepoArg(cmd.Context(), args[0])
+				rid, err := repocmd.ResolveRepoArg(cmd.Context(), args[0])
 				if err != nil {
 					return fmt.Errorf("deps: %w", err)
 				}
@@ -202,7 +203,7 @@ func depsIndexCmd() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			modulePath := args[0]
 
-			db, closeFn, err := openLocalDB()
+			db, closeFn, err := repocmd.OpenLocalDB()
 			if err != nil {
 				return fmt.Errorf("deps index: %w", err)
 			}
@@ -306,7 +307,7 @@ func lookupRepoRootAndBranch(ctx context.Context, db *sql.DB, repoID string) (st
 	if err != nil {
 		return "", "", fmt.Errorf("list repos: %w", err)
 	}
-	rec, err := resolveCLIRepoID(recs, repoID)
+	rec, err := repocmd.ResolveCLIRepoID(recs, repoID)
 	if err != nil {
 		return "", "", err
 	}
