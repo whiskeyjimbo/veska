@@ -1,5 +1,10 @@
 // Package mcp provides a JSON-RPC 2.0 server over Unix domain sockets.
 // Two listeners are started: cli.sock (actor_kind=human) and mcp.sock (actor_kind=agent).
+//
+// File-naming convention: every MCP tool source file uses the tools_ prefix —
+// tools_<area>.go (e.g. tools_graph.go, tools_promote.go), with its test in
+// tools_<area>_test.go. (Historically some single-tool files used a singular
+// tool_ prefix; that was normalised away in solov2-u4mv.6.)
 package mcp
 
 import (
