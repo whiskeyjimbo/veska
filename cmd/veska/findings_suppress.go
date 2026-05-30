@@ -1,12 +1,9 @@
 package main
 
 import (
-	"fmt"
-
 	"github.com/spf13/cobra"
 
 	"github.com/whiskeyjimbo/veska/internal/cli/findingscmd"
-	"github.com/whiskeyjimbo/veska/internal/cli/mcpclient"
 )
 
 // findings_suppress.go wires the suppression family of MCP tools
@@ -30,26 +27,13 @@ func findingsSuppressCmd() *cobra.Command {
 		Args:         cobra.ExactArgs(1),
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if reason == "" {
-				return fmt.Errorf("--reason is required")
-			}
-			params := map[string]any{"finding_id": args[0], "reason": reason}
-			if scope != "" {
-				params["scope"] = scope
-			}
-			if expiresAt != 0 {
-				params["expires_at"] = expiresAt
-			}
-			var resp struct {
-				SuppressionID string `json:"suppression_id"`
-				Scope         string `json:"scope"`
-				Branch        string `json:"branch"`
-			}
-			if err := mcpclient.Call(cmd.Context(), "eng_suppress_finding", params, &resp); err != nil {
-				return fmt.Errorf("findings suppress: %w", err)
-			}
-			fmt.Fprintf(cmd.OutOrStdout(), "suppressed: %s (scope=%s)\n", resp.SuppressionID, resp.Scope)
-			return nil
+			return findingscmd.RunSuppress(cmd.Context(), findingscmd.SuppressParams{
+				FindingID: args[0],
+				Reason:    reason,
+				Scope:     scope,
+				ExpiresAt: expiresAt,
+				Out:       cmd.OutOrStdout(),
+			})
 		},
 	}
 	cmd.Flags().StringVar(&reason, "reason", "", "suppression reason (required)")
@@ -124,19 +108,7 @@ func suppressionsCloseCmd() *cobra.Command {
 		Args:         cobra.ExactArgs(1),
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			params := map[string]any{"suppression_id": args[0]}
-			if repoFlag != "" {
-				params["repo_id"] = repoFlag
-			}
-			var resp struct {
-				SuppressionID string `json:"suppression_id"`
-				ExpiresAt     int64  `json:"expires_at"`
-			}
-			if err := mcpclient.Call(cmd.Context(), "eng_close_suppression", params, &resp); err != nil {
-				return fmt.Errorf("findings suppressions close: %w", err)
-			}
-			fmt.Fprintf(cmd.OutOrStdout(), "closed: %s (expires_at=%d)\n", resp.SuppressionID, resp.ExpiresAt)
-			return nil
+			return findingscmd.RunSuppressionsClose(cmd.Context(), args[0], repoFlag, cmd.OutOrStdout())
 		},
 	}
 	cmd.Flags().StringVar(&repoFlag, "repo", "", "repo id or short_id for audit attribution")

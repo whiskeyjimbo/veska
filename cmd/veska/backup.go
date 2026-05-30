@@ -5,12 +5,10 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"sort"
 	"strings"
-	"text/tabwriter"
-	"time"
 
 	"github.com/spf13/cobra"
+	"github.com/whiskeyjimbo/veska/internal/cli/backupcmd"
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/backup"
 	"github.com/whiskeyjimbo/veska/internal/platform/config"
 	"github.com/whiskeyjimbo/veska/internal/platform/doctor"
@@ -44,106 +42,18 @@ func backupListCmd() *cobra.Command {
 		Short:        "List backup tarballs in the backup directory, newest first",
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			w := cmd.OutOrStdout()
-			if backupDir == "" {
-				// solov2-n57f: read from the canonical $VESKA_HOME/backups
-				// but fall back to legacy ~/.veska-backups so existing
-				// tarballs remain listable post-upgrade.
-				dir, err := resolveBackupReadDir()
-				if err != nil {
-					return fmt.Errorf("backup list: %w", err)
-				}
-				backupDir = dir
-			}
-			entries, err := os.ReadDir(backupDir)
-			if err != nil {
-				if os.IsNotExist(err) {
-					if jsonOut {
-						return json.NewEncoder(w).Encode(struct {
-							BackupDir string `json:"backup_dir"`
-							Backups   []any  `json:"backups"`
-						}{backupDir, nil})
-					}
-					fmt.Fprintf(w, "no backups: %s does not exist\n", backupDir)
-					return nil
-				}
-				return fmt.Errorf("backup list: %w", err)
-			}
-			type row struct {
-				Name    string    `json:"name"`
-				Path    string    `json:"path"`
-				Size    int64     `json:"size_bytes"`
-				ModTime time.Time `json:"mtime"`
-				Kind    string    `json:"kind"` // "user" or "pre-migration"
-			}
-			var rows []row
-			for _, e := range entries {
-				if e.IsDir() {
-					continue
-				}
-				name := e.Name()
-				if !strings.HasSuffix(name, ".tar.gz") {
-					continue
-				}
-				kind := ""
-				switch {
-				case strings.HasPrefix(name, "veska-backup-"):
-					kind = "user"
-				case strings.HasPrefix(name, "auto-pre-migration-"):
-					kind = "pre-migration"
-				default:
-					continue
-				}
-				info, err := e.Info()
-				if err != nil {
-					continue
-				}
-				rows = append(rows, row{
-					Name:    name,
-					Path:    filepath.Join(backupDir, name),
-					Size:    info.Size(),
-					ModTime: info.ModTime(),
-					Kind:    kind,
-				})
-			}
-			sort.Slice(rows, func(i, j int) bool { return rows[i].ModTime.After(rows[j].ModTime) })
-			if jsonOut {
-				return json.NewEncoder(w).Encode(struct {
-					BackupDir string `json:"backup_dir"`
-					Backups   []row  `json:"backups"`
-				}{backupDir, rows})
-			}
-			if len(rows) == 0 {
-				fmt.Fprintf(w, "no backups in %s\n", backupDir)
-				return nil
-			}
-			fmt.Fprintf(w, "backups in %s:\n", backupDir)
-			tw := tabwriter.NewWriter(w, 0, 0, 2, ' ', 0)
-			fmt.Fprintln(tw, "NAME\tKIND\tSIZE\tMTIME")
-			for _, r := range rows {
-				fmt.Fprintf(tw, "%s\t%s\t%s\t%s\n", r.Name, r.Kind, humanSize(r.Size), r.ModTime.UTC().Format(time.RFC3339))
-			}
-			return tw.Flush()
+			return backupcmd.RunList(backupcmd.ListParams{
+				BackupDir:   backupDir,
+				JSONOut:     jsonOut,
+				Out:         cmd.OutOrStdout(),
+				ResolveDir:  resolveBackupReadDir,
+				FormatBytes: humanBytes,
+			})
 		},
 	}
 	cmd.Flags().StringVar(&backupDir, "backup-dir", "", "directory to list (default: $VESKA_HOME/backups, falling back to ~/.veska-backups when empty)")
 	cmd.Flags().BoolVar(&jsonOut, "json", false, "emit JSON")
 	return cmd
-}
-
-// humanSize renders a byte count in a compact human-readable form.
-func humanSize(n int64) string {
-	const k = 1024
-	switch {
-	case n < k:
-		return fmt.Sprintf("%dB", n)
-	case n < k*k:
-		return fmt.Sprintf("%.1fKB", float64(n)/k)
-	case n < k*k*k:
-		return fmt.Sprintf("%.1fMB", float64(n)/k/k)
-	default:
-		return fmt.Sprintf("%.1fGB", float64(n)/k/k/k)
-	}
 }
 
 // backupPruneCmd returns the "backup prune" subcommand.  It applies the
