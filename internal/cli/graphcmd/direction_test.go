@@ -1,4 +1,4 @@
-package main
+package graphcmd
 
 import "testing"
 
@@ -15,8 +15,8 @@ func TestNormalizeDirection(t *testing.T) {
 		"bogus":   "bogus",
 	}
 	for in, want := range cases {
-		if got := normalizeDirection(in); got != want {
-			t.Errorf("normalizeDirection(%q) = %q, want %q", in, got, want)
+		if got := NormalizeDirection(in); got != want {
+			t.Errorf("NormalizeDirection(%q) = %q, want %q", in, got, want)
 		}
 	}
 }
