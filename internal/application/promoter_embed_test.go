@@ -19,8 +19,8 @@ func TestPromote_EnqueuesPendingEmbedRefs(t *testing.T) {
 	sa := application.NewStagingArea()
 	n1, _ := domain.NewNode("n1", "a.go", "A", domain.KindFunction)
 	n2, _ := domain.NewNode("n2", "b.go", "B", domain.KindFunction)
-	sa.StageFile("repo1", "main", "a.go", []*domain.Node{n1}, nil)
-	sa.StageFile("repo1", "main", "b.go", []*domain.Node{n2}, nil)
+	sa.Stage("repo1", "main", "a.go", application.StagedFile{Nodes: []*domain.Node{n1}, Edges: nil})
+	sa.Stage("repo1", "main", "b.go", application.StagedFile{Nodes: []*domain.Node{n2}, Edges: nil})
 
 	p := newTestPromoter(sa, db)
 	if err := p.Promote(context.Background(), "repo1", "main", "sha",
@@ -76,7 +76,7 @@ func TestPromote_RepromoteResetsEmbedRef(t *testing.T) {
 
 	sa := application.NewStagingArea()
 	n1, _ := domain.NewNode("n1", "a.go", "A", domain.KindFunction)
-	sa.StageFile("repo1", "main", "a.go", []*domain.Node{n1}, nil)
+	sa.Stage("repo1", "main", "a.go", application.StagedFile{Nodes: []*domain.Node{n1}, Edges: nil})
 
 	p := newTestPromoter(sa, db)
 	if err := p.Promote(context.Background(), "repo1", "main", "sha-1",
@@ -94,7 +94,7 @@ func TestPromote_RepromoteResetsEmbedRef(t *testing.T) {
 
 	// Re-promote.
 	n1b, _ := domain.NewNode("n1", "a.go", "A", domain.KindFunction)
-	sa.StageFile("repo1", "main", "a.go", []*domain.Node{n1b}, nil)
+	sa.Stage("repo1", "main", "a.go", application.StagedFile{Nodes: []*domain.Node{n1b}, Edges: nil})
 	if err := p.Promote(context.Background(), "repo1", "main", "sha-2",
 		domain.Actor{ID: "service:veska", Kind: domain.ActorKindSystem}); err != nil {
 		t.Fatalf("Promote 2: %v", err)

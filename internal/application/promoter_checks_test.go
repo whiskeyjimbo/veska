@@ -34,7 +34,7 @@ func TestPromote_InvokesCheckRunnerPostCommit(t *testing.T) {
 
 	sa := application.NewStagingArea()
 	n, _ := domain.NewNode("n1", "a.go", "A", domain.KindFunction)
-	sa.StageFile("repo1", "main", "a.go", []*domain.Node{n}, nil)
+	sa.Stage("repo1", "main", "a.go", application.StagedFile{Nodes: []*domain.Node{n}, Edges: nil})
 
 	p := newTestPromoter(sa, db)
 	fr := &fakeCheckRunner{}
@@ -73,7 +73,7 @@ func TestPromote_PopulatesAddedLinesFromSeam(t *testing.T) {
 
 	sa := application.NewStagingArea()
 	n, _ := domain.NewNode("n1", "a.go", "A", domain.KindFunction)
-	sa.StageFile("repo1", "main", "a.go", []*domain.Node{n}, nil)
+	sa.Stage("repo1", "main", "a.go", application.StagedFile{Nodes: []*domain.Node{n}, Edges: nil})
 
 	p := newTestPromoter(sa, db)
 	fr := &fakeCheckRunner{}
@@ -114,7 +114,7 @@ func TestPromote_NoAddedLinesFunc(t *testing.T) {
 
 	sa := application.NewStagingArea()
 	n, _ := domain.NewNode("n1", "a.go", "A", domain.KindFunction)
-	sa.StageFile("repo1", "main", "a.go", []*domain.Node{n}, nil)
+	sa.Stage("repo1", "main", "a.go", application.StagedFile{Nodes: []*domain.Node{n}, Edges: nil})
 
 	p := newTestPromoter(sa, db)
 	fr := &fakeCheckRunner{}
@@ -137,7 +137,7 @@ func TestPromote_NoCheckRunner(t *testing.T) {
 
 	sa := application.NewStagingArea()
 	n, _ := domain.NewNode("n1", "a.go", "A", domain.KindFunction)
-	sa.StageFile("repo1", "main", "a.go", []*domain.Node{n}, nil)
+	sa.Stage("repo1", "main", "a.go", application.StagedFile{Nodes: []*domain.Node{n}, Edges: nil})
 
 	p := newTestPromoter(sa, db)
 	// Intentionally do not call SetCheckRunner.

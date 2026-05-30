@@ -376,7 +376,7 @@ func TestFindSymbol_StagingOverridesPromotedNode(t *testing.T) {
 
 	staged := mustNode(t, "node-1", "pkg/foo.go", "Foo", domain.KindMethod) // same ID, different kind
 	staging := application.NewStagingArea()
-	staging.StageFile("repo1", "main", "pkg/foo.go", []*domain.Node{staged}, nil)
+	staging.Stage("repo1", "main", "pkg/foo.go", application.StagedFile{Nodes: []*domain.Node{staged}, Edges: nil})
 
 	r := NewRegistry()
 	RegisterGraphTools(r, store, staging)
@@ -891,7 +891,7 @@ func TestGetFileNodes_ReturnsStagedNodesWhenPresent(t *testing.T) {
 	// Stage a different node for the same file.
 	staged := mustNode(t, "s1", "pkg/foo.go", "NewFunc", domain.KindFunction)
 	staging := application.NewStagingArea()
-	staging.StageFile("repo1", "main", "pkg/foo.go", []*domain.Node{staged}, nil)
+	staging.Stage("repo1", "main", "pkg/foo.go", application.StagedFile{Nodes: []*domain.Node{staged}, Edges: nil})
 
 	r := NewRegistry()
 	RegisterGraphTools(r, store, staging)

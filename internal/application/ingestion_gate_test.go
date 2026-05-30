@@ -99,7 +99,7 @@ func TestBranchSwitch_ClearsAndResumes(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewNode: %v", err)
 	}
-	sa.StageFile("repo1", "main", "a.go", []*domain.Node{n}, nil)
+	sa.Stage("repo1", "main", "a.go", StagedFile{Nodes: []*domain.Node{n}, Edges: nil})
 
 	// Verify it is there.
 	if files := sa.StagedFiles("repo1", "main"); len(files) != 1 {
@@ -184,7 +184,7 @@ func TestStaleGenerationWrite(t *testing.T) {
 	g.BumpGeneration()         // current is now 1
 
 	// Stale write must be rejected.
-	ok := sa.StageIfCurrentGeneration("repo1", "main", "a.go", []*domain.Node{n}, nil, staleGen, g)
+	ok := sa.Stage("repo1", "main", "a.go", StagedFile{Nodes: []*domain.Node{n}, Edges: nil}, WithGenerationGuard(staleGen, g))
 	if ok {
 		t.Fatal("StageIfCurrentGeneration must return false for stale generation")
 	}
@@ -194,7 +194,7 @@ func TestStaleGenerationWrite(t *testing.T) {
 
 	// Current-generation write must be accepted.
 	currentGen := g.Generation() // 1
-	ok = sa.StageIfCurrentGeneration("repo1", "main", "a.go", []*domain.Node{n}, nil, currentGen, g)
+	ok = sa.Stage("repo1", "main", "a.go", StagedFile{Nodes: []*domain.Node{n}, Edges: nil}, WithGenerationGuard(currentGen, g))
 	if !ok {
 		t.Fatal("StageIfCurrentGeneration must return true for current generation")
 	}

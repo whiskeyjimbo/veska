@@ -297,7 +297,7 @@ func TestIngester_Save_EmptyParseResultStagesFile(t *testing.T) {
 	}
 	staging := NewStagingArea()
 	// Pre-seed staging with an old entry.
-	staging.StageFile("repo1", "main", "empty.go", []*domain.Node{{}}, nil)
+	staging.Stage("repo1", "main", "empty.go", StagedFile{Nodes: []*domain.Node{{}}, Edges: nil})
 
 	ing := NewIngester(parser, staging, NewIngestionGate(staging))
 	ing.Save(context.Background(), "repo1", "main", "empty.go", []byte("package x"))
