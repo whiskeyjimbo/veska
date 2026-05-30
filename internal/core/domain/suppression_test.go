@@ -156,6 +156,15 @@ func TestNewSuppression_ErrorEmptyActorID(t *testing.T) {
 	}
 }
 
+func TestNewSuppression_ErrorInvalidActorKind(t *testing.T) {
+	now := time.Now()
+	_, err := NewSuppression("sup-1", ScopeSymbol, "node-1",
+		"reason", "actor", ActorKind("robot"), now)
+	if err == nil {
+		t.Error("expected error for invalid actor_kind")
+	}
+}
+
 // ── ActorKind tests ────────────────────────────────────────────────────────
 
 func TestActorKind_ValidValues(t *testing.T) {
