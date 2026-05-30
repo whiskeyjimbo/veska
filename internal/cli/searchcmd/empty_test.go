@@ -1,4 +1,4 @@
-package main
+package searchcmd
 
 import (
 	"bytes"
@@ -14,7 +14,7 @@ import (
 
 func TestRenderSearchEnvelope_EmptyTextPrintsNoResults(t *testing.T) {
 	var w bytes.Buffer
-	if err := renderSearchEnvelope(&w, searchEnvelope{Results: []searchHitView{}}, false); err != nil {
+	if err := RenderSearchEnvelope(&w, SearchEnvelope{Results: []SearchHitView{}}, false); err != nil {
 		t.Fatalf("render: %v", err)
 	}
 	out := w.String()
@@ -28,7 +28,7 @@ func TestRenderSearchEnvelope_EmptyTextPrintsNoResults(t *testing.T) {
 
 func TestRenderSearchEnvelope_EmptyJSONStillEmitsResultsArray(t *testing.T) {
 	var w bytes.Buffer
-	if err := renderSearchEnvelope(&w, searchEnvelope{Results: nil}, true); err != nil {
+	if err := RenderSearchEnvelope(&w, SearchEnvelope{Results: nil}, true); err != nil {
 		t.Fatalf("render: %v", err)
 	}
 	if !strings.Contains(w.String(), `"results"`) || !strings.Contains(w.String(), `[]`) {
@@ -38,11 +38,11 @@ func TestRenderSearchEnvelope_EmptyJSONStillEmitsResultsArray(t *testing.T) {
 
 func TestRenderSearchEnvelope_DegradedReasonsSurfacedWithEmpty(t *testing.T) {
 	var w bytes.Buffer
-	env := searchEnvelope{
-		Results:         []searchHitView{},
+	env := SearchEnvelope{
+		Results:         []SearchHitView{},
 		DegradedReasons: []string{"embeddings_pending"},
 	}
-	if err := renderSearchEnvelope(&w, env, false); err != nil {
+	if err := RenderSearchEnvelope(&w, env, false); err != nil {
 		t.Fatalf("render: %v", err)
 	}
 	if !strings.Contains(w.String(), "embeddings_pending") {
@@ -75,14 +75,14 @@ func TestRenderSearchEnvelope_DegradedHintAppendsToCode(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			var w bytes.Buffer
-			env := searchEnvelope{
-				Results: []searchHitView{{
+			env := SearchEnvelope{
+				Results: []SearchHitView{{
 					NodeID: "n1", Name: "X", Kind: "function", FilePath: "x.go",
 					LineStart: 1, LineEnd: 2, Score: 0.42,
 				}},
 				DegradedReasons: []string{tc.code},
 			}
-			if err := renderSearchEnvelope(&w, env, false); err != nil {
+			if err := RenderSearchEnvelope(&w, env, false); err != nil {
 				t.Fatalf("render: %v", err)
 			}
 			got := w.String()
@@ -112,13 +112,13 @@ func TestRenderSearchEnvelope_LowAbsoluteTopAppendsNote(t *testing.T) {
 	var w bytes.Buffer
 	// 0.0164 corresponds to a single-retriever rank-1 RRF hit (1/(60+1)),
 	// the exact case the warning is meant to catch.
-	env := searchEnvelope{
-		Results: []searchHitView{{
+	env := SearchEnvelope{
+		Results: []SearchHitView{{
 			NodeID: "n1", Name: "X", Kind: "function", FilePath: "x.go",
 			LineStart: 1, LineEnd: 2, Score: 0.0164,
 		}},
 	}
-	if err := renderSearchEnvelope(&w, env, false); err != nil {
+	if err := RenderSearchEnvelope(&w, env, false); err != nil {
 		t.Fatalf("render: %v", err)
 	}
 	if !strings.Contains(w.String(), "top match score is low") {
@@ -130,13 +130,13 @@ func TestRenderSearchEnvelope_LowAbsoluteTopAppendsNote(t *testing.T) {
 // the top is below the floor — confident matches should be quiet.
 func TestRenderSearchEnvelope_HealthyTopOmitsNote(t *testing.T) {
 	var w bytes.Buffer
-	env := searchEnvelope{
-		Results: []searchHitView{{
+	env := SearchEnvelope{
+		Results: []SearchHitView{{
 			NodeID: "n1", Name: "X", Kind: "function", FilePath: "x.go",
 			LineStart: 1, LineEnd: 2, Score: 0.42,
 		}},
 	}
-	if err := renderSearchEnvelope(&w, env, false); err != nil {
+	if err := RenderSearchEnvelope(&w, env, false); err != nil {
 		t.Fatalf("render: %v", err)
 	}
 	if strings.Contains(w.String(), "top match score is low") {

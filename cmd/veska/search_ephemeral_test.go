@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/whiskeyjimbo/veska/internal/application"
+	"github.com/whiskeyjimbo/veska/internal/cli/searchcmd"
 	fsignore "github.com/whiskeyjimbo/veska/internal/infrastructure/fs"
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/repo"
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/sqlite"
@@ -63,7 +64,7 @@ func TestEphemeralEnsureFromURL_CloneAndRegister(t *testing.T) {
 	pools := openPoolsAt(t, home)
 
 	var w bytes.Buffer
-	rec, err := ephemeralEnsureFromURL(context.Background(), pools, "file://"+source, &w)
+	rec, err := searchcmd.EphemeralEnsureFromURL(context.Background(), pools, "file://"+source, &w)
 	if err != nil {
 		t.Fatalf("ephemeralEnsureFromURL: %v", err)
 	}
@@ -99,7 +100,7 @@ func TestEphemeralEnsureFromURL_CacheHitSkipsClone(t *testing.T) {
 	pools := openPoolsAt(t, home)
 
 	var w1 bytes.Buffer
-	rec1, err := ephemeralEnsureFromURL(context.Background(), pools, "file://"+source, &w1)
+	rec1, err := searchcmd.EphemeralEnsureFromURL(context.Background(), pools, "file://"+source, &w1)
 	if err != nil {
 		t.Fatalf("first call: %v", err)
 	}
@@ -112,7 +113,7 @@ func TestEphemeralEnsureFromURL_CacheHitSkipsClone(t *testing.T) {
 	firstMtime := info.ModTime()
 
 	var w2 bytes.Buffer
-	rec2, err := ephemeralEnsureFromURL(context.Background(), pools, "file://"+source, &w2)
+	rec2, err := searchcmd.EphemeralEnsureFromURL(context.Background(), pools, "file://"+source, &w2)
 	if err != nil {
 		t.Fatalf("second call: %v", err)
 	}
@@ -143,7 +144,7 @@ func TestEphemeralEnsureFromURL_MissingCacheDirReClones(t *testing.T) {
 	source := makeBareSource(t)
 	pools := openPoolsAt(t, home)
 
-	rec1, err := ephemeralEnsureFromURL(context.Background(), pools, "file://"+source, &bytes.Buffer{})
+	rec1, err := searchcmd.EphemeralEnsureFromURL(context.Background(), pools, "file://"+source, &bytes.Buffer{})
 	if err != nil {
 		t.Fatalf("first: %v", err)
 	}
@@ -153,7 +154,7 @@ func TestEphemeralEnsureFromURL_MissingCacheDirReClones(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	rec2, err := ephemeralEnsureFromURL(context.Background(), pools, "file://"+source, &bytes.Buffer{})
+	rec2, err := searchcmd.EphemeralEnsureFromURL(context.Background(), pools, "file://"+source, &bytes.Buffer{})
 	if err != nil {
 		t.Fatalf("re-clone after wipe: %v", err)
 	}
@@ -189,7 +190,7 @@ func TestEphemeralEnsureFromURL_TrackedMatchSkipsClone(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	rec, err := ephemeralEnsureFromURL(context.Background(), pools, "file://"+source, &bytes.Buffer{})
+	rec, err := searchcmd.EphemeralEnsureFromURL(context.Background(), pools, "file://"+source, &bytes.Buffer{})
 	if err != nil {
 		t.Fatalf("ephemeralEnsureFromURL: %v", err)
 	}
@@ -221,8 +222,8 @@ func TestIsGitURL_PreservesPositionalSemantics(t *testing.T) {
 	// the original 7 cases. Re-spot-check the new tracked-path-vs-URL
 	// disambiguation that landed with kxo5.6.
 	tmp := t.TempDir()
-	if isGitURL(tmp) {
-		t.Errorf("isGitURL(%q) = true, want false (existing path)", tmp)
+	if searchcmd.IsGitURL(tmp) {
+		t.Errorf("searchcmd.IsGitURL(%q) = true, want false (existing path)", tmp)
 	}
 }
 
@@ -278,7 +279,7 @@ func TestSearchEphemeral_FirstPromotionRunsSecretCheck(t *testing.T) {
 	pools := openPoolsAt(t, home)
 
 	var buf bytes.Buffer
-	rec, err := ephemeralEnsureFromURL(context.Background(), pools, "file://"+source, &buf)
+	rec, err := searchcmd.EphemeralEnsureFromURL(context.Background(), pools, "file://"+source, &buf)
 	if err != nil {
 		t.Fatalf("ephemeralEnsureFromURL: %v", err)
 	}
@@ -343,7 +344,7 @@ func TestEphemeralPromotionPrintsCheckSummary(t *testing.T) {
 	pools := openPoolsAt(t, home)
 
 	var buf bytes.Buffer
-	rec, err := ephemeralEnsureFromURL(context.Background(), pools, "file://"+source, &buf)
+	rec, err := searchcmd.EphemeralEnsureFromURL(context.Background(), pools, "file://"+source, &buf)
 	if err != nil {
 		t.Fatalf("ephemeralEnsureFromURL: %v", err)
 	}
@@ -368,7 +369,7 @@ func TestEphemeralPromotionPrintsCheckSummary(t *testing.T) {
 	}
 
 	buf.Reset()
-	emitColdScanSummary(context.Background(), pools.ReadDB, &buf, appRec.RepoID, appRec.ActiveBranch)
+	searchcmd.EmitColdScanSummary(context.Background(), pools.ReadDB, &buf, appRec.RepoID, appRec.ActiveBranch)
 	got := buf.String()
 	if !strings.Contains(got, "secret_leak") {
 		t.Errorf("expected secret_leak summary line; got %q", got)
@@ -388,7 +389,7 @@ func TestEmitColdScanSummary_NoFindingsStaysQuiet(t *testing.T) {
 	pools := openPoolsAt(t, home)
 
 	var buf bytes.Buffer
-	emitColdScanSummary(context.Background(), pools.ReadDB, &buf, "repo-with-nothing", "main")
+	searchcmd.EmitColdScanSummary(context.Background(), pools.ReadDB, &buf, "repo-with-nothing", "main")
 	if buf.Len() != 0 {
 		t.Errorf("expected silent helper on empty findings; got %q", buf.String())
 	}

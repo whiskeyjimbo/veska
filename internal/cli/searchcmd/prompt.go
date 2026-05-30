@@ -1,4 +1,4 @@
-package main
+package searchcmd
 
 import (
 	"bufio"
@@ -12,16 +12,16 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/repo"
 )
 
-// runAcceptancePrompt presents the "keep this indexed?" UX after a
-// search against an ephemeral repo (solov2-kxo5.7).
+// RunAcceptancePrompt presents the "keep this indexed?" UX after a search
+// against an ephemeral repo (solov2-kxo5.7).
 //
 //   - prompted_at already set → silent no-op (AC3: once per row lifetime)
-//   - not a TTY → print one-liner hint, leave row ephemeral, do not
-//     mark prompted_at (so a future TTY invocation can still ask)
-//   - TTY + unprompted → ask y/N; y promotes via PromoteEphemeralToTracked,
-//     n marks declined via MarkPromptDeclined. Promotion is in-place: no
+//   - not a TTY → print one-liner hint, leave row ephemeral, do not mark
+//     prompted_at (so a future TTY invocation can still ask)
+//   - TTY + unprompted → ask y/N; y promotes via PromoteEphemeralToTracked, n
+//     marks declined via MarkPromptDeclined. Promotion is in-place: no
 //     re-clone, no file move (AC4).
-func runAcceptancePrompt(ctx context.Context, db *sql.DB, rec repo.Record, canonicalURL string, deps repocmd.PromptDeps) error {
+func RunAcceptancePrompt(ctx context.Context, db *sql.DB, rec repo.Record, canonicalURL string, deps repocmd.PromptDeps) error {
 	if rec.Kind != "ephemeral" {
 		return nil
 	}
