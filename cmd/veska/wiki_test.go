@@ -7,7 +7,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"strings"
 	"testing"
 	"time"
 
@@ -128,67 +127,4 @@ func TestWikiCmd_ByteIdenticalOutput(t *testing.T) {
 	if !bytes.Equal(stripGenerated(entry1), stripGenerated(entry2)) {
 		t.Error("entry_points.md output not byte-identical across runs (excluding generated-at line)")
 	}
-}
-
-// TestResolveWikiTarget exercises the --repo / --branch resolution rules.
-func TestResolveWikiTarget(t *testing.T) {
-	repoRoot, repoID := setupWikiEnv(t)
-
-	db, err := sqlite.OpenWithOptions(filepath.Join(os.Getenv("VESKA_HOME"), "veska.db"), sqlite.Options{})
-	if err != nil {
-		t.Fatalf("open db: %v", err)
-	}
-	defer func() { _ = db.Close() }()
-	ctx := context.Background()
-
-	t.Run("defaults to sole repo and its branch", func(t *testing.T) {
-		gotRepo, gotBranch, err := resolveWikiTarget(ctx, db, "", "")
-		if err != nil {
-			t.Fatalf("resolveWikiTarget: %v", err)
-		}
-		if gotRepo != repoID {
-			t.Errorf("repo: got %q want %q", gotRepo, repoID)
-		}
-		if gotBranch != "main" {
-			t.Errorf("branch: got %q want %q", gotBranch, "main")
-		}
-	})
-
-	t.Run("explicit branch overrides default", func(t *testing.T) {
-		_, gotBranch, err := resolveWikiTarget(ctx, db, repoID, "feature")
-		if err != nil {
-			t.Fatalf("resolveWikiTarget: %v", err)
-		}
-		if gotBranch != "feature" {
-			t.Errorf("branch: got %q want %q", gotBranch, "feature")
-		}
-	})
-
-	t.Run("unknown repo errors", func(t *testing.T) {
-		if _, _, err := resolveWikiTarget(ctx, db, "nope", ""); err == nil {
-			t.Error("expected error for unregistered repo")
-		}
-	})
-
-	// solov2-rtql: positional path arg resolves the repo by RootPath.
-	t.Run("registered path resolves to repo", func(t *testing.T) {
-		gotRepo, _, err := resolveWikiTarget(ctx, db, repoRoot, "")
-		if err != nil {
-			t.Fatalf("resolveWikiTarget(path): %v", err)
-		}
-		if gotRepo != repoID {
-			t.Errorf("repo: got %q want %q", gotRepo, repoID)
-		}
-	})
-
-	t.Run("unregistered existing path errors clearly", func(t *testing.T) {
-		other := t.TempDir()
-		_, _, err := resolveWikiTarget(ctx, db, other, "")
-		if err == nil {
-			t.Fatal("expected error for unregistered path")
-		}
-		if !strings.Contains(err.Error(), "not a registered repository") {
-			t.Errorf("want %q in err, got %v", "not a registered repository", err)
-		}
-	})
 }

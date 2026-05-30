@@ -10,13 +10,18 @@ import (
 	"strings"
 	"sync/atomic"
 	"testing"
-	"time"
 
 	"github.com/whiskeyjimbo/veska/internal/application"
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/repo"
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/sqlite"
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/sqlite/sqldriver"
 )
+
+// These tests exercise the direct-SQLite cold-scan path end-to-end through
+// newRootCmd: the daemon socket is absent in the test environment so
+// daemonRunning() returns false, and the cmd-owned reparserFactory seam is
+// swapped for a spy. The daemon-dispatch fork lives in internal/cli/reindexcmd
+// and is tested there (it needs the DaemonRunning seam).
 
 // setupReindexEnv creates a temp VESKA_HOME with a migrated veska.db and a
 // single registered git-backed repo. The repo is registered via repo.Add so
@@ -60,8 +65,9 @@ func setupReindexEnv(t *testing.T) (repoRoot, repoID string) {
 	return rec.RootPath, id
 }
 
-// installSpyReparser swaps the reparser factory for a closure that records
-// each invocation. The previous factory is restored when the test finishes.
+// installSpyReparser swaps the cmd-owned reparser factory for a closure that
+// records each invocation. The previous factory is restored when the test
+// finishes.
 func installSpyReparser(t *testing.T, calls *atomic.Int32, lastRepo *application.RepoRecord) {
 	t.Helper()
 	prev := reparserFactory
@@ -174,125 +180,6 @@ func TestReindexCmd_ForcesReparseAtHEAD(t *testing.T) {
 	if calls.Load() != 1 {
 		t.Errorf("reparser invocations at-HEAD: got %d want 1", calls.Load())
 	}
-	_ = repoRoot
-	_ = time.Now
-}
-
-// TestReindexCmd_DispatchesViaMCPWhenDaemonUp pins solov2-4d7b: when the
-// daemon socket is reachable, reindex dispatches via the eng_reindex_repo
-// MCP tool and never falls through to the direct sqlite path (which would
-// race the daemon for the write lock). Before this change, reindex printed
-// "stop it first" instead of using the daemon.
-func TestReindexCmd_DispatchesViaMCPWhenDaemonUp(t *testing.T) {
-	repoRoot, repoID := setupReindexEnv(t)
-
-	// Spy reparser must NOT be called when the daemon is up — the daemon's
-	// in-process reparser handles the scan instead.
-	var reparserCalls atomic.Int32
-	installSpyReparser(t, &reparserCalls, nil)
-
-	// Simulate daemon-up.
-	prevProbe := reindexDaemonProbe
-	reindexDaemonProbe = func() bool { return true }
-	t.Cleanup(func() { reindexDaemonProbe = prevProbe })
-
-	// Spy dial that records the params it would have sent.
-	var dialCalls atomic.Int32
-	var gotRepoID, gotRootPath string
-	prevDial := dialReindex
-	dialReindex = func(_ context.Context, rid, rp string) (string, error) {
-		dialCalls.Add(1)
-		gotRepoID = rid
-		gotRootPath = rp
-		// Echo back the repo_id like a real daemon does.
-		if rid != "" {
-			return rid, nil
-		}
-		return repoID, nil
-	}
-	t.Cleanup(func() { dialReindex = prevDial })
-
-	chdir(t, repoRoot)
-
-	var buf bytes.Buffer
-	root := newRootCmd()
-	root.SetOut(&buf)
-	root.SetErr(&buf)
-	root.SetArgs([]string{"reindex"})
-	if err := root.Execute(); err != nil {
-		t.Fatalf("veska reindex: %v\n%s", err, buf.String())
-	}
-	if dialCalls.Load() != 1 {
-		t.Errorf("dialReindex calls = %d, want 1; output: %s", dialCalls.Load(), buf.String())
-	}
-	if reparserCalls.Load() != 0 {
-		t.Errorf("direct reparser must NOT run when daemon is up, got %d invocations", reparserCalls.Load())
-	}
-	if gotRootPath != repoRoot {
-		t.Errorf("dial got rootPath = %q, want %q", gotRootPath, repoRoot)
-	}
-	if gotRepoID != "" {
-		t.Errorf("dial got repoID = %q, want empty (cwd resolution)", gotRepoID)
-	}
-}
-
-// TestReindexCmd_DispatchesViaMCPWithRepoIDArg confirms the dispatch fork
-// passes a non-path argument through as repo_id (the daemon resolves it).
-func TestReindexCmd_DispatchesViaMCPWithRepoIDArg(t *testing.T) {
-	_, repoID := setupReindexEnv(t)
-
-	prevProbe := reindexDaemonProbe
-	reindexDaemonProbe = func() bool { return true }
-	t.Cleanup(func() { reindexDaemonProbe = prevProbe })
-
-	var gotRepoID string
-	prevDial := dialReindex
-	dialReindex = func(_ context.Context, rid, _ string) (string, error) {
-		gotRepoID = rid
-		return rid, nil
-	}
-	t.Cleanup(func() { dialReindex = prevDial })
-
-	var buf bytes.Buffer
-	root := newRootCmd()
-	root.SetOut(&buf)
-	root.SetErr(&buf)
-	root.SetArgs([]string{"reindex", repoID})
-	if err := root.Execute(); err != nil {
-		t.Fatalf("veska reindex %s: %v\n%s", repoID, err, buf.String())
-	}
-	if gotRepoID != repoID {
-		t.Errorf("dial got repoID = %q, want %q", gotRepoID, repoID)
-	}
-}
-
-// TestReindexCmd_NoStopItFirstError pins the regression: with the daemon up,
-// reindex must NOT return the legacy "stop it first" error message anywhere
-// in its output. (AC1 of solov2-4d7b.)
-func TestReindexCmd_NoStopItFirstError(t *testing.T) {
-	repoRoot, _ := setupReindexEnv(t)
-
-	prevProbe := reindexDaemonProbe
-	reindexDaemonProbe = func() bool { return true }
-	t.Cleanup(func() { reindexDaemonProbe = prevProbe })
-
-	prevDial := dialReindex
-	dialReindex = func(_ context.Context, _, _ string) (string, error) { return "r1", nil }
-	t.Cleanup(func() { dialReindex = prevDial })
-
-	chdir(t, repoRoot)
-
-	var buf bytes.Buffer
-	root := newRootCmd()
-	root.SetOut(&buf)
-	root.SetErr(&buf)
-	root.SetArgs([]string{"reindex"})
-	if err := root.Execute(); err != nil {
-		t.Fatalf("veska reindex: %v\n%s", err, buf.String())
-	}
-	if strings.Contains(buf.String(), "stop it first") {
-		t.Errorf("output must not contain legacy 'stop it first' message: %s", buf.String())
-	}
 }
 
 func TestReindexCmd_UnknownRepo(t *testing.T) {
@@ -311,47 +198,6 @@ func TestReindexCmd_UnknownRepo(t *testing.T) {
 	}
 	if calls.Load() != 0 {
 		t.Errorf("reparser must not run on unknown repo, got %d invocations", calls.Load())
-	}
-}
-
-// TestResolveReindexFlagTarget covers the positional/flag merge rule used by
-// reindexCmd. The DoD for solov2-izh6.18 is that --repo behaves as an alias
-// for the positional arg and the positional wins on conflict.
-func TestResolveReindexFlagTarget(t *testing.T) {
-	t.Parallel()
-	cases := []struct {
-		name       string
-		args       []string
-		flag       string
-		wantTarget string
-		wantStderr string
-	}{
-		{name: "both empty", wantTarget: ""},
-		{name: "flag only", flag: "abcd1234", wantTarget: "abcd1234"},
-		{name: "positional only", args: []string{"abcd1234"}, wantTarget: "abcd1234"},
-		{name: "same value both", args: []string{"abcd1234"}, flag: "abcd1234", wantTarget: "abcd1234"},
-		{
-			name: "conflict: positional wins, note on stderr",
-			args: []string{"abcd1234"}, flag: "deadbeef",
-			wantTarget: "abcd1234",
-			wantStderr: `reindex: positional arg "abcd1234" overrides --repo "deadbeef"`,
-		},
-	}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			var stderr strings.Builder
-			got := resolveReindexFlagTarget(&stderr, tc.args, tc.flag)
-			if got != tc.wantTarget {
-				t.Fatalf("target: got %q want %q", got, tc.wantTarget)
-			}
-			gotErr := stderr.String()
-			if tc.wantStderr == "" && gotErr != "" {
-				t.Fatalf("unexpected stderr: %q", gotErr)
-			}
-			if tc.wantStderr != "" && !strings.Contains(gotErr, tc.wantStderr) {
-				t.Fatalf("stderr: got %q want substring %q", gotErr, tc.wantStderr)
-			}
-		})
 	}
 }
 
