@@ -4,8 +4,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/whiskeyjimbo/veska/internal/config"
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/vulnsource"
+	"github.com/whiskeyjimbo/veska/internal/platform/config"
 )
 
 // An absent [vuln_source] section (empty provider) is accepted and leaves the

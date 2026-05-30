@@ -47,7 +47,7 @@ import (
 	"time"
 
 	"github.com/whiskeyjimbo/veska/internal/core/ports"
-	"github.com/whiskeyjimbo/veska/internal/observability"
+	"github.com/whiskeyjimbo/veska/internal/platform/observability"
 )
 
 // Rule names recognised by the per-rule dispatch. They are duplicated here

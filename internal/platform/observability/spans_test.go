@@ -8,7 +8,7 @@ import (
 	"go.opentelemetry.io/otel/sdk/trace/tracetest"
 	"go.opentelemetry.io/otel/trace/noop"
 
-	"github.com/whiskeyjimbo/veska/internal/observability"
+	"github.com/whiskeyjimbo/veska/internal/platform/observability"
 )
 
 func TestStartSpan_WithNoopProvider(t *testing.T) {

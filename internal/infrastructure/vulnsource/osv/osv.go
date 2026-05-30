@@ -24,8 +24,8 @@ import (
 
 	"golang.org/x/mod/semver"
 
-	"github.com/whiskeyjimbo/veska/internal/config"
 	"github.com/whiskeyjimbo/veska/internal/core/ports"
+	"github.com/whiskeyjimbo/veska/internal/platform/config"
 )
 
 // DumpURL is the OSV full Go-ecosystem advisory dump. It is the single

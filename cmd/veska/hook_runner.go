@@ -16,8 +16,8 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
-	"github.com/whiskeyjimbo/veska/internal/config"
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/sqlite/sqldriver"
+	"github.com/whiskeyjimbo/veska/internal/platform/config"
 	"github.com/whiskeyjimbo/veska/internal/repo"
 )
 

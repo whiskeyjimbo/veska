@@ -14,7 +14,6 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/application/checks"
 	"github.com/whiskeyjimbo/veska/internal/cli/mcpclient"
 	"github.com/whiskeyjimbo/veska/internal/composition"
-	"github.com/whiskeyjimbo/veska/internal/config"
 	"github.com/whiskeyjimbo/veska/internal/core/ports"
 	fsignore "github.com/whiskeyjimbo/veska/internal/infrastructure/fs"
 	gitwatch "github.com/whiskeyjimbo/veska/internal/infrastructure/git"
@@ -22,7 +21,8 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/sqlite"
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/vulnsource"
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/vulnsource/osv"
-	"github.com/whiskeyjimbo/veska/internal/observability"
+	"github.com/whiskeyjimbo/veska/internal/platform/config"
+	"github.com/whiskeyjimbo/veska/internal/platform/observability"
 	"github.com/whiskeyjimbo/veska/internal/repo"
 )
 

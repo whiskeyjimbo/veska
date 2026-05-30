@@ -19,7 +19,7 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/core/domain"
 	"github.com/whiskeyjimbo/veska/internal/core/ports"
 	infsqlite "github.com/whiskeyjimbo/veska/internal/infrastructure/sqlite"
-	"github.com/whiskeyjimbo/veska/internal/observability"
+	"github.com/whiskeyjimbo/veska/internal/platform/observability"
 )
 
 // openSchemaDB returns an in-memory SQLite DB with the columns the worker

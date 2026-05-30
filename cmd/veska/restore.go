@@ -10,7 +10,7 @@ import (
 
 	"github.com/spf13/cobra"
 	"github.com/whiskeyjimbo/veska/internal/backup"
-	"github.com/whiskeyjimbo/veska/internal/config"
+	"github.com/whiskeyjimbo/veska/internal/platform/config"
 )
 
 // daemonRunning reports whether the veska daemon is up by dialing its CLI

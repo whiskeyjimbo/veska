@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/whiskeyjimbo/veska/internal/tokenize"
+	"github.com/whiskeyjimbo/veska/internal/platform/tokenize"
 )
 
 func TestSymbol_TableDriven(t *testing.T) {
