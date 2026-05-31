@@ -178,25 +178,9 @@ func (h *Handler) Handle(ctx context.Context, row ports.WorkRow) error {
 		return nil
 	}
 
-	// Drop container/sub-symbol source nodes (package, chunk, …): linking them
-	// is noise. Nodes whose metadata is missing (index lag) are kept — this is
-	// best-effort discovery, not a correctness invariant.
-	srcMeta, err := h.lookup.LookupNodes(ctx, row.RepoID, row.Branch, nodeIDs)
+	sources, srcMeta, err := h.resolveSources(ctx, row, nodeIDs)
 	if err != nil {
-		return fmt.Errorf("autolink.Handle: lookup source nodes: %w", err)
-	}
-	kindByID := make(map[string]string, len(srcMeta))
-	srcFileByID := make(map[string]string, len(srcMeta))
-	for _, m := range srcMeta {
-		kindByID[m.NodeID] = m.Kind
-		srcFileByID[m.NodeID] = m.FilePath
-	}
-	sources := make([]string, 0, len(nodeIDs))
-	for _, id := range nodeIDs {
-		if nonSymbolKinds[kindByID[id]] {
-			continue
-		}
-		sources = append(sources, id)
+		return err
 	}
 	if len(sources) == 0 {
 		return nil
@@ -226,40 +210,75 @@ func (h *Handler) Handle(ctx context.Context, row ports.WorkRow) error {
 		return nil
 	}
 
-	// Drop candidates whose target is a container/sub-symbol kind or whose
-	// target lives in the same file as the source (solov2-nz1v). Without
-	// these filters a tiny repo immediately gets a noise finding like
-	// "Similar to chunk:1-22 in main.go" — useless to the user and leaks
-	// the internal chunk artifact name. Filtering at the candidate level
-	// (after the linker call) keeps the linker's vector-space logic generic
-	// while ensuring the user-visible side is clean.
+	cands, tgtMeta, err := h.filterCandidates(ctx, row, cands, srcMeta)
+	if err != nil {
+		return err
+	}
+	if len(cands) == 0 {
+		return nil
+	}
+
+	return h.emitFindings(ctx, row, cands, srcMeta, tgtMeta, nodeIDs)
+}
+
+// resolveSources hydrates the file's node IDs and drops container/sub-symbol
+// source nodes (package, chunk, …): linking them is noise. Nodes whose
+// metadata is missing (index lag) are kept — this is best-effort discovery,
+// not a correctness invariant. It returns the eligible source node IDs and the
+// full source metadata (reused downstream for filtering and finding labels).
+func (h *Handler) resolveSources(ctx context.Context, row ports.WorkRow, nodeIDs []string) ([]string, []ports.NodeMeta, error) {
+	srcMeta, err := h.lookup.LookupNodes(ctx, row.RepoID, row.Branch, nodeIDs)
+	if err != nil {
+		return nil, nil, fmt.Errorf("autolink.Handle: lookup source nodes: %w", err)
+	}
+	kindByID := make(map[string]string, len(srcMeta))
+	for _, m := range srcMeta {
+		kindByID[m.NodeID] = m.Kind
+	}
+	sources := make([]string, 0, len(nodeIDs))
+	for _, id := range nodeIDs {
+		if nonSymbolKinds[kindByID[id]] {
+			continue
+		}
+		sources = append(sources, id)
+	}
+	return sources, srcMeta, nil
+}
+
+// filterCandidates hydrates the candidate targets and drops the noise pairs:
+// targets that are container/sub-symbol kinds, targets that live in the same
+// file as their source (solov2-nz1v), and idiomatic-name matches (solov2-7ze1).
+// Without these filters a tiny repo immediately gets a noise finding like
+// "Similar to chunk:1-22 in main.go" — useless to the user and leaks the
+// internal chunk artifact name. Filtering at the candidate level (after the
+// linker call) keeps the linker's vector-space logic generic while ensuring
+// the user-visible side is clean. The returned target metadata is reused for
+// the finding labels.
+func (h *Handler) filterCandidates(ctx context.Context, row ports.WorkRow, cands []Candidate, srcMeta []ports.NodeMeta) ([]Candidate, []ports.NodeMeta, error) {
 	targetIDs := make([]string, 0, len(cands))
 	for _, c := range cands {
 		targetIDs = append(targetIDs, c.TargetNodeID)
 	}
 	tgtMeta, err := h.lookup.LookupNodes(ctx, row.RepoID, row.Branch, targetIDs)
 	if err != nil {
-		return fmt.Errorf("autolink.Handle: lookup target nodes: %w", err)
+		return nil, nil, fmt.Errorf("autolink.Handle: lookup target nodes: %w", err)
+	}
+
+	srcKindByID := make(map[string]string, len(srcMeta))
+	srcFileByID := make(map[string]string, len(srcMeta))
+	srcSymByID := make(map[string]string, len(srcMeta))
+	for _, m := range srcMeta {
+		srcKindByID[m.NodeID] = m.Kind
+		srcFileByID[m.NodeID] = m.FilePath
+		srcSymByID[m.NodeID] = m.SymbolPath
 	}
 	tgtKindByID := make(map[string]string, len(tgtMeta))
 	tgtFileByID := make(map[string]string, len(tgtMeta))
+	tgtSymByID := make(map[string]string, len(tgtMeta))
 	for _, m := range tgtMeta {
 		tgtKindByID[m.NodeID] = m.Kind
 		tgtFileByID[m.NodeID] = m.FilePath
-	}
-	// Build a SymbolPath lookup so we can drop idiomatic-name noise pairs
-	// (solov2-7ze1): a tiny repo otherwise produces N×N "similar" findings
-	// for every init() function and every cobra.Command package var, even
-	// though the similarity is structural — these are sibling shapes the
-	// engineer intentionally repeats per file. Filtering before findings
-	// emit keeps the auto-link findings surface useful on small repos.
-	tgtSymByID := make(map[string]string, len(tgtMeta))
-	for _, m := range tgtMeta {
 		tgtSymByID[m.NodeID] = m.SymbolPath
-	}
-	srcSymByID := make(map[string]string, len(srcMeta))
-	for _, m := range srcMeta {
-		srcSymByID[m.NodeID] = m.SymbolPath
 	}
 
 	filtered := cands[:0]
@@ -270,16 +289,20 @@ func (h *Handler) Handle(ctx context.Context, row ports.WorkRow) error {
 		if tgtFileByID[c.TargetNodeID] != "" && tgtFileByID[c.TargetNodeID] == srcFileByID[c.SourceNodeID] {
 			continue
 		}
-		if isIdiomaticAutolinkNoise(srcSymByID[c.SourceNodeID], tgtSymByID[c.TargetNodeID], kindByID[c.SourceNodeID], tgtKindByID[c.TargetNodeID]) {
+		if isIdiomaticAutolinkNoise(srcSymByID[c.SourceNodeID], tgtSymByID[c.TargetNodeID], srcKindByID[c.SourceNodeID], tgtKindByID[c.TargetNodeID]) {
 			continue
 		}
 		filtered = append(filtered, c)
 	}
-	cands = filtered
-	if len(cands) == 0 {
-		return nil
-	}
+	return filtered, tgtMeta, nil
+}
 
+// emitFindings persists each surviving candidate as a SIMILAR_TO edge and emits
+// one source_layer='semantic' Finding per edge. cands and the edges it builds
+// are parallel slices; the finding loop walks them by index. solov2-6eqa: the
+// message names BOTH sides — "X in src.go similar to Y in tgt.go" — falling
+// back to the opaque node ID when a side's metadata is missing.
+func (h *Handler) emitFindings(ctx context.Context, row ports.WorkRow, cands []Candidate, srcMeta, tgtMeta []ports.NodeMeta, nodeIDs []string) error {
 	edges := make([]*domain.Edge, 0, len(cands))
 	for _, c := range cands {
 		e, err := domain.NewEdge(
@@ -300,18 +323,17 @@ func (h *Handler) Handle(ctx context.Context, row ports.WorkRow) error {
 		return fmt.Errorf("autolink.Handle: save edges: %w", err)
 	}
 
-	// Build display labels for the (already-hydrated above) target metadata,
-	// so the finding names the symbol+file rather than an opaque node ID
-	// (solov2-wh0). solov2-6eqa: also build src labels so the message
-	// names BOTH sides — "X in src.go similar to Y in tgt.go" — instead
-	// of "Similar to Y" with the X side hidden.
+	srcFileByID := make(map[string]string, len(srcMeta))
+	srcDisplayByID := make(map[string]string, len(srcMeta))
+	for _, m := range srcMeta {
+		srcFileByID[m.NodeID] = m.FilePath
+		srcDisplayByID[m.NodeID] = m.SymbolPath + " in " + m.FilePath
+	}
+	// Build display labels for the (already-hydrated) target metadata, so the
+	// finding names the symbol+file rather than an opaque node ID (solov2-wh0).
 	displayByID := make(map[string]string, len(tgtMeta))
 	for _, m := range tgtMeta {
 		displayByID[m.NodeID] = m.SymbolPath + " in " + m.FilePath
-	}
-	srcDisplayByID := make(map[string]string, len(srcMeta))
-	for _, m := range srcMeta {
-		srcDisplayByID[m.NodeID] = m.SymbolPath + " in " + m.FilePath
 	}
 
 	// Cache source-node content hashes across the candidate set so a handful
