@@ -1,9 +1,9 @@
 // Package backupcmd holds the business logic behind the `veska backup` command
 // family. cmd/veska/backup.go is reduced to Cobra construction whose RunE bodies
 // delegate here, following the cmd = glue / logic-in-packages pattern
-// (solov2-1tof). The remaining backup subcommands (create/verify/prune) already
-// delegate to internal/infrastructure/backup; this package covers `list`, which
-// is pure on-disk reporting with no infrastructure counterpart.
+// (solov2-1tof, solov2-0omh.9). `list` is pure on-disk reporting (this file);
+// create/verify/prune (mutate.go) orchestrate config + the
+// internal/infrastructure/backup primitives.
 package backupcmd
 
 import (
