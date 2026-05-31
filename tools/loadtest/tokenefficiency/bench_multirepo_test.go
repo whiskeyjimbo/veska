@@ -8,7 +8,7 @@
 //     handler shipped in solov2-bcn) -> top-K snippets
 //   - grep+read tokens: the simulated filesystem walks ALL N repos
 //
-// This is the headline cross-repo number the wedge pitch 
+// This is the headline cross-repo number the wedge pitch
 // calls for. Single-repo numbers live in TestTokenEfficiency.
 package tokenefficiency
 

@@ -216,4 +216,3 @@ func (l *Linker) Candidates(ctx context.Context, repoID, branch string, sourceNo
 	}
 	return out, nil
 }
-
