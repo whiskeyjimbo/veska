@@ -73,9 +73,10 @@ func cliColdScanPromoterOpts(pools *sqlite.Pools) []application.PromoterOption {
 		reg.Register(checks.NewSecretsScanCheck(secretsscanner.New()))
 	}
 
-	// Vuln-scan only when [vuln_source] provider="osv" (matches daemon).
-	if fileCfg.VulnSource.Provider == "osv" {
-		src := cliVulnSource(fileCfg)
+	// Vuln-scan only when [vuln_source] is enabled (provider="osv"). The CLI
+	// path discards the enabled bool — it only registers the check when a
+	// non-null source is returned.
+	if src, enabled := BuildVulnSource(fileCfg); enabled {
 		reg.Register(checks.NewVulnScanCheck(src, checks.RepoRootFunc(root)))
 	}
 
@@ -87,13 +88,21 @@ func cliColdScanPromoterOpts(pools *sqlite.Pools) []application.PromoterOption {
 	}
 }
 
-// cliVulnSource mirrors the daemon's vuln-source construction for the
-// in-process cold-scan path. Returns NullVulnSource unless config enables osv.
-func cliVulnSource(cfg config.Config) ports.VulnSource {
+// BuildVulnSource constructs the ports.VulnSource for the resolved config and
+// reports whether the vulnerability-scan feature is enabled. It is the single
+// source of the provider-switch rule shared by the in-process cold-scan path
+// (cliColdScanPromoterOpts) and the daemon (daemon.buildVulnSource).
+//
+// An empty or unrecognised [vuln_source] provider yields the NullVulnSource
+// with enabled false — no refresher goroutine, no vuln-scan check. provider =
+// "osv" yields the OSV.dev-backed adapter with enabled true. Daemon callers are
+// expected to have run checkVulnProvider first, so an unrecognised provider
+// falls back to the NullVulnSource here rather than panicking.
+func BuildVulnSource(cfg config.Config) (ports.VulnSource, bool) {
 	if cfg.VulnSource.Provider != "osv" {
-		return vulnsource.NewNullVulnSource()
+		return vulnsource.NewNullVulnSource(), false
 	}
-	return osv.New(osv.WithCacheDir(config.DefaultOSVCacheDir()))
+	return osv.New(osv.WithCacheDir(config.DefaultOSVCacheDir())), true
 }
 
 // repoRootByID resolves a repoID to its registered working-tree path via the
