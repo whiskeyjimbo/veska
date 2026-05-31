@@ -252,10 +252,9 @@ func isNetworkErr(err error) bool {
 	if errors.Is(err, io.EOF) || errors.Is(err, io.ErrUnexpectedEOF) {
 		return true
 	}
-	var netErr *net.OpError
-	if errors.As(err, &netErr) {
+	if _, ok := errors.AsType[*net.OpError](err); ok {
 		return true
 	}
-	var urlErr *url.Error
-	return errors.As(err, &urlErr)
+	_, ok := errors.AsType[*url.Error](err)
+	return ok
 }
