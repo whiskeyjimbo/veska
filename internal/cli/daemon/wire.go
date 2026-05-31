@@ -35,7 +35,6 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/llm"
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/mcp"
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/repo"
-	"github.com/whiskeyjimbo/veska/internal/infrastructure/secretsscanner"
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/sqlite"
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/sqlite/queue"
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/vector"
@@ -512,13 +511,19 @@ func (b *daemonBuilder) buildCheckPipeline() error {
 	))
 	checkReg.Register(checks.NewContractDriftCheck(contractRepo))
 
-	// Secrets-scan ships on by default (no required dependency); a [promotion]
-	// disabled_checks entry listing "secrets-scan" suppresses it.
-	if !b.fileCfg.Promotion.CheckDisabled("secrets-scan") {
-		checkReg.Register(checks.NewSecretsScanCheck(secretsscanner.New()))
+	// Secrets-scan (on unless disabled) + vuln-scan (only when provider="osv")
+	// share their enablement policy with the cold-scan CLI path via
+	// composition.RegisterCommonChecks. The daemon's dead-code + contract-drift
+	// checks above are daemon-only and layer on top. The vuln source is built
+	// once here and fed to BOTH the check and its advisory-cache refresher.
+	vulnSource, vulnEnabled := buildVulnSource(b.fileCfg)
+	vulnRoot := func(ctx context.Context, repoID string) (string, error) {
+		return repoRootFunc(b.pools.ReadDB)(ctx, repoID)
 	}
-
-	if err := b.registerVulnCheck(checkReg); err != nil {
+	b.vulnScanCheck = composition.RegisterCommonChecks(
+		checkReg, b.fileCfg, vulnSource, vulnEnabled, vulnRoot,
+	)
+	if err := b.buildVulnRefresher(vulnSource, vulnEnabled); err != nil {
 		return err
 	}
 
@@ -527,20 +532,15 @@ func (b *daemonBuilder) buildCheckPipeline() error {
 	return nil
 }
 
-// registerVulnCheck arms the vulnerability-scan feature when [vuln_source]
-// provider="osv": it registers the VulnScanCheck and builds the advisory-cache
-// refresher (launched later in Start). Off by default — an absent section
-// yields NullVulnSource, no check, and no refresher.
-func (b *daemonBuilder) registerVulnCheck(checkReg *checks.Registry) error {
-	vulnSource, vulnEnabled := buildVulnSource(b.fileCfg)
+// buildVulnRefresher builds the advisory-cache refresher (launched later in
+// Start) for the vulnerability-scan feature. The VulnScanCheck registration
+// itself lives in composition.RegisterCommonChecks (shared with the cold-scan
+// CLI); this is the daemon-only refresher half. Off by default — when
+// vuln-scan is disabled there is no refresher.
+func (b *daemonBuilder) buildVulnRefresher(vulnSource ports.VulnSource, vulnEnabled bool) error {
 	if !vulnEnabled {
 		return nil
 	}
-	vulnRoot := func(ctx context.Context, repoID string) (string, error) {
-		return repoRootFunc(b.pools.ReadDB)(ctx, repoID)
-	}
-	b.vulnScanCheck = checks.NewVulnScanCheck(vulnSource, vulnRoot)
-	checkReg.Register(b.vulnScanCheck)
 
 	var refreshOpts []vulnrefresh.Option
 	if iv := vulnRefreshInterval(b.fileCfg); iv > 0 {

@@ -12,7 +12,6 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/core/ports"
 	gitwatch "github.com/whiskeyjimbo/veska/internal/infrastructure/git"
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/repo"
-	"github.com/whiskeyjimbo/veska/internal/infrastructure/secretsscanner"
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/sqlite"
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/vulnsource"
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/vulnsource/osv"
@@ -66,19 +65,13 @@ func cliColdScanPromoterOpts(pools *sqlite.Pools) []application.PromoterOption {
 
 	reg := checks.NewRegistry()
 
-	// Secrets-scan ships on by default; only respect an explicit
-	// disabled_checks entry. Config load failure falls through to "on".
+	// Secrets-scan (on unless disabled) + vuln-scan (only when [vuln_source] is
+	// enabled) share their enablement policy with the daemon via
+	// RegisterCommonChecks. Config load failure falls through to "secret-scan
+	// only" — vuln-scan is off by default. The CLI discards the returned check.
 	fileCfg, _ := config.Load()
-	if !fileCfg.Promotion.CheckDisabled("secrets-scan") {
-		reg.Register(checks.NewSecretsScanCheck(secretsscanner.New()))
-	}
-
-	// Vuln-scan only when [vuln_source] is enabled (provider="osv"). The CLI
-	// path discards the enabled bool — it only registers the check when a
-	// non-null source is returned.
-	if src, enabled := BuildVulnSource(fileCfg); enabled {
-		reg.Register(checks.NewVulnScanCheck(src, checks.RepoRootFunc(root)))
-	}
+	vulnSource, vulnEnabled := BuildVulnSource(fileCfg)
+	RegisterCommonChecks(reg, fileCfg, vulnSource, vulnEnabled, checks.RepoRootFunc(root))
 
 	metrics := observability.NewMetrics(prometheus.NewRegistry())
 	runner := checks.NewRunner(reg, findings, metrics)

@@ -106,6 +106,18 @@ func (r *Registry) Register(c Check) {
 	r.checks = append(r.checks, c)
 }
 
+// Names returns the names of the registered checks in registration order. The
+// returned slice is a copy, safe to read without holding the registry lock.
+func (r *Registry) Names() []string {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	out := make([]string, len(r.checks))
+	for i, c := range r.checks {
+		out[i] = c.Name()
+	}
+	return out
+}
+
 // snapshot returns the current set of checks. The returned slice may be safely
 // iterated without holding the registry lock.
 func (r *Registry) snapshot() []Check {
