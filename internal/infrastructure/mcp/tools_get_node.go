@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	application "github.com/whiskeyjimbo/veska/internal/application"
+	"github.com/whiskeyjimbo/veska/internal/application/staging"
 	"github.com/whiskeyjimbo/veska/internal/core/domain"
 	"github.com/whiskeyjimbo/veska/internal/core/ports"
 )
@@ -20,7 +21,7 @@ type getNodeParams struct {
 	Branch string `json:"branch"`
 }
 
-func makeGetNodeHandler(graph ports.GraphReader, staging *application.StagingArea, repos application.RepoLister) ToolHandler {
+func makeGetNodeHandler(graph ports.GraphReader, staging *staging.Area, repos application.RepoLister) ToolHandler {
 	return func(ctx context.Context, _ domain.Actor, raw json.RawMessage) (any, *RPCError) {
 		var p getNodeParams
 		if err := json.Unmarshal(raw, &p); err != nil {

@@ -17,7 +17,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/whiskeyjimbo/veska/internal/application"
+	"github.com/whiskeyjimbo/veska/internal/application/staging"
 	"github.com/whiskeyjimbo/veska/internal/application/wiki"
 	"github.com/whiskeyjimbo/veska/internal/cli/repocmd"
 	"github.com/whiskeyjimbo/veska/internal/composition"
@@ -212,5 +212,5 @@ func buildWikiHandler(pools *sqlite.Pools) (*wiki.Handler, error) {
 		}
 		return matched.RootPath, nil
 	}
-	return composition.NewWikiHandler(pools, application.NewStagingArea(), wikiRoot, true)
+	return composition.NewWikiHandler(pools, staging.NewArea(), wikiRoot, true)
 }

@@ -46,7 +46,15 @@ func contextPackFixture(t *testing.T, opts ...contextpack.Option) *contextpack.A
 	activeTask := func(_ context.Context, repoID string) (*contextpack.TaskInfo, error) {
 		return &contextpack.TaskInfo{TaskID: "t1", RepoID: repoID, Title: "work", Active: true}, nil
 	}
-	a, err := contextpack.NewAssembler(findNodes, blast, fileHistory, openFindings, changedFiles, nodes.NodesInFile, activeTask, opts...)
+	a, err := contextpack.NewAssembler(contextpack.AssemblerDeps{
+		FindNodes:    findNodes,
+		Blast:        blast,
+		FileHistory:  fileHistory,
+		OpenFindings: openFindings,
+		ChangedFiles: changedFiles,
+		NodesInFile:  nodes.NodesInFile,
+		ActiveTask:   activeTask,
+	}, opts...)
 	if err != nil {
 		t.Fatalf("NewAssembler: %v", err)
 	}

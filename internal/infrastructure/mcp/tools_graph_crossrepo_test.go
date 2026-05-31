@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	application "github.com/whiskeyjimbo/veska/internal/application"
+	"github.com/whiskeyjimbo/veska/internal/application/staging"
 	"github.com/whiskeyjimbo/veska/internal/core/domain"
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/sqlite/resolver"
 )
@@ -40,7 +40,7 @@ func TestGetCallChainCrossRepoEdges(t *testing.T) {
 	}
 
 	r := NewRegistry()
-	RegisterGraphTools(r, store, application.NewStagingArea(), WithResolveFunc(mockResolve))
+	RegisterGraphTools(r, store, staging.NewArea(), WithResolveFunc(mockResolve))
 
 	resp, rpcErr := dispatchCallChain(t, r, "eng_get_call_chain", map[string]any{
 		"node_id": "a",
@@ -87,7 +87,7 @@ func TestGetCallChainNoCrossRepoByDefault(t *testing.T) {
 	store.addEdge(mustEdge(t, "a", "b", domain.EdgeCalls))
 
 	r := NewRegistry()
-	RegisterGraphTools(r, store, application.NewStagingArea())
+	RegisterGraphTools(r, store, staging.NewArea())
 
 	resp, rpcErr := dispatchCallChain(t, r, "eng_get_call_chain", map[string]any{
 		"node_id": "a",
@@ -124,7 +124,7 @@ func TestGetCallChainCrossRepoSilentMiss(t *testing.T) {
 	}
 
 	r := NewRegistry()
-	RegisterGraphTools(r, store, application.NewStagingArea(), WithResolveFunc(mockResolve))
+	RegisterGraphTools(r, store, staging.NewArea(), WithResolveFunc(mockResolve))
 
 	resp, rpcErr := dispatchCallChain(t, r, "eng_get_call_chain", map[string]any{
 		"node_id": "a",
@@ -167,7 +167,7 @@ func TestGetCallChainBFSDoesNotFollowCrossRepoEdges(t *testing.T) {
 	}
 
 	r := NewRegistry()
-	RegisterGraphTools(r, store, application.NewStagingArea(), WithResolveFunc(mockResolve))
+	RegisterGraphTools(r, store, staging.NewArea(), WithResolveFunc(mockResolve))
 
 	resp, rpcErr := dispatchCallChain(t, r, "eng_get_call_chain", map[string]any{
 		"node_id": "a",

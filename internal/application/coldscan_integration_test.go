@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/whiskeyjimbo/veska/internal/application"
+	"github.com/whiskeyjimbo/veska/internal/application/staging"
 	infrafs "github.com/whiskeyjimbo/veska/internal/infrastructure/fs"
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/treesitter"
 )
@@ -65,10 +66,10 @@ func TestColdScanReparser_Integration_RealPipeline(t *testing.T) {
 
 	// Real pipeline: tree-sitter GoParser → Ingester → Promoter (sqlite store).
 	parser := treesitter.NewGoParser()
-	staging := application.NewStagingArea()
-	gate := application.NewIngestionGate(staging)
-	ingester := application.NewIngester(parser, staging, gate)
-	promoter := newTestPromoter(staging, db)
+	area := staging.NewArea()
+	gate := staging.NewGate(area)
+	ingester := application.NewIngester(parser, area, gate)
+	promoter := newTestPromoter(area, db)
 
 	reparser, err := application.NewColdScanReparser(
 		ingester, promoter, &fakeColdScanGit{head: "sha-1"},

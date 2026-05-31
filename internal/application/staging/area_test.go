@@ -1,4 +1,4 @@
-package application
+package staging
 
 import (
 	"sync"
@@ -27,25 +27,25 @@ func mustEdge(t *testing.T, src, tgt domain.NodeID, kind domain.EdgeKind) *domai
 	return e
 }
 
-// TestNewStagingArea_IsEmpty verifies that a freshly-constructed StagingArea
+// TestNewArea_IsEmpty verifies that a freshly-constructed Area
 // holds no state (lossy-by-design: no persistence across constructions).
-func TestNewStagingArea_IsEmpty(t *testing.T) {
-	sa := NewStagingArea()
+func TestNewArea_IsEmpty(t *testing.T) {
+	sa := NewArea()
 
 	nodes, ok := sa.GetStagedNodes("repo1", "main", "foo.go")
 	if ok {
-		t.Fatal("expected no staged nodes in fresh StagingArea")
+		t.Fatal("expected no staged nodes in fresh Area")
 	}
 	if nodes != nil {
-		t.Fatal("expected nil nodes slice from empty StagingArea")
+		t.Fatal("expected nil nodes slice from empty Area")
 	}
 
 	edges, ok := sa.GetStagedEdges("repo1", "main", "foo.go")
 	if ok {
-		t.Fatal("expected no staged edges in fresh StagingArea")
+		t.Fatal("expected no staged edges in fresh Area")
 	}
 	if edges != nil {
-		t.Fatal("expected nil edges slice from empty StagingArea")
+		t.Fatal("expected nil edges slice from empty Area")
 	}
 
 	files := sa.StagedFiles("repo1", "main")
@@ -57,12 +57,12 @@ func TestNewStagingArea_IsEmpty(t *testing.T) {
 // TestStageFile_RoundTrip verifies that staged nodes and edges are immediately
 // visible via GetStagedNodes / GetStagedEdges (overlay read).
 func TestStageFile_RoundTrip(t *testing.T) {
-	sa := NewStagingArea()
+	sa := NewArea()
 
 	n := mustNode(t, "n1", "pkg/foo.go", "Foo", domain.KindFunction)
 	e := mustEdge(t, "n1", "n2", domain.EdgeCalls)
 
-	sa.Stage("repo1", "main", "pkg/foo.go", StagedFile{Nodes: []*domain.Node{n}, Edges: []*domain.Edge{e}})
+	sa.Stage("repo1", "main", "pkg/foo.go", File{Nodes: []*domain.Node{n}, Edges: []*domain.Edge{e}})
 
 	nodes, ok := sa.GetStagedNodes("repo1", "main", "pkg/foo.go")
 	if !ok {
@@ -83,13 +83,13 @@ func TestStageFile_RoundTrip(t *testing.T) {
 
 // TestStageFile_Replace verifies that staging a file twice replaces the first entry.
 func TestStageFile_Replace(t *testing.T) {
-	sa := NewStagingArea()
+	sa := NewArea()
 
 	n1 := mustNode(t, "n1", "pkg/foo.go", "Foo", domain.KindFunction)
 	n2 := mustNode(t, "n2", "pkg/foo.go", "Bar", domain.KindFunction)
 
-	sa.Stage("repo1", "main", "pkg/foo.go", StagedFile{Nodes: []*domain.Node{n1}, Edges: nil})
-	sa.Stage("repo1", "main", "pkg/foo.go", StagedFile{Nodes: []*domain.Node{n2}, Edges: nil})
+	sa.Stage("repo1", "main", "pkg/foo.go", File{Nodes: []*domain.Node{n1}, Edges: nil})
+	sa.Stage("repo1", "main", "pkg/foo.go", File{Nodes: []*domain.Node{n2}, Edges: nil})
 
 	nodes, ok := sa.GetStagedNodes("repo1", "main", "pkg/foo.go")
 	if !ok {
@@ -100,15 +100,15 @@ func TestStageFile_Replace(t *testing.T) {
 	}
 }
 
-// TestStagedFiles_ListsPaths verifies that StagedFiles returns all staged paths
+// TestFiles_ListsPaths verifies that Files returns all staged paths
 // for a given repo+branch combination, without paths from other branches.
-func TestStagedFiles_ListsPaths(t *testing.T) {
-	sa := NewStagingArea()
+func TestFiles_ListsPaths(t *testing.T) {
+	sa := NewArea()
 
-	sa.Stage("repo1", "main", "a.go", StagedFile{Nodes: nil, Edges: nil})
-	sa.Stage("repo1", "main", "b.go", StagedFile{Nodes: nil, Edges: nil})
-	sa.Stage("repo1", "feat/x", "c.go", StagedFile{Nodes: nil, Edges: nil}) // different branch
-	sa.Stage("repo2", "main", "d.go", StagedFile{Nodes: nil, Edges: nil})   // different repo
+	sa.Stage("repo1", "main", "a.go", File{Nodes: nil, Edges: nil})
+	sa.Stage("repo1", "main", "b.go", File{Nodes: nil, Edges: nil})
+	sa.Stage("repo1", "feat/x", "c.go", File{Nodes: nil, Edges: nil}) // different branch
+	sa.Stage("repo2", "main", "d.go", File{Nodes: nil, Edges: nil})   // different repo
 
 	files := sa.StagedFiles("repo1", "main")
 	if len(files) != 2 {
@@ -123,18 +123,18 @@ func TestStagedFiles_ListsPaths(t *testing.T) {
 	}
 }
 
-// TestDeleteStagedFile verifies that a file is removed from staging after deletion.
-func TestDeleteStagedFile(t *testing.T) {
-	sa := NewStagingArea()
+// TestDeleteFile verifies that a file is removed from staging after deletion.
+func TestDeleteFile(t *testing.T) {
+	sa := NewArea()
 
 	n := mustNode(t, "n1", "pkg/foo.go", "Foo", domain.KindFunction)
-	sa.Stage("repo1", "main", "pkg/foo.go", StagedFile{Nodes: []*domain.Node{n}, Edges: nil})
+	sa.Stage("repo1", "main", "pkg/foo.go", File{Nodes: []*domain.Node{n}, Edges: nil})
 
 	sa.DeleteStagedFile("repo1", "main", "pkg/foo.go")
 
 	_, ok := sa.GetStagedNodes("repo1", "main", "pkg/foo.go")
 	if ok {
-		t.Fatal("expected node to be absent after DeleteStagedFile")
+		t.Fatal("expected node to be absent after DeleteFile")
 	}
 	files := sa.StagedFiles("repo1", "main")
 	if len(files) != 0 {
@@ -144,11 +144,11 @@ func TestDeleteStagedFile(t *testing.T) {
 
 // TestClear verifies that Clear removes all staged state for a branch.
 func TestClear(t *testing.T) {
-	sa := NewStagingArea()
+	sa := NewArea()
 
-	sa.Stage("repo1", "main", "a.go", StagedFile{Nodes: nil, Edges: nil})
-	sa.Stage("repo1", "main", "b.go", StagedFile{Nodes: nil, Edges: nil})
-	sa.Stage("repo1", "feat/x", "c.go", StagedFile{Nodes: nil, Edges: nil}) // different branch — must survive
+	sa.Stage("repo1", "main", "a.go", File{Nodes: nil, Edges: nil})
+	sa.Stage("repo1", "main", "b.go", File{Nodes: nil, Edges: nil})
+	sa.Stage("repo1", "feat/x", "c.go", File{Nodes: nil, Edges: nil}) // different branch — must survive
 
 	sa.Clear("repo1", "main")
 
@@ -163,13 +163,13 @@ func TestClear(t *testing.T) {
 
 // TestSnapshot returns a copy of staged nodes keyed by filePath.
 func TestSnapshot(t *testing.T) {
-	sa := NewStagingArea()
+	sa := NewArea()
 
 	n1 := mustNode(t, "n1", "a.go", "A", domain.KindFunction)
 	n2 := mustNode(t, "n2", "b.go", "B", domain.KindFunction)
-	sa.Stage("repo1", "main", "a.go", StagedFile{Nodes: []*domain.Node{n1}, Edges: nil})
-	sa.Stage("repo1", "main", "b.go", StagedFile{Nodes: []*domain.Node{n2}, Edges: nil})
-	sa.Stage("repo1", "feat/x", "c.go", StagedFile{Nodes: nil, Edges: nil}) // different branch
+	sa.Stage("repo1", "main", "a.go", File{Nodes: []*domain.Node{n1}, Edges: nil})
+	sa.Stage("repo1", "main", "b.go", File{Nodes: []*domain.Node{n2}, Edges: nil})
+	sa.Stage("repo1", "feat/x", "c.go", File{Nodes: nil, Edges: nil}) // different branch
 
 	snap := sa.Snapshot("repo1", "main")
 	if len(snap) != 2 {
@@ -185,10 +185,10 @@ func TestSnapshot(t *testing.T) {
 
 // TestSnapshot_IsCopy verifies that mutating the snapshot does not affect staging.
 func TestSnapshot_IsCopy(t *testing.T) {
-	sa := NewStagingArea()
+	sa := NewArea()
 
 	n := mustNode(t, "n1", "a.go", "A", domain.KindFunction)
-	sa.Stage("repo1", "main", "a.go", StagedFile{Nodes: []*domain.Node{n}, Edges: nil})
+	sa.Stage("repo1", "main", "a.go", File{Nodes: []*domain.Node{n}, Edges: nil})
 
 	snap := sa.Snapshot("repo1", "main")
 	delete(snap, "a.go")
@@ -201,24 +201,24 @@ func TestSnapshot_IsCopy(t *testing.T) {
 }
 
 // TestLosy_NewInstance verifies the lossy-across-restart guarantee:
-// constructing a new StagingArea starts empty regardless of previous instance.
+// constructing a new Area starts empty regardless of previous instance.
 func TestLossy_NewInstance(t *testing.T) {
-	sa1 := NewStagingArea()
+	sa1 := NewArea()
 	n := mustNode(t, "n1", "a.go", "A", domain.KindFunction)
-	sa1.Stage("repo1", "main", "a.go", StagedFile{Nodes: []*domain.Node{n}, Edges: nil})
+	sa1.Stage("repo1", "main", "a.go", File{Nodes: []*domain.Node{n}, Edges: nil})
 
 	// Simulate daemon restart by creating a new instance.
-	sa2 := NewStagingArea()
+	sa2 := NewArea()
 	_, ok := sa2.GetStagedNodes("repo1", "main", "a.go")
 	if ok {
-		t.Fatal("new StagingArea must not inherit state from prior instance (lossy)")
+		t.Fatal("new Area must not inherit state from prior instance (lossy)")
 	}
 }
 
 // TestStageFile_Concurrent verifies that concurrent StageFile / GetStagedNodes
 // calls do not race (detected by -race).
 func TestStageFile_Concurrent(t *testing.T) {
-	sa := NewStagingArea()
+	sa := NewArea()
 
 	const workers = 20
 	var wg sync.WaitGroup
@@ -228,7 +228,7 @@ func TestStageFile_Concurrent(t *testing.T) {
 		go func(i int) {
 			defer wg.Done()
 			n, _ := domain.NewNode("n", "f.go", "F", domain.KindFunction)
-			sa.Stage("repo", "main", "f.go", StagedFile{Nodes: []*domain.Node{n}, Edges: nil})
+			sa.Stage("repo", "main", "f.go", File{Nodes: []*domain.Node{n}, Edges: nil})
 			_ = i
 		}(i)
 		go func() {
@@ -239,13 +239,13 @@ func TestStageFile_Concurrent(t *testing.T) {
 	wg.Wait()
 }
 
-// TestStagedFiles_EmptySlice verifies StagedFiles returns an empty (non-nil) slice
+// TestFiles_EmptySlice verifies Files returns an empty (non-nil) slice
 // when nothing is staged for a repo+branch.
-func TestStagedFiles_EmptySlice(t *testing.T) {
-	sa := NewStagingArea()
+func TestFiles_EmptySlice(t *testing.T) {
+	sa := NewArea()
 	files := sa.StagedFiles("repo1", "main")
 	if files == nil {
-		t.Fatal("StagedFiles must return non-nil empty slice, not nil")
+		t.Fatal("Files must return non-nil empty slice, not nil")
 		return
 	}
 }
@@ -253,7 +253,7 @@ func TestStagedFiles_EmptySlice(t *testing.T) {
 // TestOverlay_MissDoesNotMutate verifies that a cache miss (ok==false) returns
 // nil slices without altering the store.
 func TestOverlay_MissDoesNotMutate(t *testing.T) {
-	sa := NewStagingArea()
+	sa := NewArea()
 
 	nodes, ok := sa.GetStagedNodes("repo1", "main", "missing.go")
 	if ok || nodes != nil {

@@ -6,6 +6,7 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/whiskeyjimbo/veska/internal/application/staging"
 	"github.com/whiskeyjimbo/veska/internal/core/domain"
 )
 
@@ -93,15 +94,15 @@ func TestIngester_Save_StagesResult(t *testing.T) {
 	parser := &stubParser{
 		result: &domain.ParseResult{Nodes: nodes, Edges: edges},
 	}
-	staging := NewStagingArea()
-	ing := NewIngester(parser, staging, NewIngestionGate(staging))
+	area := staging.NewArea()
+	ing := NewIngester(parser, area, staging.NewGate(area))
 
 	ing.Save(context.Background(), "repo1", "main", "foo/bar.go", []byte("package foo"))
 	if !parser.called {
 		t.Fatal("expected ParseFile to be called")
 	}
 
-	gotNodes, ok := staging.GetStagedNodes("repo1", "main", "foo/bar.go")
+	gotNodes, ok := area.GetStagedNodes("repo1", "main", "foo/bar.go")
 	if !ok {
 		t.Fatal("expected file to be staged after Save")
 	}
@@ -109,7 +110,7 @@ func TestIngester_Save_StagesResult(t *testing.T) {
 		t.Fatalf("expected 1 staged node, got %d", len(gotNodes))
 	}
 
-	gotEdges, ok := staging.GetStagedEdges("repo1", "main", "foo/bar.go")
+	gotEdges, ok := area.GetStagedEdges("repo1", "main", "foo/bar.go")
 	if !ok {
 		t.Fatal("expected staged edges to be present")
 	}
@@ -120,12 +121,12 @@ func TestIngester_Save_StagesResult(t *testing.T) {
 
 func TestIngester_Save_ParseErrorIsNonFatal(t *testing.T) {
 	parser := &stubParser{err: errors.New("syntax error")}
-	staging := NewStagingArea()
-	ing := NewIngester(parser, staging, NewIngestionGate(staging))
+	area := staging.NewArea()
+	ing := NewIngester(parser, area, staging.NewGate(area))
 
 	ing.Save(context.Background(), "repo1", "main", "bad.go", []byte("not go"))
 
-	_, staged := staging.GetStagedNodes("repo1", "main", "bad.go")
+	_, staged := area.GetStagedNodes("repo1", "main", "bad.go")
 	if staged {
 		t.Fatal("file should not be staged when parse fails")
 	}
@@ -135,19 +136,19 @@ func TestIngester_DeleteFile_RemovesFromStaging(t *testing.T) {
 	parser := &stubParser{
 		result: &domain.ParseResult{Nodes: []*domain.Node{{}}, Edges: nil},
 	}
-	staging := NewStagingArea()
-	ing := NewIngester(parser, staging, NewIngestionGate(staging))
+	area := staging.NewArea()
+	ing := NewIngester(parser, area, staging.NewGate(area))
 
 	ing.Save(context.Background(), "repo1", "main", "del.go", []byte("package x"))
 
-	_, staged := staging.GetStagedNodes("repo1", "main", "del.go")
+	_, staged := area.GetStagedNodes("repo1", "main", "del.go")
 	if !staged {
 		t.Fatal("expected file to be staged before delete")
 	}
 
 	ing.DeleteFile("repo1", "main", "del.go")
 
-	_, staged = staging.GetStagedNodes("repo1", "main", "del.go")
+	_, staged = area.GetStagedNodes("repo1", "main", "del.go")
 	if staged {
 		t.Fatal("expected file to be removed from staging after DeleteFile")
 	}
@@ -159,9 +160,9 @@ func TestIngester_Save_ParseFailureEmitsFinding(t *testing.T) {
 			Failures: []domain.ParseFailure{{Line: 3, Message: "syntax error"}},
 		},
 	}
-	staging := NewStagingArea()
+	area := staging.NewArea()
 	store := &recordingFindingStorage{}
-	ing := NewIngester(parser, staging, NewIngestionGate(staging), WithFindingStorage(store))
+	ing := NewIngester(parser, area, staging.NewGate(area), WithFindingStorage(store))
 
 	ing.Save(context.Background(), "repo1", "main", "src/bad.ts", []byte("broken"))
 
@@ -193,9 +194,9 @@ func TestIngester_Save_ParseFailureIdempotent(t *testing.T) {
 			Failures: []domain.ParseFailure{{Line: 1, Message: "syntax error"}},
 		},
 	}
-	staging := NewStagingArea()
+	area := staging.NewArea()
 	store := &recordingFindingStorage{}
-	ing := NewIngester(parser, staging, NewIngestionGate(staging), WithFindingStorage(store))
+	ing := NewIngester(parser, area, staging.NewGate(area), WithFindingStorage(store))
 
 	// Ingest the same broken file twice.
 	for range 2 {
@@ -217,9 +218,9 @@ func TestIngester_Save_CleanParseEmitsNoFinding(t *testing.T) {
 	parser := &stubParser{
 		result: &domain.ParseResult{Nodes: []*domain.Node{{}}},
 	}
-	staging := NewStagingArea()
+	area := staging.NewArea()
 	store := &recordingFindingStorage{}
-	ing := NewIngester(parser, staging, NewIngestionGate(staging), WithFindingStorage(store))
+	ing := NewIngester(parser, area, staging.NewGate(area), WithFindingStorage(store))
 
 	ing.Save(context.Background(), "repo1", "main", "ok.go", []byte("package x"))
 	if got := store.snapshot(); len(got) != 0 {
@@ -228,10 +229,10 @@ func TestIngester_Save_CleanParseEmitsNoFinding(t *testing.T) {
 }
 
 func TestIngester_Save_CleanReparseClosesParseFailureFinding(t *testing.T) {
-	staging := NewStagingArea()
+	area := staging.NewArea()
 	store := &recordingFindingStorage{}
 	parser := &stubParser{}
-	ing := NewIngester(parser, staging, NewIngestionGate(staging), WithFindingStorage(store))
+	ing := NewIngester(parser, area, staging.NewGate(area), WithFindingStorage(store))
 
 	const path = "src/bad.ts"
 
@@ -260,10 +261,10 @@ func TestIngester_Save_CleanReparseClosesParseFailureFinding(t *testing.T) {
 }
 
 func TestIngester_Save_CleanParseNeverFailed_NoFindingCreated(t *testing.T) {
-	staging := NewStagingArea()
+	area := staging.NewArea()
 	store := &recordingFindingStorage{}
 	parser := &stubParser{result: &domain.ParseResult{Nodes: []*domain.Node{{}}}}
-	ing := NewIngester(parser, staging, NewIngestionGate(staging), WithFindingStorage(store))
+	ing := NewIngester(parser, area, staging.NewGate(area), WithFindingStorage(store))
 
 	ing.Save(context.Background(), "repo1", "main", "ok.go", []byte("package x"))
 
@@ -278,8 +279,8 @@ func TestIngester_Save_ParseFailureWithoutFindingStorage_NoPanic(t *testing.T) {
 			Failures: []domain.ParseFailure{{Line: 1, Message: "syntax error"}},
 		},
 	}
-	staging := NewStagingArea()
-	ing := NewIngester(parser, staging, NewIngestionGate(staging))
+	area := staging.NewArea()
+	ing := NewIngester(parser, area, staging.NewGate(area))
 	// Deliberately omit WithFindingStorage.
 
 	ing.Save(context.Background(), "repo1", "main", "src/bad.ts", []byte("broken"))
@@ -290,14 +291,14 @@ func TestIngester_Save_EmptyParseResultStagesFile(t *testing.T) {
 	parser := &stubParser{
 		result: &domain.ParseResult{Nodes: nil, Edges: nil},
 	}
-	staging := NewStagingArea()
+	area := staging.NewArea()
 	// Pre-seed staging with an old entry.
-	staging.Stage("repo1", "main", "empty.go", StagedFile{Nodes: []*domain.Node{{}}, Edges: nil})
+	area.Stage("repo1", "main", "empty.go", staging.File{Nodes: []*domain.Node{{}}, Edges: nil})
 
-	ing := NewIngester(parser, staging, NewIngestionGate(staging))
+	ing := NewIngester(parser, area, staging.NewGate(area))
 	ing.Save(context.Background(), "repo1", "main", "empty.go", []byte("package x"))
 
-	gotNodes, ok := staging.GetStagedNodes("repo1", "main", "empty.go")
+	gotNodes, ok := area.GetStagedNodes("repo1", "main", "empty.go")
 	if !ok {
 		t.Fatal("expected staging entry to exist after Save with empty result")
 	}

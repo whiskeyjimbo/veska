@@ -6,21 +6,22 @@ import (
 
 	"go.opentelemetry.io/otel/trace/noop"
 
+	"github.com/whiskeyjimbo/veska/internal/application/staging"
 	"github.com/whiskeyjimbo/veska/internal/core/ports"
 	"github.com/whiskeyjimbo/veska/internal/platform/observability"
 )
 
 // Ingester orchestrates the parse-on-save hot path:
-// CodeParser.ParseFile → StagingArea write.
+// CodeParser.ParseFile → staging.Area write.
 // It never touches SQLite for graph writes; all graph state goes to the
-// in-memory StagingArea only. Parse failures, however, are surfaced as
+// in-memory staging.Area only. Parse failures, however, are surfaced as
 // Findings through the optional FindingStorage port (wired via
 // WithFindingStorage) so structural problems are visible to operators before
 // commit-seal time.
 type Ingester struct {
 	parser  ports.CodeParser
-	staging *StagingArea
-	gate    *IngestionGate
+	staging *staging.Area
+	gate    *staging.Gate
 	tp      observability.TracerProvider
 	emitter *findingEmitter
 }
@@ -47,10 +48,10 @@ func WithFindingStorage(s ports.FindingStorage) IngesterOption {
 // NewIngester constructs an Ingester wired to the provided parser, staging area,
 // and ingestion gate. The gate guards against branch-switch races. Optional
 // collaborators (tracer, finding storage) are supplied via IngesterOption.
-func NewIngester(parser ports.CodeParser, staging *StagingArea, gate *IngestionGate, opts ...IngesterOption) *Ingester {
+func NewIngester(parser ports.CodeParser, area *staging.Area, gate *staging.Gate, opts ...IngesterOption) *Ingester {
 	ing := &Ingester{
 		parser:  parser,
-		staging: staging,
+		staging: area,
 		gate:    gate,
 	}
 	for _, o := range opts {
@@ -124,12 +125,12 @@ func (ing *Ingester) save(ctx context.Context, repoID, branch, path string, src 
 		)
 		return
 	}
-	ing.staging.Stage(repoID, branch, path, StagedFile{
+	ing.staging.Stage(repoID, branch, path, staging.File{
 		Nodes:           result.Nodes,
 		Edges:           result.Edges,
 		UnresolvedCalls: result.UnresolvedCalls,
 		Imports:         result.Imports,
-	}, WithGenerationGuard(gen, ing.gate))
+	}, staging.WithGenerationGuard(gen, ing.gate))
 	if len(result.Failures) == 0 {
 		// fsnotify-driven Save path: a clean parse closes any
 		// parse-failure finding the file carried from an earlier

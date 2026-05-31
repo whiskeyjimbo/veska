@@ -24,9 +24,9 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/whiskeyjimbo/veska/internal/platform/config"
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/embedding/model2vec"
 	embedstatic "github.com/whiskeyjimbo/veska/internal/infrastructure/embedding/static"
+	"github.com/whiskeyjimbo/veska/internal/platform/config"
 )
 
 // benchEmbedText is a representative code snippet — the kind of projection

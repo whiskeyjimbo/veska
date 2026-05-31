@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/whiskeyjimbo/veska/internal/application"
+	"github.com/whiskeyjimbo/veska/internal/application/staging"
 	"github.com/whiskeyjimbo/veska/internal/core/domain"
 )
 
@@ -32,9 +33,9 @@ func TestPromote_InvokesCheckRunnerPostCommit(t *testing.T) {
 	db := openMemDB(t)
 	insertTestRepo(t, db, "repo1")
 
-	sa := application.NewStagingArea()
+	sa := staging.NewArea()
 	n, _ := domain.NewNode("n1", "a.go", "A", domain.KindFunction)
-	sa.Stage("repo1", "main", "a.go", application.StagedFile{Nodes: []*domain.Node{n}, Edges: nil})
+	sa.Stage("repo1", "main", "a.go", staging.File{Nodes: []*domain.Node{n}, Edges: nil})
 
 	fr := &fakeCheckRunner{}
 	p := newTestPromoter(sa, db, application.WithCheckRunner(fr))
@@ -70,9 +71,9 @@ func TestPromote_PopulatesAddedLinesFromSeam(t *testing.T) {
 	db := openMemDB(t)
 	insertTestRepo(t, db, "repo1")
 
-	sa := application.NewStagingArea()
+	sa := staging.NewArea()
 	n, _ := domain.NewNode("n1", "a.go", "A", domain.KindFunction)
-	sa.Stage("repo1", "main", "a.go", application.StagedFile{Nodes: []*domain.Node{n}, Edges: nil})
+	sa.Stage("repo1", "main", "a.go", staging.File{Nodes: []*domain.Node{n}, Edges: nil})
 
 	want := map[string][]application.Line{
 		"a.go": {{Number: 1, Text: "package a"}, {Number: 2, Text: "func A() {}"}},
@@ -111,9 +112,9 @@ func TestPromote_NoAddedLinesFunc(t *testing.T) {
 	db := openMemDB(t)
 	insertTestRepo(t, db, "repo1")
 
-	sa := application.NewStagingArea()
+	sa := staging.NewArea()
 	n, _ := domain.NewNode("n1", "a.go", "A", domain.KindFunction)
-	sa.Stage("repo1", "main", "a.go", application.StagedFile{Nodes: []*domain.Node{n}, Edges: nil})
+	sa.Stage("repo1", "main", "a.go", staging.File{Nodes: []*domain.Node{n}, Edges: nil})
 
 	fr := &fakeCheckRunner{}
 	p := newTestPromoter(sa, db, application.WithCheckRunner(fr))
@@ -133,9 +134,9 @@ func TestPromote_NoCheckRunner(t *testing.T) {
 	db := openMemDB(t)
 	insertTestRepo(t, db, "repo1")
 
-	sa := application.NewStagingArea()
+	sa := staging.NewArea()
 	n, _ := domain.NewNode("n1", "a.go", "A", domain.KindFunction)
-	sa.Stage("repo1", "main", "a.go", application.StagedFile{Nodes: []*domain.Node{n}, Edges: nil})
+	sa.Stage("repo1", "main", "a.go", staging.File{Nodes: []*domain.Node{n}, Edges: nil})
 
 	p := newTestPromoter(sa, db)
 	// Intentionally do not call SetCheckRunner.
@@ -157,7 +158,7 @@ func TestPromote_CheckRunnerSkippedWhenNothingStaged(t *testing.T) {
 	insertTestRepo(t, db, "repo1")
 
 	fr := &fakeCheckRunner{}
-	p := newTestPromoter(application.NewStagingArea(), db, application.WithCheckRunner(fr))
+	p := newTestPromoter(staging.NewArea(), db, application.WithCheckRunner(fr))
 
 	if err := p.Promote(context.Background(), "repo1", "main", "sha-xyz",
 		domain.Actor{ID: "service:veska", Kind: domain.ActorKindSystem}); err != nil {

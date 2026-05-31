@@ -1,4 +1,4 @@
-package application
+package staging
 
 import (
 	"context"
@@ -13,8 +13,8 @@ import (
 // TestWaitIfPaused_NotPaused verifies that WaitIfPaused returns immediately
 // when the gate is not paused.
 func TestWaitIfPaused_NotPaused(t *testing.T) {
-	sa := NewStagingArea()
-	g := NewIngestionGate(sa)
+	sa := NewArea()
+	g := NewGate(sa)
 
 	done := make(chan struct{})
 	go func() {
@@ -33,8 +33,8 @@ func TestWaitIfPaused_NotPaused(t *testing.T) {
 // TestWaitIfPaused_BlocksAndUnblocks verifies that WaitIfPaused blocks while
 // the gate is paused and unblocks after Resume is called.
 func TestWaitIfPaused_BlocksAndUnblocks(t *testing.T) {
-	sa := NewStagingArea()
-	g := NewIngestionGate(sa)
+	sa := NewArea()
+	g := NewGate(sa)
 
 	g.Pause()
 
@@ -65,8 +65,8 @@ func TestWaitIfPaused_BlocksAndUnblocks(t *testing.T) {
 // TestBumpGeneration_Increments verifies that BumpGeneration returns
 // monotonically increasing values and Generation reflects the current value.
 func TestBumpGeneration_Increments(t *testing.T) {
-	sa := NewStagingArea()
-	g := NewIngestionGate(sa)
+	sa := NewArea()
+	g := NewGate(sa)
 
 	if gen := g.Generation(); gen != 0 {
 		t.Fatalf("expected initial generation 0, got %d", gen)
@@ -92,21 +92,21 @@ func TestBumpGeneration_Increments(t *testing.T) {
 // TestBranchSwitch_ClearsAndResumes verifies that BranchSwitch clears staging for
 // the previous branch, calls drainFn, and leaves the gate unpaused.
 func TestBranchSwitch_ClearsAndResumes(t *testing.T) {
-	sa := NewStagingArea()
+	sa := NewArea()
 
 	// Stage some data on prevBranch.
 	n, err := domain.NewNode("n1", "a.go", "A", domain.KindFunction)
 	if err != nil {
 		t.Fatalf("NewNode: %v", err)
 	}
-	sa.Stage("repo1", "main", "a.go", StagedFile{Nodes: []*domain.Node{n}, Edges: nil})
+	sa.Stage("repo1", "main", "a.go", File{Nodes: []*domain.Node{n}, Edges: nil})
 
 	// Verify it is there.
 	if files := sa.StagedFiles("repo1", "main"); len(files) != 1 {
 		t.Fatalf("pre-condition: expected 1 staged file, got %d", len(files))
 	}
 
-	g := NewIngestionGate(sa)
+	g := NewGate(sa)
 
 	drainCalled := false
 	drainFn := func(_ context.Context) error {
@@ -136,8 +136,8 @@ func TestBranchSwitch_ClearsAndResumes(t *testing.T) {
 // TestBranchSwitch_DrainError_StillResumes verifies that a drainFn error does
 // not leave the gate paused (no deadlock).
 func TestBranchSwitch_DrainError_StillResumes(t *testing.T) {
-	sa := NewStagingArea()
-	g := NewIngestionGate(sa)
+	sa := NewArea()
+	g := NewGate(sa)
 
 	drainErr := errors.New("queue drain failed")
 	drainFn := func(_ context.Context) error {
@@ -171,8 +171,8 @@ func TestBranchSwitch_DrainError_StillResumes(t *testing.T) {
 // TestStaleGenerationWrite verifies that StageIfCurrentGeneration discards writes
 // whose generation counter is stale and accepts writes at the current generation.
 func TestStaleGenerationWrite(t *testing.T) {
-	sa := NewStagingArea()
-	g := NewIngestionGate(sa)
+	sa := NewArea()
+	g := NewGate(sa)
 
 	n, err := domain.NewNode("n1", "a.go", "A", domain.KindFunction)
 	if err != nil {
@@ -184,7 +184,7 @@ func TestStaleGenerationWrite(t *testing.T) {
 	g.BumpGeneration()         // current is now 1
 
 	// Stale write must be rejected.
-	ok := sa.Stage("repo1", "main", "a.go", StagedFile{Nodes: []*domain.Node{n}, Edges: nil}, WithGenerationGuard(staleGen, g))
+	ok := sa.Stage("repo1", "main", "a.go", File{Nodes: []*domain.Node{n}, Edges: nil}, WithGenerationGuard(staleGen, g))
 	if ok {
 		t.Fatal("StageIfCurrentGeneration must return false for stale generation")
 	}
@@ -194,7 +194,7 @@ func TestStaleGenerationWrite(t *testing.T) {
 
 	// Current-generation write must be accepted.
 	currentGen := g.Generation() // 1
-	ok = sa.Stage("repo1", "main", "a.go", StagedFile{Nodes: []*domain.Node{n}, Edges: nil}, WithGenerationGuard(currentGen, g))
+	ok = sa.Stage("repo1", "main", "a.go", File{Nodes: []*domain.Node{n}, Edges: nil}, WithGenerationGuard(currentGen, g))
 	if !ok {
 		t.Fatal("StageIfCurrentGeneration must return true for current generation")
 	}
@@ -206,8 +206,8 @@ func TestStaleGenerationWrite(t *testing.T) {
 // TestConcurrentWaitIfPaused verifies that multiple goroutines blocked in
 // WaitIfPaused are all released when Resume is called.
 func TestConcurrentWaitIfPaused(t *testing.T) {
-	sa := NewStagingArea()
-	g := NewIngestionGate(sa)
+	sa := NewArea()
+	g := NewGate(sa)
 
 	const workers = 10
 	g.Pause()

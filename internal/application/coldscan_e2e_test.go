@@ -13,6 +13,7 @@ import (
 
 	"github.com/whiskeyjimbo/veska/internal/application"
 	"github.com/whiskeyjimbo/veska/internal/application/embedder"
+	"github.com/whiskeyjimbo/veska/internal/application/staging"
 	"github.com/whiskeyjimbo/veska/internal/core/domain"
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/embedding/ollama"
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/sqlite"
@@ -120,11 +121,11 @@ func runColdScanE2E(t *testing.T, kind vector.BackendKind) {
 
 	// Parse / promote chain — identical to wire.go.
 	parser := treesitter.NewGoParser()
-	staging := application.NewStagingArea()
-	gate := application.NewIngestionGate(staging)
-	ingester := application.NewIngester(parser, staging, gate)
+	area := staging.NewArea()
+	gate := staging.NewGate(area)
+	ingester := application.NewIngester(parser, area, gate)
 	store := sqlite.NewPromotionStore(db, []sqlite.PromotionSink{sqlite.NewFTSSink(), sqlite.NewEmbedRefSink()})
-	promoter := application.NewPromoter(staging, store)
+	promoter := application.NewPromoter(area, store)
 
 	reparser, err := application.NewColdScanReparser(
 		ingester, promoter, &fakeColdScanGit{head: "sha-e2e"},

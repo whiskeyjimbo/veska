@@ -1,7 +1,3 @@
-// Package application contains use-case services that orchestrate the
-// domain entities. Implementations of side-effecting ports (storage,
-// parsers, embedding providers) are wired in from the infrastructure
-// layer via constructors defined elsewhere in this package.
 package application
 
 import (
@@ -64,13 +60,13 @@ func (allowAllMatcher) ShouldIgnore(string) bool { return false }
 // "ignore nothing" default.
 func defaultIgnoreLoader(string) (IgnoreMatcher, error) { return allowAllMatcher{}, nil }
 
-// coldScanSaveFn is the narrow surface NewColdScanReparser needs from
-// Ingester.Save. Keeping the seam small makes test fakes trivial.
-type coldScanSaveFn func(ctx context.Context, repoID, branch, path string, src []byte)
+// saveFunc is the narrow seam over Ingester.Save shared by the cold-scan and
+// startup-resync paths. Keeping the seam small makes test fakes trivial.
+type saveFunc func(ctx context.Context, repoID, branch, path string, src []byte)
 
-// coldScanPromoteFn is the narrow surface NewColdScanReparser needs from
-// Promoter.Promote.
-type coldScanPromoteFn func(ctx context.Context, repoID, branch, gitSHA string, actor domain.Actor) error
+// promoteFunc is the narrow seam over Promoter.Promote, shared by the
+// cold-scan and startup-resync paths.
+type promoteFunc func(ctx context.Context, repoID, branch, gitSHA string, actor domain.Actor) error
 
 // NewColdScanReparser returns the closure that StartupResync.reparser and
 // repoRegistrar.AddRepo both invoke for a full-reparse path. It walks the
@@ -99,7 +95,7 @@ func NewColdScanReparser(ingester *Ingester, promoter *Promoter, git GitQuerier,
 // concrete Ingester/Promoter types so unit tests can capture invocations
 // without spinning up the real pipeline. The public constructor wires
 // Ingester.Save and Promoter.Promote here.
-func newColdScanReparserFromFns(save coldScanSaveFn, promote coldScanPromoteFn, git GitQuerier, opts ...ColdScanOption) (func(ctx context.Context, repo RepoRecord) error, error) {
+func newColdScanReparserFromFns(save saveFunc, promote promoteFunc, git GitQuerier, opts ...ColdScanOption) (func(ctx context.Context, repo RepoRecord) error, error) {
 	if save == nil || promote == nil || git == nil {
 		return nil, fmt.Errorf("application.newColdScanReparserFromFns: nil seam: %w", ErrMissingDependency)
 	}
@@ -207,7 +203,7 @@ func newColdScanReparserFromFns(save coldScanSaveFn, promote coldScanPromoteFn, 
 // workers via the Write pool and (likely) the page cache. A worker
 // pool just spreads that contention across more goroutines without
 // improving total throughput. The fix lives upstream of this walker.
-func walkAndSave(ctx context.Context, repo RepoRecord, ignore IgnoreMatcher, save coldScanSaveFn) error {
+func walkAndSave(ctx context.Context, repo RepoRecord, ignore IgnoreMatcher, save saveFunc) error {
 	root := repo.RootPath
 	return filepath.WalkDir(root, func(path string, d fs.DirEntry, walkErr error) error {
 		if walkErr != nil {

@@ -106,7 +106,7 @@ func TestDaemon_StartupResync_NeverPromoted_Reparses(t *testing.T) {
 
 	resync := application.NewStartupResync(
 		&repoLister{db: d.pools.ReadDB},
-		gitwatch.Querier{}, d.ingester, d.promoter, spy,
+		gitwatch.Querier{}, d.ingester.Save, d.promoter.Promote, spy,
 	)
 	if err := resync.Run(context.Background()); err != nil {
 		t.Fatalf("resync.Run: %v", err)
@@ -162,7 +162,7 @@ func TestDaemon_StartupResync_AtHEAD_SkipsReparse(t *testing.T) {
 
 	resync := application.NewStartupResync(
 		&repoLister{db: d.pools.ReadDB},
-		gitwatch.Querier{}, d.ingester, d.promoter, spy,
+		gitwatch.Querier{}, d.ingester.Save, d.promoter.Promote, spy,
 	)
 	if err := resync.Run(context.Background()); err != nil {
 		t.Fatalf("resync.Run: %v", err)
@@ -249,7 +249,7 @@ func TestDaemon_StartupResync_FullPipeline(t *testing.T) {
 	spyCalls := 0
 	cheapResync := application.NewStartupResync(
 		&repoLister{db: d.pools.ReadDB},
-		gitwatch.Querier{}, d.ingester, d.promoter,
+		gitwatch.Querier{}, d.ingester.Save, d.promoter.Promote,
 		func(context.Context, application.RepoRecord) error { spyCalls++; return nil },
 	)
 	if err := cheapResync.Run(context.Background()); err != nil {

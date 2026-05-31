@@ -1,6 +1,7 @@
 package application
 
 import (
+	"sort"
 	"sync"
 	"time"
 )
@@ -133,17 +134,6 @@ func (t *ScanTracker) Snapshot() []ScanState {
 		out = append(out, s)
 	}
 	// Stable order so the JSON shape doesn't churn between calls.
-	sortScansByRepoID(out)
+	sort.Slice(out, func(i, j int) bool { return out[i].RepoID < out[j].RepoID })
 	return out
-}
-
-// sortScansByRepoID is split out so the lock-holding Snapshot stays
-// short. A simple insertion-sort is fine here — the slice is at most
-// 'number of registered repos' long, in practice tiny.
-func sortScansByRepoID(s []ScanState) {
-	for i := 1; i < len(s); i++ {
-		for j := i; j > 0 && s[j-1].RepoID > s[j].RepoID; j-- {
-			s[j-1], s[j] = s[j], s[j-1]
-		}
-	}
 }
