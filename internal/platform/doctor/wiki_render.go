@@ -3,6 +3,8 @@ package doctor
 import (
 	"context"
 	"time"
+
+	"github.com/whiskeyjimbo/veska/internal/platform/health"
 )
 
 // WikiRenderReport summarises whether — and how long ago — the wiki was last
@@ -17,8 +19,8 @@ type WikiRenderReport struct {
 	// the zero time when Rendered is false.
 	LastRenderAt time.Time `json:"last_render_at"`
 	// AgeSeconds is now-LastRenderAt in whole seconds; 0 when never rendered.
-	AgeSeconds int64  `json:"age_seconds"`
-	Status     string `json:"status"`
+	AgeSeconds int64         `json:"age_seconds"`
+	Status     health.Status `json:"status"`
 }
 
 // renderTimeReader is the minimal surface CheckWikiRender needs. Defined here
@@ -53,7 +55,7 @@ func WithClock(now func() time.Time) Option {
 // Status "healthy" with Rendered false.
 func CheckWikiRender(ctx context.Context, store renderTimeReader, opts ...Option) (WikiRenderReport, error) {
 	if store == nil {
-		return WikiRenderReport{Status: "broken"}, nil
+		return WikiRenderReport{Status: health.StatusBroken}, nil
 	}
 
 	cfg := wikiRenderConfig{now: time.Now}
@@ -65,10 +67,10 @@ func CheckWikiRender(ctx context.Context, store renderTimeReader, opts ...Option
 
 	at, rendered, err := store.LastRenderAt(ctx)
 	if err != nil {
-		return WikiRenderReport{Status: "broken"}, nil
+		return WikiRenderReport{Status: health.StatusBroken}, nil
 	}
 	if !rendered {
-		return WikiRenderReport{Rendered: false, Status: "healthy"}, nil
+		return WikiRenderReport{Rendered: false, Status: health.StatusHealthy}, nil
 	}
 
 	age := max(cfg.now().Sub(at), 0)
@@ -76,6 +78,6 @@ func CheckWikiRender(ctx context.Context, store renderTimeReader, opts ...Option
 		Rendered:     true,
 		LastRenderAt: at,
 		AgeSeconds:   int64(age / time.Second),
-		Status:       "healthy",
+		Status:       health.StatusHealthy,
 	}, nil
 }

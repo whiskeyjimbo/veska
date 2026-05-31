@@ -12,6 +12,7 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/backup"
 	"github.com/whiskeyjimbo/veska/internal/platform/config"
 	"github.com/whiskeyjimbo/veska/internal/platform/doctor"
+	"github.com/whiskeyjimbo/veska/internal/platform/health"
 )
 
 // RunCreate runs VACUUM INTO, copies supporting files, and writes a
@@ -88,7 +89,7 @@ func RunVerify(out io.Writer, tarPath string, jsonOut bool) error {
 	}
 
 	if jsonOut {
-		return json.NewEncoder(out).Encode(doctor.NewEnvelope("backup_verify", result.Status, result))
+		return json.NewEncoder(out).Encode(doctor.NewEnvelope("backup_verify", health.Status(result.Status), result))
 	}
 
 	fmt.Fprintf(out, "backup verify: %s (db_integrity=%v, foreign_key=%v, audit_present=%v, audit_ok=%v)\n",

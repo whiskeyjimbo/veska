@@ -12,6 +12,8 @@ import (
 	"runtime"
 	"strings"
 	"time"
+
+	"github.com/whiskeyjimbo/veska/internal/platform/health"
 )
 
 // ProbeResult holds the outcome of a full embedder probe.
@@ -29,7 +31,7 @@ type ProbeResult struct {
 	//   healthy  — all three checks passed.
 	//   degraded — Ollama is reachable but model is missing or embed probe failed.
 	//   broken   — Ollama is not reachable.
-	Status string `json:"status"`
+	Status health.Status `json:"status"`
 }
 
 // ollamaTagsResponse is the minimal JSON shape returned by GET /api/tags.
@@ -68,7 +70,7 @@ func Probe(ctx context.Context, ollamaURL, modelName string) (*ProbeResult, erro
 	tagsURL := fmt.Sprintf("%s/api/tags", ollamaURL)
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, tagsURL, nil)
 	if err != nil {
-		result.Status = "broken"
+		result.Status = health.StatusBroken
 		return result, nil
 	}
 	resp, err := client.Do(req)
@@ -76,7 +78,7 @@ func Probe(ctx context.Context, ollamaURL, modelName string) (*ProbeResult, erro
 		if resp != nil {
 			resp.Body.Close()
 		}
-		result.Status = "broken"
+		result.Status = health.StatusBroken
 		return result, nil
 	}
 	result.Reachable = true
@@ -84,7 +86,7 @@ func Probe(ctx context.Context, ollamaURL, modelName string) (*ProbeResult, erro
 	var tags ollamaTagsResponse
 	if err := json.NewDecoder(resp.Body).Decode(&tags); err != nil {
 		resp.Body.Close()
-		result.Status = "broken"
+		result.Status = health.StatusBroken
 		return result, nil
 	}
 	resp.Body.Close()
@@ -102,7 +104,7 @@ func Probe(ctx context.Context, ollamaURL, modelName string) (*ProbeResult, erro
 		}
 	}
 	if !result.ModelPresent {
-		result.Status = "degraded"
+		result.Status = health.StatusDegraded
 		return result, nil
 	}
 
@@ -111,31 +113,31 @@ func Probe(ctx context.Context, ollamaURL, modelName string) (*ProbeResult, erro
 	body, _ := json.Marshal(ollamaEmbedRequest{Model: modelName, Prompt: "test"})
 	embedReq, err := http.NewRequestWithContext(ctx, http.MethodPost, embedURL, bytes.NewReader(body))
 	if err != nil {
-		result.Status = "degraded"
+		result.Status = health.StatusDegraded
 		return result, nil
 	}
 	embedReq.Header.Set("Content-Type", "application/json")
 
 	embedResp, err := client.Do(embedReq)
 	if err != nil {
-		result.Status = "degraded"
+		result.Status = health.StatusDegraded
 		return result, nil
 	}
 	defer embedResp.Body.Close()
 
 	var embedResult ollamaEmbedResponse
 	if err := json.NewDecoder(embedResp.Body).Decode(&embedResult); err != nil {
-		result.Status = "degraded"
+		result.Status = health.StatusDegraded
 		return result, nil
 	}
 
 	if len(embedResult.Embedding) == 0 {
-		result.Status = "degraded"
+		result.Status = health.StatusDegraded
 		return result, nil
 	}
 	result.EmbedOK = true
 
-	result.Status = "healthy"
+	result.Status = health.StatusHealthy
 	return result, nil
 }
 

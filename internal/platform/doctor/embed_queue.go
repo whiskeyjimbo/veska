@@ -1,6 +1,10 @@
 package doctor
 
-import "context"
+import (
+	"context"
+
+	"github.com/whiskeyjimbo/veska/internal/platform/health"
+)
 
 // Thresholds for the embed-queue health probe. The "broken" status only
 // fires on a true outage (Failed > 0) — accumulating failed rows means
@@ -21,10 +25,10 @@ const (
 //
 // "broken" takes precedence over "degraded" when both conditions hold.
 type EmbedQueueReport struct {
-	Pending int    `json:"pending"`
-	Ready   int    `json:"ready"`
-	Failed  int    `json:"failed"`
-	Status  string `json:"status"`
+	Pending int           `json:"pending"`
+	Ready   int           `json:"ready"`
+	Failed  int           `json:"failed"`
+	Status  health.Status `json:"status"`
 }
 
 // embedRefsCounter is the minimal surface CheckEmbedQueueHealth needs.
@@ -40,24 +44,24 @@ type embedRefsCounter interface {
 // zeroed counts so callers can safely render the report.
 func CheckEmbedQueueHealth(ctx context.Context, refs embedRefsCounter) (EmbedQueueReport, error) {
 	if refs == nil {
-		return EmbedQueueReport{Status: "broken"}, nil
+		return EmbedQueueReport{Status: health.StatusBroken}, nil
 	}
 	counts, err := refs.CountByState(ctx)
 	if err != nil {
-		return EmbedQueueReport{Status: "broken"}, nil
+		return EmbedQueueReport{Status: health.StatusBroken}, nil
 	}
 
 	report := EmbedQueueReport{
 		Pending: counts["pending"],
 		Ready:   counts["ready"],
 		Failed:  counts["failed"],
-		Status:  "healthy",
+		Status:  health.StatusHealthy,
 	}
 	switch {
 	case report.Failed > 0:
-		report.Status = "broken"
+		report.Status = health.StatusBroken
 	case report.Pending > embedQueueDegradedPending:
-		report.Status = "degraded"
+		report.Status = health.StatusDegraded
 	}
 	return report, nil
 }
