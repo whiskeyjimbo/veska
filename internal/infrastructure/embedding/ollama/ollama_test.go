@@ -194,3 +194,15 @@ func TestEmbed_EmptyEmbedding_Error(t *testing.T) {
 		return
 	}
 }
+
+// TestDefaultConstantValues pins the exported default constants so a future
+// edit cannot silently drift the canonical Ollama URL or embed model
+// documented in CLAUDE.md and referenced by the composition wiring layer.
+func TestDefaultConstantValues(t *testing.T) {
+	if ollama.DefaultBaseURL != "http://localhost:11434" {
+		t.Errorf("DefaultBaseURL = %q, want %q", ollama.DefaultBaseURL, "http://localhost:11434")
+	}
+	if ollama.DefaultModel != "nomic-embed-text" {
+		t.Errorf("DefaultModel = %q, want %q", ollama.DefaultModel, "nomic-embed-text")
+	}
+}

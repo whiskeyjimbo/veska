@@ -23,8 +23,12 @@ import (
 )
 
 const (
-	defaultBaseURL = "http://localhost:11434"
-	defaultModel   = "nomic-embed-text"
+	// DefaultBaseURL is the canonical Ollama base URL used when none is
+	// supplied. It is the shared default referenced by wiring layers.
+	DefaultBaseURL = "http://localhost:11434"
+	// DefaultModel is the canonical embedding model name used when none is
+	// supplied. It is the shared default referenced by wiring layers.
+	DefaultModel   = "nomic-embed-text"
 	defaultTimeout = 30 * time.Second
 )
 
@@ -103,7 +107,7 @@ func New(model string, opts ...Option) (*Provider, error) {
 		return nil, fmt.Errorf("ollama.New: model must not be empty: %w", ErrMissingDependency)
 	}
 	p := &Provider{
-		baseURL: defaultBaseURL,
+		baseURL: DefaultBaseURL,
 		model:   model,
 		timeout: defaultTimeout,
 	}
