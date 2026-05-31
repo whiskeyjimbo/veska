@@ -37,27 +37,6 @@ func TestNewTracerProvider_ValidEndpointReturnsProvider(t *testing.T) {
 	}
 }
 
-func TestNewTracerProvider_SamplerIsParentBasedTraceIDRatio(t *testing.T) {
-	tp, err := observability.NewTracerProvider("localhost:4317", 1.0)
-	if err != nil {
-		t.Fatalf("NewTracerProvider: %v", err)
-	}
-
-	// The sampler description for parentbased_traceidratio at 1.0 is
-	// "ParentBased{root:TraceIDRatioBased{1}}" per the OTel SDK.
-	sampler := observability.ExtractSampler(tp)
-	desc := sampler.Description()
-	if desc == "" {
-		t.Error("sampler description is empty")
-	}
-	// Accept any description that mentions ParentBased + ratio.
-	if desc != "ParentBased{root:TraceIDRatioBased{1}}" {
-		t.Logf("sampler description: %q (expected ParentBased{root:TraceIDRatioBased{1}})", desc)
-		// Not fatal — description format may vary across SDK versions.
-		// Log only, don't fail.
-	}
-}
-
 func TestNewTracerProvider_RatioThreadedIntoSampler(t *testing.T) {
 	// TraceIDRatioBased is deterministic at the extremes: 0.0 always drops a
 	// root span, 1.0 always samples it. The SDK exposes no sampler accessor,
