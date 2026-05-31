@@ -121,12 +121,21 @@ func resolveRepoIDOrCwd(ctx context.Context, repos application.RepoLister, repoI
 			if rec.RootPath == "" {
 				continue
 			}
-			if cwd == rec.RootPath || strings.HasPrefix(cwd, rec.RootPath+"/") {
+			if cwdMatchesRoot(cwd, rec.RootPath) {
 				return rec.RepoID, nil
 			}
 		}
 	}
 	return "", &RPCError{Code: CodeInvalidParams, Message: fmt.Sprintf("repo_id is required (%d repos registered; pass eng_list_repos to find the id)", userVisibleRepoCount(all))}
+}
+
+// cwdMatchesRoot reports whether cwd is the repo root rootPath or sits inside
+// it, so a call from a subdirectory resolves the same as one from the root.
+// It is the shared cwd→repo classification step used by the repo-scope
+// resolvers (resolveRepoIDOrCwd, resolveRepoFanoutFromParams, resolveSeedOwner);
+// each keeps its own return-shaping (solov2-xde2.4).
+func cwdMatchesRoot(cwd, rootPath string) bool {
+	return cwd == rootPath || strings.HasPrefix(cwd, rootPath+"/")
 }
 
 // userVisibleRepoCount returns the number of repos eng_list_repos would
@@ -245,7 +254,7 @@ func resolveRepoFanoutFromParams(ctx context.Context, repos application.RepoList
 			if rec.RootPath == "" {
 				continue
 			}
-			if cwd == rec.RootPath || strings.HasPrefix(cwd, rec.RootPath+"/") {
+			if cwdMatchesRoot(cwd, rec.RootPath) {
 				br := callerBranch
 				if br == "" {
 					br = rec.ActiveBranch
@@ -432,7 +441,7 @@ func resolveSeedOwner(ctx context.Context, repos application.RepoLister, graph p
 			if rec.RootPath == "" {
 				continue
 			}
-			if cwd == rec.RootPath || strings.HasPrefix(cwd, rec.RootPath+"/") {
+			if cwdMatchesRoot(cwd, rec.RootPath) {
 				br := callerBranch
 				if br == "" {
 					br = rec.ActiveBranch
