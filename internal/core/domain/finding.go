@@ -52,9 +52,18 @@ var severityOrder = map[Severity]int{
 	SeverityCritical: 4,
 }
 
-// AtLeast returns true when s is at least as severe as other.
+// AtLeast returns true when s is at least as severe as other. An unknown
+// severity on either side has no defined rank, so AtLeast returns false
+// conservatively rather than letting the map's zero value alias it to
+// SeverityInfo. In practice severities are valid()-gated at construction;
+// this guard hardens the comparison against any future non-constructor caller.
 func (s Severity) AtLeast(other Severity) bool {
-	return severityOrder[s] >= severityOrder[other]
+	sRank, sOK := severityOrder[s]
+	oRank, oOK := severityOrder[other]
+	if !sOK || !oOK {
+		return false
+	}
+	return sRank >= oRank
 }
 
 func (s Severity) valid() bool {
