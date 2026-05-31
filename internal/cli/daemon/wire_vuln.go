@@ -7,10 +7,9 @@ import (
 	"time"
 
 	"github.com/whiskeyjimbo/veska/internal/application/checks"
+	"github.com/whiskeyjimbo/veska/internal/composition"
 	"github.com/whiskeyjimbo/veska/internal/core/ports"
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/repo"
-	"github.com/whiskeyjimbo/veska/internal/infrastructure/vulnsource"
-	"github.com/whiskeyjimbo/veska/internal/infrastructure/vulnsource/osv"
 	"github.com/whiskeyjimbo/veska/internal/platform/config"
 )
 
@@ -40,10 +39,7 @@ func checkVulnProvider(cfg config.Config) error {
 // run checkVulnProvider first, so an unrecognised provider also falls back to
 // the NullVulnSource here rather than panicking.
 func buildVulnSource(cfg config.Config) (ports.VulnSource, bool) {
-	if cfg.VulnSource.Provider != "osv" {
-		return vulnsource.NewNullVulnSource(), false
-	}
-	return osv.New(osv.WithCacheDir(config.DefaultOSVCacheDir())), true
+	return composition.BuildVulnSource(cfg)
 }
 
 // vulnRefreshInterval parses the [vuln_source] refresh_interval. An empty or
