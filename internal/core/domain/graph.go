@@ -45,6 +45,9 @@ func NewGraph(repoID, branch string) (*Graph, error) {
 // AddNode inserts a Node into the projection.  Returns an error if a node with
 // the same ID already exists.
 func (g *Graph) AddNode(n *Node) error {
+	if n == nil {
+		return errors.New("graph: node must not be nil")
+	}
 	if _, exists := g.nodes[n.ID]; exists {
 		return fmt.Errorf("graph: node %q already exists in graph (%s@%s)", n.ID, g.RepoID, g.Branch)
 	}
@@ -55,6 +58,9 @@ func (g *Graph) AddNode(n *Node) error {
 // AddEdge inserts a directed Edge into the projection.  Both endpoint nodes
 // must already be present; otherwise an error is returned.
 func (g *Graph) AddEdge(e *Edge) error {
+	if e == nil {
+		return errors.New("graph: edge must not be nil")
+	}
 	if _, ok := g.nodes[e.Src]; !ok {
 		return fmt.Errorf("graph: edge src node %q not found in graph (%s@%s)", e.Src, g.RepoID, g.Branch)
 	}
