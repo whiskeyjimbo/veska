@@ -233,7 +233,7 @@ func (w *mcpToolWiring) registerContextPackTool() {
 		OpenFindings: w.findingQuerier.OpenFindingNodeIDs,
 		ChangedFiles: gitwatch.ChangedFiles,
 		NodesInFile:  w.nodes.NodesInFile,
-		ActiveTask:   activeTaskFunc(w.pools.ReadDB),
+		ActiveTask:   sqlite.NewTaskRepo(w.pools.ReadDB).GetActiveTask,
 	})
 	if err != nil {
 		mcp.RegisterContextPackTool(w.r, nil, nil, w.repos())
