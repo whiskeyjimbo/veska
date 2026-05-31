@@ -17,9 +17,10 @@ import (
 
 // newTestPromoter wires a Promoter to a real sqlite.PromotionStore over the
 // given test DB, with the production FTS + embedding-ref sinks registered.
-func newTestPromoter(sa *application.StagingArea, db *sql.DB) *application.Promoter {
+// Optional seams (check runner, added-lines) are supplied via PromoterOption.
+func newTestPromoter(sa *application.StagingArea, db *sql.DB, opts ...application.PromoterOption) *application.Promoter {
 	store := sqlite.NewPromotionStore(db, []sqlite.PromotionSink{sqlite.NewFTSSink(), sqlite.NewEmbedRefSink()})
-	return application.NewPromoter(sa, store)
+	return application.NewPromoter(sa, store, opts...)
 }
 
 // openMemDB opens an in-memory SQLite DB with foreign keys enabled and creates
