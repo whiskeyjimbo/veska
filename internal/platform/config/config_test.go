@@ -132,6 +132,29 @@ func TestValidateRejectsTracingWithoutEndpoint(t *testing.T) {
 	}
 }
 
+func TestValidateRejectsOutOfRangeSampleRatio(t *testing.T) {
+	for _, ratio := range []float64{1.5, -0.1} {
+		c := DefaultConfig()
+		c.Tracing.Enabled = true
+		c.Tracing.OTLPEndpoint = "localhost:4317"
+		c.Tracing.SampleRatio = ratio
+		if err := c.Validate(); err == nil {
+			t.Errorf("sample_ratio=%v with tracing enabled should be a config error", ratio)
+		}
+	}
+
+	// Boundary and interior valid values must pass.
+	for _, ratio := range []float64{0.0, 0.1, 1.0} {
+		c := DefaultConfig()
+		c.Tracing.Enabled = true
+		c.Tracing.OTLPEndpoint = "localhost:4317"
+		c.Tracing.SampleRatio = ratio
+		if err := c.Validate(); err != nil {
+			t.Errorf("sample_ratio=%v with tracing enabled should validate: %v", ratio, err)
+		}
+	}
+}
+
 func TestValidateRejectsEndpointWithoutTracing(t *testing.T) {
 	c := DefaultConfig()
 	c.Tracing.Enabled = false
