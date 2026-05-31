@@ -76,7 +76,7 @@ func WithBlastInboundResolveFunc(fn InboundResolveFunc) BlastToolOption {
 // When either is nil the tool is still registered but will return
 // InternalError on every call — this keeps the registry uniform across
 // composition roots that have not wired the git adapter.
-func RegisterBlastTools(r *Registry, svc *blastradius.Service, repoRoot RepoRootFunc, changedFiles blastradius.ChangedFilesFunc, repos application.RepoLister, graph ports.GraphStorage, opts ...BlastToolOption) {
+func RegisterBlastTools(r *Registry, svc *blastradius.Service, repoRoot RepoRootFunc, changedFiles blastradius.ChangedFilesFunc, repos application.RepoLister, graph ports.GraphReader, opts ...BlastToolOption) {
 	cfg := blastToolConfig{}
 	for _, opt := range opts {
 		opt(&cfg)
@@ -123,7 +123,7 @@ type blastRadiusParams struct {
 	ExpandCrossRepo bool   `json:"expand_cross_repo,omitempty"`
 }
 
-func makeBlastRadiusHandler(svc *blastradius.Service, repos application.RepoLister, graph ports.GraphStorage, resolve ResolveFunc, resolveInbound InboundResolveFunc, scans ScanTrackerReader) ToolHandler {
+func makeBlastRadiusHandler(svc *blastradius.Service, repos application.RepoLister, graph ports.GraphReader, resolve ResolveFunc, resolveInbound InboundResolveFunc, scans ScanTrackerReader) ToolHandler {
 	return func(ctx context.Context, _ domain.Actor, raw json.RawMessage) (any, *RPCError) {
 		var p blastRadiusParams
 		if rpcErr := bindParams(raw, &p); rpcErr != nil {

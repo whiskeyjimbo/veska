@@ -19,6 +19,7 @@ import (
 // Compile-time interface compliance checks.
 var (
 	_ ports.GraphStorage      = (*stubGraphStorage)(nil)
+	_ ports.GraphReader       = (*stubGraphStorage)(nil)
 	_ ports.CodeParser        = (*stubCodeParser)(nil)
 	_ ports.EmbeddingProvider = (*stubEmbeddingProvider)(nil)
 	_ ports.Watcher           = (*stubWatcher)(nil)

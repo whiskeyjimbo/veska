@@ -35,7 +35,7 @@ type findSymbolParams struct {
 	Kind   string `json:"kind,omitempty"`
 }
 
-func makeFindSymbolHandler(graph ports.GraphStorage, staging *application.StagingArea, repos application.RepoLister, scans ScanTrackerReader) ToolHandler {
+func makeFindSymbolHandler(graph ports.GraphReader, staging *application.StagingArea, repos application.RepoLister, scans ScanTrackerReader) ToolHandler {
 	return func(ctx context.Context, _ domain.Actor, raw json.RawMessage) (any, *RPCError) {
 		var p findSymbolParams
 		if err := json.Unmarshal(raw, &p); err != nil {
