@@ -30,7 +30,7 @@ port. None of that machinery has a present consumer.
 
 ## Decision
 
-Engram Solo is hexagonal / ports-and-adapters with DDD-lite
+Veska Solo is hexagonal / ports-and-adapters with DDD-lite
 (entities, aggregate root, repository interfaces, application
 service). The non-negotiables:
 

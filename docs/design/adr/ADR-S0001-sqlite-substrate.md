@@ -43,7 +43,7 @@ superseded_by: [ADR-S0014, ADR-S0015]
 
 ## Context
 
-Engram Solo is one daemon, one developer, one machine. The prior V2
+Veska Solo is one daemon, one developer, one machine. The prior V2
 design called for Dolt sql-server (graph) plus Qdrant (vectors), each
 as a supervised child process, with one Dolt branch per Git branch.
 That topology was sized for a server tier we are not building.

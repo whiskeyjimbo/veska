@@ -349,7 +349,7 @@ abstraction; transport variation lives in adapter code.
 - **Configuration loading** — plain Go in `config/`. Tests pass a
   struct.
 - **Path resolution** (`~/.veska`) — plain Go in `config/paths.go`.
-- **Git operations beyond reading** — Engram never writes Git.
+- **Git operations beyond reading** — Veska never writes Git.
 - **MCP transport** — there is one (Unix socket); no abstraction
   needed. Adding a second would be an ADR and would introduce a
   driving adapter, not a port (the port is `RPCHandler`, §4.3a).

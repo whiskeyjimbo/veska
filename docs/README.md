@@ -5,7 +5,7 @@ verified_date: "2026-05-16"
 
 # Veska — Design Set
 
-> **Naming note.** "Engram" is the product name. "Solo" is the
+> **Naming note.** "Veska" is the product name. "Solo" is the
 > single-user, single-daemon shape this design set covers. Calling
 > this a "Solo edition" is descriptive, not a skew implying a
 > "Pro" tier — there is no other tier today. Server-tier work is
@@ -16,12 +16,12 @@ verified_date: "2026-05-16"
 One daemon, one developer, one machine. SQLite + sqlite-vec for
 storage; tree-sitter for parsing; an in-process embedder (model2vec
 by default, no external service) for embeddings; MCP over Unix
-sockets for the editor surface. Everything Engram knows lives in
+sockets for the editor surface. Everything Veska knows lives in
 `~/.veska/`.
 
 ## Read order
 
-1. [`PRODUCT.md`](PRODUCT.md) — what Engram is, in plain English.
+1. [`PRODUCT.md`](PRODUCT.md) — what Veska is, in plain English.
 2. [`design/00-README.md`](design/00-README.md) — design-set conventions.
 3. [`design/01-charter/README.md`](design/01-charter/README.md) — binding pillars.
 4. [`design/03-the-daemon/README.md`](design/03-the-daemon/README.md) — runtime topology.

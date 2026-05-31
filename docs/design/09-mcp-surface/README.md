@@ -454,8 +454,8 @@ broken.
 
 | Daemon state | Reads return | Writes return | Recommended editor handling |
 |---|---|---|---|
-| **Startup-resync** running for ≥1 repo | promoted (pre-resync) data with `degraded_reasons: ["startup_resync"]`; `eng_get_status` carries `commits_total`/`commits_done` per repo | `ErrDaemonStarting` with the same payload; caller may retry | Non-blocking progress chip ("Engram catching up: 5/12 commits"); poll `eng_get_status` every 2s; show read results with a "catching up" badge |
-| **Wake-reconcile** running | promoted + (pre-sweep) staging with `degraded_reasons: ["wake_reconciling"]` | succeed normally; the sweep doesn't write | One-line non-blocking notice ("Engram re-syncing after sleep"); reads usable; clears within seconds |
+| **Startup-resync** running for ≥1 repo | promoted (pre-resync) data with `degraded_reasons: ["startup_resync"]`; `eng_get_status` carries `commits_total`/`commits_done` per repo | `ErrDaemonStarting` with the same payload; caller may retry | Non-blocking progress chip ("Veska catching up: 5/12 commits"); poll `eng_get_status` every 2s; show read results with a "catching up" badge |
+| **Wake-reconcile** running | promoted + (pre-sweep) staging with `degraded_reasons: ["wake_reconciling"]` | succeed normally; the sweep doesn't write | One-line non-blocking notice ("Veska re-syncing after sleep"); reads usable; clears within seconds |
 | **Embedder-swap** running | promoted reads succeed; `eng_search_semantic` returns FTS5 lexical fallback with `degraded_reasons: ["embedder_swapping", "embedder_offline_lexical_fallback"]` | refused with `ErrUpstreamUnavailable`, `data.context.cause = "embedder_swapping"`; caller may retry once the swap state clears | Show "lexical-only search" badge; allow other reads |
 | **Crash-loop tripped** | shim returns `ErrDaemonNotRunning`; `data.context.cli_command` = `veska doctor reset-crash-loop` | same | Surface the `cli_command` as a copyable block; same paste-handoff pattern as the human-action gate (SOLO-10 §3.3) |
 | **Refuse-to-start** (sqlite-vec missing, schema mismatch, unsupported FS, etc.; SOLO-03 §5.8) | shim returns `ErrDaemonNotRunning` | same | Render `data.context.last_error` with an "open log file" affordance |
@@ -506,7 +506,7 @@ interrupted.
 
 ### 5.1 `eng_find_owner`
 
-Engram has one user but its repos have many contributors. Owner
+Veska has one user but its repos have many contributors. Owner
 resolution combines two signals — the rules-declared owner and
 the empirical owner — and returns both, because they are routinely
 not the same person:
@@ -623,7 +623,7 @@ tightening a constraint is breaking.
 When a tool is renamed, the daemon registers an alias from the
 old name to the new one for one minor release. The alias returns
 the same payload; it emits a `Deprecation` header
-(`X-Engram-Deprecation: <old-name> -> <new-name>`) on every call.
+(`X-Veska-Deprecation: <old-name> -> <new-name>`) on every call.
 After one minor release the alias is removed.
 
 There is no N+2 rule, no ADR-gated rename ceremony, no

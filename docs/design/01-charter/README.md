@@ -11,20 +11,20 @@ verified_date: "2026-05-16"
 
 # SOLO-01 — Scope and principles
 
-## 1. What Engram is
+## 1. What Veska is
 
-Engram is a **single-process daemon** that turns local Git
+Veska is a **single-process daemon** that turns local Git
 repositories into a queryable graph and a queryable vector index,
 and exposes both through MCP. It runs on the developer's laptop.
 The data is one SQLite file plus a handful of supporting files
 under `~/.veska/`.
 
-**Single-user, not single-contributor.** Engram has one operator —
+**Single-user, not single-contributor.** Veska has one operator —
 the developer running the daemon — but it expects to live inside
 team repositories with many contributors, CODEOWNERS files, and
 shared issue trackers. "Who owns this?" and "who else is touching
 this file?" are first-class questions even though there is exactly
-one Engram user on the machine.
+one Veska user on the machine.
 
 **Multi-repo, single-daemon.** The daemon indexes N repos
 simultaneously — a service, its SDK, a docs repo are the typical
@@ -132,7 +132,7 @@ sticky finding rather than back-pressuring the hot path.
 
 Known collisions:
 
-- **"Engram"** collides with the keyboard layout, the Engram
+- **"Veska"** collides with the keyboard layout, the Veska
   memory-engineering startup, and several neuroscience products.
   The binary is `veska`, the Go module is `veska`, the data dir
   is `~/.veska/`. For a personal, on-device product, discoverability

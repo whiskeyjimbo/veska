@@ -18,10 +18,10 @@ verified_date: "2026-05-16"
 
 ## Context
 
-Engram parses files on every save event (fsnotify). V1 prototypes
+Veska parses files on every save event (fsnotify). V1 prototypes
 that wrote to durable storage on each save caused write
 amplification and post-commit hook latency spikes. The hot path
-must stay under 100ms p95 if Engram is to feel like an editor
+must stay under 100ms p95 if Veska is to feel like an editor
 extension, not a pipeline.
 
 The save event and the commit event have different cost envelopes:

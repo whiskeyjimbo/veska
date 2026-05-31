@@ -34,7 +34,7 @@ gets to be local.
 
 ## Decision
 
-Engram Solo's documentation does **not** specify any of the
+Veska Solo's documentation does **not** specify any of the
 following. They are not in the V2.0 doc tree, in any form, normative
 or aspirational:
 

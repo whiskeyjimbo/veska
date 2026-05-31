@@ -27,7 +27,7 @@ predictable names beat creative ones.
 
 ## Decision
 
-Every Engram-provided MCP tool is named:
+Every Veska-provided MCP tool is named:
 
 ```
 eng_<verb>_<object>[_<qualifier>]

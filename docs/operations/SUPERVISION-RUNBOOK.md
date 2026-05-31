@@ -67,7 +67,7 @@ Writes `~/.config/systemd/user/veska-daemon.service`:
 
 ```ini
 [Unit]
-Description=Engram daemon (solo)
+Description=Veska daemon (solo)
 After=default.target
 
 [Service]
@@ -189,7 +189,7 @@ on-disk schema) follows the same pattern: install a binary whose
 
 ## 4. Crash-loop recovery
 
-Symptom: a desktop notification ("Engram daemon stopped
+Symptom: a desktop notification ("Veska daemon stopped
 (crash-loop). Run: veska doctor reset-crash-loop") on macOS or
 Linux with `notify-send`; on platforms without either, the next
 `veska` invocation prints a one-line banner pointing at
