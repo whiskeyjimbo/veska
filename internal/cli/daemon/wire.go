@@ -533,7 +533,7 @@ func (b *daemonBuilder) buildCheckPipeline() error {
 		return err
 	}
 
-	runner := checks.NewRunner(checkReg, b.findings, b.metrics)
+	runner := checks.NewRunner(checkReg, b.findings, b.metrics, checks.WithLogger(slog.Default()))
 	b.checkRunner = composition.CheckRunnerAdapter{Inner: runner}
 	return nil
 }

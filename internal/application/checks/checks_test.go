@@ -259,6 +259,111 @@ func TestRunner_EmptyRegistryNoOp(t *testing.T) {
 	}
 }
 
+// hasLevel reports whether any captured record is at or above WARN and whose
+// message or "check" attr mentions name.
+func warnNaming(recs []slog.Record, name string) bool {
+	for _, r := range recs {
+		if r.Level < slog.LevelWarn {
+			continue
+		}
+		if attr(r, "check") == name {
+			return true
+		}
+	}
+	return false
+}
+
+// xde2.22 (a): a check that returns an error is logged at WARN naming the
+// failing check, and the sibling check still runs.
+func TestRunner_CheckErrorIsLogged(t *testing.T) {
+	bad := &stubCheck{name: "bad", err: errors.New("boom")}
+	good := &stubCheck{name: "good", findings: []*domain.Finding{
+		mustFinding(t, "ok", "repo1", "main", "a.go"),
+	}}
+	reg := checks.NewRegistry()
+	reg.Register(bad)
+	reg.Register(good)
+
+	h := &recordingHandler{}
+	store := &recordingStorage{}
+	r := checks.NewRunner(reg, store, observability.NewMetrics(prometheus.NewRegistry()),
+		checks.WithLogger(slog.New(h)))
+
+	r.Run(context.Background(), checks.Input{RepoID: "repo1", Branch: "main"})
+
+	if !warnNaming(h.snapshot(), "bad") {
+		t.Errorf("expected a WARN log naming the failing check; got %+v", h.snapshot())
+	}
+	if good.calls.Load() != 1 {
+		t.Errorf("sibling check should still run; calls=%d", good.calls.Load())
+	}
+	if got := len(store.snapshot()); got != 1 {
+		t.Errorf("sibling finding should still be saved; got %d", got)
+	}
+}
+
+// xde2.22: a panicking check is recovered AND logged at WARN, and the sibling
+// check still runs. Isolation contract must hold (no propagation).
+func TestRunner_CheckPanicIsLogged(t *testing.T) {
+	bad := &stubCheck{name: "panicky", panicMsg: "kaboom"}
+	good := &stubCheck{name: "good"}
+	reg := checks.NewRegistry()
+	reg.Register(bad)
+	reg.Register(good)
+
+	h := &recordingHandler{}
+	store := &recordingStorage{}
+	r := checks.NewRunner(reg, store, observability.NewMetrics(prometheus.NewRegistry()),
+		checks.WithLogger(slog.New(h)))
+
+	r.Run(context.Background(), checks.Input{RepoID: "repo1", Branch: "main"})
+
+	if !warnNaming(h.snapshot(), "panicky") {
+		t.Errorf("expected a WARN log naming the panicking check; got %+v", h.snapshot())
+	}
+	if good.calls.Load() != 1 {
+		t.Errorf("sibling check should still run after panic; calls=%d", good.calls.Load())
+	}
+}
+
+// xde2.22: a FindingStorage.Save error is logged at WARN, not swallowed, and
+// the runner continues.
+func TestRunner_SaveErrorIsLogged(t *testing.T) {
+	c := &stubCheck{name: "c1", findings: []*domain.Finding{
+		mustFinding(t, "rule1", "repo1", "main", "a.go"),
+	}}
+	reg := checks.NewRegistry()
+	reg.Register(c)
+
+	h := &recordingHandler{}
+	store := &recordingStorage{err: errors.New("disk full")}
+	r := checks.NewRunner(reg, store, observability.NewMetrics(prometheus.NewRegistry()),
+		checks.WithLogger(slog.New(h)))
+
+	r.Run(context.Background(), checks.Input{RepoID: "repo1", Branch: "main"})
+
+	if !warnNaming(h.snapshot(), "c1") {
+		t.Errorf("expected a WARN log for the Save error naming the check; got %+v", h.snapshot())
+	}
+}
+
+// xde2.22: a nil logger must not crash the Runner (defaults internally).
+func TestRunner_NilLoggerDoesNotCrash(t *testing.T) {
+	bad := &stubCheck{name: "bad", err: errors.New("boom")}
+	reg := checks.NewRegistry()
+	reg.Register(bad)
+
+	store := &recordingStorage{}
+	r := checks.NewRunner(reg, store, observability.NewMetrics(prometheus.NewRegistry()),
+		checks.WithLogger(nil))
+
+	r.Run(context.Background(), checks.Input{RepoID: "repo1", Branch: "main"})
+
+	if bad.calls.Load() != 1 {
+		t.Errorf("check should have run with nil logger; calls=%d", bad.calls.Load())
+	}
+}
+
 // authoritativeStub is a stubCheck that also implements
 // checks.AuthoritativeChecker, returning the configured rule.
 type authoritativeStub struct {

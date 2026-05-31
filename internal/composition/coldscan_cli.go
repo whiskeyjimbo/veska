@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"log/slog"
 
 	"github.com/prometheus/client_golang/prometheus"
 
@@ -74,7 +75,7 @@ func cliColdScanPromoterOpts(pools *sqlite.Pools) []application.PromoterOption {
 	RegisterCommonChecks(reg, fileCfg, vulnSource, vulnEnabled, checks.RepoRootFunc(root))
 
 	metrics := observability.NewMetrics(prometheus.NewRegistry())
-	runner := checks.NewRunner(reg, findings, metrics)
+	runner := checks.NewRunner(reg, findings, metrics, checks.WithLogger(slog.Default()))
 	return []application.PromoterOption{
 		application.WithAddedLinesFunc(GitAddedLinesFunc(root)),
 		application.WithCheckRunner(CheckRunnerAdapter{Inner: runner}),
