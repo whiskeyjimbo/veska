@@ -179,8 +179,8 @@ func TestPromote_TwoFiles(t *testing.T) {
 	insertTestRepo(t, db, "repo1")
 
 	sa := staging.NewArea()
-	n1, _ := domain.NewNode("n1", "a.go", "A", domain.KindFunction)
-	n2, _ := domain.NewNode("n2", "b.go", "B", domain.KindFunction)
+	n1, _ := domain.NewNode(domain.NodeSpec{ID: "n1", Path: "a.go", Name: "A", Kind: domain.KindFunction})
+	n2, _ := domain.NewNode(domain.NodeSpec{ID: "n2", Path: "b.go", Name: "B", Kind: domain.KindFunction})
 	sa.Stage("repo1", "main", "a.go", staging.File{Nodes: []*domain.Node{n1}, Edges: nil})
 	sa.Stage("repo1", "main", "b.go", staging.File{Nodes: []*domain.Node{n2}, Edges: nil})
 
@@ -231,7 +231,7 @@ func TestPromote_Idempotent(t *testing.T) {
 	sa := staging.NewArea()
 
 	// First promote.
-	n1, _ := domain.NewNode("n1", "a.go", "A", domain.KindFunction)
+	n1, _ := domain.NewNode(domain.NodeSpec{ID: "n1", Path: "a.go", Name: "A", Kind: domain.KindFunction})
 	sa.Stage("repo1", "main", "a.go", staging.File{Nodes: []*domain.Node{n1}, Edges: nil})
 	p := newTestPromoter(sa, db)
 	if err := p.Promote(context.Background(), "repo1", "main", "sha-001", domain.Actor{ID: "service:veska", Kind: domain.ActorKindSystem}); err != nil {
@@ -239,7 +239,7 @@ func TestPromote_Idempotent(t *testing.T) {
 	}
 
 	// Second promote with the same node.
-	n1b, _ := domain.NewNode("n1", "a.go", "A", domain.KindFunction)
+	n1b, _ := domain.NewNode(domain.NodeSpec{ID: "n1", Path: "a.go", Name: "A", Kind: domain.KindFunction})
 	sa.Stage("repo1", "main", "a.go", staging.File{Nodes: []*domain.Node{n1b}, Edges: nil})
 	if err := p.Promote(context.Background(), "repo1", "main", "sha-002", domain.Actor{ID: "service:veska", Kind: domain.ActorKindSystem}); err != nil {
 		t.Fatalf("second Promote: %v", err)
@@ -269,7 +269,7 @@ func TestPromote_AdvancesLastPromotedSHA(t *testing.T) {
 	p := newTestPromoter(sa, db)
 	actor := domain.Actor{ID: "service:veska", Kind: domain.ActorKindSystem}
 
-	n1, _ := domain.NewNode("n1", "a.go", "A", domain.KindFunction)
+	n1, _ := domain.NewNode(domain.NodeSpec{ID: "n1", Path: "a.go", Name: "A", Kind: domain.KindFunction})
 	sa.Stage("repo1", "main", "a.go", staging.File{Nodes: []*domain.Node{n1}, Edges: nil})
 	if err := p.Promote(context.Background(), "repo1", "main", "sha-001", actor); err != nil {
 		t.Fatalf("first Promote: %v", err)
@@ -279,7 +279,7 @@ func TestPromote_AdvancesLastPromotedSHA(t *testing.T) {
 	}
 
 	// Second promote on a different branch+sha overwrites both columns.
-	n2, _ := domain.NewNode("n2", "b.go", "B", domain.KindFunction)
+	n2, _ := domain.NewNode(domain.NodeSpec{ID: "n2", Path: "b.go", Name: "B", Kind: domain.KindFunction})
 	sa.Stage("repo1", "topic", "b.go", staging.File{Nodes: []*domain.Node{n2}, Edges: nil})
 	if err := p.Promote(context.Background(), "repo1", "topic", "sha-002", actor); err != nil {
 		t.Fatalf("second Promote: %v", err)
@@ -299,7 +299,7 @@ func TestPromote_AdvancesLastPromotedSHA(t *testing.T) {
 
 	// Defensive: a promote with an empty SHA must NOT clobber the stored value
 	// (caller-error guard inside the transaction body).
-	n3, _ := domain.NewNode("n3", "c.go", "C", domain.KindFunction)
+	n3, _ := domain.NewNode(domain.NodeSpec{ID: "n3", Path: "c.go", Name: "C", Kind: domain.KindFunction})
 	sa.Stage("repo1", "topic", "c.go", staging.File{Nodes: []*domain.Node{n3}, Edges: nil})
 	if err := p.Promote(context.Background(), "repo1", "topic", "", actor); err != nil {
 		t.Fatalf("empty-sha Promote: %v", err)
@@ -313,7 +313,7 @@ func TestPromote_AdvancesLastPromotedSHA(t *testing.T) {
 	// still advance so the next startup takes the cheap path; active_branch
 	// is left untouched.
 	insertTestRepo(t, db, "repo2")
-	n4, _ := domain.NewNode("n4", "d.go", "D", domain.KindFunction)
+	n4, _ := domain.NewNode(domain.NodeSpec{ID: "n4", Path: "d.go", Name: "D", Kind: domain.KindFunction})
 	sa.Stage("repo2", "", "d.go", staging.File{Nodes: []*domain.Node{n4}, Edges: nil})
 	if err := p.Promote(context.Background(), "repo2", "", "sha-emptybr", actor); err != nil {
 		t.Fatalf("empty-branch Promote: %v", err)
@@ -390,7 +390,7 @@ func TestPromote_WritesFTS(t *testing.T) {
 	sa := staging.NewArea()
 	// Mirror the DoD example: kind=function, symbol path (n.Name) =
 	// "pkg/api/closeFinding". n.Path (file_path) is irrelevant here.
-	n, _ := domain.NewNode("n1", "src/api.go", "pkg/api/closeFinding", domain.KindFunction)
+	n, _ := domain.NewNode(domain.NodeSpec{ID: "n1", Path: "src/api.go", Name: "pkg/api/closeFinding", Kind: domain.KindFunction})
 	sa.Stage("repo-fts", "main", "src/api.go", staging.File{Nodes: []*domain.Node{n}, Edges: nil})
 
 	p := newTestPromoter(sa, db)
@@ -444,8 +444,8 @@ func TestPromote_FTS_RemovesStaleRowsOnReParse(t *testing.T) {
 	insertTestRepo(t, db, "repo-fts")
 
 	sa := staging.NewArea()
-	a, _ := domain.NewNode("a", "f.go", "closeFinding", domain.KindFunction)
-	b, _ := domain.NewNode("b", "f.go", "openFinding", domain.KindFunction)
+	a, _ := domain.NewNode(domain.NodeSpec{ID: "a", Path: "f.go", Name: "closeFinding", Kind: domain.KindFunction})
+	b, _ := domain.NewNode(domain.NodeSpec{ID: "b", Path: "f.go", Name: "openFinding", Kind: domain.KindFunction})
 	sa.Stage("repo-fts", "main", "f.go", staging.File{Nodes: []*domain.Node{a, b}, Edges: nil})
 
 	p := newTestPromoter(sa, db)
@@ -454,7 +454,7 @@ func TestPromote_FTS_RemovesStaleRowsOnReParse(t *testing.T) {
 	}
 
 	// Re-promote with only one of the two nodes.
-	a2, _ := domain.NewNode("a", "f.go", "closeFinding", domain.KindFunction)
+	a2, _ := domain.NewNode(domain.NodeSpec{ID: "a", Path: "f.go", Name: "closeFinding", Kind: domain.KindFunction})
 	sa.Stage("repo-fts", "main", "f.go", staging.File{Nodes: []*domain.Node{a2}, Edges: nil})
 	if err := p.Promote(context.Background(), "repo-fts", "main", "sha-2", domain.Actor{ID: "service:veska", Kind: domain.ActorKindSystem}); err != nil {
 		t.Fatalf("Promote 2: %v", err)
@@ -486,12 +486,7 @@ func TestPromote_AtomicTransaction(t *testing.T) {
 	// Stage several nodes across one file to verify batch atomicity.
 	nodes := make([]*domain.Node, 0, 5)
 	for i := range 5 {
-		n, _ := domain.NewNode(
-			string(rune('a'+i)),
-			"multi.go",
-			string(rune('A'+i)),
-			domain.KindFunction,
-		)
+		n, _ := domain.NewNode(domain.NodeSpec{ID: string(rune('a' + i)), Path: "multi.go", Name: string(rune('A' + i)), Kind: domain.KindFunction})
 		nodes = append(nodes, n)
 	}
 	sa.Stage("repo1", "main", "multi.go", staging.File{Nodes: nodes, Edges: nil})

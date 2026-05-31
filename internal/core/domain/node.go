@@ -165,19 +165,37 @@ func validateHashMatchesContent(h ContentHash, content string) error {
 	return nil
 }
 
-// NewNode constructs a Node, validates invariants, and applies functional options.
-// Required fields are id, path, name, and kind.  An error is returned for any
-// invariant violation.
-func NewNode(id, path, name string, kind NodeKind, opts ...NodeOption) (*Node, error) {
-	if id == "" {
+// NodeSpec carries the required fields of a Node. It groups the constructor's
+// positional arguments into a named struct so adjacent same-typed fields
+// (ID/Path/Name) cannot be transposed at a call site, mirroring FindingSpec.
+// Optional fields (signature, lines, content, language, exported, external)
+// are still supplied via NodeOption.
+type NodeSpec struct {
+	ID   string
+	Path string
+	Name string
+	Kind NodeKind
+}
+
+// NewNode constructs a Node from spec, validates invariants, and applies
+// functional options. spec.ID, spec.Path, and spec.Name must be non-empty.
+// An error is returned for any invariant violation.
+func NewNode(spec NodeSpec, opts ...NodeOption) (*Node, error) {
+	if spec.ID == "" {
 		return nil, errors.New("node: id must not be empty")
+	}
+	if spec.Path == "" {
+		return nil, errors.New("node: path must not be empty")
+	}
+	if spec.Name == "" {
+		return nil, errors.New("node: name must not be empty")
 	}
 
 	n := &Node{
-		ID:   NodeID(id),
-		Path: path,
-		Name: name,
-		Kind: kind,
+		ID:   NodeID(spec.ID),
+		Path: spec.Path,
+		Name: spec.Name,
+		Kind: spec.Kind,
 	}
 
 	for _, opt := range opts {

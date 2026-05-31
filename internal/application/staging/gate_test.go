@@ -95,7 +95,7 @@ func TestBranchSwitch_ClearsAndResumes(t *testing.T) {
 	sa := NewArea()
 
 	// Stage some data on prevBranch.
-	n, err := domain.NewNode("n1", "a.go", "A", domain.KindFunction)
+	n, err := domain.NewNode(domain.NodeSpec{ID: "n1", Path: "a.go", Name: "A", Kind: domain.KindFunction})
 	if err != nil {
 		t.Fatalf("NewNode: %v", err)
 	}
@@ -174,7 +174,7 @@ func TestStaleGenerationWrite(t *testing.T) {
 	sa := NewArea()
 	g := NewGate(sa)
 
-	n, err := domain.NewNode("n1", "a.go", "A", domain.KindFunction)
+	n, err := domain.NewNode(domain.NodeSpec{ID: "n1", Path: "a.go", Name: "A", Kind: domain.KindFunction})
 	if err != nil {
 		t.Fatalf("NewNode: %v", err)
 	}

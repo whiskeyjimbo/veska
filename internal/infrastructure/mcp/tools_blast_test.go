@@ -234,7 +234,7 @@ func TestBlastRadius_RequiresParams(t *testing.T) {
 
 func TestDirtyBlastRadius_FlagsIncludedStaging(t *testing.T) {
 	area := staging.NewArea()
-	n, _ := domain.NewNode("s1", "foo.go", "Foo", domain.KindFunction)
+	n, _ := domain.NewNode(domain.NodeSpec{ID: "s1", Path: "foo.go", Name: "Foo", Kind: domain.KindFunction})
 	area.Stage("r1", "main", "foo.go", staging.File{Nodes: []*domain.Node{n}, Edges: nil})
 
 	edges := &blastFakeEdges{inbound: map[string][]string{"s1": {"x"}}}

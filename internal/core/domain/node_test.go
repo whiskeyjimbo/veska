@@ -13,16 +13,32 @@ func sha256Hex(s string) string {
 
 // DoD 1: NewNode with empty id returns error.
 func TestNewNode_EmptyID(t *testing.T) {
-	_, err := NewNode("", "pkg/foo.go", "Foo", KindFunction)
+	_, err := NewNode(NodeSpec{ID: "", Path: "pkg/foo.go", Name: "Foo", Kind: KindFunction})
 	if err == nil {
 		t.Fatal("expected error for empty id, got nil")
 		return
 	}
 }
 
+// NewNode with empty path returns error (previously unchecked).
+func TestNewNode_EmptyPath(t *testing.T) {
+	_, err := NewNode(NodeSpec{ID: "abc", Path: "", Name: "Foo", Kind: KindFunction})
+	if err == nil {
+		t.Fatal("expected error for empty path, got nil")
+	}
+}
+
+// NewNode with empty name returns error (previously unchecked).
+func TestNewNode_EmptyName(t *testing.T) {
+	_, err := NewNode(NodeSpec{ID: "abc", Path: "pkg/foo.go", Name: "", Kind: KindFunction})
+	if err == nil {
+		t.Fatal("expected error for empty name, got nil")
+	}
+}
+
 // DoD 2: NewNode with valid required fields returns non-nil Node.
 func TestNewNode_ValidRequired(t *testing.T) {
-	n, err := NewNode("abc", "pkg/foo.go", "Foo", KindFunction)
+	n, err := NewNode(NodeSpec{ID: "abc", Path: "pkg/foo.go", Name: "Foo", Kind: KindFunction})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -48,10 +64,7 @@ func TestNewNode_ValidRequired(t *testing.T) {
 func TestNewNode_ContentHashMatchesRawContent(t *testing.T) {
 	raw := "func Foo() {}"
 	hash := sha256Hex(raw)
-	_, err := NewNode("abc", "pkg/foo.go", "Foo", KindFunction,
-		WithRawContent(raw),
-		WithContentHash(ContentHash(hash)),
-	)
+	_, err := NewNode(NodeSpec{ID: "abc", Path: "pkg/foo.go", Name: "Foo", Kind: KindFunction}, WithRawContent(raw), WithContentHash(ContentHash(hash)))
 	if err != nil {
 		t.Fatalf("unexpected error with matching hash: %v", err)
 	}
@@ -59,10 +72,7 @@ func TestNewNode_ContentHashMatchesRawContent(t *testing.T) {
 
 // DoD 3b: WithContentHash + WithRawContent — mismatched hash returns error.
 func TestNewNode_ContentHashMismatch(t *testing.T) {
-	_, err := NewNode("abc", "pkg/foo.go", "Foo", KindFunction,
-		WithRawContent("func Foo() {}"),
-		WithContentHash("deadbeef"),
-	)
+	_, err := NewNode(NodeSpec{ID: "abc", Path: "pkg/foo.go", Name: "Foo", Kind: KindFunction}, WithRawContent("func Foo() {}"), WithContentHash("deadbeef"))
 	if err == nil {
 		t.Fatal("expected error for mismatched content hash, got nil")
 		return
@@ -71,9 +81,7 @@ func TestNewNode_ContentHashMismatch(t *testing.T) {
 
 // DoD 4: WithContentHash alone (no raw_content) is allowed.
 func TestNewNode_ContentHashAlone(t *testing.T) {
-	_, err := NewNode("abc", "pkg/foo.go", "Foo", KindFunction,
-		WithContentHash("aabbccdd"),
-	)
+	_, err := NewNode(NodeSpec{ID: "abc", Path: "pkg/foo.go", Name: "Foo", Kind: KindFunction}, WithContentHash("aabbccdd"))
 	if err != nil {
 		t.Fatalf("unexpected error for hash-only option: %v", err)
 	}
@@ -81,9 +89,7 @@ func TestNewNode_ContentHashAlone(t *testing.T) {
 
 // DoD 5: WithLines with start > end returns error.
 func TestNewNode_LinesStartAfterEnd(t *testing.T) {
-	_, err := NewNode("abc", "pkg/foo.go", "Foo", KindFunction,
-		WithLines(LineRange{Start: 10, End: 5}),
-	)
+	_, err := NewNode(NodeSpec{ID: "abc", Path: "pkg/foo.go", Name: "Foo", Kind: KindFunction}, WithLines(LineRange{Start: 10, End: 5}))
 	if err == nil {
 		t.Fatal("expected error for start > end in LineRange, got nil")
 		return
@@ -92,9 +98,7 @@ func TestNewNode_LinesStartAfterEnd(t *testing.T) {
 
 // WithLines with start == end is valid.
 func TestNewNode_LinesStartEqualsEnd(t *testing.T) {
-	_, err := NewNode("abc", "pkg/foo.go", "Foo", KindFunction,
-		WithLines(LineRange{Start: 5, End: 5}),
-	)
+	_, err := NewNode(NodeSpec{ID: "abc", Path: "pkg/foo.go", Name: "Foo", Kind: KindFunction}, WithLines(LineRange{Start: 5, End: 5}))
 	if err != nil {
 		t.Fatalf("unexpected error for start == end: %v", err)
 	}
@@ -102,9 +106,7 @@ func TestNewNode_LinesStartEqualsEnd(t *testing.T) {
 
 // WithLines with start < 1 (0-indexed) returns error.
 func TestNewNode_LinesZeroIndexed(t *testing.T) {
-	_, err := NewNode("abc", "pkg/foo.go", "Foo", KindFunction,
-		WithLines(LineRange{Start: 0, End: 5}),
-	)
+	_, err := NewNode(NodeSpec{ID: "abc", Path: "pkg/foo.go", Name: "Foo", Kind: KindFunction}, WithLines(LineRange{Start: 0, End: 5}))
 	if err == nil {
 		t.Fatal("expected error for 0-indexed start, got nil")
 		return
@@ -125,7 +127,7 @@ func TestNodeKindValues(t *testing.T) {
 
 // Optional fields are nil by default.
 func TestNewNode_OptionalFieldsNilByDefault(t *testing.T) {
-	n, err := NewNode("abc", "pkg/foo.go", "Foo", KindFunction)
+	n, err := NewNode(NodeSpec{ID: "abc", Path: "pkg/foo.go", Name: "Foo", Kind: KindFunction})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -152,9 +154,7 @@ func TestNewNode_OptionalFieldsNilByDefault(t *testing.T) {
 // WithSignature sets the signature.
 func TestNewNode_WithSignature(t *testing.T) {
 	sig := "func Foo() error"
-	n, err := NewNode("abc", "pkg/foo.go", "Foo", KindFunction,
-		WithSignature(sig),
-	)
+	n, err := NewNode(NodeSpec{ID: "abc", Path: "pkg/foo.go", Name: "Foo", Kind: KindFunction}, WithSignature(sig))
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -165,9 +165,7 @@ func TestNewNode_WithSignature(t *testing.T) {
 
 // WithLanguage sets the language.
 func TestNewNode_WithLanguage(t *testing.T) {
-	n, err := NewNode("abc", "pkg/foo.go", "Foo", KindFunction,
-		WithLanguage("go"),
-	)
+	n, err := NewNode(NodeSpec{ID: "abc", Path: "pkg/foo.go", Name: "Foo", Kind: KindFunction}, WithLanguage("go"))
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -178,9 +176,7 @@ func TestNewNode_WithLanguage(t *testing.T) {
 
 // WithExported sets exported flag.
 func TestNewNode_WithExported(t *testing.T) {
-	n, err := NewNode("abc", "pkg/foo.go", "Foo", KindFunction,
-		WithExported(true),
-	)
+	n, err := NewNode(NodeSpec{ID: "abc", Path: "pkg/foo.go", Name: "Foo", Kind: KindFunction}, WithExported(true))
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}

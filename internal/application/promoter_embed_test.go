@@ -17,8 +17,8 @@ func TestPromote_EnqueuesPendingEmbedRefs(t *testing.T) {
 	insertTestRepo(t, db, "repo1")
 
 	sa := staging.NewArea()
-	n1, _ := domain.NewNode("n1", "a.go", "A", domain.KindFunction)
-	n2, _ := domain.NewNode("n2", "b.go", "B", domain.KindFunction)
+	n1, _ := domain.NewNode(domain.NodeSpec{ID: "n1", Path: "a.go", Name: "A", Kind: domain.KindFunction})
+	n2, _ := domain.NewNode(domain.NodeSpec{ID: "n2", Path: "b.go", Name: "B", Kind: domain.KindFunction})
 	sa.Stage("repo1", "main", "a.go", staging.File{Nodes: []*domain.Node{n1}, Edges: nil})
 	sa.Stage("repo1", "main", "b.go", staging.File{Nodes: []*domain.Node{n2}, Edges: nil})
 
@@ -75,7 +75,7 @@ func TestPromote_RepromoteResetsEmbedRef(t *testing.T) {
 	insertTestRepo(t, db, "repo1")
 
 	sa := staging.NewArea()
-	n1, _ := domain.NewNode("n1", "a.go", "A", domain.KindFunction)
+	n1, _ := domain.NewNode(domain.NodeSpec{ID: "n1", Path: "a.go", Name: "A", Kind: domain.KindFunction})
 	sa.Stage("repo1", "main", "a.go", staging.File{Nodes: []*domain.Node{n1}, Edges: nil})
 
 	p := newTestPromoter(sa, db)
@@ -93,7 +93,7 @@ func TestPromote_RepromoteResetsEmbedRef(t *testing.T) {
 	}
 
 	// Re-promote.
-	n1b, _ := domain.NewNode("n1", "a.go", "A", domain.KindFunction)
+	n1b, _ := domain.NewNode(domain.NodeSpec{ID: "n1", Path: "a.go", Name: "A", Kind: domain.KindFunction})
 	sa.Stage("repo1", "main", "a.go", staging.File{Nodes: []*domain.Node{n1b}, Edges: nil})
 	if err := p.Promote(context.Background(), "repo1", "main", "sha-2",
 		domain.Actor{ID: "service:veska", Kind: domain.ActorKindSystem}); err != nil {

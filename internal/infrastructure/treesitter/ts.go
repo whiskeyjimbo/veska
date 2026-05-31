@@ -63,9 +63,7 @@ func (p *TSParser) ParseFile(ctx context.Context, repoID, path string, src []byt
 	base := filepath.Base(path)
 	modName := strings.TrimSuffix(base, filepath.Ext(base))
 	modID := nodeID(repoID, path, domain.KindModule, modName)
-	modNode, err := domain.NewNode(modID, path, modName, domain.KindModule,
-		domain.WithLanguage("typescript"),
-	)
+	modNode, err := domain.NewNode(domain.NodeSpec{ID: modID, Path: path, Name: modName, Kind: domain.KindModule}, domain.WithLanguage("typescript"))
 	if err == nil {
 		result.Nodes = append(result.Nodes, modNode)
 	}
@@ -201,12 +199,7 @@ func parseTSFunctionDecl(node *sitter.Node, src []byte, repoID, path string, exp
 	id := nodeID(repoID, path, domain.KindFunction, name)
 	lr := lineRange(node)
 	raw := string(src[node.StartByte():node.EndByte()])
-	n, err := domain.NewNode(id, path, name, domain.KindFunction,
-		domain.WithLanguage("typescript"),
-		domain.WithLines(lr),
-		domain.WithRawContent(raw),
-		domain.WithExported(exported),
-	)
+	n, err := domain.NewNode(domain.NodeSpec{ID: id, Path: path, Name: name, Kind: domain.KindFunction}, domain.WithLanguage("typescript"), domain.WithLines(lr), domain.WithRawContent(raw), domain.WithExported(exported))
 	if err != nil {
 		return nil
 	}
@@ -223,12 +216,7 @@ func parseTSClassDecl(node *sitter.Node, src []byte, repoID, path string, export
 	id := nodeID(repoID, path, domain.KindClass, name)
 	lr := lineRange(node)
 	raw := string(src[node.StartByte():node.EndByte()])
-	n, err := domain.NewNode(id, path, name, domain.KindClass,
-		domain.WithLanguage("typescript"),
-		domain.WithLines(lr),
-		domain.WithRawContent(raw),
-		domain.WithExported(exported),
-	)
+	n, err := domain.NewNode(domain.NodeSpec{ID: id, Path: path, Name: name, Kind: domain.KindClass}, domain.WithLanguage("typescript"), domain.WithLines(lr), domain.WithRawContent(raw), domain.WithExported(exported))
 	if err != nil {
 		return name, nil
 	}
@@ -269,12 +257,7 @@ func parseTSMethodDef(node *sitter.Node, src []byte, repoID, path, className str
 	id := nodeID(repoID, path, domain.KindMethod, fullName)
 	lr := lineRange(node)
 	raw := string(src[node.StartByte():node.EndByte()])
-	n, err := domain.NewNode(id, path, fullName, domain.KindMethod,
-		domain.WithLanguage("typescript"),
-		domain.WithLines(lr),
-		domain.WithRawContent(raw),
-		domain.WithExported(exported),
-	)
+	n, err := domain.NewNode(domain.NodeSpec{ID: id, Path: path, Name: fullName, Kind: domain.KindMethod}, domain.WithLanguage("typescript"), domain.WithLines(lr), domain.WithRawContent(raw), domain.WithExported(exported))
 	if err != nil {
 		return nil
 	}
@@ -291,12 +274,7 @@ func parseTSInterfaceDecl(node *sitter.Node, src []byte, repoID, path string, ex
 	id := nodeID(repoID, path, domain.KindInterface, name)
 	lr := lineRange(node)
 	raw := string(src[node.StartByte():node.EndByte()])
-	n, err := domain.NewNode(id, path, name, domain.KindInterface,
-		domain.WithLanguage("typescript"),
-		domain.WithLines(lr),
-		domain.WithRawContent(raw),
-		domain.WithExported(exported),
-	)
+	n, err := domain.NewNode(domain.NodeSpec{ID: id, Path: path, Name: name, Kind: domain.KindInterface}, domain.WithLanguage("typescript"), domain.WithLines(lr), domain.WithRawContent(raw), domain.WithExported(exported))
 	if err != nil {
 		return nil
 	}
@@ -332,12 +310,7 @@ func parseTSArrowFunctions(
 		id := nodeID(repoID, path, domain.KindFunction, name)
 		lr := lineRange(child)
 		raw := string(src[child.StartByte():child.EndByte()])
-		n, err := domain.NewNode(id, path, name, domain.KindFunction,
-			domain.WithLanguage("typescript"),
-			domain.WithLines(lr),
-			domain.WithRawContent(raw),
-			domain.WithExported(exported),
-		)
+		n, err := domain.NewNode(domain.NodeSpec{ID: id, Path: path, Name: name, Kind: domain.KindFunction}, domain.WithLanguage("typescript"), domain.WithLines(lr), domain.WithRawContent(raw), domain.WithExported(exported))
 		if err != nil {
 			continue
 		}

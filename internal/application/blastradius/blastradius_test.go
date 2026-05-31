@@ -225,7 +225,7 @@ func TestOf_DeduplicatesSeeds(t *testing.T) {
 
 func TestDirtyOf_UsesStagedNodes(t *testing.T) {
 	area := staging.NewArea()
-	n, err := domain.NewNode("staged-1", "foo.go", "Foo", domain.KindFunction)
+	n, err := domain.NewNode(domain.NodeSpec{ID: "staged-1", Path: "foo.go", Name: "Foo", Kind: domain.KindFunction})
 	if err != nil {
 		t.Fatalf("NewNode: %v", err)
 	}
@@ -278,13 +278,11 @@ func TestDirtyOf_SkipsUnchangedSymbols(t *testing.T) {
 	area := staging.NewArea()
 	// Build nodes with explicit ContentHashes: one matches the promoted
 	// hash ("unchanged"), one differs ("changed").
-	unchanged, err := domain.NewNode("unchanged", "foo.go", "Same", domain.KindFunction,
-		domain.WithContentHash("HASH-A"))
+	unchanged, err := domain.NewNode(domain.NodeSpec{ID: "unchanged", Path: "foo.go", Name: "Same", Kind: domain.KindFunction}, domain.WithContentHash("HASH-A"))
 	if err != nil {
 		t.Fatalf("NewNode unchanged: %v", err)
 	}
-	changed, err := domain.NewNode("changed", "foo.go", "Edited", domain.KindFunction,
-		domain.WithContentHash("HASH-B-NEW"))
+	changed, err := domain.NewNode(domain.NodeSpec{ID: "changed", Path: "foo.go", Name: "Edited", Kind: domain.KindFunction}, domain.WithContentHash("HASH-B-NEW"))
 	if err != nil {
 		t.Fatalf("NewNode changed: %v", err)
 	}

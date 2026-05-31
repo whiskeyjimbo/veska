@@ -11,7 +11,7 @@ import (
 
 func mustNode(t *testing.T, id, path, name string, kind domain.NodeKind) *domain.Node {
 	t.Helper()
-	n, err := domain.NewNode(id, path, name, kind)
+	n, err := domain.NewNode(domain.NodeSpec{ID: id, Path: path, Name: name, Kind: kind})
 	if err != nil {
 		t.Fatalf("NewNode: %v", err)
 	}
@@ -227,7 +227,7 @@ func TestStageFile_Concurrent(t *testing.T) {
 	for i := range workers {
 		go func(i int) {
 			defer wg.Done()
-			n, _ := domain.NewNode("n", "f.go", "F", domain.KindFunction)
+			n, _ := domain.NewNode(domain.NodeSpec{ID: "n", Path: "f.go", Name: "F", Kind: domain.KindFunction})
 			sa.Stage("repo", "main", "f.go", File{Nodes: []*domain.Node{n}, Edges: nil})
 			_ = i
 		}(i)

@@ -9,7 +9,7 @@ import (
 // ── NewTask ────────────────────────────────────────────────────────────────
 
 func TestNewTask_EmptyID(t *testing.T) {
-	_, err := NewTask("", "repo1", "My Task")
+	_, err := NewTask(TaskSpec{ID: "", RepoID: "repo1", Title: "My Task"})
 	if err == nil {
 		t.Fatal("expected error for empty id, got nil")
 		return
@@ -17,7 +17,7 @@ func TestNewTask_EmptyID(t *testing.T) {
 }
 
 func TestNewTask_EmptyRepoID(t *testing.T) {
-	_, err := NewTask("task-1", "", "My Task")
+	_, err := NewTask(TaskSpec{ID: "task-1", RepoID: "", Title: "My Task"})
 	if err == nil {
 		t.Fatal("expected error for empty repoID, got nil")
 		return
@@ -25,7 +25,7 @@ func TestNewTask_EmptyRepoID(t *testing.T) {
 }
 
 func TestNewTask_EmptyTitle(t *testing.T) {
-	_, err := NewTask("task-1", "repo1", "")
+	_, err := NewTask(TaskSpec{ID: "task-1", RepoID: "repo1", Title: ""})
 	if err == nil {
 		t.Fatal("expected error for empty title, got nil")
 		return
@@ -33,7 +33,7 @@ func TestNewTask_EmptyTitle(t *testing.T) {
 }
 
 func TestNewTask_HappyPath(t *testing.T) {
-	task, err := NewTask("task-1", "repo1", "Do something")
+	task, err := NewTask(TaskSpec{ID: "task-1", RepoID: "repo1", Title: "Do something"})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -61,7 +61,7 @@ func TestNewTask_HappyPath(t *testing.T) {
 }
 
 func TestNewTask_WithTracker(t *testing.T) {
-	task, err := NewTask("task-1", "repo1", "Track me", WithTracker("bd", "bd:veska-42"))
+	task, err := NewTask(TaskSpec{ID: "task-1", RepoID: "repo1", Title: "Track me"}, WithTracker("bd", "bd:veska-42"))
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -75,7 +75,7 @@ func TestNewTask_WithTracker(t *testing.T) {
 
 func TestNewTask_WithCreatedAt(t *testing.T) {
 	want := time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC)
-	task, err := NewTask("task-1", "repo1", "Timed", WithCreatedAt(want))
+	task, err := NewTask(TaskSpec{ID: "task-1", RepoID: "repo1", Title: "Timed"}, WithCreatedAt(want))
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -85,7 +85,7 @@ func TestNewTask_WithCreatedAt(t *testing.T) {
 }
 
 func TestNewTask_WithActive(t *testing.T) {
-	task, err := NewTask("task-1", "repo1", "Active task", WithActive())
+	task, err := NewTask(TaskSpec{ID: "task-1", RepoID: "repo1", Title: "Active task"}, WithActive())
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -96,7 +96,7 @@ func TestNewTask_WithActive(t *testing.T) {
 
 func TestNewTask_CreatedAtIsRecent(t *testing.T) {
 	before := time.Now()
-	task, err := NewTask("task-1", "repo1", "Time check")
+	task, err := NewTask(TaskSpec{ID: "task-1", RepoID: "repo1", Title: "Time check"})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -110,8 +110,8 @@ func TestNewTask_CreatedAtIsRecent(t *testing.T) {
 
 func TestTaskSet_AddInactiveTasks(t *testing.T) {
 	ts := NewTaskSet()
-	t1, _ := NewTask("t1", "repo1", "Task 1")
-	t2, _ := NewTask("t2", "repo1", "Task 2")
+	t1, _ := NewTask(TaskSpec{ID: "t1", RepoID: "repo1", Title: "Task 1"})
+	t2, _ := NewTask(TaskSpec{ID: "t2", RepoID: "repo1", Title: "Task 2"})
 	if err := ts.Add(t1); err != nil {
 		t.Fatalf("Add t1: %v", err)
 	}
@@ -122,7 +122,7 @@ func TestTaskSet_AddInactiveTasks(t *testing.T) {
 
 func TestTaskSet_AddFirstActiveTaskSucceeds(t *testing.T) {
 	ts := NewTaskSet()
-	t1, _ := NewTask("t1", "repo1", "Task 1", WithActive())
+	t1, _ := NewTask(TaskSpec{ID: "t1", RepoID: "repo1", Title: "Task 1"}, WithActive())
 	if err := ts.Add(t1); err != nil {
 		t.Fatalf("Add first active task: %v", err)
 	}
@@ -133,8 +133,8 @@ func TestTaskSet_AddFirstActiveTaskSucceeds(t *testing.T) {
 
 func TestTaskSet_AddSecondActiveTaskReturnsDuplicateError(t *testing.T) {
 	ts := NewTaskSet()
-	t1, _ := NewTask("t1", "repo1", "Task 1", WithActive())
-	t2, _ := NewTask("t2", "repo1", "Task 2", WithActive())
+	t1, _ := NewTask(TaskSpec{ID: "t1", RepoID: "repo1", Title: "Task 1"}, WithActive())
+	t2, _ := NewTask(TaskSpec{ID: "t2", RepoID: "repo1", Title: "Task 2"}, WithActive())
 	_ = ts.Add(t1)
 	err := ts.Add(t2)
 	if !errors.Is(err, ErrDuplicateActiveTask) {
@@ -144,8 +144,8 @@ func TestTaskSet_AddSecondActiveTaskReturnsDuplicateError(t *testing.T) {
 
 func TestTaskSet_AddActiveTasksDifferentReposOK(t *testing.T) {
 	ts := NewTaskSet()
-	t1, _ := NewTask("t1", "repo1", "Task 1", WithActive())
-	t2, _ := NewTask("t2", "repo2", "Task 2", WithActive())
+	t1, _ := NewTask(TaskSpec{ID: "t1", RepoID: "repo1", Title: "Task 1"}, WithActive())
+	t2, _ := NewTask(TaskSpec{ID: "t2", RepoID: "repo2", Title: "Task 2"}, WithActive())
 	if err := ts.Add(t1); err != nil {
 		t.Fatalf("Add t1: %v", err)
 	}
@@ -163,7 +163,7 @@ func TestTaskSet_ActiveReturnsNilForUnknownRepo(t *testing.T) {
 
 func TestTaskSet_ActiveReturnsNilWhenNoActiveTask(t *testing.T) {
 	ts := NewTaskSet()
-	t1, _ := NewTask("t1", "repo1", "Inactive")
+	t1, _ := NewTask(TaskSpec{ID: "t1", RepoID: "repo1", Title: "Inactive"})
 	_ = ts.Add(t1)
 	if got := ts.Active("repo1"); got != nil {
 		t.Errorf("Active: got %v, want nil", got)
@@ -172,8 +172,8 @@ func TestTaskSet_ActiveReturnsNilWhenNoActiveTask(t *testing.T) {
 
 func TestTaskSet_SetActiveDeactivatesPrevious(t *testing.T) {
 	ts := NewTaskSet()
-	t1, _ := NewTask("t1", "repo1", "Task 1", WithActive())
-	t2, _ := NewTask("t2", "repo1", "Task 2")
+	t1, _ := NewTask(TaskSpec{ID: "t1", RepoID: "repo1", Title: "Task 1"}, WithActive())
+	t2, _ := NewTask(TaskSpec{ID: "t2", RepoID: "repo1", Title: "Task 2"})
 	_ = ts.Add(t1)
 	_ = ts.Add(t2)
 
@@ -192,7 +192,7 @@ func TestTaskSet_SetActiveDeactivatesPrevious(t *testing.T) {
 
 func TestTaskSet_SetActiveTaskNotInSet(t *testing.T) {
 	ts := NewTaskSet()
-	t1, _ := NewTask("t1", "repo1", "Orphan")
+	t1, _ := NewTask(TaskSpec{ID: "t1", RepoID: "repo1", Title: "Orphan"})
 	// t1 was never Add-ed; SetActive should still work by treating it as the new active.
 	ts.SetActive(t1)
 	if got := ts.Active("repo1"); got == nil || got.ID != "t1" {

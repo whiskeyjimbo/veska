@@ -8,7 +8,7 @@ import (
 
 func makeNode(t *testing.T, id string) *Node {
 	t.Helper()
-	n, err := NewNode(id, "pkg/foo.go", id, KindFunction)
+	n, err := NewNode(NodeSpec{ID: id, Path: "pkg/foo.go", Name: id, Kind: KindFunction})
 	if err != nil {
 		t.Fatalf("makeNode(%q): %v", id, err)
 	}

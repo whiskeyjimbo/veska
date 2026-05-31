@@ -84,7 +84,7 @@ func scanNode(s interface {
 		opts = append(opts, domain.WithExternal(true))
 	}
 
-	n, err := domain.NewNode(id, filePath, symbolPath, domain.NodeKind(kind), opts...)
+	n, err := domain.NewNode(domain.NodeSpec{ID: id, Path: filePath, Name: symbolPath, Kind: domain.NodeKind(kind)}, opts...)
 	if err != nil {
 		return nil, fmt.Errorf("graph_repo: rehydrate node %q: %w", id, err)
 	}
