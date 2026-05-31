@@ -7,6 +7,7 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/application/search"
 	"github.com/whiskeyjimbo/veska/internal/core/ports"
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/embedding/elect"
+	"github.com/whiskeyjimbo/veska/internal/infrastructure/embedding/ollama"
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/sqlite"
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/vector"
 	"github.com/whiskeyjimbo/veska/internal/platform/config"
@@ -37,11 +38,11 @@ func NewCLISearchService(pools *sqlite.Pools) (*search.Service, error) {
 func NewCLIEmbeddingProvider() (ports.EmbeddingProvider, error) {
 	baseURL := os.Getenv("VESKA_OLLAMA_URL")
 	if baseURL == "" {
-		baseURL = "http://localhost:11434"
+		baseURL = ollama.DefaultBaseURL
 	}
 	model := os.Getenv("VESKA_EMBED_MODEL")
 	if model == "" {
-		model = "nomic-embed-text"
+		model = ollama.DefaultModel
 	}
 	prov, err := elect.Resolve(elect.Config{
 		VeskaHome:     config.DefaultVectorDir(),
