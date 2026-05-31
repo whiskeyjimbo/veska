@@ -37,7 +37,25 @@ type ColdScanCore struct {
 // caller-specific Ingester and Promoter collaborators (finding storage, check
 // runner, added-lines seam, tracer) are forwarded as ingesterOpts/promoterOpts
 // so the constructed core is fully wired and immutable.
-func NewColdScanCore(pools *sqlite.Pools, reviewEnabled bool, ingesterOpts []application.IngesterOption, promoterOpts []application.PromoterOption) *ColdScanCore {
+// coldScanCoreConfig holds the tuneable knobs for NewColdScanCore.
+type coldScanCoreConfig struct {
+	reviewEnabled bool
+}
+
+// ColdScanCoreOption configures NewColdScanCore.
+type ColdScanCoreOption func(*coldScanCoreConfig)
+
+// WithReviewEnabled turns on the M5 review pipeline for the cold-scan core's
+// promotion store. Absent ⇒ false (review off).
+func WithReviewEnabled(enabled bool) ColdScanCoreOption {
+	return func(c *coldScanCoreConfig) { c.reviewEnabled = enabled }
+}
+
+func NewColdScanCore(pools *sqlite.Pools, ingesterOpts []application.IngesterOption, promoterOpts []application.PromoterOption, opts ...ColdScanCoreOption) *ColdScanCore {
+	var cfg coldScanCoreConfig
+	for _, opt := range opts {
+		opt(&cfg)
+	}
 	area := staging.NewArea()
 	gate := staging.NewGate(area)
 	parser := treesitter.NewGoParser()
@@ -49,7 +67,7 @@ func NewColdScanCore(pools *sqlite.Pools, reviewEnabled bool, ingesterOpts []app
 			sqlite.NewFTSSink(),
 			sqlite.NewEmbedRefSink(),
 		},
-		sqlite.WithReviewEnabled(reviewEnabled),
+		sqlite.WithReviewEnabled(cfg.reviewEnabled),
 	)
 	promoter := application.NewPromoter(area, promotionStore, promoterOpts...)
 

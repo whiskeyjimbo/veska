@@ -486,7 +486,7 @@ func (b *daemonBuilder) buildCore() error {
 		promoterOpts = append(promoterOpts, application.WithPromoterTracerProvider(b.tracer))
 	}
 
-	core := composition.NewColdScanCore(b.pools, b.fileCfg.Review.Enabled, ingesterOpts, promoterOpts)
+	core := composition.NewColdScanCore(b.pools, ingesterOpts, promoterOpts, composition.WithReviewEnabled(b.fileCfg.Review.Enabled))
 	b.staging = core.Staging
 	b.gate = core.Gate
 	b.ingester = core.Ingester
