@@ -22,6 +22,10 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/platform/observability"
 )
 
+// ErrMissingDependency is returned by NewService when a required
+// dependency is nil. It wraps so callers can errors.Is against it.
+var ErrMissingDependency = errors.New("search: missing required dependency")
+
 // DegradedReasonEmbedderOfflineLexicalFallback is the canonical token
 // emitted on Response.DegradedReasons when Semantic falls back to the
 // lexical arm because the embedder was unreachable. The literal matches
@@ -152,19 +156,18 @@ func WithClock(now func() time.Time) Option {
 	}
 }
 
-// NewService constructs a Service. Dependencies are required: a nil
-// embedder, vectors, or nodes is a programmer error and is reported
-// by panicking at construction time rather than failing later at the
-// first query.
-func NewService(embedder ports.EmbeddingProvider, vectors ports.VectorStorage, nodes ports.NodeLookup, opts ...Option) *Service {
-	if embedder == nil {
-		panic("search.NewService: embedder is nil")
-	}
-	if vectors == nil {
-		panic("search.NewService: vectors is nil")
-	}
-	if nodes == nil {
-		panic("search.NewService: nodes is nil")
+// NewService constructs a Service. embedder, vectors, and nodes are
+// required: a nil dependency is reported at construction time with a
+// wrapped ErrMissingDependency rather than failing later at the first
+// query.
+func NewService(embedder ports.EmbeddingProvider, vectors ports.VectorStorage, nodes ports.NodeLookup, opts ...Option) (*Service, error) {
+	switch {
+	case embedder == nil:
+		return nil, fmt.Errorf("search.NewService: embedder is nil: %w", ErrMissingDependency)
+	case vectors == nil:
+		return nil, fmt.Errorf("search.NewService: vectors is nil: %w", ErrMissingDependency)
+	case nodes == nil:
+		return nil, fmt.Errorf("search.NewService: nodes is nil: %w", ErrMissingDependency)
 	}
 	s := &Service{
 		embedder: embedder,
@@ -175,7 +178,7 @@ func NewService(embedder ports.EmbeddingProvider, vectors ports.VectorStorage, n
 	for _, o := range opts {
 		o(s)
 	}
-	return s
+	return s, nil
 }
 
 // Semantic resolves query against the (repoID, branch) embedding index

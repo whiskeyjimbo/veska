@@ -85,7 +85,10 @@ func TestBlastRadius_DefaultsToCallers(t *testing.T) {
 		"seed":   {NodeID: "seed", SymbolPath: "S"},
 		"caller": {NodeID: "caller", SymbolPath: "C"},
 	}}
-	svc := blastradius.NewService(edges, nodes, nil)
+	svc, err := blastradius.NewService(edges, nodes, nil)
+	if err != nil {
+		t.Fatalf("construct: %v", err)
+	}
 	r := NewRegistry()
 	RegisterBlastTools(r, svc, nil, nil, nil, nil)
 	resp, rpcErr := dispatchBlast(t, r, "eng_get_blast_radius", map[string]any{
@@ -113,7 +116,10 @@ func TestBlastRadius_HonoursCalleesDirection(t *testing.T) {
 		"seed":   {NodeID: "seed"},
 		"callee": {NodeID: "callee"},
 	}}
-	svc := blastradius.NewService(edges, nodes, nil)
+	svc, err := blastradius.NewService(edges, nodes, nil)
+	if err != nil {
+		t.Fatalf("construct: %v", err)
+	}
 	r := NewRegistry()
 	RegisterBlastTools(r, svc, nil, nil, nil, nil)
 	resp, rpcErr := dispatchBlast(t, r, "eng_get_blast_radius", map[string]any{
@@ -141,7 +147,10 @@ func TestBlastRadius_InboundResolverSurfacesCrossRepoCallers(t *testing.T) {
 	nodes := &blastFakeNodes{metas: map[string]ports.NodeMeta{
 		"lib-seed": {NodeID: "lib-seed", SymbolPath: "lib.Hello"},
 	}}
-	svc := blastradius.NewService(edges, nodes, nil)
+	svc, err := blastradius.NewService(edges, nodes, nil)
+	if err != nil {
+		t.Fatalf("construct: %v", err)
+	}
 	r := NewRegistry()
 	inbound := func(_ context.Context, dst, _ string) ([]ports.ResolvedEdge, error) {
 		if dst != "lib-seed" {
@@ -181,7 +190,10 @@ func TestBlastRadius_InboundResolverSkippedForCalleesDirection(t *testing.T) {
 	nodes := &blastFakeNodes{metas: map[string]ports.NodeMeta{
 		"seed": {NodeID: "seed"},
 	}}
-	svc := blastradius.NewService(edges, nodes, nil)
+	svc, err := blastradius.NewService(edges, nodes, nil)
+	if err != nil {
+		t.Fatalf("construct: %v", err)
+	}
 	r := NewRegistry()
 	calls := 0
 	inbound := func(_ context.Context, _ string, _ string) ([]ports.ResolvedEdge, error) {
@@ -204,7 +216,10 @@ func TestBlastRadius_InboundResolverSkippedForCalleesDirection(t *testing.T) {
 }
 
 func TestBlastRadius_BadDirectionRejected(t *testing.T) {
-	svc := blastradius.NewService(&blastFakeEdges{}, &blastFakeNodes{}, nil)
+	svc, err := blastradius.NewService(&blastFakeEdges{}, &blastFakeNodes{}, nil)
+	if err != nil {
+		t.Fatalf("construct: %v", err)
+	}
 	r := NewRegistry()
 	RegisterBlastTools(r, svc, nil, nil, nil, nil)
 	_, rpcErr := dispatchBlast(t, r, "eng_get_blast_radius", map[string]any{
@@ -219,7 +234,10 @@ func TestBlastRadius_BadDirectionRejected(t *testing.T) {
 }
 
 func TestBlastRadius_RequiresParams(t *testing.T) {
-	svc := blastradius.NewService(&blastFakeEdges{}, &blastFakeNodes{}, nil)
+	svc, err := blastradius.NewService(&blastFakeEdges{}, &blastFakeNodes{}, nil)
+	if err != nil {
+		t.Fatalf("construct: %v", err)
+	}
 	r := NewRegistry()
 	RegisterBlastTools(r, svc, nil, nil, nil, nil)
 	_, rpcErr := dispatchBlast(t, r, "eng_get_blast_radius", map[string]any{
@@ -241,7 +259,10 @@ func TestDirtyBlastRadius_FlagsIncludedStaging(t *testing.T) {
 	nodes := &blastFakeNodes{metas: map[string]ports.NodeMeta{
 		"s1": {NodeID: "s1"}, "x": {NodeID: "x"},
 	}}
-	svc := blastradius.NewService(edges, nodes, area)
+	svc, err := blastradius.NewService(edges, nodes, area)
+	if err != nil {
+		t.Fatalf("construct: %v", err)
+	}
 	r := NewRegistry()
 	RegisterBlastTools(r, svc, nil, nil, nil, nil)
 	resp, rpcErr := dispatchBlast(t, r, "eng_get_dirty_blast_radius", map[string]any{
@@ -261,7 +282,10 @@ func TestDirtyBlastRadius_FlagsIncludedStaging(t *testing.T) {
 }
 
 func TestBlastTools_RegistersThreeTools(t *testing.T) {
-	svc := blastradius.NewService(&blastFakeEdges{}, &blastFakeNodes{}, nil)
+	svc, err := blastradius.NewService(&blastFakeEdges{}, &blastFakeNodes{}, nil)
+	if err != nil {
+		t.Fatalf("construct: %v", err)
+	}
 	r := NewRegistry()
 	RegisterBlastTools(r, svc, nil, nil, nil, nil)
 	got := r.Names()
@@ -277,7 +301,10 @@ func TestBlastTools_RegistersThreeTools(t *testing.T) {
 }
 
 func TestDiffBlastRadius_NotWiredReturnsInternalError(t *testing.T) {
-	svc := blastradius.NewService(&blastFakeEdges{}, &blastFakeNodes{}, nil)
+	svc, err := blastradius.NewService(&blastFakeEdges{}, &blastFakeNodes{}, nil)
+	if err != nil {
+		t.Fatalf("construct: %v", err)
+	}
 	r := NewRegistry()
 	RegisterBlastTools(r, svc, nil, nil, nil, nil)
 	_, rpcErr := dispatchBlast(t, r, "eng_get_diff_blast_radius", map[string]any{
@@ -297,7 +324,10 @@ func TestDiffBlastRadius_HappyPath(t *testing.T) {
 		},
 		byFile: map[string][]string{"foo.go": {"a"}},
 	}
-	svc := blastradius.NewService(edges, nodes, nil)
+	svc, err := blastradius.NewService(edges, nodes, nil)
+	if err != nil {
+		t.Fatalf("construct: %v", err)
+	}
 
 	repoRoot := func(_ context.Context, _ string) (string, error) {
 		return "/tmp/r", nil
@@ -322,7 +352,10 @@ func TestDiffBlastRadius_HappyPath(t *testing.T) {
 }
 
 func TestDiffBlastRadius_UnknownRepo(t *testing.T) {
-	svc := blastradius.NewService(&blastFakeEdges{}, &blastFakeNodes{}, nil)
+	svc, err := blastradius.NewService(&blastFakeEdges{}, &blastFakeNodes{}, nil)
+	if err != nil {
+		t.Fatalf("construct: %v", err)
+	}
 	repoRoot := func(_ context.Context, _ string) (string, error) {
 		return "", fmt.Errorf("no such repo")
 	}
@@ -350,7 +383,10 @@ func TestBlastRadius_AcceptsSymbol(t *testing.T) {
 		"n1":     {NodeID: "n1", SymbolPath: "Foo"},
 		"caller": {NodeID: "caller", SymbolPath: "C"},
 	}}
-	svc := blastradius.NewService(edges, nodes, nil)
+	svc, err := blastradius.NewService(edges, nodes, nil)
+	if err != nil {
+		t.Fatalf("construct: %v", err)
+	}
 	graph := newStubGraphStorage()
 	graph.addNode(mustNode(t, "n1", "pkg/foo.go", "Foo", domain.KindFunction))
 	r := NewRegistry()
@@ -372,7 +408,10 @@ func TestBlastRadius_AcceptsSymbol(t *testing.T) {
 // TestBlastRadius_AmbiguousSymbolRejected pins solov2-psdx: multiple matches
 // must yield the same "ambiguous; pass node_id" error eng_get_call_chain does.
 func TestBlastRadius_AmbiguousSymbolRejected(t *testing.T) {
-	svc := blastradius.NewService(&blastFakeEdges{}, &blastFakeNodes{}, nil)
+	svc, err := blastradius.NewService(&blastFakeEdges{}, &blastFakeNodes{}, nil)
+	if err != nil {
+		t.Fatalf("construct: %v", err)
+	}
 	graph := newStubGraphStorage()
 	graph.addNode(mustNode(t, "a", "a.go", "Foo", domain.KindFunction))
 	graph.addNode(mustNode(t, "b", "b.go", "Foo", domain.KindFunction))
@@ -391,7 +430,10 @@ func TestBlastRadius_AmbiguousSymbolRejected(t *testing.T) {
 
 // TestBlastRadius_MissingNodeAndSymbol pins the both-empty rejection.
 func TestBlastRadius_MissingNodeAndSymbol(t *testing.T) {
-	svc := blastradius.NewService(&blastFakeEdges{}, &blastFakeNodes{}, nil)
+	svc, err := blastradius.NewService(&blastFakeEdges{}, &blastFakeNodes{}, nil)
+	if err != nil {
+		t.Fatalf("construct: %v", err)
+	}
 	r := NewRegistry()
 	RegisterBlastTools(r, svc, nil, nil, nil, newStubGraphStorage())
 	_, rpcErr := dispatchBlast(t, r, "eng_get_blast_radius", map[string]any{

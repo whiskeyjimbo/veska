@@ -31,7 +31,10 @@ func wikiFixtureService(t *testing.T) *wiki.HotZoneService {
 			"/tmp/r/a.go": {"a"}, "/tmp/r/b.go": {"b"}, "/tmp/r/c.go": {"c"},
 		},
 	}
-	blast := blastradius.NewService(edges, nodes, nil)
+	blast, err := blastradius.NewService(edges, nodes, nil)
+	if err != nil {
+		t.Fatalf("construct: %v", err)
+	}
 	counts := func(context.Context, string) (map[string]int, error) {
 		return map[string]int{"a.go": 5, "b.go": 5, "c.go": 3}, nil
 	}
@@ -116,7 +119,10 @@ func TestHotZone_ReturnsRankedData(t *testing.T) {
 func TestHotZone_EmptyZonesSurfacesDegradedReason(t *testing.T) {
 	edges := &blastFakeEdges{}
 	nodes := &blastFakeNodes{metas: map[string]ports.NodeMeta{}, byFile: map[string][]string{}}
-	blast := blastradius.NewService(edges, nodes, nil)
+	blast, err := blastradius.NewService(edges, nodes, nil)
+	if err != nil {
+		t.Fatalf("construct: %v", err)
+	}
 	emptyCounts := func(context.Context, string) (map[string]int, error) { return map[string]int{}, nil }
 	svc, err := wiki.NewHotZoneService(emptyCounts, nodes.NodesInFile, blast)
 	if err != nil {

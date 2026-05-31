@@ -77,7 +77,10 @@ func TestOf_DefaultDirectionWalksInbound(t *testing.T) {
 		"b":    {NodeID: "b", SymbolPath: "B"},
 		"c":    {NodeID: "c", SymbolPath: "C"},
 	}}
-	s := blastradius.NewService(edges, nodes, nil)
+	s, err := blastradius.NewService(edges, nodes, nil)
+	if err != nil {
+		t.Fatalf("construct: %v", err)
+	}
 	resp, err := s.Of(context.Background(), "r", "main", []string{"seed"}, blastradius.Options{MaxDepth: 2})
 	if err != nil {
 		t.Fatalf("Of: %v", err)
@@ -109,7 +112,10 @@ func TestOf_OutboundDirection(t *testing.T) {
 		"a":    {NodeID: "a"},
 		"b":    {NodeID: "b"},
 	}}
-	s := blastradius.NewService(edges, nodes, nil)
+	s, err := blastradius.NewService(edges, nodes, nil)
+	if err != nil {
+		t.Fatalf("construct: %v", err)
+	}
 	resp, err := s.Of(context.Background(), "r", "main", []string{"seed"}, blastradius.Options{
 		MaxDepth: 5, Direction: blastradius.DirCallees,
 	})
@@ -139,7 +145,10 @@ func TestOf_BothDirections(t *testing.T) {
 	nodes := &fakeNodes{metas: map[string]ports.NodeMeta{
 		"seed": {NodeID: "seed"}, "caller": {NodeID: "caller"}, "callee": {NodeID: "callee"},
 	}}
-	s := blastradius.NewService(edges, nodes, nil)
+	s, err := blastradius.NewService(edges, nodes, nil)
+	if err != nil {
+		t.Fatalf("construct: %v", err)
+	}
 	resp, err := s.Of(context.Background(), "r", "main", []string{"seed"}, blastradius.Options{
 		MaxDepth: 1, Direction: blastradius.DirBoth,
 	})
@@ -163,7 +172,10 @@ func TestOf_TruncatedAtMaxNodes(t *testing.T) {
 	}}
 	// Seed must resolve, even if downstream nodes don't — solov2-2w0u.
 	nodes := &fakeNodes{metas: map[string]ports.NodeMeta{"seed": {NodeID: "seed"}}}
-	s := blastradius.NewService(edges, nodes, nil)
+	s, err := blastradius.NewService(edges, nodes, nil)
+	if err != nil {
+		t.Fatalf("construct: %v", err)
+	}
 	resp, err := s.Of(context.Background(), "r", "main", []string{"seed"}, blastradius.Options{
 		MaxDepth: 2, MaxNodes: 3,
 	})
@@ -183,8 +195,11 @@ func TestOf_PropagatesEdgeError(t *testing.T) {
 	// Seed metadata must be present so the new ErrSeedNotFound gate doesn't
 	// short-circuit before we reach the edge query (solov2-2w0u).
 	nodes := &fakeNodes{metas: map[string]ports.NodeMeta{"seed": {NodeID: "seed"}}}
-	s := blastradius.NewService(edges, nodes, nil)
-	_, err := s.Of(context.Background(), "r", "main", []string{"seed"}, blastradius.Options{MaxDepth: 1})
+	s, err := blastradius.NewService(edges, nodes, nil)
+	if err != nil {
+		t.Fatalf("construct: %v", err)
+	}
+	_, err = s.Of(context.Background(), "r", "main", []string{"seed"}, blastradius.Options{MaxDepth: 1})
 	if err == nil {
 		t.Fatal("expected error, got nil")
 		return
@@ -200,8 +215,11 @@ func TestOf_SeedNotFound_ReturnsErrSeedNotFound(t *testing.T) {
 	// empty-fields entry that masked the real cause for MCP callers.
 	edges := &fakeEdges{}
 	nodes := &fakeNodes{metas: map[string]ports.NodeMeta{}}
-	s := blastradius.NewService(edges, nodes, nil)
-	_, err := s.Of(context.Background(), "r", "main", []string{"deadbeef"}, blastradius.Options{MaxDepth: 1})
+	s, err := blastradius.NewService(edges, nodes, nil)
+	if err != nil {
+		t.Fatalf("construct: %v", err)
+	}
+	_, err = s.Of(context.Background(), "r", "main", []string{"deadbeef"}, blastradius.Options{MaxDepth: 1})
 	if err == nil {
 		t.Fatal("want error for unknown seed, got nil")
 	}
@@ -213,7 +231,10 @@ func TestOf_SeedNotFound_ReturnsErrSeedNotFound(t *testing.T) {
 func TestOf_DeduplicatesSeeds(t *testing.T) {
 	edges := &fakeEdges{}
 	nodes := &fakeNodes{metas: map[string]ports.NodeMeta{"s": {NodeID: "s"}}}
-	s := blastradius.NewService(edges, nodes, nil)
+	s, err := blastradius.NewService(edges, nodes, nil)
+	if err != nil {
+		t.Fatalf("construct: %v", err)
+	}
 	resp, err := s.Of(context.Background(), "r", "main", []string{"s", "s", "s"}, blastradius.Options{MaxDepth: 1})
 	if err != nil {
 		t.Fatalf("Of: %v", err)
@@ -238,7 +259,10 @@ func TestDirtyOf_UsesStagedNodes(t *testing.T) {
 		"staged-1": {NodeID: "staged-1"},
 		"caller-a": {NodeID: "caller-a"},
 	}}
-	s := blastradius.NewService(edges, nodes, area)
+	s, err := blastradius.NewService(edges, nodes, area)
+	if err != nil {
+		t.Fatalf("construct: %v", err)
+	}
 	resp, err := s.DirtyOf(context.Background(), "r", "main", blastradius.Options{MaxDepth: 1})
 	if err != nil {
 		t.Fatalf("DirtyOf: %v", err)
@@ -304,7 +328,10 @@ func TestDirtyOf_SkipsUnchangedSymbols(t *testing.T) {
 			"changed":   "HASH-B-OLD", // differs from staged HASH-B-NEW → seeded
 		},
 	}
-	s := blastradius.NewService(edges, nodes, area)
+	s, err := blastradius.NewService(edges, nodes, area)
+	if err != nil {
+		t.Fatalf("construct: %v", err)
+	}
 	resp, err := s.DirtyOf(context.Background(), "r", "main", blastradius.Options{MaxDepth: 1})
 	if err != nil {
 		t.Fatalf("DirtyOf: %v", err)
@@ -330,7 +357,10 @@ func TestDirtyOf_SkipsUnchangedSymbols(t *testing.T) {
 func TestDirtyOf_NilStagingReturnsEmpty(t *testing.T) {
 	edges := &fakeEdges{}
 	nodes := &fakeNodes{}
-	s := blastradius.NewService(edges, nodes, nil)
+	s, err := blastradius.NewService(edges, nodes, nil)
+	if err != nil {
+		t.Fatalf("construct: %v", err)
+	}
 	resp, err := s.DirtyOf(context.Background(), "r", "main", blastradius.Options{MaxDepth: 1})
 	if err != nil {
 		t.Fatalf("DirtyOf: %v", err)
@@ -356,7 +386,10 @@ func TestDiffOf_UnionAcrossChangedFiles(t *testing.T) {
 			"bar.go": {"b"},
 		},
 	}
-	s := blastradius.NewService(edges, nodes, nil)
+	s, err := blastradius.NewService(edges, nodes, nil)
+	if err != nil {
+		t.Fatalf("construct: %v", err)
+	}
 	changed := func(_ context.Context, _ string) ([]string, error) {
 		return []string{"foo.go", "bar.go"}, nil
 	}
@@ -376,7 +409,10 @@ func TestDiffOf_UnionAcrossChangedFiles(t *testing.T) {
 }
 
 func TestDiffOf_EmptyDiffEmptyResponse(t *testing.T) {
-	s := blastradius.NewService(&fakeEdges{}, &fakeNodes{}, nil)
+	s, err := blastradius.NewService(&fakeEdges{}, &fakeNodes{}, nil)
+	if err != nil {
+		t.Fatalf("construct: %v", err)
+	}
 	resp, err := s.DiffOf(context.Background(), "r", "main", "/tmp/r", func(_ context.Context, _ string) ([]string, error) {
 		return nil, nil
 	}, blastradius.Options{MaxDepth: 1})
@@ -389,7 +425,10 @@ func TestDiffOf_EmptyDiffEmptyResponse(t *testing.T) {
 }
 
 func TestDiffOf_FilesWithNoNodesShortCircuits(t *testing.T) {
-	s := blastradius.NewService(&fakeEdges{}, &fakeNodes{byFile: map[string][]string{}}, nil)
+	s, err := blastradius.NewService(&fakeEdges{}, &fakeNodes{byFile: map[string][]string{}}, nil)
+	if err != nil {
+		t.Fatalf("construct: %v", err)
+	}
 	resp, err := s.DiffOf(context.Background(), "r", "main", "/tmp/r", func(_ context.Context, _ string) ([]string, error) {
 		return []string{"new.go", "vendor.go"}, nil
 	}, blastradius.Options{MaxDepth: 1})
@@ -402,16 +441,22 @@ func TestDiffOf_FilesWithNoNodesShortCircuits(t *testing.T) {
 }
 
 func TestDiffOf_RejectsNilChangedFilesFunc(t *testing.T) {
-	s := blastradius.NewService(&fakeEdges{}, &fakeNodes{}, nil)
-	_, err := s.DiffOf(context.Background(), "r", "main", "/tmp/r", nil, blastradius.Options{})
+	s, err := blastradius.NewService(&fakeEdges{}, &fakeNodes{}, nil)
+	if err != nil {
+		t.Fatalf("construct: %v", err)
+	}
+	_, err = s.DiffOf(context.Background(), "r", "main", "/tmp/r", nil, blastradius.Options{})
 	if err == nil {
 		t.Error("expected error for nil changedFiles")
 	}
 }
 
 func TestDiffOf_RejectsEmptyRepoRoot(t *testing.T) {
-	s := blastradius.NewService(&fakeEdges{}, &fakeNodes{}, nil)
-	_, err := s.DiffOf(context.Background(), "r", "main", "", func(_ context.Context, _ string) ([]string, error) {
+	s, err := blastradius.NewService(&fakeEdges{}, &fakeNodes{}, nil)
+	if err != nil {
+		t.Fatalf("construct: %v", err)
+	}
+	_, err = s.DiffOf(context.Background(), "r", "main", "", func(_ context.Context, _ string) ([]string, error) {
 		return nil, nil
 	}, blastradius.Options{})
 	if err == nil {
@@ -445,7 +490,10 @@ func TestOf_HubDegreeThresholdSuppressesFanout(t *testing.T) {
 		"init-c": {NodeID: "init-c"}, "init-d": {NodeID: "init-d"},
 		"init-e": {NodeID: "init-e"}, "init-f": {NodeID: "init-f"},
 	}}
-	s := blastradius.NewService(edges, nodes, nil)
+	s, err := blastradius.NewService(edges, nodes, nil)
+	if err != nil {
+		t.Fatalf("construct: %v", err)
+	}
 
 	// With gating (threshold 3): hub appears as IsHub=true; init-b..f are
 	// NOT in the result because BFS didn't expand through hub.
@@ -517,5 +565,46 @@ func TestParseDirection(t *testing.T) {
 		if got != tc.want {
 			t.Errorf("ParseDirection(%q): got %q want %q", tc.in, got, tc.want)
 		}
+	}
+}
+
+// TestNewService_ErrorsOnNilDeps verifies the construction-time nil check
+// returns a typed ErrMissingDependency for each required dep (edges, nodes).
+// staging is optional and is NOT checked.
+func TestNewService_ErrorsOnNilDeps(t *testing.T) {
+	t.Parallel()
+	edges := &fakeEdges{}
+	nodes := &fakeNodes{}
+	cases := []struct {
+		name  string
+		edges ports.EdgeReader
+		nodes ports.NodeLookup
+	}{
+		{"nil edges", nil, nodes},
+		{"nil nodes", edges, nil},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			s, err := blastradius.NewService(tc.edges, tc.nodes, nil)
+			if s != nil {
+				t.Errorf("expected nil *Service for %s, got %v", tc.name, s)
+			}
+			if !errors.Is(err, blastradius.ErrMissingDependency) {
+				t.Errorf("expected ErrMissingDependency for %s, got %v", tc.name, err)
+			}
+		})
+	}
+}
+
+// TestNewService_HappyPath verifies a nil staging is acceptable and the
+// constructor returns a non-nil Service with nil error.
+func TestNewService_HappyPath(t *testing.T) {
+	t.Parallel()
+	s, err := blastradius.NewService(&fakeEdges{}, &fakeNodes{}, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if s == nil {
+		t.Fatal("expected non-nil *Service")
 	}
 }

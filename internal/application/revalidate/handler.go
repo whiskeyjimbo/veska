@@ -43,12 +43,17 @@ package revalidate
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
 	"github.com/whiskeyjimbo/veska/internal/core/ports"
 	"github.com/whiskeyjimbo/veska/internal/platform/observability"
 )
+
+// ErrMissingDependency is returned by NewHandler when a required
+// dependency is nil. It wraps so callers can errors.Is against it.
+var ErrMissingDependency = errors.New("revalidate: missing required dependency")
 
 // Rule names recognised by the per-rule dispatch. They are duplicated here
 // (not imported from internal/application/checks or autolink) to keep the
@@ -102,10 +107,11 @@ func WithMetrics(m *observability.Metrics) Option {
 }
 
 // NewHandler constructs a Handler bound to the given RevalidateQuerier.
-// repo is required; nil panics at construction time to mirror autolink.
-func NewHandler(repo ports.RevalidateQuerier, opts ...Option) *Handler {
+// repo is required; a nil repo is reported with a wrapped
+// ErrMissingDependency to mirror the sibling application constructors.
+func NewHandler(repo ports.RevalidateQuerier, opts ...Option) (*Handler, error) {
 	if repo == nil {
-		panic("revalidate.NewHandler: repo is nil")
+		return nil, fmt.Errorf("revalidate.NewHandler: repo is nil: %w", ErrMissingDependency)
 	}
 	h := &Handler{
 		repo:  repo,
@@ -114,7 +120,7 @@ func NewHandler(repo ports.RevalidateQuerier, opts ...Option) *Handler {
 	for _, o := range opts {
 		o(h)
 	}
-	return h
+	return h, nil
 }
 
 // Handle processes a single ports.WorkRow of kind WorkKindRevalidate.

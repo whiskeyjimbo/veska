@@ -149,9 +149,12 @@ func TestTokenEfficiency(t *testing.T) {
 	}
 
 	// --- run the query loop ----------------------------------------------
-	svc := search.NewService(embedder, vstore, sqlite.NewNodeLookupRepo(db),
+	svc, err := search.NewService(embedder, vstore, sqlite.NewNodeLookupRepo(db),
 		search.WithLexicalSearcher(sqlite.NewLexicalRepo(db)),
 	)
+	if err != nil {
+		t.Fatalf("construct search service: %v", err)
+	}
 	truth := corpus.TruthByCluster()
 
 	perQuery := make([]PerQuery, 0, clusters)
