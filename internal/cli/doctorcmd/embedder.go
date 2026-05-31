@@ -8,6 +8,7 @@ import (
 
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/embedding/elect"
 	"github.com/whiskeyjimbo/veska/internal/platform/embedderprobe"
+	"github.com/whiskeyjimbo/veska/internal/platform/health"
 )
 
 // EmbedderHealth describes the elected embedder's health for doctor output.
@@ -17,7 +18,7 @@ import (
 // is constructed locally and is healthy whenever election succeeds; no network
 // probe applies. Only VESKA_EMBEDDER=ollama probes a remote Ollama instance.
 type EmbedderHealth struct {
-	Status string                     // healthy | degraded | broken
+	Status health.Status              // healthy | degraded | broken
 	Detail string                     // human-readable one-liner
 	Probe  *embedderprobe.ProbeResult // non-nil only on the ollama path
 }
@@ -40,7 +41,7 @@ func CheckEmbedderHealth(ctx context.Context, home string) EmbedderHealth {
 	}
 	prov, err := elect.Resolve(elect.Config{VeskaHome: home, Override: override})
 	if err != nil {
-		return EmbedderHealth{Status: "broken", Detail: fmt.Sprintf("election failed: %v", err)}
+		return EmbedderHealth{Status: health.StatusBroken, Detail: fmt.Sprintf("election failed: %v", err)}
 	}
 	// Surface the static-v2 fallback as 'degraded' rather than 'healthy'
 	// (solov2-yql1). It is functional, but every eng_search_semantic call
@@ -48,11 +49,11 @@ func CheckEmbedderHealth(ctx context.Context, home string) EmbedderHealth {
 	// user installs model2vec — that is not a healthy steady state.
 	if prov.ModelID() == "veska-static-v2" {
 		return EmbedderHealth{
-			Status: "degraded",
+			Status: health.StatusDegraded,
 			Detail: prov.ModelID() + ", in-process (low-quality fallback — run `veska install model2vec` for higher-quality code search)",
 		}
 	}
-	return EmbedderHealth{Status: "healthy", Detail: prov.ModelID() + ", in-process"}
+	return EmbedderHealth{Status: health.StatusHealthy, Detail: prov.ModelID() + ", in-process"}
 }
 
 // checkOllamaEmbedderHealth probes a remote Ollama instance on the
@@ -62,7 +63,7 @@ func checkOllamaEmbedderHealth(ctx context.Context) EmbedderHealth {
 	model := envOrDefault("VESKA_EMBED_MODEL", DefaultModelName)
 	res, err := embedderprobe.Probe(ctx, url, model)
 	if err != nil {
-		return EmbedderHealth{Status: "broken", Detail: fmt.Sprintf("ollama probe error: %v", err)}
+		return EmbedderHealth{Status: health.StatusBroken, Detail: fmt.Sprintf("ollama probe error: %v", err)}
 	}
 	return EmbedderHealth{
 		Status: res.Status,

@@ -14,6 +14,7 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/sqlite"
 	"github.com/whiskeyjimbo/veska/internal/platform/config"
 	"github.com/whiskeyjimbo/veska/internal/platform/doctor"
+	"github.com/whiskeyjimbo/veska/internal/platform/health"
 )
 
 // statusRollupInputs is the pure-data input to computeStatusRollup. It carries
@@ -127,7 +128,7 @@ func gatherStatusProbes(home string) statusProbes {
 	// backlog. CheckPostPromotionQueue already classifies state.
 	p.queueStatus = "healthy"
 	if qr, qerr := doctor.CheckPostPromotionQueue(filepath.Join(home, "veska.db")); qerr == nil {
-		p.queueStatus = qr.Status
+		p.queueStatus = string(qr.Status)
 		p.queueFailedRows = qr.FailedRows
 		if p.queueStatus != "healthy" {
 			// solov2-gthm: include a pointer to the drilldown so a
@@ -204,7 +205,7 @@ func RunStatus(w io.Writer, opts StatusOptions) error {
 	p := gatherStatusProbes(home)
 
 	inputs := statusRollupInputs{
-		EmbedderStatus:   p.embedder.Status,
+		EmbedderStatus:   string(p.embedder.Status),
 		EgressStatus:     p.egressStatus,
 		ConfigStatus:     p.configStatus,
 		IngestionStatus:  p.ingestionStatus,
@@ -217,7 +218,7 @@ func RunStatus(w io.Writer, opts StatusOptions) error {
 	rollup := computeStatusRollup(inputs)
 
 	if jsonOut {
-		return json.NewEncoder(w).Encode(doctor.NewEnvelope("status", rollup, statusRollupJSONData{
+		return json.NewEncoder(w).Encode(doctor.NewEnvelope("status", health.Status(rollup), statusRollupJSONData{
 			Embedder:         inputs.EmbedderStatus,
 			Egress:           inputs.EgressStatus,
 			Config:           inputs.ConfigStatus,

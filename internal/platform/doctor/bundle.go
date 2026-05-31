@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/audit"
+	"github.com/whiskeyjimbo/veska/internal/platform/health"
 )
 
 // BundleOptions controls the behaviour of CreateBundle.
@@ -100,7 +101,7 @@ func CreateBundle(opts BundleOptions) (BundleResult, error) {
 
 	// 2. doctor/storage.json
 	storageReport, _ := CheckStorage(opts.VeskaHome)
-	storageEnv := NewEnvelope("storage", "healthy", storageReport)
+	storageEnv := NewEnvelope("storage", health.StatusHealthy, storageReport)
 	if err := addProbeEntry(tw, &fileCount, "doctor/storage.json", storageEnv, false); err != nil {
 		return BundleResult{}, err
 	}
@@ -117,10 +118,10 @@ func CreateBundle(opts BundleOptions) (BundleResult, error) {
 		filepath.Join(opts.VeskaHome, "cli.sock"),
 		filepath.Join(opts.VeskaHome, "mcp.sock"),
 	})
-	egressStatus := "healthy"
+	egressStatus := health.StatusHealthy
 	for _, s := range egressReport.Sockets {
 		if s.Status == "missing" {
-			egressStatus = "broken"
+			egressStatus = health.StatusBroken
 			break
 		}
 	}
@@ -131,9 +132,9 @@ func CreateBundle(opts BundleOptions) (BundleResult, error) {
 
 	// 5. doctor/config.json (redacted)
 	configReport, _ := CheckConfig(opts.VeskaHome)
-	configStatus := "healthy"
+	configStatus := health.StatusHealthy
 	if !configReport.DBExists {
-		configStatus = "degraded"
+		configStatus = health.StatusDegraded
 	}
 	configEnv := NewEnvelope("config", configStatus, configReport)
 	if err := addProbeEntry(tw, &fileCount, "doctor/config.json", configEnv, true); err != nil {

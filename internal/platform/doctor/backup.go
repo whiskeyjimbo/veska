@@ -6,6 +6,8 @@ import (
 	"os"
 	"path/filepath"
 	"time"
+
+	"github.com/whiskeyjimbo/veska/internal/platform/health"
 )
 
 // BackupReport holds the result of a backup directory integrity check,
@@ -16,7 +18,7 @@ type BackupReport struct {
 	LatestAge   time.Duration `json:"latest_age_ns"`
 	AgeHours    float64       `json:"age_hours"`
 	FileCount   int           `json:"file_count"`
-	Status      string        `json:"status"`
+	Status      health.Status `json:"status"`
 	VerifyError string        `json:"verify_error,omitempty"`
 }
 
@@ -39,7 +41,7 @@ func CheckBackup(backupDir string) (BackupReport, error) {
 	}
 
 	if len(matches) == 0 {
-		report.Status = "degraded"
+		report.Status = health.StatusDegraded
 		return report, nil
 	}
 
@@ -64,12 +66,12 @@ func CheckBackup(backupDir string) (BackupReport, error) {
 
 	// Verify gzip header by opening and reading at least the first byte.
 	if verifyErr := verifyGzip(latestPath); verifyErr != nil {
-		report.Status = "broken"
+		report.Status = health.StatusBroken
 		report.VerifyError = verifyErr.Error()
 		return report, nil
 	}
 
-	report.Status = "healthy"
+	report.Status = health.StatusHealthy
 	return report, nil
 }
 
