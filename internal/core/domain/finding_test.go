@@ -55,6 +55,19 @@ func TestSeverity_AtLeast(t *testing.T) {
 			t.Errorf("%s should NOT be >= %s", ordered[i-1], ordered[i])
 		}
 	}
+
+	// An unknown severity has no defined rank: it must not alias to Info via
+	// the map zero value. AtLeast returns false on either side being unknown.
+	const bad Severity = "bogus"
+	if bad.AtLeast(SeverityInfo) {
+		t.Error("unknown severity should NOT be at least info")
+	}
+	if SeverityCritical.AtLeast(bad) {
+		t.Error("critical should NOT be >= an unknown severity threshold")
+	}
+	if bad.AtLeast(bad) {
+		t.Error("unknown severity compared to itself should be false (no defined rank)")
+	}
 }
 
 // ── Finding constructor tests ──────────────────────────────────────────────
