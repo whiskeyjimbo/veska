@@ -681,7 +681,7 @@ func (b *daemonBuilder) buildAutolinkHandler() (*autolink.Handler, error) {
 // its live staging so blast radius sees in-flight nodes, resolves repo roots
 // through the repos table, and honours the [wiki] write_pages config.
 func (b *daemonBuilder) buildWikiHandler() (*wiki.Handler, error) {
-	return composition.NewWikiHandler(b.pools, b.staging, repoRootFunc(b.pools.ReadDB), b.fileCfg.Wiki.WritePages)
+	return composition.NewWikiHandler(b.pools, b.staging, repoRootFunc(b.pools.ReadDB), composition.WithWritePages(b.fileCfg.Wiki.WritePages))
 }
 
 // buildReviewHandler wires the optional WorkKindReview lane: the Ollama
