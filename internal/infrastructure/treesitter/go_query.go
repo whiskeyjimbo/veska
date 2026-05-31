@@ -204,7 +204,11 @@ func (p *GoParser) ParseFile(ctx context.Context, repoID, path string, src []byt
 			if n == pkgNode {
 				continue
 			}
-			e, err := domain.NewEdge(pkgNode.ID, n.ID, domain.EdgeContains,
+			e, err := domain.NewEdge(domain.EdgeSpec{
+				Src:  pkgNode.ID,
+				Tgt:  n.ID,
+				Kind: domain.EdgeContains,
+			},
 				domain.WithConfidence(domain.Definite),
 			)
 			if err == nil {
@@ -453,7 +457,11 @@ func extractCallsFromBody(q *sitter.Query, body *sitter.Node, src []byte, caller
 		if ref.line > 0 {
 			opts = append(opts, domain.WithSourceLine(ref.line))
 		}
-		e, err := domain.NewEdge(caller.ID, callee.ID, domain.EdgeCalls, opts...)
+		e, err := domain.NewEdge(domain.EdgeSpec{
+			Src:  caller.ID,
+			Tgt:  callee.ID,
+			Kind: domain.EdgeCalls,
+		}, opts...)
 		if err == nil {
 			edges = append(edges, e)
 		}

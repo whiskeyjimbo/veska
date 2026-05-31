@@ -267,7 +267,11 @@ func buildCallEdge(uc domain.UnresolvedCall, targetID domain.NodeID) (*domain.Ed
 	if uc.SrcLine > 0 {
 		opts = append(opts, domain.WithSourceLine(uc.SrcLine))
 	}
-	e, err := domain.NewEdge(uc.CallerID, targetID, domain.EdgeCalls, opts...)
+	e, err := domain.NewEdge(domain.EdgeSpec{
+		Src:  uc.CallerID,
+		Tgt:  targetID,
+		Kind: domain.EdgeCalls,
+	}, opts...)
 	if err != nil {
 		return nil, false
 	}

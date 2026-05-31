@@ -86,24 +86,36 @@ func edgeID(src NodeID, kind EdgeKind, tgt NodeID) string {
 	return hex.EncodeToString(h.Sum(nil))[:32]
 }
 
-// NewEdge constructs an Edge, validates invariants, and applies functional options.
-// src and tgt must be non-empty.
-func NewEdge(src, tgt NodeID, kind EdgeKind, opts ...EdgeOption) (*Edge, error) {
-	if src == "" {
+// EdgeSpec carries the required fields of an Edge. It groups the constructor's
+// positional arguments into a named struct so the two adjacent same-typed
+// NodeID fields (Src/Tgt) cannot be transposed at a call site, mirroring
+// NodeSpec/FindingSpec. Optional fields (confidence, source line) are still
+// supplied via EdgeOption.
+type EdgeSpec struct {
+	Src  NodeID
+	Tgt  NodeID
+	Kind EdgeKind
+}
+
+// NewEdge constructs an Edge from spec, validates invariants, and applies
+// functional options. spec.Src and spec.Tgt must be non-empty and spec.Kind
+// must be a recognised EdgeKind.
+func NewEdge(spec EdgeSpec, opts ...EdgeOption) (*Edge, error) {
+	if spec.Src == "" {
 		return nil, errors.New("edge: src must not be empty")
 	}
-	if tgt == "" {
+	if spec.Tgt == "" {
 		return nil, errors.New("edge: tgt must not be empty")
 	}
-	if _, ok := validEdgeKinds[kind]; !ok {
+	if _, ok := validEdgeKinds[spec.Kind]; !ok {
 		return nil, errors.New("edge: invalid kind")
 	}
 
 	e := &Edge{
-		ID:   edgeID(src, kind, tgt),
-		Src:  src,
-		Tgt:  tgt,
-		Kind: kind,
+		ID:   edgeID(spec.Src, spec.Kind, spec.Tgt),
+		Src:  spec.Src,
+		Tgt:  spec.Tgt,
+		Kind: spec.Kind,
 	}
 
 	for _, opt := range opts {
