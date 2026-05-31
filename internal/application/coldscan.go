@@ -68,12 +68,20 @@ type saveFunc func(ctx context.Context, repoID, branch, path string, src []byte)
 // cold-scan and startup-resync paths.
 type promoteFunc func(ctx context.Context, repoID, branch, gitSHA string, actor domain.Actor) error
 
+// headQuerier is the narrow slice of GitQuerier the cold-scan reparser
+// actually uses: just the current HEAD SHA. Declaring it locally (ISP) keeps
+// the cold-scan seam honest about its single dependency. Any GitQuerier
+// satisfies it, so production and test callers are unchanged.
+type headQuerier interface {
+	HEAD(rootPath string) (string, error)
+}
+
 // NewColdScanReparser returns the closure that StartupResync.reparser and
 // repoRegistrar.AddRepo both invoke for a full-reparse path. It walks the
 // repo's working tree, parses every non-ignored source file through the
 // given Ingester, and finalises by promoting at HEAD with the system
 // actor (solov2-0z1.1).
-func NewColdScanReparser(ingester *Ingester, promoter *Promoter, git GitQuerier, opts ...ColdScanOption) (func(ctx context.Context, repo RepoRecord) error, error) {
+func NewColdScanReparser(ingester *Ingester, promoter *Promoter, git headQuerier, opts ...ColdScanOption) (func(ctx context.Context, repo RepoRecord) error, error) {
 	if ingester == nil {
 		return nil, fmt.Errorf("application.NewColdScanReparser: ingester is nil: %w", ErrMissingDependency)
 	}
@@ -95,7 +103,7 @@ func NewColdScanReparser(ingester *Ingester, promoter *Promoter, git GitQuerier,
 // concrete Ingester/Promoter types so unit tests can capture invocations
 // without spinning up the real pipeline. The public constructor wires
 // Ingester.Save and Promoter.Promote here.
-func newColdScanReparserFromFns(save saveFunc, promote promoteFunc, git GitQuerier, opts ...ColdScanOption) (func(ctx context.Context, repo RepoRecord) error, error) {
+func newColdScanReparserFromFns(save saveFunc, promote promoteFunc, git headQuerier, opts ...ColdScanOption) (func(ctx context.Context, repo RepoRecord) error, error) {
 	if save == nil || promote == nil || git == nil {
 		return nil, fmt.Errorf("application.newColdScanReparserFromFns: nil seam: %w", ErrMissingDependency)
 	}
