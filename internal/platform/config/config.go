@@ -322,5 +322,8 @@ func (c Config) Validate() error {
 	if !c.Tracing.Enabled && c.Tracing.OTLPEndpoint != "" {
 		return fmt.Errorf("config: otlp_endpoint set but tracing is disabled (set tracing.enabled = true or clear the endpoint)")
 	}
+	if c.Tracing.Enabled && (c.Tracing.SampleRatio < 0.0 || c.Tracing.SampleRatio > 1.0) {
+		return fmt.Errorf("config: tracing.sample_ratio %v out of range (must be between 0.0 and 1.0)", c.Tracing.SampleRatio)
+	}
 	return nil
 }
