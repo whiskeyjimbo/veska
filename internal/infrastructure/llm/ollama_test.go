@@ -35,7 +35,7 @@ func TestOllamaGenerator_Generate_Success(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	gen := llm.NewOllamaGenerator(srv.URL, "llama3", srv.Client())
+	gen := llm.NewOllamaGenerator("llama3", llm.WithBaseURL(srv.URL), llm.WithHTTPClient(srv.Client()))
 	resp, err := gen.Generate(context.Background(), ports.GenerateRequest{Prompt: "say hello", MaxTokens: 50})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -58,7 +58,7 @@ func TestOllamaGenerator_Generate_Provenance(t *testing.T) {
 	const prompt = "review this commit"
 	const tmplVer = "review/v3"
 
-	gen := llm.NewOllamaGenerator(srv.URL, "llama3.1:8b", srv.Client())
+	gen := llm.NewOllamaGenerator("llama3.1:8b", llm.WithBaseURL(srv.URL), llm.WithHTTPClient(srv.Client()))
 	resp, err := gen.Generate(context.Background(), ports.GenerateRequest{
 		Prompt:                prompt,
 		PromptTemplateVersion: tmplVer,
@@ -100,7 +100,7 @@ func TestOllamaGenerator_Generate_StructuredFormat(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	gen := llm.NewOllamaGenerator(srv.URL, "llama3", srv.Client())
+	gen := llm.NewOllamaGenerator("llama3", llm.WithBaseURL(srv.URL), llm.WithHTTPClient(srv.Client()))
 	if _, err := gen.Generate(context.Background(), ports.GenerateRequest{
 		Prompt: "review this",
 		Format: schema,
@@ -136,7 +136,7 @@ func TestOllamaGenerator_Generate_NoFormatByDefault(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	gen := llm.NewOllamaGenerator(srv.URL, "llama3", srv.Client())
+	gen := llm.NewOllamaGenerator("llama3", llm.WithBaseURL(srv.URL), llm.WithHTTPClient(srv.Client()))
 	if _, err := gen.Generate(context.Background(), ports.GenerateRequest{Prompt: "hi"}); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -160,7 +160,7 @@ func TestOllamaGenerator_Generate_RetriesTransient(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	gen := llm.NewOllamaGenerator(srv.URL, "llama3", srv.Client(),
+	gen := llm.NewOllamaGenerator("llama3", llm.WithBaseURL(srv.URL), llm.WithHTTPClient(srv.Client()),
 		llm.WithBackoff(time.Millisecond))
 	resp, err := gen.Generate(context.Background(), ports.GenerateRequest{Prompt: "hi"})
 	if err != nil {
@@ -185,7 +185,7 @@ func TestOllamaGenerator_Generate_RetriesExhausted(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	gen := llm.NewOllamaGenerator(srv.URL, "llama3", srv.Client(),
+	gen := llm.NewOllamaGenerator("llama3", llm.WithBaseURL(srv.URL), llm.WithHTTPClient(srv.Client()),
 		llm.WithBackoff(time.Millisecond))
 	_, err := gen.Generate(context.Background(), ports.GenerateRequest{Prompt: "hi"})
 	if err == nil {
@@ -208,7 +208,7 @@ func TestOllamaGenerator_Generate_NoRetryOn4xx(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	gen := llm.NewOllamaGenerator(srv.URL, "llama3", srv.Client(),
+	gen := llm.NewOllamaGenerator("llama3", llm.WithBaseURL(srv.URL), llm.WithHTTPClient(srv.Client()),
 		llm.WithBackoff(time.Millisecond))
 	_, err := gen.Generate(context.Background(), ports.GenerateRequest{Prompt: "hi"})
 	if err == nil {
@@ -228,7 +228,7 @@ func TestOllamaGenerator_Generate_NonOKStatus(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	gen := llm.NewOllamaGenerator(srv.URL, "llama3", srv.Client(), llm.WithBackoff(time.Millisecond))
+	gen := llm.NewOllamaGenerator("llama3", llm.WithBaseURL(srv.URL), llm.WithHTTPClient(srv.Client()), llm.WithBackoff(time.Millisecond))
 	_, err := gen.Generate(context.Background(), ports.GenerateRequest{Prompt: "hello"})
 	if err == nil {
 		t.Fatal("expected error for non-200 status, got nil")
@@ -248,7 +248,7 @@ func TestOllamaGenerator_Generate_ContextCancelled(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel() // cancel immediately
 
-	gen := llm.NewOllamaGenerator(srv.URL, "llama3", srv.Client())
+	gen := llm.NewOllamaGenerator("llama3", llm.WithBaseURL(srv.URL), llm.WithHTTPClient(srv.Client()))
 	_, err := gen.Generate(ctx, ports.GenerateRequest{Prompt: "hello"})
 	if err == nil {
 		t.Fatal("expected error for cancelled context, got nil")
@@ -270,7 +270,7 @@ func TestOllamaGenerator_Generate_ContextCancelNoRetry(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 
-	gen := llm.NewOllamaGenerator(srv.URL, "llama3", srv.Client(), llm.WithBackoff(time.Millisecond))
+	gen := llm.NewOllamaGenerator("llama3", llm.WithBaseURL(srv.URL), llm.WithHTTPClient(srv.Client()), llm.WithBackoff(time.Millisecond))
 	_, err := gen.Generate(ctx, ports.GenerateRequest{Prompt: "hello"})
 	if err == nil {
 		t.Fatal("expected error for cancelled context")
@@ -283,11 +283,52 @@ func TestOllamaGenerator_Generate_ContextCancelNoRetry(t *testing.T) {
 
 func TestNewOllamaGenerator_Defaults(t *testing.T) {
 	t.Parallel()
-	// Ensures no panic when empty strings and nil client are passed.
-	gen := llm.NewOllamaGenerator("", "", nil)
+	// Ensures no panic when an empty model and no options are passed.
+	gen := llm.NewOllamaGenerator("")
 	if gen == nil {
 		t.Fatal("expected non-nil generator")
 		return
+	}
+}
+
+// TestNewOllamaGenerator_OptionOrderIndependence asserts the functional-options
+// contract: WithBaseURL + WithHTTPClient produce the same effective base URL and
+// client regardless of the order they are supplied in, and a caller-supplied
+// client is used unchanged. WithBaseURL("") is ignored, preserving the default.
+func TestNewOllamaGenerator_OptionOrderIndependence(t *testing.T) {
+	t.Parallel()
+
+	const wantText = "order-independent"
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_ = json.NewEncoder(w).Encode(map[string]string{"response": wantText})
+	}))
+	defer srv.Close()
+
+	// (a) Forward and reversed option order must both route to srv via its
+	// client. If the base URL or client were dropped, the request would not
+	// reach srv and Generate would fail.
+	forward := llm.NewOllamaGenerator("llama3",
+		llm.WithBaseURL(srv.URL), llm.WithHTTPClient(srv.Client()))
+	reverse := llm.NewOllamaGenerator("llama3",
+		llm.WithHTTPClient(srv.Client()), llm.WithBaseURL(srv.URL))
+	for name, gen := range map[string]*llm.OllamaGenerator{"forward": forward, "reverse": reverse} {
+		resp, err := gen.Generate(context.Background(), ports.GenerateRequest{Prompt: "hi"})
+		if err != nil {
+			t.Fatalf("%s: unexpected error: %v", name, err)
+		}
+		if resp.Text != wantText {
+			t.Fatalf("%s: Text: got %q, want %q", name, resp.Text, wantText)
+		}
+	}
+
+	// (b) WithBaseURL("") is ignored: the generator keeps the default base URL
+	// (localhost), so a request via srv's client does NOT reach srv.
+	def := llm.NewOllamaGenerator("llama3",
+		llm.WithBaseURL(""), llm.WithHTTPClient(srv.Client()))
+	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+	defer cancel()
+	if _, err := def.Generate(ctx, ports.GenerateRequest{Prompt: "hi"}); err == nil {
+		t.Fatal("expected error: WithBaseURL(\"\") should keep the default base, not srv")
 	}
 }
 
@@ -308,7 +349,7 @@ func TestOllamaGenerator_Generate_PerCallTimeout(t *testing.T) {
 	t.Cleanup(srv.Close)
 	t.Cleanup(func() { close(release) })
 
-	gen := llm.NewOllamaGenerator(srv.URL, "llama3", srv.Client(),
+	gen := llm.NewOllamaGenerator("llama3", llm.WithBaseURL(srv.URL), llm.WithHTTPClient(srv.Client()),
 		llm.WithTimeout(50*time.Millisecond), llm.WithBackoff(time.Millisecond))
 	start := time.Now()
 	_, err := gen.Generate(context.Background(), ports.GenerateRequest{Prompt: "hi"})
@@ -336,7 +377,7 @@ func TestOllamaGenerator_Generate_Usage(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	gen := llm.NewOllamaGenerator(srv.URL, "llama3", srv.Client())
+	gen := llm.NewOllamaGenerator("llama3", llm.WithBaseURL(srv.URL), llm.WithHTTPClient(srv.Client()))
 	resp, err := gen.Generate(context.Background(), ports.GenerateRequest{Prompt: "hi"})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
