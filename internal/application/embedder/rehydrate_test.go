@@ -121,7 +121,7 @@ func (s *spyVector) UpsertEmbeddings(_ context.Context, repoID, branch string, b
 	return nil
 }
 
-func (s *spyVector) Search(_ context.Context, _, _ string, _ []float32, _ int, _ domain.Filter) ([]domain.Hit, error) {
+func (s *spyVector) Search(_ context.Context, _, _ string, _ []float32, _ int, _ domain.VectorFilter) ([]domain.SearchHit, error) {
 	return nil, nil
 }
 

@@ -28,10 +28,10 @@ type Graph struct {
 // Both arguments must be non-empty.
 func NewGraph(repoID, branch string) (*Graph, error) {
 	if repoID == "" {
-		return nil, errors.New("domain: Graph repoID must not be empty")
+		return nil, errors.New("graph: repoID must not be empty")
 	}
 	if branch == "" {
-		return nil, errors.New("domain: Graph branch must not be empty")
+		return nil, errors.New("graph: branch must not be empty")
 	}
 	return &Graph{
 		RepoID:   repoID,
@@ -46,7 +46,7 @@ func NewGraph(repoID, branch string) (*Graph, error) {
 // the same ID already exists.
 func (g *Graph) AddNode(n *Node) error {
 	if _, exists := g.nodes[n.ID]; exists {
-		return fmt.Errorf("domain: node %q already exists in graph (%s@%s)", n.ID, g.RepoID, g.Branch)
+		return fmt.Errorf("graph: node %q already exists in graph (%s@%s)", n.ID, g.RepoID, g.Branch)
 	}
 	g.nodes[n.ID] = n
 	return nil
@@ -56,10 +56,10 @@ func (g *Graph) AddNode(n *Node) error {
 // must already be present; otherwise an error is returned.
 func (g *Graph) AddEdge(e *Edge) error {
 	if _, ok := g.nodes[e.Src]; !ok {
-		return fmt.Errorf("domain: edge src node %q not found in graph (%s@%s)", e.Src, g.RepoID, g.Branch)
+		return fmt.Errorf("graph: edge src node %q not found in graph (%s@%s)", e.Src, g.RepoID, g.Branch)
 	}
 	if _, ok := g.nodes[e.Tgt]; !ok {
-		return fmt.Errorf("domain: edge tgt node %q not found in graph (%s@%s)", e.Tgt, g.RepoID, g.Branch)
+		return fmt.Errorf("graph: edge tgt node %q not found in graph (%s@%s)", e.Tgt, g.RepoID, g.Branch)
 	}
 	g.outgoing[e.Src] = append(g.outgoing[e.Src], e)
 	g.incoming[e.Tgt] = append(g.incoming[e.Tgt], e)

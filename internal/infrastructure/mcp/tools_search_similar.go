@@ -107,11 +107,11 @@ func findSimilarByNodeID(ctx context.Context, lookup SimilarLookup, vectors port
 
 	// Over-request by one so we can filter the seed node out of results
 	// and still return k neighbours (the seed is its own nearest match).
-	hits, err := vectors.Search(ctx, repoID, branch, vec, k+1, domain.Filter{})
+	hits, err := vectors.Search(ctx, repoID, branch, vec, k+1, domain.VectorFilter{})
 	if err != nil {
 		return nil, &RPCError{Code: CodeInternalError, Message: fmt.Sprintf("similar: vector search: %v", err)}
 	}
-	filtered := make([]domain.Hit, 0, len(hits))
+	filtered := make([]domain.SearchHit, 0, len(hits))
 	for _, h := range hits {
 		if h.NodeID == nodeID {
 			continue

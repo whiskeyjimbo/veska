@@ -23,11 +23,11 @@ const rrfConstant = 60
 // where rank is 1-indexed. Nodes appearing in only one list still
 // contribute (so the fusion never demotes a strong unique hit below a
 // weak common one). Returns the top-k by fused score. The Score field
-// on each returned domain.Hit holds the fused score so downstream
+// on each returned domain.SearchHit holds the fused score so downstream
 // callers (e.g. rerank) can scale relative to a sensible max.
 // k <= 0 means "no truncation, return all fused candidates" — used by
 // the Semantic() path so the post-fusion rerank has full visibility.
-func rrfFuse(vec []domain.Hit, lex []ports.LexicalHit, k int) []domain.Hit {
+func rrfFuse(vec []domain.SearchHit, lex []ports.LexicalHit, k int) []domain.SearchHit {
 	if len(vec) == 0 && len(lex) == 0 {
 		return nil
 	}
@@ -38,9 +38,9 @@ func rrfFuse(vec []domain.Hit, lex []ports.LexicalHit, k int) []domain.Hit {
 	for rank, h := range lex {
 		scores[h.NodeID] += 1.0 / float32(rrfConstant+rank+1)
 	}
-	out := make([]domain.Hit, 0, len(scores))
+	out := make([]domain.SearchHit, 0, len(scores))
 	for id, s := range scores {
-		out = append(out, domain.Hit{NodeID: id, Score: s})
+		out = append(out, domain.SearchHit{NodeID: id, Score: s})
 	}
 	sort.Slice(out, func(i, j int) bool {
 		if out[i].Score != out[j].Score {

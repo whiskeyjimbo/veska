@@ -101,7 +101,7 @@ type stubVectorStorage struct{}
 func (s *stubVectorStorage) UpsertEmbeddings(_ context.Context, _, _ string, _ []domain.EmbeddingRow) error {
 	return nil
 }
-func (s *stubVectorStorage) Search(_ context.Context, _, _ string, _ []float32, _ int, _ domain.Filter) ([]domain.Hit, error) {
+func (s *stubVectorStorage) Search(_ context.Context, _, _ string, _ []float32, _ int, _ domain.VectorFilter) ([]domain.SearchHit, error) {
 	return nil, nil
 }
 func (s *stubVectorStorage) Reindex(_ context.Context, _, _ string) error { return nil }
@@ -113,8 +113,10 @@ func (s *stubVectorStorage) LookupContentHashes(_ context.Context, _, _ string, 
 
 type stubTracker struct{}
 
-func (s *stubTracker) ActiveTask(_ context.Context, _ string) (*ports.Task, error) { return nil, nil }
-func (s *stubTracker) RecentTasks(_ context.Context, _ string, _ int) ([]ports.Task, error) {
+func (s *stubTracker) ActiveTask(_ context.Context, _ string) (*ports.TaskSummary, error) {
+	return nil, nil
+}
+func (s *stubTracker) RecentTasks(_ context.Context, _ string, _ int) ([]ports.TaskSummary, error) {
 	return nil, nil
 }
 

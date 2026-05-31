@@ -41,7 +41,7 @@ func TestUpsertAndSearch(t *testing.T) {
 	}
 
 	// Query closest to n1.
-	hits, err := s.Search(ctx, testRepo, testBranch, vec(1, 0, 0), 1, domain.Filter{})
+	hits, err := s.Search(ctx, testRepo, testBranch, vec(1, 0, 0), 1, domain.VectorFilter{})
 	if err != nil {
 		t.Fatalf("Search: %v", err)
 	}
@@ -71,7 +71,7 @@ func TestUpsertReplaces(t *testing.T) {
 	}
 
 	// Now search for (0,1,0) — n1 (updated) should be closest.
-	hits, err := s.Search(ctx, testRepo, testBranch, vec(0, 1, 0), 1, domain.Filter{})
+	hits, err := s.Search(ctx, testRepo, testBranch, vec(0, 1, 0), 1, domain.VectorFilter{})
 	if err != nil {
 		t.Fatalf("Search: %v", err)
 	}
@@ -85,7 +85,7 @@ func TestSearchEmptyStore(t *testing.T) {
 	s := sqlitevec.New()
 	ctx := context.Background()
 
-	hits, err := s.Search(ctx, testRepo, testBranch, vec(1, 0), 5, domain.Filter{})
+	hits, err := s.Search(ctx, testRepo, testBranch, vec(1, 0), 5, domain.VectorFilter{})
 	if err != nil {
 		t.Fatalf("Search on empty store: %v", err)
 	}
@@ -107,7 +107,7 @@ func TestSearchKLargerThanCorpus(t *testing.T) {
 		t.Fatalf("UpsertEmbeddings: %v", err)
 	}
 
-	hits, err := s.Search(ctx, testRepo, testBranch, vec(1, 0), 100, domain.Filter{})
+	hits, err := s.Search(ctx, testRepo, testBranch, vec(1, 0), 100, domain.VectorFilter{})
 	if err != nil {
 		t.Fatalf("Search: %v", err)
 	}
@@ -127,7 +127,7 @@ func TestSearchFilterByModel(t *testing.T) {
 		t.Fatalf("UpsertEmbeddings: %v", err)
 	}
 
-	hits, err := s.Search(ctx, testRepo, testBranch, vec(1, 0), 10, domain.Filter{ModelID: "model-a"})
+	hits, err := s.Search(ctx, testRepo, testBranch, vec(1, 0), 10, domain.VectorFilter{ModelID: "model-a"})
 	if err != nil {
 		t.Fatalf("Search with filter: %v", err)
 	}
@@ -191,7 +191,7 @@ func TestSearchScoreDescending(t *testing.T) {
 		t.Fatalf("UpsertEmbeddings: %v", err)
 	}
 
-	hits, err := s.Search(ctx, testRepo, testBranch, vec(1, 0, 0), 3, domain.Filter{})
+	hits, err := s.Search(ctx, testRepo, testBranch, vec(1, 0, 0), 3, domain.VectorFilter{})
 	if err != nil {
 		t.Fatalf("Search: %v", err)
 	}
@@ -224,7 +224,7 @@ func TestCrossRepoBranchIsolation(t *testing.T) {
 	}
 
 	// Search repo1/main: should only see r1.
-	hits, err := s.Search(ctx, "repo1", "main", vec(1, 0), 10, domain.Filter{})
+	hits, err := s.Search(ctx, "repo1", "main", vec(1, 0), 10, domain.VectorFilter{})
 	if err != nil {
 		t.Fatal(err)
 	}

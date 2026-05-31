@@ -76,10 +76,10 @@ func edgeID(src NodeID, kind EdgeKind, tgt NodeID) string {
 // src and tgt must be non-empty.
 func NewEdge(src, tgt NodeID, kind EdgeKind, opts ...EdgeOption) (*Edge, error) {
 	if src == "" {
-		return nil, errors.New("domain: Edge src must not be empty")
+		return nil, errors.New("edge: src must not be empty")
 	}
 	if tgt == "" {
-		return nil, errors.New("domain: Edge tgt must not be empty")
+		return nil, errors.New("edge: tgt must not be empty")
 	}
 
 	e := &Edge{

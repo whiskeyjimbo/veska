@@ -87,13 +87,13 @@ func WithSignature(sig string) NodeOption {
 func WithLines(lr LineRange) NodeOption {
 	return func(n *Node) error {
 		if lr.Start < 1 {
-			return fmt.Errorf("domain: LineRange.Start must be ≥ 1, got %d", lr.Start)
+			return fmt.Errorf("node: LineRange.Start must be ≥ 1, got %d", lr.Start)
 		}
 		if lr.End < 1 {
-			return fmt.Errorf("domain: LineRange.End must be ≥ 1, got %d", lr.End)
+			return fmt.Errorf("node: LineRange.End must be ≥ 1, got %d", lr.End)
 		}
 		if lr.Start > lr.End {
-			return fmt.Errorf("domain: LineRange.Start (%d) must be ≤ End (%d)", lr.Start, lr.End)
+			return fmt.Errorf("node: LineRange.Start (%d) must be ≤ End (%d)", lr.Start, lr.End)
 		}
 		n.Lines = &lr
 		return nil
@@ -160,7 +160,7 @@ func validateHashMatchesContent(h ContentHash, content string) error {
 	sum := sha256.Sum256([]byte(content))
 	expected := hex.EncodeToString(sum[:])
 	if string(h) != expected {
-		return fmt.Errorf("domain: content_hash %q does not match sha256(raw_content) %q", h, expected)
+		return fmt.Errorf("node: content_hash %q does not match sha256(raw_content) %q", h, expected)
 	}
 	return nil
 }
@@ -170,7 +170,7 @@ func validateHashMatchesContent(h ContentHash, content string) error {
 // invariant violation.
 func NewNode(id, path, name string, kind NodeKind, opts ...NodeOption) (*Node, error) {
 	if id == "" {
-		return nil, errors.New("domain: Node id must not be empty")
+		return nil, errors.New("node: id must not be empty")
 	}
 
 	n := &Node{

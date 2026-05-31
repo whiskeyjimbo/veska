@@ -93,7 +93,7 @@ func TestSearch(t *testing.T) {
 	}
 
 	query := randVec(9999)
-	hits, err := store.Search(ctx, "repo-1", "main", query, 5, domain.Filter{ModelID: "nomic-embed-text"})
+	hits, err := store.Search(ctx, "repo-1", "main", query, 5, domain.VectorFilter{ModelID: "nomic-embed-text"})
 	if err != nil {
 		t.Fatalf("Search: %v", err)
 	}
@@ -124,7 +124,7 @@ func TestFilterModelID(t *testing.T) {
 		t.Fatalf("UpsertEmbeddings: %v", err)
 	}
 
-	hits, err := store.Search(ctx, "repo-1", "main", randVec(2), 5, domain.Filter{ModelID: "other-model"})
+	hits, err := store.Search(ctx, "repo-1", "main", randVec(2), 5, domain.VectorFilter{ModelID: "other-model"})
 	if err != nil {
 		t.Fatalf("Search: %v", err)
 	}

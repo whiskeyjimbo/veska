@@ -16,7 +16,7 @@ type VectorStorage interface {
 	// Search returns the k nearest neighbours to vec, optionally constrained by filter.
 	// Results are sorted by score descending. If fewer than k vectors are indexed,
 	// all stored vectors are returned.
-	Search(ctx context.Context, repoID, branch string, vec []float32, k int, filter domain.Filter) ([]domain.Hit, error)
+	Search(ctx context.Context, repoID, branch string, vec []float32, k int, filter domain.VectorFilter) ([]domain.SearchHit, error)
 
 	// Reindex rebuilds all stored embeddings using the specified model. Implementations
 	// may treat this as a no-op if the backing store handles quantization internally.

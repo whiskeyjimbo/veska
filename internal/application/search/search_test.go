@@ -38,7 +38,7 @@ func (f *fakeEmbedder) ModelID() string {
 }
 
 type fakeVectors struct {
-	hits      []domain.Hit
+	hits      []domain.SearchHit
 	err       error
 	calls     int
 	gotK      int
@@ -50,7 +50,7 @@ type fakeVectors struct {
 func (f *fakeVectors) UpsertEmbeddings(_ context.Context, _, _ string, _ []domain.EmbeddingRow) error {
 	return nil
 }
-func (f *fakeVectors) Search(_ context.Context, repoID, branch string, vec []float32, k int, _ domain.Filter) ([]domain.Hit, error) {
+func (f *fakeVectors) Search(_ context.Context, repoID, branch string, vec []float32, k int, _ domain.VectorFilter) ([]domain.SearchHit, error) {
 	f.calls++
 	f.gotRepo = repoID
 	f.gotBranch = branch
@@ -92,13 +92,13 @@ func (f *fakeNodes) NodesInFile(_ context.Context, _, _, _ string) ([]string, er
 func TestSemantic_StaticEmbedderFlagsLowQuality(t *testing.T) {
 	t.Parallel()
 	emb := &fakeEmbedder{vec: []float32{0.1, 0.2}, modelID: "veska-static-v2"}
-	vec := &fakeVectors{hits: []domain.Hit{{NodeID: "n1", Score: 0.5}}}
+	vec := &fakeVectors{hits: []domain.SearchHit{{NodeID: "n1", Score: 0.5}}}
 	nodes := &fakeNodes{rows: []ports.NodeMeta{
 		{NodeID: "n1", SymbolPath: "pkg.A", FilePath: "a.go", Kind: "function", LineStart: 1, LineEnd: 10},
 	}}
 
 	s := search.NewService(emb, vec, nodes)
-	resp, err := s.Semantic(context.Background(), "r1", "main", "q", 10, domain.Filter{})
+	resp, err := s.Semantic(context.Background(), "r1", "main", "q", 10, domain.VectorFilter{})
 	if err != nil {
 		t.Fatalf("Semantic: %v", err)
 	}
@@ -120,7 +120,7 @@ func TestSemantic_StaticEmbedderFlagsLowQuality(t *testing.T) {
 func TestSemantic_HappyPath_PreservesHitRank(t *testing.T) {
 	t.Parallel()
 	emb := &fakeEmbedder{vec: []float32{0.1, 0.2}}
-	vec := &fakeVectors{hits: []domain.Hit{
+	vec := &fakeVectors{hits: []domain.SearchHit{
 		{NodeID: "n2", Score: 0.99},
 		{NodeID: "n1", Score: 0.80},
 		{NodeID: "n3", Score: 0.70},
@@ -133,7 +133,7 @@ func TestSemantic_HappyPath_PreservesHitRank(t *testing.T) {
 	}}
 
 	s := search.NewService(emb, vec, nodes)
-	resp, err := s.Semantic(context.Background(), "r1", "main", "find foo", 10, domain.Filter{})
+	resp, err := s.Semantic(context.Background(), "r1", "main", "find foo", 10, domain.VectorFilter{})
 	if err != nil {
 		t.Fatalf("Semantic: %v", err)
 	}
@@ -181,7 +181,7 @@ func TestSemantic_HappyPath_PreservesHitRank(t *testing.T) {
 func TestSemanticCandidates_TagsRanksAndUnionsRetrievers(t *testing.T) {
 	t.Parallel()
 	emb := &fakeEmbedder{vec: []float32{0.1}}
-	vec := &fakeVectors{hits: []domain.Hit{
+	vec := &fakeVectors{hits: []domain.SearchHit{
 		{NodeID: "vlex"},  // rank 1 in vector
 		{NodeID: "vonly"}, // rank 2 in vector
 	}}
@@ -196,7 +196,7 @@ func TestSemanticCandidates_TagsRanksAndUnionsRetrievers(t *testing.T) {
 	}}
 	s := search.NewService(emb, vec, nodes, search.WithLexicalSearcher(lex))
 
-	resp, err := s.SemanticCandidates(context.Background(), "r1", "main", "x", 10, domain.Filter{})
+	resp, err := s.SemanticCandidates(context.Background(), "r1", "main", "x", 10, domain.VectorFilter{})
 	if err != nil {
 		t.Fatalf("SemanticCandidates: %v", err)
 	}
@@ -223,7 +223,7 @@ func TestSemanticCandidates_TagsRanksAndUnionsRetrievers(t *testing.T) {
 func TestSemantic_MissingNodesDroppedSilently(t *testing.T) {
 	t.Parallel()
 	emb := &fakeEmbedder{vec: []float32{1}}
-	vec := &fakeVectors{hits: []domain.Hit{
+	vec := &fakeVectors{hits: []domain.SearchHit{
 		{NodeID: "alive", Score: 0.9},
 		{NodeID: "dangling", Score: 0.8},
 		{NodeID: "also-alive", Score: 0.7},
@@ -234,7 +234,7 @@ func TestSemantic_MissingNodesDroppedSilently(t *testing.T) {
 	}}
 
 	s := search.NewService(emb, vec, nodes)
-	resp, err := s.Semantic(context.Background(), "r1", "main", "q", 5, domain.Filter{})
+	resp, err := s.Semantic(context.Background(), "r1", "main", "q", 5, domain.VectorFilter{})
 	if err != nil {
 		t.Fatalf("Semantic: %v", err)
 	}
@@ -257,7 +257,7 @@ func TestSemantic_EmbedderError_PropagatesWrapped(t *testing.T) {
 	nodes := &fakeNodes{}
 
 	s := search.NewService(emb, vec, nodes)
-	_, err := s.Semantic(context.Background(), "r1", "main", "q", 5, domain.Filter{})
+	_, err := s.Semantic(context.Background(), "r1", "main", "q", 5, domain.VectorFilter{})
 	if err == nil {
 		t.Fatal("expected error")
 		return
@@ -280,7 +280,7 @@ func TestSemantic_VectorStorageError_PropagatesWrapped(t *testing.T) {
 	nodes := &fakeNodes{}
 
 	s := search.NewService(emb, vec, nodes)
-	_, err := s.Semantic(context.Background(), "r1", "main", "q", 5, domain.Filter{})
+	_, err := s.Semantic(context.Background(), "r1", "main", "q", 5, domain.VectorFilter{})
 	if err == nil {
 		t.Fatal("expected error")
 		return
@@ -302,7 +302,7 @@ func TestSemantic_EmptyHits_ReturnsEmptyNilError(t *testing.T) {
 	nodes := &fakeNodes{}
 
 	s := search.NewService(emb, vec, nodes)
-	resp, err := s.Semantic(context.Background(), "r1", "main", "q", 5, domain.Filter{})
+	resp, err := s.Semantic(context.Background(), "r1", "main", "q", 5, domain.VectorFilter{})
 	if err != nil {
 		t.Fatalf("Semantic: %v", err)
 	}
@@ -329,7 +329,7 @@ func TestSemantic_KZero_ShortCircuits(t *testing.T) {
 		nodes := &fakeNodes{}
 		s := search.NewService(emb, vec, nodes)
 
-		resp, err := s.Semantic(context.Background(), "r1", "main", "q", k, domain.Filter{})
+		resp, err := s.Semantic(context.Background(), "r1", "main", "q", k, domain.VectorFilter{})
 		if err != nil {
 			t.Fatalf("k=%d: %v", k, err)
 		}
@@ -348,11 +348,11 @@ func TestSemantic_NodeLookupError_PropagatesWrapped(t *testing.T) {
 	t.Parallel()
 	sentinel := errors.New("lookup boom")
 	emb := &fakeEmbedder{vec: []float32{1}}
-	vec := &fakeVectors{hits: []domain.Hit{{NodeID: "n1", Score: 1}}}
+	vec := &fakeVectors{hits: []domain.SearchHit{{NodeID: "n1", Score: 1}}}
 	nodes := &fakeNodes{err: sentinel}
 
 	s := search.NewService(emb, vec, nodes)
-	_, err := s.Semantic(context.Background(), "r1", "main", "q", 5, domain.Filter{})
+	_, err := s.Semantic(context.Background(), "r1", "main", "q", 5, domain.VectorFilter{})
 	if err == nil {
 		t.Fatal("expected error")
 		return
@@ -369,11 +369,11 @@ func TestSemantic_ObservesVectorQueryDuration_HappyPath(t *testing.T) {
 	reg := prometheus.NewRegistry()
 	m := observability.NewMetrics(reg)
 	emb := &fakeEmbedder{vec: []float32{1}}
-	vec := &fakeVectors{hits: []domain.Hit{{NodeID: "n1", Score: 1}}}
+	vec := &fakeVectors{hits: []domain.SearchHit{{NodeID: "n1", Score: 1}}}
 	nodes := &fakeNodes{rows: []ports.NodeMeta{{NodeID: "n1", SymbolPath: "p.A", FilePath: "a.go", Kind: "function"}}}
 
 	s := search.NewService(emb, vec, nodes, search.WithMetrics(m))
-	if _, err := s.Semantic(context.Background(), "r1", "main", "q", 5, domain.Filter{}); err != nil {
+	if _, err := s.Semantic(context.Background(), "r1", "main", "q", 5, domain.VectorFilter{}); err != nil {
 		t.Fatalf("Semantic: %v", err)
 	}
 
@@ -394,7 +394,7 @@ func TestSemantic_ObservesVectorQueryDuration_ErrorPath(t *testing.T) {
 	nodes := &fakeNodes{}
 
 	s := search.NewService(emb, vec, nodes, search.WithMetrics(m))
-	if _, err := s.Semantic(context.Background(), "r1", "main", "q", 5, domain.Filter{}); err == nil {
+	if _, err := s.Semantic(context.Background(), "r1", "main", "q", 5, domain.VectorFilter{}); err == nil {
 		t.Fatal("expected error")
 		return
 	}
@@ -439,7 +439,7 @@ func TestSemantic_EmbedderUnreachable_FallsBackToLexical(t *testing.T) {
 	lex := &fakeLexical{hits: []ports.LexicalHit{{NodeID: "n1", Score: 0.5}}}
 
 	s := search.NewService(emb, vec, nodes, search.WithLexicalSearcher(lex))
-	resp, err := s.Semantic(context.Background(), "r1", "main", "close", 5, domain.Filter{})
+	resp, err := s.Semantic(context.Background(), "r1", "main", "close", 5, domain.VectorFilter{})
 	if err != nil {
 		t.Fatalf("Semantic with unreachable embedder + lexical: %v", err)
 	}
@@ -470,7 +470,7 @@ func TestSemantic_HybridFusion_LiftsLexicalOnlyHit(t *testing.T) {
 	// Vector ranks v1..v4 in that order with tight scores — typical of
 	// a small corpus where the cosine distances barely discriminate.
 	// NAMEMATCH appears at vector rank 4 (the tail) but lexical rank 1.
-	vec := &fakeVectors{hits: []domain.Hit{
+	vec := &fakeVectors{hits: []domain.SearchHit{
 		{NodeID: "v1", Score: 0.0021},
 		{NodeID: "v2", Score: 0.0020},
 		{NodeID: "v3", Score: 0.0020},
@@ -486,7 +486,7 @@ func TestSemantic_HybridFusion_LiftsLexicalOnlyHit(t *testing.T) {
 		{NodeID: "v3", SymbolPath: "pkg.V3", FilePath: "d.go", Kind: "function", LineStart: 1, LineEnd: 5},
 	}}
 	s := search.NewService(emb, vec, nodes, search.WithLexicalSearcher(lex))
-	resp, err := s.Semantic(context.Background(), "r1", "main", "NameMatch", 5, domain.Filter{})
+	resp, err := s.Semantic(context.Background(), "r1", "main", "NameMatch", 5, domain.VectorFilter{})
 	if err != nil {
 		t.Fatalf("Semantic: %v", err)
 	}
@@ -511,7 +511,7 @@ func TestSemantic_HybridFusion_LiftsLexicalOnlyHit(t *testing.T) {
 func TestSemantic_HybridFusion_LexicalError_DegradesGracefully(t *testing.T) {
 	t.Parallel()
 	emb := &fakeEmbedder{vec: []float32{0.1}}
-	vec := &fakeVectors{hits: []domain.Hit{
+	vec := &fakeVectors{hits: []domain.SearchHit{
 		{NodeID: "v1", Score: 0.9},
 	}}
 	lex := &fakeLexical{err: fmt.Errorf("FTS index missing")}
@@ -519,7 +519,7 @@ func TestSemantic_HybridFusion_LexicalError_DegradesGracefully(t *testing.T) {
 		{NodeID: "v1", SymbolPath: "pkg.V1", FilePath: "a.go", Kind: "function", LineStart: 1, LineEnd: 5},
 	}}
 	s := search.NewService(emb, vec, nodes, search.WithLexicalSearcher(lex))
-	resp, err := s.Semantic(context.Background(), "r1", "main", "q", 5, domain.Filter{})
+	resp, err := s.Semantic(context.Background(), "r1", "main", "q", 5, domain.VectorFilter{})
 	if err != nil {
 		t.Fatalf("Semantic: %v", err)
 	}
@@ -538,7 +538,7 @@ func TestSemantic_EmbedderUnreachable_NoLexical_PropagatesError(t *testing.T) {
 	nodes := &fakeNodes{}
 
 	s := search.NewService(emb, vec, nodes) // no WithLexicalSearcher
-	_, err := s.Semantic(context.Background(), "r1", "main", "q", 5, domain.Filter{})
+	_, err := s.Semantic(context.Background(), "r1", "main", "q", 5, domain.VectorFilter{})
 	if err == nil {
 		t.Fatal("expected error, got nil")
 		return
@@ -561,7 +561,7 @@ func TestSemantic_NonSentinelEmbedderError_DoesNotFallBack(t *testing.T) {
 	lex := &fakeLexical{}
 
 	s := search.NewService(emb, vec, nodes, search.WithLexicalSearcher(lex))
-	_, err := s.Semantic(context.Background(), "r1", "main", "q", 5, domain.Filter{})
+	_, err := s.Semantic(context.Background(), "r1", "main", "q", 5, domain.VectorFilter{})
 	if err == nil {
 		t.Fatal("expected error, got nil")
 		return

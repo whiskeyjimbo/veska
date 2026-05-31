@@ -37,7 +37,7 @@ func NewFileTracker() *FileTracker {
 // path) and returns a Task whose ID is the trimmed file contents. Returns nil,
 // nil when the file is absent or empty — that is the normal state when no task
 // is active.
-func (t *FileTracker) ActiveTask(_ context.Context, repoID string) (*ports.Task, error) {
+func (t *FileTracker) ActiveTask(_ context.Context, repoID string) (*ports.TaskSummary, error) {
 	raw, err := os.ReadFile(filepath.Join(repoID, currentTaskFile))
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
@@ -51,7 +51,7 @@ func (t *FileTracker) ActiveTask(_ context.Context, repoID string) (*ports.Task,
 		return nil, nil
 	}
 
-	return &ports.Task{
+	return &ports.TaskSummary{
 		ID:        id,
 		RepoID:    repoID,
 		Active:    true,
@@ -62,6 +62,6 @@ func (t *FileTracker) ActiveTask(_ context.Context, repoID string) (*ports.Task,
 // RecentTasks is not supported by the file-based tracker; it always returns an
 // empty slice. Use a richer Tracker implementation (e.g. beads HTTP API) to
 // query task history.
-func (t *FileTracker) RecentTasks(_ context.Context, _ string, _ int) ([]ports.Task, error) {
+func (t *FileTracker) RecentTasks(_ context.Context, _ string, _ int) ([]ports.TaskSummary, error) {
 	return nil, nil
 }
