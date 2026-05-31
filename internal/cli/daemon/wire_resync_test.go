@@ -363,7 +363,6 @@ func TestDaemon_VectorStoreRehydratesOnSecondStart(t *testing.T) {
 	}
 }
 
-
 // TestDaemon_StartupResync_StartDoesNotBlock guards the epic constraint
 // that the scan must not block Start. We hold-up the resync by registering
 // no repos (cheap path) and confirm Start returns well under the resync's
