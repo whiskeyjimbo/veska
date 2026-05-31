@@ -148,6 +148,18 @@ Env: `VESKA_HOME` (data root), `VESKA_VECTOR_BACKEND` (`sqlite-vec`|`usearch`).
 - **Functional options** for domain constructors — `NewNode(id, ...NodeOption)`.
 - **Constructors return typed errors**, not panics, on a nil/invalid dependency
   (each package exposes an `ErrMissingDependency` sentinel).
+- **Ports are owned by their consumer.** Two homes, by scope: broad,
+  cross-cutting storage/provider contracts live in `internal/core/ports/`
+  (`GraphStorage`, `VectorStorage`, `EmbeddingProvider`, `CodeParser`, …) — the
+  domain/application core depends on these. Narrow, use-case-specific ports are
+  declared in the `application/*` (or other consumer) sub-package that uses
+  them, sized to exactly the methods that consumer needs — e.g.
+  `application.PromotionStore`, `wiki.RenderTimeStore`, `review.DailyTokenStore`,
+  `embedder.EmbedRefQueue` (an ISP-narrowed view of the fat
+  `ports.EmbeddingRefRepo`; solov2-xde2.16). A single infrastructure adapter
+  typically satisfies both the broad port and several consumer-owned interfaces.
+  Rule of thumb: if only one use case needs it, the interface belongs next to
+  that use case, not in `core/ports` (solov2-waya).
 - **Promotion is atomic.** `Promoter` (application) is a thin orchestrator; all
   SQL lives behind the `application.PromotionStore` port, implemented by
   `sqlite.PromotionStore`. Co-transactional writers (FTS, embedding-refs) are
