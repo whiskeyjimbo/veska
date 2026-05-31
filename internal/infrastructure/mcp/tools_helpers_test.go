@@ -41,7 +41,7 @@ func TestCheckRequired_ReportsAllMissing(t *testing.T) {
 	})
 }
 
-// scopedGraphStub is a minimal ports.GraphStorage that scopes nodes by
+// scopedGraphStub is a minimal ports.GraphReader that scopes nodes by
 // (repoID, branch) — unlike stubGraphStorage which is global. Used by the
 // fan-out tests so the helper actually has to walk multiple repos to find
 // the seed's owner.

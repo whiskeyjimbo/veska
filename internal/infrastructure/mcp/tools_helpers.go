@@ -288,7 +288,7 @@ const fullNodeIDLen = 64
 // a not-found error if it matches none. graph may be nil — the prefix is
 // then returned unchanged so the downstream lookup surfaces its own
 // not-found error.
-func expandNodeIDPrefix(ctx context.Context, graph ports.GraphStorage, repoID, branch, nodeID string) (string, *RPCError) {
+func expandNodeIDPrefix(ctx context.Context, graph ports.GraphReader, repoID, branch, nodeID string) (string, *RPCError) {
 	if graph == nil || len(nodeID) == fullNodeIDLen {
 		return nodeID, nil
 	}
@@ -342,7 +342,7 @@ func expandNodeIDPrefix(ctx context.Context, graph ports.GraphStorage, repoID, b
 // nodeID wins when both seeds are supplied (it is globally unique by
 // construction). graph may be nil only when repos is also nil (composition
 // roots without persistence wired) — fan-out then degrades to "no match".
-func resolveSeedOwner(ctx context.Context, repos application.RepoLister, graph ports.GraphStorage, raw json.RawMessage, requestedRepoID, callerBranch, nodeID, symbol string) (repoID, branch, resolvedNodeID string, rpcErr *RPCError) {
+func resolveSeedOwner(ctx context.Context, repos application.RepoLister, graph ports.GraphReader, raw json.RawMessage, requestedRepoID, callerBranch, nodeID, symbol string) (repoID, branch, resolvedNodeID string, rpcErr *RPCError) {
 	if nodeID == "" && symbol == "" {
 		return "", "", "", &RPCError{Code: CodeInvalidParams, Message: "missing required params: node_id or symbol"}
 	}

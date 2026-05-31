@@ -24,8 +24,11 @@ type GraphRepo struct {
 	writeDB *sql.DB
 }
 
-// Compile-time assertion that GraphRepo satisfies the port.
-var _ ports.GraphStorage = (*GraphRepo)(nil)
+// Compile-time assertion that GraphRepo satisfies both the write and read ports.
+var (
+	_ ports.GraphStorage = (*GraphRepo)(nil)
+	_ ports.GraphReader  = (*GraphRepo)(nil)
+)
 
 // NewGraphRepo constructs a GraphRepo. readDB serves LoadGraph/FindNodes/
 // GetNode; writeDB serves SaveNode/SaveEdge/DeleteFile.
