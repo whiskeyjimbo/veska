@@ -43,14 +43,3 @@ func NewTracerProvider(endpoint string, sampleRatio float64) (*sdktrace.TracerPr
 	)
 	return tp, nil
 }
-
-// ExtractSampler returns the sampler configured on tp.
-// Used in tests to verify the sampler type without accessing private fields.
-func ExtractSampler(tp *sdktrace.TracerProvider) sdktrace.Sampler {
-	// The TracerProvider does not expose its sampler publicly via a method,
-	// but we can round-trip through the options pattern using a test-only
-	// local TracerProvider with the same sampler.
-	// Instead, we reconstruct the sampler we expect — this is sufficient
-	// because the test validates the description string.
-	return sdktrace.ParentBased(sdktrace.TraceIDRatioBased(1.0))
-}
