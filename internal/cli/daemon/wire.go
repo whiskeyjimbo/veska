@@ -699,7 +699,7 @@ func (b *daemonBuilder) buildReviewHandler() (queue.WorkHandler, error) {
 	quota := review.NewQuota(
 		b.fileCfg.Review.MaxTokensPerCommit,
 		b.fileCfg.Review.MaxTokensPerDay,
-		tokenStore, nil)
+		tokenStore)
 	auditW, err := audit.NewAuditFileWriter(
 		filepath.Join(config.DefaultVectorDir(), "audit.jsonl"))
 	if err != nil {

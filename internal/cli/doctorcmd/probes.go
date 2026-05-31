@@ -129,7 +129,7 @@ func RunPipelines(ctx context.Context, w io.Writer, jsonOut bool) error {
 	quota := review.NewQuota(
 		fileCfg.Review.MaxTokensPerCommit,
 		fileCfg.Review.MaxTokensPerDay,
-		tokenStore, nil)
+		tokenStore)
 
 	report, err := doctor.CheckPipelines(ctx, quota,
 		fileCfg.Review.MaxTokensPerDay, fileCfg.Review.MaxTokensPerCommit)

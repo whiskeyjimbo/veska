@@ -34,7 +34,7 @@ func (f *fakeDailyStore) AddTokens(_ context.Context, date string, n int) (int, 
 // TestQuota_CommitCap proves the per-commit running total trips the cap.
 func TestQuota_CommitCap(t *testing.T) {
 	t.Parallel()
-	q := NewQuota(100, 0, newFakeDailyStore(), nil)
+	q := NewQuota(100, 0, newFakeDailyStore())
 	ctx := context.Background()
 
 	if q.CommitExceeded("sha1") {
@@ -61,7 +61,7 @@ func TestQuota_CommitCap(t *testing.T) {
 // check entirely — it never trips no matter the usage.
 func TestQuota_CommitCapZeroUnlimited(t *testing.T) {
 	t.Parallel()
-	q := NewQuota(0, 0, newFakeDailyStore(), nil)
+	q := NewQuota(0, 0, newFakeDailyStore())
 	if err := q.Record(context.Background(), "sha1", 1_000_000); err != nil {
 		t.Fatalf("Record: %v", err)
 	}
@@ -77,7 +77,7 @@ func TestQuota_DailyCapAndMidnightReset(t *testing.T) {
 	t.Parallel()
 	day1 := time.Date(2026, 5, 17, 10, 0, 0, 0, time.Local)
 	clock := day1
-	q := NewQuota(0, 1000, newFakeDailyStore(), func() time.Time { return clock })
+	q := NewQuota(0, 1000, newFakeDailyStore(), WithClock(func() time.Time { return clock }))
 	ctx := context.Background()
 
 	paused, total, err := q.DailyPaused(ctx)
@@ -113,7 +113,7 @@ func TestQuota_DailyCapAndMidnightReset(t *testing.T) {
 // TestQuota_DailyCapZeroUnlimited proves a daily cap of 0 never pauses.
 func TestQuota_DailyCapZeroUnlimited(t *testing.T) {
 	t.Parallel()
-	q := NewQuota(0, 0, newFakeDailyStore(), nil)
+	q := NewQuota(0, 0, newFakeDailyStore())
 	if err := q.Record(context.Background(), "sha1", 1_000_000); err != nil {
 		t.Fatalf("Record: %v", err)
 	}
@@ -129,7 +129,7 @@ func TestQuota_DailyCapZeroUnlimited(t *testing.T) {
 // TestQuota_TokensToday reports the persisted daily total for AC3.
 func TestQuota_TokensToday(t *testing.T) {
 	t.Parallel()
-	q := NewQuota(0, 5000, newFakeDailyStore(), nil)
+	q := NewQuota(0, 5000, newFakeDailyStore())
 	ctx := context.Background()
 	if err := q.Record(ctx, "sha1", 1200); err != nil {
 		t.Fatalf("Record: %v", err)
