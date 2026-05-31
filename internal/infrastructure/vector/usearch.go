@@ -188,7 +188,7 @@ func (s *UsearchStore) UpsertEmbeddings(_ context.Context, repoID, branch string
 // results are merged.
 // Results are sorted by score descending (lower L2 distance → higher score:
 // score = 1 / (1 + distance)).
-func (s *UsearchStore) Search(_ context.Context, repoID, branch string, vec []float32, k int, filter domain.Filter) ([]domain.Hit, error) {
+func (s *UsearchStore) Search(_ context.Context, repoID, branch string, vec []float32, k int, filter domain.VectorFilter) ([]domain.SearchHit, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
@@ -250,10 +250,10 @@ func (s *UsearchStore) Search(_ context.Context, repoID, branch string, vec []fl
 		candidates = candidates[:k]
 	}
 
-	hits := make([]domain.Hit, len(candidates))
+	hits := make([]domain.SearchHit, len(candidates))
 	for i, c := range candidates {
 		// Convert L2-sq distance to a [0,1) similarity score.
-		hits[i] = domain.Hit{
+		hits[i] = domain.SearchHit{
 			NodeID: c.nodeID,
 			Score:  1.0 / (1.0 + c.dist),
 		}

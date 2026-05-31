@@ -164,7 +164,7 @@ func TestTokenEfficiency(t *testing.T) {
 	savingsHi := make([]float64, 0, clusters)
 
 	for cluster, q := range corpus.CenterQueries {
-		resp, err := svc.Semantic(bgCtx, repoID, branch, q, k, domain.Filter{})
+		resp, err := svc.Semantic(bgCtx, repoID, branch, q, k, domain.VectorFilter{})
 		if err != nil {
 			t.Fatalf("Semantic(cluster %d): %v", cluster, err)
 		}

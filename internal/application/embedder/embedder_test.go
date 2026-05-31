@@ -173,7 +173,7 @@ func (s *fakeVectorStore) UpsertEmbeddings(_ context.Context, repo, branch strin
 	return nil
 }
 
-func (s *fakeVectorStore) Search(context.Context, string, string, []float32, int, domain.Filter) ([]domain.Hit, error) {
+func (s *fakeVectorStore) Search(context.Context, string, string, []float32, int, domain.VectorFilter) ([]domain.SearchHit, error) {
 	return nil, nil
 }
 

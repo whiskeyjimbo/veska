@@ -219,7 +219,7 @@ func runVariant(
 	latencies := make([]time.Duration, 0, corpus.Clusters)
 	for cluster, q := range corpus.CenterQueries {
 		start := time.Now()
-		resp, err := svc.Semantic(ctx, repoID, branch, q, recallK, domain.Filter{})
+		resp, err := svc.Semantic(ctx, repoID, branch, q, recallK, domain.VectorFilter{})
 		elapsed := time.Since(start)
 		if err != nil {
 			t.Fatalf("variant %s: Semantic(cluster %d): %v", variant, cluster, err)

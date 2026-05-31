@@ -8,15 +8,15 @@ type EmbeddingRow struct {
 	Vector      []float32
 }
 
-// Hit is a single result from a vector similarity search.
-type Hit struct {
+// SearchHit is a single result from a vector similarity search.
+type SearchHit struct {
 	NodeID string
 	Score  float32
 }
 
-// Filter constrains a vector search to a subset of stored embeddings.
+// VectorFilter constrains a vector search to a subset of stored embeddings.
 // Zero-value string fields are treated as "no constraint" (match all).
-type Filter struct {
+type VectorFilter struct {
 	RepoID  string
 	Branch  string
 	ModelID string

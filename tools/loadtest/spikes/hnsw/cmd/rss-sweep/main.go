@@ -112,7 +112,7 @@ func runSweep(pop int) (sweepResult, error) {
 	}
 	defer store.Destroy()
 
-	filter := domain.Filter{ModelID: modelID}
+	filter := domain.VectorFilter{ModelID: modelID}
 
 	// Generate corpus (pop vectors, seed=42).
 	fmt.Fprintf(os.Stderr, "  generating %d corpus vectors...\n", pop)

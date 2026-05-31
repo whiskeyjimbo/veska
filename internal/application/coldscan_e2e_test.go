@@ -198,7 +198,7 @@ func runColdScanE2E(t *testing.T, kind vector.BackendKind) {
 	}
 	l2Normalize(queryVec)
 
-	hits, err := vecStore.Search(ctx, repoID, branch, queryVec, 5, domain.Filter{})
+	hits, err := vecStore.Search(ctx, repoID, branch, queryVec, 5, domain.VectorFilter{})
 	if err != nil {
 		t.Fatalf("vecStore.Search: %v", err)
 	}

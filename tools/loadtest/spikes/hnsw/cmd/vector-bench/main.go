@@ -129,7 +129,7 @@ func run(pop int) (result, error) {
 		}
 	}
 
-	filter := domain.Filter{ModelID: modelID}
+	filter := domain.VectorFilter{ModelID: modelID}
 
 	// Pre-warm: run nWarmQueries that are not measured.
 	warmVecs := gen.GenerateVectors(nWarmQueries, warmSeed)

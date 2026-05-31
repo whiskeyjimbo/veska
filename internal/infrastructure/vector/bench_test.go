@@ -67,7 +67,7 @@ func computeRecallAt10(tb testing.TB, store *vector.UsearchStore, corpus [][]flo
 	tb.Helper()
 	holdOut := gen.GenerateVectors(nHoldOut, holdOutSeed)
 	ctx := context.Background()
-	filter := domain.Filter{ModelID: benchModelID}
+	filter := domain.VectorFilter{ModelID: benchModelID}
 
 	var sumRecall float64
 	for _, q := range holdOut {
@@ -130,7 +130,7 @@ func BenchmarkSearch50k(b *testing.B) {
 	store, _ := buildStore(b, 50_000)
 	warmQueries := gen.GenerateVectors(nWarmQueries, 7777)
 	ctx := context.Background()
-	filter := domain.Filter{ModelID: benchModelID}
+	filter := domain.VectorFilter{ModelID: benchModelID}
 
 	// pre-warm
 	for _, q := range warmQueries {
@@ -165,7 +165,7 @@ func BenchmarkSearch250k(b *testing.B) {
 	store, _ := buildStore(b, 250_000)
 	warmQueries := gen.GenerateVectors(nWarmQueries, 7777)
 	ctx := context.Background()
-	filter := domain.Filter{ModelID: benchModelID}
+	filter := domain.VectorFilter{ModelID: benchModelID}
 
 	// pre-warm
 	for _, q := range warmQueries {

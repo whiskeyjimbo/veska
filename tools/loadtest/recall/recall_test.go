@@ -259,7 +259,7 @@ func TestRecall(t *testing.T) {
 	ctx := context.Background()
 	for cluster, q := range corpus.CenterQueries {
 		start := time.Now()
-		resp, err := svc.Semantic(ctx, repoID, branch, q, k, domain.Filter{})
+		resp, err := svc.Semantic(ctx, repoID, branch, q, k, domain.VectorFilter{})
 		elapsed := time.Since(start)
 		if err != nil {
 			t.Fatalf("Semantic(cluster %d): %v", cluster, err)

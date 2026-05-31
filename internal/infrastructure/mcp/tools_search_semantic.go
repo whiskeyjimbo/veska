@@ -126,7 +126,7 @@ func runSemanticFanout(
 	if !fanout {
 		// Single target: keep the existing within-repo pipeline.
 		t := targets[0]
-		resp, err := svc.Semantic(ctx, t.RepoID, t.Branch, query, k, domain.Filter{})
+		resp, err := svc.Semantic(ctx, t.RepoID, t.Branch, query, k, domain.VectorFilter{})
 		if err != nil {
 			return nil, nil, nil, &RPCError{Code: CodeInternalError, Message: fmt.Sprintf("semantic search: %v", err)}
 		}
@@ -149,7 +149,7 @@ func runSemanticFanout(
 		wg.Add(1)
 		go func(i int, tgt repoBranch) {
 			defer wg.Done()
-			resp, err := svc.SemanticCandidates(ctx, tgt.RepoID, tgt.Branch, query, k, domain.Filter{})
+			resp, err := svc.SemanticCandidates(ctx, tgt.RepoID, tgt.Branch, query, k, domain.VectorFilter{})
 			results[i] = repoResult{repoID: tgt.RepoID, resp: resp, err: err}
 		}(i, tgt)
 	}

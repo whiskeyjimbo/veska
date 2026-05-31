@@ -172,7 +172,7 @@ func runResolvedSearch(ctx context.Context, rs resolvedSearch) error {
 	if err != nil {
 		return err
 	}
-	resp, err := svc.Semantic(ctx, rs.rec.RepoID, rs.rec.ActiveBranch, rs.opts.Query, rs.opts.K, domain.Filter{})
+	resp, err := svc.Semantic(ctx, rs.rec.RepoID, rs.rec.ActiveBranch, rs.opts.Query, rs.opts.K, domain.VectorFilter{})
 	if err != nil {
 		return fmt.Errorf("search: semantic: %w", err)
 	}

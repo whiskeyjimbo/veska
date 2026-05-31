@@ -333,7 +333,7 @@ func TestDaemon_VectorStoreRehydratesOnSecondStart(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = d2.Stop() })
 
-	preHits, err := d2.vectors.Search(context.Background(), repoID, "main", vec, 5, domain.Filter{})
+	preHits, err := d2.vectors.Search(context.Background(), repoID, "main", vec, 5, domain.VectorFilter{})
 	if err != nil {
 		t.Fatalf("pre-Start search: %v", err)
 	}
@@ -347,7 +347,7 @@ func TestDaemon_VectorStoreRehydratesOnSecondStart(t *testing.T) {
 		t.Fatalf("d2.Start: %v", err)
 	}
 
-	hits, err := d2.vectors.Search(context.Background(), repoID, "main", vec, 5, domain.Filter{})
+	hits, err := d2.vectors.Search(context.Background(), repoID, "main", vec, 5, domain.VectorFilter{})
 	if err != nil {
 		t.Fatalf("post-Start search: %v", err)
 	}

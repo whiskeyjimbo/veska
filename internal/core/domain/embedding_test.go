@@ -44,7 +44,7 @@ func TestEmbeddingRowFields(t *testing.T) {
 
 // TestHitFields verifies Hit has the expected fields and zero values.
 func TestHitFields(t *testing.T) {
-	var h domain.Hit
+	var h domain.SearchHit
 	if h.NodeID != "" {
 		t.Errorf("NodeID zero value: want empty string, got %q", h.NodeID)
 	}
@@ -52,7 +52,7 @@ func TestHitFields(t *testing.T) {
 		t.Errorf("Score zero value: want 0, got %f", h.Score)
 	}
 
-	h2 := domain.Hit{NodeID: "node-42", Score: 0.95}
+	h2 := domain.SearchHit{NodeID: "node-42", Score: 0.95}
 	if h2.NodeID != "node-42" {
 		t.Errorf("NodeID: want node-42, got %q", h2.NodeID)
 	}
@@ -63,7 +63,7 @@ func TestHitFields(t *testing.T) {
 
 // TestFilterFields verifies Filter has the expected fields and zero values.
 func TestFilterFields(t *testing.T) {
-	var f domain.Filter
+	var f domain.VectorFilter
 	if f.RepoID != "" {
 		t.Errorf("RepoID zero value: want empty string, got %q", f.RepoID)
 	}
@@ -74,7 +74,7 @@ func TestFilterFields(t *testing.T) {
 		t.Errorf("ModelID zero value: want empty string, got %q", f.ModelID)
 	}
 
-	f2 := domain.Filter{RepoID: "repo-1", Branch: "main", ModelID: "nomic-embed-text"}
+	f2 := domain.VectorFilter{RepoID: "repo-1", Branch: "main", ModelID: "nomic-embed-text"}
 	if f2.RepoID != "repo-1" {
 		t.Errorf("RepoID: want repo-1, got %q", f2.RepoID)
 	}
