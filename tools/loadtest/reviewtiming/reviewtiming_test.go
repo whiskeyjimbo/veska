@@ -100,7 +100,7 @@ func TestReviewTiming(t *testing.T) {
 		t.Fatalf("review.NewLoader: %v", err)
 	}
 	llmTimeout := envDuration("REVIEW_TIMING_LLM_TIMEOUT", defaultLLMTimeout)
-	gen := llm.NewOllamaGenerator(ollamaURL, model, nil, llm.WithTimeout(llmTimeout))
+	gen := llm.NewOllamaGenerator(model, llm.WithBaseURL(ollamaURL), llm.WithTimeout(llmTimeout))
 	repoRoot := func(context.Context, string) (string, error) { return root, nil }
 
 	handler, err := review.NewHandler(gen, loader, repoRoot, nopFindings{})
