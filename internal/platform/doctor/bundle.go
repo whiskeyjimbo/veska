@@ -68,20 +68,7 @@ func CreateBundle(opts BundleOptions) (BundleResult, error) {
 	fileCount := 0
 
 	addEntry := func(name string, data []byte) error {
-		hdr := &tar.Header{
-			Name:    name,
-			Mode:    0o644,
-			Size:    int64(len(data)),
-			ModTime: time.Now().UTC(),
-		}
-		if err := tw.WriteHeader(hdr); err != nil {
-			return fmt.Errorf("bundle: write header %s: %w", name, err)
-		}
-		if _, err := tw.Write(data); err != nil {
-			return fmt.Errorf("bundle: write data %s: %w", name, err)
-		}
-		fileCount++
-		return nil
+		return writeTarEntry(tw, &fileCount, name, data)
 	}
 
 	// 1. manifest.json
@@ -184,6 +171,13 @@ func addProbeEntry(tw *tar.Writer, fileCount *int, name string, env Envelope, re
 	if redact {
 		data = audit.RedactFile(data)
 	}
+	return writeTarEntry(tw, fileCount, name, data)
+}
+
+// writeTarEntry writes data as a single tar entry named name with standard
+// metadata, incrementing *fileCount on success. It is the one place tar
+// headers are built, shared by the manifest/audit entries and addProbeEntry.
+func writeTarEntry(tw *tar.Writer, fileCount *int, name string, data []byte) error {
 	hdr := &tar.Header{
 		Name:    name,
 		Mode:    0o644,
