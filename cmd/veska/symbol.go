@@ -1,83 +1,18 @@
 package main
 
 import (
-	"context"
 	"fmt"
-	"io"
-	"os"
 
 	"github.com/spf13/cobra"
 
-	"github.com/whiskeyjimbo/veska/internal/cli/mcpclient"
 	"github.com/whiskeyjimbo/veska/internal/cli/symbolcmd"
 )
 
 // The symbol/context command logic lives in internal/cli/symbolcmd; the
 // constructors below are Cobra glue whose RunE bodies are thin delegating
-// calls into that package (solov2-0omh.7). resolveRepoFromCWD/autoResolveRepo
-// stay here because they are shared cmd-level helpers (deps.go, findings.go,
-// graph.go also call them).
-
-// resolveRepoFromCWD asks the daemon (via eng_get_current_repo) which repo
-// the caller's cwd belongs to. Used by CLI wrappers (symbol, context, ...)
-// to bridge the gap when the daemon has multiple repos registered and the
-// user hasn't passed --repo. Empty string + no error means "couldn't
-// resolve"; the caller should still pass the request through and let the
-// daemon's "repo_id is required" error surface (solov2-zukc).
-func resolveRepoFromCWD(ctx context.Context) (string, error) {
-	cwd, err := os.Getwd()
-	if err != nil {
-		return "", nil // cwd lookup failed; don't fail the whole command
-	}
-	var res struct {
-		Repo struct {
-			RepoID   string `json:"repo_id"`
-			RootPath string `json:"root_path"`
-		} `json:"repo"`
-	}
-	if err := mcpclient.Call(ctx, "eng_get_current_repo", map[string]any{"cwd": cwd}, &res); err != nil {
-		// Daemon down or no match — caller falls through with no auto-resolve.
-		return "", nil
-	}
-	return res.Repo.RepoID, nil
-}
-
-// autoResolveRepo wraps resolveRepoFromCWD with a stderr breadcrumb so the
-// user is never surprised when --repo defaulted to a repo other than the
-// one they were thinking of. Multi-repo silent fallback was the
-// #1 first-impression bug in the junior-journey walk-through (solov2-dqwh).
-// errOut may be nil to suppress the hint (e.g. JSON-output paths where a
-// stray stderr line could clutter pipelines — callers there pay the
-// no-hint cost knowingly).
-func autoResolveRepo(ctx context.Context, errOut io.Writer) string {
-	rid, _ := resolveRepoFromCWD(ctx)
-	if rid == "" {
-		return ""
-	}
-	// Only emit the hint when we know there's more than one repo to choose
-	// between — solo-repo users don't need the noise.
-	var list struct {
-		Repos []struct {
-			RepoID   string `json:"repo_id"`
-			ShortID  string `json:"short_id"`
-			RootPath string `json:"root_path"`
-		} `json:"repos"`
-	}
-	if err := mcpclient.Call(ctx, "eng_list_repos", map[string]any{}, &list); err == nil && len(list.Repos) > 1 && errOut != nil {
-		short, root := rid[:12], ""
-		for _, rec := range list.Repos {
-			if rec.RepoID == rid {
-				if rec.ShortID != "" {
-					short = rec.ShortID
-				}
-				root = rec.RootPath
-				break
-			}
-		}
-		fmt.Fprintf(errOut, "veska: scoped to repo %s (%s); pass --repo to override\n", short, root)
-	}
-	return rid
-}
+// calls into that package (solov2-0omh.7). The shared cwd→repo resolver
+// helpers (resolveRepoFromCWD/autoResolveRepo) live in shared.go since they
+// are used across the deps, findings, and symbol families.
 
 // symbolCmd wraps eng_find_symbol so users can drive the same lookup their
 // editor would, without typing the JSON-RPC envelope. repo_id auto-resolves
