@@ -193,7 +193,7 @@ func TestOf_TruncatedAtMaxNodes(t *testing.T) {
 func TestOf_PropagatesEdgeError(t *testing.T) {
 	edges := &fakeEdges{err: errors.New("db down")}
 	// Seed metadata must be present so the new ErrSeedNotFound gate doesn't
-	// short-circuit before we reach the edge query (solov2-2w0u).
+	// short-circuit before we reach the edge query .
 	nodes := &fakeNodes{metas: map[string]ports.NodeMeta{"seed": {NodeID: "seed"}}}
 	s, err := blastradius.NewService(edges, nodes, nil)
 	if err != nil {

@@ -1,6 +1,6 @@
 // Package static is a CPU-only, in-process EmbeddingProvider that
 // requires zero external services — no Ollama, no Python sidecar, no
-// network, no model file (solov2-soc).
+// network, no model file .
 //
 // Algorithm (v2, FastText-style subword hashing):
 //
@@ -49,8 +49,10 @@ const ModelID = "veska-static-v2"
 // (typically 4..16 chars) this captures enough overlap to give
 // "parseConfig" / "configParser" a meaningful cosine without
 // exploding the per-token n-gram count.
-const ngramMin = 3
-const ngramMax = 6
+const (
+	ngramMin = 3
+	ngramMax = 6
+)
 
 // Dim is the output dimensionality. 768 matches nomic-embed-text so
 // the static embedder is a drop-in replacement at the vector-storage

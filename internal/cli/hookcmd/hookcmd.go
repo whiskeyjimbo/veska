@@ -3,7 +3,7 @@
 // `hook-runner post-checkout`). cmd/veska/hook_runner.go is reduced to Cobra
 // command construction whose RunE bodies delegate here, following the
 // cmd = glue / logic-in-packages pattern established by reindexcmd, symbolcmd,
-// graphcmd, and findingscmd (solov2-0omh).
+// graphcmd, and findingscmd .
 //
 // Every entry point swallows its errors and returns nil: a git hook that exits
 // non-zero blocks the user's commit or checkout, which is never an acceptable
@@ -44,7 +44,7 @@ func RunPostCommit() error {
 		return nil
 	}
 
-	// Belt-and-braces (solov2-g50): try the VESKA_HOME-derived socket
+	// Belt-and-braces : try the VESKA_HOME-derived socket
 	// first, then fall back to ~/.veska/cli.sock so a stale baked
 	// VESKA_HOME in the hook script (or an unset env) still finds a
 	// running daemon on the default path.
@@ -168,7 +168,7 @@ func gitCurrentBranch() (string, error) {
 // HEAD and promotes. All errors after a successful dial are silently swallowed
 // — the hook must never block a commit (git would surface a non-zero exit to
 // the user). A dial failure is returned so the caller can fall back to the
-// next candidate socket (solov2-g50).
+// next candidate socket .
 //
 // Solov2-3vv: this used to send a legacy {"cmd":"promote"} payload that the
 // JSON-RPC listener rejected with method-not-found, so post-commit
@@ -187,7 +187,7 @@ func SendSeal(sockPath string) error {
 	conn, err := net.DialTimeout("unix", sockPath, dialTimeout)
 	if err != nil {
 		// Dial failure is the signal the caller uses to try the next
-		// candidate socket (solov2-g50). All other errors after a
+		// candidate socket . All other errors after a
 		// successful dial are still swallowed so a misbehaving daemon
 		// cannot block git.
 		return err

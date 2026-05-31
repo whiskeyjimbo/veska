@@ -1,11 +1,11 @@
 // Command cliparity enforces the CLI/MCP surface-parity contract
-// (solov2-xomk). Every MCP tool registered in internal/infrastructure/mcp/
+// . Every MCP tool registered in internal/infrastructure/mcp/
 // must EITHER:
 //
 //   - Appear in tools/lint/cliparity/wrapped.txt (the manifest of tools
 //     that have a `veska <subcommand>` wrapper), OR
 //   - Carry a non-zero CLIExempt value on its ToolSpec literal
-//     (solov2-4ygz).
+//     .
 //
 // Stale manifest entries (names with no matching MCP registration) are
 // also flagged so the manifest stays a live document rather than a

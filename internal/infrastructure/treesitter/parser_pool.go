@@ -12,7 +12,7 @@ import (
 // Parser pools amortize the per-language CGO setup (sitter.NewParser +
 // SetLanguage) across files. ParseFile is hot under bulk re-index and the
 // fsnotify watcher; allocating a fresh parser per call was wasteful
-// (solov2-0ung). One sync.Pool per language because tree-sitter parsers are
+// . One sync.Pool per language because tree-sitter parsers are
 // bound to a single language after SetLanguage.
 //
 // Safety: Parser.ParseCtx is called with a nil "old tree" each time, so a

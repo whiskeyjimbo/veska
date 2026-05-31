@@ -69,7 +69,7 @@ type Check interface {
 //
 // VulnScanCheck implements this: it re-resolves the entire dep set on every
 // run, so a CVE that no longer applies (because the user bumped the dep)
-// must disappear from the findings surface automatically (solov2-jvrc).
+// must disappear from the findings surface automatically .
 // Without this, fixing a vuln leaves the dashboard screaming forever.
 //
 // AuthoritativeRule returns the rule name to reconcile, or ok=false to
@@ -192,7 +192,7 @@ func (r *Runner) runOne(ctx context.Context, c Check, in Input) {
 		_ = r.storage.Save(ctx, f)
 		keep = append(keep, f.FindingID)
 	}
-	// Authoritative checks (solov2-jvrc): close open findings of the
+	// Authoritative checks : close open findings of the
 	// declared rule whose IDs are not in the freshly-returned set, so
 	// state that no longer applies (e.g. a vuln resolved by a dep bump)
 	// disappears from `veska findings list` without manual cleanup.

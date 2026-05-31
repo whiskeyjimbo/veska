@@ -37,7 +37,7 @@ func FindTrackedRepoByModulePath(ctx context.Context, db *sql.DB, modulePath str
 // LookupRepoRootAndBranch is a thin direct-DB lookup used by `veska deps index`
 // when the daemon is offline (and so eng_get_repo isn't available). Accepts
 // everything ResolveCLIRepoID accepts: full repo_id, 12-char short_id, user
-// alias, or unambiguous prefix (solov2-2kug). Returns the canonical root path +
+// alias, or unambiguous prefix . Returns the canonical root path +
 // active branch for the resolved repo, defaulting the branch to "main".
 func LookupRepoRootAndBranch(ctx context.Context, db *sql.DB, repoID string) (root, branch string, err error) {
 	recs, err := repo.List(ctx, db)

@@ -1,5 +1,5 @@
 // Package treesitter — query_runner is the thin wrapper over
-// sitter.QueryCursor that the .scm-driven extractors use (solov2-1yev).
+// sitter.QueryCursor that the .scm-driven extractors use .
 //
 // Goals:
 //   - One CGO crossing per match (vs per node in the legacy recursive

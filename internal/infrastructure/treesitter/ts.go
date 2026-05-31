@@ -96,7 +96,7 @@ func (p *TSParser) ParseFile(ctx context.Context, repoID, path string, src []byt
 	callEdges := extractTSCallEdges(root, src, symbolByName)
 	result.Edges = append(result.Edges, callEdges...)
 
-	// --- chunk index over non-declaration regions (solov2-jyt) ---
+	// --- chunk index over non-declaration regions  ---
 	result.Nodes = append(result.Nodes, chunkFile(repoID, path, src, result.Nodes)...)
 
 	// --- TODO/FIXME markers (language-agnostic lexical scan) ---
@@ -119,7 +119,7 @@ func extractTSSymbols(
 	for i := range count {
 		child := root.Child(i)
 		// Top-level declarations are unexported unless wrapped by an
-		// export_statement, which flips the flag on recursion (solov2-xp1u).
+		// export_statement, which flips the flag on recursion .
 		processTopLevelNode(child, src, repoID, path, result, symbolByName, classNames, false)
 	}
 }
@@ -327,9 +327,9 @@ func parseTSArrowFunctions(
 // class body and emits CALLS edges. Calls of the form this.foo() are
 // rewritten to className.foo and resolved against the file's symbol
 // map — bare-identifier calls (e.g. helper()) resolve directly. This
-// is the TS analogue of the Go receiver-selector rewrite (solov2-q9p)
+// is the TS analogue of the Go receiver-selector rewrite
 // and is what makes intra-class dependencies show up in eng_get_call_chain
-// for TS code (solov2-gv6).
+// for TS code .
 func collectTSCallsFromClassBody(body *sitter.Node, src []byte, symbols map[string]*domain.Node, className string) []*domain.Edge {
 	var edges []*domain.Edge
 	seen := make(map[string]bool)
@@ -410,7 +410,7 @@ func collectTSCallsFromTopLevel(node *sitter.Node, src []byte, symbols map[strin
 		// Each method inside the class is its own caller. Resolve
 		// this.foo() against the class's own method namespace via
 		// collectCallNames(recvName="this", recvType=className) —
-		// mirrors Go's receiver-selector resolution (solov2-gv6).
+		// mirrors Go's receiver-selector resolution .
 		nameNode := node.ChildByFieldName("name")
 		if nameNode == nil {
 			return edges

@@ -196,7 +196,7 @@ func TestEmbeddingRefsRepo_CountByState_AllZero(t *testing.T) {
 
 // TestEmbeddingRefsRepo_FetchPending_TextProjection verifies the embed-input
 // projection includes file_path and language so distinct nodes do not collapse
-// under the content-addressed embedding dedup (solov2-311).
+// under the content-addressed embedding dedup .
 func TestEmbeddingRefsRepo_FetchPending_TextProjection(t *testing.T) {
 	t.Parallel()
 	db, repo := openTestDB(t)

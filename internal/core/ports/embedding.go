@@ -38,7 +38,7 @@ type EmbeddingProvider interface {
 // BatchEmbeddingProvider is the optional batch interface — adapters that
 // can embed many texts in a single network roundtrip implement this in
 // addition to EmbeddingProvider, and the embedder Worker prefers it
-// (solov2-ucp). Implementations MUST preserve input order and return
+// . Implementations MUST preserve input order and return
 // exactly len(texts) vectors; partial successes return ErrEmbedderUnreachable
 // (or another wrapped error) for the whole batch — the worker retries
 // individually on failure.

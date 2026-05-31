@@ -10,7 +10,7 @@ import (
 )
 
 // epFixtureGraph builds a promoted state covering the four ranking
-// signals (solov2-73f): inbound count, exported flag, has-adjacent-test
+// signals : inbound count, exported flag, has-adjacent-test
 // tiebreaker, and the test-symbol exclusion gate.
 //
 // Nodes:
@@ -133,7 +133,7 @@ func TestSelect_ExportedBeatsUnexportedOnTie(t *testing.T) {
 	}
 	// lowFanCaps and helper both have InboundCount=1 (1 caller each).
 	// lowFanCaps is exported, helper is not — lowFanCaps must rank higher.
-	var lowIdx, helperIdx = -1, -1
+	lowIdx, helperIdx := -1, -1
 	for i, ep := range rep.EntryPoints {
 		switch ep.SymbolName {
 		case "lowFanCaps":

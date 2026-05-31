@@ -1,4 +1,4 @@
-; symbols.scm — declarative declaration extraction for Go (solov2-1yev).
+; symbols.scm — declarative declaration extraction for Go .
 ;
 ; Capture conventions match what go_query_extract.go expects:
 ;   @function.decl   the function_declaration node itself

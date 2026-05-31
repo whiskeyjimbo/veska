@@ -31,7 +31,7 @@ type RepoRecord struct {
 	LastPromotedSHA string // empty = never promoted
 	Kind            string // "tracked" (default) or "ephemeral" (solov2-kxo5.9)
 	// Aliases are user-defined human-friendly names for this repo
-	// (solov2-7w1t). MCP resolvers use them for repo_id lookup; the
+	// . MCP resolvers use them for repo_id lookup; the
 	// MCP eng_list_repos response surfaces them per repo.
 	Aliases []string
 }

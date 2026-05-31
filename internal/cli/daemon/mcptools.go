@@ -111,8 +111,8 @@ func (w *mcpToolWiring) registerBasicDataTools() {
 	mcp.RegisterRepoTools(w.r, reg, w.repos())
 }
 
-// registerPromotionTools registers eng_promote (solov2-3vv) and eng_reindex_repo
-// (solov2-4d7b). Each degrades cleanly (skipped) when its deps are nil — legacy
+// registerPromotionTools registers eng_promote  and eng_reindex_repo
+// . Each degrades cleanly (skipped) when its deps are nil — legacy
 // or test wiring — rather than panicking at startup.
 func (w *mcpToolWiring) registerPromotionTools() {
 	if w.d.ingester != nil && w.d.promoter != nil {
@@ -132,7 +132,7 @@ func (w *mcpToolWiring) registerPromotionTools() {
 }
 
 // registerOwnerTodoAdminTools registers owner, todo, and admin tools. Task
-// tools are PARKED (solov2-6m1): there is no MCP path to create a task, so
+// tools are PARKED : there is no MCP path to create a task, so
 // exposing them surfaces dead-end UX. The keep-alive reference re-enables a
 // clean re-registration when a task backend lands.
 func (w *mcpToolWiring) registerOwnerTodoAdminTools() {
@@ -148,7 +148,7 @@ func (w *mcpToolWiring) registerOwnerTodoAdminTools() {
 
 // registerGraphTools registers the graph + blast-radius tools. The cross-repo
 // resolvers turn cross_repo_edge_stubs into synthetic ResolvedEdges for
-// call_chain and blast_radius (solov2-1gj); without them the xc51.3 stub
+// call_chain and blast_radius ; without them the xc51.3 stub
 // producer has no consumer.
 func (w *mcpToolWiring) registerGraphTools() {
 	mcp.RegisterGraphTools(w.r, w.graph, w.d.staging,
@@ -259,7 +259,7 @@ func (w *mcpToolWiring) registerSearchTool() error {
 	return nil
 }
 
-// registerDependenciesTool registers eng_list_dependencies (solov2-jlws), which
+// registerDependenciesTool registers eng_list_dependencies , which
 // aggregates per-repo cross-repo edge stubs into a ranked module list with
 // sample call sites and go.mod versions.
 func (w *mcpToolWiring) registerDependenciesTool() {
@@ -284,7 +284,7 @@ func (w *mcpToolWiring) registerDependenciesTool() {
 // "golang.org/x/text/language") while go.mod lists the module path
 // ("golang.org/x/text"), so it walks the path components back until a module
 // match falls out, letting sub-packages inherit their parent's version
-// (solov2-w88y).
+// .
 func goModVersion(ctx context.Context, repoRoot, modulePath string) (string, error) {
 	content, rerr := os.ReadFile(filepath.Join(repoRoot, "go.mod"))
 	if rerr != nil {
@@ -312,7 +312,7 @@ func goModVersion(ctx context.Context, repoRoot, modulePath string) (string, err
 
 // goModOwnModulePath returns the repo's own module path so the dependencies
 // service can filter intra-module imports (the repo's own subpackages) out of
-// the external-dependency list (solov2-6q1q). Absent/malformed go.mod yields "".
+// the external-dependency list . Absent/malformed go.mod yields "".
 func goModOwnModulePath(ctx context.Context, repoRoot string) (string, error) {
 	content, rerr := os.ReadFile(filepath.Join(repoRoot, "go.mod"))
 	if rerr != nil {

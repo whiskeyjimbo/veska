@@ -64,7 +64,7 @@ func ExitCodeForProbeStatus(status string) int {
 	if status == "broken" {
 		return 2
 	}
-	// "degraded" and "stopped" (solov2-bwly) are both informational —
+	// "degraded" and "stopped"  are both informational —
 	// non-zero status label, exit 0.
 	return 0
 }

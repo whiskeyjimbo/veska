@@ -19,7 +19,7 @@ SQLITE_CGO_ENV ?= CGO_ENABLED=1
 # (`make build`) ships fat.
 all: build-small test vet lint layercheck fatfile-ratchet noidleak cliparity
 
-# `build` (solov2-sft7): default to the fat binary — model2vec embedded —
+# `build` : default to the fat binary — model2vec embedded —
 # so a clean clone + `make build` produces a usable veska without the
 # install-model2vec dance. Size-sensitive callers use `build-small`.
 build: fetch-embed-assets
@@ -28,7 +28,7 @@ build: fetch-embed-assets
 	ln -sf veska $(MCP_BIN)
 	go build -o $(LAYERCHECK_BIN) ./tools/lint/layercheck/cmd
 
-# build-small (solov2-sft7): thin binary, no embedded model. Veska elects
+# build-small : thin binary, no embedded model. Veska elects
 # the low-quality static-v2 fallback at first boot unless the user runs
 # `veska install model2vec`. Intended for CI / container layers where the
 # ~62MB embed bloat matters more than first-run UX.
@@ -46,12 +46,12 @@ build-small: $(LAYERCHECK_BIN)
 	ln -sf veska $(DAEMON_BIN)
 	ln -sf veska $(MCP_BIN)
 
-# build-fat: deprecated alias for `build` (solov2-sft7). Kept for one
+# build-fat: deprecated alias for `build` . Kept for one
 # release so muscle-memory keeps working; remove next cycle.
 build-fat: build
 	@echo "note: 'make build-fat' is now an alias for 'make build'; update scripts." >&2
 
-# Embed-asset dir for fat builds (solov2-si1). Contents are .gitignore'd —
+# Embed-asset dir for fat builds . Contents are .gitignore'd —
 # the ~62MB weights are never committed.
 EMBED_ASSET_DIR := internal/infrastructure/embedding/model2vec/assets/potion-code-16M
 
@@ -93,7 +93,7 @@ build-sizes:
 		$$fat  $$((fat/1024/1024)) \
 		$$((fat-thin)) $$(((fat-thin)/1024/1024))
 
-# install (solov2-cdw3): copy the just-built fat binaries into the user's
+# install : copy the just-built fat binaries into the user's
 # bin dir via scripts/install.sh. Mirrors the install.sh path inside the
 # release tarball so the local-build experience matches the distributed
 # one. Destination override via $VESKA_INSTALL_DIR; defaults to
@@ -101,7 +101,7 @@ build-sizes:
 install: build
 	scripts/install.sh
 
-# release-archive (solov2-cdw3): produce a tarball at
+# release-archive : produce a tarball at
 # dist/veska-<version>-<os>-<arch>.tar.gz containing the fat binaries +
 # install.sh + a top-level README. A user downloading the tarball runs
 # `./install.sh` and gets the same outcome as a developer running
@@ -156,9 +156,9 @@ layercheck: $(LAYERCHECK_BIN)
 fatfile-ratchet:
 	go run ./tools/lint/fatfiles/cmd
 
-# noidleak: fail when bd issue IDs (solov2-xxxx) appear in user-visible Go
+# noidleak: fail when bd issue IDs  appear in user-visible Go
 # string literals — flag descriptions, fmt strings, MCP tool descriptions
-# (solov2-a0hw). Comments are allowed.
+# . Comments are allowed.
 noidleak:
 	go run ./tools/lint/noidleak
 
@@ -255,7 +255,7 @@ eval-embed-throughput:
 
 # eval-embedder-bench: per-embed throughput + load-cost micro-benchmarks
 # across the election ladder (static-v2 / model2vec disk / model2vec
-# embedded) — informed the fat/thin packaging decision (solov2-si1).
+# embedded) — informed the fat/thin packaging decision .
 # Disk arms skip without an installed model; the embedded arm needs the
 # fat build tag, so this target builds with `-tags 'eval embed_model'`
 # (run `make build-fat` once so the embed assets exist). See README.
@@ -264,7 +264,7 @@ eval-embedder-bench:
 
 # eval-embed-models: phased benchmark of embedding model variants over
 # real codebase corpora. Used to inform hi5's defaults and publish a
-# comparison table (solov2-0k5h). Default runs the model2vec subset only
+# comparison table . Default runs the model2vec subset only
 # — no external service required. See env knobs at the top of
 # embed_models_test.go.
 eval-embed-models:
@@ -290,7 +290,7 @@ eval-embed-models-full:
 eval-embed-models-condense:
 	EMBED_BENCH_CONDENSE=on go test -tags=eval -run TestEmbedModelsBenchmark ./tools/loadtest/embed_models/ -v -timeout=1200s
 
-# eval-embed-models-fuse: dual-model fusion bench (solov2-8hka). Embeds
+# eval-embed-models-fuse: dual-model fusion bench . Embeds
 # every doc with TWO model2vec variants (defaults: potion-code-16M as
 # the code-side, potion-base-32M as the prose-side) and compares four
 # ranking strategies on the same headline GT: code-only, prose-only,

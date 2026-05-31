@@ -13,7 +13,7 @@ import (
 
 // chainedSelectorCallRe matches a call expression whose function is a
 // selector chain of at least two dots: `a.b.c(`, `pkg.Type.Method(`,
-// `obj.field.M(` etc. The legacy parser (solov2-9rc2) does not model
+// `obj.field.M(` etc. The legacy parser  does not model
 // these as edges, so an empty resolved-edge set on a seed whose body
 // contains this shape is a parser limitation rather than an index gap.
 var chainedSelectorCallRe = regexp.MustCompile(`[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*){2,}\s*\(`)
@@ -257,7 +257,7 @@ func makeGetCallChainHandler(graph ports.GraphReader, resolve ResolveFunc, resol
 // site source. Containers (package, file, module, chunk) sometimes
 // appear as edge sources when the extractor can't pin a call to a
 // specific function — filter them out of caller-listings so users see
-// real callers (solov2-rkc5).
+// real callers .
 func isCallableKind(k domain.NodeKind) bool {
 	switch k {
 	case domain.KindPackage, domain.KindFile, domain.KindModule, domain.KindChunk:

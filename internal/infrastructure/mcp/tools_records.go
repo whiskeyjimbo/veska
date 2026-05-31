@@ -46,7 +46,7 @@ func RegisterRecordTools(r *Registry, db *sql.DB, aw ports.AuditWriter) {
 type getFindingParams struct {
 	FindingID string `json:"finding_id"`
 	Branch    string `json:"branch"`
-	// RepoID is accepted for symmetry with eng_list_findings (solov2-8kkj)
+	// RepoID is accepted for symmetry with eng_list_findings
 	// but the lookup is by finding_id alone — when supplied it is checked
 	// against the row's repo_id and a mismatch returns NotFound.
 	RepoID string `json:"repo_id"`
@@ -105,7 +105,7 @@ type findingPrefixQuerier interface {
 // MCP handlers (eng_get_finding, eng_close_finding, eng_reopen_finding,
 // eng_suppress_finding) accept the 12-char short form `veska findings list`
 // prints, mirroring the short-id resolution other tools already do
-// (solov2-zyp4). Branch, when supplied, scopes the match.
+// . Branch, when supplied, scopes the match.
 //
 // Returns the full finding_id when exactly one row matches; CodeNotFound
 // for zero matches and CodeInvalidParams for an ambiguous prefix.

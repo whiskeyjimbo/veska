@@ -258,7 +258,7 @@ func TestPromote_Idempotent(t *testing.T) {
 // TestPromote_AdvancesLastPromotedSHA verifies that a successful Promote writes
 // repos.last_promoted_sha and repos.active_branch atomically with the node
 // rows — the contract that StartupResync's cheap-path check depends on
-// (solov2-c47). The first promote stamps the SHA; a second promote with a
+// . The first promote stamps the SHA; a second promote with a
 // different SHA overwrites it; an empty-batch (no-op) promote leaves it
 // unchanged; a promote with an empty SHA does NOT clobber a known-good value.
 func TestPromote_AdvancesLastPromotedSHA(t *testing.T) {

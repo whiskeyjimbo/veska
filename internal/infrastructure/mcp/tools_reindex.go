@@ -12,11 +12,11 @@ import (
 )
 
 // ---------------------------------------------------------------------------
-// eng_reindex_repo (solov2-4d7b)
+// eng_reindex_repo
 //
 // `veska reindex` previously refused to run while the daemon was up because it
 // opened SQLite directly and would race the daemon's embedder worker for the
-// write lock (solov2-mdn3). Telling a junior user to stop the daemon, reindex,
+// write lock . Telling a junior user to stop the daemon, reindex,
 // then restart kills their editor's MCP connection mid-task.
 //
 // This tool moves the reindex *into* the daemon — same cold-scan reparser the

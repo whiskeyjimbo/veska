@@ -17,7 +17,7 @@ is what we want for a bootstrap smoke):
   P6 . `git commit` of a new file: post-commit hook dials cli.sock, daemon
        advances last_promoted_sha to the new HEAD, new symbols are queryable.
   P7 . Daemon stop + restart: VectorStorage rehydrates from node_embeddings
-       (solov2-249) so semantic search still surfaces the same node count.
+        so semantic search still surfaces the same node count.
   P8 . `veska reindex` succeeds and remains idempotent for the next read.
 
 Runtime: ~15s on a warm Ollama, dominated by embedder drain (the worker
@@ -310,7 +310,7 @@ def test_bootstrap_golden_zero_to_working_install(tmp_path: Path):
             )
             _run("git", "-C", git_repo, "add", "-A")
             # IMPORTANT: VESKA_HOME must be in the hook's env. The hook
-            # script bakes the install-time VESKA_HOME (solov2-g50), so
+            # script bakes the install-time VESKA_HOME , so
             # this still works even when our shell doesn't export it —
             # we pass env={} to git so the bake is what's tested.
             _run("git", "-C", git_repo, "commit", "-q", "-m", "add extras",

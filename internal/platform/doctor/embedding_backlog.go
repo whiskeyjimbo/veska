@@ -6,7 +6,7 @@ import "context"
 // for `veska doctor status`. Unlike EmbedQueueReport (which classifies the
 // embedder *worker* and uses "healthy"/"degraded"/"broken"), this report is
 // purely informational: it surfaces the queue depth so the doctor rollup
-// agrees with the agent-facing `eng_get_status` signal (solov2-34rl).
+// agrees with the agent-facing `eng_get_status` signal .
 //
 // Status values:
 //
@@ -42,7 +42,7 @@ type pendingCounter interface {
 // backlog) and DOES drive the rollup; this one only mirrors what
 // `eng_get_status` reports as `pending_embeds`, so doctor and the MCP
 // status surface point at the same number even though they classify it
-// differently for different audiences (solov2-34rl).
+// differently for different audiences .
 func CheckEmbeddingBacklog(ctx context.Context, refs pendingCounter) (EmbeddingBacklogReport, error) {
 	if refs == nil {
 		return EmbeddingBacklogReport{Status: "unknown"}, nil

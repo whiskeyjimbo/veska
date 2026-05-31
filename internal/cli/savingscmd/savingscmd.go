@@ -5,7 +5,7 @@
 // "Savings" is the ratio (1 - snippet_chars / file_chars): how much agent-side
 // file-read traffic the inline snippets in eng_search_semantic results saved.
 // The per-search telemetry is written by the daemon's MCP search handler
-// (solov2-3bu); this package reads the rollup and renders today / 7d / all-time.
+// ; this package reads the rollup and renders today / 7d / all-time.
 package savingscmd
 
 import (
@@ -25,12 +25,12 @@ const barWidth = 30
 // minSampleCalls is the minimum number of recorded search calls before the
 // savings ratio is rendered as a number. Below this, the small sample is noise
 // — a single short snippet can drive the ratio negative and alarm a first-time
-// user (solov2-qjhg). The row still renders so the call count is visible.
+// user . The row still renders so the call count is visible.
 const minSampleCalls = 20
 
 // Params bundles the inputs of Run. The two boolean flags (JSON, Aggregate)
 // live in a struct rather than as adjacent positional args so call sites can't
-// transpose them (solov2-w8f9).
+// transpose them .
 type Params struct {
 	Out       io.Writer
 	VeskaHome string
@@ -46,7 +46,7 @@ type Params struct {
 //
 // Per-repo breakdown (one row per registered repo plus a total — the goal of
 // solov2-izh6.21) is gated on the recorder learning to tag each Entry with its
-// repo_id; until that follow-up (solov2-0ql0) lands, every entry is in one
+// repo_id; until that follow-up  lands, every entry is in one
 // unlabelled pool. The text mode therefore surfaces the pool under an explicit
 // "all repos" header, and the --aggregate flag is wired up now so the future
 // per-repo default has a documented opt-out path.

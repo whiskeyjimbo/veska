@@ -13,7 +13,7 @@ import (
 // SearchHitView is the CLI's wire shape for one hit. It mirrors the MCP
 // eng_search_semantic node DTO (snake_case) so `veska search --json` and the
 // tool emit byte-identical envelopes (solov2-elt, AC3). RepoID is populated
-// only by the cross-repo fanout (solov2-vm5w); single-repo search omits it so
+// only by the cross-repo fanout ; single-repo search omits it so
 // JSON output stays byte-identical with the daemon's.
 type SearchHitView struct {
 	NodeID          string  `json:"node_id"`
@@ -111,7 +111,7 @@ func prettifyEphemeralPaths(env *SearchEnvelope, cacheRepoDir, displayName strin
 
 // RenderSearchEnvelope emits the envelope as indented JSON (--json) or a
 // greppable one-line-per-hit table. Results is always a non-nil slice so the
-// JSON carries "results": [] on a miss (solov2-elt).
+// JSON carries "results": [] on a miss .
 func RenderSearchEnvelope(w io.Writer, env SearchEnvelope, jsonOut bool) error {
 	if env.Results == nil {
 		env.Results = []SearchHitView{}
@@ -130,7 +130,7 @@ func RenderSearchEnvelope(w io.Writer, env SearchEnvelope, jsonOut bool) error {
 }
 
 // renderEmptyResults handles the zero-hit text path. A silent miss reads as
-// broken to a new user (solov2-ffi3): hint at warming embeddings when we can
+// broken to a new user : hint at warming embeddings when we can
 // see the daemon's pending count, otherwise print a plain "no results" so the
 // command never exits without any text feedback.
 func renderEmptyResults(w io.Writer, env SearchEnvelope) {
@@ -168,7 +168,7 @@ func renderResultTable(w io.Writer, env SearchEnvelope) {
 	}
 	// solov2-36d5: one-line legend so the score/norm/tier columns are not
 	// inscrutable to first-time users. The numbers are post-fusion RRF
-	// (solov2-vee5) — meaningful only relative to other hits in this query,
+	//  — meaningful only relative to other hits in this query,
 	// not as absolute confidence.
 	fmt.Fprintln(w, "# tier: top|strong|weak (relative to this query); score: post-fusion RRF; norm: score / top_hit_score")
 	for _, r := range env.Results {
@@ -214,7 +214,7 @@ func renderResultRow(w io.Writer, r SearchHitView, top float32, multiRepo bool) 
 }
 
 // weakTopAbsolute is the absolute-score floor below which a query's top hit is
-// considered weak. Score is post-fusion RRF (solov2-vee5):
+// considered weak. Score is post-fusion RRF :
 //
 //	rank-1 in one list only  → 1/(60+1)            = 0.01639
 //	rank-1 in both lists     → 2 * 1/(60+1)        = 0.03279
@@ -227,7 +227,7 @@ const weakTopAbsolute = 0.018
 
 // degradedReasonHint maps an in-band degraded_reasons code to a one-line
 // actionable hint appended to the rendered line. Empty when no hint applies,
-// so the bare code is still printed (solov2-0qk5). Hints are deliberately
+// so the bare code is still printed . Hints are deliberately
 // short so the table layout stays readable.
 func degradedReasonHint(code string) string {
 	switch code {

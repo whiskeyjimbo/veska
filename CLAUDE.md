@@ -130,14 +130,14 @@ internal/
                              is operational tooling, not an inner layer. doctor
                              stays here (rather than internal/diagnostics) since
                              relocating it churns every importer for a naming
-                             nicety with no dependency benefit (solov2-k6t1).
+                             nicety with no dependency benefit .
 ```
 
 ### Runtime dependencies
 
 | Dependency | Purpose | Notes |
 |---|---|---|
-| SQLite (`github.com/mattn/go-sqlite3`, in-proc, cgo + `sqlite_fts5`) | graph + queue + FTS storage | no server process. Pinned via `internal/infrastructure/sqlite/sqldriver/`; chosen for the 1.6–2.5× speedup over modernc on driver-bound workloads (solov2-jkgp). The pure-Go modernc opt-in was removed (solov2-bu1h) because tree-sitter requires cgo anyway, so the no-cgo cross-compile story it preserved did not actually exist. |
+| SQLite (`github.com/mattn/go-sqlite3`, in-proc, cgo + `sqlite_fts5`) | graph + queue + FTS storage | no server process. Pinned via `internal/infrastructure/sqlite/sqldriver/`; chosen for the 1.6–2.5× speedup over modernc on driver-bound workloads . The pure-Go modernc opt-in was removed  because tree-sitter requires cgo anyway, so the no-cgo cross-compile story it preserved did not actually exist. |
 | sqlite-vec / usearch | vector storage | sqlite-vec default; usearch HNSW above the M2 threshold (`hnsw_native` tag + `libusearch_c.so`) |
 | Ollama | local embeddings | `VESKA_OLLAMA_URL` (default `http://localhost:11434`), `VESKA_EMBED_MODEL` (default `nomic-embed-text`) |
 
@@ -159,7 +159,7 @@ Env: `VESKA_HOME` (data root), `VESKA_VECTOR_BACKEND` (`sqlite-vec`|`usearch`).
   `ports.EmbeddingRefRepo`; solov2-xde2.16). A single infrastructure adapter
   typically satisfies both the broad port and several consumer-owned interfaces.
   Rule of thumb: if only one use case needs it, the interface belongs next to
-  that use case, not in `core/ports` (solov2-waya).
+  that use case, not in `core/ports` .
 - **Promotion is atomic.** `Promoter` (application) is a thin orchestrator; all
   SQL lives behind the `application.PromotionStore` port, implemented by
   `sqlite.PromotionStore`. Co-transactional writers (FTS, embedding-refs) are
@@ -171,7 +171,7 @@ Env: `VESKA_HOME` (data root), `VESKA_VECTOR_BACKEND` (`sqlite-vec`|`usearch`).
   exposes a post-fusion RRF score (sum of `1/(60+rank)` across the vector
   and lexical lists), not the raw similarity — top scores cluster around
   ~0.016–0.033 by construction, and are only meaningful relative to other
-  hits in the same query (solov2-vee5).
+  hits in the same query .
 
 ## Conventions & Patterns
 
@@ -190,4 +190,4 @@ Env: `VESKA_HOME` (data root), `VESKA_VECTOR_BACKEND` (`sqlite-vec`|`usearch`).
   cohesion of a single package outweighs directory nesting, and the file names
   make navigation predictable. This is an affirmed convention, not drift; do
   not split these into subpackages absent a concrete coupling problem
-  (solov2-efjz).
+  .

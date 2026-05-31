@@ -51,7 +51,7 @@ func newRootCmd(opts ...rootOption) *cobra.Command {
 		SilenceErrors: true,
 	}
 	// Compact one-liner for `veska --version`; `veska version` keeps the
-	// full multi-line build info dump (solov2-fy14).
+	// full multi-line build info dump .
 	root.SetVersionTemplate("veska {{.Version}}\n")
 	root.AddCommand(initCmd())
 	root.AddCommand(hookRunnerCmd())
@@ -72,12 +72,12 @@ func newRootCmd(opts ...rootOption) *cobra.Command {
 	root.AddCommand(installCmd())
 	root.AddCommand(versionCmd())
 	// Top-level alias for `veska doctor savings` so the marketing-y
-	// shortcut works without the doctor prefix (solov2-3bu).
+	// shortcut works without the doctor prefix .
 	root.AddCommand(doctorSavingsCmd())
 
 	// Resolve the daemon binary path at startup. os.Executable returns the path
 	// of the current binary; the daemon is reachable via the veska-daemon
-	// symlink that ships alongside it (solov2-brw6).
+	// symlink that ships alongside it .
 	var mgr, dryMgr service.Manager
 	if exe, err := os.Executable(); err == nil {
 		// Construction errors are deliberately dropped: a nil manager is a
@@ -91,7 +91,7 @@ func newRootCmd(opts ...rootOption) *cobra.Command {
 	root.AddCommand(upgradeCmd(mgr))
 
 	// `veska daemon …` / `veska mcp …` mirror the symlinked-binary entry
-	// points (solov2-brw6). The symlinks remain the canonical invocation
+	// points . The symlinks remain the canonical invocation
 	// for service managers and editor MCP configs.
 	root.AddCommand(daemon.NewCmd())
 	root.AddCommand(mcp.NewCmd())

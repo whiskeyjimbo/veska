@@ -26,7 +26,7 @@ func installCmd() *cobra.Command {
 		SilenceUsage: true,
 		// No subcommand is a usage error, not a no-op. Cobra would print help
 		// and exit 0 by default; instead return an error so scripts that
-		// expect a successful install see a non-zero exit code (solov2-1qf8).
+		// expect a successful install see a non-zero exit code .
 		RunE: func(cmd *cobra.Command, args []string) error {
 			_ = cmd.Help()
 			return fmt.Errorf("install: missing subcommand (try `veska install model2vec`)")
@@ -37,7 +37,7 @@ func installCmd() *cobra.Command {
 }
 
 // installModel2vecCmd fetches + sha-verifies the potion-code-16M static
-// embedder into <VeskaHome>/static-model/, so boot election (solov2-1az)
+// embedder into <VeskaHome>/static-model/, so boot election
 // picks it up. Idempotent: already-present, sha-matching files are kept.
 func installModel2vecCmd() *cobra.Command {
 	return &cobra.Command{

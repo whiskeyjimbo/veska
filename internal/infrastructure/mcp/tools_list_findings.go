@@ -17,7 +17,7 @@ import (
 // repo-root-relative form. Findings are anchored at different layers — the
 // checks pipeline stores repo-relative paths while the ingester (cold scan)
 // stores absolute ones — so the wire contract is unified here at the read
-// boundary instead (solov2-62gc). A nil path (e.g. auto-link findings, which
+// boundary instead . A nil path (e.g. auto-link findings, which
 // anchor on an edge, not a file) is left untouched.
 func relativizeFindingPath(path *string, root string) *string {
 	if path == nil || root == "" || !filepath.IsAbs(*path) {
@@ -41,7 +41,7 @@ func findingRepoRoot(ctx context.Context, db *sql.DB, repoID string) string {
 }
 
 // resolveRepoIDDB canonicalizes repoID against the repos table the same way
-// resolveRepoID does for RepoLister-backed tools (solov2-s7k0): an exact match
+// resolveRepoID does for RepoLister-backed tools : an exact match
 // wins; otherwise a unique short_id (ShortRepoIDLen-char) prefix is accepted.
 // Findings-family tools query the DB directly and have no RepoLister, so this
 // keeps the short_id contract uniform across the surface. Unknown/ambiguous
@@ -58,7 +58,7 @@ func resolveRepoIDDB(ctx context.Context, db *sql.DB, repoID string) (string, *R
 		return repoID, nil
 	}
 	// Pull the full set once so we can run both the short_id match and the
-	// prefix match against the same snapshot (solov2-rkbc).
+	// prefix match against the same snapshot .
 	rows, qerr := db.QueryContext(ctx, `SELECT repo_id FROM repos`)
 	if qerr != nil {
 		return repoID, nil
@@ -111,7 +111,7 @@ type listFindingsParams struct {
 	Rule     string `json:"rule,omitempty"`
 	// IncludeSuppressed surfaces findings hidden by an active suppression
 	// row. Default false matches the user expectation that
-	// eng_suppress_finding actually suppresses (solov2-2ye2).
+	// eng_suppress_finding actually suppresses .
 	IncludeSuppressed bool `json:"include_suppressed,omitempty"`
 }
 
@@ -133,7 +133,7 @@ type findingRow struct {
 	ActorKind    string  `json:"actor_kind"`
 	// SuppressedBy carries the suppression_id when an active suppression
 	// is hiding this finding. Populated only when IncludeSuppressed=true
-	// (solov2-2ye2).
+	// .
 	SuppressedBy *string `json:"suppressed_by,omitempty"`
 }
 
@@ -170,7 +170,7 @@ func makeListFindingsHandler(db *sql.DB, repos application.RepoLister) ToolHandl
 		// suppressed findings (default) or surface them with a suppressed_by
 		// hint (when include_suppressed=true). An "active" suppression is one
 		// whose expires_at is NULL or in the future — eng_close_suppression
-		// terminates by setting expires_at = now (solov2-2ye2).
+		// terminates by setting expires_at = now .
 		//
 		// solov2-f3ep: state="any" disables the state filter so callers can
 		// list findings across every lifecycle state (open, closed, …) for
@@ -246,7 +246,7 @@ func makeListFindingsHandler(db *sql.DB, repos application.RepoLister) ToolHandl
 
 		// degraded_reasons is always emitted (as [] when nothing is degraded)
 		// to match the README's "Conventions across the tool surface" contract
-		// (solov2-7cw7).
+		// .
 		return map[string]any{
 			"findings":         findings,
 			"degraded_reasons": []string{},

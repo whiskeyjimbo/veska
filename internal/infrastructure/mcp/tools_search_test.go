@@ -34,7 +34,7 @@ type stubVectors struct {
 	hits []domain.SearchHit
 	err  error
 	// captured params from the most recent Search call. Guarded by mu so
-	// the cross-repo parallel fanout path (solov2-bcn) doesn't race the
+	// the cross-repo parallel fanout path  doesn't race the
 	// writes.
 	mu     sync.Mutex
 	gotVec []float32
@@ -263,8 +263,10 @@ func TestSearchSemantic_SingleRepoOmitsRepoIDOnHits(t *testing.T) {
 func TestSearchSemantic_LimitAliasHonoured(t *testing.T) {
 	emb := &stubEmbedder{vec: []float32{0.1, 0.2}}
 	hits := []domain.SearchHit{
-		{NodeID: "n1", Score: 0.9}, {NodeID: "n2", Score: 0.8},
-		{NodeID: "n3", Score: 0.7}, {NodeID: "n4", Score: 0.6},
+		{NodeID: "n1", Score: 0.9},
+		{NodeID: "n2", Score: 0.8},
+		{NodeID: "n3", Score: 0.7},
+		{NodeID: "n4", Score: 0.6},
 		{NodeID: "n5", Score: 0.5},
 	}
 	vecs := &stubVectors{hits: hits}

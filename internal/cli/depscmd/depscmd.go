@@ -3,7 +3,7 @@
 // and indexing a vendored module's symbols into the graph. cmd/veska/deps.go is
 // reduced to Cobra command construction whose RunE bodies delegate here,
 // following the cmd = glue / logic-in-packages pattern established by
-// reindexcmd, symbolcmd, graphcmd, and findingscmd (solov2-0omh).
+// reindexcmd, symbolcmd, graphcmd, and findingscmd .
 package depscmd
 
 import (
@@ -59,7 +59,7 @@ func RunList(ctx context.Context, p ListParams) error {
 	switch {
 	case p.RepoArg != "":
 		// Accept the same identifiers `repo add` / `reindex` do (path,
-		// repo_id, short_id) so the CLI is consistent (solov2-mtd0).
+		// repo_id, short_id) so the CLI is consistent .
 		rid, err := repocmd.ResolveRepoArg(ctx, p.RepoArg)
 		if err != nil {
 			return fmt.Errorf("deps: %w", err)
@@ -152,7 +152,7 @@ type IndexParams struct {
 
 // RunIndex scans <repoRoot>/vendor/<module-path> for .go files, parses them,
 // and persists the nodes with external=1 so subsequent eng_find_symbol /
-// eng_get_call_chain queries can see into vendored dependencies (solov2-bchl).
+// eng_get_call_chain queries can see into vendored dependencies .
 //
 // Direct-write path: opens the local SQLite directly, mirroring the no-daemon
 // fallback in `veska repo add`. The single-writer pool means the daemon should

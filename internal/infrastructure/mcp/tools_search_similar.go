@@ -22,13 +22,13 @@ type searchSimilarParams struct {
 	NodeID string `json:"node_id"`
 	// Symbol is an alias for node_id, resolved via GraphStorage.FindNodes.
 	// Parity with eng_find_symbol / eng_get_call_chain / eng_get_blast_radius
-	// (solov2-3ocy). Ambiguous matches are rejected so the caller must
+	// . Ambiguous matches are rejected so the caller must
 	// disambiguate via node_id.
 	Symbol string `json:"symbol"`
 	RepoID string `json:"repo_id"`
 	Branch string `json:"branch"`
 	// K is the neighbour count. 'limit' accepted as an alias — see
-	// searchSemanticParams for rationale (solov2-8rm).
+	// searchSemanticParams for rationale .
 	K     int `json:"k,omitempty"`
 	Limit int `json:"limit,omitempty"`
 }
@@ -69,7 +69,7 @@ func makeSearchSimilarHandler(lookup SimilarLookup, vectors ports.VectorStorage,
 }
 
 // findSimilarByNodeID is the shared core of eng_search_similar and
-// eng_find_related (solov2-2g4r). Given a seed node_id, it pulls the
+// eng_find_related . Given a seed node_id, it pulls the
 // stored embedding, runs a k-NN vector search, filters the seed out,
 // and hydrates the hits into search.Result records. The seed-filter
 // over-requests by one neighbour so the caller still gets k results.
@@ -171,7 +171,7 @@ func decodeFloat32LE(blob []byte, dim int) []float32 {
 }
 
 // findRelatedInputSchema declares the (file_path, line) anchor for the
-// eng_find_related tool (solov2-2g4r). Line is 1-indexed to match every
+// eng_find_related tool . Line is 1-indexed to match every
 // other line-aware contract on the surface.
 var findRelatedInputSchema = []byte(`{
   "$schema": "https://json-schema.org/draft/2020-12/schema",

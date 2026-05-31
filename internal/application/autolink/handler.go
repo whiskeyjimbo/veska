@@ -35,7 +35,7 @@ type fileNodeLookup interface {
 	// LookupNodes hydrates node IDs into their minimal metadata, scoped to
 	// (repoID, branch). Used to (a) drop non-symbol container nodes from the
 	// auto-link source set and (b) render the target by name/path in the
-	// finding message instead of an opaque node ID (solov2-wh0). IDs absent
+	// finding message instead of an opaque node ID . IDs absent
 	// from storage are omitted, mirroring ports.NodeLookup.
 	LookupNodes(ctx context.Context, repoID, branch string, nodeIDs []string) ([]ports.NodeMeta, error)
 }
@@ -43,7 +43,7 @@ type fileNodeLookup interface {
 // nonSymbolKinds are container / sub-symbol node kinds for which a
 // nearest-neighbour "similar to" link is noise: package and chunk nodes embed
 // near-identical boilerplate across files and flood the findings list
-// (solov2-wh0). A blocklist (rather than a symbol allowlist) keeps unknown or
+// . A blocklist (rather than a symbol allowlist) keeps unknown or
 // future symbol kinds eligible by default.
 var nonSymbolKinds = map[string]bool{
 	"package": true,
@@ -164,7 +164,7 @@ func (h *Handler) Handle(ctx context.Context, row ports.WorkRow) error {
 	}
 	// Vendored / third-party files are skipped wholesale: proposing
 	// auto-link edges from cobra internals or node_modules produces pure
-	// noise on a junior's first promotion (solov2-ttsc). The same path
+	// noise on a junior's first promotion . The same path
 	// predicate gates the dead-code and secret_leak rules.
 	if pathfilter.IsVendored(filePath) {
 		return nil
@@ -191,7 +191,7 @@ func (h *Handler) Handle(ctx context.Context, row ports.WorkRow) error {
 	// targets (embeddings drift, vector backend tie-breaks reorder), so older
 	// (now-orphaned) auto-link findings would otherwise accumulate alongside
 	// the fresh ones and the "open findings" surface would balloon across
-	// reindexes (solov2-ok7y). Auto-link findings anchor on edge_id, not
+	// reindexes . Auto-link findings anchor on edge_id, not
 	// node_id, so the revalidation sweep cannot reach them — the supersession
 	// has to happen at write time.
 	//
@@ -247,7 +247,7 @@ func (h *Handler) resolveSources(ctx context.Context, row ports.WorkRow, nodeIDs
 
 // filterCandidates hydrates the candidate targets and drops the noise pairs:
 // targets that are container/sub-symbol kinds, targets that live in the same
-// file as their source (solov2-nz1v), and idiomatic-name matches (solov2-7ze1).
+// file as their source , and idiomatic-name matches .
 // Without these filters a tiny repo immediately gets a noise finding like
 // "Similar to chunk:1-22 in main.go" — useless to the user and leaks the
 // internal chunk artifact name. Filtering at the candidate level (after the
@@ -330,7 +330,7 @@ func (h *Handler) emitFindings(ctx context.Context, row ports.WorkRow, cands []C
 		srcDisplayByID[m.NodeID] = m.SymbolPath + " in " + m.FilePath
 	}
 	// Build display labels for the (already-hydrated) target metadata, so the
-	// finding names the symbol+file rather than an opaque node ID (solov2-wh0).
+	// finding names the symbol+file rather than an opaque node ID .
 	displayByID := make(map[string]string, len(tgtMeta))
 	for _, m := range tgtMeta {
 		displayByID[m.NodeID] = m.SymbolPath + " in " + m.FilePath
@@ -407,7 +407,7 @@ var _ ports.WorkHandler = (*Handler)(nil)
 // runnable program has main(), Stringer-conforming types all define
 // String(), error-bearing types all define Error(), etc. Auto-link
 // candidates that match name-on-name in this set are dropped before the
-// findings emit (solov2-7ze1).
+// findings emit .
 var idiomaticIdenticalNames = map[string]struct{}{
 	"init":     {},
 	"main":     {},

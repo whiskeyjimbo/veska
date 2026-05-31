@@ -145,7 +145,7 @@ func (p *Promoter) tracerProvider() observability.TracerProvider {
 func (p *Promoter) Promote(ctx context.Context, repoID, branch, gitSHA string, actor domain.Actor) error {
 	// Operators tail daemon.log to confirm "did my last commit get picked
 	// up?". Mirror coldscan's 'starting' / 'complete' INFO pair so that
-	// signal exists for promotions too (solov2-aiid).
+	// signal exists for promotions too .
 	promoteStart := time.Now()
 	snap := p.staging.Snapshot(repoID, branch)
 	slog.Info("promotion: starting",

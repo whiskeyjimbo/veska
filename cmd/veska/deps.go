@@ -10,7 +10,7 @@ import (
 )
 
 // The deps command logic lives in internal/cli/depscmd; the constructors below
-// are Cobra glue whose RunE bodies delegate into that package (solov2-0omh).
+// are Cobra glue whose RunE bodies delegate into that package .
 // The cwd→repo resolver (autoResolveRepo) stays in cmd/veska — it is shared
 // across the symbol, graph, findings, and deps families — and is injected
 // through the ResolveRepo seam.
@@ -18,7 +18,7 @@ import (
 // depsCmd is the `veska deps …` parent. Bare `veska deps` lists
 // imported modules ranked by call-site usage (the original solov2-jlws
 // behaviour); `veska deps index <module>` adds the new vendor-scan
-// indexer (solov2-bchl).
+// indexer .
 func depsCmd() *cobra.Command {
 	listCmd := depsListCmd()
 	cmd := &cobra.Command{
@@ -108,7 +108,7 @@ func depsListCmd() *cobra.Command {
 }
 
 // depsIndexCmd indexes a vendored Go module's symbols into the graph
-// (solov2-bchl).
+// .
 func depsIndexCmd() *cobra.Command {
 	var repoFlag string
 	cmd := &cobra.Command{

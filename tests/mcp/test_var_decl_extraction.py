@@ -1,4 +1,4 @@
-"""Tests for top-level Go var/const extraction (solov2-b7wt).
+"""Tests for top-level Go var/const extraction .
 
 Pre-b7wt the tree-sitter Go extractor emitted only function/method/type
 nodes; package-scope var declarations were invisible. That made cobra

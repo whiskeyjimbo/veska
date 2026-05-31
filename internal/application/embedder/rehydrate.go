@@ -34,7 +34,7 @@ type EmbeddingLoader interface {
 // + node_embedding_refs join (exposed by the EmbeddingLoader). sqlite-vec is an
 // in-memory backend and the usearch backend's persisted indexes are at-rest
 // only — neither survives a daemon restart with its pre-restart contents intact
-// (solov2-249). Without this rehydration call at Daemon.Start, semantic search
+// . Without this rehydration call at Daemon.Start, semantic search
 // returns ≤ 0 hits until something forces a re-embed, which can only happen via
 // a content_hash change.
 //

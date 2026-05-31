@@ -16,7 +16,7 @@ import (
 // db is the SQLite connection that backs the suppressions table.
 // aw is an optional AuditWriter; pass nil to disable audit logging.
 // repos is an optional RepoLister; when supplied, eng_list_suppressions
-// auto-resolves repo_id from the single registered repo (solov2-7tz1).
+// auto-resolves repo_id from the single registered repo .
 func RegisterSuppressionTools(r *Registry, db *sql.DB, aw ports.AuditWriter, repos application.RepoLister) {
 	r.MustRegister(ToolSpec{
 		Name:            "eng_suppress_finding",
@@ -92,7 +92,7 @@ func makeSuppressFindingHandler(db *sql.DB, aw ports.AuditWriter) ToolHandler {
 
 		// For scope='finding' the FindingID must reference an actual row in
 		// findings. branch/repo_id are derived from the row when omitted, so
-		// callers can address a finding by id alone (solov2-6ctm). When the
+		// callers can address a finding by id alone . When the
 		// caller supplies them, they must match the row's values. Other scopes
 		// carry a different kind of target (rule name, file path) and require
 		// the caller to provide branch/repo_id explicitly.
@@ -218,7 +218,7 @@ func makeListSuppressionsHandler(db *sql.DB, repos application.RepoLister) ToolH
 
 		// Suppressions are scoped by branch. branch-NULL rows (repo-wide) are
 		// always included. When the caller omits Branch, all branches are
-		// listed (solov2-6ctm).
+		// listed .
 		query := `SELECT suppression_id, scope, target, branch, rule, reason, expires_at, created_at, actor_id, actor_kind
 			   FROM suppressions`
 		var args []any

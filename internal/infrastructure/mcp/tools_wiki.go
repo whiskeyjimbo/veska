@@ -22,10 +22,10 @@ type HotZoneResponse struct {
 	// DegradedReasons surfaces in-band hints when the response is sparse for
 	// non-obvious reasons (e.g. an empty zones list because no commits have
 	// landed since registration). Tools shouldn't have to read the wiki
-	// markdown to learn why the call returned nothing (solov2-636y).
+	// markdown to learn why the call returned nothing .
 	DegradedReasons []string `json:"degraded_reasons"`
 	// Hint is a one-line, caller-facing string explaining sparse output
-	// (solov2-z5o0). Populated only when zones is empty.
+	// . Populated only when zones is empty.
 	Hint string `json:"hint,omitempty"`
 }
 
@@ -82,7 +82,7 @@ type entryPointsParams struct {
 	IncludeTests bool `json:"include_tests,omitempty"`
 	// Limit truncates the returned slice. 0 or unset returns the service
 	// default. Values larger than the service default are silently capped
-	// (solov2-tc23).
+	// .
 	Limit int `json:"limit,omitempty"`
 }
 
@@ -160,7 +160,7 @@ type hotZoneParams struct {
 	RepoID string `json:"repo_id"`
 	Branch string `json:"branch"`
 	// Limit truncates the returned slice. 0 or unset returns the service
-	// default (solov2-tc23).
+	// default .
 	Limit int `json:"limit,omitempty"`
 }
 
@@ -199,7 +199,7 @@ func makeHotZoneHandler(svc *wiki.HotZoneService, repoRoot RepoRootFunc, repos a
 			return nil, &RPCError{Code: CodeInternalError, Message: fmt.Sprintf("hot zone: %v", err)}
 		}
 		// Canonicalise file_path to absolute on the wire so every tool in
-		// the eng_* surface returns the same shape (solov2-4aka). The wiki
+		// the eng_* surface returns the same shape . The wiki
 		// markdown still renders the relative form via the same Report
 		// (the Markdown is built before this loop runs).
 		src := rep.Zones
@@ -221,7 +221,7 @@ func makeHotZoneHandler(svc *wiki.HotZoneService, repoRoot RepoRootFunc, repos a
 		// many of those produced a non-zero score (scored). The two
 		// numbers separate the "quiet repo" case from the "only lockfile
 		// churn" case.
-		// Non-nil so the field serializes as [] when empty (solov2-2bdj).
+		// Non-nil so the field serializes as [] when empty .
 		degraded := []string{}
 		hint := ""
 		if len(zones) == 0 {

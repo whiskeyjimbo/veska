@@ -14,7 +14,7 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/repo"
 )
 
-// RunRepoList prints every registered repo (solov2-0pq). Prefers the running
+// RunRepoList prints every registered repo . Prefers the running
 // daemon's eng_list_repos so the listing matches what the daemon sees
 // (including in-flight scan state); falls back to a direct SQLite read so the
 // CLI still works when the daemon is down.
@@ -211,10 +211,10 @@ func removeBulkRow(ctx context.Context, w io.Writer, db *sql.DB, r RepoView, opt
 	}
 }
 
-// RunRepoAlias binds a human-friendly name to a repo (solov2-7w1t). Resolves
+// RunRepoAlias binds a human-friendly name to a repo . Resolves
 // target against the standard progression (full id, short_id, alias, prefix);
 // --force overwrites an existing binding. Surfaces a swap hint when the args
-// look reversed (solov2-fdni).
+// look reversed .
 func RunRepoAlias(ctx context.Context, w io.Writer, name, target string, force bool) error {
 	db, closeFn, err := OpenLocalDB()
 	if err != nil {
@@ -230,7 +230,7 @@ func RunRepoAlias(ctx context.Context, w io.Writer, name, target string, force b
 	if err != nil {
 		// Likely arg-order mistake: `veska repo alias <id> <name>` instead of
 		// the documented `<name> <id>`. If args[0] resolves and args[1] does
-		// not, surface the swap hint instead of the generic error (solov2-fdni).
+		// not, surface the swap hint instead of the generic error .
 		if _, swapErr := ResolveCLIRepoID(recs, name); swapErr == nil {
 			return fmt.Errorf("repo alias: %w — did you swap the arguments? usage: `veska repo alias <name> <repo-id-or-prefix-or-alias>` (got name=%q repo=%q)", err, name, target)
 		}
@@ -246,7 +246,7 @@ func RunRepoAlias(ctx context.Context, w io.Writer, name, target string, force b
 	return nil
 }
 
-// RunRepoUnalias removes a user-defined alias (solov2-7w1t). Errors on unknown
+// RunRepoUnalias removes a user-defined alias . Errors on unknown
 // name so a typo doesn't silently succeed.
 func RunRepoUnalias(ctx context.Context, w io.Writer, name string) error {
 	db, closeFn, err := OpenLocalDB()

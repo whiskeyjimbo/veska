@@ -1,6 +1,6 @@
 //go:build eval
 
-// End-to-end token-efficiency harness (solov2-wise). Drives a real
+// End-to-end token-efficiency harness . Drives a real
 // search.Service against the deterministic semantic synthcorpus,
 // simulates grep+read across the same corpus represented as one file
 // per cluster, and emits per-query + aggregate token / recall numbers.

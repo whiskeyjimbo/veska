@@ -128,7 +128,7 @@ func (r *Refresher) Run(ctx context.Context) {
 // refresh performs a single Refresh and isolates its error. A cancelled
 // context is expected during shutdown and is not logged as a failure.
 // Success and failure are both logged so operators can verify the refresher
-// is alive and confirm the network egress that Refresh implies (solov2-n51k).
+// is alive and confirm the network egress that Refresh implies .
 func (r *Refresher) refresh(ctx context.Context) {
 	start := time.Now()
 	slog.Info("vulnrefresh: refresh starting")
