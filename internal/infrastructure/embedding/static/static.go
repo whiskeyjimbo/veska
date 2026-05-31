@@ -22,9 +22,11 @@
 // be useful at all on code.
 //
 // Production-quality embeddings still come from Ollama. The static
-// embedder is the secondary in a composite (see internal/infrastructure/
-// embedding/composite) — it unblocks first-run setup and survives an
-// Ollama outage; it doesn't replace Ollama for serious work.
+// embedder is the lowest rung of the pick-one embedder ladder
+// (static-v2 < model2vec < Ollama; see elect.go) — one embedder owns
+// the index at a time, since vectors from different models live in
+// incompatible spaces. Static unblocks first-run setup and zero-dep
+// CPU runs; it doesn't replace Ollama for serious work.
 package static
 
 import (
