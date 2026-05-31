@@ -8,19 +8,26 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// shortVersion returns just the module version string for use with
-// cobra's --version flag template (solov2-fy14). Mirrors the resolution
-// rules in versionCmd: prefer info.Main.Version, fall back to "dev".
-func shortVersion() string {
-	info, ok := debug.ReadBuildInfo()
-	if !ok {
-		return "dev"
-	}
+// resolveVersion returns the module version string, falling back to "dev" when
+// the binary was built without a tagged version (go run / `go build` of a
+// working tree both report "" or "(devel)"). Single source of truth for both
+// the --version flag template and the `version` subcommand.
+func resolveVersion(info *debug.BuildInfo) string {
 	v := info.Main.Version
 	if v == "" || v == "(devel)" {
 		return "dev"
 	}
 	return v
+}
+
+// shortVersion returns just the module version string for use with cobra's
+// --version flag template (solov2-fy14).
+func shortVersion() string {
+	info, ok := debug.ReadBuildInfo()
+	if !ok {
+		return "dev"
+	}
+	return resolveVersion(info)
 }
 
 // versionCmd prints the binary's build info — module version, VCS revision,
@@ -38,10 +45,7 @@ func versionCmd() *cobra.Command {
 				fmt.Fprintln(out, "veska (build info unavailable)")
 				return nil
 			}
-			version := info.Main.Version
-			if version == "" || version == "(devel)" {
-				version = "dev"
-			}
+			version := resolveVersion(info)
 			var rev, when, modified string
 			for _, s := range info.Settings {
 				switch s.Key {
