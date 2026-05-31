@@ -1,13 +1,9 @@
 package main
 
 import (
-	"encoding/json"
-	"fmt"
-
 	"github.com/spf13/cobra"
 
 	"github.com/whiskeyjimbo/veska/internal/cli/graphcmd"
-	"github.com/whiskeyjimbo/veska/internal/cli/mcpclient"
 
 	mcpinfra "github.com/whiskeyjimbo/veska/internal/infrastructure/mcp"
 )
@@ -38,24 +34,15 @@ func callsCmd() *cobra.Command {
 		Args:         cobra.ExactArgs(1),
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			params := selectorParams(args[0])
-			if repoFlag != "" {
-				params["repo_id"] = repoFlag
-			}
-			if dir != "" {
-				params["direction"] = graphcmd.NormalizeDirection(dir)
-			}
-			if depth > 0 {
-				params["depth"] = depth
-			}
-			if expandXR {
-				params["expand_cross_repo"] = true
-			}
-			var resp json.RawMessage
-			if err := mcpclient.Call(cmd.Context(), "eng_get_call_chain", params, &resp); err != nil {
-				return fmt.Errorf("calls: %w", err)
-			}
-			return graphcmd.RenderGraphChain(cmd.Context(), cmd.OutOrStdout(), resp, jsonOut)
+			return graphcmd.RunCalls(cmd.Context(), graphcmd.CallsParams{
+				Selector:        args[0],
+				RepoID:          repoFlag,
+				Direction:       dir,
+				Depth:           depth,
+				ExpandCrossRepo: expandXR,
+				JSONOut:         jsonOut,
+				Out:             cmd.OutOrStdout(),
+			})
 		},
 	}
 	cmd.Flags().StringVar(&repoFlag, "repo", "", "repo id, short_id, or alias (default: fan out across registered repos)")
@@ -83,18 +70,13 @@ func blastCmd() *cobra.Command {
 		Args:         cobra.ExactArgs(1),
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			params := selectorParams(args[0])
-			if repoFlag != "" {
-				params["repo_id"] = repoFlag
-			}
-			if dir != "" {
-				params["direction"] = graphcmd.NormalizeDirection(dir)
-			}
-			var resp json.RawMessage
-			if err := mcpclient.Call(cmd.Context(), "eng_get_blast_radius", params, &resp); err != nil {
-				return fmt.Errorf("blast: %w", err)
-			}
-			return graphcmd.RenderGraphChain(cmd.Context(), cmd.OutOrStdout(), resp, jsonOut)
+			return graphcmd.RunBlast(cmd.Context(), graphcmd.BlastParams{
+				Selector:  args[0],
+				RepoID:    repoFlag,
+				Direction: dir,
+				JSONOut:   jsonOut,
+				Out:       cmd.OutOrStdout(),
+			})
 		},
 	}
 	cmd.Flags().StringVar(&repoFlag, "repo", "", "repo id, short_id, or alias (default: fan out across registered repos)")
@@ -133,28 +115,13 @@ The --ref-a/--ref-b flags remain accepted and take precedence over positional ar
 			if refB == "" && len(args) >= 2 {
 				refB = args[1]
 			}
-			params := map[string]any{}
-			if repoFlag != "" {
-				params["repo_id"] = repoFlag
-			}
-			if refA != "" {
-				params["ref_a"] = refA
-			}
-			if refB != "" {
-				params["ref_b"] = refB
-			}
-			var resp json.RawMessage
-			if err := mcpclient.Call(cmd.Context(), "eng_find_changed_symbols", params, &resp); err != nil {
-				return fmt.Errorf("changed: %w", err)
-			}
-			if jsonOut {
-				enc := json.NewEncoder(cmd.OutOrStdout())
-				enc.SetIndent("", "  ")
-				var pretty any
-				_ = json.Unmarshal(resp, &pretty)
-				return enc.Encode(pretty)
-			}
-			return graphcmd.RenderChangedSymbols(cmd.OutOrStdout(), resp)
+			return graphcmd.RunChanged(cmd.Context(), graphcmd.ChangedParams{
+				RepoID:  repoFlag,
+				RefA:    refA,
+				RefB:    refB,
+				JSONOut: jsonOut,
+				Out:     cmd.OutOrStdout(),
+			})
 		},
 	}
 	cmd.Flags().StringVar(&repoFlag, "repo", "", "repo id, short_id, or alias")
@@ -162,14 +129,4 @@ The --ref-a/--ref-b flags remain accepted and take precedence over positional ar
 	cmd.Flags().StringVar(&refB, "ref-b", "", "head ref (default: HEAD)")
 	cmd.Flags().BoolVar(&jsonOut, "json", false, "emit JSON (eng_find_changed_symbols shape)")
 	return cmd
-}
-
-// selectorParams routes a positional selector to the node_id or symbol MCP
-// param depending on whether it looks like a hex content-hash node id
-// (solov2-izh6.1).
-func selectorParams(arg string) map[string]any {
-	if graphcmd.LooksLikeNodeID(arg) {
-		return map[string]any{"node_id": arg}
-	}
-	return map[string]any{"symbol": arg}
 }

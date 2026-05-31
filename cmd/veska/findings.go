@@ -1,13 +1,9 @@
 package main
 
 import (
-	"encoding/json"
-	"fmt"
-
 	"github.com/spf13/cobra"
 
 	"github.com/whiskeyjimbo/veska/internal/cli/findingscmd"
-	"github.com/whiskeyjimbo/veska/internal/cli/mcpclient"
 )
 
 // The findings command tree's logic lives in internal/cli/findingscmd; the
@@ -113,16 +109,7 @@ func findingsCloseCmd() *cobra.Command {
 		Args:         cobra.ExactArgs(1),
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if reason == "" {
-				return fmt.Errorf("--reason is required")
-			}
-			params := map[string]any{"finding_id": args[0], "reason": reason}
-			var resp json.RawMessage
-			if err := mcpclient.Call(cmd.Context(), "eng_close_finding", params, &resp); err != nil {
-				return fmt.Errorf("findings close: %w", err)
-			}
-			fmt.Fprintln(cmd.OutOrStdout(), "closed")
-			return nil
+			return findingscmd.RunClose(cmd.Context(), args[0], reason, cmd.OutOrStdout())
 		},
 	}
 	cmd.Flags().StringVar(&reason, "reason", "", "closing reason (required)")
