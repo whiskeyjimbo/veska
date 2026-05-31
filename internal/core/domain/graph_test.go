@@ -95,6 +95,20 @@ func TestGraph_AddNode_DuplicateID(t *testing.T) {
 	}
 }
 
+func TestGraph_AddNode_Nil(t *testing.T) {
+	g, _ := NewGraph("repo", "main")
+	if err := g.AddNode(nil); err == nil {
+		t.Fatal("expected error for nil node, got nil")
+	}
+}
+
+func TestGraph_AddEdge_Nil(t *testing.T) {
+	g, _ := NewGraph("repo", "main")
+	if err := g.AddEdge(nil); err == nil {
+		t.Fatal("expected error for nil edge, got nil")
+	}
+}
+
 func TestGraph_Node_NotFound(t *testing.T) {
 	g, _ := NewGraph("repo", "main")
 	got, ok := g.Node(NodeID("missing"))
