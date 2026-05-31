@@ -191,39 +191,47 @@ func WithActorID(id string) FindingOption {
 	}
 }
 
-// NewFinding constructs a validated Finding. The finding_id is computed from
-// rule, the anchor, and an optional discriminator key (see WithFindingKey);
-// it is never accepted as a parameter.
+// FindingSpec carries the required fields of a Finding. It groups the
+// constructor's positional arguments into a named struct so adjacent
+// same-typed fields (RepoID/Branch, Rule/Message) cannot be transposed at a
+// call site. Optional fields (anchors, actor, content hash, discriminator
+// key) are still supplied via FindingOption.
+type FindingSpec struct {
+	RepoID   string
+	Branch   string
+	Severity Severity
+	Layer    SourceLayer
+	Rule     string
+	Message  string
+}
+
+// NewFinding constructs a validated Finding from spec. The finding_id is
+// computed from spec.Rule, the anchor, and an optional discriminator key (see
+// WithFindingKey); it is never accepted as a parameter.
 //
 // Invariants enforced:
-//  1. rule non-empty.
+//  1. spec.Rule non-empty.
 //  2. Exactly one anchor (node_id or file_path) provided.
-//  3. severity and source_layer must be valid enum values.
+//  3. spec.Severity and spec.Layer must be valid enum values.
 //  4. State defaults to open; closed_at and closed_reason are nil.
-func NewFinding(
-	repoID, branch string,
-	severity Severity,
-	layer SourceLayer,
-	rule, message string,
-	opts ...FindingOption,
-) (*Finding, error) {
-	if rule == "" {
+func NewFinding(spec FindingSpec, opts ...FindingOption) (*Finding, error) {
+	if spec.Rule == "" {
 		return nil, errors.New("finding: rule must not be empty")
 	}
-	if !severity.valid() {
+	if !spec.Severity.valid() {
 		return nil, errors.New("finding: invalid severity")
 	}
-	if !layer.valid() {
+	if !spec.Layer.valid() {
 		return nil, errors.New("finding: invalid source_layer")
 	}
 
 	f := &Finding{
-		RepoID:      repoID,
-		Branch:      branch,
-		Severity:    severity,
-		SourceLayer: layer,
-		Rule:        rule,
-		Message:     message,
+		RepoID:      spec.RepoID,
+		Branch:      spec.Branch,
+		Severity:    spec.Severity,
+		SourceLayer: spec.Layer,
+		Rule:        spec.Rule,
+		Message:     spec.Message,
 		State:       FindingStateOpen,
 	}
 
@@ -245,7 +253,7 @@ func NewFinding(
 	} else {
 		anchor = *f.FilePath
 	}
-	f.FindingID = DeriveFindingID(rule, anchor, f.findingKey)
+	f.FindingID = DeriveFindingID(spec.Rule, anchor, f.findingKey)
 
 	return f, nil
 }

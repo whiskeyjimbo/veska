@@ -354,15 +354,14 @@ func (h *Handler) Handle(ctx context.Context, row ports.WorkRow) error {
 		if src == "" {
 			src = c.SourceNodeID
 		}
-		f, err := domain.NewFinding(
-			row.RepoID,
-			row.Branch,
-			domain.SeverityLow,
-			domain.LayerSemantic,
-			Rule,
-			fmt.Sprintf("%s similar to %s (score %.2f)", src, target, c.Score),
-			opts...,
-		)
+		f, err := domain.NewFinding(domain.FindingSpec{
+			RepoID:   row.RepoID,
+			Branch:   row.Branch,
+			Severity: domain.SeverityLow,
+			Layer:    domain.LayerSemantic,
+			Rule:     Rule,
+			Message:  fmt.Sprintf("%s similar to %s (score %.2f)", src, target, c.Score),
+		}, opts...)
 		if err != nil {
 			return fmt.Errorf("autolink.Handle: build finding: %w", err)
 		}

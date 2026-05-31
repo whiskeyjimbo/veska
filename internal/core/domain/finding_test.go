@@ -65,11 +65,7 @@ func expectedFindingID(rule, anchor, key string) string {
 }
 
 func TestNewFinding_NodeAnchor(t *testing.T) {
-	f, err := NewFinding("repo-a", "main",
-		SeverityMedium, LayerStructural,
-		"no-unused-exports", "symbol X is unused",
-		WithNodeAnchor("node-abc"),
-	)
+	f, err := NewFinding(FindingSpec{RepoID: "repo-a", Branch: "main", Severity: SeverityMedium, Layer: LayerStructural, Rule: "no-unused-exports", Message: "symbol X is unused"}, WithNodeAnchor("node-abc"))
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -98,11 +94,7 @@ func TestNewFinding_NodeAnchor(t *testing.T) {
 }
 
 func TestNewFinding_FileAnchor(t *testing.T) {
-	f, err := NewFinding("repo-b", "dev",
-		SeverityHigh, LayerSecurity,
-		"sql-injection", "potential SQL injection",
-		WithFileAnchor("pkg/db/query.go"),
-	)
+	f, err := NewFinding(FindingSpec{RepoID: "repo-b", Branch: "dev", Severity: SeverityHigh, Layer: LayerSecurity, Rule: "sql-injection", Message: "potential SQL injection"}, WithFileAnchor("pkg/db/query.go"))
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -119,10 +111,8 @@ func TestNewFinding_FileAnchor(t *testing.T) {
 }
 
 func TestNewFinding_StableFindingID_AcrossBranches(t *testing.T) {
-	f1, _ := NewFinding("repo", "main", SeverityLow, LayerQuality,
-		"rule-x", "msg", WithNodeAnchor("n1"))
-	f2, _ := NewFinding("repo", "feature-branch", SeverityLow, LayerQuality,
-		"rule-x", "msg", WithNodeAnchor("n1"))
+	f1, _ := NewFinding(FindingSpec{RepoID: "repo", Branch: "main", Severity: SeverityLow, Layer: LayerQuality, Rule: "rule-x", Message: "msg"}, WithNodeAnchor("n1"))
+	f2, _ := NewFinding(FindingSpec{RepoID: "repo", Branch: "feature-branch", Severity: SeverityLow, Layer: LayerQuality, Rule: "rule-x", Message: "msg"}, WithNodeAnchor("n1"))
 	if f1.FindingID != f2.FindingID {
 		t.Errorf("finding_id must be stable across branches: %q != %q", f1.FindingID, f2.FindingID)
 	}
@@ -135,8 +125,7 @@ func TestNewFinding_FindingKey_Discriminates(t *testing.T) {
 		if key != "" {
 			opts = append(opts, WithFindingKey(key))
 		}
-		f, err := NewFinding("repo", "main", SeverityMedium, LayerSemantic,
-			"review-security", "msg", opts...)
+		f, err := NewFinding(FindingSpec{RepoID: "repo", Branch: "main", Severity: SeverityMedium, Layer: LayerSemantic, Rule: "review-security", Message: "msg"}, opts...)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -172,49 +161,35 @@ func TestNewFinding_FindingKey_Discriminates(t *testing.T) {
 }
 
 func TestNewFinding_ErrorNoAnchor(t *testing.T) {
-	_, err := NewFinding("repo", "main",
-		SeverityInfo, LayerSemantic,
-		"some-rule", "message")
+	_, err := NewFinding(FindingSpec{RepoID: "repo", Branch: "main", Severity: SeverityInfo, Layer: LayerSemantic, Rule: "some-rule", Message: "message"})
 	if err == nil {
 		t.Error("expected error when no anchor provided")
 	}
 }
 
 func TestNewFinding_ErrorEmptyRule(t *testing.T) {
-	_, err := NewFinding("repo", "main",
-		SeverityInfo, LayerSemantic,
-		"", "message",
-		WithNodeAnchor("node-1"))
+	_, err := NewFinding(FindingSpec{RepoID: "repo", Branch: "main", Severity: SeverityInfo, Layer: LayerSemantic, Rule: "", Message: "message"}, WithNodeAnchor("node-1"))
 	if err == nil {
 		t.Error("expected error when rule is empty")
 	}
 }
 
 func TestNewFinding_ErrorInvalidSeverity(t *testing.T) {
-	_, err := NewFinding("repo", "main",
-		Severity("bogus"), LayerStructural,
-		"rule", "msg",
-		WithNodeAnchor("node-1"))
+	_, err := NewFinding(FindingSpec{RepoID: "repo", Branch: "main", Severity: Severity("bogus"), Layer: LayerStructural, Rule: "rule", Message: "msg"}, WithNodeAnchor("node-1"))
 	if err == nil {
 		t.Error("expected error for invalid severity")
 	}
 }
 
 func TestNewFinding_ErrorInvalidSourceLayer(t *testing.T) {
-	_, err := NewFinding("repo", "main",
-		SeverityInfo, SourceLayer("bogus"),
-		"rule", "msg",
-		WithNodeAnchor("node-1"))
+	_, err := NewFinding(FindingSpec{RepoID: "repo", Branch: "main", Severity: SeverityInfo, Layer: SourceLayer("bogus"), Rule: "rule", Message: "msg"}, WithNodeAnchor("node-1"))
 	if err == nil {
 		t.Error("expected error for invalid source layer")
 	}
 }
 
 func TestNewFinding_OpenStateHasNilClosedFields(t *testing.T) {
-	f, err := NewFinding("repo", "main",
-		SeverityMedium, LayerQuality,
-		"rule", "msg",
-		WithNodeAnchor("n1"))
+	f, err := NewFinding(FindingSpec{RepoID: "repo", Branch: "main", Severity: SeverityMedium, Layer: LayerQuality, Rule: "rule", Message: "msg"}, WithNodeAnchor("n1"))
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -229,9 +204,7 @@ func TestNewFinding_OpenStateHasNilClosedFields(t *testing.T) {
 // ── WithAnchorContentHash tests ────────────────────────────────────────────
 
 func TestWithAnchorContentHash_Sets(t *testing.T) {
-	f, err := NewFinding("repo", "main",
-		SeverityLow, LayerStructural, "dead-code", "msg",
-		WithNodeAnchor("n1"),
+	f, err := NewFinding(FindingSpec{RepoID: "repo", Branch: "main", Severity: SeverityLow, Layer: LayerStructural, Rule: "dead-code", Message: "msg"}, WithNodeAnchor("n1"),
 		WithAnchorContentHash("h-abc123"),
 	)
 	if err != nil {
@@ -247,10 +220,7 @@ func TestWithAnchorContentHash_Sets(t *testing.T) {
 }
 
 func TestWithAnchorContentHash_DefaultNil(t *testing.T) {
-	f, err := NewFinding("repo", "main",
-		SeverityLow, LayerStructural, "parse-failure", "msg",
-		WithFileAnchor("foo.go"),
-	)
+	f, err := NewFinding(FindingSpec{RepoID: "repo", Branch: "main", Severity: SeverityLow, Layer: LayerStructural, Rule: "parse-failure", Message: "msg"}, WithFileAnchor("foo.go"))
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -260,9 +230,7 @@ func TestWithAnchorContentHash_DefaultNil(t *testing.T) {
 }
 
 func TestWithAnchorContentHash_EmptyErrors(t *testing.T) {
-	_, err := NewFinding("repo", "main",
-		SeverityLow, LayerStructural, "dead-code", "msg",
-		WithNodeAnchor("n1"),
+	_, err := NewFinding(FindingSpec{RepoID: "repo", Branch: "main", Severity: SeverityLow, Layer: LayerStructural, Rule: "dead-code", Message: "msg"}, WithNodeAnchor("n1"),
 		WithAnchorContentHash(""),
 	)
 	if err == nil {
@@ -273,9 +241,7 @@ func TestWithAnchorContentHash_EmptyErrors(t *testing.T) {
 // ── Finding.Close tests ────────────────────────────────────────────────────
 
 func TestFinding_Close_Low_AnyActor(t *testing.T) {
-	f, _ := NewFinding("repo", "main",
-		SeverityLow, LayerQuality, "rule", "msg",
-		WithNodeAnchor("n1"))
+	f, _ := NewFinding(FindingSpec{RepoID: "repo", Branch: "main", Severity: SeverityLow, Layer: LayerQuality, Rule: "rule", Message: "msg"}, WithNodeAnchor("n1"))
 	now := time.Now()
 	err := f.Close("fixed", ActorKindAgent, "agent-007", now)
 	if err != nil {
@@ -293,9 +259,7 @@ func TestFinding_Close_Low_AnyActor(t *testing.T) {
 }
 
 func TestFinding_Close_High_RequiresHuman(t *testing.T) {
-	f, _ := NewFinding("repo", "main",
-		SeverityHigh, LayerSecurity, "rule", "msg",
-		WithNodeAnchor("n1"))
+	f, _ := NewFinding(FindingSpec{RepoID: "repo", Branch: "main", Severity: SeverityHigh, Layer: LayerSecurity, Rule: "rule", Message: "msg"}, WithNodeAnchor("n1"))
 	now := time.Now()
 	err := f.Close("fixed", ActorKindAgent, "agent-007", now)
 	if err == nil {
@@ -304,9 +268,7 @@ func TestFinding_Close_High_RequiresHuman(t *testing.T) {
 }
 
 func TestFinding_Close_Critical_RequiresHuman(t *testing.T) {
-	f, _ := NewFinding("repo", "main",
-		SeverityCritical, LayerSecurity, "rule", "msg",
-		WithNodeAnchor("n1"))
+	f, _ := NewFinding(FindingSpec{RepoID: "repo", Branch: "main", Severity: SeverityCritical, Layer: LayerSecurity, Rule: "rule", Message: "msg"}, WithNodeAnchor("n1"))
 	now := time.Now()
 	err := f.Close("fixed", ActorKindHuman, "human-1", now)
 	if err != nil {
@@ -321,9 +283,7 @@ func TestFinding_Close_RejectsInvalidActorKind(t *testing.T) {
 	// A low-severity finding skips the human-actor gate, so this isolates the
 	// actor_kind enum check: Close must reject an unrecognised kind the same way
 	// NewActor and WithActorKind do, rather than silently storing it.
-	f, _ := NewFinding("repo", "main",
-		SeverityLow, LayerQuality, "rule", "msg",
-		WithNodeAnchor("n1"))
+	f, _ := NewFinding(FindingSpec{RepoID: "repo", Branch: "main", Severity: SeverityLow, Layer: LayerQuality, Rule: "rule", Message: "msg"}, WithNodeAnchor("n1"))
 	now := time.Now()
 	if err := f.Close("fixed", ActorKind("robot"), "x", now); err == nil {
 		t.Error("expected error: invalid actor_kind must be rejected")
@@ -334,9 +294,7 @@ func TestFinding_Close_RejectsInvalidActorKind(t *testing.T) {
 }
 
 func TestFinding_Close_AlreadyClosed(t *testing.T) {
-	f, _ := NewFinding("repo", "main",
-		SeverityLow, LayerQuality, "rule", "msg",
-		WithNodeAnchor("n1"))
+	f, _ := NewFinding(FindingSpec{RepoID: "repo", Branch: "main", Severity: SeverityLow, Layer: LayerQuality, Rule: "rule", Message: "msg"}, WithNodeAnchor("n1"))
 	now := time.Now()
 	_ = f.Close("fixed", ActorKindHuman, "h1", now)
 	err := f.Close("again", ActorKindHuman, "h1", now)

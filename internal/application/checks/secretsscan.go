@@ -117,12 +117,14 @@ func (c *SecretsScanCheck) Run(ctx context.Context, in Input) ([]*domain.Finding
 		} else {
 			msg = fmt.Sprintf("secret detected by rule %q at line %d: %s", s.Rule, s.Line, s.Redacted)
 		}
-		f, err := domain.NewFinding(
-			in.RepoID, in.Branch,
-			secretSeverity(s.Confidence),
-			domain.LayerSecurity,
-			"secret_leak",
-			msg,
+		f, err := domain.NewFinding(domain.FindingSpec{
+			RepoID:   in.RepoID,
+			Branch:   in.Branch,
+			Severity: secretSeverity(s.Confidence),
+			Layer:    domain.LayerSecurity,
+			Rule:     "secret_leak",
+			Message:  msg,
+		},
 			domain.WithFileAnchor(s.FilePath),
 			domain.WithFindingKey(s.Rule+strconv.Itoa(s.Line)),
 		)

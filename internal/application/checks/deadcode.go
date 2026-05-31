@@ -129,14 +129,14 @@ func (c *DeadCodeCheck) Run(ctx context.Context, in Input) ([]*domain.Finding, e
 		if n.ContentHash != "" {
 			opts = append(opts, domain.WithAnchorContentHash(n.ContentHash))
 		}
-		f, err := domain.NewFinding(
-			in.RepoID, in.Branch,
-			domain.SeverityLow,
-			domain.LayerStructural,
-			"dead-code",
-			msg,
-			opts...,
-		)
+		f, err := domain.NewFinding(domain.FindingSpec{
+			RepoID:   in.RepoID,
+			Branch:   in.Branch,
+			Severity: domain.SeverityLow,
+			Layer:    domain.LayerStructural,
+			Rule:     "dead-code",
+			Message:  msg,
+		}, opts...)
 		if err != nil {
 			// A malformed node ref should not abort the whole check; skip it.
 			continue

@@ -64,11 +64,7 @@ func (f *revalFixture) insertFinding(t *testing.T, id, branch, nodeID string, an
 	if anchorHash != nil {
 		opts = append(opts, domain.WithAnchorContentHash(*anchorHash))
 	}
-	fnd, err := domain.NewFinding(
-		f.repoID, branch,
-		domain.SeverityLow, domain.LayerStructural,
-		"dead-code", "msg",
-		opts...,
+	fnd, err := domain.NewFinding(domain.FindingSpec{RepoID: f.repoID, Branch: branch, Severity: domain.SeverityLow, Layer: domain.LayerStructural, Rule: "dead-code", Message: "msg"}, opts...,
 	)
 	if err != nil {
 		t.Fatalf("NewFinding: %v", err)
@@ -220,11 +216,7 @@ func TestRevalidateRepo_StaleFindings_RepoScoped(t *testing.T) {
 	// Finding in repo1.
 	_ = f.insertFinding(t, "u-r1", f.branch, "n-r1", new("h-old-1"))
 	// Finding in repo2 — emulate via direct insert because the helper is keyed on repo1.
-	fndR2, err := domain.NewFinding(
-		"repo2", f.branch,
-		domain.SeverityLow, domain.LayerStructural, "dead-code", "msg",
-		domain.WithNodeAnchor("n-r2"), domain.WithAnchorContentHash("h-old-2"),
-	)
+	fndR2, err := domain.NewFinding(domain.FindingSpec{RepoID: "repo2", Branch: f.branch, Severity: domain.SeverityLow, Layer: domain.LayerStructural, Rule: "dead-code", Message: "msg"}, domain.WithNodeAnchor("n-r2"), domain.WithAnchorContentHash("h-old-2"))
 	if err != nil {
 		t.Fatalf("NewFinding r2: %v", err)
 	}

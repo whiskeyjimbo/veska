@@ -70,14 +70,14 @@ func (c *ContractDriftCheck) Run(ctx context.Context, in Input) ([]*domain.Findi
 		if d.ContentHash != "" {
 			opts = append(opts, domain.WithAnchorContentHash(d.ContentHash))
 		}
-		f, err := domain.NewFinding(
-			in.RepoID, in.Branch,
-			domain.SeverityMedium,
-			domain.LayerStructural,
-			"contract-drift",
-			msg,
-			opts...,
-		)
+		f, err := domain.NewFinding(domain.FindingSpec{
+			RepoID:   in.RepoID,
+			Branch:   in.Branch,
+			Severity: domain.SeverityMedium,
+			Layer:    domain.LayerStructural,
+			Rule:     "contract-drift",
+			Message:  msg,
+		}, opts...)
 		if err != nil {
 			// A malformed node ref should not abort the whole check; skip it.
 			continue

@@ -25,8 +25,7 @@ func TestSuppressionScope_ValidValues(t *testing.T) {
 
 func TestNewSuppression_BranchAgnostic(t *testing.T) {
 	now := time.Now()
-	s, err := NewSuppression("sup-1", ScopeSymbol, "node-xyz",
-		"noise", "actor-1", ActorKindHuman, now)
+	s, err := NewSuppression(SuppressionSpec{ID: "sup-1", Scope: ScopeSymbol, Target: "node-xyz", Reason: "noise", ActorID: "actor-1", ActorKind: ActorKindHuman, CreatedAt: now})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -58,10 +57,7 @@ func TestNewSuppression_BranchAgnostic(t *testing.T) {
 
 func TestNewSuppression_WithBranch(t *testing.T) {
 	now := time.Now()
-	s, err := NewSuppression("sup-2", ScopeFile, "pkg/foo.go",
-		"temp", "actor-2", ActorKindAgent, now,
-		WithBranch("feature-x"),
-	)
+	s, err := NewSuppression(SuppressionSpec{ID: "sup-2", Scope: ScopeFile, Target: "pkg/foo.go", Reason: "temp", ActorID: "actor-2", ActorKind: ActorKindAgent, CreatedAt: now}, WithBranch("feature-x"))
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -73,10 +69,7 @@ func TestNewSuppression_WithBranch(t *testing.T) {
 func TestNewSuppression_WithExpiresAt(t *testing.T) {
 	now := time.Now()
 	exp := now.Add(24 * time.Hour)
-	s, err := NewSuppression("sup-3", ScopeRepo, "repo-1",
-		"temporary", "actor-3", ActorKindSystem, now,
-		WithExpiresAt(exp),
-	)
+	s, err := NewSuppression(SuppressionSpec{ID: "sup-3", Scope: ScopeRepo, Target: "repo-1", Reason: "temporary", ActorID: "actor-3", ActorKind: ActorKindSystem, CreatedAt: now}, WithExpiresAt(exp))
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -88,10 +81,7 @@ func TestNewSuppression_WithExpiresAt(t *testing.T) {
 func TestNewSuppression_ExpiresAt_MustBeAfterCreatedAt(t *testing.T) {
 	now := time.Now()
 	past := now.Add(-1 * time.Hour)
-	_, err := NewSuppression("sup-4", ScopeRepo, "repo-1",
-		"temp", "actor", ActorKindHuman, now,
-		WithExpiresAt(past),
-	)
+	_, err := NewSuppression(SuppressionSpec{ID: "sup-4", Scope: ScopeRepo, Target: "repo-1", Reason: "temp", ActorID: "actor", ActorKind: ActorKindHuman, CreatedAt: now}, WithExpiresAt(past))
 	if err == nil {
 		t.Error("expected error: expires_at must be after created_at")
 	}
@@ -99,8 +89,7 @@ func TestNewSuppression_ExpiresAt_MustBeAfterCreatedAt(t *testing.T) {
 
 func TestNewSuppression_FindingScope_RequiresNonEmptyTarget(t *testing.T) {
 	now := time.Now()
-	_, err := NewSuppression("sup-5", ScopeFinding, "",
-		"reason", "actor", ActorKindHuman, now)
+	_, err := NewSuppression(SuppressionSpec{ID: "sup-5", Scope: ScopeFinding, Target: "", Reason: "reason", ActorID: "actor", ActorKind: ActorKindHuman, CreatedAt: now})
 	if err == nil {
 		t.Error("expected error: finding scope requires non-empty target (finding_id)")
 	}
@@ -108,10 +97,7 @@ func TestNewSuppression_FindingScope_RequiresNonEmptyTarget(t *testing.T) {
 
 func TestNewSuppression_WithRule(t *testing.T) {
 	now := time.Now()
-	s, err := NewSuppression("sup-6", ScopeSymbol, "node-1",
-		"noisy rule", "actor-1", ActorKindHuman, now,
-		WithSuppressionRule("no-unused-exports"),
-	)
+	s, err := NewSuppression(SuppressionSpec{ID: "sup-6", Scope: ScopeSymbol, Target: "node-1", Reason: "noisy rule", ActorID: "actor-1", ActorKind: ActorKindHuman, CreatedAt: now}, WithSuppressionRule("no-unused-exports"))
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -122,8 +108,7 @@ func TestNewSuppression_WithRule(t *testing.T) {
 
 func TestNewSuppression_ErrorEmptyID(t *testing.T) {
 	now := time.Now()
-	_, err := NewSuppression("", ScopeSymbol, "node-1",
-		"reason", "actor", ActorKindHuman, now)
+	_, err := NewSuppression(SuppressionSpec{ID: "", Scope: ScopeSymbol, Target: "node-1", Reason: "reason", ActorID: "actor", ActorKind: ActorKindHuman, CreatedAt: now})
 	if err == nil {
 		t.Error("expected error for empty id")
 	}
@@ -131,8 +116,7 @@ func TestNewSuppression_ErrorEmptyID(t *testing.T) {
 
 func TestNewSuppression_ErrorEmptyTarget(t *testing.T) {
 	now := time.Now()
-	_, err := NewSuppression("sup-1", ScopeSymbol, "",
-		"reason", "actor", ActorKindHuman, now)
+	_, err := NewSuppression(SuppressionSpec{ID: "sup-1", Scope: ScopeSymbol, Target: "", Reason: "reason", ActorID: "actor", ActorKind: ActorKindHuman, CreatedAt: now})
 	if err == nil {
 		t.Error("expected error for empty target")
 	}
@@ -140,8 +124,7 @@ func TestNewSuppression_ErrorEmptyTarget(t *testing.T) {
 
 func TestNewSuppression_ErrorEmptyReason(t *testing.T) {
 	now := time.Now()
-	_, err := NewSuppression("sup-1", ScopeSymbol, "node-1",
-		"", "actor", ActorKindHuman, now)
+	_, err := NewSuppression(SuppressionSpec{ID: "sup-1", Scope: ScopeSymbol, Target: "node-1", Reason: "", ActorID: "actor", ActorKind: ActorKindHuman, CreatedAt: now})
 	if err == nil {
 		t.Error("expected error for empty reason")
 	}
@@ -149,8 +132,7 @@ func TestNewSuppression_ErrorEmptyReason(t *testing.T) {
 
 func TestNewSuppression_ErrorEmptyActorID(t *testing.T) {
 	now := time.Now()
-	_, err := NewSuppression("sup-1", ScopeSymbol, "node-1",
-		"reason", "", ActorKindHuman, now)
+	_, err := NewSuppression(SuppressionSpec{ID: "sup-1", Scope: ScopeSymbol, Target: "node-1", Reason: "reason", ActorID: "", ActorKind: ActorKindHuman, CreatedAt: now})
 	if err == nil {
 		t.Error("expected error for empty actor_id")
 	}
@@ -158,8 +140,7 @@ func TestNewSuppression_ErrorEmptyActorID(t *testing.T) {
 
 func TestNewSuppression_ErrorInvalidActorKind(t *testing.T) {
 	now := time.Now()
-	_, err := NewSuppression("sup-1", ScopeSymbol, "node-1",
-		"reason", "actor", ActorKind("robot"), now)
+	_, err := NewSuppression(SuppressionSpec{ID: "sup-1", Scope: ScopeSymbol, Target: "node-1", Reason: "reason", ActorID: "actor", ActorKind: ActorKind("robot"), CreatedAt: now})
 	if err == nil {
 		t.Error("expected error for invalid actor_kind")
 	}
