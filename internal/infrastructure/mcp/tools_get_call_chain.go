@@ -9,6 +9,7 @@ import (
 	application "github.com/whiskeyjimbo/veska/internal/application"
 	"github.com/whiskeyjimbo/veska/internal/core/domain"
 	"github.com/whiskeyjimbo/veska/internal/core/ports"
+	"github.com/whiskeyjimbo/veska/internal/core/protocol"
 )
 
 // chainedSelectorCallRe matches a call expression whose function is a
@@ -228,9 +229,9 @@ func makeGetCallChainHandler(graph ports.GraphReader, resolve ResolveFunc, resol
 					// failure into a different signal.
 					body, snipErr := graph.GetNodeSnippet(ctx, p.RepoID, p.Branch, startID)
 					if snipErr != nil || seedBodyContainsChainedSelector(body) {
-						reasons = append(reasons, DegradedReasonChainedSelectorsUnresolved)
+						reasons = append(reasons, protocol.DegradedReasonChainedSelectorsUnresolved)
 					} else {
-						reasons = append(reasons, DegradedReasonExternalCalleesOnly)
+						reasons = append(reasons, protocol.DegradedReasonExternalCalleesOnly)
 					}
 				}
 			}
@@ -238,7 +239,7 @@ func makeGetCallChainHandler(graph ports.GraphReader, resolve ResolveFunc, resol
 			// scan is the indexing-window case; surface it alongside (or
 			// instead of) the seed-based reasons so callers can retry.
 			if ids, busy := indexingRepoIDs(scans); busy {
-				reasons = append(reasons, DegradedReasonIndexingInProgress)
+				reasons = append(reasons, protocol.DegradedReasonIndexingInProgress)
 				indexing = ids
 			}
 		}

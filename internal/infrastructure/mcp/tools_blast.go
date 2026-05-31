@@ -10,6 +10,7 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/application/blastradius"
 	"github.com/whiskeyjimbo/veska/internal/core/domain"
 	"github.com/whiskeyjimbo/veska/internal/core/ports"
+	"github.com/whiskeyjimbo/veska/internal/core/protocol"
 )
 
 // BlastResponse is the envelope returned by the eng_get_*_blast_radius tools.
@@ -161,7 +162,7 @@ func makeBlastRadiusHandler(svc *blastradius.Service, repos application.RepoList
 		// may still be populating the target repo's edges.
 		if len(resp.Entries) <= 1 && len(crossRepoEdges) == 0 {
 			if ids, busy := indexingRepoIDs(scans); busy {
-				reasons = append(reasons, DegradedReasonIndexingInProgress)
+				reasons = append(reasons, protocol.DegradedReasonIndexingInProgress)
 				indexing = ids
 			}
 		}
