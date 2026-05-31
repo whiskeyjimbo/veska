@@ -10,6 +10,7 @@ import (
 	"time"
 
 	application "github.com/whiskeyjimbo/veska/internal/application"
+	"github.com/whiskeyjimbo/veska/internal/application/staging"
 	"github.com/whiskeyjimbo/veska/internal/core/domain"
 )
 
@@ -193,7 +194,7 @@ func TestFindSymbol_UnknownRepoIDErrors(t *testing.T) {
 	store.addNode(mustNode(t, "n1", "pkg/foo.go", "Foo", domain.KindFunction))
 
 	r := NewRegistry()
-	RegisterGraphTools(r, store, application.NewStagingArea(),
+	RegisterGraphTools(r, store, staging.NewArea(),
 		WithRepoLister(&stubRepoLister{repos: sampleRepos}))
 
 	_, rpcErr := dispatchGraph(t, r, "eng_find_symbol", map[string]string{
@@ -221,7 +222,7 @@ func TestFindSymbol_AmbiguousPrefixRejected(t *testing.T) {
 		{RepoID: "deadbeef222222222222222222222222", RootPath: "/p2", ActiveBranch: "main"},
 	}
 	r := NewRegistry()
-	RegisterGraphTools(r, store, application.NewStagingArea(),
+	RegisterGraphTools(r, store, staging.NewArea(),
 		WithRepoLister(&stubRepoLister{repos: repos}))
 	_, rpcErr := dispatchGraph(t, r, "eng_find_symbol", map[string]string{
 		"symbol":  "Foo",
@@ -243,7 +244,7 @@ func TestFindSymbol_ArbitraryPrefixAccepted(t *testing.T) {
 		{RepoID: "deadbeefcafebabe1111222233334444", RootPath: "/p", ActiveBranch: "main"},
 	}
 	r := NewRegistry()
-	RegisterGraphTools(r, store, application.NewStagingArea(),
+	RegisterGraphTools(r, store, staging.NewArea(),
 		WithRepoLister(&stubRepoLister{repos: repos}))
 	resp, rpcErr := dispatchGraph(t, r, "eng_find_symbol", map[string]string{
 		"symbol":  "Foo",
@@ -268,7 +269,7 @@ func TestFindSymbol_ShortRepoIDAccepted(t *testing.T) {
 		{RepoID: "0123456789abcdef0123456789abcdef", RootPath: "/p", ActiveBranch: "main", LastPromotedSHA: "x"},
 	}
 	r := NewRegistry()
-	RegisterGraphTools(r, store, application.NewStagingArea(),
+	RegisterGraphTools(r, store, staging.NewArea(),
 		WithRepoLister(&stubRepoLister{repos: repos}))
 
 	resp, rpcErr := dispatchGraph(t, r, "eng_find_symbol", map[string]string{
@@ -295,7 +296,7 @@ func TestFindSymbol_BranchDefaultsToActiveBranch(t *testing.T) {
 		{RepoID: "abcdef0123456789abcdef0123456789", RootPath: "/p", ActiveBranch: "develop"},
 	}
 	r := NewRegistry()
-	RegisterGraphTools(r, store, application.NewStagingArea(),
+	RegisterGraphTools(r, store, staging.NewArea(),
 		WithRepoLister(&stubRepoLister{repos: repos}))
 
 	resp, rpcErr := dispatchGraph(t, r, "eng_find_symbol", map[string]string{
@@ -321,7 +322,7 @@ func TestFindSymbol_ReturnsNodesFromGraphStore(t *testing.T) {
 	store.addNode(n)
 
 	r := NewRegistry()
-	RegisterGraphTools(r, store, application.NewStagingArea())
+	RegisterGraphTools(r, store, staging.NewArea())
 
 	resp, rpcErr := dispatchGraph(t, r, "eng_find_symbol", map[string]string{
 		"symbol":  "Foo",
@@ -349,7 +350,7 @@ func TestFindSymbol_RanksDeclarationAboveContainer(t *testing.T) {
 	store.addNode(mustNode(t, "func-main", "main.go", "main", domain.KindFunction))
 
 	r := NewRegistry()
-	RegisterGraphTools(r, store, application.NewStagingArea())
+	RegisterGraphTools(r, store, staging.NewArea())
 
 	resp, rpcErr := dispatchGraph(t, r, "eng_find_symbol", map[string]string{
 		"symbol": "main", "repo_id": "repo1", "branch": "main",
@@ -375,11 +376,11 @@ func TestFindSymbol_StagingOverridesPromotedNode(t *testing.T) {
 	store.addNode(promoted)
 
 	staged := mustNode(t, "node-1", "pkg/foo.go", "Foo", domain.KindMethod) // same ID, different kind
-	staging := application.NewStagingArea()
-	staging.Stage("repo1", "main", "pkg/foo.go", application.StagedFile{Nodes: []*domain.Node{staged}, Edges: nil})
+	area := staging.NewArea()
+	area.Stage("repo1", "main", "pkg/foo.go", staging.File{Nodes: []*domain.Node{staged}, Edges: nil})
 
 	r := NewRegistry()
-	RegisterGraphTools(r, store, staging)
+	RegisterGraphTools(r, store, area)
 
 	resp, rpcErr := dispatchGraph(t, r, "eng_find_symbol", map[string]string{
 		"symbol":  "Foo",
@@ -411,7 +412,7 @@ func TestGetNode_Found(t *testing.T) {
 	store.addNode(n)
 
 	r := NewRegistry()
-	RegisterGraphTools(r, store, application.NewStagingArea())
+	RegisterGraphTools(r, store, staging.NewArea())
 
 	resp, rpcErr := dispatchGraph(t, r, "eng_get_node", map[string]string{
 		"node_id": "node-42",
@@ -436,7 +437,7 @@ func TestGetNode_Found(t *testing.T) {
 func TestGetNode_NotFound(t *testing.T) {
 	store := newStubGraphStorage()
 	r := NewRegistry()
-	RegisterGraphTools(r, store, application.NewStagingArea())
+	RegisterGraphTools(r, store, staging.NewArea())
 
 	_, rpcErr := dispatchGraph(t, r, "eng_get_node", map[string]string{
 		"node_id": "does-not-exist",
@@ -468,7 +469,7 @@ func TestGetNode_RepoIDPresentButUnknownRejected(t *testing.T) {
 		{RepoID: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", RootPath: "/abs/repo", ActiveBranch: "main"},
 	}
 	r := NewRegistry()
-	RegisterGraphTools(r, store, application.NewStagingArea(),
+	RegisterGraphTools(r, store, staging.NewArea(),
 		WithRepoLister(&stubRepoLister{repos: repos}))
 
 	_, rpcErr := dispatchGraph(t, r, "eng_get_node", map[string]string{
@@ -497,7 +498,7 @@ func TestGetNode_RepoIDWithoutBranchResolvesActiveBranch(t *testing.T) {
 		{RepoID: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", RootPath: "/abs/repo", ActiveBranch: "develop"},
 	}
 	r := NewRegistry()
-	RegisterGraphTools(r, store, application.NewStagingArea(),
+	RegisterGraphTools(r, store, staging.NewArea(),
 		WithRepoLister(&stubRepoLister{repos: repos}))
 
 	resp, rpcErr := dispatchGraph(t, r, "eng_get_node", map[string]string{
@@ -521,7 +522,7 @@ func TestGetNode_OmitRepoIDAndBranch(t *testing.T) {
 	store.addNode(n)
 
 	r := NewRegistry()
-	RegisterGraphTools(r, store, application.NewStagingArea())
+	RegisterGraphTools(r, store, staging.NewArea())
 
 	resp, rpcErr := dispatchGraph(t, r, "eng_get_node", map[string]string{
 		"node_id": "node-42",
@@ -551,7 +552,7 @@ func TestGetCallChain_TraversesCallsEdges(t *testing.T) {
 	store.addEdge(mustEdge(t, "b", "c", domain.EdgeCalls))
 
 	r := NewRegistry()
-	RegisterGraphTools(r, store, application.NewStagingArea())
+	RegisterGraphTools(r, store, staging.NewArea())
 
 	resp, rpcErr := dispatchCallChain(t, r, "eng_get_call_chain", map[string]any{
 		"node_id": "a",
@@ -590,7 +591,7 @@ func TestGetCallChain_AcceptsSymbol(t *testing.T) {
 	store.addEdge(mustEdge(t, "a", "b", domain.EdgeCalls))
 
 	r := NewRegistry()
-	RegisterGraphTools(r, store, application.NewStagingArea())
+	RegisterGraphTools(r, store, staging.NewArea())
 
 	resp, rpcErr := dispatchCallChain(t, r, "eng_get_call_chain", map[string]any{
 		"symbol":  "Alpha",
@@ -619,7 +620,7 @@ func TestGetCallChain_AcceptsSymbol(t *testing.T) {
 func TestGetCallChain_DepthTooLarge(t *testing.T) {
 	store := newStubGraphStorage()
 	r := NewRegistry()
-	RegisterGraphTools(r, store, application.NewStagingArea())
+	RegisterGraphTools(r, store, staging.NewArea())
 
 	_, rpcErr := dispatchGraph(t, r, "eng_get_call_chain", map[string]any{
 		"node_id": "a",
@@ -648,7 +649,7 @@ func TestGetCallChain_EmptyEdgesOnCallableEmitsChainedSelectorsHint(t *testing.T
 	store.addNode(mustNode(t, "fn-lonely", "pkg/x.go", "Lonely", domain.KindFunction))
 
 	r := NewRegistry()
-	RegisterGraphTools(r, store, application.NewStagingArea())
+	RegisterGraphTools(r, store, staging.NewArea())
 
 	resp, rpcErr := dispatchCallChain(t, r, "eng_get_call_chain", map[string]string{
 		"node_id": "fn-lonely",
@@ -682,7 +683,7 @@ func TestGetCallChain_EdgesPresentSuppressesHint(t *testing.T) {
 	store.addEdge(mustEdge(t, a.ID, b.ID, domain.EdgeCalls))
 
 	r := NewRegistry()
-	RegisterGraphTools(r, store, application.NewStagingArea())
+	RegisterGraphTools(r, store, staging.NewArea())
 
 	resp, rpcErr := dispatchCallChain(t, r, "eng_get_call_chain", map[string]string{
 		"node_id": "a", "repo_id": "repo1", "branch": "main",
@@ -719,7 +720,7 @@ func TestGetCallChain_StdlibOnlyBodyEmitsExternalCalleesReason(t *testing.T) {
 	store.addNode(seed)
 
 	r := NewRegistry()
-	RegisterGraphTools(r, store, application.NewStagingArea())
+	RegisterGraphTools(r, store, staging.NewArea())
 
 	resp, rpcErr := dispatchCallChain(t, r, "eng_get_call_chain", map[string]string{
 		"node_id": "fn-greet",
@@ -759,7 +760,7 @@ func TestGetCallChain_ChainedSelectorBodyStillEmitsChainedHint(t *testing.T) {
 	store.addNode(seed)
 
 	r := NewRegistry()
-	RegisterGraphTools(r, store, application.NewStagingArea())
+	RegisterGraphTools(r, store, staging.NewArea())
 
 	resp, rpcErr := dispatchCallChain(t, r, "eng_get_call_chain", map[string]string{
 		"node_id": "fn-start",
@@ -800,7 +801,7 @@ func TestFindSymbol_EmptyDuringIndexingEmitsHint(t *testing.T) {
 	}}
 
 	r := NewRegistry()
-	RegisterGraphTools(r, store, application.NewStagingArea(), WithScanTracker(tracker))
+	RegisterGraphTools(r, store, staging.NewArea(), WithScanTracker(tracker))
 
 	resp, rpcErr := dispatchGraph(t, r, "eng_find_symbol", map[string]string{
 		"symbol":  "NothingHere",
@@ -830,7 +831,7 @@ func TestFindSymbol_EmptyWithNoScansSuppressesHint(t *testing.T) {
 	tracker := &stubScanTracker{} // empty: no scans running
 
 	r := NewRegistry()
-	RegisterGraphTools(r, store, application.NewStagingArea(), WithScanTracker(tracker))
+	RegisterGraphTools(r, store, staging.NewArea(), WithScanTracker(tracker))
 
 	resp, rpcErr := dispatchGraph(t, r, "eng_find_symbol", map[string]string{
 		"symbol":  "NothingHere",
@@ -860,7 +861,7 @@ func TestFindSymbol_NonEmptyDuringIndexingSuppressesHint(t *testing.T) {
 	}}
 
 	r := NewRegistry()
-	RegisterGraphTools(r, store, application.NewStagingArea(), WithScanTracker(tracker))
+	RegisterGraphTools(r, store, staging.NewArea(), WithScanTracker(tracker))
 
 	resp, rpcErr := dispatchGraph(t, r, "eng_find_symbol", map[string]string{
 		"symbol":  "Foo",
@@ -890,11 +891,11 @@ func TestGetFileNodes_ReturnsStagedNodesWhenPresent(t *testing.T) {
 
 	// Stage a different node for the same file.
 	staged := mustNode(t, "s1", "pkg/foo.go", "NewFunc", domain.KindFunction)
-	staging := application.NewStagingArea()
-	staging.Stage("repo1", "main", "pkg/foo.go", application.StagedFile{Nodes: []*domain.Node{staged}, Edges: nil})
+	area := staging.NewArea()
+	area.Stage("repo1", "main", "pkg/foo.go", staging.File{Nodes: []*domain.Node{staged}, Edges: nil})
 
 	r := NewRegistry()
-	RegisterGraphTools(r, store, staging)
+	RegisterGraphTools(r, store, area)
 
 	resp, rpcErr := dispatchGraph(t, r, "eng_get_file_nodes", map[string]string{
 		"file_path": "pkg/foo.go",
@@ -927,7 +928,7 @@ func TestGetFileNodes_FallsBackToPromotedStore(t *testing.T) {
 	store.addNode(n2)
 
 	r := NewRegistry()
-	RegisterGraphTools(r, store, application.NewStagingArea()) // no staging
+	RegisterGraphTools(r, store, staging.NewArea()) // no staging
 
 	resp, rpcErr := dispatchGraph(t, r, "eng_get_file_nodes", map[string]string{
 		"file_path": "pkg/promoted.go",
@@ -957,7 +958,7 @@ func TestGetFileNodes_ResolvesRelativePath(t *testing.T) {
 	store.addNode(n1)
 
 	r := NewRegistry()
-	RegisterGraphTools(r, store, application.NewStagingArea(),
+	RegisterGraphTools(r, store, staging.NewArea(),
 		WithRepoLister(&stubRepoLister{repos: []application.RepoRecord{{RepoID: "repo1", RootPath: "/abs/repo"}}}))
 
 	resp, rpcErr := dispatchGraph(t, r, "eng_get_file_nodes", map[string]string{
@@ -986,7 +987,7 @@ func TestFindSymbol_ResolvesRepoFromCwdWhenOmitted(t *testing.T) {
 		{RepoID: "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", RootPath: "/home/u/projects/beta", ActiveBranch: "main"},
 	}
 	r := NewRegistry()
-	RegisterGraphTools(r, store, application.NewStagingArea(),
+	RegisterGraphTools(r, store, staging.NewArea(),
 		WithRepoLister(&stubRepoLister{repos: repos}))
 
 	// repo_id omitted, but cwd is inside alpha — should resolve.
@@ -1017,7 +1018,7 @@ func TestFindSymbol_FansOutWhenRepoIDOmittedAndCwdMismatch(t *testing.T) {
 		{RepoID: "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", RootPath: "/home/u/projects/beta", ActiveBranch: "main"},
 	}
 	r := NewRegistry()
-	RegisterGraphTools(r, store, application.NewStagingArea(),
+	RegisterGraphTools(r, store, staging.NewArea(),
 		WithRepoLister(&stubRepoLister{repos: repos}))
 
 	resp, rpcErr := dispatchGraph(t, r, "eng_find_symbol", map[string]string{
@@ -1053,7 +1054,7 @@ func TestFindSymbol_NoFanoutWhenSingleRepoSoNoRepoIDLeaks(t *testing.T) {
 		{RepoID: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", RootPath: "/abs/repo", ActiveBranch: "main"},
 	}
 	r := NewRegistry()
-	RegisterGraphTools(r, store, application.NewStagingArea(),
+	RegisterGraphTools(r, store, staging.NewArea(),
 		WithRepoLister(&stubRepoLister{repos: repos}))
 
 	resp, rpcErr := dispatchGraph(t, r, "eng_find_symbol", map[string]string{"symbol": "Foo"})
@@ -1074,7 +1075,7 @@ func TestFindSymbol_NoFanoutWhenSingleRepoSoNoRepoIDLeaks(t *testing.T) {
 func TestFindSymbol_NoReposRegisteredStillErrors(t *testing.T) {
 	store := newStubGraphStorage()
 	r := NewRegistry()
-	RegisterGraphTools(r, store, application.NewStagingArea(),
+	RegisterGraphTools(r, store, staging.NewArea(),
 		WithRepoLister(&stubRepoLister{repos: nil}))
 
 	_, rpcErr := dispatchGraph(t, r, "eng_find_symbol", map[string]string{"symbol": "Foo"})
@@ -1098,7 +1099,7 @@ func TestGetFileNodes_BranchDefaultsToActiveBranch(t *testing.T) {
 		{RepoID: "abcdef0123456789abcdef0123456789", RootPath: "/abs/repo", ActiveBranch: "develop"},
 	}
 	r := NewRegistry()
-	RegisterGraphTools(r, store, application.NewStagingArea(),
+	RegisterGraphTools(r, store, staging.NewArea(),
 		WithRepoLister(&stubRepoLister{repos: repos}))
 
 	resp, rpcErr := dispatchGraph(t, r, "eng_get_file_nodes", map[string]string{
@@ -1132,7 +1133,7 @@ func BenchmarkFindSymbol(b *testing.B) {
 	}
 
 	r := NewRegistry()
-	RegisterGraphTools(r, store, application.NewStagingArea())
+	RegisterGraphTools(r, store, staging.NewArea())
 
 	rng := rand.New(rand.NewSource(42))
 	params := func() json.RawMessage {

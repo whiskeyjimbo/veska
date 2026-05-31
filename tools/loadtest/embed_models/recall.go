@@ -14,7 +14,6 @@ package embed_models
 import (
 	"context"
 	"math"
-
 )
 
 // RecallScores holds the per-source metric output.

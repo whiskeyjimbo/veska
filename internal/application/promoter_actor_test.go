@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/whiskeyjimbo/veska/internal/application"
+	"github.com/whiskeyjimbo/veska/internal/application/staging"
 	"github.com/whiskeyjimbo/veska/internal/core/domain"
 )
 
@@ -42,9 +42,9 @@ func TestPromote_ActorStoredInNodes(t *testing.T) {
 			db := openMemDB(t)
 			insertTestRepo(t, db, "repo1")
 
-			sa := application.NewStagingArea()
+			sa := staging.NewArea()
 			n, _ := domain.NewNode("n1", "a.go", "A", domain.KindFunction)
-			sa.Stage("repo1", "main", "a.go", application.StagedFile{Nodes: []*domain.Node{n}, Edges: nil})
+			sa.Stage("repo1", "main", "a.go", staging.File{Nodes: []*domain.Node{n}, Edges: nil})
 
 			p := newTestPromoter(sa, db)
 			if err := p.Promote(context.Background(), "repo1", "main", "sha-abc", tc.actor); err != nil {

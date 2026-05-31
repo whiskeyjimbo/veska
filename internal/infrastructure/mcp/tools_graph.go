@@ -4,6 +4,7 @@ import (
 	"context"
 
 	application "github.com/whiskeyjimbo/veska/internal/application"
+	"github.com/whiskeyjimbo/veska/internal/application/staging"
 	"github.com/whiskeyjimbo/veska/internal/core/ports"
 )
 
@@ -171,7 +172,7 @@ func WithScanTracker(t ScanTrackerReader) GraphToolOption {
 // RegisterGraphTools registers the 5 graph read tools on r.
 // graph and staging are injected dependencies; pass WithResolveFunc to enable
 // cross-repo synthetic edge resolution in eng_get_call_chain.
-func RegisterGraphTools(r *Registry, graph ports.GraphReader, staging *application.StagingArea, opts ...GraphToolOption) {
+func RegisterGraphTools(r *Registry, graph ports.GraphReader, staging *staging.Area, opts ...GraphToolOption) {
 	var cfg graphToolConfig
 	for _, o := range opts {
 		o(&cfg)

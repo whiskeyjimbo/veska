@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/whiskeyjimbo/veska/internal/application"
 	"github.com/whiskeyjimbo/veska/internal/application/blastradius"
+	"github.com/whiskeyjimbo/veska/internal/application/staging"
 	"github.com/whiskeyjimbo/veska/internal/core/domain"
 	"github.com/whiskeyjimbo/veska/internal/core/ports"
 )
@@ -233,15 +233,15 @@ func TestBlastRadius_RequiresParams(t *testing.T) {
 }
 
 func TestDirtyBlastRadius_FlagsIncludedStaging(t *testing.T) {
-	staging := application.NewStagingArea()
+	area := staging.NewArea()
 	n, _ := domain.NewNode("s1", "foo.go", "Foo", domain.KindFunction)
-	staging.Stage("r1", "main", "foo.go", application.StagedFile{Nodes: []*domain.Node{n}, Edges: nil})
+	area.Stage("r1", "main", "foo.go", staging.File{Nodes: []*domain.Node{n}, Edges: nil})
 
 	edges := &blastFakeEdges{inbound: map[string][]string{"s1": {"x"}}}
 	nodes := &blastFakeNodes{metas: map[string]ports.NodeMeta{
 		"s1": {NodeID: "s1"}, "x": {NodeID: "x"},
 	}}
-	svc := blastradius.NewService(edges, nodes, staging)
+	svc := blastradius.NewService(edges, nodes, area)
 	r := NewRegistry()
 	RegisterBlastTools(r, svc, nil, nil, nil, nil)
 	resp, rpcErr := dispatchBlast(t, r, "eng_get_dirty_blast_radius", map[string]any{

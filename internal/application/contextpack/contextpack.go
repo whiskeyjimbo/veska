@@ -176,43 +176,48 @@ func WithTokenBudget(n int) Option {
 	}
 }
 
-// NewAssembler constructs an Assembler. All function dependencies and the
-// blastradius service are required; a nil dependency yields an error
-// wrapping ErrMissingDependency and a nil *Assembler.
-func NewAssembler(
-	findNodes FindNodesFunc,
-	blast *blastradius.Service,
-	fileHistory FileHistoryFunc,
-	openFindings OpenFindingsFunc,
-	changedFiles ChangedFilesFunc,
-	nodesInFile NodesInFileFunc,
-	activeTask ActiveTaskFunc,
-	opts ...Option,
-) (*Assembler, error) {
+// AssemblerDeps bundles the required collaborators NewAssembler needs. Every
+// field is mandatory; a nil field yields an error wrapping ErrMissingDependency.
+// Grouping the seven function seams in a struct keeps call sites
+// self-documenting — they read by field name rather than by argument position.
+type AssemblerDeps struct {
+	FindNodes    FindNodesFunc
+	Blast        *blastradius.Service
+	FileHistory  FileHistoryFunc
+	OpenFindings OpenFindingsFunc
+	ChangedFiles ChangedFilesFunc
+	NodesInFile  NodesInFileFunc
+	ActiveTask   ActiveTaskFunc
+}
+
+// NewAssembler constructs an Assembler. All deps fields are required; a nil
+// dependency yields an error wrapping ErrMissingDependency and a nil
+// *Assembler.
+func NewAssembler(deps AssemblerDeps, opts ...Option) (*Assembler, error) {
 	switch {
-	case findNodes == nil:
-		return nil, fmt.Errorf("contextpack.NewAssembler: findNodes is nil: %w", ErrMissingDependency)
-	case blast == nil:
-		return nil, fmt.Errorf("contextpack.NewAssembler: blast is nil: %w", ErrMissingDependency)
-	case fileHistory == nil:
-		return nil, fmt.Errorf("contextpack.NewAssembler: fileHistory is nil: %w", ErrMissingDependency)
-	case openFindings == nil:
-		return nil, fmt.Errorf("contextpack.NewAssembler: openFindings is nil: %w", ErrMissingDependency)
-	case changedFiles == nil:
-		return nil, fmt.Errorf("contextpack.NewAssembler: changedFiles is nil: %w", ErrMissingDependency)
-	case nodesInFile == nil:
-		return nil, fmt.Errorf("contextpack.NewAssembler: nodesInFile is nil: %w", ErrMissingDependency)
-	case activeTask == nil:
-		return nil, fmt.Errorf("contextpack.NewAssembler: activeTask is nil: %w", ErrMissingDependency)
+	case deps.FindNodes == nil:
+		return nil, fmt.Errorf("contextpack.NewAssembler: FindNodes is nil: %w", ErrMissingDependency)
+	case deps.Blast == nil:
+		return nil, fmt.Errorf("contextpack.NewAssembler: Blast is nil: %w", ErrMissingDependency)
+	case deps.FileHistory == nil:
+		return nil, fmt.Errorf("contextpack.NewAssembler: FileHistory is nil: %w", ErrMissingDependency)
+	case deps.OpenFindings == nil:
+		return nil, fmt.Errorf("contextpack.NewAssembler: OpenFindings is nil: %w", ErrMissingDependency)
+	case deps.ChangedFiles == nil:
+		return nil, fmt.Errorf("contextpack.NewAssembler: ChangedFiles is nil: %w", ErrMissingDependency)
+	case deps.NodesInFile == nil:
+		return nil, fmt.Errorf("contextpack.NewAssembler: NodesInFile is nil: %w", ErrMissingDependency)
+	case deps.ActiveTask == nil:
+		return nil, fmt.Errorf("contextpack.NewAssembler: ActiveTask is nil: %w", ErrMissingDependency)
 	}
 	a := &Assembler{
-		findNodes:    findNodes,
-		blast:        blast,
-		fileHistory:  fileHistory,
-		openFindings: openFindings,
-		changedFiles: changedFiles,
-		nodesInFile:  nodesInFile,
-		activeTask:   activeTask,
+		findNodes:    deps.FindNodes,
+		blast:        deps.Blast,
+		fileHistory:  deps.FileHistory,
+		openFindings: deps.OpenFindings,
+		changedFiles: deps.ChangedFiles,
+		nodesInFile:  deps.NodesInFile,
+		activeTask:   deps.ActiveTask,
 		tokenBudget:  DefaultTokenBudget,
 	}
 	for _, opt := range opts {

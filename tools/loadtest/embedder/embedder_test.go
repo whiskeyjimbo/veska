@@ -27,7 +27,6 @@ import (
 	"testing"
 	"time"
 
-
 	"github.com/whiskeyjimbo/veska/internal/application/embedder"
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/embedding/ollama"
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/sqlite"

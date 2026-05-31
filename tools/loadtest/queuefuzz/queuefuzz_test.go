@@ -26,8 +26,8 @@ import (
 	"testing"
 	"time"
 
-
 	"github.com/whiskeyjimbo/veska/internal/application"
+	"github.com/whiskeyjimbo/veska/internal/application/staging"
 	"github.com/whiskeyjimbo/veska/internal/core/domain"
 	"github.com/whiskeyjimbo/veska/internal/core/ports"
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/sqlite"
@@ -86,7 +86,7 @@ func TestQueueFuzz(t *testing.T) {
 		poller.Wait()
 	})
 
-	staging := application.NewStagingArea()
+	staging := staging.NewArea()
 	promotionStore := sqlite.NewPromotionStore(pools.Write, []sqlite.PromotionSink{sqlite.NewFTSSink(), sqlite.NewEmbedRefSink()})
 	promoter := application.NewPromoter(staging, promotionStore)
 	actor := domain.Actor{ID: "service:queuefuzz", Kind: domain.ActorKindSystem}
@@ -161,7 +161,7 @@ func TestQueueFuzz(t *testing.T) {
 
 // drivePromotions stages N synthetic single-node files and Promotes each.
 // One file per promotion → one row per (file, work_kind) in the queue.
-func drivePromotions(ctx context.Context, t *testing.T, staging *application.StagingArea, promoter *application.Promoter, actor domain.Actor, n int) {
+func drivePromotions(ctx context.Context, t *testing.T, area *staging.Area, promoter *application.Promoter, actor domain.Actor, n int) {
 	t.Helper()
 	for i := 0; i < n; i++ {
 		filePath := fmt.Sprintf("pkg/fuzz/f%05d.go", i)
@@ -171,7 +171,7 @@ func drivePromotions(ctx context.Context, t *testing.T, staging *application.Sta
 		if err != nil {
 			t.Fatalf("domain.NewNode: %v", err)
 		}
-		staging.StageFile(repoID, branch, filePath, []*domain.Node{node}, nil)
+		area.Stage(repoID, branch, filePath, staging.File{Nodes: []*domain.Node{node}, Edges: nil})
 
 		gitSHA := fmt.Sprintf("sha-%05d", i)
 		if err := promoter.Promote(ctx, repoID, branch, gitSHA, actor); err != nil {

@@ -14,16 +14,17 @@
 // subset is installed.
 //
 // Run with: make eval-embed-models
-//   Env knobs:
-//     EMBED_BENCH_MODEL_DIR  — override the model search path (default:
-//                              $VESKA_HOME/static-model)
-//     EMBED_BENCH_QUERY      — query string used for the printed top-K
-//                              sanity check (default: "load config")
-//     EMBED_BENCH_TOPK       — number of top results to print (default 10)
-//     EMBED_BENCH_MAX_DOCS   — cap docs per corpus to bound runtime
-//                              during iteration (default 5000)
-//     EMBED_BENCH_OUT        — path to write results JSON
-//                              (default: tools/loadtest/embed_models/out/results.json)
+//
+//	Env knobs:
+//	  EMBED_BENCH_MODEL_DIR  — override the model search path (default:
+//	                           $VESKA_HOME/static-model)
+//	  EMBED_BENCH_QUERY      — query string used for the printed top-K
+//	                           sanity check (default: "load config")
+//	  EMBED_BENCH_TOPK       — number of top results to print (default 10)
+//	  EMBED_BENCH_MAX_DOCS   — cap docs per corpus to bound runtime
+//	                           during iteration (default 5000)
+//	  EMBED_BENCH_OUT        — path to write results JSON
+//	                           (default: tools/loadtest/embed_models/out/results.json)
 package embed_models
 
 import (
@@ -97,10 +98,10 @@ var BenchCorpora = []string{
 // pass is skipped. The two vectors share name/file because they
 // describe the same source node — only the embed input differs.
 type doc struct {
-	name          string
-	file          string
-	vec           []float32
-	vecCondensed  []float32
+	name         string
+	file         string
+	vec          []float32
+	vecCondensed []float32
 }
 
 // modelEntry pairs a model name with its on-disk dir, used for
@@ -130,9 +131,9 @@ type runResult struct {
 	EmbedTotal   string                  `json:"embed_total"`    // human-readable duration
 	EmbedTotalMS float64                 `json:"embed_total_ms"` // machine-readable
 	EmbedAvgMS   float64                 `json:"embed_avg_ms"`
-	QueryMS      float64                 `json:"query_ms"`       // query embed time
-	TopHits      []topHit                `json:"top_hits"`       // sanity-check top-K for the printed query
-	Recall       map[string]RecallScores `json:"recall"`         // gt-source → scores (headline / doc / test-name)
+	QueryMS      float64                 `json:"query_ms"` // query embed time
+	TopHits      []topHit                `json:"top_hits"` // sanity-check top-K for the printed query
+	Recall       map[string]RecallScores `json:"recall"`   // gt-source → scores (headline / doc / test-name)
 	// Condensation axis (solov2-oo4q.2). Populated only when
 	// EMBED_BENCH_CONDENSE=on. CondensedRecall is the recall produced
 	// when ranking docs by their condensed vector; raw Recall is
@@ -152,9 +153,9 @@ type topHit struct {
 // benchResults is the on-disk JSON shape — a phase number + every
 // per-run row. Later phases (0k5h.3 recall, 0k5h.6 table) read it.
 type benchResults struct {
-	Phase    string      `json:"phase"`
-	GeneratedAt string   `json:"generated_at"`
-	Runs     []runResult `json:"runs"`
+	Phase       string      `json:"phase"`
+	GeneratedAt string      `json:"generated_at"`
+	Runs        []runResult `json:"runs"`
 }
 
 func TestEmbedModelsBenchmark(t *testing.T) {
@@ -198,9 +199,9 @@ func TestEmbedModelsBenchmark(t *testing.T) {
 	runOne := func(modelName, modelType string, provider Embedder, c corpusEntry, mxDocs int) {
 		t.Logf("--- run: model=%s [%s] corpus=%s (%s) ---", modelName, modelType, c.name, c.kind)
 		var (
-			docs       []doc
-			stats      embedStats
-			condCount  int
+			docs      []doc
+			stats     embedStats
+			condCount int
 		)
 		switch c.kind {
 		case "prose":

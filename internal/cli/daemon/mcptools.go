@@ -216,10 +216,15 @@ func (w *mcpToolWiring) registerContextPackTool() {
 		}
 		return out, nil
 	}
-	cpAsm, err := contextpack.NewAssembler(
-		w.graph.FindNodes, w.blast, fileHistory, w.findingQuerier.OpenFindingNodeIDs,
-		gitwatch.ChangedFiles, w.nodes.NodesInFile, activeTaskFunc(w.pools.ReadDB),
-	)
+	cpAsm, err := contextpack.NewAssembler(contextpack.AssemblerDeps{
+		FindNodes:    w.graph.FindNodes,
+		Blast:        w.blast,
+		FileHistory:  fileHistory,
+		OpenFindings: w.findingQuerier.OpenFindingNodeIDs,
+		ChangedFiles: gitwatch.ChangedFiles,
+		NodesInFile:  w.nodes.NodesInFile,
+		ActiveTask:   activeTaskFunc(w.pools.ReadDB),
+	})
 	if err != nil {
 		mcp.RegisterContextPackTool(w.r, nil, nil, w.repos())
 		return

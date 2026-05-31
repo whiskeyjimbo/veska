@@ -12,6 +12,7 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/whiskeyjimbo/veska/internal/application/staging"
 	"github.com/whiskeyjimbo/veska/internal/core/domain"
 	infrafs "github.com/whiskeyjimbo/veska/internal/infrastructure/fs"
 )
@@ -376,11 +377,11 @@ func TestColdScanReparser_PropagatesCtxCancel(t *testing.T) {
 }
 
 func TestNewColdScanReparser_NilDeps(t *testing.T) {
-	staging := NewStagingArea()
-	gate := NewIngestionGate(staging)
+	area := staging.NewArea()
+	gate := staging.NewGate(area)
 	parser := &stubParser{result: &domain.ParseResult{}}
-	ing := NewIngester(parser, staging, gate)
-	prom := NewPromoter(staging, nil)
+	ing := NewIngester(parser, area, gate)
+	prom := NewPromoter(area, nil)
 	git := &fakeGitQuerier{head: "x"}
 
 	cases := []struct {
