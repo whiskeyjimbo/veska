@@ -17,7 +17,7 @@ import (
 // "no calls recorded" line instead of an empty zero-bar chart.
 func TestRunSavings_NoDataMessage(t *testing.T) {
 	var buf bytes.Buffer
-	if err := runSavings(&buf, t.TempDir(), time.Now(), false, false); err != nil {
+	if err := runSavings(savingsParams{Out: &buf, VeskaHome: t.TempDir(), Now: time.Now()}); err != nil {
 		t.Fatalf("runSavings: %v", err)
 	}
 	if !strings.Contains(buf.String(), "no search calls recorded") {
@@ -59,7 +59,7 @@ func TestRunSavings_RendersBarsAndPercentages(t *testing.T) {
 	_ = f.Close()
 
 	var buf bytes.Buffer
-	if err := runSavings(&buf, dir, now, false, false); err != nil {
+	if err := runSavings(savingsParams{Out: &buf, VeskaHome: dir, Now: now}); err != nil {
 		t.Fatalf("runSavings: %v", err)
 	}
 	out := buf.String()
@@ -84,7 +84,7 @@ func TestRunSavings_JSONFlag(t *testing.T) {
 	_ = f.Close()
 
 	var buf bytes.Buffer
-	if err := runSavings(&buf, dir, now, true, false); err != nil {
+	if err := runSavings(savingsParams{Out: &buf, VeskaHome: dir, Now: now, JSON: true}); err != nil {
 		t.Fatalf("runSavings json: %v", err)
 	}
 	var got savings.Report
@@ -110,7 +110,7 @@ func TestRunSavings_AllReposLabel(t *testing.T) {
 	_ = f.Close()
 
 	var buf bytes.Buffer
-	if err := runSavings(&buf, dir, now, false, false); err != nil {
+	if err := runSavings(savingsParams{Out: &buf, VeskaHome: dir, Now: now}); err != nil {
 		t.Fatalf("runSavings: %v", err)
 	}
 	if !strings.Contains(buf.String(), "all repos") {
@@ -133,7 +133,7 @@ func TestRunSavings_AggregateFlag(t *testing.T) {
 	_ = f.Close()
 
 	var buf bytes.Buffer
-	if err := runSavings(&buf, dir, now, false, true); err != nil {
+	if err := runSavings(savingsParams{Out: &buf, VeskaHome: dir, Now: now, Aggregate: true}); err != nil {
 		t.Fatalf("runSavings: %v", err)
 	}
 	out := buf.String()

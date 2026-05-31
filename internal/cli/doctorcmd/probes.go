@@ -24,9 +24,19 @@ func StubOK(subsystem string, jsonOut bool, w io.Writer) error {
 	return nil
 }
 
+// QueueOptions are the boolean flags for RunPostPromotionQueue. Probes that
+// carry a single flag keep it positional (e.g. RunEgress(w, jsonOut)); those
+// with two or more take an options struct so adjacent bools can't be
+// transposed at the call site (solov2-w8f9).
+type QueueOptions struct {
+	JSON         bool
+	PurgeOrphans bool
+}
+
 // RunPostPromotionQueue inspects the post-promotion queue depth and failed
 // rows, optionally purging orphan failed rows first.
-func RunPostPromotionQueue(w io.Writer, jsonOut, purgeOrphans bool) error {
+func RunPostPromotionQueue(w io.Writer, opts QueueOptions) error {
+	jsonOut, purgeOrphans := opts.JSON, opts.PurgeOrphans
 	dbPath := filepath.Join(config.DefaultVectorDir(), "veska.db")
 	// solov2-zmzc: --purge-orphans deletes failed rows whose repo_id
 	// was deregistered. Without this, removed-repo rows linger

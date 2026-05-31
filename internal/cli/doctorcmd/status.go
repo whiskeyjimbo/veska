@@ -187,11 +187,19 @@ func gatherStatusProbes(home string) statusProbes {
 	return p
 }
 
+// StatusOptions are the boolean flags for RunStatus. See QueueOptions for the
+// single-flag-positional / multi-flag-struct convention (solov2-w8f9).
+type StatusOptions struct {
+	JSON    bool
+	Verbose bool
+}
+
 // RunStatus performs the `doctor status` rollup across all subsystems, writing
 // either the JSON envelope or the human-readable report to w. It returns a
 // ProbeStatusError when the rollup is not healthy/stopped, mirroring the
 // per-subsystem subcommands.
-func RunStatus(w io.Writer, jsonOut, verbose bool) error {
+func RunStatus(w io.Writer, opts StatusOptions) error {
+	jsonOut, verbose := opts.JSON, opts.Verbose
 	home := config.DefaultVectorDir()
 	p := gatherStatusProbes(home)
 
