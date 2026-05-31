@@ -62,7 +62,7 @@ func cliColdScanPromoterOpts(pools *sqlite.Pools) []application.PromoterOption {
 	// its current HEAD, so resolve the diff for that SHA via the same
 	// git.AddedLinesForCommit helper the daemon uses. Failure is non-fatal:
 	// the runner just skips diff-driven checks for this promotion.
-	root := repoRootByID(pools.ReadDB)
+	root := RepoRootByID(pools.ReadDB)
 
 	reg := checks.NewRegistry()
 
@@ -105,9 +105,12 @@ func BuildVulnSource(cfg config.Config) (ports.VulnSource, bool) {
 	return osv.New(osv.WithCacheDir(config.DefaultOSVCacheDir())), true
 }
 
-// repoRootByID resolves a repoID to its registered working-tree path via the
-// repos table — the cold-scan equivalent of the daemon's repoRootFunc.
-func repoRootByID(db *sql.DB) func(ctx context.Context, repoID string) (string, error) {
+// RepoRootByID resolves a repoID to its registered working-tree path via the
+// repos table. It is the single canonical resolver shared by the cold-scan CLI
+// and the daemon (whose repoRootFunc converts it to mcp.RepoRootFunc). An
+// unknown repoID yields an error so callers surface a clear "repo not
+// registered" message rather than running against an empty path.
+func RepoRootByID(db *sql.DB) func(ctx context.Context, repoID string) (string, error) {
 	return func(ctx context.Context, repoID string) (string, error) {
 		records, err := repo.List(ctx, db)
 		if err != nil {
