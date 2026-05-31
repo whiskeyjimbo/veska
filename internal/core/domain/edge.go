@@ -23,6 +23,17 @@ const (
 	EdgeSimilarTo EdgeKind = "SIMILAR_TO"
 )
 
+// validEdgeKinds is the closed set of recognised EdgeKind values. NewEdge
+// rejects any kind outside this set, mirroring validNodeKinds in node.go.
+var validEdgeKinds = map[EdgeKind]struct{}{
+	EdgeCalls:     {},
+	EdgeImports:   {},
+	EdgeContains:  {},
+	EdgeTests:     {},
+	EdgeDependsOn: {},
+	EdgeSimilarTo: {},
+}
+
 // Confidence is an ordered enum representing how certain an edge relationship is.
 type Confidence int
 
@@ -51,6 +62,9 @@ type EdgeOption func(*Edge) error
 // WithConfidence sets the confidence level and derives the resolved flag.
 func WithConfidence(c Confidence) EdgeOption {
 	return func(e *Edge) error {
+		if c < Unresolved || c > Definite {
+			return errors.New("edge: invalid confidence")
+		}
 		e.Confidence = c
 		e.Resolved = c != Unresolved
 		return nil
@@ -80,6 +94,9 @@ func NewEdge(src, tgt NodeID, kind EdgeKind, opts ...EdgeOption) (*Edge, error) 
 	}
 	if tgt == "" {
 		return nil, errors.New("edge: tgt must not be empty")
+	}
+	if _, ok := validEdgeKinds[kind]; !ok {
+		return nil, errors.New("edge: invalid kind")
 	}
 
 	e := &Edge{

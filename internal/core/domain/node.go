@@ -40,6 +40,25 @@ const (
 	KindChunk NodeKind = "chunk"
 )
 
+// validNodeKinds is the closed set of recognised NodeKind values. NewNode
+// rejects any kind outside this set, mirroring validSourceLayers / severityOrder
+// in finding.go and validActorKinds in actor.go.
+var validNodeKinds = map[NodeKind]struct{}{
+	KindFunction:  {},
+	KindMethod:    {},
+	KindType:      {},
+	KindStruct:    {},
+	KindInterface: {},
+	KindClass:     {},
+	KindModule:    {},
+	KindPackage:   {},
+	KindFile:      {},
+	KindField:     {},
+	KindTest:      {},
+	KindVariable:  {},
+	KindChunk:     {},
+}
+
 // ContentHash is a hex-encoded SHA-256 digest of a node's raw content.
 type ContentHash string
 
@@ -189,6 +208,9 @@ func NewNode(spec NodeSpec, opts ...NodeOption) (*Node, error) {
 	}
 	if spec.Name == "" {
 		return nil, errors.New("node: name must not be empty")
+	}
+	if _, ok := validNodeKinds[spec.Kind]; !ok {
+		return nil, errors.New("node: invalid kind")
 	}
 
 	n := &Node{

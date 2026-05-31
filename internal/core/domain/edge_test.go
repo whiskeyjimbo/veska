@@ -138,6 +138,52 @@ func TestNewEdge_SimilarToUnresolved(t *testing.T) {
 	}
 }
 
+// NewEdge accepts every valid EdgeKind and rejects an unknown kind.
+func TestNewEdge_KindValidation(t *testing.T) {
+	valid := []EdgeKind{EdgeCalls, EdgeImports, EdgeContains, EdgeTests, EdgeDependsOn, EdgeSimilarTo}
+	if len(valid) != 6 {
+		t.Fatalf("expected 6 valid EdgeKinds, listed %d", len(valid))
+	}
+	for _, k := range valid {
+		t.Run(string(k), func(t *testing.T) {
+			_, err := NewEdge("src", "tgt", k)
+			if err != nil {
+				t.Fatalf("valid kind %q rejected: %v", k, err)
+			}
+		})
+	}
+	if _, err := NewEdge("src", "tgt", EdgeKind("bogus")); err == nil {
+		t.Fatal("expected error for unknown EdgeKind, got nil")
+	}
+}
+
+// WithConfidence accepts the valid range and rejects out-of-range values.
+func TestWithConfidence_RangeValidation(t *testing.T) {
+	cases := []struct {
+		c        Confidence
+		resolved bool
+	}{
+		{Unresolved, false},
+		{Probable, true},
+		{Strong, true},
+		{Definite, true},
+	}
+	for _, tc := range cases {
+		e, err := NewEdge("src", "tgt", EdgeCalls, WithConfidence(tc.c))
+		if err != nil {
+			t.Fatalf("valid confidence %v rejected: %v", tc.c, err)
+		}
+		if e.Resolved != tc.resolved {
+			t.Errorf("confidence %v: Resolved=%v, want %v", tc.c, e.Resolved, tc.resolved)
+		}
+	}
+	for _, bad := range []Confidence{Confidence(99), Confidence(-1)} {
+		if _, err := NewEdge("src", "tgt", EdgeCalls, WithConfidence(bad)); err == nil {
+			t.Fatalf("expected error for out-of-range confidence %v, got nil", bad)
+		}
+	}
+}
+
 // Confidence ordering.
 func TestConfidenceOrdering(t *testing.T) {
 	if Unresolved >= Probable || Probable >= Strong || Strong >= Definite {
