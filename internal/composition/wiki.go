@@ -4,8 +4,8 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/whiskeyjimbo/veska/internal/application"
 	"github.com/whiskeyjimbo/veska/internal/application/blastradius"
+	"github.com/whiskeyjimbo/veska/internal/application/staging"
 	"github.com/whiskeyjimbo/veska/internal/application/wiki"
 	gitwatch "github.com/whiskeyjimbo/veska/internal/infrastructure/git"
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/sqlite"
@@ -23,7 +23,7 @@ import (
 //     uses its prefix-matching resolver.
 //   - writePages: `veska wiki` always writes pages; the daemon honours the
 //     [wiki] write_pages config.
-func NewWikiHandler(pools *sqlite.Pools, staging *application.StagingArea, repoRoot func(ctx context.Context, repoID string) (string, error), writePages bool) (*wiki.Handler, error) {
+func NewWikiHandler(pools *sqlite.Pools, staging *staging.Area, repoRoot func(ctx context.Context, repoID string) (string, error), writePages bool) (*wiki.Handler, error) {
 	nodeLookup := sqlite.NewNodeLookupRepo(pools.ReadDB)
 	wikiEdges := sqlite.NewEdgeReaderRepo(pools.ReadDB)
 	wikiGraph := sqlite.NewGraphRepo(pools.ReadDB, pools.Write)

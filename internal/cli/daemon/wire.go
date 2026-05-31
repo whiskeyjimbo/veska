@@ -23,6 +23,7 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/application/revalidate"
 	"github.com/whiskeyjimbo/veska/internal/application/review"
 	"github.com/whiskeyjimbo/veska/internal/application/savings"
+	"github.com/whiskeyjimbo/veska/internal/application/staging"
 	"github.com/whiskeyjimbo/veska/internal/application/vulnrefresh"
 	"github.com/whiskeyjimbo/veska/internal/application/wiki"
 	"github.com/whiskeyjimbo/veska/internal/composition"
@@ -154,8 +155,8 @@ type Daemon struct {
 	pools   *sqlite.Pools
 	vectors ports.VectorStorage
 
-	staging  *application.StagingArea
-	gate     *application.IngestionGate
+	staging  *staging.Area
+	gate     *staging.Gate
 	ingester *application.Ingester
 	promoter *application.Promoter
 
@@ -307,8 +308,8 @@ type daemonBuilder struct {
 	pools *sqlite.Pools
 	vec   ports.VectorStorage
 
-	staging     *application.StagingArea
-	gate        *application.IngestionGate
+	staging     *staging.Area
+	gate        *staging.Gate
 	ingester    *application.Ingester
 	promoter    *application.Promoter
 	findings    ports.FindingStorage
@@ -798,7 +799,7 @@ func (b *daemonBuilder) finalize() error {
 		b.registry.SetTracerProvider(b.tracer)
 	}
 	resync := application.NewStartupResync(
-		&repoLister{db: b.pools.ReadDB}, gitwatch.Querier{}, b.ingester, b.promoter, b.reparser,
+		&repoLister{db: b.pools.ReadDB}, gitwatch.Querier{}, b.ingester.Save, b.promoter.Promote, b.reparser,
 	)
 	b.resync = resync
 	b.resyncRef = resync
@@ -869,7 +870,7 @@ func (noopEmbedHandler) Handle(_ context.Context, _ ports.WorkRow) error { retur
 type mcpDeps struct {
 	pools    *sqlite.Pools
 	cfg      Config
-	staging  *application.StagingArea
+	staging  *staging.Area
 	vectors  ports.VectorStorage
 	provider ports.EmbeddingProvider
 	refs     *sqlite.EmbeddingRefsRepo

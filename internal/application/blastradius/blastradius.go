@@ -14,7 +14,7 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/whiskeyjimbo/veska/internal/application"
+	"github.com/whiskeyjimbo/veska/internal/application/staging"
 	"github.com/whiskeyjimbo/veska/internal/core/ports"
 )
 
@@ -121,12 +121,12 @@ type Response struct {
 type Service struct {
 	edges   ports.EdgeReader
 	nodes   ports.NodeLookup
-	staging *application.StagingArea
+	staging *staging.Area
 }
 
 // NewService constructs a Service. edges and nodes are required; staging
 // may be nil for callers that never invoke DirtyOf.
-func NewService(edges ports.EdgeReader, nodes ports.NodeLookup, staging *application.StagingArea) *Service {
+func NewService(edges ports.EdgeReader, nodes ports.NodeLookup, staging *staging.Area) *Service {
 	if edges == nil {
 		panic("blastradius.NewService: edges is nil")
 	}

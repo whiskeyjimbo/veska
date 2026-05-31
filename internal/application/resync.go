@@ -74,28 +74,31 @@ func (e *ErrPromotionDivergent) Error() string {
 type StartupResync struct {
 	repos    RepoLister
 	git      GitQuerier
-	save     func(ctx context.Context, repoID, branch, path string, src []byte)
-	promote  func(ctx context.Context, repoID, branch, gitSHA string, actor domain.Actor) error
+	save     saveFunc
+	promote  promoteFunc
 	reparser func(ctx context.Context, repo RepoRecord) error
 
 	syncing atomic.Bool
 }
 
 // NewStartupResync constructs a StartupResync wired to the provided dependencies.
-// saveFn and promoteFn wrap Ingester.Save and Promoter.Promote respectively.
-// reparser is called for full-reparse paths (never-promoted or divergent SHA).
+// save and promote are the narrow seams over Ingester.Save and Promoter.Promote
+// (callers pass ingester.Save / promoter.Promote); taking the seams rather than
+// the concrete types matches the cold-scan path and keeps the test surface
+// small. reparser is called for full-reparse paths (never-promoted or divergent
+// SHA).
 func NewStartupResync(
 	repos RepoLister,
 	git GitQuerier,
-	ingester *Ingester,
-	promoter *Promoter,
+	save saveFunc,
+	promote promoteFunc,
 	reparser func(ctx context.Context, repo RepoRecord) error,
 ) *StartupResync {
 	return &StartupResync{
 		repos:    repos,
 		git:      git,
-		save:     ingester.Save,
-		promote:  promoter.Promote,
+		save:     save,
+		promote:  promote,
 		reparser: reparser,
 	}
 }

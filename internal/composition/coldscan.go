@@ -16,6 +16,7 @@ import (
 
 	"github.com/whiskeyjimbo/veska/internal/application"
 	"github.com/whiskeyjimbo/veska/internal/application/checks"
+	"github.com/whiskeyjimbo/veska/internal/application/staging"
 	gitwatch "github.com/whiskeyjimbo/veska/internal/infrastructure/git"
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/sqlite"
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/treesitter"
@@ -34,8 +35,8 @@ import (
 // afterward. The core is exactly the part that was previously copied verbatim
 // between cmd/veska/reindex.go and internal/cli/daemon/wire.go.
 type ColdScanCore struct {
-	Staging        *application.StagingArea
-	Gate           *application.IngestionGate
+	Staging        *staging.Area
+	Gate           *staging.Gate
 	Ingester       *application.Ingester
 	PromotionStore *sqlite.PromotionStore
 	Promoter       *application.Promoter
@@ -48,10 +49,10 @@ type ColdScanCore struct {
 // runner, added-lines seam, tracer) are forwarded as ingesterOpts/promoterOpts
 // so the constructed core is fully wired and immutable.
 func NewColdScanCore(pools *sqlite.Pools, reviewEnabled bool, ingesterOpts []application.IngesterOption, promoterOpts []application.PromoterOption) *ColdScanCore {
-	staging := application.NewStagingArea()
-	gate := application.NewIngestionGate(staging)
+	area := staging.NewArea()
+	gate := staging.NewGate(area)
 	parser := treesitter.NewGoParser()
-	ingester := application.NewIngester(parser, staging, gate, ingesterOpts...)
+	ingester := application.NewIngester(parser, area, gate, ingesterOpts...)
 
 	promotionStore := sqlite.NewPromotionStore(
 		pools.Write,
@@ -61,10 +62,10 @@ func NewColdScanCore(pools *sqlite.Pools, reviewEnabled bool, ingesterOpts []app
 		},
 		sqlite.WithReviewEnabled(reviewEnabled),
 	)
-	promoter := application.NewPromoter(staging, promotionStore, promoterOpts...)
+	promoter := application.NewPromoter(area, promotionStore, promoterOpts...)
 
 	return &ColdScanCore{
-		Staging:        staging,
+		Staging:        area,
 		Gate:           gate,
 		Ingester:       ingester,
 		PromotionStore: promotionStore,

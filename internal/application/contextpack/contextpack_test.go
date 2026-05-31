@@ -98,7 +98,15 @@ func newAssembler(t *testing.T, opts ...contextpack.Option) *contextpack.Assembl
 		return &contextpack.TaskInfo{TaskID: "t1", RepoID: repoID, Title: "do work", Active: true}, nil
 	}
 
-	a, err := contextpack.NewAssembler(findNodes, blast, fileHistory, openFindings, changedFiles, nodes.NodesInFile, activeTask, opts...)
+	a, err := contextpack.NewAssembler(contextpack.AssemblerDeps{
+		FindNodes:    findNodes,
+		Blast:        blast,
+		FileHistory:  fileHistory,
+		OpenFindings: openFindings,
+		ChangedFiles: changedFiles,
+		NodesInFile:  nodes.NodesInFile,
+		ActiveTask:   activeTask,
+	}, opts...)
 	if err != nil {
 		t.Fatalf("NewAssembler: %v", err)
 	}
@@ -176,7 +184,7 @@ func TestClip_WithinBudgetNotTruncated(t *testing.T) {
 }
 
 func TestNewAssembler_RejectsNilDependency(t *testing.T) {
-	_, err := contextpack.NewAssembler(nil, nil, nil, nil, nil, nil, nil)
+	_, err := contextpack.NewAssembler(contextpack.AssemblerDeps{})
 	if !errors.Is(err, contextpack.ErrMissingDependency) {
 		t.Fatalf("want ErrMissingDependency, got %v", err)
 	}
@@ -230,15 +238,17 @@ func TestForSymbol_IncludesSnippets(t *testing.T) {
 		n, _ := domain.NewNode("seed", "a.go", "Target", domain.KindFunction)
 		return []*domain.Node{n}, nil
 	}
-	a, _ := contextpack.NewAssembler(findNodes, blast,
-		func(_ context.Context, _, _ string, _ time.Duration) ([]contextpack.CommitInfo, error) {
+	a, _ := contextpack.NewAssembler(contextpack.AssemblerDeps{
+		FindNodes: findNodes,
+		Blast:     blast,
+		FileHistory: func(_ context.Context, _, _ string, _ time.Duration) ([]contextpack.CommitInfo, error) {
 			return nil, nil
 		},
-		func(_ context.Context, _, _ string) (map[string]bool, error) { return nil, nil },
-		func(_ context.Context, _ string) ([]string, error) { return nil, nil },
-		nodes.NodesInFile,
-		func(_ context.Context, _ string) (*contextpack.TaskInfo, error) { return nil, nil },
-	)
+		OpenFindings: func(_ context.Context, _, _ string) (map[string]bool, error) { return nil, nil },
+		ChangedFiles: func(_ context.Context, _ string) ([]string, error) { return nil, nil },
+		NodesInFile:  nodes.NodesInFile,
+		ActiveTask:   func(_ context.Context, _ string) (*contextpack.TaskInfo, error) { return nil, nil },
+	})
 	p, err := a.ForSymbol(context.Background(), "r", "main", "/repo", "Target")
 	if err != nil {
 		t.Fatalf("ForSymbol: %v", err)
@@ -268,15 +278,17 @@ func TestForSymbol_SnippetTrimmedToBudget(t *testing.T) {
 		n, _ := domain.NewNode("seed", "a.go", "Big", domain.KindFunction)
 		return []*domain.Node{n}, nil
 	}
-	a, _ := contextpack.NewAssembler(findNodes, blast,
-		func(_ context.Context, _, _ string, _ time.Duration) ([]contextpack.CommitInfo, error) {
+	a, _ := contextpack.NewAssembler(contextpack.AssemblerDeps{
+		FindNodes: findNodes,
+		Blast:     blast,
+		FileHistory: func(_ context.Context, _, _ string, _ time.Duration) ([]contextpack.CommitInfo, error) {
 			return nil, nil
 		},
-		func(_ context.Context, _, _ string) (map[string]bool, error) { return nil, nil },
-		func(_ context.Context, _ string) ([]string, error) { return nil, nil },
-		nodes.NodesInFile,
-		func(_ context.Context, _ string) (*contextpack.TaskInfo, error) { return nil, nil },
-	)
+		OpenFindings: func(_ context.Context, _, _ string) (map[string]bool, error) { return nil, nil },
+		ChangedFiles: func(_ context.Context, _ string) ([]string, error) { return nil, nil },
+		NodesInFile:  nodes.NodesInFile,
+		ActiveTask:   func(_ context.Context, _ string) (*contextpack.TaskInfo, error) { return nil, nil },
+	})
 	p, _ := a.ForSymbol(context.Background(), "r", "main", "/repo", "Big")
 	if len(p.Nodes) != 1 {
 		t.Fatalf("want 1 node, got %d", len(p.Nodes))

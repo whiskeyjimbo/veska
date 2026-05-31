@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"time"
 
+	"github.com/whiskeyjimbo/veska/internal/application/staging"
 	"github.com/whiskeyjimbo/veska/internal/core/domain"
 	"github.com/whiskeyjimbo/veska/internal/platform/observability"
 	"go.opentelemetry.io/otel/trace/noop"
@@ -55,7 +56,7 @@ type CheckRunner interface {
 	Run(ctx context.Context, in CheckRunInput)
 }
 
-// Promoter flushes the in-memory StagingArea to durable storage via a
+// Promoter flushes the in-memory staging.Area to durable storage via a
 // PromotionStore and enqueues post-promotion work items. It is a thin
 // orchestrator: it builds a PromotionBatch from the staging snapshot, delegates
 // the atomic transaction to the store, then performs advisory post-commit work
@@ -64,7 +65,7 @@ type CheckRunner interface {
 // Promoter no longer writes SQL itself — all durable writes flow through the
 // PromotionStore port, keeping the application layer free of database/sql.
 type Promoter struct {
-	staging *StagingArea
+	staging *staging.Area
 	store   PromotionStore
 	tp      observability.TracerProvider
 	checks  CheckRunner
@@ -98,13 +99,13 @@ func WithPromoterTracerProvider(tp observability.TracerProvider) PromoterOption 
 	return func(p *Promoter) { p.tp = tp }
 }
 
-// NewPromoter constructs a Promoter wired to the provided StagingArea and
+// NewPromoter constructs a Promoter wired to the provided staging.Area and
 // PromotionStore. The store owns the promotion transaction; the Promoter only
 // orchestrates the snapshot and advisory post-commit steps. Optional seams
 // (check runner, added-lines resolver, tracer) are supplied via PromoterOption.
-func NewPromoter(staging *StagingArea, store PromotionStore, opts ...PromoterOption) *Promoter {
+func NewPromoter(area *staging.Area, store PromotionStore, opts ...PromoterOption) *Promoter {
 	p := &Promoter{
-		staging: staging,
+		staging: area,
 		store:   store,
 	}
 	for _, o := range opts {
@@ -132,12 +133,12 @@ func (p *Promoter) tracerProvider() observability.TracerProvider {
 //  1. Takes a snapshot of all nodes staged for (repoID, branch).
 //  2. Builds a PromotionBatch and hands it to the PromotionStore, which writes
 //     all node/FTS/embedding-ref/queue rows in a single atomic transaction.
-//  3. Calls StagingArea.DeleteStagedFile for each promoted file after commit.
+//  3. Calls staging.Area.DeleteStagedFile for each promoted file after commit.
 //  4. Writes advisory audit entries and runs post-commit structural checks.
 //
 // Node-only promotion: edges are intentionally not promoted here. They are
 // re-derived post-promotion by the auto_link queue worker (work_kind="auto_link").
-// Staged edges remain in the StagingArea solely to serve pre-promotion overlay reads.
+// Staged edges remain in the staging.Area solely to serve pre-promotion overlay reads.
 //
 // actor records who triggered the promotion. Hook-triggered paths should pass
 // domain.Actor{ID: "service:veska", Kind: domain.ActorKindSystem}.

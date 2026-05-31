@@ -3,7 +3,7 @@ package mcp
 import (
 	"testing"
 
-	application "github.com/whiskeyjimbo/veska/internal/application"
+	"github.com/whiskeyjimbo/veska/internal/application/staging"
 	"github.com/whiskeyjimbo/veska/internal/core/domain"
 )
 
@@ -23,7 +23,7 @@ func TestGetCallChain_DirectionIn_WalksIncomingEdges(t *testing.T) {
 	store.addEdge(mustEdge(t, "a", "b", domain.EdgeCalls))
 
 	r := NewRegistry()
-	RegisterGraphTools(r, store, application.NewStagingArea())
+	RegisterGraphTools(r, store, staging.NewArea())
 
 	resp, rpcErr := dispatchCallChain(t, r, "eng_get_call_chain", map[string]any{
 		"node_id":   "b",
@@ -54,7 +54,7 @@ func TestGetCallChain_DirectionOutIsDefault(t *testing.T) {
 	store.addEdge(mustEdge(t, "a", "b", domain.EdgeCalls))
 
 	r := NewRegistry()
-	RegisterGraphTools(r, store, application.NewStagingArea())
+	RegisterGraphTools(r, store, staging.NewArea())
 
 	// No direction → default 'out'. From A, must reach B.
 	resp, rpcErr := dispatchCallChain(t, r, "eng_get_call_chain", map[string]any{
@@ -90,7 +90,7 @@ func TestGetCallChain_DirectionBoth_WalksEitherWay(t *testing.T) {
 	store.addEdge(mustEdge(t, "b", "c", domain.EdgeCalls))
 
 	r := NewRegistry()
-	RegisterGraphTools(r, store, application.NewStagingArea())
+	RegisterGraphTools(r, store, staging.NewArea())
 
 	resp, rpcErr := dispatchCallChain(t, r, "eng_get_call_chain", map[string]any{
 		"node_id":   "b",
@@ -119,7 +119,7 @@ func TestGetCallChain_RejectsInvalidDirection(t *testing.T) {
 	store.addNode(a)
 
 	r := NewRegistry()
-	RegisterGraphTools(r, store, application.NewStagingArea())
+	RegisterGraphTools(r, store, staging.NewArea())
 
 	_, rpcErr := dispatchCallChain(t, r, "eng_get_call_chain", map[string]any{
 		"node_id":   "a",

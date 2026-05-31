@@ -7,6 +7,7 @@ import (
 	"sort"
 
 	application "github.com/whiskeyjimbo/veska/internal/application"
+	"github.com/whiskeyjimbo/veska/internal/application/staging"
 	"github.com/whiskeyjimbo/veska/internal/core/domain"
 	"github.com/whiskeyjimbo/veska/internal/core/ports"
 )
@@ -35,7 +36,7 @@ type findSymbolParams struct {
 	Kind   string `json:"kind,omitempty"`
 }
 
-func makeFindSymbolHandler(graph ports.GraphReader, staging *application.StagingArea, repos application.RepoLister, scans ScanTrackerReader) ToolHandler {
+func makeFindSymbolHandler(graph ports.GraphReader, staging *staging.Area, repos application.RepoLister, scans ScanTrackerReader) ToolHandler {
 	return func(ctx context.Context, _ domain.Actor, raw json.RawMessage) (any, *RPCError) {
 		var p findSymbolParams
 		if err := json.Unmarshal(raw, &p); err != nil {

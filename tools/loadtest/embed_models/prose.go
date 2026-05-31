@@ -18,7 +18,6 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
-
 )
 
 // embedProseCorpus walks .md files under root, splits each into

@@ -6,8 +6,8 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/whiskeyjimbo/veska/internal/application"
 	"github.com/whiskeyjimbo/veska/internal/application/blastradius"
+	"github.com/whiskeyjimbo/veska/internal/application/staging"
 	"github.com/whiskeyjimbo/veska/internal/core/domain"
 	"github.com/whiskeyjimbo/veska/internal/core/ports"
 )
@@ -224,12 +224,12 @@ func TestOf_DeduplicatesSeeds(t *testing.T) {
 }
 
 func TestDirtyOf_UsesStagedNodes(t *testing.T) {
-	staging := application.NewStagingArea()
+	area := staging.NewArea()
 	n, err := domain.NewNode("staged-1", "foo.go", "Foo", domain.KindFunction)
 	if err != nil {
 		t.Fatalf("NewNode: %v", err)
 	}
-	staging.Stage("r", "main", "foo.go", application.StagedFile{Nodes: []*domain.Node{n}, Edges: nil})
+	area.Stage("r", "main", "foo.go", staging.File{Nodes: []*domain.Node{n}, Edges: nil})
 
 	edges := &fakeEdges{inbound: map[string][]string{
 		"staged-1": {"caller-a"},
@@ -238,7 +238,7 @@ func TestDirtyOf_UsesStagedNodes(t *testing.T) {
 		"staged-1": {NodeID: "staged-1"},
 		"caller-a": {NodeID: "caller-a"},
 	}}
-	s := blastradius.NewService(edges, nodes, staging)
+	s := blastradius.NewService(edges, nodes, area)
 	resp, err := s.DirtyOf(context.Background(), "r", "main", blastradius.Options{MaxDepth: 1})
 	if err != nil {
 		t.Fatalf("DirtyOf: %v", err)
@@ -275,7 +275,7 @@ func (f *fakeNodesWithHashes) NodeContentHash(_ context.Context, _, _, nodeID st
 // must filter such nodes out of the seed set so the response doesn't
 // dirty the whole file.
 func TestDirtyOf_SkipsUnchangedSymbols(t *testing.T) {
-	staging := application.NewStagingArea()
+	area := staging.NewArea()
 	// Build nodes with explicit ContentHashes: one matches the promoted
 	// hash ("unchanged"), one differs ("changed").
 	unchanged, err := domain.NewNode("unchanged", "foo.go", "Same", domain.KindFunction,
@@ -288,7 +288,7 @@ func TestDirtyOf_SkipsUnchangedSymbols(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewNode changed: %v", err)
 	}
-	staging.Stage("r", "main", "foo.go", application.StagedFile{Nodes: []*domain.Node{unchanged, changed}, Edges: nil})
+	area.Stage("r", "main", "foo.go", staging.File{Nodes: []*domain.Node{unchanged, changed}, Edges: nil})
 
 	edges := &fakeEdges{inbound: map[string][]string{
 		"unchanged": {"caller-of-same"},
@@ -306,7 +306,7 @@ func TestDirtyOf_SkipsUnchangedSymbols(t *testing.T) {
 			"changed":   "HASH-B-OLD", // differs from staged HASH-B-NEW → seeded
 		},
 	}
-	s := blastradius.NewService(edges, nodes, staging)
+	s := blastradius.NewService(edges, nodes, area)
 	resp, err := s.DirtyOf(context.Background(), "r", "main", blastradius.Options{MaxDepth: 1})
 	if err != nil {
 		t.Fatalf("DirtyOf: %v", err)

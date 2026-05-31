@@ -56,16 +56,16 @@ type fuseDoc struct {
 // fuseResult is one corpus's outcome — four recall maps from the same
 // fixture pairs, evaluated by four different ranking strategies.
 type fuseResult struct {
-	Corpus       string                  `json:"corpus"`
-	Kind         string                  `json:"kind"`
-	DocCount     int                     `json:"doc_count"`
-	CodeModel    string                  `json:"code_model"`
-	ProseModel   string                  `json:"prose_model"`
-	RRFK         int                     `json:"rrf_k"`
-	CodeOnly     map[string]RecallScores `json:"code_only"`
-	ProseOnly    map[string]RecallScores `json:"prose_only"`
-	Concat       map[string]RecallScores `json:"concat"`
-	RRF          map[string]RecallScores `json:"rrf"`
+	Corpus     string                  `json:"corpus"`
+	Kind       string                  `json:"kind"`
+	DocCount   int                     `json:"doc_count"`
+	CodeModel  string                  `json:"code_model"`
+	ProseModel string                  `json:"prose_model"`
+	RRFK       int                     `json:"rrf_k"`
+	CodeOnly   map[string]RecallScores `json:"code_only"`
+	ProseOnly  map[string]RecallScores `json:"prose_only"`
+	Concat     map[string]RecallScores `json:"concat"`
+	RRF        map[string]RecallScores `json:"rrf"`
 }
 
 func TestEmbedModelsFusion(t *testing.T) {
@@ -217,11 +217,11 @@ func computeFusionRecall(codeP, proseP Embedder, pairs []Pair, docs []fuseDoc, r
 	}
 
 	var (
-		hitsCode1, hitsCode5, hitsCode10, mrrCode    float64
+		hitsCode1, hitsCode5, hitsCode10, mrrCode     float64
 		hitsProse1, hitsProse5, hitsProse10, mrrProse float64
-		hitsCat1, hitsCat5, hitsCat10, mrrCat        float64
-		hitsRRF1, hitsRRF5, hitsRRF10, mrrRRF        float64
-		notInCorpus, miss                              int
+		hitsCat1, hitsCat5, hitsCat10, mrrCat         float64
+		hitsRRF1, hitsRRF5, hitsRRF10, mrrRRF         float64
+		notInCorpus, miss                             int
 	)
 
 	for _, p := range pairs {
@@ -243,8 +243,8 @@ func computeFusionRecall(codeP, proseP Embedder, pairs []Pair, docs []fuseDoc, r
 
 		// Compute the four per-doc score vectors in one pass.
 		type scored struct {
-			idx  int
-			s    float64 // composite/fused score (varies by strategy)
+			idx int
+			s   float64 // composite/fused score (varies by strategy)
 		}
 		codeScored := make([]scored, len(docs))
 		proseScored := make([]scored, len(docs))
