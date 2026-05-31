@@ -13,12 +13,13 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/vulnsource/osv"
 	"github.com/whiskeyjimbo/veska/internal/platform/config"
 	"github.com/whiskeyjimbo/veska/internal/platform/doctor"
+	"github.com/whiskeyjimbo/veska/internal/platform/health"
 )
 
 // StubOK prints an "ok" message for stub subcommands that have no real probe yet.
 func StubOK(subsystem string, jsonOut bool, w io.Writer) error {
 	if jsonOut {
-		return json.NewEncoder(w).Encode(doctor.NewEnvelope(subsystem, "healthy", map[string]any{}))
+		return json.NewEncoder(w).Encode(doctor.NewEnvelope(subsystem, health.StatusHealthy, map[string]any{}))
 	}
 	fmt.Fprintf(w, "%s: ok\n", subsystem)
 	return nil
@@ -71,7 +72,7 @@ func RunPostPromotionQueue(w io.Writer, opts QueueOptions) error {
 		fmt.Fprintf(w, "  hint: %d failed row(s) point at a deregistered repo — run `veska doctor post_promotion_queue --purge-orphans` to clear them\n", report.OrphanCount)
 	}
 	if report.Status != "healthy" {
-		return ProbeStatusError{Subsystem: "post_promotion_queue", Status: report.Status}
+		return ProbeStatusError{Subsystem: "post_promotion_queue", Status: string(report.Status)}
 	}
 	return nil
 }
@@ -105,7 +106,7 @@ func RunWikiRender(ctx context.Context, w io.Writer, jsonOut bool) error {
 			(time.Duration(report.AgeSeconds) * time.Second))
 	}
 	if report.Status != "healthy" {
-		return ProbeStatusError{Subsystem: "wiki_render", Status: report.Status}
+		return ProbeStatusError{Subsystem: "wiki_render", Status: string(report.Status)}
 	}
 	return nil
 }
@@ -142,7 +143,7 @@ func RunPipelines(ctx context.Context, w io.Writer, jsonOut bool) error {
 		report.Status, report.TokensToday, report.MaxTokensPerDay,
 		report.MaxTokensPerCommit, report.Paused)
 	if report.Status != "healthy" {
-		return ProbeStatusError{Subsystem: "pipelines", Status: report.Status}
+		return ProbeStatusError{Subsystem: "pipelines", Status: string(report.Status)}
 	}
 	return nil
 }
@@ -162,7 +163,7 @@ func RunEmbedder(w io.Writer, jsonOut bool) error {
 		fmt.Fprintf(w, "  hint: %s\n", h.Probe.InstallHint)
 	}
 	if h.Status != "healthy" {
-		return ProbeStatusError{Subsystem: "embedder", Status: h.Status}
+		return ProbeStatusError{Subsystem: "embedder", Status: string(h.Status)}
 	}
 	return nil
 }
@@ -203,10 +204,10 @@ func RunEgress(w io.Writer, jsonOut bool) error {
 		return err
 	}
 	// Compute egress status.
-	egressStatus := "healthy"
+	egressStatus := health.StatusHealthy
 	for _, s := range report.Sockets {
 		if s.Status == "missing" {
-			egressStatus = "broken"
+			egressStatus = health.StatusBroken
 			break
 		}
 	}
@@ -251,9 +252,9 @@ func RunConfig(w io.Writer, jsonOut bool) error {
 		return err
 	}
 	// Compute config status.
-	configStatus := "healthy"
+	configStatus := health.StatusHealthy
 	if !report.DBExists {
-		configStatus = "degraded"
+		configStatus = health.StatusDegraded
 	}
 	if jsonOut {
 		return json.NewEncoder(w).Encode(doctor.NewEnvelope("config", configStatus, report))
@@ -292,7 +293,7 @@ func RunService(w io.Writer, jsonOut bool) error {
 		fmt.Fprintf(w, "  broken marker: %s\n", report.BrokenMarkerPath)
 	}
 	if report.Status != "healthy" {
-		return ProbeStatusError{Subsystem: "service", Status: report.Status}
+		return ProbeStatusError{Subsystem: "service", Status: string(report.Status)}
 	}
 	return nil
 }
@@ -331,7 +332,7 @@ func RunBackup(w io.Writer, jsonOut bool, backupDirExists func(string) bool) err
 			report.Status, filepath.Base(report.LatestFile), report.VerifyError)
 	}
 	if report.Status != "healthy" {
-		return ProbeStatusError{Subsystem: "backup", Status: report.Status}
+		return ProbeStatusError{Subsystem: "backup", Status: string(report.Status)}
 	}
 	return nil
 }
@@ -367,7 +368,7 @@ func RunStorage(w io.Writer, jsonOut bool) error {
 		return err
 	}
 	if jsonOut {
-		return json.NewEncoder(w).Encode(doctor.NewEnvelope("storage", "healthy", report))
+		return json.NewEncoder(w).Encode(doctor.NewEnvelope("storage", health.StatusHealthy, report))
 	}
 	fmt.Fprintf(w, "storage: ok (db=%d bytes, wal=%d bytes, hnsw=%d bytes, free_ratio=%.2f)\n",
 		report.DBSizeBytes, report.WALSizeBytes, report.HNSWSizeBytes, report.FreeRatio)
@@ -387,7 +388,7 @@ func RunBundle(w io.Writer, jsonOut bool, outputDir string) error {
 		return err
 	}
 	if jsonOut {
-		return json.NewEncoder(w).Encode(doctor.NewEnvelope("bundle", "healthy", map[string]any{
+		return json.NewEncoder(w).Encode(doctor.NewEnvelope("bundle", health.StatusHealthy, map[string]any{
 			"path":       result.Path,
 			"file_count": result.FileCount,
 		}))

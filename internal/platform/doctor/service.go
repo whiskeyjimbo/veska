@@ -5,14 +5,16 @@ import (
 	"os"
 	"path/filepath"
 	"time"
+
+	"github.com/whiskeyjimbo/veska/internal/platform/health"
 )
 
 // ServiceReport holds the results of the service health probe.
 type ServiceReport struct {
-	DaemonRunning       bool   `json:"daemon_running"`
-	BrokenMarkerPresent bool   `json:"broken_marker_present"`
-	BrokenMarkerPath    string `json:"broken_marker_path,omitempty"`
-	Status              string `json:"status"`
+	DaemonRunning       bool          `json:"daemon_running"`
+	BrokenMarkerPresent bool          `json:"broken_marker_present"`
+	BrokenMarkerPath    string        `json:"broken_marker_path,omitempty"`
+	Status              health.Status `json:"status"`
 }
 
 // CheckService probes the daemon socket and broken marker for veskaHome.
@@ -40,12 +42,12 @@ func CheckService(veskaHome string) (ServiceReport, error) {
 	}
 
 	// 3. Compute status.
-	status := "healthy"
+	status := health.StatusHealthy
 	switch {
 	case brokenMarkerPresent:
-		status = "broken"
+		status = health.StatusBroken
 	case !daemonRunning:
-		status = "degraded"
+		status = health.StatusDegraded
 	}
 
 	report := ServiceReport{

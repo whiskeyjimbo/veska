@@ -6,6 +6,7 @@ import (
 
 	"github.com/whiskeyjimbo/veska/internal/application/review"
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/sqlite/sqldriver"
+	"github.com/whiskeyjimbo/veska/internal/platform/health"
 )
 
 // ReviewFailureFindingID derives the branch-stable finding_id of the
@@ -47,9 +48,9 @@ type FailedRow struct {
 //   - Status "broken"   — DB could not be opened/pinged, OR a failed review
 //     row has no open review-pipeline-failure companion finding
 type PostPromotionQueueReport struct {
-	Counts     []QueueCount `json:"counts"`
-	FailedRows []FailedRow  `json:"failed_rows"`
-	Status     string       `json:"status"`
+	Counts     []QueueCount  `json:"counts"`
+	FailedRows []FailedRow   `json:"failed_rows"`
+	Status     health.Status `json:"status"`
 	// OrphanCount is the number of failed rows whose repo_id is no longer
 	// registered — the exact set `--purge-orphans` would clear. Surfaced so
 	// the textual probe can point operators at the remediation (solov2-261t).
@@ -63,22 +64,22 @@ func CheckPostPromotionQueue(dbPath string) (PostPromotionQueueReport, error) {
 	dsn := fmt.Sprintf("file:%s?mode=ro&_busy_timeout=1000", dbPath)
 	db, err := sql.Open(sqldriver.Name, dsn)
 	if err != nil {
-		return PostPromotionQueueReport{Status: "broken"}, nil
+		return PostPromotionQueueReport{Status: health.StatusBroken}, nil
 	}
 	defer db.Close()
 
 	if err := db.Ping(); err != nil {
-		return PostPromotionQueueReport{Status: "broken"}, nil
+		return PostPromotionQueueReport{Status: health.StatusBroken}, nil
 	}
 
 	counts, err := queryQueueCounts(db)
 	if err != nil {
-		return PostPromotionQueueReport{Status: "broken"}, nil
+		return PostPromotionQueueReport{Status: health.StatusBroken}, nil
 	}
 
 	failedRows, err := queryFailedRows(db)
 	if err != nil {
-		return PostPromotionQueueReport{Status: "broken"}, nil
+		return PostPromotionQueueReport{Status: health.StatusBroken}, nil
 	}
 
 	// Review-failure invariant (solov2-nz2.3 AC3): every failed review row must
@@ -86,20 +87,24 @@ func CheckPostPromotionQueue(dbPath string) (PostPromotionQueueReport, error) {
 	// row WITHOUT one means the failure vanished silently — that is broken.
 	anyMissingFinding, err := markMissingReviewFindings(db, failedRows)
 	if err != nil {
-		return PostPromotionQueueReport{Status: "broken"}, nil
+		return PostPromotionQueueReport{Status: health.StatusBroken}, nil
 	}
 
-	status := "healthy"
-	if len(failedRows) > 0 {
-		status = "degraded"
+	// Escalate from the best state to the worst observed condition, using
+	// health.WorseThan as the single precedence authority (healthy <
+	// degraded < broken). Failed rows are the designed sticky-degraded
+	// state; a failed review row missing its companion finding is broken.
+	status := health.StatusHealthy
+	if len(failedRows) > 0 && health.StatusDegraded.WorseThan(status) {
+		status = health.StatusDegraded
 	}
-	if anyMissingFinding {
-		status = "broken"
+	if anyMissingFinding && health.StatusBroken.WorseThan(status) {
+		status = health.StatusBroken
 	}
 
 	orphans, err := queryOrphanCount(db)
 	if err != nil {
-		return PostPromotionQueueReport{Status: "broken"}, nil
+		return PostPromotionQueueReport{Status: health.StatusBroken}, nil
 	}
 
 	return PostPromotionQueueReport{
