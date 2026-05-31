@@ -925,21 +925,9 @@ func activeTaskFunc(db *sql.DB) contextpack.ActiveTaskFunc {
 	}
 }
 
-// repoRootFunc returns an mcp.RepoRootFunc that resolves a repoID to its
-// registered working-tree path. An unknown repoID yields an error so the
-// blast-radius handler surfaces a clear "repo not registered" message rather
-// than running against an empty path.
+// repoRootFunc adapts the canonical composition.RepoRootByID resolver to
+// mcp.RepoRootFunc. The underlying signatures match, so this is a trivial type
+// conversion — the lookup body and error wording live in composition.
 func repoRootFunc(db *sql.DB) mcp.RepoRootFunc {
-	return func(ctx context.Context, repoID string) (string, error) {
-		records, err := repo.List(ctx, db)
-		if err != nil {
-			return "", fmt.Errorf("repo root lookup: %w", err)
-		}
-		for _, rec := range records {
-			if rec.RepoID == repoID {
-				return rec.RootPath, nil
-			}
-		}
-		return "", fmt.Errorf("repo root lookup: repo %q is not registered", repoID)
-	}
+	return mcp.RepoRootFunc(composition.RepoRootByID(db))
 }
