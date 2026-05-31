@@ -17,9 +17,18 @@ type EmbedTextInput struct {
 }
 
 // EmbedTextVariant selects which fields the projection folds into the
-// embed text. The baseline variant is the one production currently
-// ships; the others are candidates evaluated by the recall sweep
-// (see tools/loadtest/recallprojection).
+// embed text. EmbedVariantBaseline is the ONLY value used in production
+// (sqlite embedding_refs_repo); EmbedVariantSignature/Snippet/Both are
+// eval-only candidates exercised solely by the recall sweep
+// (tools/loadtest/recallprojection).
+//
+// The non-baseline variants deliberately stay in the domain rather than
+// moving next to the eval harness: the variant enum, its String() labels,
+// and the EmbedText projection switch are one cohesive contract, and the
+// eval sweep's whole job is to compare candidate projections against the
+// production baseline through that shared surface. Splitting them would
+// fragment a single switch across two packages for no production benefit
+// (decision recorded: solov2-xde2.15). Revisit only if eval ownership moves.
 type EmbedTextVariant int
 
 const (
