@@ -227,10 +227,14 @@ func (h *Handler) emitBudgetFinding(ctx context.Context, row ports.WorkRow) {
 	msg := fmt.Sprintf("review refused for %q: per-commit token budget exceeded for commit %s",
 		row.Payload, row.GitSHA)
 
-	f, err := domain.NewFinding(
-		row.RepoID, row.Branch,
-		domain.SeverityMedium, domain.LayerQuality,
-		BudgetRule, msg,
+	f, err := domain.NewFinding(domain.FindingSpec{
+		RepoID:   row.RepoID,
+		Branch:   row.Branch,
+		Severity: domain.SeverityMedium,
+		Layer:    domain.LayerQuality,
+		Rule:     BudgetRule,
+		Message:  msg,
+	},
 		domain.WithNodeAnchor(row.GitSHA),
 		domain.WithActorKind(domain.ActorKindSystem),
 	)
@@ -288,10 +292,14 @@ func (h *Handler) emitFailureFinding(ctx context.Context, row ports.WorkRow, job
 	msg := fmt.Sprintf("review pipeline failed for %q after %d attempts: %v",
 		row.Payload, row.Attempts, jobErr)
 
-	f, err := domain.NewFinding(
-		row.RepoID, row.Branch,
-		domain.SeverityHigh, domain.LayerQuality,
-		FailureRule, msg,
+	f, err := domain.NewFinding(domain.FindingSpec{
+		RepoID:   row.RepoID,
+		Branch:   row.Branch,
+		Severity: domain.SeverityHigh,
+		Layer:    domain.LayerQuality,
+		Rule:     FailureRule,
+		Message:  msg,
+	},
 		domain.WithNodeAnchor(row.GitSHA),
 		domain.WithActorKind(domain.ActorKindSystem),
 	)

@@ -140,12 +140,14 @@ func (c *VulnScanCheck) Run(ctx context.Context, in Input) ([]*domain.Finding, e
 		if v.FixedVersion != "" {
 			msg += fmt.Sprintf("; fix: go get %s@%s", v.Package, v.FixedVersion)
 		}
-		f, err := domain.NewFinding(
-			in.RepoID, in.Branch,
-			mapSeverity(v.Severity),
-			domain.LayerSecurity,
-			"vulnerable_dependency",
-			msg,
+		f, err := domain.NewFinding(domain.FindingSpec{
+			RepoID:   in.RepoID,
+			Branch:   in.Branch,
+			Severity: mapSeverity(v.Severity),
+			Layer:    domain.LayerSecurity,
+			Rule:     "vulnerable_dependency",
+			Message:  msg,
+		},
 			domain.WithFileAnchor("go.mod"),
 			domain.WithFindingKey(v.AdvisoryID+v.Package),
 		)
