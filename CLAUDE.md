@@ -120,6 +120,17 @@ internal/
     mcp/                  <- MCP server + tool families
     git/                  <- fsnotify watcher, diff reader, hook install
   repo/                   <- repos-table registry (Add/Remove/List + git hooks)
+  platform/               <- cross-cutting operational concerns. Two altitudes
+                             coexist here by design: zero-dep leaves imported
+                             widely (config, tokenize, logrotate, crashloop,
+                             observability, service, embedderprobe, health) and
+                             doctor — a high-altitude diagnostic consumer that
+                             imports application + infrastructure to assemble
+                             health bundles. layercheck permits this: platform
+                             is operational tooling, not an inner layer. doctor
+                             stays here (rather than internal/diagnostics) since
+                             relocating it churns every importer for a naming
+                             nicety with no dependency benefit (solov2-k6t1).
 ```
 
 ### Runtime dependencies
