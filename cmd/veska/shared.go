@@ -31,13 +31,6 @@ func daemonRunning() bool {
 	return true
 }
 
-// defaultBackupDir returns the directory `veska backup create` writes to.
-// solov2-n57f moved this under $VESKA_HOME/backups so wiping the data dir
-// also clears backups (previously ~/.veska-backups survived the wipe).
-func defaultBackupDir() (string, error) {
-	return config.DefaultBackupDir(), nil
-}
-
 // resolveBackupReadDir returns the directory to READ backups from. Prefer
 // the canonical $VESKA_HOME/backups; fall back to the legacy
 // ~/.veska-backups when the canonical dir is missing or has no tarballs,
