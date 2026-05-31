@@ -99,7 +99,7 @@ func TestHandler_CommitOverageRefusesRemaining(t *testing.T) {
 	gen := &usageGenerator{reply: `{"findings":[]}`, perCall: 10_000}
 	fs := &fakeFindingStorage{}
 	metrics := newFakeErrorCounter()
-	q := NewQuota(100, 0, newFakeDailyStore(), nil)
+	q := NewQuota(100, 0, newFakeDailyStore())
 
 	h, err := NewHandler(gen, loader, staticRoot(root), fs,
 		WithQuota(q), WithAuditWriter(&fakeAuditWriter{}), WithErrorCounter(metrics))
@@ -175,7 +175,7 @@ func TestHandler_CommitCapZeroUnlimited(t *testing.T) {
 	loader, _ := NewLoader()
 	gen := &usageGenerator{reply: `{"findings":[]}`, perCall: 10_000_000}
 	fs := &fakeFindingStorage{}
-	q := NewQuota(0, 0, newFakeDailyStore(), nil)
+	q := NewQuota(0, 0, newFakeDailyStore())
 	h, _ := NewHandler(gen, loader, staticRoot(root), fs, WithQuota(q))
 
 	row := ports.WorkRow{Kind: ports.WorkKindReview, RepoID: "r", Branch: "main", GitSHA: "s", Payload: "a.go"}
@@ -199,8 +199,8 @@ func TestHandler_DailyCapPauses(t *testing.T) {
 	audit := &fakeAuditWriter{}
 	store := newFakeDailyStore()
 	// Pre-seed the day at the cap.
-	_, _ = store.AddTokens(context.Background(), NewQuota(0, 0, store, nil).localDate(), 500)
-	q := NewQuota(0, 500, store, nil)
+	_, _ = store.AddTokens(context.Background(), NewQuota(0, 0, store).localDate(), 500)
+	q := NewQuota(0, 500, store)
 	h, _ := NewHandler(gen, loader, staticRoot(root), fs, WithQuota(q), WithAuditWriter(audit))
 
 	row := ports.WorkRow{Kind: ports.WorkKindReview, RepoID: "r", Branch: "main", GitSHA: "s", Payload: "a.go"}

@@ -44,21 +44,37 @@ type Quota struct {
 	perCommit map[string]int
 }
 
+// QuotaOption configures a Quota. It mirrors the HandlerOption convention in
+// this package and search.Option elsewhere — optional dependencies are
+// injected via With* helpers rather than positional params.
+type QuotaOption func(*Quota)
+
+// WithClock injects the clock used for the local-midnight window reset.
+// Defaults to time.Now; tests pass a fixed clock. A nil clock is ignored.
+func WithClock(now func() time.Time) QuotaOption {
+	return func(q *Quota) {
+		if now != nil {
+			q.now = now
+		}
+	}
+}
+
 // NewQuota constructs a Quota. maxPerCommit and maxPerDay come from
 // config.ReviewConfig; a value <= 0 disables that cap. store persists the
-// daily total. now defaults to time.Now when nil — tests inject a fixed clock
-// to exercise the local-midnight window reset.
-func NewQuota(maxPerCommit, maxPerDay int, store DailyTokenStore, now func() time.Time) *Quota {
-	if now == nil {
-		now = time.Now
-	}
-	return &Quota{
+// daily total. The clock defaults to time.Now; inject a fixed clock via
+// WithClock to exercise the local-midnight window reset.
+func NewQuota(maxPerCommit, maxPerDay int, store DailyTokenStore, opts ...QuotaOption) *Quota {
+	q := &Quota{
 		maxPerCommit: maxPerCommit,
 		maxPerDay:    maxPerDay,
-		now:          now,
+		now:          time.Now,
 		store:        store,
 		perCommit:    make(map[string]int),
 	}
+	for _, opt := range opts {
+		opt(q)
+	}
+	return q
 }
 
 // localDate is the "2006-01-02" key for the current local day. The window
