@@ -1,20 +1,19 @@
 package main
 
 import (
-	"encoding/json"
-	"errors"
 	"fmt"
 	"strings"
-	"text/tabwriter"
 
 	"github.com/spf13/cobra"
-	"github.com/whiskeyjimbo/veska/internal/cli/mcpclient"
 
-	"github.com/whiskeyjimbo/veska/internal/application/extindex"
-	"github.com/whiskeyjimbo/veska/internal/cli/repocmd"
-	"github.com/whiskeyjimbo/veska/internal/infrastructure/sqlite"
-	"github.com/whiskeyjimbo/veska/internal/infrastructure/treesitter"
+	"github.com/whiskeyjimbo/veska/internal/cli/depscmd"
 )
+
+// The deps command logic lives in internal/cli/depscmd; the constructors below
+// are Cobra glue whose RunE bodies delegate into that package (solov2-0omh).
+// The cwd→repo resolver (autoResolveRepo) stays in cmd/veska — it is shared
+// across the symbol, graph, findings, and deps families — and is injected
+// through the ResolveRepo seam.
 
 // depsCmd is the `veska deps …` parent. Bare `veska deps` lists
 // imported modules ranked by call-site usage (the original solov2-jlws
@@ -87,91 +86,19 @@ func depsListCmd() *cobra.Command {
 		Args:         cobra.MaximumNArgs(1),
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			// solov2-mtd0: accept the same identifiers `repo add` / `reindex`
-			// do (path, repo_id, short_id) so the CLI is consistent. Falls
-			// back to --repo, then to cwd-resolved repo.
-			params := map[string]any{}
-			switch {
-			case len(args) == 1:
-				rid, err := repocmd.ResolveRepoArg(cmd.Context(), args[0])
-				if err != nil {
-					return fmt.Errorf("deps: %w", err)
-				}
-				params["repo_id"] = rid
-			case repoFlag != "":
-				params["repo_id"] = repoFlag
-			default:
-				if rid := autoResolveRepo(cmd.Context(), cmd.ErrOrStderr()); rid != "" {
-					params["repo_id"] = rid
-				}
+			var repoArg string
+			if len(args) == 1 {
+				repoArg = args[0]
 			}
-			var resp struct {
-				Dependencies []struct {
-					Module       string `json:"module"`
-					Version      string `json:"version,omitempty"`
-					Language     string `json:"language"`
-					UsageCount   int    `json:"usage_count"`
-					ImportCount  int    `json:"import_count,omitempty"`
-					TopCallSites []struct {
-						SrcNodeID  string `json:"src_node_id"`
-						SymbolPath string `json:"symbol_path"`
-					} `json:"top_call_sites"`
-				} `json:"dependencies"`
-			}
-			if err := mcpclient.Call(cmd.Context(), "eng_list_dependencies", params, &resp); err != nil {
-				return fmt.Errorf("deps: %w", err)
-			}
-			w := cmd.OutOrStdout()
-			if jsonOut {
-				enc := json.NewEncoder(w)
-				enc.SetIndent("", "  ")
-				return enc.Encode(resp)
-			}
-			if len(resp.Dependencies) == 0 {
-				fmt.Fprintln(w, "no external dependencies (or no calls into them yet — the graph fills in as files are promoted)")
-				return nil
-			}
-			shown := resp.Dependencies
-			truncated := 0
-			if limit > 0 && len(shown) > limit {
-				truncated = len(shown) - limit
-				shown = shown[:limit]
-			}
-			tw := tabwriter.NewWriter(w, 0, 0, 2, ' ', 0)
-			fmt.Fprintln(tw, "MODULE\tVERSION\tCALLS\tIMPORTS\tTOP_SYMBOLS")
-			anyZeroCalls := false
-			for _, d := range shown {
-				var symbols strings.Builder
-				for i, cs := range d.TopCallSites {
-					if i > 0 {
-						symbols.WriteString(", ")
-					}
-					symbols.WriteString(cs.SymbolPath)
-				}
-				// solov2-xok5: CALLS=0 with IMPORTS>0 almost always means the
-				// module is used through chained selector expressions (e.g.
-				// cobra `&cobra.Command{...}`, `yaml.Marshal`) that the
-				// parser attributes to the package node, not the calling
-				// function. Without a marker, a junior reads "CALLS=0" as
-				// "unused dep, safe to remove" — dangerous. Tag the row with
-				// "*" and emit a footer explaining the suppression.
-				callsCell := fmt.Sprintf("%d", d.UsageCount)
-				if d.UsageCount == 0 && d.ImportCount > 0 {
-					callsCell = "0 *"
-					anyZeroCalls = true
-				}
-				fmt.Fprintf(tw, "%s\t%s\t%s\t%d\t%s\n", d.Module, d.Version, callsCell, d.ImportCount, symbols.String())
-			}
-			if err := tw.Flush(); err != nil {
-				return err
-			}
-			if truncated > 0 {
-				fmt.Fprintf(w, "... %d more (raise --limit to see all)\n", truncated)
-			}
-			if anyZeroCalls {
-				fmt.Fprintln(w, "* CALLS=0 with IMPORTS>0: call edges suppressed by chained_selectors_unresolved (cobra/yaml-style usage); the module is imported but its use is not 'unused'. Do not infer 'safe to remove' from CALLS=0 alone.")
-			}
-			return nil
+			return depscmd.RunList(cmd.Context(), depscmd.ListParams{
+				RepoArg:     repoArg,
+				RepoID:      repoFlag,
+				Limit:       limit,
+				JSONOut:     jsonOut,
+				Out:         cmd.OutOrStdout(),
+				ErrOut:      cmd.ErrOrStderr(),
+				ResolveRepo: autoResolveRepo,
+			})
 		},
 	}
 	cmd.Flags().StringVar(&repoFlag, "repo", "", "repo id or short_id (default: the sole registered repo)")
@@ -180,16 +107,8 @@ func depsListCmd() *cobra.Command {
 	return cmd
 }
 
-// depsIndexCmd scans <repoRoot>/vendor/<module-path> for .go files,
-// parses them, and persists the nodes with external=1 so subsequent
-// eng_find_symbol / eng_get_call_chain queries can see into vendored
-// dependencies (solov2-bchl).
-//
-// Direct-write path: opens the local SQLite directly, mirroring the
-// no-daemon fallback in `veska repo add`. Phase 2 will add an MCP
-// tool (eng_index_external) so the daemon coordinates writes when
-// running; until then we accept the "daemon should be stopped for
-// this command" caveat (the single-writer pool would reject otherwise).
+// depsIndexCmd indexes a vendored Go module's symbols into the graph
+// (solov2-bchl).
 func depsIndexCmd() *cobra.Command {
 	var repoFlag string
 	cmd := &cobra.Command{
@@ -198,72 +117,15 @@ func depsIndexCmd() *cobra.Command {
 		Args:         cobra.ExactArgs(1),
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			modulePath := args[0]
-
-			db, closeFn, err := repocmd.OpenLocalDB()
-			if err != nil {
-				return fmt.Errorf("deps index: %w", err)
-			}
-			defer closeFn()
-
-			// Resolve repo: --repo wins, else autoResolveRepo, else error.
-			// autoResolveRepo needs the daemon to map cwd → repo, so on
-			// daemon-down systems the user must pass --repo.
-			repoID := repoFlag
-			if repoID == "" {
-				repoID = autoResolveRepo(cmd.Context(), cmd.ErrOrStderr())
-			}
-			if repoID == "" {
-				return errors.New("deps index: --repo <id> is required when no daemon is running to resolve cwd")
-			}
-
-			// Look up the repo's root + active branch directly from the DB.
-			root, branch, err := repocmd.LookupRepoRootAndBranch(cmd.Context(), db, repoID)
-			if err != nil {
-				return fmt.Errorf("deps index: %w", err)
-			}
-			if root == "" {
-				return fmt.Errorf("deps index: repo %s has no root_path; was it registered without a working tree?", repoID)
-			}
-
-			graph := sqlite.NewGraphRepo(db, db)
-			svc, err := extindex.NewService(treesitter.NewGoParser(), graph,
-				extindex.WithExternalRepoUpserter(graph))
-			if err != nil {
-				return fmt.Errorf("deps index: %w", err)
-			}
-
-			// solov2-izh6.7: refuse to index a vendored copy of a module
-			// that is already a tracked registered repo — the synthetic
-			// ext:<module> row would shadow the real repo's nodes and
-			// confuse cross-repo CALLS resolution (two repos with the same
-			// module_path become an ambiguity at query time, and removing
-			// the vendor dir later orphans the synthetic row).
-			if existing, lookupErr := repocmd.FindTrackedRepoByModulePath(cmd.Context(), db, modulePath); lookupErr == nil && existing != "" {
-				return fmt.Errorf("deps index: module %s is already a tracked registered repo (%s); indexing its vendored copy would duplicate it. Re-run after `veska repo remove %s` if you really want the vendored snapshot instead, or just rely on the registered repo for cross-repo CALLS", modulePath, existing, existing)
-			}
-
-			res, err := svc.IndexVendorModule(cmd.Context(), repoID, branch, root, modulePath)
-			if err != nil {
-				if errors.Is(err, extindex.ErrModuleNotVendored) {
-					return fmt.Errorf("deps index: %s is not vendored under %s/vendor/ — run `go mod vendor` first, or (phase 2) the module-cache path will cover non-vendored modules", modulePath, root)
-				}
-				return fmt.Errorf("deps index: %w", err)
-			}
-			fmt.Fprintf(cmd.OutOrStdout(),
-				"indexed %d node(s) across %d file(s) under %s/vendor/%s%s\n",
-				res.Nodes, res.Files, root, modulePath, skippedSuffix(res.Skipped))
-			return nil
+			return depscmd.RunIndex(cmd.Context(), depscmd.IndexParams{
+				ModulePath:  args[0],
+				RepoID:      repoFlag,
+				Out:         cmd.OutOrStdout(),
+				ErrOut:      cmd.ErrOrStderr(),
+				ResolveRepo: autoResolveRepo,
+			})
 		},
 	}
 	cmd.Flags().StringVar(&repoFlag, "repo", "", "repo id or short_id (default: the cwd-resolved repo)")
 	return cmd
-}
-
-// skippedSuffix renders an optional " (N file(s) skipped)" suffix.
-func skippedSuffix(n int) string {
-	if n == 0 {
-		return ""
-	}
-	return fmt.Sprintf(" (%d file(s) skipped due to parse errors)", n)
 }

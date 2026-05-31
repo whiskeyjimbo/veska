@@ -23,7 +23,7 @@ import (
 // flags/positionals and delegates. The cold-scan reparser factory and the
 // cwd→repo matcher are cmd-owned seams (shared with `veska reindex`) injected
 // through searchcmd.RunOpts (solov2-0omh.5).
-func searchCmd() *cobra.Command {
+func searchCmd(reparserFactory reparserFactoryFunc) *cobra.Command {
 	var (
 		k        int
 		jsonOut  bool

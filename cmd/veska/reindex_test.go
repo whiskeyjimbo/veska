@@ -65,13 +65,12 @@ func setupReindexEnv(t *testing.T) (repoRoot, repoID string) {
 	return rec.RootPath, id
 }
 
-// installSpyReparser swaps the cmd-owned reparser factory for a closure that
-// records each invocation. The previous factory is restored when the test
-// finishes.
-func installSpyReparser(t *testing.T, calls *atomic.Int32, lastRepo *application.RepoRecord) {
-	t.Helper()
-	prev := reparserFactory
-	reparserFactory = func(_ *sqlite.Pools, _ application.IgnoreLoader) (func(context.Context, application.RepoRecord) error, error) {
+// spyReparserFactory returns a reparser factory whose reparser records each
+// invocation. It is injected into newRootCmd via withReparserFactory so the
+// command runs the spy instead of standing up the real ingester/promoter
+// pipeline.
+func spyReparserFactory(calls *atomic.Int32, lastRepo *application.RepoRecord) reparserFactoryFunc {
+	return func(_ *sqlite.Pools, _ application.IgnoreLoader) (func(context.Context, application.RepoRecord) error, error) {
 		return func(_ context.Context, rec application.RepoRecord) error {
 			calls.Add(1)
 			if lastRepo != nil {
@@ -80,7 +79,6 @@ func installSpyReparser(t *testing.T, calls *atomic.Int32, lastRepo *application
 			return nil
 		}, nil
 	}
-	t.Cleanup(func() { reparserFactory = prev })
 }
 
 func chdir(t *testing.T, dir string) {
@@ -99,12 +97,11 @@ func TestReindexCmd_ResolvesByCwd(t *testing.T) {
 	repoRoot, repoID := setupReindexEnv(t)
 	var calls atomic.Int32
 	var got application.RepoRecord
-	installSpyReparser(t, &calls, &got)
 
 	chdir(t, repoRoot)
 
 	var out bytes.Buffer
-	root := newRootCmd()
+	root := newRootCmd(withReparserFactory(spyReparserFactory(&calls, &got)))
 	root.SetOut(&out)
 	root.SetErr(&out)
 	root.SetArgs([]string{"reindex"})
@@ -126,10 +123,9 @@ func TestReindexCmd_ResolvesByID(t *testing.T) {
 	_, repoID := setupReindexEnv(t)
 	var calls atomic.Int32
 	var got application.RepoRecord
-	installSpyReparser(t, &calls, &got)
 
 	var out bytes.Buffer
-	root := newRootCmd()
+	root := newRootCmd(withReparserFactory(spyReparserFactory(&calls, &got)))
 	root.SetOut(&out)
 	root.SetErr(&out)
 	root.SetArgs([]string{"reindex", repoID})
@@ -167,10 +163,9 @@ func TestReindexCmd_ForcesReparseAtHEAD(t *testing.T) {
 	}
 
 	var calls atomic.Int32
-	installSpyReparser(t, &calls, nil)
 
 	var buf bytes.Buffer
-	root := newRootCmd()
+	root := newRootCmd(withReparserFactory(spyReparserFactory(&calls, nil)))
 	root.SetOut(&buf)
 	root.SetErr(&buf)
 	root.SetArgs([]string{"reindex", repoID})
@@ -185,10 +180,9 @@ func TestReindexCmd_ForcesReparseAtHEAD(t *testing.T) {
 func TestReindexCmd_UnknownRepo(t *testing.T) {
 	setupReindexEnv(t)
 	var calls atomic.Int32
-	installSpyReparser(t, &calls, nil)
 
 	var buf bytes.Buffer
-	root := newRootCmd()
+	root := newRootCmd(withReparserFactory(spyReparserFactory(&calls, nil)))
 	root.SetOut(&buf)
 	root.SetErr(&buf)
 	root.SetArgs([]string{"reindex", "no-such-repo-id"})
@@ -205,7 +199,7 @@ func TestReindexCmd_UnknownRepo(t *testing.T) {
 // set (parity with deps/findings/calls/blast/search).
 func TestReindexCmd_RepoFlagListed(t *testing.T) {
 	t.Parallel()
-	c := reindexCmd()
+	c := reindexCmd(defaultReparserFactory)
 	if f := c.Flags().Lookup("repo"); f == nil {
 		t.Fatal("reindex command should expose --repo flag for parity with siblings")
 	}

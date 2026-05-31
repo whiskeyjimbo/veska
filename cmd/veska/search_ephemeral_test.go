@@ -293,7 +293,7 @@ func TestSearchEphemeral_FirstPromotionRunsSecretCheck(t *testing.T) {
 	loader := func(repoRoot string) (application.IgnoreMatcher, error) {
 		return fsignore.Load(repoRoot)
 	}
-	reparser, err := reparserFactory(pools, loader)
+	reparser, err := defaultReparserFactory(pools, loader)
 	if err != nil {
 		t.Fatalf("reparserFactory: %v", err)
 	}
@@ -352,7 +352,7 @@ func TestEphemeralPromotionPrintsCheckSummary(t *testing.T) {
 	loader := func(repoRoot string) (application.IgnoreMatcher, error) {
 		return fsignore.Load(repoRoot)
 	}
-	reparser, err := reparserFactory(pools, loader)
+	reparser, err := defaultReparserFactory(pools, loader)
 	if err != nil {
 		t.Fatalf("reparserFactory: %v", err)
 	}
