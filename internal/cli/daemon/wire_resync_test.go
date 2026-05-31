@@ -2,7 +2,6 @@ package daemon
 
 import (
 	"context"
-	"math"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -11,6 +10,7 @@ import (
 	"time"
 
 	"github.com/whiskeyjimbo/veska/internal/application"
+	"github.com/whiskeyjimbo/veska/internal/application/veccodec"
 	"github.com/whiskeyjimbo/veska/internal/core/domain"
 	gitwatch "github.com/whiskeyjimbo/veska/internal/infrastructure/git"
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/repo"
@@ -293,7 +293,7 @@ func TestDaemon_VectorStoreRehydratesOnSecondStart(t *testing.T) {
 	// The vec is L2-normalised (magnitude 1) so any score comparison
 	// downstream behaves as the production code expects.
 	vec := []float32{1, 0, 0}
-	blob := encodeVecLE(vec)
+	blob := veccodec.EncodeFloat32LE(vec)
 	const hash = "h-test-rehydrate"
 	const model = "m-test"
 	if _, err := d1.pools.Write.Exec(
@@ -363,19 +363,6 @@ func TestDaemon_VectorStoreRehydratesOnSecondStart(t *testing.T) {
 	}
 }
 
-// encodeVecLE mirrors embedder.encodeFloat32LE for the rehydrate test —
-// duplicated locally so this test does not depend on an unexported helper.
-func encodeVecLE(vec []float32) []byte {
-	buf := make([]byte, 4*len(vec))
-	for i, v := range vec {
-		bits := math.Float32bits(v)
-		buf[i*4+0] = byte(bits)
-		buf[i*4+1] = byte(bits >> 8)
-		buf[i*4+2] = byte(bits >> 16)
-		buf[i*4+3] = byte(bits >> 24)
-	}
-	return buf
-}
 
 // TestDaemon_StartupResync_StartDoesNotBlock guards the epic constraint
 // that the scan must not block Start. We hold-up the resync by registering
