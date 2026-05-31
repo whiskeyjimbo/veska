@@ -688,7 +688,8 @@ func (b *daemonBuilder) buildReviewHandler() (queue.WorkHandler, error) {
 		genOpts = append(genOpts, llm.WithTimeout(d))
 	}
 	reviewGen := llm.NewOllamaGenerator(
-		b.fileCfg.LLMGenerator.Endpoint, b.fileCfg.LLMGenerator.Model, nil, genOpts...)
+		b.fileCfg.LLMGenerator.Model,
+		append([]llm.Option{llm.WithBaseURL(b.fileCfg.LLMGenerator.Endpoint)}, genOpts...)...)
 	reviewRoot := func(ctx context.Context, repoID string) (string, error) {
 		return repoRootFunc(b.pools.ReadDB)(ctx, repoID)
 	}

@@ -73,6 +73,11 @@ type OllamaGenerator struct {
 	client  *http.Client
 	backoff time.Duration
 	timeout time.Duration
+
+	// customClient holds a caller-supplied client (WithHTTPClient). Recorded
+	// during the option loop and reconciled once in NewOllamaGenerator so the
+	// options are order-independent.
+	customClient *http.Client
 }
 
 // Compile-time interface satisfaction check.
@@ -80,6 +85,27 @@ var _ ports.LLMGenerator = (*OllamaGenerator)(nil)
 
 // Option customises an OllamaGenerator at construction time.
 type Option func(*OllamaGenerator)
+
+// WithBaseURL overrides the Ollama base URL (default http://localhost:11434).
+// An empty value is ignored, preserving the default.
+func WithBaseURL(u string) Option {
+	return func(g *OllamaGenerator) {
+		if u != "" {
+			g.baseURL = u
+		}
+	}
+}
+
+// WithHTTPClient supplies a caller-owned *http.Client, used as-is and never
+// mutated. When supplied this wins, regardless of option order. A nil client is
+// ignored, preserving the default (http.DefaultClient).
+func WithHTTPClient(c *http.Client) Option {
+	return func(g *OllamaGenerator) {
+		if c != nil {
+			g.customClient = c
+		}
+	}
+}
 
 // WithBackoff sets the base delay before the first retry. Each subsequent
 // retry doubles it. A non-positive value is ignored.
@@ -101,30 +127,30 @@ func WithTimeout(d time.Duration) Option {
 	}
 }
 
-// NewOllamaGenerator constructs an OllamaGenerator with the given base URL and
-// model. Pass empty strings to use the defaults (http://localhost:11434 and
-// "llama3"). The provided http.Client is used for all requests; pass nil to use
-// http.DefaultClient. Optional behaviour (backoff, per-call timeout) is set via
-// Option values.
-func NewOllamaGenerator(baseURL, model string, client *http.Client, opts ...Option) *OllamaGenerator {
-	if baseURL == "" {
-		baseURL = defaultOllamaBase
-	}
+// NewOllamaGenerator constructs an OllamaGenerator for the given model. Pass an
+// empty model to use the default ("llama3"). Apply WithBaseURL / WithHTTPClient /
+// WithBackoff / WithTimeout to override the defaults (base URL
+// http://localhost:11434, http.DefaultClient, backoff, per-call timeout).
+func NewOllamaGenerator(model string, opts ...Option) *OllamaGenerator {
 	if model == "" {
 		model = defaultOllamaModel
 	}
-	if client == nil {
-		client = http.DefaultClient
-	}
 	g := &OllamaGenerator{
-		baseURL: baseURL,
+		baseURL: defaultOllamaBase,
 		model:   model,
-		client:  client,
 		backoff: defaultBackoff,
 		timeout: defaultTimeout,
 	}
 	for _, opt := range opts {
 		opt(g)
+	}
+	// Reconcile the client once, after all options are recorded, so the result
+	// is independent of option order. A caller-supplied client wins and is used
+	// unchanged; otherwise fall back to http.DefaultClient.
+	if g.customClient != nil {
+		g.client = g.customClient
+	} else {
+		g.client = http.DefaultClient
 	}
 	return g
 }
