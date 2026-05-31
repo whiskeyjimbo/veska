@@ -48,20 +48,36 @@ type Poller struct {
 	Pauser func() bool
 }
 
-// New creates a Poller with the default 250ms poll interval.
-func New(readDB, writeDB *sql.DB, handlers map[WorkKind]WorkHandler) *Poller {
-	return NewWithInterval(readDB, writeDB, handlers, 250*time.Millisecond)
+// defaultPollInterval is the poll cadence used when WithInterval is not given.
+const defaultPollInterval = 250 * time.Millisecond
+
+// Option configures a Poller at construction.
+type Option func(*Poller)
+
+// WithInterval sets the poll interval (primarily for testing / config tuning).
+// A non-positive duration is ignored, leaving the default.
+func WithInterval(d time.Duration) Option {
+	return func(p *Poller) {
+		if d > 0 {
+			p.interval = d
+		}
+	}
 }
 
-// NewWithInterval creates a Poller with a custom poll interval (primarily for testing).
-func NewWithInterval(readDB, writeDB *sql.DB, handlers map[WorkKind]WorkHandler, interval time.Duration) *Poller {
-	return &Poller{
+// New creates a Poller. The poll interval defaults to 250ms; override it with
+// WithInterval.
+func New(readDB, writeDB *sql.DB, handlers map[WorkKind]WorkHandler, opts ...Option) *Poller {
+	p := &Poller{
 		readDB:   readDB,
 		writeDB:  writeDB,
 		handlers: handlers,
-		interval: interval,
+		interval: defaultPollInterval,
 		done:     make(chan struct{}),
 	}
+	for _, opt := range opts {
+		opt(p)
+	}
+	return p
 }
 
 // Start launches one goroutine per registered WorkKind and returns immediately.

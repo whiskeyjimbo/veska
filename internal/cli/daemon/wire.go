@@ -730,7 +730,7 @@ func (b *daemonBuilder) buildPollerWatcher() error {
 	if d, derr := time.ParseDuration(b.fileCfg.PostPromotionQueue.PollInterval); derr == nil && d > 0 {
 		pollInterval = d
 	}
-	b.poller = queue.NewWithInterval(b.pools.ReadDB, b.pools.Write, b.handlers, pollInterval)
+	b.poller = queue.New(b.pools.ReadDB, b.pools.Write, b.handlers, queue.WithInterval(pollInterval))
 	b.poller.Pauser = b.ingestionBusy
 	b.watcher = gitwatch.NewMultiRepoWatcher()
 
