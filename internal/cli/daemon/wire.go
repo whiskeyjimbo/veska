@@ -270,8 +270,11 @@ func newDaemon(cfg Config) (*Daemon, error) {
 	}()
 
 	for _, phase := range []func() error{
-		b.buildCore,
+		// buildCheckPipeline runs before buildCore: it builds the finding
+		// storage and the post-promotion check runner, which buildCore then
+		// passes into the Ingester/Promoter as construction options.
 		b.buildCheckPipeline,
+		b.buildCore,
 		b.buildEmbedder,
 		b.buildQueueHandlers,
 		b.buildPollerWatcher,
@@ -304,11 +307,12 @@ type daemonBuilder struct {
 	pools *sqlite.Pools
 	vec   ports.VectorStorage
 
-	staging  *application.StagingArea
-	gate     *application.IngestionGate
-	ingester *application.Ingester
-	promoter *application.Promoter
-	findings ports.FindingStorage
+	staging     *application.StagingArea
+	gate        *application.IngestionGate
+	ingester    *application.Ingester
+	promoter    *application.Promoter
+	findings    ports.FindingStorage
+	checkRunner application.CheckRunner
 
 	scanTracker   *application.ScanTracker
 	resyncRef     *application.StartupResync
@@ -460,15 +464,27 @@ func (b *daemonBuilder) openStorage() error {
 // buildCore wires the shared ingestion+promotion core (internal/composition),
 // the finding storage, and the git-diff AddedLines seam.
 func (b *daemonBuilder) buildCore() error {
-	core := composition.NewColdScanCore(b.pools, b.fileCfg.Review.Enabled)
+	ingesterOpts := []application.IngesterOption{
+		application.WithFindingStorage(b.findings),
+	}
+	promoterOpts := []application.PromoterOption{
+		application.WithCheckRunner(b.checkRunner),
+		application.WithAddedLinesFunc(composition.GitAddedLinesFunc(repoRootFunc(b.pools.ReadDB))),
+	}
+	// Pass the tracer only when one was constructed: b.tracer is a concrete
+	// *sdktrace.TracerProvider, and wrapping a nil pointer in the option's
+	// interface parameter would defeat the noop fallback (non-nil interface,
+	// nil concrete value).
+	if b.tracer != nil {
+		ingesterOpts = append(ingesterOpts, application.WithIngesterTracerProvider(b.tracer))
+		promoterOpts = append(promoterOpts, application.WithPromoterTracerProvider(b.tracer))
+	}
+
+	core := composition.NewColdScanCore(b.pools, b.fileCfg.Review.Enabled, ingesterOpts, promoterOpts)
 	b.staging = core.Staging
 	b.gate = core.Gate
 	b.ingester = core.Ingester
 	b.promoter = core.Promoter
-
-	b.findings = sqlite.NewFindingRepo(b.pools.Write)
-	b.ingester.SetFindingStorage(b.findings)
-	b.promoter.SetAddedLinesFunc(composition.GitAddedLinesFunc(repoRootFunc(b.pools.ReadDB)))
 	return nil
 }
 
@@ -476,6 +492,8 @@ func (b *daemonBuilder) buildCore() error {
 // contract-drift, secrets-scan, and the optional vuln-scan) and installs the
 // check runner on the promoter.
 func (b *daemonBuilder) buildCheckPipeline() error {
+	b.findings = sqlite.NewFindingRepo(b.pools.Write)
+
 	checkReg := checks.NewRegistry()
 	deadcodeRepo := sqlite.NewDeadCodeRepo(b.pools.ReadDB)
 	contractRepo := sqlite.NewContractDriftRepo(b.pools.ReadDB)
@@ -504,7 +522,7 @@ func (b *daemonBuilder) buildCheckPipeline() error {
 	}
 
 	runner := checks.NewRunner(checkReg, b.findings, b.metrics)
-	b.promoter.SetCheckRunner(composition.CheckRunnerAdapter{Inner: runner})
+	b.checkRunner = composition.CheckRunnerAdapter{Inner: runner}
 	return nil
 }
 
@@ -773,9 +791,10 @@ func (b *daemonBuilder) buildMCPServer() error {
 // when tracing is disabled) and wires the startup-resync orchestrator, sharing
 // the reparser closure with the repo registrar (solov2-0z1.2).
 func (b *daemonBuilder) finalize() error {
+	// The Ingester and Promoter receive the tracer as a construction option in
+	// buildCore; only the MCP registry is wired here (it is built later, by
+	// buildMCPServer).
 	if b.tracer != nil {
-		b.ingester.SetTracerProvider(b.tracer)
-		b.promoter.SetTracerProvider(b.tracer)
 		b.registry.SetTracerProvider(b.tracer)
 	}
 	resync := application.NewStartupResync(

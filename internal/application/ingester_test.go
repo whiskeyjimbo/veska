@@ -161,8 +161,7 @@ func TestIngester_Save_ParseFailureEmitsFinding(t *testing.T) {
 	}
 	staging := NewStagingArea()
 	store := &recordingFindingStorage{}
-	ing := NewIngester(parser, staging, NewIngestionGate(staging))
-	ing.SetFindingStorage(store)
+	ing := NewIngester(parser, staging, NewIngestionGate(staging), WithFindingStorage(store))
 
 	ing.Save(context.Background(), "repo1", "main", "src/bad.ts", []byte("broken"))
 
@@ -196,8 +195,7 @@ func TestIngester_Save_ParseFailureIdempotent(t *testing.T) {
 	}
 	staging := NewStagingArea()
 	store := &recordingFindingStorage{}
-	ing := NewIngester(parser, staging, NewIngestionGate(staging))
-	ing.SetFindingStorage(store)
+	ing := NewIngester(parser, staging, NewIngestionGate(staging), WithFindingStorage(store))
 
 	// Ingest the same broken file twice.
 	for range 2 {
@@ -221,8 +219,7 @@ func TestIngester_Save_CleanParseEmitsNoFinding(t *testing.T) {
 	}
 	staging := NewStagingArea()
 	store := &recordingFindingStorage{}
-	ing := NewIngester(parser, staging, NewIngestionGate(staging))
-	ing.SetFindingStorage(store)
+	ing := NewIngester(parser, staging, NewIngestionGate(staging), WithFindingStorage(store))
 
 	ing.Save(context.Background(), "repo1", "main", "ok.go", []byte("package x"))
 	if got := store.snapshot(); len(got) != 0 {
@@ -234,8 +231,7 @@ func TestIngester_Save_CleanReparseClosesParseFailureFinding(t *testing.T) {
 	staging := NewStagingArea()
 	store := &recordingFindingStorage{}
 	parser := &stubParser{}
-	ing := NewIngester(parser, staging, NewIngestionGate(staging))
-	ing.SetFindingStorage(store)
+	ing := NewIngester(parser, staging, NewIngestionGate(staging), WithFindingStorage(store))
 
 	const path = "src/bad.ts"
 
@@ -267,8 +263,7 @@ func TestIngester_Save_CleanParseNeverFailed_NoFindingCreated(t *testing.T) {
 	staging := NewStagingArea()
 	store := &recordingFindingStorage{}
 	parser := &stubParser{result: &domain.ParseResult{Nodes: []*domain.Node{{}}}}
-	ing := NewIngester(parser, staging, NewIngestionGate(staging))
-	ing.SetFindingStorage(store)
+	ing := NewIngester(parser, staging, NewIngestionGate(staging), WithFindingStorage(store))
 
 	ing.Save(context.Background(), "repo1", "main", "ok.go", []byte("package x"))
 
@@ -285,7 +280,7 @@ func TestIngester_Save_ParseFailureWithoutFindingStorage_NoPanic(t *testing.T) {
 	}
 	staging := NewStagingArea()
 	ing := NewIngester(parser, staging, NewIngestionGate(staging))
-	// Deliberately do NOT call SetFindingStorage.
+	// Deliberately omit WithFindingStorage.
 
 	ing.Save(context.Background(), "repo1", "main", "src/bad.ts", []byte("broken"))
 }

@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/whiskeyjimbo/veska/internal/core/domain"
-	"github.com/whiskeyjimbo/veska/internal/core/ports"
 	"github.com/whiskeyjimbo/veska/internal/platform/observability"
 	"go.opentelemetry.io/otel/trace/noop"
 )
@@ -60,7 +59,7 @@ type CheckRunner interface {
 // PromotionStore and enqueues post-promotion work items. It is a thin
 // orchestrator: it builds a PromotionBatch from the staging snapshot, delegates
 // the atomic transaction to the store, then performs advisory post-commit work
-// (staging cleanup, audit entries, structural checks).
+// (staging cleanup, structural checks).
 //
 // Promoter no longer writes SQL itself — all durable writes flow through the
 // PromotionStore port, keeping the application layer free of database/sql.
@@ -68,50 +67,55 @@ type Promoter struct {
 	staging *StagingArea
 	store   PromotionStore
 	tp      observability.TracerProvider
-	audit   ports.AuditWriter
 	checks  CheckRunner
 	added   AddedLinesFunc
 }
 
+// PromoterOption configures optional Promoter collaborators at construction.
+// The required staging/store are positional; the post-commit seams (check
+// runner, added-lines resolver, tracer) are options so the constructed Promoter
+// is immutable and fully wired before use.
+type PromoterOption func(*Promoter)
+
+// WithCheckRunner installs the post-commit structural check runner. The runner
+// is invoked after the promotion transaction commits, before Promote returns.
+// If omitted, no checks run.
+func WithCheckRunner(r CheckRunner) PromoterOption {
+	return func(p *Promoter) { p.checks = r }
+}
+
+// WithAddedLinesFunc installs the seam that resolves the newly-added lines of a
+// promoted commit. When set, Promote calls it after commit and passes the
+// result on CheckRunInput.AddedLines. If omitted, AddedLines is left nil and
+// checks that need diff data are skipped.
+func WithAddedLinesFunc(f AddedLinesFunc) PromoterOption {
+	return func(p *Promoter) { p.added = f }
+}
+
+// WithPromoterTracerProvider installs a TracerProvider for promotion.transaction
+// spans. If omitted (or given nil), a noop provider is used.
+func WithPromoterTracerProvider(tp observability.TracerProvider) PromoterOption {
+	return func(p *Promoter) { p.tp = tp }
+}
+
 // NewPromoter constructs a Promoter wired to the provided StagingArea and
 // PromotionStore. The store owns the promotion transaction; the Promoter only
-// orchestrates the snapshot and advisory post-commit steps.
-func NewPromoter(staging *StagingArea, store PromotionStore) *Promoter {
-	return &Promoter{
+// orchestrates the snapshot and advisory post-commit steps. Optional seams
+// (check runner, added-lines resolver, tracer) are supplied via PromoterOption.
+func NewPromoter(staging *StagingArea, store PromotionStore, opts ...PromoterOption) *Promoter {
+	p := &Promoter{
 		staging: staging,
 		store:   store,
 	}
+	for _, o := range opts {
+		o(p)
+	}
+	return p
 }
 
-// SetAuditWriter installs an AuditWriter for promotion audit entries.
-// If not called (or called with nil), audit writes are skipped.
-func (p *Promoter) SetAuditWriter(aw ports.AuditWriter) {
-	p.audit = aw
-}
-
-// SetCheckRunner installs the post-commit structural check runner. The runner
-// is invoked after the promotion transaction commits, before Promote returns.
-// If not called (or called with nil), no checks run.
-func (p *Promoter) SetCheckRunner(r CheckRunner) {
-	p.checks = r
-}
-
-// SetAddedLinesFunc installs the seam that resolves the newly-added lines
-// of a promoted commit. When set, Promote calls it after commit and passes
-// the result on CheckRunInput.AddedLines. If not called (or called with
-// nil), AddedLines is left nil and checks that need diff data are skipped.
-func (p *Promoter) SetAddedLinesFunc(f AddedLinesFunc) {
-	p.added = f
-}
-
-// SetTracerProvider installs a TracerProvider for promotion.transaction spans.
-// If not called (or called with nil), a noop provider is used.
-func (p *Promoter) SetTracerProvider(tp observability.TracerProvider) {
-	p.tp = tp
-}
-
-// TracerProvider returns the installed TracerProvider, or nil if none has
-// been set. It is the read companion to SetTracerProvider.
+// TracerProvider returns the installed TracerProvider, or nil if none was
+// supplied. Exposed so the daemon wiring test can assert the tracer was
+// threaded into every tracing-aware consumer.
 func (p *Promoter) TracerProvider() observability.TracerProvider {
 	return p.tp
 }
@@ -198,22 +202,10 @@ func (p *Promoter) Promote(ctx context.Context, repoID, branch, gitSHA string, a
 	}
 
 	// Clear staging entries only after a successful commit.
-	promotedAt := time.Now()
 	filePaths := make([]string, 0, len(batch.Files))
 	for _, f := range batch.Files {
 		filePaths = append(filePaths, f.Path)
 		p.staging.DeleteStagedFile(repoID, branch, f.Path)
-		if p.audit != nil {
-			_ = p.audit.Write(ctx, ports.AuditEntry{
-				RepoID:    repoID,
-				ActorID:   actor.ID,
-				ActorKind: actor.Kind,
-				Op:        "promotion.commit",
-				TargetID:  f.Path,
-				Branch:    branch,
-				CreatedAt: promotedAt,
-			})
-		}
 	}
 
 	// Post-commit: run advisory structural checks against the just-committed
