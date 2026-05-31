@@ -50,11 +50,27 @@ const DefaultRatePerSec = 10.0
 // WithMaxAttempts.
 const DefaultMaxAttempts = 3
 
+// EmbedRefQueue is the consumer-owned slice of ports.EmbeddingRefRepo that the
+// Worker actually uses to drain and resolve the embedding queue. It omits the
+// two methods the Worker never calls (ContentHashForNode, CountByState — those
+// belong to autolink and the doctor count probes, which declare their own
+// narrow interfaces). Following the same ISP convention as those consumers
+// keeps the Worker's dependency honest; the single sqlite.EmbeddingRefsRepo
+// satisfies this and the full ports.EmbeddingRefRepo alike (solov2-xde2.16).
+type EmbedRefQueue interface {
+	FetchPending(ctx context.Context, limit int) ([]ports.PendingEmbedRef, error)
+	CountPending(ctx context.Context) (int, error)
+	LookupExisting(ctx context.Context, contentHash string) (embedding []byte, dim int, found bool, err error)
+	MarkReady(ctx context.Context, nodeID, contentHash, modelID string, dim int, embedding []byte, at time.Time) error
+	MarkAttemptFailed(ctx context.Context, nodeID string, maxAttempts int) error
+	Reuse(ctx context.Context, nodeID, contentHash string, at time.Time) error
+}
+
 // Worker drains pending node_embedding_refs, embeds them, and upserts
 // vectors into VectorStorage. It owns no state beyond what's needed to
 // service one tick; all durability lives in the SQLite refs table.
 type Worker struct {
-	refs     ports.EmbeddingRefRepo
+	refs     EmbedRefQueue
 	embedder ports.EmbeddingProvider
 	vectors  ports.VectorStorage
 	metrics  *observability.Metrics
@@ -163,7 +179,7 @@ var ErrMissingDependency = errors.New("embedder: missing required dependency")
 // wiring fault at construction time rather than crashing inside a goroutine
 // at first tick.
 func NewWorker(
-	refs ports.EmbeddingRefRepo,
+	refs EmbedRefQueue,
 	embedder ports.EmbeddingProvider,
 	vectors ports.VectorStorage,
 	opts ...Option,
