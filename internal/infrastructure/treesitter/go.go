@@ -87,12 +87,7 @@ func parseInterfaceMethods(typeDeclNode *sitter.Node, src []byte, repoID, path, 
 			id := nodeID(repoID, path, domain.KindMethod, fullName)
 			lr := lineRange(c)
 			raw := string(src[c.StartByte():c.EndByte()])
-			n, err := domain.NewNode(id, path, fullName, domain.KindMethod,
-				domain.WithLanguage("go"),
-				domain.WithLines(lr),
-				domain.WithRawContent(raw),
-				domain.WithExported(goExported(methodName)),
-			)
+			n, err := domain.NewNode(domain.NodeSpec{ID: id, Path: path, Name: fullName, Kind: domain.KindMethod}, domain.WithLanguage("go"), domain.WithLines(lr), domain.WithRawContent(raw), domain.WithExported(goExported(methodName)))
 			if err != nil {
 				continue
 			}

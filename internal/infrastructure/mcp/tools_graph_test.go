@@ -123,9 +123,9 @@ func (s *stubGraphStorage) GetNodeSnippet(_ context.Context, _, _ string, id dom
 
 func mustNode(t *testing.T, id, path, name string, kind domain.NodeKind) *domain.Node {
 	t.Helper()
-	n, err := domain.NewNode(id, path, name, kind)
+	n, err := domain.NewNode(domain.NodeSpec{ID: id, Path: path, Name: name, Kind: kind})
 	if err != nil {
-		t.Fatalf("NewNode(%q): %v", id, err)
+		t.Fatalf("NewNode(NodeSpec{ID: %q}): %v", id, err)
 	}
 	return n
 }
@@ -712,8 +712,7 @@ func TestGetCallChain_StdlibOnlyBodyEmitsExternalCalleesReason(t *testing.T) {
 	if name == "" { name = "world" }
 	return fmt.Sprintf("%s, %s!", g.Prefix, strings.TrimSpace(name))
 }`
-	seed, err := domain.NewNode("fn-greet", "libfoo/greeter.go", "Greeter.Greet", domain.KindMethod,
-		domain.WithRawContent(raw))
+	seed, err := domain.NewNode(domain.NodeSpec{ID: "fn-greet", Path: "libfoo/greeter.go", Name: "Greeter.Greet", Kind: domain.KindMethod}, domain.WithRawContent(raw))
 	if err != nil {
 		t.Fatalf("NewNode: %v", err)
 	}
@@ -752,8 +751,7 @@ func TestGetCallChain_ChainedSelectorBodyStillEmitsChainedHint(t *testing.T) {
 	s.router.handlers.Register("/x", h)
 	return s.config.tls.Load()
 }`
-	seed, err := domain.NewNode("fn-start", "srv/server.go", "Server.Start", domain.KindMethod,
-		domain.WithRawContent(raw))
+	seed, err := domain.NewNode(domain.NodeSpec{ID: "fn-start", Path: "srv/server.go", Name: "Server.Start", Kind: domain.KindMethod}, domain.WithRawContent(raw))
 	if err != nil {
 		t.Fatalf("NewNode: %v", err)
 	}
@@ -1125,7 +1123,7 @@ func BenchmarkFindSymbol(b *testing.B) {
 	for i := range 1000 {
 		id := fmt.Sprintf("node-%d", i)
 		name := fmt.Sprintf("Symbol%d", i)
-		n, err := domain.NewNode(id, "pkg/gen.go", name, domain.KindFunction)
+		n, err := domain.NewNode(domain.NodeSpec{ID: id, Path: "pkg/gen.go", Name: name, Kind: domain.KindFunction})
 		if err != nil {
 			b.Fatalf("NewNode: %v", err)
 		}

@@ -64,10 +64,7 @@ func chunkFile(repoID, path string, src []byte, symbols []*domain.Node) []*domai
 			}
 			name := fmt.Sprintf("chunk:%d-%d", start, end)
 			id := nodeID(repoID, path, domain.KindChunk, name)
-			n, err := domain.NewNode(id, path, name, domain.KindChunk,
-				domain.WithLines(domain.LineRange{Start: start, End: end}),
-				domain.WithRawContent(body),
-			)
+			n, err := domain.NewNode(domain.NodeSpec{ID: id, Path: path, Name: name, Kind: domain.KindChunk}, domain.WithLines(domain.LineRange{Start: start, End: end}), domain.WithRawContent(body))
 			if err != nil {
 				continue
 			}

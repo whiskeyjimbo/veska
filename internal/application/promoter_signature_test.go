@@ -18,8 +18,7 @@ func TestPromote_WritesSignatureAndNilPrevOnFirstPromotion(t *testing.T) {
 	insertTestRepo(t, db, "repo1")
 
 	sa := staging.NewArea()
-	n, _ := domain.NewNode("n1", "a.go", "Foo", domain.KindFunction,
-		domain.WithSignature("func Foo() error"))
+	n, _ := domain.NewNode(domain.NodeSpec{ID: "n1", Path: "a.go", Name: "Foo", Kind: domain.KindFunction}, domain.WithSignature("func Foo() error"))
 	sa.Stage("repo1", "main", "a.go", staging.File{Nodes: []*domain.Node{n}, Edges: nil})
 
 	p := newTestPromoter(sa, db)
@@ -54,11 +53,9 @@ func TestPromote_ThreadsPrevSignatureAcrossPromotions(t *testing.T) {
 	p := newTestPromoter(sa, db)
 
 	// Promotion #1: signature = "func Foo() error".
-	n1, _ := domain.NewNode("n1", "a.go", "Foo", domain.KindFunction,
-		domain.WithSignature("func Foo() error"))
+	n1, _ := domain.NewNode(domain.NodeSpec{ID: "n1", Path: "a.go", Name: "Foo", Kind: domain.KindFunction}, domain.WithSignature("func Foo() error"))
 	// Sibling: a non-drifting node so we exercise multi-row prev-sig threading.
-	n2, _ := domain.NewNode("n2", "a.go", "Bar", domain.KindFunction,
-		domain.WithSignature("func Bar()"))
+	n2, _ := domain.NewNode(domain.NodeSpec{ID: "n2", Path: "a.go", Name: "Bar", Kind: domain.KindFunction}, domain.WithSignature("func Bar()"))
 	sa.Stage("repo1", "main", "a.go", staging.File{Nodes: []*domain.Node{n1, n2}, Edges: nil})
 	if err := p.Promote(context.Background(), "repo1", "main", "sha-1",
 		domain.Actor{ID: "service:veska", Kind: domain.ActorKindSystem}); err != nil {
@@ -66,10 +63,8 @@ func TestPromote_ThreadsPrevSignatureAcrossPromotions(t *testing.T) {
 	}
 
 	// Promotion #2: n1 signature changed; n2 unchanged.
-	n1b, _ := domain.NewNode("n1", "a.go", "Foo", domain.KindFunction,
-		domain.WithSignature("func Foo(ctx context.Context) error"))
-	n2b, _ := domain.NewNode("n2", "a.go", "Bar", domain.KindFunction,
-		domain.WithSignature("func Bar()"))
+	n1b, _ := domain.NewNode(domain.NodeSpec{ID: "n1", Path: "a.go", Name: "Foo", Kind: domain.KindFunction}, domain.WithSignature("func Foo(ctx context.Context) error"))
+	n2b, _ := domain.NewNode(domain.NodeSpec{ID: "n2", Path: "a.go", Name: "Bar", Kind: domain.KindFunction}, domain.WithSignature("func Bar()"))
 	sa.Stage("repo1", "main", "a.go", staging.File{Nodes: []*domain.Node{n1b, n2b}, Edges: nil})
 	if err := p.Promote(context.Background(), "repo1", "main", "sha-2",
 		domain.Actor{ID: "service:veska", Kind: domain.ActorKindSystem}); err != nil {
@@ -114,7 +109,7 @@ func TestPromote_NilSignatureWritesNullColumn(t *testing.T) {
 	insertTestRepo(t, db, "repo1")
 
 	sa := staging.NewArea()
-	n, _ := domain.NewNode("n-nosig", "a.go", "Foo", domain.KindField)
+	n, _ := domain.NewNode(domain.NodeSpec{ID: "n-nosig", Path: "a.go", Name: "Foo", Kind: domain.KindField})
 	sa.Stage("repo1", "main", "a.go", staging.File{Nodes: []*domain.Node{n}, Edges: nil})
 
 	p := newTestPromoter(sa, db)

@@ -517,7 +517,7 @@ func TestSearchSimilar_AcceptsSymbolAlias(t *testing.T) {
 	lookup := &stubSimilarLookup{hash: "h", ready: true, blob: encodeVec(seedVec), dim: 3, found: true}
 
 	graph := newStubGraphStorage()
-	seedNode, _ := domain.NewNode("seed", "seed.go", "Target", domain.KindFunction)
+	seedNode, _ := domain.NewNode(domain.NodeSpec{ID: "seed", Path: "seed.go", Name: "Target", Kind: domain.KindFunction})
 	graph.addNode(seedNode)
 
 	r := NewRegistry()
@@ -546,8 +546,8 @@ func TestSearchSimilar_AmbiguousSymbolRejected(t *testing.T) {
 	svc := search.NewService(emb, vecs, nodes)
 
 	graph := newStubGraphStorage()
-	a, _ := domain.NewNode("a", "a.go", "Run", domain.KindFunction)
-	b, _ := domain.NewNode("b", "b.go", "Run", domain.KindFunction)
+	a, _ := domain.NewNode(domain.NodeSpec{ID: "a", Path: "a.go", Name: "Run", Kind: domain.KindFunction})
+	b, _ := domain.NewNode(domain.NodeSpec{ID: "b", Path: "b.go", Name: "Run", Kind: domain.KindFunction})
 	graph.addNode(a)
 	graph.addNode(b)
 
@@ -588,7 +588,7 @@ func TestSearchSimilar_SymbolResolvesCrossRepoWithoutRepoID(t *testing.T) {
 	// resolveRepoIDFromParams which raised "repo_id is required" in
 	// this exact shape (no repo_id, no cwd injected).
 	graph := newStubGraphStorage()
-	seedNode, _ := domain.NewNode("seed", "seed.go", "Target", domain.KindFunction)
+	seedNode, _ := domain.NewNode(domain.NodeSpec{ID: "seed", Path: "seed.go", Name: "Target", Kind: domain.KindFunction})
 	graph.addNode(seedNode)
 	repos := []application.RepoRecord{
 		{RepoID: "r1", RootPath: "/r1", ActiveBranch: "main"},

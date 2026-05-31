@@ -241,7 +241,7 @@ func TestResolveSeedOwner_CwdPinFallsThroughToFanout(t *testing.T) {
 func TestExpandNodeIDPrefix_RejectsBadAndExpandsGood(t *testing.T) {
 	full := "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
 	g := newScopedGraphStub()
-	n, err := domain.NewNode(full, "x.go", "X", domain.KindFunction)
+	n, err := domain.NewNode(domain.NodeSpec{ID: full, Path: "x.go", Name: "X", Kind: domain.KindFunction})
 	if err != nil {
 		t.Fatalf("NewNode: %v", err)
 	}

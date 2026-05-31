@@ -27,7 +27,7 @@ func epFixtureGraph(t *testing.T) *domain.Graph {
 		t.Fatalf("NewGraph: %v", err)
 	}
 	mk := func(id, path string, kind domain.NodeKind) {
-		n, err := domain.NewNode(id, path, id, kind)
+		n, err := domain.NewNode(domain.NodeSpec{ID: id, Path: path, Name: id, Kind: kind})
 		if err != nil {
 			t.Fatalf("NewNode %s: %v", id, err)
 		}
@@ -250,7 +250,7 @@ func TestEntryPointsService_FiltersGoInitFuncs(t *testing.T) {
 		t.Fatalf("NewGraph: %v", err)
 	}
 	mk := func(id, name, path string, kind domain.NodeKind) {
-		n, err := domain.NewNode(id, path, name, kind)
+		n, err := domain.NewNode(domain.NodeSpec{ID: id, Path: path, Name: name, Kind: kind})
 		if err != nil {
 			t.Fatalf("NewNode %s: %v", id, err)
 		}

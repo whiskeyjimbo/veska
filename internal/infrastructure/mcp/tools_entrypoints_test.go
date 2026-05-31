@@ -19,7 +19,7 @@ func entryPointsFixtureService(t *testing.T) *wiki.EntryPointsService {
 		t.Fatalf("NewGraph: %v", err)
 	}
 	mk := func(id, path string, kind domain.NodeKind) {
-		n, err := domain.NewNode(id, path, id, kind)
+		n, err := domain.NewNode(domain.NodeSpec{ID: id, Path: path, Name: id, Kind: kind})
 		if err != nil {
 			t.Fatalf("NewNode: %v", err)
 		}

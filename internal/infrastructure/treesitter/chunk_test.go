@@ -118,7 +118,7 @@ func TestChunkFile_FullyCoveredFileEmitsNoChunks(t *testing.T) {
 
 func mustNode(t *testing.T, id, path, name string, kind domain.NodeKind, lr domain.LineRange) *domain.Node {
 	t.Helper()
-	n, err := domain.NewNode(id, path, name, kind, domain.WithLines(lr))
+	n, err := domain.NewNode(domain.NodeSpec{ID: id, Path: path, Name: name, Kind: kind}, domain.WithLines(lr))
 	if err != nil {
 		t.Fatalf("NewNode: %v", err)
 	}
