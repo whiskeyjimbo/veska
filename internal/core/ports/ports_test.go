@@ -26,7 +26,6 @@ var (
 	_ ports.VectorStorage     = (*stubVectorStorage)(nil)
 	_ ports.Tracker           = (*stubTracker)(nil)
 	_ ports.VulnSource        = (*stubVulnSource)(nil)
-	_ ports.Embedder          = (*stubEmbedder)(nil)
 	_ ports.LLMGenerator      = (*stubLLMGenerator)(nil)
 	_ ports.Notifier          = (*stubNotifier)(nil)
 	_ ports.SecretsScanner    = (*stubSecretsScanner)(nil)
@@ -127,10 +126,6 @@ func (s *stubVulnSource) Refresh(_ context.Context) error { return nil }
 func (s *stubVulnSource) Scan(_ context.Context, _ []ports.Dependency) ([]ports.VulnFinding, error) {
 	return nil, nil
 }
-
-// ── Embedder stub ──────────────────────────────────────────────────────────
-// Embedder is an alias for EmbeddingProvider; reuse stubEmbeddingProvider.
-type stubEmbedder = stubEmbeddingProvider
 
 // ── LLMGenerator stub ─────────────────────────────────────────────────────
 
