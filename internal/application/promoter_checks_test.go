@@ -34,7 +34,7 @@ func TestPromote_InvokesCheckRunnerPostCommit(t *testing.T) {
 	insertTestRepo(t, db, "repo1")
 
 	sa := staging.NewArea()
-	n, _ := domain.NewNode("n1", "a.go", "A", domain.KindFunction)
+	n, _ := domain.NewNode(domain.NodeSpec{ID: "n1", Path: "a.go", Name: "A", Kind: domain.KindFunction})
 	sa.Stage("repo1", "main", "a.go", staging.File{Nodes: []*domain.Node{n}, Edges: nil})
 
 	fr := &fakeCheckRunner{}
@@ -72,7 +72,7 @@ func TestPromote_PopulatesAddedLinesFromSeam(t *testing.T) {
 	insertTestRepo(t, db, "repo1")
 
 	sa := staging.NewArea()
-	n, _ := domain.NewNode("n1", "a.go", "A", domain.KindFunction)
+	n, _ := domain.NewNode(domain.NodeSpec{ID: "n1", Path: "a.go", Name: "A", Kind: domain.KindFunction})
 	sa.Stage("repo1", "main", "a.go", staging.File{Nodes: []*domain.Node{n}, Edges: nil})
 
 	want := map[string][]application.Line{
@@ -113,7 +113,7 @@ func TestPromote_NoAddedLinesFunc(t *testing.T) {
 	insertTestRepo(t, db, "repo1")
 
 	sa := staging.NewArea()
-	n, _ := domain.NewNode("n1", "a.go", "A", domain.KindFunction)
+	n, _ := domain.NewNode(domain.NodeSpec{ID: "n1", Path: "a.go", Name: "A", Kind: domain.KindFunction})
 	sa.Stage("repo1", "main", "a.go", staging.File{Nodes: []*domain.Node{n}, Edges: nil})
 
 	fr := &fakeCheckRunner{}
@@ -135,7 +135,7 @@ func TestPromote_NoCheckRunner(t *testing.T) {
 	insertTestRepo(t, db, "repo1")
 
 	sa := staging.NewArea()
-	n, _ := domain.NewNode("n1", "a.go", "A", domain.KindFunction)
+	n, _ := domain.NewNode(domain.NodeSpec{ID: "n1", Path: "a.go", Name: "A", Kind: domain.KindFunction})
 	sa.Stage("repo1", "main", "a.go", staging.File{Nodes: []*domain.Node{n}, Edges: nil})
 
 	p := newTestPromoter(sa, db)

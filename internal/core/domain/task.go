@@ -55,24 +55,34 @@ func WithCreatedAt(t time.Time) TaskOption {
 	}
 }
 
-// NewTask constructs a validated Task. Returns an error if id, repoID, or
-// title is empty. CreatedAt defaults to time.Now(); pass WithCreatedAt to set
-// it deterministically.
-func NewTask(id, repoID, title string, opts ...TaskOption) (*Task, error) {
-	if id == "" {
+// TaskSpec carries the required fields of a Task. It groups the constructor's
+// positional arguments into a named struct so adjacent same-typed fields
+// (ID/RepoID/Title) cannot be transposed at a call site, mirroring FindingSpec.
+// Optional fields (tracker, active, created_at) are still supplied via TaskOption.
+type TaskSpec struct {
+	ID     string
+	RepoID string
+	Title  string
+}
+
+// NewTask constructs a validated Task from spec. Returns an error if spec.ID,
+// spec.RepoID, or spec.Title is empty. CreatedAt defaults to time.Now(); pass
+// WithCreatedAt to set it deterministically.
+func NewTask(spec TaskSpec, opts ...TaskOption) (*Task, error) {
+	if spec.ID == "" {
 		return nil, errors.New("task: id must not be empty")
 	}
-	if repoID == "" {
+	if spec.RepoID == "" {
 		return nil, errors.New("task: repo_id must not be empty")
 	}
-	if title == "" {
+	if spec.Title == "" {
 		return nil, errors.New("task: title must not be empty")
 	}
 
 	t := &Task{
-		ID:        id,
-		RepoID:    repoID,
-		Title:     title,
+		ID:        spec.ID,
+		RepoID:    spec.RepoID,
+		Title:     spec.Title,
 		CreatedAt: time.Now(),
 	}
 

@@ -43,7 +43,7 @@ func TestPromote_ActorStoredInNodes(t *testing.T) {
 			insertTestRepo(t, db, "repo1")
 
 			sa := staging.NewArea()
-			n, _ := domain.NewNode("n1", "a.go", "A", domain.KindFunction)
+			n, _ := domain.NewNode(domain.NodeSpec{ID: "n1", Path: "a.go", Name: "A", Kind: domain.KindFunction})
 			sa.Stage("repo1", "main", "a.go", staging.File{Nodes: []*domain.Node{n}, Edges: nil})
 
 			p := newTestPromoter(sa, db)

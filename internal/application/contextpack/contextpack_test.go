@@ -78,7 +78,7 @@ func newAssembler(t *testing.T, opts ...contextpack.Option) *contextpack.Assembl
 
 	findNodes := func(_ context.Context, _, _, sym string) ([]*domain.Node, error) {
 		if sym == "Target" {
-			n, _ := domain.NewNode("seed", "a.go", "Target", domain.KindFunction)
+			n, _ := domain.NewNode(domain.NodeSpec{ID: "seed", Path: "a.go", Name: "Target", Kind: domain.KindFunction})
 			return []*domain.Node{n}, nil
 		}
 		return nil, nil
@@ -235,7 +235,7 @@ func TestForSymbol_IncludesSnippets(t *testing.T) {
 	}
 	blast := blastradius.NewService(edges, nodes, nil)
 	findNodes := func(_ context.Context, _, _, sym string) ([]*domain.Node, error) {
-		n, _ := domain.NewNode("seed", "a.go", "Target", domain.KindFunction)
+		n, _ := domain.NewNode(domain.NodeSpec{ID: "seed", Path: "a.go", Name: "Target", Kind: domain.KindFunction})
 		return []*domain.Node{n}, nil
 	}
 	a, _ := contextpack.NewAssembler(contextpack.AssemblerDeps{
@@ -275,7 +275,7 @@ func TestForSymbol_SnippetTrimmedToBudget(t *testing.T) {
 	}
 	blast := blastradius.NewService(edges, nodes, nil)
 	findNodes := func(_ context.Context, _, _, _ string) ([]*domain.Node, error) {
-		n, _ := domain.NewNode("seed", "a.go", "Big", domain.KindFunction)
+		n, _ := domain.NewNode(domain.NodeSpec{ID: "seed", Path: "a.go", Name: "Big", Kind: domain.KindFunction})
 		return []*domain.Node{n}, nil
 	}
 	a, _ := contextpack.NewAssembler(contextpack.AssemblerDeps{

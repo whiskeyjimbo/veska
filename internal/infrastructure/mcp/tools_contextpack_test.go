@@ -29,7 +29,7 @@ func contextPackFixture(t *testing.T, opts ...contextpack.Option) *contextpack.A
 
 	findNodes := func(_ context.Context, _, _, sym string) ([]*domain.Node, error) {
 		if sym == "Target" {
-			n, _ := domain.NewNode("seed", "a.go", "Target", domain.KindFunction)
+			n, _ := domain.NewNode(domain.NodeSpec{ID: "seed", Path: "a.go", Name: "Target", Kind: domain.KindFunction})
 			return []*domain.Node{n}, nil
 		}
 		return nil, nil

@@ -491,7 +491,7 @@ func buildFunctionNodeFromCaptures(declNode, nameNode *sitter.Node, src []byte, 
 	if sig := extractSignature(declNode, src); sig != "" {
 		opts = append(opts, domain.WithSignature(sig))
 	}
-	n, err := domain.NewNode(id, path, name, domain.KindFunction, opts...)
+	n, err := domain.NewNode(domain.NodeSpec{ID: id, Path: path, Name: name, Kind: domain.KindFunction}, opts...)
 	if err != nil {
 		return nil
 	}
@@ -522,7 +522,7 @@ func buildMethodNodeFromCaptures(declNode, recvNode, nameNode *sitter.Node, src 
 	if sig := extractSignature(declNode, src); sig != "" {
 		opts = append(opts, domain.WithSignature(sig))
 	}
-	n, err := domain.NewNode(id, path, name, domain.KindMethod, opts...)
+	n, err := domain.NewNode(domain.NodeSpec{ID: id, Path: path, Name: name, Kind: domain.KindMethod}, opts...)
 	if err != nil {
 		return nil
 	}
@@ -547,12 +547,7 @@ func buildTypeNodeFromCaptures(declNode, nameNode, bodyNode *sitter.Node, src []
 	id := nodeID(repoID, path, kind, name)
 	lr := lineRange(declNode)
 	raw := string(src[declNode.StartByte():declNode.EndByte()])
-	n, err := domain.NewNode(id, path, name, kind,
-		domain.WithLanguage("go"),
-		domain.WithLines(lr),
-		domain.WithRawContent(raw),
-		domain.WithExported(goExported(name)),
-	)
+	n, err := domain.NewNode(domain.NodeSpec{ID: id, Path: path, Name: name, Kind: kind}, domain.WithLanguage("go"), domain.WithLines(lr), domain.WithRawContent(raw), domain.WithExported(goExported(name)))
 	if err != nil {
 		return nil
 	}
@@ -587,12 +582,7 @@ func buildVarNodesFromSpec(spec, decl *sitter.Node, src []byte, repoID, path str
 			continue
 		}
 		id := nodeID(repoID, path, kind, name)
-		n, err := domain.NewNode(id, path, name, kind,
-			domain.WithLanguage("go"),
-			domain.WithLines(lr),
-			domain.WithRawContent(raw),
-			domain.WithExported(goExported(name)),
-		)
+		n, err := domain.NewNode(domain.NodeSpec{ID: id, Path: path, Name: name, Kind: kind}, domain.WithLanguage("go"), domain.WithLines(lr), domain.WithRawContent(raw), domain.WithExported(goExported(name)))
 		if err == nil {
 			out = append(out, n)
 		}
@@ -726,9 +716,7 @@ func buildPackageNode(root *sitter.Node, src []byte, repoID, path string) *domai
 		// Legacy parser intentionally omits Lines on the package node —
 		// extractPackageName + NewNode-without-WithLines (go.go ~L92).
 		// Match that exactly so the equivalence harness stays green.
-		n, err := domain.NewNode(id, path, name, domain.KindPackage,
-			domain.WithLanguage("go"),
-		)
+		n, err := domain.NewNode(domain.NodeSpec{ID: id, Path: path, Name: name, Kind: domain.KindPackage}, domain.WithLanguage("go"))
 		if err != nil {
 			return nil
 		}

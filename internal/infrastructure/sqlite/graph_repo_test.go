@@ -59,9 +59,9 @@ func openGraphRepoTestDB(t *testing.T) *sqlite.GraphRepo {
 
 func mustNode(t *testing.T, id, path, name string, kind domain.NodeKind, opts ...domain.NodeOption) *domain.Node {
 	t.Helper()
-	n, err := domain.NewNode(id, path, name, kind, opts...)
+	n, err := domain.NewNode(domain.NodeSpec{ID: id, Path: path, Name: name, Kind: kind}, opts...)
 	if err != nil {
-		t.Fatalf("NewNode(%s): %v", id, err)
+		t.Fatalf("NewNode(NodeSpec{ID: %s}): %v", id, err)
 	}
 	return n
 }

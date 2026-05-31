@@ -167,7 +167,7 @@ func drivePromotions(ctx context.Context, t *testing.T, area *staging.Area, prom
 		filePath := fmt.Sprintf("pkg/fuzz/f%05d.go", i)
 		nodeID := fmt.Sprintf("n-fuzz-%05d", i)
 		symbol := fmt.Sprintf("pkg/fuzz.Fn%05d", i)
-		node, err := domain.NewNode(nodeID, filePath, symbol, domain.KindFunction)
+		node, err := domain.NewNode(domain.NodeSpec{ID: nodeID, Path: filePath, Name: symbol, Kind: domain.KindFunction})
 		if err != nil {
 			t.Fatalf("domain.NewNode: %v", err)
 		}
