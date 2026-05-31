@@ -1,4 +1,3 @@
-// Package domain contains the core domain types for the veska module.
 package domain
 
 // EmbeddingRow is a single vector embedding record tied to a graph node.
