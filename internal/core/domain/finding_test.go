@@ -302,3 +302,60 @@ func TestFinding_Close_AlreadyClosed(t *testing.T) {
 		t.Error("expected error closing already-closed finding")
 	}
 }
+
+func TestFinding_Close_RejectsEmptyReason(t *testing.T) {
+	f, _ := NewFinding(FindingSpec{RepoID: "repo", Branch: "main", Severity: SeverityLow, Layer: LayerQuality, Rule: "rule", Message: "msg"}, WithNodeAnchor("n1"))
+	now := time.Now()
+	if err := f.Close("", ActorKindHuman, "h1", now); err == nil {
+		t.Error("expected error: empty reason must be rejected")
+	}
+	if f.State == FindingStateClosed {
+		t.Error("finding must not be closed when reason is empty")
+	}
+}
+
+func TestFinding_Close_RejectsEmptyActorID(t *testing.T) {
+	f, _ := NewFinding(FindingSpec{RepoID: "repo", Branch: "main", Severity: SeverityLow, Layer: LayerQuality, Rule: "rule", Message: "msg"}, WithNodeAnchor("n1"))
+	now := time.Now()
+	if err := f.Close("fixed", ActorKindHuman, "", now); err == nil {
+		t.Error("expected error: empty actor_id must be rejected")
+	}
+	if f.State == FindingStateClosed {
+		t.Error("finding must not be closed when actor_id is empty")
+	}
+}
+
+func TestFinding_Close_ValidActorAndReason(t *testing.T) {
+	f, _ := NewFinding(FindingSpec{RepoID: "repo", Branch: "main", Severity: SeverityLow, Layer: LayerQuality, Rule: "rule", Message: "msg"}, WithNodeAnchor("n1"))
+	now := time.Now()
+	if err := f.Close("fixed", ActorKindHuman, "h1", now); err != nil {
+		t.Fatalf("unexpected error closing with valid actor and reason: %v", err)
+	}
+	if f.State != FindingStateClosed {
+		t.Error("state should be closed")
+	}
+	if f.ActorID == nil || *f.ActorID != "h1" {
+		t.Error("actor_id not set correctly")
+	}
+}
+
+func TestWithActorID_EmptyErrors(t *testing.T) {
+	_, err := NewFinding(FindingSpec{RepoID: "repo", Branch: "main", Severity: SeverityLow, Layer: LayerStructural, Rule: "rule", Message: "msg"}, WithNodeAnchor("n1"),
+		WithActorID(""),
+	)
+	if err == nil {
+		t.Error("expected error for empty actor_id")
+	}
+}
+
+func TestWithActorID_NonEmpty(t *testing.T) {
+	f, err := NewFinding(FindingSpec{RepoID: "repo", Branch: "main", Severity: SeverityLow, Layer: LayerStructural, Rule: "rule", Message: "msg"}, WithNodeAnchor("n1"),
+		WithActorID("agent-007"),
+	)
+	if err != nil {
+		t.Fatalf("unexpected error for non-empty actor_id: %v", err)
+	}
+	if f.ActorID == nil || *f.ActorID != "agent-007" {
+		t.Error("actor_id not set correctly")
+	}
+}

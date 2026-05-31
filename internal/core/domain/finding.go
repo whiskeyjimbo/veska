@@ -186,6 +186,9 @@ func WithFindingKey(key string) FindingOption {
 // WithActorID sets the actor_id on the finding.
 func WithActorID(id string) FindingOption {
 	return func(f *Finding) error {
+		if id == "" {
+			return errors.New("finding: actor_id must not be empty")
+		}
 		f.ActorID = &id
 		return nil
 	}
@@ -279,6 +282,8 @@ func DeriveFindingID(rule, anchor, key string) string {
 // Close transitions the finding to the closed state.
 //
 // Invariants:
+//   - reason and actorID must be non-empty (mirrors NewSuppression, so the
+//     close path cannot silently blank attribution or audit reason).
 //   - actorKind must be a recognised ActorKind (same check NewActor and
 //     WithActorKind enforce — the close path must not be the one place an
 //     unvalidated kind slips onto a Finding).
@@ -286,6 +291,12 @@ func DeriveFindingID(rule, anchor, key string) string {
 func (f *Finding) Close(reason string, actorKind ActorKind, actorID string, now time.Time) error {
 	if f.State == FindingStateClosed {
 		return errors.New("finding: already closed")
+	}
+	if reason == "" {
+		return errors.New("finding: reason must not be empty")
+	}
+	if actorID == "" {
+		return errors.New("finding: actor_id must not be empty")
 	}
 	if _, ok := validActorKinds[actorKind]; !ok {
 		return errors.New("finding: invalid actor_kind")
