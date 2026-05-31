@@ -9,15 +9,19 @@ import (
 )
 
 // NewTracerProvider constructs an OTLP gRPC TracerProvider with a
-// parentbased_traceidratio sampler at 1.0.
+// parentbased_traceidratio sampler at sampleRatio.
 //
 // endpoint must be a non-empty host:port string (e.g. "localhost:4317").
 // Returns an error when endpoint is empty — the caller must check both
 // tracing.enabled=true AND VESKA_OTLP_ENDPOINT before calling this.
 //
+// sampleRatio is the head-sampling probability applied to root spans
+// (0.0 drops all, 1.0 keeps all); the caller is responsible for bounding
+// it to [0.0, 1.0] (config.Config.Validate enforces this at startup).
+//
 // The OTLP exporter dials lazily; construction does not fail when the
 // collector is unreachable.
-func NewTracerProvider(endpoint string) (*sdktrace.TracerProvider, error) {
+func NewTracerProvider(endpoint string, sampleRatio float64) (*sdktrace.TracerProvider, error) {
 	if endpoint == "" {
 		return nil, fmt.Errorf("observability: OTLP endpoint must not be empty; set VESKA_OTLP_ENDPOINT")
 	}
@@ -31,7 +35,7 @@ func NewTracerProvider(endpoint string) (*sdktrace.TracerProvider, error) {
 		return nil, fmt.Errorf("observability: create OTLP exporter: %w", err)
 	}
 
-	sampler := sdktrace.ParentBased(sdktrace.TraceIDRatioBased(1.0))
+	sampler := sdktrace.ParentBased(sdktrace.TraceIDRatioBased(sampleRatio))
 
 	tp := sdktrace.NewTracerProvider(
 		sdktrace.WithBatcher(exp),

@@ -379,7 +379,7 @@ func (b *daemonBuilder) buildObservability() error {
 			Why: "an OTLP endpoint is set but tracing is disabled (set tracing.enabled = true or clear the endpoint)"}
 	}
 	if tracingEnabled {
-		tp, err := observability.NewTracerProvider(tracingEndpoint)
+		tp, err := observability.NewTracerProvider(tracingEndpoint, b.fileCfg.Tracing.SampleRatio)
 		if err != nil {
 			return fmt.Errorf("daemon: construct tracer provider: %w", err)
 		}
