@@ -34,6 +34,12 @@ type Provider struct {
 	baseURL string
 	model   string
 	client  *http.Client
+
+	// customClient holds a caller-supplied client (WithHTTPClient). timeout
+	// records WithTimeout's intent. Both are recorded during the option loop
+	// and reconciled once in New, so the options are order-independent.
+	customClient *http.Client
+	timeout      time.Duration
 }
 
 var _ ports.EmbeddingProvider = (*Provider)(nil)
@@ -65,24 +71,26 @@ func WithModel(m string) Option {
 	}
 }
 
-// WithHTTPClient supplies a custom *http.Client. The client's Timeout, if any,
-// applies to the entire request; pass an http.Client{} with Timeout: 0 to rely
-// solely on context deadlines.
+// WithHTTPClient supplies a caller-owned *http.Client, used as-is and never
+// mutated. The client's Timeout, if any, applies to the entire request; pass an
+// http.Client{} with Timeout: 0 to rely solely on context deadlines. When
+// supplied this wins: WithTimeout is ignored regardless of option order.
 func WithHTTPClient(c *http.Client) Option {
 	return func(p *Provider) {
 		if c != nil {
-			p.client = c
+			p.customClient = c
 		}
 	}
 }
 
 // WithTimeout sets the per-request timeout on the default http.Client. Ignored
 // when WithHTTPClient is also supplied — set the timeout on the custom client
-// instead.
+// instead. The effect is order-independent: it never mutates a caller-supplied
+// client.
 func WithTimeout(d time.Duration) Option {
 	return func(p *Provider) {
-		if d > 0 && p.client != nil {
-			p.client.Timeout = d
+		if d > 0 {
+			p.timeout = d
 		}
 	}
 }
@@ -97,10 +105,18 @@ func New(model string, opts ...Option) (*Provider, error) {
 	p := &Provider{
 		baseURL: defaultBaseURL,
 		model:   model,
-		client:  &http.Client{Timeout: defaultTimeout},
+		timeout: defaultTimeout,
 	}
 	for _, opt := range opts {
 		opt(p)
+	}
+	// Build the client once, after all options are recorded, so the result is
+	// independent of option order. A caller-supplied client wins and is used
+	// unchanged; otherwise the default client adopts the configured timeout.
+	if p.customClient != nil {
+		p.client = p.customClient
+	} else {
+		p.client = &http.Client{Timeout: p.timeout}
 	}
 	return p, nil
 }
