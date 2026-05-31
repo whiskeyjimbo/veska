@@ -1,4 +1,3 @@
-// Package ports defines the interface contracts for the veska infrastructure.
 package ports
 
 import (
