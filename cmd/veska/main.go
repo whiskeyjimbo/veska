@@ -80,6 +80,9 @@ func newRootCmd(opts ...rootOption) *cobra.Command {
 	// symlink that ships alongside it (solov2-brw6).
 	var mgr, dryMgr service.Manager
 	if exe, err := os.Executable(); err == nil {
+		// Construction errors are deliberately dropped: a nil manager is a
+		// valid state every service subcommand guards against (errNoManager),
+		// so there is nothing actionable to surface at startup.
 		mgr, _ = service.New(exe+"-daemon", config.DefaultVectorDir())
 		dryMgr, _ = service.NewDryRun(exe+"-daemon", config.DefaultVectorDir())
 	}
@@ -116,12 +119,13 @@ func main() {
 	slog.SetDefault(slog.New(slog.NewTextHandler(io.Discard, nil)))
 
 	if err := newRootCmd().Execute(); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		// A probe-status error carries its own conventional exit code; every
+		// other error exits 1.
 		var pse ProbeStatusError
 		if isProbeStatusError(err, &pse) {
-			fmt.Fprintln(os.Stderr, err)
 			os.Exit(exitCodeForProbeStatus(pse.Status))
 		}
-		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
 }

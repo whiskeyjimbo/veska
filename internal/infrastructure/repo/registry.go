@@ -171,6 +171,21 @@ func repoID(canonicalPath string) string {
 	return hex.EncodeToString(h.Sum(nil))
 }
 
+// RepoIDForPath returns the deterministic repo_id veska assigns to the repo
+// rooted at path. It canonicalises (absolute + symlink-resolved) before
+// hashing, exactly as registration does, so out-of-band callers — notably the
+// git hook runner, which only has the raw `git rev-parse --show-toplevel`
+// output — derive the SAME id the registry stored. Without this, an
+// unresolved symlinked checkout path would hash to a different id and updates
+// keyed on it (e.g. SetActiveBranch) would silently match zero rows.
+func RepoIDForPath(path string) string {
+	canonical, err := canonicalise(path)
+	if err != nil {
+		canonical = path
+	}
+	return repoID(canonical)
+}
+
 // DerivedRepoIDFromURL returns the deterministic hex ID used as repo_id
 // for an ephemeral, URL-cloned repository (solov2-kxo5.2). The input must
 // already be canonicalised — callers obtain a canonical URL via the
