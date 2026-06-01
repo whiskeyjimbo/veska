@@ -12,7 +12,7 @@ LAYERCHECK_BIN  := $(BINDIR)/layercheck
 SQLITE_TAGS    ?= sqlite_fts5
 SQLITE_CGO_ENV ?= CGO_ENABLED=1
 
-.PHONY: all build build-small build-fat fetch-embed-assets install release-archive test lint vet layercheck fatfile-ratchet noidleak cliparity clean loadtest test-mcp test-mcp-deep test-mcp-bootstrap eval-recall eval-recall-projection eval-autolink-fp eval-revalidate-bench eval-queue-fuzz eval-embed-throughput eval-embedder-bench eval-embed-models eval-embed-models-full eval-embed-models-condense eval-embed-models-fuse eval-dbbench eval-dbbench-cgo
+.PHONY: all build build-small build-fat fetch-embed-assets install release-archive test lint vet layercheck fatfile-ratchet noidleak cliparity clean loadtest test-mcp test-mcp-deep test-mcp-bootstrap eval-recall eval-recall-projection eval-autolink-fp eval-neardup-threshold eval-revalidate-bench eval-queue-fuzz eval-embed-throughput eval-embedder-bench eval-embed-models eval-embed-models-full eval-embed-models-condense eval-embed-models-fuse eval-dbbench eval-dbbench-cgo
 
 # `all` uses build-small to keep the test loop fast — the model2vec assets
 # add a network fetch + ~62MB to every CI/dev run. End-user packaging
@@ -221,6 +221,15 @@ eval-recall-projection:
 # tools/loadtest/autolink/README.md.
 eval-autolink-fp:
 	AUTOLINK_POP=$${AUTOLINK_POP:-1000} go test -tags=eval -run TestAutolinkFP ./tools/loadtest/autolink/ -v
+
+# eval-neardup-threshold: near-duplicate threshold calibration (solov2-md3n).
+# Embeds a curated corpus of real Go functions + mechanical near-dup variants
+# through model2vec (potion-code-16M, compiled in via embed_model — no service)
+# and, when Ollama is reachable, nomic-embed-text; reports per-tier score
+# distributions (neardup / related / unrelated) so DefaultNearThreshold is set
+# from data. See tools/loadtest/neardup/.
+eval-neardup-threshold:
+	go test -tags "eval embed_model" -run TestNearDupThreshold ./tools/loadtest/neardup/ -v -count=1
 
 # eval-revalidate-bench: revalidation wall-time harness against a synthetic
 # 10k-node / 10k-edge / 3k-finding commit (m3.05.4). Asserts the M3 exit-gate
