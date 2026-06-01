@@ -13,6 +13,7 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/application/changedsymbols"
 	"github.com/whiskeyjimbo/veska/internal/application/contextpack"
 	"github.com/whiskeyjimbo/veska/internal/application/dependencies"
+	"github.com/whiskeyjimbo/veska/internal/application/duplicates"
 	"github.com/whiskeyjimbo/veska/internal/application/manifest"
 	"github.com/whiskeyjimbo/veska/internal/application/search"
 	"github.com/whiskeyjimbo/veska/internal/application/wiki"
@@ -66,6 +67,7 @@ func registerMCPTools(r *mcp.Registry, d mcpDeps) error {
 		return err
 	}
 	w.registerDependenciesTool()
+	w.registerCloneTool()
 	return nil
 }
 
@@ -257,6 +259,18 @@ func (w *mcpToolWiring) registerSearchTool() error {
 		mcp.WithSearchGraph(w.graph),
 		mcp.WithSearchScanTracker(w.d.scanTracker))
 	return nil
+}
+
+// registerCloneTool registers eng_find_clones : exact-clone detection
+// by content_hash equality. The Finder is a thin reader over the nodes table;
+// if its construction fails (only a nil store, which cannot happen here) the
+// tool is skipped rather than aborting daemon startup.
+func (w *mcpToolWiring) registerCloneTool() {
+	finder, err := duplicates.NewFinder(sqlite.NewCloneRepo(w.pools.ReadDB))
+	if err != nil {
+		return
+	}
+	mcp.RegisterCloneTools(w.r, finder, w.repos())
 }
 
 // registerDependenciesTool registers eng_list_dependencies , which
