@@ -211,10 +211,12 @@ var diffBlastRadiusInputSchema = json.RawMessage(`{
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "type": "object",
   "additionalProperties": false,
-  "description": "Blast radius of the HEAD commit's diff (computed against HEAD^).",
+  "description": "Blast radius of a git diff. With ref_a and ref_b both set, diffs that ref range; with both omitted, diffs the working tree against HEAD. ref_a and ref_b must be supplied together.",
   "properties": {
     "repo_id":           {"type": "string"},
     "branch":            {"type": "string"},
+    "ref_a":             {"type": "string", "description": "Base git ref (e.g. 'main', 'HEAD~5', a SHA). Must be paired with ref_b; omit both to diff the working tree against HEAD."},
+    "ref_b":             {"type": "string", "description": "Target git ref. Must be paired with ref_a."},
     "max_depth":         {"type": "integer", "minimum": 1},
     "max_nodes":         {"type": "integer", "minimum": 1},
     "direction":         {"type": "string", "enum": ["in", "out", "both"]},
