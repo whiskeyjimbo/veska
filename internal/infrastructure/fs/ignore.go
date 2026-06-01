@@ -6,6 +6,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	ignore "github.com/sabhiram/go-gitignore"
 )
 
 // DefaultIgnorePatterns are always excluded regardless of .veskaignore.
@@ -35,9 +37,14 @@ var DefaultIgnorePatterns = []string{
 	".aider*/",
 }
 
-// IgnoreList is the merged result of default patterns and a repo's .veskaignore file.
+// IgnoreList is the merged result of default patterns and a repo's .veskaignore
+// file, matched with standard .gitignore semantics (anchoring, recursive `**`
+// globs, and last-match-wins negation via `!`). Patterns are kept in
+// merge order (defaults first, user patterns last) so user lines can override
+// defaults — significant because negation makes order meaningful.
 type IgnoreList struct {
 	patterns []string
+	matcher  *ignore.GitIgnore
 }
 
 // NewIgnoreListFromPatterns creates an IgnoreList from the provided patterns
@@ -45,7 +52,16 @@ type IgnoreList struct {
 func NewIgnoreListFromPatterns(patterns []string) *IgnoreList {
 	p := make([]string, len(patterns))
 	copy(p, patterns)
-	return &IgnoreList{patterns: p}
+	return newIgnoreList(p)
+}
+
+// newIgnoreList compiles patterns into a gitignore matcher. It takes ownership
+// of the slice (callers must not retain it).
+func newIgnoreList(patterns []string) *IgnoreList {
+	return &IgnoreList{
+		patterns: patterns,
+		matcher:  ignore.CompileIgnoreLines(patterns...),
+	}
 }
 
 // Load reads .veskaignore from repoRoot (if it exists) and returns an IgnoreList
@@ -60,7 +76,7 @@ func Load(repoRoot string) (*IgnoreList, error) {
 	f, err := os.Open(path)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
-			return &IgnoreList{patterns: patterns}, nil
+			return newIgnoreList(patterns), nil
 		}
 		return nil, err
 	}
@@ -69,6 +85,8 @@ func Load(repoRoot string) (*IgnoreList, error) {
 	scanner := bufio.NewScanner(f)
 	for scanner.Scan() {
 		line := strings.TrimSpace(scanner.Text())
+		// Skip blank lines and comments. Negation lines (`!`) are real
+		// patterns under gitignore semantics, so only `#` is a comment.
 		if line == "" || strings.HasPrefix(line, "#") {
 			continue
 		}
@@ -78,57 +96,24 @@ func Load(repoRoot string) (*IgnoreList, error) {
 		return nil, err
 	}
 
-	return &IgnoreList{patterns: patterns}, nil
+	return newIgnoreList(patterns), nil
 }
 
-// ShouldIgnore returns true if the given path (relative or absolute) matches
-// any pattern in the list. Matching rules:
-//   - Pattern ending in "/" matches any path component of that name (directory match)
-//   - Pattern with "*" uses filepath.Match semantics (glob)
-//   - Otherwise, exact substring match on the path
+// ShouldIgnore reports whether the given path matches the ignore list under
+// standard .gitignore semantics (anchoring, `**` recursion, character classes,
+// and last-match-wins negation). The path should be relative to the repo root;
+// callers pass directory paths with a trailing slash so directory-only patterns
+// (e.g. "vendor/") match. Forward and backslash separators are both accepted.
+//
+// Negation (`!`) re-includes a path at the pattern level, but matches git's own
+// limitation during a tree walk: a cold scan that prunes an excluded directory
+// (SkipDir) never visits its children, so `!secret/keep.txt` cannot re-surface
+// a file under an already-excluded `secret/`.
 func (il *IgnoreList) ShouldIgnore(path string) bool {
-	// Normalise to forward slashes for consistent matching.
-	normalised := filepath.ToSlash(path)
-
-	for _, pat := range il.patterns {
-		if dir, ok := strings.CutSuffix(pat, "/"); ok {
-			// Directory pattern: match if any path component equals the dir
-			// name. When the dir name contains a glob ('*', '?', '['), each
-			// component is matched via filepath.Match so patterns like
-			// ".aider*/" cover .aider.tags.cache.v3/ etc. .
-			hasGlob := strings.ContainsAny(dir, "*?[")
-			for part := range strings.SplitSeq(normalised, "/") {
-				if part == dir {
-					return true
-				}
-				if hasGlob {
-					if matched, _ := filepath.Match(dir, part); matched {
-						return true
-					}
-				}
-			}
-			continue
-		}
-
-		if strings.ContainsRune(pat, '*') {
-			// Glob pattern: try matching against the base name and the full path.
-			base := filepath.Base(normalised)
-			if matched, _ := filepath.Match(pat, base); matched {
-				return true
-			}
-			// Also try matching full path segments for patterns like "internal/*.go"
-			if matched, _ := filepath.Match(pat, normalised); matched {
-				return true
-			}
-			continue
-		}
-
-		// Substring match.
-		if strings.Contains(normalised, pat) {
-			return true
-		}
+	if il.matcher == nil {
+		return false
 	}
-	return false
+	return il.matcher.MatchesPath(filepath.ToSlash(path))
 }
 
 // Patterns returns a copy of all patterns (default + user).
