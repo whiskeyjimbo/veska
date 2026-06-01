@@ -74,24 +74,73 @@ type CloneStore interface {
 	ClonedNodes(ctx context.Context, repoID, branch string, excludeKinds []string) ([]ClonedNode, error)
 }
 
+// DefaultNearThreshold is the minimum SIMILAR_TO edge score for the near-dup
+// view when the caller supplies none.
+//
+// PROVISIONAL — not yet measured. It is deliberately set well above autolink's
+// DefaultThreshold (0.60, the "merely related" cutoff in the same 1/(1+L2^2)
+// score space) because near-duplicates are near-IDENTICAL, not merely related.
+// A proper value needs a fixture measurement like the gate-3 sweep that tuned
+// 0.60 (solov2-d5z/uug); until that lands, the only guarantee this constant
+// carries is the relational one — near-dup threshold > autolink related
+// threshold. Callers wanting precision should pass an explicit min_score.
+const DefaultNearThreshold float32 = 0.80
+
+// SimilarEdge is one persisted SIMILAR_TO edge whose score met the near-dup
+// threshold, with both endpoints' metadata already hydrated by the store so the
+// Finder can cluster without a second lookup. The edge is treated as undirected
+// for clustering — autolink writes a directed top-k edge, but "is a copy of" is
+// symmetric.
+type SimilarEdge struct {
+	Src   CloneMember
+	Dst   CloneMember
+	Score float32
+}
+
+// NearCluster is a connected component of SIMILAR_TO edges: a set of >=2 nodes
+// transitively linked above the threshold — N near-identical copies of one
+// helper. MinScore/MaxScore bound the edge scores within the component;
+// a low MinScore flags a loosely-chained cluster (A~B~C where A and C are only
+// transitively similar), which the caller may want to inspect.
+type NearCluster struct {
+	Size     int
+	MinScore float32
+	MaxScore float32
+	Members  []CloneMember
+}
+
+// NearStore is the narrow port the near-dup view needs: every SIMILAR_TO edge
+// in (repoID, branch) whose score >= minScore and whose BOTH endpoints are
+// outside excludeKinds, with endpoint metadata hydrated. Reads only what
+// autolink already persisted — no new similarity sweep. Edges with a NULL
+// score (legacy rows promoted before the score column existed) are omitted.
+type NearStore interface {
+	SimilarEdges(ctx context.Context, repoID, branch string, minScore float32, excludeKinds []string) ([]SimilarEdge, error)
+}
+
 // ErrMissingDependency is returned by NewFinder when a required collaborator is
 // nil. errors.Is-matchable so callers distinguish a wiring fault from a runtime
 // failure, mirroring the autolink / promoter constructors.
 var ErrMissingDependency = errors.New("duplicates: missing required dependency")
 
-// Finder computes exact-clone groups. The zero value is not usable; construct
-// with NewFinder.
+// Finder computes duplicate groups: exact clones (content_hash) and
+// near-duplicate clusters (thresholded SIMILAR_TO edges). The zero value is not
+// usable; construct with NewFinder.
 type Finder struct {
-	store CloneStore
+	clones CloneStore
+	near   NearStore
 }
 
-// NewFinder constructs a Finder. store is required: a nil dependency yields an
-// error wrapping ErrMissingDependency and a nil *Finder.
-func NewFinder(store CloneStore) (*Finder, error) {
-	if store == nil {
-		return nil, fmt.Errorf("duplicates.NewFinder: store is nil: %w", ErrMissingDependency)
+// NewFinder constructs a Finder. Both stores are required: a nil dependency
+// yields an error wrapping ErrMissingDependency and a nil *Finder.
+func NewFinder(clones CloneStore, near NearStore) (*Finder, error) {
+	if clones == nil {
+		return nil, fmt.Errorf("duplicates.NewFinder: clone store is nil: %w", ErrMissingDependency)
 	}
-	return &Finder{store: store}, nil
+	if near == nil {
+		return nil, fmt.Errorf("duplicates.NewFinder: near store is nil: %w", ErrMissingDependency)
+	}
+	return &Finder{clones: clones, near: near}, nil
 }
 
 // ExactClones returns the content_hash clone groups in (repoID, branch),
@@ -101,11 +150,31 @@ func NewFinder(store CloneStore) (*Finder, error) {
 // ContentHash (most-copied first, stable tie-break); members within a group by
 // (FilePath, LineStart) so the same physical layout always renders the same.
 func (f *Finder) ExactClones(ctx context.Context, repoID, branch string) ([]CloneGroup, error) {
-	rows, err := f.store.ClonedNodes(ctx, repoID, branch, ExcludedKinds)
+	rows, err := f.clones.ClonedNodes(ctx, repoID, branch, ExcludedKinds)
 	if err != nil {
 		return nil, fmt.Errorf("duplicates.ExactClones: %w", err)
 	}
 	return groupByHash(rows), nil
+}
+
+// NearDuplicates returns near-identical clusters: connected components of
+// SIMILAR_TO edges whose score >= minScore. A non-positive minScore falls back
+// to DefaultNearThreshold. Every returned cluster has Size >= 2 (each edge
+// contributes two members). It reads only edges autolink already persisted —
+// no new similarity sweep.
+//
+// Ordering is deterministic: clusters by descending Size, then descending
+// MinScore (tightest first among same-size), then by the first member's NodeID;
+// members within a cluster by (FilePath, LineStart).
+func (f *Finder) NearDuplicates(ctx context.Context, repoID, branch string, minScore float32) ([]NearCluster, error) {
+	if minScore <= 0 {
+		minScore = DefaultNearThreshold
+	}
+	edges, err := f.near.SimilarEdges(ctx, repoID, branch, minScore, ExcludedKinds)
+	if err != nil {
+		return nil, fmt.Errorf("duplicates.NearDuplicates: %w", err)
+	}
+	return clusterEdges(edges), nil
 }
 
 // groupByHash folds flat ClonedNode rows into deterministically-ordered
@@ -150,4 +219,109 @@ func groupByHash(rows []ClonedNode) []CloneGroup {
 		return groups[i].ContentHash < groups[j].ContentHash
 	})
 	return groups
+}
+
+// component accumulates the member set and score bounds of one connected
+// component during clustering.
+type component struct {
+	ids                []string
+	minScore, maxScore float32
+}
+
+// clusterEdges folds undirected SIMILAR_TO edges into connected components via
+// union-find, then builds a deterministically-ordered NearCluster per
+// component with its member set, min/max edge score, and size.
+func clusterEdges(edges []SimilarEdge) []NearCluster {
+	uf := newUnionFind()
+	members := make(map[string]CloneMember)
+	for _, e := range edges {
+		members[e.Src.NodeID] = e.Src
+		members[e.Dst.NodeID] = e.Dst
+		uf.union(e.Src.NodeID, e.Dst.NodeID)
+	}
+	return buildClusters(aggregateComponents(uf, edges), members)
+}
+
+// aggregateComponents walks the edges once, attributing each edge's score
+// bounds and endpoints to its component root.
+func aggregateComponents(uf *unionFind, edges []SimilarEdge) map[string]*component {
+	byRoot := make(map[string]*component)
+	seen := make(map[string]bool)
+	for _, e := range edges {
+		c := byRoot[uf.find(e.Src.NodeID)]
+		if c == nil {
+			c = &component{minScore: e.Score, maxScore: e.Score}
+			byRoot[uf.find(e.Src.NodeID)] = c
+		}
+		if e.Score < c.minScore {
+			c.minScore = e.Score
+		}
+		if e.Score > c.maxScore {
+			c.maxScore = e.Score
+		}
+		for _, id := range []string{e.Src.NodeID, e.Dst.NodeID} {
+			if !seen[id] {
+				seen[id] = true
+				c.ids = append(c.ids, id)
+			}
+		}
+	}
+	return byRoot
+}
+
+// buildClusters hydrates components into NearClusters with sorted members, then
+// orders the clusters by descending size, then descending MinScore, then the
+// first member's NodeID.
+func buildClusters(byRoot map[string]*component, members map[string]CloneMember) []NearCluster {
+	clusters := make([]NearCluster, 0, len(byRoot))
+	for _, c := range byRoot {
+		cm := make([]CloneMember, 0, len(c.ids))
+		for _, id := range c.ids {
+			cm = append(cm, members[id])
+		}
+		sort.Slice(cm, func(i, j int) bool {
+			if cm[i].FilePath != cm[j].FilePath {
+				return cm[i].FilePath < cm[j].FilePath
+			}
+			return cm[i].LineStart < cm[j].LineStart
+		})
+		clusters = append(clusters, NearCluster{Size: len(cm), MinScore: c.minScore, MaxScore: c.maxScore, Members: cm})
+	}
+	sort.Slice(clusters, func(i, j int) bool {
+		if clusters[i].Size != clusters[j].Size {
+			return clusters[i].Size > clusters[j].Size
+		}
+		if clusters[i].MinScore != clusters[j].MinScore {
+			return clusters[i].MinScore > clusters[j].MinScore
+		}
+		return clusters[i].Members[0].NodeID < clusters[j].Members[0].NodeID
+	})
+	return clusters
+}
+
+// unionFind is a tiny disjoint-set with path compression, scoped to one
+// NearDuplicates call (node IDs are the elements).
+type unionFind struct {
+	parent map[string]string
+}
+
+func newUnionFind() *unionFind { return &unionFind{parent: make(map[string]string)} }
+
+func (u *unionFind) find(x string) string {
+	p, ok := u.parent[x]
+	if !ok {
+		u.parent[x] = x
+		return x
+	}
+	if p != x {
+		u.parent[x] = u.find(p)
+	}
+	return u.parent[x]
+}
+
+func (u *unionFind) union(a, b string) {
+	ra, rb := u.find(a), u.find(b)
+	if ra != rb {
+		u.parent[ra] = rb
+	}
 }

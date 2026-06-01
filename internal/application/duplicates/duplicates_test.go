@@ -13,6 +13,11 @@ type fakeStore struct {
 	err  error
 	// gotExclude captures the excludeKinds the Finder forwarded.
 	gotExclude []string
+
+	// near-side fixtures.
+	edges       []duplicates.SimilarEdge
+	gotMinScore float32
+	gotNearExcl []string
 }
 
 func (f *fakeStore) ClonedNodes(_ context.Context, _, _ string, excludeKinds []string) ([]duplicates.ClonedNode, error) {
@@ -20,10 +25,20 @@ func (f *fakeStore) ClonedNodes(_ context.Context, _, _ string, excludeKinds []s
 	return f.rows, f.err
 }
 
-func TestNewFinder_NilStore(t *testing.T) {
+func (f *fakeStore) SimilarEdges(_ context.Context, _, _ string, minScore float32, excludeKinds []string) ([]duplicates.SimilarEdge, error) {
+	f.gotMinScore = minScore
+	f.gotNearExcl = excludeKinds
+	return f.edges, f.err
+}
+
+func TestNewFinder_NilStores(t *testing.T) {
 	t.Parallel()
-	if _, err := duplicates.NewFinder(nil); !errors.Is(err, duplicates.ErrMissingDependency) {
-		t.Fatalf("want ErrMissingDependency, got %v", err)
+	store := &fakeStore{}
+	if _, err := duplicates.NewFinder(nil, store); !errors.Is(err, duplicates.ErrMissingDependency) {
+		t.Fatalf("nil clone store: want ErrMissingDependency, got %v", err)
+	}
+	if _, err := duplicates.NewFinder(store, nil); !errors.Is(err, duplicates.ErrMissingDependency) {
+		t.Fatalf("nil near store: want ErrMissingDependency, got %v", err)
 	}
 }
 
@@ -38,7 +53,7 @@ func TestExactClones_GroupsAndOrders(t *testing.T) {
 		{ContentHash: "hashSmall", NodeID: "m1", FilePath: "b.go", LineStart: 1, Kind: "method"},
 		{ContentHash: "hashSmall", NodeID: "m2", FilePath: "c.go", LineStart: 1, Kind: "method"},
 	}}
-	finder, err := duplicates.NewFinder(store)
+	finder, err := duplicates.NewFinder(store, store)
 	if err != nil {
 		t.Fatalf("NewFinder: %v", err)
 	}
@@ -72,6 +87,61 @@ func TestExactClones_GroupsAndOrders(t *testing.T) {
 	}
 }
 
+func mem(id, file string, line int) duplicates.CloneMember {
+	return duplicates.CloneMember{NodeID: id, FilePath: file, LineStart: line, Kind: "function"}
+}
+
+func TestNearDuplicates_ClustersTransitively(t *testing.T) {
+	t.Parallel()
+	// Two components: {a,b,c} chained (a~b, b~c), and {x,y} separate.
+	store := &fakeStore{edges: []duplicates.SimilarEdge{
+		{Src: mem("a", "a.go", 1), Dst: mem("b", "b.go", 1), Score: 0.90},
+		{Src: mem("b", "b.go", 1), Dst: mem("c", "c.go", 1), Score: 0.82},
+		{Src: mem("x", "x.go", 1), Dst: mem("y", "y.go", 1), Score: 0.95},
+	}}
+	finder, _ := duplicates.NewFinder(store, store)
+
+	clusters, err := finder.NearDuplicates(context.Background(), "r1", "main", 0.80)
+	if err != nil {
+		t.Fatalf("NearDuplicates: %v", err)
+	}
+	if store.gotMinScore != 0.80 {
+		t.Errorf("forwarded minScore %v, want 0.80", store.gotMinScore)
+	}
+	if len(clusters) != 2 {
+		t.Fatalf("want 2 clusters, got %d", len(clusters))
+	}
+	// Largest first: {a,b,c}, size 3, MinScore 0.82 (the weakest link).
+	if clusters[0].Size != 3 {
+		t.Fatalf("cluster[0] size = %d, want 3", clusters[0].Size)
+	}
+	if clusters[0].MinScore != 0.82 || clusters[0].MaxScore != 0.90 {
+		t.Errorf("cluster[0] score bounds = [%v,%v], want [0.82,0.90]", clusters[0].MinScore, clusters[0].MaxScore)
+	}
+	gotIDs := []string{clusters[0].Members[0].NodeID, clusters[0].Members[1].NodeID, clusters[0].Members[2].NodeID}
+	want := []string{"a", "b", "c"} // sorted by (file,line): a.go, b.go, c.go
+	for i := range want {
+		if gotIDs[i] != want[i] {
+			t.Fatalf("cluster[0] member order %v, want %v", gotIDs, want)
+		}
+	}
+}
+
+func TestNearDuplicates_DefaultsThreshold(t *testing.T) {
+	t.Parallel()
+	store := &fakeStore{}
+	finder, _ := duplicates.NewFinder(store, store)
+	if _, err := finder.NearDuplicates(context.Background(), "r1", "main", 0); err != nil {
+		t.Fatalf("NearDuplicates: %v", err)
+	}
+	if store.gotMinScore != duplicates.DefaultNearThreshold {
+		t.Errorf("minScore=0 should default to %v, forwarded %v", duplicates.DefaultNearThreshold, store.gotMinScore)
+	}
+	if len(store.gotNearExcl) != len(duplicates.ExcludedKinds) {
+		t.Errorf("forwarded near exclude %v, want %v", store.gotNearExcl, duplicates.ExcludedKinds)
+	}
+}
+
 func TestExactClones_DropsSingletons(t *testing.T) {
 	t.Parallel()
 	// A store that (defensively) hands back a singleton hash must not yield a
@@ -79,7 +149,7 @@ func TestExactClones_DropsSingletons(t *testing.T) {
 	store := &fakeStore{rows: []duplicates.ClonedNode{
 		{ContentHash: "lonely", NodeID: "n1", FilePath: "a.go", Kind: "function"},
 	}}
-	finder, _ := duplicates.NewFinder(store)
+	finder, _ := duplicates.NewFinder(store, store)
 	groups, err := finder.ExactClones(context.Background(), "r1", "main")
 	if err != nil {
 		t.Fatalf("ExactClones: %v", err)

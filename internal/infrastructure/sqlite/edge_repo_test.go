@@ -104,9 +104,9 @@ func TestEdgeRepo_SaveEdges_EmptyIsNoop(t *testing.T) {
 	}
 }
 
-// TestEdgeRepo_SaveEdges_Idempotent verifies ON CONFLICT DO NOTHING: a
-// second SaveEdges with the same (edge_id, branch) does not error and
-// does not duplicate rows.
+// TestEdgeRepo_SaveEdges_Idempotent verifies the ON CONFLICT clause does not
+// duplicate rows: a second SaveEdges with the same (edge_id, branch) does not
+// error and leaves exactly one row (the conflict refreshes score in place).
 func TestEdgeRepo_SaveEdges_Idempotent(t *testing.T) {
 	t.Parallel()
 	db, repo := openEdgeRepoTestDB(t)
@@ -128,10 +128,10 @@ func TestEdgeRepo_SaveEdges_Idempotent(t *testing.T) {
 	}
 }
 
-// TestEdgeRepo_SaveEdges_DoesNotDowngradeResolved verifies that
-// ON CONFLICT DO NOTHING preserves an already-resolved edge — re-saving
-// the same (src, kind, tgt) with Unresolved must NOT overwrite a
-// previously stored Definite row.
+// TestEdgeRepo_SaveEdges_DoesNotDowngradeResolved verifies the ON CONFLICT
+// clause preserves an already-resolved edge — re-saving the same
+// (src, kind, tgt) with Unresolved must NOT overwrite a previously stored
+// Definite row's confidence (the conflict updates only score).
 func TestEdgeRepo_SaveEdges_DoesNotDowngradeResolved(t *testing.T) {
 	t.Parallel()
 	db, repo := openEdgeRepoTestDB(t)
@@ -153,6 +153,67 @@ func TestEdgeRepo_SaveEdges_DoesNotDowngradeResolved(t *testing.T) {
 	if conf != "definite" {
 		t.Errorf("expected confidence to remain definite, got %q", conf)
 	}
+}
+
+// TestEdgeRepo_SaveEdges_PersistsAndRefreshesScore verifies the score column
+// round-trips, refreshes on re-save (DO UPDATE), and is preserved when a later
+// writer passes no score (COALESCE) — the contract near-duplicate detection
+// relies on (solov2-c1s4).
+func TestEdgeRepo_SaveEdges_PersistsAndRefreshesScore(t *testing.T) {
+	t.Parallel()
+	db, repo := openEdgeRepoTestDB(t)
+	ctx := context.Background()
+
+	scored, _ := domain.NewEdge(
+		domain.EdgeSpec{Src: "n-src", Tgt: "n-tgt", Kind: domain.EdgeSimilarTo},
+		domain.WithConfidence(domain.Unresolved), domain.WithScore(0.5))
+	if err := repo.SaveEdges(ctx, "r1", "main", []*domain.Edge{scored}); err != nil {
+		t.Fatalf("save scored: %v", err)
+	}
+	if got := queryScore(t, db, scored.ID); !approxEqual(got, 0.5) {
+		t.Fatalf("after first save score = %v, want 0.5", got)
+	}
+
+	// Re-save the same pair with a higher score -> refreshes.
+	rescored, _ := domain.NewEdge(
+		domain.EdgeSpec{Src: "n-src", Tgt: "n-tgt", Kind: domain.EdgeSimilarTo},
+		domain.WithConfidence(domain.Unresolved), domain.WithScore(0.9))
+	if err := repo.SaveEdges(ctx, "r1", "main", []*domain.Edge{rescored}); err != nil {
+		t.Fatalf("save rescored: %v", err)
+	}
+	if got := queryScore(t, db, scored.ID); !approxEqual(got, 0.9) {
+		t.Fatalf("after re-save score = %v, want 0.9 (refresh)", got)
+	}
+
+	// Re-save with NO score -> COALESCE preserves the stored value.
+	noScore, _ := domain.NewEdge(
+		domain.EdgeSpec{Src: "n-src", Tgt: "n-tgt", Kind: domain.EdgeSimilarTo},
+		domain.WithConfidence(domain.Unresolved))
+	if err := repo.SaveEdges(ctx, "r1", "main", []*domain.Edge{noScore}); err != nil {
+		t.Fatalf("save no-score: %v", err)
+	}
+	if got := queryScore(t, db, scored.ID); !approxEqual(got, 0.9) {
+		t.Fatalf("after no-score re-save score = %v, want 0.9 (preserved)", got)
+	}
+}
+
+func queryScore(t *testing.T, db *sql.DB, edgeID string) float64 {
+	t.Helper()
+	var score sql.NullFloat64
+	if err := db.QueryRow(`SELECT score FROM edges WHERE edge_id=?`, edgeID).Scan(&score); err != nil {
+		t.Fatalf("query score: %v", err)
+	}
+	if !score.Valid {
+		t.Fatalf("score is NULL, expected a value")
+	}
+	return score.Float64
+}
+
+// approxEqual compares scores tolerant of float32->REAL->float64 round-trip
+// precision loss (e.g. 0.9 stores as 0.89999997).
+func approxEqual(got, want float64) bool {
+	d := got - want
+	return d < 1e-6 && d > -1e-6
 }
 
 // TestEdgeRepo_SaveEdges_RoundTripID verifies the persisted edge_id is

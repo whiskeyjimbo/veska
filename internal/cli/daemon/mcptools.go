@@ -262,11 +262,14 @@ func (w *mcpToolWiring) registerSearchTool() error {
 }
 
 // registerCloneTool registers eng_find_clones : exact-clone detection
-// by content_hash equality. The Finder is a thin reader over the nodes table;
-// if its construction fails (only a nil store, which cannot happen here) the
-// tool is skipped rather than aborting daemon startup.
+// by content_hash equality (mode=exact) plus near-duplicate clustering over
+// thresholded SIMILAR_TO edges (mode=near, solov2-c1s4). One CloneRepo
+// satisfies both the CloneStore and NearStore ports. If construction fails
+// (only a nil store, which cannot happen here) the tool is skipped rather than
+// aborting daemon startup.
 func (w *mcpToolWiring) registerCloneTool() {
-	finder, err := duplicates.NewFinder(sqlite.NewCloneRepo(w.pools.ReadDB))
+	repo := sqlite.NewCloneRepo(w.pools.ReadDB)
+	finder, err := duplicates.NewFinder(repo, repo)
 	if err != nil {
 		return
 	}
