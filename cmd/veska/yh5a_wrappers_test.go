@@ -17,19 +17,24 @@ func TestBlastModeFromFlags(t *testing.T) {
 		diff     bool
 		wantMode graphcmd.BlastMode
 		wantSel  string
+		wantRefA string
+		wantRefB string
 		wantErr  bool
 	}{
 		{name: "symbol", args: []string{"Server.Run"}, wantMode: graphcmd.BlastSymbol, wantSel: "Server.Run"},
 		{name: "dirty", args: nil, dirty: true, wantMode: graphcmd.BlastDirty},
-		{name: "diff", args: nil, diff: true, wantMode: graphcmd.BlastDiff},
+		{name: "diff working tree", args: nil, diff: true, wantMode: graphcmd.BlastDiff},
+		{name: "diff range", args: []string{"main..HEAD"}, diff: true, wantMode: graphcmd.BlastDiff, wantRefA: "main", wantRefB: "HEAD"},
+		{name: "diff range open right", args: []string{"main.."}, diff: true, wantMode: graphcmd.BlastDiff, wantRefA: "main", wantRefB: "HEAD"},
+		{name: "diff bare ref", args: []string{"v1.2.0"}, diff: true, wantMode: graphcmd.BlastDiff, wantRefA: "v1.2.0", wantRefB: "HEAD"},
+		{name: "diff range open left rejected", args: []string{"..HEAD"}, diff: true, wantErr: true},
 		{name: "dirty and diff rejected", dirty: true, diff: true, wantErr: true},
 		{name: "dirty with positional rejected", args: []string{"X"}, dirty: true, wantErr: true},
-		{name: "diff with positional rejected", args: []string{"X"}, diff: true, wantErr: true},
 		{name: "no seed rejected", args: nil, wantErr: true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			mode, sel, err := blastModeFromFlags(tt.args, tt.dirty, tt.diff)
+			mode, sel, refA, refB, err := blastModeFromFlags(tt.args, tt.dirty, tt.diff)
 			if tt.wantErr {
 				if err == nil {
 					t.Fatalf("expected error, got mode=%v sel=%q", mode, sel)
@@ -44,6 +49,9 @@ func TestBlastModeFromFlags(t *testing.T) {
 			}
 			if sel != tt.wantSel {
 				t.Fatalf("selector: want %q got %q", tt.wantSel, sel)
+			}
+			if refA != tt.wantRefA || refB != tt.wantRefB {
+				t.Fatalf("refs: want (%q,%q) got (%q,%q)", tt.wantRefA, tt.wantRefB, refA, refB)
 			}
 		})
 	}

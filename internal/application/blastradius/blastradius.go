@@ -344,6 +344,14 @@ func (s *Service) expandPerSource(ctx context.Context, repoID, branch string, fr
 // can plug the real adapter in while tests pass a deterministic fake.
 type ChangedFilesFunc func(ctx context.Context, repoRoot string) ([]string, error)
 
+// ChangedFilesBetweenFunc returns the files that differ between two git
+// refs for repoRoot. It mirrors git.ChangedFilesBetween. Callers wanting a
+// ranged blast (eng_get_diff_blast_radius with ref_a/ref_b) capture the two
+// refs in a closure and pass it to DiffOf as a ChangedFilesFunc — the
+// service stays agnostic about how the change set was derived (working-tree
+// vs ref range), it just blasts the union of nodes in the changed files.
+type ChangedFilesBetweenFunc func(ctx context.Context, repoRoot, refA, refB string) ([]string, error)
+
 // DiffOf computes the blast radius for the union of all nodes whose source
 // file appears in the working-tree diff for repoRoot. The change set is
 // derived from changedFiles; each file is resolved to its node_ids via

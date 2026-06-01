@@ -10,6 +10,7 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/application/staging"
 	"github.com/whiskeyjimbo/veska/internal/core/domain"
 	"github.com/whiskeyjimbo/veska/internal/core/ports"
+	gitinfra "github.com/whiskeyjimbo/veska/internal/infrastructure/git"
 )
 
 // blastFakeEdges/blastFakeNodes are local stubs — kept disjoint from the
@@ -369,6 +370,93 @@ func TestDiffBlastRadius_UnknownRepo(t *testing.T) {
 	})
 	if rpcErr == nil || rpcErr.Code != CodeNotFound {
 		t.Fatalf("expected CodeNotFound, got %+v", rpcErr)
+	}
+}
+
+// TestDiffBlastRadius_RangedRefs pins solov2-l5tx: when ref_a/ref_b are both
+// supplied, the handler routes through changedFilesBetween with exactly those
+// refs rather than the working-tree changedFiles func.
+func TestDiffBlastRadius_RangedRefs(t *testing.T) {
+	edges := &blastFakeEdges{inbound: map[string][]string{"a": {"caller"}}}
+	nodes := &blastFakeNodes{
+		metas: map[string]ports.NodeMeta{
+			"a": {NodeID: "a"}, "caller": {NodeID: "caller"},
+		},
+		byFile: map[string][]string{"foo.go": {"a"}},
+	}
+	svc, err := blastradius.NewService(edges, nodes, nil)
+	if err != nil {
+		t.Fatalf("construct: %v", err)
+	}
+	repoRoot := func(_ context.Context, _ string) (string, error) { return "/tmp/r", nil }
+	workingTreeCalled := false
+	changed := func(_ context.Context, _ string) ([]string, error) {
+		workingTreeCalled = true
+		return nil, nil
+	}
+	var gotA, gotB string
+	between := func(_ context.Context, _, refA, refB string) ([]string, error) {
+		gotA, gotB = refA, refB
+		return []string{"foo.go"}, nil
+	}
+	r := NewRegistry()
+	RegisterBlastTools(r, svc, repoRoot, changed, nil, nil, WithBlastChangedFilesBetween(between))
+	resp, rpcErr := dispatchBlast(t, r, "eng_get_diff_blast_radius", map[string]any{
+		"repo_id": "r1", "branch": "main", "max_depth": 1,
+		"ref_a": "v1.0.0", "ref_b": "HEAD",
+	})
+	if rpcErr != nil {
+		t.Fatalf("err: %+v", rpcErr)
+	}
+	if gotA != "v1.0.0" || gotB != "HEAD" {
+		t.Fatalf("between got refs (%q,%q), want (v1.0.0,HEAD)", gotA, gotB)
+	}
+	if workingTreeCalled {
+		t.Fatal("working-tree changedFiles must not be called when refs are supplied")
+	}
+	if len(resp.Entries) != 2 {
+		t.Fatalf("expected seed + 1 caller, got %+v", resp.Entries)
+	}
+}
+
+// TestDiffBlastRadius_LoneRef pins that ref_a/ref_b are all-or-nothing.
+func TestDiffBlastRadius_LoneRef(t *testing.T) {
+	svc, err := blastradius.NewService(&blastFakeEdges{}, &blastFakeNodes{}, nil)
+	if err != nil {
+		t.Fatalf("construct: %v", err)
+	}
+	repoRoot := func(_ context.Context, _ string) (string, error) { return "/tmp/r", nil }
+	changed := func(_ context.Context, _ string) ([]string, error) { return nil, nil }
+	between := func(_ context.Context, _, _, _ string) ([]string, error) { return nil, nil }
+	r := NewRegistry()
+	RegisterBlastTools(r, svc, repoRoot, changed, nil, nil, WithBlastChangedFilesBetween(between))
+	_, rpcErr := dispatchBlast(t, r, "eng_get_diff_blast_radius", map[string]any{
+		"repo_id": "r1", "branch": "main", "ref_a": "v1.0.0",
+	})
+	if rpcErr == nil || rpcErr.Code != CodeInvalidParams {
+		t.Fatalf("expected CodeInvalidParams for lone ref_a, got %+v", rpcErr)
+	}
+}
+
+// TestDiffBlastRadius_UnknownRevision maps a git unknown-revision error from
+// the ranged path to InvalidParams (a caller-fixable typo), not InternalError.
+func TestDiffBlastRadius_UnknownRevision(t *testing.T) {
+	svc, err := blastradius.NewService(&blastFakeEdges{}, &blastFakeNodes{}, nil)
+	if err != nil {
+		t.Fatalf("construct: %v", err)
+	}
+	repoRoot := func(_ context.Context, _ string) (string, error) { return "/tmp/r", nil }
+	changed := func(_ context.Context, _ string) ([]string, error) { return nil, nil }
+	between := func(_ context.Context, _, _, _ string) ([]string, error) {
+		return nil, fmt.Errorf("%w: refs=bogus..HEAD", gitinfra.ErrUnknownRevision)
+	}
+	r := NewRegistry()
+	RegisterBlastTools(r, svc, repoRoot, changed, nil, nil, WithBlastChangedFilesBetween(between))
+	_, rpcErr := dispatchBlast(t, r, "eng_get_diff_blast_radius", map[string]any{
+		"repo_id": "r1", "branch": "main", "ref_a": "bogus", "ref_b": "HEAD",
+	})
+	if rpcErr == nil || rpcErr.Code != CodeInvalidParams {
+		t.Fatalf("expected CodeInvalidParams for unknown revision, got %+v", rpcErr)
 	}
 }
 

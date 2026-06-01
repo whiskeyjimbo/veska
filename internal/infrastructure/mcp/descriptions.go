@@ -37,7 +37,7 @@ const DescBlastRadius = "Compute the blast radius (callers/callees/both) of a sy
 const DescDirtyBlastRadius = "Blast radius across every symbol currently in the staging overlay (mid-edit, pre-commit). Use during an active session to answer 'what am I about to break with my current edits?' without committing first. Unchanged-but-restaged symbols are filtered via content-hash compare so a comment-only edit doesn't dirty the whole file."
 
 // DescDiffBlastRadius is the eng_get_diff_blast_radius MCP description.
-const DescDiffBlastRadius = "Blast radius across every symbol in files changed in the working-tree vs HEAD. Use for PR review or 'what does this branch touch?' — the seed is the diff, not a single node."
+const DescDiffBlastRadius = "Blast radius across every symbol in files changed by a git diff. By default the diff is the working tree vs HEAD; supply ref_a and ref_b together to blast a ref range (e.g. main..HEAD) instead. Use for PR review or 'what does this branch touch?' — the seed is the diff, not a single node."
 
 // DescSearchSemantic is the eng_search_semantic MCP description and is
 // embedded in the `veska search` Long help. Documents the RRF score range
