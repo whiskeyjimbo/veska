@@ -24,7 +24,7 @@ func TestPromotionStore_UnregisteredRepo(t *testing.T) {
 	db := openTest(t, filepath.Join(t.TempDir(), "v.db"))
 	store := sqlite.NewPromotionStore(db, []sqlite.PromotionSink{sqlite.NewFTSSink(), sqlite.NewEmbedRefSink()})
 
-	n, _ := domain.NewNode(domain.NodeSpec{ID: "n1", Path: "a.go", Name: "A", Kind: domain.KindFunction})
+	n := mustNode(t, "n1", "a.go", "A", domain.KindFunction)
 	err := store.Promote(context.Background(), application.PromotionBatch{
 		RepoID: "ghost", Branch: "main", GitSHA: "sha", Actor: systemActor(),
 		PromotedAt: time.Now().UnixMilli(),
@@ -55,7 +55,7 @@ func TestPromotionStore_RollsBackOnMidTxFailure(t *testing.T) {
 	store := sqlite.NewPromotionStore(db, []sqlite.PromotionSink{sqlite.NewFTSSink(), sqlite.NewEmbedRefSink()})
 
 	// First promotion commits cleanly: 1 node.
-	n1, _ := domain.NewNode(domain.NodeSpec{ID: "n1", Path: "a.go", Name: "A", Kind: domain.KindFunction})
+	n1 := mustNode(t, "n1", "a.go", "A", domain.KindFunction)
 	if err := store.Promote(context.Background(), application.PromotionBatch{
 		RepoID: "repo1", Branch: "main", GitSHA: "sha-1", Actor: systemActor(),
 		PromotedAt: time.Now().UnixMilli(),
@@ -79,8 +79,8 @@ func TestPromotionStore_RollsBackOnMidTxFailure(t *testing.T) {
 
 	// Second promotion: changes the node and adds a sibling. It must fail and
 	// roll back completely.
-	n1b, _ := domain.NewNode(domain.NodeSpec{ID: "n1", Path: "a.go", Name: "A-changed", Kind: domain.KindFunction})
-	n2, _ := domain.NewNode(domain.NodeSpec{ID: "n2", Path: "a.go", Name: "B", Kind: domain.KindFunction})
+	n1b := mustNode(t, "n1", "a.go", "A-changed", domain.KindFunction)
+	n2 := mustNode(t, "n2", "a.go", "B", domain.KindFunction)
 	err := store.Promote(context.Background(), application.PromotionBatch{
 		RepoID: "repo1", Branch: "main", GitSHA: "sha-2", Actor: systemActor(),
 		PromotedAt: time.Now().UnixMilli(),
@@ -129,8 +129,8 @@ func TestPromotionStore_CrossPackageCallsResolution(t *testing.T) {
 	store := sqlite.NewPromotionStore(db, []sqlite.PromotionSink{sqlite.NewFTSSink(), sqlite.NewEmbedRefSink()})
 
 	// cmd/root.go defines Execute; main.go calls cmd.Execute().
-	exec, _ := domain.NewNode(domain.NodeSpec{ID: "execID", Path: "/tmp/app/cmd/root.go", Name: "Execute", Kind: domain.KindFunction}, domain.WithExported(true))
-	mainFn, _ := domain.NewNode(domain.NodeSpec{ID: "mainID", Path: "/tmp/app/main.go", Name: "main", Kind: domain.KindFunction})
+	exec := mustNode(t, "execID", "/tmp/app/cmd/root.go", "Execute", domain.KindFunction, domain.WithExported(true))
+	mainFn := mustNode(t, "mainID", "/tmp/app/main.go", "main", domain.KindFunction)
 
 	err := store.Promote(context.Background(), application.PromotionBatch{
 		RepoID: "repo1", Branch: "main", GitSHA: "sha", Actor: systemActor(),
@@ -182,7 +182,7 @@ func TestPromotionStore_PersistsFileImports(t *testing.T) {
 		t.Fatalf("insert repo: %v", err)
 	}
 	store := sqlite.NewPromotionStore(db, []sqlite.PromotionSink{sqlite.NewFTSSink(), sqlite.NewEmbedRefSink()})
-	n1, _ := domain.NewNode(domain.NodeSpec{ID: "n1", Path: "/tmp/app/cmd/root.go", Name: "main", Kind: domain.KindFunction})
+	n1 := mustNode(t, "n1", "/tmp/app/cmd/root.go", "main", domain.KindFunction)
 
 	// First promotion: 2 imports.
 	if err := store.Promote(context.Background(), application.PromotionBatch{
@@ -247,9 +247,9 @@ func TestPromotionStore_ChainedSelectorMethodCallInModule(t *testing.T) {
 
 	// greet/greet.go defines Greeter.Hello (method) + New (constructor).
 	// runner/runner.go has Run that does `g := greet.New(...); g.Hello(...)`.
-	helloMethod, _ := domain.NewNode(domain.NodeSpec{ID: "helloID", Path: "/tmp/app/greet/greet.go", Name: "Greeter.Hello", Kind: domain.KindMethod}, domain.WithExported(true))
-	newFn, _ := domain.NewNode(domain.NodeSpec{ID: "newID", Path: "/tmp/app/greet/greet.go", Name: "New", Kind: domain.KindFunction}, domain.WithExported(true))
-	runFn, _ := domain.NewNode(domain.NodeSpec{ID: "runID", Path: "/tmp/app/runner/runner.go", Name: "Run", Kind: domain.KindFunction}, domain.WithExported(true))
+	helloMethod := mustNode(t, "helloID", "/tmp/app/greet/greet.go", "Greeter.Hello", domain.KindMethod, domain.WithExported(true))
+	newFn := mustNode(t, "newID", "/tmp/app/greet/greet.go", "New", domain.KindFunction, domain.WithExported(true))
+	runFn := mustNode(t, "runID", "/tmp/app/runner/runner.go", "Run", domain.KindFunction, domain.WithExported(true))
 
 	err := store.Promote(context.Background(), application.PromotionBatch{
 		RepoID: "repo1", Branch: "main", GitSHA: "sha", Actor: systemActor(),
@@ -311,9 +311,9 @@ func TestPromotionStore_ChainedSelectorAmbiguityIsSkipped(t *testing.T) {
 	store := sqlite.NewPromotionStore(db, []sqlite.PromotionSink{sqlite.NewFTSSink(), sqlite.NewEmbedRefSink()})
 
 	// Two distinct receiver types each owning a Hello method.
-	helloA, _ := domain.NewNode(domain.NodeSpec{ID: "helloAID", Path: "/tmp/app/greet/greet.go", Name: "TypeA.Hello", Kind: domain.KindMethod}, domain.WithExported(true))
-	helloB, _ := domain.NewNode(domain.NodeSpec{ID: "helloBID", Path: "/tmp/app/greet/greet.go", Name: "TypeB.Hello", Kind: domain.KindMethod}, domain.WithExported(true))
-	runFn, _ := domain.NewNode(domain.NodeSpec{ID: "runID", Path: "/tmp/app/runner/runner.go", Name: "Run", Kind: domain.KindFunction}, domain.WithExported(true))
+	helloA := mustNode(t, "helloAID", "/tmp/app/greet/greet.go", "TypeA.Hello", domain.KindMethod, domain.WithExported(true))
+	helloB := mustNode(t, "helloBID", "/tmp/app/greet/greet.go", "TypeB.Hello", domain.KindMethod, domain.WithExported(true))
+	runFn := mustNode(t, "runID", "/tmp/app/runner/runner.go", "Run", domain.KindFunction, domain.WithExported(true))
 
 	err := store.Promote(context.Background(), application.PromotionBatch{
 		RepoID: "repo1", Branch: "main", GitSHA: "sha", Actor: systemActor(),
@@ -358,7 +358,7 @@ func TestPromotionStore_ChainedSelectorEmitsMethodCallStub(t *testing.T) {
 	}
 	store := sqlite.NewPromotionStore(db, []sqlite.PromotionSink{sqlite.NewFTSSink(), sqlite.NewEmbedRefSink()})
 
-	runFn, _ := domain.NewNode(domain.NodeSpec{ID: "runID", Path: "/tmp/app/runner/runner.go", Name: "Run", Kind: domain.KindFunction}, domain.WithExported(true))
+	runFn := mustNode(t, "runID", "/tmp/app/runner/runner.go", "Run", domain.KindFunction, domain.WithExported(true))
 
 	err := store.Promote(context.Background(), application.PromotionBatch{
 		RepoID: "repo1", Branch: "main", GitSHA: "sha", Actor: systemActor(),
@@ -427,7 +427,7 @@ func TestPromotionStore_CrossPackageResolvesAgainstPromotedGraph(t *testing.T) {
 	ctx := context.Background()
 
 	// First commit: only cmd/root.go.
-	exec, _ := domain.NewNode(domain.NodeSpec{ID: "execID", Path: "/tmp/app/cmd/root.go", Name: "Execute", Kind: domain.KindFunction}, domain.WithExported(true))
+	exec := mustNode(t, "execID", "/tmp/app/cmd/root.go", "Execute", domain.KindFunction, domain.WithExported(true))
 	if err := store.Promote(ctx, application.PromotionBatch{
 		RepoID: "repo1", Branch: "main", GitSHA: "sha1", Actor: systemActor(),
 		PromotedAt: time.Now().UnixMilli(),
@@ -437,7 +437,7 @@ func TestPromotionStore_CrossPackageResolvesAgainstPromotedGraph(t *testing.T) {
 	}
 
 	// Second commit: only main.go (cmd/root.go unchanged, not in batch).
-	mainFn, _ := domain.NewNode(domain.NodeSpec{ID: "mainID", Path: "/tmp/app/main.go", Name: "main", Kind: domain.KindFunction})
+	mainFn := mustNode(t, "mainID", "/tmp/app/main.go", "main", domain.KindFunction)
 	if err := store.Promote(ctx, application.PromotionBatch{
 		RepoID: "repo1", Branch: "main", GitSHA: "sha2", Actor: systemActor(),
 		PromotedAt: time.Now().UnixMilli(),
@@ -479,7 +479,7 @@ func TestPromotionStore_CrossRepoStub(t *testing.T) {
 	ctx := context.Background()
 
 	// Promote the pflag dependency: it exports Parse.
-	parse, _ := domain.NewNode(domain.NodeSpec{ID: "parseID", Path: "/tmp/pflag/flag.go", Name: "Parse", Kind: domain.KindFunction}, domain.WithLanguage("go"), domain.WithExported(true))
+	parse := mustNode(t, "parseID", "/tmp/pflag/flag.go", "Parse", domain.KindFunction, domain.WithLanguage("go"), domain.WithExported(true))
 	if err := store.Promote(ctx, application.PromotionBatch{
 		RepoID: "pflag", Branch: "main", GitSHA: "p1", Actor: systemActor(), PromotedAt: now,
 		Files: []application.PromotionFile{{Path: "/tmp/pflag/flag.go", Nodes: []*domain.Node{parse}}},
@@ -488,7 +488,7 @@ func TestPromotionStore_CrossRepoStub(t *testing.T) {
 	}
 
 	// Promote the app: main() calls flag.Parse() and fmt.Println().
-	mainFn, _ := domain.NewNode(domain.NodeSpec{ID: "mainID", Path: "/tmp/app/main.go", Name: "main", Kind: domain.KindFunction}, domain.WithLanguage("go"))
+	mainFn := mustNode(t, "mainID", "/tmp/app/main.go", "main", domain.KindFunction, domain.WithLanguage("go"))
 	if err := store.Promote(ctx, application.PromotionBatch{
 		RepoID: "app", Branch: "main", GitSHA: "a1", Actor: systemActor(), PromotedAt: now,
 		Files: []application.PromotionFile{{
@@ -544,8 +544,8 @@ func TestPromotionStore_EnqueuesExactlyOneWikiRow(t *testing.T) {
 	store := sqlite.NewPromotionStore(db, []sqlite.PromotionSink{sqlite.NewFTSSink(), sqlite.NewEmbedRefSink()})
 
 	// Multi-file batch — the wiki lane must still get exactly one row.
-	na, _ := domain.NewNode(domain.NodeSpec{ID: "na", Path: "a.go", Name: "A", Kind: domain.KindFunction})
-	nb, _ := domain.NewNode(domain.NodeSpec{ID: "nb", Path: "b.go", Name: "B", Kind: domain.KindFunction})
+	na := mustNode(t, "na", "a.go", "A", domain.KindFunction)
+	nb := mustNode(t, "nb", "b.go", "B", domain.KindFunction)
 	if err := store.Promote(context.Background(), application.PromotionBatch{
 		RepoID: "repo1", Branch: "main", GitSHA: "sha-1", Actor: systemActor(),
 		PromotedAt: time.Now().UnixMilli(),
@@ -597,8 +597,8 @@ func TestPromotionStore_ReviewEnabled_EnqueuesPerFileReviewRow(t *testing.T) {
 		sqlite.WithReviewEnabled(true),
 	)
 
-	na, _ := domain.NewNode(domain.NodeSpec{ID: "na", Path: "a.go", Name: "A", Kind: domain.KindFunction})
-	nb, _ := domain.NewNode(domain.NodeSpec{ID: "nb", Path: "b.go", Name: "B", Kind: domain.KindFunction})
+	na := mustNode(t, "na", "a.go", "A", domain.KindFunction)
+	nb := mustNode(t, "nb", "b.go", "B", domain.KindFunction)
 	if err := store.Promote(context.Background(), application.PromotionBatch{
 		RepoID: "repo1", Branch: "main", GitSHA: "sha-1", Actor: systemActor(),
 		PromotedAt: time.Now().UnixMilli(),
@@ -645,7 +645,7 @@ func TestPromotionStore_ReviewDisabled_NoReviewRow(t *testing.T) {
 	store := sqlite.NewPromotionStore(
 		db, []sqlite.PromotionSink{sqlite.NewFTSSink(), sqlite.NewEmbedRefSink()})
 
-	na, _ := domain.NewNode(domain.NodeSpec{ID: "na", Path: "a.go", Name: "A", Kind: domain.KindFunction})
+	na := mustNode(t, "na", "a.go", "A", domain.KindFunction)
 	if err := store.Promote(context.Background(), application.PromotionBatch{
 		RepoID: "repo1", Branch: "main", GitSHA: "sha-1", Actor: systemActor(),
 		PromotedAt: time.Now().UnixMilli(),

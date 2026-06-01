@@ -123,7 +123,10 @@ func TestElect_MarkerSwitchDetection(t *testing.T) {
 		t.Errorf("fresh election: Previous=%q SwitchedModel=%v, want empty/false", r1.Previous, r1.SwitchedModel)
 	}
 	// Second boot, same embedder: no switch.
-	r2, _ := Elect(Config{VeskaHome: home, Override: OverrideStatic})
+	r2, err := Elect(Config{VeskaHome: home, Override: OverrideStatic})
+	if err != nil {
+		t.Fatalf("Elect 2: %v", err)
+	}
 	if r2.SwitchedModel {
 		t.Errorf("same embedder should not report a switch")
 	}

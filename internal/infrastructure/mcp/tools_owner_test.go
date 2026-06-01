@@ -113,9 +113,14 @@ func TestFindOwner_CodeownersMatch(t *testing.T) {
 		t.Fatalf("unexpected RPC error: %v", rpcErr.Message)
 	}
 
-	raw, _ := json.Marshal(result)
+	raw, err := json.Marshal(result)
+	if err != nil {
+		t.Fatalf("marshal result: %v", err)
+	}
 	var m map[string]any
-	json.Unmarshal(raw, &m)
+	if err := json.Unmarshal(raw, &m); err != nil {
+		t.Fatalf("unmarshal result: %v", err)
+	}
 
 	if m["owner"] != "@go-team" {
 		t.Errorf("expected owner=@go-team, got %v", m["owner"])
@@ -148,9 +153,14 @@ func TestFindOwner_CodeownersInDotGithub(t *testing.T) {
 		t.Fatalf("unexpected RPC error: %v", rpcErr.Message)
 	}
 
-	raw, _ := json.Marshal(result)
+	raw, err := json.Marshal(result)
+	if err != nil {
+		t.Fatalf("marshal result: %v", err)
+	}
 	var m map[string]any
-	json.Unmarshal(raw, &m)
+	if err := json.Unmarshal(raw, &m); err != nil {
+		t.Fatalf("unmarshal result: %v", err)
+	}
 
 	if m["owner"] != "@everyone" {
 		t.Errorf("expected owner=@everyone, got %v", m["owner"])
@@ -180,9 +190,14 @@ func TestFindOwner_CodeownersLongestMatchWins(t *testing.T) {
 		t.Fatalf("unexpected RPC error: %v", rpcErr.Message)
 	}
 
-	raw, _ := json.Marshal(result)
+	raw, err := json.Marshal(result)
+	if err != nil {
+		t.Fatalf("marshal result: %v", err)
+	}
 	var m map[string]any
-	json.Unmarshal(raw, &m)
+	if err := json.Unmarshal(raw, &m); err != nil {
+		t.Fatalf("unmarshal result: %v", err)
+	}
 
 	if m["owner"] != "@mcp-owners" {
 		t.Errorf("expected owner=@mcp-owners (longest match), got %v", m["owner"])
@@ -210,9 +225,14 @@ func TestFindOwner_GitBlameFallback(t *testing.T) {
 		t.Fatalf("unexpected RPC error: %v", rpcErr.Message)
 	}
 
-	raw, _ := json.Marshal(result)
+	raw, err := json.Marshal(result)
+	if err != nil {
+		t.Fatalf("marshal result: %v", err)
+	}
 	var m map[string]any
-	json.Unmarshal(raw, &m)
+	if err := json.Unmarshal(raw, &m); err != nil {
+		t.Fatalf("unmarshal result: %v", err)
+	}
 
 	if m["owner"] != authorEmail {
 		t.Errorf("expected owner=%s, got %v", authorEmail, m["owner"])
@@ -242,9 +262,14 @@ func TestFindOwner_BothFail(t *testing.T) {
 		t.Fatalf("unexpected RPC error: %v", rpcErr.Message)
 	}
 
-	raw, _ := json.Marshal(result)
+	raw, err := json.Marshal(result)
+	if err != nil {
+		t.Fatalf("marshal result: %v", err)
+	}
 	var m map[string]any
-	json.Unmarshal(raw, &m)
+	if err := json.Unmarshal(raw, &m); err != nil {
+		t.Fatalf("unmarshal result: %v", err)
+	}
 
 	if m["owner"] != nil {
 		t.Errorf("expected owner=nil, got %v", m["owner"])
