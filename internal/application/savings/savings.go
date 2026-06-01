@@ -31,11 +31,16 @@ import (
 // versions — the aggregator must keep being able to read entries
 // written by older daemons after an upgrade.
 type Entry struct {
-	Timestamp    time.Time `json:"ts"`
-	Query        string    `json:"query"`
-	Results      int       `json:"n_results"`
-	FileChars    int64     `json:"file_chars"`
-	SnippetChars int64     `json:"snippet_chars"`
+	Timestamp time.Time `json:"ts"`
+	// RepoID tags the entry with the repo its results came from so
+	// Aggregate can bucket per repo (solov2-0ql0). omitempty keeps
+	// back-compat: entries written by pre-0ql0 daemons have no repo_id
+	// and aggregate into the "" bucket.
+	RepoID       string `json:"repo_id,omitempty"`
+	Query        string `json:"query"`
+	Results      int    `json:"n_results"`
+	FileChars    int64  `json:"file_chars"`
+	SnippetChars int64  `json:"snippet_chars"`
 }
 
 // ResultFile is the minimal projection EntryFor needs from a search
@@ -104,13 +109,14 @@ func (r *Recorder) Close() error {
 	return err
 }
 
-// EntryFor builds an Entry from a query and the result-file projection.
-// File chars are summed over UNIQUE file paths (so the same file
-// matching three times still counts its size once); snippet chars are
-// summed across all results. Files that no longer exist on disk
+// EntryFor builds an Entry from a repo_id, query and the result-file
+// projection. File chars are summed over UNIQUE file paths (so the same
+// file matching three times still counts its size once); snippet chars
+// are summed across all results. Files that no longer exist on disk
 // silently contribute 0 to FileChars — a delete-then-search race must
-// not crash the recorder.
-func EntryFor(query string, results []ResultFile, now time.Time) Entry {
+// not crash the recorder. repoID tags the entry so a fanout search that
+// spans multiple repos records one Entry per repo (solov2-0ql0).
+func EntryFor(repoID, query string, results []ResultFile, now time.Time) Entry {
 	var snippet int64
 	seen := make(map[string]struct{}, len(results))
 	var fileBytes int64
@@ -129,6 +135,7 @@ func EntryFor(query string, results []ResultFile, now time.Time) Entry {
 	}
 	return Entry{
 		Timestamp:    now,
+		RepoID:       repoID,
 		Query:        query,
 		Results:      len(results),
 		FileChars:    fileBytes,
@@ -164,24 +171,75 @@ type Report struct {
 	AllTime Period
 }
 
-// Aggregate streams path and produces a Report rolled up against now.
-// Today is the local-day window containing now; Last7d is the trailing
-// 7 days (today included); AllTime spans every entry in the file. A
-// missing file is not an error — the caller (a fresh install with no
-// searches yet) just sees a zero report.
+// Aggregate streams path and produces a Report rolled up against now,
+// pooling every repo into one report. Today is the local-day window
+// containing now; Last7d is the trailing 7 days (today included);
+// AllTime spans every entry in the file. A missing file is not an
+// error — the caller (a fresh install with no searches yet) just sees a
+// zero report.
 func Aggregate(path string, now time.Time) (Report, error) {
-	rep := Report{
+	rep := newReport(now)
+	err := scanEntries(path, rep.addEntry)
+	return rep, err
+}
+
+// AggregateByRepo is Aggregate partitioned by Entry.RepoID: it returns
+// one Report per repo seen in the file (solov2-0ql0). Entries written by
+// pre-0ql0 daemons carry no repo_id and bucket under the "" key. Each
+// per-repo Report uses the same period-bucketing as Aggregate, so the
+// combined Aggregate equals the sum of these by construction. A missing
+// file yields an empty map and no error.
+func AggregateByRepo(path string, now time.Time) (map[string]Report, error) {
+	byRepo := map[string]*Report{}
+	err := scanEntries(path, func(e Entry) {
+		rep, ok := byRepo[e.RepoID]
+		if !ok {
+			r := newReport(now)
+			rep = &r
+			byRepo[e.RepoID] = rep
+		}
+		rep.addEntry(e)
+	})
+	out := make(map[string]Report, len(byRepo))
+	for id, rep := range byRepo {
+		out[id] = *rep
+	}
+	return out, err
+}
+
+// newReport returns a zeroed Report with the period windows anchored on
+// now: Today is the local day containing now, Last7d the trailing 7 days
+// (today included), AllTime unbounded.
+func newReport(now time.Time) Report {
+	return Report{
 		Today:   Period{Label: "today", Since: startOfDay(now)},
 		Last7d:  Period{Label: "last_7d", Since: startOfDay(now).AddDate(0, 0, -6)},
 		AllTime: Period{Label: "all_time"},
 	}
+}
 
+// addEntry folds e into whichever of the report's windows contain it.
+func (rep *Report) addEntry(e Entry) {
+	rep.AllTime.add(e)
+	if !e.Timestamp.Before(rep.Last7d.Since) {
+		rep.Last7d.add(e)
+	}
+	if !e.Timestamp.Before(rep.Today.Since) {
+		rep.Today.add(e)
+	}
+}
+
+// scanEntries streams the JSONL file at path, invoking fn for each
+// well-formed Entry. A missing file is not an error (fresh install). One
+// corrupt line — most likely a truncated last line from a crashed write
+// — is skipped rather than aborting the whole scan.
+func scanEntries(path string, fn func(Entry)) error {
 	f, err := os.Open(path)
 	if err != nil {
 		if errors.Is(err, fs.ErrNotExist) {
-			return rep, nil
+			return nil
 		}
-		return rep, fmt.Errorf("savings: open %s: %w", path, err)
+		return fmt.Errorf("savings: open %s: %w", path, err)
 	}
 	defer f.Close()
 
@@ -193,23 +251,14 @@ func Aggregate(path string, now time.Time) (Report, error) {
 	for sc.Scan() {
 		var e Entry
 		if err := json.Unmarshal(sc.Bytes(), &e); err != nil {
-			// One corrupt line shouldn't kill the whole report — skip
-			// it and keep going. A truncated last line from a crashed
-			// write is the most likely culprit.
 			continue
 		}
-		rep.AllTime.add(e)
-		if !e.Timestamp.Before(rep.Last7d.Since) {
-			rep.Last7d.add(e)
-		}
-		if !e.Timestamp.Before(rep.Today.Since) {
-			rep.Today.add(e)
-		}
+		fn(e)
 	}
 	if err := sc.Err(); err != nil {
-		return rep, fmt.Errorf("savings: scan %s: %w", path, err)
+		return fmt.Errorf("savings: scan %s: %w", path, err)
 	}
-	return rep, nil
+	return nil
 }
 
 func (p *Period) add(e Entry) {
