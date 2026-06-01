@@ -123,6 +123,81 @@ func TestAggregate_BucketsByPeriod(t *testing.T) {
 	}
 }
 
+// TestAggregateByRepo_Partitions covers solov2-0ql0: entries carrying a
+// repo_id bucket into one Report per repo, untagged (pre-0ql0) entries
+// land under the "" key, and the per-repo Reports sum to the combined
+// Aggregate (same period-bucketing on both paths).
+func TestAggregateByRepo_Partitions(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "savings.jsonl")
+
+	now := time.Date(2026, 5, 20, 12, 0, 0, 0, time.UTC)
+	entries := []savings.Entry{
+		{Timestamp: now.Add(-1 * time.Hour), RepoID: "alpha", Query: "a1", FileChars: 1000, SnippetChars: 10, Results: 1},
+		{Timestamp: now.Add(-2 * time.Hour), RepoID: "alpha", Query: "a2", FileChars: 2000, SnippetChars: 20, Results: 1},
+		{Timestamp: now.Add(-1 * time.Hour), RepoID: "beta", Query: "b1", FileChars: 500, SnippetChars: 5, Results: 1},
+		{Timestamp: now.Add(-1 * time.Hour), Query: "legacy", FileChars: 300, SnippetChars: 3, Results: 1}, // no repo_id
+	}
+
+	f, err := os.Create(path)
+	if err != nil {
+		t.Fatalf("create: %v", err)
+	}
+	enc := json.NewEncoder(f)
+	for _, e := range entries {
+		if err := enc.Encode(e); err != nil {
+			t.Fatalf("encode: %v", err)
+		}
+	}
+	_ = f.Close()
+
+	byRepo, err := savings.AggregateByRepo(path, now)
+	if err != nil {
+		t.Fatalf("AggregateByRepo: %v", err)
+	}
+	if len(byRepo) != 3 {
+		t.Fatalf("want 3 repo buckets (alpha, beta, \"\"), got %d: %+v", len(byRepo), byRepo)
+	}
+	if a := byRepo["alpha"].AllTime; a.Calls != 2 || a.FileChars != 3000 || a.SnippetChars != 30 {
+		t.Errorf("alpha all-time: %+v", a)
+	}
+	if b := byRepo["beta"].AllTime; b.Calls != 1 || b.FileChars != 500 || b.SnippetChars != 5 {
+		t.Errorf("beta all-time: %+v", b)
+	}
+	if l := byRepo[""].AllTime; l.Calls != 1 || l.FileChars != 300 || l.SnippetChars != 3 {
+		t.Errorf("legacy (\"\") all-time: %+v", l)
+	}
+
+	// Per-repo Reports must sum to the combined Aggregate.
+	combined, err := savings.Aggregate(path, now)
+	if err != nil {
+		t.Fatalf("Aggregate: %v", err)
+	}
+	var calls int
+	var fileChars, snippetChars int64
+	for _, rep := range byRepo {
+		calls += rep.AllTime.Calls
+		fileChars += rep.AllTime.FileChars
+		snippetChars += rep.AllTime.SnippetChars
+	}
+	if calls != combined.AllTime.Calls || fileChars != combined.AllTime.FileChars || snippetChars != combined.AllTime.SnippetChars {
+		t.Errorf("sum of per-repo (%d calls, %d file, %d snippet) != combined %+v",
+			calls, fileChars, snippetChars, combined.AllTime)
+	}
+}
+
+// TestAggregateByRepo_MissingFileIsEmpty: no jsonl yet → empty map, no error.
+func TestAggregateByRepo_MissingFileIsEmpty(t *testing.T) {
+	dir := t.TempDir()
+	byRepo, err := savings.AggregateByRepo(filepath.Join(dir, "nope.jsonl"), time.Now())
+	if err != nil {
+		t.Fatalf("AggregateByRepo missing: %v", err)
+	}
+	if len(byRepo) != 0 {
+		t.Errorf("expected empty map on missing file, got %+v", byRepo)
+	}
+}
+
 // TestAggregate_MissingFileIsEmpty: when the jsonl doesn't exist yet
 // (no searches recorded), Aggregate must return a zeroed Report and
 // no error — the doctor subcommand should print "no data" cleanly.
@@ -172,7 +247,10 @@ func TestEntryFor_UniqueFileChars(t *testing.T) {
 		{FilePath: fileA, SnippetLen: 7}, // same file — count once
 		{FilePath: fileB, SnippetLen: 4},
 	}
-	e := savings.EntryFor("test", results, time.Date(2026, 5, 20, 0, 0, 0, 0, time.UTC))
+	e := savings.EntryFor("repo-x", "test", results, time.Date(2026, 5, 20, 0, 0, 0, 0, time.UTC))
+	if e.RepoID != "repo-x" {
+		t.Errorf("RepoID: got %q, want %q", e.RepoID, "repo-x")
+	}
 	if e.Results != 3 {
 		t.Errorf("Results: got %d, want 3", e.Results)
 	}
@@ -191,7 +269,7 @@ func TestEntryFor_MissingFileSilentlySkipped(t *testing.T) {
 	results := []savings.ResultFile{
 		{FilePath: "/nonexistent/path/that/does/not/exist.go", SnippetLen: 5},
 	}
-	e := savings.EntryFor("q", results, time.Now())
+	e := savings.EntryFor("", "q", results, time.Now())
 	if e.FileChars != 0 {
 		t.Errorf("missing file should contribute 0 file_chars, got %d", e.FileChars)
 	}
