@@ -50,6 +50,7 @@ and never reused.
 | [ADR-S0013](ADR-S0013-branch-pk-delta-scheme.md) | Branch-PK delta scheme — fallback storage layout if OQ-S006 lands red | proposed |
 | [ADR-S0014](ADR-S0014-hnsw-pivot.md) | HNSW vector index pivot (replaces vec0 above 100k nodes) | accepted (extended by ADR-S0015) |
 | [ADR-S0015](ADR-S0015-vec-pivot-dual-backend.md) | Dual-backend vector strategy (sqlite-vec default, usearch above threshold) | accepted |
+| [ADR-S0016](ADR-S0016-memvec-rename.md) | Rename the in-memory vector backend (sqlitevec → memvec) | accepted |
 
 ## Retracted from prior set
 

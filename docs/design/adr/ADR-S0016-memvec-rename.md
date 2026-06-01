@@ -7,8 +7,7 @@ deciders: [whiskeyjimbo]
 supersedes: []
 extends: [ADR-S0015]
 related: [ADR-S0014, ADR-S0015]
-verified: true
-verified_date: "2026-06-01"
+verified: false
 ---
 
 # ADR-S0016 — Rename the in-memory vector backend (sqlitevec → memvec)
