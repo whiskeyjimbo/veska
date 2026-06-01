@@ -24,6 +24,33 @@ func ucSrcLine(uc domain.UnresolvedCall) any {
 	return uc.SrcLine
 }
 
+// ucEdgeKind returns the edge kind a resolved call site should emit. The
+// zero value defaults to EdgeCalls so ordinary call sites are unchanged;
+// the framework route extractor sets EdgeRoutes (solov2-ketg).
+func ucEdgeKind(uc domain.UnresolvedCall) domain.EdgeKind {
+	if uc.EdgeKind == "" {
+		return domain.EdgeCalls
+	}
+	return uc.EdgeKind
+}
+
+// stubSymbolKey derives the symbol component of a cross-repo stub_id,
+// namespaced so distinct call shapes from the same caller into the same
+// module can't collide on the ON CONFLICT(stub_id, branch) key. A method
+// call ("v.Method") and a plain call ("Method") share a name but differ in
+// shape; likewise a ROUTES route→handler reference and a CALLS reference.
+// CALLS keeps the bare name for backward-compatible stub_ids (solov2-ketg).
+func stubSymbolKey(uc domain.UnresolvedCall, kind domain.EdgeKind) string {
+	key := uc.CalleeName
+	if uc.IsMethodCall {
+		key = "@method:" + key
+	}
+	if kind != domain.EdgeCalls {
+		key = "@" + string(kind) + ":" + key
+	}
+	return key
+}
+
 // buildPackageSymbolMap groups symbol-name → node_id by file directory.
 // Go's "one package per directory" convention means a single map per
 // dir is sufficient for resolving same-package, cross-file calls

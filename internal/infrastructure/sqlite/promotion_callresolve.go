@@ -140,9 +140,10 @@ func stubID(srcNodeID, modulePath, symbol string) string {
 	return hex.EncodeToString(h[:])
 }
 
-// buildCallEdge constructs a Probable CALLS edge for a resolved call site,
-// carrying the source line when known. Returns ok=false when the domain
-// constructor rejects the inputs, in which case the caller skips the edge.
+// buildCallEdge constructs a Probable edge for a resolved call site,
+// carrying the source line when known. The edge kind is ucEdgeKind(uc) —
+// EdgeCalls by default, EdgeRoutes for route→handler refs (solov2-ketg).
+// Returns ok=false when the domain constructor rejects the inputs.
 func buildCallEdge(uc domain.UnresolvedCall, targetID domain.NodeID) (*domain.Edge, bool) {
 	opts := []domain.EdgeOption{domain.WithConfidence(domain.Probable)}
 	if uc.SrcLine > 0 {
@@ -151,7 +152,7 @@ func buildCallEdge(uc domain.UnresolvedCall, targetID domain.NodeID) (*domain.Ed
 	e, err := domain.NewEdge(domain.EdgeSpec{
 		Src:  uc.CallerID,
 		Tgt:  targetID,
-		Kind: domain.EdgeCalls,
+		Kind: ucEdgeKind(uc),
 	}, opts...)
 	if err != nil {
 		return nil, false
@@ -270,15 +271,13 @@ func (p *promotion) emitCrossRepoStub(ctx context.Context, stubStmt *sql.Stmt, u
 		return nil
 	}
 	methodFlag := 0
-	sid := stubID(string(uc.CallerID), importPath, uc.CalleeName)
 	if uc.IsMethodCall {
 		methodFlag = 1
-		// Distinct stub_id namespace so a same-name plain and method call from
-		// the same caller don't collide on the ON CONFLICT key.
-		sid = stubID(string(uc.CallerID), importPath, "@method:"+uc.CalleeName)
 	}
+	kind := ucEdgeKind(uc)
+	sid := stubID(string(uc.CallerID), importPath, stubSymbolKey(uc, kind))
 	if _, err := stubStmt.ExecContext(ctx,
-		sid, p.branch, p.repoID, string(uc.CallerID), string(domain.EdgeCalls),
+		sid, p.branch, p.repoID, string(uc.CallerID), string(kind),
 		importPath, uc.CalleeName, "go", p.now, methodFlag,
 		ucSrcLine(uc),
 	); err != nil {

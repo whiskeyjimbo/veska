@@ -8,11 +8,13 @@
 ; framework's command word (cobra Use:) and emits CONTAINS edges from
 ; AddCommand(...) so call_chain / blast_radius walk the actual tree.
 ;
-; Frameworks handled: spf13/cobra (Command → command named by Use:) and
+; Frameworks handled: spf13/cobra (Command → command named by Use:),
 ; urfave/cli (App → command named by Name:, with its Commands:[]*Command
-; slice as subcommands). kong (struct tags) and HTTP routers (gin/echo →
-; KindRoute / EdgeRoutes — needs cross-file resolver support) are
-; reserved follow-ups; each drops in as a branch in go_frameworks.go.
+; slice as subcommands), and HTTP routers gin/echo/chi (router.METHOD(
+; "/path", handler) → KindRoute named "METHOD /path" + a ROUTES
+; route→handler edge resolved at promotion — solov2-ketg). kong (struct
+; tags) is a reserved follow-up; it drops in as a branch in
+; go_frameworks.go.
 ;
 ; The @fwvar.* patterns capture EVERY top-level `var X = &pkg.Type{...}`;
 ; go_frameworks.go dispatches on (resolved import path, type name) so a
@@ -56,3 +58,15 @@
     operand: (identifier) @cobra.add.parent
     field: (field_identifier) @cobra.add.method)
   arguments: (argument_list) @cobra.add.args)
+
+; HTTP route: router.METHOD("/path", handler). Matches any selector call;
+; go_frameworks.go filters field against the HTTP verb set (gin/echo GET,
+; chi Get) and verifies the first arg is a string literal with a handler
+; arg present (the four-way precision gate). The operand is intentionally
+; uncaptured — the router is a param of an unresolved type, so it can't be
+; verified by receiver type; precision comes from the import + verb + arg
+; gate instead (solov2-ketg).
+(call_expression
+  function: (selector_expression
+    field: (field_identifier) @route.method)
+  arguments: (argument_list) @route.args) @route.call

@@ -275,6 +275,12 @@ func (p *GoParser) ParseFile(ctx context.Context, repoID, path string, src []byt
 	// solov2-crn7: cobra AddCommand→CONTAINS command-tree edges.
 	result.Edges = append(result.Edges, fw.edges...)
 
+	// solov2-ketg: gin/echo/chi route→handler references. Emitted as
+	// ROUTES UnresolvedCalls so the handler binds against the package-wide
+	// symbol map at promotion (same path as a plain cross-file call),
+	// materialising a ROUTES edge rather than CALLS.
+	result.UnresolvedCalls = append(result.UnresolvedCalls, fw.unresolved...)
+
 	// solov2-y7gu: anonymous-function calls in top-level var/const
 	// initialisers. The legacy collectAnonCalls checked node.Type() ==
 	// "function_literal" but tree-sitter Go's grammar emits
