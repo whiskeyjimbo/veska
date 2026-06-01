@@ -34,10 +34,10 @@ func (f *fakeStore) SimilarEdges(_ context.Context, _, _ string, minScore float3
 func TestNewFinder_NilStores(t *testing.T) {
 	t.Parallel()
 	store := &fakeStore{}
-	if _, err := duplicates.NewFinder(nil, store); !errors.Is(err, duplicates.ErrMissingDependency) {
+	if _, err := duplicates.NewFinder(nil, store, ""); !errors.Is(err, duplicates.ErrMissingDependency) {
 		t.Fatalf("nil clone store: want ErrMissingDependency, got %v", err)
 	}
-	if _, err := duplicates.NewFinder(store, nil); !errors.Is(err, duplicates.ErrMissingDependency) {
+	if _, err := duplicates.NewFinder(store, nil, ""); !errors.Is(err, duplicates.ErrMissingDependency) {
 		t.Fatalf("nil near store: want ErrMissingDependency, got %v", err)
 	}
 }
@@ -53,7 +53,7 @@ func TestExactClones_GroupsAndOrders(t *testing.T) {
 		{ContentHash: "hashSmall", NodeID: "m1", FilePath: "b.go", LineStart: 1, Kind: "method"},
 		{ContentHash: "hashSmall", NodeID: "m2", FilePath: "c.go", LineStart: 1, Kind: "method"},
 	}}
-	finder, err := duplicates.NewFinder(store, store)
+	finder, err := duplicates.NewFinder(store, store, "")
 	if err != nil {
 		t.Fatalf("NewFinder: %v", err)
 	}
@@ -99,7 +99,7 @@ func TestNearDuplicates_ClustersTransitively(t *testing.T) {
 		{Src: mem("b", "b.go", 1), Dst: mem("c", "c.go", 1), Score: 0.82},
 		{Src: mem("x", "x.go", 1), Dst: mem("y", "y.go", 1), Score: 0.95},
 	}}
-	finder, _ := duplicates.NewFinder(store, store)
+	finder, _ := duplicates.NewFinder(store, store, "")
 
 	clusters, err := finder.NearDuplicates(context.Background(), "r1", "main", 0.80)
 	if err != nil {
@@ -130,15 +130,48 @@ func TestNearDuplicates_ClustersTransitively(t *testing.T) {
 func TestNearDuplicates_DefaultsThreshold(t *testing.T) {
 	t.Parallel()
 	store := &fakeStore{}
-	finder, _ := duplicates.NewFinder(store, store)
+	finder, _ := duplicates.NewFinder(store, store, "")
 	if _, err := finder.NearDuplicates(context.Background(), "r1", "main", 0); err != nil {
 		t.Fatalf("NearDuplicates: %v", err)
 	}
+	// Empty embedderID -> DefaultNearThreshold fallback.
 	if store.gotMinScore != duplicates.DefaultNearThreshold {
-		t.Errorf("minScore=0 should default to %v, forwarded %v", duplicates.DefaultNearThreshold, store.gotMinScore)
+		t.Errorf("minScore=0 (no embedder) should default to %v, forwarded %v", duplicates.DefaultNearThreshold, store.gotMinScore)
 	}
 	if len(store.gotNearExcl) != len(duplicates.ExcludedKinds) {
 		t.Errorf("forwarded near exclude %v, want %v", store.gotNearExcl, duplicates.ExcludedKinds)
+	}
+}
+
+func TestNearDuplicates_DefaultIsEmbedderCalibrated(t *testing.T) {
+	t.Parallel()
+	// A Finder built for a known embedder must apply that embedder's calibrated
+	// default (not the global fallback) when min_score is omitted.
+	store := &fakeStore{}
+	finder, _ := duplicates.NewFinder(store, store, "nomic-embed-text")
+	if _, err := finder.NearDuplicates(context.Background(), "r1", "main", 0); err != nil {
+		t.Fatalf("NearDuplicates: %v", err)
+	}
+	want := duplicates.NearThresholdFor("nomic-embed-text")
+	if store.gotMinScore != want {
+		t.Errorf("nomic default minScore = %v, want calibrated %v", store.gotMinScore, want)
+	}
+	if want == duplicates.DefaultNearThreshold {
+		t.Fatalf("test is vacuous: nomic threshold equals the fallback %v", want)
+	}
+}
+
+func TestNearThresholdFor(t *testing.T) {
+	t.Parallel()
+	if got := duplicates.NearThresholdFor("definitely-not-an-embedder"); got != duplicates.DefaultNearThreshold {
+		t.Errorf("unknown embedder = %v, want fallback %v", got, duplicates.DefaultNearThreshold)
+	}
+	// Every calibrated value must exceed autolink's related cutoff (0.60): a
+	// near-duplicate is at least as similar as "merely related".
+	for _, id := range []string{"model2vec(potion-code-16M)", "nomic-embed-text", "veska-static-v2"} {
+		if got := duplicates.NearThresholdFor(id); got <= 0.60 {
+			t.Errorf("%s threshold %v must exceed autolink related cutoff 0.60", id, got)
+		}
 	}
 }
 
@@ -149,7 +182,7 @@ func TestExactClones_DropsSingletons(t *testing.T) {
 	store := &fakeStore{rows: []duplicates.ClonedNode{
 		{ContentHash: "lonely", NodeID: "n1", FilePath: "a.go", Kind: "function"},
 	}}
-	finder, _ := duplicates.NewFinder(store, store)
+	finder, _ := duplicates.NewFinder(store, store, "")
 	groups, err := finder.ExactClones(context.Background(), "r1", "main")
 	if err != nil {
 		t.Fatalf("ExactClones: %v", err)

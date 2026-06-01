@@ -38,7 +38,7 @@ func clonesCmd() *cobra.Command {
 	cmd.Flags().StringVar(&repoFlag, "repo", "", "repo id, short_id, or alias")
 	cmd.Flags().StringVar(&branchFlag, "branch", "", "branch (default: repo's active branch)")
 	cmd.Flags().BoolVar(&nearFlag, "near", false, "fuzzy near-duplicate clusters from SIMILAR_TO edges (default: exact clones)")
-	cmd.Flags().Float64Var(&minScore, "min-score", 0, "with --near: minimum similarity score (0 = provisional default)")
+	cmd.Flags().Float64Var(&minScore, "min-score", 0, "with --near: minimum similarity score (0 = default calibrated for the elected embedder; lower for more recall)")
 	cmd.Flags().BoolVar(&jsonOut, "json", false, "emit JSON (eng_find_clones shape)")
 	return cmd
 }
