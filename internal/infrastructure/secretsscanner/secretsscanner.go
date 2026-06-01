@@ -32,7 +32,7 @@ import (
 // these creates a noise wall on the first-run journey — every junior
 // who copy-pastes AWS's quickstart hits the same canonical key. Real
 // callers never have a reason to ship these literal strings, so a
-// strict-equality allowlist is safe (solov2-j1yz).
+// strict-equality allowlist is safe .
 var docsExampleSecrets = map[string]struct{}{
 	// AWS canonical examples published throughout AWS docs and SDKs.
 	"AKIAIOSFODNN7EXAMPLE":                     {},
@@ -335,7 +335,7 @@ func (s *BuiltinScanner) scanLine(path string, line ports.Line) []ports.SecretFi
 		// secrets. Agent-config files like .mcp.json embed binary
 		// paths (e.g. "/home/user/.local/bin/veska-mcp") that the
 		// entropy heuristic otherwise flags — including the file
-		// veska itself writes during `veska init --agent` (solov2-bptv).
+		// veska itself writes during `veska init --agent` .
 		if looksLikeFilesystemPath(tok) {
 			continue
 		}
@@ -388,7 +388,7 @@ func mask(secret string) string {
 var importPathRe = regexp.MustCompile(`^(?:github\.com|gitlab\.com|bitbucket\.org|golang\.org|gopkg\.in|google\.golang\.org|cloud\.google\.com|k8s\.io|sigs\.k8s\.io|go\.uber\.org|go\.opentelemetry\.io)/[A-Za-z0-9._/\-]+$`)
 
 // looksLikeImportPath reports whether tok has the shape of a public
-// Go import path / module URL (solov2-1rfo).
+// Go import path / module URL .
 func looksLikeImportPath(tok string) bool {
 	return importPathRe.MatchString(tok)
 }
@@ -398,7 +398,7 @@ func looksLikeImportPath(tok string) bool {
 // each component built only from path-safe characters (no random
 // alphanumeric runs the way a secret would). Restricting to multi-
 // segment paths means a bare leading-slash token like "/sk_live_…"
-// still trips the entropy rule (solov2-bptv).
+// still trips the entropy rule .
 var filesystemPathRe = regexp.MustCompile(`^/[A-Za-z0-9._\-]+(?:/[A-Za-z0-9._\-]+){2,}$`)
 
 // looksLikeFilesystemPath reports whether tok has the shape of an

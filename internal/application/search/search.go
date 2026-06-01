@@ -38,7 +38,7 @@ const DegradedReasonEmbedderOfflineLexicalFallback = "embedder_offline_lexical_f
 // a low-quality last resort used only when model2vec is unavailable. It
 // surfaces the quality cliff in-band so an agent (or `veska search`) can
 // tell the user to run `veska install model2vec` instead of silently
-// trusting near-noise scores (solov2-d2x).
+// trusting near-noise scores .
 const DegradedReasonLowQualityStaticEmbedder = "low_quality_static_embedder"
 
 // staticEmbedderModelID mirrors the static adapter's ModelID. It is a
@@ -61,7 +61,7 @@ type Result struct {
 	LineEnd    int
 	// Snippet is the symbol's source code, populated from the nodes
 	// table's snippet column. Lets agents skip a follow-up Read of the
-	// file (solov2-7kz). Empty when the underlying node has no stored
+	// file . Empty when the underlying node has no stored
 	// content (legacy rows from before the snippet column existed).
 	Snippet string
 }
@@ -80,7 +80,7 @@ type Response struct {
 
 // RankedCandidate is a single hydrated search candidate plus the
 // per-retriever ranks it earned in its source repo. The MCP cross-repo
-// fanout (solov2-bcn) uses this to RRF a globally pooled candidate set —
+// fanout  uses this to RRF a globally pooled candidate set —
 // without it, each repo's local RRF score is incomparable across repos
 // (every repo has a rank-1 hit scoring ~1/61, so 'top hits' from a
 // 5-repo workspace render as five equally-ranked items).
@@ -92,7 +92,7 @@ type Response struct {
 // VectorScore is the raw distance-derived score the VectorStorage
 // returned (higher = better). It is comparable across queries against
 // the same embedder, and — critically for cross-repo fanout — across
-// repos when one embedder spans them (solov2-uuuk). 0 means the
+// repos when one embedder spans them . 0 means the
 // candidate didn't appear in the vector retriever, so cosine fusion
 // must either fall back to a baseline contribution or drop it. The
 // MCP cross-repo handler chooses cosine fusion over global RRF
@@ -242,7 +242,7 @@ func (s *Service) Semantic(ctx context.Context, repoID, branch, query string, k 
 	}
 
 	// Hybrid: when a LexicalSearcher is wired, run BM25/FTS5 in parallel
-	// and fuse with Reciprocal Rank Fusion (solov2-2su). Vector cosine
+	// and fuse with Reciprocal Rank Fusion . Vector cosine
 	// alone is too thin on small corpora — Sam's notes-API session
 	// returned scores in a ~0.00004 range across the top-10 — so the
 	// "right" answer routinely lost to neighbours by a rounding error.
@@ -303,9 +303,9 @@ func (s *Service) Semantic(ctx context.Context, repoID, branch, query string, k 
 			Snippet:    m.Snippet,
 		})
 	}
-	// Post-fusion reranking (solov2-2sf): definition boost, identifier
+	// Post-fusion reranking : definition boost, identifier
 	// stems, file coherence, noise penalty. Subsumes the earlier
-	// name-match boost (solov2-x35). All signals scale by the candidate
+	// name-match boost . All signals scale by the candidate
 	// set's maxScore so they bite on tight-clustered small-corpus
 	// distributions yet stay sub-noise on real corpora.
 	out = rerank(out, query)
@@ -317,7 +317,7 @@ func (s *Service) Semantic(ctx context.Context, repoID, branch, query string, k 
 
 // withEmbedderCaveat appends DegradedReasonLowQualityStaticEmbedder to resp
 // when the active embedder is the static-v2 fallback, so the quality cliff
-// rides along with every result set (solov2-d2x).
+// rides along with every result set .
 func (s *Service) withEmbedderCaveat(resp Response) Response {
 	if s.embedder.ModelID() == staticEmbedderModelID {
 		resp.DegradedReasons = append(resp.DegradedReasons, DegradedReasonLowQualityStaticEmbedder)
@@ -327,7 +327,7 @@ func (s *Service) withEmbedderCaveat(resp Response) Response {
 
 // SemanticCandidates returns the per-retriever-ranked, hydrated candidate
 // set for query without applying RRF or the name-match rerank. It is the
-// fan-in primitive used by the MCP cross-repo handler (solov2-bcn) — the
+// fan-in primitive used by the MCP cross-repo handler  — the
 // handler runs a SINGLE global RRF across every repo's candidates so a
 // rank-1 hit in repo A competes fairly with a rank-1 hit in repo B,
 // rather than the two top hits both scoring ~1/61 in their local fusion.

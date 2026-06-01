@@ -15,7 +15,7 @@ import (
 // findingsCmd is the parent for `veska findings …`, wrapping the
 // eng_list_findings / eng_get_finding / eng_close_finding /
 // eng_reopen_finding tools so users can interact with promotion-check output
-// without crafting JSON-RPC payloads (solov2-16qu).
+// without crafting JSON-RPC payloads .
 func findingsCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:          "findings",

@@ -17,7 +17,7 @@ import (
 
 // RunCreate runs VACUUM INTO, copies supporting files, and writes a
 // timestamped .tar.gz. outputDir == "" defaults to $VESKA_HOME/backups so a
-// single `rm -rf $VESKA_HOME` clears all veska state (solov2-n57f).
+// single `rm -rf $VESKA_HOME` clears all veska state .
 func RunCreate(out io.Writer, outputDir string) error {
 	veskaHome := config.DefaultVectorDir()
 	if outputDir == "" {
@@ -42,7 +42,7 @@ func RunCreate(out io.Writer, outputDir string) error {
 // and deletes the rest if older than [backup].keep_max_age. Auto-pre-migration
 // snapshots are never pruned. Idempotent. backupDir == "" prunes the canonical
 // $VESKA_HOME/backups; legacy ~/.veska-backups stays untouched unless named
-// explicitly (solov2-n57f).
+// explicitly .
 func RunPrune(out io.Writer, backupDir string) error {
 	if backupDir == "" {
 		backupDir = config.DefaultBackupDir()

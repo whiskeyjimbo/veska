@@ -42,7 +42,7 @@ func WithIgnoreLoader(l IgnoreLoader) ColdScanOption {
 }
 
 // WithScanTracker registers a ScanTracker the reparser will Start at scan
-// entry and End at scan exit (solov2-pm5). The daemon's status handler
+// entry and End at scan exit . The daemon's status handler
 // reads the same tracker so eng_get_status can surface scans_in_flight.
 // Nil-safe: when no tracker is wired the calls are no-ops.
 func WithScanTracker(t *ScanTracker) ColdScanOption {
@@ -121,7 +121,7 @@ func newColdScanReparserFromFns(save saveFunc, promote promoteFunc, git headQuer
 	return func(ctx context.Context, repo RepoRecord) error {
 		// Bracket every scan with start + complete INFO logs so an
 		// operator tailing ~/.veska/logs/daemon.log can tell that work
-		// is in flight and observe completion (solov2-6ip). Previously
+		// is in flight and observe completion . Previously
 		// the cold-scan path was silent end-to-end; a newbie running
 		// 'veska repo add <big repo>' saw nothing and assumed it had
 		// hung.
@@ -132,7 +132,7 @@ func newColdScanReparserFromFns(save saveFunc, promote promoteFunc, git headQuer
 			"branch", repo.ActiveBranch,
 		)
 
-		// Surface the in-flight state to eng_get_status (solov2-pm5).
+		// Surface the in-flight state to eng_get_status .
 		// The defer guarantees End fires on every exit path so a
 		// failed scan doesn't pin the tracker entry forever. Nil-safe
 		// when no tracker is wired (legacy / test callers).
@@ -160,7 +160,7 @@ func newColdScanReparserFromFns(save saveFunc, promote promoteFunc, git headQuer
 		// signature unchanged.
 		// Also publish files_seen to the scan tracker after each save so
 		// eng_get_status / veska repo list can show progress for long
-		// scans (solov2-u9h9). files_total is left 0 until we have a
+		// scans . files_total is left 0 until we have a
 		// cheap upfront count — wiring that here would double-walk the
 		// tree. Showing files_seen alone is still enough to tell hung
 		// from progressing.
@@ -184,7 +184,7 @@ func newColdScanReparserFromFns(save saveFunc, promote promoteFunc, git headQuer
 		// Publish the final walk count before flipping to promoting so a
 		// user polling eng_get_status sees the true files_seen rather than
 		// a multiple-of-25 snapshot, then learns we've entered the slow
-		// promotion phase (solov2-u9h9).
+		// promotion phase .
 		cfg.tracker.Progress(repo.RepoID, filesSaved, 0)
 		cfg.tracker.SetPhase(repo.RepoID, "promoting")
 

@@ -34,7 +34,7 @@ type FindingStorage interface {
 	// scans the resolved dep set from scratch) needs prior findings to
 	// disappear automatically once the underlying condition is resolved.
 	// Without it, fixing a vulnerable dep leaves the original finding
-	// "open" forever and erodes trust in the findings surface (solov2-jvrc).
+	// "open" forever and erodes trust in the findings surface .
 	//
 	// closed_reason is set to 'revalidated_obsolete' for parity with
 	// CloseObsolete / CloseSupersededAutoLinks. The call is idempotent and
@@ -50,7 +50,7 @@ type FindingStorage interface {
 	// findings whose target choice has since drifted (a different nearest
 	// neighbour, dropped below threshold, …) are explicitly closed so the
 	// "open findings" surface does not balloon across re-promotions
-	// (solov2-ok7y).
+	// .
 	//
 	// closed_reason is set to 'revalidated_obsolete' for parity with
 	// CloseObsolete. An empty sourceNodeIDs slice is a no-op. The call is

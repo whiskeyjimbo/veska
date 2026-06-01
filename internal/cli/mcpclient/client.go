@@ -28,13 +28,13 @@ const (
 	// ioTimeout is generous: the first call after `veska service start` (cold
 	// daemon) can take ~10s as SQLite opens, the embedder hot-loads, and
 	// registries initialise. 30s absorbs that cold-start jitter while staying
-	// within human patience for a one-shot CLI call (solov2-d37i).
+	// within human patience for a one-shot CLI call .
 	ioTimeout = 30 * time.Second
 )
 
 // methodsSkipCwd lists eng_* methods that must NOT receive an auto-injected
 // cwd: their CLI surface intentionally fans out across every registered repo
-// when --repo is omitted (solov2-efzv), and pinning them to cwd would break the
+// when --repo is omitted , and pinning them to cwd would break the
 // multi-repo workflow.
 var methodsSkipCwd = map[string]struct{}{
 	"eng_find_symbol":      {},
@@ -73,7 +73,7 @@ func IsDaemonUnreachable(err error) bool {
 // dial opens cli.sock with a bounded retry. cli.sock (not mcp.sock) is required:
 // the daemon classifies the actor by socket — cli.sock → human, mcp.sock →
 // agent — and routing CLI commands through mcp.sock breaks human_required gates
-// (solov2-7x7l).
+// .
 func dial(ctx context.Context) (net.Conn, error) {
 	sockPath := config.CLISockPath()
 	var (
@@ -92,7 +92,7 @@ func dial(ctx context.Context) (net.Conn, error) {
 		}
 	}
 	// Include the underlying cause (refused vs absent vs permission — solov2-0cg)
-	// and, when the daemon simply isn't running, an actionable hint (solov2-j68l).
+	// and, when the daemon simply isn't running, an actionable hint .
 	es := dialErr.Error()
 	if strings.Contains(es, "connection refused") ||
 		strings.Contains(es, "no such file") ||
@@ -159,7 +159,7 @@ func readResponse(conn net.Conn, out any) error {
 }
 
 // injectCwd adds a "cwd" field to eng_* params so the daemon can resolve repo_id
-// from the caller's working directory when omitted (solov2-ktz0), mirroring what
+// from the caller's working directory when omitted , mirroring what
 // veska-mcp does for editor clients. Non-eng_* methods, params already carrying
 // cwd, and methodsSkipCwd entries pass through unchanged.
 func injectCwd(method string, params any) any {
@@ -189,7 +189,7 @@ func injectCwd(method string, params any) any {
 
 // humanizeError rewrites MCP-protocol hints into CLI-flavored ones so `veska`
 // users don't see eng_* tool names or JSON-RPC codes they can't act on
-// (solov2-luc7).
+// .
 func humanizeError(msg string) string {
 	rep := strings.NewReplacer(
 		"pass eng_list_repos to find the id", "run `veska repo list` to see ids",

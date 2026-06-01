@@ -3,7 +3,7 @@
 // the project-scoped per-agent instruction snippet writer (--agent). cmd/veska/
 // init.go is reduced to Cobra command construction whose RunE delegates here,
 // following the cmd = glue / logic-in-packages pattern established by
-// reindexcmd, symbolcmd, graphcmd, and findingscmd (solov2-0omh).
+// reindexcmd, symbolcmd, graphcmd, and findingscmd .
 package initcmd
 
 import (
@@ -51,7 +51,7 @@ type Flags struct {
 	// (CI, agent harnesses, install pipelines) get the default answer
 	// silently — the prompt is suppressed entirely and the chosen default
 	// is echoed in the summary so the caller can tell what happened
-	// (solov2-mgyy).
+	// .
 	Interactive bool
 }
 
@@ -61,7 +61,7 @@ type Flags struct {
 //     default (model2vec/static) is in-process and needs no external service,
 //     so init never fails for lack of Ollama. Only an explicit
 //     VESKA_EMBEDDER=ollama probes Ollama and hard-fails when it is unhealthy.
-//  3. Prompts to enable [vuln_source] (solov2-pvyo) unless --yes / --no-vuln
+//  3. Prompts to enable [vuln_source]  unless --yes / --no-vuln
 //     short-circuits.
 //  4. Prints a short summary to out on success.
 func Run(ctx context.Context, deps Deps, flags Flags, out io.Writer) error {
@@ -145,7 +145,7 @@ func Run(ctx context.Context, deps Deps, flags Flags, out io.Writer) error {
 
 // StdinIsInteractive reports whether os.Stdin is a TTY. Used to decide
 // whether to prompt or silently take the default during `veska init`
-// (solov2-mgyy). On any stat error we conservatively report false — the
+// . On any stat error we conservatively report false — the
 // quiet, non-interactive default behaviour is the right answer when the
 // shape of stdin can't be determined.
 func StdinIsInteractive() bool {
@@ -157,7 +157,7 @@ func StdinIsInteractive() bool {
 }
 
 // ResolveVulnChoice asks the user whether to enable OSV vulnerability scanning
-// at init time (solov2-pvyo). Non-interactive paths short-circuit:
+// at init time . Non-interactive paths short-circuit:
 //   - --no-vuln → always disabled.
 //   - --yes (or stdin missing/closed) → accept the default (enabled).
 //   - existing config.toml on disk → skip the prompt entirely; we never
@@ -184,7 +184,7 @@ func ResolveVulnChoice(flags Flags, out io.Writer) (bool, error) {
 	// Peek for an immediate EOF before printing anything — some agent
 	// harnesses present a TTY-ish stdin that's already closed, in which
 	// case the prompt + "stdin EOF" parenthetical reads as an error
-	// (solov2-iabr). Skip straight to the non-interactive line so the
+	// . Skip straight to the non-interactive line so the
 	// output is identical to the !flags.Interactive branch.
 	reader := bufio.NewReader(flags.Stdin)
 	if _, peekErr := reader.Peek(1); peekErr != nil {
@@ -245,7 +245,7 @@ func resolveInitEmbedder(ctx context.Context, deps Deps) (line, tip string, err 
 
 // embedderProvenance reports where the elected provider's weights came from,
 // so `veska init` can disambiguate fat (compiled in), downloaded (~/.veska),
-// and static-v2 fallback (solov2-veci). The model name is extracted from
+// and static-v2 fallback . The model name is extracted from
 // ModelID — model2vec providers render as "model2vec(<name>)".
 func embedderProvenance(veskaHome, modelID string) string {
 	if modelID == embedstatic.ModelID {
@@ -278,7 +278,7 @@ const configTemplateHeader = `# Veska daemon config.
 `
 
 // vulnSourceBlockEnabled is the live (uncommented) [vuln_source] block —
-// written when init resolves the prompt to "yes" (solov2-pvyo).
+// written when init resolves the prompt to "yes" .
 const vulnSourceBlockEnabled = `# OSV.dev vulnerability scanner. After re-indexing existing repos
 # (` + "`veska reindex <path>`" + `), findings appear in ` + "`veska findings list`" + `.
 [vuln_source]
@@ -299,7 +299,7 @@ const vulnSourceBlockDisabled = `# OSV.dev vulnerability scanner (off; opt-in).
 
 // writeDefaultConfigIfAbsent writes the starter config.toml only when the
 // file does not already exist. vulnEnabled selects whether the
-// [vuln_source] block is written live or commented out (solov2-pvyo).
+// [vuln_source] block is written live or commented out .
 // Idempotent on re-init — never overwrites an existing config.
 func writeDefaultConfigIfAbsent(veskaHome string, vulnEnabled bool) error {
 	path := filepath.Join(veskaHome, "config.toml")

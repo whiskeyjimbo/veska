@@ -57,11 +57,11 @@ type PromotionFile struct {
 	// UnresolvedCalls are parser hints whose callee lives in another
 	// file of the same Go package; the PromotionStore resolves them
 	// against a package-wide map built from the batch and writes the
-	// resulting CALLS edges in the same transaction (solov2-2at).
+	// resulting CALLS edges in the same transaction .
 	UnresolvedCalls []domain.UnresolvedCall
 	// Imports maps the file's local package identifiers to import paths,
 	// used to resolve package-qualified UnresolvedCalls into intra-repo
-	// CALLS edges or cross-repo edge stubs at promotion (solov2-xc51).
+	// CALLS edges or cross-repo edge stubs at promotion .
 	Imports map[string]string
 }
 

@@ -213,8 +213,8 @@ func runColdScanE2E(t *testing.T, kind vector.BackendKind) {
 		t.Fatal("could not find ComputeAlphaMetric node in nodes table")
 	}
 	// Retrieval competitors for the alpha-symbol slot:
-	//   - package-scope node, snippet=whole file (solov2-sxa);
-	//   - chunk nodes covering non-declaration regions (solov2-jyt);
+	//   - package-scope node, snippet=whole file ;
+	//   - chunk nodes covering non-declaration regions ;
 	// All three carry the alpha tokens. The test asserts the symbol is
 	// in the same semantic cluster as the query, not that it beats every
 	// chunk/package-level competitor. Top-5 placement still proves the

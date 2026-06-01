@@ -21,7 +21,7 @@ type key struct {
 // entry holds the nodes, edges, and unresolved-call markers for a
 // single staged file. The unresolved markers are parser hints whose
 // target lives in another file of the same package; the Promoter binds
-// them at promotion time (solov2-2at).
+// them at promotion time .
 type entry struct {
 	nodes      []*domain.Node
 	edges      []*domain.Edge
@@ -165,7 +165,7 @@ func (s *Area) Clear(repoID, branch string) {
 // File is the per-file snapshot the promotion path consumes — nodes
 // AND parser-produced edges. SIMILAR_TO edges (autolink) are NOT included
 // here; only structural edges the parser determined at parse time
-// (solov2-ijg).
+// .
 type File struct {
 	Nodes           []*domain.Node
 	Edges           []*domain.Edge

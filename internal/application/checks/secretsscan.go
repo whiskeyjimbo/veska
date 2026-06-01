@@ -173,7 +173,7 @@ var testFixtureCredentialExts = []string{".pem", ".key", ".crt", ".cer", ".p12",
 // file embedded as a test fixture: a credential-shaped extension AND at
 // least one path segment indicating a test directory. Matching only on
 // segments avoids the "vendored_data/" / "contestdata/" substring trap that
-// already bit the vendored-deps filter (solov2-l7zd).
+// already bit the vendored-deps filter .
 func isTestFixtureCredentialPath(path string) bool {
 	lower := strings.ToLower(path)
 	extMatch := false

@@ -268,7 +268,7 @@ func (p *GoParser) ParseFile(ctx context.Context, repoID, path string, src []byt
 		result.UnresolvedCalls = append(result.UnresolvedCalls, anonUnresolved...)
 	}
 
-	// Chunk index over non-declaration regions (solov2-jyt). Emitted
+	// Chunk index over non-declaration regions . Emitted
 	// AFTER the symbol set is finalised so chunkFile can carve gaps
 	// between symbol line ranges. Mirrors go.go (~L216).
 	result.Nodes = append(result.Nodes, chunkFile(repoID, path, src, result.Nodes)...)
@@ -481,7 +481,7 @@ func buildFunctionNodeFromCaptures(declNode, nameNode *sitter.Node, src []byte, 
 	// discriminator they all hash to the same node_id and the promotion
 	// transaction fails with a UNIQUE-PK constraint on (node_id, branch)
 	// — observed on hugo and prometheus, where protobuf-generated .pb.go
-	// files routinely declare two init() (solov2-14lw). The display name
+	// files routinely declare two init() . The display name
 	// stays "init"; only the ID input is disambiguated.
 	idName := name
 	if name == "init" {
@@ -605,7 +605,7 @@ func buildVarNodesFromSpec(spec, decl *sitter.Node, src []byte, repoID, path str
 // node (e.g. `var helloCmd = &cobra.Command{ RunE: func(){ Foo() } }`),
 // the calls attribute to that var node so cross-repo blast can name
 // the actual caller (`helloCmd`) instead of the package node — closing
-// the cobra-app grain gap (solov2-zuvl). Falls back to pkgNode for
+// the cobra-app grain gap . Falls back to pkgNode for
 // shapes where no enclosing var is identifiable (const blocks,
 // composite-literal blanket lookups). Dedup is per-(caller, target)
 // across all anon bodies so two literals calling the same target

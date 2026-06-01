@@ -46,7 +46,7 @@ type AliasTarget struct {
 }
 
 // RunAliasSuggestPrompt offers an auto-suggested alias on `veska repo add`
-// (solov2-7w1t). TTY-only — non-TTY callers skip silently so scripts /
+// . TTY-only — non-TTY callers skip silently so scripts /
 // MCP-driven adds don't block.
 //
 // UX:

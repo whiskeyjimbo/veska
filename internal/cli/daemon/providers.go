@@ -31,7 +31,7 @@ var (
 // AddRepo also fires a background cold scan against the freshly-registered
 // repo so its working tree is indexed without a daemon restart (solov2-0z1.3)
 // and seeds the fsnotify multi-repo watcher so subsequent live edits flow
-// through Ingester.Save without a restart (solov2-id3). The scan runs under
+// through Ingester.Save without a restart . The scan runs under
 // daemonCtx (not the caller's ctx) so a short-lived MCP request does not
 // cancel the scan as soon as it returns. Outstanding scans are tracked on
 // scanWG so the daemon's Stop can drain them under its budget.
@@ -139,7 +139,7 @@ func (rr *repoRegistrar) RemoveRepo(ctx context.Context, repoID string) error {
 }
 
 // SetAlias and RemoveAlias adapt internal/repo's alias CRUD to the MCP
-// RepoRegistrar port (solov2-7w1t). SetAlias accepts the already-resolved
+// RepoRegistrar port . SetAlias accepts the already-resolved
 // canonical repo_id; the MCP handler does the resolution step.
 func (rr *repoRegistrar) SetAlias(ctx context.Context, name, repoID string, force bool) error {
 	return repo.SetAlias(ctx, rr.db, name, repoID, force)
@@ -205,7 +205,7 @@ func lookupAppRecord(db *sql.DB) func(ctx context.Context, repoID string) (appli
 // fallback in tools_admin.go (status, schema_version, degraded_reasons), so
 // callers that previously relied on the fallback keep working.
 //
-// scans is the optional in-flight cold-scan registry (solov2-pm5). When set,
+// scans is the optional in-flight cold-scan registry . When set,
 // Status surfaces a 'scans_in_flight' key so programmatic consumers can see
 // when a cold scan is running without tailing the log. Nil-safe — a zero
 // scans field surfaces an empty list.
@@ -301,7 +301,7 @@ func (cp *configProvider) Config(_ context.Context) (map[string]any, error) {
 		"embed_model":    embedModel,
 		// config_schema_version is the version of THIS config payload's
 		// shape — distinct from eng_get_status's schema_version, which is
-		// the SQLite migration version of the data store (solov2-d2x).
+		// the SQLite migration version of the data store .
 		"config_schema_version": 1,
 		"degraded_reasons":      []string{},
 	}, nil
@@ -311,7 +311,7 @@ func (cp *configProvider) Config(_ context.Context) (map[string]any, error) {
 // like "model2vec(potion-code-16M)" → "potion-code-16M". Returns the
 // whole marker on no parens (e.g. "static-v2"), and "" for an empty
 // input. Lives here, not on elect, because it's a presentation concern
-// specific to eng_get_config's wire shape (solov2-ebvg).
+// specific to eng_get_config's wire shape .
 func modelNameFromMarker(marker string) string {
 	open := strings.IndexByte(marker, '(')
 	close := strings.LastIndexByte(marker, ')')

@@ -155,7 +155,7 @@ type resolvedSearch struct {
 }
 
 // runResolvedSearch runs the query against an already-resolved repo. It
-// prefers the daemon's hybrid eng_search_semantic (solov2-2etd) and falls
+// prefers the daemon's hybrid eng_search_semantic  and falls
 // back to the in-process vector-only service when the daemon is unreachable.
 func runResolvedSearch(ctx context.Context, rs resolvedSearch) error {
 	if env, ok, derr := daemonSearchByRepoID(ctx, rs.rec.RepoID, rs.rec.ActiveBranch, rs.opts); ok {
@@ -247,7 +247,7 @@ func resolveSearchTarget(ctx context.Context, pools *sqlite.Pools, opts RunOpts,
 // resolveCwdTarget handles the empty-target case: only run against an already-
 // registered repo matching cwd. Auto-registering cwd here is a footgun —
 // running `veska search` from /tmp or any non-git directory would otherwise
-// cold-scan a random path (solov2-bbgj). The user must explicitly pass <path>
+// cold-scan a random path . The user must explicitly pass <path>
 // or run `veska repo add` first.
 func resolveCwdTarget(ctx context.Context, pools *sqlite.Pools, opts RunOpts) (repo.Record, error) {
 	cwd, err := os.Getwd()

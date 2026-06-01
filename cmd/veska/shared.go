@@ -35,7 +35,7 @@ func daemonRunning() bool {
 // the canonical $VESKA_HOME/backups; fall back to the legacy
 // ~/.veska-backups when the canonical dir is missing or has no tarballs,
 // so users upgrading still see backups they took under the old layout
-// (solov2-n57f).
+// .
 func resolveBackupReadDir() (string, error) {
 	canon := config.DefaultBackupDir()
 	if hasBackupTarballs(canon) {
@@ -91,7 +91,7 @@ func humanBytes(n int64) string {
 // to bridge the gap when the daemon has multiple repos registered and the
 // user hasn't passed --repo. Empty string + no error means "couldn't
 // resolve"; the caller should still pass the request through and let the
-// daemon's "repo_id is required" error surface (solov2-zukc).
+// daemon's "repo_id is required" error surface .
 func resolveRepoFromCWD(ctx context.Context) (string, error) {
 	cwd, err := os.Getwd()
 	if err != nil {
@@ -113,7 +113,7 @@ func resolveRepoFromCWD(ctx context.Context) (string, error) {
 // autoResolveRepo wraps resolveRepoFromCWD with a stderr breadcrumb so the
 // user is never surprised when --repo defaulted to a repo other than the
 // one they were thinking of. Multi-repo silent fallback was the
-// #1 first-impression bug in the junior-journey walk-through (solov2-dqwh).
+// #1 first-impression bug in the junior-journey walk-through .
 // errOut may be nil to suppress the hint (e.g. JSON-output paths where a
 // stray stderr line could clutter pipelines — callers there pay the
 // no-hint cost knowingly). Shared by the deps, findings, and symbol command

@@ -1,4 +1,4 @@
-# recallprojection — embed-text projection recall sweep (solov2-7ma)
+# recallprojection — embed-text projection recall sweep 
 
 Makes embed-text **projection** changes measurable for recall sweeps.
 

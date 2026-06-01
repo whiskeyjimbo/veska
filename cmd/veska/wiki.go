@@ -9,7 +9,7 @@ import (
 
 // The wiki command logic lives in internal/cli/wikicmd; this RunE only parses
 // flags/positionals (the positional/--repo merge and the --all mutual-exclusion
-// rule) and delegates (solov2-0omh).
+// rule) and delegates .
 
 // wikiCmd returns the "wiki" Cobra command. It regenerates both wiki pages
 // (hot_zones + entry_points) on demand by reusing the WorkKindWiki render

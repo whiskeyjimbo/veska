@@ -15,7 +15,7 @@ import (
 // minRepoIDPrefix is the shortest prefix accepted as a repo_id alias. Below
 // this length almost any input would match every registered repo by chance;
 // keeping it >= 4 means callers either pass the full id, a deliberate
-// short_id, or a long-enough prefix to be meaningful (solov2-rkbc).
+// short_id, or a long-enough prefix to be meaningful .
 const minRepoIDPrefix = 4
 
 // resolveRepoID validates that repoID names a repo the daemon tracks and
@@ -26,10 +26,10 @@ const minRepoIDPrefix = 4
 //  3. unambiguous prefix (>= minRepoIDPrefix chars) of any registered full id
 //
 // Step 3 honours the README contract that "anywhere a repo_id is required
-// you may pass the full id or that short prefix" (solov2-rkbc) — previously
+// you may pass the full id or that short prefix"  — previously
 // only step 2 worked, and an 8-char prefix returned NotFound. When no repo
 // matches, a NotFound RPCError is returned so a stale or mistyped id
-// surfaces as a loud error instead of a silently-empty result (solov2-5rh).
+// surfaces as a loud error instead of a silently-empty result .
 //
 // repos may be nil in composition roots that did not wire the registry; in
 // that case validation is skipped and repoID is returned unchanged (never
@@ -53,7 +53,7 @@ func resolveRepoID(ctx context.Context, repos application.RepoLister, repoID str
 			return rec.RepoID, nil
 		}
 	}
-	// Step 3: user-set alias (solov2-7w1t). Beats prefix so an explicit
+	// Step 3: user-set alias . Beats prefix so an explicit
 	// alias never gets shadowed by a colliding hex prefix.
 	for _, rec := range all {
 		if slices.Contains(rec.Aliases, repoID) {
@@ -81,7 +81,7 @@ func resolveRepoID(ctx context.Context, repos application.RepoLister, repoID str
 // resolveRepoIDOrSingleton behaves like resolveRepoID, but when repoID is
 // empty and exactly one repo is registered it returns that repo's id (no
 // caller-side scoping needed). When repoID is empty and there are zero or
-// many repos it returns an actionable InvalidParams (solov2-7tz1).
+// many repos it returns an actionable InvalidParams .
 func resolveRepoIDOrSingleton(ctx context.Context, repos application.RepoLister, repoID string) (string, *RPCError) {
 	return resolveRepoIDOrCwd(ctx, repos, repoID, "")
 }
@@ -91,7 +91,7 @@ func resolveRepoIDOrSingleton(ctx context.Context, repos application.RepoLister,
 // matches a registered repo's RootPath (or sits inside one), return that
 // repo. This bridges the gap for callers running inside a registered repo
 // who would otherwise have to look up a short_id even though the daemon
-// has the cwd context (solov2-ktz0).
+// has the cwd context .
 //
 // Callers extract cwd from their params struct (a `cwd` field injected by
 // the veska-mcp shim — see cmd/veska-mcp/cwd_inject.go) and pass it in.
@@ -159,7 +159,7 @@ func userVisibleRepoCount(all []application.RepoRecord) int {
 // cwdFromParams unmarshals just the "cwd" field from a raw JSON-RPC params
 // blob. Used by query tools to pick up the cwd hint injected by the
 // veska-mcp shim without adding a `cwd` field to every params struct
-// (solov2-ktz0). Returns "" when the field is missing, blank, or the blob
+// . Returns "" when the field is missing, blank, or the blob
 // is malformed — none of which should fail the caller, since cwd is a
 // best-effort hint.
 func cwdFromParams(raw json.RawMessage) string {
@@ -176,7 +176,7 @@ func cwdFromParams(raw json.RawMessage) string {
 }
 
 // resolveRepoIDFromParams is the convenience used by repo-scoped query tools
-// (solov2-ktz0): if requestedID is non-empty resolve it normally; otherwise
+// : if requestedID is non-empty resolve it normally; otherwise
 // fall back to the cwd hint extracted from raw. Tools call this in place of
 // the older `checkRequired("repo_id", ...) + resolveRepoID(...)` pair so
 // requests omitting repo_id resolve from the caller's cwd when possible.
@@ -196,7 +196,7 @@ type repoBranch struct {
 }
 
 // resolveRepoFanoutFromParams returns the set of (repo_id, branch) targets a
-// query tool should hit (solov2-g8fh). It generalises resolveRepoIDFromParams:
+// query tool should hit . It generalises resolveRepoIDFromParams:
 //
 //   - requestedID non-empty: single target, branch defaults to that repo's
 //     active_branch when caller-supplied branch is empty.
@@ -290,7 +290,7 @@ const fullNodeIDLen = 64
 // (eng_search_similar, eng_find_related) compare node_id by exact match
 // in SQL — a short prefix would otherwise produce a misleading
 // "node has no embedding" error when the actual problem is "node not
-// found by that prefix" (solov2-xc7t).
+// found by that prefix" .
 //
 // Returns nodeID unchanged when it is already 64 hex chars (the canonical
 // length). Returns an ambiguous error if the prefix matches >1 nodes, and
@@ -529,7 +529,7 @@ func resolveSeedOwner(ctx context.Context, repos application.RepoLister, graph p
 // resolveBranchOrActive returns branch when non-empty, otherwise the registered
 // active_branch of repoID. Used so callers can omit `branch` when they are
 // operating against the repo's current branch — overwhelmingly the common
-// case (solov2-5vu1). Returns an InvalidParams when branch is empty and the
+// case . Returns an InvalidParams when branch is empty and the
 // repo's active_branch is also unset.
 //
 // repoID MUST already be resolved (full id, not a short prefix). When repos
@@ -568,7 +568,7 @@ func bindParams(raw json.RawMessage, dst any) *RPCError {
 // checkRequired returns an InvalidParams RPCError naming *every* empty value
 // in the alternating name/value pairs, so a caller missing several params
 // learns all of them from one round-trip instead of fixing them one error
-// at a time (solov2-d2x). E.g. checkRequired("repo_id", p.RepoID, "branch", p.Branch).
+// at a time . E.g. checkRequired("repo_id", p.RepoID, "branch", p.Branch).
 func checkRequired(nameVal ...string) *RPCError {
 	var missing []string
 	for i := 0; i+1 < len(nameVal); i += 2 {

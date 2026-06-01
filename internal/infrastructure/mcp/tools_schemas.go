@@ -14,7 +14,7 @@ import "encoding/json"
 // callers know either form is valid.
 //
 // Every schema sets "additionalProperties": false so unknown keys are
-// rejected with -32602 at dispatch (solov2-9bzq). Tools whose handler
+// rejected with -32602 at dispatch . Tools whose handler
 // resolves the active repo from the caller's working directory must list
 // "cwd" explicitly — the dispatch-time validator only knows what's in
 // "properties".

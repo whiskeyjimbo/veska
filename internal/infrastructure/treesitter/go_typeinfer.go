@@ -13,7 +13,7 @@ import (
 // localVarOrigin tracks variables declared via `v := pkg.X(...)` inside
 // a function body, mapping the local name to its origin package. Used
 // to recognise chained-selector calls like `v.Method()` whose receiver
-// type the parser cannot infer (solov2-9rc2). The map covers the most
+// type the parser cannot infer . The map covers the most
 // common Go DI pattern (constructor + method calls); more elaborate
 // inference (var via assignment, method chains through interfaces) is
 // out of scope here — those fall through to the existing unresolved
@@ -141,7 +141,7 @@ func collectPackageVarOrigins(root *sitter.Node, src []byte) map[string]localVar
 // Multi-result returns, named result parameters with non-trivial
 // types, and qualified types (pkg.Other) are intentionally skipped:
 // without same-file binding the resolver has nothing to do, and
-// recording the wrong type would invent false edges (solov2-rlfe).
+// recording the wrong type would invent false edges .
 func collectInFileFunctionReturns(root *sitter.Node, src []byte) map[string]string {
 	out := map[string]string{}
 	if root == nil {
@@ -206,7 +206,7 @@ func simpleReturnTypeName(result *sitter.Node, src []byte) string {
 // short-var declarations whose RHS is a bare-identifier call to a
 // function in funcReturns. The returned map binds v to the function's
 // return type so v.Method() downstream resolves to ReceiverType.Method
-// in this same file (solov2-rlfe). Without it, `g := New("x"); g.Render()`
+// in this same file . Without it, `g := New("x"); g.Render()`
 // in greet_test.go emitted UnresolvedCall{PkgQualifier:"g"} — a bare
 // local-var name promotion could never bind, so test files were
 // invisible to blast/call_chain for in-repo methods.

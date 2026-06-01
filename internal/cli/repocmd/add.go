@@ -85,7 +85,7 @@ func reportDaemonAdd(ctx context.Context, w io.Writer, res daemonAddResult, wait
 
 // directAdd inserts the repo row + installs hooks without the daemon. The next
 // daemon start cold-scans it via StartupResync. Surfaces the dial error so the
-// user can tell 'daemon down' from 'daemon up but unreachable' (solov2-0cg).
+// user can tell 'daemon down' from 'daemon up but unreachable' .
 func directAdd(ctx context.Context, w io.Writer, root string, dialErr error) error {
 	db, closeFn, err := OpenLocalDB()
 	if err != nil {
@@ -110,7 +110,7 @@ func directAdd(ctx context.Context, w io.Writer, root string, dialErr error) err
 
 // promptAliasAfterAdd is the post-`repo add` auto-suggest helper. Opens a
 // transient DB handle, asks the user if they want to alias the freshly
-// registered repo, and writes the binding (solov2-7w1t). Best-effort —
+// registered repo, and writes the binding . Best-effort —
 // errors are logged and swallowed so a prompt failure never breaks the
 // add flow itself.
 func promptAliasAfterAdd(ctx context.Context, w io.Writer, repoID, canonicalURL, rootPath string) {

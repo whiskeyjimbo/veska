@@ -27,12 +27,12 @@ type OpenFindingsFunc func(ctx context.Context, repoID, branch string) (map[stri
 
 // EntryPoint is one selected entry-point symbol: its name, source
 // location, and the ranking signals that put it where it landed. The
-// JSON shape is the eng_get_entry_points tool surface (solov2-73f).
+// JSON shape is the eng_get_entry_points tool surface .
 //
 // The Name field is emitted as the canonical "name" key (matching the
 // node-shape contract documented in README §Conventions). SymbolName is
 // kept as a dual-emit for back-compat with any caller written against
-// the original v0 surface (solov2-4aka); both fields always hold the
+// the original v0 surface ; both fields always hold the
 // same value.
 type EntryPoint struct {
 	Name            string `json:"name"`
@@ -53,7 +53,7 @@ type EntryPointsReport struct {
 	EntryPoints []EntryPoint `json:"entry_points"`
 	// GeneratedAt is the wall-clock instant the report was rendered.
 	// Populated by the wiki Handler immediately before rendering; the
-	// service itself does not set it (solov2-otzn).
+	// service itself does not set it .
 	GeneratedAt time.Time `json:"generated_at,omitzero"`
 }
 
@@ -113,7 +113,7 @@ func NewEntryPointsService(loadGraph LoadGraphFunc, inboundEdges InboundEdgesFun
 // matches what almost every caller wants: exclude Test*/Benchmark*/
 // Example*/Fuzz*-named symbols and *_test.go files from the candidate
 // set so the result lists real public-API entry points, not test
-// helpers (solov2-m8d).
+// helpers .
 type SelectOptions struct {
 	IncludeTests bool
 }
@@ -127,7 +127,7 @@ type SelectOptions struct {
 // not entry points (solov2-m8d's close-reason flagged this). Adjacent
 // tests are now a tiebreaker bonus, not a hard requirement.
 //
-// Ranking (solov2-73f):
+// Ranking :
 //  1. inbound_count desc          (the moat: real fan-in)
 //  2. exported desc               (capitalised symbols rank above unexported)
 //  3. has_adjacent_test desc      (testedness as a tiebreaker)
@@ -242,7 +242,7 @@ func isEntryPointKind(k domain.NodeKind) bool {
 // the file path (*_test.go) and the name prefix (Test/Benchmark/Example/
 // Fuzz) because either alone leaks: a helper like 'newTestServer' in
 // foo_test.go IS in a test file, and a function called 'TestPriority'
-// in production code is NOT (solov2-m8d).
+// in production code is NOT .
 func isTestSymbol(n *domain.Node) bool {
 	if strings.HasSuffix(n.Path, "_test.go") {
 		return true
@@ -260,7 +260,7 @@ func isTestSymbol(n *domain.Node) bool {
 // isGoInitFunc reports whether n is a Go init() function — name "init",
 // kind function (not method/etc.), in a .go file. The Go runtime calls
 // every package-scoped init() at startup; they are framework magic, not
-// agent-useful entry points (solov2-q5gd). cobra-based CLIs especially
+// agent-useful entry points . cobra-based CLIs especially
 // suffer here: each subcommand file has its own init() registering the
 // command, and the inbound-fan-in heuristic ranked them above main()
 // and Execute() on small repos.

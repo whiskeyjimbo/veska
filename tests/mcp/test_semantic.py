@@ -9,7 +9,7 @@ def test_search_semantic_returns_results(mcp_client, repo_id, branch, target_sym
     """Querying for target_symbol should return at least one hit and the
     symbol itself should appear in the top 5.
 
-    KNOWN GAP (solov2-249): sqlite-vec is in-memory only and is not
+    KNOWN GAP : sqlite-vec is in-memory only and is not
     rehydrated from node_embeddings on daemon start, so a daemon that has
     been restarted since the last embed will return ≤ 3 hits even when
     node_embeddings has more. This test xfails specifically on that

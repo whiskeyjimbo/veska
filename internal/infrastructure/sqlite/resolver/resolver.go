@@ -26,7 +26,7 @@ type CrossRepoStub struct {
 	// MethodCall marks a stub that originated from a chained-selector method
 	// call (`v := pkg.New(...); v.Method()`). SymbolPath then holds the bare
 	// method name; the resolver matches it against `<Receiver>.<Method>` in
-	// the target package rather than as an exact symbol_path (solov2-9rc2).
+	// the target package rather than as an exact symbol_path .
 	MethodCall bool
 	// SrcLine is the 1-indexed source line of the originating
 	// call_expression; threaded into ResolvedEdge.SrcLine so renderers
@@ -45,7 +45,7 @@ type ResolvedEdge = ports.ResolvedEdge
 // target module, or no node in the target subpackage matches the symbol).
 //
 // The matcher is two-step so subpackage imports of multi-package modules
-// resolve (solov2-hkr9): step 1 finds the most-specific repo whose module_path
+// resolve : step 1 finds the most-specific repo whose module_path
 // is a prefix of stub.module_path (longest prefix wins — so import
 // github.com/x/y/z prefers a repo with module_path github.com/x/y/z over one
 // with github.com/x/y); step 2 looks up the symbol in that repo, constrained
@@ -187,7 +187,7 @@ func moduleRelDir(filePath, root string) string {
 // node N (a potential CALLEE), it finds every cross_repo_edge_stub whose
 // forward resolution would land on N, and returns one ResolvedEdge per
 // match with DstNodeID=N. This makes "who calls this library symbol?"
-// answerable across repo boundaries (solov2-80hh).
+// answerable across repo boundaries .
 //
 // Mechanics: stubs are keyed by (language, module_path, symbol_path) at the
 // import-path level — N's import path is N.repo's module_path joined with

@@ -47,7 +47,7 @@ func DefaultOSVCacheDir() string {
 }
 
 // DefaultBackupDir returns the directory `veska backup create` writes to:
-// $VESKA_HOME/backups (solov2-n57f). Co-located with the rest of veska's
+// $VESKA_HOME/backups . Co-located with the rest of veska's
 // state so a single `rm -rf $VESKA_HOME` clears everything — the original
 // ~/.veska-backups layout left tarballs orphaned after a data wipe.
 //

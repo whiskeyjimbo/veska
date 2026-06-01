@@ -52,7 +52,7 @@ type Params struct {
 // Run performs a full cold-scan reparse of the target (or cwd-resolved) repo
 // unconditionally — bypassing the daemon's StartupResync gate that skips
 // at-HEAD repos. When the daemon is up the reindex is routed through its
-// eng_reindex_repo MCP tool (solov2-4d7b) so the user does not have to stop the
+// eng_reindex_repo MCP tool  so the user does not have to stop the
 // daemon; the direct-SQLite path below handles the no-daemon case.
 func Run(ctx context.Context, p Params) error {
 	w := p.Out
@@ -206,7 +206,7 @@ func resolveReindexTarget(ctx context.Context, db *sql.DB, target string, matchB
 		return matchByPath(ctx, db, cwd)
 	}
 
-	// Try as a full id, short_id, or unambiguous prefix (solov2-c7lq).
+	// Try as a full id, short_id, or unambiguous prefix .
 	records, lerr := repo.List(ctx, db)
 	if lerr != nil {
 		return repo.Record{}, fmt.Errorf("reindex: list repos: %w", lerr)

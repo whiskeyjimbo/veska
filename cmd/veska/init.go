@@ -15,7 +15,7 @@ import (
 
 // The init flow (first-run machine setup) and the --agent snippet writer live
 // in internal/cli/initcmd; this file is Cobra glue whose RunE builds the
-// initcmd.Deps/Flags from the environment and delegates (solov2-0omh).
+// initcmd.Deps/Flags from the environment and delegates .
 
 // initCmd returns the "init" Cobra command that runs the first-run flow.
 func initCmd() *cobra.Command {
@@ -31,7 +31,7 @@ func initCmd() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			// --agent is project-scoped and short-circuits the
 			// machine-scoped first-run flow: the two intentionally
-			// don't co-execute (solov2-m81).
+			// don't co-execute .
 			if agent != "" {
 				cwd, err := os.Getwd()
 				if err != nil {

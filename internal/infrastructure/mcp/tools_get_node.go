@@ -34,11 +34,11 @@ func makeGetNodeHandler(graph ports.GraphReader, staging *staging.Area, repos ap
 		// node_id is a content-hashed sha256, globally unique by construction,
 		// so repo_id+branch are not needed to locate the node. The scoped path
 		// is taken whenever the caller supplied repo_id — branch defaults to
-		// that repo's active_branch (solov2-hb2s). Previously, supplying
+		// that repo's active_branch . Previously, supplying
 		// repo_id without branch silently dropped to the cross-repo fallback
 		// and ignored repo_id; an unknown or mistyped repo_id never surfaced
 		// to the caller. Only when both repo_id and branch are absent does
-		// the handler take the global FindNodeByID path (solov2-v4ob).
+		// the handler take the global FindNodeByID path .
 		var (
 			node            *domain.Node
 			err             error

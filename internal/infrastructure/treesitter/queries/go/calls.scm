@@ -24,7 +24,7 @@
 ; function-value passing: `helper(boolConv)` where boolConv is a same-file
 ; function passed as an argument. Treated as a CALLS edge to boolConv —
 ; even if not directly invoked here, the function is reachable through
-; the caller and shouldn't appear dead (solov2-f1zp). The capture lands
+; the caller and shouldn't appear dead . The capture lands
 ; in extractCallsFromBody's @call.value_arg branch which filters to
 ; identifiers that resolve to in-file function/method symbols.
 (call_expression

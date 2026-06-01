@@ -32,7 +32,7 @@ func NewEmbeddingArchive(readDB, writeDB *sql.DB) *EmbeddingArchive {
 
 // LoadReadyEmbeddings returns every ready embedding ref joined to its persisted
 // vector blob, for rehydration into a VectorStorage after a daemon restart
-// (solov2-249). Only refs with state='ready' and a non-NULL content_hash are
+// . Only refs with state='ready' and a non-NULL content_hash are
 // returned; pending/failed refs carry no vector yet.
 func (a *EmbeddingArchive) LoadReadyEmbeddings(ctx context.Context) ([]embedder.ReadyEmbeddingRow, error) {
 	const q = `
@@ -66,7 +66,7 @@ func (a *EmbeddingArchive) LoadReadyEmbeddings(ctx context.Context) ([]embedder.
 // resets every embedding-ref to pending, so the embedder worker re-embeds all
 // promoted nodes under the currently-elected model.
 //
-// Why needed (solov2-fz8): node_embeddings is keyed by content_hash with
+// Why needed : node_embeddings is keyed by content_hash with
 // ON CONFLICT(content_hash) DO NOTHING — re-embedding the same content under
 // a different model would otherwise be a no-op and keep the old-model vector.
 // And the sqlite-vec store is in-memory, rehydrated from node_embeddings at

@@ -36,7 +36,7 @@ type Config struct {
 // hot_zone / entry_points pages are an opt-in convenience for users who want
 // them committed alongside their source. They're computed from the graph
 // either way, and the MCP tools eng_get_hot_zone / eng_get_entry_points
-// surface the same data on demand regardless of this flag (solov2-ocnn).
+// surface the same data on demand regardless of this flag .
 type WikiConfig struct {
 	// WritePages, when true, makes the wiki handler write docs/veska/*.md
 	// into the user's repo working tree on every promotion. Default false —

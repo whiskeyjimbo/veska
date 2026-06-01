@@ -22,7 +22,7 @@ func TestResolveCLIRepoID_ErrorWording(t *testing.T) {
 			wantSubstr: "prefixes must be >=",
 		},
 		{
-			name:       "long input no longer falsely cites the prefix floor (solov2-fdni)",
+			name:       "long input no longer falsely cites the prefix floor ",
 			input:      "greetlib",
 			wantSubstr: "no match by full id",
 		},

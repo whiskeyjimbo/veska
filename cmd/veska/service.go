@@ -28,7 +28,7 @@ var errNoManager = errors.New("service manager not available")
 //
 // mgr is the real-side manager that actually mutates supervisor state.
 // dryMgr is the dry-run-mode sibling: every mutating call on it prints the
-// concrete file paths and supervisor commands it WOULD run (solov2-kqp).
+// concrete file paths and supervisor commands it WOULD run .
 // Both may be nil; every subcommand guards against a nil manager and
 // returns a descriptive error rather than panicking.
 func serviceCmd(mgr, dryMgr ServiceManager) *cobra.Command {

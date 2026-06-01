@@ -1,6 +1,6 @@
 //go:build eval
 
-// Embedder provider micro-benchmarks (solov2-si1): compare per-embed
+// Embedder provider micro-benchmarks : compare per-embed
 // throughput and one-time load cost across the election ladder —
 // static-v2 (in-binary), model2vec from disk, and model2vec embedded
 // (fat build). These informed the fat/thin packaging decision:

@@ -1,4 +1,4 @@
-"""Tests for eng_promote_repo — the post-commit hook target (solov2-3vv).
+"""Tests for eng_promote_repo — the post-commit hook target .
 
 These exercise the contract a real post-commit-driven flow depends on:
 the daemon, given a registered repo's root_path, re-Saves files changed

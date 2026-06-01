@@ -33,7 +33,7 @@ def test_critical_promoted_sha_matches_head(mcp_client, repo_id):
 
 
 def test_critical_active_branch_is_set(repo_id):
-    """repos.active_branch must be set for queryability (solov2-f8p).
+    """repos.active_branch must be set for queryability .
     Every node write keys by this branch; a NULL would silently route
     edits into a wrong-branch staging that never promotes."""
     branch = scalar("SELECT active_branch FROM repos WHERE repo_id = ?", (repo_id,))
@@ -42,7 +42,7 @@ def test_critical_active_branch_is_set(repo_id):
 
 def test_critical_nodes_carry_snippet(repo_id, branch):
     """sqlite.PromotionStore must bind nodes.snippet so embed-text has
-    body to work with (solov2-sxa). At least one function node should
+    body to work with . At least one function node should
     have a non-NULL snippet."""
     n = scalar(
         """SELECT COUNT(*) FROM nodes
@@ -57,7 +57,7 @@ def test_critical_nodes_carry_snippet(repo_id, branch):
 
 
 def test_critical_vector_store_serves_ready_refs(mcp_client, repo_id, branch):
-    """The vector store rehydrated from node_embeddings (solov2-249) must
+    """The vector store rehydrated from node_embeddings  must
     actually serve queries. eng_search_semantic caps k at 100 server-side
     (maxSearchK in tools_search.go) so we can't introspect the full vector
     population through the search API — instead we assert non-zero hits

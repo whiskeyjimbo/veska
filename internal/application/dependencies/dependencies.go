@@ -34,7 +34,7 @@ type CallSite struct {
 // from. ImportCount is the number of files that name this module in an
 // import statement; it can be non-zero even when UsageCount is zero, which
 // is the signal that the module is imported but only referenced via
-// struct literals / type assertions (solov2-xjm5).
+// struct literals / type assertions .
 type Dependency struct {
 	Module       string     `json:"module"`
 	Version      string     `json:"version,omitempty"`
@@ -62,7 +62,7 @@ type StubAggregator interface {
 // (repoID, branch). It is the second source the service unions with
 // StubAggregator so a module that's imported but only referenced via
 // struct literals / type assertions (no resolved CALLS edge) still
-// surfaces in `veska deps list` (solov2-xjm5).
+// surfaces in `veska deps list` .
 //
 // An empty result is normal — repos with no parsed imports (or non-Go
 // repos until the writer is extended) return ([], nil). A nil
@@ -120,7 +120,7 @@ const DefaultTopK = 5
 // repoRoot are optional — when nil the dependency's Version field is
 // always empty (still useful for ranking + symbol navigation). Pass an
 // ImportLister via WithImportLister to union bare-import modules with
-// the stub-derived list (solov2-xjm5).
+// the stub-derived list .
 func NewService(aggregator StubAggregator, versions ModuleVersionFunc, repoRoot RepoRootFunc, opts ...ServiceOption) (*Service, error) {
 	if aggregator == nil {
 		return nil, fmt.Errorf("dependencies.NewService: aggregator is nil: %w", ErrMissingDependency)
@@ -143,7 +143,7 @@ func NewService(aggregator StubAggregator, versions ModuleVersionFunc, repoRoot 
 type ServiceOption func(*Service)
 
 // WithImportLister supplies the second data source used to union
-// bare-import modules into Service.List output (solov2-xjm5).
+// bare-import modules into Service.List output .
 func WithImportLister(l ImportLister) ServiceOption {
 	return func(s *Service) {
 		s.imports = l
@@ -152,7 +152,7 @@ func WithImportLister(l ImportLister) ServiceOption {
 
 // OwnModulePathFunc returns the importing repo's own module path (e.g.
 // "github.com/junior/greetcli") so the service can filter that path and
-// its subpackages out of the external-dependency list (solov2-6q1q). An
+// its subpackages out of the external-dependency list . An
 // empty string disables filtering — useful for non-Go repos or when go.mod
 // is absent.
 type OwnModulePathFunc func(ctx context.Context, repoRoot string) (string, error)
@@ -160,7 +160,7 @@ type OwnModulePathFunc func(ctx context.Context, repoRoot string) (string, error
 // WithOwnModulePath supplies the func used to recognise the repo's own
 // module path. Without it the "external" dependency list ends up including
 // the repo's internal subpackages (anything inside its module tree),
-// which is misleading in `veska deps list` output (solov2-6q1q).
+// which is misleading in `veska deps list` output .
 func WithOwnModulePath(f OwnModulePathFunc) ServiceOption {
 	return func(s *Service) {
 		s.ownModule = f
@@ -177,7 +177,7 @@ func (s *Service) List(ctx context.Context, repoID, branch string) (Result, erro
 	}
 
 	// Group rows by module_path. importCount is the file-distinct count
-	// of import statements naming this module (solov2-xjm5); independent
+	// of import statements naming this module ; independent
 	// of the call-site count so a module imported but never called still
 	// shows up.
 	type modAgg struct {
@@ -301,7 +301,7 @@ func (s *Service) List(ctx context.Context, repoID, branch string) (Result, erro
 // sortDependencies orders by UsageCount desc, then ImportCount desc, then
 // Module asc. ImportCount breaks the tie between two stub-zero modules so
 // a heavily-imported-but-uncalled module ranks ahead of a once-imported
-// one (solov2-xjm5).
+// one .
 func sortDependencies(deps []Dependency) {
 	// Stable insertion sort — n is tiny (number of distinct imported
 	// modules per repo) and we want deterministic output without

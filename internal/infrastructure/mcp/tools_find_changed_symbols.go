@@ -15,14 +15,14 @@ import (
 
 // Default git refs for eng_find_changed_symbols when the caller omits both:
 // the most recent commit against its parent — the common "what did the last
-// commit change?" query (solov2-npjs).
+// commit change?" query .
 const (
 	defaultChangedRefA = "HEAD~1"
 	defaultChangedRefB = "HEAD"
 	// gitEmptyTreeSHA is git's canonical empty-tree object. Diffing HEAD
 	// against it yields every file in HEAD as an addition — the right
 	// answer for a single-commit repo where HEAD~1 doesn't exist
-	// (solov2-wrbn).
+	// .
 	gitEmptyTreeSHA = "4b825dc642cb6eb9a060e54bf8d69288fbee4904"
 )
 
@@ -59,7 +59,7 @@ type changedSymbolsParams struct {
 	// Base/Head are git's canonical names for ref_a/ref_b. Accepting
 	// both keeps the journey-natural call (base/head) working alongside
 	// the legacy ref_a/ref_b; either alias is honoured but supplying
-	// conflicting values is rejected (solov2-3ocy).
+	// conflicting values is rejected .
 	Base string `json:"base"`
 	Head string `json:"head"`
 }
@@ -92,7 +92,7 @@ func makeChangedSymbolsHandler(svc *changedsymbols.Service, repoRoot RepoRootFun
 			p.RefB = p.Head
 		}
 		// ref_a/ref_b default to the last commit (HEAD~1..HEAD) when both are
-		// omitted; supplying only one is ambiguous and rejected (solov2-npjs).
+		// omitted; supplying only one is ambiguous and rejected .
 		usedDefaults := false
 		switch {
 		case p.RefA == "" && p.RefB == "":
@@ -136,7 +136,7 @@ func makeChangedSymbolsHandler(svc *changedsymbols.Service, repoRoot RepoRootFun
 		// by every other node-emitting tool (eng_find_symbol,
 		// eng_get_file_nodes, etc.). The service stores repo-relative paths
 		// because git diff yields them that way; the wire surface must be
-		// uniform (solov2-w8nr).
+		// uniform .
 		absolutiseChangedSymbols := func(slice []changedsymbols.SymbolChange) {
 			for i := range slice {
 				if slice[i].FilePath != "" && !filepath.IsAbs(slice[i].FilePath) {
@@ -148,7 +148,7 @@ func makeChangedSymbolsHandler(svc *changedsymbols.Service, repoRoot RepoRootFun
 			// An unresolvable ref (most commonly HEAD~1 on a single-commit
 			// repo) is a caller problem, not an internal failure — return a
 			// friendly invalid-params instead of leaking raw git stderr
-			// (solov2-dr31).
+			// .
 			if errors.Is(err, gitinfra.ErrUnknownRevision) {
 				// Identify which side failed so the message names the bad
 				// ref instead of blaming both. ResolvesRef shells out twice

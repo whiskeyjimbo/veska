@@ -95,7 +95,7 @@ func (il *IgnoreList) ShouldIgnore(path string) bool {
 			// Directory pattern: match if any path component equals the dir
 			// name. When the dir name contains a glob ('*', '?', '['), each
 			// component is matched via filepath.Match so patterns like
-			// ".aider*/" cover .aider.tags.cache.v3/ etc. (solov2-v2zx).
+			// ".aider*/" cover .aider.tags.cache.v3/ etc. .
 			hasGlob := strings.ContainsAny(dir, "*?[")
 			for part := range strings.SplitSeq(normalised, "/") {
 				if part == dir {

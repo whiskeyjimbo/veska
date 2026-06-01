@@ -46,7 +46,8 @@ const nodeColumns = `node_id, symbol_path, file_path, kind, language,
 // sql.Null* and only fed to functional options when valid.
 func scanNode(s interface {
 	Scan(dest ...any) error
-}) (*domain.Node, error) {
+},
+) (*domain.Node, error) {
 	var (
 		id, symbolPath, filePath, kind string
 		language                       sql.NullString
@@ -158,7 +159,7 @@ ON CONFLICT(node_id, branch) DO UPDATE SET
 
 // UpsertExternalRepo idempotently writes a synthetic repos row for a
 // vendor-indexed module so the existing cross_repo_edge_stub
-// resolver finds it via module_path match (solov2-yr56). repoID is
+// resolver finds it via module_path match . repoID is
 // the synthetic id (caller's responsibility; today's convention is
 // "ext:<module-path>"). rootPath should be the absolute path of the
 // vendor/<module> directory so moduleRelDir in the resolver yields
@@ -180,7 +181,7 @@ func (r *GraphRepo) UpsertExternalRepo(ctx context.Context, repoID, rootPath, mo
 }
 
 // SaveExternalNode inserts/replaces a node from a vendored or
-// module-cache dependency (solov2-bchl). Identical to SaveNode except
+// module-cache dependency . Identical to SaveNode except
 // the external column is set to 1 so the read path can label these
 // rows and filter them when first-party-only views are wanted.
 func (r *GraphRepo) SaveExternalNode(ctx context.Context, repoID, branch string, n *domain.Node) error {
@@ -405,7 +406,7 @@ func escapeGlob(s string) string {
 func (r *GraphRepo) FindNodes(ctx context.Context, repoID, branch, symbolName string) ([]*domain.Node, error) {
 	// Match the fully-qualified symbol_path exactly, OR an unqualified name
 	// against the trailing segment so "Start" finds "Server.Start" instead
-	// of silently returning nothing (solov2-d2x). Exact matches sort first.
+	// of silently returning nothing . Exact matches sort first.
 	//
 	// solov2-xcb1: SQLite LIKE is case-INsensitive for ASCII regardless of
 	// COLLATE, so a search for "Run" used to also match
@@ -513,7 +514,7 @@ func (r *GraphRepo) GetNodeSnippet(ctx context.Context, repoID, branch string, i
 // FindNodeByID retrieves the first node matching the content-hashed id across
 // every (repo_id, branch). node_id is a sha256 content hash so collisions
 // across repos/branches are vanishingly rare; LIMIT 1 returns one
-// deterministic row. Returns (nil, nil) when no node matches (solov2-v4ob).
+// deterministic row. Returns (nil, nil) when no node matches .
 func (r *GraphRepo) FindNodeByID(ctx context.Context, id domain.NodeID) (*domain.Node, error) {
 	row := r.readDB.QueryRowContext(ctx,
 		`SELECT `+nodeColumns+` FROM nodes WHERE node_id = ? LIMIT 1`,

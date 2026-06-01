@@ -27,7 +27,7 @@ var ErrFileNotAtRef = errors.New("git show: file not present at ref")
 // freshly-init'd repo with a single commit, but also typos and stale
 // branch names. Callers (e.g. the eng_find_changed_symbols MCP tool)
 // translate this into a typed invalid-params response rather than
-// leaking raw git stderr to the wire (solov2-dr31).
+// leaking raw git stderr to the wire .
 var ErrUnknownRevision = errors.New("git diff: unknown revision")
 
 // ChangedFilesBetween returns the list of files that differ between
@@ -89,7 +89,7 @@ func WorkingTreeHasUncommittedChanges(ctx context.Context, repoRoot string) bool
 // `git rev-parse --verify <ref>^{commit}`. Used by callers that need to
 // say "ref_a is the bad one" after ChangedFilesBetween returned
 // ErrUnknownRevision — git's combined error doesn't say which side
-// failed (solov2-dt6q).
+// failed .
 func ResolvesRef(ctx context.Context, repoRoot, ref string) bool {
 	if repoRoot == "" || ref == "" {
 		return false

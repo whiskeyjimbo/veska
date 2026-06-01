@@ -89,7 +89,7 @@ type graphChainEnv struct {
 // RenderGraphChain prints a {nodes, edges, cross_repo_edges} envelope as a
 // greppable table. Used by `veska calls` and `veska blast`. ctx feeds the
 // eng_get_node lookups that resolve cross-repo edge endpoints from opaque
-// hex to "symbol in file:line" form (solov2-y59h).
+// hex to "symbol in file:line" form .
 func RenderGraphChain(ctx context.Context, w io.Writer, raw json.RawMessage, jsonOut bool) error {
 	if jsonOut {
 		enc := json.NewEncoder(w)
@@ -148,7 +148,7 @@ func renderEmptyChain(w io.Writer, env graphChainEnv) {
 
 // renderChainCrossRepoEdges prints the cross-repo edges block, resolving each
 // endpoint to "symbol in file:line" form and emitting the package-grain note
-// when any src landed on a package node (solov2-urqy).
+// when any src landed on a package node .
 func renderChainCrossRepoEdges(ctx context.Context, w io.Writer, env graphChainEnv, localByID map[string]graphref.NodeInfo) {
 	if len(env.CrossRepoEdges) == 0 {
 		return

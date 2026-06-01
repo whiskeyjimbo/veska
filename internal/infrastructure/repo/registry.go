@@ -60,7 +60,7 @@ func isSQLiteBusy(err error) bool {
 
 // veskaBinary resolves the absolute path of the 'veska' CLI binary so
 // installed hooks invoke it directly instead of relying on $PATH
-// (solov2-v7q). The hook MUST point at the CLI, not the running process —
+// . The hook MUST point at the CLI, not the running process —
 // when eng_add_repo runs inside veska-daemon, os.Executable() returns the
 // daemon's path, which has no 'hook-runner' subcommand. By convention the
 // CLI lives alongside the daemon and mcp shim with these names:
@@ -108,8 +108,8 @@ func resolveVeskaBinary(exe string) string {
 
 // hookScript returns the shell script content for a named hook. The veska
 // binary is resolved by absolute path so the hook works regardless of the
-// caller's $PATH at commit time (solov2-v7q). The current VESKA_HOME is
-// also baked in (solov2-g50) so the hook reaches the right daemon socket
+// caller's $PATH at commit time . The current VESKA_HOME is
+// also baked in  so the hook reaches the right daemon socket
 // regardless of the shell environment 'git commit' runs under — users with
 // non-default VESKA_HOME rarely export it, and an unset VESKA_HOME would
 // route the hook to ~/.veska/cli.sock and silently fail.
@@ -325,7 +325,7 @@ const watchesPerRepoEstimate = 128
 // Returns the repo_id string and a flag indicating whether the row was
 // already present (idempotent re-add): existed=true means the INSERT was a
 // no-op so callers can surface 'already registered' instead of a misleading
-// 'added' message (solov2-khjd).
+// 'added' message .
 func Add(ctx context.Context, db *sql.DB, rootPath string) (string, bool, error) {
 	if _, err := CheckInotifyBudget(0, watchesPerRepoEstimate); err != nil {
 		return "", false, fmt.Errorf("repo add: %w", err)
@@ -349,7 +349,7 @@ func Add(ctx context.Context, db *sql.DB, rootPath string) (string, bool, error)
 	}
 
 	// Refuse to register a path that is not inside a git work-tree
-	// (solov2-fro3). Without this check `veska repo add /tmp` silently
+	// . Without this check `veska repo add /tmp` silently
 	// succeeded, the cold scan failed (no commits / nothing to parse), and
 	// the repos table held a permanently-unindexed entry that pinned
 	// `doctor status` to "degraded" until the user noticed and manually
@@ -362,7 +362,7 @@ func Add(ctx context.Context, db *sql.DB, rootPath string) (string, bool, error)
 	modPath := readModulePath(canonical)
 	now := time.Now().Unix()
 
-	// Detect the current branch from the working tree (solov2-f8p). Without
+	// Detect the current branch from the working tree . Without
 	// this every downstream write (Ingester.Save, Promoter.Promote, FTS, vec)
 	// is keyed by branch="" and every query API rejects "branch is required"
 	// — i.e. a silently-unqueryable graph. Default to "main" when detection
@@ -430,7 +430,7 @@ type Record struct {
 	LastPromotedSHA string // may be empty
 	Kind            string // "tracked" (default) or "ephemeral" (solov2-kxo5.9)
 	// Aliases are user-defined human-friendly names for this repo
-	// (solov2-7w1t). Sorted; nil when no aliases exist.
+	// . Sorted; nil when no aliases exist.
 	Aliases []string
 }
 
@@ -512,7 +512,7 @@ func Get(ctx context.Context, db *sql.DB, repoID string) (Record, error) {
 // repoID may be the full id or a unique short prefix (as printed by
 // `veska repo add` / `veska repo list`). Without prefix resolution a short id
 // matched nothing and the DELETE silently no-op'd, leaving the repo — and,
-// since CASCADE then never ran, its child rows — in place (solov2-d78r).
+// since CASCADE then never ran, its child rows — in place .
 func Remove(ctx context.Context, db *sql.DB, repoID string) error {
 	canonical, rootPath, found, err := resolveRepoForRemoval(ctx, db, repoID)
 	if err != nil {

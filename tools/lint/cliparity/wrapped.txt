@@ -1,8 +1,8 @@
 # Manifest of MCP tools that have a corresponding `veska <subcommand>` wrapper.
 # One tool name per line. Lines starting with # and blank lines are ignored.
-# The cliparity lint (solov2-xomk) cross-references this list against the MCP
+# The cliparity lint  cross-references this list against the MCP
 # registry: every registered eng_* tool must appear here, OR be marked
-# CLIExempt on its ToolSpec (solov2-4ygz). Stale entries (manifest names with
+# CLIExempt on its ToolSpec . Stale entries (manifest names with
 # no matching registry tool) are also flagged.
 
 eng_add_repo

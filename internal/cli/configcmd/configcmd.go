@@ -1,7 +1,7 @@
 // Package configcmd holds the business logic behind the `veska config` command
 // family. cmd/veska/config.go is reduced to Cobra construction whose RunE bodies
 // delegate here, following the cmd = glue / logic-in-packages pattern
-// established by symbolcmd, depscmd, findingscmd, and doctorcmd (solov2-9otb).
+// established by symbolcmd, depscmd, findingscmd, and doctorcmd .
 package configcmd
 
 import (

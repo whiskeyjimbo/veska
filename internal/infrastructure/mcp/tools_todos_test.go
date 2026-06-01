@@ -73,7 +73,7 @@ func TestFindTodos_ReturnsOpenByDefault(t *testing.T) {
 
 // TestFindTodos_EmitsSnakeCaseKeys guards the snake_case surface contract:
 // the response must not leak the PascalCase Go field names of ports.TodoEntry
-// (solov2-unem).
+// .
 func TestFindTodos_EmitsSnakeCaseKeys(t *testing.T) {
 	q := &stubTodoQuerier{entries: []ports.TodoEntry{
 		{FindingID: "t1", RepoID: "r", Branch: "main", FilePath: "a.go", Message: "TODO: x", State: "open", CreatedAt: 42},

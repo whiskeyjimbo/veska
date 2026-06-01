@@ -1,6 +1,6 @@
 # Entry Points
 
-High-fan-in symbols an agent should start from: ranked by inbound call count, with exported symbols and symbols having adjacent tests breaking ties (solov2-73f).
+High-fan-in symbols an agent should start from: ranked by inbound call count, with exported symbols and symbols having adjacent tests breaking ties .
 
 | Symbol | File | Kind | Inbound | Exported | Tested |
 | ------ | ---- | ---- | ------- | -------- | ------ |

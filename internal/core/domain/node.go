@@ -29,14 +29,14 @@ const (
 	// so framework patterns where the API surface lives in initialised vars
 	// — cobra command trees (`var rootCmd = &cobra.Command{...}`), gin/echo
 	// router globals, viper config singletons — appear in eng_find_symbol /
-	// eng_get_file_nodes and become navigable from agent tools (solov2-b7wt).
+	// eng_get_file_nodes and become navigable from agent tools .
 	KindVariable NodeKind = "variable"
 	// KindChunk is a non-declaration source region — package-level
 	// vars, file-top comments, init() guts, anything between symbol
 	// declarations. Chunks live alongside symbol nodes so the existing
 	// embedder / FTS / search pipeline picks them up without special
 	// casing, but they are excluded from entry_points and the
-	// rerank definition-boost (solov2-jyt).
+	// rerank definition-boost .
 	KindChunk NodeKind = "chunk"
 )
 
@@ -82,7 +82,7 @@ type Node struct {
 	Exported    *bool
 	// External marks a node sourced from a registered repo's vendored
 	// or module-cache dependency rather than its first-party code
-	// (solov2-bchl). Defaults to nil (i.e. first-party / unknown).
+	// . Defaults to nil (i.e. first-party / unknown).
 	// Stored as INTEGER 0/1 in the nodes table; read paths set it on
 	// rehydrate so MCP responses can label hits without an extra
 	// lookup.
@@ -165,7 +165,7 @@ func WithExported(exported bool) NodeOption {
 }
 
 // WithExternal marks the node as sourced from a vendored or
-// module-cache dependency (solov2-bchl). nil keeps the default
+// module-cache dependency . nil keeps the default
 // (first-party / unknown).
 func WithExternal(external bool) NodeOption {
 	return func(n *Node) error {

@@ -19,7 +19,7 @@ import (
 // NodeInfo is the projection ResolveCrossRepoNode returns for cross-repo
 // edge rendering: the symbol name, the kind (so a package-grain edge can be
 // visibly labelled as such), and a file:line hint so the user can navigate
-// to the call site (solov2-358v).
+// to the call site .
 type NodeInfo struct {
 	Name     string
 	Kind     string

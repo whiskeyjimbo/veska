@@ -53,7 +53,7 @@ type PostPromotionQueueReport struct {
 	Status     health.Status `json:"status"`
 	// OrphanCount is the number of failed rows whose repo_id is no longer
 	// registered — the exact set `--purge-orphans` would clear. Surfaced so
-	// the textual probe can point operators at the remediation (solov2-261t).
+	// the textual probe can point operators at the remediation .
 	OrphanCount int `json:"orphan_count,omitempty"`
 }
 
@@ -198,7 +198,7 @@ func PurgeOrphanFailedRows(dbPath string) (int64, error) {
 
 // queryOrphanCount returns the count of failed rows whose repo_id is no
 // longer in the repos table — the set --purge-orphans would clear
-// (solov2-261t). A DB that doesn't carry the repos table (e.g. some test
+// . A DB that doesn't carry the repos table (e.g. some test
 // fixtures) yields 0 rather than an error, since the orphan concept
 // requires the repos table to be meaningful.
 func queryOrphanCount(db *sql.DB) (int, error) {

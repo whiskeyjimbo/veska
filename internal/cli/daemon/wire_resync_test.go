@@ -226,7 +226,7 @@ func TestDaemon_StartupResync_FullPipeline(t *testing.T) {
 	}
 
 	// repos.last_promoted_sha must advance to HEAD — the promotion
-	// transaction writes it atomically with the node rows (solov2-c47).
+	// transaction writes it atomically with the node rows .
 	headOut, err := exec.Command("git", "-C", gitDir, "rev-parse", "HEAD").Output()
 	if err != nil {
 		t.Fatalf("rev-parse HEAD: %v", err)

@@ -55,7 +55,7 @@ type HotZone struct {
 // eng_get_hot_zone MCP tool are built from, so the two never diverge.
 //
 // CandidatesScanned and CandidatesScored let callers distinguish two
-// empty-Zones cases (solov2-z5o0): no commits in the look-back window
+// empty-Zones cases : no commits in the look-back window
 // (CandidatesScanned == 0) vs. commits exist but every touched file
 // scored 0 because it has no graph nodes (lockfiles, READMEs, …).
 type Report struct {
@@ -67,7 +67,7 @@ type Report struct {
 	// GeneratedAt is the wall-clock instant the report was rendered.
 	// Populated by the wiki Handler immediately before rendering; the
 	// service itself does not set it, so MCP responses can leave it zero
-	// unless a caller wants staleness info (solov2-otzn).
+	// unless a caller wants staleness info .
 	GeneratedAt time.Time `json:"generated_at,omitzero"`
 }
 
@@ -137,7 +137,7 @@ func (s *HotZoneService) Rank(ctx context.Context, repoID, branch, repoRoot stri
 		// git ChangeCounts returns repo-root-relative paths, but the
 		// nodes table stores absolute file_paths. Without this join,
 		// nodesInFile returns [] for every entry and every zone scores
-		// 0, so .github/dependabot.yml ties with command.go (solov2-eb2).
+		// 0, so .github/dependabot.yml ties with command.go .
 		lookupPath := path
 		if !filepath.IsAbs(lookupPath) {
 			lookupPath = filepath.Join(repoRoot, path)

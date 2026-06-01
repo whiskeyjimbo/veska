@@ -45,7 +45,7 @@ var ErrMissingDependency = errors.New("contextpack: missing required dependency"
 const DefaultTokenBudget = 8192
 
 // PerNodeSnippetBytes is the per-node ceiling on inline source bytes
-// (solov2-dya). 1500 bytes ≈ ~375 tokens by the 4-bytes-per-token
+// . 1500 bytes ≈ ~375 tokens by the 4-bytes-per-token
 // heuristic — enough to capture a typical function body in full,
 // small enough that a 200-node blast radius (HardMaxNodes-ish) still
 // fits in DefaultTokenBudget after JSON overhead. The whole-pack
@@ -117,7 +117,7 @@ type NodeInfo struct {
 	Seed     bool   `json:"seed"`
 	HasOpen  bool   `json:"has_open_finding"`
 	// Snippet is the symbol's source, trimmed to PerNodeSnippetBytes so
-	// a single huge symbol cannot eat the bundle (solov2-dya). Omitted
+	// a single huge symbol cannot eat the bundle . Omitted
 	// from JSON when empty so legacy callers and unsnapshotted nodes
 	// don't get a noisy empty field.
 	Snippet string `json:"snippet,omitempty"`
@@ -139,7 +139,7 @@ type Pack struct {
 	Query  string `json:"query"`
 	// Focus is the seed node — a convenience pointer to the same NodeInfo
 	// the agent would otherwise find via Nodes[?Seed==true]. Nil when no
-	// node matched the query (solov2-liua).
+	// node matched the query .
 	Focus           *NodeInfo     `json:"focus,omitempty"`
 	Nodes           []NodeInfo    `json:"nodes"`
 	RecentCommits   []CommitInfo  `json:"recent_commits"`
@@ -251,7 +251,7 @@ func (a *Assembler) ForSymbol(ctx context.Context, repoID, branch, repoRoot, sym
 // ForNode assembles a context pack seeded on a known node_id. This gives
 // parity with the other graph-anchored MCP tools (call_chain, blast_radius)
 // that accept node_id directly when the caller already has it in hand
-// (solov2-z81b). It skips FindNodes — the seed is exact.
+// . It skips FindNodes — the seed is exact.
 func (a *Assembler) ForNode(ctx context.Context, repoID, branch, repoRoot, nodeID string) (Pack, error) {
 	pack, err := a.assemble(ctx, repoID, branch, repoRoot, []string{nodeID})
 	if err != nil {
@@ -309,7 +309,7 @@ func (a *Assembler) assemble(ctx context.Context, repoID, branch, repoRoot strin
 	// Relevant nodes = seeds + blast radius. Walk BOTH directions so
 	// the pack covers "what this symbol calls" AND "who calls this
 	// symbol" — the default callers-only walk left Command.Execute
-	// returning just 2-3 nodes on cobra (solov2-85n). MaxDepth/MaxNodes
+	// returning just 2-3 nodes on cobra . MaxDepth/MaxNodes
 	// keep their service defaults (3 / 200).
 	var entries []blastradius.Entry
 	if len(seedIDs) > 0 {

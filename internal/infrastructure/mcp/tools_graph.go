@@ -29,7 +29,7 @@ type CrossRepoEdge struct {
 // GraphResponse is the envelope returned by the node-list graph tools
 // (eng_find_symbol, eng_get_node, eng_get_file_nodes). Nodes is always a
 // non-nil slice so an empty result serializes as [] rather than being
-// omitted (solov2-elt).
+// omitted .
 type GraphResponse struct {
 	Nodes           []nodeDTO `json:"nodes"`
 	IncludedStaging bool      `json:"included_staging"`
@@ -44,9 +44,9 @@ type GraphResponse struct {
 
 // callChainResponse is the envelope returned by eng_get_call_chain. Both
 // nodes and edges are always non-nil so a chain with no reachable callees
-// serializes as {"nodes":[],"edges":[]} (solov2-elt). DegradedReasons
+// serializes as {"nodes":[],"edges":[]} . DegradedReasons
 // carries advisory hints — e.g. "chained_selectors_unresolved" when the
-// seed is callable but no CALLS edges resolved (solov2-jojv) — so an
+// seed is callable but no CALLS edges resolved  — so an
 // agent reading the response knows the empty result may reflect a parser
 // limitation rather than a symbol with no callees.
 type callChainResponse struct {
@@ -124,7 +124,7 @@ type ResolveFunc func(ctx context.Context, nodeID, branch string, expand bool) (
 // InboundResolveFunc resolves cross-repo edge stubs INBOUND to a given
 // node (the node is the callee). Use it to answer "who calls this library
 // symbol from another repo?" — the dual of ResolveFunc. Backed by
-// resolver.ResolveStubsTargetingNode (solov2-80hh). nil = skip inbound
+// resolver.ResolveStubsTargetingNode . nil = skip inbound
 // resolution.
 type InboundResolveFunc func(ctx context.Context, dstNodeID, branch string) ([]ports.ResolvedEdge, error)
 
@@ -148,14 +148,14 @@ func WithResolveFunc(fn ResolveFunc) GraphToolOption {
 // WithInboundResolveFunc supplies an InboundResolveFunc so call_chain
 // direction=in (and direction=both) surfaces callers in OTHER repos —
 // closes the parity gap with eng_get_blast_radius for library symbols
-// (solov2-80hh).
+// .
 func WithInboundResolveFunc(fn InboundResolveFunc) GraphToolOption {
 	return func(c *graphToolConfig) { c.resolveInbound = fn }
 }
 
 // WithRepoLister supplies the repos registry so eng_get_file_nodes can resolve
 // a repo-relative file_path against the repo's root. Node file paths are stored
-// absolute; without this, a relative path silently matched nothing (solov2-829).
+// absolute; without this, a relative path silently matched nothing .
 func WithRepoLister(repos application.RepoLister) GraphToolOption {
 	return func(c *graphToolConfig) { c.repos = repos }
 }

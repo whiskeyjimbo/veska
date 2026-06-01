@@ -1,6 +1,6 @@
 // Package savings records per-search token-savings telemetry to a
 // JSONL file (~/.veska/savings.jsonl by default) and reports rollups
-// for the `veska doctor savings` subcommand (solov2-3bu).
+// for the `veska doctor savings` subcommand .
 //
 // The premise: when search returns inline snippets, the agent skips a
 // follow-up Read of the matched files. The savings ratio is

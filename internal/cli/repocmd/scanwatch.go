@@ -79,7 +79,7 @@ func tailScanFailureReason(logPath, repoID string) string {
 // tailScanCompleteFiles scans the daemon log for the most-recent
 // "cold scan: complete" entry for repoID and returns its files_saved
 // count. Used as a last-resort source when the scan finished too fast
-// for the CLI's poll loop to observe a non-zero FilesSeen (solov2-a17i).
+// for the CLI's poll loop to observe a non-zero FilesSeen .
 func tailScanCompleteFiles(logPath, repoID string) int {
 	var lastFiles int
 	scanLogTail(logPath, func(line string) {
@@ -132,7 +132,7 @@ const (
 	// startupGrace bounds how long --wait keeps polling while the scan has
 	// not yet appeared in scans_in_flight, so the very first poll firing
 	// before the scheduler enqueues the scan does not surface a misleading
-	// "scan no longer in flight" failure (solov2-beda).
+	// "scan no longer in flight" failure .
 	startupGrace = 5 * time.Second
 )
 

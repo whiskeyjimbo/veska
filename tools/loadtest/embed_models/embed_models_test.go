@@ -3,7 +3,7 @@
 // Package embed_models benchmarks embedding model variants — model2vec
 // in-process providers and (in later phases) Ollama models — over real
 // codebase corpora, so hi5's defaults are data-backed and end users get
-// a published comparison table (solov2-0k5h).
+// a published comparison table .
 //
 // Phase 0k5h.2 — multi-model, multi-corpus, structured output.
 // Iterates over every model under $VESKA_HOME/static-model/<name>/ that

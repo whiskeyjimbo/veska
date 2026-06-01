@@ -1,7 +1,7 @@
 // Package extindex indexes a registered repo's vendored Go module
 // sources into the graph as external nodes (solov2-bchl phase 1).
 //
-// Why: the multi-repo wedge (solov2-71xq) promises "your agent knows
+// Why: the multi-repo wedge  promises "your agent knows
 // what calls what across all your repos." Today that fails the moment
 // a call crosses into a third-party module that isn't itself
 // registered: cross_repo_edge_stubs have no destination to bind to.
@@ -49,7 +49,7 @@ type ExternalNodeSaver interface {
 }
 
 // ExternalRepoUpserter inserts a synthetic repo row for an indexed
-// vendor module (solov2-yr56). The row's module_path lets the
+// vendor module . The row's module_path lets the
 // existing cross_repo_edge_stubs resolver find vendored destinations
 // for CALLS edges — without it, a stub from myapp.Run targeting
 // greetlib.New would dead-end at the import boundary.
@@ -97,7 +97,7 @@ type Service struct {
 // cross-repo CALLS edges through them do NOT resolve. With an
 // upserter wired, the indexer creates a synthetic repo per module
 // and writes nodes against it, which closes the resolver loop
-// (solov2-yr56).
+// .
 func NewService(parser ports.CodeParser, saver ExternalNodeSaver, opts ...Option) (*Service, error) {
 	if parser == nil {
 		return nil, fmt.Errorf("extindex.NewService: parser is nil: %w", ErrMissingDependency)
@@ -116,7 +116,7 @@ func NewService(parser ports.CodeParser, saver ExternalNodeSaver, opts ...Option
 type Option func(*Service)
 
 // WithExternalRepoUpserter wires the synthetic-repo writer that
-// closes the cross-repo CALLS resolution loop (solov2-yr56). Without
+// closes the cross-repo CALLS resolution loop . Without
 // this option indexed nodes still appear in eng_find_symbol but
 // cross_repo_edge_stubs targeting them won't bind.
 func WithExternalRepoUpserter(u ExternalRepoUpserter) Option {

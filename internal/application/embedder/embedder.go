@@ -156,7 +156,7 @@ func WithMaxAttempts(n int) Option {
 // WithPauser installs a predicate the worker consults at every tick.
 // When it returns true the tick is a no-op — no FetchPending, no
 // Embed, no writes. Used by the daemon to hold the embedder off the
-// db while resync / cold-scan is committing (solov2-181).
+// db while resync / cold-scan is committing .
 func WithPauser(p func() bool) Option {
 	return func(w *Worker) { w.pauser = p }
 }
@@ -289,7 +289,7 @@ func (w *Worker) tick(ctx context.Context) {
 		// While paused we deliberately do NOT touch the refs table — not
 		// even the count probe — so the Write pool stays idle and
 		// can't race the Write promotion tx into SQLITE_BUSY
-		// (solov2-181). The next tick re-checks; the daemon clears the
+		// . The next tick re-checks; the daemon clears the
 		// pause when resync finishes.
 		return
 	}
@@ -321,7 +321,7 @@ func (w *Worker) tick(ctx context.Context) {
 
 	// Pass 1: classify each ref. Fast paths (in-flight cache, prior-tick
 	// lookup) finish immediately. Cache-misses are queued for a single
-	// batched Embed call below (solov2-ucp) so cobra cold-scan doesn't
+	// batched Embed call below  so cobra cold-scan doesn't
 	// pay 67 sequential Ollama roundtrips.
 	type pendingRef struct {
 		ref         ports.PendingEmbedRef

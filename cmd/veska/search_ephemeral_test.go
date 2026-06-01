@@ -229,7 +229,7 @@ func TestIsGitURL_PreservesPositionalSemantics(t *testing.T) {
 
 // makeSecretSource creates a real git repo with a Go file that hard-codes a
 // synthetic AWS access-key — gitleaks's BuiltinScanner detects it and the
-// docs allowlist (solov2-j1yz) does NOT cover this shape, so it survives
+// docs allowlist  does NOT cover this shape, so it survives
 // to the findings table. Returns the absolute path of the new repo.
 func makeSecretSource(t *testing.T) string {
 	t.Helper()

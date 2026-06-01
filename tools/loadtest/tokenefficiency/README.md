@@ -1,4 +1,4 @@
-# tokenefficiency — tokens-saved-vs-grep+read benchmark (solov2-wise)
+# tokenefficiency — tokens-saved-vs-grep+read benchmark 
 
 Produces a defensible "tokens saved vs grep+read" figure for veska
 search, paired with recall on the same corpus so the savings number
@@ -51,9 +51,9 @@ Tunable knobs:
 | Env var | Default | Meaning |
 |---|---|---|
 | `TOKEFF_NODES_PER_CLUSTER` | `24` | Members per cluster in the synthetic semantic corpus. Larger files exaggerate grep's read-all-matches cost so the savings range widens. Capped by `synthcorpus.semanticNodesPerClusterCap` (792). |
-| `TOKEFF_REPOS` | `5` | Multi-repo harness only. Partitions clusters across N synthetic repos so veska's cross-repo fanout + global RRF (solov2-bcn) competes against a grep that walks every repo's filesystem. |
+| `TOKEFF_REPOS` | `5` | Multi-repo harness only. Partitions clusters across N synthetic repos so veska's cross-repo fanout + global RRF  competes against a grep that walks every repo's filesystem. |
 
-## Multi-repo (solov2-kcmo)
+## Multi-repo 
 
 The wedge pitch is "your agent searches across the whole workspace".
 The multi-repo harness measures exactly that:
@@ -87,7 +87,7 @@ Honest caveats specific to the multi-repo run:
   repeated identifiers across repos would multiply grep's read cost
   and widen the savings bracket.
 - Multi-repo recall matches (and on this corpus exceeds) single-repo
-  thanks to **cosine fusion** in the cross-repo path (solov2-uuuk):
+  thanks to **cosine fusion** in the cross-repo path :
   when one embedder spans every repo, raw cosine scores are
   comparable across repos, so the global fanout picks the actually-
   best match instead of tying every repo's rank-1 candidate. The

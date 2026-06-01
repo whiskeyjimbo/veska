@@ -36,7 +36,7 @@ Extractive condensation: per doc, split into pieces (lines), embed each, keep to
 
 <!-- BEGIN FUSION-8hka -->
 
-## Dual-model fusion (solov2-8hka)
+## Dual-model fusion 
 
 Compares four ranking strategies on the SAME headline ground-truth pairs using two model2vec variants embedded per doc:
 

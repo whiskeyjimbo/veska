@@ -180,7 +180,7 @@ type advisory struct {
 
 // osvDatabaseSpecif carries GHSA-prefixed advisories' severity rating
 // (CRITICAL/HIGH/MODERATE/LOW), which is more useful than the raw CVSS
-// vector string when populating finding severity (solov2-15vx).
+// vector string when populating finding severity .
 type osvDatabaseSpecif struct {
 	Severity string `json:"severity"`
 }
@@ -258,7 +258,7 @@ func (a *Adapter) Scan(ctx context.Context, deps []ports.Dependency) ([]ports.Vu
 // names the equivalent IDs; we keep one finding per (package, equivalence
 // class) and prefer GHSA-prefixed IDs (most widely cross-referenced), then
 // CVE, then anything else. The retained finding's Aliases field lists the
-// suppressed IDs so triage can still cross-check (solov2-ka54).
+// suppressed IDs so triage can still cross-check .
 func dedupeAliased(findings []ports.VulnFinding) []ports.VulnFinding {
 	if len(findings) <= 1 {
 		return findings
@@ -461,7 +461,7 @@ func versionAffected(version string, ranges []osvRange) bool {
 
 // minFixedAbove returns the lowest "fixed" version greater than the current
 // version among the matching ranges, with a leading "v" so it can be passed
-// straight to `go get` (solov2-gpvy). Empty when no published fix exists.
+// straight to `go get` . Empty when no published fix exists.
 func minFixedAbove(current string, ranges []osvRange) string {
 	cur := normalizeSemver(current)
 	var best string
@@ -525,7 +525,7 @@ func rangeString(ranges []osvRange) string {
 // GHSA records carry a rating directly in database_specific.severity; for
 // other records we parse the CVSS3 vector and derive a label from the base
 // score. Empty string falls through to checks.mapSeverity's Medium default
-// (solov2-15vx).
+// .
 func pickSeverity(adv advisory) string {
 	if s := strings.TrimSpace(adv.DatabaseSpecif.Severity); s != "" {
 		return s

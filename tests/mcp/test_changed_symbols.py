@@ -17,7 +17,7 @@ def test_changed_symbols_head_against_head(mcp_client, repo_id, branch):
 
 def test_changed_symbols_defaults_to_last_commit(mcp_client, repo_id, branch):
     """Omitting both ref_a and ref_b must default to HEAD~1..HEAD rather
-    than erroring (solov2-npjs). Previously this test asserted the
+    than erroring . Previously this test asserted the
     opposite — the default landed in trunk and the test went stale."""
     ok, text, _, result = mcp_client.call("eng_find_changed_symbols", {
         "repo_id": repo_id, "branch": branch,
@@ -27,12 +27,12 @@ def test_changed_symbols_defaults_to_last_commit(mcp_client, repo_id, branch):
     # solov2-jbgt: empty buckets must serialize as [] (never null).
     for k in ("added", "removed", "modified"):
         assert k in result, f"missing key {k!r} in response: {result}"
-        assert isinstance(result[k], list), f"{k!r} = {result[k]!r}, want list (solov2-jbgt)"
+        assert isinstance(result[k], list), f"{k!r} = {result[k]!r}, want list "
 
 
 def test_changed_symbols_one_ref_alone_is_error(mcp_client, repo_id, branch):
     """Supplying only ref_a (or only ref_b) is ambiguous — must be rejected
-    so the caller knows to pass both or neither (solov2-npjs)."""
+    so the caller knows to pass both or neither ."""
     ok, text, _, _ = mcp_client.call("eng_find_changed_symbols", {
         "repo_id": repo_id, "branch": branch,
         "ref_a": "HEAD",
@@ -62,7 +62,7 @@ def test_changed_symbols_file_path_is_absolute(mcp_client, repo_id, branch):
             seen_any = True
             fp = change.get("file_path", "")
             assert fp.startswith(root), (
-                f"{bucket!r} entry file_path={fp!r} is not absolute under {root!r} (solov2-w8nr)"
+                f"{bucket!r} entry file_path={fp!r} is not absolute under {root!r} "
             )
     if not seen_any:
         import pytest

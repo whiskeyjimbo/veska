@@ -28,7 +28,7 @@ func StubOK(subsystem string, jsonOut bool, w io.Writer) error {
 // QueueOptions are the boolean flags for RunPostPromotionQueue. Probes that
 // carry a single flag keep it positional (e.g. RunEgress(w, jsonOut)); those
 // with two or more take an options struct so adjacent bools can't be
-// transposed at the call site (solov2-w8f9).
+// transposed at the call site .
 type QueueOptions struct {
 	JSON         bool
 	PurgeOrphans bool

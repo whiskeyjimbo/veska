@@ -134,7 +134,7 @@ func daemonSearch(ctx context.Context, stderr, stdout io.Writer, opts RunOpts) (
 // daemonSearchByRepoID runs eng_search_semantic against a known repo_id/branch.
 // Returned ok is false when the daemon is unreachable so callers can fall back
 // to the in-process search service. Used by the URL/path path of Run after
-// ensureIndexed has registered the repo (solov2-2etd).
+// ensureIndexed has registered the repo .
 func daemonSearchByRepoID(ctx context.Context, repoID, branch string, opts RunOpts) (SearchEnvelope, bool, error) {
 	var env SearchEnvelope
 	if err := mcpclient.Call(ctx, "eng_search_semantic", map[string]any{
@@ -155,7 +155,7 @@ func daemonSearchByRepoID(ctx context.Context, repoID, branch string, opts RunOp
 }
 
 // daemonSearchAllRepos is the cross-repo fanout invoked when target is empty
-// and cwd is not part of a registered repo (solov2-vm5w). It lists every
+// and cwd is not part of a registered repo . It lists every
 // registered repo, runs eng_search_semantic per repo with the same k, merges
 // results, re-sorts by score desc, and trims to k. fanned is false when the
 // registry is empty so the caller surfaces the existing "not registered" error
@@ -232,7 +232,7 @@ func (r daemonRepoRow) headerInfo() SearchHeaderInfo {
 
 // resolveRepoViaDaemonInfo maps the search target to a (repo_id, branch) the
 // daemon already tracks, plus the display info (short_id, aliases) needed for
-// the 'searching:' header. Resolution order (solov2-q51m):
+// the 'searching:' header. Resolution order :
 //   - empty target → eng_get_current_repo against cwd
 //   - non-empty    → match against eng_list_repos by full repo_id, short_id,
 //     or alias first (cheap), then by canonical filesystem root.
@@ -307,7 +307,7 @@ func resolveTargetRepoViaDaemon(ctx context.Context, target string) (repoID, bra
 // queued so a zero-result search can tell the user "the index is still warming
 // up" instead of staying silent. Returns ok=false if the daemon is down or
 // doesn't expose the field — the caller falls back to a plain "no results"
-// line (solov2-ffi3).
+// line .
 func pendingEmbedsHint() (int, bool) {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()

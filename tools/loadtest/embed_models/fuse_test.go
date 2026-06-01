@@ -1,6 +1,6 @@
 //go:build eval
 
-// Dual-model fusion bench (solov2-8hka). Companion to TestEmbedModelsBenchmark
+// Dual-model fusion bench . Companion to TestEmbedModelsBenchmark
 // — instead of testing each model independently across corpora, this
 // test embeds every doc with TWO models and compares four ranking
 // strategies on the same ground-truth pairs:
@@ -413,7 +413,7 @@ func appendFuseSectionToMarkdown(rows []fuseResult) error {
 
 	var sb strings.Builder
 	sb.WriteString(startMarker + "\n")
-	sb.WriteString("\n## Dual-model fusion (solov2-8hka)\n\n")
+	sb.WriteString("\n## Dual-model fusion \n\n")
 	sb.WriteString("Compares four ranking strategies on the SAME headline ground-truth pairs ")
 	sb.WriteString("using two model2vec variants embedded per doc:\n\n")
 	sb.WriteString("- **code-only**: `" + codeName + "` cosine alone (baseline).\n")

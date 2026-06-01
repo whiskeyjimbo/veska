@@ -99,7 +99,7 @@ func makeGetCurrentRepoHandler(repos application.RepoLister) ToolHandler {
 		}
 
 		// When cwd is omitted, fall back to the sole-registered-repo case
-		// (solov2-w56f). Editors and MCP clients can't easily inject their
+		// . Editors and MCP clients can't easily inject their
 		// project root automatically, and a junior tooling with exactly one
 		// repo in flight gets the right answer without needing to know
 		// about cwd at all. Multiple repos and no cwd is ambiguous — we
@@ -140,7 +140,7 @@ func makeGetCurrentRepoHandler(repos application.RepoLister) ToolHandler {
 // RepoView decorates an application.RepoRecord with a derived 'status'
 // field so callers (`veska repo list`, `doctor status`, AI tools) can
 // distinguish a freshly-registered repo from a fully-indexed one
-// without reverse-engineering empty strings (solov2-b9y).
+// without reverse-engineering empty strings .
 //
 // Status values:
 //   - "promoted"   — last_promoted_sha is set; repo is queryable.
@@ -150,8 +150,8 @@ func makeGetCurrentRepoHandler(repos application.RepoLister) ToolHandler {
 //     (solov2-8ga's per-repo continue-on-error path).
 //   - "missing"    — root_path no longer exists on disk; the registration
 //     is stale and queries against it will return nothing useful. CLI
-//     `veska repo list` has surfaced this for a while (solov2-76px); MCP
-//     now matches so agents see the same signal (solov2-cwjj).
+//     `veska repo list` has surfaced this for a while ; MCP
+//     now matches so agents see the same signal .
 type RepoView struct {
 	RepoID          string `json:"repo_id"`
 	ShortID         string `json:"short_id"`
@@ -165,13 +165,13 @@ type RepoView struct {
 	// (solov2-kxo5.9).
 	Kind string `json:"kind"`
 	// Aliases is the list of user-defined human-friendly names bound to
-	// this repo (solov2-7w1t). Empty when none are set. Accepted as a
+	// this repo . Empty when none are set. Accepted as a
 	// repo_id substitute by every tool that resolves repo_id.
 	Aliases []string `json:"aliases"`
 }
 
 // ShortRepoIDLen is the number of leading hex chars of a repo_id that the
-// CLI and tools accept as a human-friendly alias (solov2-d2x). 12 chars of
+// CLI and tools accept as a human-friendly alias . 12 chars of
 // sha256 is collision-safe for any realistic number of tracked repos.
 const ShortRepoIDLen = 12
 
@@ -234,7 +234,7 @@ func decorateRepos(in []application.RepoRecord) []RepoView {
 // listReposParams accepts include_vendored=true to surface synthetic
 // ext: repo rows alongside user-registered ones. Default false hides
 // them so a multi-repo workspace's `eng_list_repos` result doesn't
-// balloon with one entry per indexed dependency (solov2-yr56).
+// balloon with one entry per indexed dependency .
 type listReposParams struct {
 	IncludeVendored bool `json:"include_vendored"`
 }

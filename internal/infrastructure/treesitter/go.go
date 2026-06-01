@@ -109,16 +109,16 @@ func parseInterfaceMethods(typeDeclNode *sitter.Node, src []byte, repoID, path, 
 // gin/echo router globals, viper config singletons. Without this pass the
 // graph misses the entire command tree of any cobra-based CLI and
 // eng_find_symbol returns empty for the var names users actually search
-// for (solov2-b7wt).
+// for .
 
 // ----- CALLS extraction -----
 
 // callKeySep separates the parts of an in-file call-dedup key. A NUL byte
 // cannot appear in a node id or identifier, so it is unambiguous and shared by
-// both the resolved-edge (seen) and unresolved-call (seenU) maps (solov2-2efk).
+// both the resolved-edge (seen) and unresolved-call (seenU) maps .
 const callKeySep = "\x00"
 
-// Cross-package call handling (solov2-xc51): collectCallNames returns
+// Cross-package call handling : collectCallNames returns
 // package-qualified calls (pkg.Bar()) with callRef.pkg set. extractCallEdges
 // cannot bind them in-file, so it stashes them as UnresolvedCalls carrying the
 // qualifier; the promotion store resolves each against the file's import map —
@@ -132,7 +132,7 @@ const callKeySep = "\x00"
 // children, finds function_literal bodies anywhere inside them, and emits CALLS
 // edges from pkgNode (the file's package node) to every callable target in those
 // bodies. This makes cobra-style anonymous-function call patterns visible to
-// call_chain and blast_radius (solov2-kzxh).
+// call_chain and blast_radius .
 //
 // Only identifier-form calls are bound here; package-qualified and selector
 
@@ -203,7 +203,7 @@ type callRef struct {
 	// pkg holds the originating package qualifier, name holds the method
 	// identifier. The receiver type is unknown to the parser; the
 	// promotion-time resolver binds by method name within pkg. Plain
-	// pkg.Foo() calls keep method=false (solov2-9rc2).
+	// pkg.Foo() calls keep method=false .
 	method bool
 	// line is the 1-indexed start line of the call_expression in the
 	// source file. Carried through to domain.Edge.SourceLine on
@@ -219,7 +219,7 @@ type callRef struct {
 // (import foo "x/y") the key is the alias; otherwise it is the path's last
 // segment (import "x/y" -> "y"), which equals the package name in the common
 // case. Blank ("_") and dot (".") imports are skipped — neither yields a
-// usable qualifier (solov2-xc51).
+// usable qualifier .
 func extractImports(root *sitter.Node, src []byte) map[string]string {
 	imports := map[string]string{}
 	var walk func(*sitter.Node)
@@ -314,7 +314,7 @@ func lineRange(node *sitter.Node) domain.LineRange {
 }
 
 // goParserCheck re-parses src with the standard library go/parser to validate
-// tree-sitter's claim that the file has a syntax error (solov2-0kv6).
+// tree-sitter's claim that the file has a syntax error .
 //
 // Returns (ParseFailure, true) when go/parser ALSO rejects the file — in
 // that case the failure carries go/parser's line + first error message
@@ -465,7 +465,7 @@ func collectCallNames(node *sitter.Node, src []byte, recvName, recvType string, 
 							refs = append(refs, callRef{name: fld, pkg: localOrigins[op], method: true})
 						default:
 							// pkg.Foo() — package-qualified; resolved at
-							// promotion via the import map (solov2-xc51). The
+							// promotion via the import map . The
 							// operand may also be a local variable; a
 							// non-import qualifier simply misses there.
 							refs = append(refs, callRef{name: fld, pkg: op})

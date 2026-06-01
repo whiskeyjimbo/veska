@@ -18,7 +18,7 @@ import (
 // editor would, without typing the JSON-RPC envelope. repo_id auto-resolves
 // when exactly one repo is registered (the daemon's
 // resolveRepoIDOrSingleton); pass --repo to scope across multiple
-// (solov2-kzhe).
+// .
 func symbolCmd() *cobra.Command {
 	var (
 		repoFlag string
@@ -54,7 +54,7 @@ ranked first.`,
 
 // contextCmd wraps eng_get_context_pack so users can pull the same
 // caller+callee+test bundle the agent would, without crafting JSON
-// (solov2-kzhe).
+// .
 func contextCmd() *cobra.Command {
 	var (
 		repoFlag   string
@@ -93,7 +93,7 @@ change so you (or an agent) get the whole neighbourhood in one shot.`,
 }
 
 // pickSymbolArg resolves the symbol from the positional arg or the --symbol
-// flag, rejecting the both-set and neither-set cases (solov2-bvis).
+// flag, rejecting the both-set and neither-set cases .
 func pickSymbolArg(args []string, symbolFlag string) (string, error) {
 	switch {
 	case len(args) == 1 && symbolFlag == "":

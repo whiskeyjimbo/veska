@@ -10,7 +10,7 @@ import (
 // (eng_suppress_finding, eng_list_suppressions, eng_get_suppression,
 // eng_close_suppression) onto the CLI so users do not have to craft JSON-RPC
 // payloads to suppress findings — parity with `findings list / show / close /
-// reopen` (solov2-nwef). The list/show rendering lives in
+// reopen` . The list/show rendering lives in
 // internal/cli/findingscmd; these constructors are Cobra glue (solov2-0omh.7).
 
 // findingsSuppressCmd is `veska findings suppress <finding_id> --reason ...`.

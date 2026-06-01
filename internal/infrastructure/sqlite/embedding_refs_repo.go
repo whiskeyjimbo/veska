@@ -79,7 +79,7 @@ func (r *EmbeddingRefsRepo) FetchPending(ctx context.Context, limit int) ([]port
 // The projection logic itself lives in domain.EmbedText so the recall
 // eval harness (tools/loadtest/recallprojection) measures projection
 // variants against exactly what production emits. Production uses
-// EmbedVariantSnippet: a faithful real-code recall sweep (solov2-ok0)
+// EmbedVariantSnippet: a faithful real-code recall sweep
 // across veska, golang.org/x/mod and BurntSushi/toml — real source-body
 // snippets, doc-comment queries — showed +snippet roughly doubles recall@10
 // over baseline at flat p95. An empty snippet degrades gracefully:
