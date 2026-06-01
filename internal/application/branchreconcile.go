@@ -65,28 +65,34 @@ func NewBranchReconciler(
 // mismatch, bumps the generation, clears the prior branch's staging, and stores
 // the new branch. A branch that cannot be determined ("" or git error) is a
 // no-op: a transient git failure must never wipe valid in-flight staging.
-func (r *BranchReconciler) Reconcile(ctx context.Context, repoID, rootPath string) error {
+//
+// It returns the resolved working-tree branch ONLY on a successful mismatch
+// reconcile (the authoritative new branch a caller should adopt as its
+// save/promote key); it returns "" on every no-op path (unreadable branch,
+// detached HEAD, or branch already matching active_branch) so a flaky read
+// never causes a caller to switch keys.
+func (r *BranchReconciler) Reconcile(ctx context.Context, repoID, rootPath string) (string, error) {
 	cur, err := r.reader.CurrentBranch(rootPath)
 	if err != nil {
 		slog.Debug("branch_reconcile: read current branch failed; skipping", "repo", repoID, "err", err)
-		return nil
+		return "", nil
 	}
 	if cur == "" {
-		return nil
+		return "", nil
 	}
 	prev, err := r.store.ActiveBranch(ctx, repoID)
 	if err != nil {
-		return fmt.Errorf("branch reconcile: read active branch for %s: %w", repoID, err)
+		return "", fmt.Errorf("branch reconcile: read active branch for %s: %w", repoID, err)
 	}
 	if cur == prev {
-		return nil
+		return "", nil
 	}
 	r.bumper.BumpGeneration()
 	r.clearer.Clear(repoID, prev)
 	if err := r.store.SetActiveBranch(ctx, repoID, cur); err != nil {
-		return fmt.Errorf("branch reconcile: set active branch for %s: %w", repoID, err)
+		return "", fmt.Errorf("branch reconcile: set active branch for %s: %w", repoID, err)
 	}
 	slog.Info("branch_reconcile: working tree branch changed during suspend",
 		"repo", repoID, "prev", prev, "cur", cur)
-	return nil
+	return cur, nil
 }

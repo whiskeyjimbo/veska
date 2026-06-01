@@ -77,8 +77,12 @@ func TestBranchReconcile_Mismatch_BumpsClearsAndUpdates(t *testing.T) {
 		t.Fatalf("NewBranchReconciler: %v", err)
 	}
 
-	if err := rc.Reconcile(context.Background(), "repo1", "/root"); err != nil {
+	got, err := rc.Reconcile(context.Background(), "repo1", "/root")
+	if err != nil {
 		t.Fatalf("Reconcile: %v", err)
+	}
+	if got != "feature/x" {
+		t.Errorf("resolved branch = %q, want feature/x", got)
 	}
 
 	if bump.calls != 1 {
@@ -96,8 +100,12 @@ func TestBranchReconcile_Match_NoOp(t *testing.T) {
 	br, store, bump, clear := newFakes("main", "main")
 	rc, _ := NewBranchReconciler(br, store, bump, clear)
 
-	if err := rc.Reconcile(context.Background(), "repo1", "/root"); err != nil {
+	got, err := rc.Reconcile(context.Background(), "repo1", "/root")
+	if err != nil {
 		t.Fatalf("Reconcile: %v", err)
+	}
+	if got != "" {
+		t.Errorf("resolved branch on match = %q, want empty", got)
 	}
 
 	if bump.calls != 0 {
@@ -121,7 +129,7 @@ func TestBranchReconcile_EmptyBranch_NoOp(t *testing.T) {
 	clear := &fakeClearer{}
 	rc, _ := NewBranchReconciler(br, store, bump, clear)
 
-	if err := rc.Reconcile(context.Background(), "repo1", "/root"); err != nil {
+	if _, err := rc.Reconcile(context.Background(), "repo1", "/root"); err != nil {
 		t.Fatalf("Reconcile: %v", err)
 	}
 	if bump.calls != 0 || clear.calls != 0 || store.setCalls != 0 {
@@ -136,7 +144,7 @@ func TestBranchReconcile_BranchReadError_NoOp(t *testing.T) {
 	clear := &fakeClearer{}
 	rc, _ := NewBranchReconciler(br, store, bump, clear)
 
-	if err := rc.Reconcile(context.Background(), "repo1", "/root"); err != nil {
+	if _, err := rc.Reconcile(context.Background(), "repo1", "/root"); err != nil {
 		t.Fatalf("Reconcile should swallow git read error, got: %v", err)
 	}
 	if bump.calls != 0 || clear.calls != 0 || store.setCalls != 0 {
