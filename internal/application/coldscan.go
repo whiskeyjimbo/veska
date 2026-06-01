@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/whiskeyjimbo/veska/internal/core/domain"
@@ -29,6 +30,10 @@ type IgnoreLoader func(repoRoot string) (IgnoreMatcher, error)
 type coldScanConfig struct {
 	loader  IgnoreLoader
 	tracker *ScanTracker
+	// extensions is the set of source-file extensions the wired parser can
+	// read, sourced from the parser via Ingester.SupportedExtensions rather
+	// than duplicated here (solov2-xde2.7).
+	extensions map[string]struct{}
 }
 
 // ColdScanOption configures NewColdScanReparser at construction time.
@@ -95,7 +100,7 @@ func NewColdScanReparser(ingester *Ingester, promoter *Promoter, git headQuerier
 	// skips clearParseFailure for clean parses since there's nothing
 	// to clear on a first-ever scan, removing one UPDATE per file on
 	// the contended Write pool.
-	return newColdScanReparserFromFns(ingester.SaveColdScan, promoter.Promote, git, opts...)
+	return newColdScanReparserFromFns(ingester.SaveColdScan, promoter.Promote, git, ingester.SupportedExtensions(), opts...)
 }
 
 // newColdScanReparserFromFns is the internal seam: it composes a reparser
@@ -103,12 +108,12 @@ func NewColdScanReparser(ingester *Ingester, promoter *Promoter, git headQuerier
 // concrete Ingester/Promoter types so unit tests can capture invocations
 // without spinning up the real pipeline. The public constructor wires
 // Ingester.Save and Promoter.Promote here.
-func newColdScanReparserFromFns(save saveFunc, promote promoteFunc, git headQuerier, opts ...ColdScanOption) (func(ctx context.Context, repo RepoRecord) error, error) {
+func newColdScanReparserFromFns(save saveFunc, promote promoteFunc, git headQuerier, exts []string, opts ...ColdScanOption) (func(ctx context.Context, repo RepoRecord) error, error) {
 	if save == nil || promote == nil || git == nil {
 		return nil, fmt.Errorf("application.newColdScanReparserFromFns: nil seam: %w", ErrMissingDependency)
 	}
 
-	cfg := coldScanConfig{loader: defaultIgnoreLoader}
+	cfg := coldScanConfig{loader: defaultIgnoreLoader, extensions: extensionSet(exts)}
 	for _, o := range opts {
 		o(&cfg)
 	}
@@ -116,92 +121,89 @@ func newColdScanReparserFromFns(save saveFunc, promote promoteFunc, git headQuer
 		cfg.loader = defaultIgnoreLoader
 	}
 
-	systemActor := domain.Actor{ID: "service:veska", Kind: domain.ActorKindSystem}
-
+	seams := coldScanSeams{save: save, promote: promote, git: git}
 	return func(ctx context.Context, repo RepoRecord) error {
-		// Bracket every scan with start + complete INFO logs so an
-		// operator tailing ~/.veska/logs/daemon.log can tell that work
-		// is in flight and observe completion . Previously
-		// the cold-scan path was silent end-to-end; a newbie running
-		// 'veska repo add <big repo>' saw nothing and assumed it had
-		// hung.
-		start := time.Now()
-		slog.Info("cold scan: starting",
-			"repo_id", repo.RepoID,
-			"root", repo.RootPath,
-			"branch", repo.ActiveBranch,
-		)
-
-		// Surface the in-flight state to eng_get_status .
-		// The defer guarantees End fires on every exit path so a
-		// failed scan doesn't pin the tracker entry forever. Nil-safe
-		// when no tracker is wired (legacy / test callers).
-		cfg.tracker.Start(repo.RepoID)
-		defer cfg.tracker.End(repo.RepoID)
-		cfg.tracker.SetPhase(repo.RepoID, "walking")
-
-		head, err := git.HEAD(repo.RootPath)
-		if err != nil {
-			slog.Warn("cold scan: HEAD lookup failed",
-				"repo_id", repo.RepoID, "err", err)
-			return fmt.Errorf("cold scan: HEAD for repo %q: %w", repo.RepoID, err)
-		}
-
-		ignore, err := cfg.loader(repo.RootPath)
-		if err != nil {
-			slog.Warn("cold scan: load ignore list failed",
-				"repo_id", repo.RepoID, "err", err)
-			return fmt.Errorf("cold scan: load ignore list for repo %q: %w", repo.RepoID, err)
-		}
-
-		// Wrap save so we can report files_saved at completion. The
-		// wrapper is cheap (a counter increment on the same goroutine
-		// the walk runs on, no locking) and keeps walkAndSave's
-		// signature unchanged.
-		// Also publish files_seen to the scan tracker after each save so
-		// eng_get_status / veska repo list can show progress for long
-		// scans . files_total is left 0 until we have a
-		// cheap upfront count — wiring that here would double-walk the
-		// tree. Showing files_seen alone is still enough to tell hung
-		// from progressing.
-		filesSaved := 0
-		countingSave := func(ctx context.Context, repoID, branch, path string, src []byte) {
-			save(ctx, repoID, branch, path, src)
-			filesSaved++
-			// Update on every file so progress polling never plateaus
-			// between throttled snapshots. The Progress call is one map
-			// write under a short mutex; per-file cost is negligible
-			// relative to tree-sitter parse + sqlite save on the same
-			// goroutine (solov2-jtl5.1; was modulo-5, was modulo-25).
-			cfg.tracker.Progress(repo.RepoID, filesSaved, 0)
-		}
-
-		if err := walkAndSave(ctx, repo, ignore, countingSave); err != nil {
-			slog.Warn("cold scan: walk failed",
-				"repo_id", repo.RepoID, "files_saved", filesSaved, "err", err)
-			return err
-		}
-		// Publish the final walk count before flipping to promoting so a
-		// user polling eng_get_status sees the true files_seen rather than
-		// a multiple-of-25 snapshot, then learns we've entered the slow
-		// promotion phase .
-		cfg.tracker.Progress(repo.RepoID, filesSaved, 0)
-		cfg.tracker.SetPhase(repo.RepoID, "promoting")
-
-		if err := promote(ctx, repo.RepoID, repo.ActiveBranch, head, systemActor); err != nil {
-			slog.Warn("cold scan: promote failed",
-				"repo_id", repo.RepoID, "files_saved", filesSaved, "err", err)
-			return err
-		}
-
-		slog.Info("cold scan: complete",
-			"repo_id", repo.RepoID,
-			"files_saved", filesSaved,
-			"git_sha", head,
-			"elapsed_ms", time.Since(start).Milliseconds(),
-		)
-		return nil
+		return runColdScan(ctx, repo, cfg, seams)
 	}, nil
+}
+
+// coldScanActor is the system actor under which cold-scan promotions are
+// recorded (solov2-0z1.1).
+var coldScanActor = domain.Actor{ID: "service:veska", Kind: domain.ActorKindSystem}
+
+// coldScanSeams bundles the (required) function seams a cold scan drives:
+// staging a file, promoting the batch, and reading HEAD. Grouping them keeps
+// runColdScan within the argument budget and names the collaboration.
+type coldScanSeams struct {
+	save    saveFunc
+	promote promoteFunc
+	git     headQuerier
+}
+
+// runColdScan brackets one cold scan: start/complete INFO logs (so an operator
+// tailing ~/.veska/logs/daemon.log can tell work is in flight), tracker
+// start/defer-end, HEAD + ignore-list resolution, the walk, and the final
+// promote at HEAD.
+func runColdScan(ctx context.Context, repo RepoRecord, cfg coldScanConfig, seams coldScanSeams) error {
+	start := time.Now()
+	slog.Info("cold scan: starting",
+		"repo_id", repo.RepoID, "root", repo.RootPath, "branch", repo.ActiveBranch)
+
+	// The defer guarantees End fires on every exit path so a failed scan
+	// doesn't pin the tracker entry forever. Nil-safe when no tracker is wired.
+	cfg.tracker.Start(repo.RepoID)
+	defer cfg.tracker.End(repo.RepoID)
+	cfg.tracker.SetPhase(repo.RepoID, "walking")
+
+	head, err := seams.git.HEAD(repo.RootPath)
+	if err != nil {
+		slog.Warn("cold scan: HEAD lookup failed", "repo_id", repo.RepoID, "err", err)
+		return fmt.Errorf("cold scan: HEAD for repo %q: %w", repo.RepoID, err)
+	}
+
+	ignore, err := cfg.loader(repo.RootPath)
+	if err != nil {
+		slog.Warn("cold scan: load ignore list failed", "repo_id", repo.RepoID, "err", err)
+		return fmt.Errorf("cold scan: load ignore list for repo %q: %w", repo.RepoID, err)
+	}
+
+	filesSaved, err := walkPhase(ctx, repo, cfg, ignore, seams.save)
+	if err != nil {
+		slog.Warn("cold scan: walk failed",
+			"repo_id", repo.RepoID, "files_saved", filesSaved, "err", err)
+		return err
+	}
+	cfg.tracker.SetPhase(repo.RepoID, "promoting")
+
+	if err := seams.promote(ctx, repo.RepoID, repo.ActiveBranch, head, coldScanActor); err != nil {
+		slog.Warn("cold scan: promote failed",
+			"repo_id", repo.RepoID, "files_saved", filesSaved, "err", err)
+		return err
+	}
+
+	slog.Info("cold scan: complete",
+		"repo_id", repo.RepoID, "files_saved", filesSaved, "git_sha", head,
+		"elapsed_ms", time.Since(start).Milliseconds())
+	return nil
+}
+
+// walkPhase walks the repo and feeds surviving files into save, returning the
+// number of files staged. It wraps save with a per-file counter that publishes
+// files_seen to the scan tracker so eng_get_status / veska repo list show
+// progress on long scans (files_total stays 0 — a cheap upfront count would
+// double-walk the tree; files_seen alone tells hung from progressing). The
+// final Progress call before returning ensures the count reflects the true
+// total rather than a throttled snapshot.
+func walkPhase(ctx context.Context, repo RepoRecord, cfg coldScanConfig, ignore IgnoreMatcher, save saveFunc) (int, error) {
+	filesSaved := 0
+	countingSave := func(ctx context.Context, repoID, branch, path string, src []byte) {
+		save(ctx, repoID, branch, path, src)
+		filesSaved++
+		cfg.tracker.Progress(repo.RepoID, filesSaved, 0)
+	}
+	err := walkAndSave(ctx, repo, ignore, cfg.extensions, countingSave)
+	cfg.tracker.Progress(repo.RepoID, filesSaved, 0)
+	return filesSaved, err
 }
 
 // walkAndSave performs the filesystem walk and feeds each surviving file
@@ -211,8 +213,9 @@ func newColdScanReparserFromFns(save saveFunc, promote promoteFunc, git headQuer
 // workers via the Write pool and (likely) the page cache. A worker
 // pool just spreads that contention across more goroutines without
 // improving total throughput. The fix lives upstream of this walker.
-func walkAndSave(ctx context.Context, repo RepoRecord, ignore IgnoreMatcher, save saveFunc) error {
+func walkAndSave(ctx context.Context, repo RepoRecord, ignore IgnoreMatcher, exts map[string]struct{}, save saveFunc) error {
 	root := repo.RootPath
+	stager := fileStager{repo: repo, ignore: ignore, exts: exts, save: save}
 	return filepath.WalkDir(root, func(path string, d fs.DirEntry, walkErr error) error {
 		if walkErr != nil {
 			return walkErr
@@ -228,69 +231,81 @@ func walkAndSave(ctx context.Context, repo RepoRecord, ignore IgnoreMatcher, sav
 		rel = filepath.ToSlash(rel)
 
 		if d.IsDir() {
-			if rel == "." {
-				return nil
-			}
-			// .git is always pruned regardless of ignore patterns.
-			if d.Name() == ".git" {
-				return filepath.SkipDir
-			}
-			// Use trailing-slash form so directory patterns match.
-			if ignore.ShouldIgnore(rel + "/") {
-				return filepath.SkipDir
-			}
-			return nil
+			return walkDirEntry(rel, d, ignore)
 		}
-
-		// Regular files only — skip symlinks, devices, sockets, etc.
-		if !d.Type().IsRegular() {
-			return nil
-		}
-		// The ignore-file itself is metadata, never source.
-		if d.Name() == ".veskaignore" {
-			return nil
-		}
-		if ignore.ShouldIgnore(rel) {
-			return nil
-		}
-
-		src, err := os.ReadFile(path)
-		if err != nil {
-			// Match the watch-loop's tolerance: a single unreadable file
-			// must not abort the whole scan.
-			return nil
-		}
-
-		// Fast NUL-byte sniff: binary blobs (lockfiles, minified assets)
-		// would otherwise churn the parser for no value.
-		if isLikelyBinary(src) {
-			return nil
-		}
-
-		// solov2-8x7r: skip files the parsers can't handle AND that aren't
-		// a known manifest some downstream check needs by basename
-		// (vuln-scan reads go.mod). Without this filter the cold scan
-		// staged a row for every README, .yml, .json, etc. — the result
-		// was a wide PromotionBatch.Files list that bloated staging and
-		// confused filename-gated checks.
-		if !isInterestingForStaging(path) {
-			return nil
-		}
-
-		save(ctx, repo.RepoID, repo.ActiveBranch, path, src)
+		stager.stage(ctx, path, rel, d)
 		return nil
 	})
 }
 
-// parseableExtensions enumerates the source-file extensions the wired
-// parsers know how to read. Keep in sync with the treesitter parsers
-// (treesitter.GoParser handles ".go"; TSParser handles ".ts" / ".tsx").
-// Centralising it here avoids a circular dependency between the
-// application layer and the parser adapter.
-var parseableExtensions = map[string]struct{}{
-	".go":  {},
-	".ts":  {},
-	".tsx": {},
+// walkDirEntry decides what the walk does with a directory: descend (nil) or
+// prune (SkipDir). .git is always pruned; otherwise the trailing-slash form
+// lets directory ignore patterns match.
+func walkDirEntry(rel string, d fs.DirEntry, ignore IgnoreMatcher) error {
+	if rel == "." {
+		return nil
+	}
+	if d.Name() == ".git" {
+		return filepath.SkipDir
+	}
+	if ignore.ShouldIgnore(rel + "/") {
+		return filepath.SkipDir
+	}
+	return nil
+}
+
+// fileStager holds the walk-invariant collaborators (repo, ignore matcher,
+// parser extension set, save seam) so the per-file stage decision is a method
+// with a small argument list rather than an 8-parameter free function.
+type fileStager struct {
+	repo   RepoRecord
+	ignore IgnoreMatcher
+	exts   map[string]struct{}
+	save   saveFunc
+}
+
+// stage feeds one walked file into save when it survives every filter:
+// regular-file, not .veskaignore, not ignored, readable, non-binary, and an
+// interesting extension/manifest (solov2-8x7r — without the last filter the
+// scan staged a row for every README/.yml/.json, bloating the PromotionBatch
+// and confusing filename-gated checks). A read failure is skipped silently,
+// matching the watch loop's tolerance so one bad file never aborts the scan.
+func (s fileStager) stage(ctx context.Context, path, rel string, d fs.DirEntry) {
+	if !d.Type().IsRegular() {
+		return
+	}
+	if d.Name() == ".veskaignore" {
+		return
+	}
+	if s.ignore.ShouldIgnore(rel) {
+		return
+	}
+	src, err := os.ReadFile(path)
+	if err != nil {
+		return
+	}
+	// Fast NUL-byte sniff: binary blobs (lockfiles, minified assets) would
+	// otherwise churn the parser for no value.
+	if isLikelyBinary(src) {
+		return
+	}
+	if !isInterestingForStaging(path, s.exts) {
+		return
+	}
+	s.save(ctx, s.repo.RepoID, s.repo.ActiveBranch, path, src)
+}
+
+// extensionSet folds the wired parser's SupportedExtensions list into a
+// lookup set, lower-casing each so the walk filter matches regardless of
+// on-disk case (solov2-xde2.7). The list is sourced from the parser via
+// Ingester.SupportedExtensions rather than duplicated here, so it stays in
+// sync with whatever parsers are actually wired into the cold scan.
+func extensionSet(exts []string) map[string]struct{} {
+	set := make(map[string]struct{}, len(exts))
+	for _, ext := range exts {
+		set[strings.ToLower(ext)] = struct{}{}
+	}
+	return set
 }
 
 // manifestBaseNames enumerates non-source files some structural check
@@ -301,13 +316,14 @@ var manifestBaseNames = map[string]struct{}{
 }
 
 // isInterestingForStaging reports whether a file should be fed to the
-// ingester. Returns true for any source file whose extension a parser
-// can read, or any manifest a downstream check gates on by basename.
-func isInterestingForStaging(path string) bool {
+// ingester. Returns true for any source file whose extension the wired
+// parser can read (exts), or any manifest a downstream check gates on by
+// basename.
+func isInterestingForStaging(path string, exts map[string]struct{}) bool {
 	if _, ok := manifestBaseNames[filepath.Base(path)]; ok {
 		return true
 	}
-	_, ok := parseableExtensions[filepath.Ext(path)]
+	_, ok := exts[strings.ToLower(filepath.Ext(path))]
 	return ok
 }
 

@@ -110,7 +110,7 @@ func writeFile(t *testing.T, dir, relPath, content string) {
 
 func newReparser(t *testing.T, c *captureFakes, head string) func(context.Context, RepoRecord) error {
 	t.Helper()
-	r, err := newColdScanReparserFromFns(c.save, c.promote, &fakeGitQuerier{head: head}, WithIgnoreLoader(realIgnoreLoader))
+	r, err := newColdScanReparserFromFns(c.save, c.promote, &fakeGitQuerier{head: head}, []string{".go", ".ts", ".tsx"}, WithIgnoreLoader(realIgnoreLoader))
 	if err != nil {
 		t.Fatalf("newColdScanReparserFromFns: %v", err)
 	}
@@ -134,6 +134,7 @@ func TestColdScanReparser_TrackerSeesScanInFlight(t *testing.T) {
 
 	r, err := newColdScanReparserFromFns(
 		c.save, c.promote, &fakeGitQuerier{head: "h"},
+		[]string{".go", ".ts", ".tsx"},
 		WithIgnoreLoader(realIgnoreLoader),
 		WithScanTracker(tracker),
 	)
