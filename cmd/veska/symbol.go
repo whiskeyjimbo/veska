@@ -12,7 +12,9 @@ import (
 // constructors below are Cobra glue whose RunE bodies are thin delegating
 // calls into that package (solov2-0omh.7). The shared cwd→repo resolver
 // helpers (resolveRepoFromCWD/autoResolveRepo) live in shared.go since they
-// are used across the deps, findings, and symbol families.
+// are used across the deps and findings families. The symbol/context family
+// deliberately does not auto-scope to the cwd's repo (solov2-efzv); it lives
+// alongside them only as Cobra glue.
 
 // symbolCmd wraps eng_find_symbol so users can drive the same lookup their
 // editor would, without typing the JSON-RPC envelope. repo_id auto-resolves

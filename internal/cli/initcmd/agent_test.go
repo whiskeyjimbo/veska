@@ -233,10 +233,23 @@ func TestEnsureMcpServerEntry_UpdatesChangedCommand(t *testing.T) {
 	if verb != "updated" {
 		t.Errorf("verb = %q, want updated", verb)
 	}
-	b, _ := os.ReadFile(cfgPath)
+	b, err := os.ReadFile(cfgPath)
+	if err != nil {
+		t.Fatalf("read config: %v", err)
+	}
 	var got map[string]any
-	_ = json.Unmarshal(b, &got)
-	cmd := got["mcpServers"].(map[string]any)["veska"].(map[string]any)["command"]
+	if err := json.Unmarshal(b, &got); err != nil {
+		t.Fatalf("unmarshal config: %v", err)
+	}
+	servers, ok := got["mcpServers"].(map[string]any)
+	if !ok {
+		t.Fatalf("mcpServers missing or wrong type: %v", got["mcpServers"])
+	}
+	veska, ok := servers["veska"].(map[string]any)
+	if !ok {
+		t.Fatalf("veska server missing or wrong type: %v", servers["veska"])
+	}
+	cmd := veska["command"]
 	if cmd != "/new/path/veska-mcp" {
 		t.Errorf("command = %v, want /new/path/veska-mcp", cmd)
 	}

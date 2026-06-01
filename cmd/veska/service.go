@@ -155,6 +155,10 @@ func printServiceStarted(cmd *cobra.Command, mgr ServiceManager) {
 			fmt.Fprintln(cmd.OutOrStdout(), "service start requested (run 'veska service status' to verify)")
 			return
 		}
-		time.Sleep(150 * time.Millisecond)
+		select {
+		case <-time.After(150 * time.Millisecond):
+		case <-cmd.Context().Done():
+			return
+		}
 	}
 }
