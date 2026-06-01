@@ -32,7 +32,7 @@ type EmbeddingLoader interface {
 }
 
 // RehydrateVectors rebuilds the VectorStorage from the durable node_embeddings
-// + node_embedding_refs join (exposed by the EmbeddingLoader). sqlite-vec is an
+// + node_embedding_refs join (exposed by the EmbeddingLoader). The memory backend is an
 // in-memory backend and the usearch backend's persisted indexes are at-rest
 // only — neither survives a daemon restart with its pre-restart contents intact
 // . Without this rehydration call at Daemon.Start, semantic search

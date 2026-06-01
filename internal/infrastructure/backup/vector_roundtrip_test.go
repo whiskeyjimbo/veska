@@ -17,8 +17,9 @@ import (
 )
 
 // TestBackupIncludesVeskaDB verifies that the primary veska.db is always
-// present in the backup tarball — this is the sqlite-vec backend's persistence
-// file (vectors are stored in a SQLite table inside veska.db).
+// present in the backup tarball — this is the in-memory backend's persistence
+// file (vectors live in the node_embeddings SQLite table inside veska.db and
+// are rehydrated into the in-memory store on boot).
 func TestBackupIncludesVeskaDB(t *testing.T) {
 	veskaHome := t.TempDir()
 	backupDir := t.TempDir()
@@ -37,13 +38,13 @@ func TestBackupIncludesVeskaDB(t *testing.T) {
 
 	entries := tarEntries(t, result.Path)
 	if !entries["veska.db"] {
-		t.Fatalf("tarball missing veska.db (sqlite-vec backend file); entries: %v", keys(entries))
+		t.Fatalf("tarball missing veska.db (in-memory backend file); entries: %v", keys(entries))
 	}
 }
 
-// TestBackupVerifyPassesForSQLiteVec verifies the full create → verify round-trip
-// for the sqlite-vec backend (veska.db is the sole vector store file).
-func TestBackupVerifyPassesForSQLiteVec(t *testing.T) {
+// TestBackupVerifyPassesForMemoryBackend verifies the full create → verify round-trip
+// for the in-memory backend (veska.db is the sole vector store file).
+func TestBackupVerifyPassesForMemoryBackend(t *testing.T) {
 	veskaHome := t.TempDir()
 	backupDir := t.TempDir()
 
@@ -171,10 +172,11 @@ func TestBackupUsearchVerifyRoundTrip(t *testing.T) {
 	}
 }
 
-// seedSQLiteVecVectors writes vector rows into an existing SQLite DB using the
-// standard database/sql interface (no CGo sqlite-vec extension required).
-// This simulates what the sqlite-vec backend would write in production.
-func seedSQLiteVecVectors(t *testing.T, dbPath string) {
+// seedMemoryBackendVectors writes vector rows into an existing SQLite DB using the
+// standard database/sql interface (no sqlite-vec extension is involved).
+// This simulates what the embedder pipeline persists for the in-memory backend
+// in production.
+func seedMemoryBackendVectors(t *testing.T, dbPath string) {
 	t.Helper()
 	db, err := sql.Open(sqldriver.Name, dbPath)
 	if err != nil {
@@ -207,15 +209,15 @@ func seedSQLiteVecVectors(t *testing.T, dbPath string) {
 	}
 }
 
-// TestBackupSQLiteVecVectorsInDB verifies that vector rows written into veska.db
+// TestBackupMemoryBackendVectorsInDB verifies that vector rows written into veska.db
 // survive the backup → verify round-trip (i.e. the VACUUM INTO copy preserves them).
-func TestBackupSQLiteVecVectorsInDB(t *testing.T) {
+func TestBackupMemoryBackendVectorsInDB(t *testing.T) {
 	veskaHome := t.TempDir()
 	backupDir := t.TempDir()
 
 	dbPath := filepath.Join(veskaHome, "veska.db")
 	seedDB(t, dbPath)
-	seedSQLiteVecVectors(t, dbPath)
+	seedMemoryBackendVectors(t, dbPath)
 
 	result, err := backup.Create(backup.CreateOptions{
 		DBPath:    dbPath,

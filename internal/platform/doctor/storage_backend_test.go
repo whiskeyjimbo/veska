@@ -3,20 +3,20 @@ package doctor_test
 import (
 	"testing"
 
-	"github.com/whiskeyjimbo/veska/internal/infrastructure/vector/sqlitevec"
+	"github.com/whiskeyjimbo/veska/internal/infrastructure/vector/memvec"
 	"github.com/whiskeyjimbo/veska/internal/platform/doctor"
 )
 
-// TestCheckStorageBackend_SQLiteVec_Empty verifies the report for an empty sqlite-vec store.
-func TestCheckStorageBackend_SQLiteVec_Empty(t *testing.T) {
-	store := sqlitevec.New()
+// TestCheckStorageBackend_Memory_Empty verifies the report for an empty in-memory store.
+func TestCheckStorageBackend_Memory_Empty(t *testing.T) {
+	store := memvec.New()
 	report := doctor.CheckStorageBackend(doctor.StorageBackendParams{
-		Backend:     "sqlite-vec",
+		Backend:     "memory",
 		VectorCount: store.TotalVectorCount(),
 	})
 
-	if report.Backend != "sqlite-vec" {
-		t.Errorf("Backend: got %q, want %q", report.Backend, "sqlite-vec")
+	if report.Backend != "memory" {
+		t.Errorf("Backend: got %q, want %q", report.Backend, "memory")
 	}
 	if report.VectorCount != 0 {
 		t.Errorf("VectorCount: got %d, want 0", report.VectorCount)
@@ -26,11 +26,11 @@ func TestCheckStorageBackend_SQLiteVec_Empty(t *testing.T) {
 	}
 }
 
-// TestCheckStorageBackend_SQLiteVec_Yellow verifies a yellow warning at 75k+1 vectors.
-func TestCheckStorageBackend_SQLiteVec_Yellow(t *testing.T) {
+// TestCheckStorageBackend_Memory_Yellow verifies a yellow warning at 75k+1 vectors.
+func TestCheckStorageBackend_Memory_Yellow(t *testing.T) {
 	report := doctor.CheckStorageBackend(doctor.StorageBackendParams{
-		Backend:     "sqlite-vec",
-		VectorCount: sqlitevec.SQLiteVecYellowThreshold + 1,
+		Backend:     "memory",
+		VectorCount: memvec.YellowThreshold + 1,
 	})
 
 	if report.CeilingWarning != "yellow" {
@@ -38,11 +38,11 @@ func TestCheckStorageBackend_SQLiteVec_Yellow(t *testing.T) {
 	}
 }
 
-// TestCheckStorageBackend_SQLiteVec_Red verifies a red warning at 90k+1 vectors.
-func TestCheckStorageBackend_SQLiteVec_Red(t *testing.T) {
+// TestCheckStorageBackend_Memory_Red verifies a red warning at 90k+1 vectors.
+func TestCheckStorageBackend_Memory_Red(t *testing.T) {
 	report := doctor.CheckStorageBackend(doctor.StorageBackendParams{
-		Backend:     "sqlite-vec",
-		VectorCount: sqlitevec.SQLiteVecRedThreshold + 1,
+		Backend:     "memory",
+		VectorCount: memvec.RedThreshold + 1,
 	})
 
 	if report.CeilingWarning != "red" {
@@ -50,22 +50,22 @@ func TestCheckStorageBackend_SQLiteVec_Red(t *testing.T) {
 	}
 }
 
-// TestCheckStorageBackend_SQLiteVec_AtYellow verifies no warning below the yellow threshold.
-func TestCheckStorageBackend_SQLiteVec_BelowYellow(t *testing.T) {
+// TestCheckStorageBackend_Memory_BelowYellow verifies no warning below the yellow threshold.
+func TestCheckStorageBackend_Memory_BelowYellow(t *testing.T) {
 	report := doctor.CheckStorageBackend(doctor.StorageBackendParams{
-		Backend:     "sqlite-vec",
-		VectorCount: sqlitevec.SQLiteVecYellowThreshold - 1,
+		Backend:     "memory",
+		VectorCount: memvec.YellowThreshold - 1,
 	})
 	if report.CeilingWarning != "" {
 		t.Errorf("CeilingWarning below yellow: got %q, want empty", report.CeilingWarning)
 	}
 }
 
-// TestCheckStorageBackend_SQLiteVec_AtRedThreshold verifies yellow (not red) at exactly the red threshold.
-func TestCheckStorageBackend_SQLiteVec_AtRedThreshold(t *testing.T) {
+// TestCheckStorageBackend_Memory_AtRedThreshold verifies yellow (not red) at exactly the red threshold.
+func TestCheckStorageBackend_Memory_AtRedThreshold(t *testing.T) {
 	report := doctor.CheckStorageBackend(doctor.StorageBackendParams{
-		Backend:     "sqlite-vec",
-		VectorCount: sqlitevec.SQLiteVecRedThreshold,
+		Backend:     "memory",
+		VectorCount: memvec.RedThreshold,
 	})
 	if report.CeilingWarning != "yellow" {
 		t.Errorf("CeilingWarning at exact red threshold: got %q, want %q", report.CeilingWarning, "yellow")
@@ -73,7 +73,7 @@ func TestCheckStorageBackend_SQLiteVec_AtRedThreshold(t *testing.T) {
 }
 
 // TestCheckStorageBackend_Usearch_NoCeiling verifies that usearch never triggers
-// a ceiling warning (the threshold logic applies only to sqlite-vec).
+// a ceiling warning (the threshold logic applies only to the memory backend).
 func TestCheckStorageBackend_Usearch_NoCeiling(t *testing.T) {
 	report := doctor.CheckStorageBackend(doctor.StorageBackendParams{
 		Backend:     "usearch",
@@ -88,7 +88,7 @@ func TestCheckStorageBackend_Usearch_NoCeiling(t *testing.T) {
 func TestCheckStorageBackend_VectorCountPassthrough(t *testing.T) {
 	const want = 42
 	report := doctor.CheckStorageBackend(doctor.StorageBackendParams{
-		Backend:     "sqlite-vec",
+		Backend:     "memory",
 		VectorCount: want,
 	})
 	if report.VectorCount != want {

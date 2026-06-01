@@ -69,7 +69,7 @@ func (a *EmbeddingArchive) LoadReadyEmbeddings(ctx context.Context) ([]embedder.
 // Why needed : node_embeddings is keyed by content_hash with
 // ON CONFLICT(content_hash) DO NOTHING — re-embedding the same content under
 // a different model would otherwise be a no-op and keep the old-model vector.
-// And the sqlite-vec store is in-memory, rehydrated from node_embeddings at
+// And the in-memory store is rehydrated from node_embeddings at
 // boot — so this MUST run before vector rehydration to start the store empty.
 //
 // Returns the number of refs flipped back to pending so the daemon log can

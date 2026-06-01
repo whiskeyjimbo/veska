@@ -210,7 +210,7 @@ func DefaultConfig() Config {
 			Synchronous:         "FULL",
 			WALAutocheckpoint:   1000,
 			IdleCheckpointAfter: "5s",
-			VectorBackend:       "sqlite-vec",
+			VectorBackend:       "memory",
 		},
 		Watcher: WatcherConfig{
 			Debounce:             "200ms",

@@ -1,12 +1,12 @@
-// Package sqlitevec_test exercises the SQLiteVecStore via the ports.VectorStorage contract.
-package sqlitevec_test
+// Package memvec_test exercises the in-memory Store via the ports.VectorStorage contract.
+package memvec_test
 
 import (
 	"context"
 	"testing"
 
 	"github.com/whiskeyjimbo/veska/internal/core/domain"
-	"github.com/whiskeyjimbo/veska/internal/infrastructure/vector/sqlitevec"
+	"github.com/whiskeyjimbo/veska/internal/infrastructure/vector/memvec"
 )
 
 const (
@@ -28,7 +28,7 @@ func vec(vals ...float32) []float32 { return vals }
 
 // TestUpsertAndSearch verifies that inserted rows are returned by Search.
 func TestUpsertAndSearch(t *testing.T) {
-	s := sqlitevec.New()
+	s := memvec.New()
 	ctx := context.Background()
 
 	rows := []domain.EmbeddingRow{
@@ -55,7 +55,7 @@ func TestUpsertAndSearch(t *testing.T) {
 
 // TestUpsertReplaces verifies that upserting an existing nodeID replaces the row.
 func TestUpsertReplaces(t *testing.T) {
-	s := sqlitevec.New()
+	s := memvec.New()
 	ctx := context.Background()
 
 	if err := s.UpsertEmbeddings(ctx, testRepo, testBranch, []domain.EmbeddingRow{
@@ -82,7 +82,7 @@ func TestUpsertReplaces(t *testing.T) {
 
 // TestSearchEmptyStore verifies that searching an empty store returns an empty slice.
 func TestSearchEmptyStore(t *testing.T) {
-	s := sqlitevec.New()
+	s := memvec.New()
 	ctx := context.Background()
 
 	hits, err := s.Search(ctx, testRepo, testBranch, vec(1, 0), 5, domain.VectorFilter{})
@@ -96,7 +96,7 @@ func TestSearchEmptyStore(t *testing.T) {
 
 // TestSearchKLargerThanCorpus verifies that k>n returns all n rows.
 func TestSearchKLargerThanCorpus(t *testing.T) {
-	s := sqlitevec.New()
+	s := memvec.New()
 	ctx := context.Background()
 
 	rows := []domain.EmbeddingRow{
@@ -118,7 +118,7 @@ func TestSearchKLargerThanCorpus(t *testing.T) {
 
 // TestSearchFilterByModel verifies that Filter.ModelID restricts results.
 func TestSearchFilterByModel(t *testing.T) {
-	s := sqlitevec.New()
+	s := memvec.New()
 	ctx := context.Background()
 
 	rowA := domain.EmbeddingRow{NodeID: "a", Vector: vec(1, 0), ContentHash: "ha", ModelID: "model-a"}
@@ -143,7 +143,7 @@ func TestSearchFilterByModel(t *testing.T) {
 
 // TestReindexNoOp verifies Reindex returns nil (no-op for the linear-scan backend).
 func TestReindexNoOp(t *testing.T) {
-	s := sqlitevec.New()
+	s := memvec.New()
 	if err := s.Reindex(context.Background(), testRepo, testModel); err != nil {
 		t.Errorf("Reindex: expected nil, got %v", err)
 	}
@@ -151,7 +151,7 @@ func TestReindexNoOp(t *testing.T) {
 
 // TestLookupContentHashes verifies that hashes are returned for existing nodeIDs.
 func TestLookupContentHashes(t *testing.T) {
-	s := sqlitevec.New()
+	s := memvec.New()
 	ctx := context.Background()
 
 	rows := []domain.EmbeddingRow{
@@ -179,7 +179,7 @@ func TestLookupContentHashes(t *testing.T) {
 
 // TestSearchScoreDescending verifies that hits are returned in score-descending order.
 func TestSearchScoreDescending(t *testing.T) {
-	s := sqlitevec.New()
+	s := memvec.New()
 	ctx := context.Background()
 
 	rows := []domain.EmbeddingRow{
@@ -208,7 +208,7 @@ func TestSearchScoreDescending(t *testing.T) {
 
 // TestCrossRepoBranchIsolation verifies that (repoID, branch) partitions are isolated.
 func TestCrossRepoBranchIsolation(t *testing.T) {
-	s := sqlitevec.New()
+	s := memvec.New()
 	ctx := context.Background()
 
 	// Insert into repo1/main and repo2/main.
