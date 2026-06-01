@@ -103,68 +103,173 @@ func TestInjectWake_UnchangedFile(t *testing.T) {
 	}
 }
 
-// TestIsReconciling verifies that IsReconciling is true during sweep and false
-// after sweep completes. We use a blocking handler to hold the sweep in-flight.
-func TestIsReconciling(t *testing.T) {
-	dir := t.TempDir()
-	path := filepath.Join(dir, "f.go")
-	if err := os.WriteFile(path, []byte("x"), 0o644); err != nil {
+// TestIsRepoReconciling_PerRepo verifies the per-repo reconciling state: only
+// the repo whose sweep is in flight reports true, a settled repo reports false,
+// and the flag clears after the sweep completes. A blocking handler holds the
+// target repo's sweep in flight while the test observes.
+func TestIsRepoReconciling_PerRepo(t *testing.T) {
+	dirA := t.TempDir()
+	dirB := t.TempDir()
+	pathA := filepath.Join(dirA, "f.go")
+	pathB := filepath.Join(dirB, "f.go")
+	if err := os.WriteFile(pathA, []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(pathB, []byte("x"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
-	// Seed baseline.
 	ready := make(chan struct{})
 	proceed := make(chan struct{})
 
-	var r *git.WakeReconciler
-
-	handlerCalled := false
-	handler := func(_ context.Context, _, p string) {
-		if !handlerCalled {
-			handlerCalled = true
-			close(ready) // signal that sweep has entered the handler
-			<-proceed    // block until test says go
+	var once sync.Once
+	handler := func(_ context.Context, repoID, _ string) {
+		if repoID == "repoA" {
+			once.Do(func() {
+				close(ready) // repoA sweep is inside the handler
+				<-proceed    // hold it in flight
+			})
 		}
 	}
 
-	r = makeReconciler(handler, nil, time.Now)
-	r.AddDir("repo1", dir)
+	// concurrency 1 so repoB does NOT sweep while repoA is held — that lets
+	// us assert repoB reports false (settled) during repoA's in-flight sweep.
+	r := git.NewWakeReconciler(100*time.Millisecond, 500*time.Millisecond, handler,
+		git.WithClock(time.Now), git.WithWakeConcurrency(1))
+	r.AddDir("repoA", dirA)
+	r.AddDir("repoB", dirB)
 
 	// Seed baseline (first inject — no handler calls expected).
 	r.InjectWake()
 
-	// Advance mtime so second sweep fires handler.
+	// Advance only repoA's file so its sweep fires the handler.
 	future := time.Now().Add(3 * time.Second)
-	if err := os.Chtimes(path, future, future); err != nil {
+	if err := os.Chtimes(pathA, future, future); err != nil {
 		t.Fatal(err)
 	}
 
-	// Run the sweep in a goroutine so we can observe IsReconciling.
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
 		r.InjectWake()
 	}()
 
-	// Wait until handler is entered.
 	select {
 	case <-ready:
 	case <-time.After(2 * time.Second):
-		t.Fatal("timed out waiting for handler to be entered")
+		t.Fatal("timed out waiting for repoA handler to be entered")
 	}
 
-	if !r.IsReconciling() {
-		t.Error("expected IsReconciling() == true during sweep")
+	if !r.IsRepoReconciling("repoA") {
+		t.Error("expected IsRepoReconciling(repoA) == true during repoA sweep")
+	}
+	if r.IsRepoReconciling("repoB") {
+		t.Error("expected IsRepoReconciling(repoB) == false while only repoA sweeps")
+	}
+	if got := r.ReconcilingRepos(); len(got) != 1 || got[0] != "repoA" {
+		t.Errorf("expected ReconcilingRepos == [repoA]; got %v", got)
 	}
 
-	// Let the sweep complete.
 	close(proceed)
 	<-done
 
-	if r.IsReconciling() {
-		t.Error("expected IsReconciling() == false after sweep")
+	if r.IsRepoReconciling("repoA") {
+		t.Error("expected IsRepoReconciling(repoA) == false after sweep")
+	}
+	if got := r.ReconcilingRepos(); len(got) != 0 {
+		t.Errorf("expected no reconciling repos after sweep; got %v", got)
 	}
 }
+
+// TestSweepConcurrencyCap verifies that per-repo sweeps run in parallel but
+// never exceed the configured wake_concurrency cap. A handler that blocks on a
+// barrier lets the test count how many repo sweeps are simultaneously in
+// flight. Run under -race to catch shared-state hazards.
+func TestSweepConcurrencyCap(t *testing.T) {
+	const repos = 6
+	const cap = 2
+
+	var r *git.WakeReconciler
+	dirs := make([]string, repos)
+	for i := range dirs {
+		d := t.TempDir()
+		if err := os.WriteFile(filepath.Join(d, "f.go"), []byte("x"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		dirs[i] = d
+	}
+
+	var mu sync.Mutex
+	active, maxActive := 0, 0
+	release := make(chan struct{})
+	entered := make(chan struct{}, repos) // one token per handler entry
+
+	handler := func(_ context.Context, _, _ string) {
+		mu.Lock()
+		active++
+		if active > maxActive {
+			maxActive = active
+		}
+		mu.Unlock()
+		entered <- struct{}{}
+		<-release // hold the sweep in flight until the test releases all
+		mu.Lock()
+		active--
+		mu.Unlock()
+	}
+
+	r = git.NewWakeReconciler(100*time.Millisecond, 500*time.Millisecond, handler,
+		git.WithClock(time.Now), git.WithWakeConcurrency(cap))
+	for i, d := range dirs {
+		r.AddDir(repoID(i), d)
+	}
+
+	// Seed baseline.
+	r.InjectWake()
+
+	// Advance every file so the next sweep fires the handler for each repo.
+	future := time.Now().Add(3 * time.Second)
+	for _, d := range dirs {
+		if err := os.Chtimes(filepath.Join(d, "f.go"), future, future); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		r.InjectWake()
+	}()
+
+	// Wait until `cap` handlers have entered (proving parallelism reached the
+	// cap). They are all blocked on release, so this is a stable barrier.
+	for range cap {
+		select {
+		case <-entered:
+		case <-time.After(3 * time.Second):
+			t.Fatal("timed out waiting for cap concurrent sweeps")
+		}
+	}
+
+	close(release)
+	select {
+	case <-done:
+	case <-time.After(3 * time.Second):
+		t.Fatal("timed out waiting for sweep to finish")
+	}
+
+	mu.Lock()
+	got := maxActive
+	mu.Unlock()
+	if got > cap {
+		t.Errorf("max concurrent sweeps = %d, exceeds cap %d", got, cap)
+	}
+	if got < cap {
+		t.Errorf("max concurrent sweeps = %d, expected to reach cap %d (no parallelism?)", got, cap)
+	}
+}
+
+func repoID(i int) string { return "repo" + string(rune('A'+i)) }
 
 // TestIgnoredFile verifies that files matched by the IgnoreList are not
 // passed to the handler.

@@ -48,6 +48,17 @@ type mcpToolWiring struct {
 	resolveInboundStubs func(ctx context.Context, dstNodeID, branch string) ([]ports.ResolvedEdge, error)
 }
 
+// reconcileReader returns the wake reconciler as an mcp.ReconcileReader, or a
+// nil interface when no reconciler is wired. Returning a nil interface (rather
+// than a typed-nil *WakeReconciler) keeps the helper's nil-check meaningful so
+// a query never dereferences a nil reconciler.
+func (w *mcpToolWiring) reconcileReader() mcp.ReconcileReader {
+	if w.d.reconciler == nil {
+		return nil
+	}
+	return w.d.reconciler
+}
+
 // registerMCPTools wires every MCP tool family onto the registry. The call
 // order is preserved exactly from the historical monolith so tool registration
 // order is unchanged.
@@ -158,12 +169,14 @@ func (w *mcpToolWiring) registerGraphTools() {
 		mcp.WithResolveFunc(w.resolveStubs),
 		mcp.WithInboundResolveFunc(w.resolveInboundStubs),
 		mcp.WithScanTracker(w.d.scanTracker),
+		mcp.WithReconcileTracker(w.reconcileReader()),
 	)
 	mcp.RegisterBlastTools(w.r, w.blast, repoRootFunc(w.pools.ReadDB), gitwatch.ChangedFiles, w.repos(), w.graph,
 		mcp.WithBlastChangedFilesBetween(gitwatch.ChangedFilesBetween),
 		mcp.WithBlastResolveFunc(w.resolveStubs),
 		mcp.WithBlastInboundResolveFunc(w.resolveInboundStubs),
-		mcp.WithBlastScanTracker(w.d.scanTracker))
+		mcp.WithBlastScanTracker(w.d.scanTracker),
+		mcp.WithBlastReconcileTracker(w.reconcileReader()))
 }
 
 // registerChangedSymbolsTool registers eng_find_changed_symbols, which parses
@@ -245,7 +258,8 @@ func (w *mcpToolWiring) registerContextPackTool() {
 	mcp.RegisterContextPackTool(w.r, cpAsm, repoRootFunc(w.pools.ReadDB), w.repos(),
 		mcp.WithContextPackResolveFunc(w.resolveStubs),
 		mcp.WithContextPackInboundResolveFunc(w.resolveInboundStubs),
-		mcp.WithContextPackScanTracker(w.d.scanTracker))
+		mcp.WithContextPackScanTracker(w.d.scanTracker),
+		mcp.WithContextPackReconcileTracker(w.reconcileReader()))
 }
 
 // registerSearchTool registers the semantic-search tools. The Service
@@ -258,7 +272,8 @@ func (w *mcpToolWiring) registerSearchTool() error {
 	}
 	mcp.RegisterSearchTools(w.r, searchSvc, w.d.refs, w.d.vectors, w.nodes, w.d.savings, w.repos(),
 		mcp.WithSearchGraph(w.graph),
-		mcp.WithSearchScanTracker(w.d.scanTracker))
+		mcp.WithSearchScanTracker(w.d.scanTracker),
+		mcp.WithSearchReconcileTracker(w.reconcileReader()))
 	return nil
 }
 

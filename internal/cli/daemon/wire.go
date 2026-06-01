@@ -784,7 +784,8 @@ func (b *daemonBuilder) buildReconciler() *gitwatch.WakeReconciler {
 	return gitwatch.NewWakeReconciler(tick, threshold,
 		func(_ context.Context, repoID, path string) {
 			b.watcher.Inject(repoID, path)
-		})
+		},
+		gitwatch.WithWakeConcurrency(b.fileCfg.Watcher.WakeConcurrency))
 }
 
 // parseDurationOr returns the parsed positive duration or fallback on any
@@ -823,6 +824,7 @@ func (b *daemonBuilder) buildMCPServer() error {
 		regSvc:      b.regSvc,
 		reparser:    b.reparser,
 		scanTracker: b.scanTracker,
+		reconciler:  b.reconciler,
 		savings:     b.savingsRec,
 	}); err != nil {
 		return fmt.Errorf("register MCP tools: %w", err)
@@ -942,6 +944,10 @@ type mcpDeps struct {
 	// scanTracker surfaces in-flight cold scans to eng_get_status
 	// . Nil-safe — statusProvider tolerates a nil tracker.
 	scanTracker *application.ScanTracker
+	// reconciler surfaces in-flight per-repo wake sweeps so graph read tools
+	// can attach a wake_reconciling degraded reason (solov2-xde2.25.1). It
+	// satisfies mcp.ReconcileReader. Nil-safe — the helper no-ops on nil.
+	reconciler *gitwatch.WakeReconciler
 }
 
 // repoRootFunc adapts the canonical composition.RepoRootByID resolver to

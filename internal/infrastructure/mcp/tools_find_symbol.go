@@ -37,7 +37,7 @@ type findSymbolParams struct {
 	Kind   string `json:"kind,omitempty"`
 }
 
-func makeFindSymbolHandler(graph ports.GraphReader, staging *staging.Area, repos application.RepoLister, scans ScanTrackerReader) ToolHandler {
+func makeFindSymbolHandler(graph ports.GraphReader, staging *staging.Area, repos application.RepoLister, scans ScanTrackerReader, reconcile ReconcileReader) ToolHandler {
 	return func(ctx context.Context, _ domain.Actor, raw json.RawMessage) (any, *RPCError) {
 		var p findSymbolParams
 		if err := json.Unmarshal(raw, &p); err != nil {
@@ -145,11 +145,22 @@ func makeFindSymbolHandler(graph ports.GraphReader, staging *staging.Area, repos
 				indexing = ids
 			}
 		}
+		// wake_reconciling fires on empty AND non-empty results whenever a
+		// queried repo's suspend/resume sweep is mid-flight (solov2-xde2.25.1).
+		queriedRepos := make([]string, 0, len(targets))
+		for _, tgt := range targets {
+			queriedRepos = append(queriedRepos, tgt.RepoID)
+		}
+		reconciling := reconcilingForRepos(reconcile, queriedRepos)
+		if len(reconciling) > 0 {
+			reasons = append(reasons, protocol.DegradedReasonWakeReconciling)
+		}
 		return GraphResponse{
-			Nodes:           dtos,
-			IncludedStaging: includedStaging,
-			DegradedReasons: reasons,
-			IndexingRepos:   indexing,
+			Nodes:                dtos,
+			IncludedStaging:      includedStaging,
+			DegradedReasons:      reasons,
+			IndexingRepos:        indexing,
+			WakeReconcilingRepos: reconciling,
 		}, nil
 	}
 }

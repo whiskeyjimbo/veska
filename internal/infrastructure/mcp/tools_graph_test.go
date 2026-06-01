@@ -878,6 +878,126 @@ func TestFindSymbol_NonEmptyDuringIndexingSuppressesHint(t *testing.T) {
 	}
 }
 
+// stubReconcileReader implements ReconcileReader with a fixed set of
+// mid-sweep repo_ids so tests can simulate an in-flight wake reconcile.
+type stubReconcileReader struct {
+	reconciling map[string]bool
+}
+
+func (s *stubReconcileReader) IsRepoReconciling(repoID string) bool {
+	return s.reconciling[repoID]
+}
+
+// TestFindSymbol_WakeReconcilingAttachesOnNonEmpty guards solov2-xde2.25.1:
+// wake_reconciling fires WHENEVER the queried repo is mid-sweep — including
+// when the result is non-empty (unlike indexing_in_progress, which only fires
+// on empty). A populated response can still be momentarily stale while the
+// sweep re-parses files.
+func TestFindSymbol_WakeReconcilingAttachesOnNonEmpty(t *testing.T) {
+	store := newStubGraphStorage()
+	store.addNode(mustNode(t, "n1", "pkg/x.go", "Foo", domain.KindFunction))
+	rec := &stubReconcileReader{reconciling: map[string]bool{"repoA": true}}
+
+	r := NewRegistry()
+	RegisterGraphTools(r, store, staging.NewArea(), WithReconcileTracker(rec))
+
+	resp, rpcErr := dispatchGraph(t, r, "eng_find_symbol", map[string]string{
+		"symbol":  "Foo",
+		"repo_id": "repoA",
+		"branch":  "main",
+	})
+	if rpcErr != nil {
+		t.Fatalf("unexpected error: %+v", rpcErr)
+	}
+	if len(resp.Nodes) != 1 {
+		t.Fatalf("expected 1 node; got %d", len(resp.Nodes))
+	}
+	if !slices.Contains(resp.DegradedReasons, protocol.DegradedReasonWakeReconciling) {
+		t.Errorf("expected wake_reconciling on a non-empty result while repoA sweeps; got %+v", resp.DegradedReasons)
+	}
+	if !slices.Contains(resp.WakeReconcilingRepos, "repoA") {
+		t.Errorf("expected repoA in wake_reconciling_repos; got %+v", resp.WakeReconcilingRepos)
+	}
+}
+
+// TestFindSymbol_WakeReconcilingSuppressedForOtherRepo guards the per-repo
+// filtering: a query against repoA must NOT carry wake_reconciling when only
+// repoB is mid-sweep. This is what distinguishes the per-repo state from the
+// old global flag — without filtering, every query during any sweep would be
+// flagged.
+func TestFindSymbol_WakeReconcilingSuppressedForOtherRepo(t *testing.T) {
+	store := newStubGraphStorage()
+	store.addNode(mustNode(t, "n1", "pkg/x.go", "Foo", domain.KindFunction))
+	rec := &stubReconcileReader{reconciling: map[string]bool{"repoB": true}}
+
+	r := NewRegistry()
+	RegisterGraphTools(r, store, staging.NewArea(), WithReconcileTracker(rec))
+
+	resp, rpcErr := dispatchGraph(t, r, "eng_find_symbol", map[string]string{
+		"symbol":  "Foo",
+		"repo_id": "repoA",
+		"branch":  "main",
+	})
+	if rpcErr != nil {
+		t.Fatalf("unexpected error: %+v", rpcErr)
+	}
+	if slices.Contains(resp.DegradedReasons, protocol.DegradedReasonWakeReconciling) {
+		t.Errorf("wake_reconciling must NOT fire for repoA when only repoB sweeps; got %+v", resp.DegradedReasons)
+	}
+	if len(resp.WakeReconcilingRepos) != 0 {
+		t.Errorf("wake_reconciling_repos must be empty; got %+v", resp.WakeReconcilingRepos)
+	}
+}
+
+// TestFindSymbol_WakeReconcilingAttachesOnEmpty guards that wake_reconciling
+// also fires on an empty result for the queried repo — an empty response
+// during a sweep may simply be a file mid-re-parse.
+func TestFindSymbol_WakeReconcilingAttachesOnEmpty(t *testing.T) {
+	store := newStubGraphStorage()
+	rec := &stubReconcileReader{reconciling: map[string]bool{"repoA": true}}
+
+	r := NewRegistry()
+	RegisterGraphTools(r, store, staging.NewArea(), WithReconcileTracker(rec))
+
+	resp, rpcErr := dispatchGraph(t, r, "eng_find_symbol", map[string]string{
+		"symbol":  "NothingHere",
+		"repo_id": "repoA",
+		"branch":  "main",
+	})
+	if rpcErr != nil {
+		t.Fatalf("unexpected error: %+v", rpcErr)
+	}
+	if len(resp.Nodes) != 0 {
+		t.Fatalf("expected empty nodes; got %d", len(resp.Nodes))
+	}
+	if !slices.Contains(resp.DegradedReasons, protocol.DegradedReasonWakeReconciling) {
+		t.Errorf("expected wake_reconciling on empty result while repoA sweeps; got %+v", resp.DegradedReasons)
+	}
+}
+
+// TestFindSymbol_WakeReconcilingNilReaderNoOp guards that a nil reconcile
+// reader (composition roots without a wired reconciler) never attaches the
+// reason and never panics.
+func TestFindSymbol_WakeReconcilingNilReaderNoOp(t *testing.T) {
+	store := newStubGraphStorage()
+	store.addNode(mustNode(t, "n1", "pkg/x.go", "Foo", domain.KindFunction))
+
+	r := NewRegistry()
+	RegisterGraphTools(r, store, staging.NewArea()) // no reconcile tracker
+
+	resp, rpcErr := dispatchGraph(t, r, "eng_find_symbol", map[string]string{
+		"symbol":  "Foo",
+		"repo_id": "repoA",
+		"branch":  "main",
+	})
+	if rpcErr != nil {
+		t.Fatalf("unexpected error: %+v", rpcErr)
+	}
+	if slices.Contains(resp.DegradedReasons, protocol.DegradedReasonWakeReconciling) {
+		t.Errorf("wake_reconciling must NOT fire with a nil reader; got %+v", resp.DegradedReasons)
+	}
+}
+
 // ---------------------------------------------------------------------------
 // eng_get_file_nodes — returns staged nodes when present
 // ---------------------------------------------------------------------------
