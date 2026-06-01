@@ -6,6 +6,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/whiskeyjimbo/veska/internal/cli/symbolcmd"
+	mcpinfra "github.com/whiskeyjimbo/veska/internal/infrastructure/mcp"
 )
 
 // The symbol/context command logic lives in internal/cli/symbolcmd; the
@@ -29,12 +30,13 @@ func symbolCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "symbol <name>",
 		Short: "Look up symbols by name (wraps eng_find_symbol)",
-		Long: `Find symbols by unqualified name or symbol path.
-
-Auto-resolves repo_id from the only registered repo when --repo is omitted;
-pass --repo <short_id> to scope across multiple repos. Unqualified matches
-are fine — "Run" finds Server.Run, Command.Run, etc., with exact matches
-ranked first.`,
+		// Long reuses the MCP DescFindSymbolMatching fragment so the
+		// unqualified-match / exact-first rule can't drift from the
+		// eng_find_symbol description (solov2-izh6.20).
+		Long: "Find symbols by unqualified name or symbol path.\n\n" +
+			"Auto-resolves repo_id from the only registered repo when --repo is omitted; " +
+			"pass --repo <short_id> to scope across multiple repos.\n\n" +
+			mcpinfra.DescFindSymbolMatching,
 		Args:         cobra.ExactArgs(1),
 		SilenceUsage: true,
 		// solov2-efzv: when --repo is omitted, do NOT auto-scope to the cwd's
@@ -66,9 +68,12 @@ func contextCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "context <symbol>",
 		Short: "Bundle a symbol with its callers/callees/tests (wraps eng_get_context_pack)",
-		Long: `Print the context pack for a symbol: the seed node plus surrounding
-callers, callees, and adjacent tests. Useful at the start of a non-trivial
-change so you (or an agent) get the whole neighbourhood in one shot.`,
+		// Long reuses the MCP DescContextPack fragment (shared purpose +
+		// cross-repo behaviour, both true for the CLI) so it can't drift from
+		// the eng_get_context_pack description. The MCP-only anchor prose
+		// (node_id/task_id) is intentionally NOT shared — `veska context`
+		// takes only a symbol (solov2-izh6.20).
+		Long: mcpinfra.DescContextPack,
 		// solov2-bvis: accept the symbol as either a positional arg or a
 		// --symbol flag. The MCP tool's JSON param is "symbol" so users
 		// naturally try --symbol; reject only when both or neither are
