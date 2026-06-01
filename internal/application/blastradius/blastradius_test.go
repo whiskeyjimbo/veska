@@ -381,9 +381,12 @@ func TestDiffOf_UnionAcrossChangedFiles(t *testing.T) {
 		metas: map[string]ports.NodeMeta{
 			"a": {NodeID: "a"}, "b": {NodeID: "b"}, "caller-of-a": {NodeID: "caller-of-a"},
 		},
+		// Nodes are keyed by ABSOLUTE path (storage contract). DiffOf must
+		// absolutize the repo-relative diff paths against repoRoot before
+		// NodesInFile, else 0 seeds match (solov2-im9o).
 		byFile: map[string][]string{
-			"foo.go": {"a"},
-			"bar.go": {"b"},
+			"/tmp/repo/foo.go": {"a"},
+			"/tmp/repo/bar.go": {"b"},
 		},
 	}
 	s, err := blastradius.NewService(edges, nodes, nil)
@@ -405,6 +408,31 @@ func TestDiffOf_UnionAcrossChangedFiles(t *testing.T) {
 		if !got[id] {
 			t.Errorf("expected %s in entries, got %+v", id, resp.Entries)
 		}
+	}
+}
+
+// TestDiffOf_AbsolutizesRelativeDiffPaths pins the solov2-im9o fix: git diff
+// yields repo-relative paths but nodes.file_path is stored absolute, so DiffOf
+// must join the diff path against repoRoot before NodesInFile or every changed
+// file resolves to 0 seeds and the blast is silently empty.
+func TestDiffOf_AbsolutizesRelativeDiffPaths(t *testing.T) {
+	nodes := &fakeNodes{
+		metas:  map[string]ports.NodeMeta{"a": {NodeID: "a"}},
+		byFile: map[string][]string{"/tmp/junior-pflag/flag.go": {"a"}},
+	}
+	s, err := blastradius.NewService(&fakeEdges{}, nodes, nil)
+	if err != nil {
+		t.Fatalf("construct: %v", err)
+	}
+	changed := func(_ context.Context, _ string) ([]string, error) {
+		return []string{"flag.go"}, nil // repo-relative, as git emits
+	}
+	resp, err := s.DiffOf(context.Background(), "r", "main", "/tmp/junior-pflag", changed, blastradius.Options{MaxDepth: 1})
+	if err != nil {
+		t.Fatalf("DiffOf: %v", err)
+	}
+	if len(resp.Entries) == 0 {
+		t.Fatal("expected the absolute-stored node to be found from a relative diff path, got empty")
 	}
 }
 

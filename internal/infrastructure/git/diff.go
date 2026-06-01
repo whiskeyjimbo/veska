@@ -4,9 +4,11 @@
 // around `git diff --name-only` used by the eng_get_diff_blast_radius
 // MCP tool to map a working-tree diff onto the set of touched files.
 //
-// Both helpers return paths relative to repoRoot: that is what
-// `git diff --name-only` emits and what the nodes table stores. Callers
-// should NOT prepend repoRoot before looking the paths up in storage.
+// Both helpers return paths relative to repoRoot — that is what
+// `git diff --name-only` emits. The nodes table, however, stores
+// file_path ABSOLUTE, so callers MUST join these paths against repoRoot
+// before looking them up in storage (blastradius.DiffOf does this;
+// solov2-im9o was an empty-blast bug from skipping that step).
 package git
 
 import (
