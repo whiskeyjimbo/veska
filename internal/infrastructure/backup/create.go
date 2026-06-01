@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/sqlite/sqldriver"
+	"github.com/whiskeyjimbo/veska/internal/platform/archive"
 )
 
 // CreateOptions controls backup creation behaviour.
@@ -49,7 +50,7 @@ type CreateResult struct {
 //  6. Writes manifest.json with created_at, veska_home, go_version.
 //  7. Creates <opts.BackupDir>/veska-backup-<timestamp>.tar.gz from staging.
 //  8. Removes the staging directory.
-//  9. Calls VerifyGzip on the finished tarball.
+//  9. Calls archive.VerifyGzip on the finished tarball.
 //
 // 10. Returns CreateResult{Path, SizeBytes}.
 func Create(opts CreateOptions) (CreateResult, error) {
@@ -125,7 +126,7 @@ func Create(opts CreateOptions) (CreateResult, error) {
 	// 8. Staging cleanup happens via defer.
 
 	// 9. Verify gzip.
-	if err := VerifyGzip(tarPath); err != nil {
+	if err := archive.VerifyGzip(tarPath); err != nil {
 		return CreateResult{}, fmt.Errorf("backup: verify: %w", err)
 	}
 
@@ -136,29 +137,6 @@ func Create(opts CreateOptions) (CreateResult, error) {
 	}
 
 	return CreateResult{Path: tarPath, SizeBytes: info.Size()}, nil
-}
-
-// VerifyGzip opens path as a gzip stream and reads at least the first byte,
-// confirming the archive is readable.  Returns nil on success.
-func VerifyGzip(path string) error {
-	f, err := os.Open(path)
-	if err != nil {
-		return err
-	}
-	defer f.Close()
-
-	gr, err := gzip.NewReader(f)
-	if err != nil {
-		return err
-	}
-	defer gr.Close()
-
-	buf := make([]byte, 1)
-	_, err = gr.Read(buf)
-	if err != nil && err != io.EOF {
-		return err
-	}
-	return nil
 }
 
 // vacuumInto opens the SQLite database at src read-only and runs VACUUM INTO dst.
