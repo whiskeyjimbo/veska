@@ -120,6 +120,13 @@ func TestTaskSet_AddInactiveTasks(t *testing.T) {
 	}
 }
 
+func TestTaskSet_AddNil(t *testing.T) {
+	ts := NewTaskSet()
+	if err := ts.Add(nil); err == nil {
+		t.Fatal("expected error for nil task, got nil")
+	}
+}
+
 func TestTaskSet_AddFirstActiveTaskSucceeds(t *testing.T) {
 	ts := NewTaskSet()
 	t1, _ := NewTask(TaskSpec{ID: "t1", RepoID: "repo1", Title: "Task 1"}, WithActive())
