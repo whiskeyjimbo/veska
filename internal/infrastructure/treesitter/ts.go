@@ -21,6 +21,9 @@ func NewTSParser() *TSParser {
 	return &TSParser{}
 }
 
+// SupportedExtensions reports the file extensions TSParser parses (solov2-xde2.7).
+func (p *TSParser) SupportedExtensions() []string { return []string{".ts", ".tsx"} }
+
 // ParseFile parses TypeScript (.ts) or TSX (.tsx) source and returns the Nodes and
 // Edges extracted from it. Other file extensions return an empty ParseResult and nil
 // error.
