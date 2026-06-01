@@ -175,6 +175,53 @@ func TestShouldIgnore_GlobPattern(t *testing.T) {
 	}
 }
 
+// TestShouldIgnore_NoSubstringOvermatch guards solov2-5tss deficiency (1):
+// the old matcher used strings.Contains, so a pattern like "build" wrongly
+// ignored "rebuild/" and "src/build_config.go". Under .gitignore semantics a
+// bare token anchors to a full path component, not an arbitrary substring.
+func TestShouldIgnore_NoSubstringOvermatch(t *testing.T) {
+	il := fsignore.NewIgnoreListFromPatterns([]string{"build"})
+
+	if !il.ShouldIgnore("build/out.o") {
+		t.Error("expected build/out.o to be ignored by pattern build")
+	}
+	for _, p := range []string{"rebuild/x.go", "src/build_config.go", "prebuild.go"} {
+		if il.ShouldIgnore(p) {
+			t.Errorf("expected %q to NOT be ignored: pattern build must not match as a substring", p)
+		}
+	}
+}
+
+// TestShouldIgnore_Negation guards solov2-5tss deficiency (2): the old matcher
+// had no negation support. A trailing "!pattern" must re-include a path that an
+// earlier pattern excluded (last-match-wins).
+func TestShouldIgnore_Negation(t *testing.T) {
+	il := fsignore.NewIgnoreListFromPatterns([]string{"secret/", "!secret/keep.txt"})
+
+	if !il.ShouldIgnore("secret/passwords.txt") {
+		t.Error("expected secret/passwords.txt to be ignored")
+	}
+	if il.ShouldIgnore("secret/keep.txt") {
+		t.Error("expected secret/keep.txt to be re-included by negation pattern")
+	}
+}
+
+// TestShouldIgnore_RecursiveGlob guards solov2-5tss deficiency (3): the old
+// matcher used filepath.Match, which does not cross "/" and so could not honor
+// "**". A "**/generated/" pattern must match the directory at any depth.
+func TestShouldIgnore_RecursiveGlob(t *testing.T) {
+	il := fsignore.NewIgnoreListFromPatterns([]string{"**/generated/"})
+
+	for _, p := range []string{"generated/x.go", "a/generated/x.go", "a/b/c/generated/x.go"} {
+		if !il.ShouldIgnore(p) {
+			t.Errorf("expected %q to be ignored by **/generated/", p)
+		}
+	}
+	if il.ShouldIgnore("a/b/regenerated/x.go") {
+		t.Error("expected a/b/regenerated/x.go to NOT be ignored")
+	}
+}
+
 // TestShouldIgnore_AgentWorktrees guards solov2-v2zx: AI-agent worktree roots
 // (.claude/worktrees/, .cursor/, .aider*/) are skipped by default so cold
 // scans don't index N duplicate copies of every symbol — one per worktree.

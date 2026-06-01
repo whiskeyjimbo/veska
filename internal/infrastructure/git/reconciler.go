@@ -143,8 +143,14 @@ func (r *WakeReconciler) sweepDir(dir string) {
 			return nil
 		}
 
-		// Skip ignored files.
-		if r.ignore != nil && r.ignore.ShouldIgnore(path) {
+		// Skip ignored files. The matcher uses .gitignore semantics and
+		// expects a path relative to the swept root, so anchored patterns
+		// resolve correctly; fall back to the absolute path if Rel fails.
+		rel := path
+		if rp, err := filepath.Rel(dir, path); err == nil {
+			rel = rp
+		}
+		if r.ignore != nil && r.ignore.ShouldIgnore(rel) {
 			return nil
 		}
 
