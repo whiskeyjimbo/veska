@@ -129,4 +129,3 @@ func (s *spyVector) LookupContentHashes(context.Context, string, string, []strin
 }
 
 func (s *spyVector) Reindex(context.Context, string, string) error { return nil }
-

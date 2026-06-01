@@ -519,5 +519,3 @@ func l2Normalize(vec []float32) {
 		vec[i] *= inv
 	}
 }
-
-
