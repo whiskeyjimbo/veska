@@ -599,18 +599,28 @@ freeze, or process pause — the daemon runs `wake reconcile`:
 3. Hand each changed file to the parse-on-save pipeline (SOLO-11
    §1) which writes through staging, exactly as a live save
    would.
-4. Restart the watcher's underlying handle. On Linux this is a
-   fresh `inotify_init` plus add-watches. On macOS it is a new
-   FSEvents stream from the current event ID; **if the event ID
-   is stale** (FSEvents has aged it out, returning `kFSEventStreamEventIdSinceNow`
-   or equivalent error), the daemon falls through to a full
-   working-tree rescan via the same path step 2 took, so no
-   between-sleep change is silently missed. The wake-threshold
-   tick already triggered step 2's per-file mtime/size check; a
-   stale FSEvents ID just means we cannot subscribe to the
-   incremental stream from the prior event, not that we lost
-   coverage of the working tree. Live saves resume against the
-   fresh stream.
+4. Restart the watcher's underlying handle so live saves resume
+   against a fresh OS stream. This runs once, *after* every
+   per-repo sweep (steps 2–3) has joined, via a post-sweep seam on
+   the reconciler (`WithPostSweepHook`); the daemon wires it to
+   `MultiRepoWatcher.RestartAll`, which tears down (`cancel` +
+   `Close`) and recreates each repo's `FSWatcher` in place. The
+   teardown releases the old `inotify` fd and the recreate yields a
+   fresh `inotify_init` plus add-watches on Linux, and a new
+   FSEvents stream on macOS — `fsnotify` abstracts the platform, so
+   `Remove + Add` is a fresh stream on both. There is **no separate
+   stale-event-ID code path**: on macOS, if FSEvents has aged out
+   the prior event ID (`kFSEventStreamEventIdSinceNow`), the "full
+   working-tree rescan" fallback is simply that *the wake sweep in
+   step 2 already was that rescan* — the wake-threshold tick already
+   ran the per-file mtime/size+prefix check across the whole tree,
+   so no between-sleep change is silently missed. The small window
+   between the step-2 walk and the restart is acceptable for the
+   same reason: that window is already covered by the mtime sweep.
+   A per-repo recreate failure is logged and that repo dropped
+   rather than aborting the rest; a sweep that returns early on
+   context cancellation skips the restart, so shutdown never
+   recreates a handle it is tearing down.
 5. Clear the `wake_reconciling` flag *per repo* as that repo's
    sweep finishes; the editor sees the badge clear repo-by-repo
    rather than waiting for the slowest.

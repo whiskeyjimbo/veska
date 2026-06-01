@@ -207,6 +207,38 @@ func (m *MultiRepoWatcher) Inject(repoID, path string) {
 	}
 }
 
+// RestartAll tears down and recreates every repo's FSWatcher so live events
+// resume against a fresh OS handle (a new inotify fd on Linux / FSEvents stream
+// on macOS). The wake reconciler invokes this after a suspend/resume sweep: the
+// mtime/size sweep already covered the suspend window, so the only job here is
+// to re-establish a clean live stream. Each repo is torn down (cancel + Close,
+// mirroring Remove) and recreated (startRepoWatch, mirroring Add) under m.mu,
+// replacing the map entry in place. A per-repo recreate failure is logged and
+// the entry dropped rather than aborting the remaining repos (startup-resync's
+// per-item resilience). The old forwardEvents goroutine drains and exits on its
+// cancelled ctx. cancel/Close/startRepoWatch are non-blocking, so holding m.mu
+// across the loop introduces no deadlock.
+func (m *MultiRepoWatcher) RestartAll() {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	for repoID, rw := range m.repos {
+		rw.cancel()
+		_ = rw.watcher.Close()
+
+		newRW, err := m.startRepoWatch(repoID, rw.rootPath)
+		if err != nil {
+			slog.Error("multiwatcher: failed to restart repo watcher on wake",
+				"repoID", repoID,
+				"err", err,
+			)
+			delete(m.repos, repoID)
+			continue
+		}
+		m.repos[repoID] = newRW
+	}
+}
+
 // Remove stops the watcher for repoID and removes it from the tracked set.
 // Returns an error if repoID is not currently watched.
 func (m *MultiRepoWatcher) Remove(repoID string) error {
