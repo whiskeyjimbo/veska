@@ -116,23 +116,30 @@ failure recovery, and the on-disk contract.
 
 ```sql
 -- Per-database invariants. Single-row-style key/value table.
--- `veska init` populates it from the configured embedder and
--- the schema migration set. Subsequent boots compare config
--- to these values and refuse inconsistent boot (e.g. config
--- says model=X but the database was initialised against Y).
+-- The TABLE is real (migration 0001) but is currently UNPOPULATED:
+-- no code in `internal/` writes any key. Schema versioning actually
+-- lives in the separate `schema_migrations` table (the migration
+-- runner inserts a row per applied migration), not here. The keys
+-- below are the *intended* schema, not today's contents.
 CREATE TABLE database_meta (
     key       TEXT PRIMARY KEY,
     value     TEXT NOT NULL,
     set_at    INTEGER NOT NULL                -- unix epoch microseconds
 );
--- Required keys:
---   schema_version       e.g. "M1.0"            (matches the latest applied migration)
+-- Intended keys (none written today):
+--   schema_version       e.g. "M1.0"            (would match the latest applied migration)
 --   embedder_provider    "ollama"
 --   embedder_model       e.g. "nomic-embed-text"
---   embedder_dim         "768"                  (decimal string; matches node_embeddings.dim)
+--   embedder_dim         "768"                  (decimal string; would match node_embeddings.dim)
 --   created_at           e.g. "2026-05-09T15:42:31Z"
--- Adding a new required key is a migration that inserts the
--- value and a daemon-side check that requires it.
+--
+-- Planned (NOT YET IMPLEMENTED): the `embedder_*` keys and the
+-- "`veska init` populates them, subsequent boots compare config and
+-- refuse inconsistent boot" invariant. Both the keys and the
+-- refuse-on-mismatch check have zero writers/readers in `internal/`
+-- today. See SOLO-03 §3.2 for the canonical planned home. What is
+-- shipped: the embedder is a pick-one choice; changing models means
+-- a manual reindex; Ollama-down degrades to lexical/BM25.
 
 -- Repos the daemon knows about.
 CREATE TABLE repos (
@@ -333,9 +340,10 @@ CREATE INDEX idx_node_embedding_refs_state ON node_embedding_refs(state, enqueue
 -- outside SQL from the `node_embeddings` bytes above: in process
 -- memory for the default `memory`/memvec backend, or in sibling
 -- .hnsw files for the optional `usearch` backend. The embedding
--- dim is per-database, baked at `veska init` time from the
--- configured embedder's `ModelVersion()` and recorded in
--- `database_meta.embedder_dim` (default nomic-embed-text, 768).
+-- dim is per-database (nomic-embed-text → 768) and is carried
+-- per-row on `node_embeddings.dim` (migration 0004). The planned
+-- `database_meta.embedder_dim` mirror is NOT YET IMPLEMENTED —
+-- nothing writes it (SOLO-03 §3.2).
 
 -- Lexical fallback (m3.03.2). Migration 0007 supersedes the original
 -- single `node_fts` table (migration 0004) with a TWO-INDEX design:
@@ -425,13 +433,18 @@ files) is just a search structure over these content-addressed
 bytes.
 
 **Per-database dim.** The embedding dimension is fixed for the
-life of a database, baked at `veska init` time from the
-embedder's `ModelVersion()`. `database_meta` records the
-provider/model/dim;
-`node_embeddings.dim` per-row is the sanity check that catches
-stale rows after a swap. Boot refuses on mismatch with
-`ErrEmbedderMismatch`. Swaps go through `veska embedder swap`
-(SOLO-03 §3.2) — the canonical mechanism.
+life of a database, set by the configured embedder's
+`ModelVersion()`. `node_embeddings` carries per-row `model` and
+`dim` columns (migration 0004) that record which model and
+dimension produced each vector.
+
+> **Planned (NOT YET IMPLEMENTED).** The `database_meta`
+> provider/model/dim mirror, the boot-time refuse-on-mismatch check
+> (`ErrEmbedderMismatch`), and `veska embedder swap` all have zero
+> occurrences in `internal/` today. The per-row `model`/`dim`
+> columns are recorded but not yet read for any boot check. See
+> SOLO-03 §3.2 for the canonical planned home. Today the embedder
+> is pick-one and changing models means a manual reindex.
 
 ### 3.3a Daemon state
 
@@ -863,10 +876,11 @@ pure; cross-repo bookkeeping stays out of it.
 
 ## 7. What this design does NOT include
 
-- **Embedder migration ceremony.** Swapping models is one CLI
-  subcommand against a live daemon (`veska embedder swap`) —
-  see SOLO-03 §3.2 and ADR-S0007. There is no five-phase FSM,
-  no per-row migration cursor, no dual-index window.
+- **Embedder migration ceremony.** The *planned* design is one CLI
+  subcommand against a live daemon (`veska embedder swap`) — no
+  five-phase FSM, no per-row migration cursor, no dual-index window
+  (SOLO-03 §3.2, ADR-S0007). NOT YET IMPLEMENTED: there is no swap
+  command today, so changing models means a manual reindex.
 - **Cross-database joins.** There is one database. There are no
   joins to make.
 - **Replication.** None.
