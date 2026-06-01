@@ -663,6 +663,15 @@ depending on the hook firing. §5.7's Git↔Veska resync handles
 the SHA-level recovery; the staging-vs-HEAD check handles the
 branch-level one. Both run on the same restart path.
 
+> **Implementation status.** The staging-vs-HEAD check is a
+> reusable application-layer unit (`application.BranchReconciler`)
+> wired into the **wake-reconcile sweep** as a serial pre-pass at
+> sweep start — every repo's branch is reconciled (generation
+> bumped, prior-branch staging dropped, `active_branch` updated)
+> before any parallel parse runs. Wiring the same unit into the
+> **startup-resync** path is pending — tracked as a follow-up
+> under solov2-xde2.25.
+
 ### 5.3 Restart recovery
 
 The daemon may be restarted at any time:

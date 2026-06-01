@@ -146,6 +146,16 @@ func detectActiveBranch(ctx context.Context, root string) string {
 	return strings.TrimSpace(string(out))
 }
 
+// CurrentBranch returns the working-tree current branch name for the repo at
+// root via `git symbolic-ref --short HEAD`. It returns "" (and a nil error)
+// for detached HEAD / non-git / missing tree — the single source of truth for
+// "what branch is checked out", shared by registration and the staging-vs-HEAD
+// branch reconcile (SOLO-03 §5.2). The error return exists for symmetry with
+// the application.BranchReader port; today every failure flattens to "".
+func CurrentBranch(root string) (string, error) {
+	return detectActiveBranch(context.Background(), root), nil
+}
+
 // detectOriginURL reads `git remote get-url origin` from the working tree
 // and returns the canonicalised form (solov2-kxo5.4). Returns "" when the
 // remote is missing, git is unavailable, or the URL can't be canonicalised
