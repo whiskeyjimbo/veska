@@ -125,6 +125,29 @@ func TestNodeKindValues(t *testing.T) {
 	}
 }
 
+// NewNode accepts every valid NodeKind and rejects an unknown kind.
+func TestNewNode_KindValidation(t *testing.T) {
+	valid := []NodeKind{
+		KindFunction, KindMethod, KindType, KindStruct,
+		KindInterface, KindClass, KindModule, KindPackage,
+		KindFile, KindField, KindTest, KindVariable, KindChunk,
+	}
+	if len(valid) != 13 {
+		t.Fatalf("expected 13 valid NodeKinds, listed %d", len(valid))
+	}
+	for _, k := range valid {
+		t.Run(string(k), func(t *testing.T) {
+			_, err := NewNode(NodeSpec{ID: "abc", Path: "pkg/foo.go", Name: "Foo", Kind: k})
+			if err != nil {
+				t.Fatalf("valid kind %q rejected: %v", k, err)
+			}
+		})
+	}
+	if _, err := NewNode(NodeSpec{ID: "abc", Path: "pkg/foo.go", Name: "Foo", Kind: NodeKind("bogus")}); err == nil {
+		t.Fatal("expected error for unknown NodeKind, got nil")
+	}
+}
+
 // Optional fields are nil by default.
 func TestNewNode_OptionalFieldsNilByDefault(t *testing.T) {
 	n, err := NewNode(NodeSpec{ID: "abc", Path: "pkg/foo.go", Name: "Foo", Kind: KindFunction})
