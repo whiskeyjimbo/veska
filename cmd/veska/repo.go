@@ -26,6 +26,42 @@ func repoCmd() *cobra.Command {
 	cmd.AddCommand(repoPruneCmd())
 	cmd.AddCommand(repoAliasCmd())
 	cmd.AddCommand(repoUnaliasCmd())
+	cmd.AddCommand(repoShowCmd())
+	cmd.AddCommand(repoCurrentCmd())
+	return cmd
+}
+
+// repoShowCmd wraps eng_get_repo. solov2-yh5a parity wrapper.
+func repoShowCmd() *cobra.Command {
+	var jsonOut bool
+	cmd := &cobra.Command{
+		Use:          "show <repo-id-or-short-id>",
+		Short:        "Show a single registered repo (wraps eng_get_repo)",
+		Args:         cobra.ExactArgs(1),
+		SilenceUsage: true,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return repocmd.RunRepoShow(cmd.Context(), cmd.OutOrStdout(), args[0], jsonOut)
+		},
+	}
+	cmd.Flags().BoolVar(&jsonOut, "json", false, "emit JSON (eng_get_repo shape)")
+	return cmd
+}
+
+// repoCurrentCmd wraps eng_get_current_repo. solov2-yh5a parity wrapper. With
+// no positional it reports the repo the cwd belongs to (or the sole repo when
+// only one is registered).
+func repoCurrentCmd() *cobra.Command {
+	var jsonOut bool
+	cmd := &cobra.Command{
+		Use:          "current",
+		Short:        "Show the repo the current directory belongs to (wraps eng_get_current_repo)",
+		Args:         cobra.NoArgs,
+		SilenceUsage: true,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return repocmd.RunRepoCurrent(cmd.Context(), cmd.OutOrStdout(), jsonOut)
+		},
+	}
+	cmd.Flags().BoolVar(&jsonOut, "json", false, "emit JSON (eng_get_current_repo shape)")
 	return cmd
 }
 

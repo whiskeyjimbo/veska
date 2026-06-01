@@ -1,6 +1,8 @@
 package main
 
 import (
+	"fmt"
+
 	"github.com/spf13/cobra"
 
 	"github.com/whiskeyjimbo/veska/internal/cli/graphcmd"
@@ -53,25 +55,35 @@ func callsCmd() *cobra.Command {
 	return cmd
 }
 
-// blastCmd wraps eng_get_blast_radius. solov2-xomk parity wrapper.
+// blastCmd wraps the blast-radius tool family. A single symbol seed is the
+// default; --dirty seeds from the staged overlay (eng_get_dirty_blast_radius)
+// and --diff from the working-tree-vs-HEAD diff (eng_get_diff_blast_radius).
+// solov2-xomk parity wrapper; --dirty/--diff added in solov2-yh5a.
 func blastCmd() *cobra.Command {
 	var (
 		repoFlag string
 		dir      string
 		jsonOut  bool
+		dirty    bool
+		diff     bool
 	)
 	cmd := &cobra.Command{
-		Use:   "blast <symbol-or-node-id>",
-		Short: "Compute blast radius for a symbol (wraps eng_get_blast_radius)",
+		Use:   "blast [<symbol-or-node-id>]",
+		Short: "Compute blast radius for a symbol, or --dirty/--diff for staged/working-tree changes",
 		// Long is shared verbatim with the eng_get_blast_radius MCP tool
 		// description so the diff/dirty variants and cross-repo fan-out
 		// behaviour can't drift between CLI and MCP surfaces. solov2-izh6.20.
 		Long:         mcpinfra.DescBlastRadius,
-		Args:         cobra.ExactArgs(1),
+		Args:         cobra.MaximumNArgs(1),
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
+			mode, selector, err := blastModeFromFlags(args, dirty, diff)
+			if err != nil {
+				return err
+			}
 			return graphcmd.RunBlast(cmd.Context(), graphcmd.BlastParams{
-				Selector:  args[0],
+				Mode:      mode,
+				Selector:  selector,
 				RepoID:    repoFlag,
 				Direction: dir,
 				JSONOut:   jsonOut,
@@ -82,7 +94,29 @@ func blastCmd() *cobra.Command {
 	cmd.Flags().StringVar(&repoFlag, "repo", "", "repo id, short_id, or alias (default: fan out across registered repos)")
 	cmd.Flags().StringVar(&dir, "direction", "both", "out|in|both (aliases: callees|callers) — callees, callers, or both")
 	cmd.Flags().BoolVar(&jsonOut, "json", false, "emit JSON (eng_get_blast_radius shape)")
+	cmd.Flags().BoolVar(&dirty, "dirty", false, "seed from the staged overlay (uncommitted, pre-commit changes)")
+	cmd.Flags().BoolVar(&diff, "diff", false, "seed from the working-tree diff vs HEAD")
 	return cmd
+}
+
+// blastModeFromFlags maps the positional selector and the --dirty/--diff
+// flags onto a BlastMode, enforcing that exactly one seed is chosen. The
+// symbol seed needs the positional; --dirty/--diff take none.
+func blastModeFromFlags(args []string, dirty, diff bool) (graphcmd.BlastMode, string, error) {
+	switch {
+	case dirty && diff:
+		return 0, "", fmt.Errorf("blast: pass only one of --dirty or --diff")
+	case (dirty || diff) && len(args) == 1:
+		return 0, "", fmt.Errorf("blast: --dirty/--diff seed from changes, not a symbol — drop the positional argument")
+	case dirty:
+		return graphcmd.BlastDirty, "", nil
+	case diff:
+		return graphcmd.BlastDiff, "", nil
+	case len(args) == 1:
+		return graphcmd.BlastSymbol, args[0], nil
+	default:
+		return 0, "", fmt.Errorf("blast: a symbol/node-id argument is required (or pass --dirty/--diff)")
+	}
 }
 
 // changedCmd wraps eng_find_changed_symbols. solov2-xomk parity wrapper.

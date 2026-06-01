@@ -28,3 +28,15 @@ eng_suppress_finding
 eng_find_changed_symbols
 eng_get_blast_radius
 eng_get_call_chain
+eng_get_dirty_blast_radius
+eng_get_diff_blast_radius
+eng_get_node
+eng_get_file_nodes
+eng_search_similar
+eng_find_related
+eng_find_owner
+eng_find_todos
+eng_get_entry_points
+eng_get_hot_zone
+eng_get_repo
+eng_get_current_repo
