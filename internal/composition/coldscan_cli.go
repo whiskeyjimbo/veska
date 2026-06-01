@@ -36,7 +36,7 @@ func NewCLIColdScanReparser(pools *sqlite.Pools, loader application.IgnoreLoader
 	// reviewEnabled=false: the CLI path never enqueues review work. The CLI
 	// ingester emits no parse findings (no ingesterOpts); only the promoter
 	// carries the post-promotion check pipeline.
-	core := NewColdScanCore(pools, false, nil, cliColdScanPromoterOpts(pools))
+	core := NewColdScanCore(pools, nil, cliColdScanPromoterOpts(pools))
 
 	reparser, err := application.NewColdScanReparser(
 		core.Ingester, core.Promoter, gitwatch.Querier{},
