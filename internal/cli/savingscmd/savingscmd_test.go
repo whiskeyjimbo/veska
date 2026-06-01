@@ -74,15 +74,48 @@ func TestRun_RendersBarsAndPercentages(t *testing.T) {
 	}
 }
 
-// --json round-trips a savings.Report shape, not the human-rendered text.
+// Default --json groups counters by repo_id (solov2-izh6.21) and carries a
+// pooled total. Legacy entries with no repo_id land under the "" key.
 func TestRun_JSONFlag(t *testing.T) {
 	dir := t.TempDir()
 	now := time.Date(2026, 5, 20, 12, 0, 0, 0, time.UTC)
-	writeEntries(t, dir, savings.Entry{Timestamp: now, Query: "q", FileChars: 100, SnippetChars: 10, Results: 1})
+	writeEntries(t, dir,
+		savings.Entry{Timestamp: now, RepoID: "alpha", Query: "q", FileChars: 100, SnippetChars: 10, Results: 1},
+		savings.Entry{Timestamp: now, RepoID: "beta", Query: "q", FileChars: 200, SnippetChars: 20, Results: 1},
+	)
 
 	p := params(&bytes.Buffer{}, dir, now)
 	buf := p.Out.(*bytes.Buffer)
 	p.JSON = true
+	if err := Run(p); err != nil {
+		t.Fatalf("Run json: %v", err)
+	}
+	var got repoBreakdown
+	if err := json.Unmarshal(buf.Bytes(), &got); err != nil {
+		t.Fatalf("unmarshal breakdown: %v (raw=%s)", err, buf.String())
+	}
+	if a := got.Repos["alpha"].Today; a.Calls != 1 || a.FileChars != 100 {
+		t.Errorf("alpha today wrong: %+v", a)
+	}
+	if b := got.Repos["beta"].Today; b.Calls != 1 || b.FileChars != 200 {
+		t.Errorf("beta today wrong: %+v", b)
+	}
+	if got.Total.Today.Calls != 2 || got.Total.Today.FileChars != 300 {
+		t.Errorf("total today wrong: %+v", got.Total.Today)
+	}
+}
+
+// --aggregate --json preserves the pre-breakdown savings.Report shape so
+// scripts that parsed the pooled JSON keep working.
+func TestRun_AggregateJSONFlag(t *testing.T) {
+	dir := t.TempDir()
+	now := time.Date(2026, 5, 20, 12, 0, 0, 0, time.UTC)
+	writeEntries(t, dir, savings.Entry{Timestamp: now, RepoID: "alpha", Query: "q", FileChars: 100, SnippetChars: 10, Results: 1})
+
+	p := params(&bytes.Buffer{}, dir, now)
+	buf := p.Out.(*bytes.Buffer)
+	p.JSON = true
+	p.Aggregate = true
 	if err := Run(p); err != nil {
 		t.Fatalf("Run json: %v", err)
 	}
@@ -95,9 +128,57 @@ func TestRun_JSONFlag(t *testing.T) {
 	}
 }
 
-// Until the recorder is partitioned by repo_id , the text renderer
-// labels its single bucket "all repos" so the user knows the figure is pooled.
+// --aggregate labels its single pooled bucket "all repos" so the user knows
+// the figure spans every repo.
 func TestRun_AllReposLabel(t *testing.T) {
+	dir := t.TempDir()
+	now := time.Date(2026, 5, 20, 12, 0, 0, 0, time.UTC)
+	writeEntries(t, dir, savings.Entry{Timestamp: now, RepoID: "alpha", Query: "q", FileChars: 100, SnippetChars: 10, Results: 1})
+
+	p := params(&bytes.Buffer{}, dir, now)
+	buf := p.Out.(*bytes.Buffer)
+	p.Aggregate = true
+	if err := Run(p); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if !strings.Contains(buf.String(), "all repos") {
+		t.Errorf("expected 'all repos' bucket label, got:\n%s", buf.String())
+	}
+}
+
+// Default text mode prints one section per repo (most-active first) plus a
+// pooled total (solov2-izh6.21).
+func TestRun_PerRepoSections(t *testing.T) {
+	dir := t.TempDir()
+	now := time.Date(2026, 5, 20, 12, 0, 0, 0, time.UTC)
+	// beta searched more often than alpha → beta sorts first.
+	entries := []savings.Entry{
+		{Timestamp: now, RepoID: "alpha111111111", Query: "q", FileChars: 100, SnippetChars: 10, Results: 1},
+		{Timestamp: now, RepoID: "beta2222222222", Query: "q", FileChars: 200, SnippetChars: 20, Results: 1},
+		{Timestamp: now, RepoID: "beta2222222222", Query: "q", FileChars: 200, SnippetChars: 20, Results: 1},
+	}
+	writeEntries(t, dir, entries...)
+
+	var buf bytes.Buffer
+	if err := Run(params(&buf, dir, now)); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	out := buf.String()
+	if !strings.Contains(out, "beta22222222") || !strings.Contains(out, "alpha1111111") {
+		t.Errorf("expected short repo ids in output, got:\n%s", out)
+	}
+	if !strings.Contains(out, "total:") {
+		t.Errorf("expected total section, got:\n%s", out)
+	}
+	// Most-active repo (beta) section appears before the least-active (alpha).
+	if bi, ai := strings.Index(out, "beta22222222"), strings.Index(out, "alpha1111111"); bi < 0 || ai < 0 || bi > ai {
+		t.Errorf("expected beta before alpha (most-active first), got:\n%s", out)
+	}
+}
+
+// Legacy entries with no repo_id render under an explicit "(untagged)" header
+// in the per-repo view rather than a blank section.
+func TestRun_UntaggedSection(t *testing.T) {
 	dir := t.TempDir()
 	now := time.Date(2026, 5, 20, 12, 0, 0, 0, time.UTC)
 	writeEntries(t, dir, savings.Entry{Timestamp: now, Query: "q", FileChars: 100, SnippetChars: 10, Results: 1})
@@ -106,8 +187,8 @@ func TestRun_AllReposLabel(t *testing.T) {
 	if err := Run(params(&buf, dir, now)); err != nil {
 		t.Fatalf("Run: %v", err)
 	}
-	if !strings.Contains(buf.String(), "all repos") {
-		t.Errorf("expected 'all repos' bucket label, got:\n%s", buf.String())
+	if !strings.Contains(buf.String(), "(untagged)") {
+		t.Errorf("expected '(untagged)' label for repo-less entries, got:\n%s", buf.String())
 	}
 }
 

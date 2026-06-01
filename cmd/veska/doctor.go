@@ -98,8 +98,8 @@ func doctorSavingsCmd() *cobra.Command {
 	var jsonOut bool
 	var aggregate bool
 	cmd := &cobra.Command{
-		Use:          "savings",
-		Short:        "Show inline-snippet token savings per period",
+		Use:   "savings",
+		Short: "Show inline-snippet token savings per period",
 		Long: "Show inline-snippet token savings per period (today / 7d / all-time).\n\n" +
 			"\"Savings\" is the ratio 1 - snippet_chars/file_chars: how much agent-side\n" +
 			"file-read traffic the inline snippets in eng_search_semantic results saved.\n\n" +
@@ -125,10 +125,10 @@ func doctorSavingsCmd() *cobra.Command {
 		},
 	}
 	cmd.Flags().BoolVar(&jsonOut, "json", false, "output results as JSON")
-	// --aggregate forces the pooled single-bucket output. Today this is the
-	// only mode (the recorder is not partitioned by repo_id yet — solov2-0ql0),
-	// so the flag is effectively a no-op alias introduced now so the eventual
-	// per-repo default has a stable opt-out and scripts keep working unchanged.
-	cmd.Flags().BoolVar(&aggregate, "aggregate", false, "pool every registered repo into a single row (current default)")
+	// --aggregate forces the pooled single-bucket output. The default breaks
+	// savings down per repo (solov2-izh6.21); --aggregate sums every repo into
+	// one "all repos" bucket for the headline number or for scripts that parsed
+	// the pre-breakdown shape.
+	cmd.Flags().BoolVar(&aggregate, "aggregate", false, "pool every repo into a single bucket instead of the per-repo breakdown")
 	return cmd
 }
