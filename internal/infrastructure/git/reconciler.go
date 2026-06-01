@@ -2,6 +2,7 @@ package git
 
 import (
 	"context"
+	"io"
 	"io/fs"
 	"log/slog"
 	"os"
@@ -13,10 +14,28 @@ import (
 	infrafs "github.com/whiskeyjimbo/veska/internal/infrastructure/fs"
 )
 
-// MtimeEntry records the last-seen mtime and size of a file for change detection.
+// prefixLen is the number of leading bytes the wake sweep compares in addition
+// to mtime+size. Format-on-save tools (gofmt, prettier, ruff) routinely produce
+// same-length replacements, and some filesystems coalesce mtime at second
+// granularity — so a file edited during suspend can pass the (mtime, size)
+// check unchanged. Comparing the first 64 bytes is a cheap intermediate that
+// catches most such edits; full content hashing is too expensive for working
+// trees with >50k files (SOLO-03 §5.2). Edits beyond the first 64 bytes that
+// keep mtime+size still slip through and are caught at the next live save or
+// promotion diff.
+const prefixLen = 64
+
+// MtimeEntry records the last-seen mtime, size, and leading-byte prefix of a
+// file for change detection.
 type MtimeEntry struct {
 	ModTime time.Time
 	Size    int64
+	Prefix  [prefixLen]byte
+}
+
+// changedFrom reports whether e differs from prev in mtime, size, or prefix.
+func (e MtimeEntry) changedFrom(prev MtimeEntry) bool {
+	return e.ModTime != prev.ModTime || e.Size != prev.Size || e.Prefix != prev.Prefix
 }
 
 // ReconcileHandler is called with the owning repo ID and the path of each file
@@ -180,6 +199,45 @@ func (r *WakeReconciler) sweepDirs(ctx context.Context) {
 }
 
 func (r *WakeReconciler) sweepDir(ctx context.Context, repoID, dir string) {
+	r.walkFiles(dir, func(path string, current MtimeEntry) {
+		r.mu.Lock()
+		prev, known := r.mtimeMap[path]
+		r.mtimeMap[path] = current
+		r.mu.Unlock()
+
+		// Fire only for a file we have a baseline for (Seed or a prior sweep)
+		// that has since changed. A first-ever sighting just records state.
+		if known && current.changedFrom(prev) {
+			r.handler(ctx, repoID, path)
+		}
+	})
+}
+
+// Seed records the current state of every registered directory tree as the
+// change-detection baseline WITHOUT firing the handler. The daemon calls it
+// once before the tick loop runs so the first suspend/resume sweep can detect
+// changes made during the suspend window; without a baseline that first sweep
+// would only populate the map and report nothing.
+func (r *WakeReconciler) Seed(ctx context.Context) {
+	r.mu.Lock()
+	dirs := append([]watchedDir(nil), r.dirs...)
+	r.mu.Unlock()
+
+	for _, wd := range dirs {
+		if ctx.Err() != nil {
+			return
+		}
+		r.walkFiles(wd.dir, func(path string, current MtimeEntry) {
+			r.mu.Lock()
+			r.mtimeMap[path] = current
+			r.mu.Unlock()
+		})
+	}
+}
+
+// walkFiles walks dir and invokes fn with the current MtimeEntry for each
+// non-ignored regular file. Stat/ignore handling is shared by Seed and sweepDir.
+func (r *WakeReconciler) walkFiles(dir string, fn func(path string, current MtimeEntry)) {
 	_ = filepath.WalkDir(dir, func(path string, d fs.DirEntry, err error) error {
 		if err != nil || d.IsDir() {
 			return nil
@@ -196,24 +254,36 @@ func (r *WakeReconciler) sweepDir(ctx context.Context, repoID, dir string) {
 			return nil
 		}
 
-		info, statErr := os.Stat(path)
-		if statErr != nil {
+		current, ok := statEntry(path)
+		if !ok {
 			return nil
 		}
-
-		current := MtimeEntry{ModTime: info.ModTime(), Size: info.Size()}
-
-		r.mu.Lock()
-		prev, known := r.mtimeMap[path]
-		r.mtimeMap[path] = current
-		r.mu.Unlock()
-
-		if !known || prev.ModTime != current.ModTime || prev.Size != current.Size {
-			if known {
-				// Only call handler when we have a baseline (second+ sweep).
-				r.handler(ctx, repoID, path)
-			}
-		}
+		fn(path, current)
 		return nil
 	})
+}
+
+// statEntry reads the mtime, size, and leading-byte prefix of path. ok is false
+// when the file cannot be stat'd (e.g. removed mid-walk), in which case the
+// caller skips it.
+func statEntry(path string) (MtimeEntry, bool) {
+	info, err := os.Stat(path)
+	if err != nil {
+		return MtimeEntry{}, false
+	}
+	return MtimeEntry{ModTime: info.ModTime(), Size: info.Size(), Prefix: readPrefix(path)}, true
+}
+
+// readPrefix returns the first prefixLen bytes of path, zero-padded for shorter
+// files. A read error yields the zero prefix — change detection still falls
+// back to mtime+size, so a transient open failure cannot wedge the sweep.
+func readPrefix(path string) [prefixLen]byte {
+	var buf [prefixLen]byte
+	f, err := os.Open(path)
+	if err != nil {
+		return buf
+	}
+	defer f.Close()
+	_, _ = io.ReadFull(f, buf[:])
+	return buf
 }
