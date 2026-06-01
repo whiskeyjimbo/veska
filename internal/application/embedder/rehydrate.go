@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/whiskeyjimbo/veska/internal/application/veccodec"
 	"github.com/whiskeyjimbo/veska/internal/core/domain"
 	"github.com/whiskeyjimbo/veska/internal/core/ports"
 )
@@ -67,7 +68,7 @@ func RehydrateVectors(
 	buckets := make(map[bucketKey][]domain.EmbeddingRow)
 
 	for _, row := range rows {
-		vec := decodeFloat32LE(row.Blob, row.Dim)
+		vec := veccodec.DecodeFloat32LE(row.Blob, row.Dim)
 		if len(vec) == 0 {
 			continue
 		}

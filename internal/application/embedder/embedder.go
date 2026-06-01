@@ -26,6 +26,7 @@ import (
 
 	"golang.org/x/time/rate"
 
+	"github.com/whiskeyjimbo/veska/internal/application/veccodec"
 	"github.com/whiskeyjimbo/veska/internal/core/domain"
 	"github.com/whiskeyjimbo/veska/internal/core/ports"
 	"github.com/whiskeyjimbo/veska/internal/platform/observability"
@@ -360,7 +361,7 @@ func (w *Worker) tick(ctx context.Context) {
 		// Fast path 2: a prior tick already embedded this key — the bytes
 		// are in node_embeddings.
 		if blob, dim, found, err := w.refs.LookupExisting(ctx, contentHash); err == nil && found {
-			vec := decodeFloat32LE(blob, dim)
+			vec := veccodec.DecodeFloat32LE(blob, dim)
 			if err := w.refs.Reuse(ctx, ref.NodeID, contentHash, now); err != nil {
 				continue
 			}
@@ -530,17 +531,3 @@ func encodeFloat32LE(vec []float32) []byte {
 	return out
 }
 
-// decodeFloat32LE reverses encodeFloat32LE. dim is the expected element count;
-// if the blob is short, the returned slice is truncated rather than panicking
-// so a malformed row degrades to "skip this hit" at the call site.
-func decodeFloat32LE(blob []byte, dim int) []float32 {
-	have := len(blob) / 4
-	if have < dim {
-		dim = have
-	}
-	out := make([]float32, dim)
-	for i := range dim {
-		out[i] = math.Float32frombits(binary.LittleEndian.Uint32(blob[i*4 : i*4+4]))
-	}
-	return out
-}

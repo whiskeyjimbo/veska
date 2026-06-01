@@ -22,11 +22,10 @@ package autolink
 
 import (
 	"context"
-	"encoding/binary"
 	"errors"
 	"fmt"
-	"math"
 
+	"github.com/whiskeyjimbo/veska/internal/application/veccodec"
 	"github.com/whiskeyjimbo/veska/internal/core/domain"
 	"github.com/whiskeyjimbo/veska/internal/core/ports"
 	"github.com/whiskeyjimbo/veska/internal/platform/observability"
@@ -183,7 +182,7 @@ func (l *Linker) Candidates(ctx context.Context, repoID, branch string, sourceNo
 		if !found || dim == 0 || len(blob) < dim*4 {
 			continue
 		}
-		vec := decodeFloat32LE(blob, dim)
+		vec := veccodec.DecodeFloat32LE(blob, dim)
 
 		hits, err := l.vectors.Search(ctx, repoID, branch, vec, l.k+1, domain.VectorFilter{})
 		if err != nil {
@@ -218,19 +217,3 @@ func (l *Linker) Candidates(ctx context.Context, repoID, branch string, sourceNo
 	return out, nil
 }
 
-// decodeFloat32LE reverses the encoding used by node_embeddings.embedding.
-// Mirrors application/embedder.decodeFloat32LE — duplicated here to keep the
-// autolink package free of an upward import (embedder is a sibling). If the
-// blob is short, the slice is truncated rather than panicking so a malformed
-// row degrades to "skip this hit" at the call site.
-func decodeFloat32LE(blob []byte, dim int) []float32 {
-	have := len(blob) / 4
-	if have < dim {
-		dim = have
-	}
-	out := make([]float32, dim)
-	for i := range dim {
-		out[i] = math.Float32frombits(binary.LittleEndian.Uint32(blob[i*4 : i*4+4]))
-	}
-	return out
-}

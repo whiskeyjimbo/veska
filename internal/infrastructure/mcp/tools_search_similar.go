@@ -2,13 +2,13 @@ package mcp
 
 import (
 	"context"
-	"encoding/binary"
 	"encoding/json"
 	"fmt"
 	"math"
 
 	application "github.com/whiskeyjimbo/veska/internal/application"
 	"github.com/whiskeyjimbo/veska/internal/application/search"
+	"github.com/whiskeyjimbo/veska/internal/application/veccodec"
 	"github.com/whiskeyjimbo/veska/internal/core/domain"
 	"github.com/whiskeyjimbo/veska/internal/core/ports"
 )
@@ -103,7 +103,7 @@ func findSimilarByNodeID(ctx context.Context, lookup SimilarLookup, vectors port
 			Data:    map[string]any{"reason": "node_not_embedded", "node_id": nodeID},
 		}
 	}
-	vec := decodeFloat32LE(blob, dim)
+	vec := veccodec.DecodeFloat32LE(blob, dim)
 
 	// Over-request by one so we can filter the seed node out of results
 	// and still return k neighbours (the seed is its own nearest match).
@@ -152,22 +152,6 @@ func findSimilarByNodeID(ctx context.Context, lookup SimilarLookup, vectors port
 		})
 	}
 	return out, nil
-}
-
-// decodeFloat32LE reverses the little-endian float32 packing used by
-// node_embeddings.embedding. Mirrors the helper in application/embedder and
-// application/autolink — duplicated to avoid a cross-package import from the
-// MCP layer into application internals.
-func decodeFloat32LE(blob []byte, dim int) []float32 {
-	have := len(blob) / 4
-	if have < dim {
-		dim = have
-	}
-	out := make([]float32, dim)
-	for i := range dim {
-		out[i] = math.Float32frombits(binary.LittleEndian.Uint32(blob[i*4 : i*4+4]))
-	}
-	return out
 }
 
 // findRelatedInputSchema declares the (file_path, line) anchor for the
