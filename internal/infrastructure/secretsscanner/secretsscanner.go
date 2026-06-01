@@ -17,6 +17,7 @@ import (
 	"math"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 
 	"github.com/spf13/viper"
@@ -126,21 +127,7 @@ const (
 // tokenRe splits a line into candidate secret tokens: runs of characters that
 // commonly appear in credentials. Prose words break on the missing digits.
 var tokenRe = regexp.MustCompile(`[A-Za-z0-9_\-./+]{` +
-	itoa(entropyMinLen) + `,}`)
-
-// itoa converts a small non-negative int to its decimal string, avoiding a
-// strconv import for a single compile-time constant.
-func itoa(n int) string {
-	if n == 0 {
-		return "0"
-	}
-	var b []byte
-	for n > 0 {
-		b = append([]byte{byte('0' + n%10)}, b...)
-		n /= 10
-	}
-	return string(b)
-}
+	strconv.Itoa(entropyMinLen) + `,}`)
 
 // BuiltinScanner is the in-process SecretsScanner. It holds no mutable state
 // after construction and is safe for concurrent use — gitleaks'
