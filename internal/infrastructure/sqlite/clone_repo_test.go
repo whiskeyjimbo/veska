@@ -39,6 +39,27 @@ func seedHashedNode(t *testing.T, db *sql.DB, n hashedNode) {
 	}
 }
 
+// simEdge bundles the identifiers for one seeded SIMILAR_TO edge so the helper
+// stays within the 5-arg budget. A nil score inserts NULL (legacy edge).
+type simEdge struct {
+	repoID, branch, src, dst string
+	score                    any
+}
+
+// seedSimilarEdge inserts a SIMILAR_TO edge with a score between two existing
+// nodes.
+func seedSimilarEdge(t *testing.T, db *sql.DB, e simEdge) {
+	t.Helper()
+	now := time.Now().UnixMilli()
+	edgeID := e.src + "->" + e.dst // test-local synthetic id; uniqueness is all that matters
+	if _, err := db.Exec(`INSERT INTO edges (
+		edge_id, branch, repo_id, src_node_id, dst_node_id, kind, confidence, score, last_promoted_at
+	) VALUES (?,?,?,?,?,?,?,?,?)`,
+		edgeID, e.branch, e.repoID, e.src, e.dst, "SIMILAR_TO", "unresolved", e.score, now); err != nil {
+		t.Fatalf("insert edge %s: %v", edgeID, err)
+	}
+}
+
 func openCloneTestDB(t *testing.T) (*sql.DB, *sqlite.CloneRepo) {
 	t.Helper()
 	dbPath := filepath.Join(t.TempDir(), "veska.db")
@@ -114,5 +135,48 @@ func TestCloneRepo_KindCountIsolation(t *testing.T) {
 	}
 	if len(got) != 0 {
 		t.Fatalf("expected no clone group (function alone among eligible kinds), got %d rows", len(got))
+	}
+}
+
+// TestCloneRepo_SimilarEdges_ThresholdScopeAndNulls verifies the near-dup
+// query: score threshold, NULL-score exclusion, kind exclusion on both
+// endpoints, repo/branch scoping, and metadata hydration.
+func TestCloneRepo_SimilarEdges_ThresholdScopeAndNulls(t *testing.T) {
+	t.Parallel()
+	db, repo := openCloneTestDB(t)
+	ctx := context.Background()
+
+	for _, id := range []string{"a", "b", "c", "ch"} {
+		kind := "function"
+		if id == "ch" {
+			kind = "chunk"
+		}
+		seedHashedNode(t, db, hashedNode{"r1", "main", id, kind, "h-" + id})
+	}
+	seedHashedNode(t, db, hashedNode{"r1", "feature", "fa", "function", "h-fa"})
+	seedHashedNode(t, db, hashedNode{"r1", "feature", "fb", "function", "h-fb"})
+
+	seedSimilarEdge(t, db, simEdge{"r1", "main", "a", "b", 0.90})      // kept
+	seedSimilarEdge(t, db, simEdge{"r1", "main", "a", "c", 0.50})      // below threshold
+	seedSimilarEdge(t, db, simEdge{"r1", "main", "b", "c", nil})       // NULL score -> excluded
+	seedSimilarEdge(t, db, simEdge{"r1", "main", "a", "ch", 0.99})     // chunk endpoint -> excluded
+	seedSimilarEdge(t, db, simEdge{"r1", "feature", "fa", "fb", 0.99}) // other branch -> excluded
+
+	got, err := repo.SimilarEdges(ctx, "r1", "main", 0.80, duplicates.ExcludedKinds)
+	if err != nil {
+		t.Fatalf("SimilarEdges: %v", err)
+	}
+	if len(got) != 1 {
+		t.Fatalf("want exactly 1 edge (a~b @0.90), got %d: %+v", len(got), got)
+	}
+	e := got[0]
+	if e.Score != 0.90 {
+		t.Errorf("score = %v, want 0.90", e.Score)
+	}
+	if e.Src.NodeID != "a" || e.Dst.NodeID != "b" {
+		t.Errorf("endpoints = (%s,%s), want (a,b)", e.Src.NodeID, e.Dst.NodeID)
+	}
+	if e.Src.FilePath != "a.go" || e.Dst.Kind != "function" {
+		t.Errorf("metadata not hydrated: %+v", e)
 	}
 }

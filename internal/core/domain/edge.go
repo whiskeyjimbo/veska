@@ -54,6 +54,13 @@ type Edge struct {
 	Confidence Confidence
 	Resolved   bool
 	SourceLine *int
+	// Score is the strength of the relationship, currently populated only for
+	// EdgeSimilarTo edges by the auto-link pipeline: the vector-similarity
+	// Hit.Score (1/(1+L2^2) space — see internal/application/autolink), where
+	// higher means more similar. nil means "no score recorded" (every
+	// non-SIMILAR_TO edge, plus legacy SIMILAR_TO rows promoted before the
+	// score column existed). Near-duplicate detection thresholds on this.
+	Score *float32
 }
 
 // EdgeOption is a functional option applied during Edge construction.
@@ -75,6 +82,16 @@ func WithConfidence(c Confidence) EdgeOption {
 func WithSourceLine(line int) EdgeOption {
 	return func(e *Edge) error {
 		e.SourceLine = &line
+		return nil
+	}
+}
+
+// WithScore sets the optional relationship-strength score (see Edge.Score).
+// Used by the auto-link pipeline to record the vector-similarity score on a
+// SIMILAR_TO edge so near-duplicate detection can threshold it.
+func WithScore(score float32) EdgeOption {
+	return func(e *Edge) error {
+		e.Score = &score
 		return nil
 	}
 }
