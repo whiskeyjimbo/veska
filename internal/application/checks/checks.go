@@ -14,6 +14,7 @@ package checks
 
 import (
 	"context"
+	"log/slog"
 	"sync"
 	"time"
 
@@ -134,12 +135,31 @@ type Runner struct {
 	registry *Registry
 	storage  ports.FindingStorage
 	metrics  *observability.Metrics
+	logger   *slog.Logger
+}
+
+// RunnerOption configures a Runner.
+type RunnerOption func(*Runner)
+
+// WithLogger sets the logger the Runner uses to surface swallowed check and
+// storage failures. A nil logger leaves the Runner on slog.Default().
+func WithLogger(l *slog.Logger) RunnerOption {
+	return func(r *Runner) {
+		if l != nil {
+			r.logger = l
+		}
+	}
 }
 
 // NewRunner constructs a Runner. metrics may be nil — in that case timing is
 // silently dropped (useful for embedded callers that do not yet wire metrics).
-func NewRunner(reg *Registry, storage ports.FindingStorage, metrics *observability.Metrics) *Runner {
-	return &Runner{registry: reg, storage: storage, metrics: metrics}
+// Without WithLogger the Runner logs to slog.Default().
+func NewRunner(reg *Registry, storage ports.FindingStorage, metrics *observability.Metrics, opts ...RunnerOption) *Runner {
+	r := &Runner{registry: reg, storage: storage, metrics: metrics, logger: slog.Default()}
+	for _, opt := range opts {
+		opt(r)
+	}
+	return r
 }
 
 // Run executes every registered Check sequentially. Errors and panics from
@@ -147,10 +167,10 @@ func NewRunner(reg *Registry, storage ports.FindingStorage, metrics *observabili
 // because the promotion transaction has already committed by the time it
 // fires.
 //
-// Findings returned by a Check are forwarded to FindingStorage.Save. Storage
-// failures are logged via the standard error stream (the Runner does not yet
-// take a logger; one will be added when the daemon wires this in) but do not
-// abort subsequent checks.
+// Findings returned by a Check are forwarded to FindingStorage.Save. A check
+// error, a recovered panic, a Save failure, and a reconciliation failure are
+// all logged at WARN (with check name + repo/branch context) but do not abort
+// subsequent checks.
 func (r *Runner) Run(ctx context.Context, in Input) {
 	if r == nil || r.registry == nil {
 		return
@@ -165,11 +185,13 @@ func (r *Runner) Run(ctx context.Context, in Input) {
 func (r *Runner) runOne(ctx context.Context, c Check, in Input) {
 	start := time.Now()
 	defer func() {
-		// Swallow any panic — by contract a check failure is non-fatal because
-		// the promotion transaction has already committed. A future logger
-		// wiring will surface the recovered value; for now the guard alone is
-		// what makes the isolation contract hold.
-		_ = recover()
+		// Recover any panic — by contract a check failure is non-fatal because
+		// the promotion transaction has already committed. The recovered value
+		// is surfaced at WARN; the recover itself is what makes the isolation
+		// contract hold.
+		if rec := recover(); rec != nil {
+			r.warn(in, c, "check panicked", "panic", rec)
+		}
 		if r.metrics != nil && r.metrics.CheckLatency != nil {
 			r.metrics.CheckLatency.
 				WithLabelValues(in.RepoID, c.Name()).
@@ -180,7 +202,7 @@ func (r *Runner) runOne(ctx context.Context, c Check, in Input) {
 	findings, err := c.Run(ctx, in)
 	if err != nil {
 		// Advisory: log-and-continue. The promotion has already committed.
-		// TODO(m3.01.x): wire a logger so errors are surfaced, not swallowed.
+		r.warn(in, c, "check returned error", "err", err)
 		return
 	}
 	keep := make([]string, 0, len(findings))
@@ -188,8 +210,10 @@ func (r *Runner) runOne(ctx context.Context, c Check, in Input) {
 		if f == nil {
 			continue
 		}
-		// Storage errors are also non-fatal; the same TODO applies.
-		_ = r.storage.Save(ctx, f)
+		// Storage errors are also non-fatal: surface, do not abort.
+		if err := r.storage.Save(ctx, f); err != nil {
+			r.warn(in, c, "finding save failed", "finding_id", f.FindingID, "err", err)
+		}
 		keep = append(keep, f.FindingID)
 	}
 	// Authoritative checks : close open findings of the
@@ -198,7 +222,23 @@ func (r *Runner) runOne(ctx context.Context, c Check, in Input) {
 	// disappears from `veska findings list` without manual cleanup.
 	if ac, ok := c.(AuthoritativeChecker); ok && r.storage != nil {
 		if rule, on := ac.AuthoritativeRule(in); on && rule != "" {
-			_ = r.storage.CloseSupersededByRule(ctx, in.RepoID, in.Branch, rule, keep)
+			if err := r.storage.CloseSupersededByRule(ctx, in.RepoID, in.Branch, rule, keep); err != nil {
+				r.warn(in, c, "reconcile superseded findings failed", "rule", rule, "err", err)
+			}
 		}
 	}
+}
+
+// warn surfaces a swallowed check/storage failure at WARN, prepending the
+// check name + promotion context (repo/branch) shared by every such line in
+// runOne to the call-site-specific attrs. Attributes are attached directly to
+// the record (not via Logger.With) so they remain visible to handlers that do
+// not propagate WithAttrs state.
+func (r *Runner) warn(in Input, c Check, msg string, attrs ...any) {
+	l := r.logger
+	if l == nil {
+		l = slog.Default()
+	}
+	base := []any{"check", c.Name(), "repo_id", in.RepoID, "branch", in.Branch}
+	l.Warn(msg, append(base, attrs...)...)
 }
