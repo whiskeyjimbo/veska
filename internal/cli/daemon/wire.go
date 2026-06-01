@@ -736,8 +736,8 @@ func (b *daemonBuilder) buildPollerWatcher() error {
 	if d, derr := time.ParseDuration(b.fileCfg.PostPromotionQueue.PollInterval); derr == nil && d > 0 {
 		pollInterval = d
 	}
-	b.poller = queue.New(b.pools.ReadDB, b.pools.Write, b.handlers, queue.WithInterval(pollInterval))
-	b.poller.Pauser = b.ingestionBusy
+	b.poller = queue.New(b.pools.ReadDB, b.pools.Write, b.handlers,
+		queue.WithInterval(pollInterval), queue.WithPauser(b.ingestionBusy))
 	b.watcher = gitwatch.NewMultiRepoWatcher()
 
 	ignoreAdapter := func(repoRoot string) (application.IgnoreMatcher, error) {

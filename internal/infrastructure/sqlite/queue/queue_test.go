@@ -164,8 +164,7 @@ func TestPoller_PauserBlocksProcessing(t *testing.T) {
 	paused.Store(true)
 	p := queue.New(db, db, map[queue.WorkKind]queue.WorkHandler{
 		queue.WorkKindEmbed: h,
-	}, queue.WithInterval(25*time.Millisecond))
-	p.Pauser = paused.Load
+	}, queue.WithInterval(25*time.Millisecond), queue.WithPauser(paused.Load))
 
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
