@@ -61,3 +61,43 @@ func TestCLILongMatchesMCPDescription_Search(t *testing.T) {
 		}
 	}
 }
+
+// TestCLILongMatchesMCPDescription_DepsList pins solov2-izh6.20: the `veska
+// deps list` Long help must reuse the MCP DescDepsImportOnlyCaveat fragment
+// verbatim so the import-only-modules-are-absent rule can't drift from the
+// eng_list_dependencies description. The fragment is also composed into that
+// MCP description, so both surfaces are checked here.
+func TestCLILongMatchesMCPDescription_DepsList(t *testing.T) {
+	cmd := depsListCmd()
+	if !strings.Contains(cmd.Long, mcpinfra.DescDepsImportOnlyCaveat) {
+		t.Fatalf("deps list Long must contain DescDepsImportOnlyCaveat;\n want substring=%q\n            got=%q", mcpinfra.DescDepsImportOnlyCaveat, cmd.Long)
+	}
+}
+
+// TestCLILongMatchesMCPDescription_Symbol pins solov2-izh6.20: the `veska
+// symbol` Long help must reuse the MCP DescFindSymbolMatching fragment so the
+// unqualified-match / exact-first ordering rule can't drift from the
+// eng_find_symbol description.
+func TestCLILongMatchesMCPDescription_Symbol(t *testing.T) {
+	cmd := symbolCmd()
+	if !strings.Contains(cmd.Long, mcpinfra.DescFindSymbolMatching) {
+		t.Fatalf("symbol Long must contain DescFindSymbolMatching;\n want substring=%q\n            got=%q", mcpinfra.DescFindSymbolMatching, cmd.Long)
+	}
+}
+
+// TestCLILongMatchesMCPDescription_Context pins solov2-izh6.20: the `veska
+// context` Long help must equal the MCP DescContextPack fragment. Only the
+// shared purpose + cross-repo behaviour is pinned; the MCP-only anchor prose
+// (node_id/task_id) is deliberately absent because the CLI takes only a
+// symbol, so the help must not advertise inputs the command rejects.
+func TestCLILongMatchesMCPDescription_Context(t *testing.T) {
+	cmd := contextCmd()
+	if cmd.Long != mcpinfra.DescContextPack {
+		t.Fatalf("context Long mismatch:\n want=%q\n  got=%q", mcpinfra.DescContextPack, cmd.Long)
+	}
+	for _, unwanted := range []string{"node_id", "task_id"} {
+		if strings.Contains(cmd.Long, unwanted) {
+			t.Fatalf("context Long must NOT advertise MCP-only anchor %q (CLI takes a symbol only); got: %q", unwanted, cmd.Long)
+		}
+	}
+}
