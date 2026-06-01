@@ -120,13 +120,19 @@ in that matrix.
 | `ErrMigrationFailed` | Migration N rolled back | fix migration / downgrade / restore pre-migration snapshot |
 | `ErrSnapshotFailed` | Pre-migration auto-snapshot failed | free disk; fix permissions; restart |
 | `ErrMigrationTampered` | `migration_sha` recorded ≠ binary's embedded sha | investigate; do not blindly clear |
-| `ErrEmbedderMismatch` | `[embedder]` config disagrees with `database_meta` | `veska embedder swap <model>`, or revert config |
 | `ErrUnsupportedFilesystem` | `~/.veska/` on NFS, eCryptfs, FUSE, or overlay-upper | move data dir; set `VESKA_HOME` |
 | `ErrBackupRequired` | `[backup].required = true` and no verified backup found | `veska backup create`; restart |
 
 JSON-RPC code: N/A (these never reach the wire — the daemon never came up).
 Audit line: N/A (the daemon never opened the audit log).
 Surface: stderr + the supervisor's exit code log.
+
+> **Planned — embedder-consistency refuse-to-start (NOT YET IMPLEMENTED).**
+> `ErrEmbedderMismatch` (boot: `[embedder]` config disagrees with the
+> recorded embedder geometry) is design intent only. No such sentinel
+> exists in `internal/` today, the daemon does not record or check
+> `database_meta.embedder_*` keys, and `veska embedder swap` is unbuilt.
+> See §3.5 and SOLO-03 §3.2 for the full planned shape.
 
 ### 3.2 Daemon runtime (breaker-eligible, non-78)
 
@@ -208,8 +214,20 @@ These are not MCP errors — they are *findings* or *degraded reasons*. The `ves
 | `ErrBackupCorrupt` | `veska doctor backup` finds the most recent backup unreadable | 2 | Same |
 | `ErrRestoreDaemonRunning` | `veska backup restore` while daemon up | 2 | `veska daemon stop`; rerun |
 | `ErrRestorePartial` | Restore failed mid-sequence; rolled back via `.replaced-<ts>/` sidecar | 3 | Sidecar preserved; investigate before retrying |
-| `ErrEmbedderSwapInconsistent` | `database_meta.embedder_*` ≠ stored `node_embeddings.dim` at start | 78 | Restore most recent `pre-swap-*` snapshot |
-| `ErrEmbedderModelMissing` | Pre-swap probe fails | 1 | `ollama pull <model>`; retry |
+
+> **Planned — embedder-swap codes (NOT YET IMPLEMENTED).** The swap
+> command and its consistency machinery are unbuilt; these codes have
+> zero occurrences in `internal/`:
+>
+> | `veska_code` (planned) | When | Exit | Remediation |
+> |---|---|---|---|
+> | `ErrEmbedderSwapInconsistent` | recorded embedder geometry ≠ stored `node_embeddings.dim` at start | 78 | Restore most recent `pre-swap-*` snapshot |
+> | `ErrEmbedderModelMissing` | Pre-swap probe fails | 1 | `ollama pull <model>`; retry |
+>
+> `node_embeddings` does carry a per-row `model` column (migration
+> 0004), so the model that produced each vector is recorded — but
+> nothing reads it for a boot-consistency refusal, and the daemon
+> writes no `database_meta.embedder_*` keys. See SOLO-03 §3.2.
 
 ### 3.6 Filesystem / disk
 

@@ -334,7 +334,21 @@ ones the user will see later from `veska doctor` (SOLO-13 §2).
 operation; the daemon does not wrap it. The probe in init and
 `veska doctor embedder` is enough.
 
-**`veska embedder swap <model>`.** Switching the active model
+**`veska embedder swap <model>` — Planned (NOT YET IMPLEMENTED).**
+The command, its sentinels (`ErrEmbedderMismatch`,
+`ErrEmbedderSwapInconsistent`, `ErrEmbedderModelMissing`), the
+`database_meta.embedder_*` keys, and the refuse-to-start-on-
+inconsistency invariant all have zero occurrences in `internal/`
+today — the entire procedure below is design intent, not shipped
+behavior. The `database_meta` *table* is real (migration 0001) but
+holds no embedder keys; `node_embeddings` carries a per-row `model`
+column (migration 0004) that records which model produced each
+vector but is not yet read for any boot check. What *is* shipped:
+the embedder is a pick-one choice and Ollama-down degrades to
+lexical/BM25 (`degraded_reasons:["embedding_pending"]`); there is no
+in-place swap, so changing models today means a manual reindex.
+
+Switching the active model
 warrants a wrapped command because it is not a pure Ollama
 operation: the embedding geometry (`database_meta.embedder_*`
 and every `node_embeddings.dim` row), the derived vector index
@@ -415,8 +429,9 @@ Properties:
   queue drains. There is no all-or-nothing wait.
 - **Model dim mismatches are caught.** Step 1 reads the new
   model's dim; step 4 records it in `database_meta.embedder_dim`
-  and resets the vector index to that dim. The boot consistency
-  check (SOLO-08 §3.3) covers subsequent restarts.
+  and resets the vector index to that dim. A boot consistency
+  check would cover subsequent restarts — also unbuilt (no such
+  check exists in code today).
 
 The CLI subcommand `veska embedder current` prints the active
 provider/model/dim from `database_meta`. `veska doctor
@@ -499,8 +514,10 @@ On start the daemon:
    backend (in-memory `memvec` by default, rebuilt from
    `node_embeddings`; or usearch `.hnsw` files if selected —
    SOLO-08 §1.1); runs the migration
-   runner (SOLO-08 §10); checks `database_meta` against
-   `[embedder]` config; checks `[backup].required`.
+   runner (SOLO-08 §10); checks `[backup].required`. (A planned
+   embedder-consistency check against the recorded embedder
+   geometry would also live here — see §3.2 — but it is not yet
+   implemented.)
 4. Brings up embedding worker, post-promotion-queue-drain goroutines, fsnotify
    watcher.
 5. Binds both Unix sockets (`cli.sock` and `mcp.sock`) at mode
@@ -753,7 +770,7 @@ The breaker exists for *runtime* crashes — the daemon came up,
 ran, and exited non-78 (e.g. RSS hard cap, SOLO-13 §3.3; panic
 in a core goroutine). Refuse-to-start cases (usearch backend
 selected but native library missing, schema mismatch,
-ErrEmbedderMismatch, etc.) all exit 78 and the
+`[backup].required` with no verified backup, etc.) all exit 78 and the
 supervisor halts on its own; they do **not** count against the
 breaker. §5.8 is the canonical matrix.
 
@@ -786,9 +803,9 @@ breaker. §5.8 is the canonical matrix.
 - Stable boot (alive ≥ `stable_boot_after`) resets the counter
   and removes the `broken` marker.
 - The marker blocks daemon start only. CLI repair commands
-  (`veska doctor reset-crash-loop`, `veska backup restore`,
-  `veska embedder swap`'s daemon-stopped variant) work without
-  the daemon.
+  (`veska doctor reset-crash-loop`, `veska backup restore`, and the
+  planned `veska embedder swap`'s daemon-stopped variant — §3.2)
+  work without the daemon.
 - `veska doctor` and `veska doctor service` surface the marker
   as exit 2 with recent log paths.
 - User clears manually: `veska doctor reset-crash-loop`.
@@ -961,9 +978,14 @@ breaker (§5.6) — 78 is terminal, not retry-eligible.
 | 5 | Migration N failed mid-transaction | migration runner | step 3 | fix migration / downgrade binary / restore the verified pre-migration snapshot (SOLO-08 §10.4) |
 | 6 | Pre-migration auto-snapshot failed | migration runner | step 3 | free disk / fix permissions; restart |
 | 7 | `migration_sha` recorded ≠ binary's embedded sha (tampering) | migration runner | step 3 | investigate; do not blindly clear |
-| 8 | `ErrEmbedderMismatch` — `[embedder]` config disagrees with `database_meta.embedder_*` | post-migration | step 3 | `veska embedder swap <model>` (SOLO-03 §3.2), or revert the config |
-| 9 | `~/.veska/` on NFS or unsupported fs (SQLite+WAL correctness) | start | step 1 | move data dir to a supported local fs; set `VESKA_HOME` |
-| 10 | `[backup].required = true` and no verified backup found | start | step 3 | `veska backup create`; restart |
+| 8 | `~/.veska/` on NFS or unsupported fs (SQLite+WAL correctness) | start | step 1 | move data dir to a supported local fs; set `VESKA_HOME` |
+| 9 | `[backup].required = true` and no verified backup found | start | step 3 | `veska backup create`; restart |
+
+> **Planned row (NOT YET IMPLEMENTED).** A post-migration
+> `ErrEmbedderMismatch` refuse-to-start — `[embedder]` config
+> disagrees with the recorded embedder geometry, remediated by the
+> planned `veska embedder swap <model>` (§3.2) — would slot in here.
+> Neither the sentinel nor the check exists in code today.
 
 **Breaker-eligible exits** (non-78, run-after-start):
 
