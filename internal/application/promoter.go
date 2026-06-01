@@ -134,7 +134,7 @@ func (p *Promoter) tracerProvider() observability.TracerProvider {
 //  2. Builds a PromotionBatch and hands it to the PromotionStore, which writes
 //     all node/FTS/embedding-ref/queue rows in a single atomic transaction.
 //  3. Calls staging.Area.DeleteStagedFile for each promoted file after commit.
-//  4. Writes advisory audit entries and runs post-commit structural checks.
+//  4. Runs post-commit advisory structural checks.
 //
 // Node-only promotion: edges are intentionally not promoted here. They are
 // re-derived post-promotion by the auto_link queue worker (work_kind="auto_link").
@@ -192,7 +192,7 @@ func (p *Promoter) Promote(ctx context.Context, repoID, branch, gitSHA string, a
 	}
 
 	// Nothing was staged: registration was confirmed, but there is no
-	// post-commit work to do — skip staging cleanup, audit, and checks.
+	// post-commit work to do — skip staging cleanup and checks.
 	if len(batch.Files) == 0 {
 		slog.Info("promotion: complete",
 			"repo_id", repoID, "branch", branch, "git_sha", gitSHA,
