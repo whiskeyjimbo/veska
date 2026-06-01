@@ -40,12 +40,12 @@ type Poller struct {
 	interval time.Duration
 	done     chan struct{}
 
-	// Pauser, when set and returning true, makes runKind skip its tick
+	// pauser, when set and returning true, makes runKind skip its tick
 	// without consuming a row. Wired to the daemon's ScanTracker so the
 	// post-promotion queue yields the Write lock while a cold scan
 	// is in flight . When nil the poller never pauses —
-	// production wiring sets it after New().
-	Pauser func() bool
+	// inject via WithPauser at construction.
+	pauser func() bool
 }
 
 // defaultPollInterval is the poll cadence used when WithInterval is not given.
@@ -60,6 +60,17 @@ func WithInterval(d time.Duration) Option {
 	return func(p *Poller) {
 		if d > 0 {
 			p.interval = d
+		}
+	}
+}
+
+// WithPauser injects the pause predicate: when set and returning true, the
+// poll loop skips its tick without consuming a row (e.g. to yield the Write
+// lock to an in-flight cold scan). A nil predicate is ignored (never pauses).
+func WithPauser(fn func() bool) Option {
+	return func(p *Poller) {
+		if fn != nil {
+			p.pauser = fn
 		}
 	}
 }
@@ -131,7 +142,7 @@ func (p *Poller) runKind(ctx context.Context, kind WorkKind, handler WorkHandler
 		// with a serial cold-scan promote turns a 1-minute scan into
 		// a 9-minute one (solov2-pc3 pprof). The skip preserves the
 		// same poll cadence so resumption is immediate after End.
-		if p.Pauser != nil && p.Pauser() {
+		if p.pauser != nil && p.pauser() {
 			timer.Reset(p.interval)
 			continue
 		}
