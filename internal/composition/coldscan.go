@@ -2,6 +2,7 @@ package composition
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/whiskeyjimbo/veska/internal/application"
 	"github.com/whiskeyjimbo/veska/internal/application/checks"
@@ -78,6 +79,27 @@ func NewColdScanCore(pools *sqlite.Pools, ingesterOpts []application.IngesterOpt
 		PromotionStore: promotionStore,
 		Promoter:       promoter,
 	}
+}
+
+// NewColdScanReparser builds the cold-scan reparser closure from an
+// already-wired Ingester/Promoter pair, an IgnoreLoader, and any
+// caller-specific options. It is the single construction site for the reparser:
+// the daemon passes application.WithScanTracker (so eng_get_status can surface
+// in-flight scans); the CLI cold-scan path omits it. Previously both callers
+// hand-built this closure from application.NewColdScanReparser — daemon
+// wire.go and NewCLIColdScanReparser each had a near-identical copy (solov2-8lt0).
+//
+// The reparser is deliberately not folded into NewColdScanCore: the core is the
+// part both callers share verbatim, whereas the reparser legitimately differs
+// (the scan tracker) and is built from the core's Ingester/Promoter after the
+// fact.
+func NewColdScanReparser(ingester *application.Ingester, promoter *application.Promoter, loader application.IgnoreLoader, opts ...application.ColdScanOption) (func(context.Context, application.RepoRecord) error, error) {
+	all := append([]application.ColdScanOption{application.WithIgnoreLoader(loader)}, opts...)
+	reparser, err := application.NewColdScanReparser(ingester, promoter, gitwatch.Querier{}, all...)
+	if err != nil {
+		return nil, fmt.Errorf("cold-scan reparser: %w", err)
+	}
+	return reparser, nil
 }
 
 // GitAddedLinesFunc builds the Promoter AddedLines seam from a repo-root

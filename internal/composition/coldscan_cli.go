@@ -11,7 +11,6 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/application"
 	"github.com/whiskeyjimbo/veska/internal/application/checks"
 	"github.com/whiskeyjimbo/veska/internal/core/ports"
-	gitwatch "github.com/whiskeyjimbo/veska/internal/infrastructure/git"
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/repo"
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/sqlite"
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/vulnsource"
@@ -38,14 +37,7 @@ func NewCLIColdScanReparser(pools *sqlite.Pools, loader application.IgnoreLoader
 	// carries the post-promotion check pipeline.
 	core := NewColdScanCore(pools, nil, cliColdScanPromoterOpts(pools))
 
-	reparser, err := application.NewColdScanReparser(
-		core.Ingester, core.Promoter, gitwatch.Querier{},
-		application.WithIgnoreLoader(loader),
-	)
-	if err != nil {
-		return nil, fmt.Errorf("cold-scan reparser: %w", err)
-	}
-	return reparser, nil
+	return NewColdScanReparser(core.Ingester, core.Promoter, loader)
 }
 
 // cliColdScanPromoterOpts builds the Promoter options for the CLI cold-scan

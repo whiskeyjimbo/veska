@@ -741,9 +741,8 @@ func (b *daemonBuilder) buildPollerWatcher() error {
 	ignoreAdapter := func(repoRoot string) (application.IgnoreMatcher, error) {
 		return fsignore.Load(repoRoot)
 	}
-	reparser, err := application.NewColdScanReparser(
-		b.ingester, b.promoter, gitwatch.Querier{},
-		application.WithIgnoreLoader(ignoreAdapter),
+	reparser, err := composition.NewColdScanReparser(
+		b.ingester, b.promoter, ignoreAdapter,
 		application.WithScanTracker(b.scanTracker),
 	)
 	if err != nil {
