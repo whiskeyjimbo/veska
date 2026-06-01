@@ -59,7 +59,10 @@ func NewColdScanCore(pools *sqlite.Pools, ingesterOpts []application.IngesterOpt
 	}
 	area := staging.NewArea()
 	gate := staging.NewGate(area)
-	parser := treesitter.NewGoParser()
+	// Cold scan walks and parses Go + TS/TSX; the walk filter is sourced from
+	// this parser's SupportedExtensions via Ingester.SupportedExtensions
+	// (solov2-xde2.7), so adding a language here is the only edit needed.
+	parser := treesitter.NewMultiParser(treesitter.NewGoParser(), treesitter.NewTSParser())
 	ingester := application.NewIngester(parser, area, gate, ingesterOpts...)
 
 	promotionStore := sqlite.NewPromotionStore(

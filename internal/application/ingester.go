@@ -65,6 +65,25 @@ func NewIngester(parser ports.CodeParser, area *staging.Area, gate *staging.Gate
 	return ing
 }
 
+// SupportedExtensions reports the file extensions the wired parser can read,
+// or nil when the parser does not enumerate them. The cold scan reads this to
+// filter its walk so the extension set lives with the parser rather than being
+// duplicated in coldscan.go (solov2-xde2.7).
+func (ing *Ingester) SupportedExtensions() []string {
+	if l, ok := ing.parser.(supportedExtensionLister); ok {
+		return l.SupportedExtensions()
+	}
+	return nil
+}
+
+// supportedExtensionLister is the parser-side capability the cold scan reads
+// to source its walk filter (solov2-xde2.7). Kept here next to its consumer
+// (ISP) rather than widening the broad ports.CodeParser contract, which would
+// ripple to every ParseFile implementer and test fake.
+type supportedExtensionLister interface {
+	SupportedExtensions() []string
+}
+
 // TracerProvider returns the installed TracerProvider, or nil if none was
 // supplied. Exposed so the daemon wiring test can assert the tracer was
 // threaded into every tracing-aware consumer.

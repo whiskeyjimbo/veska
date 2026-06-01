@@ -16,6 +16,12 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/core/domain"
 )
 
+// SupportedExtensions reports the file extensions GoParser parses. The cold
+// scan reads this (via Ingester.SupportedExtensions) to source its walk filter
+// from the wired parser instead of duplicating the list (solov2-xde2.7). Lives
+// here rather than in go_query.go to keep that file under its LOC ceiling.
+func (p *GoParser) SupportedExtensions() []string { return []string{".go"} }
+
 // goExported reports whether a Go identifier is exported — its first rune is an
 // uppercase letter. Names like "Receiver.Method" should be passed as the bare
 // method-name segment by the caller.
