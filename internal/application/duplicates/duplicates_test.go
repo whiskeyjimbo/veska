@@ -166,6 +166,10 @@ func TestNearThresholdFor(t *testing.T) {
 	if got := duplicates.NearThresholdFor("definitely-not-an-embedder"); got != duplicates.DefaultNearThreshold {
 		t.Errorf("unknown embedder = %v, want fallback %v", got, duplicates.DefaultNearThreshold)
 	}
+	// An Ollama :tag must resolve to the bare-name calibration, not the fallback.
+	if got, want := duplicates.NearThresholdFor("nomic-embed-text:latest"), duplicates.NearThresholdFor("nomic-embed-text"); got != want {
+		t.Errorf("tagged nomic = %v, want bare-name calibration %v", got, want)
+	}
 	// Every calibrated value must exceed autolink's related cutoff (0.60): a
 	// near-duplicate is at least as similar as "merely related".
 	for _, id := range []string{"model2vec(potion-code-16M)", "nomic-embed-text", "veska-static-v2"} {
