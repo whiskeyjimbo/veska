@@ -71,8 +71,8 @@ regardless of which router handles it.
 | `daemon.post_checkout` | `veska hook-runner post-checkout` | Branch-switch quiescence (SOLO-11 §1.3). |
 | `daemon.backup_create` | `veska backup create` | Run `VACUUM INTO` + tarball; verify. |
 | `daemon.backup_verify` | `veska backup verify <path>` | Run integrity + foreign-key + JSONL well-formedness checks. |
-| `daemon.embedder_swap` | `veska embedder swap <model>` | The multi-step procedure in SOLO-03 §3.2. |
-| `daemon.embedder_current` | `veska embedder current` | Read `database_meta.embedder_*`. |
+| `daemon.embedder_swap` | `veska embedder swap <model>` | **Planned (NOT YET IMPLEMENTED).** The multi-step procedure in SOLO-03 §3.2; zero occurrences in `internal/` today. |
+| `daemon.embedder_current` | `veska embedder current` | **Planned (NOT YET IMPLEMENTED).** Would read `database_meta.embedder_*`, which holds no embedder keys today (SOLO-03 §3.2). |
 | `daemon.doctor` | `veska doctor [--json]` and every `veska doctor <section>` | Run the doctor section(s) and return the §2.1 envelope. |
 | `daemon.bundle` | `veska bundle` | Build the `veska-doctor-bundle-*.tgz`. |
 | `daemon.gc_branches` | `veska gc --branches` | Run the branch-GC sweep manually. |
@@ -185,7 +185,8 @@ W = write; R = read.
 `doctor` is a CLI noun, not an MCP one — `veska doctor` (and its
 subcommands) is the operator surface; the two tools above are the
 agent's window into the same data. Diagnostics that *fix* things
-(repair, gc, embedder swap) are CLI-only on purpose.
+(repair, gc, and the planned embedder swap — NOT YET IMPLEMENTED,
+SOLO-03 §3.2) are CLI-only on purpose.
 
 Total: 33 registered tools.
 `eng_context_pack` from SOLO-12 is the same binding as
@@ -406,7 +407,7 @@ each entry is informative to the operator." Common codes:
 | `post_promotion_queue_deferred` | `{work_kind: string, count: int}` | Rows in `state='deferred'` because queue depth was at high-water at promotion time (SOLO-08 §3.4). |
 | `startup_resync` | `{repos_pending: int}` | Daemon is replaying `git log <last_promoted_sha>..HEAD` (SOLO-03 §5.7). |
 | `wake_reconciling` | — | Daemon detected a suspend/wake gap and is sweeping repos (SOLO-03 §5.2). |
-| `embedder_swapping` | — | Daemon is mid-`veska embedder swap` (SOLO-03 §3.2). |
+| `embedder_swapping` | — | **Planned (NOT YET IMPLEMENTED).** Would signal the daemon is mid-`veska embedder swap`; no swap path exists today (SOLO-03 §3.2). |
 | `vec0_ceiling_warn` | `{headroom_ratio: float}` | Approaching the vec0 substrate ceiling (SOLO-13 §3.3.1). |
 | `vec0_ceiling_exceeded` | `{headroom_ratio: float}` | Past the ceiling; `semantic_search` p95 budget likely missed. |
 
@@ -447,7 +448,8 @@ into SOLO-16's catalogue.
 
 The daemon enters several states where it is up but not fully
 serving: startup-resync (SOLO-03 §5.7), wake-reconcile (§5.2),
-embedder-swap (§3.2), and crash-loop-recovery (§5.6). Editor
+embedder-swap (§3.2; Planned — NOT YET IMPLEMENTED), and
+crash-loop-recovery (§5.6). Editor
 authors integrating MCP need to know what tools return in each
 state so the surface can render usefully rather than appear
 broken.
@@ -456,7 +458,7 @@ broken.
 |---|---|---|---|
 | **Startup-resync** running for ≥1 repo | promoted (pre-resync) data with `degraded_reasons: ["startup_resync"]`; `eng_get_status` carries `commits_total`/`commits_done` per repo | `ErrDaemonStarting` with the same payload; caller may retry | Non-blocking progress chip ("Veska catching up: 5/12 commits"); poll `eng_get_status` every 2s; show read results with a "catching up" badge |
 | **Wake-reconcile** running | promoted + (pre-sweep) staging with `degraded_reasons: ["wake_reconciling"]` | succeed normally; the sweep doesn't write | One-line non-blocking notice ("Veska re-syncing after sleep"); reads usable; clears within seconds |
-| **Embedder-swap** running | promoted reads succeed; `eng_search_semantic` returns FTS5 lexical fallback with `degraded_reasons: ["embedder_swapping", "embedder_offline_lexical_fallback"]` | refused with `ErrUpstreamUnavailable`, `data.context.cause = "embedder_swapping"`; caller may retry once the swap state clears | Show "lexical-only search" badge; allow other reads |
+| **Embedder-swap** running *(Planned — NOT YET IMPLEMENTED; no swap path exists today, SOLO-03 §3.2)* | promoted reads succeed; `eng_search_semantic` returns FTS5 lexical fallback with `degraded_reasons: ["embedder_swapping", "embedder_offline_lexical_fallback"]` | refused with `ErrUpstreamUnavailable`, `data.context.cause = "embedder_swapping"`; caller may retry once the swap state clears | Show "lexical-only search" badge; allow other reads |
 | **Crash-loop tripped** | shim returns `ErrDaemonNotRunning`; `data.context.cli_command` = `veska doctor reset-crash-loop` | same | Surface the `cli_command` as a copyable block; same paste-handoff pattern as the human-action gate (SOLO-10 §3.3) |
 | **Refuse-to-start** (usearch native library missing, schema mismatch, unsupported FS, etc.; SOLO-03 §5.8) | shim returns `ErrDaemonNotRunning` | same | Render `data.context.last_error` with an "open log file" affordance |
 

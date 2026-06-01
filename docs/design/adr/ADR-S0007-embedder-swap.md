@@ -5,10 +5,22 @@ status: accepted
 date: 2026-05-09
 deciders: [whiskeyjimbo]
 verified: true
-verified_date: "2026-05-16"
+verified_date: "2026-06-01"
 ---
 
 # ADR-S0007 — Embedder swap is one CLI subcommand against a live daemon
+
+> **NOT YET IMPLEMENTED (status: accepted, unbuilt).** This ADR records
+> an accepted *decision*; the mechanism it describes is not shipped.
+> `veska embedder swap`, the `ErrEmbedderMismatch` /
+> `ErrEmbedderSwapInconsistent` / `ErrEmbedderModelMissing` sentinels,
+> the `database_meta.embedder_*` keys, and the refuse-to-start-on-
+> inconsistency boot check all have zero occurrences in `internal/`
+> today. The design content below stands as the intended approach; do
+> not read it as describing current behavior. What is shipped: the
+> embedder is a pick-one choice, changing models means a manual
+> reindex, and Ollama-down degrades to lexical/BM25. SOLO-03 §3.2 is
+> the canonical planned home.
 
 ## Context
 
