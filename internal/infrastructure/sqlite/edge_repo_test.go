@@ -50,8 +50,8 @@ func TestEdgeRepo_SaveEdges_PersistsUnresolvedSimilarTo(t *testing.T) {
 	t.Parallel()
 	db, repo := openEdgeRepoTestDB(t)
 
-	e1, _ := domain.NewEdge("n-src", "n-tgt", domain.EdgeSimilarTo, domain.WithConfidence(domain.Unresolved))
-	e2, _ := domain.NewEdge("n-src", "n-tgt2", domain.EdgeSimilarTo, domain.WithConfidence(domain.Unresolved))
+	e1, _ := domain.NewEdge(domain.EdgeSpec{Src: "n-src", Tgt: "n-tgt", Kind: domain.EdgeSimilarTo}, domain.WithConfidence(domain.Unresolved))
+	e2, _ := domain.NewEdge(domain.EdgeSpec{Src: "n-src", Tgt: "n-tgt2", Kind: domain.EdgeSimilarTo}, domain.WithConfidence(domain.Unresolved))
 
 	if err := repo.SaveEdges(context.Background(), "r1", "main", []*domain.Edge{e1, e2}); err != nil {
 		t.Fatalf("SaveEdges: %v", err)
@@ -111,7 +111,7 @@ func TestEdgeRepo_SaveEdges_Idempotent(t *testing.T) {
 	t.Parallel()
 	db, repo := openEdgeRepoTestDB(t)
 
-	e, _ := domain.NewEdge("n-src", "n-tgt", domain.EdgeSimilarTo, domain.WithConfidence(domain.Unresolved))
+	e, _ := domain.NewEdge(domain.EdgeSpec{Src: "n-src", Tgt: "n-tgt", Kind: domain.EdgeSimilarTo}, domain.WithConfidence(domain.Unresolved))
 	if err := repo.SaveEdges(context.Background(), "r1", "main", []*domain.Edge{e}); err != nil {
 		t.Fatalf("first SaveEdges: %v", err)
 	}
@@ -136,12 +136,12 @@ func TestEdgeRepo_SaveEdges_DoesNotDowngradeResolved(t *testing.T) {
 	t.Parallel()
 	db, repo := openEdgeRepoTestDB(t)
 
-	definite, _ := domain.NewEdge("n-src", "n-tgt", domain.EdgeSimilarTo, domain.WithConfidence(domain.Definite))
+	definite, _ := domain.NewEdge(domain.EdgeSpec{Src: "n-src", Tgt: "n-tgt", Kind: domain.EdgeSimilarTo}, domain.WithConfidence(domain.Definite))
 	if err := repo.SaveEdges(context.Background(), "r1", "main", []*domain.Edge{definite}); err != nil {
 		t.Fatalf("save definite: %v", err)
 	}
 
-	unresolved, _ := domain.NewEdge("n-src", "n-tgt", domain.EdgeSimilarTo, domain.WithConfidence(domain.Unresolved))
+	unresolved, _ := domain.NewEdge(domain.EdgeSpec{Src: "n-src", Tgt: "n-tgt", Kind: domain.EdgeSimilarTo}, domain.WithConfidence(domain.Unresolved))
 	if err := repo.SaveEdges(context.Background(), "r1", "main", []*domain.Edge{unresolved}); err != nil {
 		t.Fatalf("save unresolved: %v", err)
 	}
@@ -161,7 +161,7 @@ func TestEdgeRepo_SaveEdges_RoundTripID(t *testing.T) {
 	t.Parallel()
 	db, repo := openEdgeRepoTestDB(t)
 
-	e, _ := domain.NewEdge("n-src", "n-tgt", domain.EdgeSimilarTo, domain.WithConfidence(domain.Unresolved))
+	e, _ := domain.NewEdge(domain.EdgeSpec{Src: "n-src", Tgt: "n-tgt", Kind: domain.EdgeSimilarTo}, domain.WithConfidence(domain.Unresolved))
 	if err := repo.SaveEdges(context.Background(), "r1", "main", []*domain.Edge{e}); err != nil {
 		t.Fatalf("SaveEdges: %v", err)
 	}

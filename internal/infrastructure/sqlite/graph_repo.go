@@ -353,8 +353,11 @@ func (r *GraphRepo) LoadGraph(ctx context.Context, repoID, branch string) (*doma
 		if srcLine.Valid && srcLine.Int64 > 0 {
 			opts = append(opts, domain.WithSourceLine(int(srcLine.Int64)))
 		}
-		e, err := domain.NewEdge(domain.NodeID(src), domain.NodeID(dst),
-			domain.EdgeKind(kind), opts...)
+		e, err := domain.NewEdge(domain.EdgeSpec{
+			Src:  domain.NodeID(src),
+			Tgt:  domain.NodeID(dst),
+			Kind: domain.EdgeKind(kind),
+		}, opts...)
 		if err != nil {
 			return nil, fmt.Errorf("graph_repo: rehydrate edge: %w", err)
 		}

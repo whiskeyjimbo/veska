@@ -6,11 +6,11 @@ import (
 
 // DoD 6: NewEdge produces deterministic ID for same (src, kind, tgt).
 func TestNewEdge_DeterministicID(t *testing.T) {
-	e1, err := NewEdge("nodeA", "nodeB", EdgeCalls)
+	e1, err := NewEdge(EdgeSpec{Src: "nodeA", Tgt: "nodeB", Kind: EdgeCalls})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	e2, err := NewEdge("nodeA", "nodeB", EdgeCalls)
+	e2, err := NewEdge(EdgeSpec{Src: "nodeA", Tgt: "nodeB", Kind: EdgeCalls})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -21,7 +21,7 @@ func TestNewEdge_DeterministicID(t *testing.T) {
 
 // ID should be 32 hex chars.
 func TestNewEdge_IDLength(t *testing.T) {
-	e, err := NewEdge("nodeA", "nodeB", EdgeCalls)
+	e, err := NewEdge(EdgeSpec{Src: "nodeA", Tgt: "nodeB", Kind: EdgeCalls})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -32,8 +32,8 @@ func TestNewEdge_IDLength(t *testing.T) {
 
 // Different (src, kind, tgt) should produce different IDs.
 func TestNewEdge_DifferentInputsDifferentID(t *testing.T) {
-	e1, _ := NewEdge("nodeA", "nodeB", EdgeCalls)
-	e2, _ := NewEdge("nodeA", "nodeC", EdgeCalls)
+	e1, _ := NewEdge(EdgeSpec{Src: "nodeA", Tgt: "nodeB", Kind: EdgeCalls})
+	e2, _ := NewEdge(EdgeSpec{Src: "nodeA", Tgt: "nodeC", Kind: EdgeCalls})
 	if e1.ID == e2.ID {
 		t.Error("expected different IDs for different edges")
 	}
@@ -41,7 +41,7 @@ func TestNewEdge_DifferentInputsDifferentID(t *testing.T) {
 
 // DoD 7: confidence != Unresolved sets resolved = true.
 func TestNewEdge_ConfidenceSetResolved(t *testing.T) {
-	e, err := NewEdge("nodeA", "nodeB", EdgeCalls, WithConfidence(Probable))
+	e, err := NewEdge(EdgeSpec{Src: "nodeA", Tgt: "nodeB", Kind: EdgeCalls}, WithConfidence(Probable))
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -55,7 +55,7 @@ func TestNewEdge_ConfidenceSetResolved(t *testing.T) {
 
 // Default confidence is Unresolved and resolved is false.
 func TestNewEdge_DefaultUnresolved(t *testing.T) {
-	e, err := NewEdge("nodeA", "nodeB", EdgeCalls)
+	e, err := NewEdge(EdgeSpec{Src: "nodeA", Tgt: "nodeB", Kind: EdgeCalls})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -70,7 +70,7 @@ func TestNewEdge_DefaultUnresolved(t *testing.T) {
 // Strong and Definite also set resolved.
 func TestNewEdge_StrongAndDefiniteResolved(t *testing.T) {
 	for _, c := range []Confidence{Strong, Definite} {
-		e, err := NewEdge("src", "tgt", EdgeImports, WithConfidence(c))
+		e, err := NewEdge(EdgeSpec{Src: "src", Tgt: "tgt", Kind: EdgeImports}, WithConfidence(c))
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -82,7 +82,7 @@ func TestNewEdge_StrongAndDefiniteResolved(t *testing.T) {
 
 // NewEdge with empty src returns error.
 func TestNewEdge_EmptySrc(t *testing.T) {
-	_, err := NewEdge("", "nodeB", EdgeCalls)
+	_, err := NewEdge(EdgeSpec{Src: "", Tgt: "nodeB", Kind: EdgeCalls})
 	if err == nil {
 		t.Fatal("expected error for empty src, got nil")
 		return
@@ -91,7 +91,7 @@ func TestNewEdge_EmptySrc(t *testing.T) {
 
 // NewEdge with empty tgt returns error.
 func TestNewEdge_EmptyTgt(t *testing.T) {
-	_, err := NewEdge("nodeA", "", EdgeCalls)
+	_, err := NewEdge(EdgeSpec{Src: "nodeA", Tgt: "", Kind: EdgeCalls})
 	if err == nil {
 		t.Fatal("expected error for empty tgt, got nil")
 		return
@@ -101,7 +101,7 @@ func TestNewEdge_EmptyTgt(t *testing.T) {
 // WithSourceLine sets the source_line optional field.
 func TestNewEdge_WithSourceLine(t *testing.T) {
 	line := 42
-	e, err := NewEdge("nodeA", "nodeB", EdgeContains, WithSourceLine(line))
+	e, err := NewEdge(EdgeSpec{Src: "nodeA", Tgt: "nodeB", Kind: EdgeContains}, WithSourceLine(line))
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -120,7 +120,7 @@ func TestEdgeKindValues(t *testing.T) {
 
 // DoD 6: NewEdge accepts SIMILAR_TO + Unresolved without rejecting the new kind.
 func TestNewEdge_SimilarToUnresolved(t *testing.T) {
-	e, err := NewEdge("nodeA", "nodeB", EdgeSimilarTo, WithConfidence(Unresolved))
+	e, err := NewEdge(EdgeSpec{Src: "nodeA", Tgt: "nodeB", Kind: EdgeSimilarTo}, WithConfidence(Unresolved))
 	if err != nil {
 		t.Fatalf("NewEdge with EdgeSimilarTo + Unresolved: %v", err)
 	}
@@ -146,13 +146,13 @@ func TestNewEdge_KindValidation(t *testing.T) {
 	}
 	for _, k := range valid {
 		t.Run(string(k), func(t *testing.T) {
-			_, err := NewEdge("src", "tgt", k)
+			_, err := NewEdge(EdgeSpec{Src: "src", Tgt: "tgt", Kind: k})
 			if err != nil {
 				t.Fatalf("valid kind %q rejected: %v", k, err)
 			}
 		})
 	}
-	if _, err := NewEdge("src", "tgt", EdgeKind("bogus")); err == nil {
+	if _, err := NewEdge(EdgeSpec{Src: "src", Tgt: "tgt", Kind: EdgeKind("bogus")}); err == nil {
 		t.Fatal("expected error for unknown EdgeKind, got nil")
 	}
 }
@@ -169,7 +169,7 @@ func TestWithConfidence_RangeValidation(t *testing.T) {
 		{Definite, true},
 	}
 	for _, tc := range cases {
-		e, err := NewEdge("src", "tgt", EdgeCalls, WithConfidence(tc.c))
+		e, err := NewEdge(EdgeSpec{Src: "src", Tgt: "tgt", Kind: EdgeCalls}, WithConfidence(tc.c))
 		if err != nil {
 			t.Fatalf("valid confidence %v rejected: %v", tc.c, err)
 		}
@@ -178,7 +178,7 @@ func TestWithConfidence_RangeValidation(t *testing.T) {
 		}
 	}
 	for _, bad := range []Confidence{Confidence(99), Confidence(-1)} {
-		if _, err := NewEdge("src", "tgt", EdgeCalls, WithConfidence(bad)); err == nil {
+		if _, err := NewEdge(EdgeSpec{Src: "src", Tgt: "tgt", Kind: EdgeCalls}, WithConfidence(bad)); err == nil {
 			t.Fatalf("expected error for out-of-range confidence %v, got nil", bad)
 		}
 	}
@@ -193,7 +193,7 @@ func TestConfidenceOrdering(t *testing.T) {
 
 // Required fields are set correctly.
 func TestNewEdge_RequiredFields(t *testing.T) {
-	e, err := NewEdge("src123", "tgt456", EdgeTests)
+	e, err := NewEdge(EdgeSpec{Src: "src123", Tgt: "tgt456", Kind: EdgeTests})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}

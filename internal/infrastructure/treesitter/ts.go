@@ -80,7 +80,11 @@ func (p *TSParser) ParseFile(ctx context.Context, repoID, path string, src []byt
 		if n == modNode {
 			continue
 		}
-		e, err := domain.NewEdge(modNode.ID, n.ID, domain.EdgeContains,
+		e, err := domain.NewEdge(domain.EdgeSpec{
+			Src:  modNode.ID,
+			Tgt:  n.ID,
+			Kind: domain.EdgeContains,
+		},
 			domain.WithConfidence(domain.Definite),
 		)
 		if err == nil {
@@ -363,7 +367,11 @@ func collectTSCallsFromClassBody(body *sitter.Node, src []byte, symbols map[stri
 				continue
 			}
 			seen[key] = true
-			e, err := domain.NewEdge(caller.ID, calleeNode.ID, domain.EdgeCalls,
+			e, err := domain.NewEdge(domain.EdgeSpec{
+				Src:  caller.ID,
+				Tgt:  calleeNode.ID,
+				Kind: domain.EdgeCalls,
+			},
 				domain.WithConfidence(domain.Probable),
 			)
 			if err == nil {
@@ -454,7 +462,11 @@ func collectTSCallsFromTopLevel(node *sitter.Node, src []byte, symbols map[strin
 				if !ok {
 					continue
 				}
-				e, err := domain.NewEdge(caller.ID, calleeNode.ID, domain.EdgeCalls,
+				e, err := domain.NewEdge(domain.EdgeSpec{
+					Src:  caller.ID,
+					Tgt:  calleeNode.ID,
+					Kind: domain.EdgeCalls,
+				},
 					domain.WithConfidence(domain.Probable),
 				)
 				if err == nil {
@@ -483,7 +495,11 @@ func collectTSCallsFromTopLevel(node *sitter.Node, src []byte, symbols map[strin
 		if !ok {
 			continue
 		}
-		e, err := domain.NewEdge(callerNode.ID, calleeNode.ID, domain.EdgeCalls,
+		e, err := domain.NewEdge(domain.EdgeSpec{
+			Src:  callerNode.ID,
+			Tgt:  calleeNode.ID,
+			Kind: domain.EdgeCalls,
+		},
 			domain.WithConfidence(domain.Probable),
 		)
 		if err == nil {
