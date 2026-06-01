@@ -33,8 +33,19 @@ func repoCmd() *cobra.Command {
 func repoAliasCmd() *cobra.Command {
 	var force bool
 	cmd := &cobra.Command{
-		Use:          "alias <name> <repo-id-or-prefix-or-alias>",
-		Short:        "Bind a human-friendly name to a repo",
+		Use:   "alias <name> <repo-id-or-prefix-or-alias>",
+		Short: "Bind a human-friendly name to a repo",
+		Long: `Bind a human-friendly name to a repo.
+
+The new name comes FIRST, the existing repo SECOND — same order as
+"git remote add <name> <url>". (Note this is the reverse of "ln -s <target>
+<link>".) If the arguments look swapped, the command detects it and prints a
+hint rather than failing silently.`,
+		Example: `  # Alias the repo whose id starts with "a1b2" to the name "lib":
+  veska repo alias lib a1b2
+
+  # Overwrite an existing alias:
+  veska repo alias lib c3d4 --force`,
 		Args:         cobra.ExactArgs(2),
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
