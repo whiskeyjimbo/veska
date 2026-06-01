@@ -14,18 +14,23 @@ verified_date: "2026-05-17"
 > **defaults < `~/.veska/config.toml` < env vars** and `Validate()`
 > enforces the tracing rule. The struct covers `[daemon]`, `[logging]`,
 > `[metrics]`, `[tracing]`, `[storage]`, `[watcher]`, `[embedder]`,
-> `[post_promotion_queue]`, `[budget]`, `[llm_generator]`, `[review]`.
+> `[post_promotion_queue]`, `[budget]`, `[llm_generator]`, `[review]`,
+> `[autolink]`, `[blast]`.
 > **Consumed today (live):** `embedder.rate_per_sec`,
-> `post_promotion_queue.poll_interval`, and the `[watcher]` wake knobs
-> (`wake_tick`, `wake_threshold`, `wake_concurrency`) are threaded into
-> `cmd/veska-daemon/wire.go` (`buildReconciler`); the four env vars
-> (`VESKA_OLLAMA_URL`, `VESKA_EMBED_MODEL`, `VESKA_VECTOR_BACKEND`,
-> `VESKA_DEBUG`) override their struct fields. **Planned:** every other
-> key is decoded and available on `Config` but not yet read by the
-> daemon. Sections not in the struct above (`[parser]`, `[branch_pk]`,
-> `[save]`, `[vuln_source]`, `[tracker]`, `[mcp]`, `[memory]`,
-> `[supervisor]`, `[backup]`, `[writer.*]`, `[reader]`, `[tokens]`,
-> `[retention]`, `[autolink]`) remain documented-but-unparsed.
+> `post_promotion_queue.poll_interval`, the `[watcher]` wake knobs
+> (`wake_tick`, `wake_threshold`, `wake_concurrency`) threaded into
+> `cmd/veska-daemon/wire.go` (`buildReconciler`), and the `[autolink]`
+> (`threshold`, `top_k`) / `[blast]` (`hub_degree_threshold`) tuning knobs
+> wired into the autolink linker and blast-radius service (solov2-l8su);
+> the env vars `VESKA_OLLAMA_URL`, `VESKA_EMBED_MODEL`,
+> `VESKA_VECTOR_BACKEND`, `VESKA_DEBUG`, `VESKA_HUB_THRESHOLD`,
+> `VESKA_AUTOLINK_THRESHOLD`, `VESKA_AUTOLINK_TOPK` override their struct
+> fields. **Planned:** every other key is decoded and available on
+> `Config` but not yet read by the daemon. Sections not in the struct
+> above (`[parser]`, `[branch_pk]`, `[save]`, `[vuln_source]`,
+> `[tracker]`, `[mcp]`, `[memory]`, `[supervisor]`, `[backup]`,
+> `[writer.*]`, `[reader]`, `[tokens]`, `[retention]`) remain
+> documented-but-unparsed.
 
 The whole story. One file (`~/.veska/config.toml`) plus a handful
 of environment variables. No per-workspace config files, no
@@ -54,6 +59,9 @@ captures inconsistent WAL state.
 | `VESKA_LOG_LEVEL` | `debug`, `info`, `warn`, `error`. | `info` |
 | `VESKA_OTLP_ENDPOINT` | OTLP exporter target. Enables tracing if set. Overrides `tracing.otlp_endpoint`. | unset |
 | `VESKA_METRICS_LISTEN` | Prometheus listener address (e.g. `127.0.0.1:9090`). Enables metrics if set. Overrides `metrics.listen`. | unset |
+| `VESKA_HUB_THRESHOLD` | Blast-radius hub-degree gate. Integer; negative disables the gate. Overrides `blast.hub_degree_threshold`. | `50` |
+| `VESKA_AUTOLINK_THRESHOLD` | Auto-link minimum similarity, `[0, 1]`. Overrides `autolink.threshold`. | `0.60` |
+| `VESKA_AUTOLINK_TOPK` | Auto-link per-source candidate cap (> 0). Overrides `autolink.top_k`. | `5` |
 
 Env vars override file values. CLI flags override env. No hot
 reload; restart for changes to take effect.
@@ -213,8 +221,25 @@ provider               = "none"              # "none" (default) | "bd-cli"
 # kind `auto-link-candidate`; the user accepts/rejects via
 # `eng_close_finding`. "apply" writes the edges directly with
 # confidence='probable'. "off" disables the worker entirely.
+#
+# threshold / top_k tune the candidate computation (solov2-l8su). Defaults
+# are calibrated against the gate-3 nomic-embed-text fixture; a different
+# embedder or repo layout is the reason to change them. threshold is a lower
+# bound on the higher-is-closer similarity 1/(1+L2dist) and is only meaningful
+# on L2-normalised embeddings.
 [autolink]
-mode                   = "suggest"           # "suggest" (default) | "apply" | "off"
+mode                   = "suggest"           # "suggest" (default) | "apply" | "off"  (mode not yet consumed)
+threshold              = 0.60                 # minimum similarity to emit a candidate; range [0, 1]
+top_k                  = 5                    # per-source candidate cap; must be > 0
+
+# ─── blast radius (graph BFS heuristics; solov2-l8su) ────────
+# hub_degree_threshold gates BFS expansion through high-degree "registry"
+# nodes (cobra rootCmd, http muxes): nodes with more neighbours than this are
+# reported but not expanded through, so a blast radius isn't drowned in
+# framework fan-out. A negative value disables the gate (legacy
+# expand-through-everything); 0 is rejected so the disable intent is explicit.
+[blast]
+hub_degree_threshold   = 50
 
 # ─── memory ──────────────────────────────────────────────────
 # Daemon-global RSS ceilings. Soft cap pauses the embed worker

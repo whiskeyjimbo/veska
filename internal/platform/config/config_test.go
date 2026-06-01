@@ -171,7 +171,9 @@ func TestEnvOverridesOTLPEndpoint(t *testing.T) {
 	t.Setenv("VESKA_OTLP_ENDPOINT", "localhost:4317")
 
 	c := DefaultConfig()
-	applyEnvOverrides(&c)
+	if err := applyEnvOverrides(&c); err != nil {
+		t.Fatalf("applyEnvOverrides: %v", err)
+	}
 	if c.Tracing.OTLPEndpoint != "localhost:4317" {
 		t.Errorf("VESKA_OTLP_ENDPOINT should override otlp_endpoint: got %q", c.Tracing.OTLPEndpoint)
 	}
@@ -242,9 +244,115 @@ disabled_checks = ["secrets-scan"]
 	}
 }
 
+func TestDefaultAutolinkAndBlast(t *testing.T) {
+	c := DefaultConfig()
+	if c.Autolink.Threshold != 0.60 {
+		t.Errorf("autolink.threshold default: got %v, want 0.60", c.Autolink.Threshold)
+	}
+	if c.Autolink.TopK != 5 {
+		t.Errorf("autolink.top_k default: got %d, want 5", c.Autolink.TopK)
+	}
+	if c.Blast.HubDegreeThreshold != 50 {
+		t.Errorf("blast.hub_degree_threshold default: got %d, want 50", c.Blast.HubDegreeThreshold)
+	}
+}
+
+func TestLoadDecodesAutolinkAndBlastSection(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("VESKA_HOME", dir)
+	clearOverrideEnv(t)
+
+	toml := `
+[autolink]
+threshold = 0.42
+top_k = 8
+
+[blast]
+hub_degree_threshold = 120
+`
+	if err := os.WriteFile(filepath.Join(dir, "config.toml"), []byte(toml), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	c, err := Load()
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if c.Autolink.Threshold != 0.42 {
+		t.Errorf("autolink.threshold: got %v want 0.42", c.Autolink.Threshold)
+	}
+	if c.Autolink.TopK != 8 {
+		t.Errorf("autolink.top_k: got %d want 8", c.Autolink.TopK)
+	}
+	if c.Blast.HubDegreeThreshold != 120 {
+		t.Errorf("blast.hub_degree_threshold: got %d want 120", c.Blast.HubDegreeThreshold)
+	}
+}
+
+func TestValidateRejectsBadAutolinkAndBlast(t *testing.T) {
+	cases := map[string]func(*Config){
+		"threshold above 1":  func(c *Config) { c.Autolink.Threshold = 1.5 },
+		"threshold negative": func(c *Config) { c.Autolink.Threshold = -0.1 },
+		"top_k zero":         func(c *Config) { c.Autolink.TopK = 0 },
+		"top_k negative":     func(c *Config) { c.Autolink.TopK = -3 },
+		"hub threshold zero": func(c *Config) { c.Blast.HubDegreeThreshold = 0 },
+	}
+	for name, mutate := range cases {
+		t.Run(name, func(t *testing.T) {
+			c := DefaultConfig()
+			mutate(&c)
+			if err := c.Validate(); err == nil {
+				t.Errorf("Validate should reject %s", name)
+			}
+		})
+	}
+}
+
+func TestValidateAllowsNegativeHubThreshold(t *testing.T) {
+	c := DefaultConfig()
+	c.Blast.HubDegreeThreshold = -1 // disables the hub gate — an explicit intent
+	if err := c.Validate(); err != nil {
+		t.Errorf("Validate should allow a negative hub threshold (gate disabled): %v", err)
+	}
+}
+
+func TestEnvOverridesAutolinkAndBlast(t *testing.T) {
+	clearOverrideEnv(t)
+	t.Setenv("VESKA_HUB_THRESHOLD", "120")
+	t.Setenv("VESKA_AUTOLINK_THRESHOLD", "0.42")
+	t.Setenv("VESKA_AUTOLINK_TOPK", "8")
+
+	c := DefaultConfig()
+	if err := applyEnvOverrides(&c); err != nil {
+		t.Fatalf("applyEnvOverrides: %v", err)
+	}
+	if c.Blast.HubDegreeThreshold != 120 {
+		t.Errorf("VESKA_HUB_THRESHOLD: got %d, want 120", c.Blast.HubDegreeThreshold)
+	}
+	if c.Autolink.Threshold != 0.42 {
+		t.Errorf("VESKA_AUTOLINK_THRESHOLD: got %v, want 0.42", c.Autolink.Threshold)
+	}
+	if c.Autolink.TopK != 8 {
+		t.Errorf("VESKA_AUTOLINK_TOPK: got %d, want 8", c.Autolink.TopK)
+	}
+}
+
+func TestEnvOverridesRejectMalformedNumbers(t *testing.T) {
+	for _, k := range []string{"VESKA_HUB_THRESHOLD", "VESKA_AUTOLINK_THRESHOLD", "VESKA_AUTOLINK_TOPK"} {
+		t.Run(k, func(t *testing.T) {
+			clearOverrideEnv(t)
+			t.Setenv(k, "not-a-number")
+			c := DefaultConfig()
+			if err := applyEnvOverrides(&c); err == nil {
+				t.Errorf("applyEnvOverrides should reject malformed %s", k)
+			}
+		})
+	}
+}
+
 func clearOverrideEnv(t *testing.T) {
 	t.Helper()
-	for _, k := range []string{"VESKA_OLLAMA_URL", "VESKA_EMBED_MODEL", "VESKA_VECTOR_BACKEND", "VESKA_DEBUG"} {
+	for _, k := range []string{"VESKA_OLLAMA_URL", "VESKA_EMBED_MODEL", "VESKA_VECTOR_BACKEND", "VESKA_DEBUG", "VESKA_HUB_THRESHOLD", "VESKA_AUTOLINK_THRESHOLD", "VESKA_AUTOLINK_TOPK"} {
 		t.Setenv(k, "")
 		os.Unsetenv(k)
 	}

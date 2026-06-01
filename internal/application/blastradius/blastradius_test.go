@@ -568,6 +568,73 @@ func TestOf_HubDegreeThresholdSuppressesFanout(t *testing.T) {
 	}
 }
 
+// hubFixture builds the star-shaped graph used by the configured-default tests:
+// cmd-a reaches a 6-degree hub one hop in, and each init-* sibling hangs off
+// the hub. Whether the init-b..f siblings appear depends on the hub gate.
+func hubFixture() (*fakeEdges, *fakeNodes) {
+	edges := &fakeEdges{inbound: map[string][]string{
+		"hub":    {"init-a", "init-b", "init-c", "init-d", "init-e", "init-f"},
+		"init-a": {"cmd-a"},
+		"init-b": {"cmd-b"},
+		"init-c": {"cmd-c"},
+		"init-d": {"cmd-d"},
+		"init-e": {"cmd-e"},
+		"init-f": {"cmd-f"},
+		"cmd-a":  {"hub"},
+	}}
+	nodes := &fakeNodes{metas: map[string]ports.NodeMeta{
+		"cmd-a": {NodeID: "cmd-a"}, "hub": {NodeID: "hub"},
+		"init-a": {NodeID: "init-a"}, "init-b": {NodeID: "init-b"},
+		"init-c": {NodeID: "init-c"}, "init-d": {NodeID: "init-d"},
+		"init-e": {NodeID: "init-e"}, "init-f": {NodeID: "init-f"},
+	}}
+	return edges, nodes
+}
+
+// blastFrom runs Of from cmd-a on a service built with the given configured
+// default hub threshold and returns the set of node IDs reached.
+func blastFrom(t *testing.T, defaultHub int) map[string]bool {
+	t.Helper()
+	edges, nodes := hubFixture()
+	s, err := blastradius.NewService(edges, nodes, nil,
+		blastradius.WithDefaultHubDegreeThreshold(defaultHub))
+	if err != nil {
+		t.Fatalf("construct: %v", err)
+	}
+	resp, err := s.Of(context.Background(), "r", "main", []string{"cmd-a"},
+		blastradius.Options{MaxDepth: 3})
+	if err != nil {
+		t.Fatalf("Of: %v", err)
+	}
+	ids := map[string]bool{}
+	for _, e := range resp.Entries {
+		ids[e.NodeID] = true
+	}
+	return ids
+}
+
+// TestOf_ConfiguredDefaultHubGates guards solov2-l8su: WithDefaultHubDegreeThreshold
+// supplies the gate value when a per-call Options leaves HubDegreeThreshold at 0.
+func TestOf_ConfiguredDefaultHubGates(t *testing.T) {
+	ids := blastFrom(t, 3) // hub has 6 neighbours > 3 → gated
+	for _, sib := range []string{"init-b", "init-c", "init-d", "init-e", "init-f"} {
+		if ids[sib] {
+			t.Errorf("configured default should gate hub: %s should be absent", sib)
+		}
+	}
+}
+
+// TestOf_ConfiguredDefaultHubNegativeDisables guards solov2-l8su: a negative
+// configured default disables the gate with no per-call override.
+func TestOf_ConfiguredDefaultHubNegativeDisables(t *testing.T) {
+	ids := blastFrom(t, -1)
+	for _, sib := range []string{"init-b", "init-c", "init-d", "init-e", "init-f"} {
+		if !ids[sib] {
+			t.Errorf("negative configured default should disable gate; %s missing", sib)
+		}
+	}
+}
+
 func TestParseDirection(t *testing.T) {
 	for _, tc := range []struct {
 		in   string
