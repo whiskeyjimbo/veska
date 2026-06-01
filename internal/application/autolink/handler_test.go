@@ -403,8 +403,20 @@ func TestHandler_FakesEmitOneEdgeAndOneFindingPerCandidate(t *testing.T) {
 	if len(findings.saved) != 3 {
 		t.Fatalf("expected 3 findings, got %d", len(findings.saved))
 	}
-	// Each finding's node_id anchor must equal the corresponding edge's ID.
+	// Each saved SIMILAR_TO edge must carry its candidate's similarity score
+	// (solov2-c1s4 seam: Candidate.Score -> domain.WithScore -> persisted edge).
 	saved := edges.saved[0]
+	wantScores := map[string]float32{"t1": 0.91, "t2": 0.88, "t3": 0.95}
+	for _, e := range saved {
+		if e.Score == nil {
+			t.Errorf("edge %s->%s missing score", e.Src, e.Tgt)
+			continue
+		}
+		if want := wantScores[string(e.Tgt)]; *e.Score != want {
+			t.Errorf("edge to %s score = %v, want %v", e.Tgt, *e.Score, want)
+		}
+	}
+	// Each finding's node_id anchor must equal the corresponding edge's ID.
 	wantAnchors := map[string]bool{saved[0].ID: true, saved[1].ID: true, saved[2].ID: true}
 	for _, f := range findings.saved {
 		if f.NodeID == nil {
