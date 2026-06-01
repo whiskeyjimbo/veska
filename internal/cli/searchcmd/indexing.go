@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 
@@ -76,22 +77,17 @@ func emitColdScanSummary(ctx context.Context, db *sql.DB, w io.Writer, repoID, b
 	if db == nil {
 		return
 	}
-	rows, err := db.QueryContext(ctx,
-		`SELECT rule, COUNT(*) FROM findings
-		 WHERE repo_id = ? AND branch = ? AND state = 'open'
-		 GROUP BY rule ORDER BY rule`,
-		repoID, branch,
-	)
+	counts, err := sqlite.NewFindingQuerierRepo(db).OpenFindingCountsByRule(ctx, repoID, branch)
 	if err != nil {
 		return
 	}
-	defer func() { _ = rows.Close() }()
-	for rows.Next() {
-		var rule string
-		var n int
-		if err := rows.Scan(&rule, &n); err != nil {
-			return
-		}
+	rules := make([]string, 0, len(counts))
+	for rule := range counts {
+		rules = append(rules, rule)
+	}
+	sort.Strings(rules)
+	for _, rule := range rules {
+		n := counts[rule]
 		if n == 0 {
 			continue
 		}
