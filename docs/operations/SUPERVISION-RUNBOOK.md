@@ -5,7 +5,7 @@ status: draft
 last_reviewed: 2026-05-08
 related: [SOLO-03, SOLO-13, CONFIG-SURFACE]
 verified: true
-verified_date: "2026-05-17"
+verified_date: "2026-06-01"
 ---
 
 # Supervision Runbook
@@ -106,7 +106,7 @@ Properties:
 
 - Exits 0 on a clean child exit (`veska-daemon` returned 0).
 - Exits 78 on a child exit-78 (terminal — schema mismatch,
-  sqlite-vec missing, etc.) without restarting. The
+  usearch native library missing, etc.) without restarting. The
   supervisor's parent (the user's autostart hook) sees the 78
   and stops trying.
 - On any other non-zero child exit, restarts the child after
@@ -206,7 +206,7 @@ the last 10 minutes. Common causes:
 |---|---|
 | RSS > 4 GiB hard cap | `~/.veska/logs/daemon.log` for repeated `veska_code: "ErrMemoryHardCap"` lines. Likely a refactor storm or a massive cold-scan. |
 | Migration failure | Same log, `veska_code: "ErrMigrationFailed"`. Inspect schema drift. |
-| sqlite-vec extension missing | `veska_code: "ErrVecExtensionMissing"`. Reinstall the extension. |
+| `usearch` backend selected but native library missing | `veska_code: "ErrVectorStoreUnavailable"`. This is a terminal **exit-78** (the supervisor halts; it does *not* trip the crash-loop breaker). Use a `hnsw_native` build with `libusearch_c.so` present, or set `VESKA_VECTOR_BACKEND=memory`. The default `memory` backend has no native dependency. |
 | Disk full | `veska doctor storage` exit 2. Free space. |
 | `~/.veska/` on NFS or other unsupported filesystem | `veska doctor storage` reports `ErrUnsupportedFS`. SQLite + WAL has known correctness issues on NFS. Move `~/.veska/` (`VESKA_HOME`) to a local filesystem. |
 | `daemon_state.restart_count` row missing or invalid | `veska doctor` reports `ErrCounterInvalid`. The daemon treats a missing/invalid row as zero on next start (re-creates the row in its initial-boot transaction), logs a warning, and continues. SQLite handles the atomicity; corruption of this row alone does not require manual file editing. |
@@ -217,7 +217,7 @@ Recovery:
 # 1. Read the recent log to identify the cause
 tail -100 ~/.veska/logs/daemon.log
 
-# 2. Address the cause (free disk, reinstall sqlite-vec, etc.)
+# 2. Address the cause (free disk, fix the usearch library / backend selection, etc.)
 
 # 3. Clear the breaker
 veska doctor reset-crash-loop   # clears the breaker marker after summarising the cause

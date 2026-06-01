@@ -6,7 +6,7 @@ version: 0.1.0
 last_reviewed: 2026-05-08
 related: [SOLO-01, SOLO-04, SOLO-07, SOLO-08, SOLO-09, SOLO-11]
 verified: true
-verified_date: "2026-05-16"
+verified_date: "2026-06-01"
 ---
 
 # SOLO-03 — The Daemon
@@ -61,7 +61,7 @@ PRODUCT.md three-box diagram is a simplification of this:
 │   ┌──────────┐  cli.sock           │  veska-daemon   │              │
 │   │  veska  │ ──────────────────▶ │                  │              │
 │   │  (CLI)   │ (MCP tools + ctrl   │  ┌─ SQLite       │              │
-│   └──────────┘  RPC; SOLO-09 §1.3) │  │  + sqlite-vec │              │
+│   └──────────┘  RPC; SOLO-09 §1.3) │  │  + vector idx │              │
 │                                    │  ├─ embed worker │              │
 │                                    │  ├─ post-promotion    │              │
 │                                    │  │  queue drain  │              │
@@ -94,8 +94,10 @@ request, so an agent cannot present itself as a human by lying
 in a header. The CLI binary `veska` connects only to
 `cli.sock`; the stdio shim `veska-mcp` connects only to
 `mcp.sock`. There are no external network listeners by default.
-SQLite is in-process (CGO); sqlite-vec loads as an extension
-into the same database file. Ollama runs as a separate user
+SQLite is in-process (CGO); the vector search index is held
+outside SQL (in-memory `memvec` by default, or optional usearch
+`.hnsw` files — SOLO-08 §1.1), not loaded into the database file.
+Ollama runs as a separate user
 process the daemon talks to over HTTP — that is the only
 outbound connection in the default configuration.
 
@@ -334,19 +336,19 @@ operation; the daemon does not wrap it. The probe in init and
 
 **`veska embedder swap <model>`.** Switching the active model
 warrants a wrapped command because it is not a pure Ollama
-operation: the database's vector geometry (`vec_nodes`'s
-declared dim), `database_meta.embedder_*`, the on-disk config,
-and every `node_embeddings` row must all move to the new model
-together. The user is not in a position to script that
-correctly.
+operation: the embedding geometry (`database_meta.embedder_*`
+and every `node_embeddings.dim` row), the derived vector index
+(in-memory `memvec`, or usearch `.hnsw` files), and the on-disk
+config must all move to the new model together. The user is not
+in a position to script that correctly.
 
 The swap is a **multi-step procedure with a daemon-stopped
 default, an explicit pre-snapshot, and a refuse-to-start-on-
-inconsistency invariant** — not an atomic transaction.
-Virtual-table DDL atomicity for `vec_nodes` is implementation-
-defined for the sqlite-vec extension, so the in-tx grouping in
-step 4 is best-effort. The pre-snapshot in step 3 is the
-canonical recovery path.
+inconsistency invariant** — not an atomic transaction. The
+vector index lives outside SQL (in-memory for `memvec`; sibling
+`.hnsw` files for usearch), so it cannot participate in the
+`BEGIN IMMEDIATE`/`COMMIT` that covers the SQL rows in step 4.
+The pre-snapshot in step 3 is the canonical recovery path.
 
 ```
 veska embedder swap nomic-embed-text-v1.5
@@ -361,7 +363,8 @@ The sequence the daemon runs:
    is missing, exit non-zero with the `ollama pull` command.
    **Refuse-to-start invariant.** Before doing any of the
    following, the daemon checks `database_meta.embedder_*`
-   against the live `vec_nodes` declared dim. If they disagree
+   against the stored `node_embeddings.dim` rows. If they
+   disagree
    (a prior swap left the DB inconsistent), the swap aborts
    with instructions pointing at `veska backup restore` and
    the most recent `pre-swap-*` snapshot. The swap will not
@@ -374,20 +377,19 @@ The sequence the daemon runs:
    snapshot, written to `~/.veska-backups/pre-swap-...`. **This
    is the canonical recovery point.**
 4. Run the storage transitions on `writeDB.hot`. The daemon
-   wraps these in a single `BEGIN IMMEDIATE`/`COMMIT` for the
-   rows it controls, but the virtual-table `DROP`/`CREATE`
-   participates in that transaction only as far as the
-   sqlite-vec extension's behaviour allows. **Treat this as a
-   procedure, not an atomic transaction.** If any step fails,
-   recovery is "stop the daemon, restore the step-3 snapshot,"
-   not "the rollback put us back where we started":
-   - Drop `vec_nodes` (the virtual table; the underlying
-     storage goes with it).
+   wraps the SQL rows it controls in a single `BEGIN IMMEDIATE`/
+   `COMMIT`, but the derived vector index lives outside SQL and
+   is reset separately. **Treat this as a procedure, not an
+   atomic transaction.** If any step fails, recovery is "stop
+   the daemon, restore the step-3 snapshot," not "the rollback
+   put us back where we started":
    - Truncate `node_embeddings` and `node_embedding_refs`.
    - Update `database_meta.embedder_provider`,
      `embedder_model`, `embedder_dim`.
-   - Re-`CREATE VIRTUAL TABLE vec_nodes USING vec0(...
-     FLOAT[<new_dim>])`.
+   - Reset the vector index for the new dim: the in-memory
+     `memvec` store clears with the truncate and rebuilds empty;
+     the usearch backend deletes its sibling `.hnsw` index files
+     so they are recreated at the new dim.
    - Mark every node's `node_embedding_refs.state = 'pending'`
      so the embed worker re-derives embeddings against the new
      model.
@@ -401,8 +403,8 @@ Properties:
 
 - **Recovery is the pre-swap snapshot.** Step 3's snapshot is
   the canonical recovery path. Step 4's transactional grouping
-  is opportunistic — `vec_nodes` DDL rollback is
-  implementation-defined for sqlite-vec — and the design does
+  is opportunistic — the vector index reset happens outside the
+  SQL transaction — and the design does
   not depend on it. The refuse-to-start invariant in step 1
   enforces snapshot-restore as the recovery path on the next
   launch. OQ-S004 measures the in-tx rollback case empirically;
@@ -412,9 +414,9 @@ Properties:
   surface `degraded_reasons:["embedding_pending"]` until the
   queue drains. There is no all-or-nothing wait.
 - **Model dim mismatches are caught.** Step 1 reads the new
-  model's dim; step 4 writes the new `vec_nodes` against that
-  dim. The boot consistency check (SOLO-08 §3.3) covers
-  subsequent restarts.
+  model's dim; step 4 records it in `database_meta.embedder_dim`
+  and resets the vector index to that dim. The boot consistency
+  check (SOLO-08 §3.3) covers subsequent restarts.
 
 The CLI subcommand `veska embedder current` prints the active
 provider/model/dim from `database_meta`. `veska doctor
@@ -493,8 +495,10 @@ On start the daemon:
 1. Loads config from `~/.veska/config.toml`; probes `~/.veska/`
    filesystem.
 2. Checks the broken marker and crash-loop breaker (§5.6).
-3. Opens SQLite (`~/.veska/veska.db`); loads sqlite-vec from
-   `~/.veska/lib/vec0.<ext>` (SOLO-08 §1.1); runs the migration
+3. Opens SQLite (`~/.veska/veska.db`); initialises the vector
+   backend (in-memory `memvec` by default, rebuilt from
+   `node_embeddings`; or usearch `.hnsw` files if selected —
+   SOLO-08 §1.1); runs the migration
    runner (SOLO-08 §10); checks `database_meta` against
    `[embedder]` config; checks `[backup].required`.
 4. Brings up embedding worker, post-promotion-queue-drain goroutines, fsnotify
@@ -685,13 +689,15 @@ A SIGKILL is also survivable — see 5.3.
 Releases — one archive per platform pair (`linux/amd64`,
 `linux/arm64`, `darwin/amd64`, `darwin/arm64`). Each archive
 contains the three binaries (`veska`, `veska-daemon`,
-`veska-mcp`) and the per-platform sqlite-vec extension
-(SOLO-08 §1.1); the daemon writes the extension to
-`~/.veska/lib/` on first start. **No auto-update; no package
+`veska-mcp`). The default `memory` vector backend needs no
+native library; builds that ship the optional usearch backend
+(`hnsw_native` tag) additionally bundle `libusearch_c.so`
+(SOLO-08 §1.1). **No auto-update; no package
 manager dependency.** Homebrew tap and a shell installer
 (`curl -fsSL https://veska.sh/install.sh | sh`) are
 M5-or-later work and not required for V2.0. macOS releases are
-notarised (sqlite-vec dylib + binaries, signed by the same
+notarised (binaries, plus `libusearch_c` dylib in usearch
+builds, signed by the same
 certificate); Linux releases ship unsigned and are verified
 against published SHA-256 checksums.
 
@@ -745,8 +751,9 @@ exists).
 
 The breaker exists for *runtime* crashes — the daemon came up,
 ran, and exited non-78 (e.g. RSS hard cap, SOLO-13 §3.3; panic
-in a core goroutine). Refuse-to-start cases (sqlite-vec missing,
-schema mismatch, ErrEmbedderMismatch, etc.) all exit 78 and the
+in a core goroutine). Refuse-to-start cases (usearch backend
+selected but native library missing, schema mismatch,
+ErrEmbedderMismatch, etc.) all exit 78 and the
 supervisor halts on its own; they do **not** count against the
 breaker. §5.8 is the canonical matrix.
 
@@ -948,7 +955,7 @@ breaker (§5.6) — 78 is terminal, not retry-eligible.
 | # | Reason | Detected at | Stage in §5.1 | Remediation |
 |---|---|---|---|---|
 | 1 | `~/.veska/state/broken` marker present | start, before any work | step 2 | `veska doctor reset-crash-loop` after investigating the prior error log |
-| 2 | sqlite-vec extension missing or unloadable | DB open | step 3 | install the extension; restart |
+| 2 | `usearch` backend selected (`VESKA_VECTOR_BACKEND=usearch`) but `hnsw_native` tag / `libusearch_c.so` missing — `vector.ErrVectorStoreUnavailable` | vector init (wiring) | step 3 | use a `hnsw_native` build with `libusearch_c.so` on the loader path, or set `VESKA_VECTOR_BACKEND=memory`. (The default `memory` backend never hits this.) |
 | 3 | Schema `current < min_schema` (binary too new) | migration runner | step 3 | downgrade binary, or restore a newer backup |
 | 4 | Schema `current > max_schema` (binary too old) | migration runner | step 3 | upgrade binary, or restore a pre-upgrade backup |
 | 5 | Migration N failed mid-transaction | migration runner | step 3 | fix migration / downgrade binary / restore the verified pre-migration snapshot (SOLO-08 §10.4) |
@@ -1010,7 +1017,7 @@ drain `post_promotion_queue` independently.
 | Embedding worker crashes | Restarted by the daemon supervisor. Pending refs stay `pending`. Semantic search returns `degraded_reasons: ["embedding_pending"]`. | Automatic on restart. |
 | Ollama unreachable | Embedding worker logs and backs off. Pending queue grows. | Self-heals when Ollama is back; the worker resumes. |
 | Disk full | Promotion fails; hook returns non-zero; daemon refuses new MCP writes until disk pressure clears. | `veska doctor disk` reports; user frees space. |
-| sqlite-vec extension missing | Daemon refuses to start; clear error with install instructions. | Install the extension, restart. |
+| `usearch` backend selected but `libusearch_c.so` / `hnsw_native` tag missing | Daemon refuses to start (`vector.ErrVectorStoreUnavailable`). The default `memory` backend has no native dependency. | Use a `hnsw_native` build with the library present, or set `VESKA_VECTOR_BACKEND=memory`; restart. |
 | WAL grows unboundedly | Daemon checkpoints the WAL when idle (no writes for 5s). `PRAGMA wal_autocheckpoint = 1000` (pages). | Automatic. |
 | Editor connects during staging-recovering window | MCP responses carry `degraded_reasons: ["staging_recovering"]` and serve the promoted view. | Resolves when fsnotify reparse completes (sub-second to seconds). |
 | RSS exceeds 4 GiB hard cap | Daemon exits; supervisor restarts. Crash-loop breaker (§5.6) trips after 5 restarts in 10 minutes. | `veska doctor reset-crash-loop` after fixing the underlying cause; see SUPERVISION-RUNBOOK.md §4. |

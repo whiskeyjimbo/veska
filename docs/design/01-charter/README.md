@@ -6,7 +6,7 @@ version: 0.1.0
 last_reviewed: 2026-05-08
 related: [SOLO-03, SOLO-04, SOLO-08, SOLO-11]
 verified: true
-verified_date: "2026-05-16"
+verified_date: "2026-06-01"
 ---
 
 # SOLO-01 — Scope and principles
@@ -38,8 +38,10 @@ per-repo.
 
 The system has three parts:
 
-1. **Substrate.** The graph (nodes, edges) and the embeddings,
-   stored in SQLite + sqlite-vec, in one file.
+1. **Substrate.** The graph (nodes, edges) and the embedding
+   bytes, stored in one SQLite file. The vector search index is
+   derived from those bytes at startup — in-memory by default,
+   or optional usearch `.hnsw` sidecars (SOLO-08 §1.1).
 2. **Pipelines.** What runs on save (in-memory only) and what runs
    on promotion (commit-time, durable).
 3. **MCP.** The editor- and agent-facing API. SOLO-09 §3 is the canonical inventory.

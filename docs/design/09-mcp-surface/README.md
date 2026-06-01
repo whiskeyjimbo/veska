@@ -5,7 +5,7 @@ status: draft
 version: 0.1.0
 last_reviewed: 2026-05-17
 verified: true
-verified_date: "2026-05-18"
+verified_date: "2026-06-01"
 related: [SOLO-01, SOLO-03, SOLO-04, SOLO-08, SOLO-11, SOLO-12, SOLO-15]
 ---
 
@@ -458,7 +458,7 @@ broken.
 | **Wake-reconcile** running | promoted + (pre-sweep) staging with `degraded_reasons: ["wake_reconciling"]` | succeed normally; the sweep doesn't write | One-line non-blocking notice ("Veska re-syncing after sleep"); reads usable; clears within seconds |
 | **Embedder-swap** running | promoted reads succeed; `eng_search_semantic` returns FTS5 lexical fallback with `degraded_reasons: ["embedder_swapping", "embedder_offline_lexical_fallback"]` | refused with `ErrUpstreamUnavailable`, `data.context.cause = "embedder_swapping"`; caller may retry once the swap state clears | Show "lexical-only search" badge; allow other reads |
 | **Crash-loop tripped** | shim returns `ErrDaemonNotRunning`; `data.context.cli_command` = `veska doctor reset-crash-loop` | same | Surface the `cli_command` as a copyable block; same paste-handoff pattern as the human-action gate (SOLO-10 §3.3) |
-| **Refuse-to-start** (sqlite-vec missing, schema mismatch, unsupported FS, etc.; SOLO-03 §5.8) | shim returns `ErrDaemonNotRunning` | same | Render `data.context.last_error` with an "open log file" affordance |
+| **Refuse-to-start** (usearch native library missing, schema mismatch, unsupported FS, etc.; SOLO-03 §5.8) | shim returns `ErrDaemonNotRunning` | same | Render `data.context.last_error` with an "open log file" affordance |
 
 **Probe protocol.** The editor's MCP integration SHOULD poll
 `eng_get_status` every 2s while any non-`ok` state is reported

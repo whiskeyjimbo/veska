@@ -6,7 +6,7 @@ version: 0.1.0
 last_reviewed: 2026-05-17
 related: [SOLO-03, SOLO-08, SOLO-09, SOLO-10, SOLO-13]
 verified: true
-verified_date: "2026-05-17"
+verified_date: "2026-06-01"
 ---
 
 # SOLO-16 — Error Catalogue
@@ -114,7 +114,7 @@ in that matrix.
 | `veska_code` | When | Remediation |
 |---|---|---|
 | `ErrCrashLoop` | `~/.veska/state/broken` marker present at start | `veska doctor reset-crash-loop` after investigation |
-| `ErrSqliteVecMissing` | sqlite-vec extension missing or unloadable | reinstall the binary (extension is bundled per SOLO-08 §1.1); if persistent, file a bug |
+| `ErrVectorStoreUnavailable` | `VESKA_VECTOR_BACKEND=usearch` selected but the `hnsw_native` build tag / `libusearch_c.so` is missing (`internal/infrastructure/vector`). The default `memory` backend has no native dependency and never raises this. | use a `hnsw_native` build with `libusearch_c.so` on the loader path, or set `VESKA_VECTOR_BACKEND=memory` (SOLO-08 §1.1) |
 | `ErrSchemaTooNew` | `current < min_schema` | downgrade binary, or restore newer backup |
 | `ErrSchemaTooOld` | `current > max_schema` | upgrade binary, or restore pre-upgrade backup |
 | `ErrMigrationFailed` | Migration N rolled back | fix migration / downgrade / restore pre-migration snapshot |
@@ -208,7 +208,7 @@ These are not MCP errors — they are *findings* or *degraded reasons*. The `ves
 | `ErrBackupCorrupt` | `veska doctor backup` finds the most recent backup unreadable | 2 | Same |
 | `ErrRestoreDaemonRunning` | `veska backup restore` while daemon up | 2 | `veska daemon stop`; rerun |
 | `ErrRestorePartial` | Restore failed mid-sequence; rolled back via `.replaced-<ts>/` sidecar | 3 | Sidecar preserved; investigate before retrying |
-| `ErrEmbedderSwapInconsistent` | `database_meta.embedder_*` ≠ live `vec_nodes` declared dim at start | 78 | Restore most recent `pre-swap-*` snapshot |
+| `ErrEmbedderSwapInconsistent` | `database_meta.embedder_*` ≠ stored `node_embeddings.dim` at start | 78 | Restore most recent `pre-swap-*` snapshot |
 | `ErrEmbedderModelMissing` | Pre-swap probe fails | 1 | `ollama pull <model>`; retry |
 
 ### 3.6 Filesystem / disk
