@@ -45,7 +45,7 @@ import (
 
 // OutputDim is the index-compatible vector dimension. Vectors from
 // this provider are zero-padded from NativeDim() up to OutputDim so
-// they fit the existing 768-dim sqlite-vec / usearch schema.
+// they fit the existing 768-dim memory / usearch vector schema.
 const OutputDim = 768
 
 // embeddingsTensorName is the conventional key safetensors uses for

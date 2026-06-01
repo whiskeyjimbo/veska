@@ -23,7 +23,7 @@ func testConfig(t *testing.T) Config {
 		SQLitePath:    filepath.Join(home, "veska.db"),
 		CLISockPath:   filepath.Join(home, "cli.sock"),
 		MCPSockPath:   filepath.Join(home, "mcp.sock"),
-		VectorBackend: vector.BackendSQLiteVec,
+		VectorBackend: vector.BackendMemory,
 		OllamaURL:     "http://127.0.0.1:0", // unreachable; not dialed at construct time
 		EmbedModel:    "nomic-embed-text",
 	}
@@ -64,12 +64,12 @@ func TestWire_UnknownVectorBackend(t *testing.T) {
 // TestWire_HonorsEnvVectorBackend ensures the VESKA_VECTOR_BACKEND env var is
 // resolved when Config.VectorBackend is empty.
 func TestWire_HonorsEnvVectorBackend(t *testing.T) {
-	t.Setenv("VESKA_VECTOR_BACKEND", string(vector.BackendSQLiteVec))
+	t.Setenv("VESKA_VECTOR_BACKEND", string(vector.BackendMemory))
 	cfg := testConfig(t)
 	cfg.VectorBackend = "" // force env path
 	resolved := ResolveConfig(cfg)
-	if resolved.VectorBackend != vector.BackendSQLiteVec {
-		t.Fatalf("VectorBackend = %q; want %q", resolved.VectorBackend, vector.BackendSQLiteVec)
+	if resolved.VectorBackend != vector.BackendMemory {
+		t.Fatalf("VectorBackend = %q; want %q", resolved.VectorBackend, vector.BackendMemory)
 	}
 }
 
@@ -175,8 +175,8 @@ func TestResolveConfig_AppliesDefaults(t *testing.T) {
 	if got.MCPSockPath == "" {
 		t.Error("MCPSockPath empty after resolve")
 	}
-	if got.VectorBackend != vector.BackendSQLiteVec {
-		t.Errorf("VectorBackend = %q; want %q", got.VectorBackend, vector.BackendSQLiteVec)
+	if got.VectorBackend != vector.BackendMemory {
+		t.Errorf("VectorBackend = %q; want %q", got.VectorBackend, vector.BackendMemory)
 	}
 	// EmbedModel is intentionally NOT defaulted daemon-wide anymore: it
 	// only matters when the elected embedder is Ollama, and elect supplies

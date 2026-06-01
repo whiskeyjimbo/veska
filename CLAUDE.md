@@ -113,8 +113,8 @@ internal/
     mcp/                  <- stdio MCP shim that proxies to the daemon's Unix socket
   infrastructure/
     sqlite/               <- graph + queue + FTS storage; PromotionStore + sinks
-    vector/               <- dual-backend VectorStorage (sqlite-vec default,
-                             usearch/float16 HNSW via the hnsw_native build tag)
+    vector/               <- dual-backend VectorStorage (in-memory `memvec`
+                             default, usearch/float16 HNSW via hnsw_native build tag)
     embedding/ollama/     <- Ollama EmbeddingProvider adapter
     treesitter/           <- CodeParser
     mcp/                  <- MCP server + tool families
@@ -138,10 +138,10 @@ internal/
 | Dependency | Purpose | Notes |
 |---|---|---|
 | SQLite (`github.com/mattn/go-sqlite3`, in-proc, cgo + `sqlite_fts5`) | graph + queue + FTS storage | no server process. Pinned via `internal/infrastructure/sqlite/sqldriver/`; chosen for the 1.6–2.5× speedup over modernc on driver-bound workloads . The pure-Go modernc opt-in was removed  because tree-sitter requires cgo anyway, so the no-cgo cross-compile story it preserved did not actually exist. |
-| sqlite-vec / usearch | vector storage | sqlite-vec default; usearch HNSW above the M2 threshold (`hnsw_native` tag + `libusearch_c.so`) |
+| in-memory `memvec` / usearch | vector storage | in-memory linear-scan default (no SQL — `memvec`, formerly mis-named `sqlitevec`; see ADR-S0016); usearch HNSW above the M2 threshold (`hnsw_native` tag + `libusearch_c.so`) |
 | Ollama | local embeddings | `VESKA_OLLAMA_URL` (default `http://localhost:11434`), `VESKA_EMBED_MODEL` (default `nomic-embed-text`) |
 
-Env: `VESKA_HOME` (data root), `VESKA_VECTOR_BACKEND` (`sqlite-vec`|`usearch`).
+Env: `VESKA_HOME` (data root), `VESKA_VECTOR_BACKEND` (`memory`|`usearch`).
 
 ### Key design decisions
 
