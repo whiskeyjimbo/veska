@@ -69,12 +69,3 @@ func tokenizeQuery(q string) []string {
 	}
 	return out
 }
-
-func basename(p string) string {
-	for i := len(p) - 1; i >= 0; i-- {
-		if p[i] == '/' || p[i] == '\\' {
-			return p[i+1:]
-		}
-	}
-	return p
-}

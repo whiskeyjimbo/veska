@@ -9,7 +9,10 @@
 // monorepo layouts like `apps/foo/vendor/...` are covered too.
 package pathfilter
 
-import "strings"
+import (
+	"slices"
+	"strings"
+)
 
 // VendoredSegments is the canonical list of path segments that mark a
 // dependency-vendoring directory. Kept narrow on purpose: each entry is a
@@ -24,34 +27,17 @@ var VendoredSegments = []string{
 }
 
 // IsVendored reports whether path lives under any VendoredSegments directory.
-// An empty path is treated as not-vendored.
+// Matching is on full `/`-separated segments, so substring matches (e.g.
+// "vendored_data" containing "vendor") do not count. An empty path is treated
+// as not-vendored.
 func IsVendored(path string) bool {
 	if path == "" {
 		return false
 	}
-	for _, seg := range VendoredSegments {
-		if hasSegment(path, seg) {
+	for seg := range strings.SplitSeq(path, "/") {
+		if slices.Contains(VendoredSegments, seg) {
 			return true
 		}
 	}
 	return false
-}
-
-// hasSegment reports whether seg appears as a full `/`-separated segment of
-// path. Substring matches (e.g. "vendored_data" containing "vendor") do not
-// count.
-func hasSegment(path, seg string) bool {
-	for {
-		i := strings.Index(path, seg)
-		if i < 0 {
-			return false
-		}
-		leftOK := i == 0 || path[i-1] == '/'
-		end := i + len(seg)
-		rightOK := end == len(path) || path[end] == '/'
-		if leftOK && rightOK {
-			return true
-		}
-		path = path[i+len(seg):]
-	}
 }

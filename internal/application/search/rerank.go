@@ -1,6 +1,7 @@
 package search
 
 import (
+	"path"
 	"slices"
 	"sort"
 	"strings"
@@ -114,7 +115,7 @@ func trailingIdentifier(symbolPath string) string {
 const identifierStemBonusFrac = 0.25
 
 func identifierStemBonus(r Result, tokens []string, maxScore float32) float32 {
-	matches := identifierStemMatches(tokens, r.SymbolPath, basename(r.FilePath))
+	matches := identifierStemMatches(tokens, r.SymbolPath, path.Base(r.FilePath))
 	if matches == 0 {
 		return 0
 	}
