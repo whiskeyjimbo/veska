@@ -115,8 +115,12 @@ func NewTaskSet() *TaskSet {
 }
 
 // Add inserts t into the set. Returns ErrDuplicateActiveTask if t.Active is
-// true and a different task is already marked active for t.RepoID.
+// true and a different task is already marked active for t.RepoID. A nil task
+// is rejected with an error rather than panicking, mirroring Graph.AddNode.
 func (ts *TaskSet) Add(t *Task) error {
+	if t == nil {
+		return errors.New("task: task must not be nil")
+	}
 	if t.Active {
 		if existing, ok := ts.activeByRepo[t.RepoID]; ok && existing.ID != t.ID {
 			return ErrDuplicateActiveTask
