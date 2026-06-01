@@ -13,6 +13,7 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/sqlite/sqldriver"
 
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/backup"
+	"github.com/whiskeyjimbo/veska/internal/platform/archive"
 )
 
 // seedDB creates a minimal SQLite database at dbPath.
@@ -83,7 +84,7 @@ func TestCreateBackupBasic(t *testing.T) {
 	}
 
 	// Must be a valid gzip.
-	if err := backup.VerifyGzip(result.Path); err != nil {
+	if err := archive.VerifyGzip(result.Path); err != nil {
 		t.Fatalf("VerifyGzip: %v", err)
 	}
 
