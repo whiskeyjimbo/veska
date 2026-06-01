@@ -19,9 +19,18 @@ type MtimeEntry struct {
 	Size    int64
 }
 
-// ReconcileHandler is called with the path of each file whose mtime/size changed
-// since last sweep. The reconciler calls this for every changed file it discovers.
-type ReconcileHandler func(path string)
+// ReconcileHandler is called with the owning repo ID and the path of each file
+// whose mtime/size changed since the last sweep. The reconciler calls this for
+// every changed file it discovers. ctx is the sweep's context so a long handler
+// can honour daemon shutdown.
+type ReconcileHandler func(ctx context.Context, repoID, path string)
+
+// watchedDir pairs a registered directory tree with the repo that owns it, so
+// the handler can be told which repo a changed file belongs to.
+type watchedDir struct {
+	repoID string
+	dir    string
+}
 
 // WakeReconciler detects system suspend/resume by comparing wall-clock time
 // across a periodic tick interval. When the gap between two ticks exceeds
@@ -35,7 +44,7 @@ type WakeReconciler struct {
 	nowFn         func() time.Time
 
 	mu          sync.Mutex
-	dirs        []string
+	dirs        []watchedDir
 	mtimeMap    map[string]MtimeEntry // guarded by mu
 	lastTick    time.Time             // guarded by mu
 	reconciling atomic.Bool
@@ -44,34 +53,52 @@ type WakeReconciler struct {
 	wakeCh chan struct{}
 }
 
+// Option configures a WakeReconciler at construction.
+type Option func(*WakeReconciler)
+
+// WithClock overrides the time source (default time.Now). Injectable for tests.
+func WithClock(nowFn func() time.Time) Option {
+	return func(r *WakeReconciler) {
+		if nowFn != nil {
+			r.nowFn = nowFn
+		}
+	}
+}
+
+// WithIgnoreList supplies a .gitignore-semantics matcher; changed files it
+// matches are skipped. A nil list (the default) skips nothing.
+func WithIgnoreList(ignore *infrafs.IgnoreList) Option {
+	return func(r *WakeReconciler) { r.ignore = ignore }
+}
+
 // NewWakeReconciler creates a reconciler that ticks every wakeTick and considers
-// a gap > wakeThreshold to indicate a suspend/resume event.
-// handler is called with the absolute path of each changed file on wake.
-// ignore may be nil (no files are skipped).
-// nowFn is injectable for testing (use time.Now in production).
+// a gap > wakeThreshold to indicate a suspend/resume event. handler is called
+// with the owning repo ID and absolute path of each changed file on wake.
 func NewWakeReconciler(
 	wakeTick time.Duration,
 	wakeThreshold time.Duration,
 	handler ReconcileHandler,
-	ignore *infrafs.IgnoreList,
-	nowFn func() time.Time,
+	opts ...Option,
 ) *WakeReconciler {
-	return &WakeReconciler{
+	r := &WakeReconciler{
 		wakeTick:      wakeTick,
 		wakeThreshold: wakeThreshold,
 		handler:       handler,
-		ignore:        ignore,
-		nowFn:         nowFn,
+		nowFn:         time.Now,
 		mtimeMap:      make(map[string]MtimeEntry),
 		wakeCh:        make(chan struct{}, 1),
 	}
+	for _, opt := range opts {
+		opt(r)
+	}
+	return r
 }
 
-// AddDir registers a directory tree to sweep on wake.
-func (r *WakeReconciler) AddDir(dir string) {
+// AddDir registers a repo's directory tree to sweep on wake.
+func (r *WakeReconciler) AddDir(repoID, dir string) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	r.dirs = append(r.dirs, dir)
+	r.dirs = append(r.dirs, watchedDir{repoID: repoID, dir: dir})
 }
 
 // IsReconciling returns true while a wake sweep is in progress.
@@ -93,7 +120,7 @@ func (r *WakeReconciler) Start(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case <-r.wakeCh:
-			r.runSweep()
+			r.runSweep(ctx)
 		case <-ticker.C:
 			now := r.nowFn()
 			r.mu.Lock()
@@ -102,10 +129,10 @@ func (r *WakeReconciler) Start(ctx context.Context) {
 			r.mu.Unlock()
 			if now.Sub(last) > r.wakeThreshold {
 				r.mu.Lock()
-				dirs := append([]string(nil), r.dirs...)
+				dirs := append([]watchedDir(nil), r.dirs...)
 				r.mu.Unlock()
 				slog.Warn("wake_reconciling", "dirs", dirs)
-				r.sweepDirs()
+				r.sweepDirs(ctx)
 			}
 		}
 	}
@@ -115,29 +142,29 @@ func (r *WakeReconciler) Start(ctx context.Context) {
 // synchronously in the caller's goroutine so tests can observe results
 // immediately after the call returns.
 func (r *WakeReconciler) InjectWake() {
-	r.runSweep()
+	r.runSweep(context.Background())
 }
 
 // runSweep performs the mtime sweep synchronously.
-func (r *WakeReconciler) runSweep() {
+func (r *WakeReconciler) runSweep(ctx context.Context) {
 	r.reconciling.Store(true)
 	defer r.reconciling.Store(false)
-	r.sweepDirs()
+	r.sweepDirs(ctx)
 }
 
 // sweepDirs walks each registered directory, compares mtime+size to the last-seen
 // map, calls handler for changed files, and updates the map.
-func (r *WakeReconciler) sweepDirs() {
+func (r *WakeReconciler) sweepDirs(ctx context.Context) {
 	r.mu.Lock()
-	dirs := append([]string(nil), r.dirs...)
+	dirs := append([]watchedDir(nil), r.dirs...)
 	r.mu.Unlock()
 
-	for _, dir := range dirs {
-		r.sweepDir(dir)
+	for _, wd := range dirs {
+		r.sweepDir(ctx, wd.repoID, wd.dir)
 	}
 }
 
-func (r *WakeReconciler) sweepDir(dir string) {
+func (r *WakeReconciler) sweepDir(ctx context.Context, repoID, dir string) {
 	_ = filepath.WalkDir(dir, func(path string, d fs.DirEntry, err error) error {
 		if err != nil || d.IsDir() {
 			return nil
@@ -169,7 +196,7 @@ func (r *WakeReconciler) sweepDir(dir string) {
 		if !known || prev.ModTime != current.ModTime || prev.Size != current.Size {
 			if known {
 				// Only call handler when we have a baseline (second+ sweep).
-				r.handler(path)
+				r.handler(ctx, repoID, path)
 			}
 		}
 		return nil
