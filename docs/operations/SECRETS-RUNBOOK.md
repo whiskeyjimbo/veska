@@ -9,12 +9,12 @@ verified_date: "2026-05-17"
 
 # Secrets Runbook
 
-When Engram's secret-scan fires, a credential has been written to
-disk. Engram redacts the credential from its own mirror and
-surfaces a finding. **Engram cannot un-publish a secret.** The
+When Veska's secret-scan fires, a credential has been written to
+disk. Veska redacts the credential from its own mirror and
+surfaces a finding. **Veska cannot un-publish a secret.** The
 remaining steps are on you.
 
-## What Engram does (automatically)
+## What Veska does (automatically)
 
 - **Redacts the credential** in `nodes` rows: `raw_content` is
   replaced with a placeholder; the `node_id` and `content_hash` are
@@ -27,7 +27,7 @@ remaining steps are on you.
 - **Refuses to log the secret value** in `audit.jsonl` (the writer
   redacts known secret patterns at write time).
 
-That is everything Engram can do alone. The credential is still
+That is everything Veska can do alone. The credential is still
 in your Git history, on every clone of the repo, and on every
 mirror that has fetched from your remote.
 
@@ -46,7 +46,7 @@ first; everything else is hygiene.
 
 If the leaked credential is the kind you would re-use elsewhere
 (a long-lived API key, a personal access token), rewrite history
-to remove it. Engram cannot do this for you. Pick a tool:
+to remove it. Veska cannot do this for you. Pick a tool:
 
 ```bash
 # Option A — git-filter-repo (recommended)
@@ -72,7 +72,7 @@ Public forks are out of your control; if the repo is public, the
 secret is permanent and Step 1 (rotation) is the only thing that
 matters.
 
-### Step 3 — Acknowledge in Engram
+### Step 3 — Acknowledge in Veska
 
 Findings are managed over MCP, not the CLI. Use the MCP tools:
 
@@ -101,11 +101,11 @@ rotate."
 
 - **Public repos.** The secret is permanent. Rotate. Move on.
 - **Forks and mirrors.** Out of scope for any local tool.
-- **Binary blobs.** Engram does not parse binaries; mirror
+- **Binary blobs.** Veska does not parse binaries; mirror
   redaction applies only to indexed nodes.
-- **CI logs and build artifacts.** Engram does not own these.
+- **CI logs and build artifacts.** Veska does not own these.
   Your CI retention policy does.
-- **Off-disk leaks** (chat, ticket, PR comment). Engram cannot see
+- **Off-disk leaks** (chat, ticket, PR comment). Veska cannot see
   these. Rotation is the answer.
 
 The framing: the mirror redaction is hygiene. Rotation is the

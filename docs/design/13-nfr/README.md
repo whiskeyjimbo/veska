@@ -615,7 +615,7 @@ the §2 contract.
 | **zfs** on Linux/FreeBSD | supported | Same caveats as btrfs CoW; same warning. |
 | **NFS / SMB / network filesystems** | refused | SQLite WAL requires the same process to hold both the `-wal` and `-shm` mappings; networked filesystems break this. The daemon refuses to start with `ErrUnsupportedFilesystem`. |
 | **eCryptfs** | refused | Inflicts mmap inconsistency on the SHM segment. The daemon refuses to start. Move `$VESKA_HOME` to a non-eCryptfs location. (Note: this affects some Ubuntu installs that still use eCryptfs for `$HOME`; the user picks `~/.veska` outside `$HOME` via `VESKA_HOME`.) |
-| **overlayfs (devcontainers, Docker bind-mount edge cases)** | refused if `~/.veska/` lands on the upper layer of an overlay; supported on a tmpfs / volume mount | Devcontainers commonly mount the project root as overlayfs. Engram's data must live on a path that is *not* overlay (a named volume, a tmpfs, or a bind-mount). `veska doctor fs` detects overlay and refuses with a remediation pointing at named-volume setup. |
+| **overlayfs (devcontainers, Docker bind-mount edge cases)** | refused if `~/.veska/` lands on the upper layer of an overlay; supported on a tmpfs / volume mount | Devcontainers commonly mount the project root as overlayfs. Veska's data must live on a path that is *not* overlay (a named volume, a tmpfs, or a bind-mount). `veska doctor fs` detects overlay and refuses with a remediation pointing at named-volume setup. |
 | **FUSE filesystems generally (sshfs, gcsfuse, s3fs)** | refused | Same WAL/SHM issue as NFS. |
 
 The check uses `statfs(2)` on Linux (`f_type` field) and
@@ -710,7 +710,7 @@ shipped macOS at NORMAL. The defence was that startup-resync
 start. That argument depends on Git itself fsync-ing the HEAD
 update; Git's `core.fsync` defaults vary by version and distro
 and don't reliably cover ref updates on every install. On a
-real power-cut both the Engram promotion and the Git HEAD
+real power-cut both the Veska promotion and the Git HEAD
 advance can be lost independently, after which
 `last_promoted_sha == HEAD` looks consistent and resync sees no
 work — but the user's commit is gone. We eat the budget cost
@@ -1000,7 +1000,7 @@ section or the number is wrong. SOLO-13 §3 is the canonical home.
 
 ## 4. Degraded modes
 
-Engram returns partial answers rather than refusing service when a
+Veska returns partial answers rather than refusing service when a
 dependency is unavailable. MCP responses carry
 `degraded_reasons: [...]` so callers know the answer is partial.
 

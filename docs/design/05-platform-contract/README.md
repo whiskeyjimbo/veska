@@ -11,7 +11,7 @@ verified_date: "2026-05-17"
 
 # SOLO-05 — Plugin Surface
 
-Engram has plugin-swappable ports. Each is a plain Go interface
+Veska has plugin-swappable ports. Each is a plain Go interface
 in `internal/core/ports/`. **Each ships with exactly one
 implementation at M1.** A second impl is a future ADR — once
 that ADR ratifies the second impl, provider-keyed selection

@@ -13,7 +13,7 @@ verified_date: "2026-05-16"
 
 ## 1. The decision
 
-Engram Solo stores everything in **one SQLite file** at
+Veska Solo stores everything in **one SQLite file** at
 `~/.veska/veska.db`. Vector embeddings live in the same file via
 the `sqlite-vec` extension. There are no child processes for
 storage. There is no Dolt. There are no Dolt branches mirroring
@@ -32,7 +32,7 @@ library statically linked into the daemon. Packaging is part of
 the substrate decision and is committed here rather than left to
 the build system:
 
-- **Per-platform builds.** Engram ships separate binaries for
+- **Per-platform builds.** Veska ships separate binaries for
   `linux/amd64`, `linux/arm64`, `darwin/amd64`, `darwin/arm64`.
   Each build embeds the matching pre-built sqlite-vec extension
   (`vec0.so` on Linux, `vec0.dylib` on macOS) as a Go `embed.FS`
@@ -629,7 +629,7 @@ discipline applied to the audit shape:
 | Changing the type of an existing field | yes |
 | Repurposing a field's meaning | yes |
 
-A `v` bump ships only in a minor Engram version with a migration
+A `v` bump ships only in a minor Veska version with a migration
 note in CHANGELOG. Patch releases never bump `v`.
 
 #### 3.5.4 Rotation
@@ -775,7 +775,7 @@ the macOS-NORMAL story relied on the startup-resync path
 (SOLO-03 §5.7) replaying missing promotions from Git on next
 start. That defence only holds if Git itself fsync'd the HEAD
 update. Git's `core.fsync` defaults vary by version and distro;
-on a real power-cut both Engram's promotion and Git's HEAD
+on a real power-cut both Veska's promotion and Git's HEAD
 advance can be lost independently, after which
 `last_promoted_sha == HEAD` looks consistent and resync sees
 nothing to do — but the user's commit work is gone. Honest
@@ -1032,7 +1032,7 @@ automatically.
 
 - **Continuous replication.** None. Use the OS's filesystem
   snapshot tooling (APFS, ZFS, Btrfs) if you want time-machine
-  semantics; that is out of Engram's surface.
+  semantics; that is out of Veska's surface.
 - **Differential / incremental backup.** Each `backup create`
   is a full snapshot. **Opt-in auto-backup with 7 retained** is
   the default shape (`[backup].auto = true` ships *off* by
@@ -1048,7 +1048,7 @@ automatically.
   Solo developers who want no auto-backups leave
   `[backup].auto = false`.
 - **Encrypted backups.** The tarball is plain. Wrap it with `gpg`
-  or filesystem encryption if you need confidentiality. Engram
+  or filesystem encryption if you need confidentiality. Veska
   redacts secret patterns at write time (SOLO-08 §3.5,
   SECRETS-RUNBOOK.md), but the audit log can still contain
   attribution and tool names.

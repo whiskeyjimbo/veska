@@ -237,7 +237,7 @@ boundary. Be precise about both halves:
   connect to `cli.sock` and present as `actor_kind = 'human'`,
   or it can shell out to `veska finding close ...` directly.
   The OS user is the only privilege boundary on the machine;
-  Engram does not invent another one.
+  Veska does not invent another one.
 - It does not authenticate the human. A second person with shell
   access on the same account is indistinguishable from the user
   who started the daemon — by design, given the single-user
@@ -413,7 +413,7 @@ the V2 roadmap.
 | **No predicate language.** No CEL, no Rego, no DSL. The gate is one `if` statement. | More than one gate, or a gate that depends on per-finding metadata beyond severity. |
 | **No group-to-role mapping.** No groups. No roles. No `requires: committer`. | A multi-user product with privilege tiers. |
 | **No IDP integration.** No Okta, no Google Workspace, no AD, no GitHub Org. | A server tier with team-managed access. |
-| **No federation.** No `urn:veska:actor:...`, no DIDs, no ActivityPub. | A cross-machine product where multiple Engram instances exchange data. |
+| **No federation.** No `urn:veska:actor:...`, no DIDs, no ActivityPub. | A cross-machine product where multiple Veska instances exchange data. |
 | **No identity merge.** No aliasing across emails, no email-change handling. | A history that needs to track a single person across renames — not relevant when `actor_id` is a label. |
 | **No personal-data scrub.** Right-to-be-forgotten is not a workflow. | A regulatory obligation that applies to a multi-user audit log. |
 | **No fourth `actor_kind` value.** `'human'`, `'agent'`, `'system'` is the closed set. | A new origin category that doesn't fit any of the three (e.g., a federated peer). |
@@ -431,7 +431,7 @@ A: it doesn't, and it doesn't need to.
 
 - The human runs the daemon. The daemon's process owner is the
   human's OS user. Anything else with that user's privileges is
-  outside Engram's threat model (§3.1).
+  outside Veska's threat model (§3.1).
 - The human approves agent actions through the editor's MCP
   consent flow. That happens above the daemon, in the editor.
 - When an agent edit reaches the daemon, the daemon records

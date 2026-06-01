@@ -13,7 +13,7 @@ verified_date: "2026-05-16"
 
 ## 1. Purpose
 
-This is the topology view of Engram Solo: one developer, one
+This is the topology view of Veska Solo: one developer, one
 machine, one daemon. It names the binaries, draws the runtime,
 spells out the lifecycle, and walks an end-to-end developer
 journey from edit through commit to drain. Subsystem detail
@@ -78,7 +78,7 @@ PRODUCT.md three-box diagram is a simplification of this:
 
 **Six runtime pieces, one stateful component.** The daemon owns
 the only state (`~/.veska/`); the other five (CLI, shim,
-supervisor, Ollama, editor) are stateless from Engram's
+supervisor, Ollama, editor) are stateless from Veska's
 perspective. The supervisor is load-bearing for first-run UX
 (§3.1) and crash-loop semantics (§5.6) and is not optional —
 the no-supervisor "manual mode" (`veska daemon` from a
@@ -638,7 +638,7 @@ and `repos.active_branch` is updated to the working tree's
 current branch. This closes the pathological case (daemon
 stopped, user runs `git checkout`, daemon restarted with the
 post-checkout hook already discarded by the shell) without
-depending on the hook firing. §5.7's Git↔Engram resync handles
+depending on the hook firing. §5.7's Git↔Veska resync handles
 the SHA-level recovery; the staging-vs-HEAD check handles the
 branch-level one. Both run on the same restart path.
 
@@ -653,7 +653,7 @@ The daemon may be restarted at any time:
   MCP responses carry `degraded_reasons: ["staging_recovering"]`.
 - **post-promotion queue** — rows in `state = in_progress` are reset to `pending`
   on startup; the drain goroutines pick them up.
-- **Git↔Engram resync (§5.7)** — for every registered repo, the
+- **Git↔Veska resync (§5.7)** — for every registered repo, the
   daemon compares `repos.last_promoted_sha` against the working
   tree's `HEAD` and replays missing commits into the promoted
   graph before serving begins.
@@ -793,8 +793,8 @@ and the editor's MCP connection just times out. Before exiting
 of these is available, in this order, and stops at the first
 that succeeds:
 
-1. **macOS:** `osascript -e 'display notification "Engram daemon stopped (crash-loop). Run: veska doctor reset-crash-loop" with title "Engram"'`
-2. **Linux with `notify-send`:** `notify-send -u critical "Engram" "Daemon stopped (crash-loop). Run: veska doctor reset-crash-loop"`
+1. **macOS:** `osascript -e 'display notification "Veska daemon stopped (crash-loop). Run: veska doctor reset-crash-loop" with title "Veska"'`
+2. **Linux with `notify-send`:** `notify-send -u critical "Veska" "Daemon stopped (crash-loop). Run: veska doctor reset-crash-loop"`
 3. **Always (fallback):** write `~/.veska/state/CRASH-LOOP-TRIPPED.txt` with the timestamp, the last 50 log lines, and the remediation command.
 
 The notifier is best-effort; failure to deliver does not block
@@ -829,7 +829,7 @@ the underlying refuse-to-start condition is fixed). The
 notification path on macOS or Linux-with-`notify-send` is
 best-effort; the banner is the guarantee.
 
-### 5.7 Git↔Engram resync on startup
+### 5.7 Git↔Veska resync on startup
 
 Application crashes, SIGKILLs, and clean restarts can leave
 `last_promoted_sha < HEAD` whenever the user committed without a
@@ -852,7 +852,7 @@ but before the MCP listener accepts connections, the daemon:
    | `last_promoted_sha` is **not** reachable from `HEAD` (force-push, branch deletion, history rewrite) | **Divergent path.** Log `veska_code: "ErrPromotionDivergent"` with the diverged SHA. Do **not** rewrite history. Set `repos.last_promoted_sha = HEAD` after a fresh full reparse of the working tree (the same flow as `veska repo add`'s cold scan, scoped to one repo). Findings anchored to commits unreachable from `HEAD` remain in the database under their original `branch` value; they are pruned only by `veska gc --branches` once the branch they belong to is gone. |
 
 4. Cross-branch state — a sibling branch advanced while another
-   was active — is **not** chased. Engram only resyncs the repo's
+   was active — is **not** chased. Veska only resyncs the repo's
    *currently checked-out* branch on startup. Sibling branches
    resync the next time the user `git checkout`s them (SOLO-11
    §1.5 branch-switch quiescence).

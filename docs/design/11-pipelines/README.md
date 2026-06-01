@@ -359,7 +359,7 @@ count; users with heavy amend workflows should expect
 `veska doctor storage` to show drift between graph node count
 and reachable-from-`HEAD` node count.
 
-**Bisect is read-only as far as Engram is concerned.** Each
+**Bisect is read-only as far as Veska is concerned.** Each
 `git bisect` step does a `checkout` (handled by §1.3) but the
 intermediate commits are not user authorship; promoting them
 produces no useful state and pollutes the audit log. The
@@ -369,7 +369,7 @@ avoid storming the watcher (`.git/BISECT_LOG` present →
 post-checkout returns 0).
 
 This shape mirrors the V1 hook behaviour and is intentional:
-during in-progress Git operations Engram's view is stale, and
+during in-progress Git operations Veska's view is stale, and
 that is fine because no one is querying it during a rebase.
 
 ### 2.4 What promotion does NOT do

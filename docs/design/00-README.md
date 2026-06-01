@@ -1,6 +1,6 @@
 ---
 id: SOLO-00
-title: "Engram Solo Design Set — Conventions"
+title: "Veska Solo Design Set — Conventions"
 status: draft
 version: 0.1.0
 last_reviewed: 2026-05-08
@@ -12,14 +12,14 @@ verified_date: "2026-05-16"
 
 ## Purpose
 
-This set defines Engram's solo architecture: one daemon, one
+This set defines Veska's solo architecture: one daemon, one
 developer, one machine.
 
 ## How to read this set
 
 | If you are… | Read in this order |
 |---|---|
-| New to Engram | PRODUCT → SOLO-01 → SOLO-03 → SOLO-08 |
+| New to Veska | PRODUCT → SOLO-01 → SOLO-03 → SOLO-08 |
 | An implementer | SOLO-04 → SOLO-08 → SOLO-07 → SOLO-11 → SOLO-09 |
 | A reviewer | SOLO-01 → SOLO-15 → relevant section |
 

@@ -13,7 +13,7 @@ verified_date: "2026-05-17"
 
 ## 1. Purpose
 
-Engram runs on a developer's laptop. The substrate is one SQLite
+Veska runs on a developer's laptop. The substrate is one SQLite
 file plus a handful of supporting files under `~/.veska/`. That
 single file is the user's only copy of their structural ground
 truth — there is no upstream, no replica, no service tier to

@@ -14,7 +14,7 @@ verified_date: "2026-05-16"
 ## 1. Purpose
 
 Names the entities, aggregates, value objects, and invariants of
-Engram Solo's core domain. Storage schema (SOLO-08), MCP exposure
+Veska Solo's core domain. Storage schema (SOLO-08), MCP exposure
 (SOLO-09), and pipeline orchestration (SOLO-11) all bind to the
 terms defined here.
 
@@ -782,7 +782,7 @@ Entities with constructors (signatures as shipped in
 ## 10a. Naming note: `Actor` and `Kind`
 
 The `Actor` noun in this model collides with the Actor model
-(Erlang/Akka). It does not refer to that pattern; an Engram
+(Erlang/Akka). It does not refer to that pattern; an Veska
 `Actor` is just an attribution stamp (`actor_id` + `actor_kind`).
 The `Kind` suffix on `ActorKind`, `NodeKind`, `EdgeKind`,
 `SourceLayer` is consistent project-wide and is unrelated to Go's

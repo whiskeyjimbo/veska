@@ -12,7 +12,7 @@ verified_date: "2026-05-16"
 
 ## Context
 
-Engram needs to tell humans, agents, and the daemon's own
+Veska needs to tell humans, agents, and the daemon's own
 background work apart on writes, so that:
 
 - The audit log records who did what.

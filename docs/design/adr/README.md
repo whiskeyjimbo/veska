@@ -1,4 +1,4 @@
-# Architecture Decision Records — Engram Solo
+# Architecture Decision Records — Veska Solo
 
 This directory holds ADRs cited from the SOLO design set. ADRs are
 MADR-style; each one records a discrete decision worth pinning.

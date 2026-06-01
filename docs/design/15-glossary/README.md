@@ -1,6 +1,6 @@
 ---
 id: SOLO-15
-title: "Glossary — Engram Solo"
+title: "Glossary — Veska Solo"
 status: draft
 version: 0.1.0
 last_reviewed: 2026-05-08

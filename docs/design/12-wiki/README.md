@@ -187,7 +187,7 @@ tie-break every list they materialise.
   reserved for a probe failure (nil store or query error).
 
 The user can `git add docs/veska/` to commit the pages or add
-`docs/veska/` to `.gitignore`. Engram does not stage them.
+`docs/veska/` to `.gitignore`. Veska does not stage them.
 
 ## 6. Performance
 
