@@ -67,9 +67,14 @@ const (
 
 // BlastParams bundles the inputs of RunBlast.
 type BlastParams struct {
-	Mode      BlastMode
-	Selector  string // required when Mode == BlastSymbol; ignored otherwise
-	RepoID    string
+	Mode     BlastMode
+	Selector string // required when Mode == BlastSymbol; ignored otherwise
+	RepoID   string
+	// RefA/RefB scope a BlastDiff to a git ref range (ref_a..ref_b). Both
+	// empty means the working-tree-vs-HEAD default. Ignored unless
+	// Mode == BlastDiff. solov2-l5tx.
+	RefA      string
+	RefB      string
 	Direction string // raw flag value; normalized internally
 	JSONOut   bool
 	Out       io.Writer
@@ -88,6 +93,15 @@ func RunBlast(ctx context.Context, p BlastParams) error {
 		params, tool = map[string]any{}, "eng_get_dirty_blast_radius"
 	case BlastDiff:
 		params, tool = map[string]any{}, "eng_get_diff_blast_radius"
+		// ref_a/ref_b are all-or-nothing at the tool boundary; the Cobra
+		// layer guarantees both are set together (or both empty for the
+		// working-tree default).
+		if p.RefA != "" {
+			params["ref_a"] = p.RefA
+		}
+		if p.RefB != "" {
+			params["ref_b"] = p.RefB
+		}
 	default:
 		params, tool = selectorParams(p.Selector), "eng_get_blast_radius"
 	}
