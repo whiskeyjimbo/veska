@@ -11,9 +11,11 @@ import (
 // proposed edges as a batch.
 //
 // SaveEdges must be safe for concurrent use and idempotent on the
-// (edge_id, branch) primary key: re-saving the same edge must not error or
-// downgrade an already-resolved edge to Unresolved. Implementations
-// achieve this with ON CONFLICT DO NOTHING — the first writer wins.
+// (edge_id, branch) primary key: re-saving the same edge must not error,
+// duplicate the row, or downgrade an already-resolved edge to Unresolved.
+// The first writer wins for identity and confidence; an implementation MAY
+// refresh a mutable strength signal (e.g. domain.Edge.Score) on conflict
+// without violating this contract.
 //
 // An empty edges slice is a no-op (nil error, no round-trip).
 type EdgeStorage interface {

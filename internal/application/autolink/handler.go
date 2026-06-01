@@ -312,6 +312,10 @@ func (h *Handler) emitFindings(ctx context.Context, row ports.WorkRow, cands []C
 				Kind: domain.EdgeSimilarTo,
 			},
 			domain.WithConfidence(domain.Unresolved),
+			// Persist the similarity score so near-duplicate detection can
+			// threshold SIMILAR_TO edges above autolink's related cutoff
+			// (solov2-c1s4). Same score space as the finding message.
+			domain.WithScore(c.Score),
 		)
 		if err != nil {
 			return fmt.Errorf("autolink.Handle: build edge: %w", err)
