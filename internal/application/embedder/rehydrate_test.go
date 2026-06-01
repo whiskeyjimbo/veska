@@ -2,12 +2,11 @@ package embedder_test
 
 import (
 	"context"
-	"encoding/binary"
 	"errors"
-	"math"
 	"testing"
 
 	"github.com/whiskeyjimbo/veska/internal/application/embedder"
+	"github.com/whiskeyjimbo/veska/internal/application/veccodec"
 	"github.com/whiskeyjimbo/veska/internal/core/domain"
 )
 
@@ -103,7 +102,7 @@ func readyRow(repo, branch, nodeID, contentHash, model string, vec []float32) em
 		ContentHash: contentHash,
 		ModelID:     model,
 		Dim:         len(vec),
-		Blob:        encodeFloat32LE(vec),
+		Blob:        veccodec.EncodeFloat32LE(vec),
 	}
 }
 
@@ -131,13 +130,3 @@ func (s *spyVector) LookupContentHashes(context.Context, string, string, []strin
 
 func (s *spyVector) Reindex(context.Context, string, string) error { return nil }
 
-// encodeFloat32LE mirrors embedder.encodeFloat32LE — duplicated here because
-// it's unexported in the production package and the test sits in
-// package embedder_test.
-func encodeFloat32LE(vec []float32) []byte {
-	buf := make([]byte, 4*len(vec))
-	for i, v := range vec {
-		binary.LittleEndian.PutUint32(buf[i*4:], math.Float32bits(v))
-	}
-	return buf
-}

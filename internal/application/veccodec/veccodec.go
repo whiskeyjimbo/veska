@@ -11,6 +11,16 @@ import (
 	"math"
 )
 
+// EncodeFloat32LE packs vec into a little-endian float32 byte blob, the wire
+// format stored in node_embeddings.embedding. DecodeFloat32LE reverses it.
+func EncodeFloat32LE(vec []float32) []byte {
+	out := make([]byte, 4*len(vec))
+	for i, f := range vec {
+		binary.LittleEndian.PutUint32(out[i*4:], math.Float32bits(f))
+	}
+	return out
+}
+
 // DecodeFloat32LE reverses a little-endian float32 blob into a slice of dim
 // elements. dim is the expected element count; if the blob is short, the
 // returned slice is truncated rather than panicking, so a malformed row
