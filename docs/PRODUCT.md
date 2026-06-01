@@ -145,7 +145,7 @@ post-commit hook ──► daemon drains staging ──► SQLite tx (atomic)
                                   worker
                                      │
                                      ▼
-                                  Ollama ──► sqlite-vec
+                                  Ollama ──► memvec
 ```
 
 **Query** — MCP reads through both layers. Tools declare which freshness they provide.
@@ -156,7 +156,7 @@ editor / agent
       ▼
 veska-mcp ──► unix socket ──► router ──┬──► staging (sees unpromoted edits)
                                         │
-                                        └──► SQLite + sqlite-vec
+                                        └──► SQLite + memvec
                                               (promoted state;
                                                may report degraded)
 ```

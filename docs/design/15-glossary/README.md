@@ -62,7 +62,7 @@ anything the verb has already touched (`promoted_sha`,
 |---|---|
 | **Staging** | The in-memory overlay that holds unpromoted edits. Lost on restart by design. |
 | **Post-promotion queue** | A SQLite table (`post_promotion_queue`) that holds work to be done after promotion: embed, auto-link, revalidate. Drained by one goroutine per `work_kind`. Historically called "outbox" — that name was retired because the transactional-outbox vocabulary implies microservices eventual consistency, while this table is read by a goroutine in the same process. The durable-queue shape is the same; the architectural connotation isn't. |
-| **Embedding** | A 768-dim float vector keyed by `content_hash`. Stored in sqlite-vec. |
+| **Embedding** | A 768-dim float vector keyed by `content_hash`. Held in the in-memory vector store (memvec) by default. |
 | **`node_fts`** | The FTS5 virtual table (SOLO-08 §3.3) that backs the lexical fallback for `eng_search_semantic` when the embedder is unreachable. Always populated; written inside the promotion transaction. |
 | **Deferred (post-promotion queue state)** | A `post_promotion_queue` row state used for `embed` rows enqueued at queue depth ≥ `post_promotion_queue.high_water` (SOLO-08 §3.4). Promotion proceeds; the row transitions to `pending` when depth drops below low-water. The escape path that prevents embed-pause × post-promotion-queue-full deadlock. |
 | **Source layer** | A tag on `Finding` and (some) `Edge` rows: `structural | semantic | security | quality`. Closed enum. |

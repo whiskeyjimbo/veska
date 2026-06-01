@@ -13,11 +13,11 @@ verified_date: "2026-05-16"
 > bring it back, at which point the trademark deadline in
 > SOLO-01 §6 applies.
 
-One daemon, one developer, one machine. SQLite + sqlite-vec for
-storage; tree-sitter for parsing; an in-process embedder (model2vec
-by default, no external service) for embeddings; MCP over Unix
-sockets for the editor surface. Everything Veska knows lives in
-`~/.veska/`.
+One daemon, one developer, one machine. SQLite plus an in-memory
+vector store (memvec) for storage; tree-sitter for parsing; an
+in-process embedder (model2vec by default, no external service) for
+embeddings; MCP over Unix sockets for the editor surface. Everything
+Veska knows lives in `~/.veska/`.
 
 ## Read order
 
