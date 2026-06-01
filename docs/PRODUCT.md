@@ -16,7 +16,7 @@ verified_date: "2026-05-16"
 
 ## What it is
 
-Engram is a **local code-intelligence daemon**. It runs on your
+Veska is a **local code-intelligence daemon**. It runs on your
 laptop, parses your repo into a graph, embeds the graph
 semantically, and exposes both through MCP so your editor and your
 AI agent see the same model of the codebase.
@@ -192,14 +192,14 @@ are in [`design/11-pipelines/`](design/11-pipelines/README.md)
 - A primary truth derived from LLMs. Call edges, blast radius, and
   containment come from tree-sitter and the parser. LLMs summarise
   and review; they don't replace the structural graph.
-- A distributed database. SQLite is one. Engram leans on it.
+- A distributed database. SQLite is one. Veska leans on it.
 - A multi-machine product. If you want to share intelligence
   across a team, that is parked in `deferred/`.
 - An identity-as-a-product offering. Identity here is "the user
   who started the daemon" plus an `actor_kind` enum.
 - A general-purpose audit/compliance system. The audit log is an
   append-only `audit.jsonl`. Forward it to whatever you like.
-- A secret-recovery tool. Engram surfaces secret leaks; rewriting
+- A secret-recovery tool. Veska surfaces secret leaks; rewriting
   Git history and rotating credentials is on you.
 
 ## Privacy & telemetry
@@ -238,7 +238,7 @@ leaves your machine until you send the file yourself.
 
 ## What it costs
 
-Engram runs on a commodity laptop (8-core, 16 GB, NVMe). Budgets and
+Veska runs on a commodity laptop (8-core, 16 GB, NVMe). Budgets and
 the gates that turn them into measurements live in
 [`design/13-nfr/`](design/13-nfr/README.md) §3. One framing worth
 knowing: every performance number in the design tree is labelled

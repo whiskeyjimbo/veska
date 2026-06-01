@@ -30,12 +30,12 @@ The whole story. One file (`~/.veska/config.toml`) plus a handful
 of environment variables. No per-workspace config files, no
 identity policy, no replication policy, no mode selectors.
 
-## 1. Files Engram reads
+## 1. Files Veska reads
 
 | File | Purpose |
 |---|---|
 | `~/.veska/config.toml` | Daemon config. Created by `veska init` if absent. |
-| `~/.veska/audit.jsonl` | Append-only audit log. Owned by Engram. |
+| `~/.veska/audit.jsonl` | Append-only audit log. Owned by Veska. |
 | `<repo>/.veskaignore` | Per-repo ignore patterns. Plain `.gitignore` syntax. |
 | `<repo>/.beads/current_task` | Active-task pin if the `bd-cli` tracker integration is on. |
 
