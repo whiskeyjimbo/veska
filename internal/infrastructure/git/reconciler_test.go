@@ -23,8 +23,8 @@ func makeReconciler(
 		100*time.Millisecond, // wakeTick
 		500*time.Millisecond, // wakeThreshold
 		handler,
-		ignore,
-		nowFn,
+		git.WithIgnoreList(ignore),
+		git.WithClock(nowFn),
 	)
 }
 
@@ -39,14 +39,14 @@ func TestInjectWake_ChangedFile(t *testing.T) {
 
 	var mu sync.Mutex
 	var called []string
-	handler := func(p string) {
+	handler := func(_ context.Context, _, p string) {
 		mu.Lock()
 		called = append(called, p)
 		mu.Unlock()
 	}
 
 	r := makeReconciler(handler, nil, time.Now)
-	r.AddDir(dir)
+	r.AddDir("repo1", dir)
 
 	// First injectWake seeds the baseline mtime map.
 	r.InjectWake()
@@ -81,14 +81,14 @@ func TestInjectWake_UnchangedFile(t *testing.T) {
 
 	var mu sync.Mutex
 	var called []string
-	handler := func(p string) {
+	handler := func(_ context.Context, _, p string) {
 		mu.Lock()
 		called = append(called, p)
 		mu.Unlock()
 	}
 
 	r := makeReconciler(handler, nil, time.Now)
-	r.AddDir(dir)
+	r.AddDir("repo1", dir)
 
 	// Seed baseline.
 	r.InjectWake()
@@ -118,7 +118,7 @@ func TestIsReconciling(t *testing.T) {
 	var r *git.WakeReconciler
 
 	handlerCalled := false
-	handler := func(p string) {
+	handler := func(_ context.Context, _, p string) {
 		if !handlerCalled {
 			handlerCalled = true
 			close(ready) // signal that sweep has entered the handler
@@ -127,7 +127,7 @@ func TestIsReconciling(t *testing.T) {
 	}
 
 	r = makeReconciler(handler, nil, time.Now)
-	r.AddDir(dir)
+	r.AddDir("repo1", dir)
 
 	// Seed baseline (first inject — no handler calls expected).
 	r.InjectWake()
@@ -181,7 +181,7 @@ func TestIgnoredFile(t *testing.T) {
 
 	var mu sync.Mutex
 	var called []string
-	handler := func(p string) {
+	handler := func(_ context.Context, _, p string) {
 		mu.Lock()
 		called = append(called, p)
 		mu.Unlock()
@@ -191,7 +191,7 @@ func TestIgnoredFile(t *testing.T) {
 	il := fs.NewIgnoreListFromPatterns([]string{"*_gen.go"})
 
 	r := makeReconciler(handler, il, time.Now)
-	r.AddDir(dir)
+	r.AddDir("repo1", dir)
 
 	// Seed baseline.
 	r.InjectWake()
@@ -253,7 +253,7 @@ func TestFreezeMonotonicClock_WakeDetected(t *testing.T) {
 
 	var mu sync.Mutex
 	var called []string
-	handler := func(p string) {
+	handler := func(_ context.Context, _, p string) {
 		mu.Lock()
 		called = append(called, p)
 		mu.Unlock()
@@ -263,10 +263,9 @@ func TestFreezeMonotonicClock_WakeDetected(t *testing.T) {
 		100*time.Millisecond,
 		500*time.Millisecond,
 		handler,
-		nil,
-		nowFn,
+		git.WithClock(nowFn),
 	)
-	r.AddDir(dir)
+	r.AddDir("repo1", dir)
 
 	// First InjectWake seeds baseline (nowFn call 1 = base time).
 	r.InjectWake()
@@ -290,9 +289,65 @@ func TestFreezeMonotonicClock_WakeDetected(t *testing.T) {
 	}
 }
 
+// TestStart_WakeGapTriggersSweep drives the real tick loop (not InjectWake):
+// a clock that jumps forward past wakeThreshold between ticks must trigger a
+// sweep that reports the changed file with its owning repo ID.
+func TestStart_WakeGapTriggersSweep(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "wake.go")
+	if err := os.WriteFile(path, []byte("v1"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	// The first clock read (Start's baseline lastTick) returns base; every
+	// later read jumps 10s ahead, so the first ticker read shows a gap well
+	// past the 500ms threshold the helper sets — i.e. a simulated resume.
+	base := time.Now()
+	var nowMu sync.Mutex
+	var calls int
+	nowFn := func() time.Time {
+		nowMu.Lock()
+		defer nowMu.Unlock()
+		calls++
+		if calls <= 1 {
+			return base
+		}
+		return base.Add(10 * time.Second)
+	}
+
+	type hit struct{ repoID, path string }
+	hits := make(chan hit, 4)
+	handler := func(_ context.Context, repoID, p string) {
+		hits <- hit{repoID, p}
+	}
+
+	r := git.NewWakeReconciler(20*time.Millisecond, 500*time.Millisecond, handler, git.WithClock(nowFn))
+	r.AddDir("repoA", dir)
+	// Seed the mtime baseline (no nowFn call) so the post-gap sweep sees a real
+	// change, then bump mtime so the gap sweep has something to report.
+	r.InjectWake()
+	future := time.Now().Add(2 * time.Second)
+	if err := os.Chtimes(path, future, future); err != nil {
+		t.Fatal(err)
+	}
+
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	go r.Start(ctx)
+
+	select {
+	case h := <-hits:
+		if h.repoID != "repoA" || h.path != path {
+			t.Fatalf("got hit %+v, want repoID=repoA path=%s", h, path)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("tick loop did not sweep after simulated wake gap")
+	}
+}
+
 // TestStart_ContextCancel verifies that Start exits cleanly when ctx is cancelled.
 func TestStart_ContextCancel(t *testing.T) {
-	r := makeReconciler(func(string) {}, nil, time.Now)
+	r := makeReconciler(func(context.Context, string, string) {}, nil, time.Now)
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan struct{})
 	go func() {

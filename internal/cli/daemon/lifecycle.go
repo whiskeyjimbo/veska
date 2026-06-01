@@ -28,6 +28,7 @@ func (d *Daemon) Start(ctx context.Context) error {
 		d.ctx, d.cancel = context.WithCancel(ctx)
 		d.mcpDone = make(chan struct{})
 		d.wDone = make(chan struct{})
+		d.recDone = make(chan struct{})
 		d.resyncDone = make(chan struct{})
 
 		// Bind the cold-scan registrar's daemonCtx now that it exists. Any
@@ -47,6 +48,7 @@ func (d *Daemon) Start(ctx context.Context) error {
 		d.poller.Start(d.ctx)
 		d.watcher.Start(d.ctx)
 		d.seedWatcher()
+		d.startReconciler()
 
 		d.startWatchLoop()
 		d.startResync()
@@ -125,7 +127,20 @@ func (d *Daemon) seedWatcher() {
 		if err := d.watcher.Add(r.RepoID, r.RootPath); err != nil {
 			slog.Error("daemon: watch repo", "repo", r.RepoID, "err", err)
 		}
+		// Register the same tree with the wake reconciler so a suspend/resume
+		// gap re-sweeps it; the reconciler seeds its mtime baseline on the
+		// first sweep, so a sweep before any change is a harmless no-op.
+		d.reconciler.AddDir(r.RepoID, r.RootPath)
 	}
+}
+
+// startReconciler launches the wake-reconciler tick loop in its own goroutine;
+// recDone is closed when it returns (on d.ctx cancellation).
+func (d *Daemon) startReconciler() {
+	go func() {
+		defer close(d.recDone)
+		d.reconciler.Start(d.ctx)
+	}()
 }
 
 // startWatchLoop bridges filesystem events → Ingester.Save in its own
@@ -264,6 +279,12 @@ func (d *Daemon) awaitBackgroundGoroutines(timeoutC <-chan time.Time) {
 	if d.wDone != nil {
 		select {
 		case <-d.wDone:
+		case <-time.After(500 * time.Millisecond):
+		}
+	}
+	if d.recDone != nil {
+		select {
+		case <-d.recDone:
 		case <-time.After(500 * time.Millisecond):
 		}
 	}

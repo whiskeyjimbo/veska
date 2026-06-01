@@ -160,8 +160,12 @@ type Daemon struct {
 	embed   *embedder.Worker
 	poller  *queue.Poller
 	watcher *gitwatch.MultiRepoWatcher
-	mcpsrv  *mcp.Server
-	mcpReg  *mcp.Registry
+	// reconciler detects suspend/resume gaps (wall-clock jump) and re-sweeps
+	// every registered repo's working tree, feeding changed files back through
+	// the watcher's event stream so they re-parse exactly as a live save would.
+	reconciler *gitwatch.WakeReconciler
+	mcpsrv     *mcp.Server
+	mcpReg     *mcp.Registry
 
 	// resync is the startup-resync orchestrator: on Start it walks every
 	// registered repo and either replays missed commits or full-reparses
@@ -214,6 +218,8 @@ type Daemon struct {
 	cancel    context.CancelFunc
 	mcpDone   chan struct{}
 	wDone     chan struct{}
+	// recDone is closed when the wake-reconciler tick loop returns.
+	recDone chan struct{}
 	// resyncDone is closed when the startup-resync goroutine returns.
 	// Stop waits on it with the same bounded budget as wDone so a slow
 	// resync cannot wedge shutdown.
@@ -323,12 +329,13 @@ type daemonBuilder struct {
 	refs        *sqlite.EmbeddingRefsRepo
 	embedWorker *embedder.Worker
 
-	handlers map[queue.WorkKind]queue.WorkHandler
-	poller   *queue.Poller
-	watcher  *gitwatch.MultiRepoWatcher
-	reparser func(ctx context.Context, rec application.RepoRecord) error
-	regSvc   *repoRegistrar
-	scanWG   *sync.WaitGroup
+	handlers   map[queue.WorkKind]queue.WorkHandler
+	poller     *queue.Poller
+	watcher    *gitwatch.MultiRepoWatcher
+	reconciler *gitwatch.WakeReconciler
+	reparser   func(ctx context.Context, rec application.RepoRecord) error
+	regSvc     *repoRegistrar
+	scanWG     *sync.WaitGroup
 
 	registry   *mcp.Registry
 	mcpsrv     *mcp.Server
@@ -730,13 +737,11 @@ func (b *daemonBuilder) buildReviewHandler() (queue.WorkHandler, error) {
 // watcher, the shared cold-scan reparser, and the cold-scan-aware repo
 // registrar (solov2-0z1.2/0z1.3). The poller and embedder share ingestionBusy.
 func (b *daemonBuilder) buildPollerWatcher() error {
-	pollInterval := 250 * time.Millisecond
-	if d, derr := time.ParseDuration(b.fileCfg.PostPromotionQueue.PollInterval); derr == nil && d > 0 {
-		pollInterval = d
-	}
+	pollInterval := parseDurationOr(b.fileCfg.PostPromotionQueue.PollInterval, 250*time.Millisecond)
 	b.poller = queue.New(b.pools.ReadDB, b.pools.Write, b.handlers,
 		queue.WithInterval(pollInterval), queue.WithPauser(b.ingestionBusy))
 	b.watcher = gitwatch.NewMultiRepoWatcher()
+	b.reconciler = b.buildReconciler()
 
 	ignoreAdapter := func(repoRoot string) (application.IgnoreMatcher, error) {
 		return fsignore.Load(repoRoot)
@@ -755,11 +760,40 @@ func (b *daemonBuilder) buildPollerWatcher() error {
 		db:        b.pools.Write,
 		reparser:  reparser,
 		recordFor: lookupAppRecord(b.pools.ReadDB),
-		watchAdd:  b.watcher.Add,
-		scanWG:    b.scanWG,
+		// A repo added mid-session is registered with both the live watcher and
+		// the wake reconciler so a later suspend/resume re-sweeps it too.
+		watchAdd: func(repoID, rootPath string) error {
+			b.reconciler.AddDir(repoID, rootPath)
+			return b.watcher.Add(repoID, rootPath)
+		},
+		scanWG: b.scanWG,
 		// daemonCtx is bound in Start once d.ctx exists.
 	}
 	return nil
+}
+
+// buildReconciler constructs the suspend/resume wake reconciler. Its handler
+// feeds each changed file back through the watcher's event stream (Inject), so
+// wake-detected changes re-parse via the same path as live fsnotify writes —
+// repo/branch resolution and Ingester.Save are reused verbatim in runWatchLoop.
+// wake_tick / wake_threshold are read from [watcher]; bad or empty values fall
+// back to the documented defaults (CONFIG-SURFACE: 5s tick, 30s threshold).
+func (b *daemonBuilder) buildReconciler() *gitwatch.WakeReconciler {
+	tick := parseDurationOr(b.fileCfg.Watcher.WakeTick, 5*time.Second)
+	threshold := parseDurationOr(b.fileCfg.Watcher.WakeThreshold, 30*time.Second)
+	return gitwatch.NewWakeReconciler(tick, threshold,
+		func(_ context.Context, repoID, path string) {
+			b.watcher.Inject(repoID, path)
+		})
+}
+
+// parseDurationOr returns the parsed positive duration or fallback on any
+// empty / unparseable / non-positive value.
+func parseDurationOr(s string, fallback time.Duration) time.Duration {
+	if d, err := time.ParseDuration(s); err == nil && d > 0 {
+		return d
+	}
+	return fallback
 }
 
 // buildMCPServer builds the MCP registry, opens the best-effort savings
@@ -832,6 +866,7 @@ func (b *daemonBuilder) assemble() *Daemon {
 		embed:          b.embedWorker,
 		poller:         b.poller,
 		watcher:        b.watcher,
+		reconciler:     b.reconciler,
 		mcpsrv:         b.mcpsrv,
 		mcpReg:         b.registry,
 		metrics:        b.metrics,

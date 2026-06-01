@@ -190,6 +190,23 @@ func (m *MultiRepoWatcher) forwardEvents(ctx context.Context, rw *repoWatch, eve
 	}
 }
 
+// Inject synthesises a write event for path under repoID and multiplexes it
+// onto the shared output channel, exactly as a live fsnotify write would. The
+// wake reconciler uses this to feed suspend/resume-detected changes into the
+// same parse-on-save pipeline that drains Events(). The send is bounded by the
+// multiplexer context so a stalled consumer cannot block a wake sweep past
+// shutdown. Calling before Start (m.ctx unset) is a no-op.
+func (m *MultiRepoWatcher) Inject(repoID, path string) {
+	if m.ctx == nil {
+		return
+	}
+	ev := RepoFileEvent{RepoID: repoID, Event: ports.FileEvent{Path: path, Op: ports.WatchOpWrite}}
+	select {
+	case m.out <- ev:
+	case <-m.ctx.Done():
+	}
+}
+
 // Remove stops the watcher for repoID and removes it from the tracked set.
 // Returns an error if repoID is not currently watched.
 func (m *MultiRepoWatcher) Remove(repoID string) error {
