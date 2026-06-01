@@ -50,8 +50,11 @@ type mcpToolWiring struct {
 // registerMCPTools wires every MCP tool family onto the registry. The call
 // order is preserved exactly from the historical monolith so tool registration
 // order is unchanged.
-func registerMCPTools(r *mcp.Registry, d mcpDeps) {
-	w := newMCPToolWiring(r, d)
+func registerMCPTools(r *mcp.Registry, d mcpDeps) error {
+	w, err := newMCPToolWiring(r, d)
+	if err != nil {
+		return err
+	}
 	w.registerBasicDataTools()
 	w.registerPromotionTools()
 	w.registerOwnerTodoAdminTools()
@@ -59,11 +62,14 @@ func registerMCPTools(r *mcp.Registry, d mcpDeps) {
 	w.registerChangedSymbolsTool()
 	w.registerWikiTools()
 	w.registerContextPackTool()
-	w.registerSearchTool()
+	if err := w.registerSearchTool(); err != nil {
+		return err
+	}
 	w.registerDependenciesTool()
+	return nil
 }
 
-func newMCPToolWiring(r *mcp.Registry, d mcpDeps) *mcpToolWiring {
+func newMCPToolWiring(r *mcp.Registry, d mcpDeps) (*mcpToolWiring, error) {
 	pools := d.pools
 	w := &mcpToolWiring{
 		r:              r,
@@ -74,14 +80,18 @@ func newMCPToolWiring(r *mcp.Registry, d mcpDeps) *mcpToolWiring {
 		nodes:          sqlite.NewNodeLookupRepo(pools.ReadDB),
 		findingQuerier: sqlite.NewFindingQuerierRepo(pools.ReadDB),
 	}
-	w.blast = blastradius.NewService(w.edges, w.nodes, d.staging)
+	blast, err := blastradius.NewService(w.edges, w.nodes, d.staging)
+	if err != nil {
+		return nil, fmt.Errorf("mcp tools: blast-radius service: %w", err)
+	}
+	w.blast = blast
 	w.resolveStubs = func(ctx context.Context, nodeID, branch string, expand bool) ([]ports.ResolvedEdge, error) {
 		return resolver.ResolveStubsForNode(ctx, pools.ReadDB, nodeID, branch, expand)
 	}
 	w.resolveInboundStubs = func(ctx context.Context, dstNodeID, branch string) ([]ports.ResolvedEdge, error) {
 		return resolver.ResolveStubsTargetingNode(ctx, pools.ReadDB, dstNodeID, branch)
 	}
-	return w
+	return w, nil
 }
 
 // repos returns a fresh repo lister over the read pool. Construction is cheap
@@ -237,12 +247,16 @@ func (w *mcpToolWiring) registerContextPackTool() {
 
 // registerSearchTool registers the semantic-search tools. The Service
 // orchestrates embed → vector search → node hydration with lexical fallback.
-func (w *mcpToolWiring) registerSearchTool() {
-	searchSvc := search.NewService(w.d.provider, w.d.vectors, w.nodes,
+func (w *mcpToolWiring) registerSearchTool() error {
+	searchSvc, err := search.NewService(w.d.provider, w.d.vectors, w.nodes,
 		search.WithMetrics(w.d.metrics))
+	if err != nil {
+		return fmt.Errorf("mcp tools: search service: %w", err)
+	}
 	mcp.RegisterSearchTools(w.r, searchSvc, w.d.refs, w.d.vectors, w.nodes, w.d.savings, w.repos(),
 		mcp.WithSearchGraph(w.graph),
 		mcp.WithSearchScanTracker(w.d.scanTracker))
+	return nil
 }
 
 // registerDependenciesTool registers eng_list_dependencies (solov2-jlws), which

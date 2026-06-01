@@ -151,7 +151,10 @@ func runFixture(t *testing.T, spec fixtureSpec) Result {
 	seedFindings(t, db, spec, deadPerFile, driftPerFile)
 
 	repo := sqlite.NewRevalidateRepo(db)
-	h := revalidate.NewHandler(repo)
+	h, err := revalidate.NewHandler(repo)
+	if err != nil {
+		t.Fatalf("construct: %v", err)
+	}
 
 	latencies := make([]time.Duration, 0, spec.files)
 	start := time.Now()

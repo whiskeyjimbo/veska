@@ -99,8 +99,11 @@ func (f *fakeRepo) ApplyDecisions(_ context.Context, _, _ string, decisions []po
 
 func TestHandler_RejectsWrongKind(t *testing.T) {
 	t.Parallel()
-	h := revalidate.NewHandler(&fakeRepo{})
-	err := h.Handle(context.Background(), ports.WorkRow{Kind: ports.WorkKindEmbed, Payload: "x.go"})
+	h, err := revalidate.NewHandler(&fakeRepo{})
+	if err != nil {
+		t.Fatalf("construct: %v", err)
+	}
+	err = h.Handle(context.Background(), ports.WorkRow{Kind: ports.WorkKindEmbed, Payload: "x.go"})
 	if err == nil {
 		t.Fatal("expected error for wrong kind, got nil")
 		return
@@ -110,8 +113,11 @@ func TestHandler_RejectsWrongKind(t *testing.T) {
 func TestHandler_EmptyPayloadIsNoop(t *testing.T) {
 	t.Parallel()
 	repo := &fakeRepo{}
-	h := revalidate.NewHandler(repo)
-	err := h.Handle(context.Background(), ports.WorkRow{Kind: ports.WorkKindRevalidate, Payload: ""})
+	h, err := revalidate.NewHandler(repo)
+	if err != nil {
+		t.Fatalf("construct: %v", err)
+	}
+	err = h.Handle(context.Background(), ports.WorkRow{Kind: ports.WorkKindRevalidate, Payload: ""})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -123,8 +129,11 @@ func TestHandler_EmptyPayloadIsNoop(t *testing.T) {
 func TestHandler_NoStaleFindingsIsNoop(t *testing.T) {
 	t.Parallel()
 	repo := &fakeRepo{stale: nil}
-	h := revalidate.NewHandler(repo)
-	err := h.Handle(context.Background(), ports.WorkRow{
+	h, err := revalidate.NewHandler(repo)
+	if err != nil {
+		t.Fatalf("construct: %v", err)
+	}
+	err = h.Handle(context.Background(), ports.WorkRow{
 		Kind: ports.WorkKindRevalidate, RepoID: "r1", Branch: "main", Payload: "x.go",
 	})
 	if err != nil {
@@ -139,8 +148,11 @@ func TestHandler_StaleQueryErrorWraps(t *testing.T) {
 	t.Parallel()
 	sentinel := errors.New("boom-query")
 	repo := &fakeRepo{staleErr: sentinel}
-	h := revalidate.NewHandler(repo)
-	err := h.Handle(context.Background(), ports.WorkRow{
+	h, err := revalidate.NewHandler(repo)
+	if err != nil {
+		t.Fatalf("construct: %v", err)
+	}
+	err = h.Handle(context.Background(), ports.WorkRow{
 		Kind: ports.WorkKindRevalidate, RepoID: "r1", Branch: "main", Payload: "x.go",
 	})
 	if !errors.Is(err, sentinel) {
@@ -155,8 +167,11 @@ func TestHandler_ApplyDecisionsErrorWraps(t *testing.T) {
 		stale:    []ports.StaleFinding{{FindingID: "fA", Rule: "auto-link", NodeID: "n1", AnchorHash: "h-old", CurrentHash: "h-new"}},
 		applyErr: sentinel,
 	}
-	h := revalidate.NewHandler(repo)
-	err := h.Handle(context.Background(), ports.WorkRow{
+	h, err := revalidate.NewHandler(repo)
+	if err != nil {
+		t.Fatalf("construct: %v", err)
+	}
+	err = h.Handle(context.Background(), ports.WorkRow{
 		Kind: ports.WorkKindRevalidate, RepoID: "r1", Branch: "main", Payload: "x.go",
 	})
 	if !errors.Is(err, sentinel) {
@@ -171,8 +186,11 @@ func TestHandler_InboundEdgesErrorWraps(t *testing.T) {
 		stale:    []ports.StaleFinding{{FindingID: "fA", Rule: "dead-code", NodeID: "n1", AnchorHash: "h-old", CurrentHash: "h-new"}},
 		edgesErr: sentinel,
 	}
-	h := revalidate.NewHandler(repo)
-	err := h.Handle(context.Background(), ports.WorkRow{
+	h, err := revalidate.NewHandler(repo)
+	if err != nil {
+		t.Fatalf("construct: %v", err)
+	}
+	err = h.Handle(context.Background(), ports.WorkRow{
 		Kind: ports.WorkKindRevalidate, RepoID: "r1", Branch: "main", Payload: "x.go",
 	})
 	if !errors.Is(err, sentinel) {
@@ -187,8 +205,11 @@ func TestHandler_SignaturePairErrorWraps(t *testing.T) {
 		stale:  []ports.StaleFinding{{FindingID: "fA", Rule: "contract-drift", NodeID: "n1", AnchorHash: "h-old", CurrentHash: "h-new"}},
 		sigErr: sentinel,
 	}
-	h := revalidate.NewHandler(repo)
-	err := h.Handle(context.Background(), ports.WorkRow{
+	h, err := revalidate.NewHandler(repo)
+	if err != nil {
+		t.Fatalf("construct: %v", err)
+	}
+	err = h.Handle(context.Background(), ports.WorkRow{
 		Kind: ports.WorkKindRevalidate, RepoID: "r1", Branch: "main", Payload: "x.go",
 	})
 	if !errors.Is(err, sentinel) {
@@ -208,7 +229,10 @@ func TestHandler_DeadCode_StillFires_Refreshes(t *testing.T) {
 	}
 	reg := prometheus.NewRegistry()
 	metrics := observability.NewMetrics(reg)
-	h := revalidate.NewHandler(repo, revalidate.WithMetrics(metrics))
+	h, err := revalidate.NewHandler(repo, revalidate.WithMetrics(metrics))
+	if err != nil {
+		t.Fatalf("construct: %v", err)
+	}
 
 	if err := h.Handle(context.Background(), ports.WorkRow{
 		Kind: ports.WorkKindRevalidate, RepoID: "r1", Branch: "main", Payload: "x.go",
@@ -242,7 +266,10 @@ func TestHandler_DeadCode_NoLongerFires_Closes(t *testing.T) {
 	}
 	reg := prometheus.NewRegistry()
 	metrics := observability.NewMetrics(reg)
-	h := revalidate.NewHandler(repo, revalidate.WithMetrics(metrics))
+	h, err := revalidate.NewHandler(repo, revalidate.WithMetrics(metrics))
+	if err != nil {
+		t.Fatalf("construct: %v", err)
+	}
 
 	if err := h.Handle(context.Background(), ports.WorkRow{
 		Kind: ports.WorkKindRevalidate, RepoID: "r1", Branch: "main", Payload: "x.go",
@@ -270,7 +297,10 @@ func TestHandler_ContractDrift_StillFires_Refreshes(t *testing.T) {
 	}
 	reg := prometheus.NewRegistry()
 	metrics := observability.NewMetrics(reg)
-	h := revalidate.NewHandler(repo, revalidate.WithMetrics(metrics))
+	h, err := revalidate.NewHandler(repo, revalidate.WithMetrics(metrics))
+	if err != nil {
+		t.Fatalf("construct: %v", err)
+	}
 
 	if err := h.Handle(context.Background(), ports.WorkRow{
 		Kind: ports.WorkKindRevalidate, RepoID: "r1", Branch: "main", Payload: "x.go",
@@ -305,7 +335,10 @@ func TestHandler_ContractDrift_Resolved_Closes(t *testing.T) {
 				},
 				sigs: map[string][2]string{"n1": {tc.prev, tc.current}},
 			}
-			h := revalidate.NewHandler(repo)
+			h, err := revalidate.NewHandler(repo)
+			if err != nil {
+				t.Fatalf("construct: %v", err)
+			}
 			if err := h.Handle(context.Background(), ports.WorkRow{
 				Kind: ports.WorkKindRevalidate, RepoID: "r1", Branch: "main", Payload: "x.go",
 			}); err != nil {
@@ -328,7 +361,10 @@ func TestHandler_AutoLink_AlwaysCloses(t *testing.T) {
 			{FindingID: "fA", Rule: "auto-link", NodeID: "n1", AnchorHash: "h-old", CurrentHash: "h-new"},
 		},
 	}
-	h := revalidate.NewHandler(repo)
+	h, err := revalidate.NewHandler(repo)
+	if err != nil {
+		t.Fatalf("construct: %v", err)
+	}
 	if err := h.Handle(context.Background(), ports.WorkRow{
 		Kind: ports.WorkKindRevalidate, RepoID: "r1", Branch: "main", Payload: "x.go",
 	}); err != nil {
@@ -350,7 +386,10 @@ func TestHandler_UnknownRule_ConservativelyCloses(t *testing.T) {
 			{FindingID: "fA", Rule: "some-future-rule", NodeID: "n1", AnchorHash: "h-old", CurrentHash: "h-new"},
 		},
 	}
-	h := revalidate.NewHandler(repo)
+	h, err := revalidate.NewHandler(repo)
+	if err != nil {
+		t.Fatalf("construct: %v", err)
+	}
 	if err := h.Handle(context.Background(), ports.WorkRow{
 		Kind: ports.WorkKindRevalidate, RepoID: "r1", Branch: "main", Payload: "x.go",
 	}); err != nil {
@@ -384,10 +423,13 @@ func TestHandler_MixedBatch_DispatchesPerRule(t *testing.T) {
 	reg := prometheus.NewRegistry()
 	metrics := observability.NewMetrics(reg)
 	fixed := time.Unix(1700000000, 0)
-	h := revalidate.NewHandler(repo,
+	h, err := revalidate.NewHandler(repo,
 		revalidate.WithClock(func() time.Time { return fixed }),
 		revalidate.WithMetrics(metrics),
 	)
+	if err != nil {
+		t.Fatalf("construct: %v", err)
+	}
 
 	if err := h.Handle(context.Background(), ports.WorkRow{
 		Kind: ports.WorkKindRevalidate, RepoID: "r1", Branch: "main", Payload: "x.go",
@@ -442,7 +484,10 @@ func TestHandler_NilMetricsIsFunctional(t *testing.T) {
 			{FindingID: "fB", Rule: "dead-code"},
 		},
 	}
-	h := revalidate.NewHandler(repo, revalidate.WithMetrics(nil))
+	h, err := revalidate.NewHandler(repo, revalidate.WithMetrics(nil))
+	if err != nil {
+		t.Fatalf("construct: %v", err)
+	}
 	if err := h.Handle(context.Background(), ports.WorkRow{
 		Kind: ports.WorkKindRevalidate, RepoID: "r1", Branch: "main", Payload: "x.go",
 	}); err != nil {
@@ -474,7 +519,10 @@ func TestHandler_BatchUsesSingleApplyCall(t *testing.T) {
 		})
 	}
 	repo := &fakeRepo{stale: stale}
-	h := revalidate.NewHandler(repo)
+	h, err := revalidate.NewHandler(repo)
+	if err != nil {
+		t.Fatalf("construct: %v", err)
+	}
 	if err := h.Handle(context.Background(), ports.WorkRow{
 		Kind: ports.WorkKindRevalidate, RepoID: "r1", Branch: "main", Payload: "x.go",
 	}); err != nil {
@@ -494,7 +542,10 @@ func TestHandler_BatchUsesSingleApplyCall(t *testing.T) {
 func TestHandler_EmptyStaleSkipsApply(t *testing.T) {
 	t.Parallel()
 	repo := &fakeRepo{stale: nil}
-	h := revalidate.NewHandler(repo)
+	h, err := revalidate.NewHandler(repo)
+	if err != nil {
+		t.Fatalf("construct: %v", err)
+	}
 	if err := h.Handle(context.Background(), ports.WorkRow{
 		Kind: ports.WorkKindRevalidate, RepoID: "r1", Branch: "main", Payload: "x.go",
 	}); err != nil {
@@ -520,9 +571,12 @@ func TestHandler_MetricsOnlyBumpAfterApplyCommits(t *testing.T) {
 	}
 	reg := prometheus.NewRegistry()
 	metrics := observability.NewMetrics(reg)
-	h := revalidate.NewHandler(repo, revalidate.WithMetrics(metrics))
+	h, err := revalidate.NewHandler(repo, revalidate.WithMetrics(metrics))
+	if err != nil {
+		t.Fatalf("construct: %v", err)
+	}
 
-	err := h.Handle(context.Background(), ports.WorkRow{
+	err = h.Handle(context.Background(), ports.WorkRow{
 		Kind: ports.WorkKindRevalidate, RepoID: "r1", Branch: "main", Payload: "x.go",
 	})
 	if err == nil {
@@ -553,15 +607,26 @@ func itoa(i int) string {
 	return string(buf[n:])
 }
 
-func TestNewHandler_NilRepoPanics(t *testing.T) {
+func TestNewHandler_NilRepoErrors(t *testing.T) {
 	t.Parallel()
-	defer func() {
-		if r := recover(); r == nil {
-			t.Fatal("expected panic on nil repo")
-			return
-		}
-	}()
-	_ = revalidate.NewHandler(nil)
+	h, err := revalidate.NewHandler(nil)
+	if h != nil {
+		t.Errorf("expected nil *Handler, got %v", h)
+	}
+	if !errors.Is(err, revalidate.ErrMissingDependency) {
+		t.Errorf("expected ErrMissingDependency, got %v", err)
+	}
+}
+
+func TestNewHandler_HappyPath(t *testing.T) {
+	t.Parallel()
+	h, err := revalidate.NewHandler(&fakeRepo{})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if h == nil {
+		t.Fatal("expected non-nil *Handler")
+	}
 }
 
 // ── integration test against real *sql.DB ──────────────────────────────────
@@ -621,7 +686,10 @@ func TestHandler_Integration_PerRuleDispatch(t *testing.T) {
 
 	reg := prometheus.NewRegistry()
 	metrics := observability.NewMetrics(reg)
-	h := revalidate.NewHandler(revalRepo, revalidate.WithMetrics(metrics))
+	h, err := revalidate.NewHandler(revalRepo, revalidate.WithMetrics(metrics))
+	if err != nil {
+		t.Fatalf("construct: %v", err)
+	}
 
 	if err := h.Handle(context.Background(), ports.WorkRow{
 		Kind: ports.WorkKindRevalidate, RepoID: "repo1", Branch: "main", Payload: "pkg/a.go",

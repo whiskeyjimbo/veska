@@ -158,7 +158,10 @@ func TestSearchSemantic_ReturnsHydratedResults(t *testing.T) {
 	nodes := &stubNodes{metas: []ports.NodeMeta{
 		{NodeID: "n1", SymbolPath: "pkg.Foo", FilePath: "foo.go", Kind: "function", LineStart: 1, LineEnd: 10},
 	}}
-	svc := search.NewService(emb, vecs, nodes)
+	svc, err := search.NewService(emb, vecs, nodes)
+	if err != nil {
+		t.Fatalf("construct: %v", err)
+	}
 
 	r := NewRegistry()
 	RegisterSearchTools(r, svc, &stubSimilarLookup{}, vecs, nodes, nil, nil)
@@ -191,7 +194,10 @@ func TestSearchSemantic_FansOutWhenRepoIDOmittedAndCwdMismatch(t *testing.T) {
 	nodes := &stubNodes{metas: []ports.NodeMeta{
 		{NodeID: "n1", SymbolPath: "pkg.Foo", FilePath: "foo.go", Kind: "function", LineStart: 1, LineEnd: 10},
 	}}
-	svc := search.NewService(emb, vecs, nodes)
+	svc, err := search.NewService(emb, vecs, nodes)
+	if err != nil {
+		t.Fatalf("construct: %v", err)
+	}
 
 	repos := []application.RepoRecord{
 		{RepoID: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", RootPath: "/home/u/projects/alpha", ActiveBranch: "main"},
@@ -226,7 +232,10 @@ func TestSearchSemantic_SingleRepoOmitsRepoIDOnHits(t *testing.T) {
 	nodes := &stubNodes{metas: []ports.NodeMeta{
 		{NodeID: "n1", SymbolPath: "pkg.Foo", FilePath: "foo.go", Kind: "function", LineStart: 1, LineEnd: 10},
 	}}
-	svc := search.NewService(emb, vecs, nodes)
+	svc, err := search.NewService(emb, vecs, nodes)
+	if err != nil {
+		t.Fatalf("construct: %v", err)
+	}
 
 	repos := []application.RepoRecord{
 		{RepoID: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", RootPath: "/abs/repo", ActiveBranch: "main"},
@@ -260,7 +269,10 @@ func TestSearchSemantic_LimitAliasHonoured(t *testing.T) {
 	}
 	vecs := &stubVectors{hits: hits}
 	nodes := &stubNodes{}
-	svc := search.NewService(emb, vecs, nodes)
+	svc, err := search.NewService(emb, vecs, nodes)
+	if err != nil {
+		t.Fatalf("construct: %v", err)
+	}
 
 	r := NewRegistry()
 	RegisterSearchTools(r, svc, &stubSimilarLookup{}, vecs, nodes, nil, nil)
@@ -289,7 +301,10 @@ func TestSearchSemantic_MissingParamsRejected(t *testing.T) {
 	emb := &stubEmbedder{vec: []float32{0.1}}
 	vecs := &stubVectors{}
 	nodes := &stubNodes{}
-	svc := search.NewService(emb, vecs, nodes)
+	svc, err := search.NewService(emb, vecs, nodes)
+	if err != nil {
+		t.Fatalf("construct: %v", err)
+	}
 
 	r := NewRegistry()
 	RegisterSearchTools(r, svc, &stubSimilarLookup{}, vecs, nodes, nil, nil)
@@ -308,7 +323,10 @@ func TestSearchSemantic_KExceedsMax(t *testing.T) {
 	emb := &stubEmbedder{vec: []float32{0.1}}
 	vecs := &stubVectors{}
 	nodes := &stubNodes{}
-	svc := search.NewService(emb, vecs, nodes)
+	svc, err := search.NewService(emb, vecs, nodes)
+	if err != nil {
+		t.Fatalf("construct: %v", err)
+	}
 
 	r := NewRegistry()
 	RegisterSearchTools(r, svc, &stubSimilarLookup{}, vecs, nodes, nil, nil)
@@ -328,7 +346,10 @@ func TestSearchSemantic_PropagatesEmbedError(t *testing.T) {
 	emb := &stubEmbedder{err: errors.New("boom")}
 	vecs := &stubVectors{}
 	nodes := &stubNodes{}
-	svc := search.NewService(emb, vecs, nodes)
+	svc, err := search.NewService(emb, vecs, nodes)
+	if err != nil {
+		t.Fatalf("construct: %v", err)
+	}
 
 	r := NewRegistry()
 	RegisterSearchTools(r, svc, &stubSimilarLookup{}, vecs, nodes, nil, nil)
@@ -366,7 +387,10 @@ func TestSearchSemantic_GlobalRRFAcrossRepos(t *testing.T) {
 		{NodeID: "nodeA2", SymbolPath: "a.A2", FilePath: "a.go"},
 		{NodeID: "nodeB1", SymbolPath: "b.B1", FilePath: "b.go"},
 	}}
-	svc := search.NewService(emb, vecs, nodes, search.WithLexicalSearcher(lex))
+	svc, err := search.NewService(emb, vecs, nodes, search.WithLexicalSearcher(lex))
+	if err != nil {
+		t.Fatalf("construct: %v", err)
+	}
 
 	repos := []application.RepoRecord{
 		{RepoID: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", RootPath: "/r/a", ActiveBranch: "main"},
@@ -424,7 +448,10 @@ func TestSearchSimilar_ReturnsNeighboursExcludingSeed(t *testing.T) {
 		{NodeID: "n2", SymbolPath: "pkg.N2", FilePath: "n2.go", Kind: "function", LineStart: 1, LineEnd: 3},
 		{NodeID: "n3", SymbolPath: "pkg.N3", FilePath: "n3.go", Kind: "function", LineStart: 4, LineEnd: 6},
 	}}
-	svc := search.NewService(emb, vecs, nodes)
+	svc, err := search.NewService(emb, vecs, nodes)
+	if err != nil {
+		t.Fatalf("construct: %v", err)
+	}
 	lookup := &stubSimilarLookup{
 		hash:  "h1",
 		ready: true,
@@ -465,7 +492,10 @@ func TestSearchSimilar_NodeNotEmbedded(t *testing.T) {
 	emb := &stubEmbedder{}
 	vecs := &stubVectors{}
 	nodes := &stubNodes{}
-	svc := search.NewService(emb, vecs, nodes)
+	svc, err := search.NewService(emb, vecs, nodes)
+	if err != nil {
+		t.Fatalf("construct: %v", err)
+	}
 	lookup := &stubSimilarLookup{ready: false}
 
 	r := NewRegistry()
@@ -485,7 +515,10 @@ func TestSearchSimilar_MissingParams(t *testing.T) {
 	emb := &stubEmbedder{}
 	vecs := &stubVectors{}
 	nodes := &stubNodes{}
-	svc := search.NewService(emb, vecs, nodes)
+	svc, err := search.NewService(emb, vecs, nodes)
+	if err != nil {
+		t.Fatalf("construct: %v", err)
+	}
 
 	r := NewRegistry()
 	RegisterSearchTools(r, svc, &stubSimilarLookup{}, vecs, nodes, nil, nil)
@@ -513,7 +546,10 @@ func TestSearchSimilar_AcceptsSymbolAlias(t *testing.T) {
 	nodes := &stubNodes{metas: []ports.NodeMeta{
 		{NodeID: "n2", SymbolPath: "pkg.N2", FilePath: "n2.go", Kind: "function", LineStart: 1, LineEnd: 3},
 	}}
-	svc := search.NewService(emb, vecs, nodes)
+	svc, err := search.NewService(emb, vecs, nodes)
+	if err != nil {
+		t.Fatalf("construct: %v", err)
+	}
 	lookup := &stubSimilarLookup{hash: "h", ready: true, blob: encodeVec(seedVec), dim: 3, found: true}
 
 	graph := newStubGraphStorage()
@@ -543,7 +579,10 @@ func TestSearchSimilar_AmbiguousSymbolRejected(t *testing.T) {
 	emb := &stubEmbedder{}
 	vecs := &stubVectors{}
 	nodes := &stubNodes{}
-	svc := search.NewService(emb, vecs, nodes)
+	svc, err := search.NewService(emb, vecs, nodes)
+	if err != nil {
+		t.Fatalf("construct: %v", err)
+	}
 
 	graph := newStubGraphStorage()
 	a, _ := domain.NewNode(domain.NodeSpec{ID: "a", Path: "a.go", Name: "Run", Kind: domain.KindFunction})
@@ -579,7 +618,10 @@ func TestSearchSimilar_SymbolResolvesCrossRepoWithoutRepoID(t *testing.T) {
 	nodes := &stubNodes{metas: []ports.NodeMeta{
 		{NodeID: "n2", SymbolPath: "pkg.N2", FilePath: "n2.go", Kind: "function", LineStart: 1, LineEnd: 3},
 	}}
-	svc := search.NewService(emb, vecs, nodes)
+	svc, err := search.NewService(emb, vecs, nodes)
+	if err != nil {
+		t.Fatalf("construct: %v", err)
+	}
 	lookup := &stubSimilarLookup{hash: "h", ready: true, blob: encodeVec(seedVec), dim: 3, found: true}
 
 	// Single registered repo — the resolveSeedOwner short-circuit
@@ -631,7 +673,10 @@ func TestFindRelated_ResolvesSmallestEnclosingNode(t *testing.T) {
 	vecs := &stubVectors{hits: []domain.SearchHit{{NodeID: "tight"}, {NodeID: "neighbour"}}}
 	nodes.metas = append(nodes.metas, ports.NodeMeta{NodeID: "neighbour", FilePath: "other.go", LineStart: 1, LineEnd: 3, SymbolPath: "Other"})
 	lookup := &stubSimilarLookup{hash: "h", ready: true, blob: encodeVec([]float32{0.1, 0.2}), dim: 2, found: true}
-	svc := search.NewService(emb, vecs, nodes)
+	svc, err := search.NewService(emb, vecs, nodes)
+	if err != nil {
+		t.Fatalf("construct: %v", err)
+	}
 
 	r := NewRegistry()
 	RegisterSearchTools(r, svc, lookup, vecs, nodes, nil, nil)
@@ -662,7 +707,10 @@ func TestFindRelated_LineOutsideAnyNodeReturnsNotFound(t *testing.T) {
 			{NodeID: "only", FilePath: "foo.go", LineStart: 5, LineEnd: 10},
 		},
 	}
-	svc := search.NewService(&stubEmbedder{}, &stubVectors{}, nodes)
+	svc, err := search.NewService(&stubEmbedder{}, &stubVectors{}, nodes)
+	if err != nil {
+		t.Fatalf("construct: %v", err)
+	}
 	r := NewRegistry()
 	RegisterSearchTools(r, svc, &stubSimilarLookup{}, &stubVectors{}, nodes, nil, nil)
 	_, rpcErr := dispatchSearch(t, r, "eng_find_related", map[string]any{
@@ -680,7 +728,10 @@ func TestFindRelated_LineOutsideAnyNodeReturnsNotFound(t *testing.T) {
 // the surface; 0 or negative must error as InvalidParams.
 func TestFindRelated_RejectsZeroLine(t *testing.T) {
 	r := NewRegistry()
-	svc := search.NewService(&stubEmbedder{}, &stubVectors{}, &stubNodes{})
+	svc, err := search.NewService(&stubEmbedder{}, &stubVectors{}, &stubNodes{})
+	if err != nil {
+		t.Fatalf("construct: %v", err)
+	}
 	RegisterSearchTools(r, svc, &stubSimilarLookup{}, &stubVectors{}, &stubNodes{}, nil, nil)
 	_, rpcErr := dispatchSearch(t, r, "eng_find_related", map[string]any{
 		"file_path": "foo.go",
@@ -700,7 +751,10 @@ func TestSearchTools_RegistersExpectedTools(t *testing.T) {
 	emb := &stubEmbedder{}
 	vecs := &stubVectors{}
 	nodes := &stubNodes{}
-	svc := search.NewService(emb, vecs, nodes)
+	svc, err := search.NewService(emb, vecs, nodes)
+	if err != nil {
+		t.Fatalf("construct: %v", err)
+	}
 
 	r := NewRegistry()
 	RegisterSearchTools(r, svc, &stubSimilarLookup{}, vecs, nodes, nil, nil)

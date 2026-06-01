@@ -29,7 +29,11 @@ func NewCLISearchService(pools *sqlite.Pools) (*search.Service, error) {
 		return nil, fmt.Errorf("search: open vector storage: %w", err)
 	}
 	nodes := sqlite.NewNodeLookupRepo(pools.ReadDB)
-	return search.NewService(prov, vec, nodes), nil
+	svc, err := search.NewService(prov, vec, nodes)
+	if err != nil {
+		return nil, fmt.Errorf("search: build service: %w", err)
+	}
+	return svc, nil
 }
 
 // NewCLIEmbeddingProvider resolves the same embedder the daemon elects, reading

@@ -97,7 +97,10 @@ func TestSemantic_StaticEmbedderFlagsLowQuality(t *testing.T) {
 		{NodeID: "n1", SymbolPath: "pkg.A", FilePath: "a.go", Kind: "function", LineStart: 1, LineEnd: 10},
 	}}
 
-	s := search.NewService(emb, vec, nodes)
+	s, err := search.NewService(emb, vec, nodes)
+	if err != nil {
+		t.Fatalf("construct: %v", err)
+	}
 	resp, err := s.Semantic(context.Background(), "r1", "main", "q", 10, domain.VectorFilter{})
 	if err != nil {
 		t.Fatalf("Semantic: %v", err)
@@ -132,7 +135,10 @@ func TestSemantic_HappyPath_PreservesHitRank(t *testing.T) {
 		{NodeID: "n2", SymbolPath: "pkg.B", FilePath: "b.go", Kind: "method", LineStart: 20, LineEnd: 25},
 	}}
 
-	s := search.NewService(emb, vec, nodes)
+	s, err := search.NewService(emb, vec, nodes)
+	if err != nil {
+		t.Fatalf("construct: %v", err)
+	}
 	resp, err := s.Semantic(context.Background(), "r1", "main", "find foo", 10, domain.VectorFilter{})
 	if err != nil {
 		t.Fatalf("Semantic: %v", err)
@@ -194,7 +200,10 @@ func TestSemanticCandidates_TagsRanksAndUnionsRetrievers(t *testing.T) {
 		{NodeID: "vonly", SymbolPath: "v.Only"},
 		{NodeID: "lonly", SymbolPath: "l.Only"},
 	}}
-	s := search.NewService(emb, vec, nodes, search.WithLexicalSearcher(lex))
+	s, err := search.NewService(emb, vec, nodes, search.WithLexicalSearcher(lex))
+	if err != nil {
+		t.Fatalf("construct: %v", err)
+	}
 
 	resp, err := s.SemanticCandidates(context.Background(), "r1", "main", "x", 10, domain.VectorFilter{})
 	if err != nil {
@@ -233,7 +242,10 @@ func TestSemantic_MissingNodesDroppedSilently(t *testing.T) {
 		{NodeID: "also-alive", SymbolPath: "pkg.B", FilePath: "b.go", Kind: "function"},
 	}}
 
-	s := search.NewService(emb, vec, nodes)
+	s, err := search.NewService(emb, vec, nodes)
+	if err != nil {
+		t.Fatalf("construct: %v", err)
+	}
 	resp, err := s.Semantic(context.Background(), "r1", "main", "q", 5, domain.VectorFilter{})
 	if err != nil {
 		t.Fatalf("Semantic: %v", err)
@@ -256,8 +268,11 @@ func TestSemantic_EmbedderError_PropagatesWrapped(t *testing.T) {
 	vec := &fakeVectors{}
 	nodes := &fakeNodes{}
 
-	s := search.NewService(emb, vec, nodes)
-	_, err := s.Semantic(context.Background(), "r1", "main", "q", 5, domain.VectorFilter{})
+	s, err := search.NewService(emb, vec, nodes)
+	if err != nil {
+		t.Fatalf("construct: %v", err)
+	}
+	_, err = s.Semantic(context.Background(), "r1", "main", "q", 5, domain.VectorFilter{})
 	if err == nil {
 		t.Fatal("expected error")
 		return
@@ -279,8 +294,11 @@ func TestSemantic_VectorStorageError_PropagatesWrapped(t *testing.T) {
 	vec := &fakeVectors{err: sentinel}
 	nodes := &fakeNodes{}
 
-	s := search.NewService(emb, vec, nodes)
-	_, err := s.Semantic(context.Background(), "r1", "main", "q", 5, domain.VectorFilter{})
+	s, err := search.NewService(emb, vec, nodes)
+	if err != nil {
+		t.Fatalf("construct: %v", err)
+	}
+	_, err = s.Semantic(context.Background(), "r1", "main", "q", 5, domain.VectorFilter{})
 	if err == nil {
 		t.Fatal("expected error")
 		return
@@ -301,7 +319,10 @@ func TestSemantic_EmptyHits_ReturnsEmptyNilError(t *testing.T) {
 	vec := &fakeVectors{hits: nil}
 	nodes := &fakeNodes{}
 
-	s := search.NewService(emb, vec, nodes)
+	s, err := search.NewService(emb, vec, nodes)
+	if err != nil {
+		t.Fatalf("construct: %v", err)
+	}
 	resp, err := s.Semantic(context.Background(), "r1", "main", "q", 5, domain.VectorFilter{})
 	if err != nil {
 		t.Fatalf("Semantic: %v", err)
@@ -327,7 +348,10 @@ func TestSemantic_KZero_ShortCircuits(t *testing.T) {
 		emb := &fakeEmbedder{}
 		vec := &fakeVectors{}
 		nodes := &fakeNodes{}
-		s := search.NewService(emb, vec, nodes)
+		s, err := search.NewService(emb, vec, nodes)
+		if err != nil {
+			t.Fatalf("construct: %v", err)
+		}
 
 		resp, err := s.Semantic(context.Background(), "r1", "main", "q", k, domain.VectorFilter{})
 		if err != nil {
@@ -351,8 +375,11 @@ func TestSemantic_NodeLookupError_PropagatesWrapped(t *testing.T) {
 	vec := &fakeVectors{hits: []domain.SearchHit{{NodeID: "n1", Score: 1}}}
 	nodes := &fakeNodes{err: sentinel}
 
-	s := search.NewService(emb, vec, nodes)
-	_, err := s.Semantic(context.Background(), "r1", "main", "q", 5, domain.VectorFilter{})
+	s, err := search.NewService(emb, vec, nodes)
+	if err != nil {
+		t.Fatalf("construct: %v", err)
+	}
+	_, err = s.Semantic(context.Background(), "r1", "main", "q", 5, domain.VectorFilter{})
 	if err == nil {
 		t.Fatal("expected error")
 		return
@@ -372,7 +399,10 @@ func TestSemantic_ObservesVectorQueryDuration_HappyPath(t *testing.T) {
 	vec := &fakeVectors{hits: []domain.SearchHit{{NodeID: "n1", Score: 1}}}
 	nodes := &fakeNodes{rows: []ports.NodeMeta{{NodeID: "n1", SymbolPath: "p.A", FilePath: "a.go", Kind: "function"}}}
 
-	s := search.NewService(emb, vec, nodes, search.WithMetrics(m))
+	s, err := search.NewService(emb, vec, nodes, search.WithMetrics(m))
+	if err != nil {
+		t.Fatalf("construct: %v", err)
+	}
 	if _, err := s.Semantic(context.Background(), "r1", "main", "q", 5, domain.VectorFilter{}); err != nil {
 		t.Fatalf("Semantic: %v", err)
 	}
@@ -393,7 +423,10 @@ func TestSemantic_ObservesVectorQueryDuration_ErrorPath(t *testing.T) {
 	vec := &fakeVectors{}
 	nodes := &fakeNodes{}
 
-	s := search.NewService(emb, vec, nodes, search.WithMetrics(m))
+	s, err := search.NewService(emb, vec, nodes, search.WithMetrics(m))
+	if err != nil {
+		t.Fatalf("construct: %v", err)
+	}
 	if _, err := s.Semantic(context.Background(), "r1", "main", "q", 5, domain.VectorFilter{}); err == nil {
 		t.Fatal("expected error")
 		return
@@ -438,7 +471,10 @@ func TestSemantic_EmbedderUnreachable_FallsBackToLexical(t *testing.T) {
 	}}
 	lex := &fakeLexical{hits: []ports.LexicalHit{{NodeID: "n1", Score: 0.5}}}
 
-	s := search.NewService(emb, vec, nodes, search.WithLexicalSearcher(lex))
+	s, err := search.NewService(emb, vec, nodes, search.WithLexicalSearcher(lex))
+	if err != nil {
+		t.Fatalf("construct: %v", err)
+	}
 	resp, err := s.Semantic(context.Background(), "r1", "main", "close", 5, domain.VectorFilter{})
 	if err != nil {
 		t.Fatalf("Semantic with unreachable embedder + lexical: %v", err)
@@ -485,7 +521,10 @@ func TestSemantic_HybridFusion_LiftsLexicalOnlyHit(t *testing.T) {
 		{NodeID: "v2", SymbolPath: "pkg.V2", FilePath: "c.go", Kind: "function", LineStart: 1, LineEnd: 5},
 		{NodeID: "v3", SymbolPath: "pkg.V3", FilePath: "d.go", Kind: "function", LineStart: 1, LineEnd: 5},
 	}}
-	s := search.NewService(emb, vec, nodes, search.WithLexicalSearcher(lex))
+	s, err := search.NewService(emb, vec, nodes, search.WithLexicalSearcher(lex))
+	if err != nil {
+		t.Fatalf("construct: %v", err)
+	}
 	resp, err := s.Semantic(context.Background(), "r1", "main", "NameMatch", 5, domain.VectorFilter{})
 	if err != nil {
 		t.Fatalf("Semantic: %v", err)
@@ -518,7 +557,10 @@ func TestSemantic_HybridFusion_LexicalError_DegradesGracefully(t *testing.T) {
 	nodes := &fakeNodes{rows: []ports.NodeMeta{
 		{NodeID: "v1", SymbolPath: "pkg.V1", FilePath: "a.go", Kind: "function", LineStart: 1, LineEnd: 5},
 	}}
-	s := search.NewService(emb, vec, nodes, search.WithLexicalSearcher(lex))
+	s, err := search.NewService(emb, vec, nodes, search.WithLexicalSearcher(lex))
+	if err != nil {
+		t.Fatalf("construct: %v", err)
+	}
 	resp, err := s.Semantic(context.Background(), "r1", "main", "q", 5, domain.VectorFilter{})
 	if err != nil {
 		t.Fatalf("Semantic: %v", err)
@@ -537,8 +579,11 @@ func TestSemantic_EmbedderUnreachable_NoLexical_PropagatesError(t *testing.T) {
 	vec := &fakeVectors{}
 	nodes := &fakeNodes{}
 
-	s := search.NewService(emb, vec, nodes) // no WithLexicalSearcher
-	_, err := s.Semantic(context.Background(), "r1", "main", "q", 5, domain.VectorFilter{})
+	s, err := search.NewService(emb, vec, nodes) // no WithLexicalSearcher
+	if err != nil {
+		t.Fatalf("construct: %v", err)
+	}
+	_, err = s.Semantic(context.Background(), "r1", "main", "q", 5, domain.VectorFilter{})
 	if err == nil {
 		t.Fatal("expected error, got nil")
 		return
@@ -560,8 +605,11 @@ func TestSemantic_NonSentinelEmbedderError_DoesNotFallBack(t *testing.T) {
 	nodes := &fakeNodes{}
 	lex := &fakeLexical{}
 
-	s := search.NewService(emb, vec, nodes, search.WithLexicalSearcher(lex))
-	_, err := s.Semantic(context.Background(), "r1", "main", "q", 5, domain.VectorFilter{})
+	s, err := search.NewService(emb, vec, nodes, search.WithLexicalSearcher(lex))
+	if err != nil {
+		t.Fatalf("construct: %v", err)
+	}
+	_, err = s.Semantic(context.Background(), "r1", "main", "q", 5, domain.VectorFilter{})
 	if err == nil {
 		t.Fatal("expected error, got nil")
 		return
@@ -589,7 +637,10 @@ func TestLexical_HappyPath(t *testing.T) {
 		{NodeID: "n2", Score: 0.5},
 	}}
 
-	s := search.NewService(emb, vec, nodes, search.WithLexicalSearcher(lex))
+	s, err := search.NewService(emb, vec, nodes, search.WithLexicalSearcher(lex))
+	if err != nil {
+		t.Fatalf("construct: %v", err)
+	}
 	got, err := s.Lexical(context.Background(), "r1", "main", "close", 10)
 	if err != nil {
 		t.Fatalf("Lexical: %v", err)
@@ -609,7 +660,10 @@ func TestLexical_HappyPath(t *testing.T) {
 // to nil when no LexicalSearcher option was applied.
 func TestLexical_NoLexicalWired_ReturnsNil(t *testing.T) {
 	t.Parallel()
-	s := search.NewService(&fakeEmbedder{}, &fakeVectors{}, &fakeNodes{})
+	s, err := search.NewService(&fakeEmbedder{}, &fakeVectors{}, &fakeNodes{})
+	if err != nil {
+		t.Fatalf("construct: %v", err)
+	}
 	got, err := s.Lexical(context.Background(), "r1", "main", "q", 5)
 	if err != nil {
 		t.Fatalf("Lexical: %v", err)
@@ -619,9 +673,10 @@ func TestLexical_NoLexicalWired_ReturnsNil(t *testing.T) {
 	}
 }
 
-// TestNewService_PanicsOnNilDeps verifies the construction-time nil check
-// short-circuits programmer errors at boot rather than at first query.
-func TestNewService_PanicsOnNilDeps(t *testing.T) {
+// TestNewService_ErrorsOnNilDeps verifies the construction-time nil check
+// short-circuits programmer errors at boot (with a typed ErrMissingDependency)
+// rather than at first query.
+func TestNewService_ErrorsOnNilDeps(t *testing.T) {
 	t.Parallel()
 	emb := &fakeEmbedder{}
 	vec := &fakeVectors{}
@@ -639,12 +694,26 @@ func TestNewService_PanicsOnNilDeps(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			defer func() {
-				if r := recover(); r == nil {
-					t.Errorf("expected panic for %s", tc.name)
-				}
-			}()
-			_ = search.NewService(tc.e, tc.v, tc.n)
+			s, err := search.NewService(tc.e, tc.v, tc.n)
+			if s != nil {
+				t.Errorf("expected nil *Service for %s, got %v", tc.name, s)
+			}
+			if !errors.Is(err, search.ErrMissingDependency) {
+				t.Errorf("expected ErrMissingDependency for %s, got %v", tc.name, err)
+			}
 		})
+	}
+}
+
+// TestNewService_HappyPath verifies the constructor returns a non-nil Service
+// and nil error when all required deps are present.
+func TestNewService_HappyPath(t *testing.T) {
+	t.Parallel()
+	s, err := search.NewService(&fakeEmbedder{}, &fakeVectors{}, &fakeNodes{})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if s == nil {
+		t.Fatal("expected non-nil *Service")
 	}
 }

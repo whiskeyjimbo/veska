@@ -25,7 +25,10 @@ func contextPackFixture(t *testing.T, opts ...contextpack.Option) *contextpack.A
 		},
 		byFile: map[string][]string{"a.go": {"seed"}, "b.go": {"caller1"}},
 	}
-	blast := blastradius.NewService(edges, nodes, nil)
+	blast, err := blastradius.NewService(edges, nodes, nil)
+	if err != nil {
+		t.Fatalf("construct: %v", err)
+	}
 
 	findNodes := func(_ context.Context, _, _, sym string) ([]*domain.Node, error) {
 		if sym == "Target" {

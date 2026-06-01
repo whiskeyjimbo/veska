@@ -138,9 +138,12 @@ func TestTokenEfficiencyMultiRepo(t *testing.T) {
 		}
 	}
 
-	svc := search.NewService(embedder, vstore, sqlite.NewNodeLookupRepo(db),
+	svc, err := search.NewService(embedder, vstore, sqlite.NewNodeLookupRepo(db),
 		search.WithLexicalSearcher(sqlite.NewLexicalRepo(db)),
 	)
+	if err != nil {
+		t.Fatalf("construct search service: %v", err)
+	}
 	truth := corpus.TruthByCluster()
 
 	var (

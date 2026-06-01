@@ -67,7 +67,10 @@ func fixtureService(t *testing.T, opts ...Option) *HotZoneService {
 			"/tmp/r/a.go": {"a"}, "/tmp/r/b.go": {"b"}, "/tmp/r/c.go": {"c"},
 		},
 	}
-	blast := blastradius.NewService(edges, nodes, nil)
+	blast, err := blastradius.NewService(edges, nodes, nil)
+	if err != nil {
+		t.Fatalf("construct: %v", err)
+	}
 	counts := func(_ context.Context, _ string) (map[string]int, error) {
 		return map[string]int{"a.go": 5, "b.go": 5, "c.go": 3}, nil
 	}
@@ -79,7 +82,10 @@ func fixtureService(t *testing.T, opts ...Option) *HotZoneService {
 }
 
 func TestNewHotZoneService_RejectsNilDependencies(t *testing.T) {
-	blast := blastradius.NewService(&fakeEdges{}, &fakeNodes{}, nil)
+	blast, err := blastradius.NewService(&fakeEdges{}, &fakeNodes{}, nil)
+	if err != nil {
+		t.Fatalf("construct: %v", err)
+	}
 	counts := func(context.Context, string) (map[string]int, error) { return nil, nil }
 	nif := func(context.Context, string, string, string) ([]string, error) { return nil, nil }
 
@@ -169,7 +175,10 @@ func TestRank_DropsZeroScoreZones(t *testing.T) {
 			"/tmp/r/go.mod": nil,
 		},
 	}
-	blast := blastradius.NewService(edges, nodes, nil)
+	blast, err := blastradius.NewService(edges, nodes, nil)
+	if err != nil {
+		t.Fatalf("construct: %v", err)
+	}
 	counts := func(_ context.Context, _ string) (map[string]int, error) {
 		return map[string]int{"a.go": 3, "go.mod": 7}, nil
 	}
