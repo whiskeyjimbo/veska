@@ -68,10 +68,12 @@ func hasBackupTarballs(dir string) bool {
 	return false
 }
 
-// humanBytes renders a byte count in the largest base-1024 unit that keeps
-// the numeric part under 1024 ("873B", "1.2KB", "1.2MB", "1.2GB"). The
-// output stays narrow so it fits comfortably in tabular and 80-column
-// terminal output across the backup and savings commands.
+// humanBytes renders a byte count in the largest base-1024 unit up to GB
+// ("873B", "1.2KB", "1.2MB", "1.2GB"). Sub-GB values keep the numeric part
+// under 1024; GB is the top unit, so terabyte-scale counts render as a large
+// GB figure rather than overflowing into a TB unit. The output stays narrow
+// so it fits comfortably in tabular and 80-column terminal output across the
+// backup and savings commands.
 func humanBytes(n int64) string {
 	const k = 1024
 	switch {
@@ -87,11 +89,11 @@ func humanBytes(n int64) string {
 }
 
 // resolveRepoFromCWD asks the daemon (via eng_get_current_repo) which repo
-// the caller's cwd belongs to. Used by CLI wrappers (symbol, context, ...)
-// to bridge the gap when the daemon has multiple repos registered and the
-// user hasn't passed --repo. Empty string + no error means "couldn't
-// resolve"; the caller should still pass the request through and let the
-// daemon's "repo_id is required" error surface .
+// the caller's cwd belongs to. Reached only through autoResolveRepo, which
+// bridges the gap when the daemon has multiple repos registered and the user
+// hasn't passed --repo. Empty string + no error means "couldn't resolve";
+// the caller should still pass the request through and let the daemon's
+// "repo_id is required" error surface .
 func resolveRepoFromCWD(ctx context.Context) (string, error) {
 	cwd, err := os.Getwd()
 	if err != nil {
@@ -116,8 +118,9 @@ func resolveRepoFromCWD(ctx context.Context) (string, error) {
 // #1 first-impression bug in the junior-journey walk-through .
 // errOut may be nil to suppress the hint (e.g. JSON-output paths where a
 // stray stderr line could clutter pipelines — callers there pay the
-// no-hint cost knowingly). Shared by the deps, findings, and symbol command
-// families.
+// no-hint cost knowingly). Shared by the deps and findings command families
+// (symbol deliberately opts out — solov2-efzv — and fans out across all
+// registered repos instead).
 func autoResolveRepo(ctx context.Context, errOut io.Writer) string {
 	rid, _ := resolveRepoFromCWD(ctx)
 	if rid == "" {

@@ -309,12 +309,22 @@ func TestGetTaskHistory_CustomLimit(t *testing.T) {
 		t.Fatalf("unexpected RPC error: %v", rpcErr.Message)
 	}
 
-	raw, _ := json.Marshal(result)
+	raw, err := json.Marshal(result)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
 	var m map[string]any
-	json.Unmarshal(raw, &m)
-	tasksRaw, _ := json.Marshal(m["tasks"])
+	if err := json.Unmarshal(raw, &m); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	tasksRaw, err := json.Marshal(m["tasks"])
+	if err != nil {
+		t.Fatalf("marshal tasks: %v", err)
+	}
 	var tasks []map[string]any
-	json.Unmarshal(tasksRaw, &tasks)
+	if err := json.Unmarshal(tasksRaw, &tasks); err != nil {
+		t.Fatalf("unmarshal tasks: %v", err)
+	}
 
 	if len(tasks) != 2 {
 		t.Errorf("expected 2 tasks with limit=2, got %d", len(tasks))
