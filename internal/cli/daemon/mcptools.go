@@ -269,7 +269,13 @@ func (w *mcpToolWiring) registerSearchTool() error {
 // aborting daemon startup.
 func (w *mcpToolWiring) registerCloneTool() {
 	repo := sqlite.NewCloneRepo(w.pools.ReadDB)
-	finder, err := duplicates.NewFinder(repo, repo)
+	// The elected embedder's ModelID selects the calibrated near-dup default
+	// (solov2-md3n): score spaces differ per model, so the threshold must too.
+	var embedderID string
+	if w.d.provider != nil {
+		embedderID = w.d.provider.ModelID()
+	}
+	finder, err := duplicates.NewFinder(repo, repo, embedderID)
 	if err != nil {
 		return
 	}
