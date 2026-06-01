@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/whiskeyjimbo/veska/internal/core/ports"
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/git"
 )
 
@@ -166,5 +167,34 @@ loop:
 
 	if err := mw.Close(); err != nil {
 		t.Fatalf("Close: %v", err)
+	}
+}
+
+// TestMultiRepoWatcherInject verifies that Inject multiplexes a synthetic write
+// event (the wake-reconciler path) onto Events() with the given repo ID, and
+// that an Inject before Start is a no-op rather than a panic.
+func TestMultiRepoWatcherInject(t *testing.T) {
+	t.Parallel()
+
+	mw := git.NewMultiRepoWatcher()
+	mw.Inject("early", "/tmp/before-start.go") // must not panic before Start
+
+	mw.Start(t.Context())
+
+	mw.Inject("repoZ", "/tmp/woke.go")
+
+	select {
+	case ev := <-mw.Events():
+		if ev.RepoID != "repoZ" {
+			t.Errorf("RepoID = %q, want repoZ", ev.RepoID)
+		}
+		if ev.Event.Path != "/tmp/woke.go" {
+			t.Errorf("Path = %q, want /tmp/woke.go", ev.Event.Path)
+		}
+		if ev.Event.Op != ports.WatchOpWrite {
+			t.Errorf("Op = %q, want write", ev.Event.Op)
+		}
+	case <-time.After(multiEventTimeout):
+		t.Fatal("no injected event delivered")
 	}
 }

@@ -43,6 +43,31 @@ func TestWire_Constructs(t *testing.T) {
 	t.Cleanup(func() { _ = d.Stop() })
 }
 
+// TestDaemon_ReconcilerWired_FieldPresent is the composition-root smoke test for
+// the wake-reconciler wiring: newDaemon must populate d.reconciler so Start can
+// spawn the suspend/resume tick loop. A nil field means the wiring was dropped.
+// The gap-detection behaviour itself is covered by the git package's
+// TestStart_WakeGapTriggersSweep.
+func TestDaemon_ReconcilerWired_FieldPresent(t *testing.T) {
+	cfg := testConfig(t)
+	d, err := newDaemon(cfg)
+	if err != nil {
+		t.Fatalf("newDaemon: %v", err)
+	}
+	t.Cleanup(func() { _ = d.Stop() })
+	if d.reconciler == nil {
+		t.Fatal("d.reconciler is nil after newDaemon; wiring missing")
+	}
+
+	// Start then Stop must cleanly spin up and tear down the reconciler
+	// goroutine (recDone) without wedging shutdown.
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if err := d.Start(ctx); err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+}
+
 // TestWire_UnknownVectorBackend ensures an invalid VESKA_VECTOR_BACKEND value
 // surfaces as a typed *ErrMissingDep rather than as a generic open error.
 func TestWire_UnknownVectorBackend(t *testing.T) {
