@@ -162,9 +162,9 @@ func TestPoller_PauserBlocksProcessing(t *testing.T) {
 
 	var paused atomic.Bool
 	paused.Store(true)
-	p := queue.NewWithInterval(db, db, map[queue.WorkKind]queue.WorkHandler{
+	p := queue.New(db, db, map[queue.WorkKind]queue.WorkHandler{
 		queue.WorkKindEmbed: h,
-	}, 25*time.Millisecond)
+	}, queue.WithInterval(25*time.Millisecond))
 	p.Pauser = paused.Load
 
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
@@ -213,7 +213,7 @@ func TestPoller_RetryAndFail(t *testing.T) {
 	}
 
 	// Use a shorter interval for faster test execution.
-	p := queue.NewWithInterval(db, db, handlers, 10*time.Millisecond)
+	p := queue.New(db, db, handlers, queue.WithInterval(10*time.Millisecond))
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -248,7 +248,7 @@ func TestPoller_ContextCancelStopsGoroutines(t *testing.T) {
 		queue.WorkKindReview:     &handlerFunc{fn: func(_ context.Context, _ queue.Row) error { return nil }},
 	}
 
-	p := queue.NewWithInterval(db, db, handlers, 10*time.Millisecond)
+	p := queue.New(db, db, handlers, queue.WithInterval(10*time.Millisecond))
 
 	ctx, cancel := context.WithCancel(context.Background())
 	p.Start(ctx)
@@ -285,7 +285,7 @@ func TestPoller_NoHandlerRowSkipped(t *testing.T) {
 		queue.WorkKindEmbed: &handlerFunc{fn: func(_ context.Context, _ queue.Row) error { return nil }},
 	}
 
-	p := queue.NewWithInterval(db, db, handlers, 10*time.Millisecond)
+	p := queue.New(db, db, handlers, queue.WithInterval(10*time.Millisecond))
 
 	ctx, cancel := context.WithTimeout(context.Background(), 300*time.Millisecond)
 	defer cancel()
@@ -316,7 +316,7 @@ func TestPoller_WikiLaneDrains(t *testing.T) {
 	handlers := map[queue.WorkKind]queue.WorkHandler{
 		queue.WorkKindWiki: h,
 	}
-	p := queue.NewWithInterval(db, db, handlers, 10*time.Millisecond)
+	p := queue.New(db, db, handlers, queue.WithInterval(10*time.Millisecond))
 
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
@@ -401,7 +401,7 @@ func TestPoller_ReviewLaneDrains(t *testing.T) {
 	handlers := map[queue.WorkKind]queue.WorkHandler{
 		queue.WorkKindReview: reviewH,
 	}
-	p := queue.NewWithInterval(db, db, handlers, 10*time.Millisecond)
+	p := queue.New(db, db, handlers, queue.WithInterval(10*time.Millisecond))
 
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
