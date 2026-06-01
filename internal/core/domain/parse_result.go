@@ -24,13 +24,13 @@ type ParseResult struct {
 	// the callee lives in another file of the same Go package. The
 	// promoter resolves these against a per-package map built from the
 	// whole batch and emits CALLS edges in the same transaction
-	// (solov2-2at).
+	// .
 	UnresolvedCalls []UnresolvedCall
 	// Imports maps a file's local package identifiers to their full import
 	// paths (alias -> path; for unaliased imports the key is the path's last
 	// segment, matching the common case where the package name equals it).
 	// Promotion uses this to resolve package-qualified UnresolvedCalls
-	// (solov2-xc51). nil/empty when the file imports nothing.
+	// . nil/empty when the file imports nothing.
 	Imports map[string]string
 }
 
@@ -45,7 +45,7 @@ type ParseResult struct {
 // package-qualified call (the "cmd" in cmd.Execute()). At promotion time it
 // is resolved against the file's import map ([[ParseResult]].Imports) to a
 // package — intra-module packages bind to a concrete CALLS edge, external
-// modules become a cross-repo edge stub (solov2-xc51). When PkgQualifier is
+// modules become a cross-repo edge stub . When PkgQualifier is
 // empty the call is plain/receiver-local as before.
 type UnresolvedCall struct {
 	CallerID     NodeID

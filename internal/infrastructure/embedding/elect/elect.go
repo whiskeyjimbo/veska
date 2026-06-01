@@ -1,10 +1,10 @@
-// Package elect performs boot-time embedder election (solov2-1az).
+// Package elect performs boot-time embedder election .
 //
 // Embedders are a PICK-ONE ladder, never a stack: exactly one embedder
 // owns the index at a time, because vectors from different models live
 // in incompatible spaces and must never be mixed (see decision memory
 // 'embedder-architecture'). This package replaces the composite
-// Ollama→static fallback chain (solov2-soc), which mixed spaces.
+// Ollama→static fallback chain , which mixed spaces.
 //
 // Election (default direction decided by the solov2-hd0 gate: model2vec
 // is the default; Ollama is an opt-in max-quality override):

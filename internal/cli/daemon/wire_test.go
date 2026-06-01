@@ -289,7 +289,7 @@ func TestWire_RegistersFinalFiveTools(t *testing.T) {
 		"eng_set_active_task", "eng_get_active_task", "eng_get_task_history",
 	} {
 		if have[parked] {
-			t.Errorf("parked tool %q unexpectedly registered (solov2-6m1)", parked)
+			t.Errorf("parked tool %q unexpectedly registered ", parked)
 		}
 	}
 }

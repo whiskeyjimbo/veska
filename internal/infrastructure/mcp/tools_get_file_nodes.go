@@ -20,7 +20,7 @@ type getFileNodesParams struct {
 	FilePath string `json:"file_path"`
 	// Path is an accepted alias for FilePath. Node file paths are keyed on
 	// "file_path"; "path" is a common caller guess, so we honour both rather
-	// than silently returning nothing (solov2-3p1).
+	// than silently returning nothing .
 	Path   string `json:"path"`
 	RepoID string `json:"repo_id"`
 	Branch string `json:"branch"`
@@ -52,7 +52,7 @@ func makeGetFileNodesHandler(graph ports.GraphReader, staging *staging.Area, rep
 			return nil, rpcErr
 		}
 		p.RepoID = repoID
-		// Branch defaults to the repo's active branch when omitted (solov2-gp2k),
+		// Branch defaults to the repo's active branch when omitted ,
 		// matching find_symbol, get_call_chain, get_blast_radius, et al.
 		if br, rpcErr := resolveBranchOrActive(ctx, repos, p.RepoID, p.Branch); rpcErr != nil {
 			return nil, rpcErr

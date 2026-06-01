@@ -43,7 +43,7 @@ type Poller struct {
 	// Pauser, when set and returning true, makes runKind skip its tick
 	// without consuming a row. Wired to the daemon's ScanTracker so the
 	// post-promotion queue yields the Write lock while a cold scan
-	// is in flight (solov2-pc3). When nil the poller never pauses —
+	// is in flight . When nil the poller never pauses —
 	// production wiring sets it after New().
 	Pauser func() bool
 }

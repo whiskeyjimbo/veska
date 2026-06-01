@@ -21,7 +21,7 @@ import (
 // ErrSeedNotFound is returned by Service.Of when none of the supplied seed
 // node_ids resolve to a node in (repoID, branch). Handlers should map this to
 // a NotFound-style RPC error so callers get a clear signal instead of an
-// empty-fields response (solov2-2w0u).
+// empty-fields response .
 var ErrSeedNotFound = errors.New("blastradius: seed not found")
 
 // ErrMissingDependency is returned by NewService when a required
@@ -88,7 +88,7 @@ type Entry struct {
 	// Snippet is the symbol's stored raw_content (nodes.snippet column),
 	// propagated from ports.NodeMeta so downstream consumers like
 	// contextpack can return source inline without a separate Read
-	// (solov2-dya). Empty when the underlying node row has no snippet
+	// . Empty when the underlying node row has no snippet
 	// (legacy rows before the column was added).
 	Snippet string
 	// IsHub is true when this node's neighbour count exceeded
@@ -102,7 +102,7 @@ type Entry struct {
 	// eventually-consistent against the edges table, so a freshly-changed
 	// file may surface an unresolved node for a few hundred ms. Callers
 	// can use this to render "pending" instead of treating the empty
-	// name/kind/file_path as a real symbol (solov2-ppk6).
+	// name/kind/file_path as a real symbol .
 	Pending bool `json:"pending,omitempty"`
 }
 
@@ -197,7 +197,7 @@ func (s *Service) Of(ctx context.Context, repoID, branch string, seedIDs []strin
 	// Seed validation: if NONE of the supplied seed_ids resolve to a real
 	// node in (repoID, branch), that's a user error — the radius is
 	// undefined, and the historical behaviour of returning a single entry
-	// with empty name/kind/file_path silently masked it (solov2-2w0u). A
+	// with empty name/kind/file_path silently masked it . A
 	// partial miss is still tolerated: downstream BFS entries may be
 	// eventually-consistent (the comment further down still applies), but
 	// the seed itself is the user's input and we owe them a clear error
@@ -249,7 +249,7 @@ func (s *Service) Of(ctx context.Context, repoID, branch string, seedIDs []strin
 	// hubs records ids whose per-source fan-out exceeded
 	// HubDegreeThreshold; the BFS does NOT expand through them, but they
 	// still appear in the result with IsHub=true so callers see the fact
-	// (solov2-l2f5). Negative threshold disables the gate entirely.
+	// . Negative threshold disables the gate entirely.
 	hubs := make(map[string]bool)
 	gateOn := opts.HubDegreeThreshold > 0
 
@@ -295,7 +295,7 @@ func (s *Service) Of(ctx context.Context, repoID, branch string, seedIDs []strin
 		// consistent vs the authoritative edges + nodes truth, and
 		// surfacing the bare ID is more useful than dropping it silently.
 		// The flag lets callers distinguish "unresolved-pending" from
-		// "real symbol with no name" (solov2-ppk6).
+		// "real symbol with no name" .
 		entries = append(entries, Entry{
 			NodeID:     id,
 			Distance:   visited[id],
@@ -392,7 +392,7 @@ func (s *Service) DiffOf(ctx context.Context, repoID, branch, repoRoot string, c
 
 // ContentHasher is an optional capability that lets DirtyOf compare a
 // staged node's parser-computed ContentHash against the promoted side's
-// stored hash, filtering out unchanged-but-restaged symbols (solov2-iyz2).
+// stored hash, filtering out unchanged-but-restaged symbols .
 // *sqlite.NodeLookupRepo satisfies it; stubs that don't simply skip the
 // filter, preserving the prior "every staged node is dirty" behaviour.
 type ContentHasher interface {

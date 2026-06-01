@@ -1,7 +1,7 @@
 // Package recallprojection is the eval harness that makes embed-text
 // PROJECTION changes measurable for recall sweeps.
 //
-// Background (solov2-7ma): the recall harness in tools/loadtest/recall
+// Background : the recall harness in tools/loadtest/recall
 // embeds the synthetic corpus Text field directly. It therefore does not
 // exercise the production FetchPending embed-text projection
 // (domain.EmbedText), so swapping projection variants — folding the

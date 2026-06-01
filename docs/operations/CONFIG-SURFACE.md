@@ -236,7 +236,7 @@ stable_boot_after      = "60s"               # alive this long → counter reset
 # files into user repos. Set write_pages = true to materialise the
 # pages under <repo>/docs/veska/ on every promotion. The eng_get_hot_zone
 # and eng_get_entry_points MCP tools serve the same data either way
-# (solov2-ocnn).
+# .
 [wiki]
 write_pages            = false
 

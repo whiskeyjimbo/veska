@@ -66,7 +66,7 @@ func RunFind(ctx context.Context, p FindParams) error {
 }
 
 // PrintCrossRepoSymbolHint walks every other registered repo and prints a
-// one-line hint when the symbol exists somewhere else (solov2-zgwd). Stays
+// one-line hint when the symbol exists somewhere else . Stays
 // best-effort: any per-repo error is silently skipped — a stuck repo must
 // not turn a successful empty result into a noisy banner. The hint only
 // fires when there's at least one cross-repo match, so the "no matches

@@ -139,7 +139,7 @@ func TestDeadCodeCheck_AppliesAllowlistFilters(t *testing.T) {
 		// non-Go-named entry: function named 'main' is filtered regardless of casing.
 		{"function literally named 'init' excluded", "init", "method", true},
 		// Non-symbol kinds carry no inbound edges by construction and must
-		// never be reported, regardless of name casing (solov2-xpb).
+		// never be reported, regardless of name casing .
 		{"package kind excluded", "server", "package", true},
 		{"chunk kind excluded", "chunk:1-4", "chunk", true},
 		{"file kind excluded", "main.go", "file", true},

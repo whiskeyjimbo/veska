@@ -151,7 +151,7 @@ func newFindingsDB(t *testing.T) *sql.DB {
 		t.Fatalf("create findings table: %v", err)
 	}
 	// Minimal suppressions table so eng_list_findings' LEFT JOIN compiles
-	// (solov2-2ye2). Tests that don't seed suppressions get the empty-join
+	// . Tests that don't seed suppressions get the empty-join
 	// case automatically.
 	_, err = db.Exec(`
 		CREATE TABLE IF NOT EXISTS suppressions (
@@ -680,7 +680,7 @@ func TestListFindings_AcceptsShortID(t *testing.T) {
 }
 
 // seedFindingRule inserts a finding with an explicit rule so tests can
-// exercise the rule filter (solov2-c7sy).
+// exercise the rule filter .
 func seedFindingRule(t *testing.T, db *sql.DB, findingID, branch, repoID, severity, state, rule string) {
 	t.Helper()
 	_, err := db.Exec(`

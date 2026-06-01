@@ -26,7 +26,7 @@ const CodeFailedPrecondition = -32003
 // actually serviced the query.
 // SearchResponse fields use non-omitempty tags so the wire shape is
 // stable across calls — empty collections serialize as [] per the
-// README's "Conventions across the tool surface" contract (solov2-2bdj).
+// README's "Conventions across the tool surface" contract .
 type SearchResponse struct {
 	Results         []searchHitDTO `json:"results"`
 	DegradedReasons []string       `json:"degraded_reasons"`
@@ -38,7 +38,7 @@ type SearchResponse struct {
 
 // PendingEmbedsCounter exposes the global pending-embeds depth so the
 // semantic handler can tag responses with 'embeddings_pending' while the
-// index is still warming. nil is a no-op (solov2-hjw9).
+// index is still warming. nil is a no-op .
 type PendingEmbedsCounter interface {
 	CountPending(ctx context.Context) (int, error)
 }
@@ -61,7 +61,7 @@ type SimilarLookup interface {
 
 // SearchToolOption configures RegisterSearchTools. The only knob today is
 // the GraphStorage used by eng_search_similar to resolve a `symbol` param
-// to a node_id (solov2-3ocy); composition roots that don't wire it can
+// to a node_id ; composition roots that don't wire it can
 // still call the tool with node_id directly.
 type SearchToolOption func(*searchToolConfig)
 
@@ -87,11 +87,13 @@ func WithSearchGraph(g ports.GraphReader) SearchToolOption {
 
 // defaultSearchK / maxSearchK bound the result count shared by every search
 // handler ('limit' is accepted as an alias for k across the surface).
-const defaultSearchK = 10
-const maxSearchK = 100
+const (
+	defaultSearchK = 10
+	maxSearchK     = 100
+)
 
 // resolveK normalises the k / limit aliases shared by every search handler:
-// k wins, 'limit' is the fallback alias (solov2-8rm), zero/negative means the
+// k wins, 'limit' is the fallback alias , zero/negative means the
 // default, and anything above maxSearchK is rejected. Centralising it keeps the
 // three handlers byte-identical on this contract instead of triplicating it.
 func resolveK(k, limit int) (int, *RPCError) {
@@ -110,7 +112,7 @@ func resolveK(k, limit int) (int, *RPCError) {
 // RegisterSearchTools registers eng_search_semantic and eng_search_similar.
 // svc is required and orchestrates the semantic + lexical-fallback path.
 // lookup + vectors + nodes drive the similar-by-node-id path. rec is
-// optional: a nil recorder disables savings telemetry (solov2-3bu).
+// optional: a nil recorder disables savings telemetry .
 func RegisterSearchTools(
 	r *Registry,
 	svc *search.Service,

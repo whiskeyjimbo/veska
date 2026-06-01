@@ -64,7 +64,7 @@ func WithHandlerClock(c func() time.Time) HandlerOption {
 // user's repo work-tree. Off by default — the README contract is that
 // veska does not write to user repos. The MCP tools eng_get_hot_zone and
 // eng_get_entry_points still serve the same ranked data when this is off
-// (solov2-ocnn).
+// .
 func WithWritePages(enabled bool) HandlerOption {
 	return func(h *Handler) {
 		h.writePages = enabled
@@ -151,7 +151,7 @@ func (h *Handler) Handle(ctx context.Context, row ports.WorkRow) error {
 	// last-render stamp is bumped — the MCP tools eng_get_hot_zone /
 	// eng_get_entry_points serve the same data on demand. We keep the
 	// rank pass to populate any caches and to surface ranking errors at
-	// the same point in the queue lifecycle (solov2-ocnn).
+	// the same point in the queue lifecycle .
 	_ = report
 	_ = epReport
 
@@ -167,7 +167,7 @@ func (h *Handler) Handle(ctx context.Context, row ports.WorkRow) error {
 // relativizeHotZoneReport returns a copy of report with each Zone.FilePath
 // rewritten to a repoRoot-relative slash-form path when possible. Used when
 // rendering the committed Markdown page so the output is portable across
-// machines (solov2-2q2a).
+// machines .
 func relativizeHotZoneReport(r Report, root string) Report {
 	out := r
 	out.Zones = make([]HotZone, len(r.Zones))
@@ -179,7 +179,7 @@ func relativizeHotZoneReport(r Report, root string) Report {
 }
 
 // relativizeEntryPointsReport mirrors relativizeHotZoneReport for the
-// EntryPointsReport (solov2-2q2a).
+// EntryPointsReport .
 func relativizeEntryPointsReport(r EntryPointsReport, root string) EntryPointsReport {
 	out := r
 	out.EntryPoints = make([]EntryPoint, len(r.EntryPoints))

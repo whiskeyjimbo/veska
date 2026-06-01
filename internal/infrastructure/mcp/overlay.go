@@ -4,7 +4,7 @@ package mcp
 // Tools embed or compose this struct in their specific response types.
 // DegradedReasons is intentionally non-omitempty so the empty case
 // serializes as [] per the README's "empty collections serialize as []"
-// contract (solov2-2bdj). IncludedStaging is a scalar default-false flag
+// contract . IncludedStaging is a scalar default-false flag
 // so omitempty is fine there.
 type Envelope struct {
 	IncludedStaging bool     `json:"included_staging,omitempty"`
@@ -43,7 +43,7 @@ func BuildEnvelope(stagingRead bool, stagingOK bool, state DaemonState) Envelope
 	}
 
 	// Always emit a non-nil slice so json.Marshal renders [] not null
-	// (solov2-2bdj).
+	// .
 	return Envelope{
 		IncludedStaging: includedStaging,
 		DegradedReasons: reasons,

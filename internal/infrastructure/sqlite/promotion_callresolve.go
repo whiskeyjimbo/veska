@@ -35,7 +35,7 @@ func ucSrcLine(uc domain.UnresolvedCall) any {
 // buildPackageSymbolMap groups symbol-name → node_id by file directory.
 // Go's "one package per directory" convention means a single map per
 // dir is sufficient for resolving same-package, cross-file calls
-// (solov2-2at). The values shadow on conflict (last file wins) — only
+// . The values shadow on conflict (last file wins) — only
 // matters when two files in the same dir export the same symbol name,
 // which is illegal Go anyway.
 func buildPackageSymbolMap(batch application.PromotionBatch) map[string]map[string]domain.NodeID {
@@ -61,7 +61,7 @@ func buildPackageSymbolMap(batch application.PromotionBatch) map[string]map[stri
 // root, in slash form. Node/file paths reach promotion in a mix of absolute
 // (cold scan) and repo-relative (incremental commit) forms; normalising both
 // against root gives a single package-key space for cross-package resolution
-// (solov2-xc51). The module-root package maps to "".
+// . The module-root package maps to "".
 func moduleRelDir(path, root string) string {
 	p := filepath.ToSlash(path)
 	if root != "" {
@@ -209,7 +209,7 @@ func lookupPromotedMethodInDir(ctx context.Context, tx *sql.Tx, scope promotedSc
 // symbol_path (indexed) and disambiguates by directory in Go, since promoted
 // file paths may be absolute or repo-relative. The cursor is fully drained
 // before returning so callers may safely write on the same tx afterwards
-// (solov2-xc51). found is false on no match.
+// . found is false on no match.
 func lookupPromotedSymbolDir(ctx context.Context, tx *sql.Tx, scope promotedScope, name string) (domain.NodeID, bool, error) {
 	rows, err := tx.QueryContext(ctx,
 		`SELECT node_id, file_path FROM nodes
@@ -279,7 +279,7 @@ func buildCallEdge(uc domain.UnresolvedCall, targetID domain.NodeID) (*domain.Ed
 }
 
 // resolveIntraPackageCalls binds UnresolvedCalls whose callee lives in another
-// file of the same Go package (solov2-2at). Package-qualified calls are left to
+// file of the same Go package . Package-qualified calls are left to
 // the cross-package pass; same-directory = same package by convention. Misses
 // stay unresolved.
 func (p *promotion) resolveIntraPackageCalls(ctx context.Context) error {
@@ -317,7 +317,7 @@ func (p *promotion) resolveIntraPackageCalls(ctx context.Context) error {
 
 // resolveCrossPackageCalls binds package-qualified calls within the same Go
 // module and records cross-repo edge stubs for calls into other modules
-// (solov2-xc51). Repos without a module_path skip the table entirely.
+// . Repos without a module_path skip the table entirely.
 // Ambiguity/misses are skipped: this pass never emits a false edge.
 func (p *promotion) resolveCrossPackageCalls(ctx context.Context) error {
 	if p.modulePath == "" {

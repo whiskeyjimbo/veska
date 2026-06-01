@@ -61,7 +61,7 @@ func (f *fakeProm) Promote(_ context.Context, repoID, branch, sha string, actor 
 
 // TestPromoteHandler_HappyPath: a registered repo's HEAD-changed files are
 // re-Saved and Promote is called once at HEAD with the system actor. This
-// is the end-to-end shape the post-commit hook depends on (solov2-3vv).
+// is the end-to-end shape the post-commit hook depends on .
 func TestPromoteHandler_HappyPath(t *testing.T) {
 	root := t.TempDir()
 	mustWrite(t, root, "a.go", "package a\nfunc A() {}\n")
@@ -255,7 +255,7 @@ func TestPromoteRepoSchema_PublishesAttributionParams(t *testing.T) {
 }
 
 // TestPromoteRepoSchema_RejectsUnknownKeyAtDispatch confirms the dispatch-time
-// validator (solov2-9bzq) still rejects keys that aren't in the published
+// validator  still rejects keys that aren't in the published
 // schema after the schema was widened for solov2-cyww. A regression here
 // would re-open the silent-drop bug.
 func TestPromoteRepoSchema_RejectsUnknownKeyAtDispatch(t *testing.T) {
@@ -273,7 +273,7 @@ func TestPromoteRepoSchema_RejectsUnknownKeyAtDispatch(t *testing.T) {
 }
 
 // TestPromoteHandler_HonoursActorOverride verifies the attribution params
-// announced in the schema are actually applied (solov2-cyww).
+// announced in the schema are actually applied .
 func TestPromoteHandler_HonoursActorOverride(t *testing.T) {
 	root := t.TempDir()
 	mustWrite(t, root, "a.go", "package a\n")
@@ -300,7 +300,7 @@ func TestPromoteHandler_HonoursActorOverride(t *testing.T) {
 }
 
 // TestPromoteHandler_HonoursBranchAndSHAOverride: branch and git_sha
-// overrides reach the Promoter without consulting git.HEAD (solov2-cyww).
+// overrides reach the Promoter without consulting git.HEAD .
 func TestPromoteHandler_HonoursBranchAndSHAOverride(t *testing.T) {
 	root := t.TempDir()
 	mustWrite(t, root, "a.go", "package a\n")
@@ -329,7 +329,7 @@ func TestPromoteHandler_HonoursBranchAndSHAOverride(t *testing.T) {
 }
 
 // TestPromoteHandler_RejectsInvalidActorKind: an actor_kind outside the
-// domain enum surfaces as CodeInvalidParams (solov2-cyww). The dispatch-time
+// domain enum surfaces as CodeInvalidParams . The dispatch-time
 // validator covers the schema-side enum check; this guards the handler-side
 // domain.NewActor fallback for clients that bypass schema validation.
 func TestPromoteHandler_RejectsInvalidActorKind(t *testing.T) {
@@ -353,7 +353,7 @@ func TestPromoteHandler_RejectsInvalidActorKind(t *testing.T) {
 }
 
 // TestPromoteHandler_RejectsPartialActor: supplying only one of actor_kind
-// / actor_id is rejected (solov2-cyww).
+// / actor_id is rejected .
 func TestPromoteHandler_RejectsPartialActor(t *testing.T) {
 	root := t.TempDir()
 	deps := PromoteDeps{

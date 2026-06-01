@@ -18,7 +18,7 @@ import (
 // Called by the post-commit git hook to drive a real promotion after a commit.
 // The previous wire protocol — a bare {"cmd":"promote"} payload — was rejected
 // by the JSON-RPC listener with method-not-found and silently swallowed, so
-// post-commit promotion was effectively dead (solov2-3vv).
+// post-commit promotion was effectively dead .
 //
 // Inputs:
 //
@@ -60,11 +60,11 @@ type PromotePromoter interface {
 
 type promoteParams struct {
 	RootPath string `json:"root_path"`
-	// RepoID accepts the full repo_id or a 12-char short_id (solov2-65bk),
+	// RepoID accepts the full repo_id or a 12-char short_id ,
 	// matching every other repo-scoped tool. Either RepoID or RootPath is
 	// sufficient; when both are passed, RepoID wins.
 	RepoID string `json:"repo_id"`
-	// Optional overrides (solov2-cyww). Pre-validator the handler silently
+	// Optional overrides . Pre-validator the handler silently
 	// dropped these; agents calling eng_promote_repo with attribution had no
 	// way to learn that. They are now first-class:
 	//   - Branch overrides the repo's active_branch when non-empty.
@@ -111,7 +111,7 @@ func makePromoteHandler(deps PromoteDeps) ToolHandler {
 		if p.RootPath == "" && p.RepoID == "" {
 			return nil, &RPCError{Code: CodeInvalidParams, Message: "root_path or repo_id is required"}
 		}
-		// actor_kind / actor_id must be supplied together (solov2-cyww). The
+		// actor_kind / actor_id must be supplied together . The
 		// schema can't express "all-or-none", so validate here.
 		if (p.ActorKind == "") != (p.ActorID == "") {
 			return nil, &RPCError{Code: CodeInvalidParams, Message: "actor_kind and actor_id must both be set or both omitted"}
@@ -206,7 +206,7 @@ func makePromoteHandler(deps PromoteDeps) ToolHandler {
 			// NewActor enforces the kind enum (human/agent/system) and
 			// rejects an empty id, so an invalid actor_kind surfaces here
 			// as CodeInvalidParams rather than silently degrading to the
-			// system default (solov2-cyww).
+			// system default .
 			a, aerr := domain.NewActor(p.ActorID, domain.ActorKind(p.ActorKind))
 			if aerr != nil {
 				return nil, &RPCError{Code: CodeInvalidParams, Message: fmt.Sprintf("invalid actor: %v", aerr)}

@@ -15,9 +15,9 @@ import (
 // frames pass through byte-for-byte.
 //
 // Two callers:
-//   - eng_get_current_repo (solov2-k8zc) — cwd is the *only* signal for "what
+//   - eng_get_current_repo  — cwd is the *only* signal for "what
 //     repo is the user in".
-//   - every other eng_* tool (solov2-ktz0) — cwd is a fallback the daemon
+//   - every other eng_* tool  — cwd is a fallback the daemon
 //     uses to resolve repo_id when the caller omits it AND multiple repos are
 //     registered. Without this, an agent running inside a registered repo
 //     still has to look up and pass a short_id explicitly.

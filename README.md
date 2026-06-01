@@ -88,7 +88,7 @@ Install Ollama only if you want the review pipeline:
 
 ## Build
 
-`make build` is the fat binary by default (solov2-sft7) — it embeds the
+`make build` is the fat binary by default  — it embeds the
 model2vec weights into the binary so the install is zero-setup: no separate
 download, no network, no static-v2 fallback at boot.
 
@@ -120,7 +120,7 @@ For a self-contained tarball (the three fat binaries + `install.sh` + a
 README), run `make release-archive`. The archive at
 `dist/veska-<version>-<os>-<arch>.tar.gz` is the same shape a future
 GitHub release will ship — `./install.sh` from inside the extracted
-directory does the same thing as `make install` (solov2-cdw3).
+directory does the same thing as `make install` .
 
 ## Quick start
 
@@ -169,7 +169,7 @@ To force a re-scan of an already-registered repo (e.g. after a model swap):
 ```
 
 Safe to run while the daemon is up — the CLI dispatches the cold-scan
-through the daemon's `eng_reindex_repo` MCP tool (solov2-4d7b), so your
+through the daemon's `eng_reindex_repo` MCP tool , so your
 editor's MCP connection is not interrupted. With the daemon stopped, the
 same command falls back to a direct in-process reparse.
 

@@ -99,7 +99,7 @@ func (d *Daemon) awaitListenerSockets() {
 }
 
 // rehydrateVectors repopulates the in-memory VectorStorage from the durable
-// node_embeddings table (solov2-249). Run synchronously before the embedder
+// node_embeddings table . Run synchronously before the embedder
 // worker starts so a query landing in the first tick after Start sees a
 // consistent store; without it a restart leaves search returning ≤ 0 hits until
 // a content change forces re-embedding.
@@ -180,7 +180,7 @@ func sumCounts(counts map[string]int) int {
 // to Ingester.Save. The loop terminates when ctx is cancelled or Events()
 // closes.
 //
-// Branch resolution (solov2-7c4): we look up each event's repo via repo.Get
+// Branch resolution : we look up each event's repo via repo.Get
 // to use its recorded active_branch instead of the previous hardcoded "main".
 // A non-main repo would otherwise have its live edits silently saved under
 // the wrong branch key, never to be promoted (Promoter.Promote would scan an

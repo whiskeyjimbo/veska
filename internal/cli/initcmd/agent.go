@@ -18,7 +18,7 @@ import (
 // Markdown but trivially greppable.
 const AgentSnippetSentinel = "<!-- veska:init -->"
 
-// agentSnippetBody is the per-agent instruction block (solov2-m81).
+// agentSnippetBody is the per-agent instruction block .
 // Lists the four MCP tools an agent reaches for most often plus a
 // one-line "when to use" so the agent doesn't have to guess. Kept
 // terse on purpose — these files are loaded into every conversation
@@ -92,7 +92,7 @@ query genuinely matched nothing — don't loop.
 // reads to discover MCP servers (`.mcp.json` for Claude Code project
 // scope, `.cursor/mcp.json` for Cursor). On `veska init --agent X`,
 // veska merges itself into that file's mcpServers map — idempotent,
-// preserves other servers (solov2-zo0w).
+// preserves other servers .
 type agentFlavor struct {
 	name          string
 	path          string
@@ -188,10 +188,10 @@ func WriteAgentSnippet(rootDir, flavor string, out io.Writer, updateGitignore bo
 		}
 	}
 
-	// Opt-in .gitignore management (solov2-zm6i): silently modifying a tracked
+	// Opt-in .gitignore management : silently modifying a tracked
 	// file surprises users who only asked for the instruction file. Pass
 	// --update-gitignore to opt in. The block is still bracketed by sentinels
-	// so a re-run leaves an already-managed block alone (solov2-t8re).
+	// so a re-run leaves an already-managed block alone .
 	if updateGitignore {
 		if err := ensureGitignoreStanza(rootDir, out); err != nil {
 			// Non-fatal: the snippet is what the user asked for; gitignore
@@ -292,8 +292,10 @@ func EnsureMcpServerEntry(cfgPath, name, command string) (string, error) {
 // block in a repo's .gitignore. Re-running `veska init --agent` finds the
 // block, leaves user-added lines outside it alone, and rewrites only what
 // lives between the sentinels.
-const gitignoreSentinelBegin = "# >>> veska-managed (do not edit between these markers) >>>"
-const gitignoreSentinelEnd = "# <<< veska-managed <<<"
+const (
+	gitignoreSentinelBegin = "# >>> veska-managed (do not edit between these markers) >>>"
+	gitignoreSentinelEnd   = "# <<< veska-managed <<<"
+)
 
 // gitignoreStanza is the body veska maintains inside the sentinel block.
 // Kept minimal: only paths veska itself writes. Edit this list (and bump the

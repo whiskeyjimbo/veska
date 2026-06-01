@@ -16,7 +16,7 @@ import (
 // TodoDTO is the snake_case wire shape for a single TODO/FIXME marker. The
 // mcp layer owns its serialization rather than emitting the raw
 // ports.TodoEntry, whose PascalCase Go field names would otherwise leak into
-// the JSON-RPC response and break the snake_case surface contract (solov2-unem).
+// the JSON-RPC response and break the snake_case surface contract .
 type TodoDTO struct {
 	FindingID string `json:"finding_id"`
 	RepoID    string `json:"repo_id"`
@@ -30,7 +30,7 @@ type TodoDTO struct {
 // TodosResponse is the envelope returned by eng_find_todos. DegradedReasons
 // is always emitted (as [] when nothing is degraded) so the wire shape
 // matches every other query tool per the README's "Conventions across the
-// tool surface" contract (solov2-7cw7).
+// tool surface" contract .
 type TodosResponse struct {
 	Todos           []TodoDTO `json:"todos"`
 	DegradedReasons []string  `json:"degraded_reasons"`

@@ -115,7 +115,9 @@ type ToolSpec struct {
 
 // CLIExempt enumerates the legitimate reasons a registered MCP tool does
 // not get a `veska <subcommand>` wrapper. The parity lint
-// (solov2-xomk) uses this to distinguish "missing CLI" from "MCP-only
+//
+//	uses this to distinguish "missing CLI" from "MCP-only
+//
 // by design".
 type CLIExempt int
 
@@ -223,7 +225,7 @@ func (r *Registry) Register(spec ToolSpec) error {
 }
 
 // Tools returns a snapshot of every registered ToolSpec, ordered by
-// name. Used by the parity lint (solov2-xomk) to walk the catalogue
+// name. Used by the parity lint  to walk the catalogue
 // without exposing the internal map.
 func (r *Registry) Tools() []ToolSpec {
 	names := make([]string, 0, len(r.tools))
@@ -249,7 +251,7 @@ func (r *Registry) MustRegister(spec ToolSpec) {
 // Returns MethodNotFound (-32601) if no tool matches.
 // Safe for concurrent use provided no further Register calls occur.
 //
-// Three method-name forms are accepted (solov2-kw4):
+// Three method-name forms are accepted :
 //
 //   - "eng_<verb>_<object>" — flat dialect, original; method == tool name.
 //   - "tools/list"          — MCP standard discovery; returns the catalog.
@@ -293,7 +295,7 @@ func (r *Registry) Dispatch(ctx context.Context, actor domain.Actor, req *Reques
 //   - contain no top-level keys outside the schema's properties set.
 //
 // Unknown keys yield CodeInvalidParams (-32602) with the offending key name,
-// closing the silent-drop bug (solov2-9bzq). Tools without an inputSchema
+// closing the silent-drop bug . Tools without an inputSchema
 // publish no contract and are not validated here.
 func validateAgainstSchema(method string, schema, params json.RawMessage) *RPCError {
 	if len(schema) == 0 {
@@ -336,7 +338,7 @@ func validateAgainstSchema(method string, schema, params json.RawMessage) *RPCEr
 			continue
 		}
 		if transportInjectedKeys[k] {
-			// Keys injected by veska-mcp at the transport layer (solov2-ktz0).
+			// Keys injected by veska-mcp at the transport layer .
 			// They're not part of the tool's published contract but every
 			// request passing through the shim carries them; rejecting them
 			// would break the shim path while validating the daemon-direct
@@ -403,7 +405,7 @@ func sortedKeys(m map[string]json.RawMessage) string {
 // sortedKeysAnnotated returns m's keys joined with ", " in lexical order,
 // suffixing each name in `required` with " (required)". Required props
 // are also listed first so the eye lands on them before scanning the
-// optional ones (solov2-m5c2).
+// optional ones .
 func sortedKeysAnnotated(m map[string]json.RawMessage, required map[string]bool) string {
 	if len(required) == 0 {
 		return sortedKeys(m)

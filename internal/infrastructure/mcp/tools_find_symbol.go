@@ -15,7 +15,7 @@ import (
 // isContainerKind reports whether a node kind is a structural container rather
 // than a callable/declaration symbol. Container nodes (package/file/module/
 // chunk) carry no CALLS edges, so eng_find_symbol ranks them below real
-// declarations for the same name (solov2-rd0l).
+// declarations for the same name .
 func isContainerKind(k domain.NodeKind) bool {
 	switch k {
 	case domain.KindPackage, domain.KindFile, domain.KindModule, domain.KindChunk:
@@ -104,7 +104,7 @@ func makeFindSymbolHandler(graph ports.GraphReader, staging *staging.Area, repos
 		// otherwise random). Exact-name matches first; then declaration /
 		// callable kinds ahead of container kinds (package/file/module/chunk)
 		// — a caller taking nodes[0] for call_chain/blast_radius wants the
-		// function "main", not the package "main" (solov2-rd0l). Name, then
+		// function "main", not the package "main" . Name, then
 		// repo_id (for fanout), then node_id break ties so output is stable.
 		sort.SliceStable(result, func(i, j int) bool {
 			a, b := result[i], result[j]

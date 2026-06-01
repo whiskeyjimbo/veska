@@ -31,15 +31,15 @@ MISSING_REQUIRED_CASES = [
     ("eng_remove_repo", {}, "repo_id"),
     ("eng_promote_repo", {}, "root_path"),
     # node_id is always required for eng_get_node — repo_id/branch are now
-    # optional (solov2-v4ob), so the only remaining missing-arg path is
+    # optional , so the only remaining missing-arg path is
     # node_id itself.
     ("eng_get_node", {}, "required"),
-    # find_symbol still requires `symbol`. Branch is optional (solov2-5vu1)
+    # find_symbol still requires `symbol`. Branch is optional 
     # and repo_id auto-resolves with one repo registered, so the only
     # missing-arg case left is the symbol itself.
     ("eng_find_symbol", {}, "required"),
     # call_chain now requires node_id OR symbol; supplying neither still
-    # surfaces a "missing required" error (solov2-lcz6).
+    # surfaces a "missing required" error .
     ("eng_get_call_chain", {}, "required"),
     ("eng_search_semantic", {}, "query"),
     ("eng_search_similar", {}, "node_id"),
@@ -95,7 +95,7 @@ UNKNOWN_ID_CASES = [
     # Tools that can prove non-existence and return a clear error.
     # repo_id="not-a-real-repo-zzz" intentionally bypasses the prefix
     # resolver (>= minRepoIDPrefix chars, no match) — surfaces the
-    # explicit not-found path (solov2-rkbc).
+    # explicit not-found path .
     ("eng_get_repo", {"repo_id": "not-a-real-repo-zzz"}, "not found"),
     ("eng_promote_repo", {"root_path": "/tmp/not-a-real-path-zzz"}, "not registered"),
 ]

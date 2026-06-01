@@ -86,7 +86,7 @@ func TestIsGitSpecialState_RebaseApplyDir(t *testing.T) {
 
 // TestSendSeal_NoSocket: a missing socket now returns a non-nil dial error so
 // the caller (RunPostCommit) can fall back to the next candidate path
-// (solov2-g50). The outer hook still ignores this error and exits 0.
+// . The outer hook still ignores this error and exits 0.
 func TestSendSeal_NoSocket(t *testing.T) {
 	dir := t.TempDir()
 	sockPath := filepath.Join(dir, "nonexistent.sock")

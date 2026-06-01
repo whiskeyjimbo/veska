@@ -32,7 +32,7 @@ func WithContextPackScanTracker(t ScanTrackerReader) ContextPackOption {
 // WithContextPackResolveFunc supplies a ResolveFunc so the handler can
 // turn each pack node's cross_repo_edge_stubs into CrossRepoEdges on the
 // response — parity with eng_get_call_chain and eng_get_blast_radius
-// (solov2-7xrw). Without it the response carries no cross_repo_edges and
+// . Without it the response carries no cross_repo_edges and
 // agents reading the pack alone cannot see consumers in other repos.
 func WithContextPackResolveFunc(fn ResolveFunc) ContextPackOption {
 	return func(c *contextPackConfig) { c.resolve = fn }
@@ -42,7 +42,7 @@ func WithContextPackResolveFunc(fn ResolveFunc) ContextPackOption {
 // context-pack response also surfaces cross-repo CALLERS of each node in
 // the pack. The pack's blast walks DirBoth, so the typical user question
 // "show me the surrounding neighbourhood" needs both directions of
-// cross-repo edges to be honest (solov2-80hh).
+// cross-repo edges to be honest .
 func WithContextPackInboundResolveFunc(fn InboundResolveFunc) ContextPackOption {
 	return func(c *contextPackConfig) { c.resolveInbound = fn }
 }
@@ -97,7 +97,7 @@ func makeContextPackHandler(asm *contextpack.Assembler, repoRoot RepoRootFunc, r
 		if rpcErr := bindParams(raw, &p); rpcErr != nil {
 			return nil, rpcErr
 		}
-		// Exactly one of node_id / symbol / task_id is required (solov2-z81b).
+		// Exactly one of node_id / symbol / task_id is required .
 		anchorCount := 0
 		if p.NodeID != "" {
 			anchorCount++
@@ -191,7 +191,7 @@ func makeContextPackHandler(asm *contextpack.Assembler, repoRoot RepoRootFunc, r
 
 // resolveCrossRepoInboundForNodes is the contextpack analogue of
 // resolveCrossRepoInboundFor: for each node in the pack, ask "who in
-// OTHER repos calls this?" and return the inbound edges (solov2-80hh).
+// OTHER repos calls this?" and return the inbound edges .
 // The pack always walks DirBoth, so unlike the blast handler there's no
 // direction gating here — both perspectives are always relevant.
 func resolveCrossRepoInboundForNodes(ctx context.Context, resolve InboundResolveFunc, nodes []contextpack.NodeInfo, branch string) []CrossRepoEdge {
@@ -229,7 +229,7 @@ func resolveCrossRepoInboundForNodes(ctx context.Context, resolve InboundResolve
 // produce and reports the unique repo that contains the symbol, or "" when
 // auto-resolution should not apply. Returns an InvalidParams error listing
 // the candidates when more than one repo contains the symbol — the caller
-// must pass --repo to disambiguate (solov2-z5cu).
+// must pass --repo to disambiguate .
 //
 // Errors from any single asm.ForSymbol probe are swallowed so a stuck repo
 // can't poison the auto-resolution for the others.

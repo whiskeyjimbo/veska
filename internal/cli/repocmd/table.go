@@ -41,7 +41,7 @@ func PrintRepoTable(w io.Writer, repos []RepoView) {
 
 // PrintRepoTableWithProgress overlays in-flight scan progress onto the
 // (unindexed) rows so a user watching a long cold scan can tell hung
-// from progressing (solov2-u9h9). progress maps repo_id → phase + files_seen.
+// from progressing . progress maps repo_id → phase + files_seen.
 func PrintRepoTableWithProgress(w io.Writer, repos []RepoView, progress map[string]ScanProgressRow) {
 	if len(repos) == 0 {
 		fmt.Fprintln(w, "no repositories registered — run: veska repo add <path>")
@@ -86,7 +86,7 @@ func repoStatus(r RepoView, progress map[string]ScanProgressRow) string {
 		status = unindexedStatus(r, progress)
 	}
 	// Flag repos whose root path no longer exists on disk so users can see
-	// stale registrations at a glance (solov2-76px). `repo remove <id>` is
+	// stale registrations at a glance . `repo remove <id>` is
 	// still the cleanup path.
 	if r.RootPath != "" {
 		if _, err := os.Stat(r.RootPath); errors.Is(err, fs.ErrNotExist) {

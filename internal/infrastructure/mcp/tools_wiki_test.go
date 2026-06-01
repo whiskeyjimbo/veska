@@ -97,7 +97,7 @@ func TestHotZone_ReturnsRankedData(t *testing.T) {
 	}
 
 	// The tool data must match what the page renders, modulo the
-	// absolute-vs-relative file_path normalisation (solov2-4aka).
+	// absolute-vs-relative file_path normalisation .
 	rep, err := svc.Rank(context.Background(), "r1", "main", "/tmp/r")
 	if err != nil {
 		t.Fatalf("Rank: %v", err)
@@ -173,7 +173,7 @@ func TestHotZone_NonEmptyZonesNoDegradedReason(t *testing.T) {
 }
 
 // TestHotZone_AcceptsShortID guards the README contract that a short_id
-// prefix is accepted anywhere a repo_id is required (solov2-eki3). Before the
+// prefix is accepted anywhere a repo_id is required . Before the
 // fix hot_zone bypassed resolveRepoID and rejected the prefix as "repo not
 // found".
 func TestHotZone_AcceptsShortID(t *testing.T) {

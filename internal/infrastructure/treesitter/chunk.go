@@ -13,7 +13,7 @@ import (
 // still gets distinct embeddings per section), large enough that the
 // chunk count per file stays bounded and the embedding cost is
 // proportionate to file size, not symbol count. Semble uses a similar
-// window. (solov2-jyt)
+// window.
 const chunkLineWindow = 80
 
 // chunkFile walks src in chunkLineWindow-sized line windows and emits
@@ -21,7 +21,7 @@ const chunkLineWindow = 80
 // by an existing symbol. Symbols already produce per-symbol embeddings;
 // chunks fill in everything between them — package vars, init() guts,
 // top-of-file commentary, helper TS modules without classes — so
-// semantic search can find non-declaration code (solov2-jyt).
+// semantic search can find non-declaration code .
 //
 // IDs are deterministic per (repoID, path, start, end) so promotion is
 // idempotent. raw_content is populated so the embedder + FTS index
@@ -58,7 +58,7 @@ func chunkFile(repoID, path string, src []byte, symbols []*domain.Node) []*domai
 			body := string(src[startByte:endByte])
 			// Skip whitespace-only windows (blank-line gaps between
 			// symbols). They embed to near-anything and pollute search
-			// results, ranking above real code (solov2-wh7u).
+			// results, ranking above real code .
 			if strings.TrimSpace(body) == "" {
 				continue
 			}

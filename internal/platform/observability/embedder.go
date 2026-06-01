@@ -35,7 +35,7 @@ func (e *InstrumentedEmbedder) ModelID() string {
 
 // EmbedBatch passes through to the inner provider's BatchEmbeddingProvider
 // implementation if it has one — preserves the batch fast path through
-// the tracing wrapper (solov2-ucp). Without this, embedder.Worker's
+// the tracing wrapper . Without this, embedder.Worker's
 // type assertion on the wrapped provider fails and we degrade to N
 // serial Embed calls. Span is named "embed.batch" with the batch size
 // as an attribute (TODO once metrics needs it).
@@ -52,5 +52,7 @@ func (e *InstrumentedEmbedder) EmbedBatch(ctx context.Context, texts []string) (
 // Compile-time check: InstrumentedEmbedder satisfies ports.EmbeddingProvider
 // AND ports.BatchEmbeddingProvider (the latter degrades when the wrapped
 // provider doesn't implement it; see EmbedBatch).
-var _ ports.EmbeddingProvider = (*InstrumentedEmbedder)(nil)
-var _ ports.BatchEmbeddingProvider = (*InstrumentedEmbedder)(nil)
+var (
+	_ ports.EmbeddingProvider      = (*InstrumentedEmbedder)(nil)
+	_ ports.BatchEmbeddingProvider = (*InstrumentedEmbedder)(nil)
+)

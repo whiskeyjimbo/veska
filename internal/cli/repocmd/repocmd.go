@@ -36,7 +36,7 @@ type RepoView struct {
 	LastPromotedSHA string `json:"last_promoted_sha"`
 	Kind            string `json:"kind"` // solov2-kxo5.9
 	// Aliases is the list of user-defined human-friendly names for this
-	// repo (solov2-7w1t). Surfaced in the ALIAS column of `veska repo
+	// repo . Surfaced in the ALIAS column of `veska repo
 	// list` and accepted anywhere a repo_id is expected.
 	Aliases []string `json:"aliases"`
 }
@@ -49,7 +49,7 @@ type listResult struct {
 // ShortRepoID returns the first 12 chars of a repo id — the alias shown by
 // `veska repo list` and accepted anywhere a repo_id is required. The CLI
 // surfaces this form so users copy the same token the tools expect, instead
-// of the unwieldy 64-char canonical id (solov2-ow4b).
+// of the unwieldy 64-char canonical id .
 func ShortRepoID(id string) string {
 	if len(id) > 12 {
 		return id[:12]
@@ -58,15 +58,15 @@ func ShortRepoID(id string) string {
 }
 
 // cliMinRepoIDPrefix mirrors mcp.minRepoIDPrefix — see that constant for the
-// reasoning (solov2-rkbc).
+// reasoning .
 const cliMinRepoIDPrefix = 4
 
 // ResolveCLIRepoID matches the MCP resolveRepoID progression for CLI callers:
-// exact full id, then 12-char short_id, then user-set alias (solov2-7w1t),
+// exact full id, then 12-char short_id, then user-set alias ,
 // then unambiguous prefix (>= 4 chars). Aliases beat prefix so a typed
 // alias never gets shadowed by a colliding hex prefix.
 // Returns a typed error so CLI commands can wrap it with their own prefix
-// ("wiki: ", "reindex: ", etc.) (solov2-c7lq).
+// ("wiki: ", "reindex: ", etc.) .
 func ResolveCLIRepoID(records []repo.Record, repoID string) (repo.Record, error) {
 	for _, r := range records {
 		if r.RepoID == repoID {
@@ -216,7 +216,7 @@ func dialEngStatus(ctx context.Context) (any, error) {
 // ScanProgressRow is the per-scan progress snapshot surfaced into repo
 // list — phase ("walking" / "promoting") + files_seen — so a user can
 // tell the sub-second walk from the long promotion phase that follows
-// it (solov2-u9h9).
+// it .
 type ScanProgressRow struct {
 	Phase     string
 	FilesSeen int

@@ -30,6 +30,7 @@ func (f *fakeEmbedder) Embed(_ context.Context, text string) ([]float32, error) 
 	f.gotText = text
 	return f.vec, f.err
 }
+
 func (f *fakeEmbedder) ModelID() string {
 	if f.modelID != "" {
 		return f.modelID
@@ -50,6 +51,7 @@ type fakeVectors struct {
 func (f *fakeVectors) UpsertEmbeddings(_ context.Context, _, _ string, _ []domain.EmbeddingRow) error {
 	return nil
 }
+
 func (f *fakeVectors) Search(_ context.Context, repoID, branch string, vec []float32, k int, _ domain.VectorFilter) ([]domain.SearchHit, error) {
 	f.calls++
 	f.gotRepo = repoID
@@ -546,7 +548,7 @@ func TestSemantic_HybridFusion_LiftsLexicalOnlyHit(t *testing.T) {
 
 // TestSemantic_HybridFusion_LexicalError_DegradesGracefully verifies
 // that a lexical-side failure falls back to vector-only ordering
-// rather than failing the whole call (solov2-2su).
+// rather than failing the whole call .
 func TestSemantic_HybridFusion_LexicalError_DegradesGracefully(t *testing.T) {
 	t.Parallel()
 	emb := &fakeEmbedder{vec: []float32{0.1}}

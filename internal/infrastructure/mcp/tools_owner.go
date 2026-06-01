@@ -21,7 +21,7 @@ import (
 // is treated as a literal filesystem root.
 // repos, when non-nil, is used by the handler to resolve repo_id from cwd
 // or short_id and to give the standard 'N repos registered' hint on a
-// missing-repo_id error (solov2-eq5a). When nil the handler falls back
+// missing-repo_id error . When nil the handler falls back
 // to the bare "repo_id is required" behaviour.
 func RegisterOwnerTools(r *Registry, db *sql.DB, repos application.RepoLister) {
 	r.MustRegister(ToolSpec{
@@ -42,7 +42,7 @@ func RegisterOwnerTools(r *Registry, db *sql.DB, repos application.RepoLister) {
 // when the db lookup fails (no db, or repo_id is an unknown id), the input
 // is returned as-is so direct callers that pass a path still work. Short
 // repo_id (12 char) prefixes are accepted for parity with other tools
-// (solov2-mha4).
+// .
 func resolveOwnerRoot(db *sql.DB, repoID string) string {
 	if db == nil {
 		return repoID
@@ -140,7 +140,7 @@ func makeFindOwnerHandler(db *sql.DB, repos application.RepoLister) ToolHandler 
 
 		// Step 3: both failed. Surface a 'reason' so the caller can tell
 		// 'no CODEOWNERS file' from 'file exists but covers nothing' from
-		// 'git blame failed' (solov2-xjg). Cheap stat: just check whether
+		// 'git blame failed' . Cheap stat: just check whether
 		// a CODEOWNERS file is present at either of the canonical paths.
 		reason := codeownersAbsenceReason(root)
 		return map[string]any{
@@ -154,7 +154,7 @@ func makeFindOwnerHandler(db *sql.DB, repos application.RepoLister) ToolHandler 
 // lookupNodeFilePath resolves a symbol or node_id to its defining file
 // path under (repoID, branch), so eng_find_owner accepts the same
 // symbol-or-node-id pattern as the rest of the eng_* surface
-// (solov2-mmox). Returns (filePath, nil) on a single match; an empty
+// . Returns (filePath, nil) on a single match; an empty
 // string + RPCError when no row or ambiguous matches are found. branch
 // may be empty: when so, we pick the row with the largest node_id and
 // don't constrain the branch.

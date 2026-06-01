@@ -124,7 +124,7 @@ func (s *PromotionStore) Promote(ctx context.Context, batch application.Promotio
 
 // lookupRepo rejects promotions for repos not in the registry and returns the
 // repo's working-tree root and go-module path — both feed cross-package CALLS
-// resolution (solov2-xc51). module_path may be NULL/empty, in which case the
+// resolution . module_path may be NULL/empty, in which case the
 // returned module string is "".
 func (s *PromotionStore) lookupRepo(ctx context.Context, repoID string) (root, module string, err error) {
 	var rootPath, modulePath sql.NullString
@@ -201,7 +201,7 @@ func prepare(ctx context.Context, tx *sql.Tx, label, query string) (*sql.Stmt, e
 // prepareStmts compiles the statements reused across the promotion phases. The
 // prev-sig select snapshots prior signatures BEFORE the per-file DELETE so the
 // re-inserted rows can carry prev_signature forward (the contract-drift check).
-// file_imports follows the same DELETE+INSERT lifecycle as nodes (solov2-xjm5).
+// file_imports follows the same DELETE+INSERT lifecycle as nodes .
 func (p *promotion) prepareStmts(ctx context.Context) error {
 	var err error
 	if p.del, err = prepare(ctx, p.tx, "delete",
@@ -345,7 +345,7 @@ func (p *promotion) capturePrevSignatures(ctx context.Context, filePath string) 
 }
 
 // syncFileImports re-DELETE+INSERTs the file's external imports so removed
-// imports disappear in the same commit (solov2-xjm5). Stdlib is skipped to
+// imports disappear in the same commit . Stdlib is skipped to
 // mirror the stub-side filter — deps list is for external deps only.
 func (p *promotion) syncFileImports(ctx context.Context, file application.PromotionFile) error {
 	if _, err := p.delImports.ExecContext(ctx, p.repoID, p.branch, file.Path); err != nil {
@@ -448,7 +448,7 @@ func (p *promotion) enqueueWiki(ctx context.Context) error {
 }
 
 // insertParserEdges persists parser-produced edges (CALLS, IMPORTS, etc.)
-// atomically with the node writes (solov2-ijg). Autolink SIMILAR_TO edges
+// atomically with the node writes . Autolink SIMILAR_TO edges
 // arrive separately via the post-promotion queue and don't conflict here.
 func (p *promotion) insertParserEdges(ctx context.Context) error {
 	for _, file := range p.batch.Files {
@@ -465,7 +465,7 @@ func (p *promotion) insertParserEdges(ctx context.Context) error {
 }
 
 // advanceRepoSHA advances repos.last_promoted_sha (and active_branch when a
-// branch is supplied) atomically with the node writes (solov2-c47). An empty
+// branch is supplied) atomically with the node writes . An empty
 // SHA is treated as caller error and skipped so a known-good value is not
 // clobbered; an empty branch (repo.Add does not set active_branch) writes the
 // SHA alone and leaves active_branch untouched.

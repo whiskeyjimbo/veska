@@ -54,7 +54,7 @@ func (p ListParams) render(resp findingsEnvelope) error {
 }
 
 // filterLow drops low-severity rows unless --include-low or an explicit
-// --severity selector is in play (solov2-h4xm). Returns the kept rows and the
+// --severity selector is in play . Returns the kept rows and the
 // hidden-low count.
 func (p ListParams) filterLow(findings []FindingView) ([]FindingView, int) {
 	if p.IncludeLow || p.Severity != "" {
@@ -186,7 +186,7 @@ func summariseFindings(shown, total int, counts map[string]int, all []FindingVie
 // trimRedundantFilePrefix drops a leading "<file>:<line>" / "<file> " from the
 // message when the file column already shows the same file — vuln messages
 // embed "go.mod:151 [GHSA-…] …" but the FILE column already says "go.mod"
-// (solov2-7ata).
+// .
 func trimRedundantFilePrefix(msg, file string) string {
 	if file == "" {
 		return msg

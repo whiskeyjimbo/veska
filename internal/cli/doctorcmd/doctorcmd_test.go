@@ -35,7 +35,7 @@ func TestCheckEmbedderHealthDefaultIsInProcess(t *testing.T) {
 }
 
 // TestStatusRollupBacklogIsInformational verifies that a non-zero embedding
-// backlog does NOT promote the rollup status (solov2-34rl). The backlog
+// backlog does NOT promote the rollup status . The backlog
 // surfaces as its own line/field — the daemon as a whole remains healthy
 // while the backfill drains. This is the contract that lets `doctor status`
 // stop contradicting `eng_get_status`'s degraded_reasons:[embeddings_pending]:

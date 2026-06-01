@@ -25,7 +25,7 @@ type searchSemanticParams struct {
 	Branch string `json:"branch"`
 	// K is the result count. 'limit' is accepted as an alias because
 	// every other MCP tool we expose uses 'limit' and callers naturally
-	// reach for it first (solov2-8rm). When both are set, K wins.
+	// reach for it first . When both are set, K wins.
 	K     int `json:"k,omitempty"`
 	Limit int `json:"limit,omitempty"`
 }
@@ -97,7 +97,7 @@ func makeSearchSemanticHandler(svc *search.Service, rec *savings.Recorder, repos
 // candidates with per-retriever ranks AND raw vector scores. When any
 // candidate carries a vector score — the common case, one daemon =
 // one embedder spanning every repo — the pool is fused by COSINE
-// SIMILARITY (solov2-uuuk) so a stronger match in repo A beats a
+// SIMILARITY  so a stronger match in repo A beats a
 // weaker one in repo B even though both ranked 1 locally. Lexical
 // confirms a candidate via a small multiplier; lexical-only
 // candidates survive via a small RRF baseline. When no vector score
@@ -180,7 +180,7 @@ func runSemanticFanout(
 		return nil, nil, reasonsSet, nil
 	}
 
-	// Cross-repo fusion (solov2-uuuk): when the vector arm returned
+	// Cross-repo fusion : when the vector arm returned
 	// scores for any candidate — the common case, one daemon = one
 	// embedder spanning every repo — fuse by raw cosine similarity
 	// rather than RRF. RRF is rank-only, so every repo's vector top-1

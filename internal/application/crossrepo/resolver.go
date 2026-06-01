@@ -1,6 +1,6 @@
 // Package crossrepo provides a small primitive that walks every registered
 // repository and aggregates per-repo hit counts for a given symbol or
-// finding query (solov2-9q72).
+// finding query .
 //
 // Today each surface (`veska symbol`, `veska findings list`, `veska search`)
 // is one-repo-scoped — a junior on repo A who runs `veska symbol Greeter`

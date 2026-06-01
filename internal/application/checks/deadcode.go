@@ -150,7 +150,7 @@ func (c *DeadCodeCheck) Run(ctx context.Context, in Input) ([]*domain.Finding, e
 // edges" is a meaningful deadness signal — i.e. things the language
 // actually CALLS. Container and sub-symbol kinds (package, file,
 // module, chunk, field) carry no inbound CALLS by construction
-// (solov2-xpb).
+// .
 //
 // solov2-f1zp: 'type', 'struct', and 'interface' were dropped from this
 // set. A Go struct isn't called; it's referenced by composite literal
@@ -179,7 +179,7 @@ func isDeadCodeCandidate(n ports.NodeRef) bool {
 // convention across the languages veska indexes. Test-only helpers
 // (fixtures, mocks, table builders) are commonly referenced only by
 // their tests and as function values — neither of which produces a
-// CALLS edge today (solov2-ix3k). Skipping symbols defined in test
+// CALLS edge today . Skipping symbols defined in test
 // files cuts a noisy class of false positives without weakening the
 // signal for production code.
 func isTestFile(path string) bool {
@@ -210,7 +210,7 @@ func isTestFile(path string) bool {
 // suffix matches one of the interface method names declared in the
 // same repo. Used by Run to skip dead-code reports on methods that
 // likely satisfy an interface contract — interface dispatch produces
-// no CALLS edge the static graph can see (solov2-f1zp). Names without
+// no CALLS edge the static graph can see . Names without
 // a '.' (orphan methods) and an empty ifaceMethods map are no-ops.
 func isInterfaceMethodImpl(name string, ifaceMethods map[string]struct{}) bool {
 	if len(ifaceMethods) == 0 || name == "" {

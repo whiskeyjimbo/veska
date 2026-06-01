@@ -24,7 +24,7 @@ func capSnippet(s string) string {
 // capped RawContent when the parser populated it, otherwise nil (NULL in
 // SQLite). Shared between GraphRepo.SaveNode and PromotionStore.Promote so
 // the embed-text projection has the same body in both write paths
-// (solov2-sxa).
+// .
 func nodeSnippet(n *domain.Node) any {
 	if n == nil || n.RawContent == nil {
 		return nil

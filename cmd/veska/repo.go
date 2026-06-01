@@ -29,7 +29,7 @@ func repoCmd() *cobra.Command {
 	return cmd
 }
 
-// repoAliasCmd binds a user-defined human-friendly name to a repo (solov2-7w1t).
+// repoAliasCmd binds a user-defined human-friendly name to a repo .
 func repoAliasCmd() *cobra.Command {
 	var force bool
 	cmd := &cobra.Command{
@@ -45,7 +45,7 @@ func repoAliasCmd() *cobra.Command {
 	return cmd
 }
 
-// repoUnaliasCmd removes a user-defined alias (solov2-7w1t).
+// repoUnaliasCmd removes a user-defined alias .
 func repoUnaliasCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:          "unalias <name>",
@@ -60,7 +60,7 @@ func repoUnaliasCmd() *cobra.Command {
 
 // repoPruneCmd is the deprecated alias for `repo remove --missing`. Hidden
 // from help but kept for one release so existing scripts/muscle memory keep
-// working (solov2-meuk). Remove this command after one release cycle.
+// working . Remove this command after one release cycle.
 func repoPruneCmd() *cobra.Command {
 	var dryRun bool
 	cmd := &cobra.Command{
@@ -78,7 +78,7 @@ func repoPruneCmd() *cobra.Command {
 	return cmd
 }
 
-// repoListCmd prints every registered repo (solov2-0pq).
+// repoListCmd prints every registered repo .
 func repoListCmd() *cobra.Command {
 	var includeExternal bool
 	cmd := &cobra.Command{
@@ -116,7 +116,7 @@ func repoAddCmd() *cobra.Command {
 	return cmd
 }
 
-// repoRemoveCmd unifies the deregister surface (solov2-meuk):
+// repoRemoveCmd unifies the deregister surface :
 //   - `repo remove <id|path>` — remove one
 //   - `repo remove --missing`  — remove every repo whose root dir is gone
 //   - `repo remove --all`      — wipe registry (requires --yes confirmation)

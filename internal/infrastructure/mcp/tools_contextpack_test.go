@@ -108,7 +108,7 @@ func TestContextPack_SymbolMode(t *testing.T) {
 }
 
 // TestContextPack_AcceptsShortID guards the README contract that a short_id
-// prefix resolves anywhere a repo_id is required (solov2-eki3). Before the fix
+// prefix resolves anywhere a repo_id is required . Before the fix
 // context_pack rejected the prefix with "repo not found".
 func TestContextPack_AcceptsShortID(t *testing.T) {
 	const fullID = "62d72fa222a0193f8fa927f95dd6a3575c7566964c8b8f6ba14aafc5a1ea871f"

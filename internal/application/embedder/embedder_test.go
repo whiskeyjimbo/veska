@@ -128,7 +128,7 @@ func (f *fakeEmbedder) ModelID() string { return f.modelID }
 
 // fakeBatchEmbedder implements ports.BatchEmbeddingProvider in addition
 // to the per-text Embed surface. Tracks distinct batch and single
-// call counts so the test can assert which path was used (solov2-ucp).
+// call counts so the test can assert which path was used .
 type fakeBatchEmbedder struct {
 	fakeEmbedder
 	batchCalls atomic.Int64
@@ -1151,7 +1151,9 @@ func vectorNorm(v []float32) float64 {
 }
 
 // Compile-time check our embedder satisfies the port.
-var _ ports.EmbeddingProvider = (*fakeEmbedder)(nil)
-var _ ports.EmbeddingProvider = (*blockingEmbedder)(nil)
-var _ ports.EmbeddingProvider = (*alwaysErrEmbedder)(nil)
-var _ ports.VectorStorage = (*fakeVectorStore)(nil)
+var (
+	_ ports.EmbeddingProvider = (*fakeEmbedder)(nil)
+	_ ports.EmbeddingProvider = (*blockingEmbedder)(nil)
+	_ ports.EmbeddingProvider = (*alwaysErrEmbedder)(nil)
+	_ ports.VectorStorage     = (*fakeVectorStore)(nil)
+)

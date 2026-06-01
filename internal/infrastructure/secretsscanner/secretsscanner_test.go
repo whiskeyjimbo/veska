@@ -348,7 +348,7 @@ func TestBuiltinScanner_FilesystemPathHeuristicStillCatchesSecrets(t *testing.T)
 
 func TestBuiltinScanner_RedactionMasksValue(t *testing.T) {
 	t.Parallel()
-	const awsKey = "AKIAZQ7XFAKE1234ABCD" // synthetic; not the docs allowlist (solov2-j1yz)
+	const awsKey = "AKIAZQ7XFAKE1234ABCD" // synthetic; not the docs allowlist
 	s := secretsscanner.New()
 	in := ports.ScanInput{AddedLines: map[string][]ports.Line{
 		"creds.go": {{Number: 1, Text: awsKey}},

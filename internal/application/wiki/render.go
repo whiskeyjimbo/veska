@@ -8,7 +8,7 @@ import (
 
 // renderGeneratedHeader prints a one-line "Generated: ISO8601" stamp +
 // a refresh hint, so a Markdown page never lies about how current it is
-// (solov2-otzn). Zero time is rendered as "_unstamped_" to keep the
+// . Zero time is rendered as "_unstamped_" to keep the
 // page readable when the handler hasn't filled in GeneratedAt — the
 // MCP responses share these renderers and don't necessarily set it.
 func renderGeneratedHeader(b *strings.Builder, at time.Time) {

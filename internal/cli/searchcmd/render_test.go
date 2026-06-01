@@ -60,7 +60,7 @@ func TestRenderSearchResults_JSONMatchesMCPEnvelope(t *testing.T) {
 		t.Fatalf("results count: got %d, want 1", len(got.Results))
 	}
 	// The CLI emits the same snake_case node DTO as eng_search_semantic
-	// (solov2-elt): node_id, name, file_path, ...
+	// : node_id, name, file_path, ...
 	if got.Results[0]["node_id"] != "n1" {
 		t.Errorf("node_id field missing or wrong: %+v", got.Results[0])
 	}

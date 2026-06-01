@@ -949,7 +949,7 @@ func TestGetFileNodes_FallsBackToPromotedStore(t *testing.T) {
 
 // TestGetFileNodes_ResolvesRelativePath verifies a repo-relative file_path is
 // joined to the repo root before lookup, instead of silently matching nothing
-// (solov2-829). Also exercises the "path" alias (solov2-3p1).
+// . Also exercises the "path" alias .
 func TestGetFileNodes_ResolvesRelativePath(t *testing.T) {
 	store := newStubGraphStorage()
 	n1 := mustNode(t, "n1", "/abs/repo/internal/server.go", "Serve", domain.KindFunction)

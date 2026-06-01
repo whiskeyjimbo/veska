@@ -1,8 +1,8 @@
-# dbbench — Go SQLite driver comparison (solov2-6e5r)
+# dbbench — Go SQLite driver comparison 
 
 Benchmarks Go SQLite drivers against the workloads veska's storage layer
 actually runs. Drove the solov2-jkgp decision to default to mattn; the
-modernc opt-in has since been removed (solov2-bu1h).
+modernc opt-in has since been removed .
 
 ## Drivers
 

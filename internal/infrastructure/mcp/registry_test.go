@@ -157,10 +157,14 @@ func TestDispatch_RoutesToHandler(t *testing.T) {
 // recognised and returns every registered tool's name/description.
 func TestDispatch_ToolsListReturnsCatalog(t *testing.T) {
 	r := NewRegistry()
-	r.MustRegister(ToolSpec{Name: "eng_get_node", Description: "fetch a graph node",
-		Handler: func(context.Context, domain.Actor, json.RawMessage) (any, *RPCError) { return nil, nil }})
-	r.MustRegister(ToolSpec{Name: "eng_find_symbol", Description: "find symbol by name",
-		Handler: func(context.Context, domain.Actor, json.RawMessage) (any, *RPCError) { return nil, nil }})
+	r.MustRegister(ToolSpec{
+		Name: "eng_get_node", Description: "fetch a graph node",
+		Handler: func(context.Context, domain.Actor, json.RawMessage) (any, *RPCError) { return nil, nil },
+	})
+	r.MustRegister(ToolSpec{
+		Name: "eng_find_symbol", Description: "find symbol by name",
+		Handler: func(context.Context, domain.Actor, json.RawMessage) (any, *RPCError) { return nil, nil },
+	})
 
 	result, rpcErr := r.Dispatch(context.Background(), domain.Actor{}, &Request{Method: "tools/list"})
 	if rpcErr != nil {
@@ -414,7 +418,7 @@ func TestRegister_CLIExemptOtherKindsNoReason(t *testing.T) {
 }
 
 // TestRegistry_ToolsReturnsSnapshot pins the Tools() accessor that the
-// parity lint (solov2-xomk) relies on.
+// parity lint  relies on.
 func TestRegistry_ToolsReturnsSnapshot(t *testing.T) {
 	r := NewRegistry()
 	_ = r.Register(makeSpec("eng_find_symbol", "finds symbols"))

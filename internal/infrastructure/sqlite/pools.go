@@ -54,7 +54,7 @@ func openPool(dbPath string, maxOpen, busyTimeoutMS int) (*sql.DB, error) {
 	// state; the previous one-shot `db.Exec("PRAGMA …")` only set them on a
 	// single connection, leaving foreign keys OFF on the rest — so ON DELETE
 	// CASCADE silently never fired and `repo remove` orphaned child rows
-	// (solov2-d78r). journal_mode=WAL is persisted in the db file, so encoding
+	// . journal_mode=WAL is persisted in the db file, so encoding
 	// it per-connection is harmless.
 	db, err := sql.Open(sqldriver.Name, sqldriver.BuildDSN(dbPath, busyTimeoutMS))
 	if err != nil {

@@ -50,14 +50,14 @@ type GraphReader interface {
 	// FindNodeByID looks up a Node by its content-hashed NodeID, scanning
 	// across every (repo_id, branch) pair. Used by eng_get_node so the caller
 	// can omit repo_id+branch when they already have the (globally unique)
-	// node_id (solov2-v4ob). Returns nil, nil when not found.
+	// node_id . Returns nil, nil when not found.
 	FindNodeByID(ctx context.Context, id domain.NodeID) (*domain.Node, error)
 
 	// NodesForFile returns every Node whose file_path equals filePath in the
 	// given repository and branch. Returns an empty slice (not an error) when
 	// the file has no promoted nodes. This is the primary read for
 	// eng_get_file_nodes; promoting it to the port retires the optional
-	// type-assertion dance the handler used to do (solov2-8ex).
+	// type-assertion dance the handler used to do .
 	NodesForFile(ctx context.Context, repoID, branch, filePath string) ([]*domain.Node, error)
 
 	// GetNodeSnippet returns the persisted capped body for a single node.

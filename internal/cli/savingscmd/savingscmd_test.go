@@ -53,7 +53,7 @@ func TestRun_NoDataMessage(t *testing.T) {
 func TestRun_RendersBarsAndPercentages(t *testing.T) {
 	dir := t.TempDir()
 	now := time.Date(2026, 5, 20, 12, 0, 0, 0, time.UTC)
-	// Use minSampleCalls entries so the percent renders (solov2-qjhg); below
+	// Use minSampleCalls entries so the percent renders ; below
 	// that threshold the row reads "warming up".
 	entries := make([]savings.Entry, minSampleCalls)
 	for i := range entries {
@@ -95,7 +95,7 @@ func TestRun_JSONFlag(t *testing.T) {
 	}
 }
 
-// Until the recorder is partitioned by repo_id (solov2-0ql0), the text renderer
+// Until the recorder is partitioned by repo_id , the text renderer
 // labels its single bucket "all repos" so the user knows the figure is pooled.
 func TestRun_AllReposLabel(t *testing.T) {
 	dir := t.TempDir()

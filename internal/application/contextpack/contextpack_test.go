@@ -232,8 +232,10 @@ func TestForSymbol_IncludesSnippets(t *testing.T) {
 	edges := &fakeEdges{}
 	nodes := &fakeNodes{
 		metas: map[string]ports.NodeMeta{
-			"seed": {NodeID: "seed", SymbolPath: "pkg.Target", FilePath: "a.go", Kind: "function",
-				Snippet: "func Target() { return 42 }"},
+			"seed": {
+				NodeID: "seed", SymbolPath: "pkg.Target", FilePath: "a.go", Kind: "function",
+				Snippet: "func Target() { return 42 }",
+			},
 		},
 	}
 	blast, err := blastradius.NewService(edges, nodes, nil)
@@ -315,7 +317,7 @@ func TestForSymbol_SnippetTrimmedToBudget(t *testing.T) {
 func TestNodeName_IsCanonicalSymbolPath(t *testing.T) {
 	// Guard: context_pack nodes carry the same qualified SymbolPath the rest
 	// of the MCP surface emits (e.g. "Server.Start", not the leaf "Start"),
-	// and expose file_path rather than the old "path" key (solov2-1zxu).
+	// and expose file_path rather than the old "path" key .
 	a := newAssembler(t)
 	p, _ := a.ForSymbol(context.Background(), "r", "main", "/repo", "Target")
 	if len(p.Nodes) == 0 {

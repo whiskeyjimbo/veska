@@ -82,7 +82,7 @@ func Run(ctx context.Context, p Params) error {
 	return nil
 }
 
-// runAll renders every registered repo (solov2-drd2) so multi-repo workspaces
+// runAll renders every registered repo  so multi-repo workspaces
 // don't have to cd into each repo and re-run. Per-repo failures are logged
 // inline but don't abort the sweep — a stuck repo must not suppress the others.
 func runAll(ctx context.Context, db *sql.DB, handler *wiki.Handler, out, errOut io.Writer) error {
@@ -149,7 +149,7 @@ func ResolveTarget(ctx context.Context, db *sql.DB, repoID, branch string) (stri
 		}
 	} else {
 		// Match the MCP resolveRepoID progression so the CLI honours the same
-		// short_id / prefix contract (solov2-c7lq): exact full id, then
+		// short_id / prefix contract : exact full id, then
 		// ShortRepoIDLen-char short_id, then unambiguous >= 4-char prefix.
 		// solov2-rtql: on id miss, try the same value as a filesystem path
 		// against every registered repo's RootPath so the positional arg can
@@ -191,7 +191,7 @@ func buildWikiHandler(pools *sqlite.Pools) (*wiki.Handler, error) {
 	// `veska wiki` is the explicit, user-invoked render path: a fresh staging
 	// (one-shot CLI — nothing is staged), the CLI prefix-matching repo
 	// resolver, and writePages=true regardless of the daemon's [wiki]
-	// write_pages default (solov2-ocnn). The handler graph itself is built by
+	// write_pages default . The handler graph itself is built by
 	// the shared composition constructor (solov2-u4mv.4).
 	wikiRoot := func(ctx context.Context, repoID string) (string, error) {
 		records, err := repo.List(ctx, pools.ReadDB)
@@ -200,7 +200,7 @@ func buildWikiHandler(pools *sqlite.Pools) (*wiki.Handler, error) {
 		}
 		// ResolveTarget already canonicalised repoID to the full sha, so
 		// equality is the expected hit. Keep the prefix resolver as a defensive
-		// fallback for any caller that bypasses it (solov2-c7lq).
+		// fallback for any caller that bypasses it .
 		for _, rec := range records {
 			if rec.RepoID == repoID {
 				return rec.RootPath, nil

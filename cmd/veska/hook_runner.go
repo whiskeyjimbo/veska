@@ -8,7 +8,7 @@ import (
 
 // The git-hook shim logic lives in internal/cli/hookcmd; the constructors
 // below are Cobra glue whose RunE bodies delegate into that package
-// (solov2-0omh). Both hooks always succeed so git never blocks a commit or
+// . Both hooks always succeed so git never blocks a commit or
 // checkout on a best-effort index notification.
 
 // hookRunnerCmd returns the "hook-runner" Cobra command with sub-commands.

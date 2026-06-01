@@ -18,7 +18,7 @@ type BlastResponse struct {
 	Truncated       bool            `json:"truncated"`
 	IncludedStaging bool            `json:"included_staging"`
 	// CrossRepoEdges are synthetic edges from any visited node into another
-	// registered repo, resolved via cross_repo_edge_stubs (solov2-1gj).
+	// registered repo, resolved via cross_repo_edge_stubs .
 	// Omitted when no resolver is wired or no stubs match — same convention
 	// as eng_get_call_chain.
 	CrossRepoEdges []CrossRepoEdge `json:"cross_repo_edges,omitempty"`
@@ -37,7 +37,7 @@ type RepoRootFunc func(ctx context.Context, repoID string) (string, error)
 
 // BlastToolOption configures optional blast-tool dependencies — primarily the
 // cross-repo stub resolver used to expand the BFS frontier into other repos
-// (solov2-1gj). Composition roots without a resolver simply omit it.
+// . Composition roots without a resolver simply omit it.
 type BlastToolOption func(*blastToolConfig)
 
 type blastToolConfig struct {
@@ -180,7 +180,7 @@ func makeBlastRadiusHandler(svc *blastradius.Service, repos application.RepoList
 // inbound resolver for each entry: "which stubs in OTHER repos point at
 // this node?" Returns nil when direction is callees-only — inbound
 // expansion only makes sense when the user actually wants callers
-// (solov2-80hh). Silent on per-node errors (a stuck remote repo must not
+// . Silent on per-node errors (a stuck remote repo must not
 // break the primary blast result).
 func resolveCrossRepoInboundFor(ctx context.Context, resolve InboundResolveFunc, entries []blastradius.Entry, branch string, dir blastradius.Direction) []CrossRepoEdge {
 	if resolve == nil || len(entries) == 0 {

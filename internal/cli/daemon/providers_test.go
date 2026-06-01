@@ -149,7 +149,7 @@ func TestStatusProvider_ReportsDBState(t *testing.T) {
 }
 
 // TestStatusProvider_HealthyWhenNoPending pins the matched-pair: with zero
-// pending embeds, status stays "ok" and degraded_reasons is empty (solov2-30sa).
+// pending embeds, status stays "ok" and degraded_reasons is empty .
 func TestStatusProvider_HealthyWhenNoPending(t *testing.T) {
 	db := providersTestDB(t)
 	if _, err := db.Exec(`INSERT INTO repos (repo_id, root_path, added_at, active_branch) VALUES ('r1', '/r1', 1, 'main')`); err != nil {
@@ -460,7 +460,7 @@ func TestRepoRegistrar_AddRepo_ContextCanceled(t *testing.T) {
 // repo.Add invokes watchAdd with the new repoID + rootPath synchronously
 // (before AddRepo returns), so subsequent file edits on the freshly-registered
 // repo flow through the running fsnotify watcher without a daemon restart
-// (solov2-id3).
+// .
 func TestRepoRegistrar_AddRepo_SeedsLiveWatcher(t *testing.T) {
 	db, root := newAddRepoTestEnv(t)
 

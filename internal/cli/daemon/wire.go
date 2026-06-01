@@ -205,7 +205,7 @@ type Daemon struct {
 	tracerProvider *sdktrace.TracerProvider
 
 	// savingsRec records per-search token-savings telemetry to
-	// <VeskaHome>/savings.jsonl (solov2-3bu). Nil disables recording.
+	// <VeskaHome>/savings.jsonl . Nil disables recording.
 	// Closed on Stop so the underlying file handle is released.
 	savingsRec *savings.Recorder
 
@@ -371,12 +371,16 @@ func (b *daemonBuilder) buildObservability() error {
 		tracingEndpoint = b.cfg.TracingEndpoint
 	}
 	if tracingEnabled && tracingEndpoint == "" {
-		return &ErrMissingDep{Name: "tracing.otlp_endpoint",
-			Why: "tracing is enabled but no OTLP endpoint is set (set tracing.otlp_endpoint or VESKA_OTLP_ENDPOINT)"}
+		return &ErrMissingDep{
+			Name: "tracing.otlp_endpoint",
+			Why:  "tracing is enabled but no OTLP endpoint is set (set tracing.otlp_endpoint or VESKA_OTLP_ENDPOINT)",
+		}
 	}
 	if !tracingEnabled && tracingEndpoint != "" {
-		return &ErrMissingDep{Name: "tracing.enabled",
-			Why: "an OTLP endpoint is set but tracing is disabled (set tracing.enabled = true or clear the endpoint)"}
+		return &ErrMissingDep{
+			Name: "tracing.enabled",
+			Why:  "an OTLP endpoint is set but tracing is disabled (set tracing.enabled = true or clear the endpoint)",
+		}
 	}
 	if tracingEnabled {
 		tp, err := observability.NewTracerProvider(tracingEndpoint, b.fileCfg.Tracing.SampleRatio)
@@ -403,9 +407,11 @@ func (b *daemonBuilder) validateConfig() error {
 	switch b.cfg.VectorBackend {
 	case vector.BackendSQLiteVec, vector.BackendUsearch:
 	default:
-		return &ErrMissingDep{Name: "vector_backend",
+		return &ErrMissingDep{
+			Name: "vector_backend",
 			Why: fmt.Sprintf("unknown VESKA_VECTOR_BACKEND %q (want %q or %q)",
-				b.cfg.VectorBackend, vector.BackendSQLiteVec, vector.BackendUsearch)}
+				b.cfg.VectorBackend, vector.BackendSQLiteVec, vector.BackendUsearch),
+		}
 	}
 	if b.cfg.SQLitePath == "" {
 		return &ErrMissingDep{Name: "sqlite_path"}
@@ -577,8 +583,8 @@ func (b *daemonBuilder) buildEmbedder() error {
 // electEmbedder picks the single embedder for this boot (model2vec if
 // installed, else the in-binary static embedder; Ollama only when
 // VESKA_EMBEDDER=ollama). Vectors from different models occupy incompatible
-// spaces (solov2-soc), so a model switch wipes the embedding store and
-// re-queues every promoted node under the new model (solov2-fz8).
+// spaces , so a model switch wipes the embedding store and
+// re-queues every promoted node under the new model .
 func (b *daemonBuilder) electEmbedder() error {
 	election, err := elect.Elect(elect.Config{
 		VeskaHome:     b.cfg.VeskaHome,
@@ -884,7 +890,7 @@ type mcpDeps struct {
 	provider ports.EmbeddingProvider
 	refs     *sqlite.EmbeddingRefsRepo
 	metrics  *observability.Metrics
-	// savings records per-search token-savings telemetry (solov2-3bu).
+	// savings records per-search token-savings telemetry .
 	// Nil disables recording — RegisterSearchTools is nil-safe.
 	savings *savings.Recorder
 	// ingester + promoter drive eng_promote (post-commit hook target,
@@ -897,12 +903,12 @@ type mcpDeps struct {
 	// tool surface still functions.
 	regSvc *repoRegistrar
 	// reparser is the cold-scan closure shared with regSvc and StartupResync.
-	// Routed to eng_reindex_repo (solov2-4d7b) so `veska reindex` can dispatch
+	// Routed to eng_reindex_repo  so `veska reindex` can dispatch
 	// the scan in-daemon instead of needing the daemon stopped. Nil when not
 	// wired (legacy / test callers); the tool degrades cleanly in that case.
 	reparser func(ctx context.Context, rec application.RepoRecord) error
 	// scanTracker surfaces in-flight cold scans to eng_get_status
-	// (solov2-pm5). Nil-safe — statusProvider tolerates a nil tracker.
+	// . Nil-safe — statusProvider tolerates a nil tracker.
 	scanTracker *application.ScanTracker
 }
 

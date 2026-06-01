@@ -117,13 +117,13 @@ func (s *Service) Diff(ctx context.Context, repoID, repoRoot, refA, refB string)
 	if err != nil {
 		// Pass the wrapped error through unchanged so callers can use
 		// errors.Is to distinguish "unknown revision" (e.g. HEAD~1 on a
-		// single-commit repo) from a generic git failure (solov2-dr31).
+		// single-commit repo) from a generic git failure .
 		return Result{}, fmt.Errorf("changedsymbols: list changed files: %w", err)
 	}
 	// Initialise with empty (non-nil) slices so JSON marshaling renders
 	// each field as [] when no symbols changed in that bucket. The MCP
 	// surface contract guarantees "empty result collections serialize as
-	// [], never omitted" (solov2-jbgt).
+	// [], never omitted" .
 	res := Result{
 		Added:           []SymbolChange{},
 		Removed:         []SymbolChange{},
@@ -193,7 +193,7 @@ func (s *Service) Diff(ctx context.Context, repoID, repoRoot, refA, refB string)
 // least one changed file produced no symbol-level diff — typical for
 // comment, whitespace, or import-only edits. Agents reading empty
 // added/removed/modified buckets would otherwise interpret the result as
-// "nothing changed" (solov2-u9os).
+// "nothing changed" .
 const DegradedReasonNonSymbolChangesOnly = "non_symbol_changes_only"
 
 // DegradedReasonBaselineRefNotIndexed is emitted when ref_a's tree
@@ -211,7 +211,7 @@ const DegradedReasonBaselineRefNotIndexed = "baseline_ref_not_indexed"
 // could not be resolved and the handler fell back to git's empty-tree SHA
 // to diff against. Surfaces the fact that "every symbol shows as added"
 // is a consequence of a single-commit repo, not a real wholesale change
-// (solov2-g04l).
+// .
 const DegradedReasonNoParentCommit = "no_parent_commit_used_empty_tree"
 
 // parseAtRef reads path at ref and parses it. The second return value

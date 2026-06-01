@@ -91,7 +91,7 @@ func New(modelDir string) (*Provider, error) {
 
 // NewFromBytes builds a Provider from in-memory tokenizer + safetensors
 // bytes — the embedded-model path (//go:embed) for fat binary builds
-// (solov2-si1). name becomes the ModelID suffix, so it MUST match the
+// . name becomes the ModelID suffix, so it MUST match the
 // on-disk directory name for the same model version: fat and thin builds
 // then share one model_id and switching binary flavor triggers no reindex.
 func NewFromBytes(name string, tokenizerJSON, safetensors []byte) (*Provider, error) {

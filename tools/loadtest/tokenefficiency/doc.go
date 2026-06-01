@@ -1,5 +1,5 @@
 // Package tokenefficiency is the eval harness that produces veska's
-// "tokens saved vs grep+read" benchmark figure (solov2-wise). It is
+// "tokens saved vs grep+read" benchmark figure . It is
 // distinct from internal/savings — which reports a live char-ratio
 // alongside every search — and the two MUST NOT be conflated in
 // user-facing output. The benchmark is suitable for docs / READMEs /

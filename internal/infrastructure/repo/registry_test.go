@@ -105,7 +105,7 @@ func TestAddRepoIdempotent(t *testing.T) {
 		t.Fatalf("second Add: %v", err)
 	}
 	if !existed2 {
-		t.Errorf("second Add: existed=false, want true (solov2-khjd)")
+		t.Errorf("second Add: existed=false, want true ")
 	}
 	if id1 != id2 {
 		t.Errorf("idempotent: id1=%s id2=%s differ", id1, id2)

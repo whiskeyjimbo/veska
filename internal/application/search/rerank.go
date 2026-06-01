@@ -7,7 +7,7 @@ import (
 	"unicode"
 )
 
-// rerank applies post-fusion reranking signals (solov2-2sf) to the
+// rerank applies post-fusion reranking signals  to the
 // hydrated candidate list before it is truncated to caller-k. Four
 // signals contribute, all scaled by the candidate set's maxScore so
 // they bite even on tight-clustered small-corpus distributions yet
@@ -262,8 +262,10 @@ func verbSynonymBonus(r Result, tokens []string, maxScore float32) float32 {
 	return 0
 }
 
-const fileCoherenceBonusFrac = 0.05
-const fileCoherenceCapExtra = 4
+const (
+	fileCoherenceBonusFrac = 0.05
+	fileCoherenceCapExtra  = 4
+)
 
 func fileCoherenceBonus(filePath string, fileCounts map[string]int, maxScore float32) float32 {
 	if filePath == "" {
@@ -287,6 +289,7 @@ var noiseSuffixes = []string{
 	"_test.go",
 	".d.ts",
 }
+
 var noiseSubstrings = []string{
 	"/legacy/",
 	"/examples/",
