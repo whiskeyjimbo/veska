@@ -3,7 +3,6 @@ package daemon
 import (
 	"context"
 	"database/sql"
-	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -18,7 +17,6 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/application"
 	"github.com/whiskeyjimbo/veska/internal/application/autolink"
 	"github.com/whiskeyjimbo/veska/internal/application/checks"
-	"github.com/whiskeyjimbo/veska/internal/application/contextpack"
 	"github.com/whiskeyjimbo/veska/internal/application/embedder"
 	"github.com/whiskeyjimbo/veska/internal/application/revalidate"
 	"github.com/whiskeyjimbo/veska/internal/application/review"
@@ -910,34 +908,6 @@ type mcpDeps struct {
 	// scanTracker surfaces in-flight cold scans to eng_get_status
 	// . Nil-safe — statusProvider tolerates a nil tracker.
 	scanTracker *application.ScanTracker
-}
-
-// activeTaskFunc returns a contextpack.ActiveTaskFunc reading the repo's
-// active task from the tasks table — the same table tools_tasks.go owns.
-// No active task yields (nil, nil) rather than an error.
-func activeTaskFunc(db *sql.DB) contextpack.ActiveTaskFunc {
-	return func(ctx context.Context, repoID string) (*contextpack.TaskInfo, error) {
-		var (
-			t                   contextpack.TaskInfo
-			tracker, trackerRef sql.NullString
-			active              int
-		)
-		err := db.QueryRowContext(ctx,
-			`SELECT task_id, repo_id, tracker, tracker_ref, title, active
-			   FROM tasks WHERE repo_id = ? AND active = 1`,
-			repoID,
-		).Scan(&t.TaskID, &t.RepoID, &tracker, &trackerRef, &t.Title, &active)
-		if errors.Is(err, sql.ErrNoRows) {
-			return nil, nil
-		}
-		if err != nil {
-			return nil, fmt.Errorf("active task lookup: %w", err)
-		}
-		t.Tracker = tracker.String
-		t.TrackerRef = trackerRef.String
-		t.Active = active != 0
-		return &t, nil
-	}
 }
 
 // repoRootFunc adapts the canonical composition.RepoRootByID resolver to
