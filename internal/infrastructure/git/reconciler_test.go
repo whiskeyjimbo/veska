@@ -345,6 +345,56 @@ func TestStart_WakeGapTriggersSweep(t *testing.T) {
 	}
 }
 
+// TestStart_WakeGapWallClock proves the detector fires on a wall-clock gap even
+// when the clock readings carry NO monotonic component — the real post-suspend
+// case, where CLOCK_MONOTONIC barely advanced but wall time jumped. time.Unix
+// values have no monotonic reading, so a regression that reverted Start to a
+// monotonic comparison would fail to see the gap here.
+func TestStart_WakeGapWallClock(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "wake.go")
+	if err := os.WriteFile(path, []byte("v1"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	base := time.Unix(1_700_000_000, 0) // no monotonic reading
+	var nowMu sync.Mutex
+	var calls int
+	nowFn := func() time.Time {
+		nowMu.Lock()
+		defer nowMu.Unlock()
+		calls++
+		if calls <= 1 {
+			return base
+		}
+		return base.Add(10 * time.Second)
+	}
+
+	hits := make(chan string, 4)
+	handler := func(_ context.Context, _, p string) { hits <- p }
+
+	r := git.NewWakeReconciler(20*time.Millisecond, 500*time.Millisecond, handler, git.WithClock(nowFn))
+	r.AddDir("repoA", dir)
+	r.InjectWake() // seed mtime baseline (no nowFn call)
+	future := time.Now().Add(2 * time.Second)
+	if err := os.Chtimes(path, future, future); err != nil {
+		t.Fatal(err)
+	}
+
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	go r.Start(ctx)
+
+	select {
+	case p := <-hits:
+		if p != path {
+			t.Fatalf("swept %q, want %q", p, path)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("no sweep on wall-clock gap with non-monotonic clock")
+	}
+}
+
 // TestStart_ContextCancel verifies that Start exits cleanly when ctx is cancelled.
 func TestStart_ContextCancel(t *testing.T) {
 	r := makeReconciler(func(context.Context, string, string) {}, nil, time.Now)

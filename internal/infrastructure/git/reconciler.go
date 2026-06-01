@@ -106,10 +106,25 @@ func (r *WakeReconciler) IsReconciling() bool {
 	return r.reconciling.Load()
 }
 
+// wallTick returns the current time with its monotonic reading stripped, so
+// gap arithmetic in Start measures wall-clock elapsed time (which advances
+// across system suspend) rather than monotonic time (which does not).
+func (r *WakeReconciler) wallTick() time.Time {
+	return r.nowFn().Round(0)
+}
+
 // Start begins the background tick loop. Stops when ctx is cancelled.
+//
+// Gap detection compares wall-clock readings, not monotonic ones. time.Time's
+// Sub uses the monotonic component when present, and CLOCK_MONOTONIC (Linux) /
+// mach_absolute_time (macOS) do NOT advance while the system is suspended — so
+// a monotonic comparison would see only ~wakeTick after a real sleep and never
+// fire. wallTick strips the monotonic reading (.Round(0)) so Sub falls back to
+// wall-clock arithmetic, which does advance across suspend. This is the whole
+// point of the detector.
 func (r *WakeReconciler) Start(ctx context.Context) {
 	r.mu.Lock()
-	r.lastTick = r.nowFn()
+	r.lastTick = r.wallTick()
 	r.mu.Unlock()
 
 	ticker := time.NewTicker(r.wakeTick)
@@ -122,7 +137,7 @@ func (r *WakeReconciler) Start(ctx context.Context) {
 		case <-r.wakeCh:
 			r.runSweep(ctx)
 		case <-ticker.C:
-			now := r.nowFn()
+			now := r.wallTick()
 			r.mu.Lock()
 			last := r.lastTick
 			r.lastTick = now
