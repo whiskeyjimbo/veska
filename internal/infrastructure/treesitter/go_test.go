@@ -1182,6 +1182,115 @@ var helloCmd = struct {
 	}
 }
 
+// TestParseFile_UrfaveCommandTree guards solov2-qqqy: a urfave
+// `var app = &cli.App{Name: ..., Commands: []*cli.Command{...}}` is
+// promoted to a KindCommand named by Name:, each Commands-slice literal
+// becomes a child KindCommand named by its own Name:, and an app→child
+// CONTAINS edge links them. The versioned import path (/v2) must still
+// resolve to urfave.
+func TestParseFile_UrfaveCommandTree(t *testing.T) {
+	src := []byte(`package main
+
+import "github.com/urfave/cli/v2"
+
+var app = &cli.App{
+	Name: "tool",
+	Commands: []*cli.Command{
+		{Name: "add", Action: addAction},
+		{Name: "rm"},
+	},
+}
+
+func addAction() {}
+`)
+	p := treesitter.NewGoParser()
+	result, err := p.ParseFile(context.Background(), repoID, filePath, src)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// The Go var "app" is promoted, so it's no longer a KindVariable.
+	if n := findNodeByName(result.Nodes, "app"); n != nil {
+		t.Errorf("app should be promoted to KindCommand, not emitted as %q", n.Kind)
+	}
+
+	appNode := findNodeByName(result.Nodes, "tool")
+	add := findNodeByName(result.Nodes, "add")
+	rm := findNodeByName(result.Nodes, "rm")
+	if appNode == nil || add == nil || rm == nil {
+		t.Fatalf("expected command nodes tool/add/rm; got app=%v add=%v rm=%v", appNode, add, rm)
+	}
+	for _, n := range []*domain.Node{appNode, add, rm} {
+		if n.Kind != domain.KindCommand {
+			t.Errorf("%s: kind = %q, want %q", n.Name, n.Kind, domain.KindCommand)
+		}
+	}
+
+	want := map[domain.NodeID]bool{add.ID: false, rm.ID: false}
+	for _, e := range result.Edges {
+		if e.Kind == domain.EdgeContains && e.Src == appNode.ID {
+			if _, ok := want[e.Tgt]; ok {
+				want[e.Tgt] = true
+			}
+		}
+	}
+	if !want[add.ID] {
+		t.Errorf("expected CONTAINS edge tool→add")
+	}
+	if !want[rm.ID] {
+		t.Errorf("expected CONTAINS edge tool→rm")
+	}
+}
+
+// TestParseFile_UrfaveByReferenceSubcommands guards solov2-qqqy's
+// by-reference idiom: subcommands declared as their own top-level
+// `var addCmd = &cli.Command{Name: ...}` and linked into the App by
+// identifier (`Commands: []*cli.Command{addCmd}`). Both the App and the
+// referenced command must promote to KindCommand, with an app→addCmd
+// CONTAINS edge — even though addCmd is declared after the App.
+func TestParseFile_UrfaveByReferenceSubcommands(t *testing.T) {
+	src := []byte(`package main
+
+import "github.com/urfave/cli/v2"
+
+var app = &cli.App{
+	Name:     "tool",
+	Commands: []*cli.Command{addCmd},
+}
+
+var addCmd = &cli.Command{Name: "add"}
+`)
+	p := treesitter.NewGoParser()
+	result, err := p.ParseFile(context.Background(), repoID, filePath, src)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	appNode := findNodeByName(result.Nodes, "tool")
+	add := findNodeByName(result.Nodes, "add")
+	if appNode == nil || add == nil {
+		t.Fatalf("expected command nodes tool/add; got app=%v add=%v", appNode, add)
+	}
+	if add.Kind != domain.KindCommand {
+		t.Errorf("add: kind = %q, want %q", add.Kind, domain.KindCommand)
+	}
+	// addCmd's Go var name must not survive as a KindVariable.
+	if n := findNodeByName(result.Nodes, "addCmd"); n != nil {
+		t.Errorf("addCmd should be promoted to KindCommand, not emitted as %q", n.Kind)
+	}
+
+	found := false
+	for _, e := range result.Edges {
+		if e.Kind == domain.EdgeContains && e.Src == appNode.ID && e.Tgt == add.ID {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Errorf("expected CONTAINS edge tool→add from by-reference Commands slice")
+	}
+}
+
 // TestParseFile_CobraRunEAttributesToCommand guards solov2-crn7's
 // interaction with the cobra-app grain (solov2-zuvl): when a command var
 // is promoted to KindCommand it must STILL be the caller of its own
