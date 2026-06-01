@@ -172,3 +172,10 @@ Env: `VESKA_HOME` (data root), `VESKA_VECTOR_BACKEND` (`sqlite-vec`|`usearch`).
   so `go test ./...` stays fast.
 - The ubiquitous language (`Node`, `Edge`, `Graph`, `Task`) stays consistent
   across domain, ports, adapters, and CLI output.
+- **One file per concern, flat within a package.** `internal/infrastructure/mcp`
+  (one `tools_*.go` per tool family) and `internal/infrastructure/sqlite` (one
+  file per repo/concern) are deliberately flat, even at 60+ / 40+ files — the
+  cohesion of a single package outweighs directory nesting, and the file names
+  make navigation predictable. This is an affirmed convention, not drift; do
+  not split these into subpackages absent a concrete coupling problem
+  (solov2-efjz).
