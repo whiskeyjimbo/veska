@@ -23,6 +23,7 @@ import (
 	"errors"
 	"fmt"
 	"sort"
+	"strings"
 )
 
 // ExcludedKinds are container / sub-symbol node kinds for which a content_hash
@@ -113,9 +114,20 @@ var calibratedNearThreshold = map[string]float32{
 // NearThresholdFor returns the calibrated near-dup minimum score for an elected
 // embedder ModelID, falling back to DefaultNearThreshold for an unknown or
 // empty ID.
+//
+// Ollama model IDs may carry a ":tag" (e.g. "nomic-embed-text:latest" — the
+// ModelID is the verbatim configured model name). A tag pins a version but does
+// not change the embedding space, so an exact miss retries on the bare name
+// before falling back — otherwise a tagged nomic would silently get the
+// model2vec-calibrated default and flood the user.
 func NearThresholdFor(modelID string) float32 {
 	if v, ok := calibratedNearThreshold[modelID]; ok {
 		return v
+	}
+	if i := strings.IndexByte(modelID, ':'); i > 0 {
+		if v, ok := calibratedNearThreshold[modelID[:i]]; ok {
+			return v
+		}
 	}
 	return DefaultNearThreshold
 }
