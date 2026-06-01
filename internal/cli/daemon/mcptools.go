@@ -160,6 +160,7 @@ func (w *mcpToolWiring) registerGraphTools() {
 		mcp.WithScanTracker(w.d.scanTracker),
 	)
 	mcp.RegisterBlastTools(w.r, w.blast, repoRootFunc(w.pools.ReadDB), gitwatch.ChangedFiles, w.repos(), w.graph,
+		mcp.WithBlastChangedFilesBetween(gitwatch.ChangedFilesBetween),
 		mcp.WithBlastResolveFunc(w.resolveStubs),
 		mcp.WithBlastInboundResolveFunc(w.resolveInboundStubs),
 		mcp.WithBlastScanTracker(w.d.scanTracker))
