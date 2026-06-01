@@ -31,6 +31,19 @@ const (
 	// router globals, viper config singletons — appear in eng_find_symbol /
 	// eng_get_file_nodes and become navigable from agent tools .
 	KindVariable NodeKind = "variable"
+	// KindCommand is a CLI command surfaced from a framework's command
+	// struct-literal (e.g. cobra `var rootCmd = &cobra.Command{Use: ...}`).
+	// Named by the framework's command word (cobra Use:, urfave Name:),
+	// not the Go var identifier, so agent tools see the actual command
+	// tree. Wire-up calls (rootCmd.AddCommand(sub)) emit CONTAINS edges so
+	// call_chain / blast_radius walk the command hierarchy .
+	KindCommand NodeKind = "command"
+	// KindRoute is an HTTP route surfaced from a router framework's
+	// registration call (gin/echo `router.GET("/path", h)`), named by its
+	// path. Reserved alongside KindCommand as the framework-aware
+	// vocabulary; route extraction itself is a follow-up to the cobra
+	// command pass .
+	KindRoute NodeKind = "route"
 	// KindChunk is a non-declaration source region — package-level
 	// vars, file-top comments, init() guts, anything between symbol
 	// declarations. Chunks live alongside symbol nodes so the existing
@@ -56,6 +69,8 @@ var validNodeKinds = map[NodeKind]struct{}{
 	KindField:     {},
 	KindTest:      {},
 	KindVariable:  {},
+	KindCommand:   {},
+	KindRoute:     {},
 	KindChunk:     {},
 }
 

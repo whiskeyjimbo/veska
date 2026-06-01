@@ -497,3 +497,42 @@ func collectCallNames(node *sitter.Node, src []byte, recvName, recvType string, 
 	walk(node)
 	return refs
 }
+
+// buildPackageNode produces the package-clause node the parser emits at
+// the top of every Go file. Lives with the other shared structural
+// helpers; called from the query parser (go_query.go).
+func buildPackageNode(root *sitter.Node, src []byte, repoID, path string) *domain.Node {
+	count := int(root.ChildCount())
+	for i := range count {
+		child := root.Child(i)
+		if child.Type() != "package_clause" {
+			continue
+		}
+		nameNode := child.ChildByFieldName("name")
+		if nameNode == nil {
+			// Some Go grammar versions expose the identifier as a plain
+			// named child rather than via the "name" field. Walk for it.
+			named := int(child.NamedChildCount())
+			for j := range named {
+				c := child.NamedChild(j)
+				if c != nil && c.Type() == "package_identifier" {
+					nameNode = c
+					break
+				}
+			}
+		}
+		if nameNode == nil {
+			continue
+		}
+		name := string(src[nameNode.StartByte():nameNode.EndByte()])
+		id := nodeID(repoID, path, domain.KindPackage, name)
+		// Package node intentionally omits Lines (matches the historical
+		// extractPackageName + NewNode-without-WithLines behaviour).
+		n, err := domain.NewNode(domain.NodeSpec{ID: id, Path: path, Name: name, Kind: domain.KindPackage}, domain.WithLanguage("go"))
+		if err != nil {
+			return nil
+		}
+		return n
+	}
+	return nil
+}

@@ -90,6 +90,12 @@ func (p *GoParser) ParseFile(ctx context.Context, repoID, path string, src []byt
 		result.Nodes = append(result.Nodes, pkgNode)
 	}
 
+	// Import map (also feeds the cobra-alias check). solov2-crn7: promote
+	// cobra command struct-literals to KindCommand nodes (the var branch
+	// below skips any var promoted here); see go_frameworks.go.
+	result.Imports = extractImports(root, src)
+	cobra := extractCobraCommands(root, src, result.Imports, repoID, path)
+
 	// callerCtx records the (callerNode, bodyNode, optional recv binding)
 	// triple for each named declaration phase 3 needs to extract calls
 	// from. Built during the symbols.scm pass so we don't re-query for
@@ -183,6 +189,9 @@ func (p *GoParser) ParseFile(ctx context.Context, repoID, path string, src []byt
 				continue
 			}
 			for _, n := range buildVarNodesFromSpec(spec, decl, src, repoID, path, domain.KindVariable) {
+				if cobra.commandVar(n.Name) {
+					continue // solov2-crn7: emitted as KindCommand instead
+				}
 				addSymbol(n)
 			}
 		case m.node("const.spec") != nil:
@@ -195,6 +204,17 @@ func (p *GoParser) ParseFile(ctx context.Context, repoID, path string, src []byt
 				addSymbol(n)
 			}
 		}
+	}
+
+	// solov2-crn7: append KindCommand nodes before the CONTAINS loop so
+	// package→symbol edges cover them, and register each under its Go var
+	// name in symbolByName — mirroring the KindVariable entry it replaced
+	// so the anon-call walker still attributes a command's RunE-closure
+	// calls to the command (the cobra grain from solov2-zuvl), not the
+	// package node.
+	result.Nodes = append(result.Nodes, cobra.nodes...)
+	for varName, n := range cobra.byVar {
+		symbolByName[varName] = n
 	}
 
 	// CONTAINS edges: package → each non-package symbol. Mirrors the
@@ -251,9 +271,8 @@ func (p *GoParser) ParseFile(ctx context.Context, repoID, path string, src []byt
 		result.UnresolvedCalls = append(result.UnresolvedCalls, callUnresolved...)
 	}
 
-	// Import map. extractImports already exists and is the same shape
-	// the legacy parser emits, so reuse it directly.
-	result.Imports = extractImports(root, src)
+	// solov2-crn7: cobra AddCommand→CONTAINS command-tree edges.
+	result.Edges = append(result.Edges, cobra.edges...)
 
 	// solov2-y7gu: anonymous-function calls in top-level var/const
 	// initialisers. The legacy collectAnonCalls checked node.Type() ==
@@ -690,45 +709,4 @@ func extractAnonCallsInTopLevelVars(q *sitter.Query, root *sitter.Node, src []by
 		}
 	}
 	return edges, unresolved
-}
-
-// buildPackageNode produces the package-clause node the legacy parser
-// emits at the top of every Go file. Extracted into a helper here so
-// the query parser keeps parity until packages get their own .scm
-// (phase 2 candidate).
-func buildPackageNode(root *sitter.Node, src []byte, repoID, path string) *domain.Node {
-	count := int(root.ChildCount())
-	for i := range count {
-		child := root.Child(i)
-		if child.Type() != "package_clause" {
-			continue
-		}
-		nameNode := child.ChildByFieldName("name")
-		if nameNode == nil {
-			// Some Go grammar versions expose the identifier as a plain
-			// named child rather than via the "name" field. Walk for it.
-			named := int(child.NamedChildCount())
-			for j := range named {
-				c := child.NamedChild(j)
-				if c != nil && c.Type() == "package_identifier" {
-					nameNode = c
-					break
-				}
-			}
-		}
-		if nameNode == nil {
-			continue
-		}
-		name := string(src[nameNode.StartByte():nameNode.EndByte()])
-		id := nodeID(repoID, path, domain.KindPackage, name)
-		// Legacy parser intentionally omits Lines on the package node —
-		// extractPackageName + NewNode-without-WithLines (go.go ~L92).
-		// Match that exactly so the equivalence harness stays green.
-		n, err := domain.NewNode(domain.NodeSpec{ID: id, Path: path, Name: name, Kind: domain.KindPackage}, domain.WithLanguage("go"))
-		if err != nil {
-			return nil
-		}
-		return n
-	}
-	return nil
 }
