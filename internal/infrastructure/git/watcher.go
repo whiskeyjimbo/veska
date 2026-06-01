@@ -6,7 +6,6 @@ import (
 	"context"
 	"io/fs"
 	"log/slog"
-	"os"
 	"path/filepath"
 	"sync"
 	"time"
@@ -17,22 +16,25 @@ import (
 
 const debounceWindow = 50 * time.Millisecond
 
-// fileInfo holds the last-observed metadata for a file used by the overflow
-// polling fallback.
-type fileInfo struct {
-	mtime time.Time
-	size  int64
-}
-
 // FSWatcher implements ports.Watcher using fsnotify with a 50 ms debounce
 // window. When the underlying watcher emits an overflow sentinel (Op == 0 /
 // fsnotify.ErrEventOverflow), it falls back to a full directory walk,
-// compares mtime+size to the last-seen map, and emits FileEvents for any
+// compares mtime+size+prefix to the last-seen map, and emits FileEvents for any
 // changed files.
+//
+// lastSeen is the SINGLE per-file change-detection baseline shared with the
+// wake reconciler (solov2-xde2.25.6): it is seeded at Watch, updated on every
+// live debounced write (run loop emit path), and updated by the overflow
+// fallback. The reconciler reaches it through the BaselineStore seam so a
+// post-suspend sweep compares against state that already tracked the session's
+// live edits, and therefore reports only the suspend-window changes. The map is
+// per-FSWatcher-instance: RestartAll creates a fresh FSWatcher (and thus a fresh
+// map), which is what makes the teardown race safe — see the package note on
+// RestartAll in multiwatcher.go.
 type FSWatcher struct {
 	mu       sync.Mutex
 	fw       *fsnotify.Watcher
-	lastSeen map[string]fileInfo   // guarded by mu
+	lastSeen map[string]MtimeEntry // guarded by mu; the shared change baseline
 	emitFn   func(ports.FileEvent) // set by Watch; used by InjectOverflow
 	emitMu   sync.RWMutex          // guards emitFn
 }
@@ -46,8 +48,52 @@ func NewFSWatcher() (*FSWatcher, error) {
 	}
 	return &FSWatcher{
 		fw:       fw,
-		lastSeen: make(map[string]fileInfo),
+		lastSeen: make(map[string]MtimeEntry),
 	}, nil
+}
+
+// Get returns the last-seen baseline entry for path. It satisfies BaselineStore
+// so the wake reconciler can compare against the watcher's live baseline.
+func (w *FSWatcher) Get(path string) (MtimeEntry, bool) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	e, ok := w.lastSeen[path]
+	return e, ok
+}
+
+// Put records path's baseline entry. It satisfies BaselineStore. The live
+// debounced-write path, the overflow fallback, and seedLastSeen all funnel
+// through it (directly or under w.mu) so the baseline tracks live edits.
+func (w *FSWatcher) Put(path string, e MtimeEntry) {
+	w.mu.Lock()
+	w.lastSeen[path] = e
+	w.mu.Unlock()
+}
+
+// refreshBaseline updates the shared baseline for path to its current on-disk
+// state (mtime+size+prefix) and reports whether it wrote. It is the live update
+// path that keeps lastSeen tracking session edits so a wake sweep reports only
+// suspend-window changes.
+//
+// It first checks ctx: a debounce timer that fires after this watcher's ctx is
+// cancelled (i.e. after RestartAll tore it down) must NOT write to the baseline.
+// The new FSWatcher owns a SEPARATE lastSeen map (RestartAll calls NewFSWatcher,
+// which allocates a fresh map), so a stray write here could only land on this
+// orphaned instance's map and can never resurrect an entry the reconciler reads
+// off the new watcher — the per-instance-fresh-map property, not the mutex, is
+// what makes the teardown race safe. The mutex only serializes individual
+// writes. The ctx guard additionally spares a needless stat + 64-byte read once
+// the watcher is gone (solov2-xde2.25.6, guardrail 3).
+func (w *FSWatcher) refreshBaseline(ctx context.Context, path string) bool {
+	if ctx.Err() != nil {
+		return false
+	}
+	entry, ok := statEntry(path)
+	if !ok {
+		return false
+	}
+	w.Put(path, entry)
+	return true
 }
 
 // Watch registers the directory tree rooted at dir for change events and
@@ -107,20 +153,19 @@ func (w *FSWatcher) addTree(dir string) error {
 	})
 }
 
-// seedLastSeen populates the last-seen map with current stat data for all
-// files under dir.
+// seedLastSeen populates the last-seen map with current stat data (mtime, size,
+// and leading-byte prefix) for all files under dir, reusing statEntry so the
+// baseline format matches the reconciler's change-detection.
 func (w *FSWatcher) seedLastSeen(dir string) {
 	_ = filepath.WalkDir(dir, func(path string, d fs.DirEntry, err error) error {
 		if err != nil || d.IsDir() {
 			return nil
 		}
-		info, err := d.Info()
-		if err != nil {
+		entry, ok := statEntry(path)
+		if !ok {
 			return nil
 		}
-		w.mu.Lock()
-		w.lastSeen[path] = fileInfo{mtime: info.ModTime(), size: info.Size()}
-		w.mu.Unlock()
+		w.Put(path, entry)
 		return nil
 	})
 }
@@ -145,6 +190,16 @@ func (w *FSWatcher) run(ctx context.Context, dir string, out chan<- ports.FileEv
 		}
 	}
 	w.setEmit(emit)
+
+	// emitWrite is the debounced-write action: refresh the shared baseline for
+	// name to its current on-disk state, then emit the write event. It is the
+	// live update path that keeps lastSeen tracking session edits, so a wake
+	// sweep compares against post-edit state and reports only suspend-window
+	// changes (solov2-xde2.25.6).
+	emitWrite := func(name string) {
+		w.refreshBaseline(ctx, name)
+		emit(ports.FileEvent{Path: name, Op: ports.WatchOpWrite})
+	}
 
 	// loop until ctx is done or the fsnotify channels close.
 	for {
@@ -183,7 +238,7 @@ func (w *FSWatcher) run(ctx context.Context, dir string, out chan<- ports.FileEv
 					pendingMu.Lock()
 					delete(pending, name)
 					pendingMu.Unlock()
-					emit(ports.FileEvent{Path: name, Op: ports.WatchOpWrite})
+					emitWrite(name)
 				})
 				pendingMu.Unlock()
 
@@ -243,19 +298,17 @@ func (w *FSWatcher) handleOverflow(emit func(ports.FileEvent), dir string) {
 			return nil
 		}
 
-		info, statErr := os.Stat(path)
-		if statErr != nil {
+		current, ok := statEntry(path)
+		if !ok {
 			return nil
 		}
-
-		current := fileInfo{mtime: info.ModTime(), size: info.Size()}
 
 		w.mu.Lock()
 		prev, known := w.lastSeen[path]
 		w.lastSeen[path] = current
 		w.mu.Unlock()
 
-		if !known || prev.mtime != current.mtime || prev.size != current.size {
+		if !known || current.changedFrom(prev) {
 			if emit != nil {
 				emit(ports.FileEvent{Path: path, Op: ports.WatchOpWrite})
 			}

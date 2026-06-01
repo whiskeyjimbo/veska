@@ -67,6 +67,51 @@ type watchedDir struct {
 	dir    string
 }
 
+// BaselineStore is the per-file change-detection baseline a wake sweep compares
+// against. *FSWatcher satisfies it (its live lastSeen map), so the reconciler
+// converges onto the watcher's continuously-updated baseline rather than a
+// separate seeded copy (solov2-xde2.25.6). Implementations must be safe for
+// concurrent use — a parallel per-repo sweep and live debounced writes both
+// touch the store.
+type BaselineStore interface {
+	Get(path string) (MtimeEntry, bool)
+	Put(path string, e MtimeEntry)
+}
+
+// BaselineResolver returns the CURRENT BaselineStore for a repo, resolved FRESH
+// on each sweep. The daemon wires it to the MultiRepoWatcher so a sweep follows
+// RestartAll replacing a repo's FSWatcher (solov2-xde2.25.3): each sweep reads
+// the live FSWatcher's baseline, not a pointer captured at construction. ok is
+// false when the repo is not (yet) watched, in which case the reconciler falls
+// back to its standalone in-memory baseline.
+type BaselineResolver func(repoID string) (BaselineStore, bool)
+
+// memBaseline is the standalone in-memory baseline used when no BaselineResolver
+// is wired (the reconciler running without a watcher: eval harness and unit
+// tests). It is filled lazily by the sweep's first sighting of each file — NOT
+// by a separate seed pass — so "first sighting records, fires nothing" still
+// holds. This is the seam's standalone implementation, not a revival of the
+// retired per-reconciler mtimeMap.
+type memBaseline struct {
+	mu sync.Mutex
+	m  map[string]MtimeEntry
+}
+
+func newMemBaseline() *memBaseline { return &memBaseline{m: make(map[string]MtimeEntry)} }
+
+func (b *memBaseline) Get(path string) (MtimeEntry, bool) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	e, ok := b.m[path]
+	return e, ok
+}
+
+func (b *memBaseline) Put(path string, e MtimeEntry) {
+	b.mu.Lock()
+	b.m[path] = e
+	b.mu.Unlock()
+}
+
 // WakeReconciler detects system suspend/resume by comparing wall-clock time
 // across a periodic tick interval. When the gap between two ticks exceeds
 // wakeThreshold, it sweeps the registered directory trees for mtime/size changes
@@ -83,10 +128,19 @@ type WakeReconciler struct {
 	// resolved to a positive value at construction (NumCPU()/2, floor 1).
 	concurrency int
 
+	// baselineFor resolves the live BaselineStore for a repo, fresh each sweep
+	// (so it tracks RestartAll replacing the FSWatcher). Nil / a false return
+	// falls back to the standalone in-memory baseline below. Set via
+	// WithBaseline.
+	baselineFor BaselineResolver
+	// standalone is the fallback baseline when baselineFor is unset or the repo
+	// is not watched. It keeps the reconciler usable without a watcher (eval
+	// harness, unit tests).
+	standalone *memBaseline
+
 	mu       sync.Mutex
 	dirs     []watchedDir
-	mtimeMap map[string]MtimeEntry // guarded by mu
-	lastTick time.Time             // guarded by mu
+	lastTick time.Time // guarded by mu
 	// reconciling is the set of repo IDs whose per-repo sweep is in flight,
 	// guarded by mu. Per-repo (not a global flag) so an MCP query against a
 	// settled repo is not flagged wake_reconciling because some OTHER repo is
@@ -132,6 +186,14 @@ func WithPostSweepHook(fn PostSweepHook) Option {
 	return func(r *WakeReconciler) { r.postSweep = fn }
 }
 
+// WithBaseline wires the resolver that supplies the live per-repo change
+// baseline (the watcher's lastSeen). When unset, the reconciler uses a
+// standalone in-memory baseline filled lazily by the sweep (first-sighting
+// records, fires nothing) — keeping it usable without a watcher.
+func WithBaseline(fn BaselineResolver) Option {
+	return func(r *WakeReconciler) { r.baselineFor = fn }
+}
+
 // WithWakeConcurrency caps how many per-repo sweeps run in parallel on a wake
 // event. n <= 0 (the default) resolves to runtime.NumCPU()/2 with a floor of 1.
 func WithWakeConcurrency(n int) Option {
@@ -160,7 +222,7 @@ func NewWakeReconciler(
 		wakeThreshold: wakeThreshold,
 		handler:       handler,
 		nowFn:         time.Now,
-		mtimeMap:      make(map[string]MtimeEntry),
+		standalone:    newMemBaseline(),
 		reconciling:   make(map[string]int),
 		wakeCh:        make(chan struct{}, 1),
 	}
@@ -334,44 +396,41 @@ func (r *WakeReconciler) sweepOneRepo(ctx context.Context, repoID, dir string) {
 	r.markReconciling(repoID)
 	defer r.clearReconciling(repoID)
 
-	r.walkFiles(dir, func(path string, current MtimeEntry) {
-		r.mu.Lock()
-		prev, known := r.mtimeMap[path]
-		r.mtimeMap[path] = current
-		r.mu.Unlock()
+	// Resolve the baseline FRESH per sweep so we follow RestartAll replacing the
+	// repo's FSWatcher: a sweep started after a restart reads the new watcher's
+	// live baseline, never a stale captured pointer (solov2-xde2.25.6 / .25.3).
+	store := r.baselineForRepo(repoID)
 
-		// Fire only for a file we have a baseline for (Seed or a prior sweep)
-		// that has since changed. A first-ever sighting just records state.
+	r.walkFiles(dir, func(path string, current MtimeEntry) {
+		prev, known := store.Get(path)
+		store.Put(path, current)
+
+		// Fire only for a file we already had a baseline for (live edit, prior
+		// sweep, or watcher seed) that has since changed. A first-ever sighting
+		// just records state. Because the live save path keeps the watcher
+		// baseline current, a file edited during the session but NOT during the
+		// suspend window has prev == current and does not fire — so the first
+		// post-suspend wake reports only suspend-window changes.
 		if known && current.changedFrom(prev) {
 			r.handler(ctx, repoID, path)
 		}
 	})
 }
 
-// Seed records the current state of every registered directory tree as the
-// change-detection baseline WITHOUT firing the handler. The daemon calls it
-// once before the tick loop runs so the first suspend/resume sweep can detect
-// changes made during the suspend window; without a baseline that first sweep
-// would only populate the map and report nothing.
-func (r *WakeReconciler) Seed(ctx context.Context) {
-	r.mu.Lock()
-	dirs := append([]watchedDir(nil), r.dirs...)
-	r.mu.Unlock()
-
-	for _, wd := range dirs {
-		if ctx.Err() != nil {
-			return
+// baselineForRepo resolves the live BaselineStore for repoID via the wired
+// resolver, falling back to the standalone in-memory baseline when no resolver
+// is set or the repo is not (yet) watched.
+func (r *WakeReconciler) baselineForRepo(repoID string) BaselineStore {
+	if r.baselineFor != nil {
+		if store, ok := r.baselineFor(repoID); ok && store != nil {
+			return store
 		}
-		r.walkFiles(wd.dir, func(path string, current MtimeEntry) {
-			r.mu.Lock()
-			r.mtimeMap[path] = current
-			r.mu.Unlock()
-		})
 	}
+	return r.standalone
 }
 
 // walkFiles walks dir and invokes fn with the current MtimeEntry for each
-// non-ignored regular file. Stat/ignore handling is shared by Seed and sweepDir.
+// non-ignored regular file. Stat/ignore handling is shared across sweeps.
 func (r *WakeReconciler) walkFiles(dir string, fn func(path string, current MtimeEntry)) {
 	_ = filepath.WalkDir(dir, func(path string, d fs.DirEntry, err error) error {
 		if err != nil || d.IsDir() {
