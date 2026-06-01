@@ -97,7 +97,9 @@ type SuppressionSpec struct {
 //  1. ID, Target, Reason, ActorID must be non-empty.
 //  2. Scope must be a valid enum value.
 //  3. ActorKind must be a recognised ActorKind (same check NewActor enforces).
-//  4. When Scope == ScopeFinding, Target must be a non-empty finding_id.
+//  4. Target non-emptiness (invariant #1) covers every scope, including
+//     ScopeFinding; the finding_id payload is treated as an opaque, non-empty
+//     string — its internal shape is not separately validated here.
 //  5. expires_at, when set, must be after created_at (enforced by WithExpiresAt).
 func NewSuppression(spec SuppressionSpec, opts ...SuppressionOption) (*Suppression, error) {
 	if spec.ID == "" {
@@ -117,9 +119,6 @@ func NewSuppression(spec SuppressionSpec, opts ...SuppressionOption) (*Suppressi
 	}
 	if _, ok := validActorKinds[spec.ActorKind]; !ok {
 		return nil, errors.New("suppression: invalid actor_kind")
-	}
-	if spec.Scope == ScopeFinding && spec.Target == "" {
-		return nil, errors.New("suppression: scope=finding requires a non-empty finding_id target")
 	}
 
 	s := &Suppression{
