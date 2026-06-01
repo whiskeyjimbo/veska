@@ -17,7 +17,7 @@ import (
 
 	"github.com/whiskeyjimbo/veska/internal/cli/mcpclient"
 	"github.com/whiskeyjimbo/veska/internal/cli/repocmd"
-	mcpinfra "github.com/whiskeyjimbo/veska/internal/infrastructure/mcp"
+	"github.com/whiskeyjimbo/veska/internal/core/protocol"
 )
 
 // FindParams bundles the inputs of RunFind so the call stays under the
@@ -178,7 +178,7 @@ func RenderNodeList(w io.Writer, resp any, jsonOut bool) error {
 // (solov2-izh6.30).
 func renderNoNodeMatches(w io.Writer, degradedReasons, indexingRepos []string) {
 	fmt.Fprintln(w, "no matches")
-	if slices.Contains(degradedReasons, mcpinfra.DegradedReasonIndexingInProgress) {
+	if slices.Contains(degradedReasons, protocol.DegradedReasonIndexingInProgress) {
 		fmt.Fprintf(w, "  hint: %d repo(s) still indexing (%s); retry shortly or rerun the relevant `veska repo add --wait`.\n",
 			len(indexingRepos), strings.Join(indexingRepos, ", "))
 	}
