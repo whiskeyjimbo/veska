@@ -34,7 +34,7 @@ developer, one machine.
 | SOLO-04 | Domain Model | Entities, ports, invariants |
 | SOLO-05 | Plugin Surface | Go interfaces with one impl each |
 | SOLO-07 | Architecture | Layering rules, package layout, composition root |
-| SOLO-08 | Data & Storage | SQLite schema, sqlite-vec index, save/promote split |
+| SOLO-08 | Data & Storage | SQLite schema, in-memory vector index, save/promote split |
 | SOLO-09 | MCP Surface | ~30 tools, naming rules, output contract |
 | SOLO-10 | Identity | One enum: `actor_kind` (`human \| agent \| system`). The whole story |
 | SOLO-11 | Pipelines | Save (in-memory) vs. promotion (SQLite + post-promotion queue) |

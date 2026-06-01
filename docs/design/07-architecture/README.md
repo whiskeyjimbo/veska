@@ -152,7 +152,7 @@ veska-v2/
         queue/                 #   post-promotion queue store
         resolver/
       vector/                  #   dual-backend VectorStorage
-                               #   (sqlite-vec default; usearch HNSW under
+                               #   (in-memory memvec default; usearch HNSW under
                                #   the hnsw_native build tag)
       embedding/
         ollama/                #   Ollama EmbeddingProvider adapter
@@ -287,7 +287,7 @@ rationale.
 | Port | Purpose | Impl |
 |---|---|---|
 | `EmbeddingStore` | Read/write content-addressed embedding bytes | `infrastructure/sqlite/embedding_store.go` |
-| `VectorIndex` | ANN search over sqlite-vec | `infrastructure/sqlite/vector_index.go` |
+| `VectorIndex` | ANN search over the in-memory memvec store (default) | `infrastructure/vector/memvec/store.go` |
 
 These are not full aggregates; they are key/value-shaped adjuncts
 to `GraphRepository`. Splitting them out keeps the embedding
