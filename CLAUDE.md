@@ -119,7 +119,7 @@ internal/
     treesitter/           <- CodeParser
     mcp/                  <- MCP server + tool families
     git/                  <- fsnotify watcher, diff reader, hook install
-  repo/                   <- repos-table registry (Add/Remove/List + git hooks)
+    repo/                 <- repos-table registry (Add/Remove/List + git hooks)
   platform/               <- cross-cutting operational concerns. Two altitudes
                              coexist here by design: zero-dep leaves imported
                              widely (config, tokenize, logrotate, crashloop,
