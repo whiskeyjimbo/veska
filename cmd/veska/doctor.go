@@ -100,6 +100,18 @@ func doctorSavingsCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:          "savings",
 		Short:        "Show inline-snippet token savings per period",
+		Long: "Show inline-snippet token savings per period (today / 7d / all-time).\n\n" +
+			"\"Savings\" is the ratio 1 - snippet_chars/file_chars: how much agent-side\n" +
+			"file-read traffic the inline snippets in eng_search_semantic results saved.\n\n" +
+			"Warmup: a period reads \"warming up\" until it has recorded at least 20\n" +
+			"eng_search_semantic calls. Below that the sample is too small to be\n" +
+			"meaningful — a single short snippet can drive the ratio negative — so only\n" +
+			"the running call count is shown, not a percentage. Once a period crosses\n" +
+			"20 calls its row switches to a percentage.\n\n" +
+			"The counter only advances on eng_search_semantic searches (not symbol/\n" +
+			"context lookups), and those come from the MCP server the daemon runs. Until\n" +
+			"an MCP-aware editor is wired up — or eng_search_semantic is called directly\n" +
+			"several times — savings stays in warmup.",
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return savingscmd.Run(savingscmd.Params{
