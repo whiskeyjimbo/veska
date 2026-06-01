@@ -6,7 +6,7 @@ version: 0.1.0
 last_reviewed: 2026-05-08
 related: [SOLO-01, SOLO-04, SOLO-11, ADR-S0001, ADR-S0014, ADR-S0015]
 verified: true
-verified_date: "2026-05-16"
+verified_date: "2026-06-01"
 ---
 
 # SOLO-08 — Data & Storage
@@ -14,8 +14,11 @@ verified_date: "2026-05-16"
 ## 1. The decision
 
 Veska Solo stores everything in **one SQLite file** at
-`~/.veska/veska.db`. Vector embeddings live in the same file via
-the `sqlite-vec` extension. There are no child processes for
+`~/.veska/veska.db`. The raw embedding bytes live in the same
+file (the `node_embeddings` table); the vector **search index**
+is held outside SQL — in process memory for the default backend,
+or in sibling `.hnsw` files for the optional usearch backend
+(§1.1, §3.3). There are no child processes for
 storage. There is no Dolt. There are no Dolt branches mirroring
 Git branches. There is no Qdrant. There is no `_workspace`
 sentinel database.
@@ -25,37 +28,43 @@ Justification, alternatives, and the open question (whether SQLite
 holds at 1M nodes / 5M edges on a laptop) are in
 [ADR-S0001](../adr/ADR-S0001-sqlite-substrate.md).
 
-### 1.1 sqlite-vec packaging and version pinning
+### 1.1 Vector backends — no runtime extension
 
-sqlite-vec is a SQLite extension loaded at runtime, not a
-library statically linked into the daemon. Packaging is part of
-the substrate decision and is committed here rather than left to
-the build system:
+The vector **search index** is not a SQLite extension and is not
+a `vec0`/`vec_nodes` virtual table. There is no `vec0.so` /
+`vec0.dylib`, no `~/.veska/lib/` extension directory, and nothing
+loaded into SQLite at runtime. Two backends, picked at startup
+([ADR-S0014](../adr/ADR-S0014-hnsw-pivot.md),
+[ADR-S0015](../adr/ADR-S0015-vec-pivot-dual-backend.md),
+[ADR-S0016](../adr/ADR-S0016-memvec-rename.md)):
 
-- **Per-platform builds.** Veska ships separate binaries for
-  `linux/amd64`, `linux/arm64`, `darwin/amd64`, `darwin/arm64`.
-  Each build embeds the matching pre-built sqlite-vec extension
-  (`vec0.so` on Linux, `vec0.dylib` on macOS) as a Go `embed.FS`
-  resource and writes it to `~/.veska/lib/vec0.<ext>` on first
-  start (or after a binary upgrade whose embedded sqlite-vec sha
-  differs from the on-disk file). The daemon loads the extension
-  from that path; no external installation is required.
-- **Version pinning.** The exact sqlite-vec git SHA is pinned in
-  `go.mod`-adjacent build metadata; binary upgrades that bump the
-  pin run as schema migrations (SOLO-08 §10) when the embedded
-  vec0 schema actually changes. Patch-level sqlite-vec upgrades
-  with no DDL change are hot-replaced in `~/.veska/lib/` on next
-  daemon start.
-- **Code signing on macOS.** The dylib is signed under the same
-  developer certificate as the daemon binary. Loading an
-  unsigned dylib at runtime would fail on Apple Silicon under
-  default Gatekeeper rules. The release pipeline notarises both
-  artifacts together.
-- **Refuse-to-start on extension mismatch.** SOLO-03 §5.8 row 2
-  ("sqlite-vec extension missing or unloadable") fires not only
-  when the file is absent but when its sha doesn't match the
-  binary's embedded sha. This catches user attempts to swap the
-  extension manually.
+- **`memory` (default, `memvec`).** A pure-Go in-memory vector
+  store with a brute-force L2 linear scan
+  (`internal/infrastructure/vector/memvec`). Zero SQL, zero
+  native libraries, nothing on disk: it is rebuilt at boot from
+  the persisted `node_embeddings` bytes. Adequate below
+  `memvec.YellowThreshold` (75k) nodes. This is the backend that
+  the abandoned asg017/sqlite-vec extension spike was *replaced
+  by* — the "sqlite-vec" name was a misnomer corrected in
+  ADR-S0016; the store never loaded an extension.
+- **`usearch` (optional, scale backend).** HNSW with float16
+  quantisation, compiled behind the `hnsw_native` build tag and
+  requiring `libusearch_c.so` on the loader path at runtime. Its
+  index persists to sibling `vec-{repoID}-{branch}-{modelID}.hnsw`
+  files plus a Go-side metadata sidecar — **not** inside
+  `veska.db`.
+
+The backend is selected by `VESKA_VECTOR_BACKEND`
+(`memory` | `usearch`; empty defaults to `memory`). An unknown
+value is a fatal startup error. The default `memory` backend has
+no native dependency and **cannot** fail to start for a missing
+library. Selecting `usearch` without the `hnsw_native` build tag
+or without `libusearch_c.so` is the one vector-backend
+refuse-to-start case: `NewVectorStorage` returns
+`vector.ErrVectorStoreUnavailable` and the daemon exits during
+wiring (SOLO-03 §5.8). There is no per-platform pre-built
+extension, no embedded SHA pin, and no code-signed dylib to
+notarise.
 
 ### 1.2 mmap address-space accounting
 
@@ -75,7 +84,7 @@ override per-pool via the `[storage]` config (CONFIG-SURFACE).
 
 ```
 ~/.veska/
-  veska.db              ← the database (SQLite + sqlite-vec)
+  veska.db              ← the database (SQLite; embedding bytes included)
   veska.db-wal          ← WAL file (managed by SQLite)
   veska.db-shm          ← shared-memory index (managed by SQLite)
   audit.jsonl            ← append-only audit log
@@ -120,7 +129,7 @@ CREATE TABLE database_meta (
 --   schema_version       e.g. "M1.0"            (matches the latest applied migration)
 --   embedder_provider    "ollama"
 --   embedder_model       e.g. "nomic-embed-text"
---   embedder_dim         "768"                  (decimal string; matches vec_nodes geometry)
+--   embedder_dim         "768"                  (decimal string; matches node_embeddings.dim)
 --   created_at           e.g. "2026-05-09T15:42:31Z"
 -- Adding a new required key is a migration that inserts the
 -- value and a daemon-side check that requires it.
@@ -264,25 +273,33 @@ CREATE TABLE suppressions (
 CREATE INDEX idx_suppressions_target ON suppressions(target, branch);
 ```
 
-### 3.3 Embeddings (sqlite-vec)
+### 3.3 Embeddings
 
-> **Amendment (vec pivot — dual-backend, 2026-05-14).** The
-> `vec_nodes`/`vec0` virtual table described below is the
-> **default** ANN backend (`VESKA_VECTOR_BACKEND=sqlite-vec`),
-> used for small workspaces. M0 measured the brute-force `vec0`
-> ceiling at ~100k nodes, and M1's evaluation spike ratified a
-> second backend: usearch HNSW with float16 quantisation
-> (`VESKA_VECTOR_BACKEND=usearch`), compiled behind the
-> `hnsw_native` build tag and requiring `libusearch_c.so` at
-> runtime. The usearch index is **not** stored in `veska.db`; it
-> persists to sibling `vec-{repoID}-{branch}-{modelID}.hnsw`
-> files plus a Go-side metadata sidecar. The decision is
-> [ADR-S0014](../adr/ADR-S0014-hnsw-pivot.md) (the pivot) and
-> [ADR-S0015](../adr/ADR-S0015-vec-pivot-dual-backend.md) (the
-> dual-backend implementation). The `node_embeddings` /
-> `node_embedding_refs` split below is unchanged and backend-
-> agnostic; only the ANN index differs between backends. OQ-S003
-> (§8) is resolved by these ADRs.
+> **Amendment (vec pivot — dual-backend, 2026-05-14; backend
+> rename 2026-06-01).** The ANN index is **not** a SQL table.
+> `veska.db` stores only the raw embedding bytes — the
+> `node_embeddings` / `node_embedding_refs` tables below, which
+> are backend-agnostic. The search index lives outside SQL and
+> differs by backend:
+>
+> - **`memory` (default, `memvec`).** A pure-Go in-memory
+>   brute-force L2 linear scan, rebuilt at boot from
+>   `node_embeddings`. Zero SQL, nothing on disk. M0 measured
+>   this brute-force ceiling at ~100k nodes; the operational
+>   threshold is `memvec.YellowThreshold` (75k).
+> - **`usearch` (optional).** HNSW + float16, behind the
+>   `hnsw_native` build tag, requiring `libusearch_c.so` at
+>   runtime. Its index persists to sibling
+>   `vec-{repoID}-{branch}-{modelID}.hnsw` files plus a Go-side
+>   metadata sidecar — **not** in `veska.db`.
+>
+> The decision is [ADR-S0014](../adr/ADR-S0014-hnsw-pivot.md)
+> (the pivot), [ADR-S0015](../adr/ADR-S0015-vec-pivot-dual-backend.md)
+> (the dual-backend implementation), and
+> [ADR-S0016](../adr/ADR-S0016-memvec-rename.md) (the backend
+> rename — the default backend was never a sqlite-vec extension;
+> the old `sqlite-vec` name/`vec0` framing was a misnomer).
+> OQ-S003 (§8) is resolved by these ADRs.
 
 ```sql
 -- Content-addressed embedding bytes.
@@ -312,15 +329,13 @@ CREATE TABLE node_embedding_refs (
 );
 CREATE INDEX idx_node_embedding_refs_state ON node_embedding_refs(state, enqueued_at);
 
--- The vec0 virtual table (sqlite-vec) for ANN search.
--- The dim is per-database, baked at `veska init` time from the
--- configured embedder's `ModelVersion()`. The example below shows
--- the default (nomic-embed-text, 768); a database initialised
--- against a 1536-dim model would carry FLOAT[1536] here.
-CREATE VIRTUAL TABLE vec_nodes USING vec0(
-    content_hash TEXT PRIMARY KEY,
-    embedding    FLOAT[<dim>]
-);
+-- (No ANN virtual table.) The vector search index is built
+-- outside SQL from the `node_embeddings` bytes above: in process
+-- memory for the default `memory`/memvec backend, or in sibling
+-- .hnsw files for the optional `usearch` backend. The embedding
+-- dim is per-database, baked at `veska init` time from the
+-- configured embedder's `ModelVersion()` and recorded in
+-- `database_meta.embedder_dim` (default nomic-embed-text, 768).
 
 -- Lexical fallback (m3.03.2). Migration 0007 supersedes the original
 -- single `node_fts` table (migration 0004) with a TWO-INDEX design:
@@ -405,12 +420,14 @@ caller can render the degraded mode explicitly.
 
 The split (`node_embeddings` content-addressed + `node_embedding_refs`
 per-node) is deliberate: rename and content-equivalent moves don't
-re-embed. The `vec0` table is just the ANN index over the
-content-addressed bytes.
+re-embed. The ANN index (in-memory memvec, or usearch `.hnsw`
+files) is just a search structure over these content-addressed
+bytes.
 
-**Per-database dim.** The vec0 dimension is fixed for the life of
-a database, baked at `veska init` time from the embedder's
-`ModelVersion()`. `database_meta` records the provider/model/dim;
+**Per-database dim.** The embedding dimension is fixed for the
+life of a database, baked at `veska init` time from the
+embedder's `ModelVersion()`. `database_meta` records the
+provider/model/dim;
 `node_embeddings.dim` per-row is the sanity check that catches
 stale rows after a swap. Boot refuses on mismatch with
 `ErrEmbedderMismatch`. Swaps go through `veska embedder swap`
@@ -655,8 +672,8 @@ This means each branch carries the cost of the symbols it has
 promoted, not the union of all branches. Two branches that share
 content of `Foo` carry **two `nodes` rows** (one per branch); the
 shared content is deduplicated only in the embedding tables
-(`node_embeddings` is content-addressed; `vec_nodes` keys on
-`content_hash`). Embeddings cost stays roughly flat across
+(`node_embeddings` is content-addressed; `node_embedding_refs`
+keys on `content_hash`). Embeddings cost stays roughly flat across
 branches; nodes/edges scale with `(symbols_touched × branches)`.
 
 The actual storage cost for a multi-branch population is unknown
@@ -805,7 +822,7 @@ the daemon may be down across user-side commits, in which case
 | Embedding goroutine crashes | Daemon supervisor restarts it; pending refs stay `pending`; semantic search returns `degraded_reasons: ['embedding_pending']`. |
 | Disk full | Promotion fails; hook returns non-zero; daemon refuses new MCP writes until `veska doctor disk` reports OK. The daemon also (a) checkpoints WAL aggressively (`PRAGMA wal_checkpoint(TRUNCATE)`) to release any pending pages, (b) rotates `audit.jsonl` and the daemon log to their retained-set sizes, and (c) refuses to write new pre-migration auto-snapshots until pressure clears (an old pre-migration snapshot is preserved; a new one would have nowhere to land). Backups are not auto-pruned — the user owns retention there (§9.5). |
 | WAL grows unboundedly | Daemon checkpoints WAL on idle (no writes for 5s). `PRAGMA wal_autocheckpoint = 1000` (pages). |
-| sqlite-vec extension missing | Daemon fails to start with a clear error pointing at install instructions. No silent degradation. |
+| `usearch` backend selected but native library missing | Only when `VESKA_VECTOR_BACKEND=usearch` and the binary lacks the `hnsw_native` tag / `libusearch_c.so` is absent: `NewVectorStorage` returns `vector.ErrVectorStoreUnavailable` and the daemon fails to start (SOLO-03 §5.8). The default `memory` backend has no native dependency and never hits this path. |
 
 ### 6.1 Cross-repo edges are not in `edges`
 
@@ -1125,7 +1142,7 @@ runner hashes it at apply time.
 | `current < min_schema` | Refuse start. Stderr: "binary requires schema ≥ M, on-disk schema is N. Downgrade the binary to a version with min_schema ≤ N, or restore from a newer backup." Exit 78 (matches the crash-loop breaker exit code; the supervisor stops retrying). |
 | `min_schema ≤ current < max_schema` | Run pending migrations N+1 .. max_schema, in order, each in its own transaction, with the auto-snapshot taken before the first one. |
 | `current > max_schema` | Refuse start. Stderr: "binary requires schema ≤ M, on-disk schema is N. Upgrade the binary, or restore from a backup taken before the upgrade that produced schema N." Exit 78. |
-| Migration N fails (constraint, syntax, sqlite-vec issue) | Transaction rolls back; on-disk schema unchanged at N-1. Daemon refuses start with stderr: "migration N failed: <error>; on-disk schema is N-1; the pre-migration snapshot at <path> is verified and ready for restore. Either fix the migration and restart, or downgrade the binary." Exit 78. |
+| Migration N fails (constraint, syntax, FK violation) | Transaction rolls back; on-disk schema unchanged at N-1. Daemon refuses start with stderr: "migration N failed: <error>; on-disk schema is N-1; the pre-migration snapshot at <path> is verified and ready for restore. Either fix the migration and restart, or downgrade the binary." Exit 78. |
 | Daemon killed mid-migration (SIGKILL, power loss) | SQLite WAL replay returns the database to its pre-migration state on next open. Treated identically to "migration N failed" above. |
 | Auto-snapshot fails before migration | Refuse start without running the migration. Stderr names the snapshot error and the recovery (free disk, fix permissions). Exit 78. |
 | `migration_sha` recorded for an applied version differs from the binary's embedded migration file | Refuse start. Stderr: "migration M was applied with sha <recorded>, binary embeds sha <embedded>. The applied migration may have been edited after the fact; investigate before continuing." Exit 78. |

@@ -6,7 +6,7 @@ version: 0.1.0
 last_reviewed: 2026-05-09
 related: [SOLO-03, SOLO-08, SOLO-13, SOLO-16]
 verified: true
-verified_date: "2026-05-17"
+verified_date: "2026-06-01"
 ---
 
 # SOLO-17 — Lifecycle and Operations
@@ -203,7 +203,8 @@ shape.
 ### 3.4 Crash-loop protection during upgrade
 
 If the new binary crashes on start (a corrupt migration file,
-an incompatible OS, a missing sqlite-vec extension), the
+an incompatible OS, or — for a `usearch` build — a missing
+`libusearch_c.so`), the
 supervisor restarts it. The daemon's crash-loop breaker
 (SOLO-03 §5.6) trips after 5 exits in 10 minutes; the
 supervisor halts; `veska doctor reset-crash-loop` clears the
@@ -229,10 +230,16 @@ veska-backup-<repo-host>-<ts>.tar.gz
 └── repos.json                        # registered repos: id, root_path, active_branch
 ```
 
-`veska.db` includes the `vec_nodes` virtual-table data because
-sqlite-vec stores its shadow tables inside the same SQLite file
-(SOLO-08 §3.3). One file means one snapshot; the backup story
-is intentionally that simple.
+`veska.db` includes the raw embedding bytes (`node_embeddings`,
+SOLO-08 §3.3). The vector **search index** is not stored in
+`veska.db`: for the default `memory`/`memvec` backend it is
+in-memory and rebuilt from `node_embeddings` on restore, so a
+single-file snapshot is complete. The optional `usearch` backend
+also persists its index to sibling `.hnsw` files outside
+`veska.db`; those are likewise rebuildable from `node_embeddings`
+(re-embedding is not required — the bytes are in the snapshot),
+so the one-file backup remains sufficient and the backup story
+stays intentionally simple.
 
 ### 4.2 The backup transaction
 

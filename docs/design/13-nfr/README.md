@@ -6,7 +6,7 @@ version: 0.1.0
 last_reviewed: 2026-05-08
 related: [SOLO-01, SOLO-08, SOLO-11, SOLO-14]
 verified: true
-verified_date: "2026-05-16"
+verified_date: "2026-06-01"
 ---
 
 # SOLO-13 — Non-Functional Requirements
@@ -62,7 +62,7 @@ The metric set is the spec, not a starting point. Twelve series:
 | `veska_writer_pool_wait_seconds` | histogram | `pool` | Time MCP writes spent waiting for an available connection in `writeDB.hot` / `writeDB.embed`. |
 | `veska_mcp_requests_total` | counter | `tool`, `result` | MCP tool call count. `result` is `ok`, `error`, or `degraded`. |
 | `veska_mcp_request_duration_seconds` | histogram | `tool`, `result` | MCP tool handler duration. |
-| `veska_vector_query_duration_seconds` | histogram | `kind` (`semantic_search` \| `find_similar_symbols`) | sqlite-vec ANN query latency. The number that decides whether vec0 is still on-budget at the current node count (ADR-S0001). |
+| `veska_vector_query_duration_seconds` | histogram | `kind` (`semantic_search` \| `find_similar_symbols`) | Vector-backend ANN query latency (in-memory `memvec` or usearch). The number that decides whether the active backend is still on-budget at the current node count; for the default `memvec` linear scan this tracks the brute-force ceiling that motivated the usearch pivot (ADR-S0014). |
 | `veska_daemon_memory_rss_bytes` | gauge | — | Process RSS from `/proc/self/status`. |
 | `veska_daemon_uptime_seconds` | counter | — | Seconds since daemon start. |
 | `veska_error_count` | counter | `kind` | Errors by kind (`promotion`, `embed`, `mcp`, `parse`, `watcher`). |
@@ -538,7 +538,7 @@ veska-doctor-bundle-2026-05-09T18-42-31Z.tar.gz
 │   └── audit.jsonl.tail           # last 5,000 lines of audit.jsonl, redacted (see below)
 └── env/
     ├── go-version.txt             # `go version` of the daemon binary
-    ├── sqlite-version.txt         # SQLite + sqlite-vec versions
+    ├── sqlite-version.txt         # SQLite version; vector backend + usearch lib version if usearch
     ├── ollama-version.txt         # `ollama --version` if reachable
     └── platform.txt               # uname -a / sw_vers
 ```
@@ -765,7 +765,7 @@ not pre-author an incremental-parse ADR before the data exists.
 | In-tx synchronous review checks (dead-code + secrets + vuln + contract drift) | budget *included* in the §3.1 hook-return row, not additive | unmeasured | M1 |
 | Embedding throughput on CPU Ollama | depends heavily on model + CPU + concurrent load — varies from seconds (small commit, idle laptop, quantised model) to hours (refactor commit, busy laptop, full nomic-embed-text); refactor-commit p95 unmeasured | unmeasured | M3 measures, publishes a matrix (model × CPU class × commit size) rather than picking one number |
 | Auto-link drain after 10k-edge commit | < 60s | unmeasured | M3 |
-| Cold daemon startup (warm sqlite-vec cache) | < 2s | unmeasured | M1 |
+| Cold daemon startup (incl. building the in-memory `memvec` index from `node_embeddings`) | < 2s | unmeasured | M1 |
 | Wake-reconcile sweep on suspend/wake (per repo, working tree only) | < 500ms p95 typical repo; < 5s for working trees with > 50k tracked files | unmeasured | M1 |
 | Wake-reconcile total (N registered repos, **parallel** across repos, capped at `[watcher].wake_concurrency` = #cores / 2) | dominated by the slowest repo's sweep, not the sum; MCP reads against promoted state serve concurrently from `readDB` from t=0 with `degraded_reasons: ['wake_reconciling']` | unmeasured | M1 |
 
@@ -1029,12 +1029,12 @@ drafts is replaced by `{"code": "post_promotion_queue_deferred",
 | post-promotion queue at high-water with embedder paused (formerly a documented deadlock) | Promotion proceeds; new `embed` rows insert with `state='deferred'` instead of blocking the promotion. `degraded_reasons: ['post_promotion_queue_deferred:embed:<count>']` until depth drops below low-water. (SOLO-08 §3.4.) |
 | Ollama model missing | Daemon refuses to start the embedder worker; `veska doctor embedder` reports the gap. Other tools function. |
 | Disk full | Promotion fails with a clear error; hook returns non-zero; daemon refuses new MCP writes (`degraded_reasons: ['disk_full']`) until `veska doctor storage` reports OK. |
-| sqlite-vec extension missing | **Daemon refuses to start.** Loud failure with install instructions. We do not silently degrade core search. |
+| `usearch` backend selected but native library missing | **Daemon refuses to start** (`vector.ErrVectorStoreUnavailable`) — only when `VESKA_VECTOR_BACKEND=usearch` and the `hnsw_native` tag / `libusearch_c.so` is absent. Loud failure, not silent degradation. The default `memory` backend has no native dependency and cannot hit this. |
 | SQLite database locked by an external writer | `BEGIN IMMEDIATE` blocks until `busy_timeout` expires (5s hot, 30s embed); op then fails. In-process pools (`writeDB.hot`, `writeDB.embed`) serialize via SQLite's lock without contending — this row fires only when the user opens an external `sqlite3` connection or similar (SOLO-11 §10, ADR-S0011). |
 | MCP write tool's `max_wait_ms` deadline expires waiting for `writeDB.hot` | Tool returns `ErrBusy` with `data.context.cause = "seal_in_flight"` (carrying `promotion_id`, `eta_ms`) or `"pool_wait"` (carrying `wait_count`, `wait_duration_ms`, `eta_ms` from `sql.DBStats()`). Surface in `veska doctor pipelines` as `writer_pool_saturated`. (SOLO-09 §4.6.) |
 | Memory pressure (RSS > 2 GiB soft cap) | Goroutine count caps; embedder worker pauses; tree-sitter reparse coalesces. **MCP does not refuse requests.** Surface in `veska doctor`. |
 | RSS > 4 GiB hard cap | Daemon logs and exits non-78; supervisor restarts; counts against the crash-loop breaker (SOLO-03 §5.6). After 5 such exits in 10 min the next start hits SOLO-03 §5.8 row 1 (exit 78, supervisor halts); user clears with `veska doctor reset-crash-loop`. |
-| Daemon refuses to start (sqlite-vec missing, schema mismatch, ErrEmbedderMismatch, NFS, etc.) | Exit 78 at start; supervisor halts. SOLO-03 §5.8 is the full matrix. None of these increment the breaker. |
+| Daemon refuses to start (usearch native library missing, schema mismatch, ErrEmbedderMismatch, NFS, etc.) | Exit 78 at start; supervisor halts. SOLO-03 §5.8 is the full matrix. None of these increment the breaker. |
 | Vuln-source feed timeout | Cached findings remain valid; refresh fails with `degraded_reasons: ['vuln_feed_unreachable']` next surface. |
 | LLM generator (review pipeline) timeout | Review job marked failed in `post_promotion_queue`; retries up to 3 with backoff, then a `review-pipeline-failure` finding (severity `high`) is emitted; the post-promotion queue row stays `failed` until that finding closes through the human-action gate (ADR-S0004). Promoted graph unaffected. |
 | Review pipeline daily token cap reached | Pause new review jobs; queued rows stay `pending`; write one line to `audit.jsonl` describing the pause (cap, spent, resets_at). Surface in `veska doctor pipelines`. Resume at local-midnight automatically — no Finding, no human-action gate. (SOLO-11 §3.1.) |
