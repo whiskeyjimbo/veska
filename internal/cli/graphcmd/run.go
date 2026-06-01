@@ -53,18 +53,44 @@ func RunCalls(ctx context.Context, p CallsParams) error {
 	return RenderGraphChain(ctx, p.Out, resp, p.JSONOut)
 }
 
+// BlastMode selects which blast-radius seed RunBlast uses: a single symbol
+// (default), the staged overlay (--dirty), or the working-tree diff (--diff).
+// The three back onto distinct MCP tools that all return the same
+// BlastResponse shape, so the renderer is shared. solov2-yh5a.
+type BlastMode int
+
+const (
+	BlastSymbol BlastMode = iota // seed from Selector via eng_get_blast_radius
+	BlastDirty                   // staged overlay via eng_get_dirty_blast_radius
+	BlastDiff                    // working-tree vs HEAD via eng_get_diff_blast_radius
+)
+
 // BlastParams bundles the inputs of RunBlast.
 type BlastParams struct {
-	Selector  string
+	Mode      BlastMode
+	Selector  string // required when Mode == BlastSymbol; ignored otherwise
 	RepoID    string
 	Direction string // raw flag value; normalized internally
 	JSONOut   bool
 	Out       io.Writer
 }
 
-// RunBlast wraps eng_get_blast_radius.
+// RunBlast wraps the blast-radius tool family. The seed mode picks the tool;
+// eng_get_dirty_blast_radius and eng_get_diff_blast_radius take no selector
+// (the staged overlay / working-tree diff IS the seed set) and resolve the
+// repo from repo_id or the connecting client's cwd, exactly like the
+// single-symbol path.
 func RunBlast(ctx context.Context, p BlastParams) error {
-	params := selectorParams(p.Selector)
+	var params map[string]any
+	var tool string
+	switch p.Mode {
+	case BlastDirty:
+		params, tool = map[string]any{}, "eng_get_dirty_blast_radius"
+	case BlastDiff:
+		params, tool = map[string]any{}, "eng_get_diff_blast_radius"
+	default:
+		params, tool = selectorParams(p.Selector), "eng_get_blast_radius"
+	}
 	if p.RepoID != "" {
 		params["repo_id"] = p.RepoID
 	}
@@ -72,8 +98,61 @@ func RunBlast(ctx context.Context, p BlastParams) error {
 		params["direction"] = NormalizeDirection(p.Direction)
 	}
 	var resp json.RawMessage
-	if err := mcpclient.Call(ctx, "eng_get_blast_radius", params, &resp); err != nil {
+	if err := mcpclient.Call(ctx, tool, params, &resp); err != nil {
 		return fmt.Errorf("blast: %w", err)
+	}
+	return RenderGraphChain(ctx, p.Out, resp, p.JSONOut)
+}
+
+// NodeParams bundles the inputs of RunNode.
+type NodeParams struct {
+	NodeID  string
+	RepoID  string
+	Branch  string
+	JSONOut bool
+	Out     io.Writer
+}
+
+// RunNode wraps eng_get_node. The response is a GraphResponse whose {nodes}
+// envelope is rendered by the shared RenderGraphChain (no edges/cross-repo on
+// a single-node lookup, so it degrades to a one-row node table).
+func RunNode(ctx context.Context, p NodeParams) error {
+	params := map[string]any{"node_id": p.NodeID}
+	if p.RepoID != "" {
+		params["repo_id"] = p.RepoID
+	}
+	if p.Branch != "" {
+		params["branch"] = p.Branch
+	}
+	var resp json.RawMessage
+	if err := mcpclient.Call(ctx, "eng_get_node", params, &resp); err != nil {
+		return fmt.Errorf("node: %w", err)
+	}
+	return RenderGraphChain(ctx, p.Out, resp, p.JSONOut)
+}
+
+// FileNodesParams bundles the inputs of RunFileNodes.
+type FileNodesParams struct {
+	FilePath string
+	RepoID   string
+	Branch   string
+	JSONOut  bool
+	Out      io.Writer
+}
+
+// RunFileNodes wraps eng_get_file_nodes, returning every node defined in a
+// single file. Like RunNode it renders the GraphResponse via RenderGraphChain.
+func RunFileNodes(ctx context.Context, p FileNodesParams) error {
+	params := map[string]any{"file_path": p.FilePath}
+	if p.RepoID != "" {
+		params["repo_id"] = p.RepoID
+	}
+	if p.Branch != "" {
+		params["branch"] = p.Branch
+	}
+	var resp json.RawMessage
+	if err := mcpclient.Call(ctx, "eng_get_file_nodes", params, &resp); err != nil {
+		return fmt.Errorf("file-nodes: %w", err)
 	}
 	return RenderGraphChain(ctx, p.Out, resp, p.JSONOut)
 }

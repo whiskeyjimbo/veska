@@ -153,7 +153,7 @@ func RegisterGraphTools(r *Registry, graph ports.GraphReader, staging *staging.A
 	resolve := cfg.resolve
 	r.MustRegister(ToolSpec{
 		Name:            "eng_find_symbol",
-		Description:     "Look up nodes by exact symbol name. Use when you already know the identifier (e.g. 'ParseConfig'). Unqualified names also match — 'Run' finds Server.Run, Command.Run, etc., with exact matches first. Returns a stable node_id you can feed to eng_get_call_chain, eng_get_blast_radius, eng_get_context_pack, eng_search_similar without another lookup. Prefer this over eng_search_semantic for known-identifier queries — it's deterministic and exact.",
+		Description:     "Look up nodes by exact symbol name. Use when you already know the identifier (e.g. 'ParseConfig'). " + DescFindSymbolMatching + " Returns a stable node_id you can feed to eng_get_call_chain, eng_get_blast_radius, eng_get_context_pack, eng_search_similar without another lookup. Prefer this over eng_search_semantic for known-identifier queries — it's deterministic and exact.",
 		IncludesStaging: true,
 		InputSchema:     findSymbolInputSchema,
 		Handler:         makeFindSymbolHandler(graph, staging, cfg.repos, cfg.scans),
@@ -164,10 +164,6 @@ func RegisterGraphTools(r *Registry, graph ports.GraphReader, staging *staging.A
 		IncludesStaging: true,
 		InputSchema:     getNodeInputSchema,
 		Handler:         makeGetNodeHandler(graph, staging, cfg.repos),
-
-		CLIExempt: ExemptDeferred,
-
-		ExemptReason: "CLI wrapper deferred (see follow-up tracker referenced in commit history).",
 	})
 	r.MustRegister(ToolSpec{
 		Name:            "eng_get_call_chain",
@@ -182,9 +178,5 @@ func RegisterGraphTools(r *Registry, graph ports.GraphReader, staging *staging.A
 		IncludesStaging: true,
 		InputSchema:     getFileNodesInputSchema,
 		Handler:         makeGetFileNodesHandler(graph, staging, cfg.repos),
-
-		CLIExempt: ExemptDeferred,
-
-		ExemptReason: "CLI wrapper deferred (see follow-up tracker referenced in commit history).",
 	})
 }

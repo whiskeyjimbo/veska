@@ -39,10 +39,6 @@ func RegisterWikiTools(r *Registry, svc *wiki.HotZoneService, repoRoot RepoRootF
 		Description: "Top-N files ranked by change risk = recent-change-frequency × blast-radius. Use during PR review or onboarding to spot the load-bearing files where a small edit fans out the most.",
 		InputSchema: hotZoneInputSchema,
 		Handler:     makeHotZoneHandler(svc, repoRoot, repos),
-
-		CLIExempt: ExemptDeferred,
-
-		ExemptReason: "CLI wrapper deferred (see follow-up tracker referenced in commit history).",
 	})
 }
 
@@ -65,10 +61,6 @@ func RegisterEntryPointsTool(r *Registry, svc *wiki.EntryPointsService, repos ap
 		Description: "High-fan-in symbols ranked by inbound call count — the natural entry points a newcomer (or agent) should read first to understand the repo. Exported, tested symbols rank above unexported untested ones at the same inbound count.",
 		InputSchema: entryPointsInputSchema,
 		Handler:     makeEntryPointsHandler(svc, repos),
-
-		CLIExempt: ExemptDeferred,
-
-		ExemptReason: "CLI wrapper deferred (see follow-up tracker referenced in commit history).",
 	})
 }
 
