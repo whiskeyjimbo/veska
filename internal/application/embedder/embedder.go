@@ -16,7 +16,6 @@ package embedder
 import (
 	"context"
 	"crypto/sha256"
-	"encoding/binary"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -462,7 +461,7 @@ func (w *Worker) tick(ctx context.Context) {
 		existing, cached := inFlight[p.contentHash]
 		if !cached {
 			l2Normalize(vec)
-			blob := encodeFloat32LE(vec)
+			blob := veccodec.EncodeFloat32LE(vec)
 			if err := w.refs.MarkReady(ctx, p.ref.NodeID, p.contentHash, modelID, len(vec), blob, now); err != nil {
 				continue
 			}
@@ -521,13 +520,4 @@ func l2Normalize(vec []float32) {
 	}
 }
 
-// encodeFloat32LE returns the little-endian byte representation of vec.
-// Stored in node_embeddings.embedding as a BLOB; readers reverse this.
-func encodeFloat32LE(vec []float32) []byte {
-	out := make([]byte, 4*len(vec))
-	for i, f := range vec {
-		binary.LittleEndian.PutUint32(out[i*4:], math.Float32bits(f))
-	}
-	return out
-}
 
