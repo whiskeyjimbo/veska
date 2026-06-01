@@ -74,17 +74,51 @@ type CloneStore interface {
 	ClonedNodes(ctx context.Context, repoID, branch string, excludeKinds []string) ([]ClonedNode, error)
 }
 
-// DefaultNearThreshold is the minimum SIMILAR_TO edge score for the near-dup
-// view when the caller supplies none.
+// DefaultNearThreshold is the near-dup minimum score used for an embedder with
+// no measured calibration in calibratedNearThreshold. It equals the model2vec
+// value — the default embedder in a normal build — so the common case is
+// calibrated even via this fallback.
+const DefaultNearThreshold float32 = 0.68
+
+// calibratedNearThreshold maps an elected embedder's ModelID to a measured
+// near-dup minimum score (solov2-md3n; harness in tools/loadtest/neardup).
 //
-// PROVISIONAL — not yet measured. It is deliberately set well above autolink's
-// DefaultThreshold (0.60, the "merely related" cutoff in the same 1/(1+L2^2)
-// score space) because near-duplicates are near-IDENTICAL, not merely related.
-// A proper value needs a fixture measurement like the gate-3 sweep that tuned
-// 0.60 (solov2-d5z/uug); until that lands, the only guarantee this constant
-// carries is the relational one — near-dup threshold > autolink related
-// threshold. Callers wanting precision should pass an explicit min_score.
-const DefaultNearThreshold float32 = 0.80
+// Each value is HIGH-PRECISION by design: set at/just above that embedder's
+// "related" (merely-same-domain) score band, so genuinely-distinct functions
+// are not surfaced as duplicates — trading recall (the weakest near-dups fall
+// below it) for a quiet, low-false-positive findings surface.
+//
+// Critically, the values are NOT comparable across embedders: similarity
+// scores live in per-model spaces ([[embedder-architecture]]). The measurement
+// showed near-dup and "related" distributions OVERLAP for every embedder (no
+// clean separator), and that one global constant cannot serve all — 0.80 (the
+// old provisional) returned almost nothing on model2vec yet leaked unrelated
+// pairs on nomic. So the default is selected by elected ModelID; callers
+// wanting different recall pass an explicit min_score.
+//
+// Measured on a small curated corpus with some shared-skeleton contamination —
+// treat as first calibration points, not exact gates.
+var calibratedNearThreshold = map[string]float32{
+	// near-dup median 0.69 vs related max 0.68 — separable at high precision.
+	"model2vec(potion-code-16M)": 0.68,
+	// scores compress high (near-dup median 0.84, related p90 0.80, unrelated
+	// max 0.82); 0.85 clears the related/unrelated bands.
+	"nomic-embed-text": 0.85,
+	// hash-ngram: bands are INVERTED (near-dup median 0.56 < related max 0.68),
+	// so no threshold separates well; 0.70 is high-precision/near-zero-recall.
+	// static-v2 is a poor fit for near-dup — prefer model2vec.
+	"veska-static-v2": 0.70,
+}
+
+// NearThresholdFor returns the calibrated near-dup minimum score for an elected
+// embedder ModelID, falling back to DefaultNearThreshold for an unknown or
+// empty ID.
+func NearThresholdFor(modelID string) float32 {
+	if v, ok := calibratedNearThreshold[modelID]; ok {
+		return v
+	}
+	return DefaultNearThreshold
+}
 
 // SimilarEdge is one persisted SIMILAR_TO edge whose score met the near-dup
 // threshold, with both endpoints' metadata already hydrated by the store so the
@@ -127,20 +161,24 @@ var ErrMissingDependency = errors.New("duplicates: missing required dependency")
 // near-duplicate clusters (thresholded SIMILAR_TO edges). The zero value is not
 // usable; construct with NewFinder.
 type Finder struct {
-	clones CloneStore
-	near   NearStore
+	clones     CloneStore
+	near       NearStore
+	embedderID string // elected embedder ModelID; selects the calibrated near-dup default
 }
 
 // NewFinder constructs a Finder. Both stores are required: a nil dependency
-// yields an error wrapping ErrMissingDependency and a nil *Finder.
-func NewFinder(clones CloneStore, near NearStore) (*Finder, error) {
+// yields an error wrapping ErrMissingDependency and a nil *Finder. embedderID
+// is the elected embedder's ModelID (e.g. "model2vec(potion-code-16M)"); it
+// selects the calibrated near-dup default via NearThresholdFor. An empty ID
+// falls back to DefaultNearThreshold.
+func NewFinder(clones CloneStore, near NearStore, embedderID string) (*Finder, error) {
 	if clones == nil {
 		return nil, fmt.Errorf("duplicates.NewFinder: clone store is nil: %w", ErrMissingDependency)
 	}
 	if near == nil {
 		return nil, fmt.Errorf("duplicates.NewFinder: near store is nil: %w", ErrMissingDependency)
 	}
-	return &Finder{clones: clones, near: near}, nil
+	return &Finder{clones: clones, near: near, embedderID: embedderID}, nil
 }
 
 // ExactClones returns the content_hash clone groups in (repoID, branch),
@@ -159,7 +197,8 @@ func (f *Finder) ExactClones(ctx context.Context, repoID, branch string) ([]Clon
 
 // NearDuplicates returns near-identical clusters: connected components of
 // SIMILAR_TO edges whose score >= minScore. A non-positive minScore falls back
-// to DefaultNearThreshold. Every returned cluster has Size >= 2 (each edge
+// to the calibrated default for this Finder's elected embedder
+// (NearThresholdFor). Every returned cluster has Size >= 2 (each edge
 // contributes two members). It reads only edges autolink already persisted —
 // no new similarity sweep.
 //
@@ -168,7 +207,7 @@ func (f *Finder) ExactClones(ctx context.Context, repoID, branch string) ([]Clon
 // members within a cluster by (FilePath, LineStart).
 func (f *Finder) NearDuplicates(ctx context.Context, repoID, branch string, minScore float32) ([]NearCluster, error) {
 	if minScore <= 0 {
-		minScore = DefaultNearThreshold
+		minScore = NearThresholdFor(f.embedderID)
 	}
 	edges, err := f.near.SimilarEdges(ctx, repoID, branch, minScore, ExcludedKinds)
 	if err != nil {

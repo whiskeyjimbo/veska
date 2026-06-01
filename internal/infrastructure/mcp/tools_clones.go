@@ -37,7 +37,7 @@ var findClonesInputSchema = []byte(`{
     "repo_id":   {"type": "string", "description": "Repo to scan. Resolved from cwd when omitted."},
     "branch":    {"type": "string", "description": "Branch to scan. Defaults to the repo's active branch."},
     "mode":      {"type": "string", "enum": ["exact", "near"], "description": "exact (default): byte-identical clones via content_hash, populates 'groups'. near: fuzzy clusters from thresholded SIMILAR_TO edges, populates 'clusters'."},
-    "min_score": {"type": "number", "description": "near mode only: minimum SIMILAR_TO edge score (higher = more similar). Omit to use the provisional default, which sits above auto-link's related threshold."},
+    "min_score": {"type": "number", "description": "near mode only: minimum SIMILAR_TO edge score (higher = more similar). Omit to use the default calibrated for the elected embedder (model spaces differ; near-dup and 'related' bands overlap, so this is a high-precision/partial-recall knob). Lower it for more recall."},
     "cwd":       {"type": "string", "description": "Working directory used to resolve the active repo when repo_id is omitted."}
   }
 }`)

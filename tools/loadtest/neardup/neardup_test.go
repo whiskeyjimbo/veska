@@ -34,6 +34,7 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/core/domain"
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/embedding/model2vec"
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/embedding/ollama"
+	embedstatic "github.com/whiskeyjimbo/veska/internal/infrastructure/embedding/static"
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/vector"
 )
 
@@ -93,6 +94,15 @@ func TestNearDupThreshold(t *testing.T) {
 // gate-3 continuity when Ollama is up.
 func availableEmbedders(t *testing.T) map[string]embedder {
 	out := map[string]embedder{}
+
+	// static-v2: the zero-install fallback default (elected when model2vec is
+	// neither installed nor embedded — i.e. a thin build with no model). Always
+	// in-binary, so always measured.
+	if p, err := embedstatic.New(); err == nil {
+		out["static/"+p.ModelID()] = p
+	} else {
+		t.Logf("static-v2 unavailable (%v) — skipping", err)
+	}
 
 	if p, ok := model2vec.Embedded(); ok {
 		out["model2vec/"+p.ModelID()] = p
