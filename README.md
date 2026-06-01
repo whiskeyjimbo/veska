@@ -35,13 +35,17 @@ they reason from the same structural ground truth instead of guessing.
 - **Cross-actor attribution.** A single `actor_kind: human | agent | system`
   enum distinguishes who changed what in the audit log.
 
-## Process topology — three binaries
+## Process topology — one binary, three personalities
 
-| Binary | Role |
+`make build` produces a single binary at `bin/veska`; `bin/veska-daemon` and
+`bin/veska-mcp` are symlinks to it. The argv[0] dispatcher in
+`cmd/veska/main.go` routes each invocation into its own package.
+
+| Invocation | Role |
 |---|---|
 | `veska` | CLI — `init`, `repo`, `reindex`, `service`, `doctor`, `backup`, `wiki`, … Run `veska --help` for the full list. |
-| `veska-daemon` | Long-running process — owns the SQLite store, the fsnotify watcher, the embedder, and the post-promotion queue. Composition root: `cmd/veska-daemon/wire.go`. |
-| `veska-mcp` | Thin stdio shim proxying an editor's MCP connection to the daemon's Unix socket. |
+| `veska-daemon` (symlink) | Long-running process — owns the SQLite store, the fsnotify watcher, the embedder, and the post-promotion queue. Composition root: `internal/cli/daemon/wire.go`. |
+| `veska-mcp` (symlink) | Thin stdio shim proxying an editor's MCP connection to the daemon's Unix socket. Routes into `internal/cli/mcp`. |
 
 ## Requirements
 
@@ -290,30 +294,33 @@ comparable.
 ## Architecture
 
 ```
-cmd/                  the three binaries
+cmd/veska/            single binary entry point; argv[0] dispatcher in main.go
 internal/
   core/
     domain/           pure entities: Node, Edge, Graph, Task, Finding
     ports/            interface contracts (GraphStorage, VectorStorage, VulnSource, …)
   application/        use-case services: ingester, promoter, embedder, checks, review, wiki
+  cli/                composition roots: daemon/wire.go and the mcp stdio shim
   infrastructure/     adapters: sqlite, vector, embedding/{model2vec,static,ollama,elect}, treesitter, mcp, git
   repo/               repos-table registry
+  platform/           cross-cutting operational concerns (config, doctor, health, …)
 docs/                 design set (SOLO-NN sections), milestones, operations runbooks
 ```
 
 ## MCP tools
 
-The daemon exposes 31 tools over a Unix-socket JSON-RPC server (forwarded to
+The daemon exposes 36 tools over a Unix-socket JSON-RPC server (forwarded to
 editors by `veska-mcp`). Tool names follow `eng_<verb>_<object>`. Quick map:
 
 | Family | Tools |
 |---|---|
 | Admin | `eng_get_status`, `eng_get_config`, `eng_get_current_repo`, `eng_get_repo`, `eng_list_repos` |
-| Repo lifecycle | `eng_add_repo`, `eng_remove_repo`, `eng_promote_repo` |
+| Repo lifecycle | `eng_add_repo`, `eng_remove_repo`, `eng_promote_repo`, `eng_reindex_repo`, `eng_set_repo_alias`, `eng_remove_repo_alias` |
 | Graph | `eng_find_symbol`, `eng_get_node`, `eng_get_file_nodes`, `eng_get_call_chain` |
-| Search | `eng_search_semantic`, `eng_search_similar` |
+| Search | `eng_search_semantic`, `eng_search_similar`, `eng_find_related` (semantic neighbours of the code at a `file_path`+`line`) |
 | Blast radius | `eng_get_blast_radius`, `eng_get_diff_blast_radius`, `eng_get_dirty_blast_radius` |
 | Context | `eng_get_context_pack`, `eng_find_changed_symbols` (takes `ref_a`/`ref_b` or aliases `base`/`head`; defaults to `HEAD~1..HEAD`; chunks filtered, comment-only diffs surface `non_symbol_changes_only` in `degraded_reasons`) |
+| Dependencies | `eng_list_dependencies` (external modules the repo CALLS into, ranked by call-site count) |
 | Misc | `eng_find_owner`, `eng_find_todos` |
 | Findings | `eng_list_findings`, `eng_get_finding`, `eng_close_finding`, `eng_reopen_finding` |
 | Suppressions | `eng_list_suppressions`, `eng_get_suppression`, `eng_suppress_finding`, `eng_close_suppression` |
