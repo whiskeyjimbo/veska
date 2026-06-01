@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -392,6 +393,98 @@ func TestStart_WakeGapWallClock(t *testing.T) {
 		}
 	case <-time.After(2 * time.Second):
 		t.Fatal("no sweep on wall-clock gap with non-monotonic clock")
+	}
+}
+
+// TestSeed_FirstWakeDetectsChange verifies that Seed establishes a baseline so
+// the FIRST wake sweep reports a file changed since Seed. Without seeding, the
+// first sweep only populates the map and detects nothing (the no-op first wake
+// that solov2-w2r8's review flagged).
+func TestSeed_FirstWakeDetectsChange(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "seeded.go")
+	if err := os.WriteFile(path, []byte("v1"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	var mu sync.Mutex
+	var called []string
+	handler := func(_ context.Context, _, p string) {
+		mu.Lock()
+		called = append(called, p)
+		mu.Unlock()
+	}
+
+	r := makeReconciler(handler, nil, time.Now)
+	r.AddDir("repo1", dir)
+	r.Seed(t.Context()) // baseline — no handler calls
+
+	mu.Lock()
+	if len(called) != 0 {
+		t.Fatalf("Seed must not fire the handler, got %v", called)
+	}
+	mu.Unlock()
+
+	// Change the file AFTER seeding, then the FIRST wake must detect it.
+	future := time.Now().Add(2 * time.Second)
+	if err := os.WriteFile(path, []byte("v2"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chtimes(path, future, future); err != nil {
+		t.Fatal(err)
+	}
+	r.InjectWake()
+
+	mu.Lock()
+	defer mu.Unlock()
+	if len(called) != 1 || called[0] != path {
+		t.Fatalf("first wake after Seed: got %v, want [%s]", called, path)
+	}
+}
+
+// TestPrefixProbe_SameSizeSameMtime verifies the same-length-same-mtime hazard
+// is caught: a file whose content changes in the first 64 bytes but whose size
+// and mtime are identical (format-on-save behaviour) must still be reported.
+func TestPrefixProbe_SameSizeSameMtime(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "fmt.go")
+	const n = 100 // > prefixLen, fixed length so size never changes
+	if err := os.WriteFile(path, []byte(strings.Repeat("A", n)), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	// Capture the original mtime so we can restore it after the rewrite.
+	info, err := os.Stat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	orig := info.ModTime()
+
+	var mu sync.Mutex
+	var called []string
+	handler := func(_ context.Context, _, p string) {
+		mu.Lock()
+		called = append(called, p)
+		mu.Unlock()
+	}
+
+	r := makeReconciler(handler, nil, time.Now)
+	r.AddDir("repo1", dir)
+	r.Seed(t.Context())
+
+	// Overwrite with the same length but different leading bytes, then force
+	// the mtime back to the original so only the prefix distinguishes them.
+	if err := os.WriteFile(path, []byte(strings.Repeat("B", n)), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chtimes(path, orig, orig); err != nil {
+		t.Fatal(err)
+	}
+	r.InjectWake()
+
+	mu.Lock()
+	defer mu.Unlock()
+	if len(called) != 1 || called[0] != path {
+		t.Fatalf("prefix-probe change: got %v, want [%s]", called, path)
 	}
 }
 

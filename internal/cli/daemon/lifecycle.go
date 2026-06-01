@@ -135,10 +135,14 @@ func (d *Daemon) seedWatcher() {
 }
 
 // startReconciler launches the wake-reconciler tick loop in its own goroutine;
-// recDone is closed when it returns (on d.ctx cancellation).
+// recDone is closed when it returns (on d.ctx cancellation). It first seeds the
+// mtime baseline so the first suspend/resume sweep detects changes rather than
+// just populating the map. Seeding walks every repo's working tree, so it runs
+// inside the goroutine to keep daemon startup non-blocking.
 func (d *Daemon) startReconciler() {
 	go func() {
 		defer close(d.recDone)
+		d.reconciler.Seed(d.ctx)
 		d.reconciler.Start(d.ctx)
 	}()
 }
