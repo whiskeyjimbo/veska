@@ -93,14 +93,17 @@ func NewStartupResync(
 	save saveFunc,
 	promote promoteFunc,
 	reparser func(ctx context.Context, repo RepoRecord) error,
-) *StartupResync {
+) (*StartupResync, error) {
+	if repos == nil || git == nil || save == nil || promote == nil || reparser == nil {
+		return nil, fmt.Errorf("application.NewStartupResync: nil dependency: %w", ErrMissingDependency)
+	}
 	return &StartupResync{
 		repos:    repos,
 		git:      git,
 		save:     save,
 		promote:  promote,
 		reparser: reparser,
-	}
+	}, nil
 }
 
 // IsSyncing returns true while Run is in progress.
