@@ -20,7 +20,7 @@ func mustNode(t *testing.T, id, path, name string, kind domain.NodeKind) *domain
 
 func mustEdge(t *testing.T, src, tgt domain.NodeID, kind domain.EdgeKind) *domain.Edge {
 	t.Helper()
-	e, err := domain.NewEdge(src, tgt, kind)
+	e, err := domain.NewEdge(domain.EdgeSpec{Src: src, Tgt: tgt, Kind: kind})
 	if err != nil {
 		t.Fatalf("NewEdge: %v", err)
 	}

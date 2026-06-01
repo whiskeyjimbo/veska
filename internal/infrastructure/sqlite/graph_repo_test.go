@@ -270,7 +270,7 @@ func TestGraphRepo_SaveEdge_LoadGraph(t *testing.T) {
 		t.Fatalf("SaveNode tgt: %v", err)
 	}
 
-	e, _ := domain.NewEdge("src", "tgt", domain.EdgeCalls, domain.WithConfidence(domain.Definite))
+	e, _ := domain.NewEdge(domain.EdgeSpec{Src: "src", Tgt: "tgt", Kind: domain.EdgeCalls}, domain.WithConfidence(domain.Definite))
 	if err := r.SaveEdge(ctx, "r1", "main", e); err != nil {
 		t.Fatalf("SaveEdge: %v", err)
 	}
@@ -304,7 +304,7 @@ func TestGraphRepo_SaveEdge_Upserts(t *testing.T) {
 			t.Fatalf("SaveNode %s: %v", id, err)
 		}
 	}
-	e, _ := domain.NewEdge("src", "tgt", domain.EdgeCalls, domain.WithConfidence(domain.Probable))
+	e, _ := domain.NewEdge(domain.EdgeSpec{Src: "src", Tgt: "tgt", Kind: domain.EdgeCalls}, domain.WithConfidence(domain.Probable))
 	if err := r.SaveEdge(ctx, "r1", "main", e); err != nil {
 		t.Fatalf("first SaveEdge: %v", err)
 	}
@@ -336,7 +336,7 @@ func TestGraphRepo_DeleteFile(t *testing.T) {
 			t.Fatalf("SaveNode %s: %v", n.ID, err)
 		}
 	}
-	e, _ := domain.NewEdge("a1", "a2", domain.EdgeCalls, domain.WithConfidence(domain.Definite))
+	e, _ := domain.NewEdge(domain.EdgeSpec{Src: "a1", Tgt: "a2", Kind: domain.EdgeCalls}, domain.WithConfidence(domain.Definite))
 	if err := r.SaveEdge(ctx, "r1", "main", e); err != nil {
 		t.Fatalf("SaveEdge: %v", err)
 	}

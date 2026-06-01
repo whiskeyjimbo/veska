@@ -283,9 +283,11 @@ func (h *Handler) Handle(ctx context.Context, row ports.WorkRow) error {
 	edges := make([]*domain.Edge, 0, len(cands))
 	for _, c := range cands {
 		e, err := domain.NewEdge(
-			domain.NodeID(c.SourceNodeID),
-			domain.NodeID(c.TargetNodeID),
-			domain.EdgeSimilarTo,
+			domain.EdgeSpec{
+				Src:  domain.NodeID(c.SourceNodeID),
+				Tgt:  domain.NodeID(c.TargetNodeID),
+				Kind: domain.EdgeSimilarTo,
+			},
 			domain.WithConfidence(domain.Unresolved),
 		)
 		if err != nil {

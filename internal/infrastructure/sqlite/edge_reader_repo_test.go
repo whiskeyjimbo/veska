@@ -42,8 +42,8 @@ func seedEdgesForReader(t *testing.T) (*sqlite.EdgeReaderRepo, func()) {
 		}
 	}
 	er := sqlite.NewEdgeRepo(db)
-	ab, _ := domain.NewEdge("a", "b", domain.EdgeCalls, domain.WithConfidence(domain.Definite))
-	bc, _ := domain.NewEdge("b", "c", domain.EdgeCalls, domain.WithConfidence(domain.Definite))
+	ab, _ := domain.NewEdge(domain.EdgeSpec{Src: "a", Tgt: "b", Kind: domain.EdgeCalls}, domain.WithConfidence(domain.Definite))
+	bc, _ := domain.NewEdge(domain.EdgeSpec{Src: "b", Tgt: "c", Kind: domain.EdgeCalls}, domain.WithConfidence(domain.Definite))
 	if err := er.SaveEdges(context.Background(), "r1", "main", []*domain.Edge{ab, bc}); err != nil {
 		cleanup()
 		t.Fatalf("SaveEdges: %v", err)

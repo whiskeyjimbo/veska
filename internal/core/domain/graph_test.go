@@ -17,7 +17,7 @@ func makeNode(t *testing.T, id string) *Node {
 
 func makeEdge(t *testing.T, src, tgt NodeID) *Edge {
 	t.Helper()
-	e, err := NewEdge(src, tgt, EdgeCalls)
+	e, err := NewEdge(EdgeSpec{Src: src, Tgt: tgt, Kind: EdgeCalls})
 	if err != nil {
 		t.Fatalf("makeEdge(%q->%q): %v", src, tgt, err)
 	}
