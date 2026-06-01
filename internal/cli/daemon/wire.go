@@ -804,9 +804,12 @@ func (b *daemonBuilder) finalize() error {
 	if b.tracer != nil {
 		b.registry.SetTracerProvider(b.tracer)
 	}
-	resync := application.NewStartupResync(
+	resync, err := application.NewStartupResync(
 		&repoLister{db: b.pools.ReadDB}, gitwatch.Querier{}, b.ingester.Save, b.promoter.Promote, b.reparser,
 	)
+	if err != nil {
+		return err
+	}
 	b.resync = resync
 	b.resyncRef = resync
 	return nil

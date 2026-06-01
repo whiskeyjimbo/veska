@@ -104,7 +104,7 @@ func TestDaemon_StartupResync_NeverPromoted_Reparses(t *testing.T) {
 		return nil
 	}
 
-	resync := application.NewStartupResync(
+	resync, _ := application.NewStartupResync(
 		&repoLister{db: d.pools.ReadDB},
 		gitwatch.Querier{}, d.ingester.Save, d.promoter.Promote, spy,
 	)
@@ -160,7 +160,7 @@ func TestDaemon_StartupResync_AtHEAD_SkipsReparse(t *testing.T) {
 		return nil
 	}
 
-	resync := application.NewStartupResync(
+	resync, _ := application.NewStartupResync(
 		&repoLister{db: d.pools.ReadDB},
 		gitwatch.Querier{}, d.ingester.Save, d.promoter.Promote, spy,
 	)
@@ -247,7 +247,7 @@ func TestDaemon_StartupResync_FullPipeline(t *testing.T) {
 	// the cheap path. We re-route the reparser through a spy and assert it
 	// is NOT invoked, because LastPromotedSHA == HEAD on the second pass.
 	spyCalls := 0
-	cheapResync := application.NewStartupResync(
+	cheapResync, _ := application.NewStartupResync(
 		&repoLister{db: d.pools.ReadDB},
 		gitwatch.Querier{}, d.ingester.Save, d.promoter.Promote,
 		func(context.Context, application.RepoRecord) error { spyCalls++; return nil },
