@@ -34,6 +34,7 @@ eng_get_node
 eng_get_file_nodes
 eng_search_similar
 eng_find_related
+eng_find_clones
 eng_find_owner
 eng_find_todos
 eng_get_entry_points

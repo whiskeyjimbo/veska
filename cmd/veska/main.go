@@ -71,6 +71,7 @@ func newRootCmd(opts ...rootOption) *cobra.Command {
 	root.AddCommand(fileNodesCmd())
 	root.AddCommand(similarCmd())
 	root.AddCommand(relatedCmd())
+	root.AddCommand(clonesCmd())
 	root.AddCommand(ownerCmd())
 	root.AddCommand(todosCmd())
 	root.AddCommand(entryPointsCmd())
