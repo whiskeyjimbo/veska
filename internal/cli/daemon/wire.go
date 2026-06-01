@@ -75,7 +75,7 @@ type Config struct {
 	MCPSockPath string
 
 	// VectorBackend selects the VectorStorage implementation.
-	// Defaults to env VESKA_VECTOR_BACKEND, then BackendSQLiteVec.
+	// Defaults to env VESKA_VECTOR_BACKEND, then BackendMemory.
 	VectorBackend vector.BackendKind
 
 	// OllamaURL / EmbedModel select the embedding provider.
@@ -123,7 +123,7 @@ func ResolveConfig(c Config) Config {
 		if env := os.Getenv("VESKA_VECTOR_BACKEND"); env != "" {
 			c.VectorBackend = vector.BackendKind(env)
 		} else {
-			c.VectorBackend = vector.BackendSQLiteVec
+			c.VectorBackend = vector.BackendMemory
 		}
 	}
 	if c.OllamaURL == "" {
@@ -403,12 +403,12 @@ func (b *daemonBuilder) validateConfig() error {
 		return err
 	}
 	switch b.cfg.VectorBackend {
-	case vector.BackendSQLiteVec, vector.BackendUsearch:
+	case vector.BackendMemory, vector.BackendUsearch:
 	default:
 		return &ErrMissingDep{
 			Name: "vector_backend",
 			Why: fmt.Sprintf("unknown VESKA_VECTOR_BACKEND %q (want %q or %q)",
-				b.cfg.VectorBackend, vector.BackendSQLiteVec, vector.BackendUsearch),
+				b.cfg.VectorBackend, vector.BackendMemory, vector.BackendUsearch),
 		}
 	}
 	if b.cfg.SQLitePath == "" {

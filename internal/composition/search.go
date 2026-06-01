@@ -15,7 +15,7 @@ import (
 
 // NewCLISearchService builds the search service for the one-shot `veska search`
 // CLI path: it resolves the embedder from env/defaults, opens the local
-// sqlite-vec store, and assembles the search.Service. The daemon builds its own
+// in-memory store, and assembles the search.Service. The daemon builds its own
 // search service from the elected provider and its configured vector backend
 // (with metrics), so this is the CLI-side construction only — moved out of the
 // Cobra file so cmd/veska/search.go is a thin adapter (solov2-u4mv.4).
@@ -24,7 +24,7 @@ func NewCLISearchService(pools *sqlite.Pools) (*search.Service, error) {
 	if err != nil {
 		return nil, err
 	}
-	vec, err := vector.NewVectorStorage("sqlite-vec", config.DefaultVectorDir())
+	vec, err := vector.NewVectorStorage(vector.BackendMemory, config.DefaultVectorDir())
 	if err != nil {
 		return nil, fmt.Errorf("search: open vector storage: %w", err)
 	}

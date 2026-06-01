@@ -225,7 +225,7 @@ func TestConfigProvider_ReflectsConfig(t *testing.T) {
 		SQLitePath:    "/home/v/veska.db",
 		CLISockPath:   "/home/v/cli.sock",
 		MCPSockPath:   "/home/v/mcp.sock",
-		VectorBackend: vector.BackendSQLiteVec,
+		VectorBackend: vector.BackendMemory,
 		OllamaURL:     "http://localhost:11434",
 		EmbedModel:    "nomic-embed-text",
 	}
@@ -239,7 +239,7 @@ func TestConfigProvider_ReflectsConfig(t *testing.T) {
 		"sqlite_path":    "/home/v/veska.db",
 		"cli_sock":       "/home/v/cli.sock",
 		"mcp_sock":       "/home/v/mcp.sock",
-		"vector_backend": string(vector.BackendSQLiteVec),
+		"vector_backend": string(vector.BackendMemory),
 		"ollama_url":     "http://localhost:11434",
 		"embed_model":    "nomic-embed-text",
 	}

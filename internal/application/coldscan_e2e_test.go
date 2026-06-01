@@ -44,7 +44,7 @@ func TestColdScanE2E_ReindexProducesSearchableVectors(t *testing.T) {
 	}
 
 	t.Run("sqlite-vec", func(t *testing.T) {
-		runColdScanE2E(t, vector.BackendSQLiteVec)
+		runColdScanE2E(t, vector.BackendMemory)
 	})
 
 	t.Run("usearch", func(t *testing.T) {

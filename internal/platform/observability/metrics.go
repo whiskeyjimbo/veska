@@ -34,7 +34,7 @@ type Metrics struct {
 	// MCPRequestDuration measures MCP tool handler duration. Labels: tool, result.
 	MCPRequestDuration *prometheus.HistogramVec
 
-	// VectorQueryDuration measures sqlite-vec ANN query latency.
+	// VectorQueryDuration measures in-memory ANN query latency.
 	// Label: kind (semantic_search|find_similar_symbols).
 	VectorQueryDuration *prometheus.HistogramVec
 
@@ -127,7 +127,7 @@ func NewMetrics(reg prometheus.Registerer) *Metrics {
 	vectorQueryDuration := prometheus.NewHistogramVec(
 		prometheus.HistogramOpts{
 			Name: "veska_vector_query_duration_seconds",
-			Help: "sqlite-vec ANN query latency. Decides whether vec0 is still on-budget.",
+			Help: "In-memory linear-scan ANN query latency. Decides whether the in-memory backend is still on-budget.",
 		},
 		[]string{"kind"},
 	)

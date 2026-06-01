@@ -319,12 +319,12 @@ func TestDaemon_VectorStoreRehydratesOnSecondStart(t *testing.T) {
 		t.Fatalf("mark ref ready: %v", err)
 	}
 
-	// Stop the first daemon. The in-memory sqlite-vec contents are gone.
+	// Stop the first daemon. The in-memory store contents are gone.
 	if err := d1.Stop(); err != nil {
 		t.Fatalf("d1.Stop: %v", err)
 	}
 
-	// Second daemon — same VESKA_HOME, fresh sqlite-vec. Search before Start
+	// Second daemon — same VESKA_HOME, fresh in-memory store. Search before Start
 	// returns nothing (memory empty). Start triggers rehydrate and Search
 	// returns the seeded row.
 	d2, err := newDaemon(cfg)

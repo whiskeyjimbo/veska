@@ -8,7 +8,7 @@
 // result is a flat slice of Candidate rows ready for downstream consumption.
 //
 // Score direction. Hit.Score from ports.VectorStorage.Search is always a
-// "higher = closer" similarity: both active backends (sqlite-vec and
+// "higher = closer" similarity: both active backends (memory and
 // usearch) compute L2-squared distance internally and report
 // score = 1 / (1 + dist). The threshold is therefore a simple lower bound
 // on Hit.Score; no per-backend normalisation is required at this layer.

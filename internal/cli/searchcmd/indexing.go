@@ -126,7 +126,7 @@ func buildDrainWorker(pools *sqlite.Pools) (*embedder.Worker, *sqlite.EmbeddingR
 	if err != nil {
 		return nil, nil, err
 	}
-	vec, err := vector.NewVectorStorage("sqlite-vec", config.DefaultVectorDir())
+	vec, err := vector.NewVectorStorage(vector.BackendMemory, config.DefaultVectorDir())
 	if err != nil {
 		return nil, nil, fmt.Errorf("search: open vector storage: %w", err)
 	}

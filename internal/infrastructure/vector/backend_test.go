@@ -6,18 +6,18 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/vector"
 )
 
-func TestNewVectorStorage_SQLiteVec(t *testing.T) {
-	store, err := vector.NewVectorStorage(vector.BackendSQLiteVec, "")
+func TestNewVectorStorage_Memory(t *testing.T) {
+	store, err := vector.NewVectorStorage(vector.BackendMemory, "")
 	if err != nil {
-		t.Fatalf("NewVectorStorage(sqlite-vec): %v", err)
+		t.Fatalf("NewVectorStorage(memory): %v", err)
 	}
 	if store == nil {
-		t.Fatal("NewVectorStorage(sqlite-vec): returned nil store")
+		t.Fatal("NewVectorStorage(memory): returned nil store")
 		return
 	}
 }
 
-func TestNewVectorStorage_EmptyKindDefaultsSQLiteVec(t *testing.T) {
+func TestNewVectorStorage_EmptyKindDefaultsMemory(t *testing.T) {
 	store, err := vector.NewVectorStorage("", "")
 	if err != nil {
 		t.Fatalf("NewVectorStorage(empty): %v", err)
