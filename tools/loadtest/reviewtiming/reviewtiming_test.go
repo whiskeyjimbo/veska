@@ -70,6 +70,12 @@ type nopFindings struct{}
 
 func (nopFindings) Save(context.Context, *domain.Finding) error         { return nil }
 func (nopFindings) CloseObsolete(context.Context, string, string) error { return nil }
+func (nopFindings) CloseSupersededByRule(context.Context, string, string, string, []string) error {
+	return nil
+}
+func (nopFindings) CloseSupersededAutoLinks(context.Context, string, string, []string) error {
+	return nil
+}
 
 // TestReviewTiming is the M5 exit-gate-5 per-commit review time-budget harness.
 func TestReviewTiming(t *testing.T) {
