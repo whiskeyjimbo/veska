@@ -12,6 +12,7 @@ import (
 	application "github.com/whiskeyjimbo/veska/internal/application"
 	"github.com/whiskeyjimbo/veska/internal/application/staging"
 	"github.com/whiskeyjimbo/veska/internal/core/domain"
+	"github.com/whiskeyjimbo/veska/internal/core/protocol"
 )
 
 // ---------------------------------------------------------------------------
@@ -663,11 +664,11 @@ func TestGetCallChain_EmptyEdgesOnCallableEmitsChainedSelectorsHint(t *testing.T
 		t.Fatalf("expected zero edges for lonely callable; got %d", len(resp.Edges))
 	}
 	var sawHint bool
-	if slices.Contains(resp.DegradedReasons, DegradedReasonChainedSelectorsUnresolved) {
+	if slices.Contains(resp.DegradedReasons, protocol.DegradedReasonChainedSelectorsUnresolved) {
 		sawHint = true
 	}
 	if !sawHint {
-		t.Errorf("expected %q in degraded_reasons; got %+v", DegradedReasonChainedSelectorsUnresolved, resp.DegradedReasons)
+		t.Errorf("expected %q in degraded_reasons; got %+v", protocol.DegradedReasonChainedSelectorsUnresolved, resp.DegradedReasons)
 	}
 }
 
@@ -692,7 +693,7 @@ func TestGetCallChain_EdgesPresentSuppressesHint(t *testing.T) {
 		t.Fatalf("unexpected error: %+v", rpcErr)
 	}
 	for _, r := range resp.DegradedReasons {
-		if r == DegradedReasonChainedSelectorsUnresolved {
+		if r == protocol.DegradedReasonChainedSelectorsUnresolved {
 			t.Errorf("hint must not fire when edges resolved: %+v", resp.DegradedReasons)
 		}
 	}
@@ -732,11 +733,11 @@ func TestGetCallChain_StdlibOnlyBodyEmitsExternalCalleesReason(t *testing.T) {
 	if len(resp.Edges) != 0 {
 		t.Fatalf("expected zero edges; got %d", len(resp.Edges))
 	}
-	if slices.Contains(resp.DegradedReasons, DegradedReasonChainedSelectorsUnresolved) {
+	if slices.Contains(resp.DegradedReasons, protocol.DegradedReasonChainedSelectorsUnresolved) {
 		t.Errorf("chained_selectors_unresolved must NOT fire on a body with no chained selectors; got %+v", resp.DegradedReasons)
 	}
-	if !slices.Contains(resp.DegradedReasons, DegradedReasonExternalCalleesOnly) {
-		t.Errorf("expected %q in degraded_reasons; got %+v", DegradedReasonExternalCalleesOnly, resp.DegradedReasons)
+	if !slices.Contains(resp.DegradedReasons, protocol.DegradedReasonExternalCalleesOnly) {
+		t.Errorf("expected %q in degraded_reasons; got %+v", protocol.DegradedReasonExternalCalleesOnly, resp.DegradedReasons)
 	}
 }
 
@@ -768,8 +769,8 @@ func TestGetCallChain_ChainedSelectorBodyStillEmitsChainedHint(t *testing.T) {
 	if rpcErr != nil {
 		t.Fatalf("unexpected error: %+v", rpcErr)
 	}
-	if !slices.Contains(resp.DegradedReasons, DegradedReasonChainedSelectorsUnresolved) {
-		t.Errorf("expected %q on a body with chained selectors; got %+v", DegradedReasonChainedSelectorsUnresolved, resp.DegradedReasons)
+	if !slices.Contains(resp.DegradedReasons, protocol.DegradedReasonChainedSelectorsUnresolved) {
+		t.Errorf("expected %q on a body with chained selectors; got %+v", protocol.DegradedReasonChainedSelectorsUnresolved, resp.DegradedReasons)
 	}
 }
 
@@ -812,8 +813,8 @@ func TestFindSymbol_EmptyDuringIndexingEmitsHint(t *testing.T) {
 	if len(resp.Nodes) != 0 {
 		t.Fatalf("expected empty nodes; got %d", len(resp.Nodes))
 	}
-	if !slices.Contains(resp.DegradedReasons, DegradedReasonIndexingInProgress) {
-		t.Errorf("expected %q in degraded_reasons; got %+v", DegradedReasonIndexingInProgress, resp.DegradedReasons)
+	if !slices.Contains(resp.DegradedReasons, protocol.DegradedReasonIndexingInProgress) {
+		t.Errorf("expected %q in degraded_reasons; got %+v", protocol.DegradedReasonIndexingInProgress, resp.DegradedReasons)
 	}
 	if !slices.Contains(resp.IndexingRepos, "scanning-repo") {
 		t.Errorf("expected scanning-repo in indexing_repos; got %+v", resp.IndexingRepos)
@@ -839,7 +840,7 @@ func TestFindSymbol_EmptyWithNoScansSuppressesHint(t *testing.T) {
 	if rpcErr != nil {
 		t.Fatalf("unexpected error: %+v", rpcErr)
 	}
-	if slices.Contains(resp.DegradedReasons, DegradedReasonIndexingInProgress) {
+	if slices.Contains(resp.DegradedReasons, protocol.DegradedReasonIndexingInProgress) {
 		t.Errorf("indexing_in_progress must NOT fire when tracker is empty; got %+v", resp.DegradedReasons)
 	}
 	if len(resp.IndexingRepos) != 0 {
@@ -872,7 +873,7 @@ func TestFindSymbol_NonEmptyDuringIndexingSuppressesHint(t *testing.T) {
 	if len(resp.Nodes) != 1 {
 		t.Fatalf("expected 1 node; got %d", len(resp.Nodes))
 	}
-	if slices.Contains(resp.DegradedReasons, DegradedReasonIndexingInProgress) {
+	if slices.Contains(resp.DegradedReasons, protocol.DegradedReasonIndexingInProgress) {
 		t.Errorf("indexing_in_progress must NOT fire on a non-empty result; got %+v", resp.DegradedReasons)
 	}
 }

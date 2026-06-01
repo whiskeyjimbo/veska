@@ -12,6 +12,7 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/application/savings"
 	"github.com/whiskeyjimbo/veska/internal/application/search"
 	"github.com/whiskeyjimbo/veska/internal/core/domain"
+	"github.com/whiskeyjimbo/veska/internal/core/protocol"
 )
 
 // This file holds the eng_search_semantic handler and its cross-repo fanout
@@ -77,7 +78,7 @@ func makeSearchSemanticHandler(svc *search.Service, rec *savings.Recorder, repos
 		// 'veska search' on a freshly-added repo knows to retry.
 		if len(dtos) == 0 {
 			if ids, busy := indexingRepoIDs(scans); busy {
-				reasons = append(reasons, DegradedReasonIndexingInProgress)
+				reasons = append(reasons, protocol.DegradedReasonIndexingInProgress)
 				indexing = ids
 			}
 		}

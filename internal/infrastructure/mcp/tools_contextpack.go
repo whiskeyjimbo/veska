@@ -9,6 +9,7 @@ import (
 	application "github.com/whiskeyjimbo/veska/internal/application"
 	"github.com/whiskeyjimbo/veska/internal/application/contextpack"
 	"github.com/whiskeyjimbo/veska/internal/core/domain"
+	"github.com/whiskeyjimbo/veska/internal/core/protocol"
 )
 
 // ContextPackOption configures RegisterContextPackTool. Today the only
@@ -176,7 +177,7 @@ func makeContextPackHandler(asm *contextpack.Assembler, repoRoot RepoRootFunc, r
 		// the final shape.
 		if len(pack.Nodes) <= 1 && len(crossRepo) == 0 {
 			if ids, busy := indexingRepoIDs(scans); busy {
-				reasons = append(reasons, DegradedReasonIndexingInProgress)
+				reasons = append(reasons, protocol.DegradedReasonIndexingInProgress)
 				indexing = ids
 			}
 		}

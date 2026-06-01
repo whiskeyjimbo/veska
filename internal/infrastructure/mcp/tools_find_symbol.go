@@ -10,6 +10,7 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/application/staging"
 	"github.com/whiskeyjimbo/veska/internal/core/domain"
 	"github.com/whiskeyjimbo/veska/internal/core/ports"
+	"github.com/whiskeyjimbo/veska/internal/core/protocol"
 )
 
 // isContainerKind reports whether a node kind is a structural container rather
@@ -140,7 +141,7 @@ func makeFindSymbolHandler(graph ports.GraphReader, staging *staging.Area, repos
 		// is authoritative even if some OTHER repo is still indexing.
 		if len(dtos) == 0 {
 			if ids, busy := indexingRepoIDs(scans); busy {
-				reasons = append(reasons, DegradedReasonIndexingInProgress)
+				reasons = append(reasons, protocol.DegradedReasonIndexingInProgress)
 				indexing = ids
 			}
 		}
