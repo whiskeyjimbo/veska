@@ -212,5 +212,5 @@ func buildWikiHandler(pools *sqlite.Pools) (*wiki.Handler, error) {
 		}
 		return matched.RootPath, nil
 	}
-	return composition.NewWikiHandler(pools, staging.NewArea(), wikiRoot, true)
+	return composition.NewWikiHandler(pools, staging.NewArea(), wikiRoot, composition.WithWritePages(true))
 }
