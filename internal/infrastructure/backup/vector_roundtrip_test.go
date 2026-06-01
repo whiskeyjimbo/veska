@@ -13,6 +13,7 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/sqlite/sqldriver"
 
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/backup"
+	"github.com/whiskeyjimbo/veska/internal/platform/archive"
 )
 
 // TestBackupIncludesVeskaDB verifies that the primary veska.db is always
@@ -165,7 +166,7 @@ func TestBackupUsearchVerifyRoundTrip(t *testing.T) {
 	}
 
 	// Verify the tarball passes the gzip integrity check.
-	if err := backup.VerifyGzip(result.Path); err != nil {
+	if err := archive.VerifyGzip(result.Path); err != nil {
 		t.Fatalf("VerifyGzip: %v", err)
 	}
 }

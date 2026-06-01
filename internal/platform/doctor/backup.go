@@ -1,12 +1,11 @@
 package doctor
 
 import (
-	"compress/gzip"
-	"io"
 	"os"
 	"path/filepath"
 	"time"
 
+	"github.com/whiskeyjimbo/veska/internal/platform/archive"
 	"github.com/whiskeyjimbo/veska/internal/platform/health"
 )
 
@@ -65,7 +64,7 @@ func CheckBackup(backupDir string) (BackupReport, error) {
 	report.AgeHours = age.Hours()
 
 	// Verify gzip header by opening and reading at least the first byte.
-	if verifyErr := verifyGzip(latestPath); verifyErr != nil {
+	if verifyErr := archive.VerifyGzip(latestPath); verifyErr != nil {
 		report.Status = health.StatusBroken
 		report.VerifyError = verifyErr.Error()
 		return report, nil
@@ -73,28 +72,4 @@ func CheckBackup(backupDir string) (BackupReport, error) {
 
 	report.Status = health.StatusHealthy
 	return report, nil
-}
-
-// verifyGzip opens path as a gzip stream and reads the header.
-// Returns nil on success, or an error describing the failure.
-func verifyGzip(path string) error {
-	f, err := os.Open(path)
-	if err != nil {
-		return err
-	}
-	defer f.Close()
-
-	gr, err := gzip.NewReader(f)
-	if err != nil {
-		return err
-	}
-	defer gr.Close()
-
-	// Read at least one byte to confirm the stream is readable.
-	buf := make([]byte, 1)
-	_, err = gr.Read(buf)
-	if err != nil && err != io.EOF {
-		return err
-	}
-	return nil
 }
