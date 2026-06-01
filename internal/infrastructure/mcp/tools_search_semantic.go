@@ -55,7 +55,7 @@ func makeSearchSemanticHandler(svc *search.Service, rec *savings.Recorder, repos
 		if rpcErr != nil {
 			return nil, rpcErr
 		}
-		recordSavings(rec, p.Query, results)
+		recordSavings(rec, p.Query, results, repoByNode, targets[0].RepoID)
 		reasons := make([]string, 0, len(reasonsSet))
 		for r := range reasonsSet {
 			reasons = append(reasons, r)
@@ -268,13 +268,31 @@ func runSemanticFanout(
 // semantic search. It is intentionally fire-and-forget: a write error
 // is silently dropped so the search hot path never fails for telemetry
 // reasons, and a nil recorder is a no-op (handled inside Record).
-func recordSavings(rec *savings.Recorder, query string, results []search.Result) {
+//
+// Results are partitioned by repo (solov2-0ql0): a fanout search across
+// N repos writes one Entry per repo so the rollup can break down savings
+// per repo. repoByNode maps each hit's NodeID to its repo (populated only
+// on the fanout path); when it is nil or lacks an entry, defaultRepoID —
+// the single resolved target — is used. An empty result set records
+// nothing.
+func recordSavings(rec *savings.Recorder, query string, results []search.Result, repoByNode map[string]string, defaultRepoID string) {
 	if rec == nil {
 		return
 	}
-	rf := make([]savings.ResultFile, len(results))
-	for i, r := range results {
-		rf[i] = savings.ResultFile{FilePath: r.FilePath, SnippetLen: len(r.Snippet)}
+	byRepo := map[string][]savings.ResultFile{}
+	order := make([]string, 0, 1)
+	for _, r := range results {
+		repoID := defaultRepoID
+		if id, ok := repoByNode[r.NodeID]; ok {
+			repoID = id
+		}
+		if _, seen := byRepo[repoID]; !seen {
+			order = append(order, repoID)
+		}
+		byRepo[repoID] = append(byRepo[repoID], savings.ResultFile{FilePath: r.FilePath, SnippetLen: len(r.Snippet)})
 	}
-	_ = rec.Record(savings.EntryFor(query, rf, time.Now()))
+	now := time.Now()
+	for _, repoID := range order {
+		_ = rec.Record(savings.EntryFor(repoID, query, byRepo[repoID], now))
+	}
 }
