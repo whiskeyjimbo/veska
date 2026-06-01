@@ -7,6 +7,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/whiskeyjimbo/veska/internal/cli/depscmd"
+	mcpinfra "github.com/whiskeyjimbo/veska/internal/infrastructure/mcp"
 )
 
 // The deps command logic lives in internal/cli/depscmd; the constructors below
@@ -81,8 +82,12 @@ func depsListCmd() *cobra.Command {
 		limit    int
 	)
 	cmd := &cobra.Command{
-		Use:          "list [<id-or-path>]",
-		Short:        "List external modules the repo CALLS into, ranked by call-site count (import-only modules without resolved calls do not appear yet)",
+		Use:   "list [<id-or-path>]",
+		Short: "List external modules the repo CALLS into, ranked by call-site count",
+		// Long reuses the MCP DescDepsImportOnlyCaveat fragment so the
+		// import-only absence rule can't drift from the eng_list_dependencies
+		// description (solov2-izh6.20).
+		Long:         "List external modules the repo CALLS into, ranked by call-site count.\n\nNote: " + mcpinfra.DescDepsImportOnlyCaveat + " — this tracks the import-side backfill.",
 		Args:         cobra.MaximumNArgs(1),
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
