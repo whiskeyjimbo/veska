@@ -250,7 +250,10 @@ func TestRecall(t *testing.T) {
 		embedder = provider
 	}
 	nodeLookup := sqlite.NewNodeLookupRepo(db)
-	svc := search.NewService(embedder, vstore, nodeLookup)
+	svc, err := search.NewService(embedder, vstore, nodeLookup)
+	if err != nil {
+		t.Fatalf("construct: %v", err)
+	}
 
 	truth := corpus.TruthByCluster()
 	perQuery := make([]float64, 0, clusters)

@@ -212,7 +212,10 @@ func runVariant(
 	}
 
 	nodeLookup := sqlite.NewNodeLookupRepo(db)
-	svc := search.NewService(provider, vstore, nodeLookup)
+	svc, err := search.NewService(provider, vstore, nodeLookup)
+	if err != nil {
+		t.Fatalf("construct: %v", err)
+	}
 
 	truth := corpus.TruthByCluster()
 	perQuery := make([]float64, 0, corpus.Clusters)

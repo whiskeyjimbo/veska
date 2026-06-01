@@ -24,6 +24,10 @@ import (
 // empty-fields response (solov2-2w0u).
 var ErrSeedNotFound = errors.New("blastradius: seed not found")
 
+// ErrMissingDependency is returned by NewService when a required
+// dependency is nil. It wraps so callers can errors.Is against it.
+var ErrMissingDependency = errors.New("blastradius: missing required dependency")
+
 // Direction selects which adjacency the BFS walks.
 //
 //   - DirCallers  walks INBOUND edges: "who depends on these seeds".
@@ -124,16 +128,17 @@ type Service struct {
 	staging *staging.Area
 }
 
-// NewService constructs a Service. edges and nodes are required; staging
+// NewService constructs a Service. edges and nodes are required; a nil
+// dependency is reported with a wrapped ErrMissingDependency. staging
 // may be nil for callers that never invoke DirtyOf.
-func NewService(edges ports.EdgeReader, nodes ports.NodeLookup, staging *staging.Area) *Service {
-	if edges == nil {
-		panic("blastradius.NewService: edges is nil")
+func NewService(edges ports.EdgeReader, nodes ports.NodeLookup, staging *staging.Area) (*Service, error) {
+	switch {
+	case edges == nil:
+		return nil, fmt.Errorf("blastradius.NewService: edges is nil: %w", ErrMissingDependency)
+	case nodes == nil:
+		return nil, fmt.Errorf("blastradius.NewService: nodes is nil: %w", ErrMissingDependency)
 	}
-	if nodes == nil {
-		panic("blastradius.NewService: nodes is nil")
-	}
-	return &Service{edges: edges, nodes: nodes, staging: staging}
+	return &Service{edges: edges, nodes: nodes, staging: staging}, nil
 }
 
 // Options carries the per-call BFS bounds.

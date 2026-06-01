@@ -28,7 +28,10 @@ func NewWikiHandler(pools *sqlite.Pools, staging *staging.Area, repoRoot func(ct
 	wikiEdges := sqlite.NewEdgeReaderRepo(pools.ReadDB)
 	wikiGraph := sqlite.NewGraphRepo(pools.ReadDB, pools.Write)
 	wikiFindings := sqlite.NewFindingQuerierRepo(pools.ReadDB)
-	wikiBlast := blastradius.NewService(wikiEdges, nodeLookup, staging)
+	wikiBlast, err := blastradius.NewService(wikiEdges, nodeLookup, staging)
+	if err != nil {
+		return nil, fmt.Errorf("wiki: blast-radius service: %w", err)
+	}
 
 	wikiCounts := func(ctx context.Context, repoRoot string) (map[string]int, error) {
 		return gitwatch.ChangeCounts(ctx, repoRoot, 0)

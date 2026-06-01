@@ -622,7 +622,10 @@ func (b *daemonBuilder) buildQueueHandlers() error {
 	if err != nil {
 		return err
 	}
-	revalH := revalidate.NewHandler(sqlite.NewRevalidateRepo(b.pools.Write), revalidate.WithMetrics(b.metrics))
+	revalH, err := revalidate.NewHandler(sqlite.NewRevalidateRepo(b.pools.Write), revalidate.WithMetrics(b.metrics))
+	if err != nil {
+		return fmt.Errorf("revalidate handler: %w", err)
+	}
 	wikiH, err := b.buildWikiHandler()
 	if err != nil {
 		return err
@@ -770,7 +773,7 @@ func (b *daemonBuilder) buildMCPServer() error {
 	}
 	b.savingsRec = rec
 
-	registerMCPTools(b.registry, mcpDeps{
+	if err := registerMCPTools(b.registry, mcpDeps{
 		pools:       b.pools,
 		cfg:         b.cfg,
 		staging:     b.staging,
@@ -784,7 +787,9 @@ func (b *daemonBuilder) buildMCPServer() error {
 		reparser:    b.reparser,
 		scanTracker: b.scanTracker,
 		savings:     b.savingsRec,
-	})
+	}); err != nil {
+		return fmt.Errorf("register MCP tools: %w", err)
+	}
 	b.mcpsrv = mcp.NewServer(b.cfg.CLISockPath, b.cfg.MCPSockPath, b.registry)
 	return nil
 }

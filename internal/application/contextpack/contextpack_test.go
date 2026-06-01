@@ -74,7 +74,10 @@ func newAssembler(t *testing.T, opts ...contextpack.Option) *contextpack.Assembl
 			"b.go": {"caller1"},
 		},
 	}
-	blast := blastradius.NewService(edges, nodes, nil)
+	blast, err := blastradius.NewService(edges, nodes, nil)
+	if err != nil {
+		t.Fatalf("construct: %v", err)
+	}
 
 	findNodes := func(_ context.Context, _, _, sym string) ([]*domain.Node, error) {
 		if sym == "Target" {
@@ -233,7 +236,10 @@ func TestForSymbol_IncludesSnippets(t *testing.T) {
 				Snippet: "func Target() { return 42 }"},
 		},
 	}
-	blast := blastradius.NewService(edges, nodes, nil)
+	blast, err := blastradius.NewService(edges, nodes, nil)
+	if err != nil {
+		t.Fatalf("construct: %v", err)
+	}
 	findNodes := func(_ context.Context, _, _, sym string) ([]*domain.Node, error) {
 		n, _ := domain.NewNode(domain.NodeSpec{ID: "seed", Path: "a.go", Name: "Target", Kind: domain.KindFunction})
 		return []*domain.Node{n}, nil
@@ -273,7 +279,10 @@ func TestForSymbol_SnippetTrimmedToBudget(t *testing.T) {
 			"seed": {NodeID: "seed", SymbolPath: "pkg.Big", FilePath: "a.go", Kind: "function", Snippet: huge},
 		},
 	}
-	blast := blastradius.NewService(edges, nodes, nil)
+	blast, err := blastradius.NewService(edges, nodes, nil)
+	if err != nil {
+		t.Fatalf("construct: %v", err)
+	}
 	findNodes := func(_ context.Context, _, _, _ string) ([]*domain.Node, error) {
 		n, _ := domain.NewNode(domain.NodeSpec{ID: "seed", Path: "a.go", Name: "Big", Kind: domain.KindFunction})
 		return []*domain.Node{n}, nil
