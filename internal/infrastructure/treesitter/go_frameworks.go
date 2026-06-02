@@ -288,6 +288,7 @@ func (c *frameworkCommands) addUrfaveApp(m queryMatch, src []byte, repoID, path 
 		return
 	}
 	c.add(app, varName)
+	set := newContainsEdgeSet()
 	for _, sub := range urfaveSubcommandLiterals(body, src) {
 		subName := firstWord(keyedStringValue(sub, src, "Name"))
 		if subName == "" {
@@ -298,10 +299,9 @@ func (c *frameworkCommands) addUrfaveApp(m queryMatch, src []byte, repoID, path 
 			continue
 		}
 		c.nodes = append(c.nodes, child)
-		if e := containsEdge(app.ID, child.ID); e != nil {
-			c.edges = append(c.edges, e)
-		}
+		set.add(app.ID, child.ID)
 	}
+	c.edges = append(c.edges, set.edges...)
 }
 
 // urfaveCommandsBody returns the literal_value listing an App's
@@ -363,8 +363,7 @@ func urfaveSubcommandRefs(body *sitter.Node, src []byte) []string {
 // edges via byVar. Run as a second pass so a subcommand var declared
 // after its App still resolves. Dedup is per (app, child).
 func urfaveRefContainsEdges(matches []queryMatch, p fwParse, byVar map[string]*domain.Node) []*domain.Edge {
-	var edges []*domain.Edge
-	seen := map[string]bool{}
+	set := newContainsEdgeSet()
 	for _, m := range matches {
 		typeNode := m.node("fwvar.type")
 		pkgNode := m.node("fwvar.pkg")
@@ -382,21 +381,12 @@ func urfaveRefContainsEdges(matches []queryMatch, p fwParse, byVar map[string]*d
 			continue
 		}
 		for _, name := range urfaveSubcommandRefs(body, p.src) {
-			child := byVar[name]
-			if child == nil {
-				continue
-			}
-			key := string(app.ID) + callKeySep + string(child.ID)
-			if seen[key] {
-				continue
-			}
-			seen[key] = true
-			if e := containsEdge(app.ID, child.ID); e != nil {
-				edges = append(edges, e)
+			if child := byVar[name]; child != nil {
+				set.add(app.ID, child.ID)
 			}
 		}
 	}
-	return edges
+	return set.edges
 }
 
 // anyPrefixImported reports whether any imported path starts with one of
@@ -573,14 +563,40 @@ func containsEdge(srcID, tgtID domain.NodeID) *domain.Edge {
 	return e
 }
 
+// containsEdgeSet accumulates command-tree CONTAINS edges, deduped per
+// (parent, child) — the wire-up shared by every command framework (cobra
+// AddCommand, urfave Commands slice, kong nested struct types). Each
+// recogniser differs only in how it resolves the parent/child pair; this
+// collapses the identical "key, skip-if-seen, build edge" tail. A repeated
+// registration of the same pair yields one edge; an edge the constructor
+// rejects is silently dropped.
+type containsEdgeSet struct {
+	edges []*domain.Edge
+	seen  map[string]bool
+}
+
+func newContainsEdgeSet() containsEdgeSet {
+	return containsEdgeSet{seen: map[string]bool{}}
+}
+
+func (s *containsEdgeSet) add(parent, child domain.NodeID) {
+	key := string(parent) + callKeySep + string(child)
+	if s.seen[key] {
+		return
+	}
+	s.seen[key] = true
+	if e := containsEdge(parent, child); e != nil {
+		s.edges = append(s.edges, e)
+	}
+}
+
 // cobraContainsEdges turns every parent.AddCommand(child, ...) call whose
 // parent and child(ren) both resolve to command nodes into parent→child
 // CONTAINS edges. Dedup is per (parent, child) so repeated registrations
 // produce one edge. Confidence is Definite — it's a literal wire-up, not
 // an inferred relationship.
 func cobraContainsEdges(matches []queryMatch, src []byte, byVar map[string]*domain.Node) []*domain.Edge {
-	var edges []*domain.Edge
-	seen := map[string]bool{}
+	set := newContainsEdgeSet()
 	for _, m := range matches {
 		methodNode := m.node("cobra.add.method")
 		parentNode := m.node("cobra.add.parent")
@@ -601,21 +617,12 @@ func cobraContainsEdges(matches []queryMatch, src []byte, byVar map[string]*doma
 			if arg == nil || arg.Type() != "identifier" {
 				continue
 			}
-			child := byVar[string(src[arg.StartByte():arg.EndByte()])]
-			if child == nil {
-				continue
-			}
-			key := string(parent.ID) + callKeySep + string(child.ID)
-			if seen[key] {
-				continue
-			}
-			seen[key] = true
-			if e := containsEdge(parent.ID, child.ID); e != nil {
-				edges = append(edges, e)
+			if child := byVar[string(src[arg.StartByte():arg.EndByte()])]; child != nil {
+				set.add(parent.ID, child.ID)
 			}
 		}
 	}
-	return edges
+	return set.edges
 }
 
 // kongField is one `cmd:""`-tagged struct field promoted to a command: the
@@ -655,23 +662,17 @@ func (c *frameworkCommands) addKongCommands(matches []queryMatch, p fwParse) {
 			byType[kf.declType] = kf.node
 		}
 	}
-	seen := map[string]bool{}
+	set := newContainsEdgeSet()
 	for structName, fields := range fieldsOf {
 		parent := byType[structName]
 		if parent == nil {
 			continue // root struct: its fields stay top-level commands
 		}
 		for _, kf := range fields {
-			key := string(parent.ID) + callKeySep + string(kf.node.ID)
-			if seen[key] {
-				continue
-			}
-			seen[key] = true
-			if e := containsEdge(parent.ID, kf.node.ID); e != nil {
-				c.edges = append(c.edges, e)
-			}
+			set.add(parent.ID, kf.node.ID)
 		}
 	}
+	c.edges = append(c.edges, set.edges...)
 }
 
 // buildKongField promotes one @kong.* match to a command node when its tag
