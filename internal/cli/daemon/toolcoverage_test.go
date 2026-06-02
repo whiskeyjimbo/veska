@@ -1977,7 +1977,6 @@ func promotionFamily() []coverageTool {
 // the owning bead so `go test -run TestToolCoverage -v` doubles as a checklist.
 func TestToolCoverage(t *testing.T) {
 	for _, ct := range coverageTools() {
-		ct := ct
 		t.Run(ct.family+"/"+ct.tool, func(t *testing.T) {
 			if ct.run == nil {
 				t.Skipf("pending: %s — replace this leaf's run func with real assertions", ct.bead)
