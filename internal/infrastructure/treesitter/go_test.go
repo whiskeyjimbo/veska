@@ -1098,6 +1098,27 @@ func findNodeByName(nodes []*domain.Node, name string) *domain.Node {
 	return nil
 }
 
+// hasContainsEdge reports whether a CONTAINS edge src→tgt is present.
+func hasContainsEdge(edges []*domain.Edge, src, tgt domain.NodeID) bool {
+	for _, e := range edges {
+		if e.Kind == domain.EdgeContains && e.Src == src && e.Tgt == tgt {
+			return true
+		}
+	}
+	return false
+}
+
+// findCommand returns the KindCommand node with the given name, or nil — a
+// kind-aware finder so a struct type (StopCmd) doesn't shadow its command.
+func findCommand(nodes []*domain.Node, name string) *domain.Node {
+	for _, n := range nodes {
+		if n.Name == name && n.Kind == domain.KindCommand {
+			return n
+		}
+	}
+	return nil
+}
+
 func findNodeByKind(nodes []*domain.Node, kind domain.NodeKind) *domain.Node {
 	for _, n := range nodes {
 		if n.Kind == kind {
@@ -1499,6 +1520,78 @@ var helloCmd = &cobra.Command{
 	}
 	if fromPkg {
 		t.Errorf("RunE-closure call must attribute to the command, not the package node")
+	}
+}
+
+// TestParseFile_KongStructTagCommands guards solov2-su6d: kong models
+// commands as struct fields with `cmd:""` tags, not composite literals.
+// Each tagged field becomes a KindCommand named by the dasherized field
+// name (or a `name:` override); nesting follows the field type, so the root
+// CLI struct's fields are top-level commands and a command struct's own cmd
+// fields are its subcommands (CONTAINS). Flag/arg fields are not commands.
+// kongCLISrc is the fixture for TestParseFile_KongStructTagCommands, hoisted
+// out of the test body so the struct-tag backticks don't bloat it past the
+// funlen budget. CLI's cmd fields are top-level commands; ServerCmd nests
+// Start/Stop; Rm overrides its name; Verbose/Addr are flag/arg fields.
+const kongCLISrc = "package main\n\n" +
+	"import \"github.com/alecthomas/kong\"\n\n" +
+	"type CLI struct {\n" +
+	"\tVerbose bool      `help:\"Be loud.\"`\n" +
+	"\tServer  ServerCmd `cmd:\"\" help:\"Server ops.\"`\n" +
+	"\tRm      RmCmd      `cmd:\"\" name:\"remove\"`\n" +
+	"}\n\n" +
+	"type ServerCmd struct {\n" +
+	"\tStart  StartCmd  `cmd:\"\"`\n" +
+	"\tStop   StopCmd   `cmd:\"\"`\n" +
+	"\tDryRun DryRunCmd `cmd:\"\"`\n" +
+	"}\n\n" +
+	"type DryRunCmd struct{}\n\n" +
+	"type StartCmd struct {\n\tAddr string `arg:\"\"`\n}\n\n" +
+	"type StopCmd struct{}\n\n" +
+	"type RmCmd struct{}\n\n" +
+	"var cli CLI\n\n" +
+	"func main() {\n\tkong.Parse(&cli)\n}\n"
+
+func TestParseFile_KongStructTagCommands(t *testing.T) {
+	p := treesitter.NewGoParser()
+	result, err := p.ParseFile(context.Background(), repoID, filePath, []byte(kongCLISrc))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	server := findCommand(result.Nodes, "server")
+	remove := findCommand(result.Nodes, "remove") // name: override
+	start := findCommand(result.Nodes, "start")
+	stop := findCommand(result.Nodes, "stop")
+	if server == nil || remove == nil || start == nil || stop == nil {
+		t.Fatalf("expected commands server/remove/start/stop; got %v", nodeNames(result.Nodes))
+	}
+	// Flag/arg fields must not be promoted to commands.
+	if n := findCommand(result.Nodes, "verbose"); n != nil {
+		t.Errorf("flag field Verbose must not become a command")
+	}
+	if n := findCommand(result.Nodes, "addr"); n != nil {
+		t.Errorf("arg field Addr must not become a command")
+	}
+
+	if !hasContainsEdge(result.Edges, server.ID, start.ID) {
+		t.Errorf("expected CONTAINS server→start")
+	}
+	if !hasContainsEdge(result.Edges, server.ID, stop.ID) {
+		t.Errorf("expected CONTAINS server→stop")
+	}
+	// Multi-word field name kebab-cases (DryRun → dry-run), like kong.
+	dryRun := findCommand(result.Nodes, "dry-run")
+	if dryRun == nil || !hasContainsEdge(result.Edges, server.ID, dryRun.ID) {
+		t.Errorf("expected command 'dry-run' contained by server; got %v", nodeNames(result.Nodes))
+	}
+	// Top-level commands (CLI's fields) must have no parent COMMAND — the
+	// package node still CONTAINS them, but no other command does.
+	cmds := []*domain.Node{server, remove, start, stop}
+	for _, parent := range cmds {
+		if hasContainsEdge(result.Edges, parent.ID, server.ID) || hasContainsEdge(result.Edges, parent.ID, remove.ID) {
+			t.Errorf("top-level command must not be contained by command %q", parent.Name)
+		}
 	}
 }
 
