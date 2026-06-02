@@ -143,6 +143,12 @@ endif
 tool-test:
 	$(SQLITE_CGO_ENV) go test -tags "$(SQLITE_TAGS)" -run '$(TOOLTEST_RUN)' ./internal/cli/daemon/...
 
+# tool-test-e2e: on-demand socket end-to-end harness (solov2-t9kg). Build-tag
+# gated behind `socket_e2e` so it stays out of the default test path; it drives
+# the real daemon Unix-socket JSON-RPC round-trip through the registry.
+tool-test-e2e:
+	$(SQLITE_CGO_ENV) go test -tags "$(SQLITE_TAGS) socket_e2e" -run TestSocketE2E ./internal/cli/daemon/...
+
 vet:
 	$(SQLITE_CGO_ENV) go vet -tags "$(SQLITE_TAGS)" ./...
 
