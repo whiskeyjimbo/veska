@@ -83,7 +83,48 @@ func repoFamily() []coverageTool {
 	return []coverageTool{
 		{family: f, tool: "eng_add_repo", bead: "solov2-ieuu"},
 		{family: f, tool: "eng_remove_repo", bead: "solov2-e6xw"},
-		{family: f, tool: "eng_list_repos", bead: "solov2-p844"},
+		{family: f, tool: "eng_list_repos", bead: "solov2-p844", run: func(t *testing.T) {
+			h := newHarness(t)
+			res, rpcErr := h.Call("eng_list_repos", map[string]any{})
+			if rpcErr != nil {
+				t.Fatalf("eng_list_repos: %v", rpcErr)
+			}
+			m, ok := res.(map[string]any)
+			if !ok {
+				t.Fatalf("eng_list_repos: result type %T, want map[string]any", res)
+			}
+			views, ok := m["repos"].([]mcp.RepoView)
+			if !ok {
+				t.Fatalf("eng_list_repos: repos type %T, want []mcp.RepoView", m["repos"])
+			}
+			byID := map[string]mcp.RepoView{}
+			for _, v := range views {
+				byID[v.RepoID] = v
+			}
+			// Contains-all (not exact size) in case the harness seeds extra repos.
+			for _, repoID := range []string{coverage.AlphaRepoID, coverage.BetaRepoID} {
+				rv, present := byID[repoID]
+				if !present {
+					t.Errorf("eng_list_repos missing seeded repo %q (got %v)", repoID, byID)
+					continue
+				}
+				if rv.RootPath != h.Root(repoID) {
+					t.Errorf("%s root_path = %q, want %q", repoID, rv.RootPath, h.Root(repoID))
+				}
+				if rv.ActiveBranch != coverage.FixtureBranch {
+					t.Errorf("%s active_branch = %q, want %q", repoID, rv.ActiveBranch, coverage.FixtureBranch)
+				}
+				if rv.Status != "promoted" {
+					t.Errorf("%s status = %q, want %q", repoID, rv.Status, "promoted")
+				}
+				if rv.Kind != "tracked" {
+					t.Errorf("%s kind = %q, want %q", repoID, rv.Kind, "tracked")
+				}
+				if rv.Aliases == nil {
+					t.Errorf("%s aliases is nil, want non-nil ([])", repoID)
+				}
+			}
+		}},
 		{family: f, tool: "eng_get_repo", bead: "solov2-p4zv"},
 		{family: f, tool: "eng_get_current_repo", bead: "solov2-mhfa"},
 		{family: f, tool: "eng_get_status", bead: "solov2-mxbd"},
