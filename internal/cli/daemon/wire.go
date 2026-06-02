@@ -805,6 +805,13 @@ func (b *daemonBuilder) buildReconciler() *gitwatch.WakeReconciler {
 			}))
 	}
 
+	// Post-sweep: restart every repo's watcher handle so live saves resume
+	// against a fresh OS stream once the mtime sweep has covered the suspend
+	// window (SOLO-03 §5.2 step 4).
+	opts = append(opts, gitwatch.WithPostSweepHook(func(_ context.Context) {
+		b.watcher.RestartAll()
+	}))
+
 	return gitwatch.NewWakeReconciler(tick, threshold,
 		func(_ context.Context, repoID, path string) {
 			b.watcher.Inject(repoID, path)

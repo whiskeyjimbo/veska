@@ -92,6 +92,60 @@ func TestSweepStartHook_FiresPerRepoBeforeWalk(t *testing.T) {
 	}
 }
 
+// TestPostSweepHook_FiresOnceAfterWalk asserts the post-sweep hook (the
+// wake-handle restart seam, solov2-xde2.25.3) runs exactly once at the end of a
+// sweep and only AFTER every file-walk handler has fired.
+func TestPostSweepHook_FiresOnceAfterWalk(t *testing.T) {
+	var mu sync.Mutex
+	postCount := 0
+	handlerSeen := false
+	postBeforeHandler := false
+
+	handler := func(_ context.Context, _, _ string) {
+		mu.Lock()
+		handlerSeen = true
+		mu.Unlock()
+	}
+	post := func(_ context.Context) {
+		mu.Lock()
+		postCount++
+		if !handlerSeen {
+			postBeforeHandler = true
+		}
+		mu.Unlock()
+	}
+
+	r := NewWakeReconciler(time.Second, time.Second, handler,
+		WithWakeConcurrency(4), WithPostSweepHook(post))
+	seedRepoDir(t, r, "repoA")
+	seedRepoDir(t, r, "repoB")
+
+	r.InjectWake()
+
+	if postBeforeHandler {
+		t.Error("post-sweep hook fired BEFORE a file-walk handler; not after-phase")
+	}
+	if postCount != 1 {
+		t.Errorf("post-sweep hook fired %d times, want exactly 1", postCount)
+	}
+	if !handlerSeen {
+		t.Error("file-walk handler never fired; test setup did not produce a changed file")
+	}
+}
+
+// TestPostSweepHook_NilSkipped confirms a nil post-sweep hook leaves the sweep
+// working (back-compat: no after-phase).
+func TestPostSweepHook_NilSkipped(t *testing.T) {
+	fired := false
+	r := NewWakeReconciler(time.Second, time.Second,
+		func(_ context.Context, _, _ string) { fired = true })
+	seedRepoDir(t, r, "repoA")
+	r.InjectWake()
+	if !fired {
+		t.Error("handler did not fire with a nil post-sweep hook")
+	}
+}
+
 // TestSweepStartHook_NilSkipped confirms a nil hook leaves the sweep working
 // (back-compat: no pre-pass).
 func TestSweepStartHook_NilSkipped(t *testing.T) {

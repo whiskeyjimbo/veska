@@ -46,6 +46,14 @@ func (e MtimeEntry) changedFrom(prev MtimeEntry) bool {
 // the callback (no staging/application import). ctx is the sweep's context.
 type SweepStartHook func(ctx context.Context, repoID, dir string)
 
+// PostSweepHook is invoked exactly once at the end of a wake sweep, AFTER every
+// per-repo file-walk has joined. The daemon wires the watcher handle-restart
+// here (solov2-xde2.25.3): live events resume against a fresh OS stream once the
+// mtime sweep has covered the suspend window. The reconciler stays infra-pure —
+// it just calls the callback (no watcher/application import). ctx is the sweep's
+// context; the hook is skipped if the sweep returns early on cancellation.
+type PostSweepHook func(ctx context.Context)
+
 // ReconcileHandler is called with the owning repo ID and the path of each file
 // whose mtime/size changed since the last sweep. The reconciler calls this for
 // every changed file it discovers. ctx is the sweep's context so a long handler
@@ -68,6 +76,7 @@ type WakeReconciler struct {
 	wakeThreshold time.Duration
 	handler       ReconcileHandler
 	sweepStart    SweepStartHook
+	postSweep     PostSweepHook
 	ignore        *infrafs.IgnoreList
 	nowFn         func() time.Time
 	// concurrency bounds how many per-repo sweeps run in parallel. Always
@@ -112,6 +121,15 @@ func WithIgnoreList(ignore *infrafs.IgnoreList) Option {
 // (the default) skips the pre-pass.
 func WithSweepStartHook(fn SweepStartHook) Option {
 	return func(r *WakeReconciler) { r.sweepStart = fn }
+}
+
+// WithPostSweepHook registers a callback invoked exactly once at the end of a
+// wake sweep, after every per-repo file-walk has joined. The daemon wires the
+// watcher handle-restart here. A nil hook (the default) skips the after-phase. A
+// sweep that returns early on context cancellation does NOT invoke the hook —
+// that correctly avoids restarting watcher handles during shutdown.
+func WithPostSweepHook(fn PostSweepHook) Option {
+	return func(r *WakeReconciler) { r.postSweep = fn }
 }
 
 // WithWakeConcurrency caps how many per-repo sweeps run in parallel on a wake
@@ -299,6 +317,14 @@ func (r *WakeReconciler) sweepDirs(ctx context.Context) {
 		}(wd)
 	}
 	wg.Wait()
+
+	// After-phase: restart the watcher handles so live events resume against a
+	// fresh stream. Runs once, after all parallel walks join. Skipped on a
+	// cancelled context so shutdown does not recreate watchers we are tearing
+	// down.
+	if r.postSweep != nil && ctx.Err() == nil {
+		r.postSweep(ctx)
+	}
 }
 
 // sweepOneRepo walks one repo's directory tree and fires the handler for each
