@@ -30,6 +30,7 @@ package daemon
 // tool surface so no tool is silently uncovered.
 
 import (
+	"encoding/json"
 	"path/filepath"
 	"reflect"
 	"sort"
@@ -170,7 +171,74 @@ func graphFamily() []coverageTool {
 				t.Fatalf("bogus node_id: got %v, want CodeNotFound", nfErr)
 			}
 		}},
-		{family: f, tool: "eng_get_call_chain", bead: "solov2-zk8c"},
+		{family: f, tool: "eng_get_call_chain", bead: "solov2-zk8c", run: func(t *testing.T) {
+			h := newHarness(t)
+			repoID := coverage.AlphaRepoID
+			seed := h.ResolveID(repoID, coverage.NodeKey{
+				Path: "metric/deviation.go", Kind: domain.KindFunction, Name: "StandardDeviation"})
+
+			res, rpcErr := h.Call("eng_get_call_chain", map[string]any{
+				"node_id": string(seed), "repo_id": repoID, "depth": 3,
+			})
+			if rpcErr != nil {
+				t.Fatalf("eng_get_call_chain: %v", rpcErr)
+			}
+			// callChainResponse + its node/edge DTOs are unexported in package
+			// mcp, so round-trip the result through JSON into a local shape with
+			// the same tags rather than type-asserting an unreachable type.
+			var resp struct {
+				Nodes []struct {
+					NodeID string `json:"node_id"`
+				} `json:"nodes"`
+				Edges []struct {
+					Src  string `json:"src_node_id"`
+					Dst  string `json:"dst_node_id"`
+					Kind string `json:"kind"`
+				} `json:"edges"`
+			}
+			b, _ := json.Marshal(res)
+			if err := json.Unmarshal(b, &resp); err != nil {
+				t.Fatalf("decode call chain: %v", err)
+			}
+
+			// Expected CALLS edges = the manifest's frozen Alpha CALLS facts (all
+			// reachable from StandardDeviation within depth 3). Nodes derive from
+			// those edges' endpoints, so no second hardcoded resolve list.
+			wantEdges, wantNodes := map[string]bool{}, map[string]bool{}
+			for _, e := range coverage.Manifest().Edges {
+				if e.Kind != domain.EdgeCalls || e.RepoID != repoID {
+					continue
+				}
+				src, dst := h.ResolveID(repoID, e.Src), h.ResolveID(repoID, e.Dst)
+				wantEdges[string(src)+"\x00"+string(dst)+"\x00"+string(e.Kind)] = true
+				// resultNodes holds callees only (the seed is marked visited but
+				// never appended), so assert presence of edge endpoints other
+				// than the seed.
+				if src != seed {
+					wantNodes[string(src)] = true
+				}
+				if dst != seed {
+					wantNodes[string(dst)] = true
+				}
+			}
+			gotEdges, gotNodes := map[string]bool{}, map[string]bool{}
+			for _, e := range resp.Edges {
+				gotEdges[e.Src+"\x00"+e.Dst+"\x00"+e.Kind] = true
+			}
+			for _, n := range resp.Nodes {
+				gotNodes[n.NodeID] = true
+			}
+			for k := range wantEdges {
+				if !gotEdges[k] {
+					t.Errorf("CALLS edge %q missing from call chain", k)
+				}
+			}
+			for id := range wantNodes {
+				if !gotNodes[id] {
+					t.Errorf("reachable node %q missing from call chain", id)
+				}
+			}
+		}},
 		{family: f, tool: "eng_get_file_nodes", bead: "solov2-2zlq", run: func(t *testing.T) {
 			h := newHarness(t)
 			repoID := coverage.AlphaRepoID
