@@ -1125,7 +1125,52 @@ func graphFamily() []coverageTool {
 				t.Errorf("non-chunk node set = %v, want %v", nonChunk, want)
 			}
 		}},
-		{family: f, tool: "eng_find_related", bead: "solov2-d217"},
+		{family: f, tool: "eng_find_related", bead: "solov2-d217", run: func(t *testing.T) {
+			h := newHarness(t)
+			repoID := coverage.AlphaRepoID
+			// Anchor at line 39 inside computeMean's body (metric/series.go). The
+			// handler resolves the SMALLEST ENCLOSING node (computeMean) and reuses
+			// the eng_search_similar vector core, so the same near-dup partner
+			// (averageSamples) surfaces. file_path is matched verbatim against the
+			// stored ABSOLUTE node paths — pass an absolute path. Assert ranking
+			// INVARIANTS only: seed-exclusion, descending ORDERING, near-dup
+			// MEMBERSHIP by node_id — never absolute vector scores.
+			seed := string(h.ResolveID(repoID, coverage.NodeKey{
+				Path: "metric/series.go", Kind: domain.KindFunction, Name: "computeMean"}))
+			want := string(h.ResolveID(repoID, coverage.NodeKey{
+				Path: "metric/deviation.go", Kind: domain.KindFunction, Name: "averageSamples"}))
+			res, rpcErr := h.Call("eng_find_related", map[string]any{
+				"file_path": filepath.Join(h.Root(repoID), "metric/series.go"),
+				"line":      39, "repo_id": repoID, "k": 10,
+			})
+			if rpcErr != nil {
+				t.Fatalf("eng_find_related: %v", rpcErr)
+			}
+			resp, ok := res.(mcp.SearchResponse)
+			if !ok {
+				t.Fatalf("eng_find_related: result type %T, want mcp.SearchResponse", res)
+			}
+			if len(resp.Results) == 0 {
+				t.Fatal("eng_find_related returned no neighbours for the enclosing seed")
+			}
+			found := false
+			for i, hit := range resp.Results {
+				if hit.NodeID == seed {
+					t.Errorf("enclosing seed %q must be excluded from its own neighbours", seed)
+				}
+				if hit.NodeID == want {
+					found = true
+				}
+				// ORDERING: scores are non-increasing.
+				if i > 0 && hit.Score > resp.Results[i-1].Score {
+					t.Errorf("neighbours not sorted descending: hit[%d] %v > hit[%d] %v",
+						i, hit.Score, i-1, resp.Results[i-1].Score)
+				}
+			}
+			if !found {
+				t.Errorf("near-dup averageSamples %q missing from computeMean neighbours", want)
+			}
+		}},
 	}
 }
 
