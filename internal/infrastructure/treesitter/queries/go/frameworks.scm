@@ -12,9 +12,10 @@
 ; urfave/cli (App → command named by Name:, with its Commands:[]*Command
 ; slice as subcommands), and HTTP routers gin/echo/chi (router.METHOD(
 ; "/path", handler) → KindRoute named "METHOD /path" + a ROUTES
-; route→handler edge resolved at promotion — solov2-ketg). kong (struct
-; tags) is a reserved follow-up; it drops in as a branch in
-; go_frameworks.go.
+; route→handler edge resolved at promotion — solov2-ketg), and
+; alecthomas/kong (struct fields tagged `cmd:""` → KindCommand, nested via
+; field type — solov2-su6d), which is a struct-tag walk rather than a
+; composite-literal match.
 ;
 ; The @fwvar.* patterns capture EVERY top-level `var X = &pkg.Type{...}`;
 ; go_frameworks.go dispatches on (resolved import path, type name) so a
@@ -58,6 +59,24 @@
     operand: (identifier) @cobra.add.parent
     field: (field_identifier) @cobra.add.method)
   arguments: (argument_list) @cobra.add.args)
+
+; kong struct-tag command: a struct field whose tag carries `cmd:""` is a
+; command (alecthomas/kong). One match fires per tagged field_declaration,
+; with @kong.struct.name repeated for every field of the struct.
+; go_frameworks.go keeps only fields whose tag has a `cmd` key (Lookup, not
+; Get — `cmd:""` is present-but-empty), names the command by the `name:` tag
+; or the dasherized field name, and nests via the field type: a command
+; whose struct type has its own `cmd` fields CONTAINS them. arg:/flag fields
+; also match (they carry tags) and are dropped by the cmd-key filter.
+(type_declaration
+  (type_spec
+    name: (type_identifier) @kong.struct.name
+    type: (struct_type
+      (field_declaration_list
+        (field_declaration
+          name: (field_identifier) @kong.field.name
+          type: (_) @kong.field.type
+          tag: (raw_string_literal) @kong.field.tag) @kong.field.decl))))
 
 ; HTTP route: router.METHOD("/path", handler). Matches any selector call;
 ; go_frameworks.go filters field against the HTTP verb set (gin/echo GET,
