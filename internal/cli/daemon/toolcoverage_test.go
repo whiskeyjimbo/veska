@@ -1675,7 +1675,77 @@ func changedSymbolsFamily() []coverageTool {
 func promotionFamily() []coverageTool {
 	const f = "promotion"
 	return []coverageTool{
-		{family: f, tool: "eng_promote_repo", bead: "solov2-0buu"},
+		{family: f, tool: "eng_promote_repo", bead: "solov2-0buu", run: func(t *testing.T) {
+			// Controlled repo so promote drives a clean 0→N graph transition.
+			// ChangedFiles diffs HEAD against its parent, so the symbol must land
+			// in a NON-root commit (c1 seeds the file empty; c2 adds Render and is
+			// the HEAD whose changed set is {widget.go}).
+			root := initGitRepo(t)
+			writeRepoFile(t, root, "widget.go", "package widget\n")
+			gitCommitAll(t, root, "c1")
+			writeRepoFile(t, root, "widget.go", "package widget\n\nfunc Render() string { return \"x\" }\n")
+			gitCommitAll(t, root, "c2")
+
+			h := newHarness(t)
+			res, rpcErr := h.Call("eng_add_repo", map[string]any{"root_path": root})
+			if rpcErr != nil {
+				t.Fatalf("eng_add_repo: %v", rpcErr)
+			}
+			repoID, _ := res.(map[string]any)["repo_id"].(string)
+			if repoID == "" {
+				t.Fatalf("eng_add_repo returned empty repo_id (got %v)", res)
+			}
+
+			fileNodes := func() mcp.GraphResponse {
+				r, e := h.Call("eng_get_file_nodes", map[string]any{"file_path": "widget.go", "repo_id": repoID})
+				if e != nil {
+					t.Fatalf("eng_get_file_nodes: %v", e)
+				}
+				resp, ok := r.(mcp.GraphResponse)
+				if !ok {
+					t.Fatalf("eng_get_file_nodes: result type %T, want mcp.GraphResponse", r)
+				}
+				return resp
+			}
+
+			// BEFORE: registered but not yet scanned — zero nodes.
+			if n := fileNodes().Nodes; len(n) != 0 {
+				t.Fatalf("before promote: got %d nodes, want 0 (unindexed)", len(n))
+			}
+
+			// MUTATE: promote re-stages HEAD's files and flushes staging.
+			res, rpcErr = h.Call("eng_promote_repo", map[string]any{"repo_id": repoID})
+			if rpcErr != nil {
+				t.Fatalf("eng_promote_repo: %v", rpcErr)
+			}
+			// promoteResult is unexported in package mcp; round-trip via JSON.
+			var pr struct {
+				RepoID        string `json:"repo_id"`
+				FilesPromoted int    `json:"files_promoted"`
+			}
+			b, _ := json.Marshal(res)
+			if err := json.Unmarshal(b, &pr); err != nil {
+				t.Fatalf("decode promote result: %v", err)
+			}
+			if pr.RepoID != repoID || pr.FilesPromoted < 1 {
+				t.Fatalf("promote = %+v, want repo_id=%s files_promoted>=1", pr, repoID)
+			}
+
+			// AFTER: the graph now holds the file's symbols, including Render.
+			after := fileNodes().Nodes
+			if len(after) == 0 {
+				t.Fatalf("after promote: got 0 nodes, want >0")
+			}
+			found := false
+			for _, n := range after {
+				if n.Name == "Render" && n.Kind == string(domain.KindFunction) {
+					found = true
+				}
+			}
+			if !found {
+				t.Errorf("after promote: no Render (KindFunction) node in %+v", after)
+			}
+		}},
 		{family: f, tool: "eng_reindex_repo", bead: "solov2-extk", run: func(t *testing.T) {
 			h := newHarness(t)
 			// Count non-zero nodes for a known file; reindex is idempotent, so the
