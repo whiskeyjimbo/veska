@@ -157,7 +157,35 @@ func repoFamily() []coverageTool {
 				t.Fatalf("unknown repo_id: got %v, want CodeNotFound", nfErr)
 			}
 		}},
-		{family: f, tool: "eng_get_current_repo", bead: "solov2-mhfa"},
+		{family: f, tool: "eng_get_current_repo", bead: "solov2-mhfa", run: func(t *testing.T) {
+			h := newHarness(t)
+			// Two repos are seeded, so empty cwd is ambiguous: must pass a cwd
+			// under Alpha's root. A real subdir exercises the HasPrefix match.
+			cwd := filepath.Join(h.Root(coverage.AlphaRepoID), "metric")
+			res, rpcErr := h.Call("eng_get_current_repo", map[string]any{"cwd": cwd})
+			if rpcErr != nil {
+				t.Fatalf("eng_get_current_repo: %v", rpcErr)
+			}
+			m, ok := res.(map[string]any)
+			if !ok {
+				t.Fatalf("eng_get_current_repo: result type %T, want map[string]any", res)
+			}
+			rv, ok := m["repo"].(mcp.RepoView)
+			if !ok {
+				t.Fatalf("eng_get_current_repo: repo type %T, want mcp.RepoView", m["repo"])
+			}
+			if rv.RepoID != coverage.AlphaRepoID {
+				t.Errorf("repo_id = %q, want %q", rv.RepoID, coverage.AlphaRepoID)
+			}
+			if want := h.Root(coverage.AlphaRepoID); rv.RootPath != want {
+				t.Errorf("root_path = %q, want %q", rv.RootPath, want)
+			}
+			// cwd matching no registered repo root is surfaced as CodeInvalidParams.
+			_, nfErr := h.Call("eng_get_current_repo", map[string]any{"cwd": "/nonexistent/path/xyz"})
+			if nfErr == nil || nfErr.Code != mcp.CodeInvalidParams {
+				t.Fatalf("unmatched cwd: got %v, want CodeInvalidParams", nfErr)
+			}
+		}},
 		{family: f, tool: "eng_get_status", bead: "solov2-mxbd"},
 		{family: f, tool: "eng_get_config", bead: "solov2-f11k"},
 		{family: f, tool: "eng_set_repo_alias", bead: "solov2-awb9"},
