@@ -1348,7 +1348,69 @@ func dependencyFamily() []coverageTool {
 func cloneFamily() []coverageTool {
 	const f = "clone"
 	return []coverageTool{
-		{family: f, tool: "eng_find_clones", bead: "solov2-8jfs"},
+		{family: f, tool: "eng_find_clones", bead: "solov2-8jfs", run: func(t *testing.T) {
+			h := newHarness(t)
+			// Structural-invariants-only coverage (fuzzy DoD). The manifest's
+			// computeMean/averageSamples are a *near*-dup pair, not byte-identical,
+			// so membership is NOT assertable here: near mode is empty (this harness
+			// runs no autolink → no scored SIMILAR_TO edges), and exact mode in this
+			// fixture buckets every non-excluded symbol under an empty content_hash
+			// (likely a content_hash-not-populated defect on this index path), which
+			// is a defect artifact we must not freeze. So assert only the invariants
+			// robust to a content_hash fix (0 groups must pass) plus exact's real
+			// kind-exclusion contract.
+			excluded := map[string]bool{
+				string(domain.KindPackage): true, string(domain.KindChunk): true,
+				string(domain.KindFile): true, string(domain.KindModule): true,
+				string(domain.KindField): true, "import": true,
+			}
+			ex, exErr := h.Call("eng_find_clones", map[string]any{"repo_id": coverage.AlphaRepoID, "mode": "exact"})
+			if exErr != nil {
+				t.Fatalf("eng_find_clones exact: %v", exErr)
+			}
+			exResp, ok := ex.(mcp.FindClonesResponse)
+			if !ok {
+				t.Fatalf("exact: result type %T, want mcp.FindClonesResponse", ex)
+			}
+			if exResp.Mode != "exact" {
+				t.Errorf("exact: mode = %q, want \"exact\"", exResp.Mode)
+			}
+			if exResp.Groups == nil {
+				t.Error("exact: groups is nil, want non-nil")
+			}
+			for _, g := range exResp.Groups {
+				if g.Size != len(g.Members) || g.Size < 2 {
+					t.Errorf("exact group: size=%d members=%d, want size==members>=2", g.Size, len(g.Members))
+				}
+				for _, m := range g.Members {
+					if excluded[m.Kind] {
+						t.Errorf("exact group member %q has excluded kind %q", m.Name, m.Kind)
+					}
+				}
+			}
+			nr, nrErr := h.Call("eng_find_clones", map[string]any{"repo_id": coverage.AlphaRepoID, "mode": "near", "min_score": 0.0})
+			if nrErr != nil {
+				t.Fatalf("eng_find_clones near: %v", nrErr)
+			}
+			nrResp, ok := nr.(mcp.FindClonesResponse)
+			if !ok {
+				t.Fatalf("near: result type %T, want mcp.FindClonesResponse", nr)
+			}
+			if nrResp.Mode != "near" {
+				t.Errorf("near: mode = %q, want \"near\"", nrResp.Mode)
+			}
+			if nrResp.Clusters == nil {
+				t.Error("near: clusters is nil, want non-nil")
+			}
+			for _, c := range nrResp.Clusters {
+				if c.MinScore > c.MaxScore {
+					t.Errorf("near cluster: min_score=%v > max_score=%v", c.MinScore, c.MaxScore)
+				}
+				if c.Size != len(c.Members) || c.Size < 2 {
+					t.Errorf("near cluster: size=%d members=%d, want size==members>=2", c.Size, len(c.Members))
+				}
+			}
+		}},
 	}
 }
 
