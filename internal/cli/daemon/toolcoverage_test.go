@@ -455,7 +455,35 @@ func wikiFamily() []coverageTool {
 	const f = "wiki"
 	return []coverageTool{
 		{family: f, tool: "eng_get_hot_zone", bead: "solov2-17kd"},
-		{family: f, tool: "eng_get_entry_points", bead: "solov2-tqda"},
+		{family: f, tool: "eng_get_entry_points", bead: "solov2-tqda", run: func(t *testing.T) {
+			h := newHarness(t)
+			repoID := coverage.BetaRepoID
+			res, rpcErr := h.Call("eng_get_entry_points", map[string]any{"repo_id": repoID})
+			if rpcErr != nil {
+				t.Fatalf("eng_get_entry_points: %v", rpcErr)
+			}
+			resp, ok := res.(mcp.EntryPointsResponse)
+			if !ok {
+				t.Fatalf("eng_get_entry_points: result type %T, want mcp.EntryPointsResponse", res)
+			}
+			// Selection runs fan-in + hidden gates (e.g. Alpha's exported
+			// ComputeVariance is dropped despite inbound>=1), so assert only the
+			// manifest's frozen entry points are PRESENT — not an exact set.
+			// EntryPoint.FilePath is absolute on the wire (mirrors sibling DTOs).
+			got := map[string]bool{}
+			for _, e := range resp.EntryPoints {
+				got[e.SymbolName+"\x00"+e.FilePath] = true
+			}
+			for _, ep := range coverage.Manifest().EntryPoints {
+				if ep.RepoID != repoID {
+					continue
+				}
+				want := ep.Node.Name + "\x00" + filepath.Join(h.Root(repoID), ep.Node.Path)
+				if !got[want] {
+					t.Errorf("manifest entry point %q (%s) missing from output", ep.Node.Name, ep.Node.Path)
+				}
+			}
+		}},
 	}
 }
 
