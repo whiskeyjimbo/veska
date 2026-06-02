@@ -629,7 +629,57 @@ func suppressionFamily() []coverageTool {
 				t.Errorf("seed-suppression-0 reason %q missing %q", sr.Reason, "intentionally explicit")
 			}
 		}},
-		{family: f, tool: "eng_close_suppression", bead: "solov2-lmhn"},
+		{family: f, tool: "eng_close_suppression", bead: "solov2-lmhn", run: func(t *testing.T) {
+			h := newHarness(t)
+			// suppressionRow is unexported; eng_get_suppression returns
+			// map[string]any{"suppression": suppressionRow}. expires_at is *int64
+			// omitempty: ABSENT in JSON while active, PRESENT after close.
+			getExpiresAt := func() *int64 {
+				res, rpcErr := h.Call("eng_get_suppression", map[string]any{"suppression_id": "seed-suppression-0"})
+				if rpcErr != nil {
+					t.Fatalf("eng_get_suppression: %v", rpcErr)
+				}
+				var got struct {
+					Suppression struct {
+						ExpiresAt *int64 `json:"expires_at"`
+					} `json:"suppression"`
+				}
+				b, _ := json.Marshal(res)
+				if err := json.Unmarshal(b, &got); err != nil {
+					t.Fatalf("decode suppression: %v", err)
+				}
+				return got.Suppression.ExpiresAt
+			}
+
+			// BEFORE: seed-suppression-0 is active (expires_at unset).
+			if exp := getExpiresAt(); exp != nil {
+				t.Fatalf("before close: expires_at = %d, want nil (active)", *exp)
+			}
+
+			// MUTATE: close sets expires_at = now; returned map value is a native int64.
+			res, rpcErr := h.Call("eng_close_suppression", map[string]any{"suppression_id": "seed-suppression-0"})
+			if rpcErr != nil {
+				t.Fatalf("eng_close_suppression: %v", rpcErr)
+			}
+			m, ok := res.(map[string]any)
+			if !ok {
+				t.Fatalf("close result type = %T, want map", res)
+			}
+			if exp, ok := m["expires_at"].(int64); !ok || exp <= 0 {
+				t.Fatalf("close expires_at = %v (%T), want positive int64", m["expires_at"], m["expires_at"])
+			}
+
+			// AFTER: the suppression is terminated (expires_at now set).
+			if exp := getExpiresAt(); exp == nil || *exp <= 0 {
+				t.Fatalf("after close: expires_at = %v, want positive (terminated)", exp)
+			}
+
+			// Unknown suppression_id -> CodeNotFound.
+			_, nfErr := h.Call("eng_close_suppression", map[string]any{"suppression_id": "nope"})
+			if nfErr == nil || nfErr.Code != mcp.CodeNotFound {
+				t.Fatalf("unknown suppression_id: got %v, want CodeNotFound", nfErr)
+			}
+		}},
 	}
 }
 
