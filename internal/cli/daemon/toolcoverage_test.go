@@ -273,7 +273,40 @@ func repoFamily() []coverageTool {
 				t.Errorf("after: aliases = %v, want \"myalias\" present", after)
 			}
 		}},
-		{family: f, tool: "eng_remove_repo_alias", bead: "solov2-ffvx"},
+		{family: f, tool: "eng_remove_repo_alias", bead: "solov2-ffvx", run: func(t *testing.T) {
+			h := newHarness(t)
+			aliasesOf := func(repoID string) []string {
+				res, rpcErr := h.Call("eng_list_repos", map[string]any{})
+				if rpcErr != nil {
+					t.Fatalf("eng_list_repos: %v", rpcErr)
+				}
+				for _, v := range res.(map[string]any)["repos"].([]mcp.RepoView) {
+					if v.RepoID == repoID {
+						return v.Aliases
+					}
+				}
+				t.Fatalf("eng_list_repos: repo %q not present", repoID)
+				return nil
+			}
+			if before := aliasesOf(coverage.AlphaRepoID); !slices.Contains(before, "alpha") {
+				t.Fatalf("before: aliases = %v, want \"alpha\" present", before)
+			}
+			res, rpcErr := h.Call("eng_remove_repo_alias", map[string]any{"name": "alpha"})
+			if rpcErr != nil {
+				t.Fatalf("eng_remove_repo_alias: %v", rpcErr)
+			}
+			m := res.(map[string]any)
+			if m["removed"] != true || m["name"] != "alpha" {
+				t.Errorf("remove returned %v, want removed=true name=%q", m, "alpha")
+			}
+			if after := aliasesOf(coverage.AlphaRepoID); slices.Contains(after, "alpha") {
+				t.Errorf("after: aliases = %v, want \"alpha\" absent", after)
+			}
+			_, rpcErr = h.Call("eng_remove_repo_alias", map[string]any{"name": "nonexistent-alias"})
+			if rpcErr == nil || rpcErr.Code != mcp.CodeNotFound {
+				t.Errorf("remove unknown: rpcErr = %v, want CodeNotFound", rpcErr)
+			}
+		}},
 		{family: f, tool: "eng_find_owner", bead: "solov2-a6ud"},
 	}
 }
