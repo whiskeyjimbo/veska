@@ -401,7 +401,46 @@ func suppressionFamily() []coverageTool {
 	return []coverageTool{
 		{family: f, tool: "eng_suppress_finding", bead: "solov2-uq5t"},
 		{family: f, tool: "eng_get_suppression", bead: "solov2-9735"},
-		{family: f, tool: "eng_list_suppressions", bead: "solov2-avb5"},
+		{family: f, tool: "eng_list_suppressions", bead: "solov2-avb5", run: func(t *testing.T) {
+			h := newHarness(t)
+			// suppressionRow is unexported in package mcp; round-trip the result
+			// through JSON into a local shape rather than type-asserting it.
+			type srow struct {
+				SuppressionID string `json:"suppression_id"`
+				Scope         string `json:"scope"`
+				Rule          string `json:"rule"`
+				Reason        string `json:"reason"`
+				ActorKind     string `json:"actor_kind"`
+			}
+			res, rpcErr := h.Call("eng_list_suppressions", map[string]any{
+				"repo_id": coverage.AlphaRepoID, "branch": coverage.FixtureBranch,
+			})
+			if rpcErr != nil {
+				t.Fatalf("eng_list_suppressions: %v", rpcErr)
+			}
+			var out struct {
+				Suppressions []srow `json:"suppressions"`
+			}
+			b, _ := json.Marshal(res)
+			if err := json.Unmarshal(b, &out); err != nil {
+				t.Fatalf("decode suppressions: %v", err)
+			}
+			bySeed := map[string]srow{}
+			for _, s := range out.Suppressions {
+				bySeed[s.SuppressionID] = s
+			}
+			// Contains-all (not exact size): assert the seeded suppression is present.
+			sr, ok := bySeed["seed-suppression-0"]
+			if !ok {
+				t.Fatalf("suppression set %v missing seed-suppression-0", bySeed)
+			}
+			if sr.Scope != "node" || sr.Rule != "complexity" || sr.ActorKind != "agent" {
+				t.Errorf("seed-suppression-0 = %+v, want scope=node rule=complexity actor_kind=agent", sr)
+			}
+			if !strings.Contains(sr.Reason, "intentionally explicit") {
+				t.Errorf("seed-suppression-0 reason %q missing %q", sr.Reason, "intentionally explicit")
+			}
+		}},
 		{family: f, tool: "eng_close_suppression", bead: "solov2-lmhn"},
 	}
 }
