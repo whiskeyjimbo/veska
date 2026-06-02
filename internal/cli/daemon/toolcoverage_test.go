@@ -840,7 +840,40 @@ func taskFamily() []coverageTool {
 	const f = "task"
 	return []coverageTool{
 		{family: f, tool: "eng_set_active_task", bead: "solov2-orrj", task: true},
-		{family: f, tool: "eng_get_active_task", bead: "solov2-0cgj", task: true},
+		{family: f, tool: "eng_get_active_task", bead: "solov2-0cgj", task: true, run: func(t *testing.T) {
+			h := newHarness(t, WithTaskTools())
+			// taskRow is unexported in package mcp; the handler returns it
+			// directly when a task is active, so round-trip via JSON.
+			res, rpcErr := h.Call("eng_get_active_task", map[string]any{"repo_id": coverage.BetaRepoID})
+			if rpcErr != nil {
+				t.Fatalf("eng_get_active_task: %v", rpcErr)
+			}
+			var got struct {
+				TaskID string `json:"task_id"`
+				Title  string `json:"title"`
+				Active int    `json:"active"`
+				RepoID string `json:"repo_id"`
+			}
+			b, _ := json.Marshal(res)
+			if err := json.Unmarshal(b, &got); err != nil {
+				t.Fatalf("decode active task: %v", err)
+			}
+			if got.TaskID != "task-active" || got.Title != "wire up the badge widget" || got.Active != 1 || got.RepoID != coverage.BetaRepoID {
+				t.Errorf("active task = %+v, want task_id=task-active title=%q active=1 repo_id=%s", got, "wire up the badge widget", coverage.BetaRepoID)
+			}
+			// Alpha has no tasks -> null shape map[string]any{"task_id": nil}.
+			none, noneErr := h.Call("eng_get_active_task", map[string]any{"repo_id": coverage.AlphaRepoID})
+			if noneErr != nil {
+				t.Fatalf("eng_get_active_task (no active): %v", noneErr)
+			}
+			m, ok := none.(map[string]any)
+			if !ok {
+				t.Fatalf("no-active result type %T, want map[string]any", none)
+			}
+			if m["task_id"] != nil {
+				t.Errorf("no-active task_id = %v, want nil", m["task_id"])
+			}
+		}},
 		{family: f, tool: "eng_get_task_history", bead: "solov2-58sw", task: true},
 	}
 }
