@@ -37,6 +37,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/whiskeyjimbo/veska/internal/application/dependencies"
 	"github.com/whiskeyjimbo/veska/internal/core/domain"
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/mcp"
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/mcp/coverage"
@@ -468,7 +469,52 @@ func contextFamily() []coverageTool {
 func dependencyFamily() []coverageTool {
 	const f = "dependency"
 	return []coverageTool{
-		{family: f, tool: "eng_list_dependencies", bead: "solov2-1zhc"},
+		{family: f, tool: "eng_list_dependencies", bead: "solov2-1zhc", run: func(t *testing.T) {
+			h := newHarness(t)
+			// Beta CALLS into modalpha/metric (the one genuine cross-module dep);
+			// modalpha imports nothing external. Assert CONTAINS, not exact set:
+			// per solov2-tb74 isExternalModulePath fails to subtract modbeta's OWN
+			// module path, so "example.com/modbeta/widget" may LEAK in. A future
+			// fix removing the leak keeps contains-all valid.
+			res, rpcErr := h.Call("eng_list_dependencies", map[string]any{"repo_id": coverage.BetaRepoID})
+			if rpcErr != nil {
+				t.Fatalf("eng_list_dependencies: %v", rpcErr)
+			}
+			resp, ok := res.(dependencies.Result)
+			if !ok {
+				t.Fatalf("eng_list_dependencies: result type %T, want dependencies.Result", res)
+			}
+			got := map[string]dependencies.Dependency{}
+			for _, d := range resp.Dependencies {
+				got[d.Module] = d
+			}
+			const wantMod = "example.com/modalpha/metric"
+			dep, present := got[wantMod]
+			if !present {
+				t.Fatalf("Beta deps %v missing %q", resp.Dependencies, wantMod)
+			}
+			if dep.UsageCount < 1 {
+				t.Errorf("%s usage_count = %d, want >=1", wantMod, dep.UsageCount)
+			}
+			// The one genuine call site is Badge.RenderBadge -> ComputeVariance.
+			hasComputeVariance := false
+			for _, cs := range dep.TopCallSites {
+				if strings.Contains(cs.SymbolPath, "ComputeVariance") {
+					hasComputeVariance = true
+				}
+			}
+			if !hasComputeVariance {
+				t.Errorf("%s top_call_sites %v missing ComputeVariance", wantMod, dep.TopCallSites)
+			}
+			// modalpha imports nothing external: Alpha has no cross-module deps.
+			ares, arpcErr := h.Call("eng_list_dependencies", map[string]any{"repo_id": coverage.AlphaRepoID})
+			if arpcErr != nil {
+				t.Fatalf("eng_list_dependencies (alpha): %v", arpcErr)
+			}
+			if deps := ares.(dependencies.Result).Dependencies; len(deps) != 0 {
+				t.Errorf("Alpha deps = %v, want empty", deps)
+			}
+		}},
 	}
 }
 
