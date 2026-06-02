@@ -1550,7 +1550,56 @@ func promotionFamily() []coverageTool {
 	const f = "promotion"
 	return []coverageTool{
 		{family: f, tool: "eng_promote_repo", bead: "solov2-0buu"},
-		{family: f, tool: "eng_reindex_repo", bead: "solov2-extk"},
+		{family: f, tool: "eng_reindex_repo", bead: "solov2-extk", run: func(t *testing.T) {
+			h := newHarness(t)
+			// Count non-zero nodes for a known file; reindex is idempotent, so the
+			// count must be stable across a re-run of the cold scan.
+			countNodes := func() int {
+				res, rpcErr := h.Call("eng_get_file_nodes", map[string]any{
+					"file_path": "metric/series.go", "repo_id": coverage.AlphaRepoID,
+				})
+				if rpcErr != nil {
+					t.Fatalf("eng_get_file_nodes: %v", rpcErr)
+				}
+				resp, ok := res.(mcp.GraphResponse)
+				if !ok {
+					t.Fatalf("eng_get_file_nodes: result type %T, want mcp.GraphResponse", res)
+				}
+				return len(resp.Nodes)
+			}
+			// BEFORE: the file is already indexed (7 non-chunk nodes + chunks).
+			n0 := countNodes()
+			if n0 == 0 {
+				t.Fatal("before reindex: eng_get_file_nodes returned 0 nodes")
+			}
+			// MUTATE: reindex re-runs the cold scan synchronously. reindexResult is
+			// unexported in package mcp, so round-trip the result through JSON.
+			res, rpcErr := h.Call("eng_reindex_repo", map[string]any{"repo_id": coverage.AlphaRepoID})
+			if rpcErr != nil {
+				t.Fatalf("eng_reindex_repo: %v", rpcErr)
+			}
+			var got struct {
+				RepoID string `json:"repo_id"`
+				Branch string `json:"branch"`
+				Status string `json:"status"`
+			}
+			b, _ := json.Marshal(res)
+			if err := json.Unmarshal(b, &got); err != nil {
+				t.Fatalf("decode reindex result: %v", err)
+			}
+			if got.Status != "complete" || got.RepoID != coverage.AlphaRepoID || got.Branch != "main" {
+				t.Errorf("reindex = %+v, want status=complete repo_id=%s branch=main", got, coverage.AlphaRepoID)
+			}
+			// AFTER: idempotent reindex left the graph intact and non-zero.
+			if n1 := countNodes(); n1 != n0 {
+				t.Errorf("after reindex: node count = %d, want %d (idempotent)", n1, n0)
+			}
+			// Unknown repo_id -> CodeNotFound.
+			_, nfErr := h.Call("eng_reindex_repo", map[string]any{"repo_id": "nope"})
+			if nfErr == nil || nfErr.Code != mcp.CodeNotFound {
+				t.Fatalf("unknown repo_id: got %v, want CodeNotFound", nfErr)
+			}
+		}},
 	}
 }
 
