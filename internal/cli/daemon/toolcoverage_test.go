@@ -839,7 +839,27 @@ func suppressionFamily() []coverageTool {
 func taskFamily() []coverageTool {
 	const f = "task"
 	return []coverageTool{
-		{family: f, tool: "eng_set_active_task", bead: "solov2-orrj", task: true},
+		{family: f, tool: "eng_set_active_task", bead: "solov2-orrj", task: true, run: func(t *testing.T) {
+			h := newHarness(t, WithTaskTools())
+			if got := activeTaskID(t, h); got != "task-active" {
+				t.Fatalf("before: active task = %q, want task-active", got)
+			}
+			res, rpcErr := h.Call("eng_set_active_task", map[string]any{"task_id": "task-done", "repo_id": coverage.BetaRepoID})
+			if rpcErr != nil {
+				t.Fatalf("eng_set_active_task: %v", rpcErr)
+			}
+			m, ok := res.(map[string]any)
+			if !ok || m["task_id"] != "task-done" {
+				t.Fatalf("set result = %v (%T), want map task_id=task-done", res, res)
+			}
+			if got := activeTaskID(t, h); got != "task-done" {
+				t.Errorf("after: active task = %q, want task-done", got)
+			}
+			_, nfErr := h.Call("eng_set_active_task", map[string]any{"task_id": "task-nonexistent", "repo_id": coverage.BetaRepoID})
+			if nfErr == nil || nfErr.Code != mcp.CodeNotFound {
+				t.Errorf("set unknown: rpcErr = %v, want CodeNotFound", nfErr)
+			}
+		}},
 		{family: f, tool: "eng_get_active_task", bead: "solov2-0cgj", task: true, run: func(t *testing.T) {
 			h := newHarness(t, WithTaskTools())
 			// taskRow is unexported in package mcp; the handler returns it
@@ -876,6 +896,24 @@ func taskFamily() []coverageTool {
 		}},
 		{family: f, tool: "eng_get_task_history", bead: "solov2-58sw", task: true},
 	}
+}
+
+// activeTaskID returns the Beta repo's active task id via eng_get_active_task.
+// taskRow is unexported in package mcp, so round-trip the result through JSON.
+func activeTaskID(t *testing.T, h *toolHarness) string {
+	t.Helper()
+	res, rpcErr := h.Call("eng_get_active_task", map[string]any{"repo_id": coverage.BetaRepoID})
+	if rpcErr != nil {
+		t.Fatalf("eng_get_active_task: %v", rpcErr)
+	}
+	var got struct {
+		TaskID string `json:"task_id"`
+	}
+	b, _ := json.Marshal(res)
+	if err := json.Unmarshal(b, &got); err != nil {
+		t.Fatalf("decode active task: %v", err)
+	}
+	return got.TaskID
 }
 
 func graphFamily() []coverageTool {
