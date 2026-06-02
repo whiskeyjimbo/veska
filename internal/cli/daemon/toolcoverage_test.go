@@ -34,6 +34,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"sort"
+	"strings"
 	"testing"
 
 	"github.com/whiskeyjimbo/veska/internal/core/domain"
@@ -99,7 +100,41 @@ func findingFamily() []coverageTool {
 		{family: f, tool: "eng_get_finding", bead: "solov2-y69v"},
 		{family: f, tool: "eng_close_finding", bead: "solov2-tvid"},
 		{family: f, tool: "eng_reopen_finding", bead: "solov2-ifne"},
-		{family: f, tool: "eng_find_todos", bead: "solov2-rrz1"},
+		{family: f, tool: "eng_find_todos", bead: "solov2-rrz1", run: func(t *testing.T) {
+			h := newHarness(t)
+			// Per-repo: assert the returned file_path SET equals the manifest's
+			// TodoFacts filtered by RepoID, and the Text appears in the message.
+			assertRepoTodos := func(repoID string) {
+				res, rpcErr := h.Call("eng_find_todos", map[string]any{"repo_id": repoID})
+				if rpcErr != nil {
+					t.Fatalf("eng_find_todos %s: %v", repoID, rpcErr)
+				}
+				resp, ok := res.(mcp.TodosResponse)
+				if !ok {
+					t.Fatalf("eng_find_todos: result type %T, want mcp.TodosResponse", res)
+				}
+				want := map[string]string{} // rel path -> manifest Text
+				for _, td := range coverage.Manifest().Todos {
+					if td.RepoID == repoID {
+						want[td.RelPath] = td.Text
+					}
+				}
+				got := map[string]bool{}
+				for _, td := range resp.Todos {
+					got[td.FilePath] = true
+					if text, ok := want[td.FilePath]; ok && !strings.Contains(td.Message, text) {
+						t.Errorf("todo %s: message %q missing manifest text %q", td.FilePath, td.Message, text)
+					}
+				}
+				for rel := range want {
+					if !got[rel] {
+						t.Errorf("manifest todo %q missing from eng_find_todos output for %s", rel, repoID)
+					}
+				}
+			}
+			assertRepoTodos(coverage.AlphaRepoID)
+			assertRepoTodos(coverage.BetaRepoID)
+		}},
 	}
 }
 
