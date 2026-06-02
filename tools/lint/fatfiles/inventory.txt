@@ -22,13 +22,14 @@
 # Blank lines and `#` comments are ignored.
 internal/application/embedder/embedder.go 530
 internal/application/search/search.go 593
-internal/cli/daemon/wire.go 924
-internal/infrastructure/mcp/registry.go 509
-internal/infrastructure/mcp/tools_helpers.go 577
-internal/infrastructure/repo/registry.go 579
+internal/cli/daemon/builder.go 684
+internal/cli/daemon/wire.go 361
+internal/infrastructure/mcp/registry.go 454
+internal/infrastructure/mcp/tools_helpers.go 527
+internal/infrastructure/repo/registry.go 446
 internal/infrastructure/secretsscanner/secretsscanner.go 571
-internal/infrastructure/sqlite/graph_repo.go 539
-internal/infrastructure/sqlite/promotion_callresolve.go 519
+internal/infrastructure/sqlite/graph_repo.go 380
+internal/infrastructure/sqlite/promotion_callresolve.go 404
 internal/infrastructure/sqlite/promotion_store.go 541
 internal/infrastructure/treesitter/go_query.go 738
 internal/infrastructure/treesitter/ts.go 521
