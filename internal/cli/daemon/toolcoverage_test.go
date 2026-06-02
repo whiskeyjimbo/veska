@@ -29,7 +29,14 @@ package daemon
 // (TestToolCoverageCompleteness) keeps the table in lock-step with the live
 // tool surface so no tool is silently uncovered.
 
-import "testing"
+import (
+	"path/filepath"
+	"testing"
+
+	"github.com/whiskeyjimbo/veska/internal/core/domain"
+	"github.com/whiskeyjimbo/veska/internal/infrastructure/mcp"
+	"github.com/whiskeyjimbo/veska/internal/infrastructure/mcp/coverage"
+)
 
 // coverageTool is one row of the coverage table: which family the tool belongs
 // to, the tool name, the owning bead, whether it is one of the parked task
@@ -117,7 +124,50 @@ func taskFamily() []coverageTool {
 func graphFamily() []coverageTool {
 	const f = "graph"
 	return []coverageTool{
-		{family: f, tool: "eng_get_node", bead: "solov2-w775"},
+		{family: f, tool: "eng_get_node", bead: "solov2-w775", run: func(t *testing.T) {
+			h := newHarness(t)
+			repoID := coverage.BetaRepoID
+			key := coverage.NodeKey{Path: "main.go", Kind: domain.KindFunction, Name: "main"}
+			id := h.ResolveID(repoID, key)
+
+			res, rpcErr := h.Call("eng_get_node", map[string]any{
+				"node_id": string(id), "repo_id": repoID,
+			})
+			if rpcErr != nil {
+				t.Fatalf("eng_get_node: %v", rpcErr)
+			}
+			resp, ok := res.(mcp.GraphResponse)
+			if !ok {
+				t.Fatalf("eng_get_node: result type %T, want mcp.GraphResponse", res)
+			}
+			if len(resp.Nodes) != 1 {
+				t.Fatalf("eng_get_node: got %d nodes, want exactly 1", len(resp.Nodes))
+			}
+			// Single-node tool: no list ordering to normalize. Assert the one
+			// returned node carries the graph facts the manifest records.
+			n := resp.Nodes[0]
+			if n.NodeID != string(id) {
+				t.Errorf("node_id = %q, want %q", n.NodeID, string(id))
+			}
+			if n.Name != key.Name {
+				t.Errorf("name = %q, want %q", n.Name, key.Name)
+			}
+			if n.Kind != string(key.Kind) {
+				t.Errorf("kind = %q, want %q", n.Kind, string(key.Kind))
+			}
+			// Node paths are stored absolute; manifest Path is repo-relative.
+			if want := filepath.Join(h.Root(repoID), key.Path); n.FilePath != want {
+				t.Errorf("file_path = %q, want %q", n.FilePath, want)
+			}
+
+			// Not-found is a domain error surfaced as CodeNotFound, not a marshal error.
+			_, nfErr := h.Call("eng_get_node", map[string]any{
+				"node_id": "deadbeef-not-a-real-node", "repo_id": repoID,
+			})
+			if nfErr == nil || nfErr.Code != mcp.CodeNotFound {
+				t.Fatalf("bogus node_id: got %v, want CodeNotFound", nfErr)
+			}
+		}},
 		{family: f, tool: "eng_get_call_chain", bead: "solov2-zk8c"},
 		{family: f, tool: "eng_get_file_nodes", bead: "solov2-2zlq"},
 		{family: f, tool: "eng_find_related", bead: "solov2-d217"},
