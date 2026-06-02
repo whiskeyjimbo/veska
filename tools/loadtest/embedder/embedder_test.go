@@ -30,7 +30,7 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/application/embedder"
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/embedding/ollama"
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/sqlite"
-	"github.com/whiskeyjimbo/veska/internal/infrastructure/vector/sqlitevec"
+	"github.com/whiskeyjimbo/veska/internal/infrastructure/vector/memvec"
 )
 
 const (
@@ -106,7 +106,7 @@ func TestEmbedderThroughput(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ollama.New: %v", err)
 	}
-	vectors := sqlitevec.New()
+	vectors := memvec.New()
 
 	// Use defaults: 10 emb/s limiter, 32 batch, 250ms interval. The point
 	// of gate-1 is to measure the *worker's* sustained output, not to

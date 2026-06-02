@@ -191,7 +191,7 @@ func runVariant(
 
 	backendKind := vector.BackendKind(os.Getenv("VESKA_VECTOR_BACKEND"))
 	if backendKind == "" {
-		backendKind = vector.BackendSQLiteVec
+		backendKind = vector.BackendMemory
 	}
 	vstore, err := vector.NewVectorStorage(backendKind, t.TempDir())
 	if err != nil {

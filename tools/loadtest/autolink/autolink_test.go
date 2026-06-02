@@ -104,13 +104,13 @@ func TestAutolinkFP(t *testing.T) {
 	seedEmbeddings(t, db, corpus.Nodes, vecOf)
 
 	// --- VectorStorage ----------------------------------------------------
-	// VESKA_VECTOR_BACKEND selects the backend (default sqlite-vec).
+	// VESKA_VECTOR_BACKEND selects the backend (default memory/memvec).
 	// "usearch" requires the hnsw_native build tag and libusearch_c.so at
-	// runtime — see ADR-S0014. sqlite-vec is O(N^2) and exceeds budget at
-	// pop > ~10k for the autolink Candidates sweep.
+	// runtime — see ADR-S0014. The memory backend is an O(N^2) linear scan
+	// and exceeds budget at pop > ~10k for the autolink Candidates sweep.
 	backendKind := vector.BackendKind(os.Getenv("VESKA_VECTOR_BACKEND"))
 	if backendKind == "" {
-		backendKind = vector.BackendSQLiteVec
+		backendKind = vector.BackendMemory
 	}
 	vstore, err := vector.NewVectorStorage(backendKind, t.TempDir())
 	if err != nil {
