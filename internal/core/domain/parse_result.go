@@ -69,6 +69,14 @@ type UnresolvedCall struct {
 	// unknown (legacy parser output or non-Go parsers that have not
 	// adopted the field yet).
 	SrcLine int
+	// EdgeKind is the kind of edge to emit when this call site resolves.
+	// The zero value ("") means EdgeCalls — every ordinary call site
+	// leaves it unset, so the resolver's default path is unchanged. The
+	// framework route extractor sets it to EdgeRoutes so a
+	// router.METHOD("/path", handler) wire-up resolves the route→handler
+	// reference through the same package-wide resolver as a plain call,
+	// but materialises a ROUTES edge instead of a CALLS edge (solov2-ketg).
+	EdgeKind EdgeKind
 }
 
 // ParseFailure describes a single syntax-error region surfaced by the parser.

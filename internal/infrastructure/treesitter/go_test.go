@@ -143,6 +143,156 @@ func init() {
 	}
 }
 
+// TestParseFile_GinRoute guards solov2-ketg: a gin router.METHOD(path,
+// handler) call becomes a KindRoute node named "METHOD /path" plus a
+// ROUTES route→handler UnresolvedCall (resolved at promotion).
+func TestParseFile_GinRoute(t *testing.T) {
+	src := []byte(`package main
+
+import "github.com/gin-gonic/gin"
+
+func register(r *gin.Engine) {
+	r.GET("/users", listUsers)
+}
+
+func listUsers(c *gin.Context) {}
+`)
+	p := treesitter.NewGoParser()
+	result, err := p.ParseFile(context.Background(), repoID, filePath, src)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	route := findNodeByName(result.Nodes, "GET /users")
+	if route == nil {
+		t.Fatalf("expected a KindRoute node named 'GET /users'; got nodes: %v", nodeNames(result.Nodes))
+	}
+	if route.Kind != domain.KindRoute {
+		t.Errorf("route: kind = %q, want %q", route.Kind, domain.KindRoute)
+	}
+
+	if !hasRouteHandlerRef(result.UnresolvedCalls, route.ID, "listUsers") {
+		t.Errorf("expected ROUTES route→handler ref %q→listUsers; got %+v", route.ID, result.UnresolvedCalls)
+	}
+}
+
+// TestParseFile_ChiRouteTitleCaseVerb guards solov2-ketg: chi spells the
+// verb title-case (Get); the route name still normalises to "GET /path"
+// and the handler selector resolves through the package qualifier.
+func TestParseFile_ChiRouteTitleCaseVerb(t *testing.T) {
+	src := []byte(`package main
+
+import "github.com/go-chi/chi/v5"
+
+func register(r chi.Router) {
+	r.Get("/items", handlers.List)
+}
+`)
+	p := treesitter.NewGoParser()
+	result, err := p.ParseFile(context.Background(), repoID, filePath, src)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	route := findNodeByName(result.Nodes, "GET /items")
+	if route == nil {
+		t.Fatalf("expected KindRoute 'GET /items'; got nodes: %v", nodeNames(result.Nodes))
+	}
+	if !hasRouteHandlerRef(result.UnresolvedCalls, route.ID, "List") {
+		t.Errorf("expected ROUTES ref to handler 'List'; got %+v", result.UnresolvedCalls)
+	}
+}
+
+// TestParseFile_RoutePrecisionGate guards solov2-ketg: selector calls that
+// look like routes but fail the gate must NOT promote to KindRoute nodes.
+// The title-case case is the key one — chi's verbs (Get/Post) collide with
+// common method names, so a gin/echo-only file's client.Post(...) must stay
+// inert (only chi enables title-case verbs).
+func TestParseFile_RoutePrecisionGate(t *testing.T) {
+	cases := map[string][]byte{
+		// No gin/echo/chi import: someVar.GET("/x", h) must not misfire.
+		"no-router-import": []byte(`package main
+
+func register(x T) {
+	x.GET("/x", h)
+}
+`),
+		// Router imported but the path is a variable, not a string literal.
+		"dynamic-path": []byte(`package main
+
+import "github.com/gin-gonic/gin"
+
+func register(r *gin.Engine, p string) {
+	r.GET(p, h)
+}
+`),
+		// gin imported (upper-case verbs only): a title-case client.Post must
+		// not be mistaken for a chi route.
+		"gin-file-titlecase-call": []byte(`package main
+
+import "github.com/gin-gonic/gin"
+
+func send(client C, body B) {
+	client.Post("https://api/x", body)
+}
+
+var _ = gin.New
+`),
+	}
+	p := treesitter.NewGoParser()
+	for name, src := range cases {
+		result, err := p.ParseFile(context.Background(), repoID, filePath, src)
+		if err != nil {
+			t.Fatalf("%s: unexpected error: %v", name, err)
+		}
+		for _, n := range result.Nodes {
+			if n.Kind == domain.KindRoute {
+				t.Errorf("%s: unexpected KindRoute node %q", name, n.Name)
+			}
+		}
+	}
+}
+
+// TestParseFile_EchoRouteFuncLiteralHandler guards solov2-ketg: echo uses
+// upper-case verbs (like gin); an inline func-literal handler still yields
+// a route NODE but no route→handler edge (mirrors the deferred urfave
+// Action-closure case).
+func TestParseFile_EchoRouteFuncLiteralHandler(t *testing.T) {
+	src := []byte(`package main
+
+import "github.com/labstack/echo/v4"
+
+func register(e *echo.Echo) {
+	e.POST("/login", func(c echo.Context) error { return nil })
+}
+`)
+	p := treesitter.NewGoParser()
+	result, err := p.ParseFile(context.Background(), repoID, filePath, src)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	route := findNodeByName(result.Nodes, "POST /login")
+	if route == nil {
+		t.Fatalf("expected KindRoute 'POST /login'; got nodes: %v", nodeNames(result.Nodes))
+	}
+	for _, uc := range result.UnresolvedCalls {
+		if uc.CallerID == route.ID && uc.EdgeKind == domain.EdgeRoutes {
+			t.Errorf("func-literal handler must not emit a route→handler ref, got %+v", uc)
+		}
+	}
+}
+
+// hasRouteHandlerRef reports whether calls contains a ROUTES route→handler
+// reference from routeID to a handler with the given callee name.
+func hasRouteHandlerRef(calls []domain.UnresolvedCall, routeID domain.NodeID, callee string) bool {
+	for _, uc := range calls {
+		if uc.CallerID == routeID && uc.CalleeName == callee && uc.EdgeKind == domain.EdgeRoutes {
+			return true
+		}
+	}
+	return false
+}
+
 func TestParseFile_MethodDeclaration(t *testing.T) {
 	src := []byte(`package foo
 

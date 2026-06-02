@@ -529,6 +529,105 @@ func TestPromotionStore_CrossRepoStub(t *testing.T) {
 	}
 }
 
+// TestPromotionStore_RouteHandlerEdgeResolution pins solov2-ketg: a route
+// node's ROUTES route→handler reference (UnresolvedCall{EdgeKind:
+// EdgeRoutes}) binds to a same-package handler via the intra-package
+// resolver and materialises a ROUTES edge — not a CALLS edge. This is the
+// generalised resolver: buildCallEdge honours uc.EdgeKind.
+func TestPromotionStore_RouteHandlerEdgeResolution(t *testing.T) {
+	t.Parallel()
+	db := openTest(t, filepath.Join(t.TempDir(), "v.db"))
+	if _, err := db.Exec(
+		`INSERT INTO repos (repo_id, root_path, added_at, module_path) VALUES (?, ?, ?, ?)`,
+		"repo1", "/tmp/app", time.Now().UnixMilli(), "github.com/acme/app",
+	); err != nil {
+		t.Fatalf("insert repo: %v", err)
+	}
+	store := sqlite.NewPromotionStore(db, []sqlite.PromotionSink{sqlite.NewFTSSink(), sqlite.NewEmbedRefSink()})
+
+	// routes.go: a "GET /users" route plus its same-package handler in
+	// another file of the package (handler.go).
+	route := mustNode(t, "routeID", "/tmp/app/api/routes.go", "GET /users", domain.KindRoute)
+	handler := mustNode(t, "handlerID", "/tmp/app/api/handler.go", "listUsers", domain.KindFunction)
+
+	err := store.Promote(context.Background(), application.PromotionBatch{
+		RepoID: "repo1", Branch: "main", GitSHA: "sha", Actor: systemActor(),
+		PromotedAt: time.Now().UnixMilli(),
+		Files: []application.PromotionFile{
+			{Path: "/tmp/app/api/handler.go", Nodes: []*domain.Node{handler}},
+			{
+				Path:  "/tmp/app/api/routes.go",
+				Nodes: []*domain.Node{route},
+				UnresolvedCalls: []domain.UnresolvedCall{
+					{CallerID: "routeID", CalleeName: "listUsers", EdgeKind: domain.EdgeRoutes},
+				},
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("Promote: %v", err)
+	}
+
+	var n int
+	if err := db.QueryRow(
+		`SELECT COUNT(*) FROM edges WHERE kind='ROUTES' AND src_node_id='routeID' AND dst_node_id='handlerID'`,
+	).Scan(&n); err != nil {
+		t.Fatalf("query route edge: %v", err)
+	}
+	if n != 1 {
+		t.Errorf("want 1 ROUTES edge route->listUsers, got %d", n)
+	}
+	// The route→handler reference must NOT also leak a CALLS edge.
+	var calls int
+	db.QueryRow(`SELECT COUNT(*) FROM edges WHERE kind='CALLS' AND src_node_id='routeID'`).Scan(&calls)
+	if calls != 0 {
+		t.Errorf("route→handler must not emit a CALLS edge, got %d", calls)
+	}
+}
+
+// TestPromotionStore_RouteHandlerCrossRepoStub pins solov2-ketg: a route
+// whose handler lives in another module records a cross-repo stub carrying
+// kind='ROUTES' (not CALLS), so the query-time resolver materialises a
+// ROUTES cross-repo edge. emitCrossRepoStub honours uc.EdgeKind and
+// namespaces the stub_id by kind.
+func TestPromotionStore_RouteHandlerCrossRepoStub(t *testing.T) {
+	t.Parallel()
+	db := openTest(t, filepath.Join(t.TempDir(), "v.db"))
+	if _, err := db.Exec(
+		`INSERT INTO repos (repo_id, root_path, added_at, module_path) VALUES (?, ?, ?, ?)`,
+		"repo1", "/tmp/app", time.Now().UnixMilli(), "github.com/acme/app",
+	); err != nil {
+		t.Fatalf("insert repo: %v", err)
+	}
+	store := sqlite.NewPromotionStore(db, []sqlite.PromotionSink{sqlite.NewFTSSink(), sqlite.NewEmbedRefSink()})
+
+	route := mustNode(t, "routeID", "/tmp/app/api/routes.go", "GET /users", domain.KindRoute, domain.WithLanguage("go"))
+	if err := store.Promote(context.Background(), application.PromotionBatch{
+		RepoID: "repo1", Branch: "main", GitSHA: "sha", Actor: systemActor(),
+		PromotedAt: time.Now().UnixMilli(),
+		Files: []application.PromotionFile{{
+			Path:    "/tmp/app/api/routes.go",
+			Nodes:   []*domain.Node{route},
+			Imports: map[string]string{"handlers": "github.com/acme/handlers"},
+			UnresolvedCalls: []domain.UnresolvedCall{
+				{CallerID: "routeID", CalleeName: "List", PkgQualifier: "handlers", EdgeKind: domain.EdgeRoutes},
+			},
+		}},
+	}); err != nil {
+		t.Fatalf("Promote: %v", err)
+	}
+
+	var kind, symbol string
+	if err := db.QueryRow(
+		`SELECT kind, symbol_path FROM cross_repo_edge_stubs WHERE src_node_id='routeID'`,
+	).Scan(&kind, &symbol); err != nil {
+		t.Fatalf("query stub: %v", err)
+	}
+	if kind != "ROUTES" || symbol != "List" {
+		t.Errorf("stub = (kind=%q, symbol=%q), want (ROUTES, List)", kind, symbol)
+	}
+}
+
 // TestPromotionStore_EnqueuesExactlyOneWikiRow verifies AC1: a promotion
 // enqueues exactly one repo-scoped WorkKindWiki row regardless of how many
 // files the batch touches.
