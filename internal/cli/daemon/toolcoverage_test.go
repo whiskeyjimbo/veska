@@ -395,7 +395,30 @@ func repoFamily() []coverageTool {
 				t.Errorf("remove unknown: rpcErr = %v, want CodeNotFound", rpcErr)
 			}
 		}},
-		{family: f, tool: "eng_find_owner", bead: "solov2-a6ud"},
+		{family: f, tool: "eng_find_owner", bead: "solov2-a6ud", run: func(t *testing.T) {
+			h := newHarness(t)
+			// CODEOWNERS path is deterministic (no git blame). The modalpha
+			// fixture carries a root CODEOWNERS with `*.go @alpha-team`; the
+			// handler resolves Alpha's root_path from the repos table and reads
+			// it. file_path is repo-relative — matchesCodeownersPattern falls
+			// back to the filename component (series.go) for the unanchored glob.
+			res, rpcErr := h.Call("eng_find_owner", map[string]any{
+				"file_path": "metric/series.go", "repo_id": coverage.AlphaRepoID,
+			})
+			if rpcErr != nil {
+				t.Fatalf("eng_find_owner: %v", rpcErr)
+			}
+			m, ok := res.(map[string]any)
+			if !ok {
+				t.Fatalf("eng_find_owner: result type %T, want map[string]any", res)
+			}
+			if m["source"] != "codeowners" {
+				t.Errorf("source = %v, want \"codeowners\"", m["source"])
+			}
+			if m["owner"] != "@alpha-team" {
+				t.Errorf("owner = %v, want \"@alpha-team\"", m["owner"])
+			}
+		}},
 	}
 }
 
