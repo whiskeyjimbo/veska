@@ -784,11 +784,32 @@ func (b *daemonBuilder) buildPollerWatcher() error {
 func (b *daemonBuilder) buildReconciler() *gitwatch.WakeReconciler {
 	tick := parseDurationOr(b.fileCfg.Watcher.WakeTick, 5*time.Second)
 	threshold := parseDurationOr(b.fileCfg.Watcher.WakeThreshold, 30*time.Second)
+
+	opts := []gitwatch.Option{gitwatch.WithWakeConcurrency(b.fileCfg.Watcher.WakeConcurrency)}
+	// Staging-vs-HEAD check (SOLO-03 §5.2): a serial pre-pass at sweep start
+	// reconciles each repo's working-tree branch against repos.active_branch,
+	// bumping the staging generation before any parse runs. b.gate/b.staging are
+	// populated by buildCore, which runs before buildReconciler.
+	if br, err := application.NewBranchReconciler(
+		gitBranchReader{},
+		&activeBranchStore{read: b.pools.ReadDB, write: b.pools.Write},
+		b.gate, b.staging,
+	); err != nil {
+		slog.Warn("wake reconciler: branch reconcile disabled", "err", err)
+	} else {
+		opts = append(opts, gitwatch.WithSweepStartHook(
+			func(ctx context.Context, repoID, dir string) {
+				if err := br.Reconcile(ctx, repoID, dir); err != nil {
+					slog.Warn("wake reconciler: branch reconcile failed", "repo", repoID, "err", err)
+				}
+			}))
+	}
+
 	return gitwatch.NewWakeReconciler(tick, threshold,
 		func(_ context.Context, repoID, path string) {
 			b.watcher.Inject(repoID, path)
 		},
-		gitwatch.WithWakeConcurrency(b.fileCfg.Watcher.WakeConcurrency))
+		opts...)
 }
 
 // parseDurationOr returns the parsed positive duration or fallback on any

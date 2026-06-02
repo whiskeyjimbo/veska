@@ -18,10 +18,12 @@ import (
 // Compile-time interface assertions: the three admin-tool collaborators must
 // satisfy the contracts RegisterAdminTools expects.
 var (
-	_ application.RepoLister = (*repoLister)(nil)
-	_ mcp.StatusProvider     = (*statusProvider)(nil)
-	_ mcp.ConfigProvider     = (*configProvider)(nil)
-	_ mcp.RepoRegistrar      = (*repoRegistrar)(nil)
+	_ application.RepoLister        = (*repoLister)(nil)
+	_ application.BranchReader      = gitBranchReader{}
+	_ application.ActiveBranchStore = (*activeBranchStore)(nil)
+	_ mcp.StatusProvider            = (*statusProvider)(nil)
+	_ mcp.ConfigProvider            = (*configProvider)(nil)
+	_ mcp.RepoRegistrar             = (*repoRegistrar)(nil)
 )
 
 // repoRegistrar adapts internal/repo's Add/Remove to the mcp.RepoRegistrar
@@ -169,6 +171,35 @@ func (rl *repoLister) ListRepos(ctx context.Context) ([]application.RepoRecord, 
 		out = append(out, toAppRecord(r))
 	}
 	return out, nil
+}
+
+// gitBranchReader adapts repo.CurrentBranch to application.BranchReader, kept
+// daemon-side so internal/repo need not import internal/application (mirrors
+// repoLister's rationale). Stateless.
+type gitBranchReader struct{}
+
+func (gitBranchReader) CurrentBranch(rootPath string) (string, error) {
+	return repo.CurrentBranch(rootPath)
+}
+
+// activeBranchStore adapts repo.Get / repo.SetActiveBranch to
+// application.ActiveBranchStore. Reads go through the read pool; the write
+// goes through the write pool — repos.active_branch lives in the same row.
+type activeBranchStore struct {
+	read  *sql.DB
+	write *sql.DB
+}
+
+func (s *activeBranchStore) ActiveBranch(ctx context.Context, repoID string) (string, error) {
+	rec, err := repo.Get(ctx, s.read, repoID)
+	if err != nil {
+		return "", err
+	}
+	return rec.ActiveBranch, nil
+}
+
+func (s *activeBranchStore) SetActiveBranch(ctx context.Context, repoID, branch string) error {
+	return repo.SetActiveBranch(ctx, s.write, repoID, branch)
 }
 
 // toAppRecord projects a repo.Record (storage shape) to an
