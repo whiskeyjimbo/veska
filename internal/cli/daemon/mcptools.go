@@ -93,7 +93,15 @@ func newMCPToolWiring(r *mcp.Registry, d mcpDeps) (*mcpToolWiring, error) {
 		nodes:          sqlite.NewNodeLookupRepo(pools.ReadDB),
 		findingQuerier: sqlite.NewFindingQuerierRepo(pools.ReadDB),
 	}
-	blast, err := blastradius.NewService(w.edges, w.nodes, d.staging)
+	// A zero hubDegreeThreshold means an unconfigured (legacy/test) mcpDeps;
+	// leave the blast service on its seeded DefaultHubDegreeThreshold rather
+	// than overwriting it with 0. config.Validate rejects a 0 in config.toml,
+	// so a live daemon always passes a non-zero value here.
+	var blastOpts []blastradius.ServiceOption
+	if d.hubDegreeThreshold != 0 {
+		blastOpts = append(blastOpts, blastradius.WithDefaultHubDegreeThreshold(d.hubDegreeThreshold))
+	}
+	blast, err := blastradius.NewService(w.edges, w.nodes, d.staging, blastOpts...)
 	if err != nil {
 		return nil, fmt.Errorf("mcp tools: blast-radius service: %w", err)
 	}
