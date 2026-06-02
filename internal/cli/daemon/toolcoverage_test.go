@@ -404,7 +404,54 @@ func findingFamily() []coverageTool {
 				t.Fatalf("unknown finding_id: got %v, want CodeNotFound", nfErr)
 			}
 		}},
-		{family: f, tool: "eng_reopen_finding", bead: "solov2-ifne"},
+		{family: f, tool: "eng_reopen_finding", bead: "solov2-ifne", run: func(t *testing.T) {
+			h := newHarness(t)
+			// findingRow is unexported; eng_get_finding returns
+			// map[string]any{"finding": findingRow}, so read State via JSON.
+			getState := func() string {
+				res, rpcErr := h.Call("eng_get_finding", map[string]any{"finding_id": "seed-finding-1"})
+				if rpcErr != nil {
+					t.Fatalf("eng_get_finding: %v", rpcErr)
+				}
+				var got struct {
+					Finding struct {
+						State string `json:"state"`
+					} `json:"finding"`
+				}
+				b, _ := json.Marshal(res)
+				if err := json.Unmarshal(b, &got); err != nil {
+					t.Fatalf("decode finding: %v", err)
+				}
+				return got.Finding.State
+			}
+
+			// BEFORE: seed-finding-1 is pre-seeded closed.
+			if st := getState(); st != "closed" {
+				t.Fatalf("before reopen: state = %q, want closed", st)
+			}
+
+			// MUTATE: reopen has no human gate; returns {state: "open"}.
+			res, rpcErr := h.Call("eng_reopen_finding", map[string]any{
+				"finding_id": "seed-finding-1",
+			})
+			if rpcErr != nil {
+				t.Fatalf("eng_reopen_finding: %v", rpcErr)
+			}
+			if m, ok := res.(map[string]any); !ok || m["state"].(string) != "open" {
+				t.Fatalf("reopen result = %v, want state=open", res)
+			}
+
+			// AFTER: the transition persisted.
+			if st := getState(); st != "open" {
+				t.Fatalf("after reopen: state = %q, want open", st)
+			}
+
+			// Unknown finding_id -> CodeNotFound.
+			_, nfErr := h.Call("eng_reopen_finding", map[string]any{"finding_id": "nope"})
+			if nfErr == nil || nfErr.Code != mcp.CodeNotFound {
+				t.Fatalf("unknown finding_id: got %v, want CodeNotFound", nfErr)
+			}
+		}},
 		{family: f, tool: "eng_find_todos", bead: "solov2-rrz1", run: func(t *testing.T) {
 			h := newHarness(t)
 			// Per-repo: assert the returned file_path SET equals the manifest's
