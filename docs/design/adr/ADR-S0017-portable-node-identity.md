@@ -1,7 +1,7 @@
 ---
 id: ADR-S0017
 title: "Portable content-derived node identity for a shared multi-contributor graph"
-status: Proposed
+status: Accepted
 date: 2026-06-02
 deciders: [whiskeyjimbo]
 supersedes: []
@@ -19,8 +19,26 @@ produce identical IDs and can share one graph DB without forking every node.
 
 ## Status
 
-Proposed. This ADR is the design; implementation is tracked by a separate bead
-(see _Implementation_ below). Nothing in here has shipped.
+Accepted. This ADR is the design; implementation is tracked by `solov2-dchd`
+and its child beads. Nothing in here has shipped yet.
+
+### Resolved: tier ordering (the lead open question)
+
+The fallback chain is **locked** as:
+
+> **host/path-shaped module manifest** (Go `module github.com/org/repo`; scoped
+> npm `@org/pkg`) **> raw canonical `origin` URL > bare module name >
+> absolute root.**
+
+A bare (non-host/path) module name (`module myapp`) is demoted **below** the
+raw origin URL: it is collision-prone in a shared DB, so it ranks as a
+local-stable key only, above abs-root but below any globally-unique anchor.
+The bare-name **collision policy** (operator-pinned identity override, or an
+extra disambiguating tier) is **deferred** — it is additive (a new tier / an
+override path), not a re-key, so it does not gate the core change. Locking this
+now is safe without real shared-DB inputs because the migration is drop+rescan,
+hence cheap and repeatable while veska is still single-user: the decision is
+**reversible, not a one-way door**.
 
 ## Context
 

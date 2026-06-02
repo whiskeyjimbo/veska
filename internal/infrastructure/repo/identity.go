@@ -59,11 +59,89 @@ func detectOriginURL(ctx context.Context, root string) string {
 	return canonical
 }
 
-// repoID returns a deterministic hex ID for a canonical root path.
-func repoID(canonicalPath string) string {
+// hashAnchor is the single hash function shared by every identity tier
+// (ADR-S0017 §2): repo_id is sha256(anchor) regardless of which anchor — module
+// path, canonical URL, or absolute root — was chosen. Keeping one function
+// guarantees the abs-root tier reproduces the legacy repoID() byte-for-byte, so
+// local-only repos see no id churn until the identity-scheme rescan runs.
+func hashAnchor(anchor string) string {
 	h := sha256.New()
-	_, _ = fmt.Fprintf(h, "%s", canonicalPath)
+	_, _ = fmt.Fprintf(h, "%s", anchor)
 	return hex.EncodeToString(h.Sum(nil))
+}
+
+// repoID returns a deterministic hex ID for a canonical root path (the
+// abs-root identity tier).
+func repoID(canonicalPath string) string {
+	return hashAnchor(canonicalPath)
+}
+
+// IdentityTier names the rung of the ADR-S0017 fallback chain a repo resolved
+// to. Persisted on the repos row (identity_tier) so identity is auditable and
+// never silently re-derived per client.
+type IdentityTier string
+
+const (
+	// TierModuleHostPath — in-tree module path shaped as a canonical host/path
+	// (Go `github.com/org/repo`) or scoped npm (`@org/pkg`). Committed content,
+	// so byte-identical across clones AND forks, and host/path-shaped, so
+	// globally unique: the supported shared-DB anchor.
+	TierModuleHostPath IdentityTier = "module-hostpath"
+	// TierOriginURL — canonical git remote URL. Globally unique but local git
+	// config, so it diverges across forks. Used when no module manifest exists.
+	TierOriginURL IdentityTier = "origin-url"
+	// TierModuleBare — a bare/vanity module name (`module myapp`) that is not
+	// host/path-shaped. Local-stable but collision-prone in a shared DB, so it
+	// ranks below any globally-unique anchor.
+	TierModuleBare IdentityTier = "module-bare"
+	// TierAbsRoot — absolute checkout path. Never converges; local-only
+	// fallback reproducing pre-ADR-S0017 behaviour.
+	TierAbsRoot IdentityTier = "abs-root"
+)
+
+// Converges reports whether this tier can participate in a shared graph DB —
+// i.e. whether two contributors indexing the same upstream resolve to the same
+// repo_id. Only the host/path module anchor converges AND is globally unique;
+// origin-url converges only when origins agree (doctor warns on the rest).
+func (t IdentityTier) Converges() bool { return t == TierModuleHostPath }
+
+// ResolveIdentity selects the strongest available identity anchor for the repo
+// at canonical (an already-canonicalised absolute root) per the ADR-S0017
+// locked chain — host/path module > origin URL > bare module > abs-root — and
+// returns the chosen tier, the exact anchor string hashed, and the resulting
+// repo_id. Resolved ONCE at repo.Add and persisted; never re-derived per
+// client (convergence comes from the anchor being globally shared, not from
+// each client recomputing it).
+func ResolveIdentity(ctx context.Context, canonical string) (IdentityTier, string, string) {
+	mod := readModulePath(canonical)
+	if anchor, ok := moduleHostPathAnchor(mod); ok {
+		return TierModuleHostPath, anchor, hashAnchor(anchor)
+	}
+	if origin := detectOriginURL(ctx, canonical); origin != "" {
+		return TierOriginURL, origin, hashAnchor(origin)
+	}
+	if mod != "" {
+		return TierModuleBare, mod, hashAnchor(mod)
+	}
+	return TierAbsRoot, canonical, hashAnchor(canonical)
+}
+
+// moduleHostPathAnchor reports whether a module path is shaped as a canonical
+// host/path (Go convention `github.com/org/repo` — first segment is a DNS host)
+// or a scoped npm package (`@org/pkg`). Such a path is simultaneously committed
+// content and globally unique, the strongest possible anchor.
+func moduleHostPathAnchor(mod string) (string, bool) {
+	if mod == "" {
+		return "", false
+	}
+	if strings.HasPrefix(mod, "@") && strings.Contains(mod, "/") {
+		return mod, true // scoped npm
+	}
+	first, rest, ok := strings.Cut(mod, "/")
+	if !ok || rest == "" || !strings.Contains(first, ".") {
+		return "", false
+	}
+	return mod, true // host/path-shaped Go module
 }
 
 // RepoIDForPath returns the deterministic repo_id veska assigns to the repo
@@ -88,9 +166,7 @@ func RepoIDForPath(path string) string {
 // (path-based repoID, URL-based DerivedRepoIDFromURL) in the same file
 // preserves the invariant that the two id spaces share one hash function.
 func DerivedRepoIDFromURL(canonicalURL string) string {
-	h := sha256.New()
-	_, _ = fmt.Fprintf(h, "%s", canonicalURL)
-	return hex.EncodeToString(h.Sum(nil))
+	return hashAnchor(canonicalURL)
 }
 
 // validateRepoRoot rejects paths that should never be registered as a

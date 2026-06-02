@@ -210,7 +210,25 @@ func Add(ctx context.Context, db *sql.DB, rootPath string) (string, bool, error)
 		return "", false, fmt.Errorf("repo add: %w", err)
 	}
 
-	id := repoID(canonical)
+	// Re-add short-circuit (ADR-S0017 §2): identity is resolved ONCE per root
+	// and STORED. A repo whose origin/manifest appears AFTER first registration
+	// must NOT be re-resolved to a new tier — that would silently shift repo_id
+	// and fork every node. Reuse the stored id for any root already registered.
+	if existingID, found, err := repoIDByRoot(ctx, db, canonical); err != nil {
+		return "", false, fmt.Errorf("repo add: lookup existing: %w", err)
+	} else if found {
+		if err := installHooks(canonical); err != nil {
+			return "", false, fmt.Errorf("install hooks: %w", err)
+		}
+		return existingID, true, nil
+	}
+
+	// Resolve the portable identity anchor ONCE (ADR-S0017 §2): repo_id derives
+	// from a globally-shared anchor (committed module path / remote URL) so two
+	// contributors indexing the same upstream get identical node IDs. The chosen
+	// tier + anchor are persisted below for auditability and are never
+	// re-derived per client.
+	tier, anchor, id := ResolveIdentity(ctx, canonical)
 	modPath := readModulePath(canonical)
 	now := time.Now().Unix()
 
@@ -233,11 +251,12 @@ func Add(ctx context.Context, db *sql.DB, rootPath string) (string, bool, error)
 	// fails on transient contention. 5 attempts × 500ms = 2.5s additional
 	// budget on top of the per-attempt busy_timeout.
 	res, err := execWithBusyRetry(ctx, db, 5, 500*time.Millisecond,
-		`INSERT INTO repos (repo_id, root_path, added_at, active_branch, module_path)
-		 VALUES (?, ?, ?, ?, ?)
+		`INSERT INTO repos (repo_id, root_path, added_at, active_branch, module_path, identity_tier, identity_anchor)
+		 VALUES (?, ?, ?, ?, ?, ?, ?)
 		 ON CONFLICT(repo_id) DO NOTHING`,
 		id, canonical, now, branch,
 		sql.NullString{String: modPath, Valid: modPath != ""},
+		string(tier), anchor,
 	)
 	if err != nil {
 		return "", false, fmt.Errorf("insert repo: %w", err)
@@ -325,6 +344,24 @@ func List(ctx context.Context, db *sql.DB) ([]Record, error) {
 		out[i].Aliases = aliases[out[i].RepoID]
 	}
 	return out, nil
+}
+
+// repoIDByRoot returns the stored repo_id for an already-canonicalised root
+// path, and whether such a row exists. It underpins the Add re-registration
+// short-circuit (ADR-S0017 §2): identity is keyed on root_path so a re-add
+// reuses the stored id rather than re-resolving the identity tier.
+func repoIDByRoot(ctx context.Context, db *sql.DB, canonical string) (string, bool, error) {
+	var id string
+	err := db.QueryRowContext(ctx,
+		`SELECT repo_id FROM repos WHERE root_path = ?`, canonical,
+	).Scan(&id)
+	if err == sql.ErrNoRows {
+		return "", false, nil
+	}
+	if err != nil {
+		return "", false, err
+	}
+	return id, true, nil
 }
 
 // Get returns the Record for repoID. A missing row yields (zero Record, nil)

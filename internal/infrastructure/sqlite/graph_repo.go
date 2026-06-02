@@ -163,6 +163,12 @@ ON CONFLICT(node_id, branch) DO UPDATE SET
 // "ext:<module-path>"). rootPath should be the absolute path of the
 // vendor/<module> directory so moduleRelDir in the resolver yields
 // correct subpackage relDirs.
+//
+// identity_tier/identity_anchor are intentionally left NULL (ADR-S0017 §2):
+// these synthetic rows already carry a content-derived, module-path-keyed id
+// and are not user-registered repos resolved through ResolveIdentity, so they
+// sit outside the portable-identity fallback chain and the doctor
+// non-convergence warning (solov2-dchd.6).
 func (r *GraphRepo) UpsertExternalRepo(ctx context.Context, repoID, rootPath, modulePath, branch string) error {
 	_, err := r.writeDB.ExecContext(ctx,
 		`INSERT INTO repos (repo_id, root_path, added_at, active_branch, module_path)
