@@ -356,7 +356,54 @@ func findingFamily() []coverageTool {
 				t.Fatalf("repo_id mismatch: got %v, want CodeNotFound", mmErr)
 			}
 		}},
-		{family: f, tool: "eng_close_finding", bead: "solov2-tvid"},
+		{family: f, tool: "eng_close_finding", bead: "solov2-tvid", run: func(t *testing.T) {
+			h := newHarness(t)
+			// findingRow is unexported; the handler returns
+			// map[string]any{"finding": findingRow}, so read State via JSON.
+			getState := func() string {
+				res, rpcErr := h.Call("eng_get_finding", map[string]any{"finding_id": "seed-finding-0"})
+				if rpcErr != nil {
+					t.Fatalf("eng_get_finding: %v", rpcErr)
+				}
+				var got struct {
+					Finding struct {
+						State string `json:"state"`
+					} `json:"finding"`
+				}
+				b, _ := json.Marshal(res)
+				if err := json.Unmarshal(b, &got); err != nil {
+					t.Fatalf("decode finding: %v", err)
+				}
+				return got.Finding.State
+			}
+
+			// BEFORE: seed-finding-0 is open.
+			if st := getState(); st != "open" {
+				t.Fatalf("before close: state = %q, want open", st)
+			}
+
+			// MUTATE: warn severity + AGENT actor closes without the human gate.
+			res, rpcErr := h.Call("eng_close_finding", map[string]any{
+				"finding_id": "seed-finding-0", "reason": "verified safe",
+			})
+			if rpcErr != nil {
+				t.Fatalf("eng_close_finding: %v", rpcErr)
+			}
+			if m, ok := res.(map[string]any); !ok || m["state"].(string) != "closed" {
+				t.Fatalf("close result = %v, want state=closed", res)
+			}
+
+			// AFTER: the transition persisted.
+			if st := getState(); st != "closed" {
+				t.Fatalf("after close: state = %q, want closed", st)
+			}
+
+			// Unknown finding_id -> CodeNotFound.
+			_, nfErr := h.Call("eng_close_finding", map[string]any{"finding_id": "nope", "reason": "x"})
+			if nfErr == nil || nfErr.Code != mcp.CodeNotFound {
+				t.Fatalf("unknown finding_id: got %v, want CodeNotFound", nfErr)
+			}
+		}},
 		{family: f, tool: "eng_reopen_finding", bead: "solov2-ifne"},
 		{family: f, tool: "eng_find_todos", bead: "solov2-rrz1", run: func(t *testing.T) {
 			h := newHarness(t)
