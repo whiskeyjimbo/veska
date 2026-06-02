@@ -51,11 +51,37 @@ func gitCommitAll(t *testing.T, root, msg string) {
 	runGitDeterministic(t, root, "commit", "-m", msg)
 }
 
+// gitCommitAllNow stages everything and commits with msg under the same fixed
+// identity as gitCommitAll but WITHOUT pinning the author/committer dates, so
+// git stamps the current wall-clock time. Tools whose ranking depends on a
+// recent look-back window (eng_get_hot_zone uses now − 30 days) need commits
+// inside that window, which the frozen fixtureGitDate (2025-01-01) is not.
+func gitCommitAllNow(t *testing.T, root, msg string) {
+	t.Helper()
+	runGitNow(t, root, "add", "-A")
+	runGitNow(t, root, "commit", "-m", msg)
+}
+
 // runGitDeterministic runs a git subcommand in root with a deterministic
 // identity and frozen author/committer dates, failing the test (with combined
 // output) on any error. (The package's other runGit helper does not pin
 // identity/dates, so coverage fixtures use this one.)
 func runGitDeterministic(t *testing.T, root string, args ...string) {
+	t.Helper()
+	runGitWithDate(t, root, fixtureGitDate, args...)
+}
+
+// runGitNow runs a git subcommand in root with the deterministic identity but
+// the host's current time for author/committer dates.
+func runGitNow(t *testing.T, root string, args ...string) {
+	t.Helper()
+	runGitWithDate(t, root, "", args...)
+}
+
+// runGitWithDate runs a git subcommand in root under the fixed coverage
+// identity. When date is non-empty it pins GIT_AUTHOR_DATE/GIT_COMMITTER_DATE
+// (deterministic SHAs); when empty git uses the current wall-clock time.
+func runGitWithDate(t *testing.T, root, date string, args ...string) {
 	t.Helper()
 	full := append([]string{
 		"-C", root,
@@ -64,10 +90,13 @@ func runGitDeterministic(t *testing.T, root string, args ...string) {
 		"-c", "commit.gpgsign=false",
 	}, args...)
 	cmd := exec.Command("git", full...)
-	cmd.Env = append(os.Environ(),
-		"GIT_AUTHOR_DATE="+fixtureGitDate,
-		"GIT_COMMITTER_DATE="+fixtureGitDate,
-	)
+	cmd.Env = os.Environ()
+	if date != "" {
+		cmd.Env = append(cmd.Env,
+			"GIT_AUTHOR_DATE="+date,
+			"GIT_COMMITTER_DATE="+date,
+		)
+	}
 	if out, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("git %v: %v\n%s", args, err, out)
 	}

@@ -42,6 +42,7 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/application/blastradius"
 	"github.com/whiskeyjimbo/veska/internal/application/changedsymbols"
 	"github.com/whiskeyjimbo/veska/internal/application/dependencies"
+	"github.com/whiskeyjimbo/veska/internal/application/wiki"
 	"github.com/whiskeyjimbo/veska/internal/core/domain"
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/mcp"
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/mcp/coverage"
@@ -1512,7 +1513,69 @@ func symbolFamily() []coverageTool {
 func wikiFamily() []coverageTool {
 	const f = "wiki"
 	return []coverageTool{
-		{family: f, tool: "eng_get_hot_zone", bead: "solov2-17kd"},
+		{family: f, tool: "eng_get_hot_zone", bead: "solov2-17kd", run: func(t *testing.T) {
+			// Tier-3: a real git repo with MULTIPLE RECENT commits, indexed.
+			// hot_zone ranks files by change-risk = recent-change-frequency ×
+			// blast-radius. helper.go is churned 3× inside the 30-day window
+			// (high frequency) and Caller depends on it (blast-radius > 0 via
+			// the default callers direction), so it must score above caller.go.
+			// Commits use gitCommitAllNow so their dates fall inside the
+			// look-back window (gitCommitAll pins 2025-01-01, which is not).
+			root := initGitRepo(t)
+			writeRepoFile(t, root, "helper.go", "package p\n\nfunc Helper() int { return 1 }\n")
+			writeRepoFile(t, root, "caller.go", "package p\n\nfunc Caller() int { return Helper() }\n")
+			gitCommitAllNow(t, root, "c1")
+			writeRepoFile(t, root, "helper.go", "package p\n\nfunc Helper() int { return 2 }\n")
+			gitCommitAllNow(t, root, "c2")
+			writeRepoFile(t, root, "helper.go", "package p\n\nfunc Helper() int { return 3 }\n")
+			gitCommitAllNow(t, root, "c3")
+
+			h := newHarness(t)
+			res, rpcErr := h.Call("eng_add_repo", map[string]any{"root_path": root})
+			if rpcErr != nil {
+				t.Fatalf("eng_add_repo: %v", rpcErr)
+			}
+			repoID, _ := res.(map[string]any)["repo_id"].(string)
+			if repoID == "" {
+				t.Fatalf("eng_add_repo returned empty repo_id (got %v)", res)
+			}
+			// Cold-scan so Helper, Caller and the CALLS edge land in the graph,
+			// giving Helper a non-zero blast radius (Caller depends on it).
+			if _, e := h.Call("eng_reindex_repo", map[string]any{"repo_id": repoID}); e != nil {
+				t.Fatalf("eng_reindex_repo: %v", e)
+			}
+
+			res, rpcErr = h.Call("eng_get_hot_zone", map[string]any{"repo_id": repoID})
+			if rpcErr != nil {
+				t.Fatalf("eng_get_hot_zone: %v", rpcErr)
+			}
+			resp, ok := res.(mcp.HotZoneResponse)
+			if !ok {
+				t.Fatalf("eng_get_hot_zone: result type %T, want mcp.HotZoneResponse", res)
+			}
+			var helper *wiki.HotZone
+			for i := range resp.Zones {
+				z := &resp.Zones[i]
+				t.Logf("zone: file=%s freq=%d blast=%d score=%d",
+					z.FilePath, z.RecentChangeFrequency, z.BlastRadius, z.Score)
+				if strings.HasSuffix(z.FilePath, "helper.go") {
+					helper = z
+				}
+			}
+			if helper == nil {
+				t.Fatalf("helper.go not ranked (degraded=%v hint=%q zones=%+v)",
+					resp.DegradedReasons, resp.Hint, resp.Zones)
+			}
+			if helper.RecentChangeFrequency < 2 {
+				t.Errorf("helper.go RecentChangeFrequency=%d, want >= 2", helper.RecentChangeFrequency)
+			}
+			if helper.BlastRadius < 1 {
+				t.Errorf("helper.go BlastRadius=%d, want >= 1", helper.BlastRadius)
+			}
+			if helper.Score <= 0 {
+				t.Errorf("helper.go Score=%d, want > 0", helper.Score)
+			}
+		}},
 		{family: f, tool: "eng_get_entry_points", bead: "solov2-tqda", run: func(t *testing.T) {
 			h := newHarness(t)
 			repoID := coverage.BetaRepoID
