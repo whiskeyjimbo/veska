@@ -1437,7 +1437,62 @@ func wikiFamily() []coverageTool {
 func contextFamily() []coverageTool {
 	const f = "context"
 	return []coverageTool{
-		{family: f, tool: "eng_get_context_pack", bead: "solov2-xjjk"},
+		{family: f, tool: "eng_get_context_pack", bead: "solov2-xjjk", run: func(t *testing.T) {
+			h := newHarness(t)
+			repoID := coverage.AlphaRepoID
+			seed := string(h.ResolveID(repoID, coverage.NodeKey{
+				Path: "metric/series.go", Kind: domain.KindFunction, Name: "ComputeVariance"}))
+			res, rpcErr := h.Call("eng_get_context_pack", map[string]any{
+				"node_id": seed, "repo_id": repoID,
+			})
+			if rpcErr != nil {
+				t.Fatalf("eng_get_context_pack: %v", rpcErr)
+			}
+			// contextPackResponse is unexported in package mcp and embeds the
+			// application Pack anonymously, so Pack's fields are JSON-promoted to
+			// the top level — decode them there, not under a "pack" key.
+			var resp struct {
+				Nodes []struct {
+					NodeID  string `json:"node_id"`
+					HasOpen bool   `json:"has_open_finding"`
+				} `json:"nodes"`
+				OpenFindings []struct {
+					NodeID string `json:"node_id"`
+				} `json:"open_findings"`
+			}
+			b, _ := json.Marshal(res)
+			if err := json.Unmarshal(b, &resp); err != nil {
+				t.Fatalf("decode context pack: %v", err)
+			}
+			// The pack anchors on ComputeVariance; its node must be present (with
+			// blast neighbours) and flagged as carrying the open finding. Assert
+			// CONTAINMENT — the node set also holds blast-radius neighbours.
+			var anchor struct {
+				present bool
+				hasOpen bool
+			}
+			for _, n := range resp.Nodes {
+				if n.NodeID == seed {
+					anchor.present, anchor.hasOpen = true, n.HasOpen
+				}
+			}
+			if !anchor.present {
+				t.Fatalf("ComputeVariance (%s) missing from pack nodes %v", seed, resp.Nodes)
+			}
+			if !anchor.hasOpen {
+				t.Errorf("ComputeVariance node has_open_finding = false, want true")
+			}
+			// seed-finding-0 is the seeded OPEN complexity finding anchored on
+			// ComputeVariance; OpenFindings carries node IDs, so the anchor's id
+			// must appear there.
+			openByNode := map[string]bool{}
+			for _, fnd := range resp.OpenFindings {
+				openByNode[fnd.NodeID] = true
+			}
+			if !openByNode[seed] {
+				t.Errorf("OpenFindings %v missing ComputeVariance node %s (seed-finding-0)", resp.OpenFindings, seed)
+			}
+		}},
 	}
 }
 
