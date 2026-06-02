@@ -31,6 +31,7 @@ package daemon
 
 import (
 	"encoding/json"
+	"os"
 	"path/filepath"
 	"reflect"
 	"slices"
@@ -82,7 +83,50 @@ func coverageTools() []coverageTool {
 func repoFamily() []coverageTool {
 	const f = "repo"
 	return []coverageTool{
-		{family: f, tool: "eng_add_repo", bead: "solov2-ieuu"},
+		{family: f, tool: "eng_add_repo", bead: "solov2-ieuu", run: func(t *testing.T) {
+			h := newHarness(t)
+			repoIDSet := func() map[string]bool {
+				res, rpcErr := h.Call("eng_list_repos", map[string]any{})
+				if rpcErr != nil {
+					t.Fatalf("eng_list_repos: %v", rpcErr)
+				}
+				ids := map[string]bool{}
+				for _, v := range res.(map[string]any)["repos"].([]mcp.RepoView) {
+					ids[v.RepoID] = true
+				}
+				return ids
+			}
+			// repo.Add walks up for a .git work-tree marker; create one (no git binary needed).
+			newRepo := t.TempDir()
+			if err := os.MkdirAll(filepath.Join(newRepo, ".git"), 0o755); err != nil {
+				t.Fatal(err)
+			}
+			// BEFORE: the two fixtures are present; the new repo is not.
+			before := repoIDSet()
+			if !before[coverage.AlphaRepoID] || !before[coverage.BetaRepoID] {
+				t.Fatalf("before add: set %v missing a seeded fixture", before)
+			}
+			// MUTATE: register the brand-new path.
+			res, rpcErr := h.Call("eng_add_repo", map[string]any{"root_path": newRepo})
+			if rpcErr != nil {
+				t.Fatalf("eng_add_repo: %v", rpcErr)
+			}
+			m := res.(map[string]any)
+			newID, _ := m["repo_id"].(string)
+			if newID == "" {
+				t.Fatalf("add returned empty repo_id (got %v)", m)
+			}
+			if before[newID] {
+				t.Fatalf("repo_id %q was already registered before add", newID)
+			}
+			if m["already_registered"] != false {
+				t.Errorf("already_registered = %v, want false", m["already_registered"])
+			}
+			// AFTER: the returned repo_id now appears in eng_list_repos.
+			if !repoIDSet()[newID] {
+				t.Errorf("after add: eng_list_repos missing new repo %q", newID)
+			}
+		}},
 		{family: f, tool: "eng_remove_repo", bead: "solov2-e6xw"},
 		{family: f, tool: "eng_list_repos", bead: "solov2-p844", run: func(t *testing.T) {
 			h := newHarness(t)
