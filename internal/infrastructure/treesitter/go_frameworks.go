@@ -13,11 +13,15 @@
 //   - urfave/cli  — `var app = &cli.App{Name: ..., Commands: []*cli.Command
 //     {...}}` named by Name:; each Commands-slice literal → a CONTAINS
 //     child (solov2-qqqy).
+//   - gin/echo/chi — `router.METHOD("/path", handler)` → a KindRoute node
+//     named "METHOD /path" plus a ROUTES route→handler reference, emitted
+//     as a domain.UnresolvedCall{EdgeKind: EdgeRoutes} so the handler binds
+//     through the same package-wide promotion resolver as a plain call
+//     (solov2-ketg). The route is named with the method so GET and POST on
+//     one path don't collide on the (repo,path,kind,name) promotion PK.
 //
-// Reserved follow-ups (separate beads): alecthomas/kong (struct tags) and
-// HTTP routers (gin/echo/chi → KindRoute / EdgeRoutes — the cross-file
-// handler edge needs promotion-resolver support beyond today's
-// CALLS-only path). Each lands as another branch here.
+// Reserved follow-up (separate bead): alecthomas/kong (struct tags) lands
+// as another branch here.
 package treesitter
 
 import (
@@ -38,6 +42,37 @@ const (
 	urfaveImportPrefix = "github.com/urfave/cli"
 )
 
+// ginEchoImportPrefixes / chiImportPrefix are the HTTP-router module paths
+// whose router.METHOD(...) calls we promote to KindRoute nodes. echo and
+// chi version their module path (…/echo/v4, …/chi/v5), so these match by
+// prefix (solov2-ketg).
+var ginEchoImportPrefixes = []string{
+	"github.com/gin-gonic/gin",
+	"github.com/labstack/echo",
+}
+
+const chiImportPrefix = "github.com/go-chi/chi"
+
+// upperVerbs (gin/echo: GET) and titleVerbs (chi: Get) each map a router
+// method's field name to the canonical upper-case HTTP method used in the
+// route node name. They are kept per-framework, not flattened, because
+// chi's title-case verbs collide with extremely common Go method names
+// (cfg.Get, client.Post) — accepting them only when chi is the imported
+// router keeps a gin/echo-only file from mistaking client.Post(...) for a
+// route. This is the verb half of the precision gate; a field absent from
+// the active set drops the selector-call match.
+var upperVerbs = map[string]string{
+	"GET": "GET", "POST": "POST", "PUT": "PUT", "DELETE": "DELETE",
+	"PATCH": "PATCH", "HEAD": "HEAD", "OPTIONS": "OPTIONS",
+	"CONNECT": "CONNECT", "TRACE": "TRACE",
+}
+
+var titleVerbs = map[string]string{
+	"Get": "GET", "Post": "POST", "Put": "PUT", "Delete": "DELETE",
+	"Patch": "PATCH", "Head": "HEAD", "Options": "OPTIONS",
+	"Connect": "CONNECT", "Trace": "TRACE",
+}
+
 // frameworkCommands is the framework pass result: the promoted
 // KindCommand nodes, a binding from the Go var identifier to its command
 // node (used to skip the generic var extraction, to resolve AddCommand
@@ -47,6 +82,11 @@ type frameworkCommands struct {
 	nodes []*domain.Node
 	byVar map[string]*domain.Node
 	edges []*domain.Edge
+	// unresolved carries route→handler references (KindRoute → handler)
+	// the promoter binds against the package-wide symbol map, emitting a
+	// ROUTES edge instead of CALLS (solov2-ketg). Routes don't appear in
+	// byVar — no Go identifier references a route node.
+	unresolved []domain.UnresolvedCall
 }
 
 // commandVar reports whether the Go var identifier name was promoted to a
@@ -70,7 +110,9 @@ func (c *frameworkCommands) add(n *domain.Node, varName string) {
 func extractFrameworkCommands(root *sitter.Node, src []byte, imports map[string]string, repoID, path string) frameworkCommands {
 	_, cobraOK := cobraAlias(imports)
 	urfaveOK := anyImportHasPrefix(imports, urfaveImportPrefix)
-	if !cobraOK && !urfaveOK {
+	ginEchoOK := anyPrefixImported(imports, ginEchoImportPrefixes)
+	chiOK := anyImportHasPrefix(imports, chiImportPrefix)
+	if !cobraOK && !urfaveOK && !ginEchoOK && !chiOK {
 		return frameworkCommands{}
 	}
 	q, err := compileEmbeddedQuery(tsgo.GetLanguage(), "go", "frameworks")
@@ -79,20 +121,28 @@ func extractFrameworkCommands(root *sitter.Node, src []byte, imports map[string]
 	}
 	matches := runQuery(q, root)
 
-	p := fwParse{src: src, imports: imports, repoID: repoID, path: path, cobraOK: cobraOK, urfaveOK: urfaveOK}
+	p := fwParse{src: src, imports: imports, repoID: repoID, path: path, cobraOK: cobraOK, urfaveOK: urfaveOK, ginEchoOK: ginEchoOK, chiOK: chiOK}
 	fw := frameworkCommands{byVar: map[string]*domain.Node{}}
 	for _, m := range matches {
 		fw.dispatchVar(m, p)
 	}
-	if len(fw.byVar) == 0 {
-		return frameworkCommands{}
-	}
 	// Second pass: resolve the by-reference command-tree wire-ups now that
 	// every command var is in byVar (a child may be declared after its
 	// parent). cobra: parent.AddCommand(child); urfave: App.Commands slice
-	// identifier elements.
-	fw.edges = append(fw.edges, cobraContainsEdges(matches, src, fw.byVar)...)
-	fw.edges = append(fw.edges, urfaveRefContainsEdges(matches, p, fw.byVar)...)
+	// identifier elements. Only when a command var was actually promoted.
+	if len(fw.byVar) > 0 {
+		fw.edges = append(fw.edges, cobraContainsEdges(matches, src, fw.byVar)...)
+		fw.edges = append(fw.edges, urfaveRefContainsEdges(matches, p, fw.byVar)...)
+	}
+	// Routes are independent of the command tree: each router.METHOD(path,
+	// handler) call becomes a KindRoute node + a ROUTES route→handler
+	// UnresolvedCall, resolved at promotion (solov2-ketg).
+	if ginEchoOK || chiOK {
+		fw.addRoutes(matches, p)
+	}
+	if len(fw.nodes) == 0 && len(fw.edges) == 0 && len(fw.unresolved) == 0 {
+		return frameworkCommands{}
+	}
 	return fw
 }
 
@@ -104,6 +154,8 @@ type fwParse struct {
 	repoID, path string
 	cobraOK      bool
 	urfaveOK     bool
+	ginEchoOK    bool
+	chiOK        bool
 }
 
 // dispatchVar classifies one @fwvar.* match by (resolved import, type
@@ -331,6 +383,151 @@ func urfaveRefContainsEdges(matches []queryMatch, p fwParse, byVar map[string]*d
 		}
 	}
 	return edges
+}
+
+// anyPrefixImported reports whether any imported path starts with one of
+// prefixes — the file half of the route precision gate.
+func anyPrefixImported(imports map[string]string, prefixes []string) bool {
+	for _, prefix := range prefixes {
+		if anyImportHasPrefix(imports, prefix) {
+			return true
+		}
+	}
+	return false
+}
+
+// routeMethod resolves a router method's field name to its canonical
+// upper-case HTTP method, accepting upper-case verbs only when gin/echo is
+// the imported router and title-case verbs only when chi is — so a
+// gin-only file's client.Post(...) or a chi-only file's resp.GET(...) is
+// not mistaken for a route. ok=false when the field is not an active verb.
+func routeMethod(field string, ginEchoOK, chiOK bool) (string, bool) {
+	if ginEchoOK {
+		if m, ok := upperVerbs[field]; ok {
+			return m, true
+		}
+	}
+	if chiOK {
+		if m, ok := titleVerbs[field]; ok {
+			return m, true
+		}
+	}
+	return "", false
+}
+
+// addRoutes promotes every router.METHOD("/path", handler) selector call to
+// a KindRoute node named "METHOD /path" and records the route→handler
+// reference as a ROUTES UnresolvedCall (bound at promotion). The precision
+// gate — framework-specific verb field, string-literal path, present
+// handler arg, on top of the file-level router import already checked by
+// the caller — reduces but cannot eliminate misfires: the router is a
+// param of an unresolved type, so a same-file someVar.GET("x", y) in a
+// gin/echo file still can't be told apart from a real route (an accepted
+// v1 limitation). Group/Route/Mount and middleware nesting are deferred;
+// only flat r.METHOD(path, handler) is matched. Dedup is per route name
+// within the file (solov2-ketg).
+func (c *frameworkCommands) addRoutes(matches []queryMatch, p fwParse) {
+	seen := map[string]bool{}
+	for _, m := range matches {
+		methodNode := m.node("route.method")
+		argsNode := m.node("route.args")
+		callNode := m.node("route.call")
+		if methodNode == nil || argsNode == nil || callNode == nil {
+			continue
+		}
+		method, ok := routeMethod(string(p.src[methodNode.StartByte():methodNode.EndByte()]), p.ginEchoOK, p.chiOK)
+		if !ok {
+			continue
+		}
+		path, handler := routeArgs(argsNode, p.src)
+		if path == "" || handler == nil {
+			continue
+		}
+		name := method + " " + path
+		if seen[name] {
+			continue
+		}
+		seen[name] = true
+		route := newRouteNode(nodeID(p.repoID, p.path, domain.KindRoute, name), name, callNode, p.src, p.path)
+		if route == nil {
+			continue
+		}
+		c.nodes = append(c.nodes, route)
+		if uc, ok := routeHandlerUnresolved(route.ID, handler, callNode, p.src); ok {
+			c.unresolved = append(c.unresolved, uc)
+		}
+	}
+}
+
+// routeArgs extracts the route's path (first arg, which must be a string
+// literal) and handler (the second arg) from a router.METHOD argument
+// list. Returns ("", nil) when the first arg is not a string literal or
+// there is no handler arg — the literal-path + handler-present halves of
+// the precision gate. The handler is taken as the second positional arg,
+// which is correct for echo/chi and the common single-handler gin form
+// r.GET(path, handler); a gin route with leading middleware
+// (r.GET(path, mw, handler)) attributes to the middleware in v1.
+func routeArgs(argsNode *sitter.Node, src []byte) (string, *sitter.Node) {
+	if int(argsNode.NamedChildCount()) < 2 {
+		return "", nil
+	}
+	first := argsNode.NamedChild(0)
+	if first == nil {
+		return "", nil
+	}
+	switch first.Type() {
+	case "interpreted_string_literal", "raw_string_literal":
+	default:
+		return "", nil
+	}
+	path := strings.Trim(string(src[first.StartByte():first.EndByte()]), "\"`")
+	if path == "" {
+		return "", nil
+	}
+	return path, argsNode.NamedChild(1)
+}
+
+// routeHandlerUnresolved builds the ROUTES route→handler UnresolvedCall for
+// a handler argument. A bare identifier (h) resolves by name against the
+// route file's package; a package/receiver selector (pkg.Handler) resolves
+// via the import map (a local-var receiver simply won't match, so no false
+// edge is emitted). Func-literal and other handler forms produce no edge
+// (ok=false), mirroring the deferred urfave Action-closure case. The call
+// site's line is carried so the resolved edge attributes to the route
+// registration (solov2-ketg).
+func routeHandlerUnresolved(routeID domain.NodeID, handler, callNode *sitter.Node, src []byte) (domain.UnresolvedCall, bool) {
+	uc := domain.UnresolvedCall{CallerID: routeID, EdgeKind: domain.EdgeRoutes, SrcLine: lineRange(callNode).Start}
+	switch handler.Type() {
+	case "identifier":
+		uc.CalleeName = string(src[handler.StartByte():handler.EndByte()])
+		return uc, true
+	case "selector_expression":
+		operand := handler.ChildByFieldName("operand")
+		field := handler.ChildByFieldName("field")
+		if operand == nil || field == nil || operand.Type() != "identifier" {
+			return domain.UnresolvedCall{}, false
+		}
+		uc.PkgQualifier = string(src[operand.StartByte():operand.EndByte()])
+		uc.CalleeName = string(src[field.StartByte():field.EndByte()])
+		return uc, true
+	default:
+		return domain.UnresolvedCall{}, false
+	}
+}
+
+// newRouteNode builds a KindRoute node named "METHOD /path", with lines +
+// raw content from the router.METHOD(...) call expression.
+func newRouteNode(id, name string, callNode *sitter.Node, src []byte, path string) *domain.Node {
+	n, err := domain.NewNode(
+		domain.NodeSpec{ID: id, Path: path, Name: name, Kind: domain.KindRoute},
+		domain.WithLanguage("go"),
+		domain.WithLines(lineRange(callNode)),
+		domain.WithRawContent(string(src[callNode.StartByte():callNode.EndByte()])),
+	)
+	if err != nil {
+		return nil
+	}
+	return n
 }
 
 // newCommandNode builds a KindCommand node whose lines + raw content come
