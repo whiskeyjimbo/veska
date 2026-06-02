@@ -51,6 +51,7 @@ and never reused.
 | [ADR-S0014](ADR-S0014-hnsw-pivot.md) | HNSW vector index pivot (replaces vec0 above 100k nodes) | accepted (extended by ADR-S0015) |
 | [ADR-S0015](ADR-S0015-vec-pivot-dual-backend.md) | Dual-backend vector strategy (sqlite-vec default, usearch above threshold) | accepted |
 | [ADR-S0016](ADR-S0016-memvec-rename.md) | Rename the in-memory vector backend (sqlitevec → memvec) | accepted |
+| [ADR-S0017](ADR-S0017-portable-node-identity.md) | Portable content-derived node identity for a shared multi-contributor graph | proposed |
 
 ## Retracted from prior set
 
