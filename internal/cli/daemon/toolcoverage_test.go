@@ -39,6 +39,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/whiskeyjimbo/veska/internal/application/changedsymbols"
 	"github.com/whiskeyjimbo/veska/internal/application/dependencies"
 	"github.com/whiskeyjimbo/veska/internal/core/domain"
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/mcp"
@@ -1620,7 +1621,54 @@ func cloneFamily() []coverageTool {
 func changedSymbolsFamily() []coverageTool {
 	const f = "changed_symbols"
 	return []coverageTool{
-		{family: f, tool: "eng_find_changed_symbols", bead: "solov2-m2wp"},
+		{family: f, tool: "eng_find_changed_symbols", bead: "solov2-m2wp", run: func(t *testing.T) {
+			// Build a controlled two-commit repo: c1 has Existing only, c2
+			// adds Added. Diffing HEAD~1..HEAD must report Added as added and
+			// leave Existing (unchanged) out of the added set.
+			root := initGitRepo(t)
+			writeRepoFile(t, root, "calc.go", "package calc\n\nfunc Existing() int { return 1 }\n")
+			gitCommitAll(t, root, "c1")
+			writeRepoFile(t, root, "calc.go", "package calc\n\nfunc Existing() int { return 1 }\n\nfunc Added() int { return 2 }\n")
+			gitCommitAll(t, root, "c2")
+
+			h := newHarness(t)
+			res, rpcErr := h.Call("eng_add_repo", map[string]any{"root_path": root})
+			if rpcErr != nil {
+				t.Fatalf("eng_add_repo: %v", rpcErr)
+			}
+			repoID, _ := res.(map[string]any)["repo_id"].(string)
+			if repoID == "" {
+				t.Fatalf("eng_add_repo returned empty repo_id (got %v)", res)
+			}
+
+			res, rpcErr = h.Call("eng_find_changed_symbols", map[string]any{
+				"repo_id": repoID, "ref_a": "HEAD~1", "ref_b": "HEAD",
+			})
+			if rpcErr != nil {
+				t.Fatalf("eng_find_changed_symbols: %v", rpcErr)
+			}
+			// Handler returns a changedsymbols.Result value (no serialization
+			// through Call), so a direct type-assert is correct.
+			r, ok := res.(changedsymbols.Result)
+			if !ok {
+				t.Fatalf("result type %T, want changedsymbols.Result", res)
+			}
+			found := false
+			for _, sc := range r.Added {
+				if sc.Name == "Added" {
+					found = true
+					if sc.Kind != domain.KindFunction {
+						t.Errorf("Added symbol kind = %q, want %q", sc.Kind, domain.KindFunction)
+					}
+				}
+				if sc.Name == "Existing" {
+					t.Errorf("unchanged symbol Existing reported as added: %+v", sc)
+				}
+			}
+			if !found {
+				t.Errorf("Added set does not contain symbol %q (got %+v)", "Added", r.Added)
+			}
+		}},
 	}
 }
 
