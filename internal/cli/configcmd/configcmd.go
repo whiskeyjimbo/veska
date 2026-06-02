@@ -19,6 +19,17 @@ import (
 // (e.g. during early bootstrap before os.Executable resolves the daemon path).
 var ErrNoManager = errors.New("service manager not available")
 
+// Supervisor is the ISP-narrowed view of service.Manager that RunReload needs:
+// restart the daemon, then poll until it reports healthy. Declaring it in the
+// consuming package — sized to exactly the two methods this use case drives —
+// keeps configcmd from depending on Install/Uninstall/Start/Stop, mirroring the
+// method-injection narrowing upgradeCmd uses for its single Restart call. Any
+// service.Manager satisfies it.
+type Supervisor interface {
+	Restart(ctx context.Context) error
+	Status(ctx context.Context) (service.ServiceStatus, error)
+}
+
 // CallFunc issues one MCP request against the daemon. It mirrors
 // mcpclient.Call so RunReload can be unit-tested with a fake in place of the
 // real socket client.
@@ -27,7 +38,7 @@ type CallFunc func(ctx context.Context, method string, params, out any) error
 // ReloadParams bundles the inputs of RunReload.
 type ReloadParams struct {
 	// Manager mutates supervisor state; nil yields ErrNoManager.
-	Manager service.Manager
+	Manager Supervisor
 	Out     io.Writer
 	// DaemonReady reports whether the daemon socket is back up after a
 	// restart. Injected (cmd/veska's daemonRunning) so the package needs no
