@@ -297,7 +297,44 @@ func graphFamily() []coverageTool {
 func blastFamily() []coverageTool {
 	const f = "blast"
 	return []coverageTool{
-		{family: f, tool: "eng_get_blast_radius", bead: "solov2-6ups"},
+		{family: f, tool: "eng_get_blast_radius", bead: "solov2-6ups", run: func(t *testing.T) {
+			h := newHarness(t)
+			repoID := coverage.AlphaRepoID
+			// Seed: computeMean. In CALLERS direction the affected set is its
+			// direct caller (ComputeVariance) and its transitive caller
+			// (StandardDeviation → ComputeVariance → computeMean).
+			seed := h.ResolveID(repoID, coverage.NodeKey{
+				Path: "metric/series.go", Kind: domain.KindFunction, Name: "computeMean"})
+
+			res, rpcErr := h.Call("eng_get_blast_radius", map[string]any{
+				"node_id": string(seed), "repo_id": repoID,
+				"direction": "callers", "max_depth": 5,
+			})
+			if rpcErr != nil {
+				t.Fatalf("eng_get_blast_radius: %v", rpcErr)
+			}
+			resp, ok := res.(mcp.BlastResponse)
+			if !ok {
+				t.Fatalf("eng_get_blast_radius: result type %T, want mcp.BlastResponse", res)
+			}
+			// The seed itself rides along (depth 0), so assert contains-all on the
+			// transitively-affected set rather than an exact size.
+			want := map[string]bool{
+				string(h.ResolveID(repoID, coverage.NodeKey{
+					Path: "metric/series.go", Kind: domain.KindFunction, Name: "ComputeVariance"})): true,
+				string(h.ResolveID(repoID, coverage.NodeKey{
+					Path: "metric/deviation.go", Kind: domain.KindFunction, Name: "StandardDeviation"})): true,
+			}
+			got := map[string]bool{}
+			for _, e := range resp.Entries {
+				got[e.NodeID] = true
+			}
+			for id := range want {
+				if !got[id] {
+					t.Errorf("affected caller %q missing from blast radius", id)
+				}
+			}
+		}},
 		{family: f, tool: "eng_get_dirty_blast_radius", bead: "solov2-1sya"},
 		{family: f, tool: "eng_get_diff_blast_radius", bead: "solov2-56c8"},
 	}
