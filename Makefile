@@ -130,6 +130,19 @@ release-archive: build
 test:
 	$(SQLITE_CGO_ENV) go test -tags "$(SQLITE_TAGS)" ./...
 
+# tool-test: run the in-process MCP tool-coverage suite (solov2-ti9x). Narrow to
+# a family and/or tool with FAMILY=/TOOL= which append to the -run subtest path,
+# e.g. `make tool-test FAMILY=graph TOOL=eng_get_node`.
+TOOLTEST_RUN := TestToolCoverage
+ifneq ($(FAMILY),)
+TOOLTEST_RUN := $(TOOLTEST_RUN)/$(FAMILY)
+ifneq ($(TOOL),)
+TOOLTEST_RUN := $(TOOLTEST_RUN)/$(TOOL)
+endif
+endif
+tool-test:
+	$(SQLITE_CGO_ENV) go test -tags "$(SQLITE_TAGS)" -run '$(TOOLTEST_RUN)' ./internal/cli/daemon/...
+
 vet:
 	$(SQLITE_CGO_ENV) go vet -tags "$(SQLITE_TAGS)" ./...
 
