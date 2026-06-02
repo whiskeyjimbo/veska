@@ -212,7 +212,36 @@ func repoFamily() []coverageTool {
 				t.Errorf("degraded_reasons = %v (%T), want empty []string", m["degraded_reasons"], m["degraded_reasons"])
 			}
 		}},
-		{family: f, tool: "eng_get_config", bead: "solov2-f11k"},
+		{family: f, tool: "eng_get_config", bead: "solov2-f11k", run: func(t *testing.T) {
+			h := newHarness(t)
+			res, rpcErr := h.Call("eng_get_config", map[string]any{})
+			if rpcErr != nil {
+				t.Fatalf("eng_get_config: %v", rpcErr)
+			}
+			m, ok := res.(map[string]any)
+			if !ok {
+				t.Fatalf("eng_get_config: result type %T, want map[string]any", res)
+			}
+			// Stable derived facts: payload-shape version is the literal 1 (int,
+			// no JSON round-trip), and degraded_reasons is an empty []string.
+			if csv, ok := m["config_schema_version"].(int); !ok || csv != 1 {
+				t.Errorf("config_schema_version = %v (%T), want int 1", m["config_schema_version"], m["config_schema_version"])
+			}
+			if dr, ok := m["degraded_reasons"].([]string); !ok || len(dr) != 0 {
+				t.Errorf("degraded_reasons = %v (%T), want empty []string", m["degraded_reasons"], m["degraded_reasons"])
+			}
+			// Under the harness's empty Config{}, path/url/model fields are empty
+			// and the embedder marker is absent, so assert key PRESENCE (the
+			// well-formed shape) rather than operator-specific values.
+			for _, k := range []string{
+				"veska_home", "sqlite_path", "cli_sock", "mcp_sock", "vector_backend",
+				"embedder", "ollama_url", "embed_model", "config_schema_version", "degraded_reasons",
+			} {
+				if _, present := m[k]; !present {
+					t.Errorf("eng_get_config missing key %q (got %v)", k, m)
+				}
+			}
+		}},
 		{family: f, tool: "eng_set_repo_alias", bead: "solov2-awb9"},
 		{family: f, tool: "eng_remove_repo_alias", bead: "solov2-ffvx"},
 		{family: f, tool: "eng_find_owner", bead: "solov2-a6ud"},
