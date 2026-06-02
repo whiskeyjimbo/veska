@@ -356,6 +356,16 @@ eval-embed-models-fuse:
 eval-review-timing:
 	REVIEW_TIMING_FILE_N=$${REVIEW_TIMING_FILE_N:-100} go test -tags=eval -run TestReviewTiming ./tools/loadtest/reviewtiming/ -v -timeout=12000s
 
+# eval-share-vs-regenerate: solov2-z0jz — ADR-S0019 §4 empirical gate. Times the
+# parse + embed pipeline stages on a real library and reports the breakeven
+# bandwidth per derived-artifact family (the link speed above which sharing beats
+# local regeneration). Runs with no external service (elected embedder is
+# model2vec if installed, else zero-dep static-v2). Knobs: SHARE_REGEN_ROOT
+# (default this repo's internal/), SHARE_REGEN_MAX_DOCS (default 5000). Set
+# VESKA_EMBEDDER=ollama (Ollama up) for the heavy-embedder crossover data point.
+eval-share-vs-regenerate:
+	go test -tags=eval -run TestShareVsRegenerate ./tools/loadtest/share-vs-regenerate/ -v -timeout=1800s
+
 # eval-token-efficiency: solov2-wise — produce the semble-shaped
 # "tokens saved vs grep+read" figure, paired with recall@10 on the same
 # corpus. Pure-Go simulation (no rg subprocess); cl100k_base tokenizer.
