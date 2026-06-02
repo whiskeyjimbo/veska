@@ -52,6 +52,16 @@ ALL_TOOLS = {
     # wiki
     "eng_get_hot_zone",
     "eng_get_entry_points",
+    # clones / similarity
+    "eng_find_clones",  # solov2-wfrj
+    "eng_find_related",
+    # dependencies
+    "eng_list_dependencies",
+    # reindex
+    "eng_reindex_repo",
+    # aliases
+    "eng_set_repo_alias",
+    "eng_remove_repo_alias",
 }
 
 
@@ -70,9 +80,27 @@ def test_known_tools_all_registered(mcp_client):
 def test_tool_count_matches_expectation(mcp_client):
     """If a new tool lands in wire.go but not in ALL_TOOLS, this test fails
     loudly so a contributor remembers to add coverage for it. The count
-    comes from wire_test.go's TestWire_RegistersFinalFiveTools assertion."""
-    assert len(ALL_TOOLS) == 31, (
-        f"ALL_TOOLS has {len(ALL_TOOLS)} entries; wire.go registers 31 "
-        "(34 minus the parked task trio — solov2-6m1). "
+    matches wire_test.go's TestWire_RegistersFinalFiveTools assertion (37)."""
+    assert len(ALL_TOOLS) == 37, (
+        f"ALL_TOOLS has {len(ALL_TOOLS)} entries; wire.go registers 37. "
         "Update tests/mcp/test_meta.ALL_TOOLS and add a per-tool test file."
+    )
+
+
+def test_all_tools_matches_live_catalog(mcp_client):
+    """ALL_TOOLS must equal the daemon's live tools/list catalog. This is
+    the self-maintaining guard: a tool added to wire.go but not to
+    ALL_TOOLS (or vice-versa) fails here with the exact diff, so the
+    hardcoded set above can't silently drift from what the server serves —
+    the failure mode that left ALL_TOOLS stale at 31 while wire.go shipped
+    37 (solov2-seut cleanup)."""
+    _, text, _, result = mcp_client.call("tools/list", {})
+    live = {t["name"] for t in (result.get("tools") or [])}
+    assert live, f"tools/list returned no tools: {text}"
+    missing_from_tests = live - ALL_TOOLS
+    stale_in_tests = ALL_TOOLS - live
+    assert not (missing_from_tests or stale_in_tests), (
+        f"ALL_TOOLS drifted from live catalog — "
+        f"registered but untracked: {sorted(missing_from_tests)}; "
+        f"tracked but not registered: {sorted(stale_in_tests)}"
     )

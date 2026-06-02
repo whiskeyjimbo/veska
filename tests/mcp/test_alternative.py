@@ -16,8 +16,6 @@ from __future__ import annotations
 
 import os
 
-import pytest
-
 from tests.mcp.helpers import query
 
 
@@ -50,33 +48,35 @@ def test_alternative_get_file_nodes_absolute_vs_db_path(mcp_client, repo_id, bra
     with that path is the canonical case; the goal here is to pin the
     contract that get_file_nodes uses exact match (not a fuzzy LIKE).
 
-    Try the basename as a counter-example: it must NOT match — otherwise
-    a relative-path slip would silently leak nodes across same-named
-    files in different directories."""
+    Counter-example: a DIFFERENT absolute path that shares target_file's
+    basename but lives under a bogus directory. The handler resolves
+    *relative* paths against the repo root (tools_get_file_nodes.go), so a
+    bare basename is a legitimate relative path and not a sound probe — a
+    root-level file's basename rejoins to its own absolute path. An
+    absolute bogus path skips that resolution and exercises pure exact
+    match: it must return ZERO of the real nodes, or get_file_nodes is
+    matching on suffix/basename and would leak across same-named files."""
     ok, _, _, by_abs = mcp_client.call("eng_get_file_nodes", {
         "repo_id": repo_id, "branch": branch, "file_path": target_file,
     })
     assert ok
-    abs_count = len(by_abs.get("nodes") or [])
-    assert abs_count > 0, "absolute path returned no nodes — fixture poisoned"
+    abs_ids = {n["node_id"] for n in by_abs.get("nodes") or []}
+    assert abs_ids, "absolute path returned no nodes — fixture poisoned"
 
     basename = os.path.basename(target_file)
-    if basename == target_file:
-        pytest.skip("target_file is already a basename — counter-example inapplicable")
-
-    _, _, _, by_base = mcp_client.call("eng_get_file_nodes", {
-        "repo_id": repo_id, "branch": branch, "file_path": basename,
+    bogus = os.path.join("/__veska_nonexistent_dir__", basename)
+    _, _, _, by_bogus = mcp_client.call("eng_get_file_nodes", {
+        "repo_id": repo_id, "branch": branch, "file_path": bogus,
     })
-    # Either empty or a different count — what we forbid is silently
-    # treating basename as a synonym for the absolute path.
-    base_nodes = by_base.get("nodes") or []
-    # A clean assertion: the basename search must not accidentally
-    # return the same node ids that the absolute path returned.
-    abs_ids = {n["node_id"] for n in by_abs.get("nodes") or []}
-    base_ids = {n["node_id"] for n in base_nodes}
-    assert not (abs_ids & base_ids) or abs_ids != base_ids, (
-        "get_file_nodes treats basename as synonym for absolute path — "
-        "would silently leak across same-named files in different dirs"
+    bogus_ids = {n["node_id"] for n in by_bogus.get("nodes") or []}
+    # Exact-match means the bogus path must hit ZERO of the real nodes.
+    # Any intersection — even a proper subset — is leakage; the old
+    # `not (a & b) or a != b` form passed on partial overlap and so never
+    # caught the bug it documents (solov2-eabj).
+    assert abs_ids.isdisjoint(bogus_ids), (
+        "get_file_nodes matched a same-basename path under a bogus dir — "
+        "it is matching on suffix/basename, not exact path, and would "
+        "silently leak across same-named files in different dirs"
     )
 
 
@@ -141,10 +141,16 @@ def test_alternative_find_symbol_and_semantic_search_both_respond(mcp_client, re
 
 
 def test_alternative_list_repos_matches_db(mcp_client):
-    """eng_list_repos must equal SELECT * FROM repos. A divergence means
-    the lister is reading from somewhere stale (e.g. a startup-time
-    snapshot that doesn't see live additions)."""
+    """eng_list_repos must equal SELECT * FROM repos, modulo the ext:
+    pseudo-repos it hides by default (tools_admin.go: external module
+    rows are synthetic and stay out of the user-facing list unless
+    include_external is set). A divergence beyond that means the lister
+    is reading from somewhere stale (e.g. a startup-time snapshot that
+    doesn't see live additions)."""
     _, _, _, result = mcp_client.call("eng_list_repos", {})
     mcp_ids = sorted(r["repo_id"] for r in result.get("repos") or [])
-    db_ids = sorted(r["repo_id"] for r in query("SELECT repo_id FROM repos"))
+    db_ids = sorted(
+        r["repo_id"]
+        for r in query("SELECT repo_id FROM repos WHERE repo_id NOT LIKE 'ext:%'")
+    )
     assert mcp_ids == db_ids, f"eng_list_repos {mcp_ids} != db {db_ids}"
