@@ -33,6 +33,7 @@ import (
 	"encoding/json"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"sort"
 	"strings"
 	"testing"
@@ -242,7 +243,36 @@ func repoFamily() []coverageTool {
 				}
 			}
 		}},
-		{family: f, tool: "eng_set_repo_alias", bead: "solov2-awb9"},
+		{family: f, tool: "eng_set_repo_alias", bead: "solov2-awb9", run: func(t *testing.T) {
+			h := newHarness(t)
+			aliasesOf := func(repoID string) []string {
+				res, rpcErr := h.Call("eng_list_repos", map[string]any{})
+				if rpcErr != nil {
+					t.Fatalf("eng_list_repos: %v", rpcErr)
+				}
+				for _, v := range res.(map[string]any)["repos"].([]mcp.RepoView) {
+					if v.RepoID == repoID {
+						return v.Aliases
+					}
+				}
+				t.Fatalf("eng_list_repos: repo %q not present", repoID)
+				return nil
+			}
+			if before := aliasesOf(coverage.AlphaRepoID); slices.Contains(before, "myalias") || !slices.Contains(before, "alpha") {
+				t.Fatalf("before: aliases = %v, want \"alpha\" present and \"myalias\" absent", before)
+			}
+			res, rpcErr := h.Call("eng_set_repo_alias", map[string]any{"name": "myalias", "repo_id": coverage.AlphaRepoID})
+			if rpcErr != nil {
+				t.Fatalf("eng_set_repo_alias: %v", rpcErr)
+			}
+			m := res.(map[string]any)
+			if m["repo_id"] != coverage.AlphaRepoID || m["name"] != "myalias" {
+				t.Errorf("set returned %v, want repo_id=%q name=%q", m, coverage.AlphaRepoID, "myalias")
+			}
+			if after := aliasesOf(coverage.AlphaRepoID); !slices.Contains(after, "myalias") {
+				t.Errorf("after: aliases = %v, want \"myalias\" present", after)
+			}
+		}},
 		{family: f, tool: "eng_remove_repo_alias", bead: "solov2-ffvx"},
 		{family: f, tool: "eng_find_owner", bead: "solov2-a6ud"},
 	}
