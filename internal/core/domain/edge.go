@@ -21,6 +21,12 @@ const (
 	// These edges are written with Confidence=Unresolved and paired with a
 	// source_layer='semantic' Finding for human review.
 	EdgeSimilarTo EdgeKind = "SIMILAR_TO"
+	// EdgeRoutes connects a router/mux node to the handler a framework
+	// registration call binds to a path (gin/echo `router.GET("/p", h)`).
+	// Reserved alongside KindRoute as the framework-aware vocabulary; the
+	// cobra command tree uses CONTAINS (a command literally contains its
+	// subcommands), so ROUTES emission lands with the route pass .
+	EdgeRoutes EdgeKind = "ROUTES"
 )
 
 // validEdgeKinds is the closed set of recognised EdgeKind values. NewEdge
@@ -32,6 +38,7 @@ var validEdgeKinds = map[EdgeKind]struct{}{
 	EdgeTests:     {},
 	EdgeDependsOn: {},
 	EdgeSimilarTo: {},
+	EdgeRoutes:    {},
 }
 
 // Confidence is an ordered enum representing how certain an edge relationship is.

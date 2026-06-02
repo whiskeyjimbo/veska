@@ -130,10 +130,11 @@ func TestNewNode_KindValidation(t *testing.T) {
 	valid := []NodeKind{
 		KindFunction, KindMethod, KindType, KindStruct,
 		KindInterface, KindClass, KindModule, KindPackage,
-		KindFile, KindField, KindTest, KindVariable, KindChunk,
+		KindFile, KindField, KindTest, KindVariable,
+		KindCommand, KindRoute, KindChunk,
 	}
-	if len(valid) != 13 {
-		t.Fatalf("expected 13 valid NodeKinds, listed %d", len(valid))
+	if len(valid) != 15 {
+		t.Fatalf("expected 15 valid NodeKinds, listed %d", len(valid))
 	}
 	for _, k := range valid {
 		t.Run(string(k), func(t *testing.T) {

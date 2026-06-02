@@ -140,9 +140,9 @@ func TestNewEdge_SimilarToUnresolved(t *testing.T) {
 
 // NewEdge accepts every valid EdgeKind and rejects an unknown kind.
 func TestNewEdge_KindValidation(t *testing.T) {
-	valid := []EdgeKind{EdgeCalls, EdgeImports, EdgeContains, EdgeTests, EdgeDependsOn, EdgeSimilarTo}
-	if len(valid) != 6 {
-		t.Fatalf("expected 6 valid EdgeKinds, listed %d", len(valid))
+	valid := []EdgeKind{EdgeCalls, EdgeImports, EdgeContains, EdgeTests, EdgeDependsOn, EdgeSimilarTo, EdgeRoutes}
+	if len(valid) != 7 {
+		t.Fatalf("expected 7 valid EdgeKinds, listed %d", len(valid))
 	}
 	for _, k := range valid {
 		t.Run(string(k), func(t *testing.T) {
