@@ -311,7 +311,51 @@ func findingFamily() []coverageTool {
 				t.Errorf("seed-finding-1 = %+v, want rule=style severity=info state=closed", br)
 			}
 		}},
-		{family: f, tool: "eng_get_finding", bead: "solov2-y69v"},
+		{family: f, tool: "eng_get_finding", bead: "solov2-y69v", run: func(t *testing.T) {
+			h := newHarness(t)
+			// findingRow is unexported in package mcp and the handler returns
+			// map[string]any{"finding": findingRow}; round-trip via JSON.
+			type frow struct {
+				FindingID string `json:"finding_id"`
+				Rule      string `json:"rule"`
+				Severity  string `json:"severity"`
+				State     string `json:"state"`
+				Message   string `json:"message"`
+				ActorKind string `json:"actor_kind"`
+			}
+			res, rpcErr := h.Call("eng_get_finding", map[string]any{
+				"finding_id": "seed-finding-0", "branch": coverage.FixtureBranch,
+			})
+			if rpcErr != nil {
+				t.Fatalf("eng_get_finding: %v", rpcErr)
+			}
+			var got struct {
+				Finding frow `json:"finding"`
+			}
+			b, _ := json.Marshal(res)
+			if err := json.Unmarshal(b, &got); err != nil {
+				t.Fatalf("decode finding: %v", err)
+			}
+			fr := got.Finding
+			if fr.FindingID != "seed-finding-0" || fr.Rule != "complexity" || fr.Severity != "warn" || fr.State != "open" || fr.ActorKind != "agent" {
+				t.Errorf("seed-finding-0 = %+v, want id=seed-finding-0 rule=complexity severity=warn state=open actor_kind=agent", fr)
+			}
+			if !strings.Contains(fr.Message, "high cyclomatic") {
+				t.Errorf("seed-finding-0 message %q missing %q", fr.Message, "high cyclomatic")
+			}
+			// Unknown finding_id resolves to zero rows -> CodeNotFound.
+			_, nfErr := h.Call("eng_get_finding", map[string]any{"finding_id": "seed-finding-does-not-exist"})
+			if nfErr == nil || nfErr.Code != mcp.CodeNotFound {
+				t.Fatalf("unknown finding_id: got %v, want CodeNotFound", nfErr)
+			}
+			// repo_id mismatch (Alpha finding scoped to Beta) -> CodeNotFound.
+			_, mmErr := h.Call("eng_get_finding", map[string]any{
+				"finding_id": "seed-finding-0", "repo_id": coverage.BetaRepoID,
+			})
+			if mmErr == nil || mmErr.Code != mcp.CodeNotFound {
+				t.Fatalf("repo_id mismatch: got %v, want CodeNotFound", mmErr)
+			}
+		}},
 		{family: f, tool: "eng_close_finding", bead: "solov2-tvid"},
 		{family: f, tool: "eng_reopen_finding", bead: "solov2-ifne"},
 		{family: f, tool: "eng_find_todos", bead: "solov2-rrz1", run: func(t *testing.T) {
