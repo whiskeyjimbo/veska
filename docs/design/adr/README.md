@@ -53,6 +53,7 @@ and never reused.
 | [ADR-S0016](ADR-S0016-memvec-rename.md) | Rename the in-memory vector backend (sqlitevec → memvec) | accepted |
 | [ADR-S0017](ADR-S0017-portable-node-identity.md) | Portable content-derived node identity for a shared multi-contributor graph | proposed |
 | [ADR-S0018](ADR-S0018-shared-graph-data-partitioning.md) | Shared-graph data partitioning — shared truth vs. local state | proposed |
+| [ADR-S0019](ADR-S0019-shared-store-port-and-merge-model.md) | Shared-store port + idempotent merge-record model (transport deferred to adapter) | proposed |
 
 ## Retracted from prior set
 
