@@ -346,7 +346,11 @@ func (p *promotion) capturePrevSignatures(ctx context.Context, filePath string) 
 
 // syncFileImports re-DELETE+INSERTs the file's external imports so removed
 // imports disappear in the same commit . Stdlib is skipped to
-// mirror the stub-side filter — deps list is for external deps only.
+// mirror the stub-side filter — deps list is for external deps only. The
+// repo's OWN-module imports (e.g. example.com/modbeta importing
+// example.com/modbeta/widget) are also skipped: they are intra-module, not
+// third-party dependencies, so they must not inflate eng_list_dependencies
+// (solov2-tb74).
 func (p *promotion) syncFileImports(ctx context.Context, file application.PromotionFile) error {
 	if _, err := p.delImports.ExecContext(ctx, p.repoID, p.branch, file.Path); err != nil {
 		return fmt.Errorf("promoter: delete file_imports for %q: %w", file.Path, err)
@@ -354,6 +358,9 @@ func (p *promotion) syncFileImports(ctx context.Context, file application.Promot
 	for alias, importPath := range file.Imports {
 		if importPath == "" || !isExternalModulePath(importPath) {
 			continue
+		}
+		if _, inModule := modulePackageDir(p.modulePath, importPath); inModule {
+			continue // own-module import — intra-module, not a dependency
 		}
 		if _, err := p.insImports.ExecContext(ctx,
 			p.repoID, p.branch, file.Path, importPath, alias, "go", p.now,

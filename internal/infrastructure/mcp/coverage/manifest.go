@@ -115,12 +115,10 @@ type CrossRepoEdgeFact struct {
 // unions with the cross_repo_edge_stub call-level signal (CrossRepoEdgeFact);
 // the two surfaces are distinct (imports vs resolved call sites), hence both
 // categories. Only paths isExternalModulePath accepts are stored, so intra-
-// stdlib imports (e.g. "net/http", "fmt") are absent by design.
-//
-// NOTE: file_imports currently also keeps modbeta's own-module import
-// ("example.com/modbeta/widget") because isExternalModulePath does not subtract
-// the repo's own module_path. This is frozen as-observed (see solov2 bead filed
-// for the smell); do not "fix" it in the manifest.
+// stdlib imports (e.g. "net/http", "fmt") are absent by design. The repo's
+// own-module imports (e.g. "example.com/modbeta/widget") are also absent:
+// syncFileImports subtracts the repo's own module_path so intra-module imports
+// never count as dependencies (solov2-tb74).
 type DependencyFact struct {
 	RepoID      string
 	FromRelPath string // repo-relative slash path of the importing file
