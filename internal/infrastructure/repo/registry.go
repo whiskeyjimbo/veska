@@ -374,26 +374,26 @@ func Remove(ctx context.Context, db *sql.DB, repoID string) error {
 		return fmt.Errorf("repo not found: %s", repoID)
 	}
 
-	// solov2-6c04 follow-up: a concurrent promotion/scan can hold the
-	// Write lock long enough to outlast SQLite's busy_timeout, surfacing
-	// SQLITE_BUSY on user-initiated removes. Same retry envelope as Add.
+	// solov2-khra/zmzc: node_embedding_refs (no FK; nodes has composite PK)
+	// and post_promotion_queue (no FK to repos) escape the repos CASCADE.
+	// Drop both manually, best-effort. Refs MUST precede the repos DELETE
+	// (matched via node_id, which the cascade then removes); queue can follow.
+	if _, err := execWithBusyRetry(ctx, db, 5, 500*time.Millisecond,
+		`DELETE FROM node_embedding_refs WHERE node_id IN
+		 (SELECT node_id FROM nodes WHERE repo_id = ?)`, canonical); err != nil {
+		_ = err
+	}
+
+	// solov2-6c04: a concurrent promotion/scan can outlast busy_timeout.
 	if _, err := execWithBusyRetry(ctx, db, 5, 500*time.Millisecond,
 		`DELETE FROM repos WHERE repo_id = ?`, canonical,
 	); err != nil {
 		return fmt.Errorf("delete repo: %w", err)
 	}
-	// solov2-zmzc: post_promotion_queue has no FK to repos, so the CASCADE
-	// fan-out skips it. Manually drop any rows targeting the removed repo
-	// so they don't sit in 'failed'/'pending' forever, dragging doctor
-	// rollups to "degraded". --purge-orphans on the doctor command cleans
-	// up rows left by older versions.
 	if _, err := execWithBusyRetry(ctx, db, 5, 500*time.Millisecond,
 		`DELETE FROM post_promotion_queue WHERE repo_id = ?`, canonical,
 	); err != nil {
-		// Best-effort: the repo row is already gone, so leaving queue rows
-		// behind is recoverable via `veska doctor post_promotion_queue
-		// --purge-orphans`. Don't fail the user-facing remove for it.
-		_ = err
+		_ = err // recover via `veska doctor post_promotion_queue --purge-orphans`
 	}
 
 	if rootPath != "" {

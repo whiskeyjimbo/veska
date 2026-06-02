@@ -65,3 +65,24 @@ def any_open_finding(repo_id: str, branch: str) -> str | None:
         (repo_id, branch),
     )
     return rows[0]["finding_id"] if rows else None
+
+
+def assert_healthy_status(status: dict) -> None:
+    """Assert eng_get_status reflects a functioning daemon.
+
+    These suites run against ONE shared session daemon, and sibling tests
+    (var_decl, reindex, repo_lifecycle) register repos mid-run, so the
+    embedder briefly carries a real backlog. eng_get_status emits exactly
+    one degraded reason — 'embeddings_pending' (providers.go) — which the
+    daemon itself classifies as "healthy, just warming up", so a transient
+    'degraded' here is not a fault. We still fail loudly on any OTHER status
+    or degraded reason, so the health gate survives: a genuinely broken
+    daemon (or a new fault token) is not silently tolerated."""
+    s = status.get("status")
+    if s == "ok":
+        return
+    reasons = status.get("degraded_reasons") or []
+    assert s == "degraded" and set(reasons) <= {"embeddings_pending"}, (
+        f"unexpected status {s!r} with degraded_reasons={reasons!r} "
+        "(only transient embeddings_pending is tolerated)"
+    )

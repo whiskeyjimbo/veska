@@ -125,6 +125,40 @@ func TestAdminTools_GetCurrentRepo_MissingCwd(t *testing.T) {
 	}
 }
 
+// TestAdminTools_GetCurrentRepo_SoleVisibleIgnoresExt pins solov2-khra:
+// synthetic ext:<module> rows (from `veska deps index`) are hidden by
+// eng_list_repos, so a workspace with one real repo + indexed deps must
+// still auto-resolve to the sole *visible* repo when cwd is omitted — not
+// fail with "more than one repo registered", and not return the ext: row.
+func TestAdminTools_GetCurrentRepo_SoleVisibleIgnoresExt(t *testing.T) {
+	r := NewRegistry()
+	repos := []application.RepoRecord{
+		{RepoID: "ext:github.com/spf13/cobra", RootPath: "/vendor/cobra", ActiveBranch: "main"},
+		{RepoID: "repo-real", RootPath: "/home/user/project", ActiveBranch: "main", LastPromotedSHA: "abc"},
+	}
+	RegisterAdminTools(r, &stubRepoLister{repos: repos}, nil, nil)
+
+	result, rpcErr := dispatchAdmin(t, r, "eng_get_current_repo", map[string]string{})
+	if rpcErr != nil {
+		t.Fatalf("expected sole-visible auto-resolve, got RPC error: %+v", rpcErr)
+	}
+	m, ok := result.(map[string]any)
+	if !ok {
+		t.Fatalf("result is not map[string]any, got %T", result)
+	}
+	repo, ok := m["repo"].(RepoView)
+	if !ok {
+		t.Fatalf("result[\"repo\"] is not RepoView, got %T", m["repo"])
+	}
+	if repo.RepoID != "repo-real" {
+		t.Errorf("expected sole visible repo-real, got %q", repo.RepoID)
+	}
+	degraded, _ := m["degraded_reasons"].([]string)
+	if len(degraded) != 1 || degraded[0] != "defaulted_to_sole_repo" {
+		t.Errorf("expected degraded_reasons=[defaulted_to_sole_repo], got %v", degraded)
+	}
+}
+
 func TestAdminTools_ListRepos(t *testing.T) {
 	r := NewRegistry()
 	RegisterAdminTools(r, &stubRepoLister{repos: sampleRepos}, nil, nil)
