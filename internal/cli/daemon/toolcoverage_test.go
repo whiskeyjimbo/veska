@@ -1217,7 +1217,49 @@ func searchFamily() []coverageTool {
 				t.Errorf("ComputeVariance node %q missing from eng_search_semantic results", want)
 			}
 		}},
-		{family: f, tool: "eng_search_similar", bead: "solov2-r1ue"},
+		{family: f, tool: "eng_search_similar", bead: "solov2-r1ue", run: func(t *testing.T) {
+			h := newHarness(t)
+			repoID := coverage.AlphaRepoID
+			// Seed: computeMean. averageSamples is its frozenClones near-dup
+			// partner (facts.go), so it surfaces among the static-embedder
+			// neighbours. Assert ranking INVARIANTS only — never absolute
+			// vector scores: seed-exclusion, descending ORDERING, and
+			// near-dup MEMBERSHIP by node_id.
+			seed := string(h.ResolveID(repoID, coverage.NodeKey{
+				Path: "metric/series.go", Kind: domain.KindFunction, Name: "computeMean"}))
+			want := string(h.ResolveID(repoID, coverage.NodeKey{
+				Path: "metric/deviation.go", Kind: domain.KindFunction, Name: "averageSamples"}))
+			res, rpcErr := h.Call("eng_search_similar", map[string]any{
+				"node_id": seed, "repo_id": repoID, "k": 10,
+			})
+			if rpcErr != nil {
+				t.Fatalf("eng_search_similar: %v", rpcErr)
+			}
+			resp, ok := res.(mcp.SearchResponse)
+			if !ok {
+				t.Fatalf("eng_search_similar: result type %T, want mcp.SearchResponse", res)
+			}
+			if len(resp.Results) == 0 {
+				t.Fatal("eng_search_similar returned no neighbours for an embedded seed")
+			}
+			found := false
+			for i, hit := range resp.Results {
+				if hit.NodeID == seed {
+					t.Errorf("seed node %q must be excluded from its own neighbours", seed)
+				}
+				if hit.NodeID == want {
+					found = true
+				}
+				// ORDERING: scores are non-increasing.
+				if i > 0 && hit.Score > resp.Results[i-1].Score {
+					t.Errorf("neighbours not sorted descending: hit[%d] %v > hit[%d] %v",
+						i, hit.Score, i-1, resp.Results[i-1].Score)
+				}
+			}
+			if !found {
+				t.Errorf("near-dup averageSamples %q missing from computeMean neighbours", want)
+			}
+		}},
 	}
 }
 
