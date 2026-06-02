@@ -39,6 +39,13 @@ func (e MtimeEntry) changedFrom(prev MtimeEntry) bool {
 	return e.ModTime != prev.ModTime || e.Size != prev.Size || e.Prefix != prev.Prefix
 }
 
+// SweepStartHook is invoked once per registered repo at the start of a wake
+// sweep, SERIALLY and BEFORE any parallel file-walk begins. It carries the
+// owning repo ID and root directory. The daemon wires the staging-vs-HEAD
+// branch reconcile here; the reconciler itself stays infra-pure and just calls
+// the callback (no staging/application import). ctx is the sweep's context.
+type SweepStartHook func(ctx context.Context, repoID, dir string)
+
 // ReconcileHandler is called with the owning repo ID and the path of each file
 // whose mtime/size changed since the last sweep. The reconciler calls this for
 // every changed file it discovers. ctx is the sweep's context so a long handler
@@ -60,6 +67,7 @@ type WakeReconciler struct {
 	wakeTick      time.Duration
 	wakeThreshold time.Duration
 	handler       ReconcileHandler
+	sweepStart    SweepStartHook
 	ignore        *infrafs.IgnoreList
 	nowFn         func() time.Time
 	// concurrency bounds how many per-repo sweeps run in parallel. Always
@@ -96,6 +104,14 @@ func WithClock(nowFn func() time.Time) Option {
 // matches are skipped. A nil list (the default) skips nothing.
 func WithIgnoreList(ignore *infrafs.IgnoreList) Option {
 	return func(r *WakeReconciler) { r.ignore = ignore }
+}
+
+// WithSweepStartHook registers a callback invoked once per registered repo at
+// the start of a wake sweep, serially and before the parallel file-walk phase
+// begins (so all generation bumps complete before any parse runs). A nil hook
+// (the default) skips the pre-pass.
+func WithSweepStartHook(fn SweepStartHook) Option {
+	return func(r *WakeReconciler) { r.sweepStart = fn }
 }
 
 // WithWakeConcurrency caps how many per-repo sweeps run in parallel on a wake
@@ -253,6 +269,20 @@ func (r *WakeReconciler) sweepDirs(ctx context.Context) {
 	r.mu.Lock()
 	dirs := append([]watchedDir(nil), r.dirs...)
 	r.mu.Unlock()
+
+	// Serial pre-pass: run the sweep-start hook for EVERY repo before launching
+	// any parallel file-walk, so all staging generation bumps complete before
+	// any parse runs (SOLO-03 §5.2: "bumped *before* any parse runs"). Running
+	// it serially also avoids a parallel branch bump spuriously invalidating
+	// another repo's concurrently-starting parse.
+	if r.sweepStart != nil {
+		for _, wd := range dirs {
+			if ctx.Err() != nil {
+				return
+			}
+			r.sweepStart(ctx, wd.repoID, wd.dir)
+		}
+	}
 
 	sem := make(chan struct{}, r.concurrency)
 	var wg sync.WaitGroup
