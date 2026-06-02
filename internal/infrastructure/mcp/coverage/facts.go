@@ -164,8 +164,13 @@ func frozenDependencies() []DependencyFact {
 // frozenEntryPoints: only func main qualifies cleanly as a program entry point.
 // badgeHandler is parsed as a plain KindFunction (not KindRoute), so whether
 // the entry-point selector surfaces it depends on inbound-fan-in heuristics;
-// we freeze only the unambiguous main() here. (Amendable by the
-// eng_get_entry_points bead if it asserts more.)
+// we freeze only the unambiguous main() here.
+//
+// Note (solov2-ozoi.1): Alpha's exported ComputeVariance is deliberately NOT a
+// frozen entry point. It has inbound>=1 and would otherwise rank, but the
+// fixture seeds an OPEN complexity finding on it (seedFindings), and the
+// selector's open-finding gate excludes such nodes by design. The tqda
+// coverage test asserts that exclusion negatively rather than freezing it here.
 func frozenEntryPoints() []EntryPointFact {
 	return []EntryPointFact{
 		{RepoID: BetaRepoID, Node: NodeKey{betaMain, domain.KindFunction, "main"}},
