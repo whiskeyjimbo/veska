@@ -799,7 +799,7 @@ func (b *daemonBuilder) buildReconciler() *gitwatch.WakeReconciler {
 	} else {
 		opts = append(opts, gitwatch.WithSweepStartHook(
 			func(ctx context.Context, repoID, dir string) {
-				if err := br.Reconcile(ctx, repoID, dir); err != nil {
+				if _, err := br.Reconcile(ctx, repoID, dir); err != nil {
 					slog.Warn("wake reconciler: branch reconcile failed", "repo", repoID, "err", err)
 				}
 			}))
@@ -875,8 +875,26 @@ func (b *daemonBuilder) finalize() error {
 	if b.tracer != nil {
 		b.registry.SetTracerProvider(b.tracer)
 	}
+	// Staging-vs-HEAD branch check (SOLO-03 §5.2): the same reconciler the
+	// wake-sweep uses also runs at the START of each startup-resync repo, so a
+	// branch switch during downtime bumps the generation and drops prior-branch
+	// staging before any replay. Degrade-don't-crash: if construction fails
+	// (nil dep) we log and proceed WITHOUT the option — startup must not fail
+	// because the branch check couldn't wire (mirrors buildReconciler).
+	var resyncOpts []application.StartupResyncOption
+	if br, berr := application.NewBranchReconciler(
+		gitBranchReader{},
+		&activeBranchStore{read: b.pools.ReadDB, write: b.pools.Write},
+		b.gate, b.staging,
+	); berr != nil {
+		slog.Warn("startup resync: branch reconcile disabled", "err", berr)
+	} else {
+		resyncOpts = append(resyncOpts, application.WithBranchReconciler(br))
+	}
+
 	resync, err := application.NewStartupResync(
 		&repoLister{db: b.pools.ReadDB}, gitwatch.Querier{}, b.ingester.Save, b.promoter.Promote, b.reparser,
+		resyncOpts...,
 	)
 	if err != nil {
 		return err

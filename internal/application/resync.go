@@ -78,7 +78,28 @@ type StartupResync struct {
 	promote  promoteFunc
 	reparser func(ctx context.Context, repo RepoRecord) error
 
+	// br is the optional staging-vs-HEAD branch reconciler (SOLO-03 §5.2).
+	// When set, each repo's working-tree branch is reconciled against
+	// repos.active_branch before any parse/replay. nil = skip (back-compat).
+	br *BranchReconciler
+
 	syncing atomic.Bool
+}
+
+// StartupResyncOption configures optional StartupResync behaviour.
+type StartupResyncOption func(*StartupResync)
+
+// WithBranchReconciler wires the staging-vs-HEAD branch reconciler (SOLO-03
+// §5.2) into the startup-resync path. A nil reconciler is ignored, leaving the
+// branch check disabled (back-compat). When set, resyncRepo reconciles the
+// working-tree branch against repos.active_branch before any replay runs, and
+// the resolved branch flows into the per-commit save/promote key.
+func WithBranchReconciler(br *BranchReconciler) StartupResyncOption {
+	return func(s *StartupResync) {
+		if br != nil {
+			s.br = br
+		}
+	}
 }
 
 // NewStartupResync constructs a StartupResync wired to the provided dependencies.
@@ -93,17 +114,22 @@ func NewStartupResync(
 	save saveFunc,
 	promote promoteFunc,
 	reparser func(ctx context.Context, repo RepoRecord) error,
+	opts ...StartupResyncOption,
 ) (*StartupResync, error) {
 	if repos == nil || git == nil || save == nil || promote == nil || reparser == nil {
 		return nil, fmt.Errorf("application.NewStartupResync: nil dependency: %w", ErrMissingDependency)
 	}
-	return &StartupResync{
+	sr := &StartupResync{
 		repos:    repos,
 		git:      git,
 		save:     save,
 		promote:  promote,
 		reparser: reparser,
-	}, nil
+	}
+	for _, opt := range opts {
+		opt(sr)
+	}
+	return sr, nil
 }
 
 // IsSyncing returns true while Run is in progress.
@@ -165,6 +191,19 @@ func (r *StartupResync) Run(ctx context.Context) error {
 
 // resyncRepo handles resync for a single repo.
 func (r *StartupResync) resyncRepo(ctx context.Context, repo RepoRecord) error {
+	// SOLO-03 §5.2: begin by reconciling the working-tree branch against
+	// repos.active_branch BEFORE any parse/replay. On a branch switch this
+	// bumps the staging generation, drops the prior branch's staging, and
+	// updates active_branch. The resolved branch flows back into the
+	// loop-local RepoRecord so replayCommit keys save/promote on the NEW
+	// branch (repo is a value copy — mutating it here is intended). A no-op
+	// reconcile returns "" and leaves the existing branch key untouched.
+	if r.br != nil {
+		if b, _ := r.br.Reconcile(ctx, repo.RepoID, repo.RootPath); b != "" {
+			repo.ActiveBranch = b
+		}
+	}
+
 	head, err := r.git.HEAD(repo.RootPath)
 	if err != nil {
 		return fmt.Errorf("startup resync: HEAD for repo %q: %w", repo.RepoID, err)
