@@ -39,6 +39,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/whiskeyjimbo/veska/internal/application/blastradius"
 	"github.com/whiskeyjimbo/veska/internal/application/changedsymbols"
 	"github.com/whiskeyjimbo/veska/internal/application/dependencies"
 	"github.com/whiskeyjimbo/veska/internal/core/domain"
@@ -1240,7 +1241,60 @@ func blastFamily() []coverageTool {
 			}
 		}},
 		{family: f, tool: "eng_get_dirty_blast_radius", bead: "solov2-1sya"},
-		{family: f, tool: "eng_get_diff_blast_radius", bead: "solov2-56c8"},
+		{family: f, tool: "eng_get_diff_blast_radius", bead: "solov2-56c8", run: func(t *testing.T) {
+			// Tier-3: a real git repo that is ALSO indexed. c1 seeds Helper
+			// (callee) + Caller (caller, CALLS Helper). c2 edits ONLY helper.go.
+			// Diffing HEAD~1..HEAD changes {helper.go} → its node Helper → the
+			// callers blast must surface Caller, the affected caller.
+			root := initGitRepo(t)
+			writeRepoFile(t, root, "helper.go", "package p\n\nfunc Helper() int { return 1 }\n")
+			writeRepoFile(t, root, "caller.go", "package p\n\nfunc Caller() int { return Helper() }\n")
+			gitCommitAll(t, root, "c1")
+			writeRepoFile(t, root, "helper.go", "package p\n\nfunc Helper() int { return 2 }\n")
+			gitCommitAll(t, root, "c2")
+
+			h := newHarness(t)
+			res, rpcErr := h.Call("eng_add_repo", map[string]any{"root_path": root})
+			if rpcErr != nil {
+				t.Fatalf("eng_add_repo: %v", rpcErr)
+			}
+			repoID, _ := res.(map[string]any)["repo_id"].(string)
+			if repoID == "" {
+				t.Fatalf("eng_add_repo returned empty repo_id (got %v)", res)
+			}
+			// Cold-scan the working tree so Helper, Caller and the CALLS edge
+			// land in the graph the blast tools read.
+			if _, e := h.Call("eng_reindex_repo", map[string]any{"repo_id": repoID}); e != nil {
+				t.Fatalf("eng_reindex_repo: %v", e)
+			}
+
+			res, rpcErr = h.Call("eng_get_diff_blast_radius", map[string]any{
+				"repo_id": repoID, "ref_a": "HEAD~1", "ref_b": "HEAD",
+				"direction": string(blastradius.DirCallers), "max_depth": 5,
+			})
+			if rpcErr != nil {
+				t.Fatalf("eng_get_diff_blast_radius: %v", rpcErr)
+			}
+			resp, ok := res.(mcp.BlastResponse)
+			if !ok {
+				t.Fatalf("eng_get_diff_blast_radius: result type %T, want mcp.BlastResponse", res)
+			}
+			// The changed Helper is the seed and may ride along (depth 0); assert
+			// CONTAINMENT of "Caller" (its affected caller). Different repo than
+			// the coverage manifest, so match by Name (entry embeds nodeDTO).
+			names := make([]string, 0, len(resp.Entries))
+			found := false
+			for _, e := range resp.Entries {
+				names = append(names, e.Name)
+				if e.Name == "Caller" {
+					found = true
+				}
+			}
+			t.Logf("diff-blast entries: %v", names)
+			if !found {
+				t.Errorf("affected caller %q missing from diff blast radius (got %v)", "Caller", names)
+			}
+		}},
 	}
 }
 
