@@ -415,6 +415,119 @@ func TestResync_PerRepoFailureSkipsAndContinues(t *testing.T) {
 	}
 }
 
+// TestResync_BranchCheck_SwitchedBranch_ReplayUsesNewBranch pins SOLO-03 §5.2:
+// when the working-tree branch differs from repos.active_branch, the branch
+// check must run FIRST (bump generation, clear prior-branch staging, update
+// active_branch) and the subsequent commit replay must use the NEW branch as
+// the save/promote key — not the stale in-memory ActiveBranch.
+func TestResync_BranchCheck_SwitchedBranch_ReplayUsesNewBranch(t *testing.T) {
+	const (
+		lastSHA = "old-sha"
+		headSHA = "new-sha"
+	)
+	repos := &stubRepoLister{repos: []RepoRecord{{
+		RepoID:          "repo1",
+		RootPath:        "/tmp/repo1",
+		ActiveBranch:    "main", // stale: working tree is on feature/x
+		LastPromotedSHA: lastSHA,
+	}}}
+	git := &stubGitQuerier{
+		headFn:         func(_ string) (string, error) { return headSHA, nil },
+		isAncestorFn:   func(_, _, _ string) (bool, error) { return true, nil },
+		commitsSinceFn: func(_, _, _ string) ([]string, error) { return []string{"c1"}, nil },
+		changedFilesFn: func(_, _ string) ([]string, error) { return []string{"a.go"}, nil },
+		readFileAtFn:   func(_, _, _ string) ([]byte, error) { return []byte("x"), nil },
+	}
+	tracker := &callTracker{}
+
+	// Real BranchReconciler with fakes: working tree on feature/x, active main.
+	reader := &fakeBranchReader{branch: "feature/x"}
+	store := &fakeActiveBranchStore{active: "main"}
+	bump := &fakeBumper{}
+	clear := &fakeClearer{}
+	rc, err := NewBranchReconciler(reader, store, bump, clear)
+	if err != nil {
+		t.Fatalf("NewBranchReconciler: %v", err)
+	}
+
+	sr, err := NewStartupResync(repos, git, tracker.saveFunc(), tracker.promoteFunc(),
+		func(_ context.Context, _ RepoRecord) error { return nil },
+		WithBranchReconciler(rc))
+	if err != nil {
+		t.Fatalf("NewStartupResync: %v", err)
+	}
+
+	if err := sr.Run(context.Background()); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+
+	// Branch check ran first.
+	if bump.calls != 1 {
+		t.Errorf("BumpGeneration calls = %d, want 1", bump.calls)
+	}
+	if clear.calls != 1 || clear.branch != "main" {
+		t.Errorf("Clear = (%d, %q), want (1, main)", clear.calls, clear.branch)
+	}
+	if store.setVal != "feature/x" {
+		t.Errorf("SetActiveBranch val = %q, want feature/x", store.setVal)
+	}
+
+	// Replay used the NEW branch as the save/promote key.
+	tracker.mu.Lock()
+	defer tracker.mu.Unlock()
+	if len(tracker.saveCalls) != 1 || tracker.saveCalls[0].branch != "feature/x" {
+		t.Errorf("save branch = %v, want feature/x", tracker.saveCalls)
+	}
+	if len(tracker.promoteCalls) != 1 || tracker.promoteCalls[0].branch != "feature/x" {
+		t.Errorf("promote branch = %v, want feature/x", tracker.promoteCalls)
+	}
+}
+
+// TestResync_BranchCheck_Match_NoBumpReplayUnchanged verifies that when the
+// working-tree branch matches active_branch, the branch check no-ops and the
+// replay uses the unchanged branch key.
+func TestResync_BranchCheck_Match_NoBumpReplayUnchanged(t *testing.T) {
+	repos := &stubRepoLister{repos: []RepoRecord{{
+		RepoID:          "repo1",
+		RootPath:        "/tmp/repo1",
+		ActiveBranch:    "main",
+		LastPromotedSHA: "old-sha",
+	}}}
+	git := &stubGitQuerier{
+		headFn:         func(_ string) (string, error) { return "new-sha", nil },
+		isAncestorFn:   func(_, _, _ string) (bool, error) { return true, nil },
+		commitsSinceFn: func(_, _, _ string) ([]string, error) { return []string{"c1"}, nil },
+		changedFilesFn: func(_, _ string) ([]string, error) { return []string{"a.go"}, nil },
+		readFileAtFn:   func(_, _, _ string) ([]byte, error) { return []byte("x"), nil },
+	}
+	tracker := &callTracker{}
+
+	reader := &fakeBranchReader{branch: "main"}
+	store := &fakeActiveBranchStore{active: "main"}
+	bump := &fakeBumper{}
+	clear := &fakeClearer{}
+	rc, _ := NewBranchReconciler(reader, store, bump, clear)
+
+	sr, err := NewStartupResync(repos, git, tracker.saveFunc(), tracker.promoteFunc(),
+		func(_ context.Context, _ RepoRecord) error { return nil },
+		WithBranchReconciler(rc))
+	if err != nil {
+		t.Fatalf("NewStartupResync: %v", err)
+	}
+	if err := sr.Run(context.Background()); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+
+	if bump.calls != 0 || clear.calls != 0 || store.setCalls != 0 {
+		t.Errorf("match path mutated state: bump=%d clear=%d set=%d", bump.calls, clear.calls, store.setCalls)
+	}
+	tracker.mu.Lock()
+	defer tracker.mu.Unlock()
+	if len(tracker.promoteCalls) != 1 || tracker.promoteCalls[0].branch != "main" {
+		t.Errorf("promote branch = %v, want main", tracker.promoteCalls)
+	}
+}
+
 // containsStr is a tiny helper because strings.Contains is in strings package.
 func containsStr(s, sub string) bool {
 	return len(s) >= len(sub) && (s == sub || len(sub) == 0 ||
