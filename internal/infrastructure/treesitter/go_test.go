@@ -41,10 +41,11 @@ func Add(a, b int) int {
 	}
 }
 
-// TestParseFile_TopLevelVarDecl guards solov2-b7wt: top-level var
-// declarations (the dominant API-surface pattern in cobra CLIs) must be
-// extracted as KindVariable nodes. Without this, eng_find_symbol returns
-// empty for `rootCmd` etc.
+// TestParseFile_TopLevelVarDecl guards solov2-b7wt + solov2-crn7:
+// generic top-level vars stay KindVariable, while a cobra command
+// struct-literal is promoted to a KindCommand node named by its Use:
+// word (not the Go var identifier). Without either, eng_find_symbol
+// returns empty for the CLI surface.
 func TestParseFile_TopLevelVarDecl(t *testing.T) {
 	src := []byte(`package main
 
@@ -68,8 +69,8 @@ const _hidden = "skip me"
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	want := []string{"rootCmd", "verbose", "logFile"}
-	for _, name := range want {
+	// Generic vars remain KindVariable.
+	for _, name := range []string{"verbose", "logFile"} {
 		n := findNodeByName(result.Nodes, name)
 		if n == nil {
 			t.Errorf("expected var %q to be extracted; got none", name)
@@ -79,10 +80,66 @@ const _hidden = "skip me"
 			t.Errorf("var %q: kind = %q, want %q", name, n.Kind, domain.KindVariable)
 		}
 	}
+
+	// solov2-crn7: rootCmd is promoted to a command named by Use: ("tool"),
+	// so the Go var name no longer appears as a KindVariable node.
+	if n := findNodeByName(result.Nodes, "rootCmd"); n != nil {
+		t.Errorf("rootCmd should be promoted to KindCommand, not emitted as %q", n.Kind)
+	}
+	cmd := findNodeByName(result.Nodes, "tool")
+	if cmd == nil {
+		t.Fatal("expected a KindCommand node named 'tool' (from Use:); got none")
+	}
+	if cmd.Kind != domain.KindCommand {
+		t.Errorf("tool: kind = %q, want %q", cmd.Kind, domain.KindCommand)
+	}
 	// Raw content must include the cobra struct body so semantic search
 	// indexes the Use:/Short: strings.
-	if n := findNodeByName(result.Nodes, "rootCmd"); n != nil && n.RawContent == nil {
-		t.Errorf("rootCmd.RawContent must be populated for semantic-search visibility")
+	if cmd.RawContent == nil {
+		t.Errorf("command RawContent must be populated for semantic-search visibility")
+	}
+}
+
+// TestParseFile_CobraCommandTree guards solov2-crn7: AddCommand(...)
+// wire-up becomes parent→child CONTAINS edges between command nodes, and
+// the Use: word — including the "verb [args]" form — names each command.
+func TestParseFile_CobraCommandTree(t *testing.T) {
+	src := []byte(`package main
+
+import "github.com/spf13/cobra"
+
+var rootCmd = &cobra.Command{Use: "tool"}
+
+var getCmd = &cobra.Command{Use: "get [id]"}
+
+func init() {
+	rootCmd.AddCommand(getCmd)
+}
+`)
+	p := treesitter.NewGoParser()
+	result, err := p.ParseFile(context.Background(), repoID, filePath, src)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	root := findNodeByName(result.Nodes, "tool")
+	get := findNodeByName(result.Nodes, "get") // first word of "get [id]"
+	if root == nil || get == nil {
+		t.Fatalf("expected command nodes 'tool' and 'get'; got root=%v get=%v", root, get)
+	}
+	if get.Kind != domain.KindCommand {
+		t.Errorf("get: kind = %q, want %q", get.Kind, domain.KindCommand)
+	}
+
+	found := false
+	for _, e := range result.Edges {
+		if e.Kind == domain.EdgeContains && e.Src == root.ID && e.Tgt == get.ID {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Errorf("expected CONTAINS edge tool→get from rootCmd.AddCommand(getCmd)")
 	}
 }
 
@@ -1122,6 +1179,67 @@ var helloCmd = struct {
 	}
 	if fromPkg {
 		t.Errorf("anon-func call must NOT attribute to package node; should attribute to surrounding var helloCmd")
+	}
+}
+
+// TestParseFile_CobraRunEAttributesToCommand guards solov2-crn7's
+// interaction with the cobra-app grain (solov2-zuvl): when a command var
+// is promoted to KindCommand it must STILL be the caller of its own
+// RunE-closure calls, not the package node. The promotion removes the
+// KindVariable entry the anon-call walker keyed on, so the command node
+// is re-registered under its Go var name — this test pins that.
+func TestParseFile_CobraRunEAttributesToCommand(t *testing.T) {
+	src := []byte(`package cmd
+
+import "github.com/spf13/cobra"
+
+func Foo() {}
+
+var helloCmd = &cobra.Command{
+	Use: "hello",
+	RunE: func() {
+		Foo()
+	},
+}
+`)
+	p := treesitter.NewGoParser()
+	result, err := p.ParseFile(context.Background(), repoID, filePath, src)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	var helloID, fooID, pkgID domain.NodeID
+	for _, n := range result.Nodes {
+		switch {
+		case n.Name == "hello" && n.Kind == domain.KindCommand:
+			helloID = n.ID
+		case n.Name == "Foo":
+			fooID = n.ID
+		case n.Name == "cmd" && n.Kind == domain.KindPackage:
+			pkgID = n.ID
+		}
+	}
+	if helloID == "" || fooID == "" || pkgID == "" {
+		t.Fatalf("missing nodes; got %d", len(result.Nodes))
+	}
+
+	var fromHello, fromPkg bool
+	for _, e := range result.Edges {
+		if e.Tgt != fooID || e.Kind != domain.EdgeCalls {
+			continue
+		}
+		switch e.Src {
+		case helloID:
+			fromHello = true
+		case pkgID:
+			fromPkg = true
+		}
+	}
+	if !fromHello {
+		t.Errorf("expected CALLS edge hello-command → Foo; edges: %+v", result.Edges)
+	}
+	if fromPkg {
+		t.Errorf("RunE-closure call must attribute to the command, not the package node")
 	}
 }
 

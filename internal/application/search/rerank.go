@@ -85,6 +85,8 @@ var definitionalKinds = map[string]bool{
 	"struct":    true,
 	"interface": true,
 	"class":     true,
+	"command":   true,
+	"route":     true,
 }
 
 const definitionBonusFrac = 1.0

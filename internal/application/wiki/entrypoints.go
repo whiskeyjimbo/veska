@@ -230,7 +230,10 @@ func (s *EntryPointsService) SelectWith(ctx context.Context, repoID, branch stri
 func isEntryPointKind(k domain.NodeKind) bool {
 	switch k {
 	case domain.KindFunction, domain.KindMethod, domain.KindType,
-		domain.KindStruct, domain.KindInterface, domain.KindClass:
+		domain.KindStruct, domain.KindInterface, domain.KindClass,
+		domain.KindCommand, domain.KindRoute:
+		// Commands and routes are the literal entry surface of a CLI / HTTP
+		// service — exactly what a developer starts from .
 		return true
 	default:
 		return false
