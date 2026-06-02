@@ -400,7 +400,43 @@ func suppressionFamily() []coverageTool {
 	const f = "suppression"
 	return []coverageTool{
 		{family: f, tool: "eng_suppress_finding", bead: "solov2-uq5t"},
-		{family: f, tool: "eng_get_suppression", bead: "solov2-9735"},
+		{family: f, tool: "eng_get_suppression", bead: "solov2-9735", run: func(t *testing.T) {
+			h := newHarness(t)
+			// suppressionRow is unexported in package mcp and the handler returns
+			// map[string]any{"suppression": suppressionRow}; round-trip via JSON.
+			type srow struct {
+				SuppressionID string `json:"suppression_id"`
+				Scope         string `json:"scope"`
+				Target        string `json:"target"`
+				Rule          string `json:"rule"`
+				Reason        string `json:"reason"`
+			}
+			res, rpcErr := h.Call("eng_get_suppression", map[string]any{"suppression_id": "seed-suppression-0"})
+			if rpcErr != nil {
+				t.Fatalf("eng_get_suppression: %v", rpcErr)
+			}
+			var got struct {
+				Suppression srow `json:"suppression"`
+			}
+			b, _ := json.Marshal(res)
+			if err := json.Unmarshal(b, &got); err != nil {
+				t.Fatalf("decode suppression: %v", err)
+			}
+			sr := got.Suppression
+			wantTarget := string(h.ResolveID(coverage.AlphaRepoID, coverage.NodeKey{
+				Path: "metric/series.go", Kind: domain.KindFunction, Name: "ComputeVariance"}))
+			if sr.SuppressionID != "seed-suppression-0" || sr.Scope != "node" || sr.Rule != "complexity" || sr.Target != wantTarget {
+				t.Errorf("seed-suppression-0 = %+v, want id=seed-suppression-0 scope=node rule=complexity target=%q", sr, wantTarget)
+			}
+			if !strings.Contains(sr.Reason, "intentionally explicit") {
+				t.Errorf("seed-suppression-0 reason %q missing %q", sr.Reason, "intentionally explicit")
+			}
+			// Unknown suppression_id resolves to zero rows -> CodeNotFound.
+			_, nfErr := h.Call("eng_get_suppression", map[string]any{"suppression_id": "seed-suppression-nope"})
+			if nfErr == nil || nfErr.Code != mcp.CodeNotFound {
+				t.Fatalf("unknown suppression_id: got %v, want CodeNotFound", nfErr)
+			}
+		}},
 		{family: f, tool: "eng_list_suppressions", bead: "solov2-avb5", run: func(t *testing.T) {
 			h := newHarness(t)
 			// suppressionRow is unexported in package mcp; round-trip the result
