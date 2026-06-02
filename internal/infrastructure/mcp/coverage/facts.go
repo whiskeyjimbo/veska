@@ -150,12 +150,14 @@ func frozenCrossRepoEdges() []CrossRepoEdgeFact {
 }
 
 // frozenDependencies: file_imports rows the promoter persisted. modalpha
-// imports nothing external, so only modbeta contributes. Both rows are frozen
-// as observed — including the own-module widget import (see DependencyFact doc).
+// imports nothing external, so only modbeta contributes the one genuine
+// cross-module dep. modbeta's own-module import (example.com/modbeta/widget)
+// is intentionally absent: solov2-tb74 made syncFileImports subtract the
+// repo's own module_path, so intra-module imports no longer land in
+// file_imports / eng_list_dependencies.
 func frozenDependencies() []DependencyFact {
 	return []DependencyFact{
 		{RepoID: BetaRepoID, FromRelPath: betaRender, ImportPath: "example.com/modalpha/metric"},
-		{RepoID: BetaRepoID, FromRelPath: betaMain, ImportPath: "example.com/modbeta/widget"},
 	}
 }
 

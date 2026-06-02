@@ -1677,9 +1677,9 @@ func dependencyFamily() []coverageTool {
 			h := newHarness(t)
 			// Beta CALLS into modalpha/metric (the one genuine cross-module dep);
 			// modalpha imports nothing external. Assert CONTAINS, not exact set:
-			// per solov2-tb74 isExternalModulePath fails to subtract modbeta's OWN
-			// module path, so "example.com/modbeta/widget" may LEAK in. A future
-			// fix removing the leak keeps contains-all valid.
+			// solov2-tb74 made syncFileImports subtract modbeta's OWN module path,
+			// so "example.com/modbeta/widget" no longer leaks in; contains-all
+			// stays valid regardless.
 			res, rpcErr := h.Call("eng_list_dependencies", map[string]any{"repo_id": coverage.BetaRepoID})
 			if rpcErr != nil {
 				t.Fatalf("eng_list_dependencies: %v", rpcErr)
