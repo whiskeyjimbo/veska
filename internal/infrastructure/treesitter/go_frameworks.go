@@ -19,13 +19,18 @@
 //     through the same package-wide promotion resolver as a plain call
 //     (solov2-ketg). The route is named with the method so GET and POST on
 //     one path don't collide on the (repo,path,kind,name) promotion PK.
-//
-// Reserved follow-up (separate bead): alecthomas/kong (struct tags) lands
-// as another branch here.
+//   - alecthomas/kong — commands are struct FIELDS with `cmd:""` tags, not
+//     composite literals; a `cmd:""`-tagged field → KindCommand named by the
+//     dasherized field name (or a `name:` tag), nested via the field's struct
+//     type (a command struct's own cmd fields are its subcommands). Runs as
+//     its own struct-tag walk, independent of the @fwvar.* literal dispatch
+//     (solov2-su6d).
 package treesitter
 
 import (
+	"reflect"
 	"strings"
+	"unicode"
 
 	sitter "github.com/smacker/go-tree-sitter"
 	tsgo "github.com/smacker/go-tree-sitter/golang"
@@ -40,6 +45,7 @@ import (
 const (
 	cobraImportPath    = "github.com/spf13/cobra"
 	urfaveImportPrefix = "github.com/urfave/cli"
+	kongImportPath     = "github.com/alecthomas/kong"
 )
 
 // ginEchoImportPrefixes / chiImportPrefix are the HTTP-router module paths
@@ -112,7 +118,8 @@ func extractFrameworkCommands(root *sitter.Node, src []byte, imports map[string]
 	urfaveOK := anyImportHasPrefix(imports, urfaveImportPrefix)
 	ginEchoOK := anyPrefixImported(imports, ginEchoImportPrefixes)
 	chiOK := anyImportHasPrefix(imports, chiImportPrefix)
-	if !cobraOK && !urfaveOK && !ginEchoOK && !chiOK {
+	kongOK := anyImportHasPrefix(imports, kongImportPath)
+	if !cobraOK && !urfaveOK && !ginEchoOK && !chiOK && !kongOK {
 		return frameworkCommands{}
 	}
 	q, err := compileEmbeddedQuery(tsgo.GetLanguage(), "go", "frameworks")
@@ -121,7 +128,7 @@ func extractFrameworkCommands(root *sitter.Node, src []byte, imports map[string]
 	}
 	matches := runQuery(q, root)
 
-	p := fwParse{src: src, imports: imports, repoID: repoID, path: path, cobraOK: cobraOK, urfaveOK: urfaveOK, ginEchoOK: ginEchoOK, chiOK: chiOK}
+	p := fwParse{src: src, imports: imports, repoID: repoID, path: path, cobraOK: cobraOK, urfaveOK: urfaveOK, ginEchoOK: ginEchoOK, chiOK: chiOK, kongOK: kongOK}
 	fw := frameworkCommands{byVar: map[string]*domain.Node{}}
 	for _, m := range matches {
 		fw.dispatchVar(m, p)
@@ -140,6 +147,12 @@ func extractFrameworkCommands(root *sitter.Node, src []byte, imports map[string]
 	if ginEchoOK || chiOK {
 		fw.addRoutes(matches, p)
 	}
+	// kong models commands as struct fields with `cmd:""` tags, not
+	// composite literals, so it runs independently of the @fwvar.* dispatch
+	// (solov2-su6d).
+	if kongOK {
+		fw.addKongCommands(matches, p)
+	}
 	if len(fw.nodes) == 0 && len(fw.edges) == 0 && len(fw.unresolved) == 0 {
 		return frameworkCommands{}
 	}
@@ -156,6 +169,7 @@ type fwParse struct {
 	urfaveOK     bool
 	ginEchoOK    bool
 	chiOK        bool
+	kongOK       bool
 }
 
 // dispatchVar classifies one @fwvar.* match by (resolved import, type
@@ -602,6 +616,137 @@ func cobraContainsEdges(matches []queryMatch, src []byte, byVar map[string]*doma
 		}
 	}
 	return edges
+}
+
+// kongField is one `cmd:""`-tagged struct field promoted to a command: the
+// command node plus the bare name of the field's struct type, used to nest
+// subcommands (a command whose struct type has its own cmd fields CONTAINS
+// them).
+type kongField struct {
+	node     *domain.Node
+	declType string // bare type identifier of the field, "" if not a plain type
+}
+
+// addKongCommands promotes alecthomas/kong struct-tag commands. Each
+// `cmd:""`-tagged field of a struct becomes a KindCommand node named by its
+// `name:` tag or the dasherized field name. Nesting follows the field type,
+// not Go embedding: a command field of type T is the parent of every cmd
+// field declared on struct T, so the root CLI struct's fields fall out as
+// top-level commands (nothing has the CLI struct as a field type). Two
+// passes over the matches: build every command + the type→command index
+// first (a child struct may be declared before or after its parent), then
+// wire CONTAINS (solov2-su6d). v1 covers named fields with a plain (or
+// pointer) struct type; embedded/anonymous-struct command fields are
+// deferred.
+func (c *frameworkCommands) addKongCommands(matches []queryMatch, p fwParse) {
+	// byType: bare struct type → the command node whose field has that type,
+	// i.e. the parent of that struct's own cmd fields.
+	byType := map[string]*domain.Node{}
+	// fieldsOf: struct type name → its promoted cmd-field commands.
+	fieldsOf := map[string][]kongField{}
+	for _, m := range matches {
+		structName, kf, ok := c.buildKongField(m, p)
+		if !ok {
+			continue
+		}
+		c.nodes = append(c.nodes, kf.node)
+		fieldsOf[structName] = append(fieldsOf[structName], kf)
+		if kf.declType != "" {
+			byType[kf.declType] = kf.node
+		}
+	}
+	seen := map[string]bool{}
+	for structName, fields := range fieldsOf {
+		parent := byType[structName]
+		if parent == nil {
+			continue // root struct: its fields stay top-level commands
+		}
+		for _, kf := range fields {
+			key := string(parent.ID) + callKeySep + string(kf.node.ID)
+			if seen[key] {
+				continue
+			}
+			seen[key] = true
+			if e := containsEdge(parent.ID, kf.node.ID); e != nil {
+				c.edges = append(c.edges, e)
+			}
+		}
+	}
+}
+
+// buildKongField promotes one @kong.* match to a command node when its tag
+// carries a `cmd` key. Returns the containing struct's type name (the
+// fieldsOf / byType key), the field, and ok=false for non-command fields
+// (arg:/flag tags also match the query but lack a cmd key).
+func (c *frameworkCommands) buildKongField(m queryMatch, p fwParse) (string, kongField, bool) {
+	structNode := m.node("kong.struct.name")
+	nameNode := m.node("kong.field.name")
+	typeNode := m.node("kong.field.type")
+	tagNode := m.node("kong.field.tag")
+	declNode := m.node("kong.field.decl")
+	if structNode == nil || nameNode == nil || typeNode == nil || tagNode == nil || declNode == nil {
+		return "", kongField{}, false
+	}
+	tag := reflect.StructTag(strings.Trim(string(p.src[tagNode.StartByte():tagNode.EndByte()]), "`"))
+	if _, isCmd := tag.Lookup("cmd"); !isCmd {
+		return "", kongField{}, false
+	}
+	structName := string(p.src[structNode.StartByte():structNode.EndByte()])
+	fieldName := string(p.src[nameNode.StartByte():nameNode.EndByte()])
+	cmdName := kongCommandName(fieldName, tag)
+	if cmdName == "" {
+		return "", kongField{}, false
+	}
+	// ID disambiguated by struct+field (the command word can repeat across
+	// sibling structs), human name stays the command word — same tactic as
+	// the cobra/urfave var disambiguator.
+	id := nodeID(p.repoID, p.path, domain.KindCommand, structName+"/"+fieldName)
+	// Source node is the whole field declaration (lines + raw content),
+	// matching the cobra/urfave commands which store the full declaration.
+	n := newCommandNode(id, cmdName, declNode, p.src, p.path)
+	if n == nil {
+		return "", kongField{}, false
+	}
+	return structName, kongField{node: n, declType: kongBareType(typeNode, p.src)}, true
+}
+
+// kongCommandName derives a kong command's display name: the `name:` tag
+// when set, otherwise the dasherized field name (kong lowercases and inserts
+// a dash at camelCase boundaries — ListUsers → list-users).
+func kongCommandName(fieldName string, tag reflect.StructTag) string {
+	if name := tag.Get("name"); name != "" {
+		return name
+	}
+	return dasherize(fieldName)
+}
+
+// dasherize lowercases s and inserts a dash before each interior upper-case
+// run boundary, approximating kong's field-name → command-name derivation.
+func dasherize(s string) string {
+	var b strings.Builder
+	for i, r := range s {
+		if i > 0 && unicode.IsUpper(r) {
+			b.WriteByte('-')
+		}
+		b.WriteRune(unicode.ToLower(r))
+	}
+	return b.String()
+}
+
+// kongBareType returns the bare type-identifier name of a field type,
+// unwrapping a single pointer (`*ServerCmd` → "ServerCmd"). Returns "" for
+// qualified, slice, map, or anonymous-struct types — those don't name a
+// local command struct, so the field has no nestable children.
+func kongBareType(typeNode *sitter.Node, src []byte) string {
+	switch typeNode.Type() {
+	case "type_identifier":
+		return string(src[typeNode.StartByte():typeNode.EndByte()])
+	case "pointer_type":
+		if inner := typeNode.NamedChild(0); inner != nil && inner.Type() == "type_identifier" {
+			return string(src[inner.StartByte():inner.EndByte()])
+		}
+	}
+	return ""
 }
 
 // keyedStringValue returns the string value of the keyed_element named key
