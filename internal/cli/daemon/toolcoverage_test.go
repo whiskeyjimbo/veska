@@ -251,7 +251,66 @@ func repoFamily() []coverageTool {
 func findingFamily() []coverageTool {
 	const f = "finding"
 	return []coverageTool{
-		{family: f, tool: "eng_list_findings", bead: "solov2-f6xk"},
+		{family: f, tool: "eng_list_findings", bead: "solov2-f6xk", run: func(t *testing.T) {
+			h := newHarness(t)
+			// findingRow is unexported in package mcp, so round-trip the result
+			// through JSON into a local shape rather than type-asserting it.
+			type frow struct {
+				FindingID string `json:"finding_id"`
+				Rule      string `json:"rule"`
+				Severity  string `json:"severity"`
+				State     string `json:"state"`
+				Message   string `json:"message"`
+				ActorKind string `json:"actor_kind"`
+			}
+			list := func(params map[string]any) map[string]frow {
+				res, rpcErr := h.Call("eng_list_findings", params)
+				if rpcErr != nil {
+					t.Fatalf("eng_list_findings %v: %v", params, rpcErr)
+				}
+				var out struct {
+					Findings []frow `json:"findings"`
+				}
+				b, _ := json.Marshal(res)
+				if err := json.Unmarshal(b, &out); err != nil {
+					t.Fatalf("decode findings: %v", err)
+				}
+				bySeed := map[string]frow{}
+				for _, fr := range out.Findings {
+					bySeed[fr.FindingID] = fr
+				}
+				return bySeed
+			}
+
+			// rule="complexity" filters out the parser-emitted todo findings, so
+			// the default (state=open) Alpha list collapses to exactly the seeded
+			// complexity finding.
+			alpha := list(map[string]any{"repo_id": coverage.AlphaRepoID, "rule": "complexity"})
+			if len(alpha) != 1 {
+				t.Fatalf("Alpha complexity findings = %v, want exactly 1", alpha)
+			}
+			fr, ok := alpha["seed-finding-0"]
+			if !ok {
+				t.Fatalf("Alpha complexity set %v missing seed-finding-0", alpha)
+			}
+			if fr.Rule != "complexity" || fr.Severity != "warn" || fr.State != "open" || fr.ActorKind != "agent" {
+				t.Errorf("seed-finding-0 = %+v, want rule=complexity severity=warn state=open actor_kind=agent", fr)
+			}
+			if !strings.Contains(fr.Message, "high cyclomatic") {
+				t.Errorf("seed-finding-0 message %q missing %q", fr.Message, "high cyclomatic")
+			}
+
+			// state=closed (default is open) surfaces the seeded closed style
+			// finding on Beta.
+			beta := list(map[string]any{"repo_id": coverage.BetaRepoID, "state": "closed", "rule": "style"})
+			br, ok := beta["seed-finding-1"]
+			if !ok {
+				t.Fatalf("Beta closed style set %v missing seed-finding-1", beta)
+			}
+			if br.Rule != "style" || br.Severity != "info" || br.State != "closed" {
+				t.Errorf("seed-finding-1 = %+v, want rule=style severity=info state=closed", br)
+			}
+		}},
 		{family: f, tool: "eng_get_finding", bead: "solov2-y69v"},
 		{family: f, tool: "eng_close_finding", bead: "solov2-tvid"},
 		{family: f, tool: "eng_reopen_finding", bead: "solov2-ifne"},
