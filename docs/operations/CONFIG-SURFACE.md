@@ -15,9 +15,10 @@ verified_date: "2026-05-17"
 > enforces the tracing rule. The struct covers `[daemon]`, `[logging]`,
 > `[metrics]`, `[tracing]`, `[storage]`, `[watcher]`, `[embedder]`,
 > `[post_promotion_queue]`, `[budget]`, `[llm_generator]`, `[review]`.
-> **Consumed today (live):** `embedder.rate_per_sec` and
-> `post_promotion_queue.poll_interval` are threaded into
-> `cmd/veska-daemon/wire.go`; the four env vars
+> **Consumed today (live):** `embedder.rate_per_sec`,
+> `post_promotion_queue.poll_interval`, and the `[watcher]` wake knobs
+> (`wake_tick`, `wake_threshold`, `wake_concurrency`) are threaded into
+> `cmd/veska-daemon/wire.go` (`buildReconciler`); the four env vars
 > (`VESKA_OLLAMA_URL`, `VESKA_EMBED_MODEL`, `VESKA_VECTOR_BACKEND`,
 > `VESKA_DEBUG`) override their struct fields. **Planned:** every other
 > key is decoded and available on `Config` but not yet read by the
@@ -121,7 +122,7 @@ debounce               = "200ms"
 poll_fallback_interval = "5s"
 wake_threshold         = "30s"               # monotonic-clock gap that triggers wake reconcile (SOLO-03 §5.2)
 wake_tick              = "5s"                # cadence of the wake-detector tick
-wake_concurrency       = 0                   # parallel repos in wake-reconcile sweep; 0 = runtime.NumCPU() / 2
+wake_concurrency       = 0                   # parallel per-repo wake-reconcile sweeps; 0 = runtime.NumCPU()/2 (floor 1)
 max_paths_per_repo     = 50000               # repo add admission ceiling (SOLO-03 §3.0)
 max_paths_total        = 200000              # daemon-global path-watch ceiling
 

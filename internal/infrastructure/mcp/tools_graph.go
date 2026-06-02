@@ -2,6 +2,7 @@ package mcp
 
 import (
 	"context"
+	"sort"
 
 	application "github.com/whiskeyjimbo/veska/internal/application"
 	"github.com/whiskeyjimbo/veska/internal/application/staging"
@@ -40,6 +41,10 @@ type GraphResponse struct {
 	// repo is the one being indexed. Omitted from JSON when empty
 	// (solov2-izh6.30).
 	IndexingRepos []string `json:"indexing_repos,omitempty"`
+	// WakeReconcilingRepos lists repo_ids touched by this query that had an
+	// in-flight wake reconcile sweep at query time. Populated only when
+	// DegradedReasons contains "wake_reconciling". Omitted when empty.
+	WakeReconcilingRepos []string `json:"wake_reconciling_repos,omitempty"`
 }
 
 // callChainResponse is the envelope returned by eng_get_call_chain. Both
@@ -57,6 +62,8 @@ type callChainResponse struct {
 	DegradedReasons []string        `json:"degraded_reasons"`
 	// IndexingRepos: see GraphResponse.IndexingRepos (solov2-izh6.30).
 	IndexingRepos []string `json:"indexing_repos,omitempty"`
+	// WakeReconcilingRepos: see GraphResponse.WakeReconcilingRepos.
+	WakeReconcilingRepos []string `json:"wake_reconciling_repos,omitempty"`
 }
 
 // ScanTrackerReader is the minimal read surface mcp tool handlers need
@@ -89,6 +96,46 @@ func indexingRepoIDs(t ScanTrackerReader) ([]string, bool) {
 	return ids, true
 }
 
+// ReconcileReader is the minimal read surface graph tool handlers need from
+// the wake reconciler (git.WakeReconciler) to attach a wake_reconciling
+// degraded reason. Declared in the consumer (mcp) package so test fixtures can
+// stub it and so the git infrastructure layer is not imported here. Nil-safe:
+// a nil reader yields no reconciling repos.
+type ReconcileReader interface {
+	IsRepoReconciling(repoID string) bool
+}
+
+// reconcilingForRepos returns the sorted subset of queried repo_ids whose wake
+// sweep is in flight. queried is the set of repos the caller's result touches
+// (request repo_id or, when repo-agnostic, the result repo_ids). Unlike
+// indexingRepoIDs this is NOT gated on empty results — a sweep may be
+// re-parsing files a non-empty response just read. Nil-safe: a nil reader or
+// empty queried set yields nil.
+func reconcilingForRepos(t ReconcileReader, queried []string) []string {
+	if t == nil || len(queried) == 0 {
+		return nil
+	}
+	seen := make(map[string]struct{}, len(queried))
+	var out []string
+	for _, id := range queried {
+		if id == "" {
+			continue
+		}
+		if _, dup := seen[id]; dup {
+			continue
+		}
+		if t.IsRepoReconciling(id) {
+			seen[id] = struct{}{}
+			out = append(out, id)
+		}
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	sort.Strings(out)
+	return out
+}
+
 // ResolveFunc is a function that resolves cross-repo edge stubs OUTBOUND
 // from a given node (the node is the caller). Injected as an optional
 // dependency; nil = skip outbound resolution.
@@ -109,6 +156,7 @@ type graphToolConfig struct {
 	resolveInbound InboundResolveFunc
 	repos          application.RepoLister
 	scans          ScanTrackerReader
+	reconcile      ReconcileReader
 }
 
 // WithResolveFunc supplies a ResolveFunc that enables cross-repo synthetic
@@ -142,6 +190,13 @@ func WithScanTracker(t ScanTrackerReader) GraphToolOption {
 	return func(c *graphToolConfig) { c.scans = t }
 }
 
+// WithReconcileTracker supplies the wake reconciler so graph read responses can
+// carry a "wake_reconciling" degraded reason while a queried repo's
+// suspend/resume mtime sweep is in flight. Nil is allowed and disables the hint.
+func WithReconcileTracker(t ReconcileReader) GraphToolOption {
+	return func(c *graphToolConfig) { c.reconcile = t }
+}
+
 // RegisterGraphTools registers the 5 graph read tools on r.
 // graph and staging are injected dependencies; pass WithResolveFunc to enable
 // cross-repo synthetic edge resolution in eng_get_call_chain.
@@ -156,7 +211,7 @@ func RegisterGraphTools(r *Registry, graph ports.GraphReader, staging *staging.A
 		Description:     "Look up nodes by exact symbol name. Use when you already know the identifier (e.g. 'ParseConfig'). " + DescFindSymbolMatching + " Returns a stable node_id you can feed to eng_get_call_chain, eng_get_blast_radius, eng_get_context_pack, eng_search_similar without another lookup. Prefer this over eng_search_semantic for known-identifier queries — it's deterministic and exact.",
 		IncludesStaging: true,
 		InputSchema:     findSymbolInputSchema,
-		Handler:         makeFindSymbolHandler(graph, staging, cfg.repos, cfg.scans),
+		Handler:         makeFindSymbolHandler(graph, staging, cfg.repos, cfg.scans, cfg.reconcile),
 	})
 	r.MustRegister(ToolSpec{
 		Name:            "eng_get_node",
@@ -170,7 +225,7 @@ func RegisterGraphTools(r *Registry, graph ports.GraphReader, staging *staging.A
 		Description:     DescCallChain,
 		IncludesStaging: false,
 		InputSchema:     getCallChainInputSchema,
-		Handler:         makeGetCallChainHandler(graph, resolve, cfg.resolveInbound, cfg.repos, cfg.scans),
+		Handler:         makeGetCallChainHandler(graph, resolve, cfg.resolveInbound, cfg.repos, cfg.scans, cfg.reconcile),
 	})
 	r.MustRegister(ToolSpec{
 		Name:            "eng_get_file_nodes",
