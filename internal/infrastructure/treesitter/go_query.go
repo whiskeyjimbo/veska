@@ -90,11 +90,12 @@ func (p *GoParser) ParseFile(ctx context.Context, repoID, path string, src []byt
 		result.Nodes = append(result.Nodes, pkgNode)
 	}
 
-	// Import map (also feeds the cobra-alias check). solov2-crn7: promote
-	// cobra command struct-literals to KindCommand nodes (the var branch
-	// below skips any var promoted here); see go_frameworks.go.
+	// Import map (also feeds the framework import checks). solov2-crn7/
+	// -qqqy: promote cobra/urfave command struct-literals to KindCommand
+	// nodes (the var branch below skips any var promoted here); see
+	// go_frameworks.go.
 	result.Imports = extractImports(root, src)
-	cobra := extractCobraCommands(root, src, result.Imports, repoID, path)
+	fw := extractFrameworkCommands(root, src, result.Imports, repoID, path)
 
 	// callerCtx records the (callerNode, bodyNode, optional recv binding)
 	// triple for each named declaration phase 3 needs to extract calls
@@ -189,7 +190,7 @@ func (p *GoParser) ParseFile(ctx context.Context, repoID, path string, src []byt
 				continue
 			}
 			for _, n := range buildVarNodesFromSpec(spec, decl, src, repoID, path, domain.KindVariable) {
-				if cobra.commandVar(n.Name) {
+				if fw.commandVar(n.Name) {
 					continue // solov2-crn7: emitted as KindCommand instead
 				}
 				addSymbol(n)
@@ -212,8 +213,8 @@ func (p *GoParser) ParseFile(ctx context.Context, repoID, path string, src []byt
 	// so the anon-call walker still attributes a command's RunE-closure
 	// calls to the command (the cobra grain from solov2-zuvl), not the
 	// package node.
-	result.Nodes = append(result.Nodes, cobra.nodes...)
-	for varName, n := range cobra.byVar {
+	result.Nodes = append(result.Nodes, fw.nodes...)
+	for varName, n := range fw.byVar {
 		symbolByName[varName] = n
 	}
 
@@ -272,7 +273,7 @@ func (p *GoParser) ParseFile(ctx context.Context, repoID, path string, src []byt
 	}
 
 	// solov2-crn7: cobra AddCommand→CONTAINS command-tree edges.
-	result.Edges = append(result.Edges, cobra.edges...)
+	result.Edges = append(result.Edges, fw.edges...)
 
 	// solov2-y7gu: anonymous-function calls in top-level var/const
 	// initialisers. The legacy collectAnonCalls checked node.Type() ==
