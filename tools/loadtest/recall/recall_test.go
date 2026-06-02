@@ -201,12 +201,12 @@ func TestRecall(t *testing.T) {
 	)
 	seedNodes(t, db, repoID, branch, corpus.Nodes)
 
-	// VESKA_VECTOR_BACKEND selects the backend (default sqlite-vec).
+	// VESKA_VECTOR_BACKEND selects the backend (default memory/memvec).
 	// "usearch" requires the hnsw_native build tag and libusearch_c.so at
 	// runtime — see ADR-S0014.
 	backendKind := vector.BackendKind(os.Getenv("VESKA_VECTOR_BACKEND"))
 	if backendKind == "" {
-		backendKind = vector.BackendSQLiteVec
+		backendKind = vector.BackendMemory
 	}
 	vstore, err := vector.NewVectorStorage(backendKind, t.TempDir())
 	if err != nil {
