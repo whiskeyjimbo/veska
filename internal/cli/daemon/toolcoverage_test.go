@@ -1619,6 +1619,11 @@ func wikiFamily() []coverageTool {
 			if !ok {
 				t.Fatalf("eng_get_entry_points(alpha): result type %T, want mcp.EntryPointsResponse", ares)
 			}
+			// Positive control: Alpha DOES surface entry points, so the negative
+			// assertion below can't pass vacuously on an empty/broken result.
+			if len(aresp.EntryPoints) == 0 {
+				t.Fatalf("alpha returned no entry points; negative ComputeVariance check would be vacuous")
+			}
 			for _, e := range aresp.EntryPoints {
 				if e.SymbolName == "ComputeVariance" {
 					t.Errorf("ComputeVariance must be excluded by the open-finding gate, but appears in entry points: %+v", e)
