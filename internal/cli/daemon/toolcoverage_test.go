@@ -1240,7 +1240,63 @@ func blastFamily() []coverageTool {
 				}
 			}
 		}},
-		{family: f, tool: "eng_get_dirty_blast_radius", bead: "solov2-1sya"},
+		{family: f, tool: "eng_get_dirty_blast_radius", bead: "solov2-1sya", run: func(t *testing.T) {
+			// Tier-3: a real git repo, indexed clean, then a watcher-staged
+			// uncommitted edit. c1 commits Helper (callee) + Caller (CALLS Helper).
+			// stageDirtyEdit simulates the fsnotify hot path writing an edited
+			// Helper into the SHARED staging.Area the dirty-blast service reads, so
+			// the callers blast must surface Caller, the affected caller.
+			root := initGitRepo(t)
+			writeRepoFile(t, root, "helper.go", "package p\n\nfunc Helper() int { return 1 }\n")
+			writeRepoFile(t, root, "caller.go", "package p\n\nfunc Caller() int { return Helper() }\n")
+			gitCommitAll(t, root, "c1")
+
+			h := newHarness(t)
+			res, rpcErr := h.Call("eng_add_repo", map[string]any{"root_path": root})
+			if rpcErr != nil {
+				t.Fatalf("eng_add_repo: %v", rpcErr)
+			}
+			repoID, _ := res.(map[string]any)["repo_id"].(string)
+			if repoID == "" {
+				t.Fatalf("eng_add_repo returned empty repo_id (got %v)", res)
+			}
+			// Cold-scan the committed tree so Helper, Caller and the CALLS edge land
+			// in the graph; promotion drains the shared staging area back to clean.
+			if _, e := h.Call("eng_reindex_repo", map[string]any{"repo_id": repoID}); e != nil {
+				t.Fatalf("eng_reindex_repo: %v", e)
+			}
+			// Simulate an uncommitted working-tree edit to helper.go via the same
+			// Save the watcher uses, staging it under (repoID, FixtureBranch).
+			h.stageDirtyEdit(repoID, coverage.FixtureBranch,
+				filepath.Join(root, "helper.go"),
+				[]byte("package p\n\nfunc Helper() int { return 2 }\n"))
+
+			res, rpcErr = h.Call("eng_get_dirty_blast_radius", map[string]any{
+				"repo_id": repoID, "direction": string(blastradius.DirCallers), "max_depth": 5,
+			})
+			if rpcErr != nil {
+				t.Fatalf("eng_get_dirty_blast_radius: %v", rpcErr)
+			}
+			resp, ok := res.(mcp.BlastResponse)
+			if !ok {
+				t.Fatalf("eng_get_dirty_blast_radius: result type %T, want mcp.BlastResponse", res)
+			}
+			// The dirty Helper is the seed and may ride along; assert CONTAINMENT
+			// of "Caller", its affected caller. Match by Name (different repo than
+			// the coverage manifest).
+			names := make([]string, 0, len(resp.Entries))
+			found := false
+			for _, e := range resp.Entries {
+				names = append(names, e.Name)
+				if e.Name == "Caller" {
+					found = true
+				}
+			}
+			t.Logf("dirty-blast entries: %v", names)
+			if !found {
+				t.Errorf("affected caller %q missing from dirty blast radius (got %v)", "Caller", names)
+			}
+		}},
 		{family: f, tool: "eng_get_diff_blast_radius", bead: "solov2-56c8", run: func(t *testing.T) {
 			// Tier-3: a real git repo that is ALSO indexed. c1 seeds Helper
 			// (callee) + Caller (caller, CALLS Helper). c2 edits ONLY helper.go.
