@@ -21,6 +21,7 @@ type contextPackConfig struct {
 	resolve        ResolveFunc
 	resolveInbound InboundResolveFunc
 	scans          ScanTrackerReader
+	reconcile      ReconcileReader
 }
 
 // WithContextPackScanTracker supplies the daemon's cold-scan tracker so
@@ -28,6 +29,13 @@ type contextPackConfig struct {
 // scan is in flight at query time (solov2-izh6.30). Nil disables the hint.
 func WithContextPackScanTracker(t ScanTrackerReader) ContextPackOption {
 	return func(c *contextPackConfig) { c.scans = t }
+}
+
+// WithContextPackReconcileTracker supplies the wake reconciler so a pack whose
+// repo is mid-sweep carries a wake_reconciling hint (solov2-xde2.25.1). Nil
+// disables the hint.
+func WithContextPackReconcileTracker(t ReconcileReader) ContextPackOption {
+	return func(c *contextPackConfig) { c.reconcile = t }
 }
 
 // WithContextPackResolveFunc supplies a ResolveFunc so the handler can
@@ -59,6 +67,9 @@ type contextPackResponse struct {
 	// distinguishable from a genuinely isolated symbol.
 	DegradedReasons []string `json:"degraded_reasons,omitempty"`
 	IndexingRepos   []string `json:"indexing_repos,omitempty"`
+	// WakeReconcilingRepos: the pack's repo when its wake sweep was in flight
+	// at query time (solov2-xde2.25.1). Fires on sparse AND full packs.
+	WakeReconcilingRepos []string `json:"wake_reconciling_repos,omitempty"`
 }
 
 // RegisterContextPackTool registers eng_get_context_pack. asm and repoRoot
@@ -74,7 +85,7 @@ func RegisterContextPackTool(r *Registry, asm *contextpack.Assembler, repoRoot R
 		Name:        "eng_get_context_pack",
 		Description: DescContextPack + " Pass exactly one of node_id, symbol, or task_id as the anchor.",
 		InputSchema: contextPackInputSchema,
-		Handler:     makeContextPackHandler(asm, repoRoot, repos, cfg.resolve, cfg.resolveInbound, cfg.scans),
+		Handler:     makeContextPackHandler(asm, repoRoot, repos, cfg.resolve, cfg.resolveInbound, cfg.scans, cfg.reconcile),
 	})
 }
 
@@ -86,7 +97,7 @@ type contextPackParams struct {
 	TaskID string `json:"task_id,omitempty"`
 }
 
-func makeContextPackHandler(asm *contextpack.Assembler, repoRoot RepoRootFunc, repos application.RepoLister, resolve ResolveFunc, resolveInbound InboundResolveFunc, scans ScanTrackerReader) ToolHandler {
+func makeContextPackHandler(asm *contextpack.Assembler, repoRoot RepoRootFunc, repos application.RepoLister, resolve ResolveFunc, resolveInbound InboundResolveFunc, scans ScanTrackerReader, reconcile ReconcileReader) ToolHandler {
 	return func(ctx context.Context, _ domain.Actor, raw json.RawMessage) (any, *RPCError) {
 		if asm == nil || repoRoot == nil {
 			return nil, &RPCError{
@@ -181,11 +192,16 @@ func makeContextPackHandler(asm *contextpack.Assembler, repoRoot RepoRootFunc, r
 				indexing = ids
 			}
 		}
+		reconciling := reconcilingForRepos(reconcile, []string{p.RepoID})
+		if len(reconciling) > 0 {
+			reasons = append(reasons, protocol.DegradedReasonWakeReconciling)
+		}
 		return contextPackResponse{
-			Pack:            pack,
-			CrossRepoEdges:  crossRepo,
-			DegradedReasons: reasons,
-			IndexingRepos:   indexing,
+			Pack:                 pack,
+			CrossRepoEdges:       crossRepo,
+			DegradedReasons:      reasons,
+			IndexingRepos:        indexing,
+			WakeReconcilingRepos: reconciling,
 		}, nil
 	}
 }

@@ -34,6 +34,11 @@ type SearchResponse struct {
 	// when a cold scan is in flight at query time and the result is empty
 	// (solov2-izh6.30). Omitted from JSON when empty.
 	IndexingRepos []string `json:"indexing_repos,omitempty"`
+	// WakeReconcilingRepos lists queried repos whose wake reconcile sweep was
+	// in flight at query time (solov2-xde2.25.1), alongside DegradedReason
+	// "wake_reconciling". Fires on empty AND non-empty results. Omitted when
+	// empty.
+	WakeReconcilingRepos []string `json:"wake_reconciling_repos,omitempty"`
 }
 
 // PendingEmbedsCounter exposes the global pending-embeds depth so the
@@ -66,8 +71,9 @@ type SimilarLookup interface {
 type SearchToolOption func(*searchToolConfig)
 
 type searchToolConfig struct {
-	graph ports.GraphReader
-	scans ScanTrackerReader
+	graph     ports.GraphReader
+	scans     ScanTrackerReader
+	reconcile ReconcileReader
 }
 
 // WithSearchScanTracker supplies the daemon's cold-scan tracker so empty
@@ -75,6 +81,13 @@ type searchToolConfig struct {
 // in flight (solov2-izh6.30). Nil disables the hint.
 func WithSearchScanTracker(t ScanTrackerReader) SearchToolOption {
 	return func(c *searchToolConfig) { c.scans = t }
+}
+
+// WithSearchReconcileTracker supplies the wake reconciler so a semantic search
+// touching a mid-sweep repo carries a wake_reconciling hint (solov2-xde2.25.1).
+// Nil disables the hint.
+func WithSearchReconcileTracker(t ReconcileReader) SearchToolOption {
+	return func(c *searchToolConfig) { c.reconcile = t }
 }
 
 // WithSearchGraph supplies the GraphStorage used by eng_search_similar's
@@ -139,7 +152,7 @@ func RegisterSearchTools(
 		Description:     DescSearchSemantic,
 		IncludesStaging: false,
 		InputSchema:     searchSemanticInputSchema,
-		Handler:         makeSearchSemanticHandler(svc, rec, repos, pending, cfg.scans),
+		Handler:         makeSearchSemanticHandler(svc, rec, repos, pending, cfg.scans, cfg.reconcile),
 	})
 	r.MustRegister(ToolSpec{
 		Name:            "eng_search_similar",

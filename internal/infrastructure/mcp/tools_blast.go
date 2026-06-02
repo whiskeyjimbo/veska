@@ -30,6 +30,10 @@ type BlastResponse struct {
 	// empty so the pre-bead JSON shape is preserved.
 	DegradedReasons []string `json:"degraded_reasons,omitempty"`
 	IndexingRepos   []string `json:"indexing_repos,omitempty"`
+	// WakeReconcilingRepos lists the seed's repo when its wake reconcile sweep
+	// was in flight at query time (solov2-xde2.25.1). Fires on empty AND
+	// non-empty results. Omitted when empty.
+	WakeReconcilingRepos []string `json:"wake_reconciling_repos,omitempty"`
 }
 
 // RepoRootFunc returns the absolute path of the working tree for a given
@@ -46,6 +50,7 @@ type blastToolConfig struct {
 	resolve             ResolveFunc
 	resolveInbound      InboundResolveFunc
 	scans               ScanTrackerReader
+	reconcile           ReconcileReader
 	changedFilesBetween blastradius.ChangedFilesBetweenFunc
 }
 
@@ -62,6 +67,13 @@ func WithBlastChangedFilesBetween(fn blastradius.ChangedFilesBetweenFunc) BlastT
 // in flight (solov2-izh6.30). Nil disables the hint.
 func WithBlastScanTracker(t ScanTrackerReader) BlastToolOption {
 	return func(c *blastToolConfig) { c.scans = t }
+}
+
+// WithBlastReconcileTracker supplies the wake reconciler so a blast on a node
+// whose repo is mid-sweep carries a wake_reconciling hint (solov2-xde2.25.1).
+// Nil disables the hint.
+func WithBlastReconcileTracker(t ReconcileReader) BlastToolOption {
+	return func(c *blastToolConfig) { c.reconcile = t }
 }
 
 // WithBlastResolveFunc supplies a ResolveFunc that the blast handlers use to
@@ -97,7 +109,7 @@ func RegisterBlastTools(r *Registry, svc *blastradius.Service, repoRoot RepoRoot
 		Description:     DescBlastRadius,
 		IncludesStaging: false,
 		InputSchema:     blastRadiusInputSchema,
-		Handler:         makeBlastRadiusHandler(svc, repos, graph, cfg.resolve, cfg.resolveInbound, cfg.scans),
+		Handler:         makeBlastRadiusHandler(svc, repos, graph, cfg.resolve, cfg.resolveInbound, cfg.scans, cfg.reconcile),
 	})
 	r.MustRegister(ToolSpec{
 		Name:            "eng_get_dirty_blast_radius",
@@ -130,7 +142,7 @@ type blastRadiusParams struct {
 	ExpandCrossRepo bool   `json:"expand_cross_repo,omitempty"`
 }
 
-func makeBlastRadiusHandler(svc *blastradius.Service, repos application.RepoLister, graph ports.GraphReader, resolve ResolveFunc, resolveInbound InboundResolveFunc, scans ScanTrackerReader) ToolHandler {
+func makeBlastRadiusHandler(svc *blastradius.Service, repos application.RepoLister, graph ports.GraphReader, resolve ResolveFunc, resolveInbound InboundResolveFunc, scans ScanTrackerReader, reconcile ReconcileReader) ToolHandler {
 	return func(ctx context.Context, _ domain.Actor, raw json.RawMessage) (any, *RPCError) {
 		var p blastRadiusParams
 		if rpcErr := bindParams(raw, &p); rpcErr != nil {
@@ -172,13 +184,18 @@ func makeBlastRadiusHandler(svc *blastradius.Service, repos application.RepoList
 				indexing = ids
 			}
 		}
+		reconciling := reconcilingForRepos(reconcile, []string{p.RepoID})
+		if len(reconciling) > 0 {
+			reasons = append(reasons, protocol.DegradedReasonWakeReconciling)
+		}
 		return BlastResponse{
-			Entries:         blastEntriesToDTO(resp.Entries),
-			Truncated:       resp.Truncated,
-			IncludedStaging: resp.IncludedStaging,
-			CrossRepoEdges:  crossRepoEdges,
-			DegradedReasons: reasons,
-			IndexingRepos:   indexing,
+			Entries:              blastEntriesToDTO(resp.Entries),
+			Truncated:            resp.Truncated,
+			IncludedStaging:      resp.IncludedStaging,
+			CrossRepoEdges:       crossRepoEdges,
+			DegradedReasons:      reasons,
+			IndexingRepos:        indexing,
+			WakeReconcilingRepos: reconciling,
 		}, nil
 	}
 }

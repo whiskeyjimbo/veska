@@ -31,7 +31,7 @@ type searchSemanticParams struct {
 	Limit int `json:"limit,omitempty"`
 }
 
-func makeSearchSemanticHandler(svc *search.Service, rec *savings.Recorder, repos application.RepoLister, pending PendingEmbedsCounter, scans ScanTrackerReader) ToolHandler {
+func makeSearchSemanticHandler(svc *search.Service, rec *savings.Recorder, repos application.RepoLister, pending PendingEmbedsCounter, scans ScanTrackerReader, reconcile ReconcileReader) ToolHandler {
 	return func(ctx context.Context, _ domain.Actor, raw json.RawMessage) (any, *RPCError) {
 		var p searchSemanticParams
 		if rpcErr := bindParams(raw, &p); rpcErr != nil {
@@ -82,7 +82,15 @@ func makeSearchSemanticHandler(svc *search.Service, rec *savings.Recorder, repos
 				indexing = ids
 			}
 		}
-		return SearchResponse{Results: dtos, DegradedReasons: reasons, IndexingRepos: indexing}, nil
+		queriedRepos := make([]string, 0, len(targets))
+		for _, tgt := range targets {
+			queriedRepos = append(queriedRepos, tgt.RepoID)
+		}
+		reconciling := reconcilingForRepos(reconcile, queriedRepos)
+		if len(reconciling) > 0 {
+			reasons = append(reasons, protocol.DegradedReasonWakeReconciling)
+		}
+		return SearchResponse{Results: dtos, DegradedReasons: reasons, IndexingRepos: indexing, WakeReconcilingRepos: reconciling}, nil
 	}
 }
 

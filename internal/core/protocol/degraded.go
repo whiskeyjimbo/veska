@@ -32,3 +32,11 @@ const DegradedReasonExternalCalleesOnly = "external_callees_only"
 // settles (solov2-izh6.30). The accompanying IndexingRepos field, when
 // populated, lists the repo_ids the caller should wait on.
 const DegradedReasonIndexingInProgress = "indexing_in_progress"
+
+// DegradedReasonWakeReconciling is emitted on a graph read tool whenever a
+// repo touched by the query has an in-flight wake reconcile sweep (a
+// suspend/resume mtime re-scan). Unlike indexing_in_progress this fires on
+// empty AND non-empty results: a sweep may be mid-flight re-parsing files the
+// query just read, so even a populated response could be momentarily stale.
+// The accompanying WakeReconcilingRepos field lists the affected repo_ids.
+const DegradedReasonWakeReconciling = "wake_reconciling"

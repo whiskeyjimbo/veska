@@ -7,8 +7,9 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"runtime"
+	"sort"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	infrafs "github.com/whiskeyjimbo/veska/internal/infrastructure/fs"
@@ -61,12 +62,19 @@ type WakeReconciler struct {
 	handler       ReconcileHandler
 	ignore        *infrafs.IgnoreList
 	nowFn         func() time.Time
+	// concurrency bounds how many per-repo sweeps run in parallel. Always
+	// resolved to a positive value at construction (NumCPU()/2, floor 1).
+	concurrency int
 
-	mu          sync.Mutex
-	dirs        []watchedDir
-	mtimeMap    map[string]MtimeEntry // guarded by mu
-	lastTick    time.Time             // guarded by mu
-	reconciling atomic.Bool
+	mu       sync.Mutex
+	dirs     []watchedDir
+	mtimeMap map[string]MtimeEntry // guarded by mu
+	lastTick time.Time             // guarded by mu
+	// reconciling is the set of repo IDs whose per-repo sweep is in flight,
+	// guarded by mu. Per-repo (not a global flag) so an MCP query against a
+	// settled repo is not flagged wake_reconciling because some OTHER repo is
+	// still sweeping.
+	reconciling map[string]int
 
 	// wakeCh is used by injectWake to trigger an immediate sweep.
 	wakeCh chan struct{}
@@ -90,6 +98,20 @@ func WithIgnoreList(ignore *infrafs.IgnoreList) Option {
 	return func(r *WakeReconciler) { r.ignore = ignore }
 }
 
+// WithWakeConcurrency caps how many per-repo sweeps run in parallel on a wake
+// event. n <= 0 (the default) resolves to runtime.NumCPU()/2 with a floor of 1.
+func WithWakeConcurrency(n int) Option {
+	return func(r *WakeReconciler) {
+		if n <= 0 {
+			n = runtime.NumCPU() / 2
+		}
+		if n < 1 {
+			n = 1
+		}
+		r.concurrency = n
+	}
+}
+
 // NewWakeReconciler creates a reconciler that ticks every wakeTick and considers
 // a gap > wakeThreshold to indicate a suspend/resume event. handler is called
 // with the owning repo ID and absolute path of each changed file on wake.
@@ -105,8 +127,10 @@ func NewWakeReconciler(
 		handler:       handler,
 		nowFn:         time.Now,
 		mtimeMap:      make(map[string]MtimeEntry),
+		reconciling:   make(map[string]int),
 		wakeCh:        make(chan struct{}, 1),
 	}
+	WithWakeConcurrency(0)(r) // resolve the default; an explicit opt overrides below.
 	for _, opt := range opts {
 		opt(r)
 	}
@@ -120,9 +144,45 @@ func (r *WakeReconciler) AddDir(repoID, dir string) {
 	r.dirs = append(r.dirs, watchedDir{repoID: repoID, dir: dir})
 }
 
-// IsReconciling returns true while a wake sweep is in progress.
-func (r *WakeReconciler) IsReconciling() bool {
-	return r.reconciling.Load()
+// IsRepoReconciling reports whether the given repo's wake sweep is in flight.
+func (r *WakeReconciler) IsRepoReconciling(repoID string) bool {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.reconciling[repoID] > 0
+}
+
+// ReconcilingRepos returns the sorted set of repo IDs whose wake sweep is
+// currently in flight. Empty when no sweep is running.
+func (r *WakeReconciler) ReconcilingRepos() []string {
+	r.mu.Lock()
+	out := make([]string, 0, len(r.reconciling))
+	for id := range r.reconciling {
+		out = append(out, id)
+	}
+	r.mu.Unlock()
+	if len(out) == 0 {
+		return nil
+	}
+	sort.Strings(out)
+	return out
+}
+
+// markReconciling records that repoID's sweep has started.
+func (r *WakeReconciler) markReconciling(repoID string) {
+	r.mu.Lock()
+	r.reconciling[repoID]++
+	r.mu.Unlock()
+}
+
+// clearReconciling records that repoID's sweep has finished.
+func (r *WakeReconciler) clearReconciling(repoID string) {
+	r.mu.Lock()
+	if r.reconciling[repoID] <= 1 {
+		delete(r.reconciling, repoID)
+	} else {
+		r.reconciling[repoID]--
+	}
+	r.mu.Unlock()
 }
 
 // wallTick returns the current time with its monotonic reading stripped, so
@@ -179,26 +239,45 @@ func (r *WakeReconciler) InjectWake() {
 	r.runSweep(context.Background())
 }
 
-// runSweep performs the mtime sweep synchronously.
+// runSweep performs the mtime sweep synchronously (blocks until every per-repo
+// sweep finishes), then returns.
 func (r *WakeReconciler) runSweep(ctx context.Context) {
-	r.reconciling.Store(true)
-	defer r.reconciling.Store(false)
 	r.sweepDirs(ctx)
 }
 
-// sweepDirs walks each registered directory, compares mtime+size to the last-seen
-// map, calls handler for changed files, and updates the map.
+// sweepDirs walks each registered directory tree, comparing mtime+size to the
+// last-seen map and calling the handler for changed files. Per-repo sweeps run
+// in parallel, bounded by r.concurrency. The handler may be invoked from
+// multiple goroutines concurrently.
 func (r *WakeReconciler) sweepDirs(ctx context.Context) {
 	r.mu.Lock()
 	dirs := append([]watchedDir(nil), r.dirs...)
 	r.mu.Unlock()
 
+	sem := make(chan struct{}, r.concurrency)
+	var wg sync.WaitGroup
 	for _, wd := range dirs {
-		r.sweepDir(ctx, wd.repoID, wd.dir)
+		if ctx.Err() != nil {
+			break
+		}
+		wg.Add(1)
+		sem <- struct{}{}
+		go func(wd watchedDir) {
+			defer wg.Done()
+			defer func() { <-sem }()
+			r.sweepOneRepo(ctx, wd.repoID, wd.dir)
+		}(wd)
 	}
+	wg.Wait()
 }
 
-func (r *WakeReconciler) sweepDir(ctx context.Context, repoID, dir string) {
+// sweepOneRepo walks one repo's directory tree and fires the handler for each
+// changed file. The repo is marked reconciling for the duration so an MCP query
+// against it can observe the in-flight sweep (cleared via defer on return).
+func (r *WakeReconciler) sweepOneRepo(ctx context.Context, repoID, dir string) {
+	r.markReconciling(repoID)
+	defer r.clearReconciling(repoID)
+
 	r.walkFiles(dir, func(path string, current MtimeEntry) {
 		r.mu.Lock()
 		prev, known := r.mtimeMap[path]
