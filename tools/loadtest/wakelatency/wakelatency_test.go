@@ -123,7 +123,11 @@ func measureSweeps(t *testing.T, tag string, n, iters int) []time.Duration {
 
 	r := git.NewWakeReconciler(wakeTick, wakeThreshold, handler)
 	r.AddDir(tag, root) // single tree -> recurses into all subdirs.
-	r.Seed(context.Background())
+	// Seed the baseline via an initial (untimed) no-change sweep: with no
+	// BaselineStore wired, the reconciler's standalone baseline records each
+	// file on first sighting and fires nothing (Seed was retired in
+	// solov2-xde2.25.6). The timed sweeps below are no-change full walks.
+	r.InjectWake()
 
 	durs := make([]time.Duration, 0, iters)
 	for i := 0; i < iters; i++ {

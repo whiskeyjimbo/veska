@@ -33,9 +33,9 @@ func TestWallTickStripsMonotonic(t *testing.T) {
 	}
 }
 
-// seedRepoDir creates a dir with one changed file and registers it, seeding the
-// reconciler's baseline so a subsequent sweep fires the handler.
-func seedRepoDir(t *testing.T, r *WakeReconciler, repoID string) string {
+// registerRepoDir creates a dir with one file and registers it, returning the
+// file's path so the caller can mutate it after the baseline is seeded.
+func registerRepoDir(t *testing.T, r *WakeReconciler, repoID string) string {
 	t.Helper()
 	dir := t.TempDir()
 	path := filepath.Join(dir, "f.go")
@@ -43,12 +43,27 @@ func seedRepoDir(t *testing.T, r *WakeReconciler, repoID string) string {
 		t.Fatalf("write: %v", err)
 	}
 	r.AddDir(repoID, dir)
-	r.Seed(context.Background())
-	// Mutate the file so the next sweep detects a change and fires the handler.
-	if err := os.WriteFile(path, []byte("package x // edited\n"), 0o644); err != nil {
-		t.Fatalf("rewrite: %v", err)
+	return path
+}
+
+// seedThenMutate seeds the reconciler's standalone baseline for each path
+// directly (no sweep, so sweep-start / post-sweep hooks do NOT fire during
+// seeding — matching the retired Seed's hook-free semantics), then mutates each
+// path so the next real sweep detects a change.
+func seedThenMutate(t *testing.T, r *WakeReconciler, paths ...string) {
+	t.Helper()
+	for _, path := range paths {
+		entry, ok := statEntry(path)
+		if !ok {
+			t.Fatalf("statEntry(%s) failed during seed", path)
+		}
+		r.standalone.Put(path, entry)
 	}
-	return dir
+	for _, path := range paths {
+		if err := os.WriteFile(path, []byte("package x // edited\n"), 0o644); err != nil {
+			t.Fatalf("rewrite: %v", err)
+		}
+	}
 }
 
 // TestSweepStartHook_FiresPerRepoBeforeWalk asserts the sweep-start hook runs
@@ -76,8 +91,9 @@ func TestSweepStartHook_FiresPerRepoBeforeWalk(t *testing.T) {
 
 	r := NewWakeReconciler(time.Second, time.Second, handler,
 		WithWakeConcurrency(4), WithSweepStartHook(hook))
-	seedRepoDir(t, r, "repoA")
-	seedRepoDir(t, r, "repoB")
+	pA := registerRepoDir(t, r, "repoA")
+	pB := registerRepoDir(t, r, "repoB")
+	seedThenMutate(t, r, pA, pB)
 
 	r.InjectWake()
 
@@ -117,8 +133,9 @@ func TestPostSweepHook_FiresOnceAfterWalk(t *testing.T) {
 
 	r := NewWakeReconciler(time.Second, time.Second, handler,
 		WithWakeConcurrency(4), WithPostSweepHook(post))
-	seedRepoDir(t, r, "repoA")
-	seedRepoDir(t, r, "repoB")
+	pA := registerRepoDir(t, r, "repoA")
+	pB := registerRepoDir(t, r, "repoB")
+	seedThenMutate(t, r, pA, pB)
 
 	r.InjectWake()
 
@@ -139,7 +156,8 @@ func TestPostSweepHook_NilSkipped(t *testing.T) {
 	fired := false
 	r := NewWakeReconciler(time.Second, time.Second,
 		func(_ context.Context, _, _ string) { fired = true })
-	seedRepoDir(t, r, "repoA")
+	pA := registerRepoDir(t, r, "repoA")
+	seedThenMutate(t, r, pA)
 	r.InjectWake()
 	if !fired {
 		t.Error("handler did not fire with a nil post-sweep hook")
@@ -152,7 +170,8 @@ func TestSweepStartHook_NilSkipped(t *testing.T) {
 	fired := false
 	r := NewWakeReconciler(time.Second, time.Second,
 		func(_ context.Context, _, _ string) { fired = true })
-	seedRepoDir(t, r, "repoA")
+	pA := registerRepoDir(t, r, "repoA")
+	seedThenMutate(t, r, pA)
 	r.InjectWake()
 	if !fired {
 		t.Error("handler did not fire with a nil sweep-start hook")
