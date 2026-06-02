@@ -186,7 +186,32 @@ func repoFamily() []coverageTool {
 				t.Fatalf("unmatched cwd: got %v, want CodeInvalidParams", nfErr)
 			}
 		}},
-		{family: f, tool: "eng_get_status", bead: "solov2-mxbd"},
+		{family: f, tool: "eng_get_status", bead: "solov2-mxbd", run: func(t *testing.T) {
+			h := newHarness(t)
+			res, rpcErr := h.Call("eng_get_status", map[string]any{})
+			if rpcErr != nil {
+				t.Fatalf("eng_get_status: %v", rpcErr)
+			}
+			m, ok := res.(map[string]any)
+			if !ok {
+				t.Fatalf("eng_get_status: result type %T, want map[string]any", res)
+			}
+			if sv, ok := m["schema_version"].(int); !ok || sv <= 0 {
+				t.Errorf("schema_version = %v (%T), want positive int", m["schema_version"], m["schema_version"])
+			}
+			if rc, ok := m["repo_count"].(int); !ok || rc != 2 {
+				t.Errorf("repo_count = %v (%T), want int 2 (Alpha+Beta)", m["repo_count"], m["repo_count"])
+			}
+			if pe, ok := m["pending_embeds"].(int); !ok || pe != 0 {
+				t.Errorf("pending_embeds = %v (%T), want int 0 (drained)", m["pending_embeds"], m["pending_embeds"])
+			}
+			if st, _ := m["status"].(string); st != "ok" {
+				t.Errorf("status = %q, want \"ok\" (no pending embeds)", st)
+			}
+			if dr, ok := m["degraded_reasons"].([]string); !ok || len(dr) != 0 {
+				t.Errorf("degraded_reasons = %v (%T), want empty []string", m["degraded_reasons"], m["degraded_reasons"])
+			}
+		}},
 		{family: f, tool: "eng_get_config", bead: "solov2-f11k"},
 		{family: f, tool: "eng_set_repo_alias", bead: "solov2-awb9"},
 		{family: f, tool: "eng_remove_repo_alias", bead: "solov2-ffvx"},
