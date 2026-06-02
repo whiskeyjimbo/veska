@@ -127,19 +127,39 @@ type Service struct {
 	edges   ports.EdgeReader
 	nodes   ports.NodeLookup
 	staging *staging.Area
+	// defaultHubDegree is the hub-degree threshold applied when a per-call
+	// Options leaves HubDegreeThreshold at 0. Seeded to DefaultHubDegreeThreshold
+	// by NewService; WithDefaultHubDegreeThreshold overwrites it with any value
+	// (including a negative one, which disables the gate). See solov2-l8su.
+	defaultHubDegree int
+}
+
+// ServiceOption configures a Service at construction.
+type ServiceOption func(*Service)
+
+// WithDefaultHubDegreeThreshold overrides the hub-degree threshold used when a
+// per-call Options leaves HubDegreeThreshold at 0. Any value is honoured,
+// including a negative one (which disables the hub gate) — the daemon threads
+// the operator-configured blast.hub_degree_threshold through here.
+func WithDefaultHubDegreeThreshold(n int) ServiceOption {
+	return func(s *Service) { s.defaultHubDegree = n }
 }
 
 // NewService constructs a Service. edges and nodes are required; a nil
 // dependency is reported with a wrapped ErrMissingDependency. staging
 // may be nil for callers that never invoke DirtyOf.
-func NewService(edges ports.EdgeReader, nodes ports.NodeLookup, staging *staging.Area) (*Service, error) {
+func NewService(edges ports.EdgeReader, nodes ports.NodeLookup, staging *staging.Area, opts ...ServiceOption) (*Service, error) {
 	switch {
 	case edges == nil:
 		return nil, fmt.Errorf("blastradius.NewService: edges is nil: %w", ErrMissingDependency)
 	case nodes == nil:
 		return nil, fmt.Errorf("blastradius.NewService: nodes is nil: %w", ErrMissingDependency)
 	}
-	return &Service{edges: edges, nodes: nodes, staging: staging}, nil
+	s := &Service{edges: edges, nodes: nodes, staging: staging, defaultHubDegree: DefaultHubDegreeThreshold}
+	for _, o := range opts {
+		o(s)
+	}
+	return s, nil
 }
 
 // Options carries the per-call BFS bounds.
@@ -166,8 +186,10 @@ type Options struct {
 }
 
 // applied returns o with zero-valued fields replaced by defaults and
-// over-large values clamped to the hard cap.
-func (o Options) applied() Options {
+// over-large values clamped to the hard cap. defaultHub is the Service-level
+// hub-degree threshold substituted when the caller leaves HubDegreeThreshold
+// at 0; a negative defaultHub propagates through to disable the gate.
+func (o Options) applied(defaultHub int) Options {
 	if o.MaxDepth <= 0 {
 		o.MaxDepth = DefaultMaxDepth
 	}
@@ -184,7 +206,7 @@ func (o Options) applied() Options {
 		o.Direction = DirCallers
 	}
 	if o.HubDegreeThreshold == 0 {
-		o.HubDegreeThreshold = DefaultHubDegreeThreshold
+		o.HubDegreeThreshold = defaultHub
 	}
 	return o
 }
@@ -193,7 +215,7 @@ func (o Options) applied() Options {
 // Seeds themselves are included in the result at distance 0. Duplicate
 // seeds are deduplicated.
 func (s *Service) Of(ctx context.Context, repoID, branch string, seedIDs []string, opts Options) (Response, error) {
-	opts = opts.applied()
+	opts = opts.applied(s.defaultHubDegree)
 
 	// Seed validation: if NONE of the supplied seed_ids resolve to a real
 	// node in (repoID, branch), that's a user error — the radius is

@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strconv"
 
 	"github.com/BurntSushi/toml"
 )
@@ -29,6 +30,33 @@ type Config struct {
 	VulnSource         VulnSourceConfig         `toml:"vuln_source"`
 	Promotion          PromotionConfig          `toml:"promotion"`
 	Wiki               WikiConfig               `toml:"wiki"`
+	Autolink           AutolinkConfig           `toml:"autolink"`
+	Blast              BlastConfig              `toml:"blast"`
+}
+
+// AutolinkConfig tunes the auto-link candidate computation (solov2-l8su). The
+// defaults mirror the autolink package constants (DefaultThreshold,
+// DefaultTopK) calibrated against the gate-3 nomic-embed-text fixture. Most
+// users should never touch these; a different embedder or repository layout is
+// the reason to. The score-space caveat applies: Threshold is a lower bound on
+// the higher-is-closer similarity 1/(1+L2dist), only meaningful on
+// L2-normalised embeddings.
+type AutolinkConfig struct {
+	// Threshold is the minimum similarity for a candidate edge to be emitted.
+	// Range [0, 1]; 0 admits every non-self neighbour.
+	Threshold float64 `toml:"threshold"`
+	// TopK is the per-source candidate cap. Must be > 0.
+	TopK int `toml:"top_k"`
+}
+
+// BlastConfig tunes the blast-radius BFS heuristics (solov2-l8su).
+type BlastConfig struct {
+	// HubDegreeThreshold gates BFS expansion through high-degree "registry"
+	// nodes (cobra rootCmd, http muxes). Nodes whose neighbour count exceeds
+	// this are reported but not expanded through. A negative value disables
+	// the gate entirely (legacy expand-through-everything behaviour); 0 is
+	// rejected by Validate so the disable intent is always explicit.
+	HubDegreeThreshold int `toml:"hub_degree_threshold"`
 }
 
 // WikiConfig controls the developer-wiki Markdown pages. The README's product
@@ -256,6 +284,13 @@ func DefaultConfig() Config {
 			KeepMinCount: 3,
 			KeepMaxAge:   "30d",
 		},
+		Autolink: AutolinkConfig{
+			Threshold: 0.60,
+			TopK:      5,
+		},
+		Blast: BlastConfig{
+			HubDegreeThreshold: 50,
+		},
 	}
 }
 
@@ -283,7 +318,9 @@ func Load() (Config, error) {
 		return Config{}, fmt.Errorf("config: stat %s: %w", path, err)
 	}
 
-	applyEnvOverrides(&cfg)
+	if err := applyEnvOverrides(&cfg); err != nil {
+		return Config{}, err
+	}
 
 	if err := cfg.Validate(); err != nil {
 		return Config{}, err
@@ -291,9 +328,11 @@ func Load() (Config, error) {
 	return cfg, nil
 }
 
-// applyEnvOverrides folds the daemon's five environment variables over the
-// resolved struct. They are the last (highest-precedence) overlay.
-func applyEnvOverrides(cfg *Config) {
+// applyEnvOverrides folds the daemon's environment variables over the resolved
+// struct. They are the last (highest-precedence) overlay. Numeric overrides
+// (the autolink/blast tuning knobs) return a parse error rather than silently
+// ignoring a malformed value — consistent with Load's fail-loud contract.
+func applyEnvOverrides(cfg *Config) error {
 	if v := os.Getenv("VESKA_OLLAMA_URL"); v != "" {
 		cfg.Embedder.Endpoint = v
 	}
@@ -309,6 +348,28 @@ func applyEnvOverrides(cfg *Config) {
 	if v := os.Getenv("VESKA_OTLP_ENDPOINT"); v != "" {
 		cfg.Tracing.OTLPEndpoint = v
 	}
+	if v := os.Getenv("VESKA_HUB_THRESHOLD"); v != "" {
+		n, err := strconv.Atoi(v)
+		if err != nil {
+			return fmt.Errorf("config: VESKA_HUB_THRESHOLD %q is not an integer: %w", v, err)
+		}
+		cfg.Blast.HubDegreeThreshold = n
+	}
+	if v := os.Getenv("VESKA_AUTOLINK_THRESHOLD"); v != "" {
+		f, err := strconv.ParseFloat(v, 64)
+		if err != nil {
+			return fmt.Errorf("config: VESKA_AUTOLINK_THRESHOLD %q is not a number: %w", v, err)
+		}
+		cfg.Autolink.Threshold = f
+	}
+	if v := os.Getenv("VESKA_AUTOLINK_TOPK"); v != "" {
+		n, err := strconv.Atoi(v)
+		if err != nil {
+			return fmt.Errorf("config: VESKA_AUTOLINK_TOPK %q is not an integer: %w", v, err)
+		}
+		cfg.Autolink.TopK = n
+	}
+	return nil
 }
 
 // Validate enforces cross-field invariants. It covers the documented tracing
@@ -324,6 +385,15 @@ func (c Config) Validate() error {
 	}
 	if c.Tracing.Enabled && (c.Tracing.SampleRatio < 0.0 || c.Tracing.SampleRatio > 1.0) {
 		return fmt.Errorf("config: tracing.sample_ratio %v out of range (must be between 0.0 and 1.0)", c.Tracing.SampleRatio)
+	}
+	if c.Autolink.Threshold < 0.0 || c.Autolink.Threshold > 1.0 {
+		return fmt.Errorf("config: autolink.threshold %v out of range (must be between 0.0 and 1.0)", c.Autolink.Threshold)
+	}
+	if c.Autolink.TopK <= 0 {
+		return fmt.Errorf("config: autolink.top_k %d must be greater than 0", c.Autolink.TopK)
+	}
+	if c.Blast.HubDegreeThreshold == 0 {
+		return fmt.Errorf("config: blast.hub_degree_threshold must not be 0 (use a positive degree to gate, or a negative value to disable the hub gate)")
 	}
 	return nil
 }

@@ -662,7 +662,10 @@ func (b *daemonBuilder) buildQueueHandlers() error {
 func (b *daemonBuilder) buildAutolinkHandler() (*autolink.Handler, error) {
 	nodeLookup := sqlite.NewNodeLookupRepo(b.pools.ReadDB)
 	edgeRepo := sqlite.NewEdgeRepo(b.pools.Write)
-	linker, err := autolink.NewLinker(b.refs, b.vec, autolink.WithMetrics(b.metrics))
+	linker, err := autolink.NewLinker(b.refs, b.vec,
+		autolink.WithMetrics(b.metrics),
+		autolink.WithThreshold(float32(b.fileCfg.Autolink.Threshold)),
+		autolink.WithTopK(b.fileCfg.Autolink.TopK))
 	if err != nil {
 		return nil, fmt.Errorf("daemon: autolink linker: %w", err)
 	}
@@ -812,20 +815,21 @@ func (b *daemonBuilder) buildMCPServer() error {
 	b.savingsRec = rec
 
 	if err := registerMCPTools(b.registry, mcpDeps{
-		pools:       b.pools,
-		cfg:         b.cfg,
-		staging:     b.staging,
-		vectors:     b.vec,
-		provider:    b.provider,
-		refs:        b.refs,
-		metrics:     b.metrics,
-		ingester:    b.ingester,
-		promoter:    b.promoter,
-		regSvc:      b.regSvc,
-		reparser:    b.reparser,
-		scanTracker: b.scanTracker,
-		reconciler:  b.reconciler,
-		savings:     b.savingsRec,
+		pools:              b.pools,
+		cfg:                b.cfg,
+		staging:            b.staging,
+		vectors:            b.vec,
+		provider:           b.provider,
+		refs:               b.refs,
+		metrics:            b.metrics,
+		ingester:           b.ingester,
+		promoter:           b.promoter,
+		regSvc:             b.regSvc,
+		reparser:           b.reparser,
+		scanTracker:        b.scanTracker,
+		reconciler:         b.reconciler,
+		savings:            b.savingsRec,
+		hubDegreeThreshold: b.fileCfg.Blast.HubDegreeThreshold,
 	}); err != nil {
 		return fmt.Errorf("register MCP tools: %w", err)
 	}
@@ -948,6 +952,10 @@ type mcpDeps struct {
 	// can attach a wake_reconciling degraded reason (solov2-xde2.25.1). It
 	// satisfies mcp.ReconcileReader. Nil-safe — the helper no-ops on nil.
 	reconciler *gitwatch.WakeReconciler
+	// hubDegreeThreshold is the operator-configured blast.hub_degree_threshold
+	// (solov2-l8su), threaded into the blast-radius service so the gate is
+	// tunable per repository layout.
+	hubDegreeThreshold int
 }
 
 // repoRootFunc adapts the canonical composition.RepoRootByID resolver to
