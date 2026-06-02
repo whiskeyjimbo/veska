@@ -31,6 +31,8 @@ package daemon
 
 import (
 	"path/filepath"
+	"reflect"
+	"sort"
 	"testing"
 
 	"github.com/whiskeyjimbo/veska/internal/core/domain"
@@ -169,7 +171,57 @@ func graphFamily() []coverageTool {
 			}
 		}},
 		{family: f, tool: "eng_get_call_chain", bead: "solov2-zk8c"},
-		{family: f, tool: "eng_get_file_nodes", bead: "solov2-2zlq"},
+		{family: f, tool: "eng_get_file_nodes", bead: "solov2-2zlq", run: func(t *testing.T) {
+			h := newHarness(t)
+			repoID := coverage.AlphaRepoID
+			const file = "metric/series.go"
+
+			res, rpcErr := h.Call("eng_get_file_nodes", map[string]any{
+				"file_path": file, "repo_id": repoID,
+			})
+			if rpcErr != nil {
+				t.Fatalf("eng_get_file_nodes: %v", rpcErr)
+			}
+			resp, ok := res.(mcp.GraphResponse)
+			if !ok {
+				t.Fatalf("eng_get_file_nodes: result type %T, want mcp.GraphResponse", res)
+			}
+			// Expected manifest facts for this file (chunk nodes are excluded
+			// from the manifest by design — their names are volatile line ranges).
+			wantPath := filepath.Join(h.Root(repoID), filepath.FromSlash(file))
+			var want []string
+			for _, k := range coverage.Manifest().Nodes {
+				if k.Path == file {
+					want = append(want, string(k.Kind)+"\x00"+k.Name)
+				}
+			}
+			// (a) every manifest node is PRESENT in the returned set, with the
+			// manifest's path fact; chunk nodes in output are ignored here.
+			got := map[string]bool{}
+			var nonChunk []string
+			for _, n := range resp.Nodes {
+				if n.Kind == string(domain.KindChunk) {
+					continue
+				}
+				if n.FilePath != wantPath {
+					t.Errorf("node %q file_path = %q, want %q", n.Name, n.FilePath, wantPath)
+				}
+				key := n.Kind + "\x00" + n.Name
+				got[key] = true
+				nonChunk = append(nonChunk, key)
+			}
+			for _, w := range want {
+				if !got[w] {
+					t.Errorf("manifest node %q missing from eng_get_file_nodes output", w)
+				}
+			}
+			// (b) chunk-filtered output equals the manifest set (normalized SET).
+			sort.Strings(want)
+			sort.Strings(nonChunk)
+			if !reflect.DeepEqual(nonChunk, want) {
+				t.Errorf("non-chunk node set = %v, want %v", nonChunk, want)
+			}
+		}},
 		{family: f, tool: "eng_find_related", bead: "solov2-d217"},
 	}
 }
