@@ -125,7 +125,38 @@ func repoFamily() []coverageTool {
 				}
 			}
 		}},
-		{family: f, tool: "eng_get_repo", bead: "solov2-p4zv"},
+		{family: f, tool: "eng_get_repo", bead: "solov2-p4zv", run: func(t *testing.T) {
+			h := newHarness(t)
+			res, rpcErr := h.Call("eng_get_repo", map[string]any{"repo_id": coverage.AlphaRepoID})
+			if rpcErr != nil {
+				t.Fatalf("eng_get_repo: %v", rpcErr)
+			}
+			m, ok := res.(map[string]any)
+			if !ok {
+				t.Fatalf("eng_get_repo: result type %T, want map[string]any", res)
+			}
+			rv, ok := m["repo"].(mcp.RepoView)
+			if !ok {
+				t.Fatalf("eng_get_repo: repo type %T, want mcp.RepoView", m["repo"])
+			}
+			if rv.RepoID != coverage.AlphaRepoID {
+				t.Errorf("repo_id = %q, want %q", rv.RepoID, coverage.AlphaRepoID)
+			}
+			if want := h.Root(coverage.AlphaRepoID); rv.RootPath != want {
+				t.Errorf("root_path = %q, want %q", rv.RootPath, want)
+			}
+			if rv.ActiveBranch != "main" {
+				t.Errorf("active_branch = %q, want %q", rv.ActiveBranch, "main")
+			}
+			if rv.Status != "promoted" {
+				t.Errorf("status = %q, want %q", rv.Status, "promoted")
+			}
+			// Unknown repo_id is a domain miss surfaced as CodeNotFound.
+			_, nfErr := h.Call("eng_get_repo", map[string]any{"repo_id": "nonexistent-repo"})
+			if nfErr == nil || nfErr.Code != mcp.CodeNotFound {
+				t.Fatalf("unknown repo_id: got %v, want CodeNotFound", nfErr)
+			}
+		}},
 		{family: f, tool: "eng_get_current_repo", bead: "solov2-mhfa"},
 		{family: f, tool: "eng_get_status", bead: "solov2-mxbd"},
 		{family: f, tool: "eng_get_config", bead: "solov2-f11k"},
