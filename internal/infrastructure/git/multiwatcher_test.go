@@ -170,6 +170,56 @@ loop:
 	}
 }
 
+// TestMultiRepoWatcherRestartAll tears down and recreates each repo's FSWatcher
+// (the wake-handle restart, solov2-xde2.25.3) and verifies that a live file
+// write AFTER the restart still produces a RepoFileEvent — proving the fresh
+// handle is wired to the same Events() stream. No file is written before the
+// restart, so the only event that can arrive is the post-restart one (the
+// buffered out channel cannot replay a stale pre-restart event as a false pass).
+func TestMultiRepoWatcherRestartAll(t *testing.T) {
+	t.Parallel()
+
+	mw := git.NewMultiRepoWatcher()
+	mw.Start(t.Context())
+
+	dir := t.TempDir()
+	if err := mw.Add("repoR", dir); err != nil {
+		t.Fatalf("Add: %v", err)
+	}
+
+	mw.RestartAll()
+
+	// The repo must still be watched after the restart.
+	ids := mw.WatchedRepoIDs()
+	if len(ids) != 1 || ids[0] != "repoR" {
+		t.Fatalf("WatchedRepoIDs after restart = %v, want [repoR]", ids)
+	}
+
+	// Let the fresh watcher register its inotify watches before writing.
+	time.Sleep(50 * time.Millisecond)
+
+	path := filepath.Join(dir, "post-wake.go")
+	if err := os.WriteFile(path, []byte("package main"), 0o644); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+
+	select {
+	case ev, ok := <-mw.Events():
+		if !ok {
+			t.Fatal("Events() channel closed unexpectedly")
+		}
+		if ev.RepoID != "repoR" {
+			t.Errorf("RepoID = %q, want repoR", ev.RepoID)
+		}
+	case <-time.After(multiEventTimeout):
+		t.Fatal("timed out waiting for post-restart RepoFileEvent (fresh handle not live)")
+	}
+
+	if err := mw.Close(); err != nil {
+		t.Fatalf("Close: %v", err)
+	}
+}
+
 // TestMultiRepoWatcherInject verifies that Inject multiplexes a synthetic write
 // event (the wake-reconciler path) onto Events() with the given repo ID, and
 // that an Inject before Start is a no-op rather than a panic.
