@@ -52,6 +52,7 @@ and never reused.
 | [ADR-S0015](ADR-S0015-vec-pivot-dual-backend.md) | Dual-backend vector strategy (sqlite-vec default, usearch above threshold) | accepted |
 | [ADR-S0016](ADR-S0016-memvec-rename.md) | Rename the in-memory vector backend (sqlitevec → memvec) | accepted |
 | [ADR-S0017](ADR-S0017-portable-node-identity.md) | Portable content-derived node identity for a shared multi-contributor graph | proposed |
+| [ADR-S0018](ADR-S0018-shared-graph-data-partitioning.md) | Shared-graph data partitioning — shared truth vs. local state | proposed |
 
 ## Retracted from prior set
 
