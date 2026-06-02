@@ -1,7 +1,8 @@
-// Package repo: git working-tree detection, canonicalisation, and repo-ID
+package repo
+
+// This file holds git working-tree detection, canonicalisation, and repo-ID
 // derivation helpers, split out of registry.go to keep that file focused on
 // the registry CRUD (Add/List/Get/Remove) and hook lifecycle.
-package repo
 
 import (
 	"bufio"
