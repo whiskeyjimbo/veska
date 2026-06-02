@@ -8,41 +8,44 @@
 ; framework's command word (cobra Use:) and emits CONTAINS edges from
 ; AddCommand(...) so call_chain / blast_radius walk the actual tree.
 ;
-; First framework: spf13/cobra. urfave/cli, kong, and HTTP routers
-; (gin/echo → KindRoute) are reserved follow-ups; each drops in here as
-; another pattern + a branch in go_frameworks.go without touching the
-; generic symbol/call extractors.
+; Frameworks handled: spf13/cobra (Command → command named by Use:) and
+; urfave/cli (App → command named by Name:, with its Commands:[]*Command
+; slice as subcommands). kong (struct tags) and HTTP routers (gin/echo →
+; KindRoute / EdgeRoutes — needs cross-file resolver support) are
+; reserved follow-ups; each drops in as a branch in go_frameworks.go.
 ;
-; The package qualifier (@cobra.cmd.pkg) is verified against the file
-; import map Go-side — matching the type name "Command" alone would
-; misfire on any unrelated `foo.Command{}` literal.
+; The @fwvar.* patterns capture EVERY top-level `var X = &pkg.Type{...}`;
+; go_frameworks.go dispatches on (resolved import path, type name) so a
+; single pattern serves all composite-literal frameworks. Matching the
+; type name alone would misfire on any unrelated `foo.Command{}`, so the
+; package qualifier is always verified against the file import map.
 
-; ungrouped: var X = &cobra.Command{ Use: "...", ... }
+; ungrouped: var X = &pkg.Type{ ... }
 (source_file
   (var_declaration
     (var_spec
-      name: (identifier) @cobra.cmd.var
+      name: (identifier) @fwvar.name
       value: (expression_list
         (unary_expression
           operand: (composite_literal
             type: (qualified_type
-              package: (package_identifier) @cobra.cmd.pkg
-              name: (type_identifier) @cobra.cmd.type)
-            body: (literal_value) @cobra.cmd.body))))) @cobra.cmd.decl)
+              package: (package_identifier) @fwvar.pkg
+              name: (type_identifier) @fwvar.type)
+            body: (literal_value) @fwvar.body))))) @fwvar.decl)
 
-; grouped: var ( X = &cobra.Command{ ... } )
+; grouped: var ( X = &pkg.Type{ ... } )
 (source_file
   (var_declaration
     (var_spec_list
       (var_spec
-        name: (identifier) @cobra.cmd.var
+        name: (identifier) @fwvar.name
         value: (expression_list
           (unary_expression
             operand: (composite_literal
               type: (qualified_type
-                package: (package_identifier) @cobra.cmd.pkg
-                name: (type_identifier) @cobra.cmd.type)
-              body: (literal_value) @cobra.cmd.body)))))) @cobra.cmd.decl)
+                package: (package_identifier) @fwvar.pkg
+                name: (type_identifier) @fwvar.type)
+              body: (literal_value) @fwvar.body)))))) @fwvar.decl)
 
 ; wire-up: parent.AddCommand(child, ...). Matches any selector call;
 ; go_frameworks.go filters on field == "AddCommand" and maps each
