@@ -13,6 +13,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"path/filepath"
 
 	"github.com/whiskeyjimbo/veska/internal/application/staging"
 	"github.com/whiskeyjimbo/veska/internal/core/ports"
@@ -378,6 +379,13 @@ func (s *Service) DiffOf(ctx context.Context, repoID, branch, repoRoot string, c
 	seen := make(map[string]struct{})
 	seeds := make([]string, 0, len(files)*4)
 	for _, fp := range files {
+		// git diff yields repo-relative paths, but nodes.file_path is stored
+		// absolute, so NodesInFile's exact match would find 0 seeds for every
+		// changed file (solov2-im9o). Absolutize against repoRoot first,
+		// mirroring how eng_get_file_nodes resolves a relative file_path.
+		if !filepath.IsAbs(fp) {
+			fp = filepath.Join(repoRoot, fp)
+		}
 		ids, err := s.nodes.NodesInFile(ctx, repoID, branch, fp)
 		if err != nil {
 			return Response{}, fmt.Errorf("blastradius: nodes in %s: %w", fp, err)
