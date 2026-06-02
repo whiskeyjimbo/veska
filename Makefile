@@ -12,7 +12,7 @@ LAYERCHECK_BIN  := $(BINDIR)/layercheck
 SQLITE_TAGS    ?= sqlite_fts5
 SQLITE_CGO_ENV ?= CGO_ENABLED=1
 
-.PHONY: all build build-small build-fat fetch-embed-assets install release-archive test lint vet layercheck fatfile-ratchet noidleak cliparity clean loadtest test-mcp test-mcp-deep test-mcp-bootstrap eval-recall eval-recall-projection eval-autolink-fp eval-neardup-threshold eval-revalidate-bench eval-queue-fuzz eval-embed-throughput eval-embedder-bench eval-embed-models eval-embed-models-full eval-embed-models-condense eval-embed-models-fuse eval-dbbench eval-dbbench-cgo
+.PHONY: all build build-small build-fat fetch-embed-assets install release-archive test lint vet layercheck fatfile-ratchet noidleak cliparity clean loadtest test-mcp test-mcp-deep test-mcp-bootstrap eval-recall eval-recall-projection eval-autolink-fp eval-neardup-threshold eval-revalidate-bench eval-wake-latency eval-queue-fuzz eval-embed-throughput eval-embedder-bench eval-embed-models eval-embed-models-full eval-embed-models-condense eval-embed-models-fuse eval-dbbench eval-dbbench-cgo
 
 # `all` uses build-small to keep the test loop fast — the model2vec assets
 # add a network fetch + ~62MB to every CI/dev run. End-user packaging
@@ -237,6 +237,14 @@ eval-neardup-threshold:
 # tools/loadtest/revalidate/README.md.
 eval-revalidate-bench:
 	$(SQLITE_CGO_ENV) go test -tags "eval $(SQLITE_TAGS)" -run TestRevalidateBench ./tools/loadtest/revalidate/ -v -count=1 -timeout=120s
+
+# eval-wake-latency: solov2-xde2.25.4 — wake-reconcile sweep latency gate.
+# Times git.WakeReconciler's no-change mtime/size/prefix walk over a
+# synthetic tree and asserts the SOLO-03 §5.2 NFR: typical-repo p95 < 500ms
+# and a single >50k-file sweep < 5s. The git package needs no sqlite tags.
+# Override WAKE_FILES / WAKE_FILES_LARGE. See tools/loadtest/wakelatency/README.md.
+eval-wake-latency:
+	go test -tags eval -run TestWakeLatency ./tools/loadtest/wakelatency/ -v -count=1 -timeout=120s
 
 # eval-dbbench: solov2-6e5r — compare Go SQLite drivers (mattn, zombiezen)
 # against veska's storage workloads. Pure-Go variant (zombiezen only).
