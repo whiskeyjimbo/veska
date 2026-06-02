@@ -116,7 +116,7 @@ func TestTokenEfficiencyMultiRepo(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = db.Close() })
 
-	vstore, err := vector.NewVectorStorage(vector.BackendSQLiteVec, t.TempDir())
+	vstore, err := vector.NewVectorStorage(vector.BackendMemory, t.TempDir())
 	if err != nil {
 		t.Fatalf("vector.NewVectorStorage: %v", err)
 	}

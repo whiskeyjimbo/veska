@@ -202,7 +202,7 @@ loadtest:
 # (RECALL_POP=1000, fake embedder) is the default and runs in ~1s. Override
 # RECALL_POP for larger runs; see tools/loadtest/recall/README.md.
 eval-recall:
-	RECALL_POP=$${RECALL_POP:-1000} go test -tags=eval -run TestRecall ./tools/loadtest/recall/ -v
+	RECALL_POP=$${RECALL_POP:-1000} $(SQLITE_CGO_ENV) go test -tags "eval $(SQLITE_TAGS)" -run TestRecall ./tools/loadtest/recall/ -v
 
 # eval-recall-projection: recall@10 + p95 sweep over embed-text PROJECTION
 # variants (baseline / +signature / +snippet / +both). The corpus is built
@@ -213,14 +213,14 @@ eval-recall:
 # A full 4-variant sweep at pop=1000 is reference-laptop work — raise the
 # timeout accordingly. See tools/loadtest/recallprojection/README.md.
 eval-recall-projection:
-	RECALL_POP=$${RECALL_POP:-1000} go test -tags=eval -run TestRecallProjectionSweep ./tools/loadtest/recallprojection/ -v -timeout=3600s
+	RECALL_POP=$${RECALL_POP:-1000} $(SQLITE_CGO_ENV) go test -tags "eval $(SQLITE_TAGS)" -run TestRecallProjectionSweep ./tools/loadtest/recallprojection/ -v -timeout=3600s
 
 # eval-autolink-fp: auto-link false-positive harness (m3.04.4). Quick mode
 # (AUTOLINK_POP=1000, fake embedder) is the default and runs in ~1s. Override
 # AUTOLINK_POP / AUTOLINK_THRESHOLD / AUTOLINK_TOPK for sweeps; see
 # tools/loadtest/autolink/README.md.
 eval-autolink-fp:
-	AUTOLINK_POP=$${AUTOLINK_POP:-1000} go test -tags=eval -run TestAutolinkFP ./tools/loadtest/autolink/ -v
+	AUTOLINK_POP=$${AUTOLINK_POP:-1000} $(SQLITE_CGO_ENV) go test -tags "eval $(SQLITE_TAGS)" -run TestAutolinkFP ./tools/loadtest/autolink/ -v
 
 # eval-neardup-threshold: near-duplicate threshold calibration (solov2-md3n).
 # Embeds a curated corpus of real Go functions + mechanical near-dup variants
@@ -268,7 +268,7 @@ eval-queue-fuzz:
 # Override EMBED_BENCH_DURATION_S / EMBED_BENCH_SEED_N / VESKA_OLLAMA_URL /
 # VESKA_EMBED_MODEL. Skips if Ollama is unreachable. See README.
 eval-embed-throughput:
-	EMBED_BENCH_DURATION_S=$${EMBED_BENCH_DURATION_S:-60} go test -tags=eval -run TestEmbedderThroughput ./tools/loadtest/embedder/ -v -timeout=180s
+	EMBED_BENCH_DURATION_S=$${EMBED_BENCH_DURATION_S:-60} $(SQLITE_CGO_ENV) go test -tags "eval $(SQLITE_TAGS)" -run TestEmbedderThroughput ./tools/loadtest/embedder/ -v -timeout=180s
 
 # eval-embedder-bench: per-embed throughput + load-cost micro-benchmarks
 # across the election ladder (static-v2 / model2vec disk / model2vec

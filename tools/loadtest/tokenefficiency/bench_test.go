@@ -133,7 +133,7 @@ func TestTokenEfficiency(t *testing.T) {
 	)
 	seedNodesWithSnippets(t, db, repoID, branch, corpus.Nodes)
 
-	vstore, err := vector.NewVectorStorage(vector.BackendSQLiteVec, t.TempDir())
+	vstore, err := vector.NewVectorStorage(vector.BackendMemory, t.TempDir())
 	if err != nil {
 		t.Fatalf("vector.NewVectorStorage: %v", err)
 	}
