@@ -54,12 +54,12 @@ answer, and reopening it deliberately is part of this work.
 | Class | Definition | Convergence | Examples |
 |-------|------------|-------------|----------|
 | **A — shared derived truth** | A pure function of (source @ branch+sha, identity scheme, **extraction-tool version**, embedding model) | Converges across contributors (S0017) | `nodes`, `edges`, `cross_repo_edge_stubs`, `file_imports`, `node_fts_*`, `node_embeddings` |
-| **B — shared human curation** | Human decisions a team wants shared; does NOT auto-converge; needs attribution + merge | Conflicts possible | `suppressions`, finding **triage state**, (optionally) the task **backlog** |
-| **C — per-contributor local** | Meaningless or harmful to share | N/A | `repos` registration/working columns, `post_promotion_queue`, `node_embedding_refs.state`, `daemon_state`, `tasks.active`, `repo_aliases` |
+| **B — shared human curation** | Human decisions a team wants shared; does NOT auto-converge; needs attribution + merge | Conflicts possible | `suppressions`, finding **triage state** |
+| **C — per-contributor local** | Meaningless or harmful to share | N/A | `repos` registration/working columns, `post_promotion_queue`, `node_embedding_refs.state`, `daemon_state`, `tasks` (whole table), `repo_aliases` |
 
 ### 2. The splits are often **intra-table (column-level)**, not whole-table
 
-Three tables straddle the line and must be split by column, not assigned wholesale:
+Two tables straddle the line and must be split by column, not assigned wholesale:
 
 - **`repos`** → shared **identity core** (`repo_id`, `module_path`,
   `canonical_url`) vs. local **registration/working state** (`root_path`,
@@ -67,13 +67,14 @@ Three tables straddle the line and must be split by column, not assigned wholesa
   `prompted_at`).
 - **`findings`** → shared **derived existence** (`finding_id`, anchor, `rule`,
   `severity`, `message` — re-derivable, class A) vs. shared **triage state**
-  (`state`, `closed_reason`, `closed_at`, closing actor — class B curation).
-- **`tasks`** → shared **backlog** (the work item) vs. local **activation**
-  (`active`; the `UNIQUE(repo_id) WHERE active=1` constraint is the concrete
-  thing that breaks under sharing).
+  (`state`, `closed_reason`, `closed_at`, closing actor — class B curation, per
+  the _Resolved decisions_ below).
 - **`node_embedding_refs`** → shared **`node_id → content_hash` link** (class A,
   re-derivable) vs. local **embed state machine** (`state`, `attempts`,
   `enqueued_at` — class C, each daemon's own embedder progress).
+
+(`tasks` is *not* split — it resolved to wholesale local; see _Resolved
+decisions_.)
 
 ### 3. Version-homogeneity is the precondition for sharing class A
 
@@ -164,17 +165,47 @@ the global-unique-name table that exists today.)
 - **Reopening [[ADR-S0009]].** Any networked/canonical-store shape is a
   deliberate reversal of the local-only scope and gets its own ADR.
 
-## Open questions
+## Resolved decisions
 
-- **Branch axis.** `nodes`/`edges`/`findings` are branch-keyed. Presumably only
-  *shared* branches (e.g. `main`) belong in the shared store; a contributor's
-  personal feature branch stays local. This couples to `last_promoted_sha` being
-  class C and needs an explicit rule for "which branches are shareable."
-- **Task ownership.** Is the backlog genuinely shared (team tracker) or is the
-  whole `tasks` table local? Depends on whether veska tasks are a team artifact
-  or a personal working set.
-- **Finding-triage sharing.** Is a closed/suppressed finding a team decision
-  (shared, class B) or personal? Default assumption: team-shared, attributed.
+### R1 — Branch axis: shareable iff tracked on the common remote
+
+`nodes`/`edges`/`findings` are branch-keyed. **A branch is shareable iff it is
+tracked on the common remote** (has an upstream); local-only branches stay in
+the local store. Default shared branch = the repo's default branch (`main`);
+configurable. This mirrors git and reuses [[ADR-S0017]]'s tier-a anchor — the
+same remote that defines repo identity defines branch shareability.
+
+Critically, the rule **only bites class B**, because of *what travels*:
+
+- **Embeddings are content-addressed** (`node_embeddings` PK = `content_hash`)
+  — branch- *and* sha-agnostic by construction. The expensive shared artifact
+  is shared wholesale with **no branch rule**; identical bodies across branches
+  and shas dedup to one vector.
+- The **cheap derived graph** (nodes/edges at a sha) is regenerated locally per
+  contributor (§4), so "whose `main`@sha wins" never arises.
+- Only **class B** (suppressions, finding triage) is genuinely branch-scoped and
+  uses the remote-tracked rule. `last_promoted_sha` stays class C (each
+  contributor's own promotion cursor).
+
+### R2 — Tasks: wholesale **local** (class C)
+
+veska's `tasks` table is a **per-contributor local working set**, not a shared
+backlog. Rationale: `active` (the `UNIQUE(repo_id) WHERE active=1` constraint —
+the concrete thing that breaks under sharing) is inherently "what *I'm* working
+on now, for attribution"; the team backlog properly lives in the **external
+tracker** (beads / jira via `tracker`/`tracker_ref`), so veska does not
+reinvent a shared issue tracker (respects [[ADR-S0009]]). This removes `tasks`
+from the straddler list — the whole table is local.
+
+### R3 — Triage: closures **and** suppressions are shared, attributed (class B)
+
+Finding closures are treated the same as suppressions: **shared team curation,
+attributed to actor**, so the team never re-triages a finding someone already
+dispositioned and the two triage mechanisms don't split-brain. Convergent
+`finding_id` ([[ADR-S0017]]) lets a shared closure re-attach to the locally
+re-derived finding. This confirms `suppressions` + finding `state`/closure
+columns as class B. (Merge of conflicting triage is the deferred class-B policy
+above.)
 
 ## Consequences
 
