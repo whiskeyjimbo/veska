@@ -127,7 +127,51 @@ func repoFamily() []coverageTool {
 				t.Errorf("after add: eng_list_repos missing new repo %q", newID)
 			}
 		}},
-		{family: f, tool: "eng_remove_repo", bead: "solov2-e6xw"},
+		{family: f, tool: "eng_remove_repo", bead: "solov2-e6xw", run: func(t *testing.T) {
+			h := newHarness(t)
+			repoIDSet := func() map[string]bool {
+				res, rpcErr := h.Call("eng_list_repos", map[string]any{})
+				if rpcErr != nil {
+					t.Fatalf("eng_list_repos: %v", rpcErr)
+				}
+				ids := map[string]bool{}
+				for _, v := range res.(map[string]any)["repos"].([]mcp.RepoView) {
+					ids[v.RepoID] = true
+				}
+				return ids
+			}
+			// repo.Add walks up for a .git work-tree marker; create one (no git binary needed).
+			newRepo := t.TempDir()
+			if err := os.MkdirAll(filepath.Join(newRepo, ".git"), 0o755); err != nil {
+				t.Fatal(err)
+			}
+			res, rpcErr := h.Call("eng_add_repo", map[string]any{"root_path": newRepo})
+			if rpcErr != nil {
+				t.Fatalf("eng_add_repo: %v", rpcErr)
+			}
+			newID, _ := res.(map[string]any)["repo_id"].(string)
+			// BEFORE: the freshly added repo is present.
+			if !repoIDSet()[newID] {
+				t.Fatalf("before remove: eng_list_repos missing added repo %q", newID)
+			}
+			// MUTATE: unregister it.
+			res, rpcErr = h.Call("eng_remove_repo", map[string]any{"repo_id": newID})
+			if rpcErr != nil {
+				t.Fatalf("eng_remove_repo: %v", rpcErr)
+			}
+			m := res.(map[string]any)
+			if m["removed"] != true || m["repo_id"] != newID {
+				t.Errorf("remove returned %v, want removed=true repo_id=%q", m, newID)
+			}
+			// AFTER: the repo is gone but both fixtures remain.
+			after := repoIDSet()
+			if after[newID] {
+				t.Errorf("after remove: eng_list_repos still has %q", newID)
+			}
+			if !after[coverage.AlphaRepoID] || !after[coverage.BetaRepoID] {
+				t.Errorf("after remove: set %v missing a seeded fixture", after)
+			}
+		}},
 		{family: f, tool: "eng_list_repos", bead: "solov2-p844", run: func(t *testing.T) {
 			h := newHarness(t)
 			res, rpcErr := h.Call("eng_list_repos", map[string]any{})
