@@ -894,7 +894,50 @@ func taskFamily() []coverageTool {
 				t.Errorf("no-active task_id = %v, want nil", m["task_id"])
 			}
 		}},
-		{family: f, tool: "eng_get_task_history", bead: "solov2-58sw", task: true},
+		{family: f, tool: "eng_get_task_history", bead: "solov2-58sw", task: true, run: func(t *testing.T) {
+			h := newHarness(t, WithTaskTools())
+			res, rpcErr := h.Call("eng_get_task_history", map[string]any{"repo_id": coverage.BetaRepoID})
+			if rpcErr != nil {
+				t.Fatalf("eng_get_task_history: %v", rpcErr)
+			}
+			// taskRow is unexported in package mcp; round-trip via JSON.
+			var got struct {
+				Tasks []struct {
+					TaskID string `json:"task_id"`
+					Title  string `json:"title"`
+				} `json:"tasks"`
+			}
+			b, _ := json.Marshal(res)
+			if err := json.Unmarshal(b, &got); err != nil {
+				t.Fatalf("decode task history: %v", err)
+			}
+			// Same created_at on both seeds -> assert as a SET, not an order.
+			titles := map[string]string{}
+			for _, tk := range got.Tasks {
+				titles[tk.TaskID] = tk.Title
+			}
+			if titles["task-active"] != "wire up the badge widget" {
+				t.Errorf("task-active title = %q, want %q", titles["task-active"], "wire up the badge widget")
+			}
+			if titles["task-done"] != "scaffold the beta module" {
+				t.Errorf("task-done title = %q, want %q", titles["task-done"], "scaffold the beta module")
+			}
+			// Alpha has no tasks.
+			none, noneErr := h.Call("eng_get_task_history", map[string]any{"repo_id": coverage.AlphaRepoID})
+			if noneErr != nil {
+				t.Fatalf("eng_get_task_history (alpha): %v", noneErr)
+			}
+			var alpha struct {
+				Tasks []json.RawMessage `json:"tasks"`
+			}
+			ab, _ := json.Marshal(none)
+			if err := json.Unmarshal(ab, &alpha); err != nil {
+				t.Fatalf("decode alpha history: %v", err)
+			}
+			if len(alpha.Tasks) != 0 {
+				t.Errorf("alpha task count = %d, want 0", len(alpha.Tasks))
+			}
+		}},
 	}
 }
 
