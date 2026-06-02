@@ -812,6 +812,11 @@ func (b *daemonBuilder) buildReconciler() *gitwatch.WakeReconciler {
 		b.watcher.RestartAll()
 	}))
 
+	// Baseline seam (solov2-xde2.25.6): the reconciler compares against the live
+	// FSWatcher lastSeen map (kept current by the live save path) instead of its
+	// own seeded copy, resolved fresh each sweep so it follows RestartAll.
+	opts = append(opts, gitwatch.WithBaseline(b.watcher.BaselineFor))
+
 	return gitwatch.NewWakeReconciler(tick, threshold,
 		func(_ context.Context, repoID, path string) {
 			b.watcher.Inject(repoID, path)

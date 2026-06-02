@@ -501,10 +501,10 @@ func TestStart_WakeGapWallClock(t *testing.T) {
 	}
 }
 
-// TestSeed_FirstWakeDetectsChange verifies that Seed establishes a baseline so
-// the FIRST wake sweep reports a file changed since Seed. Without seeding, the
-// first sweep only populates the map and detects nothing (the no-op first wake
-// that solov2-w2r8's review flagged).
+// TestSeed_FirstWakeDetectsChange verifies that an initial seeding sweep
+// establishes a baseline so the SECOND wake sweep reports a file changed since
+// the seed. The first sweep only records state (first-sighting) and fires
+// nothing — the no-op first wake that solov2-w2r8's review flagged.
 func TestSeed_FirstWakeDetectsChange(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "seeded.go")
@@ -522,11 +522,11 @@ func TestSeed_FirstWakeDetectsChange(t *testing.T) {
 
 	r := makeReconciler(handler, nil, time.Now)
 	r.AddDir("repo1", dir)
-	r.Seed(t.Context()) // baseline — no handler calls
+	r.InjectWake() // baseline (first-sighting) — no handler calls
 
 	mu.Lock()
 	if len(called) != 0 {
-		t.Fatalf("Seed must not fire the handler, got %v", called)
+		t.Fatalf("seeding sweep must not fire the handler, got %v", called)
 	}
 	mu.Unlock()
 
@@ -574,7 +574,7 @@ func TestPrefixProbe_SameSizeSameMtime(t *testing.T) {
 
 	r := makeReconciler(handler, nil, time.Now)
 	r.AddDir("repo1", dir)
-	r.Seed(t.Context())
+	r.InjectWake() // baseline (first-sighting)
 
 	// Overwrite with the same length but different leading bytes, then force
 	// the mtime back to the original so only the prefix distinguishes them.

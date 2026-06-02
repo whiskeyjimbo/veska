@@ -128,21 +128,21 @@ func (d *Daemon) seedWatcher() {
 			slog.Error("daemon: watch repo", "repo", r.RepoID, "err", err)
 		}
 		// Register the same tree with the wake reconciler so a suspend/resume
-		// gap re-sweeps it; the reconciler seeds its mtime baseline on the
-		// first sweep, so a sweep before any change is a harmless no-op.
+		// gap re-sweeps it; it reads the watcher's live lastSeen baseline (just
+		// seeded by Add above) via the WithBaseline seam, so the first sweep
+		// reports only suspend-window changes (solov2-xde2.25.6).
 		d.reconciler.AddDir(r.RepoID, r.RootPath)
 	}
 }
 
 // startReconciler launches the wake-reconciler tick loop in its own goroutine;
-// recDone is closed when it returns (on d.ctx cancellation). It first seeds the
-// mtime baseline so the first suspend/resume sweep detects changes rather than
-// just populating the map. Seeding walks every repo's working tree, so it runs
-// inside the goroutine to keep daemon startup non-blocking.
+// recDone is closed when it returns (on d.ctx cancellation). No separate seed
+// pass is needed (solov2-xde2.25.6): each repo is Added to the watcher in
+// seedWatcher, which seeds the watcher's lastSeen baseline, and the reconciler
+// reads that live baseline via the WithBaseline seam.
 func (d *Daemon) startReconciler() {
 	go func() {
 		defer close(d.recDone)
-		d.reconciler.Seed(d.ctx)
 		d.reconciler.Start(d.ctx)
 	}()
 }

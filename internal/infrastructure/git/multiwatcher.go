@@ -239,6 +239,22 @@ func (m *MultiRepoWatcher) RestartAll() {
 	}
 }
 
+// BaselineFor returns the live change-detection baseline for repoID — the
+// current FSWatcher's lastSeen map — resolved under m.mu so it follows
+// RestartAll replacing the watcher (the lookup is performed on every call, never
+// captured once). ok is false when repoID is not watched, signalling the wake
+// reconciler to fall back to its standalone baseline. The returned *FSWatcher
+// satisfies git.BaselineStore.
+func (m *MultiRepoWatcher) BaselineFor(repoID string) (BaselineStore, bool) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	rw, ok := m.repos[repoID]
+	if !ok {
+		return nil, false
+	}
+	return rw.watcher, true
+}
+
 // Remove stops the watcher for repoID and removes it from the tracked set.
 // Returns an error if repoID is not currently watched.
 func (m *MultiRepoWatcher) Remove(repoID string) error {
