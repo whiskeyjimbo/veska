@@ -493,7 +493,65 @@ func findingFamily() []coverageTool {
 func suppressionFamily() []coverageTool {
 	const f = "suppression"
 	return []coverageTool{
-		{family: f, tool: "eng_suppress_finding", bead: "solov2-uq5t"},
+		{family: f, tool: "eng_suppress_finding", bead: "solov2-uq5t", run: func(t *testing.T) {
+			h := newHarness(t)
+			// findingRow is unexported in package mcp; round-trip the result
+			// through JSON and collect the finding_id set for one rule.
+			listFindingIDs := func(repoID, rule string, includeSuppressed bool) map[string]bool {
+				res, rpcErr := h.Call("eng_list_findings", map[string]any{
+					"repo_id": repoID, "rule": rule, "include_suppressed": includeSuppressed,
+				})
+				if rpcErr != nil {
+					t.Fatalf("eng_list_findings: %v", rpcErr)
+				}
+				var out struct {
+					Findings []struct {
+						FindingID string `json:"finding_id"`
+					} `json:"findings"`
+				}
+				b, _ := json.Marshal(res)
+				if err := json.Unmarshal(b, &out); err != nil {
+					t.Fatalf("decode findings: %v", err)
+				}
+				ids := map[string]bool{}
+				for _, fr := range out.Findings {
+					ids[fr.FindingID] = true
+				}
+				return ids
+			}
+
+			// BEFORE: the seeded complexity finding is in the default list.
+			if !listFindingIDs(coverage.AlphaRepoID, "complexity", false)["seed-finding-0"] {
+				t.Fatalf("before suppress: default list missing seed-finding-0")
+			}
+
+			// MUTATE: scope defaults to "finding"; branch/repo_id derive from the row.
+			res, rpcErr := h.Call("eng_suppress_finding", map[string]any{
+				"finding_id": "seed-finding-0", "reason": "accepted complexity",
+			})
+			if rpcErr != nil {
+				t.Fatalf("eng_suppress_finding: %v", rpcErr)
+			}
+			m, ok := res.(map[string]any)
+			if !ok {
+				t.Fatalf("eng_suppress_finding: result type %T, want map[string]any", res)
+			}
+			if m["scope"] != "finding" {
+				t.Errorf("scope = %v, want \"finding\"", m["scope"])
+			}
+			if id, _ := m["suppression_id"].(string); id == "" {
+				t.Errorf("suppression_id = %v, want non-empty string", m["suppression_id"])
+			}
+
+			// AFTER: dropped from the default list, but still present (suppressed,
+			// not deleted) when include_suppressed=true.
+			if listFindingIDs(coverage.AlphaRepoID, "complexity", false)["seed-finding-0"] {
+				t.Errorf("after suppress: default list still contains seed-finding-0")
+			}
+			if !listFindingIDs(coverage.AlphaRepoID, "complexity", true)["seed-finding-0"] {
+				t.Errorf("after suppress: include_suppressed list missing seed-finding-0")
+			}
+		}},
 		{family: f, tool: "eng_get_suppression", bead: "solov2-9735", run: func(t *testing.T) {
 			h := newHarness(t)
 			// suppressionRow is unexported in package mcp and the handler returns
