@@ -1178,7 +1178,45 @@ func blastFamily() []coverageTool {
 func searchFamily() []coverageTool {
 	const f = "search"
 	return []coverageTool{
-		{family: f, tool: "eng_search_semantic", bead: "solov2-4g0h"},
+		{family: f, tool: "eng_search_semantic", bead: "solov2-4g0h", run: func(t *testing.T) {
+			h := newHarness(t)
+			repoID := coverage.AlphaRepoID
+			// Identifier query: lexical (FTS) fusion deterministically surfaces the
+			// ComputeVariance node regardless of static-embedder recall, so assert
+			// MEMBERSHIP (by node_id) and descending ORDERING — never absolute RRF
+			// scores, which cluster in ~0.016–0.033 and are query-relative only.
+			want := string(h.ResolveID(repoID, coverage.NodeKey{
+				Path: "metric/series.go", Kind: domain.KindFunction, Name: "ComputeVariance"}))
+			res, rpcErr := h.Call("eng_search_semantic", map[string]any{
+				"query": "ComputeVariance", "repo_id": repoID, "k": 10,
+			})
+			if rpcErr != nil {
+				t.Fatalf("eng_search_semantic: %v", rpcErr)
+			}
+			resp, ok := res.(mcp.SearchResponse)
+			if !ok {
+				t.Fatalf("eng_search_semantic: result type %T, want mcp.SearchResponse", res)
+			}
+			if len(resp.Results) == 0 {
+				t.Fatal("eng_search_semantic returned no results for an indexed identifier")
+			}
+			// MEMBERSHIP: the queried symbol's node is present (containment, not
+			// position) — a function-name query may also surface sibling/chunk nodes.
+			found := false
+			for i, hit := range resp.Results {
+				if hit.NodeID == want {
+					found = true
+				}
+				// ORDERING: scores are non-increasing (sorted descending).
+				if i > 0 && hit.Score > resp.Results[i-1].Score {
+					t.Errorf("results not sorted descending: hit[%d] score %v > hit[%d] score %v",
+						i, hit.Score, i-1, resp.Results[i-1].Score)
+				}
+			}
+			if !found {
+				t.Errorf("ComputeVariance node %q missing from eng_search_semantic results", want)
+			}
+		}},
 		{family: f, tool: "eng_search_similar", bead: "solov2-r1ue"},
 	}
 }
