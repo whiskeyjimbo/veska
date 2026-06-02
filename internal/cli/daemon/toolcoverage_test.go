@@ -194,7 +194,67 @@ func searchFamily() []coverageTool {
 func symbolFamily() []coverageTool {
 	const f = "symbol"
 	return []coverageTool{
-		{family: f, tool: "eng_find_symbol", bead: "solov2-f6lt"},
+		{family: f, tool: "eng_find_symbol", bead: "solov2-f6lt", run: func(t *testing.T) {
+			h := newHarness(t)
+			repoID := coverage.BetaRepoID
+			key := coverage.NodeKey{Path: "main.go", Kind: domain.KindFunction, Name: "main"}
+			declID := h.ResolveID(repoID, key)
+
+			res, rpcErr := h.Call("eng_find_symbol", map[string]any{
+				"symbol": key.Name, "repo_id": repoID,
+			})
+			if rpcErr != nil {
+				t.Fatalf("eng_find_symbol: %v", rpcErr)
+			}
+			resp, ok := res.(mcp.GraphResponse)
+			if !ok {
+				t.Fatalf("eng_find_symbol: result type %T, want mcp.GraphResponse", res)
+			}
+			// "main" matches both the function and the per-file package node, so the
+			// declaration-before-container ordering contract is actually exercised.
+			if len(resp.Nodes) < 2 {
+				t.Fatalf("got %d nodes for %q, want >=2 (function + package) to test ordering", len(resp.Nodes), key.Name)
+			}
+			// Ordering contract: nodes[0] is the declaration, never a container.
+			containers := map[string]bool{
+				string(domain.KindPackage): true, string(domain.KindFile): true,
+				string(domain.KindModule): true, string(domain.KindChunk): true,
+			}
+			if containers[resp.Nodes[0].Kind] {
+				t.Errorf("nodes[0].kind = %q is a container; declaration must sort first", resp.Nodes[0].Kind)
+			}
+			if resp.Nodes[0].NodeID != string(declID) {
+				t.Errorf("nodes[0].node_id = %q, want declaration %q", resp.Nodes[0].NodeID, string(declID))
+			}
+			// Set CONTAINS the declaration node with the manifest's graph facts.
+			wantPath := filepath.Join(h.Root(repoID), key.Path)
+			found := false
+			for _, n := range resp.Nodes {
+				if n.NodeID == string(declID) {
+					found = true
+					if n.Name != key.Name || n.Kind != string(key.Kind) || n.FilePath != wantPath {
+						t.Errorf("decl node = {%q %q %q}, want {%q %q %q}",
+							n.Name, n.Kind, n.FilePath, key.Name, string(key.Kind), wantPath)
+					}
+				}
+			}
+			if !found {
+				t.Errorf("returned set missing declaration node %q", string(declID))
+			}
+			// kind filter narrows results: package-only excludes the function decl.
+			fres, frpcErr := h.Call("eng_find_symbol", map[string]any{
+				"symbol": key.Name, "repo_id": repoID, "kind": string(domain.KindPackage),
+			})
+			if frpcErr != nil {
+				t.Fatalf("eng_find_symbol (kind filter): %v", frpcErr)
+			}
+			fresp := fres.(mcp.GraphResponse)
+			for _, n := range fresp.Nodes {
+				if n.Kind != string(domain.KindPackage) {
+					t.Errorf("kind=package filter returned %q node", n.Kind)
+				}
+			}
+		}},
 	}
 }
 
