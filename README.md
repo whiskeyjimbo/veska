@@ -15,14 +15,15 @@ they reason from the same structural ground truth instead of guessing.
   during the indexing lag window it falls back to a BM25 lexical index and
   flags the response `degraded_reasons`.
 - **Promotion checks.** On every commit, synchronous checks emit advisory
-  `Finding`s: dead code, contract drift, leaked secrets, and — opt-in —
-  vulnerable `go.mod` dependencies via the OSV.dev advisory database. The
-  vuln check is gated behind a `[vuln_source]` config block in
+  `Finding`s: dead code, contract drift, leaked secrets, and vulnerable
+  `go.mod` dependencies via the OSV.dev advisory database. All four ship on
+  by default: `veska init` writes an active `[vuln_source]` config block to
   `~/.veska/config.toml` (see
-  [`docs/operations/CONFIG-SURFACE.md`](docs/operations/CONFIG-SURFACE.md));
-  the other three ship on by default. **Lifecycle:** the block is read at
-  daemon start, so add it before `veska service start` (or restart the
-  service after editing). New scans pick it up automatically; to scan
+  [`docs/operations/CONFIG-SURFACE.md`](docs/operations/CONFIG-SURFACE.md))
+  unless you opt out with `veska init --no-vuln` (or answer "no" at the
+  interactive prompt). **Lifecycle:** the block is read at daemon start, so
+  it takes effect from the next `veska service start` (restart the service
+  after editing the block). New scans pick it up automatically; to scan
   already-promoted repos retroactively, run `veska reindex <path>`.
 - **Optional LLM review.** An off-by-default post-promotion review pipeline.
 - **Mechanical wiki.** Hot-zones and entry-points computed from the graph,

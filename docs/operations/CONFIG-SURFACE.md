@@ -184,15 +184,18 @@ enabled               = false
 max_tokens_per_commit = 100000
 max_tokens_per_day    = 500000
 
-# ─── vuln source (off by default; SOLO-11 §2.1, M7) ──────────
-# Drives the `vuln-scan` promotion check. An empty `provider`
-# (the default) keeps the feature off — the daemon uses the
-# no-op NullVulnSource. Set `provider = "osv"` to enable the
-# OSV.dev adapter; any other value is a fatal startup error.
+# ─── vuln source (SOLO-11 §2.1, M7) ──────────────────────────
+# Drives the `vuln-scan` promotion check. Two layers: the bare
+# schema zero-value (empty `provider`) is off — the daemon falls
+# back to the no-op NullVulnSource — BUT `veska init` writes this
+# block with `provider = "osv"` ENABLED by default, so a fresh
+# install ships with OSV scanning on. Opt out with `veska init
+# --no-vuln` (or answer "no" at the interactive prompt). Any
+# value other than "" / "osv" is a fatal startup error.
 # `refresh_interval` overrides the advisory-cache refresh
 # cadence (Go duration); empty falls back to the 24h default.
 [vuln_source]
-provider               = ""                  # "" (off, default) | "osv"
+provider               = ""                  # "" (schema zero-value, off) | "osv" (what `veska init` writes)
 refresh_interval       = "24h"
 
 # ─── promotion checks (M7) ───────────────────────────────────
