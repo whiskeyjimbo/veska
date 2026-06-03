@@ -7,26 +7,7 @@ exercise the full lifecycle here without seeding any data."""
 
 from __future__ import annotations
 
-import pytest
-
-from tests.mcp.helpers import query
-
-
-def _any_open_finding(repo_id: str, branch: str) -> str | None:
-    rows = query(
-        """SELECT finding_id FROM findings
-           WHERE repo_id = ? AND branch = ? AND state = 'open' LIMIT 1""",
-        (repo_id, branch),
-    )
-    return rows[0]["finding_id"] if rows else None
-
-
-@pytest.fixture
-def open_finding(repo_id, branch):
-    fid = _any_open_finding(repo_id, branch)
-    if not fid:
-        pytest.skip("no open finding to exercise — promote first")
-    return fid
+# open_finding is a shared fixture from conftest.py.
 
 
 def test_list_findings_responds(mcp_client, repo_id, branch):

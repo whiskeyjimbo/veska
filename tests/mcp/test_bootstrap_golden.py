@@ -284,7 +284,7 @@ def test_bootstrap_golden_zero_to_working_install(tmp_path: Path):
             fs = mcp.call("eng_find_symbol", {
                 "repo_id": repo_id, "branch": branch, "symbol": "GreetUser",
             })
-            names = [n["Name"] for n in fs["result"].get("nodes") or []]
+            names = [n.get("name") for n in fs["result"].get("nodes") or []]
             assert "GreetUser" in names, f"find_symbol miss: {names}"
 
             fn = mcp.call("eng_get_file_nodes", {

@@ -50,3 +50,18 @@ def scalar(sql: str, params: tuple = ()) -> object | None:
     first = rows[0]
     # dict insertion order matches SELECT order; first value is column 0
     return next(iter(first.values()))
+
+
+def any_open_finding(repo_id: str, branch: str) -> str | None:
+    """Return the id of one open finding for (repo_id, branch), or None.
+
+    Shared by the findings and suppressions suites, which both need a live
+    open finding to exercise their lifecycle round-trips. Keeping it here
+    (rather than copied into each test file) means a findings-schema change
+    touches one query, not two that can drift apart."""
+    rows = query(
+        """SELECT finding_id FROM findings
+           WHERE repo_id = ? AND branch = ? AND state = 'open' LIMIT 1""",
+        (repo_id, branch),
+    )
+    return rows[0]["finding_id"] if rows else None
