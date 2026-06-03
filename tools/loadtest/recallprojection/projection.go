@@ -156,6 +156,7 @@ func identifierize(phrase string) string {
 			b.WriteString(strings.ToLower(w))
 			continue
 		}
+		//lint:ignore SA1019 strings.Title fine for ASCII-only synthetic input.
 		b.WriteString(strings.Title(strings.ToLower(w))) //nolint:staticcheck // ASCII-only synthetic input
 	}
 	if b.Len() == 0 {

@@ -1,6 +1,7 @@
 // EdgeReaderRepo backs ports.EdgeReader against the edges table. Reads
 // take the read-only connection so they never contend with the
 // single-writer pool used by promotion.
+
 package sqlite
 
 import (

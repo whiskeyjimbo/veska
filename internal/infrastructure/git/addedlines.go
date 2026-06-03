@@ -4,6 +4,7 @@
 //
 // The secrets-scan check (M7) consumes this: it must scan only lines a
 // commit introduced, never pre-existing context or removed lines.
+
 package git
 
 import (

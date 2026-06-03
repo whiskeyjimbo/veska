@@ -3,6 +3,7 @@
 // under the key 'wiki.last_render_at' as a Unix-millisecond string —
 // daemon_state is runtime/operational state, the correct home (vs
 // database_meta which holds schema metadata).
+
 package sqlite
 
 import (

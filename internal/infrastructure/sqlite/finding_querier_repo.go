@@ -1,6 +1,7 @@
 // FindingQuerierRepo backs ports.FindingQuerier by SELECTing open rows
 // from the findings table. Reads use the read-only DB handle so the query
 // never contends with the single-writer pool used by promotion.
+
 package sqlite
 
 import (

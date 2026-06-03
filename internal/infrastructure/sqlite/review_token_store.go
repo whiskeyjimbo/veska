@@ -5,6 +5,7 @@
 // survive a daemon restart. Keying on the local date means the window resets
 // at local midnight without an explicit reset: a read on a new day finds no
 // row and returns zero.
+
 package sqlite
 
 import (
