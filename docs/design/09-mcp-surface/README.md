@@ -136,11 +136,20 @@ W = write; R = read.
 
 ### 3.2 Task
 
+> **Parked — not currently exposed.** `eng_set_active_task`,
+> `eng_get_active_task`, and `eng_get_task_history` are implemented and
+> unit-tested but are **deliberately not registered by the daemon** (see
+> the keep-alive reference in `internal/cli/daemon/mcptools.go`): there is
+> no MCP path to *create* a task yet, so exposing them would surface a
+> dead-end. They do not appear in `tools/list` and a call returns
+> `-32601 method not found`. They re-register cleanly once a task backend
+> lands. `eng_find_todos` and `eng_get_context_pack` below are live.
+
 | Tool | Purpose | Staging | W/R |
 |---|---|---|---|
-| `eng_set_active_task` | Pin the active task for the session. | yes | W |
-| `eng_get_active_task` | Return the current active task. | yes | R |
-| `eng_get_task_history` | Nodes touched while this task was active. | yes | R |
+| `eng_set_active_task` _(parked)_ | Pin the active task for the session. | yes | W |
+| `eng_get_active_task` _(parked)_ | Return the current active task. | yes | R |
+| `eng_get_task_history` _(parked)_ | Nodes touched while this task was active. | yes | R |
 | `eng_find_todos` | TODOs in the active task's blast radius. | yes | R |
 | `eng_get_context_pack` | Bounded, token-budgeted context pack for a `{symbol}` or `{task_id}` (exactly one required). Bundle: relevant nodes, recent commits, open findings, tasks. | yes | R |
 
