@@ -28,9 +28,10 @@ type RepoRootFunc func(ctx context.Context, repoID string) (string, error)
 //
 // The check is offline: dependency resolution is textual (manifest.ReadGoMod)
 // and VulnSource.Scan performs no network I/O. Findings anchor on the go.mod
-// path with a discriminator key of advisoryID+package, which makes the
-// resulting finding_ids branch-stable and idempotent — re-running on
-// unchanged state yields byte-identical finding_ids.
+// path with a discriminator key of repoID+advisoryID+package, which makes the
+// resulting finding_ids branch-stable, idempotent, and repo-namespaced —
+// re-running on unchanged state yields byte-identical finding_ids, while two
+// repos sharing one advisory keep distinct finding_ids (solov2-uej9.1).
 type VulnScanCheck struct {
 	src      ports.VulnSource
 	repoRoot RepoRootFunc
@@ -149,7 +150,15 @@ func (c *VulnScanCheck) Run(ctx context.Context, in Input) ([]*domain.Finding, e
 			Message:  msg,
 		},
 			domain.WithFileAnchor("go.mod"),
-			domain.WithFindingKey(v.AdvisoryID+v.Package),
+			// solov2-uej9.1: namespace the finding key by repo id. The
+			// finding_id is sha256(rule+anchor+key) with no repo_id, and the
+			// storage PK is (finding_id, branch) — so two repos sharing one
+			// advisory on the same branch would derive an identical
+			// finding_id and one scan's upsert would silently overwrite the
+			// other repo's row. Folding in.RepoID (stable per repo) into the
+			// key keeps idempotency while making the id repo-scoped. The
+			// 0x00 delimiter keeps the concatenation unambiguous.
+			domain.WithFindingKey(in.RepoID+"\x00"+v.AdvisoryID+v.Package),
 		)
 		if err != nil {
 			// A malformed advisory should not abort the whole check; skip it.
