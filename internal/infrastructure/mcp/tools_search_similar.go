@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
+	"path/filepath"
 
 	application "github.com/whiskeyjimbo/veska/internal/application"
 	"github.com/whiskeyjimbo/veska/internal/application/search"
@@ -218,6 +219,15 @@ func makeFindRelatedHandler(lookup SimilarLookup, vectors ports.VectorStorage, n
 		k, rpcErr := resolveK(p.K, p.Limit)
 		if rpcErr != nil {
 			return nil, rpcErr
+		}
+
+		// Node paths are stored absolute. Resolve a repo-relative file_path
+		// against the repo root, mirroring eng_get_file_nodes, so callers
+		// inside a registered repo can pass a relative path (solov2-uej9.4).
+		if !filepath.IsAbs(p.FilePath) && repos != nil {
+			if root, ok := repoRoot(ctx, repos, p.RepoID); ok {
+				p.FilePath = filepath.Join(root, p.FilePath)
+			}
 		}
 
 		nodeID, rpcErr := resolveEnclosingNode(ctx, nodes, p.RepoID, p.Branch, p.FilePath, p.Line)

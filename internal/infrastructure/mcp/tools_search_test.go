@@ -698,6 +698,64 @@ func TestFindRelated_ResolvesSmallestEnclosingNode(t *testing.T) {
 	}
 }
 
+// TestFindRelated_ResolvesRelativePath covers solov2-uej9.4: a repo-relative
+// file_path must be joined against the repo root before the node lookup (node
+// paths are stored absolute), mirroring eng_get_file_nodes. The byFile stub is
+// keyed on the ABSOLUTE path, so a relative request only resolves if the
+// handler joins it against RootPath. An absolute file_path is left unchanged.
+func TestFindRelated_ResolvesRelativePath(t *testing.T) {
+	const root = "/abs/repo"
+	const abs = root + "/foo.go"
+	nodes := &stubNodes{
+		byFile: map[string][]string{abs: {"seed"}},
+		metas: []ports.NodeMeta{
+			{NodeID: "seed", FilePath: abs, LineStart: 5, LineEnd: 30, Kind: "function"},
+			{NodeID: "neighbour", FilePath: "other.go", LineStart: 1, LineEnd: 3, SymbolPath: "Other"},
+		},
+	}
+	vecs := &stubVectors{hits: []domain.SearchHit{{NodeID: "seed"}, {NodeID: "neighbour"}}}
+	lookup := &stubSimilarLookup{hash: "h", ready: true, blob: encodeVec([]float32{0.1, 0.2}), dim: 2, found: true}
+	svc, err := search.NewService(&stubEmbedder{}, vecs, nodes)
+	if err != nil {
+		t.Fatalf("construct: %v", err)
+	}
+	repos := &stubRepoLister{repos: []application.RepoRecord{
+		{RepoID: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", RootPath: root, ActiveBranch: "main"},
+	}}
+	r := NewRegistry()
+	RegisterSearchTools(r, svc, lookup, vecs, nodes, nil, repos)
+
+	// Relative path resolves against the repo root → reaches the seeded node.
+	resp, rpcErr := dispatchSearch(t, r, "eng_find_related", map[string]any{
+		"file_path": "foo.go",
+		"line":      16,
+		"repo_id":   "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+		"branch":    "main",
+		"k":         1,
+	})
+	if rpcErr != nil {
+		t.Fatalf("relative path should resolve, got %+v", rpcErr)
+	}
+	if len(resp.Results) != 1 || resp.Results[0].NodeID != "neighbour" {
+		t.Errorf("want [neighbour] from resolved relative path, got %+v", resp.Results)
+	}
+
+	// Absolute path is passed through unchanged.
+	respAbs, rpcErr := dispatchSearch(t, r, "eng_find_related", map[string]any{
+		"file_path": abs,
+		"line":      16,
+		"repo_id":   "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+		"branch":    "main",
+		"k":         1,
+	})
+	if rpcErr != nil {
+		t.Fatalf("absolute path should still work, got %+v", rpcErr)
+	}
+	if len(respAbs.Results) != 1 || respAbs.Results[0].NodeID != "neighbour" {
+		t.Errorf("want [neighbour] from absolute path, got %+v", respAbs.Results)
+	}
+}
+
 // TestFindRelated_LineOutsideAnyNodeReturnsNotFound: a line that
 // falls in pre-package whitespace or below the last symbol has no
 // enclosing anchor; the handler returns CodeNotFound with a hint
