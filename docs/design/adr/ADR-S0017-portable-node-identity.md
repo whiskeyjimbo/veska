@@ -272,9 +272,29 @@ while preserving the `(path,kind,name)` anchor *semantics* those ADRs rely on.)
 
 ## Sequencing
 
-The migration is **cheapest now** — small graph, single user, no external ID
-consumers — but the **tier-a anchor design must be validated against the actual
-shared-DB + multi-language requirements** to avoid re-keying twice. Therefore:
-land the `ozoi` wording correction immediately; schedule the refactor +
-migration to ride **just ahead of** the shared-DB epic, executed as one atomic
-change before the contributor set grows.
+**This is independently implementable now — it does not gate on the shared-DB
+epic's design.** The relevant ordering constraint is **"before IDs are shared,"
+not "after the sharing transport is designed":**
+
+- The anchor analysis is **intrinsic** — the convergence properties
+  (in-tree-vs-local-config, unique-vs-collision) are facts about git and the
+  module manifests, not about how a DB is synced. The shared-DB transport
+  cannot change them.
+- The migration is **drop + rescan**, hence cheap **and repeatable**. While
+  veska is still single-user with no externally-shared IDs, re-running it costs
+  ~nothing and coordinates with no one — so the tier decision is **reversible,
+  not a one-way door**. (The earlier draft's "avoid re-keying twice" caution
+  contradicted this design's own cheap-migration property and is withdrawn.)
+- node_id must **never** encode provenance / namespace / who-wrote-it — that
+  would break convergence by construction — so the shared-DB epic cannot force
+  a node_id *schema* change beyond the anchor choice. No one-way door exists.
+
+The only parts genuinely better settled with concrete shared-DB inputs — the
+bare-module-name collision policy and a possible operator-pinned-identity
+override — are **additive** (extra tiers / an override path), not re-keys, so
+they don't gate the core change either.
+
+Therefore: land the `ozoi` wording correction immediately (done); implement the
+refactor + migration **whenever convenient, the sooner the cheaper**, as one
+atomic change that must simply precede any actual DB sharing. The risk is
+landing it *late* (after IDs leak into a shared DB), never *early*.
