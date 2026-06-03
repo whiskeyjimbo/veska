@@ -27,6 +27,15 @@ type TaskStore interface {
 // RegisterTaskTools registers task management tools on r.
 // store backs the tasks table; aw is an optional AuditWriter (pass nil to
 // disable audit logging).
+//
+// PARKED — not wired into the daemon. The composition root keeps only a
+// keep-alive reference to this function (see internal/cli/daemon/mcptools.go)
+// and never calls it, because there is no MCP path to *create* a task yet, so
+// exposing eng_set_active_task / eng_get_active_task / eng_get_task_history
+// would surface a dead-end (callers get -32601 method not found). The specs
+// and handlers below are kept compiling + unit-tested so the feature
+// re-registers cleanly once a task backend lands; they are exercised only by
+// the coverage harness's WithTaskTools() option, never the live registry.
 func RegisterTaskTools(r *Registry, store TaskStore, aw ports.AuditWriter) {
 	r.MustRegister(ToolSpec{
 		Name:            "eng_set_active_task",
