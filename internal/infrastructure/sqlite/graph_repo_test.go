@@ -140,6 +140,82 @@ func TestGraphRepo_GetNode_MissingReturnsNilNil(t *testing.T) {
 	}
 }
 
+// TestGraphRepo_FindNodeIDsByPrefix_Unique verifies a prefix that matches
+// exactly one node resolves to its full id, and a full id resolves to itself
+// (solov2-uej9.3 — `veska node <12-char display id>`).
+func TestGraphRepo_FindNodeIDsByPrefix_Unique(t *testing.T) {
+	t.Parallel()
+	r := openGraphRepoTestDB(t)
+	ctx := context.Background()
+	full := "f470f8ff4243aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+	if err := r.SaveNode(ctx, "r1", "main", mustNode(t, full, "a.go", "Add", domain.KindFunction)); err != nil {
+		t.Fatalf("SaveNode: %v", err)
+	}
+	got, err := r.FindNodeIDsByPrefix(ctx, "f470f8ff4243", 2)
+	if err != nil {
+		t.Fatalf("FindNodeIDsByPrefix: %v", err)
+	}
+	if len(got) != 1 || string(got[0]) != full {
+		t.Fatalf("prefix lookup = %v; want [%s]", got, full)
+	}
+	// A full id is its own unique prefix.
+	gotFull, err := r.FindNodeIDsByPrefix(ctx, full, 2)
+	if err != nil {
+		t.Fatalf("FindNodeIDsByPrefix(full): %v", err)
+	}
+	if len(gotFull) != 1 || string(gotFull[0]) != full {
+		t.Fatalf("full-id lookup = %v; want [%s]", gotFull, full)
+	}
+}
+
+// TestGraphRepo_FindNodeIDsByPrefix_MultiBranchNotAmbiguous pins the DISTINCT
+// requirement: the SAME node_id stored on two branches must count as one
+// candidate, not two, so a unique display prefix is not misread as ambiguous
+// (solov2-uej9.3).
+func TestGraphRepo_FindNodeIDsByPrefix_MultiBranchNotAmbiguous(t *testing.T) {
+	t.Parallel()
+	r := openGraphRepoTestDB(t)
+	ctx := context.Background()
+	full := "abc123def456aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+	for _, br := range []string{"main", "develop"} {
+		if err := r.SaveNode(ctx, "r1", br, mustNode(t, full, "a.go", "Add", domain.KindFunction)); err != nil {
+			t.Fatalf("SaveNode on %s: %v", br, err)
+		}
+	}
+	got, err := r.FindNodeIDsByPrefix(ctx, "abc123def456", 2)
+	if err != nil {
+		t.Fatalf("FindNodeIDsByPrefix: %v", err)
+	}
+	if len(got) != 1 {
+		t.Fatalf("multi-branch prefix lookup = %v (len %d); want 1 distinct id", got, len(got))
+	}
+}
+
+// TestGraphRepo_FindNodeIDsByPrefix_Ambiguous verifies two distinct node_ids
+// sharing a prefix both surface (capped at limit) so the handler can detect
+// ambiguity (solov2-uej9.3).
+func TestGraphRepo_FindNodeIDsByPrefix_Ambiguous(t *testing.T) {
+	t.Parallel()
+	r := openGraphRepoTestDB(t)
+	ctx := context.Background()
+	ids := []string{
+		"dead000011110000aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+		"dead000022220000aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+	}
+	for i, id := range ids {
+		if err := r.SaveNode(ctx, "r1", "main", mustNode(t, id, "a.go", "Fn", domain.KindFunction)); err != nil {
+			t.Fatalf("SaveNode %d: %v", i, err)
+		}
+	}
+	got, err := r.FindNodeIDsByPrefix(ctx, "dead0000", 2)
+	if err != nil {
+		t.Fatalf("FindNodeIDsByPrefix: %v", err)
+	}
+	if len(got) != 2 {
+		t.Fatalf("ambiguous prefix lookup = %v (len %d); want 2", got, len(got))
+	}
+}
+
 // TestGraphRepo_FindNodes_ExactMatch verifies FindNodes returns only exact
 // symbol-name matches.
 func TestGraphRepo_FindNodes_ExactMatch(t *testing.T) {
