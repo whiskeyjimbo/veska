@@ -18,16 +18,30 @@ import os
 import subprocess
 import time
 from pathlib import Path
+from typing import Callable
 
 import pytest
 
-from tests.mcp.helpers import query, scalar, veska_db_path
+from tests.mcp.helpers import any_open_finding, query, scalar, veska_db_path
 
 
 # ── pretty-print helpers ───────────────────────────────────────────────────────
 
 _RESP_MAX = 1200  # chars before truncation in transcript output
 _W = 64
+
+# Transient JSON-RPC error substrings that warrant a retry (case-insensitive
+# match against the error text). New SQLITE_BUSY-class patterns get added
+# here without touching MCPClient.call — the predicate stays closed for
+# modification, open for extension (solov2-seut).
+_TRANSIENT_ERROR_PATTERNS = (
+    "database is locked",
+)
+
+
+def _is_transient_error(text: str) -> bool:
+    low = text.lower()
+    return any(p in low for p in _TRANSIENT_ERROR_PATTERNS)
 
 
 def _fmt_args(args: dict) -> str:
@@ -56,13 +70,26 @@ def _print_call(name: str, args: dict, ok: bool, text: str, elapsed: float) -> N
 # ── MCPClient ─────────────────────────────────────────────────────────────────
 
 
+# A transcript sink is any callable with _print_call's signature. Injecting
+# it (rather than calling _print_call directly inside MCPClient) keeps the
+# client responsible only for JSON-RPC transport: changing the on-screen
+# format, silencing it, or capturing it for assertions is now a constructor
+# concern, not a reason to edit the transport class (solov2-gr3p).
+Transcript = Callable[[str, dict, bool, str, float], None]
+
+
 class MCPClient:
     """JSON-RPC-over-stdio wrapper for the veska-mcp shim.
 
     The shim forwards each line of stdin/stdout to/from the daemon's mcp.sock,
-    so any io error usually means the daemon isn't running."""
+    so any io error usually means the daemon isn't running.
 
-    def __init__(self, binary: str = "./bin/veska-mcp"):
+    Transport only: every call's request/response is handed to the injected
+    ``transcript`` sink (default: the human-readable _print_call) so this
+    class has a single reason to change — the JSON-RPC framing."""
+
+    def __init__(self, binary: str = "./bin/veska-mcp", transcript: Transcript = _print_call):
+        self._transcript = transcript
         env = os.environ.copy()
         self.proc = subprocess.Popen(
             [binary],
@@ -101,12 +128,12 @@ class MCPClient:
                 line = self.proc.stdout.readline()
             except (BrokenPipeError, ValueError) as e:
                 elapsed = (time.monotonic() - t0) * 1000
-                _print_call(name, args or {}, False, f"<io-error: {e}>", elapsed)
+                self._transcript(name, args or {}, False, f"<io-error: {e}>", elapsed)
                 return False, str(e), elapsed, {}
 
             if not line:
                 elapsed = (time.monotonic() - t0) * 1000
-                _print_call(name, args or {}, False, "<empty response>", elapsed)
+                self._transcript(name, args or {}, False, "<empty response>", elapsed)
                 return False, "<empty response>", elapsed, {}
 
             resp = json.loads(line)
@@ -115,22 +142,22 @@ class MCPClient:
                 last_err = resp["error"]
                 # Transient locking — retry without surfacing the failure
                 # to the transcript so a successful retry reads cleanly.
-                if "database is locked" in last_text.lower() and attempt < retries - 1:
+                if _is_transient_error(last_text) and attempt < retries - 1:
                     time.sleep(0.05 * (attempt + 1))
                     continue
                 elapsed = (time.monotonic() - t0) * 1000
-                _print_call(name, args or {}, False, last_text, elapsed)
+                self._transcript(name, args or {}, False, last_text, elapsed)
                 return False, last_text, elapsed, last_err
 
             result = resp.get("result", {})
             elapsed = (time.monotonic() - t0) * 1000
             text = json.dumps(result, indent=2)
-            _print_call(name, args or {}, True, text, elapsed)
+            self._transcript(name, args or {}, True, text, elapsed)
             return True, text, elapsed, result if isinstance(result, dict) else {}
 
         # Exhausted retries — return the last error.
         elapsed = (time.monotonic() - t0) * 1000
-        _print_call(name, args or {}, False, last_text, elapsed)
+        self._transcript(name, args or {}, False, last_text, elapsed)
         return False, last_text, elapsed, last_err
 
     def close(self) -> None:
@@ -272,3 +299,14 @@ def fixture_summary(repo_id, branch):
         f"└──────────────────────────────────────────────────────────────"
     )
     return {"repo_id": repo_id, "branch": branch, "nodes": n_nodes}
+
+
+@pytest.fixture
+def open_finding(repo_id, branch) -> str:
+    """Id of one open finding for the active repo/branch. Shared by the
+    findings and suppressions suites — both need a live finding to drive
+    their lifecycle round-trips. Skips when none exist (promote first)."""
+    fid = any_open_finding(repo_id, branch)
+    if not fid:
+        pytest.skip("no open finding to exercise — promote first")
+    return fid
