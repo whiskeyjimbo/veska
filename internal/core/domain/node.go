@@ -241,5 +241,17 @@ func NewNode(spec NodeSpec, opts ...NodeOption) (*Node, error) {
 		}
 	}
 
+	// Derive the content hash from raw content when a caller supplied the
+	// body but not an explicit hash (the common parser path: WithRawContent
+	// only). Without this, every parsed node persisted content_hash='' and
+	// exact-clone detection bucketed all of them into one false byte-identity
+	// group (solov2-ozoi.2). ContentHash stays nil for nodes with no raw
+	// content (packages, imports) so they never participate in clone grouping.
+	if n.RawContent != nil && n.ContentHash == nil {
+		sum := sha256.Sum256([]byte(*n.RawContent))
+		h := ContentHash(hex.EncodeToString(sum[:]))
+		n.ContentHash = &h
+	}
+
 	return n, nil
 }

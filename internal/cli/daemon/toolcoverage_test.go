@@ -1587,9 +1587,8 @@ func wikiFamily() []coverageTool {
 			if !ok {
 				t.Fatalf("eng_get_entry_points: result type %T, want mcp.EntryPointsResponse", res)
 			}
-			// Selection runs fan-in + hidden gates (e.g. Alpha's exported
-			// ComputeVariance is dropped despite inbound>=1), so assert only the
-			// manifest's frozen entry points are PRESENT — not an exact set.
+			// Selection runs fan-in ranking plus documented gates, so assert only
+			// the manifest's frozen entry points are PRESENT — not an exact set.
 			// EntryPoint.FilePath is absolute on the wire (mirrors sibling DTOs).
 			got := map[string]bool{}
 			for _, e := range resp.EntryPoints {
@@ -1602,6 +1601,27 @@ func wikiFamily() []coverageTool {
 				want := ep.Node.Name + "\x00" + filepath.Join(h.Root(repoID), ep.Node.Path)
 				if !got[want] {
 					t.Errorf("manifest entry point %q (%s) missing from output", ep.Node.Name, ep.Node.Path)
+				}
+			}
+			// solov2-ozoi.1: pin the open-finding gate (entrypoints.go Select:
+			// "no open finding on the node"). Alpha's ComputeVariance is an
+			// exported function with inbound>=1 — it would rank as an entry point
+			// — but the fixture seeds an OPEN complexity finding on it
+			// (seed.go seedFindings), so the selector MUST exclude it. This is
+			// working-as-designed, not the ranking inversion ozoi.1 first
+			// suspected: unexported averageSamples survives only because it
+			// carries no open finding, not because unexported outranks exported.
+			ares, arpcErr := h.Call("eng_get_entry_points", map[string]any{"repo_id": coverage.AlphaRepoID})
+			if arpcErr != nil {
+				t.Fatalf("eng_get_entry_points(alpha): %v", arpcErr)
+			}
+			aresp, ok := ares.(mcp.EntryPointsResponse)
+			if !ok {
+				t.Fatalf("eng_get_entry_points(alpha): result type %T, want mcp.EntryPointsResponse", ares)
+			}
+			for _, e := range aresp.EntryPoints {
+				if e.SymbolName == "ComputeVariance" {
+					t.Errorf("ComputeVariance must be excluded by the open-finding gate, but appears in entry points: %+v", e)
 				}
 			}
 		}},
@@ -1727,15 +1747,16 @@ func cloneFamily() []coverageTool {
 	return []coverageTool{
 		{family: f, tool: "eng_find_clones", bead: "solov2-8jfs", run: func(t *testing.T) {
 			h := newHarness(t)
-			// Structural-invariants-only coverage (fuzzy DoD). The manifest's
+			// Structural-invariants coverage (fuzzy DoD). The manifest's
 			// computeMean/averageSamples are a *near*-dup pair, not byte-identical,
 			// so membership is NOT assertable here: near mode is empty (this harness
-			// runs no autolink → no scored SIMILAR_TO edges), and exact mode in this
-			// fixture buckets every non-excluded symbol under an empty content_hash
-			// (likely a content_hash-not-populated defect on this index path), which
-			// is a defect artifact we must not freeze. So assert only the invariants
-			// robust to a content_hash fix (0 groups must pass) plus exact's real
-			// kind-exclusion contract.
+			// runs no autolink → no scored SIMILAR_TO edges).
+			//
+			// solov2-ozoi.2: content_hash is now derived from raw content at node
+			// construction, and the exact-clone query excludes empty content_hash,
+			// so the old false group (all 9 symbols bucketed under '') is gone. The
+			// fixture has no byte-identical pair, so exact mode must return 0 groups;
+			// we also assert no group is keyed on an empty content_hash.
 			excluded := map[string]bool{
 				string(domain.KindPackage): true, string(domain.KindChunk): true,
 				string(domain.KindFile): true, string(domain.KindModule): true,
@@ -1755,7 +1776,13 @@ func cloneFamily() []coverageTool {
 			if exResp.Groups == nil {
 				t.Error("exact: groups is nil, want non-nil")
 			}
+			if len(exResp.Groups) != 0 {
+				t.Errorf("exact: got %d groups, want 0 (fixture has no byte-identical pair): %+v", len(exResp.Groups), exResp.Groups)
+			}
 			for _, g := range exResp.Groups {
+				if g.ContentHash == "" {
+					t.Errorf("exact group keyed on empty content_hash (false byte-identity): %+v", g)
+				}
 				if g.Size != len(g.Members) || g.Size < 2 {
 					t.Errorf("exact group: size=%d members=%d, want size==members>=2", g.Size, len(g.Members))
 				}

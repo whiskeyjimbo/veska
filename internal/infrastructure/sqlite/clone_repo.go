@@ -32,7 +32,12 @@ func NewCloneRepo(readDB *sql.DB) *CloneRepo {
 // only eligible nodes (a chunk sharing a hash with a function must not inflate
 // the count). idx_nodes_content_hash + idx_nodes_repo_branch serve it.
 //
-// content_hash is NOT NULL on the schema, so no NULL guard is needed.
+// Empty content_hash is excluded from grouping: content_hash is NOT NULL on the
+// schema, but nodes with no raw content (and, before solov2-ozoi.2, every parsed
+// node) carry the empty string. Grouping by an empty hash would bucket all of
+// them into one bogus byte-identical clone group, so both query levels filter
+// empty out (content_hash != '') —
+// "no content known" can never be a clone match.
 func (r *CloneRepo) ClonedNodes(ctx context.Context, repoID, branch string, excludeKinds []string) ([]duplicates.ClonedNode, error) {
 	// Two copies of (repoID, branch) — one per query level — then the kind
 	// list once per level. Built positionally to keep SQLite's planner on the
@@ -49,9 +54,11 @@ func (r *CloneRepo) ClonedNodes(ctx context.Context, repoID, branch string, excl
 		COALESCE(line_start, 0), COALESCE(line_end, 0)
 		FROM nodes
 		WHERE repo_id = ? AND branch = ?` + kindClause + `
+		  AND content_hash != ''
 		  AND content_hash IN (
 			SELECT content_hash FROM nodes
 			WHERE repo_id = ? AND branch = ?` + kindClause + `
+			  AND content_hash != ''
 			GROUP BY content_hash HAVING COUNT(*) >= 2
 		  )`
 
