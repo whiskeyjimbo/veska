@@ -158,6 +158,35 @@ func (r *GraphRepo) FindNodeByID(ctx context.Context, id domain.NodeID) (*domain
 	return n, nil
 }
 
+// FindNodeIDsByPrefix returns the distinct node_ids beginning with prefix,
+// across every (repo_id, branch), capped at limit. node_id is a sha256 hex
+// hash, so it contains no LIKE metacharacters (%, _) — the prefix is safe to
+// interpolate into a `LIKE ?||'%'` pattern without an ESCAPE clause. DISTINCT
+// collapses the same node present on several branches into one id, so a unique
+// display prefix is not misread as ambiguous . The caller passes
+// limit=2 to detect ambiguity cheaply (.uej9.3).
+func (r *GraphRepo) FindNodeIDsByPrefix(ctx context.Context, prefix string, limit int) ([]domain.NodeID, error) {
+	rows, err := r.readDB.QueryContext(ctx,
+		`SELECT DISTINCT node_id FROM nodes WHERE node_id LIKE ? || '%' LIMIT ?`,
+		prefix, limit)
+	if err != nil {
+		return nil, fmt.Errorf("graph_repo: find node ids by prefix %q: %w", prefix, err)
+	}
+	defer rows.Close()
+	var out []domain.NodeID
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return nil, fmt.Errorf("graph_repo: scan node id prefix %q: %w", prefix, err)
+		}
+		out = append(out, domain.NodeID(id))
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("graph_repo: iterate node id prefix %q: %w", prefix, err)
+	}
+	return out, nil
+}
+
 // confidenceValue is the inverse of confidenceText: it maps the TEXT column
 // value back onto the domain Confidence enum. An unknown string maps to
 // Unresolved.

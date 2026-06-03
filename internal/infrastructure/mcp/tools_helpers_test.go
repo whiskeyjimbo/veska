@@ -99,6 +99,22 @@ func (s *scopedGraphStub) FindNodeByID(_ context.Context, id domain.NodeID) (*do
 	}
 	return nil, nil
 }
+func (s *scopedGraphStub) FindNodeIDsByPrefix(_ context.Context, prefix string, limit int) ([]domain.NodeID, error) {
+	seen := map[string]bool{}
+	var out []domain.NodeID
+	for _, m := range s.nodes {
+		for id := range m {
+			if strings.HasPrefix(id, prefix) && !seen[id] {
+				seen[id] = true
+				out = append(out, domain.NodeID(id))
+				if len(out) >= limit {
+					return out, nil
+				}
+			}
+		}
+	}
+	return out, nil
+}
 func (s *scopedGraphStub) NodesForFile(_ context.Context, repoID, branch, path string) ([]*domain.Node, error) {
 	var out []*domain.Node
 	for _, n := range s.nodes[repoID+"|"+branch] {

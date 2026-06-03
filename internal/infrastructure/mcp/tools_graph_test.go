@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"math/rand"
 	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -93,6 +94,19 @@ func (s *stubGraphStorage) FindNodeByID(_ context.Context, id domain.NodeID) (*d
 		return nil, nil
 	}
 	return n, nil
+}
+
+func (s *stubGraphStorage) FindNodeIDsByPrefix(_ context.Context, prefix string, limit int) ([]domain.NodeID, error) {
+	var out []domain.NodeID
+	for id := range s.nodes {
+		if strings.HasPrefix(id, prefix) {
+			out = append(out, domain.NodeID(id))
+			if len(out) >= limit {
+				break
+			}
+		}
+	}
+	return out, nil
 }
 
 // NodesForFile implements the optional fileQuerier extension used by
@@ -533,6 +547,98 @@ func TestGetNode_OmitRepoIDAndBranch(t *testing.T) {
 	}
 	if len(resp.Nodes) != 1 || resp.Nodes[0].NodeID != "node-42" {
 		t.Fatalf("expected node-42, got %+v", resp.Nodes)
+	}
+}
+
+// TestGetNode_ResolvesUniquePrefix pins solov2-uej9.3: eng_get_node accepts the
+// 12-char display prefix that eng_find_symbol prints, not just the full id.
+func TestGetNode_ResolvesUniquePrefix(t *testing.T) {
+	store := newStubGraphStorage()
+	full := "f470f8ff4243aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+	store.addNode(mustNode(t, full, "pkg/bar.go", "Add", domain.KindFunction))
+
+	r := NewRegistry()
+	RegisterGraphTools(r, store, staging.NewArea())
+
+	resp, rpcErr := dispatchGraph(t, r, "eng_get_node", map[string]string{
+		"node_id": "f470f8ff4243",
+	})
+	if rpcErr != nil {
+		t.Fatalf("unexpected error: %+v", rpcErr)
+	}
+	if len(resp.Nodes) != 1 || resp.Nodes[0].NodeID != full {
+		t.Fatalf("prefix did not resolve to full node: %+v", resp.Nodes)
+	}
+}
+
+// TestGetNode_FullIDStillResolves guards that a full 64-char id (its own unique
+// prefix) keeps resolving after prefix support (solov2-uej9.3).
+func TestGetNode_FullIDStillResolves(t *testing.T) {
+	store := newStubGraphStorage()
+	full := "f470f8ff4243aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+	store.addNode(mustNode(t, full, "pkg/bar.go", "Add", domain.KindFunction))
+
+	r := NewRegistry()
+	RegisterGraphTools(r, store, staging.NewArea())
+
+	resp, rpcErr := dispatchGraph(t, r, "eng_get_node", map[string]string{
+		"node_id": full,
+	})
+	if rpcErr != nil {
+		t.Fatalf("unexpected error: %+v", rpcErr)
+	}
+	if len(resp.Nodes) != 1 || resp.Nodes[0].NodeID != full {
+		t.Fatalf("full id did not resolve: %+v", resp.Nodes)
+	}
+}
+
+// TestGetNode_AmbiguousPrefixErrorsWithCandidates pins the ambiguity guard:
+// two node_ids sharing a prefix must error (not silently pick one) and the
+// message must list the candidate ids (solov2-uej9.3).
+func TestGetNode_AmbiguousPrefixErrorsWithCandidates(t *testing.T) {
+	store := newStubGraphStorage()
+	id1 := "dead000011110000aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+	id2 := "dead000022220000aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+	store.addNode(mustNode(t, id1, "a.go", "Fn", domain.KindFunction))
+	store.addNode(mustNode(t, id2, "b.go", "Fn", domain.KindFunction))
+
+	r := NewRegistry()
+	RegisterGraphTools(r, store, staging.NewArea())
+
+	_, rpcErr := dispatchGraph(t, r, "eng_get_node", map[string]string{
+		"node_id": "dead0000",
+	})
+	if rpcErr == nil {
+		t.Fatal("expected ambiguity error, got success")
+	}
+	if rpcErr.Code != CodeInvalidParams {
+		t.Errorf("expected CodeInvalidParams, got %d", rpcErr.Code)
+	}
+	if !strings.Contains(rpcErr.Message, id1) || !strings.Contains(rpcErr.Message, id2) {
+		t.Errorf("ambiguity message must list candidate ids; got %q", rpcErr.Message)
+	}
+}
+
+// TestGetNode_ShortInputTreatedAsExact pins the nodePrefixMinLen floor
+// (solov2-uej9.3): an input below the floor is not prefix-resolved, so a node
+// whose id only shares a too-short prefix is NOT returned — the short input is
+// matched exactly and misses (CodeNotFound), rather than scanning the whole
+// table for an absurdly short prefix.
+func TestGetNode_ShortInputTreatedAsExact(t *testing.T) {
+	store := newStubGraphStorage()
+	store.addNode(mustNode(t, "deadbeefcafef00d", "a.go", "Fn", domain.KindFunction))
+
+	r := NewRegistry()
+	RegisterGraphTools(r, store, staging.NewArea())
+
+	_, rpcErr := dispatchGraph(t, r, "eng_get_node", map[string]string{
+		"node_id": "dead", // 4 chars, below nodePrefixMinLen
+	})
+	if rpcErr == nil {
+		t.Fatal("expected not-found for too-short non-exact input, got success")
+	}
+	if rpcErr.Code != CodeNotFound {
+		t.Errorf("expected CodeNotFound, got %d (%s)", rpcErr.Code, rpcErr.Message)
 	}
 }
 

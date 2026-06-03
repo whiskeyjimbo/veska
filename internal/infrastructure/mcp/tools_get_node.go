@@ -31,6 +31,17 @@ func makeGetNodeHandler(graph ports.GraphReader, staging *staging.Area, repos ap
 			return nil, rpcErr
 		}
 
+		// Resolve a node_id prefix (e.g. the 12-char display id that
+		// eng_find_symbol / `veska symbol` print) to its full id up front, so
+		// both the scoped (repo_id supplied) and global lookup paths below run
+		// against an exact id . A full 64-char id resolves to
+		// itself; an ambiguous prefix errors with the candidate ids.
+		resolvedID, rpcErr := resolveNodeIDPrefix(ctx, graph, p.NodeID)
+		if rpcErr != nil {
+			return nil, rpcErr
+		}
+		p.NodeID = resolvedID
+
 		// node_id is a content-hashed sha256, globally unique by construction,
 		// so repo_id+branch are not needed to locate the node. The scoped path
 		// is taken whenever the caller supplied repo_id — branch defaults to
@@ -93,5 +104,39 @@ func makeGetNodeHandler(graph ports.GraphReader, staging *staging.Area, repos ap
 			IncludedStaging: includedStaging,
 			DegradedReasons: []string{},
 		}, nil
+	}
+}
+
+// nodePrefixMinLen is the shortest accepted node_id prefix. The display id
+// eng_find_symbol prints is 12 hex chars; we accept down to this floor and lean
+// on the ambiguity guard for everything else. A shorter input is treated as an
+// exact id (resolveNodeIDPrefix is a no-op) so legitimately short test ids and
+// any non-hex literal still match exactly.
+const nodePrefixMinLen = 8
+
+// resolveNodeIDPrefix maps a node_id prefix to its full id. A full 64-char id
+// resolves to itself (it is its own unique prefix). When the input is shorter
+// than nodePrefixMinLen it is returned unchanged so the downstream exact-match
+// path runs as before. Zero matches also pass through unchanged so the existing
+// not-found / staging-overlay handling owns that case. An ambiguous prefix
+// (more than one distinct node_id matches) is a CodeInvalidParams error listing
+// the candidates, so the caller can disambiguate (solov2-uej9.3).
+func resolveNodeIDPrefix(ctx context.Context, graph ports.GraphReader, nodeID string) (string, *RPCError) {
+	if len(nodeID) < nodePrefixMinLen {
+		return nodeID, nil
+	}
+	ids, err := graph.FindNodeIDsByPrefix(ctx, nodeID, 2)
+	if err != nil {
+		return "", &RPCError{Code: CodeInternalError, Message: fmt.Sprintf("node prefix lookup failed: %v", err)}
+	}
+	switch len(ids) {
+	case 0:
+		return nodeID, nil
+	case 1:
+		return string(ids[0]), nil
+	default:
+		return "", &RPCError{Code: CodeInvalidParams, Message: fmt.Sprintf(
+			"ambiguous node_id prefix %q matches multiple nodes (e.g. %s, %s) — supply more characters",
+			nodeID, ids[0], ids[1])}
 	}
 }

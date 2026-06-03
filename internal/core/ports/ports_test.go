@@ -61,6 +61,9 @@ func (s *stubGraphStorage) GetNode(_ context.Context, _, _ string, _ domain.Node
 func (s *stubGraphStorage) FindNodeByID(_ context.Context, _ domain.NodeID) (*domain.Node, error) {
 	return nil, nil
 }
+func (s *stubGraphStorage) FindNodeIDsByPrefix(_ context.Context, _ string, _ int) ([]domain.NodeID, error) {
+	return nil, nil
+}
 
 // ── CodeParser stub ────────────────────────────────────────────────────────
 
