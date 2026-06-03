@@ -186,6 +186,50 @@ func TestVulnScanCheck_Idempotent(t *testing.T) {
 	}
 }
 
+// TestVulnScanCheck_RepoNamespacedFindingID pins solov2-uej9.1: two repos
+// that share the SAME advisory (same AdvisoryID+Package) must each retain
+// their OWN vulnerable_dependency finding. Because the storage PK is
+// (finding_id, branch) with no repo_id, identical finding_ids on the same
+// branch would let one repo's scan overwrite the other's row — silently
+// dropping a real CVE from all-but-one repo. The finding_id must therefore
+// be namespaced by repo id while staying idempotent within a repo.
+func TestVulnScanCheck_RepoNamespacedFindingID(t *testing.T) {
+	advisory := []ports.VulnFinding{
+		{AdvisoryID: "GHSA-w73w-5m7g-f7qc", Package: "github.com/dgrijalva/jwt-go",
+			AffectedRange: "<4.0.0", Severity: "HIGH", Summary: "jwt bypass"},
+	}
+	newCheck := func() *VulnScanCheck {
+		return NewVulnScanCheck(&fakeVulnSource{findings: advisory}, writeGoMod(t, goModFixture))
+	}
+
+	repo1a, err := newCheck().Run(context.Background(), Input{RepoID: "repoA", Branch: "main"})
+	if err != nil {
+		t.Fatalf("Run repoA: %v", err)
+	}
+	repo2, err := newCheck().Run(context.Background(), Input{RepoID: "repoB", Branch: "main"})
+	if err != nil {
+		t.Fatalf("Run repoB: %v", err)
+	}
+	if len(repo1a) != 1 || len(repo2) != 1 {
+		t.Fatalf("want 1 finding per repo, got %d / %d", len(repo1a), len(repo2))
+	}
+	if repo1a[0].FindingID == repo2[0].FindingID {
+		t.Errorf("finding_id collides across repos: repoA=%q repoB=%q", repo1a[0].FindingID, repo2[0].FindingID)
+	}
+
+	// Idempotency: re-scanning the SAME repo+advisory yields the SAME id.
+	repo1b, err := newCheck().Run(context.Background(), Input{RepoID: "repoA", Branch: "main"})
+	if err != nil {
+		t.Fatalf("Run repoA again: %v", err)
+	}
+	if len(repo1b) != 1 {
+		t.Fatalf("want 1 finding on re-scan, got %d", len(repo1b))
+	}
+	if repo1a[0].FindingID != repo1b[0].FindingID {
+		t.Errorf("finding_id not stable within repo: %q != %q", repo1a[0].FindingID, repo1b[0].FindingID)
+	}
+}
+
 func TestVulnScanCheck_NilSource(t *testing.T) {
 	c := NewVulnScanCheck(nil, writeGoMod(t, goModFixture))
 	if _, err := c.Run(context.Background(), Input{FilePaths: []string{"go.mod"}}); err == nil {
