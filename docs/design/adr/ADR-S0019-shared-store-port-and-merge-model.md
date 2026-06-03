@@ -113,6 +113,35 @@ per-deployment toggle behind `SharedArtifactStore`, and the boundary is set by
   the size/sync cost of carrying each artifact in the shared store. Place the
   share/regenerate line per artifact from data, not assumption.
 
+### 5. Consumption strategy — federate vs. hydrate (the local SQLite graph never accrues remote data)
+
+How a consumer *reads* the shared store differs by family, and **neither merges
+remote data into the local SQLite graph store** — the graph store stays purely
+local (regenerated from source), which is the invariant that keeps `dchd`'s
+single-user behaviour intact while sharing is on. The ports support both
+strategies; the choice is per-family, not a transport concern:
+
+- **Class-B curation → federate-and-fold at query time.** Read local + remote
+  curation records and apply the §2 deterministic fold *at query time*. The
+  fold **is** the merge, so nothing is persisted: conflicts are never written
+  down, and each query recomputes current state from local + remote records.
+  No background sync, no merged-state table.
+
+- **Embeddings → hydrate into the local vector backend.** Semantic search scans
+  an **in-memory** vector index (`memvec` brute-force / `usearch` HNSW via
+  `UpsertEmbeddings`+`Search`); it never reads vectors from a store per query.
+  So shared vectors cannot be federated read-through — they must be **pulled
+  into the local vector backend** to be searchable. This is a cache/hydrate of
+  the *vector backend*, which is **separate from the SQLite graph store**, so
+  the "no remote data in the graph store" invariant still holds.
+
+- **Summaries / other LLM text → federate or cache, low stakes.** Small, used at
+  embed/display time; either read-through or hydrate is fine.
+
+The empirical gate (§4) directly informs the embeddings case: it measures
+whether the hydrate cost is small enough to prefer sharing over local
+re-embedding for a given embedder.
+
 ## Deferred
 
 - **The concrete transport adapter.** Chosen later, informed by the empirical
