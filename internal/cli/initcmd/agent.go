@@ -1,6 +1,7 @@
 package initcmd
 
 import (
+	"bufio"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -133,16 +134,55 @@ func SupportedFlavorNames() []string {
 	return names
 }
 
+// AgentSnippetParams bundles the inputs for WriteAgentSnippet. It exists to
+// keep the call within the project's argument budget and to carry the
+// preview/confirm controls (AssumeYes, Interactive, In) added in
+// solov2-uej9.8 so init --agent never silently mutates the wrong tree.
+type AgentSnippetParams struct {
+	RootDir         string    // project root the snippet is written under
+	Flavor          string    // agent flavor (claude, cursor, …)
+	Out             io.Writer // status + preview sink
+	In              io.Reader // stdin for the interactive confirm prompt
+	UpdateGitignore bool      // also manage a veska block in .gitignore
+	AssumeYes       bool      // skip the prompt and write (-y / --yes)
+	Interactive     bool      // stdin is a TTY → prompt instead of bailing
+}
+
 // WriteAgentSnippet writes (or appends) the per-flavor snippet under
-// rootDir and reports the action taken to out. Idempotent: a second
-// call against the same rootDir+flavor detects the sentinel already
-// present and reports "already present" without modifying the file.
-func WriteAgentSnippet(rootDir, flavor string, out io.Writer, updateGitignore bool) error {
-	f, ok := lookupFlavor(flavor)
+// p.RootDir and reports the action taken to p.Out. Before writing it prints a
+// preview of every file it will touch (with the absolute root path) and gates
+// the write on confirmation: AssumeYes writes immediately; an interactive TTY
+// prompts [Y/n]; a non-interactive stdin without AssumeYes prints the preview
+// and writes NOTHING (solov2-uej9.8 — prevents accidental writes in the wrong
+// tree / in automation). Idempotent: a second call against the same
+// rootDir+flavor detects the sentinel and reports "already present".
+func WriteAgentSnippet(p AgentSnippetParams) error {
+	f, ok := lookupFlavor(p.Flavor)
 	if !ok {
 		return fmt.Errorf("unknown agent flavor %q (supported: %s)",
-			flavor, strings.Join(SupportedFlavorNames(), ", "))
+			p.Flavor, strings.Join(SupportedFlavorNames(), ", "))
 	}
+
+	rootDir, out, updateGitignore := p.RootDir, p.Out, p.UpdateGitignore
+
+	plan := buildAgentPlan(f, rootDir, updateGitignore)
+	printAgentPlan(out, rootDir, plan)
+	proceed, err := confirmAgentWrite(p, out)
+	if err != nil {
+		return err
+	}
+	if !proceed {
+		return nil
+	}
+	return applyAgentSnippet(f, p)
+}
+
+// applyAgentSnippet performs the confirmed writes: the instruction file, the
+// MCP-server config (when the flavor speaks MCP), and the opt-in .gitignore
+// block. Split from WriteAgentSnippet so the preview/confirm orchestration and
+// the write body each stay within the size budget.
+func applyAgentSnippet(f agentFlavor, p AgentSnippetParams) error {
+	rootDir, out, updateGitignore := p.RootDir, p.Out, p.UpdateGitignore
 
 	target := filepath.Join(rootDir, f.path)
 	if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
@@ -156,16 +196,16 @@ func WriteAgentSnippet(rootDir, flavor string, out io.Writer, updateGitignore bo
 
 	instructionsAlreadyPresent := strings.Contains(string(existing), AgentSnippetSentinel)
 	if instructionsAlreadyPresent {
-		fmt.Fprintf(out, "veska: %s already present at %s\n", flavor, target)
+		fmt.Fprintf(out, "veska: %s already present at %s\n", p.Flavor, target)
 	} else {
 		body := buildAppendBody(existing, agentSnippetBody)
 		if err := os.WriteFile(target, body, 0o644); err != nil {
 			return fmt.Errorf("write %s: %w", target, err)
 		}
 		if len(existing) == 0 {
-			fmt.Fprintf(out, "veska: wrote %s instructions to %s\n", flavor, target)
+			fmt.Fprintf(out, "veska: wrote %s instructions to %s\n", p.Flavor, target)
 		} else {
-			fmt.Fprintf(out, "veska: appended %s instructions to %s\n", flavor, target)
+			fmt.Fprintf(out, "veska: appended %s instructions to %s\n", p.Flavor, target)
 		}
 	}
 
@@ -202,6 +242,111 @@ func WriteAgentSnippet(rootDir, flavor string, out io.Writer, updateGitignore bo
 		fmt.Fprintln(out, "veska: tip: pass --update-gitignore to also add a veska-managed .gitignore block (covers generated artifacts under docs/veska/)")
 	}
 	return nil
+}
+
+// agentPlanItem is one previewed file write: the absolute path and the verb
+// describing what will happen to it (create / append / register / …). The
+// verb is computed read-only so the preview matches what the writer does.
+type agentPlanItem struct {
+	path   string
+	action string
+}
+
+// buildAgentPlan computes — without writing anything — the set of files
+// WriteAgentSnippet will touch and the action for each, so the preview is
+// accurate. Mirrors the writer's decision logic (sentinel scan for the
+// instruction file, mcpServerAction for the MCP config).
+func buildAgentPlan(f agentFlavor, rootDir string, updateGitignore bool) []agentPlanItem {
+	plan := make([]agentPlanItem, 0, 3)
+
+	target := filepath.Join(rootDir, f.path)
+	existing, _ := os.ReadFile(target)
+	switch {
+	case strings.Contains(string(existing), AgentSnippetSentinel):
+		plan = append(plan, agentPlanItem{target, "already present"})
+	case len(existing) == 0:
+		plan = append(plan, agentPlanItem{target, "create veska block"})
+	default:
+		plan = append(plan, agentPlanItem{target, "append veska block"})
+	}
+
+	if f.mcpConfigPath != "" {
+		cfgPath := filepath.Join(rootDir, f.mcpConfigPath)
+		mcpBin, err := resolveVeskaMcpPath()
+		if err != nil {
+			plan = append(plan, agentPlanItem{cfgPath, "register veska MCP server (path TBD)"})
+		} else {
+			plan = append(plan, agentPlanItem{cfgPath, mcpServerAction(cfgPath, "veska", mcpBin)})
+		}
+	}
+
+	if updateGitignore {
+		plan = append(plan, agentPlanItem{filepath.Join(rootDir, ".gitignore"), "manage veska block"})
+	}
+	return plan
+}
+
+// printAgentPlan emits the preview. The absolute root is shown on its own
+// line so a user who launched init in the wrong directory notices before
+// confirming.
+func printAgentPlan(out io.Writer, rootDir string, plan []agentPlanItem) {
+	fmt.Fprintf(out, "veska init --agent will write under: %s\n", rootDir)
+	for _, item := range plan {
+		fmt.Fprintf(out, "  %s (%s)\n", item.path, item.action)
+	}
+}
+
+// confirmAgentWrite resolves whether to proceed with the write. AssumeYes →
+// yes without prompting. Non-interactive stdin without AssumeYes → no (prints
+// the -y hint; deliberately safer than defaulting to accept). Interactive →
+// prompt [Y/n], Enter/y = yes, n = no. Mirrors the ResolveVulnChoice idiom.
+func confirmAgentWrite(p AgentSnippetParams, out io.Writer) (bool, error) {
+	if p.AssumeYes {
+		return true, nil
+	}
+	if !p.Interactive || p.In == nil {
+		fmt.Fprintln(out, "veska: re-run with -y to apply (non-interactive stdin); nothing written")
+		return false, nil
+	}
+	reader := bufio.NewReader(p.In)
+	fmt.Fprint(out, "Apply these changes? [Y/n] ")
+	line, err := reader.ReadString('\n')
+	if err != nil && line == "" {
+		// EOF before any answer — treat as the safe non-interactive default.
+		fmt.Fprintln(out, "veska: no input; nothing written (re-run with -y to apply)")
+		return false, nil
+	}
+	switch strings.ToLower(strings.TrimSpace(line)) {
+	case "", "y", "yes":
+		return true, nil
+	default:
+		fmt.Fprintln(out, "veska: declined; nothing written")
+		return false, nil
+	}
+}
+
+// mcpServerAction reports the verb EnsureMcpServerEntry would use for cfgPath
+// WITHOUT writing — read-only counterpart used by the preview so it can't
+// drift from the actual write. On any read/parse trouble it optimistically
+// reports "register", matching the create path.
+func mcpServerAction(cfgPath, name, command string) string {
+	existing, err := os.ReadFile(cfgPath)
+	if err != nil || len(existing) == 0 {
+		return "register veska MCP server"
+	}
+	var cfg map[string]any
+	if json.Unmarshal(existing, &cfg) != nil {
+		return "register veska MCP server"
+	}
+	servers, _ := cfg["mcpServers"].(map[string]any)
+	prior, ok := servers[name].(map[string]any)
+	if !ok {
+		return "register veska MCP server"
+	}
+	if prior["command"] == command {
+		return "already registered"
+	}
+	return "update veska MCP server"
 }
 
 // resolveVeskaMcpPath returns the absolute path to the veska-mcp binary
