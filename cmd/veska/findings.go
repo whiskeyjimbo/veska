@@ -34,14 +34,15 @@ func findingsCmd() *cobra.Command {
 
 func findingsListCmd() *cobra.Command {
 	var (
-		repoFlag   string
-		allRepos   bool
-		state      string
-		severity   string
-		rule       string
-		limit      int
-		jsonOut    bool
-		includeLow bool
+		repoFlag          string
+		allRepos          bool
+		state             string
+		severity          string
+		rule              string
+		limit             int
+		jsonOut           bool
+		includeLow        bool
+		includeSuppressed bool
 	)
 	cmd := &cobra.Command{
 		Use:          "list",
@@ -50,17 +51,18 @@ func findingsListCmd() *cobra.Command {
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return findingscmd.RunList(cmd.Context(), findingscmd.ListParams{
-				RepoID:      repoFlag,
-				AllRepos:    allRepos,
-				State:       state,
-				Severity:    severity,
-				Rule:        rule,
-				Limit:       limit,
-				JSONOut:     jsonOut,
-				IncludeLow:  includeLow,
-				Out:         cmd.OutOrStdout(),
-				ErrOut:      cmd.ErrOrStderr(),
-				ResolveRepo: autoResolveRepo,
+				RepoID:            repoFlag,
+				AllRepos:          allRepos,
+				State:             state,
+				Severity:          severity,
+				Rule:              rule,
+				Limit:             limit,
+				JSONOut:           jsonOut,
+				IncludeLow:        includeLow,
+				IncludeSuppressed: includeSuppressed,
+				Out:               cmd.OutOrStdout(),
+				ErrOut:            cmd.ErrOrStderr(),
+				ResolveRepo:       autoResolveRepo,
 			})
 		},
 	}
@@ -72,6 +74,7 @@ func findingsListCmd() *cobra.Command {
 	cmd.Flags().IntVar(&limit, "limit", 25, "maximum rows to print (0 = no limit)")
 	cmd.Flags().BoolVar(&jsonOut, "json", false, "emit JSON")
 	cmd.Flags().BoolVar(&includeLow, "include-low", false, "include low-severity findings (default hides auto-link noise)")
+	cmd.Flags().BoolVar(&includeSuppressed, "include-suppressed", false, "include findings hidden by an active suppression (shows a SUPPRESSED_BY column)")
 	return cmd
 }
 

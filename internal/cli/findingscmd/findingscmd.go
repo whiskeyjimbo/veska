@@ -33,22 +33,28 @@ type FindingView struct {
 	Message     string  `json:"message"`
 	State       string  `json:"state"`
 	CreatedAt   int64   `json:"created_at"`
+	// SuppressedBy carries the suppression_id when an active suppression hides
+	// this finding; populated only when include_suppressed=true was requested.
+	SuppressedBy *string `json:"suppressed_by,omitempty"`
 }
 
 // ListParams bundles the inputs of RunList. ResolveRepo is the cwd→repo seam
 // the cmd layer injects (passing a nil errOut suppresses the breadcrumb).
 type ListParams struct {
-	RepoID      string
-	AllRepos    bool
-	State       string
-	Severity    string
-	Rule        string
-	Limit       int
-	JSONOut     bool
-	IncludeLow  bool
-	Out         io.Writer
-	ErrOut      io.Writer
-	ResolveRepo func(ctx context.Context, errOut io.Writer) string
+	RepoID     string
+	AllRepos   bool
+	State      string
+	Severity   string
+	Rule       string
+	Limit      int
+	JSONOut    bool
+	IncludeLow bool
+	// IncludeSuppressed asks the daemon to surface findings hidden by an active
+	// suppression (their state stays "open", so no --state value reveals them).
+	IncludeSuppressed bool
+	Out               io.Writer
+	ErrOut            io.Writer
+	ResolveRepo       func(ctx context.Context, errOut io.Writer) string
 }
 
 // RunList implements `veska findings list`: it resolves scope, gathers the
@@ -98,6 +104,13 @@ func (p ListParams) listScope(ctx context.Context) (map[string]any, bool) {
 	}
 	if p.Rule != "" {
 		baseParams["rule"] = p.Rule
+	}
+	// solov2-uej9.7: a suppressed finding keeps state="open" (suppression hides
+	// it rather than closing it), so no --state value surfaces it. Only
+	// include_suppressed=true does — the daemon LEFT JOINs active suppressions
+	// and populates suppressed_by on the returned rows.
+	if p.IncludeSuppressed {
+		baseParams["include_suppressed"] = true
 	}
 	return baseParams, fanoutAllRepos
 }
