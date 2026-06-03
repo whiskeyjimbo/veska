@@ -5,6 +5,7 @@
 //
 // Like diff.go, paths are relative to repoRoot — that is what
 // `git diff --name-only` emits and what `git show <ref>:<path>` expects.
+
 package git
 
 import (

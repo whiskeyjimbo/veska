@@ -256,8 +256,8 @@ func dedupeFindings(local, gl []ports.SecretFinding) []ports.SecretFinding {
 // contract callers rely on; gitleaks' Detect is O(rules × len(input))
 // per call and is fast enough on single-line inputs.
 func (s *BuiltinScanner) scanLineGitleaks(path string, line ports.Line) []ports.SecretFinding {
-	//nolint:staticcheck // SA1019: detect.Fragment is deprecated, will update on gitleaks v9.
-	frag := detect.Fragment{Raw: line.Text, FilePath: path}
+	//lint:ignore SA1019 detect.Fragment deprecated; will migrate to sources.Fragment on gitleaks v9.
+	frag := detect.Fragment{Raw: line.Text, FilePath: path} //nolint:staticcheck // SA1019: see lint:ignore above
 	leaks := s.gitleaks.Detect(frag)
 	if len(leaks) == 0 {
 		return nil

@@ -1,5 +1,6 @@
 // This file implements application/duplicates.CloneStore against the nodes
 // table: the exact-clone projection that groups nodes by shared content_hash.
+
 package sqlite
 
 import (
@@ -36,7 +37,7 @@ func NewCloneRepo(readDB *sql.DB) *CloneRepo {
 // schema, but nodes with no raw content (and, before solov2-ozoi.2, every parsed
 // node) carry the empty string. Grouping by an empty hash would bucket all of
 // them into one bogus byte-identical clone group, so both query levels filter
-// empty out (content_hash != '') —
+// empty out with a non-empty content_hash check —
 // "no content known" can never be a clone match.
 func (r *CloneRepo) ClonedNodes(ctx context.Context, repoID, branch string, excludeKinds []string) ([]duplicates.ClonedNode, error) {
 	// Two copies of (repoID, branch) — one per query level — then the kind

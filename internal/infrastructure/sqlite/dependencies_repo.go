@@ -4,6 +4,7 @@
 // import emits a row at promotion time — see promotion_store.go), so
 // aggregating it gives accurate per-module usage counts without
 // re-parsing go.mod .
+
 package sqlite
 
 import (

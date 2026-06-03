@@ -12,7 +12,7 @@ type Envelope struct {
 	SchemaVersion int           `json:"schema_version"`
 	Subsystem     string        `json:"subsystem"`
 	Status        health.Status `json:"status"`
-	Ts            string        `json:"ts"` // RFC3339
+	TS            string        `json:"ts"` // RFC3339
 	Data          any           `json:"data"`
 }
 
@@ -22,7 +22,7 @@ func NewEnvelope(subsystem string, status health.Status, data any) Envelope {
 		SchemaVersion: 1,
 		Subsystem:     subsystem,
 		Status:        status,
-		Ts:            time.Now().UTC().Format(time.RFC3339),
+		TS:            time.Now().UTC().Format(time.RFC3339),
 		Data:          data,
 	}
 }

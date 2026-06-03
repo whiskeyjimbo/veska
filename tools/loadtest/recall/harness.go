@@ -21,6 +21,7 @@ import (
 // harnesses can share them. These aliases preserve the in-package
 // surface the eval test was written against (recall.GenerateCorpus,
 // recall.FakeEmbedder, etc.) without breaking the call sites.
+
 const FakeEmbeddingDim = synthcorpus.FakeEmbeddingDim
 
 type (

@@ -1,6 +1,7 @@
 // This file implements ports.LexicalSearcher on top of the m3.03.2 FTS
 // pair (node_fts_words + node_fts_trigrams). Results are fused with
 // Reciprocal Rank Fusion (RRF) at query time.
+
 package sqlite
 
 import (

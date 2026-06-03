@@ -3,6 +3,7 @@
 // (wire.go binds GetActiveTask to contextpack.ActiveTaskFunc) and the MCP task
 // tools (ActiveTask/SetActiveTask/ListTasks) — so the SQL and row mapping live
 // here, beside the other sqlite.*Repo adapters.
+
 package sqlite
 
 import (

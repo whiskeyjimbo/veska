@@ -25,6 +25,7 @@
 //     type (a command struct's own cmd fields are its subcommands). Runs as
 //     its own struct-tag walk, independent of the @fwvar.* literal dispatch
 //     (solov2-su6d).
+
 package treesitter
 
 import (
