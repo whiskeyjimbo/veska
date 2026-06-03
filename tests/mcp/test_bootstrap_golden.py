@@ -204,7 +204,12 @@ def test_bootstrap_golden_zero_to_working_install(tmp_path: Path):
                 f"nomic-embed-text not pulled. stderr: {res.stderr.strip()}"
             )
         raise AssertionError(f"veska init failed:\n{res.stderr}")
-    assert "healthy" in res.stdout, f"init didn't report healthy: {res.stdout}"
+    # Backend-agnostic success markers: model2vec is the canonical baked-in
+    # embedder (Ollama is an opt-in addon), so assert on what BOTH paths emit —
+    # an embedder line + the terminal "ready" — not the Ollama-only "healthy"
+    # probe string.
+    assert "embedder:" in res.stdout, f"init didn't report an embedder: {res.stdout}"
+    assert "ready" in res.stdout, f"init didn't reach ready: {res.stdout}"
 
     # ── P2: start daemon, wait for sockets ─────────────────────────────
     print("[P2] start veska-daemon, wait for sockets")

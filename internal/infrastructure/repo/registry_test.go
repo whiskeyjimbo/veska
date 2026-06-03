@@ -17,9 +17,9 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/repo"
 )
 
-// createReposTable mirrors the schema after migration 0013 (kxo5.2) so
-// tests touching canonical_url / kind / last_accessed_at / prompted_at can
-// exercise the real column set.
+// createReposTable mirrors the schema after migration 0018 (dchd.1) so tests
+// touching canonical_url / kind / last_accessed_at / prompted_at /
+// identity_tier / identity_anchor can exercise the real column set.
 const createReposTable = `
 CREATE TABLE repos (
 	repo_id          TEXT PRIMARY KEY,
@@ -31,7 +31,9 @@ CREATE TABLE repos (
 	kind             TEXT NOT NULL DEFAULT 'tracked',
 	canonical_url    TEXT,
 	last_accessed_at INTEGER,
-	prompted_at      INTEGER
+	prompted_at      INTEGER,
+	identity_tier    TEXT,
+	identity_anchor  TEXT
 );
 CREATE UNIQUE INDEX idx_repos_canonical_url
 	ON repos(canonical_url)
@@ -64,6 +66,39 @@ func newGitRepo(t *testing.T) string {
 		t.Fatalf("create .git/hooks: %v", err)
 	}
 	return dir
+}
+
+// TestAddRepo_ConvergesAcrossRoots is the end-to-end ADR-S0017 contract at the
+// Add boundary: the same module manifest indexed at two DIFFERENT absolute
+// roots yields the SAME stored repo_id (so node IDs converge in a shared DB).
+// The second Add resolves to an already-present repo_id and reports existed=true
+// — root_path stays whichever root registered first (acceptable; mirrors the
+// ADR's "repo granularity = the registered root" limitation).
+func TestAddRepo_ConvergesAcrossRoots(t *testing.T) {
+	db := newTestDB(t)
+	mk := func() string {
+		dir := newGitRepo(t)
+		if err := os.WriteFile(filepath.Join(dir, "go.mod"), []byte("module github.com/org/shared\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		return dir
+	}
+	rootA, rootB := mk(), mk()
+
+	idA, existedA, err := repo.Add(context.Background(), db, rootA)
+	if err != nil || existedA {
+		t.Fatalf("first Add: id=%q existed=%v err=%v", idA, existedA, err)
+	}
+	idB, existedB, err := repo.Add(context.Background(), db, rootB)
+	if err != nil {
+		t.Fatalf("second Add: %v", err)
+	}
+	if idA != idB {
+		t.Fatalf("convergence broken at Add boundary: %s != %s", idA, idB)
+	}
+	if !existedB {
+		t.Errorf("second root resolving to the same anchor must report existed=true")
+	}
 }
 
 func TestAddRepo(t *testing.T) {
