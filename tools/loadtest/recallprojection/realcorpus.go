@@ -19,6 +19,7 @@
 // truth: recall@10 asks whether a symbol's doc-comment query retrieves
 // that symbol out of the whole corpus. Undocumented exported symbols are
 // carried as non-queried distractors so they still compete in search.
+
 package recallprojection
 
 import (

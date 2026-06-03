@@ -1,3 +1,5 @@
+// Package fs contains filesystem infrastructure adapters, including
+// gitignore-style ignore-file matching.
 package fs
 
 import (

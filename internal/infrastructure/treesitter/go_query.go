@@ -14,6 +14,7 @@
 // Until equivalence is validated across the entire fixture corpus, the
 // daemon's composition root keeps using NewGoParser. Phase 5 flips the
 // default and drops the legacy path.
+
 package treesitter
 
 import (
@@ -597,12 +598,12 @@ func buildTypeNodeFromCaptures(declNode, nameNode, bodyNode *sitter.Node, src []
 // struct-literal initialisers (go.go ~L445). When decl is nil (the
 // pattern omitted the @decl capture) we fall back to the spec.
 func buildVarNodesFromSpec(spec, decl *sitter.Node, src []byte, repoID, path string, kind domain.NodeKind) []*domain.Node {
-	src_node := decl
-	if src_node == nil {
-		src_node = spec
+	srcNode := decl
+	if srcNode == nil {
+		srcNode = spec
 	}
-	lr := lineRange(src_node)
-	raw := string(src[src_node.StartByte():src_node.EndByte()])
+	lr := lineRange(srcNode)
+	raw := string(src[srcNode.StartByte():srcNode.EndByte()])
 
 	var out []*domain.Node
 	named := int(spec.NamedChildCount())
