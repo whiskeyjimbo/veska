@@ -63,7 +63,10 @@ func (p ListParams) filterLow(findings []FindingView) ([]FindingView, int) {
 	kept := findings[:0]
 	hiddenLow := 0
 	for _, f := range findings {
-		if f.Severity == "low" {
+		// solov2-uej9.7: a row explicitly surfaced by --include-suppressed must
+		// not be re-hidden by the low-severity filter — the whole point was to
+		// see it.
+		if f.Severity == "low" && f.SuppressedBy == nil {
 			hiddenLow++
 			continue
 		}
@@ -76,11 +79,11 @@ func (p ListParams) filterLow(findings []FindingView) ([]FindingView, int) {
 // --all (cross-repo) view.
 func (p ListParams) renderTable(w io.Writer, shown []FindingView) error {
 	tw := tabwriter.NewWriter(w, 0, 0, 2, ' ', 0)
-	if p.AllRepos {
-		fmt.Fprintln(tw, "FINDING_ID\tSEVERITY\tRULE\tREPO\tFILE\tMESSAGE")
-	} else {
-		fmt.Fprintln(tw, "FINDING_ID\tSEVERITY\tRULE\tFILE\tMESSAGE")
-	}
+	// solov2-uej9.7: the trailing SUPPRESSED_BY column appears only when at
+	// least one row is suppressed (i.e. --include-suppressed surfaced it), so
+	// the common view stays narrow.
+	supCol := anySuppressed(shown)
+	fmt.Fprintln(tw, listHeader(p.AllRepos, supCol))
 	for _, f := range shown {
 		path := ""
 		if f.FilePath != nil {
@@ -90,17 +93,50 @@ func (p ListParams) renderTable(w io.Writer, shown []FindingView) error {
 		if len(msg) > 80 {
 			msg = msg[:77] + "..."
 		}
+		row := []string{f.FindingID, f.Severity, f.Rule}
 		if p.AllRepos {
 			short := f.RepoID
 			if len(short) > 12 {
 				short = short[:12]
 			}
-			fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\t%s\n", f.FindingID, f.Severity, f.Rule, short, path, msg)
-		} else {
-			fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\n", f.FindingID, f.Severity, f.Rule, path, msg)
+			row = append(row, short)
 		}
+		row = append(row, path, msg)
+		if supCol {
+			sup := ""
+			if f.SuppressedBy != nil {
+				sup = *f.SuppressedBy
+			}
+			row = append(row, sup)
+		}
+		fmt.Fprintln(tw, strings.Join(row, "\t"))
 	}
 	return tw.Flush()
+}
+
+// anySuppressed reports whether any row carries an active suppression — the
+// trigger for the optional SUPPRESSED_BY column.
+func anySuppressed(fs []FindingView) bool {
+	for _, f := range fs {
+		if f.SuppressedBy != nil {
+			return true
+		}
+	}
+	return false
+}
+
+// listHeader builds the table header, growing with the optional REPO (cross-repo
+// view) and SUPPRESSED_BY (suppressed rows present) columns.
+func listHeader(allRepos, supCol bool) string {
+	cols := []string{"FINDING_ID", "SEVERITY", "RULE"}
+	if allRepos {
+		cols = append(cols, "REPO")
+	}
+	cols = append(cols, "FILE", "MESSAGE")
+	if supCol {
+		cols = append(cols, "SUPPRESSED_BY")
+	}
+	return strings.Join(cols, "\t")
 }
 
 // severityOrder ranks severities for sortFindingsBySeverity; lower = more
@@ -208,6 +244,9 @@ func trimRedundantFilePrefix(msg, file string) string {
 func RenderFindingHuman(w io.Writer, f FindingView) {
 	fmt.Fprintf(w, "finding_id : %s\n", f.FindingID)
 	fmt.Fprintf(w, "state      : %s\n", f.State)
+	if f.SuppressedBy != nil {
+		fmt.Fprintf(w, "suppressed : %s\n", *f.SuppressedBy)
+	}
 	fmt.Fprintf(w, "severity   : %s\n", f.Severity)
 	fmt.Fprintf(w, "rule       : %s\n", f.Rule)
 	fmt.Fprintf(w, "source     : %s\n", f.SourceLayer)
