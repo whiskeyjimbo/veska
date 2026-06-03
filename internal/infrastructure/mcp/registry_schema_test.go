@@ -99,10 +99,13 @@ func assertSchemaKeys(t *testing.T, raw json.RawMessage, wantKeys []string) {
 }
 
 func TestStateChangingToolsPublishSchemas(t *testing.T) {
+	// Task tools are PARKED (not registered by the daemon; see
+	// RegisterTaskTools' doc comment), so they are intentionally absent from
+	// this published-schema surface. Their schema well-formedness is still
+	// exercised by tools_tasks_test.go and the coverage harness.
 	r := NewRegistry()
 	RegisterFindingTools(r, nil, nil, nil)
 	RegisterSuppressionTools(r, nil, nil, nil)
-	RegisterTaskTools(r, nil, nil)
 
 	cases := []struct {
 		name      string
@@ -118,11 +121,6 @@ func TestStateChangingToolsPublishSchemas(t *testing.T) {
 			name:      "eng_suppress_finding",
 			inputKeys: []string{"finding_id", "branch", "repo_id", "reason", "scope", "expires_at"},
 			outKeys:   []string{"suppression_id", "finding_id", "branch", "scope"},
-		},
-		{
-			name:      "eng_set_active_task",
-			inputKeys: []string{"task_id", "repo_id"},
-			outKeys:   []string{"task_id"},
 		},
 	}
 	for _, tc := range cases {
