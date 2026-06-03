@@ -264,9 +264,18 @@ func (sp *statusProvider) Status(ctx context.Context) (map[string]any, error) {
 		return nil, fmt.Errorf("query repo count: %w", err)
 	}
 
+	// Count only pending refs that still have a backing node — the real
+	// embed backlog the worker will drain. The EXISTS guard mirrors the
+	// embedder's FetchPending JOIN (and sqlite.EmbeddingRefsRepo.CountPending):
+	// orphaned refs left behind by node deletion / re-promotion churn are
+	// never fetched, so counting them here would pin eng_get_status at
+	// degraded_reasons:["embeddings_pending"] forever even with the queue
+	// fully drained (solov2-khra).
 	var pendingEmbeds int
 	if err := sp.db.QueryRowContext(ctx,
-		`SELECT COUNT(*) FROM node_embedding_refs WHERE state = 'pending'`,
+		`SELECT COUNT(*) FROM node_embedding_refs r
+		 WHERE r.state = 'pending'
+		   AND EXISTS (SELECT 1 FROM nodes n WHERE n.node_id = r.node_id)`,
 	).Scan(&pendingEmbeds); err != nil {
 		return nil, fmt.Errorf("query pending embeds: %w", err)
 	}

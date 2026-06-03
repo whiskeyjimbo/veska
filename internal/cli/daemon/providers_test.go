@@ -54,6 +54,14 @@ func providersTestDB(t *testing.T) *sql.DB {
 			state       TEXT NOT NULL,
 			enqueued_at INTEGER NOT NULL DEFAULT 0
 		)`,
+		// nodes is needed by the status pending-embeds EXISTS guard
+		// (solov2-khra): a pending ref only counts when its node still
+		// exists. Composite PK mirrors the production schema.
+		`CREATE TABLE nodes (
+			node_id TEXT NOT NULL,
+			branch  TEXT NOT NULL DEFAULT 'main',
+			PRIMARY KEY (node_id, branch)
+		)`,
 		`CREATE TABLE schema_migrations (
 			version       INTEGER PRIMARY KEY,
 			applied_at    INTEGER,
@@ -114,6 +122,11 @@ func TestStatusProvider_ReportsDBState(t *testing.T) {
 		t.Fatalf("seed refs: %v", err)
 	}
 	if _, err := db.Exec(
+		`INSERT INTO nodes (node_id) VALUES ('n1'), ('n2'), ('n3')`,
+	); err != nil {
+		t.Fatalf("seed nodes: %v", err)
+	}
+	if _, err := db.Exec(
 		`INSERT INTO schema_migrations (version) VALUES (1), (2), (3)`,
 	); err != nil {
 		t.Fatalf("seed migrations: %v", err)
@@ -171,6 +184,55 @@ func TestStatusProvider_HealthyWhenNoPending(t *testing.T) {
 	}
 }
 
+// TestStatusProvider_OrphanPendingRefsNotCounted pins solov2-khra: a
+// pending ref whose node has been deleted (repo removal / re-promotion
+// churn left it dangling — node_embedding_refs has no FK to nodes) is NOT
+// real backlog. The embedder's FetchPending JOIN already skips it, so
+// eng_get_status must too, or the daemon reports degraded forever with a
+// queue the worker considers fully drained.
+func TestStatusProvider_OrphanPendingRefsNotCounted(t *testing.T) {
+	db := providersTestDB(t)
+	if _, err := db.Exec(
+		`INSERT INTO repos (repo_id, root_path, added_at) VALUES ('r1','/a',1)`,
+	); err != nil {
+		t.Fatalf("seed repo: %v", err)
+	}
+	// One pending ref WITH a node (real backlog) + one orphan (no node).
+	if _, err := db.Exec(
+		`INSERT INTO node_embedding_refs (node_id, state) VALUES ('live','pending'), ('orphan','pending')`,
+	); err != nil {
+		t.Fatalf("seed refs: %v", err)
+	}
+	if _, err := db.Exec(`INSERT INTO nodes (node_id) VALUES ('live')`); err != nil {
+		t.Fatalf("seed node: %v", err)
+	}
+
+	sp := &statusProvider{db: db}
+	m, err := sp.Status(context.Background())
+	if err != nil {
+		t.Fatalf("Status: %v", err)
+	}
+	if m["pending_embeds"] != 1 {
+		t.Errorf("pending_embeds = %v; want 1 (orphan excluded)", m["pending_embeds"])
+	}
+
+	// Drop the live node too: now every pending ref is an orphan, so the
+	// daemon must report a clean, drained, healthy status.
+	if _, err := db.Exec(`DELETE FROM nodes WHERE node_id='live'`); err != nil {
+		t.Fatalf("delete node: %v", err)
+	}
+	m, err = sp.Status(context.Background())
+	if err != nil {
+		t.Fatalf("Status: %v", err)
+	}
+	if m["pending_embeds"] != 0 {
+		t.Errorf("pending_embeds = %v; want 0 (all orphans)", m["pending_embeds"])
+	}
+	if m["status"] != "ok" {
+		t.Errorf("status = %v; want ok (no real backlog)", m["status"])
+	}
+}
+
 // TestStatusProvider_BacklogStaysDegradedForAgentContract pins solov2-34rl:
 // even though `doctor status` no longer escalates a non-zero backlog to
 // "degraded" (it now reports the backlog as a separate informational line),
@@ -189,6 +251,9 @@ func TestStatusProvider_BacklogStaysDegradedForAgentContract(t *testing.T) {
 		`INSERT INTO node_embedding_refs (node_id, state) VALUES ('n1','pending')`,
 	); err != nil {
 		t.Fatalf("seed refs: %v", err)
+	}
+	if _, err := db.Exec(`INSERT INTO nodes (node_id) VALUES ('n1')`); err != nil {
+		t.Fatalf("seed nodes: %v", err)
 	}
 	sp := &statusProvider{db: db}
 	m, err := sp.Status(context.Background())

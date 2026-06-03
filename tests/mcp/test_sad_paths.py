@@ -50,7 +50,10 @@ MISSING_REQUIRED_CASES = [
     # the "exactly one of" selector. Either substring is correct evidence
     # of a missing-arg rejection.
     ("eng_get_context_pack", {}, "required"),
-    ("eng_find_owner", {}, "file_path"),
+    # find_owner validates repo_id before file_path and does NOT sole-repo
+    # auto-resolve (unlike find_symbol), so an empty call is rejected on
+    # repo_id first (solov2-khra: re-pinned from "file_path").
+    ("eng_find_owner", {}, "repo_id"),
     # Findings family — finding_id is the always-required selector.
     ("eng_get_finding", {}, "finding_id"),
     ("eng_close_finding", {}, "finding_id"),
@@ -111,12 +114,12 @@ def test_unknown_ids_loud(mcp_client, method, params, want_substr):
 
 
 def test_search_similar_unknown_node_is_loud(mcp_client, repo_id, branch):
-    """eng_search_similar with a real repo but bogus node_id must surface
-    an 'embedding' error (the node has no embedding to similar-search
-    against). Previously this case passed repo_id='x' which never reached
-    the embedding lookup — after solov2-rkbc the resolver rejects 'x' as
-    an unknown repo, hiding the embedding-missing path. Use the real repo
-    fixture so the test exercises what it claims to."""
+    """eng_search_similar with a real repo but bogus node_id surfaces the
+    shared node-id resolver error (-32002 'node_id … not in repo …') BEFORE
+    it ever reaches the embedding lookup (solov2-izh6). The resolver
+    rejecting the unknown id is the loud failure we want — the node simply
+    doesn't exist in the repo (solov2-khra: re-pinned from the old
+    'embedding'/'not found' wording)."""
     ok, text, _, _ = mcp_client.call("eng_search_similar", {
         "repo_id": repo_id,
         "branch": branch,
@@ -124,23 +127,23 @@ def test_search_similar_unknown_node_is_loud(mcp_client, repo_id, branch):
         "limit": 3,
     })
     assert not ok, "eng_search_similar unexpectedly succeeded for unknown node_id"
-    assert "embedding" in text.lower() or "not found" in text.lower(), (
-        f"eng_search_similar error %r missing 'embedding' or 'not found'" % text
+    assert "not in repo" in text.lower(), (
+        f"eng_search_similar error %r missing 'not in repo'" % text
     )
 
 
 # Tools that soft-fail on unknown ID (success + empty body). Pin the contract.
+# eng_get_call_chain used to live here but now LOUDLY rejects an unknown
+# node_id via the shared resolver (-32002) — see
+# test_call_chain.py::test_call_chain_unknown_node_errors (solov2-khra).
 SOFT_FAIL_UNKNOWN_CASES = [
     ("eng_find_symbol", "symbol"),       # unknown symbol → {nodes:nil}
-    ("eng_get_call_chain", "node_id"),   # unknown node   → empty body
 ]
 
 
 @pytest.mark.parametrize("method,id_field", SOFT_FAIL_UNKNOWN_CASES)
 def test_unknown_ids_soft_fail(mcp_client, repo_id, branch, method, id_field):
     params = {"repo_id": repo_id, "branch": branch, id_field: "definitely-not-real-zzz"}
-    if method == "eng_get_call_chain":
-        params["depth"] = 2
     ok, _, _, result = mcp_client.call(method, params)
     assert ok, f"{method} unexpectedly errored on unknown {id_field}"
     nodes = result.get("nodes") if isinstance(result, dict) else None

@@ -32,15 +32,17 @@ def test_search_semantic_returns_results(mcp_client, repo_id, branch, target_sym
 
 
 def test_search_similar_unknown_node_errors(mcp_client, repo_id, branch):
-    """eng_search_similar returns -32003 'node has no embedding' when the
-    node_id is unknown. Pinned from the journey-test transcript."""
+    """eng_search_similar rejects an unknown node_id via the shared node-id
+    resolver (-32002 'node_id … not in repo …') before reaching the
+    embedding lookup (solov2-izh6; solov2-khra: re-pinned from the old
+    'no embedding' wording)."""
     ok, text, _, _ = mcp_client.call("eng_search_similar", {
         "repo_id": repo_id, "branch": branch,
         "node_id": "definitely-not-a-real-node-id-zzz",
         "k": 3,
     })
     assert not ok
-    assert "embedding" in text.lower() or "not embedded" in text.lower()
+    assert "not in repo" in text.lower()
 
 
 def test_search_similar_returns_results(mcp_client, repo_id, branch, target_symbol):

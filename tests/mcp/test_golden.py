@@ -25,7 +25,7 @@ from __future__ import annotations
 
 import pytest
 
-from tests.mcp.helpers import query
+from tests.mcp.helpers import assert_healthy_status, query
 
 pytestmark = pytest.mark.golden
 
@@ -34,7 +34,7 @@ def test_golden_user_journey(mcp_client, repo_id, branch, target_symbol, target_
     # ── 1. Status ─────────────────────────────────────────────────────
     ok, text, _, status = mcp_client.call("eng_get_status", {})
     assert ok, f"get_status: {text}"
-    assert status.get("status") == "ok"
+    assert_healthy_status(status)
     assert status.get("schema_version", 0) >= 9
     assert status.get("repo_count", 0) >= 1
 

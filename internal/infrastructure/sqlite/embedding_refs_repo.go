@@ -95,11 +95,24 @@ func embedText(kind, symbolPath, filePath, language, snippet string) string {
 	}, domain.EmbedVariantSnippet)
 }
 
-// CountPending returns the count of state='pending' rows.
+// CountPending returns the count of pending refs that still have a backing
+// node — i.e. the real embed backlog the worker will actually drain.
+//
+// The EXISTS guard mirrors FetchPending's `JOIN nodes`: an orphaned ref
+// (node deleted by repo removal or re-promotion churn, but the ref left
+// behind — node_embedding_refs has no FK to nodes because nodes has a
+// composite PK, see migration 0004) is never fetched by the worker, so it
+// must not be counted as pending either. Without this guard the orphans
+// inflate the count forever and pin eng_get_status at
+// degraded_reasons:["embeddings_pending"] long after the queue has drained
+// (solov2-khra). EXISTS (not JOIN) keeps the count strictly 1:1 even if a
+// node_id ever spans branches.
 func (r *EmbeddingRefsRepo) CountPending(ctx context.Context) (int, error) {
 	var n int
 	err := r.readDB.QueryRowContext(ctx,
-		`SELECT COUNT(*) FROM node_embedding_refs WHERE state = 'pending'`).Scan(&n)
+		`SELECT COUNT(*) FROM node_embedding_refs r
+		 WHERE r.state = 'pending'
+		   AND EXISTS (SELECT 1 FROM nodes n WHERE n.node_id = r.node_id)`).Scan(&n)
 	if err != nil {
 		return 0, fmt.Errorf("embedding_refs: count pending: %w", err)
 	}

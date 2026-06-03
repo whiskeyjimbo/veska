@@ -10,6 +10,7 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/sqlite/sqldriver"
 
@@ -333,6 +334,64 @@ func TestRemoveRepo(t *testing.T) {
 	}
 	if count != 0 {
 		t.Errorf("expected 0 rows after Remove, got %d", count)
+	}
+}
+
+// TestRemoveRepoDeletesEmbeddingRefs pins solov2-khra: node_embedding_refs
+// has no FK to nodes (composite PK), so the repos CASCADE that clears a
+// removed repo's nodes leaves its refs orphaned. Remove must delete them
+// explicitly, or they linger as 'pending' rows that pin eng_get_status at
+// degraded forever.
+func TestRemoveRepoDeletesEmbeddingRefs(t *testing.T) {
+	db := newTestDB(t)
+	dir := newGitRepo(t)
+	ctx := context.Background()
+
+	repoID, _, err := repo.Add(ctx, db, dir)
+	if err != nil {
+		t.Fatalf("Add: %v", err)
+	}
+
+	// newTestDB only creates the repos tables; add the minimal nodes +
+	// refs shape this path touches.
+	if _, err := db.Exec(`
+		CREATE TABLE nodes (node_id TEXT, branch TEXT, repo_id TEXT, language TEXT,
+			kind TEXT, symbol_path TEXT, file_path TEXT, content_hash TEXT,
+			last_promoted_at INTEGER, actor_id TEXT, actor_kind TEXT,
+			PRIMARY KEY (node_id, branch));
+		CREATE TABLE node_embedding_refs (node_id TEXT PRIMARY KEY, content_hash TEXT,
+			state TEXT NOT NULL, enqueued_at INTEGER NOT NULL, embedded_at INTEGER,
+			attempts INTEGER NOT NULL DEFAULT 0);`); err != nil {
+		t.Fatalf("create nodes/refs tables: %v", err)
+	}
+
+	// Seed a node for the repo plus a pending ref into it.
+	now := time.Now().UnixMilli()
+	if _, err := db.Exec(`INSERT INTO nodes (
+		node_id, branch, repo_id, language, kind, symbol_path, file_path,
+		content_hash, last_promoted_at, actor_id, actor_kind
+	) VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
+		"n-khra", "main", repoID, "go", "function", "n-khra", "f.go",
+		"h", now, "test", "system"); err != nil {
+		t.Fatalf("insert node: %v", err)
+	}
+	if _, err := db.Exec(
+		`INSERT INTO node_embedding_refs (node_id, state, enqueued_at) VALUES (?, 'pending', ?)`,
+		"n-khra", now); err != nil {
+		t.Fatalf("insert ref: %v", err)
+	}
+
+	if err := repo.Remove(ctx, db, repoID); err != nil {
+		t.Fatalf("Remove: %v", err)
+	}
+
+	var refs int
+	if err := db.QueryRow(`SELECT COUNT(*) FROM node_embedding_refs WHERE node_id='n-khra'`).
+		Scan(&refs); err != nil {
+		t.Fatalf("count refs: %v", err)
+	}
+	if refs != 0 {
+		t.Errorf("expected embedding refs deleted on repo removal, got %d", refs)
 	}
 }
 

@@ -142,6 +142,52 @@ func TestEmbeddingRefsRepo_MarkAttemptFailed_NoOpOnNonPending(t *testing.T) {
 	}
 }
 
+// TestEmbeddingRefsRepo_CountPending_IgnoresOrphans verifies CountPending
+// counts only pending refs that still have a backing node — orphaned refs
+// (node deleted, ref left behind) are excluded, matching FetchPending's
+// JOIN. Without this, orphans pin eng_get_status at degraded forever even
+// though the worker has nothing left to drain (solov2-khra).
+func TestEmbeddingRefsRepo_CountPending_IgnoresOrphans(t *testing.T) {
+	t.Parallel()
+	db, repo := openTestDB(t)
+	ctx := context.Background()
+
+	// Two real pending refs, then orphan one by deleting its node.
+	seedRefRow(t, db, "r1", "live")
+	seedRefRow(t, db, "r1", "orphan")
+	if _, err := db.Exec(`DELETE FROM nodes WHERE node_id='orphan'`); err != nil {
+		t.Fatalf("delete node: %v", err)
+	}
+
+	// The orphaned ref row is still present and still 'pending'...
+	var raw int
+	if err := db.QueryRow(`SELECT COUNT(*) FROM node_embedding_refs WHERE state='pending'`).
+		Scan(&raw); err != nil {
+		t.Fatalf("raw count: %v", err)
+	}
+	if raw != 2 {
+		t.Fatalf("raw pending rows: want 2 (incl orphan), got %d", raw)
+	}
+
+	// ...but CountPending excludes it.
+	n, err := repo.CountPending(ctx)
+	if err != nil {
+		t.Fatalf("CountPending: %v", err)
+	}
+	if n != 1 {
+		t.Errorf("CountPending: want 1 (orphan excluded), got %d", n)
+	}
+
+	// And FetchPending agrees — the orphan is never returned for embedding.
+	pending, err := repo.FetchPending(ctx, 10)
+	if err != nil {
+		t.Fatalf("FetchPending: %v", err)
+	}
+	if len(pending) != 1 || pending[0].NodeID != "live" {
+		t.Errorf("FetchPending: want [live], got %+v", pending)
+	}
+}
+
 // TestEmbeddingRefsRepo_CountByState returns accurate counts and
 // guarantees all three keys are present even when their count is zero.
 func TestEmbeddingRefsRepo_CountByState(t *testing.T) {
