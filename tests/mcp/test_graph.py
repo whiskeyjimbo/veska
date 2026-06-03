@@ -51,8 +51,13 @@ def test_get_file_nodes_returns_file_content(mcp_client, repo_id, branch, target
 
 @pytest.mark.deep
 def test_get_file_nodes_matches_sqlite(mcp_client, repo_id, branch, target_file):
+    # eng_get_file_nodes filters out chunk:* pseudo-nodes (internal
+    # file-fragment embedding units, nodesToDTO in dto.go), so the
+    # ground-truth count must exclude them too or it over-counts every
+    # chunked file (solov2-khra).
     db_count = query(
-        "SELECT COUNT(*) AS c FROM nodes WHERE repo_id = ? AND branch = ? AND file_path = ?",
+        "SELECT COUNT(*) AS c FROM nodes "
+        "WHERE repo_id = ? AND branch = ? AND file_path = ? AND kind != 'chunk'",
         (repo_id, branch, target_file),
     )[0]["c"]
     _, _, _, result = mcp_client.call("eng_get_file_nodes", {

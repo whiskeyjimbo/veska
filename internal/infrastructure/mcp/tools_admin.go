@@ -98,9 +98,26 @@ func makeGetCurrentRepoHandler(repos application.RepoLister) ToolHandler {
 		// keep the loud invalid-params error so the caller learns it must
 		// pass one.
 		if p.CWD == "" {
-			if len(all) == 1 {
+			// Resolve to the sole *user-visible* repo. Synthetic ext:<module>
+			// rows (from `veska deps index`) are hidden by eng_list_repos, so
+			// counting them here would tell a caller "more than one repo" when
+			// the listing shows exactly one, and would pick the wrong record;
+			// skip them and default to the lone real repo (solov2-khra).
+			var sole *application.RepoRecord
+			ambiguous := false
+			for i := range all {
+				if strings.HasPrefix(all[i].RepoID, "ext:") {
+					continue
+				}
+				if sole != nil {
+					ambiguous = true
+					break
+				}
+				sole = &all[i]
+			}
+			if sole != nil && !ambiguous {
 				return map[string]any{
-					"repo":             decorateRepo(all[0]),
+					"repo":             decorateRepo(*sole),
 					"included_staging": true,
 					"degraded_reasons": []string{"defaulted_to_sole_repo"},
 				}, nil

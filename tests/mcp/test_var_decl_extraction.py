@@ -58,9 +58,15 @@ def _wait_for_promotion(mcp_client, repo_id: str, timeout_s: float = 15.0) -> bo
 
 
 def test_top_level_var_declarations_become_variable_nodes(mcp_client):
-    """solov2-b7wt: rootCmd (a top-level `var x = &cobra.Command{...}`)
-    plus var-block names (verbose, logFile) and the const buildMode must
-    all surface as kind='variable' nodes via eng_find_symbol."""
+    """solov2-b7wt: plain top-level var-block names (verbose, logFile) and
+    the const buildMode surface as kind='variable' nodes via eng_find_symbol.
+
+    rootCmd is the exception: `var rootCmd = &cobra.Command{...}` is no
+    longer a plain variable — the cobra extractor (solov2, 'promote cobra
+    command literals to KindCommand') reclassifies it as a kind='command'
+    node keyed by its Use string ("tool"), NOT by the Go var name. So we
+    assert the command surfaces under "tool" rather than expecting a
+    'rootCmd' variable (solov2-khra: re-pinned after the extractor change)."""
     with tempfile.TemporaryDirectory(prefix="veska-mcp-cobra-") as tmp:
         _init_cobra_repo(tmp)
 
@@ -71,7 +77,8 @@ def test_top_level_var_declarations_become_variable_nodes(mcp_client):
             assert _wait_for_promotion(mcp_client, repo_id), (
                 "fixture repo never reached promoted state — cold scan stuck?"
             )
-            for name in ("rootCmd", "verbose", "logFile", "buildMode"):
+            # Plain var/const declarations → kind='variable'.
+            for name in ("verbose", "logFile", "buildMode"):
                 ok, text, _, res = mcp_client.call("eng_find_symbol", {
                     "repo_id": repo_id, "symbol": name,
                 })
@@ -82,5 +89,16 @@ def test_top_level_var_declarations_become_variable_nodes(mcp_client):
                 assert "variable" in kinds, (
                     f"{name!r}: expected at least one kind='variable' node, got kinds={kinds}"
                 )
+
+            # rootCmd is promoted to a cobra command keyed by its Use string.
+            ok, text, _, res = mcp_client.call("eng_find_symbol", {
+                "repo_id": repo_id, "symbol": "tool",
+            })
+            assert ok, f"eng_find_symbol('tool') failed: {text}"
+            nodes = res.get("nodes") or []
+            kinds = {n.get("kind") for n in nodes}
+            assert "command" in kinds, (
+                f"expected the cobra rootCmd as a kind='command' node, got kinds={kinds}"
+            )
         finally:
             mcp_client.call("eng_remove_repo", {"repo_id": repo_id})

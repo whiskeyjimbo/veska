@@ -21,19 +21,20 @@ def test_call_chain_for_target_node(mcp_client, repo_id, branch, target_symbol):
     assert "included_staging" in result
 
 
-def test_call_chain_unknown_node_soft_fails(mcp_client, repo_id, branch):
-    """The journey test confirmed eng_get_call_chain returns success with
-    an empty body when the node_id doesn't exist — not an error. Pin
-    that contract so a future change that 'helpfully' errors on missing
-    nodes shows up here."""
-    ok, _, _, result = mcp_client.call("eng_get_call_chain", {
+def test_call_chain_unknown_node_errors(mcp_client, repo_id, branch):
+    """eng_get_call_chain now LOUDLY rejects an unknown node_id rather than
+    soft-failing with an empty body: the shared node-id resolver (solov2-izh6,
+    "junior-engineer journey gaps") returns -32002 with a "node_id … not in
+    repo … may belong to a different registered repo" hint across every
+    node-id tool. That's more useful to an agent than a silent empty result,
+    so it's the canonical contract (solov2-khra: re-pinned from soft-fail)."""
+    ok, text, _, _ = mcp_client.call("eng_get_call_chain", {
         "repo_id": repo_id, "branch": branch,
         "node_id": "definitely-not-a-real-node-deadbeef",
         "depth": 2,
     })
-    assert ok, "unknown node should soft-fail with empty body, not error"
-    # No nodes/edges keys means an empty body — acceptable here.
-    assert not result.get("nodes") and not result.get("edges")
+    assert not ok, "unknown node_id should surface a loud resolver error"
+    assert "not in repo" in text.lower()
 
 
 def test_call_chain_requires_node_id_or_symbol(mcp_client, repo_id, branch):
