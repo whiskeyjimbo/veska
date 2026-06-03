@@ -37,7 +37,15 @@ func initCmd() *cobra.Command {
 				if err != nil {
 					return fmt.Errorf("init --agent: cwd: %w", err)
 				}
-				return initcmd.WriteAgentSnippet(cwd, agent, cmd.OutOrStdout(), updateGitignore)
+				return initcmd.WriteAgentSnippet(initcmd.AgentSnippetParams{
+					RootDir:         cwd,
+					Flavor:          agent,
+					Out:             cmd.OutOrStdout(),
+					In:              cmd.InOrStdin(),
+					UpdateGitignore: updateGitignore,
+					AssumeYes:       yes,
+					Interactive:     initcmd.StdinIsInteractive(),
+				})
 			}
 			deps := initcmd.Deps{
 				VeskaHome: config.DefaultVectorDir(),
