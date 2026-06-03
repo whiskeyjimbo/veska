@@ -130,6 +130,17 @@ release-archive: build
 test:
 	$(SQLITE_CGO_ENV) go test -tags "$(SQLITE_TAGS)" ./...
 
+# test-race: race-detector run with package parallelism pinned to 1 (solov2-ozoi.3).
+# TestToolCoverage builds a full isolated harness (sqlite + memvec + static
+# embedder + cold-scan) per leaf; under `go test -race ./...` the detector
+# inflates peak RSS ~5-10x, and when this heavy package overlaps with others it
+# can spike memory enough to panic (observed once in ~16 runs). The subtests are
+# already sequential and the harness has no logic race — the contention is purely
+# cross-package, so `-p 1` serializes the test binaries and makes race runs
+# deterministic at the cost of wall time.
+test-race:
+	$(SQLITE_CGO_ENV) go test -race -p 1 -tags "$(SQLITE_TAGS)" ./...
+
 # tool-test: run the in-process MCP tool-coverage suite (solov2-ti9x). Narrow to
 # a family and/or tool with FAMILY=/TOOL= which append to the -run subtest path,
 # e.g. `make tool-test FAMILY=graph TOOL=eng_get_node`.
