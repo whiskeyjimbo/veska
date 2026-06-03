@@ -53,6 +53,17 @@ type GraphReader interface {
 	// node_id . Returns nil, nil when not found.
 	FindNodeByID(ctx context.Context, id domain.NodeID) (*domain.Node, error)
 
+	// FindNodeIDsByPrefix returns the distinct node_ids that begin with prefix,
+	// scanning across every (repo_id, branch) pair, capped at limit. It exists
+	// so eng_get_node can resolve the 12-char display prefix that
+	// eng_find_symbol / `veska symbol` print, not just the full 64-char id
+	// (solov2-uej9.3). Implementations DISTINCT on node_id so a node present on
+	// multiple branches is not mistaken for an ambiguous prefix. The caller
+	// (eng_get_node) treats len>1 as an ambiguous-prefix error listing the
+	// candidates and len==1 as the resolved id. Returns an empty slice (not an
+	// error) when nothing matches.
+	FindNodeIDsByPrefix(ctx context.Context, prefix string, limit int) ([]domain.NodeID, error)
+
 	// NodesForFile returns every Node whose file_path equals filePath in the
 	// given repository and branch. Returns an empty slice (not an error) when
 	// the file has no promoted nodes. This is the primary read for
