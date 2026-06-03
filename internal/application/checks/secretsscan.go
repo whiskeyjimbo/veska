@@ -126,7 +126,11 @@ func (c *SecretsScanCheck) Run(ctx context.Context, in Input) ([]*domain.Finding
 			Message:  msg,
 		},
 			domain.WithFileAnchor(s.FilePath),
-			domain.WithFindingKey(s.Rule+strconv.Itoa(s.Line)),
+			// Namespace the finding_id by repo so two repos that leak the same
+			// secret (same rule+line in a same-named file) don't derive an
+			// identical finding_id and clobber each other on the (finding_id,
+			// branch) PK. Mirrors the vulnscan fix (solov2-uej9.1).
+			domain.WithFindingKey(in.RepoID+"\x00"+s.Rule+strconv.Itoa(s.Line)),
 		)
 		if err != nil {
 			// A malformed scanner result should not abort the whole check.

@@ -77,6 +77,45 @@ func TestSecretsScanCheck_AddedLinesHit_EmitsFindings(t *testing.T) {
 	}
 }
 
+// TestSecretsScanCheck_RepoNamespacedFindingID guards solov2-uej9.9: two repos
+// that leak the SAME secret (same rule, file, and line) must NOT share a
+// finding_id, or the second repo's promote upserts over the first on the
+// (finding_id, branch) PK and the first repo silently loses the finding. The
+// same secret in the SAME repo must stay idempotent (stable finding_id).
+func TestSecretsScanCheck_RepoNamespacedFindingID(t *testing.T) {
+	mkFindings := func() []ports.SecretFinding {
+		return []ports.SecretFinding{
+			{Rule: "aws-access-key", FilePath: "config.go", Line: 12,
+				Redacted: "AKIA****************", Confidence: 0.95},
+		}
+	}
+	run := func(repoID string) *domain.Finding {
+		c := NewSecretsScanCheck(&fakeSecretsScanner{findings: mkFindings()})
+		got, err := c.Run(context.Background(), Input{
+			RepoID: repoID, Branch: "main",
+			AddedLines: map[string][]Line{"config.go": {{Number: 12, Text: "key = AKIAIOSFODNN7EXAMPLE"}}},
+		})
+		if err != nil {
+			t.Fatalf("Run(%s): %v", repoID, err)
+		}
+		if len(got) != 1 {
+			t.Fatalf("Run(%s): want 1 finding, got %d", repoID, len(got))
+		}
+		return got[0]
+	}
+
+	repo1a := run("repo1")
+	repo1b := run("repo1")
+	repo2 := run("repo2")
+
+	if repo1a.FindingID != repo1b.FindingID {
+		t.Errorf("same repo+secret must be idempotent: %q != %q", repo1a.FindingID, repo1b.FindingID)
+	}
+	if repo1a.FindingID == repo2.FindingID {
+		t.Errorf("different repos sharing a secret must get distinct finding_ids; both = %q", repo1a.FindingID)
+	}
+}
+
 func TestSecretsScanCheck_EmptyAddedLines_NoFindings(t *testing.T) {
 	scanner := &fakeSecretsScanner{findings: []ports.SecretFinding{
 		{Rule: "aws-access-key", FilePath: "config.go", Line: 1, Redacted: "x"},
