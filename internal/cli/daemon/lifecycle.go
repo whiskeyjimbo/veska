@@ -160,11 +160,23 @@ func (d *Daemon) startWatchLoop() {
 // startResync runs the startup resync (solov2-0z1.2) in its own goroutine so a
 // long cold-scan over a large repo cannot block Start from returning. ctx
 // cancellation on shutdown is the expected exit and not logged as an error.
+//
+// When the ADR-S0017 identity migration (0019) is pending, the rescheme path
+// takes over: it re-keys repo identity, runs the rescan, carries suppressions
+// forward, and drops the migration snapshot — then a normal resync is a no-op
+// (every repo already up to date). reschemeIdentity itself runs the rescan, so
+// the else-branch resync is reached only on the steady-state (no migration)
+// path.
 func (d *Daemon) startResync() {
 	go func() {
 		defer close(d.resyncDone)
 		if d.resync == nil {
 			return
+		}
+		if err := d.reschemeIdentity(d.ctx); err != nil && !errors.Is(err, context.Canceled) {
+			slog.Error("daemon: identity rescheme", "err", err)
+			// Fall through to a normal resync: even a partial rescheme left
+			// last_promoted_sha cleared, so the graph must still be rebuilt.
 		}
 		if err := d.resync.Run(d.ctx); err != nil && !errors.Is(err, context.Canceled) {
 			slog.Error("daemon: startup resync", "err", err)
