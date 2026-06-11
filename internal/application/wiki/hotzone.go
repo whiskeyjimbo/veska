@@ -134,13 +134,15 @@ func (s *HotZoneService) Rank(ctx context.Context, repoID, branch, repoRoot stri
 
 	zones := make([]HotZone, 0, len(counts))
 	for path, freq := range counts {
-		// git ChangeCounts returns repo-root-relative paths, but the
-		// nodes table stores absolute file_paths. Without this join,
-		// nodesInFile returns [] for every entry and every zone scores
-		// 0, so .github/dependabot.yml ties with command.go .
+		// git ChangeCounts and the nodes table now both key on the
+		// repo-relative slash path (ADR-S0017 §1), so the change-count
+		// path feeds nodesInFile directly. An absolute path (defensive,
+		// e.g. a non-git change source) is relativised to match.
 		lookupPath := path
-		if !filepath.IsAbs(lookupPath) {
-			lookupPath = filepath.Join(repoRoot, path)
+		if filepath.IsAbs(lookupPath) {
+			if rel, rerr := filepath.Rel(repoRoot, lookupPath); rerr == nil {
+				lookupPath = filepath.ToSlash(rel)
+			}
 		}
 		seedIDs, err := s.nodesInFile(ctx, repoID, branch, lookupPath)
 		if err != nil {

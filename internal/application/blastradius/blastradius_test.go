@@ -381,12 +381,11 @@ func TestDiffOf_UnionAcrossChangedFiles(t *testing.T) {
 		metas: map[string]ports.NodeMeta{
 			"a": {NodeID: "a"}, "b": {NodeID: "b"}, "caller-of-a": {NodeID: "caller-of-a"},
 		},
-		// Nodes are keyed by ABSOLUTE path (storage contract). DiffOf must
-		// absolutize the repo-relative diff paths against repoRoot before
-		// NodesInFile, else 0 seeds match (solov2-im9o).
+		// ADR-S0017 §1: nodes are keyed by the repo-relative slash path, which
+		// is the form git diff yields, so DiffOf feeds them through directly.
 		byFile: map[string][]string{
-			"/tmp/repo/foo.go": {"a"},
-			"/tmp/repo/bar.go": {"b"},
+			"foo.go": {"a"},
+			"bar.go": {"b"},
 		},
 	}
 	s, err := blastradius.NewService(edges, nodes, nil)
@@ -411,14 +410,13 @@ func TestDiffOf_UnionAcrossChangedFiles(t *testing.T) {
 	}
 }
 
-// TestDiffOf_AbsolutizesRelativeDiffPaths pins the solov2-im9o fix: git diff
-// yields repo-relative paths but nodes.file_path is stored absolute, so DiffOf
-// must join the diff path against repoRoot before NodesInFile or every changed
-// file resolves to 0 seeds and the blast is silently empty.
-func TestDiffOf_AbsolutizesRelativeDiffPaths(t *testing.T) {
+// TestDiffOf_MatchesRelativeDiffPaths pins ADR-S0017 §1: git diff yields
+// repo-relative paths and nodes.file_path is now stored repo-relative too, so a
+// diff path feeds NodesInFile directly without an absolutize step.
+func TestDiffOf_MatchesRelativeDiffPaths(t *testing.T) {
 	nodes := &fakeNodes{
 		metas:  map[string]ports.NodeMeta{"a": {NodeID: "a"}},
-		byFile: map[string][]string{"/tmp/junior-pflag/flag.go": {"a"}},
+		byFile: map[string][]string{"flag.go": {"a"}},
 	}
 	s, err := blastradius.NewService(&fakeEdges{}, nodes, nil)
 	if err != nil {
@@ -432,7 +430,7 @@ func TestDiffOf_AbsolutizesRelativeDiffPaths(t *testing.T) {
 		t.Fatalf("DiffOf: %v", err)
 	}
 	if len(resp.Entries) == 0 {
-		t.Fatal("expected the absolute-stored node to be found from a relative diff path, got empty")
+		t.Fatal("expected the relative-stored node to be found from a relative diff path, got empty")
 	}
 }
 

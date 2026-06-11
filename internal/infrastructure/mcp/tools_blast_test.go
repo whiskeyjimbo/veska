@@ -323,9 +323,8 @@ func TestDiffBlastRadius_HappyPath(t *testing.T) {
 		metas: map[string]ports.NodeMeta{
 			"a": {NodeID: "a"}, "caller": {NodeID: "caller"},
 		},
-		// nodes.file_path is stored absolute; the relative diff path "foo.go"
-		// must resolve against repoRoot "/tmp/r" to hit this key (solov2-im9o).
-		byFile: map[string][]string{"/tmp/r/foo.go": {"a"}},
+		// ADR-S0017 §1: nodes.file_path is repo-relative, matching the diff path.
+		byFile: map[string][]string{"foo.go": {"a"}},
 	}
 	svc, err := blastradius.NewService(edges, nodes, nil)
 	if err != nil {
@@ -385,7 +384,7 @@ func TestDiffBlastRadius_RangedRefs(t *testing.T) {
 			"a": {NodeID: "a"}, "caller": {NodeID: "caller"},
 		},
 		// Absolute storage key; "foo.go" resolves against repoRoot (solov2-im9o).
-		byFile: map[string][]string{"/tmp/r/foo.go": {"a"}},
+		byFile: map[string][]string{"foo.go": {"a"}},
 	}
 	svc, err := blastradius.NewService(edges, nodes, nil)
 	if err != nil {

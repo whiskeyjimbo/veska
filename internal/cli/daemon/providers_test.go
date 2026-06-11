@@ -41,7 +41,9 @@ func providersTestDB(t *testing.T) *sql.DB {
 			kind              TEXT NOT NULL DEFAULT 'tracked',
 			canonical_url     TEXT,
 			last_accessed_at  INTEGER,
-			prompted_at       INTEGER
+			prompted_at       INTEGER,
+			identity_tier     TEXT,
+			identity_anchor   TEXT
 		)`,
 		`CREATE TABLE repo_aliases (
 			name     TEXT PRIMARY KEY,
@@ -340,7 +342,9 @@ func newAddRepoTestEnv(t *testing.T) (*sql.DB, string) {
 		kind              TEXT NOT NULL DEFAULT 'tracked',
 		canonical_url     TEXT,
 		last_accessed_at  INTEGER,
-		prompted_at       INTEGER
+		prompted_at       INTEGER,
+		identity_tier     TEXT,
+		identity_anchor   TEXT
 	)`); err != nil {
 		t.Fatalf("create repos: %v", err)
 	}

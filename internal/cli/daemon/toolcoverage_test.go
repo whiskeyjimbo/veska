@@ -1019,9 +1019,10 @@ func graphFamily() []coverageTool {
 			if n.Kind != string(key.Kind) {
 				t.Errorf("kind = %q, want %q", n.Kind, string(key.Kind))
 			}
-			// Node paths are stored absolute; manifest Path is repo-relative.
-			if want := filepath.Join(h.Root(repoID), key.Path); n.FilePath != want {
-				t.Errorf("file_path = %q, want %q", n.FilePath, want)
+			// ADR-S0017 §1: node paths are stored repo-relative, matching the
+			// manifest Path directly.
+			if n.FilePath != key.Path {
+				t.Errorf("file_path = %q, want %q", n.FilePath, key.Path)
 			}
 
 			// Not-found is a domain error surfaced as CodeNotFound, not a marshal error.
@@ -1117,7 +1118,8 @@ func graphFamily() []coverageTool {
 			}
 			// Expected manifest facts for this file (chunk nodes are excluded
 			// from the manifest by design — their names are volatile line ranges).
-			wantPath := filepath.Join(h.Root(repoID), filepath.FromSlash(file))
+			// ADR-S0017 §1: node file_path is repo-relative, matching `file`.
+			wantPath := file
 			var want []string
 			for _, k := range coverage.Manifest().Nodes {
 				if k.Path == file {
@@ -1166,7 +1168,7 @@ func graphFamily() []coverageTool {
 			want := string(h.ResolveID(repoID, coverage.NodeKey{
 				Path: "metric/deviation.go", Kind: domain.KindFunction, Name: "averageSamples"}))
 			res, rpcErr := h.Call("eng_find_related", map[string]any{
-				"file_path": filepath.Join(h.Root(repoID), "metric/series.go"),
+				"file_path": "metric/series.go", // ADR-S0017 §1: stored paths are repo-relative
 				"line":      39, "repo_id": repoID, "k": 10,
 			})
 			if rpcErr != nil {
@@ -1269,7 +1271,7 @@ func blastFamily() []coverageTool {
 			// Simulate an uncommitted working-tree edit to helper.go via the same
 			// Save the watcher uses, staging it under (repoID, FixtureBranch).
 			h.stageDirtyEdit(repoID, coverage.FixtureBranch,
-				filepath.Join(root, "helper.go"),
+				"helper.go", // ADR-S0017 §1: parser keys on the repo-relative path
 				[]byte("package p\n\nfunc Helper() int { return 2 }\n"))
 
 			res, rpcErr = h.Call("eng_get_dirty_blast_radius", map[string]any{
@@ -1479,7 +1481,8 @@ func symbolFamily() []coverageTool {
 				t.Errorf("nodes[0].node_id = %q, want declaration %q", resp.Nodes[0].NodeID, string(declID))
 			}
 			// Set CONTAINS the declaration node with the manifest's graph facts.
-			wantPath := filepath.Join(h.Root(repoID), key.Path)
+			// ADR-S0017 §1: stored file_path is repo-relative (== manifest Path).
+			wantPath := key.Path
 			found := false
 			for _, n := range resp.Nodes {
 				if n.NodeID == string(declID) {

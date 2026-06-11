@@ -27,8 +27,9 @@ func wikiFixtureService(t *testing.T) *wiki.HotZoneService {
 			"a": {NodeID: "a"}, "b": {NodeID: "b"}, "c": {NodeID: "c"},
 			"x": {NodeID: "x"}, "y": {NodeID: "y"},
 		},
+		// ADR-S0017 §1: NodesInFile is keyed on the repo-relative slash path.
 		byFile: map[string][]string{
-			"/tmp/r/a.go": {"a"}, "/tmp/r/b.go": {"b"}, "/tmp/r/c.go": {"c"},
+			"a.go": {"a"}, "b.go": {"b"}, "c.go": {"c"},
 		},
 	}
 	blast, err := blastradius.NewService(edges, nodes, nil)

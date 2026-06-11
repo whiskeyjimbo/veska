@@ -401,12 +401,13 @@ func (s *Service) DiffOf(ctx context.Context, repoID, branch, repoRoot string, c
 	seen := make(map[string]struct{})
 	seeds := make([]string, 0, len(files)*4)
 	for _, fp := range files {
-		// git diff yields repo-relative paths, but nodes.file_path is stored
-		// absolute, so NodesInFile's exact match would find 0 seeds for every
-		// changed file (solov2-im9o). Absolutize against repoRoot first,
-		// mirroring how eng_get_file_nodes resolves a relative file_path.
-		if !filepath.IsAbs(fp) {
-			fp = filepath.Join(repoRoot, fp)
+		// git diff and nodes.file_path now both key on the repo-relative slash
+		// path (ADR-S0017 §1), so a diff path feeds NodesInFile directly. An
+		// absolute path (defensive) is relativised against repoRoot to match.
+		if filepath.IsAbs(fp) {
+			if rel, rerr := filepath.Rel(repoRoot, fp); rerr == nil {
+				fp = filepath.ToSlash(rel)
+			}
 		}
 		ids, err := s.nodes.NodesInFile(ctx, repoID, branch, fp)
 		if err != nil {
