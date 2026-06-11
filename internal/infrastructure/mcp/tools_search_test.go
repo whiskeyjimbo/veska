@@ -698,18 +698,16 @@ func TestFindRelated_ResolvesSmallestEnclosingNode(t *testing.T) {
 	}
 }
 
-// TestFindRelated_ResolvesRelativePath covers solov2-uej9.4: a repo-relative
-// file_path must be joined against the repo root before the node lookup (node
-// paths are stored absolute), mirroring eng_get_file_nodes. The byFile stub is
-// keyed on the ABSOLUTE path, so a relative request only resolves if the
-// handler joins it against RootPath. An absolute file_path is left unchanged.
+// TestFindRelated_ResolvesRelativePath covers solov2-uej9.4 / ADR-S0017 §1: node
+// file_paths are stored repo-relative, so a relative file_path matches directly
+// and an absolute one is relativised against RootPath. The byFile stub is keyed
+// on the repo-relative path.
 func TestFindRelated_ResolvesRelativePath(t *testing.T) {
 	const root = "/abs/repo"
-	const abs = root + "/foo.go"
 	nodes := &stubNodes{
-		byFile: map[string][]string{abs: {"seed"}},
+		byFile: map[string][]string{"foo.go": {"seed"}},
 		metas: []ports.NodeMeta{
-			{NodeID: "seed", FilePath: abs, LineStart: 5, LineEnd: 30, Kind: "function"},
+			{NodeID: "seed", FilePath: "foo.go", LineStart: 5, LineEnd: 30, Kind: "function"},
 			{NodeID: "neighbour", FilePath: "other.go", LineStart: 1, LineEnd: 3, SymbolPath: "Other"},
 		},
 	}
@@ -740,9 +738,9 @@ func TestFindRelated_ResolvesRelativePath(t *testing.T) {
 		t.Errorf("want [neighbour] from resolved relative path, got %+v", resp.Results)
 	}
 
-	// Absolute path is passed through unchanged.
+	// Absolute path is relativised against the root and still resolves.
 	respAbs, rpcErr := dispatchSearch(t, r, "eng_find_related", map[string]any{
-		"file_path": abs,
+		"file_path": root + "/foo.go",
 		"line":      16,
 		"repo_id":   "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
 		"branch":    "main",

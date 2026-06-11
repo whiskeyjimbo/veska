@@ -315,11 +315,11 @@ func (h *toolHarness) ResolveID(repoID string, key coverage.NodeKey) domain.Node
 // Ingester.Save the fsnotify hot path uses, writing the parsed nodes/edges into
 // the shared staging.Area the dirty-blast service reads. Use it AFTER indexing,
 // once the reparser has drained the area, to seed an uncommitted edit.
-func (h *toolHarness) stageDirtyEdit(repoID, branch, absPath string, src []byte) {
+func (h *toolHarness) stageDirtyEdit(repoID, branch, relPath string, src []byte) {
 	h.t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	h.ingester.Save(ctx, repoID, branch, absPath, src)
+	h.ingester.Save(ctx, repoID, branch, relPath, src)
 }
 
 // fixtureHeadQuerier is the cold-scan headQuerier stub; the fixture is not a

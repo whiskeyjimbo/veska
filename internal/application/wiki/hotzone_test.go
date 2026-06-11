@@ -61,10 +61,10 @@ func fixtureService(t *testing.T, opts ...Option) *HotZoneService {
 			"a": {NodeID: "a"}, "b": {NodeID: "b"}, "c": {NodeID: "c"},
 			"x": {NodeID: "x"}, "y": {NodeID: "y"},
 		},
-		// Keys match what HotZoneService passes to NodesInFile, i.e.
-		// repoRoot-joined absolute paths (solov2-eb2 fix).
+		// Keys match what HotZoneService passes to NodesInFile, i.e. the
+		// repo-relative slash path (ADR-S0017 §1; nodes are no longer absolute).
 		byFile: map[string][]string{
-			"/tmp/r/a.go": {"a"}, "/tmp/r/b.go": {"b"}, "/tmp/r/c.go": {"c"},
+			"a.go": {"a"}, "b.go": {"b"}, "c.go": {"c"},
 		},
 	}
 	blast, err := blastradius.NewService(edges, nodes, nil)
@@ -170,9 +170,9 @@ func TestRank_DropsZeroScoreZones(t *testing.T) {
 	nodes := &fakeNodes{
 		metas: map[string]ports.NodeMeta{"a": {NodeID: "a"}, "x": {NodeID: "x"}},
 		byFile: map[string][]string{
-			"/tmp/r/a.go": {"a"},
+			"a.go": {"a"},
 			// go.mod has no graph nodes — common in real repos.
-			"/tmp/r/go.mod": nil,
+			"go.mod": nil,
 		},
 	}
 	blast, err := blastradius.NewService(edges, nodes, nil)

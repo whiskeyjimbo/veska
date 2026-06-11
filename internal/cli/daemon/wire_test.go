@@ -403,10 +403,13 @@ func TestWire_WatchLoopRoutesEditsToStaging(t *testing.T) {
 				t.Fatalf("write hello.go: %v", err)
 			}
 
+			// ADR-S0017 §1: the watch loop relativises the absolute fsnotify
+			// path before staging, so the staged key is the repo-relative form.
+			const wantRel = "hello.go"
 			deadline := time.Now().Add(3 * time.Second)
 			for time.Now().Before(deadline) {
 				files := d.staging.StagedFiles(repoID, branch)
-				if slices.Contains(files, abs) {
+				if slices.Contains(files, wantRel) {
 					return // success — staged under correct branch
 				}
 				time.Sleep(50 * time.Millisecond)

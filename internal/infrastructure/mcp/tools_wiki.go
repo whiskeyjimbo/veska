@@ -117,6 +117,21 @@ func makeEntryPointsHandler(svc *wiki.EntryPointsService, repos application.Repo
 		if p.Limit > 0 && p.Limit < len(entries) {
 			entries = entries[:p.Limit]
 		}
+		// Canonicalise file_path to absolute on the wire so every eng_* tool
+		// returns the same shape (mirrors the hot-zone handler below). Node
+		// file_paths are stored repo-relative since ADR-S0017 §1, so join the
+		// repo root; an already-absolute path is left as-is. When the repo
+		// lister is unwired (repos == nil), the relative path is surfaced as-is.
+		if root, ok := repoRoot(ctx, repos, p.RepoID); ok {
+			absEntries := make([]wiki.EntryPoint, len(entries))
+			for i, e := range entries {
+				if !filepath.IsAbs(e.FilePath) {
+					e.FilePath = filepath.Join(root, e.FilePath)
+				}
+				absEntries[i] = e
+			}
+			entries = absEntries
+		}
 		return EntryPointsResponse{
 			RepoID:      rep.RepoID,
 			Branch:      rep.Branch,

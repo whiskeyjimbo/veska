@@ -1174,20 +1174,23 @@ func TestGetFileNodes_FallsBackToPromotedStore(t *testing.T) {
 	}
 }
 
-// TestGetFileNodes_ResolvesRelativePath verifies a repo-relative file_path is
-// joined to the repo root before lookup, instead of silently matching nothing
-// . Also exercises the "path" alias .
+// TestGetFileNodes_ResolvesRelativePath verifies that an ABSOLUTE caller path is
+// relativised to the repo-relative form node file_paths are stored in (ADR-S0017
+// §1) so it still matches, and that a relative path matches directly. Also
+// exercises the "path" alias .
 func TestGetFileNodes_ResolvesRelativePath(t *testing.T) {
 	store := newStubGraphStorage()
-	n1 := mustNode(t, "n1", "/abs/repo/internal/server.go", "Serve", domain.KindFunction)
+	// Nodes are stored repo-relative since ADR-S0017 §1.
+	n1 := mustNode(t, "n1", "internal/server.go", "Serve", domain.KindFunction)
 	store.addNode(n1)
 
 	r := NewRegistry()
 	RegisterGraphTools(r, store, staging.NewArea(),
 		WithRepoLister(&stubRepoLister{repos: []application.RepoRecord{{RepoID: "repo1", RootPath: "/abs/repo"}}}))
 
+	// An absolute path under the root relativises to "internal/server.go".
 	resp, rpcErr := dispatchGraph(t, r, "eng_get_file_nodes", map[string]string{
-		"path":    "internal/server.go", // relative + alias
+		"path":    "/abs/repo/internal/server.go", // absolute + alias
 		"repo_id": "repo1",
 		"branch":  "main",
 	})
@@ -1195,7 +1198,7 @@ func TestGetFileNodes_ResolvesRelativePath(t *testing.T) {
 		t.Fatalf("unexpected error: %+v", rpcErr)
 	}
 	if len(resp.Nodes) != 1 || resp.Nodes[0].NodeID != "n1" {
-		t.Fatalf("expected node n1 from resolved relative path, got %+v", resp.Nodes)
+		t.Fatalf("expected node n1 from resolved absolute path, got %+v", resp.Nodes)
 	}
 }
 
@@ -1317,7 +1320,9 @@ func TestFindSymbol_NoReposRegisteredStillErrors(t *testing.T) {
 // active_branch instead of erroring — matching find_symbol et al.
 func TestGetFileNodes_BranchDefaultsToActiveBranch(t *testing.T) {
 	store := newStubGraphStorage()
-	n1 := mustNode(t, "n1", "/abs/repo/pkg/promoted.go", "PromotedFunc", domain.KindFunction)
+	// Nodes are stored repo-relative (ADR-S0017 §1); the absolute caller path
+	// below relativises to match.
+	n1 := mustNode(t, "n1", "pkg/promoted.go", "PromotedFunc", domain.KindFunction)
 	store.addNode(n1)
 
 	repos := []application.RepoRecord{

@@ -60,14 +60,10 @@ func makeGetFileNodesHandler(graph ports.GraphReader, staging *staging.Area, rep
 			p.Branch = br
 		}
 
-		// Node paths are stored absolute. Resolve a repo-relative file_path
-		// against the repo root so callers don't have to pass an absolute path
-		// (and don't get a silent empty result when they pass a relative one).
-		if !filepath.IsAbs(filePath) && repos != nil {
-			if root, ok := repoRoot(ctx, repos, p.RepoID); ok {
-				filePath = filepath.Join(root, filePath)
-			}
-		}
+		// Node file_paths are stored repo-relative (ADR-S0017 §1). Normalise a
+		// caller-supplied path to that form so an absolute path still matches
+		// (and a relative one is used as-is) rather than silently missing.
+		filePath = toStoredPath(ctx, repos, p.RepoID, filePath)
 
 		// Staging overlay wins when present.
 		if stagedNodes, ok := staging.GetStagedNodes(p.RepoID, p.Branch, filePath); ok {
@@ -82,10 +78,29 @@ func makeGetFileNodesHandler(graph ports.GraphReader, staging *staging.Area, rep
 	}
 }
 
+// toStoredPath normalises a caller-supplied file_path to the repo-relative
+// slash form node file_paths are stored in (ADR-S0017 §1). An absolute path is
+// relativised against the repo root; a relative path is returned ToSlash'd
+// as-is. On any lookup failure the input is returned unchanged (the query then
+// simply finds nothing, matching the pre-existing best-effort behaviour).
+func toStoredPath(ctx context.Context, repos application.RepoLister, repoID, p string) string {
+	if filepath.IsAbs(p) && repos != nil {
+		if root, ok := repoRoot(ctx, repos, repoID); ok {
+			if rel, err := filepath.Rel(root, p); err == nil {
+				return filepath.ToSlash(rel)
+			}
+		}
+	}
+	return filepath.ToSlash(p)
+}
+
 // repoRoot looks up the absolute working-tree root for repoID. ok is false when
 // the repo is unknown or the registry errors — callers then leave the path as
 // given rather than failing the request.
 func repoRoot(ctx context.Context, repos application.RepoLister, repoID string) (string, bool) {
+	if repos == nil {
+		return "", false
+	}
 	all, err := repos.ListRepos(ctx)
 	if err != nil {
 		return "", false
