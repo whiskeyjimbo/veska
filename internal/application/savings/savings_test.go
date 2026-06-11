@@ -242,12 +242,13 @@ func TestEntryFor_UniqueFileChars(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	// ADR-S0017 §1: FilePaths are repo-relative; EntryFor rejoins root to stat.
 	results := []savings.ResultFile{
-		{FilePath: fileA, SnippetLen: 10},
-		{FilePath: fileA, SnippetLen: 7}, // same file — count once
-		{FilePath: fileB, SnippetLen: 4},
+		{FilePath: "a.go", SnippetLen: 10},
+		{FilePath: "a.go", SnippetLen: 7}, // same file — count once
+		{FilePath: "b.go", SnippetLen: 4},
 	}
-	e := savings.EntryFor("repo-x", "test", results, time.Date(2026, 5, 20, 0, 0, 0, 0, time.UTC))
+	e := savings.EntryFor("repo-x", dir, "test", results, time.Date(2026, 5, 20, 0, 0, 0, 0, time.UTC))
 	if e.RepoID != "repo-x" {
 		t.Errorf("RepoID: got %q, want %q", e.RepoID, "repo-x")
 	}
@@ -269,7 +270,7 @@ func TestEntryFor_MissingFileSilentlySkipped(t *testing.T) {
 	results := []savings.ResultFile{
 		{FilePath: "/nonexistent/path/that/does/not/exist.go", SnippetLen: 5},
 	}
-	e := savings.EntryFor("", "q", results, time.Now())
+	e := savings.EntryFor("", "", "q", results, time.Now())
 	if e.FileChars != 0 {
 		t.Errorf("missing file should contribute 0 file_chars, got %d", e.FileChars)
 	}

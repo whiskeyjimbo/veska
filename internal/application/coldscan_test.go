@@ -179,7 +179,9 @@ func TestColdScanReparser_IndexesNonIgnoredFiles(t *testing.T) {
 	}
 
 	got := c.savedPaths()
-	want := []string{filepath.Join(root, "a.go"), filepath.Join(root, "b.go")}
+	// ADR-S0017 §1: the parser is fed the repo-relative slash path, not the
+	// absolute walked path.
+	want := []string{"a.go", "b.go"}
 	if !equalStringSlice(got, want) {
 		t.Fatalf("saved paths = %v, want %v", got, want)
 	}
@@ -218,11 +220,7 @@ func TestColdScanReparser_SkipsNonSourceNonManifest(t *testing.T) {
 	}
 
 	got := c.savedPaths()
-	want := []string{
-		filepath.Join(root, "a.go"),
-		filepath.Join(root, "b.ts"),
-		filepath.Join(root, "go.mod"),
-	}
+	want := []string{"a.go", "b.ts", "go.mod"}
 	if !equalStringSlice(got, want) {
 		t.Fatalf("saved paths = %v, want %v (README/.yaml/.json must be filtered)", got, want)
 	}
@@ -285,8 +283,8 @@ func TestColdScanReparser_RespectsVeskaIgnore(t *testing.T) {
 			t.Fatalf("unexpected save under skip/: %s", s.Path)
 		}
 	}
-	if got := c.savedPaths(); len(got) != 1 || got[0] != filepath.Join(root, "keep.go") {
-		t.Fatalf("saved = %v, want [%s]", got, filepath.Join(root, "keep.go"))
+	if got := c.savedPaths(); len(got) != 1 || got[0] != "keep.go" {
+		t.Fatalf("saved = %v, want [keep.go]", got)
 	}
 }
 

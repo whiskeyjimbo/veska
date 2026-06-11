@@ -1,6 +1,7 @@
 package mcp
 
 import (
+	"context"
 	"path/filepath"
 	"testing"
 	"time"
@@ -26,7 +27,7 @@ func TestRecordSavings_PartitionsByRepo(t *testing.T) {
 			{NodeID: "n1", FilePath: "", Snippet: "abcde"},   // 5
 			{NodeID: "n2", FilePath: "", Snippet: "fghijkl"}, // 7
 		}
-		recordSavings(rec, "q", results, nil, "repo-default")
+		recordSavings(context.Background(), rec, nil, "q", results, nil, "repo-default")
 		_ = rec.Close()
 
 		byRepo, err := savings.AggregateByRepo(path, time.Now())
@@ -64,7 +65,7 @@ func TestRecordSavings_PartitionsByRepo(t *testing.T) {
 			"n2": "beta",
 			"n3": "alpha",
 		}
-		recordSavings(rec, "q", results, repoByNode, "alpha")
+		recordSavings(context.Background(), rec, nil, "q", results, repoByNode, "alpha")
 		_ = rec.Close()
 
 		byRepo, err := savings.AggregateByRepo(path, time.Now())
@@ -92,7 +93,7 @@ func TestRecordSavings_PartitionsByRepo(t *testing.T) {
 		}
 		t.Cleanup(func() { _ = rec.Close() })
 
-		recordSavings(rec, "q", nil, nil, "repo-default")
+		recordSavings(context.Background(), rec, nil, "q", nil, nil, "repo-default")
 		_ = rec.Close()
 
 		byRepo, err := savings.AggregateByRepo(path, time.Now())

@@ -197,7 +197,10 @@ func makePromoteHandler(deps PromoteDeps) ToolHandler {
 					"repo", rec.RepoID, "file", rel, "err", rerr)
 				continue
 			}
-			deps.Ingester.Save(ctx, rec.RepoID, branch, abs, src)
+			// ADR-S0017 §1: the parser keys on the repo-relative slash path.
+			// `rel` (from git ChangedFiles) is already that form; `abs` exists
+			// only to read the bytes above.
+			deps.Ingester.Save(ctx, rec.RepoID, branch, rel, src)
 			staged++
 		}
 
