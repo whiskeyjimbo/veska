@@ -211,6 +211,32 @@ non-converging repo in a shared DB is the failure mode users will actually hit.
 
 ## Migration
 
+> **Implementation note (revised down — solov2-dchd):** the shipped migration
+> (`0019_identity_scheme_v2.sql`) is a **plain drop+rescan** — it deletes the
+> derived graph and clears `last_promoted_sha`, and that is all. The elaborate
+> snapshot + repo-id re-key + per-scope **suppression carry-forward** described
+> below was built, tested end-to-end, then **deliberately removed** as
+> over-engineering for the actual need. The reasoning:
+>
+> - The id-changing transition is **one-time and single-user** (this ADR
+>   sequences it *before* any DB is shared), so the entire downside of a rescan
+>   is "re-author a handful of suppressions whose anchor id moved." Cheap.
+> - A **shared DB never needs the carry-forward**: node_ids are content-derived
+>   and **stable across rescans**, and a rescan never touches the `suppressions`
+>   table — so suppressions ride along untouched through any operational
+>   downtime+rescan. This ADR forbids node_id from encoding provenance precisely
+>   so the shared-DB epic *cannot* force an id re-key; there is therefore no
+>   future shared-DB event the carry-forward would protect.
+> - Embeddings survive regardless (content-addressed), so the cheap migration
+>   keeps the only expensive artifact.
+>
+> **Revisit only if** a *future* scheme change re-keys ids on an
+> *already-shared* DB — at which point design the carry-forward against real
+> shared-DB inputs (always the better time, per _Sequencing_). To convert a
+> single pre-ADR repo, `repo remove && repo add` re-resolves its identity; no
+> migration machinery required. The rest of this section is retained as the
+> original analysis of *why* drop+rescan is the right shape.
+
 The migration is the real hazard surface — not the FK rewrite. Two facts,
 **both verified against the schema**, shape it:
 
