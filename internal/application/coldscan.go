@@ -292,7 +292,10 @@ func (s fileStager) stage(ctx context.Context, path, rel string, d fs.DirEntry) 
 	if !isInterestingForStaging(path, s.exts) {
 		return
 	}
-	s.save(ctx, s.repo.RepoID, s.repo.ActiveBranch, path, src)
+	// ADR-S0017 §1: nodeID + nodes.file_path key on the repo-relative slash
+	// path (rel), never the absolute walked path. path stays for reading bytes
+	// and the extension/binary filters above; rel is what the parser sees.
+	s.save(ctx, s.repo.RepoID, s.repo.ActiveBranch, rel, src)
 }
 
 // extensionSet folds the wired parser's SupportedExtensions list into a

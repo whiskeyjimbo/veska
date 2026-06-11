@@ -31,7 +31,6 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
-	"path/filepath"
 
 	"github.com/whiskeyjimbo/veska/internal/core/domain"
 )
@@ -69,23 +68,20 @@ type NodeKey struct {
 }
 
 // ResolveID reconstructs the sha256 node ID the cold-scan pipeline emits for
-// this key when the repo was indexed at absolute filesystem root.
+// this key.
 //
-// IMPORTANT: the pipeline keys node IDs on the ABSOLUTE path it walked
-// (coldscan.go fileStager.stage passes the absolute path, not the relative
-// one — the line-227 `rel` is used only for .veskaignore matching). So the
-// manifest freezes the relative Path and ResolveID rejoins it onto the
-// caller-supplied root with filepath.Join (the same call WalkDir used), giving
-// the exact byte sequence treesitter nodeID() hashed. Do NOT ToSlash here —
-// nodeID hashes filepath.Join output verbatim.
+// Since ADR-S0017 §1 the pipeline keys node IDs on the repo-relative SLASH
+// path (coldscan.go fileStager.stage passes `rel`, already ToSlash'd, to the
+// parser — no longer the absolute walked path). So ResolveID hashes k.Path
+// verbatim — it is already the repo-relative slash form treesitter nodeID()
+// receives. No Join/FromSlash: the root is no longer part of the identity.
 //
-// This signature intentionally takes (repoID, root) — it diverges from a
-// root-free ResolveID(repoID) because production paths are absolute; the
-// coverage harness must pass the per-repo root it indexed at.
-func (k NodeKey) ResolveID(repoID, root string) domain.NodeID {
-	abs := filepath.Join(root, filepath.FromSlash(k.Path))
+// root is retained in the signature (ignored) so the many coverage-harness
+// call sites that pass the per-repo root keep compiling; it is dead for ID
+// purposes and can be dropped in a follow-up sweep.
+func (k NodeKey) ResolveID(repoID, _ string) domain.NodeID {
 	h := sha256.New()
-	_, _ = fmt.Fprintf(h, "%s\x00%s\x00%s\x00%s", repoID, abs, string(k.Kind), k.Name)
+	_, _ = fmt.Fprintf(h, "%s\x00%s\x00%s\x00%s", repoID, k.Path, string(k.Kind), k.Name)
 	return domain.NodeID(hex.EncodeToString(h.Sum(nil)))
 }
 

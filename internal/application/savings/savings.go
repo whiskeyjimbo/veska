@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"io/fs"
 	"os"
+	"path/filepath"
 	"sync"
 	"time"
 )
@@ -116,7 +117,13 @@ func (r *Recorder) Close() error {
 // silently contribute 0 to FileChars — a delete-then-search race must
 // not crash the recorder. repoID tags the entry so a fanout search that
 // spans multiple repos records one Entry per repo (solov2-0ql0).
-func EntryFor(repoID, query string, results []ResultFile, now time.Time) Entry {
+//
+// root is the repo's absolute working-tree root. Since ADR-S0017 §1
+// nodes.file_path (and thus ResultFile.FilePath) is repo-relative, so the
+// on-disk stat must rejoin root. An empty root means "unknown" — the stat
+// falls back to the path as-is, contributing 0 for a relative path rather
+// than crashing.
+func EntryFor(repoID, root, query string, results []ResultFile, now time.Time) Entry {
 	var snippet int64
 	seen := make(map[string]struct{}, len(results))
 	var fileBytes int64
@@ -129,7 +136,11 @@ func EntryFor(repoID, query string, results []ResultFile, now time.Time) Entry {
 			continue
 		}
 		seen[r.FilePath] = struct{}{}
-		if info, err := os.Stat(r.FilePath); err == nil {
+		abs := r.FilePath
+		if root != "" {
+			abs = filepath.Join(root, r.FilePath)
+		}
+		if info, err := os.Stat(abs); err == nil {
 			fileBytes += info.Size()
 		}
 	}

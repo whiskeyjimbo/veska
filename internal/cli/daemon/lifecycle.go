@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/whiskeyjimbo/veska/internal/application/embedder"
@@ -207,7 +208,12 @@ func sumCounts(counts map[string]int) int {
 // the lookup cost off the hot path.
 func (d *Daemon) runWatchLoop(ctx context.Context) {
 	events := d.watcher.Events()
+	// Per-repo cache of (active_branch, root_path). root_path is needed to
+	// relativise the absolute fsnotify path before it reaches the parser
+	// (ADR-S0017 §1) — nodeID + nodes.file_path key on the repo-relative slash
+	// path, so the cold-scan and hot (fsnotify) paths must agree.
 	branchOf := make(map[string]string)
+	rootOf := make(map[string]string)
 
 	for {
 		select {
@@ -236,8 +242,16 @@ func (d *Daemon) runWatchLoop(ctx context.Context) {
 					branch = "main"
 				}
 				branchOf[ev.RepoID] = branch
+				rootOf[ev.RepoID] = rec.RootPath
 			}
-			d.ingester.Save(ctx, ev.RepoID, branch, ev.Event.Path, data)
+			rel, rerr := filepath.Rel(rootOf[ev.RepoID], ev.Event.Path)
+			if rerr != nil {
+				slog.Warn("watch loop: relativise path failed; skipping",
+					"repo_id", ev.RepoID, "root", rootOf[ev.RepoID],
+					"path", ev.Event.Path, "err", rerr)
+				continue
+			}
+			d.ingester.Save(ctx, ev.RepoID, branch, filepath.ToSlash(rel), data)
 		}
 	}
 }

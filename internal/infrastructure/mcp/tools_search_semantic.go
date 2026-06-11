@@ -55,7 +55,7 @@ func makeSearchSemanticHandler(svc *search.Service, rec *savings.Recorder, repos
 		if rpcErr != nil {
 			return nil, rpcErr
 		}
-		recordSavings(rec, p.Query, results, repoByNode, targets[0].RepoID)
+		recordSavings(ctx, rec, repos, p.Query, results, repoByNode, targets[0].RepoID)
 		reasons := make([]string, 0, len(reasonsSet))
 		for r := range reasonsSet {
 			reasons = append(reasons, r)
@@ -283,7 +283,7 @@ func runSemanticFanout(
 // on the fanout path); when it is nil or lacks an entry, defaultRepoID —
 // the single resolved target — is used. An empty result set records
 // nothing.
-func recordSavings(rec *savings.Recorder, query string, results []search.Result, repoByNode map[string]string, defaultRepoID string) {
+func recordSavings(ctx context.Context, rec *savings.Recorder, repos application.RepoLister, query string, results []search.Result, repoByNode map[string]string, defaultRepoID string) {
 	if rec == nil {
 		return
 	}
@@ -299,8 +299,30 @@ func recordSavings(rec *savings.Recorder, query string, results []search.Result,
 		}
 		byRepo[repoID] = append(byRepo[repoID], savings.ResultFile{FilePath: r.FilePath, SnippetLen: len(r.Snippet)})
 	}
+	// ADR-S0017 §1: result FilePaths are repo-relative, so EntryFor must
+	// rejoin each repo's root to stat the file on disk. Resolve roots once.
+	rootByRepo := rootPathsByRepoID(ctx, repos)
 	now := time.Now()
 	for _, repoID := range order {
-		_ = rec.Record(savings.EntryFor(repoID, query, byRepo[repoID], now))
+		_ = rec.Record(savings.EntryFor(repoID, rootByRepo[repoID], query, byRepo[repoID], now))
 	}
+}
+
+// rootPathsByRepoID lists registered repos and indexes their absolute
+// working-tree roots by repo_id. A nil lister or a list error yields an empty
+// map — savings telemetry degrades to FileChars=0 rather than failing the
+// search (EntryFor tolerates an empty root).
+func rootPathsByRepoID(ctx context.Context, repos application.RepoLister) map[string]string {
+	out := map[string]string{}
+	if repos == nil {
+		return out
+	}
+	recs, err := repos.ListRepos(ctx)
+	if err != nil {
+		return out
+	}
+	for _, rc := range recs {
+		out[rc.RepoID] = rc.RootPath
+	}
+	return out
 }
