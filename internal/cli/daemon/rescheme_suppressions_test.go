@@ -51,6 +51,16 @@ func TestReschemeSuppressions_AllScopes(t *testing.T) {
 	insertFinding(t, db, "NEWF2a", newRepo, newNode, "review", now)
 	insertFinding(t, db, "NEWF2b", newRepo, newNode, "review", now)
 
+	// OLDF3: a file-anchored finding whose file_path is stored RELATIVE already
+	// (vuln-scan anchors on "go.mod"), node_id empty — mirrors the live DB. The
+	// anchor is unchanged by the migration, so it remaps to the re-derived NEWF3.
+	mustExec(t, db, `INSERT INTO _dchd_old_findings (finding_id, repo_id, branch, node_id, file_path, rule) VALUES (?,?,?,?,?,?)`,
+		"OLDF3", oldRepo, "main", nil, "go.mod", "vulnerable_dependency")
+	mustExec(t, db, `INSERT INTO findings
+		(finding_id, branch, repo_id, file_path, severity, source_layer, rule, message, state, created_at, actor_id, actor_kind)
+		VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`,
+		"NEWF3", "main", newRepo, "go.mod", "high", "security", "vulnerable_dependency", "m", "open", now, "system", "system")
+
 	// Suppressions across every scope, plus one already-current symbol.
 	supp := func(id, scope, target string) {
 		mustExec(t, db, `INSERT INTO suppressions (suppression_id, scope, target, reason, created_at, actor_id, actor_kind) VALUES (?,?,?,?,?,?,?)`,
@@ -59,6 +69,7 @@ func TestReschemeSuppressions_AllScopes(t *testing.T) {
 	supp("s-symbol", "symbol", oldNode)
 	supp("s-find-ok", "finding", "OLDF1")
 	supp("s-find-keyed", "finding", "OLDF2")
+	supp("s-find-file", "finding", "OLDF3") // file-anchored (relative "go.mod")
 	supp("s-file", "file", "/old/root/pkg/a.go")
 	supp("s-symbol-current", "symbol", newNode) // already new — must be left alone
 
@@ -71,6 +82,7 @@ func TestReschemeSuppressions_AllScopes(t *testing.T) {
 		"s-symbol":         newNode,
 		"s-find-ok":        "NEWF1",
 		"s-find-keyed":     "OLDF2",    // unchanged: reported, not guessed
+		"s-find-file":      "NEWF3",    // file-anchored, remapped via relative go.mod
 		"s-file":           "pkg/a.go", // relativised
 		"s-symbol-current": newNode,    // untouched
 	}
@@ -84,8 +96,8 @@ func TestReschemeSuppressions_AllScopes(t *testing.T) {
 		}
 	}
 
-	if rep.remapped != 3 {
-		t.Errorf("remapped = %d, want 3 (symbol, finding-ok, file)", rep.remapped)
+	if rep.remapped != 4 {
+		t.Errorf("remapped = %d, want 4 (symbol, finding-ok, finding-file, file)", rep.remapped)
 	}
 	if len(rep.unremappable) != 1 {
 		t.Fatalf("unremappable = %d, want 1 (the keyed finding); got %+v", len(rep.unremappable), rep.unremappable)
@@ -211,6 +223,7 @@ func TestReschemeRepoIdentities_ReKeysToModuleTier(t *testing.T) {
 	}
 	const legacyID = "legacy-abs-root-id"
 	mustExec(t, db, `INSERT INTO repos (repo_id, root_path, added_at) VALUES (?,?,?)`, legacyID, root, now)
+	mustExec(t, db, `INSERT INTO _dchd_old_repos (repo_id, root_path) VALUES (?,?)`, legacyID, root)
 	mustExec(t, db, `INSERT INTO suppressions (suppression_id, scope, target, reason, created_at, actor_id, actor_kind) VALUES (?,?,?,?,?,?,?)`,
 		"sr", "repo", legacyID, "r", now, "tester", "human")
 
@@ -232,6 +245,49 @@ func TestReschemeRepoIdentities_ReKeysToModuleTier(t *testing.T) {
 	mustScanRow(t, db, `SELECT target FROM suppressions WHERE suppression_id=?`, "sr", &suppTarget)
 	if suppTarget != newID {
 		t.Errorf("repo suppression target = %q, want %q", suppTarget, newID)
+	}
+}
+
+// TestReschemeRepoIdentities_IdempotentAcrossRerun simulates a crash between the
+// repo re-key and the snapshot drop: a recovery re-run must still produce the
+// old->new map keyed on PRE-migration ids (so the node/suppression remap can join
+// against old node repo_ids) and must not double-re-key or error.
+func TestReschemeRepoIdentities_IdempotentAcrossRerun(t *testing.T) {
+	db := openReschemeDB(t)
+	ctx := context.Background()
+	now := time.Now().Unix()
+
+	root := t.TempDir()
+	if err := os.WriteFile(root+"/go.mod", []byte("module github.com/org/repo\n\ngo 1.26\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	const legacyID = "legacy-abs-root-id"
+	mustExec(t, db, `INSERT INTO repos (repo_id, root_path, added_at) VALUES (?,?,?)`, legacyID, root, now)
+	mustExec(t, db, `INSERT INTO _dchd_old_repos (repo_id, root_path) VALUES (?,?)`, legacyID, root)
+
+	first, err := reschemeRepoIdentities(ctx, db, db)
+	if err != nil {
+		t.Fatalf("first run: %v", err)
+	}
+	newID := first[legacyID]
+	if newID == "" || newID == legacyID {
+		t.Fatalf("first run did not re-key: %v", first)
+	}
+
+	// Recovery run: repos now holds newID, but the map must still be keyed on the
+	// snapshot's legacyID and resolve to the same newID.
+	second, err := reschemeRepoIdentities(ctx, db, db)
+	if err != nil {
+		t.Fatalf("recovery run: %v", err)
+	}
+	if second[legacyID] != newID {
+		t.Errorf("recovery map[%s] = %q, want %q (stable old->new keyed on snapshot id)", legacyID, second[legacyID], newID)
+	}
+	// Exactly one repos row, under the new id.
+	var n int
+	mustScan(t, db, `SELECT count(*) FROM repos`, &n)
+	if n != 1 {
+		t.Errorf("repos row count = %d, want 1 (no duplicate from double re-key)", n)
 	}
 }
 

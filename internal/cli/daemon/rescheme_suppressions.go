@@ -292,9 +292,17 @@ func remapFindingSuppressions(ctx context.Context, read, write *sql.DB, repoMap 
 				`SELECT finding_id FROM findings WHERE repo_id=? AND rule=? AND node_id=?`,
 				newRepoID, rule, newNodeID)
 		case oldFilePath.Valid && oldFilePath.String != "":
-			rel, ok := relativizeOldPath(roots[repoID], oldFilePath.String)
-			if !ok {
-				rep.miss(p.id, "finding", p.target, "file anchor not under the repo root")
+			// Finding file anchors may be stored relative already (e.g.
+			// vuln-scan anchors on "go.mod"), so normalise either form.
+			rel := relStoredPath(roots[repoID], oldFilePath.String)
+			// finding_id = hash(rule, anchor, key). When the anchor AND repo are
+			// both invariant under the migration (a relative file anchor in a
+			// repo whose id did not change), the finding_id is unchanged, so the
+			// suppression already targets the right id — leave it untouched.
+			// Crucially this must not depend on the finding being present yet:
+			// re-derivation can be async (vuln-scan runs off the OSV refresh),
+			// so a recompute-and-match would falsely report it as unremappable.
+			if rel == oldFilePath.String && newRepoID == repoID {
 				continue
 			}
 			newFindingID, lookErr = uniqueFindingID(ctx, read,
