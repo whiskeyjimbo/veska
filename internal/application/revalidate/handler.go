@@ -187,39 +187,11 @@ func (h *Handler) Handle(ctx context.Context, row ports.WorkRow) error {
 }
 
 // decide derives a FindingDecision for one stale finding using per-rule
-// re-run logic. Reads only — no writes happen until ApplyDecisions.
+// re-run logic. Reads only — no writes happen until ApplyDecisions. The rule
+// dispatch lives in the shared Decide function so the diff-safety gate reuses
+// it; the Handler's RevalidateQuerier satisfies PredicateSource directly.
 func (h *Handler) decide(ctx context.Context, row ports.WorkRow, s ports.StaleFinding) (ports.FindingDecision, error) {
-	switch s.Rule {
-	case ruleDeadCode:
-		hasIn, err := h.repo.HasInboundEdges(ctx, row.RepoID, row.Branch, s.NodeID)
-		if err != nil {
-			return ports.FindingDecision{}, fmt.Errorf("revalidate.Handle: inbound edges for %q: %w", s.FindingID, err)
-		}
-		if hasIn {
-			// rule no longer fires — the node now has callers.
-			return ports.FindingDecision{FindingID: s.FindingID, Kind: ports.DecisionClose}, nil
-		}
-		// still dead — refresh anchor hash in place.
-		return ports.FindingDecision{FindingID: s.FindingID, Kind: ports.DecisionRefresh, NewHash: s.CurrentHash}, nil
-
-	case ruleContractDrift:
-		prev, cur, err := h.repo.NodeSignaturePair(ctx, row.RepoID, row.Branch, s.NodeID)
-		if err != nil {
-			return ports.FindingDecision{}, fmt.Errorf("revalidate.Handle: signature pair for %q: %w", s.FindingID, err)
-		}
-		if prev != "" && prev != cur {
-			// still drifting — refresh anchor hash in place.
-			return ports.FindingDecision{FindingID: s.FindingID, Kind: ports.DecisionRefresh, NewHash: s.CurrentHash}, nil
-		}
-		// drift resolved (signatures match, or signature absent).
-		return ports.FindingDecision{FindingID: s.FindingID, Kind: ports.DecisionClose}, nil
-
-	default:
-		// Unknown rule: conservative close (matches m3.05.2 behaviour for
-		// rules that have no defined re-run path). Note "auto-link" never
-		// reaches here — see the const block above.
-		return ports.FindingDecision{FindingID: s.FindingID, Kind: ports.DecisionClose}, nil
-	}
+	return Decide(ctx, row.RepoID, row.Branch, s, h.repo)
 }
 
 // Compile-time check: *Handler satisfies ports.WorkHandler.
