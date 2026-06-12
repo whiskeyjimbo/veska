@@ -6,9 +6,19 @@ import (
 	"slices"
 	"testing"
 
+	"github.com/whiskeyjimbo/veska/internal/application/diffgate"
 	"github.com/whiskeyjimbo/veska/internal/composition"
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/sqlite"
 )
+
+// unchangedLib serves lib.go's (unchanged) content for the discovery assembly,
+// standing in for git.FileAtRef at the base ref.
+func unchangedLib(_ context.Context, path string) ([]byte, error) {
+	if path == "lib.go" {
+		return []byte("package p\n\nfunc helper() {}\n"), nil
+	}
+	return nil, nil
+}
 
 const discRepo = "repo-disc"
 const discBranch = "main"
@@ -62,10 +72,8 @@ func TestDiscoverStructural_CrossFileNewlyDead(t *testing.T) {
 	// cross-file call — so a new finding here means the call is GENUINELY gone,
 	// not that resolution silently broke.
 	disc, err := DiscoverStructural(context.Background(), dbPath, discRepo, discBranch, "cand-sha",
-		map[string][]byte{
-			"lib.go":  []byte("package p\n\nfunc helper() {}\n"),
-			"main.go": []byte("package p\n\nfunc Run() {}\n"),
-		},
+		[]diffgate.FileChange{{Path: "main.go", Content: []byte("package p\n\nfunc Run() {}\n")}},
+		unchangedLib,
 	)
 	if err != nil {
 		t.Fatalf("DiscoverStructural: %v", err)
@@ -103,10 +111,8 @@ func TestDiscoverStructural_NoChangeNoNewFindings(t *testing.T) {
 	// that fails if whole-candidate re-promote ever stops resolving the
 	// cross-file call (the partial-batch bug that motivated this design).
 	disc, err := DiscoverStructural(context.Background(), dbPath, discRepo, discBranch, "cand-sha",
-		map[string][]byte{
-			"lib.go":  []byte("package p\n\nfunc helper() {}\n"),
-			"main.go": []byte("package p\n\n// run it\nfunc Run() { helper() }\n"),
-		},
+		[]diffgate.FileChange{{Path: "main.go", Content: []byte("package p\n\n// run it\nfunc Run() { helper() }\n")}},
+		unchangedLib,
 	)
 	if err != nil {
 		t.Fatalf("DiscoverStructural: %v", err)

@@ -3,11 +3,12 @@
 // the diffgate composer and emits the machine-readable verdict, exiting
 // non-zero on FAIL for CI gating.
 //
-// v1 runs with finding-discovery NOT wired (diffgate.Discovery{Ran:false}), so
-// the verdict is conservatively FAIL with reason "discovery_unchecked" until
-// the ephemeral finding-discovery adapter lands (solov2-ll57.4). This is the
-// fail-safe by design — the gate never greenlights a change whose
-// no-new-findings check did not run.
+// Structural finding-discovery (dead-code, contract-drift) is wired: the
+// candidate is re-promoted into a throwaway clone of the base graph and the
+// real checks run over the whole graph, so a change that introduces a new
+// structural finding FAILs. Any discovery error degrades to Ran=false, so the
+// gate FAILs with "discovery_unchecked" rather than risking a false green.
+// Line/dep scanners (secrets, vuln) are out of v1 discovery scope.
 package diffgatecmd
 
 import (
@@ -89,6 +90,14 @@ func Run(ctx context.Context, p Params) error {
 		return fmt.Errorf("diff-gate: index candidate: %w", err)
 	}
 
+	// Structural finding-discovery over the candidate (degrades to Ran=false on
+	// any error → gate FAILs discovery_unchecked, never a false green).
+	changes, err := src.Changes(ctx)
+	if err != nil {
+		return fmt.Errorf("diff-gate: read changes: %w", err)
+	}
+	disc := discover(ctx, dbPath, p, changes)
+
 	// The guard's blast radius is computed over the BASE graph only, so its
 	// staging overlay is empty (the candidate overlay belongs to the ephemeral
 	// changed-node set, not the radius).
@@ -105,7 +114,7 @@ func Run(ctx context.Context, p Params) error {
 		return fmt.Errorf("diff-gate: gate: %w", err)
 	}
 
-	verdict, err := gate.Evaluate(ctx, eph, target, diffgate.Discovery{Ran: false}, blastradius.Options{})
+	verdict, err := gate.Evaluate(ctx, eph, target, disc, blastradius.Options{})
 	if err != nil {
 		return fmt.Errorf("diff-gate: evaluate: %w", err)
 	}
