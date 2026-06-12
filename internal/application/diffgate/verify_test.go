@@ -99,9 +99,8 @@ func TestVerify_NewFindingFails(t *testing.T) {
 	introduced := deadCodeFinding(t, "a:NewlyDead")
 	v := diffgate.NewVerifier()
 	got, err := v.Verify(context.Background(), eph, deadCodeFinding(t, anchor), diffgate.Discovery{
-		Ran:       true,
-		Base:      nil,
-		Candidate: []*domain.Finding{introduced},
+		Ran:          true,
+		CandidateIDs: []string{introduced.FindingID},
 	})
 	if err != nil {
 		t.Fatalf("Verify: %v", err)
@@ -124,9 +123,9 @@ func TestVerify_PreexistingFindingNotNew(t *testing.T) {
 
 	v := diffgate.NewVerifier()
 	got, err := v.Verify(context.Background(), eph, deadCodeFinding(t, anchor), diffgate.Discovery{
-		Ran:       true,
-		Base:      []*domain.Finding{pre},
-		Candidate: []*domain.Finding{pre},
+		Ran:          true,
+		BaseIDs:      []string{pre.FindingID},
+		CandidateIDs: []string{pre.FindingID},
 	})
 	if err != nil {
 		t.Fatalf("Verify: %v", err)

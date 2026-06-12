@@ -45,17 +45,23 @@ type VerifyVerdict struct {
 	NewFindings []string `json:"new_findings"`
 }
 
-// Discovery carries the finding sets used for the no-new-findings check. Ran
-// distinguishes "discovery was performed" from "no findings found": when Ran is
-// false the verdict's NewFindingsChecked is false (fail-safe). Base and
-// Candidate are the complete finding sets over the base and candidate graph
-// states respectively; the producer of these sets (running the structural
-// checks over an ephemeral-backed querier) is the scope:large adapter deferred
-// to a follow-up — the Verifier consumes them, it does not produce them.
+// Discovery carries the finding-id sets used for the no-new-findings check. Ran
+// distinguishes "discovery was performed" from "not run": when Ran is false the
+// verdict's NewFindingsChecked is false (fail-safe). BaseIDs and CandidateIDs
+// are the complete sets of open finding_ids over the base and candidate graph
+// states respectively — the diff is by finding identity, so ids are all the
+// Verifier needs. Producing these (re-promoting changed files into a cloned
+// base graph and running the real structural checks over it) is the scope:large
+// adapter the gate's CLI wires; the Verifier only consumes the sets.
+//
+// SCOPE: discovery covers the graph-structural rules (dead-code, contract-drift)
+// that a re-promote + full-file check pass makes sound. Line/dep scanners
+// (secrets, vuln) need per-line/dep inputs and are out of v1 scope — the gate's
+// "no new findings" is over structural findings.
 type Discovery struct {
-	Ran       bool
-	Base      []*domain.Finding
-	Candidate []*domain.Finding
+	Ran          bool
+	BaseIDs      []string
+	CandidateIDs []string
 }
 
 // Verifier answers the verify half of the gate: did the candidate resolve its
@@ -106,26 +112,26 @@ func (v *Verifier) Verify(ctx context.Context, eph *Ephemeral, target *domain.Fi
 	// degraded, not green.
 	if disc.Ran {
 		out.NewFindingsChecked = true
-		baseIDs := make(map[string]struct{}, len(disc.Base))
-		for _, f := range disc.Base {
-			if f != nil {
-				baseIDs[f.FindingID] = struct{}{}
+		baseIDs := make(map[string]struct{}, len(disc.BaseIDs))
+		for _, id := range disc.BaseIDs {
+			if id != "" {
+				baseIDs[id] = struct{}{}
 			}
 		}
 		var newF []string
 		seen := make(map[string]struct{})
-		for _, f := range disc.Candidate {
-			if f == nil {
+		for _, id := range disc.CandidateIDs {
+			if id == "" {
 				continue
 			}
-			if _, ok := baseIDs[f.FindingID]; ok {
+			if _, ok := baseIDs[id]; ok {
 				continue
 			}
-			if _, dup := seen[f.FindingID]; dup {
+			if _, dup := seen[id]; dup {
 				continue
 			}
-			seen[f.FindingID] = struct{}{}
-			newF = append(newF, f.FindingID)
+			seen[id] = struct{}{}
+			newF = append(newF, id)
 		}
 		sort.Strings(newF)
 		out.NewFindings = newF
