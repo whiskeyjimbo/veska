@@ -8,7 +8,9 @@ import (
 
 	"github.com/whiskeyjimbo/veska/internal/application/blastradius"
 	"github.com/whiskeyjimbo/veska/internal/application/diffgate"
+	"github.com/whiskeyjimbo/veska/internal/application/staging"
 	"github.com/whiskeyjimbo/veska/internal/core/domain"
+	"github.com/whiskeyjimbo/veska/internal/core/ports"
 )
 
 // gateFixture builds a Gate plus an Ephemeral for a dead-code finding on
@@ -47,7 +49,61 @@ func gateFixture(t *testing.T, withCaller bool, extraNodes []string, radiusReach
 	return gate, eph, deadCodeFinding(t, anchor)
 }
 
-// TestGate_Pass covers AC1: resolves within radius, no new findings → PASS.
+// TestGate_RealRadius_CanonicalDeadCodeFix_KnownGap documents a real,
+// empirically-verified limitation (solov2-ll57.5): with a REAL blastradius
+// service, the canonical dead-code fix (add a caller) RESOLVES the finding but
+// FAILs scope, because the new caller is outside the dead anchor's base radius
+// ({anchor} only — a dead node has no radius). This is the SAFE direction
+// (over-block, never false-green) but makes the gate FAIL its flagship fix
+// until new-node-connectivity scope-containment lands. When ll57.5 fixes it,
+// this test flips to Pass and moves under TestGate_Pass.
+func TestGate_RealRadius_CanonicalDeadCodeFix_KnownGap(t *testing.T) {
+	anchor := "a:Dead"
+	base := &fakeBaseGraph{
+		metas:   map[string]ports.NodeMeta{anchor: {NodeID: anchor, FilePath: "a.go"}},
+		inbound: map[string][]string{anchor: {}},
+	}
+	callEdge, err := domain.NewEdge(
+		domain.EdgeSpec{Src: "a:Caller", Tgt: domain.NodeID(anchor), Kind: domain.EdgeCalls},
+		domain.WithConfidence(domain.Definite),
+	)
+	if err != nil {
+		t.Fatalf("NewEdge: %v", err)
+	}
+	eph := indexCandidate(t, base, &domain.ParseResult{
+		Nodes: []*domain.Node{mustNode(t, anchor, "a.go", "Dead"), mustNode(t, "a:Caller", "a.go", "Caller")},
+		Edges: []*domain.Edge{callEdge},
+	})
+	radius, err := blastradius.NewService(base, base, staging.NewArea())
+	if err != nil {
+		t.Fatalf("NewService: %v", err)
+	}
+	guard := newGuard(t, radius)
+	gate, err := diffgate.NewGate(diffgate.NewVerifier(), guard)
+	if err != nil {
+		t.Fatalf("NewGate: %v", err)
+	}
+	v, err := gate.Evaluate(context.Background(), eph, deadCodeFinding(t, anchor), diffgate.Discovery{Ran: true}, blastradius.Options{})
+	if err != nil {
+		t.Fatalf("Evaluate: %v", err)
+	}
+	// Finding IS resolved, but scope over-blocks on the new caller. Asserting
+	// the CURRENT behaviour so the gap can't silently change unnoticed.
+	if !v.Verify.TargetResolved {
+		t.Fatalf("expected the fix to resolve the finding; got %+v", v)
+	}
+	if v.Pass || !slices.Contains(v.Failures, diffgate.FailBlastRadiusExceeded) {
+		t.Fatalf("KNOWN GAP (ll57.5): expected FAIL with blast_radius_exceeded on the new caller; got %+v", v)
+	}
+	if !slices.Contains(v.Scope.Offending, "a:Caller") {
+		t.Fatalf("expected a:Caller listed as offending; got %v", v.Scope.Offending)
+	}
+}
+
+// TestGate_Pass covers AC1 at the COMPOSER level: given a radius that contains
+// the changed nodes, the composition yields PASS. It uses a synthetic radius
+// fake on purpose — the realistic dead-code path hits the new-node scope gap
+// documented in TestGate_RealRadius_CanonicalDeadCodeFix_KnownGap (ll57.5).
 func TestGate_Pass(t *testing.T) {
 	gate, eph, target := gateFixture(t, true, nil, []string{"a:Caller"})
 	v, err := gate.Evaluate(context.Background(), eph, target, diffgate.Discovery{Ran: true}, blastradius.Options{})
