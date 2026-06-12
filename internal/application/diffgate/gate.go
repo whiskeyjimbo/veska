@@ -2,6 +2,7 @@ package diffgate
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/whiskeyjimbo/veska/internal/application/blastradius"
@@ -25,6 +26,10 @@ const (
 	// FailBlastRadiusExceeded: the candidate touched nodes outside the finding's
 	// blast radius.
 	FailBlastRadiusExceeded = "blast_radius_exceeded"
+	// FailAnchorNotResolved: the target finding's anchor node does not resolve
+	// in the base graph, so its blast radius — and thus scope containment —
+	// cannot be computed. Degraded, not a pass (fail-safe).
+	FailAnchorNotResolved = "anchor_not_resolved"
 )
 
 // GateVerdict is the single machine-readable pass/fail result over a candidate
@@ -45,6 +50,15 @@ func (v GateVerdict) ExitCode() int {
 		return 0
 	}
 	return 1
+}
+
+// derefAnchor returns the finding's node anchor, or "" for a file-anchored
+// finding.
+func derefAnchor(f *domain.Finding) string {
+	if f.NodeID == nil {
+		return ""
+	}
+	return *f.NodeID
 }
 
 // Gate composes the verify and scope-containment sub-verdicts into one pass/fail
@@ -104,13 +118,18 @@ func (g *Gate) Evaluate(ctx context.Context, eph *Ephemeral, target *domain.Find
 
 	// Scope check needs a node anchor; a file-anchored target is already
 	// flagged resolution_unchecked above, so skip the guard rather than error.
-	sv := ScopeVerdict{}
+	sv := ScopeVerdict{AnchorNodeID: derefAnchor(target)}
 	if target.NodeID != nil {
 		sv, err = g.guard.Check(ctx, eph.RepoID, eph.Branch, *target.NodeID, eph.ChangedNodeIDs(ctx), radiusOpts)
-		if err != nil {
+		switch {
+		case errors.Is(err, blastradius.ErrSeedNotFound):
+			// Anchor not in the base graph → radius undefined → can't assess
+			// scope. Degrade to a named failure rather than crashing.
+			sv = ScopeVerdict{AnchorNodeID: *target.NodeID}
+			failures = append(failures, FailAnchorNotResolved)
+		case err != nil:
 			return GateVerdict{}, fmt.Errorf("diffgate: guard: %w", err)
-		}
-		if !sv.Contained {
+		case !sv.Contained:
 			failures = append(failures, FailBlastRadiusExceeded)
 		}
 	}
