@@ -120,7 +120,7 @@ func (g *Gate) Evaluate(ctx context.Context, eph *Ephemeral, target *domain.Find
 	// flagged resolution_unchecked above, so skip the guard rather than error.
 	sv := ScopeVerdict{AnchorNodeID: derefAnchor(target)}
 	if target.NodeID != nil {
-		sv, err = g.guard.Check(ctx, eph.RepoID, eph.Branch, *target.NodeID, eph.ChangedNodeIDs(ctx), radiusOpts)
+		sv, err = g.guard.Check(ctx, eph, *target.NodeID, radiusOpts)
 		switch {
 		case errors.Is(err, blastradius.ErrSeedNotFound):
 			// Anchor not in the base graph → radius undefined → can't assess
