@@ -12,6 +12,7 @@ import (
 	"testing"
 
 	"github.com/whiskeyjimbo/veska/internal/application/diffgate"
+	"github.com/whiskeyjimbo/veska/internal/infrastructure/sqlite"
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/sqlite/sqldriver"
 )
 
@@ -162,5 +163,30 @@ func TestRun_E2E_PassOnDeadCodeFix(t *testing.T) {
 	// read as "no new findings of ANY kind" (secrets/vuln are not covered).
 	if !slices.Contains(v.Verify.NewFindingsCoveredRules, "dead-code") {
 		t.Fatalf("verdict should disclose covered rules; got %v", v.Verify.NewFindingsCoveredRules)
+	}
+}
+
+// TestRun_E2E_RepoNotIndexed: pointed at a fresh/empty VESKA_HOME, the gate must
+// emit a clean JSON verdict (repo_not_indexed) and exit non-zero — NOT crash
+// with a raw "no such table" and empty stdout (the ll57.8 finding, ll57.12 fix).
+func TestRun_E2E_RepoNotIndexed(t *testing.T) {
+	home := t.TempDir()
+	migrated, err := sqlite.OpenWithOptions(filepath.Join(home, "veska.db"), sqlite.Options{BackupDir: t.TempDir()})
+	if err != nil {
+		t.Fatalf("migrate: %v", err)
+	}
+	_ = migrated.Close() // schema present, but zero nodes for the repo
+
+	repoDir := t.TempDir()
+	base := map[string]string{"x.go": "package p\n\nfunc dead() {}\n"}
+	fixed := "package p\n\nfunc dead() {}\n\nfunc User() { dead() }\n"
+	makeRepo(t, repoDir, base, map[string]*string{"x.go": &fixed})
+
+	v, err := runGate(t, home, repoDir, "anything")
+	if err == nil {
+		t.Fatalf("expected non-zero exit for an unindexed repo")
+	}
+	if v.Pass || !slices.Contains(v.Failures, diffgate.FailRepoNotIndexed) {
+		t.Fatalf("expected a clean repo_not_indexed verdict (JSON emitted); got %+v", v)
 	}
 }

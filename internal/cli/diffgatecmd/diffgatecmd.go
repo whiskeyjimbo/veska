@@ -13,6 +13,7 @@ package diffgatecmd
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -76,6 +77,18 @@ func Run(ctx context.Context, p Params) error {
 		NodeLookupRepo: sqlite.NewNodeLookupRepo(pools.ReadDB),
 	}
 
+	// Fail closed with a clean verdict when the repo isn't indexed (missing
+	// schema or zero nodes), rather than letting a downstream "no such table"
+	// crash escape with no JSON. CI consumers always get a parseable verdict
+	// and a non-zero exit.
+	if !repoIndexed(ctx, pools.ReadDB, p.RepoID, p.Branch) {
+		v := diffgate.GateVerdict{Pass: false, Failures: []string{diffgate.FailRepoNotIndexed}}
+		if err := emitVerdict(p.Out, v); err != nil {
+			return err
+		}
+		return fmt.Errorf("%w (repo_not_indexed: index %q first, e.g. `veska reindex`)", ErrGateFailed, p.RepoID)
+	}
+
 	src, err := diffgate.NewRefChangeSource(p.RepoRoot, p.BaseRef, p.CandidateRef, git.ChangedFilesBetween, fileAtRef)
 	if err != nil {
 		return fmt.Errorf("diff-gate: change source: %w", err)
@@ -119,15 +132,33 @@ func Run(ctx context.Context, p Params) error {
 		return fmt.Errorf("diff-gate: evaluate: %w", err)
 	}
 
-	enc := json.NewEncoder(p.Out)
-	enc.SetIndent("", "  ")
-	if err := enc.Encode(verdict); err != nil {
-		return fmt.Errorf("diff-gate: encode verdict: %w", err)
+	if err := emitVerdict(p.Out, verdict); err != nil {
+		return err
 	}
 	if !verdict.Pass {
 		return fmt.Errorf("%w (%s)", ErrGateFailed, strings.Join(verdict.Failures, ","))
 	}
 	return nil
+}
+
+// emitVerdict writes the verdict as indented JSON. Every non-PASS path goes
+// through here so a CI consumer always gets a parseable verdict on stdout.
+func emitVerdict(out io.Writer, v diffgate.GateVerdict) error {
+	enc := json.NewEncoder(out)
+	enc.SetIndent("", "  ")
+	if err := enc.Encode(v); err != nil {
+		return fmt.Errorf("diff-gate: encode verdict: %w", err)
+	}
+	return nil
+}
+
+// repoIndexed reports whether (repoID, branch) has any indexed nodes. A missing
+// schema (fresh/empty db → "no such table: nodes") counts as not indexed.
+func repoIndexed(ctx context.Context, db *sql.DB, repoID, branch string) bool {
+	var n int
+	err := db.QueryRowContext(ctx,
+		`SELECT COUNT(*) FROM nodes WHERE repo_id=? AND branch=?`, repoID, branch).Scan(&n)
+	return err == nil && n > 0
 }
 
 // baseGraph composes the two sqlite read repos into one diffgate.BaseGraph.
