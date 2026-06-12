@@ -158,4 +158,9 @@ func TestRun_E2E_PassOnDeadCodeFix(t *testing.T) {
 	if !v.Verify.TargetResolved || !v.Verify.NewFindingsChecked {
 		t.Fatalf("expected resolved + discovery-checked; got %+v", v.Verify)
 	}
+	// The verdict must disclose WHICH rules discovery covered, so a PASS is not
+	// read as "no new findings of ANY kind" (secrets/vuln are not covered).
+	if !slices.Contains(v.Verify.NewFindingsCoveredRules, "dead-code") {
+		t.Fatalf("verdict should disclose covered rules; got %v", v.Verify.NewFindingsCoveredRules)
+	}
 }

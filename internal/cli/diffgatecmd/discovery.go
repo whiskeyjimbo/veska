@@ -97,7 +97,12 @@ func DiscoverStructural(ctx context.Context, baseDBPath, repoID, branch, gitSHA 
 		return diffgate.Discovery{}, fmt.Errorf("diff-gate discovery: candidate pass: %w", err)
 	}
 
-	return diffgate.Discovery{Ran: true, BaseIDs: baseIDs, CandidateIDs: candIDs}, nil
+	return diffgate.Discovery{
+		Ran:          true,
+		BaseIDs:      baseIDs,
+		CandidateIDs: candIDs,
+		CoveredRules: append([]string(nil), structuralRules...),
+	}, nil
 }
 
 // assembleCandidate builds the complete candidate file set: every base file,
