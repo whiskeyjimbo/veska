@@ -28,21 +28,21 @@ var resolvableRules = map[string]struct{}{
 // NEVER read an unchecked dimension as PASS. The Verifier emits the verdict; it
 // never merges or blocks.
 type VerifyVerdict struct {
-	Rule string
+	Rule string `json:"rule"`
 	// ResolutionChecked is false when the target's rule (or anchor) is not
 	// soundly re-runnable over the ephemeral graph in v1; TargetResolved is
 	// meaningful only when this is true.
-	ResolutionChecked bool
+	ResolutionChecked bool `json:"resolution_checked"`
 	// TargetResolved is true when the target finding's rule no longer fires on
 	// the candidate (the diff resolved it).
-	TargetResolved bool
+	TargetResolved bool `json:"target_resolved"`
 	// NewFindingsChecked is false when finding-discovery over the candidate was
 	// not wired; an unchecked discovery is degraded, never green.
-	NewFindingsChecked bool
+	NewFindingsChecked bool `json:"new_findings_checked"`
 	// NewFindings lists finding_ids present in the candidate but absent in the
 	// base — findings the diff introduced. Sorted; empty when none (and when
 	// NewFindingsChecked).
-	NewFindings []string
+	NewFindings []string `json:"new_findings"`
 }
 
 // Discovery carries the finding sets used for the no-new-findings check. Ran
