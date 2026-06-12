@@ -135,19 +135,24 @@ func (m repoIDMap) changed() int {
 	return n
 }
 
-// reschemeRepoIdentities re-resolves the portable identity of every registered
-// repo and re-keys repo_id where the resolved id differs from the stored one.
-// The re-key uses INSERT-new / move-children / DELETE-old rather than an
-// in-place PK UPDATE, because the repos FKs are ON DELETE CASCADE (not ON
-// UPDATE CASCADE): inserting the new parent first, repointing children, then
-// deleting the old parent sidesteps the missing cascade without toggling
-// foreign_keys off. nodes/edges/findings are already empty (dropped by 0019),
-// so only tasks, repo_aliases, and repo-scope suppressions carry a live
-// repo_id reference at this point.
+// reschemeRepoIdentities re-resolves the portable identity of every repo and
+// re-keys repo_id where the resolved id differs. It returns the old->new map
+// keyed on PRE-migration repo_ids, which the node remap and suppression
+// carry-forward both join against.
+//
+// The map is built from the _dchd_old_repos SNAPSHOT, not the live repos table:
+// the live table is what this function mutates, so reading it on a crash-recovery
+// re-run (after the re-key but before the snapshot drop) would key the map on the
+// already-NEW ids, and buildNodeRemap — which looks up old node repo_ids — would
+// then miss every node and silently drop the suppression carry-forward. Sourcing
+// the stable snapshot ids makes the map deterministic across re-runs.
+//
+// The re-key itself is idempotent: it runs only while the live row still holds
+// the OLD id, so a recovery re-run (row already at the new id) skips it.
 func reschemeRepoIdentities(ctx context.Context, read, write *sql.DB) (repoIDMap, error) {
-	rows, err := read.QueryContext(ctx, `SELECT repo_id, root_path FROM repos`)
+	rows, err := read.QueryContext(ctx, `SELECT repo_id, root_path FROM _dchd_old_repos`)
 	if err != nil {
-		return nil, fmt.Errorf("list repos: %w", err)
+		return nil, fmt.Errorf("list snapshot repos: %w", err)
 	}
 	type repoRow struct{ oldID, root string }
 	var repos []repoRow
@@ -169,6 +174,16 @@ func reschemeRepoIdentities(ctx context.Context, read, write *sql.DB) (repoIDMap
 	for _, r := range repos {
 		tier, anchor, newID := repo.ResolveIdentity(ctx, r.root)
 		out[r.oldID] = newID
+
+		// Idempotency: only act while the live row still holds the old id. On a
+		// recovery re-run it already holds newID, so both branches no-op.
+		stillOld, err := rowExists(ctx, read, `SELECT 1 FROM repos WHERE repo_id=? LIMIT 1`, r.oldID)
+		if err != nil {
+			return nil, err
+		}
+		if !stillOld {
+			continue
+		}
 		if newID == r.oldID {
 			// Identity unchanged (abs-root tier, or already tiered). Backfill
 			// tier/anchor in case they were NULL (pre-0018 abs-root rows).
@@ -257,6 +272,20 @@ func dropReschemeSnapshots(ctx context.Context, db *sql.DB) error {
 		}
 	}
 	return nil
+}
+
+// relStoredPath normalises a snapshot file_path to the repo-relative slash form
+// the rescan stores. An absolute path is relativised against root; a path that
+// is ALREADY relative (e.g. findings stored file_path "go.mod" even pre-ADR) is
+// returned ToSlash'd as-is. Unlike relativizeOldPath it always yields a value —
+// used where the snapshot path may be either form (finding file anchors).
+func relStoredPath(root, p string) string {
+	if filepath.IsAbs(p) {
+		if rel, err := filepath.Rel(root, p); err == nil {
+			return filepath.ToSlash(rel)
+		}
+	}
+	return filepath.ToSlash(p)
 }
 
 // relativizeOldPath converts a snapshot's absolute file_path to the repo-relative
