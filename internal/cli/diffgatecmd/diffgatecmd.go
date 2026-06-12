@@ -40,6 +40,10 @@ type Params struct {
 	RepoRoot     string // working dir for git ref reads
 	BaseRef      string
 	CandidateRef string
+	// FindingID, when set, identifies the target finding by its id (the first
+	// column of `veska findings list`); its anchor + rule are derived from the
+	// stored row. Otherwise AnchorNodeID + Rule are used directly.
+	FindingID    string
 	AnchorNodeID string
 	Rule         string
 	Out          io.Writer
@@ -53,16 +57,14 @@ var ErrGateFailed = errors.New("diff-gate: FAIL")
 // the verify + scope-containment gate, writes the JSON verdict to p.Out, and
 // returns ErrGateFailed when the verdict is not PASS.
 func Run(ctx context.Context, p Params) error {
-	if p.RepoID == "" || p.BaseRef == "" || p.CandidateRef == "" || p.AnchorNodeID == "" || p.Rule == "" {
-		return errors.New("diff-gate: --repo, --base-ref, --candidate-ref, --anchor and --rule are required")
+	if p.RepoID == "" || p.BaseRef == "" || p.CandidateRef == "" {
+		return errors.New("diff-gate: --repo, --base-ref and --candidate-ref are required")
 	}
-
-	target, err := domain.NewFinding(
-		domain.FindingSpec{RepoID: p.RepoID, Branch: p.Branch, Severity: domain.SeverityMedium, Layer: domain.LayerStructural, Rule: p.Rule, Message: "diff-gate target"},
-		domain.WithNodeAnchor(p.AnchorNodeID),
-	)
-	if err != nil {
-		return fmt.Errorf("diff-gate: build target finding: %w", err)
+	// The target finding is identified EITHER by --finding (the finding_id from
+	// `veska findings list`, the ergonomic front door) OR by the explicit
+	// --anchor + --rule pair (for power users / CI without a finding id).
+	if p.FindingID == "" && (p.AnchorNodeID == "" || p.Rule == "") {
+		return errors.New("diff-gate: identify the target with --finding <id>, or with both --anchor and --rule")
 	}
 
 	dbPath := filepath.Join(config.DefaultVectorDir(), "veska.db")
@@ -87,6 +89,11 @@ func Run(ctx context.Context, p Params) error {
 			return err
 		}
 		return fmt.Errorf("%w (repo_not_indexed: index %q first, e.g. `veska reindex`)", ErrGateFailed, p.RepoID)
+	}
+
+	target, err := resolveTarget(ctx, pools.ReadDB, p)
+	if err != nil {
+		return err
 	}
 
 	src, err := diffgate.NewRefChangeSource(p.RepoRoot, p.BaseRef, p.CandidateRef, git.ChangedFilesBetween, fileAtRef)
@@ -139,6 +146,46 @@ func Run(ctx context.Context, p Params) error {
 		return fmt.Errorf("%w (%s)", ErrGateFailed, strings.Join(verdict.Failures, ","))
 	}
 	return nil
+}
+
+// resolveTarget builds the target finding from either --finding (deriving the
+// anchor + rule from the stored finding row) or the explicit --anchor + --rule.
+func resolveTarget(ctx context.Context, db *sql.DB, p Params) (*domain.Finding, error) {
+	anchor, rule := p.AnchorNodeID, p.Rule
+	if p.FindingID != "" {
+		a, r, err := lookupFinding(ctx, db, p.RepoID, p.Branch, p.FindingID)
+		if err != nil {
+			return nil, err
+		}
+		anchor, rule = a, r
+	}
+	target, err := domain.NewFinding(
+		domain.FindingSpec{RepoID: p.RepoID, Branch: p.Branch, Severity: domain.SeverityMedium, Layer: domain.LayerStructural, Rule: rule, Message: "diff-gate target"},
+		domain.WithNodeAnchor(anchor),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("diff-gate: build target finding: %w", err)
+	}
+	return target, nil
+}
+
+// lookupFinding resolves a finding_id to its (node anchor, rule). A file-anchored
+// finding (NULL node_id) is rejected: the gate needs a node anchor.
+func lookupFinding(ctx context.Context, db *sql.DB, repoID, branch, findingID string) (anchor, rule string, err error) {
+	var node sql.NullString
+	err = db.QueryRowContext(ctx,
+		`SELECT node_id, rule FROM findings WHERE finding_id=? AND repo_id=? AND branch=?`,
+		findingID, repoID, branch).Scan(&node, &rule)
+	if errors.Is(err, sql.ErrNoRows) {
+		return "", "", fmt.Errorf("diff-gate: finding %q not found in repo %q branch %q", findingID, repoID, branch)
+	}
+	if err != nil {
+		return "", "", fmt.Errorf("diff-gate: look up finding %q: %w", findingID, err)
+	}
+	if !node.Valid || node.String == "" {
+		return "", "", fmt.Errorf("diff-gate: finding %q is file-anchored; the gate needs a node-anchored finding (pass --anchor/--rule instead)", findingID)
+	}
+	return node.String, rule, nil
 }
 
 // emitVerdict writes the verdict as indented JSON. Every non-PASS path goes
