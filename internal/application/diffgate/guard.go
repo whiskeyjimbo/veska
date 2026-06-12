@@ -26,16 +26,16 @@ var _ BlastRadius = (*blastradius.Service)(nil)
 type ScopeVerdict struct {
 	// Contained is true when every changed node falls inside the allowed set
 	// (the anchor plus its blast radius).
-	Contained bool
+	Contained bool `json:"contained"`
 	// AnchorNodeID is the finding anchor the radius was computed from.
-	AnchorNodeID string
+	AnchorNodeID string `json:"anchor_node_id"`
 	// Offending lists the changed node IDs that fell OUTSIDE the allowed set,
 	// sorted for deterministic output. Empty when Contained.
-	Offending []string
+	Offending []string `json:"offending"`
 	// Truncated is propagated from the radius traversal: when the BFS hit its
 	// node bound the allowed set is incomplete, so an "exceeded" verdict may
 	// be a false positive. Callers can surface this as a caveat.
-	Truncated bool
+	Truncated bool `json:"truncated"`
 }
 
 // Guard answers the blast-radius-containment half of the diff-safety gate:
