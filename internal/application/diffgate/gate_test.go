@@ -149,6 +149,26 @@ func TestGate_FileAnchoredDegrades(t *testing.T) {
 	}
 }
 
+// TestGate_AnchorNotResolvedDegrades: when the anchor doesn't resolve in the
+// base graph (blastradius.ErrSeedNotFound), the gate degrades to a named
+// failure instead of crashing — the fail-safe the smoke test surfaced.
+func TestGate_AnchorNotResolvedDegrades(t *testing.T) {
+	base := &fakeBaseGraph{inbound: map[string][]string{"a:Dead": {}}}
+	eph := indexCandidate(t, base, &domain.ParseResult{Nodes: []*domain.Node{mustNode(t, "a:Dead", "a.go", "Dead")}})
+	guard := newGuard(t, &fakeRadius{err: blastradius.ErrSeedNotFound})
+	gate, err := diffgate.NewGate(diffgate.NewVerifier(), guard)
+	if err != nil {
+		t.Fatalf("NewGate: %v", err)
+	}
+	v, err := gate.Evaluate(context.Background(), eph, deadCodeFinding(t, "a:Dead"), diffgate.Discovery{Ran: true}, blastradius.Options{})
+	if err != nil {
+		t.Fatalf("Evaluate should degrade, not error: %v", err)
+	}
+	if v.Pass || !slices.Contains(v.Failures, diffgate.FailAnchorNotResolved) {
+		t.Fatalf("verdict = %+v, want FAIL with anchor_not_resolved", v)
+	}
+}
+
 // TestGate_VerdictJSON covers AC3: the verdict round-trips as JSON with the
 // stable field names CI/agents consume.
 func TestGate_VerdictJSON(t *testing.T) {
