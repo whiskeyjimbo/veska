@@ -23,6 +23,11 @@ type DriftedNode struct {
 	// contract-drift check threads it onto the resulting Finding so the
 	// revalidation sweep can supersede the finding once content drifts again.
 	ContentHash string
+	// Exported is the node's visibility flag (nodes.exported; NULL coalesced to
+	// false). The whole-repo contract-drift check ignores it — it flags drift of
+	// any visibility — but the breaking-exported-signature diff gate
+	// (solov2-zvh6.2) filters on it so only public-surface drift fails CI.
+	Exported bool
 }
 
 // ContractDriftQuerier is the read-side port used by the contract-drift
