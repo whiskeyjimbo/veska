@@ -11,11 +11,16 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/sqlite"
 )
 
-// unchangedLib serves lib.go's (unchanged) content for the discovery assembly,
-// standing in for git.FileAtRef at the base ref.
-func unchangedLib(_ context.Context, path string) ([]byte, error) {
-	if path == "lib.go" {
+// readBaseRef serves every file's BASE content, standing in for
+// git.FileAtRef at the base ref. The symmetric discovery reads ALL files at the
+// base ref for the base side, so this must answer for every path, not just the
+// unchanged ones.
+func readBaseRef(_ context.Context, path string) ([]byte, error) {
+	switch path {
+	case "lib.go":
 		return []byte("package p\n\nfunc helper() {}\n"), nil
+	case "main.go":
+		return []byte("package p\n\nfunc Run() { helper() }\n"), nil
 	}
 	return nil, nil
 }
@@ -73,7 +78,7 @@ func TestDiscoverStructural_CrossFileNewlyDead(t *testing.T) {
 	// not that resolution silently broke.
 	disc, err := DiscoverStructural(context.Background(), dbPath, discRepo, discBranch, "cand-sha",
 		[]diffgate.FileChange{{Path: "main.go", Content: []byte("package p\n\nfunc Run() {}\n")}},
-		unchangedLib,
+		readBaseRef,
 	)
 	if err != nil {
 		t.Fatalf("DiscoverStructural: %v", err)
@@ -112,7 +117,7 @@ func TestDiscoverStructural_NoChangeNoNewFindings(t *testing.T) {
 	// cross-file call (the partial-batch bug that motivated this design).
 	disc, err := DiscoverStructural(context.Background(), dbPath, discRepo, discBranch, "cand-sha",
 		[]diffgate.FileChange{{Path: "main.go", Content: []byte("package p\n\n// run it\nfunc Run() { helper() }\n")}},
-		unchangedLib,
+		readBaseRef,
 	)
 	if err != nil {
 		t.Fatalf("DiscoverStructural: %v", err)
