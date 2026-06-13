@@ -12,6 +12,7 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/application/diffgate"
 	"github.com/whiskeyjimbo/veska/internal/composition"
 	"github.com/whiskeyjimbo/veska/internal/core/domain"
+	git "github.com/whiskeyjimbo/veska/internal/infrastructure/git"
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/repo"
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/sqlite"
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/sqlite/sqldriver"
@@ -47,12 +48,14 @@ var discoverActor = domain.Actor{ID: "service:veska-diff-gate", Kind: domain.Act
 // a node that became dead in an UNCHANGED file because the change removed its
 // last caller — the false-green a per-file check scope would miss.
 //
-// candidateFiles is the complete candidate file set: every file_path in the
-// repo mapped to its candidate content (changed files carry new content,
-// unchanged files carry their existing content; a deleted file maps to nil so
-// promotion drops its nodes). It mutates only the throwaway clone (removed on
-// return) and performs no network IO.
-func DiscoverStructural(ctx context.Context, baseDBPath, repoID, branch, gitSHA string, candidateFiles map[string][]byte) (diffgate.Discovery, error) {
+// changes are the candidate's changed files (new content, or Deleted). The
+// complete candidate file set is assembled internally: every file_path in the
+// base graph, overlaid with the changes — unchanged files are read through
+// readUnchanged (in the live path, git.FileAtRef at the base ref; their content
+// is unchanged, so the base ref is authoritative). It mutates only the
+// throwaway clone (removed on return) and performs no network IO beyond
+// readUnchanged.
+func DiscoverStructural(ctx context.Context, baseDBPath, repoID, branch, gitSHA string, changes []diffgate.FileChange, readUnchanged func(ctx context.Context, path string) ([]byte, error)) (diffgate.Discovery, error) {
 	clone, err := cloneDB(ctx, baseDBPath)
 	if err != nil {
 		return diffgate.Discovery{}, fmt.Errorf("diff-gate discovery: clone base db: %w", err)
@@ -73,8 +76,18 @@ func DiscoverStructural(ctx context.Context, baseDBPath, repoID, branch, gitSHA 
 		return diffgate.Discovery{}, fmt.Errorf("diff-gate discovery: base pass: %w", err)
 	}
 
-	// Candidate findings: re-promote the COMPLETE candidate file set so the
-	// promoter's batch-scoped resolution rebinds all cross-file calls.
+	// Assemble the COMPLETE candidate file set from the base graph's file list
+	// overlaid with the changes — a complete batch is what makes the promoter's
+	// batch-scoped resolution rebind all cross-file calls.
+	baseFiles, err := allFiles(ctx, pools.ReadDB, repoID, branch)
+	if err != nil {
+		return diffgate.Discovery{}, fmt.Errorf("diff-gate discovery: list base files: %w", err)
+	}
+	candidateFiles, err := assembleCandidate(ctx, baseFiles, changes, readUnchanged)
+	if err != nil {
+		return diffgate.Discovery{}, fmt.Errorf("diff-gate discovery: assemble candidate files: %w", err)
+	}
+
 	if err := repromoteAll(ctx, pools, repoID, branch, gitSHA, candidateFiles); err != nil {
 		return diffgate.Discovery{}, fmt.Errorf("diff-gate discovery: re-promote candidate: %w", err)
 	}
@@ -85,6 +98,56 @@ func DiscoverStructural(ctx context.Context, baseDBPath, repoID, branch, gitSHA 
 	}
 
 	return diffgate.Discovery{Ran: true, BaseIDs: baseIDs, CandidateIDs: candIDs}, nil
+}
+
+// assembleCandidate builds the complete candidate file set: every base file,
+// overlaid with the changes. A changed file uses its new content (nil when
+// deleted, so promotion drops its nodes); an added file (not in the base graph)
+// is appended; an unchanged base file is read through readUnchanged.
+func assembleCandidate(ctx context.Context, baseFiles []string, changes []diffgate.FileChange, readUnchanged func(ctx context.Context, path string) ([]byte, error)) (map[string][]byte, error) {
+	changed := make(map[string]diffgate.FileChange, len(changes))
+	for _, c := range changes {
+		changed[c.Path] = c
+	}
+	out := make(map[string][]byte, len(baseFiles)+len(changes))
+	seen := make(map[string]struct{}, len(baseFiles))
+	for _, f := range baseFiles {
+		seen[f] = struct{}{}
+		if c, ok := changed[f]; ok {
+			out[f] = c.Content // nil when deleted → promotion drops the file's nodes
+			continue
+		}
+		content, err := readUnchanged(ctx, f)
+		if err != nil {
+			return nil, fmt.Errorf("read unchanged file %q: %w", f, err)
+		}
+		out[f] = content
+	}
+	// Added files: present in the change set but not in the base graph.
+	for _, c := range changes {
+		if _, ok := seen[c.Path]; ok || c.Deleted {
+			continue
+		}
+		out[c.Path] = c.Content
+	}
+	return out, nil
+}
+
+// discover runs structural finding-discovery for the live gate. ANY error
+// degrades to a not-run Discovery (Ran=false) so the gate FAILs with
+// discovery_unchecked rather than risking a false green — the fail-safe. The
+// unchanged-file reader is git.FileAtRef at the base ref (an unchanged file's
+// content is identical at the base ref).
+func discover(ctx context.Context, dbPath string, p Params, changes []diffgate.FileChange) diffgate.Discovery {
+	readUnchanged := func(ctx context.Context, path string) ([]byte, error) {
+		return adaptAbsence(git.FileAtRef(ctx, p.RepoRoot, p.BaseRef, path))
+	}
+	disc, err := DiscoverStructural(ctx, dbPath, p.RepoID, p.Branch, p.CandidateRef, changes, readUnchanged)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "diff-gate: discovery degraded (no-new-findings unchecked): %v\n", err)
+		return diffgate.Discovery{Ran: false}
+	}
+	return disc
 }
 
 // cloneDB copies the committed contents of the base DB into a fresh temp file

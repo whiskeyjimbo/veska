@@ -13,9 +13,9 @@ import (
 // within blast radius and introduces no new findings, and emit a machine-
 // readable pass/fail verdict — exiting non-zero on FAIL for CI gating.
 //
-// v1 runs with finding-discovery unwired, so the verdict is conservatively
-// FAIL with "discovery_unchecked" until solov2-ll57.4 lands. The target finding
-// is supplied as flags (--anchor/--rule) rather than looked up from storage.
+// Structural finding-discovery (dead-code, contract-drift) is wired; a change
+// that introduces a new structural finding FAILs. The target finding is
+// supplied as flags (--anchor/--rule) rather than looked up from storage.
 func diffGateCmd() *cobra.Command {
 	var (
 		repoFlag   string
@@ -29,7 +29,7 @@ func diffGateCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:          "diff-gate",
 		Short:        "Gate a candidate change: verify it resolves a finding within blast radius, emit pass/fail JSON (exits non-zero on FAIL)",
-		Long:         "Index a candidate change (base-ref..candidate-ref) against the indexed-HEAD graph and emit a deterministic, network-free pass/fail verdict: did it resolve its target finding, introduce no new findings, and stay within the finding's blast radius? Emits JSON and exits non-zero on FAIL for CI gating. NOTE: v1 runs with finding-discovery unwired, so the verdict is conservatively FAIL with reason \"discovery_unchecked\" until that adapter lands (solov2-ll57.4).",
+		Long:         "Index a candidate change (base-ref..candidate-ref) against the indexed-HEAD graph and emit a deterministic, network-free pass/fail verdict: did it resolve its target finding, introduce no new structural findings (dead-code, contract-drift), and stay within the finding's blast radius? Emits JSON and exits non-zero on FAIL for CI gating.",
 		Args:         cobra.NoArgs,
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, _ []string) error {
