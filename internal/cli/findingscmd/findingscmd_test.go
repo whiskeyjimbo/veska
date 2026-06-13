@@ -96,4 +96,22 @@ func TestFilterLowKeepsSuppressed(t *testing.T) {
 	}
 }
 
+// TestFilterLowShownWhenRuleFilter pins solov2-ll57's junior-journey fix: an
+// explicit --rule selector surfaces low-severity rows of that rule (e.g.
+// dead-code), instead of the confusing empty list a junior got when their only
+// finding was low-severity and hidden by the default auto-link-noise filter.
+func TestFilterLowShownWhenRuleFilter(t *testing.T) {
+	findings := []FindingView{
+		{FindingID: "f1", Severity: "low", Rule: "dead-code"},
+		{FindingID: "f2", Severity: "low", Rule: "dead-code"},
+	}
+	kept, hiddenLow := ListParams{Rule: "dead-code"}.filterLow(findings)
+	if hiddenLow != 0 {
+		t.Fatalf("hiddenLow = %d, want 0 (explicit --rule shows low rows)", hiddenLow)
+	}
+	if len(kept) != 2 {
+		t.Fatalf("expected both low dead-code rows kept under --rule, got %d", len(kept))
+	}
+}
+
 var _ io.Writer = (*bytes.Buffer)(nil)

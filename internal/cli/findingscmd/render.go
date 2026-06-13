@@ -54,10 +54,13 @@ func (p ListParams) render(resp findingsEnvelope) error {
 }
 
 // filterLow drops low-severity rows unless --include-low or an explicit
-// --severity selector is in play . Returns the kept rows and the
-// hidden-low count.
+// --severity / --rule selector is in play . An explicit --rule means
+// the user asked for that rule by name (e.g. dead-code, which is low-severity),
+// so re-hiding it by severity would yield a confusingly empty list; the
+// auto-link noise the default hide targets stays hidden in the unfiltered view.
+// Returns the kept rows and the hidden-low count.
 func (p ListParams) filterLow(findings []FindingView) ([]FindingView, int) {
-	if p.IncludeLow || p.Severity != "" {
+	if p.IncludeLow || p.Severity != "" || p.Rule != "" {
 		return findings, 0
 	}
 	kept := findings[:0]
