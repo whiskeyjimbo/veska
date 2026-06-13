@@ -264,6 +264,9 @@ func (b *daemonBuilder) buildCheckPipeline() error {
 		checks.WithDeadCodeRepoKindLookup(deadcodeRepoKind),
 	))
 	checkReg.Register(checks.NewContractDriftCheck(contractRepo))
+	checkReg.Register(checks.NewUntestedSymbolCheck(sqlite.NewCoverageRepo(b.pools.ReadDB),
+		checks.WithUntestedRepoKindLookup(deadcodeRepoKind),
+	))
 
 	// Secrets-scan (on unless disabled) + vuln-scan (only when provider="osv")
 	// share their enablement policy with the cold-scan CLI path via
