@@ -23,13 +23,15 @@ func diffGateCmd() *cobra.Command {
 		rootFlag   string
 		baseRef    string
 		candRef    string
+		finding    string
 		anchor     string
 		rule       string
 	)
 	cmd := &cobra.Command{
 		Use:          "diff-gate",
 		Short:        "Gate a candidate change: verify it resolves a finding within blast radius, emit pass/fail JSON (exits non-zero on FAIL)",
-		Long:         "Index a candidate change (base-ref..candidate-ref) against the indexed-HEAD graph and emit a deterministic, network-free pass/fail verdict: did it resolve its target finding, introduce no new structural findings (dead-code, contract-drift), and stay within the finding's blast radius? Emits JSON and exits non-zero on FAIL for CI gating.",
+		Long:         "Index a candidate change (base-ref..candidate-ref) against the indexed-HEAD graph and emit a deterministic, network-free pass/fail verdict: did it resolve its target finding, introduce no new structural findings (dead-code, contract-drift), and stay within the finding's blast radius? Emits JSON and exits non-zero on FAIL for CI gating.\n\nIdentify the target finding with --finding <id> (the first column of `veska findings list`); its anchor and rule are derived for you. Power users / CI can pass --anchor + --rule directly instead.",
+		Example:      "  # gate a fix for a finding you saw in `veska findings list`\n  veska diff-gate --repo <id> --finding <finding_id> --base-ref HEAD~1 --candidate-ref HEAD",
 		Args:         cobra.NoArgs,
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, _ []string) error {
@@ -47,6 +49,7 @@ func diffGateCmd() *cobra.Command {
 				RepoRoot:     root,
 				BaseRef:      baseRef,
 				CandidateRef: candRef,
+				FindingID:    finding,
 				AnchorNodeID: anchor,
 				Rule:         rule,
 				Out:          cmd.OutOrStdout(),
@@ -58,7 +61,8 @@ func diffGateCmd() *cobra.Command {
 	cmd.Flags().StringVar(&rootFlag, "repo-root", "", "repo working dir for git ref reads (default: cwd)")
 	cmd.Flags().StringVar(&baseRef, "base-ref", "", "git ref of the base the candidate is diffed against")
 	cmd.Flags().StringVar(&candRef, "candidate-ref", "", "git ref/worktree of the candidate change")
-	cmd.Flags().StringVar(&anchor, "anchor", "", "node id the target finding is anchored on")
-	cmd.Flags().StringVar(&rule, "rule", "", "rule name of the target finding (e.g. dead-code)")
+	cmd.Flags().StringVar(&finding, "finding", "", "target finding id from 'veska findings list'; derives --anchor and --rule")
+	cmd.Flags().StringVar(&anchor, "anchor", "", "node id the target finding is anchored on (alternative to --finding)")
+	cmd.Flags().StringVar(&rule, "rule", "", "rule name of the target finding, e.g. dead-code (alternative to --finding)")
 	return cmd
 }

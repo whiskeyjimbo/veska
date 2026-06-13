@@ -166,6 +166,54 @@ func TestRun_E2E_PassOnDeadCodeFix(t *testing.T) {
 	}
 }
 
+// TestRun_E2E_FindingFlag proves the ll57.11 ergonomic front door: a junior
+// passes only --finding <id> (no --anchor/--rule), and the gate derives the
+// anchor + rule from the stored finding and produces the correct PASS.
+func TestRun_E2E_FindingFlag(t *testing.T) {
+	home := t.TempDir()
+	dbPath := filepath.Join(home, "veska.db")
+	base := map[string]string{"x.go": "package p\n\nfunc dead() {}\n"}
+	seedBaseDB(t, dbPath, base)
+
+	// Generate the real dead-code finding on `dead` and capture its id.
+	pools, err := sqlite.OpenPools(dbPath)
+	if err != nil {
+		t.Fatalf("open pools: %v", err)
+	}
+	ids, err := fullCheckPass(context.Background(), pools, buildStructuralRunner(pools), discRepo, discBranch, "seed")
+	pools.Close()
+	if err != nil {
+		t.Fatalf("seed finding: %v", err)
+	}
+	if len(ids) == 0 {
+		t.Fatalf("expected a dead-code finding to seed")
+	}
+	findingID := ids[0]
+
+	repoDir := t.TempDir()
+	fixed := "package p\n\nfunc dead() {}\n\nfunc User() { dead() }\n"
+	makeRepo(t, repoDir, base, map[string]*string{"x.go": &fixed})
+
+	t.Setenv("VESKA_HOME", home)
+	var out bytes.Buffer
+	err = Run(context.Background(), Params{
+		RepoID: discRepo, Branch: discBranch, RepoRoot: repoDir,
+		BaseRef: "HEAD~1", CandidateRef: "HEAD",
+		FindingID: findingID, // no --anchor / --rule
+		Out:       &out,
+	})
+	var v diffgate.GateVerdict
+	if jerr := json.Unmarshal(out.Bytes(), &v); jerr != nil {
+		t.Fatalf("verdict JSON: %v\nraw: %s", jerr, out.String())
+	}
+	if err != nil || !v.Pass {
+		t.Fatalf("expected PASS via --finding alone; err=%v verdict=%+v", err, v)
+	}
+	if v.Verify.Rule != "dead-code" || !v.Verify.TargetResolved {
+		t.Fatalf("expected rule derived to dead-code + resolved; got %+v", v.Verify)
+	}
+}
+
 // TestRun_E2E_RepoNotIndexed: pointed at a fresh/empty VESKA_HOME, the gate must
 // emit a clean JSON verdict (repo_not_indexed) and exit non-zero — NOT crash
 // with a raw "no such table" and empty stdout (the ll57.8 finding, ll57.12 fix).
