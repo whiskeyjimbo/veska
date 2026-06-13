@@ -133,10 +133,35 @@ func findingsForChangedFiles(ctx context.Context, baseDBPath, repoID, branch, gi
 		return nil, fmt.Errorf("open clone: %w", err)
 	}
 	defer pools.Close()
+	// The clone inherits the indexed graph's findings table. dead-code and
+	// contract-drift are NOT authoritative checks (only vulnscan is), so the
+	// re-check below never closes a stale open finding — it would leak into this
+	// side's set and, being symmetric in id, cancel a genuinely-new candidate
+	// finding (a false GREEN when the index sits AHEAD of base; solov2-ll57.16).
+	// Clear the structural findings so each side derives them purely from graph
+	// state, independent of the index's ref position.
+	if err := clearStructuralFindings(ctx, pools.Write, repoID, branch); err != nil {
+		return nil, fmt.Errorf("clear inherited findings: %w", err)
+	}
 	if err := repromoteChanged(ctx, pools, repoID, branch, gitSHA, files); err != nil {
 		return nil, fmt.Errorf("re-promote: %w", err)
 	}
 	return fullCheckPass(ctx, pools, buildStructuralRunner(pools), repoID, branch, gitSHA)
+}
+
+// clearStructuralFindings deletes the structural-rule findings inherited by the
+// throwaway clone so discovery's per-side check pass starts from a clean slate.
+// Safe because the clone is discarded and the structural checks read graph state
+// (nodes/edges), not the findings table.
+func clearStructuralFindings(ctx context.Context, db *sql.DB, repoID, branch string) error {
+	placeholders := strings.TrimSuffix(strings.Repeat("?,", len(structuralRules)), ",")
+	args := []any{repoID, branch}
+	for _, r := range structuralRules {
+		args = append(args, r)
+	}
+	_, err := db.ExecContext(ctx, fmt.Sprintf(
+		`DELETE FROM findings WHERE repo_id=? AND branch=? AND rule IN (%s)`, placeholders), args...)
+	return err
 }
 
 // discover runs structural finding-discovery for the live gate. ANY error
