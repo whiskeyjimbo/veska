@@ -43,6 +43,12 @@ type VerifyVerdict struct {
 	// base — findings the diff introduced. Sorted; empty when none (and when
 	// NewFindingsChecked).
 	NewFindings []string `json:"new_findings"`
+	// NewFindingsCoveredRules names the rules discovery actually evaluated, so
+	// a consumer never reads "checked" as "all rules checked". The no-new-
+	// findings result is sound ONLY for these rules; a rule absent here (e.g.
+	// secrets, vuln) was NOT checked and a new finding under it would not fail
+	// the gate. Empty when discovery did not run.
+	NewFindingsCoveredRules []string `json:"new_findings_covered_rules"`
 }
 
 // Discovery carries the finding-id sets used for the no-new-findings check. Ran
@@ -62,6 +68,10 @@ type Discovery struct {
 	Ran          bool
 	BaseIDs      []string
 	CandidateIDs []string
+	// CoveredRules names the rules the discovery producer actually evaluated.
+	// The verdict propagates it so "no new findings" is never read as covering
+	// rules the producer didn't run.
+	CoveredRules []string
 }
 
 // Verifier answers the verify half of the gate: did the candidate resolve its
@@ -112,6 +122,7 @@ func (v *Verifier) Verify(ctx context.Context, eph *Ephemeral, target *domain.Fi
 	// degraded, not green.
 	if disc.Ran {
 		out.NewFindingsChecked = true
+		out.NewFindingsCoveredRules = disc.CoveredRules
 		baseIDs := make(map[string]struct{}, len(disc.BaseIDs))
 		for _, id := range disc.BaseIDs {
 			if id != "" {
