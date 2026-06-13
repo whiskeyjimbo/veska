@@ -58,6 +58,34 @@ func AddedLinesForCommit(ctx context.Context, repoRoot, commitSHA string) (map[s
 	return parseAddedLines(stdout.String()), nil
 }
 
+// AddedLinesBetween returns the lines added between refA and refB (the net
+// "+"-side of `git diff -U0 refA refB`), keyed by repo-root-relative file path.
+// Unlike AddedLinesForCommit (a single commit vs its parent) this spans an
+// arbitrary ref RANGE, so the net-new security gate (solov2-zvh6.1) scans only
+// what a candidate actually introduces over its base — a secret added then
+// removed within the range does not appear, because the diff is net.
+//
+// Files with no added lines (pure deletions) are omitted. An empty repoRoot,
+// refA, or refB returns an error rather than shelling out against defaults.
+func AddedLinesBetween(ctx context.Context, repoRoot, refA, refB string) (map[string][]Line, error) {
+	if repoRoot == "" {
+		return nil, fmt.Errorf("git diff: repoRoot is empty")
+	}
+	if refA == "" || refB == "" {
+		return nil, fmt.Errorf("git diff: refA and refB are required")
+	}
+	cmd := exec.CommandContext(ctx, "git", "-C", repoRoot,
+		"diff", "-U0", "--no-color", refA, refB)
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+	if err := cmd.Run(); err != nil {
+		return nil, fmt.Errorf("git diff %s %s in %s: %w: %s",
+			refA, refB, repoRoot, err, strings.TrimSpace(stderr.String()))
+	}
+	return parseAddedLines(stdout.String()), nil
+}
+
 // parseAddedLines walks unified-patch text and collects "+"-prefixed body
 // lines per file, numbering them from each "@@" hunk header's new-file
 // start. It is split out from AddedLinesForCommit so it can be unit-tested

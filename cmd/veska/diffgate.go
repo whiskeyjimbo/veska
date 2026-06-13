@@ -65,6 +65,53 @@ func diffGateCmd() *cobra.Command {
 	cmd.Flags().StringVar(&anchor, "anchor", "", "node id the target finding is anchored on (alternative to --finding)")
 	cmd.Flags().StringVar(&rule, "rule", "", "rule name of the target finding, e.g. dead-code (alternative to --finding)")
 	cmd.AddCommand(diffGateClonesCmd())
+	cmd.AddCommand(diffGateSecurityCmd())
+	return cmd
+}
+
+// diffGateSecurityCmd is the net-new security diff-twin gate (solov2-zvh6.1): a
+// blanket gate (no target finding, no indexed graph) that FAILs when the
+// candidate introduces a new secret_leak (added-line scan, language-agnostic)
+// or vulnerable_dependency (manifest finding-delta; Go/go.mod today) finding.
+func diffGateSecurityCmd() *cobra.Command {
+	var (
+		repoFlag   string
+		branchFlag string
+		rootFlag   string
+		baseRef    string
+		candRef    string
+	)
+	cmd := &cobra.Command{
+		Use:          "security",
+		Short:        "Gate a candidate change on net-new secret/vulnerable-dependency findings, emit pass/fail JSON (exits non-zero on FAIL)",
+		Long:         "Scan a candidate change (base-ref..candidate-ref) and FAIL when it introduces a new secret_leak (scanned over the diff's added lines — any language) or a new vulnerable_dependency (manifest finding-delta by finding_id; go.mod today). A blanket gate: no target finding, no indexed graph required. Offline and deterministic; emits JSON and exits non-zero on FAIL for CI gating.",
+		Example:      "  veska diff-gate security --repo <id> --base-ref HEAD~1 --candidate-ref HEAD",
+		Args:         cobra.NoArgs,
+		SilenceUsage: true,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			root := rootFlag
+			if root == "" {
+				wd, err := os.Getwd()
+				if err != nil {
+					return err
+				}
+				root = wd
+			}
+			return diffgatecmd.RunSecurity(cmd.Context(), diffgatecmd.SecurityParams{
+				RepoID:       repoFlag,
+				Branch:       branchFlag,
+				RepoRoot:     root,
+				BaseRef:      baseRef,
+				CandidateRef: candRef,
+				Out:          cmd.OutOrStdout(),
+			})
+		},
+	}
+	cmd.Flags().StringVar(&repoFlag, "repo", "", "repo id (folded into finding keys)")
+	cmd.Flags().StringVar(&branchFlag, "branch", "main", "branch")
+	cmd.Flags().StringVar(&rootFlag, "repo-root", "", "repo working dir for git ref reads (default: cwd)")
+	cmd.Flags().StringVar(&baseRef, "base-ref", "", "git ref of the base the candidate is diffed against")
+	cmd.Flags().StringVar(&candRef, "candidate-ref", "", "git ref/worktree of the candidate change")
 	return cmd
 }
 
