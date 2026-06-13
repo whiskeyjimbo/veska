@@ -61,3 +61,51 @@ is the `--anchor` node id. This is a hard blocker, not a polish item.
 This complements, not replaces, the ll57.6 e2e logic tests. They prove the gate
 *computes* correct verdicts; this run shows a junior *can't reach* that
 computation yet. F1 is the gating fix for adoption.
+
+---
+
+## Redo — 2026-06-13 (after ll57.9/.11/.12/.13)
+
+Re-ran the journey against a **freshly built binary** end-to-end on a real repo:
+`veska init -y` → `veska repo add --wait` (daemon up) → `findings list` →
+`diff-gate --finding`. The first-pass blockers are gone; two **new** bugs
+surfaced that only a real-binary, real-daemon run could expose. Both were fixed
+and re-validated against the same live binary in this session.
+
+### Fixed since the first run
+
+- **F1 (blocker) → FIXED (ll57.11).** `--finding <id>` is the front door now;
+  `--help` documents it and derives `--anchor`/`--rule` from the stored row. A
+  junior pastes the `finding_id` from the first column of `findings list` and
+  the gate runs.
+- **F2 (robustness) → FIXED (ll57.12).** An unindexed/empty repo now emits a
+  clean `repo_not_indexed` JSON verdict + non-zero exit (was a raw
+  `no such table: edges` crash with empty stdout).
+- **F4 → FIXED.** `--help` carries a copy-pasteable example.
+
+### New findings (this run)
+
+| # | Severity | Finding | Status |
+|---|----------|---------|--------|
+| **N1** | **Blocker** | `diff-gate --repo <short_id>` (the 12-char id printed by `repo add` and accepted by `findings list`) returned `repo_not_indexed` against an **indexed** repo, with a *misdirecting* "index %q first" message. `repoIndexed()` did `WHERE repo_id=?` on the raw flag; `nodes.repo_id` holds the full 64-hex id, and diff-gate — unlike every other surface — never resolved short ids. | **FIXED (ll57.15):** `resolveRepoID` resolves full id / 12-char short id / unambiguous hex prefix → canonical id before any query. Validated: short id now PASSes/FAILs correctly. |
+| **N2** | **High (soundness)** | A candidate that **resolved** its target finding but **introduced** a new dead-code finding **PASSed** (`new_findings: null`) — a false GREEN. The discovery clone inherits the indexed graph's `findings` table via `VACUUM INTO`; dead-code/contract-drift are not `AuthoritativeChecker` (only vulnscan is), so the base-side re-check never closes the inherited finding. It leaks into `baseIDs` and, sharing a deterministic id with the candidate's, cancels. Fires only when the index sits **ahead** of base — exactly the local post-commit-hook flow. Clean CI (index == base) is unaffected. The e2e tests missed it because `seedBaseDB` seeds **without** running checks, so their clones start findings-free. | **FIXED (ll57.16):** clear the structural findings in each clone before re-checking, so discovery derives findings purely from graph state. Regression test seeds via a *real* check pass (red without the fix). Validated: the exact command that false-greened now FAILs `new_findings`, exit 1. |
+
+### Lower-friction notes (report-only, not filed)
+
+- **Low-severity dead-code is hidden by default.** `findings list` prints
+  `showing 0 of 1 … (1 low-severity hidden; pass --include-low to show)` — the
+  hint is there, but a junior's only finding being invisible by default is a
+  speed bump.
+- **`repo add` before `init` emits a raw sqlite error** (`open sqlite: …
+  unable to open database file`) instead of "run `veska init` first" — the
+  top-level help does say to init, so this is polish.
+- **`repo add --wait` needs the daemon**, but its error is genuinely good: it
+  names both `veska service start` and the drop-`--wait` offline path.
+
+### What works (real binary)
+
+- `--finding` front door, clean `repo_not_indexed`, the verdict's
+  `new_findings_covered_rules` honesty field, and the discovery fail-safe all
+  hold in the live binary, not just in `Run()` tests.
+- After the two fixes, the **full junior path is unblocked**: short id in,
+  `--finding` in, correct PASS / FAIL[new_findings] / exit code out.
