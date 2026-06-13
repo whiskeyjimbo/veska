@@ -24,6 +24,7 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/application/blastradius"
 	"github.com/whiskeyjimbo/veska/internal/application/diffgate"
 	"github.com/whiskeyjimbo/veska/internal/application/staging"
+	"github.com/whiskeyjimbo/veska/internal/cli/repocmd"
 	"github.com/whiskeyjimbo/veska/internal/core/domain"
 	git "github.com/whiskeyjimbo/veska/internal/infrastructure/git"
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/sqlite"
@@ -73,6 +74,17 @@ func Run(ctx context.Context, p Params) error {
 		return fmt.Errorf("diff-gate: open store: %w", err)
 	}
 	defer pools.Close()
+
+	// Resolve --repo as a full id, a 12-char short id (what `repo add` and
+	// `veska findings list` print), or an unambiguous hex prefix → the canonical
+	// full repo_id every downstream query keys on. Without this a junior who
+	// pastes the short id gets a spurious repo_not_indexed against an indexed repo
+	// (solov2-ll57.15). Unknown ids pass through and fail closed below.
+	resolved, err := resolveRepoID(ctx, pools.ReadDB, p.RepoID)
+	if err != nil {
+		return err
+	}
+	p.RepoID = resolved
 
 	base := baseGraph{
 		EdgeReaderRepo: sqlite.NewEdgeReaderRepo(pools.ReadDB),
@@ -197,6 +209,61 @@ func emitVerdict(out io.Writer, v diffgate.GateVerdict) error {
 		return fmt.Errorf("diff-gate: encode verdict: %w", err)
 	}
 	return nil
+}
+
+// resolveRepoID maps the --repo flag to the canonical full repo_id: an exact id
+// passes through; otherwise it matches a 12-char short id or an unambiguous hex
+// prefix against the repos table (mirroring the MCP/registry resolver). An
+// unknown id is returned unchanged so the repoIndexed fail-closed path emits a
+// clean repo_not_indexed rather than a confusing match error. A missing repos
+// table (fresh/empty db) also passes through unchanged.
+func resolveRepoID(ctx context.Context, db *sql.DB, repoID string) (string, error) {
+	var exact string
+	switch err := db.QueryRowContext(ctx, `SELECT repo_id FROM repos WHERE repo_id = ?`, repoID).Scan(&exact); {
+	case err == nil:
+		return exact, nil
+	case errors.Is(err, sql.ErrNoRows):
+		// fall through to short-id / prefix matching
+	default:
+		return repoID, nil // repos table unavailable — never worse than no resolution
+	}
+
+	rows, err := db.QueryContext(ctx, `SELECT repo_id FROM repos`)
+	if err != nil {
+		return repoID, nil
+	}
+	defer rows.Close()
+	var ids []string
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return "", fmt.Errorf("diff-gate: resolve repo %q: %w", repoID, err)
+		}
+		ids = append(ids, id)
+	}
+	if err := rows.Err(); err != nil {
+		return "", fmt.Errorf("diff-gate: resolve repo %q: %w", repoID, err)
+	}
+	for _, id := range ids {
+		if repocmd.ShortRepoID(id) == repoID {
+			return id, nil
+		}
+	}
+	if len(repoID) >= 4 {
+		var matched string
+		for _, id := range ids {
+			if strings.HasPrefix(id, repoID) {
+				if matched != "" {
+					return "", fmt.Errorf("diff-gate: --repo %q is ambiguous (matches multiple repos); use the full id from `veska repo list`", repoID)
+				}
+				matched = id
+			}
+		}
+		if matched != "" {
+			return matched, nil
+		}
+	}
+	return repoID, nil // unknown — repoIndexed() will fail closed with repo_not_indexed
 }
 
 // repoIndexed reports whether (repoID, branch) has any indexed nodes. A missing
