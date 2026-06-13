@@ -170,10 +170,10 @@ func (p *promotion) resolveIntraPackageCalls(ctx context.Context) error {
 		if len(file.UnresolvedCalls) == 0 {
 			continue
 		}
+		// names may be empty for a single-file batch (no siblings staged); the
+		// promoted-graph fallback below still resolves calls into UNCHANGED
+		// same-package files, so we must NOT skip on an empty in-batch map.
 		names := pkgMaps[filepath.Dir(file.Path)]
-		if len(names) == 0 {
-			continue
-		}
 		for _, uc := range file.UnresolvedCalls {
 			// Package-qualified calls (cmd.Execute) bind via the import map in
 			// the cross-package pass, never by bare name against the local
@@ -181,8 +181,11 @@ func (p *promotion) resolveIntraPackageCalls(ctx context.Context) error {
 			if uc.PkgQualifier != "" {
 				continue
 			}
-			targetID, ok := names[uc.CalleeName]
-			if !ok || uc.CallerID == targetID { // miss or self-call (recursion)
+			targetID, found, err := p.lookupIntraPackageTarget(ctx, names, file, uc)
+			if err != nil {
+				return err
+			}
+			if !found || uc.CallerID == targetID { // miss or self-call (recursion)
 				continue
 			}
 			e, ok := buildCallEdge(uc, targetID)
@@ -195,6 +198,31 @@ func (p *promotion) resolveIntraPackageCalls(ctx context.Context) error {
 		}
 	}
 	return nil
+}
+
+// lookupIntraPackageTarget resolves a same-package, bare-name call first against
+// the current batch then against the already-promoted graph — the latter so an
+// incremental single-file commit still binds calls into UNCHANGED sibling files
+// (solov2-ll57.13; mirrors lookupInModuleTarget's cross-package fallback). Method
+// calls are NOT resolved here: the in-batch map keys nodes by qualified name
+// ("T.Method"), so the batch path never binds a bare-named method call intra-
+// package, and the fallback stays symmetric with it by skipping them too.
+func (p *promotion) lookupIntraPackageTarget(ctx context.Context, names map[string]domain.NodeID, file application.PromotionFile, uc domain.UnresolvedCall) (domain.NodeID, bool, error) {
+	if tid, ok := names[uc.CalleeName]; ok {
+		return tid, true, nil
+	}
+	if uc.IsMethodCall {
+		return "", false, nil
+	}
+	// Fall back to the promoted graph, scoped to the caller's own package dir.
+	// The cursor fully drains before any edge insert (lookupPromotedSymbolDir
+	// guarantees this) so the single write connection never deadlocks.
+	scope := promotedScope{repoID: p.repoID, branch: p.branch, root: p.rootPath, relDir: moduleRelDir(file.Path, p.rootPath)}
+	tid, found, err := lookupPromotedSymbolDir(ctx, p.tx, scope, uc.CalleeName)
+	if err != nil {
+		return "", false, fmt.Errorf("promoter: intra-package lookup %q: %w", uc.CalleeName, err)
+	}
+	return tid, found, nil
 }
 
 // resolveCrossPackageCalls binds package-qualified calls within the same Go

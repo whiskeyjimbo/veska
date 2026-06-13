@@ -458,6 +458,57 @@ func TestPromotionStore_CrossPackageResolvesAgainstPromotedGraph(t *testing.T) {
 	}
 }
 
+// TestPromotionStore_IntraPackageResolvesAgainstPromotedGraph pins
+// solov2-ll57.13: an incremental single-file commit whose plain (non-method,
+// non-pkg-qualified) call targets a same-package symbol in an UNCHANGED sibling
+// file (not in this batch) must still bind, by falling back to the promoted
+// graph — the intra-package twin of CrossPackageResolvesAgainstPromotedGraph.
+// Without the fallback the edge is silently dropped, which would flag the
+// callee dead-code on a single-file save.
+func TestPromotionStore_IntraPackageResolvesAgainstPromotedGraph(t *testing.T) {
+	t.Parallel()
+	db := openTest(t, filepath.Join(t.TempDir(), "v.db"))
+	if _, err := db.Exec(
+		`INSERT INTO repos (repo_id, root_path, added_at) VALUES (?, ?, ?)`,
+		"repo1", "/tmp/app", time.Now().UnixMilli(),
+	); err != nil {
+		t.Fatalf("insert repo: %v", err)
+	}
+	store := sqlite.NewPromotionStore(db, []sqlite.PromotionSink{sqlite.NewFTSSink(), sqlite.NewEmbedRefSink()})
+	ctx := context.Background()
+
+	// First commit: only util.go, defining helper.
+	helper := mustNode(t, "helperID", "/tmp/app/util.go", "helper", domain.KindFunction)
+	if err := store.Promote(ctx, application.PromotionBatch{
+		RepoID: "repo1", Branch: "main", GitSHA: "sha1", Actor: systemActor(),
+		PromotedAt: time.Now().UnixMilli(),
+		Files:      []application.PromotionFile{{Path: "/tmp/app/util.go", Nodes: []*domain.Node{helper}}},
+	}); err != nil {
+		t.Fatalf("first Promote: %v", err)
+	}
+
+	// Second commit: only main.go (util.go unchanged, not in batch). Run() makes
+	// a bare-name call to helper — same package, cross-file, callee not staged.
+	runFn := mustNode(t, "runID", "/tmp/app/main.go", "Run", domain.KindFunction)
+	if err := store.Promote(ctx, application.PromotionBatch{
+		RepoID: "repo1", Branch: "main", GitSHA: "sha2", Actor: systemActor(),
+		PromotedAt: time.Now().UnixMilli(),
+		Files: []application.PromotionFile{{
+			Path:            "/tmp/app/main.go",
+			Nodes:           []*domain.Node{runFn},
+			UnresolvedCalls: []domain.UnresolvedCall{{CallerID: "runID", CalleeName: "helper"}},
+		}},
+	}); err != nil {
+		t.Fatalf("second Promote: %v", err)
+	}
+
+	var n int
+	db.QueryRow(`SELECT COUNT(*) FROM edges WHERE kind='CALLS' AND src_node_id='runID' AND dst_node_id='helperID'`).Scan(&n)
+	if n != 1 {
+		t.Errorf("want Run->helper resolved via promoted graph (intra-package fallback), got %d edges", n)
+	}
+}
+
 // TestPromotionStore_CrossRepoStub pins solov2-xc51.3 / solov2-1gj: a
 // package-qualified call into ANOTHER module records a cross_repo_edge_stub
 // that the query-time resolver binds to the node in whichever registered repo
