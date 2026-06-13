@@ -56,45 +56,33 @@ var discoverActor = domain.Actor{ID: "service:veska-diff-gate", Kind: domain.Act
 // throwaway clone (removed on return) and performs no network IO beyond
 // readUnchanged.
 func DiscoverStructural(ctx context.Context, baseDBPath, repoID, branch, gitSHA string, changes []diffgate.FileChange, readUnchanged func(ctx context.Context, path string) ([]byte, error)) (diffgate.Discovery, error) {
-	clone, err := cloneDB(ctx, baseDBPath)
-	if err != nil {
-		return diffgate.Discovery{}, fmt.Errorf("diff-gate discovery: clone base db: %w", err)
-	}
-	defer os.Remove(clone)
-
-	pools, err := sqlite.OpenPools(clone)
-	if err != nil {
-		return diffgate.Discovery{}, fmt.Errorf("diff-gate discovery: open clone: %w", err)
-	}
-	defer pools.Close()
-
-	runner := buildStructuralRunner(pools)
-
-	// Base findings: the clone's graph already has correctly-resolved edges.
-	baseIDs, err := fullCheckPass(ctx, pools, runner, repoID, branch, gitSHA)
-	if err != nil {
-		return diffgate.Discovery{}, fmt.Errorf("diff-gate discovery: base pass: %w", err)
-	}
-
-	// Assemble the COMPLETE candidate file set from the base graph's file list
-	// overlaid with the changes — a complete batch is what makes the promoter's
-	// batch-scoped resolution rebind all cross-file calls.
-	baseFiles, err := allFiles(ctx, pools.ReadDB, repoID, branch)
+	files, err := baseFileList(ctx, baseDBPath, repoID, branch)
 	if err != nil {
 		return diffgate.Discovery{}, fmt.Errorf("diff-gate discovery: list base files: %w", err)
 	}
-	candidateFiles, err := assembleCandidate(ctx, baseFiles, changes, readUnchanged)
+
+	// Assemble BOTH complete file sets up front: the candidate (changes overlaid)
+	// and the base (every file at the base ref). Computing both finding sets by
+	// the SAME path — a fresh clone + complete re-promote + check pass — is what
+	// makes the diff sound. Earlier the base side read the SEED graph while the
+	// candidate side re-promoted, so an inert change could surface spurious "new"
+	// findings purely from the graph-build difference (solov2-ll57.10).
+	candidateFiles, err := assembleCandidate(ctx, files, changes, readUnchanged)
 	if err != nil {
 		return diffgate.Discovery{}, fmt.Errorf("diff-gate discovery: assemble candidate files: %w", err)
 	}
-
-	if err := repromoteAll(ctx, pools, repoID, branch, gitSHA, candidateFiles); err != nil {
-		return diffgate.Discovery{}, fmt.Errorf("diff-gate discovery: re-promote candidate: %w", err)
+	baseFiles, err := assembleBase(ctx, files, readUnchanged)
+	if err != nil {
+		return diffgate.Discovery{}, fmt.Errorf("diff-gate discovery: assemble base files: %w", err)
 	}
 
-	candIDs, err := fullCheckPass(ctx, pools, runner, repoID, branch, gitSHA)
+	baseIDs, err := findingsForFileSet(ctx, baseDBPath, repoID, branch, gitSHA, baseFiles)
 	if err != nil {
-		return diffgate.Discovery{}, fmt.Errorf("diff-gate discovery: candidate pass: %w", err)
+		return diffgate.Discovery{}, fmt.Errorf("diff-gate discovery: base findings: %w", err)
+	}
+	candIDs, err := findingsForFileSet(ctx, baseDBPath, repoID, branch, gitSHA, candidateFiles)
+	if err != nil {
+		return diffgate.Discovery{}, fmt.Errorf("diff-gate discovery: candidate findings: %w", err)
 	}
 
 	return diffgate.Discovery{
@@ -103,6 +91,55 @@ func DiscoverStructural(ctx context.Context, baseDBPath, repoID, branch, gitSHA 
 		CandidateIDs: candIDs,
 		CoveredRules: append([]string(nil), structuralRules...),
 	}, nil
+}
+
+// findingsForFileSet computes the open structural finding ids for a COMPLETE
+// file set, built identically for both the base and candidate sides: clone the
+// base db (for its repos registration + module metadata, which the promoter's
+// cross-package resolution needs), re-promote the whole file set over it, and
+// run the checks across the whole graph. Both sides go through this same path,
+// so only genuine content differences survive the base-vs-candidate diff.
+func findingsForFileSet(ctx context.Context, baseDBPath, repoID, branch, gitSHA string, files map[string][]byte) ([]string, error) {
+	clone, err := cloneDB(ctx, baseDBPath)
+	if err != nil {
+		return nil, fmt.Errorf("clone base db: %w", err)
+	}
+	defer os.Remove(clone)
+	pools, err := sqlite.OpenPools(clone)
+	if err != nil {
+		return nil, fmt.Errorf("open clone: %w", err)
+	}
+	defer pools.Close()
+	if err := repromoteAll(ctx, pools, repoID, branch, gitSHA, files); err != nil {
+		return nil, fmt.Errorf("re-promote: %w", err)
+	}
+	return fullCheckPass(ctx, pools, buildStructuralRunner(pools), repoID, branch, gitSHA)
+}
+
+// baseFileList reads the set of indexed file paths for (repoID, branch) from the
+// base db.
+func baseFileList(ctx context.Context, baseDBPath, repoID, branch string) ([]string, error) {
+	db, err := sql.Open(sqldriver.Name, sqldriver.BuildDSN(baseDBPath, 5000))
+	if err != nil {
+		return nil, err
+	}
+	defer db.Close()
+	return allFiles(ctx, db, repoID, branch)
+}
+
+// assembleBase builds the complete base file set: every base file read at the
+// base ref (readUnchanged reads at the base ref, so it is authoritative for all
+// files, changed or not).
+func assembleBase(ctx context.Context, files []string, readUnchanged func(ctx context.Context, path string) ([]byte, error)) (map[string][]byte, error) {
+	out := make(map[string][]byte, len(files))
+	for _, f := range files {
+		content, err := readUnchanged(ctx, f)
+		if err != nil {
+			return nil, fmt.Errorf("read base file %q: %w", f, err)
+		}
+		out[f] = content
+	}
+	return out, nil
 }
 
 // assembleCandidate builds the complete candidate file set: every base file,
