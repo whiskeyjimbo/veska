@@ -189,6 +189,52 @@ func TestDiscoverStructural_AddedFileSkippedAtBase(t *testing.T) {
 	}
 }
 
+// TestDiscoverStructural_IndexAheadOfBaseStillDetectsNewFinding pins
+// solov2-ll57.16: when the indexed graph sits AHEAD of base (e.g. a local
+// post-commit hook already indexed HEAD), the clone inherits an open finding for
+// the candidate's new dead symbol. Because dead-code is not an authoritative
+// check, discovery's re-check never closes it, so a naive diff cancels it on
+// both sides → false GREEN. After clearing the inherited findings, the genuinely
+// new finding must surface. This seeds via a REAL check pass — the check-free
+// seedBaseDB is exactly what hid this bug from the other fixtures.
+func TestDiscoverStructural_IndexAheadOfBaseStillDetectsNewFinding(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "veska.db")
+	// Seed the graph in CANDIDATE state: greet is already dead (Run doesn't call it).
+	seedBaseDB(t, dbPath, map[string]string{
+		"app.go": "package p\n\nfunc Run() {}\n\nfunc greet() string { return \"hi\" }\n",
+	})
+	// Persist the dead-code finding the daemon would have left, via a real check
+	// pass — the step seedBaseDB omits, which is why the other fixtures (clean
+	// findings table) never reproduced the leak.
+	pools, err := sqlite.OpenPools(dbPath)
+	if err != nil {
+		t.Fatalf("open pools: %v", err)
+	}
+	seeded, err := fullCheckPass(context.Background(), pools, buildStructuralRunner(pools), discRepo, discBranch, "seed")
+	pools.Close()
+	if err != nil {
+		t.Fatalf("seed check pass: %v", err)
+	}
+	if len(seeded) == 0 {
+		t.Fatalf("expected a seeded dead-code finding for greet")
+	}
+
+	// base content CALLS greet (alive at base); candidate ORPHANS it (newly dead).
+	readBase := func(_ context.Context, _ string) ([]byte, error) {
+		return []byte("package p\n\nfunc Run() { greet() }\n\nfunc greet() string { return \"hi\" }\n"), nil
+	}
+	disc, err := DiscoverStructural(context.Background(), dbPath, discRepo, discBranch, "cand-sha",
+		[]diffgate.FileChange{{Path: "app.go", Content: []byte("package p\n\nfunc Run() {}\n\nfunc greet() string { return \"hi\" }\n")}},
+		readBase,
+	)
+	if err != nil {
+		t.Fatalf("DiscoverStructural: %v", err)
+	}
+	if newIDs := setDiff(disc.CandidateIDs, disc.BaseIDs); len(newIDs) == 0 {
+		t.Fatalf("greet is newly dead (base calls it, candidate orphans it) but discovery found no new finding — false GREEN (base=%v cand=%v)", disc.BaseIDs, disc.CandidateIDs)
+	}
+}
+
 func setDiff(a, b []string) []string {
 	bs := make(map[string]struct{}, len(b))
 	for _, x := range b {
