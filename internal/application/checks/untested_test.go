@@ -227,6 +227,44 @@ func TestUntestedCheck_TrackedRepoReports(t *testing.T) {
 	}
 }
 
+type fakeIfaceLister struct{ names []string }
+
+func (f fakeIfaceLister) InterfaceMethodNames(context.Context, string, string) ([]string, error) {
+	return f.names, nil
+}
+
+// A concrete method whose bare name matches a same-repo interface method is
+// suppressed (interface-dispatch proxy blind spot) — the persona-test fix.
+func TestUntestedCheck_SuppressesInterfaceMethodImpl(t *testing.T) {
+	q := &fakeCoverageQuerier{nodes: []ports.NodeCallers{
+		nc("n1", "internal/svc/en.go", "method", "EN.Greet"), // no test caller
+	}}
+	c := checks.NewUntestedSymbolCheck(q,
+		checks.WithUntestedInterfaceMethods(fakeIfaceLister{names: []string{"Greet"}}))
+	out, _ := c.Run(context.Background(), checks.Input{
+		RepoID: "r", Branch: "main", FilePaths: []string{"internal/svc/en.go"},
+	})
+	if len(out) != 0 {
+		t.Fatalf("interface-method impl must be suppressed; got %d findings", len(out))
+	}
+}
+
+// A non-interface method with no test caller is still flagged (suppression is
+// keyed on the interface-method name set).
+func TestUntestedCheck_NonInterfaceMethodStillFlagged(t *testing.T) {
+	q := &fakeCoverageQuerier{nodes: []ports.NodeCallers{
+		nc("n1", "internal/svc/en.go", "method", "EN.Helper"),
+	}}
+	c := checks.NewUntestedSymbolCheck(q,
+		checks.WithUntestedInterfaceMethods(fakeIfaceLister{names: []string{"Greet"}}))
+	out, _ := c.Run(context.Background(), checks.Input{
+		RepoID: "r", Branch: "main", FilePaths: []string{"internal/svc/en.go"},
+	})
+	if len(out) != 1 {
+		t.Fatalf("non-interface method should still flag; got %d", len(out))
+	}
+}
+
 func TestUntestedCheck_EmptyFilePathsNoOp(t *testing.T) {
 	q := &fakeCoverageQuerier{nodes: []ports.NodeCallers{
 		nc("n1", "internal/svc/svc.go", "function", "doWork"),

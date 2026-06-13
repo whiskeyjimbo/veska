@@ -55,10 +55,34 @@ type UntestedSymbolCheck struct {
 	// Untested-symbol has strictly worse exposure on an external clone: every
 	// prod symbol with no test in the indexed tree would flag.
 	repoKind func(ctx context.Context, repoID string) (string, error)
+	// ifaceMethods, when non-nil, lists the bare method names declared by every
+	// interface in the repo. A concrete method whose bare name matches one is
+	// suppressed: it is likely satisfied via interface dispatch, which emits a
+	// CALLS edge to the INTERFACE method, not the concrete impl — so a test
+	// exercising it through the interface leaves the impl looking untested.
+	// This is the same false positive dead-code suppresses (solov2-f1zp); the
+	// untested gate is PR-blocking, so silencing it (at the cost of not flagging
+	// a genuinely-untested interface method) beats false-FAILing tested code.
+	ifaceMethods InterfaceMethodLister
+}
+
+// InterfaceMethodLister returns the bare method names declared by every
+// interface type in (repoID, branch) — e.g. ["Greet", "String"]. It is the
+// narrow capability UntestedSymbolCheck needs to suppress interface-dispatch
+// false positives; sqlite.DeadCodeRepo already satisfies it.
+type InterfaceMethodLister interface {
+	InterfaceMethodNames(ctx context.Context, repoID, branch string) ([]string, error)
 }
 
 // UntestedSymbolOption configures an UntestedSymbolCheck.
 type UntestedSymbolOption func(*UntestedSymbolCheck)
+
+// WithUntestedInterfaceMethods wires the interface-method lister used to
+// suppress interface-dispatch false positives (a concrete method tested only
+// through its interface). Strongly recommended for any Go repo.
+func WithUntestedInterfaceMethods(l InterfaceMethodLister) UntestedSymbolOption {
+	return func(c *UntestedSymbolCheck) { c.ifaceMethods = l }
+}
 
 // WithUntestedRepoKindLookup wires a callback returning a repo's Kind
 // ("tracked" / "ephemeral"). Run skips reporting on ephemeral repos — the
@@ -107,6 +131,18 @@ func (c *UntestedSymbolCheck) Run(ctx context.Context, in Input) ([]*domain.Find
 		return nil, fmt.Errorf("untested-symbol: query: %w", err)
 	}
 
+	// Interface method names to suppress concrete impls reached via dispatch.
+	// An error fails open (over-report) rather than silently widening suppression.
+	var ifaceMethods map[string]struct{}
+	if c.ifaceMethods != nil {
+		if names, ierr := c.ifaceMethods.InterfaceMethodNames(ctx, in.RepoID, in.Branch); ierr == nil && len(names) > 0 {
+			ifaceMethods = make(map[string]struct{}, len(names))
+			for _, nm := range names {
+				ifaceMethods[nm] = struct{}{}
+			}
+		}
+	}
+
 	out := make([]*domain.Finding, 0)
 	for _, nc := range cands {
 		n := nc.Node
@@ -117,6 +153,12 @@ func (c *UntestedSymbolCheck) Run(ctx context.Context, in Input) ([]*domain.Find
 			continue
 		}
 		if n.Name == "main" || n.Name == "init" {
+			continue
+		}
+		// Suppress a concrete method that satisfies a same-repo interface: a test
+		// exercising it via interface dispatch emits no CALLS edge to the impl,
+		// so it would otherwise false-FAIL (the persona-test finding).
+		if n.Kind == "method" && isInterfaceMethodImpl(n.Name, ifaceMethods) {
 			continue
 		}
 		if hasTestCaller(nc.CallerFiles) {
