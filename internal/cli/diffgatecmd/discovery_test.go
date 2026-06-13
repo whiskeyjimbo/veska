@@ -2,6 +2,7 @@ package diffgatecmd
 
 import (
 	"context"
+	"fmt"
 	"path/filepath"
 	"slices"
 	"testing"
@@ -124,6 +125,67 @@ func TestDiscoverStructural_NoChangeNoNewFindings(t *testing.T) {
 	}
 	if newIDs := setDiff(disc.CandidateIDs, disc.BaseIDs); len(newIDs) != 0 {
 		t.Fatalf("expected no new findings for a no-impact change; got %v", newIDs)
+	}
+}
+
+// TestDiscoverStructural_InertEditToCalledFileNoNewFindings is the changed-
+// files-only soundness proof (solov2-ll57.9): the CHANGED file (target.go) holds
+// a symbol whose only caller lives in an UNCHANGED file (caller.go). An inert
+// (comment-only) edit must yield NO new finding — the inbound edge from the
+// unchanged caller survives because re-promoting target.go re-mints `target`
+// with the SAME node_id (sha256 of repo/file/kind/symbol), so caller.go's edge
+// still resolves. A naive "re-promote drops the node" would false-positive here.
+func TestDiscoverStructural_InertEditToCalledFileNoNewFindings(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "veska.db")
+	seedBaseDB(t, dbPath, map[string]string{
+		"caller.go": "package p\n\nfunc Caller() { target() }\n",
+		"target.go": "package p\n\nfunc target() {}\n",
+	})
+	readBase := func(_ context.Context, path string) ([]byte, error) {
+		if path == "target.go" {
+			return []byte("package p\n\nfunc target() {}\n"), nil
+		}
+		return nil, nil
+	}
+
+	// Only target.go changes (comment added); caller.go is untouched and NOT
+	// re-promoted — its edge to target must keep target alive.
+	disc, err := DiscoverStructural(context.Background(), dbPath, discRepo, discBranch, "cand-sha",
+		[]diffgate.FileChange{{Path: "target.go", Content: []byte("package p\n\n// keep\nfunc target() {}\n")}},
+		readBase,
+	)
+	if err != nil {
+		t.Fatalf("DiscoverStructural: %v", err)
+	}
+	if newIDs := setDiff(disc.CandidateIDs, disc.BaseIDs); len(newIDs) != 0 {
+		t.Fatalf("inert edit to a called file must add no findings; got %v (base=%v cand=%v)", newIDs, disc.BaseIDs, disc.CandidateIDs)
+	}
+}
+
+// TestDiscoverStructural_AddedFileSkippedAtBase proves the added-file edge case:
+// a brand-new file (absent at the base ref) is promoted on the candidate side
+// but SKIPPED on the base side (readBase reports ErrFileAbsentAtRef). A new file
+// whose new function is unused is itself newly dead → a NEW finding, and the
+// base side must not error on the absent file.
+func TestDiscoverStructural_AddedFileSkippedAtBase(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "veska.db")
+	seedBaseDB(t, dbPath, map[string]string{
+		"main.go": "package p\n\nfunc Run() {}\n",
+	})
+	readBase := func(_ context.Context, path string) ([]byte, error) {
+		// new.go did not exist at base → absence sentinel, must be skipped.
+		return nil, fmt.Errorf("%w: %s", diffgate.ErrFileAbsentAtRef, path)
+	}
+
+	disc, err := DiscoverStructural(context.Background(), dbPath, discRepo, discBranch, "cand-sha",
+		[]diffgate.FileChange{{Path: "new.go", Content: []byte("package p\n\nfunc orphan() {}\n")}},
+		readBase,
+	)
+	if err != nil {
+		t.Fatalf("DiscoverStructural (added file must not error at base): %v", err)
+	}
+	if newIDs := setDiff(disc.CandidateIDs, disc.BaseIDs); len(newIDs) == 0 {
+		t.Fatalf("an added file with an unused function should surface a new dead-code finding; base=%v cand=%v", disc.BaseIDs, disc.CandidateIDs)
 	}
 }
 
