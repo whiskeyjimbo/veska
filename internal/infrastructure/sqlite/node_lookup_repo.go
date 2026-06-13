@@ -102,6 +102,51 @@ func (r *NodeLookupRepo) NodeContentHash(ctx context.Context, repoID, branch, no
 	return hash.String, nil
 }
 
+// NodesByContentHash returns every node in (repoID, branch) whose content_hash
+// equals hash, excluding excludeKinds. It is the read-side capability the
+// exact-clone diff gate (solov2-zvh6.7) needs to count how many existing nodes
+// share a candidate's content_hash — the base-state membership of a potential
+// clone group. The kind filter mirrors clone_repo's ClonedNodes so the gate's
+// base counts and the whole-repo clones analyzer agree on what is eligible.
+//
+// An empty hash returns (nil, nil): "no content known" can never be a clone
+// match (consistent with ClonedNodes' content_hash != ” guard), so the gate
+// never queries one. idx_nodes_content_hash serves the lookup.
+func (r *NodeLookupRepo) NodesByContentHash(ctx context.Context, repoID, branch, hash string, excludeKinds []string) ([]ports.NodeRef, error) {
+	if hash == "" {
+		return nil, nil
+	}
+	kindClause, kindArgs := notInClause("kind", excludeKinds)
+	args := make([]any, 0, 3+len(kindArgs))
+	args = append(args, repoID, branch, hash)
+	args = append(args, kindArgs...)
+
+	query := `SELECT node_id, file_path, kind, symbol_path,
+		COALESCE(line_start, 0), COALESCE(line_end, 0), COALESCE(content_hash, '')
+		FROM nodes
+		WHERE repo_id = ? AND branch = ? AND content_hash = ?` + kindClause
+
+	rows, err := r.readDB.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("node_lookup: nodes_by_content_hash query: %w", err)
+	}
+	defer rows.Close()
+
+	out := make([]ports.NodeRef, 0)
+	for rows.Next() {
+		var ref ports.NodeRef
+		if err := rows.Scan(&ref.NodeID, &ref.FilePath, &ref.Kind, &ref.Name,
+			&ref.LineStart, &ref.LineEnd, &ref.ContentHash); err != nil {
+			return nil, fmt.Errorf("node_lookup: nodes_by_content_hash scan: %w", err)
+		}
+		out = append(out, ref)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("node_lookup: nodes_by_content_hash iterate: %w", err)
+	}
+	return out, nil
+}
+
 // NodesInFile returns every node_id in (repoID, branch) whose file_path
 // equals filePath. The query is served by idx_nodes_repo_branch combined
 // with a file_path filter; with the typical "tens of nodes per file" cardinality
