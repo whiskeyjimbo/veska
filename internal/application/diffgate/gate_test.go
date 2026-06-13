@@ -131,7 +131,7 @@ func TestGate_FailModes(t *testing.T) {
 			build: func(t *testing.T) (*diffgate.Gate, *diffgate.Ephemeral, *domain.Finding) {
 				return gateFixture(t, true, nil, []string{"a:Caller"})
 			},
-			disc:     diffgate.Discovery{Ran: true, Candidate: []*domain.Finding{deadCodeFinding(t, "a:NewDead")}},
+			disc:     diffgate.Discovery{Ran: true, CandidateIDs: []string{deadCodeFinding(t, "a:NewDead").FindingID}},
 			wantFail: diffgate.FailNewFindings,
 		},
 		{
