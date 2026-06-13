@@ -64,5 +64,53 @@ func diffGateCmd() *cobra.Command {
 	cmd.Flags().StringVar(&finding, "finding", "", "target finding id from 'veska findings list'; derives --anchor and --rule")
 	cmd.Flags().StringVar(&anchor, "anchor", "", "node id the target finding is anchored on (alternative to --finding)")
 	cmd.Flags().StringVar(&rule, "rule", "", "rule name of the target finding, e.g. dead-code (alternative to --finding)")
+	cmd.AddCommand(diffGateClonesCmd())
+	return cmd
+}
+
+// diffGateClonesCmd is the exact-clone diff-twin gate (solov2-zvh6.7): a
+// blanket gate (no target finding) that FAILs when the candidate introduces a
+// byte-identical copy of existing code — net-new exact-clone duplication absent
+// at base. Deterministic and embedding-free (content_hash equality); near-mode
+// is out by design.
+func diffGateClonesCmd() *cobra.Command {
+	var (
+		repoFlag   string
+		branchFlag string
+		rootFlag   string
+		baseRef    string
+		candRef    string
+	)
+	cmd := &cobra.Command{
+		Use:          "clones",
+		Short:        "Gate a candidate change on newly-introduced exact-clone duplication, emit pass/fail JSON (exits non-zero on FAIL)",
+		Long:         "Index a candidate change (base-ref..candidate-ref) against the indexed-HEAD graph and FAIL when it introduces a new exact-clone group — a byte-identical copy (content_hash equality) of code it did not already duplicate at base. Deterministic, network-free, embedding-free; emits JSON and exits non-zero on FAIL for CI gating.",
+		Example:      "  veska diff-gate clones --repo <id> --base-ref HEAD~1 --candidate-ref HEAD",
+		Args:         cobra.NoArgs,
+		SilenceUsage: true,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			root := rootFlag
+			if root == "" {
+				wd, err := os.Getwd()
+				if err != nil {
+					return err
+				}
+				root = wd
+			}
+			return diffgatecmd.RunClones(cmd.Context(), diffgatecmd.CloneParams{
+				RepoID:       repoFlag,
+				Branch:       branchFlag,
+				RepoRoot:     root,
+				BaseRef:      baseRef,
+				CandidateRef: candRef,
+				Out:          cmd.OutOrStdout(),
+			})
+		},
+	}
+	cmd.Flags().StringVar(&repoFlag, "repo", "", "repo id (scopes the indexed-HEAD base graph)")
+	cmd.Flags().StringVar(&branchFlag, "branch", "main", "branch")
+	cmd.Flags().StringVar(&rootFlag, "repo-root", "", "repo working dir for git ref reads (default: cwd)")
+	cmd.Flags().StringVar(&baseRef, "base-ref", "", "git ref of the base the candidate is diffed against")
+	cmd.Flags().StringVar(&candRef, "candidate-ref", "", "git ref/worktree of the candidate change")
 	return cmd
 }
