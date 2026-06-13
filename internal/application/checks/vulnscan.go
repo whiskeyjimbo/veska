@@ -112,7 +112,40 @@ func (c *VulnScanCheck) Run(ctx context.Context, in Input) ([]*domain.Finding, e
 	}
 
 	start := time.Now()
-	vulns, err := c.src.Scan(ctx, deps)
+	out, err := ScanManifestDeps(ctx, c.src, in.RepoID, in.Branch, "go.mod", deps, lineFor)
+	if err != nil {
+		return nil, err
+	}
+	// solov2-fw6z: per-promotion log line so operators can confirm the
+	// check ran for a given git_sha. The 'vulnrefresh' log lines only
+	// reflect the OSV cache pull.
+	slog.Info("vuln-scan: scanned",
+		"repo_id", in.RepoID,
+		"branch", in.Branch,
+		"deps", len(deps),
+		"findings", len(out),
+		"elapsed_ms", time.Since(start).Milliseconds(),
+	)
+	return out, nil
+}
+
+// ScanManifestDeps matches deps against the advisory source and builds one
+// vulnerable_dependency finding per match, anchored on manifestPath. It is the
+// finding-construction core shared by VulnScanCheck.Run (which reads go.mod
+// from disk) and the net-new security diff gate (solov2-zvh6.1, which scans a
+// manifest's content at two refs and diffs by finding_id). lineFor maps a
+// package to its line in the manifest for an editor-clickable message; pass nil
+// to omit line numbers — it never affects the finding_id (key = repoID +
+// advisoryID + package, manifestPath the anchor), so the same advisory at a
+// different line yields the SAME finding_id, which is what makes the gate's
+// net-new-by-id diff line-stable.
+//
+// manifestPath generalises the historically-hardcoded "go.mod" so an additional
+// ecosystem's reader (registered in the gate) anchors on its own manifest. The
+// "go get" remediation hint stays Go-shaped until a multi-ecosystem source
+// lands (tracked separately).
+func ScanManifestDeps(ctx context.Context, src ports.VulnSource, repoID, branch, manifestPath string, deps []ports.Dependency, lineFor map[string]int) ([]*domain.Finding, error) {
+	vulns, err := src.Scan(ctx, deps)
 	if err != nil {
 		return nil, fmt.Errorf("vuln-scan: scan: %w", err)
 	}
@@ -121,12 +154,12 @@ func (c *VulnScanCheck) Run(ctx context.Context, in Input) ([]*domain.Finding, e
 	for _, v := range vulns {
 		// solov2-fr2a: lead the message with the advisory ID so triage
 		// doesn't need to grep the OSV cache.
-		// solov2-5dxw: include the offending go.mod line when known so
+		// solov2-5dxw: include the offending manifest line when known so
 		// the message is editor-clickable (the findings table has no
 		// line column today).
-		loc := "go.mod"
+		loc := manifestPath
 		if ln, ok := lineFor[v.Package]; ok {
-			loc = fmt.Sprintf("go.mod:%d", ln)
+			loc = fmt.Sprintf("%s:%d", manifestPath, ln)
 		}
 		msg := fmt.Sprintf("%s [%s] %s: %s (affected range %s)", loc, v.AdvisoryID, v.Package, v.Summary, v.AffectedRange)
 		// solov2-ka54: when the OSV adapter dedupes aliased advisories
@@ -142,23 +175,23 @@ func (c *VulnScanCheck) Run(ctx context.Context, in Input) ([]*domain.Finding, e
 			msg += fmt.Sprintf("; fix: go get %s@%s", v.Package, v.FixedVersion)
 		}
 		f, err := domain.NewFinding(domain.FindingSpec{
-			RepoID:   in.RepoID,
-			Branch:   in.Branch,
+			RepoID:   repoID,
+			Branch:   branch,
 			Severity: mapSeverity(v.Severity),
 			Layer:    domain.LayerSecurity,
 			Rule:     "vulnerable_dependency",
 			Message:  msg,
 		},
-			domain.WithFileAnchor("go.mod"),
+			domain.WithFileAnchor(manifestPath),
 			// solov2-uej9.1: namespace the finding key by repo id. The
 			// finding_id is sha256(rule+anchor+key) with no repo_id, and the
 			// storage PK is (finding_id, branch) — so two repos sharing one
 			// advisory on the same branch would derive an identical
 			// finding_id and one scan's upsert would silently overwrite the
-			// other repo's row. Folding in.RepoID (stable per repo) into the
+			// other repo's row. Folding repoID (stable per repo) into the
 			// key keeps idempotency while making the id repo-scoped. The
 			// 0x00 delimiter keeps the concatenation unambiguous.
-			domain.WithFindingKey(in.RepoID+"\x00"+v.AdvisoryID+v.Package),
+			domain.WithFindingKey(repoID+"\x00"+v.AdvisoryID+v.Package),
 		)
 		if err != nil {
 			// A malformed advisory should not abort the whole check; skip it.
@@ -166,16 +199,6 @@ func (c *VulnScanCheck) Run(ctx context.Context, in Input) ([]*domain.Finding, e
 		}
 		out = append(out, f)
 	}
-	// solov2-fw6z: per-promotion log line so operators can confirm the
-	// check ran for a given git_sha. The 'vulnrefresh' log lines only
-	// reflect the OSV cache pull.
-	slog.Info("vuln-scan: scanned",
-		"repo_id", in.RepoID,
-		"branch", in.Branch,
-		"deps", len(deps),
-		"findings", len(out),
-		"elapsed_ms", time.Since(start).Milliseconds(),
-	)
 	return out, nil
 }
 
