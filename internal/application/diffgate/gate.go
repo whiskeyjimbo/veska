@@ -30,6 +30,11 @@ const (
 	// in the base graph, so its blast radius — and thus scope containment —
 	// cannot be computed. Degraded, not a pass (fail-safe).
 	FailAnchorNotResolved = "anchor_not_resolved"
+	// FailRepoNotIndexed: the base graph for (repo, branch) has no indexed
+	// nodes (or the schema is absent) — the gate cannot judge a change against
+	// a graph that isn't there. Degraded, not a pass; the caller should index
+	// the repo first. Emitted by the invocation surface, not Evaluate.
+	FailRepoNotIndexed = "repo_not_indexed"
 )
 
 // GateVerdict is the single machine-readable pass/fail result over a candidate
