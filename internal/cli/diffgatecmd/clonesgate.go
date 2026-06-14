@@ -71,7 +71,7 @@ func RunClones(ctx context.Context, p CloneParams) error {
 		return fmt.Errorf("%w (repo_not_indexed: index %q first, e.g. `veska reindex`)", ErrGateFailed, p.RepoID)
 	}
 
-	eph, err := buildEphemeral(ctx, ephemeralParams{
+	eph, _, err := buildEphemeral(ctx, ephemeralParams{
 		RepoID:       p.RepoID,
 		Branch:       p.Branch,
 		RepoRoot:     p.RepoRoot,
@@ -121,20 +121,27 @@ type ephemeralParams struct {
 // buildEphemeral is the shared diff-gate harness: it parses the candidate
 // change (base-ref..candidate-ref) into an overlay and pairs it with the
 // supplied base graph, producing the ephemeral (base, candidate) substrate the
-// gates query. Extracted so every diff-twin gate constructs the substrate the
-// same way (the verify gate predates it and keeps its own inline wiring).
-func buildEphemeral(ctx context.Context, p ephemeralParams, base diffgate.BaseGraph) (*diffgate.Ephemeral, error) {
+// gates query. It also returns the candidate's raw FileChanges, which gates
+// that re-promote the candidate (the untested gate) need for file content;
+// gates that only query the overlay (clones) ignore them. Extracted so every
+// diff-twin gate constructs the substrate the same way (the verify gate
+// predates it and keeps its own inline wiring).
+func buildEphemeral(ctx context.Context, p ephemeralParams, base diffgate.BaseGraph) (*diffgate.Ephemeral, []diffgate.FileChange, error) {
 	src, err := diffgate.NewRefChangeSource(p.RepoRoot, p.BaseRef, p.CandidateRef, git.ChangedFilesBetween, fileAtRef)
 	if err != nil {
-		return nil, fmt.Errorf("diff-gate: change source: %w", err)
+		return nil, nil, fmt.Errorf("diff-gate: change source: %w", err)
 	}
 	ix, err := diffgate.NewIndexer(treesitter.NewGoParser())
 	if err != nil {
-		return nil, fmt.Errorf("diff-gate: indexer: %w", err)
+		return nil, nil, fmt.Errorf("diff-gate: indexer: %w", err)
 	}
 	eph, err := ix.Index(ctx, p.RepoID, p.Branch, base, src)
 	if err != nil {
-		return nil, fmt.Errorf("diff-gate: index candidate: %w", err)
+		return nil, nil, fmt.Errorf("diff-gate: index candidate: %w", err)
 	}
-	return eph, nil
+	changes, err := src.Changes(ctx)
+	if err != nil {
+		return nil, nil, fmt.Errorf("diff-gate: read changes: %w", err)
+	}
+	return eph, changes, nil
 }

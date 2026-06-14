@@ -66,6 +66,53 @@ func diffGateCmd() *cobra.Command {
 	cmd.Flags().StringVar(&rule, "rule", "", "rule name of the target finding, e.g. dead-code (alternative to --finding)")
 	cmd.AddCommand(diffGateClonesCmd())
 	cmd.AddCommand(diffGateSecurityCmd())
+	cmd.AddCommand(diffGateUntestedCmd())
+	return cmd
+}
+
+// diffGateUntestedCmd is the diff-coverage gate (solov2-zvh6.4): a blanket gate
+// that FAILs when the candidate changes or adds a prod symbol no test reaches.
+// Coverage is a CALLS-edge proxy (a test-file caller), not real coverage data;
+// it re-promotes the candidate so a test added in the same diff counts.
+func diffGateUntestedCmd() *cobra.Command {
+	var (
+		repoFlag   string
+		branchFlag string
+		rootFlag   string
+		baseRef    string
+		candRef    string
+	)
+	cmd := &cobra.Command{
+		Use:          "untested",
+		Short:        "Gate a candidate change on changed prod symbols that no test reaches, emit pass/fail JSON (exits non-zero on FAIL)",
+		Long:         "Index a candidate change (base-ref..candidate-ref) and FAIL when a changed or added prod symbol has no test-file caller in the candidate after-state — a CALLS-edge coverage proxy, not real coverage data. The candidate is re-promoted so a test added in the same diff counts; only symbols in the change set are judged. Emits JSON and exits non-zero on FAIL for CI gating.",
+		Example:      "  veska diff-gate untested --repo <id> --base-ref HEAD~1 --candidate-ref HEAD",
+		Args:         cobra.NoArgs,
+		SilenceUsage: true,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			root := rootFlag
+			if root == "" {
+				wd, err := os.Getwd()
+				if err != nil {
+					return err
+				}
+				root = wd
+			}
+			return diffgatecmd.RunUntested(cmd.Context(), diffgatecmd.UntestedParams{
+				RepoID:       repoFlag,
+				Branch:       branchFlag,
+				RepoRoot:     root,
+				BaseRef:      baseRef,
+				CandidateRef: candRef,
+				Out:          cmd.OutOrStdout(),
+			})
+		},
+	}
+	cmd.Flags().StringVar(&repoFlag, "repo", "", "repo id (scopes the indexed-HEAD base graph)")
+	cmd.Flags().StringVar(&branchFlag, "branch", "main", "branch")
+	cmd.Flags().StringVar(&rootFlag, "repo-root", "", "repo working dir for git ref reads (default: cwd)")
+	cmd.Flags().StringVar(&baseRef, "base-ref", "", "git ref of the base the candidate is diffed against")
+	cmd.Flags().StringVar(&candRef, "candidate-ref", "", "git ref/worktree of the candidate change")
 	return cmd
 }
 
