@@ -67,6 +67,57 @@ func diffGateCmd() *cobra.Command {
 	cmd.AddCommand(diffGateClonesCmd())
 	cmd.AddCommand(diffGateSecurityCmd())
 	cmd.AddCommand(diffGateUntestedCmd())
+	cmd.AddCommand(diffGateCyclesCmd())
+	return cmd
+}
+
+// diffGateCyclesCmd is the dependency-cycle diff-twin gate (solov2-zvh6.6): a
+// blanket gate (no target finding) that FAILs when the candidate introduces a
+// net-new dependency cycle — a strongly-connected component of >=2 symbols over
+// CALLS/IMPORTS edges that was not already a single cycle at base. Node-level and
+// language-agnostic; on compiling Go the catchable case is within-package mutual
+// recursion (the compiler forbids package import cycles), but the same gate
+// catches the import cycles other languages permit once their parsers emit
+// IMPORTS edges.
+func diffGateCyclesCmd() *cobra.Command {
+	var (
+		repoFlag   string
+		branchFlag string
+		rootFlag   string
+		baseRef    string
+		candRef    string
+	)
+	cmd := &cobra.Command{
+		Use:          "cycles",
+		Short:        "Gate a candidate change on newly-introduced dependency cycles, emit pass/fail JSON (exits non-zero on FAIL)",
+		Long:         "Index a candidate change (base-ref..candidate-ref) against the indexed-HEAD graph and FAIL when it introduces a net-new dependency cycle — a strongly-connected component of >=2 symbols (over CALLS/IMPORTS edges) absent at base. The candidate is re-promoted so cross-file edges resolve; only cycles touching the change set are judged. Node-level, deterministic, network-free; emits JSON and exits non-zero on FAIL for CI gating.",
+		Example:      "  veska diff-gate cycles --repo <id> --base-ref HEAD~1 --candidate-ref HEAD",
+		Args:         cobra.NoArgs,
+		SilenceUsage: true,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			root := rootFlag
+			if root == "" {
+				wd, err := os.Getwd()
+				if err != nil {
+					return err
+				}
+				root = wd
+			}
+			return diffgatecmd.RunCycles(cmd.Context(), diffgatecmd.CycleParams{
+				RepoID:       repoFlag,
+				Branch:       branchFlag,
+				RepoRoot:     root,
+				BaseRef:      baseRef,
+				CandidateRef: candRef,
+				Out:          cmd.OutOrStdout(),
+			})
+		},
+	}
+	cmd.Flags().StringVar(&repoFlag, "repo", "", "repo id (scopes the indexed-HEAD base graph)")
+	cmd.Flags().StringVar(&branchFlag, "branch", "main", "branch")
+	cmd.Flags().StringVar(&rootFlag, "repo-root", "", "repo working dir for git ref reads (default: cwd)")
+	cmd.Flags().StringVar(&baseRef, "base-ref", "", "git ref of the base the candidate is diffed against")
+	cmd.Flags().StringVar(&candRef, "candidate-ref", "", "git ref/worktree of the candidate change")
 	return cmd
 }
 
