@@ -8,6 +8,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"strings"
 )
 
 // FindingQuerierRepo is the SQLite-backed adapter for ports.FindingQuerier.
@@ -46,6 +47,61 @@ func (r *FindingQuerierRepo) OpenFindingNodeIDs(ctx context.Context, repoID, bra
 		return nil, fmt.Errorf("finding_querier: iterate: %w", err)
 	}
 	return out, nil
+}
+
+// OpenFinding is one open finding projected for the advisory PR report
+// (solov2-zvh6.5): enough to tell a reviewer which touched file carries a known
+// issue. FilePath coalesces the node's file for node-anchored findings (most
+// structural rules set only a node anchor) so file-level intersection works.
+type OpenFinding struct {
+	FindingID string
+	Rule      string
+	Severity  string
+	FilePath  string
+	NodeID    string
+	Message   string
+}
+
+// OpenFindingsInFiles returns every open finding in (repoID, branch) whose
+// (coalesced) file_path is one of filePaths. File-level, so a file-anchored
+// finding is not dropped. Empty filePaths is a no-op (nil, nil).
+func (r *FindingQuerierRepo) OpenFindingsInFiles(ctx context.Context, repoID, branch string, filePaths []string) ([]OpenFinding, error) {
+	if len(filePaths) == 0 {
+		return nil, nil
+	}
+	placeholders := make([]string, len(filePaths))
+	args := make([]any, 0, len(filePaths)+2)
+	args = append(args, repoID, branch)
+	for i, p := range filePaths {
+		placeholders[i] = "?"
+		args = append(args, p)
+	}
+	query := fmt.Sprintf(`
+SELECT f.finding_id, f.rule, f.severity,
+       COALESCE(f.file_path, n.file_path, '') AS file_path,
+       COALESCE(f.node_id, ''),
+       f.message
+FROM findings f
+LEFT JOIN nodes n ON n.node_id = f.node_id AND n.branch = f.branch
+WHERE f.repo_id = ? AND f.branch = ? AND f.state = 'open'
+  AND COALESCE(f.file_path, n.file_path) IN (%s)
+ORDER BY file_path, f.rule, f.finding_id`, strings.Join(placeholders, ","))
+
+	rows, err := r.readDB.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("finding_querier: in-files query: %w", err)
+	}
+	defer rows.Close()
+
+	var out []OpenFinding
+	for rows.Next() {
+		var o OpenFinding
+		if err := rows.Scan(&o.FindingID, &o.Rule, &o.Severity, &o.FilePath, &o.NodeID, &o.Message); err != nil {
+			return nil, fmt.Errorf("finding_querier: in-files scan: %w", err)
+		}
+		out = append(out, o)
+	}
+	return out, rows.Err()
 }
 
 // OpenFindingCountsByRule returns the count of open findings per rule in

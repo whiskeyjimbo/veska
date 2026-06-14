@@ -69,6 +69,56 @@ func diffGateCmd() *cobra.Command {
 	cmd.AddCommand(diffGateUntestedCmd())
 	cmd.AddCommand(diffGateCyclesCmd())
 	cmd.AddCommand(diffGateAPICmd())
+	cmd.AddCommand(diffGateReportCmd())
+	return cmd
+}
+
+// diffGateReportCmd is the advisory PR impact/risk report (solov2-zvh6.5): NOT a
+// gate. It assembles, for a diff, the blast radius, each changed file's
+// change-risk standing, open findings on the touched files, and the
+// changed-but-untested symbols — and ALWAYS exits 0 (presence of findings/risk
+// never blocks; an un-indexed repo yields a noted report). The soft on-ramp:
+// teams trust an advisory "what this diff touches / where it's risky" before
+// they let the graph block a merge.
+func diffGateReportCmd() *cobra.Command {
+	var (
+		repoFlag   string
+		branchFlag string
+		rootFlag   string
+		baseRef    string
+		candRef    string
+	)
+	cmd := &cobra.Command{
+		Use:          "report",
+		Short:        "Advisory PR impact/risk report (blast radius, change-risk, findings, untested) — always exits 0, never gates",
+		Long:         "Assemble an ADVISORY report for a candidate change (base-ref..candidate-ref): the diff's blast radius, each changed file's change-risk standing (recent-change-frequency × blast-radius), open findings on the touched files, and changed-but-untested symbols. Unlike the diff-gate subcommands this NEVER gates — it always exits 0 (findings/risk never block; an un-indexed repo or a failed section yields a noted report). The soft on-ramp before teams trust blocking gates. Emits JSON.",
+		Example:      "  veska diff-gate report --repo <id> --base-ref HEAD~1 --candidate-ref HEAD",
+		Args:         cobra.NoArgs,
+		SilenceUsage: true,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			root := rootFlag
+			if root == "" {
+				wd, err := os.Getwd()
+				if err != nil {
+					return err
+				}
+				root = wd
+			}
+			return diffgatecmd.RunReport(cmd.Context(), diffgatecmd.ReportParams{
+				RepoID:       repoFlag,
+				Branch:       branchFlag,
+				RepoRoot:     root,
+				BaseRef:      baseRef,
+				CandidateRef: candRef,
+				Out:          cmd.OutOrStdout(),
+			})
+		},
+	}
+	cmd.Flags().StringVar(&repoFlag, "repo", "", "repo id (scopes the indexed-HEAD base graph)")
+	cmd.Flags().StringVar(&branchFlag, "branch", "main", "branch")
+	cmd.Flags().StringVar(&rootFlag, "repo-root", "", "repo working dir for git ref reads (default: cwd)")
+	cmd.Flags().StringVar(&baseRef, "base-ref", "", "git ref of the base the candidate is diffed against")
+	cmd.Flags().StringVar(&candRef, "candidate-ref", "", "git ref/worktree of the candidate change")
 	return cmd
 }
 
