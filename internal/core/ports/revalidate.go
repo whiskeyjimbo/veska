@@ -106,6 +106,14 @@ type RevalidateQuerier interface {
 	// is absent — caller treats that as "drift resolved" (no longer fires).
 	NodeSignaturePair(ctx context.Context, repoID, branch, nodeID string) (prev, current string, err error)
 
+	// HasTestCaller reports whether the named node currently has at least one
+	// direct inbound CALLS caller defined in a test-shaped file on (repoID,
+	// branch). Used by the revalidation handler's untested-symbol re-run: if a
+	// stale untested-symbol finding's anchor now has a test-file caller, the
+	// rule no longer fires (it is covered) and the finding is closed as
+	// obsolete; otherwise it is still untested and the row is REFRESHED in place.
+	HasTestCaller(ctx context.Context, repoID, branch, nodeID string) (bool, error)
+
 	// ApplyDecisions applies a batch of refresh and/or close decisions to
 	// open findings on (repoID, branch) in a single transaction. The intent
 	// is to collapse the per-file revalidation sweep — which can produce

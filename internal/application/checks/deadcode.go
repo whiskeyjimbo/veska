@@ -182,28 +182,11 @@ func isDeadCodeCandidate(n ports.NodeRef) bool {
 // CALLS edge today . Skipping symbols defined in test
 // files cuts a noisy class of false positives without weakening the
 // signal for production code.
+// isTestFile delegates to pathfilter.IsTestFile, the single source of truth for
+// the test-file vocabulary (shared with the revalidation sweep's HasTestCaller).
+// Kept as a package-local alias so the many in-package call sites stay terse.
 func isTestFile(path string) bool {
-	if path == "" {
-		return false
-	}
-	base := path
-	if i := strings.LastIndexAny(path, "/\\"); i >= 0 {
-		base = path[i+1:]
-	}
-	switch {
-	case strings.HasSuffix(base, "_test.go"): // Go
-		return true
-	case strings.HasPrefix(base, "test_") && strings.HasSuffix(base, ".py"): // pytest
-		return true
-	case strings.HasSuffix(base, "_test.py"): // pytest alt
-		return true
-	case strings.HasSuffix(base, ".test.ts"), strings.HasSuffix(base, ".test.tsx"),
-		strings.HasSuffix(base, ".test.js"), strings.HasSuffix(base, ".test.jsx"),
-		strings.HasSuffix(base, ".spec.ts"), strings.HasSuffix(base, ".spec.tsx"),
-		strings.HasSuffix(base, ".spec.js"), strings.HasSuffix(base, ".spec.jsx"):
-		return true
-	}
-	return false
+	return pathfilter.IsTestFile(path)
 }
 
 // isInterfaceMethodImpl reports whether name is a method whose bare

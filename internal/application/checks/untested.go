@@ -38,15 +38,20 @@ import (
 // false positive. Copying dead-code's exported-symbol exclusion would gut the
 // check.
 //
-// Lifecycle: findings are emitted WITHOUT an anchor content-hash, so they are
-// excluded from the content-drift revalidation sweep (which closes via
-// revalidate.Decide's default branch — a conservative close that would wrongly
-// retire a still-untested symbol the moment its body is edited). A coverage
-// proxy changes state when TESTS change, not when the symbol changes, so
-// content drift is the wrong axis. Like dead-code (also non-authoritative),
-// the consequence is that adding a test later does not auto-close the prior
-// finding; a test-caller-predicate revalidation case is the principled fix
-// (tracked separately) — until then the finding is stable, not flapping.
+// Lifecycle (solov2-zvh6.8): findings are emitted WITH an anchor content-hash,
+// so the post-promotion revalidation sweep selects them when the symbol's body
+// drifts — and revalidate.Decide's "untested-symbol" case re-runs the
+// test-caller predicate: CLOSE if the symbol now has a test caller, else REFRESH
+// in place (still untested, stays open). This makes untested-symbol a structural
+// clone of dead-code's lifecycle. The anchor hash was deliberately withheld
+// UNTIL that Decide case existed, because without it the sweep's default branch
+// would conservative-close a still-untested symbol on any edit. The two are
+// atomic: the hash here is only correct because the Decide case exists.
+//
+// It remains non-authoritative on the same axis dead-code is: a coverage proxy
+// changes state when TESTS change, but the sweep is triggered by the SYMBOL's
+// file drifting, so adding a test in another file does not auto-close until the
+// symbol is next re-promoted. Stable, not flapping.
 type UntestedSymbolCheck struct {
 	q ports.CoverageQuerier
 	// repoKind, when non-nil, returns the kind ("tracked" / "ephemeral") of a
@@ -166,9 +171,14 @@ func (c *UntestedSymbolCheck) Run(ctx context.Context, in Input) ([]*domain.Find
 		}
 		msg := fmt.Sprintf("symbol %q in %s has no test-file caller on branch %s — likely untested (CALLS-edge proxy)",
 			n.Name, n.FilePath, in.Branch)
-		// No anchor content-hash: see the type doc — content drift is the wrong
-		// revalidation axis for a coverage proxy, and setting it would let the
-		// drift sweep conservative-close a still-untested symbol on any edit.
+		// Anchor on the symbol's content-hash so the revalidation sweep picks the
+		// finding up when the body drifts and re-runs the test-caller predicate
+		// (revalidate.Decide "untested-symbol" case) — see the type doc. Mirrors
+		// dead-code (deadcode.go); empty hash falls back to no-anchor.
+		opts := []domain.FindingOption{domain.WithNodeAnchor(n.NodeID)}
+		if n.ContentHash != "" {
+			opts = append(opts, domain.WithAnchorContentHash(n.ContentHash))
+		}
 		f, err := domain.NewFinding(domain.FindingSpec{
 			RepoID:   in.RepoID,
 			Branch:   in.Branch,
@@ -176,7 +186,7 @@ func (c *UntestedSymbolCheck) Run(ctx context.Context, in Input) ([]*domain.Find
 			Layer:    domain.LayerStructural,
 			Rule:     "untested-symbol",
 			Message:  msg,
-		}, domain.WithNodeAnchor(n.NodeID))
+		}, opts...)
 		if err != nil {
 			// A malformed node ref should not abort the whole check; skip it.
 			continue

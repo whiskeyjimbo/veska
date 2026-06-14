@@ -34,6 +34,9 @@ type fakeRepo struct {
 	hasInbound map[string]bool
 	// node_id -> (prev, current) (contract-drift re-run).
 	sigs map[string][2]string
+	// node_id -> hasTestCaller (untested-symbol re-run); default false.
+	testErr        error
+	hasTestCallers map[string]bool
 
 	closedIDs    []string
 	closedAt     []int64
@@ -70,6 +73,13 @@ func (f *fakeRepo) NodeSignaturePair(_ context.Context, _, _, nodeID string) (st
 	}
 	pair := f.sigs[nodeID]
 	return pair[0], pair[1], nil
+}
+
+func (f *fakeRepo) HasTestCaller(_ context.Context, _, _, nodeID string) (bool, error) {
+	if f.testErr != nil {
+		return false, f.testErr
+	}
+	return f.hasTestCallers[nodeID], nil
 }
 
 func (f *fakeRepo) ApplyDecisions(_ context.Context, _, _ string, decisions []ports.FindingDecision, at int64) error {
@@ -351,6 +361,85 @@ func TestHandler_ContractDrift_Resolved_Closes(t *testing.T) {
 				t.Errorf("refreshedIDs = %v, want []", repo.refreshedIDs)
 			}
 		})
+	}
+}
+
+// The discriminating test (solov2-zvh6.8): an untested-symbol finding whose
+// anchor body drifted but STILL has no test caller must stay open via REFRESH,
+// not close. This is the exact failure the old "no anchor hash" doc feared —
+// the proof Part A (emit anchor hash) is safe because Part B handles the re-run.
+func TestHandler_UntestedSymbol_StillUntested_Refreshes(t *testing.T) {
+	t.Parallel()
+	repo := &fakeRepo{
+		stale: []ports.StaleFinding{
+			{FindingID: "fA", Rule: "untested-symbol", NodeID: "n1", AnchorHash: "h-old", CurrentHash: "h-new"},
+		},
+		// hasTestCallers[n1] absent → false → still untested → refresh (stays open).
+	}
+	reg := prometheus.NewRegistry()
+	metrics := observability.NewMetrics(reg)
+	h, err := revalidate.NewHandler(repo, revalidate.WithMetrics(metrics))
+	if err != nil {
+		t.Fatalf("construct: %v", err)
+	}
+	if err := h.Handle(context.Background(), ports.WorkRow{
+		Kind: ports.WorkKindRevalidate, RepoID: "r1", Branch: "main", Payload: "x.go",
+	}); err != nil {
+		t.Fatalf("Handle: %v", err)
+	}
+	if len(repo.refreshedIDs) != 1 || repo.refreshedIDs[0] != "fA" {
+		t.Errorf("refreshedIDs = %v, want [fA] (still untested → stays open)", repo.refreshedIDs)
+	}
+	if repo.refreshedHsh[0] != "h-new" {
+		t.Errorf("refreshed hash = %q, want h-new", repo.refreshedHsh[0])
+	}
+	if len(repo.closedIDs) != 0 {
+		t.Errorf("closedIDs = %v, want [] (must NOT conservative-close)", repo.closedIDs)
+	}
+}
+
+// Now-tested: a test caller appeared, so the rule no longer fires → CLOSE.
+func TestHandler_UntestedSymbol_NowTested_Closes(t *testing.T) {
+	t.Parallel()
+	repo := &fakeRepo{
+		stale: []ports.StaleFinding{
+			{FindingID: "fA", Rule: "untested-symbol", NodeID: "n1", AnchorHash: "h-old", CurrentHash: "h-new"},
+		},
+		hasTestCallers: map[string]bool{"n1": true}, // a test calls it now.
+	}
+	h, err := revalidate.NewHandler(repo)
+	if err != nil {
+		t.Fatalf("construct: %v", err)
+	}
+	if err := h.Handle(context.Background(), ports.WorkRow{
+		Kind: ports.WorkKindRevalidate, RepoID: "r1", Branch: "main", Payload: "x.go",
+	}); err != nil {
+		t.Fatalf("Handle: %v", err)
+	}
+	if len(repo.closedIDs) != 1 || repo.closedIDs[0] != "fA" {
+		t.Errorf("closedIDs = %v, want [fA]", repo.closedIDs)
+	}
+	if len(repo.refreshedIDs) != 0 {
+		t.Errorf("refreshedIDs = %v, want []", repo.refreshedIDs)
+	}
+}
+
+// A test-caller predicate error wraps and propagates (queue retries).
+func TestHandler_TestCallerErrorWraps(t *testing.T) {
+	t.Parallel()
+	repo := &fakeRepo{
+		stale:   []ports.StaleFinding{{FindingID: "fA", Rule: "untested-symbol", NodeID: "n1", AnchorHash: "h-old", CurrentHash: "h-new"}},
+		testErr: errors.New("boom"),
+	}
+	h, err := revalidate.NewHandler(repo)
+	if err != nil {
+		t.Fatalf("construct: %v", err)
+	}
+	err = h.Handle(context.Background(), ports.WorkRow{
+		Kind: ports.WorkKindRevalidate, RepoID: "r1", Branch: "main", Payload: "x.go",
+	})
+	if err == nil {
+		t.Fatal("want wrapped error, got nil")
 	}
 }
 
@@ -653,9 +742,24 @@ func TestHandler_Integration_PerRuleDispatch(t *testing.T) {
 	insertNodeWithSig(t, db, "n-drift-close", "repo1", "main", "pkg/a.go", "h-cur-dcc", "sig-same", "sig-same")
 	insertNode(t, db, "n-al", "repo1", "main", "pkg/a.go", "h-cur-al")
 	insertNode(t, db, "n-fresh", "repo1", "main", "pkg/a.go", "h-fresh")
+	//   n-untested-refresh — no test caller, content changed → stays untested.
+	//   n-untested-close   — a *_test.go CALLS caller appeared → now tested.
+	insertNode(t, db, "n-untested-refresh", "repo1", "main", "pkg/a.go", "h-cur-ur")
+	insertNode(t, db, "n-untested-close", "repo1", "main", "pkg/a.go", "h-cur-uc")
 	// A "caller" node + edge into n-dead-close.
 	insertNode(t, db, "n-caller", "repo1", "main", "pkg/b.go", "h-caller")
 	insertEdge(t, db, "edge-1", "repo1", "main", "n-caller", "n-dead-close")
+	// A TEST-shaped caller making a CALLS edge into n-untested-close (so the
+	// test-caller predicate fires). insertEdge writes kind 'call'; HasTestCaller
+	// matches UPPER(kind)='CALLS', so insert this edge explicitly.
+	insertNode(t, db, "n-test-caller", "repo1", "main", "pkg/a_test.go", "h-tcaller")
+	if _, err := db.Exec(`INSERT INTO edges (
+        edge_id, branch, repo_id, src_node_id, dst_node_id, kind, confidence, last_promoted_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+		"edge-test", "main", "repo1", "n-test-caller", "n-untested-close", "CALLS", "definite", time.Now().UnixMilli(),
+	); err != nil {
+		t.Fatalf("insert test-caller edge: %v", err)
+	}
 
 	findRepo := sqlite.NewFindingRepo(db)
 	revalRepo := sqlite.NewRevalidateRepo(db)
@@ -677,8 +781,10 @@ func TestHandler_Integration_PerRuleDispatch(t *testing.T) {
 	fDriftClose := mustFinding("u-drift-c", "contract-drift", "n-drift-close", "h-anchor-old")
 	fAutoLink := mustFinding("u-al", "auto-link", "n-al", "h-anchor-old")
 	fFresh := mustFinding("u-fresh", "dead-code", "n-fresh", "h-fresh")
+	fUntestedRefresh := mustFinding("u-unt-r", "untested-symbol", "n-untested-refresh", "h-anchor-old")
+	fUntestedClose := mustFinding("u-unt-c", "untested-symbol", "n-untested-close", "h-anchor-old")
 
-	for _, fnd := range []*domain.Finding{fDeadRefresh, fDeadClose, fDriftRefresh, fDriftClose, fAutoLink, fFresh} {
+	for _, fnd := range []*domain.Finding{fDeadRefresh, fDeadClose, fDriftRefresh, fDriftClose, fAutoLink, fFresh, fUntestedRefresh, fUntestedClose} {
 		if err := findRepo.Save(context.Background(), fnd); err != nil {
 			t.Fatalf("Save %s: %v", fnd.FindingID, err)
 		}
@@ -727,6 +833,10 @@ func TestHandler_Integration_PerRuleDispatch(t *testing.T) {
 	if got := get(fDriftRefresh.FindingID, "main"); got.state != "open" || got.anchor != "h-cur-drr" || got.reason != "" {
 		t.Errorf("drift-refresh = %+v, want open/h-cur-drr/no-reason", got)
 	}
+	// Untested, still no test caller → REFRESH (stays open, anchor advances).
+	if got := get(fUntestedRefresh.FindingID, "main"); got.state != "open" || got.anchor != "h-cur-ur" || got.reason != "" {
+		t.Errorf("untested-refresh = %+v, want open/h-cur-ur/no-reason", got)
+	}
 	// Closures.
 	for _, tc := range []struct {
 		id   string
@@ -735,6 +845,7 @@ func TestHandler_Integration_PerRuleDispatch(t *testing.T) {
 		{fDeadClose.FindingID, "dead-close"},
 		{fDriftClose.FindingID, "drift-close"},
 		{fAutoLink.FindingID, "autolink-close"},
+		{fUntestedClose.FindingID, "untested-close"}, // a _test.go caller now exists
 	} {
 		got := get(tc.id, "main")
 		if got.state != "closed" || got.reason != "revalidated_obsolete" {
@@ -746,11 +857,11 @@ func TestHandler_Integration_PerRuleDispatch(t *testing.T) {
 		t.Errorf("fresh = %+v, want open/h-fresh", got)
 	}
 
-	if got := testutil.ToFloat64(metrics.RevalidateRefreshed); got != 2 {
-		t.Errorf("refreshed counter = %v, want 2", got)
+	if got := testutil.ToFloat64(metrics.RevalidateRefreshed); got != 3 {
+		t.Errorf("refreshed counter = %v, want 3", got)
 	}
-	if got := testutil.ToFloat64(metrics.RevalidateClosed); got != 3 {
-		t.Errorf("closed counter = %v, want 3", got)
+	if got := testutil.ToFloat64(metrics.RevalidateClosed); got != 4 {
+		t.Errorf("closed counter = %v, want 4", got)
 	}
 }
 
