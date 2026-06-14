@@ -218,7 +218,7 @@ func simpleReturnTypeName(result *sitter.Node, src []byte) string {
 //nolint:cyclop // see note above: verbatim relocation, diff-scoped gate
 func collectLocalReceiverTypes(body *sitter.Node, src []byte, funcReturns map[string]string) map[string]string {
 	out := map[string]string{}
-	if body == nil || len(funcReturns) == 0 {
+	if body == nil {
 		return out
 	}
 	var walk func(*sitter.Node)
@@ -231,11 +231,23 @@ func collectLocalReceiverTypes(body *sitter.Node, src []byte, funcReturns map[st
 				int(right.NamedChildCount()) == 1 {
 				lhs := left.NamedChild(0)
 				rhs := right.NamedChild(0)
-				if lhs != nil && rhs != nil && lhs.Type() == "identifier" && rhs.Type() == "call_expression" {
-					fn := rhs.ChildByFieldName("function")
-					if fn != nil && fn.Type() == "identifier" {
-						if recvType, ok := funcReturns[string(src[fn.StartByte():fn.EndByte()])]; ok {
-							out[string(src[lhs.StartByte():lhs.EndByte()])] = recvType
+				if lhs != nil && rhs != nil && lhs.Type() == "identifier" {
+					name := string(src[lhs.StartByte():lhs.EndByte()])
+					switch {
+					case rhs.Type() == "call_expression":
+						// `v := F(...)` where F is a same-file function returning
+						// a same-package type (solov2-rlfe).
+						fn := rhs.ChildByFieldName("function")
+						if fn != nil && fn.Type() == "identifier" {
+							if recvType, ok := funcReturns[string(src[fn.StartByte():fn.EndByte()])]; ok {
+								out[name] = recvType
+							}
+						}
+					default:
+						// `v := T{...}` / `v := &T{...}` composite literal of a
+						// bare same-package type (solov2-d521).
+						if t := compositeLitBareType(rhs, src); t != "" {
+							out[name] = t
 						}
 					}
 				}
@@ -247,6 +259,73 @@ func collectLocalReceiverTypes(body *sitter.Node, src []byte, funcReturns map[st
 		}
 	}
 	walk(body)
+	return out
+}
+
+// compositeLitBareType returns the bare (unqualified, pointer-stripped) type
+// name of a composite-literal RHS — `T{...}` or `&T{...}` — when the type is a
+// same-package type_identifier, else "". A qualified `pkg.T{...}` returns ""
+// (it is a cross-package value, handled by collectLocalVarOrigins as a package
+// origin, not a same-package receiver type), so we never mis-bind `v.M()` to a
+// same-package `T.M` that isn't the real type (solov2-d521).
+func compositeLitBareType(rhs *sitter.Node, src []byte) string {
+	switch rhs.Type() {
+	case "composite_literal":
+		t := rhs.ChildByFieldName("type")
+		if t != nil && t.Type() == "type_identifier" {
+			return string(src[t.StartByte():t.EndByte()])
+		}
+	case "unary_expression":
+		// &T{...} — operand is the composite_literal.
+		if op := rhs.ChildByFieldName("operand"); op != nil {
+			return compositeLitBareType(op, src)
+		}
+	}
+	return ""
+}
+
+// collectParamReceiverTypes maps the caller declaration's parameter names to
+// their bare same-package type — `func f(o Order, s *Server)` yields
+// {o:Order, s:Server} — so a method call on a typed parameter, `o.Method()`,
+// binds to `Order.Method` rather than falling through as an unbindable
+// package-qualifier UnresolvedCall (solov2-d521). Only bare `T` / `*T`
+// parameter types are recorded (via simpleReturnTypeName, which pointer-strips
+// to match the method node's receiver-type name); qualified, slice, map, func
+// and generic parameter types yield "" and are skipped, so a wrong type is
+// never recorded (a missing entry just degrades to prior behaviour).
+func collectParamReceiverTypes(decl *sitter.Node, src []byte) map[string]string {
+	out := map[string]string{}
+	if decl == nil {
+		return out
+	}
+	params := decl.ChildByFieldName("parameters")
+	if params == nil {
+		return out
+	}
+	count := int(params.NamedChildCount())
+	for i := range count {
+		pd := params.NamedChild(i)
+		if pd == nil || pd.Type() != "parameter_declaration" {
+			continue
+		}
+		typeNode := pd.ChildByFieldName("type")
+		if typeNode == nil {
+			continue
+		}
+		bare := simpleReturnTypeName(typeNode, src)
+		if bare == "" {
+			continue
+		}
+		// A parameter_declaration may share one type across several names:
+		// `func f(a, b Order)`. Bind each identifier child to the bare type.
+		nc := int(pd.NamedChildCount())
+		for j := range nc {
+			ch := pd.NamedChild(j)
+			if ch != nil && ch.Type() == "identifier" {
+				out[string(src[ch.StartByte():ch.EndByte()])] = bare
+			}
+		}
+	}
 	return out
 }
 

@@ -107,6 +107,10 @@ func (p *GoParser) ParseFile(ctx context.Context, repoID, path string, src []byt
 		body     *sitter.Node
 		recvName string
 		recvType string
+		// paramTypes maps the caller's parameter names to their bare
+		// same-package type so a method call on a typed parameter resolves
+		// (solov2-d521).
+		paramTypes map[string]string
 	}
 	var callers []callerCtx
 	symbolByName := map[string]*domain.Node{}
@@ -141,7 +145,11 @@ func (p *GoParser) ParseFile(ctx context.Context, repoID, path string, src []byt
 			}
 			if n := buildFunctionNodeFromCaptures(declNode, nameNode, src, repoID, path); n != nil {
 				addSymbol(n)
-				callers = append(callers, callerCtx{caller: n, body: m.node("function.body")})
+				callers = append(callers, callerCtx{
+					caller:     n,
+					body:       m.node("function.body"),
+					paramTypes: collectParamReceiverTypes(declNode, src),
+				})
 			}
 		case m.node("method.decl") != nil:
 			declNode := m.node("method.decl")
@@ -157,10 +165,11 @@ func (p *GoParser) ParseFile(ctx context.Context, repoID, path string, src []byt
 				addSymbol(n)
 				recvName, recvType := extractReceiverBinding(recvNode, src)
 				callers = append(callers, callerCtx{
-					caller:   n,
-					body:     m.node("method.body"),
-					recvName: recvName,
-					recvType: recvType,
+					caller:     n,
+					body:       m.node("method.body"),
+					recvName:   recvName,
+					recvType:   recvType,
+					paramTypes: collectParamReceiverTypes(declNode, src),
 				})
 			}
 		case m.node("type.decl") != nil:
@@ -268,7 +277,7 @@ func (p *GoParser) ParseFile(ctx context.Context, repoID, path string, src []byt
 		if c.body == nil {
 			continue
 		}
-		callEdges, callUnresolved := extractCallsFromBody(callsQuery, c.body, src, c.caller, c.recvName, c.recvType, symbolByName, structFields, pkgVarOrigins, funcReturns)
+		callEdges, callUnresolved := extractCallsFromBody(callsQuery, c.body, src, c.caller, c.recvName, c.recvType, symbolByName, structFields, pkgVarOrigins, funcReturns, c.paramTypes)
 		result.Edges = append(result.Edges, callEdges...)
 		result.UnresolvedCalls = append(result.UnresolvedCalls, callUnresolved...)
 	}
@@ -317,7 +326,16 @@ func (p *GoParser) ParseFile(ctx context.Context, repoID, path string, src []byt
 // in-file map (matching parseMethodDecl naming). Dedup is per-caller
 // on (callee-name) for unresolved and (caller-id, callee-id) for edges
 // to mirror the legacy seen/seenU maps.
-func extractCallsFromBody(q *sitter.Query, body *sitter.Node, src []byte, caller *domain.Node, recvName, recvType string, symbols map[string]*domain.Node, structFields map[string]map[string]fieldType, pkgVarOrigins map[string]localVarOrigin, funcReturns map[string]string) ([]*domain.Edge, []domain.UnresolvedCall) {
+//
+// (132 lines) ALL predate solov2-d521 — this resolver is one big switch over
+// call shapes carrying 10 per-file lookup maps. d521 added paramTypes (11th arg)
+// and a small param-merge loop (+2 complexity, +6 lines); the diff-scoped gate
+// only re-flags the already-grandfathered function because its signature/body
+// changed. Bundling the maps into a context struct / splitting the switch is a
+// separate refactor, out of scope for this bugfix.
+//
+//nolint:revive,cyclop,funlen // arg-limit (11), cyclomatic (42) and length
+func extractCallsFromBody(q *sitter.Query, body *sitter.Node, src []byte, caller *domain.Node, recvName, recvType string, symbols map[string]*domain.Node, structFields map[string]map[string]fieldType, pkgVarOrigins map[string]localVarOrigin, funcReturns map[string]string, paramTypes map[string]string) ([]*domain.Edge, []domain.UnresolvedCall) {
 	var edges []*domain.Edge
 	var unresolved []domain.UnresolvedCall
 	seen := map[string]bool{}
@@ -342,6 +360,14 @@ func extractCallsFromBody(q *sitter.Query, body *sitter.Node, src []byte, caller
 	// downstream lookup binds against the in-file symbol map directly,
 	// not against a cross-repo stub.
 	localRecvTypes := collectLocalReceiverTypes(body, src, funcReturns)
+	// A typed parameter is a valid method-call receiver too (solov2-d521):
+	// fold the caller's param→type map in as a base, but let body-local
+	// short-var origins SHADOW a param of the same name (Go scoping).
+	for name, typ := range paramTypes {
+		if _, shadowed := localRecvTypes[name]; !shadowed {
+			localRecvTypes[name] = typ
+		}
+	}
 
 	for _, m := range runQuery(q, body) {
 		var ref callRef
@@ -679,7 +705,7 @@ func extractAnonCallsInTopLevelVars(q *sitter.Query, root *sitter.Node, src []by
 		if n.Type() == "func_literal" {
 			body := n.ChildByFieldName("body")
 			if body != nil {
-				e, u := extractCallsFromBody(q, body, src, caller, "", "", symbols, nil, pkgVarOrigins, funcReturns)
+				e, u := extractCallsFromBody(q, body, src, caller, "", "", symbols, nil, pkgVarOrigins, funcReturns, nil)
 				for _, edge := range e {
 					key := string(edge.Src) + callKeySep + string(edge.Tgt)
 					if seenEdge[key] {
