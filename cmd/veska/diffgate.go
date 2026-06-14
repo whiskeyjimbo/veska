@@ -68,6 +68,57 @@ func diffGateCmd() *cobra.Command {
 	cmd.AddCommand(diffGateSecurityCmd())
 	cmd.AddCommand(diffGateUntestedCmd())
 	cmd.AddCommand(diffGateCyclesCmd())
+	cmd.AddCommand(diffGateAPICmd())
+	return cmd
+}
+
+// diffGateAPICmd is the breaking-exported-signature diff-twin gate
+// (solov2-zvh6.2): a blanket gate (no target finding) that FAILs when the
+// candidate changes the signature SHAPE of an exported symbol. It reuses the
+// contract-drift signal over the re-promoted candidate and filters to the
+// exported visibility flag, so unexported and body-only changes pass. Scope is
+// signature-shape only: symbol REMOVAL/RENAME is not detected (delete-replace
+// emits no drift; tracked as solov2-zvh6.12), and "exported" is the name-based
+// flag, not a reachability analysis.
+func diffGateAPICmd() *cobra.Command {
+	var (
+		repoFlag   string
+		branchFlag string
+		rootFlag   string
+		baseRef    string
+		candRef    string
+	)
+	cmd := &cobra.Command{
+		Use:          "api",
+		Short:        "Gate a candidate change on breaking exported-signature changes, emit pass/fail JSON (exits non-zero on FAIL)",
+		Long:         "Index a candidate change (base-ref..candidate-ref) against the indexed-HEAD graph and FAIL when it changes the signature shape (name + parameters + result) of an EXPORTED symbol — a breaking public-surface change. Unexported signature changes and body-only edits pass. Scope is signature-shape only: symbol removal/rename is not detected, and exported is the name-based visibility flag, not reachability. Deterministic, network-free; emits JSON and exits non-zero on FAIL for CI gating.",
+		Example:      "  veska diff-gate api --repo <id> --base-ref HEAD~1 --candidate-ref HEAD",
+		Args:         cobra.NoArgs,
+		SilenceUsage: true,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			root := rootFlag
+			if root == "" {
+				wd, err := os.Getwd()
+				if err != nil {
+					return err
+				}
+				root = wd
+			}
+			return diffgatecmd.RunAPIBreak(cmd.Context(), diffgatecmd.APIParams{
+				RepoID:       repoFlag,
+				Branch:       branchFlag,
+				RepoRoot:     root,
+				BaseRef:      baseRef,
+				CandidateRef: candRef,
+				Out:          cmd.OutOrStdout(),
+			})
+		},
+	}
+	cmd.Flags().StringVar(&repoFlag, "repo", "", "repo id (scopes the indexed-HEAD base graph)")
+	cmd.Flags().StringVar(&branchFlag, "branch", "main", "branch")
+	cmd.Flags().StringVar(&rootFlag, "repo-root", "", "repo working dir for git ref reads (default: cwd)")
+	cmd.Flags().StringVar(&baseRef, "base-ref", "", "git ref of the base the candidate is diffed against")
+	cmd.Flags().StringVar(&candRef, "candidate-ref", "", "git ref/worktree of the candidate change")
 	return cmd
 }
 
