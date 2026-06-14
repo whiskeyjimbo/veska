@@ -86,7 +86,6 @@ func (p *fakeParser) ParseFile(_ context.Context, _ string, path string, _ []byt
 // no change to their code.
 type staticChangeSource struct {
 	changes []diffgate.FileChange
-	err     error
 }
 
 func (s staticChangeSource) Changes(context.Context) ([]diffgate.FileChange, error) {
