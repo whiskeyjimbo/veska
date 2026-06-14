@@ -124,6 +124,36 @@ func TestRunUntested_E2E_InterfaceInUnchangedFile_Passes(t *testing.T) {
 	}
 }
 
+// solov2-d521 regression (gate level): a prod METHOD tested only via a
+// method-call dispatch `recv.Method()` in a SEPARATE test file must PASS when
+// its body changes. Before the parser resolved value-receiver method calls the
+// test→method CALLS edge never existed, so the method false-FAILed as untested
+// — the junior-persona P1. Cross-file (method in order.go, test in
+// order_test.go) so it also exercises promotion-time bare-name binding of the
+// rewritten "Order.Total" callee.
+func TestRunUntested_E2E_MethodCallTested_Passes(t *testing.T) {
+	home := t.TempDir()
+	const prodSrc = "package p\n\ntype Order struct{ Qty int }\n\nfunc (o Order) Total() int { return o.Qty }\n"
+	const testSrc = "package p\n\nimport \"testing\"\n\nfunc TestTotal(t *testing.T) {\n\to := Order{Qty: 2}\n\tif o.Total() != 2 {\n\t\tt.Fatal(\"bad\")\n\t}\n}\n"
+	seedBaseDB(t, filepath.Join(home, "veska.db"), map[string]string{
+		"order.go": prodSrc, "order_test.go": testSrc,
+	})
+	repoDir := t.TempDir()
+	modified := "package p\n\ntype Order struct{ Qty int }\n\nfunc (o Order) Total() int { return o.Qty * 1 }\n" // body change
+	makeRepo(t, repoDir,
+		map[string]string{"order.go": prodSrc, "order_test.go": testSrc},
+		map[string]*string{"order.go": &modified}, // order_test.go untouched
+	)
+
+	v, err := runUntested(t, home, repoDir)
+	if err != nil {
+		t.Fatalf("method tested via recv.Method() must PASS (d521); got %v verdict=%+v", err, v)
+	}
+	if !v.Pass {
+		t.Fatalf("method-call-tested method must PASS (d521 regression); got %+v", v)
+	}
+}
+
 // False-PASS lock (dangerous direction): adding a prod symbol with no test must
 // FAIL, and the gate must list it. Proves the cross-machinery join fires —
 // Ephemeral.ChangedNodeIDs (overlay-derived) and the untested finding's NodeID
