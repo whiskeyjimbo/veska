@@ -3,8 +3,10 @@ package diffgatecmd
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
+	"os"
 	"path/filepath"
 	"strings"
 
@@ -54,11 +56,6 @@ func RunClones(ctx context.Context, p CloneParams) error {
 	}
 	p.RepoID = resolved
 
-	base := baseGraph{
-		EdgeReaderRepo: sqlite.NewEdgeReaderRepo(pools.ReadDB),
-		NodeLookupRepo: sqlite.NewNodeLookupRepo(pools.ReadDB),
-	}
-
 	// Fail closed with a clean verdict when the repo isn't indexed.
 	if !repoIndexed(ctx, pools.ReadDB, p.RepoID, p.Branch) {
 		rep := cloneGateReport{
@@ -71,16 +68,19 @@ func RunClones(ctx context.Context, p CloneParams) error {
 		return fmt.Errorf("%w (repo_not_indexed: index %q first, e.g. `veska reindex`)", ErrGateFailed, p.RepoID)
 	}
 
-	eph, _, err := buildEphemeral(ctx, ephemeralParams{
+	// Base graph is pinned to base-ref (not the live index) so an index that has
+	// advanced past base-ref cannot mask a net-new clone (solov2-zvh6.11).
+	eph, _, _, cleanup, err := buildPinnedEphemeral(ctx, ephemeralParams{
 		RepoID:       p.RepoID,
 		Branch:       p.Branch,
 		RepoRoot:     p.RepoRoot,
 		BaseRef:      p.BaseRef,
 		CandidateRef: p.CandidateRef,
-	}, base)
+	}, dbPath)
 	if err != nil {
 		return err
 	}
+	defer cleanup()
 
 	verdict, err := diffgate.NewCloneGate().Evaluate(ctx, eph)
 	if err != nil {
@@ -116,6 +116,100 @@ type ephemeralParams struct {
 	RepoRoot     string
 	BaseRef      string
 	CandidateRef string
+}
+
+// buildPinnedEphemeral is the index-ahead-safe variant of buildEphemeral
+// (solov2-zvh6.11). Instead of pairing the candidate overlay with the LIVE
+// index — whose SHA can drift ahead of base-ref and silently mask a net-new
+// finding (the documented index-ahead false-PASS) — it pins the base graph to
+// base-ref: it clones the index and re-promotes the changed files' BASE-REF
+// content onto the clone, generalising discovery.go's symmetric re-promote. Both
+// the ChangedNodeIDs content-hash comparison AND any base-state lookup (e.g.
+// clones' NodesByContentHash) then read a base-ref-pinned graph, so the gate
+// compares base-ref vs candidate regardless of how far the index has advanced.
+//
+// It returns the (base-ref-pinned) ephemeral, the candidate FileChanges, the
+// base-clone DB path — gates that build a candidate after-state clone (untested,
+// cycles, api) clone FROM this so their pre-state is base-ref too, not the live
+// index — and a cleanup func the caller MUST defer (it closes the base-clone
+// pools and removes the file; the pools stay open until then because eph.Base
+// reads from them).
+//
+// Soundness: unchanged-file state is inherited from the index by BOTH this base
+// clone and any candidate clone derived from it, so the index's drift on
+// unchanged files cancels in every comparison; only the changed files differ
+// (base-ref content here vs candidate content), which is exactly what each gate
+// measures (discovery.go / ll57.10/.13).
+func buildPinnedEphemeral(ctx context.Context, p ephemeralParams, dbPath string) (*diffgate.Ephemeral, []diffgate.FileChange, string, func(), error) {
+	noop := func() {}
+	src, err := diffgate.NewRefChangeSource(p.RepoRoot, p.BaseRef, p.CandidateRef, git.ChangedFilesBetween, fileAtRef)
+	if err != nil {
+		return nil, nil, "", noop, fmt.Errorf("diff-gate: change source: %w", err)
+	}
+	changes, err := src.Changes(ctx)
+	if err != nil {
+		return nil, nil, "", noop, fmt.Errorf("diff-gate: read changes: %w", err)
+	}
+
+	baseClonePath, err := cloneDB(ctx, dbPath)
+	if err != nil {
+		return nil, nil, "", noop, fmt.Errorf("diff-gate: clone base db: %w", err)
+	}
+	cleanup := func() { _ = os.Remove(baseClonePath) }
+	basePools, err := sqlite.OpenPools(baseClonePath)
+	if err != nil {
+		cleanup()
+		return nil, nil, "", noop, fmt.Errorf("diff-gate: open base clone: %w", err)
+	}
+	cleanup = func() { basePools.Close(); _ = os.Remove(baseClonePath) }
+
+	// Build the base-ref file map for the changed files and re-promote it over
+	// the clone, reverting those files to their base-ref state:
+	//   - modified file → its base-ref content
+	//   - deleted file (present at base-ref) → its base-ref content (base keeps it)
+	//   - ADDED file (absent at base-ref) → nil (DELETE from the clone). This is
+	//     the crux for index-ahead: a drifted index already holds the added
+	//     file, so the clone inherits it; skipping (discovery's baseChangedFiles)
+	//     would leave that stale copy and the net-new clone would still cancel.
+	//     Mapping to nil removes it, so the base graph truly reflects base-ref.
+	//     When the index is NOT ahead the file is absent anyway, so the delete is
+	//     a harmless no-op.
+	readBaseContent := func(ctx context.Context, path string) ([]byte, error) {
+		return adaptAbsence(git.FileAtRef(ctx, p.RepoRoot, p.BaseRef, path))
+	}
+	baseFiles := make(map[string][]byte, len(changes))
+	for _, c := range changes {
+		content, rerr := readBaseContent(ctx, c.Path)
+		if rerr != nil {
+			if errors.Is(rerr, diffgate.ErrFileAbsentAtRef) {
+				baseFiles[c.Path] = nil // added file: absent at base-ref → delete
+				continue
+			}
+			cleanup()
+			return nil, nil, "", noop, fmt.Errorf("diff-gate: read base content %q: %w", c.Path, rerr)
+		}
+		baseFiles[c.Path] = content
+	}
+	if err := repromoteChanged(ctx, basePools, p.RepoID, p.Branch, p.BaseRef, baseFiles); err != nil {
+		cleanup()
+		return nil, nil, "", noop, fmt.Errorf("diff-gate: re-promote base: %w", err)
+	}
+
+	base := baseGraph{
+		EdgeReaderRepo: sqlite.NewEdgeReaderRepo(basePools.ReadDB),
+		NodeLookupRepo: sqlite.NewNodeLookupRepo(basePools.ReadDB),
+	}
+	ix, err := diffgate.NewIndexer(treesitter.NewGoParser())
+	if err != nil {
+		cleanup()
+		return nil, nil, "", noop, fmt.Errorf("diff-gate: indexer: %w", err)
+	}
+	eph, err := ix.Index(ctx, p.RepoID, p.Branch, base, src)
+	if err != nil {
+		cleanup()
+		return nil, nil, "", noop, fmt.Errorf("diff-gate: index candidate: %w", err)
+	}
+	return eph, changes, baseClonePath, cleanup, nil
 }
 
 // buildEphemeral is the shared diff-gate harness: it parses the candidate
