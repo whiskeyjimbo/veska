@@ -226,6 +226,7 @@ func buildStructuralRunner(pools *sqlite.Pools) *checks.Runner {
 	reg.Register(checks.NewContractDriftCheck(sqlite.NewContractDriftRepo(pools.ReadDB)))
 	reg.Register(checks.NewUntestedSymbolCheck(sqlite.NewCoverageRepo(pools.ReadDB),
 		checks.WithUntestedRepoKindLookup(repoKind),
+		checks.WithUntestedInterfaceMethods(sqlite.NewDeadCodeRepo(pools.ReadDB)),
 	))
 	return checks.NewRunner(reg, sqlite.NewFindingRepo(pools.Write), nil)
 }

@@ -67,6 +67,63 @@ func TestRunUntested_E2E_ModifiedButTested_Passes(t *testing.T) {
 	}
 }
 
+// Persona-test regression: modifying a concrete method tested ONLY via
+// interface dispatch must PASS. The static CALLS edge points at the interface
+// method, not the impl, so without interface-method suppression the gate
+// false-FAILs a ubiquitous Go idiom (the filed P1).
+func TestRunUntested_E2E_InterfaceDispatchTested_Passes(t *testing.T) {
+	home := t.TempDir()
+	const ifaceSrc = "package p\n\ntype Greeter interface{ Greet() string }\n\ntype EN struct{}\n\nfunc (EN) Greet() string { return \"hi\" }\n\nfunc Pick(g Greeter) string { return g.Greet() }\n"
+	const ifaceTestSrc = "package p\n\nimport \"testing\"\n\nfunc TestPick(t *testing.T) {\n\tif Pick(EN{}) != \"hi\" {\n\t\tt.Fatal(\"bad\")\n\t}\n}\n"
+	seedBaseDB(t, filepath.Join(home, "veska.db"), map[string]string{
+		"greeter.go": ifaceSrc, "greeter_test.go": ifaceTestSrc,
+	})
+	repoDir := t.TempDir()
+	// Modify EN.Greet's body (it stays an interface-dispatch-tested method).
+	modified := "package p\n\ntype Greeter interface{ Greet() string }\n\ntype EN struct{}\n\nfunc (EN) Greet() string { return \"hi!\" }\n\nfunc Pick(g Greeter) string { return g.Greet() }\n"
+	makeRepo(t, repoDir,
+		map[string]string{"greeter.go": ifaceSrc, "greeter_test.go": ifaceTestSrc},
+		map[string]*string{"greeter.go": &modified},
+	)
+
+	v, err := runUntested(t, home, repoDir)
+	if err != nil {
+		t.Fatalf("interface-dispatch-tested method must PASS (nil err); got %v verdict=%+v", err, v)
+	}
+	if !v.Pass {
+		t.Fatalf("interface-dispatch-tested method must PASS (P1 regression); got %+v", v)
+	}
+}
+
+// Discriminating case (advisor): interface declared in an UNCHANGED file,
+// impl in a CHANGED file. Verifies the interface-method lister sees the
+// interface even though only the impl file was re-promoted — the clone is a
+// full base snapshot, so unchanged-file interface nodes survive (unlike the
+// cascade-deleted caller edges). Must PASS.
+func TestRunUntested_E2E_InterfaceInUnchangedFile_Passes(t *testing.T) {
+	home := t.TempDir()
+	const ifaceFile = "package p\n\ntype Greeter interface{ Greet() string }\n\nfunc Pick(g Greeter) string { return g.Greet() }\n"
+	const implFile = "package p\n\ntype EN struct{}\n\nfunc (EN) Greet() string { return \"hi\" }\n"
+	const testFile = "package p\n\nimport \"testing\"\n\nfunc TestPick(t *testing.T) {\n\tif Pick(EN{}) != \"hi\" {\n\t\tt.Fatal(\"bad\")\n\t}\n}\n"
+	seedBaseDB(t, filepath.Join(home, "veska.db"), map[string]string{
+		"iface.go": ifaceFile, "impl.go": implFile, "greeter_test.go": testFile,
+	})
+	repoDir := t.TempDir()
+	modImpl := "package p\n\ntype EN struct{}\n\nfunc (EN) Greet() string { return \"hi!\" }\n" // modify impl only
+	makeRepo(t, repoDir,
+		map[string]string{"iface.go": ifaceFile, "impl.go": implFile, "greeter_test.go": testFile},
+		map[string]*string{"impl.go": &modImpl}, // iface.go unchanged
+	)
+
+	v, err := runUntested(t, home, repoDir)
+	if err != nil {
+		t.Fatalf("interface-in-unchanged-file must PASS (nil err); got %v verdict=%+v", err, v)
+	}
+	if !v.Pass {
+		t.Fatalf("interface-in-unchanged-file must PASS; got %+v", v)
+	}
+}
+
 // False-PASS lock (dangerous direction): adding a prod symbol with no test must
 // FAIL, and the gate must list it. Proves the cross-machinery join fires —
 // Ephemeral.ChangedNodeIDs (overlay-derived) and the untested finding's NodeID

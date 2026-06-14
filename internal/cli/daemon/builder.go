@@ -266,6 +266,7 @@ func (b *daemonBuilder) buildCheckPipeline() error {
 	checkReg.Register(checks.NewContractDriftCheck(contractRepo))
 	checkReg.Register(checks.NewUntestedSymbolCheck(sqlite.NewCoverageRepo(b.pools.ReadDB),
 		checks.WithUntestedRepoKindLookup(deadcodeRepoKind),
+		checks.WithUntestedInterfaceMethods(deadcodeRepo),
 	))
 
 	// Secrets-scan (on unless disabled) + vuln-scan (only when provider="osv")

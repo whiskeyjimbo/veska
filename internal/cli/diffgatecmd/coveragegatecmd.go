@@ -145,7 +145,10 @@ func untestedInChangedFiles(ctx context.Context, basePools *sqlite.Pools, baseDB
 		clone:   sqlite.NewCoverageRepo(clonePools.ReadDB),
 		changed: changedSet,
 	}
-	check := checks.NewUntestedSymbolCheck(union)
+	// Interface-method names over the CLONE (after-state) so a candidate-added
+	// interface suppresses its dispatch-tested impls too.
+	check := checks.NewUntestedSymbolCheck(union,
+		checks.WithUntestedInterfaceMethods(sqlite.NewDeadCodeRepo(clonePools.ReadDB)))
 	return check.Run(ctx, checks.Input{RepoID: repoID, Branch: branch, GitSHA: gitSHA, FilePaths: changedFiles})
 }
 
