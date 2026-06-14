@@ -24,8 +24,12 @@ func NewExportedSymbolRepo(db *sql.DB) *ExportedSymbolRepo {
 }
 
 // ExportedSymbolsInFiles returns the exported nodes in (repoID, branch) whose
-// file_path is one of filePaths and whose kind is in {function, method,
-// interface} — the same public-surface kind set the contract-drift gate judges.
+// file_path is one of filePaths and whose kind is a removable public-surface
+// kind: function, method, interface, struct, type, variable, class. This is
+// WIDER than the contract-drift gate's signature-shaped set {function, method,
+// interface} — removal/rename detection (solov2-zvh6.12/.14) needs only a name's
+// presence, so it also covers exported types, structs, consts and vars (Go
+// const + var both surface as the parser's KindVariable).
 //
 // Empty filePaths is a no-op (returns nil, nil) — avoiding a degenerate "IN ()"
 // clause that SQLite rejects, symmetric with DriftedNodesInFiles.
@@ -48,7 +52,7 @@ FROM nodes
 WHERE repo_id = ?
   AND branch = ?
   AND file_path IN (%s)
-  AND kind IN ('function','method','interface')
+  AND kind IN ('function','method','interface','struct','type','variable','class')
   AND COALESCE(exported, 0) = 1
 ORDER BY file_path, node_id`, strings.Join(placeholders, ","))
 

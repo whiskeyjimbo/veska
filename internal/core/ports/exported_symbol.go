@@ -19,11 +19,14 @@ type ExportedSymbol struct {
 // enumerate exported public-surface symbols over a set of changed files.
 //
 // ExportedSymbolsInFiles returns the nodes in (repoID, branch) whose file_path
-// is in filePaths, whose exported flag is true, and whose kind is one of
-// {function, method, interface} (the same closed public-surface set the
-// contract-drift gate judges). An empty filePaths slice MUST return an empty
-// result with no error — symmetric with ContractDriftQuerier / DeadCodeQuerier,
-// and it avoids a degenerate "IN ()" clause at the adapter.
+// is in filePaths, whose exported flag is true, and whose kind is a removable
+// public-surface kind: function, method, interface, struct, type, variable,
+// class (solov2-zvh6.14). This is WIDER than the contract-drift gate's
+// signature-shaped set — removal detection needs only a name's presence, so it
+// also covers exported types, structs, consts and vars. An empty filePaths
+// slice MUST return an empty result with no error — symmetric with
+// ContractDriftQuerier / DeadCodeQuerier, and it avoids a degenerate "IN ()"
+// clause at the adapter.
 type ExportedSymbolQuerier interface {
 	ExportedSymbolsInFiles(ctx context.Context, repoID, branch string, filePaths []string) ([]ExportedSymbol, error)
 }

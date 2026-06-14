@@ -24,6 +24,21 @@ type apiVerdict struct {
 	Failures []string `json:"failures"`
 }
 
+// runAPIRemoval seeds base with x.go=baseSrc, modifies it to candSrc, and runs
+// the api gate — the shared harness for the removal/shape e2e cases.
+func runAPIRemoval(t *testing.T, baseSrc, candSrc string) (apiVerdict, error) {
+	t.Helper()
+	home := t.TempDir()
+	seedBaseDB(t, filepath.Join(home, "veska.db"), map[string]string{"x.go": baseSrc})
+	repoDir := t.TempDir()
+	c := candSrc
+	makeRepo(t, repoDir,
+		map[string]string{"x.go": baseSrc},
+		map[string]*string{"x.go": &c},
+	)
+	return runAPI(t, home, repoDir)
+}
+
 // removedSymbols flattens the verdict's removed-symbol set to names.
 func removedSymbols(v apiVerdict) map[string]bool {
 	out := map[string]bool{}
@@ -292,6 +307,67 @@ func TestRunAPIBreak_E2E_DeletedFileRemovesExport_Fails(t *testing.T) {
 	}
 	if !removedSymbols(v)["Bar"] {
 		t.Fatalf("must name Bar removed; got %+v", v)
+	}
+}
+
+// Removal of an exported TYPE/STRUCT must FAIL (solov2-zvh6.14).
+func TestRunAPIBreak_E2E_RemovedExportedType_Fails(t *testing.T) {
+	v, err := runAPIRemoval(t,
+		"package p\n\ntype Config struct{ A int }\n\nfunc Keep() {}\n",
+		"package p\n\nfunc Keep() {}\n", // Config removed
+	)
+	if !errors.Is(err, ErrGateFailed) {
+		t.Fatalf("removing exported type Config must FAIL; got %v verdict=%+v", err, v)
+	}
+	if !removedSymbols(v)["Config"] {
+		t.Fatalf("must name Config removed; got %+v", v)
+	}
+}
+
+// Removal of an exported grouped CONST must FAIL (solov2-zvh6.14). Go const +
+// var both surface as the parser's KindVariable; this pins that the grouped
+// const_declaration path produces a removable exported node.
+func TestRunAPIBreak_E2E_RemovedExportedConst_Fails(t *testing.T) {
+	v, err := runAPIRemoval(t,
+		"package p\n\nconst (\n\tMaxN = 10\n\tMinN = 1\n)\n\nfunc Keep() {}\n",
+		"package p\n\nconst (\n\tMinN = 1\n)\n\nfunc Keep() {}\n", // MaxN removed
+	)
+	if !errors.Is(err, ErrGateFailed) {
+		t.Fatalf("removing exported const MaxN must FAIL; got %v verdict=%+v", err, v)
+	}
+	if !removedSymbols(v)["MaxN"] {
+		t.Fatalf("must name MaxN removed; got %+v", v)
+	}
+}
+
+// Removal of an exported VAR must FAIL (solov2-zvh6.14).
+func TestRunAPIBreak_E2E_RemovedExportedVar_Fails(t *testing.T) {
+	v, err := runAPIRemoval(t,
+		"package p\n\nvar Default = 7\n\nfunc Keep() {}\n",
+		"package p\n\nfunc Keep() {}\n", // Default removed
+	)
+	if !errors.Is(err, ErrGateFailed) {
+		t.Fatalf("removing exported var Default must FAIL; got %v verdict=%+v", err, v)
+	}
+	if !removedSymbols(v)["Default"] {
+		t.Fatalf("must name Default removed; got %+v", v)
+	}
+}
+
+// A same-name type SHAPE change (struct -> interface) is NOT a removal: the
+// exported NAME persists (solov2-zvh6.14, kind dropped from identity). It must
+// PASS the removal detector. (Type shape drift is a separate, currently
+// undetected concern — neither removal nor signature-drift covers it.)
+func TestRunAPIBreak_E2E_TypeShapeChange_NotRemoval_Passes(t *testing.T) {
+	v, err := runAPIRemoval(t,
+		"package p\n\ntype Config struct{ A int }\n\nfunc Keep() {}\n",
+		"package p\n\ntype Config interface{ A() int }\n\nfunc Keep() {}\n", // struct -> interface, same name
+	)
+	if err != nil {
+		t.Fatalf("same-name type shape change must PASS the removal detector; got %v verdict=%+v", err, v)
+	}
+	if !v.Pass {
+		t.Fatalf("struct->interface (name persists) must NOT be reported as removal; got %+v", v)
 	}
 }
 
