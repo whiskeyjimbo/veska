@@ -25,7 +25,9 @@ CREATE TABLE repos (
 	kind             TEXT NOT NULL DEFAULT 'tracked',
 	canonical_url    TEXT,
 	last_accessed_at INTEGER,
-	prompted_at      INTEGER
+	prompted_at      INTEGER,
+	identity_tier    TEXT,
+	identity_anchor  TEXT
 );
 CREATE UNIQUE INDEX idx_repos_canonical_url
 	ON repos(canonical_url)
