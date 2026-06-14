@@ -145,16 +145,42 @@ func TestRunCycles_E2E_CrossFileCycle_Fails(t *testing.T) {
 	}
 }
 
-// KNOWN LIMITATION (solov2-zvh6.11) — pins the documented index-ahead false-PASS
-// so the behaviour is explicit and the hardening bead has a red target to flip.
-// When the index has advanced ALL THE WAY to the candidate's content (here:
-// seeded cyclic, which is also the candidate), both diff-gate legs collapse —
-// base edges (from the live index) already hold the cycle, and ChangedNodeIDs
-// goes empty because the overlay matches the index — so a net-new cycle PASSES.
-// This is the out-of-contract index-ahead race (indexed-HEAD != base-ref) shared
-// by the whole gate family, NOT the canonical contract the four tests above
-// encode. Flip this to a FAIL assertion when zvh6.11 lands.
-func TestRunCycles_E2E_IndexAhead_KnownLimitation(t *testing.T) {
+// Base-side splice guard (solov2-zvh6.11): a PRE-EXISTING cross-file cycle
+// (a.go A->B, b.go B->A both at base-ref) with a body-only change to b.go must
+// PASS — it is not net-new. This is the symmetric companion to CrossFileCycle:
+// re-promoting b.go into the BASE clone cascade-deletes the inbound A->B edge
+// (src in unchanged a.go), so without splicing it back from the live index the
+// base graph would show no cycle and the gate would false-FAIL.
+func TestRunCycles_E2E_PreExistingCrossFileCycle_Passes(t *testing.T) {
+	home := t.TempDir()
+	const aSrc = "package p\n\nfunc A() { B() }\n"
+	const bSrc = "package p\n\nfunc B() { A() }\n" // base-ref already cyclic across files
+	seedBaseDB(t, filepath.Join(home, "veska.db"), map[string]string{"a.go": aSrc, "b.go": bSrc})
+	repoDir := t.TempDir()
+	candB := "package p\n\nfunc B() { A(); _ = 1 }\n" // body-only change, cycle unchanged
+	makeRepo(t, repoDir,
+		map[string]string{"a.go": aSrc, "b.go": bSrc},
+		map[string]*string{"b.go": &candB}, // a.go untouched
+	)
+
+	v, err := runCycles(t, home, repoDir)
+	if err != nil {
+		t.Fatalf("pre-existing cross-file cycle must PASS (nil err); got %v verdict=%+v", err, v)
+	}
+	if !v.Pass {
+		t.Fatalf("pre-existing cross-file cycle must PASS; got %+v", v)
+	}
+}
+
+// INDEX-AHEAD HARDENING (solov2-zvh6.11) — the former false-PASS, now FAILing.
+// The index is seeded AHEAD at the candidate's cyclic content (violating the
+// indexed-HEAD == base-ref precondition). Before pinning, both diff-gate legs
+// collapsed — base edges (from the live index) already held the cycle, and
+// ChangedNodeIDs went empty because the overlay matched the index — so the
+// net-new cycle wrongly PASSED. With buildPinnedEphemeral the base clone
+// re-promotes base-ref's acyclic x.go and the after-state clone chains from it,
+// so the cycle is correctly net-new and the gate FAILs naming A and B.
+func TestRunCycles_E2E_IndexAhead_NowDetected(t *testing.T) {
 	home := t.TempDir()
 	const cyclic = "package p\n\nfunc A() { B() }\nfunc B() { A() }\n"
 	const acyclic = "package p\n\nfunc A() { B() }\nfunc B() {}\n"
@@ -169,7 +195,11 @@ func TestRunCycles_E2E_IndexAhead_KnownLimitation(t *testing.T) {
 	)
 
 	v, err := runCycles(t, home, repoDir)
-	if err != nil || !v.Pass {
-		t.Fatalf("documented index-ahead limitation: gate PASSes today (zvh6.11 will flip this); got err=%v verdict=%+v", err, v)
+	if !errors.Is(err, ErrGateFailed) {
+		t.Fatalf("index-ahead cycle must now FAIL (zvh6.11); got err=%v verdict=%+v", err, v)
+	}
+	syms := symbolsOf(v)
+	if !syms["A"] || !syms["B"] {
+		t.Fatalf("index-ahead cycle must name A and B; got %+v", v)
 	}
 }

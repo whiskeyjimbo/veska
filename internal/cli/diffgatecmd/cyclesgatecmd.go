@@ -40,18 +40,14 @@ type cycleGateReport struct {
 // runs the cycle gate (solov2-zvh6.6), and FAILs when a strongly-connected
 // component of >=2 symbols absent at base appears in the change set.
 //
-// PRECONDITION (shared diff-gate contract — also assumed by clones and untested):
-// the indexed graph must sit at base-ref, i.e. indexed-HEAD == base-ref. Two
-// legs depend on it: the base-state edge set is read from the live index, and
-// the change set comes from Ephemeral.ChangedNodeIDs, which content-hashes the
-// candidate overlay against the live index (diffgate/changednodes.go). If a
-// daemon has advanced the index all the way TO the candidate's content for the
-// changed files (essentially post-merge), both legs collapse — base already
-// holds the cycle and the change set goes empty — and a net-new cycle can FALSE-
-// PASS. This is an out-of-contract index-ahead race, not the common main-drift
-// (drifted main won't independently contain the PR's specific cycle). Hardening
-// the whole gate family to fail closed on indexed-HEAD != base-ref is tracked as
-// a follow-up; see solov2-zvh6.11 (ll57.16 is the findings-side precedent).
+// Index-ahead safety (solov2-zvh6.11): both the base-state edge set AND the
+// candidate after-state are pinned to base-ref via buildPinnedEphemeral's base
+// clone (the after-state clone chains FROM that base clone, not the live index).
+// So even if a daemon has advanced the index past base-ref — all the way to the
+// candidate's content — neither leg collapses: the base clone re-promotes
+// base-ref's changed-file content (deleting any added file the drifted index
+// carried), and ChangedNodeIDs content-hashes against that base-ref-pinned base.
+// A net-new cycle therefore still FAILs regardless of index drift.
 func RunCycles(ctx context.Context, p CycleParams) error {
 	if p.RepoID == "" || p.BaseRef == "" || p.CandidateRef == "" {
 		return fmt.Errorf("diff-gate cycles: --repo, --base-ref and --candidate-ref are required")
@@ -70,11 +66,6 @@ func RunCycles(ctx context.Context, p CycleParams) error {
 	}
 	p.RepoID = resolved
 
-	base := baseGraph{
-		EdgeReaderRepo: sqlite.NewEdgeReaderRepo(pools.ReadDB),
-		NodeLookupRepo: sqlite.NewNodeLookupRepo(pools.ReadDB),
-	}
-
 	if !repoIndexed(ctx, pools.ReadDB, p.RepoID, p.Branch) {
 		rep := cycleGateReport{
 			CycleVerdict: diffgate.CycleVerdict{Pass: false},
@@ -86,18 +77,30 @@ func RunCycles(ctx context.Context, p CycleParams) error {
 		return fmt.Errorf("%w (repo_not_indexed: index %q first, e.g. `veska reindex`)", ErrGateFailed, p.RepoID)
 	}
 
-	eph, changes, err := buildEphemeral(ctx, ephemeralParams{
+	// Pin base + candidate after-state to base-ref (index-ahead hardening,
+	// solov2-zvh6.11). The base clone re-promotes base-ref's changed files; the
+	// after-state clone below chains FROM baseClonePath, not the live index.
+	eph, changes, baseClonePath, cleanup, err := buildPinnedEphemeral(ctx, ephemeralParams{
 		RepoID:       p.RepoID,
 		Branch:       p.Branch,
 		RepoRoot:     p.RepoRoot,
 		BaseRef:      p.BaseRef,
 		CandidateRef: p.CandidateRef,
-	}, base)
+	}, dbPath)
 	if err != nil {
 		return err
 	}
+	defer cleanup()
 
-	after, baseEdges, info, err := cycleEdgeGraphs(ctx, pools, dbPath, p.RepoID, p.Branch, p.CandidateRef, changes, eph.ChangedFiles)
+	// Read base edges and clone the after-state from the base-ref-pinned clone
+	// (not the live index) so both legs reflect base-ref.
+	basePools, err := sqlite.OpenPools(baseClonePath)
+	if err != nil {
+		return fmt.Errorf("diff-gate cycles: open base clone: %w", err)
+	}
+	defer basePools.Close()
+
+	after, baseEdges, info, err := cycleEdgeGraphs(ctx, basePools, baseClonePath, pools, p.RepoID, p.Branch, p.CandidateRef, changes, eph.ChangedFiles)
 	if err != nil {
 		return fmt.Errorf("diff-gate cycles: %w", err)
 	}
@@ -117,26 +120,41 @@ func RunCycles(ctx context.Context, p CycleParams) error {
 // cycleEdgeGraphs materialises the after- and base-state dependency graphs for
 // the cycle gate, plus a node_id->member naming map for the verdict.
 //
-// The base graph is read straight from the indexed base DB. The after graph
-// re-promotes the candidate's changed files into a throwaway clone (so
-// cross-file CALLS resolve — the overlay only carries intra-file edges) and
-// SPLICES the result: re-promoting a changed file delete-replaces its nodes,
-// which CASCADE-deletes inbound edges from UNCHANGED source files (edges FK is
-// ON DELETE CASCADE on dst_node_id). So the clone alone is missing exactly the
-// edges whose src lives in an unchanged file and whose dst lives in a changed
-// file. The after graph restores them from base:
+// Both graphs are built from a clone the changed files are re-promoted into (so
+// cross-file CALLS resolve — the ephemeral overlay only carries intra-file
+// edges): the BASE clone (base-ref content, from buildPinnedEphemeral) and an
+// AFTER clone derived from it (candidate content). Re-promoting a changed file
+// delete-replaces its nodes, which CASCADE-deletes inbound edges from UNCHANGED
+// source files (edges FK is ON DELETE CASCADE on dst_node_id). So BOTH clones
+// are missing exactly the edges whose src lives in an unchanged file and whose
+// dst lives in a changed file. We splice those back from the LIVE index:
 //
-//	after = clone-edges ∪ base-edges(srcFile∉changed ∧ dstFile∈changed)
+//	base  = base-clone-edges  ∪ index-edges(srcFile∉changed ∧ dstFile∈changed)
+//	after = after-clone-edges ∪ index-edges(srcFile∉changed ∧ dstFile∈changed)
 //
-// which is complete: clone covers every src∈changed (re-derived) and every
-// src∉changed∧dst∉changed (untouched by the re-promote), the splice adds back
-// the cascade-deleted src∉changed∧dst∈changed. A re-added edge to a node the
-// diff DELETED is harmless — that node has no outbound edge in the clone, so it
-// is a sink and cannot be a >=2 cycle member.
-func cycleEdgeGraphs(ctx context.Context, basePools *sqlite.Pools, baseDBPath, repoID, branch, gitSHA string, changes []diffgate.FileChange, changedFiles []string) (after, base []diffgate.DirectedEdge, info map[string]diffgate.CycleMember, err error) {
+// The live index is a SOUND source for that splice term under the common
+// index-ahead case (body-level drift of the changed file): a cross-file inbound
+// edge (src in an unchanged file) is invariant to body drift — A→B exists
+// because a.go calls B and B's node_id is stable, independent of b.go's body —
+// so the index always holds it. (Edge case, already out of contract: if the
+// drifted candidate-content index RENAMED or REMOVED the dst symbol, its
+// node_id changes and the base-ref edge is absent from the index; the base-leg
+// splice would then under-restore. Not chased — it is a corner of an already
+// out-of-contract index-ahead race; see solov2-zvh6.11.) The drift lives only
+// in edges whose src is in a changed file, and those come from the clones, not
+// the splice. A re-added edge to a
+// node the diff DELETED is harmless — that node has no outbound edge in the
+// clone, so it is a sink and cannot be a >=2 cycle member.
+//
+//nolint:revive,cyclop // argument-limit + cyclomatic complexity predate zvh6.11; this change only adds the idxPools splice source and merged splice loop. The args are distinct plumbing (two clones + the live index) that don't form a cohesive struct.
+func cycleEdgeGraphs(ctx context.Context, basePools *sqlite.Pools, baseDBPath string, idxPools *sqlite.Pools, repoID, branch, gitSHA string, changes []diffgate.FileChange, changedFiles []string) (after, base []diffgate.DirectedEdge, info map[string]diffgate.CycleMember, err error) {
 	baseRows, err := sqlite.NewCycleEdgeRepo(basePools.ReadDB).DependencyEdges(ctx, repoID, branch, diffgate.DependencyKinds)
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("base edges: %w", err)
+	}
+	idxRows, err := sqlite.NewCycleEdgeRepo(idxPools.ReadDB).DependencyEdges(ctx, repoID, branch, diffgate.DependencyKinds)
+	if err != nil {
+		return nil, nil, nil, fmt.Errorf("index edges: %w", err)
 	}
 
 	clone, err := cloneDB(ctx, baseDBPath)
@@ -175,6 +193,7 @@ func cycleEdgeGraphs(ctx context.Context, basePools *sqlite.Pools, baseDBPath, r
 	}
 	record(baseRows)
 	record(cloneRows)
+	record(idxRows) // spliced endpoints (e.g. A) get names even after their edge cascaded away
 
 	for _, e := range baseRows {
 		base = append(base, diffgate.DirectedEdge{Src: e.SrcID, Dst: e.DstID})
@@ -182,10 +201,13 @@ func cycleEdgeGraphs(ctx context.Context, basePools *sqlite.Pools, baseDBPath, r
 	for _, e := range cloneRows {
 		after = append(after, diffgate.DirectedEdge{Src: e.SrcID, Dst: e.DstID})
 	}
-	for _, e := range baseRows {
+	// Splice the cascade-deleted cross-file inbound edges back into BOTH legs
+	// from the live index (sound under index drift; see doc comment).
+	for _, e := range idxRows {
 		_, srcChanged := changedSet[e.SrcFile]
 		_, dstChanged := changedSet[e.DstFile]
 		if !srcChanged && dstChanged {
+			base = append(base, diffgate.DirectedEdge{Src: e.SrcID, Dst: e.DstID})
 			after = append(after, diffgate.DirectedEdge{Src: e.SrcID, Dst: e.DstID})
 		}
 	}
