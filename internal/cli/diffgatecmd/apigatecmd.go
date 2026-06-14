@@ -40,14 +40,13 @@ type apiGateReport struct {
 // signature to the candidate's), reads the drifted nodes over the changed files,
 // and FAILs on any whose visibility flag is exported (solov2-zvh6.2).
 //
-// PRECONDITION (shared diff-gate contract — also assumed by clones, untested and
-// cycles): the indexed graph must sit at base-ref, i.e. indexed-HEAD == base-ref.
-// A node's prev_signature is taken from the clone (= live index) BEFORE the
-// re-promote; if a daemon has advanced the index all the way to the candidate's
-// content for the changed files, prev_signature already equals the candidate's
-// signature, drift never fires, and a breaking change FALSE-PASSes. This is the
-// out-of-contract index-ahead race tracked for the whole gate family by
-// solov2-zvh6.11 (ll57.16 is the findings-side precedent).
+// Index-ahead safety (solov2-zvh6.11): a node's prev_signature is the signature
+// in the clone BEFORE the candidate re-promote. By cloning the after-state from
+// the base-ref-pinned clone (buildPinnedEphemeral re-promotes base-ref's changed
+// files) rather than the live index, prev_signature is the BASE-REF signature
+// even if a daemon has advanced the index to the candidate's content. So drift
+// reads base-ref-sig vs candidate-sig and a breaking change still FAILs. No
+// cross-file splice is needed here (drift is per-node, not edge-derived).
 func RunAPIBreak(ctx context.Context, p APIParams) error {
 	if p.RepoID == "" || p.BaseRef == "" || p.CandidateRef == "" {
 		return fmt.Errorf("diff-gate api: --repo, --base-ref and --candidate-ref are required")
@@ -66,11 +65,6 @@ func RunAPIBreak(ctx context.Context, p APIParams) error {
 	}
 	p.RepoID = resolved
 
-	base := baseGraph{
-		EdgeReaderRepo: sqlite.NewEdgeReaderRepo(pools.ReadDB),
-		NodeLookupRepo: sqlite.NewNodeLookupRepo(pools.ReadDB),
-	}
-
 	if !repoIndexed(ctx, pools.ReadDB, p.RepoID, p.Branch) {
 		rep := apiGateReport{
 			APIVerdict: diffgate.APIVerdict{Pass: false},
@@ -82,18 +76,22 @@ func RunAPIBreak(ctx context.Context, p APIParams) error {
 		return fmt.Errorf("%w (repo_not_indexed: index %q first, e.g. `veska reindex`)", ErrGateFailed, p.RepoID)
 	}
 
-	eph, changes, err := buildEphemeral(ctx, ephemeralParams{
+	// Pin base to base-ref (index-ahead hardening, solov2-zvh6.11): drift is read
+	// from an after-state clone derived from baseClonePath (not the live index),
+	// so prev_signature is the base-ref signature.
+	eph, changes, baseClonePath, cleanup, err := buildPinnedEphemeral(ctx, ephemeralParams{
 		RepoID:       p.RepoID,
 		Branch:       p.Branch,
 		RepoRoot:     p.RepoRoot,
 		BaseRef:      p.BaseRef,
 		CandidateRef: p.CandidateRef,
-	}, base)
+	}, dbPath)
 	if err != nil {
 		return err
 	}
+	defer cleanup()
 
-	drifted, err := driftedInChangedFiles(ctx, dbPath, p.RepoID, p.Branch, p.CandidateRef, changes, eph.ChangedFiles)
+	drifted, err := driftedInChangedFiles(ctx, baseClonePath, p.RepoID, p.Branch, p.CandidateRef, changes, eph.ChangedFiles)
 	if err != nil {
 		return fmt.Errorf("diff-gate api: %w", err)
 	}
