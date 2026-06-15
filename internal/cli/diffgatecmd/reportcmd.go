@@ -103,21 +103,51 @@ func RunReport(ctx context.Context, p ReportParams) error {
 	return emitReport(p.Out, report)
 }
 
+// blastNoiseKinds are node kinds that carry no "downstream impact" signal in the
+// PR report: structural containers (package/module/file) and the embedding
+// sub-symbol text chunks. They reach the blast set via CONTAINS edges but only
+// dilute the symbol-level impact list a reviewer reads (solov2-zvh6.13). Filtered
+// here, in the report consumer, so other blastradius consumers still see them.
+var blastNoiseKinds = map[string]struct{}{
+	"chunk":   {},
+	"package": {},
+	"module":  {},
+	"file":    {},
+}
+
+// filterBlastNoise drops blast entries whose kind carries no downstream-impact
+// signal (blastNoiseKinds), preserving order. It returns a fresh slice; the
+// input is not mutated.
+func filterBlastNoise(entries []blastradius.Entry) []blastradius.Entry {
+	out := make([]blastradius.Entry, 0, len(entries))
+	for _, e := range entries {
+		if _, noise := blastNoiseKinds[e.Kind]; noise {
+			continue
+		}
+		out = append(out, e)
+	}
+	return out
+}
+
 // assembleBlast runs blastradius.DiffOf over the canonical changed-files set and
-// projects the response into the report section. Errors degrade to a Note.
+// projects the response into the report section, dropping non-symbol noise kinds
+// (chunk/package/...). Errors degrade to a Note.
 func assembleBlast(ctx context.Context, blast *blastradius.Service, p ReportParams, changedFiles []string, notes []string) (diffgate.BlastRadiusSection, []string) {
 	changedFunc := func(context.Context, string) ([]string, error) { return changedFiles, nil }
 	resp, err := blast.DiffOf(ctx, p.RepoID, p.Branch, p.RepoRoot, changedFunc, blastradius.Options{})
 	if err != nil {
 		return diffgate.BlastRadiusSection{}, append(notes, fmt.Sprintf("blast_radius: %v", err))
 	}
+	// Filter out noise kinds first so NodeCount and the entry cap both reflect
+	// the symbol-level impact, not container/chunk nodes.
+	meaningful := filterBlastNoise(resp.Entries)
 	sec := diffgate.BlastRadiusSection{
 		SeedFiles: len(changedFiles),
-		NodeCount: len(resp.Entries),
+		NodeCount: len(meaningful),
 		Truncated: resp.Truncated,
 	}
-	limit := min(len(resp.Entries), diffgate.ReportBlastEntryLimit)
-	for _, e := range resp.Entries[:limit] {
+	limit := min(len(meaningful), diffgate.ReportBlastEntryLimit)
+	for _, e := range meaningful[:limit] {
 		sec.Entries = append(sec.Entries, diffgate.BlastEntry{
 			NodeID:     e.NodeID,
 			SymbolPath: e.SymbolPath,
