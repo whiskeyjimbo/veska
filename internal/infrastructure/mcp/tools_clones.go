@@ -20,6 +20,7 @@ import (
 type CloneFinder interface {
 	ExactClones(ctx context.Context, repoID, branch string) ([]duplicates.CloneGroup, error)
 	NearDuplicates(ctx context.Context, repoID, branch string, minScore float32) ([]duplicates.NearCluster, error)
+	Clusters(ctx context.Context, opts duplicates.ClusterOptions) ([]duplicates.Cluster, error)
 }
 
 // DescFindClones is the eng_find_clones tool description. It states the exact
@@ -94,6 +95,13 @@ func RegisterCloneTools(r *Registry, finder CloneFinder, repos application.RepoL
 		IncludesStaging: false,
 		InputSchema:     findClonesInputSchema,
 		Handler:         makeFindClonesHandler(finder, repos),
+	})
+	r.MustRegister(ToolSpec{
+		Name:            "eng_find_clusters",
+		Description:     DescFindClusters,
+		IncludesStaging: false,
+		InputSchema:     findClustersInputSchema,
+		Handler:         makeFindClustersHandler(finder, repos),
 	})
 }
 
