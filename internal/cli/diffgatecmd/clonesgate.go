@@ -65,7 +65,7 @@ func RunClones(ctx context.Context, p CloneParams) error {
 		if err := emitCloneReport(p.Out, rep); err != nil {
 			return err
 		}
-		return fmt.Errorf("%w (repo_not_indexed: index %q first, e.g. `veska reindex`)", ErrGateFailed, p.RepoID)
+		return fmt.Errorf("%w (%s)", ErrGateFailed, notIndexedDetail(ctx, pools.ReadDB, p.RepoID))
 	}
 
 	// Base graph is pinned to base-ref (not the live index) so an index that has
@@ -148,7 +148,10 @@ func buildPinnedEphemeral(ctx context.Context, p ephemeralParams, dbPath string)
 	}
 	changes, err := src.Changes(ctx)
 	if err != nil {
-		return nil, nil, "", noop, fmt.Errorf("diff-gate: read changes: %w", err)
+		// A bad/unknown ref is a user input error; surface a clean, ref-naming
+		// message instead of raw git plumbing (solov2-i0tx.2 F3). Shared by every
+		// clone-based gate (api/coverage/cycles/clones).
+		return nil, nil, "", noop, fmt.Errorf("diff-gate: read changes: %w", cleanRefError(err, p.BaseRef, p.CandidateRef))
 	}
 
 	baseClonePath, err := cloneDB(ctx, dbPath)

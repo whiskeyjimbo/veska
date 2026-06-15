@@ -3,6 +3,7 @@ package diffgatecmd
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"path"
@@ -18,9 +19,11 @@ import (
 
 // SelectTestsParams are the impact-based test-selection inputs (solov2-v6de.2).
 // Unlike the diff-gate subcommands this NEVER gates: it emits a runner-consumable
-// SELECTION and always exits 0 (a real error — bad refs, repo not indexed, git/db
-// failure — is still returned). It needs the indexed base graph to resolve which
-// tests cover the changed prod nodes.
+// SELECTION at exit 0. Understandable non-fatal conditions (unknown repo, repo
+// not indexed, bad ref) are reported as an empty selection with an `error` field
+// in the same JSON envelope, NOT a non-zero exit (solov2-v6de.3) — only an
+// unexpected infra failure (store open, git exec) is returned. It needs the
+// indexed base graph to resolve which tests cover the changed prod nodes.
 type SelectTestsParams struct {
 	RepoID       string
 	Branch       string
@@ -43,12 +46,24 @@ type packageSelection struct {
 }
 
 // selectTestsReport is the JSON envelope. Empty is true when the diff selects no
-// tests at all (AC2: say so explicitly, never fall back to "all tests").
+// tests at all (AC2: say so explicitly, never fall back to "all tests"). Error
+// carries an advisory reason (unknown repo, not indexed, bad ref) — the command
+// NEVER gates, so these surface as an empty selection + a parseable error field
+// at exit 0, not a bare stderr crash (solov2-v6de.3).
 type selectTestsReport struct {
 	Packages []packageSelection `json:"packages"`
 	Commands []string           `json:"commands"`
 	Empty    bool               `json:"empty"`
 	Note     string             `json:"note,omitempty"`
+	Error    string             `json:"error,omitempty"`
+}
+
+// emitAdvisoryEmpty writes an empty selection carrying an advisory error reason
+// and returns nil — the command's "always exits 0, always emits JSON" contract
+// for understandable non-fatal conditions (solov2-v6de.3). A CI consumer parses
+// the same envelope shape whether or not tests were selected.
+func emitAdvisoryEmpty(out io.Writer, errMsg string) error {
+	return emitSelectTestsReport(out, selectTestsReport{Empty: true, Error: errMsg})
 }
 
 // RunSelectTests selects the tests whose covered nodes intersect the candidate
@@ -78,11 +93,20 @@ func RunSelectTests(ctx context.Context, p SelectTestsParams) error {
 	}
 	p.RepoID = resolved
 	if !repoIndexed(ctx, pools.ReadDB, p.RepoID, p.Branch) {
-		return fmt.Errorf("diff-gate select-tests: repo %q not indexed on branch %q — index it first (e.g. `veska reindex`)", p.RepoID, p.Branch)
+		// Advisory, not fatal: emit an empty selection + reason at exit 0 so the
+		// "always exits 0, emits JSON" contract holds (solov2-v6de.3). The reason
+		// distinguishes an unknown handle from an unindexed repo (i0tx.2 F2).
+		return emitAdvisoryEmpty(p.Out, notIndexedDetail(ctx, pools.ReadDB, p.RepoID))
 	}
 
 	changedFiles, err := git.ChangedFilesBetween(ctx, p.RepoRoot, p.BaseRef, p.CandidateRef)
 	if err != nil {
+		// A bad/unknown ref is a user-fixable input error, not a tool failure:
+		// surface the cleaned reason as an advisory empty selection (i0tx.2 F3),
+		// still at exit 0 with JSON. Genuine git/exec failures stay fatal.
+		if errors.Is(err, git.ErrUnknownRevision) {
+			return emitAdvisoryEmpty(p.Out, cleanRefError(err, p.BaseRef, p.CandidateRef).Error())
+		}
 		return fmt.Errorf("diff-gate select-tests: list changed files: %w", err)
 	}
 
@@ -174,7 +198,11 @@ func buildSelectionReport(tests []coverage.TestRef, forcedPkgs map[string]struct
 		out.Commands = append(out.Commands, sel.Command)
 	}
 	if out.Empty {
-		out.Note = "no covering tests selected for the changed prod nodes (and no test files changed)"
+		// F4 (solov2-dchd.8 sibling): an empty result is ambiguous — it can mean
+		// "your change has no covering tests" OR "this repo has no indexed tests
+		// at all (no *_test.go CALLS edges to select from)". Name both so a junior
+		// doesn't read it as a false all-clear.
+		out.Note = "no covering tests selected for the changed prod nodes (and no test files changed) — note this is also what you see when the repo has no indexed tests at all"
 	}
 	return out
 }

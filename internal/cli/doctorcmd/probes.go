@@ -114,6 +114,12 @@ func RunIdentity(w io.Writer, jsonOut bool) error {
 		}
 		fmt.Fprintf(w, "  %s tier=%s%s\n", short, tier, note)
 	}
+	// Legend on every run (solov2-dchd.8): the raw tier names are opaque on the
+	// healthy path, where the non-converging hint below never fires. A junior
+	// seeing `tier=module-hostpath` needs to know it's the good one.
+	if len(report.Repos) > 0 {
+		fmt.Fprintln(w, "  tiers: module-hostpath converges (shareable across contributors); origin-url/module-bare/abs-root are local-only")
+	}
 	if report.NonConverging > 0 {
 		fmt.Fprintf(w, "  hint: only the module-hostpath tier (go.mod `github.com/org/repo`) converges; see ADR-S0017\n")
 	}
