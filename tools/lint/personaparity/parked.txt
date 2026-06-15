@@ -1,0 +1,15 @@
+# personaparity parked manifest (solov2-nmps.2)
+#
+# eng_* tools intentionally NOT exercised by any tests/mcp test, with the
+# reason. Every other registered tool MUST be referenced by a persona test
+# (test_persona_*.py / persona_harness.py) or the per-tool suite, or the gate
+# fails. Format: `tool_name  reason` (reason required). Unpark a tool the
+# moment a test names it — the gate flags stale parked entries.
+#
+# The task tools are PARKED OFF the live daemon registry (RegisterTaskTools is
+# never wired — see internal/infrastructure/mcp/tools_tasks.go), so a real
+# agent cannot reach them; there is no MCP path to create a task to activate.
+# Re-test these when they re-enable (tracked by solov2-nmps.10).
+eng_set_active_task   parked: RegisterTaskTools not wired into the live daemon (solov2-nmps.10)
+eng_get_active_task   parked: RegisterTaskTools not wired into the live daemon (solov2-nmps.10)
+eng_get_task_history  parked: RegisterTaskTools not wired into the live daemon (solov2-nmps.10)
