@@ -32,6 +32,11 @@ type AuditEntry struct {
 
 	// CreatedAt is the wall-clock time at which the operation was recorded.
 	CreatedAt time.Time
+
+	// Reason is the optional human/agent-supplied justification for the
+	// operation (e.g. why a finding was closed or reopened). Empty when none
+	// was given; omitted from the serialised record when empty.
+	Reason string
 }
 
 // AuditWriter is the port for appending audit entries to a durable log.

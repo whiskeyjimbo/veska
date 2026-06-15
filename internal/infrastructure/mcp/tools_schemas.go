@@ -378,7 +378,8 @@ var reopenFindingInputSchema = json.RawMessage(`{
   "properties": {
     "finding_id": {"type": "string"},
     "branch":     {"type": "string"},
-    "repo_id":    {"type": "string"}
+    "repo_id":    {"type": "string"},
+    "reason":     {"type": "string", "description": "Optional justification recorded in the audit log (reopen needs no reason functionally, unlike close)."}
   },
   "required": ["finding_id"]
 }`)

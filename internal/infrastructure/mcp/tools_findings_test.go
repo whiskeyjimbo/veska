@@ -802,6 +802,42 @@ func TestReopenFinding_Basic(t *testing.T) {
 	}
 }
 
+// TestReopenFinding_RecordsReasonInAudit guards the reopen/close audit-reason
+// symmetry: an optional reopen reason is recorded in the audit entry (close
+// already requires + records one). solov2-nmps verify follow-up.
+func TestReopenFinding_RecordsReasonInAudit(t *testing.T) {
+	db := newFindingsDB(t)
+	seedFinding(t, db, "reopen-reason", "main", "repo-1", "low", "closed")
+
+	aw := &capturingAuditWriter{}
+	r := NewRegistry()
+	RegisterFindingTools(r, db, aw, nil)
+
+	actor := domain.Actor{ID: "agent:bot", Kind: domain.ActorKindAgent}
+	_, rpcErr := dispatchReopenFinding(t, r, actor, map[string]string{
+		"finding_id": "reopen-reason",
+		"branch":     "main",
+		"repo_id":    "repo-1",
+		"reason":     "false positive on second look",
+	})
+	if rpcErr != nil {
+		t.Fatalf("unexpected RPC error: %v", rpcErr.Message)
+	}
+
+	var found bool
+	for _, e := range aw.entries {
+		if e.Op == "finding.reopen" {
+			found = true
+			if e.Reason != "false positive on second look" {
+				t.Errorf("audit reason = %q, want the supplied reopen reason", e.Reason)
+			}
+		}
+	}
+	if !found {
+		t.Fatal("no finding.reopen audit entry written")
+	}
+}
+
 func TestReopenFinding_AnyActorCanReopen(t *testing.T) {
 	db := newFindingsDB(t)
 	seedFinding(t, db, "reopen-agent", "main", "repo-1", "critical", "closed")

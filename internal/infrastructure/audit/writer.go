@@ -31,6 +31,7 @@ type auditRecord struct {
 	TargetID  string `json:"target_id"`
 	Branch    string `json:"branch"`
 	CreatedAt string `json:"created_at"`
+	Reason    string `json:"reason,omitempty"`
 }
 
 // AuditFileWriter is a synchronous, mutex-protected JSONL file writer that
@@ -78,6 +79,7 @@ func (w *AuditFileWriter) Write(_ context.Context, e ports.AuditEntry) error {
 		TargetID:  e.TargetID,
 		Branch:    e.Branch,
 		CreatedAt: e.CreatedAt.UTC().Format("2006-01-02T15:04:05.999999999Z"),
+		Reason:    e.Reason,
 	}
 
 	line, err := json.Marshal(rec)
