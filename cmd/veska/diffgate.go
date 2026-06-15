@@ -283,7 +283,7 @@ func diffGateSelectTestsCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:          "select-tests",
 		Short:        "Select the tests whose covered nodes intersect a diff (emit go test -run per package); never gates",
-		Long:         "Select the tests whose covered nodes intersect a candidate change (base-ref..candidate-ref) and emit a runner-consumable `go test -run` selection per package. Covering tests are derived transitively from the latent *_test.go CALLS edges already in the index (no real coverage data) — a selection HEURISTIC that over-selects (the safe direction), not a guarantee. Changed test files force their whole package since their tests may not be indexed yet. NEVER gates: always exits 0. Emits JSON.",
+		Long:         "Select the tests whose covered nodes intersect a candidate change (base-ref..candidate-ref) and emit a runner-consumable `go test -run` selection per package. Covering tests are derived transitively from the latent *_test.go CALLS edges already in the index (no real coverage data) — a selection HEURISTIC that over-selects (the safe direction), not a guarantee. Changed test files force their whole package since their tests may not be indexed yet. NEVER gates: every selection outcome — including unknown-repo, repo-not-indexed, and bad-ref — exits 0 with a JSON envelope (an advisory reason lands in the `error` field); only a usage or infrastructure error exits non-zero. Always emits JSON.",
 		Example:      "  veska diff-gate select-tests --repo <id> --base-ref HEAD~1 --candidate-ref HEAD",
 		Args:         cobra.NoArgs,
 		SilenceUsage: true,
