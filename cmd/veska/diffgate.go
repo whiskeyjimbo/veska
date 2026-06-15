@@ -70,6 +70,7 @@ func diffGateCmd() *cobra.Command {
 	cmd.AddCommand(diffGateCyclesCmd())
 	cmd.AddCommand(diffGateAPICmd())
 	cmd.AddCommand(diffGateReportCmd())
+	cmd.AddCommand(diffGateSelectTestsCmd())
 	return cmd
 }
 
@@ -261,6 +262,51 @@ func diffGateUntestedCmd() *cobra.Command {
 		},
 	}
 	cmd.Flags().StringVar(&repoFlag, "repo", "", "repo id (scopes the indexed-HEAD base graph)")
+	cmd.Flags().StringVar(&branchFlag, "branch", "main", "branch")
+	cmd.Flags().StringVar(&rootFlag, "repo-root", "", "repo working dir for git ref reads (default: cwd)")
+	cmd.Flags().StringVar(&baseRef, "base-ref", "", "git ref of the base the candidate is diffed against")
+	cmd.Flags().StringVar(&candRef, "candidate-ref", "", "git ref/worktree of the candidate change")
+	return cmd
+}
+
+// diffGateSelectTestsCmd is impact-based test selection (solov2-v6de.2): NOT a
+// gate — it emits the tests whose covered nodes intersect the diff's changed
+// prod nodes as a `go test -run` selection, always exiting 0.
+func diffGateSelectTestsCmd() *cobra.Command {
+	var (
+		repoFlag   string
+		branchFlag string
+		rootFlag   string
+		baseRef    string
+		candRef    string
+	)
+	cmd := &cobra.Command{
+		Use:          "select-tests",
+		Short:        "Select the tests whose covered nodes intersect a diff (emit go test -run per package); never gates",
+		Long:         "Select the tests whose covered nodes intersect a candidate change (base-ref..candidate-ref) and emit a runner-consumable `go test -run` selection per package. Covering tests are derived transitively from the latent *_test.go CALLS edges already in the index (no real coverage data) — a selection HEURISTIC that over-selects (the safe direction), not a guarantee. Changed test files force their whole package since their tests may not be indexed yet. NEVER gates: always exits 0. Emits JSON.",
+		Example:      "  veska diff-gate select-tests --repo <id> --base-ref HEAD~1 --candidate-ref HEAD",
+		Args:         cobra.NoArgs,
+		SilenceUsage: true,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			root := rootFlag
+			if root == "" {
+				wd, err := os.Getwd()
+				if err != nil {
+					return err
+				}
+				root = wd
+			}
+			return diffgatecmd.RunSelectTests(cmd.Context(), diffgatecmd.SelectTestsParams{
+				RepoID:       repoFlag,
+				Branch:       branchFlag,
+				RepoRoot:     root,
+				BaseRef:      baseRef,
+				CandidateRef: candRef,
+				Out:          cmd.OutOrStdout(),
+			})
+		},
+	}
+	cmd.Flags().StringVar(&repoFlag, "repo", "", "repo id (scopes the indexed base graph)")
 	cmd.Flags().StringVar(&branchFlag, "branch", "main", "branch")
 	cmd.Flags().StringVar(&rootFlag, "repo-root", "", "repo working dir for git ref reads (default: cwd)")
 	cmd.Flags().StringVar(&baseRef, "base-ref", "", "git ref of the base the candidate is diffed against")
