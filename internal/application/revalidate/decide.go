@@ -15,8 +15,11 @@ import (
 // instead of the promoted graph — reuse, not a second copy of the rule
 // dispatch.
 type PredicateSource interface {
-	// HasInboundEdges reports whether nodeID currently has >=1 inbound edge.
-	HasInboundEdges(ctx context.Context, repoID, branch, nodeID string) (bool, error)
+	// HasInboundCallEdges reports whether nodeID currently has >=1 inbound
+	// CALLS edge — the dead-code liveness signal. Structural edges (CONTAINS,
+	// IMPORTS) are NOT callers and must not count, or a dead symbol reads as
+	// live merely because its file/package contains it (solov2-nmps.9).
+	HasInboundCallEdges(ctx context.Context, repoID, branch, nodeID string) (bool, error)
 	// NodeSignaturePair returns the (prev_signature, signature) pair for nodeID.
 	NodeSignaturePair(ctx context.Context, repoID, branch, nodeID string) (prev, current string, err error)
 	// HasTestCaller reports whether nodeID currently has >=1 direct inbound
@@ -45,7 +48,7 @@ type PredicateSource interface {
 func Decide(ctx context.Context, repoID, branch string, s ports.StaleFinding, src PredicateSource) (ports.FindingDecision, error) {
 	switch s.Rule {
 	case ruleDeadCode:
-		hasIn, err := src.HasInboundEdges(ctx, repoID, branch, s.NodeID)
+		hasIn, err := src.HasInboundCallEdges(ctx, repoID, branch, s.NodeID)
 		if err != nil {
 			return ports.FindingDecision{}, fmt.Errorf("revalidate.Decide: inbound edges for %q: %w", s.FindingID, err)
 		}

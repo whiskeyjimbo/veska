@@ -251,35 +251,46 @@ func TestRevalidateRepo_StaleFindings_CarriesRule(t *testing.T) {
 	}
 }
 
-func TestRevalidateRepo_HasInboundEdges(t *testing.T) {
+func TestRevalidateRepo_HasInboundCallEdges(t *testing.T) {
 	t.Parallel()
 	f := setupRevalFixture(t)
 	f.insertNode(t, "n-src", f.branch, "pkg/a.go", "h-a")
+	f.insertNode(t, "n-pkg", f.branch, "pkg/p.go", "h-p")
 	f.insertNode(t, "n-dst-with", f.branch, "pkg/b.go", "h-b")
 	f.insertNode(t, "n-dst-without", f.branch, "pkg/c.go", "h-c")
+	f.insertNode(t, "n-dst-contains", f.branch, "pkg/d.go", "h-d")
 
-	if _, err := f.db.Exec(`INSERT INTO edges (
+	mkEdge := func(id, src, dst, kind string) {
+		if _, err := f.db.Exec(`INSERT INTO edges (
         edge_id, branch, repo_id, src_node_id, dst_node_id, kind, confidence, last_promoted_at
     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-		"edge-1", f.branch, f.repoID, "n-src", "n-dst-with", "call", "definite", time.Now().UnixMilli(),
-	); err != nil {
-		t.Fatalf("insert edge: %v", err)
+			id, f.branch, f.repoID, src, dst, kind, "definite", time.Now().UnixMilli(),
+		); err != nil {
+			t.Fatalf("insert edge %s: %v", id, err)
+		}
 	}
+	mkEdge("edge-call", "n-src", "n-dst-with", "CALLS")
+	// nmps.9 regression: a node whose ONLY inbound edge is a structural
+	// CONTAINS (its package/file parent) is still dead — CONTAINS is not a
+	// caller, so liveness must read false.
+	mkEdge("edge-contains", "n-pkg", "n-dst-contains", "CONTAINS")
 
-	got, err := f.reval.HasInboundEdges(context.Background(), f.repoID, f.branch, "n-dst-with")
-	if err != nil {
-		t.Fatalf("HasInboundEdges: %v", err)
+	cases := []struct {
+		node string
+		want bool
+	}{
+		{"n-dst-with", true},      // has a CALLS caller → live
+		{"n-dst-without", false},  // no inbound at all → dead
+		{"n-dst-contains", false}, // only a CONTAINS parent → still dead (nmps.9)
 	}
-	if !got {
-		t.Errorf("HasInboundEdges(n-dst-with) = false, want true")
-	}
-
-	got, err = f.reval.HasInboundEdges(context.Background(), f.repoID, f.branch, "n-dst-without")
-	if err != nil {
-		t.Fatalf("HasInboundEdges: %v", err)
-	}
-	if got {
-		t.Errorf("HasInboundEdges(n-dst-without) = true, want false")
+	for _, c := range cases {
+		got, err := f.reval.HasInboundCallEdges(context.Background(), f.repoID, f.branch, c.node)
+		if err != nil {
+			t.Fatalf("HasInboundCallEdges(%s): %v", c.node, err)
+		}
+		if got != c.want {
+			t.Errorf("HasInboundCallEdges(%s) = %v, want %v", c.node, got, c.want)
+		}
 	}
 }
 
@@ -323,7 +334,7 @@ func TestRevalidateRepo_HasTestCaller(t *testing.T) {
 	}
 }
 
-func TestRevalidateRepo_HasInboundEdges_BranchScoped(t *testing.T) {
+func TestRevalidateRepo_HasInboundCallEdges_BranchScoped(t *testing.T) {
 	t.Parallel()
 	f := setupRevalFixture(t)
 	f.insertNode(t, "n-src", "main", "pkg/a.go", "h-a")
@@ -334,17 +345,17 @@ func TestRevalidateRepo_HasInboundEdges_BranchScoped(t *testing.T) {
 	if _, err := f.db.Exec(`INSERT INTO edges (
         edge_id, branch, repo_id, src_node_id, dst_node_id, kind, confidence, last_promoted_at
     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-		"edge-feat", "feature", f.repoID, "n-src", "n-dst", "call", "definite", time.Now().UnixMilli(),
+		"edge-feat", "feature", f.repoID, "n-src", "n-dst", "CALLS", "definite", time.Now().UnixMilli(),
 	); err != nil {
 		t.Fatalf("insert edge: %v", err)
 	}
 	// main branch must see no inbound edge.
-	got, err := f.reval.HasInboundEdges(context.Background(), f.repoID, "main", "n-dst")
+	got, err := f.reval.HasInboundCallEdges(context.Background(), f.repoID, "main", "n-dst")
 	if err != nil {
-		t.Fatalf("HasInboundEdges: %v", err)
+		t.Fatalf("HasInboundCallEdges: %v", err)
 	}
 	if got {
-		t.Errorf("HasInboundEdges(main, n-dst) = true, want false (feature-branch edge must not leak)")
+		t.Errorf("HasInboundCallEdges(main, n-dst) = true, want false (feature-branch edge must not leak)")
 	}
 }
 

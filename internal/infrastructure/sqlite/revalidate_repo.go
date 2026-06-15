@@ -91,11 +91,15 @@ WHERE f.repo_id              = ?
 	return out, nil
 }
 
-// HasInboundEdges reports whether the named node currently has at least one
-// inbound edge on (repoID, branch). Uses LIMIT 1 + EXISTS so the query
-// short-circuits at the first matching row; the (dst_node_id, branch, kind)
-// index on edges keeps this constant-time.
-func (r *RevalidateRepo) HasInboundEdges(
+// HasInboundCallEdges reports whether the named node currently has at least one
+// inbound CALLS edge on (repoID, branch) — the liveness signal the dead-code
+// rule re-runs on. A structural CONTAINS/IMPORTS parent edge is NOT a caller,
+// so the kind filter (UPPER(kind)='CALLS', mirroring deadcode_repo.go) is what
+// keeps revalidation from spuriously closing a still-dead finding just because
+// its file/package contains it (solov2-nmps.9). Uses LIMIT 1 + EXISTS so the
+// query short-circuits at the first matching row; the (dst_node_id, branch,
+// kind) index on edges keeps this constant-time.
+func (r *RevalidateRepo) HasInboundCallEdges(
 	ctx context.Context, repoID, branch, nodeID string,
 ) (bool, error) {
 	const q = `
@@ -105,11 +109,12 @@ SELECT EXISTS (
     WHERE dst_node_id = ?
       AND branch      = ?
       AND repo_id     = ?
+      AND UPPER(kind) = 'CALLS'
     LIMIT 1
 )`
 	var has bool
 	if err := r.db.QueryRowContext(ctx, q, nodeID, branch, repoID).Scan(&has); err != nil {
-		return false, fmt.Errorf("sqlite.RevalidateRepo.HasInboundEdges: %w", err)
+		return false, fmt.Errorf("sqlite.RevalidateRepo.HasInboundCallEdges: %w", err)
 	}
 	return has, nil
 }

@@ -89,6 +89,38 @@ func TestVerify_TargetUnresolved(t *testing.T) {
 	}
 }
 
+// TestVerify_DeadCodeStructuralEdgeNotResolved is the solov2-nmps.9 regression:
+// the anchor has an inbound edge in the base, but it is a STRUCTURAL parent edge
+// (its package/file CONTAINS it), not a CALLS caller. Dead-code liveness is
+// CALLS-only, so the finding must read UNRESOLVED — counting the CONTAINS edge
+// reported every dead-code finding resolved with no fix at all, since every
+// symbol has a CONTAINS parent.
+func TestVerify_DeadCodeStructuralEdgeNotResolved(t *testing.T) {
+	anchor := "a:Dead"
+	// Base: anchor HAS an inbound edge for all-kind adjacency (its package
+	// parent), but ZERO inbound CALLS edges.
+	base := &fakeBaseGraph{
+		inbound:     map[string][]string{anchor: {"a:Pkg"}},
+		callInbound: map[string][]string{anchor: {}},
+	}
+	// Candidate touches the file but adds no caller of the anchor.
+	eph := indexCandidate(t, base, &domain.ParseResult{
+		Nodes: []*domain.Node{mustNode(t, anchor, "a.go", "Dead")},
+	})
+
+	v := diffgate.NewVerifier()
+	got, err := v.Verify(context.Background(), eph, deadCodeFinding(t, anchor), diffgate.Discovery{Ran: true})
+	if err != nil {
+		t.Fatalf("Verify: %v", err)
+	}
+	if !got.ResolutionChecked {
+		t.Fatalf("dead-code is on the allowlist; ResolutionChecked must be true, got %+v", got)
+	}
+	if got.TargetResolved {
+		t.Fatalf("anchor has only a CONTAINS parent edge, no CALLS caller — must read UNRESOLVED, got %+v", got)
+	}
+}
+
 // TestVerify_NewFindingFails covers AC3: a finding present in the candidate but
 // absent in the base is reported as introduced.
 func TestVerify_NewFindingFails(t *testing.T) {

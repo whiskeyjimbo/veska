@@ -24,9 +24,14 @@ const (
 type fakeBaseGraph struct {
 	inbound  map[string][]string
 	outbound map[string][]string
-	metas    map[string]ports.NodeMeta
-	byFile   map[string][]string
-	hashes   map[string]string // nodeID -> promoted content hash
+	// callInbound models CALLS-only inbound adjacency (InboundCallEdges). When
+	// nil it falls back to `inbound` — most tests don't care about edge kind, so
+	// their `inbound` doubles as the call set; a test exercising the CALLS-vs-
+	// structural distinction (solov2-nmps.9) sets callInbound explicitly.
+	callInbound map[string][]string
+	metas       map[string]ports.NodeMeta
+	byFile      map[string][]string
+	hashes      map[string]string // nodeID -> promoted content hash
 }
 
 // NodeContentHash makes fakeBaseGraph a blastradius.ContentHasher so a
@@ -40,6 +45,18 @@ func (f *fakeBaseGraph) InboundEdges(_ context.Context, _, _ string, ids []strin
 	out := make(map[string][]string, len(ids))
 	for _, id := range ids {
 		out[id] = append([]string(nil), f.inbound[id]...)
+	}
+	return out, nil
+}
+
+func (f *fakeBaseGraph) InboundCallEdges(_ context.Context, _, _ string, ids []string) (map[string][]string, error) {
+	src := f.callInbound
+	if src == nil {
+		src = f.inbound
+	}
+	out := make(map[string][]string, len(ids))
+	for _, id := range ids {
+		out[id] = append([]string(nil), src[id]...)
 	}
 	return out, nil
 }
