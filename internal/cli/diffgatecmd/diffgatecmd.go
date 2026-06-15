@@ -100,7 +100,7 @@ func Run(ctx context.Context, p Params) error {
 		if err := emitVerdict(p.Out, v); err != nil {
 			return err
 		}
-		return fmt.Errorf("%w (repo_not_indexed: index %q first, e.g. `veska reindex`)", ErrGateFailed, p.RepoID)
+		return fmt.Errorf("%w (%s)", ErrGateFailed, notIndexedDetail(ctx, pools.ReadDB, p.RepoID))
 	}
 
 	target, err := resolveTarget(ctx, pools.ReadDB, p)
@@ -119,14 +119,14 @@ func Run(ctx context.Context, p Params) error {
 	}
 	eph, err := ix.Index(ctx, p.RepoID, p.Branch, base, src)
 	if err != nil {
-		return fmt.Errorf("diff-gate: index candidate: %w", err)
+		return fmt.Errorf("diff-gate: index candidate: %w", cleanRefError(err, p.BaseRef, p.CandidateRef))
 	}
 
 	// Structural finding-discovery over the candidate (degrades to Ran=false on
 	// any error → gate FAILs discovery_unchecked, never a false green).
 	changes, err := src.Changes(ctx)
 	if err != nil {
-		return fmt.Errorf("diff-gate: read changes: %w", err)
+		return fmt.Errorf("diff-gate: read changes: %w", cleanRefError(err, p.BaseRef, p.CandidateRef))
 	}
 	disc := discover(ctx, dbPath, p, changes)
 
@@ -273,6 +273,40 @@ func repoIndexed(ctx context.Context, db *sql.DB, repoID, branch string) bool {
 	err := db.QueryRowContext(ctx,
 		`SELECT COUNT(*) FROM nodes WHERE repo_id=? AND branch=?`, repoID, branch).Scan(&n)
 	return err == nil && n > 0
+}
+
+// repoKnown reports whether repoID is a registered repo. It distinguishes an
+// UNKNOWN --repo handle (a name/typo that resolveRepoID could not match to any
+// id) from a registered-but-UN-indexed repo — the two conditions a junior
+// conflates when an indexed repo, addressed by its name, reports "not indexed"
+// (solov2-i0tx.2 F2). A missing repos table counts as "not known".
+func repoKnown(ctx context.Context, db *sql.DB, repoID string) bool {
+	var n int
+	err := db.QueryRowContext(ctx,
+		`SELECT COUNT(*) FROM repos WHERE repo_id=?`, repoID).Scan(&n)
+	return err == nil && n > 0
+}
+
+// notIndexedDetail renders the actionable reason a (repoID, branch) is not
+// usable: an unknown handle points the junior back at `veska repo list`; a
+// registered-but-unindexed repo points at `veska reindex`. Shared by every
+// diff-gate subcommand's not-indexed branch so the distinction is uniform.
+func notIndexedDetail(ctx context.Context, db *sql.DB, repoID string) string {
+	if !repoKnown(ctx, db, repoID) {
+		return fmt.Sprintf("unknown repo %q — use the REPO_ID from `veska repo list`", repoID)
+	}
+	return fmt.Sprintf("repo_not_indexed: index %q first, e.g. `veska reindex`", repoID)
+}
+
+// cleanRefError maps git's raw "unknown revision" plumbing to an actionable
+// message naming the offending refs (solov2-i0tx.2 F3). The typed
+// git.ErrUnknownRevision exists precisely so callers need not string-match.
+// Non-ref errors pass through unchanged.
+func cleanRefError(err error, baseRef, candidateRef string) error {
+	if errors.Is(err, git.ErrUnknownRevision) {
+		return fmt.Errorf("ref not found (base %q .. candidate %q) — is the base committed, or is this a shallow clone?", baseRef, candidateRef)
+	}
+	return err
 }
 
 // baseGraph composes the two sqlite read repos into one diffgate.BaseGraph.

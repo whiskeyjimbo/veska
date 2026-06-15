@@ -74,7 +74,7 @@ func RunCycles(ctx context.Context, p CycleParams) error {
 		if err := emitCycleReport(p.Out, rep); err != nil {
 			return err
 		}
-		return fmt.Errorf("%w (repo_not_indexed: index %q first, e.g. `veska reindex`)", ErrGateFailed, p.RepoID)
+		return fmt.Errorf("%w (%s)", ErrGateFailed, notIndexedDetail(ctx, pools.ReadDB, p.RepoID))
 	}
 
 	// Pin base + candidate after-state to base-ref (index-ahead hardening,

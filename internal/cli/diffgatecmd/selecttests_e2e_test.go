@@ -70,6 +70,65 @@ func TestRunSelectTests_E2E_SelectsCoveringTest(t *testing.T) {
 	}
 }
 
+// TestRunSelectTests_E2E_UnknownRepo_AdvisoryEmpty: an unknown --repo handle is
+// reported as an empty selection + a distinct "unknown repo" error at exit 0
+// (nil err) — the never-gates contract (v6de.3) and the unknown-vs-unindexed
+// distinction (i0tx.2 F2).
+func TestRunSelectTests_E2E_UnknownRepo_AdvisoryEmpty(t *testing.T) {
+	home := t.TempDir()
+	seedBaseDB(t, filepath.Join(home, "veska.db"), map[string]string{"foo.go": fooSrc})
+	t.Setenv("VESKA_HOME", home)
+
+	var out bytes.Buffer
+	err := RunSelectTests(context.Background(), SelectTestsParams{
+		RepoID: "no-such-repo", Branch: discBranch, RepoRoot: t.TempDir(),
+		BaseRef: "HEAD~1", CandidateRef: "HEAD", Out: &out,
+	})
+	if err != nil {
+		t.Fatalf("unknown repo must be advisory (nil err); got %v", err)
+	}
+	var rep selectTestsReport
+	if jerr := json.Unmarshal(out.Bytes(), &rep); jerr != nil {
+		t.Fatalf("must still emit JSON: %v\nraw: %s", jerr, out.String())
+	}
+	if !rep.Empty || !strings.Contains(rep.Error, "unknown repo") {
+		t.Fatalf("want empty + 'unknown repo' error; got %+v", rep)
+	}
+}
+
+// TestRunSelectTests_E2E_BadRef_AdvisoryEmpty: a bad base ref yields a clean
+// ref-naming error (not raw git plumbing) as an advisory empty selection at
+// exit 0 (v6de.3 + i0tx.2 F3).
+func TestRunSelectTests_E2E_BadRef_AdvisoryEmpty(t *testing.T) {
+	home := t.TempDir()
+	seedBaseDB(t, filepath.Join(home, "veska.db"), map[string]string{
+		"foo.go": fooSrc, "foo_test.go": fooTestSrc,
+	})
+	repoDir := t.TempDir()
+	mod := "package p\n\nfunc Foo() int { return 2 }\n"
+	makeRepo(t, repoDir,
+		map[string]string{"foo.go": fooSrc, "foo_test.go": fooTestSrc},
+		map[string]*string{"foo.go": &mod},
+	)
+	t.Setenv("VESKA_HOME", home)
+
+	var out bytes.Buffer
+	err := RunSelectTests(context.Background(), SelectTestsParams{
+		RepoID: discRepo, Branch: discBranch, RepoRoot: repoDir,
+		BaseRef: "no-such-ref", CandidateRef: "HEAD", Out: &out,
+	})
+	if err != nil {
+		t.Fatalf("bad ref must be advisory (nil err); got %v", err)
+	}
+	var rep selectTestsReport
+	if jerr := json.Unmarshal(out.Bytes(), &rep); jerr != nil {
+		t.Fatalf("must still emit JSON: %v\nraw: %s", jerr, out.String())
+	}
+	if !rep.Empty || !strings.Contains(rep.Error, "ref not found") {
+		t.Fatalf("want empty + clean 'ref not found' error; got %+v\nraw: %s", rep, out.String())
+	}
+}
+
 // TestRunSelectTests_E2E_ChangedTestFileForcesPackage: editing a *_test.go file
 // forces its whole package (run-all), since a newly-added/edited test may not be
 // in the index — the safe over-selecting direction.

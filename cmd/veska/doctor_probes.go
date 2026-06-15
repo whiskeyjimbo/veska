@@ -34,8 +34,15 @@ func doctorPostPromotionQueueCmd() *cobra.Command {
 func doctorIdentityCmd() *cobra.Command {
 	var jsonOut bool
 	cmd := &cobra.Command{
-		Use:          "identity",
-		Short:        "Report repo identity-tier convergence for shared-DB readiness",
+		Use:   "identity",
+		Short: "Report repo identity-tier convergence for shared-DB readiness",
+		Long: "Report each registered repo's resolved identity tier (ADR-S0017) and warn on any that won't converge in a shared multi-contributor graph DB.\n\n" +
+			"A tier is how a repo's identity (and therefore its node ids) is derived:\n" +
+			"  module-hostpath  go.mod `github.com/org/repo` — CONVERGES: two contributors indexing the same upstream get identical ids (the shareable tier)\n" +
+			"  origin-url       git remote URL — local-only (diverges across forks)\n" +
+			"  module-bare      bare `module myapp` — local-only (collision-prone)\n" +
+			"  abs-root         absolute checkout path — local-only\n\n" +
+			"Non-converging is perfectly fine for single-user use; it only matters before sharing a DB. Advisory only — never folded into `doctor status`.",
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return doctorcmd.RunIdentity(cmd.OutOrStdout(), jsonOut)
