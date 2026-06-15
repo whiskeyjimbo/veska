@@ -61,13 +61,17 @@ def test_agent_grounding_and_staging_aware(tmp_path: Path):
             res = ws.mcp.result("eng_get_dirty_blast_radius", {
                 "repo_id": ws.repo_id, "branch": ws.branch,
             })
-            return res if res.get("included_staging") else None
+            # Assert on ENTRIES, not included_staging: that flag is hardcoded
+            # true for the dirty tool (solov2-nmps.11), so the real proof the
+            # staged edit was observed is the edited node appearing as dirty.
+            names = {e.get("name") for e in res.get("entries") or []}
+            return res if COVERED_SYMBOL in names else None
 
-        # fsnotify staging is asynchronous; poll until the overlay is observed.
-        ws.wait(_dirty, 20, "dirty blast radius reflects the staged edit")
+        # fsnotify staging is asynchronous; poll until the edit surfaces.
+        ws.wait(_dirty, 20, "dirty blast radius reflects the staged GreetUser edit")
         dirty = _dirty()
         entries = {e.get("name") for e in dirty.get("entries") or []}
         print(f"   dirty entries={entries} included_staging={dirty.get('included_staging')}")
-        assert dirty.get("included_staging") is True, "staging not reflected"
+        assert COVERED_SYMBOL in entries, f"staged edit not reflected in dirty blast: {entries}"
 
         print("[OK] agent journey: ground (pack) → call-chain → staging-aware blast")
