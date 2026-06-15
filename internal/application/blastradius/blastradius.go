@@ -115,8 +115,11 @@ type Response struct {
 	// Truncated is true when traversal stopped because MaxNodes was hit
 	// (rather than naturally exhausting reachable nodes).
 	Truncated bool
-	// IncludedStaging is true when the seed set was derived from the
-	// in-memory staging area (i.e. via DirtyOf).
+	// IncludedStaging is true when the in-memory staging area actually
+	// contributed seeds to this response (a dirty node was staged via DirtyOf).
+	// A clean working tree — or a non-staging path (Of/DiffOf) — reports false,
+	// so a consumer can trust the flag as "staging contributed rows"
+	// (SOLO-09 4.4), not merely "this is the dirty view" (solov2-nmps.11).
 	IncludedStaging bool
 }
 
@@ -457,7 +460,8 @@ type ContentHasher interface {
 // prior "every staged node is a seed" semantics.
 func (s *Service) DirtyOf(ctx context.Context, repoID, branch string, opts Options) (Response, error) {
 	if s.staging == nil {
-		return Response{IncludedStaging: true}, nil
+		// No staging area wired → staging contributed nothing.
+		return Response{IncludedStaging: false}, nil
 	}
 	hasher, _ := s.nodes.(ContentHasher)
 	snap := s.staging.Snapshot(repoID, branch)
@@ -483,6 +487,10 @@ func (s *Service) DirtyOf(ctx context.Context, repoID, branch string, opts Optio
 	if err != nil {
 		return Response{}, err
 	}
-	resp.IncludedStaging = true
+	// IncludedStaging is honest about CONTRIBUTION: true only when a dirty node
+	// was actually staged (matching the SOLO-09 4.4 contract and the Of/DiffOf
+	// paths), not merely because this is the dirty view. A clean working tree
+	// yields no seeds and reports false (solov2-nmps.11).
+	resp.IncludedStaging = len(seeds) > 0
 	return resp, nil
 }
