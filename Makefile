@@ -204,12 +204,16 @@ clean:
 
 # docs-gen: regenerate the manual's derived reference pages from live source.
 # CLI reference comes from the in-process cobra tree (`veska gendocs`); the
-# config env-var reference is AST-extracted from internal/platform/config.
-# (MCP tools reference is generated separately — see solov2-38zo.7.)
+# config env-var reference is AST-extracted from internal/platform/config; the
+# MCP tools reference is rendered from the production tool registry via a
+# docsgen-tagged test (reuses registerMCPTools — same surface as tools/list).
 DOCS_REF := docs/manual/reference
 docs-gen:
 	go run ./cmd/veska gendocs $(DOCS_REF)/cli.md
 	go run ./tools/docgen config $(DOCS_REF)/config.md
+	MCP_DOCS_OUT="$(abspath $(DOCS_REF)/mcp-tools.md)" \
+	  $(SQLITE_CGO_ENV) go test -tags "$(SQLITE_TAGS) docsgen" \
+	  -run TestGenerateMCPToolsDoc ./internal/cli/daemon/ -count=1
 
 # docs-check: fail if the committed reference pages are stale. CI runs this so
 # a code change that shifts the CLI/config surface without `make docs-gen`
