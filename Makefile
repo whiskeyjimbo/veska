@@ -249,6 +249,14 @@ test-mcp-deep: $(MCP_BIN)
 test-mcp-bootstrap: $(VESKA_BIN) $(DAEMON_BIN) $(MCP_BIN)
 	PYTHONPATH=. python3 -m pytest tests/mcp -v -s -m bootstrap
 
+# test-persona: persona-shaped end-to-end workflows (junior / senior / agent)
+# over a synthetic repo, each spawning its own daemon in a tmp VESKA_HOME
+# (~12s total). Runs the persona-parity coverage gate FIRST (fast, no daemon)
+# so a tool with no test fails before the slow suite. Needs the three binaries;
+# no Ollama (model2vec). Maps to SOLO-02 — see tests/mcp/PERSONA.md.
+test-persona: persona-parity $(VESKA_BIN) $(DAEMON_BIN) $(MCP_BIN)
+	PYTHONPATH=. python3 -m pytest tests/mcp -v -s -m persona
+
 # loadtest: manual-only — collates M1 exit-gate RESULTS.md files and emits tools/loadtest/REPORT.md.
 # Not included in `all`. Exit 0=all-pass, 1=fail, 2=pending.
 loadtest:
