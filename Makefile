@@ -12,7 +12,7 @@ LAYERCHECK_BIN  := $(BINDIR)/layercheck
 SQLITE_TAGS    ?= sqlite_fts5
 SQLITE_CGO_ENV ?= CGO_ENABLED=1
 
-.PHONY: all build build-small build-fat fetch-embed-assets install release-archive test lint vet layercheck fatfile-ratchet noidleak cliparity clean loadtest test-mcp test-mcp-deep test-mcp-bootstrap eval-recall eval-recall-projection eval-autolink-fp eval-neardup-threshold eval-revalidate-bench eval-wake-latency eval-queue-fuzz eval-embed-throughput eval-embedder-bench eval-embed-models eval-embed-models-full eval-embed-models-condense eval-embed-models-fuse eval-dbbench eval-dbbench-cgo
+.PHONY: all build build-small build-fat fetch-embed-assets install release-archive test lint vet layercheck fatfile-ratchet noidleak cliparity clean loadtest test-mcp test-mcp-deep test-mcp-bootstrap eval-recall eval-recall-projection eval-autolink-fp eval-neardup-threshold eval-revalidate-bench eval-wake-latency eval-queue-fuzz eval-embed-throughput eval-embedder-bench eval-embed-models eval-embed-models-full eval-embed-models-condense eval-embed-models-fuse eval-dbbench eval-dbbench-cgo docs-gen docs-check
 
 # `all` uses build-small to keep the test loop fast — the model2vec assets
 # add a network fetch + ~62MB to every CI/dev run. End-user packaging
@@ -200,7 +200,23 @@ cliparity:
 
 clean:
 	rm -f $(VESKA_BIN) $(DAEMON_BIN) $(MCP_BIN) $(LAYERCHECK_BIN)
-	rm -rf dist
+	rm -rf dist site
+
+# docs-gen: regenerate the manual's derived reference pages from live source.
+# CLI reference comes from the in-process cobra tree (`veska gendocs`); the
+# config env-var reference is AST-extracted from internal/platform/config.
+# (MCP tools reference is generated separately — see solov2-38zo.7.)
+DOCS_REF := docs/manual/reference
+docs-gen:
+	go run ./cmd/veska gendocs $(DOCS_REF)/cli.md
+	go run ./tools/docgen config $(DOCS_REF)/config.md
+
+# docs-check: fail if the committed reference pages are stale. CI runs this so
+# a code change that shifts the CLI/config surface without `make docs-gen`
+# breaks the build.
+docs-check: docs-gen
+	@git diff --exit-code -- $(DOCS_REF) \
+	  || { echo "ERROR: generated docs are stale. Run 'make docs-gen' and commit."; exit 1; }
 
 # test-mcp: black-box pytest harness against a running daemon. Needs:
 #   - VESKA_HOME pointing at the daemon's data dir (or default ~/.veska)

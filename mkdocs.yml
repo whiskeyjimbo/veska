@@ -1,0 +1,66 @@
+site_name: Veska Manual
+site_description: Operator and user manual for Veska — a local code-intelligence daemon.
+site_url: ""
+docs_dir: docs/manual
+site_dir: site
+
+theme:
+  name: material
+  features:
+    - navigation.instant
+    - navigation.tracking
+    - navigation.sections
+    - navigation.top
+    - content.code.copy
+    - search.suggest
+    - search.highlight
+    - toc.follow
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      toggle:
+        icon: material/weather-night
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      toggle:
+        icon: material/weather-sunny
+        name: Switch to light mode
+
+markdown_extensions:
+  - admonition
+  - pymdownx.details
+  - pymdownx.superfences
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.inlinehilite
+  - pymdownx.tabbed:
+      alternate_style: true
+  - toc:
+      permalink: true
+  - tables
+
+plugins:
+  - search
+
+nav:
+  - Home: index.md
+  - Getting started:
+      - Install: getting-started/install.md
+      - Quickstart: getting-started/quickstart.md
+  - Concepts:
+      - Overview: concepts/index.md
+      - The code graph: concepts/graph.md
+      - Promotion & staging: concepts/promotion-staging.md
+      - Semantic search & embeddings: concepts/embeddings.md
+      - Daemon topology: concepts/daemon-topology.md
+  - Operator guides:
+      - Running the daemon: guides/running-the-daemon.md
+      - Connecting your editor: guides/editor-setup.md
+      - Diagnostics with doctor: guides/doctor.md
+      - Backup & restore: guides/backup-restore.md
+      - Managing repositories: guides/repos.md
+  - Reference:
+      - CLI: reference/cli.md
+      - MCP tools: reference/mcp-tools.md
+      - Configuration: reference/config.md

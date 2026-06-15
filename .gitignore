@@ -27,3 +27,6 @@ tools/loadtest/recallprojection/recall_projection_results.json
 __pycache__/
 .pytest_cache/
 docs/research/cmd_code_review.md
+
+# MkDocs build output (manual)
+site/
