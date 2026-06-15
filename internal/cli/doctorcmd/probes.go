@@ -77,6 +77,52 @@ func RunPostPromotionQueue(w io.Writer, opts QueueOptions) error {
 	return nil
 }
 
+// RunIdentity reports each registered repo's resolved identity tier and warns
+// when any repo sits on a non-converging tier — its node_ids would not match
+// another contributor indexing the same upstream in a shared graph DB
+// (ADR-S0017). Non-converging is the expected, fine state for single-user use,
+// so this probe is advisory: it is NOT folded into the `doctor status` rollup.
+func RunIdentity(w io.Writer, jsonOut bool) error {
+	dbPath := filepath.Join(config.DefaultVectorDir(), "veska.db")
+	report, err := doctor.CheckIdentityTiers(dbPath)
+	if err != nil {
+		return err
+	}
+	if jsonOut {
+		return json.NewEncoder(w).Encode(doctor.NewEnvelope("identity", report.Status, report))
+	}
+	fmt.Fprintf(w, "identity: %s (%d repo(s), %d non-converging)\n",
+		report.Status, len(report.Repos), report.NonConverging)
+	for _, r := range report.Repos {
+		short := r.RepoID
+		if len(short) > 12 {
+			short = short[:12]
+		}
+		note := ""
+		if !r.Converges {
+			// Distinguish an unresolved (pre-0018) repo from a resolved-but-
+			// local-only tier; they read differently to an operator.
+			if r.Tier == "" {
+				note = "  WARN unresolved tier — won't converge in a shared DB"
+			} else {
+				note = "  WARN won't converge in a shared DB"
+			}
+		}
+		tier := r.Tier
+		if tier == "" {
+			tier = "(unresolved)"
+		}
+		fmt.Fprintf(w, "  %s tier=%s%s\n", short, tier, note)
+	}
+	if report.NonConverging > 0 {
+		fmt.Fprintf(w, "  hint: only the module-hostpath tier (go.mod `github.com/org/repo`) converges; see ADR-S0017\n")
+	}
+	if report.Status != "healthy" {
+		return ProbeStatusError{Subsystem: "identity", Status: string(report.Status)}
+	}
+	return nil
+}
+
 // RunWikiRender reports the age of the last successful wiki render.
 func RunWikiRender(ctx context.Context, w io.Writer, jsonOut bool) error {
 	dbPath := filepath.Join(config.DefaultVectorDir(), "veska.db")

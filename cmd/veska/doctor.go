@@ -60,6 +60,7 @@ func doctorCmd() *cobra.Command {
 		doctorEmbedderCmd(),
 		doctorConfigCmd(),
 		doctorPostPromotionQueueCmd(),
+		doctorIdentityCmd(),
 		doctorWikiRenderCmd(),
 		doctorServiceCmd(),
 		doctorPipelinesCmd(),
