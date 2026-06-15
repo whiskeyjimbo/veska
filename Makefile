@@ -198,6 +198,13 @@ noidleak:
 cliparity:
 	go run ./tools/lint/cliparity
 
+# persona-parity: every registered eng_* MCP tool must be EXERCISED by a
+# tests/mcp test — a persona workflow or the per-tool suite — or listed with a
+# reason in tools/lint/personaparity/parked.txt. The "test ALL functionality"
+# guarantee for the MCP surface; a new untested tool turns this red.
+persona-parity:
+	go run ./tools/lint/personaparity
+
 clean:
 	rm -f $(VESKA_BIN) $(DAEMON_BIN) $(MCP_BIN) $(LAYERCHECK_BIN)
 	rm -rf dist site
@@ -241,6 +248,14 @@ test-mcp-deep: $(MCP_BIN)
 # built. Doesn't touch the live daemon's state.
 test-mcp-bootstrap: $(VESKA_BIN) $(DAEMON_BIN) $(MCP_BIN)
 	PYTHONPATH=. python3 -m pytest tests/mcp -v -s -m bootstrap
+
+# test-persona: persona-shaped end-to-end workflows (junior / senior / agent)
+# over a synthetic repo, each spawning its own daemon in a tmp VESKA_HOME
+# (~12s total). Runs the persona-parity coverage gate FIRST (fast, no daemon)
+# so a tool with no test fails before the slow suite. Needs the three binaries;
+# no Ollama (model2vec). Maps to SOLO-02 — see tests/mcp/PERSONA.md.
+test-persona: persona-parity $(VESKA_BIN) $(DAEMON_BIN) $(MCP_BIN)
+	PYTHONPATH=. python3 -m pytest tests/mcp -v -s -m persona
 
 # loadtest: manual-only — collates M1 exit-gate RESULTS.md files and emits tools/loadtest/REPORT.md.
 # Not included in `all`. Exit 0=all-pass, 1=fail, 2=pending.
