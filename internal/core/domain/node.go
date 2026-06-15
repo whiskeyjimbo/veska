@@ -93,8 +93,14 @@ type Node struct {
 	Lines       *LineRange
 	RawContent  *string
 	ContentHash *ContentHash
-	Language    *string
-	Exported    *bool
+	// StructuralHash is a hex SHA-256 over the node's identifier-/literal-
+	// normalised token stream, so renamed-variable (Type-2) clones collide even
+	// when ContentHash differs. Nil for nodes the parser does not structurally
+	// hash (packages, imports, chunks). Computed at parse time (the AST is
+	// needed); never auto-derived from RawContent.
+	StructuralHash *ContentHash
+	Language       *string
+	Exported       *bool
 	// External marks a node sourced from a registered repo's vendored
 	// or module-cache dependency rather than its first-party code
 	// . Defaults to nil (i.e. first-party / unknown).
@@ -159,6 +165,16 @@ func WithContentHash(h ContentHash) NodeOption {
 			}
 		}
 		n.ContentHash = &h
+		return nil
+	}
+}
+
+// WithStructuralHash sets the identifier-normalised structural hash (Type-2
+// clone signal). The parser computes it from the AST; it is carried verbatim
+// (unlike ContentHash, it is never derived from RawContent).
+func WithStructuralHash(h ContentHash) NodeOption {
+	return func(n *Node) error {
+		n.StructuralHash = &h
 		return nil
 	}
 }
