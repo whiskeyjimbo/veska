@@ -84,6 +84,8 @@ func newRootCmd(opts ...rootOption) *cobra.Command {
 	// Top-level alias for `veska doctor savings` so the marketing-y
 	// shortcut works without the doctor prefix .
 	root.AddCommand(doctorSavingsCmd())
+	// Hidden docs generator for the manual's CLI reference (make docs-gen).
+	root.AddCommand(gendocsCmd())
 
 	// Resolve the daemon binary path at startup. os.Executable returns the path
 	// of the current binary; the daemon is reachable via the veska-daemon

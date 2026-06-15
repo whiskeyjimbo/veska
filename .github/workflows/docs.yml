@@ -1,0 +1,66 @@
+name: docs
+
+# Builds the Veska manual (MkDocs Material) and deploys it to GitHub Pages.
+#
+# Deployment is gated on the Pages feature being enabled for the repo. The repo
+# is private, so the `deploy` job only runs on pushes to main and will no-op
+# (error) until a maintainer turns Pages on under Settings → Pages → "GitHub
+# Actions". Building and the docs staleness check run on every PR regardless.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: docs-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # Fail the build if the generated reference pages drift from the source.
+  docs-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.26'
+      - name: Verify generated reference is up to date
+        run: make docs-check
+
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install MkDocs Material
+        run: pip install -r docs-requirements.txt
+      - name: Build site (strict)
+        run: mkdocs build --strict
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+  deploy:
+    # Only deploy from main; PRs just build. Requires Pages enabled (Settings →
+    # Pages → Source: GitHub Actions). No-op/error until a maintainer enables it.
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    needs: [build, docs-check]
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
