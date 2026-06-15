@@ -73,6 +73,13 @@ type CloneGroup struct {
 // store may return rows in any order.
 type CloneStore interface {
 	ClonedNodes(ctx context.Context, repoID, branch string, excludeKinds []string) ([]ClonedNode, error)
+	// StructuralNodes returns every node in (repoID, branch) whose
+	// structural_hash is shared by >=2 nodes, excluding excludeKinds — the
+	// Type-2 (renamed-variable) clone projection. Returned rows carry the
+	// structural_hash in ClonedNode.ContentHash (the grouping key); the Finder
+	// folds them the same way as exact clones. NULL structural_hash (nodes the
+	// parser did not structurally hash) never groups.
+	StructuralNodes(ctx context.Context, repoID, branch string, excludeKinds []string) ([]ClonedNode, error)
 }
 
 // DefaultNearThreshold is the near-dup minimum score used for an embedder with
@@ -203,6 +210,23 @@ func (f *Finder) ExactClones(ctx context.Context, repoID, branch string) ([]Clon
 	rows, err := f.clones.ClonedNodes(ctx, repoID, branch, ExcludedKinds)
 	if err != nil {
 		return nil, fmt.Errorf("duplicates.ExactClones: %w", err)
+	}
+	return groupByHash(rows), nil
+}
+
+// StructuralClones returns Type-2 clone groups in (repoID, branch): sets of >=2
+// nodes sharing a structural_hash (identical shape after a consistent rename),
+// excluding container/sub-symbol kinds. Every group has Size >= 2. A group
+// whose members also all share one content_hash is a pure exact clone (the
+// unified Clusters view promotes those to the exact tier); on its own this
+// surface returns every structurally-identical group, exact or renamed.
+//
+// Ordering matches ExactClones: groups by descending Size then ascending hash;
+// members by (FilePath, LineStart).
+func (f *Finder) StructuralClones(ctx context.Context, repoID, branch string) ([]CloneGroup, error) {
+	rows, err := f.clones.StructuralNodes(ctx, repoID, branch, ExcludedKinds)
+	if err != nil {
+		return nil, fmt.Errorf("duplicates.StructuralClones: %w", err)
 	}
 	return groupByHash(rows), nil
 }
