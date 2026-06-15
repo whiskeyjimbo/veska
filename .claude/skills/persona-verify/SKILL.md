@@ -20,17 +20,24 @@ This is the third leg of the persona suite: `test_persona_*.py` (regression),
 
 1. **Green baseline.** `make test-persona`. If red, stop and report — verify
    over a broken suite is meaningless.
-2. **Stand up the fixture.** Reuse `tests/mcp/persona_harness.py::persona_workspace`
-   (real daemon + synthetic Go repo: `GreetUser`→`normalizeName` CALLS edge, a
-   covered fn, an untested `AddNumbers`, a dead-code `staleHelper`). You KNOW
-   the ground truth of this corpus — that is what makes the outputs judgeable.
-3. **Enumerate the surface.** Take the tool list from the parity manifest:
-   `go run ./tools/lint/personaparity` (or read
-   `tools/lint/personaparity/parked.txt` + the registry). `scope` may narrow it
-   (e.g. `findings`, `blast`, `search`); default is all non-parked tools.
-4. **Exercise each tool** over the fixture with realistic inputs (and its
-   `veska` CLI wrapper where one exists — outputs should agree). Capture the
-   real response verbatim.
+2. **Capture the real outputs.** Run the committed driver:
+   **`make persona-verify-capture`**. It stands up the synthetic fixture (real
+   daemon + Go repo: `GreetUser`→`normalizeName` CALLS edge, covered fn, untested
+   `AddNumbers`, dead-code `staleHelper`), enumerates the LIVE surface via
+   `tools/list`, and drives every tool with correct params — read tools plus the
+   stateful lifecycles (suppress→get→close, close→reopen finding, alias
+   set/remove, add/remove a second repo) — printing every request/response
+   VERBATIM (`tests/mcp/persona_verify_driver.py`). You KNOW the ground truth of
+   this corpus; that is what makes the outputs judgeable.
+3. **Mind the coverage line.** The driver asserts every live tool is exercised.
+   If it FAILS with `NOT EXERCISED: [...]`, a newly-registered tool has no param
+   spec — judge that tool by hand AND add it to the driver's sequence so the
+   sweep stays complete. (`scope` may narrow your *judging* focus — e.g.
+   `findings`, `blast` — but the driver always sweeps the whole live surface.)
+4. **Read the transcript.** Each tool is one `┌─ ✓/✗ <tool>` block with its
+   params and verbatim response. A `✗` is a JSON-RPC error — often a deliberate
+   strict-param rejection, so judge whether the error is *correct*. Where a tool
+   has a `veska` CLI wrapper, the CLI output should agree.
 5. **Judge each output** against the known corpus and the tool's contract:
    - **matches** — output is what it should be.
    - **mismatch — investigate (reason)** — green/valid but wrong: a missing
