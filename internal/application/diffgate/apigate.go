@@ -95,9 +95,11 @@ func (v APIVerdict) ExitCode() int {
 //     an exported-named method on an UNEXPORTED type reads as exported and a
 //     signature change there false-FAILs. A known over-approximation, not a
 //     reachability analysis.
-//   - The removal detector judges {function, method, interface} only (mirroring
-//     contract-drift); removing an exported type/const/var is also breaking but
-//     left as a documented follow-up rather than silently widening v1.
+//   - The removal detector judges the WIDER public-surface set {function,
+//     method, interface, struct, type, variable, class} (solov2-zvh6.14): a
+//     removed exported type/const/var is breaking too. (Signature drift stays
+//     narrow to the signature-shaped kinds.) A same-name type SHAPE change is
+//     NOT a removal — see symbolIdentity.
 //
 // Language-agnostic: signature drift judges ports.DriftedNode.Exported, and
 // removal judges a package-scoped identity key (package = path.Dir(file_path)),
@@ -109,14 +111,21 @@ type APIGate struct{}
 // NewAPIGate constructs an APIGate. It is stateless.
 func NewAPIGate() *APIGate { return &APIGate{} }
 
-// symbolIdentity is the package-scoped key (package, kind, name) under which an
+// symbolIdentity is the package-scoped key (package, name) under which an
 // exported symbol's PRESENCE is judged. package = path.Dir(file_path), so an
 // intra-package file move (a.go -> b.go, same dir) keeps the key stable and is
 // NOT flagged as a removal, while a cross-package move (or true removal/rename/
-// unexport) changes/drops the key and IS flagged. Names are unique within a Go
-// package per kind, so the key is unambiguous.
-func symbolIdentity(filePath, kind, name string) string {
-	return path.Dir(filePath) + "\x00" + kind + "\x00" + name
+// unexport) changes/drops the key and IS flagged.
+//
+// Kind is deliberately NOT in the key (solov2-zvh6.14): Go's top-level
+// identifiers share one namespace per package (you cannot have both a func and a
+// type named Foo), and methods are receiver-qualified ("T.Method"), so a bare
+// name is already unambiguous. Dropping kind means a same-name type SHAPE change
+// (`type Foo struct{}` -> `type Foo interface{}`) is correctly NOT reported as a
+// removal — the name persists; that is a shape change, a different concern from
+// "the name disappeared". Kind is still carried in the reported APIRemoval.
+func symbolIdentity(filePath, name string) string {
+	return path.Dir(filePath) + "\x00" + name
 }
 
 // Evaluate reports two classes of breaking public-API change. Pure — no I/O.
@@ -126,8 +135,9 @@ func symbolIdentity(filePath, kind, name string) string {
 //     is absent from the candidate's exported set (removed/renamed/unexported).
 //
 // baseExported and candidateExported are the exported public-surface symbols
-// (function/method/interface) over the CHANGED files at base-ref and in the
-// candidate after-state respectively — the complete scope, since a moved
+// (the wide removable set — function/method/interface/struct/type/variable/
+// class; see ExportedSymbolQuerier) over the CHANGED files at base-ref and in
+// the candidate after-state respectively — the complete scope, since a moved
 // symbol's destination is always a changed file too.
 func (g *APIGate) Evaluate(drifted []ports.DriftedNode, baseExported, candidateExported []ports.ExportedSymbol) APIVerdict {
 	var breaking []APIChange
@@ -153,11 +163,11 @@ func (g *APIGate) Evaluate(drifted []ports.DriftedNode, baseExported, candidateE
 
 	candKeys := make(map[string]struct{}, len(candidateExported))
 	for _, s := range candidateExported {
-		candKeys[symbolIdentity(s.FilePath, s.Kind, s.Name)] = struct{}{}
+		candKeys[symbolIdentity(s.FilePath, s.Name)] = struct{}{}
 	}
 	var removed []APIRemoval
 	for _, s := range baseExported {
-		if _, present := candKeys[symbolIdentity(s.FilePath, s.Kind, s.Name)]; present {
+		if _, present := candKeys[symbolIdentity(s.FilePath, s.Name)]; present {
 			continue // identity survives (incl. intra-package move) — not a removal
 		}
 		removed = append(removed, APIRemoval{

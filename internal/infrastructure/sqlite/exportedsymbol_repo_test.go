@@ -55,8 +55,11 @@ func TestExportedSymbolRepo_FiltersExportedPublicSurface(t *testing.T) {
 	f.insertNode(t, "n-fn", "pkg/a.go", "function", "Foo", true)        // in
 	f.insertNode(t, "n-m", "pkg/a.go", "method", "T.M", true)           // in
 	f.insertNode(t, "n-i", "pkg/a.go", "interface", "I", true)          // in
+	f.insertNode(t, "n-type", "pkg/a.go", "type", "T", true)            // in: type (zvh6.14)
+	f.insertNode(t, "n-struct", "pkg/a.go", "struct", "S", true)        // in: struct (zvh6.14)
+	f.insertNode(t, "n-var", "pkg/a.go", "variable", "V", true)         // in: const/var (zvh6.14)
 	f.insertNode(t, "n-unexp", "pkg/a.go", "function", "helper", false) // out: unexported
-	f.insertNode(t, "n-type", "pkg/a.go", "type", "T", true)            // out: wrong kind
+	f.insertNode(t, "n-pkg", "pkg/a.go", "package", "p", true)          // out: non-surface kind
 	f.insertNode(t, "n-oos", "pkg/other.go", "function", "X", true)     // out: file out of scope
 
 	repo := sqlite.NewExportedSymbolRepo(f.db)
@@ -69,7 +72,7 @@ func TestExportedSymbolRepo_FiltersExportedPublicSurface(t *testing.T) {
 		ids[i] = s.NodeID
 	}
 	sort.Strings(ids)
-	want := []string{"n-fn", "n-i", "n-m"}
+	want := []string{"n-fn", "n-i", "n-m", "n-struct", "n-type", "n-var"}
 	if len(ids) != len(want) {
 		t.Fatalf("got %d, want %d: %+v", len(ids), len(want), got)
 	}
