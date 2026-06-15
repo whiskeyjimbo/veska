@@ -29,6 +29,22 @@ func doctorPostPromotionQueueCmd() *cobra.Command {
 	return cmd
 }
 
+// doctorIdentityCmd returns the "doctor identity" subcommand. It reports each
+// repo's resolved identity tier and warns on non-converging tiers (ADR-S0017).
+func doctorIdentityCmd() *cobra.Command {
+	var jsonOut bool
+	cmd := &cobra.Command{
+		Use:          "identity",
+		Short:        "Report repo identity-tier convergence for shared-DB readiness",
+		SilenceUsage: true,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return doctorcmd.RunIdentity(cmd.OutOrStdout(), jsonOut)
+		},
+	}
+	cmd.Flags().BoolVar(&jsonOut, "json", false, "output results as JSON")
+	return cmd
+}
+
 // doctorWikiRenderCmd returns the "doctor wiki_render" subcommand.
 func doctorWikiRenderCmd() *cobra.Command {
 	var jsonOut bool

@@ -98,6 +98,7 @@ func TestCreateBundleContents(t *testing.T) {
 		"doctor/config.json",
 		"doctor/service.json",
 		"doctor/post_promotion_queue.json",
+		"doctor/identity.json",
 		"audit.tail",
 	}
 	for _, name := range required {
