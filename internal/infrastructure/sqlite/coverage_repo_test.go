@@ -95,3 +95,55 @@ func TestCoverageRepo_PopulatesNodeRef(t *testing.T) {
 		t.Errorf("ContentHash not populated; want h-n1 from fixture")
 	}
 }
+
+// TestCoverageRepo_InboundCallsEdges seeds a prod node with a CALLS caller and a
+// CONTAINS caller, plus a second queried node with no caller. It asserts the
+// adapter returns CALLS callers only (metadata-hydrated) and honours the
+// present-key contract for an uncalled queried id.
+func TestCoverageRepo_InboundCallsEdges(t *testing.T) {
+	t.Parallel()
+	f := setupDeadCodeFixture(t)
+	f.insertNode(t, "prod", "pkg/a.go", "function", "DoWork")
+	f.insertNode(t, "orphan", "pkg/a.go", "function", "neverCalled")
+	f.insertNode(t, "caller", "pkg/a_test.go", "function", "TestDoWork")
+	f.insertNode(t, "pkgnode", "pkg/a.go", "package", "pkg")
+
+	f.insertEdge(t, "e1", "caller", "prod", "calls")     // a real caller
+	f.insertEdge(t, "e2", "pkgnode", "prod", "contains") // must NOT count
+
+	repo := sqlite.NewCoverageRepo(f.db)
+	got, err := repo.InboundCallsEdges(context.Background(), f.repoID, f.branch, []string{"prod", "orphan"})
+	if err != nil {
+		t.Fatalf("InboundCallsEdges: %v", err)
+	}
+
+	// Present-key contract: both queried ids present.
+	if _, ok := got["orphan"]; !ok {
+		t.Errorf("orphan missing from result map (present-key contract)")
+	}
+	if len(got["orphan"]) != 0 {
+		t.Errorf("orphan callers = %v, want empty", got["orphan"])
+	}
+	// prod: exactly the CALLS caller, fully hydrated; the contains edge dropped.
+	callers := got["prod"]
+	if len(callers) != 1 {
+		t.Fatalf("prod callers = %v, want exactly 1 (contains edge must not count)", callers)
+	}
+	c := callers[0]
+	if c.NodeID != "caller" || c.Kind != "function" || c.Name != "TestDoWork" || c.FilePath != "pkg/a_test.go" {
+		t.Errorf("caller NodeRef = %+v, want id=caller kind=function name=TestDoWork file=pkg/a_test.go", c)
+	}
+}
+
+func TestCoverageRepo_InboundCallsEdges_EmptyNoOp(t *testing.T) {
+	t.Parallel()
+	f := setupDeadCodeFixture(t)
+	repo := sqlite.NewCoverageRepo(f.db)
+	got, err := repo.InboundCallsEdges(context.Background(), f.repoID, f.branch, nil)
+	if err != nil {
+		t.Fatalf("InboundCallsEdges: %v", err)
+	}
+	if len(got) != 0 {
+		t.Errorf("empty nodeIDs returned %d entries, want 0", len(got))
+	}
+}
