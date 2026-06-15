@@ -198,6 +198,13 @@ noidleak:
 cliparity:
 	go run ./tools/lint/cliparity
 
+# persona-parity: every registered eng_* MCP tool must be EXERCISED by a
+# tests/mcp test — a persona workflow or the per-tool suite — or listed with a
+# reason in tools/lint/personaparity/parked.txt. The "test ALL functionality"
+# guarantee for the MCP surface; a new untested tool turns this red.
+persona-parity:
+	go run ./tools/lint/personaparity
+
 clean:
 	rm -f $(VESKA_BIN) $(DAEMON_BIN) $(MCP_BIN) $(LAYERCHECK_BIN)
 	rm -rf dist site
