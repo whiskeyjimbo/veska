@@ -107,3 +107,65 @@ ORDER BY n.file_path, n.node_id`, strings.Join(placeholders, ","))
 	}
 	return out, nil
 }
+
+// InboundCallsEdges returns, for each node_id in nodeIDs, the source nodes of
+// its inbound CALLS edges in (repoID, branch), hydrated with the metadata the
+// reverse-map BFS needs to classify test entrypoints (kind, symbol_path, file).
+// It is the CALLS-scoped, metadata-bearing adjacency primitive behind the
+// node→test reverse map (solov2-v6de.1) — the transitive sibling of
+// CandidateCallersInFiles, which is direct-only and file-granularity.
+//
+// CALLS edges ONLY (case-insensitive), matching the coverage proxy: a CONTAINS
+// or SIMILAR_TO edge is not a caller. Every queried id is present in the result
+// map (empty slice when it has no inbound CALLS caller), so the BFS can rely on
+// a present key meaning "queried". Empty nodeIDs is a no-op (empty map).
+func (r *CoverageRepo) InboundCallsEdges(ctx context.Context, repoID, branch string, nodeIDs []string) (map[string][]ports.NodeRef, error) {
+	out := make(map[string][]ports.NodeRef, len(nodeIDs))
+	for _, id := range nodeIDs {
+		out[id] = nil // present-key contract; overwritten below if it has callers
+	}
+	if len(nodeIDs) == 0 {
+		return out, nil
+	}
+
+	placeholders := make([]string, len(nodeIDs))
+	args := make([]any, 0, len(nodeIDs)+2)
+	args = append(args, repoID, branch)
+	for i, id := range nodeIDs {
+		placeholders[i] = "?"
+		args = append(args, id)
+	}
+
+	query := fmt.Sprintf(`
+SELECT e.dst_node_id AS queried,
+       src.node_id, src.file_path, src.kind, src.symbol_path,
+       COALESCE(src.line_start, 0), COALESCE(src.line_end, 0),
+       COALESCE(src.content_hash, '')
+FROM edges e
+JOIN nodes src
+  ON src.node_id = e.src_node_id AND src.branch = e.branch
+WHERE e.repo_id = ?
+  AND e.branch = ?
+  AND UPPER(e.kind) = 'CALLS'
+  AND e.dst_node_id IN (%s)`, strings.Join(placeholders, ","))
+
+	rows, err := r.db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("sqlite.CoverageRepo.InboundCallsEdges: %w", err)
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var queried string
+		var ref ports.NodeRef
+		if err := rows.Scan(&queried, &ref.NodeID, &ref.FilePath, &ref.Kind, &ref.Name,
+			&ref.LineStart, &ref.LineEnd, &ref.ContentHash); err != nil {
+			return nil, fmt.Errorf("sqlite.CoverageRepo.InboundCallsEdges: scan: %w", err)
+		}
+		out[queried] = append(out[queried], ref)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("sqlite.CoverageRepo.InboundCallsEdges: rows: %w", err)
+	}
+	return out, nil
+}
