@@ -51,7 +51,7 @@ func (r *CloneRepo) ClonedNodes(ctx context.Context, repoID, branch string, excl
 	args = append(args, repoID, branch)
 	args = append(args, kindArgs...)
 
-	query := `SELECT content_hash, node_id, symbol_path, file_path, kind,
+	query := `SELECT content_hash, repo_id, node_id, symbol_path, file_path, kind,
 		COALESCE(line_start, 0), COALESCE(line_end, 0)
 		FROM nodes
 		WHERE repo_id = ? AND branch = ?` + kindClause + `
@@ -72,7 +72,7 @@ func (r *CloneRepo) ClonedNodes(ctx context.Context, repoID, branch string, excl
 	out := make([]duplicates.ClonedNode, 0)
 	for rows.Next() {
 		var n duplicates.ClonedNode
-		if err := rows.Scan(&n.ContentHash, &n.NodeID, &n.SymbolPath, &n.FilePath, &n.Kind, &n.LineStart, &n.LineEnd); err != nil {
+		if err := rows.Scan(&n.ContentHash, &n.RepoID, &n.NodeID, &n.SymbolPath, &n.FilePath, &n.Kind, &n.LineStart, &n.LineEnd); err != nil {
 			return nil, fmt.Errorf("clone_repo: scan: %w", err)
 		}
 		out = append(out, n)
@@ -100,7 +100,7 @@ func (r *CloneRepo) StructuralNodes(ctx context.Context, repoID, branch string, 
 	args = append(args, repoID, branch)
 	args = append(args, kindArgs...)
 
-	query := `SELECT structural_hash, node_id, symbol_path, file_path, kind,
+	query := `SELECT structural_hash, content_hash, repo_id, node_id, symbol_path, file_path, kind,
 		COALESCE(line_start, 0), COALESCE(line_end, 0)
 		FROM nodes
 		WHERE repo_id = ? AND branch = ?` + kindClause + `
@@ -121,7 +121,7 @@ func (r *CloneRepo) StructuralNodes(ctx context.Context, repoID, branch string, 
 	out := make([]duplicates.ClonedNode, 0)
 	for rows.Next() {
 		var n duplicates.ClonedNode
-		if err := rows.Scan(&n.ContentHash, &n.NodeID, &n.SymbolPath, &n.FilePath, &n.Kind, &n.LineStart, &n.LineEnd); err != nil {
+		if err := rows.Scan(&n.StructuralHash, &n.ContentHash, &n.RepoID, &n.NodeID, &n.SymbolPath, &n.FilePath, &n.Kind, &n.LineStart, &n.LineEnd); err != nil {
 			return nil, fmt.Errorf("clone_repo: structural scan: %w", err)
 		}
 		out = append(out, n)
@@ -149,8 +149,8 @@ func (r *CloneRepo) SimilarEdges(ctx context.Context, repoID, branch string, min
 	args = append(args, dstArgs...)
 
 	query := `SELECT e.score,
-		s.node_id, s.symbol_path, s.file_path, s.kind, COALESCE(s.line_start, 0), COALESCE(s.line_end, 0),
-		d.node_id, d.symbol_path, d.file_path, d.kind, COALESCE(d.line_start, 0), COALESCE(d.line_end, 0)
+		s.node_id, s.repo_id, s.symbol_path, s.file_path, s.kind, COALESCE(s.line_start, 0), COALESCE(s.line_end, 0),
+		d.node_id, d.repo_id, d.symbol_path, d.file_path, d.kind, COALESCE(d.line_start, 0), COALESCE(d.line_end, 0)
 		FROM edges e
 		JOIN nodes s ON s.node_id = e.src_node_id AND s.branch = e.branch
 		JOIN nodes d ON d.node_id = e.dst_node_id AND d.branch = e.branch
@@ -167,8 +167,8 @@ func (r *CloneRepo) SimilarEdges(ctx context.Context, repoID, branch string, min
 	for rows.Next() {
 		var e duplicates.SimilarEdge
 		if err := rows.Scan(&e.Score,
-			&e.Src.NodeID, &e.Src.SymbolPath, &e.Src.FilePath, &e.Src.Kind, &e.Src.LineStart, &e.Src.LineEnd,
-			&e.Dst.NodeID, &e.Dst.SymbolPath, &e.Dst.FilePath, &e.Dst.Kind, &e.Dst.LineStart, &e.Dst.LineEnd,
+			&e.Src.NodeID, &e.Src.RepoID, &e.Src.SymbolPath, &e.Src.FilePath, &e.Src.Kind, &e.Src.LineStart, &e.Src.LineEnd,
+			&e.Dst.NodeID, &e.Dst.RepoID, &e.Dst.SymbolPath, &e.Dst.FilePath, &e.Dst.Kind, &e.Dst.LineStart, &e.Dst.LineEnd,
 		); err != nil {
 			return nil, fmt.Errorf("clone_repo: similar edges scan: %w", err)
 		}
