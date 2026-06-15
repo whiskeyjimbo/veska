@@ -92,7 +92,7 @@ func TestCloneRepo_GroupsSharedHashes(t *testing.T) {
 	// A function in another repo shares hashA but must not bleed in.
 	seedHashedNode(t, db, hashedNode{"r2", "main", "fnA4", "function", "hashA"})
 
-	got, err := repo.ClonedNodes(ctx, "r1", "main", duplicates.ExcludedKinds)
+	got, err := repo.ClonedNodes(ctx, duplicates.CloneQuery{RepoID: "r1", Branch: "main"}, duplicates.ExcludedKinds)
 	if err != nil {
 		t.Fatalf("ClonedNodes: %v", err)
 	}
@@ -129,7 +129,7 @@ func TestCloneRepo_KindCountIsolation(t *testing.T) {
 	seedHashedNode(t, db, hashedNode{"r1", "main", "fnX", "function", "hashX"})
 	seedHashedNode(t, db, hashedNode{"r1", "main", "chunkX", "chunk", "hashX"})
 
-	got, err := repo.ClonedNodes(ctx, "r1", "main", duplicates.ExcludedKinds)
+	got, err := repo.ClonedNodes(ctx, duplicates.CloneQuery{RepoID: "r1", Branch: "main"}, duplicates.ExcludedKinds)
 	if err != nil {
 		t.Fatalf("ClonedNodes: %v", err)
 	}

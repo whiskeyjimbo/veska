@@ -39,26 +39,26 @@ func NewCloneRepo(readDB *sql.DB) *CloneRepo {
 // them into one bogus byte-identical clone group, so both query levels filter
 // empty out with a non-empty content_hash check —
 // "no content known" can never be a clone match.
-func (r *CloneRepo) ClonedNodes(ctx context.Context, repoID, branch string, excludeKinds []string) ([]duplicates.ClonedNode, error) {
-	// Two copies of (repoID, branch) — one per query level — then the kind
-	// list once per level. Built positionally to keep SQLite's planner on the
-	// indexed path rather than a named-param rewrite.
-	kindClause, kindArgs := notInClause("kind", excludeKinds)
+func (r *CloneRepo) ClonedNodes(ctx context.Context, q duplicates.CloneQuery, excludeKinds []string) ([]duplicates.ClonedNode, error) {
+	// scope() emits the shared per-level predicate (branch, optional repo +
+	// path) plus the kind exclusion, so the outer query and the GROUP BY
+	// subquery filter identically — a chunk in one repo must not inflate a
+	// content_hash COUNT in another. Built positionally to keep SQLite's planner
+	// on the indexed path rather than a named-param rewrite.
+	scope, scopeArgs := cloneScopeClause(q, excludeKinds)
 
-	args := make([]any, 0, 4+2*len(excludeKinds))
-	args = append(args, repoID, branch)
-	args = append(args, kindArgs...)
-	args = append(args, repoID, branch)
-	args = append(args, kindArgs...)
+	args := make([]any, 0, 2*len(scopeArgs))
+	args = append(args, scopeArgs...)
+	args = append(args, scopeArgs...)
 
-	query := `SELECT content_hash, node_id, symbol_path, file_path, kind,
+	query := `SELECT content_hash, repo_id, node_id, symbol_path, file_path, kind,
 		COALESCE(line_start, 0), COALESCE(line_end, 0)
 		FROM nodes
-		WHERE repo_id = ? AND branch = ?` + kindClause + `
+		WHERE ` + scope + `
 		  AND content_hash != ''
 		  AND content_hash IN (
 			SELECT content_hash FROM nodes
-			WHERE repo_id = ? AND branch = ?` + kindClause + `
+			WHERE ` + scope + `
 			  AND content_hash != ''
 			GROUP BY content_hash HAVING COUNT(*) >= 2
 		  )`
@@ -72,13 +72,60 @@ func (r *CloneRepo) ClonedNodes(ctx context.Context, repoID, branch string, excl
 	out := make([]duplicates.ClonedNode, 0)
 	for rows.Next() {
 		var n duplicates.ClonedNode
-		if err := rows.Scan(&n.ContentHash, &n.NodeID, &n.SymbolPath, &n.FilePath, &n.Kind, &n.LineStart, &n.LineEnd); err != nil {
+		if err := rows.Scan(&n.ContentHash, &n.RepoID, &n.NodeID, &n.SymbolPath, &n.FilePath, &n.Kind, &n.LineStart, &n.LineEnd); err != nil {
 			return nil, fmt.Errorf("clone_repo: scan: %w", err)
 		}
 		out = append(out, n)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("clone_repo: iterate: %w", err)
+	}
+	return out, nil
+}
+
+// StructuralNodes is the Type-2 (renamed-variable) analogue of ClonedNodes: it
+// groups by structural_hash instead of content_hash, so nodes with the same
+// shape after a consistent rename cluster even when their verbatim text differs.
+// structural_hash is NULLABLE (the parser sets it only for structurally-hashed
+// kinds), so the empty-string guard ClonedNodes uses becomes an IS NOT NULL
+// guard — NULL "no structural signal" can never be a clone match. The grouping
+// hash is returned in ClonedNode.ContentHash so the Finder folds it identically.
+// idx_nodes_structural_hash + idx_nodes_repo_branch serve it.
+func (r *CloneRepo) StructuralNodes(ctx context.Context, q duplicates.CloneQuery, excludeKinds []string) ([]duplicates.ClonedNode, error) {
+	scope, scopeArgs := cloneScopeClause(q, excludeKinds)
+
+	args := make([]any, 0, 2*len(scopeArgs))
+	args = append(args, scopeArgs...)
+	args = append(args, scopeArgs...)
+
+	query := `SELECT structural_hash, content_hash, repo_id, node_id, symbol_path, file_path, kind,
+		COALESCE(line_start, 0), COALESCE(line_end, 0)
+		FROM nodes
+		WHERE ` + scope + `
+		  AND structural_hash IS NOT NULL
+		  AND structural_hash IN (
+			SELECT structural_hash FROM nodes
+			WHERE ` + scope + `
+			  AND structural_hash IS NOT NULL
+			GROUP BY structural_hash HAVING COUNT(*) >= 2
+		  )`
+
+	rows, err := r.readDB.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("clone_repo: structural query: %w", err)
+	}
+	defer rows.Close()
+
+	out := make([]duplicates.ClonedNode, 0)
+	for rows.Next() {
+		var n duplicates.ClonedNode
+		if err := rows.Scan(&n.StructuralHash, &n.ContentHash, &n.RepoID, &n.NodeID, &n.SymbolPath, &n.FilePath, &n.Kind, &n.LineStart, &n.LineEnd); err != nil {
+			return nil, fmt.Errorf("clone_repo: structural scan: %w", err)
+		}
+		out = append(out, n)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("clone_repo: structural iterate: %w", err)
 	}
 	return out, nil
 }
@@ -100,8 +147,8 @@ func (r *CloneRepo) SimilarEdges(ctx context.Context, repoID, branch string, min
 	args = append(args, dstArgs...)
 
 	query := `SELECT e.score,
-		s.node_id, s.symbol_path, s.file_path, s.kind, COALESCE(s.line_start, 0), COALESCE(s.line_end, 0),
-		d.node_id, d.symbol_path, d.file_path, d.kind, COALESCE(d.line_start, 0), COALESCE(d.line_end, 0)
+		s.node_id, s.repo_id, s.symbol_path, s.file_path, s.kind, COALESCE(s.line_start, 0), COALESCE(s.line_end, 0),
+		d.node_id, d.repo_id, d.symbol_path, d.file_path, d.kind, COALESCE(d.line_start, 0), COALESCE(d.line_end, 0)
 		FROM edges e
 		JOIN nodes s ON s.node_id = e.src_node_id AND s.branch = e.branch
 		JOIN nodes d ON d.node_id = e.dst_node_id AND d.branch = e.branch
@@ -118,8 +165,8 @@ func (r *CloneRepo) SimilarEdges(ctx context.Context, repoID, branch string, min
 	for rows.Next() {
 		var e duplicates.SimilarEdge
 		if err := rows.Scan(&e.Score,
-			&e.Src.NodeID, &e.Src.SymbolPath, &e.Src.FilePath, &e.Src.Kind, &e.Src.LineStart, &e.Src.LineEnd,
-			&e.Dst.NodeID, &e.Dst.SymbolPath, &e.Dst.FilePath, &e.Dst.Kind, &e.Dst.LineStart, &e.Dst.LineEnd,
+			&e.Src.NodeID, &e.Src.RepoID, &e.Src.SymbolPath, &e.Src.FilePath, &e.Src.Kind, &e.Src.LineStart, &e.Src.LineEnd,
+			&e.Dst.NodeID, &e.Dst.RepoID, &e.Dst.SymbolPath, &e.Dst.FilePath, &e.Dst.Kind, &e.Dst.LineStart, &e.Dst.LineEnd,
 		); err != nil {
 			return nil, fmt.Errorf("clone_repo: similar edges scan: %w", err)
 		}
@@ -129,6 +176,29 @@ func (r *CloneRepo) SimilarEdges(ctx context.Context, repoID, branch string, min
 		return nil, fmt.Errorf("clone_repo: similar edges iterate: %w", err)
 	}
 	return out, nil
+}
+
+// cloneScopeClause builds the shared per-query-level predicate for the clone
+// projections: branch (always), repo_id (only when CloneQuery.RepoID is set — an
+// empty RepoID means cross-repo), an optional file_path prefix, and the kind
+// exclusion. Returning the clause + its args lets ClonedNodes/StructuralNodes
+// apply the SAME filter at both the outer and the GROUP BY subquery level so the
+// COUNT reflects only eligible nodes.
+func cloneScopeClause(q duplicates.CloneQuery, excludeKinds []string) (string, []any) {
+	clause := "branch = ?"
+	args := []any{q.Branch}
+	if q.RepoID != "" {
+		clause += " AND repo_id = ?"
+		args = append(args, q.RepoID)
+	}
+	if q.PathPrefix != "" {
+		clause += " AND file_path LIKE ?"
+		args = append(args, q.PathPrefix+"%")
+	}
+	kindClause, kindArgs := notInClause("kind", excludeKinds)
+	clause += kindClause
+	args = append(args, kindArgs...)
+	return clause, args
 }
 
 // notInClause builds a " AND <col> NOT IN (?, ?, …)" fragment plus its bound

@@ -40,22 +40,31 @@ var ExcludedKinds = []string{"package", "chunk", "file", "module", "field", "imp
 // Finder folds them into CloneGroups.
 type ClonedNode struct {
 	ContentHash string
-	NodeID      string
-	SymbolPath  string
-	FilePath    string
-	Kind        string
-	LineStart   int
-	LineEnd     int
+	// StructuralHash is the identifier-normalised (Type-2) hash; set by the
+	// structural projection, empty for the exact projection.
+	StructuralHash string
+	RepoID         string
+	NodeID         string
+	SymbolPath     string
+	FilePath       string
+	Kind           string
+	LineStart      int
+	LineEnd        int
 }
 
 // CloneMember is one occurrence of a clone within a CloneGroup.
 type CloneMember struct {
 	NodeID     string
+	RepoID     string
 	SymbolPath string
 	FilePath   string
 	Kind       string
 	LineStart  int
 	LineEnd    int
+	// ContentHash is the member's byte-identity hash, carried so the unified
+	// Clusters view can sub-tier a structural group (all-same content_hash =>
+	// exact tier; mixed => genuine Type-2). Empty when not hydrated.
+	ContentHash string
 }
 
 // CloneGroup is a set of >=2 nodes sharing one content_hash — N literal copies
@@ -72,7 +81,23 @@ type CloneGroup struct {
 // excludeKinds. Grouping and ordering are the Finder's responsibility, so the
 // store may return rows in any order.
 type CloneStore interface {
-	ClonedNodes(ctx context.Context, repoID, branch string, excludeKinds []string) ([]ClonedNode, error)
+	ClonedNodes(ctx context.Context, q CloneQuery, excludeKinds []string) ([]ClonedNode, error)
+	// StructuralNodes returns every node matching q whose structural_hash is
+	// shared by >=2 nodes, excluding excludeKinds — the Type-2 (renamed-
+	// variable) clone projection. Returned rows carry the structural_hash in
+	// ClonedNode.StructuralHash (the grouping key) and the byte-identity hash in
+	// ContentHash. NULL structural_hash (nodes the parser did not structurally
+	// hash) never groups.
+	StructuralNodes(ctx context.Context, q CloneQuery, excludeKinds []string) ([]ClonedNode, error)
+}
+
+// CloneQuery scopes a clone projection. An empty RepoID means ALL registered
+// repos (cross-repo clustering); a non-empty PathPrefix restricts the sweep to
+// nodes whose file_path starts with it. Branch is always required.
+type CloneQuery struct {
+	RepoID     string
+	Branch     string
+	PathPrefix string
 }
 
 // DefaultNearThreshold is the near-dup minimum score used for an embedder with
@@ -200,11 +225,28 @@ func NewFinder(clones CloneStore, near NearStore, embedderID string) (*Finder, e
 // ContentHash (most-copied first, stable tie-break); members within a group by
 // (FilePath, LineStart) so the same physical layout always renders the same.
 func (f *Finder) ExactClones(ctx context.Context, repoID, branch string) ([]CloneGroup, error) {
-	rows, err := f.clones.ClonedNodes(ctx, repoID, branch, ExcludedKinds)
+	rows, err := f.clones.ClonedNodes(ctx, CloneQuery{RepoID: repoID, Branch: branch}, ExcludedKinds)
 	if err != nil {
 		return nil, fmt.Errorf("duplicates.ExactClones: %w", err)
 	}
-	return groupByHash(rows), nil
+	return groupByHash(rows, func(r ClonedNode) string { return r.ContentHash }), nil
+}
+
+// StructuralClones returns Type-2 clone groups in (repoID, branch): sets of >=2
+// nodes sharing a structural_hash (identical shape after a consistent rename),
+// excluding container/sub-symbol kinds. Every group has Size >= 2. A group
+// whose members also all share one content_hash is a pure exact clone (the
+// unified Clusters view promotes those to the exact tier); on its own this
+// surface returns every structurally-identical group, exact or renamed.
+//
+// Ordering matches ExactClones: groups by descending Size then ascending hash;
+// members by (FilePath, LineStart).
+func (f *Finder) StructuralClones(ctx context.Context, repoID, branch string) ([]CloneGroup, error) {
+	rows, err := f.clones.StructuralNodes(ctx, CloneQuery{RepoID: repoID, Branch: branch}, ExcludedKinds)
+	if err != nil {
+		return nil, fmt.Errorf("duplicates.StructuralClones: %w", err)
+	}
+	return groupByHash(rows, func(r ClonedNode) string { return r.StructuralHash }), nil
 }
 
 // NearDuplicates returns near-identical clusters: connected components of
@@ -232,20 +274,23 @@ func (f *Finder) NearDuplicates(ctx context.Context, repoID, branch string, minS
 // CloneGroups, dropping any hash that ended up with a single member (defensive:
 // the store already enforces COUNT>=2, but grouping here keeps the invariant
 // local and lets the store stay a dumb projection).
-func groupByHash(rows []ClonedNode) []CloneGroup {
+func groupByHash(rows []ClonedNode, keyOf func(ClonedNode) string) []CloneGroup {
 	byHash := make(map[string][]CloneMember)
 	order := make([]string, 0)
 	for _, r := range rows {
-		if _, seen := byHash[r.ContentHash]; !seen {
-			order = append(order, r.ContentHash)
+		k := keyOf(r)
+		if _, seen := byHash[k]; !seen {
+			order = append(order, k)
 		}
-		byHash[r.ContentHash] = append(byHash[r.ContentHash], CloneMember{
-			NodeID:     r.NodeID,
-			SymbolPath: r.SymbolPath,
-			FilePath:   r.FilePath,
-			Kind:       r.Kind,
-			LineStart:  r.LineStart,
-			LineEnd:    r.LineEnd,
+		byHash[k] = append(byHash[k], CloneMember{
+			NodeID:      r.NodeID,
+			RepoID:      r.RepoID,
+			SymbolPath:  r.SymbolPath,
+			FilePath:    r.FilePath,
+			Kind:        r.Kind,
+			LineStart:   r.LineStart,
+			LineEnd:     r.LineEnd,
+			ContentHash: r.ContentHash,
 		})
 	}
 

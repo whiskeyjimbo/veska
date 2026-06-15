@@ -72,6 +72,7 @@ func newRootCmd(opts ...rootOption) *cobra.Command {
 	root.AddCommand(similarCmd())
 	root.AddCommand(relatedCmd())
 	root.AddCommand(clonesCmd())
+	root.AddCommand(duplicatesCmd())
 	root.AddCommand(diffGateCmd())
 	root.AddCommand(ownerCmd())
 	root.AddCommand(todosCmd())

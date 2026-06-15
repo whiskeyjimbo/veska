@@ -105,9 +105,9 @@ func (r *GraphRepo) SaveNode(ctx context.Context, repoID, branch string, n *doma
 	const stmt = `
 INSERT INTO nodes
 	(node_id, branch, repo_id, language, kind, symbol_path, file_path,
-	 line_start, line_end, content_hash, last_promoted_at, actor_id, actor_kind,
+	 line_start, line_end, content_hash, structural_hash, last_promoted_at, actor_id, actor_kind,
 	 signature, snippet, prev_signature, exported)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?)
 ON CONFLICT(node_id, branch) DO UPDATE SET
 	repo_id          = excluded.repo_id,
 	language         = excluded.language,
@@ -117,6 +117,7 @@ ON CONFLICT(node_id, branch) DO UPDATE SET
 	line_start       = excluded.line_start,
 	line_end         = excluded.line_end,
 	content_hash     = excluded.content_hash,
+	structural_hash  = excluded.structural_hash,
 	last_promoted_at = excluded.last_promoted_at,
 	actor_id         = excluded.actor_id,
 	actor_kind       = excluded.actor_kind,
@@ -147,7 +148,7 @@ ON CONFLICT(node_id, branch) DO UPDATE SET
 	now := time.Now().UnixMilli()
 	if _, err := r.writeDB.ExecContext(ctx, stmt,
 		string(n.ID), branch, repoID, language, string(n.Kind),
-		n.Name, n.Path, lineStart, lineEnd, contentHash, now,
+		n.Name, n.Path, lineStart, lineEnd, contentHash, nodeStructuralHash(n), now,
 		string(domain.ActorKindSystem), string(domain.ActorKindSystem),
 		signature, snippet, nodeExported(n),
 	); err != nil {
@@ -196,9 +197,9 @@ func (r *GraphRepo) SaveExternalNode(ctx context.Context, repoID, branch string,
 	const stmt = `
 INSERT INTO nodes
 	(node_id, branch, repo_id, language, kind, symbol_path, file_path,
-	 line_start, line_end, content_hash, last_promoted_at, actor_id, actor_kind,
+	 line_start, line_end, content_hash, structural_hash, last_promoted_at, actor_id, actor_kind,
 	 signature, snippet, prev_signature, exported, external)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, 1)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, 1)
 ON CONFLICT(node_id, branch) DO UPDATE SET
 	repo_id          = excluded.repo_id,
 	language         = excluded.language,
@@ -208,6 +209,7 @@ ON CONFLICT(node_id, branch) DO UPDATE SET
 	line_start       = excluded.line_start,
 	line_end         = excluded.line_end,
 	content_hash     = excluded.content_hash,
+	structural_hash  = excluded.structural_hash,
 	last_promoted_at = excluded.last_promoted_at,
 	actor_id         = excluded.actor_id,
 	actor_kind       = excluded.actor_kind,
@@ -237,7 +239,7 @@ ON CONFLICT(node_id, branch) DO UPDATE SET
 	now := time.Now().UnixMilli()
 	if _, err := r.writeDB.ExecContext(ctx, stmt,
 		string(n.ID), branch, repoID, language, string(n.Kind),
-		n.Name, n.Path, lineStart, lineEnd, contentHash, now,
+		n.Name, n.Path, lineStart, lineEnd, contentHash, nodeStructuralHash(n), now,
 		string(domain.ActorKindSystem), string(domain.ActorKindSystem),
 		signature, snippet, nodeExported(n),
 	); err != nil {
