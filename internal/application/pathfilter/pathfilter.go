@@ -41,3 +41,34 @@ func IsVendored(path string) bool {
 	}
 	return false
 }
+
+// IsTestFile reports whether path is a test-shaped source file, by its base
+// name, across the languages veska parses. It is the single source of truth for
+// the test-file vocabulary, shared by the dead-code / untested-symbol checks
+// (which exclude or attribute test files) AND the revalidation sweep's
+// test-caller predicate (sqlite.RevalidateRepo.HasTestCaller) — so the
+// language-specific naming rules stay in one trivially-testable place rather
+// than being duplicated into adapter SQL. An empty path is not a test file.
+func IsTestFile(path string) bool {
+	if path == "" {
+		return false
+	}
+	base := path
+	if i := strings.LastIndexAny(path, "/\\"); i >= 0 {
+		base = path[i+1:]
+	}
+	switch {
+	case strings.HasSuffix(base, "_test.go"): // Go
+		return true
+	case strings.HasPrefix(base, "test_") && strings.HasSuffix(base, ".py"): // pytest
+		return true
+	case strings.HasSuffix(base, "_test.py"): // pytest alt
+		return true
+	case strings.HasSuffix(base, ".test.ts"), strings.HasSuffix(base, ".test.tsx"),
+		strings.HasSuffix(base, ".test.js"), strings.HasSuffix(base, ".test.jsx"),
+		strings.HasSuffix(base, ".spec.ts"), strings.HasSuffix(base, ".spec.tsx"),
+		strings.HasSuffix(base, ".spec.js"), strings.HasSuffix(base, ".spec.jsx"):
+		return true
+	}
+	return false
+}

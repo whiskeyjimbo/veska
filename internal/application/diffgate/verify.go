@@ -189,3 +189,14 @@ func (p ephemeralPredicates) HasInboundEdges(ctx context.Context, repoID, branch
 func (p ephemeralPredicates) NodeSignaturePair(_ context.Context, _, _, _ string) (string, string, error) {
 	return "", "", nil
 }
+
+// HasTestCaller is a total-but-unused stub: untested-symbol is NOT on the
+// Verifier's resolvableRules allowlist, so Decide never reaches its case via the
+// gate. It returns false (= "still untested" = refresh = over-block), the
+// fail-safe direction for a gate. A sound ephemeral impl would need the inbound
+// edges' SRC FILE PATHS to apply the test-file predicate, which the Base
+// EdgeReader port does not expose (it returns src node_ids only) — so this stays
+// a stub until untested-symbol is added to the allowlist as a separate decision.
+func (p ephemeralPredicates) HasTestCaller(_ context.Context, _, _, _ string) (bool, error) {
+	return false, nil
+}

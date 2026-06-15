@@ -283,6 +283,46 @@ func TestRevalidateRepo_HasInboundEdges(t *testing.T) {
 	}
 }
 
+func TestRevalidateRepo_HasTestCaller(t *testing.T) {
+	t.Parallel()
+	f := setupRevalFixture(t)
+	f.insertNode(t, "n-testcaller", f.branch, "pkg/a_test.go", "h-t") // test-shaped src
+	f.insertNode(t, "n-prodcaller", f.branch, "pkg/b.go", "h-p")      // non-test src
+	f.insertNode(t, "n-tested", f.branch, "pkg/c.go", "h-c")          // has a test caller
+	f.insertNode(t, "n-untested", f.branch, "pkg/d.go", "h-d")        // only a prod caller
+
+	mkEdge := func(id, src, dst, kind string) {
+		if _, err := f.db.Exec(`INSERT INTO edges (
+            edge_id, branch, repo_id, src_node_id, dst_node_id, kind, confidence, last_promoted_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+			id, f.branch, f.repoID, src, dst, kind, "definite", time.Now().UnixMilli(),
+		); err != nil {
+			t.Fatalf("insert edge %s: %v", id, err)
+		}
+	}
+	mkEdge("e-test", "n-testcaller", "n-tested", "CALLS") // test file CALLS n-tested
+	mkEdge("e-prod", "n-prodcaller", "n-untested", "CALLS")
+	// A CALLS from a test file but to n-untested? no — n-untested has only prod.
+	// A non-CALLS edge from a test file must NOT count as a test caller.
+	mkEdge("e-contains", "n-testcaller", "n-untested", "CONTAINS")
+
+	got, err := f.reval.HasTestCaller(context.Background(), f.repoID, f.branch, "n-tested")
+	if err != nil {
+		t.Fatalf("HasTestCaller: %v", err)
+	}
+	if !got {
+		t.Errorf("HasTestCaller(n-tested) = false, want true (CALLS from a _test.go src)")
+	}
+
+	got, err = f.reval.HasTestCaller(context.Background(), f.repoID, f.branch, "n-untested")
+	if err != nil {
+		t.Fatalf("HasTestCaller: %v", err)
+	}
+	if got {
+		t.Errorf("HasTestCaller(n-untested) = true, want false (only a prod CALLS caller + a CONTAINS from test)")
+	}
+}
+
 func TestRevalidateRepo_HasInboundEdges_BranchScoped(t *testing.T) {
 	t.Parallel()
 	f := setupRevalFixture(t)

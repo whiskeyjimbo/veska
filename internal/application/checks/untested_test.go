@@ -89,6 +89,31 @@ func TestUntestedCheck_FlagsSymbolWithNoTestCaller(t *testing.T) {
 	}
 }
 
+// solov2-zvh6.8: the finding carries the symbol's content-hash as its anchor,
+// so the revalidation sweep selects it on body drift and re-runs the test-caller
+// predicate (rather than the old no-anchor behaviour that excluded it).
+func TestUntestedCheck_EmitsAnchorContentHash(t *testing.T) {
+	q := &fakeCoverageQuerier{nodes: []ports.NodeCallers{
+		{
+			Node:        ports.NodeRef{NodeID: "n1", FilePath: "internal/svc/svc.go", Kind: "function", Name: "doWork", ContentHash: "h-body"},
+			CallerFiles: []string{"internal/svc/handler.go"}, // prod caller only
+		},
+	}}
+	c := checks.NewUntestedSymbolCheck(q)
+	out, err := c.Run(context.Background(), checks.Input{
+		RepoID: "r", Branch: "main", FilePaths: []string{"internal/svc/svc.go"},
+	})
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if len(out) != 1 {
+		t.Fatalf("got %d findings, want 1", len(out))
+	}
+	if out[0].AnchorContentHash == nil || *out[0].AnchorContentHash != "h-body" {
+		t.Errorf("anchor content-hash = %v, want h-body", out[0].AnchorContentHash)
+	}
+}
+
 // AC2: a prod symbol with >=1 test-file caller produces no finding.
 func TestUntestedCheck_NoFindingWhenTestCallerPresent(t *testing.T) {
 	q := &fakeCoverageQuerier{nodes: []ports.NodeCallers{

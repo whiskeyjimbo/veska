@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"fmt"
 
+	"github.com/whiskeyjimbo/veska/internal/application/pathfilter"
 	"github.com/whiskeyjimbo/veska/internal/core/ports"
 )
 
@@ -111,6 +112,48 @@ SELECT EXISTS (
 		return false, fmt.Errorf("sqlite.RevalidateRepo.HasInboundEdges: %w", err)
 	}
 	return has, nil
+}
+
+// HasTestCaller reports whether the named node currently has at least one
+// direct inbound CALLS caller defined in a test-shaped file on (repoID, branch)
+// — the re-run predicate for the untested-symbol rule (solov2-zvh6.8).
+//
+// The test-file vocabulary stays in pathfilter.IsTestFile (one place, shared
+// with the checks), so this reads the distinct caller file paths via the same
+// CALLS-edge join the coverage adapter uses and applies the predicate in Go
+// rather than encoding _test.go / *.spec.ts naming into the SQL.
+func (r *RevalidateRepo) HasTestCaller(
+	ctx context.Context, repoID, branch, nodeID string,
+) (bool, error) {
+	const q = `
+SELECT DISTINCT src.file_path
+FROM edges e
+JOIN nodes src
+  ON  src.node_id = e.src_node_id
+  AND src.branch  = e.branch
+  AND src.repo_id = e.repo_id
+WHERE e.dst_node_id = ?
+  AND e.branch      = ?
+  AND e.repo_id     = ?
+  AND UPPER(e.kind) = 'CALLS'`
+	rows, err := r.db.QueryContext(ctx, q, nodeID, branch, repoID)
+	if err != nil {
+		return false, fmt.Errorf("sqlite.RevalidateRepo.HasTestCaller: %w", err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var fp sql.NullString
+		if err := rows.Scan(&fp); err != nil {
+			return false, fmt.Errorf("sqlite.RevalidateRepo.HasTestCaller: scan: %w", err)
+		}
+		if fp.Valid && pathfilter.IsTestFile(fp.String) {
+			return true, nil
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return false, fmt.Errorf("sqlite.RevalidateRepo.HasTestCaller: rows: %w", err)
+	}
+	return false, nil
 }
 
 // NodeSignaturePair returns (prev_signature, signature) for the node. If the

@@ -16,6 +16,11 @@
 //     signature) pair. If prev != "" && prev != current, drift still
 //     applies → REFRESH. Otherwise → CLOSE as 'revalidated_obsolete'.
 //
+//   - "untested-symbol": cheap re-run. If the anchor node now has a direct
+//     inbound CALLS caller in a test-shaped file, the rule no longer fires
+//     (it is covered) → CLOSE. Otherwise it is still untested → REFRESH.
+//     Structural twin of dead-code (solov2-zvh6.8).
+//
 //   - "auto-link": NOT swept. Auto-link findings store an edge_id in the
 //     findings.node_id column; StaleFindingsForFile joins findings.node_id
 //     to nodes.node_id, which an edge_id never matches — so auto-link
@@ -68,8 +73,9 @@ var ErrMissingDependency = errors.New("revalidate: missing required dependency")
 // see solov2-l8y. An edge-anchored revalidation path would be a new feature,
 // not a per-rule case here.
 const (
-	ruleDeadCode      = "dead-code"
-	ruleContractDrift = "contract-drift"
+	ruleDeadCode       = "dead-code"
+	ruleContractDrift  = "contract-drift"
+	ruleUntestedSymbol = "untested-symbol"
 )
 
 // Handler implements ports.WorkHandler for WorkKindRevalidate rows.

@@ -19,6 +19,10 @@ type PredicateSource interface {
 	HasInboundEdges(ctx context.Context, repoID, branch, nodeID string) (bool, error)
 	// NodeSignaturePair returns the (prev_signature, signature) pair for nodeID.
 	NodeSignaturePair(ctx context.Context, repoID, branch, nodeID string) (prev, current string, err error)
+	// HasTestCaller reports whether nodeID currently has >=1 direct inbound
+	// CALLS caller defined in a test-shaped file — the re-run predicate for the
+	// untested-symbol rule (solov2-zvh6.8).
+	HasTestCaller(ctx context.Context, repoID, branch, nodeID string) (bool, error)
 }
 
 // Decide re-runs the finding's rule against current node state (read through
@@ -31,6 +35,9 @@ type PredicateSource interface {
 //     fires), else refresh in place (still dead).
 //   - "contract-drift": refresh while prev != "" && prev != current (still
 //     drifting), else close (drift resolved).
+//   - "untested-symbol": close if the anchor now has a test-file caller (rule no
+//     longer fires — it is covered), else refresh in place (still untested).
+//     Structural twin of dead-code (solov2-zvh6.8).
 //   - any other rule: conservative close — rules with no cheap re-run path are
 //     treated as obsolete. Callers that must NOT assume "close == resolved"
 //     for an unsupported rule (e.g. the gate's verify) gate on the rule set
@@ -60,6 +67,18 @@ func Decide(ctx context.Context, repoID, branch string, s ports.StaleFinding, sr
 		}
 		// drift resolved (signatures match, or signature absent).
 		return ports.FindingDecision{FindingID: s.FindingID, Kind: ports.DecisionClose}, nil
+
+	case ruleUntestedSymbol:
+		hasTest, err := src.HasTestCaller(ctx, repoID, branch, s.NodeID)
+		if err != nil {
+			return ports.FindingDecision{}, fmt.Errorf("revalidate.Decide: test caller for %q: %w", s.FindingID, err)
+		}
+		if hasTest {
+			// rule no longer fires — the symbol now has a test-file caller.
+			return ports.FindingDecision{FindingID: s.FindingID, Kind: ports.DecisionClose}, nil
+		}
+		// still untested — refresh anchor hash in place (stays open).
+		return ports.FindingDecision{FindingID: s.FindingID, Kind: ports.DecisionRefresh, NewHash: s.CurrentHash}, nil
 
 	default:
 		// Unknown rule: conservative close (matches m3.05.2 behaviour for
