@@ -120,6 +120,37 @@ func TestRunClones_E2E_FailsAndExitsNonZero(t *testing.T) {
 	}
 }
 
+// TestRunClones_E2E_IndexAhead_NowDetected is the solov2-zvh6.11 lock: the index
+// is seeded AHEAD (at the candidate's content — it already holds the cloned b.go),
+// base-ref has only a.go. Before the base graph was pinned to base-ref, the live
+// index already showed the clone (baseCount>=2) so the net-new group cancelled →
+// false-PASS. With buildPinnedEphemeral the base clone re-promotes base-ref's
+// changed files — and DELETES the added b.go the drifted index carried — so the
+// base reflects base-ref (a.go only) and the gate correctly FAILs. This exercises
+// the added-file delete path that a plain skip would miss.
+func TestRunClones_E2E_IndexAhead_NowDetected(t *testing.T) {
+	home := t.TempDir()
+	dbPath := filepath.Join(home, "veska.db")
+	const foo = "package p\n\nfunc Foo() int {\n\tx := 1\n\treturn x\n}\n"
+	// Index seeded AHEAD: BOTH a.go and the cloned b.go already promoted.
+	seedBaseDB(t, dbPath, map[string]string{"a.go": foo, "b.go": foo})
+
+	repoDir := t.TempDir()
+	dup := foo
+	// base-ref has only a.go; candidate ADDS the identical b.go.
+	makeRepo(t, repoDir, map[string]string{"a.go": foo}, map[string]*string{"b.go": &dup})
+
+	t.Setenv("VESKA_HOME", home)
+	var out bytes.Buffer
+	err := RunClones(context.Background(), CloneParams{
+		RepoID: discRepo, Branch: discBranch, RepoRoot: repoDir,
+		BaseRef: "HEAD~1", CandidateRef: "HEAD", Out: &out,
+	})
+	if !errors.Is(err, ErrGateFailed) {
+		t.Fatalf("index-ahead clone must now FAIL (zvh6.11); got %v\nraw: %s", err, out.String())
+	}
+}
+
 // TestCloneGate_RealParserCleanModificationPasses is the PASS companion: a
 // candidate whose Foo body differs from the base produces a unique hash, so no
 // new clone group forms.
