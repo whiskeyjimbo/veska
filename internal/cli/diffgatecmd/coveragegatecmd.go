@@ -59,11 +59,6 @@ func RunUntested(ctx context.Context, p UntestedParams) error {
 	}
 	p.RepoID = resolved
 
-	base := baseGraph{
-		EdgeReaderRepo: sqlite.NewEdgeReaderRepo(pools.ReadDB),
-		NodeLookupRepo: sqlite.NewNodeLookupRepo(pools.ReadDB),
-	}
-
 	if !repoIndexed(ctx, pools.ReadDB, p.RepoID, p.Branch) {
 		rep := untestedReport{
 			CoverageVerdict: diffgate.CoverageVerdict{Pass: false},
@@ -75,18 +70,28 @@ func RunUntested(ctx context.Context, p UntestedParams) error {
 		return fmt.Errorf("%w (repo_not_indexed: index %q first, e.g. `veska reindex`)", ErrGateFailed, p.RepoID)
 	}
 
-	eph, changes, err := buildEphemeral(ctx, ephemeralParams{
+	// Pin base to base-ref (index-ahead hardening, solov2-zvh6.11): the base
+	// clone re-promotes base-ref's changed files so ChangedNodeIDs content-hashes
+	// the candidate against base-ref, not a drifted index.
+	eph, changes, baseClonePath, cleanup, err := buildPinnedEphemeral(ctx, ephemeralParams{
 		RepoID:       p.RepoID,
 		Branch:       p.Branch,
 		RepoRoot:     p.RepoRoot,
 		BaseRef:      p.BaseRef,
 		CandidateRef: p.CandidateRef,
-	}, base)
+	}, dbPath)
 	if err != nil {
 		return err
 	}
+	defer cleanup()
 
-	untested, err := untestedInChangedFiles(ctx, pools, dbPath, p.RepoID, p.Branch, p.CandidateRef, changes, eph.ChangedFiles)
+	// The after-state clone derives from the base-ref-pinned clone (baseClonePath),
+	// but unionCoverage's base term stays the LIVE INDEX (pools): inbound test→prod
+	// CALLS edges from UNCHANGED test files are invariant to the changed prod file's
+	// drift, so the live index is the sound source for the cascade-restoring splice
+	// even when the index has advanced past base-ref (the base clone re-promoted the
+	// changed prod files and cascade-deleted exactly those inbound edges).
+	untested, err := untestedInChangedFiles(ctx, pools, baseClonePath, p.RepoID, p.Branch, p.CandidateRef, changes, eph.ChangedFiles)
 	if err != nil {
 		return fmt.Errorf("diff-gate untested: %w", err)
 	}

@@ -211,6 +211,35 @@ func TestRunUntested_E2E_ModifyProdRemoveTest_Fails(t *testing.T) {
 	}
 }
 
+// INDEX-AHEAD HARDENING (solov2-zvh6.11): the index is seeded AHEAD — it already
+// holds the added, untested Bar — while base-ref has only foo.go/foo_test.go.
+// Before pinning, ChangedNodeIDs went empty (overlay matched the drifted index)
+// so the new untested symbol wrongly PASSED. With buildPinnedEphemeral the base
+// clone re-promotes base-ref's changed files — DELETING the added bar.go the
+// drifted index carried — so Bar is correctly net-new and the gate FAILs.
+func TestRunUntested_E2E_IndexAhead_NowDetected(t *testing.T) {
+	home := t.TempDir()
+	barSrc := "package p\n\nfunc Bar() int { return 9 }\n" // untested
+	// Index seeded AHEAD: foo + its test AND the added untested Bar.
+	seedBaseDB(t, filepath.Join(home, "veska.db"), map[string]string{
+		"foo.go": fooSrc, "foo_test.go": fooTestSrc, "bar.go": barSrc,
+	})
+	repoDir := t.TempDir()
+	// base-ref has only foo.go/foo_test.go; candidate ADDS the untested bar.go.
+	makeRepo(t, repoDir,
+		map[string]string{"foo.go": fooSrc, "foo_test.go": fooTestSrc},
+		map[string]*string{"bar.go": &barSrc},
+	)
+
+	v, err := runUntested(t, home, repoDir)
+	if !errors.Is(err, ErrGateFailed) {
+		t.Fatalf("index-ahead untested must now FAIL (zvh6.11); got %v verdict=%+v", err, v)
+	}
+	if v.Pass || len(v.UntestedChanged) != 1 {
+		t.Fatalf("want exactly one untested changed symbol (Bar); got %+v", v)
+	}
+}
+
 // AC2 positive — the case that justifies the re-promote: adding a prod symbol
 // AND its test in a new _test.go (cross-file) must PASS. The test→prod CALLS
 // edge resolves at promotion (the ephemeral overlay alone would miss it).
