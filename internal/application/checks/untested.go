@@ -16,21 +16,35 @@ import (
 // CALLS-edge PROXY for "is covered by tests" (solov2-zvh6.3). It needs no new
 // ingest — the signal is latent in CALLS edges already in the graph.
 //
-// Proxy limits (by design, not bugs — the finding is advisory/low-severity):
+// Proxy limits (by design, not bugs — the finding is advisory/low-severity).
+// The complete set was probed empirically in solov2-zvh6.10 and each case is
+// locked by a regression test in coveragegate_probe_test.go:
 //
-//   - False positives (flagged untested but actually exercised): interface /
-//     dynamic dispatch resolves the CALLS edge to the interface method, not the
-//     concrete impl; transitive-only coverage (a test calls A→B→symbol) has no
-//     DIRECT test caller; a symbol passed as a function value emits no CALLS
-//     edge. These over-report on interface-heavy, table-driven Go.
+//   - SUPPRESSED today: interface / dynamic dispatch resolves the CALLS edge to
+//     the interface method, not the concrete impl — including a base method
+//     reached through embedding when it satisfies an interface. The
+//     InterfaceMethodNames filter below silences these (solov2-zvh6.9).
+//   - False positives that REMAIN (no graph signal to suppress on):
+//     · func-value / callback references — a prod fn passed as a value
+//     (fn := F; F as t.Cleanup(F); a struct field {F}) emits no CALLS edge
+//     (solov2-zvh6.15);
+//     · embedded method promotion WITHOUT an interface — w.Do() binds to a
+//     non-existent Wrap.Do, not Base.Do (solov2-zvh6.16);
+//     · transitive-only coverage — a test calls A→B→symbol, no DIRECT test
+//     caller; the principled fix is the transitive reverse map
+//     (solov2-v6de.1).
+//     · reflection / generated harnesses — string-keyed dispatch
+//     (reflect.ValueOf(x).MethodByName("Do").Call(...)) names the symbol only
+//     at runtime, so NO static analysis can ever produce an edge. This is a
+//     PERMANENT proxy limit, not a deferred fix — there is no follow-up bead.
 //   - False negatives (not flagged but effectively untested): a hollow test
 //     caller that asserts nothing still emits a CALLS edge.
 //
 // The bias is toward over-reporting, which is why the finding never blocks on
-// its own. The transitive node→test reverse map that removes the transitive
-// false positive is tracked as solov2-v6de.1; interface-dispatch suppression
-// (borrowing dead-code's InterfaceMethodNames filter) is the natural next
-// lever. Neither is in scope here.
+// its own. The fixable false positives each need a NEW graph signal (a
+// reference edge kind, embedding resolution, or the transitive reverse map) —
+// not the name-based suppression this check already does — so they are tracked
+// as follow-ups; reflection is unanalyzable and stays a permanent limit.
 //
 // Unlike DeadCodeCheck this deliberately does NOT exclude exported symbols: a
 // test caller is always a visible CALLS edge regardless of export, so an
