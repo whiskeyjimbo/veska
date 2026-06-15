@@ -40,8 +40,11 @@ import (
 //   - False negatives (not flagged but effectively untested): a hollow test
 //     caller that asserts nothing still emits a CALLS edge.
 //
-// The bias is toward over-reporting, which is why the finding never blocks on
-// its own. The fixable false positives each need a NEW graph signal (a
+// The bias is toward over-reporting. As a FINDING this is advisory/low-severity
+// and never blocks on its own; the SEPARATE diff-gate (RunUntested) does return
+// ErrGateFailed on a changed-and-untested symbol, which is why suppressing these
+// false positives matters there. The fixable false positives each need a NEW
+// graph signal (a
 // reference edge kind, embedding resolution, or the transitive reverse map) —
 // not the name-based suppression this check already does — so they are tracked
 // as follow-ups; reflection is unanalyzable and stays a permanent limit.
