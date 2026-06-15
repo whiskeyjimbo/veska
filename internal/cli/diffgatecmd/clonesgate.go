@@ -234,11 +234,11 @@ func buildEphemeral(ctx context.Context, p ephemeralParams, base diffgate.BaseGr
 	}
 	eph, err := ix.Index(ctx, p.RepoID, p.Branch, base, src)
 	if err != nil {
-		return nil, nil, fmt.Errorf("diff-gate: index candidate: %w", err)
+		return nil, nil, fmt.Errorf("diff-gate: index candidate: %w", cleanRefError(err, p.BaseRef, p.CandidateRef))
 	}
 	changes, err := src.Changes(ctx)
 	if err != nil {
-		return nil, nil, fmt.Errorf("diff-gate: read changes: %w", err)
+		return nil, nil, fmt.Errorf("diff-gate: read changes: %w", cleanRefError(err, p.BaseRef, p.CandidateRef))
 	}
 	return eph, changes, nil
 }

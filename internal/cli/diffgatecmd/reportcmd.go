@@ -66,7 +66,7 @@ func RunReport(ctx context.Context, p ReportParams) error {
 	// Advisory, not a gate: an un-indexed repo yields a noted report and still
 	// exits 0 (the other gates fail closed here; the report must not).
 	if !repoIndexed(ctx, pools.ReadDB, p.RepoID, p.Branch) {
-		report.Notes = append(report.Notes, "repo_not_indexed: index the repo (e.g. `veska reindex`) for a complete report")
+		report.Notes = append(report.Notes, notIndexedDetail(ctx, pools.ReadDB, p.RepoID))
 		return emitReport(p.Out, report)
 	}
 
@@ -74,7 +74,7 @@ func RunReport(ctx context.Context, p ReportParams) error {
 	// (repo-relative slash, matching nodes.file_path / git ChangeCounts).
 	changedFiles, err := git.ChangedFilesBetween(ctx, p.RepoRoot, p.BaseRef, p.CandidateRef)
 	if err != nil {
-		report.Notes = append(report.Notes, fmt.Sprintf("changed_files: could not diff %s..%s: %v", p.BaseRef, p.CandidateRef, err))
+		report.Notes = append(report.Notes, fmt.Sprintf("changed_files: %v", cleanRefError(err, p.BaseRef, p.CandidateRef)))
 		return emitReport(p.Out, report)
 	}
 	report.ChangedFiles = changedFiles
