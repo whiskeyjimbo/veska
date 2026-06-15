@@ -16,7 +16,21 @@ type apiVerdict struct {
 		PrevSig    string `json:"prev_signature"`
 		NewSig     string `json:"new_signature"`
 	} `json:"breaking_changes"`
+	RemovedSymbols []struct {
+		SymbolPath string `json:"symbol_path"`
+		FilePath   string `json:"file_path"`
+		Kind       string `json:"kind"`
+	} `json:"removed_symbols"`
 	Failures []string `json:"failures"`
+}
+
+// removedSymbols flattens the verdict's removed-symbol set to names.
+func removedSymbols(v apiVerdict) map[string]bool {
+	out := map[string]bool{}
+	for _, r := range v.RemovedSymbols {
+		out[r.SymbolPath] = true
+	}
+	return out
 }
 
 func runAPI(t *testing.T, home, repoDir string) (apiVerdict, error) {
@@ -166,5 +180,168 @@ func TestRunAPIBreak_E2E_IndexAhead_NowDetected(t *testing.T) {
 	}
 	if bc.NewSig != "Foo(a int, b int) int" {
 		t.Fatalf("new_signature must be the candidate sig; got %q", bc.NewSig)
+	}
+}
+
+// Removal (solov2-zvh6.12): deleting an EXPORTED function must FAIL, naming it.
+func TestRunAPIBreak_E2E_RemovedExportedFunc_Fails(t *testing.T) {
+	home := t.TempDir()
+	const baseSrc = "package p\n\nfunc Foo() int { return 1 }\nfunc Bar() int { return 2 }\n"
+	seedBaseDB(t, filepath.Join(home, "veska.db"), map[string]string{"x.go": baseSrc})
+	repoDir := t.TempDir()
+	cand := "package p\n\nfunc Foo() int { return 1 }\n" // Bar removed
+	makeRepo(t, repoDir,
+		map[string]string{"x.go": baseSrc},
+		map[string]*string{"x.go": &cand},
+	)
+
+	v, err := runAPI(t, home, repoDir)
+	if !errors.Is(err, ErrGateFailed) {
+		t.Fatalf("removing exported Bar must FAIL; got %v verdict=%+v", err, v)
+	}
+	if !removedSymbols(v)["Bar"] {
+		t.Fatalf("must name Bar removed; got %+v", v)
+	}
+}
+
+// Rename (solov2-zvh6.12): renaming an EXPORTED function FAILs — the OLD name is
+// gone (breaking for importers). Removal/rename collapse into one category.
+func TestRunAPIBreak_E2E_RenamedExportedFunc_Fails(t *testing.T) {
+	home := t.TempDir()
+	const baseSrc = "package p\n\nfunc Foo() int { return 1 }\n"
+	seedBaseDB(t, filepath.Join(home, "veska.db"), map[string]string{"x.go": baseSrc})
+	repoDir := t.TempDir()
+	cand := "package p\n\nfunc Renamed() int { return 1 }\n" // Foo -> Renamed
+	makeRepo(t, repoDir,
+		map[string]string{"x.go": baseSrc},
+		map[string]*string{"x.go": &cand},
+	)
+
+	v, err := runAPI(t, home, repoDir)
+	if !errors.Is(err, ErrGateFailed) {
+		t.Fatalf("renaming exported Foo must FAIL; got %v verdict=%+v", err, v)
+	}
+	if !removedSymbols(v)["Foo"] {
+		t.Fatalf("must name the absent OLD symbol Foo; got %+v", v)
+	}
+}
+
+// Unexport-in-place (solov2-zvh6.12): lowercasing an EXPORTED symbol FAILs —
+// the exported name disappears from the public surface. This pins that the
+// candidate-side exported filter is what makes unexporting register as a
+// removal (base-exported {Foo}, candidate exports nothing → Foo absent).
+func TestRunAPIBreak_E2E_UnexportInPlace_Fails(t *testing.T) {
+	home := t.TempDir()
+	const baseSrc = "package p\n\nfunc Foo() int { return 1 }\n"
+	seedBaseDB(t, filepath.Join(home, "veska.db"), map[string]string{"x.go": baseSrc})
+	repoDir := t.TempDir()
+	cand := "package p\n\nfunc foo() int { return 1 }\n" // Foo -> foo (unexported)
+	makeRepo(t, repoDir,
+		map[string]string{"x.go": baseSrc},
+		map[string]*string{"x.go": &cand},
+	)
+
+	v, err := runAPI(t, home, repoDir)
+	if !errors.Is(err, ErrGateFailed) {
+		t.Fatalf("unexporting Foo must FAIL; got %v verdict=%+v", err, v)
+	}
+	if !removedSymbols(v)["Foo"] {
+		t.Fatalf("must name the now-absent exported Foo; got %+v", v)
+	}
+}
+
+// Unexporting-as-removal negative: removing an UNEXPORTED function is not a
+// public-API break — it never entered the base-exported set, so PASS.
+func TestRunAPIBreak_E2E_RemovedUnexportedFunc_Passes(t *testing.T) {
+	home := t.TempDir()
+	const baseSrc = "package p\n\nfunc Foo() int { return 1 }\nfunc helper() int { return 2 }\n"
+	seedBaseDB(t, filepath.Join(home, "veska.db"), map[string]string{"x.go": baseSrc})
+	repoDir := t.TempDir()
+	cand := "package p\n\nfunc Foo() int { return 1 }\n" // unexported helper removed
+	makeRepo(t, repoDir,
+		map[string]string{"x.go": baseSrc},
+		map[string]*string{"x.go": &cand},
+	)
+
+	v, err := runAPI(t, home, repoDir)
+	if err != nil {
+		t.Fatalf("removing unexported helper must PASS (nil err); got %v verdict=%+v", err, v)
+	}
+	if !v.Pass {
+		t.Fatalf("removing unexported helper must PASS; got %+v", v)
+	}
+}
+
+// Deleted file (solov2-zvh6.12): deleting a file that defined an EXPORTED symbol
+// must FAIL. Exercises buildPinnedEphemeral's deleted-file→base-ref-content path
+// for the base-exported leg.
+func TestRunAPIBreak_E2E_DeletedFileRemovesExport_Fails(t *testing.T) {
+	home := t.TempDir()
+	const aSrc = "package p\n\nfunc Foo() int { return 1 }\n"
+	const bSrc = "package p\n\nfunc Bar() int { return 2 }\n"
+	seedBaseDB(t, filepath.Join(home, "veska.db"), map[string]string{"a.go": aSrc, "b.go": bSrc})
+	repoDir := t.TempDir()
+	makeRepo(t, repoDir,
+		map[string]string{"a.go": aSrc, "b.go": bSrc},
+		map[string]*string{"b.go": nil}, // delete b.go (and its exported Bar)
+	)
+
+	v, err := runAPI(t, home, repoDir)
+	if !errors.Is(err, ErrGateFailed) {
+		t.Fatalf("deleting a file with an exported symbol must FAIL; got %v verdict=%+v", err, v)
+	}
+	if !removedSymbols(v)["Bar"] {
+		t.Fatalf("must name Bar removed; got %+v", v)
+	}
+}
+
+// The discriminating e2e (proves package-scoped identity, not node_id): moving
+// an EXPORTED function to another file in the SAME package (root dir) must PASS.
+func TestRunAPIBreak_E2E_IntraPackageMove_Passes(t *testing.T) {
+	home := t.TempDir()
+	const aSrc = "package p\n\nfunc Foo() int { return 1 }\n"
+	seedBaseDB(t, filepath.Join(home, "veska.db"), map[string]string{"a.go": aSrc})
+	repoDir := t.TempDir()
+	emptied := "package p\n"                              // Foo removed from a.go
+	moved := "package p\n\nfunc Foo() int { return 1 }\n" // Foo now in b.go
+	makeRepo(t, repoDir,
+		map[string]string{"a.go": aSrc},
+		map[string]*string{"a.go": &emptied, "b.go": &moved},
+	)
+
+	v, err := runAPI(t, home, repoDir)
+	if err != nil {
+		t.Fatalf("intra-package move must PASS (nil err); got %v verdict=%+v", err, v)
+	}
+	if !v.Pass {
+		t.Fatalf("intra-package move must PASS (identity = pkg+kind+name); got %+v", v)
+	}
+}
+
+// INDEX-AHEAD removal lock (solov2-zvh6.11 + .12): the index is seeded AHEAD —
+// it already reflects Bar's removal — while base-ref still has Bar. Before
+// pinning, the base-exported leg (read from a clone of the drifted index) would
+// also lack Bar, so no removal is detected → false PASS. With buildPinnedEphemeral
+// the base clone re-promotes base-ref's x.go (Bar present), so the removal is
+// correctly detected and the gate FAILs.
+func TestRunAPIBreak_E2E_IndexAhead_Removal_NowDetected(t *testing.T) {
+	home := t.TempDir()
+	const withBar = "package p\n\nfunc Foo() int { return 1 }\nfunc Bar() int { return 2 }\n"
+	const withoutBar = "package p\n\nfunc Foo() int { return 1 }\n"
+	// Index seeded AHEAD: at the candidate content (Bar already gone).
+	seedBaseDB(t, filepath.Join(home, "veska.db"), map[string]string{"x.go": withoutBar})
+	repoDir := t.TempDir()
+	c := withoutBar
+	makeRepo(t, repoDir,
+		map[string]string{"x.go": withBar}, // base-ref HEAD~1 still has Bar
+		map[string]*string{"x.go": &c},     // candidate HEAD removes Bar
+	)
+
+	v, err := runAPI(t, home, repoDir)
+	if !errors.Is(err, ErrGateFailed) {
+		t.Fatalf("index-ahead removal must now FAIL (zvh6.11/.12); got %v verdict=%+v", err, v)
+	}
+	if !removedSymbols(v)["Bar"] {
+		t.Fatalf("must name Bar removed; got %+v", v)
 	}
 }

@@ -91,12 +91,21 @@ func RunAPIBreak(ctx context.Context, p APIParams) error {
 	}
 	defer cleanup()
 
-	drifted, err := driftedInChangedFiles(ctx, baseClonePath, p.RepoID, p.Branch, p.CandidateRef, changes, eph.ChangedFiles)
+	// Base-ref exported public surface over the changed files (from the pinned
+	// base clone) — the symbols whose disappearance is a breaking removal.
+	baseExported, err := exportedSymbolsAt(ctx, baseClonePath, p.RepoID, p.Branch, eph.ChangedFiles)
+	if err != nil {
+		return fmt.Errorf("diff-gate api: base exported: %w", err)
+	}
+
+	// After-state: clone the base-ref-pinned graph, re-promote the candidate, and
+	// query BOTH signals (drift + exported set) off the SAME clone.
+	drifted, candExported, err := afterStateAPISignals(ctx, baseClonePath, p.RepoID, p.Branch, p.CandidateRef, changes, eph.ChangedFiles)
 	if err != nil {
 		return fmt.Errorf("diff-gate api: %w", err)
 	}
 
-	verdict := diffgate.NewAPIGate().Evaluate(drifted)
+	verdict := diffgate.NewAPIGate().Evaluate(drifted, baseExported, candExported)
 
 	rep := apiGateReport{APIVerdict: verdict, Failures: verdict.Failures()}
 	if err := emitAPIReport(p.Out, rep); err != nil {
@@ -108,29 +117,58 @@ func RunAPIBreak(ctx context.Context, p APIParams) error {
 	return nil
 }
 
-// driftedInChangedFiles re-promotes the candidate's changed files into a
-// throwaway clone of the base graph and returns the contract-drift rows over
-// those files (nodes whose prev_signature != signature). The re-promote is what
-// sets prev_signature (base) vs signature (candidate); the drift query is
-// self-scoping to genuinely-changed signatures, so the gate needs no separate
-// change-set intersection. Visibility filtering (exported-only) lives in the
-// gate, leaving the whole-repo contract-drift querier unchanged.
-func driftedInChangedFiles(ctx context.Context, baseDBPath, repoID, branch, gitSHA string, changes []diffgate.FileChange, changedFiles []string) ([]ports.DriftedNode, error) {
+// afterStateAPISignals re-promotes the candidate's changed files into a
+// throwaway clone of the (base-ref-pinned) base graph and reads BOTH api-gate
+// signals off that single clone:
+//
+//   - drifted: contract-drift rows over the changed files (nodes whose
+//     prev_signature != signature). The re-promote is what sets prev_signature
+//     (base-ref) vs signature (candidate); the drift query is self-scoping to
+//     genuinely-changed signatures. Visibility filtering (exported-only) lives in
+//     the gate, leaving the whole-repo contract-drift querier unchanged.
+//   - candidateExported: the exported public-surface symbols over the changed
+//     files in the candidate after-state, for the removal/rename detector.
+//
+// Both reads hit the same clone so the DB is cloned and re-promoted once.
+//
+//nolint:revive // argument-limit: intrinsic clone+identity+change plumbing, matching the sibling diff-gate helpers (untestedInChangedFiles, cycleEdgeGraphs); not a cohesive struct.
+func afterStateAPISignals(ctx context.Context, baseDBPath, repoID, branch, gitSHA string, changes []diffgate.FileChange, changedFiles []string) ([]ports.DriftedNode, []ports.ExportedSymbol, error) {
 	clone, err := cloneDB(ctx, baseDBPath)
 	if err != nil {
-		return nil, fmt.Errorf("clone base db: %w", err)
+		return nil, nil, fmt.Errorf("clone base db: %w", err)
 	}
 	defer os.Remove(clone)
 	clonePools, err := sqlite.OpenPools(clone)
 	if err != nil {
-		return nil, fmt.Errorf("open clone: %w", err)
+		return nil, nil, fmt.Errorf("open clone: %w", err)
 	}
 	defer clonePools.Close()
 
 	if err := repromoteChanged(ctx, clonePools, repoID, branch, gitSHA, candidateChangedFiles(changes)); err != nil {
-		return nil, fmt.Errorf("re-promote: %w", err)
+		return nil, nil, fmt.Errorf("re-promote: %w", err)
 	}
-	return sqlite.NewContractDriftRepo(clonePools.ReadDB).DriftedNodesInFiles(ctx, repoID, branch, changedFiles)
+	drifted, err := sqlite.NewContractDriftRepo(clonePools.ReadDB).DriftedNodesInFiles(ctx, repoID, branch, changedFiles)
+	if err != nil {
+		return nil, nil, fmt.Errorf("drift: %w", err)
+	}
+	candExported, err := sqlite.NewExportedSymbolRepo(clonePools.ReadDB).ExportedSymbolsInFiles(ctx, repoID, branch, changedFiles)
+	if err != nil {
+		return nil, nil, fmt.Errorf("candidate exported: %w", err)
+	}
+	return drifted, candExported, nil
+}
+
+// exportedSymbolsAt opens a read pool on dbPath and returns the exported
+// public-surface symbols over the given files. Used for the base-ref leg (over
+// the pinned base clone); the after-state leg reads its exported set off the
+// re-promoted clone directly in afterStateAPISignals.
+func exportedSymbolsAt(ctx context.Context, dbPath, repoID, branch string, files []string) ([]ports.ExportedSymbol, error) {
+	pools, err := sqlite.OpenPools(dbPath)
+	if err != nil {
+		return nil, fmt.Errorf("open db: %w", err)
+	}
+	defer pools.Close()
+	return sqlite.NewExportedSymbolRepo(pools.ReadDB).ExportedSymbolsInFiles(ctx, repoID, branch, files)
 }
 
 // emitAPIReport writes the indented JSON api-gate report to out.
