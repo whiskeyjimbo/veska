@@ -3,10 +3,10 @@ id: SOLO-02
 title: "Personas & Stories — Dev and Agent"
 status: draft
 version: 0.2.0
-last_reviewed: 2026-05-19
+last_reviewed: 2026-06-15
 related: [SOLO-01, SOLO-03, SOLO-05, SOLO-08, SOLO-09, SOLO-10, SOLO-11, SOLO-12]
 verified: true
-verified_date: "2026-05-19"
+verified_date: "2026-06-15"
 ---
 
 # SOLO-02 — Personas & Stories
@@ -145,8 +145,16 @@ response sets `included_staging` per SOLO-09 §4.4.
 
 ### US-04.02 — Agent: Compute blast radius for the active task
 
-**Status:** shipped
+**Status:** blocked — task scoping parked
 **Satisfied by:** SOLO-09, SOLO-12
+
+> **Not reachable on the live MCP surface (solov2-nmps.10).** The
+> `eng_get_dirty_blast_radius` and `eng_get_context_pack` tools ship and work,
+> but the *active-task* anchoring this story depends on — `eng_set_active_task`
+> — is parked off the daemon registry (there is no MCP path to create a task;
+> see `internal/infrastructure/mcp/tools_tasks.go`). A real agent can compute a
+> dirty blast radius, but cannot scope it to an active task. Re-mark `shipped`
+> when the task tools re-enable.
 
 The Agent has previously called `eng_set_active_task`. It now
 calls `eng_get_dirty_blast_radius` (or `eng_get_context_pack` for
@@ -289,8 +297,16 @@ idempotent to repeated mid-session calls.
 
 ### US-09.02 — Agent: Resume an in-progress task
 
-**Status:** shipped
+**Status:** blocked — task tools parked
 **Satisfied by:** SOLO-09, SOLO-12
+
+> **Not reachable on the live MCP surface (solov2-nmps.10).** This story needs
+> `eng_get_task_history` and `eng_get_context_pack` *in task mode*, both of which
+> depend on the task tools (`eng_set_active_task` / `eng_get_task_history`) that
+> are parked off the daemon registry — `RegisterTaskTools` is never wired
+> because there is no MCP path to create a task
+> (`internal/infrastructure/mcp/tools_tasks.go`). Symbol-mode `eng_get_context_pack`
+> works; the task-anchored resume path does not. Re-mark `shipped` on re-enable.
 
 The Agent returns to a long-running task. It calls
 `eng_get_task_history` for the task-anchored deltas and
@@ -323,8 +339,13 @@ restart daemons; the Dev does not drive findings generation).
 
 ## 6. Status
 
-All sixteen stories are `shipped`: milestones M0–M7 have closed and
-their satisfying SOLO sections are in the field. A story transitions
-to `shipped` once its satisfying SOLO section ships and the milestone
-WBS closes the matching epic; future stories added here start at
-`planned`.
+Fourteen of sixteen stories are `shipped`: milestones M0–M7 have
+closed and their satisfying SOLO sections are in the field. The two
+Agent task-anchored stories — **US-04.02** and **US-09.02** — are
+`blocked`: their underlying blast-radius and context-pack tools ship,
+but the task tools (`eng_set_active_task` / `eng_get_task_history`)
+they need are parked off the live MCP registry, so the task-scoped
+behaviour is not reachable by a real agent (solov2-nmps.10; surfaced
+by the agent persona workflow). A story transitions to `shipped` once
+its satisfying SOLO section ships AND its tools are dispatchable on the
+live surface; future stories added here start at `planned`.
