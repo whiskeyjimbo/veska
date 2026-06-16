@@ -907,6 +907,29 @@ veska doctor wiki_render [flags]
 ```
 
 
+### `veska duplicates`
+
+Whole-repo (or cross-repo) similar-code clusters for de-dupe triage (wraps eng_find_clusters)
+
+List groups of >=2 similar symbols in one ranked pass across three tiers (tightest first): 'exact' (byte-identical copy-paste), 'structural' (same shape after renaming variables/literals — Type-2 clones), and 'near' (vector-similar above the elected embedder's calibrated threshold). A symbol appears at most once, at its tightest tier. No seed needed — point it at a repo (or --all-repos) and turn each cluster into a verify-and-dedupe task. Note: structural/near need structural_hash + scored SIMILAR_TO edges; reindex a graph promoted before they landed.
+
+```
+veska duplicates [flags]
+```
+
+**Flags:**
+
+```
+      --all-repos         cluster across every registered repo (cross-repo; exact+structural only)
+      --branch string     branch (default: repo's active branch, or 'main' with --all-repos)
+      --json              emit JSON (eng_find_clusters shape)
+      --min-score float   near tier: minimum similarity score (0 = calibrated default; lower for more recall)
+      --path string       restrict to nodes whose file_path starts with this prefix
+      --repo string       repo id, short_id, or alias (ignored with --all-repos)
+      --tiers string      comma-separated subset of exact,structural,near (default: all)
+```
+
+
 ### `veska entry-points`
 
 List high-fan-in entry-point symbols (wraps eng_get_entry_points)

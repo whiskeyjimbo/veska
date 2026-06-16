@@ -53,6 +53,7 @@ nav:
       - The code graph: concepts/graph.md
       - Promotion & staging: concepts/promotion-staging.md
       - Semantic search & embeddings: concepts/embeddings.md
+      - Finding duplicate & similar code: concepts/duplicates.md
       - Daemon topology: concepts/daemon-topology.md
   - Operator guides:
       - Running the daemon: guides/running-the-daemon.md

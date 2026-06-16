@@ -15,6 +15,8 @@ when you want the binding detail.
   recall on save, semantic recall on commit.
 - **[Semantic search & embeddings](embeddings.md)** — the in-process embedder
   and the lexical fallback.
+- **[Finding duplicate & similar code](duplicates.md)** — exact, structural
+  (renamed), and near tiers, repo-wide and cross-repo.
 - **[Daemon topology](daemon-topology.md)** — one binary, three personalities,
   and what the daemon owns.
 
