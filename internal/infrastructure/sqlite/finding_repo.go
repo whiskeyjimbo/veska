@@ -10,33 +10,24 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/core/domain"
 )
 
-// FindingRepo is the SQLite adapter for the FindingStorage port. It writes
-// to the `findings` table created by migration 0003.
-// The (finding_id, branch) primary key is branch-stable: re-running a check
-// against the same anchor on the same branch must not create a duplicate row.
-// Save therefore uses ON CONFLICT DO UPDATE so re-detection of an unresolved
-// finding refreshes its message/severity without churning the row.
+// FindingRepo implements the FindingStorage port. Because the (finding_id,
+// branch) primary key is branch-stable, re-running a check on the same branch
+// must not create duplicates. Save therefore uses ON CONFLICT DO UPDATE to
+// refresh the finding's properties without churning the row.
 type FindingRepo struct {
 	db *sql.DB
 }
 
-// NewFindingRepo constructs a FindingRepo bound to the provided write-capable
-// *sql.DB handle. The handle must point at a DB that has had migration 0003
-// applied (verified by Open).
+// NewFindingRepo constructs a FindingRepo. The database handle must be
+// write-capable and have migration 0003 applied.
 func NewFindingRepo(db *sql.DB) *FindingRepo {
 	return &FindingRepo{db: db}
 }
 
-// Save persists f into the findings table. It is idempotent on (finding_id,
-// branch): a second Save with the same finding_id/branch updates rule, message,
-// severity, source_layer, state, anchor, and closed_* columns.
-// Schema fields that are NOT NULL but not present on the domain.Finding value
-// are filled in by the adapter:
-//
-//	created_at is set to the current wall-clock millis on first insert.
-//	actor_id / actor_kind default to "service:veska" / "system" when the
-//	  finding has no actor metadata (the common case for checks produced
-//	  automatically by the promotion pipeline).
+// Save persists a finding into the database, performing an idempotent update
+// if the finding already exists on the branch. Fields not defined on the
+// domain object, such as default actor metadata for automated checks, are
+// filled in with default values.
 func (r *FindingRepo) Save(ctx context.Context, f *domain.Finding) error {
 	if f == nil {
 		return fmt.Errorf("sqlite.FindingRepo.Save: nil finding")
@@ -71,10 +62,9 @@ func (r *FindingRepo) Save(ctx context.Context, f *domain.Finding) error {
 		closedReasonArg = *f.ClosedReason
 	}
 
-	// anchor_content_hash: nil pointer -> NULL; non-nil -> the captured hash.
-	// Using sql.NullString keeps the NULL-vs-empty-string distinction explicit
-	// at the driver boundary so the revalidation sweep can rely on "NULL means
-	// no hash recorded" without coexisting empty strings poisoning the rule.
+	// Using sql.NullString maintains the distinction between a NULL and an empty
+	// string, allowing the revalidation sweep to reliably distinguish between
+	// a missing hash and an empty hash value.
 	var anchorHashArg sql.NullString
 	if f.AnchorContentHash != nil {
 		anchorHashArg = sql.NullString{String: *f.AnchorContentHash, Valid: true}
@@ -116,14 +106,9 @@ ON CONFLICT(finding_id, branch) DO UPDATE SET
 	return nil
 }
 
-// CloseObsolete closes the OPEN finding identified by (findingID, branch),
-// setting state='closed', closed_reason='revalidated_obsolete', and stamping
-// closed_at with the current wall-clock millis (consistent with how Save
-// records timestamps).
-// The UPDATE is gated on state='open' so re-running it cannot churn a finding
-// that a human or an earlier pass already closed. A no-op UPDATE (zero rows
-// matched - already closed, or no such finding) returns nil; closing a
-// finding that does not exist is not an error.
+// CloseObsolete transitions an open finding's state to closed. The update is
+// gated on the open state to prevent modifying findings that have already been
+// closed manually or by another process.
 func (r *FindingRepo) CloseObsolete(ctx context.Context, findingID, branch string) error {
 	const stmt = `
 UPDATE findings
@@ -141,14 +126,9 @@ WHERE finding_id = ?
 	return nil
 }
 
-// CloseSupersededByRule closes every OPEN finding in (repoID, branch, rule)
-// whose finding_id is NOT in keep.
-// See ports.FindingStorage for the full contract. Implementation: when
-// keep is empty, a single UPDATE closes everything in scope. Otherwise the
-// keep set is chunked (500/batch, below SQLITE_MAX_VARIABLE_NUMBER=999),
-// and the closing UPDATE runs once with NOT IN over the chunked union. For
-// the typical N (<= a few dozen findings per rule per repo), one chunk
-// suffices.
+// CloseSupersededByRule closes open findings under a rule that are not in the
+// keep set. The keep set is chunked to stay safely under SQLite's maximum query
+// variable limits.
 func (r *FindingRepo) CloseSupersededByRule(ctx context.Context, repoID, branch, rule string, keep []string) error {
 	now := time.Now().UnixMilli()
 
@@ -170,11 +150,9 @@ WHERE repo_id = ?
 
 	const maxInline = 500
 	if len(keep) > maxInline {
-		// NOT IN over a chunked union would over-close findings outside
-		// each chunk's window, so for keep sets that overflow the IN-list
-		// budget we fall back to a set-difference path. Unreachable in
-		// practice on today's workloads (vuln/secret findings sit well
-		// below 500 per rule per repo); included so the contract holds.
+		// A set-difference fallback is used for keep sets that exceed the chunk
+		// budget because multiple chunked NOT IN queries would incorrectly close
+		// findings omitted from any single chunk.
 		return r.closeSupersededByRuleSetDiff(ctx, repoID, branch, rule, keep, now)
 	}
 
@@ -203,11 +181,9 @@ WHERE repo_id    = ?
 	return nil
 }
 
-// closeSupersededByRuleSetDiff is the slow fallback for keep sets larger
-// than a single SQLite IN-list chunk. Loads all open IDs in scope, diffs
-// against keep in Go, closes the difference one CloseObsolete at a time.
-// Unreachable in practice on today's workloads; included so the contract
-// holds for any caller.
+// closeSupersededByRuleSetDiff computes the set difference in memory to close
+// superseded findings when the keep set size exceeds the single-query chunk
+// limit.
 func (r *FindingRepo) closeSupersededByRuleSetDiff(ctx context.Context, repoID, branch, rule string, keep []string, now int64) error {
 	const sel = `SELECT finding_id FROM findings WHERE repo_id=? AND branch=? AND rule=? AND state='open'`
 	rows, err := r.db.QueryContext(ctx, sel, repoID, branch, rule)
@@ -241,15 +217,9 @@ func (r *FindingRepo) closeSupersededByRuleSetDiff(ctx context.Context, repoID, 
 	return nil
 }
 
-// CloseSupersededAutoLinks closes every OPEN finding with rule='auto-link' in
-// (repoID, branch) whose anchor (findings.node_id) is an edge_id of a
-// SIMILAR_TO edge whose src_node_id appears in sourceNodeIDs.
-// See ports.FindingStorage for the full contract. The implementation issues a
-// single UPDATE whose WHERE filters by an inner SELECT over the edges table,
-// so the supersession is one round-trip irrespective of |sourceNodeIDs|.
-// SQLite's compile-time SQLITE_MAX_VARIABLE_NUMBER caps the IN-list at ~999;
-// to stay safely below that we chunk sourceNodeIDs into batches of 500. An
-// empty input is a no-op (returns nil without touching the DB).
+// CloseSupersededAutoLinks closes open auto-link findings whose anchors match
+// similar-to edges originating from the specified source nodes. The query is
+// chunked into batches of 500 to prevent exceeding SQLITE_MAX_VARIABLE_NUMBER.
 func (r *FindingRepo) CloseSupersededAutoLinks(ctx context.Context, repoID, branch string, sourceNodeIDs []string) error {
 	if len(sourceNodeIDs) == 0 {
 		return nil

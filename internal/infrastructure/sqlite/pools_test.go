@@ -15,15 +15,12 @@ import (
 
 const memDSN = "file::memory:?mode=memory&cache=shared"
 
-// TestOpenPools_ForeignKeyCascade pins: deleting a repos row must
-// cascade-delete its child rows. This only works if foreign_keys is ON for the
-// connection running the DELETE — and the pool opens many connections, so the
-// pragma must be in the DSN (applied per-connection), not a one-shot Exec.
+// TestOpenPools_ForeignKeyCascade verifies that ON DELETE CASCADE correctly fires
+// across pooled connections when foreign key enforcement is DSN-scoped.
 func TestOpenPools_ForeignKeyCascade(t *testing.T) {
 	t.Parallel()
 	dbPath := filepath.Join(t.TempDir(), "v.db")
 
-	// Create + migrate the schema, then close that handle.
 	mdb, err := sqlite.Open(dbPath)
 	if err != nil {
 		t.Fatalf("Open (migrate): %v", err)
@@ -86,7 +83,6 @@ func TestOpenPools_ReadDB_UnlimitedConnections(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = pools.Close() })
 
-	// MaxOpenConnections == 0 means unlimited.
 	if got := pools.ReadDB.Stats().MaxOpenConnections; got != 0 {
 		t.Errorf("ReadDB.MaxOpenConnections = %d; want 0 (unlimited)", got)
 	}
@@ -128,20 +124,17 @@ func TestOpenPools_WALMode(t *testing.T) {
 			t.Errorf("%s: PRAGMA journal_mode: %v", h.name, err)
 			continue
 		}
-		// In-memory SQLite always returns "memory" for journal_mode; WAL is only
-		// available for file-backed databases. Accept both.
+		// In-memory SQLite databases always return "memory" for journal_mode because
+		// WAL is only supported by file-backed databases.
 		if mode != "wal" && mode != "memory" {
 			t.Errorf("%s: journal_mode = %q; want \"wal\" or \"memory\"", h.name, mode)
 		}
 	}
 }
 
-// TestOpenPools_ConcurrentWrites_NoSQLITEBUSY pins: concurrent
-// writers (formerly via separate WriteHot/WriteEmbed pools) must not surface
-// SQLITE_BUSY mid-transaction. The single Write pool's MaxOpenConns=1 forces
-// in-process writers to queue on the *sql.DB conn rather than racing for the
-// SQLite-file writer slot, which was the source of the BUSY_SNAPSHOT errors
-// the user kept hitting on `config reload` and fast cold-scan completions.
+// TestOpenPools_ConcurrentWrites_NoSQLITEBUSY verifies that forcing a single
+// connection on the write pool prevents concurrent transactions from failing
+// with SQLITE_BUSY errors.
 func TestOpenPools_ConcurrentWrites_NoSQLITEBUSY(t *testing.T) {
 	t.Parallel()
 	dbPath := filepath.Join(t.TempDir(), "v.db")
@@ -202,7 +195,6 @@ func TestOpenPools_ConcurrentWrites_NoSQLITEBUSY(t *testing.T) {
 	close(errs)
 
 	for err := range errs {
-		// SQLITE_BUSY = 5; the invariant under test is that callers never see it.
 		if err != nil && (errors.Is(err, sql.ErrTxDone) || strings.Contains(err.Error(), "SQLITE_BUSY") || strings.Contains(err.Error(), "database is locked")) {
 			t.Errorf("concurrent writer hit SQLITE_BUSY/locked: %v", err)
 		} else if err != nil {

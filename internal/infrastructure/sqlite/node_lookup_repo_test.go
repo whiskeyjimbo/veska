@@ -11,8 +11,6 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/sqlite"
 )
 
-// seedNodeRow inserts a repo (if needed) and a single node row with the
-// supplied identifiers and source location. Helper for NodeLookupRepo tests.
 func seedNodeRow(t *testing.T, db *sql.DB, repoID, branch, nodeID, symbolPath, filePath, kind string, lineStart, lineEnd int) {
 	t.Helper()
 	now := time.Now().UnixMilli()
@@ -44,9 +42,6 @@ func openLookupTestDB(t *testing.T) (*sql.DB, *sqlite.NodeLookupRepo) {
 	return db, sqlite.NewNodeLookupRepo(db)
 }
 
-// TestNodeLookupRepo_ReturnsKnownNodes_DropsMissing verifies the adapter
-// hydrates rows that exist and silently omits IDs that do not — the
-// defensive contract the search service relies on.
 func TestNodeLookupRepo_ReturnsKnownNodes_DropsMissing(t *testing.T) {
 	t.Parallel()
 	db, repo := openLookupTestDB(t)
@@ -73,8 +68,6 @@ func TestNodeLookupRepo_ReturnsKnownNodes_DropsMissing(t *testing.T) {
 	}
 }
 
-// TestNodeLookupRepo_BranchIsolated verifies branch scoping — a row with
-// the same node_id on a different branch must not be returned.
 func TestNodeLookupRepo_BranchIsolated(t *testing.T) {
 	t.Parallel()
 	db, repo := openLookupTestDB(t)
@@ -91,7 +84,6 @@ func TestNodeLookupRepo_BranchIsolated(t *testing.T) {
 	}
 }
 
-// TestNodeLookupRepo_EmptyInput short-circuits with no error and no rows.
 func TestNodeLookupRepo_EmptyInput(t *testing.T) {
 	t.Parallel()
 	_, repo := openLookupTestDB(t)
@@ -105,9 +97,6 @@ func TestNodeLookupRepo_EmptyInput(t *testing.T) {
 	}
 }
 
-// TestNodeLookupRepo_NodesInFile_ReturnsMatchingNodes verifies that
-// NodesInFile returns every node_id whose file_path equals the supplied
-// path on the given (repo, branch).
 func TestNodeLookupRepo_NodesInFile_ReturnsMatchingNodes(t *testing.T) {
 	t.Parallel()
 	db, repo := openLookupTestDB(t)
@@ -126,7 +115,6 @@ func TestNodeLookupRepo_NodesInFile_ReturnsMatchingNodes(t *testing.T) {
 	}
 }
 
-// TestNodeLookupRepo_NodesInFile_UnknownFile returns nil, nil.
 func TestNodeLookupRepo_NodesInFile_UnknownFile(t *testing.T) {
 	t.Parallel()
 	db, repo := openLookupTestDB(t)
@@ -141,8 +129,6 @@ func TestNodeLookupRepo_NodesInFile_UnknownFile(t *testing.T) {
 	}
 }
 
-// TestNodeLookupRepo_NodesInFile_BranchAndRepoIsolated verifies that
-// NodesInFile is correctly scoped to (repo, branch).
 func TestNodeLookupRepo_NodesInFile_BranchAndRepoIsolated(t *testing.T) {
 	t.Parallel()
 	db, repo := openLookupTestDB(t)
@@ -160,7 +146,6 @@ func TestNodeLookupRepo_NodesInFile_BranchAndRepoIsolated(t *testing.T) {
 	}
 }
 
-// TestNodeLookupRepo_NodesInFile_EmptyPath returns nil, nil.
 func TestNodeLookupRepo_NodesInFile_EmptyPath(t *testing.T) {
 	t.Parallel()
 	_, repo := openLookupTestDB(t)
@@ -173,12 +158,8 @@ func TestNodeLookupRepo_NodesInFile_EmptyPath(t *testing.T) {
 	}
 }
 
-// TestNodeLookupRepo_RepoIsolated verifies repo scoping — a node_id that
-// only exists in another repo must not leak. The (node_id, branch)
-// composite primary key makes "same node_id in two repos on the same
-// branch" structurally impossible, so we test the weaker but actually
-// reachable case: a query against repo r2 must not return rows that
-// live in repo r1.
+// TestNodeLookupRepo_RepoIsolated verifies that query isolation prevents node IDs
+// from leaking across repositories since node IDs are not globally unique.
 func TestNodeLookupRepo_RepoIsolated(t *testing.T) {
 	t.Parallel()
 	db, repo := openLookupTestDB(t)

@@ -69,7 +69,7 @@ func TestPrintRepoTable_BlankKindDefaultsToTracked(t *testing.T) {
 func TestPrintRepoTable_EmptyMessageUnchanged(t *testing.T) {
 	var buf bytes.Buffer
 	PrintRepoTable(&buf, nil)
-	want := "no repositories registered — run: veska repo add <path>"
+	want := "no repositories registered - run: veska repo add <path>"
 	if !strings.Contains(buf.String(), want) {
 		t.Errorf("missing empty-message %q; got:\n%s", want, buf.String())
 	}

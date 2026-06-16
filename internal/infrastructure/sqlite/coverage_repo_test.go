@@ -8,27 +8,20 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/sqlite"
 )
 
-// TestCoverageRepo_AttributesCallersByFile seeds a prod symbol called from both
-// a prod and a test file, a prod symbol called only from a prod file, and an
-// uncalled symbol; it asserts the adapter returns each candidate paired with
-// the distinct file paths of its direct CALLS callers.
+// TestCoverageRepo_AttributesCallersByFile verifies that the adapter returns candidate nodes mapped to the distinct file paths of their direct CALLS callers.
 func TestCoverageRepo_AttributesCallersByFile(t *testing.T) {
 	t.Parallel()
 	f := setupDeadCodeFixture(t) // reuse repos+nodes+edges fixture helpers
 
-	// Candidates (in scope: pkg/a.go).
 	f.insertNode(t, "n-prod", "pkg/a.go", "function", "DoWork")
 	f.insertNode(t, "n-untested", "pkg/a.go", "function", "lonely")
 	f.insertNode(t, "n-orphan", "pkg/a.go", "function", "neverCalled")
-	// Callers (out of scope; their file paths are what matters).
 	f.insertNode(t, "c-prod", "pkg/handler.go", "function", "handle")
 	f.insertNode(t, "c-test", "pkg/a_test.go", "function", "TestDoWork")
 
-	// CALLS edges. n-prod gets a prod AND a test caller; n-untested only prod.
 	f.insertEdge(t, "e1", "c-prod", "n-prod", "calls")
 	f.insertEdge(t, "e2", "c-test", "n-prod", "calls")
 	f.insertEdge(t, "e3", "c-prod", "n-untested", "calls")
-	// A non-CALLS edge must NOT count as a caller.
 	f.insertEdge(t, "e4", "c-test", "n-untested", "contains")
 
 	repo := sqlite.NewCoverageRepo(f.db)
@@ -44,7 +37,6 @@ func TestCoverageRepo_AttributesCallersByFile(t *testing.T) {
 		byID[nc.Node.NodeID] = files
 	}
 
-	// All three candidates returned.
 	for _, id := range []string{"n-prod", "n-untested", "n-orphan"} {
 		if _, ok := byID[id]; !ok {
 			t.Errorf("candidate %s missing from result", id)
@@ -74,7 +66,7 @@ func TestCoverageRepo_EmptyFilePathsNoOp(t *testing.T) {
 	}
 }
 
-// Carry the NodeRef shape through so the check can anchor a finding.
+// TestCoverageRepo_PopulatesNodeRef ensures that NodeRefs returned in the results are fully hydrated with metadata.
 func TestCoverageRepo_PopulatesNodeRef(t *testing.T) {
 	t.Parallel()
 	f := setupDeadCodeFixture(t)
@@ -96,10 +88,7 @@ func TestCoverageRepo_PopulatesNodeRef(t *testing.T) {
 	}
 }
 
-// TestCoverageRepo_InboundCallsEdges seeds a prod node with a CALLS caller and a
-// CONTAINS caller, plus a second queried node with no caller. It asserts the
-// adapter returns CALLS callers only (metadata-hydrated) and honours the
-// present-key contract for an uncalled queried id.
+// TestCoverageRepo_InboundCallsEdges verifies that the adapter maps nodes to the source nodes of their inbound CALLS edges, filtering out other edge kinds.
 func TestCoverageRepo_InboundCallsEdges(t *testing.T) {
 	t.Parallel()
 	f := setupDeadCodeFixture(t)
@@ -117,14 +106,12 @@ func TestCoverageRepo_InboundCallsEdges(t *testing.T) {
 		t.Fatalf("InboundCallsEdges: %v", err)
 	}
 
-	// Present-key contract: both queried ids present.
 	if _, ok := got["orphan"]; !ok {
 		t.Errorf("orphan missing from result map (present-key contract)")
 	}
 	if len(got["orphan"]) != 0 {
 		t.Errorf("orphan callers = %v, want empty", got["orphan"])
 	}
-	// prod: exactly the CALLS caller, fully hydrated; the contains edge dropped.
 	callers := got["prod"]
 	if len(callers) != 1 {
 		t.Fatalf("prod callers = %v, want exactly 1 (contains edge must not count)", callers)

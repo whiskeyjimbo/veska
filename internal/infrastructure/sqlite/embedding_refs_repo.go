@@ -1,6 +1,4 @@
 // Package sqlite contains SQLite-backed adapters for the veska ports layer.
-// This file implements ports.EmbeddingRefRepo against the node_embedding_refs
-// and node_embeddings tables introduced by migration 0004.
 package sqlite
 
 import (
@@ -13,30 +11,25 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/core/ports"
 )
 
-// EmbeddingRefsRepo is a SQLite-backed implementation of ports.EmbeddingRefRepo.
-// It uses separate read and write handles so a long-running poll loop reading
-// pending rows never contends with the single writer connection on which the
-// daemon serialises all SQLite writes.
+// EmbeddingRefsRepo implements ports.EmbeddingRefRepo. It uses separate read and
+// write handles to prevent long-running poll loops from contending with the
+// single writer connection on which all writes are serialized.
 type EmbeddingRefsRepo struct {
 	readDB  *sql.DB
 	writeDB *sql.DB
 }
 
-// NewEmbeddingRefsRepo constructs an EmbeddingRefsRepo. The caller is
-// responsible for ensuring writeDB is the singleton single-writer handle
-// established by sqlite.Open.
+// NewEmbeddingRefsRepo constructs an EmbeddingRefsRepo. The writeDB parameter
+// must be the singleton single-writer handle established by sqlite.Open to
+// prevent write serialization issues.
 func NewEmbeddingRefsRepo(readDB, writeDB *sql.DB) *EmbeddingRefsRepo {
 	return &EmbeddingRefsRepo{readDB: readDB, writeDB: writeDB}
 }
 
-// FetchPending returns up to limit pending refs joined with the minimal node
-// fields needed to embed. Rows are ordered by enqueued_at then node_id for
-// deterministic batch composition.
-// The Text field is a deterministic projection:
-// "<kind> <symbol_path> <file_path> <language>" (empty trailing fields are
-// omitted). file_path and language disambiguate otherwise-identical symbols so
-// the content-addressed embedding dedup does not collapse genuinely-distinct
-// nodes; re-promoting the same node in the same file still dedups.
+// FetchPending returns up to limit pending references ordered by enqueued time and
+// node ID for deterministic batching. The returned Text field is a deterministic
+// projection that includes the file path and language to prevent content-addressed
+// deduplication from collapsing identical symbols in different files.
 func (r *EmbeddingRefsRepo) FetchPending(ctx context.Context, limit int) ([]ports.PendingEmbedRef, error) {
 	if limit <= 0 {
 		return nil, nil
@@ -69,19 +62,10 @@ func (r *EmbeddingRefsRepo) FetchPending(ctx context.Context, limit int) ([]port
 	return out, nil
 }
 
-// embedText builds the deterministic Embed-input projection for a node,
-// joining the non-empty parts with a single space. kind and symbolPath are
-// always present; filePath and language may be empty (the parser may leave
-// language unset), and snippet may be empty when nodes.snippet is NULL.
-// The projection logic itself lives in domain.EmbedText so the recall
-// eval harness (tools/loadtest/recallprojection) measures projection
-// variants against exactly what production emits. Production uses
-// EmbedVariantSnippet: a faithful real-code recall sweep
-// across veska, golang.org/x/mod and BurntSushi/toml — real source-body
-// snippets, doc-comment queries — showed +snippet roughly doubles recall@10
-// over baseline at flat p95. An empty snippet degrades gracefully:
-// domain.EmbedText skips empty parts, so a NULL-snippet node yields exactly
-// the baseline "<kind> <symbol_path> <file_path> <language>" projection.
+// embedText delegates projection logic to domain.EmbedText to ensure the evaluation
+// harness measures variants against production behavior. The snippet-based variant
+// is used because benchmark evaluations showed it roughly doubles recall@10 over the
+// baseline, degrading gracefully to the baseline projection if the snippet is empty.
 func embedText(kind, symbolPath, filePath, language, snippet string) string {
 	return domain.EmbedText(domain.EmbedTextInput{
 		Kind:       kind,
@@ -92,17 +76,11 @@ func embedText(kind, symbolPath, filePath, language, snippet string) string {
 	}, domain.EmbedVariantSnippet)
 }
 
-// CountPending returns the count of pending refs that still have a backing
-// node — i.e. the real embed backlog the worker will actually drain.
-// The EXISTS guard mirrors FetchPending's `JOIN nodes`: an orphaned ref
-// (node deleted by repo removal or re-promotion churn, but the ref left
-// behind — node_embedding_refs has no FK to nodes because nodes has a
-// composite PK, see migration 0004) is never fetched by the worker, so it
-// must not be counted as pending either. Without this guard the orphans
-// inflate the count forever and pin eng_get_status at
-// degraded_reasons:["embeddings_pending"] long after the queue has drained
-// EXISTS (not JOIN) keeps the count strictly 1:1 even if a
-// node_id ever spans branches.
+// CountPending returns the count of pending references with a backing node. The
+// EXISTS guard prevents orphaned references (which occur because
+// node_embedding_refs lacks a foreign key to nodes due to the composite primary
+// key on nodes) from inflating the backlog status metrics. Using EXISTS instead of
+// a JOIN keeps the count strictly 1:1 if a node ID spans branches.
 func (r *EmbeddingRefsRepo) CountPending(ctx context.Context) (int, error) {
 	var n int
 	err := r.readDB.QueryRowContext(ctx,
@@ -115,11 +93,10 @@ func (r *EmbeddingRefsRepo) CountPending(ctx context.Context) (int, error) {
 	return n, nil
 }
 
-// MarkReady upserts the content-addressed embedding bytes and updates the ref
-// to state='ready' atomically.
-// node_embeddings uses ON CONFLICT(content_hash) DO NOTHING so re-embedding
-// the same content is a no-op for the bytes table; the ref row is still
-// updated to reflect the (possibly new) content_hash for this node.
+// MarkReady atomically inserts the content-addressed embedding and marks the
+// reference as ready. The embedding insert uses ON CONFLICT DO NOTHING to avoid
+// overwriting existing equivalent embeddings, while updating the reference with
+// the correct hash.
 func (r *EmbeddingRefsRepo) MarkReady(
 	ctx context.Context,
 	nodeID, contentHash, modelID string,
@@ -158,19 +135,14 @@ func (r *EmbeddingRefsRepo) MarkReady(
 	return nil
 }
 
-// MarkAttemptFailed bumps the per-row attempts counter and, when the new
-// value reaches maxAttempts, atomically flips state to 'failed'. The
-// bump-and-flip is a single UPDATE so a concurrent FetchPending cannot
-// observe a row with attempts>=maxAttempts that is still 'pending'.
-// Rows not in state='pending' (already 'ready' or 'failed') are left
-// untouched. maxAttempts <= 0 is treated as 1 (any failure is fatal).
+// MarkAttemptFailed increments the attempt counter and transitions the state to
+// failed if maxAttempts is reached. This update is executed as a single query to
+// prevent concurrent fetch operations from observing a pending row with exceeded
+// attempts. Rows not in a pending state are unaffected.
 func (r *EmbeddingRefsRepo) MarkAttemptFailed(ctx context.Context, nodeID string, maxAttempts int) error {
 	if maxAttempts < 1 {
 		maxAttempts = 1
 	}
-	// CASE: only flip to 'failed' when the *new* attempts value (attempts+1)
-	// is >= maxAttempts. Otherwise keep state='pending' so the next tick
-	// picks the row back up.
 	_, err := r.writeDB.ExecContext(ctx, `
 		UPDATE node_embedding_refs
 		SET attempts = attempts + 1,
@@ -187,9 +159,8 @@ func (r *EmbeddingRefsRepo) MarkAttemptFailed(ctx context.Context, nodeID string
 	return nil
 }
 
-// CountByState returns row counts for {pending, ready, failed}. Missing
-// states are returned with a 0 value so callers can index without
-// ok-checks.
+// CountByState returns row counts grouped by state. Non-existent states are
+// pre-populated with zero values so callers can index the returned map directly.
 func (r *EmbeddingRefsRepo) CountByState(ctx context.Context) (map[string]int, error) {
 	out := map[string]int{"pending": 0, "ready": 0, "failed": 0}
 	rows, err := r.readDB.QueryContext(ctx,
@@ -212,11 +183,9 @@ func (r *EmbeddingRefsRepo) CountByState(ctx context.Context) (map[string]int, e
 	return out, nil
 }
 
-// LookupExisting probes node_embeddings for a row keyed by contentHash. A hit
-// returns (bytes, dim, true, nil); a miss returns (nil, 0, false, nil). The
-// hash is content-addressed on the embed INPUT (modelID + embed_text), so a
-// hit means an equivalent Embed call has already produced these bytes for
-// this model — the worker can skip the provider call.
+// LookupExisting checks if an equivalent content-addressed embedding already
+// exists for the given model and text. A hit allows the caller to skip calling the
+// embedding provider.
 func (r *EmbeddingRefsRepo) LookupExisting(ctx context.Context, contentHash string) ([]byte, int, bool, error) {
 	var (
 		blob []byte
@@ -235,11 +204,9 @@ func (r *EmbeddingRefsRepo) LookupExisting(ctx context.Context, contentHash stri
 	return blob, dim, true, nil
 }
 
-// Reuse flips a pending ref to state='ready' against an existing
-// content_hash WITHOUT touching node_embeddings. Used by the dedup fast-path
-// when LookupExisting reported a hit. Rows not in state='pending' are left
-// alone so a racy second caller observing the same hit cannot regress a
-// row already marked ready.
+// Reuse updates a pending reference to ready using an existing embedding hash. It
+// targets only pending rows to prevent concurrent callers from regressing a
+// reference that has already transitioned to another state.
 func (r *EmbeddingRefsRepo) Reuse(ctx context.Context, nodeID, contentHash string, at time.Time) error {
 	_, err := r.writeDB.ExecContext(ctx, `
 		UPDATE node_embedding_refs
@@ -253,13 +220,10 @@ func (r *EmbeddingRefsRepo) Reuse(ctx context.Context, nodeID, contentHash strin
 	return nil
 }
 
-// ContentHashForNode returns the content_hash and ready flag for nodeID
-// scoped to (repoID, branch). A JOIN against nodes enforces the scope so a
-// stale or cross-repo node_id cannot leak a hash out of its origin tree.
-// ready=true requires BOTH state='ready' AND a non-NULL content_hash; either
-// alone returns ready=false. err=nil with ready=false also covers the
-// "no such ref" and "no such node" cases — the caller decides whether to
-// skip or escalate.
+// ContentHashForNode returns the embedding hash for a node scoped to a specific
+// repository and branch. The JOIN against nodes prevents stale or cross-repository
+// node IDs from leaking hashes. If the node or reference is missing or not ready,
+// it returns an empty string without an error.
 func (r *EmbeddingRefsRepo) ContentHashForNode(ctx context.Context, repoID, branch, nodeID string) (string, bool, error) {
 	var (
 		hash  sql.NullString
@@ -284,5 +248,4 @@ func (r *EmbeddingRefsRepo) ContentHashForNode(ctx context.Context, repoID, bran
 	return hash.String, true, nil
 }
 
-// Compile-time check.
 var _ ports.EmbeddingRefRepo = (*EmbeddingRefsRepo)(nil)

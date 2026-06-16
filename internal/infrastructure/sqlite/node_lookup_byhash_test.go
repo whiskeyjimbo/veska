@@ -12,9 +12,8 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/sqlite"
 )
 
-// byHashFixture inserts nodes with explicit content_hash values so the
-// NodesByContentHash lookup can be exercised across kind- and hash-based
-// filtering.
+// byHashFixture inserts test nodes with specific content hashes to verify
+// NodesByContentHash filtering behavior.
 type byHashFixture struct {
 	db     *sql.DB
 	repoID string
@@ -52,11 +51,9 @@ func (f *byHashFixture) insert(t *testing.T, nodeID, filePath, kind, hash string
 func TestNodesByContentHash_MatchesHashAndExcludesKinds(t *testing.T) {
 	t.Parallel()
 	f := setupByHashFixture(t)
-	// Two functions share hash "H"; one field also shares it (excluded);
-	// one function has a different hash.
 	f.insert(t, "n1", "a.go", "function", "H")
 	f.insert(t, "n2", "b.go", "function", "H")
-	f.insert(t, "n3", "c.go", "field", "H") // excluded kind
+	f.insert(t, "n3", "c.go", "field", "H")
 	f.insert(t, "n4", "d.go", "function", "OTHER")
 
 	repo := sqlite.NewNodeLookupRepo(f.db)

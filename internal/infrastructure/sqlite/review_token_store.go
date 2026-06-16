@@ -1,11 +1,8 @@
+// Package sqlite provides SQLite implementations of domain repositories.
 // ReviewTokenStore backs review.DailyTokenStore against the daemon_state
-// key-value table. The cumulative per-day review token total lives under the
-// key 'review.tokens.<local-date>' as a decimal string — daemon_state is
-// runtime/operational state, the correct home for a token counter that must
-// survive a daemon restart. Keying on the local date means the window resets
-// at local midnight without an explicit reset: a read on a new day finds no
-// row and returns zero.
-
+// key-value table. Storing this in daemon_state ensures the token counter
+// survives daemon restarts, while keying on localDate automatically resets
+// the daily window at midnight when a read on a new day finds no row.
 package sqlite
 
 import (
@@ -18,15 +15,12 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/application/review"
 )
 
-// reviewTokenKeyPrefix is the daemon_state key prefix for the per-day total.
 const reviewTokenKeyPrefix = "review.tokens."
 
-// Compile-time assertion that ReviewTokenStore satisfies the port.
 var _ review.DailyTokenStore = (*ReviewTokenStore)(nil)
 
-// ReviewTokenStore is the SQLite adapter for review.DailyTokenStore. Reads take
-// the read pool; writes take the write pool. The increment is a
-// read-modify-write, so a process-local mutex serialises concurrent AddTokens
+// ReviewTokenStore is the SQLite adapter for review.DailyTokenStore. The increment
+// is a read-modify-write, so a process-local mutex serialises concurrent AddTokens
 // calls to keep the running total consistent.
 type ReviewTokenStore struct {
 	readDB  *sql.DB
@@ -35,8 +29,7 @@ type ReviewTokenStore struct {
 	mu sync.Mutex
 }
 
-// NewReviewTokenStore constructs a ReviewTokenStore. writeDB carries the
-// UPSERT, readDB the lookup.
+// NewReviewTokenStore constructs a ReviewTokenStore.
 func NewReviewTokenStore(readDB, writeDB *sql.DB) *ReviewTokenStore {
 	return &ReviewTokenStore{readDB: readDB, writeDB: writeDB}
 }
@@ -61,8 +54,7 @@ func (s *ReviewTokenStore) TokensFor(ctx context.Context, localDate string) (int
 	return n, nil
 }
 
-// AddTokens adds n to the running total for localDate and returns the new
-// total. The read-modify-write is serialised by a process-local mutex.
+// AddTokens adds n to the running total for localDate and returns the new total.
 func (s *ReviewTokenStore) AddTokens(ctx context.Context, localDate string, n int) (int, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()

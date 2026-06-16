@@ -12,9 +12,8 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/sqlite"
 )
 
-// openGraphRepoTestDBWithHandle is openGraphRepoTestDB but also returns the
-// underlying *sql.DB so tests can assert directly on table columns the read
-// path does not hydrate (e.g. nodes.snippet).
+// openGraphRepoTestDBWithHandle constructs a GraphRepo and returns the
+// underlying database handle for direct column assertions.
 func openGraphRepoTestDBWithHandle(t *testing.T) (*sqlite.GraphRepo, *sql.DB) {
 	t.Helper()
 	dir := t.TempDir()
@@ -34,10 +33,8 @@ func openGraphRepoTestDBWithHandle(t *testing.T) (*sqlite.GraphRepo, *sql.DB) {
 	return sqlite.NewGraphRepo(db, db), db
 }
 
-// openGraphRepoTestDB opens an isolated DB with the real migrated schema,
-// seeds a repos row, and returns a constructed GraphRepo. The same *sql.DB
-// handle backs both the read and write side — the driver serialises access
-// internally, which is sufficient for a single-connection test.
+// openGraphRepoTestDB opens an isolated database, seeds a repository, and
+// returns a GraphRepo.
 func openGraphRepoTestDB(t *testing.T) *sqlite.GraphRepo {
 	t.Helper()
 	dir := t.TempDir()
@@ -66,8 +63,6 @@ func mustNode(t *testing.T, id, path, name string, kind domain.NodeKind, opts ..
 	return n
 }
 
-// TestGraphRepo_SaveNode_GetNode_RoundTrip verifies SaveNode followed by
-// GetNode returns an equivalent node.
 func TestGraphRepo_SaveNode_GetNode_RoundTrip(t *testing.T) {
 	t.Parallel()
 	r := openGraphRepoTestDB(t)
@@ -104,8 +99,6 @@ func TestGraphRepo_SaveNode_GetNode_RoundTrip(t *testing.T) {
 	}
 }
 
-// TestGraphRepo_SaveNode_Upserts verifies SaveNode replaces an existing row
-// keyed on node ID rather than erroring or duplicating.
 func TestGraphRepo_SaveNode_Upserts(t *testing.T) {
 	t.Parallel()
 	r := openGraphRepoTestDB(t)
@@ -127,7 +120,6 @@ func TestGraphRepo_SaveNode_Upserts(t *testing.T) {
 	}
 }
 
-// TestGraphRepo_GetNode_MissingReturnsNilNil verifies a miss is (nil, nil).
 func TestGraphRepo_GetNode_MissingReturnsNilNil(t *testing.T) {
 	t.Parallel()
 	r := openGraphRepoTestDB(t)
@@ -140,9 +132,6 @@ func TestGraphRepo_GetNode_MissingReturnsNilNil(t *testing.T) {
 	}
 }
 
-// TestGraphRepo_FindNodeIDsByPrefix_Unique verifies a prefix that matches
-// exactly one node resolves to its full id, and a full id resolves to itself
-// ( — `veska node <12-char display id>`).
 func TestGraphRepo_FindNodeIDsByPrefix_Unique(t *testing.T) {
 	t.Parallel()
 	r := openGraphRepoTestDB(t)
@@ -168,9 +157,6 @@ func TestGraphRepo_FindNodeIDsByPrefix_Unique(t *testing.T) {
 	}
 }
 
-// TestGraphRepo_FindNodeIDsByPrefix_MultiBranchNotAmbiguous pins the DISTINCT
-// requirement: the SAME node_id stored on two branches must count as one
-// candidate, not two, so a unique display prefix is not misread as ambiguous
 func TestGraphRepo_FindNodeIDsByPrefix_MultiBranchNotAmbiguous(t *testing.T) {
 	t.Parallel()
 	r := openGraphRepoTestDB(t)
@@ -190,9 +176,6 @@ func TestGraphRepo_FindNodeIDsByPrefix_MultiBranchNotAmbiguous(t *testing.T) {
 	}
 }
 
-// TestGraphRepo_FindNodeIDsByPrefix_Ambiguous verifies two distinct node_ids
-// sharing a prefix both surface (capped at limit) so the handler can detect
-// ambiguity.
 func TestGraphRepo_FindNodeIDsByPrefix_Ambiguous(t *testing.T) {
 	t.Parallel()
 	r := openGraphRepoTestDB(t)
@@ -215,8 +198,6 @@ func TestGraphRepo_FindNodeIDsByPrefix_Ambiguous(t *testing.T) {
 	}
 }
 
-// TestGraphRepo_FindNodes_ExactMatch verifies FindNodes returns only exact
-// symbol-name matches.
 func TestGraphRepo_FindNodes_ExactMatch(t *testing.T) {
 	t.Parallel()
 	r := openGraphRepoTestDB(t)
@@ -254,10 +235,6 @@ func TestGraphRepo_FindNodes_ExactMatch(t *testing.T) {
 	}
 }
 
-// TestGraphRepo_FindNodes_UnqualifiedSuffix pins: an unqualified
-// name matches the trailing segment of a qualified symbol_path, so "Start"
-// finds "Server.Start" instead of silently returning nothing. Exact matches
-// still sort ahead of suffix matches.
 func TestGraphRepo_FindNodes_UnqualifiedSuffix(t *testing.T) {
 	t.Parallel()
 	r := openGraphRepoTestDB(t)
@@ -292,11 +269,6 @@ func TestGraphRepo_FindNodes_UnqualifiedSuffix(t *testing.T) {
 	}
 }
 
-// TestGraphRepo_FindNodes_CaseSensitive guards: identifier
-// matching is byte-exact. SQLite LIKE is case-insensitive for ASCII by
-// default, so before the COLLATE BINARY fix, searching "Run" also matched
-// "FSNotifyWatcher.run" — a different symbol. Go (and most supported
-// languages) treats "Run" and "run" as distinct identifiers.
 func TestGraphRepo_FindNodes_CaseSensitive(t *testing.T) {
 	t.Parallel()
 	r := openGraphRepoTestDB(t)
@@ -331,8 +303,6 @@ func names(ns []*domain.Node) []string {
 	return out
 }
 
-// TestGraphRepo_SaveEdge_LoadGraph verifies SaveEdge then LoadGraph includes
-// the edge with its endpoints.
 func TestGraphRepo_SaveEdge_LoadGraph(t *testing.T) {
 	t.Parallel()
 	r := openGraphRepoTestDB(t)
@@ -367,8 +337,6 @@ func TestGraphRepo_SaveEdge_LoadGraph(t *testing.T) {
 	}
 }
 
-// TestGraphRepo_SaveEdge_Upserts verifies re-saving the same (From,To,Kind)
-// edge does not duplicate or error.
 func TestGraphRepo_SaveEdge_Upserts(t *testing.T) {
 	t.Parallel()
 	r := openGraphRepoTestDB(t)
@@ -395,7 +363,6 @@ func TestGraphRepo_SaveEdge_Upserts(t *testing.T) {
 	}
 }
 
-// TestGraphRepo_DeleteFile removes both nodes and edges of a file.
 func TestGraphRepo_DeleteFile(t *testing.T) {
 	t.Parallel()
 	r := openGraphRepoTestDB(t)
@@ -439,8 +406,6 @@ func TestGraphRepo_DeleteFile(t *testing.T) {
 	}
 }
 
-// TestGraphRepo_LoadGraph_UnknownReturnsEmptyNonNil verifies an unknown
-// repo/branch yields a non-nil empty Graph, never nil.
 func TestGraphRepo_LoadGraph_UnknownReturnsEmptyNonNil(t *testing.T) {
 	t.Parallel()
 	r := openGraphRepoTestDB(t)
@@ -457,8 +422,8 @@ func TestGraphRepo_LoadGraph_UnknownReturnsEmptyNonNil(t *testing.T) {
 	}
 }
 
-// snippetOf reads the raw nodes.snippet column for a node — the read path does
-// not hydrate it, so tests must query it directly.
+// snippetOf queries the snippet column directly since snippet data is not hydrated
+// in the default Node read path.
 func snippetOf(t *testing.T, db *sql.DB, repoID, branch, id string) sql.NullString {
 	t.Helper()
 	var s sql.NullString
@@ -471,9 +436,6 @@ func snippetOf(t *testing.T, db *sql.DB, repoID, branch, id string) sql.NullStri
 	return s
 }
 
-// TestGraphRepo_SaveNode_PersistsRawContentSnippet verifies a node saved with
-// RawContent stores that body in nodes.snippet, and a node without RawContent
-// stores SQL NULL.
 func TestGraphRepo_SaveNode_PersistsRawContentSnippet(t *testing.T) {
 	t.Parallel()
 	r, db := openGraphRepoTestDBWithHandle(t)
@@ -499,8 +461,6 @@ func TestGraphRepo_SaveNode_PersistsRawContentSnippet(t *testing.T) {
 	}
 }
 
-// TestGraphRepo_SaveNode_CapsSnippetOnRuneBoundary verifies an over-limit body
-// is capped at the byte limit on a UTF-8 rune boundary (no broken runes).
 func TestGraphRepo_SaveNode_CapsSnippetOnRuneBoundary(t *testing.T) {
 	t.Parallel()
 	r, db := openGraphRepoTestDBWithHandle(t)
@@ -532,8 +492,6 @@ func TestGraphRepo_SaveNode_CapsSnippetOnRuneBoundary(t *testing.T) {
 	}
 }
 
-// TestGraphRepo_SaveNode_RoundTripUnaffectedBySnippet verifies persisting a
-// snippet does not change the GetNode/LoadGraph round-trip.
 func TestGraphRepo_SaveNode_RoundTripUnaffectedBySnippet(t *testing.T) {
 	t.Parallel()
 	r, _ := openGraphRepoTestDBWithHandle(t)

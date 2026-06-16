@@ -9,12 +9,10 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/core/domain"
 )
 
-// escapeGlob wraps GLOB metacharacters (*, ?, [) in a literal-character
-// class so an identifier embedded in a GLOB pattern matches itself. GLOB
-// has no ESCAPE clause, so the only safe way is the [X] form.
-// Identifiers in supported languages are [A-Za-z0-9_.] (plus a leading $ in
-// some), so the *, ?, and [ characters do not appear inside an identifier in
-// practice; this is defence-in-depth for fuzz inputs / odd languages.
+// escapeGlob wraps GLOB metacharacters (*, ?, [) in character classes because
+// GLOB lacks an ESCAPE clause. Since identifier characters generally do not
+// include these metacharacters, this function provides defense-in-depth for
+// unexpected language inputs.
 func escapeGlob(s string) string {
 	var b strings.Builder
 	b.Grow(len(s))
@@ -31,18 +29,12 @@ func escapeGlob(s string) string {
 	return b.String()
 }
 
+// FindNodes matches fully-qualified symbols exactly or by suffix. We use
+// SQLite's GLOB operator instead of LIKE because LIKE is case-insensitive on
+// ASCII characters, which would incorrectly conflate distinct symbols. GLOB
+// wildcard characters are escaped to prevent interpreting them as character
+// classes.
 func (r *GraphRepo) FindNodes(ctx context.Context, repoID, branch, symbolName string) ([]*domain.Node, error) {
-	// Match the fully-qualified symbol_path exactly, OR an unqualified name
-	// against the trailing segment so "Start" finds "Server.Start" instead
-	// of silently returning nothing. Exact matches sort first.
-	// SQLite LIKE is case-INsensitive for ASCII regardless of
-	// COLLATE, so a search for "Run" used to also match
-	// "FSNotifyWatcher.run" — a distinct symbol. Identifiers are
-	// case-significant in every supported language, so we use GLOB (which
-	// is byte-exact) for the suffix match. GLOB uses *,? wildcards (vs
-	// LIKE's %,_), and treats as character classes — escape those in
-	// the user-supplied identifier so a literal "[" isn't treated as a
-	// class opener.
 	suffixPattern := `*.` + escapeGlob(symbolName)
 	rows, err := r.readDB.QueryContext(ctx,
 		`SELECT `+nodeColumns+` FROM nodes
@@ -69,9 +61,7 @@ func (r *GraphRepo) FindNodes(ctx context.Context, repoID, branch, symbolName st
 	return out, nil
 }
 
-// NodesForFile returns every node whose file_path equals filePath for
-// (repoID, branch). Backs eng_get_file_nodes. Returns an empty slice (not an
-// error) when the file has no promoted nodes, matching the port contract.
+// NodesForFile returns all nodes residing in the specified file path.
 func (r *GraphRepo) NodesForFile(ctx context.Context, repoID, branch, filePath string) ([]*domain.Node, error) {
 	rows, err := r.readDB.QueryContext(ctx,
 		`SELECT `+nodeColumns+` FROM nodes
@@ -96,8 +86,8 @@ func (r *GraphRepo) NodesForFile(ctx context.Context, repoID, branch, filePath s
 	return out, nil
 }
 
-// GetNode retrieves a single node by ID for (repoID, branch). A missing node
-// returns (nil, nil) — the caller treats absence as a normal outcome.
+// GetNode retrieves a single node by ID. A missing node returns (nil, nil)
+// without an error.
 func (r *GraphRepo) GetNode(ctx context.Context, repoID, branch string, id domain.NodeID) (*domain.Node, error) {
 	row := r.readDB.QueryRowContext(ctx,
 		`SELECT `+nodeColumns+` FROM nodes
@@ -113,12 +103,9 @@ func (r *GraphRepo) GetNode(ctx context.Context, repoID, branch string, id domai
 	return n, nil
 }
 
-// GetNodeSnippet returns the persisted (capped) body text for a single
-// node. Returns ("", nil) when the row is missing or the snippet column
-// stored NULL — callers treat the empty result as "no snippet available"
-// and fall back to conservative defaults. The returned text is capped to
-// maxSnippetBytes by the write path, so callers must not assume it equals
-// the full source. Backs the eng_get_call_chain seed-body discriminator
+// GetNodeSnippet returns the persisted body snippet for a single node. The
+// returned text is capped by the write path and is not guaranteed to cover the
+// full source.
 func (r *GraphRepo) GetNodeSnippet(ctx context.Context, repoID, branch string, id domain.NodeID) (string, error) {
 	var snippet sql.NullString
 	err := r.readDB.QueryRowContext(ctx,
@@ -137,10 +124,9 @@ func (r *GraphRepo) GetNodeSnippet(ctx context.Context, repoID, branch string, i
 	return snippet.String, nil
 }
 
-// FindNodeByID retrieves the first node matching the content-hashed id across
-// every (repo_id, branch). node_id is a sha256 content hash so collisions
-// across repos/branches are vanishingly rare; LIMIT 1 returns one
-// deterministic row. Returns (nil, nil) when no node matches.
+// FindNodeByID retrieves the first node matching the content-hashed ID. Because
+// node IDs are SHA-256 hashes, collisions across repositories are highly
+// unlikely.
 func (r *GraphRepo) FindNodeByID(ctx context.Context, id domain.NodeID) (*domain.Node, error) {
 	row := r.readDB.QueryRowContext(ctx,
 		`SELECT `+nodeColumns+` FROM nodes WHERE node_id = ? LIMIT 1`,
@@ -155,13 +141,9 @@ func (r *GraphRepo) FindNodeByID(ctx context.Context, id domain.NodeID) (*domain
 	return n, nil
 }
 
-// FindNodeIDsByPrefix returns the distinct node_ids beginning with prefix,
-// across every (repo_id, branch), capped at limit. node_id is a sha256 hex
-// hash, so it contains no LIKE metacharacters (%, _) — the prefix is safe to
-// interpolate into a `LIKE ?||'%'` pattern without an ESCAPE clause. DISTINCT
-// collapses the same node present on several branches into one id, so a unique
-// display prefix is not misread as ambiguous. The caller passes
-// limit=2 to detect ambiguity cheaply (.uej9.3).
+// FindNodeIDsByPrefix returns distinct node IDs starting with the prefix.
+// Because SHA-256 hex node IDs do not contain LIKE wildcard characters, the
+// prefix can be safely interpolated without an ESCAPE clause.
 func (r *GraphRepo) FindNodeIDsByPrefix(ctx context.Context, prefix string, limit int) ([]domain.NodeID, error) {
 	rows, err := r.readDB.QueryContext(ctx,
 		`SELECT DISTINCT node_id FROM nodes WHERE node_id LIKE ? || '%' LIMIT ?`,
@@ -184,9 +166,7 @@ func (r *GraphRepo) FindNodeIDsByPrefix(ctx context.Context, prefix string, limi
 	return out, nil
 }
 
-// confidenceValue is the inverse of confidenceText: it maps the TEXT column
-// value back onto the domain Confidence enum. An unknown string maps to
-// Unresolved.
+// confidenceValue maps the SQLite text confidence value back to the domain enum.
 func confidenceValue(s string) domain.Confidence {
 	switch s {
 	case "definite":

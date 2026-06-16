@@ -24,8 +24,8 @@ type migration struct {
 	sql     string
 }
 
-// migrations is the ordered registry of all known migrations.
-// New migrations must be appended; never reorder or remove.
+// migrations is the ordered registry of all known migrations. New migrations
+// must only be appended to maintain ordering.
 var migrations = func() []migration {
 	entries, err := migrationFS.ReadDir("migrations")
 	if err != nil {
@@ -53,18 +53,12 @@ var migrations = func() []migration {
 const minSchemaVersion = 1
 
 // ComputeMigrationSHA returns the canonical SHA-256 of a migration's SQL text.
-// Normalisation rules (per ):
-//
-//	Strip UTF-8 BOM (0xEF 0xBB 0xBF) if present
-//	Normalise line endings to LF (\n)
-//	Ensure exactly one trailing newline
+// It normalizes line endings and removes UTF-8 BOM prefixes to ensure
+// consistency across systems.
 func ComputeMigrationSHA(sqlText string) string {
-	// Strip BOM.
 	sqlText = strings.TrimPrefix(sqlText, "\xef\xbb\xbf")
-	// Normalise line endings.
 	sqlText = strings.ReplaceAll(sqlText, "\r\n", "\n")
 	sqlText = strings.ReplaceAll(sqlText, "\r", "\n")
-	// Ensure single trailing newline.
 	sqlText = strings.TrimRight(sqlText, "\n") + "\n"
 	h := sha256.Sum256([]byte(sqlText))
 	return fmt.Sprintf("%x", h)
@@ -104,14 +98,12 @@ func maxVersion() int {
 }
 
 // MigrationCount returns the number of migrations in the embedded registry.
-// Exported primarily for testing idempotency assertions.
 func MigrationCount() int {
 	return len(migrations)
 }
 
-// verifyAppliedSHAs checks that every already-applied migration's recorded
-// migration_sha still matches the embedded SQL text. Returns an error
-// describing any mismatch (tamper detection per ).
+// verifyAppliedSHAs checks that already-applied migrations match the recorded
+// SHA-256 hashes to detect database schema tampering.
 func verifyAppliedSHAs(db *sql.DB) error {
 	rows, err := db.Query(`SELECT version, migration_sha FROM schema_migrations ORDER BY version`)
 	if err != nil {
@@ -119,7 +111,6 @@ func verifyAppliedSHAs(db *sql.DB) error {
 	}
 	defer rows.Close()
 
-	// Build a fast lookup: version → embedded SHA.
 	embeddedSHA := make(map[int]string, len(migrations))
 	for _, m := range migrations {
 		embeddedSHA[m.version] = ComputeMigrationSHA(m.sql)
@@ -133,7 +124,6 @@ func verifyAppliedSHAs(db *sql.DB) error {
 		}
 		expected, ok := embeddedSHA[version]
 		if !ok {
-			// Migration version recorded in DB but not in binary — too new.
 			return fmt.Errorf("migration version %d is recorded in DB but unknown to this binary", version)
 		}
 		if recordedSHA != expected {
@@ -144,10 +134,9 @@ func verifyAppliedSHAs(db *sql.DB) error {
 	return rows.Err()
 }
 
-// snapshotPath builds the auto-snapshot file path.
-// Format: <backupDir>/<from>-<to>-<timestamp>.db
-// The timestamp includes nanoseconds to avoid collisions when two processes
-// snapshot the same DB in the same second (e.g. parallel tests).
+// snapshotPath builds the pre-migration snapshot file path. The timestamp
+// includes nanoseconds to avoid file name collisions when running tests in
+// parallel.
 func snapshotPath(backupDir string, from, to int) string {
 	ts := time.Now().UTC().Format("20060102T150405.000000000Z")
 	name := fmt.Sprintf("%d-%d-%s.db", from, to, ts)
@@ -155,14 +144,11 @@ func snapshotPath(backupDir string, from, to int) string {
 }
 
 // runMigrations applies all pending migrations against db.
-// backupDir is used for the pre-migration snapshot.
-// appliedBy is recorded in the schema_migrations table.
 func runMigrations(db *sql.DB, current, target int, backupDir, appliedBy string) error {
 	if current == target {
 		return nil
 	}
 
-	// Collect pending migrations.
 	var pending []migration
 	for _, m := range migrations {
 		if m.version > current {
@@ -173,7 +159,6 @@ func runMigrations(db *sql.DB, current, target int, backupDir, appliedBy string)
 		return nil
 	}
 
-	// Auto-snapshot before first migration.
 	snapPath := snapshotPath(backupDir, current, target)
 	if err := os.MkdirAll(backupDir, 0o750); err != nil {
 		return fmt.Errorf("create backup dir %s: %w", backupDir, err)
@@ -182,7 +167,6 @@ func runMigrations(db *sql.DB, current, target int, backupDir, appliedBy string)
 		return fmt.Errorf("auto-snapshot failed (refusing to migrate): %w", err)
 	}
 
-	// Apply each migration in its own transaction.
 	binarySHA := computeBinarySHA()
 	for _, m := range pending {
 		migSHA := ComputeMigrationSHA(m.sql)
@@ -191,13 +175,11 @@ func runMigrations(db *sql.DB, current, target int, backupDir, appliedBy string)
 			return fmt.Errorf("begin tx for migration %d: %w (pre-migration snapshot: %s)", m.version, err, snapPath)
 		}
 
-		// Execute the migration SQL — may contain multiple statements.
 		if _, err := tx.Exec(m.sql); err != nil {
 			_ = tx.Rollback()
 			return fmt.Errorf("migration %d failed (snapshot at %s): %w", m.version, snapPath, err)
 		}
 
-		// Record in schema_migrations.
 		_, err = tx.Exec(
 			`INSERT INTO schema_migrations (version, applied_at, binary_sha, migration_sha, applied_by) VALUES (?, ?, ?, ?, ?)`,
 			m.version, time.Now().Unix(), binarySHA, migSHA, appliedBy,
@@ -215,7 +197,6 @@ func runMigrations(db *sql.DB, current, target int, backupDir, appliedBy string)
 }
 
 // computeBinarySHA returns a short SHA-256 of the running binary's path for traceability.
-// Falls back to "unknown" if the executable path cannot be determined.
 func computeBinarySHA() string {
 	exe, err := os.Executable()
 	if err != nil {
@@ -223,7 +204,8 @@ func computeBinarySHA() string {
 	}
 	data, err := os.ReadFile(exe)
 	if err != nil {
-		// In tests the binary may not be readable; use the path as a stand-in.
+		// Use the executable path as a fallback hash key if the binary itself
+		// is unreadable during test runs.
 		h := sha256.Sum256([]byte(exe))
 		return fmt.Sprintf("%x", h[:8])
 	}
@@ -233,7 +215,6 @@ func computeBinarySHA() string {
 
 // CheckMigrationIntegrity opens the DB at path and verifies the recorded
 // migration SHAs match the embedded SQL. Returns a non-nil error on mismatch.
-// This is exported primarily for testing.
 func CheckMigrationIntegrity(path string) error {
 	db, err := sql.Open(sqldriver.Name, path)
 	if err != nil {
@@ -243,11 +224,8 @@ func CheckMigrationIntegrity(path string) error {
 	return verifyAppliedSHAs(db)
 }
 
-// defaultBackupDir returns the default auto-snapshot directory.
-// Path: $VESKA_HOME/backups/.pre-migration/ ( co-located with
-// user-initiated backups so a single `rm -rf $VESKA_HOME` clears them
-// too). Falls back to ~/.veska-backups/.pre-migration when VESKA_HOME is
-// unset and the user's home dir cannot be determined.
+// defaultBackupDir returns the pre-migration backup directory path, defaulting
+// to co-locate with user-initiated backups under the application home directory.
 func defaultBackupDir() string {
 	if dir := os.Getenv("VESKA_HOME"); dir != "" {
 		return filepath.Join(dir, "backups", ".pre-migration")
@@ -259,23 +237,14 @@ func defaultBackupDir() string {
 	return filepath.Join(home, ".veska", "backups", ".pre-migration")
 }
 
-// normaliseDSN returns a file: DSN for the given path with the build-time
-// driver's standard pragmas (WAL + foreign_keys + synchronous=NORMAL +
-// busy_timeout). Delegates to sqldriver so the URI parameter format matches
-// whichever driver is compiled in.
+// normaliseDSN delegates DSN construction to the compiled sql driver wrapper.
 func normaliseDSN(path string) string {
 	return sqldriver.BuildDSN(path, 5000)
 }
 
-// applyPragmas sets WAL mode, autocheckpoint, foreign-keys, and a 5s
-// busy_timeout on db. Foreign-keys are also set via the DSN; this
-// ensures enforcement on every connection.
-// The busy_timeout matches the daemon's read+writeHot pools (pools.go).
-// Without it, any CLI command opening the same db while the daemon is
-// writing (e.g. `veska reindex` racing the embedder worker) fails
-// immediately with SQLITE_BUSY. The 5s ceiling is long enough to ride
-// out the embedder's batch commits but short enough that a wedged
-// daemon surfaces as a clear error rather than an indefinite hang.
+// applyPragmas sets performance and integrity configuration. The 5-second busy
+// timeout prevents concurrent CLI invocations from failing with SQLITE_BUSY
+// errors during active background writes.
 func applyPragmas(db *sql.DB) error {
 	pragmas := []string{
 		`PRAGMA journal_mode=WAL`,
@@ -298,10 +267,9 @@ func openAndMigrate(path, backupDir, appliedBy string) (*sql.DB, error) {
 		return nil, fmt.Errorf("sqlite.Open %s: %w", path, err)
 	}
 
-	// Single-writer: serialise all writes through one connection.
+	// Use a single connection limit to serialize database writes.
 	db.SetMaxOpenConns(1)
 
-	// Set WAL mode and autocheckpoint before any migration work.
 	if err := applyPragmas(db); err != nil {
 		db.Close()
 		return nil, err
@@ -319,10 +287,8 @@ func openAndMigrate(path, backupDir, appliedBy string) (*sql.DB, error) {
 	}
 	target := maxVersion()
 
-	// Behaviour matrix.
 	switch {
 	case current == target:
-		// Up to date — verify SHAs, then return.
 		if err := verifyAppliedSHAs(db); err != nil {
 			db.Close()
 			fmt.Fprintf(os.Stderr, "veska: migration integrity check failed: %v\n", err)
@@ -341,8 +307,6 @@ func openAndMigrate(path, backupDir, appliedBy string) (*sql.DB, error) {
 		os.Exit(78)
 
 	default:
-		// current < target (and either 0 or within range): apply pending migrations.
-		// Verify already-applied SHAs before running new ones.
 		if current > 0 {
 			if err := verifyAppliedSHAs(db); err != nil {
 				db.Close()
@@ -363,19 +327,15 @@ func openAndMigrate(path, backupDir, appliedBy string) (*sql.DB, error) {
 // Options controls optional behaviour for OpenWithOptions.
 type Options struct {
 	// BackupDir overrides the default auto-snapshot directory.
-	// Defaults to ~/.veska-backups/.pre-migration/.
 	BackupDir string
 
 	// AppliedBy is recorded in schema_migrations.applied_by.
-	// Defaults to the running executable path.
 	AppliedBy string
 }
 
-// OpenWithOptions opens (or creates) the SQLite database at path, applies
-// pending migrations, and returns a ready-to-use *sql.DB. It accepts an
-// Options struct for override of backup directory and applied_by label.
-// This function intentionally calls os.Exit(78) on schema mismatch, tamper
-// detection, or migration failure — that is the specified contract.
+// OpenWithOptions opens the SQLite database and applies pending migrations. In
+// accordance with requirements, it calls os.Exit(78) on migration failures or
+// schema tamper detection.
 func OpenWithOptions(path string, opts Options) (*sql.DB, error) {
 	backupDir := opts.BackupDir
 	if backupDir == "" {
@@ -392,11 +352,7 @@ func OpenWithOptions(path string, opts Options) (*sql.DB, error) {
 	return openAndMigrate(path, backupDir, appliedBy)
 }
 
-// Open opens (or creates) the SQLite database at path, applies pending
-// migrations, and returns a ready-to-use *sql.DB. WAL mode and
-// wal_autocheckpoint=1000 are set unconditionally.
-// Exit 78 semantics per: schema too old, too new, SHA tamper, or
-// migration failure all cause os.Exit(78) after writing a message to stderr.
+// Open opens the SQLite database and runs all migrations using default options.
 func Open(path string) (*sql.DB, error) {
 	return OpenWithOptions(path, Options{})
 }

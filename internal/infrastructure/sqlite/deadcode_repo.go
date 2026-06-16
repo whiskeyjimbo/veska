@@ -9,35 +9,18 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/core/ports"
 )
 
-// DeadCodeRepo is the SQLite adapter for the DeadCodeQuerier port. It answers
-// "which nodes in (repoID, branch) whose file_path is in a set have no inbound
-// edges on that branch?" in a single round-trip via a LEFT JOIN.
+// DeadCodeRepo implements ports.DeadCodeQuerier using a SQLite database.
 type DeadCodeRepo struct {
 	db *sql.DB
 }
 
-// NewDeadCodeRepo constructs a DeadCodeRepo bound to the given read-capable
-// *sql.DB. The handle must point at a DB with migration 0001 applied (nodes
-// + edges tables).
+// NewDeadCodeRepo constructs a DeadCodeRepo bound to the given sql.DB.
 func NewDeadCodeRepo(db *sql.DB) *DeadCodeRepo {
 	return &DeadCodeRepo{db: db}
 }
 
-// DeadNodesInFiles returns nodes in (repoID, branch) whose file_path is one of
-// filePaths and which have ZERO inbound CALLS edges on that branch.
-// Liveness is measured against CALLS edges ONLY — not every edge kind. Every
-// symbol has an inbound CONTAINS edge from its package and may have SIMILAR_TO
-// edges from autolink; counting those made the check inert (nothing was ever
-// "dead"), which is. "No inbound CALLS" is the meaningful
-// uncalled-symbol signal. Exported symbols (callable from other packages /
-// repos, where call edges may be invisible) are excluded upstream by the
-// application-layer DeadCodeCheck allowlist, so this does not mis-flag them.
-// Empty filePaths is a no-op (returns nil, nil) — this avoids building a
-// degenerate "IN " clause that SQLite rejects and is also a cheap fast-path
-// for promotions that touched no files of interest.
-// The query intentionally does not apply name/kind allowlist filtering; that
-// rule lives in the application-layer DeadCodeCheck so it is easy to evolve
-// and trivial to unit-test without a database.
+// DeadNodesInFiles returns nodes in (repoID, branch) whose file_path is one of filePaths and which have zero inbound CALLS edges on that branch.
+// An empty slice of filePaths is treated as a no-op.
 func (r *DeadCodeRepo) DeadNodesInFiles(ctx context.Context, repoID, branch string, filePaths []string) ([]ports.NodeRef, error) {
 	if len(filePaths) == 0 {
 		return nil, nil
@@ -51,11 +34,8 @@ func (r *DeadCodeRepo) DeadNodesInFiles(ctx context.Context, repoID, branch stri
 		args = append(args, p)
 	}
 
-	// LEFT JOIN keeps every candidate node; the WHERE e.dst_node_id IS NULL
-	// filter selects rows whose join produced no edge match — i.e. zero inbound
-	// CALLS edges on this branch. The join pins dst_node_id, branch AND the
-	// CALLS kind (case-insensitive) so containment/similarity edges and
-	// cross-branch edges never count as liveness.
+	// The query uses a LEFT JOIN to find nodes with zero inbound CALLS edges on the specified branch,
+	// filtering out containment and cross-branch edges.
 	query := fmt.Sprintf(`
 SELECT n.node_id, n.file_path, n.kind, n.symbol_path,
        COALESCE(n.line_start, 0), COALESCE(n.line_end, 0),
@@ -89,14 +69,7 @@ ORDER BY n.file_path, n.node_id`, strings.Join(placeholders, ","))
 	return out, nil
 }
 
-// InterfaceMethodNames returns the distinct bare method names declared by
-// every interface type in (repoID, branch). An interface method node has
-// kind='method' and symbol_path '<IfaceName>.<MethodName>'; the parent
-// type's node has kind='interface'. The query joins the two so an
-// orphan method node (e.g. created by a malformed parse) does not bleed
-// into the result. Result strings are bare method names ('Set', 'String')
-// the dead-code application filter compares against a method's bare
-// suffix.
+// InterfaceMethodNames returns the distinct method names declared by interface types in (repoID, branch).
 func (r *DeadCodeRepo) InterfaceMethodNames(ctx context.Context, repoID, branch string) ([]string, error) {
 	const q = `
 SELECT DISTINCT substr(m.symbol_path, length(i.symbol_path) + 2)

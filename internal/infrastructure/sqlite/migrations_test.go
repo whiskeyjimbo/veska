@@ -13,7 +13,7 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/sqlite"
 )
 
-// openRawDB opens a raw *sql.DB for inspection without running migrations.
+// openRawDB opens a database connection without running migrations.
 func openRawDB(t *testing.T, path string) *sql.DB {
 	t.Helper()
 	db, err := sql.Open(sqldriver.Name, path)
@@ -24,7 +24,6 @@ func openRawDB(t *testing.T, path string) *sql.DB {
 	return db
 }
 
-// tableExists returns true if the named table exists in db.
 func tableExists(t *testing.T, db *sql.DB, name string) bool {
 	t.Helper()
 	var cnt int
@@ -35,7 +34,6 @@ func tableExists(t *testing.T, db *sql.DB, name string) bool {
 	return cnt > 0
 }
 
-// indexExists returns true if the named index exists in db.
 func indexExists(t *testing.T, db *sql.DB, name string) bool {
 	t.Helper()
 	var cnt int
@@ -46,8 +44,7 @@ func indexExists(t *testing.T, db *sql.DB, name string) bool {
 	return cnt > 0
 }
 
-// openTest opens a DB using OpenWithOptions with a temp backup dir, isolating
-// tests from each other and from ~/.veska-backups.
+// openTest opens a database using temporary directories for isolation.
 func openTest(t *testing.T, dbPath string) *sql.DB {
 	t.Helper()
 	backupDir := filepath.Join(t.TempDir(), "backups")
@@ -59,7 +56,6 @@ func openTest(t *testing.T, dbPath string) *sql.DB {
 	return db
 }
 
-// TestMigration0001_CreatesAllTables verifies migration 0001 creates all required tables.
 func TestMigration0001_CreatesAllTables(t *testing.T) {
 	t.Parallel()
 
@@ -87,7 +83,6 @@ func TestMigration0001_CreatesAllTables(t *testing.T) {
 	}
 }
 
-// TestMigration0001_CreatesIndexes verifies indexes from migration 0001.
 func TestMigration0001_CreatesIndexes(t *testing.T) {
 	t.Parallel()
 
@@ -116,7 +111,6 @@ func TestMigration0001_CreatesIndexes(t *testing.T) {
 	}
 }
 
-// TestMigration0001_RecordsSchemaVersion verifies schema_migrations has version 1 after open.
 func TestMigration0001_RecordsSchemaVersion(t *testing.T) {
 	t.Parallel()
 
@@ -149,7 +143,6 @@ func TestMigration0001_RecordsSchemaVersion(t *testing.T) {
 	}
 }
 
-// TestOpen_WALModeEnabled verifies WAL journal mode is set.
 func TestOpen_WALModeEnabled(t *testing.T) {
 	t.Parallel()
 
@@ -169,7 +162,6 @@ func TestOpen_WALModeEnabled(t *testing.T) {
 	}
 }
 
-// TestOpen_WALAutocheckpoint verifies wal_autocheckpoint=1000.
 func TestOpen_WALAutocheckpoint(t *testing.T) {
 	t.Parallel()
 
@@ -189,7 +181,6 @@ func TestOpen_WALAutocheckpoint(t *testing.T) {
 	}
 }
 
-// TestOpen_Idempotent verifies opening an already-migrated DB does not re-run migrations.
 func TestOpen_Idempotent(t *testing.T) {
 	t.Parallel()
 
@@ -221,19 +212,15 @@ func TestOpen_Idempotent(t *testing.T) {
 	}
 }
 
-// TestMigrationSHA_TamperDetected verifies exit 78 behaviour when migration_sha is modified.
-// We exercise CheckMigrationIntegrity directly after tampering.
 func TestMigrationSHA_TamperDetected(t *testing.T) {
 	t.Parallel()
 
 	dir := t.TempDir()
 	dbPath := filepath.Join(dir, "veska.db")
 
-	// Open normally to apply migration 0001.
 	db := openTest(t, dbPath)
 	db.Close()
 
-	// Tamper: update the migration_sha to a bogus value.
 	raw := openRawDB(t, dbPath)
 	if _, err := raw.Exec(`UPDATE schema_migrations SET migration_sha = 'tampered' WHERE version = 1`); err != nil {
 		t.Fatalf("tamper migration_sha: %v", err)
@@ -247,8 +234,6 @@ func TestMigrationSHA_TamperDetected(t *testing.T) {
 	}
 }
 
-// TestAutoSnapshot_CreatedBeforeMigrations verifies the auto-snapshot file is created
-// when there are pending migrations.
 func TestAutoSnapshot_CreatedBeforeMigrations(t *testing.T) {
 	t.Parallel()
 
@@ -256,7 +241,6 @@ func TestAutoSnapshot_CreatedBeforeMigrations(t *testing.T) {
 	dbPath := filepath.Join(dir, "veska.db")
 	backupDir := filepath.Join(dir, "backups", ".pre-migration")
 
-	// Open with a custom backup dir to avoid touching ~/.veska-backups in tests.
 	db, err := sqlite.OpenWithOptions(dbPath, sqlite.Options{
 		BackupDir: backupDir,
 	})
@@ -284,15 +268,12 @@ func TestAutoSnapshot_CreatedBeforeMigrations(t *testing.T) {
 	}
 }
 
-// TestWALReplay_KillMidMigration verifies that if the process is killed during migration
-// (simulated by closing DB before commit), WAL replay leaves the DB in its pre-migration state.
 func TestWALReplay_KillMidMigration(t *testing.T) {
 	t.Parallel()
 
 	dir := t.TempDir()
 	dbPath := filepath.Join(dir, "veska.db")
 
-	// Open a raw db, set WAL, create schema_migrations table, but do NOT commit 0001.
 	db, err := sql.Open("sqlite3", "file:"+dbPath+"?_journal_mode=WAL&_foreign_keys=on")
 	if err != nil {
 		t.Fatalf("open raw: %v", err)
@@ -314,7 +295,6 @@ func TestWALReplay_KillMidMigration(t *testing.T) {
 		t.Fatalf("create schema_migrations: %v", err)
 	}
 
-	// Begin a transaction, insert into schema_migrations, then "kill" by closing without commit.
 	tx, err := db.Begin()
 	if err != nil {
 		t.Fatalf("begin tx: %v", err)
@@ -325,7 +305,6 @@ func TestWALReplay_KillMidMigration(t *testing.T) {
 		t.Fatalf("insert in tx: %v", err)
 	}
 
-	// Simulate kill: close without committing — triggers WAL rollback.
 	tx.Rollback() //nolint:errcheck
 	db.Close()
 
@@ -345,14 +324,9 @@ func TestWALReplay_KillMidMigration(t *testing.T) {
 	}
 }
 
-// TestMigrationSHA_Computation verifies the canonical SHA-256 computation.
 func TestMigrationSHA_Computation(t *testing.T) {
 	t.Parallel()
 
-	// Known input/output: SHA-256 of "hello\n" (UTF-8, no BOM).
-	// echo -n "hello\n" | sha256sum => not what we want
-	// We want SHA-256 of the 6-byte string "hello\n":
-	// sha256("hello\n") = 5891b5b522d5df086d0ff0b110fbd9d21bb4fc7163af34d08286a2e846f6be03
 	got := sqlite.ComputeMigrationSHA("hello\n")
 	want := "5891b5b522d5df086d0ff0b110fbd9d21bb4fc7163af34d08286a2e846f6be03"
 	if got != want {
@@ -360,7 +334,6 @@ func TestMigrationSHA_Computation(t *testing.T) {
 	}
 }
 
-// TestMigrationSHA_StripsBOM verifies UTF-8 BOM is stripped before SHA computation.
 func TestMigrationSHA_StripsBOM(t *testing.T) {
 	t.Parallel()
 
@@ -372,7 +345,6 @@ func TestMigrationSHA_StripsBOM(t *testing.T) {
 	}
 }
 
-// TestMigrationSHA_NormalisesLineEndings verifies CRLF → LF normalisation.
 func TestMigrationSHA_NormalisesLineEndings(t *testing.T) {
 	t.Parallel()
 
@@ -383,9 +355,6 @@ func TestMigrationSHA_NormalisesLineEndings(t *testing.T) {
 	}
 }
 
-// Migration 0003: tasks, findings, suppressions
-// TestMigration0003_TablesAndIndexesExist verifies all three tables and their
-// indexes are created by migration 0003.
 func TestMigration0003_TablesAndIndexesExist(t *testing.T) {
 	t.Parallel()
 
@@ -417,8 +386,6 @@ func TestMigration0003_TablesAndIndexesExist(t *testing.T) {
 	}
 }
 
-// TestMigration0003_TasksActivePartialIndex verifies the partial unique index
-// idx_tasks_active_one_per_repo: only one active task per repo is allowed.
 func TestMigration0003_TasksActivePartialIndex(t *testing.T) {
 	t.Parallel()
 
@@ -434,7 +401,6 @@ func TestMigration0003_TasksActivePartialIndex(t *testing.T) {
 
 	now := time.Now().Unix()
 
-	// Insert a repo first (tasks has FK to repos).
 	if _, err := db.Exec(`INSERT INTO repos (repo_id, root_path, added_at) VALUES (?, ?, ?)`,
 		"repo-1", "/tmp/repo1", now); err != nil {
 		t.Fatalf("insert repo: %v", err)
@@ -461,8 +427,6 @@ func TestMigration0003_TasksActivePartialIndex(t *testing.T) {
 	}
 }
 
-// TestMigration0003_FindingsBranchPK verifies that the same finding_id can
-// coexist on two different branches (open on A, closed on B).
 func TestMigration0003_FindingsBranchPK(t *testing.T) {
 	t.Parallel()
 
@@ -528,8 +492,6 @@ func TestMigration0003_FindingsBranchPK(t *testing.T) {
 	}
 }
 
-// Migration 0004: node_embeddings, node_embedding_refs, node_fts
-// TestMigration0004_TablesExist verifies migration 0004 creates all three objects.
 func TestMigration0004_TablesExist(t *testing.T) {
 	t.Parallel()
 
@@ -570,8 +532,6 @@ func TestMigration0004_TablesExist(t *testing.T) {
 	}
 }
 
-// TestMigration0004_ContentAddressedDedup verifies inserting the same content_hash
-// twice into node_embeddings fails (PRIMARY KEY constraint).
 func TestMigration0004_ContentAddressedDedup(t *testing.T) {
 	t.Parallel()
 
@@ -601,8 +561,6 @@ func TestMigration0004_ContentAddressedDedup(t *testing.T) {
 	}
 }
 
-// TestMigration0004_TwoNodesShareEmbedding verifies two nodes can reference the same
-// content_hash in node_embedding_refs (the deduplication point).
 func TestMigration0004_TwoNodesShareEmbedding(t *testing.T) {
 	t.Parallel()
 
@@ -653,8 +611,6 @@ func TestMigration0004_TwoNodesShareEmbedding(t *testing.T) {
 	}
 }
 
-// TestMigration0004_StateTransitions verifies node_embedding_refs pending->ready
-// transition and FK enforcement on content_hash.
 func TestMigration0004_StateTransitions(t *testing.T) {
 	t.Parallel()
 
@@ -728,9 +684,6 @@ func TestMigration0004_StateTransitions(t *testing.T) {
 	}
 }
 
-// TestMigration0007_FTSWordsAndTrigramsQueryable verifies the m3.03.2 FTS
-// pair can be inserted into and queried for both prefix matches (words) and
-// substring matches (trigrams).
 func TestMigration0007_FTSWordsAndTrigramsQueryable(t *testing.T) {
 	t.Parallel()
 
@@ -785,8 +738,6 @@ func TestMigration0007_FTSWordsAndTrigramsQueryable(t *testing.T) {
 	}
 }
 
-// TestMigration0003_SuppressionsAgnosticVsSpecific verifies branch-agnostic
-// (branch IS NULL) and branch-specific suppressions can coexist.
 func TestMigration0003_SuppressionsAgnosticVsSpecific(t *testing.T) {
 	t.Parallel()
 
@@ -802,7 +753,6 @@ func TestMigration0003_SuppressionsAgnosticVsSpecific(t *testing.T) {
 
 	now := time.Now().Unix()
 
-	// Branch-agnostic suppression (branch IS NULL).
 	if _, err := db.Exec(`INSERT INTO suppressions
 		(suppression_id, scope, target, branch, rule, reason, created_at, actor_id, actor_kind)
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
@@ -810,7 +760,6 @@ func TestMigration0003_SuppressionsAgnosticVsSpecific(t *testing.T) {
 		t.Fatalf("insert branch-agnostic suppression: %v", err)
 	}
 
-	// Branch-specific suppression (branch = 'feat/x').
 	if _, err := db.Exec(`INSERT INTO suppressions
 		(suppression_id, scope, target, branch, rule, reason, created_at, actor_id, actor_kind)
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
@@ -818,7 +767,6 @@ func TestMigration0003_SuppressionsAgnosticVsSpecific(t *testing.T) {
 		t.Fatalf("insert branch-specific suppression: %v", err)
 	}
 
-	// Verify branch-agnostic row has NULL branch.
 	var branchVal sql.NullString
 	if err := db.QueryRow(`SELECT branch FROM suppressions WHERE suppression_id=?`, "sup-1").Scan(&branchVal); err != nil {
 		t.Fatalf("query sup-1: %v", err)
@@ -827,7 +775,6 @@ func TestMigration0003_SuppressionsAgnosticVsSpecific(t *testing.T) {
 		t.Errorf("sup-1 branch should be NULL, got %q", branchVal.String)
 	}
 
-	// Verify branch-specific row has correct branch.
 	if err := db.QueryRow(`SELECT branch FROM suppressions WHERE suppression_id=?`, "sup-2").Scan(&branchVal); err != nil {
 		t.Fatalf("query sup-2: %v", err)
 	}
@@ -835,7 +782,6 @@ func TestMigration0003_SuppressionsAgnosticVsSpecific(t *testing.T) {
 		t.Errorf("sup-2 branch: want feat/x, got %v", branchVal)
 	}
 
-	// Count suppressions matching target regardless of branch (agnostic lookup).
 	var cnt int
 	if err := db.QueryRow(`SELECT COUNT(*) FROM suppressions WHERE target=?`, "rule-x").Scan(&cnt); err != nil {
 		t.Fatalf("count suppressions: %v", err)
@@ -844,7 +790,6 @@ func TestMigration0003_SuppressionsAgnosticVsSpecific(t *testing.T) {
 		t.Errorf("expected 2 suppressions for target rule-x, got %d", cnt)
 	}
 
-	// Count branch-specific suppressions for feat/x only.
 	if err := db.QueryRow(`SELECT COUNT(*) FROM suppressions WHERE target=? AND branch=?`, "rule-x", "feat/x").Scan(&cnt); err != nil {
 		t.Fatalf("count branch-specific suppressions: %v", err)
 	}
@@ -853,9 +798,6 @@ func TestMigration0003_SuppressionsAgnosticVsSpecific(t *testing.T) {
 	}
 }
 
-// ── Migration 0005: nodes.signature + nodes.prev_signature ─────────────────
-
-// columnExists returns true if the named column is present on the table.
 func columnExists(t *testing.T, db *sql.DB, table, col string) bool {
 	t.Helper()
 	rows, err := db.Query(`SELECT name FROM pragma_table_info(?)`, table)
@@ -875,8 +817,6 @@ func columnExists(t *testing.T, db *sql.DB, table, col string) bool {
 	return false
 }
 
-// TestMigration0005_AddsSignatureColumns verifies migration 0005 adds the two
-// new columns to nodes with NULL as the default value.
 func TestMigration0005_AddsSignatureColumns(t *testing.T) {
 	t.Parallel()
 
@@ -894,10 +834,6 @@ func TestMigration0005_AddsSignatureColumns(t *testing.T) {
 	}
 }
 
-// ── Migration 0006: node_embedding_refs.attempts ───────────────────────────
-
-// TestMigration0006_AddsAttemptsColumn verifies migration 0006 adds the
-// attempts column to node_embedding_refs.
 func TestMigration0006_AddsAttemptsColumn(t *testing.T) {
 	t.Parallel()
 
@@ -912,8 +848,6 @@ func TestMigration0006_AddsAttemptsColumn(t *testing.T) {
 	}
 }
 
-// TestMigration0006_AttemptsDefaultsToZero verifies new rows omitting the
-// attempts column default to 0.
 func TestMigration0006_AttemptsDefaultsToZero(t *testing.T) {
 	t.Parallel()
 
@@ -948,8 +882,6 @@ func TestMigration0006_AttemptsDefaultsToZero(t *testing.T) {
 	}
 }
 
-// TestMigration0005_DefaultsAreNull verifies that legacy INSERT statements
-// (omitting the new columns) yield NULL for both new columns.
 func TestMigration0005_DefaultsAreNull(t *testing.T) {
 	t.Parallel()
 
@@ -983,10 +915,6 @@ func TestMigration0005_DefaultsAreNull(t *testing.T) {
 	}
 }
 
-// ── Migration 0008: findings.anchor_content_hash ───────────────────────────
-
-// TestMigration0008_AddsAnchorContentHashColumn verifies migration 0008 adds
-// the nullable anchor_content_hash column to findings.
 func TestMigration0008_AddsAnchorContentHashColumn(t *testing.T) {
 	t.Parallel()
 
@@ -1001,10 +929,9 @@ func TestMigration0008_AddsAnchorContentHashColumn(t *testing.T) {
 	}
 }
 
-// TestMigration0008_PreservesExistingRowsAsNull verifies that an INSERT
-// omitting anchor_content_hash leaves the column NULL — the contract the
-// revalidation sweep relies on for "no hash recorded, fall back to anchor
-// existence check".
+// TestMigration0008_PreservesExistingRowsAsNull verifies that findings created
+// without an anchor hash default to NULL, which triggers the fallback anchor
+// existence check during validation.
 func TestMigration0008_PreservesExistingRowsAsNull(t *testing.T) {
 	t.Parallel()
 
@@ -1042,10 +969,6 @@ func TestMigration0008_PreservesExistingRowsAsNull(t *testing.T) {
 	}
 }
 
-// ── Migration 0009: nodes.snippet ──────────────────────────────────────────
-
-// TestMigration0009_AddsSnippetColumn verifies migration 0009 adds the
-// nullable snippet column to nodes.
 func TestMigration0009_AddsSnippetColumn(t *testing.T) {
 	t.Parallel()
 
@@ -1060,9 +983,8 @@ func TestMigration0009_AddsSnippetColumn(t *testing.T) {
 	}
 }
 
-// TestMigration0009_DefaultsToNull verifies that an INSERT omitting snippet
-// leaves the column NULL — the contract the +snippet embed-text projection
-// relies on (domain.EmbedText skips empty parts, degrading to baseline).
+// TestMigration0009_DefaultsToNull verifies that nodes without snippets default
+// to NULL so that embedding logic can correctly fall back to baseline formatting.
 func TestMigration0009_DefaultsToNull(t *testing.T) {
 	t.Parallel()
 
@@ -1093,8 +1015,6 @@ func TestMigration0009_DefaultsToNull(t *testing.T) {
 	}
 }
 
-// ── Migration 0013: repos cache-tier columns ───────────────
-
 func TestMigration0013_AddsCacheTierColumns(t *testing.T) {
 	t.Parallel()
 
@@ -1112,15 +1032,14 @@ func TestMigration0013_AddsCacheTierColumns(t *testing.T) {
 	}
 }
 
+// TestMigration0013_DefaultsForExistingRow verifies that database records
+// created prior to migration 0013 remain valid under default constraints.
 func TestMigration0013_DefaultsForExistingRow(t *testing.T) {
 	t.Parallel()
 
 	dbPath := filepath.Join(t.TempDir(), "veska.db")
 	db := openTest(t, dbPath)
 
-	// Insert a row simulating "already-registered before the migration",
-	// using only the pre-0013 columns. The DEFAULT on kind plus the
-	// nullability of the other three columns should let this succeed.
 	if _, err := db.Exec(
 		`INSERT INTO repos (repo_id, root_path, added_at) VALUES (?, ?, ?)`,
 		"abc123", "/tmp/foo", int64(1000),
@@ -1158,7 +1077,8 @@ func TestMigration0013_CanonicalURLUniquePartialIndex(t *testing.T) {
 	dbPath := filepath.Join(t.TempDir(), "veska.db")
 	db := openTest(t, dbPath)
 
-	// Two rows with NULL canonical_url are allowed (partial index excludes NULL).
+	// Multiple repositories with NULL canonical URLs are allowed because the
+	// partial unique index excludes NULL values.
 	for i, id := range []string{"id-null-1", "id-null-2"} {
 		if _, err := db.Exec(
 			`INSERT INTO repos (repo_id, root_path, added_at) VALUES (?, ?, ?)`,
@@ -1168,7 +1088,6 @@ func TestMigration0013_CanonicalURLUniquePartialIndex(t *testing.T) {
 		}
 	}
 
-	// First non-NULL value succeeds.
 	if _, err := db.Exec(
 		`INSERT INTO repos (repo_id, root_path, added_at, canonical_url) VALUES (?, ?, ?, ?)`,
 		"id-url-1", "/tmp/u1", int64(2000), "https://github.com/foo/bar",
@@ -1176,7 +1095,6 @@ func TestMigration0013_CanonicalURLUniquePartialIndex(t *testing.T) {
 		t.Fatalf("first non-NULL canonical_url: %v", err)
 	}
 
-	// Duplicate non-NULL value must fail.
 	_, err := db.Exec(
 		`INSERT INTO repos (repo_id, root_path, added_at, canonical_url) VALUES (?, ?, ?, ?)`,
 		"id-url-2", "/tmp/u2", int64(2001), "https://github.com/foo/bar",

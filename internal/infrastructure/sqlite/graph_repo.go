@@ -10,13 +10,10 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/core/ports"
 )
 
-// GraphRepo is the SQLite-backed adapter for ports.GraphStorage. It reads and
-// writes the `nodes` and `edges` tables created by migration 0001 (plus the
-// signature columns from 0005).
-// Writes take the write-capable handle (the single-writer hot pool in the
-// daemon); reads take the read pool so graph traversals do not contend with
-// promotion. Its upsert SQL mirrors the column set and ON CONFLICT semantics
-// of the Promoter so a GraphRepo write and a promotion write are compatible.
+// GraphRepo implements ports.GraphStorage and ports.GraphReader. It separates
+// read and write operations across separate database handles to prevent graph
+// traversals from contending with the single-writer promotion connection. The
+// upsert SQL logic is designed to match the Promoter's schema requirements.
 type GraphRepo struct {
 	readDB  *sql.DB
 	writeDB *sql.DB
@@ -28,20 +25,16 @@ var (
 	_ ports.GraphReader  = (*GraphRepo)(nil)
 )
 
-// NewGraphRepo constructs a GraphRepo. readDB serves LoadGraph/FindNodes/
-// GetNode; writeDB serves SaveNode/SaveEdge/DeleteFile.
+// NewGraphRepo constructs a GraphRepo.
 func NewGraphRepo(readDB, writeDB *sql.DB) *GraphRepo {
 	return &GraphRepo{readDB: readDB, writeDB: writeDB}
 }
 
-// nodeColumns is the SELECT column list shared by GetNode and FindNodes. It
-// matches the subset of `nodes` columns needed to rehydrate a domain.Node.
+// nodeColumns lists the columns needed to rehydrate a domain.Node.
 const nodeColumns = `node_id, symbol_path, file_path, kind, language,
 	line_start, line_end, content_hash, signature, exported, external`
 
-// scanNode rehydrates a domain.Node from a row selected with nodeColumns.
-// Nullable columns (line_start/line_end, language, signature) are read into
-// sql.Null* and only fed to functional options when valid.
+// scanNode rehydrates a domain.Node from a query row.
 func scanNode(s interface {
 	Scan(dest ...any) error
 },
@@ -90,13 +83,9 @@ func scanNode(s interface {
 	return n, nil
 }
 
-// (maxSnippetBytes / capSnippet moved to snippet.go and shared with the
-// Promoter so both write paths bind the same body into nodes.snippet
-// )
-
-// SaveNode inserts or replaces a node row keyed on (node_id, branch). The
-// column set and ON CONFLICT clause mirror the Promoter so a GraphRepo write
-// is interchangeable with a promotion write.
+// SaveNode inserts or replaces a node row. Its schema fields and conflict
+// resolution match the Promoter to ensure compatibility between independent
+// writes and promotion events.
 func (r *GraphRepo) SaveNode(ctx context.Context, repoID, branch string, n *domain.Node) error {
 	if n == nil {
 		return nil
@@ -128,8 +117,8 @@ ON CONFLICT(node_id, branch) DO UPDATE SET
 	if n.Lines != nil {
 		lineStart, lineEnd = n.Lines.Start, n.Lines.End
 	}
-	// language is NOT NULL in the schema; mirror the Promoter and write the
-	// empty string when the parser did not populate it.
+	// Language is NOT NULL in the schema, so an empty string is written if it
+	// was not populated by the parser.
 	language := ""
 	if n.Language != nil {
 		language = *n.Language
@@ -156,18 +145,11 @@ ON CONFLICT(node_id, branch) DO UPDATE SET
 	return nil
 }
 
-// UpsertExternalRepo idempotently writes a synthetic repos row for a
-// vendor-indexed module so the existing cross_repo_edge_stub
-// resolver finds it via module_path match. repoID is
-// the synthetic id (caller's responsibility; today's convention is
-// "ext:<module-path>"). rootPath should be the absolute path of the
-// vendor/<module> directory so moduleRelDir in the resolver yields
-// correct subpackage relDirs.
-// identity_tier/identity_anchor are intentionally left NULL:
-// these synthetic rows already carry a content-derived, module-path-keyed id
-// and are not user-registered repos resolved through ResolveIdentity, so they
-// sit outside the portable-identity fallback chain and the doctor
-// non-convergence warning.
+// UpsertExternalRepo writes a synthetic repository row for a vendor-indexed
+// module so the cross-repository edge resolver can match it. The root path
+// must point to the root of the vendored module to ensure subpackage relative
+// paths are computed correctly. Synthetic rows bypass the identity resolution
+// chain.
 func (r *GraphRepo) UpsertExternalRepo(ctx context.Context, repoID, rootPath, modulePath, branch string) error {
 	_, err := r.writeDB.ExecContext(ctx,
 		`INSERT INTO repos (repo_id, root_path, added_at, active_branch, module_path)
@@ -184,10 +166,8 @@ func (r *GraphRepo) UpsertExternalRepo(ctx context.Context, repoID, rootPath, mo
 	return nil
 }
 
-// SaveExternalNode inserts/replaces a node from a vendored or
-// module-cache dependency. Identical to SaveNode except
-// the external column is set to 1 so the read path can label these
-// rows and filter them when first-party-only views are wanted.
+// SaveExternalNode inserts or replaces a dependency node, marking it as external
+// so first-party views can filter it out during queries.
 func (r *GraphRepo) SaveExternalNode(ctx context.Context, repoID, branch string, n *domain.Node) error {
 	if n == nil {
 		return nil
@@ -246,9 +226,8 @@ ON CONFLICT(node_id, branch) DO UPDATE SET
 	return nil
 }
 
-// SaveEdge inserts or replaces an edge row keyed on (edge_id, branch). The
-// edge_id is the deterministic hash of (Src, Kind, Tgt), so the upsert key is
-// effectively (From, To, Kind) per the port contract.
+// SaveEdge inserts or replaces an edge row. The edge ID is computed
+// deterministically from the source, destination, and kind.
 func (r *GraphRepo) SaveEdge(ctx context.Context, repoID, branch string, e *domain.Edge) error {
 	if e == nil {
 		return nil
@@ -275,10 +254,9 @@ ON CONFLICT(edge_id, branch) DO UPDATE SET
 	return nil
 }
 
-// DeleteFile removes every node and edge whose source file is filePath for
-// the given (repoID, branch). Edges are deleted explicitly first: the FK
-// ON DELETE CASCADE only fires when SQLite foreign-key enforcement is on, so
-// removing edges by their endpoints' file makes the behaviour deterministic.
+// DeleteFile deletes all nodes and edges associated with the specified file.
+// Edges are removed explicitly rather than relying on CASCADE DELETE because
+// foreign key enforcement is not guaranteed to be active.
 func (r *GraphRepo) DeleteFile(ctx context.Context, repoID, branch, filePath string) error {
 	tx, err := r.writeDB.BeginTx(ctx, nil)
 	if err != nil {
@@ -286,7 +264,6 @@ func (r *GraphRepo) DeleteFile(ctx context.Context, repoID, branch, filePath str
 	}
 	defer func() { _ = tx.Rollback() }()
 
-	// Delete edges incident to any node in the file (as src or dst).
 	if _, err := tx.ExecContext(ctx,
 		`DELETE FROM edges
 		 WHERE repo_id = ? AND branch = ?
@@ -312,9 +289,8 @@ func (r *GraphRepo) DeleteFile(ctx context.Context, repoID, branch, filePath str
 	return nil
 }
 
-// LoadGraph builds the full in-memory Graph for (repoID, branch). It always
-// returns a non-nil Graph — an empty one when no nodes are stored. Edges whose
-// endpoints are both present are added; dangling edges are skipped.
+// LoadGraph reconstructs the complete in-memory graph. Edges with missing
+// endpoints are skipped since endpoints must exist prior to edge insertion.
 func (r *GraphRepo) LoadGraph(ctx context.Context, repoID, branch string) (*domain.Graph, error) {
 	g, err := domain.NewGraph(repoID, branch)
 	if err != nil {
@@ -367,7 +343,6 @@ func (r *GraphRepo) LoadGraph(ctx context.Context, repoID, branch string) (*doma
 		if err != nil {
 			return nil, fmt.Errorf("graph_repo: rehydrate edge: %w", err)
 		}
-		// Skip edges whose endpoints are absent — AddEdge requires both.
 		if _, ok := g.Node(e.Src); !ok {
 			continue
 		}

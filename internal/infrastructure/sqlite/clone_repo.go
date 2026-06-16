@@ -1,5 +1,3 @@
-// This file implements application/duplicates.CloneStore against the nodes
-// table: the exact-clone projection that groups nodes by shared content_hash.
 
 package sqlite
 
@@ -12,37 +10,22 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/application/duplicates"
 )
 
-// CloneRepo is a SQLite-backed implementation of duplicates.CloneStore.
-// It uses the read-only DB handle: the query never mutates state and must not
-// contend with the single-writer connection.
+// CloneRepo implements duplicates.CloneStore using a SQLite database.
+// A read-only database connection is used because clone queries are query-only
+// and must not block the single-writer SQLite connection.
 type CloneRepo struct {
 	readDB *sql.DB
 }
 
-// NewCloneRepo constructs a CloneRepo backed by readDB.
 func NewCloneRepo(readDB *sql.DB) *CloneRepo {
 	return &CloneRepo{readDB: readDB}
 }
 
-// ClonedNodes returns every node in (repoID, branch) whose content_hash is
-// shared by >=2 nodes, excluding excludeKinds. The set is selected by a
-// GROUP BY. HAVING COUNT(*) >= 2 subquery over content_hash; the outer
-// query re-joins to hydrate each member's metadata. Both the subquery and the
-// outer query apply the same repo/branch + kind filter so the COUNT reflects
-// only eligible nodes (a chunk sharing a hash with a function must not inflate
-// the count). idx_nodes_content_hash + idx_nodes_repo_branch serve it.
-// Empty content_hash is excluded from grouping: content_hash is NOT NULL on the
-// schema, but nodes with no raw content (and, before, every parsed
-// node) carry the empty string. Grouping by an empty hash would bucket all of
-// them into one bogus byte-identical clone group, so both query levels filter
-// empty out with a non-empty content_hash check
-// "no content known" can never be a clone match.
+// ClonedNodes queries nodes sharing a content_hash within the given scope,
+// filtering out empty content hashes to prevent unpopulated nodes from grouping together.
 func (r *CloneRepo) ClonedNodes(ctx context.Context, q duplicates.CloneQuery, excludeKinds []string) ([]duplicates.ClonedNode, error) {
-	// scope emits the shared per-level predicate (branch, optional repo +
-	// path) plus the kind exclusion, so the outer query and the GROUP BY
-	// subquery filter identically — a chunk in one repo must not inflate a
-	// content_hash COUNT in another. Built positionally to keep SQLite's planner
-	// on the indexed path rather than a named-param rewrite.
+	// The scope clause is applied identically to both the outer query and the HAVING subquery
+	// to prevent node counts from leaking across different repositories.
 	scope, scopeArgs := cloneScopeClause(q, excludeKinds)
 
 	args := make([]any, 0, 2*len(scopeArgs))
@@ -81,14 +64,8 @@ func (r *CloneRepo) ClonedNodes(ctx context.Context, q duplicates.CloneQuery, ex
 	return out, nil
 }
 
-// StructuralNodes is the Type-2 (renamed-variable) analogue of ClonedNodes: it
-// groups by structural_hash instead of content_hash, so nodes with the same
-// shape after a consistent rename cluster even when their verbatim text differs.
-// structural_hash is NULLABLE (the parser sets it only for structurally-hashed
-// kinds), so the empty-string guard ClonedNodes uses becomes an IS NOT NULL
-// guard — NULL "no structural signal" can never be a clone match. The grouping
-// hash is returned in ClonedNode.ContentHash so the Finder folds it identically.
-// idx_nodes_structural_hash + idx_nodes_repo_branch serve it.
+// StructuralNodes clusters nodes using structural_hash to identify duplicate structures
+// with renamed variables, ignoring NULL values which indicate missing structural signals.
 func (r *CloneRepo) StructuralNodes(ctx context.Context, q duplicates.CloneQuery, excludeKinds []string) ([]duplicates.ClonedNode, error) {
 	scope, scopeArgs := cloneScopeClause(q, excludeKinds)
 
@@ -128,13 +105,8 @@ func (r *CloneRepo) StructuralNodes(ctx context.Context, q duplicates.CloneQuery
 	return out, nil
 }
 
-// SimilarEdges returns persisted SIMILAR_TO edges in (repoID, branch) whose
-// score is non-NULL and >= minScore and whose BOTH endpoints fall outside
-// excludeKinds, with endpoint metadata hydrated by joining the nodes table on
-// (node_id, branch) — the (node_id, branch) primary key serves each join.
-// idx_edges_repo_branch selects the edge set; the score predicate prunes the
-// SIMILAR_TO subset further. NULL-score rows (legacy edges promoted before the
-// score column existed) are excluded by the IS NOT NULL guard.
+// SimilarEdges retrieves SIMILAR_TO edges exceeding the score threshold and
+// filters out legacy edges with NULL scores.
 func (r *CloneRepo) SimilarEdges(ctx context.Context, repoID, branch string, minScore float32, excludeKinds []string) ([]duplicates.SimilarEdge, error) {
 	srcClause, srcArgs := notInClause("s.kind", excludeKinds)
 	dstClause, dstArgs := notInClause("d.kind", excludeKinds)
@@ -176,12 +148,8 @@ func (r *CloneRepo) SimilarEdges(ctx context.Context, repoID, branch string, min
 	return out, nil
 }
 
-// cloneScopeClause builds the shared per-query-level predicate for the clone
-// projections: branch (always), repo_id (only when CloneQuery.RepoID is set — an
-// empty RepoID means cross-repo), an optional file_path prefix, and the kind
-// exclusion. Returning the clause + its args lets ClonedNodes/StructuralNodes
-// apply the SAME filter at both the outer and the GROUP BY subquery level so the
-// COUNT reflects only eligible nodes.
+// cloneScopeClause builds a shared query filter to ensure consistent criteria
+// are applied across nested queries.
 func cloneScopeClause(q duplicates.CloneQuery, excludeKinds []string) (string, []any) {
 	clause := "branch = ?"
 	args := []any{q.Branch}
@@ -199,9 +167,7 @@ func cloneScopeClause(q duplicates.CloneQuery, excludeKinds []string) (string, [
 	return clause, args
 }
 
-// notInClause builds a " AND <col> NOT IN (?, ?, …)" fragment plus its bound
-// args. An empty values slice yields an empty clause and no args, so the caller
-// can concatenate unconditionally.
+// notInClause builds a parameterized NOT IN SQL clause for list filtering.
 func notInClause(col string, values []string) (string, []any) {
 	if len(values) == 0 {
 		return "", nil
@@ -215,7 +181,6 @@ func notInClause(col string, values []string) (string, []any) {
 	return " AND " + col + " NOT IN (" + strings.Join(placeholders, ",") + ")", args
 }
 
-// Compile-time checks that *CloneRepo satisfies the consumer-owned ports.
 var (
 	_ duplicates.CloneStore = (*CloneRepo)(nil)
 	_ duplicates.NearStore  = (*CloneRepo)(nil)

@@ -13,52 +13,42 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/platform/tokenize"
 )
 
-// rrfK is the standard RRF dampener: 1 / (rrfK + rank). 60 is the value
-// originally proposed by Cormack et al. and the de-facto default in
-// production lexical+vector fusion. Lower values amplify top hits, higher
-// values flatten the ranking.
+// rrfK is the standard Reciprocal Rank Fusion dampener. The value of 60.0 is
+// standard in lexical and vector fusion to balance top hits against tail
+// rankings.
 const rrfK = 60.0
 
-// rrfFetchMultiplier is how many candidate rows we pull from EACH arm
-// before fusing. Pulling more than k from either arm lets the RRF score
-// surface results that rank well in both arms even if neither ranks them
-// at the very top.
+// rrfFetchMultiplier controls the candidate pool size fetched from each ranking
+// source. Pulling more than k candidates from each arm allows Reciprocal Rank
+// Fusion to surface items that perform moderately well across both sources.
 const rrfFetchMultiplier = 4
 
-// LexicalRepo is a SQLite-backed implementation of ports.LexicalSearcher.
-// It reads from the two FTS5 virtual tables created by migration 0007 and
-// fuses their results with Reciprocal Rank Fusion.
+// LexicalRepo implements ports.LexicalSearcher using separate words and
+// trigrams SQLite FTS5 tables, fusing their rankings at query time with
+// Reciprocal Rank Fusion.
 type LexicalRepo struct {
 	readDB *sql.DB
 }
 
-// NewLexicalRepo constructs a LexicalRepo backed by readDB.
+// NewLexicalRepo constructs a LexicalRepo.
 func NewLexicalRepo(readDB *sql.DB) *LexicalRepo {
 	return &LexicalRepo{readDB: readDB}
 }
 
-// Search returns up to k LexicalHits for query in (repoID, branch).
-// The query string is pre-tokenised with tokenize.Symbol so a camelCase
-// query like "closeFinding" is also matchable as "close Finding". The
-// trigram arm uses the flattened original query (built-in trigram tokenizer
-// requires no help from the caller).
-// Empty query short-circuits to nil; k <= 0 short-circuits to nil.
+// Search performs a combined words and trigrams search, fusing hits using
+// Reciprocal Rank Fusion. The query string is pre-tokenized for the words
+// matcher to align with the write path, whereas the trigram matcher queries
+// the raw input directly.
 func (r *LexicalRepo) Search(ctx context.Context, repoID, branch, query string, k int) ([]ports.LexicalHit, error) {
 	if k <= 0 || query == "" {
 		return nil, nil
 	}
 
-	// Build the FTS5 MATCH expressions. The words arm consumes the
-	// pre-tokenised form so the caller-side split is symmetric with the
-	// write path (Promoter writes tokenize.Symbol of kind+symbol+name).
-	// The trigram arm consumes the raw query — trigram tokenizer needs no
-	// pre-processing.
 	wordsExpr := buildWordsMatchExpr(query)
 	rawExpr := buildTrigramMatchExpr(query)
 
 	limit := k * rrfFetchMultiplier
 
-	// Score map keyed by node_id; populated from both arms.
 	score := make(map[string]float64)
 
 	if wordsExpr != "" {
@@ -87,14 +77,13 @@ func (r *LexicalRepo) Search(ctx context.Context, repoID, branch, query string, 
 		return nil, nil
 	}
 
-	// Convert map to a slice and pick the top k by score.
 	hits := make([]ports.LexicalHit, 0, len(score))
 	for id, s := range score {
 		hits = append(hits, ports.LexicalHit{NodeID: id, Score: s})
 	}
-	// Partial sort: cheap selection sort over a tiny set (typically a few
-	// dozen rows max). Avoids importing sort for a constant-bounded slice
-	// and keeps the hot path allocation-free beyond the result slice.
+	// A selection-based partial sort is used on the small candidate set to
+	// avoid the overhead of the standard sort package and keep the execution
+	// allocation-free.
 	if len(hits) > k {
 		topKByScore(hits, k)
 		hits = hits[:k]
@@ -104,8 +93,8 @@ func (r *LexicalRepo) Search(ctx context.Context, repoID, branch, query string, 
 	return hits, nil
 }
 
-// accumulate runs an ORDER BY rank query and adds 1/(rrfK+rank) to score
-// for each returned node_id (rank starts at 0 for the first row).
+// accumulate aggregates Reciprocal Rank Fusion scores from a query into the
+// cumulative score map.
 func (r *LexicalRepo) accumulate(
 	ctx context.Context,
 	score map[string]float64,
@@ -129,10 +118,8 @@ func (r *LexicalRepo) accumulate(
 	return rows.Err()
 }
 
-// topKByScore reorders hits so that the highest-score n entries occupy the
-// front of the slice. It is a selection-style partial sort; stable order is
-// not promised among ties (FTS5 already breaks them by rank inside each
-// arm, and the RRF fusion is what we care about here).
+// topKByScore performs a selection-style partial sort to place the
+// highest-scoring elements at the front of the slice.
 func topKByScore(hits []ports.LexicalHit, n int) {
 	if n > len(hits) {
 		n = len(hits)
@@ -150,23 +137,17 @@ func topKByScore(hits []ports.LexicalHit, n int) {
 	}
 }
 
-// buildWordsMatchExpr produces an FTS5 MATCH expression for the words arm.
-// Each token from tokenize.Symbol becomes a prefix-match term joined by OR
-// so any single hit raises the score. Empty input yields "".
+// buildWordsMatchExpr constructs an FTS5 MATCH query for the words index,
+// converting each token into an OR-joined prefix match.
 func buildWordsMatchExpr(query string) string {
 	tokens := splitFields(tokenize.Symbol(query))
 	return joinFTS5OR(tokens, true /* withPrefix*/)
 }
 
-// buildTrigramMatchExpr produces an FTS5 MATCH expression for the trigram
-// arm. The trigram tokenizer needs at least 3 characters in a token to
-// match anything; we feed the raw query collapsed to alnum runs so very
-// short queries still hit when possible.
+// buildTrigramMatchExpr constructs an FTS5 MATCH query for the trigram index.
+// Because trigram indexes require tokens of at least length 3 to match, shorter
+// inputs yield empty queries.
 func buildTrigramMatchExpr(query string) string {
-	// For trigram, FTS5 matches substrings of length >= 3. Quote the
-	// query as a phrase so spaces inside the query are interpreted as
-	// "must appear in sequence". A single token longer than 2 chars is
-	// the common case.
 	q := flattenForTrigram(query)
 	if len(q) < 3 {
 		return ""
@@ -174,9 +155,8 @@ func buildTrigramMatchExpr(query string) string {
 	return `"` + escapeFTS5Quote(q) + `"`
 }
 
-// flattenForTrigram returns query with any embedded quote removed (FTS5
-// MATCH strings cannot contain `"` even when quoted). Other characters are
-// passed through unchanged — the trigram tokenizer accepts any UTF-8.
+// flattenForTrigram strips double quotes from the input because SQLite FTS5
+// MATCH expressions cannot contain double quotes.
 func flattenForTrigram(query string) string {
 	out := make([]byte, 0, len(query))
 	for i := 0; i < len(query); i++ {
@@ -188,9 +168,7 @@ func flattenForTrigram(query string) string {
 	return string(out)
 }
 
-// escapeFTS5Quote doubles any embedded `"`; defensive — flattenForTrigram
-// already strips them — but kept so future changes that allow quotes don't
-// silently produce invalid FTS5 syntax.
+// escapeFTS5Quote doubles embedded double quotes to ensure valid FTS5 syntax.
 func escapeFTS5Quote(s string) string {
 	out := make([]byte, 0, len(s))
 	for i := 0; i < len(s); i++ {
@@ -203,7 +181,6 @@ func escapeFTS5Quote(s string) string {
 	return string(out)
 }
 
-// splitFields splits s on whitespace into non-empty tokens.
 func splitFields(s string) []string {
 	var out []string
 	start := -1
@@ -222,16 +199,12 @@ func splitFields(s string) []string {
 	return out
 }
 
-// joinFTS5OR joins tokens with " OR ", optionally appending `*` to each
-// for prefix matching. Tokens are double-quoted to be safe against any
-// FTS5 reserved characters. Returns "" if tokens is empty.
 func joinFTS5OR(tokens []string, withPrefix bool) string {
 	if len(tokens) == 0 {
 		return ""
 	}
 	out := make([]byte, 0, 32)
 	for i, t := range tokens {
-		// Skip pure-symbol or empty tokens — they cannot contribute.
 		if t == "" {
 			continue
 		}

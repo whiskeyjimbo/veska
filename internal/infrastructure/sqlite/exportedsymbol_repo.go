@@ -9,28 +9,23 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/core/ports"
 )
 
-// ExportedSymbolRepo is the SQLite adapter for the ExportedSymbolQuerier port.
-// It answers "which EXPORTED public-surface nodes in (repoID, branch) live in a
-// set of files?" in a single round-trip, for the breaking-removal diff gate
+// ExportedSymbolRepo implements the ExportedSymbolQuerier port. It queries
+// exported public-surface nodes within specific files for the breaking-removal
+// diff gate.
 type ExportedSymbolRepo struct {
 	db *sql.DB
 }
 
-// NewExportedSymbolRepo constructs an ExportedSymbolRepo bound to the given
-// read-capable *sql.DB.
+// NewExportedSymbolRepo constructs an ExportedSymbolRepo.
 func NewExportedSymbolRepo(db *sql.DB) *ExportedSymbolRepo {
 	return &ExportedSymbolRepo{db: db}
 }
 
-// ExportedSymbolsInFiles returns the exported nodes in (repoID, branch) whose
-// file_path is one of filePaths and whose kind is a removable public-surface
-// kind: function, method, interface, struct, type, variable, class. This is
-// WIDER than the contract-drift gate's signature-shaped set {function, method,
-// interface} — removal/rename detection (/.14) needs only a name's
-// presence, so it also covers exported types, structs, consts and vars (Go
-// const + var both surface as the parser's KindVariable).
-// Empty filePaths is a no-op (returns nil, nil) — avoiding a degenerate "IN "
-// clause that SQLite rejects, symmetric with DriftedNodesInFiles.
+// ExportedSymbolsInFiles returns exported nodes in the specified files. It
+// includes a wider set of public kinds (including types, structs, and variables)
+// than the contract-drift check because removal detection only requires name
+// presence. An empty slice of file paths returns early to avoid generating
+// an invalid SQL IN clause.
 func (r *ExportedSymbolRepo) ExportedSymbolsInFiles(ctx context.Context, repoID, branch string, filePaths []string) ([]ports.ExportedSymbol, error) {
 	if len(filePaths) == 0 {
 		return nil, nil

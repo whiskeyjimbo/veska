@@ -36,10 +36,10 @@ func openFindingQuerierTestDB(t *testing.T) *sqlite.FindingQuerierRepo {
 	}
 	insert("f1", "main", "n1", "open")
 	insert("f2", "main", "n2", "open")
-	insert("f3", "main", "n3", "closed") // closed -> excluded
-	insert("f4", "main", nil, "open")    // NULL node_id -> excluded
-	insert("f5", "other", "n9", "open")  // different branch -> excluded
-	insert("f6", "main", "n1", "open")   // duplicate node -> still one entry
+	insert("f3", "main", "n3", "closed")
+	insert("f4", "main", nil, "open")
+	insert("f5", "other", "n9", "open")
+	insert("f6", "main", "n1", "open")
 
 	return sqlite.NewFindingQuerierRepo(db)
 }

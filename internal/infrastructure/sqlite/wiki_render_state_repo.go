@@ -1,9 +1,3 @@
-// WikiRenderStateRepo backs wiki.RenderTimeStore against the daemon_state
-// key-value table. The most recent successful wiki regeneration time lives
-// under the key 'wiki.last_render_at' as a Unix-millisecond string
-// daemon_state is runtime/operational state, the correct home (vs
-// database_meta which holds schema metadata).
-
 package sqlite
 
 import (
@@ -16,28 +10,22 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/application/wiki"
 )
 
-// wikiLastRenderKey is the daemon_state key the last-render time is stored
-// under.
 const wikiLastRenderKey = "wiki.last_render_at"
 
-// Compile-time assertion that WikiRenderStateRepo satisfies the port.
 var _ wiki.RenderTimeStore = (*WikiRenderStateRepo)(nil)
 
-// WikiRenderStateRepo is the SQLite adapter for wiki.RenderTimeStore. Reads
-// take the read pool; writes take the write pool. Both *sql.DB handles are
-// safe for concurrent use, so the repo itself is too.
+// WikiRenderStateRepo persists the most recent successful wiki regeneration time
+// in the daemon_state table, ensuring it survives daemon restarts.
 type WikiRenderStateRepo struct {
 	readDB  *sql.DB
 	writeDB *sql.DB
 }
 
-// NewWikiRenderStateRepo constructs a WikiRenderStateRepo. writeDB carries
-// the UPSERT, readDB the lookup.
+// NewWikiRenderStateRepo constructs a WikiRenderStateRepo.
 func NewWikiRenderStateRepo(readDB, writeDB *sql.DB) *WikiRenderStateRepo {
 	return &WikiRenderStateRepo{readDB: readDB, writeDB: writeDB}
 }
 
-// SetLastRenderAt upserts the last-render time keyed on wiki.last_render_at.
 func (r *WikiRenderStateRepo) SetLastRenderAt(ctx context.Context, t time.Time) error {
 	value := strconv.FormatInt(t.UnixMilli(), 10)
 	_, err := r.writeDB.ExecContext(ctx, `
@@ -52,8 +40,8 @@ func (r *WikiRenderStateRepo) SetLastRenderAt(ctx context.Context, t time.Time) 
 	return nil
 }
 
-// LastRenderAt reads the most recent persisted render time. The bool is
-// false when no render has been recorded yet.
+// LastRenderAt returns the most recent persisted render time. Returns false for
+// the boolean flag if no render has been recorded yet.
 func (r *WikiRenderStateRepo) LastRenderAt(ctx context.Context) (time.Time, bool, error) {
 	var value string
 	err := r.readDB.QueryRowContext(ctx,

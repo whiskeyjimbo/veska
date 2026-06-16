@@ -11,7 +11,7 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/sqlite"
 )
 
-// contractDriftFixture seeds a repo + nodes table for ContractDriftRepo tests.
+// contractDriftFixture maintains test database state for ContractDriftRepo tests.
 type contractDriftFixture struct {
 	db     *sql.DB
 	repoID string
@@ -34,9 +34,7 @@ func setupContractDriftFixture(t *testing.T) *contractDriftFixture {
 	return &contractDriftFixture{db: db, repoID: repoID, branch: branch}
 }
 
-// insertNode seeds a row with explicit signature + prev_signature. Pass empty
-// string for either to write NULL (matches Promoter behaviour for nil
-// signatures).
+// insertNode seeds a node row with explicit signature values, treating empty strings as NULL.
 func (f *contractDriftFixture) insertNode(t *testing.T, nodeID, filePath, kind, name, prevSig, sig string) {
 	t.Helper()
 	var prevArg, sigArg any
@@ -68,15 +66,10 @@ func TestContractDriftRepo_FlagsDriftedNodesOnly(t *testing.T) {
 	t.Parallel()
 	f := setupContractDriftFixture(t)
 
-	// In-scope drifted function: should appear.
 	f.insertNode(t, "n-drift", "pkg/a.go", "function", "Foo", "old", "new")
-	// In-scope unchanged: should NOT appear.
 	f.insertNode(t, "n-stable", "pkg/a.go", "function", "Bar", "same", "same")
-	// In-scope first-promotion (prev NULL): should NOT appear.
 	f.insertNode(t, "n-new", "pkg/a.go", "function", "Baz", "", "fresh")
-	// In-scope wrong kind: should NOT appear.
 	f.insertNode(t, "n-type", "pkg/a.go", "type", "T", "old", "new")
-	// Out-of-scope file: should NOT appear.
 	f.insertNode(t, "n-oos", "pkg/elsewhere.go", "function", "X", "old", "new")
 
 	repo := sqlite.NewContractDriftRepo(f.db)
@@ -146,7 +139,7 @@ func TestContractDriftRepo_ScopesByRepoAndBranch(t *testing.T) {
 	f := setupContractDriftFixture(t)
 
 	f.insertNode(t, "n-main", "pkg/a.go", "function", "M", "a", "b")
-	// Different branch row for same node_id: PK is (node_id, branch), so this is allowed.
+	// A separate branch row for the same node ID is allowed since the primary key spans both node ID and branch.
 	if _, err := f.db.Exec(`INSERT INTO nodes (
         node_id, branch, repo_id, language, kind, symbol_path, file_path,
         line_start, line_end, content_hash, last_promoted_at, actor_id, actor_kind,
@@ -154,14 +147,13 @@ func TestContractDriftRepo_ScopesByRepoAndBranch(t *testing.T) {
     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		"n-main", "feat/x", f.repoID, "go", "function", "M", "pkg/a.go",
 		1, 10, "h-feat", time.Now().UnixMilli(), "service:veska", "system",
-		"q", "q", // unchanged on feat/x
+		"q", "q",
 	); err != nil {
 		t.Fatalf("insert feat node: %v", err)
 	}
 
 	repo := sqlite.NewContractDriftRepo(f.db)
 
-	// main: drifted.
 	got, err := repo.DriftedNodesInFiles(context.Background(), f.repoID, "main", []string{"pkg/a.go"})
 	if err != nil {
 		t.Fatalf("query main: %v", err)
@@ -170,7 +162,6 @@ func TestContractDriftRepo_ScopesByRepoAndBranch(t *testing.T) {
 		t.Errorf("main: want 1, got %d", len(got))
 	}
 
-	// feat/x: unchanged.
 	got, err = repo.DriftedNodesInFiles(context.Background(), f.repoID, "feat/x", []string{"pkg/a.go"})
 	if err != nil {
 		t.Fatalf("query feat/x: %v", err)

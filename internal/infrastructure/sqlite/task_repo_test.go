@@ -10,22 +10,20 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/sqlite"
 )
 
-// TestTaskRepo_GetActiveTask covers the three behaviours the old wire.go closure
-// had: an active task maps to a fully-populated TaskInfo with Active=true; no
-// active task returns (nil, nil); and NULL tracker/tracker_ref map to "".
+// TestTaskRepo_GetActiveTask verifies that active tasks map to populated TaskInfo,
+// returns nil when no task is active, and maps NULL tracker fields to empty strings.
 func TestTaskRepo_GetActiveTask(t *testing.T) {
 	t.Parallel()
 	db := openTest(t, filepath.Join(t.TempDir(), "v.db"))
 	ctx := context.Background()
 	repo := sqlite.NewTaskRepo(db)
 
-	// repos row to satisfy the tasks.repo_id foreign key.
+	// Insert a repository to satisfy the foreign key constraint.
 	if _, err := db.ExecContext(ctx,
 		`INSERT INTO repos (repo_id, root_path, added_at) VALUES (?, ?, ?)`, "repo-1", "/tmp/repo-1", 1); err != nil {
 		t.Fatalf("seed repo: %v", err)
 	}
 
-	// No active task yet -> (nil, nil).
 	got, err := repo.GetActiveTask(ctx, "repo-1")
 	if err != nil {
 		t.Fatalf("GetActiveTask (none): %v", err)
@@ -34,7 +32,6 @@ func TestTaskRepo_GetActiveTask(t *testing.T) {
 		t.Fatalf("GetActiveTask (none) = %+v, want nil", got)
 	}
 
-	// Insert an active task with non-NULL tracker fields.
 	if _, err := db.ExecContext(ctx,
 		`INSERT INTO tasks (task_id, repo_id, tracker, tracker_ref, title, active, created_at)
 		 VALUES (?, ?, ?, ?, ?, ?, ?)`,
@@ -59,7 +56,6 @@ func TestTaskRepo_GetActiveTask(t *testing.T) {
 		t.Fatalf("Active = false, want true")
 	}
 
-	// A task with NULL tracker/tracker_ref maps to empty strings.
 	if _, err := db.ExecContext(ctx,
 		`INSERT INTO repos (repo_id, root_path, added_at) VALUES (?, ?, ?)`, "repo-2", "/tmp/repo-2", 1); err != nil {
 		t.Fatalf("seed repo-2: %v", err)
@@ -83,9 +79,7 @@ func TestTaskRepo_GetActiveTask(t *testing.T) {
 	}
 }
 
-// TestTaskRepo_ActiveTask covers the domain.Task projection the MCP read uses:
-// non-NULL tracker maps to non-nil pointers, created_at survives the round trip,
-// and no active task returns (nil, nil).
+// TestTaskRepo_ActiveTask verifies that ActiveTask correctly maps SQL fields to domain.Task pointers and values.
 func TestTaskRepo_ActiveTask(t *testing.T) {
 	t.Parallel()
 	db := openTest(t, filepath.Join(t.TempDir(), "v.db"))
@@ -130,9 +124,7 @@ func TestTaskRepo_ActiveTask(t *testing.T) {
 	}
 }
 
-// TestTaskRepo_SetActiveTask covers the switch-active transaction: a match
-// activates exactly one task (deactivating the incumbent) and reports found; a
-// miss reports found=false and leaves the table untouched.
+// TestTaskRepo_SetActiveTask verifies that SetActiveTask atomically updates the active task and deactivates any existing active task.
 func TestTaskRepo_SetActiveTask(t *testing.T) {
 	t.Parallel()
 	db := openTest(t, filepath.Join(t.TempDir(), "v.db"))
@@ -164,7 +156,6 @@ func TestTaskRepo_SetActiveTask(t *testing.T) {
 	assertActive(t, db, "task-A", 0)
 	assertActive(t, db, "task-B", 1)
 
-	// A miss leaves task-B active and reports not-found.
 	found, err = repo.SetActiveTask(ctx, "repo-1", "task-missing")
 	if err != nil {
 		t.Fatalf("SetActiveTask (miss): %v", err)
@@ -175,7 +166,7 @@ func TestTaskRepo_SetActiveTask(t *testing.T) {
 	assertActive(t, db, "task-B", 1)
 }
 
-// TestTaskRepo_ListTasks covers newest-first ordering and the limit cap.
+// TestTaskRepo_ListTasks verifies that ListTasks returns tasks sorted by creation time in descending order and honors the limit parameter.
 func TestTaskRepo_ListTasks(t *testing.T) {
 	t.Parallel()
 	db := openTest(t, filepath.Join(t.TempDir(), "v.db"))
@@ -201,7 +192,6 @@ func TestTaskRepo_ListTasks(t *testing.T) {
 	if len(got) != 2 {
 		t.Fatalf("ListTasks len = %d, want 2 (limit)", len(got))
 	}
-	// Newest-first: created_at 300 then 200.
 	if got[0].CreatedAt.Unix() != 300 || got[1].CreatedAt.Unix() != 200 {
 		t.Fatalf("ordering = %d,%d, want 300,200", got[0].CreatedAt.Unix(), got[1].CreatedAt.Unix())
 	}

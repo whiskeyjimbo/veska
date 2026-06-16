@@ -8,25 +8,19 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/sqlite/sqldriver"
 )
 
-// Pools holds the two *sql.DB handles for a single veska.db file.
-// ReadDB: unlimited connections, for all read paths.
-// Write: MaxOpenConns=1, the single writer for promotion, MCP writes, and
-//
-//	the embedder worker. SQLite WAL admits only one writer at the file
-//	level, so a second in-process write pool buys nothing but
-//	SQLITE_BUSY_SNAPSHOT races on transaction commit.
-//	Serializing all writes through one Go-level connection lets in-process
-//	contention queue on the *sql.DB conn instead of failing mid-tx.
+// Pools manages separate read and write database handles for a SQLite database.
+// SQLite WAL allows only one writer at a time, so the write pool is restricted
+// to one connection to serialize writes in Go rather than letting concurrent
+// transactions fail with SQLITE_BUSY_SNAPSHOT errors.
 type Pools struct {
 	ReadDB *sql.DB
 	Write  *sql.DB
 }
 
-// OpenPools opens the read and write *sql.DB handles to dbPath with per-role
-// PRAGMA setup. Both handles use WAL mode and foreign keys. The write pool
-// gets a 30s busy_timeout to absorb the embedder's longer-running writes;
-// readers use 5s since they never block writers under WAL.
-// Caller must call pools.Close when done.
+// OpenPools opens read and write database handles with per-role timeouts. The
+// write pool uses a 30-second busy timeout to absorb longer embedder writes,
+// while the read pool uses a 5-second timeout because readers do not block
+// writers under WAL.
 func OpenPools(dbPath string) (*Pools, error) {
 	readDB, err := openPool(dbPath, 0, 5000)
 	if err != nil {
@@ -45,16 +39,12 @@ func OpenPools(dbPath string) (*Pools, error) {
 	}, nil
 }
 
-// openPool opens a single *sql.DB to dbPath with the given MaxOpenConns (0 = unlimited)
-// and applies the provided PRAGMA string.
+// openPool opens a single *sql.DB to dbPath with the given MaxOpenConns (0 = unlimited).
 func openPool(dbPath string, maxOpen, busyTimeoutMS int) (*sql.DB, error) {
-	// Encode connection-scoped pragmas in the DSN so the driver applies them
-	// to EVERY pooled connection. foreign_keys and busy_timeout are per-connection
-	// state; the previous one-shot `db.Exec("PRAGMA …")` only set them on a
-	// single connection, leaving foreign keys OFF on the rest — so ON DELETE
-	// CASCADE silently never fired and `repo remove` orphaned child rows
-	// journal_mode=WAL is persisted in the db file, so encoding
-	// it per-connection is harmless.
+	// Connection-scoped pragmas must be encoded in the DSN rather than executed
+	// via db.Exec so they apply to all connections in the pool. This ensures
+	// foreign key enforcement (such as ON DELETE CASCADE) remains active across
+	// all connections.
 	db, err := sql.Open(sqldriver.Name, sqldriver.BuildDSN(dbPath, busyTimeoutMS))
 	if err != nil {
 		return nil, err
@@ -64,8 +54,8 @@ func openPool(dbPath string, maxOpen, busyTimeoutMS int) (*sql.DB, error) {
 		db.SetMaxOpenConns(maxOpen)
 	}
 
-	// Verify foreign_keys actually took on a live connection — a silent OFF
-	// here is what this fix exists to prevent.
+	// Verify that foreign key enforcement is active on a live connection to
+	// prevent silent cascading failures.
 	var fk int
 	if err := db.QueryRow(`PRAGMA foreign_keys`).Scan(&fk); err != nil {
 		_ = db.Close()

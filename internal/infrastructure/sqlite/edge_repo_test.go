@@ -11,9 +11,7 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/sqlite"
 )
 
-// openEdgeRepoTestDB opens an isolated DB, seeds a repo and two nodes that
-// the edge tests can reference, and returns the *sql.DB and a constructed
-// EdgeRepo.
+// openEdgeRepoTestDB creates a temporary database populated with a repository and source/destination nodes for testing.
 func openEdgeRepoTestDB(t *testing.T) (*sql.DB, *sqlite.EdgeRepo) {
 	t.Helper()
 	dir := t.TempDir()
@@ -43,9 +41,7 @@ func openEdgeRepoTestDB(t *testing.T) (*sql.DB, *sqlite.EdgeRepo) {
 	return db, sqlite.NewEdgeRepo(db)
 }
 
-// TestEdgeRepo_SaveEdges_PersistsUnresolvedSimilarTo verifies that the
-// adapter writes the supplied edges to the table with the expected
-// (edge_id, kind, confidence) tuple.
+// TestEdgeRepo_SaveEdges_PersistsUnresolvedSimilarTo verifies that SaveEdges writes edges with the expected properties.
 func TestEdgeRepo_SaveEdges_PersistsUnresolvedSimilarTo(t *testing.T) {
 	t.Parallel()
 	db, repo := openEdgeRepoTestDB(t)
@@ -92,7 +88,7 @@ func TestEdgeRepo_SaveEdges_PersistsUnresolvedSimilarTo(t *testing.T) {
 	}
 }
 
-// TestEdgeRepo_SaveEdges_EmptyIsNoop returns nil error for an empty batch.
+// TestEdgeRepo_SaveEdges_EmptyIsNoop verifies that calling SaveEdges with an empty batch is a no-op.
 func TestEdgeRepo_SaveEdges_EmptyIsNoop(t *testing.T) {
 	t.Parallel()
 	_, repo := openEdgeRepoTestDB(t)
@@ -104,9 +100,7 @@ func TestEdgeRepo_SaveEdges_EmptyIsNoop(t *testing.T) {
 	}
 }
 
-// TestEdgeRepo_SaveEdges_Idempotent verifies the ON CONFLICT clause does not
-// duplicate rows: a second SaveEdges with the same (edge_id, branch) does not
-// error and leaves exactly one row (the conflict refreshes score in place).
+// TestEdgeRepo_SaveEdges_Idempotent verifies that SaveEdges is idempotent for a given edge ID and branch.
 func TestEdgeRepo_SaveEdges_Idempotent(t *testing.T) {
 	t.Parallel()
 	db, repo := openEdgeRepoTestDB(t)
@@ -128,10 +122,7 @@ func TestEdgeRepo_SaveEdges_Idempotent(t *testing.T) {
 	}
 }
 
-// TestEdgeRepo_SaveEdges_DoesNotDowngradeResolved verifies the ON CONFLICT
-// clause preserves an already-resolved edge — re-saving the same
-// (src, kind, tgt) with Unresolved must NOT overwrite a previously stored
-// Definite row's confidence (the conflict updates only score).
+// TestEdgeRepo_SaveEdges_DoesNotDowngradeResolved ensures that saving an unresolved duplicate of an already resolved definite edge does not downgrade its confidence.
 func TestEdgeRepo_SaveEdges_DoesNotDowngradeResolved(t *testing.T) {
 	t.Parallel()
 	db, repo := openEdgeRepoTestDB(t)
@@ -155,10 +146,7 @@ func TestEdgeRepo_SaveEdges_DoesNotDowngradeResolved(t *testing.T) {
 	}
 }
 
-// TestEdgeRepo_SaveEdges_PersistsAndRefreshesScore verifies the score column
-// round-trips, refreshes on re-save (DO UPDATE), and is preserved when a later
-// writer passes no score (COALESCE) — the contract near-duplicate detection
-// relies on.
+// TestEdgeRepo_SaveEdges_PersistsAndRefreshesScore verifies that the score column is updated on conflict and preserved when the new score is nil.
 func TestEdgeRepo_SaveEdges_PersistsAndRefreshesScore(t *testing.T) {
 	t.Parallel()
 	db, repo := openEdgeRepoTestDB(t)
@@ -209,15 +197,13 @@ func queryScore(t *testing.T, db *sql.DB, edgeID string) float64 {
 	return score.Float64
 }
 
-// approxEqual compares scores tolerant of float32->REAL->float64 round-trip
-// precision loss (e.g. 0.9 stores as 0.89999997).
+// approxEqual compares float values with a small delta tolerance.
 func approxEqual(got, want float64) bool {
 	d := got - want
 	return d < 1e-6 && d > -1e-6
 }
 
-// TestEdgeRepo_SaveEdges_RoundTripID verifies the persisted edge_id is
-// exactly the deterministic ID computed by domain.NewEdge.
+// TestEdgeRepo_SaveEdges_RoundTripID verifies that the persisted edge_id matches the generated domain ID.
 func TestEdgeRepo_SaveEdges_RoundTripID(t *testing.T) {
 	t.Parallel()
 	db, repo := openEdgeRepoTestDB(t)

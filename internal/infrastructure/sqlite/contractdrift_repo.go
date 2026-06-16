@@ -9,30 +9,18 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/core/ports"
 )
 
-// ContractDriftRepo is the SQLite adapter for the ContractDriftQuerier port.
-// It answers "which nodes in (repoID, branch) whose file_path is in a set have
-// a signature that differs from prev_signature?" in a single round-trip.
+// ContractDriftRepo implements ports.ContractDriftQuerier using a SQLite database, querying signature changes across files in a single round-trip.
 type ContractDriftRepo struct {
 	db *sql.DB
 }
 
-// NewContractDriftRepo constructs a ContractDriftRepo bound to the given
-// read-capable *sql.DB. The handle must point at a DB with migration 0005
-// applied (nodes table has signature + prev_signature columns).
+// NewContractDriftRepo constructs a ContractDriftRepo bound to the given sql.DB.
 func NewContractDriftRepo(db *sql.DB) *ContractDriftRepo {
 	return &ContractDriftRepo{db: db}
 }
 
-// DriftedNodesInFiles returns nodes in (repoID, branch) whose file_path is one
-// of filePaths, whose prev_signature and signature are both non-NULL, whose
-// kind is in {function, method, interface}, and whose prev_signature differs
-// from signature.
-// Empty filePaths is a no-op (returns nil, nil) — this avoids building a
-// degenerate "IN " clause that SQLite rejects.
-// The query intentionally applies the kind filter at the storage layer (it
-// uses a closed enum the index can evaluate cheaply) but does not encode any
-// severity / message / anchor policy — those live in the application-layer
-// ContractDriftCheck.
+// DriftedNodesInFiles returns nodes in (repoID, branch) whose file_path matches filePaths, whose prev_signature differs from signature, and whose kind is a function, method, or interface.
+// An empty slice of filePaths is treated as a no-op to avoid producing a degenerate IN clause.
 func (r *ContractDriftRepo) DriftedNodesInFiles(ctx context.Context, repoID, branch string, filePaths []string) ([]ports.DriftedNode, error) {
 	if len(filePaths) == 0 {
 		return nil, nil

@@ -1,7 +1,3 @@
-// Package sqlite contains SQLite-backed adapters for the veska ports layer.
-// This file implements ports.NodeLookup against the nodes table — a narrow
-// projection used by the application-layer semantic-search service to
-// hydrate hits returned by VectorStorage.Search.
 package sqlite
 
 import (
@@ -13,9 +9,8 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/core/ports"
 )
 
-// NodeLookupRepo is a SQLite-backed implementation of ports.NodeLookup.
-// It uses the read-only DB handle: lookups never mutate state and must
-// not contend with the single-writer connection.
+// NodeLookupRepo is a SQLite-backed implementation of ports.NodeLookup. It uses
+// a read-only database handle to avoid contention with the single-writer connection.
 type NodeLookupRepo struct {
 	readDB *sql.DB
 }
@@ -25,19 +20,16 @@ func NewNodeLookupRepo(readDB *sql.DB) *NodeLookupRepo {
 	return &NodeLookupRepo{readDB: readDB}
 }
 
-// LookupNodes returns NodeMeta rows for nodeIDs in the given (repoID, branch).
-// IDs not present in the nodes table are silently omitted from the result
-// the caller treats the vector index as eventually-consistent and drops any
-// hit whose backing row is gone. An empty nodeIDs slice short-circuits to a
-// nil result without a database round-trip.
+// LookupNodes retrieves NodeMeta rows for the specified node IDs. Missing IDs
+// are silently omitted because semantic search treats the vector index as
+// eventually consistent and filters out hits with deleted backing rows.
 func (r *NodeLookupRepo) LookupNodes(ctx context.Context, repoID, branch string, nodeIDs []string) ([]ports.NodeMeta, error) {
 	if len(nodeIDs) == 0 {
 		return nil, nil
 	}
 
-	// Build an IN-list with one placeholder per node_id. The repo_id and
-	// branch filters are bound separately and SQLite plans this against
-	// idx_nodes_repo_branch + the (node_id, branch) primary key.
+	// Repository and branch filters are bound separately so SQLite can plan the
+	// query using the idx_nodes_repo_branch index alongside the primary key.
 	placeholders := make([]string, len(nodeIDs))
 	args := make([]any, 0, len(nodeIDs)+2)
 	args = append(args, repoID, branch)
@@ -72,13 +64,10 @@ func (r *NodeLookupRepo) LookupNodes(ctx context.Context, repoID, branch string,
 	return out, nil
 }
 
-// NodeContentHash returns nodes.content_hash for nodeID scoped to
-// (repoID, branch). An unknown node returns ("", nil) — callers (notably the
-// auto-link handler) treat a missing source as "no hash recorded" rather than
-// as an error.
-// This is the per-symbol content_hash on the nodes table; it is intentionally
-// distinct from EmbeddingRefRepo.ContentHashForNode, which returns the
-// embedding-input hash on node_embedding_refs.
+// NodeContentHash returns the per-symbol content hash for a node. A missing node
+// returns an empty string rather than an error because callers (such as the
+// auto-link handler) treat it as having no recorded hash. This is distinct
+// from the embedding-input hash tracked in node_embedding_refs.
 func (r *NodeLookupRepo) NodeContentHash(ctx context.Context, repoID, branch, nodeID string) (string, error) {
 	if nodeID == "" {
 		return "", nil
@@ -100,15 +89,10 @@ func (r *NodeLookupRepo) NodeContentHash(ctx context.Context, repoID, branch, no
 	return hash.String, nil
 }
 
-// NodesByContentHash returns every node in (repoID, branch) whose content_hash
-// equals hash, excluding excludeKinds. It is the read-side capability the
-// exact-clone diff gate needs to count how many existing nodes
-// share a candidate's content_hash — the base-state membership of a potential
-// clone group. The kind filter mirrors clone_repo's ClonedNodes so the gate's
-// base counts and the whole-repo clones analyzer agree on what is eligible.
-// An empty hash returns (nil, nil): "no content known" can never be a clone
-// match (consistent with ClonedNodes' content_hash != ” guard), so the gate
-// never queries one. idx_nodes_content_hash serves the lookup.
+// NodesByContentHash retrieves nodes sharing a specific content hash, excluding
+// specified kinds. It is used by the exact-clone diff gate to identify potential
+// clone groups. The kind filters must align with clone_repo's eligibility rules,
+// and empty hashes are rejected early since empty content cannot form clone groups.
 func (r *NodeLookupRepo) NodesByContentHash(ctx context.Context, repoID, branch, hash string, excludeKinds []string) ([]ports.NodeRef, error) {
 	if hash == "" {
 		return nil, nil
@@ -144,10 +128,7 @@ func (r *NodeLookupRepo) NodesByContentHash(ctx context.Context, repoID, branch,
 	return out, nil
 }
 
-// NodesInFile returns every node_id in (repoID, branch) whose file_path
-// equals filePath. The query is served by idx_nodes_repo_branch combined
-// with a file_path filter; with the typical "tens of nodes per file" cardinality
-// this stays cheap. An unknown path returns (nil, nil).
+// NodesInFile returns all node IDs defined within the specified file.
 func (r *NodeLookupRepo) NodesInFile(ctx context.Context, repoID, branch, filePath string) ([]string, error) {
 	if filePath == "" {
 		return nil, nil

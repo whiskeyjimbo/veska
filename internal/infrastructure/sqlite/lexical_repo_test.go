@@ -10,9 +10,8 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/platform/tokenize"
 )
 
-// seedLexical inserts a single (node_id, kind, symbol_path) into the two
-// m3.03.2 FTS tables using the same write contract Promoter uses (raw =
-// kind + " " + symbol_path; words = tokenize.Symbol(raw)).
+// seedLexical seeds FTS indexes with words and trigrams using the Promoter
+// write contract.
 func seedLexical(t *testing.T, db *sql.DB, nodeID, branch, repoID, kind, symbolPath string) {
 	t.Helper()
 	raw := kind + " " + symbolPath
@@ -44,9 +43,6 @@ func openLexDB(t *testing.T) *sql.DB {
 	return db
 }
 
-// TestLexical_PrefixHitOnWordsArm exercises the DoD example:
-// "closeFinding" with kind=function and symbol_path="pkg/api" must be
-// recoverable from the query "close" via the camelCase-split words arm.
 func TestLexical_PrefixHitOnWordsArm(t *testing.T) {
 	t.Parallel()
 	db := openLexDB(t)
@@ -62,8 +58,6 @@ func TestLexical_PrefixHitOnWordsArm(t *testing.T) {
 	}
 }
 
-// TestLexical_CamelCaseSplit verifies a query against an internal
-// camelCase token ("Find") still hits the node via the words arm.
 func TestLexical_CamelCaseSplit(t *testing.T) {
 	t.Parallel()
 	db := openLexDB(t)
@@ -85,8 +79,6 @@ func TestLexical_CamelCaseSplit(t *testing.T) {
 	}
 }
 
-// TestLexical_TrigramTypoTolerance verifies a substring/typo query
-// ("closeFnd") still surfaces the node via the trigram arm.
 func TestLexical_TrigramTypoTolerance(t *testing.T) {
 	t.Parallel()
 	db := openLexDB(t)
@@ -108,18 +100,6 @@ func TestLexical_TrigramTypoTolerance(t *testing.T) {
 	}
 }
 
-// TestLexical_RRFCombinesArms verifies a node that hits in both arms
-// outranks a node that hits in only one. Setup:
-//
-//	n1: "closeFinding" — hits both words ("close") and trigrams ("ind").
-//	n2: "indexBuilder" — hits trigrams ("ind") but not words ("close").
-//
-// Query "close" only matches words for n1; trigram "close" matches n1
-// only. So we use a query that lands on both arms for n1: tokenized
-// query "close" (words: matches n1) AND trigram "ose" (only matches n1).
-// This is somewhat synthetic — the load-bearing assertion is that when
-// both arms surface the same node, its RRF score is the SUM of the two
-// 1/(60+rank) contributions, strictly greater than a one-arm-only hit.
 func TestLexical_RRFCombinesArms(t *testing.T) {
 	t.Parallel()
 	db := openLexDB(t)
@@ -151,8 +131,6 @@ func TestLexical_RRFCombinesArms(t *testing.T) {
 	}
 }
 
-// TestLexical_EmptyQuery verifies an empty query short-circuits to nil
-// without a SQL round-trip.
 func TestLexical_EmptyQuery(t *testing.T) {
 	t.Parallel()
 	db := openLexDB(t)
@@ -166,8 +144,6 @@ func TestLexical_EmptyQuery(t *testing.T) {
 	}
 }
 
-// TestLexical_ScopesToRepoAndBranch verifies cross-(repo,branch) rows
-// don't leak into results.
 func TestLexical_ScopesToRepoAndBranch(t *testing.T) {
 	t.Parallel()
 	db := openLexDB(t)

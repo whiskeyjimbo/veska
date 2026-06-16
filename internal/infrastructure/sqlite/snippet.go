@@ -2,13 +2,13 @@ package sqlite
 
 import "github.com/whiskeyjimbo/veska/internal/core/domain"
 
-// maxSnippetBytes bounds the node body persisted into nodes.snippet. The body
-// feeds embed-text projection, so it is capped to keep embed cost and snippet
-// storage bounded and uniform — matching the recallprojection harness cap.
+// maxSnippetBytes limits the node body size persisted in nodes.snippet. The snippet
+// is capped to keep embedding costs and snippet storage bounded, matching the
+// recallprojection harness limit.
 const maxSnippetBytes = 2000
 
-// capSnippet trims s to at most maxSnippetBytes on a UTF-8 rune boundary so the
-// stored snippet never contains a broken rune.
+// capSnippet trims s to at most maxSnippetBytes on a UTF-8 rune boundary to
+// avoid storing a broken rune.
 func capSnippet(s string) string {
 	if len(s) <= maxSnippetBytes {
 		return s
@@ -20,10 +20,9 @@ func capSnippet(s string) string {
 	return s[:cut]
 }
 
-// nodeSnippet returns the SQL bind value for the nodes.snippet column
-// capped RawContent when the parser populated it, otherwise nil (NULL in
-// SQLite). Shared between GraphRepo.SaveNode and PromotionStore.Promote so
-// the embed-text projection has the same body in both write paths
+// nodeSnippet returns the SQL bind value for the nodes.snippet column, capping
+// the raw content at maxSnippetBytes. This ensures both GraphRepo and PromotionStore
+// write the same snippet format for text embedding.
 func nodeSnippet(n *domain.Node) any {
 	if n == nil || n.RawContent == nil {
 		return nil
