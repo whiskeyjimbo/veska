@@ -74,6 +74,7 @@ func (w *RedactingAuditWriter) Write(ctx context.Context, e ports.AuditEntry) er
 	e.Op = Redact(e.Op)
 	e.TargetID = Redact(e.TargetID)
 	e.Branch = Redact(e.Branch)
+	e.Reason = Redact(e.Reason)
 	return w.inner.Write(ctx, e)
 }
 

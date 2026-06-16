@@ -143,8 +143,8 @@ def test_persona_verify_capture(tmp_path: Path):
         cap("eng_get_suppression", {"suppression_id": sid})
         cap("eng_close_suppression", {"suppression_id": sid})
         cap("eng_close_finding", {"finding_id": fid, "branch": b, "repo_id": r, "reason": "verify capture"})
-        # reopen takes no reason (asymmetry with close_finding, which does).
-        cap("eng_reopen_finding", {"finding_id": fid, "branch": b, "repo_id": r})
+        # reason is optional on reopen (audit-only); required on close (functional).
+        cap("eng_reopen_finding", {"finding_id": fid, "branch": b, "repo_id": r, "reason": "verify reopen"})
 
         # ── repo alias lifecycle ──────────────────────────────────────────
         cap("eng_set_repo_alias", {"repo_id": r, "name": "verify-alias"})

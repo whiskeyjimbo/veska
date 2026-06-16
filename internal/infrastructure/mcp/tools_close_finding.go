@@ -221,6 +221,7 @@ func makeCloseFindingHandler(db *sql.DB, aw ports.AuditWriter) ToolHandler {
 				TargetID:  p.FindingID,
 				Branch:    p.Branch,
 				CreatedAt: time.Now(),
+				Reason:    p.Reason,
 			})
 		}
 

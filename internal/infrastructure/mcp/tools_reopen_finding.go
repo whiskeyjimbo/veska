@@ -19,6 +19,12 @@ type reopenFindingParams struct {
 	FindingID string `json:"finding_id"`
 	Branch    string `json:"branch"`
 	RepoID    string `json:"repo_id"`
+	// Reason is an OPTIONAL justification recorded in the audit log. Unlike
+	// eng_close_finding (where reason is required and drives the accept-flow +
+	// closed_reason column), reopen has no functional use for it — it only
+	// enriches the audit trail, so it is optional (solov2-nmps follow-up:
+	// reopen/close audit-reason symmetry).
+	Reason string `json:"reason"`
 }
 
 func makeReopenFindingHandler(db *sql.DB, aw ports.AuditWriter) ToolHandler {
@@ -82,6 +88,7 @@ func makeReopenFindingHandler(db *sql.DB, aw ports.AuditWriter) ToolHandler {
 				TargetID:  p.FindingID,
 				Branch:    p.Branch,
 				CreatedAt: time.Now(),
+				Reason:    p.Reason,
 			})
 		}
 
