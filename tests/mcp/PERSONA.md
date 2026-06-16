@@ -12,8 +12,16 @@ Run it:
 ```bash
 make test-persona          # parity gate + junior/senior/agent workflows (~12s)
 make persona-parity        # just the coverage gate (fast, no daemon)
+make persona-verify-capture  # drive the LIVE tool surface, dump verbatim output to judge
 PYTHONPATH=. python3 -m pytest tests/mcp -m persona   # direct
 ```
+
+`persona-verify-capture` (`persona_verify_driver.py`) is the repeatable engine
+behind the `/persona-verify` skill: it enumerates the live surface via
+`tools/list` and drives every tool (reads + suppress/finding/alias/repo
+lifecycles) with correct params, printing each request/response verbatim for the
+model to **judge** (capture, not asserts — its one hard check is that no live
+tool is silently skipped). The skill reads that transcript.
 
 No Ollama required — the workflows use the baked-in model2vec embedder. Each
 test spawns its own daemon in a throwaway `VESKA_HOME` (the

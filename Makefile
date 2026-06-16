@@ -257,6 +257,15 @@ test-mcp-bootstrap: $(VESKA_BIN) $(DAEMON_BIN) $(MCP_BIN)
 test-persona: persona-parity $(VESKA_BIN) $(DAEMON_BIN) $(MCP_BIN)
 	PYTHONPATH=. python3 -m pytest tests/mcp -v -s -m persona
 
+# persona-verify-capture: the repeatable capture driver behind /persona-verify.
+# Enumerates the LIVE tool surface (tools/list) and drives every tool over the
+# synthetic fixture, dumping verbatim request/response for the model to JUDGE
+# (capture, not pass/fail asserts — the one hard check is that no live tool is
+# silently skipped). Needs the three binaries; no Ollama. See the
+# /persona-verify skill, which reads this transcript.
+persona-verify-capture: $(VESKA_BIN) $(DAEMON_BIN) $(MCP_BIN)
+	PYTHONPATH=. python3 -m pytest tests/mcp/persona_verify_driver.py -v -s -m persona_verify
+
 # loadtest: manual-only — collates M1 exit-gate RESULTS.md files and emits tools/loadtest/REPORT.md.
 # Not included in `all`. Exit 0=all-pass, 1=fail, 2=pending.
 loadtest:
