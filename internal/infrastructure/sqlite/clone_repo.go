@@ -83,6 +83,55 @@ func (r *CloneRepo) ClonedNodes(ctx context.Context, repoID, branch string, excl
 	return out, nil
 }
 
+// StructuralNodes is the Type-2 (renamed-variable) analogue of ClonedNodes: it
+// groups by structural_hash instead of content_hash, so nodes with the same
+// shape after a consistent rename cluster even when their verbatim text differs.
+// structural_hash is NULLABLE (the parser sets it only for structurally-hashed
+// kinds), so the empty-string guard ClonedNodes uses becomes an IS NOT NULL
+// guard — NULL "no structural signal" can never be a clone match. The grouping
+// hash is returned in ClonedNode.ContentHash so the Finder folds it identically.
+// idx_nodes_structural_hash + idx_nodes_repo_branch serve it.
+func (r *CloneRepo) StructuralNodes(ctx context.Context, repoID, branch string, excludeKinds []string) ([]duplicates.ClonedNode, error) {
+	kindClause, kindArgs := notInClause("kind", excludeKinds)
+
+	args := make([]any, 0, 4+2*len(excludeKinds))
+	args = append(args, repoID, branch)
+	args = append(args, kindArgs...)
+	args = append(args, repoID, branch)
+	args = append(args, kindArgs...)
+
+	query := `SELECT structural_hash, node_id, symbol_path, file_path, kind,
+		COALESCE(line_start, 0), COALESCE(line_end, 0)
+		FROM nodes
+		WHERE repo_id = ? AND branch = ?` + kindClause + `
+		  AND structural_hash IS NOT NULL
+		  AND structural_hash IN (
+			SELECT structural_hash FROM nodes
+			WHERE repo_id = ? AND branch = ?` + kindClause + `
+			  AND structural_hash IS NOT NULL
+			GROUP BY structural_hash HAVING COUNT(*) >= 2
+		  )`
+
+	rows, err := r.readDB.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("clone_repo: structural query: %w", err)
+	}
+	defer rows.Close()
+
+	out := make([]duplicates.ClonedNode, 0)
+	for rows.Next() {
+		var n duplicates.ClonedNode
+		if err := rows.Scan(&n.ContentHash, &n.NodeID, &n.SymbolPath, &n.FilePath, &n.Kind, &n.LineStart, &n.LineEnd); err != nil {
+			return nil, fmt.Errorf("clone_repo: structural scan: %w", err)
+		}
+		out = append(out, n)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("clone_repo: structural iterate: %w", err)
+	}
+	return out, nil
+}
+
 // SimilarEdges returns persisted SIMILAR_TO edges in (repoID, branch) whose
 // score is non-NULL and >= minScore and whose BOTH endpoints fall outside
 // excludeKinds, with endpoint metadata hydrated by joining the nodes table on
