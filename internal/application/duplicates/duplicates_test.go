@@ -209,10 +209,10 @@ func TestStructuralClones_GroupsByStructuralHashAndExcludesContainers(t *testing
 	t.Parallel()
 	store := &fakeStore{structuralRows: []duplicates.ClonedNode{
 		// Two renamed copies sharing one structural_hash → a Type-2 group.
-		{ContentHash: "structA", NodeID: "n1", FilePath: "a.go", LineStart: 9, Kind: "function"},
-		{ContentHash: "structA", NodeID: "n2", FilePath: "b.go", LineStart: 1, Kind: "function"},
+		{StructuralHash: "structA", ContentHash: "c1", NodeID: "n1", FilePath: "a.go", LineStart: 9, Kind: "function"},
+		{StructuralHash: "structA", ContentHash: "c2", NodeID: "n2", FilePath: "b.go", LineStart: 1, Kind: "function"},
 		// A singleton structural_hash must not form a group.
-		{ContentHash: "structB", NodeID: "n3", FilePath: "c.go", LineStart: 1, Kind: "method"},
+		{StructuralHash: "structB", ContentHash: "c3", NodeID: "n3", FilePath: "c.go", LineStart: 1, Kind: "method"},
 	}}
 	finder, _ := duplicates.NewFinder(store, store, "")
 	groups, err := finder.StructuralClones(context.Background(), "r1", "main")

@@ -40,22 +40,31 @@ var ExcludedKinds = []string{"package", "chunk", "file", "module", "field", "imp
 // Finder folds them into CloneGroups.
 type ClonedNode struct {
 	ContentHash string
-	NodeID      string
-	SymbolPath  string
-	FilePath    string
-	Kind        string
-	LineStart   int
-	LineEnd     int
+	// StructuralHash is the identifier-normalised (Type-2) hash; set by the
+	// structural projection, empty for the exact projection.
+	StructuralHash string
+	RepoID         string
+	NodeID         string
+	SymbolPath     string
+	FilePath       string
+	Kind           string
+	LineStart      int
+	LineEnd        int
 }
 
 // CloneMember is one occurrence of a clone within a CloneGroup.
 type CloneMember struct {
 	NodeID     string
+	RepoID     string
 	SymbolPath string
 	FilePath   string
 	Kind       string
 	LineStart  int
 	LineEnd    int
+	// ContentHash is the member's byte-identity hash, carried so the unified
+	// Clusters view can sub-tier a structural group (all-same content_hash =>
+	// exact tier; mixed => genuine Type-2). Empty when not hydrated.
+	ContentHash string
 }
 
 // CloneGroup is a set of >=2 nodes sharing one content_hash — N literal copies
@@ -211,7 +220,7 @@ func (f *Finder) ExactClones(ctx context.Context, repoID, branch string) ([]Clon
 	if err != nil {
 		return nil, fmt.Errorf("duplicates.ExactClones: %w", err)
 	}
-	return groupByHash(rows), nil
+	return groupByHash(rows, func(r ClonedNode) string { return r.ContentHash }), nil
 }
 
 // StructuralClones returns Type-2 clone groups in (repoID, branch): sets of >=2
@@ -228,7 +237,7 @@ func (f *Finder) StructuralClones(ctx context.Context, repoID, branch string) ([
 	if err != nil {
 		return nil, fmt.Errorf("duplicates.StructuralClones: %w", err)
 	}
-	return groupByHash(rows), nil
+	return groupByHash(rows, func(r ClonedNode) string { return r.StructuralHash }), nil
 }
 
 // NearDuplicates returns near-identical clusters: connected components of
@@ -256,20 +265,23 @@ func (f *Finder) NearDuplicates(ctx context.Context, repoID, branch string, minS
 // CloneGroups, dropping any hash that ended up with a single member (defensive:
 // the store already enforces COUNT>=2, but grouping here keeps the invariant
 // local and lets the store stay a dumb projection).
-func groupByHash(rows []ClonedNode) []CloneGroup {
+func groupByHash(rows []ClonedNode, keyOf func(ClonedNode) string) []CloneGroup {
 	byHash := make(map[string][]CloneMember)
 	order := make([]string, 0)
 	for _, r := range rows {
-		if _, seen := byHash[r.ContentHash]; !seen {
-			order = append(order, r.ContentHash)
+		k := keyOf(r)
+		if _, seen := byHash[k]; !seen {
+			order = append(order, k)
 		}
-		byHash[r.ContentHash] = append(byHash[r.ContentHash], CloneMember{
-			NodeID:     r.NodeID,
-			SymbolPath: r.SymbolPath,
-			FilePath:   r.FilePath,
-			Kind:       r.Kind,
-			LineStart:  r.LineStart,
-			LineEnd:    r.LineEnd,
+		byHash[k] = append(byHash[k], CloneMember{
+			NodeID:      r.NodeID,
+			RepoID:      r.RepoID,
+			SymbolPath:  r.SymbolPath,
+			FilePath:    r.FilePath,
+			Kind:        r.Kind,
+			LineStart:   r.LineStart,
+			LineEnd:     r.LineEnd,
+			ContentHash: r.ContentHash,
 		})
 	}
 
