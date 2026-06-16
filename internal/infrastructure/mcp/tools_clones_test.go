@@ -11,10 +11,12 @@ import (
 )
 
 type fakeCloneFinder struct {
-	groups      []duplicates.CloneGroup
-	clusters    []duplicates.NearCluster
-	gotMinScore float32
-	nearCalled  bool
+	groups         []duplicates.CloneGroup
+	clusters       []duplicates.NearCluster
+	unified        []duplicates.Cluster
+	gotMinScore    float32
+	nearCalled     bool
+	gotClusterOpts duplicates.ClusterOptions
 }
 
 func (f *fakeCloneFinder) ExactClones(_ context.Context, _, _ string) ([]duplicates.CloneGroup, error) {
@@ -25,6 +27,11 @@ func (f *fakeCloneFinder) NearDuplicates(_ context.Context, _, _ string, minScor
 	f.nearCalled = true
 	f.gotMinScore = minScore
 	return f.clusters, nil
+}
+
+func (f *fakeCloneFinder) Clusters(_ context.Context, opts duplicates.ClusterOptions) ([]duplicates.Cluster, error) {
+	f.gotClusterOpts = opts
+	return f.unified, nil
 }
 
 func dispatchClones(t *testing.T, finder CloneFinder, params map[string]any) FindClonesResponse {
