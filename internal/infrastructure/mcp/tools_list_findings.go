@@ -14,9 +14,9 @@ import (
 )
 
 // relativizeFindingPath normalizes a finding's stored file_path to a
-// repo-root-relative form. Findings are anchored at different layers — the
+// repo-root-relative form. Findings are anchored at different layers - the
 // checks pipeline stores repo-relative paths while the ingester (cold scan)
-// stores absolute ones — so the wire contract is unified here at the read
+// stores absolute ones - so the wire contract is unified here at the read
 // boundary instead. A nil path (e.g. auto-link findings, which
 // anchor on an edge, not a file) is left untouched.
 func relativizeFindingPath(path *string, root string) *string {
@@ -53,7 +53,7 @@ func resolveRepoIDDB(ctx context.Context, db *sql.DB, repoID string) (string, *R
 		return exact, nil
 	}
 	if err != sql.ErrNoRows {
-		// repos table unavailable (e.g. a minimal test DB) — skip validation
+		// repos table unavailable (e.g. a minimal test DB) - skip validation
 		// and pass the id through unchanged, never worse than pre-resolution.
 		return repoID, nil
 	}
@@ -166,7 +166,7 @@ func makeListFindingsHandler(db *sql.DB, repos application.RepoLister) ToolHandl
 		// LEFT JOIN against active suppressions so we can either filter out
 		// suppressed findings (default) or surface them with a suppressed_by
 		// hint (when include_suppressed=true). An "active" suppression is one
-		// whose expires_at is NULL or in the future — eng_close_suppression
+		// whose expires_at is NULL or in the future - eng_close_suppression
 		// terminates by setting expires_at = now.
 		// state="any" disables the state filter so callers can
 		// list findings across every lifecycle state (open, closed, …) for

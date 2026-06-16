@@ -36,7 +36,7 @@ func TestRenderGraphChain_EmptyWithChainedSelectorsHint(t *testing.T) {
 	}
 }
 
-// Other degraded reasons should NOT trigger the chained-selector hint — keep
+// Other degraded reasons should NOT trigger the chained-selector hint - keep
 // the message focused.
 func TestRenderGraphChain_EmptyWithOtherDegradedNoHint(t *testing.T) {
 	payload, _ := json.Marshal(map[string]any{

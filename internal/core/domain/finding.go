@@ -114,7 +114,7 @@ type Finding struct {
 
 	// findingKey is an optional discriminator folded into the finding_id hash.
 	// It lets a caller emit several findings sharing the same (rule, anchor)
-	// e.g. multiple review-code findings in one file — without their
+	// e.g. multiple review-code findings in one file - without their
 	// finding_ids colliding. It defaults to "" and is not persisted.
 	findingKey string
 
@@ -122,7 +122,7 @@ type Finding struct {
 	// the finding was written. It is populated only when the finding anchors
 	// on a node whose content_hash is known to the producing check (dead-code,
 	// contract-drift, auto-link). File-anchored findings (parse-failure) leave
-	// it nil — the file as a whole has no per-symbol hash.
+	// it nil - the file as a whole has no per-symbol hash.
 	// The revalidation sweep (m3.05.2) compares this against the node's
 	// current content_hash to detect drift: a finding whose anchor has moved
 	// on is superseded rather than re-fired.
@@ -273,11 +273,11 @@ func NewFinding(spec FindingSpec, opts ...FindingOption) (*Finding, error) {
 // It is the single source of truth for finding_id derivation. NewFinding uses
 // it internally; any code that must reconstruct a finding_id without a Finding
 // in hand (e.g. a doctor probe correlating a queue row to its companion
-// finding) MUST call this rather than re-implementing the hash — the two must
+// finding) MUST call this rather than re-implementing the hash - the two must
 // stay byte-identical or correlation silently breaks.
 // anchor is the finding's node_id or file_path. key is the optional
 // discriminator set via WithFindingKey ("" when the finding is one-per-anchor).
-// repoID and branch are intentionally NOT part of the hash — a finding is
+// repoID and branch are intentionally NOT part of the hash - a finding is
 // scoped by the (finding_id, branch) primary key and the repo_id column.
 func DeriveFindingID(rule, anchor, key string) string {
 	h := sha256.Sum256([]byte(rule + "\x00" + anchor + "\x00" + key))
@@ -290,7 +290,7 @@ func DeriveFindingID(rule, anchor, key string) string {
 //	reason and actorID must be non-empty (mirrors NewSuppression, so the
 //	  close path cannot silently blank attribution or audit reason).
 //	actorKind must be a recognised ActorKind (same check NewActor and
-//	  WithActorKind enforce — the close path must not be the one place an
+//	  WithActorKind enforce - the close path must not be the one place an
 //	  unvalidated kind slips onto a Finding).
 //	severity >= high requires actorKind == human.
 func (f *Finding) Close(reason string, actorKind ActorKind, actorID string, now time.Time) error {

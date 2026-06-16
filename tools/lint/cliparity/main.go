@@ -9,7 +9,7 @@
 // Stale manifest entries (names with no matching MCP registration) are
 // also flagged so the manifest stays a live document rather than a
 // graveyard. The lint walks internal/infrastructure/mcp/*.go via the
-// go/ast package — no daemon spin-up required — so it runs in the same
+// go/ast package - no daemon spin-up required - so it runs in the same
 // pre-merge gate as gofmt and `go vet`.
 package main
 
@@ -93,7 +93,7 @@ func main() {
 	}
 	if len(stale) > 0 {
 		fmt.Fprintln(os.Stderr, "")
-		fmt.Fprintln(os.Stderr, "Stale manifest entries (tool no longer registered — remove from wrapped.txt):")
+		fmt.Fprintln(os.Stderr, "Stale manifest entries (tool no longer registered - remove from wrapped.txt):")
 		sort.Strings(stale)
 		for _, s := range stale {
 			fmt.Fprintf(os.Stderr, "  %s\n", s)
@@ -110,7 +110,7 @@ func fail(format string, args ...any) {
 // scanMCPRegistrations walks internal/infrastructure/mcp/*.go and
 // extracts every ToolSpec composite literal passed to r.MustRegister
 // (or r.Register). Returns the (Name, CLIExempt, ExemptReason) triple
-// for each. Tests are excluded — test-only registrations aren't part
+// for each. Tests are excluded - test-only registrations aren't part
 // of the shipped surface.
 func scanMCPRegistrations() ([]toolFact, error) {
 	var out []toolFact

@@ -130,7 +130,7 @@ func parseTiers(csv string) ([]duplicates.Tier, *RPCError) {
 		"near":       duplicates.TierNear,
 	}
 	var out []duplicates.Tier
-	for _, raw := range strings.Split(csv, ",") {
+	for raw := range strings.SplitSeq(csv, ",") {
 		t, ok := valid[strings.TrimSpace(raw)]
 		if !ok {
 			return nil, &RPCError{Code: CodeInvalidParams, Message: fmt.Sprintf("unknown tier %q (want exact|structural|near)", strings.TrimSpace(raw))}

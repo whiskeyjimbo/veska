@@ -105,13 +105,13 @@ func doctorSavingsCmd() *cobra.Command {
 			"file-read traffic the inline snippets in eng_search_semantic results saved.\n\n" +
 			"Warmup: a period reads \"warming up\" until it has recorded at least 20\n" +
 			"eng_search_semantic calls. Below that the sample is too small to be\n" +
-			"meaningful — a single short snippet can drive the ratio negative — so only\n" +
+			"meaningful - a single short snippet can drive the ratio negative - so only\n" +
 			"the running call count is shown, not a percentage. Once a period crosses\n" +
 			"20 calls its row switches to a percentage.\n\n" +
 			"The counter only advances on eng_search_semantic searches (not symbol/\n" +
 			"context lookups), and those come from the MCP server the daemon runs. Until\n" +
-			"an MCP-aware editor is wired up — or eng_search_semantic is called directly\n" +
-			"several times — savings stays in warmup.",
+			"an MCP-aware editor is wired up - or eng_search_semantic is called directly\n" +
+			"several times - savings stays in warmup.",
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return savingscmd.Run(savingscmd.Params{

@@ -44,7 +44,7 @@ func PrintRepoTable(w io.Writer, repos []RepoView) {
 // from progressing. progress maps repo_id → phase + files_seen.
 func PrintRepoTableWithProgress(w io.Writer, repos []RepoView, progress map[string]ScanProgressRow) {
 	if len(repos) == 0 {
-		fmt.Fprintln(w, "no repositories registered — run: veska repo add <path>")
+		fmt.Fprintln(w, "no repositories registered - run: veska repo add <path>")
 		return
 	}
 	tw := tabwriter.NewWriter(w, 0, 0, 2, ' ', 0)
@@ -143,10 +143,10 @@ func scanPhaseStatus(p ScanProgressRow, base string) string {
 
 // ColdScanRunningHint returns the post-`repo add` hint shown when the daemon
 // has accepted a new repo and is cold-scanning it asynchronously. The hint
-// must name `veska repo add <path> --wait` explicitly — `--wait` is a flag on
+// must name `veska repo add <path> --wait` explicitly - `--wait` is a flag on
 // `repo add`, not on `repo list`, and a copy-pasteable suggestion avoids the
 // trap where juniors run `veska repo list --wait` and hit
 // "unknown flag".
 func ColdScanRunningHint(root, logPath string) string {
-	return fmt.Sprintf("  cold scan running in the background — `veska repo list` shows status; re-run with `veska repo add %s --wait` to block until it finishes, or `tail %s` for live progress", root, logPath)
+	return fmt.Sprintf("  cold scan running in the background - `veska repo list` shows status; re-run with `veska repo add %s --wait` to block until it finishes, or `tail %s` for live progress", root, logPath)
 }

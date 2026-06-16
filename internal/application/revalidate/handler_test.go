@@ -626,7 +626,7 @@ func TestHandler_BatchUsesSingleApplyCall(t *testing.T) {
 }
 
 // TestHandler_EmptyStaleSkipsApply asserts that Handle never invokes
-// ApplyDecisions when StaleFindingsForFile returns no rows — no tx is opened
+// ApplyDecisions when StaleFindingsForFile returns no rows - no tx is opened
 // on a clean file (the dominant case post-sync).
 func TestHandler_EmptyStaleSkipsApply(t *testing.T) {
 	t.Parallel()
@@ -730,20 +730,20 @@ func TestHandler_Integration_PerRuleDispatch(t *testing.T) {
 	insertRepo(t, db, "repo1")
 
 	// Nodes:
-	//   n-dead-refresh — no inbound edges, content changed.
-	//   n-dead-close — has 1 inbound edge, content changed.
-	//   n-drift-refresh — prev != current sig, content changed.
-	//   n-drift-close — sigs match, content changed.
-	//   n-al — content changed (auto-link gets closed regardless).
-	//   n-fresh — content matches, finding stays open.
+	//   n-dead-refresh - no inbound edges, content changed.
+	//   n-dead-close - has 1 inbound edge, content changed.
+	//   n-drift-refresh - prev != current sig, content changed.
+	//   n-drift-close - sigs match, content changed.
+	//   n-al - content changed (auto-link gets closed regardless).
+	//   n-fresh - content matches, finding stays open.
 	insertNode(t, db, "n-dead-refresh", "repo1", "main", "pkg/a.go", "h-cur-dr")
 	insertNode(t, db, "n-dead-close", "repo1", "main", "pkg/a.go", "h-cur-dc")
 	insertNodeWithSig(t, db, "n-drift-refresh", "repo1", "main", "pkg/a.go", "h-cur-drr", "sig-old", "sig-new")
 	insertNodeWithSig(t, db, "n-drift-close", "repo1", "main", "pkg/a.go", "h-cur-dcc", "sig-same", "sig-same")
 	insertNode(t, db, "n-al", "repo1", "main", "pkg/a.go", "h-cur-al")
 	insertNode(t, db, "n-fresh", "repo1", "main", "pkg/a.go", "h-fresh")
-	//   n-untested-refresh — no test caller, content changed → stays untested.
-	//   n-untested-close — a *_test.go CALLS caller appeared → now tested.
+	//   n-untested-refresh - no test caller, content changed → stays untested.
+	//   n-untested-close - a *_test.go CALLS caller appeared → now tested.
 	insertNode(t, db, "n-untested-refresh", "repo1", "main", "pkg/a.go", "h-cur-ur")
 	insertNode(t, db, "n-untested-close", "repo1", "main", "pkg/a.go", "h-cur-uc")
 	// A "caller" node + edge into n-dead-close.

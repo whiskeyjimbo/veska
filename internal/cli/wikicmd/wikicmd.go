@@ -38,7 +38,7 @@ type Params struct {
 }
 
 // Run regenerates the wiki pages (hot_zones + entry_points) by reusing the
-// WorkKindWiki render orchestration (wiki.Handler.Handle) — the same code path
+// WorkKindWiki render orchestration (wiki.Handler.Handle) - the same code path
 // the post-promotion queue lane runs, so the output is byte-identical.
 func Run(ctx context.Context, p Params) error {
 	dbPath := filepath.Join(config.DefaultVectorDir(), "veska.db")
@@ -83,14 +83,14 @@ func Run(ctx context.Context, p Params) error {
 
 // runAll renders every registered repo so multi-repo workspaces
 // don't have to cd into each repo and re-run. Per-repo failures are logged
-// inline but don't abort the sweep — a stuck repo must not suppress the others.
+// inline but don't abort the sweep - a stuck repo must not suppress the others.
 func runAll(ctx context.Context, db *sql.DB, handler *wiki.Handler, out, errOut io.Writer) error {
 	records, err := repo.List(ctx, db)
 	if err != nil {
 		return fmt.Errorf("wiki: list repos: %w", err)
 	}
 	if len(records) == 0 {
-		return fmt.Errorf("wiki: no repos registered — run 'veska repo add <path>' first")
+		return fmt.Errorf("wiki: no repos registered - run 'veska repo add <path>' first")
 	}
 	var failed int
 	for _, rec := range records {
@@ -127,7 +127,7 @@ func ResolveTarget(ctx context.Context, db *sql.DB, repoID, branch string) (stri
 	if repoID == "" {
 		switch len(records) {
 		case 0:
-			return "", "", fmt.Errorf("wiki: no repos registered — run 'veska repo add <path>' first")
+			return "", "", fmt.Errorf("wiki: no repos registered - run 'veska repo add <path>' first")
 		case 1:
 			rec = records[0]
 		default:
@@ -143,7 +143,7 @@ func ResolveTarget(ctx context.Context, db *sql.DB, repoID, branch string) (stri
 				}
 			}
 			if rec.RepoID == "" {
-				return "", "", fmt.Errorf("wiki: %d repos registered — pass --repo to choose one, or cd into a registered repo", len(records))
+				return "", "", fmt.Errorf("wiki: %d repos registered - pass --repo to choose one, or cd into a registered repo", len(records))
 			}
 		}
 	} else {
@@ -188,7 +188,7 @@ func ResolveTarget(ctx context.Context, db *sql.DB, repoID, branch string) (stri
 // reimplementing render orchestration.
 func buildWikiHandler(pools *sqlite.Pools) (*wiki.Handler, error) {
 	// `veska wiki` is the explicit, user-invoked render path: a fresh staging
-	// (one-shot CLI — nothing is staged), the CLI prefix-matching repo
+	// (one-shot CLI - nothing is staged), the CLI prefix-matching repo
 	// resolver, and writePages=true regardless of the daemon's [wiki]
 	// write_pages default. The handler graph itself is built by
 	// the shared composition constructor.

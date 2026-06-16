@@ -56,7 +56,7 @@ func (p *TSParser) ParseFile(ctx context.Context, repoID, path string, src []byt
 	result := &domain.ParseResult{}
 
 	// Surface syntax errors as ParseFailures. Unlike the Go parser we still
-	// extract whatever symbols tree-sitter could recover — TS/TSX trees with
+	// extract whatever symbols tree-sitter could recover - TS/TSX trees with
 	// localized errors typically still expose valid top-level declarations.
 	if hasErrorNode(root) {
 		result.Failures = append(result.Failures, firstErrorFailure(root))
@@ -139,7 +139,7 @@ func processTopLevelNode(
 	classNames map[string]bool,
 	exported bool,
 ) {
-	// Skip declarations whose own subtree carries a syntax error — their
+	// Skip declarations whose own subtree carries a syntax error - their
 	// extracted name/signature/body would be unreliable. Sibling declarations
 	// that parsed cleanly still index, so a transiently-broken TS file
 	// mid-edit doesn't erase its other symbols (, mirrors the Go
@@ -329,7 +329,7 @@ func parseTSArrowFunctions(
 // collectTSCallsFromClassBody walks each method_definition under a
 // class body and emits CALLS edges. Calls of the form this.foo are
 // rewritten to className.foo and resolved against the file's symbol
-// map — bare-identifier calls (e.g. helper) resolve directly. This
+// map - bare-identifier calls (e.g. helper) resolve directly. This
 // is the TS analogue of the Go receiver-selector rewrite
 // and is what makes intra-class dependencies show up in eng_get_call_chain
 // for TS code.

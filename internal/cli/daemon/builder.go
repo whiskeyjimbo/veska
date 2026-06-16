@@ -143,7 +143,7 @@ func (b *daemonBuilder) buildObservability() error {
 // validateConfig fails fast on misconfiguration before any resource is opened:
 // the review LLM provider, the vuln advisory provider, the vector backend, the
 // required socket/db paths, and creation of the SQLite parent directory.
-// EmbedModel is intentionally NOT required — it only matters when the elected
+// EmbedModel is intentionally NOT required - it only matters when the elected
 // embedder is Ollama (VESKA_EMBEDDER=ollama).
 func (b *daemonBuilder) validateConfig() error {
 	if err := checkLLMProvider(b.fileCfg); err != nil {
@@ -293,7 +293,7 @@ func (b *daemonBuilder) buildCheckPipeline() error {
 // buildVulnRefresher builds the advisory-cache refresher (launched later in
 // Start) for the vulnerability-scan feature. The VulnScanCheck registration
 // itself lives in composition.RegisterCommonChecks (shared with the cold-scan
-// CLI); this is the daemon-only refresher half. Off by default — when
+// CLI); this is the daemon-only refresher half. Off by default - when
 // vuln-scan is disabled there is no refresher.
 func (b *daemonBuilder) buildVulnRefresher(vulnSource ports.VulnSource, vulnEnabled bool) error {
 	if !vulnEnabled {
@@ -352,7 +352,7 @@ func (b *daemonBuilder) electEmbedder() error {
 	// surface a one-shot WARN so operators tailing daemon.log see
 	// why eng_search_semantic returns 'low_quality_static_embedder'.
 	if election.Name == "veska-static-v2" {
-		slog.Warn("daemon: low-quality static-v2 embedder elected — run `veska install model2vec` for higher-quality code search",
+		slog.Warn("daemon: low-quality static-v2 embedder elected - run `veska install model2vec` for higher-quality code search",
 			"model_id", election.Name)
 	}
 	if election.SwitchedModel {
@@ -586,7 +586,7 @@ func (b *daemonBuilder) buildMCPServer() error {
 	b.registry = mcp.NewRegistry()
 
 	// Savings telemetry is best-effort: a failure to open the JSONL file logs
-	// and continues with recording disabled — never load-bearing for search.
+	// and continues with recording disabled - never load-bearing for search.
 	rec, err := savings.NewRecorder(filepath.Join(b.cfg.VeskaHome, "savings.jsonl"))
 	if err != nil {
 		slog.Warn("savings: recorder disabled", "err", err)
@@ -631,7 +631,7 @@ func (b *daemonBuilder) finalize() error {
 	// wake-sweep uses also runs at the START of each startup-resync repo, so a
 	// branch switch during downtime bumps the generation and drops prior-branch
 	// staging before any replay. Degrade-don't-crash: if construction fails
-	// (nil dep) we log and proceed WITHOUT the option — startup must not fail
+	// (nil dep) we log and proceed WITHOUT the option - startup must not fail
 	// because the branch check couldn't wire (mirrors buildReconciler).
 	var resyncOpts []application.StartupResyncOption
 	if br, berr := application.NewBranchReconciler(

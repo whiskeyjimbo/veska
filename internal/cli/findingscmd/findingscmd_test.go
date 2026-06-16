@@ -53,7 +53,7 @@ func TestRenderTableSuppressedMarker(t *testing.T) {
 		t.Fatalf("expected suppression id %q in output, got:\n%s", sup, out)
 	}
 	// The plain row's line must not carry a suppression id.
-	for _, line := range strings.Split(strings.TrimSpace(out), "\n") {
+	for line := range strings.SplitSeq(strings.TrimSpace(out), "\n") {
 		if strings.HasPrefix(line, "f2") && strings.Contains(line, "sup_") {
 			t.Fatalf("plain row f2 should have no suppression id: %q", line)
 		}

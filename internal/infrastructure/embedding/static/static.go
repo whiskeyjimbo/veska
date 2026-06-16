@@ -1,17 +1,17 @@
 // Package static is a CPU-only, in-process EmbeddingProvider that
-// requires zero external services — no Ollama, no Python sidecar, no
+// requires zero external services - no Ollama, no Python sidecar, no
 // network, no model file.
 // Algorithm (v2, FastText-style subword hashing):
 //  1. Tokenise into camelCase / snake_case / non-alphanumeric subwords.
 //  2. For each token, derive character n-grams (3.6) plus the token
 //     itself, with explicit boundary markers ('<' / '>') so prefix and
-//     suffix morphology contributes — FastText's trick.
+//     suffix morphology contributes - FastText's trick.
 //  3. Hash each n-gram to a Dim-length float32 vector via SHA-256
 //     expansion mapped into [-1, 1].
 //  4. Sum all n-gram vectors across all tokens; divide by count
 //     (mean-pool); L2-normalise.
 //
-// This is NOT a faithful Model2Vec / potion-code-16M port — that work
+// This is NOT a faithful Model2Vec / potion-code-16M port - that work
 // is filed as and requires a HuggingFace tokenizer +
 // safetensors loader. The v2 subword scheme captures the property the
 // v1 per-token hash could not: identifiers sharing morphology
@@ -20,7 +20,7 @@
 // be useful at all on code.
 // Production-quality embeddings still come from Ollama. The static
 // embedder is the lowest rung of the pick-one embedder ladder
-// (static-v2 < model2vec < Ollama; see elect.go) — one embedder owns
+// (static-v2 < model2vec < Ollama; see elect.go) - one embedder owns
 // the index at a time, since vectors from different models live in
 // incompatible spaces. Static unblocks first-run setup and zero-dep
 // CPU runs; it doesn't replace Ollama for serious work.
@@ -36,7 +36,7 @@ import (
 )
 
 // ModelID is the embedding-cache key reported by Provider.ModelID.
-// Bumping the suffix invalidates every static-embedded vector — done
+// Bumping the suffix invalidates every static-embedded vector - done
 // here moving from v1 (per-token hash) to v2 (subword n-gram hash).
 // The "veska-" prefix prevents collision with any external model name.
 const ModelID = "veska-static-v2"
@@ -175,7 +175,7 @@ func tokenize(s string) []string {
 // SHA-256 across Dim/8 hash rounds, packing 8 float32 components per
 // round. Each component is mapped into [-1, 1] via
 // (uint32 → float64 / max → 2x - 1). Cheap, deterministic, dimension
-// stable. Used for both per-token and per-n-gram hashing — same math,
+// stable. Used for both per-token and per-n-gram hashing - same math,
 // just different inputs.
 func hashVector(key string) []float32 {
 	out := make([]float32, Dim)

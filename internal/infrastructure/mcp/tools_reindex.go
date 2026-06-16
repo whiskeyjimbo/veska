@@ -16,13 +16,13 @@ import (
 // opened SQLite directly and would race the daemon's embedder worker for the
 // write lock. Telling a junior user to stop the daemon, reindex,
 // then restart kills their editor's MCP connection mid-task.
-// This tool moves the reindex *into* the daemon — same cold-scan reparser the
-// add-repo path uses — so `veska reindex` dispatches via MCP
+// This tool moves the reindex *into* the daemon - same cold-scan reparser the
+// add-repo path uses - so `veska reindex` dispatches via MCP
 // when a daemon is running and the editor stays connected throughout.
 // Inputs:
 //
-//	repo_id — full repo_id or short_id prefix (mirrors eng_promote_repo).
-//	root_path — absolute filesystem path; canonicalised via EvalSymlinks.
+//	repo_id - full repo_id or short_id prefix (mirrors eng_promote_repo).
+//	root_path - absolute filesystem path; canonicalised via EvalSymlinks.
 //
 // One of the two is required. When both are passed, repo_id wins.
 // The handler runs the cold-scan synchronously under the request context and
@@ -52,7 +52,7 @@ type reindexResult struct {
 }
 
 // RegisterReindexTool wires eng_reindex_repo. Nil deps degrade to a clear
-// internal-error response rather than a panic — the daemon stays up even if
+// internal-error response rather than a panic - the daemon stays up even if
 // the wiring is incomplete.
 func RegisterReindexTool(r *Registry, deps ReindexDeps) {
 	r.MustRegister(ToolSpec{

@@ -212,7 +212,7 @@ func (s *UsearchStore) Search(_ context.Context, repoID, branch string, vec []fl
 		for i, key := range keys {
 			row, ok := e.rows[key]
 			if !ok {
-				// tombstone slot — skip
+				// tombstone slot - skip
 				continue
 			}
 			var dist float32
