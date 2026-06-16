@@ -122,7 +122,7 @@ ON CONFLICT(finding_id, branch) DO UPDATE SET
 // records timestamps).
 // The UPDATE is gated on state='open' so re-running it cannot churn a finding
 // that a human or an earlier pass already closed. A no-op UPDATE (zero rows
-// matched — already closed, or no such finding) returns nil; closing a
+// matched - already closed, or no such finding) returns nil; closing a
 // finding that does not exist is not an error.
 func (r *FindingRepo) CloseObsolete(ctx context.Context, findingID, branch string) error {
 	const stmt = `

@@ -25,7 +25,7 @@ type getFileNodesParams struct {
 }
 
 // makeGetFileNodesHandler returns every node for (repo, branch, file_path).
-// Staging overlay takes precedence — if the file is in staging the handler
+// Staging overlay takes precedence - if the file is in staging the handler
 // returns those nodes and sets included_staging=true. Otherwise it falls
 // through to the promoted store via GraphStorage.NodesForFile.
 // retired the previous in-handler type-assertion to an optional
@@ -92,7 +92,7 @@ func toStoredPath(ctx context.Context, repos application.RepoLister, repoID, p s
 }
 
 // repoRoot looks up the absolute working-tree root for repoID. ok is false when
-// the repo is unknown or the registry errors — callers then leave the path as
+// the repo is unknown or the registry errors - callers then leave the path as
 // given rather than failing the request.
 func repoRoot(ctx context.Context, repos application.RepoLister, repoID string) (string, bool) {
 	if repos == nil {

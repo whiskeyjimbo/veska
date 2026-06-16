@@ -58,7 +58,7 @@ func TestViolationDetection(t *testing.T) {
 			imported: "github.com/whiskeyjimbo/veska/internal/core/domain",
 			wantViol: false,
 		},
-		// unrelated packages — no violation
+		// unrelated packages - no violation
 		{
 			name:     "infrastructure imports core is fine",
 			importer: "github.com/whiskeyjimbo/veska/internal/infrastructure/vector",

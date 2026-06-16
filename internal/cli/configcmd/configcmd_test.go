@@ -20,7 +20,7 @@ type repo struct {
 }
 
 // decodeRepos populates RunReload's anonymous decode target by round-tripping
-// through JSON — the same path mcpclient.Call uses — so the test stays
+// through JSON - the same path mcpclient.Call uses - so the test stays
 // independent of the unexported struct RunReload passes.
 func decodeRepos(t *testing.T, outv any, repos []repo) {
 	t.Helper()
@@ -49,6 +49,7 @@ func (f *fakeManager) Restart(context.Context) error {
 	f.restarts++
 	return f.restartErr
 }
+
 func (f *fakeManager) Status(context.Context) (service.ServiceStatus, error) {
 	return service.ServiceStatus{Running: true, PID: 1}, f.statusErr
 }

@@ -51,7 +51,7 @@ type EgressObservabilityParams struct {
 }
 
 // CheckEgressObservability builds an EgressObservabilityReport from the provided
-// params. It never returns an error — it purely projects configuration state into
+// params. It never returns an error - it purely projects configuration state into
 // the report shape.
 func CheckEgressObservability(params EgressObservabilityParams) EgressObservabilityReport {
 	dests := make([]EgressDestination, 0, 4)

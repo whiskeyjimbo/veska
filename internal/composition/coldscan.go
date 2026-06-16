@@ -15,7 +15,7 @@ import (
 // ColdScanCore bundles the ingestion + promotion graph shared by the daemon and
 // the CLI cold-scan (reindex) path: the staging area, the Ingester, the
 // PromotionStore with its FTS + embedding-ref sinks, and the Promoter.
-// The reparser is intentionally NOT part of the core — it legitimately differs
+// The reparser is intentionally NOT part of the core - it legitimately differs
 // between callers (the daemon passes a scan tracker). The Ingester's finding
 // storage and the Promoter's check/added-lines/tracer seams also differ per
 // caller (the daemon registers dead-code + contract-drift checks the CLI omits,
@@ -88,7 +88,7 @@ func NewColdScanCore(pools *sqlite.Pools, ingesterOpts []application.IngesterOpt
 // caller-specific options. It is the single construction site for the reparser:
 // the daemon passes application.WithScanTracker (so eng_get_status can surface
 // in-flight scans); the CLI cold-scan path omits it. Previously both callers
-// hand-built this closure from application.NewColdScanReparser — daemon
+// hand-built this closure from application.NewColdScanReparser - daemon
 // wire.go and NewCLIColdScanReparser each had a near-identical copy.
 // The reparser is deliberately not folded into NewColdScanCore: the core is the
 // part both callers share verbatim, whereas the reparser legitimately differs
@@ -132,7 +132,7 @@ func GitAddedLinesFunc(repoRoot func(ctx context.Context, repoID string) (string
 
 // CheckRunnerAdapter bridges *checks.Runner to the application.CheckRunner port
 // the Promoter consumes, converting application.Line to checks.Line. Both the
-// daemon and the CLI cold-scan path wrap their runner in this — previously two
+// daemon and the CLI cold-scan path wrap their runner in this - previously two
 // byte-identical copies (daemon.checkRunnerAdapter, reindex.coldScanCheckRunner).
 type CheckRunnerAdapter struct {
 	Inner *checks.Runner

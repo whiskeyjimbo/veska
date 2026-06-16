@@ -13,7 +13,7 @@ import (
 // It proves the convergence goal: when the reconciler shares
 // the watcher's live baseline (kept current by the live save path), the first
 // post-suspend wake fires the handler ONLY for files edited during the suspend
-// window — NOT for files edited live during the session whose baseline already
+// window - NOT for files edited live during the session whose baseline already
 // tracks disk.
 // Setup mirrors the production wiring without fsnotify timing flake:
 //
@@ -53,7 +53,7 @@ func TestFirstWakeReportsOnlySuspendWindowChanges(t *testing.T) {
 	r.AddDir("repo1", dir)
 
 	// LIVE edit during the session: change content, then update the shared
-	// baseline through the watcher's Put — exactly what emitWrite does on a live
+	// baseline through the watcher's Put - exactly what emitWrite does on a live
 	// debounced write. Its baseline now equals disk.
 	if err := os.WriteFile(liveFile, []byte("package x // live edit\n"), 0o644); err != nil {
 		t.Fatal(err)

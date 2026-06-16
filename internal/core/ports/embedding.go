@@ -35,12 +35,12 @@ type EmbeddingProvider interface {
 	ModelID() string
 }
 
-// BatchEmbeddingProvider is the optional batch interface — adapters that
+// BatchEmbeddingProvider is the optional batch interface - adapters that
 // can embed many texts in a single network roundtrip implement this in
 // addition to EmbeddingProvider, and the embedder Worker prefers it
 // Implementations MUST preserve input order and return
 // exactly len(texts) vectors; partial successes return ErrEmbedderUnreachable
-// (or another wrapped error) for the whole batch — the worker retries
+// (or another wrapped error) for the whole batch - the worker retries
 // individually on failure.
 // Empty input returns (nil, nil). A nil or zero-length individual text
 // in the slice is the caller's responsibility to filter out; adapters

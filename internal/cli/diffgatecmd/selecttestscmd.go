@@ -21,7 +21,7 @@ import (
 // Unlike the diff-gate subcommands this NEVER gates: it emits a runner-consumable
 // SELECTION at exit 0. Understandable non-fatal conditions (unknown repo, repo
 // not indexed, bad ref) are reported as an empty selection with an `error` field
-// in the same JSON envelope, NOT a non-zero exit — only an
+// in the same JSON envelope, NOT a non-zero exit - only an
 // unexpected infra failure (store open, git exec) is returned. It needs the
 // indexed base graph to resolve which tests cover the changed prod nodes.
 type SelectTestsParams struct {
@@ -47,7 +47,7 @@ type packageSelection struct {
 
 // selectTestsReport is the JSON envelope. Empty is true when the diff selects no
 // tests at all (AC2: say so explicitly, never fall back to "all tests"). Error
-// carries an advisory reason (unknown repo, not indexed, bad ref) — the command
+// carries an advisory reason (unknown repo, not indexed, bad ref) - the command
 // NEVER gates, so these surface as an empty selection + a parseable error field
 // at exit 0, not a bare stderr crash.
 type selectTestsReport struct {
@@ -59,7 +59,7 @@ type selectTestsReport struct {
 }
 
 // emitAdvisoryEmpty writes an empty selection carrying an advisory error reason
-// and returns nil — the command's "always exits 0, always emits JSON" contract
+// and returns nil - the command's "always exits 0, always emits JSON" contract
 // for understandable non-fatal conditions. A CI consumer parses
 // the same envelope shape whether or not tests were selected.
 func emitAdvisoryEmpty(out io.Writer, errMsg string) error {
@@ -69,7 +69,7 @@ func emitAdvisoryEmpty(out io.Writer, errMsg string) error {
 // RunSelectTests selects the tests whose covered nodes intersect the candidate
 // diff's changed prod nodes, and emits a `go test -run` selection per package.
 // Per Decision A the transitive reverse map makes this a DIRECT
-// lookup — selected = ⋃ ReverseMap[changed_node] — so there is no blast-radius
+// lookup - selected = ⋃ ReverseMap[changed_node] - so there is no blast-radius
 // BFS and no ephemeral clone (the diff-gate's clone exists to restore
 // cascade-deleted edges after a re-promote we don't do here). Changed prod files
 // seed the reverse map against the LIVE index; changed test files force their
@@ -197,17 +197,17 @@ func buildSelectionReport(tests []coverage.TestRef, forcedPkgs map[string]struct
 		out.Commands = append(out.Commands, sel.Command)
 	}
 	if out.Empty {
-		// F4 ( sibling): an empty result is ambiguous — it can mean
+		// F4 ( sibling): an empty result is ambiguous - it can mean
 		// "your change has no covering tests" OR "this repo has no indexed tests
 		// at all (no *_test.go CALLS edges to select from)". Name both so a junior
 		// doesn't read it as a false all-clear.
-		out.Note = "no covering tests selected for the changed prod nodes (and no test files changed) — note this is also what you see when the repo has no indexed tests at all"
+		out.Note = "no covering tests selected for the changed prod nodes (and no test files changed) - note this is also what you see when the repo has no indexed tests at all"
 	}
 	return out
 }
 
 // goTestCommand renders a single package's runner invocation. The `-run` regex
-// is anchored `^(.)$` so e.g. TestFoo does not also match TestFoobar — an
+// is anchored `^(.)$` so e.g. TestFoo does not also match TestFoobar - an
 // over-select that would masquerade as precision.
 func goTestCommand(pkg string, runAll bool, tests []string) string {
 	target := "./" + pkg

@@ -16,6 +16,7 @@ package treesitter
 import (
 	"context"
 	"fmt"
+	"maps"
 	"path/filepath"
 
 	sitter "github.com/smacker/go-tree-sitter"
@@ -219,9 +220,7 @@ func (p *GoParser) ParseFile(ctx context.Context, repoID, path string, src []byt
 	// calls to the command (the cobra grain from ), not the
 	// package node.
 	result.Nodes = append(result.Nodes, fw.nodes...)
-	for varName, n := range fw.byVar {
-		symbolByName[varName] = n
-	}
+	maps.Copy(symbolByName, fw.byVar)
 
 	// CONTAINS edges: package → each non-package symbol. Mirrors the
 	// loop in go.go just after symbol extraction.

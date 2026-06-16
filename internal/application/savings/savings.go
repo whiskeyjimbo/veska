@@ -8,7 +8,7 @@
 //
 // which is the marketing number Semble's "semble savings" chart
 // surfaces. It is cheap to compute, has no fan-out beyond a single
-// O_APPEND write per search, and is local-only — no network egress.
+// O_APPEND write per search, and is local-only - no network egress.
 // The Recorder is intentionally optional: a nil *Recorder is the
 // "disabled" state and silently no-ops, so callers don't need to
 // guard every call site with an explicit feature check.
@@ -27,7 +27,7 @@ import (
 )
 
 // Entry is a single recorded search call. JSON tags are stable across
-// versions — the aggregator must keep being able to read entries
+// versions - the aggregator must keep being able to read entries
 // written by older daemons after an upgrade.
 type Entry struct {
 	Timestamp time.Time `json:"ts"`
@@ -52,7 +52,7 @@ type ResultFile struct {
 }
 
 // Recorder appends Entry records to a JSONL file. A single recorder
-// is safe for concurrent Record calls — writes are serialised through
+// is safe for concurrent Record calls - writes are serialised through
 // a mutex so partial lines never interleave. fsync is intentionally
 // omitted (acceptance criterion 3): a power-loss-induced loss of the
 // last few savings entries is acceptable; the hot-path overhead of
@@ -63,7 +63,7 @@ type Recorder struct {
 }
 
 // NewRecorder opens (or creates) path in append-only mode. The parent
-// directory must already exist — the caller's data-dir initialisation
+// directory must already exist - the caller's data-dir initialisation
 // is responsible for it.
 func NewRecorder(path string) (*Recorder, error) {
 	f, err := os.OpenFile(path, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o644)
@@ -74,7 +74,7 @@ func NewRecorder(path string) (*Recorder, error) {
 }
 
 // Record appends e as a single JSONL line. A nil receiver is the
-// documented "disabled" state — returns nil and does nothing.
+// documented "disabled" state - returns nil and does nothing.
 func (r *Recorder) Record(e Entry) error {
 	if r == nil {
 		return nil
@@ -112,12 +112,12 @@ func (r *Recorder) Close() error {
 // projection. File chars are summed over UNIQUE file paths (so the same
 // file matching three times still counts its size once); snippet chars
 // are summed across all results. Files that no longer exist on disk
-// silently contribute 0 to FileChars — a delete-then-search race must
+// silently contribute 0 to FileChars - a delete-then-search race must
 // not crash the recorder. repoID tags the entry so a fanout search that
 // spans multiple repos records one Entry per repo.
 // root is the repo's absolute working-tree root. Since
 // nodes.file_path (and thus ResultFile.FilePath) is repo-relative, so the
-// on-disk stat must rejoin root. An empty root means "unknown" — the stat
+// on-disk stat must rejoin root. An empty root means "unknown" - the stat
 // falls back to the path as-is, contributing 0 for a relative path rather
 // than crashing.
 func EntryFor(repoID, root, query string, results []ResultFile, now time.Time) Entry {
@@ -183,7 +183,7 @@ type Report struct {
 // pooling every repo into one report. Today is the local-day window
 // containing now; Last7d is the trailing 7 days (today included);
 // AllTime spans every entry in the file. A missing file is not an
-// error — the caller (a fresh install with no searches yet) just sees a
+// error - the caller (a fresh install with no searches yet) just sees a
 // zero report.
 func Aggregate(path string, now time.Time) (Report, error) {
 	rep := newReport(now)
@@ -239,7 +239,7 @@ func (rep *Report) addEntry(e Entry) {
 
 // scanEntries streams the JSONL file at path, invoking fn for each
 // well-formed Entry. A missing file is not an error (fresh install). One
-// corrupt line — most likely a truncated last line from a crashed write
+// corrupt line - most likely a truncated last line from a crashed write
 // is skipped rather than aborting the whole scan.
 func scanEntries(path string, fn func(Entry)) error {
 	f, err := os.Open(path)

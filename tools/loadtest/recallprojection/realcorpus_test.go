@@ -95,7 +95,7 @@ func TestBuildRealCorpus_RealBodyAndDisjointQuery(t *testing.T) {
 	if !strings.Contains(greet.Input.Signature, "func Greet(name string) string") {
 		t.Errorf("Greet signature wrong: %q", greet.Input.Signature)
 	}
-	// Snippet (code) and query (doc comment) must be disjoint — the
+	// Snippet (code) and query (doc comment) must be disjoint - the
 	// snippet must NOT carry the doc-comment prose.
 	if strings.Contains(greet.Input.Snippet, "friendly greeting") {
 		t.Errorf("Greet snippet leaked the doc comment: %q", greet.Input.Snippet)

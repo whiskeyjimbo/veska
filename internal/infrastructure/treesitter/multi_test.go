@@ -9,7 +9,7 @@ import (
 )
 
 // TestMultiParser_SupportedExtensionsUnion pins that a MultiParser reports the
-// sorted union of its sub-parsers' extensions — the set the cold scan sources
+// sorted union of its sub-parsers' extensions - the set the cold scan sources
 // its walk filter from.
 func TestMultiParser_SupportedExtensionsUnion(t *testing.T) {
 	m := NewMultiParser(NewGoParser(), NewTSParser())
