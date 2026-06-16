@@ -547,6 +547,7 @@ func buildFunctionNodeFromCaptures(declNode, nameNode *sitter.Node, src []byte, 
 		domain.WithLanguage("go"),
 		domain.WithLines(lr),
 		domain.WithRawContent(raw),
+		domain.WithStructuralHash(domain.ContentHash(goStructuralHash(declNode, src))),
 		domain.WithExported(goExported(name)),
 	}
 	if sig := extractSignature(declNode, src); sig != "" {
@@ -576,6 +577,7 @@ func buildMethodNodeFromCaptures(declNode, recvNode, nameNode *sitter.Node, src 
 		domain.WithLanguage("go"),
 		domain.WithLines(lr),
 		domain.WithRawContent(raw),
+		domain.WithStructuralHash(domain.ContentHash(goStructuralHash(declNode, src))),
 		// Method is exported when the method name (after "Receiver.")
 		// is capitalised; the receiver's casing is irrelevant.
 		domain.WithExported(goExported(methodName)),
@@ -608,7 +610,7 @@ func buildTypeNodeFromCaptures(declNode, nameNode, bodyNode *sitter.Node, src []
 	id := nodeID(repoID, path, kind, name)
 	lr := lineRange(declNode)
 	raw := string(src[declNode.StartByte():declNode.EndByte()])
-	n, err := domain.NewNode(domain.NodeSpec{ID: id, Path: path, Name: name, Kind: kind}, domain.WithLanguage("go"), domain.WithLines(lr), domain.WithRawContent(raw), domain.WithExported(goExported(name)))
+	n, err := domain.NewNode(domain.NodeSpec{ID: id, Path: path, Name: name, Kind: kind}, domain.WithLanguage("go"), domain.WithLines(lr), domain.WithRawContent(raw), domain.WithStructuralHash(domain.ContentHash(goStructuralHash(declNode, src))), domain.WithExported(goExported(name)))
 	if err != nil {
 		return nil
 	}

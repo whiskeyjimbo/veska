@@ -211,9 +211,9 @@ func (p *promotion) prepareStmts(ctx context.Context) error {
 	if p.ins, err = prepare(ctx, p.tx, "insert", `
 		INSERT INTO nodes
 			(node_id, branch, repo_id, language, kind, symbol_path, file_path,
-			 line_start, line_end, content_hash, last_promoted_at, actor_id, actor_kind,
+			 line_start, line_end, content_hash, structural_hash, last_promoted_at, actor_id, actor_kind,
 			 signature, snippet, prev_signature, exported)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`); err != nil {
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`); err != nil {
 		return err
 	}
 	if p.prevSigSel, err = prepare(ctx, p.tx, "prev-sig select", `
@@ -393,6 +393,7 @@ func (p *promotion) insertNode(ctx context.Context, n *domain.Node, prevSig map[
 		lineStart,
 		lineEnd,
 		nodeContentHash(n),
+		nodeStructuralHash(n),
 		p.now,
 		p.batch.Actor.ID,
 		string(p.batch.Actor.Kind),
@@ -506,6 +507,15 @@ func nodeLines(n *domain.Node) (lineStart, lineEnd any) {
 		return nil, nil
 	}
 	return n.Lines.Start, n.Lines.End
+}
+
+// nodeStructuralHash returns the structural hash, or nil (SQL NULL) when the
+// parser did not set one — so non-structural nodes never group.
+func nodeStructuralHash(n *domain.Node) any {
+	if n.StructuralHash == nil {
+		return nil
+	}
+	return string(*n.StructuralHash)
 }
 
 // nodeContentHash returns the content hash string or "" when not set.
