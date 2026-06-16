@@ -6,12 +6,8 @@ import (
 	"time"
 )
 
-// ScanState describes one cold scan currently in flight. Returned by
-// ScanTracker.Snapshot so callers (e.g. statusProvider) can surface
-// progress without coupling to the tracker's internals.
-// FilesSeen / FilesTotal are best-effort progress counters updated by
-// the scanner via Progress. They are omitted from the JSON shape when
-// zero so older clients see the same envelope.
+// ScanState describes one cold scan currently in flight, surfaced to track
+// indexing progress.
 type ScanState struct {
 	RepoID     string    `json:"repo_id"`
 	Phase      string    `json:"phase"`
@@ -20,28 +16,19 @@ type ScanState struct {
 	FilesTotal int       `json:"files_total,omitempty"`
 }
 
-// ScanTracker is the in-memory registry of cold-scan reparser runs
-// currently in flight. The cold-scan closure calls Start at scan entry
-// and End at scan exit; the daemon's statusProvider reads Snapshot to
-// surface a 'scans_in_flight' field on eng_get_status.
-// Concurrent safety: a single RWMutex guards the map. Reads (Snapshot
-// from the status handler) take the read lock; writes (Start/End from
-// the reparser goroutine) take the write lock. The scan-rate is low
-// at most one reparser per repo at a time — so the lock is
-// uncontended in practice.
+// ScanTracker is the in-memory registry of cold-scan reparser runs currently
+// in flight. Reads and writes are synchronized via an RWMutex.
 type ScanTracker struct {
 	mu    sync.RWMutex
 	scans map[string]ScanState
 }
 
-// NewScanTracker returns an empty tracker.
 func NewScanTracker() *ScanTracker {
 	return &ScanTracker{scans: make(map[string]ScanState)}
 }
 
-// Start records that a scan for repoID has begun. If a scan is already
-// recorded for repoID (e.g. a concurrent eng_add_repo race), the new
-// start replaces the old — the latest run is what's relevant to surface.
+// Start records that a scan for repoID has begun, overwriting older runs to
+// capture the latest state.
 func (t *ScanTracker) Start(repoID string) {
 	if t == nil {
 		return
@@ -55,9 +42,6 @@ func (t *ScanTracker) Start(repoID string) {
 	}
 }
 
-// Progress updates the files_seen / files_total counters for an
-// in-flight scan. Nil-safe and no-op if the scan was never Started
-// (handles tracker-less unit tests).
 func (t *ScanTracker) Progress(repoID string, filesSeen, filesTotal int) {
 	if t == nil {
 		return
@@ -73,12 +57,8 @@ func (t *ScanTracker) Progress(repoID string, filesSeen, filesTotal int) {
 	t.scans[repoID] = st
 }
 
-// SetPhase updates the human-readable phase string on an in-flight scan
-// ("walking", "promoting", etc.) so a user watching a long scan can tell
-// the slow promotion phase apart from the fast walk phase.
-// Otherwise files_seen jumps to N during the sub-second walk, then sits
-// frozen for the duration of promotion — reading as "stuck".
-// Nil-safe; no-op when the scan was never Started.
+// SetPhase updates the progress phase string (e.g. 'walking', 'promoting') so
+// operators can distinguish slow promotion stages from fast walker scans.
 func (t *ScanTracker) SetPhase(repoID, phase string) {
 	if t == nil {
 		return
@@ -93,9 +73,6 @@ func (t *ScanTracker) SetPhase(repoID, phase string) {
 	t.scans[repoID] = st
 }
 
-// End removes the scan record for repoID. Idempotent — calling End for
-// a repo that isn't tracked is a no-op (handles the failed-start path
-// where reparser dispatch races with the start log).
 func (t *ScanTracker) End(repoID string) {
 	if t == nil {
 		return
@@ -105,10 +82,7 @@ func (t *ScanTracker) End(repoID string) {
 	delete(t.scans, repoID)
 }
 
-// IsAnyScanRunning reports whether at least one scan is currently
-// in flight. Cheaper than Snapshot for callers that only need a
-// yes/no (e.g. the post-promotion queue gate in #1).
-// Nil-safe — returns false when the tracker is unset.
+// IsAnyScanRunning reports whether at least one scan is currently in flight.
 func (t *ScanTracker) IsAnyScanRunning() bool {
 	if t == nil {
 		return false
@@ -118,9 +92,8 @@ func (t *ScanTracker) IsAnyScanRunning() bool {
 	return len(t.scans) > 0
 }
 
-// Snapshot returns a copy of every in-flight scan, ordered by RepoID
-// for stable consumption. Empty slice (never nil) when no scans are
-// running.
+// Snapshot returns a copy of every in-flight scan, ordered by RepoID for
+// stable serialization.
 func (t *ScanTracker) Snapshot() []ScanState {
 	if t == nil {
 		return []ScanState{}

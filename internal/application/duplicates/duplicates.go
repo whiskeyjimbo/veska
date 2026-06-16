@@ -1,18 +1,6 @@
-// Package duplicates finds exact-clone groups: sets of >=2 nodes whose
-// content_hash is byte-identical, i.e. literal copy-paste.
-// This is the deterministic, embedding-free half of duplicate detection
-// content_hash is sha256 of a node's verbatim declaration
-// bytes (see domain.Node / treesitter), so two functions collide here only
-// when their source text is identical character-for-character — exactly the
-// "exact clone" the autolink SIMILAR_TO path treats as merely "related".
-// Near-duplicate clustering (a higher-threshold re-slice of the SIMILAR_TO
-// edges autolink already persists) is deliberately NOT here: those edges carry
-// no per-edge similarity score today, so honest near-dup detection needs a
-// score-on-edge migration first. That is tracked as a separate follow-up
-// this package ships the exact half only.
-// For the single-function question "is THIS function duplicated?", use
-// eng_search_similar / `veska similar <symbol>` — that is the vector-neighbour
-// pivot and needs no group-wide scan.
+// Package duplicates finds exact-clone groups of nodes (functions/symbols) with
+// byte-identical content hashes. Near-duplicate detection is deferred to vector
+// similarity search (`veska similar`), avoiding a global clustering scan.
 package duplicates
 
 import (
@@ -23,22 +11,13 @@ import (
 	"strings"
 )
 
-// ExcludedKinds are container / sub-symbol node kinds for which a content_hash
-// collision carries no refactor signal: package/file/module nodes hash whole
-// regions, chunk nodes are synthetic windows, and field/import nodes are tiny
-// fragments that collide constantly across files. The set mirrors autolink's
-// nonSymbolKinds (internal/application/autolink) so both duplicate-detection
-// surfaces filter identically. A blocklist (rather than a symbol allowlist)
-// keeps unknown or future symbol kinds eligible by default.
+// ExcludedKinds blocks structural container or trivial node types that do not
+// carry a refactoring signal, maintaining parity with autolink's symbol filters.
 var ExcludedKinds = []string{"package", "chunk", "file", "module", "field", "import"}
 
-// ClonedNode is one node that shares its content_hash with at least one other
-// node in the same (repo, branch). The CloneStore returns these flat; the
-// Finder folds them into CloneGroups.
 type ClonedNode struct {
 	ContentHash string
-	// StructuralHash is the identifier-normalised (Type-2) hash; set by the
-	// structural projection, empty for the exact projection.
+	// StructuralHash is empty for exact clone sweeps and set for structural Type-2 sweeps.
 	StructuralHash string
 	RepoID         string
 	NodeID         string
@@ -49,7 +28,6 @@ type ClonedNode struct {
 	LineEnd        int
 }
 
-// CloneMember is one occurrence of a clone within a CloneGroup.
 type CloneMember struct {
 	NodeID     string
 	RepoID     string
@@ -58,66 +36,35 @@ type CloneMember struct {
 	Kind       string
 	LineStart  int
 	LineEnd    int
-	// ContentHash is the member's byte-identity hash, carried so the unified
-	// Clusters view can sub-tier a structural group (all-same content_hash =>
-	// exact tier; mixed => genuine Type-2). Empty when not hydrated.
+	// ContentHash sub-tiers structural groups to identify exact clones within Type-2 structural groups.
 	ContentHash string
 }
 
-// CloneGroup is a set of >=2 nodes sharing one content_hash — N literal copies
-// of the same code. Size is len(Members), surfaced explicitly so callers can
-// rank "most-copied" groups without re-counting.
 type CloneGroup struct {
 	ContentHash string
 	Size        int
 	Members     []CloneMember
 }
 
-// CloneStore is the narrow port the Finder needs: it returns every node whose
-// content_hash is shared by >=2 nodes in (repoID, branch), excluding
-// excludeKinds. Grouping and ordering are the Finder's responsibility, so the
-// store may return rows in any order.
+// CloneStore defines the storage port for identifying duplicate nodes in a given branch.
 type CloneStore interface {
 	ClonedNodes(ctx context.Context, q CloneQuery, excludeKinds []string) ([]ClonedNode, error)
-	// StructuralNodes returns every node matching q whose structural_hash is
-	// shared by >=2 nodes, excluding excludeKinds — the Type-2 (renamed
-	// variable) clone projection. Returned rows carry the structural_hash in
-	// ClonedNode.StructuralHash (the grouping key) and the byte-identity hash in
-	// ContentHash. NULL structural_hash (nodes the parser did not structurally
-	// hash) never groups.
+	// StructuralNodes returns renamed Type-2 clone matches, ignoring nodes the parser failed to structurally hash.
 	StructuralNodes(ctx context.Context, q CloneQuery, excludeKinds []string) ([]ClonedNode, error)
 }
 
-// CloneQuery scopes a clone projection. An empty RepoID means ALL registered
-// repos (cross-repo clustering); a non-empty PathPrefix restricts the sweep to
-// nodes whose file_path starts with it. Branch is always required.
+// CloneQuery limits the duplicate search scope; an empty RepoID scans all repositories.
 type CloneQuery struct {
 	RepoID     string
 	Branch     string
 	PathPrefix string
 }
 
-// DefaultNearThreshold is the near-dup minimum score used for an embedder with
-// no measured calibration in calibratedNearThreshold. It equals the model2vec
-// value — the default embedder in a normal build — so the common case is
-// calibrated even via this fallback.
+// DefaultNearThreshold matches model2vec's calibrated limit as the default embedder.
 const DefaultNearThreshold float32 = 0.68
 
-// calibratedNearThreshold maps an elected embedder's ModelID to a measured
-// near-dup minimum score (; harness in tools/loadtest/neardup).
-// Each value is HIGH-PRECISION by design: set at/just above that embedder's
-// "related" (merely-same-domain) score band, so genuinely-distinct functions
-// are not surfaced as duplicates — trading recall (the weakest near-dups fall
-// below it) for a quiet, low-false-positive findings surface.
-// Critically, the values are NOT comparable across embedders: similarity
-// scores live in per-model spaces ([[embedder-architecture]]). The measurement
-// showed near-dup and "related" distributions OVERLAP for every embedder (no
-// clean separator), and that one global constant cannot serve all — 0.80 (the
-// old provisional) returned almost nothing on model2vec yet leaked unrelated
-// pairs on nomic. So the default is selected by elected ModelID; callers
-// wanting different recall pass an explicit min_score.
-// Measured on a small curated corpus with some shared-skeleton contamination
-// treat as first calibration points, not exact gates.
+// calibratedNearThreshold maps embedder models to similarity score limits calibrated
+// to minimize false positives. Scores are model-specific and not comparable across architectures.
 var calibratedNearThreshold = map[string]float32{
 	// near-dup median 0.69 vs related max 0.68 — separable at high precision.
 	"model2vec(potion-code-16M)": 0.68,
@@ -130,14 +77,8 @@ var calibratedNearThreshold = map[string]float32{
 	"veska-static-v2": 0.70,
 }
 
-// NearThresholdFor returns the calibrated near-dup minimum score for an elected
-// embedder ModelID, falling back to DefaultNearThreshold for an unknown or
-// empty ID.
-// Ollama model IDs may carry a ":tag" (e.g. "nomic-embed-text:latest" — the
-// ModelID is the verbatim configured model name). A tag pins a version but does
-// not change the embedding space, so an exact miss retries on the bare name
-// before falling back — otherwise a tagged nomic would silently get the
-// model2vec-calibrated default and flood the user.
+// NearThresholdFor parses Ollama model IDs to discard tags, returning the base
+// model's calibration to prevent score misalignments.
 func NearThresholdFor(modelID string) float32 {
 	if v, ok := calibratedNearThreshold[modelID]; ok {
 		return v
@@ -150,22 +91,16 @@ func NearThresholdFor(modelID string) float32 {
 	return DefaultNearThreshold
 }
 
-// SimilarEdge is one persisted SIMILAR_TO edge whose score met the near-dup
-// threshold, with both endpoints' metadata already hydrated by the store so the
-// Finder can cluster without a second lookup. The edge is treated as undirected
-// for clustering — autolink writes a directed top-k edge, but "is a copy of" is
-// symmetric.
+// SimilarEdge represents a thresholded similarity relationship between two hydrated
+// nodes, treated as undirected during clustering.
 type SimilarEdge struct {
 	Src   CloneMember
 	Dst   CloneMember
 	Score float32
 }
 
-// NearCluster is a connected component of SIMILAR_TO edges: a set of >=2 nodes
-// transitively linked above the threshold — N near-identical copies of one
-// helper. MinScore/MaxScore bound the edge scores within the component;
-// a low MinScore flags a loosely-chained cluster (A~B~C where A and C are only
-// transitively similar), which the caller may want to inspect.
+// NearCluster groups transitively similar nodes; a low MinScore indicates looser
+// similarity chaining.
 type NearCluster struct {
 	Size     int
 	MinScore float32
@@ -173,11 +108,8 @@ type NearCluster struct {
 	Members  []CloneMember
 }
 
-// NearStore is the narrow port the near-dup view needs: every SIMILAR_TO edge
-// in (repoID, branch) whose score >= minScore and whose BOTH endpoints are
-// outside excludeKinds, with endpoint metadata hydrated. Reads only what
-// autolink already persisted — no new similarity sweep. Edges with a NULL
-// score (legacy rows promoted before the score column existed) are omitted.
+// NearStore retrieves persisted similar-to relationships, ignoring legacy rows
+// lacking similarity scores.
 type NearStore interface {
 	SimilarEdges(ctx context.Context, repoID, branch string, minScore float32, excludeKinds []string) ([]SimilarEdge, error)
 }
@@ -187,20 +119,13 @@ type NearStore interface {
 // failure, mirroring the autolink / promoter constructors.
 var ErrMissingDependency = errors.New("duplicates: missing required dependency")
 
-// Finder computes duplicate groups: exact clones (content_hash) and
-// near-duplicate clusters (thresholded SIMILAR_TO edges). The zero value is not
-// usable; construct with NewFinder.
 type Finder struct {
 	clones     CloneStore
 	near       NearStore
 	embedderID string // elected embedder ModelID; selects the calibrated near-dup default
 }
 
-// NewFinder constructs a Finder. Both stores are required: a nil dependency
-// yields an error wrapping ErrMissingDependency and a nil *Finder. embedderID
-// is the elected embedder's ModelID (e.g. "model2vec(potion-code-16M)"); it
-// selects the calibrated near-dup default via NearThresholdFor. An empty ID
-// falls back to DefaultNearThreshold.
+// NewFinder initializes a Finder, selecting the calibrated threshold for the elected embedder.
 func NewFinder(clones CloneStore, near NearStore, embedderID string) (*Finder, error) {
 	if clones == nil {
 		return nil, fmt.Errorf("duplicates.NewFinder: clone store is nil: %w", ErrMissingDependency)
@@ -211,11 +136,8 @@ func NewFinder(clones CloneStore, near NearStore, embedderID string) (*Finder, e
 	return &Finder{clones: clones, near: near, embedderID: embedderID}, nil
 }
 
-// ExactClones returns the content_hash clone groups in (repoID, branch),
-// excluding container/sub-symbol kinds. Every returned group has Size >= 2.
-// Ordering is deterministic: groups by descending Size then ascending
-// ContentHash (most-copied first, stable tie-break); members within a group by
-// (FilePath, LineStart) so the same physical layout always renders the same.
+// ExactClones returns duplicate groups with stable, deterministic sorting by group size
+// and symbol locations.
 func (f *Finder) ExactClones(ctx context.Context, repoID, branch string) ([]CloneGroup, error) {
 	rows, err := f.clones.ClonedNodes(ctx, CloneQuery{RepoID: repoID, Branch: branch}, ExcludedKinds)
 	if err != nil {
@@ -224,14 +146,7 @@ func (f *Finder) ExactClones(ctx context.Context, repoID, branch string) ([]Clon
 	return groupByHash(rows, func(r ClonedNode) string { return r.ContentHash }), nil
 }
 
-// StructuralClones returns Type-2 clone groups in (repoID, branch): sets of >=2
-// nodes sharing a structural_hash (identical shape after a consistent rename),
-// excluding container/sub-symbol kinds. Every group has Size >= 2. A group
-// whose members also all share one content_hash is a pure exact clone (the
-// unified Clusters view promotes those to the exact tier); on its own this
-// surface returns every structurally-identical group, exact or renamed.
-// Ordering matches ExactClones: groups by descending Size then ascending hash;
-// members by (FilePath, LineStart).
+// StructuralClones returns Type-2 renamed groups, including any that are also exact clones.
 func (f *Finder) StructuralClones(ctx context.Context, repoID, branch string) ([]CloneGroup, error) {
 	rows, err := f.clones.StructuralNodes(ctx, CloneQuery{RepoID: repoID, Branch: branch}, ExcludedKinds)
 	if err != nil {
@@ -240,15 +155,7 @@ func (f *Finder) StructuralClones(ctx context.Context, repoID, branch string) ([
 	return groupByHash(rows, func(r ClonedNode) string { return r.StructuralHash }), nil
 }
 
-// NearDuplicates returns near-identical clusters: connected components of
-// SIMILAR_TO edges whose score >= minScore. A non-positive minScore falls back
-// to the calibrated default for this Finder's elected embedder
-// (NearThresholdFor). Every returned cluster has Size >= 2 (each edge
-// contributes two members). It reads only edges autolink already persisted
-// no new similarity sweep.
-// Ordering is deterministic: clusters by descending Size, then descending
-// MinScore (tightest first among same-size), then by the first member's NodeID;
-// members within a cluster by (FilePath, LineStart).
+// NearDuplicates groups similar nodes into connected components using existing similarity edges.
 func (f *Finder) NearDuplicates(ctx context.Context, repoID, branch string, minScore float32) ([]NearCluster, error) {
 	if minScore <= 0 {
 		minScore = NearThresholdFor(f.embedderID)
@@ -260,10 +167,8 @@ func (f *Finder) NearDuplicates(ctx context.Context, repoID, branch string, minS
 	return clusterEdges(edges), nil
 }
 
-// groupByHash folds flat ClonedNode rows into deterministically-ordered
-// CloneGroups, dropping any hash that ended up with a single member (defensive:
-// the store already enforces COUNT>=2, but grouping here keeps the invariant
-// local and lets the store stay a dumb projection).
+// groupByHash clusters flat node rows into groups, dropping single-member groups to safeguard
+// the store's uniqueness constraint.
 func groupByHash(rows []ClonedNode, keyOf func(ClonedNode) string) []CloneGroup {
 	byHash := make(map[string][]CloneMember)
 	order := make([]string, 0)
@@ -307,16 +212,12 @@ func groupByHash(rows []ClonedNode, keyOf func(ClonedNode) string) []CloneGroup 
 	return groups
 }
 
-// component accumulates the member set and score bounds of one connected
-// component during clustering.
 type component struct {
 	ids                []string
 	minScore, maxScore float32
 }
 
-// clusterEdges folds undirected SIMILAR_TO edges into connected components via
-// union-find, then builds a deterministically-ordered NearCluster per
-// component with its member set, min/max edge score, and size.
+// clusterEdges groups similarity relationships into transitively connected components via union-find.
 func clusterEdges(edges []SimilarEdge) []NearCluster {
 	uf := newUnionFind()
 	members := make(map[string]CloneMember)
@@ -328,8 +229,7 @@ func clusterEdges(edges []SimilarEdge) []NearCluster {
 	return buildClusters(aggregateComponents(uf, edges), members)
 }
 
-// aggregateComponents walks the edges once, attributing each edge's score
-// bounds and endpoints to its component root.
+// aggregateComponents aggregates edge score bounds to each component's root node.
 func aggregateComponents(uf *unionFind, edges []SimilarEdge) map[string]*component {
 	byRoot := make(map[string]*component)
 	seen := make(map[string]bool)
@@ -355,9 +255,7 @@ func aggregateComponents(uf *unionFind, edges []SimilarEdge) map[string]*compone
 	return byRoot
 }
 
-// buildClusters hydrates components into NearClusters with sorted members, then
-// orders the clusters by descending size, then descending MinScore, then the
-// first member's NodeID.
+// buildClusters transforms disjoint components into sorted NearCluster models.
 func buildClusters(byRoot map[string]*component, members map[string]CloneMember) []NearCluster {
 	clusters := make([]NearCluster, 0, len(byRoot))
 	for _, c := range byRoot {
@@ -385,8 +283,7 @@ func buildClusters(byRoot map[string]*component, members map[string]CloneMember)
 	return clusters
 }
 
-// unionFind is a tiny disjoint-set with path compression, scoped to one
-// NearDuplicates call (node IDs are the elements).
+// unionFind implements a path-compressed disjoint-set to group node IDs within a query sweep.
 type unionFind struct {
 	parent map[string]string
 }

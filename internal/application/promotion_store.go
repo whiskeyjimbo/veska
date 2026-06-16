@@ -8,21 +8,15 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/core/ports"
 )
 
-// workKinds lists the always-on post-promotion work kinds enqueued per file. A
-// PromotionStore enqueues one post_promotion_queue row per file per work kind.
+
 var workKinds = []string{
 	string(ports.WorkKindEmbed),
 	string(ports.WorkKindAutoLink),
 	string(ports.WorkKindRevalidate),
 }
 
-// PromotionWorkKinds returns the list of post-promotion work kinds a
-// PromotionStore enqueues — one queue row per file per kind. It is exported so
-// the infrastructure adapter can drive the queue inserts without re-declaring
-// the canonical list.
-// reviewEnabled gates the optional WorkKindReview lane: when true, 'review' is
-// appended so a review row is enqueued per changed file; when false (the
-// default), no review row is enqueued. The always-on kinds are unconditional.
+// PromotionWorkKinds returns the enqueued work types. The 'review' lane is
+// optional and only enqueued if reviewEnabled is true.
 func PromotionWorkKinds(reviewEnabled bool) []string {
 	out := make([]string, len(workKinds), len(workKinds)+1)
 	copy(out, workKinds)
@@ -32,9 +26,8 @@ func PromotionWorkKinds(reviewEnabled bool) []string {
 	return out
 }
 
-// ErrUnregisteredRepo is returned by PromotionStore.Promote when the repoID is
-// not found in the repos table. The daemon must never promote work from an
-// unknown repo. It is type-assertable via errors.As by callers.
+// ErrUnregisteredRepo is returned by PromotionStore.Promote when repoID is not
+// registered in the repository table.
 type ErrUnregisteredRepo struct{ RepoID string }
 
 func (e ErrUnregisteredRepo) Error() string {
@@ -44,32 +37,20 @@ func (e ErrUnregisteredRepo) Error() string {
 	)
 }
 
-// PromotionFile is the set of nodes (and parser-produced edges) parsed for a
-// single staged file. Edges carry structural relationships the parser can
-// determine at parse time (CALLS, IMPORTS, etc., per ).
-// Vector-similarity edges (SIMILAR_TO) are NOT in this set — those are
-// derived post-promotion by the autolink queue worker.
+// PromotionFile contains the parsed nodes and edges for a staged file.
+// Vector-similarity edges (SIMILAR_TO) are computed later by the autolink worker.
 type PromotionFile struct {
 	Path  string
 	Nodes []*domain.Node
 	Edges []*domain.Edge
-	// UnresolvedCalls are parser hints whose callee lives in another
-	// file of the same Go package; the PromotionStore resolves them
-	// against a package-wide map built from the batch and writes the
-	// resulting CALLS edges in the same transaction.
+	// UnresolvedCalls lists calls to packages resolved during promotion.
 	UnresolvedCalls []domain.UnresolvedCall
-	// Imports maps the file's local package identifiers to import paths,
-	// used to resolve package-qualified UnresolvedCalls into intra-repo
-	// CALLS edges or cross-repo edge stubs at promotion.
+	// Imports maps local packages to import paths for cross-reference.
 	Imports map[string]string
 }
 
-// PromotionBatch is the plain-data description of one promotion. It carries no
-// SQL types so it can cross the application/infrastructure boundary. The
-// PromotionStore is responsible for turning it into an atomic transaction.
-// PromotedAt is computed by the Promoter (now-millis) so a single timestamp is
-// applied consistently to every row in the batch and stays deterministic for
-// tests.
+// PromotionBatch holds the metadata and staged files for an atomic promotion,
+// using a consistent timestamp for all rows.
 type PromotionBatch struct {
 	RepoID     string
 	Branch     string
@@ -79,11 +60,8 @@ type PromotionBatch struct {
 	Files      []PromotionFile
 }
 
-// PromotionStore is the port through which the Promoter flushes a batch of
-// staged nodes to durable storage. The implementation owns the ENTIRE
-// transaction — registration check through commit — so that all node, FTS,
-// embedding-ref and queue writes land atomically or not at all.
-// Promote returns ErrUnregisteredRepo when the batch's repo is not registered.
+// PromotionStore abstracts the transaction layer to write nodes, FTS indexes,
+// embedding references, and queues atomically.
 type PromotionStore interface {
 	Promote(ctx context.Context, batch PromotionBatch) error
 }
