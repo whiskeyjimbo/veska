@@ -61,9 +61,8 @@ def test_agent_grounding_and_staging_aware(tmp_path: Path):
             res = ws.mcp.result("eng_get_dirty_blast_radius", {
                 "repo_id": ws.repo_id, "branch": ws.branch,
             })
-            # Assert on ENTRIES, not included_staging: that flag is hardcoded
-            # true for the dirty tool (solov2-nmps.11), so the real proof the
-            # staged edit was observed is the edited node appearing as dirty.
+            # The edited node appearing as dirty is the real proof staging was
+            # observed; poll on ENTRIES (not the flag) to avoid racing fsnotify.
             names = {e.get("name") for e in res.get("entries") or []}
             return res if COVERED_SYMBOL in names else None
 
@@ -73,5 +72,8 @@ def test_agent_grounding_and_staging_aware(tmp_path: Path):
         entries = {e.get("name") for e in dirty.get("entries") or []}
         print(f"   dirty entries={entries} included_staging={dirty.get('included_staging')}")
         assert COVERED_SYMBOL in entries, f"staged edit not reflected in dirty blast: {entries}"
+        # With a real staged edit contributing rows, included_staging must be
+        # true (solov2-nmps.11: it now reflects contribution, not just the view).
+        assert dirty.get("included_staging") is True, "staged edit must set included_staging"
 
         print("[OK] agent journey: ground (pack) → call-chain → staging-aware blast")

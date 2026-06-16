@@ -368,8 +368,31 @@ func TestDirtyOf_NilStagingReturnsEmpty(t *testing.T) {
 	if len(resp.Entries) != 0 {
 		t.Errorf("expected empty, got %+v", resp.Entries)
 	}
-	if !resp.IncludedStaging {
-		t.Error("IncludedStaging should still be true for the dirty path")
+	// No staging area → staging contributed nothing (solov2-nmps.11).
+	if resp.IncludedStaging {
+		t.Error("IncludedStaging must be false when there is no staging area")
+	}
+}
+
+// TestDirtyOf_CleanTreeReportsNoStaging is the solov2-nmps.11 regression: with a
+// staging area present but no dirty nodes, DirtyOf contributes no seeds and must
+// report IncludedStaging=false — the flag means "staging contributed rows"
+// (SOLO-09 4.4), not merely "this is the dirty view".
+func TestDirtyOf_CleanTreeReportsNoStaging(t *testing.T) {
+	area := staging.NewArea() // present but empty: nothing staged
+	s, err := blastradius.NewService(&fakeEdges{}, &fakeNodes{}, area)
+	if err != nil {
+		t.Fatalf("construct: %v", err)
+	}
+	resp, err := s.DirtyOf(context.Background(), "r", "main", blastradius.Options{MaxDepth: 1})
+	if err != nil {
+		t.Fatalf("DirtyOf: %v", err)
+	}
+	if len(resp.Entries) != 0 {
+		t.Errorf("expected empty entries for a clean tree, got %+v", resp.Entries)
+	}
+	if resp.IncludedStaging {
+		t.Error("IncludedStaging must be false when nothing is staged")
 	}
 }
 
