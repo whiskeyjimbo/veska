@@ -1,25 +1,6 @@
-// Package contextpack assembles a token-bounded bundle of code-graph
-// context — relevant nodes, recent commits, open findings and tasks
-// for a single symbol or a single task. It backs the eng_get_context_pack
-// MCP tool (M4 epic, m4.01).
-// Two input modes are supported:
-//
-//	{symbol}: relevant nodes = the FindNodes(symbol) result plus its
-//	  blast radius; recent commits = FileHistory for those nodes' files;
-//	  open findings = FindingQuerier scoped to those nodes; tasks = the
-//	  repo's active task.
-//	{task_id}: domain.Task carries no graph link, so the repo's
-//	  working-tree diff (ChangedFiles) is treated as the symbol set
-//	  relevant nodes = nodes in the changed files (NodesInFile); commits,
-//	  findings and tasks are derived from that node set plus the task.
-//
-// The assembled bundle is clipped to a configurable token budget
-// (DefaultTokenBudget) using a deterministic byte-length heuristic:
-// lowest-priority sections are dropped/clipped first so an oversized
-// bundle is truncated, never rejected.
-// The Assembler depends only on injected function types and the
-// blastradius application service — never on internal/infrastructure
-// so the domain/application layering stays intact (make layercheck).
+// Package contextpack assembles a token-bounded bundle of code-graph context
+// (nodes, commits, findings, tasks) for a symbol or task, clipping sections
+// by descending priority to fit a token budget.
 package contextpack
 
 import (
@@ -34,60 +15,35 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/core/domain"
 )
 
-// ErrMissingDependency is returned by NewAssembler when a required
-// dependency is nil. It wraps so callers can errors.Is against it.
 var ErrMissingDependency = errors.New("contextpack: missing required dependency")
 
-// DefaultTokenBudget is the token ceiling applied when no WithTokenBudget
-// option is set. It mirrors a comfortable LLM context slice.
+// DefaultTokenBudget is the default token limit for context packs to fit comfortably in LLM context windows.
 const DefaultTokenBudget = 8192
 
-// PerNodeSnippetBytes is the per-node ceiling on inline source bytes
-// 1500 bytes ≈ ~375 tokens by the 4-bytes-per-token
-// heuristic — enough to capture a typical function body in full,
-// small enough that a 200-node blast radius (HardMaxNodes-ish) still
-// fits in DefaultTokenBudget after JSON overhead. The whole-pack
-// budget is enforced separately by clip, so this is just a per-row
-// guard against a single 50KB monster symbol drowning out everything
-// else before clip even gets a chance to drop sections.
+// PerNodeSnippetBytes guards against single large symbols consuming the entire
+// token budget before section-level clipping occurs.
 const PerNodeSnippetBytes = 1500
 
-// defaultCommitWindow is the look-back applied to FileHistory.
 const defaultCommitWindow = 30 * 24 * time.Hour
 
-// maxFilesForHistory caps how many distinct files are walked for commit
-// history; without it a wide blast radius would shell out to git once
-// per file and blow the latency budget.
+// maxFilesForHistory limits history file counts.
 const maxFilesForHistory = 25
 
-// FindNodesFunc resolves an exact symbol name to its nodes. It mirrors
-// ports.GraphStorage.FindNodes so the SQLite adapter plugs in while tests
-// pass a deterministic fake.
+// FindNodesFunc resolves a symbol name to its nodes, facilitating tests with storage fakes.
 type FindNodesFunc func(ctx context.Context, repoID, branch, symbolName string) ([]*domain.Node, error)
 
-// FileHistoryFunc returns the commits that touched a repoRoot-relative
-// path within window, newest first. It mirrors git.FileHistory.
+// FileHistoryFunc lists commits touching a repo path.
 type FileHistoryFunc func(ctx context.Context, repoRoot, path string, window time.Duration) ([]CommitInfo, error)
 
-// OpenFindingsFunc returns the set of node IDs carrying an open finding.
-// It mirrors ports.FindingQuerier.OpenFindingNodeIDs.
 type OpenFindingsFunc func(ctx context.Context, repoID, branch string) (map[string]bool, error)
 
-// ChangedFilesFunc returns the working-tree diff vs HEAD for repoRoot. It
-// mirrors git.ChangedFiles.
 type ChangedFilesFunc func(ctx context.Context, repoRoot string) ([]string, error)
 
-// NodesInFileFunc resolves a repoRoot-relative file path to the node IDs
-// it contains. It mirrors ports.NodeLookup.NodesInFile.
 type NodesInFileFunc func(ctx context.Context, repoID, branch, filePath string) ([]string, error)
 
-// ActiveTaskFunc returns the repo's active task, or (nil, nil) when none
-// is active. It is satisfied by a narrow read over the tasks table.
 type ActiveTaskFunc func(ctx context.Context, repoID string) (*TaskInfo, error)
 
-// CommitInfo is one commit in the recent-commits section. It is the
-// transport-shaped projection of git.Commit (the application layer must
-// not import the git adapter).
+// CommitInfo projects commit data.
 type CommitInfo struct {
 	Hash    string    `json:"hash"`
 	Author  string    `json:"author"`
@@ -95,7 +51,6 @@ type CommitInfo struct {
 	Subject string    `json:"subject"`
 }
 
-// TaskInfo is one task in the tasks section.
 type TaskInfo struct {
 	TaskID     string `json:"task_id"`
 	RepoID     string `json:"repo_id"`
@@ -105,7 +60,6 @@ type TaskInfo struct {
 	Active     bool   `json:"active"`
 }
 
-// NodeInfo is one relevant node in the bundle.
 type NodeInfo struct {
 	NodeID   string `json:"node_id"`
 	Name     string `json:"name"`
@@ -114,30 +68,21 @@ type NodeInfo struct {
 	Distance int    `json:"distance"`
 	Seed     bool   `json:"seed"`
 	HasOpen  bool   `json:"has_open_finding"`
-	// Snippet is the symbol's source, trimmed to PerNodeSnippetBytes so
-	// a single huge symbol cannot eat the bundle. Omitted
-	// from JSON when empty so legacy callers and unsnapshotted nodes
-	// don't get a noisy empty field.
+	// Snippet is capped to PerNodeSnippetBytes; omitted if empty.
 	Snippet string `json:"snippet,omitempty"`
 }
 
-// FindingInfo is one open finding reference in the bundle.
 type FindingInfo struct {
 	NodeID string `json:"node_id"`
 }
 
-// Pack is the assembled context bundle. It is the structure the
-// eng_get_context_pack MCP tool returns; the four sections are ordered by
-// ascending truncation priority — Tasks and Findings are clipped before
-// Commits, which is clipped before Nodes.
+// Pack is the returned context envelope; sections are clipped in priority order.
 type Pack struct {
 	RepoID string `json:"repo_id"`
 	Branch string `json:"branch"`
 	Mode   string `json:"mode"`
 	Query  string `json:"query"`
-	// Focus is the seed node — a convenience pointer to the same NodeInfo
-	// the agent would otherwise find via Nodes[?Seed==true]. Nil when no
-	// node matched the query.
+	// Focus exposes the seed node directly.
 	Focus           *NodeInfo     `json:"focus,omitempty"`
 	Nodes           []NodeInfo    `json:"nodes"`
 	RecentCommits   []CommitInfo  `json:"recent_commits"`
@@ -148,8 +93,6 @@ type Pack struct {
 	Truncated       bool          `json:"truncated"`
 }
 
-// Assembler builds context packs. It is stateless; the same instance is
-// safe for concurrent callers.
 type Assembler struct {
 	findNodes    FindNodesFunc
 	blast        *blastradius.Service
@@ -161,11 +104,9 @@ type Assembler struct {
 	tokenBudget  int
 }
 
-// Option configures an Assembler at construction time.
 type Option func(*Assembler)
 
-// WithTokenBudget sets the token ceiling the bundle is clipped to.
-// Non-positive values are ignored so DefaultTokenBudget stays in effect.
+// WithTokenBudget sets the token ceiling.
 func WithTokenBudget(n int) Option {
 	return func(a *Assembler) {
 		if n > 0 {
@@ -174,10 +115,7 @@ func WithTokenBudget(n int) Option {
 	}
 }
 
-// AssemblerDeps bundles the required collaborators NewAssembler needs. Every
-// field is mandatory; a nil field yields an error wrapping ErrMissingDependency.
-// Grouping the seven function seams in a struct keeps call sites
-// self-documenting — they read by field name rather than by argument position.
+// AssemblerDeps gathers collaborators for construction.
 type AssemblerDeps struct {
 	FindNodes    FindNodesFunc
 	Blast        *blastradius.Service
@@ -188,9 +126,7 @@ type AssemblerDeps struct {
 	ActiveTask   ActiveTaskFunc
 }
 
-// NewAssembler constructs an Assembler. All deps fields are required; a nil
-// dependency yields an error wrapping ErrMissingDependency and a nil
-// *Assembler.
+// NewAssembler constructs an Assembler.
 func NewAssembler(deps AssemblerDeps, opts ...Option) (*Assembler, error) {
 	switch {
 	case deps.FindNodes == nil:
@@ -224,9 +160,7 @@ func NewAssembler(deps AssemblerDeps, opts ...Option) (*Assembler, error) {
 	return a, nil
 }
 
-// ForSymbol assembles a context pack seeded on an exact symbol name. The
-// FindNodes result is expanded by blast radius for the relevant-nodes
-// section; commits, findings and the active task are derived from there.
+// ForSymbol builds a context pack starting from a symbol name.
 func (a *Assembler) ForSymbol(ctx context.Context, repoID, branch, repoRoot, symbol string) (Pack, error) {
 	seeds, err := a.findNodes(ctx, repoID, branch, symbol)
 	if err != nil {
@@ -246,10 +180,7 @@ func (a *Assembler) ForSymbol(ctx context.Context, repoID, branch, repoRoot, sym
 	return pack, nil
 }
 
-// ForNode assembles a context pack seeded on a known node_id. This gives
-// parity with the other graph-anchored MCP tools (call_chain, blast_radius)
-// that accept node_id directly when the caller already has it in hand
-// It skips FindNodes — the seed is exact.
+// ForNode builds a context pack from a node ID.
 func (a *Assembler) ForNode(ctx context.Context, repoID, branch, repoRoot, nodeID string) (Pack, error) {
 	pack, err := a.assemble(ctx, repoID, branch, repoRoot, []string{nodeID})
 	if err != nil {
@@ -261,9 +192,7 @@ func (a *Assembler) ForNode(ctx context.Context, repoID, branch, repoRoot, nodeI
 	return pack, nil
 }
 
-// ForTask assembles a context pack for a task. domain.Task has no graph
-// link, so the repo's working-tree diff is used as the seed set: relevant
-// nodes are the nodes in the changed files.
+// ForTask builds a context pack for a task.
 func (a *Assembler) ForTask(ctx context.Context, repoID, branch, repoRoot, taskID string) (Pack, error) {
 	files, err := a.changedFiles(ctx, repoRoot)
 	if err != nil {
@@ -294,8 +223,7 @@ func (a *Assembler) ForTask(ctx context.Context, repoID, branch, repoRoot, taskI
 	return pack, nil
 }
 
-// assemble builds the un-clipped pack from a seed node-ID set. Mode and
-// Query are filled by the caller.
+// assemble constructs the un-clipped context pack.
 func (a *Assembler) assemble(ctx context.Context, repoID, branch, repoRoot string, seedIDs []string) (Pack, error) {
 	pack := Pack{RepoID: repoID, Branch: branch, TokenBudget: a.tokenBudget}
 
@@ -304,11 +232,6 @@ func (a *Assembler) assemble(ctx context.Context, repoID, branch, repoRoot strin
 		seedSet[id] = struct{}{}
 	}
 
-	// Relevant nodes = seeds + blast radius. Walk BOTH directions so
-	// the pack covers "what this symbol calls" AND "who calls this
-	// symbol" — the default callers-only walk left Command.Execute
-	// returning just 2-3 nodes on cobra. MaxDepth/MaxNodes
-	// keep their service defaults (3 / 200).
 	var entries []blastradius.Entry
 	if len(seedIDs) > 0 {
 		resp, err := a.blast.Of(ctx, repoID, branch, seedIDs, blastradius.Options{
@@ -341,8 +264,6 @@ func (a *Assembler) assemble(ctx context.Context, repoID, branch, repoRoot strin
 			Snippet:  trimSnippet(e.Snippet, PerNodeSnippetBytes),
 		}
 		pack.Nodes = append(pack.Nodes, ni)
-		// expose the first seed as a convenience pointer so
-		// callers don't have to scan Nodes for Seed==true.
 		if isSeed && pack.Focus == nil {
 			seedCopy := ni
 			pack.Focus = &seedCopy
@@ -354,7 +275,6 @@ func (a *Assembler) assemble(ctx context.Context, repoID, branch, repoRoot strin
 			findingSet[e.NodeID] = struct{}{}
 		}
 	}
-	// Nodes are already BFS-distance ordered by blastradius; keep that.
 
 	for id := range findingSet {
 		pack.OpenFindings = append(pack.OpenFindings, FindingInfo{NodeID: id})
@@ -363,8 +283,7 @@ func (a *Assembler) assemble(ctx context.Context, repoID, branch, repoRoot strin
 		return pack.OpenFindings[i].NodeID < pack.OpenFindings[j].NodeID
 	})
 
-	// Recent commits: walk the distinct files of the relevant nodes,
-	// capped so a wide blast radius cannot blow the latency budget.
+	// Cap the number of history files checked to bound git shell-out execution time.
 	files := make([]string, 0, len(fileSet))
 	for f := range fileSet {
 		files = append(files, f)
@@ -406,11 +325,8 @@ func (a *Assembler) assemble(ctx context.Context, repoID, branch, repoRoot strin
 	return pack, nil
 }
 
-// clip enforces the token budget. estimateTokens uses a deterministic
-// byte-length heuristic (len(json)/4). When the bundle is over budget,
-// the lowest-priority sections are dropped/clipped first — Tasks, then
-// OpenFindings, then RecentCommits, then Nodes — until the estimate fits
-// or every section is empty. Truncated records whether anything was cut.
+// clip drops low-priority sections (Tasks, Findings, Commits, Nodes) sequentially until
+// the pack fits the budget.
 func (a *Assembler) clip(p *Pack) {
 	p.EstimatedTokens = estimateTokens(p)
 	if p.EstimatedTokens <= a.tokenBudget {
@@ -443,8 +359,8 @@ func (a *Assembler) clip(p *Pack) {
 	}, a.tokenBudget)
 }
 
-// clipSlice removes tail elements of a section (via remove) while more
-// remain (more) and the pack is over budget, re-estimating each step.
+// clipSlice iteratively drops trailing elements of a section until the budget
+// constraint is satisfied.
 func clipSlice(p *Pack, more func() bool, remove func(), budget int) {
 	for p.EstimatedTokens > budget && more() {
 		remove()
@@ -452,9 +368,8 @@ func clipSlice(p *Pack, more func() bool, remove func(), budget int) {
 	}
 }
 
-// estimateTokens is the deterministic token heuristic: the JSON-encoded
-// byte length divided by four. Encoding failure falls back to 0 so a
-// pathological pack is never rejected.
+// estimateTokens estimates token counts by dividing the JSON length by 4,
+// falling back to 0 on marshal errors.
 func estimateTokens(p *Pack) int {
 	b, err := json.Marshal(p)
 	if err != nil {
@@ -463,10 +378,8 @@ func estimateTokens(p *Pack) int {
 	return len(b) / 4
 }
 
-// trimSnippet caps s at max bytes, preserving UTF-8 by backing off to
-// the last rune boundary, and appends a single trailing newline +
-// ".\n" marker so consumers can tell the body was truncated. An
-// empty input is passed through unchanged.
+// trimSnippet truncates a snippet to max bytes at a UTF-8 boundary, appending
+// a truncation marker.
 func trimSnippet(s string, max int) string {
 	if len(s) <= max {
 		return s

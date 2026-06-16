@@ -1,17 +1,8 @@
-// Package savings records per-search token-savings telemetry to a
-// JSONL file (~/.veska/savings.jsonl by default) and reports rollups
-// for the `veska doctor savings` subcommand.
-// The premise: when search returns inline snippets, the agent skips a
-// follow-up Read of the matched files. The savings ratio is
-//
-//	1 - sum(snippet_chars) / sum(unique_file_chars)
-//
-// which is the marketing number Semble's "semble savings" chart
-// surfaces. It is cheap to compute, has no fan-out beyond a single
-// O_APPEND write per search, and is local-only - no network egress.
-// The Recorder is intentionally optional: a nil *Recorder is the
-// "disabled" state and silently no-ops, so callers don't need to
-// guard every call site with an explicit feature check.
+// Package savings records per-search token-savings telemetry to a JSONL file
+// (~/.veska/savings.jsonl by default) and reports rollups for the doctor subcommand.
+// Telemetry is cheap to compute and local-only, using O_APPEND write per search.
+// A nil *Recorder represents the disabled state and silently no-ops, allowing
+// callers to invoke Record without explicit feature checks.
 package savings
 
 import (
@@ -26,15 +17,12 @@ import (
 	"time"
 )
 
-// Entry is a single recorded search call. JSON tags are stable across
-// versions - the aggregator must keep being able to read entries
-// written by older daemons after an upgrade.
+// Entry represents a single search call. JSON tags must remain stable
+// across versions so that the aggregator can read older entries.
 type Entry struct {
 	Timestamp time.Time `json:"ts"`
-	// RepoID tags the entry with the repo its results came from so
-	// Aggregate can bucket per repo. omitempty keeps
-	// back-compat: entries written by pre-0ql0 daemons have no repo_id
-	// and aggregate into the "" bucket.
+	// RepoID identifies the repository. Omitempty preserves compatibility
+	// with older telemetry entries that omit the repository ID.
 	RepoID       string `json:"repo_id,omitempty"`
 	Query        string `json:"query"`
 	Results      int    `json:"n_results"`
@@ -42,29 +30,21 @@ type Entry struct {
 	SnippetChars int64  `json:"snippet_chars"`
 }
 
-// ResultFile is the minimal projection EntryFor needs from a search
-// result: a file path to stat and a snippet length to sum. Keeping
-// this struct narrow lets infrastructure callers (MCP, CLI) build the
-// input without leaking search-package types into this package.
+// ResultFile is a narrow search result projection that prevents leaking
+// search-package types into telemetry.
 type ResultFile struct {
 	FilePath   string
 	SnippetLen int
 }
 
-// Recorder appends Entry records to a JSONL file. A single recorder
-// is safe for concurrent Record calls - writes are serialised through
-// a mutex so partial lines never interleave. fsync is intentionally
-// omitted (acceptance criterion 3): a power-loss-induced loss of the
-// last few savings entries is acceptable; the hot-path overhead of
-// fsync would not be.
+// Recorder appends entries concurrently. Fsync is omitted to avoid hot-path
+// performance overhead, accepting the risk of telemetry loss on power failure.
 type Recorder struct {
 	mu sync.Mutex
 	f  *os.File
 }
 
-// NewRecorder opens (or creates) path in append-only mode. The parent
-// directory must already exist - the caller's data-dir initialisation
-// is responsible for it.
+// NewRecorder opens path. The parent directory must exist beforehand.
 func NewRecorder(path string) (*Recorder, error) {
 	f, err := os.OpenFile(path, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o644)
 	if err != nil {
@@ -73,8 +53,6 @@ func NewRecorder(path string) (*Recorder, error) {
 	return &Recorder{f: f}, nil
 }
 
-// Record appends e as a single JSONL line. A nil receiver is the
-// documented "disabled" state - returns nil and does nothing.
 func (r *Recorder) Record(e Entry) error {
 	if r == nil {
 		return nil
@@ -93,7 +71,6 @@ func (r *Recorder) Record(e Entry) error {
 	return nil
 }
 
-// Close releases the underlying file. A nil receiver is a no-op.
 func (r *Recorder) Close() error {
 	if r == nil {
 		return nil
@@ -108,18 +85,9 @@ func (r *Recorder) Close() error {
 	return err
 }
 
-// EntryFor builds an Entry from a repo_id, query and the result-file
-// projection. File chars are summed over UNIQUE file paths (so the same
-// file matching three times still counts its size once); snippet chars
-// are summed across all results. Files that no longer exist on disk
-// silently contribute 0 to FileChars - a delete-then-search race must
-// not crash the recorder. repoID tags the entry so a fanout search that
-// spans multiple repos records one Entry per repo.
-// root is the repo's absolute working-tree root. Since
-// nodes.file_path (and thus ResultFile.FilePath) is repo-relative, so the
-// on-disk stat must rejoin root. An empty root means "unknown" - the stat
-// falls back to the path as-is, contributing 0 for a relative path rather
-// than crashing.
+// EntryFor builds an Entry. Missing files contribute zero size to avoid
+// crashing during search-then-delete races. Relative file paths are resolved
+// against root, falling back to zero if root is empty.
 func EntryFor(repoID, root, query string, results []ResultFile, now time.Time) Entry {
 	var snippet int64
 	seen := make(map[string]struct{}, len(results))
@@ -151,10 +119,6 @@ func EntryFor(repoID, root, query string, results []ResultFile, now time.Time) E
 	}
 }
 
-// Period is the rolled-up savings over a window: how many search
-// calls landed in it, how much file content would have been pulled,
-// how much snippet content actually was. SavingsRatio derives from
-// these two sums.
 type Period struct {
 	Label        string
 	Since        time.Time
@@ -163,8 +127,7 @@ type Period struct {
 	SnippetChars int64
 }
 
-// SavingsRatio is 1 - snippet/file. An empty period (FileChars=0)
-// returns 0 rather than NaN so the doctor chart can render uniformly.
+// SavingsRatio returns 0 when FileChars is 0 to avoid NaN propagation.
 func (p Period) SavingsRatio() float64 {
 	if p.FileChars == 0 {
 		return 0
@@ -172,31 +135,22 @@ func (p Period) SavingsRatio() float64 {
 	return 1 - float64(p.SnippetChars)/float64(p.FileChars)
 }
 
-// Report is the three-window rollup the doctor subcommand renders.
 type Report struct {
 	Today   Period
 	Last7d  Period
 	AllTime Period
 }
 
-// Aggregate streams path and produces a Report rolled up against now,
-// pooling every repo into one report. Today is the local-day window
-// containing now; Last7d is the trailing 7 days (today included);
-// AllTime spans every entry in the file. A missing file is not an
-// error - the caller (a fresh install with no searches yet) just sees a
-// zero report.
+// Aggregate builds a Report from path. A missing file is treated as a zero
+// report to support fresh installations.
 func Aggregate(path string, now time.Time) (Report, error) {
 	rep := newReport(now)
 	err := scanEntries(path, rep.addEntry)
 	return rep, err
 }
 
-// AggregateByRepo is Aggregate partitioned by Entry.RepoID: it returns
-// one Report per repo seen in the file. Entries written by
-// pre-0ql0 daemons carry no repo_id and bucket under the "" key. Each
-// per-repo Report uses the same period-bucketing as Aggregate, so the
-// combined Aggregate equals the sum of these by construction. A missing
-// file yields an empty map and no error.
+// AggregateByRepo aggregates telemetry partitioned by Entry.RepoID. Entries
+// lacking a repository ID are bucketed under the empty string.
 func AggregateByRepo(path string, now time.Time) (map[string]Report, error) {
 	byRepo := map[string]*Report{}
 	err := scanEntries(path, func(e Entry) {
@@ -215,9 +169,6 @@ func AggregateByRepo(path string, now time.Time) (map[string]Report, error) {
 	return out, err
 }
 
-// newReport returns a zeroed Report with the period windows anchored on
-// now: Today is the local day containing now, Last7d the trailing 7 days
-// (today included), AllTime unbounded.
 func newReport(now time.Time) Report {
 	return Report{
 		Today:   Period{Label: "today", Since: startOfDay(now)},
@@ -226,7 +177,6 @@ func newReport(now time.Time) Report {
 	}
 }
 
-// addEntry folds e into whichever of the report's windows contain it.
 func (rep *Report) addEntry(e Entry) {
 	rep.AllTime.add(e)
 	if !e.Timestamp.Before(rep.Last7d.Since) {
@@ -237,10 +187,8 @@ func (rep *Report) addEntry(e Entry) {
 	}
 }
 
-// scanEntries streams the JSONL file at path, invoking fn for each
-// well-formed Entry. A missing file is not an error (fresh install). One
-// corrupt line - most likely a truncated last line from a crashed write
-// is skipped rather than aborting the whole scan.
+// scanEntries processes the telemetry file. Corrupt or truncated lines are
+// skipped to ensure a partial write does not invalidate the entire dataset.
 func scanEntries(path string, fn func(Entry)) error {
 	f, err := os.Open(path)
 	if err != nil {
@@ -252,9 +200,7 @@ func scanEntries(path string, fn func(Entry)) error {
 	defer f.Close()
 
 	sc := bufio.NewScanner(f)
-	// Bump max line length: savings entries are tiny today, but a
-	// future Query that's a long natural-language sentence could blow
-	// the default 64KiB. 1 MiB is plenty.
+	// Set 1MiB buffer limit to prevent failure on exceptionally long query strings.
 	sc.Buffer(make([]byte, 0, 64*1024), 1<<20)
 	for sc.Scan() {
 		var e Entry

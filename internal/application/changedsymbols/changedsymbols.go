@@ -1,11 +1,6 @@
-// Package changedsymbols computes the set of code symbols added, removed,
-// or modified between two arbitrary git refs.
-// It deliberately sidesteps the promoted SQLite graph: rather than reading
-// a stored per-commit history substrate (which V2 does not have), the
-// Service parses each changed file at both refs on demand via the
-// tree-sitter CodeParser and diffs the resulting symbol sets by symbol
-// path. This makes eng_find_changed_symbols a pure read-only,
-// history-substrate-free tool.
+// Package changedsymbols computes the set of code symbols added, removed, or
+// modified between two arbitrary git refs on demand, bypassing the sqlite graph
+// database.
 package changedsymbols
 
 import (
@@ -20,47 +15,29 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/core/ports"
 )
 
-// ChangedFilesBetweenFunc lists the files that differ between two git
-// refs, with paths relative to repoRoot. It mirrors the injected
-// func-type pattern used by blastradius.ChangedFilesFunc so the
-// application layer does not import internal/infrastructure/git.
+// ChangedFilesBetweenFunc defines the callback signature to list changed files
+// relative to repoRoot.
 type ChangedFilesBetweenFunc func(ctx context.Context, repoRoot, refA, refB string) ([]string, error)
 
-// FileAtRefFunc reads the content of path at the given git ref. On
-// legitimate absence (file added/deleted between the two refs) adapters
-// must return (nil, err) where err satisfies errors.Is against
-// ErrFileAbsentAtRef — the Service treats that as "empty symbol set for
-// that side" and proceeds. Any OTHER error is interpreted as "this ref's
-// tree was unreadable" and propagated as the baseline_ref_not_indexed
-// degraded reason.
+// FileAtRefFunc reads the file contents at a specific git ref. Absence of the
+// file should return ErrFileAbsentAtRef to allow the diff to proceed.
 type FileAtRefFunc func(ctx context.Context, repoRoot, ref, path string) ([]byte, error)
 
-// ErrFileAbsentAtRef is the sentinel adapters must wrap when reporting
-// that a file does not exist at the requested ref. Distinguishing it
-// from a generic read failure lets the Service tell "file genuinely
-// absent at ref" (an added/deleted file, expected) apart from "ref's
-// tree is unreadable" (e.g. an unfetched commit, corrupted object
-// store, or — in the user-facing rephrasing the bug report uses — a
-// baseline ref whose tree was never indexed).
+// ErrFileAbsentAtRef is returned when a file does not exist at a ref, allowing
+// diffs of added or deleted files to proceed without throwing an error.
 var ErrFileAbsentAtRef = errors.New("changedsymbols: file absent at ref")
 
 // Change classifies one symbol's fate between ref_a and ref_b.
 type Change string
 
 const (
-	// ChangeAdded marks a symbol present at ref_b but not ref_a.
-	ChangeAdded Change = "added"
-	// ChangeRemoved marks a symbol present at ref_a but not ref_b.
-	ChangeRemoved Change = "removed"
-	// ChangeModified marks a symbol present at both refs whose content
-	// hash differs.
+	ChangeAdded    Change = "added"
+	ChangeRemoved  Change = "removed"
 	ChangeModified Change = "modified"
 )
 
-// SymbolChange describes a single classified symbol. LineStart/LineEnd are
-// the symbol's line range at the *ref_b* side for added/modified, and at
-// ref_a for removed — i.e. the location an editor should jump to so the
-// user can read the symbol that exists at the surviving ref.
+// SymbolChange describes a single classified symbol. LineStart/LineEnd point to
+// ref_b for additions/modifications and ref_a for removals.
 type SymbolChange struct {
 	SymbolPath string          `json:"symbol_path"`
 	Name       string          `json:"name"`
@@ -71,29 +48,21 @@ type SymbolChange struct {
 	Change     Change          `json:"change"`
 }
 
-// Result is the envelope returned by Service.Diff. Each slice is sorted
-// by symbol path for deterministic output.
 type Result struct {
 	Added    []SymbolChange `json:"added"`
 	Removed  []SymbolChange `json:"removed"`
 	Modified []SymbolChange `json:"modified"`
-	// DegradedReasons surfaces advisory hints — currently only
-	// "non_symbol_changes_only" when files were modified but produced no
-	// symbol-level diff (typical for comment/whitespace/import-only
-	// edits). Agents reading {added:,removed:,modified:} would
-	// otherwise conclude "nothing changed".
+	// DegradedReasons flags occurrences where a change occurred but yielded no
+	// symbol-level diff (e.g. whitespace edits).
 	DegradedReasons []string `json:"degraded_reasons"`
 }
 
-// Service orchestrates the changed-files → parse-both-refs → diff flow.
-// It is stateless and safe for concurrent callers.
 type Service struct {
 	parser       ports.CodeParser
 	changedFiles ChangedFilesBetweenFunc
 	fileAtRef    FileAtRefFunc
 }
 
-// NewService constructs a Service. All three dependencies are required.
 func NewService(parser ports.CodeParser, changedFiles ChangedFilesBetweenFunc, fileAtRef FileAtRefFunc) (*Service, error) {
 	if parser == nil {
 		return nil, errors.New("changedsymbols: parser is nil")
@@ -107,22 +76,13 @@ func NewService(parser ports.CodeParser, changedFiles ChangedFilesBetweenFunc, f
 	return &Service{parser: parser, changedFiles: changedFiles, fileAtRef: fileAtRef}, nil
 }
 
-// Diff reports the symbols added, removed, and modified between refA and
-// refB in the single repo rooted at repoRoot. repoID is passed to the
-// parser for node-ID derivation; branch is accepted for standard scoping
-// but does not affect the on-demand ref parsing.
+// Diff compares symbol states between two refs.
 func (s *Service) Diff(ctx context.Context, repoID, repoRoot, refA, refB string) (Result, error) {
 	files, err := s.changedFiles(ctx, repoRoot, refA, refB)
 	if err != nil {
-		// Pass the wrapped error through unchanged so callers can use
-		// errors.Is to distinguish "unknown revision" (e.g. HEAD~1 on a
-		// single-commit repo) from a generic git failure.
+		// Wrap the error to allow callers to inspect specific git failures using errors.Is.
 		return Result{}, fmt.Errorf("changedsymbols: list changed files: %w", err)
 	}
-	// Initialise with empty (non-nil) slices so JSON marshaling renders
-	// each field as when no symbols changed in that bucket. The MCP
-	// surface contract guarantees "empty result collections serialize as
-	// never omitted".
 	res := Result{
 		Added:           []SymbolChange{},
 		Removed:         []SymbolChange{},
@@ -137,12 +97,8 @@ func (s *Service) Diff(ctx context.Context, repoID, repoRoot, refA, refB string)
 			return Result{}, err
 		}
 		if aUnreachable {
-			// refA's tree couldn't be read for this file
-			// via a non-absence error. Treat the baseline side as empty
-			// for diff purposes but remember that we did NOT actually
-			// observe its contents — so a downstream "no symbol diff"
-			// outcome is reported as baseline_ref_not_indexed rather than
-			// the misleading non_symbol_changes_only.
+			// If the baseline ref cannot be read, flag the session as degraded rather
+			// than implying only non-symbol code changed.
 			baselineUnreachable = true
 		}
 		nodesB, _, err := s.parseAtRef(ctx, repoID, repoRoot, refB, path)
@@ -153,30 +109,16 @@ func (s *Service) Diff(ctx context.Context, repoID, repoRoot, refA, refB string)
 		classifyFile(path, nodesA, nodesB, &res)
 		after := len(res.Added) + len(res.Removed) + len(res.Modified)
 		if before == after {
-			// File was listed as changed but produced no symbol-level
-			// diff — comments, whitespace, imports, or other gaps the
-			// chunk-aware embedder cares about but the symbol-grain
-			// caller does not.
 			nonSymbolOnlyFiles++
 		}
 	}
-	// only surface the "non_symbol_changes_only" hint when
-	// EVERY symbol bucket is empty. Previously the hint fired any time at
-	// least one changed file had no symbol diff — which contradicted itself
-	// in mixed commits (e.g. one.go file added a method AND a generated
-	// md file changed: the response had a real symbol diff yet still
-	// claimed "non_symbol_changes_only"). The user-visible purpose of the
-	// hint is "the diff is empty, but stuff did change — here's why"; once
-	// the diff is non-empty the hint is just noise.
+	// Degraded reasons are only populated when the overall symbol diff is empty, to
+	// prevent false positives in mixed commits.
 	if len(res.Added)+len(res.Removed)+len(res.Modified) == 0 {
 		switch {
 		case baselineUnreachable:
-			// when refA's tree was unreadable for at
-			// least one changed file, the empty symbol diff is most
-			// honestly explained as "we never saw the baseline".
-			// Emit this in PLACE of non_symbol_changes_only — the two
-			// reasons are mutually exclusive at this layer (the latter
-			// is a true-negative; this one is a can't-observe).
+			// Baseline unreadability takes precedence over non-symbol changes to
+			// highlight missing history.
 			res.DegradedReasons = append(res.DegradedReasons, DegradedReasonBaselineRefNotIndexed)
 		case nonSymbolOnlyFiles > 0:
 			res.DegradedReasons = append(res.DegradedReasons, DegradedReasonNonSymbolChangesOnly)
@@ -188,62 +130,33 @@ func (s *Service) Diff(ctx context.Context, repoID, repoRoot, refA, refB string)
 	return res, nil
 }
 
-// DegradedReasonNonSymbolChangesOnly is emitted on Diff results when at
-// least one changed file produced no symbol-level diff — typical for
-// comment, whitespace, or import-only edits. Agents reading empty
-// added/removed/modified buckets would otherwise interpret the result as
-// "nothing changed".
+// DegradedReasonNonSymbolChangesOnly flags edits that only changed comments, whitespace, or imports.
 const DegradedReasonNonSymbolChangesOnly = "non_symbol_changes_only"
 
-// DegradedReasonBaselineRefNotIndexed is emitted when ref_a's tree
-// could not be read for at least one changed file via a non-absence
-// error from the FileAtRefFunc adapter. Common causes: an unfetched
-// commit, a corrupted object store, or — in the user-facing phrasing
-// from the original bug report — a baseline ref whose tree was never
-// indexed/promoted on this machine. Distinguishing it from
-// non_symbol_changes_only stops the tool from telling agents "only
-// comments/whitespace changed" when the real story is "we couldn't see
-// the baseline at all".
+// DegradedReasonBaselineRefNotIndexed flags errors loading the baseline tree
+// (e.g. corrupt object store or unindexed ref).
 const DegradedReasonBaselineRefNotIndexed = "baseline_ref_not_indexed"
 
-// DegradedReasonNoParentCommit is emitted when the default HEAD~1 base
-// could not be resolved and the handler fell back to git's empty-tree SHA
-// to diff against. Surfaces the fact that "every symbol shows as added"
-// is a consequence of a single-commit repo, not a real wholesale change
+// DegradedReasonNoParentCommit flags when a single-commit repo diff fell back to
+// an empty-tree SHA.
 const DegradedReasonNoParentCommit = "no_parent_commit_used_empty_tree"
 
-// parseAtRef reads path at ref and parses it. The second return value
-// reports whether the read failed with a non-absence error (i.e. the
-// ref's tree was unreadable for this file). A legitimately absent file
-// (sentinel-wrapped errors.Is(err, ErrFileAbsentAtRef)) yields an empty
-// map with unreachable=false; an unreachable read also yields an empty
-// map but with unreachable=true so the caller can degrade the result
-// with baseline_ref_not_indexed rather than non_symbol_changes_only
+// parseAtRef reads and parses a path. It distinguishes file absence (expected)
+// from tree unreadability (degraded).
 func (s *Service) parseAtRef(ctx context.Context, repoID, repoRoot, ref, path string) (map[string]*domain.Node, bool, error) {
 	content, err := s.fileAtRef(ctx, repoRoot, ref, path)
 	if err != nil {
 		if errors.Is(err, ErrFileAbsentAtRef) {
-			// Sentinel-wrapped absence: file genuinely not present at
-			// this ref (added/deleted between refs). Empty side, no
-			// degraded reason.
 			return map[string]*domain.Node{}, false, nil
 		}
-		// Non-absence read failure: we couldn't see the ref's tree for
-		// this file. Empty side, flag the caller so it can emit
-		// baseline_ref_not_indexed if the overall diff comes back empty.
 		return map[string]*domain.Node{}, true, nil
 	}
 	pr, err := s.parser.ParseFile(ctx, repoID, path, content)
 	if err != nil {
 		return nil, false, fmt.Errorf("changedsymbols: parse %s at %s: %w", path, ref, err)
 	}
-	// chunks are an embedding-internal concept (KindChunk
-	// covers comment/whitespace/import gaps between symbols so semantic
-	// search can find non-declaration code). Including them here makes
-	// "find_changed_symbols" emit chunk:N-M entries that aren't symbols
-	// from the user's perspective. Filter them out; the degraded reason
-	// "non_symbol_changes_only" still tells the caller the file
-	// changed if NO real symbol differed.
+	// Filter out KindChunk nodes since they represent gaps (comment/whitespace)
+	// rather than user-facing symbols.
 	out := make(map[string]*domain.Node, len(pr.Nodes))
 	for _, n := range pr.Nodes {
 		if n.Kind == domain.KindChunk {
@@ -254,7 +167,6 @@ func (s *Service) parseAtRef(ctx context.Context, repoID, repoRoot, ref, path st
 	return out, false, nil
 }
 
-// classifyFile diffs the two symbol maps of one file into res.
 func classifyFile(path string, a, b map[string]*domain.Node, res *Result) {
 	for key, nb := range b {
 		na, ok := a[key]
@@ -273,17 +185,13 @@ func classifyFile(path string, a, b map[string]*domain.Node, res *Result) {
 	}
 }
 
-// symbolKey is the cross-ref identity of a node: its symbol path (a
-// node's Path is its file; the Name disambiguates symbols within a
-// file). Both refs are diffed with the same key.
+// symbolKey generates a unique key combining path and symbol name to correlate
+// symbols across refs.
 func symbolKey(n *domain.Node) string {
 	return n.Path + "::" + n.Name
 }
 
-// contentHash returns a stable digest of the node's body used to detect
-// "modified" symbols. The parser may populate either ContentHash or
-// RawContent (the Go parser sets only RawContent); when neither is set
-// the digest is "" and the symbol is reported as unchanged.
+// contentHash computes a stable digest of a node's body to detect modifications.
 func contentHash(n *domain.Node) string {
 	if n.ContentHash != nil {
 		return string(*n.ContentHash)

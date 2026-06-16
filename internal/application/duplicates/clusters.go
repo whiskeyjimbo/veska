@@ -6,26 +6,20 @@ import (
 	"sort"
 )
 
-// Tier ranks a cluster by the precision of its similarity signal, tightest
-// first. The unified Clusters view labels every group with one.
+// Tier classifies a cluster by its similarity type: exact (byte-identical),
+// structural (Type-2 shape matches), or near (vector-similar).
 type Tier string
 
 const (
-	// TierExact: every member is byte-identical (shared content_hash).
-	TierExact Tier = "exact"
-	// TierStructural: same shape after a consistent rename (shared
-	// structural_hash) but NOT all byte-identical — Type-2 clones.
+	TierExact      Tier = "exact"
 	TierStructural Tier = "structural"
-	// TierNear: vector-similar (SIMILAR_TO above threshold), looser than the
-	// hash tiers; only members not already in a hash cluster appear here.
-	TierNear Tier = "near"
+	TierNear       Tier = "near"
 )
 
 var tierRank = map[Tier]int{TierExact: 0, TierStructural: 1, TierNear: 2}
 
-// Cluster is one group of >=2 similar nodes at a single Tier. Score is the
-// weakest edge score in the component for the near tier and 0 otherwise.
-// CrossRepo is true when the members span more than one repo.
+// Cluster groups similar nodes at a single Tier. Score represents the weakest
+// edge similarity score (0 if not TierNear).
 type Cluster struct {
 	Tier      Tier
 	Members   []CloneMember
@@ -34,12 +28,8 @@ type Cluster struct {
 	CrossRepo bool
 }
 
-// ClusterOptions configures Clusters. Empty Tiers means all tiers. MinScore <= 0
-// uses the calibrated near-dup default for the elected embedder. AllRepos
-// clusters across every registered repo (cross-repo); in that mode the near
-// tier is skipped — cross-repo SIMILAR_TO edges are not persisted (autolink runs
-// per repo), so cross-repo near needs a vector fan-out that is a follow-up.
-// PathPrefix restricts the sweep to nodes whose file_path starts with it.
+// ClusterOptions filters the cluster results. If AllRepos is true, the near tier
+// is skipped because cross-repo similar-to edges are not persisted.
 type ClusterOptions struct {
 	RepoID     string
 	Branch     string
@@ -49,11 +39,9 @@ type ClusterOptions struct {
 	MinScore   float32
 }
 
-// Clusters returns the unified, tier-labeled similar-code view for one repo: the
-// structural grouping (a superset of exact) sub-tiered into exact vs structural,
-// plus near clusters for any node not already in a hash cluster (precedence
-// exact > structural > near). Ranked tightest tier first, then by descending
-// size, then stably by the first member's node id.
+// Clusters aggregates and ranks similar-code groups. Groups are ranked by tier
+// priority (exact > structural > near), descending group size, and stably by the
+// first member's ID.
 func (f *Finder) Clusters(ctx context.Context, opts ClusterOptions) ([]Cluster, error) {
 	want := tierFilter(opts.Tiers)
 	claimed := make(map[string]bool) // node_ids already in a hash cluster
@@ -124,8 +112,6 @@ func (f *Finder) Clusters(ctx context.Context, opts ClusterOptions) ([]Cluster, 
 	return out, nil
 }
 
-// tierFilter turns the requested tier list into a membership set; an empty list
-// means "all tiers".
 func tierFilter(tiers []Tier) map[Tier]bool {
 	if len(tiers) == 0 {
 		return map[Tier]bool{TierExact: true, TierStructural: true, TierNear: true}
@@ -137,8 +123,6 @@ func tierFilter(tiers []Tier) map[Tier]bool {
 	return m
 }
 
-// uniformContentHash reports whether every member shares one content_hash (a
-// fully byte-identical group — the exact tier).
 func uniformContentHash(members []CloneMember) bool {
 	if len(members) == 0 {
 		return false
@@ -152,7 +136,6 @@ func uniformContentHash(members []CloneMember) bool {
 	return true
 }
 
-// spansRepos reports whether the members come from more than one repo.
 func spansRepos(members []CloneMember) bool {
 	for _, m := range members[1:] {
 		if m.RepoID != members[0].RepoID {
