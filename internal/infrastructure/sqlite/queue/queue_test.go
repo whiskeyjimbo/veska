@@ -143,7 +143,7 @@ func TestPoller_PicksUpPendingRow(t *testing.T) {
 	t.Errorf("expected state=done, got %q", state)
 }
 
-// TestPoller_PauserBlocksProcessing covers solov2-pc3 fix #1: when
+// TestPoller_PauserBlocksProcessing covers fix #1: when
 // Pauser returns true, the poll loop skips its tick without consuming
 // a pending row. When Pauser flips back to false, the row is picked
 // up on the next tick. This is the gate that keeps the post-promotion
@@ -256,7 +256,7 @@ func TestPoller_ContextCancelStopsGoroutines(t *testing.T) {
 	time.Sleep(50 * time.Millisecond)
 	cancel()
 
-	// Wait() blocks until all goroutines exit.
+	// Wait blocks until all goroutines exit.
 	done := make(chan struct{})
 	go func() {
 		p.Wait()

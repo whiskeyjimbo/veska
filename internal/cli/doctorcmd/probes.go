@@ -28,7 +28,7 @@ func StubOK(subsystem string, jsonOut bool, w io.Writer) error {
 // QueueOptions are the boolean flags for RunPostPromotionQueue. Probes that
 // carry a single flag keep it positional (e.g. RunEgress(w, jsonOut)); those
 // with two or more take an options struct so adjacent bools can't be
-// transposed at the call site .
+// transposed at the call site.
 type QueueOptions struct {
 	JSON         bool
 	PurgeOrphans bool
@@ -39,7 +39,7 @@ type QueueOptions struct {
 func RunPostPromotionQueue(w io.Writer, opts QueueOptions) error {
 	jsonOut, purgeOrphans := opts.JSON, opts.PurgeOrphans
 	dbPath := filepath.Join(config.DefaultVectorDir(), "veska.db")
-	// solov2-zmzc: --purge-orphans deletes failed rows whose repo_id
+	// purge-orphans deletes failed rows whose repo_id
 	// was deregistered. Without this, removed-repo rows linger
 	// forever and drag the rollup to "degraded".
 	if purgeOrphans {
@@ -65,7 +65,7 @@ func RunPostPromotionQueue(w io.Writer, opts QueueOptions) error {
 		fmt.Fprintf(w, "  FAILED seq=%d repo=%s branch=%s kind=%s attempts=%d err=%s\n",
 			f.Seq, f.RepoID, f.Branch, f.WorkKind, f.Attempts, f.Error)
 	}
-	// solov2-261t: when the failed set includes rows pointing at
+	// when the failed set includes rows pointing at
 	// deregistered repos, tell the operator what to run instead of
 	// leaving them to grep the error messages for "is not registered".
 	if report.OrphanCount > 0 {
@@ -80,7 +80,7 @@ func RunPostPromotionQueue(w io.Writer, opts QueueOptions) error {
 // RunIdentity reports each registered repo's resolved identity tier and warns
 // when any repo sits on a non-converging tier — its node_ids would not match
 // another contributor indexing the same upstream in a shared graph DB
-// (ADR-S0017). Non-converging is the expected, fine state for single-user use,
+// Non-converging is the expected, fine state for single-user use,
 // so this probe is advisory: it is NOT folded into the `doctor status` rollup.
 func RunIdentity(w io.Writer, jsonOut bool) error {
 	dbPath := filepath.Join(config.DefaultVectorDir(), "veska.db")
@@ -100,7 +100,7 @@ func RunIdentity(w io.Writer, jsonOut bool) error {
 		}
 		note := ""
 		if !r.Converges {
-			// Distinguish an unresolved (pre-0018) repo from a resolved-but-
+			// Distinguish an unresolved (pre-0018) repo from a resolved-but
 			// local-only tier; they read differently to an operator.
 			if r.Tier == "" {
 				note = "  WARN unresolved tier — won't converge in a shared DB"
@@ -114,7 +114,7 @@ func RunIdentity(w io.Writer, jsonOut bool) error {
 		}
 		fmt.Fprintf(w, "  %s tier=%s%s\n", short, tier, note)
 	}
-	// Legend on every run (solov2-dchd.8): the raw tier names are opaque on the
+	// Legend on every run: the raw tier names are opaque on the
 	// healthy path, where the non-converging hint below never fires. A junior
 	// seeing `tier=module-hostpath` needs to know it's the good one.
 	if len(report.Repos) > 0 {
@@ -313,7 +313,7 @@ func RunConfig(w io.Writer, jsonOut bool) error {
 	}
 	fmt.Fprintf(w, "config: veska_home=%s db_exists=%v veska_home_set=%v\n",
 		report.VeskaHome, report.DBExists, report.VeskaHomeSet)
-	// solov2-kxo5.8: surface the ephemeral-cache knobs so the
+	// surface the ephemeral-cache knobs so the
 	// user can see effective values and where each came from
 	// (default vs env override) without grepping the source.
 	fmt.Fprintf(w, "cache: declined_ttl=%s (%s) max_bytes=%d (%s) max_ephemerals=%d (%s)\n",
@@ -355,7 +355,7 @@ func RunService(w io.Writer, jsonOut bool) error {
 // the cmd package injects it (shared with `veska restore`) so doctorcmd does
 // not re-implement the legacy-dir fallback scan.
 func RunBackup(w io.Writer, jsonOut bool, backupDirExists func(string) bool) error {
-	// solov2-n57f: prefer the canonical $VESKA_HOME/backups; fall
+	// prefer the canonical $VESKA_HOME/backups; fall
 	// back to legacy ~/.veska-backups so doctor doesn't report
 	// "no backups" right after an upgrade that hasn't run a new
 	// backup yet.

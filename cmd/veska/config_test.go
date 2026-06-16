@@ -6,7 +6,7 @@ import (
 	"testing"
 )
 
-// TestConfigShowOutputsTOML pins solov2-p6rt: `veska config show` must
+// TestConfigShowOutputsTOML pins: `veska config show` must
 // emit the resolved config in a parseable shape (TOML by default, JSON
 // with --json). The body matters less than the contract: it succeeds,
 // writes to stdout, and surfaces at least one well-known top-level key.

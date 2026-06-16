@@ -2,9 +2,8 @@
 
 // Package dbbench benchmarks Go SQLite drivers (mattn, zombiezen) against
 // the workloads veska's storage layer actually runs. See README.md and
-// solov2-6e5r for the motivation.
-//
-// The package is build-tagged `eval` so `go test ./...` stays fast. The
+// for the motivation.
+// The package is build-tagged `eval` so `go test./.` stays fast. The
 // mattn driver additionally requires cgo; its registration lives in a
 // `cgo`-tagged file and is silently absent when cgo is disabled.
 package dbbench
@@ -18,7 +17,6 @@ import (
 
 // Bench is the per-driver bench facade. One Bench owns one open database;
 // the harness opens a fresh Bench per driver per run.
-//
 // Workload methods receive the iteration index `i` so they can choose
 // well-distributed inputs (random-but-deterministic) without per-call
 // allocation overhead inside the hot loop.
@@ -50,7 +48,7 @@ var (
 )
 
 // Register adds a driver factory under the given name. Each driver file
-// (driver_mattn.go / driver_zombiezen.go) calls this from its init().
+// (driver_mattn.go / driver_zombiezen.go) calls this from its init.
 func Register(name string, f Factory) {
 	registryMu.Lock()
 	defer registryMu.Unlock()

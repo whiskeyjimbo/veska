@@ -59,7 +59,6 @@ func (v CycleVerdict) ExitCode() int {
 // DependencyKinds edges, whose members were NOT already a single cycle at base.
 // Self-loops (direct recursion A->A) are excluded — they are size-1 SCCs and
 // ubiquitous/benign.
-//
 // Net-new is decided per after-state SCC C (|C|>=2): C is flagged iff its members
 // are NOT all contained in one base SCC — i.e. they were not already mutually
 // reachable before the change. A symbol added by the change has no base SCC, so a
@@ -67,7 +66,6 @@ func (v CycleVerdict) ExitCode() int {
 // Flagged SCCs are further scoped to those touching the change's node set, so a
 // pre-existing cycle elsewhere can never surface from an unrelated graph-build
 // difference (defensive, consistent with the coverage gate's intersection).
-//
 // Language-agnostic: the algorithm is pure graph topology over DependencyKinds
 // and makes no Go-specific assumption. On compiling Go the only catchable cycle
 // is within-package mutual recursion (the compiler forbids package import

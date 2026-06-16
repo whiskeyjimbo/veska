@@ -2,9 +2,9 @@
 
 // Package recall's eval test: drives a real search.Service against an
 // in-memory SQLite NodeLookup adapter and an in-process VectorStorage
-// (the sqlite-vec linear-scan backend by default, per ADR-S0015), with
+// (the sqlite-vec linear-scan backend by default, per ), with
 // a deterministic synthetic corpus. Build-tag-gated so plain CI runs
-// (`go test ./...`) skip this end-to-end driver — it stays available
+// (`go test./.`) skip this end-to-end driver — it stays available
 // via `go test -tags=eval` from the eval-recall make target.
 package recall
 
@@ -40,15 +40,15 @@ const (
 // into a real VectorStorage + in-memory SQLite (via the existing
 // NodeLookupRepo), drives 100 cluster-center queries through
 // search.Service.Semantic, and emits a JSON summary.
-//
 // Modes (env):
-//   - RECALL_POP=N             — total population (default 1000)
-//   - RECALL_GENERATE=1        — seed the fixture from real Ollama for
-//     non-quick-mode populations (pop > 5000). Honors VESKA_OLLAMA_URL
-//     and VESKA_EMBED_MODEL. If Ollama is unreachable (/api/tags probe
-//     with a 3s timeout) the test SKIPS rather than failing. In quick
-//     mode (pop <= 5000) GENERATE persists the deterministic fake
-//     vectors so the autolink harness can replay the same fixture.
+//
+//	RECALL_POP=N — total population (default 1000)
+//	RECALL_GENERATE=1 — seed the fixture from real Ollama for
+//	  non-quick-mode populations (pop > 5000). Honors VESKA_OLLAMA_URL
+//	  and VESKA_EMBED_MODEL. If Ollama is unreachable (/api/tags probe
+//	  with a 3s timeout) the test SKIPS rather than failing. In quick
+//	  mode (pop <= 5000) GENERATE persists the deterministic fake
+//	  vectors so the autolink harness can replay the same fixture.
 //
 // The quick-mode (<= 5000) path uses the FakeEmbedder directly without
 // requiring a fixture or Ollama. Larger populations require a fixture
@@ -87,7 +87,7 @@ func TestRecall(t *testing.T) {
 		corpus = GenerateCorpus(clusters, nodesPerCluster)
 	}
 
-	// --- choose embedder + obtain vectors ----------------------------------
+	// choose embedder + obtain vectors
 	embedderName := "fake"
 	quickMode := pop <= 5000
 	var nodeVecs []float32
@@ -107,7 +107,7 @@ func TestRecall(t *testing.T) {
 		}
 		if d != dim {
 			// A fixture from a different embedder is fine for replay
-			// — we just need the dim to be consistent across nodes &
+			// we just need the dim to be consistent across nodes &
 			// queries below. Re-tag as "fixture".
 			embedderName = "fixture"
 			dim = d
@@ -185,7 +185,7 @@ func TestRecall(t *testing.T) {
 		t.Fatalf("vector count mismatch: have %d vectors, expected %d", got, pop)
 	}
 
-	// --- wire SQLite + VectorStorage --------------------------------------
+	// wire SQLite + VectorStorage
 	tmpDir := t.TempDir()
 	dbPath := filepath.Join(tmpDir, "veska.db")
 	backupDir := filepath.Join(tmpDir, "backups")
@@ -203,7 +203,7 @@ func TestRecall(t *testing.T) {
 
 	// VESKA_VECTOR_BACKEND selects the backend (default memory/memvec).
 	// "usearch" requires the hnsw_native build tag and libusearch_c.so at
-	// runtime — see ADR-S0014.
+	// runtime.
 	backendKind := vector.BackendKind(os.Getenv("VESKA_VECTOR_BACKEND"))
 	if backendKind == "" {
 		backendKind = vector.BackendMemory
@@ -227,7 +227,7 @@ func TestRecall(t *testing.T) {
 		t.Fatalf("UpsertEmbeddings: %v", err)
 	}
 
-	// --- run queries through real search.Service ---------------------------
+	// run queries through real search.Service
 	// When the corpus vectors come from real Ollama (either fresh
 	// generation or replay of an ollama-seeded fixture) queries must
 	// be embedded by the same provider, otherwise recall numbers are
@@ -282,7 +282,7 @@ func TestRecall(t *testing.T) {
 		t.Fatalf("mean_recall is zero — embedder %q did not produce cluster-aligned vectors (pop=%d)", embedderName, pop)
 	}
 
-	// --- emit JSON + single-line summary -----------------------------------
+	// emit JSON + single-line summary
 	res := Result{
 		Population:      pop,
 		Clusters:        clusters,

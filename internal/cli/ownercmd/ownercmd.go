@@ -1,7 +1,7 @@
 // Package ownercmd holds the delivery-layer logic behind `veska owner`
 // (eng_find_owner): resolve the owner of a file via CODEOWNERS (longest-match)
-// or a git-blame fallback. The anchor may be a path, a symbol, or a node_id —
-// the latter two resolve to their defining file first. solov2-yh5a.
+// or a git-blame fallback. The anchor may be a path, a symbol, or a node_id
+// the latter two resolve to their defining file first.
 package ownercmd
 
 import (
@@ -77,7 +77,7 @@ func Run(ctx context.Context, p Params) error {
 // name: it contains a path separator or ends in a source extension. A bare
 // "." is NOT enough — qualified Go symbols like "FlagSet.Parse" or
 // "pkg.Func" contain a dot but are symbols, so anchoring on ".go"/".ts"/etc.
-// (or a slash) keeps them on the symbol branch (solov2-yh5a).
+// (or a slash) keeps them on the symbol branch.
 func looksLikePath(s string) bool {
 	if strings.Contains(s, "/") {
 		return true

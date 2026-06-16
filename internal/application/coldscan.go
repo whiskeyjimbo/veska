@@ -22,7 +22,7 @@ type IgnoreMatcher interface {
 }
 
 // IgnoreLoader builds an IgnoreMatcher for a given repository root. It is
-// invoked once per cold scan so per-repo .veskaignore files can shape the
+// invoked once per cold scan so per-repo.veskaignore files can shape the
 // resulting IgnoreMatcher.
 type IgnoreLoader func(repoRoot string) (IgnoreMatcher, error)
 
@@ -32,7 +32,7 @@ type coldScanConfig struct {
 	tracker *ScanTracker
 	// extensions is the set of source-file extensions the wired parser can
 	// read, sourced from the parser via Ingester.SupportedExtensions rather
-	// than duplicated here (solov2-xde2.7).
+	// than duplicated here.
 	extensions map[string]struct{}
 }
 
@@ -47,7 +47,7 @@ func WithIgnoreLoader(l IgnoreLoader) ColdScanOption {
 }
 
 // WithScanTracker registers a ScanTracker the reparser will Start at scan
-// entry and End at scan exit . The daemon's status handler
+// entry and End at scan exit. The daemon's status handler
 // reads the same tracker so eng_get_status can surface scans_in_flight.
 // Nil-safe: when no tracker is wired the calls are no-ops.
 func WithScanTracker(t *ScanTracker) ColdScanOption {
@@ -85,7 +85,7 @@ type headQuerier interface {
 // repoRegistrar.AddRepo both invoke for a full-reparse path. It walks the
 // repo's working tree, parses every non-ignored source file through the
 // given Ingester, and finalises by promoting at HEAD with the system
-// actor (solov2-0z1.1).
+// actor.
 func NewColdScanReparser(ingester *Ingester, promoter *Promoter, git headQuerier, opts ...ColdScanOption) (func(ctx context.Context, repo RepoRecord) error, error) {
 	if ingester == nil {
 		return nil, fmt.Errorf("application.NewColdScanReparser: ingester is nil: %w", ErrMissingDependency)
@@ -96,7 +96,7 @@ func NewColdScanReparser(ingester *Ingester, promoter *Promoter, git headQuerier
 	if git == nil {
 		return nil, fmt.Errorf("application.NewColdScanReparser: git is nil: %w", ErrMissingDependency)
 	}
-	// Wire the cold-scan-specific Save variant (solov2-pc3 #2): it
+	// Wire the cold-scan-specific Save variant ( #2): it
 	// skips clearParseFailure for clean parses since there's nothing
 	// to clear on a first-ever scan, removing one UPDATE per file on
 	// the contended Write pool.
@@ -128,7 +128,7 @@ func newColdScanReparserFromFns(save saveFunc, promote promoteFunc, git headQuer
 }
 
 // coldScanActor is the system actor under which cold-scan promotions are
-// recorded (solov2-0z1.1).
+// recorded.
 var coldScanActor = domain.Actor{ID: "service:veska", Kind: domain.ActorKindSystem}
 
 // coldScanSeams bundles the (required) function seams a cold scan drives:
@@ -208,7 +208,7 @@ func walkPhase(ctx context.Context, repo RepoRecord, cfg coldScanConfig, ignore 
 
 // walkAndSave performs the filesystem walk and feeds each surviving file
 // into save. Serial by design: parallelising the walker on a real repo
-// (solov2-pc3 investigation) made wall time slightly worse because the
+// ( investigation) made wall time slightly worse because the
 // daemon's per-file workload contends with the embedder / queue / wiki
 // workers via the Write pool and (likely) the page cache. A worker
 // pool just spreads that contention across more goroutines without
@@ -239,7 +239,7 @@ func walkAndSave(ctx context.Context, repo RepoRecord, ignore IgnoreMatcher, ext
 }
 
 // walkDirEntry decides what the walk does with a directory: descend (nil) or
-// prune (SkipDir). .git is always pruned; otherwise the trailing-slash form
+// prune (SkipDir).git is always pruned; otherwise the trailing-slash form
 // lets directory ignore patterns match.
 func walkDirEntry(rel string, d fs.DirEntry, ignore IgnoreMatcher) error {
 	if rel == "." {
@@ -265,8 +265,8 @@ type fileStager struct {
 }
 
 // stage feeds one walked file into save when it survives every filter:
-// regular-file, not .veskaignore, not ignored, readable, non-binary, and an
-// interesting extension/manifest (solov2-8x7r — without the last filter the
+// regular-file, not.veskaignore, not ignored, readable, non-binary, and an
+// interesting extension/manifest ( — without the last filter the
 // scan staged a row for every README/.yml/.json, bloating the PromotionBatch
 // and confusing filename-gated checks). A read failure is skipped silently,
 // matching the watch loop's tolerance so one bad file never aborts the scan.
@@ -292,7 +292,7 @@ func (s fileStager) stage(ctx context.Context, path, rel string, d fs.DirEntry) 
 	if !isInterestingForStaging(path, s.exts) {
 		return
 	}
-	// ADR-S0017 §1: nodeID + nodes.file_path key on the repo-relative slash
+	// nodeID + nodes.file_path key on the repo-relative slash
 	// path (rel), never the absolute walked path. path stays for reading bytes
 	// and the extension/binary filters above; rel is what the parser sees.
 	s.save(ctx, s.repo.RepoID, s.repo.ActiveBranch, rel, src)
@@ -300,7 +300,7 @@ func (s fileStager) stage(ctx context.Context, path, rel string, d fs.DirEntry) 
 
 // extensionSet folds the wired parser's SupportedExtensions list into a
 // lookup set, lower-casing each so the walk filter matches regardless of
-// on-disk case (solov2-xde2.7). The list is sourced from the parser via
+// on-disk case. The list is sourced from the parser via
 // Ingester.SupportedExtensions rather than duplicated here, so it stays in
 // sync with whatever parsers are actually wired into the cold scan.
 func extensionSet(exts []string) map[string]struct{} {

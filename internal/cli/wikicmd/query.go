@@ -14,7 +14,7 @@ import (
 // hot-zones`. Unlike `veska wiki` (which opens SQLite directly to write the
 // markdown pages), these hit the daemon over the MCP socket and render a
 // table, so an agent or script can pull the data without reading the
-// generated docs. solov2-yh5a. eng_get_entry_points / eng_get_hot_zone both
+// generated docs. eng_get_entry_points / eng_get_hot_zone both
 // require repo_id, resolved by the Cobra layer before these run.
 
 // EntryPointsParams bundles the inputs of RunEntryPoints.

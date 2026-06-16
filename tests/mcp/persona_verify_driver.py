@@ -7,7 +7,7 @@ fixture, enumerates the LIVE tool surface via `tools/list`, drives every tool
 with realistic params (read tools + stateful lifecycle round-trips), and prints
 every request/response VERBATIM for the model to judge.
 
-It is a capture tool, not an assertion suite — it (almost) always passes; its
+It is a capture tool, not an assertion suite - it (almost) always passes; its
 value is the `-s` transcript. It is marked `persona_verify` so it stays out of
 `make test-persona`. Run it via:
 
@@ -16,7 +16,7 @@ value is the `-s` transcript. It is marked `persona_verify` so it stays out of
 
 The one thing it DOES assert: every live tool is either exercised here or
 accounted for, so a newly-registered tool the driver lacks params for is
-surfaced loudly (not silently skipped) — the model then judges it by hand and
+surfaced loudly (not silently skipped) - the model then judges it by hand and
 the spec is extended.
 """
 
@@ -168,7 +168,7 @@ def test_persona_verify_capture(tmp_path: Path):
         print("\n" + "=" * 60)
         print(f"COVERAGE: {len(cap.called - {'tools/list'})}/{len(live)} live tools exercised")
         if not_exercised:
-            print(f"NOT EXERCISED (live tools with no driver spec — judge by hand "
+            print(f"NOT EXERCISED (live tools with no driver spec - judge by hand "
                   f"+ extend the driver): {not_exercised}")
         if not_live:
             print(f"DRIVER CALLED NON-LIVE TOOLS (parked/removed?): {not_live}")
@@ -177,5 +177,5 @@ def test_persona_verify_capture(tmp_path: Path):
 
         # The only hard assertion: no live tool is silently skipped.
         assert not not_exercised, (
-            f"driver lacks params for live tool(s) {not_exercised} — extend the "
+            f"driver lacks params for live tool(s) {not_exercised} - extend the "
             f"spec so the verify sweep stays complete as the surface grows")

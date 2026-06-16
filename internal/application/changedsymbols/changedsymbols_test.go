@@ -15,7 +15,7 @@ import (
 // absent at that ref. Adapters must wrap the sentinel
 // changedsymbols.ErrFileAbsentAtRef on legitimate absence so the Service
 // can distinguish "file legitimately not present at this ref" from
-// "couldn't read the ref at all" (solov2-izh6.17).
+// "couldn't read the ref at all".
 type memFiles map[string]string
 
 func (m memFiles) changedFiles(_ context.Context, _, _, _ string) ([]string, error) {
@@ -96,7 +96,7 @@ func TestNewService_RejectsNilDeps(t *testing.T) {
 // multiFileFiles supports a per-test changed-file list and per-ref
 // per-path content, plus a configurable "unreachable" error injected for
 // arbitrary (ref,path) pairs so tests can simulate ref_a's tree being
-// unreadable while ref_b succeeds (solov2-izh6.17).
+// unreadable while ref_b succeeds.
 type multiFileFiles struct {
 	changed     []string
 	contents    map[string]string // "ref:path" -> content; missing => absent (wraps sentinel)
@@ -118,7 +118,7 @@ func (m *multiFileFiles) fileAtRefFn(_ context.Context, _, ref, path string) ([]
 	return nil, fmt.Errorf("%w: %s", changedsymbols.ErrFileAbsentAtRef, k)
 }
 
-// solov2-izh6.17: when ref_a is unreadable (e.g. its tree isn't in the
+// when ref_a is unreadable (e.g. its tree isn't in the
 // promotion store / can't be checked out) and ref_b has only
 // non-symbol-yielding diffs, the result must surface
 // "baseline_ref_not_indexed" rather than the misleading
@@ -153,7 +153,7 @@ func TestDiff_BaselineRefUnreachable_EmitsBaselineRefNotIndexed(t *testing.T) {
 	}
 }
 
-// solov2-izh6.17 acceptance #2: when both refs are reachable and a new
+// acceptance #2: when both refs are reachable and a new
 // file containing a new symbol is added between them, the added symbol
 // is returned — NOT classified as a non-symbol change. The existing
 // classifier already does this, so the test guards against regressions

@@ -1,9 +1,9 @@
 //go:build embed_model
 
-// Fat-binary build : the model2vec weights are compiled into
+// Fat-binary build: the model2vec weights are compiled into
 // the binary via //go:embed, so the embedder needs no `veska install` and
-// no network. The assets are fetched into ./assets/ at build time by
-// `make build-fat` and are .gitignore'd — they are NOT committed (a ~62MB
+// no network. The assets are fetched into./assets/ at build time by
+// `make build-fat` and are.gitignore'd — they are NOT committed (a ~62MB
 // blob in git history is the cost this design exists to avoid).
 package model2vec
 

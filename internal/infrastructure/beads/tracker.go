@@ -1,6 +1,6 @@
 // Package beads provides a Tracker implementation backed by the beads
 // file-based issue tracker. The active task ID is read from the
-// .beads/current_task file that beads writes into the repository root.
+// beads/current_task file that beads writes into the repository root.
 package beads
 
 import (
@@ -19,9 +19,8 @@ import (
 const currentTaskFile = ".beads/current_task"
 
 // FileTracker is a Tracker that reads the active task ID from a
-// .beads/current_task file located at the root of the given repository
+// beads/current_task file located at the root of the given repository
 // directory. It satisfies ports.Tracker.
-//
 // FileTracker is safe for concurrent use.
 type FileTracker struct{}
 
@@ -33,7 +32,7 @@ func NewFileTracker() *FileTracker {
 	return &FileTracker{}
 }
 
-// ActiveTask reads .beads/current_task from repoID (treated as a filesystem
+// ActiveTask reads.beads/current_task from repoID (treated as a filesystem
 // path) and returns a Task whose ID is the trimmed file contents. Returns nil,
 // nil when the file is absent or empty — that is the normal state when no task
 // is active.

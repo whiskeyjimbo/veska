@@ -1,4 +1,4 @@
-"""Tests for eng_set_repo_alias / eng_remove_repo_alias — human-friendly
+"""Tests for eng_set_repo_alias / eng_remove_repo_alias - human-friendly
 names bound to a repo_id.
 
 These mutate the alias registry, so every test binds a uniquely-named alias
@@ -24,7 +24,7 @@ def test_set_then_remove_alias_roundtrip(mcp_client, repo_id):
     assert isinstance(result, dict)
     try:
         # The alias should now resolve the repo wherever a repo_id is
-        # accepted — eng_get_repo takes the alias in place of the full id.
+        # accepted - eng_get_repo takes the alias in place of the full id.
         ok2, text2, _, _ = mcp_client.call("eng_get_repo", {"repo_id": name})
         assert "method not found" not in text2.lower()
     finally:

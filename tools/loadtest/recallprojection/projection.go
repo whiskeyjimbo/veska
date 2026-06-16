@@ -1,20 +1,17 @@
 // Package recallprojection is the eval harness that makes embed-text
 // PROJECTION changes measurable for recall sweeps.
-//
-// Background : the recall harness in tools/loadtest/recall
+// Background: the recall harness in tools/loadtest/recall
 // embeds the synthetic corpus Text field directly. It therefore does not
 // exercise the production FetchPending embed-text projection
 // (domain.EmbedText), so swapping projection variants — folding the
 // symbol signature and/or a code snippet into the embed text — does not
 // move its measured recall number.
-//
 // This harness closes that gap: it builds the recall corpus from
 // node-shaped projection inputs run through domain.EmbedText, the SAME
 // function the production sqlite adapter uses. A projection variant is
 // selectable (baseline / +signature / +snippet / +both) so a
 // reference-laptop run can sweep them against the m3.03 recall fixture.
-//
-// The pure (build-tag-free) helpers live here so they compile and unit-
+// The pure (build-tag-free) helpers live here so they compile and unit
 // test under standard `go test`/`go vet`; the end-to-end Ollama-backed
 // driver is gated by the `eval` build tag in projection_eval_test.go.
 package recallprojection
@@ -60,14 +57,14 @@ type ProjectionCorpus struct {
 // projection corpus. Each synthetic node's semantic Text is decomposed
 // into the projection fields:
 //
-//   - Kind / SymbolPath / FilePath / Language — the structural identifiers
-//     the production baseline projection joins. SymbolPath and FilePath
-//     come straight from the synthetic node; Language is fixed to "go".
-//   - Signature — a synthesized symbol signature that paraphrases the
-//     node's semantic content, consumed only by the +signature / +both
-//     variants.
-//   - Snippet — a synthesized one-line code snippet that restates the
-//     semantic content, consumed only by the +snippet / +both variants.
+//	Kind / SymbolPath / FilePath / Language — the structural identifiers
+//	  the production baseline projection joins. SymbolPath and FilePath
+//	  come straight from the synthetic node; Language is fixed to "go".
+//	Signature — a synthesized symbol signature that paraphrases the
+//	  node's semantic content, consumed only by the +signature / +both
+//	  variants.
+//	Snippet — a synthesized one-line code snippet that restates the
+//	  semantic content, consumed only by the +snippet / +both variants.
 //
 // The baseline projection therefore carries only the structural
 // identifiers; the enrichment variants additionally carry the semantic
@@ -185,7 +182,7 @@ func orDefault(v, def string) string {
 
 // VariantByName maps an env-knob string to a domain.EmbedTextVariant.
 // Unknown / empty values fall back to the baseline variant. The accepted
-// names match domain.EmbedTextVariant.String() so a report row round-trips.
+// names match domain.EmbedTextVariant.String so a report row round-trips.
 func VariantByName(name string) domain.EmbedTextVariant {
 	switch strings.ToLower(strings.TrimSpace(name)) {
 	case "+signature", "signature":

@@ -25,7 +25,7 @@ const (
 	// registration call binds to a path (gin/echo `router.GET("/p", h)`).
 	// Reserved alongside KindRoute as the framework-aware vocabulary; the
 	// cobra command tree uses CONTAINS (a command literally contains its
-	// subcommands), so ROUTES emission lands with the route pass .
+	// subcommands), so ROUTES emission lands with the route pass.
 	EdgeRoutes EdgeKind = "ROUTES"
 )
 

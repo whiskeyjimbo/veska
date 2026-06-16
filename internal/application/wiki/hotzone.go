@@ -1,14 +1,12 @@
 // Package wiki contains the application-layer surfaces that render the
-// generated developer wiki under docs/veska/.
-//
+// generated developer wiki under
 // The hot_zone surface (m4.02) ranks source files by change risk: the
 // product of how often a file changes (recent_change_frequency) and how
 // much depends on it (blast_radius). The top-N files are rendered to a
 // deterministic Markdown page so engineers and agents can see where
 // change risk concentrates.
-//
 // The ranking service depends only on injected function types and the
-// blastradius application service — never on internal/infrastructure —
+// blastradius application service — never on internal/infrastructure
 // so the domain/application layering stays intact (make layercheck).
 package wiki
 
@@ -53,9 +51,8 @@ type HotZone struct {
 // Report is the ranked hot_zone surface: the top-N files ordered by
 // descending score. It is the structure both the Markdown page and the
 // eng_get_hot_zone MCP tool are built from, so the two never diverge.
-//
 // CandidatesScanned and CandidatesScored let callers distinguish two
-// empty-Zones cases : no commits in the look-back window
+// empty-Zones cases: no commits in the look-back window
 // (CandidatesScanned == 0) vs. commits exist but every touched file
 // scored 0 because it has no graph nodes (lockfiles, READMEs, …).
 type Report struct {
@@ -67,7 +64,7 @@ type Report struct {
 	// GeneratedAt is the wall-clock instant the report was rendered.
 	// Populated by the wiki Handler immediately before rendering; the
 	// service itself does not set it, so MCP responses can leave it zero
-	// unless a caller wants staleness info .
+	// unless a caller wants staleness info.
 	GeneratedAt time.Time `json:"generated_at,omitzero"`
 }
 
@@ -122,7 +119,6 @@ func NewHotZoneService(changeCounts ChangeCountsFunc, nodesInFile NodesInFileFun
 // tree at repoRoot. Every file in the change-count map is scored by
 // recent_change_frequency × blast_radius, where blast_radius is the entry
 // count of running blastradius.Service.Of seeded with that file's nodes.
-//
 // Files are ranked by descending score; ties break by ascending file path
 // so the output is byte-identical across runs given a fixed promoted
 // state. The top-N files are retained.
@@ -135,7 +131,7 @@ func (s *HotZoneService) Rank(ctx context.Context, repoID, branch, repoRoot stri
 	zones := make([]HotZone, 0, len(counts))
 	for path, freq := range counts {
 		// git ChangeCounts and the nodes table now both key on the
-		// repo-relative slash path (ADR-S0017 §1), so the change-count
+		// repo-relative slash path, so the change-count
 		// path feeds nodesInFile directly. An absolute path (defensive,
 		// e.g. a non-git change source) is relativised to match.
 		lookupPath := path
@@ -156,7 +152,7 @@ func (s *HotZoneService) Rank(ctx context.Context, repoID, branch, repoRoot stri
 			}
 			radius = len(resp.Entries)
 		}
-		// solov2-i3pm: drop zones whose score is zero. A file that was
+		// drop zones whose score is zero. A file that was
 		// touched in-window but has zero downstream blast radius
 		// (lockfiles, READMEs, generated assets, hand-edited go.mod
 		// without graph nodes) is not "hot" by any meaningful

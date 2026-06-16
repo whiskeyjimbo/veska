@@ -1,6 +1,5 @@
 // Package gen provides synthetic vector generation with realistic L2 norms
 // matching the empirical distribution of nomic-embed-text embeddings.
-//
 // Each vector is drawn by:
 //  1. Sampling a 768-dimensional direction uniform on the unit sphere via
 //     Box-Muller (draw standard normals, normalize).

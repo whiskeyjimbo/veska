@@ -20,7 +20,7 @@ type PruneOptions struct {
 	// MaxAge deletes user-initiated backups older than this, subject to
 	// KeepMinCount. Derived from [backup].keep_max_age.
 	MaxAge time.Duration
-	// Now is the reference time for age comparisons; zero means time.Now().
+	// Now is the reference time for age comparisons; zero means time.Now.
 	Now time.Time
 }
 
@@ -32,10 +32,9 @@ type PruneResult struct {
 	Kept int
 }
 
-// Prune applies the SOLO-17 §4.5 retention policy to user-initiated backups
+// Prune applies the retention policy to user-initiated backups
 // in opts.BackupDir. It keeps the KeepMinCount most-recent backups regardless
 // of age and deletes the rest if they are older than MaxAge.
-//
 // Auto-pre-migration snapshots have their own retention (§2.3) and are never
 // touched here. Prune is idempotent and a no-op on a clean directory.
 func Prune(opts PruneOptions) (PruneResult, error) {

@@ -53,10 +53,11 @@ var migrations = func() []migration {
 const minSchemaVersion = 1
 
 // ComputeMigrationSHA returns the canonical SHA-256 of a migration's SQL text.
-// Normalisation rules (per SOLO-08 §10):
-//   - Strip UTF-8 BOM (0xEF 0xBB 0xBF) if present
-//   - Normalise line endings to LF (\n)
-//   - Ensure exactly one trailing newline
+// Normalisation rules (per ):
+//
+//	Strip UTF-8 BOM (0xEF 0xBB 0xBF) if present
+//	Normalise line endings to LF (\n)
+//	Ensure exactly one trailing newline
 func ComputeMigrationSHA(sqlText string) string {
 	// Strip BOM.
 	sqlText = strings.TrimPrefix(sqlText, "\xef\xbb\xbf")
@@ -109,8 +110,8 @@ func MigrationCount() int {
 }
 
 // verifyAppliedSHAs checks that every already-applied migration's recorded
-// migration_sha still matches the embedded SQL text.  Returns an error
-// describing any mismatch (tamper detection per SOLO-08 §10).
+// migration_sha still matches the embedded SQL text. Returns an error
+// describing any mismatch (tamper detection per ).
 func verifyAppliedSHAs(db *sql.DB) error {
 	rows, err := db.Query(`SELECT version, migration_sha FROM schema_migrations ORDER BY version`)
 	if err != nil {
@@ -231,7 +232,7 @@ func computeBinarySHA() string {
 }
 
 // CheckMigrationIntegrity opens the DB at path and verifies the recorded
-// migration SHAs match the embedded SQL.  Returns a non-nil error on mismatch.
+// migration SHAs match the embedded SQL. Returns a non-nil error on mismatch.
 // This is exported primarily for testing.
 func CheckMigrationIntegrity(path string) error {
 	db, err := sql.Open(sqldriver.Name, path)
@@ -243,7 +244,7 @@ func CheckMigrationIntegrity(path string) error {
 }
 
 // defaultBackupDir returns the default auto-snapshot directory.
-// Path: $VESKA_HOME/backups/.pre-migration/ (solov2-n57f co-located with
+// Path: $VESKA_HOME/backups/.pre-migration/ ( co-located with
 // user-initiated backups so a single `rm -rf $VESKA_HOME` clears them
 // too). Falls back to ~/.veska-backups/.pre-migration when VESKA_HOME is
 // unset and the user's home dir cannot be determined.
@@ -269,7 +270,6 @@ func normaliseDSN(path string) string {
 // applyPragmas sets WAL mode, autocheckpoint, foreign-keys, and a 5s
 // busy_timeout on db. Foreign-keys are also set via the DSN; this
 // ensures enforcement on every connection.
-//
 // The busy_timeout matches the daemon's read+writeHot pools (pools.go).
 // Without it, any CLI command opening the same db while the daemon is
 // writing (e.g. `veska reindex` racing the embedder worker) fails
@@ -319,7 +319,7 @@ func openAndMigrate(path, backupDir, appliedBy string) (*sql.DB, error) {
 	}
 	target := maxVersion()
 
-	// Behaviour matrix (SOLO-08 §10.2).
+	// Behaviour matrix.
 	switch {
 	case current == target:
 		// Up to date — verify SHAs, then return.
@@ -372,9 +372,8 @@ type Options struct {
 }
 
 // OpenWithOptions opens (or creates) the SQLite database at path, applies
-// pending migrations, and returns a ready-to-use *sql.DB.  It accepts an
+// pending migrations, and returns a ready-to-use *sql.DB. It accepts an
 // Options struct for override of backup directory and applied_by label.
-//
 // This function intentionally calls os.Exit(78) on schema mismatch, tamper
 // detection, or migration failure — that is the specified contract.
 func OpenWithOptions(path string, opts Options) (*sql.DB, error) {
@@ -394,10 +393,9 @@ func OpenWithOptions(path string, opts Options) (*sql.DB, error) {
 }
 
 // Open opens (or creates) the SQLite database at path, applies pending
-// migrations, and returns a ready-to-use *sql.DB.  WAL mode and
+// migrations, and returns a ready-to-use *sql.DB. WAL mode and
 // wal_autocheckpoint=1000 are set unconditionally.
-//
-// Exit 78 semantics per SOLO-08 §10.2: schema too old, too new, SHA tamper, or
+// Exit 78 semantics per: schema too old, too new, SHA tamper, or
 // migration failure all cause os.Exit(78) after writing a message to stderr.
 func Open(path string) (*sql.DB, error) {
 	return OpenWithOptions(path, Options{})

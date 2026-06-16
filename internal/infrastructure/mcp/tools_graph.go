@@ -21,7 +21,7 @@ type CrossRepoEdge struct {
 	// SrcLine is the 1-indexed line of the call_expression inside the
 	// source node's file. Renderers prefer this over the caller node's
 	// declaration line when set so a function with N cross-repo calls
-	// shows each at its actual call site (solov2-izh6.31). Omitted when
+	// shows each at its actual call site. Omitted when
 	// unknown (pre-migration stubs or non-Go languages without the
 	// adoption).
 	SrcLine int `json:"src_line,omitempty"`
@@ -29,8 +29,8 @@ type CrossRepoEdge struct {
 
 // GraphResponse is the envelope returned by the node-list graph tools
 // (eng_find_symbol, eng_get_node, eng_get_file_nodes). Nodes is always a
-// non-nil slice so an empty result serializes as [] rather than being
-// omitted .
+// non-nil slice so an empty result serializes as rather than being
+// omitted.
 type GraphResponse struct {
 	Nodes           []nodeDTO `json:"nodes"`
 	IncludedStaging bool      `json:"included_staging"`
@@ -39,7 +39,6 @@ type GraphResponse struct {
 	// at query time. Populated only when DegradedReasons contains
 	// "indexing_in_progress" so callers can decide whether their target
 	// repo is the one being indexed. Omitted from JSON when empty
-	// (solov2-izh6.30).
 	IndexingRepos []string `json:"indexing_repos,omitempty"`
 	// WakeReconcilingRepos lists repo_ids touched by this query that had an
 	// in-flight wake reconcile sweep at query time. Populated only when
@@ -49,9 +48,9 @@ type GraphResponse struct {
 
 // callChainResponse is the envelope returned by eng_get_call_chain. Both
 // nodes and edges are always non-nil so a chain with no reachable callees
-// serializes as {"nodes":[],"edges":[]} . DegradedReasons
+// serializes as {"nodes":,"edges":}. DegradedReasons
 // carries advisory hints — e.g. "chained_selectors_unresolved" when the
-// seed is callable but no CALLS edges resolved  — so an
+// seed is callable but no CALLS edges resolved — so an
 // agent reading the response knows the empty result may reflect a parser
 // limitation rather than a symbol with no callees.
 type callChainResponse struct {
@@ -60,7 +59,7 @@ type callChainResponse struct {
 	CrossRepoEdges  []CrossRepoEdge `json:"cross_repo_edges,omitempty"`
 	IncludedStaging bool            `json:"included_staging"`
 	DegradedReasons []string        `json:"degraded_reasons"`
-	// IndexingRepos: see GraphResponse.IndexingRepos (solov2-izh6.30).
+	// IndexingRepos: see GraphResponse.IndexingRepos.
 	IndexingRepos []string `json:"indexing_repos,omitempty"`
 	// WakeReconcilingRepos: see GraphResponse.WakeReconcilingRepos.
 	WakeReconcilingRepos []string `json:"wake_reconciling_repos,omitempty"`
@@ -144,7 +143,7 @@ type ResolveFunc func(ctx context.Context, nodeID, branch string, expand bool) (
 // InboundResolveFunc resolves cross-repo edge stubs INBOUND to a given
 // node (the node is the callee). Use it to answer "who calls this library
 // symbol from another repo?" — the dual of ResolveFunc. Backed by
-// resolver.ResolveStubsTargetingNode . nil = skip inbound
+// resolver.ResolveStubsTargetingNode. nil = skip inbound
 // resolution.
 type InboundResolveFunc func(ctx context.Context, dstNodeID, branch string) ([]ports.ResolvedEdge, error)
 
@@ -167,16 +166,15 @@ func WithResolveFunc(fn ResolveFunc) GraphToolOption {
 }
 
 // WithInboundResolveFunc supplies an InboundResolveFunc so call_chain
-// direction=in (and direction=both) surfaces callers in OTHER repos —
+// direction=in (and direction=both) surfaces callers in OTHER repos
 // closes the parity gap with eng_get_blast_radius for library symbols
-// .
 func WithInboundResolveFunc(fn InboundResolveFunc) GraphToolOption {
 	return func(c *graphToolConfig) { c.resolveInbound = fn }
 }
 
 // WithRepoLister supplies the repos registry so eng_get_file_nodes can resolve
 // a repo-relative file_path against the repo's root. Node file paths are stored
-// absolute; without this, a relative path silently matched nothing .
+// absolute; without this, a relative path silently matched nothing.
 func WithRepoLister(repos application.RepoLister) GraphToolOption {
 	return func(c *graphToolConfig) { c.repos = repos }
 }
@@ -184,7 +182,7 @@ func WithRepoLister(repos application.RepoLister) GraphToolOption {
 // WithScanTracker supplies the daemon-wide cold-scan tracker so empty
 // graph-read responses can carry an "indexing_in_progress" degraded reason
 // when the empty result was likely caused by a scan still in flight rather
-// than the symbol genuinely not existing (solov2-izh6.30). Nil is allowed
+// than the symbol genuinely not existing. Nil is allowed
 // and disables the hint (matches single-process tests with no daemon).
 func WithScanTracker(t ScanTrackerReader) GraphToolOption {
 	return func(c *graphToolConfig) { c.scans = t }

@@ -1,7 +1,6 @@
 package daemon
 
-// Operational seed-state inserts for the tool-coverage harness (solov2-ti9x).
-//
+// Operational seed-state inserts for the tool-coverage harness.
 // These rows are the literal starting state the finding / suppression / task /
 // alias tools assert against — NOT parse output. The coverage package's seed
 // facts carry only the test-meaningful columns; this file fills the remaining
@@ -9,7 +8,6 @@ package daemon
 // actor_id, actor_kind∈{human,agent,system}, suppression scope/target, task
 // title) so the inserts satisfy the schema. NodeKey anchors are resolved to
 // node IDs via the harness root so no raw sha256 is ever written here.
-//
 // The fixture repos themselves are already inserted (with their real root +
 // module path) by indexRepo; seedRepos in the coverage facts is therefore not
 // re-inserted as repos rows — the aliases below reference the already-present

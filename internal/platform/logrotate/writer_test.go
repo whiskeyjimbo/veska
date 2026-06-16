@@ -41,7 +41,7 @@ func TestRotatingWriterBasic(t *testing.T) {
 	}
 }
 
-// TestRotatingWriterRotation writes past the 1 KiB limit and checks that .1 exists.
+// TestRotatingWriterRotation writes past the 1 KiB limit and checks that.1 exists.
 func TestRotatingWriterRotation(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "test.log")
@@ -66,13 +66,13 @@ func TestRotatingWriterRotation(t *testing.T) {
 	}
 }
 
-// TestRotatingWriterMaxFiles pre-seeds .1–.5 and verifies that after another
-// rotation .5 is gone and the existing files shifted.
+// TestRotatingWriterMaxFiles pre-seeds.1–.5 and verifies that after another
+// rotation.5 is gone and the existing files shifted.
 func TestRotatingWriterMaxFiles(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "test.log")
 
-	// Pre-seed rotated files .1 through .5.
+	// Pre-seed rotated files.1 through.5.
 	for i := 1; i <= 5; i++ {
 		name := fmt.Sprintf("%s.%d", path, i)
 		if err := os.WriteFile(name, fmt.Appendf(nil, "old-%d\n", i), 0o644); err != nil {
@@ -95,15 +95,15 @@ func TestRotatingWriterMaxFiles(t *testing.T) {
 		}
 	}
 
-	// Nothing to assert on .5: rotation shifts .4→.5, so the file may exist.
+	// Nothing to assert on.5: rotation shifts.4→.5, so the file may exist.
 	// The key invariant — max 5 rotated copies — is verified by the shift logic itself.
 
-	// .1 must exist.
+	// 1 must exist.
 	if _, err := os.Stat(path + ".1"); os.IsNotExist(err) {
 		t.Errorf("expected %s.1 to exist after rotation", path)
 	}
 
-	// Verify no .6 file exists.
+	// Verify no.6 file exists.
 	if _, err := os.Stat(fmt.Sprintf("%s.6", path)); err == nil {
 		t.Errorf("found unexpected %s.6 — too many rotated files", path)
 	}

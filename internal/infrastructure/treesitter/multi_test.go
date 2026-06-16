@@ -10,7 +10,7 @@ import (
 
 // TestMultiParser_SupportedExtensionsUnion pins that a MultiParser reports the
 // sorted union of its sub-parsers' extensions — the set the cold scan sources
-// its walk filter from (solov2-xde2.7).
+// its walk filter from.
 func TestMultiParser_SupportedExtensionsUnion(t *testing.T) {
 	m := NewMultiParser(NewGoParser(), NewTSParser())
 	got := m.SupportedExtensions()
@@ -21,7 +21,7 @@ func TestMultiParser_SupportedExtensionsUnion(t *testing.T) {
 }
 
 // TestMultiParser_RoutesByExtension confirms each extension reaches the
-// sub-parser that claims it: a .go file yields a Go module node, a .ts file a
+// sub-parser that claims it: a.go file yields a Go module node, a.ts file a
 // TypeScript module node.
 func TestMultiParser_RoutesByExtension(t *testing.T) {
 	m := NewMultiParser(NewGoParser(), NewTSParser())

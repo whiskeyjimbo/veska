@@ -96,7 +96,7 @@ func TestFilterLowKeepsSuppressed(t *testing.T) {
 	}
 }
 
-// TestFilterLowShownWhenRuleFilter pins solov2-ll57's junior-journey fix: an
+// TestFilterLowShownWhenRuleFilter pins 's junior-journey fix: an
 // explicit --rule selector surfaces low-severity rows of that rule (e.g.
 // dead-code), instead of the confusing empty list a junior got when their only
 // finding was low-severity and hidden by the default auto-link-noise filter.

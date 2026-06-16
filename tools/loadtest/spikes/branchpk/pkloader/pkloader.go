@@ -1,5 +1,5 @@
 // Package pkloader provides a synthetic data loader for the branch-in-PK SQLite schema
-// defined in SOLO-08 §3.1/§3.2.
+// defined in /§3.2.
 package pkloader
 
 import (
@@ -33,7 +33,7 @@ type Symbol struct {
 	ContentHash string
 }
 
-// CreateSchema creates all tables and indexes on db (verbatim from SOLO-08 §3.1/§3.2).
+// CreateSchema creates all tables and indexes on db (verbatim from /§3.2).
 func CreateSchema(db *sql.DB) error {
 	_, err := db.Exec(`
 CREATE TABLE IF NOT EXISTS repos (

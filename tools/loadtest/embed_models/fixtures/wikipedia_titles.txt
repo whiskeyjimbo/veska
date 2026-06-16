@@ -1,6 +1,6 @@
-# wikipedia_titles.txt — software/CS Wikipedia articles fetched by
+# wikipedia_titles.txt - software/CS Wikipedia articles fetched by
 # scripts/fetch-wikipedia-corpus.sh into out/wikipedia-tech/. Curated to
-# span the breadth of topics a developer might semantic-search for —
+# span the breadth of topics a developer might semantic-search for -
 # ~25 titles is enough to drive headline-set recall comparisons without
 # bloating fetch time. (solov2-0k5h.7)
 #

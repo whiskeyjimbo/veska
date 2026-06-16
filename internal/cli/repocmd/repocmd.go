@@ -1,10 +1,9 @@
 // Package repocmd holds the business logic behind the `veska repo` command
 // family: repo add/remove/list orchestration, daemon MCP dialing, scan-progress
 // watching + daemon-log tailing, repo-id resolution, and table formatting.
-//
 // cmd/veska/repo.go is reduced to Cobra command construction whose RunE bodies
-// are thin calls into this package (solov2-0omh.4, following the
-// cmd = glue / logic-in-packages pattern from solov2-u4mv). The shared CLI
+// are thin calls into this package (, following the
+// cmd = glue / logic-in-packages pattern from ). The shared CLI
 // helpers (ShortRepoID, OpenLocalDB, ResolveCLIRepoID, ResolveRepoArg,
 // FetchScanProgress, PromptDeps) live here too because several other cmd/veska
 // commands depend on them.
@@ -34,9 +33,8 @@ type RepoView struct {
 	RootPath        string `json:"root_path"`
 	ActiveBranch    string `json:"active_branch"`
 	LastPromotedSHA string `json:"last_promoted_sha"`
-	Kind            string `json:"kind"` // solov2-kxo5.9
-	// Aliases is the list of user-defined human-friendly names for this
-	// repo . Surfaced in the ALIAS column of `veska repo
+	Kind            string `json:"kind"` // Aliases is the list of user-defined human-friendly names for this
+	// repo. Surfaced in the ALIAS column of `veska repo
 	// list` and accepted anywhere a repo_id is expected.
 	Aliases []string `json:"aliases"`
 }
@@ -49,7 +47,7 @@ type listResult struct {
 // ShortRepoID returns the first 12 chars of a repo id — the alias shown by
 // `veska repo list` and accepted anywhere a repo_id is required. The CLI
 // surfaces this form so users copy the same token the tools expect, instead
-// of the unwieldy 64-char canonical id .
+// of the unwieldy 64-char canonical id.
 func ShortRepoID(id string) string {
 	if len(id) > 12 {
 		return id[:12]
@@ -58,15 +56,15 @@ func ShortRepoID(id string) string {
 }
 
 // cliMinRepoIDPrefix mirrors mcp.minRepoIDPrefix — see that constant for the
-// reasoning .
+// reasoning.
 const cliMinRepoIDPrefix = 4
 
 // ResolveCLIRepoID matches the MCP resolveRepoID progression for CLI callers:
-// exact full id, then 12-char short_id, then user-set alias ,
+// exact full id, then 12-char short_id, then user-set alias,
 // then unambiguous prefix (>= 4 chars). Aliases beat prefix so a typed
 // alias never gets shadowed by a colliding hex prefix.
 // Returns a typed error so CLI commands can wrap it with their own prefix
-// ("wiki: ", "reindex: ", etc.) .
+// ("wiki: ", "reindex: ", etc.).
 func ResolveCLIRepoID(records []repo.Record, repoID string) (repo.Record, error) {
 	for _, r := range records {
 		if r.RepoID == repoID {
@@ -216,7 +214,7 @@ func dialEngStatus(ctx context.Context) (any, error) {
 // ScanProgressRow is the per-scan progress snapshot surfaced into repo
 // list — phase ("walking" / "promoting") + files_seen — so a user can
 // tell the sub-second walk from the long promotion phase that follows
-// it .
+// it.
 type ScanProgressRow struct {
 	Phase     string
 	FilesSeen int

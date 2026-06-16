@@ -1,7 +1,7 @@
 // Package clonescmd holds the delivery-layer logic behind `veska clones`
 // (eng_find_clones): exact-clone detection by content_hash equality. It proxies
 // to the daemon like the other read commands and renders one block per clone
-// group. solov2-wfrj.
+// group.
 package clonescmd
 
 import (

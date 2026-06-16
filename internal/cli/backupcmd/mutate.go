@@ -16,8 +16,8 @@ import (
 )
 
 // RunCreate runs VACUUM INTO, copies supporting files, and writes a
-// timestamped .tar.gz. outputDir == "" defaults to $VESKA_HOME/backups so a
-// single `rm -rf $VESKA_HOME` clears all veska state .
+// timestamped.tar.gz. outputDir == "" defaults to $VESKA_HOME/backups so a
+// single `rm -rf $VESKA_HOME` clears all veska state.
 func RunCreate(out io.Writer, outputDir string) error {
 	veskaHome := config.DefaultVectorDir()
 	if outputDir == "" {
@@ -37,12 +37,12 @@ func RunCreate(out io.Writer, outputDir string) error {
 	return nil
 }
 
-// RunPrune applies the SOLO-17 §4.5 retention policy: it keeps the
+// RunPrune applies the retention policy: it keeps the
 // [backup].keep_min_count most-recent user-initiated backups regardless of age
 // and deletes the rest if older than [backup].keep_max_age. Auto-pre-migration
 // snapshots are never pruned. Idempotent. backupDir == "" prunes the canonical
 // $VESKA_HOME/backups; legacy ~/.veska-backups stays untouched unless named
-// explicitly .
+// explicitly.
 func RunPrune(out io.Writer, backupDir string) error {
 	if backupDir == "" {
 		backupDir = config.DefaultBackupDir()
@@ -76,7 +76,7 @@ func RunPrune(out io.Writer, backupDir string) error {
 // RunVerify extracts veska.db from the tarball, runs PRAGMA integrity_check and
 // foreign_key_check, and validates audit.jsonl if present. A non-healthy status
 // is returned as a doctorcmd.ProbeStatusError so the CLI exits with the
-// SOLO-13 §2 code (0 healthy / 1 degraded / 2 broken).
+// code (0 healthy / 1 degraded / 2 broken).
 func RunVerify(out io.Writer, tarPath string, jsonOut bool) error {
 	tarPath = resolveTarballPath(tarPath)
 	if _, err := os.Stat(tarPath); err != nil {
@@ -102,9 +102,9 @@ func RunVerify(out io.Writer, tarPath string, jsonOut bool) error {
 }
 
 // resolveTarballPath resolves a bare backup name (the NAME column from
-// `backup list`) against the configured backups dir. solov2-tkqd: without this
+// `backup list`) against the configured backups dir.: without this
 // Verify's "couldn't open the archive" failure rendered as "broken
-// (db_integrity=false, ...)" — indistinguishable from a real corrupt-DB
+// (db_integrity=false,.)" — indistinguishable from a real corrupt-DB
 // result, making fat-fingered paths look like healthy backups had gone bad.
 func resolveTarballPath(tarPath string) string {
 	if _, err := os.Stat(tarPath); err == nil {

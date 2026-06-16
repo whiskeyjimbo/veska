@@ -2,7 +2,7 @@
 
 **Veska** is a local code-intelligence daemon. It runs on your laptop, parses
 your repository into a code graph (nodes + edges), embeds that graph
-semantically, and serves both to your editor and your AI agent over MCP — so
+semantically, and serves both to your editor and your AI agent over MCP - so
 they reason from the same structural ground truth instead of guessing.
 
 ## What it gives you
@@ -11,7 +11,7 @@ they reason from the same structural ground truth instead of guessing.
   to a node, edge, or commit. Structural recall stays current within the
   save → staging freshness budget.
 - **Eventually-consistent semantic search.** `semantic_search` embeds the graph
-  with an in-process embedder (model2vec by default — no external service);
+  with an in-process embedder (model2vec by default - no external service);
   during the indexing lag window it falls back to a BM25 lexical index and
   flags the response `degraded_reasons`.
 - **Promotion checks.** On every commit, synchronous checks emit advisory
@@ -30,13 +30,13 @@ they reason from the same structural ground truth instead of guessing.
   no LLM in the path. The `eng_get_hot_zone` and `eng_get_entry_points`
   MCP tools return data in-memory and write nothing; the `veska wiki`
   CLI renders the same data into `docs/veska/{hot_zones,entry_points}.md`
-  inside the repo (re-runnable, idempotent — bracket markers in each
+  inside the repo (re-runnable, idempotent - bracket markers in each
   page preserve any hand edits outside the managed block). A context-pack
   tool sits alongside.
 - **Cross-actor attribution.** A single `actor_kind: human | agent | system`
   enum distinguishes who changed what in the audit log.
 
-## Process topology — one binary, three personalities
+## Process topology - one binary, three personalities
 
 `make build` produces a single binary at `bin/veska`; `bin/veska-daemon` and
 `bin/veska-mcp` are symlinks to it. The argv[0] dispatcher in
@@ -44,8 +44,8 @@ they reason from the same structural ground truth instead of guessing.
 
 | Invocation | Role |
 |---|---|
-| `veska` | CLI — `init`, `repo`, `reindex`, `service`, `doctor`, `backup`, `wiki`, … Run `veska --help` for the full list. |
-| `veska-daemon` (symlink) | Long-running process — owns the SQLite store, the fsnotify watcher, the embedder, and the post-promotion queue. Composition root: `internal/cli/daemon/wire.go`. |
+| `veska` | CLI - `init`, `repo`, `reindex`, `service`, `doctor`, `backup`, `wiki`, … Run `veska --help` for the full list. |
+| `veska-daemon` (symlink) | Long-running process - owns the SQLite store, the fsnotify watcher, the embedder, and the post-promotion queue. Composition root: `internal/cli/daemon/wire.go`. |
 | `veska-mcp` (symlink) | Thin stdio shim proxying an editor's MCP connection to the daemon's Unix socket. Routes into `internal/cli/mcp`. |
 
 ## Requirements
@@ -58,16 +58,16 @@ they reason from the same structural ground truth instead of guessing.
 ### Embedder
 
 Semantic search needs an embedder. Veska **elects one at boot** in preference
-order — it never mixes vector spaces, so exactly one embedder owns the index
+order - it never mixes vector spaces, so exactly one embedder owns the index
 at a time:
 
-1. **model2vec** (`potion-code-16M`) — a fast, in-process static *code*
+1. **model2vec** (`potion-code-16M`) - a fast, in-process static *code*
    embedder. The default and recommended choice. Get it either way:
-   - **Fat binary** (`make build`, default) — the model is compiled into the
+   - **Fat binary** (`make build`, default) - the model is compiled into the
      binary. Zero setup: nothing to install, no download, no network.
-   - **Thin binary** (`make build-small`) + `veska install model2vec` — a
+   - **Thin binary** (`make build-small`) + `veska install model2vec` - a
      one-time ~62 MB download into `~/.veska/`.
-2. **static-v2** — an in-binary fallback that works with no model files at
+2. **static-v2** - an in-binary fallback that works with no model files at
    all (lower quality). Used only when model2vec is unavailable.
 
 No Ollama, no network, and no separate process is required for search.
@@ -89,7 +89,7 @@ Install Ollama only if you want the review pipeline:
 
 ## Build
 
-`make build` is the fat binary by default  — it embeds the
+`make build` is the fat binary by default  - it embeds the
 model2vec weights into the binary so the install is zero-setup: no separate
 download, no network, no static-v2 fallback at boot.
 
@@ -120,7 +120,7 @@ VESKA_INSTALL_DIR=/usr/local/bin sudo make install   # system-wide
 For a self-contained tarball (the three fat binaries + `install.sh` + a
 README), run `make release-archive`. The archive at
 `dist/veska-<version>-<os>-<arch>.tar.gz` is the same shape a future
-GitHub release will ship — `./install.sh` from inside the extracted
+GitHub release will ship - `./install.sh` from inside the extracted
 directory does the same thing as `make install` .
 
 ## Quick start
@@ -169,19 +169,19 @@ To force a re-scan of an already-registered repo (e.g. after a model swap):
 ./bin/veska reindex /path/to/your/repo
 ```
 
-Safe to run while the daemon is up — the CLI dispatches the cold-scan
+Safe to run while the daemon is up - the CLI dispatches the cold-scan
 through the daemon's `eng_reindex_repo` MCP tool , so your
 editor's MCP connection is not interrupted. With the daemon stopped, the
 same command falls back to a direct in-process reparse.
 
-### First call — 60 second sanity check
+### First call - 60 second sanity check
 
 Once `cold scan: complete` shows in `~/.veska/logs/daemon.log`, drive two
 MCP tools from the shell so you've seen real output before pointing an
 editor at the daemon:
 
 ```sh
-# Find a symbol by name. Unqualified matches are fine — "Run" finds
+# Find a symbol by name. Unqualified matches are fine - "Run" finds
 # Server.Run, Command.Run, etc., with exact matches ranked first.
 printf '{"jsonrpc":"2.0","id":1,"method":"eng_find_symbol","params":{"symbol":"Run"}}\n' \
   | ./bin/veska-mcp | jq '.result.nodes[0]'
@@ -193,7 +193,7 @@ printf '{"jsonrpc":"2.0","id":1,"method":"eng_search_semantic","params":{"query"
 ```
 
 Either tool's response should contain `file_path`, `line_start/line_end`,
-and a `name` — if you see those, the daemon is parsing and serving your
+and a `name` - if you see those, the daemon is parsing and serving your
 repo correctly. `eng_search_semantic` may return `[]` on a freshly
 registered repo while embeddings finish populating; check
 `eng_get_status`'s `pending_embeds` count.
@@ -257,7 +257,7 @@ If your `VESKA_HOME` is non-default, pass it through:
 
 ### Calling tools from the shell
 
-Skip the editor and drive `veska-mcp` directly — handy for debugging or
+Skip the editor and drive `veska-mcp` directly - handy for debugging or
 scripting. The protocol is newline-delimited JSON-RPC; the method IS the
 tool name (no `tools/call` envelope):
 
@@ -277,7 +277,7 @@ Get `<id>` from `eng_list_repos`. The full tool surface is in
 ### Configuration
 
 State lives under `~/.veska/` (`VESKA_HOME`). Daemon config is
-`~/.veska/config.toml` — see [`docs/operations/CONFIG-SURFACE.md`](docs/operations/CONFIG-SURFACE.md).
+`~/.veska/config.toml` - see [`docs/operations/CONFIG-SURFACE.md`](docs/operations/CONFIG-SURFACE.md).
 Key environment variables:
 
 | Var | Purpose | Default |
@@ -285,8 +285,8 @@ Key environment variables:
 | `VESKA_HOME` | Data root | `~/.veska` |
 | `VESKA_EMBEDDER` | Embedder election: `auto` (model2vec→static-v2), or force `model2vec` / `static` / `ollama` | `auto` |
 | `VESKA_VECTOR_BACKEND` | `sqlite-vec` or `usearch` | `sqlite-vec` |
-| `VESKA_OLLAMA_URL` | Ollama endpoint — review pipeline, and `VESKA_EMBEDDER=ollama` | `http://localhost:11434` |
-| `VESKA_EMBED_MODEL` | Ollama embedding model — only when `VESKA_EMBEDDER=ollama` | `nomic-embed-text` |
+| `VESKA_OLLAMA_URL` | Ollama endpoint - review pipeline, and `VESKA_EMBEDDER=ollama` | `http://localhost:11434` |
+| `VESKA_EMBED_MODEL` | Ollama embedding model - only when `VESKA_EMBEDDER=ollama` | `nomic-embed-text` |
 
 The elected embedder is recorded in `~/.veska/embedder.locked`. Switching
 embedders requires a re-index (`veska reindex`) since their vectors aren't
@@ -327,15 +327,15 @@ editors by `veska-mcp`). Tool names follow `eng_<verb>_<object>`. Quick map:
 | Suppressions | `eng_list_suppressions`, `eng_get_suppression`, `eng_suppress_finding`, `eng_close_suppression` |
 | Wiki | `eng_get_hot_zone`, `eng_get_entry_points` |
 <!-- Parked task family (eng_get_active_task, eng_set_active_task, eng_get_task_history)
-     is intentionally omitted from this table — it is unregistered and would
+     is intentionally omitted from this table - it is unregistered and would
      return `method not found` if called. See "Parked tools" note further below. -->
 
 
 **Conventions across the tool surface:**
 
-- **Responses are `snake_case`.** Every tool emits the same node shape —
+- **Responses are `snake_case`.** Every tool emits the same node shape -
   `{node_id, name, kind, file_path, line_start, line_end, signature?,
-  language?, exported?}` — plus `score`/`distance`/`snippet` on search and
+  language?, exported?}` - plus `score`/`distance`/`snippet` on search and
   blast hits. Empty result collections serialize as `[]`, never omitted.
 - **`repo_id` accepts a short alias.** `eng_list_repos` returns a 12-char
   `short_id` for each repo; anywhere a `repo_id` is required you may pass the
@@ -361,12 +361,12 @@ editors by `veska-mcp`). Tool names follow `eng_<verb>_<object>`. Quick map:
   `Server.Start`; exact matches rank first.
 - **Embedder quality is in-band:** when the daemon is on the low-quality
   static-v2 fallback (no model2vec installed), every `eng_search_semantic`
-  response carries `low_quality_static_embedder` in `degraded_reasons` — run
+  response carries `low_quality_static_embedder` in `degraded_reasons` - run
   `veska install model2vec` to clear it.
 
 **Parked tools.** A task family (`eng_get_active_task`,
 `eng_set_active_task`, `eng_get_task_history`) is implemented in the tree
-but **not** registered on the socket — calling it returns `method not
+but **not** registered on the socket - calling it returns `method not
 found`. It stays parked until a task backend (Jira / Linear / GitHub) lands
 to populate the underlying table (`wire.go`, solov2-6m1). Treat it as
 non-existent for now; agent instruction snippets do not advertise it.
@@ -374,7 +374,7 @@ non-existent for now; agent instruction snippets do not advertise it.
 ## Testing
 
 ```sh
-make test          # go test ./... — unit + integration suites
+make test          # go test ./... - unit + integration suites
 make test-mcp      # python pytest harness against a running daemon (fast)
 make test-mcp-deep # add cross-validation against the live SQLite
 ```
@@ -386,11 +386,11 @@ at a running daemon's data dir and at least one `veska repo add`'d repo.
 
 ## Documentation
 
-- [`docs/PRODUCT.md`](docs/PRODUCT.md) — what Veska is, in plain English.
-- [`docs/README.md`](docs/README.md) — the design set, with a recommended read order.
-- [`docs/design/`](docs/design/) — the `SOLO-NN` design sections and ADRs.
-- [`docs/milestones/`](docs/milestones/) — milestone breakdowns (M0–M7 closed).
-- [`docs/operations/`](docs/operations/) — config surface and runbooks.
+- [`docs/PRODUCT.md`](docs/PRODUCT.md) - what Veska is, in plain English.
+- [`docs/README.md`](docs/README.md) - the design set, with a recommended read order.
+- [`docs/design/`](docs/design/) - the `SOLO-NN` design sections and ADRs.
+- [`docs/milestones/`](docs/milestones/) - milestone breakdowns (M0–M7 closed).
+- [`docs/operations/`](docs/operations/) - config surface and runbooks.
 
 ## Status
 

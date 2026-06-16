@@ -1,21 +1,18 @@
 package daemon
 
-// In-process MCP tool-coverage harness (solov2-ti9x).
-//
+// In-process MCP tool-coverage harness.
 // This is the white-box test substrate the 40 per-tool coverage beads build on.
 // It reuses the REAL wiring: it hand-builds an mcpDeps over a freshly indexed
 // golden fixture and calls the unexported registerMCPTools — it does NOT
 // replicate registration and does NOT call newDaemon (which would start the
 // fsnotify watcher, the socket server, and the async embedder worker, adding
 // timing nondeterminism unwanted in CI).
-//
 // State isolation is by construction: newHarness performs a full fresh setup
 // (own temp DB + own in-memory vector store + deterministic static embed) every
 // call, so the ~11 mutating tools cannot leak state across subtests and the
 // suite is order-independent. There is intentionally NO shared-golden cache:
 // every coverage subtest currently t.Skips, so nothing pays setup cost yet. A
 // reader-side cached golden may be added later if setup time becomes a concern.
-//
 // Indexing walks the SHARED read-only fixture root (a read-only walk is safe
 // across parallel instances) rather than copying the source per instance, so
 // node IDs — which embed the absolute walked path — are identical across every

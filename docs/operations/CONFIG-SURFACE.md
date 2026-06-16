@@ -46,7 +46,7 @@ identity policy, no replication policy, no mode selectors.
 | `<repo>/.beads/current_task` | Active-task pin if the `bd-cli` tracker integration is on. |
 
 That's it. Backup is `veska backup create` (SOLO-08 §9), not a
-`tar` of the live directory — tarring a running SQLite database
+`tar` of the live directory - tarring a running SQLite database
 captures inconsistent WAL state.
 
 ## 2. Environment variables
@@ -72,7 +72,7 @@ A complete example with defaults. The surface is split: a
 **common** set users tune routinely (top of the file) and an
 **advanced** set that exists for tuning corner cases and that
 most users will never touch (bottom). The split is documentation,
-not enforcement — TOML doesn't care, but it lets a user opening
+not enforcement - TOML doesn't care, but it lets a user opening
 the file see what is and isn't worth their time.
 
 ### 3.1 Common
@@ -106,7 +106,7 @@ listen          = "127.0.0.1:9090"           # only bound when enabled; VESKA_ME
 # that ships traces.
 [tracing]
 enabled         = false
-otlp_endpoint   = ""                         # e.g. "http://localhost:4318" — required when enabled
+otlp_endpoint   = ""                         # e.g. "http://localhost:4318" - required when enabled
 sample_ratio    = 1.0                        # set at opt-in time; lower for noisy local profiling
 
 # ─── storage ─────────────────────────────────────────────────
@@ -186,8 +186,8 @@ max_tokens_per_day    = 500000
 
 # ─── vuln source (SOLO-11 §2.1, M7) ──────────────────────────
 # Drives the `vuln-scan` promotion check. Two layers: the bare
-# schema zero-value (empty `provider`) is off — the daemon falls
-# back to the no-op NullVulnSource — BUT `veska init` writes this
+# schema zero-value (empty `provider`) is off - the daemon falls
+# back to the no-op NullVulnSource - BUT `veska init` writes this
 # block with `provider = "osv"` ENABLED by default, so a fresh
 # install ships with OSV scanning on. Opt out with `veska init
 # --no-vuln` (or answer "no" at the interactive prompt). Any
@@ -200,7 +200,7 @@ refresh_interval       = "24h"
 
 # ─── promotion checks (M7) ───────────────────────────────────
 # `disabled_checks` names structural checks to skip; each entry
-# matches a check's Name() — "dead-code", "contract-drift",
+# matches a check's Name() - "dead-code", "contract-drift",
 # "vuln-scan", "secrets-scan". An empty list (the default) keeps
 # every registered check on. `vuln-scan` is only registered when
 # `[vuln_source]` is configured; `secrets-scan` ships on by
@@ -209,7 +209,7 @@ refresh_interval       = "24h"
 disabled_checks        = []                   # e.g. ["secrets-scan"]
 
 # ─── tracker integration ─────────────────────────────────────
-# Default is "none" — no tracker integration. Set to "bd-cli" to
+# Default is "none" - no tracker integration. Set to "bd-cli" to
 # enable the local `bd` CLI integration; `veska init` probes for
 # `bd` on $PATH (same shape as the Ollama probe) and refuses
 # silent degradation. We refer to the integration as "the tracker"
@@ -261,7 +261,7 @@ stable_boot_after      = "60s"               # alive this long → counter reset
 
 # ─── wiki ────────────────────────────────────────────────────
 # The developer-wiki Markdown pages (hot_zones.md + entry_points.md).
-# Off by default — the product contract is that veska writes no
+# Off by default - the product contract is that veska writes no
 # files into user repos. Set write_pages = true to materialise the
 # pages under <repo>/docs/veska/ on every promotion. The eng_get_hot_zone
 # and eng_get_entry_points MCP tools serve the same data either way
@@ -276,7 +276,7 @@ auto                   = true                 # daily auto-backup at first idle 
 auto_retain            = 7                    # number of auto-backup files retained (older auto-backups pruned; user-initiated backups never auto-pruned)
 staleness_warn         = "24h"                # doctor warns if last backup older than this (with auto on, 24h is reachable; lower the alarm window)
 required               = false                # if true, daemon refuses to start unless a verified backup exists
-pre_migration_keep     = 5                    # auto-snapshots taken by the migration runner (SOLO-08 §10) — last N retained, older pruned
+pre_migration_keep     = 5                    # auto-snapshots taken by the migration runner (SOLO-08 §10) - last N retained, older pruned
 ```
 
 ### 3.2 Advanced

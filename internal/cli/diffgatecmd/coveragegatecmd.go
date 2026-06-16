@@ -39,7 +39,7 @@ type untestedReport struct {
 // It re-promotes the candidate's changed files into a throwaway clone of the
 // base graph (so cross-file test→prod CALLS edges RESOLVE — the ephemeral
 // overlay only carries intra-file resolved edges), runs the untested-symbol
-// check (solov2-zvh6.3) over that after-state scoped to the changed files, and
+// check over that after-state scoped to the changed files, and
 // FAILs on untested findings whose node is in the node-precision changed set.
 func RunUntested(ctx context.Context, p UntestedParams) error {
 	if p.RepoID == "" || p.BaseRef == "" || p.CandidateRef == "" {
@@ -70,7 +70,7 @@ func RunUntested(ctx context.Context, p UntestedParams) error {
 		return fmt.Errorf("%w (%s)", ErrGateFailed, notIndexedDetail(ctx, pools.ReadDB, p.RepoID))
 	}
 
-	// Pin base to base-ref (index-ahead hardening, solov2-zvh6.11): the base
+	// Pin base to base-ref (index-ahead hardening): the base
 	// clone re-promotes base-ref's changed files so ChangedNodeIDs content-hashes
 	// the candidate against base-ref, not a drifted index.
 	eph, changes, baseClonePath, cleanup, err := buildPinnedEphemeral(ctx, ephemeralParams{
@@ -112,7 +112,6 @@ func RunUntested(ctx context.Context, p UntestedParams) error {
 // throwaway clone of the base graph and runs the untested-symbol check over the
 // changed files, returning its findings (node-anchored) in-memory. The clone
 // resolves cross-file test→prod CALLS so a test added in the SAME diff counts.
-//
 // Caller attribution is the UNION of base and clone: re-promoting a changed
 // prod file delete-replaces its nodes, which CASCADE-deletes inbound CALLS
 // edges from UNCHANGED caller files (the edges schema is ON DELETE CASCADE on
@@ -120,11 +119,10 @@ func RunUntested(ctx context.Context, p UntestedParams) error {
 // test, falsely flagging a modified-but-tested symbol. The base graph still
 // holds that edge; the union restores it. So after-state test callers =
 // base callers (unchanged callers) ∪ clone callers (changed/added callers).
-//
 // It deliberately does NOT use fullCheckPass/openStructuralFindingIDs — those
 // filter to structuralRules (dead-code, contract-drift), which excludes
 // untested-symbol and would silently drop every finding (a false PASS). The
-// check's in-memory []*domain.Finding carry the node_id anchors the gate needs.
+// check's in-memory *domain.Finding carry the node_id anchors the gate needs.
 func untestedInChangedFiles(ctx context.Context, basePools *sqlite.Pools, baseDBPath, repoID, branch, gitSHA string, changes []diffgate.FileChange, changedFiles []string) ([]*domain.Finding, error) {
 	clone, err := cloneDB(ctx, baseDBPath)
 	if err != nil {
@@ -161,7 +159,6 @@ func untestedInChangedFiles(ctx context.Context, basePools *sqlite.Pools, baseDB
 // comes from the clone (re-promoted), while each node's caller files are the
 // union of clone callers and base callers. This recovers inbound test→prod
 // edges that the clone's re-promote cascade-deleted (see untestedInChangedFiles).
-//
 // Base callers are authoritative ONLY for UNCHANGED files: a base caller file
 // the diff changed/deleted is stale (the clone re-promoted it and is the
 // authority), so base callers in the changed set are dropped. Without this,

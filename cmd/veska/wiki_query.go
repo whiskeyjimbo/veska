@@ -10,7 +10,7 @@ import (
 // wiki` bakes these rankings into markdown, while these verbs return the same
 // data straight from the daemon (text + --json) so agents/scripts skip the
 // file read. Both back onto repo_id-required MCP tools, so when --repo is
-// omitted we resolve it from the cwd before calling. solov2-yh5a.
+// omitted we resolve it from the cwd before calling.
 
 func entryPointsCmd() *cobra.Command {
 	var (

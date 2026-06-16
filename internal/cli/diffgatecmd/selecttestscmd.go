@@ -17,11 +17,11 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/platform/config"
 )
 
-// SelectTestsParams are the impact-based test-selection inputs (solov2-v6de.2).
+// SelectTestsParams are the impact-based test-selection inputs.
 // Unlike the diff-gate subcommands this NEVER gates: it emits a runner-consumable
 // SELECTION at exit 0. Understandable non-fatal conditions (unknown repo, repo
 // not indexed, bad ref) are reported as an empty selection with an `error` field
-// in the same JSON envelope, NOT a non-zero exit (solov2-v6de.3) — only an
+// in the same JSON envelope, NOT a non-zero exit — only an
 // unexpected infra failure (store open, git exec) is returned. It needs the
 // indexed base graph to resolve which tests cover the changed prod nodes.
 type SelectTestsParams struct {
@@ -36,7 +36,7 @@ type SelectTestsParams struct {
 // packageSelection is one package's slice of the selection. RunAll is set when
 // a *_test.go file in the package changed: a newly-added/edited test is not yet
 // in the index, so the whole package is run rather than risk under-selecting it
-// (the safe direction — solov2-v6de Decision B). Otherwise Tests lists the
+// (the safe direction Decision B). Otherwise Tests lists the
 // covering test entrypoints and Command applies a `-run` filter.
 type packageSelection struct {
 	Package string   `json:"package"`
@@ -49,7 +49,7 @@ type packageSelection struct {
 // tests at all (AC2: say so explicitly, never fall back to "all tests"). Error
 // carries an advisory reason (unknown repo, not indexed, bad ref) — the command
 // NEVER gates, so these surface as an empty selection + a parseable error field
-// at exit 0, not a bare stderr crash (solov2-v6de.3).
+// at exit 0, not a bare stderr crash.
 type selectTestsReport struct {
 	Packages []packageSelection `json:"packages"`
 	Commands []string           `json:"commands"`
@@ -60,7 +60,7 @@ type selectTestsReport struct {
 
 // emitAdvisoryEmpty writes an empty selection carrying an advisory error reason
 // and returns nil — the command's "always exits 0, always emits JSON" contract
-// for understandable non-fatal conditions (solov2-v6de.3). A CI consumer parses
+// for understandable non-fatal conditions. A CI consumer parses
 // the same envelope shape whether or not tests were selected.
 func emitAdvisoryEmpty(out io.Writer, errMsg string) error {
 	return emitSelectTestsReport(out, selectTestsReport{Empty: true, Error: errMsg})
@@ -68,8 +68,7 @@ func emitAdvisoryEmpty(out io.Writer, errMsg string) error {
 
 // RunSelectTests selects the tests whose covered nodes intersect the candidate
 // diff's changed prod nodes, and emits a `go test -run` selection per package.
-//
-// Per solov2-v6de Decision A the transitive reverse map makes this a DIRECT
+// Per Decision A the transitive reverse map makes this a DIRECT
 // lookup — selected = ⋃ ReverseMap[changed_node] — so there is no blast-radius
 // BFS and no ephemeral clone (the diff-gate's clone exists to restore
 // cascade-deleted edges after a re-promote we don't do here). Changed prod files
@@ -94,7 +93,7 @@ func RunSelectTests(ctx context.Context, p SelectTestsParams) error {
 	p.RepoID = resolved
 	if !repoIndexed(ctx, pools.ReadDB, p.RepoID, p.Branch) {
 		// Advisory, not fatal: emit an empty selection + reason at exit 0 so the
-		// "always exits 0, emits JSON" contract holds (solov2-v6de.3). The reason
+		// "always exits 0, emits JSON" contract holds. The reason
 		// distinguishes an unknown handle from an unindexed repo (i0tx.2 F2).
 		return emitAdvisoryEmpty(p.Out, notIndexedDetail(ctx, pools.ReadDB, p.RepoID))
 	}
@@ -198,7 +197,7 @@ func buildSelectionReport(tests []coverage.TestRef, forcedPkgs map[string]struct
 		out.Commands = append(out.Commands, sel.Command)
 	}
 	if out.Empty {
-		// F4 (solov2-dchd.8 sibling): an empty result is ambiguous — it can mean
+		// F4 ( sibling): an empty result is ambiguous — it can mean
 		// "your change has no covering tests" OR "this repo has no indexed tests
 		// at all (no *_test.go CALLS edges to select from)". Name both so a junior
 		// doesn't read it as a false all-clear.
@@ -208,7 +207,7 @@ func buildSelectionReport(tests []coverage.TestRef, forcedPkgs map[string]struct
 }
 
 // goTestCommand renders a single package's runner invocation. The `-run` regex
-// is anchored `^(...)$` so e.g. TestFoo does not also match TestFoobar — an
+// is anchored `^(.)$` so e.g. TestFoo does not also match TestFoobar — an
 // over-select that would masquerade as precision.
 func goTestCommand(pkg string, runAll bool, tests []string) string {
 	target := "./" + pkg

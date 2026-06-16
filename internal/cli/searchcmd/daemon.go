@@ -14,7 +14,7 @@ import (
 )
 
 // SearchHeaderMode discriminates the three scope-resolution paths the
-// 'searching: ...' stderr header announces (solov2-izh6.15).
+// 'searching:.' stderr header announces.
 type SearchHeaderMode int
 
 const (
@@ -25,7 +25,7 @@ const (
 	// SearchHeaderModeExplicit: --repo (or positional target) selected a
 	// specific repo. The user already named it; no override hint needed.
 	SearchHeaderModeExplicit
-	// SearchHeaderModeAll: no target, cwd outside any registered repo —
+	// SearchHeaderModeAll: no target, cwd outside any registered repo
 	// daemon fan-out across every registered repo.
 	SearchHeaderModeAll
 )
@@ -40,7 +40,7 @@ type SearchHeaderInfo struct {
 
 // EmitSearchHeader writes a one-line 'searching: <label>' notice to stderr
 // announcing the repo scope. JSON mode suppresses the header entirely so
-// `--json` output stays a clean machine-consumable envelope. solov2-izh6.15.
+// `--json` output stays a clean machine-consumable envelope.
 func EmitSearchHeader(stderr, stdout io.Writer, jsonOut bool, info SearchHeaderInfo) {
 	_ = stdout // explicit reminder: header NEVER goes to stdout
 	if jsonOut {
@@ -82,7 +82,7 @@ func repoDisplayLabel(info SearchHeaderInfo) string {
 // unreachable or the target repo is not yet tracked — the caller then falls
 // back to the in-process clone/index/query path. This keeps the common
 // "search my already-indexed repo" case on the daemon's hybrid pipeline and
-// avoids a second writer on veska.db (solov2-b1q, solov2-xkm).
+// avoids a second writer on veska.db ().
 func daemonSearch(ctx context.Context, stderr, stdout io.Writer, opts RunOpts) (SearchEnvelope, bool, error) {
 	// A git-URL target needs a clone+index pass the daemon-dial path does
 	// not perform; leave it to the in-process path.
@@ -92,7 +92,7 @@ func daemonSearch(ctx context.Context, stderr, stdout io.Writer, opts RunOpts) (
 
 	repoID, branch, info, ok := resolveRepoViaDaemonInfo(ctx, opts.Target)
 	if !ok {
-		// solov2-vm5w: when the cwd isn't part of any registered repo
+		// when the cwd isn't part of any registered repo
 		// (junior who registered repos in another dir and ran search from
 		// /tmp), fan out across every registered repo instead of erroring.
 		// Only fires when target is empty — explicit paths / URLs still go
@@ -106,7 +106,7 @@ func daemonSearch(ctx context.Context, stderr, stdout io.Writer, opts RunOpts) (
 		return SearchEnvelope{}, false, nil
 	}
 
-	// solov2-izh6.15: announce which repo we're searching so cwd-scoping
+	// announce which repo we're searching so cwd-scoping
 	// isn't silent. cwd-mode adds a '--repo to override' hint; explicit-mode
 	// (user passed --repo / positional) skips the hint.
 	mode := SearchHeaderModeCwd
@@ -134,7 +134,7 @@ func daemonSearch(ctx context.Context, stderr, stdout io.Writer, opts RunOpts) (
 // daemonSearchByRepoID runs eng_search_semantic against a known repo_id/branch.
 // Returned ok is false when the daemon is unreachable so callers can fall back
 // to the in-process search service. Used by the URL/path path of Run after
-// ensureIndexed has registered the repo .
+// ensureIndexed has registered the repo.
 func daemonSearchByRepoID(ctx context.Context, repoID, branch string, opts RunOpts) (SearchEnvelope, bool, error) {
 	var env SearchEnvelope
 	if err := mcpclient.Call(ctx, "eng_search_semantic", map[string]any{
@@ -155,7 +155,7 @@ func daemonSearchByRepoID(ctx context.Context, repoID, branch string, opts RunOp
 }
 
 // daemonSearchAllRepos is the cross-repo fanout invoked when target is empty
-// and cwd is not part of a registered repo . It lists every
+// and cwd is not part of a registered repo. It lists every
 // registered repo, runs eng_search_semantic per repo with the same k, merges
 // results, re-sorts by score desc, and trims to k. fanned is false when the
 // registry is empty so the caller surfaces the existing "not registered" error
@@ -174,7 +174,7 @@ func daemonSearchAllRepos(ctx context.Context, stderr, stdout io.Writer, opts Ru
 	if len(lr.Repos) == 0 {
 		return SearchEnvelope{}, false, nil
 	}
-	// solov2-izh6.15: emit the 'searching: all repos' header before the
+	// emit the 'searching: all repos' header before the
 	// fanout fires so the user knows we did NOT scope to a single repo.
 	EmitSearchHeader(stderr, stdout, opts.JSONOut, SearchHeaderInfo{Mode: SearchHeaderModeAll})
 	k := kOrDefault(opts.K)
@@ -232,10 +232,11 @@ func (r daemonRepoRow) headerInfo() SearchHeaderInfo {
 
 // resolveRepoViaDaemonInfo maps the search target to a (repo_id, branch) the
 // daemon already tracks, plus the display info (short_id, aliases) needed for
-// the 'searching:' header. Resolution order :
-//   - empty target → eng_get_current_repo against cwd
-//   - non-empty    → match against eng_list_repos by full repo_id, short_id,
-//     or alias first (cheap), then by canonical filesystem root.
+// the 'searching:' header. Resolution order:
+//
+//	empty target → eng_get_current_repo against cwd
+//	non-empty → match against eng_list_repos by full repo_id, short_id,
+//	  or alias first (cheap), then by canonical filesystem root.
 //
 // ok is false (caller falls back to the in-process path) when the daemon is
 // down or the repo is unknown.
@@ -307,7 +308,7 @@ func resolveTargetRepoViaDaemon(ctx context.Context, target string) (repoID, bra
 // queued so a zero-result search can tell the user "the index is still warming
 // up" instead of staying silent. Returns ok=false if the daemon is down or
 // doesn't expose the field — the caller falls back to a plain "no results"
-// line .
+// line.
 func pendingEmbedsHint() (int, bool) {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()

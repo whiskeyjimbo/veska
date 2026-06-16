@@ -10,13 +10,13 @@ import (
 
 // TestCheckEmbedderHealthDefaultIsInProcess verifies the default (no override)
 // embedder health reports the elected in-process embedder and never claims to
-// be probing Ollama — the bug behind solov2-rrm, where doctor reported
+// be probing Ollama — the bug behind, where doctor reported
 // "nomic-embed-text @ ollama" on the documented zero-dependency path.
 func TestCheckEmbedderHealthDefaultIsInProcess(t *testing.T) {
 	t.Setenv("VESKA_EMBEDDER", "")
 	home := t.TempDir()
 	h := CheckEmbedderHealth(context.Background(), home)
-	// solov2-yql1: a fresh home with no model2vec installed elects static-v2,
+	// a fresh home with no model2vec installed elects static-v2,
 	// which is reported as 'degraded' so users see the fallback in `doctor
 	// status` instead of only discovering it per-search. 'healthy' is also
 	// acceptable here (e.g. when run from a fat build with model2vec embedded).
@@ -35,7 +35,7 @@ func TestCheckEmbedderHealthDefaultIsInProcess(t *testing.T) {
 }
 
 // TestStatusRollupBacklogIsInformational verifies that a non-zero embedding
-// backlog does NOT promote the rollup status . The backlog
+// backlog does NOT promote the rollup status. The backlog
 // surfaces as its own line/field — the daemon as a whole remains healthy
 // while the backfill drains. This is the contract that lets `doctor status`
 // stop contradicting `eng_get_status`'s degraded_reasons:[embeddings_pending]:

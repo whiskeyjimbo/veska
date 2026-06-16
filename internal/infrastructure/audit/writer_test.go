@@ -117,7 +117,7 @@ func TestAuditWriterRetainsMaxFive(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "audit.jsonl")
 
-	// Pre-create rotated files .1 through .5.
+	// Pre-create rotated files.1 through.5.
 	for i := 1; i <= 5; i++ {
 		name := fmt.Sprintf("%s.%d.jsonl", path, i)
 		if err := os.WriteFile(name, fmt.Appendf(nil, "old-%d\n", i), 0o644); err != nil {
@@ -140,9 +140,9 @@ func TestAuditWriterRetainsMaxFive(t *testing.T) {
 		}
 	}
 
-	// .5 must be gone (deleted because max is 5 and we shifted).
+	// 5 must be gone (deleted because max is 5 and we shifted).
 	old5 := fmt.Sprintf("%s.5.jsonl", path)
-	// After rotation the old .5 is deleted; a new .5 may exist if we shifted 4->5 etc.
+	// After rotation the old.5 is deleted; a new.5 may exist if we shifted 4->5 etc.
 	// The test just checks that we have at most 5 rotated files total.
 	count := 0
 	for i := 1; i <= 6; i++ {
@@ -154,7 +154,7 @@ func TestAuditWriterRetainsMaxFive(t *testing.T) {
 	if count > 5 {
 		t.Errorf("found %d rotated files; expected at most 5", count)
 	}
-	// .6 must not exist.
+	// 6 must not exist.
 	if _, err := os.Stat(fmt.Sprintf("%s.6.jsonl", path)); err == nil {
 		t.Errorf("file .6.jsonl should not exist")
 	}

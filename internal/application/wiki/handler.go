@@ -30,12 +30,10 @@ type RepoRootFunc func(ctx context.Context, repoID string) (string, error)
 // Handler implements ports.WorkHandler for WorkKindWiki rows. On each row it
 // regenerates BOTH the hot_zone and entry_points Markdown pages and, only on
 // full success, stamps the last-render time.
-//
 // Failure semantics mirror the other application handlers: any error (repo
 // resolution, ranking, rendering, file write) propagates wrapped so the
 // queue.Poller retry path runs. The render time is stamped ONLY when both
 // pages were written — a partial failure leaves the previous stamp intact.
-//
 // The handler is stateless beyond its injected dependencies and is safe for
 // concurrent use; the poller runs it in its own goroutine.
 type Handler struct {
@@ -60,11 +58,10 @@ func WithHandlerClock(c func() time.Time) HandlerOption {
 	}
 }
 
-// WithWritePages enables Markdown page writes under docs/veska/ in the
+// WithWritePages enables Markdown page writes under in the
 // user's repo work-tree. Off by default — the README contract is that
 // veska does not write to user repos. The MCP tools eng_get_hot_zone and
 // eng_get_entry_points still serve the same ranked data when this is off
-// .
 func WithWritePages(enabled bool) HandlerOption {
 	return func(h *Handler) {
 		h.writePages = enabled
@@ -101,13 +98,13 @@ func NewHandler(hotZone *HotZoneService, entry *EntryPointsService, store Render
 }
 
 // Handle processes one ports.WorkRow of kind WorkKindWiki: it regenerates
-// both wiki pages under docs/veska/ and, on full success, stamps the
+// both wiki pages under and, on full success, stamps the
 // last-render time.
-//
 // Behaviour:
-//   - Wrong kind: wrapped error (routing bug).
-//   - Repo-root resolution / ranking / rendering / write error: wrapped
-//     error so the Poller retries; the render time is NOT stamped.
+//
+//	Wrong kind: wrapped error (routing bug).
+//	Repo-root resolution / ranking / rendering / write error: wrapped
+//	  error so the Poller retries; the render time is NOT stamped.
 func (h *Handler) Handle(ctx context.Context, row ports.WorkRow) error {
 	if row.Kind != ports.WorkKindWiki {
 		return fmt.Errorf("wiki.Handle: unexpected kind %q", row.Kind)
@@ -127,7 +124,7 @@ func (h *Handler) Handle(ctx context.Context, row ports.WorkRow) error {
 		return fmt.Errorf("wiki.Handle: select entry points: %w", err)
 	}
 
-	// solov2-otzn: stamp GeneratedAt so a Markdown page on disk never
+	// stamp GeneratedAt so a Markdown page on disk never
 	// hides how old it is. The render-time stamp lands in the document
 	// header; the persisted SetLastRenderAt below is the source of
 	// truth for staleness checks elsewhere.
@@ -136,7 +133,7 @@ func (h *Handler) Handle(ctx context.Context, row ports.WorkRow) error {
 	epReport.GeneratedAt = now
 
 	if h.writePages {
-		// solov2-2q2a: committed Markdown carries repo-relative file_path
+		// committed Markdown carries repo-relative file_path
 		// so the docs stay portable across machines and contributors.
 		// The MCP tool responses still canonicalise to absolute (see
 		// tools_wiki.go).
@@ -151,7 +148,7 @@ func (h *Handler) Handle(ctx context.Context, row ports.WorkRow) error {
 	// last-render stamp is bumped — the MCP tools eng_get_hot_zone /
 	// eng_get_entry_points serve the same data on demand. We keep the
 	// rank pass to populate any caches and to surface ranking errors at
-	// the same point in the queue lifecycle .
+	// the same point in the queue lifecycle.
 	_ = report
 	_ = epReport
 
@@ -167,7 +164,7 @@ func (h *Handler) Handle(ctx context.Context, row ports.WorkRow) error {
 // relativizeHotZoneReport returns a copy of report with each Zone.FilePath
 // rewritten to a repoRoot-relative slash-form path when possible. Used when
 // rendering the committed Markdown page so the output is portable across
-// machines .
+// machines.
 func relativizeHotZoneReport(r Report, root string) Report {
 	out := r
 	out.Zones = make([]HotZone, len(r.Zones))
@@ -179,7 +176,7 @@ func relativizeHotZoneReport(r Report, root string) Report {
 }
 
 // relativizeEntryPointsReport mirrors relativizeHotZoneReport for the
-// EntryPointsReport .
+// EntryPointsReport.
 func relativizeEntryPointsReport(r EntryPointsReport, root string) EntryPointsReport {
 	out := r
 	out.EntryPoints = make([]EntryPoint, len(r.EntryPoints))

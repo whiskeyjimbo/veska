@@ -6,9 +6,7 @@ import (
 	"testing"
 )
 
-// ---------------------------------------------------------------------------
 // ToolSpec schema fields — optional, nil by default
-// ---------------------------------------------------------------------------
 
 func TestRegister_NoSchemaRegistersWithNilSchemas(t *testing.T) {
 	r := NewRegistry()
@@ -54,10 +52,7 @@ func TestRegister_MalformedOutputSchemaRejected(t *testing.T) {
 	}
 }
 
-// ---------------------------------------------------------------------------
 // State-changing tools publish accurate schemas
-// ---------------------------------------------------------------------------
-
 // schemaProps unmarshals a JSON Schema and returns its top-level "type" and
 // sorted "properties" keys.
 func schemaProps(t *testing.T, raw json.RawMessage) (string, []string) {

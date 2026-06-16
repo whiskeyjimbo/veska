@@ -19,7 +19,7 @@ import (
 
 // These tests exercise the direct-SQLite cold-scan path end-to-end through
 // newRootCmd: the daemon socket is absent in the test environment so
-// daemonRunning() returns false, and the cmd-owned reparserFactory seam is
+// daemonRunning returns false, and the cmd-owned reparserFactory seam is
 // swapped for a spy. The daemon-dispatch fork lives in internal/cli/reindexcmd
 // and is tested there (it needs the DaemonRunning seam).
 

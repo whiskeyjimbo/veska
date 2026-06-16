@@ -13,13 +13,12 @@ import (
 // same branch. The comparison is anchored on (node_id, branch) and uses the
 // per-row prev_signature/signature columns written by the Promoter, so the
 // check does not need to maintain its own history table.
-//
 // Scope:
 //
-//   - Only nodes of kind function, method, or interface are considered.
-//   - Both prev_signature and signature must be non-empty — first-time
-//     promotions (no prior row) cannot drift by construction.
-//   - Body-only edits leave signature unchanged and so emit no finding.
+//	Only nodes of kind function, method, or interface are considered.
+//	Both prev_signature and signature must be non-empty — first-time
+//	  promotions (no prior row) cannot drift by construction.
+//	Body-only edits leave signature unchanged and so emit no finding.
 //
 // Findings are anchored on node_id so finding_id is branch-stable and
 // idempotent re-runs collapse via the storage layer's
@@ -42,7 +41,6 @@ func (c *ContractDriftCheck) Name() string { return "contract-drift" }
 // paths and constructs one Finding per node. Findings carry the before/after
 // signature snippet in their message so reviewers can see what changed
 // without a second round-trip.
-//
 // An empty Input.FilePaths is a no-op.
 func (c *ContractDriftCheck) Run(ctx context.Context, in Input) ([]*domain.Finding, error) {
 	if c == nil || c.q == nil {

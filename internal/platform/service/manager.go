@@ -39,7 +39,7 @@ func New(binaryPath, veskaHome string) (Manager, error) {
 // NewDryRun mirrors New but returns a Manager whose mutating operations
 // print what they would do instead of executing them. Used by the
 // `veska service * --dry-run` subcommands so users see the concrete file
-// paths and supervisor commands that would run .
+// paths and supervisor commands that would run.
 func NewDryRun(binaryPath, veskaHome string) (Manager, error) {
 	return newForGOOS(runtime.GOOS, binaryPath, veskaHome, true)
 }

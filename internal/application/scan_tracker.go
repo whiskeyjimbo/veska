@@ -9,10 +9,9 @@ import (
 // ScanState describes one cold scan currently in flight. Returned by
 // ScanTracker.Snapshot so callers (e.g. statusProvider) can surface
 // progress without coupling to the tracker's internals.
-//
 // FilesSeen / FilesTotal are best-effort progress counters updated by
-// the scanner via Progress(). They are omitted from the JSON shape when
-// zero so older clients see the same envelope .
+// the scanner via Progress. They are omitted from the JSON shape when
+// zero so older clients see the same envelope.
 type ScanState struct {
 	RepoID     string    `json:"repo_id"`
 	Phase      string    `json:"phase"`
@@ -24,11 +23,10 @@ type ScanState struct {
 // ScanTracker is the in-memory registry of cold-scan reparser runs
 // currently in flight. The cold-scan closure calls Start at scan entry
 // and End at scan exit; the daemon's statusProvider reads Snapshot to
-// surface a 'scans_in_flight' field on eng_get_status .
-//
+// surface a 'scans_in_flight' field on eng_get_status.
 // Concurrent safety: a single RWMutex guards the map. Reads (Snapshot
 // from the status handler) take the read lock; writes (Start/End from
-// the reparser goroutine) take the write lock. The scan-rate is low —
+// the reparser goroutine) take the write lock. The scan-rate is low
 // at most one reparser per repo at a time — so the lock is
 // uncontended in practice.
 type ScanTracker struct {
@@ -77,7 +75,7 @@ func (t *ScanTracker) Progress(repoID string, filesSeen, filesTotal int) {
 
 // SetPhase updates the human-readable phase string on an in-flight scan
 // ("walking", "promoting", etc.) so a user watching a long scan can tell
-// the slow promotion phase apart from the fast walk phase .
+// the slow promotion phase apart from the fast walk phase.
 // Otherwise files_seen jumps to N during the sub-second walk, then sits
 // frozen for the duration of promotion — reading as "stuck".
 // Nil-safe; no-op when the scan was never Started.
@@ -109,7 +107,7 @@ func (t *ScanTracker) End(repoID string) {
 
 // IsAnyScanRunning reports whether at least one scan is currently
 // in flight. Cheaper than Snapshot for callers that only need a
-// yes/no (e.g. the post-promotion queue gate in solov2-pc3 #1).
+// yes/no (e.g. the post-promotion queue gate in #1).
 // Nil-safe — returns false when the tracker is unset.
 func (t *ScanTracker) IsAnyScanRunning() bool {
 	if t == nil {

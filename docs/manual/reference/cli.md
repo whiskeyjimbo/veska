@@ -83,7 +83,7 @@ veska backup verify <path> [flags]
 
 Compute blast radius for a symbol, or --dirty/--diff for staged/working-tree/ranged changes
 
-Compute the blast radius (callers/callees/both) of a symbol — 'if I change this, what breaks?' or 'what does this transitively reach?'. Use BEFORE editing an exported symbol, or when scoping a refactor. Walks cross_repo_edges in both directions so a library symbol's consumers in workspace repos are surfaced. Pass node_id (exact) or symbol (resolved via eng_find_symbol). For working-tree changes use eng_get_diff_blast_radius; for in-progress staged edits use eng_get_dirty_blast_radius.
+Compute the blast radius (callers/callees/both) of a symbol - 'if I change this, what breaks?' or 'what does this transitively reach?'. Use BEFORE editing an exported symbol, or when scoping a refactor. Walks cross_repo_edges in both directions so a library symbol's consumers in workspace repos are surfaced. Pass node_id (exact) or symbol (resolved via eng_find_symbol). For working-tree changes use eng_get_diff_blast_radius; for in-progress staged edits use eng_get_dirty_blast_radius.
 
 ```
 veska blast [<symbol-or-node-id> | --diff [<ref_a>..<ref_b>]] [flags]
@@ -93,7 +93,7 @@ veska blast [<symbol-or-node-id> | --diff [<ref_a>..<ref_b>]] [flags]
 
 ```
       --diff               seed from a git diff: bare = working-tree vs HEAD; with a positional ref range (e.g. main..HEAD) = that range
-      --direction string   out|in|both (aliases: callees|callers) — callees, callers, or both (default "both")
+      --direction string   out|in|both (aliases: callees|callers) - callees, callers, or both (default "both")
       --dirty              seed from the staged overlay (uncommitted, pre-commit changes)
       --json               emit JSON (eng_get_blast_radius shape)
       --repo string        repo id, short_id, or alias (default: fan out across registered repos)
@@ -104,7 +104,7 @@ veska blast [<symbol-or-node-id> | --diff [<ref_a>..<ref_b>]] [flags]
 
 Walk CALLS edges from a symbol (wraps eng_get_call_chain)
 
-Walk CALLS edges from a symbol. Use this — not search — when the question is 'what does this reach' (direction=out, default) or 'what calls this' (direction=in). Surfaces cross_repo_edges into other registered repos so library-symbol callers in a multi-repo workspace are visible without separate queries. Pass node_id (exact) or symbol (resolved via eng_find_symbol; ambiguity is rejected). NOTE: empty edges on a function/method seed carry one of two degraded_reasons hints: 'chained_selectors_unresolved' (parser limit — chained selector call sites like rootCmd.AddCommand(...).Execute() or s.field.M() are not yet modelled) or 'external_callees_only' (index boundary — callees are stdlib or unregistered modules, NOT a parser bug). Fall back to eng_get_blast_radius, eng_search_semantic, or eng_find_symbol.
+Walk CALLS edges from a symbol. Use this - not search - when the question is 'what does this reach' (direction=out, default) or 'what calls this' (direction=in). Surfaces cross_repo_edges into other registered repos so library-symbol callers in a multi-repo workspace are visible without separate queries. Pass node_id (exact) or symbol (resolved via eng_find_symbol; ambiguity is rejected). NOTE: empty edges on a function/method seed carry one of two degraded_reasons hints: 'chained_selectors_unresolved' (parser limit - chained selector call sites like rootCmd.AddCommand(...).Execute() or s.field.M() are not yet modelled) or 'external_callees_only' (index boundary - callees are stdlib or unregistered modules, NOT a parser bug). Fall back to eng_get_blast_radius, eng_search_semantic, or eng_find_symbol.
 
 ```
 veska calls <symbol-or-node-id> [flags]
@@ -114,7 +114,7 @@ veska calls <symbol-or-node-id> [flags]
 
 ```
       --depth int           BFS depth limit (0 = daemon default)
-      --direction string    out|in|both (aliases: callees|callers) — outgoing callees, incoming callers, or both (default "out")
+      --direction string    out|in|both (aliases: callees|callers) - outgoing callees, incoming callers, or both (default "out")
       --expand-cross-repo   follow CALLS edges into other registered repos (default true)
       --json                emit JSON (eng_get_call_chain shape)
       --repo string         repo id, short_id, or alias (default: fan out across registered repos)
@@ -151,7 +151,7 @@ veska changed [ref-a [ref-b]] [flags]
 
 Find duplicate code: exact byte-identical clones, or --near fuzzy clusters (wraps eng_find_clones)
 
-Default: list groups of >=2 symbols whose source text is byte-for-byte identical (literal copy-paste), via content_hash equality — deterministic, no embeddings. With --near: cluster symbols whose persisted SIMILAR_TO similarity exceeds a threshold above auto-link's 'related' cutoff (fuzzy near-duplicates — renamed copies, drifted variants), reading scores auto-link already stored. For 'what else looks like this ONE symbol?', use `veska similar <symbol>`. Note: --near needs SIMILAR_TO edges carrying scores; reindex a repo promoted before scoring landed.
+Default: list groups of >=2 symbols whose source text is byte-for-byte identical (literal copy-paste), via content_hash equality - deterministic, no embeddings. With --near: cluster symbols whose persisted SIMILAR_TO similarity exceeds a threshold above auto-link's 'related' cutoff (fuzzy near-duplicates - renamed copies, drifted variants), reading scores auto-link already stored. For 'what else looks like this ONE symbol?', use `veska similar <symbol>`. Note: --near needs SIMILAR_TO edges carrying scores; reindex a repo promoted before scoring landed.
 
 ```
 veska clones [flags]
@@ -410,7 +410,7 @@ List external modules the repo CALLS into, ranked by call-site count
 
 List external modules the repo CALLS into, ranked by call-site count.
 
-Note: a module imported but only referenced via struct literals / type assertions (no resolved package-qualified call) will not appear yet — this tracks the import-side backfill.
+Note: a module imported but only referenced via struct literals / type assertions (no resolved package-qualified call) will not appear yet - this tracks the import-side backfill.
 
 ```
 veska deps list [<id-or-path>] [flags]
@@ -462,7 +462,7 @@ veska diff-gate [flags]
 
 Gate a candidate change on breaking exported-signature changes, emit pass/fail JSON (exits non-zero on FAIL)
 
-Index a candidate change (base-ref..candidate-ref) against the indexed-HEAD graph and FAIL when it changes the signature shape (name + parameters + result) of an EXPORTED symbol — a breaking public-surface change. Unexported signature changes and body-only edits pass. Scope is signature-shape only: symbol removal/rename is not detected, and exported is the name-based visibility flag, not reachability. Deterministic, network-free; emits JSON and exits non-zero on FAIL for CI gating.
+Index a candidate change (base-ref..candidate-ref) against the indexed-HEAD graph and FAIL when it changes the signature shape (name + parameters + result) of an EXPORTED symbol - a breaking public-surface change. Unexported signature changes and body-only edits pass. Scope is signature-shape only: symbol removal/rename is not detected, and exported is the name-based visibility flag, not reachability. Deterministic, network-free; emits JSON and exits non-zero on FAIL for CI gating.
 
 ```
 veska diff-gate api [flags]
@@ -489,7 +489,7 @@ veska diff-gate api --repo <id> --base-ref HEAD~1 --candidate-ref HEAD
 
 Gate a candidate change on newly-introduced exact-clone duplication, emit pass/fail JSON (exits non-zero on FAIL)
 
-Index a candidate change (base-ref..candidate-ref) against the indexed-HEAD graph and FAIL when it introduces a new exact-clone group — a byte-identical copy (content_hash equality) of code it did not already duplicate at base. Deterministic, network-free, embedding-free; emits JSON and exits non-zero on FAIL for CI gating.
+Index a candidate change (base-ref..candidate-ref) against the indexed-HEAD graph and FAIL when it introduces a new exact-clone group - a byte-identical copy (content_hash equality) of code it did not already duplicate at base. Deterministic, network-free, embedding-free; emits JSON and exits non-zero on FAIL for CI gating.
 
 ```
 veska diff-gate clones [flags]
@@ -516,7 +516,7 @@ veska diff-gate clones --repo <id> --base-ref HEAD~1 --candidate-ref HEAD
 
 Gate a candidate change on newly-introduced dependency cycles, emit pass/fail JSON (exits non-zero on FAIL)
 
-Index a candidate change (base-ref..candidate-ref) against the indexed-HEAD graph and FAIL when it introduces a net-new dependency cycle — a strongly-connected component of >=2 symbols (over CALLS/IMPORTS edges) absent at base. The candidate is re-promoted so cross-file edges resolve; only cycles touching the change set are judged. Node-level, deterministic, network-free; emits JSON and exits non-zero on FAIL for CI gating.
+Index a candidate change (base-ref..candidate-ref) against the indexed-HEAD graph and FAIL when it introduces a net-new dependency cycle - a strongly-connected component of >=2 symbols (over CALLS/IMPORTS edges) absent at base. The candidate is re-promoted so cross-file edges resolve; only cycles touching the change set are judged. Node-level, deterministic, network-free; emits JSON and exits non-zero on FAIL for CI gating.
 
 ```
 veska diff-gate cycles [flags]
@@ -541,9 +541,9 @@ veska diff-gate cycles --repo <id> --base-ref HEAD~1 --candidate-ref HEAD
 
 #### `veska diff-gate report`
 
-Advisory PR impact/risk report (blast radius, change-risk, findings, untested) — always exits 0, never gates
+Advisory PR impact/risk report (blast radius, change-risk, findings, untested) - always exits 0, never gates
 
-Assemble an ADVISORY report for a candidate change (base-ref..candidate-ref): the diff's blast radius, each changed file's change-risk standing (recent-change-frequency × blast-radius), open findings on the touched files, and changed-but-untested symbols. Unlike the diff-gate subcommands this NEVER gates — it always exits 0 (findings/risk never block; an un-indexed repo or a failed section yields a noted report). The soft on-ramp before teams trust blocking gates. Emits JSON.
+Assemble an ADVISORY report for a candidate change (base-ref..candidate-ref): the diff's blast radius, each changed file's change-risk standing (recent-change-frequency × blast-radius), open findings on the touched files, and changed-but-untested symbols. Unlike the diff-gate subcommands this NEVER gates - it always exits 0 (findings/risk never block; an un-indexed repo or a failed section yields a noted report). The soft on-ramp before teams trust blocking gates. Emits JSON.
 
 ```
 veska diff-gate report [flags]
@@ -570,7 +570,7 @@ veska diff-gate report --repo <id> --base-ref HEAD~1 --candidate-ref HEAD
 
 Gate a candidate change on net-new secret/vulnerable-dependency findings, emit pass/fail JSON (exits non-zero on FAIL)
 
-Scan a candidate change (base-ref..candidate-ref) and FAIL when it introduces a new secret_leak (scanned over the diff's added lines — any language) or a new vulnerable_dependency (manifest finding-delta by finding_id; go.mod today). A blanket gate: no target finding, no indexed graph required. Offline and deterministic; emits JSON and exits non-zero on FAIL for CI gating.
+Scan a candidate change (base-ref..candidate-ref) and FAIL when it introduces a new secret_leak (scanned over the diff's added lines - any language) or a new vulnerable_dependency (manifest finding-delta by finding_id; go.mod today). A blanket gate: no target finding, no indexed graph required. Offline and deterministic; emits JSON and exits non-zero on FAIL for CI gating.
 
 ```
 veska diff-gate security [flags]
@@ -597,7 +597,7 @@ veska diff-gate security --repo <id> --base-ref HEAD~1 --candidate-ref HEAD
 
 Select the tests whose covered nodes intersect a diff (emit go test -run per package); never gates
 
-Select the tests whose covered nodes intersect a candidate change (base-ref..candidate-ref) and emit a runner-consumable `go test -run` selection per package. Covering tests are derived transitively from the latent *_test.go CALLS edges already in the index (no real coverage data) — a selection HEURISTIC that over-selects (the safe direction), not a guarantee. Changed test files force their whole package since their tests may not be indexed yet. NEVER gates: every selection outcome — including unknown-repo, repo-not-indexed, and bad-ref — exits 0 with a JSON envelope (an advisory reason lands in the `error` field); only a usage or infrastructure error exits non-zero. Always emits JSON.
+Select the tests whose covered nodes intersect a candidate change (base-ref..candidate-ref) and emit a runner-consumable `go test -run` selection per package. Covering tests are derived transitively from the latent *_test.go CALLS edges already in the index (no real coverage data) - a selection HEURISTIC that over-selects (the safe direction), not a guarantee. Changed test files force their whole package since their tests may not be indexed yet. NEVER gates: every selection outcome - including unknown-repo, repo-not-indexed, and bad-ref - exits 0 with a JSON envelope (an advisory reason lands in the `error` field); only a usage or infrastructure error exits non-zero. Always emits JSON.
 
 ```
 veska diff-gate select-tests [flags]
@@ -624,7 +624,7 @@ veska diff-gate select-tests --repo <id> --base-ref HEAD~1 --candidate-ref HEAD
 
 Gate a candidate change on changed prod symbols that no test reaches, emit pass/fail JSON (exits non-zero on FAIL)
 
-Index a candidate change (base-ref..candidate-ref) and FAIL when a changed or added prod symbol has no test-file caller in the candidate after-state — a CALLS-edge coverage proxy, not real coverage data. The candidate is re-promoted so a test added in the same diff counts; only symbols in the change set are judged. Emits JSON and exits non-zero on FAIL for CI gating.
+Index a candidate change (base-ref..candidate-ref) and FAIL when a changed or added prod symbol has no test-file caller in the candidate after-state - a CALLS-edge coverage proxy, not real coverage data. The candidate is re-promoted so a test added in the same diff counts; only symbols in the change set are judged. Emits JSON and exits non-zero on FAIL for CI gating.
 
 ```
 veska diff-gate untested [flags]
@@ -750,12 +750,12 @@ Report repo identity-tier convergence for shared-DB readiness
 Report each registered repo's resolved identity tier (ADR-S0017) and warn on any that won't converge in a shared multi-contributor graph DB.
 
 A tier is how a repo's identity (and therefore its node ids) is derived:
-  module-hostpath  go.mod `github.com/org/repo` — CONVERGES: two contributors indexing the same upstream get identical ids (the shareable tier)
-  origin-url       git remote URL — local-only (diverges across forks)
-  module-bare      bare `module myapp` — local-only (collision-prone)
-  abs-root         absolute checkout path — local-only
+  module-hostpath  go.mod `github.com/org/repo` - CONVERGES: two contributors indexing the same upstream get identical ids (the shareable tier)
+  origin-url       git remote URL - local-only (diverges across forks)
+  module-bare      bare `module myapp` - local-only (collision-prone)
+  abs-root         absolute checkout path - local-only
 
-Non-converging is perfectly fine for single-user use; it only matters before sharing a DB. Advisory only — never folded into `doctor status`.
+Non-converging is perfectly fine for single-user use; it only matters before sharing a DB. Advisory only - never folded into `doctor status`.
 
 ```
 veska doctor identity [flags]
@@ -825,14 +825,14 @@ file-read traffic the inline snippets in eng_search_semantic results saved.
 
 Warmup: a period reads "warming up" until it has recorded at least 20
 eng_search_semantic calls. Below that the sample is too small to be
-meaningful — a single short snippet can drive the ratio negative — so only
+meaningful - a single short snippet can drive the ratio negative - so only
 the running call count is shown, not a percentage. Once a period crosses
 20 calls its row switches to a percentage.
 
 The counter only advances on eng_search_semantic searches (not symbol/
 context lookups), and those come from the MCP server the daemon runs. Until
-an MCP-aware editor is wired up — or eng_search_semantic is called directly
-several times — savings stays in warmup.
+an MCP-aware editor is wired up - or eng_search_semantic is called directly
+several times - savings stays in warmup.
 
 ```
 veska doctor savings [flags]
@@ -911,7 +911,7 @@ veska doctor wiki_render [flags]
 
 Whole-repo (or cross-repo) similar-code clusters for de-dupe triage (wraps eng_find_clusters)
 
-List groups of >=2 similar symbols in one ranked pass across three tiers (tightest first): 'exact' (byte-identical copy-paste), 'structural' (same shape after renaming variables/literals — Type-2 clones), and 'near' (vector-similar above the elected embedder's calibrated threshold). A symbol appears at most once, at its tightest tier. No seed needed — point it at a repo (or --all-repos) and turn each cluster into a verify-and-dedupe task. Note: structural/near need structural_hash + scored SIMILAR_TO edges; reindex a graph promoted before they landed.
+List groups of >=2 similar symbols in one ranked pass across three tiers (tightest first): 'exact' (byte-identical copy-paste), 'structural' (same shape after renaming variables/literals - Type-2 clones), and 'near' (vector-similar above the elected embedder's calibrated threshold). A symbol appears at most once, at its tightest tier. No seed needed - point it at a repo (or --all-repos) and turn each cluster into a verify-and-dedupe task. Note: structural/near need structural_hash + scored SIMILAR_TO edges; reindex a graph promoted before they landed.
 
 ```
 veska duplicates [flags]
@@ -934,7 +934,7 @@ veska duplicates [flags]
 
 List high-fan-in entry-point symbols (wraps eng_get_entry_points)
 
-List the high-fan-in symbols ranked by inbound call count — the natural entry points to read first when learning a repo. Exported, tested symbols rank above unexported untested ones at equal inbound count.
+List the high-fan-in symbols ranked by inbound call count - the natural entry points to read first when learning a repo. Exported, tested symbols rank above unexported untested ones at equal inbound count.
 
 ```
 veska entry-points [flags]
@@ -1153,7 +1153,7 @@ veska hook-runner post-commit
 
 List files ranked by change risk (wraps eng_get_hot_zone)
 
-List the top files by change risk = recent-change-frequency × blast-radius — the load-bearing files where a small edit fans out the most. Useful during PR review or onboarding.
+List the top files by change risk = recent-change-frequency × blast-radius - the load-bearing files where a small edit fans out the most. Useful during PR review or onboarding.
 
 ```
 veska hot-zones [flags]
@@ -1233,7 +1233,7 @@ veska mcp
 
 Show a single node by id (wraps eng_get_node)
 
-Look up one node by its content-hashed node_id (or 12-char display prefix). repo_id/branch are optional — the id is globally unique; pass both to apply the staging overlay.
+Look up one node by its content-hashed node_id (or 12-char display prefix). repo_id/branch are optional - the id is globally unique; pass both to apply the staging overlay.
 
 ```
 veska node <node-id> [flags]
@@ -1252,7 +1252,7 @@ veska node <node-id> [flags]
 
 Find the owner of a file via CODEOWNERS or git blame (wraps eng_find_owner)
 
-Resolve who owns a file — CODEOWNERS longest-match first, git-blame dominant-committer fallback. The argument may be a file path, a symbol, or a node_id (symbol/node resolve to their defining file).
+Resolve who owns a file - CODEOWNERS longest-match first, git-blame dominant-committer fallback. The argument may be a file path, a symbol, or a node_id (symbol/node resolve to their defining file).
 
 ```
 veska owner <path-or-symbol> [flags]
@@ -1286,7 +1286,7 @@ veska reindex [<repo-id-or-path>] [flags]
 
 Find symbols similar to the code at a file:line (wraps eng_find_related)
 
-Find symbols semantically similar to the code at a (file, line) anchor — a moat-pivot from a search hit, error trace, or editor cursor. Line is 1-indexed.
+Find symbols semantically similar to the code at a (file, line) anchor - a moat-pivot from a search hit, error trace, or editor cursor. Line is 1-indexed.
 
 ```
 veska related <file:line> [flags]
@@ -1327,7 +1327,7 @@ Bind a human-friendly name to a repo
 
 Bind a human-friendly name to a repo.
 
-The new name comes FIRST, the existing repo SECOND — same order as
+The new name comes FIRST, the existing repo SECOND - same order as
 "git remote add <name> <url>". (Note this is the reverse of "ln -s <target>
 <link>".) If the arguments look swapped, the command detects it and prints a
 hint rather than failing silently.
@@ -1458,14 +1458,14 @@ file-read traffic the inline snippets in eng_search_semantic results saved.
 
 Warmup: a period reads "warming up" until it has recorded at least 20
 eng_search_semantic calls. Below that the sample is too small to be
-meaningful — a single short snippet can drive the ratio negative — so only
+meaningful - a single short snippet can drive the ratio negative - so only
 the running call count is shown, not a percentage. Once a period crosses
 20 calls its row switches to a percentage.
 
 The counter only advances on eng_search_semantic searches (not symbol/
 context lookups), and those come from the MCP server the daemon runs. Until
-an MCP-aware editor is wired up — or eng_search_semantic is called directly
-several times — savings stays in warmup.
+an MCP-aware editor is wired up - or eng_search_semantic is called directly
+several times - savings stays in warmup.
 
 ```
 veska savings [flags]
@@ -1486,9 +1486,9 @@ Semantic search; optionally clone+index a repo first
 Natural-language search over embedded symbols (RRF-fused with FTS, lexical fallback when the embedder is offline). Best for behavior-shaped queries ('where do we validate session tokens'). Returns inline snippets so a follow-up Read is usually unnecessary. For known identifiers prefer eng_find_symbol (exact + deterministic); for 'what does this reach / who calls this' escalate to eng_get_call_chain / eng_get_blast_radius. With repo_id omitted (and cwd outside any registered repo) the query fans out across every registered repo in parallel and is fused with a single GLOBAL RRF so a top hit in one repo competes fairly with a top hit in another; each result then carries 'repo_id' so callers can disambiguate. The returned score is intra-query RRF (~0.01–0.03 typical range); use rank, not absolute score, to compare hits.
 
 The optional second argument (or --repo flag) selects the repo to search:
-  - omitted        — auto-detect from cwd (must be a registered repo)
-  - local path     — registered local repo (absolute or relative)
-  - git URL        — clones into the cache tier (~/.cache/veska/repos/<id>),
+  - omitted        - auto-detect from cwd (must be a registered repo)
+  - local path     - registered local repo (absolute or relative)
+  - git URL        - clones into the cache tier (~/.cache/veska/repos/<id>),
                      marks as ephemeral, indexes it, then searches
 
 Examples:
@@ -1506,7 +1506,7 @@ veska search <query> [path-or-url] [flags]
 ```
       --json          emit JSON (same shape as eng_search_semantic)
   -k, --limit int     max results to return (default 10)
-      --repo string   repo target (path, URL, repo_id or short_id) — alias for the positional argument
+      --repo string   repo target (path, URL, repo_id or short_id) - alias for the positional argument
 ```
 
 
@@ -1609,7 +1609,7 @@ veska service uninstall [flags]
 
 Find symbols nearest to a seed in vector space (wraps eng_search_similar)
 
-Vector-nearest-neighbour search seeded by an existing symbol or node_id — 'what else looks like this?'. Use to find variants, near-duplicates, or refactor targets. The seed itself is excluded from results.
+Vector-nearest-neighbour search seeded by an existing symbol or node_id - 'what else looks like this?'. Use to find variants, near-duplicates, or refactor targets. The seed itself is excluded from results.
 
 ```
 veska similar <symbol-or-node-id> [flags]
@@ -1632,7 +1632,7 @@ Find symbols by unqualified name or symbol path.
 
 Auto-resolves repo_id from the only registered repo when --repo is omitted; pass --repo <short_id> to scope across multiple repos.
 
-Unqualified names also match — 'Run' finds Server.Run, Command.Run, etc., with exact matches first.
+Unqualified names also match - 'Run' finds Server.Run, Command.Run, etc., with exact matches first.
 
 ```
 veska symbol <name> [flags]

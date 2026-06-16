@@ -160,7 +160,7 @@ func TestRunAPIBreak_E2E_AddedExportedFunc_Passes(t *testing.T) {
 	}
 }
 
-// INDEX-AHEAD HARDENING (solov2-zvh6.11) — the former false-PASS, now FAILing.
+// INDEX-AHEAD HARDENING — the former false-PASS, now FAILing.
 // The index is seeded AHEAD at the candidate's changed content. Before pinning,
 // each node's prev_signature equalled its signature after the re-promote (the
 // clone-of-the-live-index already held the candidate sig), so contract-drift
@@ -198,7 +198,7 @@ func TestRunAPIBreak_E2E_IndexAhead_NowDetected(t *testing.T) {
 	}
 }
 
-// Removal (solov2-zvh6.12): deleting an EXPORTED function must FAIL, naming it.
+// Removal: deleting an EXPORTED function must FAIL, naming it.
 func TestRunAPIBreak_E2E_RemovedExportedFunc_Fails(t *testing.T) {
 	home := t.TempDir()
 	const baseSrc = "package p\n\nfunc Foo() int { return 1 }\nfunc Bar() int { return 2 }\n"
@@ -219,7 +219,7 @@ func TestRunAPIBreak_E2E_RemovedExportedFunc_Fails(t *testing.T) {
 	}
 }
 
-// Rename (solov2-zvh6.12): renaming an EXPORTED function FAILs — the OLD name is
+// Rename: renaming an EXPORTED function FAILs — the OLD name is
 // gone (breaking for importers). Removal/rename collapse into one category.
 func TestRunAPIBreak_E2E_RenamedExportedFunc_Fails(t *testing.T) {
 	home := t.TempDir()
@@ -241,7 +241,7 @@ func TestRunAPIBreak_E2E_RenamedExportedFunc_Fails(t *testing.T) {
 	}
 }
 
-// Unexport-in-place (solov2-zvh6.12): lowercasing an EXPORTED symbol FAILs —
+// Unexport-in-place: lowercasing an EXPORTED symbol FAILs
 // the exported name disappears from the public surface. This pins that the
 // candidate-side exported filter is what makes unexporting register as a
 // removal (base-exported {Foo}, candidate exports nothing → Foo absent).
@@ -287,7 +287,7 @@ func TestRunAPIBreak_E2E_RemovedUnexportedFunc_Passes(t *testing.T) {
 	}
 }
 
-// Deleted file (solov2-zvh6.12): deleting a file that defined an EXPORTED symbol
+// Deleted file: deleting a file that defined an EXPORTED symbol
 // must FAIL. Exercises buildPinnedEphemeral's deleted-file→base-ref-content path
 // for the base-exported leg.
 func TestRunAPIBreak_E2E_DeletedFileRemovesExport_Fails(t *testing.T) {
@@ -310,7 +310,7 @@ func TestRunAPIBreak_E2E_DeletedFileRemovesExport_Fails(t *testing.T) {
 	}
 }
 
-// Removal of an exported TYPE/STRUCT must FAIL (solov2-zvh6.14).
+// Removal of an exported TYPE/STRUCT must FAIL.
 func TestRunAPIBreak_E2E_RemovedExportedType_Fails(t *testing.T) {
 	v, err := runAPIRemoval(t,
 		"package p\n\ntype Config struct{ A int }\n\nfunc Keep() {}\n",
@@ -324,7 +324,7 @@ func TestRunAPIBreak_E2E_RemovedExportedType_Fails(t *testing.T) {
 	}
 }
 
-// Removal of an exported grouped CONST must FAIL (solov2-zvh6.14). Go const +
+// Removal of an exported grouped CONST must FAIL. Go const +
 // var both surface as the parser's KindVariable; this pins that the grouped
 // const_declaration path produces a removable exported node.
 func TestRunAPIBreak_E2E_RemovedExportedConst_Fails(t *testing.T) {
@@ -340,7 +340,7 @@ func TestRunAPIBreak_E2E_RemovedExportedConst_Fails(t *testing.T) {
 	}
 }
 
-// Removal of an exported VAR must FAIL (solov2-zvh6.14).
+// Removal of an exported VAR must FAIL.
 func TestRunAPIBreak_E2E_RemovedExportedVar_Fails(t *testing.T) {
 	v, err := runAPIRemoval(t,
 		"package p\n\nvar Default = 7\n\nfunc Keep() {}\n",
@@ -355,7 +355,7 @@ func TestRunAPIBreak_E2E_RemovedExportedVar_Fails(t *testing.T) {
 }
 
 // A same-name type SHAPE change (struct -> interface) is NOT a removal: the
-// exported NAME persists (solov2-zvh6.14, kind dropped from identity). It must
+// exported NAME persists (, kind dropped from identity). It must
 // PASS the removal detector. (Type shape drift is a separate, currently
 // undetected concern — neither removal nor signature-drift covers it.)
 func TestRunAPIBreak_E2E_TypeShapeChange_NotRemoval_Passes(t *testing.T) {
@@ -394,7 +394,7 @@ func TestRunAPIBreak_E2E_IntraPackageMove_Passes(t *testing.T) {
 	}
 }
 
-// INDEX-AHEAD removal lock (solov2-zvh6.11 + .12): the index is seeded AHEAD —
+// INDEX-AHEAD removal lock ( +.12): the index is seeded AHEAD
 // it already reflects Bar's removal — while base-ref still has Bar. Before
 // pinning, the base-exported leg (read from a clone of the drifted index) would
 // also lack Bar, so no removal is detected → false PASS. With buildPinnedEphemeral

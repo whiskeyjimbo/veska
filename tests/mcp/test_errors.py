@@ -1,4 +1,4 @@
-"""Surface-level error tests — every tool we wire must return a
+"""Surface-level error tests - every tool we wire must return a
 JSON-RPC error for unknown methods rather than crashing, and required-
 arg errors must mention which arg is missing."""
 
@@ -26,7 +26,7 @@ def test_find_symbol_auto_resolves_repo_id(mcp_client):
 
 
 def test_get_file_nodes_auto_resolves_branch(mcp_client, repo_id, target_file):
-    """eng_get_file_nodes no longer requires an explicit branch — it
+    """eng_get_file_nodes no longer requires an explicit branch - it
     defaults to the repo's active_branch. Supplying a real repo_id +
     file_path with no branch succeeds (solov2-khra: re-pinned)."""
     ok, text, _, _ = mcp_client.call("eng_get_file_nodes", {
@@ -42,7 +42,7 @@ def test_search_semantic_empty_query_errors(mcp_client, repo_id, branch):
         "branch": branch,
         "query": "",
     })
-    # Either rejects empty query OR returns empty results — both are valid;
+    # Either rejects empty query OR returns empty results - both are valid;
     # what matters is no crash, no silent success with bogus rankings.
     if not ok:
         return

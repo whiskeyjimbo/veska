@@ -16,7 +16,7 @@ import (
 // TodoDTO is the snake_case wire shape for a single TODO/FIXME marker. The
 // mcp layer owns its serialization rather than emitting the raw
 // ports.TodoEntry, whose PascalCase Go field names would otherwise leak into
-// the JSON-RPC response and break the snake_case surface contract .
+// the JSON-RPC response and break the snake_case surface contract.
 type TodoDTO struct {
 	FindingID string `json:"finding_id"`
 	RepoID    string `json:"repo_id"`
@@ -28,9 +28,9 @@ type TodoDTO struct {
 }
 
 // TodosResponse is the envelope returned by eng_find_todos. DegradedReasons
-// is always emitted (as [] when nothing is degraded) so the wire shape
+// is always emitted (as when nothing is degraded) so the wire shape
 // matches every other query tool per the README's "Conventions across the
-// tool surface" contract .
+// tool surface" contract.
 type TodosResponse struct {
 	Todos           []TodoDTO `json:"todos"`
 	DegradedReasons []string  `json:"degraded_reasons"`
@@ -55,7 +55,7 @@ func todosToDTO(in []ports.TodoEntry, repoRoot string) []TodoDTO {
 // relativizeToRoot is the value-typed twin of relativizeFindingPath used by
 // list_findings: TodoDTO.FilePath is a plain string (todos always have a
 // path), but eng_find_todos and eng_list_findings must agree on the wire
-// convention — repo-relative (solov2-62gc / solov2-v7dq).
+// convention — repo-relative.
 func relativizeToRoot(path, root string) string {
 	if path == "" || root == "" || !filepath.IsAbs(path) {
 		return path
@@ -91,7 +91,7 @@ func makeFindTodosHandler(querier ports.TodoQuerier, repos application.RepoListe
 		if rpcErr := bindParams(raw, &p); rpcErr != nil {
 			return nil, rpcErr
 		}
-		// solov2-ktz0: shim-injected cwd resolves repo_id when omitted.
+		// shim-injected cwd resolves repo_id when omitted.
 		repoID, rpcErr := resolveRepoIDFromParams(ctx, repos, raw, p.RepoID)
 		if rpcErr != nil {
 			return nil, rpcErr
@@ -106,15 +106,15 @@ func makeFindTodosHandler(querier ports.TodoQuerier, repos application.RepoListe
 		if err != nil {
 			return nil, &RPCError{Code: CodeInternalError, Message: fmt.Sprintf("find todos: %v", err)}
 		}
-		// solov2-v7dq: emit repo-relative file_path so eng_find_todos and
-		// eng_list_findings agree on shape per solov2-62gc.
+		// emit repo-relative file_path so eng_find_todos and
+		// eng_list_findings agree on shape per.
 		var root string
 		if repos != nil {
 			if r, ok := repoRoot(ctx, repos, p.RepoID); ok {
 				root = r
 			}
 		}
-		// solov2-k1jm: TODO scanning is post-promotion (it indexes the last
+		// TODO scanning is post-promotion (it indexes the last
 		// committed tree). When the result is empty but the working tree
 		// has uncommitted changes, surface a degraded_reason so callers can
 		// say "commit first" instead of "no TODOs". Non-empty results stay

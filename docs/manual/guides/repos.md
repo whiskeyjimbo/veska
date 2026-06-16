@@ -11,7 +11,7 @@ veska repo add /path/to/your/repo --wait
 ```
 
 `--wait` blocks until the cold scan completes and prints live progress, so your
-first search is hot. Without it the scan runs in the background — tail
+first search is hot. Without it the scan runs in the background - tail
 `~/.veska/logs/daemon.log` for `cold scan: complete`.
 
 `repo add` also accepts a **git URL**, which Veska clones into its cache tier and
@@ -31,7 +31,7 @@ Add `--json` to `current` / `show` for machine-readable output.
 ## Aliases
 
 Bind a human-friendly name to a repo. The **new name comes first**, the existing
-repo second — same order as `git remote add <name> <url>`:
+repo second - same order as `git remote add <name> <url>`:
 
 ```sh
 veska repo alias lib a1b2          # alias repo a1b2… to "lib"
@@ -56,6 +56,6 @@ To force a fresh scan of an already-registered repo (e.g. after a model swap):
 veska reindex /path/to/your/repo
 ```
 
-Safe while the daemon is up — it dispatches through the daemon's
+Safe while the daemon is up - it dispatches through the daemon's
 `eng_reindex_repo` tool, so editor MCP connections aren't interrupted. With the
 daemon stopped, it falls back to a direct in-process reparse.

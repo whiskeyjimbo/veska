@@ -15,15 +15,13 @@ var todoMarkers = []string{"TODO", "FIXME", "XXX"}
 // scanTodos walks src once line-by-line and returns a ParseTodo for each
 // line that begins (after optional comment leaders and whitespace) with
 // one of the recognised markers.
-//
 // The scan is lexical and language-agnostic: it understands the common
-// single-line and block-comment leaders //, #, /*, *, --, <!--, ; and any
+// single-line and block-comment leaders //, #, /*, *, --, <!--,; and any
 // run of whitespace before the marker. It does NOT distinguish code from
 // strings — a literal containing "// TODO" would be flagged. We accept
 // this false-positive rate as the cost of language-independence: the
 // alternative is a per-language tree-sitter query, which costs an order
 // of magnitude more code for marginal precision.
-//
 // Each emitted ParseTodo.Line is 1-based. ParseTodo.Message is the
 // substring of the line FROM the marker onward, with the trailing
 // closing comment leader (*/ or -->) stripped and whitespace trimmed.
@@ -54,7 +52,7 @@ func scanTodos(src []byte) []domain.ParseTodo {
 func matchTodoLine(raw []byte, line int) (domain.ParseTodo, bool) {
 	// Find where the comment content begins. We skip whitespace, then
 	// known leader runs, then whitespace again. Repeating until stable
-	// handles cases like "  // " and "/* TODO".
+	// handles cases like " // " and "/* TODO".
 	i := 0
 	for {
 		j := i

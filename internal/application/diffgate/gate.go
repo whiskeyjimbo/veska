@@ -27,7 +27,7 @@ const (
 	// blast radius.
 	FailBlastRadiusExceeded = "blast_radius_exceeded"
 	// FailAnchorNotResolved: the target finding's anchor node does not resolve
-	// in the base graph, so its blast radius — and thus scope containment —
+	// in the base graph, so its blast radius — and thus scope containment
 	// cannot be computed. Degraded, not a pass (fail-safe).
 	FailAnchorNotResolved = "anchor_not_resolved"
 	// FailRepoNotIndexed: the base graph for (repo, branch) has no indexed
@@ -89,7 +89,6 @@ func NewGate(verifier *Verifier, guard *Guard) (*Gate, error) {
 // composed verdict. target is the finding the change claims to resolve; disc
 // supplies the no-new-findings finding sets; radiusOpts selects the
 // blast-radius policy (depth/direction/bounds) the scope check uses.
-//
 // PASS requires ALL of: resolution checked AND resolved; discovery checked AND
 // no new findings; blast radius contained. A node-anchored target is required
 // for the scope check — a file-anchored target degrades to resolution_unchecked

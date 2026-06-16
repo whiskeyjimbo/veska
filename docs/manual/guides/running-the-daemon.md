@@ -10,12 +10,12 @@ it as an OS service so it survives reboots and crashes.
 ./bin/veska-daemon &
 ```
 
-Fine for kicking the tyres. No auto-restart, no managed logs — when your shell
+Fine for kicking the tyres. No auto-restart, no managed logs - when your shell
 exits, so does the daemon.
 
 ## Real use: run it as a service
 
-`veska service` manages the daemon as an OS service — **systemd `--user`** on
+`veska service` manages the daemon as an OS service - **systemd `--user`** on
 Linux, **launchd** on macOS:
 
 ```sh
@@ -43,7 +43,7 @@ veska doctor service             # service-specific health
 tail -f ~/.veska/logs/daemon.log # live logs
 ```
 
-Look for `cold scan: complete` in the log after registering a repo — that's when
+Look for `cold scan: complete` in the log after registering a repo - that's when
 the first index is hot. See **[Diagnostics with doctor](doctor.md)** for reading
 the health output, and **[Connecting your editor](editor-setup.md)** to wire an
 MCP client to the running daemon.

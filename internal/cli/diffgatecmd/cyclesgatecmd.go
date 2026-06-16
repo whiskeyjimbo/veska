@@ -37,10 +37,9 @@ type cycleGateReport struct {
 // candidate's changed files into a throwaway clone of the base graph (so
 // cross-file CALLS RESOLVE — the ephemeral overlay carries only intra-file
 // edges), materialises the after- and base-state directed dependency graphs,
-// runs the cycle gate (solov2-zvh6.6), and FAILs when a strongly-connected
+// runs the cycle gate, and FAILs when a strongly-connected
 // component of >=2 symbols absent at base appears in the change set.
-//
-// Index-ahead safety (solov2-zvh6.11): both the base-state edge set AND the
+// Index-ahead safety: both the base-state edge set AND the
 // candidate after-state are pinned to base-ref via buildPinnedEphemeral's base
 // clone (the after-state clone chains FROM that base clone, not the live index).
 // So even if a daemon has advanced the index past base-ref — all the way to the
@@ -78,7 +77,7 @@ func RunCycles(ctx context.Context, p CycleParams) error {
 	}
 
 	// Pin base + candidate after-state to base-ref (index-ahead hardening,
-	// solov2-zvh6.11). The base clone re-promotes base-ref's changed files; the
+	// ). The base clone re-promotes base-ref's changed files; the
 	// after-state clone below chains FROM baseClonePath, not the live index.
 	eph, changes, baseClonePath, cleanup, err := buildPinnedEphemeral(ctx, ephemeralParams{
 		RepoID:       p.RepoID,
@@ -119,7 +118,6 @@ func RunCycles(ctx context.Context, p CycleParams) error {
 
 // cycleEdgeGraphs materialises the after- and base-state dependency graphs for
 // the cycle gate, plus a node_id->member naming map for the verdict.
-//
 // Both graphs are built from a clone the changed files are re-promoted into (so
 // cross-file CALLS resolve — the ephemeral overlay only carries intra-file
 // edges): the BASE clone (base-ref content, from buildPinnedEphemeral) and an
@@ -129,18 +127,18 @@ func RunCycles(ctx context.Context, p CycleParams) error {
 // are missing exactly the edges whose src lives in an unchanged file and whose
 // dst lives in a changed file. We splice those back from the LIVE index:
 //
-//	base  = base-clone-edges  ∪ index-edges(srcFile∉changed ∧ dstFile∈changed)
+//	base = base-clone-edges ∪ index-edges(srcFile∉changed ∧ dstFile∈changed)
 //	after = after-clone-edges ∪ index-edges(srcFile∉changed ∧ dstFile∈changed)
 //
 // The live index is a SOUND source for that splice term under the common
 // index-ahead case (body-level drift of the changed file): a cross-file inbound
 // edge (src in an unchanged file) is invariant to body drift — A→B exists
-// because a.go calls B and B's node_id is stable, independent of b.go's body —
+// because a.go calls B and B's node_id is stable, independent of b.go's body
 // so the index always holds it. (Edge case, already out of contract: if the
 // drifted candidate-content index RENAMED or REMOVED the dst symbol, its
 // node_id changes and the base-ref edge is absent from the index; the base-leg
 // splice would then under-restore. Not chased — it is a corner of an already
-// out-of-contract index-ahead race; see solov2-zvh6.11.) The drift lives only
+// out-of-contract index-ahead race.) The drift lives only
 // in edges whose src is in a changed file, and those come from the clones, not
 // the splice. A re-added edge to a
 // node the diff DELETED is harmless — that node has no outbound edge in the

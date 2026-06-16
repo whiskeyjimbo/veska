@@ -15,7 +15,7 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/platform/observability"
 )
 
-// --- fakes -----------------------------------------------------------------
+// fakes
 
 type fakeEmbedder struct {
 	vec     []float32
@@ -85,9 +85,9 @@ func (f *fakeNodes) NodesInFile(_ context.Context, _, _, _ string) ([]string, er
 	return nil, nil
 }
 
-// --- tests -----------------------------------------------------------------
+// tests
 
-// TestSemantic_StaticEmbedderFlagsLowQuality pins solov2-d2x: when the
+// TestSemantic_StaticEmbedderFlagsLowQuality pins: when the
 // elected embedder is the static-v2 fallback, every response carries the
 // low_quality_static_embedder degraded reason so the quality cliff is
 // visible in-band.
@@ -172,7 +172,7 @@ func TestSemantic_HappyPath_PreservesHitRank(t *testing.T) {
 	}
 	// Vector retriever is over-requested by max(k*fusionFanout=30,
 	// fanoutFloor=100); k=10 caller hits the floor → 100 to the vector
-	// backend. The floor was widened from 30 to 100 in solov2-izh6.26 so
+	// backend. The floor was widened from 30 to 100 in so
 	// rerank-promotable nodes (e.g. cobra's Command.AddCommand at fused
 	// rank ~22 for "register subcommand") enter the candidate pool.
 	if vec.gotK != 100 || vec.gotRepo != "r1" || vec.gotBranch != "main" {
@@ -180,7 +180,7 @@ func TestSemantic_HappyPath_PreservesHitRank(t *testing.T) {
 	}
 }
 
-// TestSemanticCandidates_TagsRanksAndUnionsRetrievers pins solov2-bcn:
+// TestSemanticCandidates_TagsRanksAndUnionsRetrievers pins:
 // SemanticCandidates returns one hydrated entry per node touched by
 // either retriever, each carrying its 1-indexed per-retriever rank
 // (0 = absent from that list). The MCP cross-repo handler uses these
@@ -440,7 +440,7 @@ func TestSemantic_ObservesVectorQueryDuration_ErrorPath(t *testing.T) {
 	}
 }
 
-// --- lexical fallback (m3.03.2) -------------------------------------------
+// lexical fallback (m3.03.2)
 
 type fakeLexical struct {
 	hits   []ports.LexicalHit
@@ -497,7 +497,7 @@ func TestSemantic_EmbedderUnreachable_FallsBackToLexical(t *testing.T) {
 	}
 }
 
-// TestSemantic_HybridFusion_LiftsLexicalOnlyHit pins solov2-2su:
+// TestSemantic_HybridFusion_LiftsLexicalOnlyHit pins:
 // when a node ranks #1 in lexical (e.g. exact identifier match) but is
 // missing from the vector top — typical on small corpora where vector
 // scores cluster — RRF fusion still lifts it ahead of vector-only
@@ -505,7 +505,7 @@ func TestSemantic_EmbedderUnreachable_FallsBackToLexical(t *testing.T) {
 func TestSemantic_HybridFusion_LiftsLexicalOnlyHit(t *testing.T) {
 	t.Parallel()
 	emb := &fakeEmbedder{vec: []float32{0.1}}
-	// Vector ranks v1..v4 in that order with tight scores — typical of
+	// Vector ranks v1.v4 in that order with tight scores — typical of
 	// a small corpus where the cosine distances barely discriminate.
 	// NAMEMATCH appears at vector rank 4 (the tail) but lexical rank 1.
 	vec := &fakeVectors{hits: []domain.SearchHit{
@@ -537,7 +537,7 @@ func TestSemantic_HybridFusion_LiftsLexicalOnlyHit(t *testing.T) {
 	if lex.calls != 1 {
 		t.Errorf("expected exactly 1 lexical call, got %d", lex.calls)
 	}
-	// fanout=3 with floor=100 (solov2-izh6.26 widening) so k=5 caller
+	// fanout=3 with floor=100 ( widening) so k=5 caller
 	// still requests k=100 of each retriever — floor protects small-k
 	// callers from losing recall to the post-fusion rerank having no
 	// candidates to lift.
@@ -548,7 +548,7 @@ func TestSemantic_HybridFusion_LiftsLexicalOnlyHit(t *testing.T) {
 
 // TestSemantic_HybridFusion_LexicalError_DegradesGracefully verifies
 // that a lexical-side failure falls back to vector-only ordering
-// rather than failing the whole call .
+// rather than failing the whole call.
 func TestSemantic_HybridFusion_LexicalError_DegradesGracefully(t *testing.T) {
 	t.Parallel()
 	emb := &fakeEmbedder{vec: []float32{0.1}}

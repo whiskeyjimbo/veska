@@ -33,7 +33,7 @@ mirror that has fetched from your remote.
 
 ## What you must do
 
-### Step 1 — Rotate the credential. Now.
+### Step 1 - Rotate the credential. Now.
 
 Rotation is the only step that genuinely reduces risk. Do this
 first; everything else is hygiene.
@@ -42,14 +42,14 @@ first; everything else is hygiene.
 - Notify your security on-call per org policy.
 - If the credential grants production access, treat as an incident.
 
-### Step 2 — Rewrite Git history (optional, often not enough)
+### Step 2 - Rewrite Git history (optional, often not enough)
 
 If the leaked credential is the kind you would re-use elsewhere
 (a long-lived API key, a personal access token), rewrite history
 to remove it. Veska cannot do this for you. Pick a tool:
 
 ```bash
-# Option A — git-filter-repo (recommended)
+# Option A - git-filter-repo (recommended)
 pip install git-filter-repo
 git clone --mirror git@github.com:org/repo.git repo-rewrite.git
 cd repo-rewrite.git
@@ -60,7 +60,7 @@ git push --force-with-lease --tags
 ```
 
 ```bash
-# Option B — BFG
+# Option B - BFG
 java -jar bfg.jar --replace-text replacements.txt repo-rewrite.git
 cd repo-rewrite.git
 git reflog expire --expire=now --all && git gc --prune=now --aggressive
@@ -72,7 +72,7 @@ Public forks are out of your control; if the repo is public, the
 secret is permanent and Step 1 (rotation) is the only thing that
 matters.
 
-### Step 3 — Acknowledge in Veska
+### Step 3 - Acknowledge in Veska
 
 Findings are managed over MCP, not the CLI. Use the MCP tools:
 

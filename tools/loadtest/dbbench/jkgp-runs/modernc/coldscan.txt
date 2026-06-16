@@ -6,6 +6,6 @@ added repo f43242f95b88 (via daemon)
   walking → 296 files (2.5s)
   walking → 311 files (3.0s)
   promoting → 324 files (3.5s)
-  promoting → 324 files (13.5s, stalled 10s — check ~/.veska/logs/daemon.log)
+  promoting → 324 files (13.5s, stalled 10s - check ~/.veska/logs/daemon.log)
   ✓ cold scan complete (16.0s)
 elapsed=16.10 user=0.00 sys=0.01 maxRSS=18944

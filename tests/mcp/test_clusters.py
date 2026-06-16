@@ -1,4 +1,4 @@
-"""Tests for eng_find_clusters — unified, tier-labeled similar-code clusters.
+"""Tests for eng_find_clusters - unified, tier-labeled similar-code clusters.
 
 One pass returns exact / structural / near groups for de-dupe triage. Read-only,
 so these assert the contract (responds, well-shaped, tiers/scope honoured) rather
@@ -13,7 +13,7 @@ def test_find_clusters_responds(mcp_client, repo_id, branch):
     })
     assert ok, f"eng_find_clusters failed: {text}"
     assert isinstance(result, dict)
-    assert "clusters" in result, f"missing 'clusters' key — shape drift: {list(result)}"
+    assert "clusters" in result, f"missing 'clusters' key - shape drift: {list(result)}"
 
 
 def test_find_clusters_groups_are_well_formed(mcp_client, repo_id, branch):

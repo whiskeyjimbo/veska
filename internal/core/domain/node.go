@@ -27,29 +27,29 @@ const (
 	KindTest      NodeKind = "test"
 	// KindVariable is a top-level (package-scope) var declaration. Captured
 	// so framework patterns where the API surface lives in initialised vars
-	// — cobra command trees (`var rootCmd = &cobra.Command{...}`), gin/echo
+	// cobra command trees (`var rootCmd = &cobra.Command{.}`), gin/echo
 	// router globals, viper config singletons — appear in eng_find_symbol /
-	// eng_get_file_nodes and become navigable from agent tools .
+	// eng_get_file_nodes and become navigable from agent tools.
 	KindVariable NodeKind = "variable"
 	// KindCommand is a CLI command surfaced from a framework's command
-	// struct-literal (e.g. cobra `var rootCmd = &cobra.Command{Use: ...}`).
+	// struct-literal (e.g. cobra `var rootCmd = &cobra.Command{Use:.}`).
 	// Named by the framework's command word (cobra Use:, urfave Name:),
 	// not the Go var identifier, so agent tools see the actual command
 	// tree. Wire-up calls (rootCmd.AddCommand(sub)) emit CONTAINS edges so
-	// call_chain / blast_radius walk the command hierarchy .
+	// call_chain / blast_radius walk the command hierarchy.
 	KindCommand NodeKind = "command"
 	// KindRoute is an HTTP route surfaced from a router framework's
 	// registration call (gin/echo `router.GET("/path", h)`), named by its
 	// path. Reserved alongside KindCommand as the framework-aware
 	// vocabulary; route extraction itself is a follow-up to the cobra
-	// command pass .
+	// command pass.
 	KindRoute NodeKind = "route"
 	// KindChunk is a non-declaration source region — package-level
-	// vars, file-top comments, init() guts, anything between symbol
+	// vars, file-top comments, init guts, anything between symbol
 	// declarations. Chunks live alongside symbol nodes so the existing
 	// embedder / FTS / search pipeline picks them up without special
 	// casing, but they are excluded from entry_points and the
-	// rerank definition-boost .
+	// rerank definition-boost.
 	KindChunk NodeKind = "chunk"
 )
 
@@ -93,7 +93,7 @@ type Node struct {
 	Lines       *LineRange
 	RawContent  *string
 	ContentHash *ContentHash
-	// StructuralHash is a hex SHA-256 over the node's identifier-/literal-
+	// StructuralHash is a hex SHA-256 over the node's identifier-/literal
 	// normalised token stream, so renamed-variable (Type-2) clones collide even
 	// when ContentHash differs. Nil for nodes the parser does not structurally
 	// hash (packages, imports, chunks). Computed at parse time (the AST is
@@ -103,7 +103,7 @@ type Node struct {
 	Exported       *bool
 	// External marks a node sourced from a registered repo's vendored
 	// or module-cache dependency rather than its first-party code
-	// . Defaults to nil (i.e. first-party / unknown).
+	// Defaults to nil (i.e. first-party / unknown).
 	// Stored as INTEGER 0/1 in the nodes table; read paths set it on
 	// rehydrate so MCP responses can label hits without an extra
 	// lookup.
@@ -140,7 +140,7 @@ func WithLines(lr LineRange) NodeOption {
 	}
 }
 
-// WithRawContent sets the raw source text.  If ContentHash is already set it
+// WithRawContent sets the raw source text. If ContentHash is already set it
 // must equal sha256(content); otherwise an error is returned.
 func WithRawContent(raw string) NodeOption {
 	return func(n *Node) error {
@@ -154,7 +154,7 @@ func WithRawContent(raw string) NodeOption {
 	}
 }
 
-// WithContentHash sets a pre-computed SHA-256 content hash.  If RawContent is
+// WithContentHash sets a pre-computed SHA-256 content hash. If RawContent is
 // already set the hash must equal sha256(raw_content); otherwise an error is
 // returned.
 func WithContentHash(h ContentHash) NodeOption {
@@ -196,7 +196,7 @@ func WithExported(exported bool) NodeOption {
 }
 
 // WithExternal marks the node as sourced from a vendored or
-// module-cache dependency . nil keeps the default
+// module-cache dependency. nil keeps the default
 // (first-party / unknown).
 func WithExternal(external bool) NodeOption {
 	return func(n *Node) error {
@@ -261,7 +261,7 @@ func NewNode(spec NodeSpec, opts ...NodeOption) (*Node, error) {
 	// body but not an explicit hash (the common parser path: WithRawContent
 	// only). Without this, every parsed node persisted content_hash='' and
 	// exact-clone detection bucketed all of them into one false byte-identity
-	// group (solov2-ozoi.2). ContentHash stays nil for nodes with no raw
+	// group. ContentHash stays nil for nodes with no raw
 	// content (packages, imports) so they never participate in clone grouping.
 	if n.RawContent != nil && n.ContentHash == nil {
 		sum := sha256.Sum256([]byte(*n.RawContent))

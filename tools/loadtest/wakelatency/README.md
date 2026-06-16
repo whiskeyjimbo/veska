@@ -1,4 +1,4 @@
-# wakelatency — wake-reconcile sweep latency gate (solov2-xde2.25.4)
+# wakelatency - wake-reconcile sweep latency gate (solov2-xde2.25.4)
 
 Wall-time gate for `internal/infrastructure/git.WakeReconciler`'s wake
 sweep. Generates a synthetic on-disk tree, seeds the reconciler baseline,
@@ -13,19 +13,19 @@ then times no-change `InjectWake()` sweeps and asserts the SOLO-03 §5.2 /
 The sweep cost the NFR targets is the **no-change full walk**: `stat` +
 64-byte prefix read + last-seen map compare on every tracked file, with the
 handler never firing. After `Seed()` records the baseline, a no-change
-`InjectWake()` still walks every file but invokes no handler — that walk is
+`InjectWake()` still walks every file but invokes no handler - that walk is
 exactly the cost being gated.
 
 Only `InjectWake()` is timed. Synthetic-tree generation and `Seed()` are
 setup and excluded. Git/branch-check and watcher-restart hooks are
-deliberately **not** wired — the NFR is about the mtime/size/prefix walk,
+deliberately **not** wired - the NFR is about the mtime/size/prefix walk,
 which dominates. The handler is an atomic counter asserted to stay `0`, so a
 nonzero count fails the run (it would mean the timed sweep included handler
 work and the number isn't the pure walk).
 
 A single tree is registered via one `AddDir`; the reconciler recurses into
 all subdirs. A single registered tree is one goroutine
-(`WithWakeConcurrency` is a no-op), so the 50k walk is single-threaded — the
+(`WithWakeConcurrency` is a no-op), so the 50k walk is single-threaded - the
 representative single-repo case.
 
 ## Files
@@ -64,7 +64,7 @@ runs are comparable across machines.
 `Seed()` pre-walks the tree, so every timed `InjectWake()` runs against a
 warm OS page cache. This is the representative steady-state for a
 wake/resume sweep (the working tree was just read at seed time) and is
-deterministic — the numbers are warm-cache by design and should not be read
+deterministic - the numbers are warm-cache by design and should not be read
 as cold-start. No cold-cache variant is provided.
 
 ## Output

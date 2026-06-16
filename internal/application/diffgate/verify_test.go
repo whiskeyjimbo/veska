@@ -89,7 +89,6 @@ func TestVerify_TargetUnresolved(t *testing.T) {
 	}
 }
 
-// TestVerify_DeadCodeStructuralEdgeNotResolved is the solov2-nmps.9 regression:
 // the anchor has an inbound edge in the base, but it is a STRUCTURAL parent edge
 // (its package/file CONTAINS it), not a CALLS caller. Dead-code liveness is
 // CALLS-only, so the finding must read UNRESOLVED — counting the CONTAINS edge

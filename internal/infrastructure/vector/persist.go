@@ -13,7 +13,7 @@ import (
 	usearchlib "github.com/unum-cloud/usearch/golang"
 )
 
-// sidecar is the JSON companion to each .hnsw file.
+// sidecar is the JSON companion to each.hnsw file.
 // It holds the Go-side metadata that usearch itself does not persist.
 // Vectors are intentionally excluded — usearch holds the float16 copy.
 type sidecar struct {
@@ -31,10 +31,8 @@ type sidecar struct {
 const sep = "|"
 
 // indexFileName encodes an indexKey into a safe filename stem.
-//
-// Format:  vec-{repoID}|{branch}|{modelID}
-//
-// Each field is URL-query-escaped.  The separator "|" is never emitted by
+// Format: vec-{repoID}|{branch}|{modelID}
+// Each field is URL-query-escaped. The separator "|" is never emitted by
 // url.QueryEscape (it would become "%7C"), so splitting on "|" is unambiguous
 // regardless of what characters appear in the key fields (slashes, hyphens, etc.).
 func indexFileName(key indexKey) string {
@@ -70,13 +68,12 @@ func parseIndexKey(stem string) (indexKey, error) {
 }
 
 // Save persists all HNSW indexes plus their metadata sidecars to dir.
-//
 // For each (repoID, branch, modelID) index, two files are written:
 //
-//	<dir>/vec-{repoID}-{branch}-{modelID}.hnsw  — native usearch index
-//	<dir>/vec-{repoID}-{branch}-{modelID}.json  — JSON sidecar (rows, nodeToID, nextID)
+//	<dir>/vec-{repoID}-{branch}-{modelID}.hnsw — native usearch index
+//	<dir>/vec-{repoID}-{branch}-{modelID}.json — JSON sidecar (rows, nodeToID, nextID)
 //
-// Save acquires a read-lock for the duration of the iteration.  Individual
+// Save acquires a read-lock for the duration of the iteration. Individual
 // idx.Save calls go to disk while the lock is held; they do not mutate
 // in-memory state.
 func (s *UsearchStore) Save(dir string) error {
@@ -118,7 +115,6 @@ func (s *UsearchStore) Save(dir string) error {
 
 // Load reads all *.json sidecar files from dir, reconstructs the corresponding
 // usearch HNSW index from the paired *.hnsw file, and adds each index to the store.
-//
 // Load acquires a write-lock for the duration of the operation.
 // If the store already contains an index for a given key it is replaced.
 func (s *UsearchStore) Load(dir string) error {

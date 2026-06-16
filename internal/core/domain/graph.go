@@ -7,8 +7,8 @@ import (
 )
 
 // Graph is a domain read projection — an in-memory bundle of Nodes and Edges
-// scoped to a single (repo_id, branch) pair.  It is NOT a write aggregate;
-// writes flow row-shaped through GraphRepository (a port).  Graph exists for
+// scoped to a single (repo_id, branch) pair. It is NOT a write aggregate;
+// writes flow row-shaped through GraphRepository (a port). Graph exists for
 // read-time traversal only.
 type Graph struct {
 	RepoID string
@@ -42,7 +42,7 @@ func NewGraph(repoID, branch string) (*Graph, error) {
 	}, nil
 }
 
-// AddNode inserts a Node into the projection.  Returns an error if a node with
+// AddNode inserts a Node into the projection. Returns an error if a node with
 // the same ID already exists.
 func (g *Graph) AddNode(n *Node) error {
 	if n == nil {
@@ -55,7 +55,7 @@ func (g *Graph) AddNode(n *Node) error {
 	return nil
 }
 
-// AddEdge inserts a directed Edge into the projection.  Both endpoint nodes
+// AddEdge inserts a directed Edge into the projection. Both endpoint nodes
 // must already be present; otherwise an error is returned.
 func (g *Graph) AddEdge(e *Edge) error {
 	if e == nil {
@@ -91,7 +91,7 @@ func (g *Graph) Node(id NodeID) (*Node, bool) {
 	return n, ok
 }
 
-// OutgoingEdges returns all edges whose source is id.  Returns an empty
+// OutgoingEdges returns all edges whose source is id. Returns an empty
 // (non-nil) slice if none exist.
 func (g *Graph) OutgoingEdges(id NodeID) []*Edge {
 	if edges, ok := g.outgoing[id]; ok {
@@ -100,7 +100,7 @@ func (g *Graph) OutgoingEdges(id NodeID) []*Edge {
 	return []*Edge{}
 }
 
-// IncomingEdges returns all edges whose target is id.  Returns an empty
+// IncomingEdges returns all edges whose target is id. Returns an empty
 // (non-nil) slice if none exist.
 func (g *Graph) IncomingEdges(id NodeID) []*Edge {
 	if edges, ok := g.incoming[id]; ok {

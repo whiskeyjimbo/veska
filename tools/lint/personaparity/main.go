@@ -1,21 +1,18 @@
 // Command personaparity enforces the persona-suite coverage contract
-// (solov2-nmps.2): every eng_* MCP tool registered in
+// every eng_* MCP tool registered in
 // internal/infrastructure/mcp/ must be EXERCISED by some test under
 // tests/mcp/ — either a persona workflow (tests/mcp/test_persona_*.py,
 // tests/mcp/persona_harness.py) or the per-tool suite (any other
 // tests/mcp/*.py) — OR be listed in tools/lint/personaparity/parked.txt
 // with a reason.
-//
 // Unlike a hand-maintained allow-list, the gate VERIFIES references: it
 // greps the test corpus for each tool name, so a tool that no test names
 // fails the gate. A new tool added to the registry without a covering test
 // turns this red; deleting a tool's last test reference does too. This is
 // the "test ALL functionality" guarantee for the eng_* surface.
-//
 // CLI/MCP parity (every tool also reachable via a `veska` subcommand) is a
 // separate concern enforced by the cliparity lint; the CLI wraps these same
 // tools, so personaparity scopes itself to the MCP surface.
-//
 // The MCP scan walks *.go via go/ast (no daemon spin-up), so this runs in
 // the same pre-merge gate as gofmt and `go vet`.
 package main
@@ -53,7 +50,7 @@ var personaFiles = map[string]struct{}{
 }
 
 // engToolRe matches a tool name only as a quoted string literal — the way a
-// tool is actually invoked over MCP (mcp.call("eng_x", ...)). Bare mentions in
+// tool is actually invoked over MCP (mcp.call("eng_x",.)). Bare mentions in
 // comments/docstrings (e.g. a PARKED note naming a tool) are deliberately NOT
 // counted as coverage.
 var engToolRe = regexp.MustCompile(`"(eng_[a-z_]+)"`)
@@ -246,7 +243,7 @@ func scanTestRefs() (map[string]map[string]struct{}, error) {
 	return out, nil
 }
 
-// readParked reads the parked manifest: one `tool_name  reason` per line,
+// readParked reads the parked manifest: one `tool_name reason` per line,
 // blank lines and #-comments ignored. The reason is required (a parked tool
 // must justify why it is unexercised).
 func readParked(path string) (map[string]string, error) {

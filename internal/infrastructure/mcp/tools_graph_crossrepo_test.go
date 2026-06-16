@@ -9,10 +9,7 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/sqlite/resolver"
 )
 
-// ---------------------------------------------------------------------------
 // eng_get_call_chain — cross-repo edges injected into response
-// ---------------------------------------------------------------------------
-
 // TestGetCallChainCrossRepoEdges verifies that when a ResolveFunc is provided
 // and returns a ResolvedEdge for a visited node, the GraphResponse contains a
 // matching CrossRepoEdge with cross_repo=true.

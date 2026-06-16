@@ -9,20 +9,20 @@ import (
 	mcpinfra "github.com/whiskeyjimbo/veska/internal/infrastructure/mcp"
 )
 
-// searchCmd is the one-shot eval CLI from solov2-z92: clone+index+query
+// searchCmd is the one-shot eval CLI from: clone+index+query
 // in a single command, no daemon required. It is a thin wrapper around
 // the in-process services the daemon also wires — Ingester, Promoter,
 // EmbedWorker, VectorStorage, search.Service — bolted together for a
 // synchronous one-pass run instead of long-lived goroutines.
 //
-//	veska search "<query>"                       # search existing index
-//	veska search "<query>" <path>                # ensure indexed, then search
-//	veska search "<query>" https://github.com/x  # clone, index, search
+//	veska search "<query>" # search existing index
+//	veska search "<query>" <path> # ensure indexed, then search
+//	veska search "<query>" https://github.com/x # clone, index, search
 //
 // All orchestration lives in internal/cli/searchcmd; this RunE only parses
 // flags/positionals and delegates. The cold-scan reparser factory and the
 // cwd→repo matcher are cmd-owned seams (shared with `veska reindex`) injected
-// through searchcmd.RunOpts (solov2-0omh.5).
+// through searchcmd.RunOpts.
 func searchCmd(reparserFactory reparserFactoryFunc) *cobra.Command {
 	var (
 		k        int
@@ -37,7 +37,6 @@ func searchCmd(reparserFactory reparserFactoryFunc) *cobra.Command {
 		// cluster around ~0.01–0.03, use rank not absolute score to
 		// compare hits — can't drift between CLI and MCP surfaces. The
 		// CLI-specific positional/--repo behaviour is appended below.
-		// solov2-izh6.20.
 		Long: mcpinfra.DescSearchSemantic + `
 
 The optional second argument (or --repo flag) selects the repo to search:

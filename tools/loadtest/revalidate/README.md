@@ -1,4 +1,4 @@
-# revalidate — 10k-edge commit timing bench (m3.05.4)
+# revalidate - 10k-edge commit timing bench (m3.05.4)
 
 End-to-end wall-time bench for `internal/application/revalidate.Handler`.
 Drives a synthetic 10 000-node / 10 000-edge / ~3 000-finding commit
@@ -27,7 +27,7 @@ go test -tags=eval -run TestRevalidateBench ./tools/loadtest/revalidate/ -v -tim
 | `REVALIDATE_FILES` | `100` | File count. Each file gets `NODES/FILES` nodes plus that many within-file edges. |
 | `REVALIDATE_STALE_PCT` | `30` | Percentage of nodes-per-file that anchor a stale open finding (split half dead-code / half contract-drift). |
 
-There is **no quick-mode override** — the M3 exit gate is specifically
+There is **no quick-mode override** - the M3 exit gate is specifically
 the 10k-edge case, so the bench always runs the full fixture.
 
 ## Sub-tests
@@ -48,13 +48,13 @@ drift (DoD #7) but have no wall-time assertion of their own.
 ## Fixture shape
 
 - Nodes per file are partitioned into three contiguous ranges:
-  - `[0, deadEnd)` — dead-code anchors. The edge layout guarantees
+  - `[0, deadEnd)` - dead-code anchors. The edge layout guarantees
     these have zero inbound edges, so dispatch takes the REFRESH
     branch.
-  - `[deadEnd, driftEnd)` — contract-drift anchors. Their
+  - `[deadEnd, driftEnd)` - contract-drift anchors. Their
     `prev_signature` differs from `signature`, so dispatch also takes
     REFRESH.
-  - `[driftEnd, nodesPerFile)` — "callee tail". Every edge dst lives
+  - `[driftEnd, nodesPerFile)` - "callee tail". Every edge dst lives
     here, which keeps the dead-code heads inbound-free without
     requiring per-node edge logic.
 - Findings have `anchor_content_hash = 'h-stale-<node_id>'`; nodes have
@@ -88,7 +88,7 @@ Plus a one-line stdout summary per sub-test:
 REVALIDATE[combined] nodes=10000 files=100 findings=3000 elapsed_ms=1234.50 p95_ms=18.70 refreshed=3000 closed=0 gate=PASS
 ```
 
-`elapsed_ms` covers only the per-file `Handle` loop — fixture seeding is
+`elapsed_ms` covers only the per-file `Handle` loop - fixture seeding is
 excluded so the number is comparable across runs and machines.
 
 ## Interpreting the numbers

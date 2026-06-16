@@ -1,5 +1,5 @@
 site_name: Veska Manual
-site_description: Operator and user manual for Veska — a local code-intelligence daemon.
+site_description: Operator and user manual for Veska - a local code-intelligence daemon.
 site_url: ""
 docs_dir: docs/manual
 site_dir: site

@@ -74,8 +74,7 @@ func TestBackupVerifyPassesForMemoryBackend(t *testing.T) {
 
 // TestBackupIncludesUsearchIndexFiles verifies that *.hnsw and *.json sidecar
 // files placed in veskaHome are captured in the backup tarball.
-//
-// The usearch backend writes vec-{repo}|{branch}|{model}.hnsw + .json into
+// The usearch backend writes vec-{repo}|{branch}|{model}.hnsw +.json into
 // veskaHome on shutdown; backup.Create must include them.
 func TestBackupIncludesUsearchIndexFiles(t *testing.T) {
 	veskaHome := t.TempDir()
@@ -84,7 +83,7 @@ func TestBackupIncludesUsearchIndexFiles(t *testing.T) {
 	dbPath := filepath.Join(veskaHome, "veska.db")
 	seedDB(t, dbPath)
 
-	// Simulate usearch Save: write a fake .hnsw and its JSON sidecar.
+	// Simulate usearch Save: write a fake.hnsw and its JSON sidecar.
 	hnswName := "vec-repo1|main|nomic.hnsw"
 	jsonName := "vec-repo1|main|nomic.json"
 	if err := os.WriteFile(filepath.Join(veskaHome, hnswName), []byte("fake-hnsw-data"), 0o644); err != nil {
@@ -106,18 +105,16 @@ func TestBackupIncludesUsearchIndexFiles(t *testing.T) {
 	entries := tarEntries(t, result.Path)
 
 	// The current backup implementation copies only explicit files (audit.jsonl,
-	// config.toml, cache/) and the vacuumed veska.db.  *.hnsw files in veskaHome
-	// are NOT copied by the current create.go.  This test documents the gap and
+	// config.toml, cache/) and the vacuumed veska.db. *.hnsw files in veskaHome
+	// are NOT copied by the current create.go. This test documents the gap and
 	// acts as a contract: if/when backup.Create is extended to include *.hnsw
 	// files, this assertion should flip to require their presence.
-	//
 	// For the usearch backend, the DoD says "*.usearch index file in VESKA_HOME"
-	// is included.  The current backup.Create implementation copies veska.db and
+	// is included. The current backup.Create implementation copies veska.db and
 	// the cache/ tree; *.hnsw files live at the top level of veskaHome which is
 	// NOT currently walked by createTarGz (only the staging dir is walked).
-	//
 	// Track: once backup.Create is updated, change the assertion below to:
-	//   if !entries[hnswName] { t.Fatalf(...) }
+	//   if !entries[hnswName] { t.Fatalf(.) }
 	if entries[hnswName] {
 		t.Logf("INFO: .hnsw file %q IS now in tarball (backup.Create was extended)", hnswName)
 	} else {
@@ -131,7 +128,7 @@ func TestBackupIncludesUsearchIndexFiles(t *testing.T) {
 }
 
 // TestBackupUsearchVerifyRoundTrip verifies that a backup containing a fake
-// .hnsw file (placed in cache/ so it IS copied) survives the verify step.
+// hnsw file (placed in cache/ so it IS copied) survives the verify step.
 func TestBackupUsearchVerifyRoundTrip(t *testing.T) {
 	veskaHome := t.TempDir()
 	backupDir := t.TempDir()
@@ -255,7 +252,7 @@ func TestBackupMemoryBackendVectorsInDB(t *testing.T) {
 	}
 }
 
-// extractDB extracts veska.db from the .tar.gz at tarPath into destDir.
+// extractDB extracts veska.db from the.tar.gz at tarPath into destDir.
 func extractDB(t *testing.T, tarPath, destDir string) {
 	t.Helper()
 	f, err := os.Open(tarPath)

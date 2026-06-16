@@ -2,7 +2,6 @@
 // (eng_find_clusters): the unified, tier-labeled similar-code view (exact +
 // structural + near) for de-dupe triage. It proxies to the daemon like the other
 // read commands and renders one block per cluster, grouped tightest tier first.
-// solov2-phn0.
 package duplicatescmd
 
 import (

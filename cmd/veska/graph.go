@@ -13,12 +13,12 @@ import (
 
 // The calls/blast/changed command logic lives in internal/cli/graphcmd; the
 // constructors below are Cobra glue whose RunE bodies are thin delegating
-// calls into that package (solov2-0omh.7).
+// calls into that package.
 
 // callsCmd wraps eng_get_call_chain. One command with --direction
 // (out|in|both) instead of separate `callers` / `callees` verbs — the
 // underlying MCP tool already takes that parameter and a single CLI surface
-// keeps the help text simple. solov2-xomk parity wrapper.
+// keeps the help text simple. parity wrapper.
 func callsCmd() *cobra.Command {
 	var (
 		repoFlag string
@@ -32,7 +32,7 @@ func callsCmd() *cobra.Command {
 		Short: "Walk CALLS edges from a symbol (wraps eng_get_call_chain)",
 		// Long is shared verbatim with the eng_get_call_chain MCP tool
 		// description so the chained_selectors_unresolved fallback guidance
-		// can't drift between CLI and MCP surfaces. solov2-izh6.20.
+		// can't drift between CLI and MCP surfaces.
 		Long:         mcpinfra.DescCallChain,
 		Args:         cobra.ExactArgs(1),
 		SilenceUsage: true,
@@ -59,7 +59,7 @@ func callsCmd() *cobra.Command {
 // blastCmd wraps the blast-radius tool family. A single symbol seed is the
 // default; --dirty seeds from the staged overlay (eng_get_dirty_blast_radius)
 // and --diff from the working-tree-vs-HEAD diff (eng_get_diff_blast_radius).
-// solov2-xomk parity wrapper; --dirty/--diff added in solov2-yh5a.
+// parity wrapper; --dirty/--diff added in.
 func blastCmd() *cobra.Command {
 	var (
 		repoFlag string
@@ -73,7 +73,7 @@ func blastCmd() *cobra.Command {
 		Short: "Compute blast radius for a symbol, or --dirty/--diff for staged/working-tree/ranged changes",
 		// Long is shared verbatim with the eng_get_blast_radius MCP tool
 		// description so the diff/dirty variants and cross-repo fan-out
-		// behaviour can't drift between CLI and MCP surfaces. solov2-izh6.20.
+		// behaviour can't drift between CLI and MCP surfaces.
 		Long:         mcpinfra.DescBlastRadius,
 		Args:         cobra.MaximumNArgs(1),
 		SilenceUsage: true,
@@ -105,7 +105,7 @@ func blastCmd() *cobra.Command {
 // blastModeFromFlags maps the positional selector and the --dirty/--diff
 // flags onto a BlastMode, enforcing that exactly one seed is chosen. The
 // symbol seed needs the positional; --dirty takes none; --diff takes an
-// optional `ref_a..ref_b` range positional (bare --diff = working-tree vs
+// optional `ref_a.ref_b` range positional (bare --diff = working-tree vs
 // HEAD). The returned refA/refB are non-empty only for a ranged --diff.
 func blastModeFromFlags(args []string, dirty, diff bool) (graphcmd.BlastMode, string, string, string, error) {
 	switch {
@@ -133,12 +133,12 @@ func blastModeFromFlags(args []string, dirty, diff bool) (graphcmd.BlastMode, st
 // parseDiffRange maps a `veska blast --diff` positional onto ref_a/ref_b,
 // matching `git diff` / `veska changed` ergonomics:
 //
-//	main..HEAD  -> ref_a=main,  ref_b=HEAD
-//	main..      -> ref_a=main,  ref_b=HEAD   (empty right side defaults to HEAD)
-//	main        -> ref_a=main,  ref_b=HEAD   (bare ref = ref..HEAD)
+//	main.HEAD -> ref_a=main, ref_b=HEAD
+//	main. -> ref_a=main, ref_b=HEAD (empty right side defaults to HEAD)
+//	main -> ref_a=main, ref_b=HEAD (bare ref = ref.HEAD)
 //
 // The tool requires both refs together, so a bare ref is expanded to
-// ref..HEAD here rather than rejected. An empty left side is an error —
+// ref.HEAD here rather than rejected. An empty left side is an error
 // there is no working-tree concept in a ref range.
 func parseDiffRange(arg string) (string, string, error) {
 	refA, refB, hasRange := strings.Cut(arg, "..")
@@ -154,7 +154,7 @@ func parseDiffRange(arg string) (string, string, error) {
 	return refA, refB, nil
 }
 
-// changedCmd wraps eng_find_changed_symbols. solov2-xomk parity wrapper.
+// changedCmd wraps eng_find_changed_symbols. parity wrapper.
 func changedCmd() *cobra.Command {
 	var (
 		repoFlag string
@@ -175,7 +175,7 @@ The --ref-a/--ref-b flags remain accepted and take precedence over positional ar
 		Args:         cobra.MaximumNArgs(2),
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			// solov2-izh6.4: positional refs are common muscle memory from
+			// positional refs are common muscle memory from
 			// `git diff REF_A REF_B`. Map positionals onto the flag values
 			// when the flags aren't already set.
 			if refA == "" && len(args) >= 1 {

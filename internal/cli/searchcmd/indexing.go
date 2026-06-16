@@ -24,8 +24,7 @@ import (
 // ensureIndexed runs a synchronous cold-scan + embedder drain when the repo
 // has no promoted SHA yet. Subsequent runs against the same repo short-circuit,
 // satisfying AC2 (re-use of the existing index).
-//
-// The embedder is started, the pending queue drained, and the worker stopped —
+// The embedder is started, the pending queue drained, and the worker stopped
 // turning the daemon's long-running goroutine into a one-shot pass that fits
 // the CLI's lifecycle.
 func ensureIndexed(ctx context.Context, pools *sqlite.Pools, rec repo.Record, opts RunOpts, w io.Writer) error {
@@ -54,7 +53,7 @@ func ensureIndexed(ctx context.Context, pools *sqlite.Pools, rec repo.Record, op
 		return fmt.Errorf("search: cold scan: %w", err)
 	}
 
-	// solov2-izh6.28: surface the same per-rule check summary that
+	// surface the same per-rule check summary that
 	// `repo add --wait` prints, so a junior running
 	// `veska search <q> --repo <url>` sees what the promotion checks found
 	// before the search results scroll past. Silent on a clean promotion.
@@ -66,9 +65,9 @@ func ensureIndexed(ctx context.Context, pools *sqlite.Pools, rec repo.Record, op
 // EmitColdScanSummary prints a one-line "✓ <rule>: N finding(s)" entry per
 // non-zero rule for the given (repo, branch), matching the per-rule summary
 // the `repo add --wait` flow surfaces. Silent when no findings exist so a
-// clean promotion doesn't pollute `veska search --repo <url>` output. Best-
-// effort: any DB error is swallowed — the summary is advisory, not load-
-// bearing (solov2-izh6.28).
+// clean promotion doesn't pollute `veska search --repo <url>` output. Best
+// effort: any DB error is swallowed — the summary is advisory, not load
+// bearing.
 func EmitColdScanSummary(ctx context.Context, db *sql.DB, w io.Writer, repoID, branch string) {
 	emitColdScanSummary(ctx, db, w, repoID, branch)
 }
@@ -168,8 +167,7 @@ func pollEmbedderDrain(ctx context.Context, refs *sqlite.EmbeddingRefsRepo, w io
 }
 
 // EphemeralEnsureFromURL implements the URL-target half of `veska search`
-// (solov2-kxo5.6). Steps:
-//
+// Steps:
 //  1. canonicalise the URL
 //  2. consult canonical_url for an existing row (tracked or ephemeral) — if
 //     hit, reuse it (and bump last_accessed_at when ephemeral); no clone. AC3:
@@ -205,7 +203,7 @@ func ephemeralEnsureFromURL(ctx context.Context, pools *sqlite.Pools, rawURL str
 }
 
 // reuseExistingClone short-circuits the clone when a canonical_url match
-// exists. reused is false only for an ephemeral row whose cache dir vanished —
+// exists. reused is false only for an ephemeral row whose cache dir vanished
 // the caller then re-clones (AC3); the stale row is dropped here first so the
 // re-add doesn't trip the UNIQUE(root_path) index.
 func reuseExistingClone(ctx context.Context, pools *sqlite.Pools, existing repo.Record, canonical string, w io.Writer) (repo.Record, bool) {

@@ -15,7 +15,6 @@ import (
 // problems"; the Ingester owns parse→stage and delegates emission here so the
 // two concerns can evolve independently (severity policy, message format, and
 // routing all live in this one type).
-//
 // Emission is best-effort across every method: a nil sink is a no-op (the
 // caller does not require one) and per-call errors are logged but never
 // propagated — the Save hot path must not fail because a finding could not be
@@ -32,7 +31,6 @@ func newFindingEmitter(findings ports.FindingStorage) *findingEmitter {
 
 // ParseFailures forwards each ParseFailure to the sink as a single
 // 'parse-failure' Finding anchored to the file.
-//
 // All failures for one (repo, branch, file) collapse to one finding_id because
 // domain.NewFinding hashes (rule, anchor) only; the SQLite repo's
 // ON CONFLICT(finding_id, branch) clause then guarantees at most one OPEN row.
@@ -75,7 +73,7 @@ func (e *findingEmitter) ParseFailures(ctx context.Context, repoID, branch, path
 
 // ClearParseFailure closes any OPEN parse-failure finding for (repoID, branch,
 // path) once the file parses cleanly. It reconstructs the branch-stable
-// FindingID by building the same finding ParseFailures would build —
+// FindingID by building the same finding ParseFailures would build
 // domain.NewFinding hashes only (rule, anchor), so the message body is
 // irrelevant — then asks the sink to close it.
 func (e *findingEmitter) ClearParseFailure(ctx context.Context, repoID, branch, path string) {

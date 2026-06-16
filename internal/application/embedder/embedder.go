@@ -2,12 +2,10 @@
 // node_embedding_refs(state='pending'), computes embeddings via the
 // EmbeddingProvider, persists the bytes to node_embeddings, and upserts
 // them into the VectorStorage so they become searchable in the same tick.
-//
 // Scope (m3.02.1): correctness of the loop. m3.02.2 added rate limiting,
 // m3.02.3 added retry policy, m3.02.4 added content-addressed dedup that
 // skips the EmbeddingProvider.Embed call when the (modelID, embed_text)
 // hash already has a row in node_embeddings.
-//
 // Lifecycle mirrors the post_promotion_queue Poller: Start launches one
 // background goroutine; passing a cancelled context (or calling Stop)
 // terminates it cleanly; Wait blocks until exit.
@@ -56,7 +54,7 @@ const DefaultMaxAttempts = 3
 // belong to autolink and the doctor count probes, which declare their own
 // narrow interfaces). Following the same ISP convention as those consumers
 // keeps the Worker's dependency honest; the single sqlite.EmbeddingRefsRepo
-// satisfies this and the full ports.EmbeddingRefRepo alike (solov2-xde2.16).
+// satisfies this and the full ports.EmbeddingRefRepo alike.
 type EmbedRefQueue interface {
 	FetchPending(ctx context.Context, limit int) ([]ports.PendingEmbedRef, error)
 	CountPending(ctx context.Context) (int, error)
@@ -90,8 +88,8 @@ type Worker struct {
 	// FetchPending+Embed pass. The poll loop still runs at interval so
 	// the worker resumes promptly when the gate clears. Used by the
 	// daemon to hold the embedder off the Write pool while the
-	// resync path is committing on Write (solov2-181 — closes the
-	// race solov2-8ga's queue-poller pause only partially fixed).
+	// resync path is committing on Write ( — closes the
+	// race 's queue-poller pause only partially fixed).
 	pauser func() bool
 
 	mu        sync.Mutex
@@ -126,11 +124,9 @@ func WithInterval(d time.Duration) Option {
 
 // WithRatePerSec installs a token-bucket rate limit on Embed calls. The
 // limiter is checked once per row before invoking EmbeddingProvider.Embed.
-//
 // A value of 0 (or negative) disables the limiter entirely — useful for
 // tests and for backends that handle their own throttling. If the option
 // is not supplied, the worker uses DefaultRatePerSec.
-//
 // The bucket size is fixed at 1: the limiter smooths load rather than
 // allowing bursts. A cold worker issues its first Embed immediately and
 // then waits 1/r seconds between subsequent calls.
@@ -156,7 +152,7 @@ func WithMaxAttempts(n int) Option {
 // WithPauser installs a predicate the worker consults at every tick.
 // When it returns true the tick is a no-op — no FetchPending, no
 // Embed, no writes. Used by the daemon to hold the embedder off the
-// db while resync / cold-scan is committing .
+// db while resync / cold-scan is committing.
 func WithPauser(p func() bool) Option {
 	return func(w *Worker) { w.pauser = p }
 }
@@ -221,7 +217,6 @@ func NewWorker(
 
 // Start launches the poll loop in a new goroutine and returns immediately.
 // Subsequent calls are no-ops (the worker may only be started once).
-//
 // The provided ctx is the parent for the worker's lifetime; cancelling it
 // stops the loop. Stop and Wait are also available for callers that want
 // explicit lifecycle control without owning the ctx.
@@ -289,7 +284,7 @@ func (w *Worker) tick(ctx context.Context) {
 		// While paused we deliberately do NOT touch the refs table — not
 		// even the count probe — so the Write pool stays idle and
 		// can't race the Write promotion tx into SQLITE_BUSY
-		// . The next tick re-checks; the daemon clears the
+		// The next tick re-checks; the daemon clears the
 		// pause when resync finishes.
 		return
 	}
@@ -321,7 +316,7 @@ func (w *Worker) tick(ctx context.Context) {
 
 	// Pass 1: classify each ref. Fast paths (in-flight cache, prior-tick
 	// lookup) finish immediately. Cache-misses are queued for a single
-	// batched Embed call below  so cobra cold-scan doesn't
+	// batched Embed call below so cobra cold-scan doesn't
 	// pay 67 sequential Ollama roundtrips.
 	type pendingRef struct {
 		ref         ports.PendingEmbedRef
@@ -490,7 +485,6 @@ func (w *Worker) tick(ctx context.Context) {
 // identifier and the deterministic embed_text projection. Two refs that hash
 // to the same value are guaranteed to produce the same vector under this
 // model, so the worker can dedup before calling EmbeddingProvider.Embed.
-//
 // The model is mixed into the hash so swapping models invalidates dedup
 // against prior bytes: a re-embed under a new model produces fresh bytes
 // rather than aliasing onto the previous model's vector.
@@ -504,7 +498,7 @@ func hashEmbedText(modelID, embedText string) string {
 
 // l2Normalize scales vec in place to unit L2 norm. A zero vector is left
 // unchanged. Keeping every stored embedding unit-length is what makes the
-// VectorStorage score 1/(1+L2dist) — and thus the auto-link threshold —
+// VectorStorage score 1/(1+L2dist) — and thus the auto-link threshold
 // behave as documented regardless of the embedding model's native scale.
 func l2Normalize(vec []float32) {
 	var sq float64

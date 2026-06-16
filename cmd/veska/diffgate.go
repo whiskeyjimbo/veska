@@ -8,11 +8,10 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/cli/diffgatecmd"
 )
 
-// diffGateCmd is the CI diff-safety gate (solov2-ll57.2): index a candidate
+// diffGateCmd is the CI diff-safety gate: index a candidate
 // change against the indexed-HEAD graph, verify it resolves its target finding
-// within blast radius and introduces no new findings, and emit a machine-
+// within blast radius and introduces no new findings, and emit a machine
 // readable pass/fail verdict — exiting non-zero on FAIL for CI gating.
-//
 // Structural finding-discovery (dead-code, contract-drift) is wired; a change
 // that introduces a new structural finding FAILs. The target finding is
 // supplied as flags (--anchor/--rule) rather than looked up from storage.
@@ -74,7 +73,7 @@ func diffGateCmd() *cobra.Command {
 	return cmd
 }
 
-// diffGateReportCmd is the advisory PR impact/risk report (solov2-zvh6.5): NOT a
+// diffGateReportCmd is the advisory PR impact/risk report: NOT a
 // gate. It assembles, for a diff, the blast radius, each changed file's
 // change-risk standing, open findings on the touched files, and the
 // changed-but-untested symbols — and ALWAYS exits 0 (presence of findings/risk
@@ -124,12 +123,12 @@ func diffGateReportCmd() *cobra.Command {
 }
 
 // diffGateAPICmd is the breaking-exported-signature diff-twin gate
-// (solov2-zvh6.2): a blanket gate (no target finding) that FAILs when the
+// a blanket gate (no target finding) that FAILs when the
 // candidate changes the signature SHAPE of an exported symbol. It reuses the
 // contract-drift signal over the re-promoted candidate and filters to the
 // exported visibility flag, so unexported and body-only changes pass. Scope is
 // signature-shape only: symbol REMOVAL/RENAME is not detected (delete-replace
-// emits no drift; tracked as solov2-zvh6.12), and "exported" is the name-based
+// emits no drift; tracked as ), and "exported" is the name-based
 // flag, not a reachability analysis.
 func diffGateAPICmd() *cobra.Command {
 	var (
@@ -173,7 +172,7 @@ func diffGateAPICmd() *cobra.Command {
 	return cmd
 }
 
-// diffGateCyclesCmd is the dependency-cycle diff-twin gate (solov2-zvh6.6): a
+// diffGateCyclesCmd is the dependency-cycle diff-twin gate: a
 // blanket gate (no target finding) that FAILs when the candidate introduces a
 // net-new dependency cycle — a strongly-connected component of >=2 symbols over
 // CALLS/IMPORTS edges that was not already a single cycle at base. Node-level and
@@ -223,7 +222,7 @@ func diffGateCyclesCmd() *cobra.Command {
 	return cmd
 }
 
-// diffGateUntestedCmd is the diff-coverage gate (solov2-zvh6.4): a blanket gate
+// diffGateUntestedCmd is the diff-coverage gate: a blanket gate
 // that FAILs when the candidate changes or adds a prod symbol no test reaches.
 // Coverage is a CALLS-edge proxy (a test-file caller), not real coverage data;
 // it re-promotes the candidate so a test added in the same diff counts.
@@ -269,7 +268,7 @@ func diffGateUntestedCmd() *cobra.Command {
 	return cmd
 }
 
-// diffGateSelectTestsCmd is impact-based test selection (solov2-v6de.2): NOT a
+// diffGateSelectTestsCmd is impact-based test selection: NOT a
 // gate — it emits the tests whose covered nodes intersect the diff's changed
 // prod nodes as a `go test -run` selection, always exiting 0.
 func diffGateSelectTestsCmd() *cobra.Command {
@@ -314,7 +313,7 @@ func diffGateSelectTestsCmd() *cobra.Command {
 	return cmd
 }
 
-// diffGateSecurityCmd is the net-new security diff-twin gate (solov2-zvh6.1): a
+// diffGateSecurityCmd is the net-new security diff-twin gate: a
 // blanket gate (no target finding, no indexed graph) that FAILs when the
 // candidate introduces a new secret_leak (added-line scan, language-agnostic)
 // or vulnerable_dependency (manifest finding-delta; Go/go.mod today) finding.
@@ -360,7 +359,7 @@ func diffGateSecurityCmd() *cobra.Command {
 	return cmd
 }
 
-// diffGateClonesCmd is the exact-clone diff-twin gate (solov2-zvh6.7): a
+// diffGateClonesCmd is the exact-clone diff-twin gate: a
 // blanket gate (no target finding) that FAILs when the candidate introduces a
 // byte-identical copy of existing code — net-new exact-clone duplication absent
 // at base. Deterministic and embedding-free (content_hash equality); near-mode

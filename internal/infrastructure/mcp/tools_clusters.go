@@ -12,7 +12,7 @@ import (
 )
 
 // This file holds eng_find_clusters: the unified, tier-labeled similar-code view
-// (solov2-phn0). One pass returns exact (byte-identical), structural (Type-2
+// One pass returns exact (byte-identical), structural (Type-2
 // renamed) and near (vector) clusters, ranked, repo-wide or cross-repo — shaped
 // so each grouping can become a de-dupe task.
 

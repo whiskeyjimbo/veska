@@ -1,4 +1,4 @@
-"""Tests for eng_find_todos — surfaces parser-emitted TODO/FIXME comments."""
+"""Tests for eng_find_todos - surfaces parser-emitted TODO/FIXME comments."""
 
 from __future__ import annotations
 

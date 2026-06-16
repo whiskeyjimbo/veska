@@ -87,7 +87,7 @@ type daemonBuilder struct {
 }
 
 // loadConfig loads ~/.veska/config.toml (defaults < config.toml < env vars). A
-// missing file is not an error; see docs/operations/CONFIG-SURFACE.md.
+// missing file is not an error; see
 func (b *daemonBuilder) loadConfig() error {
 	fileCfg, err := config.Load()
 	if err != nil {
@@ -191,7 +191,7 @@ func (b *daemonBuilder) openStorage() error {
 		return fmt.Errorf("daemon: migrate sqlite: %w", err)
 	}
 
-	// Shared ingestion-busy predicate (solov2-181 + 8ga): the queue poller and
+	// Shared ingestion-busy predicate ( + 8ga): the queue poller and
 	// the embedder worker both hold writes off while a cold-scan or startup
 	// resync is committing. resyncRef is filled in by finalize; the closure
 	// reads it through the builder so the later assignment is visible.
@@ -251,7 +251,7 @@ func (b *daemonBuilder) buildCheckPipeline() error {
 	checkReg := checks.NewRegistry()
 	deadcodeRepo := sqlite.NewDeadCodeRepo(b.pools.ReadDB)
 	contractRepo := sqlite.NewContractDriftRepo(b.pools.ReadDB)
-	// solov2-izh6.13: dead-code skips ephemeral (cache-tier) repos cloned by
+	// dead-code skips ephemeral (cache-tier) repos cloned by
 	// `veska search --repo <url>`, mirroring the autolink short-circuit.
 	deadcodeRepoKind := func(ctx context.Context, repoID string) (string, error) {
 		rec, err := repo.Get(ctx, b.pools.ReadDB, repoID)
@@ -335,8 +335,8 @@ func (b *daemonBuilder) buildEmbedder() error {
 // electEmbedder picks the single embedder for this boot (model2vec if
 // installed, else the in-binary static embedder; Ollama only when
 // VESKA_EMBEDDER=ollama). Vectors from different models occupy incompatible
-// spaces , so a model switch wipes the embedding store and
-// re-queues every promoted node under the new model .
+// spaces, so a model switch wipes the embedding store and
+// re-queues every promoted node under the new model.
 func (b *daemonBuilder) electEmbedder() error {
 	election, err := elect.Elect(elect.Config{
 		VeskaHome:     b.cfg.VeskaHome,
@@ -349,7 +349,7 @@ func (b *daemonBuilder) electEmbedder() error {
 		return fmt.Errorf("daemon: embedder election: %w", err)
 	}
 	slog.Info("daemon: embedder elected", "model_id", election.Name)
-	// solov2-yql1: surface a one-shot WARN so operators tailing daemon.log see
+	// surface a one-shot WARN so operators tailing daemon.log see
 	// why eng_search_semantic returns 'low_quality_static_embedder'.
 	if election.Name == "veska-static-v2" {
 		slog.Warn("daemon: low-quality static-v2 embedder elected — run `veska install model2vec` for higher-quality code search",
@@ -404,7 +404,7 @@ func (b *daemonBuilder) buildQueueHandlers() error {
 	return nil
 }
 
-// buildAutolinkHandler wires the SIMILAR_TO autolink handler. solov2-izh6.8:
+// buildAutolinkHandler wires the SIMILAR_TO autolink handler.:
 // the repo-kind lookup skips ephemeral (cache-tier) repos.
 func (b *daemonBuilder) buildAutolinkHandler() (*autolink.Handler, error) {
 	nodeLookup := sqlite.NewNodeLookupRepo(b.pools.ReadDB)
@@ -457,7 +457,7 @@ func (b *daemonBuilder) buildReviewHandler() (queue.WorkHandler, error) {
 	reviewRoot := func(ctx context.Context, repoID string) (string, error) {
 		return repoRootFunc(b.pools.ReadDB)(ctx, repoID)
 	}
-	// Token-quota enforcement (solov2-nz2.5): the per-day total persists in
+	// Token-quota enforcement: the per-day total persists in
 	// daemon_state; the audit writer records the daily-cap pause.
 	tokenStore := sqlite.NewReviewTokenStore(b.pools.ReadDB, b.pools.Write)
 	quota := review.NewQuota(
@@ -485,7 +485,7 @@ func (b *daemonBuilder) buildReviewHandler() (queue.WorkHandler, error) {
 
 // buildPollerWatcher constructs the post-promotion queue poller, the fsnotify
 // watcher, the shared cold-scan reparser, and the cold-scan-aware repo
-// registrar (solov2-0z1.2/0z1.3). The poller and embedder share ingestionBusy.
+// registrar (/0z1.3). The poller and embedder share ingestionBusy.
 func (b *daemonBuilder) buildPollerWatcher() error {
 	pollInterval := parseDurationOr(b.fileCfg.PostPromotionQueue.PollInterval, 250*time.Millisecond)
 	b.poller = queue.New(b.pools.ReadDB, b.pools.Write, b.handlers,
@@ -524,7 +524,7 @@ func (b *daemonBuilder) buildPollerWatcher() error {
 
 // buildReconciler constructs the suspend/resume wake reconciler. Its handler
 // feeds each changed file back through the watcher's event stream (Inject), so
-// wake-detected changes re-parse via the same path as live fsnotify writes —
+// wake-detected changes re-parse via the same path as live fsnotify writes
 // repo/branch resolution and Ingester.Save are reused verbatim in runWatchLoop.
 // wake_tick / wake_threshold are read from [watcher]; bad or empty values fall
 // back to the documented defaults (CONFIG-SURFACE: 5s tick, 30s threshold).
@@ -533,7 +533,7 @@ func (b *daemonBuilder) buildReconciler() *gitwatch.WakeReconciler {
 	threshold := parseDurationOr(b.fileCfg.Watcher.WakeThreshold, 30*time.Second)
 
 	opts := []gitwatch.Option{gitwatch.WithWakeConcurrency(b.fileCfg.Watcher.WakeConcurrency)}
-	// Staging-vs-HEAD check (SOLO-03 §5.2): a serial pre-pass at sweep start
+	// Staging-vs-HEAD check: a serial pre-pass at sweep start
 	// reconciles each repo's working-tree branch against repos.active_branch,
 	// bumping the staging generation before any parse runs. b.gate/b.staging are
 	// populated by buildCore, which runs before buildReconciler.
@@ -554,12 +554,12 @@ func (b *daemonBuilder) buildReconciler() *gitwatch.WakeReconciler {
 
 	// Post-sweep: restart every repo's watcher handle so live saves resume
 	// against a fresh OS stream once the mtime sweep has covered the suspend
-	// window (SOLO-03 §5.2 step 4).
+	// window ( step 4).
 	opts = append(opts, gitwatch.WithPostSweepHook(func(_ context.Context) {
 		b.watcher.RestartAll()
 	}))
 
-	// Baseline seam (solov2-xde2.25.6): the reconciler compares against the live
+	// Baseline seam: the reconciler compares against the live
 	// FSWatcher lastSeen map (kept current by the live save path) instead of its
 	// own seeded copy, resolved fresh each sweep so it follows RestartAll.
 	opts = append(opts, gitwatch.WithBaseline(b.watcher.BaselineFor))
@@ -619,7 +619,7 @@ func (b *daemonBuilder) buildMCPServer() error {
 
 // finalize threads the TracerProvider into the tracing-aware consumers (a no-op
 // when tracing is disabled) and wires the startup-resync orchestrator, sharing
-// the reparser closure with the repo registrar (solov2-0z1.2).
+// the reparser closure with the repo registrar.
 func (b *daemonBuilder) finalize() error {
 	// The Ingester and Promoter receive the tracer as a construction option in
 	// buildCore; only the MCP registry is wired here (it is built later, by
@@ -627,7 +627,7 @@ func (b *daemonBuilder) finalize() error {
 	if b.tracer != nil {
 		b.registry.SetTracerProvider(b.tracer)
 	}
-	// Staging-vs-HEAD branch check (SOLO-03 §5.2): the same reconciler the
+	// Staging-vs-HEAD branch check: the same reconciler the
 	// wake-sweep uses also runs at the START of each startup-resync repo, so a
 	// branch switch during downtime bumps the generation and drops prior-branch
 	// staging before any replay. Degrade-don't-crash: if construction fails

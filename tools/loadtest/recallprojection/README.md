@@ -1,4 +1,4 @@
-# recallprojection — embed-text projection recall sweep 
+# recallprojection - embed-text projection recall sweep 
 
 Makes embed-text **projection** changes measurable for recall sweeps.
 
@@ -11,12 +11,12 @@ code **snippet** into the embed text for semantically richer embeddings.
 That changes embedding QUALITY, so it needs a recall measurement.
 
 The existing `tools/loadtest/recall` harness embeds the synthetic corpus
-`Text` field directly — it does **not** exercise `domain.EmbedText`, so
+`Text` field directly - it does **not** exercise `domain.EmbedText`, so
 swapping projection variants there does not move the measured recall.
 
 This harness closes the gap: the recall corpus is built from
-**node-shaped projection inputs** run through `domain.EmbedText` — the
-same function the production sqlite adapter calls — and the projection
+**node-shaped projection inputs** run through `domain.EmbedText` - the
+same function the production sqlite adapter calls - and the projection
 variant is selectable, so a variant change is exactly what the recall
 delta measures.
 
@@ -31,7 +31,7 @@ delta measures.
 | `+snippet` | baseline + a code snippet |
 | `+both` | baseline + signature + snippet |
 
-Enrichment variants only **append** — `baseline` is always a prefix, so
+Enrichment variants only **append** - `baseline` is always a prefix, so
 production output is never altered by this harness.
 
 ## Files
@@ -75,7 +75,7 @@ plus a JSON array at `recall_projection_results.json`.
 ## Reference-laptop run (steps 2 + 3, deferred)
 
 A full 4-variant sweep at `pop=1000` issues ~4×1000 real embed calls and
-is slow — run it on the reference laptop, not in CI. Compare the
+is slow - run it on the reference laptop, not in CI. Compare the
 `mean_recall` per variant against the m3.03 baseline; the variant with
 the best recall (without an unacceptable p95 regression) is the candidate
 to promote into the production projection. Promotion is a separate change

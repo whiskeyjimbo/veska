@@ -158,7 +158,7 @@ func TestEdgeRepo_SaveEdges_DoesNotDowngradeResolved(t *testing.T) {
 // TestEdgeRepo_SaveEdges_PersistsAndRefreshesScore verifies the score column
 // round-trips, refreshes on re-save (DO UPDATE), and is preserved when a later
 // writer passes no score (COALESCE) — the contract near-duplicate detection
-// relies on (solov2-c1s4).
+// relies on.
 func TestEdgeRepo_SaveEdges_PersistsAndRefreshesScore(t *testing.T) {
 	t.Parallel()
 	db, repo := openEdgeRepoTestDB(t)

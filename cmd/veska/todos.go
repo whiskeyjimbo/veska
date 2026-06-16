@@ -6,7 +6,7 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/cli/findingscmd"
 )
 
-// todosCmd wraps eng_find_todos. solov2-yh5a parity wrapper. Lists the
+// todosCmd wraps eng_find_todos. parity wrapper. Lists the
 // TODO/FIXME findings harvested by the promotion checks; repo_id auto-resolves
 // from the cwd when --repo is omitted.
 func todosCmd() *cobra.Command {

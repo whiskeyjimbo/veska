@@ -18,7 +18,7 @@ import (
 // stubProvider is a deterministic in-memory EmbeddingProvider used to
 // exercise the generator end-to-end without hitting real Ollama. Each
 // text deterministically maps to a vector of length dim where the first
-// byte of text drives the spike — enough to assert the body is round-
+// byte of text drives the spike — enough to assert the body is round
 // tripped and the dim header is correct.
 type stubProvider struct {
 	dim    int
@@ -86,8 +86,8 @@ func TestGenerateOllamaFixture_WritesRoundTrippableFile(t *testing.T) {
 	}
 
 	// Vector body round-trips. The generator L2-normalises every vector
-	// before writing (see solov2-uug), so the stored value is the unit
-	// form of the stub's raw {text[0], i, 0...}. Verify each stored vector
+	// before writing, so the stored value is the unit
+	// form of the stub's raw {text[0], i, 0.}. Verify each stored vector
 	// is unit-norm and matches the expected normalised first element.
 	for i, n := range corpus.Nodes {
 		// stubProvider sets v[0]=text[0] and v[1]=callIndex (1-based), so

@@ -59,7 +59,7 @@ func RunSecurity(ctx context.Context, p SecurityParams) error {
 	// source. vulnEnabled mirrors the daemon — when no source is configured the
 	// gate skips the dimension entirely rather than failing closed.
 	vulnSource, vulnEnabled := composition.BuildVulnSource(cfg)
-	// Cache-readiness fail-safe (solov2-zvh6.1): osv.Adapter.Scan returns
+	// Cache-readiness fail-safe: osv.Adapter.Scan returns
 	// (nil, nil) on a missing/empty advisory cache — no error. vulnEnabled
 	// reflects CONFIG, not cache STATE, so a CI runner with vuln_source=osv but
 	// an unrefreshed cache would otherwise silently PASS a vulnerable-dep PR.

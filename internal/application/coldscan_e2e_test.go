@@ -27,16 +27,16 @@ import (
 // VectorStorage backend. It is parameterised over backend kind so the same
 // fixture proves that vectors land in whichever store the operator
 // configures via VESKA_VECTOR_BACKEND.
-//
 // Skips:
-//   - The whole test skips when Ollama is unreachable at the default URL.
-//   - The "usearch" subtest skips when the binary was not built with
-//     -tags hnsw_native (vector.NewVectorStorage returns
-//     vector.ErrVectorStoreUnavailable).
 //
-// -race is intentionally omitted from the documented run instructions: the
+//	The whole test skips when Ollama is unreachable at the default URL.
+//	The "usearch" subtest skips when the binary was not built with
+//	  tags hnsw_native (vector.NewVectorStorage returns
+//	  vector.ErrVectorStoreUnavailable).
+//
+// race is intentionally omitted from the documented run instructions: the
 // embedder polling loop combined with cgo (usearch) is fragile under -race
-// for value that this long-running integration test does not add. Unit-
+// for value that this long-running integration test does not add. Unit
 // level race coverage already exists in narrower tests.
 func TestColdScanE2E_ReindexProducesSearchableVectors(t *testing.T) {
 	if !ollamaReachable(t) {
@@ -156,7 +156,7 @@ func runColdScanE2E(t *testing.T, kind vector.BackendKind) {
 		t.Fatal("expected node_embedding_refs(state=pending) > 0 after reparser; got 0")
 	}
 
-	// Ollama provider — :latest matches the local tag from `ollama list`.
+	// Ollama provider —:latest matches the local tag from `ollama list`.
 	prov, err := ollama.New("nomic-embed-text:latest", ollama.WithBaseURL("http://localhost:11434"))
 	if err != nil {
 		t.Fatalf("ollama.New: %v", err)
@@ -213,8 +213,8 @@ func runColdScanE2E(t *testing.T, kind vector.BackendKind) {
 		t.Fatal("could not find ComputeAlphaMetric node in nodes table")
 	}
 	// Retrieval competitors for the alpha-symbol slot:
-	//   - package-scope node, snippet=whole file ;
-	//   - chunk nodes covering non-declaration regions ;
+	//   package-scope node, snippet=whole file;
+	//   chunk nodes covering non-declaration regions;
 	// All three carry the alpha tokens. The test asserts the symbol is
 	// in the same semantic cluster as the query, not that it beats every
 	// chunk/package-level competitor. Top-5 placement still proves the

@@ -107,8 +107,8 @@ func (w *AuditFileWriter) Write(_ context.Context, e ports.AuditEntry) error {
 	return nil
 }
 
-// rotate renames existing rotated files upward (.4→.5, .3→.4, …, .1→.2) then
-// renames the active log to .1.jsonl and opens a fresh active file.
+// rotate renames existing rotated files upward (.4→.5,.3→.4, …,.1→.2) then
+// renames the active log to.1.jsonl and opens a fresh active file.
 // Callers must hold w.mu.
 func (w *AuditFileWriter) rotate() error {
 	// Close the current file before renaming it.
@@ -120,7 +120,7 @@ func (w *AuditFileWriter) rotate() error {
 	oldest := rotatedName(w.path, maxRotatedFiles)
 	_ = os.Remove(oldest) // ignore error; file may not exist
 
-	// Shift existing rotated files: .4→.5, .3→.4, …, .1→.2
+	// Shift existing rotated files:.4→.5,.3→.4, …,.1→.2
 	for i := maxRotatedFiles - 1; i >= 1; i-- {
 		src := rotatedName(w.path, i)
 		dst := rotatedName(w.path, i+1)
@@ -131,7 +131,7 @@ func (w *AuditFileWriter) rotate() error {
 		}
 	}
 
-	// Rename the active file to .1.
+	// Rename the active file to.1.
 	if err := os.Rename(w.path, rotatedName(w.path, 1)); err != nil {
 		return fmt.Errorf("rename active to .1: %w", err)
 	}

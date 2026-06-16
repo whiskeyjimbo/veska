@@ -3,8 +3,7 @@
 // `hook-runner post-checkout`). cmd/veska/hook_runner.go is reduced to Cobra
 // command construction whose RunE bodies delegate here, following the
 // cmd = glue / logic-in-packages pattern established by reindexcmd, symbolcmd,
-// graphcmd, and findingscmd .
-//
+// graphcmd, and findingscmd.
 // Every entry point swallows its errors and returns nil: a git hook that exits
 // non-zero blocks the user's commit or checkout, which is never an acceptable
 // failure mode for a best-effort index notification.
@@ -44,7 +43,7 @@ func RunPostCommit() error {
 		return nil
 	}
 
-	// Belt-and-braces : try the VESKA_HOME-derived socket
+	// Belt-and-braces: try the VESKA_HOME-derived socket
 	// first, then fall back to ~/.veska/cli.sock so a stale baked
 	// VESKA_HOME in the hook script (or an unset env) still finds a
 	// running daemon on the default path.
@@ -166,11 +165,10 @@ func gitCurrentBranch() (string, error) {
 // SendSeal dials the daemon CLI socket and invokes the eng_promote MCP tool
 // for the current git working tree. The daemon re-stages files changed in
 // HEAD and promotes. All errors after a successful dial are silently swallowed
-// — the hook must never block a commit (git would surface a non-zero exit to
+// the hook must never block a commit (git would surface a non-zero exit to
 // the user). A dial failure is returned so the caller can fall back to the
-// next candidate socket .
-//
-// Solov2-3vv: this used to send a legacy {"cmd":"promote"} payload that the
+// next candidate socket.
+// this used to send a legacy {"cmd":"promote"} payload that the
 // JSON-RPC listener rejected with method-not-found, so post-commit
 // promotion was silently dead. Now it speaks the same JSON-RPC the rest of
 // the MCP surface does.
@@ -187,7 +185,7 @@ func SendSeal(sockPath string) error {
 	conn, err := net.DialTimeout("unix", sockPath, dialTimeout)
 	if err != nil {
 		// Dial failure is the signal the caller uses to try the next
-		// candidate socket . All other errors after a
+		// candidate socket. All other errors after a
 		// successful dial are still swallowed so a misbehaving daemon
 		// cannot block git.
 		return err

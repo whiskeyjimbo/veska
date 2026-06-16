@@ -3,9 +3,8 @@
 // Package autolink's eval test: drives a real autolink.Linker against
 // an in-memory SQLite (with the real EmbeddingRefRepo adapter) and an
 // in-process VectorStorage (the sqlite-vec linear-scan backend by
-// default, per ADR-S0015), using a deterministic synthetic corpus.
-//
-// Build-tag-gated so plain CI runs (`go test ./...`) skip this
+// default, per ), using a deterministic synthetic corpus.
+// Build-tag-gated so plain CI runs (`go test./.`) skip this
 // end-to-end driver — it stays available via `go test -tags=eval`
 // from the eval-autolink-fp make target.
 package autolink
@@ -41,16 +40,16 @@ const sharedFixtureDir = "../recall/fixtures"
 // the real sqlite EmbeddingRefRepo, then runs autolink.Linker for each
 // source node and computes the FP rate against the cluster ground
 // truth.
-//
 // Modes (env):
-//   - AUTOLINK_POP=N            — total population (default 1000).
-//   - AUTOLINK_THRESHOLD=X.XX   — minimum similarity to admit a
-//     candidate (default 0.85, matching autolink.DefaultThreshold).
-//   - AUTOLINK_TOPK=K           — per-source candidate cap (default 5,
-//     matching autolink.DefaultTopK).
-//   - RECALL_GENERATE=1         — persist a fixture for reproducibility
-//     (currently a no-op on this harness; reserved for future real-
-//     Ollama seeding to mirror the recall harness).
+//
+//	AUTOLINK_POP=N — total population (default 1000).
+//	AUTOLINK_THRESHOLD=X.XX — minimum similarity to admit a
+//	  candidate (default 0.85, matching autolink.DefaultThreshold).
+//	AUTOLINK_TOPK=K — per-source candidate cap (default 5,
+//	  matching autolink.DefaultTopK).
+//	RECALL_GENERATE=1 — persist a fixture for reproducibility
+//	  (currently a no-op on this harness; reserved for future real
+//	  Ollama seeding to mirror the recall harness).
 func TestAutolinkFP(t *testing.T) {
 	pop := envInt("AUTOLINK_POP", 1000)
 	topK := envInt("AUTOLINK_TOPK", autolink.DefaultTopK)
@@ -90,7 +89,7 @@ func TestAutolinkFP(t *testing.T) {
 	// to the deterministic FakeEmbed when no fixture is present.
 	vecOf, embedderName := loadEmbeddings(t, corpus.Nodes, pop, "fake", semantic)
 
-	// --- wire SQLite + repos ----------------------------------------------
+	// wire SQLite + repos
 	tmpDir := t.TempDir()
 	dbPath := filepath.Join(tmpDir, "veska.db")
 	backupDir := filepath.Join(tmpDir, "backups")
@@ -103,10 +102,10 @@ func TestAutolinkFP(t *testing.T) {
 	seedNodes(t, db, repoID, branch, corpus.Nodes)
 	seedEmbeddings(t, db, corpus.Nodes, vecOf)
 
-	// --- VectorStorage ----------------------------------------------------
+	// VectorStorage
 	// VESKA_VECTOR_BACKEND selects the backend (default memory/memvec).
 	// "usearch" requires the hnsw_native build tag and libusearch_c.so at
-	// runtime — see ADR-S0014. The memory backend is an O(N^2) linear scan
+	// runtime. The memory backend is an O(N^2) linear scan
 	// and exceeds budget at pop > ~10k for the autolink Candidates sweep.
 	backendKind := vector.BackendKind(os.Getenv("VESKA_VECTOR_BACKEND"))
 	if backendKind == "" {
@@ -135,7 +134,7 @@ func TestAutolinkFP(t *testing.T) {
 		t.Fatalf("UpsertEmbeddings: %v", err)
 	}
 
-	// --- Linker -----------------------------------------------------------
+	// Linker
 	refs := sqlite.NewEmbeddingRefsRepo(db, db)
 	linker, err := autolink.NewLinker(refs, vstore,
 		autolink.WithTopK(topK),
@@ -145,7 +144,7 @@ func TestAutolinkFP(t *testing.T) {
 		t.Fatalf("autolink.NewLinker: %v", err)
 	}
 
-	// --- run Candidates for every source node -----------------------------
+	// run Candidates for every source node
 	ctx := context.Background()
 	srcIDs := make([]string, len(corpus.Nodes))
 	for i, n := range corpus.Nodes {
@@ -156,7 +155,7 @@ func TestAutolinkFP(t *testing.T) {
 		t.Fatalf("linker.Candidates: %v", err)
 	}
 
-	// --- classify + compute FP rate ---------------------------------------
+	// classify + compute FP rate
 	pairs := make([]Pair, 0, len(cands))
 	for _, c := range cands {
 		srcK, ok1 := clusterOf[c.SourceNodeID]
@@ -169,7 +168,7 @@ func TestAutolinkFP(t *testing.T) {
 	fp, tp := FPCounts(pairs)
 	fpRate := FPRate(pairs)
 
-	// --- emit JSON + single-line summary ----------------------------------
+	// emit JSON + single-line summary
 	res := Result{
 		Population:          pop,
 		Clusters:            clusters,

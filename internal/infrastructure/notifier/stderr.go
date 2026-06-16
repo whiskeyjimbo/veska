@@ -12,7 +12,6 @@ import (
 // StderrNotifier is a Notifier that writes notifications to os.Stderr in the
 // format "[<level>] <message>\n". It is the default implementation and
 // requires no external dependencies.
-//
 // StderrNotifier is safe for concurrent use; individual Fprintf calls to
 // os.Stderr are atomic on all supported platforms for small writes.
 type StderrNotifier struct{}

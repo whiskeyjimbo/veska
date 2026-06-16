@@ -6,7 +6,7 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/cli/graphcmd"
 )
 
-// nodeCmd wraps eng_get_node. solov2-yh5a parity wrapper. The node_id is the
+// nodeCmd wraps eng_get_node. parity wrapper. The node_id is the
 // content-hashed sha256 (or its 12-char display prefix) that `veska symbol`,
 // `veska calls`, etc. print; repo_id/branch are optional since the id is
 // globally unique.
@@ -38,7 +38,7 @@ func nodeCmd() *cobra.Command {
 	return cmd
 }
 
-// fileNodesCmd wraps eng_get_file_nodes. solov2-yh5a parity wrapper. Returns
+// fileNodesCmd wraps eng_get_file_nodes. parity wrapper. Returns
 // every node defined in a single file (repo-relative or absolute path).
 func fileNodesCmd() *cobra.Command {
 	var (

@@ -38,12 +38,10 @@ func NewLexicalRepo(readDB *sql.DB) *LexicalRepo {
 }
 
 // Search returns up to k LexicalHits for query in (repoID, branch).
-//
 // The query string is pre-tokenised with tokenize.Symbol so a camelCase
 // query like "closeFinding" is also matchable as "close Finding". The
 // trigram arm uses the flattened original query (built-in trigram tokenizer
 // requires no help from the caller).
-//
 // Empty query short-circuits to nil; k <= 0 short-circuits to nil.
 func (r *LexicalRepo) Search(ctx context.Context, repoID, branch, query string, k int) ([]ports.LexicalHit, error) {
 	if k <= 0 || query == "" {
@@ -157,7 +155,7 @@ func topKByScore(hits []ports.LexicalHit, n int) {
 // so any single hit raises the score. Empty input yields "".
 func buildWordsMatchExpr(query string) string {
 	tokens := splitFields(tokenize.Symbol(query))
-	return joinFTS5OR(tokens, true /* withPrefix */)
+	return joinFTS5OR(tokens, true /* withPrefix*/)
 }
 
 // buildTrigramMatchExpr produces an FTS5 MATCH expression for the trigram

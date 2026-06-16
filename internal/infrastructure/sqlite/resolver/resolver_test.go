@@ -100,7 +100,7 @@ func seedStub(t *testing.T, db *sql.DB, stubID, branch, repoID, srcNodeID, kind,
 	}
 }
 
-// seedMethodStub inserts a method-call cross-repo stub (solov2-9rc2 Phase C).
+// seedMethodStub inserts a method-call cross-repo stub.
 // symbolPath is the bare method name (e.g. "Hello"); the resolver matches
 // it against `<Receiver>.Hello` in the target package.
 func seedMethodStub(t *testing.T, db *sql.DB, stubID, branch, repoID, srcNodeID, modulePath, methodName string) {
@@ -183,8 +183,8 @@ func TestResolveCrossRepoEdgeMiss(t *testing.T) {
 	}
 }
 
-// TestResolveCrossRepoEdge_Subpackage pins solov2-hkr9: an import path that is
-// a subpackage of a registered multi-package module resolves via longest-
+// TestResolveCrossRepoEdge_Subpackage pins: an import path that is
+// a subpackage of a registered multi-package module resolves via longest
 // prefix-match (e.g. github.com/spf13/cobra/doc binds to the cobra repo when
 // only github.com/spf13/cobra is registered) and the symbol lookup is
 // constrained to the subpackage directory.
@@ -314,7 +314,7 @@ func TestResolveStubsExpandFalse(t *testing.T) {
 	}
 }
 
-// TestResolveCrossRepoEdge_MethodCallSuffixMatch covers solov2-9rc2 phase D
+// TestResolveCrossRepoEdge_MethodCallSuffixMatch covers
 // forward path: a stub flagged MethodCall=true with bare symbol_path "Hello"
 // resolves to a method node whose symbol_path is "Greeter.Hello" via
 // suffix match in the destination subpackage.
@@ -372,7 +372,7 @@ func TestResolveCrossRepoEdge_MethodCallAmbiguousIsDropped(t *testing.T) {
 	}
 }
 
-// TestResolveStubsTargetingNode_MatchesMethodCallStub covers solov2-9rc2
+// TestResolveStubsTargetingNode_MatchesMethodCallStub covers
 // phase D reverse path: a method node Greeter.Hello in repo-lib must
 // surface as the dst of a method-call stub from repo-app whose
 // symbol_path is the bare "Hello".
@@ -400,7 +400,7 @@ func TestResolveStubsTargetingNode_MatchesMethodCallStub(t *testing.T) {
 	}
 }
 
-// TestResolveStubsTargetingNode_FindsInboundCallers covers the solov2-80hh
+// TestResolveStubsTargetingNode_FindsInboundCallers covers the
 // happy path: a library symbol N in repo-b has a stub in repo-a pointing
 // at it. The reverse resolver must surface that stub as an inbound edge
 // (DstNodeID == N), enabling blast_radius/call_chain on a library symbol

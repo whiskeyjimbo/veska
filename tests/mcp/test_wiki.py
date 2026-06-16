@@ -1,6 +1,6 @@
 """Tests for the wiki MCP tools (hot zones + entry points).
 
-Wiki surfaces are derived state — they may be empty for a freshly
+Wiki surfaces are derived state - they may be empty for a freshly
 indexed repo. We check the tools are registered, accept the standard
 {repo_id, branch} params, and return well-shaped (possibly empty)
 responses."""

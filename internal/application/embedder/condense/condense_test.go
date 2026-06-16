@@ -44,7 +44,6 @@ func (f *fakeEmbedder) ModelID() string { return "fake" }
 // three boilerplate err-returns share a noise tag. The one-hot
 // embedder makes centrality purely a majority count, so T (5) wins
 // over N (3); top-3 must be the three highest-centrality T lines.
-//
 // Order matters: top-3 by centrality and then by original index, so we
 // expect the FIRST three T pieces (positions 0, 1, 2) — a tie among
 // equal-centrality pieces breaks toward the earlier index, which keeps

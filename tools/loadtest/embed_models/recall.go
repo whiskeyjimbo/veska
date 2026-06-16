@@ -1,12 +1,11 @@
 //go:build eval
 
-// Recall metric computation for the embed-models bench (solov2-0k5h.3).
+// Recall metric computation for the embed-models bench.
 // Given a set of ground-truth pairs and an embedded corpus, embed each
 // query, find top-K hits, compute recall@1/@5/@10 + MRR.
-//
 // Naming convention: a hit "matches" a pair when the hit's document
 // name equals the pair's Expected symbol. Multiple docs in the corpus
-// can share a name (e.g. several New() functions across files); recall
+// can share a name (e.g. several New functions across files); recall
 // counts any same-named doc in the top K as a match.
 
 package embed_models
@@ -17,7 +16,6 @@ import (
 )
 
 // RecallScores holds the per-source metric output.
-//
 // Two recall series are reported. RAW recall@k uses N (all pairs) as the
 // denominator — penalises models whose target docs weren't embedded at all
 // (e.g. an Ollama run capped at max_docs=500 against a 2489-doc corpus
@@ -25,7 +23,6 @@ import (
 // uses (N - NotInCorpus) — recall over pairs whose target was actually
 // in the embedded subset, so cross-type comparisons (model2vec vs ollama,
 // where the corpus caps differ by design) aren't biased by the cap.
-//
 // Reporters should prefer FairAt10 when comparing models with different
 // embed-time corpora sizes; the raw numbers stay useful for tracking
 // fixture quality (not_in_corpus shifting between runs == fixture or

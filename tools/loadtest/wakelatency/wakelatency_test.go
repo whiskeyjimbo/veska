@@ -2,22 +2,20 @@
 
 // Package wakelatency's eval test: drives the production
 // git.WakeReconciler mtime/size/prefix sweep against a synthetic on-disk
-// tree and asserts the SOLO-03 §5.2 / docs/design/13-nfr wake-reconcile
+// tree and asserts the / wake-reconcile
 // latency NFR:
 //
-//   - typical repo: sweep p95 < 500ms over N >= 20 InjectWake iterations.
-//   - >50k files:   a single worst-case sweep < 5s.
+//	typical repo: sweep p95 < 500ms over N >= 20 InjectWake iterations.
+//	>50k files: a single worst-case sweep < 5s.
 //
 // The sweep cost the NFR targets is the no-change full walk: stat +
 // 64-byte prefix read + last-seen map compare on every tracked file, with
-// the handler never firing. After Seed() records the baseline, a no-change
-// InjectWake() still walks every file but invokes no handler.
-//
-// Only InjectWake() is timed; synthetic-tree generation and Seed() are
+// the handler never firing. After Seed records the baseline, a no-change
+// InjectWake still walks every file but invokes no handler.
+// Only InjectWake is timed; synthetic-tree generation and Seed are
 // setup. The single-repo NFR is one goroutine (WithWakeConcurrency is a
 // no-op for a single registered tree), so no -race is needed.
-//
-// Build-tag-gated so plain CI runs (`go test ./...`) skip this harness.
+// Build-tag-gated so plain CI runs (`go test./.`) skip this harness.
 // The make target is `make eval-wake-latency`.
 package wakelatency
 
@@ -110,7 +108,7 @@ func TestWakeLatency(t *testing.T) {
 }
 
 // measureSweeps generates a synthetic tree of n files, seeds the
-// reconciler baseline, then times `iters` no-change InjectWake() sweeps.
+// reconciler baseline, then times `iters` no-change InjectWake sweeps.
 // It asserts the handler never fired (a nonzero count would mean the timed
 // sweep includes handler work and the number isn't the pure walk).
 func measureSweeps(t *testing.T, tag string, n, iters int) []time.Duration {
@@ -126,7 +124,7 @@ func measureSweeps(t *testing.T, tag string, n, iters int) []time.Duration {
 	// Seed the baseline via an initial (untimed) no-change sweep: with no
 	// BaselineStore wired, the reconciler's standalone baseline records each
 	// file on first sighting and fires nothing (Seed was retired in
-	// solov2-xde2.25.6). The timed sweeps below are no-change full walks.
+	// ). The timed sweeps below are no-change full walks.
 	r.InjectWake()
 
 	durs := make([]time.Duration, 0, iters)

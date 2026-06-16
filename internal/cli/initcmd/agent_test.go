@@ -107,8 +107,8 @@ func TestWriteAgentSnippet_AppendsToExistingFile(t *testing.T) {
 	}
 }
 
-// TestWriteAgentSnippet_GitignoreOptIn guards solov2-zm6i: the default call
-// (updateGitignore=false) must NOT create or modify .gitignore; only the
+// TestWriteAgentSnippet_GitignoreOptIn guards: the default call
+// (updateGitignore=false) must NOT create or modify.gitignore; only the
 // explicit opt-in path writes the veska-managed block.
 func TestWriteAgentSnippet_GitignoreOptIn(t *testing.T) {
 	root := t.TempDir()
@@ -130,8 +130,8 @@ func TestWriteAgentSnippet_GitignoreOptIn(t *testing.T) {
 	}
 }
 
-// TestEnsureMcpServerEntry_CreatesFile covers solov2-zo0w: writing
-// veska into a missing .mcp.json creates the file with the right
+// TestEnsureMcpServerEntry_CreatesFile covers: writing
+// veska into a missing.mcp.json creates the file with the right
 // shape and returns "registered".
 func TestEnsureMcpServerEntry_CreatesFile(t *testing.T) {
 	dir := t.TempDir()
@@ -267,7 +267,7 @@ func writeParams(root, flavor string, buf *bytes.Buffer, updateGitignore bool) A
 	}
 }
 
-// TestWriteAgentSnippet_PreviewAndConfirm covers solov2-uej9.8: init --agent
+// TestWriteAgentSnippet_PreviewAndConfirm covers: init --agent
 // must preview the files it touches and gate the write on confirmation.
 func TestWriteAgentSnippet_PreviewAndConfirm(t *testing.T) {
 	cases := []struct {

@@ -1,17 +1,14 @@
 //go:build eval
 
 // Package embedder drives the M3 gate-1 embedder throughput bench.
-//
 // Goal: drive the real embedder.Worker against a real local Ollama instance
 // for a measurement window and assert sustained throughput is at or above the
 // gate-1 floor (5 emb/s, see M3.md exit gates).
-//
 // What this measures: the WORKER's sustained output rate — i.e. the rate that
 // production observes, which is the min of (Ollama capacity, Worker rate
 // limiter). The Worker defaults to 10 emb/s; the gate floor is 5 emb/s; if
 // Ollama is healthy the run reports a rate close to the limiter cap. A rate
 // significantly below the limiter cap points at Ollama, not the worker.
-//
 // Build-tag-gated; the make target is `make eval-embed-throughput`. The test
 // skips with a clear message if Ollama is not reachable.
 package embedder

@@ -99,7 +99,6 @@ func parseMCPLatencyBench(content string) (ms float64, ok bool) {
 
 // parseMultiBranchBench parses daemon RSS (in bytes) and promotion p95 (in seconds)
 // from multi-branch/RESULTS.md content.
-//
 // It expects table rows like:
 //
 //	| Daemon RSS | 342mb | ≤2GiB | PASS |

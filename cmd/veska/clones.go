@@ -6,7 +6,7 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/cli/clonescmd"
 )
 
-// clonesCmd wraps eng_find_clones. solov2-wfrj. Exact-clone detection by
+// clonesCmd wraps eng_find_clones. Exact-clone detection by
 // content_hash equality — the deterministic, embedding-free half of duplicate
 // detection. For the per-function "is THIS duplicated?" pivot, reach for
 // `veska similar <symbol>` (eng_search_similar) instead.

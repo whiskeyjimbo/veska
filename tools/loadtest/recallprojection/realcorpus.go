@@ -1,20 +1,16 @@
 // realcorpus.go builds a recall-projection corpus from a real Go module
 // instead of the synthetic corpus.
-//
-// Background (solov2-7ma / solov2-ok0): the synthetic sweep's +snippet
+// Background: the synthetic sweep's +snippet
 // input is synthSnippet — a restatement of the cluster query text — so
 // its recall figure is circular. A faithful measurement needs real
 // source bodies and queries that are written independently of them.
-//
 // BuildRealCorpus walks a Go module with go/parser + go/doc and emits a
 // ProjectionCorpus where, for each exported symbol:
-//
-//   - Snippet    = the symbol's real source body (no doc comment).
-//   - Signature  = the symbol's real declaration line.
-//   - Kind/SymbolPath/FilePath = real structural identifiers.
-//   - the center query (documented symbols only) = the symbol's doc
+//   Snippet = the symbol's real source body (no doc comment).
+//   Signature = the symbol's real declaration line.
+//   Kind/SymbolPath/FilePath = real structural identifiers.
+//   the center query (documented symbols only) = the symbol's doc
 //     comment — natural-language prose written separately from the body.
-//
 // Each documented symbol is its own cluster with single-node ground
 // truth: recall@10 asks whether a symbol's doc-comment query retrieves
 // that symbol out of the whole corpus. Undocumented exported symbols are
@@ -66,7 +62,7 @@ func BuildRealCorpus(root string) (ProjectionCorpus, error) {
 }
 
 // goPackageDirs returns every directory under root that holds at least one
-// non-test .go file, skipping vendor, testdata, and dot-directories.
+// non-test.go file, skipping vendor, testdata, and dot-directories.
 func goPackageDirs(root string) ([]string, error) {
 	seen := make(map[string]struct{})
 	err := filepath.WalkDir(root, func(path string, d os.DirEntry, err error) error {

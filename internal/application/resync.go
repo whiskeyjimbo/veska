@@ -29,9 +29,9 @@ type RepoRecord struct {
 	RootPath        string // absolute path to the git working tree
 	ActiveBranch    string
 	LastPromotedSHA string // empty = never promoted
-	Kind            string // "tracked" (default) or "ephemeral" (solov2-kxo5.9)
+	Kind            string // "tracked" (default) or "ephemeral"
 	// Aliases are user-defined human-friendly names for this repo
-	// . MCP resolvers use them for repo_id lookup; the
+	// MCP resolvers use them for repo_id lookup; the
 	// MCP eng_list_repos response surfaces them per repo.
 	Aliases []string
 }
@@ -48,8 +48,8 @@ type GitQuerier interface {
 	HEAD(rootPath string) (string, error)
 	// IsAncestor returns true if sha is reachable from HEAD (i.e. sha is an ancestor).
 	IsAncestor(rootPath, sha, head string) (bool, error)
-	// CommitsSince returns the list of commit SHAs from sha..HEAD in oldest-first order,
-	// i.e. the output of `git log <sha>..HEAD --reverse --format=%H`.
+	// CommitsSince returns the list of commit SHAs from sha.HEAD in oldest-first order,
+	// i.e. the output of `git log <sha>.HEAD --reverse --format=%H`.
 	CommitsSince(rootPath, sha, head string) ([]string, error)
 	// ChangedFiles returns the list of files changed in the given commit SHA.
 	ChangedFiles(rootPath, sha string) ([]string, error)
@@ -70,7 +70,7 @@ func (e *ErrPromotionDivergent) Error() string {
 
 // StartupResync runs the startup resync for all registered repos.
 // It is called before the daemon accepts connections.
-// During resync, IsSyncing() returns true.
+// During resync, IsSyncing returns true.
 type StartupResync struct {
 	repos    RepoLister
 	git      GitQuerier
@@ -78,7 +78,7 @@ type StartupResync struct {
 	promote  promoteFunc
 	reparser func(ctx context.Context, repo RepoRecord) error
 
-	// br is the optional staging-vs-HEAD branch reconciler (SOLO-03 §5.2).
+	// br is the optional staging-vs-HEAD branch reconciler.
 	// When set, each repo's working-tree branch is reconciled against
 	// repos.active_branch before any parse/replay. nil = skip (back-compat).
 	br *BranchReconciler
@@ -89,7 +89,7 @@ type StartupResync struct {
 // StartupResyncOption configures optional StartupResync behaviour.
 type StartupResyncOption func(*StartupResync)
 
-// WithBranchReconciler wires the staging-vs-HEAD branch reconciler (SOLO-03
+// WithBranchReconciler wires the staging-vs-HEAD branch reconciler (
 // §5.2) into the startup-resync path. A nil reconciler is ignored, leaving the
 // branch check disabled (back-compat). When set, resyncRepo reconciles the
 // working-tree branch against repos.active_branch before any replay runs, and
@@ -142,7 +142,7 @@ func (r *StartupResync) IsSyncing() bool {
 //  1. Get HEAD SHA via git.HEAD
 //  2. If last_promoted_sha == HEAD: skip (already up to date)
 //  3. If last_promoted_sha is empty: full reparse path
-//  4. If git.IsAncestor(sha, head): replay commits sha..HEAD via save + promote per commit
+//  4. If git.IsAncestor(sha, head): replay commits sha.HEAD via save + promote per commit
 //  5. If not ancestor (divergent): full reparse path (log ErrPromotionDivergent, then reparse)
 //
 // Returns the first non-divergent error. Divergent errors are logged but not returned.
@@ -159,14 +159,14 @@ func (r *StartupResync) Run(ctx context.Context) error {
 	// SQLITE_BUSY against the post-promotion queue, a missing working
 	// tree, a parser crash) must not abort the rest of the resync.
 	// Otherwise repos registered AFTER the failing one never get
-	// indexed at all (solov2-8ga: pflag+cobra promoted, logrus errored
+	// indexed at all (: pflag+cobra promoted, logrus errored
 	// on a sink-before-delete race, and sam-repo never started).
 	for _, repo := range repos {
 		if ctx.Err() != nil {
 			return ctx.Err()
 		}
 		if err := r.resyncRepo(ctx, repo); err != nil {
-			// solov2-s0t0: a missing root is an expected, recurring state
+			// a missing root is an expected, recurring state
 			// (registered repo whose checkout has since moved or been
 			// deleted). Log it as WARN so it doesn't cry wolf at every
 			// boot; reserve ERROR for genuinely unexpected failures.
@@ -191,7 +191,7 @@ func (r *StartupResync) Run(ctx context.Context) error {
 
 // resyncRepo handles resync for a single repo.
 func (r *StartupResync) resyncRepo(ctx context.Context, repo RepoRecord) error {
-	// SOLO-03 §5.2: begin by reconciling the working-tree branch against
+	// begin by reconciling the working-tree branch against
 	// repos.active_branch BEFORE any parse/replay. On a branch switch this
 	// bumps the staging generation, drops the prior branch's staging, and
 	// updates active_branch. The resolved branch flows back into the

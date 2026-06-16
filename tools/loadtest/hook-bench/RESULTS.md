@@ -1,4 +1,4 @@
-# Hook p95 Benchmark — sendSeal round-trip
+# Hook p95 Benchmark - sendSeal round-trip
 
 Generated: 2026-05-13
 Platform: Linux amd64 (Intel Core i7-7700 @ 3.60GHz)
@@ -8,9 +8,9 @@ Iterations: 500
 | Metric | Value | Gate |
 |--------|-------|------|
 | p95 latency | 0.116ms | ≤100ms |
-| p99 latency | 0.208ms | — |
-| min | 0.033ms | — |
-| max | 1.696ms | — |
+| p99 latency | 0.208ms | - |
+| min | 0.033ms | - |
+| max | 1.696ms | - |
 
 Gate: PASS (p95 ≤ 100ms)
 

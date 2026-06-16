@@ -12,12 +12,11 @@ import (
 	ignore "github.com/sabhiram/go-gitignore"
 )
 
-// DefaultIgnorePatterns are always excluded regardless of .veskaignore.
-//
-// solov2-v2zx: include common AI-agent worktree roots (`.claude/worktrees/`,
+// DefaultIgnorePatterns are always excluded regardless of.veskaignore.
+// include common AI-agent worktree roots (`.claude/worktrees/`,
 // `.git/worktrees/`, `.cursor/`, `.aider*/`). Without these, a cold scan
 // inside a repo whose tools create per-task worktrees ends up indexing N
-// copies of every symbol — once for the main tree, once for each worktree —
+// copies of every symbol — once for the main tree, once for each worktree
 // which trashes search ranking and inflates the embedder queue. The agent
 // worktree paths are conventional, not hard schema, so they belong with the
 // other "almost always wrong to index" defaults like vendor/ and node_modules/.
@@ -39,8 +38,8 @@ var DefaultIgnorePatterns = []string{
 	".aider*/",
 }
 
-// IgnoreList is the merged result of default patterns and a repo's .veskaignore
-// file, matched with standard .gitignore semantics (anchoring, recursive `**`
+// IgnoreList is the merged result of default patterns and a repo's.veskaignore
+// file, matched with standard.gitignore semantics (anchoring, recursive `**`
 // globs, and last-match-wins negation via `!`). Patterns are kept in
 // merge order (defaults first, user patterns last) so user lines can override
 // defaults — significant because negation makes order meaningful.
@@ -66,7 +65,7 @@ func newIgnoreList(patterns []string) *IgnoreList {
 	}
 }
 
-// Load reads .veskaignore from repoRoot (if it exists) and returns an IgnoreList
+// Load reads.veskaignore from repoRoot (if it exists) and returns an IgnoreList
 // merging DefaultIgnorePatterns with the file's patterns.
 // Lines starting with # and blank lines are skipped.
 // Returns a list of default patterns only if the file doesn't exist.
@@ -102,11 +101,10 @@ func Load(repoRoot string) (*IgnoreList, error) {
 }
 
 // ShouldIgnore reports whether the given path matches the ignore list under
-// standard .gitignore semantics (anchoring, `**` recursion, character classes,
+// standard.gitignore semantics (anchoring, `**` recursion, character classes,
 // and last-match-wins negation). The path should be relative to the repo root;
 // callers pass directory paths with a trailing slash so directory-only patterns
 // (e.g. "vendor/") match. Forward and backslash separators are both accepted.
-//
 // Negation (`!`) re-includes a path at the pattern level, but matches git's own
 // limitation during a tree walk: a cold scan that prunes an excluded directory
 // (SkipDir) never visits its children, so `!secret/keep.txt` cannot re-surface

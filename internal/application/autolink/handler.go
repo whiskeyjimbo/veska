@@ -20,12 +20,10 @@ type candidateProducer interface {
 // fileNodeLookup is the narrow port the Handler needs from ports.NodeLookup.
 // Defined here so the autolink package does not import the full NodeLookup
 // surface (which carries the LookupNodes method aimed at the search layer).
-//
 // NodeContentHash returns nodes.content_hash for a single node scoped to
 // (repoID, branch). An unknown node MUST return ("", nil) — the Handler
 // treats a missing source as "no hash recorded" (NULL on the finding) rather
 // than as an error, mirroring the eventual-consistency contract on LookupNodes.
-//
 // NOTE: this is the SOURCE node's content_hash (the dirty side that re-ran
 // auto-link); it is intentionally distinct from the embedding-input hash on
 // node_embedding_refs.content_hash, which is keyed by ports.EmbeddingRefRepo.
@@ -35,7 +33,7 @@ type fileNodeLookup interface {
 	// LookupNodes hydrates node IDs into their minimal metadata, scoped to
 	// (repoID, branch). Used to (a) drop non-symbol container nodes from the
 	// auto-link source set and (b) render the target by name/path in the
-	// finding message instead of an opaque node ID . IDs absent
+	// finding message instead of an opaque node ID. IDs absent
 	// from storage are omitted, mirroring ports.NodeLookup.
 	LookupNodes(ctx context.Context, repoID, branch string, nodeIDs []string) ([]ports.NodeMeta, error)
 }
@@ -43,7 +41,7 @@ type fileNodeLookup interface {
 // nonSymbolKinds are container / sub-symbol node kinds for which a
 // nearest-neighbour "similar to" link is noise: package and chunk nodes embed
 // near-identical boilerplate across files and flood the findings list
-// . A blocklist (rather than a symbol allowlist) keeps unknown or
+// A blocklist (rather than a symbol allowlist) keeps unknown or
 // future symbol kinds eligible by default.
 var nonSymbolKinds = map[string]bool{
 	"package": true,
@@ -55,9 +53,7 @@ var nonSymbolKinds = map[string]bool{
 }
 
 // Handler implements queue.WorkHandler for WorkKindAutoLink rows.
-//
 // One Row -> one batch of unresolved Edges + one Finding per Edge:
-//
 //  1. Validate row.Kind == WorkKindAutoLink.
 //  2. Resolve the payload file path to its set of source node_ids.
 //  3. Ask the Linker for top-k similarity candidates across those sources.
@@ -79,7 +75,7 @@ type Handler struct {
 	// "ephemeral") of a repo. ephemeral repos (search --repo <url>
 	// clones) skip autolink entirely — a 75-file external clone like
 	// spf13/pflag otherwise yields ~100 low-severity findings on the
-	// junior's first 'findings list' (solov2-izh6.8). When the option
+	// junior's first 'findings list'. When the option
 	// is unset (older composition roots), behaviour is unchanged.
 	repoKind func(ctx context.Context, repoID string) (string, error)
 }
@@ -92,7 +88,7 @@ type HandlerOption func(*Handler)
 // WithRepoKindLookup wires a callback that returns a repo's Kind
 // ("tracked" / "ephemeral"). Used by Handle to skip autolink on
 // ephemeral repos so externally-cloned codebases don't produce a wall
-// of noise findings (solov2-izh6.8).
+// of noise findings.
 func WithRepoKindLookup(fn func(ctx context.Context, repoID string) (string, error)) HandlerOption {
 	return func(h *Handler) { h.repoKind = fn }
 }
@@ -137,13 +133,13 @@ func NewHandler(
 const Rule = "auto-link"
 
 // Handle processes a single ports.WorkRow of kind WorkKindAutoLink.
-//
 // Behaviour:
-//   - Wrong kind returns an error (programmer or routing bug).
-//   - Empty payload returns nil (nothing to do).
-//   - File with zero nodes is a no-op.
-//   - Linker / EdgeStorage / FindingStorage errors propagate wrapped so the
-//     queue.Poller can re-queue or mark the row failed.
+//
+//	Wrong kind returns an error (programmer or routing bug).
+//	Empty payload returns nil (nothing to do).
+//	File with zero nodes is a no-op.
+//	Linker / EdgeStorage / FindingStorage errors propagate wrapped so the
+//	  queue.Poller can re-queue or mark the row failed.
 func (h *Handler) Handle(ctx context.Context, row ports.WorkRow) error {
 	if row.Kind != ports.WorkKindAutoLink {
 		return fmt.Errorf("autolink.Handle: unexpected kind %q", row.Kind)
@@ -152,7 +148,7 @@ func (h *Handler) Handle(ctx context.Context, row ports.WorkRow) error {
 	if filePath == "" {
 		return nil
 	}
-	// solov2-izh6.8: ephemeral repos (cache-tier clones from
+	// ephemeral repos (cache-tier clones from
 	// `veska search --repo <url>`) skip autolink entirely. The user is
 	// exploring an external codebase, not curating its findings; emitting
 	// N×N "similar to" findings on a 75-file pflag clone trains them to
@@ -164,7 +160,7 @@ func (h *Handler) Handle(ctx context.Context, row ports.WorkRow) error {
 	}
 	// Vendored / third-party files are skipped wholesale: proposing
 	// auto-link edges from cobra internals or node_modules produces pure
-	// noise on a junior's first promotion . The same path
+	// noise on a junior's first promotion. The same path
 	// predicate gates the dead-code and secret_leak rules.
 	if pathfilter.IsVendored(filePath) {
 		return nil
@@ -191,10 +187,9 @@ func (h *Handler) Handle(ctx context.Context, row ports.WorkRow) error {
 	// targets (embeddings drift, vector backend tie-breaks reorder), so older
 	// (now-orphaned) auto-link findings would otherwise accumulate alongside
 	// the fresh ones and the "open findings" surface would balloon across
-	// reindexes . Auto-link findings anchor on edge_id, not
+	// reindexes. Auto-link findings anchor on edge_id, not
 	// node_id, so the revalidation sweep cannot reach them — the supersession
 	// has to happen at write time.
-	//
 	// The close runs BEFORE the linker call so the new finding-Save's
 	// ON CONFLICT path correctly re-opens (closed_at NULL, state='open') any
 	// finding that survived from the previous round on the same edge.
@@ -247,7 +242,7 @@ func (h *Handler) resolveSources(ctx context.Context, row ports.WorkRow, nodeIDs
 
 // filterCandidates hydrates the candidate targets and drops the noise pairs:
 // targets that are container/sub-symbol kinds, targets that live in the same
-// file as their source , and idiomatic-name matches .
+// file as their source, and idiomatic-name matches.
 // Without these filters a tiny repo immediately gets a noise finding like
 // "Similar to chunk:1-22 in main.go" — useless to the user and leaks the
 // internal chunk artifact name. Filtering at the candidate level (after the
@@ -299,7 +294,7 @@ func (h *Handler) filterCandidates(ctx context.Context, row ports.WorkRow, cands
 
 // emitFindings persists each surviving candidate as a SIMILAR_TO edge and emits
 // one source_layer='semantic' Finding per edge. cands and the edges it builds
-// are parallel slices; the finding loop walks them by index. solov2-6eqa: the
+// are parallel slices; the finding loop walks them by index.: the
 // message names BOTH sides — "X in src.go similar to Y in tgt.go" — falling
 // back to the opaque node ID when a side's metadata is missing.
 func (h *Handler) emitFindings(ctx context.Context, row ports.WorkRow, cands []Candidate, srcMeta, tgtMeta []ports.NodeMeta, nodeIDs []string) error {
@@ -314,7 +309,7 @@ func (h *Handler) emitFindings(ctx context.Context, row ports.WorkRow, cands []C
 			domain.WithConfidence(domain.Unresolved),
 			// Persist the similarity score so near-duplicate detection can
 			// threshold SIMILAR_TO edges above autolink's related cutoff
-			// (solov2-c1s4). Same score space as the finding message.
+			// Same score space as the finding message.
 			domain.WithScore(c.Score),
 		)
 		if err != nil {
@@ -334,7 +329,7 @@ func (h *Handler) emitFindings(ctx context.Context, row ports.WorkRow, cands []C
 		srcDisplayByID[m.NodeID] = m.SymbolPath + " in " + m.FilePath
 	}
 	// Build display labels for the (already-hydrated) target metadata, so the
-	// finding names the symbol+file rather than an opaque node ID .
+	// finding names the symbol+file rather than an opaque node ID.
 	displayByID := make(map[string]string, len(tgtMeta))
 	for _, m := range tgtMeta {
 		displayByID[m.NodeID] = m.SymbolPath + " in " + m.FilePath
@@ -366,7 +361,7 @@ func (h *Handler) emitFindings(ctx context.Context, row ports.WorkRow, cands []C
 		if hash != "" {
 			opts = append(opts, domain.WithAnchorContentHash(hash))
 		}
-		// solov2-4n7q: surface the source node's file path so `veska
+		// surface the source node's file path so `veska
 		// findings list` populates the FILE column. The edge_id anchor in
 		// NodeID is opaque to users; the file_path lets findings be
 		// scanned/grouped by file like vulnerable_dependency rows already
@@ -407,11 +402,11 @@ var _ ports.WorkHandler = (*Handler)(nil)
 
 // idiomaticIdenticalNames is the set of unqualified symbol names where
 // "src and tgt share the same name" is by-construction true across files
-// and carries no signal: every Go package has its own init(), every
-// runnable program has main(), Stringer-conforming types all define
-// String(), error-bearing types all define Error(), etc. Auto-link
+// and carries no signal: every Go package has its own init, every
+// runnable program has main, Stringer-conforming types all define
+// String, error-bearing types all define Error, etc. Auto-link
 // candidates that match name-on-name in this set are dropped before the
-// findings emit .
+// findings emit.
 var idiomaticIdenticalNames = map[string]struct{}{
 	"init":     {},
 	"main":     {},
@@ -422,13 +417,12 @@ var idiomaticIdenticalNames = map[string]struct{}{
 
 // isIdiomaticAutolinkNoise reports whether a (src, tgt) auto-link
 // candidate is structurally trivial. Today's rules:
-//
 //  1. Same unqualified name on both sides AND the name is one of the
 //     well-known Go idioms above. A junior eng's tiny CLI repo otherwise
 //     gets a "main similar to Execute" and "init similar to init" pair
 //     for every cobra subcommand.
 //  2. Both sides are package-level variables with names ending in "Cmd"
-//     (e.g. rootCmd, shoutCmd, tokenCmd). These are cobra.Command{...}
+//     (e.g. rootCmd, shoutCmd, tokenCmd). These are cobra.Command{.}
 //     literals — the structural similarity is intentional repetition,
 //     not a refactor target.
 //

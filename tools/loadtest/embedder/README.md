@@ -1,4 +1,4 @@
-# embedder — M3 gate-1 throughput bench
+# embedder - M3 gate-1 throughput bench
 
 Drives the real `embedder.Worker` against a local Ollama instance for a
 measurement window and asserts sustained throughput is at or above the M3
@@ -13,11 +13,11 @@ is not reachable.
 
 ## What this actually measures
 
-The **worker's** sustained output rate — i.e. the min of (Ollama capacity,
+The **worker's** sustained output rate - i.e. the min of (Ollama capacity,
 worker rate limiter). The worker defaults to 10 emb/s; the gate floor is
 5 emb/s. A healthy local Ollama reports a rate near the limiter cap. A rate
 significantly below the cap points at Ollama or model load time, not the
-worker. We intentionally do NOT disable the limiter — production sees the
+worker. We intentionally do NOT disable the limiter - production sees the
 limiter, so the gate does too.
 
 ## Run

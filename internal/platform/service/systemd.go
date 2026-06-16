@@ -38,7 +38,6 @@ type SystemdManager struct {
 	dryRun     bool
 }
 
-// NewSystemdManager creates a SystemdManager.
 // When dryRun is true, mutating operations print what they would do.
 func NewSystemdManager(binaryPath, veskaHome string, dryRun bool) *SystemdManager {
 	return &SystemdManager{

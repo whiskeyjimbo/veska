@@ -12,8 +12,8 @@ import (
 
 // SearchHitView is the CLI's wire shape for one hit. It mirrors the MCP
 // eng_search_semantic node DTO (snake_case) so `veska search --json` and the
-// tool emit byte-identical envelopes (solov2-elt, AC3). RepoID is populated
-// only by the cross-repo fanout ; single-repo search omits it so
+// tool emit byte-identical envelopes (, AC3). RepoID is populated
+// only by the cross-repo fanout; single-repo search omits it so
 // JSON output stays byte-identical with the daemon's.
 type SearchHitView struct {
 	NodeID          string  `json:"node_id"`
@@ -45,9 +45,9 @@ func RenderSearchResults(w io.Writer, resp search.Response, jsonOut bool) error 
 }
 
 // buildSearchEnvelope maps an in-process search.Response into the wire
-// envelope used by both render paths. Extracted so the search flow can post-
+// envelope used by both render paths. Extracted so the search flow can post
 // process the envelope (e.g. shortening ephemeral cache-tier paths) before
-// rendering — solov2-l04m.
+// rendering.
 func buildSearchEnvelope(resp search.Response) SearchEnvelope {
 	env := SearchEnvelope{DegradedReasons: resp.DegradedReasons}
 	env.Results = make([]SearchHitView, 0, len(resp.Results))
@@ -69,7 +69,7 @@ func buildSearchEnvelope(resp search.Response) SearchEnvelope {
 // ephemeralDisplayName picks a short, human-readable name for an ephemeral
 // cache-tier repo: the last path segment of canonical_url (e.g. "pflag" from
 // "https://github.com/spf13/pflag.git"), falling back to a 12-char prefix of
-// repoID. solov2-l04m.
+// repoID.
 func ephemeralDisplayName(canonicalURL, repoID string) string {
 	if canonicalURL != "" {
 		base := canonicalURL
@@ -92,7 +92,7 @@ func ephemeralDisplayName(canonicalURL, repoID string) string {
 // under the ephemeral cache repo dir, replacing the cache prefix with
 // "<displayName>/" so the user sees `pflag/flag.go:194-206` rather than the
 // unscannable 64-char sha. JSON output should skip this — callers gate on
-// jsonOut. solov2-l04m.
+// jsonOut.
 func prettifyEphemeralPaths(env *SearchEnvelope, cacheRepoDir, displayName string) {
 	if env == nil || cacheRepoDir == "" || displayName == "" {
 		return
@@ -111,7 +111,7 @@ func prettifyEphemeralPaths(env *SearchEnvelope, cacheRepoDir, displayName strin
 
 // RenderSearchEnvelope emits the envelope as indented JSON (--json) or a
 // greppable one-line-per-hit table. Results is always a non-nil slice so the
-// JSON carries "results": [] on a miss .
+// JSON carries "results": on a miss.
 func RenderSearchEnvelope(w io.Writer, env SearchEnvelope, jsonOut bool) error {
 	if env.Results == nil {
 		env.Results = []SearchHitView{}
@@ -130,7 +130,7 @@ func RenderSearchEnvelope(w io.Writer, env SearchEnvelope, jsonOut bool) error {
 }
 
 // renderEmptyResults handles the zero-hit text path. A silent miss reads as
-// broken to a new user : hint at warming embeddings when we can
+// broken to a new user: hint at warming embeddings when we can
 // see the daemon's pending count, otherwise print a plain "no results" so the
 // command never exits without any text feedback.
 func renderEmptyResults(w io.Writer, env SearchEnvelope) {
@@ -148,7 +148,7 @@ func renderEmptyResults(w io.Writer, env SearchEnvelope) {
 // envelope, including the column legend, optional multi-repo column, weak-top
 // note, and degraded-reason footer.
 func renderResultTable(w io.Writer, env SearchEnvelope) {
-	// solov2-hl70: tier + score_normalized arrive on the DTO so the CLI
+	// tier + score_normalized arrive on the DTO so the CLI
 	// doesn't recompute them. We still need the absolute top for the
 	// weak-top hint below.
 	var top float32
@@ -157,7 +157,7 @@ func renderResultTable(w io.Writer, env SearchEnvelope) {
 			top = r.Score
 		}
 	}
-	// solov2-vm5w: when the fanout populated RepoID, render it as a leading
+	// when the fanout populated RepoID, render it as a leading
 	// column so the user can disambiguate hits across repos.
 	multiRepo := false
 	for _, r := range env.Results {
@@ -166,15 +166,15 @@ func renderResultTable(w io.Writer, env SearchEnvelope) {
 			break
 		}
 	}
-	// solov2-36d5: one-line legend so the score/norm/tier columns are not
+	// one-line legend so the score/norm/tier columns are not
 	// inscrutable to first-time users. The numbers are post-fusion RRF
-	//  — meaningful only relative to other hits in this query,
+	//  meaningful only relative to other hits in this query,
 	// not as absolute confidence.
 	fmt.Fprintln(w, "# tier: top|strong|weak (relative to this query); score: post-fusion RRF; norm: score / top_hit_score")
 	for _, r := range env.Results {
 		renderResultRow(w, r, top, multiRepo)
 	}
-	// solov2-gfhq: tiers are relative to this query's top hit — a query with
+	// tiers are relative to this query's top hit — a query with
 	// no strong absolute match still gets a "top" label, which reads as
 	// confidence the data can't back up. Below an absolute floor, append a
 	// one-liner so the user knows the labels are relative and recall is weak.
@@ -214,20 +214,20 @@ func renderResultRow(w io.Writer, r SearchHitView, top float32, multiRepo bool) 
 }
 
 // weakTopAbsolute is the absolute-score floor below which a query's top hit is
-// considered weak. Score is post-fusion RRF :
+// considered weak. Score is post-fusion RRF:
 //
-//	rank-1 in one list only  → 1/(60+1)            = 0.01639
-//	rank-1 in both lists     → 2 * 1/(60+1)        = 0.03279
+//	rank-1 in one list only → 1/(60+1) = 0.01639
+//	rank-1 in both lists → 2 * 1/(60+1) = 0.03279
 //
 // A top below ~0.018 means even the best hit only made it into ONE retriever's
 // list — the cross-corroboration signal is missing and recall is weak. The
-// floor sits a hair above 0.0164 so a single-list rank-1 (the common small-
+// floor sits a hair above 0.0164 so a single-list rank-1 (the common small
 // corpus case) trips the hint and prompts the user to refine.
 const weakTopAbsolute = 0.018
 
 // degradedReasonHint maps an in-band degraded_reasons code to a one-line
 // actionable hint appended to the rendered line. Empty when no hint applies,
-// so the bare code is still printed . Hints are deliberately
+// so the bare code is still printed. Hints are deliberately
 // short so the table layout stays readable.
 func degradedReasonHint(code string) string {
 	switch code {

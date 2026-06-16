@@ -1,7 +1,6 @@
 // Package checks contains the synchronous structural-check pipeline that runs
 // immediately after a promotion transaction commits. It exposes the Check
 // interface, an in-memory Registry, and a Runner that:
-//
 //  1. invokes every registered Check with the promotion Input,
 //  2. persists any returned findings via the FindingStorage port,
 //  3. records per-check wall-clock duration on the CheckLatency histogram,
@@ -49,10 +48,8 @@ type Line struct {
 }
 
 // Check is a single structural verification step.
-//
 // Name returns a stable identifier used as a Prometheus label and in finding
 // rule attribution. Names must be unique within a Registry.
-//
 // Run is invoked once per promotion. It is given the post-commit Input and
 // must return zero or more findings. Returning an error is non-fatal: the
 // Runner logs the error and continues with the next check.
@@ -67,12 +64,10 @@ type Check interface {
 // against prior state: any open finding under the declared rule whose
 // finding_id is not in the just-returned set is auto-closed with
 // reason='revalidated_obsolete'.
-//
 // VulnScanCheck implements this: it re-resolves the entire dep set on every
 // run, so a CVE that no longer applies (because the user bumped the dep)
-// must disappear from the findings surface automatically .
+// must disappear from the findings surface automatically.
 // Without this, fixing a vuln leaves the dashboard screaming forever.
-//
 // AuthoritativeRule returns the rule name to reconcile, or ok=false to
 // opt out for this particular Input (e.g. when the check decided to skip
 // the scan because the manifest was absent).
@@ -81,7 +76,6 @@ type AuthoritativeChecker interface {
 }
 
 // Registry is a small in-memory map of name → Check.
-//
 // Registration is expected to happen at daemon start-up; the Registry is not
 // optimised for hot-path mutation. It is, however, safe for concurrent reads.
 type Registry struct {
@@ -142,7 +136,7 @@ type Runner struct {
 type RunnerOption func(*Runner)
 
 // WithLogger sets the logger the Runner uses to surface swallowed check and
-// storage failures. A nil logger leaves the Runner on slog.Default().
+// storage failures. A nil logger leaves the Runner on slog.Default.
 func WithLogger(l *slog.Logger) RunnerOption {
 	return func(r *Runner) {
 		if l != nil {
@@ -153,7 +147,7 @@ func WithLogger(l *slog.Logger) RunnerOption {
 
 // NewRunner constructs a Runner. metrics may be nil — in that case timing is
 // silently dropped (useful for embedded callers that do not yet wire metrics).
-// Without WithLogger the Runner logs to slog.Default().
+// Without WithLogger the Runner logs to slog.Default.
 func NewRunner(reg *Registry, storage ports.FindingStorage, metrics *observability.Metrics, opts ...RunnerOption) *Runner {
 	r := &Runner{registry: reg, storage: storage, metrics: metrics, logger: slog.Default()}
 	for _, opt := range opts {
@@ -166,7 +160,6 @@ func NewRunner(reg *Registry, storage ports.FindingStorage, metrics *observabili
 // individual checks are caught and isolated: the Runner never returns an error
 // because the promotion transaction has already committed by the time it
 // fires.
-//
 // Findings returned by a Check are forwarded to FindingStorage.Save. A check
 // error, a recovered panic, a Save failure, and a reconciliation failure are
 // all logged at WARN (with check name + repo/branch context) but do not abort
@@ -216,7 +209,7 @@ func (r *Runner) runOne(ctx context.Context, c Check, in Input) {
 		}
 		keep = append(keep, f.FindingID)
 	}
-	// Authoritative checks : close open findings of the
+	// Authoritative checks: close open findings of the
 	// declared rule whose IDs are not in the freshly-returned set, so
 	// state that no longer applies (e.g. a vuln resolved by a dep bump)
 	// disappears from `veska findings list` without manual cleanup.

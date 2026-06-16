@@ -15,7 +15,6 @@ import (
 // ColdScanCore bundles the ingestion + promotion graph shared by the daemon and
 // the CLI cold-scan (reindex) path: the staging area, the Ingester, the
 // PromotionStore with its FTS + embedding-ref sinks, and the Promoter.
-//
 // The reparser is intentionally NOT part of the core — it legitimately differs
 // between callers (the daemon passes a scan tracker). The Ingester's finding
 // storage and the Promoter's check/added-lines/tracer seams also differ per
@@ -61,7 +60,7 @@ func NewColdScanCore(pools *sqlite.Pools, ingesterOpts []application.IngesterOpt
 	gate := staging.NewGate(area)
 	// Cold scan walks and parses Go + TS/TSX; the walk filter is sourced from
 	// this parser's SupportedExtensions via Ingester.SupportedExtensions
-	// (solov2-xde2.7), so adding a language here is the only edit needed.
+	// so adding a language here is the only edit needed.
 	parser := treesitter.NewMultiParser(treesitter.NewGoParser(), treesitter.NewTSParser())
 	ingester := application.NewIngester(parser, area, gate, ingesterOpts...)
 
@@ -90,8 +89,7 @@ func NewColdScanCore(pools *sqlite.Pools, ingesterOpts []application.IngesterOpt
 // the daemon passes application.WithScanTracker (so eng_get_status can surface
 // in-flight scans); the CLI cold-scan path omits it. Previously both callers
 // hand-built this closure from application.NewColdScanReparser — daemon
-// wire.go and NewCLIColdScanReparser each had a near-identical copy (solov2-8lt0).
-//
+// wire.go and NewCLIColdScanReparser each had a near-identical copy.
 // The reparser is deliberately not folded into NewColdScanCore: the core is the
 // part both callers share verbatim, whereas the reparser legitimately differs
 // (the scan tracker) and is built from the core's Ingester/Promoter after the

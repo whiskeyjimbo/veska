@@ -2,13 +2,11 @@
 // a deterministic hash-to-vector embedder used by the loadtest harnesses
 // (recall@k in tools/loadtest/recall and auto-link FP-rate in
 // tools/loadtest/autolink).
-//
 // Ground truth is structural: two nodes are "related" iff they live in
 // the same cluster. The cluster id is encoded both in the node's
 // metadata (Cluster int) and in its synthetic Text so the FakeEmbedder
 // can produce a vector with a strong spike on the cluster axis without
 // needing access to the labelled metadata.
-//
 // Both harnesses depend on this package; the recall harness layers a
 // "center query" per cluster on top, while the autolink harness uses
 // existing node embeddings as the query.
@@ -119,10 +117,8 @@ func (FakeEmbedder) Embed(_ context.Context, text string) ([]float32, error) {
 func (FakeEmbedder) ModelID() string { return "fake-hash-v1" }
 
 // FakeEmbed builds a deterministic FakeEmbeddingDim vector from text.
-//
 // The construction has two parts so cluster-center queries align with
 // their own members:
-//
 //  1. A cluster bias: ParseClusterID extracts the integer K from
 //     "cluster_K_*" prefixes; the vector then has a strong positive
 //     spike on axis (K mod FakeEmbeddingDim). Both centroid and member

@@ -1,7 +1,7 @@
 // Package similarcmd holds the delivery-layer logic behind `veska similar`
 // (eng_search_similar) and `veska related` (eng_find_related). Both ride the
 // same vector-neighbourhood path on the daemon and return a SearchResponse
-// envelope, so they share one renderer here. solov2-yh5a.
+// envelope, so they share one renderer here.
 package similarcmd
 
 import (

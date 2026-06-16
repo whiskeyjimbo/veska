@@ -44,7 +44,7 @@ type VerifyVerdict struct {
 	// NewFindingsChecked).
 	NewFindings []string `json:"new_findings"`
 	// NewFindingsCoveredRules names the rules discovery actually evaluated, so
-	// a consumer never reads "checked" as "all rules checked". The no-new-
+	// a consumer never reads "checked" as "all rules checked". The no-new
 	// findings result is sound ONLY for these rules; a rule absent here (e.g.
 	// secrets, vuln) was NOT checked and a new finding under it would not fail
 	// the gate. Empty when discovery did not run.
@@ -59,7 +59,6 @@ type VerifyVerdict struct {
 // Verifier needs. Producing these (re-promoting changed files into a cloned
 // base graph and running the real structural checks over it) is the scope:large
 // adapter the gate's CLI wires; the Verifier only consumes the sets.
-//
 // SCOPE: discovery covers the graph-structural rules (dead-code, contract-drift)
 // that a re-promote + full-file check pass makes sound. Line/dep scanners
 // (secrets, vuln) need per-line/dep inputs and are out of v1 scope — the gate's
@@ -156,7 +155,7 @@ func (v *Verifier) Verify(ctx context.Context, eph *Ephemeral, target *domain.Fi
 // base. Inbound CALLS edges = base inbound CALLS ∪ resolved overlay CALLS edges
 // targeting the node. Only CALLS count: a structural CONTAINS/IMPORTS parent
 // edge is not a caller, so it must not resolve a dead-code finding — counting
-// it made every dead-code finding read as resolved with no fix (solov2-nmps.9),
+// it made every dead-code finding read as resolved with no fix,
 // since every symbol has a CONTAINS parent. A candidate's NEW cross-file caller
 // surfaces as an UnresolvedCall (bound only at promotion), not a resolved
 // overlay edge, so it is NOT counted here — that under-reports inbound edges,

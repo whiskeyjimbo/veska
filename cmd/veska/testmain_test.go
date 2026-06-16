@@ -8,8 +8,7 @@ import (
 // TestMain isolates the whole cmd/veska test package from the developer's real
 // VESKA_HOME. It points VESKA_HOME at a throwaway temp dir so no test reads,
 // migrates, or pollutes ~/.veska.
-//
-// solov2-dchd surfaced why this matters: editing an already-applied migration
+// surfaced why this matters: editing an already-applied migration
 // in place (0019) makes the integrity check tamper-fail on any pre-existing DB,
 // and OpenWithOptions responds with os.Exit(78) — so a single storage-opening
 // test against a stale ~/.veska aborts the entire test binary (no clean

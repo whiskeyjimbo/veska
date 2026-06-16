@@ -3,7 +3,7 @@
 // the project-scoped per-agent instruction snippet writer (--agent). cmd/veska/
 // init.go is reduced to Cobra command construction whose RunE delegates here,
 // following the cmd = glue / logic-in-packages pattern established by
-// reindexcmd, symbolcmd, graphcmd, and findingscmd .
+// reindexcmd, symbolcmd, graphcmd, and findingscmd.
 package initcmd
 
 import (
@@ -44,14 +44,13 @@ type Deps struct {
 // Run — separates flag-handling from the core flow and keeps Run testable
 // without spinning up cobra.
 type Flags struct {
-	Yes    bool // --yes: auto-accept all prompts with the default answer.
-	NoVuln bool // --no-vuln: force vuln_source disabled, skip the prompt.
+	Yes    bool // yes: auto-accept all prompts with the default answer.
+	NoVuln bool // no-vuln: force vuln_source disabled, skip the prompt.
 	Stdin  io.Reader
 	// Interactive reports whether stdin is a TTY. Non-interactive callers
 	// (CI, agent harnesses, install pipelines) get the default answer
 	// silently — the prompt is suppressed entirely and the chosen default
 	// is echoed in the summary so the caller can tell what happened
-	// .
 	Interactive bool
 }
 
@@ -61,7 +60,7 @@ type Flags struct {
 //     default (model2vec/static) is in-process and needs no external service,
 //     so init never fails for lack of Ollama. Only an explicit
 //     VESKA_EMBEDDER=ollama probes Ollama and hard-fails when it is unhealthy.
-//  3. Prompts to enable [vuln_source]  unless --yes / --no-vuln
+//  3. Prompts to enable [vuln_source] unless --yes / --no-vuln
 //     short-circuits.
 //  4. Prints a short summary to out on success.
 func Run(ctx context.Context, deps Deps, flags Flags, out io.Writer) error {
@@ -72,7 +71,7 @@ func Run(ctx context.Context, deps Deps, flags Flags, out io.Writer) error {
 		}
 	}
 
-	// solov2-pvyo: resolve vuln_source choice BEFORE writing the config so
+	// resolve vuln_source choice BEFORE writing the config so
 	// we write it in its final shape (uncommented when enabled). Defaults
 	// to Y so `veska init -y` opts the user in — junior-journey UX choice,
 	// the scanner ships behind a single feature flag and is safe to enable.
@@ -81,7 +80,7 @@ func Run(ctx context.Context, deps Deps, flags Flags, out io.Writer) error {
 		return err
 	}
 
-	// solov2-w1ng: CONFIG-SURFACE.md promises `veska init` writes
+	// CONFIG-SURFACE.md promises `veska init` writes
 	// ~/.veska/config.toml when absent. Honour that — drop a starter file
 	// so a junior can grep, edit, restart, and go. Never overwrites an
 	// existing file (the prompt above does NOT mutate an existing config).
@@ -102,7 +101,7 @@ func Run(ctx context.Context, deps Deps, flags Flags, out io.Writer) error {
 	fmt.Fprintf(out, "embedder: %s\n", embedderLine)
 	fmt.Fprintln(out, "service:  not installed (run: veska service install)")
 	fmt.Fprintln(out, "repo:     not added (run: veska repo add <path>)")
-	// solov2-yx2y: surface the vuln-scan choice in the summary so
+	// surface the vuln-scan choice in the summary so
 	// `init -y` users don't get OSV egress silently enabled.
 	if vulnEnabled {
 		fmt.Fprintln(out, "vuln:     OSV scanner enabled (auto-runs on every repo promotion; results land in `veska findings list`; rerun init with --no-vuln to disable)")
@@ -110,7 +109,7 @@ func Run(ctx context.Context, deps Deps, flags Flags, out io.Writer) error {
 		fmt.Fprintln(out, "vuln:     OSV scanner disabled (no network egress for vuln scans)")
 	}
 	if tip != "" {
-		// solov2-sft7: make this LOUD. The quiet 'tip:' line buried under
+		// make this LOUD. The quiet 'tip:' line buried under
 		// 'ready' meant junior users routinely shipped with the low-quality
 		// static-v2 embedder.
 		fmt.Fprintln(out)
@@ -120,7 +119,7 @@ func Run(ctx context.Context, deps Deps, flags Flags, out io.Writer) error {
 		fmt.Fprintln(out, "    or rebuild with `make build` (default fat binary).")
 		fmt.Fprintln(out)
 	}
-	// solov2-0cv6: surface the first-five-minutes walkthrough right at
+	// surface the first-five-minutes walkthrough right at
 	// init so a junior never has to grep --help for the next step. The
 	// three-command block is the minimum to get from 'veska init' to
 	// 'veska search' producing real results.
@@ -131,7 +130,7 @@ func Run(ctx context.Context, deps Deps, flags Flags, out io.Writer) error {
 	fmt.Fprintln(out, "  3. veska search \"your question\"                  # semantic search the graph")
 	fmt.Fprintln(out, "  see also: veska init --agent claude|cursor|...   # MCP setup for editors")
 	fmt.Fprintln(out)
-	// solov2-izh6.19: tiny discoverability hints. New users hit two
+	// tiny discoverability hints. New users hit two
 	// papercuts on first contact: invoking bin/veska by absolute path
 	// (no PATH suggestion anywhere), and discovering -y / --yes only by
 	// reading source when scripting init from CI/Docker.
@@ -145,7 +144,7 @@ func Run(ctx context.Context, deps Deps, flags Flags, out io.Writer) error {
 
 // StdinIsInteractive reports whether os.Stdin is a TTY. Used to decide
 // whether to prompt or silently take the default during `veska init`
-// . On any stat error we conservatively report false — the
+// On any stat error we conservatively report false — the
 // quiet, non-interactive default behaviour is the right answer when the
 // shape of stdin can't be determined.
 func StdinIsInteractive() bool {
@@ -157,11 +156,12 @@ func StdinIsInteractive() bool {
 }
 
 // ResolveVulnChoice asks the user whether to enable OSV vulnerability scanning
-// at init time . Non-interactive paths short-circuit:
-//   - --no-vuln → always disabled.
-//   - --yes (or stdin missing/closed) → accept the default (enabled).
-//   - existing config.toml on disk → skip the prompt entirely; we never
-//     mutate an existing file.
+// at init time. Non-interactive paths short-circuit:
+//
+//	no-vuln → always disabled.
+//	yes (or stdin missing/closed) → accept the default (enabled).
+//	existing config.toml on disk → skip the prompt entirely; we never
+//	  mutate an existing file.
 func ResolveVulnChoice(flags Flags, out io.Writer) (bool, error) {
 	if flags.NoVuln {
 		return false, nil
@@ -169,7 +169,7 @@ func ResolveVulnChoice(flags Flags, out io.Writer) (bool, error) {
 	if flags.Yes || flags.Stdin == nil {
 		return true, nil
 	}
-	// solov2-mgyy: when stdin isn't a TTY (CI, piped install, agent
+	// when stdin isn't a TTY (CI, piped install, agent
 	// harness) skip the prompt entirely and take the default. Echo what
 	// we chose so the caller can read the summary and know vuln scanning
 	// is on without inspecting config.toml.
@@ -177,14 +177,13 @@ func ResolveVulnChoice(flags Flags, out io.Writer) (bool, error) {
 		fmt.Fprintln(out, "OSV vulnerability scanning: enabled (default; non-interactive stdin — pass --no-vuln to opt out, --yes to silence this line)")
 		return true, nil
 	}
-	// solov2-k4pe: surface that the default makes the daemon query osv.dev
+	// surface that the default makes the daemon query osv.dev
 	// over the network, and point at --no-vuln / --yes so a junior never
 	// has to grep --help to script the install.
-	//
 	// Peek for an immediate EOF before printing anything — some agent
 	// harnesses present a TTY-ish stdin that's already closed, in which
 	// case the prompt + "stdin EOF" parenthetical reads as an error
-	// . Skip straight to the non-interactive line so the
+	// Skip straight to the non-interactive line so the
 	// output is identical to the !flags.Interactive branch.
 	reader := bufio.NewReader(flags.Stdin)
 	if _, peekErr := reader.Peek(1); peekErr != nil {
@@ -245,7 +244,7 @@ func resolveInitEmbedder(ctx context.Context, deps Deps) (line, tip string, err 
 
 // embedderProvenance reports where the elected provider's weights came from,
 // so `veska init` can disambiguate fat (compiled in), downloaded (~/.veska),
-// and static-v2 fallback . The model name is extracted from
+// and static-v2 fallback. The model name is extracted from
 // ModelID — model2vec providers render as "model2vec(<name>)".
 func embedderProvenance(veskaHome, modelID string) string {
 	if modelID == embedstatic.ModelID {
@@ -277,8 +276,8 @@ const configTemplateHeader = `# Veska daemon config.
 
 `
 
-// vulnSourceBlockEnabled is the live (uncommented) [vuln_source] block —
-// written when init resolves the prompt to "yes" .
+// vulnSourceBlockEnabled is the live (uncommented) [vuln_source] block
+// written when init resolves the prompt to "yes".
 const vulnSourceBlockEnabled = `# OSV.dev vulnerability scanner. After re-indexing existing repos
 # (` + "`veska reindex <path>`" + `), findings appear in ` + "`veska findings list`" + `.
 [vuln_source]
@@ -299,7 +298,7 @@ const vulnSourceBlockDisabled = `# OSV.dev vulnerability scanner (off; opt-in).
 
 // writeDefaultConfigIfAbsent writes the starter config.toml only when the
 // file does not already exist. vulnEnabled selects whether the
-// [vuln_source] block is written live or commented out .
+// [vuln_source] block is written live or commented out.
 // Idempotent on re-init — never overwrites an existing config.
 func writeDefaultConfigIfAbsent(veskaHome string, vulnEnabled bool) error {
 	path := filepath.Join(veskaHome, "config.toml")

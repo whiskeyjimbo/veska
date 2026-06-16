@@ -117,7 +117,7 @@ func newReparser(t *testing.T, c *captureFakes, head string) func(context.Contex
 	return r
 }
 
-// TestColdScanReparser_TrackerSeesScanInFlight covers solov2-pm5: when
+// TestColdScanReparser_TrackerSeesScanInFlight covers: when
 // the reparser is built with WithScanTracker, the tracker reports the
 // repo as in-flight while save is running, and empty after the
 // reparser returns. We hook the saveHook to take a Snapshot mid-scan.
@@ -179,7 +179,7 @@ func TestColdScanReparser_IndexesNonIgnoredFiles(t *testing.T) {
 	}
 
 	got := c.savedPaths()
-	// ADR-S0017 §1: the parser is fed the repo-relative slash path, not the
+	// the parser is fed the repo-relative slash path, not the
 	// absolute walked path.
 	want := []string{"a.go", "b.go"}
 	if !equalStringSlice(got, want) {
@@ -194,10 +194,10 @@ func TestColdScanReparser_IndexesNonIgnoredFiles(t *testing.T) {
 	}
 }
 
-// TestColdScanReparser_SkipsNonSourceNonManifest pins solov2-8x7r: the
-// walker only feeds the ingester files the parsers can read (.go, .ts,
-// .tsx) or known manifests downstream checks gate on (go.mod). README,
-// .yml, etc. are skipped so staging isn't bloated with empty parse
+// TestColdScanReparser_SkipsNonSourceNonManifest pins: the
+// walker only feeds the ingester files the parsers can read (.go,.ts,
+// tsx) or known manifests downstream checks gate on (go.mod). README,
+// yml, etc. are skipped so staging isn't bloated with empty parse
 // results.
 func TestColdScanReparser_SkipsNonSourceNonManifest(t *testing.T) {
 	root := t.TempDir()
@@ -226,7 +226,7 @@ func TestColdScanReparser_SkipsNonSourceNonManifest(t *testing.T) {
 	}
 }
 
-// TestColdScanReparser_LogsStartAndComplete pins solov2-6ip: every scan
+// TestColdScanReparser_LogsStartAndComplete pins: every scan
 // emits a 'cold scan: starting' INFO at entry and a 'cold scan: complete'
 // INFO at exit, with repo_id + git_sha + files_saved + elapsed. A newbie
 // tailing ~/.veska/logs/daemon.log relies on these to know the scan is

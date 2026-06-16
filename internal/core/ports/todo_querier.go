@@ -18,7 +18,6 @@ type TodoEntry struct {
 // TodoQuerier is the read-side port for parser-emitted TODO findings.
 // Implementations sit on top of the findings table and filter
 // rule='todo' with the additional scopes the caller supplies.
-//
 // The port is intentionally distinct from FindingStorage: TODO retrieval
 // has a narrow projection and a single rule, so widening FindingStorage
 // to support arbitrary list queries would couple it to display concerns.

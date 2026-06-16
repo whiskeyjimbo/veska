@@ -1,9 +1,8 @@
 // Package wikicmd holds the business logic behind the `veska wiki` command:
 // opening the SQLite pools, replicating the daemon's WorkKindWiki handler
 // wiring, resolving the target repo/branch, and driving the render.
-//
 // cmd/veska/wiki.go is reduced to Cobra command construction whose RunE body
-// parses flags/positionals and delegates here (solov2-0omh, following the
+// parses flags/positionals and delegates here (, following the
 // cmd = glue / logic-in-packages pattern established by symbolcmd, graphcmd,
 // findingscmd, and searchcmd).
 package wikicmd
@@ -28,7 +27,7 @@ import (
 )
 
 // Params bundles the resolved inputs of Run. The positional/flag merge and the
-// --all mutual-exclusion check stay in the Cobra layer; Run receives a single
+// all mutual-exclusion check stay in the Cobra layer; Run receives a single
 // already-resolved RepoID (empty = auto-resolve) plus the All sweep toggle.
 type Params struct {
 	RepoID string
@@ -82,7 +81,7 @@ func Run(ctx context.Context, p Params) error {
 	return nil
 }
 
-// runAll renders every registered repo  so multi-repo workspaces
+// runAll renders every registered repo so multi-repo workspaces
 // don't have to cd into each repo and re-run. Per-repo failures are logged
 // inline but don't abort the sweep — a stuck repo must not suppress the others.
 func runAll(ctx context.Context, db *sql.DB, handler *wiki.Handler, out, errOut io.Writer) error {
@@ -132,7 +131,7 @@ func ResolveTarget(ctx context.Context, db *sql.DB, repoID, branch string) (stri
 		case 1:
 			rec = records[0]
 		default:
-			// solov2-ig2x: with multiple repos registered, try the caller's
+			// with multiple repos registered, try the caller's
 			// cwd before erroring out. Matches what `veska search` does and
 			// what the MCP resolveRepoIDOrCwd helper does for query tools.
 			if cwd, err := os.Getwd(); err == nil && cwd != "" {
@@ -149,9 +148,9 @@ func ResolveTarget(ctx context.Context, db *sql.DB, repoID, branch string) (stri
 		}
 	} else {
 		// Match the MCP resolveRepoID progression so the CLI honours the same
-		// short_id / prefix contract : exact full id, then
+		// short_id / prefix contract: exact full id, then
 		// ShortRepoIDLen-char short_id, then unambiguous >= 4-char prefix.
-		// solov2-rtql: on id miss, try the same value as a filesystem path
+		// on id miss, try the same value as a filesystem path
 		// against every registered repo's RootPath so the positional arg can
 		// be either an id or a path (matching `veska reindex`).
 		if matched, rerr := repocmd.ResolveCLIRepoID(records, repoID); rerr == nil {
@@ -191,8 +190,8 @@ func buildWikiHandler(pools *sqlite.Pools) (*wiki.Handler, error) {
 	// `veska wiki` is the explicit, user-invoked render path: a fresh staging
 	// (one-shot CLI — nothing is staged), the CLI prefix-matching repo
 	// resolver, and writePages=true regardless of the daemon's [wiki]
-	// write_pages default . The handler graph itself is built by
-	// the shared composition constructor (solov2-u4mv.4).
+	// write_pages default. The handler graph itself is built by
+	// the shared composition constructor.
 	wikiRoot := func(ctx context.Context, repoID string) (string, error) {
 		records, err := repo.List(ctx, pools.ReadDB)
 		if err != nil {
@@ -200,7 +199,7 @@ func buildWikiHandler(pools *sqlite.Pools) (*wiki.Handler, error) {
 		}
 		// ResolveTarget already canonicalised repoID to the full sha, so
 		// equality is the expected hit. Keep the prefix resolver as a defensive
-		// fallback for any caller that bypasses it .
+		// fallback for any caller that bypasses it.
 		for _, rec := range records {
 			if rec.RepoID == repoID {
 				return rec.RootPath, nil

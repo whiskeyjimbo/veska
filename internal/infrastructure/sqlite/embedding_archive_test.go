@@ -83,7 +83,7 @@ func TestEmbeddingArchive_LoadReadyEmbeddings(t *testing.T) {
 	}
 }
 
-// TestEmbeddingArchive_RequeueAllUnderNewModel pins solov2-fz8: on embedder
+// TestEmbeddingArchive_RequeueAllUnderNewModel pins: on embedder
 // switch, every ready ref must flip back to pending AND the content-addressed
 // embedding store must be wiped.
 func TestEmbeddingArchive_RequeueAllUnderNewModel(t *testing.T) {

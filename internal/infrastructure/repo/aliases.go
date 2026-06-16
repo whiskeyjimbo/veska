@@ -145,7 +145,6 @@ func AliasesForRepo(ctx context.Context, db *sql.DB, repoID string) ([]string, e
 // ValidateAliasName rejects names that would either silently shadow the
 // resolver's higher-precedence steps (full repo_id, 12-char short_id, hex
 // prefix) or be unusable as a CLI argument.
-//
 // Specifically: empty/whitespace, contains whitespace, or is hex-only and
 // >= the minimum prefix length the resolver accepts (4 chars). The latter
 // is what looksLikeRepoID would catch — we duplicate the check here rather
@@ -184,7 +183,6 @@ func isHexPrefix(s string) bool {
 // SuggestAliasNames returns (primary, fallback) name candidates for a
 // freshly added repo. The CLI's auto-suggest prompt offers primary, then
 // falls back to fallback when primary collides with an existing alias.
-//
 // For a URL-registered repo: primary is the repo basename ("bar" for
 // https://github.com/foo/bar), fallback is "<owner>-<name>" ("foo-bar").
 // For a path-registered repo with no canonical URL: primary is the

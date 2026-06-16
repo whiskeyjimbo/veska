@@ -27,10 +27,10 @@ var validSuppressionScopes = map[SuppressionScope]struct{}{
 // ── Suppression ────────────────────────────────────────────────────────────
 
 // Suppression silences one or more findings that match its scope and target.
-//
 // Branch semantics:
-//   - Branch == nil → branch-agnostic: suppression applies on every branch.
-//   - Branch != nil → branch-specific: suppression applies only on that branch.
+//
+//	Branch == nil → branch-agnostic: suppression applies on every branch.
+//	Branch != nil → branch-specific: suppression applies only on that branch.
 type Suppression struct {
 	ID        string
 	Scope     SuppressionScope
@@ -92,7 +92,6 @@ type SuppressionSpec struct {
 }
 
 // NewSuppression constructs a validated Suppression from spec.
-//
 // Invariants enforced:
 //  1. ID, Target, Reason, ActorID must be non-empty.
 //  2. Scope must be a valid enum value.

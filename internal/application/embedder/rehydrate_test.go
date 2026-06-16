@@ -12,7 +12,7 @@ import (
 
 // TestRehydrateVectors_LoadsReadyRows: the rows yielded by the loader hydrate
 // the spy VectorStorage with one UpsertEmbeddings call per (repo, branch)
-// bucket. Stand-in for the daemon-restart scenario that motivated solov2-249.
+// bucket. Stand-in for the daemon-restart scenario that motivated.
 // The state='ready' filtering is the loader's job (covered by the sqlite
 // EmbeddingArchive test); here we verify bucketing + decode + upsert.
 func TestRehydrateVectors_LoadsReadyRows(t *testing.T) {

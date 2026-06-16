@@ -4,10 +4,8 @@ package mcp
 // of the MCP tools that also have a CLI wrapper (`veska calls`, `veska
 // blast`, `veska search`). The cmd/veska package reuses these constants
 // for the cobra Long help strings so that the warnings an MCP agent sees
-// — chained_selectors_unresolved fallback, diff/dirty variants and
+// chained_selectors_unresolved fallback, diff/dirty variants and
 // cross-repo fan-out, RRF score range — can't drift from the CLI help.
-// solov2-izh6.20.
-//
 // Two scopes of constant live here. The whole-description constants
 // (DescCallChain, DescBlastRadius, DescSearchSemantic) cover query tools
 // whose MCP params (node_id/symbol/repo) map cleanly onto the CLI flags, so
@@ -25,7 +23,7 @@ package mcp
 // DescCallChain is the eng_get_call_chain MCP description and the
 // `veska calls` Long help. It documents both degraded_reason fallbacks
 // so junior CLI users learn about each gap without having to hit it first.
-// The chained-selector parser limit is tracked by epic solov2-9rc2.
+// The chained-selector parser limit is tracked by epic.
 const DescCallChain = "Walk CALLS edges from a symbol. Use this — not search — when the question is 'what does this reach' (direction=out, default) or 'what calls this' (direction=in). Surfaces cross_repo_edges into other registered repos so library-symbol callers in a multi-repo workspace are visible without separate queries. Pass node_id (exact) or symbol (resolved via eng_find_symbol; ambiguity is rejected). NOTE: empty edges on a function/method seed carry one of two degraded_reasons hints: 'chained_selectors_unresolved' (parser limit — chained selector call sites like rootCmd.AddCommand(...).Execute() or s.field.M() are not yet modelled) or 'external_callees_only' (index boundary — callees are stdlib or unregistered modules, NOT a parser bug). Fall back to eng_get_blast_radius, eng_search_semantic, or eng_find_symbol."
 
 // DescBlastRadius is the eng_get_blast_radius MCP description and the

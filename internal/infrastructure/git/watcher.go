@@ -21,9 +21,8 @@ const debounceWindow = 50 * time.Millisecond
 // fsnotify.ErrEventOverflow), it falls back to a full directory walk,
 // compares mtime+size+prefix to the last-seen map, and emits FileEvents for any
 // changed files.
-//
 // lastSeen is the SINGLE per-file change-detection baseline shared with the
-// wake reconciler (solov2-xde2.25.6): it is seeded at Watch, updated on every
+// wake reconciler: it is seeded at Watch, updated on every
 // live debounced write (run loop emit path), and updated by the overflow
 // fallback. The reconciler reaches it through the BaselineStore seam so a
 // post-suspend sweep compares against state that already tracked the session's
@@ -74,7 +73,6 @@ func (w *FSWatcher) Put(path string, e MtimeEntry) {
 // state (mtime+size+prefix) and reports whether it wrote. It is the live update
 // path that keeps lastSeen tracking session edits so a wake sweep reports only
 // suspend-window changes.
-//
 // It first checks ctx: a debounce timer that fires after this watcher's ctx is
 // cancelled (i.e. after RestartAll tore it down) must NOT write to the baseline.
 // The new FSWatcher owns a SEPARATE lastSeen map (RestartAll calls NewFSWatcher,
@@ -83,7 +81,7 @@ func (w *FSWatcher) Put(path string, e MtimeEntry) {
 // off the new watcher — the per-instance-fresh-map property, not the mutex, is
 // what makes the teardown race safe. The mutex only serializes individual
 // writes. The ctx guard additionally spares a needless stat + 64-byte read once
-// the watcher is gone (solov2-xde2.25.6, guardrail 3).
+// the watcher is gone (, guardrail 3).
 func (w *FSWatcher) refreshBaseline(ctx context.Context, path string) bool {
 	if ctx.Err() != nil {
 		return false
@@ -195,7 +193,7 @@ func (w *FSWatcher) run(ctx context.Context, dir string, out chan<- ports.FileEv
 	// name to its current on-disk state, then emit the write event. It is the
 	// live update path that keeps lastSeen tracking session edits, so a wake
 	// sweep compares against post-edit state and reports only suspend-window
-	// changes (solov2-xde2.25.6).
+	// changes.
 	emitWrite := func(name string) {
 		w.refreshBaseline(ctx, name)
 		emit(ports.FileEvent{Path: name, Op: ports.WatchOpWrite})
@@ -275,7 +273,7 @@ cleanup:
 	// A timer that already fired but is blocked on done/ctx.Done will unblock
 	// now that done is closed. Give it a moment, then close the output channel.
 	// The brief sleep is intentional: AfterFunc goroutines run concurrently and
-	// the t.Stop() above may not cancel a timer that has already expired and is
+	// the t.Stop above may not cancel a timer that has already expired and is
 	// waiting to be scheduled. Closing done unblocks them; they will return
 	// without sending.
 	close(out)
@@ -284,11 +282,10 @@ cleanup:
 // handleOverflow is called when fsnotify signals that events were dropped.
 // It walks dir, compares current stat data to the last-seen map, emits
 // WatchOpWrite for any file that changed, and updates the map.
-//
 // emit may be nil when called from InjectOverflow (test helper path); in that
 // case the method writes to the watcher's internal channel via the stored
 // reference — but since we don't store out, callers that need events must
-// ensure the loop is running.  The simplest design is: handleOverflow accepts
+// ensure the loop is running. The simplest design is: handleOverflow accepts
 // an optional emit func.
 func (w *FSWatcher) handleOverflow(emit func(ports.FileEvent), dir string) {
 	slog.Warn("watcher_overflow", "dir", dir)

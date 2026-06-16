@@ -13,12 +13,10 @@ var ErrVectorStoreUnavailable = errors.New(
 		"and ensure libusearch_c.so is on LD_LIBRARY_PATH (Linux) or DYLD_LIBRARY_PATH (macOS)")
 
 // Open initialises the VectorStorage for the given veskaHome directory.
-//
 // With the hnsw_native build tag: creates a UsearchStore, loads any persisted
 // indexes from veskaHome, and returns the store ready for use. The returned
-// ports.VectorStorage is a *UsearchStore; callers that need Destroy() must
+// ports.VectorStorage is a *UsearchStore; callers that need Destroy must
 // assert the concrete type.
-//
 // Without the hnsw_native build tag: always returns ErrVectorStoreUnavailable.
 func Open(veskaHome string) (ports.VectorStorage, error) {
 	return openNative(veskaHome)

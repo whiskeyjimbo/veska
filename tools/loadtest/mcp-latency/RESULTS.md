@@ -1,4 +1,4 @@
-# MCP Latency Benchmark — find_symbol warm p95
+# MCP Latency Benchmark - find_symbol warm p95
 
 Generated: 2026-05-13
 Platform: linux amd64

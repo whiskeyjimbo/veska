@@ -263,7 +263,7 @@ func TestCheckPostPromotionQueue_FailedReviewWithFinding(t *testing.T) {
 	}
 }
 
-// TestPurgeOrphanFailedRows guards solov2-zmzc: failed queue rows whose
+// TestPurgeOrphanFailedRows guards: failed queue rows whose
 // repo_id is no longer in the repos table are deleted by PurgeOrphanFailedRows.
 // Rows for still-registered repos and non-failed orphan rows are preserved
 // (only "failed" state qualifies — pending/in_progress/done rows might still
@@ -317,7 +317,7 @@ func TestPurgeOrphanFailedRows(t *testing.T) {
 }
 
 // TestCheckPostPromotionQueue_ReportsOrphanCount is the regression for
-// solov2-261t: doctor should surface the orphan count so the textual probe
+// doctor should surface the orphan count so the textual probe
 // can point at --purge-orphans instead of leaving operators to grep the
 // FailedRow error messages.
 func TestCheckPostPromotionQueue_ReportsOrphanCount(t *testing.T) {

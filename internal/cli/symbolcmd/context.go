@@ -49,7 +49,7 @@ func RunContext(ctx context.Context, p ContextParams) error {
 	if p.RepoID != "" {
 		params["repo_id"] = p.RepoID
 	}
-	// solov2-efzv: omit repo_id so the daemon fans out by default — the common
+	// omit repo_id so the daemon fans out by default — the common
 	// cobra-CLI-plus-shared-lib pattern wants `veska context Greeter.Hello`
 	// from the CLI repo to surface the library's symbol (and its cross-repo
 	// edges back).
@@ -74,7 +74,7 @@ func RunContext(ctx context.Context, p ContextParams) error {
 // renderContextPack prints the text-mode context pack: header, one line per
 // neighbour, then resolved cross-repo edges.
 func renderContextPack(ctx context.Context, w io.Writer, pack contextPack) error {
-	// solov2-ub9c: a zero-node pack means the symbol didn't resolve. Say so
+	// a zero-node pack means the symbol didn't resolve. Say so
 	// plainly + point to `veska symbol` for fuzzier lookup instead of the
 	// deadpan "context for X (0 node(s))".
 	if len(pack.Nodes) == 0 {
@@ -95,7 +95,7 @@ func renderContextPack(ctx context.Context, w io.Writer, pack contextPack) error
 }
 
 // renderContextCrossRepoEdges prints the cross-repo edges the daemon resolved
-// through cross_repo_edge_stubs (solov2-7xrw, solov2-358v). Each edge is
+// through cross_repo_edge_stubs (). Each edge is
 // labelled with the calling function/method + file:line when the graph has
 // it, falling back to a per-side eng_get_node lookup.
 func renderContextCrossRepoEdges(ctx context.Context, w io.Writer, pack contextPack) {

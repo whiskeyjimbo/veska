@@ -7,7 +7,7 @@ import (
 )
 
 // This file owns the single snake_case wire contract for nodes and edges
-// across every MCP tool . Domain entities (domain.Node,
+// across every MCP tool. Domain entities (domain.Node,
 // domain.Edge) and the narrow application projections (search.Result,
 // blastradius.Entry) deliberately carry no json tags — the hexagonal core
 // stays ignorant of the wire format — so the MCP adapter owns the mapping.
@@ -32,7 +32,7 @@ type nodeDTO struct {
 	Exported  *bool  `json:"exported,omitempty"`
 	RepoID    string `json:"repo_id,omitempty"`
 	// External marks hits from a registered repo's vendored or
-	// module-cache dependency . Agents inspecting a hit
+	// module-cache dependency. Agents inspecting a hit
 	// can use this to decide "is this our code or someone else's?"
 	// without parsing file_path. Omitted on first-party rows so the
 	// wire shape stays byte-stable for callers that don't care.
@@ -51,7 +51,6 @@ type edgeDTO struct {
 }
 
 // searchHitDTO is a node plus its retrieval score and inline snippet.
-//
 // Score is the post-fusion RRF score, NOT a similarity. Hybrid search runs
 // vector + lexical retrieval and fuses with Reciprocal Rank Fusion (RRF),
 // summing 1/(60+rank) across both lists. A single-list rank-1 hit scores
@@ -59,16 +58,16 @@ type edgeDTO struct {
 // The raw vector similarity (1/(1+L2dist)) is therefore NOT exposed on
 // this field — RRF is the only signal that's comparable across hits in
 // the same query. Compare hits relative to each other; absolute values
-// don't map onto a 0..1 similarity scale .
+// don't map onto a 0.1 similarity scale.
 type searchHitDTO struct {
 	nodeDTO
 	Score   float32 `json:"score"`
 	Snippet string  `json:"snippet,omitempty"`
-	// ScoreNormalized is the min-max-rescaled score (0..1) within
+	// ScoreNormalized is the min-max-rescaled score (0.1) within
 	// this single response's result set. Provides a calibrated number
 	// agents can threshold on without interpreting raw RRF — which
 	// clusters in 0.016–0.033 and reads as low-confidence even when
-	// the hit is the strongest available . Use Score for
+	// the hit is the strongest available. Use Score for
 	// reproducible cross-query comparisons; use ScoreNormalized for
 	// intra-query ranking decisions.
 	ScoreNormalized float32 `json:"score_normalized"`
@@ -76,7 +75,7 @@ type searchHitDTO struct {
 	// top hit. "top" / "strong" / "weak"; ScoreTier in
 	// internal/application/search is the source of truth. Pair with
 	// the "weak top absolute" hint on degraded_reasons to detect the
-	// case where every result is weak in absolute terms .
+	// case where every result is weak in absolute terms.
 	Tier string `json:"tier,omitempty"`
 }
 
@@ -88,13 +87,13 @@ type blastEntryDTO struct {
 	// IsHub flags nodes whose neighbour count exceeded the hub-degree
 	// threshold during BFS — BFS reported the node but did NOT expand
 	// through it, so the entry is informational (the framework registry
-	// node itself) rather than the start of a chain .
+	// node itself) rather than the start of a chain.
 	IsHub bool `json:"is_hub,omitempty"`
 	// Pending is true when NodeLookup couldn't hydrate this id at the
 	// time of the call — the BFS reached it via the edges table but the
 	// nodes-table row lags briefly behind during an active reparse. Lets
 	// callers render "unresolved" instead of treating empty name/kind/
-	// file_path as a real symbol .
+	// file_path as a real symbol.
 	Pending bool `json:"pending,omitempty"`
 }
 
@@ -126,11 +125,10 @@ func nodeToDTO(n *domain.Node) nodeDTO {
 }
 
 // nodesToDTO maps a slice of domain nodes, always returning a non-nil slice
-// so empty results serialize as [] rather than null/omitted .
+// so empty results serialize as rather than null/omitted.
 // chunk:* pseudo-nodes are filtered out: they are internal file-fragment
 // embeddings used to give un-symbolised code coverage in vector space, and
 // surfacing them on a tool that promises "symbols" leaks the abstraction
-// .
 func nodesToDTO(in []*domain.Node) []nodeDTO {
 	out := make([]nodeDTO, 0, len(in))
 	for _, n := range in {
@@ -181,7 +179,7 @@ func searchResultToDTO(r search.Result) searchHitDTO {
 }
 
 func searchResultsToDTO(in []search.Result) []searchHitDTO {
-	// solov2-hl70: compute ScoreNormalized + Tier in one pre-pass over
+	// compute ScoreNormalized + Tier in one pre-pass over
 	// the visible-to-callers result set (chunks excluded — they would
 	// otherwise distort the min/max range and the top-of-set tier
 	// anchor).
@@ -229,7 +227,7 @@ func blastEntryToDTO(e blastradius.Entry) blastEntryDTO {
 func blastEntriesToDTO(in []blastradius.Entry) []blastEntryDTO {
 	out := make([]blastEntryDTO, 0, len(in))
 	for _, e := range in {
-		// Filter chunk:* pseudo-nodes  — same reasoning as
+		// Filter chunk:* pseudo-nodes — same reasoning as
 		// searchResultsToDTO. Real symbols are the contract; the blast-radius
 		// path runs across the graph and would otherwise expose chunk nodes
 		// at distance>=1 from any seed in a chunked file.

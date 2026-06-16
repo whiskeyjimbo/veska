@@ -6,7 +6,7 @@ import (
 )
 
 // The backup command family's logic lives in internal/cli/backupcmd; these
-// constructors are Cobra glue whose RunE bodies delegate there (solov2-0omh.9).
+// constructors are Cobra glue whose RunE bodies delegate there.
 
 // backupCmd returns the top-level "backup" Cobra command with subcommands.
 func backupCmd() *cobra.Command {
@@ -48,7 +48,6 @@ func backupListCmd() *cobra.Command {
 	return cmd
 }
 
-// backupPruneCmd returns the "backup prune" subcommand.
 func backupPruneCmd() *cobra.Command {
 	var backupDir string
 	cmd := &cobra.Command{
@@ -64,7 +63,7 @@ func backupPruneCmd() *cobra.Command {
 }
 
 // backupCreateCmd returns the "backup create" subcommand that runs VACUUM INTO,
-// copies supporting files, and writes a timestamped .tar.gz to --output-dir.
+// copies supporting files, and writes a timestamped.tar.gz to --output-dir.
 func backupCreateCmd() *cobra.Command {
 	var outputDir string
 	cmd := &cobra.Command{
@@ -82,12 +81,11 @@ func backupCreateCmd() *cobra.Command {
 // backupVerifyCmd returns the "backup verify" subcommand. It extracts veska.db
 // from the tarball, runs PRAGMA integrity_check and foreign_key_check, and
 // validates audit.jsonl if present.
-//
-// Exit codes follow SOLO-13 §2:
+// Exit codes follow:
 //
 //	0 = healthy
 //	1 = degraded (audit.jsonl malformed but DB ok)
-//	2 = broken   (DB checks failed or archive unreadable)
+//	2 = broken (DB checks failed or archive unreadable)
 func backupVerifyCmd() *cobra.Command {
 	var jsonOut bool
 	cmd := &cobra.Command{

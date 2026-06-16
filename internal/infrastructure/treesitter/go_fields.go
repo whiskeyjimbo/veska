@@ -5,15 +5,14 @@ import (
 )
 
 // This file holds the struct-field-type analysis used by collectCallNames to
-// resolve chained-selector method calls `s.field.M()`: the fieldType record and
+// resolve chained-selector method calls `s.field.M`: the fieldType record and
 // the walkers that build a struct-name → field-name → fieldType map. The
 // call-extraction and node-building helpers live in go.go.
 
 // fieldType describes a struct field's declared type for the limited
-// purpose of resolving chained-selector method calls `s.field.M()`. The
+// purpose of resolving chained-selector method calls `s.field.M`. The
 // parser strips pointer/slice/etc. modifiers and records the base type
-// name plus an optional package qualifier (solov2-9rc2 phase E).
-//
+// name plus an optional package qualifier.
 // Phase E v1 only acts on fields whose pkg=="" (same-package concrete
 // types) — those bind directly to the method node already in the
 // file's symbol map. Cross-package field types and interface-typed
@@ -21,14 +20,14 @@ import (
 // remain TODOs for phase E v2.
 type fieldType struct {
 	pkg  string // empty for fields declared with a local type name
-	name string // base type name with *, [], chan etc. stripped
+	name string // base type name with *,, chan etc. stripped
 }
 
 // collectStructFields walks every top-level type_declaration with a
 // struct_type body and returns a map of struct-name -> field-name ->
 // fieldType, keyed by the struct name as it appears in the type_spec
 // (without any pointer/slice prefix). Used by collectCallNames to
-// resolve `s.field.M()` chains where s is the method receiver.
+// resolve `s.field.M` chains where s is the method receiver.
 func collectStructFields(root *sitter.Node, src []byte) map[string]map[string]fieldType {
 	out := map[string]map[string]fieldType{}
 	count := int(root.ChildCount())
@@ -106,10 +105,10 @@ func walkStructFields(n *sitter.Node, src []byte, out map[string]fieldType) {
 
 // classifyFieldType extracts the base type name + optional package
 // qualifier from a struct field's type node. Pointer (`*T`), slice
-// (`[]T`), and channel (`chan T`) prefixes are stripped — for the
+// (`T`), and channel (`chan T`) prefixes are stripped — for the
 // purpose of method-call resolution we just need the underlying type.
 // Returns ok=false for shapes the resolver can't act on (function
-// types, map types, anonymous struct/interface literals, ...).
+// types, map types, anonymous struct/interface literals,.).
 func classifyFieldType(typeNode *sitter.Node, src []byte) (fieldType, bool) {
 	switch typeNode.Type() {
 	case "pointer_type":
@@ -120,7 +119,7 @@ func classifyFieldType(typeNode *sitter.Node, src []byte) (fieldType, bool) {
 		return fieldType{}, false
 	case "slice_type", "array_type", "channel_type":
 		// A slice/array of T or channel of T isn't directly method-callable
-		// in the s.field.M() shape we resolve. Skip.
+		// in the s.field.M shape we resolve. Skip.
 		return fieldType{}, false
 	case "type_identifier":
 		return fieldType{name: string(src[typeNode.StartByte():typeNode.EndByte()])}, true

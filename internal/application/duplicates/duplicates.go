@@ -1,18 +1,15 @@
 // Package duplicates finds exact-clone groups: sets of >=2 nodes whose
 // content_hash is byte-identical, i.e. literal copy-paste.
-//
 // This is the deterministic, embedding-free half of duplicate detection
-// (solov2-wfrj). content_hash is sha256 of a node's verbatim declaration
+// content_hash is sha256 of a node's verbatim declaration
 // bytes (see domain.Node / treesitter), so two functions collide here only
 // when their source text is identical character-for-character — exactly the
 // "exact clone" the autolink SIMILAR_TO path treats as merely "related".
-//
 // Near-duplicate clustering (a higher-threshold re-slice of the SIMILAR_TO
 // edges autolink already persists) is deliberately NOT here: those edges carry
 // no per-edge similarity score today, so honest near-dup detection needs a
 // score-on-edge migration first. That is tracked as a separate follow-up
-// (solov2-c1s4); this package ships the exact half only.
-//
+// this package ships the exact half only.
 // For the single-function question "is THIS function duplicated?", use
 // eng_search_similar / `veska similar <symbol>` — that is the vector-neighbour
 // pivot and needs no group-wide scan.
@@ -83,7 +80,7 @@ type CloneGroup struct {
 type CloneStore interface {
 	ClonedNodes(ctx context.Context, q CloneQuery, excludeKinds []string) ([]ClonedNode, error)
 	// StructuralNodes returns every node matching q whose structural_hash is
-	// shared by >=2 nodes, excluding excludeKinds — the Type-2 (renamed-
+	// shared by >=2 nodes, excluding excludeKinds — the Type-2 (renamed
 	// variable) clone projection. Returned rows carry the structural_hash in
 	// ClonedNode.StructuralHash (the grouping key) and the byte-identity hash in
 	// ContentHash. NULL structural_hash (nodes the parser did not structurally
@@ -107,13 +104,11 @@ type CloneQuery struct {
 const DefaultNearThreshold float32 = 0.68
 
 // calibratedNearThreshold maps an elected embedder's ModelID to a measured
-// near-dup minimum score (solov2-md3n; harness in tools/loadtest/neardup).
-//
+// near-dup minimum score (; harness in tools/loadtest/neardup).
 // Each value is HIGH-PRECISION by design: set at/just above that embedder's
 // "related" (merely-same-domain) score band, so genuinely-distinct functions
 // are not surfaced as duplicates — trading recall (the weakest near-dups fall
 // below it) for a quiet, low-false-positive findings surface.
-//
 // Critically, the values are NOT comparable across embedders: similarity
 // scores live in per-model spaces ([[embedder-architecture]]). The measurement
 // showed near-dup and "related" distributions OVERLAP for every embedder (no
@@ -121,8 +116,7 @@ const DefaultNearThreshold float32 = 0.68
 // old provisional) returned almost nothing on model2vec yet leaked unrelated
 // pairs on nomic. So the default is selected by elected ModelID; callers
 // wanting different recall pass an explicit min_score.
-//
-// Measured on a small curated corpus with some shared-skeleton contamination —
+// Measured on a small curated corpus with some shared-skeleton contamination
 // treat as first calibration points, not exact gates.
 var calibratedNearThreshold = map[string]float32{
 	// near-dup median 0.69 vs related max 0.68 — separable at high precision.
@@ -139,7 +133,6 @@ var calibratedNearThreshold = map[string]float32{
 // NearThresholdFor returns the calibrated near-dup minimum score for an elected
 // embedder ModelID, falling back to DefaultNearThreshold for an unknown or
 // empty ID.
-//
 // Ollama model IDs may carry a ":tag" (e.g. "nomic-embed-text:latest" — the
 // ModelID is the verbatim configured model name). A tag pins a version but does
 // not change the embedding space, so an exact miss retries on the bare name
@@ -220,7 +213,6 @@ func NewFinder(clones CloneStore, near NearStore, embedderID string) (*Finder, e
 
 // ExactClones returns the content_hash clone groups in (repoID, branch),
 // excluding container/sub-symbol kinds. Every returned group has Size >= 2.
-//
 // Ordering is deterministic: groups by descending Size then ascending
 // ContentHash (most-copied first, stable tie-break); members within a group by
 // (FilePath, LineStart) so the same physical layout always renders the same.
@@ -238,7 +230,6 @@ func (f *Finder) ExactClones(ctx context.Context, repoID, branch string) ([]Clon
 // whose members also all share one content_hash is a pure exact clone (the
 // unified Clusters view promotes those to the exact tier); on its own this
 // surface returns every structurally-identical group, exact or renamed.
-//
 // Ordering matches ExactClones: groups by descending Size then ascending hash;
 // members by (FilePath, LineStart).
 func (f *Finder) StructuralClones(ctx context.Context, repoID, branch string) ([]CloneGroup, error) {
@@ -253,9 +244,8 @@ func (f *Finder) StructuralClones(ctx context.Context, repoID, branch string) ([
 // SIMILAR_TO edges whose score >= minScore. A non-positive minScore falls back
 // to the calibrated default for this Finder's elected embedder
 // (NearThresholdFor). Every returned cluster has Size >= 2 (each edge
-// contributes two members). It reads only edges autolink already persisted —
+// contributes two members). It reads only edges autolink already persisted
 // no new similarity sweep.
-//
 // Ordering is deterministic: clusters by descending Size, then descending
 // MinScore (tightest first among same-size), then by the first member's NodeID;
 // members within a cluster by (FilePath, LineStart).

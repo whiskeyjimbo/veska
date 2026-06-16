@@ -97,7 +97,7 @@ func TestMeanRecall(t *testing.T) {
 
 func TestP95Latency(t *testing.T) {
 	t.Parallel()
-	// 20 samples [1ms..20ms]. ceil(0.95*20) = 19; rank index = 18 → 19ms.
+	// 20 samples [1ms.20ms]. ceil(0.95*20) = 19; rank index = 18 → 19ms.
 	samples := make([]time.Duration, 20)
 	for i := range samples {
 		samples[i] = time.Duration(i+1) * time.Millisecond

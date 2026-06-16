@@ -178,7 +178,7 @@ func TestEnsureModel_DownloadFailureSurfaces(t *testing.T) {
 	}
 }
 
-// --- helpers --------------------------------------------------------------
+// helpers
 
 func sha256Hex(b []byte) string {
 	h := sha256.Sum256(b)

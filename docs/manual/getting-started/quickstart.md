@@ -1,7 +1,7 @@
 # Quickstart
 
 This walks you from a built binary to a daemon serving your repo, in five
-steps. Commands assume `./bin/` — drop the prefix if Veska is on your `PATH`.
+steps. Commands assume `./bin/` - drop the prefix if Veska is on your `PATH`.
 
 ## 1. Initialise the data directory
 
@@ -22,7 +22,7 @@ For kicking the tyres, background it:
 ```
 
 For a real install, run it as an OS service (systemd `--user` on Linux, launchd
-on macOS) — auto-restart on crash, logs under `~/.veska/logs/`:
+on macOS) - auto-restart on crash, logs under `~/.veska/logs/`:
 
 ```sh
 ./bin/veska service install
@@ -41,7 +41,7 @@ service lifecycle.
 `--wait` blocks until the cold scan finishes (a few seconds for most repos) so
 your first search is already hot. Without it, the scan runs in the background
 and an early `eng_search_semantic` may return `[]` with
-`degraded_reasons=embeddings_pending` until indexing catches up — tail
+`degraded_reasons=embeddings_pending` until indexing catches up - tail
 `~/.veska/logs/daemon.log` for the `cold scan: complete` line.
 
 `repo add` also installs the git post-commit hook (absolute path to the `veska`
@@ -56,7 +56,7 @@ binary). Subsequent commits drive promotion automatically.
 See **[Diagnostics with doctor](../guides/doctor.md)** for what the output
 means.
 
-## 5. First MCP call — 60-second check
+## 5. First MCP call - 60-second check
 
 Once `cold scan: complete` shows in the log, drive two MCP tools from the shell
 before pointing an editor at the daemon:
@@ -82,12 +82,12 @@ To force a re-scan of an already-registered repo (e.g. after a model swap):
 ./bin/veska reindex /path/to/your/repo
 ```
 
-Safe to run while the daemon is up — it dispatches through the daemon's
+Safe to run while the daemon is up - it dispatches through the daemon's
 `eng_reindex_repo` tool, so your editor's MCP connection is not interrupted.
 
 ## Next
 
-- **[Connect your editor](../guides/editor-setup.md)** — wire `veska-mcp` into
+- **[Connect your editor](../guides/editor-setup.md)** - wire `veska-mcp` into
   Claude Desktop, Cursor, or any MCP client.
-- **[Concepts](../concepts/index.md)** — the mental model behind the graph,
+- **[Concepts](../concepts/index.md)** - the mental model behind the graph,
   promotion, and search.

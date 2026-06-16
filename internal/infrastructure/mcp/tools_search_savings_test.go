@@ -10,7 +10,7 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/application/search"
 )
 
-// TestRecordSavings_PartitionsByRepo covers solov2-0ql0: the partition
+// TestRecordSavings_PartitionsByRepo covers: the partition
 // logic in recordSavings. A single-repo search (nil repoByNode) writes
 // one entry tagged with the default target repo; a fanout search writes
 // one entry per repo, each summing only that repo's results.

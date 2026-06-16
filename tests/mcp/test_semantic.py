@@ -13,7 +13,7 @@ def test_search_semantic_returns_results(mcp_client, repo_id, branch, target_sym
     rehydrated from node_embeddings on daemon start, so a daemon that has
     been restarted since the last embed will return ≤ 3 hits even when
     node_embeddings has more. This test xfails specifically on that
-    symptom — pass once 249 lands."""
+    symptom - pass once 249 lands."""
     ok, text, _, result = mcp_client.call("eng_search_semantic", {
         "repo_id": repo_id,
         "branch": branch,
@@ -26,7 +26,7 @@ def test_search_semantic_returns_results(mcp_client, repo_id, branch, target_sym
     syms = [r.get("name") for r in results]
     if not any(target_symbol in (s or "") for s in syms):
         pytest.xfail(
-            f"target {target_symbol!r} not in top 5 {syms} — likely solov2-249 "
+            f"target {target_symbol!r} not in top 5 {syms} - likely solov2-249 "
             "(sqlite-vec not rehydrated from node_embeddings on restart)"
         )
 
@@ -53,7 +53,7 @@ def test_search_similar_returns_results(mcp_client, repo_id, branch, target_symb
         "symbol": target_symbol,
     })
     nodes = find_result.get("nodes", [])
-    assert nodes, "no nodes for target_symbol — cannot test similar"
+    assert nodes, "no nodes for target_symbol - cannot test similar"
     node_id = nodes[0]["node_id"]
 
     ok, text, _, result = mcp_client.call("eng_search_similar", {
@@ -72,7 +72,7 @@ def test_search_semantic_quality(mcp_client, repo_id, branch, target_symbol):
     """Coarse smoke for embedding quality: query for target_symbol's name
     and verify the system returns ranked results. The previous canned query
     'function that returns a string greeting' returned zero hits for the
-    small journey corpus — using target_symbol guarantees vocabulary overlap."""
+    small journey corpus - using target_symbol guarantees vocabulary overlap."""
     ok, _, _, result = mcp_client.call("eng_search_semantic", {
         "repo_id": repo_id,
         "branch": branch,

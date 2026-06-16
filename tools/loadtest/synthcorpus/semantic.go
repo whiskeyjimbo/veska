@@ -9,7 +9,6 @@ import (
 // GenerateSemanticCorpus. Each topic is a bag of distinct,
 // domain-coherent phrases; node text is assembled by sampling several
 // phrases from one bag.
-//
 // The design goal is a corpus that real embedding models (nomic-embed-text
 // and similar) cluster the way the structural ground truth says they
 // should. The earlier {verb} {entity} template failed because every
@@ -20,13 +19,11 @@ import (
 // no phrases at all, so its embedding similarity stays well below a
 // within-cluster pair's. A probe of nomic-embed-text on this design
 // measured within-cluster cosine mean ≈ 0.74 vs between-cluster ≈ 0.49.
-//
 // Topics deliberately include semantically adjacent neighbours
 // (authentication/permissions/encryption, payments/tax/shipping,
 // caching/database) so the auto-link false-positive measurement still
 // sees realistic cross-cluster confusion rather than a trivially
 // separable dataset.
-//
 // Each bag has exactly semanticPhrasesPerTopic entries so the
 // nth-combination addressing in GenerateSemanticCorpus is uniform.
 var semanticTopics = []struct {
@@ -221,10 +218,8 @@ var semanticNodesPerClusterCap = binomial(semanticPhrasesPerTopic, semanticPhras
 // vocabulary (see semanticTopics); a node's text is the j-th
 // semanticPhrasesPerNode-combination of that topic's phrase bag, joined
 // into a short descriptive blob.
-//
 // The cluster count is fixed at SemanticClusterCount; only nodesPerCluster
 // is a parameter, and it must not exceed semanticNodesPerClusterCap.
-//
 // The Corpus shape (Nodes, CenterQueries, TruthByCluster, ClusterOf) is
 // identical to GenerateCorpus so the recall and autolink harnesses can
 // substitute one generator for the other.
@@ -285,7 +280,6 @@ func binomial(n, k int) int {
 // nthCombination returns the n-th k-combination of {0,1,…,total-1} in
 // lexicographic order, as a sorted, ascending int slice. n is taken
 // modulo C(total, k) so callers can pass any non-negative index.
-//
 // Standard combinatorial unranking: walk the candidate values, and for
 // each one decide whether it belongs in the result by comparing n against
 // the number of combinations that would skip it.

@@ -1,21 +1,19 @@
 //go:build eval
 
-// Markdown table generator for the embed-models bench (solov2-0k5h.6).
+// Markdown table generator for the embed-models bench.
 // Reads the runResults captured during a bench run, aggregates per
 // model across corpora, and writes a published comparison table to
-// docs/operations/embedder-benchmarks.md. The table is the deliverable
+// The table is the deliverable
 // users consult when picking an embedder.
-//
 // What aggregates per model:
-//   - Average recall@10 on "headline" GT across CODE corpora (the
+//   Average recall@10 on "headline" GT across CODE corpora (the
 //     published headline metric for code retrieval).
-//   - Average recall@10 on "headline" GT across PROSE corpora.
-//   - Average per-query embed latency (model2vec: CPU in-process;
+//   Average recall@10 on "headline" GT across PROSE corpora.
+//   Average per-query embed latency (model2vec: CPU in-process;
 //     ollama: HTTP round-trip — REPORTED SEPARATELY since they aren't
 //     comparable).
-//   - Disk footprint for model2vec (size of the model dir). Ollama
+//   Disk footprint for model2vec (size of the model dir). Ollama
 //     models are server-side; cell reads "server-side".
-//
 // "Recommended for" is derived from heuristics: any model that wins
 // (or ties within 0.02 of the best) on code-recall picks up a "code"
 // badge; same for prose; the smallest model2vec by footprint picks up
@@ -52,7 +50,7 @@ var proseCorporaSet = map[string]bool{
 // published comparison table. Called at the end of the bench so a
 // single 'make eval-embed-models[-full]' invocation refreshes the
 // published doc. Path is overridable via EMBED_BENCH_TABLE_OUT;
-// default is docs/operations/embedder-benchmarks.md.
+// default is
 func writeMarkdownTable(rows []runResult) error {
 	if len(rows) == 0 {
 		return nil
@@ -239,7 +237,7 @@ func writeMarkdownTable(rows []runResult) error {
 	}
 
 	// Condensation lift table (oo4q.2): only when at least one model
-	// has a condensed series. Reports the per-model lift (condensed -
+	// has a condensed series. Reports the per-model lift (condensed
 	// raw) on code and prose headline R@10, plus the share of corpus
 	// docs that actually got condensed (the rest were below the
 	// minLen gate and embedded raw — so they cap the achievable lift).

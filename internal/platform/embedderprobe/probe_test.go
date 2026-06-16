@@ -42,7 +42,7 @@ func makeServer(t *testing.T, modelName string, modelPresent bool, embedResp str
 
 // TestProbeHealthy_TagMatching covers the realistic case where Ollama tags
 // the installed model (e.g. "nomic-embed-text:latest") but the caller passes
-// the bare name. solov2-2be: the original exact-string match failed every
+// the bare name.: the original exact-string match failed every
 // vanilla 'ollama pull' install.
 func TestProbeHealthy_TagMatching(t *testing.T) {
 	for _, tc := range []struct{ installed, requested string }{

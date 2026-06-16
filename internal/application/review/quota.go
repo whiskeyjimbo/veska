@@ -32,7 +32,6 @@ type DailyTokenStore interface {
 // (a promotion's review jobs run close together); the per-day total is
 // persisted via a DailyTokenStore so it survives a daemon restart. A cap of
 // zero means "unlimited" — the corresponding check never trips.
-//
 // Quota is safe for concurrent use.
 type Quota struct {
 	maxPerCommit int

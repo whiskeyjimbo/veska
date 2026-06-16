@@ -2,7 +2,6 @@
 
 // Command mcp-latency benchmarks the find_symbol warm p95 query against a
 // file-based SQLite database seeded with 50,000 nodes.
-//
 // Exit codes:
 //
 //	0 — p95 < 50ms (PASS)

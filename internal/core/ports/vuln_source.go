@@ -42,14 +42,14 @@ type VulnFinding struct {
 	// FixedVersion is the lowest version (semver, with leading "v" for Go
 	// modules) that resolves this advisory for the affected range that
 	// matched. Empty when the advisory has no published fix yet. Used by
-	// application/checks to render a remediation hint .
+	// application/checks to render a remediation hint.
 	FixedVersion string
 
 	// Aliases lists other advisory IDs that describe the same vulnerability
 	// (e.g. ["GO-2020-0017", "CVE-2020-26160"] alongside a GHSA-prefixed
 	// AdvisoryID). Populated by the OSV adapter when collapsing duplicate
 	// advisories that arrive via the OSV aliases field — kept on the
-	// retained finding so triage can cross-check .
+	// retained finding so triage can cross-check.
 	Aliases []string
 }
 

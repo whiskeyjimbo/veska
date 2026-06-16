@@ -6,7 +6,7 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/cli/ownercmd"
 )
 
-// ownerCmd wraps eng_find_owner. solov2-yh5a parity wrapper. eng_find_owner
+// ownerCmd wraps eng_find_owner. parity wrapper. eng_find_owner
 // requires repo_id, so when --repo is omitted we resolve it from the cwd
 // (autoResolveRepo) before calling — the daemon can't infer it server-side
 // for this tool (its schema has no cwd param).

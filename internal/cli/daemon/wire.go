@@ -46,20 +46,19 @@ func (e *ErrMissingDep) Error() string {
 }
 
 // Config carries the resolved runtime configuration for the daemon.
-//
 // All fields are optional in the sense that newDaemon will fall back to
 // environment-backed defaults when zero. The composition root validates each
 // resolved value and returns ErrMissingDep when a field that ultimately must
 // be non-empty (e.g. SQLitePath) cannot be derived.
 type Config struct {
-	// VeskaHome is the data root (defaults to config.DefaultVectorDir()).
+	// VeskaHome is the data root (defaults to config.DefaultVectorDir).
 	VeskaHome string
 
 	// SQLitePath is the location of veska.db. Defaults to <VeskaHome>/veska.db.
 	SQLitePath string
 
 	// CLISockPath / MCPSockPath are the Unix sockets for the JSON-RPC server.
-	// Defaults to config.CLISockPath() and config.MCPSockPath().
+	// Defaults to config.CLISockPath and config.MCPSockPath.
 	CLISockPath string
 	MCPSockPath string
 
@@ -165,7 +164,7 @@ type Daemon struct {
 	// vulnScanCheck is the registered post-promotion vulnerability check
 	// (non-nil iff [vuln_source] is enabled). Captured here so the
 	// on-first-refresh-ok callback can run it against every registered repo
-	// once the OSV cache becomes hot (solov2-jtl5.4).
+	// once the OSV cache becomes hot.
 	vulnScanCheck *checks.VulnScanCheck
 	// findings is the FindingStorage handle used by the post-commit check
 	// runner. Captured here so the same persistence path is reused when
@@ -196,7 +195,7 @@ type Daemon struct {
 	tracerProvider *sdktrace.TracerProvider
 
 	// savingsRec records per-search token-savings telemetry to
-	// <VeskaHome>/savings.jsonl . Nil disables recording.
+	// <VeskaHome>/savings.jsonl. Nil disables recording.
 	// Closed on Stop so the underlying file handle is released.
 	savingsRec *savings.Recorder
 
@@ -230,7 +229,6 @@ type Daemon struct {
 // newDaemon builds the full collaborator graph from cfg. Every dep is
 // validated; any failure produces a typed *ErrMissingDep without panicking.
 // The returned Daemon is not yet running — call Start.
-//
 // The work is split across daemonBuilder phase methods so each stays small, and
 // the partial-failure cleanup (closing the SQLite pools once they are open) is
 // expressed once as a deferred guard rather than repeated at every error site.
@@ -253,7 +251,7 @@ func newDaemon(cfg Config) (*Daemon, error) {
 		return nil, err
 	}
 	// The SQLite pools are now open. Every later failure must close them; a
-	// single deferred guard replaces the repeated `_ = pools.Close()` that
+	// single deferred guard replaces the repeated `_ = pools.Close` that
 	// peppered the original monolith.
 	ok := false
 	defer func() {
@@ -323,32 +321,32 @@ type mcpDeps struct {
 	provider ports.EmbeddingProvider
 	refs     *sqlite.EmbeddingRefsRepo
 	metrics  *observability.Metrics
-	// savings records per-search token-savings telemetry .
+	// savings records per-search token-savings telemetry.
 	// Nil disables recording — RegisterSearchTools is nil-safe.
 	savings *savings.Recorder
 	// ingester + promoter drive eng_promote (post-commit hook target,
-	// solov2-3vv). When either is nil eng_promote is skipped at wire time.
+	// ). When either is nil eng_promote is skipped at wire time.
 	ingester *application.Ingester
 	promoter *application.Promoter
-	// regSvc is the live cold-scan-aware repoRegistrar (solov2-0z1.3).
+	// regSvc is the live cold-scan-aware repoRegistrar.
 	// When nil (legacy / test callers that don't drive registration) a
 	// fallback registrar with no cold-scan dispatch is wired so the MCP
 	// tool surface still functions.
 	regSvc *repoRegistrar
 	// reparser is the cold-scan closure shared with regSvc and StartupResync.
-	// Routed to eng_reindex_repo  so `veska reindex` can dispatch
+	// Routed to eng_reindex_repo so `veska reindex` can dispatch
 	// the scan in-daemon instead of needing the daemon stopped. Nil when not
 	// wired (legacy / test callers); the tool degrades cleanly in that case.
 	reparser func(ctx context.Context, rec application.RepoRecord) error
 	// scanTracker surfaces in-flight cold scans to eng_get_status
-	// . Nil-safe — statusProvider tolerates a nil tracker.
+	// Nil-safe — statusProvider tolerates a nil tracker.
 	scanTracker *application.ScanTracker
 	// reconciler surfaces in-flight per-repo wake sweeps so graph read tools
-	// can attach a wake_reconciling degraded reason (solov2-xde2.25.1). It
+	// can attach a wake_reconciling degraded reason. It
 	// satisfies mcp.ReconcileReader. Nil-safe — the helper no-ops on nil.
 	reconciler *gitwatch.WakeReconciler
 	// hubDegreeThreshold is the operator-configured blast.hub_degree_threshold
-	// (solov2-l8su), threaded into the blast-radius service so the gate is
+	// threaded into the blast-radius service so the gate is
 	// tunable per repository layout.
 	hubDegreeThreshold int
 }

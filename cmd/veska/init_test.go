@@ -21,9 +21,9 @@ func TestInitCmdName(t *testing.T) {
 	}
 }
 
-// TestInitHintsResolveToRealCommands pins solov2-0ib: every "run: veska …"
+// TestInitHintsResolveToRealCommands pins: every "run: veska …"
 // hint the post-init summary prints must name an actual cobra sub-command.
-// Drift previously suggested 'veska workspace add .', which never existed.
+// Drift previously suggested 'veska workspace add.', which never existed.
 func TestInitHintsResolveToRealCommands(t *testing.T) {
 	tmp := t.TempDir()
 	fakeProbe := func(_ context.Context, _, _ string) (*embedderprobe.ProbeResult, error) {
@@ -59,7 +59,7 @@ func TestInitHintsResolveToRealCommands(t *testing.T) {
 	}
 }
 
-// TestRootHelpMentionsInit pins solov2-izh6.19 #2: `veska --help` must
+// TestRootHelpMentionsInit pins #2: `veska --help` must
 // surface a "run veska init to set up" hint so a brand-new user knows
 // the entry point without scanning 30 alphabetised sub-commands.
 func TestRootHelpMentionsInit(t *testing.T) {
@@ -72,7 +72,7 @@ func TestRootHelpMentionsInit(t *testing.T) {
 		t.Fatalf("--help returned error: %v", err)
 	}
 	out := buf.String()
-	// The hint must point users at `veska init` as the start-here step —
+	// The hint must point users at `veska init` as the start-here step
 	// distinct from `init` merely appearing in the alphabetised command list.
 	if !strings.Contains(out, `run "veska init"`) {
 		t.Errorf("expected --help to include a 'run \"veska init\" to set up' hint; got:\n%s", out)

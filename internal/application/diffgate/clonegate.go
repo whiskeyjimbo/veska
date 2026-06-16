@@ -71,10 +71,9 @@ func (v CloneVerdict) ExitCode() int {
 
 // CloneGate flags a candidate change that introduces net-new exact-clone
 // duplication: a byte-identical copy (content_hash equality) of code that the
-// change did not already duplicate at base. Exact-only and embedding-free —
+// change did not already duplicate at base. Exact-only and embedding-free
 // near-mode (thresholded SIMILAR_TO) is deliberately out, since a miscalibrated
 // fuzzy gate blocks PRs.
-//
 // Net-new is decided per candidate content_hash H by comparing group size:
 //
 //	FAIL ⟺ afterCount(H) >= 2 AND baseCount(H) < 2

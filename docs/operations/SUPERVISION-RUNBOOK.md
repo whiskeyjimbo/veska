@@ -1,6 +1,6 @@
 ---
 id: SOLO-OPS-SUPERVISION
-title: "Supervision Runbook — Install, Upgrade, Crash-loop"
+title: "Supervision Runbook - Install, Upgrade, Crash-loop"
 status: draft
 last_reviewed: 2026-05-08
 related: [SOLO-03, SOLO-13, CONFIG-SURFACE]
@@ -12,7 +12,7 @@ verified_date: "2026-06-01"
 
 How `veska-daemon` is supervised on a developer machine. The
 canonical design is SOLO-03 §5; this document is operator-facing
-detail — the unit-file shape, the `veska service` subcommands,
+detail - the unit-file shape, the `veska service` subcommands,
 the recovery steps when something goes wrong.
 
 ## 1. Install
@@ -21,7 +21,7 @@ the recovery steps when something goes wrong.
 platform and registers it. The command is idempotent: running it
 twice does not break anything.
 
-### macOS — launchd
+### macOS - launchd
 
 Writes `~/Library/LaunchAgents/com.veska.daemon.plist`:
 
@@ -58,10 +58,10 @@ Loaded with `launchctl bootstrap gui/$(id -u)
 `KeepAlive.SuccessfulExit = false` means launchd restarts on
 non-zero exit but **not** on a clean exit (code 0). Exit code 78
 (crash-loop breaker; SOLO-03 §5.6) is treated as failure by
-default — the breaker's marker file is what stops the loop, not
+default - the breaker's marker file is what stops the loop, not
 the exit code.
 
-### Linux — systemd --user
+### Linux - systemd --user
 
 Writes `~/.config/systemd/user/veska-daemon.service`:
 
@@ -95,7 +95,7 @@ own breaker (5 restarts / 10 min) for defense-in-depth.
 
 Many real Linux installs do not have `systemd --user` enabled.
 The supervisor for these is the **built-in supervisor process**
-— a Go-side restart loop in the same binary, sharing the
+- a Go-side restart loop in the same binary, sharing the
 crash-loop breaker (§4) with the launchd / systemd paths. It is
 an internal process spawned by the start script `veska service
 install` writes, not a user-facing verb you invoke directly.
@@ -105,7 +105,7 @@ There is no shipped shell script; the prior 18-line
 Properties:
 
 - Exits 0 on a clean child exit (`veska-daemon` returned 0).
-- Exits 78 on a child exit-78 (terminal — schema mismatch,
+- Exits 78 on a child exit-78 (terminal - schema mismatch,
   usearch native library missing, etc.) without restarting. The
   supervisor's parent (the user's autostart hook) sees the 78
   and stops trying.
@@ -139,7 +139,7 @@ veska doctor service      # daemon's view (PID, recent restarts, broken marker?)
 ```
 
 Both should agree. Disagreement means the user manually started
-an `veska-daemon` outside the supervisor — see §5.
+an `veska-daemon` outside the supervisor - see §5.
 
 ## 3. Upgrade
 
@@ -175,7 +175,7 @@ veska service restart
 # 2c. If 2a and 2b are both blocked: restore from the pre-migration
 #     snapshot the runner took before the failing migration
 veska service stop
-veska restore --pre-migration   # (planned — see s5c.12) auto-selects the most recent
+veska restore --pre-migration   # (planned - see s5c.12) auto-selects the most recent
                                   # pre-migration snapshot, verifies it,
                                   # renames the live DB to .replaced-<ts>/,
                                   # extracts the snapshot, prints the
@@ -245,10 +245,10 @@ with the `rm -rf` only when you actually want a fresh start.
 
 ## 6. What this runbook does not cover
 
-- The daemon's internal failure modes during normal operation —
+- The daemon's internal failure modes during normal operation -
   see SOLO-13 §4.
-- The audit log — see SOLO-08 §3.5.
-- Ollama / embedder issues — see `veska doctor embedder` and
+- The audit log - see SOLO-08 §3.5.
+- Ollama / embedder issues - see `veska doctor embedder` and
   SOLO-13.
-- Backup creation and verification — see `veska backup` and
+- Backup creation and verification - see `veska backup` and
   `veska doctor backup`.

@@ -63,7 +63,7 @@ func TestListDependencies_EmptyResultSerializesAsArray(t *testing.T) {
 		t.Fatalf("dispatch: %+v", rpcErr)
 	}
 	b, _ := json.Marshal(result)
-	// Must serialize as {"dependencies":[]} not null/omitted.
+	// Must serialize as {"dependencies":} not null/omitted.
 	if !contains(string(b), `"dependencies":[]`) {
 		t.Errorf("empty result must serialize as array, got: %s", string(b))
 	}

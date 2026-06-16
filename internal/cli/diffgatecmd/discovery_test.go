@@ -128,8 +128,7 @@ func TestDiscoverStructural_NoChangeNoNewFindings(t *testing.T) {
 	}
 }
 
-// TestDiscoverStructural_InertEditToCalledFileNoNewFindings is the changed-
-// files-only soundness proof (solov2-ll57.9): the CHANGED file (target.go) holds
+// files-only soundness proof: the CHANGED file (target.go) holds
 // a symbol whose only caller lives in an UNCHANGED file (caller.go). An inert
 // (comment-only) edit must yield NO new finding — the inbound edge from the
 // unchanged caller survives because re-promoting target.go re-mints `target`
@@ -190,7 +189,7 @@ func TestDiscoverStructural_AddedFileSkippedAtBase(t *testing.T) {
 }
 
 // TestDiscoverStructural_IndexAheadOfBaseStillDetectsNewFinding pins
-// solov2-ll57.16: when the indexed graph sits AHEAD of base (e.g. a local
+// when the indexed graph sits AHEAD of base (e.g. a local
 // post-commit hook already indexed HEAD), the clone inherits an open finding for
 // the candidate's new dead symbol. Because dead-code is not an authoritative
 // check, discovery's re-check never closes it, so a naive diff cancels it on

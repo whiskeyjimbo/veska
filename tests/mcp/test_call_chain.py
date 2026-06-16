@@ -1,4 +1,4 @@
-"""Tests for eng_get_call_chain — walks caller/callee edges from a node."""
+"""Tests for eng_get_call_chain - walks caller/callee edges from a node."""
 
 from __future__ import annotations
 
@@ -17,7 +17,7 @@ def test_call_chain_for_target_node(mcp_client, repo_id, branch, target_symbol):
     })
     assert ok, f"eng_get_call_chain failed: {text}"
     assert isinstance(result, dict)
-    # included_staging is always set — pin it as a structure smoke.
+    # included_staging is always set - pin it as a structure smoke.
     assert "included_staging" in result
 
 

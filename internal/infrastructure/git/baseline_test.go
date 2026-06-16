@@ -10,19 +10,19 @@ import (
 )
 
 // TestFirstWakeReportsOnlySuspendWindowChanges is the behavioral heart of
-// solov2-xde2.25.6. It proves the convergence goal: when the reconciler shares
+// It proves the convergence goal: when the reconciler shares
 // the watcher's live baseline (kept current by the live save path), the first
 // post-suspend wake fires the handler ONLY for files edited during the suspend
 // window — NOT for files edited live during the session whose baseline already
 // tracks disk.
-//
 // Setup mirrors the production wiring without fsnotify timing flake:
-//   - a real FSWatcher is the BaselineStore, wired via WithBaseline;
-//   - seedLastSeen records the baseline (as Watch does);
-//   - the LIVE edit goes through the watcher's baseline Put (what the live
-//     debounced-write path does), so its baseline == current disk → no fire;
-//   - the SUSPEND-WINDOW edit changes a DIFFERENT file on disk WITHOUT updating
-//     the watcher baseline (as a real suspend does) → fires.
+//
+//	a real FSWatcher is the BaselineStore, wired via WithBaseline;
+//	seedLastSeen records the baseline (as Watch does);
+//	the LIVE edit goes through the watcher's baseline Put (what the live
+//	  debounced-write path does), so its baseline == current disk → no fire;
+//	the SUSPEND-WINDOW edit changes a DIFFERENT file on disk WITHOUT updating
+//	  the watcher baseline (as a real suspend does) → fires.
 func TestFirstWakeReportsOnlySuspendWindowChanges(t *testing.T) {
 	dir := t.TempDir()
 	liveFile := filepath.Join(dir, "live.go")
@@ -168,14 +168,13 @@ func TestRefreshBaselineSkipsAfterCtxCancel(t *testing.T) {
 // page-cache-hot just-written file (guardrail 2: hot-path no-regression
 // evidence). It is the per-debounced-write cost the convergence adds: one
 // os.Stat + a 64-byte prefix read + a map Put under a mutex.
-//
 // Measured (Intel i7-7700, Linux, t.TempDir page-cache hot):
 //
-//	BenchmarkRefreshBaseline-4  ~5985 ns/op, 504 B/op, 6 allocs/op.
+//	BenchmarkRefreshBaseline-4 ~5985 ns/op, 504 B/op, 6 allocs/op.
 //
 // Cost argument: ~6µs runs once per debounced write, AFTER the 50ms debounce
 // window and BEFORE a channel send + downstream tree-sitter parse + Ingester
-// .Save. Six microseconds of stat + hot 64-byte read is ~4 orders of magnitude
+// Save. Six microseconds of stat + hot 64-byte read is ~4 orders of magnitude
 // below the 50ms debounce it follows and is dwarfed by the parse it precedes, so
 // it is not a measurable hot-path regression.
 func BenchmarkRefreshBaseline(b *testing.B) {

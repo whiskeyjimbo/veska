@@ -1,5 +1,4 @@
 // Command layercheck enforces architectural layer boundaries in veska packages.
-//
 // Usage:
 //
 //	layercheck [dir]

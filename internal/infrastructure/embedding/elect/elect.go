@@ -1,24 +1,21 @@
-// Package elect performs boot-time embedder election .
-//
+// Package elect performs boot-time embedder election.
 // Embedders are a PICK-ONE ladder, never a stack: exactly one embedder
 // owns the index at a time, because vectors from different models live
 // in incompatible spaces and must never be mixed (see decision memory
 // 'embedder-architecture'). This package replaces the composite
-// Ollama→static fallback chain , which mixed spaces.
-//
-// Election (default direction decided by the solov2-hd0 gate: model2vec
+// Ollama→static fallback chain, which mixed spaces.
+// Election (default direction decided by the gate: model2vec
 // is the default; Ollama is an opt-in max-quality override):
 //
-//	VESKA_EMBEDDER=ollama     → Ollama only
-//	VESKA_EMBEDDER=model2vec  → model2vec only (error if not installed)
-//	VESKA_EMBEDDER=static     → in-binary static-v2 only
-//	unset (auto)              → model2vec if installed, else static-v2
+//	VESKA_EMBEDDER=ollama → Ollama only
+//	VESKA_EMBEDDER=model2vec → model2vec only (error if not installed)
+//	VESKA_EMBEDDER=static → in-binary static-v2 only
+//	unset (auto) → model2vec if installed, else static-v2
 //
 // The elected embedder's ModelID is written to <VeskaHome>/embedder.locked
-// — a sticky, descriptive marker. It equals the per-row model_id the
+// a sticky, descriptive marker. It equals the per-row model_id the
 // embedder worker stamps, so the (deferred) background-reindex path can
 // compare it against node_embedding_refs to detect a model switch.
-//
 // Transient outage of the elected embedder is NOT handled here: the
 // provider returns ports.ErrEmbedderUnreachable at call time, the search
 // service degrades to lexical/BM25 (already wired), and the embed worker
@@ -162,7 +159,7 @@ const (
 // tryModel2Vec resolves the model2vec provider with on-disk precedence:
 // an explicitly installed model (`veska install model2vec`, or a newer
 // model the user dropped in) wins over the binary's embedded copy (fat
-// build, solov2-si1). Returns (nil, nil) when neither source has it — the
+// build). Returns (nil, nil) when neither source has it — the
 // caller then falls back down the ladder (auto) or errors (override).
 func tryModel2Vec(cfg Config, modelName string) (ports.EmbeddingProvider, error) {
 	p, err := model2vec.TryLoad(cfg.VeskaHome, modelName)

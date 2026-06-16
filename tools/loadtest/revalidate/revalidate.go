@@ -12,7 +12,6 @@ import (
 )
 
 // Result is the on-disk envelope written by the revalidation bench.
-//
 // elapsed_ms is the wall-clock time spent inside the per-file Handle loop
 // only (fixture seeding is excluded). exit_gate_met == (elapsed_ms < 60000).
 type Result struct {

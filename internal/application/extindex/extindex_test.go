@@ -26,7 +26,7 @@ func (f *fakeSaver) SaveExternalNode(_ context.Context, _, _ string, n *domain.N
 }
 
 // writeVendorFixture creates a vendor/<modulePath> tree under root
-// with two .go files (one .go, one _test.go which the indexer must
+// with two.go files (one.go, one _test.go which the indexer must
 // skip).
 func writeVendorFixture(t *testing.T, root, modulePath, exportedSrc, testSrc string) {
 	t.Helper()

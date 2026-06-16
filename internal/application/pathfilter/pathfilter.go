@@ -1,12 +1,11 @@
 // Package pathfilter centralises the "is this a third-party / vendored path"
 // predicate shared by promotion-side checks (dead-code, secret_leak) and
 // auto-link. A junior user's first promotion of a freshly-vendored Go CLI
-// produced 128 + 232 + 88 noise findings on cobra internals (solov2-l7zd,
-// solov2-ttsc); the offending paths all match one of a small set of
+// produced 128 + 232 + 88 noise findings on cobra internals (,
+// ); the offending paths all match one of a small set of
 // well-known dependency-vendoring directories.
-//
 // Matching is segment-anywhere on `/`-separated repo-relative paths, so
-// monorepo layouts like `apps/foo/vendor/...` are covered too.
+// monorepo layouts like `apps/foo/vendor/.` are covered too.
 package pathfilter
 
 import (

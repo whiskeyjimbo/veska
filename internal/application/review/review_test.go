@@ -249,7 +249,7 @@ func TestParse_Malformed(t *testing.T) {
 	}
 }
 
-// solov2-spb: a finding object with no "message" is not a parse failure —
+// a finding object with no "message" is not a parse failure
 // message falls back to the title (a real model omits message ~1% of the time
 // even under structured output, and failing the whole job over it is wrong).
 func TestParse_MissingMessageFallsBackToTitle(t *testing.T) {

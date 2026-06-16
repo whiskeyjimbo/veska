@@ -1,11 +1,9 @@
 // Package static is a CPU-only, in-process EmbeddingProvider that
 // requires zero external services — no Ollama, no Python sidecar, no
-// network, no model file .
-//
+// network, no model file.
 // Algorithm (v2, FastText-style subword hashing):
-//
 //  1. Tokenise into camelCase / snake_case / non-alphanumeric subwords.
-//  2. For each token, derive character n-grams (3..6) plus the token
+//  2. For each token, derive character n-grams (3.6) plus the token
 //     itself, with explicit boundary markers ('<' / '>') so prefix and
 //     suffix morphology contributes — FastText's trick.
 //  3. Hash each n-gram to a Dim-length float32 vector via SHA-256
@@ -14,13 +12,12 @@
 //     (mean-pool); L2-normalise.
 //
 // This is NOT a faithful Model2Vec / potion-code-16M port — that work
-// is filed as solov2-vn0 and requires a HuggingFace tokenizer +
+// is filed as and requires a HuggingFace tokenizer +
 // safetensors loader. The v2 subword scheme captures the property the
 // v1 per-token hash could not: identifiers sharing morphology
 // ("parseConfig" vs "configParser") land closer in vector space than
 // unrelated ones. That's the recall floor a static embedder needs to
 // be useful at all on code.
-//
 // Production-quality embeddings still come from Ollama. The static
 // embedder is the lowest rung of the pick-one embedder ladder
 // (static-v2 < model2vec < Ollama; see elect.go) — one embedder owns
@@ -38,15 +35,15 @@ import (
 	"unicode"
 )
 
-// ModelID is the embedding-cache key reported by Provider.ModelID().
+// ModelID is the embedding-cache key reported by Provider.ModelID.
 // Bumping the suffix invalidates every static-embedded vector — done
 // here moving from v1 (per-token hash) to v2 (subword n-gram hash).
 // The "veska-" prefix prevents collision with any external model name.
 const ModelID = "veska-static-v2"
 
 // ngramMin and ngramMax bound the character-n-gram window applied per
-// token. 3..6 matches FastText's defaults; on code identifiers
-// (typically 4..16 chars) this captures enough overlap to give
+// token. 3.6 matches FastText's defaults; on code identifiers
+// (typically 4.16 chars) this captures enough overlap to give
 // "parseConfig" / "configParser" a meaningful cosine without
 // exploding the per-token n-gram count.
 const (
@@ -161,8 +158,8 @@ func tokenize(s string) []string {
 				next = runes[i+1]
 			}
 			// Boundary forms (mirrors the rerank splitIdentifier):
-			//   - prev lower / digit, this upper      : camelCase  (Foo|Bar)
-			//   - prev upper, next lower (in an acronym run)        : HTTP|Server
+			//   prev lower / digit, this upper: camelCase (Foo|Bar)
+			//   prev upper, next lower (in an acronym run): HTTP|Server
 			if unicode.IsLower(prev) || unicode.IsDigit(prev) ||
 				(unicode.IsUpper(prev) && next != 0 && unicode.IsLower(next)) {
 				flush()
@@ -177,7 +174,7 @@ func tokenize(s string) []string {
 // hashVector derives a Dim-length pseudo-vector from key by expanding
 // SHA-256 across Dim/8 hash rounds, packing 8 float32 components per
 // round. Each component is mapped into [-1, 1] via
-// (uint32 → float64 / max → 2x - 1). Cheap, deterministic, dimension-
+// (uint32 → float64 / max → 2x - 1). Cheap, deterministic, dimension
 // stable. Used for both per-token and per-n-gram hashing — same math,
 // just different inputs.
 func hashVector(key string) []float32 {

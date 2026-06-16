@@ -2,11 +2,9 @@
 
 // Package lancedb implements the eval.VectorIndex interface using
 // github.com/lancedb/lancedb-go (CGo via Rust FFI, Lance columnar format + HNSW).
-//
 // CGo requirement: yes — requires liblancedb_go.a and lancedb.h at build time.
 // Quantization: float32 only (Lance handles its own compression internally).
 // Build with: go build/test -tags hnsw_native
-//
 // Save/Load semantics: the Lance database directory is the persistent form.
 // Save(path) copies the directory to path (as a directory).
 // Load(path) opens an existing Lance directory at path.

@@ -11,12 +11,10 @@ import (
 )
 
 // gendocsCmd is a hidden command that renders the CLI command tree into a
-// single Markdown reference page for the manual (docs/manual/reference/cli.md).
-//
+// single Markdown reference page for the manual.
 // It is hidden so it never appears in `veska --help`, and it walks its own
-// root via cmd.Root() so the output always tracks the real command set —
+// root via cmd.Root so the output always tracks the real command set
 // `make docs-gen` regenerates it and CI fails if the committed page drifts.
-//
 // We render Markdown ourselves rather than using cobra/doc's GenMarkdownTree
 // because that emits one file per command with cross-file "SEE ALSO" links,
 // which break under `mkdocs build --strict`. A single self-contained page with

@@ -34,7 +34,7 @@ type CheckRunInput struct {
 // Line is a single newly-added line of a commit's diff: its line number
 // in the post-commit revision plus the line text (no leading "+" marker,
 // no trailing newline). It mirrors checks.Line and git.Line; the type is
-// re-declared here so the application package need not import either —
+// re-declared here so the application package need not import either
 // consistent with how CheckRunInput mirrors checks.Input.
 type Line struct {
 	Number int
@@ -61,7 +61,6 @@ type CheckRunner interface {
 // orchestrator: it builds a PromotionBatch from the staging snapshot, delegates
 // the atomic transaction to the store, then performs advisory post-commit work
 // (staging cleanup, structural checks).
-//
 // Promoter no longer writes SQL itself — all durable writes flow through the
 // PromotionStore port, keeping the application layer free of database/sql.
 type Promoter struct {
@@ -129,7 +128,7 @@ func (p *Promoter) tracerProvider() observability.TracerProvider {
 	return p.tp
 }
 
-// Promote is called by the post-commit hook.  It:
+// Promote is called by the post-commit hook. It:
 //  1. Takes a snapshot of all nodes staged for (repoID, branch).
 //  2. Builds a PromotionBatch and hands it to the PromotionStore, which writes
 //     all node/FTS/embedding-ref/queue rows in a single atomic transaction.
@@ -139,13 +138,12 @@ func (p *Promoter) tracerProvider() observability.TracerProvider {
 // Node-only promotion: edges are intentionally not promoted here. They are
 // re-derived post-promotion by the auto_link queue worker (work_kind="auto_link").
 // Staged edges remain in the staging.Area solely to serve pre-promotion overlay reads.
-//
 // actor records who triggered the promotion. Hook-triggered paths should pass
 // domain.Actor{ID: "service:veska", Kind: domain.ActorKindSystem}.
 func (p *Promoter) Promote(ctx context.Context, repoID, branch, gitSHA string, actor domain.Actor) error {
 	// Operators tail daemon.log to confirm "did my last commit get picked
 	// up?". Mirror coldscan's 'starting' / 'complete' INFO pair so that
-	// signal exists for promotions too .
+	// signal exists for promotions too.
 	promoteStart := time.Now()
 	snap := p.staging.Snapshot(repoID, branch)
 	slog.Info("promotion: starting",
@@ -177,7 +175,7 @@ func (p *Promoter) Promote(ctx context.Context, repoID, branch, gitSHA string, a
 	// The promotion.transaction span wraps the atomic store write. The store
 	// owns the transaction; this thin span preserves end-to-end tracing of the
 	// commit phase. An empty batch still reaches the store so the registration
-	// check runs — an unregistered repo is rejected even with nothing staged —
+	// check runs — an unregistered repo is rejected even with nothing staged
 	// but the store opens no transaction for an empty batch.
 	ctx, span := observability.StartSpan(ctx, p.tracerProvider(), "promotion.transaction")
 	err := p.store.Promote(ctx, batch)

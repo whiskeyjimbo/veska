@@ -10,9 +10,9 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/core/ports"
 )
 
-// edgeSrcLine returns the SQL bind value for the edges.src_line column —
-// the edge's 1-indexed SourceLine when set, NULL otherwise (solov2-izh6.31).
-// Persisting NULL for unknown lines keeps the migration backward-
+// edgeSrcLine returns the SQL bind value for the edges.src_line column
+// the edge's 1-indexed SourceLine when set, NULL otherwise.
+// Persisting NULL for unknown lines keeps the migration backward
 // compatible: legacy rows read as NULL and renderers fall back to
 // today's caller-node-line behaviour for both.
 func edgeSrcLine(e *domain.Edge) any {
@@ -30,12 +30,10 @@ var _ application.PromotionStore = (*PromotionStore)(nil)
 // IMMEDIATE serializable tx, per-file node delete + re-insert, the registered
 // co-transactional PromotionSinks, the post_promotion_queue inserts, and the
 // commit. Any error rolls the whole transaction back.
-//
 // PromotionSinks (FTS, embedding-refs, and any future co-transactional writer)
 // are registered at construction time, so adding a sink does not require
 // editing the transaction body — the store is open for extension, closed for
 // modification.
-//
 // The symbol/call-resolution phases (resolveIntraPackageCalls,
 // resolveCrossPackageCalls and their helpers) live in promotion_callresolve.go;
 // Promote invokes them through its phase list below.
@@ -124,7 +122,7 @@ func (s *PromotionStore) Promote(ctx context.Context, batch application.Promotio
 
 // lookupRepo rejects promotions for repos not in the registry and returns the
 // repo's working-tree root and go-module path — both feed cross-package CALLS
-// resolution . module_path may be NULL/empty, in which case the
+// resolution. module_path may be NULL/empty, in which case the
 // returned module string is "".
 func (s *PromotionStore) lookupRepo(ctx context.Context, repoID string) (root, module string, err error) {
 	var rootPath, modulePath sql.NullString
@@ -201,7 +199,7 @@ func prepare(ctx context.Context, tx *sql.Tx, label, query string) (*sql.Stmt, e
 // prepareStmts compiles the statements reused across the promotion phases. The
 // prev-sig select snapshots prior signatures BEFORE the per-file DELETE so the
 // re-inserted rows can carry prev_signature forward (the contract-drift check).
-// file_imports follows the same DELETE+INSERT lifecycle as nodes .
+// file_imports follows the same DELETE+INSERT lifecycle as nodes.
 func (p *promotion) prepareStmts(ctx context.Context) error {
 	var err error
 	if p.del, err = prepare(ctx, p.tx, "delete",
@@ -291,7 +289,7 @@ func (p *promotion) promoteFile(ctx context.Context, file application.PromotionF
 		return err
 	}
 	// Sink pre-delete hooks run while the old node rows still exist — e.g. the
-	// FTS sink's node_id IN (SELECT ... FROM nodes ...) deletes MUST resolve
+	// FTS sink's node_id IN (SELECT. FROM nodes.) deletes MUST resolve
 	// against the pre-DELETE rows.
 	for _, sink := range p.s.sinks {
 		if err := sink.BeforeNodeDelete(ctx, p.tx, p.branch, p.repoID, file.Path); err != nil {
@@ -345,7 +343,7 @@ func (p *promotion) capturePrevSignatures(ctx context.Context, filePath string) 
 }
 
 // syncFileImports re-DELETE+INSERTs the file's external imports (stdlib and
-// own-module skipped; eng_list_dependencies is external-only — solov2-tb74).
+// own-module skipped; eng_list_dependencies is external-only).
 func (p *promotion) syncFileImports(ctx context.Context, file application.PromotionFile) error {
 	if _, err := p.delImports.ExecContext(ctx, p.repoID, p.branch, file.Path); err != nil {
 		return fmt.Errorf("promoter: delete file_imports for %q: %w", file.Path, err)
@@ -398,7 +396,7 @@ func (p *promotion) insertNode(ctx context.Context, n *domain.Node, prevSig map[
 		p.batch.Actor.ID,
 		string(p.batch.Actor.Kind),
 		nodeSignature(n),
-		nodeSnippet(n), // solov2-sxa: bind the capped RawContent so embed-text
+		nodeSnippet(n), // bind the capped RawContent so embed-text
 		// picks up the body via FetchPending's join.
 		prev,
 		nodeExported(n),
@@ -406,7 +404,7 @@ func (p *promotion) insertNode(ctx context.Context, n *domain.Node, prevSig map[
 		// Include kind+name+path+lines: a UNIQUE-PK violation here means the
 		// parser emitted two nodes with the same (repoID, path, kind, name)
 		// tuple, and the bare ID isn't enough to find which symbol
-		// (solov2-14lw was diagnosed via these fields).
+		// ( was diagnosed via these fields).
 		return fmt.Errorf("promoter: insert node %q (kind=%s name=%q path=%q lines=%v): %w",
 			n.ID, n.Kind, n.Name, n.Path, n.Lines, err)
 	}
@@ -449,7 +447,7 @@ func (p *promotion) enqueueWiki(ctx context.Context) error {
 }
 
 // insertParserEdges persists parser-produced edges (CALLS, IMPORTS, etc.)
-// atomically with the node writes . Autolink SIMILAR_TO edges
+// atomically with the node writes. Autolink SIMILAR_TO edges
 // arrive separately via the post-promotion queue and don't conflict here.
 func (p *promotion) insertParserEdges(ctx context.Context) error {
 	for _, file := range p.batch.Files {
@@ -466,7 +464,7 @@ func (p *promotion) insertParserEdges(ctx context.Context) error {
 }
 
 // advanceRepoSHA advances repos.last_promoted_sha (and active_branch when a
-// branch is supplied) atomically with the node writes . An empty
+// branch is supplied) atomically with the node writes. An empty
 // SHA is treated as caller error and skipped so a known-good value is not
 // clobbered; an empty branch (repo.Add does not set active_branch) writes the
 // SHA alone and leaves active_branch untouched.

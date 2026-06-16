@@ -1,12 +1,12 @@
 //go:build eval
 
 // Multi-repo extension of the single-repo token-efficiency harness
-// . Partitions the deterministic semantic synthcorpus
+// Partitions the deterministic semantic synthcorpus
 // across N repos, then for every query measures:
 //
-//   - veska tokens: cross-repo fanout + GLOBAL RRF (matches the MCP
-//     handler shipped in solov2-bcn) -> top-K snippets
-//   - grep+read tokens: the simulated filesystem walks ALL N repos
+//	veska tokens: cross-repo fanout + GLOBAL RRF (matches the MCP
+//	  handler shipped in ) -> top-K snippets
+//	grep+read tokens: the simulated filesystem walks ALL N repos
 //
 // This is the headline cross-repo number the wedge pitch
 // calls for. Single-repo numbers live in TestTokenEfficiency.
@@ -266,7 +266,7 @@ func multiRepoFanoutSearch(ctx context.Context, svc *search.Service, repoIDs []s
 		return nil, nil
 	}
 
-	// Mirror the production cross-repo fusion : cosine
+	// Mirror the production cross-repo fusion: cosine
 	// when scores are present, RRF fallback otherwise.
 	useCosine := false
 	for _, pc := range pool {

@@ -272,10 +272,10 @@ func TestWire_RegistersGraphBlastSearchTools(t *testing.T) {
 	}
 }
 
-// TestWire_RegistersFinalFiveTools verifies the SOLO-09 record/repo tools
+// TestWire_RegistersFinalFiveTools verifies the record/repo tools
 // (eng_get_finding, eng_get_suppression, eng_close_suppression, eng_add_repo,
 // eng_remove_repo) resolve, and that the full registered surface is 33 tools
-// (32 + eng_find_changed_symbols, added by solov2-4j5).
+// (32 + eng_find_changed_symbols, added by ).
 func TestWire_RegistersFinalFiveTools(t *testing.T) {
 	cfg := testConfig(t)
 	d, err := newDaemon(cfg)
@@ -292,23 +292,24 @@ func TestWire_RegistersFinalFiveTools(t *testing.T) {
 	for _, n := range []string{
 		"eng_get_finding", "eng_get_suppression", "eng_close_suppression",
 		"eng_add_repo", "eng_remove_repo", "eng_find_changed_symbols",
-		"eng_promote_repo", // solov2-3vv post-commit hook target
-		"eng_reindex_repo", // solov2-4d7b in-daemon reindex dispatch
+		"eng_promote_repo", // post-commit hook target
+		"eng_reindex_repo", // in-daemon reindex dispatch
 	} {
 		if !have[n] {
 			t.Errorf("tool %q not registered; have=%v", n, names)
 		}
 	}
 
-	// solov2-6m1: the task tools (eng_set_active_task / get_active_task /
+	// the task tools (eng_set_active_task / get_active_task /
 	// get_task_history) are parked until a backend exists. 34 → 31.
-	// solov2-4d7b adds eng_reindex_repo: 31 → 32.
-	// solov2-jlws adds eng_list_dependencies: 32 → 33.
-	// solov2-2g4r adds eng_find_related: 33 → 34.
-	// solov2-7w1t adds eng_set_repo_alias + eng_remove_repo_alias: 34 → 36.
-	// solov2-wfrj adds eng_find_clones: 36 → 37.
-	if got := len(names); got != 37 {
-		t.Errorf("registered tool count = %d; want 37; have=%v", got, names)
+	// adds eng_reindex_repo: 31 → 32.
+	// adds eng_list_dependencies: 32 → 33.
+	// adds eng_find_related: 33 → 34.
+	// adds eng_set_repo_alias + eng_remove_repo_alias: 34 → 36.
+	// adds eng_find_clones: 36 → 37.
+	// adds eng_find_clusters: 37 → 38.
+	if got := len(names); got != 38 {
+		t.Errorf("registered tool count = %d; want 38; have=%v", got, names)
 	}
 	// Negative-check: parked tools must NOT appear.
 	for _, parked := range []string{
@@ -359,7 +360,7 @@ func TestWire_StartWatchesRegisteredRepos(t *testing.T) {
 }
 
 // TestWire_WatchLoopRoutesEditsToStaging exercises the end-to-end fsnotify
-// chain we cared about in solov2-7c4: file write in a watched repo →
+// chain we cared about in: file write in a watched repo →
 // MultiRepoWatcher → runWatchLoop → Ingester.Save → StagingArea contains the
 // file under the repo's active_branch. Parameterised over branch to make sure
 // the hardcoded "main" regression doesn't reappear.
@@ -403,7 +404,7 @@ func TestWire_WatchLoopRoutesEditsToStaging(t *testing.T) {
 				t.Fatalf("write hello.go: %v", err)
 			}
 
-			// ADR-S0017 §1: the watch loop relativises the absolute fsnotify
+			// the watch loop relativises the absolute fsnotify
 			// path before staging, so the staged key is the repo-relative form.
 			const wantRel = "hello.go"
 			deadline := time.Now().Add(3 * time.Second)

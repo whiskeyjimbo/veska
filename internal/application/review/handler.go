@@ -42,12 +42,10 @@ type ErrorCounter interface {
 // one changed file: the handler reads the file's current source, renders each
 // review prompt over it, dispatches the rendered text through the LLMGenerator,
 // and parses the response.
-//
 // When a Quota is wired in (WithQuota) the handler enforces the review token
 // caps: it pauses before dispatch when the per-day total is reached, refuses
 // remaining jobs for a commit once that commit's per-commit total is reached,
 // and records each completed job's actual token usage.
-//
 // The handler is stateless beyond its injected dependencies; the Quota is
 // concurrency-safe, so the handler is safe for the poller's per-kind goroutine.
 type Handler struct {
@@ -125,19 +123,19 @@ func NewHandler(gen ports.LLMGenerator, loader *Loader, repoRoot RepoRootFunc, f
 }
 
 // Handle processes one ports.WorkRow of kind WorkKindReview.
-//
 // Behaviour:
-//   - Wrong kind: wrapped error (routing bug).
-//   - Empty payload: nil (no file => nothing to review).
-//   - Daily-cap pause: when the per-day token total is reached the job is not
-//     dispatched; an ErrQuotaExceeded is returned (the row stays pending) and
-//     one audit.jsonl line is written the first time the pause trips.
-//   - Per-commit overage: once the commit's running total reaches the cap the
-//     job is refused (no LLM call), one budget-exceeded Finding is filed, and
-//     the review error metric is incremented.
-//   - Repo-root resolution / file-read error: wrapped error so the Poller
-//     retries.
-//   - On success: nil — the row drains to 'done'.
+//
+//	Wrong kind: wrapped error (routing bug).
+//	Empty payload: nil (no file => nothing to review).
+//	Daily-cap pause: when the per-day token total is reached the job is not
+//	  dispatched; an ErrQuotaExceeded is returned (the row stays pending) and
+//	  one audit.jsonl line is written the first time the pause trips.
+//	Per-commit overage: once the commit's running total reaches the cap the
+//	  job is refused (no LLM call), one budget-exceeded Finding is filed, and
+//	  the review error metric is incremented.
+//	Repo-root resolution / file-read error: wrapped error so the Poller
+//	  retries.
+//	On success: nil — the row drains to 'done'.
 func (h *Handler) Handle(ctx context.Context, row ports.WorkRow) error {
 	if row.Kind != ports.WorkKindReview {
 		// A misrouted row is a wiring bug, not a review failure — no finding.
@@ -155,7 +153,7 @@ func (h *Handler) Handle(ctx context.Context, row ports.WorkRow) error {
 		return nil
 	}
 
-	// Review failure contract (solov2-nz2.3): on the FINAL failing attempt the
+	// Review failure contract: on the FINAL failing attempt the
 	// job will be marked state='failed' by the poller. Park a sticky
 	// review-pipeline-failure Finding so the failure does not silently vanish.
 	// Earlier attempts just return the error for the poller to re-queue.

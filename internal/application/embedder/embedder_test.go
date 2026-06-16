@@ -53,6 +53,7 @@ CREATE TABLE nodes (
     actor_kind     TEXT NOT NULL,
     signature      TEXT,
     snippet        TEXT,
+    structural_hash TEXT,
     PRIMARY KEY (node_id, branch)
 );
 CREATE TABLE node_embeddings (
@@ -128,7 +129,7 @@ func (f *fakeEmbedder) ModelID() string { return f.modelID }
 
 // fakeBatchEmbedder implements ports.BatchEmbeddingProvider in addition
 // to the per-text Embed surface. Tracks distinct batch and single
-// call counts so the test can assert which path was used .
+// call counts so the test can assert which path was used.
 type fakeBatchEmbedder struct {
 	fakeEmbedder
 	batchCalls atomic.Int64
@@ -324,7 +325,7 @@ func TestWorker_DrainsPendingAndMarksReady(t *testing.T) {
 	}
 }
 
-// TestWorker_BatchEmbedderUsedForMultipleRefs pins solov2-ucp: when
+// TestWorker_BatchEmbedderUsedForMultipleRefs pins: when
 // the embedder satisfies BatchEmbeddingProvider AND a tick has > 1
 // unique text to embed, the worker calls EmbedBatch once instead of
 // looping Embed. The serial Embed path stays the per-row fallback.
@@ -361,7 +362,7 @@ func TestWorker_BatchEmbedderUsedForMultipleRefs(t *testing.T) {
 	// what matters is the path was a batch.
 }
 
-// TestWorker_PauserSkipsTick pins solov2-181: when the injected pauser
+// TestWorker_PauserSkipsTick pins: when the injected pauser
 // returns true, tick is a complete no-op (no FetchPending, no Embed, no
 // writes). When the pauser flips to false, the worker resumes and
 // drains the backlog. The contract matters because the daemon uses
@@ -1099,7 +1100,7 @@ func TestWorker_SiblingsUnaffectedByFailure(t *testing.T) {
 // every embedding before it reaches VectorStorage and node_embeddings.
 // Embedding models such as nomic-embed-text return vectors with norm far
 // from 1.0; auto-link's score = 1/(1+L2dist) only yields meaningful
-// thresholds for unit vectors. See solov2-uug.
+// thresholds for unit vectors.
 func TestWorker_NormalizesVectorsBeforeStorage(t *testing.T) {
 	db := openSchemaDB(t)
 	repo := infsqlite.NewEmbeddingRefsRepo(db, db)

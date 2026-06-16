@@ -1,11 +1,11 @@
-"""Bootstrap golden path — zero-state to working install, single test.
+"""Bootstrap golden path - zero-state to working install, single test.
 
 The fast harness (mcp_client fixture) assumes a daemon is already
 running with a repo registered. This test asserts the OTHER direction:
 a fresh user starting from nothing can run our documented commands in
 order and reach a working install.
 
-Phases (single function, sequential — one failure stops the test, which
+Phases (single function, sequential - one failure stops the test, which
 is what we want for a bootstrap smoke):
 
   P1 . `veska init` against a fresh VESKA_HOME succeeds and probes Ollama.
@@ -184,7 +184,7 @@ def test_bootstrap_golden_zero_to_working_install(tmp_path: Path):
     bin_mcp = str(repo_root / "bin" / "veska-mcp")
     for path in (bin_veska, bin_daemon, bin_mcp):
         if not os.path.exists(path):
-            pytest.skip(f"missing {path} — run `make build` first")
+            pytest.skip(f"missing {path} - run `make build` first")
 
     veska_home = str(tmp_path / "home")
     git_repo = str(tmp_path / "repo")
@@ -200,13 +200,13 @@ def test_bootstrap_golden_zero_to_working_install(tmp_path: Path):
     if res.returncode != 0:
         if "embedder" in res.stderr.lower() or "ollama" in res.stderr.lower():
             pytest.skip(
-                "veska init failed embedder probe — Ollama not reachable or "
+                "veska init failed embedder probe - Ollama not reachable or "
                 f"nomic-embed-text not pulled. stderr: {res.stderr.strip()}"
             )
         raise AssertionError(f"veska init failed:\n{res.stderr}")
     # Backend-agnostic success markers: model2vec is the canonical baked-in
-    # embedder (Ollama is an opt-in addon), so assert on what BOTH paths emit —
-    # an embedder line + the terminal "ready" — not the Ollama-only "healthy"
+    # embedder (Ollama is an opt-in addon), so assert on what BOTH paths emit -
+    # an embedder line + the terminal "ready" - not the Ollama-only "healthy"
     # probe string.
     assert "embedder:" in res.stdout, f"init didn't report an embedder: {res.stdout}"
     assert "ready" in res.stdout, f"init didn't reach ready: {res.stdout}"
@@ -247,7 +247,7 @@ def test_bootstrap_golden_zero_to_working_install(tmp_path: Path):
 
             res = _run(bin_veska, "repo", "add", git_repo, env=env)
             assert "(via daemon)" in res.stdout, (
-                f"repo add didn't route via daemon — solov2-trh regression? "
+                f"repo add didn't route via daemon - solov2-trh regression? "
                 f"stdout: {res.stdout!r}"
             )
 
@@ -316,7 +316,7 @@ def test_bootstrap_golden_zero_to_working_install(tmp_path: Path):
             _run("git", "-C", git_repo, "add", "-A")
             # IMPORTANT: VESKA_HOME must be in the hook's env. The hook
             # script bakes the install-time VESKA_HOME , so
-            # this still works even when our shell doesn't export it —
+            # this still works even when our shell doesn't export it -
             # we pass env={} to git so the bake is what's tested.
             _run("git", "-C", git_repo, "commit", "-q", "-m", "add extras",
                  env={**os.environ, "VESKA_HOME": ""})  # hook must self-resolve
@@ -352,7 +352,7 @@ def test_bootstrap_golden_zero_to_working_install(tmp_path: Path):
             mcp = _MCP(bin_mcp, veska_home)
             # If 249 regressed the second-pass embedder won't see any
             # pending refs (everything's 'ready') and the vec store stays
-            # empty — semantic search returns ≤ 0 hits.
+            # empty - semantic search returns ≤ 0 hits.
             sem2 = mcp.call("eng_search_semantic", {
                 "repo_id": repo_id, "branch": branch,
                 "query": "GreetUser", "limit": 50,
@@ -360,7 +360,7 @@ def test_bootstrap_golden_zero_to_working_install(tmp_path: Path):
             hits = sem2["result"].get("results") or []
             assert len(hits) >= pre_embed_count - 2, (
                 f"post-restart vector store has {len(hits)} hits but "
-                f"node_embeddings has {pre_embed_count} — 249 regression"
+                f"node_embeddings has {pre_embed_count} - 249 regression"
             )
 
             # ── P8: veska reindex idempotent re-scan ────────────────

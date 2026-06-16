@@ -10,7 +10,7 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/core/ports"
 )
 
-// Named failing checks in SecurityVerdict.Failures(). Stable strings: CI and
+// Named failing checks in SecurityVerdict.Failures. Stable strings: CI and
 // agents match on them.
 const (
 	// FailNewSecretLeak: the candidate's added lines introduced a secret.

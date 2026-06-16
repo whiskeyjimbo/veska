@@ -8,15 +8,14 @@ import (
 	"unicode"
 )
 
-// rerank applies post-fusion reranking signals  to the
+// rerank applies post-fusion reranking signals to the
 // hydrated candidate list before it is truncated to caller-k. Four
 // signals contribute, all scaled by the candidate set's maxScore so
 // they bite even on tight-clustered small-corpus distributions yet
 // stay sub-noise on real corpora where raw vector scores already
 // discriminate well:
-//
 //  1. definition boost — exact match on the trailing identifier of a
-//     SymbolPath for a definitional Kind (function/method/type/...).
+//     SymbolPath for a definitional Kind (function/method/type/.).
 //     Lifts the chunk that DEFINES the queried symbol above chunks
 //     that merely mention it.
 //  2. identifier stems — split SymbolPath (and file basename) on
@@ -105,7 +104,7 @@ func definitionBonus(r Result, tokens []string, maxScore float32) float32 {
 	return 0
 }
 
-// trailingIdentifier returns the last dot-segment of a symbol path —
+// trailingIdentifier returns the last dot-segment of a symbol path
 // the identifier itself, stripped of receiver / namespace prefix.
 func trailingIdentifier(symbolPath string) string {
 	if i := strings.LastIndex(symbolPath, "."); i >= 0 {
@@ -196,8 +195,7 @@ func splitIdentifier(s string) []string {
 // reach for the same action under. The lexical/embedding pipeline has
 // no model of these clusters — a user types "register subcommand" but
 // cobra exposes "AddCommand", so neither retriever surfaces the
-// canonical answer well (solov2-izh6.26).
-//
+// canonical answer well.
 // Conservative on purpose: only well-known API-design clusters that
 // appear repeatedly across Go libraries are listed. Adding a noun
 // (e.g. "subcommand" → "command") would lift entire candidate sets
@@ -227,7 +225,6 @@ var verbSynonyms = map[string][]string{
 // known synonym of a query token. Gated on the head position so it
 // doesn't false-fire on substring matches deep inside the identifier
 // (e.g. "ItemsToAdd" is not registration).
-//
 // Bonus magnitude equals definitionBonusFrac × maxScore — same weight
 // as an exact trailing-identifier match — so the canonical "AddCommand"
 // for "register subcommand" can leapfrog larger sibling methods that
@@ -242,7 +239,7 @@ func verbSynonymBonus(r Result, tokens []string, maxScore float32) float32 {
 	if len(stems) == 0 {
 		return 0
 	}
-	// Head identifier is the FIRST subword of the trailing identifier —
+	// Head identifier is the FIRST subword of the trailing identifier
 	// for "Command.AddCommand" splitIdentifier yields ["command","add",
 	// "command"]; the trailing identifier "AddCommand" splits as
 	// ["add","command"], so we take splitIdentifier of trailingIdentifier

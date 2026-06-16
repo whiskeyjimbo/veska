@@ -6,11 +6,11 @@ real daemon over the synthetic repo. Maps to the SOLO-02 stories:
   J1  orient        US-08.01  `veska wiki` / repo list to build a mental model
   J2  find a symbol US-04.01  `eng_find_symbol`
   J3  see findings  US-05.01  `veska findings list`
-  J4  gate (FAIL)   —         `veska diff-gate --finding` on an unresolved fix
-  J5  fix + gate    —         the candidate resolves the finding → PASS
+  J4  gate (FAIL)   -         `veska diff-gate --finding` on an unresolved fix
+  J5  fix + gate    -         the candidate resolves the finding → PASS
   J6  commit        US-03.01  the post-commit hook promotes the fix
 
-The junior leans on `--help`-discoverable commands only — no internal ids hunted
+The junior leans on `--help`-discoverable commands only - no internal ids hunted
 by hand: the finding_id comes from `findings list`, and `--finding` derives the
 anchor + rule. The gate must FAIL while the dead-code finding is unresolved and
 PASS once the candidate removes it.

@@ -25,19 +25,16 @@ func NewDeadCodeRepo(db *sql.DB) *DeadCodeRepo {
 
 // DeadNodesInFiles returns nodes in (repoID, branch) whose file_path is one of
 // filePaths and which have ZERO inbound CALLS edges on that branch.
-//
 // Liveness is measured against CALLS edges ONLY — not every edge kind. Every
 // symbol has an inbound CONTAINS edge from its package and may have SIMILAR_TO
 // edges from autolink; counting those made the check inert (nothing was ever
-// "dead"), which is solov2-jdok. "No inbound CALLS" is the meaningful
+// "dead"), which is. "No inbound CALLS" is the meaningful
 // uncalled-symbol signal. Exported symbols (callable from other packages /
 // repos, where call edges may be invisible) are excluded upstream by the
 // application-layer DeadCodeCheck allowlist, so this does not mis-flag them.
-//
 // Empty filePaths is a no-op (returns nil, nil) — this avoids building a
-// degenerate "IN ()" clause that SQLite rejects and is also a cheap fast-path
+// degenerate "IN " clause that SQLite rejects and is also a cheap fast-path
 // for promotions that touched no files of interest.
-//
 // The query intentionally does not apply name/kind allowlist filtering; that
 // rule lives in the application-layer DeadCodeCheck so it is easy to evolve
 // and trivial to unit-test without a database.
@@ -98,7 +95,7 @@ ORDER BY n.file_path, n.node_id`, strings.Join(placeholders, ","))
 // type's node has kind='interface'. The query joins the two so an
 // orphan method node (e.g. created by a malformed parse) does not bleed
 // into the result. Result strings are bare method names ('Set', 'String')
-// — the dead-code application filter compares against a method's bare
+// the dead-code application filter compares against a method's bare
 // suffix.
 func (r *DeadCodeRepo) InterfaceMethodNames(ctx context.Context, repoID, branch string) ([]string, error) {
 	const q = `

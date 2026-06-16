@@ -21,7 +21,7 @@ type key struct {
 // entry holds the nodes, edges, and unresolved-call markers for a
 // single staged file. The unresolved markers are parser hints whose
 // target lives in another file of the same package; the Promoter binds
-// them at promotion time .
+// them at promotion time.
 type entry struct {
 	nodes      []*domain.Node
 	edges      []*domain.Edge
@@ -31,11 +31,9 @@ type entry struct {
 
 // Area is a thread-safe, in-memory store of pending (not-yet-promoted)
 // parse results keyed by (repoID, branch, filePath).
-//
 // It is intentionally lossy: constructing a new Area always produces
 // empty state. Nothing is persisted to disk, so a daemon restart clears all
 // staged data while promoted (SQLite) state survives unchanged.
-//
 // Overlay reads: callers check staging before hitting SQLite, so staged state
 // is immediately visible without a round-trip to durable storage.
 type Area struct {
@@ -76,13 +74,11 @@ func WithGenerationGuard(gen uint64, gate *Gate) Option {
 
 // Stage replaces all staged parse data for (repoID, branch, filePath) with f,
 // overwriting any existing entry. It returns true when the data was staged.
-//
 // f carries whatever fidelity the caller has: a bare (Nodes, Edges) pair for
 // tests and manual paths, or the full parser output (UnresolvedCalls + the
 // import map) on the ingest path. Unset fields stage as nil.
-//
 // With WithGenerationGuard, Stage stages nothing and returns false when the
-// supplied generation is stale relative to the gate (solov2-2at, solov2-xc51).
+// supplied generation is stale relative to the gate ().
 func (s *Area) Stage(repoID, branch, filePath string, f File, opts ...Option) bool {
 	var cfg config
 	for _, o := range opts {
@@ -165,7 +161,6 @@ func (s *Area) Clear(repoID, branch string) {
 // File is the per-file snapshot the promotion path consumes — nodes
 // AND parser-produced edges. SIMILAR_TO edges (autolink) are NOT included
 // here; only structural edges the parser determined at parse time
-// .
 type File struct {
 	Nodes           []*domain.Node
 	Edges           []*domain.Edge
@@ -178,7 +173,6 @@ type File struct {
 // the Area; the slices themselves are not deep-copied (callers must
 // not mutate elements). Used by the promotion path to flush all staged
 // state to SQLite in a single transaction.
-//
 // Parser-produced edges (CALLS, IMPORTS, etc.) ride with their file's
 // nodes. Post-promotion SIMILAR_TO edges are produced separately by the
 // autolink queue worker.

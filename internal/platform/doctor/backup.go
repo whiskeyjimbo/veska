@@ -10,7 +10,7 @@ import (
 )
 
 // BackupReport holds the result of a backup directory integrity check,
-// matching the SOLO-13 §2.1 data schema for the backup subsystem.
+// matching the data schema for the backup subsystem.
 type BackupReport struct {
 	BackupDir   string        `json:"backup_dir"`
 	LatestFile  string        `json:"latest_file"`
@@ -23,11 +23,11 @@ type BackupReport struct {
 
 // CheckBackup scans backupDir for *.tar.gz files, selects the most recently
 // modified one, reports its age, and verifies that it is a valid gzip archive.
-//
 // Status values:
-//   - "healthy"  — at least one backup exists and its gzip header is valid
-//   - "degraded" — no *.tar.gz files found in backupDir
-//   - "broken"   — most recent backup exists but fails gzip verification
+//
+//	"healthy" — at least one backup exists and its gzip header is valid
+//	"degraded" — no *.tar.gz files found in backupDir
+//	"broken" — most recent backup exists but fails gzip verification
 func CheckBackup(backupDir string) (BackupReport, error) {
 	matches, err := filepath.Glob(filepath.Join(backupDir, "*.tar.gz"))
 	if err != nil {

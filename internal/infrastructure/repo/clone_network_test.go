@@ -1,8 +1,8 @@
 //go:build network
 
-// Network-tagged integration tests for the clone helper (solov2-kxo5.1).
-// Excluded from `go test ./...` so the default loop stays offline-safe;
-// run with `go test -tags=network ./internal/infrastructure/repo/`.
+// Network-tagged integration tests for the clone helper.
+// Excluded from `go test./.` so the default loop stays offline-safe;
+// run with `go test -tags=network./internal/infrastructure/repo/`.
 
 package repo_test
 

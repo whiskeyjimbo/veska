@@ -27,12 +27,11 @@ type OpenFindingsFunc func(ctx context.Context, repoID, branch string) (map[stri
 
 // EntryPoint is one selected entry-point symbol: its name, source
 // location, and the ranking signals that put it where it landed. The
-// JSON shape is the eng_get_entry_points tool surface .
-//
+// JSON shape is the eng_get_entry_points tool surface.
 // The Name field is emitted as the canonical "name" key (matching the
 // node-shape contract documented in README §Conventions). SymbolName is
 // kept as a dual-emit for back-compat with any caller written against
-// the original v0 surface ; both fields always hold the
+// the original v0 surface; both fields always hold the
 // same value.
 type EntryPoint struct {
 	Name            string `json:"name"`
@@ -53,7 +52,7 @@ type EntryPointsReport struct {
 	EntryPoints []EntryPoint `json:"entry_points"`
 	// GeneratedAt is the wall-clock instant the report was rendered.
 	// Populated by the wiki Handler immediately before rendering; the
-	// service itself does not set it .
+	// service itself does not set it.
 	GeneratedAt time.Time `json:"generated_at,omitzero"`
 }
 
@@ -113,31 +112,30 @@ func NewEntryPointsService(loadGraph LoadGraphFunc, inboundEdges InboundEdgesFun
 // matches what almost every caller wants: exclude Test*/Benchmark*/
 // Example*/Fuzz*-named symbols and *_test.go files from the candidate
 // set so the result lists real public-API entry points, not test
-// helpers .
+// helpers.
 type SelectOptions struct {
 	IncludeTests bool
 }
 
 // Select computes the entry_points report for (repoID, branch).
-//
 // Real entry points have HIGH inbound fan-in: lots of call sites depend
 // on them. Exported (capitalised) names in non-test files are likelier
 // entry points than internal helpers. The previous gate — "must have
 // an adjacent test, must have small blast radius" — selected leaves,
-// not entry points (solov2-m8d's close-reason flagged this). Adjacent
+// not entry points ('s close-reason flagged this). Adjacent
 // tests are now a tiebreaker bonus, not a hard requirement.
-//
-// Ranking :
-//  1. inbound_count desc          (the moat: real fan-in)
-//  2. exported desc               (capitalised symbols rank above unexported)
-//  3. has_adjacent_test desc      (testedness as a tiebreaker)
-//  4. symbol_name asc             (final determinism)
+// Ranking:
+//  1. inbound_count desc (the moat: real fan-in)
+//  2. exported desc (capitalised symbols rank above unexported)
+//  3. has_adjacent_test desc (testedness as a tiebreaker)
+//  4. symbol_name asc (final determinism)
 //
 // Gates remain:
-//   - symbol-shaped kind only (function / method / type / struct /
-//     interface / class); files/packages/fields excluded;
-//   - no open finding on the node;
-//   - not a Test*/Benchmark*/Example*/Fuzz* symbol (unless IncludeTests=true).
+//
+//	symbol-shaped kind only (function / method / type / struct /
+//	  interface / class); files/packages/fields excluded;
+//	no open finding on the node;
+//	not a Test*/Benchmark*/Example*/Fuzz* symbol (unless IncludeTests=true).
 func (s *EntryPointsService) Select(ctx context.Context, repoID, branch string) (EntryPointsReport, error) {
 	return s.SelectWith(ctx, repoID, branch, SelectOptions{})
 }
@@ -171,12 +169,12 @@ func (s *EntryPointsService) SelectWith(ctx context.Context, repoID, branch stri
 		if !opts.IncludeTests && isTestSymbol(n) {
 			continue
 		}
-		// solov2-q5gd: filter Go init() functions. Go's runtime invokes
-		// every init() automatically — they are framework magic, not
-		// "places to start reading the code." cobra-based CLIs use init()
+		// filter Go init functions. Go's runtime invokes
+		// every init automatically — they are framework magic, not
+		// "places to start reading the code." cobra-based CLIs use init
 		// heavily to register subcommands, which would otherwise dominate
 		// the entry_points page (one per command file). Python's __init__
-		// is a constructor and intentionally NOT filtered here. main() is
+		// is a constructor and intentionally NOT filtered here. main is
 		// also left in: the user's mental model of "entry point" naturally
 		// includes the program's main, even though the runtime calls it.
 		if isGoInitFunc(n) {
@@ -233,7 +231,7 @@ func isEntryPointKind(k domain.NodeKind) bool {
 		domain.KindStruct, domain.KindInterface, domain.KindClass,
 		domain.KindCommand, domain.KindRoute:
 		// Commands and routes are the literal entry surface of a CLI / HTTP
-		// service — exactly what a developer starts from .
+		// service — exactly what a developer starts from.
 		return true
 	default:
 		return false
@@ -245,7 +243,7 @@ func isEntryPointKind(k domain.NodeKind) bool {
 // the file path (*_test.go) and the name prefix (Test/Benchmark/Example/
 // Fuzz) because either alone leaks: a helper like 'newTestServer' in
 // foo_test.go IS in a test file, and a function called 'TestPriority'
-// in production code is NOT .
+// in production code is NOT.
 func isTestSymbol(n *domain.Node) bool {
 	if strings.HasSuffix(n.Path, "_test.go") {
 		return true
@@ -260,13 +258,13 @@ func isTestSymbol(n *domain.Node) bool {
 	return false
 }
 
-// isGoInitFunc reports whether n is a Go init() function — name "init",
-// kind function (not method/etc.), in a .go file. The Go runtime calls
-// every package-scoped init() at startup; they are framework magic, not
-// agent-useful entry points . cobra-based CLIs especially
-// suffer here: each subcommand file has its own init() registering the
-// command, and the inbound-fan-in heuristic ranked them above main()
-// and Execute() on small repos.
+// isGoInitFunc reports whether n is a Go init function — name "init",
+// kind function (not method/etc.), in a.go file. The Go runtime calls
+// every package-scoped init at startup; they are framework magic, not
+// agent-useful entry points. cobra-based CLIs especially
+// suffer here: each subcommand file has its own init registering the
+// command, and the inbound-fan-in heuristic ranked them above main
+// and Execute on small repos.
 func isGoInitFunc(n *domain.Node) bool {
 	return n.Name == "init" && n.Kind == domain.KindFunction && strings.HasSuffix(n.Path, ".go")
 }

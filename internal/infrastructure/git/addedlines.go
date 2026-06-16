@@ -1,7 +1,6 @@
 // addedlines.go exposes AddedLinesForCommit — a thin os/exec wrapper that
 // parses `git diff` unified/patch output to recover the newly-added ("+")
 // lines of a commit, keyed by repo-root-relative file path.
-//
 // The secrets-scan check (M7) consumes this: it must scan only lines a
 // commit introduced, never pre-existing context or removed lines.
 
@@ -29,11 +28,9 @@ type Line struct {
 // and parses the unified patch output, collecting only "+"-prefixed body
 // lines and assigning each its new-file line number from the surrounding
 // "@@" hunk header.
-//
 // Files with no added lines (pure deletions) are omitted from the map.
 // For a repository's first commit (no parent), the diff is taken against
 // the empty tree so every line counts as added.
-//
 // An empty repoRoot or commitSHA returns an error rather than silently
 // shelling out against the process cwd or HEAD.
 func AddedLinesForCommit(ctx context.Context, repoRoot, commitSHA string) (map[string][]Line, error) {
@@ -45,7 +42,7 @@ func AddedLinesForCommit(ctx context.Context, repoRoot, commitSHA string) (map[s
 	}
 	// `git diff-tree` against the commit's first parent (or the empty tree
 	// for a root commit). --root makes the root commit emit a full add diff;
-	// -p produces a unified patch; -U0 keeps only changed lines (no context).
+	// p produces a unified patch; -U0 keeps only changed lines (no context).
 	cmd := exec.CommandContext(ctx, "git", "-C", repoRoot,
 		"diff-tree", "--root", "-p", "-U0", "--no-color", commitSHA)
 	var stdout, stderr bytes.Buffer
@@ -61,10 +58,9 @@ func AddedLinesForCommit(ctx context.Context, repoRoot, commitSHA string) (map[s
 // AddedLinesBetween returns the lines added between refA and refB (the net
 // "+"-side of `git diff -U0 refA refB`), keyed by repo-root-relative file path.
 // Unlike AddedLinesForCommit (a single commit vs its parent) this spans an
-// arbitrary ref RANGE, so the net-new security gate (solov2-zvh6.1) scans only
+// arbitrary ref RANGE, so the net-new security gate scans only
 // what a candidate actually introduces over its base — a secret added then
 // removed within the range does not appear, because the diff is net.
-//
 // Files with no added lines (pure deletions) are omitted. An empty repoRoot,
 // refA, or refB returns an error rather than shelling out against defaults.
 func AddedLinesBetween(ctx context.Context, repoRoot, refA, refB string) (map[string][]Line, error) {
@@ -135,7 +131,7 @@ func newFilePath(header string) string {
 }
 
 // parseHunkNewStart extracts the new-file starting line number from a
-// unified hunk header of the form "@@ -a,b +c,d @@ ...". It returns the
+// unified hunk header of the form "@@ -a,b +c,d @@.". It returns the
 // value of c; on any parse failure it returns 1 (the conservative
 // first-line fallback).
 func parseHunkNewStart(header string) int {

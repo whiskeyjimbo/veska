@@ -71,7 +71,7 @@ func TestDeadCodeRepo_ReturnsOnlyNodesWithZeroInbound(t *testing.T) {
 	f.insertNode(t, "n-caller", "pkg/a.go", "function", "caller")
 	f.insertNode(t, "n-out-of-scope-dead", "pkg/c.go", "function", "outOfScopeDead")
 
-	// caller -> called  (so n-called has 1 inbound; n-caller has 0 inbound and so is dead too)
+	// caller -> called (so n-called has 1 inbound; n-caller has 0 inbound and so is dead too)
 	f.insertEdge(t, "e1", "n-caller", "n-called", "calls")
 
 	repo := sqlite.NewDeadCodeRepo(f.db)
@@ -91,7 +91,7 @@ func TestDeadCodeRepo_ReturnsOnlyNodesWithZeroInbound(t *testing.T) {
 	}
 }
 
-// TestDeadCodeRepo_ContainsAndSimilarDoNotCountAsLiveness pins solov2-jdok:
+// TestDeadCodeRepo_ContainsAndSimilarDoNotCountAsLiveness pins:
 // only inbound CALLS edges keep a node alive. A node with only a CONTAINS edge
 // (every symbol has one from its package) or a SIMILAR_TO edge (autolink) must
 // still be reported dead — otherwise the check is inert on real repos.

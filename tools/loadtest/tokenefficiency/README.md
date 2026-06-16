@@ -1,4 +1,4 @@
-# tokenefficiency — tokens-saved-vs-grep+read benchmark 
+# tokenefficiency - tokens-saved-vs-grep+read benchmark 
 
 Produces a defensible "tokens saved vs grep+read" figure for veska
 search, paired with recall on the same corpus so the savings number
@@ -7,8 +7,8 @@ can't be gamed by returning nothing.
 This harness is **separate** from `internal/savings`. Do not conflate
 them in user-facing output:
 
-- `internal/savings` — live char-ratio telemetry per real query (ops).
-- `tokenefficiency` — offline benchmark with a recall anchor (docs).
+- `internal/savings` - live char-ratio telemetry per real query (ops).
+- `tokenefficiency` - offline benchmark with a recall anchor (docs).
 
 ## Running
 
@@ -27,7 +27,7 @@ Veska found the right code ~98% of the time, using about 42% as many tokens as g
 TOKENEFF embedder=model2vec:potion-code-16M queries=30 recall=0.98 veska_tok=176 grep_lo=422 grep_hi=422 savings=[58%, 58%]
 ```
 
-The second line denominates the same data in concrete units — useful
+The second line denominates the same data in concrete units - useful
 when quoting in a budget or docs blurb. Tunable knobs for the
 extrapolation:
 
@@ -82,7 +82,7 @@ Honest caveats specific to the multi-repo run:
 - The synthetic corpus has zero cross-cluster phrase overlap, so the
   simulated grep matches exactly one file per query (the cluster's
   own file) regardless of how many repos exist. That keeps the
-  baseline tokens nearly identical to the single-repo run — savings
+  baseline tokens nearly identical to the single-repo run - savings
   ratios reported here are conservative. A real workspace with
   repeated identifiers across repos would multiply grep's read cost
   and widen the savings bracket.
@@ -95,14 +95,14 @@ Honest caveats specific to the multi-repo run:
 
 ## Methodology
 
-- **Corpus.** `tools/loadtest/synthcorpus.GenerateSemanticCorpus` — one
+- **Corpus.** `tools/loadtest/synthcorpus.GenerateSemanticCorpus` - one
   hand-authored topic vocabulary per cluster. Each node = 5 phrases
   drawn (without repetition) from the cluster's 12-phrase bag. Center
   queries are the first 5 phrases of each topic so grep can actually
   match the corpus.
 - **Tokenizer.** [tiktoken-go](https://github.com/pkoukk/tiktoken-go)'s
   `cl100k_base` encoding. The encoding choice doesn't bias the ratio
-  (veska and grep get the same tokenizer) — it only matters for
+  (veska and grep get the same tokenizer) - it only matters for
   cross-tool comparisons.
 - **Veska side.** Runs `search.Service.Semantic` (real
   application-layer service against an in-memory SQLite + sqlite-vec
@@ -126,13 +126,13 @@ Honest caveats specific to the multi-repo run:
   annotated corpora like semble's `benchmarks/annotations/`. Importing
   those annotations for overlapping repos is a deliberate
   out-of-scope follow-up.
-- The simulated `grep` matches on phrase substrings — a real `rg`
+- The simulated `grep` matches on phrase substrings - a real `rg`
   with regex / word boundaries would produce a different file set on
   some queries. The bracket (`SavingsLo`, `SavingsHi`) is intended to
   absorb that variance; future work could replay live `rg` output for
   a sample of queries.
 - The default `FakeEmbedder` is hash-based, not a real model.
-  Recall numbers will look low; that's expected and HONEST — the
+  Recall numbers will look low; that's expected and HONEST - the
   savings figure has a recall anchor printed alongside it so the
   number cannot be quoted in isolation.
 

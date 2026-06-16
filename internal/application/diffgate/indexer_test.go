@@ -26,8 +26,8 @@ type fakeBaseGraph struct {
 	outbound map[string][]string
 	// callInbound models CALLS-only inbound adjacency (InboundCallEdges). When
 	// nil it falls back to `inbound` — most tests don't care about edge kind, so
-	// their `inbound` doubles as the call set; a test exercising the CALLS-vs-
-	// structural distinction (solov2-nmps.9) sets callInbound explicitly.
+	// their `inbound` doubles as the call set; a test exercising the CALLS-vs
+	// structural distinction sets callInbound explicitly.
 	callInbound map[string][]string
 	metas       map[string]ports.NodeMeta
 	byFile      map[string][]string

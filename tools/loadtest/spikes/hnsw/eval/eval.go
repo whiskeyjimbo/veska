@@ -1,10 +1,10 @@
 // Package eval defines the VectorIndex interface and shared harness utilities
 // for evaluating HNSW backing library candidates (usearch, coder/hnsw, lancedb).
-//
 // All adapters must implement VectorIndex. The harness measures:
-//   - recall@10 using brute-force ground truth
-//   - warm p95 query latency at k=10
-//   - backup round-trip correctness (Save → Load → same results)
+//
+//	recall@10 using brute-force ground truth
+//	warm p95 query latency at k=10
+//	backup round-trip correctness (Save → Load → same results)
 package eval
 
 import (

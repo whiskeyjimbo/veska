@@ -53,7 +53,7 @@ func TestRun_NoDataMessage(t *testing.T) {
 func TestRun_RendersBarsAndPercentages(t *testing.T) {
 	dir := t.TempDir()
 	now := time.Date(2026, 5, 20, 12, 0, 0, 0, time.UTC)
-	// Use minSampleCalls entries so the percent renders ; below
+	// Use minSampleCalls entries so the percent renders; below
 	// that threshold the row reads "warming up".
 	entries := make([]savings.Entry, minSampleCalls)
 	for i := range entries {
@@ -74,7 +74,7 @@ func TestRun_RendersBarsAndPercentages(t *testing.T) {
 	}
 }
 
-// Default --json groups counters by repo_id (solov2-izh6.21) and carries a
+// Default --json groups counters by repo_id and carries a
 // pooled total. Legacy entries with no repo_id land under the "" key.
 func TestRun_JSONFlag(t *testing.T) {
 	dir := t.TempDir()
@@ -105,7 +105,7 @@ func TestRun_JSONFlag(t *testing.T) {
 	}
 }
 
-// --aggregate --json preserves the pre-breakdown savings.Report shape so
+// aggregate --json preserves the pre-breakdown savings.Report shape so
 // scripts that parsed the pooled JSON keep working.
 func TestRun_AggregateJSONFlag(t *testing.T) {
 	dir := t.TempDir()
@@ -128,7 +128,7 @@ func TestRun_AggregateJSONFlag(t *testing.T) {
 	}
 }
 
-// --aggregate labels its single pooled bucket "all repos" so the user knows
+// aggregate labels its single pooled bucket "all repos" so the user knows
 // the figure spans every repo.
 func TestRun_AllReposLabel(t *testing.T) {
 	dir := t.TempDir()
@@ -147,7 +147,7 @@ func TestRun_AllReposLabel(t *testing.T) {
 }
 
 // Default text mode prints one section per repo (most-active first) plus a
-// pooled total (solov2-izh6.21).
+// pooled total.
 func TestRun_PerRepoSections(t *testing.T) {
 	dir := t.TempDir()
 	now := time.Date(2026, 5, 20, 12, 0, 0, 0, time.UTC)
@@ -192,7 +192,7 @@ func TestRun_UntaggedSection(t *testing.T) {
 	}
 }
 
-// --aggregate forces the pooled single-row output (the only mode today).
+// aggregate forces the pooled single-row output (the only mode today).
 func TestRun_AggregateFlag(t *testing.T) {
 	dir := t.TempDir()
 	now := time.Date(2026, 5, 20, 12, 0, 0, 0, time.UTC)

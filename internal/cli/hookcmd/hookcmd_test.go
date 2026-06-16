@@ -15,7 +15,7 @@ func TestIsGitSpecialState_Clean(t *testing.T) {
 	}
 }
 
-// TestIsGitSpecialState_MergeHead detects .git/MERGE_HEAD.
+// TestIsGitSpecialState_MergeHead detects.git/MERGE_HEAD.
 func TestIsGitSpecialState_MergeHead(t *testing.T) {
 	dir := t.TempDir()
 	gitDir := filepath.Join(dir, ".git")
@@ -30,7 +30,7 @@ func TestIsGitSpecialState_MergeHead(t *testing.T) {
 	}
 }
 
-// TestIsGitSpecialState_CherryPickHead detects .git/CHERRY_PICK_HEAD.
+// TestIsGitSpecialState_CherryPickHead detects.git/CHERRY_PICK_HEAD.
 func TestIsGitSpecialState_CherryPickHead(t *testing.T) {
 	dir := t.TempDir()
 	gitDir := filepath.Join(dir, ".git")
@@ -45,7 +45,7 @@ func TestIsGitSpecialState_CherryPickHead(t *testing.T) {
 	}
 }
 
-// TestIsGitSpecialState_BisectLog detects .git/BISECT_LOG.
+// TestIsGitSpecialState_BisectLog detects.git/BISECT_LOG.
 func TestIsGitSpecialState_BisectLog(t *testing.T) {
 	dir := t.TempDir()
 	gitDir := filepath.Join(dir, ".git")
@@ -60,7 +60,7 @@ func TestIsGitSpecialState_BisectLog(t *testing.T) {
 	}
 }
 
-// TestIsGitSpecialState_RebaseMergeDir detects .git/rebase-merge/ directory.
+// TestIsGitSpecialState_RebaseMergeDir detects.git/rebase-merge/ directory.
 func TestIsGitSpecialState_RebaseMergeDir(t *testing.T) {
 	dir := t.TempDir()
 	rebaseDir := filepath.Join(dir, ".git", "rebase-merge")
@@ -72,7 +72,7 @@ func TestIsGitSpecialState_RebaseMergeDir(t *testing.T) {
 	}
 }
 
-// TestIsGitSpecialState_RebaseApplyDir detects .git/rebase-apply/ directory.
+// TestIsGitSpecialState_RebaseApplyDir detects.git/rebase-apply/ directory.
 func TestIsGitSpecialState_RebaseApplyDir(t *testing.T) {
 	dir := t.TempDir()
 	rebaseDir := filepath.Join(dir, ".git", "rebase-apply")
@@ -86,7 +86,7 @@ func TestIsGitSpecialState_RebaseApplyDir(t *testing.T) {
 
 // TestSendSeal_NoSocket: a missing socket now returns a non-nil dial error so
 // the caller (RunPostCommit) can fall back to the next candidate path
-// . The outer hook still ignores this error and exits 0.
+// The outer hook still ignores this error and exits 0.
 func TestSendSeal_NoSocket(t *testing.T) {
 	dir := t.TempDir()
 	sockPath := filepath.Join(dir, "nonexistent.sock")

@@ -1,6 +1,5 @@
 // Command bench measures warm and cold KNN query latency for sqlite-vec (vec0)
 // at multiple populations and k values, then sweeps to find the vec0 ceiling.
-//
 // Usage:
 //
 //	bench [-n50k N] [-n1m N] [-queries N] [-out path] [-db path]

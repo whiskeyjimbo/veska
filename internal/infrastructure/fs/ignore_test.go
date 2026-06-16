@@ -175,9 +175,9 @@ func TestShouldIgnore_GlobPattern(t *testing.T) {
 	}
 }
 
-// TestShouldIgnore_NoSubstringOvermatch guards solov2-5tss deficiency (1):
+// TestShouldIgnore_NoSubstringOvermatch guards deficiency (1):
 // the old matcher used strings.Contains, so a pattern like "build" wrongly
-// ignored "rebuild/" and "src/build_config.go". Under .gitignore semantics a
+// ignored "rebuild/" and "src/build_config.go". Under.gitignore semantics a
 // bare token anchors to a full path component, not an arbitrary substring.
 func TestShouldIgnore_NoSubstringOvermatch(t *testing.T) {
 	il := fsignore.NewIgnoreListFromPatterns([]string{"build"})
@@ -192,7 +192,7 @@ func TestShouldIgnore_NoSubstringOvermatch(t *testing.T) {
 	}
 }
 
-// TestShouldIgnore_Negation guards solov2-5tss deficiency (2): the old matcher
+// TestShouldIgnore_Negation guards deficiency (2): the old matcher
 // had no negation support. A trailing "!pattern" must re-include a path that an
 // earlier pattern excluded (last-match-wins).
 func TestShouldIgnore_Negation(t *testing.T) {
@@ -206,7 +206,7 @@ func TestShouldIgnore_Negation(t *testing.T) {
 	}
 }
 
-// TestShouldIgnore_RecursiveGlob guards solov2-5tss deficiency (3): the old
+// TestShouldIgnore_RecursiveGlob guards deficiency (3): the old
 // matcher used filepath.Match, which does not cross "/" and so could not honor
 // "**". A "**/generated/" pattern must match the directory at any depth.
 func TestShouldIgnore_RecursiveGlob(t *testing.T) {
@@ -222,8 +222,8 @@ func TestShouldIgnore_RecursiveGlob(t *testing.T) {
 	}
 }
 
-// TestShouldIgnore_AgentWorktrees guards solov2-v2zx: AI-agent worktree roots
-// (.claude/worktrees/, .cursor/, .aider*/) are skipped by default so cold
+// TestShouldIgnore_AgentWorktrees guards: AI-agent worktree roots
+// (.claude/worktrees/,.cursor/,.aider*/) are skipped by default so cold
 // scans don't index N duplicate copies of every symbol — one per worktree.
 func TestShouldIgnore_AgentWorktrees(t *testing.T) {
 	dir := t.TempDir()

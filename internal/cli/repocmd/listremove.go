@@ -14,7 +14,7 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/repo"
 )
 
-// RunRepoList prints every registered repo . Prefers the running
+// RunRepoList prints every registered repo. Prefers the running
 // daemon's eng_list_repos so the listing matches what the daemon sees
 // (including in-flight scan state); falls back to a direct SQLite read so the
 // CLI still works when the daemon is down.
@@ -63,7 +63,7 @@ func recordToView(r repo.Record) RepoView {
 
 // RunRepoRemoveOne is the original single-repo deregister path.
 func RunRepoRemoveOne(ctx context.Context, w io.Writer, arg string) error {
-	// solov2-jtl5.2: accept the same identifiers `repo add` does.
+	// accept the same identifiers `repo add` does.
 	id, resolveErr := ResolveRepoArg(ctx, arg)
 	if resolveErr != nil {
 		return fmt.Errorf("repo remove: %w", resolveErr)
@@ -87,8 +87,7 @@ func RunRepoRemoveOne(ctx context.Context, w io.Writer, arg string) error {
 // listRegisteredRepos returns the repo set via the daemon when up, falling
 // back to direct DB read. Shared by RunRepoRemoveMissing / RunRepoRemoveAll so
 // the unified verb sees the same registry the legacy prune did.
-//
-// solov2-izh6.7: pass include_vendored=true so synthetic ext:<module> rows
+// pass include_vendored=true so synthetic ext:<module> rows
 // created by `veska deps index` are surfaced; without this they stayed
 // invisible to `repo remove --missing` and orphaned on vendor-dir deletion.
 func listRegisteredRepos(ctx context.Context) ([]RepoView, error) {
@@ -211,10 +210,10 @@ func removeBulkRow(ctx context.Context, w io.Writer, db *sql.DB, r RepoView, opt
 	}
 }
 
-// RunRepoAlias binds a human-friendly name to a repo . Resolves
+// RunRepoAlias binds a human-friendly name to a repo. Resolves
 // target against the standard progression (full id, short_id, alias, prefix);
-// --force overwrites an existing binding. Surfaces a swap hint when the args
-// look reversed .
+// force overwrites an existing binding. Surfaces a swap hint when the args
+// look reversed.
 func RunRepoAlias(ctx context.Context, w io.Writer, name, target string, force bool) error {
 	db, closeFn, err := OpenLocalDB()
 	if err != nil {
@@ -230,7 +229,7 @@ func RunRepoAlias(ctx context.Context, w io.Writer, name, target string, force b
 	if err != nil {
 		// Likely arg-order mistake: `veska repo alias <id> <name>` instead of
 		// the documented `<name> <id>`. If args[0] resolves and args[1] does
-		// not, surface the swap hint instead of the generic error .
+		// not, surface the swap hint instead of the generic error.
 		if _, swapErr := ResolveCLIRepoID(recs, name); swapErr == nil {
 			return fmt.Errorf("repo alias: %w — did you swap the arguments? usage: `veska repo alias <name> <repo-id-or-prefix-or-alias>` (got name=%q repo=%q)", err, name, target)
 		}
@@ -246,7 +245,7 @@ func RunRepoAlias(ctx context.Context, w io.Writer, name, target string, force b
 	return nil
 }
 
-// RunRepoUnalias removes a user-defined alias . Errors on unknown
+// RunRepoUnalias removes a user-defined alias. Errors on unknown
 // name so a typo doesn't silently succeed.
 func RunRepoUnalias(ctx context.Context, w io.Writer, name string) error {
 	db, closeFn, err := OpenLocalDB()

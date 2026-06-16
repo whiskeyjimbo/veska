@@ -21,7 +21,7 @@ type extParser interface {
 // extension and reports the union of its sub-parsers' supported extensions.
 // It lets the cold scan parse several languages through one ports.CodeParser
 // while sourcing its walk filter from SupportedExtensions instead of a
-// hand-synced list (solov2-xde2.7). A file whose extension no sub-parser
+// hand-synced list. A file whose extension no sub-parser
 // claims yields an empty ParseResult — the same contract each sub-parser
 // already honours for unrecognised extensions. Safe for concurrent use:
 // byExt is read-only after construction.

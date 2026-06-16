@@ -11,7 +11,6 @@ import (
 // read surface (GraphReader) so read-only consumers — the MCP graph tools,
 // blast-radius, call-chain — depend only on what they use. Implementations
 // are provided by infrastructure adapters (e.g. SQLite GraphRepo).
-//
 // Production graph writes flow through application.PromotionStore inside the
 // promotion transaction; these methods exist for the adapter's own
 // round-trip coverage and any future non-promotion writer.
@@ -50,14 +49,14 @@ type GraphReader interface {
 	// FindNodeByID looks up a Node by its content-hashed NodeID, scanning
 	// across every (repo_id, branch) pair. Used by eng_get_node so the caller
 	// can omit repo_id+branch when they already have the (globally unique)
-	// node_id . Returns nil, nil when not found.
+	// node_id. Returns nil, nil when not found.
 	FindNodeByID(ctx context.Context, id domain.NodeID) (*domain.Node, error)
 
 	// FindNodeIDsByPrefix returns the distinct node_ids that begin with prefix,
 	// scanning across every (repo_id, branch) pair, capped at limit. It exists
 	// so eng_get_node can resolve the 12-char display prefix that
 	// eng_find_symbol / `veska symbol` print, not just the full 64-char id
-	// (solov2-uej9.3). Implementations DISTINCT on node_id so a node present on
+	// Implementations DISTINCT on node_id so a node present on
 	// multiple branches is not mistaken for an ambiguous prefix. The caller
 	// (eng_get_node) treats len>1 as an ambiguous-prefix error listing the
 	// candidates and len==1 as the resolved id. Returns an empty slice (not an
@@ -68,7 +67,7 @@ type GraphReader interface {
 	// given repository and branch. Returns an empty slice (not an error) when
 	// the file has no promoted nodes. This is the primary read for
 	// eng_get_file_nodes; promoting it to the port retires the optional
-	// type-assertion dance the handler used to do .
+	// type-assertion dance the handler used to do.
 	NodesForFile(ctx context.Context, repoID, branch, filePath string) ([]*domain.Node, error)
 
 	// GetNodeSnippet returns the persisted capped body for a single node.
@@ -78,6 +77,5 @@ type GraphReader interface {
 	// so callers must not assume the snippet equals the full source.
 	// Used by eng_get_call_chain to discriminate the
 	// chained_selectors_unresolved / external_callees_only degraded reasons
-	// (solov2-izh6.22).
 	GetNodeSnippet(ctx context.Context, repoID, branch string, id domain.NodeID) (string, error)
 }

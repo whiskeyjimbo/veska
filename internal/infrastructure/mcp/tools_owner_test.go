@@ -14,9 +14,7 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/core/domain"
 )
 
-// ---------------------------------------------------------------------------
 // helpers
-// ---------------------------------------------------------------------------
 
 func dispatchOwner(t *testing.T, r *Registry, actor domain.Actor, params map[string]any) (any, *RPCError) {
 	t.Helper()
@@ -65,11 +63,8 @@ func makeGitRepoWithCommit(t *testing.T, dir, filePath, authorEmail string) {
 	}
 }
 
-// ---------------------------------------------------------------------------
 // eng_find_owner — CODEOWNERS
-// ---------------------------------------------------------------------------
-
-// solov2-fo0e: the schema must accept "branch" alongside repo_id so the
+// the schema must accept "branch" alongside repo_id so the
 // tool surface is consistent with other read-side eng_* tools (find_todos,
 // find_changed_symbols, etc.). The branch is informational for the
 // owner lookup but agents iterating tool schemas pass it uniformly.
@@ -132,7 +127,7 @@ func TestFindOwner_CodeownersMatch(t *testing.T) {
 
 func TestFindOwner_CodeownersInDotGithub(t *testing.T) {
 	dir := t.TempDir()
-	// Write CODEOWNERS in .github/
+	// Write CODEOWNERS in.github/
 	if err := os.MkdirAll(filepath.Join(dir, ".github"), 0o755); err != nil {
 		t.Fatalf("mkdirall .github: %v", err)
 	}
@@ -204,9 +199,7 @@ func TestFindOwner_CodeownersLongestMatchWins(t *testing.T) {
 	}
 }
 
-// ---------------------------------------------------------------------------
 // eng_find_owner — git blame fallback
-// ---------------------------------------------------------------------------
 
 func TestFindOwner_GitBlameFallback(t *testing.T) {
 	dir := t.TempDir()
@@ -242,9 +235,7 @@ func TestFindOwner_GitBlameFallback(t *testing.T) {
 	}
 }
 
-// ---------------------------------------------------------------------------
 // eng_find_owner — both fail
-// ---------------------------------------------------------------------------
 
 func TestFindOwner_BothFail(t *testing.T) {
 	dir := t.TempDir()
@@ -277,7 +268,7 @@ func TestFindOwner_BothFail(t *testing.T) {
 	if m["source"] != nil {
 		t.Errorf("expected source=nil, got %v", m["source"])
 	}
-	// solov2-xjg: null path must include a reason so callers can tell
+	// null path must include a reason so callers can tell
 	// 'no CODEOWNERS file' from 'CODEOWNERS exists but no match'.
 	reason, _ := m["reason"].(string)
 	if reason == "" {
@@ -306,7 +297,7 @@ func TestFindOwner_MissingParams(t *testing.T) {
 	}
 }
 
-// TestFindOwner_AcceptsPathAlias covers solov2-3ocy: agents naturally
+// TestFindOwner_AcceptsPathAlias covers: agents naturally
 // reach for "path", and the schema must accept it without a -32602
 // "unknown parameter" rejection. The handler already collapses path into
 // file_path; this test guards the schema's additionalProperties stance.
@@ -349,7 +340,7 @@ func TestFindOwner_NilDBIsAccepted(t *testing.T) {
 	}
 }
 
-// TestFindOwner_MissingRepoIDHintMatchesPeers pins solov2-eq5a: when
+// TestFindOwner_MissingRepoIDHintMatchesPeers pins: when
 // a RepoLister is wired and the caller omits repo_id, the resulting
 // error message must carry the same "N repos registered; pass
 // eng_list_repos to find the id" suffix that eng_list_findings /

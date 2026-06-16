@@ -6,7 +6,7 @@ import (
 	"time"
 )
 
-// solov2-gdf1 + solov2-z5o0 verification — empty hot_zones and
+// + verification — empty hot_zones and
 // entry_points pages render a friendly explanation, not the old "no
 // files changed" / "no symbols qualify" lines that read as "feature
 // broken" on a fresh repo. The hot-zone page now picks one of three
@@ -39,7 +39,7 @@ func TestRenderEntryPoints_EmptyStateMentionsAutoLinkAndDoctor(t *testing.T) {
 	}
 }
 
-// TestRender_StampsGeneratedAt covers solov2-otzn: a non-zero GeneratedAt
+// TestRender_StampsGeneratedAt covers: a non-zero GeneratedAt
 // must surface as a "_Generated: ISO8601_" header so a Markdown page on
 // disk doesn't lie about how current it is. A zero GeneratedAt renders an
 // "_unstamped_" hint pointing the reader at `veska wiki`.

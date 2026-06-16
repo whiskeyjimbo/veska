@@ -128,7 +128,7 @@ func TestDeadCodeCheck_AppliesAllowlistFilters(t *testing.T) {
 		{"Uppercase-leading (exported) excluded", "DoThing", "function", true},
 		{"lowercase function reported", "helper", "function", false},
 		{"lowercase method reported", "doit", "method", false},
-		// solov2-f1zp: 'type', 'struct', 'interface' kinds are no longer
+		// 'type', 'struct', 'interface' kinds are no longer
 		// in deadCodeKinds — a CALLS-based liveness test is meaningless
 		// for non-callable kinds. Both cases must filter regardless of
 		// name casing.
@@ -139,7 +139,7 @@ func TestDeadCodeCheck_AppliesAllowlistFilters(t *testing.T) {
 		// non-Go-named entry: function named 'main' is filtered regardless of casing.
 		{"function literally named 'init' excluded", "init", "method", true},
 		// Non-symbol kinds carry no inbound edges by construction and must
-		// never be reported, regardless of name casing .
+		// never be reported, regardless of name casing.
 		{"package kind excluded", "server", "package", true},
 		{"chunk kind excluded", "chunk:1-4", "chunk", true},
 		{"file kind excluded", "main.go", "file", true},
@@ -170,7 +170,7 @@ func TestDeadCodeCheck_AppliesAllowlistFilters(t *testing.T) {
 	}
 }
 
-// TestDeadCodeCheck_SkipsTestFiles pins solov2-ix3k: lowercase symbols in
+// TestDeadCodeCheck_SkipsTestFiles pins: lowercase symbols in
 // test-file conventions (Go _test.go, pytest test_*.py, jest *.test.ts, …)
 // must not produce dead-code findings, since test helpers are often passed
 // as function values or referenced only by their test, neither of which
@@ -216,7 +216,7 @@ func TestDeadCodeCheck_SkipsTestFiles(t *testing.T) {
 	}
 }
 
-// TestDeadCodeCheck_SkipsVendoredFiles pins solov2-ttsc: dead-code must not
+// TestDeadCodeCheck_SkipsVendoredFiles pins: dead-code must not
 // fire on vendored deps. The path predicate is shared with secret_leak and
 // auto-link via pathfilter.IsVendored.
 func TestDeadCodeCheck_SkipsVendoredFiles(t *testing.T) {
@@ -331,13 +331,13 @@ func TestDeadCodeCheck_EmptyContentHashStaysNil(t *testing.T) {
 	}
 }
 
-// TestDeadCodeCheck_SkipsEphemeralRepo pins solov2-izh6.13: an external
+// TestDeadCodeCheck_SkipsEphemeralRepo pins: an external
 // cache-tier clone (kind == "ephemeral", e.g. a repo registered by
-// `veska search --repo <url>`) must not produce dead-code findings. A 75-
+// `veska search --repo <url>`) must not produce dead-code findings. A 75
 // file pflag-like clone otherwise emits a wall of low-severity findings on
 // every unused exported helper that is part of the upstream public API,
 // training juniors to ignore the findings surface on day one. Mirrors the
-// autolink short-circuit added in solov2-izh6.8.
+// autolink short-circuit added in.
 func TestDeadCodeCheck_SkipsEphemeralRepo(t *testing.T) {
 	q := &fakeDeadQuerier{
 		dead: []ports.NodeRef{
@@ -424,11 +424,11 @@ func TestDeadCodeCheck_DeterministicFindingID(t *testing.T) {
 }
 
 // TestDeadCodeCheck_SkipsInterfaceMethodImplementations covers
-// solov2-f1zp: concrete methods whose bare name matches a same-repo
+// concrete methods whose bare name matches a same-repo
 // interface method are interface implementations called via dispatch
 // (the static graph cannot see those edges) and must not be flagged
-// dead. The pflag junior-journey concrete: boolValue.Set / .String /
-// .Type satisfy pflag.Value, but they have zero inbound CALLS edges
+// dead. The pflag junior-journey concrete: boolValue.Set /.String /
+// Type satisfy pflag.Value, but they have zero inbound CALLS edges
 // in the graph, so before the fix all three got flagged. Methods
 // whose bare name is NOT an interface method (boolValue.privateHelper)
 // still get reported when otherwise dead.

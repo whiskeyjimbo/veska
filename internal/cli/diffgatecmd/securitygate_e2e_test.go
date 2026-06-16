@@ -17,7 +17,7 @@ import (
 	"os"
 )
 
-// TestRunSecurity_E2E_SecretFailsNonZero drives the WIRED command path —
+// TestRunSecurity_E2E_SecretFailsNonZero drives the WIRED command path
 // RunSecurity -> git.AddedLinesBetween -> the REAL secretsscanner -> JSON report
 // + ErrGateFailed (non-zero exit). The candidate adds a real AWS-key-shaped
 // secret; vuln is unconfigured (VESKA_HOME is empty), so this exercises the

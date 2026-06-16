@@ -14,7 +14,7 @@ import (
 
 // chainedSelectorCallRe matches a call expression whose function is a
 // selector chain of at least two dots: `a.b.c(`, `pkg.Type.Method(`,
-// `obj.field.M(` etc. The legacy parser  does not model
+// `obj.field.M(` etc. The legacy parser does not model
 // these as edges, so an empty resolved-edge set on a seed whose body
 // contains this shape is a parser limitation rather than an index gap.
 var chainedSelectorCallRe = regexp.MustCompile(`[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*){2,}\s*\(`)
@@ -31,9 +31,7 @@ func seedBodyContainsChainedSelector(body string) bool {
 	return chainedSelectorCallRe.MatchString(body)
 }
 
-// ---------------------------------------------------------------------------
 // eng_get_call_chain
-// ---------------------------------------------------------------------------
 
 type getCallChainParams struct {
 	NodeID          string `json:"node_id"`
@@ -42,10 +40,10 @@ type getCallChainParams struct {
 	Branch          string `json:"branch"`
 	Depth           int    `json:"depth"`
 	ExpandCrossRepo bool   `json:"expand_cross_repo"`
-	// Direction selects which CALLS edges to traverse: "out" (default —
+	// Direction selects which CALLS edges to traverse: "out" (default
 	// callees, what this reaches), "in" (callers, what reaches this), or
 	// "both". Default preserves prior behaviour; "in"/"both" close
-	// solov2-2n33 where docs promised incoming traversal but only
+	// where docs promised incoming traversal but only
 	// outgoing was wired.
 	Direction string `json:"direction"`
 }
@@ -60,7 +58,7 @@ func makeGetCallChainHandler(graph ports.GraphReader, resolve ResolveFunc, resol
 		}
 		// Param validation that doesn't require seed resolution runs
 		// first so cheap "bad request" errors aren't masked by the more
-		// expensive resolve+expand round trips (solov2-izh6.1 made
+		// expensive resolve+expand round trips ( made
 		// resolveSeedOwner expand node_id prefixes, which can now hit
 		// NotFound before depth-validation would have fired).
 		depth := p.Depth
@@ -70,10 +68,10 @@ func makeGetCallChainHandler(graph ports.GraphReader, resolve ResolveFunc, resol
 		if depth > maxCallChainDepth {
 			return nil, &RPCError{Code: CodeInvalidParams, Message: fmt.Sprintf("depth %d exceeds maximum of %d", depth, maxCallChainDepth)}
 		}
-		// solov2-f0zt: when repo_id is omitted, fan-out across registered repos
+		// when repo_id is omitted, fan-out across registered repos
 		// to find which one owns the seed (node_id or symbol). Matches the
 		// "default: fan out across registered repos" contract in `veska calls
-		// --help`. resolveSeedOwner returns the (repo, branch, node_id) triple
+		// help`. resolveSeedOwner returns the (repo, branch, node_id) triple
 		// in one call so we can drop the previous repo+branch+symbol-lookup
 		// three-step.
 		repoID, branch, nid, rpcErr := resolveSeedOwner(ctx, repos, graph, raw, p.RepoID, p.Branch, p.NodeID, p.Symbol)
@@ -119,7 +117,7 @@ func makeGetCallChainHandler(graph ports.GraphReader, resolve ResolveFunc, resol
 
 			// Resolve cross-repo stubs for each visited node (including start).
 			// Outbound resolution is gated by dirOut (the node is a caller);
-			// inbound resolution by dirIn (the node is a callee). solov2-80hh
+			// inbound resolution by dirIn (the node is a callee).
 			// adds the inbound side for parity with eng_get_blast_radius.
 			if resolve != nil && dirOut {
 				resolved, resolveErr := resolve(ctx, string(item.id), p.Branch, p.ExpandCrossRepo)
@@ -182,12 +180,12 @@ func makeGetCallChainHandler(graph ports.GraphReader, resolve ResolveFunc, resol
 					if e.Kind != domain.EdgeCalls {
 						continue
 					}
-					// solov2-rkc5: skip CALLS edges that originate from a
+					// skip CALLS edges that originate from a
 					// package (or other non-callable container) node. The
 					// extractor sometimes attaches a coarse "package calls
 					// function" edge when it can't resolve the call site
 					// to a specific function — surfacing those as
-					// "callers" misleads the user, who expects function-
+					// "callers" misleads the user, who expects function
 					// level call sites. The edge itself is preserved in
 					// the graph for downstream tooling; we just don't
 					// present it here.
@@ -209,12 +207,12 @@ func makeGetCallChainHandler(graph ports.GraphReader, resolve ResolveFunc, resol
 			}
 		}
 
-		// solov2-jojv / solov2-izh6.22: emit a degraded_reasons hint
+		// /: emit a degraded_reasons hint
 		// when the seed is a callable but no CALLS edges resolved.
 		// jojv landed a single chained_selectors_unresolved catch-all;
 		// izh6.22 splits it: only emit that reason when the seed's body
-		// actually contains a chained selector call site (a.b.c(...))
-		// the parser doesn't model (epic solov2-9rc2). Otherwise the
+		// actually contains a chained selector call site (a.b.c(.))
+		// the parser doesn't model (epic ). Otherwise the
 		// dominant cause is external/stdlib callees outside the graph,
 		// so emit external_callees_only instead — actionable for an
 		// agent ("not a parser bug, just index boundary").
@@ -235,7 +233,7 @@ func makeGetCallChainHandler(graph ports.GraphReader, resolve ResolveFunc, resol
 					}
 				}
 			}
-			// solov2-izh6.30: a fully empty chain during an active cold
+			// a fully empty chain during an active cold
 			// scan is the indexing-window case; surface it alongside (or
 			// instead of) the seed-based reasons so callers can retry.
 			if ids, busy := indexingRepoIDs(scans); busy {
@@ -244,7 +242,7 @@ func makeGetCallChainHandler(graph ports.GraphReader, resolve ResolveFunc, resol
 			}
 		}
 		// wake_reconciling fires on empty AND non-empty results whenever the
-		// seed's repo is mid-sweep (solov2-xde2.25.1).
+		// seed's repo is mid-sweep.
 		reconciling := reconcilingForRepos(reconcile, []string{p.RepoID})
 		if len(reconciling) > 0 {
 			reasons = append(reasons, protocol.DegradedReasonWakeReconciling)
@@ -265,7 +263,7 @@ func makeGetCallChainHandler(graph ports.GraphReader, resolve ResolveFunc, resol
 // site source. Containers (package, file, module, chunk) sometimes
 // appear as edge sources when the extractor can't pin a call to a
 // specific function — filter them out of caller-listings so users see
-// real callers .
+// real callers.
 func isCallableKind(k domain.NodeKind) bool {
 	switch k {
 	case domain.KindPackage, domain.KindFile, domain.KindModule, domain.KindChunk:

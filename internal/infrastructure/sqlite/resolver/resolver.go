@@ -24,14 +24,14 @@ type CrossRepoStub struct {
 	SymbolPath string
 	Language   string
 	// MethodCall marks a stub that originated from a chained-selector method
-	// call (`v := pkg.New(...); v.Method()`). SymbolPath then holds the bare
+	// call (`v:= pkg.New(.); v.Method`). SymbolPath then holds the bare
 	// method name; the resolver matches it against `<Receiver>.<Method>` in
-	// the target package rather than as an exact symbol_path .
+	// the target package rather than as an exact symbol_path.
 	MethodCall bool
 	// SrcLine is the 1-indexed source line of the originating
 	// call_expression; threaded into ResolvedEdge.SrcLine so renderers
 	// attribute the cross-repo edge to the actual call site
-	// (solov2-izh6.31). 0 = unknown (pre-migration stub).
+	// 0 = unknown (pre-migration stub).
 	SrcLine int
 }
 
@@ -43,9 +43,8 @@ type ResolvedEdge = ports.ResolvedEdge
 // ResolveCrossRepoEdge resolves a single stub to its destination node, if one
 // is indexed. nil, nil indicates a silent miss (no registered repo owns the
 // target module, or no node in the target subpackage matches the symbol).
-//
 // The matcher is two-step so subpackage imports of multi-package modules
-// resolve : step 1 finds the most-specific repo whose module_path
+// resolve: step 1 finds the most-specific repo whose module_path
 // is a prefix of stub.module_path (longest prefix wins — so import
 // github.com/x/y/z prefers a repo with module_path github.com/x/y/z over one
 // with github.com/x/y); step 2 looks up the symbol in that repo, constrained
@@ -78,7 +77,7 @@ func ResolveCrossRepoEdge(ctx context.Context, db *sql.DB, stub CrossRepoStub, e
 		subDir = strings.TrimPrefix(stub.ModulePath, modulePath+"/")
 	}
 
-	// solov2-9rc2 phase D: method-call stubs match by suffix against the
+	// method-call stubs match by suffix against the
 	// stored symbol_path (which has form <Receiver>.<Method>) rather than
 	// exact equality. Ambiguity (multiple receiver types in the same
 	// subpackage owning a method with that name) returns no edge — the
@@ -104,7 +103,7 @@ func ResolveCrossRepoEdge(ctx context.Context, db *sql.DB, stub CrossRepoStub, e
 		return nil, fmt.Errorf("resolver: lookup symbol for stub %s: %w", stub.StubID, err)
 	}
 	defer rows.Close()
-	// solov2-9rc2: prefer non-test candidates for method-call disambiguation —
+	// prefer non-test candidates for method-call disambiguation
 	// see lookupPromotedMethodInDir for rationale.
 	var prodMatch, testMatch *ResolvedEdge
 	prodCount, testCount := 0, 0
@@ -187,8 +186,7 @@ func moduleRelDir(filePath, root string) string {
 // node N (a potential CALLEE), it finds every cross_repo_edge_stub whose
 // forward resolution would land on N, and returns one ResolvedEdge per
 // match with DstNodeID=N. This makes "who calls this library symbol?"
-// answerable across repo boundaries .
-//
+// answerable across repo boundaries.
 // Mechanics: stubs are keyed by (language, module_path, symbol_path) at the
 // import-path level — N's import path is N.repo's module_path joined with
 // N's subpackage directory (relative to the repo root). We query the
@@ -230,8 +228,7 @@ func ResolveStubsTargetingNode(ctx context.Context, db *sql.DB, dstNodeID, branc
 	// only return TRUE cross-repo callers; an intra-repo stub (rare; only
 	// happens when a repo imports its own module path before promotion
 	// catches up) is not a cross-repo edge for blast purposes.
-	//
-	// solov2-9rc2 phase D: when N is a method (symbol_path like
+	// when N is a method (symbol_path like
 	// "Receiver.Method"), we also accept method-call stubs whose
 	// symbol_path equals N's BARE method name (the suffix after the last
 	// "."). Plain stubs always require exact symbol_path equality so a
@@ -302,7 +299,7 @@ func ResolveStubsTargetingNode(ctx context.Context, db *sql.DB, dstNodeID, branc
 
 // lastDot returns the byte index of the final '.' in s, or -1 when absent.
 // Used to split a method's symbol_path ("Receiver.Method") into its bare
-// method name (solov2-9rc2 reverse-resolver suffix match).
+// method name ( reverse-resolver suffix match).
 func lastDot(s string) int {
 	for i := len(s) - 1; i >= 0; i-- {
 		if s[i] == '.' {

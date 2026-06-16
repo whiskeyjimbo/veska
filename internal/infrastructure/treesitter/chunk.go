@@ -19,10 +19,9 @@ const chunkLineWindow = 80
 // chunkFile walks src in chunkLineWindow-sized line windows and emits
 // one KindChunk node per window whose line range is NOT fully covered
 // by an existing symbol. Symbols already produce per-symbol embeddings;
-// chunks fill in everything between them — package vars, init() guts,
+// chunks fill in everything between them — package vars, init guts,
 // top-of-file commentary, helper TS modules without classes — so
-// semantic search can find non-declaration code .
-//
+// semantic search can find non-declaration code.
 // IDs are deterministic per (repoID, path, start, end) so promotion is
 // idempotent. raw_content is populated so the embedder + FTS index
 // pick the chunk up through the same pipeline as symbol nodes.
@@ -58,7 +57,7 @@ func chunkFile(repoID, path string, src []byte, symbols []*domain.Node) []*domai
 			body := string(src[startByte:endByte])
 			// Skip whitespace-only windows (blank-line gaps between
 			// symbols). They embed to near-anything and pollute search
-			// results, ranking above real code .
+			// results, ranking above real code.
 			if strings.TrimSpace(body) == "" {
 				continue
 			}

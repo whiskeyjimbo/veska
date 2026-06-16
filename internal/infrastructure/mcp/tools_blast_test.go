@@ -138,8 +138,8 @@ func TestBlastRadius_HonoursCalleesDirection(t *testing.T) {
 	}
 }
 
-// TestBlastRadius_InboundResolverSurfacesCrossRepoCallers covers solov2-80hh:
-// when only the inbound resolver is wired (the library-author scenario —
+// TestBlastRadius_InboundResolverSurfacesCrossRepoCallers covers:
+// when only the inbound resolver is wired (the library-author scenario
 // the target node is a callee, with no outbound stubs of its own), the
 // response must include a cross_repo_edge per stub in another repo that
 // points at the node.
@@ -323,7 +323,7 @@ func TestDiffBlastRadius_HappyPath(t *testing.T) {
 		metas: map[string]ports.NodeMeta{
 			"a": {NodeID: "a"}, "caller": {NodeID: "caller"},
 		},
-		// ADR-S0017 §1: nodes.file_path is repo-relative, matching the diff path.
+		// nodes.file_path is repo-relative, matching the diff path.
 		byFile: map[string][]string{"foo.go": {"a"}},
 	}
 	svc, err := blastradius.NewService(edges, nodes, nil)
@@ -374,7 +374,7 @@ func TestDiffBlastRadius_UnknownRepo(t *testing.T) {
 	}
 }
 
-// TestDiffBlastRadius_RangedRefs pins solov2-l5tx: when ref_a/ref_b are both
+// TestDiffBlastRadius_RangedRefs pins: when ref_a/ref_b are both
 // supplied, the handler routes through changedFilesBetween with exactly those
 // refs rather than the working-tree changedFiles func.
 func TestDiffBlastRadius_RangedRefs(t *testing.T) {
@@ -383,7 +383,7 @@ func TestDiffBlastRadius_RangedRefs(t *testing.T) {
 		metas: map[string]ports.NodeMeta{
 			"a": {NodeID: "a"}, "caller": {NodeID: "caller"},
 		},
-		// Absolute storage key; "foo.go" resolves against repoRoot (solov2-im9o).
+		// Absolute storage key; "foo.go" resolves against repoRoot.
 		byFile: map[string][]string{"foo.go": {"a"}},
 	}
 	svc, err := blastradius.NewService(edges, nodes, nil)
@@ -462,7 +462,7 @@ func TestDiffBlastRadius_UnknownRevision(t *testing.T) {
 	}
 }
 
-// TestBlastRadius_AcceptsSymbol pins solov2-psdx: eng_get_blast_radius must
+// TestBlastRadius_AcceptsSymbol pins: eng_get_blast_radius must
 // resolve symbol→node_id when only symbol is supplied, matching the parity
 // promise eng_get_call_chain already keeps.
 func TestBlastRadius_AcceptsSymbol(t *testing.T) {
@@ -495,7 +495,7 @@ func TestBlastRadius_AcceptsSymbol(t *testing.T) {
 	}
 }
 
-// TestBlastRadius_AmbiguousSymbolRejected pins solov2-psdx: multiple matches
+// TestBlastRadius_AmbiguousSymbolRejected pins: multiple matches
 // must yield the same "ambiguous; pass node_id" error eng_get_call_chain does.
 func TestBlastRadius_AmbiguousSymbolRejected(t *testing.T) {
 	svc, err := blastradius.NewService(&blastFakeEdges{}, &blastFakeNodes{}, nil)

@@ -32,18 +32,17 @@ var goLiteralClass = map[string]string{
 	"raw_string_literal":         "$STR",
 }
 
-// goStructuralHash returns a hex SHA-256 over decl's identifier-/literal-
+// goStructuralHash returns a hex SHA-256 over decl's identifier-/literal
 // normalised token stream, so two declarations with the same SHAPE after a
-// consistent renaming of identifiers (and any literals) hash identically —
+// consistent renaming of identifiers (and any literals) hash identically
 // Type-2 clone detection. Comments and whitespace are ignored (it is
 // token-stream based, not text based).
-//
 // Identifiers are renamed CONSISTENTLY: the first distinct name becomes $1, the
 // next $2, and so on, so a variable reused keeps the same token — `a+a` and
 // `b+b` match, but `a+b` does NOT match `a+a`. This includes the declaration's
 // own name, so two identically-bodied, differently-named functions collide
 // (the de-dupe signal we want). Operators, punctuation, and keywords are
-// emitted verbatim via their tree-sitter Type(), which carries the structure.
+// emitted verbatim via their tree-sitter Type, which carries the structure.
 func goStructuralHash(decl *sitter.Node, src []byte) string {
 	h := sha256.New()
 	idMap := make(map[string]string)

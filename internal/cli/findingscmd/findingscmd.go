@@ -4,10 +4,9 @@
 // header, the low-severity curation, and the textual/JSON rendering of
 // findings and suppressions. cmd/veska/findings.go and findings_suppress.go
 // are reduced to Cobra command construction whose RunE bodies are thin calls
-// into the Run helpers here (solov2-0omh.7, following the cmd = glue /
-// logic-in-packages pattern from solov2-0omh.4/.5/.6).
-//
-// The cwd→repo resolver (autoResolveRepo) is a shared cmd-level helper —
+// into the Run helpers here (, following the cmd = glue /
+// logic-in-packages pattern from /.5/.6).
+// The cwd→repo resolver (autoResolveRepo) is a shared cmd-level helper
 // deps.go/symbol.go/graph.go also call it — so it stays in cmd/veska and is
 // injected here through the ResolveRepo seam rather than re-extracted.
 package findingscmd
@@ -72,11 +71,11 @@ func RunList(ctx context.Context, p ListParams) error {
 // listScope decides the repo + state scope. It returns the base MCP params
 // (state/severity/rule filters) and whether to fan out across all repos.
 func (p ListParams) listScope(ctx context.Context) (map[string]any, bool) {
-	// solov2-f3ep: --all + --repo is no longer rejected. --repo X scopes to a
+	// all + --repo is no longer rejected. --repo X scopes to a
 	// single repo; --all asks "include every state, not just open". When --all
 	// is set without --repo, fan out across every registered repo.
 	fanoutAllRepos := p.AllRepos && p.RepoID == ""
-	// solov2-t8v8: when neither --repo nor --all is set AND the cwd doesn't
+	// when neither --repo nor --all is set AND the cwd doesn't
 	// resolve to a single registered repo, fall back to 'list across every
 	// repo' rather than erroring with 'repo_id required'.
 	autoAll := false
@@ -86,12 +85,12 @@ func (p ListParams) listScope(ctx context.Context) (map[string]any, bool) {
 			autoAll = true
 		}
 	}
-	// solov2-w4bd: the advisory rides stderr so it never breaks stdout pipes;
+	// the advisory rides stderr so it never breaks stdout pipes;
 	// under --json we drop it entirely.
 	if autoAll && !p.JSONOut {
 		fmt.Fprintln(p.ErrOut, "veska: no --repo and cwd outside any registered repo; listing findings across all repos (pass --repo <id> to scope)")
 	}
-	// solov2-f3ep: --all clears the default state=open filter so
+	// all clears the default state=open filter so
 	// closed/suppressed findings come back too. An explicit --state still wins.
 	baseParams := map[string]any{}
 	if p.State != "" {
@@ -105,7 +104,7 @@ func (p ListParams) listScope(ctx context.Context) (map[string]any, bool) {
 	if p.Rule != "" {
 		baseParams["rule"] = p.Rule
 	}
-	// solov2-uej9.7: a suppressed finding keeps state="open" (suppression hides
+	// a suppressed finding keeps state="open" (suppression hides
 	// it rather than closing it), so no --state value surfaces it. Only
 	// include_suppressed=true does — the daemon LEFT JOINs active suppressions
 	// and populates suppressed_by on the returned rows.
@@ -115,7 +114,7 @@ func (p ListParams) listScope(ctx context.Context) (map[string]any, bool) {
 	return baseParams, fanoutAllRepos
 }
 
-// findingsEnvelope is the {findings:[...]} response shape.
+// findingsEnvelope is the {findings:[.]} response shape.
 type findingsEnvelope struct {
 	Findings []FindingView `json:"findings"`
 }
@@ -151,7 +150,7 @@ func (p ListParams) gatherFindings(ctx context.Context, baseParams map[string]an
 	if p.RepoID != "" {
 		params["repo_id"] = p.RepoID
 	} else if rid := p.ResolveRepo(ctx, p.ErrOut); rid != "" {
-		// solov2-dqwh: surface which repo was picked when multiple are
+		// surface which repo was picked when multiple are
 		// registered so users don't get silently-scoped empty results.
 		params["repo_id"] = rid
 	}

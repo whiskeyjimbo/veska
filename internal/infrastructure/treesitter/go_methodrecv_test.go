@@ -24,11 +24,11 @@ func hasCallEdge(nodes []*domain.Node, edges []*domain.Edge, srcName, dstName st
 	return false
 }
 
-// TestParseFile_MethodCall_ValueReceiverIdioms guards solov2-d521: a value /
-// pointer-receiver method call `recv.Method()` must resolve to a CALLS edge when
+// TestParseFile_MethodCall_ValueReceiverIdioms guards: a value /
+// pointer-receiver method call `recv.Method` must resolve to a CALLS edge when
 // the receiver is a plain typed PARAMETER or a COMPOSITE-LITERAL local — the two
 // idioms that previously fell to the default (package-qualifier) branch and
-// produced an unbindable UnresolvedCall, so any method tested via `recv.M()`
+// produced an unbindable UnresolvedCall, so any method tested via `recv.M`
 // looked uncalled. All callers/callees are in one file so the same-package call
 // rewrites to "T.Method" and resolves intra-file to a real edge.
 func TestParseFile_MethodCall_ValueReceiverIdioms(t *testing.T) {

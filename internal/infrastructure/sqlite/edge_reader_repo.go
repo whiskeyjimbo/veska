@@ -22,13 +22,13 @@ func NewEdgeReaderRepo(readDB *sql.DB) *EdgeReaderRepo {
 	return &EdgeReaderRepo{readDB: readDB}
 }
 
-// InboundEdges returns dst_node_id → [src_node_id, ...] for each node_id
+// InboundEdges returns dst_node_id → [src_node_id,.] for each node_id
 // that appears as a destination in the edges table.
 func (r *EdgeReaderRepo) InboundEdges(ctx context.Context, repoID, branch string, nodeIDs []string) (map[string][]string, error) {
 	return r.adjacency(ctx, repoID, branch, nodeIDs, "dst_node_id", "src_node_id", "")
 }
 
-// OutboundEdges returns src_node_id → [dst_node_id, ...] for each node_id
+// OutboundEdges returns src_node_id → [dst_node_id,.] for each node_id
 // that appears as a source in the edges table.
 func (r *EdgeReaderRepo) OutboundEdges(ctx context.Context, repoID, branch string, nodeIDs []string) (map[string][]string, error) {
 	return r.adjacency(ctx, repoID, branch, nodeIDs, "src_node_id", "dst_node_id", "")
@@ -38,7 +38,7 @@ func (r *EdgeReaderRepo) OutboundEdges(ctx context.Context, repoID, branch strin
 // signal the dead-code rule uses. A structural CONTAINS/IMPORTS parent edge is
 // NOT a caller, so it must not count toward liveness; mirrors
 // deadcode_repo.go's UPPER(kind)='CALLS' so the gate/revalidate resolution
-// predicate agrees with the check that raised the finding (solov2-nmps.9).
+// predicate agrees with the check that raised the finding.
 func (r *EdgeReaderRepo) InboundCallEdges(ctx context.Context, repoID, branch string, nodeIDs []string) (map[string][]string, error) {
 	return r.adjacency(ctx, repoID, branch, nodeIDs, "dst_node_id", "src_node_id", "CALLS")
 }

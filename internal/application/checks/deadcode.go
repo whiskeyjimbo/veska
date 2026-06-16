@@ -19,9 +19,9 @@ import (
 // helpers). To minimise false positives the check skips a small allowlist of
 // well-known external-entry shapes:
 //
-//   - Functions/methods named main or init.
-//   - Names beginning with Test, Example, or Benchmark (Go test runner).
-//   - Names whose first rune is uppercase (Go-exported / TS-public, conservatively).
+//	Functions/methods named main or init.
+//	Names beginning with Test, Example, or Benchmark (Go test runner).
+//	Names whose first rune is uppercase (Go-exported / TS-public, conservatively).
 //
 // These filters live in the application layer, NOT in the adapter SQL, so the
 // rules remain easy to evolve and trivial to unit-test without a database.
@@ -32,7 +32,7 @@ type DeadCodeCheck struct {
 	// `veska search --repo <url>`) short-circuit to zero findings — the
 	// user is exploring an external codebase, not curating its findings,
 	// and a 75-file pflag clone otherwise emits ~220 low-severity
-	// dead-code findings on the upstream public API (solov2-izh6.13).
+	// dead-code findings on the upstream public API.
 	// When unset, behaviour is unchanged.
 	repoKind func(ctx context.Context, repoID string) (string, error)
 }
@@ -45,7 +45,6 @@ type DeadCodeOption func(*DeadCodeCheck)
 // WithDeadCodeRepoKindLookup wires a callback that returns a repo's Kind
 // ("tracked" / "ephemeral"). Used by Run to skip dead-code reporting on
 // ephemeral repos — siblings the autolink short-circuit added in
-// solov2-izh6.8.
 func WithDeadCodeRepoKindLookup(fn func(ctx context.Context, repoID string) (string, error)) DeadCodeOption {
 	return func(c *DeadCodeCheck) { c.repoKind = fn }
 }
@@ -67,7 +66,6 @@ func (c *DeadCodeCheck) Name() string { return "dead-code" }
 // applies the external-entry allowlist filters, and constructs one Finding per
 // surviving node. Findings are anchored on node_id which makes finding_id
 // branch-stable and idempotent under the underlying ON CONFLICT clause.
-//
 // An empty Input.FilePaths is a no-op: the querier is still consulted (it must
 // return empty) but no findings are produced.
 func (c *DeadCodeCheck) Run(ctx context.Context, in Input) ([]*domain.Finding, error) {
@@ -77,7 +75,7 @@ func (c *DeadCodeCheck) Run(ctx context.Context, in Input) ([]*domain.Finding, e
 	if len(in.FilePaths) == 0 {
 		return nil, nil
 	}
-	// solov2-izh6.13: ephemeral repos (cache-tier clones from
+	// ephemeral repos (cache-tier clones from
 	// `veska search --repo <url>`) skip dead-code entirely. Reporting
 	// "unused" symbols on an external library's public API trains the
 	// junior to ignore the findings surface from day one. Lookup errors
@@ -94,7 +92,7 @@ func (c *DeadCodeCheck) Run(ctx context.Context, in Input) ([]*domain.Finding, e
 		return nil, fmt.Errorf("dead-code: query: %w", err)
 	}
 
-	// solov2-f1zp: pull the bare names of every interface method declared
+	// pull the bare names of every interface method declared
 	// in this repo so concrete implementations (boolValue.Set satisfies
 	// pflag.Value's Set) are not reported as dead. Interface dispatch
 	// emits no CALLS edges the static graph can see; without this filter
@@ -150,11 +148,9 @@ func (c *DeadCodeCheck) Run(ctx context.Context, in Input) ([]*domain.Finding, e
 // edges" is a meaningful deadness signal — i.e. things the language
 // actually CALLS. Container and sub-symbol kinds (package, file,
 // module, chunk, field) carry no inbound CALLS by construction
-// .
-//
-// solov2-f1zp: 'type', 'struct', and 'interface' were dropped from this
+// 'type', 'struct', and 'interface' were dropped from this
 // set. A Go struct isn't called; it's referenced by composite literal
-// (&boolSliceValue{...}), function signature, or struct embedding —
+// (&boolSliceValue{.}), function signature, or struct embedding
 // none of which produce a CALLS edge. An interface is never directly
 // callable. Including them applied a callable test to non-callable
 // kinds and accounted for ~half of the 220 false-positive findings the
@@ -179,7 +175,7 @@ func isDeadCodeCandidate(n ports.NodeRef) bool {
 // convention across the languages veska indexes. Test-only helpers
 // (fixtures, mocks, table builders) are commonly referenced only by
 // their tests and as function values — neither of which produces a
-// CALLS edge today . Skipping symbols defined in test
+// CALLS edge today. Skipping symbols defined in test
 // files cuts a noisy class of false positives without weakening the
 // signal for production code.
 // isTestFile delegates to pathfilter.IsTestFile, the single source of truth for
@@ -193,7 +189,7 @@ func isTestFile(path string) bool {
 // suffix matches one of the interface method names declared in the
 // same repo. Used by Run to skip dead-code reports on methods that
 // likely satisfy an interface contract — interface dispatch produces
-// no CALLS edge the static graph can see . Names without
+// no CALLS edge the static graph can see. Names without
 // a '.' (orphan methods) and an empty ifaceMethods map are no-ops.
 func isInterfaceMethodImpl(name string, ifaceMethods map[string]struct{}) bool {
 	if len(ifaceMethods) == 0 || name == "" {

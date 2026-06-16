@@ -10,16 +10,15 @@ import (
 )
 
 // epFixtureGraph builds a promoted state covering the four ranking
-// signals : inbound count, exported flag, has-adjacent-test
+// signals: inbound count, exported flag, has-adjacent-test
 // tiebreaker, and the test-symbol exclusion gate.
-//
 // Nodes:
 //
-//	Hub         high fan-in (10 callers), exported, has _test caller   -> top
-//	lowFanCaps  one caller, exported, has _test caller                  -> middle
-//	helper      one caller (non-test), unexported, no test caller       -> low
-//	flagged     would qualify but has an open finding                   -> EXCLUDED
-//	TestThing   Test-prefixed symbol                                    -> EXCLUDED by gate
+//	Hub high fan-in (10 callers), exported, has _test caller -> top
+//	lowFanCaps one caller, exported, has _test caller -> middle
+//	helper one caller (non-test), unexported, no test caller -> low
+//	flagged would qualify but has an open finding -> EXCLUDED
+//	TestThing Test-prefixed symbol -> EXCLUDED by gate
 func epFixtureGraph(t *testing.T) *domain.Graph {
 	t.Helper()
 	g, err := domain.NewGraph("r1", "main")
@@ -165,7 +164,7 @@ func TestSelect_FlaggedNodesExcluded(t *testing.T) {
 	}
 }
 
-// TestSelect_TestSymbolsExcludedByDefault pins solov2-m8d: Test-prefixed
+// TestSelect_TestSymbolsExcludedByDefault pins: Test-prefixed
 // symbols and symbols in *_test.go files stay out unless IncludeTests=true.
 func TestSelect_TestSymbolsExcludedByDefault(t *testing.T) {
 	svc := epFixtureService(t)
@@ -238,12 +237,12 @@ func TestEntryPointsPagePath_IsUnderDocsVeska(t *testing.T) {
 	}
 }
 
-// TestEntryPointsService_FiltersGoInitFuncs pins solov2-q5gd: Go's runtime
-// invokes every package-scoped init() automatically, so they aren't
+// TestEntryPointsService_FiltersGoInitFuncs pins: Go's runtime
+// invokes every package-scoped init automatically, so they aren't
 // "places to start reading" from an agent's perspective. cobra-style CLIs
-// register every subcommand inside init(), which previously dominated the
-// entry_points page on small repos (one init() per command file ranked
-// above main() and Execute()).
+// register every subcommand inside init, which previously dominated the
+// entry_points page on small repos (one init per command file ranked
+// above main and Execute).
 func TestEntryPointsService_FiltersGoInitFuncs(t *testing.T) {
 	g, err := domain.NewGraph("r1", "main")
 	if err != nil {

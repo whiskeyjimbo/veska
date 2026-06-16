@@ -3,21 +3,20 @@
 // Package revalidate's eval test: drives revalidate.Handler against a
 // synthetic 10k-edge commit fixture and asserts the M3 exit-gate target
 // (< 60s wall time for a full-commit revalidation sweep).
-//
 // Fixture shape (defaults):
-//   - 100 files, 100 nodes each = 10 000 nodes.
-//   - 100 within-file edges per file = 10 000 edges total. Edges always
-//     point into the "tail" half of each file, so the "head" nodes that
-//     anchor dead-code findings genuinely have zero inbound edges.
-//   - 30% of nodes carry an open finding with a STALE anchor_content_hash
-//     (half rule='dead-code' on head nodes, half rule='contract-drift' on
-//     nodes whose prev_signature != signature). All 3000 findings should
-//     resolve to REFRESH on the first sweep — the explicit count check is
-//     part of DoD #7.
 //
-// Build-tag-gated so plain CI runs (`go test ./...`) skip this end-to-end
+//	100 files, 100 nodes each = 10 000 nodes.
+//	100 within-file edges per file = 10 000 edges total. Edges always
+//	  point into the "tail" half of each file, so the "head" nodes that
+//	  anchor dead-code findings genuinely have zero inbound edges.
+//	30% of nodes carry an open finding with a STALE anchor_content_hash
+//	  (half rule='dead-code' on head nodes, half rule='contract-drift' on
+//	  nodes whose prev_signature != signature). All 3000 findings should
+//	  resolve to REFRESH on the first sweep — the explicit count check is
+//	  part of DoD #7.
+//
+// Build-tag-gated so plain CI runs (`go test./.`) skip this end-to-end
 // driver. The make target is `make eval-revalidate-bench`.
-//
 // Two isolation sub-tests run beforehand against smaller fixtures so a
 // dead-code or contract-drift dispatch regression surfaces with its own
 // signal independent of the 10k gate.
@@ -123,7 +122,7 @@ func runFixture(t *testing.T, spec fixtureSpec) Result {
 		t.Fatalf("dead+drift > nodes/file: %d+%d > %d", deadPerFile, driftPerFile, spec.nodesPerFile)
 	}
 
-	// Layout: indices [0, deadPerFile)              -> dead-code anchors (no inbound)
+	// Layout: indices [0, deadPerFile) -> dead-code anchors (no inbound)
 	//         [deadPerFile, deadPerFile+driftPerFile) -> contract-drift anchors (prev != current)
 	//         [deadPerFile+driftPerFile, nodesPerFile) -> "callee tail" (edge dst pool)
 	tailStart := deadPerFile + driftPerFile
@@ -230,11 +229,9 @@ func seedRepo(t *testing.T, db *sql.DB) {
 // "tail" slice [tailStart, nodesPerFile), so dead-code anchor nodes in
 // [0, deadPerFile) always have zero inbound edges — the dead-code
 // dispatch path therefore takes the REFRESH branch.
-//
 // Nodes in [deadPerFile, deadPerFile+driftPerFile) receive distinct
 // (prev_signature, signature) values so the contract-drift dispatch path
 // also takes REFRESH.
-//
 // All nodes use an "h-current-<node_id>" content_hash; findings carry
 // "h-stale-<node_id>" so the stale-set join surfaces every finding.
 func seedNodesAndEdges(t *testing.T, db *sql.DB, spec fixtureSpec, tailStart, tailLen int) {
@@ -358,12 +355,10 @@ func seedFindings(t *testing.T, db *sql.DB, spec fixtureSpec, deadPerFile, drift
 }
 
 // countOutcomes returns (refreshed, closed) for the eval repo.
-//
 // REFRESH leaves state='open' and rewrites anchor_content_hash from the
-// stale "h-stale-..." prefix to the node's current "h-current-..." hash
-// — so any row with state='open' AND anchor_content_hash NOT LIKE
+// stale "h-stale-." prefix to the node's current "h-current-." hash
+// so any row with state='open' AND anchor_content_hash NOT LIKE
 // 'h-stale-%' was refreshed by Handle.
-//
 // CLOSE flips state to 'closed' with closed_reason='revalidated_obsolete'.
 func countOutcomes(t *testing.T, db *sql.DB) (refreshed, closed int) {
 	t.Helper()

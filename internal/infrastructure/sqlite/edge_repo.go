@@ -11,7 +11,6 @@ import (
 
 // EdgeRepo is the SQLite adapter for the ports.EdgeStorage port. It writes
 // to the `edges` table created by migration 0001.
-//
 // SaveEdges uses ON CONFLICT(edge_id, branch) DO UPDATE SET score only: the
 // first writer still wins for identity and confidence — re-running a flow
 // (e.g. an auto-link queue handler) that proposes an already-existing edge
@@ -20,7 +19,7 @@ import (
 // exception is `score`, which refreshes from the incoming row when that row
 // carries one (COALESCE keeps the stored value when the writer passes NULL).
 // This lets a `veska reindex` backfill/refresh similarity scores on SIMILAR_TO
-// edges (solov2-c1s4) without disturbing any other edge attribute. edge_id
+// edges without disturbing any other edge attribute. edge_id
 // derives from (src, kind, tgt), so a conflict is always same-kind — a
 // non-SIMILAR_TO writer passing score=NULL is a guaranteed no-op here.
 type EdgeRepo struct {

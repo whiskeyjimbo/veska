@@ -21,9 +21,7 @@ func makeSpec(name, desc string) ToolSpec {
 	}
 }
 
-// ---------------------------------------------------------------------------
 // Register — happy path
-// ---------------------------------------------------------------------------
 
 func TestRegister_ValidSpec(t *testing.T) {
 	r := NewRegistry()
@@ -33,9 +31,7 @@ func TestRegister_ValidSpec(t *testing.T) {
 	}
 }
 
-// ---------------------------------------------------------------------------
 // Register — name validation
-// ---------------------------------------------------------------------------
 
 func TestRegister_NoPrefixRejectsName(t *testing.T) {
 	r := NewRegistry()
@@ -86,9 +82,7 @@ func TestRegister_ObjectStartsWithDigitRejectsName(t *testing.T) {
 	}
 }
 
-// ---------------------------------------------------------------------------
 // Register — description validation
-// ---------------------------------------------------------------------------
 
 func TestRegister_ShortDescriptionRejected(t *testing.T) {
 	r := NewRegistry()
@@ -108,9 +102,7 @@ func TestRegister_ExactlyTenCharDescriptionAccepted(t *testing.T) {
 	}
 }
 
-// ---------------------------------------------------------------------------
 // Register — duplicate rejection
-// ---------------------------------------------------------------------------
 
 func TestRegister_DuplicateNameRejected(t *testing.T) {
 	r := NewRegistry()
@@ -124,9 +116,7 @@ func TestRegister_DuplicateNameRejected(t *testing.T) {
 	}
 }
 
-// ---------------------------------------------------------------------------
 // Dispatch
-// ---------------------------------------------------------------------------
 
 func TestDispatch_RoutesToHandler(t *testing.T) {
 	r := NewRegistry()
@@ -153,7 +143,7 @@ func TestDispatch_RoutesToHandler(t *testing.T) {
 	}
 }
 
-// TestDispatch_ToolsListReturnsCatalog pins solov2-kw4: tools/list is
+// TestDispatch_ToolsListReturnsCatalog pins: tools/list is
 // recognised and returns every registered tool's name/description.
 func TestDispatch_ToolsListReturnsCatalog(t *testing.T) {
 	r := NewRegistry()
@@ -182,8 +172,8 @@ func TestDispatch_ToolsListReturnsCatalog(t *testing.T) {
 	}
 }
 
-// TestDispatch_ToolsCallRoutesByName pins solov2-kw4: tools/call with
-// {"name":"eng_find_symbol","arguments":{...}} dispatches to the tool
+// TestDispatch_ToolsCallRoutesByName pins: tools/call with
+// {"name":"eng_find_symbol","arguments":{.}} dispatches to the tool
 // handler with the unwrapped arguments.
 func TestDispatch_ToolsCallRoutesByName(t *testing.T) {
 	r := NewRegistry()
@@ -219,7 +209,7 @@ func TestDispatch_ToolsCallUnknownToolReturnsNotFound(t *testing.T) {
 	}
 }
 
-// TestDispatch_InitializeReturnsServerInfo pins solov2-axmt: strict MCP
+// TestDispatch_InitializeReturnsServerInfo pins: strict MCP
 // clients require a successful initialize handshake before issuing
 // tools/list, so the registry must answer with protocolVersion + capabilities
 // + serverInfo instead of method-not-found.
@@ -290,9 +280,7 @@ func TestDispatch_UnknownMethodReturnsMethodNotFound(t *testing.T) {
 	}
 }
 
-// ---------------------------------------------------------------------------
 // Names
-// ---------------------------------------------------------------------------
 
 func TestNames_ReturnsSortedList(t *testing.T) {
 	r := NewRegistry()
@@ -313,9 +301,7 @@ func TestNames_ReturnsSortedList(t *testing.T) {
 	}
 }
 
-// ---------------------------------------------------------------------------
 // Handle — satisfies Handler interface
-// ---------------------------------------------------------------------------
 
 func TestHandle_DelegatesToDispatch(t *testing.T) {
 	r := NewRegistry()
@@ -340,9 +326,7 @@ func TestHandle_DelegatesToDispatch(t *testing.T) {
 	}
 }
 
-// ---------------------------------------------------------------------------
 // MustRegister
-// ---------------------------------------------------------------------------
 
 func TestMustRegister_PanicsOnBadSpec(t *testing.T) {
 	defer func() {
@@ -355,9 +339,7 @@ func TestMustRegister_PanicsOnBadSpec(t *testing.T) {
 	r.MustRegister(makeSpec("bad_name", "description long enough here"))
 }
 
-// ---------------------------------------------------------------------------
 // Contract test: all m1.06 tools pass validation
-// ---------------------------------------------------------------------------
 
 func TestAllM106ToolsPassValidation(t *testing.T) {
 	tools := []string{
@@ -384,7 +366,7 @@ func TestAllM106ToolsPassValidation(t *testing.T) {
 	}
 }
 
-// TestRegister_CLIExemptDeferredRequiresReason pins solov2-4ygz: a
+// TestRegister_CLIExemptDeferredRequiresReason pins: a
 // tool that opts out of CLI parity with ExemptDeferred must justify
 // the choice so the parity lint and future readers know whether to
 // upgrade it. ExemptInternal and ExemptAgentOnly are self-explanatory
@@ -417,8 +399,8 @@ func TestRegister_CLIExemptOtherKindsNoReason(t *testing.T) {
 	}
 }
 
-// TestRegistry_ToolsReturnsSnapshot pins the Tools() accessor that the
-// parity lint  relies on.
+// TestRegistry_ToolsReturnsSnapshot pins the Tools accessor that the
+// parity lint relies on.
 func TestRegistry_ToolsReturnsSnapshot(t *testing.T) {
 	r := NewRegistry()
 	_ = r.Register(makeSpec("eng_find_symbol", "finds symbols"))

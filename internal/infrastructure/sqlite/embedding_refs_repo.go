@@ -14,7 +14,6 @@ import (
 )
 
 // EmbeddingRefsRepo is a SQLite-backed implementation of ports.EmbeddingRefRepo.
-//
 // It uses separate read and write handles so a long-running poll loop reading
 // pending rows never contends with the single writer connection on which the
 // daemon serialises all SQLite writes.
@@ -33,7 +32,6 @@ func NewEmbeddingRefsRepo(readDB, writeDB *sql.DB) *EmbeddingRefsRepo {
 // FetchPending returns up to limit pending refs joined with the minimal node
 // fields needed to embed. Rows are ordered by enqueued_at then node_id for
 // deterministic batch composition.
-//
 // The Text field is a deterministic projection:
 // "<kind> <symbol_path> <file_path> <language>" (empty trailing fields are
 // omitted). file_path and language disambiguate otherwise-identical symbols so
@@ -75,7 +73,6 @@ func (r *EmbeddingRefsRepo) FetchPending(ctx context.Context, limit int) ([]port
 // joining the non-empty parts with a single space. kind and symbolPath are
 // always present; filePath and language may be empty (the parser may leave
 // language unset), and snippet may be empty when nodes.snippet is NULL.
-//
 // The projection logic itself lives in domain.EmbedText so the recall
 // eval harness (tools/loadtest/recallprojection) measures projection
 // variants against exactly what production emits. Production uses
@@ -97,7 +94,6 @@ func embedText(kind, symbolPath, filePath, language, snippet string) string {
 
 // CountPending returns the count of pending refs that still have a backing
 // node — i.e. the real embed backlog the worker will actually drain.
-//
 // The EXISTS guard mirrors FetchPending's `JOIN nodes`: an orphaned ref
 // (node deleted by repo removal or re-promotion churn, but the ref left
 // behind — node_embedding_refs has no FK to nodes because nodes has a
@@ -105,7 +101,7 @@ func embedText(kind, symbolPath, filePath, language, snippet string) string {
 // must not be counted as pending either. Without this guard the orphans
 // inflate the count forever and pin eng_get_status at
 // degraded_reasons:["embeddings_pending"] long after the queue has drained
-// (solov2-khra). EXISTS (not JOIN) keeps the count strictly 1:1 even if a
+// EXISTS (not JOIN) keeps the count strictly 1:1 even if a
 // node_id ever spans branches.
 func (r *EmbeddingRefsRepo) CountPending(ctx context.Context) (int, error) {
 	var n int
@@ -121,7 +117,6 @@ func (r *EmbeddingRefsRepo) CountPending(ctx context.Context) (int, error) {
 
 // MarkReady upserts the content-addressed embedding bytes and updates the ref
 // to state='ready' atomically.
-//
 // node_embeddings uses ON CONFLICT(content_hash) DO NOTHING so re-embedding
 // the same content is a no-op for the bytes table; the ref row is still
 // updated to reflect the (possibly new) content_hash for this node.
@@ -167,7 +162,6 @@ func (r *EmbeddingRefsRepo) MarkReady(
 // value reaches maxAttempts, atomically flips state to 'failed'. The
 // bump-and-flip is a single UPDATE so a concurrent FetchPending cannot
 // observe a row with attempts>=maxAttempts that is still 'pending'.
-//
 // Rows not in state='pending' (already 'ready' or 'failed') are left
 // untouched. maxAttempts <= 0 is treated as 1 (any failure is fatal).
 func (r *EmbeddingRefsRepo) MarkAttemptFailed(ctx context.Context, nodeID string, maxAttempts int) error {
@@ -262,7 +256,6 @@ func (r *EmbeddingRefsRepo) Reuse(ctx context.Context, nodeID, contentHash strin
 // ContentHashForNode returns the content_hash and ready flag for nodeID
 // scoped to (repoID, branch). A JOIN against nodes enforces the scope so a
 // stale or cross-repo node_id cannot leak a hash out of its origin tree.
-//
 // ready=true requires BOTH state='ready' AND a non-NULL content_hash; either
 // alone returns ready=false. err=nil with ready=false also covers the
 // "no such ref" and "no such node" cases — the caller decides whether to

@@ -12,7 +12,7 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/core/ports"
 )
 
-// --- fakes -------------------------------------------------------------------
+// fakes
 
 // fakeSecrets emits a secret_leak finding for every added line containing the
 // literal "SECRET", anchored on the file with a line discriminator.
@@ -104,7 +104,7 @@ func secInput(repoID string, added map[string][]checks.Line, refs map[string]str
 
 func line(text string) []checks.Line { return []checks.Line{{Number: 1, Text: text}} }
 
-// --- tests -------------------------------------------------------------------
+// tests
 
 // AC1: a net-new secret on an added line FAILs.
 func TestSecurityGate_NewSecret_Fails(t *testing.T) {
@@ -193,7 +193,7 @@ func TestSecurityGate_BaseManifestAbsent_AllNew(t *testing.T) {
 // Vuln not configured: dimension is not-applicable; a clean-secrets diff passes
 // even though go.mod content (were it scanned) carries a vuln. No config coupling.
 func TestSecurityGate_VulnNotConfigured_SecretsOnly(t *testing.T) {
-	g := diffgate.NewSecurityGate(fakeSecrets, fakeDepsScan, goModReaders(), false /* vuln disabled */)
+	g := diffgate.NewSecurityGate(fakeSecrets, fakeDepsScan, goModReaders(), false /* vuln disabled*/)
 	refs := map[string]string{"cand|go.mod": "vuln-b v2"}
 	v, err := g.Evaluate(context.Background(), secInput("r", nil, refs))
 	if err != nil {

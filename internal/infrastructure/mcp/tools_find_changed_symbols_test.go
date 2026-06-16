@@ -79,7 +79,7 @@ func TestChangedSymbols_ReturnsThreeBuckets(t *testing.T) {
 	if len(resp.Added) != 1 || resp.Added[0].Name != "Fresh" {
 		t.Errorf("added = %+v, want [Fresh]", resp.Added)
 	}
-	// solov2-w8nr: file_path must be absolute, matching the contract used by
+	// file_path must be absolute, matching the contract used by
 	// every other node-emitting tool. The MCP handler rewrites the service's
 	// repo-relative paths against the resolved root ("/root" in this test).
 	if resp.Added[0].FilePath != "/root/code.go" {
@@ -93,7 +93,7 @@ func TestChangedSymbols_ReturnsThreeBuckets(t *testing.T) {
 	}
 }
 
-// TestChangedSymbols_FiltersChunkEntries covers solov2-u9os: a comment- or
+// TestChangedSymbols_FiltersChunkEntries covers: a comment- or
 // whitespace-only change creates a chunk diff (KindChunk) in the parser
 // output, but it isn't a symbol from the user's perspective. The
 // changedsymbols service must filter chunks and surface a
@@ -133,7 +133,7 @@ func TestChangedSymbols_FiltersChunkEntries(t *testing.T) {
 	}
 }
 
-// TestChangedSymbols_AcceptsBaseHeadAliases covers solov2-3ocy: git's
+// TestChangedSymbols_AcceptsBaseHeadAliases covers: git's
 // canonical "base/head" param names must be accepted alongside ref_a/ref_b.
 // Junior agents reach for base/head naturally — pre-fix, the schema's
 // additionalProperties:false rejected them with an "unknown parameter"
@@ -176,8 +176,8 @@ func TestChangedSymbols_RejectsConflictingAliases(t *testing.T) {
 	}
 }
 
-// TestChangedSymbols_EmptyBucketsSerializeAsArrays guards solov2-jbgt: empty
-// added/removed/modified must JSON-render as [] (not null) to match the MCP
+// TestChangedSymbols_EmptyBucketsSerializeAsArrays guards: empty
+// added/removed/modified must JSON-render as (not null) to match the MCP
 // surface contract.
 func TestChangedSymbols_EmptyBucketsSerializeAsArrays(t *testing.T) {
 	m := csMemFiles{
@@ -215,8 +215,8 @@ func contains(haystack, needle string) bool {
 	return false
 }
 
-// TestChangedSymbols_DefaultsToLastCommit guards solov2-npjs: omitting both
-// refs must default to HEAD~1..HEAD rather than erroring on missing params.
+// TestChangedSymbols_DefaultsToLastCommit guards: omitting both
+// refs must default to HEAD~1.HEAD rather than erroring on missing params.
 func TestChangedSymbols_DefaultsToLastCommit(t *testing.T) {
 	m := csMemFiles{
 		"HEAD~1:code.go": "package p\nfunc Old() {}\n",
@@ -234,8 +234,8 @@ func TestChangedSymbols_DefaultsToLastCommit(t *testing.T) {
 	}
 }
 
-// TestChangedSymbols_SingleCommitRepoFallsBackToEmptyTree pins solov2-wrbn:
-// the default HEAD~1..HEAD pair fails on a freshly-promoted single-commit
+// TestChangedSymbols_SingleCommitRepoFallsBackToEmptyTree pins:
+// the default HEAD~1.HEAD pair fails on a freshly-promoted single-commit
 // repo (the literal first-run journey). The handler must detect the
 // unknown-revision error on the default path and retry against the
 // canonical empty-tree SHA, so every symbol in HEAD comes back as
@@ -346,7 +346,7 @@ func TestChangedSymbols_NotWiredReturnsInternalError(t *testing.T) {
 	}
 }
 
-// TestChangedSymbols_PopulatesLineRanges pins solov2-qu6l: an added symbol
+// TestChangedSymbols_PopulatesLineRanges pins: an added symbol
 // must carry line_start/line_end so the CLI renders foo.go:N-M instead of
 // the previous foo.go:0-0.
 func TestChangedSymbols_PopulatesLineRanges(t *testing.T) {
@@ -371,7 +371,7 @@ func TestChangedSymbols_PopulatesLineRanges(t *testing.T) {
 }
 
 // TestChangedSymbols_NonSymbolHintSuppressedWhenSymbolsChanged pins
-// solov2-qu6l: the degraded_reason "non_symbol_changes_only" must NOT fire
+// the degraded_reason "non_symbol_changes_only" must NOT fire
 // when at least one symbol bucket is non-empty. The old behaviour fired the
 // hint per non-symbol-only file, which produced output like "+ method X
 // [degraded: non_symbol_changes_only]" — directly contradicting itself.

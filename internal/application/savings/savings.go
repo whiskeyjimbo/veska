@@ -1,7 +1,6 @@
 // Package savings records per-search token-savings telemetry to a
 // JSONL file (~/.veska/savings.jsonl by default) and reports rollups
-// for the `veska doctor savings` subcommand .
-//
+// for the `veska doctor savings` subcommand.
 // The premise: when search returns inline snippets, the agent skips a
 // follow-up Read of the matched files. The savings ratio is
 //
@@ -10,7 +9,6 @@
 // which is the marketing number Semble's "semble savings" chart
 // surfaces. It is cheap to compute, has no fan-out beyond a single
 // O_APPEND write per search, and is local-only — no network egress.
-//
 // The Recorder is intentionally optional: a nil *Recorder is the
 // "disabled" state and silently no-ops, so callers don't need to
 // guard every call site with an explicit feature check.
@@ -34,7 +32,7 @@ import (
 type Entry struct {
 	Timestamp time.Time `json:"ts"`
 	// RepoID tags the entry with the repo its results came from so
-	// Aggregate can bucket per repo (solov2-0ql0). omitempty keeps
+	// Aggregate can bucket per repo. omitempty keeps
 	// back-compat: entries written by pre-0ql0 daemons have no repo_id
 	// and aggregate into the "" bucket.
 	RepoID       string `json:"repo_id,omitempty"`
@@ -116,9 +114,8 @@ func (r *Recorder) Close() error {
 // are summed across all results. Files that no longer exist on disk
 // silently contribute 0 to FileChars — a delete-then-search race must
 // not crash the recorder. repoID tags the entry so a fanout search that
-// spans multiple repos records one Entry per repo (solov2-0ql0).
-//
-// root is the repo's absolute working-tree root. Since ADR-S0017 §1
+// spans multiple repos records one Entry per repo.
+// root is the repo's absolute working-tree root. Since
 // nodes.file_path (and thus ResultFile.FilePath) is repo-relative, so the
 // on-disk stat must rejoin root. An empty root means "unknown" — the stat
 // falls back to the path as-is, contributing 0 for a relative path rather
@@ -195,7 +192,7 @@ func Aggregate(path string, now time.Time) (Report, error) {
 }
 
 // AggregateByRepo is Aggregate partitioned by Entry.RepoID: it returns
-// one Report per repo seen in the file (solov2-0ql0). Entries written by
+// one Report per repo seen in the file. Entries written by
 // pre-0ql0 daemons carry no repo_id and bucket under the "" key. Each
 // per-repo Report uses the same period-bucketing as Aggregate, so the
 // combined Aggregate equals the sum of these by construction. A missing
@@ -243,7 +240,7 @@ func (rep *Report) addEntry(e Entry) {
 // scanEntries streams the JSONL file at path, invoking fn for each
 // well-formed Entry. A missing file is not an error (fresh install). One
 // corrupt line — most likely a truncated last line from a crashed write
-// — is skipped rather than aborting the whole scan.
+// is skipped rather than aborting the whole scan.
 func scanEntries(path string, fn func(Entry)) error {
 	f, err := os.Open(path)
 	if err != nil {

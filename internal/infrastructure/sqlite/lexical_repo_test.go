@@ -110,8 +110,9 @@ func TestLexical_TrigramTypoTolerance(t *testing.T) {
 
 // TestLexical_RRFCombinesArms verifies a node that hits in both arms
 // outranks a node that hits in only one. Setup:
-//   - n1: "closeFinding" — hits both words ("close") and trigrams ("ind").
-//   - n2: "indexBuilder" — hits trigrams ("ind") but not words ("close").
+//
+//	n1: "closeFinding" — hits both words ("close") and trigrams ("ind").
+//	n2: "indexBuilder" — hits trigrams ("ind") but not words ("close").
 //
 // Query "close" only matches words for n1; trigram "close" matches n1
 // only. So we use a query that lands on both arms for n1: tokenized

@@ -1,14 +1,12 @@
 // Package extindex indexes a registered repo's vendored Go module
-// sources into the graph as external nodes (solov2-bchl phase 1).
-//
-// Why: the multi-repo wedge  promises "your agent knows
+// sources into the graph as external nodes.
+// Why: the multi-repo wedge promises "your agent knows
 // what calls what across all your repos." Today that fails the moment
 // a call crosses into a third-party module that isn't itself
 // registered: cross_repo_edge_stubs have no destination to bind to.
 // Indexing vendor/ adds those destination nodes so eng_find_symbol,
 // eng_get_call_chain, eng_get_blast_radius see into the imported code
 // instead of dead-ending at the module boundary.
-//
 // Phase 1 scope: vendor/ only (no $GOMODCACHE yet), manual trigger via
 // `veska deps index <module>`, no embeddings, no auto-rescan on
 // go.sum change. Each phase landing widens the scope without changing
@@ -49,15 +47,15 @@ type ExternalNodeSaver interface {
 }
 
 // ExternalRepoUpserter inserts a synthetic repo row for an indexed
-// vendor module . The row's module_path lets the
+// vendor module. The row's module_path lets the
 // existing cross_repo_edge_stubs resolver find vendored destinations
 // for CALLS edges — without it, a stub from myapp.Run targeting
 // greetlib.New would dead-end at the import boundary.
-//
 // Implementations should:
-//   - INSERT … ON CONFLICT DO NOTHING (idempotent re-index)
-//   - use the supplied synthetic repo_id (caller decides the format;
-//     today's convention is "ext:<module-path>" — no version yet)
+//
+//	INSERT … ON CONFLICT DO NOTHING (idempotent re-index)
+//	use the supplied synthetic repo_id (caller decides the format;
+//	  today's convention is "ext:<module-path>" — no version yet)
 type ExternalRepoUpserter interface {
 	UpsertExternalRepo(ctx context.Context, repoID, rootPath, modulePath, branch string) error
 }
@@ -80,7 +78,7 @@ type Result struct {
 	ModulePath string
 	Files      int
 	Nodes      int
-	Skipped    int // .go files the parser couldn't extract symbols from
+	Skipped    int // go files the parser couldn't extract symbols from
 }
 
 // Service is the application-level facade. It is stateless; the same
@@ -97,7 +95,6 @@ type Service struct {
 // cross-repo CALLS edges through them do NOT resolve. With an
 // upserter wired, the indexer creates a synthetic repo per module
 // and writes nodes against it, which closes the resolver loop
-// .
 func NewService(parser ports.CodeParser, saver ExternalNodeSaver, opts ...Option) (*Service, error) {
 	if parser == nil {
 		return nil, fmt.Errorf("extindex.NewService: parser is nil: %w", ErrMissingDependency)
@@ -116,23 +113,22 @@ func NewService(parser ports.CodeParser, saver ExternalNodeSaver, opts ...Option
 type Option func(*Service)
 
 // WithExternalRepoUpserter wires the synthetic-repo writer that
-// closes the cross-repo CALLS resolution loop . Without
+// closes the cross-repo CALLS resolution loop. Without
 // this option indexed nodes still appear in eng_find_symbol but
 // cross_repo_edge_stubs targeting them won't bind.
 func WithExternalRepoUpserter(u ExternalRepoUpserter) Option {
 	return func(s *Service) { s.upserter = u }
 }
 
-// IndexVendorModule walks <repoRoot>/vendor/<modulePath> for .go
+// IndexVendorModule walks <repoRoot>/vendor/<modulePath> for.go
 // files, parses each via the injected CodeParser, and persists the
 // resulting nodes with external=1 against (repoID, branch). Returns
 // ErrModuleNotVendored when the path doesn't exist — callers can
 // distinguish "module not vendored" from a genuine I/O error.
-//
 // Test files (`_test.go`) are skipped: they aren't part of the
 // shipped API and would balloon the external-node count with stub
 // types. Subdirectories of vendor/<modulePath> ARE walked so
-// multi-package modules (e.g. cobra has cobra/doc, cobra/cmd, ...)
+// multi-package modules (e.g. cobra has cobra/doc, cobra/cmd,.)
 // are indexed too.
 func (s *Service) IndexVendorModule(ctx context.Context, repoID, branch, repoRoot, modulePath string) (Result, error) {
 	modDir := filepath.Join(repoRoot, "vendor", modulePath)
@@ -147,7 +143,7 @@ func (s *Service) IndexVendorModule(ctx context.Context, repoID, branch, repoRoo
 		return Result{}, fmt.Errorf("extindex: %s is not a directory", modDir)
 	}
 
-	// solov2-yr56: when an upserter is wired, write nodes under a
+	// when an upserter is wired, write nodes under a
 	// synthetic per-module repo row so cross_repo_edge_stubs can bind
 	// against module_path. Without it (older callers), fall back to
 	// the importing repo's repo_id — find_symbol still surfaces the
@@ -185,7 +181,7 @@ func (s *Service) IndexVendorModule(ctx context.Context, repoID, branch, repoRoo
 			return nil
 		}
 		// Parser sees the synthetic repo_id when upserter is wired
-		// (yr56) so node_id hashes are deterministic per module —
+		// (yr56) so node_id hashes are deterministic per module
 		// re-indexing the same vendor tree produces the same IDs
 		// regardless of which importing repo triggered it.
 		pr, perr := s.parser.ParseFile(ctx, nodeRepoID, path, src)

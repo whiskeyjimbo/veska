@@ -55,7 +55,7 @@ var severityOrder = map[Severity]int{
 // AtLeast returns true when s is at least as severe as other. An unknown
 // severity on either side has no defined rank, so AtLeast returns false
 // conservatively rather than letting the map's zero value alias it to
-// SeverityInfo. In practice severities are valid()-gated at construction;
+// SeverityInfo. In practice severities are valid-gated at construction;
 // this guard hardens the comparison against any future non-constructor caller.
 func (s Severity) AtLeast(other Severity) bool {
 	sRank, sOK := severityOrder[s]
@@ -114,7 +114,7 @@ type Finding struct {
 
 	// findingKey is an optional discriminator folded into the finding_id hash.
 	// It lets a caller emit several findings sharing the same (rule, anchor)
-	// — e.g. multiple review-code findings in one file — without their
+	// e.g. multiple review-code findings in one file — without their
 	// finding_ids colliding. It defaults to "" and is not persisted.
 	findingKey string
 
@@ -123,7 +123,6 @@ type Finding struct {
 	// on a node whose content_hash is known to the producing check (dead-code,
 	// contract-drift, auto-link). File-anchored findings (parse-failure) leave
 	// it nil — the file as a whole has no per-symbol hash.
-	//
 	// The revalidation sweep (m3.05.2) compares this against the node's
 	// current content_hash to detect drift: a finding whose anchor has moved
 	// on is superseded rather than re-fired.
@@ -169,7 +168,7 @@ func WithActorKind(ak ActorKind) FindingOption {
 // WithAnchorContentHash sets the content_hash of the node anchor captured at
 // finding-write time. An empty hash is rejected so callers cannot silently
 // confuse "anchor has no hash" (nil) with "anchor's hash is the empty string"
-// — mirrors the empty-anchor validation on WithNodeAnchor / WithFileAnchor.
+// mirrors the empty-anchor validation on WithNodeAnchor / WithFileAnchor.
 func WithAnchorContentHash(hash string) FindingOption {
 	return func(f *Finding) error {
 		if hash == "" {
@@ -220,7 +219,6 @@ type FindingSpec struct {
 // NewFinding constructs a validated Finding from spec. The finding_id is
 // computed from spec.Rule, the anchor, and an optional discriminator key (see
 // WithFindingKey); it is never accepted as a parameter.
-//
 // Invariants enforced:
 //  1. spec.Rule non-empty.
 //  2. Exactly one anchor (node_id or file_path) provided.
@@ -272,13 +270,11 @@ func NewFinding(spec FindingSpec, opts ...FindingOption) (*Finding, error) {
 
 // DeriveFindingID computes the branch-stable finding_id for a Finding:
 // hex(sha256(rule + "\x00" + anchor + "\x00" + key))[:32].
-//
 // It is the single source of truth for finding_id derivation. NewFinding uses
 // it internally; any code that must reconstruct a finding_id without a Finding
 // in hand (e.g. a doctor probe correlating a queue row to its companion
 // finding) MUST call this rather than re-implementing the hash — the two must
 // stay byte-identical or correlation silently breaks.
-//
 // anchor is the finding's node_id or file_path. key is the optional
 // discriminator set via WithFindingKey ("" when the finding is one-per-anchor).
 // repoID and branch are intentionally NOT part of the hash — a finding is
@@ -289,14 +285,14 @@ func DeriveFindingID(rule, anchor, key string) string {
 }
 
 // Close transitions the finding to the closed state.
-//
 // Invariants:
-//   - reason and actorID must be non-empty (mirrors NewSuppression, so the
-//     close path cannot silently blank attribution or audit reason).
-//   - actorKind must be a recognised ActorKind (same check NewActor and
-//     WithActorKind enforce — the close path must not be the one place an
-//     unvalidated kind slips onto a Finding).
-//   - severity >= high requires actorKind == human.
+//
+//	reason and actorID must be non-empty (mirrors NewSuppression, so the
+//	  close path cannot silently blank attribution or audit reason).
+//	actorKind must be a recognised ActorKind (same check NewActor and
+//	  WithActorKind enforce — the close path must not be the one place an
+//	  unvalidated kind slips onto a Finding).
+//	severity >= high requires actorKind == human.
 func (f *Finding) Close(reason string, actorKind ActorKind, actorID string, now time.Time) error {
 	if f.State == FindingStateClosed {
 		return errors.New("finding: already closed")

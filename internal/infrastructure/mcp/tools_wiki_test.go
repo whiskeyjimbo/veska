@@ -27,7 +27,7 @@ func wikiFixtureService(t *testing.T) *wiki.HotZoneService {
 			"a": {NodeID: "a"}, "b": {NodeID: "b"}, "c": {NodeID: "c"},
 			"x": {NodeID: "x"}, "y": {NodeID: "y"},
 		},
-		// ADR-S0017 §1: NodesInFile is keyed on the repo-relative slash path.
+		// NodesInFile is keyed on the repo-relative slash path.
 		byFile: map[string][]string{
 			"a.go": {"a"}, "b.go": {"b"}, "c.go": {"c"},
 		},
@@ -86,7 +86,7 @@ func TestHotZone_ReturnsRankedData(t *testing.T) {
 	if len(resp.Zones) != 3 {
 		t.Fatalf("expected 3 zones, got %d (%+v)", len(resp.Zones), resp.Zones)
 	}
-	// solov2-4aka: the wire shape now canonicalises file_path to absolute
+	// the wire shape now canonicalises file_path to absolute
 	// so every eng_* tool returns the same shape. The wiki Markdown page
 	// still uses the relative form internally (see TestHotZone_PageAgrees
 	// below for that guarantee).
@@ -98,7 +98,7 @@ func TestHotZone_ReturnsRankedData(t *testing.T) {
 	}
 
 	// The tool data must match what the page renders, modulo the
-	// absolute-vs-relative file_path normalisation .
+	// absolute-vs-relative file_path normalisation.
 	rep, err := svc.Rank(context.Background(), "r1", "main", "/tmp/r")
 	if err != nil {
 		t.Fatalf("Rank: %v", err)
@@ -113,7 +113,7 @@ func TestHotZone_ReturnsRankedData(t *testing.T) {
 	}
 }
 
-// TestHotZone_EmptyZonesSurfacesDegradedReason guards solov2-636y/z5o0:
+// TestHotZone_EmptyZonesSurfacesDegradedReason guards /z5o0:
 // when ranking returns no zones because the change-count window is empty,
 // the response carries degraded_reasons=["no_recent_commits"] plus a
 // human-readable hint so callers don't have to grep the wiki markdown.
@@ -152,7 +152,7 @@ func TestHotZone_EmptyZonesSurfacesDegradedReason(t *testing.T) {
 	}
 }
 
-// TestHotZone_NonEmptyZonesNoDegradedReason guards solov2-636y: when zones
+// TestHotZone_NonEmptyZonesNoDegradedReason guards: when zones
 // are returned, the degraded_reasons slot is omitted/empty.
 func TestHotZone_NonEmptyZonesNoDegradedReason(t *testing.T) {
 	svc := wikiFixtureService(t)
@@ -174,7 +174,7 @@ func TestHotZone_NonEmptyZonesNoDegradedReason(t *testing.T) {
 }
 
 // TestHotZone_AcceptsShortID guards the README contract that a short_id
-// prefix is accepted anywhere a repo_id is required . Before the
+// prefix is accepted anywhere a repo_id is required. Before the
 // fix hot_zone bypassed resolveRepoID and rejected the prefix as "repo not
 // found".
 func TestHotZone_AcceptsShortID(t *testing.T) {

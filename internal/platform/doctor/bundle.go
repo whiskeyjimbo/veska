@@ -20,11 +20,11 @@ type BundleOptions struct {
 	// VeskaHome is the veska data directory (e.g. ~/.veska).
 	VeskaHome string
 	// OutputDir is where the tarball is written.
-	// If empty, os.TempDir() is used.
+	// If empty, os.TempDir is used.
 	OutputDir string
-	// OllamaURL is passed to CheckEmbedder.  Defaults to http://localhost:11434 if empty.
+	// OllamaURL is passed to CheckEmbedder. Defaults to http://localhost:11434 if empty.
 	OllamaURL string
-	// ModelName is passed to CheckEmbedder.  Defaults to nomic-embed-text if empty.
+	// ModelName is passed to CheckEmbedder. Defaults to nomic-embed-text if empty.
 	ModelName string
 }
 
@@ -38,7 +38,7 @@ type BundleResult struct {
 
 // CreateBundle assembles a diagnostic tarball and writes it to opts.OutputDir.
 // The tarball contains a manifest, all doctor probe outputs, and a redacted
-// audit log tail — see SOLO-13 §2.2 for the full spec.
+// audit log tail for the full spec.
 func CreateBundle(opts BundleOptions) (BundleResult, error) {
 	if opts.OutputDir == "" {
 		opts.OutputDir = os.TempDir()
@@ -143,7 +143,7 @@ func CreateBundle(opts BundleOptions) (BundleResult, error) {
 		return BundleResult{}, err
 	}
 
-	// 8. doctor/identity.json — repo identity-tier convergence (ADR-S0017)
+	// 8. doctor/identity.json — repo identity-tier convergence
 	identityReport, _ := CheckIdentityTiers(dbPath)
 	identityEnv := NewEnvelope("identity", identityReport.Status, identityReport)
 	if err := addProbeEntry(tw, &fileCount, "doctor/identity.json", identityEnv, false); err != nil {

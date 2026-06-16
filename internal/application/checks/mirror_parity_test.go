@@ -15,10 +15,9 @@ import (
 // need not import checks. The copy is correct, but the parity is enforced by
 // hand — a field added to checks.Input must be mirrored. A field-signature
 // comparison fails compilation-adjacent here the moment the two drift, turning
-// a silent latent bug into a red test (solov2-xde2.8).
-//
-// The Line package qualifier is normalised away so map[string][]checks.Line
-// and map[string][]application.Line compare equal by shape.
+// a silent latent bug into a red test.
+// The Line package qualifier is normalised away so map[string]checks.Line
+// and map[string]application.Line compare equal by shape.
 
 func normalizeLineType(s string) string {
 	s = strings.ReplaceAll(s, "checks.Line", "Line")

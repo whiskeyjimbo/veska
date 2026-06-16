@@ -124,11 +124,11 @@ func TestRunUntested_E2E_InterfaceInUnchangedFile_Passes(t *testing.T) {
 	}
 }
 
-// solov2-d521 regression (gate level): a prod METHOD tested only via a
-// method-call dispatch `recv.Method()` in a SEPARATE test file must PASS when
+// regression (gate level): a prod METHOD tested only via a
+// method-call dispatch `recv.Method` in a SEPARATE test file must PASS when
 // its body changes. Before the parser resolved value-receiver method calls the
 // test→method CALLS edge never existed, so the method false-FAILed as untested
-// — the junior-persona P1. Cross-file (method in order.go, test in
+// the junior-persona P1. Cross-file (method in order.go, test in
 // order_test.go) so it also exercises promotion-time bare-name binding of the
 // rewritten "Order.Total" callee.
 func TestRunUntested_E2E_MethodCallTested_Passes(t *testing.T) {
@@ -155,7 +155,7 @@ func TestRunUntested_E2E_MethodCallTested_Passes(t *testing.T) {
 }
 
 // False-PASS lock (dangerous direction): adding a prod symbol with no test must
-// FAIL, and the gate must list it. Proves the cross-machinery join fires —
+// FAIL, and the gate must list it. Proves the cross-machinery join fires
 // Ephemeral.ChangedNodeIDs (overlay-derived) and the untested finding's NodeID
 // (re-promote-clone-derived) agree on the node_id. A silent disagreement would
 // empty the intersection -> the gate never fires -> false PASS. Non-substitutable
@@ -211,7 +211,7 @@ func TestRunUntested_E2E_ModifyProdRemoveTest_Fails(t *testing.T) {
 	}
 }
 
-// INDEX-AHEAD HARDENING (solov2-zvh6.11): the index is seeded AHEAD — it already
+// INDEX-AHEAD HARDENING: the index is seeded AHEAD — it already
 // holds the added, untested Bar — while base-ref has only foo.go/foo_test.go.
 // Before pinning, ChangedNodeIDs went empty (overlay matched the drifted index)
 // so the new untested symbol wrongly PASSED. With buildPinnedEphemeral the base

@@ -9,23 +9,18 @@ import (
 )
 
 // safetensors file layout:
-//
 //	+--------+--------------------+--------------------+
-//	| u64 LE |  header (UTF-8 JSON)| concatenated data |
-//	|  N     |     N bytes        |   rest of file    |
+//	| u64 LE | header (UTF-8 JSON)| concatenated data |
+//	| N | N bytes | rest of file |
 //	+--------+--------------------+--------------------+
-//
 // Header schema (Model2Vec only uses the embedding-matrix entry):
-//
 //	{
 //	  "tensor_name": {
 //	    "dtype": "F32" | "F16",
-//	    "shape": [int, ...],
-//	    "data_offsets": [start, end]   // relative to start of data segment
+//	    "shape": [int,.],
+//	    "data_offsets": [start, end] // relative to start of data segment
 //	  },
-//	  ...
 //	}
-//
 // The "__metadata__" key is optional and ignored here — Model2Vec
 // doesn't depend on it for inference.
 
@@ -48,7 +43,6 @@ type safetensorsHeaderEntry struct {
 // readSafetensors parses the safetensors envelope from r and returns
 // one decoded Tensor per named entry. The "__metadata__" key is
 // silently skipped — it carries optional model metadata, not tensors.
-//
 // Float tensors (F32/F16/F64) are decoded to float32. Tensors with an
 // integer dtype (e.g. the identity I64 "mapping" tensor potion models
 // ship) are skipped rather than rejected — they aren't used in the

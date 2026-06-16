@@ -9,7 +9,7 @@ import (
 
 // The wiki command logic lives in internal/cli/wikicmd; this RunE only parses
 // flags/positionals (the positional/--repo merge and the --all mutual-exclusion
-// rule) and delegates .
+// rule) and delegates.
 
 // wikiCmd returns the "wiki" Cobra command. It regenerates both wiki pages
 // (hot_zones + entry_points) on demand by reusing the WorkKindWiki render
@@ -31,7 +31,7 @@ func wikiCmd() *cobra.Command {
 			if allFlag && (repoID != "" || branch != "" || len(args) > 0) {
 				return fmt.Errorf("wiki: --all is mutually exclusive with --repo/--branch and positional args")
 			}
-			// solov2-rtql: accept an optional positional path or repo id so
+			// accept an optional positional path or repo id so
 			// 'veska wiki /path/to/repo' works the same way 'veska reindex'
 			// and 'veska repo add' do. The positional arg and --repo flag
 			// are mutually exclusive — pick one source of truth.

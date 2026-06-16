@@ -1,4 +1,4 @@
-# sqlite-vec Spike — RESULTS
+# sqlite-vec Spike - RESULTS
 
 Generated: 2026-05-10T04:17:58Z
 
@@ -23,15 +23,15 @@ Generated: 2026-05-10T04:17:58Z
 | Population | k | p50 (ms) | p95 (ms) | p99 (ms) | max (ms) | gate |
 |---|---|---|---|---|---|---|
 | 50000 | 10 | 74.15 | 80.98 | 90.34 | 102.44 | PASS (≤ 100ms) |
-| 50000 | 50 | 77.20 | 90.50 | 98.57 | 108.04 | — |
+| 50000 | 50 | 77.20 | 90.50 | 98.57 | 108.04 | - |
 | 1000000 | 10 | 1505.09 | 2724.27 | 7662.95 | 25900.80 | RED (> 400ms) |
-| 1000000 | 50 | 1530.12 | 2813.65 | 5790.15 | 45069.32 | — |
+| 1000000 | 50 | 1530.12 | 2813.65 | 5790.15 | 45069.32 | - |
 
 ## Recall
 
 | Population | recall@10 | recall@50 | hold-out | gate |
 |---|---|---|---|---|
-| 1000000 | N/A (measurement failed) | N/A | N/A | N/A — consistent with ceiling=100k |
+| 1000000 | N/A (measurement failed) | N/A | N/A | N/A - consistent with ceiling=100k |
 | 50000 | 1.0000 | 1.0000 | 100 | PASS (≥ 0.95) |
 
 ## vec0 Ceiling
@@ -51,7 +51,7 @@ Generated: 2026-05-10T04:17:58Z
 
 ## Measurement Notes
 
-> **NOTE:** 1M recall: measurement failed — sqlite-vec returned an internal error when inserting ~272k vectors into the 1M recall DB. This is consistent with the vec0 ceiling of 100k nodes detected in the bench sweep.
+> **NOTE:** 1M recall: measurement failed - sqlite-vec returned an internal error when inserting ~272k vectors into the 1M recall DB. This is consistent with the vec0 ceiling of 100k nodes detected in the bench sweep.
 
 ## Exit-Gate Summary
 

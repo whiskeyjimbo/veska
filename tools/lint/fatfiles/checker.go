@@ -1,12 +1,10 @@
 // Package fatfiles implements a per-file line-count ratchet.
-//
 // Unlike `make lint-size` (which enforces per-FUNCTION limits on CHANGED code
 // only via golangci-lint --new-from-merge-base), this ratchet tracks the TOTAL
 // line count of a checked-in inventory of already-oversized files. The recorded
 // value is a ceiling that can only go DOWN: any inventoried file that grows past
 // its recorded line count fails the gate, forcing the backlog to shrink over
 // time instead of being grandfathered forever.
-//
 // The inventory file (inventory.txt) is a list of `path<space>maxLOC` records,
 // one per line; blank lines and `#`-prefixed comments are ignored.
 package fatfiles

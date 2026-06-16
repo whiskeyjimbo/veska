@@ -28,16 +28,15 @@ type VerifyResult struct {
 	// Always false when AuditPresent is false.
 	AuditJSONLOK bool
 	// Status is one of "healthy", "degraded", or "broken".
-	//   healthy  — all present checks passed
+	//   healthy — all present checks passed
 	//   degraded — audit.jsonl present but malformed; DB checks passed
-	//   broken   — veska.db could not be extracted or failed integrity checks
+	//   broken — veska.db could not be extracted or failed integrity checks
 	Status string
 }
 
-// Verify extracts veska.db (and optionally audit.jsonl) from the .tar.gz at
+// Verify extracts veska.db (and optionally audit.jsonl) from the.tar.gz at
 // path, runs PRAGMA integrity_check and PRAGMA foreign_key_check on the
 // database, and validates each line of audit.jsonl as JSON.
-//
 // Exit codes (via caller): 0=healthy, 1=degraded, 2=broken.
 func Verify(path string) (VerifyResult, error) {
 	// Extract files into a temp dir.
@@ -90,8 +89,8 @@ func Verify(path string) (VerifyResult, error) {
 	return result, nil
 }
 
-// extractVerifyFiles reads the .tar.gz at path and returns the raw bytes for
-// veska.db and audit.jsonl (if present).  Returns an error if veska.db is
+// extractVerifyFiles reads the.tar.gz at path and returns the raw bytes for
+// veska.db and audit.jsonl (if present). Returns an error if veska.db is
 // not found in the archive.
 func extractVerifyFiles(path string) (dbBytes []byte, auditBytes []byte, auditPresent bool, err error) {
 	f, err := os.Open(path)
@@ -144,8 +143,8 @@ func extractVerifyFiles(path string) (dbBytes []byte, auditBytes []byte, auditPr
 }
 
 // checkSQLite opens the SQLite database at dbPath and runs PRAGMA
-// integrity_check and PRAGMA foreign_key_check.  Returns (integrityOK, fkOK,
-// error).  An error is returned only if the database cannot be opened.
+// integrity_check and PRAGMA foreign_key_check. Returns (integrityOK, fkOK,
+// error). An error is returned only if the database cannot be opened.
 func checkSQLite(dbPath string) (integrityOK bool, fkOK bool, err error) {
 	db, err := sql.Open(sqldriver.Name, dbPath)
 	if err != nil {

@@ -11,7 +11,7 @@ import (
 // db is the SQLite connection that backs the findings table.
 // aw is an optional AuditWriter; pass nil to disable audit logging.
 // repos is used by eng_list_findings to fall back to a cwd-injected
-// repo_id when the caller omits it ; pass nil to disable
+// repo_id when the caller omits it; pass nil to disable
 // the fallback (the older "repo_id is required" behaviour is preserved).
 func RegisterFindingTools(r *Registry, db *sql.DB, aw ports.AuditWriter, repos application.RepoLister) {
 	r.MustRegister(ToolSpec{

@@ -124,7 +124,7 @@ func TestReindexHandler_NilDepsReturnsInternalError(t *testing.T) {
 	}
 }
 
-// TestReindexRepoSchema_AdditionalPropertiesFalse pins the solov2-9bzq
+// TestReindexRepoSchema_AdditionalPropertiesFalse pins the
 // invariant: every new MCP tool's schema must reject unknown keys.
 func TestReindexRepoSchema_AdditionalPropertiesFalse(t *testing.T) {
 	var s struct {

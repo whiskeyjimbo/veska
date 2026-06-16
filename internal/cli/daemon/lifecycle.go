@@ -22,7 +22,7 @@ import (
 // in wire.go.
 
 // Start launches all background goroutines. It is safe to call multiple times
-// — subsequent invocations are no-ops.
+// subsequent invocations are no-ops.
 func (d *Daemon) Start(ctx context.Context) error {
 	d.startOnce.Do(func() {
 		d.started = true
@@ -102,7 +102,7 @@ func (d *Daemon) awaitListenerSockets() {
 }
 
 // rehydrateVectors repopulates the in-memory VectorStorage from the durable
-// node_embeddings table . Run synchronously before the embedder
+// node_embeddings table. Run synchronously before the embedder
 // worker starts so a query landing in the first tick after Start sees a
 // consistent store; without it a restart leaves search returning ≤ 0 hits until
 // a content change forces re-embedding.
@@ -131,14 +131,14 @@ func (d *Daemon) seedWatcher() {
 		// Register the same tree with the wake reconciler so a suspend/resume
 		// gap re-sweeps it; it reads the watcher's live lastSeen baseline (just
 		// seeded by Add above) via the WithBaseline seam, so the first sweep
-		// reports only suspend-window changes (solov2-xde2.25.6).
+		// reports only suspend-window changes.
 		d.reconciler.AddDir(r.RepoID, r.RootPath)
 	}
 }
 
 // startReconciler launches the wake-reconciler tick loop in its own goroutine;
 // recDone is closed when it returns (on d.ctx cancellation). No separate seed
-// pass is needed (solov2-xde2.25.6): each repo is Added to the watcher in
+// pass is needed: each repo is Added to the watcher in
 // seedWatcher, which seeds the watcher's lastSeen baseline, and the reconciler
 // reads that live baseline via the WithBaseline seam.
 func (d *Daemon) startReconciler() {
@@ -157,11 +157,10 @@ func (d *Daemon) startWatchLoop() {
 	}()
 }
 
-// startResync runs the startup resync (solov2-0z1.2) in its own goroutine so a
+// startResync runs the startup resync in its own goroutine so a
 // long cold-scan over a large repo cannot block Start from returning. ctx
 // cancellation on shutdown is the expected exit and not logged as an error.
-//
-// The ADR-S0017 identity scheme change (migration 0019) needs no special
+// The identity scheme change (migration 0019) needs no special
 // handling here: 0019 drops the derived graph and clears last_promoted_sha, so
 // the normal resync full-reparses every repo under the new scheme on next boot.
 func (d *Daemon) startResync() {
@@ -180,7 +179,6 @@ func (d *Daemon) startResync() {
 // when [vuln_source] provider="osv"); its Run blocks until d.ctx is cancelled.
 // On the first successful refresh it kicks a one-shot vuln-scan sweep over every
 // repo so promotions that ran against a cold cache get retroactive findings
-// (solov2-jtl5.4).
 func (d *Daemon) startVulnRefresher() {
 	if d.vulnRefresher == nil {
 		return
@@ -201,10 +199,9 @@ func sumCounts(counts map[string]int) int {
 }
 
 // runWatchLoop reads from the multi-repo watcher and forwards each file event
-// to Ingester.Save. The loop terminates when ctx is cancelled or Events()
+// to Ingester.Save. The loop terminates when ctx is cancelled or Events
 // closes.
-//
-// Branch resolution : we look up each event's repo via repo.Get
+// Branch resolution: we look up each event's repo via repo.Get
 // to use its recorded active_branch instead of the previous hardcoded "main".
 // A non-main repo would otherwise have its live edits silently saved under
 // the wrong branch key, never to be promoted (Promoter.Promote would scan an
@@ -214,7 +211,7 @@ func (d *Daemon) runWatchLoop(ctx context.Context) {
 	events := d.watcher.Events()
 	// Per-repo cache of (active_branch, root_path). root_path is needed to
 	// relativise the absolute fsnotify path before it reaches the parser
-	// (ADR-S0017 §1) — nodeID + nodes.file_path key on the repo-relative slash
+	// nodeID + nodes.file_path key on the repo-relative slash
 	// path, so the cold-scan and hot (fsnotify) paths must agree.
 	branchOf := make(map[string]string)
 	rootOf := make(map[string]string)
@@ -318,7 +315,7 @@ func (d *Daemon) awaitBackgroundGoroutines(timeoutC <-chan time.Time) {
 	}
 }
 
-// drainScans waits for in-flight AddRepo cold-scan goroutines (solov2-0z1.3)
+// drainScans waits for in-flight AddRepo cold-scan goroutines
 // under the shared budget. ctx is already cancelled so a well-behaved reparser
 // exits promptly; a stuck scan does not wedge shutdown — we fall through after
 // the deadline and proceed with pool close.

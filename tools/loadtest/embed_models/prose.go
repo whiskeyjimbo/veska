@@ -1,11 +1,10 @@
 //go:build eval
 
-// Prose corpus loader for the embed-models bench (solov2-0k5h.4).
-// Walks .md files under a corpus root, splits each into sections at
+// Prose corpus loader for the embed-models bench.
+// Walks.md files under a corpus root, splits each into sections at
 // H1/H2 headings, and emits one document per section. Section docs use
 // a "<relative-path>#<heading-slug>" name so hand-curated prose.jsonl
 // can address them stably.
-//
 // We use a minimal ATX-only line scanner — no inline markdown parsing
 // needed since we treat the section body as a flat text blob to embed.
 
@@ -20,9 +19,8 @@ import (
 	"time"
 )
 
-// embedProseCorpus walks .md files under root, splits each into
+// embedProseCorpus walks.md files under root, splits each into
 // sections, and embeds each section as one doc. Capped at maxDocs.
-//
 // When cfg.enabled, ALSO computes a condensed-input embedding per
 // section. Returns the count of sections that were condensed.
 func embedProseCorpus(p Embedder, root string, maxDocs int, cfg condenseConfig) ([]doc, embedStats, int) {

@@ -1,16 +1,12 @@
-// go_query.go — query-driven Go parser (solov2-1yev phase 1).
-//
+// go_query.go — query-driven Go parser.
 // This is the new tree-sitter Query API path. It coexists with go.go
 // (the legacy hand-rolled walkers) so an equivalence harness can diff
 // the two implementations on the same fixtures before we flip the
 // default. Each phase of the rewrite plugs another extractor into this
 // file; phase 1 ships only top-level function declarations.
-//
 // Construction:
-//
-//	parser := NewGoParser()   // satisfies ports.CodeParser
-//	// ... same usage as NewGoParser()
-//
+//	parser:= NewGoParser // satisfies ports.CodeParser
+//	//. same usage as NewGoParser
 // Until equivalence is validated across the entire fixture corpus, the
 // daemon's composition root keeps using NewGoParser. Phase 5 flips the
 // default and drops the legacy path.
@@ -45,7 +41,7 @@ func NewGoParser() *GoParser {
 // source and return a ParseResult of nodes + edges + diagnostics.
 // Phase 1 implementation: package node + top-level function
 // declarations via queries/go/symbols.scm. Everything else (methods,
-// types, calls, imports, ...) is produced as empty/nil so the diff
+// types, calls, imports,.) is produced as empty/nil so the diff
 // harness can compare extractor-by-extractor as phases land.
 func (p *GoParser) ParseFile(ctx context.Context, repoID, path string, src []byte) (*domain.ParseResult, error) {
 	// Non-Go files and empty src return an empty ParseResult and nil
@@ -72,7 +68,7 @@ func (p *GoParser) ParseFile(ctx context.Context, repoID, path string, src []byt
 
 	result := domain.ParseResult{}
 
-	// solov2-7nkm / solov2-0kv6: a syntax error somewhere in the file
+	// /: a syntax error somewhere in the file
 	// no longer discards everything. Cross-check with go/parser: if
 	// stdlib accepts the file, tree-sitter ERRORs are false positives;
 	// otherwise surface go/parser's (more precise) failure.
@@ -91,8 +87,8 @@ func (p *GoParser) ParseFile(ctx context.Context, repoID, path string, src []byt
 		result.Nodes = append(result.Nodes, pkgNode)
 	}
 
-	// Import map (also feeds the framework import checks). solov2-crn7/
-	// -qqqy: promote cobra/urfave command struct-literals to KindCommand
+	// Import map (also feeds the framework import checks). /
+	// qqqy: promote cobra/urfave command struct-literals to KindCommand
 	// nodes (the var branch below skips any var promoted here); see
 	// go_frameworks.go.
 	result.Imports = extractImports(root, src)
@@ -109,7 +105,6 @@ func (p *GoParser) ParseFile(ctx context.Context, repoID, path string, src []byt
 		recvType string
 		// paramTypes maps the caller's parameter names to their bare
 		// same-package type so a method call on a typed parameter resolves
-		// (solov2-d521).
 		paramTypes map[string]string
 	}
 	var callers []callerCtx
@@ -137,7 +132,7 @@ func (p *GoParser) ParseFile(ctx context.Context, repoID, path string, src []byt
 			if nameNode == nil {
 				continue
 			}
-			// solov2-7nkm / solov2-0kv6: a declaration inside an ERROR
+			// /: a declaration inside an ERROR
 			// subtree has unreliable bytes; skip UNLESS go/parser
 			// accepted the file (then ts ERROR nodes are false positives).
 			if !parseAccepted && hasErrorNode(declNode) {
@@ -184,7 +179,7 @@ func (p *GoParser) ParseFile(ctx context.Context, repoID, path string, src []byt
 			}
 			if n := buildTypeNodeFromCaptures(declNode, nameNode, bodyNode, src, repoID, path); n != nil {
 				addSymbol(n)
-				// solov2-9rc2 phase E v2: surface each interface method
+				// v2: surface each interface method
 				// as its own KindMethod node so chained-selector calls
 				// through interface fields resolve at promotion time.
 				if n.Kind == domain.KindInterface {
@@ -201,7 +196,7 @@ func (p *GoParser) ParseFile(ctx context.Context, repoID, path string, src []byt
 			}
 			for _, n := range buildVarNodesFromSpec(spec, decl, src, repoID, path, domain.KindVariable) {
 				if fw.commandVar(n.Name) {
-					continue // solov2-crn7: emitted as KindCommand instead
+					continue // emitted as KindCommand instead
 				}
 				addSymbol(n)
 			}
@@ -217,11 +212,11 @@ func (p *GoParser) ParseFile(ctx context.Context, repoID, path string, src []byt
 		}
 	}
 
-	// solov2-crn7: append KindCommand nodes before the CONTAINS loop so
+	// append KindCommand nodes before the CONTAINS loop so
 	// package→symbol edges cover them, and register each under its Go var
 	// name in symbolByName — mirroring the KindVariable entry it replaced
 	// so the anon-call walker still attributes a command's RunE-closure
-	// calls to the command (the cobra grain from solov2-zuvl), not the
+	// calls to the command (the cobra grain from ), not the
 	// package node.
 	result.Nodes = append(result.Nodes, fw.nodes...)
 	for varName, n := range fw.byVar {
@@ -252,18 +247,17 @@ func (p *GoParser) ParseFile(ctx context.Context, repoID, path string, src []byt
 	// scoped to the body subtree. Each call match becomes an edge
 	// (in-file callee found in symbolByName) or an UnresolvedCall
 	// (cross-file / cross-package, resolved at promotion).
-	//
-	// Struct field types are scanned once per file (solov2-9rc2 phase E)
-	// so chained-selector calls `s.field.M()` can look up the field's
+	// Struct field types are scanned once per file
+	// so chained-selector calls `s.field.M` can look up the field's
 	// declared type. The map is empty for files with no struct decls.
 	structFields := collectStructFields(root, src)
-	// solov2-8ffo / solov2-zuvl: file-scope `var x = &pkg.Type{...}` or
-	// `var x = pkg.New(...)` origins, used by extractCallsFromBody to
-	// classify `x.Method()` as a cross-package method call. Computed
+	// /: file-scope `var x = &pkg.Type{.}` or
+	// `var x = pkg.New(.)` origins, used by extractCallsFromBody to
+	// classify `x.Method` as a cross-package method call. Computed
 	// once per file and shared across every function body in the file.
 	pkgVarOrigins := collectPackageVarOrigins(root, src)
-	// solov2-rlfe: same-file function return types so `v := New(...);
-	// v.Method()` in test files (and any other same-package caller)
+	// same-file function return types so `v:= New(.);
+	// v.Method` in test files (and any other same-package caller)
 	// binds Method to ReceiverType.Method via the in-file symbol map.
 	// Without this, test functions were invisible to blast/call_chain
 	// for in-repo methods because Render lookups dead-ended on a bare
@@ -282,19 +276,19 @@ func (p *GoParser) ParseFile(ctx context.Context, repoID, path string, src []byt
 		result.UnresolvedCalls = append(result.UnresolvedCalls, callUnresolved...)
 	}
 
-	// solov2-crn7: cobra AddCommand→CONTAINS command-tree edges.
+	// cobra AddCommand→CONTAINS command-tree edges.
 	result.Edges = append(result.Edges, fw.edges...)
 
-	// solov2-ketg: gin/echo/chi route→handler references. Emitted as
+	// gin/echo/chi route→handler references. Emitted as
 	// ROUTES UnresolvedCalls so the handler binds against the package-wide
 	// symbol map at promotion (same path as a plain cross-file call),
 	// materialising a ROUTES edge rather than CALLS.
 	result.UnresolvedCalls = append(result.UnresolvedCalls, fw.unresolved...)
 
-	// solov2-y7gu: anonymous-function calls in top-level var/const
-	// initialisers. The legacy collectAnonCalls checked node.Type() ==
+	// anonymous-function calls in top-level var/const
+	// initialisers. The legacy collectAnonCalls checked node.Type ==
 	// "function_literal" but tree-sitter Go's grammar emits
-	// "func_literal" — so the cobra-style `var rootCmd = func() { ... }`
+	// "func_literal" — so the cobra-style `var rootCmd = func {. }`
 	// CALLS extraction was silently broken all along. Attribute the
 	// anon body's calls to the package node so call_chain answers
 	// "what does this file initialisation eventually reach" correctly.
@@ -304,12 +298,12 @@ func (p *GoParser) ParseFile(ctx context.Context, repoID, path string, src []byt
 		result.UnresolvedCalls = append(result.UnresolvedCalls, anonUnresolved...)
 	}
 
-	// Chunk index over non-declaration regions . Emitted
+	// Chunk index over non-declaration regions. Emitted
 	// AFTER the symbol set is finalised so chunkFile can carve gaps
 	// between symbol line ranges. Mirrors go.go (~L216).
 	result.Nodes = append(result.Nodes, chunkFile(repoID, path, src, result.Nodes)...)
 
-	// TODO/FIXME markers via the language-agnostic lexical scanner —
+	// TODO/FIXME markers via the language-agnostic lexical scanner
 	// parity with go.go (~L217). Walks src once for the closed set of
 	// marker tokens.
 	result.Todos = scanTodos(src)
@@ -322,12 +316,11 @@ func (p *GoParser) ParseFile(ctx context.Context, repoID, path string, src []byt
 // (callee found in symbolByName) or an UnresolvedCall stashed for the
 // promotion-time cross-package resolver. recvName/recvType, when
 // non-empty, identify the method's receiver so selector calls of the
-// form `s.foo()` on a known receiver bind to "Receiver.foo" in the
+// form `s.foo` on a known receiver bind to "Receiver.foo" in the
 // in-file map (matching parseMethodDecl naming). Dedup is per-caller
 // on (callee-name) for unresolved and (caller-id, callee-id) for edges
 // to mirror the legacy seen/seenU maps.
-//
-// (132 lines) ALL predate solov2-d521 — this resolver is one big switch over
+// (132 lines) ALL predate — this resolver is one big switch over
 // call shapes carrying 10 per-file lookup maps. d521 added paramTypes (11th arg)
 // and a small param-merge loop (+2 complexity, +6 lines); the diff-scoped gate
 // only re-flags the already-grandfathered function because its signature/body
@@ -341,10 +334,10 @@ func extractCallsFromBody(q *sitter.Query, body *sitter.Node, src []byte, caller
 	seen := map[string]bool{}
 	seenU := map[string]bool{}
 
-	// Per-body local-var origins (solov2-9rc2 phase A): `v := pkg.New(...)`
-	// produces v→pkg so subsequent `v.X()` chained-selector calls are
+	// Per-body local-var origins: `v:= pkg.New(.)`
+	// produces v→pkg so subsequent `v.X` chained-selector calls are
 	// recognised as method calls on a value from pkg. File-scope `var x =
-	// &pkg.Type{...}` origins (solov2-8ffo / solov2-zuvl) feed the same
+	// &pkg.Type{.}` origins feed the same
 	// lookup; function-body short-var origins shadow them on collision,
 	// matching Go's scoping rules.
 	localOrigins := collectLocalVarOrigins(body, src)
@@ -354,13 +347,13 @@ func extractCallsFromBody(q *sitter.Query, body *sitter.Node, src []byte, caller
 		}
 		localOrigins[name] = pkg
 	}
-	// solov2-rlfe: per-body local-var receiver-type origins (v := New()
+	// per-body local-var receiver-type origins (v:= New
 	// where New is a same-file function returning a same-package type).
 	// Kept distinct from localOrigins/pkgVarOrigins because the
 	// downstream lookup binds against the in-file symbol map directly,
 	// not against a cross-repo stub.
 	localRecvTypes := collectLocalReceiverTypes(body, src, funcReturns)
-	// A typed parameter is a valid method-call receiver too (solov2-d521):
+	// A typed parameter is a valid method-call receiver too:
 	// fold the caller's param→type map in as a base, but let body-local
 	// short-var origins SHADOW a param of the same name (Go scoping).
 	for name, typ := range paramTypes {
@@ -373,7 +366,7 @@ func extractCallsFromBody(q *sitter.Query, body *sitter.Node, src []byte, caller
 		var ref callRef
 		// Capture the call_expression's 1-indexed start line so resolved
 		// edges and UnresolvedCalls carry the actual call-site location,
-		// not the caller node's declaration line (solov2-izh6.31).
+		// not the caller node's declaration line.
 		// tree-sitter Row is 0-indexed; add 1. Missing @call.expr (e.g. a
 		// future calls.scm pattern that omits the wrapper capture) leaves
 		// line at 0 — the renderer falls back to the caller's line.
@@ -384,9 +377,9 @@ func extractCallsFromBody(q *sitter.Query, body *sitter.Node, src []byte, caller
 		switch {
 		case m.node("call.value_arg") != nil && m.node("call.identifier") == nil &&
 			m.node("call.operand") == nil && m.node("call.chain_operand") == nil:
-			// solov2-f1zp: bare identifier passed as a call argument
+			// bare identifier passed as a call argument
 			// (helper(boolConv)). Treat as a CALLS edge to boolConv when
-			// the identifier resolves to a same-file function/method —
+			// the identifier resolves to a same-file function/method
 			// otherwise it's a local variable or parameter and we skip.
 			// The symbol-map check filters here rather than later because
 			// the regular call branches below all flow through unresolved
@@ -406,7 +399,7 @@ func extractCallsFromBody(q *sitter.Query, body *sitter.Node, src []byte, caller
 			n := m.node("call.identifier")
 			ref = callRef{name: string(src[n.StartByte():n.EndByte()])}
 		case m.node("call.chain_operand") != nil:
-			// Chained selector: outer.inner.Method(). Classify based on
+			// Chained selector: outer.inner.Method. Classify based on
 			// the inner operand (the leftmost identifier) — either it's
 			// the method receiver (struct field method call, phase E)
 			// or a local variable assigned from pkg.X (phase A).
@@ -415,7 +408,7 @@ func extractCallsFromBody(q *sitter.Query, body *sitter.Node, src []byte, caller
 			methodName := string(src[m.node("call.field").StartByte():m.node("call.field").EndByte()])
 			switch {
 			case recvName != "" && recvType != "" && outerOp == recvName:
-				// `s.field.Method()` — phase E. Look up the field on
+				// `s.field.Method` — phase E. Look up the field on
 				// the receiver type. Same-package concrete struct
 				// resolves to FieldType.Method via the in-file symbol
 				// map; cross-package emits IsMethodCall=true.
@@ -429,7 +422,7 @@ func extractCallsFromBody(q *sitter.Query, body *sitter.Node, src []byte, caller
 					}
 				}
 			case localOrigins[outerOp] != "":
-				// `v.M()` follows-through to `local.X.M()` only when
+				// `v.M` follows-through to `local.X.M` only when
 				// the legacy parser also drops it — neither path
 				// captures the chained variant of local-var origins.
 				// We do nothing here so phase 3b stays equivalent.
@@ -439,13 +432,13 @@ func extractCallsFromBody(q *sitter.Query, body *sitter.Node, src []byte, caller
 			fld := string(src[m.node("call.field").StartByte():m.node("call.field").EndByte()])
 			switch {
 			case recvName != "" && recvType != "" && op == recvName:
-				// s.foo() inside a method on *Server -> Server.foo (local).
+				// s.foo inside a method on *Server -> Server.foo (local).
 				ref = callRef{name: recvType + "." + fld}
 			case localOrigins[op] != "":
-				// v.Method() where v := pkg.New(...) — phase A.
+				// v.Method where v:= pkg.New(.) — phase A.
 				ref = callRef{name: fld, pkg: localOrigins[op], method: true}
 			case localRecvTypes[op] != "":
-				// solov2-rlfe: v.Method() where v := SamePkgFunc(...)
+				// v.Method where v:= SamePkgFunc(.)
 				// and SamePkgFunc returns a same-package type T → bind
 				// to T.Method via the in-file symbol map. Same shape as
 				// the recvName branch above, just with the receiver
@@ -453,7 +446,7 @@ func extractCallsFromBody(q *sitter.Query, body *sitter.Node, src []byte, caller
 				// than a method declaration's receiver.
 				ref = callRef{name: localRecvTypes[op] + "." + fld}
 			default:
-				// pkg.Foo() — package-qualified.
+				// pkg.Foo — package-qualified.
 				ref = callRef{name: fld, pkg: op}
 			}
 		default:
@@ -530,11 +523,11 @@ func extractCallsFromBody(q *sitter.Query, body *sitter.Node, src []byte, caller
 func buildFunctionNodeFromCaptures(declNode, nameNode *sitter.Node, src []byte, repoID, path string) *domain.Node {
 	name := string(src[nameNode.StartByte():nameNode.EndByte()])
 	lr := lineRange(declNode)
-	// Go allows multiple `func init()` per file. Without a per-decl
+	// Go allows multiple `func init` per file. Without a per-decl
 	// discriminator they all hash to the same node_id and the promotion
 	// transaction fails with a UNIQUE-PK constraint on (node_id, branch)
-	// — observed on hugo and prometheus, where protobuf-generated .pb.go
-	// files routinely declare two init() . The display name
+	// observed on hugo and prometheus, where protobuf-generated.pb.go
+	// files routinely declare two init. The display name
 	// stays "init"; only the ID input is disambiguated.
 	idName := name
 	if name == "init" {
@@ -621,7 +614,7 @@ func buildTypeNodeFromCaptures(declNode, nameNode, bodyNode *sitter.Node, src []
 // declared identifier, skipping anonymous "_" names. Multiple names
 // sharing one spec (`var a, b = 1, 2`) yield two nodes. Lines + raw
 // content come from the ENCLOSING declaration (not the spec) so a
-// grouped var ( ... ) block embeds the whole block in raw_content —
+// grouped var (. ) block embeds the whole block in raw_content
 // the legacy parser does this so semantic search indexes cobra-style
 // struct-literal initialisers (go.go ~L445). When decl is nil (the
 // pattern omitted the @decl capture) we fall back to the spec.
@@ -657,10 +650,10 @@ func buildVarNodesFromSpec(spec, decl *sitter.Node, src []byte, repoID, path str
 // and const_declaration for func_literal subtrees, then runs the
 // existing calls.scm extractor against each literal's body. When the
 // surrounding var has a name we can resolve to an extracted Variable
-// node (e.g. `var helloCmd = &cobra.Command{ RunE: func(){ Foo() } }`),
+// node (e.g. `var helloCmd = &cobra.Command{ RunE: func{ Foo } }`),
 // the calls attribute to that var node so cross-repo blast can name
 // the actual caller (`helloCmd`) instead of the package node — closing
-// the cobra-app grain gap . Falls back to pkgNode for
+// the cobra-app grain gap. Falls back to pkgNode for
 // shapes where no enclosing var is identifiable (const blocks,
 // composite-literal blanket lookups). Dedup is per-(caller, target)
 // across all anon bodies so two literals calling the same target
@@ -684,8 +677,8 @@ func extractAnonCallsInTopLevelVars(q *sitter.Query, root *sitter.Node, src []by
 		if n.Type() == "var_spec" {
 			if name := n.ChildByFieldName("name"); name != nil {
 				// var_spec.name is either an identifier directly
-				// (`var x = ...`) or a comma-separated list whose
-				// children are identifiers (`var x, y = ...`).
+				// (`var x =.`) or a comma-separated list whose
+				// children are identifiers (`var x, y =.`).
 				// Only single-name shapes can attribute calls
 				// unambiguously; multi-name var blocks fall through
 				// to pkgNode.

@@ -3,14 +3,12 @@
 // paragraph, etc.), it returns the k most-central pieces in original
 // order. Callers can embed the concatenation of the result instead of
 // the raw input, which suppresses boilerplate (low-centrality lines
-// like repeated `if err != nil { ... }` returns) and concentrates the
+// like repeated `if err != nil {. }` returns) and concentrates the
 // node's vector on signal-dense content.
-//
-// Scope (solov2-oo4q.1): self-contained Tier 1 helper, no production
+// Scope: self-contained Tier 1 helper, no production
 // wiring. Tier 2 (small distilled LLM) and Tier 3 (full LLM) live in
 // separate sub-beads if the bench at oo4q.2 shows the extractive lift
 // is worth chasing further.
-//
 // Centrality scoring is raw cosine-centroid: each piece's score is the
 // average dot product against every other piece (vectors are assumed
 // L2-normalised, which model2vec already guarantees, so dot == cosine).
@@ -34,15 +32,15 @@ import (
 // result and embed it, and natural ordering reads better than
 // score-ordering for both code (signature before body) and prose
 // (topic sentence before elaboration).
-//
 // Edge cases:
-//   - k <= 0: returns nil (caller asked for nothing).
-//   - k >= len(pieces): returns a copy of pieces unchanged (already
-//     "fully condensed").
-//   - len(pieces) <= 1: returns a copy unchanged (centrality
-//     undefined with fewer than 2 pieces).
-//   - An empty piece embeds normally; the embedder is responsible for
-//     producing a well-defined vector for empty input.
+//
+//	k <= 0: returns nil (caller asked for nothing).
+//	k >= len(pieces): returns a copy of pieces unchanged (already
+//	  "fully condensed").
+//	len(pieces) <= 1: returns a copy unchanged (centrality
+//	  undefined with fewer than 2 pieces).
+//	An empty piece embeds normally; the embedder is responsible for
+//	  producing a well-defined vector for empty input.
 //
 // Returns an error if any embed call fails. Partial results are not
 // returned — the caller can fall back to the raw input.

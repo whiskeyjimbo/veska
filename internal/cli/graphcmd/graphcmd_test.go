@@ -8,7 +8,7 @@ import (
 	"testing"
 )
 
-// solov2-4soa: when the chain is empty and chained_selectors_unresolved is
+// when the chain is empty and chained_selectors_unresolved is
 // the degraded reason, the renderer must print an explanatory hint plus a
 // pointer to blast/context so users don't read the bare degraded tag as
 // "veska is broken".

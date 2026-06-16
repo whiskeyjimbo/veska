@@ -25,7 +25,6 @@ type modelResponse struct {
 
 // parseJSON parses a model's structured JSON response into findings tagged
 // with kind.
-//
 // The response contract: a JSON object with a "findings" array; each finding
 // carries severity, title and message. Surrounding prose or whitespace is
 // tolerated — the first balanced JSON object in the response is decoded. An
@@ -65,7 +64,7 @@ func (mf modelFinding) toReviewFinding(kind ReviewKind) (ReviewFinding, error) {
 	}
 	// message is optional: a real model occasionally returns a finding object
 	// with no "message" even under structured output. Rather than fail the
-	// whole review job over it (~1% of responses — solov2-spb), fall back to
+	// whole review job over it (~1% of responses), fall back to
 	// the title, which is always present.
 	message := strings.TrimSpace(mf.Message)
 	if message == "" {
@@ -85,7 +84,7 @@ func (mf modelFinding) toReviewFinding(kind ReviewKind) (ReviewFinding, error) {
 
 // extractJSONObject returns the first balanced top-level JSON object in s,
 // tolerating leading/trailing prose a real model often emits around it (e.g.
-// "Here is the result:\n{...}\n"). It scans for the first '{' and tracks brace
+// "Here is the result:\n{.}\n"). It scans for the first '{' and tracks brace
 // depth, skipping braces inside string literals. It returns an empty string
 // when no object is present.
 func extractJSONObject(s string) string {

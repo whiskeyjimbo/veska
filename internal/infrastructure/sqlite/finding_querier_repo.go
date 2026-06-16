@@ -50,7 +50,7 @@ func (r *FindingQuerierRepo) OpenFindingNodeIDs(ctx context.Context, repoID, bra
 }
 
 // OpenFinding is one open finding projected for the advisory PR report
-// (solov2-zvh6.5): enough to tell a reviewer which touched file carries a known
+// enough to tell a reviewer which touched file carries a known
 // issue. FilePath coalesces the node's file for node-anchored findings (most
 // structural rules set only a node anchor) so file-level intersection works.
 type OpenFinding struct {

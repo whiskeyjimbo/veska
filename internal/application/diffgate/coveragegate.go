@@ -45,11 +45,10 @@ func (v CoverageVerdict) ExitCode() int {
 }
 
 // CoverageGate flags a candidate change that modifies or adds a prod symbol no
-// test reaches. It is a blanket gate (no target finding). The heavy lifting —
+// test reaches. It is a blanket gate (no target finding). The heavy lifting
 // re-promoting the candidate so cross-file test→prod CALLS edges resolve, then
-// running the untested-symbol check (solov2-zvh6.3) over the after-state — is
+// running the untested-symbol check over the after-state — is
 // the invocation surface's job; this gate only intersects the two results.
-//
 // The intersection is the whole gate, and it is exactly what AC2 requires:
 // "untested" is judged over ALL symbols in the changed files (the check scopes
 // by file), but the gate fires ONLY for symbols in the node-precision CHANGED

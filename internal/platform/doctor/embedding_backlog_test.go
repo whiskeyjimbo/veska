@@ -39,7 +39,7 @@ func TestCheckEmbeddingBacklog_Drained(t *testing.T) {
 }
 
 // TestCheckEmbeddingBacklog_Backfilling verifies that any pending count >0
-// classifies as "backfilling". The threshold is 0/non-0 — solov2-34rl is
+// classifies as "backfilling". The threshold is 0/non-0 is
 // about reconciling presentation with eng_get_status, which sets
 // embeddings_pending whenever pending>0.
 func TestCheckEmbeddingBacklog_Backfilling(t *testing.T) {

@@ -3,19 +3,16 @@
 package daemon
 
 // Generator for the manual's MCP tools reference
-// (docs/manual/reference/mcp-tools.md), gated behind the `docsgen` build tag so
+// ( gated behind the `docsgen` build tag so
 // it stays OUT of the default `go test` / `make all` path. `make docs-gen` runs
 // it; CI's docs-check fails if the committed page drifts.
-//
 // It reuses the test harness, which calls the production registerMCPTools — so
 // the rendered catalog is exactly the surface the daemon publishes over
 // tools/list, with no per-tool maintenance here. Adding or changing a tool
 // flows through automatically.
-//
 //	go test -tags "sqlite_fts5 docsgen" -run TestGenerateMCPToolsDoc \
-//	  ./internal/cli/daemon/ -count=1
-//
-// Output path comes from MCP_DOCS_OUT (default docs/manual/reference/mcp-tools.md,
+//	  /internal/cli/daemon/ -count=1
+// Output path comes from MCP_DOCS_OUT (default
 // resolved relative to the repo root — three levels up from this package).
 
 import (

@@ -1,4 +1,4 @@
-; symbols.scm — declarative declaration extraction for Go .
+; symbols.scm - declarative declaration extraction for Go .
 ;
 ; Capture conventions match what go_query_extract.go expects:
 ;   @function.decl   the function_declaration node itself
@@ -10,7 +10,7 @@
 ; walkers.
 ;
 ; Patterns borrow shape from Helix's runtime/queries/go and the
-; tree-sitter-go tags.scm upstream — both Apache-2.0/MIT — with our
+; tree-sitter-go tags.scm upstream - both Apache-2.0/MIT - with our
 ; capture names. Vendoring the wider set comes in later phases.
 
 ; body captures (@*.body) let the phase 3 call extractor scope its
@@ -25,7 +25,7 @@
 
 ; method_declaration captures the receiver's parameter_list so the Go
 ; extractor can run the existing extractReceiverBinding / extractReceiverType
-; helpers — those handle pointer vs value receivers and the receiver-name
+; helpers - those handle pointer vs value receivers and the receiver-name
 ; binding consistently with parseMethodDecl in the legacy walker.
 (method_declaration
   receiver: (parameter_list) @method.receiver
@@ -39,7 +39,7 @@
 ; collect interface method nodes (solov2-9rc2 phase E v2) without a
 ; second pass.
 ;
-; Anchored to source_file to match TOP-LEVEL types only — function-local
+; Anchored to source_file to match TOP-LEVEL types only - function-local
 ; type declarations (Go allows `func f(){ type k int; ... }`) are not
 ; part of the symbol graph, and on real codebases two different funcs
 ; routinely declare the same local name (hugo: helpers_test.go has
@@ -62,11 +62,11 @@
 ;
 ; Two patterns per declaration kind because tree-sitter's Go grammar
 ; nests the specs differently depending on whether the source uses a
-; parenthesised block — `var x = 1` produces var_declaration → var_spec
+; parenthesised block - `var x = 1` produces var_declaration → var_spec
 ; directly, while `var ( ... )` produces var_declaration → var_spec_list
 ; → var_spec. The Go extractor needs both the spec (for identifiers)
 ; AND the enclosing declaration (its line range + raw content drive
-; lineRange / RawContent — legacy parseTopLevelVarSpec uses decl, not
+; lineRange / RawContent - legacy parseTopLevelVarSpec uses decl, not
 ; spec, so a grouped var preserves its full block in raw_content).
 (source_file
   (var_declaration
@@ -77,7 +77,7 @@
     (var_spec_list
       (var_spec) @var.spec)) @var.decl)
 
-; const_declaration has no spec_list wrapper — const_specs are direct
+; const_declaration has no spec_list wrapper - const_specs are direct
 ; children of const_declaration in both the parenthesised and
 ; non-parenthesised forms, so one pattern covers both.
 (source_file

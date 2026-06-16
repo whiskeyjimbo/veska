@@ -3,10 +3,9 @@ package search
 // ScoreTier reports a human-readable confidence band for a single
 // result's Score relative to the highest-scoring hit in the same
 // result set. Bands: "top" >= 95% of top, "strong" >= 80%, "weak"
-// otherwise. solov2-hl70 moves this from cmd/veska/search.go so both
+// otherwise. moves this from cmd/veska/search.go so both
 // the MCP response and the CLI render the same label without the CLI
 // duplicating the math.
-//
 // IMPORTANT: tiers are RELATIVE to the query's top hit, not absolute.
 // A query whose best match is poor still gets a "top" label on its
 // least-bad result. Callers needing absolute confidence should pair
@@ -27,7 +26,7 @@ func ScoreTier(s, top float32) string {
 }
 
 // WeakTopAbsolute is the post-fusion RRF score floor below which a
-// query's top hit is considered weak in absolute terms (the cross-
+// query's top hit is considered weak in absolute terms (the cross
 // corroboration signal between vector + lexical is missing). RRF top
 // scores cluster ~0.0164 (one list, rank 1) to 0.0328 (both lists,
 // rank 1); 0.018 sits a hair above the single-list rank-1 floor so a
@@ -35,7 +34,7 @@ func ScoreTier(s, top float32) string {
 const WeakTopAbsolute float32 = 0.018
 
 // NormalizeScores returns the per-result min-max-normalised score
-// (0..1) for a results slice. When all scores are equal (or only one
+// (0.1) for a results slice. When all scores are equal (or only one
 // result is present), each entry returns 1.0 so consumers don't have
 // to special-case the divide-by-zero. The function is pure — it
 // computes a parallel slice instead of mutating results — so the raw

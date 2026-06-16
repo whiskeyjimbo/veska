@@ -10,10 +10,10 @@ import (
 // (eng_suppress_finding, eng_list_suppressions, eng_get_suppression,
 // eng_close_suppression) onto the CLI so users do not have to craft JSON-RPC
 // payloads to suppress findings — parity with `findings list / show / close /
-// reopen` . The list/show rendering lives in
-// internal/cli/findingscmd; these constructors are Cobra glue (solov2-0omh.7).
+// reopen`. The list/show rendering lives in
+// internal/cli/findingscmd; these constructors are Cobra glue.
 
-// findingsSuppressCmd is `veska findings suppress <finding_id> --reason ...`.
+// findingsSuppressCmd is `veska findings suppress <finding_id> --reason.`.
 // Wraps eng_suppress_finding. branch/repo_id are derived from the finding row.
 func findingsSuppressCmd() *cobra.Command {
 	var (

@@ -1,7 +1,7 @@
 // Package configcmd holds the business logic behind the `veska config` command
 // family. cmd/veska/config.go is reduced to Cobra construction whose RunE bodies
 // delegate here, following the cmd = glue / logic-in-packages pattern
-// established by symbolcmd, depscmd, findingscmd, and doctorcmd .
+// established by symbolcmd, depscmd, findingscmd, and doctorcmd.
 package configcmd
 
 import (
@@ -21,7 +21,7 @@ var ErrNoManager = errors.New("service manager not available")
 
 // Supervisor is the ISP-narrowed view of service.Manager that RunReload needs:
 // restart the daemon, then poll until it reports healthy. Declaring it in the
-// consuming package — sized to exactly the two methods this use case drives —
+// consuming package — sized to exactly the two methods this use case drives
 // keeps configcmd from depending on Install/Uninstall/Start/Stop, mirroring the
 // method-injection narrowing upgradeCmd uses for its single Restart call. Any
 // service.Manager satisfies it.

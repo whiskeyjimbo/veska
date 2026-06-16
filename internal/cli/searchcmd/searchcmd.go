@@ -3,10 +3,9 @@
 // {results, degraded_reasons} envelope build + render, the 'searching:'
 // stderr header, ephemeral cache-tier path prettification, and the small
 // classifiers/hints those paths rely on.
-//
 // cmd/veska/search.go is reduced to Cobra command construction whose RunE
-// is a thin call into Run here (solov2-0omh.5, following the cmd = glue /
-// logic-in-packages pattern from solov2-u4mv). Cross-package seams the cmd
+// is a thin call into Run here (, following the cmd = glue /
+// logic-in-packages pattern from ). Cross-package seams the cmd
 // package owns — the cold-scan reparser factory and the cwd→repo matcher,
 // both shared with `veska reindex` — are injected through RunOpts rather
 // than re-extracted here.
@@ -61,7 +60,7 @@ func Run(ctx context.Context, w, stderr io.Writer, opts RunOpts) error {
 	// Daemon-first: when a daemon is up and already tracks the target repo,
 	// run the query through its eng_search_semantic so the CLI shares the
 	// daemon's hybrid (vector + lexical) retrieval pipeline and never opens
-	// a second writer on veska.db (solov2-b1q, solov2-xkm). The in-process
+	// a second writer on veska.db (). The in-process
 	// path below is the fallback for when the daemon is down or the repo is
 	// not yet registered (it clones/indexes synchronously).
 	if env, handled, err := daemonSearch(ctx, stderr, w, opts); handled {
@@ -88,7 +87,7 @@ func Run(ctx context.Context, w, stderr io.Writer, opts RunOpts) error {
 
 	prettifier := ephemeralPrettifier(ctx, pools, rec, opts.JSONOut)
 
-	// solov2-izh6.15: announce the resolved repo before running the
+	// announce the resolved repo before running the
 	// search. The in-process / URL-target flow always knows the exact
 	// repo (rec) — show its short_id since aliases aren't loaded on
 	// the Record here. JSON mode suppresses inside EmitSearchHeader.
@@ -128,7 +127,7 @@ func openSearchPools() (*sqlite.Pools, error) {
 
 // ephemeralPrettifier builds the file-path shortener for ephemeral cache-tier
 // repos so the user sees `pflag/flag.go` instead of the 64-char-sha cache
-// path. Returns nil for JSON output or tracked repos. solov2-l04m.
+// path. Returns nil for JSON output or tracked repos.
 func ephemeralPrettifier(ctx context.Context, pools *sqlite.Pools, rec repo.Record, jsonOut bool) func(*SearchEnvelope) {
 	if jsonOut || rec.Kind != "ephemeral" {
 		return nil
@@ -155,7 +154,7 @@ type resolvedSearch struct {
 }
 
 // runResolvedSearch runs the query against an already-resolved repo. It
-// prefers the daemon's hybrid eng_search_semantic  and falls
+// prefers the daemon's hybrid eng_search_semantic and falls
 // back to the in-process vector-only service when the daemon is unreachable.
 func runResolvedSearch(ctx context.Context, rs resolvedSearch) error {
 	if env, ok, derr := daemonSearchByRepoID(ctx, rs.rec.RepoID, rs.rec.ActiveBranch, rs.opts); ok {
@@ -186,7 +185,7 @@ func runResolvedSearch(ctx context.Context, rs resolvedSearch) error {
 // offerAcceptancePrompt runs the post-search "keep this indexed?" prompt for
 // ephemeral repos. No-op for tracked rows, JSON output, or already-prompted
 // repos. Failure to record the outcome is non-fatal — the search succeeded;
-// we log to stderr so the user knows the row stays ephemeral. solov2-kxo5.7.
+// we log to stderr so the user knows the row stays ephemeral.
 func offerAcceptancePrompt(ctx context.Context, pools *sqlite.Pools, rec repo.Record, opts RunOpts, w io.Writer) {
 	if opts.JSONOut || rec.Kind != "ephemeral" {
 		return
@@ -219,19 +218,19 @@ func lookupCanonicalURL(ctx context.Context, db *sql.DB, repoID string) (string,
 // resolveSearchTarget picks the repo the search will run against. The three
 // input modes mirror the bead AC:
 //
-//   - empty arg: use the repo whose RootPath matches cwd (or the only
-//     registered repo, if any). Doesn't clone or scan.
-//   - a filesystem path: register if needed; subsequent runs reuse the
-//     registration so the index survives.
-//   - a git URL: clone to the cache tier on first use, reuse the same dir on
-//     re-runs (AC2 — index reuse).
+//	empty arg: use the repo whose RootPath matches cwd (or the only
+//	  registered repo, if any). Doesn't clone or scan.
+//	a filesystem path: register if needed; subsequent runs reuse the
+//	  registration so the index survives.
+//	a git URL: clone to the cache tier on first use, reuse the same dir on
+//	  re-runs (AC2 — index reuse).
 func resolveSearchTarget(ctx context.Context, pools *sqlite.Pools, opts RunOpts, w io.Writer) (repo.Record, error) {
 	target := opts.Target
 	if target == "" {
 		return resolveCwdTarget(ctx, pools, opts)
 	}
 	if isGitURL(target) {
-		// solov2-kxo5.6: URL targets route through the cache tier and land
+		// URL targets route through the cache tier and land
 		// as kind='ephemeral' rows so the eviction story works. A
 		// canonical_url match (tracked or ephemeral) short-circuits the
 		// clone — same code re-used between sessions hits the warm graph
@@ -244,10 +243,10 @@ func resolveSearchTarget(ctx context.Context, pools *sqlite.Pools, opts RunOpts,
 	return repo.Record{}, fmt.Errorf("search: target %q is neither an existing path nor a git URL", target)
 }
 
-// resolveCwdTarget handles the empty-target case: only run against an already-
-// registered repo matching cwd. Auto-registering cwd here is a footgun —
+// resolveCwdTarget handles the empty-target case: only run against an already
+// registered repo matching cwd. Auto-registering cwd here is a footgun
 // running `veska search` from /tmp or any non-git directory would otherwise
-// cold-scan a random path . The user must explicitly pass <path>
+// cold-scan a random path. The user must explicitly pass <path>
 // or run `veska repo add` first.
 func resolveCwdTarget(ctx context.Context, pools *sqlite.Pools, opts RunOpts) (repo.Record, error) {
 	cwd, err := os.Getwd()

@@ -7,23 +7,23 @@ routes each into its own code path.
 
 | Invocation | Role |
 |---|---|
-| `veska` | **CLI** — `init`, `repo`, `reindex`, `service`, `doctor`, `backup`, `wiki`, … Operator and user surface. |
-| `veska-daemon` | **Long-running process** — owns the SQLite store, the fsnotify watcher, the embedder, the MCP Unix-socket server, and the post-promotion queue poller. |
-| `veska-mcp` | **Thin stdio shim** — proxies an editor's MCP (JSON-RPC) frames to the daemon's Unix socket. What your editor launches. |
+| `veska` | **CLI** - `init`, `repo`, `reindex`, `service`, `doctor`, `backup`, `wiki`, … Operator and user surface. |
+| `veska-daemon` | **Long-running process** - owns the SQLite store, the fsnotify watcher, the embedder, the MCP Unix-socket server, and the post-promotion queue poller. |
+| `veska-mcp` | **Thin stdio shim** - proxies an editor's MCP (JSON-RPC) frames to the daemon's Unix socket. What your editor launches. |
 
 ## What the daemon owns
 
 The daemon is the single writer. Everything Veska knows lives under `~/.veska/`
 (override with `VESKA_HOME`):
 
-- **SQLite store** — the durable graph, the post-promotion queue, and the FTS
+- **SQLite store** - the durable graph, the post-promotion queue, and the FTS
   (lexical) index. In-process, no server.
-- **Vector index** — in-memory by default (`memvec`); an on-disk HNSW backend
+- **Vector index** - in-memory by default (`memvec`); an on-disk HNSW backend
   (usearch) is available for large graphs via `VESKA_VECTOR_BACKEND=usearch`.
-- **File watcher** — fsnotify, debounced, driving save → staging reparses.
-- **Embedder** — in-process model2vec by default.
-- **MCP server** — a Unix socket the `veska-mcp` shim and CLI dispatch through.
-- **Post-promotion queue poller** — drains embedding/check/autolink work after
+- **File watcher** - fsnotify, debounced, driving save → staging reparses.
+- **Embedder** - in-process model2vec by default.
+- **MCP server** - a Unix socket the `veska-mcp` shim and CLI dispatch through.
+- **Post-promotion queue poller** - drains embedding/check/autolink work after
   each commit.
 
 ## How the pieces talk

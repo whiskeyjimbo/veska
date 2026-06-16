@@ -2,7 +2,6 @@
 
 // Command loadtest reads M1 exit-gate RESULTS.md files and emits a consolidated
 // REPORT.md under tools/loadtest/.
-//
 // Exit codes:
 //
 //	0 — all non-pending gates pass

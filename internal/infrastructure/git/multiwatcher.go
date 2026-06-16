@@ -26,7 +26,7 @@ type repoWatch struct {
 
 // MultiRepoWatcher manages a dynamic set of per-repo FSWatcher instances.
 // Each repo has its own isolated debounce queue. Events from all repos are
-// multiplexed onto a single channel returned by Events().
+// multiplexed onto a single channel returned by Events.
 // A panic in one repo's watcher goroutine is recovered, logged, and that
 // repo is restarted after a 1-second delay.
 type MultiRepoWatcher struct {
@@ -193,7 +193,7 @@ func (m *MultiRepoWatcher) forwardEvents(ctx context.Context, rw *repoWatch, eve
 // Inject synthesises a write event for path under repoID and multiplexes it
 // onto the shared output channel, exactly as a live fsnotify write would. The
 // wake reconciler uses this to feed suspend/resume-detected changes into the
-// same parse-on-save pipeline that drains Events(). The send is bounded by the
+// same parse-on-save pipeline that drains Events. The send is bounded by the
 // multiplexer context so a stalled consumer cannot block a wake sweep past
 // shutdown. Calling before Start (m.ctx unset) is a no-op.
 func (m *MultiRepoWatcher) Inject(repoID, path string) {
@@ -272,7 +272,7 @@ func (m *MultiRepoWatcher) Remove(repoID string) error {
 	return nil
 }
 
-// Close stops all repo watchers and closes the Events() channel.
+// Close stops all repo watchers and closes the Events channel.
 func (m *MultiRepoWatcher) Close() error {
 	if m.cancel != nil {
 		m.cancel()

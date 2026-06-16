@@ -1,11 +1,10 @@
 // Command cliparity enforces the CLI/MCP surface-parity contract
-// . Every MCP tool registered in internal/infrastructure/mcp/
+// Every MCP tool registered in internal/infrastructure/mcp/
 // must EITHER:
 //
-//   - Appear in tools/lint/cliparity/wrapped.txt (the manifest of tools
-//     that have a `veska <subcommand>` wrapper), OR
-//   - Carry a non-zero CLIExempt value on its ToolSpec literal
-//     .
+//	Appear in tools/lint/cliparity/wrapped.txt (the manifest of tools
+//	  that have a `veska <subcommand>` wrapper), OR
+//	Carry a non-zero CLIExempt value on its ToolSpec literal
 //
 // Stale manifest entries (names with no matching MCP registration) are
 // also flagged so the manifest stays a live document rather than a
@@ -146,7 +145,7 @@ func scanMCPRegistrations() ([]toolFact, error) {
 			if !ok {
 				return true
 			}
-			// Best-effort: only inspect ToolSpec{...} literals.
+			// Best-effort: only inspect ToolSpec{.} literals.
 			if id, ok := lit.Type.(*ast.Ident); !ok || id.Name != "ToolSpec" {
 				return true
 			}

@@ -32,7 +32,7 @@ func seedDB(t *testing.T, dbPath string) {
 	}
 }
 
-// tarEntries returns the set of file names inside a .tar.gz archive.
+// tarEntries returns the set of file names inside a.tar.gz archive.
 func tarEntries(t *testing.T, path string) map[string]bool {
 	t.Helper()
 	f, err := os.Open(path)

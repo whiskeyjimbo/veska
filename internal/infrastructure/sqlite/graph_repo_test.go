@@ -142,7 +142,7 @@ func TestGraphRepo_GetNode_MissingReturnsNilNil(t *testing.T) {
 
 // TestGraphRepo_FindNodeIDsByPrefix_Unique verifies a prefix that matches
 // exactly one node resolves to its full id, and a full id resolves to itself
-// (solov2-uej9.3 — `veska node <12-char display id>`).
+// ( — `veska node <12-char display id>`).
 func TestGraphRepo_FindNodeIDsByPrefix_Unique(t *testing.T) {
 	t.Parallel()
 	r := openGraphRepoTestDB(t)
@@ -171,7 +171,6 @@ func TestGraphRepo_FindNodeIDsByPrefix_Unique(t *testing.T) {
 // TestGraphRepo_FindNodeIDsByPrefix_MultiBranchNotAmbiguous pins the DISTINCT
 // requirement: the SAME node_id stored on two branches must count as one
 // candidate, not two, so a unique display prefix is not misread as ambiguous
-// (solov2-uej9.3).
 func TestGraphRepo_FindNodeIDsByPrefix_MultiBranchNotAmbiguous(t *testing.T) {
 	t.Parallel()
 	r := openGraphRepoTestDB(t)
@@ -193,7 +192,7 @@ func TestGraphRepo_FindNodeIDsByPrefix_MultiBranchNotAmbiguous(t *testing.T) {
 
 // TestGraphRepo_FindNodeIDsByPrefix_Ambiguous verifies two distinct node_ids
 // sharing a prefix both surface (capped at limit) so the handler can detect
-// ambiguity (solov2-uej9.3).
+// ambiguity.
 func TestGraphRepo_FindNodeIDsByPrefix_Ambiguous(t *testing.T) {
 	t.Parallel()
 	r := openGraphRepoTestDB(t)
@@ -255,7 +254,7 @@ func TestGraphRepo_FindNodes_ExactMatch(t *testing.T) {
 	}
 }
 
-// TestGraphRepo_FindNodes_UnqualifiedSuffix pins solov2-d2x: an unqualified
+// TestGraphRepo_FindNodes_UnqualifiedSuffix pins: an unqualified
 // name matches the trailing segment of a qualified symbol_path, so "Start"
 // finds "Server.Start" instead of silently returning nothing. Exact matches
 // still sort ahead of suffix matches.
@@ -293,7 +292,7 @@ func TestGraphRepo_FindNodes_UnqualifiedSuffix(t *testing.T) {
 	}
 }
 
-// TestGraphRepo_FindNodes_CaseSensitive guards solov2-xcb1: identifier
+// TestGraphRepo_FindNodes_CaseSensitive guards: identifier
 // matching is byte-exact. SQLite LIKE is case-insensitive for ASCII by
 // default, so before the COLLATE BINARY fix, searching "Run" also matched
 // "FSNotifyWatcher.run" — a different symbol. Go (and most supported

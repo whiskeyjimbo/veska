@@ -13,10 +13,7 @@ import (
 	_ "github.com/mattn/go-sqlite3" // SQLite driver
 )
 
-// ---------------------------------------------------------------------------
 // Mirrored structs (JSON-compatible with bench/gcsweep/pkloader packages)
-// ---------------------------------------------------------------------------
-
 // LoadMetrics mirrors pkloader.LoadMetrics.
 type LoadMetrics struct {
 	OverlapPct   int   `json:"overlap_pct"`
@@ -65,10 +62,7 @@ type GCSweepResult struct {
 	ReclaimBytes    int64 `json:"reclaim_bytes"`
 }
 
-// ---------------------------------------------------------------------------
 // SpikeInputs bundles all measured data needed to generate the report.
-// ---------------------------------------------------------------------------
-
 // SpikeInputs holds all measured data for one spike run.
 type SpikeInputs struct {
 	Load                  LoadMetrics
@@ -77,10 +71,7 @@ type SpikeInputs struct {
 	LinearGrowthConfirmed bool
 }
 
-// ---------------------------------------------------------------------------
 // Verdict
-// ---------------------------------------------------------------------------
-
 // Verdict is the outcome bucket per M0 §Outcomes.
 type Verdict string
 
@@ -102,9 +93,9 @@ const (
 
 // AssignVerdict applies the green/yellow/red matrix from M0 §Outcomes.
 //
-//	Green:  linear growth + disk ≤ 5 GiB + node p95 ≤ 25ms + edges p95 ≤ 100ms
+//	Green: linear growth + disk ≤ 5 GiB + node p95 ≤ 25ms + edges p95 ≤ 100ms
 //	Yellow: linear growth confirmed but disk ≤ 10 GiB OR node p95 ≤ 50ms OR edges p95 ≤ 200ms
-//	Red:    super-linear growth OR disk > 10 GiB OR node p95 > 50ms OR edges p95 > 200ms
+//	Red: super-linear growth OR disk > 10 GiB OR node p95 > 50ms OR edges p95 > 200ms
 func AssignVerdict(in SpikeInputs) Verdict {
 	const gib = float64(1 << 30)
 
@@ -281,9 +272,7 @@ func RenderMarkdown(in SpikeInputs, v Verdict) string {
 	return sb.String()
 }
 
-// ---------------------------------------------------------------------------
 // Helpers
-// ---------------------------------------------------------------------------
 
 func fmtInt(n int) string {
 	return fmtInt64(int64(n))

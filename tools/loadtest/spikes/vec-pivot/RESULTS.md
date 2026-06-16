@@ -45,9 +45,9 @@ Corpus: 768-dim synthetic vectors seed=42. Hold-out: 100 queries seed=999.
 | sqlite-vec | Default; zero external libs; linear scan ≤75k nodes| CGo (sqlite-vec.c embedded) |
 | usearch    | Scale; HNSW float16; recall@10=0.987 @50k          | libusearch_c.so + hnsw_native tag |
 
-- **Default backend**: `sqlite-vec` — no `libusearch_c.so` required; adequate
+- **Default backend**: `sqlite-vec` - no `libusearch_c.so` required; adequate
   below `SQLiteVecYellowThreshold` (75k nodes).
-- **Scale backend**: `usearch` (float16, HNSW) — selected library from M1 spike;
+- **Scale backend**: `usearch` (float16, HNSW) - selected library from M1 spike;
   all DoD floors pass at both 50k and 250k populations.
 - vec0 impl removed; sqlite-vec covers the low-count case without the vec0 ceiling.
 

@@ -73,7 +73,7 @@ def assert_healthy_status(status: dict) -> None:
     These suites run against ONE shared session daemon, and sibling tests
     (var_decl, reindex, repo_lifecycle) register repos mid-run, so the
     embedder briefly carries a real backlog. eng_get_status emits exactly
-    one degraded reason — 'embeddings_pending' (providers.go) — which the
+    one degraded reason - 'embeddings_pending' (providers.go) - which the
     daemon itself classifies as "healthy, just warming up", so a transient
     'degraded' here is not a fault. We still fail loudly on any OTHER status
     or degraded reason, so the health gate survives: a genuinely broken

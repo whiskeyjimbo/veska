@@ -383,7 +383,7 @@ func TestResync_ErrDaemonStarting(t *testing.T) {
 	}
 }
 
-// TestResync_PerRepoFailureSkipsAndContinues pins solov2-8ga: when one
+// TestResync_PerRepoFailureSkipsAndContinues pins: when one
 // repo errors during resync (e.g. SQLITE_BUSY on its cold-scan
 // promote), the loop must log + continue so repos registered AFTER the
 // failing one still get indexed.
@@ -415,7 +415,7 @@ func TestResync_PerRepoFailureSkipsAndContinues(t *testing.T) {
 	}
 }
 
-// TestResync_BranchCheck_SwitchedBranch_ReplayUsesNewBranch pins SOLO-03 §5.2:
+// TestResync_BranchCheck_SwitchedBranch_ReplayUsesNewBranch pins:
 // when the working-tree branch differs from repos.active_branch, the branch
 // check must run FIRST (bump generation, clear prior-branch staging, update
 // active_branch) and the subsequent commit replay must use the NEW branch as

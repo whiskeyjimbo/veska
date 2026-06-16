@@ -2,7 +2,6 @@
 // These blank-identifier checks ensure that all stub implementations satisfy
 // every interface in the ports package. The stubs have empty method bodies;
 // their only purpose is to make the compiler validate the full method set.
-//
 // Adding a new method to an interface will cause a compile error here until
 // the stub (and any real adapter) is updated — giving you fast, zero-overhead
 // coverage of the interface contract.

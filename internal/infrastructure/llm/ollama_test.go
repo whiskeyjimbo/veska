@@ -363,7 +363,7 @@ func TestOllamaGenerator_Generate_PerCallTimeout(t *testing.T) {
 }
 
 // TestOllamaGenerator_Generate_Usage verifies the adapter surfaces Ollama's
-// prompt_eval_count and eval_count as ports.TokenUsage (solov2-nz2.5).
+// prompt_eval_count and eval_count as ports.TokenUsage.
 func TestOllamaGenerator_Generate_Usage(t *testing.T) {
 	t.Parallel()
 

@@ -103,7 +103,7 @@ func TestEntryPoints_ReturnsSelectedData(t *testing.T) {
 	}
 }
 
-// TestFilterTestEntries_DefaultDropsTestSymbols pins solov2-bos: the
+// TestFilterTestEntries_DefaultDropsTestSymbols pins: the
 // default response excludes _test.go files and Test/Benchmark/Example/
 // Fuzz-prefixed funcs. include_tests=true opts back in.
 func TestFilterTestEntries_DefaultDropsTestSymbols(t *testing.T) {

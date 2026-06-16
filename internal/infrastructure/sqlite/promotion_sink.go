@@ -21,14 +21,13 @@ type nodeWrite struct {
 // PromotionSink is a co-transactional writer plugged into PromotionStore. Every
 // sink participates in the single promotion transaction; a failure in any hook
 // rolls the whole transaction back.
-//
 // Lifecycle within one Promote call:
 //
-//	Prepare(tx)                       — once, before the per-file loop
+//	Prepare(tx) — once, before the per-file loop
 //	for each file:
-//	    BeforeNodeDelete(ctx, tx, file)   — before the store DELETEs node rows
+//	    BeforeNodeDelete(ctx, tx, file) — before the store DELETEs node rows
 //	    (store DELETEs + re-INSERTs node rows)
-//	    for each node: AfterNodeInsert(...) — after each node row is inserted
+//	    for each node: AfterNodeInsert(.) — after each node row is inserted
 //
 // BeforeNodeDelete is the hook for writes that must observe the still-present
 // prior node rows (e.g. FTS deletes that resolve node ids via a subquery over
@@ -127,7 +126,7 @@ func (s *ftsSink) Prepare(ctx context.Context, tx *sql.Tx) error {
 
 // BeforeNodeDelete clears FTS rows for every node that currently lives in this
 // file BEFORE the store deletes the node rows themselves. The node_id IN
-// (SELECT ...) subquery must observe the still-present rows, so this MUST run
+// (SELECT.) subquery must observe the still-present rows, so this MUST run
 // before the per-file node DELETE. Doing it this way keeps the FTS in sync even
 // for nodes the new parse no longer produces (file shrank / symbol removed).
 func (s *ftsSink) BeforeNodeDelete(ctx context.Context, tx *sql.Tx, branch, repoID, filePath string) error {

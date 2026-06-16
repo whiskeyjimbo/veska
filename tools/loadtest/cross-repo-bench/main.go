@@ -3,10 +3,9 @@
 // Command cross-repo-bench measures the p95 latency of ResolveStubsForNode
 // against a seeded in-memory SQLite database with two repos (service + sdk),
 // 1000 nodes in each, and 200 cross_repo_edge_stubs from service to sdk.
-//
 // Usage:
 //
-//	go run -tags cross_repo_bench ./tools/loadtest/cross-repo-bench/
+//	go run -tags cross_repo_bench./tools/loadtest/cross-repo-bench/
 package main
 
 import (
@@ -140,7 +139,7 @@ func seedData(db *sql.DB) (stubSrcNodeIDs []string, err error) {
 	for i := 0; i < numStubs; i++ {
 		srcIdx := (i / 4) % numNodes // 4 stubs per source node, cycling through nodes
 		srcNodeID := fmt.Sprintf("repo-service-node-%04d", srcIdx)
-		dstIdx := i % numNodes // point at sdk nodes 0..199
+		dstIdx := i % numNodes // point at sdk nodes 0.199
 		symbolPath := fmt.Sprintf("pkg.Symbol%04d", dstIdx)
 		stubID := fmt.Sprintf("stub-%04d", i)
 

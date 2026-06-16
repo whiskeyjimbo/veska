@@ -206,7 +206,7 @@ func TestHandler_EmptyPayloadIsNoop(t *testing.T) {
 	}
 }
 
-// TestHandler_VendoredPathIsNoop pins solov2-ttsc: auto-link must not run
+// TestHandler_VendoredPathIsNoop pins: auto-link must not run
 // against vendored source files. The handler short-circuits before any
 // lookup/linker call so a vendored tree (cobra, node_modules) produces zero
 // findings and zero queue work.
@@ -337,7 +337,7 @@ func TestHandler_FindingStorageErrorWraps(t *testing.T) {
 	}
 }
 
-// TestHandler_SkipsNonSymbolSourcesAndNamesTarget covers solov2-wh0: package /
+// TestHandler_SkipsNonSymbolSourcesAndNamesTarget covers: package /
 // chunk source nodes are dropped before linking, and the finding message names
 // the target symbol + file instead of an opaque node ID.
 func TestHandler_SkipsNonSymbolSourcesAndNamesTarget(t *testing.T) {
@@ -371,7 +371,7 @@ func TestHandler_SkipsNonSymbolSourcesAndNamesTarget(t *testing.T) {
 	if len(findings.saved) != 1 {
 		t.Fatalf("expected 1 finding, got %d", len(findings.saved))
 	}
-	// solov2-6eqa: message now names both sides explicitly.
+	// message now names both sides explicitly.
 	want := "DoThing in x.go similar to OtherThing in y.go (score 0.91)"
 	if findings.saved[0].Message != want {
 		t.Errorf("message = %q, want %q", findings.saved[0].Message, want)
@@ -404,7 +404,7 @@ func TestHandler_FakesEmitOneEdgeAndOneFindingPerCandidate(t *testing.T) {
 		t.Fatalf("expected 3 findings, got %d", len(findings.saved))
 	}
 	// Each saved SIMILAR_TO edge must carry its candidate's similarity score
-	// (solov2-c1s4 seam: Candidate.Score -> domain.WithScore -> persisted edge).
+	// ( seam: Candidate.Score -> domain.WithScore -> persisted edge).
 	saved := edges.saved[0]
 	wantScores := map[string]float32{"t1": 0.91, "t2": 0.88, "t3": 0.95}
 	for _, e := range saved {
@@ -699,8 +699,7 @@ func TestHandler_Integration_PersistsAndIsIdempotent(t *testing.T) {
 	}
 }
 
-// TestHandler_Integration_SupersedesPriorAutoLinksWhenTargetsDrift is the
-// solov2-ok7y regression: re-promoting a file whose source nodes now match a
+// regression: re-promoting a file whose source nodes now match a
 // DIFFERENT set of nearest-neighbour targets must NOT leave the prior
 // auto-link findings open. Without the supersession step the open
 // "auto-link" surface balloons across reindexes; with it, only the
@@ -766,7 +765,6 @@ func TestHandler_Integration_SupersedesPriorAutoLinksWhenTargetsDrift(t *testing
 	}
 }
 
-// TestHandler_Integration_IdenticalCandidatesStableAcrossReruns is a tighter
 // version of TestHandler_Integration_PersistsAndIsIdempotent: when the linker
 // returns the same candidates on a re-run, the supersede-then-save dance must
 // leave the previously-open findings still open (the Save's ON CONFLICT path
@@ -805,7 +803,7 @@ func TestHandler_Integration_IdenticalCandidatesStableAcrossReruns(t *testing.T)
 	}
 }
 
-// TestIsIdiomaticAutolinkNoise pins solov2-7ze1: name-on-name pairs in
+// TestIsIdiomaticAutolinkNoise pins: name-on-name pairs in
 // the Go-idiom set (init/main/String/Error/TestMain) and same-kind
 // cobra command vars (*Cmd) are filtered out before findings emit, so
 // a tiny CLI repo doesn't get flooded with structurally-trivial pairs.

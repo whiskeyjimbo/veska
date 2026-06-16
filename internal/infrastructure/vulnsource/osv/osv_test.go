@@ -61,7 +61,7 @@ const fooV2Advisory = `{
   }]
 }`
 
-// jwtGHSA + jwtGOAdvisory pin solov2-ka54: OSV ships the same jwt-go
+// jwtGHSA + jwtGOAdvisory pin: OSV ships the same jwt-go
 // auth-bypass vulnerability under both a GHSA and a GO- ID; Scan must
 // emit one finding (GHSA wins), not two.
 const jwtGHSA = `{
@@ -101,7 +101,7 @@ func writeFixtureCache(t *testing.T, advisories map[string]string) string {
 	return dir
 }
 
-// TestScan_DedupesAliasedAdvisories pins solov2-ka54: two OSV advisories that
+// TestScan_DedupesAliasedAdvisories pins: two OSV advisories that
 // describe the same vuln via different IDs (GHSA + GO-) must collapse to a
 // single finding, with the GHSA-prefixed ID winning and the suppressed IDs
 // surfacing in Aliases.

@@ -21,14 +21,13 @@ type EmbedTextInput struct {
 // (sqlite embedding_refs_repo); EmbedVariantSignature/Snippet/Both are
 // eval-only candidates exercised solely by the recall sweep
 // (tools/loadtest/recallprojection).
-//
 // The non-baseline variants deliberately stay in the domain rather than
-// moving next to the eval harness: the variant enum, its String() labels,
+// moving next to the eval harness: the variant enum, its String labels,
 // and the EmbedText projection switch are one cohesive contract, and the
 // eval sweep's whole job is to compare candidate projections against the
 // production baseline through that shared surface. Splitting them would
 // fragment a single switch across two packages for no production benefit
-// (decision recorded: solov2-xde2.15). Revisit only if eval ownership moves.
+// (decision recorded: ). Revisit only if eval ownership moves.
 type EmbedTextVariant int
 
 const (
@@ -59,15 +58,13 @@ func (v EmbedTextVariant) String() string {
 }
 
 // EmbedText builds the deterministic Embed-input projection for a node.
-//
 // The baseline variant joins the non-empty parts of
-// "<kind> <symbol_path> <file_path> <language>" with a single space —
+// "<kind> <symbol_path> <file_path> <language>" with a single space
 // the exact projection the production FetchPending path produces.
 // kind and symbolPath are always present; filePath and language may be
 // empty. Enrichment variants append signature and/or snippet after the
 // baseline fields, again skipping empty parts so a node missing the
 // enrichment field projects identically to baseline.
-//
 // This function is the single shared definition consumed both by the
 // production sqlite adapter and by the recall-projection eval harness so
 // a projection change is measured against exactly what production emits.

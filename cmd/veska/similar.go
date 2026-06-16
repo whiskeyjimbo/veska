@@ -10,7 +10,7 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/cli/similarcmd"
 )
 
-// similarCmd wraps eng_search_similar. solov2-yh5a parity wrapper. The
+// similarCmd wraps eng_search_similar. parity wrapper. The
 // selector is a symbol name or node_id, routed the same way `veska calls`/
 // `veska blast` route theirs.
 func similarCmd() *cobra.Command {
@@ -41,7 +41,7 @@ func similarCmd() *cobra.Command {
 	return cmd
 }
 
-// relatedCmd wraps eng_find_related. solov2-yh5a parity wrapper. The anchor is
+// relatedCmd wraps eng_find_related. parity wrapper. The anchor is
 // a file:line; the daemon resolves the smallest enclosing node and runs the
 // same neighbourhood search as `veska similar`.
 func relatedCmd() *cobra.Command {

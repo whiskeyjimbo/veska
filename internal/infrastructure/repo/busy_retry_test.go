@@ -7,7 +7,7 @@ import (
 	"time"
 )
 
-// solov2-6c04 verification — execWithBusyRetry retries SQLITE_BUSY errors
+// verification — execWithBusyRetry retries SQLITE_BUSY errors
 // up to N attempts and gives up after exhausting them.
 
 func TestIsSQLiteBusy_MatchesBothFormats(t *testing.T) {

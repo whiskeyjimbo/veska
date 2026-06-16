@@ -1,16 +1,15 @@
 // Package layercheck implements an import-graph layer analyser that enforces
 // architectural boundaries between core, application, and infrastructure layers.
-//
 // Forbidden import directions:
 //
-//	internal/core/**         → internal/application/**
-//	internal/core/**         → internal/infrastructure/**
-//	internal/application/**  → internal/infrastructure/**
+//	internal/core/** → internal/application/**
+//	internal/core/** → internal/infrastructure/**
+//	internal/application/** → internal/infrastructure/**
 //
 // Allowed exceptions (application may cross only to ports/domain):
 //
-//	internal/application/** → internal/core/ports/**   (allowed)
-//	internal/application/** → internal/core/domain/**  (allowed)
+//	internal/application/** → internal/core/ports/** (allowed)
+//	internal/application/** → internal/core/domain/** (allowed)
 package layercheck
 
 import (
@@ -33,7 +32,7 @@ func (v Violation) String() string {
 }
 
 // IsViolation returns true when importing `imported` from `importer` breaches a
-// layer rule.  Both paths are expected to be fully-qualified Go package import
+// layer rule. Both paths are expected to be fully-qualified Go package import
 // paths (e.g. "github.com/foo/bar/internal/core/domain").
 func IsViolation(importer, imported string) bool {
 	_, violated := checkViolation(importer, imported)

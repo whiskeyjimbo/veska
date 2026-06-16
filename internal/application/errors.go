@@ -16,8 +16,8 @@ var ErrMissingDependency = errors.New("application: missing required dependency"
 // active, or "pool_wait" when the pool's wait queue is backed up.
 type ErrBusy struct {
 	Cause     string // "seal_in_flight" | "pool_wait"
-	InUse     int    // db.Stats().InUse at time of error
-	WaitCount int64  // db.Stats().WaitCount
+	InUse     int    // db.Stats.InUse at time of error
+	WaitCount int64  // db.Stats.WaitCount
 }
 
 func (e ErrBusy) Error() string {

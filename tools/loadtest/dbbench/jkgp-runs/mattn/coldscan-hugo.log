@@ -1,5 +1,5 @@
 {"time":"2026-05-27T02:59:40.410616018Z","level":"INFO","msg":"daemon: embedder elected","model_id":"veska-static-v2"}
-{"time":"2026-05-27T02:59:40.410651417Z","level":"WARN","msg":"daemon: low-quality static-v2 embedder elected — run `veska install model2vec` for higher-quality code search","model_id":"veska-static-v2"}
+{"time":"2026-05-27T02:59:40.410651417Z","level":"WARN","msg":"daemon: low-quality static-v2 embedder elected - run `veska install model2vec` for higher-quality code search","model_id":"veska-static-v2"}
 {"time":"2026-05-27T02:59:40.422007226Z","level":"INFO","msg":"veska-daemon: running (Ctrl-C to stop)"}
 {"time":"2026-05-27T02:59:41.125796682Z","level":"INFO","msg":"cold scan: starting","repo_id":"e39177424c0af2f0683b46a7d81a3f059272ffd86539ec71757ac791d6794aa5","root":"/tmp/hugo-jkgp","branch":"master"}
 {"time":"2026-05-27T02:59:45.04705113Z","level":"INFO","msg":"promotion: starting","repo_id":"e39177424c0af2f0683b46a7d81a3f059272ffd86539ec71757ac791d6794aa5","branch":"master","git_sha":"076dfe13d0f789e3d9586b192f8f7f3329c26990","files":899}

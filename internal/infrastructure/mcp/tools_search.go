@@ -25,17 +25,17 @@ const CodeFailedPrecondition = -32003
 // from search.Service unchanged so callers can branch on the mode that
 // actually serviced the query.
 // SearchResponse fields use non-omitempty tags so the wire shape is
-// stable across calls — empty collections serialize as [] per the
-// README's "Conventions across the tool surface" contract .
+// stable across calls — empty collections serialize as per the
+// README's "Conventions across the tool surface" contract.
 type SearchResponse struct {
 	Results         []searchHitDTO `json:"results"`
 	DegradedReasons []string       `json:"degraded_reasons"`
 	// IndexingRepos populates alongside DegradedReason "indexing_in_progress"
 	// when a cold scan is in flight at query time and the result is empty
-	// (solov2-izh6.30). Omitted from JSON when empty.
+	// Omitted from JSON when empty.
 	IndexingRepos []string `json:"indexing_repos,omitempty"`
 	// WakeReconcilingRepos lists queried repos whose wake reconcile sweep was
-	// in flight at query time (solov2-xde2.25.1), alongside DegradedReason
+	// in flight at query time, alongside DegradedReason
 	// "wake_reconciling". Fires on empty AND non-empty results. Omitted when
 	// empty.
 	WakeReconcilingRepos []string `json:"wake_reconciling_repos,omitempty"`
@@ -43,7 +43,7 @@ type SearchResponse struct {
 
 // PendingEmbedsCounter exposes the global pending-embeds depth so the
 // semantic handler can tag responses with 'embeddings_pending' while the
-// index is still warming. nil is a no-op .
+// index is still warming. nil is a no-op.
 type PendingEmbedsCounter interface {
 	CountPending(ctx context.Context) (int, error)
 }
@@ -51,7 +51,7 @@ type PendingEmbedsCounter interface {
 // DegradedReasonEmbeddingsPending is the canonical token emitted on
 // eng_search_semantic responses when the daemon still has un-embedded
 // nodes queued. A junior running a search against a freshly-registered
-// repo and getting [] otherwise has no signal that the index is warming
+// repo and getting otherwise has no signal that the index is warming
 // rather than the query being wrong.
 const DegradedReasonEmbeddingsPending = "embeddings_pending"
 
@@ -66,7 +66,7 @@ type SimilarLookup interface {
 
 // SearchToolOption configures RegisterSearchTools. The only knob today is
 // the GraphStorage used by eng_search_similar to resolve a `symbol` param
-// to a node_id ; composition roots that don't wire it can
+// to a node_id; composition roots that don't wire it can
 // still call the tool with node_id directly.
 type SearchToolOption func(*searchToolConfig)
 
@@ -78,13 +78,13 @@ type searchToolConfig struct {
 
 // WithSearchScanTracker supplies the daemon's cold-scan tracker so empty
 // search responses can carry an indexing_in_progress hint when a scan is
-// in flight (solov2-izh6.30). Nil disables the hint.
+// in flight. Nil disables the hint.
 func WithSearchScanTracker(t ScanTrackerReader) SearchToolOption {
 	return func(c *searchToolConfig) { c.scans = t }
 }
 
 // WithSearchReconcileTracker supplies the wake reconciler so a semantic search
-// touching a mid-sweep repo carries a wake_reconciling hint (solov2-xde2.25.1).
+// touching a mid-sweep repo carries a wake_reconciling hint.
 // Nil disables the hint.
 func WithSearchReconcileTracker(t ReconcileReader) SearchToolOption {
 	return func(c *searchToolConfig) { c.reconcile = t }
@@ -106,7 +106,7 @@ const (
 )
 
 // resolveK normalises the k / limit aliases shared by every search handler:
-// k wins, 'limit' is the fallback alias , zero/negative means the
+// k wins, 'limit' is the fallback alias, zero/negative means the
 // default, and anything above maxSearchK is rejected. Centralising it keeps the
 // three handlers byte-identical on this contract instead of triplicating it.
 func resolveK(k, limit int) (int, *RPCError) {
@@ -125,7 +125,7 @@ func resolveK(k, limit int) (int, *RPCError) {
 // RegisterSearchTools registers eng_search_semantic and eng_search_similar.
 // svc is required and orchestrates the semantic + lexical-fallback path.
 // lookup + vectors + nodes drive the similar-by-node-id path. rec is
-// optional: a nil recorder disables savings telemetry .
+// optional: a nil recorder disables savings telemetry.
 func RegisterSearchTools(
 	r *Registry,
 	svc *search.Service,
@@ -140,7 +140,7 @@ func RegisterSearchTools(
 	for _, o := range opts {
 		o(&cfg)
 	}
-	// solov2-hjw9: opportunistically extract a PendingEmbedsCounter from the
+	// opportunistically extract a PendingEmbedsCounter from the
 	// SimilarLookup. *sqlite.EmbeddingRefsRepo satisfies both interfaces; test
 	// stubs that don't can ignore the signal (handler treats nil as "no info").
 	var pending PendingEmbedsCounter

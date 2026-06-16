@@ -28,7 +28,7 @@ func (f *fakeCheckRunner) Run(_ context.Context, in application.CheckRunInput) {
 }
 
 // TestPromote_InvokesCheckRunnerPostCommit verifies that when a CheckRunner is
-// installed, Promote calls Run() after the tx commits.
+// installed, Promote calls Run after the tx commits.
 func TestPromote_InvokesCheckRunnerPostCommit(t *testing.T) {
 	db := openMemDB(t)
 	insertTestRepo(t, db, "repo1")

@@ -1,14 +1,14 @@
 // Package crashloop implements a crash-loop breaker for the veska daemon.
-//
 // It tracks restart frequency in two files under <veskaHome>:
-//   - crash_count        — integer restart counter for the current window
-//   - crash_window_start — Unix timestamp (seconds) when the current window began
-//   - broken             — presence of this file signals the breaker has tripped
+//
+//	crash_count — integer restart counter for the current window
+//	crash_window_start — Unix timestamp (seconds) when the current window began
+//	broken — presence of this file signals the breaker has tripped
 //
 // When five or more restarts occur within a 10-minute sliding window the
 // breaker trips: it writes the broken marker and returns tripped=true from
-// [Record].  The daemon should call [Check] at startup and exit with
-// [ExitCode] (78) if the marker is present.  Run `veska doctor
+// [Record]. The daemon should call [Check] at startup and exit with
+// [ExitCode] (78) if the marker is present. Run `veska doctor
 // reset-crash-loop` to clear the marker and resume normal operation.
 package crashloop
 
@@ -44,13 +44,11 @@ func Check(veskaHome string) error {
 }
 
 // Record increments the restart counter for veskaHome.
-//
 // It reads <veskaHome>/crash_window_start to determine whether the current
-// count falls within a 10-minute window.  If the window has expired (or never
-// started) the counter and window-start are reset before incrementing.  If the
+// count falls within a 10-minute window. If the window has expired (or never
+// started) the counter and window-start are reset before incrementing. If the
 // counter reaches [maxRestarts] (5) the broken marker is written and
 // tripped=true is returned.
-//
 // After the breaker has tripped every subsequent call to Record also returns
 // tripped=true (the broken file already exists).
 func Record(veskaHome string) (tripped bool, err error) {

@@ -104,7 +104,7 @@ func TestRepoCachePath_UnderCacheDirRepos(t *testing.T) {
 	}
 }
 
-// TestDefaultBackupDir_UnderVeskaHome pins solov2-n57f: backup writes
+// TestDefaultBackupDir_UnderVeskaHome pins: backup writes
 // land under $VESKA_HOME/backups so a single rm clears all state.
 func TestDefaultBackupDir_UnderVeskaHome(t *testing.T) {
 	t.Setenv("VESKA_HOME", "/tmp/veska-test-home")

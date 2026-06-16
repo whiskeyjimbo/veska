@@ -1,5 +1,5 @@
 // Command bench measures warm indexed-lookup latency for the branchpk SQLite schema
-// and compares the results against SOLO-13 §3.1 budgets.
+// and compares the results against budgets.
 package main
 
 import (

@@ -6,9 +6,8 @@ import "github.com/whiskeyjimbo/veska/internal/core/domain"
 // output (see dump_test.go's TestDumpFixtureFacts). Chunk nodes are
 // deliberately EXCLUDED — their names are line-ranges (chunk:1-5) that couple
 // the manifest to exact line numbers and no tool keys on chunk identity.
-//
 // Relative paths are in slash form; the parser emits one package node PER FILE
-// (so modalpha/metric has two "metric" package nodes, one per .go file).
+// (so modalpha/metric has two "metric" package nodes, one per.go file).
 
 const (
 	alphaSeries    = "metric/series.go"
@@ -19,7 +18,7 @@ const (
 
 func frozenNodes() []NodeKey {
 	return []NodeKey{
-		// --- modalpha/metric/series.go ---
+		// modalpha/metric/series.go
 		{Path: alphaSeries, Kind: domain.KindPackage, Name: "metric"},
 		{Path: alphaSeries, Kind: domain.KindStruct, Name: "Series"},
 		{Path: alphaSeries, Kind: domain.KindInterface, Name: "Accumulator"},
@@ -28,18 +27,18 @@ func frozenNodes() []NodeKey {
 		{Path: alphaSeries, Kind: domain.KindFunction, Name: "ComputeVariance"},
 		{Path: alphaSeries, Kind: domain.KindFunction, Name: "computeMean"},
 
-		// --- modalpha/metric/deviation.go ---
+		// modalpha/metric/deviation.go
 		{Path: alphaDeviation, Kind: domain.KindPackage, Name: "metric"},
 		{Path: alphaDeviation, Kind: domain.KindFunction, Name: "averageSamples"},
 		{Path: alphaDeviation, Kind: domain.KindFunction, Name: "StandardDeviation"},
 		{Path: alphaDeviation, Kind: domain.KindFunction, Name: "sqrtApprox"},
 
-		// --- modbeta/main.go ---
+		// modbeta/main.go
 		{Path: betaMain, Kind: domain.KindPackage, Name: "main"},
 		{Path: betaMain, Kind: domain.KindFunction, Name: "main"},
 		{Path: betaMain, Kind: domain.KindFunction, Name: "badgeHandler"},
 
-		// --- modbeta/widget/render.go ---
+		// modbeta/widget/render.go
 		{Path: betaRender, Kind: domain.KindPackage, Name: "widget"},
 		{Path: betaRender, Kind: domain.KindStruct, Name: "Palette"},
 		{Path: betaRender, Kind: domain.KindStruct, Name: "Badge"},
@@ -152,7 +151,7 @@ func frozenCrossRepoEdges() []CrossRepoEdgeFact {
 // frozenDependencies: file_imports rows the promoter persisted. modalpha
 // imports nothing external, so only modbeta contributes the one genuine
 // cross-module dep. modbeta's own-module import (example.com/modbeta/widget)
-// is intentionally absent: solov2-tb74 made syncFileImports subtract the
+// is intentionally absent: made syncFileImports subtract the
 // repo's own module_path, so intra-module imports no longer land in
 // file_imports / eng_list_dependencies.
 func frozenDependencies() []DependencyFact {
@@ -164,9 +163,8 @@ func frozenDependencies() []DependencyFact {
 // frozenEntryPoints: only func main qualifies cleanly as a program entry point.
 // badgeHandler is parsed as a plain KindFunction (not KindRoute), so whether
 // the entry-point selector surfaces it depends on inbound-fan-in heuristics;
-// we freeze only the unambiguous main() here.
-//
-// Note (solov2-ozoi.1): Alpha's exported ComputeVariance is deliberately NOT a
+// we freeze only the unambiguous main here.
+// Note: Alpha's exported ComputeVariance is deliberately NOT a
 // frozen entry point. It has inbound>=1 and would otherwise rank, but the
 // fixture seeds an OPEN complexity finding on it (seedFindings), and the
 // selector's open-finding gate excludes such nodes by design. The tqda

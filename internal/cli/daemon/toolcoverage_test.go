@@ -1,30 +1,25 @@
 package daemon
 
-// TestToolCoverage is the parent skeleton (solov2-ti9x) for the 40 per-tool MCP
+// TestToolCoverage is the parent skeleton for the 40 per-tool MCP
 // coverage beads. It is a per-FAMILY subtest tree where every one of the 40
 // tools is a PENDING leaf: each leaf currently calls t.Skip with its owning
 // bead ID and makes ZERO real assertions. A per-tool bead replaces ONLY its own
 // leaf's body — it does not touch the table or any sibling.
-//
 // HOW A TOOL BEAD PLUGS IN (exact pattern):
-//
 //	Find the entry in coverageTools for your tool (e.g. eng_get_node /
-//	solov2-w775) and replace its run func. Inside, build a harness and call:
-//
+//	) and replace its run func. Inside, build a harness and call:
 //	    func(t *testing.T) {
-//	        h := newHarness(t)
-//	        id := h.ResolveID(coverage.BetaRepoID, coverage.NodeKey{
+//	        h:= newHarness(t)
+//	        id:= h.ResolveID(coverage.BetaRepoID, coverage.NodeKey{
 //	            Path: "main.go", Kind: domain.KindFunction, Name: "main"})
-//	        res, rpcErr := h.Call("eng_get_node", map[string]any{"node_id": string(id)})
+//	        res, rpcErr:= h.Call("eng_get_node", map[string]any{"node_id": string(id)})
 //	        if rpcErr != nil { t.Fatalf("eng_get_node: %v", rpcErr) }
-//	        // ... assert on res against coverage.Manifest() facts ...
+//	        //. assert on res against coverage.Manifest facts.
 //	    }
-//
 //	For a MUTATING tool just do the same — newHarness gives a fresh isolated
 //	DB + vector store, so the mutation cannot leak to any other subtest. For a
 //	TASK tool (eng_set_active_task / eng_get_active_task / eng_get_task_history)
-//	construct the harness with the opt-in: newHarness(t, WithTaskTools()).
-//
+//	construct the harness with the opt-in: newHarness(t, WithTaskTools).
 // The leaf must STOP calling t.Skip once it asserts. The completeness guard
 // (TestToolCoverageCompleteness) keeps the table in lock-step with the live
 // tool surface so no tool is silently uncovered.
@@ -57,7 +52,7 @@ type coverageTool struct {
 	family string
 	tool   string
 	bead   string
-	task   bool // parked task tool: covered only via newHarness(t, WithTaskTools())
+	task   bool // parked task tool: covered only via newHarness(t, WithTaskTools)
 	run    func(t *testing.T)
 }
 
@@ -99,7 +94,7 @@ func repoFamily() []coverageTool {
 				}
 				return ids
 			}
-			// repo.Add walks up for a .git work-tree marker; create one (no git binary needed).
+			// repo.Add walks up for a.git work-tree marker; create one (no git binary needed).
 			newRepo := t.TempDir()
 			if err := os.MkdirAll(filepath.Join(newRepo, ".git"), 0o755); err != nil {
 				t.Fatal(err)
@@ -143,7 +138,7 @@ func repoFamily() []coverageTool {
 				}
 				return ids
 			}
-			// repo.Add walks up for a .git work-tree marker; create one (no git binary needed).
+			// repo.Add walks up for a.git work-tree marker; create one (no git binary needed).
 			newRepo := t.TempDir()
 			if err := os.MkdirAll(filepath.Join(newRepo, ".git"), 0o755); err != nil {
 				t.Fatal(err)
@@ -315,7 +310,7 @@ func repoFamily() []coverageTool {
 				t.Fatalf("eng_get_config: result type %T, want map[string]any", res)
 			}
 			// Stable derived facts: payload-shape version is the literal 1 (int,
-			// no JSON round-trip), and degraded_reasons is an empty []string.
+			// no JSON round-trip), and degraded_reasons is an empty string.
 			if csv, ok := m["config_schema_version"].(int); !ok || csv != 1 {
 				t.Errorf("config_schema_version = %v (%T), want int 1", m["config_schema_version"], m["config_schema_version"])
 			}
@@ -1019,7 +1014,7 @@ func graphFamily() []coverageTool {
 			if n.Kind != string(key.Kind) {
 				t.Errorf("kind = %q, want %q", n.Kind, string(key.Kind))
 			}
-			// ADR-S0017 §1: node paths are stored repo-relative, matching the
+			// node paths are stored repo-relative, matching the
 			// manifest Path directly.
 			if n.FilePath != key.Path {
 				t.Errorf("file_path = %q, want %q", n.FilePath, key.Path)
@@ -1118,7 +1113,7 @@ func graphFamily() []coverageTool {
 			}
 			// Expected manifest facts for this file (chunk nodes are excluded
 			// from the manifest by design — their names are volatile line ranges).
-			// ADR-S0017 §1: node file_path is repo-relative, matching `file`.
+			// node file_path is repo-relative, matching `file`.
 			wantPath := file
 			var want []string
 			for _, k := range coverage.Manifest().Nodes {
@@ -1168,7 +1163,7 @@ func graphFamily() []coverageTool {
 			want := string(h.ResolveID(repoID, coverage.NodeKey{
 				Path: "metric/deviation.go", Kind: domain.KindFunction, Name: "averageSamples"}))
 			res, rpcErr := h.Call("eng_find_related", map[string]any{
-				"file_path": "metric/series.go", // ADR-S0017 §1: stored paths are repo-relative
+				"file_path": "metric/series.go", // stored paths are repo-relative
 				"line":      39, "repo_id": repoID, "k": 10,
 			})
 			if rpcErr != nil {
@@ -1271,7 +1266,7 @@ func blastFamily() []coverageTool {
 			// Simulate an uncommitted working-tree edit to helper.go via the same
 			// Save the watcher uses, staging it under (repoID, FixtureBranch).
 			h.stageDirtyEdit(repoID, coverage.FixtureBranch,
-				"helper.go", // ADR-S0017 §1: parser keys on the repo-relative path
+				"helper.go", // parser keys on the repo-relative path
 				[]byte("package p\n\nfunc Helper() int { return 2 }\n"))
 
 			res, rpcErr = h.Call("eng_get_dirty_blast_radius", map[string]any{
@@ -1303,7 +1298,7 @@ func blastFamily() []coverageTool {
 		{family: f, tool: "eng_get_diff_blast_radius", bead: "solov2-56c8", run: func(t *testing.T) {
 			// Tier-3: a real git repo that is ALSO indexed. c1 seeds Helper
 			// (callee) + Caller (caller, CALLS Helper). c2 edits ONLY helper.go.
-			// Diffing HEAD~1..HEAD changes {helper.go} → its node Helper → the
+			// Diffing HEAD~1.HEAD changes {helper.go} → its node Helper → the
 			// callers blast must surface Caller, the affected caller.
 			root := initGitRepo(t)
 			writeRepoFile(t, root, "helper.go", "package p\n\nfunc Helper() int { return 1 }\n")
@@ -1481,7 +1476,7 @@ func symbolFamily() []coverageTool {
 				t.Errorf("nodes[0].node_id = %q, want declaration %q", resp.Nodes[0].NodeID, string(declID))
 			}
 			// Set CONTAINS the declaration node with the manifest's graph facts.
-			// ADR-S0017 §1: stored file_path is repo-relative (== manifest Path).
+			// stored file_path is repo-relative (== manifest Path).
 			wantPath := key.Path
 			found := false
 			for _, n := range resp.Nodes {
@@ -1606,10 +1601,10 @@ func wikiFamily() []coverageTool {
 					t.Errorf("manifest entry point %q (%s) missing from output", ep.Node.Name, ep.Node.Path)
 				}
 			}
-			// solov2-ozoi.1: pin the open-finding gate (entrypoints.go Select:
+			// pin the open-finding gate (entrypoints.go Select:
 			// "no open finding on the node"). Alpha's ComputeVariance is an
 			// exported function with inbound>=1 — it would rank as an entry point
-			// — but the fixture seeds an OPEN complexity finding on it
+			// but the fixture seeds an OPEN complexity finding on it
 			// (seed.go seedFindings), so the selector MUST exclude it. This is
 			// working-as-designed, not the ranking inversion ozoi.1 first
 			// suspected: unexported averageSamples survives only because it
@@ -1705,7 +1700,7 @@ func dependencyFamily() []coverageTool {
 			h := newHarness(t)
 			// Beta CALLS into modalpha/metric (the one genuine cross-module dep);
 			// modalpha imports nothing external. Assert CONTAINS, not exact set:
-			// solov2-tb74 made syncFileImports subtract modbeta's OWN module path,
+			// made syncFileImports subtract modbeta's OWN module path,
 			// so "example.com/modbeta/widget" no longer leaks in; contains-all
 			// stays valid regardless.
 			res, rpcErr := h.Call("eng_list_dependencies", map[string]any{"repo_id": coverage.BetaRepoID})
@@ -1759,8 +1754,7 @@ func cloneFamily() []coverageTool {
 			// computeMean/averageSamples are a *near*-dup pair, not byte-identical,
 			// so membership is NOT assertable here: near mode is empty (this harness
 			// runs no autolink → no scored SIMILAR_TO edges).
-			//
-			// solov2-ozoi.2: content_hash is now derived from raw content at node
+			// content_hash is now derived from raw content at node
 			// construction, and the exact-clone query excludes empty content_hash,
 			// so the old false group (all 9 symbols bucketed under '') is gone. The
 			// fixture has no byte-identical pair, so exact mode must return 0 groups;
@@ -1823,6 +1817,7 @@ func cloneFamily() []coverageTool {
 				}
 			}
 		}},
+		{family: f, tool: "eng_find_clusters", bead: "solov2-phn0", run: nil},
 	}
 }
 
@@ -1831,7 +1826,7 @@ func changedSymbolsFamily() []coverageTool {
 	return []coverageTool{
 		{family: f, tool: "eng_find_changed_symbols", bead: "solov2-m2wp", run: func(t *testing.T) {
 			// Build a controlled two-commit repo: c1 has Existing only, c2
-			// adds Added. Diffing HEAD~1..HEAD must report Added as added and
+			// adds Added. Diffing HEAD~1.HEAD must report Added as added and
 			// leave Existing (unchanged) out of the added set.
 			root := initGitRepo(t)
 			writeRepoFile(t, root, "calc.go", "package calc\n\nfunc Existing() int { return 1 }\n")

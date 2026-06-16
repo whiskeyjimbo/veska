@@ -7,7 +7,7 @@ import (
 	mcpinfra "github.com/whiskeyjimbo/veska/internal/infrastructure/mcp"
 )
 
-// TestCLILongMatchesMCPDescription_Calls pins solov2-izh6.20: the `veska
+// TestCLILongMatchesMCPDescription_Calls pins: the `veska
 // calls` Long help string must reuse the MCP eng_get_call_chain
 // description verbatim so the two can't drift, ensuring CLI users learn
 // about the chained_selectors_unresolved fallback the same way an MCP
@@ -22,7 +22,7 @@ func TestCLILongMatchesMCPDescription_Calls(t *testing.T) {
 	}
 }
 
-// TestCLILongMatchesMCPDescription_Blast pins solov2-izh6.20: the `veska
+// TestCLILongMatchesMCPDescription_Blast pins: the `veska
 // blast` Long help string must reuse the MCP eng_get_blast_radius
 // description verbatim and reference the diff/dirty variants and the
 // cross-repo fan-out behaviour.
@@ -42,7 +42,7 @@ func TestCLILongMatchesMCPDescription_Blast(t *testing.T) {
 	}
 }
 
-// TestCLILongMatchesMCPDescription_Search pins solov2-izh6.20: the `veska
+// TestCLILongMatchesMCPDescription_Search pins: the `veska
 // search` Long help string must contain the MCP eng_search_semantic
 // description so CLI users learn the RRF score range and that rank, not
 // absolute score, is the right comparator.
@@ -62,7 +62,7 @@ func TestCLILongMatchesMCPDescription_Search(t *testing.T) {
 	}
 }
 
-// TestCLILongMatchesMCPDescription_DepsList pins solov2-izh6.20: the `veska
+// TestCLILongMatchesMCPDescription_DepsList pins: the `veska
 // deps list` Long help must reuse the MCP DescDepsImportOnlyCaveat fragment
 // verbatim so the import-only-modules-are-absent rule can't drift from the
 // eng_list_dependencies description. The fragment is also composed into that
@@ -74,7 +74,7 @@ func TestCLILongMatchesMCPDescription_DepsList(t *testing.T) {
 	}
 }
 
-// TestCLILongMatchesMCPDescription_Symbol pins solov2-izh6.20: the `veska
+// TestCLILongMatchesMCPDescription_Symbol pins: the `veska
 // symbol` Long help must reuse the MCP DescFindSymbolMatching fragment so the
 // unqualified-match / exact-first ordering rule can't drift from the
 // eng_find_symbol description.
@@ -85,7 +85,7 @@ func TestCLILongMatchesMCPDescription_Symbol(t *testing.T) {
 	}
 }
 
-// TestCLILongMatchesMCPDescription_Context pins solov2-izh6.20: the `veska
+// TestCLILongMatchesMCPDescription_Context pins: the `veska
 // context` Long help must equal the MCP DescContextPack fragment. Only the
 // shared purpose + cross-repo behaviour is pinned; the MCP-only anchor prose
 // (node_id/task_id) is deliberately absent because the CLI takes only a

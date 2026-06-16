@@ -3,7 +3,6 @@
 // leaf: the decode routine was hand-copied into three packages (embedder,
 // autolink, infrastructure/mcp) to avoid upward sibling imports; once a third
 // copy appeared the duplication was promoted here rather than copied again
-// (solov2-xde2.21).
 package veccodec
 
 import (

@@ -15,7 +15,7 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/repo"
 )
 
-// PromptDeps is the seam tests use to fake isatty + stdin (solov2-kxo5.7).
+// PromptDeps is the seam tests use to fake isatty + stdin.
 // In production both are derived from os.Stdin / os.Stdout.
 type PromptDeps struct {
 	IsTTY  func() bool
@@ -46,13 +46,13 @@ type AliasTarget struct {
 }
 
 // RunAliasSuggestPrompt offers an auto-suggested alias on `veska repo add`
-// . TTY-only — non-TTY callers skip silently so scripts /
+// TTY-only — non-TTY callers skip silently so scripts /
 // MCP-driven adds don't block.
-//
 // UX:
-//   - y → bind the suggested name
-//   - N (or anything starting with n) → skip
-//   - anything else → treat the response as a custom alias name
+//
+//	y → bind the suggested name
+//	N (or anything starting with n) → skip
+//	anything else → treat the response as a custom alias name
 //
 // If the suggested name collides with an existing alias and a fallback
 // exists (URL form: "<owner>-<name>"), the prompt tries the fallback. If

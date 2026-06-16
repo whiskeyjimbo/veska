@@ -1,7 +1,7 @@
 # Diagnostics with doctor
 
 `veska doctor` is the operator's window into the daemon. It's the one surface you
-reach for when something looks wrong — or to confirm things are healthy.
+reach for when something looks wrong - or to confirm things are healthy.
 
 ## Start here
 
@@ -34,19 +34,19 @@ Each subsystem has its own focused check:
 
 ## When things look stuck
 
-- **Search returns `[]` or `degraded_reasons`** — embeddings are still catching
+- **Search returns `[]` or `degraded_reasons`** - embeddings are still catching
   up. Check `veska doctor post_promotion_queue` and `eng_get_status`'s
   `pending_embeds`. See **[Semantic search & embeddings](../concepts/embeddings.md)**.
-- **Daemon won't stay up** — check `veska doctor service`, then the logs at
+- **Daemon won't stay up** - check `veska doctor service`, then the logs at
   `~/.veska/logs/daemon.log`. If a crash-loop guard tripped:
 
     ```sh
     veska doctor reset-crash-loop
     ```
 
-- **Collecting a report for a bug** — `veska doctor bundle` gathers the full
+- **Collecting a report for a bug** - `veska doctor bundle` gathers the full
   diagnostic set in one shot.
 
 !!! tip "doctor is the operator surface"
     By design, `veska doctor` is the thing an operator actually sees. If a
-    subsystem can fail, it has a doctor check — start there before reading logs.
+    subsystem can fail, it has a doctor check - start there before reading logs.

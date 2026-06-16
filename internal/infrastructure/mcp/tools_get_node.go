@@ -11,9 +11,7 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/core/ports"
 )
 
-// ---------------------------------------------------------------------------
 // eng_get_node
-// ---------------------------------------------------------------------------
 
 type getNodeParams struct {
 	NodeID string `json:"node_id"`
@@ -34,7 +32,7 @@ func makeGetNodeHandler(graph ports.GraphReader, staging *staging.Area, repos ap
 		// Resolve a node_id prefix (e.g. the 12-char display id that
 		// eng_find_symbol / `veska symbol` print) to its full id up front, so
 		// both the scoped (repo_id supplied) and global lookup paths below run
-		// against an exact id . A full 64-char id resolves to
+		// against an exact id. A full 64-char id resolves to
 		// itself; an ambiguous prefix errors with the candidate ids.
 		resolvedID, rpcErr := resolveNodeIDPrefix(ctx, graph, p.NodeID)
 		if rpcErr != nil {
@@ -45,11 +43,11 @@ func makeGetNodeHandler(graph ports.GraphReader, staging *staging.Area, repos ap
 		// node_id is a content-hashed sha256, globally unique by construction,
 		// so repo_id+branch are not needed to locate the node. The scoped path
 		// is taken whenever the caller supplied repo_id — branch defaults to
-		// that repo's active_branch . Previously, supplying
+		// that repo's active_branch. Previously, supplying
 		// repo_id without branch silently dropped to the cross-repo fallback
 		// and ignored repo_id; an unknown or mistyped repo_id never surfaced
 		// to the caller. Only when both repo_id and branch are absent does
-		// the handler take the global FindNodeByID path .
+		// the handler take the global FindNodeByID path.
 		var (
 			node            *domain.Node
 			err             error
@@ -95,7 +93,7 @@ func makeGetNodeHandler(graph ports.GraphReader, staging *staging.Area, repos ap
 		}
 
 		if node == nil {
-			// solov2-byxy: not-found is a domain error, not a malformed-params error.
+			// not-found is a domain error, not a malformed-params error.
 			return nil, &RPCError{Code: CodeNotFound, Message: fmt.Sprintf("node not found: %s", p.NodeID)}
 		}
 
@@ -120,7 +118,7 @@ const nodePrefixMinLen = 8
 // path runs as before. Zero matches also pass through unchanged so the existing
 // not-found / staging-overlay handling owns that case. An ambiguous prefix
 // (more than one distinct node_id matches) is a CodeInvalidParams error listing
-// the candidates, so the caller can disambiguate (solov2-uej9.3).
+// the candidates, so the caller can disambiguate.
 func resolveNodeIDPrefix(ctx context.Context, graph ports.GraphReader, nodeID string) (string, *RPCError) {
 	if len(nodeID) < nodePrefixMinLen {
 		return nodeID, nil

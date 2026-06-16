@@ -3,7 +3,7 @@
 // and indexing a vendored module's symbols into the graph. cmd/veska/deps.go is
 // reduced to Cobra command construction whose RunE bodies delegate here,
 // following the cmd = glue / logic-in-packages pattern established by
-// reindexcmd, symbolcmd, graphcmd, and findingscmd .
+// reindexcmd, symbolcmd, graphcmd, and findingscmd.
 package depscmd
 
 import (
@@ -59,7 +59,7 @@ func RunList(ctx context.Context, p ListParams) error {
 	switch {
 	case p.RepoArg != "":
 		// Accept the same identifiers `repo add` / `reindex` do (path,
-		// repo_id, short_id) so the CLI is consistent .
+		// repo_id, short_id) so the CLI is consistent.
 		rid, err := repocmd.ResolveRepoArg(ctx, p.RepoArg)
 		if err != nil {
 			return fmt.Errorf("deps: %w", err)
@@ -115,9 +115,9 @@ func RunList(ctx context.Context, p ListParams) error {
 			}
 			symbols.WriteString(cs.SymbolPath)
 		}
-		// solov2-xok5: CALLS=0 with IMPORTS>0 almost always means the module
+		// CALLS=0 with IMPORTS>0 almost always means the module
 		// is used through chained selector expressions (e.g. cobra
-		// `&cobra.Command{...}`, `yaml.Marshal`) that the parser attributes to
+		// `&cobra.Command{.}`, `yaml.Marshal`) that the parser attributes to
 		// the package node, not the calling function. Without a marker, a
 		// junior reads "CALLS=0" as "unused dep, safe to remove" — dangerous.
 		// Tag the row with "*" and emit a footer explaining the suppression.
@@ -150,10 +150,9 @@ type IndexParams struct {
 	ResolveRepo ResolveRepoFunc
 }
 
-// RunIndex scans <repoRoot>/vendor/<module-path> for .go files, parses them,
+// RunIndex scans <repoRoot>/vendor/<module-path> for.go files, parses them,
 // and persists the nodes with external=1 so subsequent eng_find_symbol /
-// eng_get_call_chain queries can see into vendored dependencies .
-//
+// eng_get_call_chain queries can see into vendored dependencies.
 // Direct-write path: opens the local SQLite directly, mirroring the no-daemon
 // fallback in `veska repo add`. The single-writer pool means the daemon should
 // be stopped for this command.
@@ -190,7 +189,7 @@ func RunIndex(ctx context.Context, p IndexParams) error {
 		return fmt.Errorf("deps index: %w", err)
 	}
 
-	// solov2-izh6.7: refuse to index a vendored copy of a module that is
+	// refuse to index a vendored copy of a module that is
 	// already a tracked registered repo — the synthetic ext:<module> row would
 	// shadow the real repo's nodes and confuse cross-repo CALLS resolution.
 	if existing, lookupErr := repocmd.FindTrackedRepoByModulePath(ctx, db, p.ModulePath); lookupErr == nil && existing != "" {

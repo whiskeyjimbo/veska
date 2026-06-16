@@ -105,7 +105,7 @@ func TestWikiCmd_ByteIdenticalOutput(t *testing.T) {
 	hot1, entry1 := run()
 	hot2, entry2 := run()
 
-	// solov2-otzn: the wiki Handler stamps a wall-clock GeneratedAt in
+	// the wiki Handler stamps a wall-clock GeneratedAt in
 	// the page header on every render, which is non-deterministic by
 	// design. Strip that single line before the byte-identical
 	// comparison — the data rows (ranking input is the same) must still

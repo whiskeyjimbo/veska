@@ -12,8 +12,8 @@ import (
 const FailBreakingAPIChange = "breaking_api_change"
 
 // FailRemovedAPISymbol names the failing check: an EXPORTED symbol present at
-// base-ref disappeared from the candidate (removed, renamed, or unexported) —
-// arguably the most breaking public-surface change (solov2-zvh6.12).
+// base-ref disappeared from the candidate (removed, renamed, or unexported)
+// arguably the most breaking public-surface change.
 const FailRemovedAPISymbol = "removed_api_symbol"
 
 // APIChange is one exported symbol whose signature shape changed.
@@ -82,24 +82,24 @@ func (v APIVerdict) ExitCode() int {
 // no drift row — prev_sig == sig). Drift is self-scoping (it only fires where a
 // signature genuinely changed in this re-promote), so no change-set intersection
 // is needed.
-//
 // Scope (deliberate, matching the bead's "exported symbols only / signature
 // shape" boundary; see also the family-wide index-ahead caveat zvh6.11):
-//   - Signature shape is the parser's signature string (name + parameters +
-//     result). It includes parameter NAMES, so a cosmetic parameter rename of an
-//     exported symbol false-FAILs — documented, not judged for semantic breakage.
-//   - REMOVAL or RENAME of an exported symbol fires the SECOND detector
-//     (RemovedSymbols, solov2-zvh6.12): a base-ref exported symbol whose
-//     package-scoped identity key is absent from the candidate after-state.
-//   - "Exported" is the name-based visibility flag (Go: uppercase first rune), so
-//     an exported-named method on an UNEXPORTED type reads as exported and a
-//     signature change there false-FAILs. A known over-approximation, not a
-//     reachability analysis.
-//   - The removal detector judges the WIDER public-surface set {function,
-//     method, interface, struct, type, variable, class} (solov2-zvh6.14): a
-//     removed exported type/const/var is breaking too. (Signature drift stays
-//     narrow to the signature-shaped kinds.) A same-name type SHAPE change is
-//     NOT a removal — see symbolIdentity.
+//
+//	Signature shape is the parser's signature string (name + parameters +
+//	  result). It includes parameter NAMES, so a cosmetic parameter rename of an
+//	  exported symbol false-FAILs — documented, not judged for semantic breakage.
+//	REMOVAL or RENAME of an exported symbol fires the SECOND detector
+//	  (RemovedSymbols): a base-ref exported symbol whose
+//	  package-scoped identity key is absent from the candidate after-state.
+//	"Exported" is the name-based visibility flag (Go: uppercase first rune), so
+//	  an exported-named method on an UNEXPORTED type reads as exported and a
+//	  signature change there false-FAILs. A known over-approximation, not a
+//	  reachability analysis.
+//	The removal detector judges the WIDER public-surface set {function,
+//	  method, interface, struct, type, variable, class}: a
+//	  removed exported type/const/var is breaking too. (Signature drift stays
+//	  narrow to the signature-shaped kinds.) A same-name type SHAPE change is
+//	  NOT a removal — see symbolIdentity.
 //
 // Language-agnostic: signature drift judges ports.DriftedNode.Exported, and
 // removal judges a package-scoped identity key (package = path.Dir(file_path)),
@@ -116,8 +116,7 @@ func NewAPIGate() *APIGate { return &APIGate{} }
 // intra-package file move (a.go -> b.go, same dir) keeps the key stable and is
 // NOT flagged as a removal, while a cross-package move (or true removal/rename/
 // unexport) changes/drops the key and IS flagged.
-//
-// Kind is deliberately NOT in the key (solov2-zvh6.14): Go's top-level
+// Kind is deliberately NOT in the key: Go's top-level
 // identifiers share one namespace per package (you cannot have both a func and a
 // type named Foo), and methods are receiver-qualified ("T.Method"), so a bare
 // name is already unambiguous. Dropping kind means a same-name type SHAPE change
@@ -130,9 +129,9 @@ func symbolIdentity(filePath, name string) string {
 
 // Evaluate reports two classes of breaking public-API change. Pure — no I/O.
 //
-//   - BreakingChanges: exported nodes among drifted whose signature shape changed.
-//   - RemovedSymbols: base-ref exported symbols whose package-scoped identity key
-//     is absent from the candidate's exported set (removed/renamed/unexported).
+//	BreakingChanges: exported nodes among drifted whose signature shape changed.
+//	RemovedSymbols: base-ref exported symbols whose package-scoped identity key
+//	  is absent from the candidate's exported set (removed/renamed/unexported).
 //
 // baseExported and candidateExported are the exported public-surface symbols
 // (the wide removable set — function/method/interface/struct/type/variable/

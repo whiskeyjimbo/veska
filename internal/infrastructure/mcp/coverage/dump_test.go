@@ -1,15 +1,12 @@
 package coverage
 
 // This is the THROWAWAY exploratory dump used to AUTHOR the frozen manifest
-// (solov2-5zka). It is NOT a coverage harness and asserts nothing about tool
+// It is NOT a coverage harness and asserts nothing about tool
 // behaviour. It indexes the two fixture modules through the real cold-scan
 // pipeline (no Ollama) and logs every (path,kind,name) node, every edge
 // resolved back to its endpoint keys, every cross-repo stub, and every TODO.
-//
 // Run it with:
-//
-//	go test ./internal/infrastructure/mcp/coverage/ -run TestDumpFixtureFacts -v
-//
+//	go test./internal/infrastructure/mcp/coverage/ -run TestDumpFixtureFacts -v
 // then read the t.Log output and transcribe the facts into manifest.go. It is
 // gated behind TestDumpFixtureFacts (a normal test name) but does no
 // assertions, so it stays green in CI while remaining a one-shot authoring aid.

@@ -8,7 +8,7 @@ import (
 )
 
 // The upgrade command's logic lives in internal/cli/upgradecmd; this
-// constructor is Cobra glue whose RunE body delegates there (solov2-0omh.11).
+// constructor is Cobra glue whose RunE body delegates there.
 
 // upgradeCmd returns the "upgrade" Cobra command.
 // mgr may be nil; --restart is only available when mgr is non-nil.
@@ -24,7 +24,7 @@ func upgradeCmd(mgr ServiceManager) *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			// Inject only the manager's Restart method so upgradecmd stays
 			// decoupled from the service package. nil mgr => nil RestartFn =>
-			// --restart reports ErrNoManager.
+			// restart reports ErrNoManager.
 			var restartFn func(context.Context) error
 			if mgr != nil {
 				restartFn = mgr.Restart

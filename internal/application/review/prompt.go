@@ -21,7 +21,7 @@ type templatedPrompt struct {
 }
 
 // newTemplatedPrompt parses the embedded template file for kind. A parse
-// failure here is a build-time defect in a committed .tmpl file, so it
+// failure here is a build-time defect in a committed.tmpl file, so it
 // surfaces as an error the loader turns loud at construction.
 func newTemplatedPrompt(kind ReviewKind, version, file string) (*templatedPrompt, error) {
 	raw, err := promptFS.ReadFile("prompts/" + file)

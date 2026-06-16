@@ -1,4 +1,4 @@
-# queuefuzz — M3 gate-5 queue-lane drain fuzz
+# queuefuzz - M3 gate-5 queue-lane drain fuzz
 
 Drives N synthetic promotions through the real `Promoter` and lets the real
 queue `Poller` (with stub `WorkHandler`s) drain every enqueued row across the

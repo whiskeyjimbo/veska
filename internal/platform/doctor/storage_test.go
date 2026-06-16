@@ -15,7 +15,7 @@ import (
 // We write the sidecar manually — no dependency on the hnsw_native package.
 func writeSidecar(t *testing.T, dir, base string, rowCount int) {
 	t.Helper()
-	// Build a map with rowCount entries.  Keys are uint64 marshalled as strings.
+	// Build a map with rowCount entries. Keys are uint64 marshalled as strings.
 	rows := make(map[string]json.RawMessage, rowCount)
 	for i := range rowCount {
 		rows[string(rune('0'+i))] = json.RawMessage(`{}`)
@@ -31,7 +31,7 @@ func writeSidecar(t *testing.T, dir, base string, rowCount int) {
 	}
 }
 
-// writeHNSW writes a fake .hnsw file of exactly size bytes.
+// writeHNSW writes a fake.hnsw file of exactly size bytes.
 func writeHNSW(t *testing.T, dir, base string, size int) {
 	t.Helper()
 	data := make([]byte, size)
@@ -73,7 +73,7 @@ func TestCheckStorage_EmptyDir(t *testing.T) {
 	}
 }
 
-// TestCheckStorage_WithSidecars writes two .hnsw + two .json sidecar files and
+// TestCheckStorage_WithSidecars writes two.hnsw + two.json sidecar files and
 // asserts that sizes and row counts are summed correctly.
 func TestCheckStorage_WithSidecars(t *testing.T) {
 	dir := t.TempDir()
@@ -119,7 +119,7 @@ func TestCheckStorage_WithSidecars(t *testing.T) {
 }
 
 // TestStorageReport_JSONKeys marshals a StorageReport and asserts that every
-// required JSON key from the SOLO-13 §2.1.3 schema is present.
+// required JSON key from the schema is present.
 func TestStorageReport_JSONKeys(t *testing.T) {
 	r := doctor.StorageReport{
 		VeskaHome:       "/home/jeff/.veska",

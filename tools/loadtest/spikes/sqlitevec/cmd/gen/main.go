@@ -1,6 +1,5 @@
 // Command gen generates synthetic 768-dim float32 vectors with L2 norms drawn
 // from Gaussian(μ=7.5, σ=1.5) and writes them to disk in the vecbin format.
-//
 // Usage:
 //
 //	gen -n 50000 -out data/vectors.bin

@@ -6,7 +6,7 @@ import (
 	"testing"
 )
 
-// solov2-ffi3 verification — renderSearchEnvelope must print SOMETHING
+// verification — renderSearchEnvelope must print SOMETHING
 // when there are no results, so a junior user can tell "ran with no
 // hits" from "broken / misconfigured". The exact wording follows the
 // pendingEmbedsHint signal, but the contract is: non-empty text output
@@ -50,7 +50,7 @@ func TestRenderSearchEnvelope_DegradedReasonsSurfacedWithEmpty(t *testing.T) {
 	}
 }
 
-// TestRenderSearchEnvelope_DegradedHintAppendsToCode guards solov2-0qk5: a
+// TestRenderSearchEnvelope_DegradedHintAppendsToCode guards: a
 // raw "[degraded: <code>]" line is opaque to a new user. The renderer
 // appends a short actionable hint per known code (low_quality_static_embedder
 // and no_post_registration_commits don't need a daemon to look up — they
@@ -104,7 +104,7 @@ func TestDegradedReasonHint_UnknownIsEmpty(t *testing.T) {
 	}
 }
 
-// TestRenderSearchEnvelope_LowAbsoluteTopAppendsNote guards solov2-gfhq: when
+// TestRenderSearchEnvelope_LowAbsoluteTopAppendsNote guards: when
 // the top hit's absolute score is below weakTopAbsolute, the renderer prints a
 // one-line note explaining the tier labels are relative. Without this, a 0.018
 // "top" looks confidently correct.

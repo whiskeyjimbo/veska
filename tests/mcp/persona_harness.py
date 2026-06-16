@@ -14,14 +14,14 @@ then yields a `PersonaWorkspace` with an MCP client, the resolved repo_id /
 branch, and helpers for driving the CLI, git, and direct sqlite reads.
 
 It deliberately reuses the daemon-spawn pattern proven by
-`test_bootstrap_golden.py` (which stays untouched — a passing golden test is
+`test_bootstrap_golden.py` (which stays untouched - a passing golden test is
 not worth refactoring). The synthetic corpus is shaped so the promoted graph
 carries, by construction:
 
-  * a real CALLS edge          — GreetUser -> normalizeName
-  * a test-covered function    — GreetUser, called by TestGreetUser
-  * an untested function       — AddNumbers (exported, no test caller)
-  * a dead-code finding source — staleHelper (unexported, uncalled)
+  * a real CALLS edge          - GreetUser -> normalizeName
+  * a test-covered function    - GreetUser, called by TestGreetUser
+  * an untested function       - AddNumbers (exported, no test caller)
+  * a dead-code finding source - staleHelper (unexported, uncalled)
 
 so junior/senior/agent journeys have something true to query, gate, and
 suppress. No Ollama required: `veska init` uses the baked-in model2vec
@@ -53,7 +53,7 @@ POLL_INTERVAL_S = 0.25
 
 # ── synthetic corpus ───────────────────────────────────────────────────────────
 # One package, four shapes, each load-bearing for a persona assertion. Keep the
-# comments — they double as semantic-search bait and document intent.
+# comments - they double as semantic-search bait and document intent.
 _GREETER_GO = """package greeter
 
 // GreetUser returns a personalised greeting for the user. Covered by
@@ -71,7 +71,7 @@ func normalizeName(name string) string {
 \treturn name
 }
 
-// staleHelper is never referenced from anywhere — a deterministic dead-code
+// staleHelper is never referenced from anywhere - a deterministic dead-code
 // finding source (unexported, uncalled, not main/init/Test*).
 func staleHelper() string {
 \treturn "unreachable"
@@ -125,7 +125,7 @@ def resolve_binaries() -> dict[str, str]:
     }
     for path in bins.values():
         if not os.path.exists(path):
-            pytest.skip(f"missing {path} — run `make build` first")
+            pytest.skip(f"missing {path} - run `make build` first")
     return bins
 
 
@@ -178,7 +178,7 @@ def sqlite_count(db_path: str, sql: str, params=()) -> int:
 class MCP:
     """Minimal MCP client targeting a specific VESKA_HOME's daemon.
 
-    Veska speaks a flat JSON-RPC protocol — the tool name IS the method (no
+    Veska speaks a flat JSON-RPC protocol - the tool name IS the method (no
     `tools/call` wrapper). `call()` returns the parsed JSON-RPC envelope;
     `result()` unwraps it and asserts no error.
     """
@@ -272,7 +272,7 @@ class PersonaWorkspace:
     _proc: object
     _log: object
 
-    # — CLI / git drivers —
+    # - CLI / git drivers -
     def veska(self, *args, check=True) -> subprocess.CompletedProcess:
         env = os.environ.copy()
         env["VESKA_HOME"] = self.home
@@ -284,7 +284,7 @@ class PersonaWorkspace:
     def file(self, name: str) -> str:
         return os.path.join(self.repo_dir, name)
 
-    # — direct-read helpers —
+    # - direct-read helpers -
     def count(self, sql: str, params=()) -> int:
         return sqlite_count(self.db_path, sql, params)
 
@@ -341,7 +341,7 @@ def persona_workspace(tmp_path: Path) -> Iterator[PersonaWorkspace]:
     env = os.environ.copy()
     env["VESKA_HOME"] = home
 
-    # P1 — init (model2vec by default; skip only if an embedder probe fails).
+    # P1 - init (model2vec by default; skip only if an embedder probe fails).
     res = run(bins["veska"], "init", env=env, check=False)
     if res.returncode != 0:
         if "embedder" in res.stderr.lower() or "ollama" in res.stderr.lower():
@@ -354,11 +354,11 @@ def persona_workspace(tmp_path: Path) -> Iterator[PersonaWorkspace]:
         wait_for_socket(os.path.join(home, "cli.sock"), SOCKET_WAIT_S)
         wait_for_socket(os.path.join(home, "mcp.sock"), SOCKET_WAIT_S)
 
-        # P3 — synthetic repo + repo add.
+        # P3 - synthetic repo + repo add.
         write_synthetic_repo(repo_dir)
         run(bins["veska"], "repo", "add", repo_dir, env=env)
 
-        # P4 — drain the cold scan: nodes promoted, embeddings + checks settled.
+        # P4 - drain the cold scan: nodes promoted, embeddings + checks settled.
         db_path = os.path.join(home, "veska.db")
         wait(lambda: sqlite_count(db_path, "SELECT COUNT(*) FROM nodes") > 0,
              COLD_SCAN_DRAIN_S, "nodes populated")

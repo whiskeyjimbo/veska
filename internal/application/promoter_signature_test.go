@@ -52,7 +52,7 @@ func TestPromote_ThreadsPrevSignatureAcrossPromotions(t *testing.T) {
 	sa := staging.NewArea()
 	p := newTestPromoter(sa, db)
 
-	// Promotion #1: signature = "func Foo() error".
+	// Promotion #1: signature = "func Foo error".
 	n1, _ := domain.NewNode(domain.NodeSpec{ID: "n1", Path: "a.go", Name: "Foo", Kind: domain.KindFunction}, domain.WithSignature("func Foo() error"))
 	// Sibling: a non-drifting node so we exercise multi-row prev-sig threading.
 	n2, _ := domain.NewNode(domain.NodeSpec{ID: "n2", Path: "a.go", Name: "Bar", Kind: domain.KindFunction}, domain.WithSignature("func Bar()"))

@@ -1,20 +1,20 @@
 //go:build hnsw_native
 
 // cmd/hnsw-eval runs the full HNSW candidate evaluation sweep at 50k and 250k vectors.
-//
 // It measures:
-//   - recall@10 with 100 hold-out queries at each population size
-//   - warm p95 query latency at k=10 (200 warm queries)
-//   - backup round-trip correctness (5 hold-out queries)
-//   - index file size at each quantization level (usearch: float32/float16/int8; others: float32)
+//
+//	recall@10 with 100 hold-out queries at each population size
+//	warm p95 query latency at k=10 (200 warm queries)
+//	backup round-trip correctness (5 hold-out queries)
+//	index file size at each quantization level (usearch: float32/float16/int8; others: float32)
 //
 // Results are printed as a Markdown table and written to RESULTS.md.
-//
 // Build-time CGo notes:
-//   - usearch: requires libusearch_c.so (from usearch v2.25.2 deb) and usearch.h.
-//     Set CGO_LDFLAGS="-L<path-to-lib> -lusearch_c" and CGO_CFLAGS="-I<path-to-include>".
-//   - lancedb: requires liblancedb_go.a from lancedb-go v0.1.2 release.
-//     Set CGO_LDFLAGS="<path>/liblancedb_go.a -lm -ldl -lpthread".
+//
+//	usearch: requires libusearch_c.so (from usearch v2.25.2 deb) and usearch.h.
+//	  Set CGO_LDFLAGS="-L<path-to-lib> -lusearch_c" and CGO_CFLAGS="-I<path-to-include>".
+//	lancedb: requires liblancedb_go.a from lancedb-go v0.1.2 release.
+//	  Set CGO_LDFLAGS="<path>/liblancedb_go.a -lm -ldl -lpthread".
 package main
 
 import (
@@ -65,7 +65,7 @@ func main() {
 	var rows []row
 	buildStart := time.Now()
 
-	// --- usearch ---
+	// usearch
 	for _, pop := range []int{nSmall, nLarge} {
 		for _, quant := range []struct {
 			name  usearchlib.Quantization
@@ -81,14 +81,14 @@ func main() {
 		}
 	}
 
-	// --- coder/hnsw ---
+	// coder/hnsw
 	for _, pop := range []int{nSmall, nLarge} {
 		fmt.Fprintf(os.Stderr, "coder/hnsw @%dk: building...\n", pop/1000)
 		r := evalCohnsw(tmpDir, pop)
 		rows = append(rows, r)
 	}
 
-	// --- lancedb ---
+	// lancedb
 	for _, pop := range []int{nSmall, nLarge} {
 		fmt.Fprintf(os.Stderr, "lancedb @%dk: building...\n", pop/1000)
 		r := evalLanceDB(tmpDir, pop)
@@ -134,7 +134,7 @@ func findSpikeDir() string {
 	if !ok {
 		return ""
 	}
-	// file = .../tools/loadtest/spikes/hnsw/cmd/hnsw-eval/main.go
+	// file =./tools/loadtest/spikes/hnsw/cmd/hnsw-eval/main.go
 	return filepath.Join(filepath.Dir(file), "..", "..")
 }
 

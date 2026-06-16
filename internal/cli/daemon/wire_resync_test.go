@@ -27,7 +27,7 @@ func runGit(t *testing.T, dir string, args ...string) {
 }
 
 // initGitRepoWithGoFile lays out a temp git repo containing one committed
-// .go file. The .git/hooks directory is created so repo.Add (which installs
+// go file. The.git/hooks directory is created so repo.Add (which installs
 // post-commit / post-checkout hooks) does not fail when called against it.
 func initGitRepoWithGoFile(t *testing.T) string {
 	t.Helper()
@@ -73,12 +73,11 @@ func TestDaemon_ResyncWired_FieldPresent(t *testing.T) {
 // TestDaemon_StartupResync_NeverPromoted_Reparses exercises AC1 at the
 // wiring level: a repo with last_promoted_sha = "" is routed through the
 // reparser when StartupResync.Run is invoked.
-//
 // We use the daemon's real repoLister (so the wiring path is exercised)
 // but swap a spy in for the reparser. The full real-pipeline path
 // (Ingester.Save → Promoter.Promote → SQLite nodes) is gated on the
 // cold-scan integration follow-up bead (see TestColdScanReparser_Integration
-// in coldscan_test.go, currently skipped under solov2-21h).
+// in coldscan_test.go, currently skipped under ).
 func TestDaemon_StartupResync_NeverPromoted_Reparses(t *testing.T) {
 	cfg := testConfig(t)
 	d, err := newDaemon(cfg)
@@ -120,7 +119,7 @@ func TestDaemon_StartupResync_NeverPromoted_Reparses(t *testing.T) {
 }
 
 // TestDaemon_StartupResync_AtHEAD_SkipsReparse exercises AC2: a repo
-// whose last_promoted_sha already equals HEAD takes the cheap path —
+// whose last_promoted_sha already equals HEAD takes the cheap path
 // the reparser is NOT invoked. As with AC1 this is asserted via a spy
 // over the daemon's wiring (real repoLister + real Querier).
 func TestDaemon_StartupResync_AtHEAD_SkipsReparse(t *testing.T) {
@@ -226,7 +225,7 @@ func TestDaemon_StartupResync_FullPipeline(t *testing.T) {
 	}
 
 	// repos.last_promoted_sha must advance to HEAD — the promotion
-	// transaction writes it atomically with the node rows .
+	// transaction writes it atomically with the node rows.
 	headOut, err := exec.Command("git", "-C", gitDir, "rev-parse", "HEAD").Output()
 	if err != nil {
 		t.Fatalf("rev-parse HEAD: %v", err)
@@ -260,7 +259,7 @@ func TestDaemon_StartupResync_FullPipeline(t *testing.T) {
 	}
 }
 
-// TestDaemon_VectorStoreRehydratesOnSecondStart covers solov2-249: the
+// TestDaemon_VectorStoreRehydratesOnSecondStart covers: the
 // in-memory vector store is repopulated from node_embeddings on a fresh
 // Daemon.Start. We simulate "daemon restart" by running newDaemon twice
 // over the same VESKA_HOME; the second instance's vector store is empty

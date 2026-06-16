@@ -1,11 +1,10 @@
 // Package reindexcmd holds the business logic behind the `veska reindex`
 // command: the daemon-dispatch fork (route through eng_reindex_repo when the
 // daemon is up) and the direct-SQLite cold-scan fallback when it is down.
-//
 // cmd/veska/reindex.go is reduced to Cobra command construction whose RunE body
 // merges the positional/flag target and delegates here, injecting the
 // cmd-owned cold-scan seams (ReparserFactory, MatchByPath) it shares with
-// `veska search` (solov2-0omh, following the cmd = glue / logic-in-packages
+// `veska search` (, following the cmd = glue / logic-in-packages
 // pattern established by searchcmd, symbolcmd, graphcmd, and findingscmd).
 package reindexcmd
 
@@ -52,13 +51,13 @@ type Params struct {
 // Run performs a full cold-scan reparse of the target (or cwd-resolved) repo
 // unconditionally — bypassing the daemon's StartupResync gate that skips
 // at-HEAD repos. When the daemon is up the reindex is routed through its
-// eng_reindex_repo MCP tool  so the user does not have to stop the
+// eng_reindex_repo MCP tool so the user does not have to stop the
 // daemon; the direct-SQLite path below handles the no-daemon case.
 func Run(ctx context.Context, p Params) error {
 	w := p.Out
 
-	// solov2-4d7b: when the daemon is up, route through eng_reindex_repo. The
-	// previous behaviour (refuse with a stop-the-daemon hint, solov2-mdn3)
+	// when the daemon is up, route through eng_reindex_repo. The
+	// previous behaviour (refuse with a stop-the-daemon hint)
 	// disconnected the editor's MCP session and was a junior-hostile regression
 	// from add-time scans (which already run inside the daemon).
 	if p.DaemonRunning() {
@@ -206,7 +205,7 @@ func resolveReindexTarget(ctx context.Context, db *sql.DB, target string, matchB
 		return matchByPath(ctx, db, cwd)
 	}
 
-	// Try as a full id, short_id, or unambiguous prefix .
+	// Try as a full id, short_id, or unambiguous prefix.
 	records, lerr := repo.List(ctx, db)
 	if lerr != nil {
 		return repo.Record{}, fmt.Errorf("reindex: list repos: %w", lerr)

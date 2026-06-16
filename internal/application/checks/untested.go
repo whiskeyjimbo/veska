@@ -13,49 +13,44 @@ import (
 // UntestedSymbolCheck is a structural check that flags a prod-kind symbol whose
 // direct inbound CALLS edges include NO caller in a test-shaped file. With no
 // real coverage data, "has a direct caller in a *_test.go-shaped file" is a
-// CALLS-edge PROXY for "is covered by tests" (solov2-zvh6.3). It needs no new
+// CALLS-edge PROXY for "is covered by tests". It needs no new
 // ingest — the signal is latent in CALLS edges already in the graph.
-//
 // Proxy limits (by design, not bugs — the finding is advisory/low-severity).
-// The complete set was probed empirically in solov2-zvh6.10 and each case is
+// The complete set was probed empirically in and each case is
 // locked by a regression test in coveragegate_probe_test.go:
 //
-//   - SUPPRESSED today: interface / dynamic dispatch resolves the CALLS edge to
-//     the interface method, not the concrete impl — including a base method
-//     reached through embedding when it satisfies an interface. The
-//     InterfaceMethodNames filter below silences these (solov2-zvh6.9).
-//   - False positives that REMAIN (no graph signal to suppress on):
-//     · func-value / callback references — a prod fn passed as a value
-//     (fn := F; F as t.Cleanup(F); a struct field {F}) emits no CALLS edge
-//     (solov2-zvh6.15);
-//     · embedded method promotion WITHOUT an interface — w.Do() binds to a
-//     non-existent Wrap.Do, not Base.Do (solov2-zvh6.16);
-//     · transitive-only coverage — a test calls A→B→symbol, no DIRECT test
-//     caller; the principled fix is the transitive reverse map
-//     (solov2-v6de.1).
-//     · reflection / generated harnesses — string-keyed dispatch
-//     (reflect.ValueOf(x).MethodByName("Do").Call(...)) names the symbol only
-//     at runtime, so NO static analysis can ever produce an edge. This is a
-//     PERMANENT proxy limit, not a deferred fix — there is no follow-up bead.
-//   - False negatives (not flagged but effectively untested): a hollow test
-//     caller that asserts nothing still emits a CALLS edge.
+//	SUPPRESSED today: interface / dynamic dispatch resolves the CALLS edge to
+//	  the interface method, not the concrete impl — including a base method
+//	  reached through embedding when it satisfies an interface. The
+//	  InterfaceMethodNames filter below silences these.
+//	False positives that REMAIN (no graph signal to suppress on):
+//	  · func-value / callback references — a prod fn passed as a value
+//	  (fn:= F; F as t.Cleanup(F); a struct field {F}) emits no CALLS edge
+//	  · embedded method promotion WITHOUT an interface — w.Do binds to a
+//	  non-existent Wrap.Do, not Base.Do;
+//	  · transitive-only coverage — a test calls A→B→symbol, no DIRECT test
+//	  caller; the principled fix is the transitive reverse map
+//	  · reflection / generated harnesses — string-keyed dispatch
+//	  (reflect.ValueOf(x).MethodByName("Do").Call(.)) names the symbol only
+//	  at runtime, so NO static analysis can ever produce an edge. This is a
+//	  PERMANENT proxy limit, not a deferred fix — there is no follow-up bead.
+//	False negatives (not flagged but effectively untested): a hollow test
+//	  caller that asserts nothing still emits a CALLS edge.
 //
 // The bias is toward over-reporting. As a FINDING this is advisory/low-severity
 // and never blocks on its own; the SEPARATE diff-gate (RunUntested) does return
 // ErrGateFailed on a changed-and-untested symbol, which is why suppressing these
 // false positives matters there. The fixable false positives each need a NEW
 // graph signal (a
-// reference edge kind, embedding resolution, or the transitive reverse map) —
+// reference edge kind, embedding resolution, or the transitive reverse map)
 // not the name-based suppression this check already does — so they are tracked
 // as follow-ups; reflection is unanalyzable and stays a permanent limit.
-//
 // Unlike DeadCodeCheck this deliberately does NOT exclude exported symbols: a
 // test caller is always a visible CALLS edge regardless of export, so an
 // exported prod symbol with no test caller is the HIGHEST-value finding, not a
 // false positive. Copying dead-code's exported-symbol exclusion would gut the
 // check.
-//
-// Lifecycle (solov2-zvh6.8): findings are emitted WITH an anchor content-hash,
+// Lifecycle: findings are emitted WITH an anchor content-hash,
 // so the post-promotion revalidation sweep selects them when the symbol's body
 // drifts — and revalidate.Decide's "untested-symbol" case re-runs the
 // test-caller predicate: CLOSE if the symbol now has a test caller, else REFRESH
@@ -64,7 +59,6 @@ import (
 // UNTIL that Decide case existed, because without it the sweep's default branch
 // would conservative-close a still-untested symbol on any edit. The two are
 // atomic: the hash here is only correct because the Decide case exists.
-//
 // It remains non-authoritative on the same axis dead-code is: a coverage proxy
 // changes state when TESTS change, but the sweep is triggered by the SYMBOL's
 // file drifting, so adding a test in another file does not auto-close until the
@@ -73,7 +67,7 @@ type UntestedSymbolCheck struct {
 	q ports.CoverageQuerier
 	// repoKind, when non-nil, returns the kind ("tracked" / "ephemeral") of a
 	// repoID. Ephemeral cache-tier clones (`veska search --repo <url>`)
-	// short-circuit to zero findings — mirrors dead-code (solov2-izh6.13).
+	// short-circuit to zero findings — mirrors dead-code.
 	// Untested-symbol has strictly worse exposure on an external clone: every
 	// prod symbol with no test in the indexed tree would flag.
 	repoKind func(ctx context.Context, repoID string) (string, error)
@@ -82,7 +76,7 @@ type UntestedSymbolCheck struct {
 	// suppressed: it is likely satisfied via interface dispatch, which emits a
 	// CALLS edge to the INTERFACE method, not the concrete impl — so a test
 	// exercising it through the interface leaves the impl looking untested.
-	// This is the same false positive dead-code suppresses (solov2-f1zp); the
+	// This is the same false positive dead-code suppresses; the
 	// untested gate is PR-blocking, so silencing it (at the cost of not flagging
 	// a genuinely-untested interface method) beats false-FAILing tested code.
 	ifaceMethods InterfaceMethodLister

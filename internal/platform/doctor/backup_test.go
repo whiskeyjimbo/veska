@@ -11,7 +11,7 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/platform/doctor"
 )
 
-// writeTarGz writes a minimal valid .tar.gz archive to path.
+// writeTarGz writes a minimal valid.tar.gz archive to path.
 func writeTarGz(t *testing.T, path string) {
 	t.Helper()
 	f, err := os.Create(path)
@@ -44,7 +44,7 @@ func writeTarGz(t *testing.T, path string) {
 	}
 }
 
-// writeInvalidGz writes a file with a .tar.gz extension but invalid gzip content.
+// writeInvalidGz writes a file with a.tar.gz extension but invalid gzip content.
 func writeInvalidGz(t *testing.T, path string) {
 	t.Helper()
 	if err := os.WriteFile(path, []byte("this is not gzip data"), 0o644); err != nil {

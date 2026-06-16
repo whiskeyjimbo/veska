@@ -1,5 +1,5 @@
 // Package backup implements veska backup creation and verification.
-// See SOLO-08 §9.2 for the full specification.
+// for the full specification.
 package backup
 
 import (
@@ -40,7 +40,6 @@ type CreateResult struct {
 }
 
 // Create produces a timestamped backup tarball in opts.BackupDir.
-//
 // Steps:
 //  1. Creates a temp staging directory.
 //  2. Runs VACUUM INTO <staging>/veska.db on opts.DBPath (read-only connection).
@@ -152,8 +151,8 @@ func vacuumInto(src, dst string) error {
 	return err
 }
 
-// copyIfPresent copies src to dst.  If src does not exist the function returns
-// nil (skip silently).  Parent directories of dst are created as needed.
+// copyIfPresent copies src to dst. If src does not exist the function returns
+// nil (skip silently). Parent directories of dst are created as needed.
 func copyIfPresent(src, dst string) error {
 	sf, err := os.Open(src)
 	if os.IsNotExist(err) {
@@ -196,7 +195,7 @@ func copyDirRecursive(src, dst string) error {
 	})
 }
 
-// createTarGz walks srcDir and writes all files into a .tar.gz at tarPath.
+// createTarGz walks srcDir and writes all files into a.tar.gz at tarPath.
 func createTarGz(tarPath, srcDir string) error {
 	f, err := os.Create(tarPath)
 	if err != nil {

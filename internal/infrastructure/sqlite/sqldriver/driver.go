@@ -1,9 +1,8 @@
 // Package sqldriver pins veska's SQLite driver.
-//
 // veska uses github.com/mattn/go-sqlite3 (cgo, with the sqlite_fts5 build
 // tag so the lexical-fallback FTS5 virtual tables work). cgo is required
 // regardless because tree-sitter is cgo, so the historical pure-Go
-// (modernc) opt-in had no remaining value and was removed .
+// (modernc) opt-in had no remaining value and was removed.
 package sqldriver
 
 import (

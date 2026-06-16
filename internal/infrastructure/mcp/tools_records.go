@@ -39,9 +39,7 @@ func RegisterRecordTools(r *Registry, db *sql.DB, aw ports.AuditWriter) {
 	})
 }
 
-// ---------------------------------------------------------------------------
 // eng_get_finding
-// ---------------------------------------------------------------------------
 
 type getFindingParams struct {
 	FindingID string `json:"finding_id"`
@@ -62,8 +60,8 @@ func makeGetFindingHandler(db *sql.DB) ToolHandler {
 			return nil, rpcErr
 		}
 
-		// solov2-zyp4: accept an unambiguous finding_id prefix (12+ chars in
-		// the CLI listing). solov2-qwpt: finding_id is globally unique, so
+		// accept an unambiguous finding_id prefix (12+ chars in
+		// the CLI listing).: finding_id is globally unique, so
 		// branch is just a consistency hint; the resolver checks it when set.
 		fullID, rpcErr := resolveFindingPrefix(ctx, db, p.FindingID, p.Branch)
 		if rpcErr != nil {
@@ -82,7 +80,7 @@ func makeGetFindingHandler(db *sql.DB) ToolHandler {
 		if err != nil {
 			return nil, &RPCError{Code: CodeInternalError, Message: fmt.Sprintf("query finding: %v", err)}
 		}
-		// solov2-8kkj: when --repo is supplied, ensure it agrees with the
+		// when --repo is supplied, ensure it agrees with the
 		// row we loaded; mismatch is a NotFound (the agent asked for "this
 		// finding scoped to repo X" and that pair does not exist).
 		if p.RepoID != "" && !findingRepoMatches(f.RepoID, p.RepoID) {
@@ -105,8 +103,7 @@ type findingPrefixQuerier interface {
 // MCP handlers (eng_get_finding, eng_close_finding, eng_reopen_finding,
 // eng_suppress_finding) accept the 12-char short form `veska findings list`
 // prints, mirroring the short-id resolution other tools already do
-// . Branch, when supplied, scopes the match.
-//
+// Branch, when supplied, scopes the match.
 // Returns the full finding_id when exactly one row matches; CodeNotFound
 // for zero matches and CodeInvalidParams for an ambiguous prefix.
 func resolveFindingPrefix(ctx context.Context, q findingPrefixQuerier, prefix, branch string) (string, *RPCError) {
@@ -158,9 +155,7 @@ func findingRepoMatches(actual, supplied string) bool {
 	return strings.HasPrefix(actual, supplied)
 }
 
-// ---------------------------------------------------------------------------
 // eng_get_suppression
-// ---------------------------------------------------------------------------
 
 type getSuppressionParams struct {
 	SuppressionID string `json:"suppression_id"`
@@ -196,9 +191,7 @@ func makeGetSuppressionHandler(db *sql.DB) ToolHandler {
 	}
 }
 
-// ---------------------------------------------------------------------------
 // eng_close_suppression
-// ---------------------------------------------------------------------------
 
 type closeSuppressionParams struct {
 	SuppressionID string `json:"suppression_id"`

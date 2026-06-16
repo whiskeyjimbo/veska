@@ -12,7 +12,7 @@ import (
 // CoverageRepo is the SQLite adapter for the CoverageQuerier port. It answers
 // "for each node in (repoID, branch) whose file_path is in a set, what are the
 // distinct file paths of its DIRECT inbound CALLS callers?" — the read-side
-// attribution the untested-symbol check (solov2-zvh6.3) consumes.
+// attribution the untested-symbol check consumes.
 type CoverageRepo struct {
 	db *sql.DB
 }
@@ -28,16 +28,14 @@ func NewCoverageRepo(db *sql.DB) *CoverageRepo {
 // file_path is one of filePaths, each paired with the distinct file paths of
 // its direct inbound CALLS callers. A candidate with no caller appears with an
 // empty CallerFiles slice.
-//
 // Liveness is attributed against CALLS edges ONLY (case-insensitive), matching
 // the dead-code adapter: a CONTAINS edge from the parent package or a
 // SIMILAR_TO autolink edge is not a "caller". The LEFT JOINs keep every
 // candidate node even when it has zero callers; a CALLS edge whose source node
 // is missing contributes a NULL caller file, which is skipped.
-//
 // No name/kind/test-file filtering is applied here — those rules live in the
 // application-layer check so they stay trivially testable without a database.
-// Empty filePaths is a no-op (nil, nil), avoiding a degenerate "IN ()" clause.
+// Empty filePaths is a no-op (nil, nil), avoiding a degenerate "IN " clause.
 func (r *CoverageRepo) CandidateCallersInFiles(ctx context.Context, repoID, branch string, filePaths []string) ([]ports.NodeCallers, error) {
 	if len(filePaths) == 0 {
 		return nil, nil
@@ -112,9 +110,8 @@ ORDER BY n.file_path, n.node_id`, strings.Join(placeholders, ","))
 // its inbound CALLS edges in (repoID, branch), hydrated with the metadata the
 // reverse-map BFS needs to classify test entrypoints (kind, symbol_path, file).
 // It is the CALLS-scoped, metadata-bearing adjacency primitive behind the
-// node→test reverse map (solov2-v6de.1) — the transitive sibling of
+// node→test reverse map — the transitive sibling of
 // CandidateCallersInFiles, which is direct-only and file-granularity.
-//
 // CALLS edges ONLY (case-insensitive), matching the coverage proxy: a CONTAINS
 // or SIMILAR_TO edge is not a caller. Every queried id is present in the result
 // map (empty slice when it has no inbound CALLS caller), so the BFS can rely on

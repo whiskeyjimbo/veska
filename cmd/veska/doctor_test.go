@@ -142,7 +142,7 @@ func TestDoctorStorageExitZero(t *testing.T) {
 }
 
 // TestDoctorRealProbeSubcommandsRun verifies the live-probe subcommands (embedder, egress,
-// config, status) execute without panicking.  In a test environment the probes may return
+// config, status) execute without panicking. In a test environment the probes may return
 // degraded/broken but they must not crash or return an unexpected Go error.
 func TestDoctorRealProbeSubcommandsRun(t *testing.T) {
 	probeNames := []string{"embedder", "egress", "config", "status"}
@@ -155,7 +155,7 @@ func TestDoctorRealProbeSubcommandsRun(t *testing.T) {
 			root.SetErr(&out)
 			root.SetArgs([]string{"doctor", name})
 			// We do NOT assert err == nil — probes may legitimately return a
-			// ProbeStatusError when services are unavailable in CI.  We only
+			// ProbeStatusError when services are unavailable in CI. We only
 			// assert the command ran (no panic) and any error is a ProbeStatusError.
 			err := root.Execute()
 			if err != nil {

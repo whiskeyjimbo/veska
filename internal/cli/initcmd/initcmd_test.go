@@ -12,7 +12,7 @@ import (
 )
 
 // TestResolveVulnChoice_NonInteractiveStdinSkipsPromptAndEchoes pins
-// solov2-mgyy: when stdin is non-TTY the prompt must NOT be printed (it
+// when stdin is non-TTY the prompt must NOT be printed (it
 // can't be answered) and the chosen default must be echoed so the
 // caller can read the summary and tell vuln scanning was enabled.
 func TestResolveVulnChoice_NonInteractiveStdinSkipsPromptAndEchoes(t *testing.T) {
@@ -56,7 +56,7 @@ func TestResolveVulnChoice_InteractiveStillPrompts(t *testing.T) {
 	}
 }
 
-// TestResolveVulnChoice_InteractiveEmptyStdinSkipsPrompt pins solov2-iabr:
+// TestResolveVulnChoice_InteractiveEmptyStdinSkipsPrompt pins:
 // when stdin LOOKS like a TTY but is actually empty/closed (common under
 // agent harnesses), the prompt must NOT be printed.
 func TestResolveVulnChoice_InteractiveEmptyStdinSkipsPrompt(t *testing.T) {
@@ -180,7 +180,7 @@ func TestInitSummaryContainsKeyLines(t *testing.T) {
 	}
 }
 
-// TestInitVulnPromptYesEnablesBlock pins solov2-pvyo: --yes accepts the
+// TestInitVulnPromptYesEnablesBlock pins: --yes accepts the
 // default (enabled), so the written config.toml has [vuln_source] live.
 func TestInitVulnPromptYesEnablesBlock(t *testing.T) {
 	tmp := t.TempDir()
@@ -199,7 +199,7 @@ func TestInitVulnPromptYesEnablesBlock(t *testing.T) {
 	}
 }
 
-// TestInitVulnPromptNoVulnFlagSkipsBlock pins solov2-pvyo: --no-vuln forces
+// TestInitVulnPromptNoVulnFlagSkipsBlock pins: --no-vuln forces
 // the disabled (commented-out) shape regardless of --yes.
 func TestInitVulnPromptNoVulnFlagSkipsBlock(t *testing.T) {
 	tmp := t.TempDir()
@@ -221,7 +221,7 @@ func TestInitVulnPromptNoVulnFlagSkipsBlock(t *testing.T) {
 	}
 }
 
-// TestInitSummaryMentionsPATH pins solov2-izh6.19 #1.
+// TestInitSummaryMentionsPATH pins #1.
 func TestInitSummaryMentionsPATH(t *testing.T) {
 	tmp := t.TempDir()
 	deps := Deps{VeskaHome: tmp, Probe: healthyProbe, GOOS: "linux"}
@@ -236,7 +236,7 @@ func TestInitSummaryMentionsPATH(t *testing.T) {
 	}
 }
 
-// TestInitSummaryMentionsYesFlag pins solov2-izh6.19 #10.
+// TestInitSummaryMentionsYesFlag pins #10.
 func TestInitSummaryMentionsYesFlag(t *testing.T) {
 	tmp := t.TempDir()
 	deps := Deps{VeskaHome: tmp, Probe: healthyProbe, GOOS: "linux"}
@@ -251,7 +251,7 @@ func TestInitSummaryMentionsYesFlag(t *testing.T) {
 	}
 }
 
-// TestInitVulnPromptInteractiveNo pins solov2-pvyo: interactive 'n' answer
+// TestInitVulnPromptInteractiveNo pins: interactive 'n' answer
 // leaves vuln_source disabled.
 func TestInitVulnPromptInteractiveNo(t *testing.T) {
 	tmp := t.TempDir()

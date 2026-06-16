@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
-# install.sh — copy the veska binaries into a user-writable bin dir.
+# install.sh - copy the veska binaries into a user-writable bin dir.
 #
 # Two modes:
 #   1. Inside a release tarball, where ./bin/{veska,veska-daemon,veska-mcp}
-#      sit next to this script — copies those binaries.
-#   2. Run from a clone (`scripts/install.sh` after `make build`) — same
+#      sit next to this script - copies those binaries.
+#   2. Run from a clone (`scripts/install.sh` after `make build`) - same
 #      bin/ layout, same copy. The Makefile's `make install` target is the
 #      preferred entry point for this case.
 #
@@ -62,7 +62,7 @@ ln -sf veska "$dest/veska-mcp"
 
 printf 'installed veska to %s\n' "$dest"
 
-# PATH sanity check: only warn — the user can still invoke "$dest/veska"
+# PATH sanity check: only warn - the user can still invoke "$dest/veska"
 # directly, and editing shell config without asking is overreach.
 case ":${PATH:-}:" in
     *":$dest:"*) ;;

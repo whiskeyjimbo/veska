@@ -21,12 +21,11 @@ var validActorKinds = map[ActorKind]struct{}{
 
 // Actor is an attribution stamp that records who or what performed an action.
 // It is a lightweight value type; ActorKind is the kind discriminator.
-//
 // Convention for the ID field:
 //
-//	"human:<username>"     — a human developer
-//	"agent:<name>"         — an AI agent
-//	"service:veska"       — the veska system itself
+//	"human:<username>" — a human developer
+//	"agent:<name>" — an AI agent
+//	"service:veska" — the veska system itself
 type Actor struct {
 	ID   string
 	Kind ActorKind

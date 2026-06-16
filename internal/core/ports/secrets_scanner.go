@@ -36,7 +36,7 @@ type SecretFinding struct {
 	// safe to surface in findings and logs.
 	Redacted string
 
-	// Confidence is the scanner's per-finding confidence in the range 0..1.
+	// Confidence is the scanner's per-finding confidence in the range 0.1.
 	Confidence float64
 }
 

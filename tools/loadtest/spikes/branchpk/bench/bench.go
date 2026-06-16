@@ -1,6 +1,6 @@
 // Package bench provides indexed-lookup latency benchmarks for the branchpk SQLite schema.
 // It measures warm p50/p95/p99 for the two hot queries (get_node, get_edges) and
-// compares them against SOLO-13 §3.1 budgets.
+// compares them against budgets.
 package bench
 
 import (
@@ -14,9 +14,9 @@ import (
 )
 
 const (
-	// NodeBudgetMs is the SOLO-13 §3.1 p95 budget for eng_get_node (SELECT * FROM nodes WHERE node_id=? AND branch=?).
+	// NodeBudgetMs is the p95 budget for eng_get_node (SELECT * FROM nodes WHERE node_id=? AND branch=?).
 	NodeBudgetMs = 25.0
-	// EdgesBudgetMs is the SOLO-13 §3.1 p95 budget for eng_get_edges / get_call_chain proxy.
+	// EdgesBudgetMs is the p95 budget for eng_get_edges / get_call_chain proxy.
 	EdgesBudgetMs = 100.0
 )
 

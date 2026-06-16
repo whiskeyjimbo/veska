@@ -11,7 +11,7 @@ veska backup create
 ```
 
 Writes a backup tarball to `$VESKA_HOME/backups` (override with `--output-dir`).
-Safe to run while the daemon is up — it uses an online SQLite snapshot.
+Safe to run while the daemon is up - it uses an online SQLite snapshot.
 
 ## List & prune
 

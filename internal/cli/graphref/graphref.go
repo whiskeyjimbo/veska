@@ -3,9 +3,8 @@
 // side of a cross-repo edge. It is shared by the `veska symbol`/`veska
 // context` (symbolcmd) and `veska calls`/`veska blast` (graphcmd) surfaces,
 // both of which decorate cross-repo edges with the calling/called symbol
-// instead of a bare hash (solov2-358v, solov2-y59h). Extracted from
+// instead of a bare hash (). Extracted from
 // cmd/veska as part of the cmd = Cobra glue / logic-in-packages split
-// (solov2-0omh.7).
 package graphref
 
 import (
@@ -19,7 +18,7 @@ import (
 // NodeInfo is the projection ResolveCrossRepoNode returns for cross-repo
 // edge rendering: the symbol name, the kind (so a package-grain edge can be
 // visibly labelled as such), and a file:line hint so the user can navigate
-// to the call site .
+// to the call site.
 type NodeInfo struct {
 	Name     string
 	Kind     string
@@ -30,8 +29,8 @@ type NodeInfo struct {
 // ResolveCrossRepoNode best-effort resolves any cross-repo node_id (src or
 // dst) to its symbol name + file location via eng_get_node, so the CLI can
 // print "RunE in cmd/root.go:18 --CALLS--> greetlib.Greeter.Hello" instead
-// of opaque hashes (extends solov2-7xrw, solov2-80hh; rendering upgrade for
-// solov2-358v). Pass repoID/branch empty to let the daemon scan all (repo,
+// of opaque hashes (extends,; rendering upgrade for
+// ). Pass repoID/branch empty to let the daemon scan all (repo,
 // branch) pairs — needed for inbound src nodes whose containing repo isn't
 // on the response envelope. Returns the zero value on any error or empty
 // result so a stuck remote repo never fails the primary output.

@@ -96,7 +96,7 @@ Terminate an active suppression now by setting expires_at to the current time.
 
 ## `eng_find_changed_symbols`
 
-Symbol-grain diff between two git refs — answers 'which functions/methods/structs actually changed?' for PR review, blame, or 'why did this break since yesterday'. ref_a/ref_b (aliases base/head) default to HEAD~1..HEAD. Comment- or whitespace-only changes emit a 'non_symbol_changes_only' degraded_reason so callers know the file changed even when no symbol diff comes back. Pair with eng_get_diff_blast_radius for 'what's downstream of these changes'.
+Symbol-grain diff between two git refs - answers 'which functions/methods/structs actually changed?' for PR review, blame, or 'why did this break since yesterday'. ref_a/ref_b (aliases base/head) default to HEAD~1..HEAD. Comment- or whitespace-only changes emit a 'non_symbol_changes_only' degraded_reason so callers know the file changed even when no symbol diff comes back. Pair with eng_get_diff_blast_radius for 'what's downstream of these changes'.
 
 **Input schema:**
 
@@ -140,7 +140,7 @@ Symbol-grain diff between two git refs — answers 'which functions/methods/stru
 
 ## `eng_find_clones`
 
-Find duplicate code. mode='exact' (default): groups of >=2 symbols whose source text is byte-for-byte identical (literal copy-paste), detected by content_hash equality — deterministic, no embeddings. mode='near': clusters of symbols whose persisted SIMILAR_TO similarity exceeds a threshold higher than auto-link's 'related' cutoff (fuzzy near-duplicates — renamed copies, drifted variants); reads scores auto-link already stored, runs no new similarity sweep. For 'what else looks LIKE this ONE symbol?' use eng_search_similar instead. Container/sub-symbol kinds (package, chunk, file, module, field, import) are excluded so boilerplate doesn't flood results. NOTE: near mode needs SIMILAR_TO edges carrying a score, which only exist after a promotion/reindex on a build with the score column — older indexes report no near clusters until reindexed.
+Find duplicate code. mode='exact' (default): groups of >=2 symbols whose source text is byte-for-byte identical (literal copy-paste), detected by content_hash equality - deterministic, no embeddings. mode='near': clusters of symbols whose persisted SIMILAR_TO similarity exceeds a threshold higher than auto-link's 'related' cutoff (fuzzy near-duplicates - renamed copies, drifted variants); reads scores auto-link already stored, runs no new similarity sweep. For 'what else looks LIKE this ONE symbol?' use eng_search_similar instead. Container/sub-symbol kinds (package, chunk, file, module, field, import) are excluded so boilerplate doesn't flood results. NOTE: near mode needs SIMILAR_TO edges carrying a score, which only exist after a promotion/reindex on a build with the score column - older indexes report no near clusters until reindexed.
 
 **Input schema:**
 
@@ -182,7 +182,7 @@ Find duplicate code. mode='exact' (default): groups of >=2 symbols whose source 
 
 ## `eng_find_clusters`
 
-Whole-repo (or cross-repo) similar-code clusters for de-dupe triage. One pass returns groups of >=2 symbols at three tiers, ranked tightest first: 'exact' (byte-identical copy-paste, content_hash), 'structural' (same shape after renaming variables/literals — Type-2 clones, structural_hash), and 'near' (vector-similar above the elected embedder's calibrated threshold). A symbol appears at most once, at its tightest tier. No seed needed. scope='all' clusters across EVERY registered repo (exact+structural only — cross-repo near is not yet computed); 'path' narrows to a file_path prefix; 'tiers' selects a subset. Container kinds (package/chunk/file/module/field/import) are excluded. Each cluster's members carry repo_id/file/line so you can open a verify-and-dedupe task per grouping. NOTE: structural/near need structural_hash + scored SIMILAR_TO edges, populated by a promotion/reindex on a current build — reindex older graphs first.
+Whole-repo (or cross-repo) similar-code clusters for de-dupe triage. One pass returns groups of >=2 symbols at three tiers, ranked tightest first: 'exact' (byte-identical copy-paste, content_hash), 'structural' (same shape after renaming variables/literals - Type-2 clones, structural_hash), and 'near' (vector-similar above the elected embedder's calibrated threshold). A symbol appears at most once, at its tightest tier. No seed needed. scope='all' clusters across EVERY registered repo (exact+structural only - cross-repo near is not yet computed); 'path' narrows to a file_path prefix; 'tiers' selects a subset. Container kinds (package/chunk/file/module/field/import) are excluded. Each cluster's members carry repo_id/file/line so you can open a verify-and-dedupe task per grouping. NOTE: structural/near need structural_hash + scored SIMILAR_TO edges, populated by a promotion/reindex on a current build - reindex older graphs first.
 
 **Input schema:**
 
@@ -276,7 +276,7 @@ Find the owner of a file via CODEOWNERS lookup or git blame fallback.
 
 ## `eng_find_related`
 
-Find symbols semantically similar to the code at a given (file_path, line). Use as a moat-pivot from a search hit, an error trace, or an open editor cursor: 'what else in the graph looks like this?'. Resolves the smallest enclosing symbol or chunk for the given line, then runs the same vector-neighbourhood search as eng_search_similar — no separate find_symbol round-trip needed.
+Find symbols semantically similar to the code at a given (file_path, line). Use as a moat-pivot from a search hit, an error trace, or an open editor cursor: 'what else in the graph looks like this?'. Resolves the smallest enclosing symbol or chunk for the given line, then runs the same vector-neighbourhood search as eng_search_similar - no separate find_symbol round-trip needed.
 
 **Input schema:**
 
@@ -327,7 +327,7 @@ Find symbols semantically similar to the code at a given (file_path, line). Use 
 
 ## `eng_find_symbol`
 
-Look up nodes by exact symbol name. Use when you already know the identifier (e.g. 'ParseConfig'). Unqualified names also match — 'Run' finds Server.Run, Command.Run, etc., with exact matches first. Returns a stable node_id you can feed to eng_get_call_chain, eng_get_blast_radius, eng_get_context_pack, eng_search_similar without another lookup. Prefer this over eng_search_semantic for known-identifier queries — it's deterministic and exact.
+Look up nodes by exact symbol name. Use when you already know the identifier (e.g. 'ParseConfig'). Unqualified names also match - 'Run' finds Server.Run, Command.Run, etc., with exact matches first. Returns a stable node_id you can feed to eng_get_call_chain, eng_get_blast_radius, eng_get_context_pack, eng_search_similar without another lookup. Prefer this over eng_search_semantic for known-identifier queries - it's deterministic and exact.
 
 _Reads through the staging overlay (reflects uncommitted edits)._
 
@@ -400,7 +400,7 @@ List parser-detected TODO/FIXME markers for the given (repo, branch).
 
 ## `eng_get_blast_radius`
 
-Compute the blast radius (callers/callees/both) of a symbol — 'if I change this, what breaks?' or 'what does this transitively reach?'. Use BEFORE editing an exported symbol, or when scoping a refactor. Walks cross_repo_edges in both directions so a library symbol's consumers in workspace repos are surfaced. Pass node_id (exact) or symbol (resolved via eng_find_symbol). For working-tree changes use eng_get_diff_blast_radius; for in-progress staged edits use eng_get_dirty_blast_radius.
+Compute the blast radius (callers/callees/both) of a symbol - 'if I change this, what breaks?' or 'what does this transitively reach?'. Use BEFORE editing an exported symbol, or when scoping a refactor. Walks cross_repo_edges in both directions so a library symbol's consumers in workspace repos are surfaced. Pass node_id (exact) or symbol (resolved via eng_find_symbol). For working-tree changes use eng_get_diff_blast_radius; for in-progress staged edits use eng_get_dirty_blast_radius.
 
 **Input schema:**
 
@@ -454,7 +454,7 @@ Compute the blast radius (callers/callees/both) of a symbol — 'if I change thi
 
 ## `eng_get_call_chain`
 
-Walk CALLS edges from a symbol. Use this — not search — when the question is 'what does this reach' (direction=out, default) or 'what calls this' (direction=in). Surfaces cross_repo_edges into other registered repos so library-symbol callers in a multi-repo workspace are visible without separate queries. Pass node_id (exact) or symbol (resolved via eng_find_symbol; ambiguity is rejected). NOTE: empty edges on a function/method seed carry one of two degraded_reasons hints: 'chained_selectors_unresolved' (parser limit — chained selector call sites like rootCmd.AddCommand(...).Execute() or s.field.M() are not yet modelled) or 'external_callees_only' (index boundary — callees are stdlib or unregistered modules, NOT a parser bug). Fall back to eng_get_blast_radius, eng_search_semantic, or eng_find_symbol.
+Walk CALLS edges from a symbol. Use this - not search - when the question is 'what does this reach' (direction=out, default) or 'what calls this' (direction=in). Surfaces cross_repo_edges into other registered repos so library-symbol callers in a multi-repo workspace are visible without separate queries. Pass node_id (exact) or symbol (resolved via eng_find_symbol; ambiguity is rejected). NOTE: empty edges on a function/method seed carry one of two degraded_reasons hints: 'chained_selectors_unresolved' (parser limit - chained selector call sites like rootCmd.AddCommand(...).Execute() or s.field.M() are not yet modelled) or 'external_callees_only' (index boundary - callees are stdlib or unregistered modules, NOT a parser bug). Fall back to eng_get_blast_radius, eng_search_semantic, or eng_find_symbol.
 
 **Input schema:**
 
@@ -589,7 +589,7 @@ _Reads through the staging overlay (reflects uncommitted edits)._
 
 ## `eng_get_diff_blast_radius`
 
-Blast radius across every symbol in files changed by a git diff. By default the diff is the working tree vs HEAD; supply ref_a and ref_b together to blast a ref range (e.g. main..HEAD) instead. Use for PR review or 'what does this branch touch?' — the seed is the diff, not a single node.
+Blast radius across every symbol in files changed by a git diff. By default the diff is the working tree vs HEAD; supply ref_a and ref_b together to blast a ref range (e.g. main..HEAD) instead. Use for PR review or 'what does this branch touch?' - the seed is the diff, not a single node.
 
 **Input schema:**
 
@@ -693,7 +693,7 @@ _Reads through the staging overlay (reflects uncommitted edits)._
 
 ## `eng_get_entry_points`
 
-High-fan-in symbols ranked by inbound call count — the natural entry points a newcomer (or agent) should read first to understand the repo. Exported, tested symbols rank above unexported untested ones at the same inbound count.
+High-fan-in symbols ranked by inbound call count - the natural entry points a newcomer (or agent) should read first to understand the repo. Exported, tested symbols rank above unexported untested ones at the same inbound count.
 
 **Input schema:**
 
@@ -835,7 +835,7 @@ Top-N files ranked by change risk = recent-change-frequency × blast-radius. Use
 
 ## `eng_get_node`
 
-Get a single node by its ID. node_id is a content-hashed sha256 and globally unique, so repo_id and branch are optional — when omitted the lookup scans across all (repo, branch) pairs. Pass both to apply the staging overlay (only the scoped path can observe an uncommitted staged version).
+Get a single node by its ID. node_id is a content-hashed sha256 and globally unique, so repo_id and branch are optional - when omitted the lookup scans across all (repo, branch) pairs. Pass both to apply the staging overlay (only the scoped path can observe an uncommitted staged version).
 
 _Reads through the staging overlay (reflects uncommitted edits)._
 
@@ -1253,7 +1253,7 @@ Natural-language search over embedded symbols (RRF-fused with FTS, lexical fallb
 
 ## `eng_search_similar`
 
-Vector-nearest-neighbour search seeded by an existing symbol's embedding — 'what else looks like this?'. Use after eng_find_symbol or eng_search_semantic when you want to find variants, near-duplicates, or candidate refactor targets. Accepts node_id (exact) or symbol (resolved via FindNodes). Excludes the seed itself from results.
+Vector-nearest-neighbour search seeded by an existing symbol's embedding - 'what else looks like this?'. Use after eng_find_symbol or eng_search_semantic when you want to find variants, near-duplicates, or candidate refactor targets. Accepts node_id (exact) or symbol (resolved via FindNodes). Excludes the seed itself from results.
 
 **Input schema:**
 

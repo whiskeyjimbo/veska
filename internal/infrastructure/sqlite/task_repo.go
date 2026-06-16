@@ -49,7 +49,7 @@ func (r *TaskRepo) activeTask(ctx context.Context, repoID string) (*domain.Task,
 
 // GetActiveTask returns the repo's active task as a contextpack.TaskInfo, or
 // (nil, nil) when none is active. NULL tracker/tracker_ref map to empty strings
-// — the projection the contextpack assembler expects.
+// the projection the contextpack assembler expects.
 func (r *TaskRepo) GetActiveTask(ctx context.Context, repoID string) (*contextpack.TaskInfo, error) {
 	t, err := r.activeTask(ctx, repoID)
 	if err != nil || t == nil {

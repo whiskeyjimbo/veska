@@ -35,7 +35,6 @@ func daemonRunning() bool {
 // the canonical $VESKA_HOME/backups; fall back to the legacy
 // ~/.veska-backups when the canonical dir is missing or has no tarballs,
 // so users upgrading still see backups they took under the old layout
-// .
 func resolveBackupReadDir() (string, error) {
 	canon := config.DefaultBackupDir()
 	if hasBackupTarballs(canon) {
@@ -44,7 +43,7 @@ func resolveBackupReadDir() (string, error) {
 	if legacy, ok := config.LegacyBackupDir(); ok && hasBackupTarballs(legacy) {
 		return legacy, nil
 	}
-	// No tarballs anywhere — return the canonical path so error messages
+	// No tarballs anywhere - return the canonical path so error messages
 	// point at the location new writes will land.
 	return canon, nil
 }
@@ -93,7 +92,7 @@ func humanBytes(n int64) string {
 // bridges the gap when the daemon has multiple repos registered and the user
 // hasn't passed --repo. Empty string + no error means "couldn't resolve";
 // the caller should still pass the request through and let the daemon's
-// "repo_id is required" error surface .
+// "repo_id is required" error surface.
 func resolveRepoFromCWD(ctx context.Context) (string, error) {
 	cwd, err := os.Getwd()
 	if err != nil {
@@ -106,7 +105,7 @@ func resolveRepoFromCWD(ctx context.Context) (string, error) {
 		} `json:"repo"`
 	}
 	if err := mcpclient.Call(ctx, "eng_get_current_repo", map[string]any{"cwd": cwd}, &res); err != nil {
-		// Daemon down or no match — caller falls through with no auto-resolve.
+		// Daemon down or no match - caller falls through with no auto-resolve.
 		return "", nil
 	}
 	return res.Repo.RepoID, nil
@@ -115,11 +114,11 @@ func resolveRepoFromCWD(ctx context.Context) (string, error) {
 // autoResolveRepo wraps resolveRepoFromCWD with a stderr breadcrumb so the
 // user is never surprised when --repo defaulted to a repo other than the
 // one they were thinking of. Multi-repo silent fallback was the
-// #1 first-impression bug in the junior-journey walk-through .
+// #1 first-impression bug in the junior-journey walk-through.
 // errOut may be nil to suppress the hint (e.g. JSON-output paths where a
-// stray stderr line could clutter pipelines — callers there pay the
+// stray stderr line could clutter pipelines - callers there pay the
 // no-hint cost knowingly). Shared by the deps and findings command families
-// (symbol deliberately opts out — solov2-efzv — and fans out across all
+// (symbol deliberately opts out - and fans out across all
 // registered repos instead).
 func autoResolveRepo(ctx context.Context, errOut io.Writer) string {
 	rid, _ := resolveRepoFromCWD(ctx)
@@ -127,7 +126,7 @@ func autoResolveRepo(ctx context.Context, errOut io.Writer) string {
 		return ""
 	}
 	// Only emit the hint when we know there's more than one repo to choose
-	// between — solo-repo users don't need the noise.
+	// between - solo-repo users don't need the noise.
 	var list struct {
 		Repos []struct {
 			RepoID   string `json:"repo_id"`

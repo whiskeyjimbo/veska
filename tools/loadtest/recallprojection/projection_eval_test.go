@@ -1,14 +1,12 @@
 //go:build eval
 
-// Eval harness for solov2-7ma: measures recall@10 + p95 for each
+// Eval harness for: measures recall@10 + p95 for each
 // embed-text projection variant so a reference-laptop run can decide
 // whether folding signature and/or a code snippet into the embed text
 // improves embedding quality.
-//
 // The corpus is built from node-shaped projection inputs run through
-// domain.EmbedText — the SAME projection production FetchPending uses —
+// domain.EmbedText — the SAME projection production FetchPending uses
 // so a variant change is exactly what the recall delta measures.
-//
 // Build-tag-gated (`eval`) like the sibling harnesses; the make target is
 // `make eval-recall-projection`. The test SKIPS with a clear message when
 // Ollama is unreachable rather than failing.
@@ -59,17 +57,17 @@ type variantResult struct {
 // variant (baseline / +signature / +snippet / +both) so the measured
 // recall numbers can be compared. With RECALL_PROJECTION_VARIANT set, only
 // that single variant runs.
-//
 // Env knobs:
-//   - RECALL_POP                  synthetic-corpus population (default 1000)
-//   - RECALL_PROJECTION_CORPUS    "real:<path>" builds the corpus from a
-//     real Go module (faithful snippet/query; solov2-ok0); unset uses the
-//     synthetic corpus
-//   - RECALL_PROJECTION_VARIANT   restrict to one variant (baseline|
-//     +signature|+snippet|+both); unset sweeps all four
-//   - VESKA_OLLAMA_URL            Ollama base URL (probe + embed)
-//   - VESKA_EMBED_MODEL           embedding model
-//   - VESKA_VECTOR_BACKEND        vector backend (default sqlite-vec)
+//
+//	RECALL_POP synthetic-corpus population (default 1000)
+//	RECALL_PROJECTION_CORPUS "real:<path>" builds the corpus from a
+//	  real Go module (faithful snippet/query); unset uses the
+//	  synthetic corpus
+//	RECALL_PROJECTION_VARIANT restrict to one variant (baseline|
+//	  +signature|+snippet|+both); unset sweeps all four
+//	VESKA_OLLAMA_URL Ollama base URL (probe + embed)
+//	VESKA_EMBED_MODEL embedding model
+//	VESKA_VECTOR_BACKEND vector backend (default sqlite-vec)
 func TestRecallProjectionSweep(t *testing.T) {
 	var corpus ProjectionCorpus
 	pop := envInt("RECALL_POP", 1000)
@@ -96,7 +94,7 @@ func TestRecallProjectionSweep(t *testing.T) {
 		pop = clusters * nodesPerCluster
 
 		// The semantic corpus carries disjoint per-cluster topic
-		// vocabularies, so a real embedding model can separate clusters —
+		// vocabularies, so a real embedding model can separate clusters
 		// required for the projection delta to be visible above noise.
 		src := synthcorpus.GenerateSemanticCorpus(nodesPerCluster)
 		corpus = BuildProjectionCorpus(src)

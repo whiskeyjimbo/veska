@@ -97,7 +97,7 @@ func TestEmbed_MeanPoolsKnownVocabularyTokens(t *testing.T) {
 }
 
 // TestEmbed_PadsToOutputDim: native dim is 4 but we project to
-// OutputDim() (768) for index compatibility — zero-pad the tail so
+// OutputDim (768) for index compatibility — zero-pad the tail so
 // the cosine in the native subspace is preserved.
 func TestEmbed_PadsToOutputDim(t *testing.T) {
 	dir, _, native := makeSyntheticModel(t, t.TempDir())
@@ -220,7 +220,7 @@ func buildSafetensorsEmbedWeights(t *testing.T, shape []int, emb []float32, weig
 
 // TestNewFromBytes builds a Provider from in-memory bytes (the embedded
 // fat-binary path) and confirms it embeds and reports the name-derived
-// ModelID — which must match the on-disk New() ID for the same model so
+// ModelID — which must match the on-disk New ID for the same model so
 // fat/thin builds share a model_id.
 func TestNewFromBytes(t *testing.T) {
 	vocab := map[string]int{"[UNK]": 0, "parse": 1, "config": 2}

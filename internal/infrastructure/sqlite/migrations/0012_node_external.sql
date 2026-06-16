@@ -1,4 +1,4 @@
--- solov2-bchl phase 1 — Mark nodes that came from a registered repo's
+-- solov2-bchl phase 1 - Mark nodes that came from a registered repo's
 -- vendored or module-cache dependencies (third-party Go code) so the
 -- read path can label them and the write path can scope re-indexes
 -- without touching first-party rows.

@@ -27,7 +27,7 @@ func (l *importLister) ListImports(_ context.Context, _, _ string) ([]dependenci
 	return l.rows, l.err
 }
 
-// TestService_UnionsImportsWithStubs pins solov2-xjm5: a module imported
+// TestService_UnionsImportsWithStubs pins: a module imported
 // in N files but with zero resolved CALLS still surfaces with UsageCount=0
 // and ImportCount=N. The case mirrors the junior-journey reproduction: a
 // vanilla cobra-based CLI lists github.com/spf13/cobra in deps even
@@ -68,7 +68,7 @@ func TestService_UnionsImportsWithStubs(t *testing.T) {
 }
 
 // TestService_ImportCountDistinctByFile pins that repeated imports of the
-// same module from the same file count as one (file-distinct, not row-
+// same module from the same file count as one (file-distinct, not row
 // count). Prevents accidental double-counting on re-promote.
 func TestService_ImportCountDistinctByFile(t *testing.T) {
 	imps := &importLister{rows: []dependencies.ImportRow{
@@ -135,7 +135,7 @@ func TestService_DefaultTopKCapsCallSites(t *testing.T) {
 	}
 }
 
-// TestService_DedupesTopCallSitesBySymbol pins solov2-tpvr: when N stub
+// TestService_DedupesTopCallSitesBySymbol pins: when N stub
 // rows all target the same SymbolPath (the common case for a hot library
 // function called from many sites), TopCallSites must show that symbol
 // exactly once and use the remaining TopK slots for other symbols.
@@ -195,7 +195,7 @@ func TestService_EmptyAggregateReturnsNonNilSlice(t *testing.T) {
 	if err != nil {
 		t.Fatalf("List: %v", err)
 	}
-	// JSON marshaling guarantee: callers must see [] not null.
+	// JSON marshaling guarantee: callers must see not null.
 	if res.Dependencies == nil {
 		t.Errorf("Dependencies must be non-nil slice")
 	}

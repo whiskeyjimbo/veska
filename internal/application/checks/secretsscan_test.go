@@ -77,7 +77,7 @@ func TestSecretsScanCheck_AddedLinesHit_EmitsFindings(t *testing.T) {
 	}
 }
 
-// TestSecretsScanCheck_RepoNamespacedFindingID guards solov2-uej9.9: two repos
+// TestSecretsScanCheck_RepoNamespacedFindingID guards: two repos
 // that leak the SAME secret (same rule, file, and line) must NOT share a
 // finding_id, or the second repo's promote upserts over the first on the
 // (finding_id, branch) PK and the first repo silently loses the finding. The
@@ -218,8 +218,8 @@ func TestSecretsScanCheck_Name(t *testing.T) {
 	}
 }
 
-// TestSecretsScanCheck_IgnoresBeadsTracker pins solov2-jtl5.3: high-entropy
-// memory keys inside .beads/issues.jsonl must not surface as findings. The
+// TestSecretsScanCheck_IgnoresBeadsTracker pins: high-entropy
+// memory keys inside.beads/issues.jsonl must not surface as findings. The
 // scanner must never see lines from that path, so the canonical scanner-stub
 // records-input check is also asserted.
 func TestSecretsScanCheck_IgnoresBeadsTracker(t *testing.T) {
@@ -243,11 +243,11 @@ func TestSecretsScanCheck_IgnoresBeadsTracker(t *testing.T) {
 	}
 }
 
-// TestSecretsScanCheck_IgnoresVendoredDeps pins solov2-l7zd: a freshly
+// TestSecretsScanCheck_IgnoresVendoredDeps pins: a freshly
 // vendored cobra (or any Go vendor/ tree) must not trip the high-entropy
 // rule on Apache 2 license URLs and bash-completion boilerplate. The same
 // filter also covers node_modules/, third_party/, and nested-segment matches
-// like apps/foo/vendor/...
+// like apps/foo/vendor/.
 func TestSecretsScanCheck_IgnoresVendoredDeps(t *testing.T) {
 	for _, path := range []string{
 		"vendor/github.com/spf13/cobra/cobra.go",
@@ -277,7 +277,7 @@ func TestSecretsScanCheck_IgnoresVendoredDeps(t *testing.T) {
 	}
 }
 
-// TestSecretsScanCheck_IgnoresTestFixturePEM pins solov2-izh6.13: PEM /
+// TestSecretsScanCheck_IgnoresTestFixturePEM pins: PEM /
 // key-shaped credentials living under conventional test-fixture paths
 // (testdata/, /test/ subtrees, test/fixtures/) are vanishingly unlikely to
 // be real secrets and routinely flood ephemeral / forked repos like
@@ -316,7 +316,7 @@ func TestSecretsScanCheck_IgnoresTestFixturePEM(t *testing.T) {
 }
 
 // TestSecretsScanCheck_NonFixturePEMStillFlags verifies the fixture filter
-// is targeted: a .pem in a production / non-test path still reports.
+// is targeted: a.pem in a production / non-test path still reports.
 func TestSecretsScanCheck_NonFixturePEMStillFlags(t *testing.T) {
 	for _, path := range []string{
 		"config/private.pem",   // production-looking dir
@@ -348,7 +348,7 @@ func TestSecretsScanCheck_NonFixturePEMStillFlags(t *testing.T) {
 // line-hits from the same rule on the same file collapse to a single
 // finding with a count suffix in the message. Without this, a 28-line PEM
 // block flagged line-by-line produces 28 separate findings — the dominant
-// failure mode of `veska search --repo` on jwt-go (solov2-izh6.13).
+// failure mode of `veska search --repo` on jwt-go.
 func TestSecretsScanCheck_CollapsesMultiLinePEM(t *testing.T) {
 	const path = "config/private.pem" // non-fixture path so we reach the scanner
 	var raw []ports.SecretFinding

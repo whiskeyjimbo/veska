@@ -27,10 +27,8 @@ func NewContractDriftRepo(db *sql.DB) *ContractDriftRepo {
 // of filePaths, whose prev_signature and signature are both non-NULL, whose
 // kind is in {function, method, interface}, and whose prev_signature differs
 // from signature.
-//
 // Empty filePaths is a no-op (returns nil, nil) — this avoids building a
-// degenerate "IN ()" clause that SQLite rejects.
-//
+// degenerate "IN " clause that SQLite rejects.
 // The query intentionally applies the kind filter at the storage layer (it
 // uses a closed enum the index can evaluate cheaply) but does not encode any
 // severity / message / anchor policy — those live in the application-layer

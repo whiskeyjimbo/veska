@@ -17,7 +17,7 @@ type NodeMeta struct {
 	// Populated by adapters that select the column; empty when the
 	// caller is on a code path that did not request it. Search hydrates
 	// this through to Result.Snippet so agents get the bytes inline and
-	// can skip a separate Read call .
+	// can skip a separate Read call.
 	Snippet string
 }
 
@@ -25,7 +25,6 @@ type NodeMeta struct {
 // minimal metadata. It is used by the application-layer search service
 // to project VectorStorage.Search hits (which carry only node_id and
 // score) into results that callers can render.
-//
 // Implementations must scope the lookup to (repoID, branch); a node_id
 // is only unique within a branch. IDs not present in storage are
 // silently omitted from the result — callers treat the index as
