@@ -12,7 +12,6 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/sqlite/sqldriver"
 )
 
-// helpers
 
 func newTasksDB(t *testing.T) *sql.DB {
 	t.Helper()
@@ -48,7 +47,7 @@ func newTasksDB(t *testing.T) *sql.DB {
 		t.Fatalf("create tasks table: %v", err)
 	}
 
-	// Add the partial unique index to enforce one active task per repo.
+	// A partial unique index is used to enforce at most one active task per repository.
 	_, err = db.Exec(`
 		CREATE UNIQUE INDEX IF NOT EXISTS idx_tasks_active_one_per_repo ON tasks(repo_id) WHERE active = 1
 	`)
@@ -92,7 +91,6 @@ func dispatchTask(t *testing.T, r *Registry, method string, actor domain.Actor, 
 	return r.Dispatch(context.Background(), actor, req)
 }
 
-// eng_set_active_task
 
 func TestSetActiveTask_Basic(t *testing.T) {
 	db := newTasksDB(t)
@@ -119,7 +117,6 @@ func TestSetActiveTask_Basic(t *testing.T) {
 		t.Errorf("expected task_id=task-001, got %v", m["task_id"])
 	}
 
-	// Verify DB.
 	var active int
 	if err := db.QueryRow(`SELECT active FROM tasks WHERE task_id = 'task-001'`).Scan(&active); err != nil {
 		t.Fatalf("query active: %v", err)
@@ -167,7 +164,6 @@ func TestSetActiveTask_MissingParams(t *testing.T) {
 	actor := domain.Actor{ID: "human:alice", Kind: domain.ActorKindHuman}
 	_, rpcErr := dispatchTask(t, r, "eng_set_active_task", actor, map[string]any{
 		"repo_id": "repo-1",
-		// missing task_id
 	})
 	if rpcErr == nil {
 		t.Fatal("expected RPC error")
@@ -178,7 +174,6 @@ func TestSetActiveTask_MissingParams(t *testing.T) {
 	}
 }
 
-// eng_get_active_task
 
 func TestGetActiveTask_NoActive(t *testing.T) {
 	db := newTasksDB(t)
@@ -233,13 +228,12 @@ func TestGetActiveTask_WithActive(t *testing.T) {
 	}
 }
 
-// eng_get_task_history
 
 func TestGetTaskHistory_DefaultLimit(t *testing.T) {
 	db := newTasksDB(t)
 	seedRepo(t, db, "repo-1", "/repos/repo-1")
 
-	// Insert 25 tasks to exceed the default limit of 20.
+	// TestGetTaskHistory_DefaultLimit seeds more than 20 tasks to ensure that the default history response is capped at 20.
 	for i := range 25 {
 		taskID := "task-" + string(rune('A'+i))
 		_, err := db.Exec(`

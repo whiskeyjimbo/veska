@@ -107,9 +107,7 @@ func TestContextPack_SymbolMode(t *testing.T) {
 	}
 }
 
-// TestContextPack_AcceptsShortID guards the README contract that a short_id
-// prefix resolves anywhere a repo_id is required. Before the fix
-// context_pack rejected the prefix with "repo not found".
+// We verify that a short repository ID prefix successfully resolves when querying a context pack, matching the general repository resolution contract.
 func TestContextPack_AcceptsShortID(t *testing.T) {
 	const fullID = "62d72fa222a0193f8fa927f95dd6a3575c7566964c8b8f6ba14aafc5a1ea871f"
 	r := NewRegistry()
@@ -126,11 +124,7 @@ func TestContextPack_AcceptsShortID(t *testing.T) {
 	}
 }
 
-// TestContextPack_CrossRepoEdges guards: when a resolver is
-// wired and any node in the pack has cross_repo_edge_stubs, the response
-// must surface them in a top-level cross_repo_edges array — parity with
-// eng_get_call_chain and eng_get_blast_radius. Without it the CLI 'context'
-// wrapper has no signal that consumers exist in other repos.
+// When a cross-repository resolver is provided, the context pack response must surface external dependency edges in a top-level cross_repo_edges array.
 func TestContextPack_CrossRepoEdges(t *testing.T) {
 	r := NewRegistry()
 	resolve := func(_ context.Context, nodeID, _ string, _ bool) ([]ports.ResolvedEdge, error) {
@@ -179,9 +173,7 @@ func TestContextPack_CrossRepoEdges(t *testing.T) {
 	}
 }
 
-// TestContextPack_NoResolverOmitsCrossRepo: without WithContextPackResolveFunc
-// the response must NOT include a cross_repo_edges field, so older clients
-// see exactly the same JSON shape they did before.
+// If no cross-repository resolver is configured, the cross_repo_edges field is omitted from the JSON response to maintain backward compatibility.
 func TestContextPack_NoResolverOmitsCrossRepo(t *testing.T) {
 	r := NewRegistry()
 	RegisterContextPackTool(r, contextPackFixture(t), stubRepoRoot(""), nil)
@@ -228,9 +220,7 @@ func TestContextPack_RejectsBothOrNeither(t *testing.T) {
 	}
 }
 
-// TestContextPack_NodeMode covers: agents that already hold a
-// node_id (from eng_find_symbol / eng_search_semantic) can anchor directly
-// without a symbol round-trip.
+// If a client provides a direct node ID parameter, the context pack anchors directly on the node without performing symbol lookup.
 func TestContextPack_NodeMode(t *testing.T) {
 	r := NewRegistry()
 	RegisterContextPackTool(r, contextPackFixture(t), stubRepoRoot(""), nil)
@@ -248,10 +238,7 @@ func TestContextPack_NodeMode(t *testing.T) {
 	}
 }
 
-// TestContextPack_SchemaDeclaresNodeID guards the schema-vs-behaviour parity
-// invariant: the inputSchema must declare every accepted param, and the
-// description must name all three anchors so agents discover the option
-// without reading source. additionalProperties:false must remain.
+// The context pack input schema must explicitly declare all supported anchor parameters to allow automated clients to discover them.
 func TestContextPack_SchemaDeclaresNodeID(t *testing.T) {
 	var schema struct {
 		AdditionalProperties any    `json:"additionalProperties"`

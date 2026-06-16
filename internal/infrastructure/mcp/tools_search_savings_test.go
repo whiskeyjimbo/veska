@@ -10,10 +10,7 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/application/search"
 )
 
-// TestRecordSavings_PartitionsByRepo covers: the partition
-// logic in recordSavings. A single-repo search (nil repoByNode) writes
-// one entry tagged with the default target repo; a fanout search writes
-// one entry per repo, each summing only that repo's results.
+// TestRecordSavings_PartitionsByRepo verifies that character saving recorder partitions search results by repository.
 func TestRecordSavings_PartitionsByRepo(t *testing.T) {
 	t.Run("single repo uses default repo id", func(t *testing.T) {
 		path := filepath.Join(t.TempDir(), "savings.jsonl")
@@ -76,7 +73,6 @@ func TestRecordSavings_PartitionsByRepo(t *testing.T) {
 		if len(byRepo) != 2 {
 			t.Fatalf("want 2 buckets (alpha, beta), got %d: %+v", len(byRepo), byRepo)
 		}
-		// alpha: n1(2) + n3(4) + n4(5) across 1 recorded entry.
 		if a := byRepo["alpha"].AllTime; a.Calls != 1 || a.SnippetChars != 11 {
 			t.Errorf("alpha: %+v", a)
 		}

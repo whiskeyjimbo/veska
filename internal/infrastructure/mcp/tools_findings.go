@@ -7,12 +7,7 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/core/ports"
 )
 
-// RegisterFindingTools registers finding management tools on r.
-// db is the SQLite connection that backs the findings table.
-// aw is an optional AuditWriter; pass nil to disable audit logging.
-// repos is used by eng_list_findings to fall back to a cwd-injected
-// repo_id when the caller omits it; pass nil to disable
-// the fallback (the older "repo_id is required" behaviour is preserved).
+// RegisterFindingTools registers tools for managing findings, where passing a nil AuditWriter disables auditing.
 func RegisterFindingTools(r *Registry, db *sql.DB, aw ports.AuditWriter, repos application.RepoLister) {
 	r.MustRegister(ToolSpec{
 		Name:            "eng_close_finding",

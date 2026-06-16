@@ -11,18 +11,14 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/core/ports"
 )
 
-// CodeHumanRequired is the custom JSON-RPC error code returned when a
-// severity >= high finding is closed by a non-human actor.
+// CodeHumanRequired is returned when a severity >= high finding is closed by a non-human actor.
 const CodeHumanRequired = -32001
 
-// reviewPipelineFailureRule is the rule string of the sticky finding parked by
-// the review pipeline when a review job exhausts its retries. Closing such a
-// finding flips its parked review-queue rows to 'done'. It mirrors
-// review.FailureRule; the constant is duplicated to keep this infrastructure
-// adapter free of an application-package import.
+// reviewPipelineFailureRule matches the rule of the sticky finding parked by
+// the review pipeline when a review job exhausts its retries, allowing a user
+// to clear the review queue. This constant is duplicated from the review
+// package to avoid importing application logic here.
 const reviewPipelineFailureRule = "review-pipeline-failure"
-
-// eng_close_finding
 
 type closeFindingParams struct {
 	FindingID string `json:"finding_id"`
@@ -31,7 +27,6 @@ type closeFindingParams struct {
 	Reason    string `json:"reason"`
 }
 
-// closeFindingInputSchema describes the params object for eng_close_finding.
 var closeFindingInputSchema = json.RawMessage(`{
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "type": "object",
@@ -45,7 +40,6 @@ var closeFindingInputSchema = json.RawMessage(`{
   "required": ["finding_id", "reason"]
 }`)
 
-// closeFindingOutputSchema describes the result object for eng_close_finding.
 var closeFindingOutputSchema = json.RawMessage(`{
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "type": "object",
@@ -67,28 +61,21 @@ func makeCloseFindingHandler(db *sql.DB, aw ports.AuditWriter) ToolHandler {
 			return nil, rpcErr
 		}
 
-		// Open a single transaction so finding-close and any edge-promotion
-		// commit or roll back together.
+		// We execute the finding closure and edge promotion in a single transaction to guarantee atomic updates.
 		tx, err := db.BeginTx(ctx, nil)
 		if err != nil {
 			return nil, &RPCError{Code: CodeInternalError, Message: fmt.Sprintf("begin tx: %v", err)}
 		}
-		// Ensure rollback on any non-commit return path. After a successful
-		// Commit, Rollback is a no-op per database/sql.
 		defer func() { _ = tx.Rollback() }()
 
-		// resolve a finding_id prefix to its full id on this
-		// tx so the row is locked through the subsequent SELECT/UPDATE.
+		// We resolve the finding ID prefix within the transaction to lock the row and prevent concurrent modifications.
 		fullID, rpcErr := resolveFindingPrefix(ctx, tx, p.FindingID, p.Branch)
 		if rpcErr != nil {
 			return nil, rpcErr
 		}
 		p.FindingID = fullID
 
-		// Fetch the finding to check existence, severity, rule, and anchor
-		// (node_id, which for auto-link findings carries the edge_id).
-		// finding_id is globally unique; branch/repo_id are looked up when not
-		// supplied so callers can address findings by id alone.
+		// We fetch the finding's details to validate its state, check severity restrictions, and resolve the branch or repository if they were not explicitly provided.
 		var (
 			severity  string
 			state     string
@@ -107,8 +94,6 @@ func makeCloseFindingHandler(db *sql.DB, aw ports.AuditWriter) ToolHandler {
 		if err != nil {
 			return nil, &RPCError{Code: CodeInternalError, Message: fmt.Sprintf("query finding: %v", err)}
 		}
-		// If caller passed branch/repo_id, honor them as a consistency check;
-		// otherwise fall back to the row's own values.
 		if p.Branch != "" && p.Branch != rowBranch {
 			return nil, &RPCError{Code: CodeNotFound, Message: fmt.Sprintf("finding not found: %s on branch %s", p.FindingID, p.Branch)}
 		}
@@ -117,11 +102,10 @@ func makeCloseFindingHandler(db *sql.DB, aw ports.AuditWriter) ToolHandler {
 			p.RepoID = rowRepoID
 		}
 
-		// Human-action gate: severity >= high requires a human actor.
+		// Severity levels of high or higher require a human actor to prevent automated scripts from closing critical findings without review.
 		sev := domain.Severity(severity)
 		if sev.AtLeast(domain.SeverityHigh) && actor.Kind != domain.ActorKindHuman {
-			// include a one-line resolution hint so callers
-			// don't have to read the source to learn how to proceed.
+			// We include a resolution hint in the error message to guide automated systems on how a human can perform this action.
 			return nil, &RPCError{
 				Code:    CodeHumanRequired,
 				Message: fmt.Sprintf("human_required: severity=%s requires a human actor — close from the CLI as a human user (veska findings close %s --reason=...) or have a teammate run eng_close_finding", severity, p.FindingID),
@@ -134,15 +118,7 @@ func makeCloseFindingHandler(db *sql.DB, aw ports.AuditWriter) ToolHandler {
 			}
 		}
 
-		// Accept-flow for auto-link findings promotes the anchored edge from
-		// 'unresolved' to 'definite' in the same tx. Any other (rule, reason)
-		// combination is a regular close.
-		// Behaviours for edge anchors:
-		//   Missing/empty node_id: skip promotion silently; finding still closes.
-		//   Missing edge row: data-corruption-soft-fail — UPDATE affects 0 rows,
-		//     finding still closes (no rollback). Logged via the absence of an
-		//     audit follow-up beyond the standard accept entry.
-		//   Already 'definite' edge: UPDATE is naturally idempotent.
+		// When an auto-link finding is accepted, we promote the associated edge to 'definite' state. If the edge reference is missing or already definite, the operation soft-fails or succeeds silently to avoid blocking the closure of the finding itself.
 		isAccept := rule == "auto-link" && p.Reason == "accept"
 		if isAccept && nodeID.Valid && nodeID.String != "" {
 			if _, err := tx.ExecContext(ctx,
@@ -153,13 +129,7 @@ func makeCloseFindingHandler(db *sql.DB, aw ports.AuditWriter) ToolHandler {
 			}
 		}
 
-		// review-pipeline-failure close-flips-row ( AC2): closing
-		// the sticky review-failure finding clears its parked review jobs by
-		// flipping every still-failed review row anchored on the promotion
-		// commit (node_id carries the git_sha) to state='done', in the same tx.
-		// The human-action gate above already enforces a human closer (the
-		// finding is severity high). A missing/empty anchor or zero matched
-		// rows is a soft no-op — the finding still closes.
+		// Closing a review-pipeline-failure finding clears associated failed review jobs in the post-promotion queue by setting their state to 'done'. Missing anchors or missing queue rows are treated as soft no-ops so that the finding can always be closed.
 		if rule == reviewPipelineFailureRule && nodeID.Valid && nodeID.String != "" {
 			if _, err := tx.ExecContext(ctx,
 				`UPDATE post_promotion_queue
@@ -175,13 +145,7 @@ func makeCloseFindingHandler(db *sql.DB, aw ports.AuditWriter) ToolHandler {
 			}
 		}
 
-		// Update the finding to closed.
-		// do NOT overwrite actor_id/actor_kind on close. The
-		// finding's actor columns mean "who created/last-saved this finding"
-		// clobbering them with the closer caused TODO findings (created by
-		// service:veska) to surface as actor_id=agent:unknown after an MCP
-		// caller closed them, even though the creator never changed. The
-		// audit log below already records who performed the close.
+		// We preserve the original actor fields on the finding record because they represent the creator, whereas the closer's identity is tracked separately in the audit log.
 		closedAt := time.Now().Unix()
 		res, err := tx.ExecContext(ctx,
 			`UPDATE findings

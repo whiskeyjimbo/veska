@@ -12,8 +12,8 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/core/domain"
 )
 
-// TestReindexHandler_ResolvesByRepoID asserts that eng_reindex_repo runs the
-// reparser exactly once with the resolved record when called with a short_id.
+// TestReindexHandler_ResolvesByRepoID asserts that eng_reindex_repo triggers the
+// reparser exactly once with the resolved record when given a repository ID prefix.
 func TestReindexHandler_ResolvesByRepoID(t *testing.T) {
 	const fullID = "deadbeefcafebabe0000000000000000"
 	var got application.RepoRecord
@@ -124,8 +124,7 @@ func TestReindexHandler_NilDepsReturnsInternalError(t *testing.T) {
 	}
 }
 
-// TestReindexRepoSchema_AdditionalPropertiesFalse pins the
-// invariant: every new MCP tool's schema must reject unknown keys.
+// TestReindexRepoSchema_AdditionalPropertiesFalse ensures that the tool schema explicitly rejects unregistered parameters.
 func TestReindexRepoSchema_AdditionalPropertiesFalse(t *testing.T) {
 	var s struct {
 		AdditionalProperties any                        `json:"additionalProperties"`

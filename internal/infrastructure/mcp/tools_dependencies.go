@@ -10,11 +10,7 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/core/domain"
 )
 
-// RegisterDependenciesTool registers eng_list_dependencies on r. svc and
-// repos are both required for the tool to do anything useful; when svc is
-// nil the tool is still registered but returns InternalError on every
-// call, keeping the registry uniform across composition roots that have
-// not wired the dependencies service.
+// RegisterDependenciesTool registers eng_list_dependencies, keeping registration uniform even if the dependencies service is not wired.
 func RegisterDependenciesTool(r *Registry, svc *dependencies.Service, repos application.RepoLister) {
 	r.MustRegister(ToolSpec{
 		Name:        "eng_list_dependencies",
@@ -55,8 +51,7 @@ func makeListDependenciesHandler(svc *dependencies.Service, repos application.Re
 		if err != nil {
 			return nil, &RPCError{Code: CodeInternalError, Message: fmt.Sprintf("list dependencies: %v", err)}
 		}
-		// Always serialize as a non-nil slice — empty result is ``, not
-		// omitted ( contract).
+		// Ensure serialization of dependencies is a non-nil slice to satisfy client expectations.
 		if res.Dependencies == nil {
 			res.Dependencies = []dependencies.Dependency{}
 		}

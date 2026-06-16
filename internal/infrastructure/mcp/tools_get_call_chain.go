@@ -12,26 +12,16 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/core/protocol"
 )
 
-// chainedSelectorCallRe matches a call expression whose function is a
-// selector chain of at least two dots: `a.b.c(`, `pkg.Type.Method(`,
-// `obj.field.M(` etc. The legacy parser does not model
-// these as edges, so an empty resolved-edge set on a seed whose body
-// contains this shape is a parser limitation rather than an index gap.
+// chainedSelectorCallRe matches call expressions containing a selector chain of at least two dots (e.g. `a.b.c(`), which are not modeled as edges by the legacy parser.
 var chainedSelectorCallRe = regexp.MustCompile(`[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*){2,}\s*\(`)
 
-// seedBodyContainsChainedSelector reports whether the seed body contains
-// a chained selector call. Empty body (snippet unavailable, file truly
-// empty) is treated conservatively as "yes" so the legacy
-// chained_selectors_unresolved hint still fires — the discriminator only
-// narrows when we have evidence the body has no chained selectors.
+// seedBodyContainsChainedSelector reports whether the seed body contains a chained selector call, treating empty bodies conservatively as a match to trigger the unresolved hint.
 func seedBodyContainsChainedSelector(body string) bool {
 	if body == "" {
 		return true
 	}
 	return chainedSelectorCallRe.MatchString(body)
 }
-
-// eng_get_call_chain
 
 type getCallChainParams struct {
 	NodeID          string `json:"node_id"`
@@ -40,11 +30,7 @@ type getCallChainParams struct {
 	Branch          string `json:"branch"`
 	Depth           int    `json:"depth"`
 	ExpandCrossRepo bool   `json:"expand_cross_repo"`
-	// Direction selects which CALLS edges to traverse: "out" (default
-	// callees, what this reaches), "in" (callers, what reaches this), or
-	// "both". Default preserves prior behaviour; "in"/"both" close
-	// where docs promised incoming traversal but only
-	// outgoing was wired.
+	// Direction selects which CALLS edges to traverse ("out", "in", or "both").
 	Direction string `json:"direction"`
 }
 
@@ -56,11 +42,6 @@ func makeGetCallChainHandler(graph ports.GraphReader, resolve ResolveFunc, resol
 		if err := json.Unmarshal(raw, &p); err != nil {
 			return nil, &RPCError{Code: CodeInvalidParams, Message: fmt.Sprintf("invalid params: %v", err)}
 		}
-		// Param validation that doesn't require seed resolution runs
-		// first so cheap "bad request" errors aren't masked by the more
-		// expensive resolve+expand round trips ( made
-		// resolveSeedOwner expand node_id prefixes, which can now hit
-		// NotFound before depth-validation would have fired).
 		depth := p.Depth
 		if depth <= 0 {
 			depth = 3 // default
@@ -68,12 +49,7 @@ func makeGetCallChainHandler(graph ports.GraphReader, resolve ResolveFunc, resol
 		if depth > maxCallChainDepth {
 			return nil, &RPCError{Code: CodeInvalidParams, Message: fmt.Sprintf("depth %d exceeds maximum of %d", depth, maxCallChainDepth)}
 		}
-		// when repo_id is omitted, fan-out across registered repos
-		// to find which one owns the seed (node_id or symbol). Matches the
-		// "default: fan out across registered repos" contract in `veska calls
-		// help`. resolveSeedOwner returns the (repo, branch, node_id) triple
-		// in one call so we can drop the previous repo+branch+symbol-lookup
-		// three-step.
+
 		repoID, branch, nid, rpcErr := resolveSeedOwner(ctx, repos, graph, raw, p.RepoID, p.Branch, p.NodeID, p.Symbol)
 		if rpcErr != nil {
 			return nil, rpcErr
@@ -96,7 +72,6 @@ func makeGetCallChainHandler(graph ports.GraphReader, resolve ResolveFunc, resol
 			return nil, &RPCError{Code: CodeInternalError, Message: fmt.Sprintf("load graph failed: %v", err)}
 		}
 
-		// BFS over CALLS edges starting from node_id.
 		startID := domain.NodeID(p.NodeID)
 		visited := make(map[domain.NodeID]bool)
 		visitedEdges := make(map[string]bool)
@@ -115,10 +90,7 @@ func makeGetCallChainHandler(graph ports.GraphReader, resolve ResolveFunc, resol
 			item := queue[0]
 			queue = queue[1:]
 
-			// Resolve cross-repo stubs for each visited node (including start).
-			// Outbound resolution is gated by dirOut (the node is a caller);
-			// inbound resolution by dirIn (the node is a callee).
-			// adds the inbound side for parity with eng_get_blast_radius.
+			// Cross-repo stubs are resolved for each visited node based on the direction of traversal.
 			if resolve != nil && dirOut {
 				resolved, resolveErr := resolve(ctx, string(item.id), p.Branch, p.ExpandCrossRepo)
 				if resolveErr == nil {
@@ -134,7 +106,7 @@ func makeGetCallChainHandler(graph ports.GraphReader, resolve ResolveFunc, resol
 						})
 					}
 				}
-				// Silent miss: resolveErr != nil is ignored; continue BFS.
+
 			}
 			if resolveInbound != nil && dirIn {
 				resolved, resolveErr := resolveInbound(ctx, string(item.id), p.Branch)
@@ -180,15 +152,7 @@ func makeGetCallChainHandler(graph ports.GraphReader, resolve ResolveFunc, resol
 					if e.Kind != domain.EdgeCalls {
 						continue
 					}
-					// skip CALLS edges that originate from a
-					// package (or other non-callable container) node. The
-					// extractor sometimes attaches a coarse "package calls
-					// function" edge when it can't resolve the call site
-					// to a specific function — surfacing those as
-					// "callers" misleads the user, who expects function
-					// level call sites. The edge itself is preserved in
-					// the graph for downstream tooling; we just don't
-					// present it here.
+					// CALLS edges originating from structural container nodes (e.g. packages) are filtered out here to ensure only function-level callers are returned.
 					if src, ok := g.Node(e.Src); ok && !isCallableKind(src.Kind) {
 						continue
 					}
@@ -207,15 +171,7 @@ func makeGetCallChainHandler(graph ports.GraphReader, resolve ResolveFunc, resol
 			}
 		}
 
-		// /: emit a degraded_reasons hint
-		// when the seed is a callable but no CALLS edges resolved.
-		// jojv landed a single chained_selectors_unresolved catch-all;
-		// izh6.22 splits it: only emit that reason when the seed's body
-		// actually contains a chained selector call site (a.b.c(.))
-		// the parser doesn't model (epic ). Otherwise the
-		// dominant cause is external/stdlib callees outside the graph,
-		// so emit external_callees_only instead — actionable for an
-		// agent ("not a parser bug, just index boundary").
+		// Degraded reasons distinguish between unresolved chained selectors and external/stdlib callees that are not indexed.
 		reasons := []string{}
 		var indexing []string
 		if len(resultEdges) == 0 && len(crossRepoEdges) == 0 && dirOut {
@@ -233,16 +189,13 @@ func makeGetCallChainHandler(graph ports.GraphReader, resolve ResolveFunc, resol
 					}
 				}
 			}
-			// a fully empty chain during an active cold
-			// scan is the indexing-window case; surface it alongside (or
-			// instead of) the seed-based reasons so callers can retry.
+			// Empty responses during an active cold scan include the indexing degraded reason.
 			if ids, busy := indexingRepoIDs(scans); busy {
 				reasons = append(reasons, protocol.DegradedReasonIndexingInProgress)
 				indexing = ids
 			}
 		}
-		// wake_reconciling fires on empty AND non-empty results whenever the
-		// seed's repo is mid-sweep.
+
 		reconciling := reconcilingForRepos(reconcile, []string{p.RepoID})
 		if len(reconciling) > 0 {
 			reasons = append(reasons, protocol.DegradedReasonWakeReconciling)
@@ -259,11 +212,7 @@ func makeGetCallChainHandler(graph ports.GraphReader, resolve ResolveFunc, resol
 	}
 }
 
-// isCallableKind reports whether a node kind represents an actual call
-// site source. Containers (package, file, module, chunk) sometimes
-// appear as edge sources when the extractor can't pin a call to a
-// specific function — filter them out of caller-listings so users see
-// real callers.
+// isCallableKind reports whether a node kind represents a callable symbol rather than a structural container.
 func isCallableKind(k domain.NodeKind) bool {
 	switch k {
 	case domain.KindPackage, domain.KindFile, domain.KindModule, domain.KindChunk:

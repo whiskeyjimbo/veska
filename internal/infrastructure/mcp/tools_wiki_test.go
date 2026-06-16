@@ -13,9 +13,7 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/core/ports"
 )
 
-// wikiFixtureService mirrors the wiki package fixture so the MCP handler
-// test asserts the tool exposes the same ranked data the page is built
-// from (AC3).
+// wikiFixtureService constructs a HotZoneService pre-populated with fixture data for MCP handler tests.
 func wikiFixtureService(t *testing.T) *wiki.HotZoneService {
 	t.Helper()
 	edges := &blastFakeEdges{inbound: map[string][]string{
@@ -27,7 +25,6 @@ func wikiFixtureService(t *testing.T) *wiki.HotZoneService {
 			"a": {NodeID: "a"}, "b": {NodeID: "b"}, "c": {NodeID: "c"},
 			"x": {NodeID: "x"}, "y": {NodeID: "y"},
 		},
-		// NodesInFile is keyed on the repo-relative slash path.
 		byFile: map[string][]string{
 			"a.go": {"a"}, "b.go": {"b"}, "c.go": {"c"},
 		},
@@ -68,7 +65,7 @@ func dispatchHotZone(t *testing.T, r *Registry, params any) (HotZoneResponse, *R
 	return resp, nil
 }
 
-// AC3: the tool returns the same ranked data the page exposes.
+// TestHotZone_ReturnsRankedData ensures the tool returns the same ranked data that the wiki page exposes.
 func TestHotZone_ReturnsRankedData(t *testing.T) {
 	svc := wikiFixtureService(t)
 	repoRoot := func(context.Context, string) (string, error) { return "/tmp/r", nil }
@@ -86,10 +83,7 @@ func TestHotZone_ReturnsRankedData(t *testing.T) {
 	if len(resp.Zones) != 3 {
 		t.Fatalf("expected 3 zones, got %d (%+v)", len(resp.Zones), resp.Zones)
 	}
-	// the wire shape now canonicalises file_path to absolute
-	// so every eng_* tool returns the same shape. The wiki Markdown page
-	// still uses the relative form internally (see TestHotZone_PageAgrees
-	// below for that guarantee).
+	// The returned zone paths are absolute, but the wiki markdown page retains relative path shapes.
 	if resp.Zones[0].FilePath != "/tmp/r/a.go" || resp.Zones[0].Score != 15 {
 		t.Errorf("zone[0]: got %+v, want /tmp/r/a.go score 15", resp.Zones[0])
 	}
@@ -97,8 +91,7 @@ func TestHotZone_ReturnsRankedData(t *testing.T) {
 		t.Errorf("zone[2]: got %+v, want /tmp/r/b.go", resp.Zones[2])
 	}
 
-	// The tool data must match what the page renders, modulo the
-	// absolute-vs-relative file_path normalisation.
+	// Verify that the returned zone data matches the ranked zones modulo path differences.
 	rep, err := svc.Rank(context.Background(), "r1", "main", "/tmp/r")
 	if err != nil {
 		t.Fatalf("Rank: %v", err)
@@ -113,10 +106,8 @@ func TestHotZone_ReturnsRankedData(t *testing.T) {
 	}
 }
 
-// TestHotZone_EmptyZonesSurfacesDegradedReason guards /z5o0:
-// when ranking returns no zones because the change-count window is empty,
-// the response carries degraded_reasons=["no_recent_commits"] plus a
-// human-readable hint so callers don't have to grep the wiki markdown.
+// TestHotZone_EmptyZonesSurfacesDegradedReason ensures that when ranking yields no results due to
+// an empty commit window, a degraded reason and hint are returned.
 func TestHotZone_EmptyZonesSurfacesDegradedReason(t *testing.T) {
 	edges := &blastFakeEdges{}
 	nodes := &blastFakeNodes{metas: map[string]ports.NodeMeta{}, byFile: map[string][]string{}}
@@ -152,8 +143,7 @@ func TestHotZone_EmptyZonesSurfacesDegradedReason(t *testing.T) {
 	}
 }
 
-// TestHotZone_NonEmptyZonesNoDegradedReason guards: when zones
-// are returned, the degraded_reasons slot is omitted/empty.
+// TestHotZone_NonEmptyZonesNoDegradedReason verifies that no degraded reason is returned when zones are populated.
 func TestHotZone_NonEmptyZonesNoDegradedReason(t *testing.T) {
 	svc := wikiFixtureService(t)
 	repoRoot := func(context.Context, string) (string, error) { return "/tmp/r", nil }
@@ -173,10 +163,7 @@ func TestHotZone_NonEmptyZonesNoDegradedReason(t *testing.T) {
 	}
 }
 
-// TestHotZone_AcceptsShortID guards the README contract that a short_id
-// prefix is accepted anywhere a repo_id is required. Before the
-// fix hot_zone bypassed resolveRepoID and rejected the prefix as "repo not
-// found".
+// TestHotZone_AcceptsShortID ensures that short repo ID prefixes are successfully resolved during hot zone lookup.
 func TestHotZone_AcceptsShortID(t *testing.T) {
 	const fullID = "62d72fa222a0193f8fa927f95dd6a3575c7566964c8b8f6ba14aafc5a1ea871f"
 	svc := wikiFixtureService(t)

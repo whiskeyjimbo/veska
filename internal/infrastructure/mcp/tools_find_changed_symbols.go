@@ -13,29 +13,15 @@ import (
 	gitinfra "github.com/whiskeyjimbo/veska/internal/infrastructure/git"
 )
 
-// Default git refs for eng_find_changed_symbols when the caller omits both:
-// the most recent commit against its parent — the common "what did the last
-// commit change?" query.
+// Default git refs diff the most recent commit against its parent.
 const (
 	defaultChangedRefA = "HEAD~1"
 	defaultChangedRefB = "HEAD"
-	// gitEmptyTreeSHA is git's canonical empty-tree object. Diffing HEAD
-	// against it yields every file in HEAD as an addition — the right
-	// answer for a single-commit repo where HEAD~1 doesn't exist
+	// gitEmptyTreeSHA is diffed against HEAD on a single-commit repository where HEAD~1 does not exist.
 	gitEmptyTreeSHA = "4b825dc642cb6eb9a060e54bf8d69288fbee4904"
 )
 
-// eng_find_changed_symbols
-// Given a repo and two git refs, this tool reports the symbols added,
-// removed, or modified between them. It parses the changed files at each
-// ref on demand and diffs the symbol sets — it does NOT read the promoted
-// SQLite graph, so it needs no per-commit history substrate.
-
-// RegisterChangedSymbolsTool registers eng_find_changed_symbols on r.
-// svc and repoRoot are required; when either is nil the tool is still
-// registered but returns InternalError on every call, keeping the
-// registry uniform across composition roots that have not wired the
-// parser/git adapters.
+// RegisterChangedSymbolsTool registers eng_find_changed_symbols, maintaining registry uniformity even if adapter dependencies are missing.
 func RegisterChangedSymbolsTool(r *Registry, svc *changedsymbols.Service, repoRoot RepoRootFunc, repos application.RepoLister) {
 	r.MustRegister(ToolSpec{
 		Name:            "eng_find_changed_symbols",
@@ -51,10 +37,7 @@ type changedSymbolsParams struct {
 	Branch string `json:"branch"`
 	RefA   string `json:"ref_a"`
 	RefB   string `json:"ref_b"`
-	// Base/Head are git's canonical names for ref_a/ref_b. Accepting
-	// both keeps the journey-natural call (base/head) working alongside
-	// the legacy ref_a/ref_b; either alias is honoured but supplying
-	// conflicting values is rejected.
+	// Base/Head are aliases for ref_a/ref_b to support standard git nomenclature.
 	Base string `json:"base"`
 	Head string `json:"head"`
 }
@@ -71,9 +54,7 @@ func makeChangedSymbolsHandler(svc *changedsymbols.Service, repoRoot RepoRootFun
 		if rpcErr := bindParams(raw, &p); rpcErr != nil {
 			return nil, rpcErr
 		}
-		// collapse base/head aliases into ref_a/ref_b. Reject
-		// only when both names are supplied with DIFFERENT non-empty values
-		// equality is fine since some agents may set both for safety.
+
 		if p.Base != "" {
 			if p.RefA != "" && p.RefA != p.Base {
 				return nil, &RPCError{Code: CodeInvalidParams, Message: "ref_a and base are aliases; supply only one (or matching values)"}
@@ -86,8 +67,7 @@ func makeChangedSymbolsHandler(svc *changedsymbols.Service, repoRoot RepoRootFun
 			}
 			p.RefB = p.Head
 		}
-		// ref_a/ref_b default to the last commit (HEAD~1.HEAD) when both are
-		// omitted; supplying only one is ambiguous and rejected.
+
 		usedDefaults := false
 		switch {
 		case p.RefA == "" && p.RefB == "":
@@ -96,7 +76,7 @@ func makeChangedSymbolsHandler(svc *changedsymbols.Service, repoRoot RepoRootFun
 		case p.RefA == "" || p.RefB == "":
 			return nil, &RPCError{Code: CodeInvalidParams, Message: "ref_a and ref_b must be provided together (or both omitted to default to HEAD~1..HEAD)"}
 		}
-		// shim-injected cwd resolves repo_id when omitted.
+
 		repoID, rpcErr := resolveRepoIDFromParams(ctx, repos, raw, p.RepoID)
 		if rpcErr != nil {
 			return nil, rpcErr
@@ -115,23 +95,14 @@ func makeChangedSymbolsHandler(svc *changedsymbols.Service, repoRoot RepoRootFun
 			return nil, &RPCError{Code: CodeNotFound, Message: fmt.Sprintf("repo has no root path: %s", p.RepoID)}
 		}
 		res, err := svc.Diff(ctx, p.RepoID, root, p.RefA, p.RefB)
-		// on a single-commit repo the default HEAD~1 doesn't
-		// resolve. Retry against git's canonical empty-tree SHA so every
-		// symbol in HEAD comes back as "added" instead of the user seeing
-		// a self-contradicting "try omitting both refs" error on a path
-		// where they already did. Only fires when we picked the defaults
-		// caller-supplied refs that don't resolve are still their problem.
+		// For single-commit repositories, diffing defaults fall back to the empty tree hash to avoid resolution errors.
 		usedEmptyTreeFallback := false
 		if err != nil && usedDefaults && errors.Is(err, gitinfra.ErrUnknownRevision) {
 			p.RefA = gitEmptyTreeSHA
 			res, err = svc.Diff(ctx, p.RepoID, root, p.RefA, p.RefB)
 			usedEmptyTreeFallback = true
 		}
-		// Rewrite file_path to absolute form so it matches the contract used
-		// by every other node-emitting tool (eng_find_symbol,
-		// eng_get_file_nodes, etc.). The service stores repo-relative paths
-		// because git diff yields them that way; the wire surface must be
-		// uniform.
+		// File paths are converted to absolute format to maintain API consistency with other symbol-retrieval tools.
 		absolutiseChangedSymbols := func(slice []changedsymbols.SymbolChange) {
 			for i := range slice {
 				if slice[i].FilePath != "" && !filepath.IsAbs(slice[i].FilePath) {
@@ -140,13 +111,9 @@ func makeChangedSymbolsHandler(svc *changedsymbols.Service, repoRoot RepoRootFun
 			}
 		}
 		if err != nil {
-			// An unresolvable ref (most commonly HEAD~1 on a single-commit
-			// repo) is a caller problem, not an internal failure — return a
-			// friendly invalid-params instead of leaking raw git stderr
+
 			if errors.Is(err, gitinfra.ErrUnknownRevision) {
-				// Identify which side failed so the message names the bad
-				// ref instead of blaming both. ResolvesRef shells out twice
-				// only on this error path.
+
 				aOK := gitinfra.ResolvesRef(ctx, root, p.RefA)
 				bOK := gitinfra.ResolvesRef(ctx, root, p.RefB)
 				var msg string
@@ -158,9 +125,7 @@ func makeChangedSymbolsHandler(svc *changedsymbols.Service, repoRoot RepoRootFun
 				case !bOK:
 					msg = fmt.Sprintf("ref_b=%q does not resolve in this repository — verify the ref with `git rev-parse %s`", p.RefB, p.RefB)
 				default:
-					// Shouldn't happen — git diff said unknown revision but
-					// both refs resolve individually. Fall back to the raw
-					// error.
+
 					msg = fmt.Sprintf("git diff %s..%s failed despite both refs resolving — try `git diff %s %s` in the repo for details", p.RefA, p.RefB, p.RefA, p.RefB)
 				}
 				return nil, &RPCError{Code: CodeInvalidParams, Message: msg}
@@ -170,8 +135,7 @@ func makeChangedSymbolsHandler(svc *changedsymbols.Service, repoRoot RepoRootFun
 		absolutiseChangedSymbols(res.Added)
 		absolutiseChangedSymbols(res.Removed)
 		absolutiseChangedSymbols(res.Modified)
-		// tag the empty-tree fallback so callers don't
-		// interpret "every symbol added" as a real wholesale change.
+		// The empty tree fallback is recorded under degraded reasons to indicate that all symbols are shown as additions.
 		if usedEmptyTreeFallback {
 			res.DegradedReasons = append(res.DegradedReasons, changedsymbols.DegradedReasonNoParentCommit)
 		}

@@ -12,8 +12,6 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/sqlite/sqldriver"
 )
 
-// helpers
-
 func newSuppressionsDB(t *testing.T) *sql.DB {
 	t.Helper()
 	db, err := sql.Open(sqldriver.Name, ":memory:")
@@ -92,15 +90,9 @@ func dispatchSuppression(t *testing.T, r *Registry, method string, actor domain.
 	return r.Dispatch(context.Background(), actor, req)
 }
 
-// eng_suppress_finding
-// TestSuppressFinding_RejectsUnknownFinding covers: when scope is
-// "finding" (the default) the handler must validate that (finding_id,
-// branch, repo_id) actually exists in findings before inserting. Otherwise
-// the suppressions table accumulates orphan rows that point at nothing
-// and pollute eng_list_suppressions forever.
+// When the scope is 'finding', the handler validates that the target finding exists in the database to prevent orphaned suppressions.
 func TestSuppressFinding_RejectsUnknownFinding(t *testing.T) {
 	db := newSuppressionsDB(t)
-	// No finding seeded — only suppressions schema exists.
 
 	r := NewRegistry()
 	RegisterSuppressionTools(r, db, nil, nil)
@@ -119,7 +111,6 @@ func TestSuppressFinding_RejectsUnknownFinding(t *testing.T) {
 	if rpcErr.Code != CodeInvalidParams {
 		t.Errorf("error code = %d, want CodeInvalidParams (%d)", rpcErr.Code, CodeInvalidParams)
 	}
-	// No suppression row should have been inserted on the rejected path.
 	var n int
 	if err := db.QueryRow(`SELECT COUNT(*) FROM suppressions`).Scan(&n); err != nil {
 		t.Fatalf("count suppressions: %v", err)
@@ -129,10 +120,7 @@ func TestSuppressFinding_RejectsUnknownFinding(t *testing.T) {
 	}
 }
 
-// TestSuppressFinding_AllowsNonFindingScopes covers the carve-out: when
-// scope != "finding" (e.g. "rule" or "file") the target carries a
-// different kind of identifier, so the finding-existence guard does not
-// apply. The handler must let those calls through unchanged.
+// Non-finding scopes like 'rule' or 'file' bypass target existence checks because they target virtual categories rather than specific database rows.
 func TestSuppressFinding_AllowsNonFindingScopes(t *testing.T) {
 	db := newSuppressionsDB(t)
 	r := NewRegistry()
@@ -178,7 +166,6 @@ func TestSuppressFinding_Basic(t *testing.T) {
 		t.Error("expected non-empty suppression_id in result")
 	}
 
-	// Verify row exists in DB.
 	var count int
 	if err := db.QueryRow(`SELECT COUNT(*) FROM suppressions WHERE suppression_id = ?`, supID).Scan(&count); err != nil {
 		t.Fatalf("query suppression: %v", err)
@@ -201,7 +188,6 @@ func TestSuppressFinding_DefaultScope(t *testing.T) {
 		"branch":     "main",
 		"repo_id":    "repo-1",
 		"reason":     "accepted risk",
-		// no scope → defaults to "finding"
 	})
 	if rpcErr != nil {
 		t.Fatalf("unexpected RPC error: %v", rpcErr.Message)
@@ -255,7 +241,6 @@ func TestSuppressFinding_MissingParams(t *testing.T) {
 		"branch":  "main",
 		"repo_id": "repo-1",
 		"reason":  "some reason",
-		// missing finding_id
 	})
 	if rpcErr == nil {
 		t.Fatal("expected RPC error for missing finding_id")
@@ -266,10 +251,7 @@ func TestSuppressFinding_MissingParams(t *testing.T) {
 	}
 }
 
-// eng_list_suppressions
-// TestListSuppressions_SingleRepoDefaultsRepoID guards: when a
-// RepoLister is wired and exactly one repo is registered, eng_list_suppressions
-// must auto-resolve repo_id from the singleton rather than rejecting the call.
+// When a single repository is registered, omitting the repository ID automatically defaults to that repository.
 func TestListSuppressions_SingleRepoDefaultsRepoID(t *testing.T) {
 	db := newSuppressionsDB(t)
 	r := NewRegistry()
@@ -279,18 +261,13 @@ func TestListSuppressions_SingleRepoDefaultsRepoID(t *testing.T) {
 	actor := domain.Actor{ID: "agent:bot", Kind: domain.ActorKindAgent}
 	_, rpcErr := dispatchSuppression(t, r, "eng_list_suppressions", actor, map[string]any{
 		"branch": "main",
-		// repo_id intentionally omitted
 	})
 	if rpcErr != nil {
 		t.Fatalf("expected auto-resolution, got %+v", rpcErr)
 	}
 }
 
-// TestListSuppressions_MultiRepoDefaultsToFanOut guards:
-// when multiple repos are registered and repo_id is omitted, the call
-// must succeed (listing across all repos) rather than rejecting with
-// "repo_id is required" — mirroring eng_list_findings's default and
-// fixing the find/list inconsistency caught in the junior-journey audit.
+// Omitting the repository ID when multiple repositories are registered runs the list operation across all repositories.
 func TestListSuppressions_MultiRepoDefaultsToFanOut(t *testing.T) {
 	db := newSuppressionsDB(t)
 	r := NewRegistry()
@@ -302,9 +279,7 @@ func TestListSuppressions_MultiRepoDefaultsToFanOut(t *testing.T) {
 	RegisterSuppressionTools(r, db, nil, repos)
 
 	actor := domain.Actor{ID: "agent:bot", Kind: domain.ActorKindAgent}
-	_, rpcErr := dispatchSuppression(t, r, "eng_list_suppressions", actor, map[string]any{
-		// repo_id intentionally omitted with >1 repos registered
-	})
+	_, rpcErr := dispatchSuppression(t, r, "eng_list_suppressions", actor, map[string]any{})
 	if rpcErr != nil {
 		t.Fatalf("expected fan-out across repos, got %+v", rpcErr)
 	}
@@ -342,7 +317,6 @@ func TestListSuppressions_AfterInsert(t *testing.T) {
 	RegisterSuppressionTools(r, db, nil, nil)
 
 	actor := domain.Actor{ID: "agent:bot", Kind: domain.ActorKindAgent}
-	// Insert a suppression.
 	_, rpcErr := dispatchSuppression(t, r, "eng_suppress_finding", actor, map[string]any{
 		"finding_id": "finding-list-001",
 		"branch":     "main",
@@ -353,7 +327,6 @@ func TestListSuppressions_AfterInsert(t *testing.T) {
 		t.Fatalf("suppress: %v", rpcErr.Message)
 	}
 
-	// List suppressions.
 	result, rpcErr := dispatchSuppression(t, r, "eng_list_suppressions", actor, map[string]any{
 		"repo_id": "repo-1",
 		"branch":  "main",
@@ -366,8 +339,6 @@ func TestListSuppressions_AfterInsert(t *testing.T) {
 	if !ok {
 		t.Fatalf("expected map result, got %T", result)
 	}
-	// We can't assert the exact type of the slice element since it's serialised via JSON.
-	// Just ensure suppressions key exists and is non-empty.
 	raw, err := json.Marshal(m["suppressions"])
 	if err != nil {
 		t.Fatalf("marshal suppressions: %v", err)

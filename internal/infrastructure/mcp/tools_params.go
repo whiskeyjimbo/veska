@@ -9,14 +9,7 @@ import (
 	application "github.com/whiskeyjimbo/veska/internal/application"
 )
 
-// resolveBranchOrActive returns branch when non-empty, otherwise the registered
-// active_branch of repoID. Used so callers can omit `branch` when they are
-// operating against the repo's current branch — overwhelmingly the common
-// case. Returns an InvalidParams when branch is empty and the
-// repo's active_branch is also unset.
-// repoID MUST already be resolved (full id, not a short prefix). When repos
-// is nil the helper is a no-op pass-through (returns branch unchanged); the
-// caller is responsible for checking emptiness in that mode.
+// resolveBranchOrActive returns the specified branch, falling back to the repository's active branch.
 func resolveBranchOrActive(ctx context.Context, repos application.RepoLister, repoID, branch string) (string, *RPCError) {
 	if branch != "" {
 		return branch, nil
@@ -47,10 +40,7 @@ func bindParams(raw json.RawMessage, dst any) *RPCError {
 	return nil
 }
 
-// checkRequired returns an InvalidParams RPCError naming *every* empty value
-// in the alternating name/value pairs, so a caller missing several params
-// learns all of them from one round-trip instead of fixing them one error
-// at a time. E.g. checkRequired("repo_id", p.RepoID, "branch", p.Branch).
+// checkRequired checks that all provided alternating name/value pairs are non-empty, returning an error listing all missing parameters.
 func checkRequired(nameVal ...string) *RPCError {
 	var missing []string
 	for i := 0; i+1 < len(nameVal); i += 2 {

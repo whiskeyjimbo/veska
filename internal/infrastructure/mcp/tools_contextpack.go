@@ -12,9 +12,7 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/core/protocol"
 )
 
-// ContextPackOption configures RegisterContextPackTool. Today the only
-// option is the cross-repo resolver; the variadic shape leaves room for
-// future knobs without another signature break.
+// ContextPackOption configures RegisterContextPackTool, using a variadic shape to support future configuration parameters without breaking the function signature.
 type ContextPackOption func(*contextPackConfig)
 
 type contextPackConfig struct {
@@ -24,58 +22,38 @@ type contextPackConfig struct {
 	reconcile      ReconcileReader
 }
 
-// WithContextPackScanTracker supplies the daemon's cold-scan tracker so
-// sparse context packs can carry an indexing_in_progress hint when a
-// scan is in flight at query time. Nil disables the hint.
+// WithContextPackScanTracker supplies the cold-scan tracker so that sparse context packs can include an indexing-in-progress hint when a scan is currently active.
 func WithContextPackScanTracker(t ScanTrackerReader) ContextPackOption {
 	return func(c *contextPackConfig) { c.scans = t }
 }
 
-// WithContextPackReconcileTracker supplies the wake reconciler so a pack whose
-// repo is mid-sweep carries a wake_reconciling hint. Nil
-// disables the hint.
+// WithContextPackReconcileTracker supplies the wake reconciler so that packs include a reconciling hint when a repository sweep is currently active.
 func WithContextPackReconcileTracker(t ReconcileReader) ContextPackOption {
 	return func(c *contextPackConfig) { c.reconcile = t }
 }
 
-// WithContextPackResolveFunc supplies a ResolveFunc so the handler can
-// turn each pack node's cross_repo_edge_stubs into CrossRepoEdges on the
-// response — parity with eng_get_call_chain and eng_get_blast_radius
-// Without it the response carries no cross_repo_edges and
-// agents reading the pack alone cannot see consumers in other repos.
+// WithContextPackResolveFunc supplies a ResolveFunc to translate cross-repo edge stubs into full CrossRepoEdges, allowing callers to view consumer relationships across repository boundaries.
 func WithContextPackResolveFunc(fn ResolveFunc) ContextPackOption {
 	return func(c *contextPackConfig) { c.resolve = fn }
 }
 
-// WithContextPackInboundResolveFunc supplies an InboundResolveFunc so the
-// context-pack response also surfaces cross-repo CALLERS of each node in
-// the pack. The pack's blast walks DirBoth, so the typical user question
-// "show me the surrounding neighbourhood" needs both directions of
-// cross-repo edges to be honest.
+// WithContextPackInboundResolveFunc surfaces cross-repo callers of each node in the pack to ensure both directions of cross-repo relationships are represented.
 func WithContextPackInboundResolveFunc(fn InboundResolveFunc) ContextPackOption {
 	return func(c *contextPackConfig) { c.resolveInbound = fn }
 }
 
-// contextPackResponse embeds the application Pack so the existing JSON
-// shape is preserved bit-for-bit, then layers CrossRepoEdges on top
-// keeping the application layer free of an mcp-specific edge type.
+// contextPackResponse embeds the core application Pack to preserve the public JSON schema while adding cross-repo metadata without introducing MCP details to the core application package.
 type contextPackResponse struct {
 	contextpack.Pack
 	CrossRepoEdges []CrossRepoEdge `json:"cross_repo_edges,omitempty"`
-	// DegradedReasons / IndexingRepos surface the cold-scan-in-progress
-	// window so a sparse pack during indexing is
-	// distinguishable from a genuinely isolated symbol.
+	// DegradedReasons and IndexingRepos indicate whether a sparse result is due to ongoing background indexing.
 	DegradedReasons []string `json:"degraded_reasons,omitempty"`
 	IndexingRepos   []string `json:"indexing_repos,omitempty"`
-	// WakeReconcilingRepos: the pack's repo when its wake sweep was in flight
-	// at query time. Fires on sparse AND full packs.
+	// WakeReconcilingRepos lists repositories currently undergoing an active wake sweep.
 	WakeReconcilingRepos []string `json:"wake_reconciling_repos,omitempty"`
 }
 
-// RegisterContextPackTool registers eng_get_context_pack. asm and repoRoot
-// are required; when either is nil the tool is still registered but
-// returns InternalError on every call, keeping the registry uniform
-// across composition roots that have not wired the context-pack service.
+// RegisterContextPackTool registers eng_get_context_pack, allowing tool registration to proceed even if dependencies are missing to maintain registry uniformity across all environments.
 func RegisterContextPackTool(r *Registry, asm *contextpack.Assembler, repoRoot RepoRootFunc, repos application.RepoLister, opts ...ContextPackOption) {
 	var cfg contextPackConfig
 	for _, o := range opts {
@@ -126,11 +104,7 @@ func makeContextPackHandler(asm *contextpack.Assembler, repoRoot RepoRootFunc, r
 				Message: "exactly one of node_id, symbol or task_id is required",
 			}
 		}
-		// parity with eng_find_symbol. When the caller asks
-		// for a symbol-anchored pack and repo_id is omitted, probe every
-		// registered repo and auto-pick if exactly one contains the
-		// symbol. Multi-repo workspaces would otherwise dead-end on
-		// "repo_id is required" even when the symbol is unambiguous.
+		// If repo_id is omitted for a symbol, all registered repositories are queried to automatically resolve the repository when the symbol is unambiguous.
 		if p.Symbol != "" && p.RepoID == "" {
 			chosen, rpcErr := pickRepoForSymbol(ctx, asm, repoRoot, repos, raw, p.Symbol, p.Branch)
 			if rpcErr != nil {
@@ -140,7 +114,7 @@ func makeContextPackHandler(asm *contextpack.Assembler, repoRoot RepoRootFunc, r
 				p.RepoID = chosen
 			}
 		}
-		// shim-injected cwd resolves repo_id when omitted.
+
 		repoID, rpcErr := resolveRepoIDFromParams(ctx, repos, raw, p.RepoID)
 		if rpcErr != nil {
 			return nil, rpcErr
@@ -171,21 +145,13 @@ func makeContextPackHandler(asm *contextpack.Assembler, repoRoot RepoRootFunc, r
 		if err != nil {
 			return nil, &RPCError{Code: CodeInternalError, Message: fmt.Sprintf("context pack: %v", err)}
 		}
-		// resolve cross_repo_edge_stubs for each node in the
-		// pack so an agent (or the CLI wrapper) can see consumers/callees
-		// in other registered repos in the same response. Without this
-		// step a junior asking 'what does Run touch?' on a multi-repo
-		// workspace gets only same-repo nodes even when the parser
-		// captured the cross-repo edge.
+		// Cross-repo edge stubs are fully resolved here to ensure callers receive cross-repo dependencies in a single response payload.
 		crossRepo := mergeCrossRepoEdges(
 			resolveCrossRepoForNodes(ctx, resolve, pack.Nodes, p.Branch),
 			resolveCrossRepoInboundForNodes(ctx, resolveInbound, pack.Nodes, p.Branch),
 		)
 		var reasons, indexing []string
-		// a pack with only the seed node and no cross-repo
-		// edges, while a scan is in flight, is the indexing-window case.
-		// Surface so the caller can retry instead of treating the pack as
-		// the final shape.
+		// Packs containing only the seed node during an active scan trigger an indexing degraded state to signal that results may be incomplete.
 		if len(pack.Nodes) <= 1 && len(crossRepo) == 0 {
 			if ids, busy := indexingRepoIDs(scans); busy {
 				reasons = append(reasons, protocol.DegradedReasonIndexingInProgress)
@@ -206,11 +172,7 @@ func makeContextPackHandler(asm *contextpack.Assembler, repoRoot RepoRootFunc, r
 	}
 }
 
-// resolveCrossRepoInboundForNodes is the contextpack analogue of
-// resolveCrossRepoInboundFor: for each node in the pack, ask "who in
-// OTHER repos calls this?" and return the inbound edges.
-// The pack always walks DirBoth, so unlike the blast handler there's no
-// direction gating here — both perspectives are always relevant.
+// resolveCrossRepoInboundForNodes finds inbound caller relationships from other repositories for all nodes in the pack.
 func resolveCrossRepoInboundForNodes(ctx context.Context, resolve InboundResolveFunc, nodes []contextpack.NodeInfo, branch string) []CrossRepoEdge {
 	if resolve == nil || len(nodes) == 0 {
 		return nil
@@ -242,13 +204,7 @@ func resolveCrossRepoInboundForNodes(ctx context.Context, resolve InboundResolve
 	return out
 }
 
-// pickRepoForSymbol probes every (repoID, branch) target a fanout would
-// produce and reports the unique repo that contains the symbol, or "" when
-// auto-resolution should not apply. Returns an InvalidParams error listing
-// the candidates when more than one repo contains the symbol — the caller
-// must pass --repo to disambiguate.
-// Errors from any single asm.ForSymbol probe are swallowed so a stuck repo
-// can't poison the auto-resolution for the others.
+// pickRepoForSymbol identifies the unique repository containing the symbol when repository auto-resolution applies. Individual repository query errors are ignored to prevent a misconfigured repository from breaking lookup for others.
 func pickRepoForSymbol(ctx context.Context, asm *contextpack.Assembler, repoRoot RepoRootFunc, repos application.RepoLister, raw json.RawMessage, symbol, callerBranch string) (string, *RPCError) {
 	if asm == nil || repoRoot == nil {
 		return "", nil
@@ -295,10 +251,7 @@ func pickRepoForSymbol(ctx context.Context, asm *contextpack.Assembler, repoRoot
 	}
 }
 
-// resolveCrossRepoForNodes mirrors resolveCrossRepoFor in tools_blast.go
-// but takes a contextpack.NodeInfo slice instead of blastradius.Entry.
-// Silent on per-node errors — a stuck repo must not break the primary
-// pack. nil resolve is a no-op.
+// resolveCrossRepoForNodes resolves outbound cross-repo edges for all nodes in the pack. Individual node errors are swallowed to keep the primary pack response functional.
 func resolveCrossRepoForNodes(ctx context.Context, resolve ResolveFunc, nodes []contextpack.NodeInfo, branch string) []CrossRepoEdge {
 	if resolve == nil || len(nodes) == 0 {
 		return nil

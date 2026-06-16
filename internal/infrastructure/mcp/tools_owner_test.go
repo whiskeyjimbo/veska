@@ -14,7 +14,6 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/core/domain"
 )
 
-// helpers
 
 func dispatchOwner(t *testing.T, r *Registry, actor domain.Actor, params map[string]any) (any, *RPCError) {
 	t.Helper()
@@ -30,7 +29,7 @@ func dispatchOwner(t *testing.T, r *Registry, actor domain.Actor, params map[str
 	return r.Dispatch(context.Background(), actor, req)
 }
 
-// makeGitRepoWithCommit initialises a git repo in dir, creates file, and commits it.
+
 func makeGitRepoWithCommit(t *testing.T, dir, filePath, authorEmail string) {
 	t.Helper()
 	cmds := [][]string{
@@ -63,11 +62,8 @@ func makeGitRepoWithCommit(t *testing.T, dir, filePath, authorEmail string) {
 	}
 }
 
-// eng_find_owner — CODEOWNERS
-// the schema must accept "branch" alongside repo_id so the
-// tool surface is consistent with other read-side eng_* tools (find_todos,
-// find_changed_symbols, etc.). The branch is informational for the
-// owner lookup but agents iterating tool schemas pass it uniformly.
+// TestFindOwner_AcceptsBranchParam verifies that the tool schema accepts "branch"
+// alongside repo_id to ensure consistency with other read-side eng_* tools.
 func TestFindOwner_AcceptsBranchParam(t *testing.T) {
 	dir := t.TempDir()
 	if err := os.WriteFile(filepath.Join(dir, "CODEOWNERS"), []byte("*.go @go-team\n"), 0o644); err != nil {
@@ -90,7 +86,6 @@ func TestFindOwner_AcceptsBranchParam(t *testing.T) {
 
 func TestFindOwner_CodeownersMatch(t *testing.T) {
 	dir := t.TempDir()
-	// Write CODEOWNERS at repo root.
 	codeowners := "*.go @go-team\n/internal/ @infra-team\n"
 	if err := os.WriteFile(filepath.Join(dir, "CODEOWNERS"), []byte(codeowners), 0o644); err != nil {
 		t.Fatalf("write CODEOWNERS: %v", err)
@@ -127,7 +122,6 @@ func TestFindOwner_CodeownersMatch(t *testing.T) {
 
 func TestFindOwner_CodeownersInDotGithub(t *testing.T) {
 	dir := t.TempDir()
-	// Write CODEOWNERS in.github/
 	if err := os.MkdirAll(filepath.Join(dir, ".github"), 0o755); err != nil {
 		t.Fatalf("mkdirall .github: %v", err)
 	}
@@ -167,7 +161,6 @@ func TestFindOwner_CodeownersInDotGithub(t *testing.T) {
 
 func TestFindOwner_CodeownersLongestMatchWins(t *testing.T) {
 	dir := t.TempDir()
-	// More specific pattern should win over wildcard.
 	codeowners := "* @fallback\n/internal/mcp/ @mcp-owners\n"
 	if err := os.WriteFile(filepath.Join(dir, "CODEOWNERS"), []byte(codeowners), 0o644); err != nil {
 		t.Fatalf("write CODEOWNERS: %v", err)
@@ -198,8 +191,6 @@ func TestFindOwner_CodeownersLongestMatchWins(t *testing.T) {
 		t.Errorf("expected owner=@mcp-owners (longest match), got %v", m["owner"])
 	}
 }
-
-// eng_find_owner — git blame fallback
 
 func TestFindOwner_GitBlameFallback(t *testing.T) {
 	dir := t.TempDir()
@@ -235,11 +226,8 @@ func TestFindOwner_GitBlameFallback(t *testing.T) {
 	}
 }
 
-// eng_find_owner — both fail
-
 func TestFindOwner_BothFail(t *testing.T) {
 	dir := t.TempDir()
-	// No CODEOWNERS, no git repo.
 
 	r := NewRegistry()
 	RegisterOwnerTools(r, nil, nil)
@@ -268,8 +256,8 @@ func TestFindOwner_BothFail(t *testing.T) {
 	if m["source"] != nil {
 		t.Errorf("expected source=nil, got %v", m["source"])
 	}
-	// null path must include a reason so callers can tell
-	// 'no CODEOWNERS file' from 'CODEOWNERS exists but no match'.
+	// A null owner path must include a diagnostics reason to help distinguish
+	// a missing CODEOWNERS file from a file that exists but lacks a matching pattern.
 	reason, _ := m["reason"].(string)
 	if reason == "" {
 		t.Errorf("expected non-empty reason on null path, got %q", reason)
@@ -286,7 +274,6 @@ func TestFindOwner_MissingParams(t *testing.T) {
 	actor := domain.Actor{ID: "agent:bot", Kind: domain.ActorKindAgent}
 	_, rpcErr := dispatchOwner(t, r, actor, map[string]any{
 		"repo_id": "/some/dir",
-		// missing file_path
 	})
 	if rpcErr == nil {
 		t.Fatal("expected RPC error for missing file_path")
@@ -297,18 +284,14 @@ func TestFindOwner_MissingParams(t *testing.T) {
 	}
 }
 
-// TestFindOwner_AcceptsPathAlias covers: agents naturally
-// reach for "path", and the schema must accept it without a -32602
-// "unknown parameter" rejection. The handler already collapses path into
-// file_path; this test guards the schema's additionalProperties stance.
+// TestFindOwner_AcceptsPathAlias verifies that the schema accepts "path" as an alias
+// for "file_path" and delegates gracefully instead of rejecting the parameter as unknown.
 func TestFindOwner_AcceptsPathAlias(t *testing.T) {
 	repoRoot, _ := os.Getwd()
 	r := NewRegistry()
 	RegisterOwnerTools(r, nil, nil)
 
 	actor := domain.Actor{ID: "agent:bot", Kind: domain.ActorKindAgent}
-	// "path" alone (no file_path) — schema must let it through, handler
-	// folds it into file_path before the CODEOWNERS / git-blame lookups.
 	res, rpcErr := dispatchOwner(t, r, actor, map[string]any{
 		"repo_id": repoRoot,
 		"path":    "some/file.go",
@@ -316,9 +299,8 @@ func TestFindOwner_AcceptsPathAlias(t *testing.T) {
 	if rpcErr != nil {
 		t.Fatalf("path alias rejected: %+v", rpcErr)
 	}
-	// Result is permitted to be a null-owner reason (file doesn't exist),
-	// but the response shape must be the find_owner envelope, not an
-	// RPC error.
+	// The result may indicate a null owner if the file does not exist, but the
+	// response envelope structure must still be returned instead of an RPC error.
 	m, ok := res.(map[string]any)
 	if !ok {
 		t.Fatalf("expected map response, got %T: %+v", res, res)
@@ -330,9 +312,10 @@ func TestFindOwner_AcceptsPathAlias(t *testing.T) {
 	}
 }
 
-// Ensure RegisterOwnerTools accepts a nil db (db is unused, but consistent signature).
+// TestFindOwner_NilDBIsAccepted ensures RegisterOwnerTools accepts a nil db
+// for API compatibility, even though db is unused during the lookup.
 func TestFindOwner_NilDBIsAccepted(t *testing.T) {
-	var db *sql.DB // nil is fine
+	var db *sql.DB
 	r := NewRegistry()
 	RegisterOwnerTools(r, db, nil)
 	if len(r.Names()) != 1 {
@@ -340,12 +323,8 @@ func TestFindOwner_NilDBIsAccepted(t *testing.T) {
 	}
 }
 
-// TestFindOwner_MissingRepoIDHintMatchesPeers pins: when
-// a RepoLister is wired and the caller omits repo_id, the resulting
-// error message must carry the same "N repos registered; pass
-// eng_list_repos to find the id" suffix that eng_list_findings /
-// eng_find_todos / eng_search_similar surface. Without this nudge,
-// agents have no signal about how to recover.
+// TestFindOwner_MissingRepoIDHintMatchesPeers ensures the error message guides
+// the user to list repositories when repo_id is missing and cannot be inferred.
 func TestFindOwner_MissingRepoIDHintMatchesPeers(t *testing.T) {
 	r := NewRegistry()
 	repos := &stubRepoLister{repos: []application.RepoRecord{
@@ -356,7 +335,6 @@ func TestFindOwner_MissingRepoIDHintMatchesPeers(t *testing.T) {
 
 	_, rpcErr := dispatchOwner(t, r, domain.Actor{}, map[string]any{
 		"file_path": "x.go",
-		// no repo_id, no cwd → multi-repo fanout path raises the hint
 	})
 	if rpcErr == nil {
 		t.Fatal("want RPC error, got nil")

@@ -6,8 +6,6 @@ import (
 	"testing"
 )
 
-// ToolSpec schema fields — optional, nil by default
-
 func TestRegister_NoSchemaRegistersWithNilSchemas(t *testing.T) {
 	r := NewRegistry()
 	if err := r.Register(makeSpec("eng_get_node", "gets a node by identifier")); err != nil {
@@ -52,9 +50,6 @@ func TestRegister_MalformedOutputSchemaRejected(t *testing.T) {
 	}
 }
 
-// State-changing tools publish accurate schemas
-// schemaProps unmarshals a JSON Schema and returns its top-level "type" and
-// sorted "properties" keys.
 func schemaProps(t *testing.T, raw json.RawMessage) (string, []string) {
 	t.Helper()
 	if !json.Valid(raw) {
@@ -94,10 +89,7 @@ func assertSchemaKeys(t *testing.T, raw json.RawMessage, wantKeys []string) {
 }
 
 func TestStateChangingToolsPublishSchemas(t *testing.T) {
-	// Task tools are PARKED (not registered by the daemon; see
-	// RegisterTaskTools' doc comment), so they are intentionally absent from
-	// this published-schema surface. Their schema well-formedness is still
-	// exercised by tools_tasks_test.go and the coverage harness.
+	// Task tools are registered dynamically rather than at daemon startup, so we exclude them from the static schema registry tests.
 	r := NewRegistry()
 	RegisterFindingTools(r, nil, nil, nil)
 	RegisterSuppressionTools(r, nil, nil, nil)

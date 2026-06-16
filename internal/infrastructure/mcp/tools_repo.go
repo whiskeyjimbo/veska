@@ -11,13 +11,7 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/repo"
 )
 
-// RepoRegistrar registers and deregisters tracked repositories. It is the
-// port consumed by eng_add_repo / eng_remove_repo; the composition root wires
-// an adapter over internal/repo so the MCP layer stays decoupled from it.
-// Add registers root_path and returns the repo_id; registration is expected
-// to return before any cold scan completes (the scan runs asynchronously via
-// the daemon's queue/watcher). Remove drops the repo's rows in one
-// transaction (CASCADE removes nodes/edges).
+// RepoRegistrar registers and deregisters tracked repositories.
 type RepoRegistrar interface {
 	AddRepo(ctx context.Context, rootPath string) (repoID string, existed bool, err error)
 	RemoveRepo(ctx context.Context, repoID string) error
@@ -30,10 +24,7 @@ type RepoRegistrar interface {
 	RemoveAlias(ctx context.Context, name string) error
 }
 
-// RegisterRepoTools registers eng_add_repo / eng_remove_repo /
-// eng_set_repo_alias / eng_remove_repo_alias on r. reg is the
-// RepoRegistrar adapter; when nil, the tools return an internal error so
-// a misconfigured daemon fails loudly rather than silently.
+// RegisterRepoTools registers repository configuration tools.
 func RegisterRepoTools(r *Registry, reg RepoRegistrar, repos application.RepoLister) {
 	r.MustRegister(ToolSpec{
 		Name:            "eng_add_repo",
@@ -65,8 +56,6 @@ func RegisterRepoTools(r *Registry, reg RepoRegistrar, repos application.RepoLis
 	})
 }
 
-// eng_add_repo
-
 type addRepoParams struct {
 	RootPath string `json:"root_path"`
 }
@@ -84,11 +73,7 @@ func makeAddRepoHandler(reg RepoRegistrar) ToolHandler {
 			return nil, &RPCError{Code: CodeInternalError, Message: "repo registrar unavailable"}
 		}
 
-		// Add returns once the repo row is inserted and hooks are installed;
-		// the cold scan is driven asynchronously by the daemon's queue/watcher.
-		// already_registered=true means the row already existed and no scan was
-		// dispatched — the CLI uses this to print an idempotency
-		// message instead of a misleading 'added'.
+
 		id, existed, err := reg.AddRepo(ctx, p.RootPath)
 		if err != nil {
 			return nil, &RPCError{Code: CodeInternalError, Message: fmt.Sprintf("add repo: %v", err)}
@@ -102,8 +87,6 @@ func makeAddRepoHandler(reg RepoRegistrar) ToolHandler {
 		}, nil
 	}
 }
-
-// eng_remove_repo
 
 type removeRepoParams struct {
 	RepoID string `json:"repo_id"`
@@ -132,8 +115,6 @@ func makeRemoveRepoHandler(reg RepoRegistrar) ToolHandler {
 		}, nil
 	}
 }
-
-// eng_set_repo_alias
 
 type setRepoAliasParams struct {
 	Name   string `json:"name"`
@@ -178,8 +159,6 @@ func makeSetRepoAliasHandler(reg RepoRegistrar, repos application.RepoLister) To
 		}, nil
 	}
 }
-
-// eng_remove_repo_alias
 
 type removeRepoAliasParams struct {
 	Name string `json:"name"`

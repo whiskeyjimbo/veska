@@ -79,9 +79,7 @@ func TestChangedSymbols_ReturnsThreeBuckets(t *testing.T) {
 	if len(resp.Added) != 1 || resp.Added[0].Name != "Fresh" {
 		t.Errorf("added = %+v, want [Fresh]", resp.Added)
 	}
-	// file_path must be absolute, matching the contract used by
-	// every other node-emitting tool. The MCP handler rewrites the service's
-	// repo-relative paths against the resolved root ("/root" in this test).
+	// The returned file path must be absolute to align with the response format of all other node-emitting tools.
 	if resp.Added[0].FilePath != "/root/code.go" {
 		t.Errorf("added[0].file_path = %q, want absolute /root/code.go", resp.Added[0].FilePath)
 	}
@@ -93,16 +91,8 @@ func TestChangedSymbols_ReturnsThreeBuckets(t *testing.T) {
 	}
 }
 
-// TestChangedSymbols_FiltersChunkEntries covers: a comment- or
-// whitespace-only change creates a chunk diff (KindChunk) in the parser
-// output, but it isn't a symbol from the user's perspective. The
-// changedsymbols service must filter chunks and surface a
-// "non_symbol_changes_only" degraded reason instead so agents don't see
-// "chunk:N-M" entries leaking into added/removed/modified.
+// We filter out raw parser chunk nodes and expose only semantic symbol changes, setting a degraded reason if a diff contains only non-symbol updates.
 func TestChangedSymbols_FiltersChunkEntries(t *testing.T) {
-	// Two refs whose only difference is a comment line; symbols are
-	// identical, but the parser will still emit different chunk nodes
-	// because the file body changed.
 	m := csMemFiles{
 		"refA:code.go": "package p\n// old comment\nfunc Keep() {}\n",
 		"refB:code.go": "package p\n// new comment\nfunc Keep() {}\n",
@@ -121,9 +111,6 @@ func TestChangedSymbols_FiltersChunkEntries(t *testing.T) {
 			}
 		}
 	}
-	// At least one of the buckets must be empty or the degraded reason
-	// signalling 'comments-only changes' must be set so a caller knows
-	// the file did change.
 	if len(resp.Added)+len(resp.Removed)+len(resp.Modified) == 0 {
 		found := slices.Contains(resp.DegradedReasons, changedsymbols.DegradedReasonNonSymbolChangesOnly)
 		if !found {
@@ -133,11 +120,7 @@ func TestChangedSymbols_FiltersChunkEntries(t *testing.T) {
 	}
 }
 
-// TestChangedSymbols_AcceptsBaseHeadAliases covers: git's
-// canonical "base/head" param names must be accepted alongside ref_a/ref_b.
-// Junior agents reach for base/head naturally — pre-fix, the schema's
-// additionalProperties:false rejected them with an "unknown parameter"
-// error before the handler ever ran.
+// We support standard git 'base' and 'head' parameters as aliases for 'ref_a' and 'ref_b' to support natural caller names.
 func TestChangedSymbols_AcceptsBaseHeadAliases(t *testing.T) {
 	m := csMemFiles{
 		"refA:code.go": "package p\nfunc Keep() {}\nfunc Gone() {}\n",
@@ -158,9 +141,7 @@ func TestChangedSymbols_AcceptsBaseHeadAliases(t *testing.T) {
 	}
 }
 
-// TestChangedSymbols_RejectsConflictingAliases: when both ref_a and base
-// are supplied with DIFFERENT values, surface a clear param error rather
-// than picking one silently.
+// Providing conflicting values for the ref_a and base parameters is rejected with CodeInvalidParams.
 func TestChangedSymbols_RejectsConflictingAliases(t *testing.T) {
 	m := csMemFiles{
 		"refA:code.go": "package p\n",
@@ -176,9 +157,7 @@ func TestChangedSymbols_RejectsConflictingAliases(t *testing.T) {
 	}
 }
 
-// TestChangedSymbols_EmptyBucketsSerializeAsArrays guards: empty
-// added/removed/modified must JSON-render as (not null) to match the MCP
-// surface contract.
+// Empty change buckets must serialize as empty JSON arrays rather than null.
 func TestChangedSymbols_EmptyBucketsSerializeAsArrays(t *testing.T) {
 	m := csMemFiles{
 		"refA:code.go": "package p\nfunc Same() {}\n",
@@ -215,8 +194,7 @@ func contains(haystack, needle string) bool {
 	return false
 }
 
-// TestChangedSymbols_DefaultsToLastCommit guards: omitting both
-// refs must default to HEAD~1.HEAD rather than erroring on missing params.
+// If revision references are omitted, we default to comparing HEAD~1 with HEAD.
 func TestChangedSymbols_DefaultsToLastCommit(t *testing.T) {
 	m := csMemFiles{
 		"HEAD~1:code.go": "package p\nfunc Old() {}\n",
@@ -234,17 +212,9 @@ func TestChangedSymbols_DefaultsToLastCommit(t *testing.T) {
 	}
 }
 
-// TestChangedSymbols_SingleCommitRepoFallsBackToEmptyTree pins:
-// the default HEAD~1.HEAD pair fails on a freshly-promoted single-commit
-// repo (the literal first-run journey). The handler must detect the
-// unknown-revision error on the default path and retry against the
-// canonical empty-tree SHA, so every symbol in HEAD comes back as
-// "added" instead of the user seeing a self-contradicting "try omitting
-// both refs" message.
+// On a single-commit repository where HEAD~1 does not exist, the tool falls back to comparing HEAD against git's canonical empty-tree SHA.
 func TestChangedSymbols_SingleCommitRepoFallsBackToEmptyTree(t *testing.T) {
 	const emptyTreeSHA = "4b825dc642cb6eb9a060e54bf8d69288fbee4904"
-	// changedFiles errors when asked about HEAD~1 (single-commit case) and
-	// returns the file when asked against the empty-tree retry.
 	changedFiles := func(_ context.Context, _, refA, _ string) ([]string, error) {
 		if refA == "HEAD~1" {
 			return nil, fmt.Errorf("%w: refs=HEAD~1..HEAD", gitinfra.ErrUnknownRevision)
@@ -254,8 +224,6 @@ func TestChangedSymbols_SingleCommitRepoFallsBackToEmptyTree(t *testing.T) {
 		}
 		return nil, fmt.Errorf("unexpected refA %q", refA)
 	}
-	// fileAtRef: at HEAD the file has one symbol; at the empty tree the
-	// file is absent (handled as empty by the service).
 	fileAtRef := func(_ context.Context, _, ref, _ string) ([]byte, error) {
 		if ref == "HEAD" {
 			return []byte("package p\nfunc Fresh() {}\n"), nil
@@ -271,7 +239,6 @@ func TestChangedSymbols_SingleCommitRepoFallsBackToEmptyTree(t *testing.T) {
 
 	resp, rpcErr := dispatchChangedSymbols(t, r, map[string]string{
 		"repo_id": "repo1", "branch": "main",
-		// ref_a and ref_b intentionally omitted — defaults trigger.
 	})
 	if rpcErr != nil {
 		t.Fatalf("expected empty-tree fallback to succeed, got %+v", rpcErr)
@@ -288,10 +255,7 @@ func TestChangedSymbols_SingleCommitRepoFallsBackToEmptyTree(t *testing.T) {
 	}
 }
 
-// TestChangedSymbols_ExplicitUnknownRefStillErrors pins that the fallback
-// fires only on the implicit-default path; an explicit caller-supplied
-// ref that doesn't resolve still surfaces the friendly invalid-params
-// error (caller typo, stale branch name, etc.).
+// The empty-tree fallback only activates for implicit defaults; explicit unknown references provided by the caller must fail with CodeInvalidParams.
 func TestChangedSymbols_ExplicitUnknownRefStillErrors(t *testing.T) {
 	changedFiles := func(_ context.Context, _, refA, _ string) ([]string, error) {
 		return nil, fmt.Errorf("%w: refs=%s..HEAD", gitinfra.ErrUnknownRevision, refA)
@@ -346,9 +310,7 @@ func TestChangedSymbols_NotWiredReturnsInternalError(t *testing.T) {
 	}
 }
 
-// TestChangedSymbols_PopulatesLineRanges pins: an added symbol
-// must carry line_start/line_end so the CLI renders foo.go:N-M instead of
-// the previous foo.go:0-0.
+// Every reported symbol change must include its line start and line end ranges.
 func TestChangedSymbols_PopulatesLineRanges(t *testing.T) {
 	m := csMemFiles{
 		"refA:code.go": "package p\n",
@@ -370,14 +332,8 @@ func TestChangedSymbols_PopulatesLineRanges(t *testing.T) {
 	}
 }
 
-// TestChangedSymbols_NonSymbolHintSuppressedWhenSymbolsChanged pins
-// the degraded_reason "non_symbol_changes_only" must NOT fire
-// when at least one symbol bucket is non-empty. The old behaviour fired the
-// hint per non-symbol-only file, which produced output like "+ method X
-// [degraded: non_symbol_changes_only]" — directly contradicting itself.
+// The non_symbol_changes_only degraded reason is suppressed if there is at least one semantic symbol change in the response.
 func TestChangedSymbols_NonSymbolHintSuppressedWhenSymbolsChanged(t *testing.T) {
-	// Two changed files: code.go adds a function (real symbol diff);
-	// notes.md has a textual change but produces no symbol nodes.
 	m := csMemFiles{
 		"refA:code.go":  "package p\n",
 		"refB:code.go":  "package p\n\nfunc Whisper() string { return \"shh\" }\n",

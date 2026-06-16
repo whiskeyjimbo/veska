@@ -13,8 +13,7 @@ import (
 	gitinfra "github.com/whiskeyjimbo/veska/internal/infrastructure/git"
 )
 
-// blastFakeEdges/blastFakeNodes are local stubs — kept disjoint from the
-// search-tool stubs so each test file is independently readable.
+// These fake edge and node stubs are kept disjoint from other test files to maintain isolated readability.
 
 type blastFakeEdges struct {
 	inbound  map[string][]string
@@ -138,11 +137,7 @@ func TestBlastRadius_HonoursCalleesDirection(t *testing.T) {
 	}
 }
 
-// TestBlastRadius_InboundResolverSurfacesCrossRepoCallers covers:
-// when only the inbound resolver is wired (the library-author scenario
-// the target node is a callee, with no outbound stubs of its own), the
-// response must include a cross_repo_edge per stub in another repo that
-// points at the node.
+// When only the inbound resolver is wired, the blast radius response must include cross-repository edges from callers in other repositories targeting the node.
 func TestBlastRadius_InboundResolverSurfacesCrossRepoCallers(t *testing.T) {
 	edges := &blastFakeEdges{inbound: map[string][]string{}}
 	nodes := &blastFakeNodes{metas: map[string]ports.NodeMeta{
@@ -183,9 +178,7 @@ func TestBlastRadius_InboundResolverSurfacesCrossRepoCallers(t *testing.T) {
 	}
 }
 
-// TestBlastRadius_InboundResolverSkippedForCalleesDirection guards the
-// gating in resolveCrossRepoInboundFor: when direction=callees the user
-// asked "what does this reach?" — inbound callers are noise.
+// The cross-repository inbound resolver must not be invoked when querying the callees direction, as inbound callers are not part of the transitive callee set.
 func TestBlastRadius_InboundResolverSkippedForCalleesDirection(t *testing.T) {
 	edges := &blastFakeEdges{outbound: map[string][]string{}}
 	nodes := &blastFakeNodes{metas: map[string]ports.NodeMeta{
@@ -244,7 +237,6 @@ func TestBlastRadius_RequiresParams(t *testing.T) {
 	_, rpcErr := dispatchBlast(t, r, "eng_get_blast_radius", map[string]any{
 		"repo_id": "r",
 		"branch":  "main",
-		// node_id missing
 	})
 	if rpcErr == nil || rpcErr.Code != CodeInvalidParams {
 		t.Fatalf("expected InvalidParams, got %+v", rpcErr)
@@ -317,13 +309,11 @@ func TestDiffBlastRadius_NotWiredReturnsInternalError(t *testing.T) {
 }
 
 func TestDiffBlastRadius_HappyPath(t *testing.T) {
-	// We need blastFakeNodes to honour byFile too.
 	edges := &blastFakeEdges{inbound: map[string][]string{"a": {"caller"}}}
 	nodes := &blastFakeNodes{
 		metas: map[string]ports.NodeMeta{
 			"a": {NodeID: "a"}, "caller": {NodeID: "caller"},
 		},
-		// nodes.file_path is repo-relative, matching the diff path.
 		byFile: map[string][]string{"foo.go": {"a"}},
 	}
 	svc, err := blastradius.NewService(edges, nodes, nil)
@@ -374,16 +364,13 @@ func TestDiffBlastRadius_UnknownRepo(t *testing.T) {
 	}
 }
 
-// TestDiffBlastRadius_RangedRefs pins: when ref_a/ref_b are both
-// supplied, the handler routes through changedFilesBetween with exactly those
-// refs rather than the working-tree changedFiles func.
+// When both ref_a and ref_b are provided, the handler retrieves changes between those specific revisions rather than using the active working-tree files list.
 func TestDiffBlastRadius_RangedRefs(t *testing.T) {
 	edges := &blastFakeEdges{inbound: map[string][]string{"a": {"caller"}}}
 	nodes := &blastFakeNodes{
 		metas: map[string]ports.NodeMeta{
 			"a": {NodeID: "a"}, "caller": {NodeID: "caller"},
 		},
-		// Absolute storage key; "foo.go" resolves against repoRoot.
 		byFile: map[string][]string{"foo.go": {"a"}},
 	}
 	svc, err := blastradius.NewService(edges, nodes, nil)
@@ -421,7 +408,7 @@ func TestDiffBlastRadius_RangedRefs(t *testing.T) {
 	}
 }
 
-// TestDiffBlastRadius_LoneRef pins that ref_a/ref_b are all-or-nothing.
+// The ref_a and ref_b parameters are validated as all-or-nothing; specifying one without the other is rejected.
 func TestDiffBlastRadius_LoneRef(t *testing.T) {
 	svc, err := blastradius.NewService(&blastFakeEdges{}, &blastFakeNodes{}, nil)
 	if err != nil {
@@ -440,8 +427,7 @@ func TestDiffBlastRadius_LoneRef(t *testing.T) {
 	}
 }
 
-// TestDiffBlastRadius_UnknownRevision maps a git unknown-revision error from
-// the ranged path to InvalidParams (a caller-fixable typo), not InternalError.
+// We map git unknown-revision errors to CodeInvalidParams to indicate that the user provided a malformed or non-existent git reference.
 func TestDiffBlastRadius_UnknownRevision(t *testing.T) {
 	svc, err := blastradius.NewService(&blastFakeEdges{}, &blastFakeNodes{}, nil)
 	if err != nil {
@@ -462,9 +448,7 @@ func TestDiffBlastRadius_UnknownRevision(t *testing.T) {
 	}
 }
 
-// TestBlastRadius_AcceptsSymbol pins: eng_get_blast_radius must
-// resolve symbol→node_id when only symbol is supplied, matching the parity
-// promise eng_get_call_chain already keeps.
+// When only a symbol name is supplied, the blast radius query resolves the symbol name to its node ID using graph storage before calculating the radius.
 func TestBlastRadius_AcceptsSymbol(t *testing.T) {
 	edges := &blastFakeEdges{inbound: map[string][]string{
 		"n1": {"caller"},
@@ -495,8 +479,7 @@ func TestBlastRadius_AcceptsSymbol(t *testing.T) {
 	}
 }
 
-// TestBlastRadius_AmbiguousSymbolRejected pins: multiple matches
-// must yield the same "ambiguous; pass node_id" error eng_get_call_chain does.
+// An ambiguous symbol name that resolves to multiple nodes in the graph storage is rejected with a CodeInvalidParams error.
 func TestBlastRadius_AmbiguousSymbolRejected(t *testing.T) {
 	svc, err := blastradius.NewService(&blastFakeEdges{}, &blastFakeNodes{}, nil)
 	if err != nil {
@@ -518,7 +501,7 @@ func TestBlastRadius_AmbiguousSymbolRejected(t *testing.T) {
 	}
 }
 
-// TestBlastRadius_MissingNodeAndSymbol pins the both-empty rejection.
+// A blast radius request is rejected if both the node ID and symbol parameters are omitted.
 func TestBlastRadius_MissingNodeAndSymbol(t *testing.T) {
 	svc, err := blastradius.NewService(&blastFakeEdges{}, &blastFakeNodes{}, nil)
 	if err != nil {

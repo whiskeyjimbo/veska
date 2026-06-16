@@ -7,17 +7,13 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/core/ports"
 )
 
-// validActorKinds is the closed set of recognised actor kinds.
 var validActorKinds = map[domain.ActorKind]struct{}{
 	domain.ActorKindHuman:  {},
 	domain.ActorKindAgent:  {},
 	domain.ActorKindSystem: {},
 }
 
-// ValidateAuditEntry returns an error if e is missing any required field or
-// carries an unrecognised ActorKind. Call this before passing an AuditEntry to
-// ports.AuditWriter.Write to guarantee the audit log is never incomplete.
-// Required fields: RepoID, ActorID (non-empty), ActorKind (valid enum value), Op.
+// ValidateAuditEntry ensures the audit log entry is structurally complete before writing.
 func ValidateAuditEntry(e ports.AuditEntry) error {
 	if e.RepoID == "" {
 		return errors.New("audit: RepoID must not be empty")

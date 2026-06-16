@@ -1,9 +1,5 @@
 // Package mcp provides a JSON-RPC 2.0 server over Unix domain sockets.
-// Two listeners are started: cli.sock (actor_kind=human) and mcp.sock (actor_kind=agent).
-// File-naming convention: every MCP tool source file uses the tools_ prefix
-// tools_<area>.go (e.g. tools_graph.go, tools_promote.go), with its test in
-// tools_<area>_test.go. (Historically some single-tool files used a singular
-// tool_ prefix; that was normalised away in.)
+// Listeners are started for cli.sock (actor_kind=human) and mcp.sock (actor_kind=agent).
 package mcp
 
 import (
@@ -18,7 +14,6 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/core/domain"
 )
 
-// Request is an inbound JSON-RPC 2.0 frame.
 type Request struct {
 	JSONRPC string           `json:"jsonrpc"`
 	ID      *json.RawMessage `json:"id,omitempty"`
@@ -26,7 +21,6 @@ type Request struct {
 	Params  json.RawMessage  `json:"params,omitempty"`
 }
 
-// Response is an outbound JSON-RPC 2.0 frame.
 type Response struct {
 	JSONRPC string           `json:"jsonrpc"`
 	ID      *json.RawMessage `json:"id,omitempty"`
@@ -34,14 +28,12 @@ type Response struct {
 	Error   *RPCError        `json:"error,omitempty"`
 }
 
-// RPCError is the JSON-RPC error object.
 type RPCError struct {
 	Code    int    `json:"code"`
 	Message string `json:"message"`
 	Data    any    `json:"data,omitempty"`
 }
 
-// Standard JSON-RPC 2.0 error codes.
 const (
 	CodeParseError     = -32700
 	CodeInvalidRequest = -32600
@@ -50,14 +42,11 @@ const (
 	CodeInternalError  = -32603
 )
 
-// Application-level JSON-RPC extension codes.
 const (
-	// CodeNotFound is returned when a requested resource does not exist.
 	CodeNotFound = -32002
 )
 
-// Handler processes one JSON-RPC request and returns a result or error.
-// actor carries the full attribution stamp derived from the inbound connection.
+// Handler defines the interface to process JSON-RPC requests with associated client actor attribution.
 type Handler interface {
 	Handle(ctx context.Context, actor domain.Actor, req *Request) (any, *RPCError)
 }
@@ -69,8 +58,7 @@ type Server struct {
 	handler Handler
 }
 
-// NewServer creates a server that will listen on cliSock (actor=human) and
-// mcpSock (actor=agent). Both sockets are created with mode 0600.
+// NewServer instantiates a server configured to listen on designated user and agent sockets.
 func NewServer(cliSock, mcpSock string, handler Handler) *Server {
 	return &Server{
 		cliSock: cliSock,
@@ -79,9 +67,7 @@ func NewServer(cliSock, mcpSock string, handler Handler) *Server {
 	}
 }
 
-// Start creates the socket files, begins accepting connections, and serves
-// until ctx is cancelled. Returns when both listeners have shut down.
-// Cleans up socket files on exit.
+// Start spawns the listener routines and blocks until the context is cancelled, performing socket cleanup on shutdown.
 func (s *Server) Start(ctx context.Context) error {
 	cliL, err := listenUnix(s.cliSock)
 	if err != nil {
@@ -94,7 +80,6 @@ func (s *Server) Start(ctx context.Context) error {
 		return err
 	}
 
-	// When ctx is cancelled, close both listeners to unblock Accept.
 	go func() {
 		<-ctx.Done()
 		cliL.Close()
@@ -113,15 +98,14 @@ func (s *Server) Start(ctx context.Context) error {
 	}()
 	wg.Wait()
 
-	// Clean up socket files.
 	os.Remove(s.cliSock)
 	os.Remove(s.mcpSock)
 	return nil
 }
 
-// listenUnix removes any stale socket, creates a new listener, and chmods it to 0600.
+// listenUnix binds to a Unix socket path, ensuring stale files are removed first and permissions are locked to 0600.
 func listenUnix(path string) (net.Listener, error) {
-	os.Remove(path) // ignore error — file may not exist
+	os.Remove(path)
 	l, err := net.Listen("unix", path)
 	if err != nil {
 		return nil, err
@@ -134,8 +118,7 @@ func listenUnix(path string) (net.Listener, error) {
 	return l, nil
 }
 
-// humanActor derives an Actor for a human (cli.sock) connection.
-// It uses the OS username; falls back to "human:unknown" on error.
+// humanActor resolves the calling OS user to attribute CLI actions to a specific human actor.
 func humanActor() domain.Actor {
 	u, err := user.Current()
 	if err != nil || u.Username == "" {
@@ -144,7 +127,6 @@ func humanActor() domain.Actor {
 	return domain.Actor{ID: "human:" + u.Username, Kind: domain.ActorKindHuman}
 }
 
-// acceptLoop accepts connections on l until the listener is closed (ctx cancelled).
 func (s *Server) acceptLoop(ctx context.Context, l net.Listener, ak domain.ActorKind) {
 	var wg sync.WaitGroup
 	defer wg.Wait()
@@ -152,7 +134,6 @@ func (s *Server) acceptLoop(ctx context.Context, l net.Listener, ak domain.Actor
 	for {
 		conn, err := l.Accept()
 		if err != nil {
-			// Listener closed — normal shutdown path.
 			return
 		}
 		wg.Add(1)
@@ -163,24 +144,16 @@ func (s *Server) acceptLoop(ctx context.Context, l net.Listener, ak domain.Actor
 	}
 }
 
-// initializeParams is the subset of the MCP "initialize" request params we care about.
 type initializeParams struct {
 	ClientInfo struct {
 		Name string `json:"name"`
 	} `json:"clientInfo"`
 }
 
-// serveConn handles one client connection: read newline-delimited JSON requests,
-// dispatch to the handler, write JSON-RPC responses.
-// Actor derivation:
-//
-//	cli.sock connections: ActorKindHuman, ID = "human:<osUser>".
-//	mcp.sock connections: start as ActorKindAgent, ID = "agent:unknown";
-//	  on "initialize" update ID to "agent:<clientInfo.name>".
+// serveConn processes a connection's lifetime, promoting agent client names during MCP initialization to audit agent activity.
 func (s *Server) serveConn(ctx context.Context, conn net.Conn, ak domain.ActorKind) {
 	defer conn.Close()
 
-	// Derive the initial actor for this connection.
 	var actor domain.Actor
 	switch ak {
 	case domain.ActorKindHuman:
@@ -197,7 +170,7 @@ func (s *Server) serveConn(ctx context.Context, conn net.Conn, ak domain.ActorKi
 
 		var req Request
 		if err := json.Unmarshal(line, &req); err != nil {
-			// Parse error — send -32700, then close connection per spec.
+			// Parsing errors trigger immediate closure of the connection under the JSON-RPC spec.
 			_ = enc.Encode(Response{
 				JSONRPC: "2.0",
 				Error:   &RPCError{Code: CodeParseError, Message: "parse error"},
@@ -205,7 +178,6 @@ func (s *Server) serveConn(ctx context.Context, conn net.Conn, ak domain.ActorKi
 			return
 		}
 
-		// For agent connections: update actor_id from "initialize" clientInfo.name.
 		if req.Method == "initialize" && actor.Kind == domain.ActorKindAgent {
 			var p initializeParams
 			if err := json.Unmarshal(req.Params, &p); err == nil && p.ClientInfo.Name != "" {
@@ -215,9 +187,7 @@ func (s *Server) serveConn(ctx context.Context, conn net.Conn, ak domain.ActorKi
 
 		result, rpcErr := s.handler.Handle(ctx, actor, &req)
 
-		// JSON-RPC 2.0: requests without an id are notifications and MUST
-		// NOT receive a response. The MCP lifecycle uses notifications/*
-		// for one-way signals (notifications/initialized, etc.).
+		// JSON-RPC 2.0 notifications carry no request identifier and must not receive a response.
 		if req.ID == nil {
 			continue
 		}
@@ -235,5 +205,4 @@ func (s *Server) serveConn(ctx context.Context, conn net.Conn, ak domain.ActorKi
 			return
 		}
 	}
-	// scanner.Err == nil means EOF (client closed connection) — exit cleanly.
 }

@@ -16,10 +16,8 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/core/protocol"
 )
 
-// Stub GraphStorage
-// stubGraphStorage is an in-test implementation of ports.GraphReader.
 type stubGraphStorage struct {
-	nodes map[string]*domain.Node // keyed by nodeID
+	nodes map[string]*domain.Node
 	edges []*domain.Edge
 	graph *domain.Graph
 }
@@ -106,8 +104,6 @@ func (s *stubGraphStorage) FindNodeIDsByPrefix(_ context.Context, prefix string,
 	return out, nil
 }
 
-// NodesForFile implements the optional fileQuerier extension used by
-// makeGetFileNodesHandler when the storage implements it.
 func (s *stubGraphStorage) NodesForFile(_ context.Context, _, _, filePath string) ([]*domain.Node, error) {
 	var result []*domain.Node
 	for _, n := range s.nodes {
@@ -118,9 +114,7 @@ func (s *stubGraphStorage) NodesForFile(_ context.Context, _, _, filePath string
 	return result, nil
 }
 
-// GetNodeSnippet returns the in-memory node's RawContent (if any). Stubbed
-// so the call-chain seed-body discriminator sees the same
-// text the test set on the node via WithRawContent.
+// GetNodeSnippet returns the snippet raw content associated with the stub node ID.
 func (s *stubGraphStorage) GetNodeSnippet(_ context.Context, _, _ string, id domain.NodeID) (string, error) {
 	n, ok := s.nodes[string(id)]
 	if !ok || n.RawContent == nil {
@@ -128,8 +122,6 @@ func (s *stubGraphStorage) GetNodeSnippet(_ context.Context, _, _ string, id dom
 	}
 	return *n.RawContent, nil
 }
-
-// Helpers
 
 func mustNode(t *testing.T, id, path, name string, kind domain.NodeKind) *domain.Node {
 	t.Helper()
@@ -160,7 +152,6 @@ func dispatchGraph(t *testing.T, r *Registry, method string, params any) (GraphR
 	if rpcErr != nil {
 		return GraphResponse{}, rpcErr
 	}
-	// Re-encode and decode into GraphResponse to handle the any return type.
 	b, err := json.Marshal(result)
 	if err != nil {
 		t.Fatalf("marshal result: %v", err)
@@ -172,8 +163,6 @@ func dispatchGraph(t *testing.T, r *Registry, method string, params any) (GraphR
 	return resp, nil
 }
 
-// dispatchCallChain dispatches eng_get_call_chain and decodes the
-// callChainResponse envelope (nodes + edges + cross-repo edges).
 func dispatchCallChain(t *testing.T, r *Registry, method string, params any) (callChainResponse, *RPCError) {
 	t.Helper()
 	raw, err := json.Marshal(params)
@@ -196,9 +185,7 @@ func dispatchCallChain(t *testing.T, r *Registry, method string, params any) (ca
 	return resp, nil
 }
 
-// TestFindSymbol_UnknownRepoIDErrors pins: an unknown repo_id
-// must return a loud NotFound error, not a silently-empty result, so a
-// stale/typo'd id is distinguishable from a genuine no-match.
+// An unknown repo ID must return CodeNotFound rather than a silently empty result.
 func TestFindSymbol_UnknownRepoIDErrors(t *testing.T) {
 	store := newStubGraphStorage()
 	store.addNode(mustNode(t, "n1", "pkg/foo.go", "Foo", domain.KindFunction))
@@ -221,9 +208,7 @@ func TestFindSymbol_UnknownRepoIDErrors(t *testing.T) {
 	}
 }
 
-// TestFindSymbol_AmbiguousPrefixRejected guards: a 4+ char prefix
-// that matches multiple repos must return a clear ambiguous-prefix error
-// instead of silently picking one.
+// If a repository ID prefix matches multiple repositories, the search must fail with CodeInvalidParams.
 func TestFindSymbol_AmbiguousPrefixRejected(t *testing.T) {
 	store := newStubGraphStorage()
 	store.addNode(mustNode(t, "n1", "pkg/foo.go", "Foo", domain.KindFunction))
@@ -236,7 +221,7 @@ func TestFindSymbol_AmbiguousPrefixRejected(t *testing.T) {
 		WithRepoLister(&stubRepoLister{repos: repos}))
 	_, rpcErr := dispatchGraph(t, r, "eng_find_symbol", map[string]string{
 		"symbol":  "Foo",
-		"repo_id": "deadbeef", // 8 chars but matches both
+		"repo_id": "deadbeef",
 		"branch":  "main",
 	})
 	if rpcErr == nil || rpcErr.Code != CodeInvalidParams {
@@ -244,9 +229,7 @@ func TestFindSymbol_AmbiguousPrefixRejected(t *testing.T) {
 	}
 }
 
-// TestFindSymbol_ArbitraryPrefixAccepted guards: a 4+ char prefix
-// that unambiguously matches one repo resolves like the full id (README
-// contract).
+// An unambiguous repository ID prefix of at least 4 characters successfully resolves to the target repository.
 func TestFindSymbol_ArbitraryPrefixAccepted(t *testing.T) {
 	store := newStubGraphStorage()
 	store.addNode(mustNode(t, "n1", "pkg/foo.go", "Foo", domain.KindFunction))
@@ -258,7 +241,7 @@ func TestFindSymbol_ArbitraryPrefixAccepted(t *testing.T) {
 		WithRepoLister(&stubRepoLister{repos: repos}))
 	resp, rpcErr := dispatchGraph(t, r, "eng_find_symbol", map[string]string{
 		"symbol":  "Foo",
-		"repo_id": "deadbeef", // 8-char prefix, not exact short_id length
+		"repo_id": "deadbeef",
 		"branch":  "main",
 	})
 	if rpcErr != nil {
@@ -269,8 +252,7 @@ func TestFindSymbol_ArbitraryPrefixAccepted(t *testing.T) {
 	}
 }
 
-// TestFindSymbol_ShortRepoIDAccepted pins: a 12-char short_id
-// prefix resolves to the full repo_id.
+// A 12-character repository ID prefix resolves to the target repository.
 func TestFindSymbol_ShortRepoIDAccepted(t *testing.T) {
 	store := newStubGraphStorage()
 	store.addNode(mustNode(t, "n1", "pkg/foo.go", "Foo", domain.KindFunction))
@@ -284,7 +266,7 @@ func TestFindSymbol_ShortRepoIDAccepted(t *testing.T) {
 
 	resp, rpcErr := dispatchGraph(t, r, "eng_find_symbol", map[string]string{
 		"symbol":  "Foo",
-		"repo_id": "0123456789ab", // 12-char short_id
+		"repo_id": "0123456789ab",
 		"branch":  "main",
 	})
 	if rpcErr != nil {
@@ -295,9 +277,7 @@ func TestFindSymbol_ShortRepoIDAccepted(t *testing.T) {
 	}
 }
 
-// TestFindSymbol_BranchDefaultsToActiveBranch guards: when the
-// caller omits branch, the handler resolves it from the registered
-// active_branch instead of erroring.
+// If the branch parameter is omitted, the query defaults to the repository's active branch.
 func TestFindSymbol_BranchDefaultsToActiveBranch(t *testing.T) {
 	store := newStubGraphStorage()
 	store.addNode(mustNode(t, "n1", "pkg/foo.go", "Foo", domain.KindFunction))
@@ -312,7 +292,6 @@ func TestFindSymbol_BranchDefaultsToActiveBranch(t *testing.T) {
 	resp, rpcErr := dispatchGraph(t, r, "eng_find_symbol", map[string]string{
 		"symbol":  "Foo",
 		"repo_id": "abcdef012345",
-		// branch intentionally omitted
 	})
 	if rpcErr != nil {
 		t.Fatalf("expected branch auto-resolution, got %+v", rpcErr)
@@ -321,8 +300,6 @@ func TestFindSymbol_BranchDefaultsToActiveBranch(t *testing.T) {
 		t.Fatalf("expected 1 node with default branch, got %d", len(resp.Nodes))
 	}
 }
-
-// eng_find_symbol — finds nodes from graph store
 
 func TestFindSymbol_ReturnsNodesFromGraphStore(t *testing.T) {
 	store := newStubGraphStorage()
@@ -348,10 +325,7 @@ func TestFindSymbol_ReturnsNodesFromGraphStore(t *testing.T) {
 	}
 }
 
-// TestFindSymbol_RanksDeclarationAboveContainer pins: when a name
-// matches both a package and a function (Go 'package main' + 'func main'), the
-// callable declaration must rank first so nodes[0] is usable for
-// call_chain/blast_radius.
+// When a query matches both a container and a declaration, the declaration is ranked higher in the results.
 func TestFindSymbol_RanksDeclarationAboveContainer(t *testing.T) {
 	store := newStubGraphStorage()
 	store.addNode(mustNode(t, "pkg-main", "main.go", "main", domain.KindPackage))
@@ -374,14 +348,12 @@ func TestFindSymbol_RanksDeclarationAboveContainer(t *testing.T) {
 	}
 }
 
-// eng_find_symbol — staging overlay overrides promoted node
-
 func TestFindSymbol_StagingOverridesPromotedNode(t *testing.T) {
 	store := newStubGraphStorage()
 	promoted := mustNode(t, "node-1", "pkg/foo.go", "Foo", domain.KindFunction)
 	store.addNode(promoted)
 
-	staged := mustNode(t, "node-1", "pkg/foo.go", "Foo", domain.KindMethod) // same ID, different kind
+	staged := mustNode(t, "node-1", "pkg/foo.go", "Foo", domain.KindMethod)
 	area := staging.NewArea()
 	area.Stage("repo1", "main", "pkg/foo.go", staging.File{Nodes: []*domain.Node{staged}, Edges: nil})
 
@@ -402,13 +374,10 @@ func TestFindSymbol_StagingOverridesPromotedNode(t *testing.T) {
 	if len(resp.Nodes) != 1 {
 		t.Fatalf("expected 1 node after merge, got %d", len(resp.Nodes))
 	}
-	// Staged version should win.
 	if resp.Nodes[0].Kind != string(domain.KindMethod) {
 		t.Errorf("expected staged kind %q, got %q", domain.KindMethod, resp.Nodes[0].Kind)
 	}
 }
-
-// eng_get_node — found → single node response
 
 func TestGetNode_Found(t *testing.T) {
 	store := newStubGraphStorage()
@@ -434,8 +403,6 @@ func TestGetNode_Found(t *testing.T) {
 	}
 }
 
-// eng_get_node — not found → -32602
-
 func TestGetNode_NotFound(t *testing.T) {
 	store := newStubGraphStorage()
 	r := NewRegistry()
@@ -450,19 +417,12 @@ func TestGetNode_NotFound(t *testing.T) {
 		t.Fatal("expected RPCError for not-found node")
 		return
 	}
-	// not-found is a domain error (CodeNotFound), not -32602.
 	if rpcErr.Code != CodeNotFound {
 		t.Errorf("expected code %d, got %d", CodeNotFound, rpcErr.Code)
 	}
 }
 
-// TestGetNode_RepoIDPresentButUnknownRejected pins: when the
-// caller supplies repo_id (even without branch), the handler must validate
-// it against the registry. Previously, an unknown or mistyped repo_id was
-// silently ignored — the handler took the cross-repo fallback path (since
-// branch was empty) and returned a node from any repo, with no error.
-// That made the repo_id parameter advisory in a way the README contract
-// did not document.
+// If a repository ID is provided but cannot be found, the request fails with CodeNotFound even if the node exists globally.
 func TestGetNode_RepoIDPresentButUnknownRejected(t *testing.T) {
 	store := newStubGraphStorage()
 	store.addNode(mustNode(t, "node-42", "pkg/bar.go", "Bar", domain.KindStruct))
@@ -476,7 +436,7 @@ func TestGetNode_RepoIDPresentButUnknownRejected(t *testing.T) {
 
 	_, rpcErr := dispatchGraph(t, r, "eng_get_node", map[string]string{
 		"node_id": "node-42",
-		"repo_id": "deadbeefdead", // valid 12-char shape, but no such repo
+		"repo_id": "deadbeefdead",
 	})
 	if rpcErr == nil {
 		t.Fatal("expected NotFound for unknown repo_id, got success")
@@ -486,12 +446,7 @@ func TestGetNode_RepoIDPresentButUnknownRejected(t *testing.T) {
 	}
 }
 
-// TestGetNode_RepoIDWithoutBranchResolvesActiveBranch pins:
-// when only repo_id is supplied, the handler must fill branch from the
-// registered active_branch and take the scoped GetNode path (not the
-// cross-repo fallback). We assert this by registering a repo that
-// resolves cleanly — the call must succeed without erroring out of the
-// resolveRepoID validation that the fallback path would have skipped.
+// When only repo_id is provided, the handler resolves the repository's active branch to scope the search.
 func TestGetNode_RepoIDWithoutBranchResolvesActiveBranch(t *testing.T) {
 	store := newStubGraphStorage()
 	store.addNode(mustNode(t, "node-42", "pkg/bar.go", "Bar", domain.KindStruct))
@@ -505,7 +460,7 @@ func TestGetNode_RepoIDWithoutBranchResolvesActiveBranch(t *testing.T) {
 
 	resp, rpcErr := dispatchGraph(t, r, "eng_get_node", map[string]string{
 		"node_id": "node-42",
-		"repo_id": "aaaaaaaaaaaa", // valid short_id
+		"repo_id": "aaaaaaaaaaaa",
 	})
 	if rpcErr != nil {
 		t.Fatalf("expected scoped lookup to succeed, got %+v", rpcErr)
@@ -515,9 +470,7 @@ func TestGetNode_RepoIDWithoutBranchResolvesActiveBranch(t *testing.T) {
 	}
 }
 
-// TestGetNode_OmitRepoIDAndBranch guards: node_id is a globally
-// unique content hash, so repo_id and branch must be optional. When both are
-// omitted the handler falls back to FindNodeByID (cross-repo lookup).
+// If both repository ID and branch are omitted, the query falls back to a global lookup across all repositories.
 func TestGetNode_OmitRepoIDAndBranch(t *testing.T) {
 	store := newStubGraphStorage()
 	n := mustNode(t, "node-42", "pkg/bar.go", "Bar", domain.KindStruct)
@@ -537,8 +490,7 @@ func TestGetNode_OmitRepoIDAndBranch(t *testing.T) {
 	}
 }
 
-// TestGetNode_ResolvesUniquePrefix pins: eng_get_node accepts the
-// 12-char display prefix that eng_find_symbol prints, not just the full id.
+// Node IDs can be queried using a unique 12-character prefix of the node's content hash.
 func TestGetNode_ResolvesUniquePrefix(t *testing.T) {
 	store := newStubGraphStorage()
 	full := "f470f8ff4243aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
@@ -558,8 +510,7 @@ func TestGetNode_ResolvesUniquePrefix(t *testing.T) {
 	}
 }
 
-// TestGetNode_FullIDStillResolves guards that a full 64-char id (its own unique
-// prefix) keeps resolving after prefix support.
+// A full 64-character node ID successfully resolves without being treated as an ambiguous prefix.
 func TestGetNode_FullIDStillResolves(t *testing.T) {
 	store := newStubGraphStorage()
 	full := "f470f8ff4243aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
@@ -579,9 +530,7 @@ func TestGetNode_FullIDStillResolves(t *testing.T) {
 	}
 }
 
-// TestGetNode_AmbiguousPrefixErrorsWithCandidates pins the ambiguity guard:
-// two node_ids sharing a prefix must error (not silently pick one) and the
-// message must list the candidate ids.
+// If a node ID prefix matches multiple nodes, the query fails with CodeInvalidParams listing all matching candidates.
 func TestGetNode_AmbiguousPrefixErrorsWithCandidates(t *testing.T) {
 	store := newStubGraphStorage()
 	id1 := "dead000011110000aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
@@ -606,11 +555,7 @@ func TestGetNode_AmbiguousPrefixErrorsWithCandidates(t *testing.T) {
 	}
 }
 
-// TestGetNode_ShortInputTreatedAsExact pins the nodePrefixMinLen floor
-// an input below the floor is not prefix-resolved, so a node
-// whose id only shares a too-short prefix is NOT returned — the short input is
-// matched exactly and misses (CodeNotFound), rather than scanning the whole
-// table for an absurdly short prefix.
+// Inputs shorter than the prefix minimum length are matched exactly to avoid expensive scans over short keys.
 func TestGetNode_ShortInputTreatedAsExact(t *testing.T) {
 	store := newStubGraphStorage()
 	store.addNode(mustNode(t, "deadbeefcafef00d", "a.go", "Fn", domain.KindFunction))
@@ -619,7 +564,7 @@ func TestGetNode_ShortInputTreatedAsExact(t *testing.T) {
 	RegisterGraphTools(r, store, staging.NewArea())
 
 	_, rpcErr := dispatchGraph(t, r, "eng_get_node", map[string]string{
-		"node_id": "dead", // 4 chars, below nodePrefixMinLen
+		"node_id": "dead",
 	})
 	if rpcErr == nil {
 		t.Fatal("expected not-found for too-short non-exact input, got success")
@@ -629,11 +574,8 @@ func TestGetNode_ShortInputTreatedAsExact(t *testing.T) {
 	}
 }
 
-// eng_get_call_chain — traverses CALLS edges up to depth
-
 func TestGetCallChain_TraversesCallsEdges(t *testing.T) {
 	store := newStubGraphStorage()
-	// Build: A -> B -> C
 	a := mustNode(t, "a", "pkg/a.go", "A", domain.KindFunction)
 	b := mustNode(t, "b", "pkg/b.go", "B", domain.KindFunction)
 	c := mustNode(t, "c", "pkg/c.go", "C", domain.KindFunction)
@@ -656,7 +598,6 @@ func TestGetCallChain_TraversesCallsEdges(t *testing.T) {
 		t.Fatalf("unexpected error: %+v", rpcErr)
 	}
 
-	// Should include b and c (reachable via CALLS from a), possibly a itself.
 	nodeIDs := make(map[string]bool)
 	for _, n := range resp.Nodes {
 		nodeIDs[n.NodeID] = true
@@ -672,8 +613,7 @@ func TestGetCallChain_TraversesCallsEdges(t *testing.T) {
 	}
 }
 
-// TestGetCallChain_AcceptsSymbol guards: callers can pass
-// 'symbol' instead of 'node_id' for parity with eng_find_symbol.
+// Callers can query call chains using a symbol name instead of a direct node ID.
 func TestGetCallChain_AcceptsSymbol(t *testing.T) {
 	store := newStubGraphStorage()
 	a := mustNode(t, "a", "pkg/a.go", "Alpha", domain.KindFunction)
@@ -705,8 +645,6 @@ func TestGetCallChain_AcceptsSymbol(t *testing.T) {
 	}
 }
 
-// eng_get_call_chain — depth > 10 → -32602
-
 func TestGetCallChain_DepthTooLarge(t *testing.T) {
 	store := newStubGraphStorage()
 	r := NewRegistry()
@@ -727,15 +665,9 @@ func TestGetCallChain_DepthTooLarge(t *testing.T) {
 	}
 }
 
-// TestGetCallChain_EmptyEdgesOnCallableEmitsChainedSelectorsHint pins
-// when the seed is a function/method but no CALLS edges
-// resolved, the response carries a "chained_selectors_unresolved"
-// degraded_reasons hint so the caller knows the empty result may reflect
-// a parser limitation (epic ) rather than the symbol genuinely
-// having no callees.
+// If a callable node has no resolved edges, the response includes a degraded reason suggesting chained selectors may be unresolved.
 func TestGetCallChain_EmptyEdgesOnCallableEmitsChainedSelectorsHint(t *testing.T) {
 	store := newStubGraphStorage()
-	// A lone function node with no CALLS edges at all.
 	store.addNode(mustNode(t, "fn-lonely", "pkg/x.go", "Lonely", domain.KindFunction))
 
 	r := NewRegistry()
@@ -761,9 +693,7 @@ func TestGetCallChain_EmptyEdgesOnCallableEmitsChainedSelectorsHint(t *testing.T
 	}
 }
 
-// TestGetCallChain_EdgesPresentSuppressesHint guards that the hint only
-// fires when edges are empty — a working call chain must not carry the
-// chained_selectors_unresolved marker.
+// The chained selectors degraded hint is suppressed if the call chain contains at least one edge.
 func TestGetCallChain_EdgesPresentSuppressesHint(t *testing.T) {
 	store := newStubGraphStorage()
 	a := mustNode(t, "a", "pkg/a.go", "A", domain.KindFunction)
@@ -788,16 +718,9 @@ func TestGetCallChain_EdgesPresentSuppressesHint(t *testing.T) {
 	}
 }
 
-// TestGetCallChain_StdlibOnlyBodyEmitsExternalCalleesReason guards:
-// when the seed's body only calls into stdlib / unmodeled packages (e.g.
-// fmt.Sprintf, strings.TrimSpace) it has no chained selectors, so the
-// catch-all chained_selectors_unresolved hint must NOT fire. Instead, the
-// narrower external_callees_only reason should communicate that the empty
-// edges set reflects callees outside the graph, not a parser limitation.
+// If a function body only calls unmodeled external dependencies, we report external_callees_only instead of chained_selectors_unresolved.
 func TestGetCallChain_StdlibOnlyBodyEmitsExternalCalleesReason(t *testing.T) {
 	store := newStubGraphStorage()
-	// Seed body mirrors the cobra-journey Greeter.Greet: only stdlib calls,
-	// no chained selectors at all.
 	raw := `func (g *Greeter) Greet(name string) string {
 	if name == "" { name = "world" }
 	return fmt.Sprintf("%s, %s!", g.Prefix, strings.TrimSpace(name))
@@ -830,11 +753,7 @@ func TestGetCallChain_StdlibOnlyBodyEmitsExternalCalleesReason(t *testing.T) {
 	}
 }
 
-// TestGetCallChain_ChainedSelectorBodyStillEmitsChainedHint guards that the
-// existing chained_selectors_unresolved hint still fires on bodies that
-// actually contain a chained selector pattern (a.b.c or a.b.c), so the
-// narrowing in TestGetCallChain_StdlibOnlyBodyEmitsExternalCalleesReason
-// doesn't over-correct.
+// We verify that the chained selectors degraded hint continues to fire on bodies containing chained selector invocations.
 func TestGetCallChain_ChainedSelectorBodyStillEmitsChainedHint(t *testing.T) {
 	store := newStubGraphStorage()
 	raw := `func (s *Server) Start() error {
@@ -863,8 +782,6 @@ func TestGetCallChain_ChainedSelectorBodyStillEmitsChainedHint(t *testing.T) {
 	}
 }
 
-// stubScanTracker implements ScanTrackerReader with hand-set state so
-// tests can simulate cold-scan-in-progress windows.
 type stubScanTracker struct {
 	scans []application.ScanState
 }
@@ -876,12 +793,7 @@ func (s *stubScanTracker) Snapshot() []application.ScanState {
 	return out
 }
 
-// TestFindSymbol_EmptyDuringIndexingEmitsHint guards: when
-// eng_find_symbol returns no nodes AND the daemon reports at least one
-// cold scan in flight, the response carries indexing_in_progress in
-// degraded_reasons plus the list of scanning repo_ids in indexing_repos.
-// An agent reading without that hint concludes the symbol doesn't
-// exist; the hint tells them to retry once indexing settles.
+// If a symbol query is empty while repository indexing is in progress, the response returns the indexing status in the degraded reasons list.
 func TestFindSymbol_EmptyDuringIndexingEmitsHint(t *testing.T) {
 	store := newStubGraphStorage()
 	tracker := &stubScanTracker{scans: []application.ScanState{
@@ -910,13 +822,10 @@ func TestFindSymbol_EmptyDuringIndexingEmitsHint(t *testing.T) {
 	}
 }
 
-// TestFindSymbol_EmptyWithNoScansSuppressesHint guards that the hint
-// does NOT fire when no scan is in flight — an empty result for a real
-// (non-existent) symbol must stay empty so callers don't get a false
-// "retry later" signal.
+// The indexing in progress degraded hint is suppressed when no repository index scans are running.
 func TestFindSymbol_EmptyWithNoScansSuppressesHint(t *testing.T) {
 	store := newStubGraphStorage()
-	tracker := &stubScanTracker{} // empty: no scans running
+	tracker := &stubScanTracker{}
 
 	r := NewRegistry()
 	RegisterGraphTools(r, store, staging.NewArea(), WithScanTracker(tracker))
@@ -937,10 +846,7 @@ func TestFindSymbol_EmptyWithNoScansSuppressesHint(t *testing.T) {
 	}
 }
 
-// TestFindSymbol_NonEmptyDuringIndexingSuppressesHint guards that a
-// query which returns real nodes is NOT flagged with the hint, even if
-// a scan is in flight elsewhere — the hint signals "your empty result
-// may be stale", not "the daemon is busy".
+// The indexing in progress degraded hint is suppressed if the query successfully returns nodes, even if other indexing operations are running.
 func TestFindSymbol_NonEmptyDuringIndexingSuppressesHint(t *testing.T) {
 	store := newStubGraphStorage()
 	store.addNode(mustNode(t, "n1", "pkg/x.go", "Foo", domain.KindFunction))
@@ -967,8 +873,6 @@ func TestFindSymbol_NonEmptyDuringIndexingSuppressesHint(t *testing.T) {
 	}
 }
 
-// stubReconcileReader implements ReconcileReader with a fixed set of
-// mid-sweep repo_ids so tests can simulate an in-flight wake reconcile.
 type stubReconcileReader struct {
 	reconciling map[string]bool
 }
@@ -977,11 +881,7 @@ func (s *stubReconcileReader) IsRepoReconciling(repoID string) bool {
 	return s.reconciling[repoID]
 }
 
-// TestFindSymbol_WakeReconcilingAttachesOnNonEmpty guards:
-// wake_reconciling fires WHENEVER the queried repo is mid-sweep — including
-// when the result is non-empty (unlike indexing_in_progress, which only fires
-// on empty). A populated response can still be momentarily stale while the
-// sweep re-parses files.
+// The wake reconciling degraded reason is attached to the response if the target repository is currently undergoing a reconciliation sweep.
 func TestFindSymbol_WakeReconcilingAttachesOnNonEmpty(t *testing.T) {
 	store := newStubGraphStorage()
 	store.addNode(mustNode(t, "n1", "pkg/x.go", "Foo", domain.KindFunction))
@@ -1009,11 +909,7 @@ func TestFindSymbol_WakeReconcilingAttachesOnNonEmpty(t *testing.T) {
 	}
 }
 
-// TestFindSymbol_WakeReconcilingSuppressedForOtherRepo guards the per-repo
-// filtering: a query against repoA must NOT carry wake_reconciling when only
-// repoB is mid-sweep. This is what distinguishes the per-repo state from the
-// old global flag — without filtering, every query during any sweep would be
-// flagged.
+// The wake reconciling degraded reason is only attached to queries targeting the specific repository undergoing reconciliation.
 func TestFindSymbol_WakeReconcilingSuppressedForOtherRepo(t *testing.T) {
 	store := newStubGraphStorage()
 	store.addNode(mustNode(t, "n1", "pkg/x.go", "Foo", domain.KindFunction))
@@ -1038,9 +934,7 @@ func TestFindSymbol_WakeReconcilingSuppressedForOtherRepo(t *testing.T) {
 	}
 }
 
-// TestFindSymbol_WakeReconcilingAttachesOnEmpty guards that wake_reconciling
-// also fires on an empty result for the queried repo — an empty response
-// during a sweep may simply be a file mid-re-parse.
+// The wake reconciling degraded reason is attached to empty query results if the repository is undergoing reconciliation.
 func TestFindSymbol_WakeReconcilingAttachesOnEmpty(t *testing.T) {
 	store := newStubGraphStorage()
 	rec := &stubReconcileReader{reconciling: map[string]bool{"repoA": true}}
@@ -1064,15 +958,13 @@ func TestFindSymbol_WakeReconcilingAttachesOnEmpty(t *testing.T) {
 	}
 }
 
-// TestFindSymbol_WakeReconcilingNilReaderNoOp guards that a nil reconcile
-// reader (composition roots without a wired reconciler) never attaches the
-// reason and never panics.
+// If no reconciliation tracker is configured, the wake reconciling check is skipped safely.
 func TestFindSymbol_WakeReconcilingNilReaderNoOp(t *testing.T) {
 	store := newStubGraphStorage()
 	store.addNode(mustNode(t, "n1", "pkg/x.go", "Foo", domain.KindFunction))
 
 	r := NewRegistry()
-	RegisterGraphTools(r, store, staging.NewArea()) // no reconcile tracker
+	RegisterGraphTools(r, store, staging.NewArea())
 
 	resp, rpcErr := dispatchGraph(t, r, "eng_find_symbol", map[string]string{
 		"symbol":  "Foo",
@@ -1087,15 +979,11 @@ func TestFindSymbol_WakeReconcilingNilReaderNoOp(t *testing.T) {
 	}
 }
 
-// eng_get_file_nodes — returns staged nodes when present
-
 func TestGetFileNodes_ReturnsStagedNodesWhenPresent(t *testing.T) {
 	store := newStubGraphStorage()
-	// Put a promoted node in the store.
 	promoted := mustNode(t, "p1", "pkg/foo.go", "OldFunc", domain.KindFunction)
 	store.addNode(promoted)
 
-	// Stage a different node for the same file.
 	staged := mustNode(t, "s1", "pkg/foo.go", "NewFunc", domain.KindFunction)
 	area := staging.NewArea()
 	area.Stage("repo1", "main", "pkg/foo.go", staging.File{Nodes: []*domain.Node{staged}, Edges: nil})
@@ -1122,8 +1010,6 @@ func TestGetFileNodes_ReturnsStagedNodesWhenPresent(t *testing.T) {
 	}
 }
 
-// eng_get_file_nodes — falls back to promoted store when not staged
-
 func TestGetFileNodes_FallsBackToPromotedStore(t *testing.T) {
 	store := newStubGraphStorage()
 	n1 := mustNode(t, "n1", "pkg/promoted.go", "PromotedFunc", domain.KindFunction)
@@ -1132,7 +1018,7 @@ func TestGetFileNodes_FallsBackToPromotedStore(t *testing.T) {
 	store.addNode(n2)
 
 	r := NewRegistry()
-	RegisterGraphTools(r, store, staging.NewArea()) // no staging
+	RegisterGraphTools(r, store, staging.NewArea())
 
 	resp, rpcErr := dispatchGraph(t, r, "eng_get_file_nodes", map[string]string{
 		"file_path": "pkg/promoted.go",
@@ -1153,13 +1039,9 @@ func TestGetFileNodes_FallsBackToPromotedStore(t *testing.T) {
 	}
 }
 
-// TestGetFileNodes_ResolvesRelativePath verifies that an ABSOLUTE caller path is
-// relativised to the repo-relative form node file_paths are stored in (
-// §1) so it still matches, and that a relative path matches directly. Also
-// exercises the "path" alias.
+// Absolute file paths provided by the caller are automatically relativized to match the repository-relative keys used in storage.
 func TestGetFileNodes_ResolvesRelativePath(t *testing.T) {
 	store := newStubGraphStorage()
-	// Nodes are stored repo-relative since.
 	n1 := mustNode(t, "n1", "internal/server.go", "Serve", domain.KindFunction)
 	store.addNode(n1)
 
@@ -1167,9 +1049,8 @@ func TestGetFileNodes_ResolvesRelativePath(t *testing.T) {
 	RegisterGraphTools(r, store, staging.NewArea(),
 		WithRepoLister(&stubRepoLister{repos: []application.RepoRecord{{RepoID: "repo1", RootPath: "/abs/repo"}}}))
 
-	// An absolute path under the root relativises to "internal/server.go".
 	resp, rpcErr := dispatchGraph(t, r, "eng_get_file_nodes", map[string]string{
-		"path":    "/abs/repo/internal/server.go", // absolute + alias
+		"path":    "/abs/repo/internal/server.go",
 		"repo_id": "repo1",
 		"branch":  "main",
 	})
@@ -1181,10 +1062,7 @@ func TestGetFileNodes_ResolvesRelativePath(t *testing.T) {
 	}
 }
 
-// TestFindSymbol_ResolvesRepoFromCwdWhenOmitted guards: when
-// repo_id is omitted but the shim-injected cwd matches a registered repo's
-// RootPath (or sits inside one), the handler resolves to that repo instead
-// of rejecting with "repo_id is required". Critical for multi-repo users.
+// If the repository ID is omitted, we attempt to resolve the repository automatically using the shim-injected current working directory.
 func TestFindSymbol_ResolvesRepoFromCwdWhenOmitted(t *testing.T) {
 	store := newStubGraphStorage()
 	store.addNode(mustNode(t, "n-cwd", "/home/u/projects/alpha/main.go", "Foo", domain.KindFunction))
@@ -1197,7 +1075,6 @@ func TestFindSymbol_ResolvesRepoFromCwdWhenOmitted(t *testing.T) {
 	RegisterGraphTools(r, store, staging.NewArea(),
 		WithRepoLister(&stubRepoLister{repos: repos}))
 
-	// repo_id omitted, but cwd is inside alpha — should resolve.
 	resp, rpcErr := dispatchGraph(t, r, "eng_find_symbol", map[string]string{
 		"symbol": "Foo",
 		"cwd":    "/home/u/projects/alpha/sub/dir",
@@ -1210,11 +1087,7 @@ func TestFindSymbol_ResolvesRepoFromCwdWhenOmitted(t *testing.T) {
 	}
 }
 
-// TestFindSymbol_FansOutWhenRepoIDOmittedAndCwdMismatch pins:
-// when repo_id is omitted and cwd doesn't match any registered repo, the
-// handler fans out across every registered repo instead of erroring. The
-// README's "60 second sanity check" example works without naming a repo
-// id when the user just spawned veska-mcp from /tmp or similar.
+// If both repository ID and current working directory are missing or unmatched, the query fans out across all registered repositories.
 func TestFindSymbol_FansOutWhenRepoIDOmittedAndCwdMismatch(t *testing.T) {
 	store := newStubGraphStorage()
 	store.addNode(mustNode(t, "n-alpha", "/home/u/projects/alpha/main.go", "Foo", domain.KindFunction))
@@ -1235,14 +1108,9 @@ func TestFindSymbol_FansOutWhenRepoIDOmittedAndCwdMismatch(t *testing.T) {
 	if rpcErr != nil {
 		t.Fatalf("expected fanout success, got %+v", rpcErr)
 	}
-	// Both repos searched (the stub's FindNodes ignores repo_id so each
-	// fanout target returns both nodes; the (repo_id,node_id) merge key
-	// dedupes to 2 entries per repo = 4 hits total).
 	if len(resp.Nodes) == 0 {
 		t.Fatalf("expected nodes from fanout, got empty result")
 	}
-	// repo_id MUST be populated on every hit when fanout is engaged, so
-	// callers can disambiguate which repo each hit belongs to.
 	for i, n := range resp.Nodes {
 		if n.RepoID == "" {
 			t.Errorf("nodes[%d] missing repo_id on fanout response: %+v", i, n)
@@ -1250,9 +1118,7 @@ func TestFindSymbol_FansOutWhenRepoIDOmittedAndCwdMismatch(t *testing.T) {
 	}
 }
 
-// TestFindSymbol_NoFanoutWhenSingleRepoSoNoRepoIDLeaks pins: a
-// single-repo install must keep the pre-fanout wire shape — `repo_id` is
-// only emitted when the response actually crosses repos.
+// For environments with exactly one registered repository, repository IDs are omitted from query results to match the single-repository response format.
 func TestFindSymbol_NoFanoutWhenSingleRepoSoNoRepoIDLeaks(t *testing.T) {
 	store := newStubGraphStorage()
 	store.addNode(mustNode(t, "n1", "/abs/repo/main.go", "Foo", domain.KindFunction))
@@ -1276,9 +1142,7 @@ func TestFindSymbol_NoFanoutWhenSingleRepoSoNoRepoIDLeaks(t *testing.T) {
 	}
 }
 
-// TestFindSymbol_NoReposRegisteredStillErrors guards the empty-registry
-// edge case — fanout has nothing to span, so the original "no repos
-// registered" message must still surface.
+// If no repositories are registered in the system, querying symbols fails with CodeInvalidParams.
 func TestFindSymbol_NoReposRegisteredStillErrors(t *testing.T) {
 	store := newStubGraphStorage()
 	r := NewRegistry()
@@ -1294,13 +1158,9 @@ func TestFindSymbol_NoReposRegisteredStillErrors(t *testing.T) {
 	}
 }
 
-// TestGetFileNodes_BranchDefaultsToActiveBranch guards: when the
-// caller omits branch, the handler resolves it from the registered
-// active_branch instead of erroring — matching find_symbol et al.
+// If the branch parameter is omitted in a file nodes query, the repository's active branch is used as a default.
 func TestGetFileNodes_BranchDefaultsToActiveBranch(t *testing.T) {
 	store := newStubGraphStorage()
-	// Nodes are stored repo-relative; the absolute caller path
-	// below relativises to match.
 	n1 := mustNode(t, "n1", "pkg/promoted.go", "PromotedFunc", domain.KindFunction)
 	store.addNode(n1)
 
@@ -1314,7 +1174,6 @@ func TestGetFileNodes_BranchDefaultsToActiveBranch(t *testing.T) {
 	resp, rpcErr := dispatchGraph(t, r, "eng_get_file_nodes", map[string]string{
 		"file_path": "/abs/repo/pkg/promoted.go",
 		"repo_id":   "abcdef012345",
-		// branch intentionally omitted
 	})
 	if rpcErr != nil {
 		t.Fatalf("expected branch auto-resolution, got %+v", rpcErr)
@@ -1324,11 +1183,8 @@ func TestGetFileNodes_BranchDefaultsToActiveBranch(t *testing.T) {
 	}
 }
 
-// p95 benchmark — eng_find_symbol against 1000-node in-memory stub
-
 func BenchmarkFindSymbol(b *testing.B) {
 	store := newStubGraphStorage()
-	// Seed 1000 nodes with names like "Symbol0" … "Symbol999".
 	for i := range 1000 {
 		id := fmt.Sprintf("node-%d", i)
 		name := fmt.Sprintf("Symbol%d", i)
@@ -1365,7 +1221,6 @@ func BenchmarkFindSymbol(b *testing.B) {
 	}
 	b.StopTimer()
 
-	// Compute and report p95.
 	slices.Sort(latencies)
 	p95idx := int(float64(len(latencies)) * 0.95)
 	if p95idx >= len(latencies) {
