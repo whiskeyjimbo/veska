@@ -14,15 +14,30 @@ type fakeStore struct {
 	// gotExclude captures the excludeKinds the Finder forwarded.
 	gotExclude []string
 
+	// structural-side fixtures (Type-2).
+	structuralRows   []duplicates.ClonedNode
+	gotStructExclude []string
+
+	// captured CloneQuery scoping (repo/branch/path).
+	gotQuery       duplicates.CloneQuery
+	gotStructQuery duplicates.CloneQuery
+
 	// near-side fixtures.
 	edges       []duplicates.SimilarEdge
 	gotMinScore float32
 	gotNearExcl []string
 }
 
-func (f *fakeStore) ClonedNodes(_ context.Context, _, _ string, excludeKinds []string) ([]duplicates.ClonedNode, error) {
+func (f *fakeStore) ClonedNodes(_ context.Context, q duplicates.CloneQuery, excludeKinds []string) ([]duplicates.ClonedNode, error) {
 	f.gotExclude = excludeKinds
+	f.gotQuery = q
 	return f.rows, f.err
+}
+
+func (f *fakeStore) StructuralNodes(_ context.Context, q duplicates.CloneQuery, excludeKinds []string) ([]duplicates.ClonedNode, error) {
+	f.gotStructExclude = excludeKinds
+	f.gotStructQuery = q
+	return f.structuralRows, f.err
 }
 
 func (f *fakeStore) SimilarEdges(_ context.Context, _, _ string, minScore float32, excludeKinds []string) ([]duplicates.SimilarEdge, error) {
@@ -193,5 +208,31 @@ func TestExactClones_DropsSingletons(t *testing.T) {
 	}
 	if len(groups) != 0 {
 		t.Fatalf("want 0 groups for a singleton, got %d", len(groups))
+	}
+}
+
+func TestStructuralClones_GroupsByStructuralHashAndExcludesContainers(t *testing.T) {
+	t.Parallel()
+	store := &fakeStore{structuralRows: []duplicates.ClonedNode{
+		// Two renamed copies sharing one structural_hash → a Type-2 group.
+		{StructuralHash: "structA", ContentHash: "c1", NodeID: "n1", FilePath: "a.go", LineStart: 9, Kind: "function"},
+		{StructuralHash: "structA", ContentHash: "c2", NodeID: "n2", FilePath: "b.go", LineStart: 1, Kind: "function"},
+		// A singleton structural_hash must not form a group.
+		{StructuralHash: "structB", ContentHash: "c3", NodeID: "n3", FilePath: "c.go", LineStart: 1, Kind: "method"},
+	}}
+	finder, _ := duplicates.NewFinder(store, store, "")
+	groups, err := finder.StructuralClones(context.Background(), "r1", "main")
+	if err != nil {
+		t.Fatalf("StructuralClones: %v", err)
+	}
+	if len(groups) != 1 {
+		t.Fatalf("want 1 structural group, got %d", len(groups))
+	}
+	if groups[0].Size != 2 {
+		t.Errorf("want size 2, got %d", groups[0].Size)
+	}
+	// The container-kind exclusion list is forwarded to the store.
+	if len(store.gotStructExclude) == 0 {
+		t.Error("StructuralClones should forward ExcludedKinds to the store")
 	}
 }
