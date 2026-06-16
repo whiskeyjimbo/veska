@@ -33,7 +33,7 @@ def test_get_current_repo_uses_injected_cwd(mcp_client):
     that omits it (cwd_inject.go), and for eng_get_current_repo cwd is the
     sole resolution signal. So through the shim, calling with no cwd does
     NOT hit the daemon's sole-repo fallback (that path is reachable only by
-    a direct daemon client and is covered by the daemon unit tests) — it
+    a direct daemon client and is covered by the daemon unit tests) - it
     resolves against the test runner's cwd. Since the runner sits in the
     veska source tree, not a registered repo, the daemon answers with the
     loud 'no indexed repo found for cwd' error.

@@ -6,9 +6,9 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/cli/graphcmd"
 )
 
-// TestBlastModeFromFlags pins the seed-selection logic added in solov2-yh5a:
+// TestBlastModeFromFlags pins the seed-selection logic added in:
 // exactly one of {positional symbol, --dirty, --diff} must be chosen, and
-// --dirty/--diff reject a positional (they seed from changes, not a symbol).
+// dirty/--diff reject a positional (they seed from changes, not a symbol).
 func TestBlastModeFromFlags(t *testing.T) {
 	tests := []struct {
 		name     string

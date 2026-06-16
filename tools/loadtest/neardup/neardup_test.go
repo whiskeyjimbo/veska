@@ -1,21 +1,19 @@
 //go:build eval
 
-// Near-duplicate threshold-calibration harness (solov2-md3n). Embeds the
+// Near-duplicate threshold-calibration harness. Embeds the
 // curated corpus through one or more real providers, scores every pair through
 // the production memvec path (Score = 1/(1+L2^2)), and reports the per-tier
 // score distributions so DefaultNearThreshold can be set with data rather than
 // guessed.
-//
 // Run:
 //
 //	go test -tags "eval embed_model" -run TestNearDupThreshold -v \
-//	    ./tools/loadtest/neardup/
+//	    /tools/loadtest/neardup/
 //
 // embed_model compiles in the potion-code-16M weights so model2vec runs with
 // no service and no download. nomic-embed-text is measured additionally when
 // an Ollama daemon is reachable (VESKA_OLLAMA_URL, default localhost:11434);
 // it is skipped cleanly otherwise.
-//
 // The threshold lives in an embedder-specific score space (vectors from
 // different models are not comparable), so the harness reports EACH embedder
 // separately and the chosen DefaultNearThreshold names the model it was

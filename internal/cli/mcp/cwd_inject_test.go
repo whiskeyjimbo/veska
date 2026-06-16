@@ -8,7 +8,7 @@ import (
 	"testing"
 )
 
-// solov2-k8zc verification — the shim rewrites eng_get_current_repo
+// verification — the shim rewrites eng_get_current_repo
 // requests that omit cwd to carry the shim's working directory.
 
 func TestMaybeInjectCwd_AddsCwdWhenMissing(t *testing.T) {
@@ -38,7 +38,7 @@ func TestMaybeInjectCwd_KeepsExplicitCwd(t *testing.T) {
 	}
 }
 
-// TestMaybeInjectCwd_AllEngMethodsRewritten guards solov2-ktz0: every eng_*
+// TestMaybeInjectCwd_AllEngMethodsRewritten guards: every eng_*
 // call gets cwd injected (when missing) so the daemon can fall back to it
 // when repo_id is omitted. Non-eng_* methods (and frames that already carry
 // cwd) still pass through unchanged.
@@ -107,7 +107,7 @@ func TestInjectCwdAndCopy_StreamRewritesOnlyTargetFrames(t *testing.T) {
 		t.Fatalf("eng_get_current_repo frame should now carry cwd, got: %s", lines[1])
 	}
 	// Frames 1 and 3 are also eng_* calls — they should now carry cwd too
-	// (solov2-ktz0 broadened the rewrite from just eng_get_current_repo to
+	// ( broadened the rewrite from just eng_get_current_repo to
 	// every eng_* method).
 	var frame1, frame3 map[string]any
 	_ = json.Unmarshal([]byte(lines[0]), &frame1)

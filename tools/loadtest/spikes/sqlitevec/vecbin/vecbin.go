@@ -1,5 +1,4 @@
 // Package vecbin provides read/write helpers for the flat binary vector file format.
-//
 // Format: little-endian uint64 count, then count*768 little-endian float32 values.
 // There is no per-vector dimension prefix.
 package vecbin

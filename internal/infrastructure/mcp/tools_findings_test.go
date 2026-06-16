@@ -114,10 +114,7 @@ func findingState(t *testing.T, db *sql.DB, findingID, branch string) string {
 	return s
 }
 
-// ---------------------------------------------------------------------------
 // helpers
-// ---------------------------------------------------------------------------
-
 // newFindingsDB creates an in-memory SQLite DB seeded with the findings table.
 func newFindingsDB(t *testing.T) *sql.DB {
 	t.Helper()
@@ -151,7 +148,7 @@ func newFindingsDB(t *testing.T) *sql.DB {
 		t.Fatalf("create findings table: %v", err)
 	}
 	// Minimal suppressions table so eng_list_findings' LEFT JOIN compiles
-	// . Tests that don't seed suppressions get the empty-join
+	// Tests that don't seed suppressions get the empty-join
 	// case automatically.
 	_, err = db.Exec(`
 		CREATE TABLE IF NOT EXISTS suppressions (
@@ -171,7 +168,7 @@ func newFindingsDB(t *testing.T) *sql.DB {
 		t.Fatalf("create suppressions table: %v", err)
 	}
 	// Minimal nodes table so eng_list_findings' LEFT JOIN can resolve a
-	// file_path from a node-anchored finding (solov2-izh6.25). Dead-code
+	// file_path from a node-anchored finding. Dead-code
 	// findings only carry node_id; without the join, the FILE column on
 	// the CLI is empty even though the file path is recoverable.
 	_, err = db.Exec(`
@@ -190,7 +187,7 @@ func newFindingsDB(t *testing.T) *sql.DB {
 
 // seedNodeAnchoredFinding inserts a finding row anchored on a node_id
 // (no file_path of its own) plus the matching node row so the resolver
-// in eng_list_findings can recover a path. Used for solov2-izh6.25.
+// in eng_list_findings can recover a path. Used for.
 func seedNodeAnchoredFinding(t *testing.T, db *sql.DB, findingID, branch, repoID, nodeID, nodeFile string) {
 	t.Helper()
 	if _, err := db.Exec(`
@@ -235,9 +232,7 @@ func dispatchFinding(t *testing.T, r *Registry, actor domain.Actor, params map[s
 	return r.Dispatch(context.Background(), actor, req)
 }
 
-// ---------------------------------------------------------------------------
 // Tests
-// ---------------------------------------------------------------------------
 
 func TestCloseFindings_HumanActionGate(t *testing.T) {
 	tests := []struct {
@@ -366,7 +361,7 @@ func TestCloseFindings_MessageContainsFindingAndSeverity(t *testing.T) {
 	}
 }
 
-// TestCloseFindings_PreservesCreatorActor guards solov2-iyog: closing a
+// TestCloseFindings_PreservesCreatorActor guards: closing a
 // finding must NOT overwrite actor_id/actor_kind on the row. Those columns
 // mean "who created/last-saved this finding"; the closer is recorded
 // independently in the audit log. Previously a service-created TODO surfaced
@@ -457,9 +452,7 @@ func TestCloseFindings_MissingParams(t *testing.T) {
 	}
 }
 
-// ---------------------------------------------------------------------------
 // eng_list_findings tests
-// ---------------------------------------------------------------------------
 
 func dispatchListFindings(t *testing.T, r *Registry, actor domain.Actor, params map[string]string) (any, *RPCError) {
 	t.Helper()
@@ -499,9 +492,9 @@ func TestListFindings_Empty(t *testing.T) {
 	}
 }
 
-// TestListFindings_EmitsDegradedReasonsAsEmptyArray pins solov2-7cw7: the
+// TestListFindings_EmitsDegradedReasonsAsEmptyArray pins: the
 // README's "Conventions across the tool surface" promises every tool
-// includes degraded_reasons (as [] when nothing is degraded). eng_list_findings
+// includes degraded_reasons (as when nothing is degraded). eng_list_findings
 // previously omitted the field entirely.
 func TestListFindings_EmitsDegradedReasonsAsEmptyArray(t *testing.T) {
 	db := newFindingsDB(t)
@@ -521,7 +514,7 @@ func TestListFindings_EmitsDegradedReasonsAsEmptyArray(t *testing.T) {
 	}
 }
 
-// TestListFindings_ResolvesFilePathFromNodeAnchor guards solov2-izh6.25:
+// TestListFindings_ResolvesFilePathFromNodeAnchor guards:
 // node-anchored findings (dead-code is the dominant case — see
 // internal/application/checks/deadcode.go: only WithNodeAnchor is set)
 // must surface a file_path in the response by joining nodes.file_path on
@@ -583,11 +576,11 @@ func TestListFindings_DefaultStateIsOpen(t *testing.T) {
 	}
 }
 
-// TestListFindings_StateAnyReturnsEveryLifecycleRow pins solov2-f3ep:
+// TestListFindings_StateAnyReturnsEveryLifecycleRow pins:
 // state="any" disables the per-state WHERE clause so closed/resolved
 // findings come back in the same query as open ones. This is the daemon
 // side of `veska findings list --all --repo <id>` ("all states, one repo")
-// — previously the CLI rejected that combination with a "mutually
+// previously the CLI rejected that combination with a "mutually
 // exclusive" error.
 func TestListFindings_StateAnyReturnsEveryLifecycleRow(t *testing.T) {
 	db := newFindingsDB(t)
@@ -611,7 +604,7 @@ func TestListFindings_StateAnyReturnsEveryLifecycleRow(t *testing.T) {
 	}
 }
 
-// TestListFindings_ResolvesRepoIDFromCWD pins solov2-ig2x: when the caller
+// TestListFindings_ResolvesRepoIDFromCWD pins: when the caller
 // omits repo_id but the shim has injected a cwd that matches a registered
 // repo's RootPath, eng_list_findings must resolve via the RepoLister instead
 // of erroring "repo_id is required".
@@ -641,9 +634,9 @@ func TestListFindings_ResolvesRepoIDFromCWD(t *testing.T) {
 	}
 }
 
-// TestListFindings_AcceptsShortID pins solov2-s7k0: eng_list_findings must
+// TestListFindings_AcceptsShortID pins: eng_list_findings must
 // resolve a 12-char short_id prefix the same way the graph tools do, instead
-// of querying findings by the raw prefix and silently returning [].
+// of querying findings by the raw prefix and silently returning.
 func TestListFindings_AcceptsShortID(t *testing.T) {
 	const fullID = "62d72fa222a0193f8fa927f95dd6a3575c7566964c8b8f6ba14aafc5a1ea871f"
 	db := newFindingsDB(t)
@@ -680,7 +673,7 @@ func TestListFindings_AcceptsShortID(t *testing.T) {
 }
 
 // seedFindingRule inserts a finding with an explicit rule so tests can
-// exercise the rule filter .
+// exercise the rule filter.
 func seedFindingRule(t *testing.T, db *sql.DB, findingID, branch, repoID, severity, state, rule string) {
 	t.Helper()
 	_, err := db.Exec(`
@@ -693,7 +686,7 @@ func seedFindingRule(t *testing.T, db *sql.DB, findingID, branch, repoID, severi
 	}
 }
 
-// TestListFindings_RuleFilter pins solov2-c7sy: the rule param must narrow
+// TestListFindings_RuleFilter pins: the rule param must narrow
 // results to that rule. Before the fix the param was silently ignored and
 // the full unfiltered list came back.
 func TestListFindings_RuleFilter(t *testing.T) {
@@ -749,9 +742,7 @@ func TestListFindings_SeverityFilter(t *testing.T) {
 	}
 }
 
-// ---------------------------------------------------------------------------
 // eng_reopen_finding tests
-// ---------------------------------------------------------------------------
 
 func dispatchReopenFinding(t *testing.T, r *Registry, actor domain.Actor, params map[string]string) (any, *RPCError) {
 	t.Helper()
@@ -804,7 +795,7 @@ func TestReopenFinding_Basic(t *testing.T) {
 
 // TestReopenFinding_RecordsReasonInAudit guards the reopen/close audit-reason
 // symmetry: an optional reopen reason is recorded in the audit entry (close
-// already requires + records one). solov2-nmps verify follow-up.
+// already requires + records one). verify follow-up.
 func TestReopenFinding_RecordsReasonInAudit(t *testing.T) {
 	db := newFindingsDB(t)
 	seedFinding(t, db, "reopen-reason", "main", "repo-1", "low", "closed")
@@ -877,10 +868,7 @@ func TestReopenFinding_NotFound(t *testing.T) {
 	}
 }
 
-// ---------------------------------------------------------------------------
 // Auto-link accept-flow tests (m3.04.3)
-// ---------------------------------------------------------------------------
-
 // TestCloseFinding_AutoLinkAccept_PromotesEdge verifies the canonical happy
 // path: accept on an auto-link finding promotes its anchored edge from
 // 'unresolved' to 'definite' in the same tx.
@@ -934,7 +922,7 @@ func TestCloseFinding_AutoLinkAccept_PromotesEdge(t *testing.T) {
 	if !closedAt.Valid || closedAt.Int64 == 0 {
 		t.Errorf("expected closed_at to be set, got %v", closedAt)
 	}
-	// solov2-iyog: close no longer overwrites actor_id/actor_kind. The row
+	// close no longer overwrites actor_id/actor_kind. The row
 	// keeps its creator (seeded as actor:seed/agent); the closer is recorded
 	// in the audit log via the finding.accept op asserted above.
 	if actorID != "actor:seed" || actorKind != "agent" {
@@ -982,7 +970,7 @@ func TestCloseFinding_AutoLinkSuppress_LeavesEdgeUnresolved(t *testing.T) {
 // ensure that even an edge sharing the finding's node_id is untouched.
 func TestCloseFinding_NonAutoLinkAccept_LeavesEdgesAlone(t *testing.T) {
 	db := newFindingsDBWithEdges(t)
-	// Seed an edge whose id matches what could be misread as an anchor —
+	// Seed an edge whose id matches what could be misread as an anchor
 	// this guards against accidental promotion regardless of rule.
 	seedEdge(t, db, "node-123", "main", "repo-1", "unresolved")
 
@@ -1112,7 +1100,6 @@ func TestCloseFinding_AutoLinkAccept_AlreadyDefinite(t *testing.T) {
 // TestCloseFinding_AutoLinkAccept_AtomicRollback proves the finding-close and
 // edge-promote share a transaction: forcing the edges table into a state where
 // the promotion UPDATE fails must leave the finding in state='open'.
-//
 // We trigger a failure by dropping the edges table so the UPDATE returns a
 // "no such table" error AFTER the SELECT but BEFORE the finding UPDATE.
 func TestCloseFinding_AutoLinkAccept_AtomicRollback(t *testing.T) {
@@ -1209,10 +1196,7 @@ func TestReopenFinding_MissingParams(t *testing.T) {
 	}
 }
 
-// ---------------------------------------------------------------------------
-// review-pipeline-failure: close-flips-row contract (solov2-nz2.3 AC2)
-// ---------------------------------------------------------------------------
-
+// review-pipeline-failure: close-flips-row contract ( AC2)
 // newFindingsDBWithQueue adds the post_promotion_queue table so the
 // review-pipeline-failure close path can flip a failed review row to done.
 func newFindingsDBWithQueue(t *testing.T) *sql.DB {

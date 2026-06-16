@@ -15,7 +15,7 @@ import (
 
 const memDSN = "file::memory:?mode=memory&cache=shared"
 
-// TestOpenPools_ForeignKeyCascade pins solov2-d78r: deleting a repos row must
+// TestOpenPools_ForeignKeyCascade pins: deleting a repos row must
 // cascade-delete its child rows. This only works if foreign_keys is ON for the
 // connection running the DELETE — and the pool opens many connections, so the
 // pragma must be in the DSN (applied per-connection), not a one-shot Exec.
@@ -129,14 +129,14 @@ func TestOpenPools_WALMode(t *testing.T) {
 			continue
 		}
 		// In-memory SQLite always returns "memory" for journal_mode; WAL is only
-		// available for file-backed databases.  Accept both.
+		// available for file-backed databases. Accept both.
 		if mode != "wal" && mode != "memory" {
 			t.Errorf("%s: journal_mode = %q; want \"wal\" or \"memory\"", h.name, mode)
 		}
 	}
 }
 
-// TestOpenPools_ConcurrentWrites_NoSQLITEBUSY pins solov2-jtl5.5: concurrent
+// TestOpenPools_ConcurrentWrites_NoSQLITEBUSY pins: concurrent
 // writers (formerly via separate WriteHot/WriteEmbed pools) must not surface
 // SQLITE_BUSY mid-transaction. The single Write pool's MaxOpenConns=1 forces
 // in-process writers to queue on the *sql.DB conn rather than racing for the

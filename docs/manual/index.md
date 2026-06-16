@@ -2,7 +2,7 @@
 
 **Veska** is a local code-intelligence daemon. It runs on your laptop, parses
 your repository into a code graph (nodes + edges), embeds that graph
-semantically, and serves both to your editor and your AI agent over MCP — so
+semantically, and serves both to your editor and your AI agent over MCP - so
 they reason from the same structural ground truth instead of guessing.
 
 This is the **operator and user manual**: how to install Veska, run the daemon,
@@ -14,7 +14,7 @@ architecture decision records, see the design set under `docs/design/`.
 - **Grounded structural answers.** Every function, type, file, and call traces
   to a node, edge, or commit.
 - **Semantic search.** Embeds your graph with an in-process embedder
-  (model2vec by default — no external service), with a BM25 lexical fallback
+  (model2vec by default - no external service), with a BM25 lexical fallback
   while indexing catches up.
 - **Promotion checks.** On every commit, advisory findings flag dead code,
   contract drift, leaked secrets, and vulnerable `go.mod` dependencies.
@@ -28,8 +28,8 @@ architecture decision records, see the design set under `docs/design/`.
 
 | Invocation | Role |
 |---|---|
-| `veska` | CLI — `init`, `repo`, `reindex`, `service`, `doctor`, `backup`, `wiki`, … |
-| `veska-daemon` | Long-running process — owns the SQLite store, the file watcher, the embedder, and the post-promotion queue. |
+| `veska` | CLI - `init`, `repo`, `reindex`, `service`, `doctor`, `backup`, `wiki`, … |
+| `veska-daemon` | Long-running process - owns the SQLite store, the file watcher, the embedder, and the post-promotion queue. |
 | `veska-mcp` | Thin stdio shim proxying an editor's MCP connection to the daemon's Unix socket. |
 
 ## Where to go next

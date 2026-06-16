@@ -104,7 +104,7 @@ func TestRunReport_E2E_PopulatesSections(t *testing.T) {
 	if r.BlastRadius.NodeCount == 0 || len(r.BlastRadius.Entries) == 0 {
 		t.Fatalf("blast_radius section empty; got %+v", r.BlastRadius)
 	}
-	// solov2-zvh6.13: no container/chunk noise kinds leak into the blast list.
+	// no container/chunk noise kinds leak into the blast list.
 	for _, e := range r.BlastRadius.Entries {
 		switch e.Kind {
 		case "chunk", "package", "module", "file":

@@ -13,9 +13,9 @@ import (
 // showcurrent.go backs `veska repo show <id>` (eng_get_repo) and `veska repo
 // current` (eng_get_current_repo). Both return a {repo: RepoView} envelope, so
 // they decode into the same RepoView the list path uses and render through the
-// shared PrintRepoTable for output consistency. solov2-yh5a.
+// shared PrintRepoTable for output consistency.
 
-// repoEnvelope decodes the {repo, ...} shape both tools return.
+// repoEnvelope decodes the {repo,.} shape both tools return.
 type repoEnvelope struct {
 	Repo RepoView `json:"repo"`
 }

@@ -3,7 +3,7 @@
 -- (byte-identical only) misses.
 --
 -- structural_hash is a SHA-256 over the node's identifier-/literal-normalised
--- token stream (computed at parse time from the AST — see
+-- token stream (computed at parse time from the AST - see
 -- internal/infrastructure/treesitter/structural.go). Two functions collide here
 -- when they have the same shape after renaming locals/params/literals, even if
 -- their verbatim text (and thus content_hash) differs.

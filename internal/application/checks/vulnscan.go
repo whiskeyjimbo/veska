@@ -25,13 +25,12 @@ type RepoRootFunc func(ctx context.Context, repoID string) (string, error)
 // findings on promotion. When go.mod is among the promotion's changed files
 // it reads the module's dependencies and scans them against the offline
 // advisory cache, emitting one finding per matched advisory.
-//
 // The check is offline: dependency resolution is textual (manifest.ReadGoMod)
 // and VulnSource.Scan performs no network I/O. Findings anchor on the go.mod
 // path with a discriminator key of repoID+advisoryID+package, which makes the
-// resulting finding_ids branch-stable, idempotent, and repo-namespaced —
+// resulting finding_ids branch-stable, idempotent, and repo-namespaced
 // re-running on unchanged state yields byte-identical finding_ids, while two
-// repos sharing one advisory keep distinct finding_ids (solov2-uej9.1).
+// repos sharing one advisory keep distinct finding_ids.
 type VulnScanCheck struct {
 	src      ports.VulnSource
 	repoRoot RepoRootFunc
@@ -51,8 +50,7 @@ func (c *VulnScanCheck) Name() string { return "vuln-scan" }
 // findings under rule 'vulnerable_dependency': every Run resolves the
 // complete dep set, so any prior open finding whose advisory no longer
 // matches the resolved version must be auto-closed. See
-// checks.AuthoritativeChecker and solov2-jvrc.
-//
+// checks.AuthoritativeChecker and.
 // Returns ok=false when the scope is ambiguous (missing repo, empty
 // branch) so the Runner does not over-close on a partial input.
 func (c *VulnScanCheck) AuthoritativeRule(in Input) (string, bool) {
@@ -65,7 +63,6 @@ func (c *VulnScanCheck) AuthoritativeRule(in Input) (string, bool) {
 // Run scans the module dependency set against the advisory cache when go.mod
 // is among the promotion's changed files. When the repo has no go.mod at all
 // it is a no-op returning (nil, nil) — no manifest, no scan.
-//
 // Historically this check skipped any promotion that didn't include go.mod in
 // its file list, which collapsed two distinct cases into "no scan": (a) the
 // commit really didn't touch go.mod, and (b) the promotion was a partial
@@ -73,7 +70,7 @@ func (c *VulnScanCheck) AuthoritativeRule(in Input) (string, bool) {
 // only restages the latest commit's changed files). Case (b) meant
 // retroactive vuln scans after enabling [vuln_source] never fired on repos
 // whose last commit was unrelated to deps — exactly the gap that hit during
-// junior-journey round 3 (solov2-jtl5.4). The scan against the OSV cache is
+// junior-journey round 3. The scan against the OSV cache is
 // ~35ms; running it on every promote is cheap, and findings dedup by
 // finding_key so a no-change re-scan is a no-op at the storage layer.
 func (c *VulnScanCheck) Run(ctx context.Context, in Input) ([]*domain.Finding, error) {
@@ -98,7 +95,7 @@ func (c *VulnScanCheck) Run(ctx context.Context, in Input) ([]*domain.Finding, e
 	if err != nil {
 		return nil, fmt.Errorf("vuln-scan: parse go.mod: %w", err)
 	}
-	// solov2-5dxw: build module->line map so the finding message points
+	// build module->line map so the finding message points
 	// at the offending require line for editor jump-to. A parse error here
 	// would have failed manifest.ReadGoMod already; we ignore it and fall
 	// back to omitting the line if it somehow slips through.
@@ -116,7 +113,7 @@ func (c *VulnScanCheck) Run(ctx context.Context, in Input) ([]*domain.Finding, e
 	if err != nil {
 		return nil, err
 	}
-	// solov2-fw6z: per-promotion log line so operators can confirm the
+	// per-promotion log line so operators can confirm the
 	// check ran for a given git_sha. The 'vulnrefresh' log lines only
 	// reflect the OSV cache pull.
 	slog.Info("vuln-scan: scanned",
@@ -132,14 +129,13 @@ func (c *VulnScanCheck) Run(ctx context.Context, in Input) ([]*domain.Finding, e
 // ScanManifestDeps matches deps against the advisory source and builds one
 // vulnerable_dependency finding per match, anchored on manifestPath. It is the
 // finding-construction core shared by VulnScanCheck.Run (which reads go.mod
-// from disk) and the net-new security diff gate (solov2-zvh6.1, which scans a
+// from disk) and the net-new security diff gate (, which scans a
 // manifest's content at two refs and diffs by finding_id). lineFor maps a
 // package to its line in the manifest for an editor-clickable message; pass nil
 // to omit line numbers — it never affects the finding_id (key = repoID +
 // advisoryID + package, manifestPath the anchor), so the same advisory at a
 // different line yields the SAME finding_id, which is what makes the gate's
 // net-new-by-id diff line-stable.
-//
 // manifestPath generalises the historically-hardcoded "go.mod" so an additional
 // ecosystem's reader (registered in the gate) anchors on its own manifest. The
 // "go get" remediation hint stays Go-shaped until a multi-ecosystem source
@@ -152,9 +148,9 @@ func ScanManifestDeps(ctx context.Context, src ports.VulnSource, repoID, branch,
 
 	out := make([]*domain.Finding, 0, len(vulns))
 	for _, v := range vulns {
-		// solov2-fr2a: lead the message with the advisory ID so triage
+		// lead the message with the advisory ID so triage
 		// doesn't need to grep the OSV cache.
-		// solov2-5dxw: include the offending manifest line when known so
+		// include the offending manifest line when known so
 		// the message is editor-clickable (the findings table has no
 		// line column today).
 		loc := manifestPath
@@ -162,13 +158,13 @@ func ScanManifestDeps(ctx context.Context, src ports.VulnSource, repoID, branch,
 			loc = fmt.Sprintf("%s:%d", manifestPath, ln)
 		}
 		msg := fmt.Sprintf("%s [%s] %s: %s (affected range %s)", loc, v.AdvisoryID, v.Package, v.Summary, v.AffectedRange)
-		// solov2-ka54: when the OSV adapter dedupes aliased advisories
+		// when the OSV adapter dedupes aliased advisories
 		// (GHSA vs GO- vs CVE for the same vuln), cross-reference the
 		// suppressed IDs so users can still grep their tracker.
 		if len(v.Aliases) > 0 {
 			msg += "; aliases: " + strings.Join(v.Aliases, ", ")
 		}
-		// solov2-gpvy: append a remediation hint so the finding is
+		// append a remediation hint so the finding is
 		// directly actionable from `veska findings show` without a
 		// trip to the advisory website.
 		if v.FixedVersion != "" {
@@ -183,7 +179,7 @@ func ScanManifestDeps(ctx context.Context, src ports.VulnSource, repoID, branch,
 			Message:  msg,
 		},
 			domain.WithFileAnchor(manifestPath),
-			// solov2-uej9.1: namespace the finding key by repo id. The
+			// namespace the finding key by repo id. The
 			// finding_id is sha256(rule+anchor+key) with no repo_id, and the
 			// storage PK is (finding_id, branch) — so two repos sharing one
 			// advisory on the same branch would derive an identical

@@ -1,17 +1,17 @@
 """Agent persona workflow (solov2-nmps.5).
 
 An AI agent drives veska over MCP to ground its reasoning in the graph and to
-understand the blast radius of its in-flight (staged) edits — the live agent
+understand the blast radius of its in-flight (staged) edits - the live agent
 loop. Maps to SOLO-02:
 
   A1  ground in context  US-08.02  eng_get_context_pack (symbol mode)
   A2  walk the call graph US-02.02  eng_get_call_chain (GreetUser → normalizeName)
   A3  staging-aware blast US-02.02  eng_get_dirty_blast_radius, included_staging
 
-PARKED — task scoping. SOLO-02's task-anchored Agent stories (US-04.02,
+PARKED - task scoping. SOLO-02's task-anchored Agent stories (US-04.02,
 US-09.02: eng_set_active_task / task-mode context_pack / eng_get_task_history)
 are NOT reachable over the live MCP surface: RegisterTaskTools is parked off the
-daemon registry (no MCP path to create a task — see tools_tasks.go), so those
+daemon registry (no MCP path to create a task - see tools_tasks.go), so those
 calls return -32601. Filed as a persona-coverage finding under solov2-nmps; this
 test asserts the agent loop that IS live and will grow a task-scoping phase when
 the tools re-enable.

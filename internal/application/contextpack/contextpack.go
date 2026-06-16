@@ -1,26 +1,24 @@
 // Package contextpack assembles a token-bounded bundle of code-graph
-// context — relevant nodes, recent commits, open findings and tasks —
+// context — relevant nodes, recent commits, open findings and tasks
 // for a single symbol or a single task. It backs the eng_get_context_pack
 // MCP tool (M4 epic, m4.01).
-//
 // Two input modes are supported:
 //
-//   - {symbol}: relevant nodes = the FindNodes(symbol) result plus its
-//     blast radius; recent commits = FileHistory for those nodes' files;
-//     open findings = FindingQuerier scoped to those nodes; tasks = the
-//     repo's active task.
-//   - {task_id}: domain.Task carries no graph link, so the repo's
-//     working-tree diff (ChangedFiles) is treated as the symbol set —
-//     relevant nodes = nodes in the changed files (NodesInFile); commits,
-//     findings and tasks are derived from that node set plus the task.
+//	{symbol}: relevant nodes = the FindNodes(symbol) result plus its
+//	  blast radius; recent commits = FileHistory for those nodes' files;
+//	  open findings = FindingQuerier scoped to those nodes; tasks = the
+//	  repo's active task.
+//	{task_id}: domain.Task carries no graph link, so the repo's
+//	  working-tree diff (ChangedFiles) is treated as the symbol set
+//	  relevant nodes = nodes in the changed files (NodesInFile); commits,
+//	  findings and tasks are derived from that node set plus the task.
 //
 // The assembled bundle is clipped to a configurable token budget
 // (DefaultTokenBudget) using a deterministic byte-length heuristic:
 // lowest-priority sections are dropped/clipped first so an oversized
 // bundle is truncated, never rejected.
-//
 // The Assembler depends only on injected function types and the
-// blastradius application service — never on internal/infrastructure —
+// blastradius application service — never on internal/infrastructure
 // so the domain/application layering stays intact (make layercheck).
 package contextpack
 
@@ -45,13 +43,13 @@ var ErrMissingDependency = errors.New("contextpack: missing required dependency"
 const DefaultTokenBudget = 8192
 
 // PerNodeSnippetBytes is the per-node ceiling on inline source bytes
-// . 1500 bytes ≈ ~375 tokens by the 4-bytes-per-token
+// 1500 bytes ≈ ~375 tokens by the 4-bytes-per-token
 // heuristic — enough to capture a typical function body in full,
 // small enough that a 200-node blast radius (HardMaxNodes-ish) still
 // fits in DefaultTokenBudget after JSON overhead. The whole-pack
-// budget is enforced separately by clip(), so this is just a per-row
+// budget is enforced separately by clip, so this is just a per-row
 // guard against a single 50KB monster symbol drowning out everything
-// else before clip() even gets a chance to drop sections.
+// else before clip even gets a chance to drop sections.
 const PerNodeSnippetBytes = 1500
 
 // defaultCommitWindow is the look-back applied to FileHistory.
@@ -117,7 +115,7 @@ type NodeInfo struct {
 	Seed     bool   `json:"seed"`
 	HasOpen  bool   `json:"has_open_finding"`
 	// Snippet is the symbol's source, trimmed to PerNodeSnippetBytes so
-	// a single huge symbol cannot eat the bundle . Omitted
+	// a single huge symbol cannot eat the bundle. Omitted
 	// from JSON when empty so legacy callers and unsnapshotted nodes
 	// don't get a noisy empty field.
 	Snippet string `json:"snippet,omitempty"`
@@ -139,7 +137,7 @@ type Pack struct {
 	Query  string `json:"query"`
 	// Focus is the seed node — a convenience pointer to the same NodeInfo
 	// the agent would otherwise find via Nodes[?Seed==true]. Nil when no
-	// node matched the query .
+	// node matched the query.
 	Focus           *NodeInfo     `json:"focus,omitempty"`
 	Nodes           []NodeInfo    `json:"nodes"`
 	RecentCommits   []CommitInfo  `json:"recent_commits"`
@@ -251,7 +249,7 @@ func (a *Assembler) ForSymbol(ctx context.Context, repoID, branch, repoRoot, sym
 // ForNode assembles a context pack seeded on a known node_id. This gives
 // parity with the other graph-anchored MCP tools (call_chain, blast_radius)
 // that accept node_id directly when the caller already has it in hand
-// . It skips FindNodes — the seed is exact.
+// It skips FindNodes — the seed is exact.
 func (a *Assembler) ForNode(ctx context.Context, repoID, branch, repoRoot, nodeID string) (Pack, error) {
 	pack, err := a.assemble(ctx, repoID, branch, repoRoot, []string{nodeID})
 	if err != nil {
@@ -309,7 +307,7 @@ func (a *Assembler) assemble(ctx context.Context, repoID, branch, repoRoot strin
 	// Relevant nodes = seeds + blast radius. Walk BOTH directions so
 	// the pack covers "what this symbol calls" AND "who calls this
 	// symbol" — the default callers-only walk left Command.Execute
-	// returning just 2-3 nodes on cobra . MaxDepth/MaxNodes
+	// returning just 2-3 nodes on cobra. MaxDepth/MaxNodes
 	// keep their service defaults (3 / 200).
 	var entries []blastradius.Entry
 	if len(seedIDs) > 0 {
@@ -343,7 +341,7 @@ func (a *Assembler) assemble(ctx context.Context, repoID, branch, repoRoot strin
 			Snippet:  trimSnippet(e.Snippet, PerNodeSnippetBytes),
 		}
 		pack.Nodes = append(pack.Nodes, ni)
-		// solov2-liua: expose the first seed as a convenience pointer so
+		// expose the first seed as a convenience pointer so
 		// callers don't have to scan Nodes for Seed==true.
 		if isSeed && pack.Focus == nil {
 			seedCopy := ni
@@ -467,7 +465,7 @@ func estimateTokens(p *Pack) int {
 
 // trimSnippet caps s at max bytes, preserving UTF-8 by backing off to
 // the last rune boundary, and appends a single trailing newline +
-// "...\n" marker so consumers can tell the body was truncated. An
+// ".\n" marker so consumers can tell the body was truncated. An
 // empty input is passed through unchanged.
 func trimSnippet(s string, max int) string {
 	if len(s) <= max {

@@ -12,8 +12,7 @@ import (
 // FindTrackedRepoByModulePath returns the short_id of any registered tracked
 // (non-synthetic) repo whose module_path equals modulePath, or "" when no such
 // repo exists. Used by `veska deps index` to refuse indexing a vendored copy of
-// an already-tracked module (solov2-izh6.7).
-//
+// an already-tracked module.
 // The query lives here rather than in cmd/veska so the delivery layer holds no
 // SQL — it is the deps-index sibling of the resolution helpers above.
 func FindTrackedRepoByModulePath(ctx context.Context, db *sql.DB, modulePath string) (string, error) {
@@ -37,7 +36,7 @@ func FindTrackedRepoByModulePath(ctx context.Context, db *sql.DB, modulePath str
 // LookupRepoRootAndBranch is a thin direct-DB lookup used by `veska deps index`
 // when the daemon is offline (and so eng_get_repo isn't available). Accepts
 // everything ResolveCLIRepoID accepts: full repo_id, 12-char short_id, user
-// alias, or unambiguous prefix . Returns the canonical root path +
+// alias, or unambiguous prefix. Returns the canonical root path +
 // active branch for the resolved repo, defaulting the branch to "main".
 func LookupRepoRootAndBranch(ctx context.Context, db *sql.DB, repoID string) (root, branch string, err error) {
 	recs, err := repo.List(ctx, db)

@@ -1,4 +1,4 @@
-"""Alternative paths — equivalent ways to reach the same outcome.
+"""Alternative paths - equivalent ways to reach the same outcome.
 
 These tests don't exercise new functionality; they verify that two
 different paths through the system produce the same result. A divergence
@@ -26,7 +26,7 @@ def test_alternative_find_symbol_vs_get_node(mcp_client, repo_id, branch, target
         "repo_id": repo_id, "branch": branch, "symbol": target_symbol,
     })
     nodes = fs.get("nodes") or []
-    assert nodes, "find_symbol returned nothing — fixture poisoned"
+    assert nodes, "find_symbol returned nothing - fixture poisoned"
     fs_node = nodes[0]
 
     _, _, _, gn = mcp_client.call("eng_get_node", {
@@ -51,7 +51,7 @@ def test_alternative_get_file_nodes_absolute_vs_db_path(mcp_client, repo_id, bra
     Counter-example: a DIFFERENT absolute path that shares target_file's
     basename but lives under a bogus directory. The handler resolves
     *relative* paths against the repo root (tools_get_file_nodes.go), so a
-    bare basename is a legitimate relative path and not a sound probe — a
+    bare basename is a legitimate relative path and not a sound probe - a
     root-level file's basename rejoins to its own absolute path. An
     absolute bogus path skips that resolution and exercises pure exact
     match: it must return ZERO of the real nodes, or get_file_nodes is
@@ -61,7 +61,7 @@ def test_alternative_get_file_nodes_absolute_vs_db_path(mcp_client, repo_id, bra
     })
     assert ok
     abs_ids = {n["node_id"] for n in by_abs.get("nodes") or []}
-    assert abs_ids, "absolute path returned no nodes — fixture poisoned"
+    assert abs_ids, "absolute path returned no nodes - fixture poisoned"
 
     basename = os.path.basename(target_file)
     bogus = os.path.join("/__veska_nonexistent_dir__", basename)
@@ -70,11 +70,11 @@ def test_alternative_get_file_nodes_absolute_vs_db_path(mcp_client, repo_id, bra
     })
     bogus_ids = {n["node_id"] for n in by_bogus.get("nodes") or []}
     # Exact-match means the bogus path must hit ZERO of the real nodes.
-    # Any intersection — even a proper subset — is leakage; the old
+    # Any intersection - even a proper subset - is leakage; the old
     # `not (a & b) or a != b` form passed on partial overlap and so never
     # caught the bug it documents (solov2-eabj).
     assert abs_ids.isdisjoint(bogus_ids), (
-        "get_file_nodes matched a same-basename path under a bogus dir — "
+        "get_file_nodes matched a same-basename path under a bogus dir - "
         "it is matching on suffix/basename, not exact path, and would "
         "silently leak across same-named files in different dirs"
     )
@@ -85,7 +85,7 @@ def test_alternative_search_semantic_default_vs_explicit_limit(mcp_client, repo_
     explicit-limit=large result. Ranking within score-ties is not
     deterministic (sqlite-vec breaks them by insertion order), so we
     assert set-equality on the score-tied prefix rather than strict
-    list-order equality — a drift in the SET of top hits is the real
+    list-order equality - a drift in the SET of top hits is the real
     correctness signal."""
     _, _, _, with_explicit = mcp_client.call("eng_search_semantic", {
         "repo_id": repo_id, "branch": branch,
@@ -109,7 +109,7 @@ def test_alternative_search_semantic_default_vs_explicit_limit(mcp_client, repo_
         f"default-limit hits not in explicit-limit superset: {missing}"
     )
 
-    # The TOP hit must agree across runs — if the #1 result shuffles
+    # The TOP hit must agree across runs - if the #1 result shuffles
     # between calls the user-visible "best match" becomes inconsistent
     # and that IS a real bug worth pinning here.
     assert big[0]["node_id"] == small[0]["node_id"], (
@@ -122,7 +122,7 @@ def test_alternative_find_symbol_and_semantic_search_both_respond(mcp_client, re
       - eng_find_symbol(name) returns ≥1 exact match
       - eng_search_semantic(name) returns ≥1 ranked hit (any node)
 
-    We do NOT assert the semantic-top includes the exact name node — on a
+    We do NOT assert the semantic-top includes the exact name node - on a
     real-sized corpus (~thousands of nodes) bare-name queries have very
     flat score distributions and rank the target arbitrarily. The
     relevant invariant is that both APIs respond, not that semantic

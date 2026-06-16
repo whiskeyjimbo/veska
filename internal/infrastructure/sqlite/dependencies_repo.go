@@ -3,7 +3,7 @@
 // external module usage (every package-qualified call to a non-stdlib
 // import emits a row at promotion time — see promotion_store.go), so
 // aggregating it gives accurate per-module usage counts without
-// re-parsing go.mod .
+// re-parsing go.mod.
 
 package sqlite
 
@@ -28,7 +28,7 @@ func NewDependenciesRepo(readDB *sql.DB) *DependenciesRepo {
 
 // ListImports returns one row per (file, import_path) in (repoID, branch),
 // backing dependencies.ImportLister. Ordered by file_path so the
-// application-layer union is deterministic .
+// application-layer union is deterministic.
 func (r *DependenciesRepo) ListImports(ctx context.Context, repoID, branch string) ([]dependencies.ImportRow, error) {
 	const query = `
 		SELECT file_path, import_path, language

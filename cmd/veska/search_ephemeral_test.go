@@ -229,7 +229,7 @@ func TestIsGitURL_PreservesPositionalSemantics(t *testing.T) {
 
 // makeSecretSource creates a real git repo with a Go file that hard-codes a
 // synthetic AWS access-key — gitleaks's BuiltinScanner detects it and the
-// docs allowlist  does NOT cover this shape, so it survives
+// docs allowlist does NOT cover this shape, so it survives
 // to the findings table. Returns the absolute path of the new repo.
 func makeSecretSource(t *testing.T) string {
 	t.Helper()
@@ -260,7 +260,7 @@ func makeSecretSource(t *testing.T) string {
 	return dir
 }
 
-// TestSearchEphemeral_FirstPromotionRunsSecretCheck pins solov2-izh6.16:
+// TestSearchEphemeral_FirstPromotionRunsSecretCheck pins:
 // the in-process `veska search --repo <url>` path (and equivalently a
 // daemon-less `veska reindex`) must register the same post-promotion
 // check chain as `veska repo add --wait`. Before the fix the cold-scan
@@ -328,7 +328,7 @@ func TestSearchEphemeral_FirstPromotionRunsSecretCheck(t *testing.T) {
 	}
 }
 
-// TestEphemeralPromotionPrintsCheckSummary guards solov2-izh6.28: after
+// TestEphemeralPromotionPrintsCheckSummary guards: after
 // the first ephemeral cold scan completes, the search command emits a
 // one-line per-rule summary so a user who ran `veska search <q> --repo
 // <url>` sees the check chain ran (and what it found) before the search

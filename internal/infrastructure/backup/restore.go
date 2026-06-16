@@ -13,7 +13,7 @@ import (
 	"time"
 )
 
-// Sentinel errors for restore, mirroring SOLO-16 / SOLO-17 §4.4.
+// Sentinel errors for restore, mirroring /.
 var (
 	// ErrDaemonRunning is returned when a restore is attempted while the
 	// veska daemon is up. Restore is a non-running-only operation.
@@ -58,10 +58,8 @@ type RestoreResult struct {
 }
 
 // Restore restores a verified backup tarball into opts.VeskaHome.
-//
 // The operation is non-running-only; the caller must confirm the daemon is
-// stopped (see ErrDaemonRunning). Steps follow SOLO-17 §4.4:
-//
+// stopped (see ErrDaemonRunning). Steps follow:
 //  1. Verify the tarball; a corrupt archive aborts with ErrBackupCorrupt and
 //     leaves the veska home untouched.
 //  2. Rescue the existing veska.db/.db-wal/.db-shm to
@@ -198,7 +196,7 @@ func checkRestoredDB(dbPath string) error {
 	return nil
 }
 
-// extractTarGz extracts the .tar.gz at tarPath into destDir. Entry names are
+// extractTarGz extracts the.tar.gz at tarPath into destDir. Entry names are
 // cleaned and confined to destDir to defend against path traversal.
 func extractTarGz(tarPath, destDir string) error {
 	f, err := os.Open(tarPath)
@@ -286,7 +284,7 @@ func SelectPreMigration(backupDir string) (string, error) {
 	return selectNewest(backupDir, autoPrefix, "pre-migration snapshot")
 }
 
-// selectNewest returns the lexically-largest .tar.gz under backupDir whose
+// selectNewest returns the lexically-largest.tar.gz under backupDir whose
 // name starts with prefix. Backup filenames embed a sortable UTC timestamp,
 // so lexical order is chronological order.
 func selectNewest(backupDir, prefix, kind string) (string, error) {

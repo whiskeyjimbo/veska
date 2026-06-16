@@ -11,7 +11,7 @@ import (
 )
 
 // Config is the resolved daemon configuration. It mirrors the documented
-// surface in docs/operations/CONFIG-SURFACE.md. Sections that map to real
+// surface in Sections that map to real
 // current behaviour are loaded and consumed today; M5 sections (budget,
 // llm_generator, review) are decoded and validated but not all consumed yet.
 type Config struct {
@@ -34,7 +34,7 @@ type Config struct {
 	Blast              BlastConfig              `toml:"blast"`
 }
 
-// AutolinkConfig tunes the auto-link candidate computation (solov2-l8su). The
+// AutolinkConfig tunes the auto-link candidate computation. The
 // defaults mirror the autolink package constants (DefaultThreshold,
 // DefaultTopK) calibrated against the gate-3 nomic-embed-text fixture. Most
 // users should never touch these; a different embedder or repository layout is
@@ -49,7 +49,7 @@ type AutolinkConfig struct {
 	TopK int `toml:"top_k"`
 }
 
-// BlastConfig tunes the blast-radius BFS heuristics (solov2-l8su).
+// BlastConfig tunes the blast-radius BFS heuristics.
 type BlastConfig struct {
 	// HubDegreeThreshold gates BFS expansion through high-degree "registry"
 	// nodes (cobra rootCmd, http muxes). Nodes whose neighbour count exceeds
@@ -64,22 +64,22 @@ type BlastConfig struct {
 // hot_zone / entry_points pages are an opt-in convenience for users who want
 // them committed alongside their source. They're computed from the graph
 // either way, and the MCP tools eng_get_hot_zone / eng_get_entry_points
-// surface the same data on demand regardless of this flag .
+// surface the same data on demand regardless of this flag.
 type WikiConfig struct {
-	// WritePages, when true, makes the wiki handler write docs/veska/*.md
-	// into the user's repo working tree on every promotion. Default false —
+	// WritePages, when true, makes the wiki handler write
+	// into the user's repo working tree on every promotion. Default false
 	// no files are written, matching the README's "no files written to disk"
-	// claim. Flip on per-repo via a docs/veska/.veska-wiki sentinel file once
+	// claim. Flip on per-repo via a sentinel file once
 	// that flow lands; for now this is a global daemon switch.
 	WritePages bool `toml:"write_pages"`
 }
 
 // PromotionConfig tunes the synchronous promotion-pipeline checks (M7). Every
-// structural check ships on by default; listing a check's Name() in
+// structural check ships on by default; listing a check's Name in
 // DisabledChecks suppresses its registration in the daemon composition root.
 type PromotionConfig struct {
 	// DisabledChecks names structural checks to skip. Each entry matches a
-	// check's Name() (e.g. "secrets-scan"). An empty list keeps every check on.
+	// check's Name (e.g. "secrets-scan"). An empty list keeps every check on.
 	DisabledChecks []string `toml:"disabled_checks"`
 }
 
@@ -180,7 +180,7 @@ type ReviewConfig struct {
 	MaxTokensPerDay    int  `toml:"max_tokens_per_day"`
 }
 
-// BackupConfig holds the retention policy for veska backup prune (SOLO-17 §4.5).
+// BackupConfig holds the retention policy for veska backup prune.
 type BackupConfig struct {
 	// KeepMinCount is the number of most-recent user-initiated backups always
 	// kept regardless of age.

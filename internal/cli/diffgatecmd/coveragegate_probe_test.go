@@ -7,20 +7,19 @@ import (
 
 // This file LOCKS the untested-symbol gate's CALLS-edge proxy behaviour on Go
 // idioms that exercise a prod symbol WITHOUT a direct static CALLS edge from a
-// test file (probed in solov2-zvh6.10). Each test modifies a prod symbol that IS
+// test file (probed in ). Each test modifies a prod symbol that IS
 // exercised by a test via the named idiom and asserts the CURRENT gate verdict,
 // so the documented proxy limit is a regression lock, not a silent surprise.
-//
 // Outcome of the probe (see untested.go "Proxy limits"):
-//   - func-value (local-var, callback-arg) and table-driven struct field:
-//     no edge is produced → false-FAIL. Fix tracked as solov2-zvh6.15. FLIP the
+//   func-value (local-var, callback-arg) and table-driven struct field:
+//     no edge is produced → false-FAIL. Fix tracked as. FLIP the
 //     asserts here to PASS when it lands.
-//   - embedded method promotion WITHOUT an interface: false-FAIL. solov2-zvh6.16.
-//   - embedded method satisfying an INTERFACE: already suppressed by the
-//     interface-dispatch fix (solov2-zvh6.9) → PASSES today. Locked as PASS.
-//   - transitive-only coverage: false-FAIL. The principled fix is the
-//     transitive reverse map, solov2-v6de.1.
-//   - a DIRECT test call PASSES (control).
+//   embedded method promotion WITHOUT an interface: false-FAIL.
+//   embedded method satisfying an INTERFACE: already suppressed by the
+//     interface-dispatch fix → PASSES today. Locked as PASS.
+//   transitive-only coverage: false-FAIL. The principled fix is the
+//     transitive reverse map,.
+//   a DIRECT test call PASSES (control).
 
 // proxyProbe is one untested-gate proxy-limit fixture: a prod file (base→cand
 // body change) plus the test file that exercises the prod symbol via the idiom
@@ -91,7 +90,7 @@ func TestUntestedProxyLimit_TableDrivenStructField(t *testing.T) {
 	assertProxyLimit(t, v, err, "solov2-zvh6.15")
 }
 
-// embedded-struct method promotion WITHOUT an interface (w.Do() binds to a
+// embedded-struct method promotion WITHOUT an interface (w.Do binds to a
 // non-existent Wrap.Do, not Base.Do).
 func TestUntestedProxyLimit_EmbeddedMethodNoInterface(t *testing.T) {
 	v, err := probeUntestedModify(t, proxyProbe{

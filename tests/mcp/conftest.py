@@ -32,7 +32,7 @@ _W = 64
 
 # Transient JSON-RPC error substrings that warrant a retry (case-insensitive
 # match against the error text). New SQLITE_BUSY-class patterns get added
-# here without touching MCPClient.call — the predicate stays closed for
+# here without touching MCPClient.call - the predicate stays closed for
 # modification, open for extension (solov2-seut).
 _TRANSIENT_ERROR_PATTERNS = (
     "database is locked",
@@ -86,7 +86,7 @@ class MCPClient:
 
     Transport only: every call's request/response is handed to the injected
     ``transcript`` sink (default: the human-readable _print_call) so this
-    class has a single reason to change — the JSON-RPC framing."""
+    class has a single reason to change - the JSON-RPC framing."""
 
     def __init__(self, binary: str = "./bin/veska-mcp", transcript: Transcript = _print_call):
         self._transcript = transcript
@@ -140,7 +140,7 @@ class MCPClient:
             if "error" in resp:
                 last_text = json.dumps(resp["error"], indent=2)
                 last_err = resp["error"]
-                # Transient locking — retry without surfacing the failure
+                # Transient locking - retry without surfacing the failure
                 # to the transcript so a successful retry reads cleanly.
                 if _is_transient_error(last_text) and attempt < retries - 1:
                     time.sleep(0.05 * (attempt + 1))
@@ -155,7 +155,7 @@ class MCPClient:
             self._transcript(name, args or {}, True, text, elapsed)
             return True, text, elapsed, result if isinstance(result, dict) else {}
 
-        # Exhausted retries — return the last error.
+        # Exhausted retries - return the last error.
         elapsed = (time.monotonic() - t0) * 1000
         self._transcript(name, args or {}, False, last_text, elapsed)
         return False, last_text, elapsed, last_err
@@ -185,7 +185,7 @@ def mcp_client(veska_home):
     is missing or the daemon's mcp.sock isn't reachable."""
     binary = Path(os.environ.get("VESKA_BIN_DIR", "./bin")) / "veska-mcp"
     if not binary.exists():
-        pytest.skip(f"{binary} not built — run `make build` first")
+        pytest.skip(f"{binary} not built - run `make build` first")
 
     client = MCPClient(str(binary))
 
@@ -204,7 +204,7 @@ def mcp_client(veska_home):
 @pytest.fixture(scope="session")
 def repo_id(mcp_client) -> str:
     """Return a known repo_id with promoted content. Reads the live daemon's
-    eng_list_repos and prefers the repo with the most promoted nodes — this
+    eng_list_repos and prefers the repo with the most promoted nodes - this
     avoids the trap of selecting an empty or orphaned entry (e.g. a stale
     row from a test that crashed before its eng_remove_repo cleanup ran).
     Skips when nothing is registered."""
@@ -213,7 +213,7 @@ def repo_id(mcp_client) -> str:
         pytest.skip("eng_list_repos failed")
     repos = result.get("repos", []) if isinstance(result, dict) else []
     if not repos:
-        pytest.skip("No repos registered — run `veska repo add <path>` first")
+        pytest.skip("No repos registered - run `veska repo add <path>` first")
 
     # Rank by node count to skip empty/orphaned rows.
     best, best_n = None, -1
@@ -225,7 +225,7 @@ def repo_id(mcp_client) -> str:
             best, best_n = rid, n
     if best_n <= 0:
         pytest.skip(
-            "No repo has promoted nodes — run `veska reindex <path>` against a "
+            "No repo has promoted nodes - run `veska reindex <path>` against a "
             "registered repo first"
         )
     return best
@@ -243,7 +243,7 @@ def branch(repo_id) -> str:
 
 @pytest.fixture(scope="session")
 def target_symbol(repo_id, branch) -> str:
-    """A symbol guaranteed to exist in the repo's promoted graph — picks the
+    """A symbol guaranteed to exist in the repo's promoted graph - picks the
     most line-spanning function so cross-validation queries have something
     meaningful to compare against."""
     rows = query(
@@ -256,13 +256,13 @@ def target_symbol(repo_id, branch) -> str:
         (repo_id, branch),
     )
     if not rows:
-        # Fall back to any node — useful for non-Go fixtures.
+        # Fall back to any node - useful for non-Go fixtures.
         rows = query(
             "SELECT symbol_path FROM nodes WHERE repo_id = ? AND branch = ? LIMIT 1",
             (repo_id, branch),
         )
     if not rows:
-        pytest.skip("Repo has no promoted nodes — run `veska reindex` first")
+        pytest.skip("Repo has no promoted nodes - run `veska reindex` first")
     return rows[0]["symbol_path"]
 
 
@@ -304,9 +304,9 @@ def fixture_summary(repo_id, branch):
 @pytest.fixture
 def open_finding(repo_id, branch) -> str:
     """Id of one open finding for the active repo/branch. Shared by the
-    findings and suppressions suites — both need a live finding to drive
+    findings and suppressions suites - both need a live finding to drive
     their lifecycle round-trips. Skips when none exist (promote first)."""
     fid = any_open_finding(repo_id, branch)
     if not fid:
-        pytest.skip("no open finding to exercise — promote first")
+        pytest.skip("no open finding to exercise - promote first")
     return fid

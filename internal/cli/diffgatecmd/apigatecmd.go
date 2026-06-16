@@ -38,9 +38,8 @@ type apiGateReport struct {
 // re-promotes the candidate's changed files into a throwaway clone of the base
 // graph (so each changed node's prev_signature is set to its base signature and
 // signature to the candidate's), reads the drifted nodes over the changed files,
-// and FAILs on any whose visibility flag is exported (solov2-zvh6.2).
-//
-// Index-ahead safety (solov2-zvh6.11): a node's prev_signature is the signature
+// and FAILs on any whose visibility flag is exported.
+// Index-ahead safety: a node's prev_signature is the signature
 // in the clone BEFORE the candidate re-promote. By cloning the after-state from
 // the base-ref-pinned clone (buildPinnedEphemeral re-promotes base-ref's changed
 // files) rather than the live index, prev_signature is the BASE-REF signature
@@ -76,7 +75,7 @@ func RunAPIBreak(ctx context.Context, p APIParams) error {
 		return fmt.Errorf("%w (%s)", ErrGateFailed, notIndexedDetail(ctx, pools.ReadDB, p.RepoID))
 	}
 
-	// Pin base to base-ref (index-ahead hardening, solov2-zvh6.11): drift is read
+	// Pin base to base-ref (index-ahead hardening): drift is read
 	// from an after-state clone derived from baseClonePath (not the live index),
 	// so prev_signature is the base-ref signature.
 	eph, changes, baseClonePath, cleanup, err := buildPinnedEphemeral(ctx, ephemeralParams{
@@ -121,13 +120,13 @@ func RunAPIBreak(ctx context.Context, p APIParams) error {
 // throwaway clone of the (base-ref-pinned) base graph and reads BOTH api-gate
 // signals off that single clone:
 //
-//   - drifted: contract-drift rows over the changed files (nodes whose
-//     prev_signature != signature). The re-promote is what sets prev_signature
-//     (base-ref) vs signature (candidate); the drift query is self-scoping to
-//     genuinely-changed signatures. Visibility filtering (exported-only) lives in
-//     the gate, leaving the whole-repo contract-drift querier unchanged.
-//   - candidateExported: the exported public-surface symbols over the changed
-//     files in the candidate after-state, for the removal/rename detector.
+//	drifted: contract-drift rows over the changed files (nodes whose
+//	  prev_signature != signature). The re-promote is what sets prev_signature
+//	  (base-ref) vs signature (candidate); the drift query is self-scoping to
+//	  genuinely-changed signatures. Visibility filtering (exported-only) lives in
+//	  the gate, leaving the whole-repo contract-drift querier unchanged.
+//	candidateExported: the exported public-surface symbols over the changed
+//	  files in the candidate after-state, for the removal/rename detector.
 //
 // Both reads hit the same clone so the DB is cloned and re-promoted once.
 //

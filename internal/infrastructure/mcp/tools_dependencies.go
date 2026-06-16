@@ -14,7 +14,7 @@ import (
 // repos are both required for the tool to do anything useful; when svc is
 // nil the tool is still registered but returns InternalError on every
 // call, keeping the registry uniform across composition roots that have
-// not wired the dependencies service .
+// not wired the dependencies service.
 func RegisterDependenciesTool(r *Registry, svc *dependencies.Service, repos application.RepoLister) {
 	r.MustRegister(ToolSpec{
 		Name:        "eng_list_dependencies",
@@ -55,8 +55,8 @@ func makeListDependenciesHandler(svc *dependencies.Service, repos application.Re
 		if err != nil {
 			return nil, &RPCError{Code: CodeInternalError, Message: fmt.Sprintf("list dependencies: %v", err)}
 		}
-		// Always serialize as a non-nil slice — empty result is `[]`, not
-		// omitted (solov2-2bdj contract).
+		// Always serialize as a non-nil slice — empty result is ``, not
+		// omitted ( contract).
 		if res.Dependencies == nil {
 			res.Dependencies = []dependencies.Dependency{}
 		}

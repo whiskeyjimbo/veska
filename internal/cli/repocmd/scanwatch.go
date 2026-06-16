@@ -79,7 +79,7 @@ func tailScanFailureReason(logPath, repoID string) string {
 // tailScanCompleteFiles scans the daemon log for the most-recent
 // "cold scan: complete" entry for repoID and returns its files_saved
 // count. Used as a last-resort source when the scan finished too fast
-// for the CLI's poll loop to observe a non-zero FilesSeen .
+// for the CLI's poll loop to observe a non-zero FilesSeen.
 func tailScanCompleteFiles(logPath, repoID string) int {
 	var lastFiles int
 	scanLogTail(logPath, func(line string) {
@@ -98,9 +98,9 @@ func tailScanCompleteFiles(logPath, repoID string) int {
 
 // tailVulnScanResult scans the daemon log for the most-recent
 // "vuln-scan: scanned" entry for repoID and returns (deps, findings,
-// found). found=false when the scanner didn't run (NullVulnSource —
+// found). found=false when the scanner didn't run (NullVulnSource
 // [vuln_source] not configured) so callers can omit the summary line
-// rather than print a misleading "0 findings". solov2-izh6.3.
+// rather than print a misleading "0 findings".
 func tailVulnScanResult(logPath, repoID string) (deps, findings int, found bool) {
 	scanLogTail(logPath, func(line string) {
 		if !strings.Contains(line, repoID) || !strings.Contains(line, "vuln-scan: scanned") {
@@ -120,19 +120,19 @@ func tailVulnScanResult(logPath, repoID string) (deps, findings int, found bool)
 // scanWaitTuning groups the poll-loop timing constants for WaitForScanComplete.
 // See the field comments for the per-constant rationale.
 const (
-	// heartbeatEvery: solov2-en47 — when the scanner sits on a slow file the
+	// heartbeatEvery: — when the scanner sits on a slow file the
 	// phase + files_seen don't change, so the original loop printed nothing
 	// for tens of seconds. Heartbeat with elapsed-since-last-update so the
 	// user can see we're still working.
 	heartbeatEvery = 10 * time.Second
-	// pollInterval: solov2-a17i — poll at 100ms (was 500ms). Small repos walk
+	// pollInterval: — poll at 100ms (was 500ms). Small repos walk
 	// + promote in well under 500ms; the old cadence usually missed every
 	// intermediate files_seen update.
 	pollInterval = 100 * time.Millisecond
 	// startupGrace bounds how long --wait keeps polling while the scan has
 	// not yet appeared in scans_in_flight, so the very first poll firing
 	// before the scheduler enqueues the scan does not surface a misleading
-	// "scan no longer in flight" failure .
+	// "scan no longer in flight" failure.
 	startupGrace = 5 * time.Second
 )
 
@@ -182,7 +182,7 @@ func (st *waitState) handleNotInFlight(ctx context.Context, w io.Writer, repoID 
 	}
 	// Not promoted and no in-flight entry. Either the scan never started
 	// yet (stay in the loop until startupGrace elapses so we don't surface
-	// a false-negative on the user's very first repo — solov2-beda) or a
+	// a false-negative on the user's very first repo) or a
 	// previously in-flight scan left the set without a last_promoted_sha
 	// (a real failure; surface the daemon log's cause).
 	logPath := daemonLogPath()
@@ -215,14 +215,14 @@ func (st *waitState) reportCompleteIfPromoted(ctx context.Context, w io.Writer, 
 			continue
 		}
 		logPath := daemonLogPath()
-		// solov2-a17i: scan may have finished before our first poll caught a
+		// scan may have finished before our first poll caught a
 		// non-zero FilesSeen. Fall back to the daemon log's final files_saved.
 		files := st.maxFiles
 		if files == 0 {
 			files = tailScanCompleteFiles(logPath, repoID)
 		}
 		printColdScanComplete(w, files, time.Since(st.start))
-		// solov2-izh6.3: surface vuln-scan result so a fresh-init user can see
+		// surface vuln-scan result so a fresh-init user can see
 		// the OSV scanner did run. Silent when [vuln_source] is off.
 		if deps, findings, ok := tailVulnScanResult(logPath, repoID); ok {
 			fmt.Fprintf(w, "  ✓ vuln-scan: %d finding(s) across %d dep(s)\n", findings, deps)
@@ -252,7 +252,7 @@ func (st *waitState) reportProgress(w io.Writer, row ScanProgressRow) {
 	if row.FilesSeen > st.maxFiles {
 		st.maxFiles = row.FilesSeen
 	}
-	// solov2-a17i: suppress the "0 files (0.0s)" first tick — it just reflects
+	// suppress the "0 files (0.0s)" first tick — it just reflects
 	// the race between scan start and the first poll and reads as broken. We
 	// still report when files_seen first crosses 0 or when phase changes after
 	// we've seen files.

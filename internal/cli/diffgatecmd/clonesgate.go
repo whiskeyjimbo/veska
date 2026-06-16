@@ -69,7 +69,7 @@ func RunClones(ctx context.Context, p CloneParams) error {
 	}
 
 	// Base graph is pinned to base-ref (not the live index) so an index that has
-	// advanced past base-ref cannot mask a net-new clone (solov2-zvh6.11).
+	// advanced past base-ref cannot mask a net-new clone.
 	eph, _, _, cleanup, err := buildPinnedEphemeral(ctx, ephemeralParams{
 		RepoID:       p.RepoID,
 		Branch:       p.Branch,
@@ -119,7 +119,7 @@ type ephemeralParams struct {
 }
 
 // buildPinnedEphemeral is the index-ahead-safe variant of buildEphemeral
-// (solov2-zvh6.11). Instead of pairing the candidate overlay with the LIVE
+// Instead of pairing the candidate overlay with the LIVE
 // index — whose SHA can drift ahead of base-ref and silently mask a net-new
 // finding (the documented index-ahead false-PASS) — it pins the base graph to
 // base-ref: it clones the index and re-promotes the changed files' BASE-REF
@@ -127,14 +127,12 @@ type ephemeralParams struct {
 // the ChangedNodeIDs content-hash comparison AND any base-state lookup (e.g.
 // clones' NodesByContentHash) then read a base-ref-pinned graph, so the gate
 // compares base-ref vs candidate regardless of how far the index has advanced.
-//
 // It returns the (base-ref-pinned) ephemeral, the candidate FileChanges, the
 // base-clone DB path — gates that build a candidate after-state clone (untested,
 // cycles, api) clone FROM this so their pre-state is base-ref too, not the live
 // index — and a cleanup func the caller MUST defer (it closes the base-clone
 // pools and removes the file; the pools stay open until then because eph.Base
 // reads from them).
-//
 // Soundness: unchanged-file state is inherited from the index by BOTH this base
 // clone and any candidate clone derived from it, so the index's drift on
 // unchanged files cancels in every comparison; only the changed files differ
@@ -149,7 +147,7 @@ func buildPinnedEphemeral(ctx context.Context, p ephemeralParams, dbPath string)
 	changes, err := src.Changes(ctx)
 	if err != nil {
 		// A bad/unknown ref is a user input error; surface a clean, ref-naming
-		// message instead of raw git plumbing (solov2-i0tx.2 F3). Shared by every
+		// message instead of raw git plumbing ( F3). Shared by every
 		// clone-based gate (api/coverage/cycles/clones).
 		return nil, nil, "", noop, fmt.Errorf("diff-gate: read changes: %w", cleanRefError(err, p.BaseRef, p.CandidateRef))
 	}
@@ -168,9 +166,9 @@ func buildPinnedEphemeral(ctx context.Context, p ephemeralParams, dbPath string)
 
 	// Build the base-ref file map for the changed files and re-promote it over
 	// the clone, reverting those files to their base-ref state:
-	//   - modified file → its base-ref content
-	//   - deleted file (present at base-ref) → its base-ref content (base keeps it)
-	//   - ADDED file (absent at base-ref) → nil (DELETE from the clone). This is
+	//   modified file → its base-ref content
+	//   deleted file (present at base-ref) → its base-ref content (base keeps it)
+	//   ADDED file (absent at base-ref) → nil (DELETE from the clone). This is
 	//     the crux for index-ahead: a drifted index already holds the added
 	//     file, so the clone inherits it; skipping (discovery's baseChangedFiles)
 	//     would leave that stale copy and the net-new clone would still cancel.
@@ -216,7 +214,7 @@ func buildPinnedEphemeral(ctx context.Context, p ephemeralParams, dbPath string)
 }
 
 // buildEphemeral is the shared diff-gate harness: it parses the candidate
-// change (base-ref..candidate-ref) into an overlay and pairs it with the
+// change (base-ref.candidate-ref) into an overlay and pairs it with the
 // supplied base graph, producing the ephemeral (base, candidate) substrate the
 // gates query. It also returns the candidate's raw FileChanges, which gates
 // that re-promote the candidate (the untested gate) need for file content;

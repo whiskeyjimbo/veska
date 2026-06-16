@@ -11,10 +11,10 @@ import (
 
 // The doctor command tree's logic lives in internal/cli/doctorcmd; the
 // constructors below are Cobra glue whose RunE bodies are thin delegating
-// calls into that package (solov2-0omh.6).
+// calls into that package.
 
 // ProbeStatusError is returned by doctor subcommands when a probe yields a
-// non-healthy status. main() translates it to the appropriate OS exit code.
+// non-healthy status. main translates it to the appropriate OS exit code.
 // It is an alias of doctorcmd.ProbeStatusError so main.go and backup.go keep
 // constructing and matching the same concrete type.
 type ProbeStatusError = doctorcmd.ProbeStatusError
@@ -42,7 +42,7 @@ func doctorCmd() *cobra.Command {
 		Short:        "Health checks for the veska runtime",
 		Long:         "Health checks for the veska runtime.\n\nWith no subcommand, runs the 'status' rollup across all subsystems.",
 		SilenceUsage: true,
-		// solov2-jtl5.2: bare `veska doctor` now runs the status rollup
+		// bare `veska doctor` now runs the status rollup
 		// instead of just printing help. The rollup is what users actually
 		// want as a first-call health probe; the per-subsystem probes
 		// (embedder, egress, storage, …) remain explicit subcommands.
@@ -91,10 +91,9 @@ func doctorStatusCmd() *cobra.Command {
 }
 
 // doctorSavingsCmd returns the "doctor savings" subcommand (also registered
-// top-level as `veska savings`, solov2-3bu). It reads the per-search telemetry
+// top-level as `veska savings`). It reads the per-search telemetry
 // the daemon's MCP search handler writes and renders today / 7d / all-time
 // savings bars. Logic lives in internal/cli/savingscmd; this is Cobra glue
-// (solov2-0omh.8).
 func doctorSavingsCmd() *cobra.Command {
 	var jsonOut bool
 	var aggregate bool
@@ -126,8 +125,8 @@ func doctorSavingsCmd() *cobra.Command {
 		},
 	}
 	cmd.Flags().BoolVar(&jsonOut, "json", false, "output results as JSON")
-	// --aggregate forces the pooled single-bucket output. The default breaks
-	// savings down per repo (solov2-izh6.21); --aggregate sums every repo into
+	// aggregate forces the pooled single-bucket output. The default breaks
+	// savings down per repo; --aggregate sums every repo into
 	// one "all repos" bucket for the headline number or for scripts that parsed
 	// the pre-breakdown shape.
 	cmd.Flags().BoolVar(&aggregate, "aggregate", false, "pool every repo into a single bucket instead of the per-repo breakdown")

@@ -1,26 +1,23 @@
 // Package coverage holds the frozen golden fixture's known-facts manifest:
 // the single source of truth that every eng_* tool coverage subtest asserts
-// against (solov2-5zka). The fixture source trees live under testdata/ as two
+// against. The fixture source trees live under testdata/ as two
 // self-contained Go modules; this package indexes them through the real
 // cold-scan pipeline and freezes the actually-extracted facts here.
-//
 // # Two kinds of facts
 //
-//   - PARSE-DERIVED facts (Nodes, Edges, CrossRepoEdges, EntryPoints, Todos)
-//     were AUTHORED FROM REAL PIPELINE OUTPUT, not hand-predicted. They are
-//     guarded against fixture drift by the self-test in manifest_test.go,
-//     which re-indexes the fixture and asserts every one is present (and that
-//     each NodeKey resolves byte-for-byte to the node_id the pipeline emits).
-//
-//   - SEED-STATE facts (Repos, Aliases, Tasks, Findings, Suppressions) are
-//     NOT parse output. They are the literal operational state a coverage
-//     harness will INSERT before exercising the registry / task / finding /
-//     suppression tools. They are declared here so the schema spans every
-//     fact category the 40 eng_* tools assert, but the drift self-test does
-//     not assert them (there is nothing to re-derive from a parse).
+//	PARSE-DERIVED facts (Nodes, Edges, CrossRepoEdges, EntryPoints, Todos)
+//	  were AUTHORED FROM REAL PIPELINE OUTPUT, not hand-predicted. They are
+//	  guarded against fixture drift by the self-test in manifest_test.go,
+//	  which re-indexes the fixture and asserts every one is present (and that
+//	  each NodeKey resolves byte-for-byte to the node_id the pipeline emits).
+//	SEED-STATE facts (Repos, Aliases, Tasks, Findings, Suppressions) are
+//	  NOT parse output. They are the literal operational state a coverage
+//	  harness will INSERT before exercising the registry / task / finding /
+//	  suppression tools. They are declared here so the schema spans every
+//	  fact category the 40 eng_* tools assert, but the drift self-test does
+//	  not assert them (there is nothing to re-derive from a parse).
 //
 // # Amendment, not forking (F1)
-//
 // Later tool beads amend this manifest in place when a fact a tool needs is
 // missing — they never fork it. 5zka delivers the amendable base + schema and
 // freezes the facts for the fixture as built; it does NOT author all 40 tools'
@@ -57,7 +54,6 @@ const (
 // the repo-RELATIVE slash path, the kind, and the symbol name. The manifest
 // NEVER stores raw sha256 node IDs or absolute paths — a harness resolves keys
 // to IDs at test time via ResolveID, supplying the root it indexed at.
-//
 // Name mirrors the parser's node name, NOT the symbol_path: methods are keyed
 // "Type.method" (e.g. "Badge.RenderBadge"), packages by the package name.
 type NodeKey struct {
@@ -69,13 +65,11 @@ type NodeKey struct {
 
 // ResolveID reconstructs the sha256 node ID the cold-scan pipeline emits for
 // this key.
-//
-// Since ADR-S0017 §1 the pipeline keys node IDs on the repo-relative SLASH
+// Since the pipeline keys node IDs on the repo-relative SLASH
 // path (coldscan.go fileStager.stage passes `rel`, already ToSlash'd, to the
 // parser — no longer the absolute walked path). So ResolveID hashes k.Path
-// verbatim — it is already the repo-relative slash form treesitter nodeID()
+// verbatim — it is already the repo-relative slash form treesitter nodeID
 // receives. No Join/FromSlash: the root is no longer part of the identity.
-//
 // root is retained in the signature (ignored) so the many coverage-harness
 // call sites that pass the per-repo root keep compiling; it is dead for ID
 // purposes and can be dropped in a follow-up sweep.
@@ -110,11 +104,11 @@ type CrossRepoEdgeFact struct {
 // file_imports table. It is the import-level signal eng_list_dependencies
 // unions with the cross_repo_edge_stub call-level signal (CrossRepoEdgeFact);
 // the two surfaces are distinct (imports vs resolved call sites), hence both
-// categories. Only paths isExternalModulePath accepts are stored, so intra-
+// categories. Only paths isExternalModulePath accepts are stored, so intra
 // stdlib imports (e.g. "net/http", "fmt") are absent by design. The repo's
 // own-module imports (e.g. "example.com/modbeta/widget") are also absent:
 // syncFileImports subtracts the repo's own module_path so intra-module imports
-// never count as dependencies (solov2-tb74).
+// never count as dependencies.
 type DependencyFact struct {
 	RepoID      string
 	FromRelPath string // repo-relative slash path of the importing file
@@ -132,7 +126,6 @@ type EntryPointFact struct {
 // ingester collapsed into one rule='todo' finding per file. RelPath is the
 // repo-relative slash path of the containing file; Line is the 1-based source
 // line; Marker is the matched token; Text is the trailing comment text.
-//
 // The persisted finding message embeds the ABSOLUTE file path, so the
 // self-test asserts on (repo, relative path suffix, line) rather than the full
 // message string.
@@ -154,10 +147,10 @@ type CloneFact struct {
 	B      NodeKey
 }
 
-// --- SEED-STATE fact types (NOT parse output; inserted by the harness) ---
+// SEED-STATE fact types (NOT parse output; inserted by the harness)
 
 // RepoFact is a repos-table registry row a harness seeds before exercising the
-// repo-registry tools (eng_add_repo, eng_list_repos, eng_get_repo, ...).
+// repo-registry tools (eng_add_repo, eng_list_repos, eng_get_repo,.).
 type RepoFact struct {
 	RepoID     string
 	RootPath   string // resolved at harness time to the testdata module root

@@ -1,6 +1,6 @@
 ---
 id: SOLO-MILESTONES
-title: "Milestones — Index"
+title: "Milestones - Index"
 status: draft
 last_reviewed: 2026-05-18
 verified: true

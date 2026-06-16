@@ -8,7 +8,7 @@ verified: true
 verified_date: "2026-05-16"
 ---
 
-# ADR-S0005 — actor_id + actor_kind is the entire identity model
+# ADR-S0005 - actor_id + actor_kind is the entire identity model
 
 ## Context
 
@@ -43,18 +43,18 @@ covers both.
 Two columns on every state-changing write (nodes, edges, findings,
 suppressions, audit log entries):
 
-- `actor_id TEXT NOT NULL` — a string. Format is one of:
-  - `human:<os-username>` — the user who started the daemon.
-  - `agent:<name>` — e.g., `agent:claude-code`, set by MCP via the
+- `actor_id TEXT NOT NULL` - a string. Format is one of:
+  - `human:<os-username>` - the user who started the daemon.
+  - `agent:<name>` - e.g., `agent:claude-code`, set by MCP via the
     `actor_id` header on the connection.
-  - `service:veska` — the daemon writing on its own behalf.
+  - `service:veska` - the daemon writing on its own behalf.
 - `actor_kind TEXT NOT NULL CHECK (actor_kind IN ('human','agent','system'))`
-  — the trust signal. One of:
-  - `'human'` — write originated from a CLI invocation by the
+  - the trust signal. One of:
+  - `'human'` - write originated from a CLI invocation by the
     local user.
-  - `'agent'` — write originated from an MCP call over the Unix
+  - `'agent'` - write originated from an MCP call over the Unix
     socket.
-  - `'system'` — write originated from a daemon-internal goroutine
+  - `'system'` - write originated from a daemon-internal goroutine
     (revalidation sweep, embed worker auto-attribution,
     auto-revoke).
 
@@ -66,7 +66,7 @@ listener, not from the request body.
 
 `actor_id` is a free-form label and may be polluted by an agent
 that lies about its name in the MCP handshake. `actor_kind` is
-**daemon-set from the accepting listener** — it is the column
+**daemon-set from the accepting listener** - it is the column
 the human-action gate reads. Note the limit: a process running as the
 same OS user can dial `cli.sock` directly and present as
 `'human'`. The OS user is the privilege boundary; SOLO-10 §3.1

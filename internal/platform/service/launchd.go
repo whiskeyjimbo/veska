@@ -55,7 +55,6 @@ type LaunchdManager struct {
 	dryRun     bool
 }
 
-// NewLaunchdManager creates a LaunchdManager.
 // When dryRun is true, Install/Uninstall/Start/Stop/Restart print what they
 // would do rather than executing any commands.
 func NewLaunchdManager(binaryPath, veskaHome string, dryRun bool) *LaunchdManager {

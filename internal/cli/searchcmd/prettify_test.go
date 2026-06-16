@@ -5,7 +5,7 @@ import (
 	"testing"
 )
 
-// solov2-l04m: file_path rewriting for ephemeral cache-tier repos turns
+// file_path rewriting for ephemeral cache-tier repos turns
 // `~/.cache/veska/repos/<sha>/flag.go` into `pflag/flag.go`, but only for
 // rows that actually live under that cache dir.
 func TestPrettifyEphemeralPaths(t *testing.T) {

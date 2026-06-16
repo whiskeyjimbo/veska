@@ -23,9 +23,9 @@ func init() {
 }
 
 const (
-	// BudgetLatencyMs is the SOLO-13 §3.1 p95 latency budget in milliseconds (k=10).
+	// BudgetLatencyMs is the p95 latency budget in milliseconds (k=10).
 	BudgetLatencyMs = 100.0
-	// BudgetRSSBytes is the SOLO-13 §3.3 soft RSS cap in bytes (2 GiB).
+	// BudgetRSSBytes is the soft RSS cap in bytes (2 GiB).
 	BudgetRSSBytes = 2 * 1024 * 1024 * 1024
 )
 
@@ -118,7 +118,6 @@ func QueryVec0(db *sql.DB, queryVec []float32, k int) ([]int64, error) {
 // RunQueryBench runs nQueries warm queries at k against the open DB,
 // using a random 768-dim query vector each time.
 // Returns LatencyStats for the warm pass.
-//
 // For cold benchmarking: the caller should close the DB, issue `PRAGMA cache_size=0`
 // on reopen, then call RunQueryBench again. This approximates cold-cache behaviour;
 // true post-restart cold is not achievable without a process restart.
@@ -183,7 +182,6 @@ func FindCeilingFromMock(
 // RunCeilingSweep loads vectors into a temp DB at each sweep population,
 // runs nQueries warm queries at k=10, measures p95 and RSS,
 // and returns the ceiling population and reason.
-//
 // Sweep populations: 50k, 100k, 200k, 400k, 800k, 1.6M (doubling from 50k up to 2M).
 func RunCeilingSweep(dbPath string, nQueries int, rng *rand.Rand) (ceiling int64, reason string, err error) {
 	populations := []int64{50_000, 100_000, 200_000, 400_000, 800_000, 1_600_000}

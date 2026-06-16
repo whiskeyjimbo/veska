@@ -1,11 +1,9 @@
 // Package vulnrefresh contains the daemon-owned goroutine that keeps the OSV
 // advisory cache fresh, off the promotion hot path.
-//
 // Scope (M7 §3 task A4): lifecycle and scheduling only. The refresher depends
 // on the ports.VulnSource interface and calls its Refresh — it owns no cache
 // state and performs no scanning. Network egress is entirely the adapter's
 // concern; this package only decides *when* Refresh runs.
-//
 // Run calls Refresh once immediately on entry (so a daemon start kicks a
 // catch-up refresh) and then on every tick of a configurable interval. A
 // Refresh error is logged and swallowed: a transient OSV.dev failure must not
@@ -42,7 +40,7 @@ type Refresher struct {
 	// onFirstRefreshOk fires exactly once, after the first successful Refresh.
 	// Wired by the daemon to kick a one-shot vuln-scan pass over every
 	// registered repo so the cache going hot doesn't leave existing repos
-	// stuck at "scanned with empty cache → 0 findings" (solov2-jtl5.4).
+	// stuck at "scanned with empty cache → 0 findings".
 	onFirstRefreshOk func(context.Context)
 	firstRefreshDone bool
 }
@@ -64,7 +62,7 @@ func WithInterval(d time.Duration) Option {
 // WithOnFirstRefreshOk registers a callback fired exactly once, on the first
 // successful Refresh. The daemon uses it to trigger a scan-all-repos sweep so
 // repos that were promoted while the OSV advisory cache was still cold get
-// their findings retroactively (solov2-jtl5.4). A nil callback is a no-op.
+// their findings retroactively. A nil callback is a no-op.
 func WithOnFirstRefreshOk(cb func(context.Context)) Option {
 	return func(r *Refresher) { r.onFirstRefreshOk = cb }
 }
@@ -95,7 +93,7 @@ func (r *Refresher) Interval() time.Duration { return r.interval }
 // Equivalent to WithOnFirstRefreshOk but usable from sites that get the
 // Refresher fully built (e.g. the daemon composition root, where the callback
 // closes over the Daemon struct that doesn't exist at NewRefresher time).
-// Calling this after the first refresh has already completed is a no-op —
+// Calling this after the first refresh has already completed is a no-op
 // the firing was a one-shot.
 func (r *Refresher) SetOnFirstRefreshOk(cb func(context.Context)) {
 	r.onFirstRefreshOk = cb
@@ -104,7 +102,6 @@ func (r *Refresher) SetOnFirstRefreshOk(cb func(context.Context)) {
 // Run blocks, refreshing the advisory cache once immediately and then on every
 // tick of the configured interval. It returns when ctx is cancelled. A Refresh
 // error is logged and swallowed; the ticker keeps running.
-//
 // Run is intended to be launched in its own goroutine by the daemon
 // composition root.
 func (r *Refresher) Run(ctx context.Context) {
@@ -128,7 +125,7 @@ func (r *Refresher) Run(ctx context.Context) {
 // refresh performs a single Refresh and isolates its error. A cancelled
 // context is expected during shutdown and is not logged as a failure.
 // Success and failure are both logged so operators can verify the refresher
-// is alive and confirm the network egress that Refresh implies .
+// is alive and confirm the network egress that Refresh implies.
 func (r *Refresher) refresh(ctx context.Context) {
 	start := time.Now()
 	slog.Info("vulnrefresh: refresh starting")

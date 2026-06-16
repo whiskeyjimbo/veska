@@ -20,7 +20,6 @@ import (
 type Querier struct{}
 
 // HEAD returns the current HEAD SHA for the repo at rootPath.
-//
 // An empty rootPath returns an error rather than silently shelling out
 // against the process cwd: history queries must always run scoped to a
 // registered repo.
@@ -61,9 +60,9 @@ func (Querier) IsAncestor(rootPath, sha, head string) (bool, error) {
 	return false, fmt.Errorf("git merge-base in %s: %w: %s", rootPath, err, strings.TrimSpace(stderr.String()))
 }
 
-// CommitsSince returns the list of commit SHAs from sha..head in
-// oldest-first order — the output of `git log <sha>..<head> --reverse
-// --format=%H`. The set excludes sha itself.
+// CommitsSince returns the list of commit SHAs from sha.head in
+// oldest-first order — the output of `git log <sha>.<head> --reverse
+// format=%H`. The set excludes sha itself.
 func (Querier) CommitsSince(rootPath, sha, head string) ([]string, error) {
 	if rootPath == "" {
 		return nil, fmt.Errorf("git log: repoRoot is empty")

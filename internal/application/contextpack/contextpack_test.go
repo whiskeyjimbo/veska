@@ -13,7 +13,7 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/core/ports"
 )
 
-// --- blastradius fakes (same shape as blastradius_test) -------------------
+// blastradius fakes (same shape as blastradius_test)
 
 type fakeEdges struct {
 	inbound  map[string][]string
@@ -55,7 +55,7 @@ func (f *fakeNodes) NodesInFile(_ context.Context, _, _, filePath string) ([]str
 	return f.byFile[filePath], nil
 }
 
-// --- test fixture ---------------------------------------------------------
+// test fixture
 
 func newAssembler(t *testing.T, opts ...contextpack.Option) *contextpack.Assembler {
 	t.Helper()
@@ -225,7 +225,7 @@ func percentile(d []time.Duration, p int) time.Duration {
 	return cp[idx]
 }
 
-// TestForSymbol_IncludesSnippets covers solov2-dya: NodeInfo entries
+// TestForSymbol_IncludesSnippets covers: NodeInfo entries
 // must carry the symbol's raw_content inline so the agent can answer
 // from the pack alone instead of doing a follow-up Read per node.
 func TestForSymbol_IncludesSnippets(t *testing.T) {
@@ -317,7 +317,7 @@ func TestForSymbol_SnippetTrimmedToBudget(t *testing.T) {
 func TestNodeName_IsCanonicalSymbolPath(t *testing.T) {
 	// Guard: context_pack nodes carry the same qualified SymbolPath the rest
 	// of the MCP surface emits (e.g. "Server.Start", not the leaf "Start"),
-	// and expose file_path rather than the old "path" key .
+	// and expose file_path rather than the old "path" key.
 	a := newAssembler(t)
 	p, _ := a.ForSymbol(context.Background(), "r", "main", "/repo", "Target")
 	if len(p.Nodes) == 0 {

@@ -17,7 +17,7 @@ import (
 // repo-root-relative form. Findings are anchored at different layers — the
 // checks pipeline stores repo-relative paths while the ingester (cold scan)
 // stores absolute ones — so the wire contract is unified here at the read
-// boundary instead . A nil path (e.g. auto-link findings, which
+// boundary instead. A nil path (e.g. auto-link findings, which
 // anchor on an edge, not a file) is left untouched.
 func relativizeFindingPath(path *string, root string) *string {
 	if path == nil || root == "" || !filepath.IsAbs(*path) {
@@ -41,7 +41,7 @@ func findingRepoRoot(ctx context.Context, db *sql.DB, repoID string) string {
 }
 
 // resolveRepoIDDB canonicalizes repoID against the repos table the same way
-// resolveRepoID does for RepoLister-backed tools : an exact match
+// resolveRepoID does for RepoLister-backed tools: an exact match
 // wins; otherwise a unique short_id (ShortRepoIDLen-char) prefix is accepted.
 // Findings-family tools query the DB directly and have no RepoLister, so this
 // keeps the short_id contract uniform across the surface. Unknown/ambiguous
@@ -58,7 +58,7 @@ func resolveRepoIDDB(ctx context.Context, db *sql.DB, repoID string) (string, *R
 		return repoID, nil
 	}
 	// Pull the full set once so we can run both the short_id match and the
-	// prefix match against the same snapshot .
+	// prefix match against the same snapshot.
 	rows, qerr := db.QueryContext(ctx, `SELECT repo_id FROM repos`)
 	if qerr != nil {
 		return repoID, nil
@@ -99,9 +99,7 @@ func resolveRepoIDDB(ctx context.Context, db *sql.DB, repoID string) (string, *R
 	return "", &RPCError{Code: CodeNotFound, Message: fmt.Sprintf("unknown repo_id: %s (run eng_list_repos; prefixes must be >= %d chars)", repoID, minRepoIDPrefix)}
 }
 
-// ---------------------------------------------------------------------------
 // eng_list_findings
-// ---------------------------------------------------------------------------
 
 type listFindingsParams struct {
 	RepoID   string `json:"repo_id"`
@@ -111,7 +109,7 @@ type listFindingsParams struct {
 	Rule     string `json:"rule,omitempty"`
 	// IncludeSuppressed surfaces findings hidden by an active suppression
 	// row. Default false matches the user expectation that
-	// eng_suppress_finding actually suppresses .
+	// eng_suppress_finding actually suppresses.
 	IncludeSuppressed bool `json:"include_suppressed,omitempty"`
 }
 
@@ -133,7 +131,6 @@ type findingRow struct {
 	ActorKind    string  `json:"actor_kind"`
 	// SuppressedBy carries the suppression_id when an active suppression
 	// is hiding this finding. Populated only when IncludeSuppressed=true
-	// .
 	SuppressedBy *string `json:"suppressed_by,omitempty"`
 }
 
@@ -143,7 +140,7 @@ func makeListFindingsHandler(db *sql.DB, repos application.RepoLister) ToolHandl
 		if rpcErr := bindParams(raw, &p); rpcErr != nil {
 			return nil, rpcErr
 		}
-		// solov2-ig2x: fall back to a cwd-injected hint when repo_id is
+		// fall back to a cwd-injected hint when repo_id is
 		// omitted, matching the other repo-scoped query tools. A nil
 		// RepoLister preserves the old "repo_id is required" behaviour so
 		// test sites that don't care about resolution can still pass nil.
@@ -170,14 +167,13 @@ func makeListFindingsHandler(db *sql.DB, repos application.RepoLister) ToolHandl
 		// suppressed findings (default) or surface them with a suppressed_by
 		// hint (when include_suppressed=true). An "active" suppression is one
 		// whose expires_at is NULL or in the future — eng_close_suppression
-		// terminates by setting expires_at = now .
-		//
-		// solov2-f3ep: state="any" disables the state filter so callers can
+		// terminates by setting expires_at = now.
+		// state="any" disables the state filter so callers can
 		// list findings across every lifecycle state (open, closed, …) for
 		// one repo in a single query. Previously the CLI had to choose
 		// either "all repos default-state" or "one repo default-state".
 		nowMS := time.Now().UnixMilli()
-		// solov2-izh6.25: COALESCE in the nodes.file_path for node-anchored
+		// COALESCE in the nodes.file_path for node-anchored
 		// findings (dead-code is the dominant case; deadcode.go sets only
 		// WithNodeAnchor) so the CLI's FILE column is never blank when the
 		// path is recoverable. file-anchored findings keep f.file_path
@@ -244,9 +240,8 @@ func makeListFindingsHandler(db *sql.DB, repos application.RepoLister) ToolHandl
 			return nil, &RPCError{Code: CodeInternalError, Message: fmt.Sprintf("iterate findings: %v", err)}
 		}
 
-		// degraded_reasons is always emitted (as [] when nothing is degraded)
+		// degraded_reasons is always emitted (as when nothing is degraded)
 		// to match the README's "Conventions across the tool surface" contract
-		// .
 		return map[string]any{
 			"findings":         findings,
 			"degraded_reasons": []string{},

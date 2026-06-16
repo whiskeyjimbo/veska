@@ -1,6 +1,6 @@
 ---
 id: SOLO-07
-title: "Architecture — Layering, Ports, Composition Root"
+title: "Architecture - Layering, Ports, Composition Root"
 status: draft
 version: 0.1.0
 last_reviewed: 2026-05-08
@@ -9,7 +9,7 @@ verified: true
 verified_date: "2026-05-17"
 ---
 
-# SOLO-07 — Architecture
+# SOLO-07 - Architecture
 
 ## 1. Purpose
 
@@ -52,12 +52,12 @@ ADR, not a present design constraint.
 may import only from layers *below* it on the page, not above.
 `core/domain` imports nothing. `core/ports` imports only
 `core/domain`. `application` and `infrastructure` both import
-`core/domain` and `core/ports` — they are sibling layers and
+`core/domain` and `core/ports` - they are sibling layers and
 must not import each other. The composition root is the only
 place that imports both `application/` and `infrastructure/`
 (so it can wire concrete adapters into use cases). The
 composition root for the daemon ships *as part of the binary
-package* — `cmd/veska-daemon/wire.go` — rather than in a
+package* - `cmd/veska-daemon/wire.go` - rather than in a
 separate `internal/bootstrap/` package. `internal/bootstrap/`
 exists only as a `doc.go` placeholder; the actual wiring lives
 next to `main.go` in each `cmd/` sub-package. `cmd/` is
@@ -67,35 +67,35 @@ therefore the layer that imports both `application/` and
 This makes "imports flow downward" precise: in the diagram,
 arrows point at what a layer *depends on*. The `application` ↔
 `infrastructure` arrow does **not** exist, even though both
-boxes sit at the same level — the dependency between them flows
+boxes sit at the same level - the dependency between them flows
 through `core/ports`.
 
 ### 2.1 Per-layer responsibilities
 
-- **`core/domain/`** — entities, value objects, aggregate roots
+- **`core/domain/`** - entities, value objects, aggregate roots
   (SOLO-04). Pure functions; no I/O; standard library only.
   Constructors are functional options.
-- **`core/ports/`** — Go interface definitions. The full set
+- **`core/ports/`** - Go interface definitions. The full set
   of storage, substrate, and service ports listed in §4. Files
   are named for the capability they expose (`graph.go`,
   `queue.go`, `embedder.go`, `vector.go`, `edge_reader.go`,
-  `node_lookup.go`, `finding_storage.go`, …) — there is no
+  `node_lookup.go`, `finding_storage.go`, …) - there is no
   `*_repository.go` naming scheme. No implementations.
-- **`application/`** — use-case orchestrators. The `Ingester`
+- **`application/`** - use-case orchestrators. The `Ingester`
   (the promotion hot path). The post-promotion-queue-drain goroutines (one per
   `work_kind`). The MCP request router. Talks to ports only;
   never to SQLite or HTTP directly.
-- **`infrastructure/`** — port implementations. SQLite repos,
+- **`infrastructure/`** - port implementations. SQLite repos,
   the tree-sitter parser, Ollama HTTP clients, the MCP transport,
   fsnotify, slog logger. Never imports `application/`.
-- **`cmd/`** — one sub-package per binary (`veska`,
+- **`cmd/`** - one sub-package per binary (`veska`,
   `veska-daemon`, `veska-mcp`). Flag parsing, signal handling,
-  and — for the daemon — the composition root itself. The
+  and - for the daemon - the composition root itself. The
   daemon's wiring lives in `cmd/veska-daemon/wire.go` (with
   `providers.go` alongside it); manual constructor wiring, no
   DI container. Reading `cmd/veska-daemon/wire.go` shows you the
   entire daemon wiring.
-- **`internal/bootstrap/`** — a placeholder package containing
+- **`internal/bootstrap/`** - a placeholder package containing
   only `doc.go`. No wiring shipped here; the composition root
   moved into the `cmd/` binary packages. Other cross-cutting
   internal packages (`config`, `observability`, `repo`,
@@ -112,7 +112,7 @@ veska-v2/
     veska/                     # CLI binary
     veska-daemon/              # daemon binary; wire.go is the composition root
       main.go
-      wire.go                  # newDaemon — manual DI wiring
+      wire.go                  # newDaemon - manual DI wiring
       providers.go             # per-dependency constructors
     veska-mcp/                 # stdio shim binary
   internal/
@@ -166,7 +166,7 @@ veska-v2/
       notifier/                #   stderr Notifier
       vulnsource/              #   VulnSource (null impl today)
     backup/                    # backup create/verify + vector round-trip
-    config/                    # paths.go — ~/.veska resolution
+    config/                    # paths.go - ~/.veska resolution
     crashloop/                 # crash-loop breaker
     doctor/                    # veska doctor diagnostics
     embedderprobe/             # Ollama embedder probe
@@ -175,7 +175,7 @@ veska-v2/
     repo/                      # repos-table registry + active-branch watch
     service/                   # systemd / launchd service management
     tokenize/                  # symbol tokenisation helper
-    bootstrap/                 # placeholder package — doc.go only
+    bootstrap/                 # placeholder package - doc.go only
   tools/
     loadtest/                  # eval / load-test harnesses (build tag `eval`)
   docs/
@@ -211,10 +211,10 @@ A few things this layout deliberately does not have:
 `core/ports/` ships roughly two dozen Go interface files.
 Hexagonal architecture distinguishes two directions:
 
-- **Driven (outbound) ports** — the application *calls out*
+- **Driven (outbound) ports** - the application *calls out*
   through them; infrastructure adapters *implement* them
   (repos, embedder, file watcher, …).
-- **Driving (inbound) ports** — infrastructure adapters *call
+- **Driving (inbound) ports** - infrastructure adapters *call
   in* through them; the application *implements* them
   (the MCP transport adapter calls `RPCHandler`, which the
   application's request router implements).
@@ -231,7 +231,7 @@ LLMGenerator, Tracker, VulnSource, SecretsScanner, Notifier,
 CoverageSource, OwnershipSource, FileWatcher, CodeParser,
 TokenEstimator. The other nine (4 repository ports + 2
 storage adjuncts + Logger + RPCHandler) are
-not plugin candidates — a second `GraphRepository` would mean
+not plugin candidates - a second `GraphRepository` would mean
 changing the substrate, not swapping an adapter; Logger is a
 substrate primitive whose port exists for testability rather
 than runtime swap; the two driving ports each have one
@@ -239,10 +239,10 @@ in-process implementation because there is one of each surface.
 
 > **Note on naming.** The tables in §4.1–§4.3 below describe the
 > *roles* the ports play. The actual files in `core/ports/` are
-> named for the capability they expose — `graph.go`,
+> named for the capability they expose - `graph.go`,
 > `edge_storage.go`, `finding_storage.go`, `queue.go`,
 > `vector.go`, `embedding.go`, `embedder.go`, `parser.go`,
-> `watcher.go`, etc. — and the adapter files under
+> `watcher.go`, etc. - and the adapter files under
 > `infrastructure/sqlite/` follow the same convention
 > (`edge_repo.go`, `edge_reader_repo.go`, …). There is no
 > `<Entity>_repository.go` file-naming scheme on disk; treat the
@@ -278,7 +278,7 @@ written; SOLO-04 §3 explains why that is enough.
 `GraphRepository`'s row-shaped methods (`SaveNode`, `SaveEdge`,
 `DeleteFile`) follow the same identity-on-the-row rule. Its
 graph-shaped read (`LoadGraph`) returns a `*Graph` (SOLO-04
-§5.3) — a domain read projection with traversal helpers, no
+§5.3) - a domain read projection with traversal helpers, no
 write methods. SOLO-04 §11.2 has the full surface and
 rationale.
 
@@ -330,7 +330,7 @@ top-level router dispatches to its `MCPRouter` (the
 `eng_<verb>_<object>` tools, SOLO-09 §3) or `ControlRouter` (the
 daemon-lifecycle verbs `Promote`, `BackupCreate`, `EmbedderSwap`,
 `DoctorRun`, etc.). The split between routers is *internal to
-the application layer* — the prior design exposed two driving
+the application layer* - the prior design exposed two driving
 ports for what is one inbound seam, and that surface is now
 consolidated.
 
@@ -340,38 +340,38 @@ that exercises the UDS frame parser hands the adapter a fake
 `RPCHandler` and asserts on the dispatch.
 
 If a second MCP transport lands (gRPC, named pipe), it
-implements no port — it is another *driving adapter* that
+implements no port - it is another *driving adapter* that
 holds the same `RPCHandler`. There is no `MCPTransport`
 abstraction; transport variation lives in adapter code.
 
 ### 4.4 What is not a port
 
-- **Configuration loading** — plain Go in `config/`. Tests pass a
+- **Configuration loading** - plain Go in `config/`. Tests pass a
   struct.
-- **Path resolution** (`~/.veska`) — plain Go in `config/paths.go`.
-- **Git operations beyond reading** — Veska never writes Git.
-- **MCP transport** — there is one (Unix socket); no abstraction
+- **Path resolution** (`~/.veska`) - plain Go in `config/paths.go`.
+- **Git operations beyond reading** - Veska never writes Git.
+- **MCP transport** - there is one (Unix socket); no abstraction
   needed. Adding a second would be an ADR and would introduce a
   driving adapter, not a port (the port is `RPCHandler`, §4.3a).
-- **`StagingArea`** — plain Go interface in `application/staging.go`.
+- **`StagingArea`** - plain Go interface in `application/staging.go`.
   Both the save pipeline (writer) and the MCP router (reader)
   are application code, so this is an intra-application
-  testability seam — *not* a hex seam, no direction crossed.
+  testability seam - *not* a hex seam, no direction crossed.
   Single in-memory impl.
-- **`PostPromotionQueueDrainer`** — plain Go interface in
+- **`PostPromotionQueueDrainer`** - plain Go interface in
   `application/post_promotion_queue_drain.go`. Bridges the promotion pipeline
   (writer) and per-`work_kind` drain goroutines (reader); both
-  application code. Same status as `StagingArea` — intra-layer
+  application code. Same status as `StagingArea` - intra-layer
   testability seam, not a port.
 
-### 4.4a `GraphReader` — the staging-overlay reader
+### 4.4a `GraphReader` - the staging-overlay reader
 
 The MCP graph-read tools (`eng_get_node`, `eng_get_call_chain`,
 `eng_get_blast_radius`, `eng_find_symbol`, etc.) need a view that
 combines `StagingArea` (in-memory, dirty files) with
 `GraphRepository` (promoted SQLite rows) per the SOLO-11 §1.2
 per-file overlay rule. That composition is **named, owned, and
-located in `application/`** — it is not implicit in the MCP
+located in `application/`** - it is not implicit in the MCP
 router and it is not a method on either underlying primitive.
 
 ```go
@@ -394,7 +394,7 @@ implemented. Properties:
    `GraphReader` is the impl. The MCP router holds a
    `*GraphReader`, never a `GraphRepository` directly. Tools that
    intentionally read promoted-only state (audit-shaped queries,
-   the revalidation sweep) call `GraphReader.LoadPromoted(...)` —
+   the revalidation sweep) call `GraphReader.LoadPromoted(...)` -
    a documented sibling that bypasses staging. The plain
    `LoadGraph` always overlays.
 2. **Cross-file edge resolution under overlay.** When a traversal
@@ -402,7 +402,7 @@ implemented. Properties:
    come from staging; if staging marked the file deleted, the
    edge is **dropped** at read time, mirroring the same-repo
    unresolved-edge drop at promotion time (SOLO-04 §5.2 invariant
-   4). No new edge state, no new degraded reason — the edge
+   4). No new edge state, no new degraded reason - the edge
    simply does not appear in the response. SOLO-11 §1.2 has the
    worked example.
 3. **Branch scoping.** Staging is implicitly scoped to the repo's
@@ -414,13 +414,13 @@ implemented. Properties:
    seam crosses; the abstraction exists for testability and to
    give the merge rule a single home.
 5. **Cross-repo.** The cross-repo resolver chain (SOLO-11 §9)
-   composes per-repo `GraphReader.LoadPromoted` calls — never
-   `LoadGraph` — so the as-of envelope cited per SOLO-04 §5.4
+   composes per-repo `GraphReader.LoadPromoted` calls - never
+   `LoadGraph` - so the as-of envelope cited per SOLO-04 §5.4
    is meaningful. A target repo's staging is never read across
    the repo boundary.
 
 `GraphReader` is the answer to the question "where does the
-staging↔promoted merge live?" — it lives here, by name, and the
+staging↔promoted merge live?" - it lives here, by name, and the
 test surface for the merge rule is one `_test.go` next to the
 implementation.
 
@@ -428,7 +428,7 @@ implementation.
 
 `newDaemon` in `cmd/veska-daemon/wire.go` is the only place
 dependencies are materialised. No mode flags. No conditional
-adapter selection. It reads top to bottom (sketch — actual
+adapter selection. It reads top to bottom (sketch - actual
 constructor names live in `wire.go` / `providers.go`):
 
 ```go
@@ -462,17 +462,17 @@ func newDaemon(ctx context.Context, cfg Config) (*Daemon, error) {
     // 5. Application services.
     staging := application.NewStagingArea(parser)
     ingester := application.NewIngester(graphRepo, embStore, vecIndex, staging, log)
-    graphReader := application.NewGraphReader(graphRepo, staging)  // §4.4a — owns the staging-overlay merge
+    graphReader := application.NewGraphReader(graphRepo, staging)  // §4.4a - owns the staging-overlay merge
 
     // 6. post-promotion queue drain goroutines (one per work_kind). Takes
-    //    ports, not handles — the adapter behind postPromotionQueueRepo holds
+    //    ports, not handles - the adapter behind postPromotionQueueRepo holds
     //    the *sql.DB.
     drains := application.StartPostPromotionQueueDrains(ctx, postPromotionQueueRepo, embProv, embStore, vecIndex, log)
 
     // 7. RPC router and Unix-socket listener. The top-level router
     //    composes the MCP and Control sub-routers and implements
     //    ports.RPCHandler. The MCP sub-router holds a *GraphReader,
-    //    never *GraphRepository directly — every graph read goes
+    //    never *GraphRepository directly - every graph read goes
     //    through the overlay merge.
     mcpRouter := mcp.NewRouter(graphReader, taskRepo, findingRepo, vecIndex, tokens)
     ctlRouter := control.NewRouter(repoRepo, postPromotionQueueRepo, embProv, log)
@@ -489,7 +489,7 @@ Application code holds ports (`PostPromotionQueueRepository`,
 `GraphRepository`, etc.), never the raw handle. The lint
 analyser in §6 enforces this on `core/`; the `cmd/` binary
 package is the only place permitted to import the sqlite adapter
-package and must pass the resulting ports — not the handle —
+package and must pass the resulting ports - not the handle -
 into `application/`.
 
 That is the wiring. Reading it tells you what the daemon does.
@@ -513,7 +513,7 @@ One custom analyser, mandatory:
 
 | Rule | Check |
 |---|---|
-| `layercheck` | `core/` imports nothing from `application/` or `infrastructure/` (covers both `core/domain/` and `core/ports/`). **`application/` imports nothing from `infrastructure/`** — application code depends on ports in `core/ports/`, not on concrete adapters. `application/` may import only `core/ports/` and `core/domain/`. No allow-list, no carve-out. |
+| `layercheck` | `core/` imports nothing from `application/` or `infrastructure/` (covers both `core/domain/` and `core/ports/`). **`application/` imports nothing from `infrastructure/`** - application code depends on ports in `core/ports/`, not on concrete adapters. `application/` may import only `core/ports/` and `core/domain/`. No allow-list, no carve-out. |
 
 `layercheck` is the only architectural lint. The standard
 `golangci-lint` set covers the rest.
@@ -537,7 +537,7 @@ Acceptable.
 A new port lands when:
 
 1. A new aggregate root is added to SOLO-04 (rare; needs ADR).
-2. A new substrate concern emerges (e.g. a second LLM provider —
+2. A new substrate concern emerges (e.g. a second LLM provider -
    then `LLMGenerator` gets a second impl, no new port).
 3. A new infrastructure abstraction is needed for testability.
 

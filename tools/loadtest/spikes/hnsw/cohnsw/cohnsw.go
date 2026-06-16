@@ -1,6 +1,5 @@
 // Package cohnsw implements the eval.VectorIndex interface using
 // github.com/coder/hnsw (pure Go, no CGo, float32 only, file persistence).
-//
 // CGo requirement: none.
 // Quantization: float32 only.
 package cohnsw

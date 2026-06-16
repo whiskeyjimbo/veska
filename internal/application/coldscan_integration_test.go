@@ -27,7 +27,7 @@ func (f *fakeColdScanGit) ReadFileAtCommit(string, string, string) ([]byte, erro
 	return nil, nil
 }
 
-// realIgnoreLoader adapts the production .veskaignore loader to the
+// realIgnoreLoader adapts the production.veskaignore loader to the
 // application-layer IgnoreLoader contract. Defined locally so the external
 // test package does not depend on the whitebox test helpers.
 func realIgnoreLoader(repoRoot string) (application.IgnoreMatcher, error) {
@@ -52,9 +52,8 @@ func writeIntFile(t *testing.T, dir, rel, content string) {
 // asserts (1) nodes from the fixture files land in the promoted graph, and
 // (2) running the reparser a second time leaves the node count unchanged
 // (pipeline-level idempotency).
-//
 // Scope: base sqlite only — the vector backend is downstream of the embedder
-// worker (tracked separately as solov2-asn).
+// worker (tracked separately as ).
 func TestColdScanReparser_Integration_RealPipeline(t *testing.T) {
 	db := openMemDB(t)
 	insertTestRepo(t, db, "repo1")
@@ -125,7 +124,7 @@ func TestColdScanReparser_Integration_RealPipeline(t *testing.T) {
 	}
 
 	// The promotion transaction advances repos.last_promoted_sha and
-	// repos.active_branch . Without this the daemon's cheap-path
+	// repos.active_branch. Without this the daemon's cheap-path
 	// check would never engage.
 	if sha, br := readRepoSHA(t, db, "repo1"); sha != "sha-1" || br != "main" {
 		t.Errorf("repos row: sha=%q branch=%q, want sha-1/main", sha, br)

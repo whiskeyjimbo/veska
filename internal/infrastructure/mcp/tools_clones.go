@@ -11,7 +11,7 @@ import (
 )
 
 // This file holds the eng_find_clones handler: exact-clone detection by
-// content_hash equality (solov2-wfrj). It is the deterministic, embedding-free
+// content_hash equality. It is the deterministic, embedding-free
 // half of duplicate detection — for the per-function "is THIS duplicated?"
 // pivot use eng_search_similar instead (noted in the tool description).
 

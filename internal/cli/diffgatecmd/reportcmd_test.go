@@ -6,7 +6,7 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/application/blastradius"
 )
 
-// filterBlastNoise must drop container/chunk kinds (solov2-zvh6.13) and keep
+// filterBlastNoise must drop container/chunk kinds and keep
 // every symbol-level kind, preserving order.
 func TestFilterBlastNoise(t *testing.T) {
 	in := []blastradius.Entry{

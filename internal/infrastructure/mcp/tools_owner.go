@@ -21,7 +21,7 @@ import (
 // is treated as a literal filesystem root.
 // repos, when non-nil, is used by the handler to resolve repo_id from cwd
 // or short_id and to give the standard 'N repos registered' hint on a
-// missing-repo_id error . When nil the handler falls back
+// missing-repo_id error. When nil the handler falls back
 // to the bare "repo_id is required" behaviour.
 func RegisterOwnerTools(r *Registry, db *sql.DB, repos application.RepoLister) {
 	r.MustRegister(ToolSpec{
@@ -38,7 +38,6 @@ func RegisterOwnerTools(r *Registry, db *sql.DB, repos application.RepoLister) {
 // when the db lookup fails (no db, or repo_id is an unknown id), the input
 // is returned as-is so direct callers that pass a path still work. Short
 // repo_id (12 char) prefixes are accepted for parity with other tools
-// .
 func resolveOwnerRoot(db *sql.DB, repoID string) string {
 	if db == nil {
 		return repoID
@@ -62,19 +61,17 @@ func resolveOwnerRoot(db *sql.DB, repoID string) string {
 	return repoID
 }
 
-// ---------------------------------------------------------------------------
 // eng_find_owner
-// ---------------------------------------------------------------------------
 
 type findOwnerParams struct {
 	FilePath string `json:"file_path"`
 	// Path is an accepted alias for FilePath, matching the precedent set by
 	// eng_get_file_nodes. Users naturally reach for "path"; honouring both
-	// keeps the MCP surface internally consistent (solov2-jtl5.10).
+	// keeps the MCP surface internally consistent.
 	Path string `json:"path"`
 	// Symbol / NodeID resolve to the defining file's path before the
 	// CODEOWNERS / blame lookup. Mirrors the symbol-or-node pattern other
-	// eng_* tools accept (find_symbol, get_blast_radius, ...) — solov2-mmox.
+	// eng_* tools accept (find_symbol, get_blast_radius,.).
 	Symbol string `json:"symbol"`
 	NodeID string `json:"node_id"`
 	RepoID string `json:"repo_id"`
@@ -90,7 +87,7 @@ func makeFindOwnerHandler(db *sql.DB, repos application.RepoLister) ToolHandler 
 		if p.FilePath == "" {
 			p.FilePath = p.Path
 		}
-		// solov2-eq5a: when a RepoLister is wired, route through the
+		// when a RepoLister is wired, route through the
 		// shared resolver so the missing-repo_id error carries the same
 		// "N repos registered; pass eng_list_repos to find the id" hint
 		// the peer tools give, and so single-repo callers get
@@ -136,7 +133,7 @@ func makeFindOwnerHandler(db *sql.DB, repos application.RepoLister) ToolHandler 
 
 		// Step 3: both failed. Surface a 'reason' so the caller can tell
 		// 'no CODEOWNERS file' from 'file exists but covers nothing' from
-		// 'git blame failed' . Cheap stat: just check whether
+		// 'git blame failed'. Cheap stat: just check whether
 		// a CODEOWNERS file is present at either of the canonical paths.
 		reason := codeownersAbsenceReason(root)
 		return map[string]any{
@@ -150,7 +147,7 @@ func makeFindOwnerHandler(db *sql.DB, repos application.RepoLister) ToolHandler 
 // lookupNodeFilePath resolves a symbol or node_id to its defining file
 // path under (repoID, branch), so eng_find_owner accepts the same
 // symbol-or-node-id pattern as the rest of the eng_* surface
-// . Returns (filePath, nil) on a single match; an empty
+// Returns (filePath, nil) on a single match; an empty
 // string + RPCError when no row or ambiguous matches are found. branch
 // may be empty: when so, we pick the row with the largest node_id and
 // don't constrain the branch.
@@ -159,7 +156,7 @@ func lookupNodeFilePath(db *sql.DB, repoID, branch, symbol, nodeID string) (stri
 		return "", &RPCError{Code: CodeInternalError, Message: "find_owner: no database wired for symbol/node_id resolution"}
 	}
 	// Accept short_id (12-char prefix) for parity with the rest of the
-	// eng_* surface — solov2-mha4 / solov2-mmox.
+	// eng_* surface /.
 	if len(repoID) < 64 {
 		rows, qerr := db.Query(`SELECT repo_id FROM repos`)
 		if qerr == nil {
@@ -291,9 +288,10 @@ func lookupCodeowners(repoRoot, filePath string) (string, bool) {
 
 // matchesCodeownersPattern checks whether filePath matches a CODEOWNERS pattern.
 // Supports:
-//   - "*"  wildcard (matches anything in any directory component, a la filepath.Match)
-//   - Leading "/" anchors to repo root
-//   - Trailing "/" matches a directory prefix
+//
+//	"*" wildcard (matches anything in any directory component, a la filepath.Match)
+//	Leading "/" anchors to repo root
+//	Trailing "/" matches a directory prefix
 func matchesCodeownersPattern(pattern, filePath string) bool {
 	// Normalise file path (remove leading /).
 	fp := strings.TrimPrefix(filePath, "/")

@@ -29,11 +29,10 @@ var (
 // repoRegistrar adapts internal/repo's Add/Remove to the mcp.RepoRegistrar
 // port consumed by eng_add_repo / eng_remove_repo. It lives in the composition
 // root so internal/repo need not be imported by the MCP layer directly.
-//
 // AddRepo also fires a background cold scan against the freshly-registered
-// repo so its working tree is indexed without a daemon restart (solov2-0z1.3)
+// repo so its working tree is indexed without a daemon restart
 // and seeds the fsnotify multi-repo watcher so subsequent live edits flow
-// through Ingester.Save without a restart . The scan runs under
+// through Ingester.Save without a restart. The scan runs under
 // daemonCtx (not the caller's ctx) so a short-lived MCP request does not
 // cancel the scan as soon as it returns. Outstanding scans are tracked on
 // scanWG so the daemon's Stop can drain them under its budget.
@@ -79,7 +78,7 @@ func (rr *repoRegistrar) AddRepo(ctx context.Context, rootPath string) (string, 
 		return repoID, existed, nil
 	}
 
-	// solov2-0bc1: skip the cold-scan dispatch ONLY when the existing row
+	// skip the cold-scan dispatch ONLY when the existing row
 	// already has a last_promoted_sha — i.e. a previous scan ran to
 	// completion. A row inserted via the direct-write fallback (CLI's
 	// no-daemon path) has no SHA and was never indexed, but pre-fix this
@@ -98,7 +97,7 @@ func (rr *repoRegistrar) AddRepo(ctx context.Context, rootPath string) (string, 
 	}
 
 	// daemonCtx outlives any single request ctx, so the goroutine survives
-	// the caller returning. Fall back to context.Background() if Start has
+	// the caller returning. Fall back to context.Background if Start has
 	// not yet wired one (defensive — production wiring always sets it).
 	scanCtx := rr.daemonCtx
 	if scanCtx == nil {
@@ -141,7 +140,7 @@ func (rr *repoRegistrar) RemoveRepo(ctx context.Context, repoID string) error {
 }
 
 // SetAlias and RemoveAlias adapt internal/repo's alias CRUD to the MCP
-// RepoRegistrar port . SetAlias accepts the already-resolved
+// RepoRegistrar port. SetAlias accepts the already-resolved
 // canonical repo_id; the MCP handler does the resolution step.
 func (rr *repoRegistrar) SetAlias(ctx context.Context, name, repoID string, force bool) error {
 	return repo.SetAlias(ctx, rr.db, name, repoID, force)
@@ -235,8 +234,7 @@ func lookupAppRecord(db *sql.DB) func(ctx context.Context, repoID string) (appli
 // from the SQLite read pool. The returned key set is a superset of the static
 // fallback in tools_admin.go (status, schema_version, degraded_reasons), so
 // callers that previously relied on the fallback keep working.
-//
-// scans is the optional in-flight cold-scan registry . When set,
+// scans is the optional in-flight cold-scan registry. When set,
 // Status surfaces a 'scans_in_flight' key so programmatic consumers can see
 // when a cold scan is running without tailing the log. Nil-safe — a zero
 // scans field surfaces an empty list.
@@ -270,7 +268,7 @@ func (sp *statusProvider) Status(ctx context.Context) (map[string]any, error) {
 	// orphaned refs left behind by node deletion / re-promotion churn are
 	// never fetched, so counting them here would pin eng_get_status at
 	// degraded_reasons:["embeddings_pending"] forever even with the queue
-	// fully drained (solov2-khra).
+	// fully drained.
 	var pendingEmbeds int
 	if err := sp.db.QueryRowContext(ctx,
 		`SELECT COUNT(*) FROM node_embedding_refs r
@@ -281,14 +279,14 @@ func (sp *statusProvider) Status(ctx context.Context) (map[string]any, error) {
 	}
 
 	// scans_in_flight: snapshot of cold scans the reparser is currently
-	// running, populated via solov2-pm5's ScanTracker. Empty slice when
+	// running, populated via 's ScanTracker. Empty slice when
 	// nothing is running OR when no tracker is wired (test / legacy
 	// callers). Programmatic consumers can use this to display a "scan
 	// in progress" spinner without tailing daemon.log for the
 	// 'cold scan: starting' line.
 	scansInFlight := sp.scans.Snapshot()
 
-	// solov2-30sa: keep the rollup status aligned with the eng_search_semantic
+	// keep the rollup status aligned with the eng_search_semantic
 	// 'embeddings_pending' signal. Returning {status: "ok", pending_embeds:
 	// 4699} alongside search responses that already flag 'embeddings_pending'
 	// is contradictory — the same backlog drove both, so both should reflect it.
@@ -320,7 +318,7 @@ type configProvider struct {
 // credential field be added later, redact it here before returning.
 func (cp *configProvider) Config(_ context.Context) (map[string]any, error) {
 	embedder := elect.Marker(cp.cfg.VeskaHome)
-	// solov2-ebvg: cfg.EmbedModel is only populated when the operator
+	// cfg.EmbedModel is only populated when the operator
 	// explicitly sets VESKA_EMBED_MODEL (Ollama path). For the default
 	// model2vec/static path it's "", which surfaces as an empty field
 	// even though `embedder` carries the model id. Derive the model name
@@ -341,7 +339,7 @@ func (cp *configProvider) Config(_ context.Context) (map[string]any, error) {
 		"embed_model":    embedModel,
 		// config_schema_version is the version of THIS config payload's
 		// shape — distinct from eng_get_status's schema_version, which is
-		// the SQLite migration version of the data store .
+		// the SQLite migration version of the data store.
 		"config_schema_version": 1,
 		"degraded_reasons":      []string{},
 	}, nil
@@ -351,7 +349,7 @@ func (cp *configProvider) Config(_ context.Context) (map[string]any, error) {
 // like "model2vec(potion-code-16M)" → "potion-code-16M". Returns the
 // whole marker on no parens (e.g. "static-v2"), and "" for an empty
 // input. Lives here, not on elect, because it's a presentation concern
-// specific to eng_get_config's wire shape .
+// specific to eng_get_config's wire shape.
 func modelNameFromMarker(marker string) string {
 	open := strings.IndexByte(marker, '(')
 	close := strings.LastIndexByte(marker, ')')

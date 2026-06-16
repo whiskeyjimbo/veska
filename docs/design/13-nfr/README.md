@@ -1,6 +1,6 @@
 ---
 id: SOLO-13
-title: "NFR — Observability, Performance, Degraded Modes, CI"
+title: "NFR - Observability, Performance, Degraded Modes, CI"
 status: draft
 version: 0.1.0
 last_reviewed: 2026-05-08
@@ -9,7 +9,7 @@ verified: true
 verified_date: "2026-06-01"
 ---
 
-# SOLO-13 — Non-Functional Requirements
+# SOLO-13 - Non-Functional Requirements
 
 One developer, one daemon, one machine. The NFR surface tracks that
 shape: structured logs by default, everything else opt-in, one
@@ -41,7 +41,7 @@ listener is bound.
 **Port collision behavior.** The default `127.0.0.1:9090` is the
 canonical Prometheus port and collides with a running Prometheus,
 Cockroach UI, and several other dev tools. On `bind: address
-already in use`, the daemon does **not** silently skip metrics —
+already in use`, the daemon does **not** silently skip metrics -
 it writes a `warn`-level slog line and surfaces a `degraded`
 status in `veska doctor metrics` (exit 1) with the bound port
 recovered from the OS error and a suggested alternative
@@ -55,7 +55,7 @@ The metric set is the spec, not a starting point. Twelve series:
 | Metric | Type | Labels | What it measures |
 |---|---|---|---|
 | `veska_seal_latency_seconds` | histogram | `repo_id` | End-to-end promotion duration: hook entry → SQL commit → post-promotion queue enqueue. |
-| `veska_post_commit_hook_duration_seconds` | histogram | `repo_id`, `commit_size` (`typical` \| `refactor`) | Wall-clock from hook entry to hook return — the user-visible commit latency budget (SOLO-13 §3.1). |
+| `veska_post_commit_hook_duration_seconds` | histogram | `repo_id`, `commit_size` (`typical` \| `refactor`) | Wall-clock from hook entry to hook return - the user-visible commit latency budget (SOLO-13 §3.1). |
 | `veska_post_promotion_queue_depth` | gauge | `work_kind`, `state` | Rows in `post_promotion_queue` by `(work_kind, state)`. Replaces the prior pending-only gauge; covers `embed`/`auto_link`/`revalidate`/`review` × `pending`/`running`/`failed`. |
 | `veska_post_promotion_queue_oldest_pending_seconds` | gauge | `work_kind` | Age of the oldest `pending` row per work_kind. Surfaces embed lag during catch-up. |
 | `veska_writer_pool_busy_timeout_total` | counter | `pool` (`hot` \| `embed`) | Times `BEGIN IMMEDIATE` hit `busy_timeout` waiting for the SQLite OS lock. Catches embed/hot contention (ADR-S0011). |
@@ -63,8 +63,8 @@ The metric set is the spec, not a starting point. Twelve series:
 | `veska_mcp_requests_total` | counter | `tool`, `result` | MCP tool call count. `result` is `ok`, `error`, or `degraded`. |
 | `veska_mcp_request_duration_seconds` | histogram | `tool`, `result` | MCP tool handler duration. |
 | `veska_vector_query_duration_seconds` | histogram | `kind` (`semantic_search` \| `find_similar_symbols`) | Vector-backend ANN query latency (in-memory `memvec` or usearch). The number that decides whether the active backend is still on-budget at the current node count; for the default `memvec` linear scan this tracks the brute-force ceiling that motivated the usearch pivot (ADR-S0014). |
-| `veska_daemon_memory_rss_bytes` | gauge | — | Process RSS from `/proc/self/status`. |
-| `veska_daemon_uptime_seconds` | counter | — | Seconds since daemon start. |
+| `veska_daemon_memory_rss_bytes` | gauge | - | Process RSS from `/proc/self/status`. |
+| `veska_daemon_uptime_seconds` | counter | - | Seconds since daemon start. |
 | `veska_error_count` | counter | `kind` | Errors by kind (`promotion`, `embed`, `mcp`, `parse`, `watcher`). |
 | `veska_disk_free_bytes` | gauge | `mount` | Free bytes on the filesystem hosting `~/.veska/`. Catches disk pressure before it surfaces as a write failure. |
 | `veska_resync_in_flight` | gauge | `repo_id` | 1 while `last_promoted_sha < HEAD` replay is running for the repo, 0 otherwise. Lets the operator see startup-resync dominating cold start. |
@@ -85,17 +85,17 @@ ratio: when the operator opts in, they pick both. The pillar
 "zero telemetry by default" (§3 of SOLO-01) means traces never
 leave the daemon unless the operator wired both knobs
 deliberately. When enabled, the recommended sampler is
-`parentbased_traceidratio` at 1.0 — for a single-user product,
+`parentbased_traceidratio` at 1.0 - for a single-user product,
 fractional sampling makes traces useless when the user actually
 looks; the user lowers it via `[tracing] sample_ratio` if their
 collector is overwhelmed.
 
 Spans we emit:
 
-- `promotion.transaction` — the SQLite write transaction.
-- `mcp.<tool>` — one per MCP handler invocation.
-- `embed.run` — one per embedder batch.
-- `parse.file` — one per tree-sitter parse.
+- `promotion.transaction` - the SQLite write transaction.
+- `mcp.<tool>` - one per MCP handler invocation.
+- `embed.run` - one per embedder batch.
+- `parse.file` - one per tree-sitter parse.
 
 Span attributes mirror log attribute names. No proprietary
 trace exporters; OTLP only.
@@ -137,7 +137,7 @@ veska doctor --json       # full machine-readable bundle, all sections, in one o
 The bare summary digest aggregates every section the JSON output
 produces; users who want to see one part run
 `veska doctor --json | jq '.data.<section>'`. We do not ship
-13 subcommands for the 13 sections — every one of them collected
+13 subcommands for the 13 sections - every one of them collected
 maintenance burden out of proportion to a one-developer surface.
 
 Exit code: 0 on healthy, 1 on degraded, 2 on broken. The
@@ -177,7 +177,7 @@ lands with the feature it covers. The mapping is:
 | `backup` | M3 | first auto-snapshot landing (SOLO-08 §10) |
 
 The bare `veska doctor` (no subcommand) reports only the
-sections shipped in the current binary — it does not stub
+sections shipped in the current binary - it does not stub
 unimplemented sections. Older binaries reporting a smaller set
 is forward-compatible per §2.1's `data` tolerance rule.
 
@@ -238,7 +238,7 @@ stdout, then exits with the same code as the human-readable form.
 The schema is **stable across patch releases**; additive
 changes (new optional fields, new `messages[].code` values) do
 not bump `schema_version`. Removing or renaming fields, changing
-field types, or repurposing exit codes does — and ships only in
+field types, or repurposing exit codes does - and ships only in
 a minor version bump with a migration note.
 
 **Common envelope.** Every `--json` response has this shape:
@@ -263,7 +263,7 @@ a minor version bump with a migration note.
       "text":  "free: 412 GiB; db: 1.2 GiB; WAL: 8 MiB; vec0: 240 MiB"
     }
   ],
-  "data": {  /* per-subcommand payload — see §2.1.1–§2.1.10 */  }
+  "data": {  /* per-subcommand payload - see §2.1.1–§2.1.10 */  }
 }
 ```
 
@@ -309,7 +309,7 @@ Every configured outbound is enumerated. Unset destinations are
 omitted, not represented as `null`. `configured_via` cites the
 provenance (default | env var name | `config:<key>`).
 
-Codes: `ok`, `unexpected_egress` (warn — one of the destinations
+Codes: `ok`, `unexpected_egress` (warn - one of the destinations
 is enabled in a config layer the operator may not realise).
 
 #### 2.1.3 `storage`
@@ -350,7 +350,7 @@ non-`ok`, `remediation` carries the platform-specific install or
 
 ```jsonc
 "data": {
-  "effective": { /* merged config — full struct, secrets redacted */ },
+  "effective": { /* merged config - full struct, secrets redacted */ },
   "sources": [
     {"key": "metrics.listen", "value": "127.0.0.1:9090", "from": "env:VESKA_METRICS_LISTEN"},
     {"key": "embedder.model", "value": "nomic-embed-text", "from": "default"}
@@ -386,7 +386,7 @@ Codes: `ok`, `config_invalid` (broken).
 
 Codes: `ok`, `queue_high` (queue_depth > high_water),
 `failed_rows_present` (any `failed` row outside `review`; user
-should investigate and retry — degraded, not broken),
+should investigate and retry - degraded, not broken),
 `post_promotion_queue_invariant_broken` (a `review` failed row has no
 companion `review-pipeline-failure` finding; broken).
 
@@ -423,7 +423,7 @@ Codes: `ok`, `writer_pool_saturated` (any pool's
 `resync_running` (degraded), `resync_diverged` (broken),
 `review_paused_token_cap`, `review_paused_usd_cap`. The
 cap-paused codes are degraded
-(exit 1), not broken — the daemon is functioning as designed,
+(exit 1), not broken - the daemon is functioning as designed,
 just declining new review work until the next reset.
 
 #### 2.1.7 `service`
@@ -479,7 +479,7 @@ Per SOLO-10 §7. Schema:
 }
 ```
 
-Codes: `ok`, `anon_actor_connected` (warn — a connected MCP
+Codes: `ok`, `anon_actor_connected` (warn - a connected MCP
 client did not declare a name).
 
 #### 2.1.10 `reset-crash-loop`
@@ -492,13 +492,13 @@ client did not declare a name).
 }
 ```
 
-Codes: `ok`, `no_marker` (informational — there was nothing to
+Codes: `ok`, `no_marker` (informational - there was nothing to
 reset).
 
 ### 2.2 Diagnostic bundle
 
-`veska bundle` writes a single tarball — meant for
-attaching to a GitHub issue or sharing with another developer —
+`veska bundle` writes a single tarball - meant for
+attaching to a GitHub issue or sharing with another developer -
 that contains every operator-visible diagnostic the daemon can
 produce, with secrets and user content redacted. The command is
 **always user-initiated**; nothing leaves the machine
@@ -545,9 +545,9 @@ veska-doctor-bundle-2026-05-09T18-42-31Z.tar.gz
 
 **Bundle exclusions** (never included, no flag overrides):
 
-- `veska.db` and `veska.db-wal` — schema, vector bytes, raw
+- `veska.db` and `veska.db-wal` - schema, vector bytes, raw
   node content. Too large; contains source code.
-- Full `audit.jsonl` history (rotations) — only the live tail.
+- Full `audit.jsonl` history (rotations) - only the live tail.
 - Repo contents from any registered `Repo`.
 - Any embedding tensor or LLM prompt/response payload.
 - The user's home directory beyond `~/.veska/` resolved paths.
@@ -572,7 +572,7 @@ promotion pipeline uses, SOLO-11 §2.1). Matches are replaced with
 `"<redacted:<rule>>"` (e.g. `<redacted:aws-access-key>`) so the
 operator can see *what* was redacted without seeing the value.
 This catches the long-tail case where a secret lands in a
-non-secret-named field — for a tool whose product surface
+non-secret-named field - for a tool whose product surface
 *finds* secret leaks, ironically letting them flow through the
 audit log was a design footgun.
 
@@ -580,7 +580,7 @@ audit log was a design footgun.
 finite-rule; novel secret shapes (custom token formats, generic
 high-entropy strings under the entropy threshold) still pass
 through. The bundle ships as **operator data, not sanitised
-data** — open it before sending. Source content is excluded
+data** - open it before sending. Source content is excluded
 entirely (node bodies, embedding bytes, LLM payloads are never
 in the bundle).
 
@@ -608,7 +608,7 @@ the §2 contract.
 | Filesystem | Status | Notes |
 |---|---|---|
 | **ext4, xfs, btrfs (no COW reflinks on the data dir)** on Linux | supported | The default on every mainstream distribution. |
-| **APFS** on macOS | supported | The default. SQLite WAL+SHM works correctly. Time Machine clones of `~/.veska/` while the daemon is running are unsafe (see SOLO-08 §9 — use `veska backup create` instead). |
+| **APFS** on macOS | supported | The default. SQLite WAL+SHM works correctly. Time Machine clones of `~/.veska/` while the daemon is running are unsafe (see SOLO-08 §9 - use `veska backup create` instead). |
 | **HFS+** on macOS | supported | Legacy; works. |
 | **tmpfs** | supported but discouraged | Loses durability across reboot. Useful for tests; not for a real `~/.veska/`. The daemon does not refuse to run; `veska doctor fs` warns. |
 | **btrfs with `nodatacow` disabled (default)** | supported with a caveat | Copy-on-write of the SQLite file is correct but inflates write amplification under WAL churn. The daemon does not refuse; `veska doctor fs` warns once. Operators with large graphs should `chattr +C ~/.veska` on a fresh dir. |
@@ -625,7 +625,7 @@ daemon refuses to start with the same error. The remediation
 text names a supported filesystem and the `VESKA_HOME`
 override.
 
-This list is not exhaustive — exotic filesystems (gfs2, ocfs2,
+This list is not exhaustive - exotic filesystems (gfs2, ocfs2,
 9p) are not in the allowlist; the doctor reports them as
 **unknown** with exit 1 and recommends moving the data dir to a
 known-good filesystem rather than guessing.
@@ -637,12 +637,12 @@ or equivalent x86-64 laptop.
 
 **Number labels.** Every number in this section carries one of:
 
-- `BUDGET (unmeasured)` — a target picked from informed estimate.
+- `BUDGET (unmeasured)` - a target picked from informed estimate.
   Not a decision. Replaced with a measurement at the named gate.
-- `BUDGET (measured M<N>)` — measured on the reference laptop;
+- `BUDGET (measured M<N>)` - measured on the reference laptop;
   cites the spike commit hash.
-- `INVARIANT` — a fact (file dim, schema PK, protocol shape).
-- `DEFAULT` — a knob with a sensible-but-arbitrary value;
+- `INVARIANT` - a fact (file dim, schema PK, protocol shape).
+- `DEFAULT` - a knob with a sensible-but-arbitrary value;
   override in config (CONFIG-SURFACE.md).
 
 A `BUDGET (unmeasured)` that misses at its gate gets rewritten
@@ -661,7 +661,7 @@ budget inline; on divergence, this section wins.
 | `get_node` p95 | < 25ms | BUDGET (measured M0): 0.039ms at 100k nodes, spike 72d6ca4 (PASS) | M1 |
 | `get_edges` p95 | < 100ms | BUDGET (measured M0): 0.047ms at 100k nodes, spike 72d6ca4 (PASS) | M1 |
 | `get_call_chain` p95, depth 3, single repo | < 100ms | unmeasured | M1 |
-| `semantic_search` p95 (k=10, 50k vectors) | < 100ms | BUDGET (measured M1): 1.90ms via application-layer UsearchStore at 50k vectors, recall@10=0.987, bench commit in m1.hnsw-pivot (PASS); OQ-S001 resolved — integrated path confirmed << M0 vec0 ceiling | M1 ✓ |
+| `semantic_search` p95 (k=10, 50k vectors) | < 100ms | BUDGET (measured M1): 1.90ms via application-layer UsearchStore at 50k vectors, recall@10=0.987, bench commit in m1.hnsw-pivot (PASS); OQ-S001 resolved - integrated path confirmed << M0 vec0 ceiling | M1 ✓ |
 | Save → staging visible to MCP (post-debounce; reparse + staging update), **typical file** (≤ `[save].large_file_threshold_loc`, DEFAULT 1500 LOC) | < 50ms | unmeasured | M1 |
 | Save → staging visible to MCP, **large file** (> threshold) | reparse runs in background; **staging serves the prior good entry for that file** and MCP reads stamp `degraded_reasons: ["staging_reparsing:<path>"]` until the reparse completes; budget < 500ms p95 for the badge-clear, not the save→staging-visible path | unmeasured | M1 |
 | Post-commit hook return p95, **typical commit** (see "refactor-commit definition" below), Linux | < 100ms | BUDGET (measured M1): 0.116ms p95 (500 iterations, Unix socket round-trip), bench commit in m1.04 (PASS) | M1 ✓ |
@@ -692,7 +692,7 @@ shows hot-pool wait exceeding the budget despite the barrier,
 the fix path is bench-driven (e.g., shrinking embed chunk size)
 rather than a priority lane.
 
-### 3.1a fsync defaults — uniform FULL
+### 3.1a fsync defaults - uniform FULL
 
 `[storage].synchronous = "FULL"` on every platform. SOLO-08 §5.1
 records the SQLite-level mechanics; this section records the
@@ -713,7 +713,7 @@ and don't reliably cover ref updates on every install. On a
 real power-cut both the Veska promotion and the Git HEAD
 advance can be lost independently, after which
 `last_promoted_sha == HEAD` looks consistent and resync sees no
-work — but the user's commit is gone. We eat the budget cost
+work - but the user's commit is gone. We eat the budget cost
 for honest durability rather than ship a defence that doesn't
 fully hold.
 
@@ -751,7 +751,7 @@ catches up. M1 measures the badge-clear p95 to confirm the
 
 Incremental-parse via `ts_parser_parse` with the prior tree is
 the obvious next step, but fsnotify does not deliver edit ranges
-— the editor would have to push them, which is editor
+- the editor would have to push them, which is editor
 integration work and out of M1 scope. **Revisit after M3** if
 real-workload measurements show the threshold is too tight; do
 not pre-author an incremental-parse ADR before the data exists.
@@ -763,7 +763,7 @@ not pre-author an incremental-parse ADR before the data exists.
 | Cold-scan 100k LOC repo (per repo) | < 60s wall-clock | BUDGET (measured M1): 1.616s total (1000 files ~119k LOC, GoParser), bench commit in m1.05 (PASS) | M1 ✓ |
 | Promotion SQL transaction (atomic write portion only) | < 1s p95 typical, < 5s p95 refactor | BUDGET (measured M1): 3.83s p95 refactor (50k nodes + edges, WAL, 20 trials), bench commit 662a951 (PASS); typical-commit split not yet isolated | M1 ✓ (refactor gate) |
 | In-tx synchronous review checks (dead-code + secrets + vuln + contract drift) | budget *included* in the §3.1 hook-return row, not additive | unmeasured | M1 |
-| Embedding throughput on CPU Ollama | depends heavily on model + CPU + concurrent load — varies from seconds (small commit, idle laptop, quantised model) to hours (refactor commit, busy laptop, full nomic-embed-text); refactor-commit p95 unmeasured | unmeasured | M3 measures, publishes a matrix (model × CPU class × commit size) rather than picking one number |
+| Embedding throughput on CPU Ollama | depends heavily on model + CPU + concurrent load - varies from seconds (small commit, idle laptop, quantised model) to hours (refactor commit, busy laptop, full nomic-embed-text); refactor-commit p95 unmeasured | unmeasured | M3 measures, publishes a matrix (model × CPU class × commit size) rather than picking one number |
 | Auto-link drain after 10k-edge commit | < 60s | unmeasured | M3 |
 | Cold daemon startup (incl. building the in-memory `memvec` index from `node_embeddings`) | < 2s | unmeasured | M1 |
 | Wake-reconcile sweep on suspend/wake (per repo, working tree only) | < 500ms p95 typical repo; < 5s for working trees with > 50k tracked files | unmeasured | M1 |
@@ -790,26 +790,26 @@ tasks by file size with the `staging_reparsing:<path>` badge
 visible to MCP reads (already specified in SOLO-11 §1), so the
 editor surfaces "this file's staging is stale" rather than
 silently blocking the save→staging path. No incremental-parse
-plan today — the design accepts whole-file reparse and pushes
+plan today - the design accepts whole-file reparse and pushes
 the cost into a per-file degraded badge.
 
 The **wake-reconcile budget** captures the cost of resyncing the
 working tree after macOS FSEvents / Linux inotify drop events
 across a suspend (SOLO-03 §5.2). With multiple registered repos
-this is the user's first impression on opening the laptop —
+this is the user's first impression on opening the laptop -
 make the budget visible so M1 measurement catches it if it stretches.
 
 ### 3.3 Resource ceilings (daemon-global)
 
 | Resource | Soft cap | Hard cap | Label |
 |---|---|---|---|
-| Daemon RSS at steady state, 1 repo | 2 GiB | 4 GiB (kill if exceeded) | BUDGET (measured M1): 17 MiB RSS after 50-branch × 5k-node load (250k rows), bench commit 662a951 (PASS) — SQLite page cache dominates, not row count |
-| Daemon RSS at steady state, N repos (working set) | 2 GiB global | 4 GiB global | BUDGET (measured M1): per-repo additive curve is ~17 MiB / repo at 250k rows; 50-repo projection ≈ 850 MiB — well within 2 GiB soft cap; `veska repo add` RSS check uses `internal/repo/rss.go` (commit in m1.10) |
+| Daemon RSS at steady state, 1 repo | 2 GiB | 4 GiB (kill if exceeded) | BUDGET (measured M1): 17 MiB RSS after 50-branch × 5k-node load (250k rows), bench commit 662a951 (PASS) - SQLite page cache dominates, not row count |
+| Daemon RSS at steady state, N repos (working set) | 2 GiB global | 4 GiB global | BUDGET (measured M1): per-repo additive curve is ~17 MiB / repo at 250k rows; 50-repo projection ≈ 850 MiB - well within 2 GiB soft cap; `veska repo add` RSS check uses `internal/repo/rss.go` (commit in m1.10) |
 | Goroutines | 200 | 500 (refuse new work above) | DEFAULT |
 | File descriptors | 1024 | OS limit | INVARIANT (OS) |
-| `~/.veska/` on-disk size | unbounded; surfaced in `veska doctor storage` | — | INVARIANT |
+| `~/.veska/` on-disk size | unbounded; surfaced in `veska doctor storage` | - | INVARIANT |
 | `audit.jsonl` per-file size | 100 MiB before rotation | 5 rotations kept | DEFAULT |
-| Branch-in-PK on-disk size (28 branches × 100k nodes) | ~1.68 GiB measured; ~3.0 GiB extrapolated to 50 branches | — | BUDGET (measured M1): OQ-S006 re-verified — 50 branches × 5k nodes; query p95 0.030ms (M0: 0.040ms, ratio 0.75×, GREEN); no ≥2x regression; bench commit 662a951. M0 curve confirmed. |
+| Branch-in-PK on-disk size (28 branches × 100k nodes) | ~1.68 GiB measured; ~3.0 GiB extrapolated to 50 branches | - | BUDGET (measured M1): OQ-S006 re-verified - 50 branches × 5k nodes; query p95 0.030ms (M0: 0.040ms, ratio 0.75×, GREEN); no ≥2x regression; bench commit 662a951. M0 curve confirmed. |
 
 The 4 GiB hard cap is global, not per-repo. `veska repo add`
 refuses to register a new repo if its estimated steady-state cost
@@ -820,7 +820,7 @@ then, `veska repo add` uses a conservative linear estimate
 (working number: 20 MiB per 10 kLOC indexed) and reports it
 explicitly to the user before committing.
 
-#### 3.3.1 The vec0 scale ceiling — explicit gate
+#### 3.3.1 The vec0 scale ceiling - explicit gate
 
 The 4 GiB cap interacts with the vec0 substrate (ADR-S0001) in a
 way the design must name out loud rather than discover at M1.
@@ -866,7 +866,7 @@ gate** for M1's substrate, not just a measurement exercise:
 - **The minimum-ceiling floor.** `[ceiling].minimum_for_m1`
   (DEFAULT 250 000 nodes; CONFIG-SURFACE) is the floor below
   which vec0 is not a shippable substrate. The number matches
-  M0's "Red — ceiling" outcome (milestones/M0.md): a measured
+  M0's "Red - ceiling" outcome (milestones/M0.md): a measured
   ceiling below 250 000 nodes promotes the HNSW pivot ADR
   (OQ-S003) from M3 work into M1 work, mandatory before
   m1.03 begins.
@@ -927,13 +927,13 @@ storage --json` carries an `embeddings` block:
 
 Status thresholds (DEFAULT, CONFIG-SURFACE):
 
-- `ok` — `headroom_ratio ≥ 0.25`.
-- `warn` — `0.05 ≤ headroom_ratio < 0.25`. The warning fires
+- `ok` - `headroom_ratio ≥ 0.25`.
+- `warn` - `0.05 ≤ headroom_ratio < 0.25`. The warning fires
   in `veska doctor` digest output and `veska_doctor_status`
   metric labels (`status="warn"`); MCP reads against
   `semantic_search` add `degraded_reasons:
   ["vec0_ceiling_warn"]`.
-- `exceeded` — `headroom_ratio < 0.05`. `semantic_search` p95
+- `exceeded` - `headroom_ratio < 0.05`. `semantic_search` p95
   budget is presumed missed; reads stamp `degraded_reasons:
   ["vec0_ceiling_exceeded"]`. The daemon does *not* refuse
   reads; it serves what vec0 can serve and tells the truth.
@@ -956,7 +956,7 @@ resolution (SOLO-11 §9).
 | `get_call_chain` p95, depth 3, `repo: "*"`, ≤ 5 indexed repos, ≤ 1 cross-repo hop | < 250ms (includes audit-append on every cross-repo-touching read per SOLO-10 §4) | unmeasured | OQ-S010 (M1) |
 | `get_blast_radius` p95, single src node, `repo: "*"`, one-hop | < 250ms (includes audit-append) | unmeasured | OQ-S010 (M1) |
 | `semantic_search` p95 (k=10, 50k vectors) `repo: "*"` | < 150ms | unmeasured | M1 |
-| Cross-repo resolver lookup (one indexed point query) | < 5ms p95 | BUDGET (measured M1): 339µs p95 (2 repos × 1000 nodes, 200 stubs, 1000 runs), bench commit in m1.10 (PASS) — OQ-S010 RESOLVED GREEN | OQ-S010 ✓ |
+| Cross-repo resolver lookup (one indexed point query) | < 5ms p95 | BUDGET (measured M1): 339µs p95 (2 repos × 1000 nodes, 200 stubs, 1000 runs), bench commit in m1.10 (PASS) - OQ-S010 RESOLVED GREEN | OQ-S010 ✓ |
 | Audit-append cost on a cross-repo read (synchronous, per SOLO-10 §4) | < 2ms p95 (one O_APPEND fsync + JSON marshal); included in the row above, not additive | unmeasured | M1 |
 | Cold-scan total wall-clock for N repos at `repo add` time | linear in repo size; concurrent across repos | DEFAULT (concurrency = #cores / 2) | M1 confirms |
 
@@ -982,14 +982,14 @@ the row, not the design.
 
 | Operation | Budget | Label | Gate |
 |---|---|---|---|
-| Save → staging update, **fsnotify path** (post-debounce; tree-sitter reparse + staging write — debounce window itself is a coalescing knob, not in the budget) | "imperceptible"; concrete number unmeasured | unmeasured | M1 |
-| Save → staging update, **polling-fallback path** (FSEvents budget exceeded; SOLO-03 §3.0 names the trigger) | bounded by `[watcher].poll_fallback_interval` (DEFAULT 5s) — this is a regime change, not a degraded fsnotify run; user perception is "edits show up after the next poll tick" | DEFAULT (regime) | M1 documents the engagement criteria |
+| Save → staging update, **fsnotify path** (post-debounce; tree-sitter reparse + staging write - debounce window itself is a coalescing knob, not in the budget) | "imperceptible"; concrete number unmeasured | unmeasured | M1 |
+| Save → staging update, **polling-fallback path** (FSEvents budget exceeded; SOLO-03 §3.0 names the trigger) | bounded by `[watcher].poll_fallback_interval` (DEFAULT 5s) - this is a regime change, not a degraded fsnotify run; user perception is "edits show up after the next poll tick" | DEFAULT (regime) | M1 documents the engagement criteria |
 | Revalidation sweep at 1k / 10k / 100k open findings | "well under the cadence interval" | unmeasured | M2 |
 | Review pipeline per-commit (security specialty), local Ollama | seconds-to-minutes per touched file; range unmeasured | unmeasured | M5 measures, picks a number |
 | Review pipeline per-commit (contract specialty), local Ollama | seconds per touched file; faster than security | unmeasured | M5 |
 
 The review pipeline's hard-halt ceilings (per-commit tokens, daily
-tokens; USD/weekly caps arrive with hosted LLM providers) are not perf budgets — they are operator
+tokens; USD/weekly caps arrive with hosted LLM providers) are not perf budgets - they are operator
 cost controls. The defaults and behavior are normative in
 SOLO-11 §3 and CONFIG-SURFACE.md `[review]`; the degraded-mode
 row in §4 covers what the system does when one trips.
@@ -1029,15 +1029,15 @@ drafts is replaced by `{"code": "post_promotion_queue_deferred",
 | post-promotion queue at high-water with embedder paused (formerly a documented deadlock) | Promotion proceeds; new `embed` rows insert with `state='deferred'` instead of blocking the promotion. `degraded_reasons: ['post_promotion_queue_deferred:embed:<count>']` until depth drops below low-water. (SOLO-08 §3.4.) |
 | Ollama model missing | Daemon refuses to start the embedder worker; `veska doctor embedder` reports the gap. Other tools function. |
 | Disk full | Promotion fails with a clear error; hook returns non-zero; daemon refuses new MCP writes (`degraded_reasons: ['disk_full']`) until `veska doctor storage` reports OK. |
-| `usearch` backend selected but native library missing | **Daemon refuses to start** (`vector.ErrVectorStoreUnavailable`) — only when `VESKA_VECTOR_BACKEND=usearch` and the `hnsw_native` tag / `libusearch_c.so` is absent. Loud failure, not silent degradation. The default `memory` backend has no native dependency and cannot hit this. |
-| SQLite database locked by an external writer | `BEGIN IMMEDIATE` blocks until `busy_timeout` expires (5s hot, 30s embed); op then fails. In-process pools (`writeDB.hot`, `writeDB.embed`) serialize via SQLite's lock without contending — this row fires only when the user opens an external `sqlite3` connection or similar (SOLO-11 §10, ADR-S0011). |
+| `usearch` backend selected but native library missing | **Daemon refuses to start** (`vector.ErrVectorStoreUnavailable`) - only when `VESKA_VECTOR_BACKEND=usearch` and the `hnsw_native` tag / `libusearch_c.so` is absent. Loud failure, not silent degradation. The default `memory` backend has no native dependency and cannot hit this. |
+| SQLite database locked by an external writer | `BEGIN IMMEDIATE` blocks until `busy_timeout` expires (5s hot, 30s embed); op then fails. In-process pools (`writeDB.hot`, `writeDB.embed`) serialize via SQLite's lock without contending - this row fires only when the user opens an external `sqlite3` connection or similar (SOLO-11 §10, ADR-S0011). |
 | MCP write tool's `max_wait_ms` deadline expires waiting for `writeDB.hot` | Tool returns `ErrBusy` with `data.context.cause = "seal_in_flight"` (carrying `promotion_id`, `eta_ms`) or `"pool_wait"` (carrying `wait_count`, `wait_duration_ms`, `eta_ms` from `sql.DBStats()`). Surface in `veska doctor pipelines` as `writer_pool_saturated`. (SOLO-09 §4.6.) |
 | Memory pressure (RSS > 2 GiB soft cap) | Goroutine count caps; embedder worker pauses; tree-sitter reparse coalesces. **MCP does not refuse requests.** Surface in `veska doctor`. |
 | RSS > 4 GiB hard cap | Daemon logs and exits non-78; supervisor restarts; counts against the crash-loop breaker (SOLO-03 §5.6). After 5 such exits in 10 min the next start hits SOLO-03 §5.8 row 1 (exit 78, supervisor halts); user clears with `veska doctor reset-crash-loop`. |
-| Daemon refuses to start (usearch native library missing, schema mismatch, `[backup].required` unmet, NFS, etc.) | Exit 78 at start; supervisor halts. SOLO-03 §5.8 is the full matrix. None of these increment the breaker. (A planned embedder-consistency refusal would join this set — SOLO-03 §3.2 — but is unbuilt.) |
+| Daemon refuses to start (usearch native library missing, schema mismatch, `[backup].required` unmet, NFS, etc.) | Exit 78 at start; supervisor halts. SOLO-03 §5.8 is the full matrix. None of these increment the breaker. (A planned embedder-consistency refusal would join this set - SOLO-03 §3.2 - but is unbuilt.) |
 | Vuln-source feed timeout | Cached findings remain valid; refresh fails with `degraded_reasons: ['vuln_feed_unreachable']` next surface. |
 | LLM generator (review pipeline) timeout | Review job marked failed in `post_promotion_queue`; retries up to 3 with backoff, then a `review-pipeline-failure` finding (severity `high`) is emitted; the post-promotion queue row stays `failed` until that finding closes through the human-action gate (ADR-S0004). Promoted graph unaffected. |
-| Review pipeline daily token cap reached | Pause new review jobs; queued rows stay `pending`; write one line to `audit.jsonl` describing the pause (cap, spent, resets_at). Surface in `veska doctor pipelines`. Resume at local-midnight automatically — no Finding, no human-action gate. (SOLO-11 §3.1.) |
+| Review pipeline daily token cap reached | Pause new review jobs; queued rows stay `pending`; write one line to `audit.jsonl` describing the pause (cap, spent, resets_at). Surface in `veska doctor pipelines`. Resume at local-midnight automatically - no Finding, no human-action gate. (SOLO-11 §3.1.) |
 | Tree-sitter parse error on a file | File skipped; finding emitted with `source_layer='structural'`, `rule='parse-failure'`. Other files in the promotion proceed. |
 | Watcher (fsnotify) overflow | Daemon falls back to polling at 5s for the affected paths; logs `watcher_overflow`; surface in `veska doctor`. |
 
@@ -1095,8 +1095,8 @@ Forward elsewhere by tailing the file.
 
 ## 7. Cross-references
 
-- SOLO-01 §8 — what we measure and what we don't.
-- SOLO-08 §3.5 — audit log shape.
-- SOLO-08 §6 — storage failure modes.
-- SOLO-11 — pipelines (where the promotion-latency budget originates).
-- SOLO-14 — milestone exit gates that resolve every `BUDGET (unmeasured)` row.
+- SOLO-01 §8 - what we measure and what we don't.
+- SOLO-08 §3.5 - audit log shape.
+- SOLO-08 §6 - storage failure modes.
+- SOLO-11 - pipelines (where the promotion-latency budget originates).
+- SOLO-14 - milestone exit gates that resolve every `BUDGET (unmeasured)` row.

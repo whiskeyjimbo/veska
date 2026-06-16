@@ -18,8 +18,7 @@ func init() {
 
 // zbBench is a parallel Bench implementation using zombiezen's non-database/sql
 // API. The query strings match driver_sql.go's; only the bind/scan harness
-// differs. This faithfulness is the point of including zombiezen at all —
-// see solov2-6e5r.
+// differs. This faithfulness is the point of including zombiezen at all
 type zbBench struct {
 	pool      *sqlitex.Pool
 	seedCount int

@@ -8,7 +8,7 @@ import (
 )
 
 // DependencyEdge is a directed dependency edge with both endpoints resolved to
-// their file and symbol — the projection the cycle diff-gate (solov2-zvh6.6)
+// their file and symbol — the projection the cycle diff-gate
 // needs to build the after-/base-state graphs (partition by endpoint file to
 // splice the re-promote clone) and to name cycle members without a second
 // round-trip.
@@ -30,7 +30,7 @@ func NewCycleEdgeRepo(db *sql.DB) *CycleEdgeRepo { return &CycleEdgeRepo{db: db}
 // DependencyEdges returns every edge in (repoID, branch) whose kind is in kinds
 // (case-insensitive), with both endpoints resolved to (file_path, symbol_path).
 // An edge whose src or dst node is absent is dropped (INNER JOINs). Empty kinds
-// is a no-op (nil, nil), avoiding a degenerate "IN ()" clause.
+// is a no-op (nil, nil), avoiding a degenerate "IN " clause.
 func (r *CycleEdgeRepo) DependencyEdges(ctx context.Context, repoID, branch string, kinds []string) ([]DependencyEdge, error) {
 	if len(kinds) == 0 {
 		return nil, nil

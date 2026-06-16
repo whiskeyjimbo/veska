@@ -1,6 +1,6 @@
 ---
 id: SOLO-02
-title: "Personas & Stories — Dev and Agent"
+title: "Personas & Stories - Dev and Agent"
 status: draft
 version: 0.2.0
 last_reviewed: 2026-06-15
@@ -9,7 +9,7 @@ verified: true
 verified_date: "2026-06-15"
 ---
 
-# SOLO-02 — Personas & Stories
+# SOLO-02 - Personas & Stories
 
 Two personas, sixteen stories. Each story is two or three lines: who
 acts, what happens, what acceptance looks like. Design sections
@@ -55,7 +55,7 @@ place; its ID is not reused.
 
 ## 4. Stories
 
-### US-01.01 — Dev: First install on a new repo
+### US-01.01 - Dev: First install on a new repo
 
 **Status:** shipped
 **Satisfied by:** SOLO-03
@@ -70,7 +70,7 @@ scan completes within the cold-scan budget (SOLO-13 §3.2); the
 user is not asked to log in, configure YAML, or accept a
 network egress prompt.
 
-### US-01.02 — Agent: Discover the MCP tool surface
+### US-01.02 - Agent: Discover the MCP tool surface
 
 **Status:** shipped
 **Satisfied by:** SOLO-09
@@ -83,10 +83,10 @@ active task name that requirement in their description.
 **Acceptance.** `list_tools` returns every registered `eng_*` tool
 with a stable input schema; task-scoped tools either take an
 explicit `task_id` argument or read the task set by
-`eng_set_active_task`; every advertised tool is dispatchable — none
+`eng_set_active_task`; every advertised tool is dispatchable - none
 is half-wired.
 
-### US-02.01 — Dev: Daily edit loop
+### US-02.01 - Dev: Daily edit loop
 
 **Status:** shipped
 **Satisfied by:** SOLO-11
@@ -101,7 +101,7 @@ SOLO-13 §3.1 budget; the promoted graph is unchanged (saves do not
 write to SQLite); restarting the daemon discards staging and
 falls back to promoted state without error.
 
-### US-02.02 — Agent: Daily edit loop
+### US-02.02 - Agent: Daily edit loop
 
 **Status:** shipped
 **Satisfied by:** SOLO-09, SOLO-11
@@ -115,7 +115,7 @@ when staging contributed rows (SOLO-09 §4.4); the agent's view of
 the graph matches the editor's view within the same staging
 window.
 
-### US-03.01 — Dev: Commit and push
+### US-03.01 - Dev: Commit and push
 
 **Status:** shipped
 **Satisfied by:** SOLO-08, SOLO-11
@@ -130,7 +130,7 @@ hook-return budget. Async drains run after.
 atomic (a crash mid-promotion leaves staging unmodified); `git push`
 is not blocked on embedding completion.
 
-### US-04.01 — Agent: Find a symbol
+### US-04.01 - Agent: Find a symbol
 
 **Status:** shipped
 **Satisfied by:** SOLO-09
@@ -143,15 +143,15 @@ ranked by exact-match-then-fuzzy.
 budget; the response respects the per-response token budget; the
 response sets `included_staging` per SOLO-09 §4.4.
 
-### US-04.02 — Agent: Compute blast radius for the active task
+### US-04.02 - Agent: Compute blast radius for the active task
 
-**Status:** blocked — task scoping parked
+**Status:** blocked - task scoping parked
 **Satisfied by:** SOLO-09, SOLO-12
 
 > **Not reachable on the live MCP surface (solov2-nmps.10).** The
 > `eng_get_dirty_blast_radius` and `eng_get_context_pack` tools ship and work,
-> but the *active-task* anchoring this story depends on — `eng_set_active_task`
-> — is parked off the daemon registry (there is no MCP path to create a task;
+> but the *active-task* anchoring this story depends on - `eng_set_active_task`
+> - is parked off the daemon registry (there is no MCP path to create a task;
 > see `internal/infrastructure/mcp/tools_tasks.go`). A real agent can compute a
 > dirty blast radius, but cannot scope it to an active task. Re-mark `shipped`
 > when the task tools re-enable.
@@ -166,7 +166,7 @@ response is reproducible across two calls within the same staging
 window; the agent can opt in to unresolved edges with
 `include_unresolved: true`.
 
-### US-05.01 — Dev: Surface a vuln finding from a feed
+### US-05.01 - Dev: Surface a vuln finding from a feed
 
 **Status:** shipped
 **Satisfied by:** SOLO-05, SOLO-11
@@ -181,7 +181,7 @@ client lists them via `eng_list_findings`.
 within one poll cycle of the feed publishing it; each finding
 carries a stable id and a target `node_id`.
 
-### US-05.02 — Dev: Suppress a false positive
+### US-05.02 - Dev: Suppress a false positive
 
 **Status:** shipped
 **Satisfied by:** SOLO-09
@@ -196,7 +196,7 @@ finding by default and include it with `include_suppressed:
 true`; the suppression's `actor_id` and `actor_kind` are recorded
 in `audit.jsonl`.
 
-### US-05.03 — Dev: Read a finding from the optional review pipeline
+### US-05.03 - Dev: Read a finding from the optional review pipeline
 
 **Status:** shipped
 **Satisfied by:** SOLO-05, SOLO-11
@@ -208,13 +208,13 @@ files and files `Finding` rows. The Dev lists them via
 `eng_list_findings` alongside feed-sourced findings.
 
 **Acceptance.** The review pass runs only when `review.enabled` is
-set — off by default (SOLO-05); it runs as a post-promotion
+set - off by default (SOLO-05); it runs as a post-promotion
 goroutine and never blocks the commit hook or `git push`; each
 review finding carries a stable id and a target `node_id` and is
 suppressible through the same `eng_suppress_finding` flow as
 US-05.02.
 
-### US-06.01 — Dev: Switch to a stale branch and re-query
+### US-06.01 - Dev: Switch to a stale branch and re-query
 
 **Status:** shipped
 **Satisfied by:** SOLO-08, SOLO-11
@@ -231,7 +231,7 @@ queries return immediately on the existing promoted state; the
 daemon kicks off a background re-scan of the changed files and
 the staleness notice clears as the queue drains.
 
-### US-07.01 — Dev: Restart the daemon and recover state
+### US-07.01 - Dev: Restart the daemon and recover state
 
 **Status:** shipped
 **Satisfied by:** SOLO-03, SOLO-08
@@ -246,15 +246,15 @@ startup budget (SOLO-13 §3.2 "Cold daemon startup"); pending
 post-promotion queue rows from before the restart are drained without
 duplication; the user does not need to re-run a cold scan.
 
-### US-08.01 — Dev: Onboard to a codebase through the wiki
+### US-08.01 - Dev: Onboard to a codebase through the wiki
 
 **Status:** shipped
 **Satisfied by:** SOLO-12
 
 The Dev opens an unfamiliar repo. They run `veska wiki` to
 regenerate the mechanical pages and read the `hot_zone` and
-`entry_points` Markdown — the high-churn, high-blast-radius areas
-and the program's entry points — to build a mental model before
+`entry_points` Markdown - the high-churn, high-blast-radius areas
+and the program's entry points - to build a mental model before
 touching code.
 
 **Acceptance.** `veska wiki` regenerates both page kinds from the
@@ -264,15 +264,15 @@ nodes; the same data is reachable over MCP via `eng_get_hot_zone`
 and `eng_get_entry_points`, so the Markdown and the editor view
 never diverge.
 
-### US-08.02 — Agent: Ground reasoning in a codebase context pack
+### US-08.02 - Agent: Ground reasoning in a codebase context pack
 
 **Status:** shipped
 **Satisfied by:** SOLO-09, SOLO-12
 
 The Agent, working an unfamiliar codebase, calls
 `eng_get_context_pack` for a symbol or the active task. The daemon
-returns a token-bounded bundle — the symbol's or task's
-neighbourhood in the promoted graph — so the agent reasons from the
+returns a token-bounded bundle - the symbol's or task's
+neighbourhood in the promoted graph - so the agent reasons from the
 same structural view the wiki gives a human.
 
 **Acceptance.** `eng_get_context_pack` accepts exactly one of
@@ -280,7 +280,7 @@ same structural view the wiki gives a human.
 per-response token budget and truncates deterministically; no LLM is
 in the path.
 
-### US-09.01 — Dev: Catch up after stepping away
+### US-09.01 - Dev: Catch up after stepping away
 
 **Status:** shipped
 **Satisfied by:** SOLO-08, SOLO-09
@@ -295,15 +295,15 @@ and queue-drain state; `eng_get_task_history` returns the nodes
 touched since the task became active; both are read-only and
 idempotent to repeated mid-session calls.
 
-### US-09.02 — Agent: Resume an in-progress task
+### US-09.02 - Agent: Resume an in-progress task
 
-**Status:** blocked — task tools parked
+**Status:** blocked - task tools parked
 **Satisfied by:** SOLO-09, SOLO-12
 
 > **Not reachable on the live MCP surface (solov2-nmps.10).** This story needs
 > `eng_get_task_history` and `eng_get_context_pack` *in task mode*, both of which
 > depend on the task tools (`eng_set_active_task` / `eng_get_task_history`) that
-> are parked off the daemon registry — `RegisterTaskTools` is never wired
+> are parked off the daemon registry - `RegisterTaskTools` is never wired
 > because there is no MCP path to create a task
 > (`internal/infrastructure/mcp/tools_tasks.go`). Symbol-mode `eng_get_context_pack`
 > works; the task-anchored resume path does not. Re-mark `shipped` on re-enable.
@@ -325,15 +325,15 @@ makes no write to the promoted graph.
 |---|---|---|
 | 01 First install | US-01.01 | US-01.02 |
 | 02 Daily edit loop | US-02.01 | US-02.02 |
-| 03 Commit and push | US-03.01 | — |
-| 04 Querying the graph | — | US-04.01, US-04.02 |
-| 05 Findings | US-05.01, US-05.02, US-05.03 | — |
-| 06 Branch switching | US-06.01 | — |
-| 07 Daemon restart | US-07.01 | — |
+| 03 Commit and push | US-03.01 | - |
+| 04 Querying the graph | - | US-04.01, US-04.02 |
+| 05 Findings | US-05.01, US-05.02, US-05.03 | - |
+| 06 Branch switching | US-06.01 | - |
+| 07 Daemon restart | US-07.01 | - |
 | 08 Codebase onboarding | US-08.01 | US-08.02 |
 | 09 Session recovery | US-09.01 | US-09.02 |
 
-Sixteen stories. Empty cells are not gaps — they are moments where
+Sixteen stories. Empty cells are not gaps - they are moments where
 the persona has nothing distinct to do (the Agent does not
 restart daemons; the Dev does not drive findings generation).
 
@@ -341,7 +341,7 @@ restart daemons; the Dev does not drive findings generation).
 
 Fourteen of sixteen stories are `shipped`: milestones M0–M7 have
 closed and their satisfying SOLO sections are in the field. The two
-Agent task-anchored stories — **US-04.02** and **US-09.02** — are
+Agent task-anchored stories - **US-04.02** and **US-09.02** - are
 `blocked`: their underlying blast-radius and context-pack tools ship,
 but the task tools (`eng_set_active_task` / `eng_get_task_history`)
 they need are parked off the live MCP registry, so the task-scoped

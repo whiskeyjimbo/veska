@@ -1,6 +1,6 @@
 ---
 id: ADR-S0008
-title: MCP tool naming — eng_<verb>_<object>, closed verb set
+title: MCP tool naming - eng_<verb>_<object>, closed verb set
 status: accepted
 date: 2026-05-08
 deciders: [whiskeyjimbo]
@@ -8,7 +8,7 @@ verified: true
 verified_date: "2026-05-16"
 ---
 
-# ADR-S0008 — MCP tool naming — `eng_<verb>_<object>`, closed verb set
+# ADR-S0008 - MCP tool naming - `eng_<verb>_<object>`, closed verb set
 
 ## Context
 
@@ -43,7 +43,7 @@ host. It is mandatory.
 | `find` | Lookup by partial info; returns 0..N matches, unranked. |
 | `get` | Lookup by ID; returns 0..1 result, errors if unknown. |
 | `list` | Enumerate within a small bounded scope (a file, a package, a task). |
-| `search` | Ranked search — vector or full-text. |
+| `search` | Ranked search - vector or full-text. |
 | `set` | Pin/select a single-cardinality value (e.g. the active task). |
 | `close` | Transition a finding / suppression / task to terminal state. |
 | `reopen` | Reverse a `close`. Inverse pair. |
@@ -57,11 +57,11 @@ file. SOLO-09 cites this list; it does not maintain its own.
 
 Verbs intentionally **not** in the set:
 
-- `walk` — graph traversal is shaped as `get` (returns one chain / radius).
-- `open` — covered by `reopen`; a finding's first transition is implicit at creation.
-- `index`, `promotion` — CLI commands, not MCP tools (the *"diagnostics that fix things are CLI-only"* rule in SOLO-09 §3.7).
-- `inspect` — same rule.
-- `create`, `update`, `link` — no V2.0 caller. Add via ADR amendment when a tool actually needs them (likely when tracker-write or analysis-slot tools land in M2/M3).
+- `walk` - graph traversal is shaped as `get` (returns one chain / radius).
+- `open` - covered by `reopen`; a finding's first transition is implicit at creation.
+- `index`, `promotion` - CLI commands, not MCP tools (the *"diagnostics that fix things are CLI-only"* rule in SOLO-09 §3.7).
+- `inspect` - same rule.
+- `create`, `update`, `link` - no V2.0 caller. Add via ADR amendment when a tool actually needs them (likely when tracker-write or analysis-slot tools land in M2/M3).
 
 The object set is open but drawn from the glossary nouns
 (`symbol`, `node`, `edge`, `file`, `task`, `finding`, `suppression`,
@@ -115,6 +115,6 @@ Negative:
 
 ## References
 
-- SOLO-09 (MCP surface — full tool inventory)
+- SOLO-09 (MCP surface - full tool inventory)
 - Prior ADR-0022 (the `eng_` prefix; this ADR carries the prefix
   forward and adds the verb set)

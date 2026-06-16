@@ -12,7 +12,7 @@ import (
 
 // EncodingName is the tiktoken encoding used for every token count. We
 // pin to cl100k_base — GPT-4 / GPT-3.5-turbo / claude-flavoured estimate
-// — because it is the published default and the comparable baseline
+// because it is the published default and the comparable baseline
 // semble uses for its public figure. The exact encoding doesn't bias the
 // ratio (veska and grep are tokenised by the same function); the choice
 // matters only for cross-tool comparisons.
@@ -43,7 +43,6 @@ func CountTokens(s string) (int, error) {
 // veska's search ought to retrieve (the "right answer" — i.e. the
 // snippet content for the truth nodes), the set of ground-truth node
 // ids, and the simulated filesystem grep would read against.
-//
 // FilesByPath holds every file in the corpus by absolute (or fake)
 // path. NodeToFile maps node_id → file path so the stop-when-covered
 // baseline can detect when a read has covered a truth target. Both
@@ -127,10 +126,9 @@ type Result struct {
 	// above are the right metric for comparing harness runs; these
 	// translate the same data into something concrete a reader can
 	// quote in a doc or budget against.
-	//
-	//   TokensSavedPerQuery = mean(grep_mid - veska)        per query
+	//   TokensSavedPerQuery = mean(grep_mid - veska) per query
 	//   TokensSavedOverConversation = TokensSavedPerQuery * ConversationQueries
-	//   USDSavedOverConversation    = TokensSavedOverConversation * USDPerMToken / 1e6
+	//   USDSavedOverConversation = TokensSavedOverConversation * USDPerMToken / 1e6
 	TokensSavedPerQuery         float64 `json:"tokens_saved_per_query"`
 	ConversationQueries         int     `json:"conversation_queries"`
 	TokensSavedOverConversation float64 `json:"tokens_saved_over_conversation"`

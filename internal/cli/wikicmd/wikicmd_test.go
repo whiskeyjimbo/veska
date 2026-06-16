@@ -73,7 +73,7 @@ func TestResolveTarget(t *testing.T) {
 		}
 	})
 
-	// solov2-rtql: positional path arg resolves the repo by RootPath.
+	// positional path arg resolves the repo by RootPath.
 	t.Run("registered path resolves to repo", func(t *testing.T) {
 		gotRepo, _, err := ResolveTarget(ctx, db, repoRoot, "")
 		if err != nil {

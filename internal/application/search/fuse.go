@@ -26,7 +26,7 @@ const rrfConstant = 60
 // on each returned domain.SearchHit holds the fused score so downstream
 // callers (e.g. rerank) can scale relative to a sensible max.
 // k <= 0 means "no truncation, return all fused candidates" — used by
-// the Semantic() path so the post-fusion rerank has full visibility.
+// the Semantic path so the post-fusion rerank has full visibility.
 func rrfFuse(vec []domain.SearchHit, lex []ports.LexicalHit, k int) []domain.SearchHit {
 	if len(vec) == 0 && len(lex) == 0 {
 		return nil

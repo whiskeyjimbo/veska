@@ -287,7 +287,7 @@ func TestFindingRepo_CloseObsolete(t *testing.T) {
 	}
 }
 
-// TestFindingRepo_CloseSupersededAutoLinks covers solov2-ok7y: an UPDATE
+// TestFindingRepo_CloseSupersededAutoLinks covers: an UPDATE
 // scoped by (repo_id, branch, rule='auto-link', state='open') and gated on
 // the finding anchor referencing a SIMILAR_TO edge whose src is in the
 // supplied source-node-id set. Rows that don't match are untouched.
@@ -383,7 +383,7 @@ func TestFindingRepo_CloseSupersededAutoLinks(t *testing.T) {
 	assertState(t, db, fC, "main", "open")
 }
 
-// TestFindingRepo_CloseSupersededByRule pins solov2-jvrc: a re-scanned
+// TestFindingRepo_CloseSupersededByRule pins: a re-scanned
 // authoritative rule (e.g. vulnerable_dependency) closes prior open
 // findings whose IDs are not in the freshly-returned keep set, leaves
 // keeps untouched, and leaves findings under OTHER rules alone.

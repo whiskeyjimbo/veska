@@ -86,7 +86,7 @@ func TestVulnScanCheck_GoModTouched_EmitsFindings(t *testing.T) {
 	}
 }
 
-// TestVulnScanCheck_MessageCarriesGoModLine pins solov2-5dxw: the
+// TestVulnScanCheck_MessageCarriesGoModLine pins: the
 // finding message must include the go.mod line of the offending require
 // so editors can jump to source. (The findings table has no dedicated
 // line column today — see also the schema note in the issue.)
@@ -122,7 +122,7 @@ require (
 
 func startsWith(s, prefix string) bool { return len(s) >= len(prefix) && s[:len(prefix)] == prefix }
 
-// TestVulnScanCheck_GoModNotTouched_StillScans pins solov2-jtl5.4: a
+// TestVulnScanCheck_GoModNotTouched_StillScans pins: a
 // promotion whose changed file set does not include go.mod must still
 // run vuln-scan against the on-disk go.mod, so retroactive scans after
 // enabling [vuln_source] (via partial re-promote in `config reload`)
@@ -186,7 +186,7 @@ func TestVulnScanCheck_Idempotent(t *testing.T) {
 	}
 }
 
-// TestVulnScanCheck_RepoNamespacedFindingID pins solov2-uej9.1: two repos
+// TestVulnScanCheck_RepoNamespacedFindingID pins: two repos
 // that share the SAME advisory (same AdvisoryID+Package) must each retain
 // their OWN vulnerable_dependency finding. Because the storage PK is
 // (finding_id, branch) with no repo_id, identical finding_ids on the same
@@ -238,7 +238,7 @@ func TestVulnScanCheck_NilSource(t *testing.T) {
 	}
 }
 
-// TestVulnScanCheck_GoModReadFailure pins solov2-jtl5.4: a missing go.mod
+// TestVulnScanCheck_GoModReadFailure pins: a missing go.mod
 // is no longer an error after the touchesGoMod gate removal — non-Go repos
 // are a normal case (TestVulnScanCheck_NoGoModOnDisk_NoFindings covers that).
 // This test now pins the residual error path: a read failure that ISN'T
@@ -258,8 +258,8 @@ func TestVulnScanCheck_GoModReadFailure(t *testing.T) {
 }
 
 // TestVulnScanCheck_GoModTouched_AbsolutePath is the regression for
-// solov2-3tqb: the cold-scan / fsnotify Save path passes full filesystem
-// paths through to PromotionBatch.Files[].Path, so the gate must match
+// the cold-scan / fsnotify Save path passes full filesystem
+// paths through to PromotionBatch.Files.Path, so the gate must match
 // "/abs/path/to/repo/go.mod" the same way it matches "go.mod".
 func TestVulnScanCheck_GoModTouched_AbsolutePath(t *testing.T) {
 	src := &fakeVulnSource{findings: []ports.VulnFinding{

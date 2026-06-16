@@ -8,7 +8,7 @@ import (
 
 // TestTrailingSentencePunctuationFalsePositive reproduces the pflag
 // text.go:62 false positive: an in-prose dotted identifier ending at a
-// sentence period ("encoding.TextUnmarshaler.") was treated as non-
+// sentence period ("encoding.TextUnmarshaler.") was treated as non
 // identifier-shaped because identifierChainSeparators emitted an empty
 // trailing element, causing the high-entropy rule to fire on a Godoc
 // comment. Discovered during the junior onboarding journey against

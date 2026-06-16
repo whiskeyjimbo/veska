@@ -2,7 +2,7 @@
 # and ONLY against changed code (Makefile passes --new-from-merge-base), so the
 # <=50 LOC / <=15 cyclomatic / <=5 args bar applies to new and modified
 # functions without forcing a repo-wide remediation of pre-existing legacy
-# violations (those are explicitly out of scope — see the epic). The main
+# violations (those are explicitly out of scope - see the epic). The main
 # .golangci.yml keeps govet/staticcheck/unused at full coverage.
 version: "2"
 linters:

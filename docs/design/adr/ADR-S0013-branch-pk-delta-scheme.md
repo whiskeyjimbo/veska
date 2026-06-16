@@ -1,6 +1,6 @@
 ---
 id: ADR-S0013
-title: Branch-PK delta scheme — fallback storage layout if OQ-S006 lands red
+title: Branch-PK delta scheme - fallback storage layout if OQ-S006 lands red
 status: proposed
 date: 2026-05-09
 deciders: [whiskeyjimbo]
@@ -9,7 +9,7 @@ verified: true
 verified_date: "2026-05-16"
 ---
 
-# ADR-S0013 — Branch-PK delta scheme (fallback)
+# ADR-S0013 - Branch-PK delta scheme (fallback)
 
 ## Status
 
@@ -28,7 +28,7 @@ mode in the design.
 SOLO-08 §4 makes `branch` part of the composite primary key on
 `nodes`, `edges`, `findings`, and `cross_repo_edge_stubs`. The
 storage cost is `O(symbols_touched × branches)` for the four
-tables — embeddings dedupe via content addressing, but the row
+tables - embeddings dedupe via content addressing, but the row
 tables do not.
 
 OQ-S006 measures the actual cost on synthetic and real-repo
@@ -50,7 +50,7 @@ when the symbol is identical across branches.
 tables sharing the same logical view:
 
 ```sql
--- The "trunk" — one row per (symbol, content_hash). Branch-agnostic.
+-- The "trunk" - one row per (symbol, content_hash). Branch-agnostic.
 -- The trunk row is shared across every branch whose content matches.
 CREATE TABLE nodes_trunk (
     node_id        TEXT NOT NULL,
@@ -67,7 +67,7 @@ CREATE TABLE nodes_trunk (
     FOREIGN KEY (repo_id) REFERENCES repos(repo_id) ON DELETE CASCADE
 );
 
--- The "delta" — one row per (node, branch). Records which content_hash
+-- The "delta" - one row per (node, branch). Records which content_hash
 -- the branch points at, plus per-branch metadata that *must* be
 -- per-branch (actor attribution at the per-branch promotion).
 CREATE TABLE nodes_branch (
@@ -176,7 +176,7 @@ If the spike lands red and we trip this ADR:
   developers debugging will still poke at trunk/delta directly.
 - `cross_repo_edge_stubs` complicates because stubs key on
   source-side `(node_id, branch)` plus resolver-side identifiers.
-  Stub trunk vs. stub delta is not as natural a split — likely
+  Stub trunk vs. stub delta is not as natural a split - likely
   stubs stay flat-PK as a small exception.
 
 ## Alternatives considered

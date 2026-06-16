@@ -3,7 +3,6 @@ package domain
 // ParseResult is the output of CodeParser.ParseFile.
 // It carries the Nodes and Edges extracted from a single source file.
 // Both slices may be nil or empty when the file contains no recognisable symbols.
-//
 // Failures carries any non-fatal syntax errors detected while parsing the file
 // (tree-sitter ERROR / MISSING nodes). A non-empty Failures slice does not
 // suppress whatever partial Nodes/Edges the parser was able to extract — the
@@ -24,13 +23,12 @@ type ParseResult struct {
 	// the callee lives in another file of the same Go package. The
 	// promoter resolves these against a per-package map built from the
 	// whole batch and emits CALLS edges in the same transaction
-	// .
 	UnresolvedCalls []UnresolvedCall
 	// Imports maps a file's local package identifiers to their full import
 	// paths (alias -> path; for unaliased imports the key is the path's last
 	// segment, matching the common case where the package name equals it).
 	// Promotion uses this to resolve package-qualified UnresolvedCalls
-	// . nil/empty when the file imports nothing.
+	// nil/empty when the file imports nothing.
 	Imports map[string]string
 }
 
@@ -40,32 +38,31 @@ type ParseResult struct {
 // resolver — either "foo" for a plain-identifier call or "Type.foo" for
 // a receiver-method call (the receiver type having been determined from
 // the enclosing method_declaration).
-//
 // PkgQualifier, when non-empty, names the selector operand of a
-// package-qualified call (the "cmd" in cmd.Execute()). At promotion time it
+// package-qualified call (the "cmd" in cmd.Execute). At promotion time it
 // is resolved against the file's import map ([[ParseResult]].Imports) to a
 // package — intra-module packages bind to a concrete CALLS edge, external
-// modules become a cross-repo edge stub . When PkgQualifier is
+// modules become a cross-repo edge stub. When PkgQualifier is
 // empty the call is plain/receiver-local as before.
 type UnresolvedCall struct {
 	CallerID     NodeID
 	CalleeName   string
 	PkgQualifier string
-	// IsMethodCall marks a call site of the form `v.Method(...)` where the
+	// IsMethodCall marks a call site of the form `v.Method(.)` where the
 	// parser recognised `v` as a local variable assigned from a
-	// package-qualified call (`v := pkg.New(...)` / `v := pkg.Func(...)`).
+	// package-qualified call (`v:= pkg.New(.)` / `v:= pkg.Func(.)`).
 	// PkgQualifier holds `pkg`; CalleeName holds `Method`. The receiver
 	// TYPE is intentionally unknown — Go return-type inference is out of
 	// scope for tree-sitter — so the resolver looks up `Method` by name
 	// inside the imported package and binds when the match is unambiguous
-	// (solov2-9rc2 epic). Non-method calls keep IsMethodCall=false and
+	// ( epic). Non-method calls keep IsMethodCall=false and
 	// resolve through the existing PkgQualifier path.
 	IsMethodCall bool
 	// SrcLine is the 1-indexed source line of the call_expression. The
 	// promotion-time resolver carries it through to the resulting
 	// cross-repo edge stub (and from there to the resolved Edge) so
 	// renderers attribute the cross-repo edge to the actual call site,
-	// not the caller node's declaration line (solov2-izh6.31). 0 means
+	// not the caller node's declaration line. 0 means
 	// unknown (legacy parser output or non-Go parsers that have not
 	// adopted the field yet).
 	SrcLine int
@@ -75,7 +72,7 @@ type UnresolvedCall struct {
 	// framework route extractor sets it to EdgeRoutes so a
 	// router.METHOD("/path", handler) wire-up resolves the route→handler
 	// reference through the same package-wide resolver as a plain call,
-	// but materialises a ROUTES edge instead of a CALLS edge (solov2-ketg).
+	// but materialises a ROUTES edge instead of a CALLS edge.
 	EdgeKind EdgeKind
 }
 

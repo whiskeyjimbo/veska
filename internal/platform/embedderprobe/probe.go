@@ -1,5 +1,5 @@
 // Package embedderprobe provides shared health-check helpers for the Ollama
-// embedding provider.  It is used by both "veska init" and "veska doctor
+// embedding provider. It is used by both "veska init" and "veska doctor
 // embedder" to avoid duplicating connectivity logic.
 package embedderprobe
 
@@ -28,9 +28,9 @@ type ProbeResult struct {
 	// the model when the embedder is not healthy.
 	InstallHint string `json:"install_hint,omitempty"`
 	// Status is one of: "healthy", "degraded", "broken".
-	//   healthy  — all three checks passed.
+	//   healthy — all three checks passed.
 	//   degraded — Ollama is reachable but model is missing or embed probe failed.
-	//   broken   — Ollama is not reachable.
+	//   broken — Ollama is not reachable.
 	Status health.Status `json:"status"`
 }
 
@@ -53,7 +53,7 @@ type ollamaEmbedResponse struct {
 }
 
 // Probe runs three sequential checks against the Ollama instance at ollamaURL:
-//  1. Reachable  — GET /api/tags returns 200.
+//  1. Reachable — GET /api/tags returns 200.
 //  2. ModelPresent — modelName appears in the tags list.
 //  3. ProbeEmbed — POST /api/embeddings with a dummy prompt returns a non-empty vector.
 //
@@ -142,7 +142,7 @@ func Probe(ctx context.Context, ollamaURL, modelName string) (*ProbeResult, erro
 }
 
 // InstallHint returns a platform-specific string describing how to install
-// Ollama and pull the required model.  goos should be runtime.GOOS.
+// Ollama and pull the required model. goos should be runtime.GOOS.
 // This function is pure — no network calls — so it is trivially testable.
 func InstallHint(goos, modelName string) string {
 	switch goos {

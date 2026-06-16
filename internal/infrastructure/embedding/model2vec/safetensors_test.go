@@ -112,7 +112,7 @@ func TestReadSafetensors_TruncatedHeaderErrors(t *testing.T) {
 
 // TestReadSafetensors_SkipsIntegerTensors: real potion-* models ship an
 // identity I64 "mapping" tensor alongside the float matrix. We decode
-// only float dtypes and skip integer/aux tensors rather than erroring —
+// only float dtypes and skip integer/aux tensors rather than erroring
 // erroring on a valid model file is worse than ignoring an unused
 // tensor. The float entry alongside it must still decode.
 func TestReadSafetensors_SkipsIntegerTensors(t *testing.T) {

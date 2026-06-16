@@ -13,7 +13,7 @@ import (
 // captures the exercise of every algorithmic branch:
 //
 //	[UNK] [CLS] [SEP] [PAD]
-//	parse  config  parser  ##er  ##ing  func  return
+//	parse config parser ##er ##ing func return
 //
 // Token IDs are assigned by vocab order — same convention HF uses.
 func synthTokenizerJSON(t *testing.T) []byte {
@@ -125,7 +125,7 @@ func TestEncode_Lowercasing(t *testing.T) {
 func TestEncode_PunctuationIsItsOwnToken(t *testing.T) {
 	tk, _ := newTokenizer(synthTokenizerJSON(t))
 	got := tk.encode("parse, config")
-	// parse , config  →  [4, [UNK], 5]
+	// parse, config → [4, [UNK], 5]
 	want := []int{4, 0, 5}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("got %v, want %v", got, want)

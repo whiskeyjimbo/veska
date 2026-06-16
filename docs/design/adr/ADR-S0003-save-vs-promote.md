@@ -8,7 +8,7 @@ verified: true
 verified_date: "2026-05-16"
 ---
 
-# ADR-S0003 — Save-vs-promote split with volatile staging
+# ADR-S0003 - Save-vs-promote split with volatile staging
 
 > **Terminology note.** This ADR was originally titled
 > "Save-vs-seal split." The body has been rewritten in the new

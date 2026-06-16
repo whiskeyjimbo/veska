@@ -10,7 +10,7 @@
 
 ## Build
 
-`make build` produces the **fat binary** by default — the model2vec embedder
+`make build` produces the **fat binary** by default - the model2vec embedder
 weights are compiled into the binary, so the install is zero-setup: no separate
 download, no network, no fallback at boot.
 
@@ -46,15 +46,15 @@ README), run `make release-archive`. The archive lands at
 ## The embedder
 
 Semantic search needs an embedder. Veska **elects one at boot** in preference
-order — it never mixes vector spaces, so exactly one embedder owns the index at
+order - it never mixes vector spaces, so exactly one embedder owns the index at
 a time:
 
-1. **model2vec** (`potion-code-16M`) — a fast, in-process static *code*
+1. **model2vec** (`potion-code-16M`) - a fast, in-process static *code*
    embedder. The default and recommended choice.
-    - **Fat binary** (`make build`) — compiled in. Nothing to install.
-    - **Thin binary** (`make build-small`) + `veska install model2vec` — a
+    - **Fat binary** (`make build`) - compiled in. Nothing to install.
+    - **Thin binary** (`make build-small`) + `veska install model2vec` - a
       one-time ~62 MB download into `~/.veska/`.
-2. **static-v2** — an in-binary fallback that works with no model files at all
+2. **static-v2** - an in-binary fallback that works with no model files at all
    (lower quality). Used only when model2vec is unavailable.
 
 No Ollama, no network, and no separate process is required for search.

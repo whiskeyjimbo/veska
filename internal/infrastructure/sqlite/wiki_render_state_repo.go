@@ -1,6 +1,6 @@
 // WikiRenderStateRepo backs wiki.RenderTimeStore against the daemon_state
 // key-value table. The most recent successful wiki regeneration time lives
-// under the key 'wiki.last_render_at' as a Unix-millisecond string —
+// under the key 'wiki.last_render_at' as a Unix-millisecond string
 // daemon_state is runtime/operational state, the correct home (vs
 // database_meta which holds schema metadata).
 

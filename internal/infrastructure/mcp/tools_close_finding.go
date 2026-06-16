@@ -22,9 +22,7 @@ const CodeHumanRequired = -32001
 // adapter free of an application-package import.
 const reviewPipelineFailureRule = "review-pipeline-failure"
 
-// ---------------------------------------------------------------------------
 // eng_close_finding
-// ---------------------------------------------------------------------------
 
 type closeFindingParams struct {
 	FindingID string `json:"finding_id"`
@@ -79,7 +77,7 @@ func makeCloseFindingHandler(db *sql.DB, aw ports.AuditWriter) ToolHandler {
 		// Commit, Rollback is a no-op per database/sql.
 		defer func() { _ = tx.Rollback() }()
 
-		// solov2-zyp4: resolve a finding_id prefix to its full id on this
+		// resolve a finding_id prefix to its full id on this
 		// tx so the row is locked through the subsequent SELECT/UPDATE.
 		fullID, rpcErr := resolveFindingPrefix(ctx, tx, p.FindingID, p.Branch)
 		if rpcErr != nil {
@@ -122,7 +120,7 @@ func makeCloseFindingHandler(db *sql.DB, aw ports.AuditWriter) ToolHandler {
 		// Human-action gate: severity >= high requires a human actor.
 		sev := domain.Severity(severity)
 		if sev.AtLeast(domain.SeverityHigh) && actor.Kind != domain.ActorKindHuman {
-			// solov2-6l6l: include a one-line resolution hint so callers
+			// include a one-line resolution hint so callers
 			// don't have to read the source to learn how to proceed.
 			return nil, &RPCError{
 				Code:    CodeHumanRequired,
@@ -139,13 +137,12 @@ func makeCloseFindingHandler(db *sql.DB, aw ports.AuditWriter) ToolHandler {
 		// Accept-flow for auto-link findings promotes the anchored edge from
 		// 'unresolved' to 'definite' in the same tx. Any other (rule, reason)
 		// combination is a regular close.
-		//
 		// Behaviours for edge anchors:
-		//   - Missing/empty node_id: skip promotion silently; finding still closes.
-		//   - Missing edge row: data-corruption-soft-fail — UPDATE affects 0 rows,
+		//   Missing/empty node_id: skip promotion silently; finding still closes.
+		//   Missing edge row: data-corruption-soft-fail — UPDATE affects 0 rows,
 		//     finding still closes (no rollback). Logged via the absence of an
 		//     audit follow-up beyond the standard accept entry.
-		//   - Already 'definite' edge: UPDATE is naturally idempotent.
+		//   Already 'definite' edge: UPDATE is naturally idempotent.
 		isAccept := rule == "auto-link" && p.Reason == "accept"
 		if isAccept && nodeID.Valid && nodeID.String != "" {
 			if _, err := tx.ExecContext(ctx,
@@ -156,7 +153,7 @@ func makeCloseFindingHandler(db *sql.DB, aw ports.AuditWriter) ToolHandler {
 			}
 		}
 
-		// review-pipeline-failure close-flips-row (solov2-nz2.3 AC2): closing
+		// review-pipeline-failure close-flips-row ( AC2): closing
 		// the sticky review-failure finding clears its parked review jobs by
 		// flipping every still-failed review row anchored on the promotion
 		// commit (node_id carries the git_sha) to state='done', in the same tx.
@@ -179,10 +176,9 @@ func makeCloseFindingHandler(db *sql.DB, aw ports.AuditWriter) ToolHandler {
 		}
 
 		// Update the finding to closed.
-		//
-		// solov2-iyog: do NOT overwrite actor_id/actor_kind on close. The
+		// do NOT overwrite actor_id/actor_kind on close. The
 		// finding's actor columns mean "who created/last-saved this finding"
-		// — clobbering them with the closer caused TODO findings (created by
+		// clobbering them with the closer caused TODO findings (created by
 		// service:veska) to surface as actor_id=agent:unknown after an MCP
 		// caller closed them, even though the creator never changed. The
 		// audit log below already records who performed the close.

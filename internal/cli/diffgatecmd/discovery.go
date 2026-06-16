@@ -34,25 +34,24 @@ var discoverActor = domain.Actor{ID: "service:veska-diff-gate", Kind: domain.Act
 // DiscoverStructural produces the base/candidate structural finding-id sets for
 // the gate's no-new-findings check. It is SOUND by construction:
 //
-//   - Each side clones the base graph, re-promotes ONLY the CHANGED files over
-//     that clone (base content for the base side, candidate content for the
-//     candidate side), then runs the real dead-code + contract-drift checks
-//     across the WHOLE graph.
-//   - Re-promoting only the changed files is sound because the promoter resolves
-//     a changed file's calls into UNCHANGED same-package siblings against the
-//     already-promoted graph (solov2-ll57.13), and the inbound edge that makes a
-//     symbol in an unchanged file newly-dead is OWNED by the changed file — so
-//     deleting/rebinding the changed file's edges is enough to surface it.
-//   - Running the check pass over ALL files (not just the changed ones) is what
-//     catches a node that became dead in an UNCHANGED file because the change
-//     removed its last caller — the false-green a per-file check scope misses.
+//	Each side clones the base graph, re-promotes ONLY the CHANGED files over
+//	  that clone (base content for the base side, candidate content for the
+//	  candidate side), then runs the real dead-code + contract-drift checks
+//	  across the WHOLE graph.
+//	Re-promoting only the changed files is sound because the promoter resolves
+//	  a changed file's calls into UNCHANGED same-package siblings against the
+//	  already-promoted graph, and the inbound edge that makes a
+//	  symbol in an unchanged file newly-dead is OWNED by the changed file — so
+//	  deleting/rebinding the changed file's edges is enough to surface it.
+//	Running the check pass over ALL files (not just the changed ones) is what
+//	  catches a node that became dead in an UNCHANGED file because the change
+//	  removed its last caller — the false-green a per-file check scope misses.
 //
 // Both sides run the IDENTICAL clone + re-promote-changed + check path, so an
 // inert change yields no spurious "new" finding from a graph-build difference
-// (solov2-ll57.10). It mutates only the throwaway clones (removed on return) and
+// It mutates only the throwaway clones (removed on return) and
 // reads only the changed files' base content via readBaseContent — O(changed),
-// not O(repo), the whole point of solov2-ll57.9.
-//
+// not O(repo), the whole point of.
 // changes are the candidate's changed files (new content, or Deleted).
 // readBaseContent supplies a changed file's content at the base ref (in the live
 // path, git.FileAtRef at the base ref); it is consulted only for changed paths.
@@ -137,7 +136,7 @@ func findingsForChangedFiles(ctx context.Context, baseDBPath, repoID, branch, gi
 	// contract-drift are NOT authoritative checks (only vulnscan is), so the
 	// re-check below never closes a stale open finding — it would leak into this
 	// side's set and, being symmetric in id, cancel a genuinely-new candidate
-	// finding (a false GREEN when the index sits AHEAD of base; solov2-ll57.16).
+	// finding (a false GREEN when the index sits AHEAD of base).
 	// Clear the structural findings so each side derives them purely from graph
 	// state, independent of the index's ref position.
 	if err := clearStructuralFindings(ctx, pools.Write, repoID, branch); err != nil {
@@ -232,7 +231,7 @@ func buildStructuralRunner(pools *sqlite.Pools) *checks.Runner {
 }
 
 // fullCheckPass runs the structural checks over EVERY file in (repoID, branch)
-// — making absence-triggered rules like dead-code sound across files the change
+// making absence-triggered rules like dead-code sound across files the change
 // did not touch directly — then reads back the open structural finding ids.
 func fullCheckPass(ctx context.Context, pools *sqlite.Pools, runner *checks.Runner, repoID, branch, gitSHA string) ([]string, error) {
 	files, err := allFiles(ctx, pools.ReadDB, repoID, branch)
@@ -246,7 +245,7 @@ func fullCheckPass(ctx context.Context, pools *sqlite.Pools, runner *checks.Runn
 // repromoteChanged stages the CHANGED files over the clone and promotes them as
 // one batch through the real Promoter. The promoter rebinds a changed file's
 // calls into unchanged same-package siblings against the already-promoted graph
-// (solov2-ll57.13), so a partial batch no longer drops cross-file edges. A file
+// so a partial batch no longer drops cross-file edges. A file
 // mapped to nil content stages no nodes (a deletion). Checks are NOT run during
 // promotion — fullCheckPass runs them over the whole graph afterwards.
 func repromoteChanged(ctx context.Context, pools *sqlite.Pools, repoID, branch, gitSHA string, changedFiles map[string][]byte) error {

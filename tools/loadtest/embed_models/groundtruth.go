@@ -1,15 +1,13 @@
 //go:build eval
 
 // Ground-truth extractors for the embed-models bench. Three sources
-// (solov2-0k5h.3):
-//   - Doc-derived (cheap, bulk): for each exported declaration with a
+//   Doc-derived (cheap, bulk): for each exported declaration with a
 //     non-empty doc comment, emit (paraphrase-of-comment, symbol-name).
-//   - Hand-curated headline.jsonl: ~20 natural-language queries per
+//   Hand-curated headline.jsonl: ~20 natural-language queries per
 //     corpus, the PUBLISHED headline metric.
-//   - Test-name-derived (auxiliary): TestXxx_Yyy → (humanized "Yyy",
+//   Test-name-derived (auxiliary): TestXxx_Yyy → (humanized "Yyy",
 //     tested-symbol "Xxx").
-//
-// All sources produce []Pair so the recall metric in recall.go runs
+// All sources produce Pair so the recall metric in recall.go runs
 // each uniformly. Symbol names follow the treesitter parser's
 // convention so they line up with the embedded doc names: methods are
 // "Receiver.Method"; top-level decls are bare.
@@ -63,16 +61,16 @@ func CollectGroundTruth(corpusName, corpusRoot, fixturesDir, kind string) []GTSo
 // Doc-derived
 // ──────────────────────────────────────────────────────────────────────
 
-// docDerived parses every .go file under root with go/parser
+// docDerived parses every.go file under root with go/parser
 // (ParseComments) and emits one Pair per exported function/method/type
 // with a non-empty doc comment. The query is the first sentence of the
 // doc with the symbol's name stripped from the front (Go's convention
 // is "Foo does X" — keeping "Foo" leaks the answer into the query).
-//
 // Symbol naming matches treesitter's convention so recall can compare
 // directly against the embedded docs' name field:
-//   - method on receiver T  → "T.Method"
-//   - everything else       → bare name (function/type/struct/etc.)
+//
+//	method on receiver T → "T.Method"
+//	everything else → bare name (function/type/struct/etc.)
 func docDerived(root string) []Pair {
 	var out []Pair
 	fset := token.NewFileSet()
@@ -228,7 +226,7 @@ func loadHeadlineDir(fixturesDir, corpusName string) ([]Pair, error) {
 	return out, nil
 }
 
-// loadHeadline reads a single .jsonl file and returns the pairs scoped
+// loadHeadline reads a single.jsonl file and returns the pairs scoped
 // to corpusName. Missing file is a non-error.
 func loadHeadline(path, corpusName string) ([]Pair, error) {
 	f, err := os.Open(path)

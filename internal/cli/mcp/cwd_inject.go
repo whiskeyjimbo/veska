@@ -13,14 +13,14 @@ import (
 // writes them to dst, injecting the shim's working directory into eng_*
 // requests that don't already carry a cwd param. Non-JSON or non-target
 // frames pass through byte-for-byte.
-//
 // Two callers:
-//   - eng_get_current_repo  — cwd is the *only* signal for "what
-//     repo is the user in".
-//   - every other eng_* tool  — cwd is a fallback the daemon
-//     uses to resolve repo_id when the caller omits it AND multiple repos are
-//     registered. Without this, an agent running inside a registered repo
-//     still has to look up and pass a short_id explicitly.
+//
+//	eng_get_current_repo — cwd is the *only* signal for "what
+//	  repo is the user in".
+//	every other eng_* tool — cwd is a fallback the daemon
+//	  uses to resolve repo_id when the caller omits it AND multiple repos are
+//	  registered. Without this, an agent running inside a registered repo
+//	  still has to look up and pass a short_id explicitly.
 //
 // The shim is normally a pure byte pump, but tools that key off the
 // caller's filesystem location need cwd, and most MCP clients (Claude
@@ -69,7 +69,7 @@ func maybeInjectCwd(line []byte, cwd string) ([]byte, bool) {
 		return nil, false
 	}
 	method, _ := msg["method"].(string)
-	// solov2-ktz0: inject cwd into any eng_* call (not just
+	// inject cwd into any eng_* call (not just
 	// eng_get_current_repo) so the daemon can resolve repo_id from the
 	// shim's working directory when the caller omits it.
 	if !strings.HasPrefix(method, "eng_") {

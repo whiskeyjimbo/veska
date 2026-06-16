@@ -10,7 +10,6 @@ import (
 // NullVulnSource is a VulnSource that performs no work: Refresh is a no-op and
 // Scan reports no findings. It is the default implementation and is used when
 // vulnerability scanning is disabled.
-//
 // NullVulnSource is safe for concurrent use.
 type NullVulnSource struct{}
 

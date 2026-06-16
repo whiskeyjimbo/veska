@@ -4,7 +4,7 @@
 # line count (wc -l) at the time it was inventoried. `make fatfile-ratchet`
 # fails if any listed file GROWS past its ceiling. This complements
 # `make lint-size` (per-FUNCTION limits on CHANGED code) by ratcheting the
-# total size of pre-existing fat files DOWN over time — grandfathering can no
+# total size of pre-existing fat files DOWN over time - grandfathering can no
 # longer hide them forever.
 #
 # THRESHOLD: seeded with every first-party non-test .go file under cmd/ and

@@ -10,7 +10,7 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/core/domain"
 )
 
-// TestCheckRequired_ReportsAllMissing pins solov2-d2x: a call missing several
+// TestCheckRequired_ReportsAllMissing pins: a call missing several
 // required params learns all of them from one error, not one at a time.
 func TestCheckRequired_ReportsAllMissing(t *testing.T) {
 	t.Run("all present", func(t *testing.T) {
@@ -133,7 +133,7 @@ func (s *scopedGraphStub) GetNodeSnippet(_ context.Context, repoID, branch strin
 	return "", nil
 }
 
-// TestResolveSeedOwner_FanoutFindsUniqueOwner pins solov2-f0zt: when repo_id
+// TestResolveSeedOwner_FanoutFindsUniqueOwner pins: when repo_id
 // is omitted and multiple repos are registered, the seed must be located
 // across all of them and resolve to the single owner — matching the
 // "default: fan out across registered repos" documented in `veska
@@ -206,7 +206,7 @@ func TestResolveSeedOwner_FanoutNotFound(t *testing.T) {
 	}
 }
 
-// TestResolveSeedOwner_CwdPinFallsThroughToFanout pins solov2-izh6.14: when
+// TestResolveSeedOwner_CwdPinFallsThroughToFanout pins: when
 // the MCP shim injects a cwd that resolves to a registered repo but the seed
 // symbol/node_id does NOT live in that repo, the helper must fall through
 // to the fan-out path (Path 3) instead of returning NotFound. Otherwise
@@ -248,9 +248,9 @@ func TestResolveSeedOwner_CwdPinFallsThroughToFanout(t *testing.T) {
 	})
 }
 
-// TestExpandNodeIDPrefix_RejectsBadAndExpandsGood pins solov2-xc7t: when a
+// TestExpandNodeIDPrefix_RejectsBadAndExpandsGood pins: when a
 // caller passes a 12-char short_id (the form veska's CLI prints under the
-// "(...)" column), the daemon must NOT silently pass it through to a SQL
+// "(.)" column), the daemon must NOT silently pass it through to a SQL
 // equality lookup and report "node has no embedding" — instead either
 // expand it to the canonical 64-char form (unique prefix), or surface a
 // "no node matches prefix" error so the user knows the id was wrong.
@@ -288,7 +288,7 @@ func TestExpandNodeIDPrefix_RejectsBadAndExpandsGood(t *testing.T) {
 	})
 }
 
-// TestSortedKeysAnnotated_FlagsRequired pins solov2-m5c2: when a tool's
+// TestSortedKeysAnnotated_FlagsRequired pins: when a tool's
 // schema declares "required" properties, the unknown-parameter error must
 // mark them as such so a caller can correct the call from the error
 // alone. Required keys also sort before optional ones.
@@ -307,7 +307,7 @@ func TestSortedKeysAnnotated_FlagsRequired(t *testing.T) {
 	}
 }
 
-// TestRequireRepoID_CountExcludesExtRepos pins solov2-dqga: the
+// TestRequireRepoID_CountExcludesExtRepos pins: the
 // "N repos registered" hint in the missing-repo_id error must agree
 // with what eng_list_repos shows by default, which hides synthetic
 // ext:<module> rows produced by `veska deps index`. Before the fix

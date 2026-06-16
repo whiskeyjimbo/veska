@@ -36,7 +36,7 @@ type promotedScope struct {
 // the unique promoted method node whose symbol_path ends with ".Hello" and
 // whose file lives in scope.relDir. Returns found=false on miss or on ambiguity
 // (multiple receiver types own a Hello method in the same package — rare in
-// well-typed Go but possible). solov2-9rc2.
+// well-typed Go but possible).
 func lookupPromotedMethodInDir(ctx context.Context, tx *sql.Tx, scope promotedScope, methodName string) (domain.NodeID, bool, error) {
 	rows, err := tx.QueryContext(ctx,
 		`SELECT node_id, file_path FROM nodes
@@ -48,9 +48,9 @@ func lookupPromotedMethodInDir(ctx context.Context, tx *sql.Tx, scope promotedSc
 	}
 	defer rows.Close()
 
-	// solov2-9rc2: prefer non-test candidates. Test files commonly declare
+	// prefer non-test candidates. Test files commonly declare
 	// stub implementations of an interface ("type stubX struct {}; func
-	// (s *stubX) Write(...) ...") that share a method name with the
+	// (s *stubX) Write(.).") that share a method name with the
 	// production type. If a production match exists, return it without
 	// failing on the test-vs-production ambiguity; only when production
 	// matches are themselves ambiguous (or absent) do we count test
@@ -90,7 +90,7 @@ func lookupPromotedMethodInDir(ctx context.Context, tx *sql.Tx, scope promotedSc
 // symbol_path (indexed) and disambiguates by directory in Go, since promoted
 // file paths may be absolute or repo-relative. The cursor is fully drained
 // before returning so callers may safely write on the same tx afterwards
-// . found is false on no match.
+// found is false on no match.
 func lookupPromotedSymbolDir(ctx context.Context, tx *sql.Tx, scope promotedScope, name string) (domain.NodeID, bool, error) {
 	rows, err := tx.QueryContext(ctx,
 		`SELECT node_id, file_path FROM nodes
@@ -141,8 +141,8 @@ func stubID(srcNodeID, modulePath, symbol string) string {
 }
 
 // buildCallEdge constructs a Probable edge for a resolved call site,
-// carrying the source line when known. The edge kind is ucEdgeKind(uc) —
-// EdgeCalls by default, EdgeRoutes for route→handler refs (solov2-ketg).
+// carrying the source line when known. The edge kind is ucEdgeKind(uc)
+// EdgeCalls by default, EdgeRoutes for route→handler refs.
 // Returns ok=false when the domain constructor rejects the inputs.
 func buildCallEdge(uc domain.UnresolvedCall, targetID domain.NodeID) (*domain.Edge, bool) {
 	opts := []domain.EdgeOption{domain.WithConfidence(domain.Probable)}
@@ -161,7 +161,7 @@ func buildCallEdge(uc domain.UnresolvedCall, targetID domain.NodeID) (*domain.Ed
 }
 
 // resolveIntraPackageCalls binds UnresolvedCalls whose callee lives in another
-// file of the same Go package . Package-qualified calls are left to
+// file of the same Go package. Package-qualified calls are left to
 // the cross-package pass; same-directory = same package by convention. Misses
 // stay unresolved.
 func (p *promotion) resolveIntraPackageCalls(ctx context.Context) error {
@@ -203,9 +203,9 @@ func (p *promotion) resolveIntraPackageCalls(ctx context.Context) error {
 // lookupIntraPackageTarget resolves a same-package, bare-name call first against
 // the current batch then against the already-promoted graph — the latter so an
 // incremental single-file commit still binds calls into UNCHANGED sibling files
-// (solov2-ll57.13; mirrors lookupInModuleTarget's cross-package fallback). Method
+// (; mirrors lookupInModuleTarget's cross-package fallback). Method
 // calls are NOT resolved here: the in-batch map keys nodes by qualified name
-// ("T.Method"), so the batch path never binds a bare-named method call intra-
+// ("T.Method"), so the batch path never binds a bare-named method call intra
 // package, and the fallback stays symmetric with it by skipping them too.
 func (p *promotion) lookupIntraPackageTarget(ctx context.Context, names map[string]domain.NodeID, file application.PromotionFile, uc domain.UnresolvedCall) (domain.NodeID, bool, error) {
 	if tid, ok := names[uc.CalleeName]; ok {
@@ -227,7 +227,7 @@ func (p *promotion) lookupIntraPackageTarget(ctx context.Context, names map[stri
 
 // resolveCrossPackageCalls binds package-qualified calls within the same Go
 // module and records cross-repo edge stubs for calls into other modules
-// . Repos without a module_path skip the table entirely.
+// Repos without a module_path skip the table entirely.
 // Ambiguity/misses are skipped: this pass never emits a false edge.
 func (p *promotion) resolveCrossPackageCalls(ctx context.Context) error {
 	if p.modulePath == "" {
@@ -235,7 +235,7 @@ func (p *promotion) resolveCrossPackageCalls(ctx context.Context) error {
 	}
 	// Stub statement prepared lazily here so promotions for repos without a
 	// module_path never touch the table. Bound by the query-time resolver to
-	// whichever registered repo owns the module_path (solov2-xc51.3 / 1gj).
+	// whichever registered repo owns the module_path ( / 1gj).
 	stubStmt, err := prepare(ctx, p.tx, "stub insert", `
 		INSERT INTO cross_repo_edge_stubs
 			(stub_id, branch, repo_id, src_node_id, kind, module_path, symbol_path, language, last_promoted_at, method_call, src_line)
@@ -264,7 +264,7 @@ func (p *promotion) resolveCrossPackageCalls(ctx context.Context) error {
 }
 
 // resolveQualifiedCall resolves the call's package qualifier to an import path
-// (with the package-name fallback of solov2-izh6.6), then either binds an
+// (with the package-name fallback of ), then either binds an
 // in-module CALLS edge or records a cross-repo stub.
 func (p *promotion) resolveQualifiedCall(ctx context.Context, stubStmt *sql.Stmt, byPkgDir map[string]map[string]domain.NodeID, file application.PromotionFile, uc domain.UnresolvedCall) error {
 	importPath, ok := file.Imports[uc.PkgQualifier]
@@ -273,7 +273,7 @@ func (p *promotion) resolveQualifiedCall(ctx context.Context, stubStmt *sql.Stmt
 		// module's package name can diverge from its URL (e.g.
 		// github.com/jrose/greetlib declares `package greet`). Fall back to a
 		// registered Go module among this file's imports whose promoted package
-		// node is named uc.PkgQualifier; a single match binds (solov2-izh6.6).
+		// node is named uc.PkgQualifier; a single match binds.
 		ip, matched, err := findImportByPackageName(ctx, p.tx, file.Imports, uc.PkgQualifier)
 		if err != nil {
 			return fmt.Errorf("promoter: cross-repo pkg-name lookup %q: %w", uc.PkgQualifier, err)
@@ -292,7 +292,7 @@ func (p *promotion) resolveQualifiedCall(ctx context.Context, stubStmt *sql.Stmt
 
 // emitCrossRepoStub records a cross-repo edge stub for a package-qualified call
 // into another module. Stdlib (no domain in the first path segment) can never
-// match a repo, so it is skipped to keep the table lean. solov2-9rc2 Phase C:
+// match a repo, so it is skipped to keep the table lean.:
 // plain and method calls both emit stubs, distinguished by method_call.
 func (p *promotion) emitCrossRepoStub(ctx context.Context, stubStmt *sql.Stmt, uc domain.UnresolvedCall, importPath string) error {
 	if !isExternalModulePath(importPath) {
@@ -336,7 +336,7 @@ func (p *promotion) resolveInModuleCall(ctx context.Context, byPkgDir map[string
 
 // lookupInModuleTarget finds the target node for an in-module call, first in
 // the current batch then in the already-promoted graph (so incremental
-// single-file commits still bind). Method calls (solov2-9rc2 Phase B) carry the
+// single-file commits still bind). Method calls carry the
 // bare method name and match by `<Receiver>.<name>` suffix; single-match binds,
 // ambiguity is skipped to preserve the "no false edges" invariant.
 func (p *promotion) lookupInModuleTarget(ctx context.Context, byPkgDir map[string]map[string]domain.NodeID, relDir string, uc domain.UnresolvedCall) (domain.NodeID, bool, error) {
@@ -369,8 +369,7 @@ func (p *promotion) lookupInModuleTarget(ctx context.Context, byPkgDir map[strin
 // a fallback when the parser's import-alias key (last URL segment) does
 // not match the call-site qualifier — common when a module's package
 // declaration diverges from its URL (e.g. github.com/jrose/greetlib
-// declares `package greet`). solov2-izh6.6.
-//
+// declares `package greet`).
 // Returns the matching import path when exactly one registered module
 // matches. Multiple matches are reported as "no match" rather than
 // guessing — emitting a stub against the wrong module would violate the

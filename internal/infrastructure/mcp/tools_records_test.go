@@ -8,9 +8,7 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/core/domain"
 )
 
-// ---------------------------------------------------------------------------
 // eng_get_finding (AC1)
-// ---------------------------------------------------------------------------
 
 func TestGetFinding(t *testing.T) {
 	db := newSuppressionsDB(t)
@@ -39,7 +37,7 @@ func TestGetFinding(t *testing.T) {
 			wantCode: CodeNotFound,
 		},
 		{
-			// solov2-qwpt: branch is now optional — finding_id is globally
+			// branch is now optional — finding_id is globally
 			// unique, so omitting branch resolves the row by id alone.
 			name:   "branch omitted resolves by id",
 			params: map[string]any{"finding_id": "finding-get-1"},
@@ -52,20 +50,20 @@ func TestGetFinding(t *testing.T) {
 			wantCode: CodeNotFound,
 		},
 		{
-			// solov2-8kkj: --repo accepted as opt-in scoping assertion.
+			// repo accepted as opt-in scoping assertion.
 			name:   "matching repo passes through",
 			params: map[string]any{"finding_id": "finding-get-1", "repo_id": "repo-1"},
 			wantID: "finding-get-1",
 		},
 		{
-			// solov2-8kkj: --repo with a wrong repo prefix yields NotFound.
+			// repo with a wrong repo prefix yields NotFound.
 			name:     "wrong repo returns not-found",
 			params:   map[string]any{"finding_id": "finding-get-1", "repo_id": "different-repo"},
 			wantErr:  true,
 			wantCode: CodeNotFound,
 		},
 		{
-			// solov2-8kkj: prefix match (short repo id) is accepted.
+			// prefix match (short repo id) is accepted.
 			name:   "short repo prefix passes through",
 			params: map[string]any{"finding_id": "finding-get-1", "repo_id": "repo"},
 			wantID: "finding-get-1",
@@ -97,9 +95,7 @@ func TestGetFinding(t *testing.T) {
 	}
 }
 
-// ---------------------------------------------------------------------------
 // eng_get_suppression (AC1)
-// ---------------------------------------------------------------------------
 
 func TestGetSuppression(t *testing.T) {
 	db := newSuppressionsDB(t)
@@ -148,9 +144,7 @@ func TestGetSuppression(t *testing.T) {
 	})
 }
 
-// ---------------------------------------------------------------------------
 // eng_close_suppression (AC2)
-// ---------------------------------------------------------------------------
 
 func TestCloseSuppression(t *testing.T) {
 	db := newSuppressionsDB(t)
@@ -211,10 +205,7 @@ func TestCloseSuppression(t *testing.T) {
 	})
 }
 
-// ---------------------------------------------------------------------------
 // eng_add_repo / eng_remove_repo (AC3)
-// ---------------------------------------------------------------------------
-
 // stubRepoRegistrar records calls and lets tests assert on add/remove.
 type stubRepoRegistrar struct {
 	added   []string

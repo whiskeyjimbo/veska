@@ -1,6 +1,6 @@
 ---
 id: SOLO-03
-title: "The Daemon — Runtime & Developer Journey"
+title: "The Daemon - Runtime & Developer Journey"
 status: draft
 version: 0.1.0
 last_reviewed: 2026-05-08
@@ -9,7 +9,7 @@ verified: true
 verified_date: "2026-06-01"
 ---
 
-# SOLO-03 — The Daemon
+# SOLO-03 - The Daemon
 
 ## 1. Purpose
 
@@ -22,7 +22,7 @@ integration view.
 
 For the reader-friendly **dataflow** view (save / promotion / query as
 three small diagrams), see [`PRODUCT.md` §"How it works"](../../PRODUCT.md).
-The diagram below is the **process** view — what runs, where, and
+The diagram below is the **process** view - what runs, where, and
 how the binaries talk.
 
 ## 2. The three binaries
@@ -38,7 +38,7 @@ All three ship from one source tree under `cmd/`. The daemon is
 
 ## 3. Runtime topology
 
-The full topology with **all six runtime pieces** named — the
+The full topology with **all six runtime pieces** named - the
 PRODUCT.md three-box diagram is a simplification of this:
 
 ```
@@ -80,7 +80,7 @@ PRODUCT.md three-box diagram is a simplification of this:
 the only state (`~/.veska/`); the other five (CLI, shim,
 supervisor, Ollama, editor) are stateless from Veska's
 perspective. The supervisor is load-bearing for first-run UX
-(§3.1) and crash-loop semantics (§5.6) and is not optional —
+(§3.1) and crash-loop semantics (§5.6) and is not optional -
 the no-supervisor "manual mode" (`veska daemon` from a
 terminal) is a dev convenience, not a supported deployment.
 
@@ -96,9 +96,9 @@ in a header. The CLI binary `veska` connects only to
 `mcp.sock`. There are no external network listeners by default.
 SQLite is in-process (CGO); the vector search index is held
 outside SQL (in-memory `memvec` by default, or optional usearch
-`.hnsw` files — SOLO-08 §1.1), not loaded into the database file.
+`.hnsw` files - SOLO-08 §1.1), not loaded into the database file.
 Ollama runs as a separate user
-process the daemon talks to over HTTP — that is the only
+process the daemon talks to over HTTP - that is the only
 outbound connection in the default configuration.
 
 **Permissions and ownership.**
@@ -111,11 +111,11 @@ outbound connection in the default configuration.
   request. This catches accidental MCP-side closures from a
   benign editor extension; it does **not** stop same-user code
   from dialling `cli.sock` directly. The OS user is the only
-  privilege boundary on the machine — see SOLO-10 §3.1 for the
+  privilege boundary on the machine - see SOLO-10 §3.1 for the
   full framing.
 - The two listeners are bound by the same daemon process; one
   process, two sockets. There is no separate "MCP daemon" or
-  "CLI daemon" — that would be a federation surface we do not
+  "CLI daemon" - that would be a federation surface we do not
   want.
 - A user who manually invokes the CLI binary against `mcp.sock`
   (e.g. `veska --socket=$HOME/.veska/mcp.sock ...`) is
@@ -131,18 +131,18 @@ SOLO-08 §9). Verification is `veska doctor backup` (see SOLO-13
 ### 3.0 Repo lifecycle and watcher composition
 
 The daemon manages **N registered repos** simultaneously (the
-"working set" — typically a service, its SDK, a docs repo). Repos
+"working set" - typically a service, its SDK, a docs repo). Repos
 are not config; they are dynamic state in the `repos` table
 (SOLO-08 §3.1).
 
 **Registration.**
 
-- `veska repo add <path>` — registers a repo and atomically:
+- `veska repo add <path>` - registers a repo and atomically:
   installs the `post-commit` and `post-checkout` Git hooks; reads
   the module path (`go.mod`, `package.json`) into `repos.module_path`
   for the cross-repo resolver (SOLO-11 §10); kicks off a cold scan
   in the background.
-- `veska repo remove <id>` — removes hooks, deletes the repo's
+- `veska repo remove <id>` - removes hooks, deletes the repo's
   rows (cascades via foreign keys), drops watcher state.
 - `veska init` in a Git working tree calls `veska repo add` for
   that tree.
@@ -203,12 +203,12 @@ soft cap. See SOLO-13 §3.
 The daemon must be running for `veska-mcp` to do anything. Three
 paths from "user just installed the binaries" to "daemon is alive":
 
-1. **`veska init`** — interactive on first run. See §3.2 for
+1. **`veska init`** - interactive on first run. See §3.2 for
    the full first-run flow (config, embedder probe, service
    register, repo register).
-2. **`veska service install`** — service registration only,
+2. **`veska service install`** - service registration only,
    non-interactively. Idempotent.
-3. **Manual / dev mode** — `veska-daemon` run from a terminal.
+3. **Manual / dev mode** - `veska-daemon` run from a terminal.
    No supervisor, no auto-restart.
 
 `veska-mcp` (the stdio shim) handles a missing socket cleanly,
@@ -231,14 +231,14 @@ becoming the daemon's parent:
      (DEFAULT 3000) for the socket to appear; on success it
      proxies the original MCP frame normally. The user sees the
      daemon come up without leaving the editor. **The shim never
-     becomes the daemon's parent process** — the supervisor
+     becomes the daemon's parent process** - the supervisor
      starts the daemon, so orphan-process and racy-upgrade
      concerns the prior design called out are still solved.
   3. **If no supervisor is registered**, the shim returns
      `ErrDaemonNotRunning` with `cli_command:
      "veska service install"` so the editor can render a
      one-paste install affordance. Until that runs the editor
-     surface is dead, deliberately — the alternative (shim
+     surface is dead, deliberately - the alternative (shim
      forks the daemon) creates the orphan-process problem we
      refused to ship.
 - The shim **never** forks `veska-daemon` itself. The daemon's
@@ -302,7 +302,7 @@ with a clear `cli_command` to remediate.
      platform (`bd` install one-liner) and exit non-zero with a
      `cli_command` to retry. We do not silently fall back to
      `none` after the user opted in.
-   - In `--yes` / `--noninteractive`, the default is `none` —
+   - In `--yes` / `--noninteractive`, the default is `none` -
      opt-in requires a deliberate choice.
 6. **Summary.** Print a 7-line summary: data dir, config path,
    embedder status, service status, registered repos, tracker
@@ -334,12 +334,12 @@ ones the user will see later from `veska doctor` (SOLO-13 §2).
 operation; the daemon does not wrap it. The probe in init and
 `veska doctor embedder` is enough.
 
-**`veska embedder swap <model>` — Planned (NOT YET IMPLEMENTED).**
+**`veska embedder swap <model>` - Planned (NOT YET IMPLEMENTED).**
 The command, its sentinels (`ErrEmbedderMismatch`,
 `ErrEmbedderSwapInconsistent`, `ErrEmbedderModelMissing`), the
 `database_meta.embedder_*` keys, and the refuse-to-start-on-
 inconsistency invariant all have zero occurrences in `internal/`
-today — the entire procedure below is design intent, not shipped
+today - the entire procedure below is design intent, not shipped
 behavior. The `database_meta` *table* is real (migration 0001) but
 holds no embedder keys; `node_embeddings` carries a per-row `model`
 column (migration 0004) that records which model produced each
@@ -358,7 +358,7 @@ in a position to script that correctly.
 
 The swap is a **multi-step procedure with a daemon-stopped
 default, an explicit pre-snapshot, and a refuse-to-start-on-
-inconsistency invariant** — not an atomic transaction. The
+inconsistency invariant** - not an atomic transaction. The
 vector index lives outside SQL (in-memory for `memvec`; sibling
 `.hnsw` files for usearch), so it cannot participate in the
 `BEGIN IMMEDIATE`/`COMMIT` that covers the SQL rows in step 4.
@@ -387,7 +387,7 @@ The sequence the daemon runs:
    up; reads continue against promoted state). Set
    `degraded_reasons:["embedder_swapping"]` on responses.
 3. Take an auto-snapshot via the migration runner's snapshot
-   mechanism (SOLO-08 §10) — same lifecycle as a pre-migration
+   mechanism (SOLO-08 §10) - same lifecycle as a pre-migration
    snapshot, written to `~/.veska-backups/pre-swap-...`. **This
    is the canonical recovery point.**
 4. Run the storage transitions on `writeDB.hot`. The daemon
@@ -417,8 +417,8 @@ Properties:
 
 - **Recovery is the pre-swap snapshot.** Step 3's snapshot is
   the canonical recovery path. Step 4's transactional grouping
-  is opportunistic — the vector index reset happens outside the
-  SQL transaction — and the design does
+  is opportunistic - the vector index reset happens outside the
+  SQL transaction - and the design does
   not depend on it. The refuse-to-start invariant in step 1
   enforces snapshot-restore as the recovery path on the next
   launch. OQ-S004 measures the in-tx rollback case empirically;
@@ -430,7 +430,7 @@ Properties:
 - **Model dim mismatches are caught.** Step 1 reads the new
   model's dim; step 4 records it in `database_meta.embedder_dim`
   and resets the vector index to that dim. A boot consistency
-  check would cover subsequent restarts — also unbuilt (no such
+  check would cover subsequent restarts - also unbuilt (no such
   check exists in code today).
 
 The CLI subcommand `veska embedder current` prints the active
@@ -512,11 +512,11 @@ On start the daemon:
 2. Checks the broken marker and crash-loop breaker (§5.6).
 3. Opens SQLite (`~/.veska/veska.db`); initialises the vector
    backend (in-memory `memvec` by default, rebuilt from
-   `node_embeddings`; or usearch `.hnsw` files if selected —
+   `node_embeddings`; or usearch `.hnsw` files if selected -
    SOLO-08 §1.1); runs the migration
    runner (SOLO-08 §10); checks `[backup].required`. (A planned
    embedder-consistency check against the recorded embedder
-   geometry would also live here — see §3.2 — but it is not yet
+   geometry would also live here - see §3.2 - but it is not yet
    implemented.)
 4. Brings up embedding worker, post-promotion-queue-drain goroutines, fsnotify
    watcher.
@@ -531,7 +531,7 @@ No silent degradation.
 
 ### 5.2 Run
 
-The daemon is long-running — days-to-weeks per session. It
+The daemon is long-running - days-to-weeks per session. It
 survives editor restarts. RSS soft and hard caps live in SOLO-13
 §3.3 (both unmeasured at write time, gated by M1). The hard cap
 is enforced via §5.6.
@@ -539,7 +539,7 @@ is enforced via §5.6.
 **Daemon log rotation.** Stderr is redirected by the supervisor to
 `~/.veska/logs/daemon.log`. The daemon rotates this file
 internally (not via external `logrotate`) at 100 MiB, keeping 5
-rotations. On `SIGHUP` the daemon reopens log files — the same
+rotations. On `SIGHUP` the daemon reopens log files - the same
 signal an external rotator would use, in case the user wires one
 in. Audit log rotation (`audit.jsonl`) is independent and
 unchanged (SOLO-08 §3.5).
@@ -565,8 +565,8 @@ The daemon's response is a wall-clock-gap detector plus a
 per-repo mtime sweep. A monotonic clock (`time.Now()` against
 a rolling baseline) ticks every 5s. When two consecutive ticks
 show a gap larger than `[watcher].wake_threshold` (default 30s,
-CONFIG-SURFACE) — a near-certain signal of suspend, kernel
-freeze, or process pause — the daemon runs `wake reconcile`:
+CONFIG-SURFACE) - a near-certain signal of suspend, kernel
+freeze, or process pause - the daemon runs `wake reconcile`:
 
 1. Mark every registered repo's staging as
    `degraded_reasons: ["wake_reconciling"]`. **The MCP listener
@@ -607,12 +607,12 @@ freeze, or process pause — the daemon runs `wake reconcile`:
    `Close`) and recreates each repo's `FSWatcher` in place. The
    teardown releases the old `inotify` fd and the recreate yields a
    fresh `inotify_init` plus add-watches on Linux, and a new
-   FSEvents stream on macOS — `fsnotify` abstracts the platform, so
+   FSEvents stream on macOS - `fsnotify` abstracts the platform, so
    `Remove + Add` is a fresh stream on both. There is **no separate
    stale-event-ID code path**: on macOS, if FSEvents has aged out
    the prior event ID (`kFSEventStreamEventIdSinceNow`), the "full
    working-tree rescan" fallback is simply that *the wake sweep in
-   step 2 already was that rescan* — the wake-threshold tick already
+   step 2 already was that rescan* - the wake-threshold tick already
    ran the per-file mtime/size+prefix check across the whole tree,
    so no between-sleep change is silently missed. The small window
    between the step-2 walk and the restart is acceptable for the
@@ -626,7 +626,7 @@ freeze, or process pause — the daemon runs `wake reconcile`:
    rather than waiting for the slowest.
 
 This sweep is bounded by the working tree size and runs entirely
-through the read pool plus parse-on-save staging — no database
+through the read pool plus parse-on-save staging - no database
 writes until the user's next promotion triggers them. We do not
 attempt to detect *which* files changed during the suspend window
 beyond mtime/size; rename detection that would require content
@@ -676,24 +676,24 @@ branch-level one. Both run on the same restart path.
 > **Implementation status.** The staging-vs-HEAD check is a
 > reusable application-layer unit (`application.BranchReconciler`)
 > wired into the **wake-reconcile sweep** as a serial pre-pass at
-> sweep start — every repo's branch is reconciled (generation
+> sweep start - every repo's branch is reconciled (generation
 > bumped, prior-branch staging dropped, `active_branch` updated)
 > before any parallel parse runs. Wiring the same unit into the
-> **startup-resync** path is pending — tracked as a follow-up
+> **startup-resync** path is pending - tracked as a follow-up
 > under solov2-xde2.25.
 
 ### 5.3 Restart recovery
 
 The daemon may be restarted at any time:
 
-- **Promoted state** — recovered from SQLite as-is. WAL replay (if
+- **Promoted state** - recovered from SQLite as-is. WAL replay (if
   the daemon crashed mid-checkpoint) is handled by SQLite itself.
-- **Staging** — discarded. The fsnotify watcher reparses the
+- **Staging** - discarded. The fsnotify watcher reparses the
   current filesystem state on the next save event. While reparsing,
   MCP responses carry `degraded_reasons: ["staging_recovering"]`.
-- **post-promotion queue** — rows in `state = in_progress` are reset to `pending`
+- **post-promotion queue** - rows in `state = in_progress` are reset to `pending`
   on startup; the drain goroutines pick them up.
-- **Git↔Veska resync (§5.7)** — for every registered repo, the
+- **Git↔Veska resync (§5.7)** - for every registered repo, the
   daemon compares `repos.last_promoted_sha` against the working
   tree's `HEAD` and replays missing commits into the promoted
   graph before serving begins.
@@ -717,12 +717,12 @@ cliff").
 5. Close SQLite.
 6. Exit 0.
 
-A SIGKILL is also survivable — see 5.3.
+A SIGKILL is also survivable - see 5.3.
 
 ### 5.5 Upgrade
 
 **Distribution channel.** V2.0 ships as `tar.gz` from GitHub
-Releases — one archive per platform pair (`linux/amd64`,
+Releases - one archive per platform pair (`linux/amd64`,
 `linux/arm64`, `darwin/amd64`, `darwin/arm64`). Each archive
 contains the three binaries (`veska`, `veska-daemon`,
 `veska-mcp`). The default `memory` vector backend needs no
@@ -743,7 +743,7 @@ The user has just downloaded a new release.
    user's package manager) writes the new binaries to
    `~/.veska/bin/veska-daemon.next`, `veska.next`,
    `veska-mcp.next`, then atomically `mv` them into place. The
-   running daemon is unaffected by the file replacement —
+   running daemon is unaffected by the file replacement -
    already-loaded text is in memory.
 2. **Restart the daemon.** `veska service restart` calls
    `launchctl kickstart -k` or `systemctl --user restart` so the
@@ -758,7 +758,7 @@ The user has just downloaded a new release.
    no-ops.
 4. **Migrations.** On the new daemon's start (§5.1), the
    migration runner (SOLO-08 §10) takes an auto-snapshot, runs
-   pending migrations in order — each in its own transaction —
+   pending migrations in order - each in its own transaction -
    and refuses to start on schema mismatch (exit 78) or
    migration failure. The user is never asked to run
    `veska backup create` manually before an upgrade; the runner
@@ -779,13 +779,13 @@ The user has just downloaded a new release.
 `veska upgrade --restart` does the binary path + service
 restart; without `--restart` it stages the next-binary files and
 prints the restart command. Backup creation is **not** automatic
-— the user runs `veska backup create` if they want one (the
+- the user runs `veska backup create` if they want one (the
 daemon will refuse the start in step 3 if it needs one and none
 exists).
 
 ### 5.6 Crash-loop circuit breaker
 
-The breaker exists for *runtime* crashes — the daemon came up,
+The breaker exists for *runtime* crashes - the daemon came up,
 ran, and exited non-78 (e.g. RSS hard cap, SOLO-13 §3.3; panic
 in a core goroutine). Refuse-to-start cases (usearch backend
 selected but native library missing, schema mismatch,
@@ -811,7 +811,7 @@ breaker. §5.8 is the canonical matrix.
   is responsible for writing both surfaces in step §5.6's exit
   path; `veska supervise` is responsible for honouring the
   marker. launchd / systemd-user use exit code 78 directly and
-  do not read the markers — they halt because the daemon told
+  do not read the markers - they halt because the daemon told
   them to.
 - ≥ `[supervisor].max_restarts_in_window` (default 5) starts in
   `[supervisor].restart_window` (default 10m) ⇒ daemon writes
@@ -823,14 +823,14 @@ breaker. §5.8 is the canonical matrix.
   and removes the `broken` marker.
 - The marker blocks daemon start only. CLI repair commands
   (`veska doctor reset-crash-loop`, `veska backup restore`, and the
-  planned `veska embedder swap`'s daemon-stopped variant — §3.2)
+  planned `veska embedder swap`'s daemon-stopped variant - §3.2)
   work without the daemon.
 - `veska doctor` and `veska doctor service` surface the marker
   as exit 2 with recent log paths.
 - User clears manually: `veska doctor reset-crash-loop`.
 
 **Notification on trip.** A tripped breaker is otherwise
-silent — the daemon is dead, the supervisor has stopped trying,
+silent - the daemon is dead, the supervisor has stopped trying,
 and the editor's MCP connection just times out. Before exiting
 78, the daemon writes a sentinel notification through whichever
 of these is available, in this order, and stops at the first
@@ -841,7 +841,7 @@ that succeeds:
 3. **Always (fallback):** write `~/.veska/state/CRASH-LOOP-TRIPPED.txt` with the timestamp, the last 50 log lines, and the remediation command.
 
 The notifier is best-effort; failure to deliver does not block
-the exit. The fallback file is the contract — it is the place a
+the exit. The fallback file is the contract - it is the place a
 user (or a support bundle) can reliably find evidence that the
 breaker tripped without consulting the supervisor's own state.
 
@@ -894,8 +894,8 @@ but before the MCP listener accepts connections, the daemon:
    | `last_promoted_sha` is an ancestor of `HEAD` (`git merge-base --is-ancestor`) | **Replay path.** Walk `git log <last_promoted_sha>..HEAD --reverse`; for each commit, run the same parse-and-promotion pipeline used by the post-commit hook (SOLO-11 §1, §2). Emit one `promotion_id` per commit. |
    | `last_promoted_sha` is **not** reachable from `HEAD` (force-push, branch deletion, history rewrite) | **Divergent path.** Log `veska_code: "ErrPromotionDivergent"` with the diverged SHA. Do **not** rewrite history. Set `repos.last_promoted_sha = HEAD` after a fresh full reparse of the working tree (the same flow as `veska repo add`'s cold scan, scoped to one repo). Findings anchored to commits unreachable from `HEAD` remain in the database under their original `branch` value; they are pruned only by `veska gc --branches` once the branch they belong to is gone. |
 
-4. Cross-branch state — a sibling branch advanced while another
-   was active — is **not** chased. Veska only resyncs the repo's
+4. Cross-branch state - a sibling branch advanced while another
+   was active - is **not** chased. Veska only resyncs the repo's
    *currently checked-out* branch on startup. Sibling branches
    resync the next time the user `git checkout`s them (SOLO-11
    §1.5 branch-switch quiescence).
@@ -934,7 +934,7 @@ one left off.
 (SOLO-08 §4) before opening the MCP listener. Branch deletions
 that happened while the daemon was down are reaped here; the
 same routine fires after each wake-reconcile sweep (§5.2).
-There is no nightly cron — laptops sleep through wall clocks.
+There is no nightly cron - laptops sleep through wall clocks.
 
 **Surface.** `veska doctor` reports replay state under
 `pipelines`:
@@ -963,7 +963,7 @@ zombie reaping are explicit rather than implicit:
 | Caller | Command | When | Lifecycle |
 |---|---|---|---|
 | Startup resync (§5.7) | `git rev-parse HEAD`, `git merge-base --is-ancestor`, `git log <range>` | Every daemon start, per registered repo | Foreground; daemon waits with a 5s deadline; SIGTERM-on-shutdown propagates |
-| Hook runner | `veska hook-runner post-commit` (the daemon does NOT spawn this — Git does, via the installed hook) | On `git commit` / `git checkout` | The daemon is the RPC target, not the parent |
+| Hook runner | `veska hook-runner post-commit` (the daemon does NOT spawn this - Git does, via the installed hook) | On `git commit` / `git checkout` | The daemon is the RPC target, not the parent |
 | Crash-loop notify (§5.6) | `osascript` (macOS) or `notify-send` (Linux) | At most once per breaker trip | Best-effort; failure does not block the daemon's exit |
 | Backup (§9.1, SOLO-08) | `tar -czf ...` after `VACUUM INTO` | On `veska backup create` and pre-migration auto-snapshot | Foreground; daemon waits with a 600s deadline; SIGTERM aborts the backup cleanly |
 | Init (§3.2) | `ollama pull <model>` | Only during `veska init` (the CLI runs this, not the daemon) | The daemon is not the parent |
@@ -972,7 +972,7 @@ zombie reaping are explicit rather than implicit:
 spawned child receives SIGTERM via the daemon's `Cmd.Process`
 group; if a child is still running 5 seconds after the daemon
 finishes its drain, it is sent SIGKILL. Zombie reaping is
-automatic via Go's `os/exec` — every `Cmd.Wait()` call closes
+automatic via Go's `os/exec` - every `Cmd.Wait()` call closes
 out the child correctly. There is no user-visible "veska has
 spawned a process you have to kill" footgun.
 
@@ -986,12 +986,12 @@ The OS file-descriptor budget (SOLO-13 §3.3) covers this.
 Canonical home for every condition that prevents the daemon from
 serving. **All exit 78** ("stop, do not retry"); the supervisor
 halts and the user remediates. None increment the crash-loop
-breaker (§5.6) — 78 is terminal, not retry-eligible.
+breaker (§5.6) - 78 is terminal, not retry-eligible.
 
 | # | Reason | Detected at | Stage in §5.1 | Remediation |
 |---|---|---|---|---|
 | 1 | `~/.veska/state/broken` marker present | start, before any work | step 2 | `veska doctor reset-crash-loop` after investigating the prior error log |
-| 2 | `usearch` backend selected (`VESKA_VECTOR_BACKEND=usearch`) but `hnsw_native` tag / `libusearch_c.so` missing — `vector.ErrVectorStoreUnavailable` | vector init (wiring) | step 3 | use a `hnsw_native` build with `libusearch_c.so` on the loader path, or set `VESKA_VECTOR_BACKEND=memory`. (The default `memory` backend never hits this.) |
+| 2 | `usearch` backend selected (`VESKA_VECTOR_BACKEND=usearch`) but `hnsw_native` tag / `libusearch_c.so` missing - `vector.ErrVectorStoreUnavailable` | vector init (wiring) | step 3 | use a `hnsw_native` build with `libusearch_c.so` on the loader path, or set `VESKA_VECTOR_BACKEND=memory`. (The default `memory` backend never hits this.) |
 | 3 | Schema `current < min_schema` (binary too new) | migration runner | step 3 | downgrade binary, or restore a newer backup |
 | 4 | Schema `current > max_schema` (binary too old) | migration runner | step 3 | upgrade binary, or restore a pre-upgrade backup |
 | 5 | Migration N failed mid-transaction | migration runner | step 3 | fix migration / downgrade binary / restore the verified pre-migration snapshot (SOLO-08 §10.4) |
@@ -1001,9 +1001,9 @@ breaker (§5.6) — 78 is terminal, not retry-eligible.
 | 9 | `[backup].required = true` and no verified backup found | start | step 3 | `veska backup create`; restart |
 
 > **Planned row (NOT YET IMPLEMENTED).** A post-migration
-> `ErrEmbedderMismatch` refuse-to-start — `[embedder]` config
+> `ErrEmbedderMismatch` refuse-to-start - `[embedder]` config
 > disagrees with the recorded embedder geometry, remediated by the
-> planned `veska embedder swap <model>` (§3.2) — would slot in here.
+> planned `veska embedder swap <model>` (§3.2) - would slot in here.
 > Neither the sentinel nor the check exists in code today.
 
 **Breaker-eligible exits** (non-78, run-after-start):
@@ -1022,26 +1022,26 @@ without the daemon.
 
 The flow on a single machine:
 
-1. **Edit** — fsnotify fires on save. The watcher hands the path
+1. **Edit** - fsnotify fires on save. The watcher hands the path
    to the parser; the parser produces nodes/edges; staging is
    updated. End-to-end: ms to a couple hundred ms for typical
    files.
-2. **Query from editor** — MCP tools see the staging overlay
+2. **Query from editor** - MCP tools see the staging overlay
    immediately. `find_symbol`, `get_call_chain`, etc. read
    staging-on-promoted.
-3. **Commit** — `git commit` triggers the post-commit hook. The
+3. **Commit** - `git commit` triggers the post-commit hook. The
    hook runs `veska promote` over the Unix socket. The daemon
    promotes staging to SQLite in one transaction and enqueues
    post-promotion queue work. The hook returns. Budgets in SOLO-13 §3.1 (split
    typical vs. refactor commit; both unmeasured at write time,
    gated by M1).
-4. **Drain** — embedding, auto-link, finding revalidation run
+4. **Drain** - embedding, auto-link, finding revalidation run
    asynchronously. None of these block the hook. Findings surface
    in the editor when they're ready.
 
 ### 6.1 Commit-promotion sequence
 
-The full sequence — promotion SQL, post-promotion queue enqueue, async drain — lives
+The full sequence - promotion SQL, post-promotion queue enqueue, async drain - lives
 in **SOLO-11 §2** (and the failure handling in §2.2). The shape
 the daemon owns is just: hook calls `Promote` over `cli.sock`,
 daemon runs one `BEGIN IMMEDIATE` transaction on `writeDB.hot`,

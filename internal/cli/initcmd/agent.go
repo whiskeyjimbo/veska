@@ -19,7 +19,7 @@ import (
 // Markdown but trivially greppable.
 const AgentSnippetSentinel = "<!-- veska:init -->"
 
-// agentSnippetBody is the per-agent instruction block .
+// agentSnippetBody is the per-agent instruction block.
 // Lists the four MCP tools an agent reaches for most often plus a
 // one-line "when to use" so the agent doesn't have to guess. Kept
 // terse on purpose — these files are loaded into every conversation
@@ -88,19 +88,18 @@ query genuinely matched nothing — don't loop.
 // agentFlavor describes a known AI-agent harness: the canonical name
 // the user passes via --agent, and the relative file path under the
 // project root where its instruction snippet lives.
-//
 // mcpConfigPath, when non-empty, points at a JSON file the harness
 // reads to discover MCP servers (`.mcp.json` for Claude Code project
 // scope, `.cursor/mcp.json` for Cursor). On `veska init --agent X`,
 // veska merges itself into that file's mcpServers map — idempotent,
-// preserves other servers .
+// preserves other servers.
 type agentFlavor struct {
 	name          string
 	path          string
 	mcpConfigPath string // empty when the harness doesn't speak MCP via a JSON config
 }
 
-// agentFlavors are the harnesses solov2-m81 promises to support. The
+// agentFlavors are the harnesses promises to support. The
 // path conventions follow each tool's documented instruction-file
 // location at the time of writing; harness vendors may move these,
 // in which case we update the table.
@@ -137,13 +136,13 @@ func SupportedFlavorNames() []string {
 // AgentSnippetParams bundles the inputs for WriteAgentSnippet. It exists to
 // keep the call within the project's argument budget and to carry the
 // preview/confirm controls (AssumeYes, Interactive, In) added in
-// solov2-uej9.8 so init --agent never silently mutates the wrong tree.
+// so init --agent never silently mutates the wrong tree.
 type AgentSnippetParams struct {
 	RootDir         string    // project root the snippet is written under
 	Flavor          string    // agent flavor (claude, cursor, …)
 	Out             io.Writer // status + preview sink
 	In              io.Reader // stdin for the interactive confirm prompt
-	UpdateGitignore bool      // also manage a veska block in .gitignore
+	UpdateGitignore bool      // also manage a veska block in.gitignore
 	AssumeYes       bool      // skip the prompt and write (-y / --yes)
 	Interactive     bool      // stdin is a TTY → prompt instead of bailing
 }
@@ -153,7 +152,7 @@ type AgentSnippetParams struct {
 // preview of every file it will touch (with the absolute root path) and gates
 // the write on confirmation: AssumeYes writes immediately; an interactive TTY
 // prompts [Y/n]; a non-interactive stdin without AssumeYes prints the preview
-// and writes NOTHING (solov2-uej9.8 — prevents accidental writes in the wrong
+// and writes NOTHING ( — prevents accidental writes in the wrong
 // tree / in automation). Idempotent: a second call against the same
 // rootDir+flavor detects the sentinel and reports "already present".
 func WriteAgentSnippet(p AgentSnippetParams) error {
@@ -178,7 +177,7 @@ func WriteAgentSnippet(p AgentSnippetParams) error {
 }
 
 // applyAgentSnippet performs the confirmed writes: the instruction file, the
-// MCP-server config (when the flavor speaks MCP), and the opt-in .gitignore
+// MCP-server config (when the flavor speaks MCP), and the opt-in.gitignore
 // block. Split from WriteAgentSnippet so the preview/confirm orchestration and
 // the write body each stay within the size budget.
 func applyAgentSnippet(f agentFlavor, p AgentSnippetParams) error {
@@ -209,7 +208,7 @@ func applyAgentSnippet(f agentFlavor, p AgentSnippetParams) error {
 		}
 	}
 
-	// solov2-zo0w: when the harness reads an MCP-server config JSON,
+	// when the harness reads an MCP-server config JSON,
 	// merge veska in so the user doesn't have to hand-edit. Idempotent:
 	// preserves other servers; skips when veska is already registered
 	// with the same command. Non-fatal on error — the instruction file
@@ -228,10 +227,10 @@ func applyAgentSnippet(f agentFlavor, p AgentSnippetParams) error {
 		}
 	}
 
-	// Opt-in .gitignore management : silently modifying a tracked
+	// Opt-in.gitignore management: silently modifying a tracked
 	// file surprises users who only asked for the instruction file. Pass
-	// --update-gitignore to opt in. The block is still bracketed by sentinels
-	// so a re-run leaves an already-managed block alone .
+	// update-gitignore to opt in. The block is still bracketed by sentinels
+	// so a re-run leaves an already-managed block alone.
 	if updateGitignore {
 		if err := ensureGitignoreStanza(rootDir, out); err != nil {
 			// Non-fatal: the snippet is what the user asked for; gitignore
@@ -353,7 +352,7 @@ func mcpServerAction(cfgPath, name, command string) string {
 // that the running veska invocation should advertise to MCP harnesses.
 // The lookup goes: PATH (the binary is installed), then the running
 // binary's directory (veska-mcp sits next to veska in dev clones and in
-// the release tarball). solov2-zo0w.
+// the release tarball).
 func resolveVeskaMcpPath() (string, error) {
 	if p, err := exec.LookPath("veska-mcp"); err == nil {
 		// Resolve to an absolute path so the config doesn't break when
@@ -374,7 +373,7 @@ func resolveVeskaMcpPath() (string, error) {
 	return "", fmt.Errorf("veska-mcp not found on PATH or alongside %s", exe)
 }
 
-// EnsureMcpServerEntry merges {name: {command, args:[]}} into cfgPath's
+// EnsureMcpServerEntry merges {name: {command, args:}} into cfgPath's
 // mcpServers map. Creates cfgPath when absent; preserves unrelated keys
 // and other server entries when present. Returns the verb used for the
 // status line ("registered", "updated", "already registered"). Errors
@@ -434,7 +433,7 @@ func EnsureMcpServerEntry(cfgPath, name, command string) (string, error) {
 }
 
 // gitignoreSentinelBegin / gitignoreSentinelEnd bracket the veska-managed
-// block in a repo's .gitignore. Re-running `veska init --agent` finds the
+// block in a repo's.gitignore. Re-running `veska init --agent` finds the
 // block, leaves user-added lines outside it alone, and rewrites only what
 // lives between the sentinels.
 const (

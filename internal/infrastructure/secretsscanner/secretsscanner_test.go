@@ -15,7 +15,7 @@ func TestBuiltinScanner_Scan(t *testing.T) {
 	t.Parallel()
 
 	// AKIA-shaped synthetic; NOT the AKIAIOSFODNN7EXAMPLE docs placeholder
-	// (the new docs-allowlist drops that one — solov2-j1yz).
+	// (the new docs-allowlist drops that one).
 	const awsKey = "AKIAZQ7XFAKE1234ABCD"
 	const ghToken = "ghp_0123456789abcdefghijklmnopqrstuvwxyz"
 	const entropyTok = "h8Kq2Lx9Zp4Wn7Vc3Mb6Td1Rj5Yf0Gs"
@@ -122,8 +122,8 @@ func TestBuiltinScanner_Scan(t *testing.T) {
 	}
 }
 
-// TestBuiltinScanner_ImportPathsNotFlagged pins solov2-j66g + solov2-1rfo:
-// Go import paths and well-known module URLs must never produce a finding —
+// TestBuiltinScanner_ImportPathsNotFlagged pins +:
+// Go import paths and well-known module URLs must never produce a finding
 // they cross the entropy threshold but are never secrets.
 func TestBuiltinScanner_ImportPathsNotFlagged(t *testing.T) {
 	t.Parallel()
@@ -151,12 +151,12 @@ func TestBuiltinScanner_ImportPathsNotFlagged(t *testing.T) {
 	}
 }
 
-// TestBuiltinScanner_URLsInCommentsNotFlagged guards solov2-izh6.24:
+// TestBuiltinScanner_URLsInCommentsNotFlagged guards:
 // a line whose only secret-shaped token is the path of an http(s) URL
 // (typical SPDX license header, doc cross-references, README links)
 // must not fire the high-entropy rule. The journey report saw 47 of
 // these on a fresh spf13/cobra clone — every Apache-2.0 header line
-// like `//      http://www.apache.org/licenses/LICENSE-2.0` flagged.
+// like `// http://www.apache.org/licenses/LICENSE-2.0` flagged.
 func TestBuiltinScanner_URLsInCommentsNotFlagged(t *testing.T) {
 	t.Parallel()
 	s := secretsscanner.New()
@@ -206,7 +206,7 @@ func TestBuiltinScanner_UrlsDoNotMaskRealSecrets(t *testing.T) {
 	}
 }
 
-// TestBuiltinScanner_GitleaksAddsStripeRule pins solov2-j66g: gitleaks
+// TestBuiltinScanner_GitleaksAddsStripeRule pins: gitleaks
 // fires on Stripe test tokens that the previous local-only rules missed.
 // Uses a synthetic-but-realistic shape that gitleaks does not allowlist.
 func TestBuiltinScanner_GitleaksAddsStripeRule(t *testing.T) {
@@ -270,7 +270,7 @@ func TestBuiltinScanner_ExcludesLockfiles(t *testing.T) {
 	}
 }
 
-// TestBuiltinScanner_DocsExamplesAllowlisted pins solov2-j1yz: well-known
+// TestBuiltinScanner_DocsExamplesAllowlisted pins: well-known
 // vendor documentation placeholders (e.g. AWS's canonical
 // AKIAIOSFODNN7EXAMPLE / wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY) must
 // not surface as findings — they dominate the first-run journey otherwise
@@ -296,8 +296,8 @@ func TestBuiltinScanner_DocsExamplesAllowlisted(t *testing.T) {
 	}
 }
 
-// TestBuiltinScanner_FilesystemPathsNotFlagged pins solov2-bptv: the
-// .mcp.json file veska itself writes during `veska init --agent` embeds
+// TestBuiltinScanner_FilesystemPathsNotFlagged pins: the
+// mcp.json file veska itself writes during `veska init --agent` embeds
 // the absolute path of veska-mcp, which previously tripped the
 // high-entropy rule. Filesystem paths must never produce a finding.
 func TestBuiltinScanner_FilesystemPathsNotFlagged(t *testing.T) {

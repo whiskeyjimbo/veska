@@ -13,7 +13,7 @@ import (
 const multiEventTimeout = 500 * time.Millisecond
 
 // TestMultiRepoWatcherAdd creates a MultiRepoWatcher, adds two tempdir repos,
-// and verifies that the Events() channel is non-nil.
+// and verifies that the Events channel is non-nil.
 func TestMultiRepoWatcherAdd(t *testing.T) {
 	t.Parallel()
 
@@ -73,7 +73,7 @@ func TestMultiRepoWatcherRemove(t *testing.T) {
 }
 
 // TestMultiRepoWatcherReceivesEvent adds a tempdir, starts the watcher, creates a
-// file, and expects a RepoFileEvent on Events() within 500ms.
+// file, and expects a RepoFileEvent on Events within 500ms.
 func TestMultiRepoWatcherReceivesEvent(t *testing.T) {
 	t.Parallel()
 
@@ -171,9 +171,9 @@ loop:
 }
 
 // TestMultiRepoWatcherRestartAll tears down and recreates each repo's FSWatcher
-// (the wake-handle restart, solov2-xde2.25.3) and verifies that a live file
+// (the wake-handle restart) and verifies that a live file
 // write AFTER the restart still produces a RepoFileEvent — proving the fresh
-// handle is wired to the same Events() stream. No file is written before the
+// handle is wired to the same Events stream. No file is written before the
 // restart, so the only event that can arrive is the post-restart one (the
 // buffered out channel cannot replay a stale pre-restart event as a false pass).
 func TestMultiRepoWatcherRestartAll(t *testing.T) {
@@ -221,7 +221,7 @@ func TestMultiRepoWatcherRestartAll(t *testing.T) {
 }
 
 // TestMultiRepoWatcherInject verifies that Inject multiplexes a synthetic write
-// event (the wake-reconciler path) onto Events() with the given repo ID, and
+// event (the wake-reconciler path) onto Events with the given repo ID, and
 // that an Inject before Start is a no-op rather than a panic.
 func TestMultiRepoWatcherInject(t *testing.T) {
 	t.Parallel()

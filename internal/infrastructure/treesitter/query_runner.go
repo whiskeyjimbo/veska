@@ -1,13 +1,13 @@
 // Package treesitter — query_runner is the thin wrapper over
-// sitter.QueryCursor that the .scm-driven extractors use .
-//
+// sitter.QueryCursor that the.scm-driven extractors use.
 // Goals:
-//   - One CGO crossing per match (vs per node in the legacy recursive
-//     walkers); the cursor itself iterates inside the C extension.
-//   - Capture results as a map[name]*Node so extractors can pull
-//     "@function.name" directly without index gymnastics.
-//   - Compile each query once per process via sync.Once so a hot parse
-//     path doesn't re-compile S-expressions every call.
+//
+//	One CGO crossing per match (vs per node in the legacy recursive
+//	  walkers); the cursor itself iterates inside the C extension.
+//	Capture results as a map[name]*Node so extractors can pull
+//	  "@function.name" directly without index gymnastics.
+//	Compile each query once per process via sync.Once so a hot parse
+//	  path doesn't re-compile S-expressions every call.
 package treesitter
 
 import (
@@ -74,7 +74,7 @@ func compileEmbeddedQuery(lang *sitter.Language, langName, queryName string) (*s
 // Each entry maps the capture name (e.g. "function.name") to the
 // underlying tree-sitter node. A capture absent from the match — for
 // example an optional capture in an alternative branch — simply isn't
-// in the map, so extractors check with `node, ok := m["..."]`.
+// in the map, so extractors check with `node, ok:= m["."]`.
 type queryMatch struct {
 	captures map[string]*sitter.Node
 }
@@ -90,7 +90,6 @@ func (m queryMatch) node(name string) *sitter.Node {
 // captures populate each match's map. Anonymous captures (no @name)
 // are silently dropped — they're useful for structural anchors in the
 // pattern but rarely needed Go-side.
-//
 // Returns nil when the query has no matches. Callers iterate the slice
 // and emit nodes/edges; the cursor's underlying CGO state is released
 // before this function returns.

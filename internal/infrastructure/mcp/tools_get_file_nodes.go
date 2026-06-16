@@ -12,15 +12,13 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/core/ports"
 )
 
-// ---------------------------------------------------------------------------
 // eng_get_file_nodes
-// ---------------------------------------------------------------------------
 
 type getFileNodesParams struct {
 	FilePath string `json:"file_path"`
 	// Path is an accepted alias for FilePath. Node file paths are keyed on
 	// "file_path"; "path" is a common caller guess, so we honour both rather
-	// than silently returning nothing .
+	// than silently returning nothing.
 	Path   string `json:"path"`
 	RepoID string `json:"repo_id"`
 	Branch string `json:"branch"`
@@ -30,8 +28,7 @@ type getFileNodesParams struct {
 // Staging overlay takes precedence — if the file is in staging the handler
 // returns those nodes and sets included_staging=true. Otherwise it falls
 // through to the promoted store via GraphStorage.NodesForFile.
-//
-// solov2-8ex retired the previous in-handler type-assertion to an optional
+// retired the previous in-handler type-assertion to an optional
 // fileQuerier interface; NodesForFile is now part of the port contract.
 func makeGetFileNodesHandler(graph ports.GraphReader, staging *staging.Area, repos application.RepoLister) ToolHandler {
 	return func(ctx context.Context, _ domain.Actor, raw json.RawMessage) (any, *RPCError) {
@@ -46,13 +43,13 @@ func makeGetFileNodesHandler(graph ports.GraphReader, staging *staging.Area, rep
 		if filePath == "" {
 			return nil, &RPCError{Code: CodeInvalidParams, Message: "file_path (or path) is required"}
 		}
-		// solov2-ktz0: shim-injected cwd resolves repo_id when omitted.
+		// shim-injected cwd resolves repo_id when omitted.
 		repoID, rpcErr := resolveRepoIDFromParams(ctx, repos, raw, p.RepoID)
 		if rpcErr != nil {
 			return nil, rpcErr
 		}
 		p.RepoID = repoID
-		// Branch defaults to the repo's active branch when omitted ,
+		// Branch defaults to the repo's active branch when omitted,
 		// matching find_symbol, get_call_chain, get_blast_radius, et al.
 		if br, rpcErr := resolveBranchOrActive(ctx, repos, p.RepoID, p.Branch); rpcErr != nil {
 			return nil, rpcErr
@@ -60,7 +57,7 @@ func makeGetFileNodesHandler(graph ports.GraphReader, staging *staging.Area, rep
 			p.Branch = br
 		}
 
-		// Node file_paths are stored repo-relative (ADR-S0017 §1). Normalise a
+		// Node file_paths are stored repo-relative. Normalise a
 		// caller-supplied path to that form so an absolute path still matches
 		// (and a relative one is used as-is) rather than silently missing.
 		filePath = toStoredPath(ctx, repos, p.RepoID, filePath)
@@ -79,7 +76,7 @@ func makeGetFileNodesHandler(graph ports.GraphReader, staging *staging.Area, rep
 }
 
 // toStoredPath normalises a caller-supplied file_path to the repo-relative
-// slash form node file_paths are stored in (ADR-S0017 §1). An absolute path is
+// slash form node file_paths are stored in. An absolute path is
 // relativised against the repo root; a relative path is returned ToSlash'd
 // as-is. On any lookup failure the input is returned unchanged (the query then
 // simply finds nothing, matching the pre-existing best-effort behaviour).

@@ -1,4 +1,4 @@
-# repos.manifest — sha-pinned external Go repositories that make up the
+# repos.manifest - sha-pinned external Go repositories that make up the
 # embed-models bench corpus. Format: name<TAB>url<TAB>tag-or-sha.
 # Tags are treated as immutable; the fetch script does a shallow clone at
 # the listed ref so we get a deterministic checkout per bench run.

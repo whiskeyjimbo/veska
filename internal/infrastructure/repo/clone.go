@@ -21,16 +21,15 @@ var ErrInvalidURL = errors.New("invalid git url")
 
 // CanonicalURL returns the canonical form of a git URL used as the alias
 // key for repo collision-resolution and as the input to DerivedRepoIDFromURL
-// (solov2-kxo5.1).
-//
 // Rules:
-//   - SSH scp-like form ([user@]host:path) is rewritten to https://host/path
-//   - ssh:// and git:// schemes are rewritten to https://
-//   - Host is lowercased; user-info is dropped
-//   - Trailing .git on the path is stripped
-//   - Trailing slash on the path is stripped
-//   - Port (if present) is preserved
-//   - Path case is preserved (some forges are case-sensitive)
+//
+//	SSH scp-like form ([user@]host:path) is rewritten to https://host/path
+//	ssh:// and git:// schemes are rewritten to https://
+//	Host is lowercased; user-info is dropped
+//	Trailing.git on the path is stripped
+//	Trailing slash on the path is stripped
+//	Port (if present) is preserved
+//	Path case is preserved (some forges are case-sensitive)
 //
 // Anything that doesn't look like a URL at all returns ErrInvalidURL.
 func CanonicalURL(raw string) (string, error) {
@@ -71,7 +70,7 @@ func CanonicalURL(raw string) (string, error) {
 		}
 		return normaliseURL("https", authority, path), nil
 	case "file":
-		// file URLs map to absolute paths and stay as file://; .git strip
+		// file URLs map to absolute paths and stay as file://;.git strip
 		// + trailing-slash strip still apply. The authority is conventionally
 		// empty or "localhost" and is stripped for canonicality.
 		_, path, _ := strings.Cut(rest, "/")
@@ -101,8 +100,8 @@ func splitScheme(raw string) (scheme, rest string, ok bool) {
 	return scheme, raw[idx+3:], true
 }
 
-// normaliseURL applies the host-lowercase, .git-strip, trailing-slash-strip
-// rules and assembles the canonical string. authority may include :port.
+// normaliseURL applies the host-lowercase,.git-strip, trailing-slash-strip
+// rules and assembles the canonical string. authority may include:port.
 func normaliseURL(scheme, authority, path string) string {
 	host, port, hasPort := strings.Cut(authority, ":")
 	host = strings.ToLower(host)
@@ -118,7 +117,7 @@ func normaliseURL(scheme, authority, path string) string {
 }
 
 // TrackedClonePath returns the on-disk root for a tracked URL-cloned repo
-// (solov2-kxo5.3). The first 16 hex characters of the URL-derived id give
+// The first 16 hex characters of the URL-derived id give
 // a collision-free directory name without the unreadable 64-char form.
 func TrackedClonePath(veskaHome, canonicalURL string) string {
 	return filepath.Join(veskaHome, "repos", DerivedRepoIDFromURL(canonicalURL)[:16])
@@ -126,7 +125,7 @@ func TrackedClonePath(veskaHome, canonicalURL string) string {
 
 // LookupByCanonicalURL returns the registered repo whose canonical_url
 // column matches the canonicalised URL. The needle is re-canonicalised
-// inside so callers can pass either the raw or canonical form (solov2-kxo5.4
+// inside so callers can pass either the raw or canonical form (
 // adds the same helper signature; landed here because kxo5.3 needs it for
 // the "already registered" short-circuit).
 func LookupByCanonicalURL(ctx context.Context, db *sql.DB, urlOrCanonical string) (Record, bool, error) {
@@ -157,7 +156,7 @@ func LookupByCanonicalURL(ctx context.Context, db *sql.DB, urlOrCanonical string
 
 // PromoteEphemeralToTracked flips an ephemeral row's kind to 'tracked'
 // and stamps prompted_at — the "user said yes" branch of the acceptance
-// prompt (solov2-kxo5.7). In-place: no row replacement, no file move,
+// prompt. In-place: no row replacement, no file move,
 // the clone stays where it is. The WHERE clause guards against running
 // against a row that isn't ephemeral so a stray call can't demote a
 // tracked repo.
@@ -173,7 +172,7 @@ func PromoteEphemeralToTracked(ctx context.Context, db *sql.DB, repoID string) e
 }
 
 // MarkPromptDeclined stamps prompted_at without changing kind — the "user
-// said no" branch (solov2-kxo5.7). prompted_at is the once-per-row gate
+// said no" branch. prompted_at is the once-per-row gate
 // for re-prompting; setting it here is what keeps the prompt from
 // re-firing on the next ephemeral query.
 func MarkPromptDeclined(ctx context.Context, db *sql.DB, repoID string) error {
@@ -190,9 +189,8 @@ func MarkPromptDeclined(ctx context.Context, db *sql.DB, repoID string) error {
 // TouchEphemeral bumps last_accessed_at to now for repoID, but only when
 // the row is kind='ephemeral'. Tracked rows are skipped silently — they
 // are not subject to LRU eviction so the column is meaningless for them
-// (solov2-kxo5.8). The combined WHERE clause is the gate; callers do not
+// The combined WHERE clause is the gate; callers do not
 // need to check kind themselves.
-//
 // Safe to call multiple times within a single query; the UPDATE is
 // idempotent and the second write is a no-op cost-wise.
 func TouchEphemeral(ctx context.Context, db *sql.DB, repoID string) error {
@@ -229,10 +227,10 @@ func SetCanonicalURL(ctx context.Context, db *sql.DB, repoID, urlOrCanonical str
 }
 
 // AddFromURL clones a remote git URL into the tracked clones tier and
-// registers it like a normal `repo add <path>` (solov2-kxo5.3).
+// registers it like a normal `repo add <path>`.
 //
-//   - veskaHome is the root for the on-disk clone (typically $VESKA_HOME)
-//   - progressW receives `git clone --progress` output; pass nil to discard
+//	veskaHome is the root for the on-disk clone (typically $VESKA_HOME)
+//	progressW receives `git clone --progress` output; pass nil to discard
 //
 // The function is idempotent: if a row already exists with the same
 // canonicalised URL, it returns that row's id with existed=true and
@@ -286,7 +284,6 @@ func AddFromURL(ctx context.Context, db *sql.DB, veskaHome, rawURL string, progr
 // render a live indicator. On failure the captured stderr is included
 // verbatim in the returned error — never swallowed or paraphrased — so a
 // permission/auth/404 diagnosis is obvious from one error string.
-//
 // destDir must be a path that does not yet exist (git clone refuses to
 // clone into an existing non-empty directory). The returned path equals
 // destDir on success.
@@ -294,7 +291,7 @@ func Clone(ctx context.Context, url, destDir string, progressW io.Writer) (strin
 	if progressW == nil {
 		progressW = io.Discard
 	}
-	// solov2-izh6.9: drop --progress so git's own TTY detection picks
+	// drop --progress so git's own TTY detection picks
 	// between "show progress" (interactive shell) and "quiet" (logs, CI,
 	// background tool capture). With --progress we were dumping dozens
 	// of CR-overwritten "Counting/Compressing/Receiving" lines into

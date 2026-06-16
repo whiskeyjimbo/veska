@@ -17,8 +17,8 @@ import (
 // whose payloads routinely contain high-entropy slugs (memory keys, sequence
 // hashes) that are not credentials. Without this filter the high-entropy
 // heuristic fires repeatedly on the project's own tracker file — exactly the
-// failure mode that hit on .beads/issues.jsonl during junior-journey round 3
-// (solov2-jtl5.3). Paths are matched as prefixes against the promotion's
+// failure mode that hit on.beads/issues.jsonl during junior-journey round 3
+// Paths are matched as prefixes against the promotion's
 // repo-relative file path.
 var secretsScanIgnoredPrefixes = []string{
 	".beads/", // beads issue tracker (https://github.com/steveyegge/beads)
@@ -29,7 +29,6 @@ var secretsScanIgnoredPrefixes = []string{
 // findings on promotion. It scans only the lines newly added by the promoted
 // commit (Input.AddedLines), so a pre-existing secret on an untouched line is
 // excluded by construction — no extra filtering is required.
-//
 // Findings anchor on the leaking file's path with a discriminator key of
 // rule+line, which makes the resulting finding_ids branch-stable and
 // idempotent: re-running on unchanged input yields byte-identical finding_ids.
@@ -80,7 +79,7 @@ func (c *SecretsScanCheck) Run(ctx context.Context, in Input) ([]*domain.Finding
 		return nil, fmt.Errorf("secrets-scan: scan: %w", err)
 	}
 
-	// solov2-izh6.13: collapse N consecutive same-rule hits on the same
+	// collapse N consecutive same-rule hits on the same
 	// file into a single finding. A 28-line PEM block flagged line-by-line
 	// otherwise produces 28 separate findings and dominates the surface on
 	// `veska search --repo <url>` of e.g. jwt-go. The keyed first-occurrence
@@ -129,7 +128,7 @@ func (c *SecretsScanCheck) Run(ctx context.Context, in Input) ([]*domain.Finding
 			// Namespace the finding_id by repo so two repos that leak the same
 			// secret (same rule+line in a same-named file) don't derive an
 			// identical finding_id and clobber each other on the (finding_id,
-			// branch) PK. Mirrors the vulnscan fix (solov2-uej9.1).
+			// branch) PK. Mirrors the vulnscan fix.
 			domain.WithFindingKey(in.RepoID+"\x00"+s.Rule+strconv.Itoa(s.Line)),
 		)
 		if err != nil {
@@ -149,7 +148,7 @@ func (c *SecretsScanCheck) Run(ctx context.Context, in Input) ([]*domain.Finding
 // extensions under conventional test directories are also skipped, since
 // PEM/key files inside testdata/ or test/ subtrees are vanishingly unlikely
 // to be real and dominate the noise on forks of crypto-adjacent projects
-// like jwt-go (solov2-izh6.13).
+// like jwt-go.
 func isSecretsScanIgnored(path string) bool {
 	for _, prefix := range secretsScanIgnoredPrefixes {
 		if strings.HasPrefix(path, prefix) {
@@ -177,7 +176,7 @@ var testFixtureCredentialExts = []string{".pem", ".key", ".crt", ".cer", ".p12",
 // file embedded as a test fixture: a credential-shaped extension AND at
 // least one path segment indicating a test directory. Matching only on
 // segments avoids the "vendored_data/" / "contestdata/" substring trap that
-// already bit the vendored-deps filter .
+// already bit the vendored-deps filter.
 func isTestFixtureCredentialPath(path string) bool {
 	lower := strings.ToLower(path)
 	extMatch := false

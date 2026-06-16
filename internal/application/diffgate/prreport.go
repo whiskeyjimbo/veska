@@ -1,6 +1,6 @@
 package diffgate
 
-// PRReport is the advisory PR impact/risk report (solov2-zvh6.5): a non-gating
+// PRReport is the advisory PR impact/risk report: a non-gating
 // assembly of "what this diff touches and where it is risky". It is ADVISORY by
 // construction — unlike the gate verdicts it has no Pass/Failures/ExitCode, and
 // the CLI always exits 0 once it can emit one. Each section is sourced from an
@@ -8,8 +8,7 @@ package diffgate
 // degrades its section (left empty) and appends a Note rather than failing the
 // report. The report never blocks a merge — that is the whole point of the soft
 // on-ramp (teams trust an advisory view before they let the graph gate).
-//
-// The index-ahead caveat that the gate family carries (solov2-zvh6.11) does NOT
+// The index-ahead caveat that the gate family carries does NOT
 // apply here: the report does not gate, so reflecting current index state is
 // acceptable rather than a false-PASS.
 type PRReport struct {
@@ -23,7 +22,7 @@ type PRReport struct {
 	OpenFindings []ReportFinding    `json:"open_findings"`
 	Untested     []UntestedSymbol   `json:"untested_changed"`
 	// Notes records per-section degradation (a producer errored, or the repo is
-	// not indexed) so the report is honest about what it could not assemble —
+	// not indexed) so the report is honest about what it could not assemble
 	// without gating on it.
 	Notes []string `json:"notes,omitempty"`
 }

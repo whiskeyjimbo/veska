@@ -1,7 +1,6 @@
 // Command loader loads synthetic 768-dim vectors into a sqlite-vec vec0 virtual table
 // for two populations (50k and 1M), recording wall-clock time, disk footprint, and
 // peak RSS. Metrics are written as a JSON array to the output file.
-//
 // Usage:
 //
 //	loader [-n50k 50000] [-n1m 1000000] [-db data/spike.db] [-out data/load_metrics.json]

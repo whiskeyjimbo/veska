@@ -26,11 +26,10 @@ import (
 // (secret-scan always, vuln-scan when [vuln_source] is enabled) so a cold
 // scan emits findings on the FIRST promotion of an ephemeral or freshly-added
 // repo, exactly as the daemon does.
-//
 // This was previously assembled inside cmd/veska/reindex.go; it lives here so
 // the delivery layer carries no composition wiring and the check pipeline no
 // longer hand-mirrors internal/cli/daemon/wire.go from a separate copy
-// (solov2-0omh, follow-up to the SOLID/CLEAN review of cmd/veska).
+// (, follow-up to the SOLID/CLEAN review of cmd/veska).
 func NewCLIColdScanReparser(pools *sqlite.Pools, loader application.IgnoreLoader) (func(context.Context, application.RepoRecord) error, error) {
 	// reviewEnabled=false: the CLI path never enqueues review work. The CLI
 	// ingester emits no parse findings (no ingesterOpts); only the promoter
@@ -43,7 +42,6 @@ func NewCLIColdScanReparser(pools *sqlite.Pools, loader application.IgnoreLoader
 // cliColdScanPromoterOpts builds the Promoter options for the CLI cold-scan
 // path: the secret-leak + vuln-scan check runner (per resolved config) and the
 // AddedLinesFunc that drives the secret-scan rule.
-//
 // Errors during config load fall back to "secret-scan only" — vuln-scan is off
 // by default anyway and a malformed config.toml should not silently disable
 // secret detection on the cold-scan path.
@@ -78,7 +76,6 @@ func cliColdScanPromoterOpts(pools *sqlite.Pools) []application.PromoterOption {
 // reports whether the vulnerability-scan feature is enabled. It is the single
 // source of the provider-switch rule shared by the in-process cold-scan path
 // (cliColdScanPromoterOpts) and the daemon (daemon.buildVulnSource).
-//
 // An empty or unrecognised [vuln_source] provider yields the NullVulnSource
 // with enabled false — no refresher goroutine, no vuln-scan check. provider =
 // "osv" yields the OSV.dev-backed adapter with enabled true. Daemon callers are

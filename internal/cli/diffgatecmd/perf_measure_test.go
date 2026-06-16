@@ -18,7 +18,7 @@ import (
 // ll57.7 package-closure optimization is warranted. Env-guarded so it never
 // runs in normal CI.
 //
-//	DIFFGATE_PERF=1 go test -tags sqlite_fts5 -run TestMeasure_DiscoveryCost -v ./internal/cli/diffgatecmd/
+//	DIFFGATE_PERF=1 go test -tags sqlite_fts5 -run TestMeasure_DiscoveryCost -v./internal/cli/diffgatecmd/
 func TestMeasure_DiscoveryCost(t *testing.T) {
 	if os.Getenv("DIFFGATE_PERF") == "" {
 		t.Skip("set DIFFGATE_PERF=1 to run the discovery cost measurement")

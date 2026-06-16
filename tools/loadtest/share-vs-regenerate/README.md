@@ -1,4 +1,4 @@
-# share-vs-regenerate — ADR-S0019 §4 empirical gate
+# share-vs-regenerate - ADR-S0019 §4 empirical gate
 
 Measures, per derived-artifact family, the **local regeneration cost** against
 the **size/sync cost** of carrying that artifact in the shared store, and places
@@ -16,13 +16,13 @@ For each artifact:
 breakeven = bytes_carried / regen_seconds
 ```
 
-— the link speed at which downloading the artifact costs exactly what
+- the link speed at which downloading the artifact costs exactly what
 regenerating it locally does. **Below breakeven: regenerate. Above: share.**
 No bandwidth is hardcoded into the verdict; reference link speeds (WAN / 100 Mbit
 / LAN / 10 Gbit) are layered on top purely for display.
 
 > **Measurement basis.** Regen is timed unbatched on a single goroutine, whereas
-> production embeds via a worker pool + `BatchEmbeddingProvider` — so real regen
+> production embeds via a worker pool + `BatchEmbeddingProvider` - so real regen
 > wall-clock is lower and the true breakeven is somewhat *higher* (biased toward
 > regenerate). The breakeven is corpus-size-invariant (`count` cancels), so a
 > larger library buys measurement *stability*, not a different verdict.
@@ -37,7 +37,7 @@ ADR-S0019 §3 already decided four of the five families *qualitatively*:
 | summaries / condensations | **share** | LLM-produced → expensive + content-addressable |
 | review output | **share** | LLM-produced → expensive + content-addressable |
 | class-B curation | **share** | irreproducible, not source-derived |
-| **embeddings** | **measured** | deployment-dependent (§5) — the only gray-zone family |
+| **embeddings** | **measured** | deployment-dependent (§5) - the only gray-zone family |
 
 So the harness measures embeddings empirically (against both vector-backend
 widths: memvec float32 and usearch float16) and reports the other families'
@@ -70,6 +70,6 @@ installed, else the zero-dependency static-v2 hash embedder. Install model2vec
 
 ## Output
 
-- `RESULTS.md` (next to this README) — the per-artifact table + the embedding
+- `RESULTS.md` (next to this README) - the per-artifact table + the embedding
   verdict at reference link speeds + a data-driven reading.
 - A `SHARE_REGEN ` JSON line on stdout (the same rows, machine-readable).

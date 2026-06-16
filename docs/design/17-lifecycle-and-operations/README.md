@@ -1,6 +1,6 @@
 ---
 id: SOLO-17
-title: "Lifecycle and Operations — Schema Migrations, Upgrade, Restore, Install"
+title: "Lifecycle and Operations - Schema Migrations, Upgrade, Restore, Install"
 status: draft
 version: 0.1.0
 last_reviewed: 2026-05-09
@@ -9,27 +9,27 @@ verified: true
 verified_date: "2026-06-01"
 ---
 
-# SOLO-17 — Lifecycle and Operations
+# SOLO-17 - Lifecycle and Operations
 
 ## 1. Purpose
 
 Veska runs on a developer's laptop. The substrate is one SQLite
 file plus a handful of supporting files under `~/.veska/`. That
 single file is the user's only copy of their structural ground
-truth — there is no upstream, no replica, no service tier to
+truth - there is no upstream, no replica, no service tier to
 fall back to. The cost of getting lifecycle wrong on a laptop is
 the user's graph.
 
 This section is the normative spec for the operational surfaces
 that other docs assume but never own:
 
-- **Schema migrations** (§2) — applying a new daemon binary's
+- **Schema migrations** (§2) - applying a new daemon binary's
   schema to an existing `veska.db`.
-- **Upgrade during run** (§3) — what happens when the user
+- **Upgrade during run** (§3) - what happens when the user
   replaces the binary while the daemon is up.
-- **Backup and restore** (§4) — how `veska backup` and
+- **Backup and restore** (§4) - how `veska backup` and
   `veska restore` interact with the substrate.
-- **Install and uninstall** (§5) — what `veska init` writes to
+- **Install and uninstall** (§5) - what `veska init` writes to
   the filesystem and what `veska uninstall` removes.
 
 Substrate mechanics (WAL, schema rows, vec0 shadow tables) live
@@ -55,7 +55,7 @@ backup (§4), not by replaying inverse SQL.
 The `sha256` column hashes the migration file's content at the
 time it was applied. On daemon start, the recorded hash is
 compared against the file shipped with the current binary. A
-mismatch is `ErrSchemaTampered` (SOLO-16) — a migration that was
+mismatch is `ErrSchemaTampered` (SOLO-16) - a migration that was
 applied is no longer the same SQL on disk. The daemon refuses to
 start.
 
@@ -83,7 +83,7 @@ that cannot run inside a single `BEGIN IMMEDIATE`**. SQLite's
 `ALTER TABLE ... ADD COLUMN` is fine; data rewrites against
 multi-million-row tables are fine (the laptop is one process,
 one writer, no concurrency). The constraint that bites is
-`PRAGMA journal_mode = WAL` and similar pragmas — those run at
+`PRAGMA journal_mode = WAL` and similar pragmas - those run at
 pool open, before the migration transaction. SOLO-08 §2.1
 covers the pragma sequence.
 
@@ -203,7 +203,7 @@ shape.
 ### 3.4 Crash-loop protection during upgrade
 
 If the new binary crashes on start (a corrupt migration file,
-an incompatible OS, or — for a `usearch` build — a missing
+an incompatible OS, or - for a `usearch` build - a missing
 `libusearch_c.so`), the
 supervisor restarts it. The daemon's crash-loop breaker
 (SOLO-03 §5.6) trips after 5 exits in 10 minutes; the
@@ -237,7 +237,7 @@ in-memory and rebuilt from `node_embeddings` on restore, so a
 single-file snapshot is complete. The optional `usearch` backend
 also persists its index to sibling `.hnsw` files outside
 `veska.db`; those are likewise rebuildable from `node_embeddings`
-(re-embedding is not required — the bytes are in the snapshot),
+(re-embedding is not required - the bytes are in the snapshot),
 so the one-file backup remains sufficient and the backup story
 stays intentionally simple.
 
@@ -285,7 +285,7 @@ informational, not corruption.
 
 ### 4.4 Restore
 
-`veska restore` is **planned** — not yet shipped (see s5c.12).
+`veska restore` is **planned** - not yet shipped (see s5c.12).
 The spec below is the intended surface.
 
 ```
@@ -360,7 +360,7 @@ installed binary inside a Git working tree:
    existing one.
 5. Open SQLite pools, run §2 migration flow (the first run
    applies every migration from 0001 forward; the auto-snapshot
-   in §2.3 is skipped on an empty database — there is nothing
+   in §2.3 is skipped on an empty database - there is nothing
    to back up).
 6. Register the daemon with the session supervisor
    (SOLO-03 §5.1): `launchctl load` on macOS, `systemctl --user
@@ -389,7 +389,7 @@ veska uninstall [--keep-data]
   → exit 0.
 ```
 
-The binary itself is not removed by `veska uninstall` — the
+The binary itself is not removed by `veska uninstall` - the
 package manager (Homebrew, the user's `go install` cache,
 etc.) owns that. The doc notes the asymmetry.
 
@@ -413,7 +413,7 @@ dir, or otherwise needs to re-bootstrap without losing data.
 
 - **OQ-S017-01:** Should `veska restore` support partial
   restore (database only, audit log only, config only)? Today's
-  answer is no — the tarball is one unit — but if user
+  answer is no - the tarball is one unit - but if user
   feedback in M3+ shows a real need, this is where the spec
   lands.
 - **OQ-S017-02:** Should auto-pre-migration snapshots include

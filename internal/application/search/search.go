@@ -1,11 +1,9 @@
 // Package search contains the application-layer semantic-search service.
-//
 // Scope (m3.03.1): backend-agnostic k-NN. The service embeds the query,
 // dispatches the k-NN through ports.VectorStorage (which itself routes
-// to the configured vector backend per ADR-S0015), then hydrates the
+// to the configured vector backend per ), then hydrates the
 // returned node_ids into source-location-bearing Results via
 // ports.NodeLookup.
-//
 // Out of scope: lexical fallback when the embedder is unreachable
 // (m3.03.2), eval/recall harness (m3.03.3), MCP tool registration
 // (m3.06.1), and degraded_reasons envelope construction (MCP layer).
@@ -29,16 +27,16 @@ var ErrMissingDependency = errors.New("search: missing required dependency")
 // DegradedReasonEmbedderOfflineLexicalFallback is the canonical token
 // emitted on Response.DegradedReasons when Semantic falls back to the
 // lexical arm because the embedder was unreachable. The literal matches
-// the string defined in SOLO-13 §4 and SOLO-09 §4.5 so MCP/HTTP envelopes
+// the string defined in and so MCP/HTTP envelopes
 // can forward it unchanged.
 const DegradedReasonEmbedderOfflineLexicalFallback = "embedder_offline_lexical_fallback"
 
 // DegradedReasonLowQualityStaticEmbedder is emitted on every Semantic
-// response when the elected embedder is the in-binary static-v2 fallback —
+// response when the elected embedder is the in-binary static-v2 fallback
 // a low-quality last resort used only when model2vec is unavailable. It
 // surfaces the quality cliff in-band so an agent (or `veska search`) can
 // tell the user to run `veska install model2vec` instead of silently
-// trusting near-noise scores .
+// trusting near-noise scores.
 const DegradedReasonLowQualityStaticEmbedder = "low_quality_static_embedder"
 
 // staticEmbedderModelID mirrors the static adapter's ModelID. It is a
@@ -61,7 +59,7 @@ type Result struct {
 	LineEnd    int
 	// Snippet is the symbol's source code, populated from the nodes
 	// table's snippet column. Lets agents skip a follow-up Read of the
-	// file . Empty when the underlying node has no stored
+	// file. Empty when the underlying node has no stored
 	// content (legacy rows from before the snippet column existed).
 	Snippet string
 }
@@ -71,7 +69,7 @@ type Result struct {
 // service actually took differed from the happy path (e.g. embedder
 // offline → lexical fallback). The wrapper exists so callers can branch
 // on degradation without inspecting errors, and so additional reasons
-// (rate-limit, stale index, ...) can be added without breaking the
+// (rate-limit, stale index,.) can be added without breaking the
 // signature.
 type Response struct {
 	Results         []Result
@@ -80,19 +78,17 @@ type Response struct {
 
 // RankedCandidate is a single hydrated search candidate plus the
 // per-retriever ranks it earned in its source repo. The MCP cross-repo
-// fanout  uses this to RRF a globally pooled candidate set —
+// fanout uses this to RRF a globally pooled candidate set
 // without it, each repo's local RRF score is incomparable across repos
 // (every repo has a rank-1 hit scoring ~1/61, so 'top hits' from a
 // 5-repo workspace render as five equally-ranked items).
-//
 // VectorRank and LexicalRank are 1-indexed; 0 means the candidate was
 // absent from that retriever. A candidate always appears in at least
 // one of the two.
-//
 // VectorScore is the raw distance-derived score the VectorStorage
 // returned (higher = better). It is comparable across queries against
 // the same embedder, and — critically for cross-repo fanout — across
-// repos when one embedder spans them . 0 means the
+// repos when one embedder spans them. 0 means the
 // candidate didn't appear in the vector retriever, so cosine fusion
 // must either fall back to a baseline contribution or drop it. The
 // MCP cross-repo handler chooses cosine fusion over global RRF
@@ -113,7 +109,7 @@ type CandidatesResponse struct {
 }
 
 // Service is the application-layer semantic-search orchestrator. It
-// composes an EmbeddingProvider, a VectorStorage, and a NodeLookup —
+// composes an EmbeddingProvider, a VectorStorage, and a NodeLookup
 // plus an optional LexicalSearcher used as the fallback path when the
 // embedder is unreachable (m3.03.2). When no LexicalSearcher is wired
 // in, embedder-unreachable errors propagate to the caller unchanged.
@@ -183,7 +179,6 @@ func NewService(embedder ports.EmbeddingProvider, vectors ports.VectorStorage, n
 
 // Semantic resolves query against the (repoID, branch) embedding index
 // and returns up to k hydrated Results in VectorStorage rank order.
-//
 // k <= 0 short-circuits to an empty result without invoking the
 // embedder or VectorStorage. An empty result from VectorStorage is
 // returned as an empty slice with nil error. Hits whose backing node
@@ -191,7 +186,6 @@ func NewService(embedder ports.EmbeddingProvider, vectors ports.VectorStorage, n
 // vector index is eventually-consistent vs SQL truth, and surfacing
 // dangling hits would let the caller render a result with no source
 // location.
-//
 // VectorQueryDuration{kind="semantic_search"} is observed once per
 // call, including error paths (the duration is the time-to-error).
 func (s *Service) Semantic(ctx context.Context, repoID, branch, query string, k int, filter domain.VectorFilter) (Response, error) {
@@ -228,7 +222,7 @@ func (s *Service) Semantic(ctx context.Context, repoID, branch, query string, k 
 	// produces a sensible top-K. 3× is the sweet spot in the semble
 	// paper. A minimum floor protects small-k callers so the rerank
 	// (definition / stem / verb-synonym signals) has a meaningful pool
-	// to draw from. solov2-izh6.26 widened the floor from 30 to 60 —
+	// to draw from. widened the floor from 30 to 60
 	// the canonical answer for "register subcommand" (cobra's
 	// Command.AddCommand) sits at fused-rank ~22, so a floor of 30 left
 	// it just outside the rerank window even though the synonym signal
@@ -242,13 +236,12 @@ func (s *Service) Semantic(ctx context.Context, repoID, branch, query string, k 
 	}
 
 	// Hybrid: when a LexicalSearcher is wired, run BM25/FTS5 in parallel
-	// and fuse with Reciprocal Rank Fusion . Vector cosine
+	// and fuse with Reciprocal Rank Fusion. Vector cosine
 	// alone is too thin on small corpora — Sam's notes-API session
 	// returned scores in a ~0.00004 range across the top-10 — so the
 	// "right" answer routinely lost to neighbours by a rounding error.
 	// RRF is rank-only so the two retrievers' incompatible score
 	// distributions don't need normalising.
-	//
 	// When lexical is absent (no FTS5 wired, or empty corpus on that
 	// side), the fusion path degrades to pure vector ordering.
 	var lexHits []ports.LexicalHit
@@ -303,9 +296,9 @@ func (s *Service) Semantic(ctx context.Context, repoID, branch, query string, k 
 			Snippet:    m.Snippet,
 		})
 	}
-	// Post-fusion reranking : definition boost, identifier
+	// Post-fusion reranking: definition boost, identifier
 	// stems, file coherence, noise penalty. Subsumes the earlier
-	// name-match boost . All signals scale by the candidate
+	// name-match boost. All signals scale by the candidate
 	// set's maxScore so they bite on tight-clustered small-corpus
 	// distributions yet stay sub-noise on real corpora.
 	out = rerank(out, query)
@@ -317,7 +310,7 @@ func (s *Service) Semantic(ctx context.Context, repoID, branch, query string, k 
 
 // withEmbedderCaveat appends DegradedReasonLowQualityStaticEmbedder to resp
 // when the active embedder is the static-v2 fallback, so the quality cliff
-// rides along with every result set .
+// rides along with every result set.
 func (s *Service) withEmbedderCaveat(resp Response) Response {
 	if s.embedder.ModelID() == staticEmbedderModelID {
 		resp.DegradedReasons = append(resp.DegradedReasons, DegradedReasonLowQualityStaticEmbedder)
@@ -327,14 +320,12 @@ func (s *Service) withEmbedderCaveat(resp Response) Response {
 
 // SemanticCandidates returns the per-retriever-ranked, hydrated candidate
 // set for query without applying RRF or the name-match rerank. It is the
-// fan-in primitive used by the MCP cross-repo handler  — the
+// fan-in primitive used by the MCP cross-repo handler — the
 // handler runs a SINGLE global RRF across every repo's candidates so a
 // rank-1 hit in repo A competes fairly with a rank-1 hit in repo B,
 // rather than the two top hits both scoring ~1/61 in their local fusion.
-//
 // The single-repo Semantic path stays on the existing intra-repo RRF +
 // rerank pipeline for byte-stability.
-//
 // Errors: same contract as Semantic (embedder-unreachable falls back to
 // the lexical path when available; every other embedder error wraps).
 // When the lexical fallback fires the response's DegradedReasons carries

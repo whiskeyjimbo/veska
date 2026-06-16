@@ -51,7 +51,7 @@ func TestPercentiles(t *testing.T) {
 		t.Errorf("N: got %d want 100", stats.N)
 	}
 
-	// p50 of [1..100] = 50th percentile → 50ms (index 49 after sort)
+	// p50 of [1.100] = 50th percentile → 50ms (index 49 after sort)
 	if stats.P50Ms < 49 || stats.P50Ms > 51 {
 		t.Errorf("P50Ms: got %.2f, expected ~50", stats.P50Ms)
 	}

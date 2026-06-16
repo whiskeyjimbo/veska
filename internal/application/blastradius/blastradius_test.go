@@ -170,7 +170,7 @@ func TestOf_TruncatedAtMaxNodes(t *testing.T) {
 	edges := &fakeEdges{inbound: map[string][]string{
 		"seed": {"a", "b", "c", "d", "e"},
 	}}
-	// Seed must resolve, even if downstream nodes don't — solov2-2w0u.
+	// Seed must resolve, even if downstream nodes don't.
 	nodes := &fakeNodes{metas: map[string]ports.NodeMeta{"seed": {NodeID: "seed"}}}
 	s, err := blastradius.NewService(edges, nodes, nil)
 	if err != nil {
@@ -193,7 +193,7 @@ func TestOf_TruncatedAtMaxNodes(t *testing.T) {
 func TestOf_PropagatesEdgeError(t *testing.T) {
 	edges := &fakeEdges{err: errors.New("db down")}
 	// Seed metadata must be present so the new ErrSeedNotFound gate doesn't
-	// short-circuit before we reach the edge query .
+	// short-circuit before we reach the edge query.
 	nodes := &fakeNodes{metas: map[string]ports.NodeMeta{"seed": {NodeID: "seed"}}}
 	s, err := blastradius.NewService(edges, nodes, nil)
 	if err != nil {
@@ -210,7 +210,7 @@ func TestOf_PropagatesEdgeError(t *testing.T) {
 }
 
 func TestOf_SeedNotFound_ReturnsErrSeedNotFound(t *testing.T) {
-	// Regression for solov2-2w0u: when the supplied seed_id doesn't resolve
+	// Regression for: when the supplied seed_id doesn't resolve
 	// in (repoID, branch), Of must return ErrSeedNotFound instead of an
 	// empty-fields entry that masked the real cause for MCP callers.
 	edges := &fakeEdges{}
@@ -283,7 +283,7 @@ func TestDirtyOf_UsesStagedNodes(t *testing.T) {
 }
 
 // fakeNodesWithHashes adds ContentHasher to fakeNodes for the
-// solov2-iyz2 unchanged-symbol filter test.
+// unchanged-symbol filter test.
 type fakeNodesWithHashes struct {
 	*fakeNodes
 	hashes map[string]string
@@ -293,7 +293,7 @@ func (f *fakeNodesWithHashes) NodeContentHash(_ context.Context, _, _, nodeID st
 	return f.hashes[nodeID], nil
 }
 
-// TestDirtyOf_SkipsUnchangedSymbols covers solov2-iyz2: a re-parse stages
+// TestDirtyOf_SkipsUnchangedSymbols covers: a re-parse stages
 // every symbol in a touched file, but a node whose ContentHash matches the
 // promoted hash isn't actually dirty (e.g. comment-only edit). DirtyOf
 // must filter such nodes out of the seed set so the response doesn't
@@ -368,16 +368,16 @@ func TestDirtyOf_NilStagingReturnsEmpty(t *testing.T) {
 	if len(resp.Entries) != 0 {
 		t.Errorf("expected empty, got %+v", resp.Entries)
 	}
-	// No staging area → staging contributed nothing (solov2-nmps.11).
+	// No staging area → staging contributed nothing.
 	if resp.IncludedStaging {
 		t.Error("IncludedStaging must be false when there is no staging area")
 	}
 }
 
-// TestDirtyOf_CleanTreeReportsNoStaging is the solov2-nmps.11 regression: with a
+// TestDirtyOf_CleanTreeReportsNoStaging is the regression: with a
 // staging area present but no dirty nodes, DirtyOf contributes no seeds and must
 // report IncludedStaging=false — the flag means "staging contributed rows"
-// (SOLO-09 4.4), not merely "this is the dirty view".
+// ( 4.4), not merely "this is the dirty view".
 func TestDirtyOf_CleanTreeReportsNoStaging(t *testing.T) {
 	area := staging.NewArea() // present but empty: nothing staged
 	s, err := blastradius.NewService(&fakeEdges{}, &fakeNodes{}, area)
@@ -404,7 +404,7 @@ func TestDiffOf_UnionAcrossChangedFiles(t *testing.T) {
 		metas: map[string]ports.NodeMeta{
 			"a": {NodeID: "a"}, "b": {NodeID: "b"}, "caller-of-a": {NodeID: "caller-of-a"},
 		},
-		// ADR-S0017 §1: nodes are keyed by the repo-relative slash path, which
+		// nodes are keyed by the repo-relative slash path, which
 		// is the form git diff yields, so DiffOf feeds them through directly.
 		byFile: map[string][]string{
 			"foo.go": {"a"},
@@ -433,7 +433,7 @@ func TestDiffOf_UnionAcrossChangedFiles(t *testing.T) {
 	}
 }
 
-// TestDiffOf_MatchesRelativeDiffPaths pins ADR-S0017 §1: git diff yields
+// TestDiffOf_MatchesRelativeDiffPaths pins: git diff yields
 // repo-relative paths and nodes.file_path is now stored repo-relative too, so a
 // diff path feeds NodesInFile directly without an absolutize step.
 func TestDiffOf_MatchesRelativeDiffPaths(t *testing.T) {
@@ -513,7 +513,7 @@ func TestDiffOf_RejectsEmptyRepoRoot(t *testing.T) {
 	}
 }
 
-// TestOf_HubDegreeThresholdSuppressesFanout guards solov2-l2f5: when a node
+// TestOf_HubDegreeThresholdSuppressesFanout guards: when a node
 // in the BFS frontier has more neighbours than HubDegreeThreshold, the
 // walker does NOT expand through it. The node itself still appears in the
 // result with IsHub=true so callers see the structural fact; what's
@@ -544,7 +544,7 @@ func TestOf_HubDegreeThresholdSuppressesFanout(t *testing.T) {
 		t.Fatalf("construct: %v", err)
 	}
 
-	// With gating (threshold 3): hub appears as IsHub=true; init-b..f are
+	// With gating (threshold 3): hub appears as IsHub=true; init-b.f are
 	// NOT in the result because BFS didn't expand through hub.
 	gated, err := s.Of(context.Background(), "r", "main", []string{"cmd-a"},
 		blastradius.Options{MaxDepth: 3, HubDegreeThreshold: 3})
@@ -572,7 +572,7 @@ func TestOf_HubDegreeThresholdSuppressesFanout(t *testing.T) {
 	}
 
 	// With gating disabled (threshold -1): legacy behaviour — every sibling
-	// init-* is pulled in at distance 3 (cmd-a → hub → init-b → ...).
+	// init-* is pulled in at distance 3 (cmd-a → hub → init-b →.).
 	wide, err := s.Of(context.Background(), "r", "main", []string{"cmd-a"},
 		blastradius.Options{MaxDepth: 3, HubDegreeThreshold: -1})
 	if err != nil {
@@ -591,7 +591,7 @@ func TestOf_HubDegreeThresholdSuppressesFanout(t *testing.T) {
 
 // hubFixture builds the star-shaped graph used by the configured-default tests:
 // cmd-a reaches a 6-degree hub one hop in, and each init-* sibling hangs off
-// the hub. Whether the init-b..f siblings appear depends on the hub gate.
+// the hub. Whether the init-b.f siblings appear depends on the hub gate.
 func hubFixture() (*fakeEdges, *fakeNodes) {
 	edges := &fakeEdges{inbound: map[string][]string{
 		"hub":    {"init-a", "init-b", "init-c", "init-d", "init-e", "init-f"},
@@ -634,7 +634,7 @@ func blastFrom(t *testing.T, defaultHub int) map[string]bool {
 	return ids
 }
 
-// TestOf_ConfiguredDefaultHubGates guards solov2-l8su: WithDefaultHubDegreeThreshold
+// TestOf_ConfiguredDefaultHubGates guards: WithDefaultHubDegreeThreshold
 // supplies the gate value when a per-call Options leaves HubDegreeThreshold at 0.
 func TestOf_ConfiguredDefaultHubGates(t *testing.T) {
 	ids := blastFrom(t, 3) // hub has 6 neighbours > 3 → gated
@@ -645,7 +645,7 @@ func TestOf_ConfiguredDefaultHubGates(t *testing.T) {
 	}
 }
 
-// TestOf_ConfiguredDefaultHubNegativeDisables guards solov2-l8su: a negative
+// TestOf_ConfiguredDefaultHubNegativeDisables guards: a negative
 // configured default disables the gate with no per-call override.
 func TestOf_ConfiguredDefaultHubNegativeDisables(t *testing.T) {
 	ids := blastFrom(t, -1)

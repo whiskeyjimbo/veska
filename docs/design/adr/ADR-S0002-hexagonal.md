@@ -8,7 +8,7 @@ verified: true
 verified_date: "2026-05-16"
 ---
 
-# ADR-S0002 — Hexagonal layering, one impl per port at V2.0
+# ADR-S0002 - Hexagonal layering, one impl per port at V2.0
 
 ## Context
 
@@ -24,7 +24,7 @@ layer.
 
 The prior V2 design carried hexagonal forward but layered on a
 typed plugin registry, capability schemas, multiple lint
-analysers, and a 12-slot platform contract — most of which
+analysers, and a 12-slot platform contract - most of which
 existed to support a future server tier with multiple impls per
 port. None of that machinery has a present consumer.
 

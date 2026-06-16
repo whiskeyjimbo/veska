@@ -47,9 +47,10 @@ func (f *fakeNodes) NodesInFile(_ context.Context, _, _, filePath string) ([]str
 }
 
 // fixtureService builds a HotZoneService over a fixed promoted state:
-//   - a.go: 5 commits, 1 node "a", 2 inbound callers -> radius 3, score 15
-//   - b.go: 5 commits, 1 node "b", 0 callers          -> radius 1, score 5
-//   - c.go: 3 commits, 1 node "c", 2 inbound callers  -> radius 3, score 9
+//
+//	a.go: 5 commits, 1 node "a", 2 inbound callers -> radius 3, score 15
+//	b.go: 5 commits, 1 node "b", 0 callers -> radius 1, score 5
+//	c.go: 3 commits, 1 node "c", 2 inbound callers -> radius 3, score 9
 func fixtureService(t *testing.T, opts ...Option) *HotZoneService {
 	t.Helper()
 	edges := &fakeEdges{inbound: map[string][]string{
@@ -62,7 +63,7 @@ func fixtureService(t *testing.T, opts ...Option) *HotZoneService {
 			"x": {NodeID: "x"}, "y": {NodeID: "y"},
 		},
 		// Keys match what HotZoneService passes to NodesInFile, i.e. the
-		// repo-relative slash path (ADR-S0017 §1; nodes are no longer absolute).
+		// repo-relative slash path (; nodes are no longer absolute).
 		byFile: map[string][]string{
 			"a.go": {"a"}, "b.go": {"b"}, "c.go": {"c"},
 		},
@@ -161,7 +162,7 @@ func TestRenderHotZones_Deterministic(t *testing.T) {
 	}
 }
 
-// TestRank_DropsZeroScoreZones pins solov2-i3pm: a file that churns
+// TestRank_DropsZeroScoreZones pins: a file that churns
 // in-window but maps to no graph nodes (e.g. lockfile, dependabot config,
 // hand-edited go.mod) yields score 0 and must be excluded — otherwise on
 // a quiet repo the surface returns one useless score=0 entry.
@@ -199,7 +200,7 @@ func TestRank_DropsZeroScoreZones(t *testing.T) {
 }
 
 func TestRenderHotZones_EmptyReport(t *testing.T) {
-	// solov2-z5o0: empty render now picks one of three reasons. The
+	// empty render now picks one of three reasons. The
 	// zero-Report case has CandidatesScanned=0, so the "No commits in
 	// the past 30 days" message wins.
 	out := RenderHotZones(Report{RepoID: "r1", Branch: "main"})

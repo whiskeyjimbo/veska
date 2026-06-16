@@ -1,11 +1,10 @@
 //go:build eval
 
-// End-to-end token-efficiency harness . Drives a real
+// End-to-end token-efficiency harness. Drives a real
 // search.Service against the deterministic semantic synthcorpus,
 // simulates grep+read across the same corpus represented as one file
 // per cluster, and emits per-query + aggregate token / recall numbers.
-//
-// Build-tag-gated so `go test ./...` stays fast.
+// Build-tag-gated so `go test./.` stays fast.
 package tokenefficiency
 
 import (
@@ -82,11 +81,11 @@ func findModel2VecAssets() string {
 // search.Service + sqlite-vec — so apples-to-apples comparisons stay
 // possible. Output: tools/loadtest/tokenefficiency/results.json plus a
 // one-line semble-shaped summary on stdout.
-//
 // Env knobs:
-//   - TOKEFF_NODES_PER_CLUSTER (default 24) — larger files exaggerate
-//     grep's read-all-matches cost so the bracket widens. Capped by
-//     synthcorpus' per-cluster combinatorial cap.
+//
+//	TOKEFF_NODES_PER_CLUSTER (default 24) — larger files exaggerate
+//	  grep's read-all-matches cost so the bracket widens. Capped by
+//	  synthcorpus' per-cluster combinatorial cap.
 func TestTokenEfficiency(t *testing.T) {
 	nodesPerCluster := envInt("TOKEFF_NODES_PER_CLUSTER", 24)
 	if nodesPerCluster < 5 {
@@ -97,7 +96,7 @@ func TestTokenEfficiency(t *testing.T) {
 	corpus := synthcorpus.GenerateSemanticCorpus(nodesPerCluster)
 	clusters := corpus.Clusters
 
-	// --- build the simulated filesystem -----------------------------------
+	// build the simulated filesystem
 	// One file per cluster, containing every member node's text joined
 	// with a blank line. node->file and file->nodes maps let the
 	// baseline simulator detect truth coverage during a stop-when-covered
@@ -118,7 +117,7 @@ func TestTokenEfficiency(t *testing.T) {
 		fileTokens[p] = n
 	}
 
-	// --- wire SQLite + VectorStorage -------------------------------------
+	// wire SQLite + VectorStorage
 	tmpDir := t.TempDir()
 	dbPath := filepath.Join(tmpDir, "veska.db")
 	db, err := sqlite.OpenWithOptions(dbPath, sqlite.Options{BackupDir: filepath.Join(tmpDir, "backups")})
@@ -148,7 +147,7 @@ func TestTokenEfficiency(t *testing.T) {
 		t.Fatalf("UpsertEmbeddings: %v", err)
 	}
 
-	// --- run the query loop ----------------------------------------------
+	// run the query loop
 	svc, err := search.NewService(embedder, vstore, sqlite.NewNodeLookupRepo(db),
 		search.WithLexicalSearcher(sqlite.NewLexicalRepo(db)),
 	)
@@ -347,8 +346,8 @@ func envFloat(key string, def float64) float64 {
 // the label travels with the number so a stale figure is obvious.
 //
 //	TOKEFF_CONVERSATION_QUERIES — how many searches per conversation
-//	TOKEFF_USD_PER_MTOKEN       — $/M input tokens
-//	TOKEFF_PRICE_LABEL          — human name for the rate
+//	TOKEFF_USD_PER_MTOKEN — $/M input tokens
+//	TOKEFF_PRICE_LABEL — human name for the rate
 func tokenPricingFromEnv() (int, float64, string) {
 	label := os.Getenv("TOKEFF_PRICE_LABEL")
 	if label == "" {

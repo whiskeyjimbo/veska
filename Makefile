@@ -14,12 +14,12 @@ SQLITE_CGO_ENV ?= CGO_ENABLED=1
 
 .PHONY: all build build-small build-fat fetch-embed-assets install release-archive test lint vet layercheck fatfile-ratchet noidleak cliparity clean loadtest test-mcp test-mcp-deep test-mcp-bootstrap eval-recall eval-recall-projection eval-autolink-fp eval-neardup-threshold eval-revalidate-bench eval-wake-latency eval-queue-fuzz eval-embed-throughput eval-embedder-bench eval-embed-models eval-embed-models-full eval-embed-models-condense eval-embed-models-fuse eval-dbbench eval-dbbench-cgo docs-gen docs-check
 
-# `all` uses build-small to keep the test loop fast — the model2vec assets
+# `all` uses build-small to keep the test loop fast - the model2vec assets
 # add a network fetch + ~62MB to every CI/dev run. End-user packaging
 # (`make build`) ships fat.
 all: build-small test vet lint layercheck fatfile-ratchet noidleak cliparity
 
-# `build` : default to the fat binary — model2vec embedded —
+# `build` : default to the fat binary - model2vec embedded -
 # so a clean clone + `make build` produces a usable veska without the
 # install-model2vec dance. Size-sensitive callers use `build-small`.
 build: fetch-embed-assets
@@ -35,7 +35,7 @@ build: fetch-embed-assets
 #
 # solov2-izh6.32: 'build' and 'build-small' both produce $(VESKA_BIN), so
 # the file-target rule for $(VESKA_BIN) was skipped when running build-
-# small after build (and vice versa) — make sees an existing artifact and
+# small after build (and vice versa) - make sees an existing artifact and
 # does nothing, leaving the user with the wrong-mode binary they already
 # had. Recipe now removes the artifact unconditionally and invokes the
 # thin go build directly so the mode the user asked for is the mode they
@@ -51,14 +51,14 @@ build-small: $(LAYERCHECK_BIN)
 build-fat: build
 	@echo "note: 'make build-fat' is now an alias for 'make build'; update scripts." >&2
 
-# Embed-asset dir for fat builds . Contents are .gitignore'd —
+# Embed-asset dir for fat builds . Contents are .gitignore'd -
 # the ~62MB weights are never committed.
 EMBED_ASSET_DIR := internal/infrastructure/embedding/model2vec/assets/potion-code-16M
 
 # fetch-embed-assets: populate the //go:embed asset dir using the SAME
 # pinned ModelSpec + sha verification `veska install model2vec` uses, so
 # there is one source of truth for the model revision. Runs the installer
-# from current source (go run) — not a prebuilt bin, which may be stale —
+# from current source (go run) - not a prebuilt bin, which may be stale -
 # into a temp home, then copies the verified files into place. `set -e`
 # aborts the recipe if the download/verify fails (rather than building a
 # binary with no embedded model).
@@ -78,7 +78,7 @@ $(LAYERCHECK_BIN):
 
 # build-sizes (solov2-izh6.29): measure thin and fat binary sizes so
 # README numbers stay in sync with reality. Cleans bin/veska between
-# runs because $(VESKA_BIN) is the same path for both modes — without
+# runs because $(VESKA_BIN) is the same path for both modes - without
 # the clean, make sees an existing artifact and skips the rebuild.
 .PHONY: build-sizes
 build-sizes:
@@ -108,7 +108,7 @@ install: build
 # `make install` from a clone.
 #
 # Version source is the same `git describe` that produced shortVersion()
-# in cmd/veska/version.go — kept inside the recipe so a dirty tree
+# in cmd/veska/version.go - kept inside the recipe so a dirty tree
 # still gets a meaningful tag and never silently ships unversioned.
 RELEASE_GOOS    := $(shell go env GOOS)
 RELEASE_GOARCH  := $(shell go env GOARCH)
@@ -135,7 +135,7 @@ test:
 # embedder + cold-scan) per leaf; under `go test -race ./...` the detector
 # inflates peak RSS ~5-10x, and when this heavy package overlaps with others it
 # can spike memory enough to panic (observed once in ~16 runs). The subtests are
-# already sequential and the harness has no logic race — the contention is purely
+# already sequential and the harness has no logic race - the contention is purely
 # cross-package, so `-p 1` serializes the test binaries and makes race runs
 # deterministic at the cost of wall time.
 test-race:
@@ -169,7 +169,7 @@ lint:
 
 # lint-size: enforce the <=50 LOC / <=15 cyclomatic / <=5 args bar on CHANGED
 # code only (solov2-u4mv.7). LINT_SIZE_BASE is the ref the diff is taken
-# against — default 'main'; override (e.g. LINT_SIZE_BASE=origin/main) in CI.
+# against - default 'main'; override (e.g. LINT_SIZE_BASE=origin/main) in CI.
 LINT_SIZE_BASE ?= main
 lint-size:
 	golangci-lint run -c .golangci-size.yml --new-from-merge-base=$(LINT_SIZE_BASE) ./cmd/... ./internal/...
@@ -187,7 +187,7 @@ fatfile-ratchet:
 	go run ./tools/lint/fatfiles/cmd
 
 # noidleak: fail when bd issue IDs  appear in user-visible Go
-# string literals — flag descriptions, fmt strings, MCP tool descriptions
+# string literals - flag descriptions, fmt strings, MCP tool descriptions
 # . Comments are allowed.
 noidleak:
 	go run ./tools/lint/noidleak
@@ -199,7 +199,7 @@ cliparity:
 	go run ./tools/lint/cliparity
 
 # persona-parity: every registered eng_* MCP tool must be EXERCISED by a
-# tests/mcp test — a persona workflow or the per-tool suite — or listed with a
+# tests/mcp test - a persona workflow or the per-tool suite - or listed with a
 # reason in tools/lint/personaparity/parked.txt. The "test ALL functionality"
 # guarantee for the MCP surface; a new untested tool turns this red.
 persona-parity:
@@ -213,7 +213,7 @@ clean:
 # CLI reference comes from the in-process cobra tree (`veska gendocs`); the
 # config env-var reference is AST-extracted from internal/platform/config; the
 # MCP tools reference is rendered from the production tool registry via a
-# docsgen-tagged test (reuses registerMCPTools — same surface as tools/list).
+# docsgen-tagged test (reuses registerMCPTools - same surface as tools/list).
 DOCS_REF := docs/manual/reference
 docs-gen:
 	go run ./cmd/veska gendocs $(DOCS_REF)/cli.md
@@ -253,20 +253,20 @@ test-mcp-bootstrap: $(VESKA_BIN) $(DAEMON_BIN) $(MCP_BIN)
 # over a synthetic repo, each spawning its own daemon in a tmp VESKA_HOME
 # (~12s total). Runs the persona-parity coverage gate FIRST (fast, no daemon)
 # so a tool with no test fails before the slow suite. Needs the three binaries;
-# no Ollama (model2vec). Maps to SOLO-02 — see tests/mcp/PERSONA.md.
+# no Ollama (model2vec). Maps to SOLO-02 - see tests/mcp/PERSONA.md.
 test-persona: persona-parity $(VESKA_BIN) $(DAEMON_BIN) $(MCP_BIN)
 	PYTHONPATH=. python3 -m pytest tests/mcp -v -s -m persona
 
 # persona-verify-capture: the repeatable capture driver behind /persona-verify.
 # Enumerates the LIVE tool surface (tools/list) and drives every tool over the
 # synthetic fixture, dumping verbatim request/response for the model to JUDGE
-# (capture, not pass/fail asserts — the one hard check is that no live tool is
+# (capture, not pass/fail asserts - the one hard check is that no live tool is
 # silently skipped). Needs the three binaries; no Ollama. See the
 # /persona-verify skill, which reads this transcript.
 persona-verify-capture: $(VESKA_BIN) $(DAEMON_BIN) $(MCP_BIN)
 	PYTHONPATH=. python3 -m pytest tests/mcp/persona_verify_driver.py -v -s -m persona_verify
 
-# loadtest: manual-only — collates M1 exit-gate RESULTS.md files and emits tools/loadtest/REPORT.md.
+# loadtest: manual-only - collates M1 exit-gate RESULTS.md files and emits tools/loadtest/REPORT.md.
 # Not included in `all`. Exit 0=all-pass, 1=fail, 2=pending.
 loadtest:
 	go build -tags loadtest -o /tmp/veska-loadtest ./tools/loadtest/driver/
@@ -284,7 +284,7 @@ eval-recall:
 # projection, so a variant change moves the measured recall number.
 # Requires a reachable Ollama; skips cleanly if absent. Override RECALL_POP
 # (default 1000) and RECALL_PROJECTION_VARIANT to restrict to one variant.
-# A full 4-variant sweep at pop=1000 is reference-laptop work — raise the
+# A full 4-variant sweep at pop=1000 is reference-laptop work - raise the
 # timeout accordingly. See tools/loadtest/recallprojection/README.md.
 eval-recall-projection:
 	RECALL_POP=$${RECALL_POP:-1000} $(SQLITE_CGO_ENV) go test -tags "eval $(SQLITE_TAGS)" -run TestRecallProjectionSweep ./tools/loadtest/recallprojection/ -v -timeout=3600s
@@ -298,7 +298,7 @@ eval-autolink-fp:
 
 # eval-neardup-threshold: near-duplicate threshold calibration (solov2-md3n).
 # Embeds a curated corpus of real Go functions + mechanical near-dup variants
-# through model2vec (potion-code-16M, compiled in via embed_model — no service)
+# through model2vec (potion-code-16M, compiled in via embed_model - no service)
 # and, when Ollama is reachable, nomic-embed-text; reports per-tier score
 # distributions (neardup / related / unrelated) so DefaultNearThreshold is set
 # from data. See tools/loadtest/neardup/.
@@ -307,12 +307,12 @@ eval-neardup-threshold:
 
 # eval-revalidate-bench: revalidation wall-time harness against a synthetic
 # 10k-node / 10k-edge / 3k-finding commit (m3.05.4). Asserts the M3 exit-gate
-# target (< 60s). No quick-mode override — the gate IS the 10k case. See
+# target (< 60s). No quick-mode override - the gate IS the 10k case. See
 # tools/loadtest/revalidate/README.md.
 eval-revalidate-bench:
 	$(SQLITE_CGO_ENV) go test -tags "eval $(SQLITE_TAGS)" -run TestRevalidateBench ./tools/loadtest/revalidate/ -v -count=1 -timeout=120s
 
-# eval-wake-latency: solov2-xde2.25.4 — wake-reconcile sweep latency gate.
+# eval-wake-latency: solov2-xde2.25.4 - wake-reconcile sweep latency gate.
 # Times git.WakeReconciler's no-change mtime/size/prefix walk over a
 # synthetic tree and asserts the SOLO-03 §5.2 NFR: typical-repo p95 < 500ms
 # and a single >50k-file sweep < 5s. The git package needs no sqlite tags.
@@ -320,7 +320,7 @@ eval-revalidate-bench:
 eval-wake-latency:
 	go test -tags eval -run TestWakeLatency ./tools/loadtest/wakelatency/ -v -count=1 -timeout=120s
 
-# eval-dbbench: solov2-6e5r — compare Go SQLite drivers (mattn, zombiezen)
+# eval-dbbench: solov2-6e5r - compare Go SQLite drivers (mattn, zombiezen)
 # against veska's storage workloads. Pure-Go variant (zombiezen only).
 # Writes tools/loadtest/dbbench/RESULTS.md. See README.
 eval-dbbench:
@@ -330,14 +330,14 @@ eval-dbbench:
 eval-dbbench-cgo:
 	CGO_ENABLED=1 go test -tags="eval sqlite_fts5" -run TestDBBench ./tools/loadtest/dbbench/ -v -count=1 -timeout=600s
 
-# eval-queue-fuzz: M3 gate-5 — drive N synthetic promotions through Promoter and
+# eval-queue-fuzz: M3 gate-5 - drive N synthetic promotions through Promoter and
 # assert all three M3 work_kind lanes (embed/auto_link/revalidate) drain to done.
 # Override QUEUEFUZZ_PROMOTIONS / QUEUEFUZZ_BUDGET_MS to tune. See
 # tools/loadtest/queuefuzz/README.md.
 eval-queue-fuzz:
 	QUEUEFUZZ_PROMOTIONS=$${QUEUEFUZZ_PROMOTIONS:-100} $(SQLITE_CGO_ENV) go test -tags "eval $(SQLITE_TAGS)" -run TestQueueFuzz ./tools/loadtest/queuefuzz/ -v -timeout=120s
 
-# eval-embed-throughput: M3 gate-1 — drive embedder.Worker against real Ollama
+# eval-embed-throughput: M3 gate-1 - drive embedder.Worker against real Ollama
 # for a measurement window; assert throughput >= 5 emb/s (gate-1 lower bound).
 # Override EMBED_BENCH_DURATION_S / EMBED_BENCH_SEED_N / VESKA_OLLAMA_URL /
 # VESKA_EMBED_MODEL. Skips if Ollama is unreachable. See README.
@@ -346,7 +346,7 @@ eval-embed-throughput:
 
 # eval-embedder-bench: per-embed throughput + load-cost micro-benchmarks
 # across the election ladder (static-v2 / model2vec disk / model2vec
-# embedded) — informed the fat/thin packaging decision .
+# embedded) - informed the fat/thin packaging decision .
 # Disk arms skip without an installed model; the embedded arm needs the
 # fat build tag, so this target builds with `-tags 'eval embed_model'`
 # (run `make build-fat` once so the embed assets exist). See README.
@@ -356,7 +356,7 @@ eval-embedder-bench:
 # eval-embed-models: phased benchmark of embedding model variants over
 # real codebase corpora. Used to inform hi5's defaults and publish a
 # comparison table . Default runs the model2vec subset only
-# — no external service required. See env knobs at the top of
+# - no external service required. See env knobs at the top of
 # embed_models_test.go.
 eval-embed-models:
 	go test -tags=eval -run TestEmbedModelsBenchmark ./tools/loadtest/embed_models/ -v -timeout=300s
@@ -366,7 +366,7 @@ eval-embed-models:
 # mxbai-embed-large). Requires Ollama running and the models pulled
 # via `ollama pull <name>`. The harness probes /api/tags once at start
 # and gracefully drops the Ollama subset if unreachable rather than
-# failing — keeps the contributor experience smooth.
+# failing - keeps the contributor experience smooth.
 eval-embed-models-full:
 	EMBED_BENCH_INCLUDE_OLLAMA=1 go test -tags=eval -run TestEmbedModelsBenchmark ./tools/loadtest/embed_models/ -v -timeout=3600s
 
@@ -374,9 +374,9 @@ eval-embed-models-full:
 # condensation axis enabled (oo4q.2). Each (model × corpus) cell gets
 # a second condensed-vec embed; results.json + the published markdown
 # table emit a Lift column. Adds ~3min to a full model2vec sweep.
-# Knobs: EMBED_BENCH_CONDENSE_K (default 5) — top-K pieces kept per doc.
-#        EMBED_BENCH_CONDENSE_MIN_LEN (default 500) — skip docs shorter.
-# DO NOT combine with EMBED_BENCH_INCLUDE_OLLAMA — Ollama per-piece
+# Knobs: EMBED_BENCH_CONDENSE_K (default 5) - top-K pieces kept per doc.
+#        EMBED_BENCH_CONDENSE_MIN_LEN (default 500) - skip docs shorter.
+# DO NOT combine with EMBED_BENCH_INCLUDE_OLLAMA - Ollama per-piece
 # embeds would balloon runtime to hours.
 eval-embed-models-condense:
 	EMBED_BENCH_CONDENSE=on go test -tags=eval -run TestEmbedModelsBenchmark ./tools/loadtest/embed_models/ -v -timeout=1200s
@@ -392,7 +392,7 @@ eval-embed-models-condense:
 eval-embed-models-fuse:
 	go test -tags=eval -run TestEmbedModelsFusion ./tools/loadtest/embed_models/ -v -timeout=600s
 
-# eval-review-timing: M5 exit-gate-5 — drive the review Handler over a synthetic
+# eval-review-timing: M5 exit-gate-5 - drive the review Handler over a synthetic
 # ~100-file commit against a real Ollama and report the wall-clock time budget.
 # Measurement only (no pass/fail gate). Override REVIEW_TIMING_FILE_N /
 # VESKA_OLLAMA_URL / VESKA_REVIEW_MODEL. Skips if Ollama is unreachable. See
@@ -400,7 +400,7 @@ eval-embed-models-fuse:
 eval-review-timing:
 	REVIEW_TIMING_FILE_N=$${REVIEW_TIMING_FILE_N:-100} go test -tags=eval -run TestReviewTiming ./tools/loadtest/reviewtiming/ -v -timeout=12000s
 
-# eval-share-vs-regenerate: solov2-z0jz — ADR-S0019 §4 empirical gate. Times the
+# eval-share-vs-regenerate: solov2-z0jz - ADR-S0019 §4 empirical gate. Times the
 # parse + embed pipeline stages on a real library and reports the breakeven
 # bandwidth per derived-artifact family (the link speed above which sharing beats
 # local regeneration). Runs with no external service (elected embedder is
@@ -410,16 +410,16 @@ eval-review-timing:
 eval-share-vs-regenerate:
 	go test -tags=eval -run TestShareVsRegenerate ./tools/loadtest/share-vs-regenerate/ -v -timeout=1800s
 
-# eval-token-efficiency: solov2-wise — produce the semble-shaped
+# eval-token-efficiency: solov2-wise - produce the semble-shaped
 # "tokens saved vs grep+read" figure, paired with recall@10 on the same
 # corpus. Pure-Go simulation (no rg subprocess); cl100k_base tokenizer.
 # Writes tools/loadtest/tokenefficiency/results.json + a one-line
 # summary. Knob: TOKEFF_NODES_PER_CLUSTER (default 24) tunes how big
-# each cluster file gets — larger files widen the savings bracket.
+# each cluster file gets - larger files widen the savings bracket.
 eval-token-efficiency:
 	$(SQLITE_CGO_ENV) go test -tags "eval $(SQLITE_TAGS)" -run '^TestTokenEfficiency$$' ./tools/loadtest/tokenefficiency/ -v -count=1 -timeout=120s
 
-# eval-token-efficiency-multirepo: solov2-kcmo — the WEDGE headline.
+# eval-token-efficiency-multirepo: solov2-kcmo - the WEDGE headline.
 # Partitions the synthcorpus across N repos and measures veska's
 # cross-repo fanout + global RRF (the work shipped in solov2-bcn) vs
 # grep+read across every repo's file tree. Writes

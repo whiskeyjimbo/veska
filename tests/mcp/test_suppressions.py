@@ -62,7 +62,7 @@ def test_suppress_then_close_roundtrip(mcp_client, repo_id, branch, open_finding
         assert rec and rec.get("suppression_id") == sup_id
         assert rec.get("target") == open_finding
     finally:
-        # Cleanup — close the suppression so we don't leak state.
+        # Cleanup - close the suppression so we don't leak state.
         mcp_client.call("eng_close_suppression", {
             "suppression_id": sup_id, "repo_id": repo_id,
         })

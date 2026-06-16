@@ -1,4 +1,4 @@
-# autolink — false-positive eval harness (m3.04.4)
+# autolink - false-positive eval harness (m3.04.4)
 
 End-to-end FP-rate harness for `internal/application/autolink.Linker`.
 
@@ -14,7 +14,7 @@ they live in the same cluster.
 
 | File | Role |
 |---|---|
-| `fp.go` | Pure FP-rate math: `FPRate`, `FPCounts` (no build tag — unit-testable in standard CI). |
+| `fp.go` | Pure FP-rate math: `FPRate`, `FPCounts` (no build tag - unit-testable in standard CI). |
 | `fp_internal_test.go` | Unit tests for the math above. Runs under default `go test`. |
 | `result.go` | JSON envelope + writer. |
 | `autolink_test.go` | End-to-end eval test (`//go:build eval`). |
@@ -34,7 +34,7 @@ AUTOLINK_POP=1000 go test -tags=eval -run TestAutolinkFP ./tools/loadtest/autoli
 | `AUTOLINK_POP` | `1000` | Total population. Snapped to a multiple of 100 (clusters). |
 | `AUTOLINK_TOPK` | `5` | Per-source candidate cap, passed through `autolink.WithTopK`. |
 | `AUTOLINK_THRESHOLD` | `0.85` | Minimum `Hit.Score` for a candidate to be emitted (`autolink.WithThreshold`). Score is in [0,1], higher = more similar. |
-| (shared fixture) | — | If `../recall/fixtures/embeddings_<pop>.bin` exists (seeded by the recall harness with `RECALL_GENERATE=1`), this harness replays those vectors instead of using `FakeEmbed`. One generation seeds both gate-2 (recall) and gate-3 (autolink FP). |
+| (shared fixture) | - | If `../recall/fixtures/embeddings_<pop>.bin` exists (seeded by the recall harness with `RECALL_GENERATE=1`), this harness replays those vectors instead of using `FakeEmbed`. One generation seeds both gate-2 (recall) and gate-3 (autolink FP). |
 
 ## Output
 

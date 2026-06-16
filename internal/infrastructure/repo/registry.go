@@ -55,14 +55,14 @@ func isSQLiteBusy(err error) bool {
 
 // veskaBinary resolves the absolute path of the 'veska' CLI binary so
 // installed hooks invoke it directly instead of relying on $PATH
-// . The hook MUST point at the CLI, not the running process —
-// when eng_add_repo runs inside veska-daemon, os.Executable() returns the
+// The hook MUST point at the CLI, not the running process
+// when eng_add_repo runs inside veska-daemon, os.Executable returns the
 // daemon's path, which has no 'hook-runner' subcommand. By convention the
 // CLI lives alongside the daemon and mcp shim with these names:
 //
-//	veska         (the CLI)
-//	veska-daemon  (the long-running process)
-//	veska-mcp     (the stdio shim)
+//	veska (the CLI)
+//	veska-daemon (the long-running process)
+//	veska-mcp (the stdio shim)
 //
 // So we resolve the running binary, strip the '-daemon' / '-mcp' suffix
 // from its basename, and check that the sibling exists. If anything fails
@@ -103,8 +103,8 @@ func resolveVeskaBinary(exe string) string {
 
 // hookScript returns the shell script content for a named hook. The veska
 // binary is resolved by absolute path so the hook works regardless of the
-// caller's $PATH at commit time . The current VESKA_HOME is
-// also baked in  so the hook reaches the right daemon socket
+// caller's $PATH at commit time. The current VESKA_HOME is
+// also baked in so the hook reaches the right daemon socket
 // regardless of the shell environment 'git commit' runs under — users with
 // non-default VESKA_HOME rarely export it, and an unset VESKA_HOME would
 // route the hook to ~/.veska/cli.sock and silently fail.
@@ -177,7 +177,7 @@ const watchesPerRepoEstimate = 128
 // Returns the repo_id string and a flag indicating whether the row was
 // already present (idempotent re-add): existed=true means the INSERT was a
 // no-op so callers can surface 'already registered' instead of a misleading
-// 'added' message .
+// 'added' message.
 func Add(ctx context.Context, db *sql.DB, rootPath string) (string, bool, error) {
 	if _, err := CheckInotifyBudget(0, watchesPerRepoEstimate); err != nil {
 		return "", false, fmt.Errorf("repo add: %w", err)
@@ -201,7 +201,7 @@ func Add(ctx context.Context, db *sql.DB, rootPath string) (string, bool, error)
 	}
 
 	// Refuse to register a path that is not inside a git work-tree
-	// . Without this check `veska repo add /tmp` silently
+	// Without this check `veska repo add /tmp` silently
 	// succeeded, the cold scan failed (no commits / nothing to parse), and
 	// the repos table held a permanently-unindexed entry that pinned
 	// `doctor status` to "degraded" until the user noticed and manually
@@ -210,7 +210,7 @@ func Add(ctx context.Context, db *sql.DB, rootPath string) (string, bool, error)
 		return "", false, fmt.Errorf("repo add: %w", err)
 	}
 
-	// Re-add short-circuit (ADR-S0017 §2): identity is resolved ONCE per root
+	// Re-add short-circuit: identity is resolved ONCE per root
 	// and STORED. A repo whose origin/manifest appears AFTER first registration
 	// must NOT be re-resolved to a new tier — that would silently shift repo_id
 	// and fork every node. Reuse the stored id for any root already registered.
@@ -223,7 +223,7 @@ func Add(ctx context.Context, db *sql.DB, rootPath string) (string, bool, error)
 		return existingID, true, nil
 	}
 
-	// Resolve the portable identity anchor ONCE (ADR-S0017 §2): repo_id derives
+	// Resolve the portable identity anchor ONCE: repo_id derives
 	// from a globally-shared anchor (committed module path / remote URL) so two
 	// contributors indexing the same upstream get identical node IDs. The chosen
 	// tier + anchor are persisted below for auditability and are never
@@ -232,10 +232,10 @@ func Add(ctx context.Context, db *sql.DB, rootPath string) (string, bool, error)
 	modPath := readModulePath(canonical)
 	now := time.Now().Unix()
 
-	// Detect the current branch from the working tree . Without
+	// Detect the current branch from the working tree. Without
 	// this every downstream write (Ingester.Save, Promoter.Promote, FTS, vec)
 	// is keyed by branch="" and every query API rejects "branch is required"
-	// — i.e. a silently-unqueryable graph. Default to "main" when detection
+	// i.e. a silently-unqueryable graph. Default to "main" when detection
 	// fails (no git, detached HEAD, freshly-init'd repo with no commits) so
 	// the rest of the pipeline has a usable key.
 	branch := detectActiveBranch(ctx, canonical)
@@ -243,7 +243,7 @@ func Add(ctx context.Context, db *sql.DB, rootPath string) (string, bool, error)
 		branch = "main"
 	}
 
-	// solov2-6c04: a concurrent cold-scan can hold the Write lock long
+	// a concurrent cold-scan can hold the Write lock long
 	// enough to outlast SQLite's busy_timeout (5s), surfacing SQLITE_BUSY
 	// to the user even though the INSERT itself is trivial. Wrap the
 	// single statement in a short app-level retry loop so the natural
@@ -265,18 +265,18 @@ func Add(ctx context.Context, db *sql.DB, rootPath string) (string, bool, error)
 	existed := rows == 0
 
 	// Stamp canonical_url from `git remote get-url origin` for fresh
-	// registrations (solov2-kxo5.4). Lets a later `search --repo <url>`
+	// registrations. Lets a later `search --repo <url>`
 	// against the same repo resolve to this row via LookupByCanonicalURL
 	// instead of cloning a duplicate. Skipped for re-adds: per design we
 	// do not backfill existing rows. A missing/malformed origin is silent
-	// — canonical_url stays NULL and the row behaves like any other.
+	// canonical_url stays NULL and the row behaves like any other.
 	if !existed {
 		if origin := detectOriginURL(ctx, canonical); origin != "" {
 			if _, err := execWithBusyRetry(ctx, db, 5, 500*time.Millisecond,
 				`UPDATE repos SET canonical_url = ? WHERE repo_id = ?`,
 				origin, id,
 			); err != nil {
-				// solov2-kxo5.4: the canonical_url is an alias — its
+				// the canonical_url is an alias — its
 				// absence only forfeits the URL-collision short-circuit,
 				// it does not break registration. Log via the returned
 				// error would be too loud; swallow and move on so
@@ -299,9 +299,9 @@ type Record struct {
 	RootPath        string
 	ActiveBranch    string // may be empty
 	LastPromotedSHA string // may be empty
-	Kind            string // "tracked" (default) or "ephemeral" (solov2-kxo5.9)
+	Kind            string // "tracked" (default) or "ephemeral"
 	// Aliases are user-defined human-friendly names for this repo
-	// . Sorted; nil when no aliases exist.
+	// Sorted; nil when no aliases exist.
 	Aliases []string
 }
 
@@ -335,7 +335,7 @@ func List(ctx context.Context, db *sql.DB) ([]Record, error) {
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("iterate repo rows: %w", err)
 	}
-	// solov2-7w1t: decorate every record with its user-defined aliases.
+	// decorate every record with its user-defined aliases.
 	aliases, err := AliasesByRepoID(ctx, db)
 	if err != nil {
 		return nil, err
@@ -348,7 +348,7 @@ func List(ctx context.Context, db *sql.DB) ([]Record, error) {
 
 // repoIDByRoot returns the stored repo_id for an already-canonicalised root
 // path, and whether such a row exists. It underpins the Add re-registration
-// short-circuit (ADR-S0017 §2): identity is keyed on root_path so a re-add
+// short-circuit: identity is keyed on root_path so a re-add
 // reuses the stored id rather than re-resolving the identity tier.
 func repoIDByRoot(ctx context.Context, db *sql.DB, canonical string) (string, bool, error) {
 	var id string
@@ -397,11 +397,10 @@ func Get(ctx context.Context, db *sql.DB, repoID string) (Record, error) {
 
 // Remove deletes the repo row identified by repoID (CASCADE removes nodes/edges)
 // and removes installed git hooks if the git dir still exists.
-//
 // repoID may be the full id or a unique short prefix (as printed by
 // `veska repo add` / `veska repo list`). Without prefix resolution a short id
 // matched nothing and the DELETE silently no-op'd, leaving the repo — and,
-// since CASCADE then never ran, its child rows — in place .
+// since CASCADE then never ran, its child rows — in place.
 func Remove(ctx context.Context, db *sql.DB, repoID string) error {
 	canonical, rootPath, found, err := resolveRepoForRemoval(ctx, db, repoID)
 	if err != nil {
@@ -411,7 +410,7 @@ func Remove(ctx context.Context, db *sql.DB, repoID string) error {
 		return fmt.Errorf("repo not found: %s", repoID)
 	}
 
-	// solov2-khra/zmzc: node_embedding_refs (no FK; nodes has composite PK)
+	// /zmzc: node_embedding_refs (no FK; nodes has composite PK)
 	// and post_promotion_queue (no FK to repos) escape the repos CASCADE.
 	// Drop both manually, best-effort. Refs MUST precede the repos DELETE
 	// (matched via node_id, which the cascade then removes); queue can follow.
@@ -421,7 +420,7 @@ func Remove(ctx context.Context, db *sql.DB, repoID string) error {
 		_ = err
 	}
 
-	// solov2-6c04: a concurrent promotion/scan can outlast busy_timeout.
+	// a concurrent promotion/scan can outlast busy_timeout.
 	if _, err := execWithBusyRetry(ctx, db, 5, 500*time.Millisecond,
 		`DELETE FROM repos WHERE repo_id = ?`, canonical,
 	); err != nil {

@@ -11,7 +11,7 @@ verified: true
 verified_date: "2026-05-16"
 ---
 
-# ADR-S0015 — Dual-backend vector strategy
+# ADR-S0015 - Dual-backend vector strategy
 
 Implementation of the HNSW pivot decided in [[ADR-S0014]]: sqlite-vec by default,
 usearch/float16 above the M2-ratified threshold.
@@ -26,7 +26,7 @@ ADR-S0014 committed veska to an HNSW pivot after M0 measured the vec0 (sqlite-ve
 brute-force scan) ceiling at 100k nodes on the reference hardware. The pivot ADR left
 the specific backing library as TBD, to be resolved by the m1.03 evaluation spike.
 
-M1 evaluated four candidates — usearch, coder/hnsw, lancedb, and vec0 itself — across
+M1 evaluated four candidates - usearch, coder/hnsw, lancedb, and vec0 itself - across
 recall, latency, backup round-trip, and dependency weight. Results are in
 `tools/loadtest/spikes/hnsw/RESULTS.md` and `tools/loadtest/spikes/hnsw/cmd/vector-bench/RESULTS.md`.
 
@@ -41,7 +41,7 @@ After the M1 evaluation, two distinct user profiles emerged:
 
 2. **Large workspaces (≥ 75k nodes)**: usearch HNSW with float16 quantization
    delivers recall@10 = 0.987 @50k and 0.954 @250k at p95 = 1.9ms and 4.3ms
-   respectively — well within all DoD floors. The trade-off is a compiled
+   respectively - well within all DoD floors. The trade-off is a compiled
    `libusearch_c.so` dependency and the `hnsw_native` build tag.
 
 Making sqlite-vec the **default** removes the CGo shared-library install step from
@@ -72,7 +72,7 @@ Zero extra native dependencies beyond standard CGo. Adequate for workspaces belo
 75k embedded nodes. Vectors are stored in the `vec_embeddings` table inside `veska.db`
 (same database as the graph store), so the existing backup round-trip covers them.
 
-Implementation: `internal/infrastructure/vector/sqlitevec` — pure in-memory
+Implementation: `internal/infrastructure/vector/sqlitevec` - pure in-memory
 map + brute-force L2 scan. Clearly documented as "dev/low-count, linear scan".
 
 ### Config key

@@ -12,9 +12,7 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/sqlite/sqldriver"
 )
 
-// ---------------------------------------------------------------------------
 // helpers
-// ---------------------------------------------------------------------------
 
 func newTasksDB(t *testing.T) *sql.DB {
 	t.Helper()
@@ -94,9 +92,7 @@ func dispatchTask(t *testing.T, r *Registry, method string, actor domain.Actor, 
 	return r.Dispatch(context.Background(), actor, req)
 }
 
-// ---------------------------------------------------------------------------
 // eng_set_active_task
-// ---------------------------------------------------------------------------
 
 func TestSetActiveTask_Basic(t *testing.T) {
 	db := newTasksDB(t)
@@ -182,9 +178,7 @@ func TestSetActiveTask_MissingParams(t *testing.T) {
 	}
 }
 
-// ---------------------------------------------------------------------------
 // eng_get_active_task
-// ---------------------------------------------------------------------------
 
 func TestGetActiveTask_NoActive(t *testing.T) {
 	db := newTasksDB(t)
@@ -239,9 +233,7 @@ func TestGetActiveTask_WithActive(t *testing.T) {
 	}
 }
 
-// ---------------------------------------------------------------------------
 // eng_get_task_history
-// ---------------------------------------------------------------------------
 
 func TestGetTaskHistory_DefaultLimit(t *testing.T) {
 	db := newTasksDB(t)

@@ -7,7 +7,7 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/core/domain"
 )
 
-// solov2-2n33 verification — eng_get_call_chain accepts direction =
+// verification — eng_get_call_chain accepts direction =
 // out (default), in, or both, and walks the requested edge directions.
 // Uses the same in-package fixture helpers (newStubGraphStorage, mustNode,
 // mustEdge, dispatchCallChain) that the existing TestGetCallChain_*

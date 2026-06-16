@@ -2,7 +2,7 @@ package ownercmd
 
 import "testing"
 
-// TestLooksLikePath pins the symbol-vs-path routing fix from solov2-yh5a: a
+// TestLooksLikePath pins the symbol-vs-path routing fix from: a
 // qualified Go symbol (FlagSet.Parse) contains a dot but must NOT be treated
 // as a file path, or eng_find_owner git-blames a nonexistent file.
 func TestLooksLikePath(t *testing.T) {

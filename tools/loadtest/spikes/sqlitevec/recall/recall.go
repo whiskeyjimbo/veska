@@ -97,8 +97,7 @@ func GenerateHoldOut(nQueries int, seed uint64) [][]float32 {
 // RunRecall loads the corpus into the DB (assumed already loaded via the caller),
 // generates ground-truth top-k via brute-force, queries vec0 for each hold-out vector,
 // and returns a RecallResult for this population.
-//
-// corpus must already be inserted into db's vec_nodes table (rowids 1..len(corpus)).
+// corpus must already be inserted into db's vec_nodes table (rowids 1.len(corpus)).
 // holdOut vectors must NOT be in the corpus.
 func RunRecall(db *sql.DB, corpus [][]float32, holdOut [][]float32, population int64) (RecallResult, error) {
 	const k10 = 10

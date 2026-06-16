@@ -43,7 +43,7 @@ type mcpToolWiring struct {
 	// Cross-repo stub resolvers turn cross_repo_edge_stubs into synthetic
 	// ResolvedEdges. resolveStubs is the outbound ("what does this reach")
 	// direction; resolveInboundStubs is the reverse ("who calls this",
-	// solov2-80hh). Shared by the graph, blast, and context-pack tools.
+	// ). Shared by the graph, blast, and context-pack tools.
 	resolveStubs        func(ctx context.Context, nodeID, branch string, expand bool) ([]ports.ResolvedEdge, error)
 	resolveInboundStubs func(ctx context.Context, dstNodeID, branch string) ([]ports.ResolvedEdge, error)
 }
@@ -132,8 +132,8 @@ func (w *mcpToolWiring) registerBasicDataTools() {
 	mcp.RegisterRepoTools(w.r, reg, w.repos())
 }
 
-// registerPromotionTools registers eng_promote  and eng_reindex_repo
-// . Each degrades cleanly (skipped) when its deps are nil — legacy
+// registerPromotionTools registers eng_promote and eng_reindex_repo
+// Each degrades cleanly (skipped) when its deps are nil — legacy
 // or test wiring — rather than panicking at startup.
 func (w *mcpToolWiring) registerPromotionTools() {
 	if w.d.ingester != nil && w.d.promoter != nil {
@@ -153,7 +153,7 @@ func (w *mcpToolWiring) registerPromotionTools() {
 }
 
 // registerOwnerTodoAdminTools registers owner, todo, and admin tools. Task
-// tools are PARKED : there is no MCP path to create a task, so
+// tools are PARKED: there is no MCP path to create a task, so
 // exposing them surfaces dead-end UX. The keep-alive reference re-enables a
 // clean re-registration when a task backend lands.
 func (w *mcpToolWiring) registerOwnerTodoAdminTools() {
@@ -169,7 +169,7 @@ func (w *mcpToolWiring) registerOwnerTodoAdminTools() {
 
 // registerGraphTools registers the graph + blast-radius tools. The cross-repo
 // resolvers turn cross_repo_edge_stubs into synthetic ResolvedEdges for
-// call_chain and blast_radius ; without them the xc51.3 stub
+// call_chain and blast_radius; without them the xc51.3 stub
 // producer has no consumer.
 func (w *mcpToolWiring) registerGraphTools() {
 	mcp.RegisterGraphTools(w.r, w.graph, w.d.staging,
@@ -191,7 +191,7 @@ func (w *mcpToolWiring) registerGraphTools() {
 // each file changed between two git refs at both refs and diffs the symbol
 // sets — no promoted-graph history substrate needed. fileAtRef wraps the git
 // adapter's ErrFileNotAtRef so the service distinguishes "file absent at ref"
-// from "ref tree unreadable" (solov2-izh6.17).
+// from "ref tree unreadable".
 func (w *mcpToolWiring) registerChangedSymbolsTool() {
 	fileAtRef := func(ctx context.Context, root, ref, path string) ([]byte, error) {
 		b, err := gitwatch.FileAtRef(ctx, root, ref, path)
@@ -285,16 +285,16 @@ func (w *mcpToolWiring) registerSearchTool() error {
 	return nil
 }
 
-// registerCloneTool registers eng_find_clones : exact-clone detection
+// registerCloneTool registers eng_find_clones: exact-clone detection
 // by content_hash equality (mode=exact) plus near-duplicate clustering over
-// thresholded SIMILAR_TO edges (mode=near, solov2-c1s4). One CloneRepo
+// thresholded SIMILAR_TO edges (mode=near). One CloneRepo
 // satisfies both the CloneStore and NearStore ports. If construction fails
 // (only a nil store, which cannot happen here) the tool is skipped rather than
 // aborting daemon startup.
 func (w *mcpToolWiring) registerCloneTool() {
 	repo := sqlite.NewCloneRepo(w.pools.ReadDB)
 	// The elected embedder's ModelID selects the calibrated near-dup default
-	// (solov2-md3n): score spaces differ per model, so the threshold must too.
+	// score spaces differ per model, so the threshold must too.
 	var embedderID string
 	if w.d.provider != nil {
 		embedderID = w.d.provider.ModelID()
@@ -306,7 +306,7 @@ func (w *mcpToolWiring) registerCloneTool() {
 	mcp.RegisterCloneTools(w.r, finder, w.repos())
 }
 
-// registerDependenciesTool registers eng_list_dependencies , which
+// registerDependenciesTool registers eng_list_dependencies, which
 // aggregates per-repo cross-repo edge stubs into a ranked module list with
 // sample call sites and go.mod versions.
 func (w *mcpToolWiring) registerDependenciesTool() {
@@ -331,7 +331,6 @@ func (w *mcpToolWiring) registerDependenciesTool() {
 // "golang.org/x/text/language") while go.mod lists the module path
 // ("golang.org/x/text"), so it walks the path components back until a module
 // match falls out, letting sub-packages inherit their parent's version
-// .
 func goModVersion(ctx context.Context, repoRoot, modulePath string) (string, error) {
 	content, rerr := os.ReadFile(filepath.Join(repoRoot, "go.mod"))
 	if rerr != nil {
@@ -359,7 +358,7 @@ func goModVersion(ctx context.Context, repoRoot, modulePath string) (string, err
 
 // goModOwnModulePath returns the repo's own module path so the dependencies
 // service can filter intra-module imports (the repo's own subpackages) out of
-// the external-dependency list . Absent/malformed go.mod yields "".
+// the external-dependency list. Absent/malformed go.mod yields "".
 func goModOwnModulePath(ctx context.Context, repoRoot string) (string, error) {
 	content, rerr := os.ReadFile(filepath.Join(repoRoot, "go.mod"))
 	if rerr != nil {

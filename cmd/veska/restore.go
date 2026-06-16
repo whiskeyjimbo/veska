@@ -7,10 +7,10 @@ import (
 )
 
 // The restore command's logic lives in internal/cli/restorecmd; this
-// constructor is Cobra glue whose RunE body delegates there (solov2-0omh.10).
+// constructor is Cobra glue whose RunE body delegates there.
 
 // restoreCmd returns the "restore" Cobra command. It restores a backup tarball
-// into the veska home (SOLO-17 §4.4). The daemon must be stopped.
+// into the veska home. The daemon must be stopped.
 func restoreCmd() *cobra.Command {
 	var useLatest, usePreMigration bool
 

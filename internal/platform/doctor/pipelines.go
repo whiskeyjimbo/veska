@@ -9,11 +9,11 @@ import (
 // PipelinesReport summarises the review pipeline's token-budget state for the
 // doctor subcommand.
 //
-//   - Status "healthy"  — tokens_today is below the configured daily cap (or
-//     no daily cap is configured).
-//   - Status "degraded" — tokens_today has reached the daily cap; the review
-//     pipeline is paused until the local-midnight window reset.
-//   - Status "broken"   — the probe could not read the persisted token total.
+//	Status "healthy" — tokens_today is below the configured daily cap (or
+//	  no daily cap is configured).
+//	Status "degraded" — tokens_today has reached the daily cap; the review
+//	  pipeline is paused until the local-midnight window reset.
+//	Status "broken" — the probe could not read the persisted token total.
 //
 // MaxTokensPerDay / MaxTokensPerCommit of 0 mean "unlimited" (cap disabled).
 type PipelinesReport struct {

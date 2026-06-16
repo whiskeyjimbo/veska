@@ -18,7 +18,6 @@ type LexicalHit struct {
 // adapter is expected to combine results from the words FTS5 index (built-in
 // unicode61 over pre-tokenised symbol text) and the trigram FTS5 index
 // (built-in trigram over the raw symbol text) via RRF and return the top k.
-//
 // k > 0 is required; k <= 0 is a programmer error and the adapter may
 // short-circuit to an empty result. An empty query string is treated as a
 // no-op: an empty slice is returned with nil error.

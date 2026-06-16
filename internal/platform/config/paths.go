@@ -47,11 +47,10 @@ func DefaultOSVCacheDir() string {
 }
 
 // DefaultBackupDir returns the directory `veska backup create` writes to:
-// $VESKA_HOME/backups . Co-located with the rest of veska's
+// $VESKA_HOME/backups. Co-located with the rest of veska's
 // state so a single `rm -rf $VESKA_HOME` clears everything — the original
 // ~/.veska-backups layout left tarballs orphaned after a data wipe.
-//
-// Backward compat: LegacyBackupDir() returns the prior path; callers that
+// Backward compat: LegacyBackupDir returns the prior path; callers that
 // read backups (list, restore) should fall back to it when the canonical
 // dir is empty.
 func DefaultBackupDir() string {
@@ -61,7 +60,7 @@ func DefaultBackupDir() string {
 // LegacyBackupDir returns the pre-n57f backup location (~/.veska-backups).
 // It is only used as a read-side fallback so an existing user upgrading
 // keeps access to backups they took before this change. New writes always
-// go to DefaultBackupDir(). Returns ("", false) when the user's home
+// go to DefaultBackupDir. Returns ("", false) when the user's home
 // directory cannot be resolved.
 func LegacyBackupDir() (string, bool) {
 	home, err := os.UserHomeDir()
@@ -72,14 +71,13 @@ func LegacyBackupDir() (string, bool) {
 }
 
 // CacheDir returns the root directory for ephemeral / evictable Veska data
-// (solov2-kxo5.5). Precedence:
-//
+// Precedence:
 //  1. $VESKA_CACHE_HOME (explicit override; useful for CI / containers
 //     that want cache colocated with data)
-//  2. $XDG_CACHE_HOME/veska  (XDG-compliant default)
-//  3. ~/.cache/veska         (fallback when XDG_CACHE_HOME is unset)
+//  2. $XDG_CACHE_HOME/veska (XDG-compliant default)
+//  3. ~/.cache/veska (fallback when XDG_CACHE_HOME is unset)
 //
-// Distinct from veskaHome(): VESKA_HOME holds authoritative data (the
+// Distinct from veskaHome: VESKA_HOME holds authoritative data (the
 // graph DB, sockets, logs) that survives `rm -rf ~/.cache`; CacheDir
 // holds regenerable cache the user can wipe safely. The cache-tier
 // kxo5 design routes ephemeral repo clones here so a user clearing
@@ -98,9 +96,9 @@ func CacheDir() string {
 }
 
 // RepoCachePath returns the on-disk path for an ephemeral, URL-cloned repo
-// identified by its URL-derived repo_id (solov2-kxo5.5). kxo5.6 is the
+// identified by its URL-derived repo_id. kxo5.6 is the
 // first call site; until then this helper has no production consumers
-// other than the CacheDir() composition.
+// other than the CacheDir composition.
 func RepoCachePath(repoID string) string {
 	return filepath.Join(CacheDir(), "repos", repoID)
 }

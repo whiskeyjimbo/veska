@@ -16,7 +16,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
-// Metrics holds the six Prometheus metrics defined in SOLO-13 §1.2.
+// Metrics holds the six Prometheus metrics defined in.
 // All metrics are stored as fields so callers can instrument call sites
 // directly without a global registry.
 type Metrics struct {
@@ -43,10 +43,9 @@ type Metrics struct {
 
 	// CheckLatency measures the wall-clock duration of each structural check
 	// run by the post-promotion check pipeline. Labels: repo_id, check.
-	//
 	// A sibling histogram (rather than a new label on SealLatency) keeps the
 	// end-to-end seal-latency time series clean: SealLatency is a single
-	// observation per Promote() call (repo_id), while CheckLatency cardinality
+	// observation per Promote call (repo_id), while CheckLatency cardinality
 	// fans out per registered check.
 	CheckLatency *prometheus.HistogramVec
 
@@ -65,7 +64,7 @@ type Metrics struct {
 
 	// AutolinkCandidates counts auto-link candidate edges emitted by the
 	// similarity service (internal/application/autolink). Label: repo_id.
-	// One increment per emitted Candidate, NOT per Linker.Candidates call —
+	// One increment per emitted Candidate, NOT per Linker.Candidates call
 	// a single call may emit zero or many candidates depending on input
 	// node count and top-k.
 	AutolinkCandidates *prometheus.CounterVec
@@ -89,7 +88,7 @@ type Metrics struct {
 }
 
 // NewMetrics constructs a Metrics struct and registers all metrics with reg.
-// Callers should pass prometheus.NewRegistry() for isolation (tests) or
+// Callers should pass prometheus.NewRegistry for isolation (tests) or
 // prometheus.DefaultRegisterer for the daemon's global registry.
 func NewMetrics(reg prometheus.Registerer) *Metrics {
 	sealLatency := prometheus.NewHistogramVec(
@@ -235,7 +234,7 @@ func (c *httpCloser) Close() error {
 // It returns the io.Closer that shuts the listener down gracefully and the
 // actual bound address — when addr is "127.0.0.1:0" the OS picks a free port,
 // so callers learn the real address from the returned string rather than addr.
-// The caller is responsible for checking config before calling this function —
+// The caller is responsible for checking config before calling this function
 // it binds immediately.
 func StartHTTPListener(addr string, reg interface {
 	prometheus.Registerer
@@ -251,7 +250,7 @@ func StartHTTPListener(addr string, reg interface {
 
 	// Gated pprof: VESKA_PPROF=1 mounts /debug/pprof/* on the metrics
 	// listener. Off by default so production hosts don't expose profile
-	// endpoints. Used for ad-hoc perf investigation (solov2-pc3 and
+	// endpoints. Used for ad-hoc perf investigation ( and
 	// similar). The metrics listener already binds to a config-chosen
 	// address, so pprof inherits that address policy.
 	if os.Getenv("VESKA_PPROF") == "1" {

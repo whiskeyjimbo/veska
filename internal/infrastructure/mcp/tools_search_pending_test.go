@@ -8,7 +8,7 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/application/search"
 )
 
-// solov2-hjw9 verification — eng_search_semantic's PendingEmbedsCounter
+// verification — eng_search_semantic's PendingEmbedsCounter
 // contract is honoured: the token, the public response shape, and the
 // pluggable interface that wires from sqlite.EmbeddingRefsRepo.
 
@@ -20,7 +20,7 @@ func (s *stubPendingCounter) CountPending(ctx context.Context) (int, error) {
 
 // Compile-time guard: PendingEmbedsCounter is what the handler type-asserts
 // on against SimilarLookup. If its shape ever changes, every call site
-// (incl. wire.go's assertion from *sqlite.EmbeddingRefsRepo) must follow —
+// (incl. wire.go's assertion from *sqlite.EmbeddingRefsRepo) must follow
 // pin that contract here so a rename trips this test instead of silently
 // dropping the degraded signal.
 var _ PendingEmbedsCounter = (*stubPendingCounter)(nil)

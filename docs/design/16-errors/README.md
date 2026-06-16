@@ -1,6 +1,6 @@
 ---
 id: SOLO-16
-title: "Error Catalogue — veska_code, exit codes, audit shape"
+title: "Error Catalogue - veska_code, exit codes, audit shape"
 status: draft
 version: 0.1.0
 last_reviewed: 2026-05-17
@@ -9,7 +9,7 @@ verified: true
 verified_date: "2026-06-01"
 ---
 
-# SOLO-16 — Error Catalogue
+# SOLO-16 - Error Catalogue
 
 Every refusal, every refuse-to-start condition, every MCP error
 response shares one shape. This file is the catalogue: code,
@@ -30,7 +30,7 @@ rather than re-define it.
 ### 2.1 MCP error envelope
 
 **Shipped reality.** A JSON-RPC error returned over the socket is a
-bare `RPCError` — an integer `code` and a human-readable `message`,
+bare `RPCError` - an integer `code` and a human-readable `message`,
 with no `data` block:
 
 ```jsonc
@@ -44,13 +44,13 @@ with no `data` block:
 
 Handlers in `internal/infrastructure/mcp/` construct
 `RPCError{Code, Message}` directly (`server.go` defines the type and
-code constants). There is **no `data.veska_code` block** — the
+code constants). There is **no `data.veska_code` block** - the
 `veska_code` keys used throughout this catalogue are documentation
 identifiers for the failure conditions, not values carried on the
 wire. Tooling that needs to discriminate failures today must match on
 the integer `code` (and, where codes overlap, the `message` text).
 
-> **Planned — structured `veska_code` envelope (NOT YET IMPLEMENTED).**
+> **Planned - structured `veska_code` envelope (NOT YET IMPLEMENTED).**
 > The target design adds a `data` block carrying a stable string id
 > plus a code-specific `context` payload:
 >
@@ -69,7 +69,7 @@ the integer `code` (and, where codes overlap, the `message` text).
 >
 > Once it lands, the `veska_code` becomes the contract and the
 > `message` becomes friendly prose; tooling would key on `veska_code`,
-> not `message`. This envelope is design ambition only — no handler
+> not `message`. This envelope is design ambition only - no handler
 > emits it. The `context` payloads in §3.3 and the stability rules in
 > §4 describe this future shape, not the current one.
 
@@ -78,8 +78,8 @@ the integer `code` (and, where codes overlap, the `message` text).
 | Exit | Meaning |
 |---|---|
 | 0 | Success. |
-| 1 | Degraded — work completed but the result is partial or stale. `veska doctor` reports `status: degraded`. |
-| 2 | Broken — work failed; the user must remediate. `veska doctor` reports `status: broken`. |
+| 1 | Degraded - work completed but the result is partial or stale. `veska doctor` reports `status: degraded`. |
+| 2 | Broken - work failed; the user must remediate. `veska doctor` reports `status: broken`. |
 | 78 | Refuse-to-start (daemon only). The supervisor halts; not retry-eligible. |
 
 ### 2.3 Audit-line shape
@@ -123,11 +123,11 @@ in that matrix.
 | `ErrUnsupportedFilesystem` | `~/.veska/` on NFS, eCryptfs, FUSE, or overlay-upper | move data dir; set `VESKA_HOME` |
 | `ErrBackupRequired` | `[backup].required = true` and no verified backup found | `veska backup create`; restart |
 
-JSON-RPC code: N/A (these never reach the wire — the daemon never came up).
+JSON-RPC code: N/A (these never reach the wire - the daemon never came up).
 Audit line: N/A (the daemon never opened the audit log).
 Surface: stderr + the supervisor's exit code log.
 
-> **Planned — embedder-consistency refuse-to-start (NOT YET IMPLEMENTED).**
+> **Planned - embedder-consistency refuse-to-start (NOT YET IMPLEMENTED).**
 > `ErrEmbedderMismatch` (boot: `[embedder]` config disagrees with the
 > recorded embedder geometry) is design intent only. No such sentinel
 > exists in `internal/` today, the daemon does not record or check
@@ -159,7 +159,7 @@ bare `RPCError{Code, Message}` (see §2.1).
 | `CodeInvalidParams` | -32602 | `server.go` | Argument schema violation, missing required field, or a bound exceeded (e.g. `k` over the search max) |
 | `CodeInternalError` | -32603 | `server.go` | Unhandled failure inside a handler (DB error, tx failure, etc.) |
 | `CodeHumanRequired` | -32001 | `tool_close_finding.go` | High-severity finding close attempted by a non-human actor (SOLO-10 §3) |
-| `CodeNotFound` | -32002 | `server.go` | A referenced entity does not exist — repo, finding, node, or task not found |
+| `CodeNotFound` | -32002 | `server.go` | A referenced entity does not exist - repo, finding, node, or task not found |
 | `CodeFailedPrecondition` | -32003 | `tools_search.go` | A precondition for the operation is not met (e.g. `similar` called on a node with no stored embedding) |
 
 The `message` field is free-form prose built per call site
@@ -170,7 +170,7 @@ contract. Tooling that must discriminate failures keys on the integer
 #### 3.3.2 Planned `veska_code` mapping (NOT YET IMPLEMENTED)
 
 The table below is the **target** catalogue for the structured
-envelope described in §2.1 — it pairs each planned `veska_code` with
+envelope described in §2.1 - it pairs each planned `veska_code` with
 the JSON-RPC code it would carry and the `context` payload it would
 attach. None of this is wired today; handlers emit bare `RPCError`
 values per §3.3.1. Note that the shipped `-32002` is `CodeNotFound`
@@ -204,7 +204,7 @@ synchronously per SOLO-10 §4. `result` would carry
 | `ErrParseFailure` | Tree-sitter parse error on a file | Finding `rule='parse-failure'`, `source_layer='structural'`; the promotion proceeds |
 | `ErrEmbedSaturated` | Deferred-embed queue's oldest row aged past 24h | Sticky finding `embed-deferred-saturated`, severity medium |
 
-These are not MCP errors — they are *findings* or *degraded reasons*. The `veska_code` keys are stable so tooling can correlate.
+These are not MCP errors - they are *findings* or *degraded reasons*. The `veska_code` keys are stable so tooling can correlate.
 
 ### 3.5 Backup, restore, embedder swap
 
@@ -215,7 +215,7 @@ These are not MCP errors — they are *findings* or *degraded reasons*. The `ves
 | `ErrRestoreDaemonRunning` | `veska backup restore` while daemon up | 2 | `veska daemon stop`; rerun |
 | `ErrRestorePartial` | Restore failed mid-sequence; rolled back via `.replaced-<ts>/` sidecar | 3 | Sidecar preserved; investigate before retrying |
 
-> **Planned — embedder-swap codes (NOT YET IMPLEMENTED).** The swap
+> **Planned - embedder-swap codes (NOT YET IMPLEMENTED).** The swap
 > command and its consistency machinery are unbuilt; these codes have
 > zero occurrences in `internal/`:
 >
@@ -225,7 +225,7 @@ These are not MCP errors — they are *findings* or *degraded reasons*. The `ves
 > | `ErrEmbedderModelMissing` | Pre-swap probe fails | 1 | `ollama pull <model>`; retry |
 >
 > `node_embeddings` does carry a per-row `model` column (migration
-> 0004), so the model that produced each vector is recorded — but
+> 0004), so the model that produced each vector is recorded - but
 > nothing reads it for a boot-consistency refusal, and the daemon
 > writes no `database_meta.embedder_*` keys. See SOLO-03 §3.2.
 
@@ -250,9 +250,9 @@ bump rule:
 
 | Change | Bumps anything? |
 |---|---|
-| Adding a new `veska_code` | no — additive; tooling tolerates unknowns |
+| Adding a new `veska_code` | no - additive; tooling tolerates unknowns |
 | Adding an optional field to `context` | no |
-| Removing or renaming an `veska_code` | yes — minor version bump + CHANGELOG note |
+| Removing or renaming an `veska_code` | yes - minor version bump + CHANGELOG note |
 | Repurposing an existing `veska_code` | yes |
 | Changing the type of a `context` field | yes |
 
@@ -261,11 +261,11 @@ compat) by treating them as opaque error markers.
 
 ## 5. Cross-references
 
-- SOLO-03 §5.6, §5.8 — the refuse-to-start matrix and
+- SOLO-03 §5.6, §5.8 - the refuse-to-start matrix and
   breaker-eligible exits.
-- SOLO-09 §4.6 — the JSON-RPC error envelope on the wire.
-- SOLO-10 §3 — the human-action gate and `ErrHumanActionRequired`.
-- SOLO-11 §10 — `ErrBusy` and the promotion barrier.
-- SOLO-13 §2 — `veska doctor` exit codes and `--json` schema.
-- SOLO-08 §3.5 — the audit-line schema this catalogue's
+- SOLO-09 §4.6 - the JSON-RPC error envelope on the wire.
+- SOLO-10 §3 - the human-action gate and `ErrHumanActionRequired`.
+- SOLO-11 §10 - `ErrBusy` and the promotion barrier.
+- SOLO-13 §2 - `veska doctor` exit codes and `--json` schema.
+- SOLO-08 §3.5 - the audit-line schema this catalogue's
   `result` strings target.

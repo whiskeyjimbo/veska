@@ -1,7 +1,6 @@
 // Package tokenize provides pure-Go helpers that pre-tokenise symbol-bearing
 // strings (kind, symbol_path, name) into a whitespace-joined form suitable
 // for indexing by FTS5's built-in unicode61 tokenizer.
-//
 // Why pre-tokenise in Go rather than register a custom FTS5 tokenizer?
 // Custom tokenizers are platform-specific and brittle to wire through
 // database/sql. Pre-tokenising on the write path lets unicode61 do what
@@ -16,17 +15,17 @@ import (
 )
 
 // Symbol splits text into tokens by:
-//   - any rune that is not a letter or digit (covers `.`, `::`, `/`, `-`,
-//     whitespace, `_`, etc.);
-//   - lower→upper transitions inside an identifier (camelCase: "closeFinding"
-//     → ["close", "Finding"]);
-//   - end-of-acronym → next word boundaries (ACRONYM-style: "HTTPServer" →
-//     ["HTTP", "Server"]).
+//
+//	any rune that is not a letter or digit (covers `.`, `::`, `/`, `-`,
+//	  whitespace, `_`, etc.);
+//	lower→upper transitions inside an identifier (camelCase: "closeFinding"
+//	  → ["close", "Finding"]);
+//	end-of-acronym → next word boundaries (ACRONYM-style: "HTTPServer" →
+//	  ["HTTP", "Server"]).
 //
 // The result is whitespace-joined: the original text is preserved as one
 // "atom" by also being emitted first, followed by the per-token splits.
 // FTS5 unicode61 will then lower-case-fold the whole thing.
-//
 // Empty input returns "". The output never carries leading or trailing
 // whitespace and never contains consecutive spaces.
 func Symbol(text string) string {
@@ -84,10 +83,10 @@ func flattenNonAlnum(text string) string {
 }
 
 // splitCamel splits an identifier on camelCase and acronym boundaries.
-// "closeFinding"  -> ["close", "Finding"]
-// "HTTPServer"    -> ["HTTP", "Server"]
-// "parseURL2Path" -> ["parse", "URL", "2", "Path"]   (digits split too)
-// "closefinding"  -> ["closefinding"]
+// "closeFinding" -> ["close", "Finding"]
+// "HTTPServer" -> ["HTTP", "Server"]
+// "parseURL2Path" -> ["parse", "URL", "2", "Path"] (digits split too)
+// "closefinding" -> ["closefinding"]
 func splitCamel(s string) []string {
 	if s == "" {
 		return nil

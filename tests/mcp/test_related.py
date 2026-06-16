@@ -1,4 +1,4 @@
-"""Tests for eng_find_related — symbols semantically similar to the code at
+"""Tests for eng_find_related - symbols semantically similar to the code at
 a given (file_path, line). Read-only; the (file_path, line) is derived from a
 real promoted node so the cursor lands inside known source."""
 
@@ -21,7 +21,7 @@ def file_and_line(repo_id, branch) -> tuple[str, int]:
         (repo_id, branch),
     )
     if not rows:
-        pytest.skip("no promoted node with a line number — reindex first")
+        pytest.skip("no promoted node with a line number - reindex first")
     return rows[0]["file_path"], rows[0]["line_start"]
 
 
@@ -36,7 +36,7 @@ def test_find_related_responds(mcp_client, repo_id, branch, file_and_line):
 
 
 def test_find_related_requires_file_path_and_line(mcp_client, repo_id, branch):
-    """file_path and line are both required — omitting them must error,
+    """file_path and line are both required - omitting them must error,
     not silently return everything."""
     ok, text, _, _ = mcp_client.call("eng_find_related", {
         "repo_id": repo_id, "branch": branch,
@@ -56,7 +56,7 @@ def test_find_related_honours_k(mcp_client, repo_id, branch, file_and_line):
         "file_path": file_path, "line": line, "k": 3,
     })
     assert ok, f"eng_find_related k=3 failed: {text}"
-    assert "results" in result, f"missing 'results' key — shape drift: {list(result)}"
+    assert "results" in result, f"missing 'results' key - shape drift: {list(result)}"
     hits = result["results"]
     assert len(hits) <= 3, f"k=3 returned {len(hits)} hits"
     for h in hits:

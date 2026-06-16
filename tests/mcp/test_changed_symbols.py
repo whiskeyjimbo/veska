@@ -1,4 +1,4 @@
-"""Tests for eng_find_changed_symbols — diffs symbol sets between two refs."""
+"""Tests for eng_find_changed_symbols - diffs symbol sets between two refs."""
 
 from __future__ import annotations
 
@@ -18,7 +18,7 @@ def test_changed_symbols_head_against_head(mcp_client, repo_id, branch):
 def test_changed_symbols_defaults_to_last_commit(mcp_client, repo_id, branch):
     """Omitting both ref_a and ref_b must default to HEAD~1..HEAD rather
     than erroring . Previously this test asserted the
-    opposite — the default landed in trunk and the test went stale."""
+    opposite - the default landed in trunk and the test went stale."""
     ok, text, _, result = mcp_client.call("eng_find_changed_symbols", {
         "repo_id": repo_id, "branch": branch,
     })
@@ -31,7 +31,7 @@ def test_changed_symbols_defaults_to_last_commit(mcp_client, repo_id, branch):
 
 
 def test_changed_symbols_one_ref_alone_is_error(mcp_client, repo_id, branch):
-    """Supplying only ref_a (or only ref_b) is ambiguous — must be rejected
+    """Supplying only ref_a (or only ref_b) is ambiguous - must be rejected
     so the caller knows to pass both or neither ."""
     ok, text, _, _ = mcp_client.call("eng_find_changed_symbols", {
         "repo_id": repo_id, "branch": branch,

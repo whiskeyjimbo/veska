@@ -1,9 +1,9 @@
-"""Tests for eng_reindex_repo — forces a full cold-scan reparse.
+"""Tests for eng_reindex_repo - forces a full cold-scan reparse.
 
 Reindex is expensive and mutates last_promoted_sha + re-embeds, so we never
 run it against the live registered repo (that would disrupt the shared
 target_symbol / target_file fixtures). Every test operates on a fresh temp
-git repo, removed in a finally — same hygiene as test_repo_lifecycle."""
+git repo, removed in a finally - same hygiene as test_repo_lifecycle."""
 
 from __future__ import annotations
 

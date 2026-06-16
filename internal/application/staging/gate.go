@@ -9,7 +9,6 @@ import (
 // Gate controls the branch-switch quiescence protocol.
 // It guards an Area with a monotonic generation counter so
 // in-flight saves from the prior branch cannot corrupt the new branch's staging.
-//
 // Pause/Resume use a sync.Cond so blocked goroutines sleep without spinning.
 // BumpGeneration uses atomic increment for lock-free reads by the hot save path.
 // BranchSwitch defers Resume to guarantee the gate is always unpaused, even on

@@ -2,7 +2,7 @@ package application
 
 import "testing"
 
-// solov2-u9h9 verification — ScanTracker.Progress sets files_seen on the
+// verification — ScanTracker.Progress sets files_seen on the
 // snapshot for an in-flight scan and is a no-op for unknown repos /
 // nil receivers.
 

@@ -59,5 +59,5 @@ def test_harness_builds_realistic_graph(tmp_path: Path):
 
         # At least one open finding landed (dead-code and/or untested).
         finding_id = ws.open_finding_id()
-        assert finding_id, "no open finding — structural checks did not fire"
+        assert finding_id, "no open finding - structural checks did not fire"
         print(f"[harness] open finding: {finding_id}")

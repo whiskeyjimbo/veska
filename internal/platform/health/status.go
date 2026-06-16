@@ -4,7 +4,6 @@
 // the embedderprobe used by `veska init`) do not transitively pull in the
 // heavy doctor dependency tree (application/review, infrastructure/sqlite,
 // infrastructure/vector).
-//
 // A Status has underlying type string and marshals to its lowercase word, so
 // retyping a `json:"status"` struct field from string to Status keeps the JSON
 // wire format byte-identical.

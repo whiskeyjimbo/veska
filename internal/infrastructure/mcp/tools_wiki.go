@@ -13,7 +13,7 @@ import (
 )
 
 // HotZoneResponse is the envelope returned by eng_get_hot_zone. It carries
-// the same ranked Report the docs/veska/hot_zones.md page is built from,
+// the same ranked Report the page is built from,
 // so the tool and the page can never diverge (AC3).
 type HotZoneResponse struct {
 	RepoID string         `json:"repo_id"`
@@ -22,10 +22,10 @@ type HotZoneResponse struct {
 	// DegradedReasons surfaces in-band hints when the response is sparse for
 	// non-obvious reasons (e.g. an empty zones list because no commits have
 	// landed since registration). Tools shouldn't have to read the wiki
-	// markdown to learn why the call returned nothing .
+	// markdown to learn why the call returned nothing.
 	DegradedReasons []string `json:"degraded_reasons"`
 	// Hint is a one-line, caller-facing string explaining sparse output
-	// . Populated only when zones is empty.
+	// Populated only when zones is empty.
 	Hint string `json:"hint,omitempty"`
 }
 
@@ -43,7 +43,7 @@ func RegisterWikiTools(r *Registry, svc *wiki.HotZoneService, repoRoot RepoRootF
 }
 
 // EntryPointsResponse is the envelope returned by eng_get_entry_points. It
-// carries the same selected list the docs/veska/entry_points.md page is
+// carries the same selected list the page is
 // built from, so the tool and the page can never diverge (AC3).
 type EntryPointsResponse struct {
 	RepoID      string            `json:"repo_id"`
@@ -70,11 +70,10 @@ type entryPointsParams struct {
 	// IncludeTests opts the caller back in to Test*/Benchmark*/Example*/
 	// Fuzz* functions and *_test.go entries. Default false — on a real
 	// library the test corpus drowns out the actual public-API entry
-	// points (solov2-bos: cobra returned ~hundreds of TestX funcs).
+	// points (: cobra returned ~hundreds of TestX funcs).
 	IncludeTests bool `json:"include_tests,omitempty"`
 	// Limit truncates the returned slice. 0 or unset returns the service
 	// default. Values larger than the service default are silently capped
-	// .
 	Limit int `json:"limit,omitempty"`
 }
 
@@ -90,7 +89,7 @@ func makeEntryPointsHandler(svc *wiki.EntryPointsService, repos application.Repo
 		if rpcErr := bindParams(raw, &p); rpcErr != nil {
 			return nil, rpcErr
 		}
-		// solov2-ktz0: shim-injected cwd resolves repo_id when omitted.
+		// shim-injected cwd resolves repo_id when omitted.
 		repoID, rpcErr := resolveRepoIDFromParams(ctx, repos, raw, p.RepoID)
 		if rpcErr != nil {
 			return nil, rpcErr
@@ -119,7 +118,7 @@ func makeEntryPointsHandler(svc *wiki.EntryPointsService, repos application.Repo
 		}
 		// Canonicalise file_path to absolute on the wire so every eng_* tool
 		// returns the same shape (mirrors the hot-zone handler below). Node
-		// file_paths are stored repo-relative since ADR-S0017 §1, so join the
+		// file_paths are stored repo-relative since, so join the
 		// repo root; an already-absolute path is left as-is. When the repo
 		// lister is unwired (repos == nil), the relative path is surfaced as-is.
 		if root, ok := repoRoot(ctx, repos, p.RepoID); ok {
@@ -144,7 +143,7 @@ func makeEntryPointsHandler(svc *wiki.EntryPointsService, repos application.Repo
 // (Go convention) or whose symbol name carries a Test/Benchmark/Example/
 // Fuzz prefix. Applied at the MCP layer so the wiki page generation
 // (which renders the same list) can keep its current behaviour
-// independently — solov2-bos affects the tool consumers, not the docs.
+// independently affects the tool consumers, not the docs.
 func filterTestEntries(in []wiki.EntryPoint) []wiki.EntryPoint {
 	out := make([]wiki.EntryPoint, 0, len(in))
 	for _, e := range in {
@@ -167,7 +166,7 @@ type hotZoneParams struct {
 	RepoID string `json:"repo_id"`
 	Branch string `json:"branch"`
 	// Limit truncates the returned slice. 0 or unset returns the service
-	// default .
+	// default.
 	Limit int `json:"limit,omitempty"`
 }
 
@@ -183,7 +182,7 @@ func makeHotZoneHandler(svc *wiki.HotZoneService, repoRoot RepoRootFunc, repos a
 		if rpcErr := bindParams(raw, &p); rpcErr != nil {
 			return nil, rpcErr
 		}
-		// solov2-ktz0: shim-injected cwd resolves repo_id when omitted.
+		// shim-injected cwd resolves repo_id when omitted.
 		repoID, rpcErr := resolveRepoIDFromParams(ctx, repos, raw, p.RepoID)
 		if rpcErr != nil {
 			return nil, rpcErr
@@ -206,7 +205,7 @@ func makeHotZoneHandler(svc *wiki.HotZoneService, repoRoot RepoRootFunc, repos a
 			return nil, &RPCError{Code: CodeInternalError, Message: fmt.Sprintf("hot zone: %v", err)}
 		}
 		// Canonicalise file_path to absolute on the wire so every tool in
-		// the eng_* surface returns the same shape . The wiki
+		// the eng_* surface returns the same shape. The wiki
 		// markdown still renders the relative form via the same Report
 		// (the Markdown is built before this loop runs).
 		src := rep.Zones
@@ -222,13 +221,13 @@ func makeHotZoneHandler(svc *wiki.HotZoneService, repoRoot RepoRootFunc, repos a
 			z.FilePath = abs
 			zones[i] = z
 		}
-		// solov2-636y/solov2-z5o0: when ranking returns no zones, explain
+		// /: when ranking returns no zones, explain
 		// why precisely instead of guessing — Rank reports both how many
 		// files were touched in the look-back window (scanned) and how
 		// many of those produced a non-zero score (scored). The two
 		// numbers separate the "quiet repo" case from the "only lockfile
 		// churn" case.
-		// Non-nil so the field serializes as [] when empty .
+		// Non-nil so the field serializes as when empty.
 		degraded := []string{}
 		hint := ""
 		if len(zones) == 0 {

@@ -1,11 +1,10 @@
 // Package savingscmd holds the business logic behind `veska doctor savings`
 // (and its top-level `veska savings` alias). cmd/veska delegates here, following
-// the cmd = glue / logic-in-packages pattern (solov2-0omh.8).
-//
+// the cmd = glue / logic-in-packages pattern.
 // "Savings" is the ratio (1 - snippet_chars / file_chars): how much agent-side
 // file-read traffic the inline snippets in eng_search_semantic results saved.
 // The per-search telemetry is written by the daemon's MCP search handler
-// ; this package reads the rollup and renders today / 7d / all-time.
+// this package reads the rollup and renders today / 7d / all-time.
 package savingscmd
 
 import (
@@ -26,13 +25,13 @@ const barWidth = 30
 
 // minSampleCalls is the minimum number of recorded search calls before the
 // savings ratio is rendered as a number. Below this, the small sample is noise
-// — a single short snippet can drive the ratio negative and alarm a first-time
-// user . The row still renders so the call count is visible.
+// a single short snippet can drive the ratio negative and alarm a first-time
+// user. The row still renders so the call count is visible.
 const minSampleCalls = 20
 
 // Params bundles the inputs of Run. The two boolean flags (JSON, Aggregate)
 // live in a struct rather than as adjacent positional args so call sites can't
-// transpose them .
+// transpose them.
 type Params struct {
 	Out       io.Writer
 	VeskaHome string
@@ -47,7 +46,7 @@ type Params struct {
 // repoBreakdown is the --json shape for the per-repo default: each repo's
 // rollup keyed by repo_id, plus the pooled Total (== sum of Repos by
 // construction, see savings.AggregateByRepo). Legacy entries written before
-// the repo_id partition (solov2-0ql0) carry no repo_id and group under the
+// the repo_id partition carry no repo_id and group under the
 // "" key.
 type repoBreakdown struct {
 	Repos map[string]savings.Report `json:"repos"`
@@ -55,13 +54,11 @@ type repoBreakdown struct {
 }
 
 // Run reads the savings.jsonl rollup and renders it.
-//
-// Default mode (solov2-izh6.21) breaks savings down per repo — one section per
+// Default mode breaks savings down per repo — one section per
 // repo that has recorded searches, plus a pooled "total" — so the user can see
 // which repo's symbol embeddings are paying off. --aggregate keeps the older
 // single pooled view (every repo summed into one "all repos" bucket) for
 // scripts and users that want just the headline number.
-//
 // Repos with no recorded searches do not appear: a repo_id only lands in
 // savings.jsonl once eng_search_semantic has hit it, so an idle registered
 // repo has no savings story to tell.
@@ -165,7 +162,7 @@ func printWarmupNote(w io.Writer, calls int) {
 
 // formatRow renders one period as a fixed-width row:
 //
-//	today    [████████████████████████····] 87.3%  (42 calls, 1.2MB → 156KB)
+//	today [████████████████████████····] 87.3% (42 calls, 1.2MB → 156KB)
 //
 // The bar fill is proportional to the savings ratio; the trailing detail shows
 // the raw numerator/denominator so the user can sanity check.

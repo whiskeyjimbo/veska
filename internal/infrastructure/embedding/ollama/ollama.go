@@ -1,6 +1,5 @@
 // Package ollama provides a ports.EmbeddingProvider implementation backed by a
 // locally running Ollama instance via POST /api/embeddings.
-//
 // Errors caused by an unreachable embedder (dial failures, DNS, EOF mid-flight,
 // 5xx responses) are wrapped with ports.ErrEmbedderUnreachable so the
 // application-layer search service can fall back to lexical search. 4xx
@@ -195,9 +194,8 @@ type batchResponse struct {
 
 // EmbedBatch sends multiple texts to Ollama's POST /api/embed in a
 // single request and returns embeddings in the same order. One network
-// roundtrip instead of N — primary lever for solov2-ucp's cobra
+// roundtrip instead of N — primary lever for 's cobra
 // cold-scan dropping from ~15s to <3s. Empty input is a no-op.
-//
 // Failure modes mirror Embed: 5xx / net errors are wrapped with
 // ErrEmbedderUnreachable so callers can fall back; 4xx propagates as
 // a plain error. A short response (fewer embeddings than texts) is

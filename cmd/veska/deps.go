@@ -11,22 +11,22 @@ import (
 )
 
 // The deps command logic lives in internal/cli/depscmd; the constructors below
-// are Cobra glue whose RunE bodies delegate into that package .
+// are Cobra glue whose RunE bodies delegate into that package.
 // The cwd→repo resolver (autoResolveRepo) stays in cmd/veska — it is shared
 // across the symbol, graph, findings, and deps families — and is injected
 // through the ResolveRepo seam.
 
 // depsCmd is the `veska deps …` parent. Bare `veska deps` lists
-// imported modules ranked by call-site usage (the original solov2-jlws
+// imported modules ranked by call-site usage (the original
 // behaviour); `veska deps index <module>` adds the new vendor-scan
-// indexer .
+// indexer.
 func depsCmd() *cobra.Command {
 	listCmd := depsListCmd()
 	cmd := &cobra.Command{
 		Use:          "deps",
 		Short:        "Inspect and index a repo's external dependencies",
 		SilenceUsage: true,
-		// solov2-izh6.5: cap positional args at 1 so a bare
+		// cap positional args at 1 so a bare
 		// `veska deps show github.com/foo` (which silently fell through
 		// to `deps list` when the parent had no Args constraint) is
 		// caught as an unknown subcommand instead. The single permitted
@@ -73,7 +73,7 @@ func looksLikeUnknownDepsSubcommand(arg string, parent *cobra.Command) bool {
 	return true
 }
 
-// depsListCmd wraps eng_list_dependencies — the existing solov2-jlws
+// depsListCmd wraps eng_list_dependencies — the existing
 // behaviour, now available as both `veska deps` and `veska deps list`.
 func depsListCmd() *cobra.Command {
 	var (
@@ -86,7 +86,7 @@ func depsListCmd() *cobra.Command {
 		Short: "List external modules the repo CALLS into, ranked by call-site count",
 		// Long reuses the MCP DescDepsImportOnlyCaveat fragment so the
 		// import-only absence rule can't drift from the eng_list_dependencies
-		// description (solov2-izh6.20).
+		// description.
 		Long:         "List external modules the repo CALLS into, ranked by call-site count.\n\nNote: " + mcpinfra.DescDepsImportOnlyCaveat + " — this tracks the import-side backfill.",
 		Args:         cobra.MaximumNArgs(1),
 		SilenceUsage: true,
@@ -113,7 +113,6 @@ func depsListCmd() *cobra.Command {
 }
 
 // depsIndexCmd indexes a vendored Go module's symbols into the graph
-// .
 func depsIndexCmd() *cobra.Command {
 	var repoFlag string
 	cmd := &cobra.Command{

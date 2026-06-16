@@ -19,17 +19,17 @@ superseded_by: [ADR-S0014, ADR-S0015]
 > (one SQLite file, WAL, atomic promotion) stands unchanged.
 > Note: S0014 moved the pivot ADR to a mandatory M1 pre-requisite,
 > ahead of the M2 placement described in the staged-adoption note
-> below — see S0014 for the current schedule of record.
+> below - see S0014 for the current schedule of record.
 
 > **Staged adoption.** sqlite-vec is the V2.0 substrate up to
 > ~100k embedded nodes (the M0 / M1 working range). Above that,
 > a pivot to an HNSW-backed vector index (lancedb or equivalent,
 > kept inside the same SQLite-rooted on-disk layout where
-> possible) is **expected, not contingent** — the brute-force
+> possible) is **expected, not contingent** - the brute-force
 > `vec0` index does not have headroom to ~1M vectors at the
 > latency budgets in SOLO-13 §3 on the reference laptop. **M0
 > measures the actual crossover; the pivot ADR is written and
-> ratified at M2** (epic `m2.06-vec-pivot-adr` — see
+> ratified at M2** (epic `m2.06-vec-pivot-adr` - see
 > `milestones/M2.md`), so M3 and later milestones build on the
 > pivoted index rather than treating it as optional. The prior
 > framing that placed the pivot ADR at M3 lagged behind the
@@ -39,7 +39,7 @@ superseded_by: [ADR-S0014, ADR-S0015]
 > confirms the working-range claim and the M2 pivot ADR is
 > recorded against measured numbers.
 
-# ADR-S0001 — SQLite + sqlite-vec as the V2.0 substrate
+# ADR-S0001 - SQLite + sqlite-vec as the V2.0 substrate
 
 ## Context
 
@@ -57,7 +57,7 @@ What the solo product actually needs from storage:
   unmeasured at write time, gated by the M0 spike).
 - Survive `kill -9` without corrupting the database.
 - Be backed up by an online snapshot mechanism that doesn't
-  require quiescing writers (SOLO-08 §9 — `VACUUM INTO` plus a
+  require quiescing writers (SOLO-08 §9 - `VACUUM INTO` plus a
   tarball of supporting files).
 
 A single SQLite file with the `sqlite-vec` extension covers every
@@ -69,7 +69,7 @@ scales we care about.
 The tradeoff we accept: we lose Dolt's time-travel queries
 (`AS OF`), branch-level diffs, and the "graph as Git" mental model.
 For a single-user product none of those features have a present
-consumer. Time-travel for graphs gets re-derived from Git anyway —
+consumer. Time-travel for graphs gets re-derived from Git anyway -
 we already have a promoted graph per commit, indexed by `git_sha`.
 
 ## Decision
@@ -126,7 +126,7 @@ Open questions tracked in SOLO-OQ:
 - OQ-S002: WAL checkpoint cadence under sustained refactor storms.
   Resolution: M1 spike.
 - OQ-S003: HNSW pivot ADR. Resolution: **M2 epic
-  `m2.06-vec-pivot-adr`** (not M3 — see staged-adoption note
+  `m2.06-vec-pivot-adr`** (not M3 - see staged-adoption note
   above). The M2 ADR records the
   measured failure mode of vec0 at scale and the on-disk layout
   that keeps backup/restore (SOLO-08 §9) intact through the
@@ -153,7 +153,7 @@ Open questions tracked in SOLO-OQ:
 
 ## M0 Measurement (2026-05-11)
 
-**Verdict: red-ceiling** — spike commit `4d63d34`
+**Verdict: red-ceiling** - spike commit `4d63d34`
 
 | Gate | Measured | Threshold | Result |
 |---|---|---|---|
@@ -172,7 +172,7 @@ SOLO-13 §3.3.1's gate is keyed against.
 **Action per M0 §Outcomes red-ceiling row:**
 1. This ADR is amended (status → `amended`). The staged-adoption note in the preamble
    remains accurate: vec0 covers the M0/M1 working range up to ~100k nodes (not ~100k
-   as originally estimated — the measured ceiling is exactly at the lower bound).
+   as originally estimated - the measured ceiling is exactly at the lower bound).
 2. OQ-S003 (HNSW pivot ADR) is promoted from M3 to **mandatory M1 work**, to be
    written and ratified **before m1.03 begins**. The pivot ADR will specify the chosen
    HNSW backing (lancedb or equivalent), the recall floor, and how it preserves the

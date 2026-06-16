@@ -41,9 +41,9 @@ type ScopeVerdict struct {
 // Guard answers the blast-radius-containment half of the diff-safety gate: did
 // a candidate change stay within the anchor's blast radius? It distinguishes
 // "modified EXISTING distant code" (scope creep — offending) from "NEW code
-// wired into the allowed neighbourhood" (the fix's natural footprint —
+// wired into the allowed neighbourhood" (the fix's natural footprint
 // contained), so the canonical fix that adds a caller of a dead symbol is not
-// over-blocked (solov2-ll57.5). It is stateless and safe for concurrent
+// over-blocked. It is stateless and safe for concurrent
 // callers.
 type Guard struct {
 	radius BlastRadius
@@ -64,11 +64,9 @@ func NewGuard(radius BlastRadius) (*Guard, error) {
 // candidate wires — via a resolved overlay edge — into the allowed set; the
 // expansion is run to a fixpoint so a chain of new nodes connected to the fix
 // is admitted. A changed node outside the resulting set is offending.
-//
 // opts selects the radius policy (depth/direction/bounds); the zero value uses
 // the blastradius defaults. The Guard does no network IO — it reads the base
 // radius and the in-memory ephemeral overlay.
-//
 // Safe/unsafe asymmetry: when membership or connectivity can't be determined
 // (a base lookup error, an unresolved edge), the node stays OFFENDING
 // (over-block) rather than being admitted — a false "exceeded" over-blocks a

@@ -1,16 +1,13 @@
 //go:build eval
 
 // Package queuefuzz drives the M3 gate-5 queue-lane drain fuzz test.
-//
 // Goal: drive N synthetic promotions through the real Promoter, let the
 // real queue Poller (with stub WorkHandlers) drain every enqueued row, and
 // assert that every row reaches state='done' (or state='failed' with a
 // surfaced reason) within a configurable wall-time budget. No rows must
 // remain 'pending' past the budget.
-//
 // Three M3 lanes are exercised: embed, auto_link, revalidate. The 'review'
 // kind is reserved for M5 and never enqueued by Promoter today.
-//
 // Build-tag gated; the make target is `make eval-queue-fuzz`.
 package queuefuzz
 
@@ -69,7 +66,7 @@ func TestQueueFuzz(t *testing.T) {
 	seedRepo(t, pools.Write)
 
 	// Stub handlers: succeed for every kind. Optional artificial latency
-	// (random 0..latencyMS) exercises real concurrency across lanes.
+	// (random 0.latencyMS) exercises real concurrency across lanes.
 	stub := newStubHandler(latencyMS)
 	handlers := map[queue.WorkKind]queue.WorkHandler{
 		ports.WorkKindEmbed:      stub,
@@ -249,7 +246,7 @@ func tallyCounts(t *testing.T, db *sql.DB) counts {
 }
 
 // stubHandler is a thread-safe WorkHandler that succeeds for every kind.
-// Optional artificial latency (random 0..latencyMS) lets the test exercise
+// Optional artificial latency (random 0.latencyMS) lets the test exercise
 // real concurrency across the per-kind goroutines without depending on real
 // embedding / linking / revalidate stacks.
 type stubHandler struct {

@@ -3,8 +3,7 @@
 // Package embed_models benchmarks embedding model variants — model2vec
 // in-process providers and (in later phases) Ollama models — over real
 // codebase corpora, so hi5's defaults are data-backed and end users get
-// a published comparison table .
-//
+// a published comparison table.
 // Phase 0k5h.2 — multi-model, multi-corpus, structured output.
 // Iterates over every model under $VESKA_HOME/static-model/<name>/ that
 // matches the BenchModels list, and every corpus directory that's been
@@ -12,18 +11,17 @@
 // always-present veska self-corpus. Models / corpora that aren't on disk
 // are skipped with a warning — the bench is runnable with whatever
 // subset is installed.
-//
 // Run with: make eval-embed-models
 //
 //	Env knobs:
-//	  EMBED_BENCH_MODEL_DIR  — override the model search path (default:
+//	  EMBED_BENCH_MODEL_DIR — override the model search path (default:
 //	                           $VESKA_HOME/static-model)
-//	  EMBED_BENCH_QUERY      — query string used for the printed top-K
+//	  EMBED_BENCH_QUERY — query string used for the printed top-K
 //	                           sanity check (default: "load config")
-//	  EMBED_BENCH_TOPK       — number of top results to print (default 10)
-//	  EMBED_BENCH_MAX_DOCS   — cap docs per corpus to bound runtime
+//	  EMBED_BENCH_TOPK — number of top results to print (default 10)
+//	  EMBED_BENCH_MAX_DOCS — cap docs per corpus to bound runtime
 //	                           during iteration (default 5000)
-//	  EMBED_BENCH_OUT        — path to write results JSON
+//	  EMBED_BENCH_OUT — path to write results JSON
 //	                           (default: tools/loadtest/embed_models/out/results.json)
 package embed_models
 
@@ -73,7 +71,7 @@ var BenchOllamaModels = []string{
 }
 
 // Embedder is the minimum surface every bench-target provider satisfies
-// — both model2vec.Provider and ollama.Provider implement this exact
+// both model2vec.Provider and ollama.Provider implement this exact
 // signature. Keeps the corpus walkers and the recall metric independent
 // of the concrete provider type.
 type Embedder interface {
@@ -83,7 +81,7 @@ type Embedder interface {
 // BenchCorpora lists the corpus names the bench targets. veska is
 // always present (this repo); the rest live under out/repos/<name>/
 // after scripts/fetch-corpora.sh runs. Prose corpora (suffix "-docs"
-// or "wikipedia-*") walk .md files via embedProseCorpus.
+// or "wikipedia-*") walk.md files via embedProseCorpus.
 var BenchCorpora = []string{
 	// Code corpora
 	"veska", "cobra", "pflag", "testify", "gin",
@@ -113,7 +111,7 @@ type modelEntry struct {
 }
 
 // corpusEntry pairs a corpus name with its root directory and its kind
-// ("code" walks .go files via tree-sitter; "prose" walks .md files via
+// ("code" walks.go files via tree-sitter; "prose" walks.md files via
 // the section splitter in prose.go).
 type corpusEntry struct {
 	name string
@@ -134,7 +132,7 @@ type runResult struct {
 	QueryMS      float64                 `json:"query_ms"` // query embed time
 	TopHits      []topHit                `json:"top_hits"` // sanity-check top-K for the printed query
 	Recall       map[string]RecallScores `json:"recall"`   // gt-source → scores (headline / doc / test-name)
-	// Condensation axis (solov2-oo4q.2). Populated only when
+	// Condensation axis. Populated only when
 	// EMBED_BENCH_CONDENSE=on. CondensedRecall is the recall produced
 	// when ranking docs by their condensed vector; raw Recall is
 	// preserved so the lift is row-comparable.
@@ -251,7 +249,7 @@ func TestEmbedModelsBenchmark(t *testing.T) {
 				scores.Miss, scores.NotInCorpus)
 		}
 
-		// Condensation pass: build a parallel docs slice whose .vec is
+		// Condensation pass: build a parallel docs slice whose.vec is
 		// the condensed vector (where one was computed) and re-run
 		// recall. Docs without a condensed vec are kept with the raw
 		// vec — that's the natural "below the minLen gate" behavior:
@@ -390,7 +388,7 @@ func ollamaReachable() (bool, string) {
 // fixturesDir resolves the bench's hand-curated ground-truth directory.
 // Override with EMBED_BENCH_FIXTURES; default is fixtures/ under the
 // package (committed). Every *.jsonl file inside is loaded and merged
-// — see CollectGroundTruth.
+// see CollectGroundTruth.
 func fixturesDir() string {
 	if p := os.Getenv("EMBED_BENCH_FIXTURES"); p != "" {
 		return p
@@ -487,12 +485,11 @@ type embedStats struct {
 	total time.Duration
 }
 
-// embedCorpus walks every .go file under root (skipping _test.go and
+// embedCorpus walks every.go file under root (skipping _test.go and
 // vendor/), parses each with the production Go parser, and embeds each
 // declaration's name+raw_content as a single document. Capped at
 // maxDocs to bound runtime when iterating over many (model × corpus)
 // combinations.
-//
 // When cfg.enabled, ALSO computes a condensed-input embedding per doc
 // and stores it in doc.vecCondensed. Returns the count of docs that
 // were actually condensed (vs skipped by minLen gate).
@@ -510,7 +507,7 @@ func embedCorpus(t *testing.T, p Embedder, root string, maxDocs int, cfg condens
 			return nil // tolerate per-entry walk errors
 		}
 		if d.IsDir() {
-			// Skip vendor/, .git/, and any node_modules-style noise.
+			// Skip vendor/,.git/, and any node_modules-style noise.
 			name := d.Name()
 			if name == "vendor" || name == ".git" || name == "node_modules" || name == "out" {
 				return filepath.SkipDir

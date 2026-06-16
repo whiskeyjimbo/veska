@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# fetch-wikipedia-corpus.sh — pulls plain-text extracts of the Wikipedia
+# fetch-wikipedia-corpus.sh - pulls plain-text extracts of the Wikipedia
 # articles listed in fixtures/wikipedia_titles.txt and writes one
 # markdown file per article into out/wikipedia-tech/. Used by the
 # embed-models bench to evaluate models on GENUINE natural prose, since
@@ -42,7 +42,7 @@ print(s)
     out_file="${OUT}/${slug}.md"
 
     if [[ -s "${out_file}" ]]; then
-        echo "fetch-wikipedia: ${title} cached — skip"
+        echo "fetch-wikipedia: ${title} cached - skip"
         continue
     fi
 
@@ -66,7 +66,7 @@ print(urllib.parse.quote(sys.argv[1].replace(' ', '_')))
         "${url}" || true)
     sleep 0.5
     if [[ -z "${body}" ]]; then
-        echo "fetch-wikipedia: empty response for ${title} — skip"
+        echo "fetch-wikipedia: empty response for ${title} - skip"
         continue
     fi
 
@@ -94,7 +94,7 @@ for _, p in pages.items():
     print('\n'.join(out))
 ")
     if [[ -z "${extracted// }" ]]; then
-        echo "fetch-wikipedia: empty extract for ${title} — skip"
+        echo "fetch-wikipedia: empty extract for ${title} - skip"
         continue
     fi
 

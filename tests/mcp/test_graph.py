@@ -1,4 +1,4 @@
-"""Tests for the graph MCP tools — find_symbol, get_file_nodes, get_node."""
+"""Tests for the graph MCP tools - find_symbol, get_file_nodes, get_node."""
 
 from __future__ import annotations
 
@@ -84,8 +84,8 @@ def test_find_symbol_branch_defaults_to_active(mcp_client, repo_id, target_symbo
 
 def test_find_symbol_accepts_repo_id_prefix(mcp_client, repo_id, branch, target_symbol):
     """solov2-rkbc: any unambiguous repo_id prefix (>= 4 chars) resolves
-    to the full id. Use an 8-char prefix — neither the full sha nor the
-    canonical 12-char short_id — to prove the prefix path runs."""
+    to the full id. Use an 8-char prefix - neither the full sha nor the
+    canonical 12-char short_id - to prove the prefix path runs."""
     prefix = repo_id[:8]
     ok, text, _, result = mcp_client.call("eng_find_symbol", {
         "repo_id": prefix,
@@ -104,7 +104,7 @@ def test_get_node_without_repo_id_or_branch(mcp_client, repo_id, branch, target_
         "repo_id": repo_id, "branch": branch, "symbol": target_symbol,
     })
     nodes = find_result.get("nodes", [])
-    assert nodes, "find_symbol returned nothing — cannot test get_node"
+    assert nodes, "find_symbol returned nothing - cannot test get_node"
     node_id = nodes[0]["node_id"]
 
     ok, text, _, result = mcp_client.call("eng_get_node", {"node_id": node_id})
@@ -120,7 +120,7 @@ def test_get_node_by_id(mcp_client, repo_id, branch, target_symbol):
         "symbol": target_symbol,
     })
     nodes = find_result.get("nodes", [])
-    assert nodes, "find_symbol returned nothing — cannot test get_node"
+    assert nodes, "find_symbol returned nothing - cannot test get_node"
     node_id = nodes[0]["node_id"]
 
     ok, text, _, result = mcp_client.call("eng_get_node", {

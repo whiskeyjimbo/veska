@@ -35,7 +35,7 @@ function greet(name: string): string {
 	}
 }
 
-// TestTS_ErrorRecovery pins solov2-rbb7: a syntax error in one declaration
+// TestTS_ErrorRecovery pins: a syntax error in one declaration
 // must not erase the file's other symbols. The clean function survives, a
 // ParseFailure is reported, and the broken declaration is skipped.
 func TestTS_ErrorRecovery(t *testing.T) {
@@ -59,7 +59,7 @@ function alsoGood(): string { return "ok"; }
 	}
 }
 
-// TestTS_ExportedFlag pins solov2-xp1u: TS declarations under an
+// TestTS_ExportedFlag pins: TS declarations under an
 // export_statement carry Exported=true; unexported ones Exported=false (not
 // nil). Methods inherit their class's export status.
 func TestTS_ExportedFlag(t *testing.T) {
@@ -198,7 +198,7 @@ function hello(): string {
 `)
 	p := treesitter.NewTSParser()
 
-	// .ts
+	// ts
 	rTS, err := p.ParseFile(context.Background(), tsRepoID, "src/hello.ts", src)
 	if err != nil {
 		t.Fatalf(".ts parse error: %v", err)
@@ -207,7 +207,7 @@ function hello(): string {
 		t.Error("expected 'hello' node for .ts file")
 	}
 
-	// .tsx
+	// tsx
 	rTSX, err := p.ParseFile(context.Background(), tsRepoID, "src/hello.tsx", src)
 	if err != nil {
 		t.Fatalf(".tsx parse error: %v", err)
@@ -258,7 +258,7 @@ function greet(): string {
 	}
 }
 
-// TestTS_ThisCallsEdge_IntraClass covers solov2-gv6: a `this.foo()`
+// TestTS_ThisCallsEdge_IntraClass covers: a `this.foo`
 // call inside a method on class C must emit a CALLS edge to C.foo,
 // matching the Go parser's receiver-selector resolution.
 func TestTS_ThisCallsEdge_IntraClass(t *testing.T) {
@@ -287,7 +287,7 @@ class Server {
 }
 
 // TestTS_ThisCallsEdge_FromConstructor covers AC2: the constructor of a
-// class is itself a method whose this.foo() calls must resolve. Without
+// class is itself a method whose this.foo calls must resolve. Without
 // this, the most common "wire dependencies" pattern is invisible.
 func TestTS_ThisCallsEdge_FromConstructor(t *testing.T) {
 	src := []byte(`

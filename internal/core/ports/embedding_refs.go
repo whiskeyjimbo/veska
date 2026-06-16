@@ -28,7 +28,6 @@ type PendingEmbedRef struct {
 
 // EmbeddingRefRepo is the worker-side port for node_embedding_refs and the
 // content-addressed node_embeddings table.
-//
 // The enqueue side (writing pending refs) is NOT part of this port: refs are
 // inserted in the same transaction as the nodes they point at, directly by
 // Promoter. Keeping enqueue out of this port preserves the atomicity contract
@@ -45,18 +44,16 @@ type EmbeddingRefRepo interface {
 	CountPending(ctx context.Context) (int, error)
 
 	// MarkReady atomically:
-	//  - inserts a row into node_embeddings keyed by contentHash if absent
+	//  inserts a row into node_embeddings keyed by contentHash if absent
 	//    (ON CONFLICT DO NOTHING — idempotent w.r.t. content),
-	//  - updates node_embedding_refs for nodeID to state='ready',
+	//  updates node_embedding_refs for nodeID to state='ready',
 	//    content_hash=contentHash, embedded_at=at.
-	//
 	// Both writes are performed inside a single BEGIN IMMEDIATE transaction.
 	MarkReady(ctx context.Context, nodeID, contentHash, modelID string, dim int, embedding []byte, at time.Time) error
 
 	// MarkAttemptFailed records one Embed failure for nodeID:
-	//   - increments node_embedding_refs.attempts by 1,
-	//   - flips state to 'failed' if the new attempts value is >= maxAttempts.
-	//
+	//   increments node_embedding_refs.attempts by 1,
+	//   flips state to 'failed' if the new attempts value is >= maxAttempts.
 	// The bump-and-maybe-flip is performed in a single UPDATE so concurrent
 	// callers cannot observe a torn state. Rows already in state='failed'
 	// or 'ready' are not modified (the WHERE clause restricts to pending).
@@ -77,14 +74,12 @@ type EmbeddingRefRepo interface {
 
 	// ContentHashForNode returns the content_hash of the embedding for nodeID
 	// scoped to (repoID, branch), with a ready flag.
-	//
 	//   ready=true with a non-empty hash: the ref is in state='ready' and the
 	//     hash points at a row in node_embeddings.
 	//   ready=false: the node has no ref row, the ref is state='pending'
 	//     (no hash yet), state='failed', or the node does not match
 	//     (repoID, branch). All four cases are returned with err=nil — the
 	//     caller decides whether to skip or fail.
-	//
 	// The (repoID, branch) scoping is enforced via a JOIN to the nodes table:
 	// node_embedding_refs is keyed solely by node_id (the nodes table owns the
 	// repo/branch dimension), so a bare ref lookup could leak across repos if

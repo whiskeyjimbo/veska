@@ -64,7 +64,7 @@ func insertVecs(t *testing.T, db *sql.DB, n int) {
 
 // TestPercentiles verifies p50/p95/p99/max on a known slice of durations.
 func TestPercentiles(t *testing.T) {
-	// 100 durations: 1ms, 2ms, ..., 100ms
+	// 100 durations: 1ms, 2ms,., 100ms
 	durs := make([]time.Duration, 100)
 	for i := range durs {
 		durs[i] = time.Duration(i+1) * time.Millisecond

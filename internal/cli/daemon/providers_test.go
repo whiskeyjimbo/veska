@@ -57,7 +57,7 @@ func providersTestDB(t *testing.T) *sql.DB {
 			enqueued_at INTEGER NOT NULL DEFAULT 0
 		)`,
 		// nodes is needed by the status pending-embeds EXISTS guard
-		// (solov2-khra): a pending ref only counts when its node still
+		// a pending ref only counts when its node still
 		// exists. Composite PK mirrors the production schema.
 		`CREATE TABLE nodes (
 			node_id TEXT NOT NULL,
@@ -139,7 +139,7 @@ func TestStatusProvider_ReportsDBState(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Status: %v", err)
 	}
-	// solov2-30sa: a non-zero pending_embeds count flips status to degraded
+	// a non-zero pending_embeds count flips status to degraded
 	// and adds embeddings_pending to degraded_reasons (matches what
 	// eng_search_semantic already emits for the same backlog).
 	if m["status"] != "degraded" {
@@ -164,7 +164,7 @@ func TestStatusProvider_ReportsDBState(t *testing.T) {
 }
 
 // TestStatusProvider_HealthyWhenNoPending pins the matched-pair: with zero
-// pending embeds, status stays "ok" and degraded_reasons is empty .
+// pending embeds, status stays "ok" and degraded_reasons is empty.
 func TestStatusProvider_HealthyWhenNoPending(t *testing.T) {
 	db := providersTestDB(t)
 	if _, err := db.Exec(`INSERT INTO repos (repo_id, root_path, added_at, active_branch) VALUES ('r1', '/r1', 1, 'main')`); err != nil {
@@ -186,7 +186,7 @@ func TestStatusProvider_HealthyWhenNoPending(t *testing.T) {
 	}
 }
 
-// TestStatusProvider_OrphanPendingRefsNotCounted pins solov2-khra: a
+// TestStatusProvider_OrphanPendingRefsNotCounted pins: a
 // pending ref whose node has been deleted (repo removal / re-promotion
 // churn left it dangling — node_embedding_refs has no FK to nodes) is NOT
 // real backlog. The embedder's FetchPending JOIN already skips it, so
@@ -235,7 +235,7 @@ func TestStatusProvider_OrphanPendingRefsNotCounted(t *testing.T) {
 	}
 }
 
-// TestStatusProvider_BacklogStaysDegradedForAgentContract pins solov2-34rl:
+// TestStatusProvider_BacklogStaysDegradedForAgentContract pins:
 // even though `doctor status` no longer escalates a non-zero backlog to
 // "degraded" (it now reports the backlog as a separate informational line),
 // `eng_get_status` MUST keep reporting `degraded_reasons:[embeddings_pending]`
@@ -529,7 +529,6 @@ func TestRepoRegistrar_AddRepo_ContextCanceled(t *testing.T) {
 // repo.Add invokes watchAdd with the new repoID + rootPath synchronously
 // (before AddRepo returns), so subsequent file edits on the freshly-registered
 // repo flow through the running fsnotify watcher without a daemon restart
-// .
 func TestRepoRegistrar_AddRepo_SeedsLiveWatcher(t *testing.T) {
 	db, root := newAddRepoTestEnv(t)
 
@@ -614,7 +613,7 @@ func TestRepoRegistrar_AddRepo_WatcherErrorIsNonFatal(t *testing.T) {
 	}
 }
 
-// TestRepoRegistrar_AddRepo_ReDispatchesScanForDirectWriteRow covers solov2-0bc1:
+// TestRepoRegistrar_AddRepo_ReDispatchesScanForDirectWriteRow covers:
 // a repo row inserted via the CLI's direct-write fallback (no daemon
 // running) has no last_promoted_sha and was never indexed. Re-running
 // `veska repo add` after the daemon starts must dispatch a cold-scan for
@@ -666,9 +665,9 @@ func TestRepoRegistrar_AddRepo_ReDispatchesScanForDirectWriteRow(t *testing.T) {
 }
 
 // TestRepoRegistrar_AddRepo_SkipsScanForPromotedRow guards the
-// other side of the solov2-0bc1 condition: a row with a non-empty
+// other side of the condition: a row with a non-empty
 // last_promoted_sha was already indexed, and re-adding must NOT
-// re-dispatch the cold scan (preserves the prior solov2-khjd skip).
+// re-dispatch the cold scan (preserves the prior skip).
 func TestRepoRegistrar_AddRepo_SkipsScanForPromotedRow(t *testing.T) {
 	db, root := newAddRepoTestEnv(t)
 	if _, _, err := repo.Add(context.Background(), db, root); err != nil {

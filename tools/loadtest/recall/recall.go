@@ -1,6 +1,6 @@
 // Package recall contains the eval harness for veska's semantic-search
 // service. The pure recall@k / p95 computations live here without a build
-// tag so they compile under default `go test`/`go vet` and can be unit-
+// tag so they compile under default `go test`/`go vet` and can be unit
 // tested in isolation. The end-to-end eval driver that wires up a real
 // search.Service is gated by the `eval` build tag in recall_test.go.
 package recall
@@ -12,13 +12,11 @@ import (
 )
 
 // RecallAtK returns the recall@k for a single query.
-//
 // hits is the ordered list of NodeIDs the search service returned (ranked
 // best first); truth is the set of NodeIDs that are correct answers for
 // the query. The returned value is len(hits[:min(k,len(hits))] ∩ truth)
 // divided by min(k, len(truth)). When len(truth) is zero the result is
 // zero — a query with no correct answers cannot have positive recall.
-//
 // Semantics note: we normalise the denominator by min(k, len(truth))
 // rather than len(truth). This is the standard recall@k definition: if
 // truth has more members than k the score is bounded by 1.0 (otherwise

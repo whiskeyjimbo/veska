@@ -29,7 +29,7 @@ func TestScoreTier_TopStrongWeak(t *testing.T) {
 }
 
 func TestScoreTier_ZeroTopIsAlwaysWeak(t *testing.T) {
-	// solov2-hl70: when no result has any score (empty set anchor),
+	// when no result has any score (empty set anchor),
 	// every hit gets the conservative "weak" label.
 	for _, s := range []float32{0, 0.5, 1.0} {
 		if got := search.ScoreTier(s, 0); got != "weak" {
@@ -60,8 +60,8 @@ func TestNormalizeScores_MinMaxRescaledTo01(t *testing.T) {
 }
 
 func TestNormalizeScores_AllEqualScores(t *testing.T) {
-	// solov2-hl70: when the result set has zero spread (all scores
-	// equal, or only one result), every hit gets 1.0 — no divide-by-
+	// when the result set has zero spread (all scores
+	// equal, or only one result), every hit gets 1.0 — no divide-by
 	// zero, and the caller still sees a meaningful "this is the best
 	// we've got" signal.
 	in := []search.Result{

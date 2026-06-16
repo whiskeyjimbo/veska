@@ -2,7 +2,6 @@
 // eng_find_changed_symbols MCP tool to compare two arbitrary git refs
 // on demand: ChangedFilesBetween lists the files that differ between
 // two refs, and FileAtRef reads a single file's content at a ref.
-//
 // Like diff.go, paths are relative to repoRoot — that is what
 // `git diff --name-only` emits and what `git show <ref>:<path>` expects.
 
@@ -28,13 +27,12 @@ var ErrFileNotAtRef = errors.New("git show: file not present at ref")
 // freshly-init'd repo with a single commit, but also typos and stale
 // branch names. Callers (e.g. the eng_find_changed_symbols MCP tool)
 // translate this into a typed invalid-params response rather than
-// leaking raw git stderr to the wire .
+// leaking raw git stderr to the wire.
 var ErrUnknownRevision = errors.New("git diff: unknown revision")
 
 // ChangedFilesBetween returns the list of files that differ between
 // refA and refB, as `git diff --name-only <refA> <refB>` reports them.
 // Paths are relative to repoRoot.
-//
 // An empty repoRoot or an empty ref returns an error rather than
 // silently shelling out against the process cwd or HEAD.
 func ChangedFilesBetween(ctx context.Context, repoRoot, refA, refB string) ([]string, error) {
@@ -71,7 +69,7 @@ func ChangedFilesBetween(ctx context.Context, repoRoot, refA, refB string) ([]st
 // files) by running `git status --porcelain`. Returns false on any
 // shell-out error so callers don't surface a false "dirty" signal from a
 // transient git failure. Used by post-promotion-oriented tools
-// (eng_find_todos, solov2-k1jm) to add a degraded_reason explaining why
+// (eng_find_todos) to add a degraded_reason explaining why
 // working-tree edits are invisible to them.
 func WorkingTreeHasUncommittedChanges(ctx context.Context, repoRoot string) bool {
 	if repoRoot == "" {
@@ -90,7 +88,7 @@ func WorkingTreeHasUncommittedChanges(ctx context.Context, repoRoot string) bool
 // `git rev-parse --verify <ref>^{commit}`. Used by callers that need to
 // say "ref_a is the bad one" after ChangedFilesBetween returned
 // ErrUnknownRevision — git's combined error doesn't say which side
-// failed .
+// failed.
 func ResolvesRef(ctx context.Context, repoRoot, ref string) bool {
 	if repoRoot == "" || ref == "" {
 		return false
@@ -101,7 +99,6 @@ func ResolvesRef(ctx context.Context, repoRoot, ref string) bool {
 
 // FileAtRef returns the content of path as it existed at ref, via
 // `git show <ref>:<path>`. Path is relative to repoRoot.
-//
 // When the file does not exist at ref, ErrFileNotAtRef is returned and
 // the content is nil — this is expected for files added or deleted
 // between the two refs being compared.

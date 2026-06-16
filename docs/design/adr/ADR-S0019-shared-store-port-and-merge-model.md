@@ -10,10 +10,10 @@ related: [ADR-S0017, ADR-S0018, ADR-S0009, ADR-S0007, ADR-S0015, ADR-0020]
 verified: false
 ---
 
-# ADR-S0019 — Shared-store port + idempotent merge-record model
+# ADR-S0019 - Shared-store port + idempotent merge-record model
 
 [[ADR-S0018]] deferred two things: the sharing **transport** and the **merge
-policy**. This ADR settles them — by deciding *not* to pick a transport. The
+policy**. This ADR settles them - by deciding *not* to pick a transport. The
 durable decisions are a **port** for the shared store and a **merge model that
 lives in the records**, not in any transport. Concrete transports become
 swappable **adapters**, exactly as `VectorStorage` (memvec/usearch,
@@ -29,7 +29,7 @@ left open (see _Deferred_).
 
 The design nearly committed to Dolt as the transport, on the argument "Dolt is
 already in-stack." That argument was a category error: **Dolt is _beads'_ choice
-— the issue tracker we use to build veska — not part of veska's own
+- the issue tracker we use to build veska - not part of veska's own
 architecture.** veska has no reason to inherit a dev-tool's storage engine.
 
 Stepping back, the project is ports-and-adapters throughout (`layercheck`
@@ -44,39 +44,39 @@ the transport as a later, low-risk adapter swap.
 ### 1. The shared store is a port; the transport is an adapter
 
 Define consumer-owned port(s) for the shared store, sized to what their
-consumers need — not a transport-shaped interface. The merge model (§2) makes
+consumers need - not a transport-shaped interface. The merge model (§2) makes
 the contract small: an adapter only has to **exchange sets of records**.
 
 Likely two ports, because the two payloads have different access patterns (this
 is an adapter-granularity detail, not a new merge model):
 
-- **`SharedCurationStore`** — small, mutable, human-authored class-B records:
+- **`SharedCurationStore`** - small, mutable, human-authored class-B records:
   roughly `Publish(records)` / `Pull(since cursor)`.
-- **`SharedArtifactStore`** — content-addressed, immutable, bulk artifacts
+- **`SharedArtifactStore`** - content-addressed, immutable, bulk artifacts
   (embeddings + other expensive derived output): `Put(hash, blob)` /
   `Get(hash)`; semantics are a pure key→blob union.
 
-Candidate adapters — git-tracked export, a shared directory, an object store, a
-peer daemon, or Dolt — all satisfy these. Ship the simplest first; swap with no
+Candidate adapters - git-tracked export, a shared directory, an object store, a
+peer daemon, or Dolt - all satisfy these. Ship the simplest first; swap with no
 redesign.
 
 ### 2. Merge correctness lives in the records, not the transport
 
-This is where the "idempotency + version fields" instinct belongs — as a
+This is where the "idempotency + version fields" instinct belongs - as a
 property of the **domain record**, so that *any* adapter that exchanges record
 sets merges correctly:
 
-- **Idempotency key** — a content-derived id, so two contributors making the
+- **Idempotency key** - a content-derived id, so two contributors making the
   same decision produce the *same* record → union dedups it.
-- **Version** — a logical clock (Lamport-style counter, not wall-clock) on
+- **Version** - a logical clock (Lamport-style counter, not wall-clock) on
   mutable records, so concurrent edits resolve by a **deterministic fold**:
   last-writer-wins on `(version, actor)`, with prior versions preserved as
   attributed history. (Accepts LWW's lost-update on a genuinely concurrent
   same-field edit; the loser survives in history. Sufficient for a few
-  contributors; richer CRDTs are not warranted — relates to [[ADR-0020]].)
-- **Actor** — attribution + the LWW tiebreak.
+  contributors; richer CRDTs are not warranted - relates to [[ADR-0020]].)
+- **Actor** - attribution + the LWW tiebreak.
 
-Because correctness is in the data, the transport stops being the hard problem —
+Because correctness is in the data, the transport stops being the hard problem -
 which is *why* we can defer it.
 
 ### 3. Two record families, one merge model
@@ -94,7 +94,7 @@ plus **consume-don't-recompute** (if the shared store already has the hash,
 pull it rather than re-running the model) preserves the content-addressed
 invariant across non-bit-deterministic hardware.
 
-### 4. Share-vs-regenerate is set by production cost — and measured, not guessed
+### 4. Share-vs-regenerate is set by production cost - and measured, not guessed
 
 [[ADR-S0018]] §4 established the axis; this sharpens the rule:
 
@@ -109,14 +109,14 @@ per-deployment toggle behind `SharedArtifactStore`, and the boundary is set by
 **measurement**:
 
 - **Empirical gate (`solov2`-tracked):** on real large libraries, measure the
-  delta — local regeneration cost (cold-scan + embed + summarise + review) vs.
+  delta - local regeneration cost (cold-scan + embed + summarise + review) vs.
   the size/sync cost of carrying each artifact in the shared store. Place the
   share/regenerate line per artifact from data, not assumption.
 
-### 5. Consumption strategy — federate vs. hydrate (the local SQLite graph never accrues remote data)
+### 5. Consumption strategy - federate vs. hydrate (the local SQLite graph never accrues remote data)
 
 How a consumer *reads* the shared store differs by family, and **neither merges
-remote data into the local SQLite graph store** — the graph store stays purely
+remote data into the local SQLite graph store** - the graph store stays purely
 local (regenerated from source), which is the invariant that keeps `dchd`'s
 single-user behaviour intact while sharing is on. The ports support both
 strategies; the choice is per-family, not a transport concern:
@@ -130,7 +130,7 @@ strategies; the choice is per-family, not a transport concern:
 - **Embeddings → hydrate into the local vector backend.** Semantic search scans
   an **in-memory** vector index (`memvec` brute-force / `usearch` HNSW via
   `UpsertEmbeddings`+`Search`); it never reads vectors from a store per query.
-  So shared vectors cannot be federated read-through — they must be **pulled
+  So shared vectors cannot be federated read-through - they must be **pulled
   into the local vector backend** to be searchable. This is a cache/hydrate of
   the *vector backend*, which is **separate from the SQLite graph store**, so
   the "no remote data in the graph store" invariant still holds.
@@ -148,11 +148,11 @@ re-embedding for a given embedder.
   gate. Candidates above; a networked/canonical adapter would reopen
   [[ADR-S0009]] and gets its own ADR.
 - **Class-B conflict UX** beyond deterministic LWW (e.g. surfacing a contested
-  triage to a human) — extends [[ADR-0020]].
+  triage to a human) - extends [[ADR-0020]].
 
 ## Consequences
 
-- The contested Dolt-vs-git decision is **removed from the critical path** — it
+- The contested Dolt-vs-git decision is **removed from the critical path** - it
   is now an adapter choice, deferrable and reversible.
 - The merge policy is engine-independent and testable in isolation (fold over
   records), with no transport stood up.

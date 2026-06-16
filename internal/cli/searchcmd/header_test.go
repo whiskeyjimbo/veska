@@ -6,7 +6,7 @@ import (
 	"testing"
 )
 
-// solov2-izh6.15: the user-facing 'searching:' header must make the
+// the user-facing 'searching:' header must make the
 // repo scope visible above the results so a cwd-scoped query doesn't
 // silently drop other registered repos.
 

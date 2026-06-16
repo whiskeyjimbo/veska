@@ -21,7 +21,7 @@ func resolveVersion(info *debug.BuildInfo) string {
 }
 
 // shortVersion returns just the module version string for use with cobra's
-// --version flag template .
+// version flag template.
 func shortVersion() string {
 	info, ok := debug.ReadBuildInfo()
 	if !ok {

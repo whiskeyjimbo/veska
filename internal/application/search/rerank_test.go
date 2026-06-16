@@ -5,9 +5,8 @@ import (
 	"testing"
 )
 
-// --- splitIdentifier --------------------------------------------------------
-//
-// The stems-aware matcher (solov2-2sf signal "b") needs to take an
+// splitIdentifier
+// The stems-aware matcher ( signal "b") needs to take an
 // identifier and produce its lowercased subwords. Pinning the
 // tokenisation independently from the rerank logic keeps the boundary
 // rules explicit: camelCase, PascalCase, snake_case, dotted symbol
@@ -48,7 +47,7 @@ func TestSplitIdentifier_AcronymRun(t *testing.T) {
 	}
 }
 
-// --- definitionBoost --------------------------------------------------------
+// definitionBoost
 
 // TestRerank_DefinitionBoost_ExactTrailingMatch: an exact match on the
 // trailing identifier of SymbolPath for a definitional Kind should
@@ -68,7 +67,7 @@ func TestRerank_DefinitionBoost_ExactTrailingMatch(t *testing.T) {
 	}
 }
 
-// --- identifierStems --------------------------------------------------------
+// identifierStems
 
 // TestRerank_IdentifierStems_CamelMatch: "parse config" should boost
 // both ParseConfig and configParser even though neither contains the
@@ -100,7 +99,7 @@ func TestRerank_IdentifierStems_NoPartialWordMatch(t *testing.T) {
 	}
 }
 
-// TestRerank_VerbSynonym_RegisterMatchesAdd guards solov2-izh6.26: the
+// TestRerank_VerbSynonym_RegisterMatchesAdd guards: the
 // junior-journey query "register subcommand" must surface
 // Command.AddCommand above larger methods like Command.ExecuteC that
 // merely *mention* subcommand handling. The lexical/embedding pipeline
@@ -161,7 +160,7 @@ func TestRerank_VerbSynonym_NoFalsePositive(t *testing.T) {
 	}
 }
 
-// --- fileCoherence ----------------------------------------------------------
+// fileCoherence
 
 // TestRerank_FileCoherence_LiftsClusteredMatches: when multiple
 // candidates come from the same file, all candidates in that file get
@@ -182,7 +181,7 @@ func TestRerank_FileCoherence_LiftsClusteredMatches(t *testing.T) {
 	}
 }
 
-// --- noisePenalty -----------------------------------------------------------
+// noisePenalty
 
 // TestRerank_NoisePenalty_TestFileDemotedBelowProdCode: when a query
 // matches a name in both a *_test.go file and a real source file,
@@ -221,7 +220,7 @@ func TestRerank_NoisePenalty_PathPatterns(t *testing.T) {
 	}
 }
 
-// --- integration: rerank composition ----------------------------------------
+// integration: rerank composition
 
 // TestRerank_EmptyQueryIsNoop replaces the prior boost_test empty-query
 // case: the rerank pipeline as a whole must be a no-op on empty input.

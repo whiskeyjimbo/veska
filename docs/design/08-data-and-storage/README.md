@@ -1,6 +1,6 @@
 ---
 id: SOLO-08
-title: "Data & Storage — SQLite Substrate"
+title: "Data & Storage - SQLite Substrate"
 status: draft
 version: 0.1.0
 last_reviewed: 2026-05-08
@@ -9,14 +9,14 @@ verified: true
 verified_date: "2026-06-01"
 ---
 
-# SOLO-08 — Data & Storage
+# SOLO-08 - Data & Storage
 
 ## 1. The decision
 
 Veska Solo stores everything in **one SQLite file** at
 `~/.veska/veska.db`. The raw embedding bytes live in the same
 file (the `node_embeddings` table); the vector **search index**
-is held outside SQL — in process memory for the default backend,
+is held outside SQL - in process memory for the default backend,
 or in sibling `.hnsw` files for the optional usearch backend
 (§1.1, §3.3). There are no child processes for
 storage. There is no Dolt. There are no Dolt branches mirroring
@@ -28,7 +28,7 @@ Justification, alternatives, and the open question (whether SQLite
 holds at 1M nodes / 5M edges on a laptop) are in
 [ADR-S0001](../adr/ADR-S0001-sqlite-substrate.md).
 
-### 1.1 Vector backends — no runtime extension
+### 1.1 Vector backends - no runtime extension
 
 The vector **search index** is not a SQLite extension and is not
 a `vec0`/`vec_nodes` virtual table. There is no `vec0.so` /
@@ -45,13 +45,13 @@ loaded into SQLite at runtime. Two backends, picked at startup
   the persisted `node_embeddings` bytes. Adequate below
   `memvec.YellowThreshold` (75k) nodes. This is the backend that
   the abandoned asg017/sqlite-vec extension spike was *replaced
-  by* — the "sqlite-vec" name was a misnomer corrected in
+  by* - the "sqlite-vec" name was a misnomer corrected in
   ADR-S0016; the store never loaded an extension.
 - **`usearch` (optional, scale backend).** HNSW with float16
   quantisation, compiled behind the `hnsw_native` build tag and
   requiring `libusearch_c.so` on the loader path at runtime. Its
   index persists to sibling `vec-{repoID}-{branch}-{modelID}.hnsw`
-  files plus a Go-side metadata sidecar — **not** inside
+  files plus a Go-side metadata sidecar - **not** inside
   `veska.db`.
 
 The backend is selected by `VESKA_VECTOR_BACKEND`
@@ -71,7 +71,7 @@ notarise.
 `PRAGMA mmap_size = 268435456` (256 MiB; SOLO-08 §5.1) is set on
 **every connection on every pool**. With three pools (`readDB`,
 `writeDB.hot`, `writeDB.embed`) the daemon may map up to **~768
-MiB of address space** for SQLite alone — independent of resident
+MiB of address space** for SQLite alone - independent of resident
 working set, which the OS pages in on demand.
 
 On a 16 GiB laptop running editor + browser + simulator + Slack
@@ -97,7 +97,7 @@ override per-pool via the `[storage]` config (CONFIG-SURFACE).
 ```
 
 That is the entire on-disk footprint. Reset is `rm -rf
-~/.veska/`. Backup is **not** `tar` of the live tree — see §9
+~/.veska/`. Backup is **not** `tar` of the live tree - see §9
 for the mechanism. Restore is documented there.
 
 ## 3. Schema
@@ -199,7 +199,7 @@ CREATE INDEX idx_edges_repo_branch ON edges(repo_id, branch);
 -- unresolved cross-repo target by (module_path, symbol_path,
 -- language). The resolver chain (SOLO-11 §9) reads stubs at
 -- query time and projects them into the MCP response as
--- synthetic edges. There is no FK to a target node — by
+-- synthetic edges. There is no FK to a target node - by
 -- definition the target is not in this repo's `nodes`.
 CREATE TABLE cross_repo_edge_stubs (
     stub_id        TEXT NOT NULL,        -- stable hash (src, kind, module_path, symbol_path, language)
@@ -282,9 +282,9 @@ CREATE INDEX idx_suppressions_target ON suppressions(target, branch);
 
 ### 3.3 Embeddings
 
-> **Amendment (vec pivot — dual-backend, 2026-05-14; backend
+> **Amendment (vec pivot - dual-backend, 2026-05-14; backend
 > rename 2026-06-01).** The ANN index is **not** a SQL table.
-> `veska.db` stores only the raw embedding bytes — the
+> `veska.db` stores only the raw embedding bytes - the
 > `node_embeddings` / `node_embedding_refs` tables below, which
 > are backend-agnostic. The search index lives outside SQL and
 > differs by backend:
@@ -298,13 +298,13 @@ CREATE INDEX idx_suppressions_target ON suppressions(target, branch);
 >   `hnsw_native` build tag, requiring `libusearch_c.so` at
 >   runtime. Its index persists to sibling
 >   `vec-{repoID}-{branch}-{modelID}.hnsw` files plus a Go-side
->   metadata sidecar — **not** in `veska.db`.
+>   metadata sidecar - **not** in `veska.db`.
 >
 > The decision is [ADR-S0014](../adr/ADR-S0014-hnsw-pivot.md)
 > (the pivot), [ADR-S0015](../adr/ADR-S0015-vec-pivot-dual-backend.md)
 > (the dual-backend implementation), and
 > [ADR-S0016](../adr/ADR-S0016-memvec-rename.md) (the backend
-> rename — the default backend was never a sqlite-vec extension;
+> rename - the default backend was never a sqlite-vec extension;
 > the old `sqlite-vec` name/`vec0` framing was a misnomer).
 > OQ-S003 (§8) is resolved by these ADRs.
 
@@ -342,7 +342,7 @@ CREATE INDEX idx_node_embedding_refs_state ON node_embedding_refs(state, enqueue
 -- .hnsw files for the optional `usearch` backend. The embedding
 -- dim is per-database (nomic-embed-text → 768) and is carried
 -- per-row on `node_embeddings.dim` (migration 0004). The planned
--- `database_meta.embedder_dim` mirror is NOT YET IMPLEMENTED —
+-- `database_meta.embedder_dim` mirror is NOT YET IMPLEMENTED -
 -- nothing writes it (SOLO-03 §3.2).
 
 -- Lexical fallback (m3.03.2). Migration 0007 supersedes the original
@@ -375,7 +375,7 @@ to vector recall and is surfaced to callers via `degraded_reasons:
 ["embedder_offline_lexical_fallback"]` (SOLO-09 §4.5) so an
 agent does not silently switch reasoning modes.
 
-**Amendment (m3.03.2 — 2026-05-14)**: The original §3.3 design
+**Amendment (m3.03.2 - 2026-05-14)**: The original §3.3 design
 specified a single `node_fts` table tokenised by `unicode61`,
 ranked by FTS5's default BM25. The implementation supersedes
 that with two FTS5 virtual tables fused at query time. The
@@ -466,7 +466,7 @@ CREATE TABLE daemon_state (
 -- writeDB.hot before any other goroutine starts. SQLite handles
 -- atomicity; no flock dance. Recovery if veska.db itself is
 -- corrupt: the daemon refuses to start at the migration runner
--- (SOLO-08 §10) and the breaker is moot — there's no daemon to
+-- (SOLO-08 §10) and the breaker is moot - there's no daemon to
 -- restart-loop.
 ```
 
@@ -501,7 +501,7 @@ is no 24h auto-acknowledge sweeper. Failure handling is per-
 
 - `embed`: row stays `failed`. Reads against affected nodes
   surface `degraded_reasons:["embedding_failed"]` (distinct from
-  `embedding_pending` — the work is not in flight, it has given
+  `embedding_pending` - the work is not in flight, it has given
   up). The user retries via `veska doctor post-promotion-queue retry --kind=embed [--seq=N]`,
   which moves matching `failed` rows back to `pending` and
   resets `attempts` to 0. There is no automatic retry; a model
@@ -515,7 +515,7 @@ is no 24h auto-acknowledge sweeper. Failure handling is per-
   sweep (SOLO-11 §6) picks up open findings on its own cadence,
   so a missed post-promotion queue row does not silently lose state. The
   failed row is for diagnosis.
-- `review`: **sticky** with a finding — a `Finding` is emitted
+- `review`: **sticky** with a finding - a `Finding` is emitted
   (`rule='review-pipeline-failure'`, `severity='high'`); the
   post-promotion queue row stays `failed` until the finding closes through the
   human-action gate. Closing the finding flips the row to `done`.
@@ -533,7 +533,7 @@ transaction:
 1. Inserts the row with `state = 'deferred'` instead of
    `'pending'` for `work_kind` rows that are not on the
    user-blocking path. `embed` is the only deferrable kind today;
-   `auto_link`, `revalidate`, and `review` are not deferred —
+   `auto_link`, `revalidate`, and `review` are not deferred -
    they queue normally and the user-blocking path is the promotion
    itself, which proceeds.
 2. Emits `degraded_reasons: ["post_promotion_queue_deferred:embed:<count>"]`
@@ -544,7 +544,7 @@ Deferred rows transition to `pending` as soon as queue depth
 drops below `low_water`; the embed worker picks them up on its
 normal cadence. **Promotion never blocks on post-promotion queue depth.** This
 removes the prior deadlock where embedder pause (RSS pressure)
-plus high-water would deadlock the promotion — the user's commit is
+plus high-water would deadlock the promotion - the user's commit is
 durable; embedding is async best-effort.
 
 Nothing is silently dropped: `deferred` is a real state, visible
@@ -565,7 +565,7 @@ oldest row's age exceeds `post_promotion_queue.deferred_age_threshold`
 (default `24h`, CONFIG-SURFACE). The finding clears
 automatically when the deferred queue empties; it is not
 human-action-gated. This is the same pattern as
-`review-pipeline-failure` (SOLO-11 §2.2) — a sticky finding
+`review-pipeline-failure` (SOLO-11 §2.2) - a sticky finding
 gives an editor surface for a condition that the
 `degraded_reasons` line alone makes too easy to ignore. The
 finding's payload carries the deferred-row count and the
@@ -577,7 +577,7 @@ and lists the seq IDs of any `failed` row aged past its policy.
 
 ### 3.5 Audit log shape
 
-`audit.jsonl` is **not** a table — it's an append-only file. The
+`audit.jsonl` is **not** a table - it's an append-only file. The
 **writer rule** (when the daemon appends a line) lives in SOLO-10
 §4. This section is the **wire shape and stability contract**.
 One JSON object per line.
@@ -598,7 +598,7 @@ One JSON object per line.
 
 | Field | Set when |
 |---|---|
-| `resolver` | Tool's answer materialised cross-repo synthetic edges (SOLO-04 §5.4, SOLO-11 §9). Records the resolved outputs, not the inputs — see §3.5.1. |
+| `resolver` | Tool's answer materialised cross-repo synthetic edges (SOLO-04 §5.4, SOLO-11 §9). Records the resolved outputs, not the inputs - see §3.5.1. |
 
 #### 3.5.1 Resolver record (cross-repo reads)
 
@@ -713,16 +713,16 @@ spike would force the team to invent the alternate storage
 shape under M1 deadline pressure.
 
 Branch GC runs at daemon start (after resync) and after every
-wake-reconcile sweep (SOLO-03 §5.2) — never on a wall-clock cron,
+wake-reconcile sweep (SOLO-03 §5.2) - never on a wall-clock cron,
 because laptops sleep through wall clocks. `veska gc --branches`
 is the manual handle for the same routine. It sweeps rows whose
 `branch` value no longer appears in `git branch -a`. Default
 retention: 7 days post-deletion. With branch-in-PK this sweep is
-load-bearing — it is the primary defence against unbounded growth.
+load-bearing - it is the primary defence against unbounded growth.
 
 ### 4.1 Findings and the branch question
 
-`findings` PK is `(finding_id, branch)` — see §3.2. The decision
+`findings` PK is `(finding_id, branch)` - see §3.2. The decision
 mirrors `nodes` / `edges`: per-branch state is required to
 correctly represent findings whose rule premise is per-branch
 (dead-code, contract-drift, anything anchored to per-branch
@@ -741,7 +741,7 @@ referencing `finding_id` matches all per-branch rows by default
 matches one branch.
 
 The cost question (per-branch row growth) is part of OQ-S006's
-M0 measurement — the same audit that covers nodes/edges row
+M0 measurement - the same audit that covers nodes/edges row
 growth, re-verified on real-repo data at M1 close.
 
 ## 5. The promotion transaction
@@ -759,7 +759,7 @@ BEGIN IMMEDIATE;
 COMMIT;
 ```
 
-All hot-path writes — the promotion transaction and MCP write tools —
+All hot-path writes - the promotion transaction and MCP write tools -
 go through the **`writeDB.hot`** pool (SOLO-11 §10, ADR-S0011),
 which is a `*sql.DB` opened with `MaxOpenConns=1`. The pool is
 the queue; SQLite's writer lock arbitrates against the embed
@@ -808,7 +808,7 @@ update. Git's `core.fsync` defaults vary by version and distro;
 on a real power-cut both Veska's promotion and Git's HEAD
 advance can be lost independently, after which
 `last_promoted_sha == HEAD` looks consistent and resync sees
-nothing to do — but the user's commit work is gone. Honest
+nothing to do - but the user's commit work is gone. Honest
 durability everywhere is worth the budget hit. SOLO-13 §3.1's
 macOS row carries the cost.
 
@@ -820,7 +820,7 @@ defaults are FULL. We do not offer `OFF`.
 OQ-S002 (M1) measures actual fsync cost on the reference laptop
 to confirm the budget rows stay green under refactor load.
 
-The startup resync (SOLO-03 §5.7) still runs unconditionally —
+The startup resync (SOLO-03 §5.7) still runs unconditionally -
 the daemon may be down across user-side commits, in which case
 `last_promoted_sha < HEAD` is normal and the replay catches up.
 
@@ -833,7 +833,7 @@ the daemon may be down across user-side commits, in which case
 | `last_promoted_sha` not reachable from `HEAD` (force-push, history rewrite) | Startup resync logs `ErrPromotionDivergent`, falls back to a fresh full reparse for the active branch, and records the new `HEAD` as `last_promoted_sha`. Findings on the orphaned branch persist until `veska gc --branches` sweeps them. (SOLO-03 §5.7.) |
 | SQLite database locked by an external writer (e.g. user `sqlite3` shell) | `BEGIN IMMEDIATE` blocks until `busy_timeout` expires (5s hot, 30s embed); the in-flight op then fails. User can `veska promote --retry` after closing the external connection. In-process pools do not contend with each other beyond SQLite's own lock arbitration (SOLO-11 §10, ADR-S0011). |
 | Embedding goroutine crashes | Daemon supervisor restarts it; pending refs stay `pending`; semantic search returns `degraded_reasons: ['embedding_pending']`. |
-| Disk full | Promotion fails; hook returns non-zero; daemon refuses new MCP writes until `veska doctor disk` reports OK. The daemon also (a) checkpoints WAL aggressively (`PRAGMA wal_checkpoint(TRUNCATE)`) to release any pending pages, (b) rotates `audit.jsonl` and the daemon log to their retained-set sizes, and (c) refuses to write new pre-migration auto-snapshots until pressure clears (an old pre-migration snapshot is preserved; a new one would have nowhere to land). Backups are not auto-pruned — the user owns retention there (§9.5). |
+| Disk full | Promotion fails; hook returns non-zero; daemon refuses new MCP writes until `veska doctor disk` reports OK. The daemon also (a) checkpoints WAL aggressively (`PRAGMA wal_checkpoint(TRUNCATE)`) to release any pending pages, (b) rotates `audit.jsonl` and the daemon log to their retained-set sizes, and (c) refuses to write new pre-migration auto-snapshots until pressure clears (an old pre-migration snapshot is preserved; a new one would have nowhere to land). Backups are not auto-pruned - the user owns retention there (§9.5). |
 | WAL grows unboundedly | Daemon checkpoints WAL on idle (no writes for 5s). `PRAGMA wal_autocheckpoint = 1000` (pages). |
 | `usearch` backend selected but native library missing | Only when `VESKA_VECTOR_BACKEND=usearch` and the binary lacks the `hnsw_native` tag / `libusearch_c.so` is absent: `NewVectorStorage` returns `vector.ErrVectorStoreUnavailable` and the daemon fails to start (SOLO-03 §5.8). The default `memory` backend has no native dependency and never hits this path. |
 
@@ -850,7 +850,7 @@ symbol_path)` against other indexed repos using
 (`cross_repo: true, target_repo_id: ..., target_branch: ...`).
 
 The one stored thing is the **`CrossRepoStub`** (SOLO-04
-§5.2.1) — a value object, **not an `Edge`** — held in the
+§5.2.1) - a value object, **not an `Edge`** - held in the
 sibling `cross_repo_edge_stubs` table defined in §3.1. A stub
 is written at source-side promotion when a parser produces a
 cross-repo reference whose target repo is not yet indexed (or
@@ -870,14 +870,14 @@ state *as captured at query start* (SOLO-04 §5.4 invariant 2).
 The per-query `as_of: [{repo_id, branch, promoted_sha}, ...]`
 envelope makes this auditable. If query-time resolution misses
 its budget (SOLO-13 §3.4), the fallback is a query-time
-materialisation cache invalidated on target-repo promotion — not a
+materialisation cache invalidated on target-repo promotion - not a
 promotion of stubs into `edges`. The `Edge` aggregate stays
 pure; cross-repo bookkeeping stays out of it.
 
 ## 7. What this design does NOT include
 
 - **Embedder migration ceremony.** The *planned* design is one CLI
-  subcommand against a live daemon (`veska embedder swap`) — no
+  subcommand against a live daemon (`veska embedder swap`) - no
   five-phase FSM, no per-row migration cursor, no dual-index window
   (SOLO-03 §3.2, ADR-S0007). NOT YET IMPLEMENTED: there is no swap
   command today, so changing models means a manual reindex.
@@ -887,7 +887,7 @@ pure; cross-repo bookkeeping stays out of it.
 - **Snapshot reads.** SQLite WAL gives readers a consistent view
   for the duration of a transaction; that is the only "snapshot"
   we offer. No `Graph.Snapshot()` API.
-- **Reachability sweeps comparing Dolt vs. Git.** N/A — no Dolt.
+- **Reachability sweeps comparing Dolt vs. Git.** N/A - no Dolt.
 
 ## 8. Open questions
 
@@ -897,7 +897,7 @@ pure; cross-repo bookkeeping stays out of it.
   storms (50k symbols/commit, repeated). **Resolution:** M1 spike.
 - **OQ-S003:** Does `vec0`'s Hamming/cosine ANN remain accurate
   enough for code-search recall at 1M-node scale? Or do we need
-  HNSW via lancedb at that point? **Resolution: mandatory M1 work before m1.03.** M0 measured vec0 ceiling at 100k nodes (below the 250k minimum). The HNSW pivot ADR is not optional — it must be written and accepted before m1.03 begins. See ADR-S0001 §M0 Measurement.
+  HNSW via lancedb at that point? **Resolution: mandatory M1 work before m1.03.** M0 measured vec0 ceiling at 100k nodes (below the 250k minimum). The HNSW pivot ADR is not optional - it must be written and accepted before m1.03 begins. See ADR-S0001 §M0 Measurement.
 - **OQ-S006:** Branch-in-PK row growth and GC cost at 50-branch scale.
   **Resolved (M0).** Spike commit `72d6ca4` (28 branches × 100k symbols, 10% dirty overlap):
   node p95 = 0.039 ms (PASS ≤ 25 ms); edges p95 = 0.047 ms (PASS ≤ 100 ms);
@@ -945,7 +945,7 @@ Properties that matter:
   the promotion transaction proceed concurrently. The snapshot reads
   a consistent point-in-time view; subsequent writes don't touch
   the destination file.
-- Produces **one file** — no `-wal` / `-shm` siblings — that
+- Produces **one file** - no `-wal` / `-shm` siblings - that
   passes `PRAGMA integrity_check` by construction.
 - The destination file is smaller than the source (`VACUUM`
   defragments the page layout while it copies).
@@ -953,7 +953,7 @@ Properties that matter:
   daemon does not need to be quiesced.
 
 **Mechanically:** `VACUUM INTO` is a random-read on the source
-pages plus a sequential write to the destination — not a single
+pages plus a sequential write to the destination - not a single
 sequential I/O pass. `veska doctor backup` surfaces the age of
 the last successful backup so the user can see drift; we do not
 guarantee a daily cadence on laptops that suspend or are powered
@@ -986,7 +986,7 @@ Steps:
 6. Remove the staging dir.
 
 The `cli.sock`, `mcp.sock`, and `daemon.pid` are **not** backed
-up — they are runtime sentinels recreated at start. `models/`
+up - they are runtime sentinels recreated at start. `models/`
 is **not** backed up either; the embedder fetches them on demand.
 
 ### 9.3 `veska backup verify`
@@ -1016,18 +1016,18 @@ verification result.
 veska backup restore <backup.tgz>
 ```
 
-`veska backup restore` is a first-class command — typing the
+`veska backup restore` is a first-class command - typing the
 underlying steps by hand into `~/.veska/` is the kind of
 operation that ends with "I restored over my live db." The
 command:
 
 1. Refuses to run while the daemon is up. Stderr names
    `veska daemon stop` as the prerequisite. (No automatic
-   stop — restore is destructive enough that we want the user
+   stop - restore is destructive enough that we want the user
    to take that step deliberately.)
 2. Verifies the tarball with the same checks as
-   `veska backup verify` (§9.3) — integrity, foreign keys,
-   audit JSONL well-formedness — *before* touching `~/.veska/`.
+   `veska backup verify` (§9.3) - integrity, foreign keys,
+   audit JSONL well-formedness - *before* touching `~/.veska/`.
    A failed verification leaves the existing data untouched.
 3. Renames the existing `veska.db`, `veska.db-wal`,
    `veska.db-shm`, `audit.jsonl`, and `cache/` to a sibling
@@ -1039,7 +1039,7 @@ command:
    noting the restore is appended last
    (`tool: "service:backup-restore", args: {tarball: "...",
    backup_ts: "...", merged_post_backup_lines: <n>}`). This
-   preserves the agent-attribution chain across restore — losing
+   preserves the agent-attribution chain across restore - losing
    it silently would be a compliance footgun.
 6. Prints the path of the `.replaced-<ts>/` directory and the
    command to delete it once the user has confirmed the restore
@@ -1070,7 +1070,7 @@ automatically.
   default until the cadence story is validated;
   `[backup].auto_retain = 7`). When enabled, the daemon attempts
   `veska backup create` at the first observed idle window after
-  local midnight — but a laptop that is suspended, off, or
+  local midnight - but a laptop that is suspended, off, or
   continuously busy at midnight will simply skip days. The doc
   does not promise a guaranteed daily cadence on developer
   laptops; `veska doctor backup` reports last-successful-backup
@@ -1132,7 +1132,7 @@ The `migration_sha` is recorded so the daemon can detect
 the binary differs from the recorded sha for the same version,
 the daemon refuses to start. This catches "I edited an old
 migration file in source; production has the unedited version
-applied" — a class of footgun that costs days when it lands.
+applied" - a class of footgun that costs days when it lands.
 
 **Sha-calculation rule.** `migration_sha` is the SHA-256 of the
 migration's **SQL text only**, byte-for-byte, with line endings
@@ -1171,7 +1171,7 @@ runner hashes it at apply time.
   §10's step 2), prints which version was rolled back to, and
   prints the binary version that pairs with that schema so the
   user can downgrade. The user runs `brew downgrade veska` (or
-  the equivalent) and restarts. **This is not auto-restore** —
+  the equivalent) and restarts. **This is not auto-restore** -
   auto-restore on a failing migration would mask migration bugs;
   the user issues the explicit restore once they have read the
   failure message.
@@ -1184,7 +1184,7 @@ runner hashes it at apply time.
 - **Out-of-band migration.** `veska migrate` as a CLI surface
   does not exist. Migrations are triggered by daemon start.
   Manual SQL against `veska.db` while the daemon is stopped is
-  supported but unsupported (see SOLO-11 §10.4 "What this design does NOT include" — the user is on
+  supported but unsupported (see SOLO-11 §10.4 "What this design does NOT include" - the user is on
   their own).
 
 ### 10.4 The auto-snapshot retention policy
@@ -1196,6 +1196,6 @@ last 5; delete older. Configurable via `[backup].pre_migration_keep`
 separately from user-initiated backups so the user knows which
 were tool-created and prunable.
 
-If the user cares about an older pre-migration snapshot — perhaps
-to attempt a downgrade two upgrades back — they `mv` it out of the
+If the user cares about an older pre-migration snapshot - perhaps
+to attempt a downgrade two upgrades back - they `mv` it out of the
 auto-managed directory.

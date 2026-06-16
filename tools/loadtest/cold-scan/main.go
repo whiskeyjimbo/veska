@@ -4,10 +4,9 @@
 // using GoParser. It generates 1000 synthetic Go source files (~100 LOC each),
 // parses each with GoParser.ParseFile, records per-file latency, and writes
 // RESULTS.md. Exits non-zero if total elapsed > 60s.
-//
 // Usage:
 //
-//	go build -tags cold_scan -o /tmp/cold-scan ./tools/loadtest/cold-scan/
+//	go build -tags cold_scan -o /tmp/cold-scan./tools/loadtest/cold-scan/
 //	/tmp/cold-scan
 package main
 

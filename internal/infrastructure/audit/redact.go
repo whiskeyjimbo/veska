@@ -15,7 +15,7 @@ const redacted = "[REDACTED]"
 // for concurrent use from multiple goroutines without any locking.
 var (
 	// reAPIKey matches common API key prefixes followed by non-whitespace characters.
-	// Groups: sk-..., ghp_..., xoxb-...
+	// Groups: sk-., ghp_., xoxb-.
 	reAPIKey = regexp.MustCompile(`(?:sk-|ghp_|xoxb-)[\w\-]+`)
 
 	// reBearer matches a Bearer token in an Authorization header or similar context.
@@ -23,9 +23,9 @@ var (
 	reBearer = regexp.MustCompile(`(Bearer )\S+`)
 
 	// reURLPassword matches the password portion of a URL with userinfo (user:pass@host).
-	// The full userinfo ://user:password@host is captured so we can replace only the
-	// password.  We match ://[^/\s]+@ greedily (consuming the entire userinfo including
-	// any @ inside the password), then split on the first colon after ://.
+	// The full userinfo://user:password@host is captured so we can replace only the
+	// password. We match://[^/\s]+@ greedily (consuming the entire userinfo including
+	// any @ inside the password), then split on the first colon after://.
 	reURLPassword = regexp.MustCompile(`(://[^:/\s]+:)[^/\s]+(@)`)
 
 	// reEnvSecret matches environment-variable-style assignments whose names contain

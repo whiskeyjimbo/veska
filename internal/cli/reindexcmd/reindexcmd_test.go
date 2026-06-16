@@ -26,7 +26,7 @@ func spyReparserFactory(calls *atomic.Int32) func(*sqlite.Pools, application.Ign
 	}
 }
 
-// notCalledMatchByPath fails the test if the cwd→repo matcher is consulted —
+// notCalledMatchByPath fails the test if the cwd→repo matcher is consulted
 // the daemon-up dispatch path must not touch the local DB.
 func notCalledMatchByPath(t *testing.T) func(context.Context, *sql.DB, string) (repo.Record, error) {
 	return func(context.Context, *sql.DB, string) (repo.Record, error) {
@@ -48,7 +48,7 @@ func chdir(t *testing.T, dir string) {
 	t.Cleanup(func() { _ = os.Chdir(prev) })
 }
 
-// TestRun_DispatchesViaMCPWhenDaemonUp pins solov2-4d7b: when the daemon is
+// TestRun_DispatchesViaMCPWhenDaemonUp pins: when the daemon is
 // reachable, Run dispatches via DialReindex and never falls through to the
 // direct sqlite path (which would race the daemon for the write lock). A
 // cwd-invocation (empty Target) must send rootPath=cwd and repoID="".
@@ -123,7 +123,7 @@ func TestRun_DispatchesViaMCPWithRepoIDArg(t *testing.T) {
 
 // TestRun_NoStopItFirstError pins the regression: with the daemon up, Run must
 // NOT emit the legacy "stop it first" error message anywhere in its output
-// (AC1 of solov2-4d7b).
+// (AC1 of ).
 func TestRun_NoStopItFirstError(t *testing.T) {
 	chdir(t, t.TempDir())
 
@@ -145,7 +145,7 @@ func TestRun_NoStopItFirstError(t *testing.T) {
 }
 
 // TestMergeTarget covers the positional/flag merge rule used by reindexCmd.
-// The DoD for solov2-izh6.18 is that --repo behaves as an alias for the
+// The DoD for is that --repo behaves as an alias for the
 // positional arg and the positional wins on conflict.
 func TestMergeTarget(t *testing.T) {
 	t.Parallel()

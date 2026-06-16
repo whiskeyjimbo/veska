@@ -37,7 +37,6 @@ func ruleForKind(kind ReviewKind) (string, error) {
 // toDomainFinding converts one parsed ReviewFinding into a validated
 // domain.Finding anchored on the reviewed file. The finding carries
 // source_layer='semantic' and actor_kind='system'.
-//
 // Unlike a pipeline-failure finding (one per commit), a single file can yield
 // several review findings under the same rule, so the finding's Title is
 // passed as the WithFindingKey discriminator: domain.NewFinding folds it into

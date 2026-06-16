@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# fetch-corpora.sh — shallow-clone the external Go repos listed in
+# fetch-corpora.sh - shallow-clone the external Go repos listed in
 # fixtures/repos.manifest into out/repos/<name>/, sha-pinned via the
 # manifest's tag-or-sha column. Idempotent: skips repos already at the
 # correct ref. (solov2-0k5h.2)
@@ -31,7 +31,7 @@ while IFS=$'\t' read -r name url ref; do
     if [[ -d "${dir}/.git" ]]; then
         current="$(git -C "${dir}" describe --tags --always 2>/dev/null || echo "")"
         if [[ "${current}" == "${ref}" ]]; then
-            echo "fetch-corpora: ${name} already at ${ref} — skip"
+            echo "fetch-corpora: ${name} already at ${ref} - skip"
             continue
         fi
         echo "fetch-corpora: ${name} at ${current}, re-fetching ${ref}"

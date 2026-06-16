@@ -14,7 +14,6 @@ import (
 // to discover findings whose recorded anchor_content_hash no longer matches
 // the current node's content_hash, and writes a state='closed' update with
 // closed_reason='revalidated_obsolete'.
-//
 // The repo is intentionally write-narrow: only the closed_* / state / actor
 // columns are touched. The original creator (actor metadata at emission
 // time) is preserved on the row's history via closed_by columns owned by
@@ -27,7 +26,7 @@ type RevalidateRepo struct {
 // NewRevalidateRepo constructs a RevalidateRepo bound to the provided
 // write-capable *sql.DB. The handle must point at a DB that has had
 // migrations 0003 (findings) and 0008 (anchor_content_hash) applied; both
-// are verified by Open().
+// are verified by Open.
 func NewRevalidateRepo(db *sql.DB) *RevalidateRepo {
 	return &RevalidateRepo{db: db}
 }
@@ -35,10 +34,8 @@ func NewRevalidateRepo(db *sql.DB) *RevalidateRepo {
 // StaleFindingsForFile returns the set of open findings on (repoID, branch)
 // whose anchor node lives in filePath AND whose recorded
 // anchor_content_hash differs from the node's current content_hash.
-//
 // Rows with anchor_content_hash IS NULL (file-anchored findings such as
 // parse-failure) are filtered out — there is no hash to compare against.
-//
 // Rows whose anchor node has no matching row in `nodes` (deleted symbol)
 // are filtered out by the INNER JOIN; cleaning those up is a separate
 // path (out of scope for this port).
@@ -96,7 +93,7 @@ WHERE f.repo_id              = ?
 // rule re-runs on. A structural CONTAINS/IMPORTS parent edge is NOT a caller,
 // so the kind filter (UPPER(kind)='CALLS', mirroring deadcode_repo.go) is what
 // keeps revalidation from spuriously closing a still-dead finding just because
-// its file/package contains it (solov2-nmps.9). Uses LIMIT 1 + EXISTS so the
+// its file/package contains it. Uses LIMIT 1 + EXISTS so the
 // query short-circuits at the first matching row; the (dst_node_id, branch,
 // kind) index on edges keeps this constant-time.
 func (r *RevalidateRepo) HasInboundCallEdges(
@@ -121,8 +118,7 @@ SELECT EXISTS (
 
 // HasTestCaller reports whether the named node currently has at least one
 // direct inbound CALLS caller defined in a test-shaped file on (repoID, branch)
-// — the re-run predicate for the untested-symbol rule (solov2-zvh6.8).
-//
+// the re-run predicate for the untested-symbol rule.
 // The test-file vocabulary stays in pathfilter.IsTestFile (one place, shared
 // with the checks), so this reads the distinct caller file paths via the same
 // CALLS-edge join the coverage adapter uses and applies the predicate in Go
@@ -191,16 +187,16 @@ WHERE node_id = ? AND branch = ? AND repo_id = ?`
 // ApplyDecisions applies a batch of refresh + close decisions inside one
 // transaction, collapsing fsyncs from O(decisions) to one per call. See the
 // port doc for full semantics.
-//
 // Implementation notes:
-//   - Empty input: returns nil without opening a tx.
-//   - Both UPDATE statements are prepared once (lazily, only if the batch
-//     contains decisions of that kind) and reused for every row of the
-//     matching kind.
-//   - state='open' gates on both UPDATEs mean idempotent on already-closed
-//     rows (matched=0 is fine).
-//   - On any error (incl. Commit) the tx rolls back; the caller treats this
-//     as a retryable failure and MUST NOT bump success counters.
+//
+//	Empty input: returns nil without opening a tx.
+//	Both UPDATE statements are prepared once (lazily, only if the batch
+//	  contains decisions of that kind) and reused for every row of the
+//	  matching kind.
+//	state='open' gates on both UPDATEs mean idempotent on already-closed
+//	  rows (matched=0 is fine).
+//	On any error (incl. Commit) the tx rolls back; the caller treats this
+//	  as a retryable failure and MUST NOT bump success counters.
 func (r *RevalidateRepo) ApplyDecisions(
 	ctx context.Context, repoID, branch string, decisions []ports.FindingDecision, at int64,
 ) error {

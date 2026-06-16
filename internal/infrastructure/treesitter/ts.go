@@ -12,7 +12,7 @@ import (
 
 // TSParser is a tree-sitter-backed implementation of ports.CodeParser for
 // TypeScript and TSX source files. Each ParseFile call borrows a parser from
-// the per-language pool (tsParserPool / tsxParserPool, solov2-0ung); parsers
+// the per-language pool (tsParserPool / tsxParserPool); parsers
 // are reused across files to amortise the CGO setup cost.
 type TSParser struct{}
 
@@ -21,7 +21,7 @@ func NewTSParser() *TSParser {
 	return &TSParser{}
 }
 
-// SupportedExtensions reports the file extensions TSParser parses (solov2-xde2.7).
+// SupportedExtensions reports the file extensions TSParser parses.
 func (p *TSParser) SupportedExtensions() []string { return []string{".ts", ".tsx"} }
 
 // ParseFile parses TypeScript (.ts) or TSX (.tsx) source and returns the Nodes and
@@ -62,7 +62,7 @@ func (p *TSParser) ParseFile(ctx context.Context, repoID, path string, src []byt
 		result.Failures = append(result.Failures, firstErrorFailure(root))
 	}
 
-	// --- module node (one per file) ---
+	// module node (one per file)
 	base := filepath.Base(path)
 	modName := strings.TrimSuffix(base, filepath.Ext(base))
 	modID := nodeID(repoID, path, domain.KindModule, modName)
@@ -71,14 +71,14 @@ func (p *TSParser) ParseFile(ctx context.Context, repoID, path string, src []byt
 		result.Nodes = append(result.Nodes, modNode)
 	}
 
-	// --- symbol nodes ---
+	// symbol nodes
 	symbolByName := map[string]*domain.Node{}
 	// track class names for method association: className -> node
 	classNames := map[string]bool{}
 
 	extractTSSymbols(root, src, repoID, path, result, symbolByName, classNames)
 
-	// --- CONTAINS edges: module -> each symbol ---
+	// CONTAINS edges: module -> each symbol
 	for _, n := range result.Nodes {
 		if n == modNode {
 			continue
@@ -95,14 +95,14 @@ func (p *TSParser) ParseFile(ctx context.Context, repoID, path string, src []byt
 		}
 	}
 
-	// --- CALLS edges ---
+	// CALLS edges
 	callEdges := extractTSCallEdges(root, src, symbolByName)
 	result.Edges = append(result.Edges, callEdges...)
 
-	// --- chunk index over non-declaration regions  ---
+	// chunk index over non-declaration regions
 	result.Nodes = append(result.Nodes, chunkFile(repoID, path, src, result.Nodes)...)
 
-	// --- TODO/FIXME markers (language-agnostic lexical scan) ---
+	// TODO/FIXME markers (language-agnostic lexical scan)
 	result.Todos = scanTodos(src)
 
 	return result, nil
@@ -122,7 +122,7 @@ func extractTSSymbols(
 	for i := range count {
 		child := root.Child(i)
 		// Top-level declarations are unexported unless wrapped by an
-		// export_statement, which flips the flag on recursion .
+		// export_statement, which flips the flag on recursion.
 		processTopLevelNode(child, src, repoID, path, result, symbolByName, classNames, false)
 	}
 }
@@ -142,8 +142,8 @@ func processTopLevelNode(
 	// Skip declarations whose own subtree carries a syntax error — their
 	// extracted name/signature/body would be unreliable. Sibling declarations
 	// that parsed cleanly still index, so a transiently-broken TS file
-	// mid-edit doesn't erase its other symbols (solov2-rbb7, mirrors the Go
-	// fix in solov2-7nkm). export_statement wrappers re-enter this function,
+	// mid-edit doesn't erase its other symbols (, mirrors the Go
+	// fix in ). export_statement wrappers re-enter this function,
 	// so the guard applies at every recursion level.
 	if hasErrorNode(node) {
 		return
@@ -191,7 +191,7 @@ func processTopLevelNode(
 		}
 
 	case "lexical_declaration", "variable_declaration":
-		// const Foo = () => { ... }  arrow function assigned to variable
+		// const Foo = => {. } arrow function assigned to variable
 		parseTSArrowFunctions(node, src, repoID, path, result, symbolByName, exported)
 	}
 }
@@ -290,7 +290,7 @@ func parseTSInterfaceDecl(node *sitter.Node, src []byte, repoID, path string, ex
 
 // parseTSArrowFunctions extracts arrow functions assigned to variables:
 //
-//	const greet = (name: string) => { ... }
+//	const greet = (name: string) => {. }
 func parseTSArrowFunctions(
 	node *sitter.Node,
 	src []byte,
@@ -327,12 +327,12 @@ func parseTSArrowFunctions(
 }
 
 // collectTSCallsFromClassBody walks each method_definition under a
-// class body and emits CALLS edges. Calls of the form this.foo() are
+// class body and emits CALLS edges. Calls of the form this.foo are
 // rewritten to className.foo and resolved against the file's symbol
-// map — bare-identifier calls (e.g. helper()) resolve directly. This
+// map — bare-identifier calls (e.g. helper) resolve directly. This
 // is the TS analogue of the Go receiver-selector rewrite
 // and is what makes intra-class dependencies show up in eng_get_call_chain
-// for TS code .
+// for TS code.
 func collectTSCallsFromClassBody(body *sitter.Node, src []byte, symbols map[string]*domain.Node, className string) []*domain.Edge {
 	var edges []*domain.Edge
 	seen := make(map[string]bool)
@@ -357,7 +357,7 @@ func collectTSCallsFromClassBody(body *sitter.Node, src []byte, symbols map[stri
 		}
 		for _, ref := range collectCallNames(bodyNode, src, "this", className, nil) {
 			// TS has no promotion-time cross-package resolution (that path is
-			// Go-only, solov2-xc51), so package-qualified calls are skipped here.
+			// Go-only), so package-qualified calls are skipped here.
 			if ref.pkg != "" {
 				continue
 			}
@@ -411,9 +411,9 @@ func collectTSCallsFromTopLevel(node *sitter.Node, src []byte, symbols map[strin
 		}
 	case "class_declaration":
 		// Each method inside the class is its own caller. Resolve
-		// this.foo() against the class's own method namespace via
-		// collectCallNames(recvName="this", recvType=className) —
-		// mirrors Go's receiver-selector resolution .
+		// this.foo against the class's own method namespace via
+		// collectCallNames(recvName="this", recvType=className)
+		// mirrors Go's receiver-selector resolution.
 		nameNode := node.ChildByFieldName("name")
 		if nameNode == nil {
 			return edges

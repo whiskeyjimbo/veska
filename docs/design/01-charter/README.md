@@ -1,6 +1,6 @@
 ---
 id: SOLO-01
-title: "Scope and principles — Veska"
+title: "Scope and principles - Veska"
 status: draft
 version: 0.1.0
 last_reviewed: 2026-05-08
@@ -9,7 +9,7 @@ verified: true
 verified_date: "2026-06-01"
 ---
 
-# SOLO-01 — Scope and principles
+# SOLO-01 - Scope and principles
 
 ## 1. What Veska is
 
@@ -19,18 +19,18 @@ and exposes both through MCP. It runs on the developer's laptop.
 The data is one SQLite file plus a handful of supporting files
 under `~/.veska/`.
 
-**Single-user, not single-contributor.** Veska has one operator —
-the developer running the daemon — but it expects to live inside
+**Single-user, not single-contributor.** Veska has one operator -
+the developer running the daemon - but it expects to live inside
 team repositories with many contributors, CODEOWNERS files, and
 shared issue trackers. "Who owns this?" and "who else is touching
 this file?" are first-class questions even though there is exactly
 one Veska user on the machine.
 
 **Multi-repo, single-daemon.** The daemon indexes N repos
-simultaneously — a service, its SDK, a docs repo are the typical
+simultaneously - a service, its SDK, a docs repo are the typical
 solo working set. Repos are dynamic state: `veska repo add`
 registers; `veska repo remove` reverses. Cross-repo edges (service
-A `CALLS` SDK B) are computed at query time, not stored — see
+A `CALLS` SDK B) are computed at query time, not stored - see
 SOLO-04 §5.4 and SOLO-11 §9. Cross-repo answers always reflect the
 target repo's current promoted branch; there is no version-pinning.
 Resource ceilings (RSS, FDs, goroutines) are daemon-global, not
@@ -40,7 +40,7 @@ The system has three parts:
 
 1. **Substrate.** The graph (nodes, edges) and the embedding
    bytes, stored in one SQLite file. The vector search index is
-   derived from those bytes at startup — in-memory by default,
+   derived from those bytes at startup - in-memory by default,
    or optional usearch `.hnsw` sidecars (SOLO-08 §1.1).
 2. **Pipelines.** What runs on save (in-memory only) and what runs
    on promotion (commit-time, durable).
@@ -84,7 +84,7 @@ Deliberate non-goals:
    implementation when M1 lands. A *second* impl is the bar that
    needs an ADR; once it lands, provider-keyed selection
    (`[<port>].provider = "x" | "y"`) is the legitimate
-   composition mechanism — no capability schemas, no typed
+   composition mechanism - no capability schemas, no typed
    registry, no slot lint, but also no pretence that adding a
    `provider` switch needs ceremony beyond the ADR that justified
    the second impl. SOLO-05 §1.1 lists the four ports that
@@ -95,8 +95,8 @@ Deliberate non-goals:
    promotion transaction publishes nodes/edges and enqueues
    `post_promotion_queue` rows in one `BEGIN IMMEDIATE`). The
    asynchronous post-promotion drains (`embed`, `auto_link`,
-   `revalidate`, `review`) also write durably — they have to,
-   because findings and embedding rows are persistent state — but
+   `revalidate`, `review`) also write durably - they have to,
+   because findings and embedding rows are persistent state - but
    only *after* the promotion transaction commits, and never on
    the user's commit-return critical path. The pillar is "save
    never blocks on disk; the user's `git commit` blocks only on
@@ -125,7 +125,7 @@ promotes to SQLite. The full mechanism lives in **SOLO-11**
 staging and promoted state is per-file overlay, not row-level merge
 (SOLO-11 §1.2). History-rewriting Git operations (rebase, merge
 continuation, cherry-pick, bisect, amend) are handled by SOLO-11
-§2.3 — short-circuit during the operation; catch-up via the
+§2.3 - short-circuit during the operation; catch-up via the
 divergent-promotion path afterward. Promotion never blocks on post-promotion
 queue depth (SOLO-08 §3.4); embedding saturation surfaces as a
 sticky finding rather than back-pressuring the hot path.
@@ -140,7 +140,7 @@ Known collisions:
   is `~/.veska/`. For a personal, on-device product, discoverability
   is not the goal and the collision is acceptable. **Trademark
   resolution is required before any V2.1 server-tier work begins**
-  — that is the deadline, not "deferred indefinitely." A server
+  - that is the deadline, not "deferred indefinitely." A server
   tier introduces marketing surface and a public registration
   story that the current name cannot carry without a check.
 - **"Beads"** (the default tracker integration) collides with a JS

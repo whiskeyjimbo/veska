@@ -34,7 +34,7 @@ func LooksLikeRepoURL(arg string) bool {
 // absolute form, register via the daemon when up (cold scan + live watch),
 // and fall back to a direct SQLite write when the daemon is unreachable.
 func RunRepoAddPath(ctx context.Context, w io.Writer, root string, wait bool) error {
-	// solov2-clgn: '.', '..', or any relative path must be resolved against
+	// '.', '.', or any relative path must be resolved against
 	// the user's cwd here. The daemon's cwd is unrelated and would otherwise
 	// mis-resolve '.' to the daemon's working dir.
 	abs, err := filepath.Abs(root)
@@ -50,7 +50,7 @@ func RunRepoAddPath(ctx context.Context, w io.Writer, root string, wait bool) er
 		return reportDaemonAdd(ctx, w, daemonAddResult{ID: id, Root: root, Existed: existed}, wait)
 	}
 
-	// solov2-qnt9: --wait promises to block until cold scan completes; when
+	// wait promises to block until cold scan completes; when
 	// the daemon is unreachable there IS no cold scan to wait on, so silently
 	// degrading to the direct-write fallback would make the flag a lie.
 	if wait {
@@ -85,7 +85,7 @@ func reportDaemonAdd(ctx context.Context, w io.Writer, res daemonAddResult, wait
 
 // directAdd inserts the repo row + installs hooks without the daemon. The next
 // daemon start cold-scans it via StartupResync. Surfaces the dial error so the
-// user can tell 'daemon down' from 'daemon up but unreachable' .
+// user can tell 'daemon down' from 'daemon up but unreachable'.
 func directAdd(ctx context.Context, w io.Writer, root string, dialErr error) error {
 	db, closeFn, err := OpenLocalDB()
 	if err != nil {
@@ -110,7 +110,7 @@ func directAdd(ctx context.Context, w io.Writer, root string, dialErr error) err
 
 // promptAliasAfterAdd is the post-`repo add` auto-suggest helper. Opens a
 // transient DB handle, asks the user if they want to alias the freshly
-// registered repo, and writes the binding . Best-effort —
+// registered repo, and writes the binding. Best-effort
 // errors are logged and swallowed so a prompt failure never breaks the
 // add flow itself.
 func promptAliasAfterAdd(ctx context.Context, w io.Writer, repoID, canonicalURL, rootPath string) {
@@ -127,8 +127,7 @@ func promptAliasAfterAdd(ctx context.Context, w io.Writer, repoID, canonicalURL,
 // RunRepoAddURL implements `veska repo add <url>`: canonicalise the URL,
 // short-circuit on a matching canonical_url row, clone to the tracked tier
 // with live progress, then register via the daemon (with direct fallback)
-// and stamp canonical_url on the new row (solov2-kxo5.3).
-//
+// and stamp canonical_url on the new row.
 // Errors during register-or-canonical_url-update roll the clone back so a
 // retry starts clean and no orphan directory pretends to be a repo.
 func RunRepoAddURL(ctx context.Context, w, stderr io.Writer, rawURL string, wait bool) error {

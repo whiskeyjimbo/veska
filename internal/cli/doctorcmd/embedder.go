@@ -12,7 +12,6 @@ import (
 )
 
 // EmbedderHealth describes the elected embedder's health for doctor output.
-//
 // The elected embedder — not Ollama unconditionally — is what doctor must
 // report. For the in-process embedders (model2vec / static-v2) the provider
 // is constructed locally and is healthy whenever election succeeds; no network
@@ -44,7 +43,7 @@ func CheckEmbedderHealth(ctx context.Context, home string) EmbedderHealth {
 		return EmbedderHealth{Status: health.StatusBroken, Detail: fmt.Sprintf("election failed: %v", err)}
 	}
 	// Surface the static-v2 fallback as 'degraded' rather than 'healthy'
-	// . It is functional, but every eng_search_semantic call
+	// It is functional, but every eng_search_semantic call
 	// returns 'low_quality_static_embedder' in degraded_reasons until the
 	// user installs model2vec — that is not a healthy steady state.
 	if prov.ModelID() == "veska-static-v2" {

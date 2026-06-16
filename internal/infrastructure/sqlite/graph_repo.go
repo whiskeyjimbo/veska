@@ -13,7 +13,6 @@ import (
 // GraphRepo is the SQLite-backed adapter for ports.GraphStorage. It reads and
 // writes the `nodes` and `edges` tables created by migration 0001 (plus the
 // signature columns from 0005).
-//
 // Writes take the write-capable handle (the single-writer hot pool in the
 // daemon); reads take the read pool so graph traversals do not contend with
 // promotion. Its upsert SQL mirrors the column set and ON CONFLICT semantics
@@ -92,8 +91,8 @@ func scanNode(s interface {
 }
 
 // (maxSnippetBytes / capSnippet moved to snippet.go and shared with the
-// Promoter so both write paths bind the same body into nodes.snippet —
-// solov2-sxa.)
+// Promoter so both write paths bind the same body into nodes.snippet
+// )
 
 // SaveNode inserts or replaces a node row keyed on (node_id, branch). The
 // column set and ON CONFLICT clause mirror the Promoter so a GraphRepo write
@@ -159,17 +158,16 @@ ON CONFLICT(node_id, branch) DO UPDATE SET
 
 // UpsertExternalRepo idempotently writes a synthetic repos row for a
 // vendor-indexed module so the existing cross_repo_edge_stub
-// resolver finds it via module_path match . repoID is
+// resolver finds it via module_path match. repoID is
 // the synthetic id (caller's responsibility; today's convention is
 // "ext:<module-path>"). rootPath should be the absolute path of the
 // vendor/<module> directory so moduleRelDir in the resolver yields
 // correct subpackage relDirs.
-//
-// identity_tier/identity_anchor are intentionally left NULL (ADR-S0017 §2):
+// identity_tier/identity_anchor are intentionally left NULL:
 // these synthetic rows already carry a content-derived, module-path-keyed id
 // and are not user-registered repos resolved through ResolveIdentity, so they
 // sit outside the portable-identity fallback chain and the doctor
-// non-convergence warning (solov2-dchd.6).
+// non-convergence warning.
 func (r *GraphRepo) UpsertExternalRepo(ctx context.Context, repoID, rootPath, modulePath, branch string) error {
 	_, err := r.writeDB.ExecContext(ctx,
 		`INSERT INTO repos (repo_id, root_path, added_at, active_branch, module_path)
@@ -187,7 +185,7 @@ func (r *GraphRepo) UpsertExternalRepo(ctx context.Context, repoID, rootPath, mo
 }
 
 // SaveExternalNode inserts/replaces a node from a vendored or
-// module-cache dependency . Identical to SaveNode except
+// module-cache dependency. Identical to SaveNode except
 // the external column is set to 1 so the read path can label these
 // rows and filter them when first-party-only views are wanted.
 func (r *GraphRepo) SaveExternalNode(ctx context.Context, repoID, branch string, n *domain.Node) error {

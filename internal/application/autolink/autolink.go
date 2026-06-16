@@ -1,18 +1,15 @@
 // Package autolink computes auto-link candidates: top-k similarity edges
 // proposed for a set of recently-promoted source nodes.
-//
 // This package ships the pure computation only (m3.04.1). It does not write
 // findings or unresolved edges (m3.04.2) and is not wired into the queue
 // handler (m3.04.3). The Linker reads embedding bytes via a narrow port
 // (EmbeddingLookup) and queries a VectorStorage for nearest neighbours; the
 // result is a flat slice of Candidate rows ready for downstream consumption.
-//
 // Score direction. Hit.Score from ports.VectorStorage.Search is always a
 // "higher = closer" similarity: both active backends (memory and
 // usearch) compute L2-squared distance internally and report
 // score = 1 / (1 + dist). The threshold is therefore a simple lower bound
 // on Hit.Score; no per-backend normalisation is required at this layer.
-//
 // Score range depends on input. score lands in (0, 1] only when stored
 // embeddings are unit-length (L2-squared distance then bounded in [0, 4]).
 // The embedder pipeline L2-normalises every vector before storage
@@ -36,9 +33,9 @@ const (
 	DefaultTopK = 5
 
 	// DefaultThreshold is the minimum Hit.Score for a candidate to be emitted.
-	// Tuned against the gate-3 measurement (solov2-d5z / solov2-uug): on a
+	// Tuned against the gate-3 measurement: on a
 	// real nomic-embed-text fixture of unit-normalised vectors, within-topic
-	// pairs score ≈0.66 and cross-topic pairs ≈0.50. 0.60 sits in that gap —
+	// pairs score ≈0.66 and cross-topic pairs ≈0.50. 0.60 sits in that gap
 	// it admitted 100% of true links with a 0.00% false-positive rate on the
 	// gate-3 fixture. (The original 0.85 assumed a cosine-like score range
 	// and was unreachable once real embedding norms were accounted for.)
@@ -64,7 +61,6 @@ type Candidate struct {
 type EmbeddingLookup interface {
 	// ContentHashForNode returns the content_hash of the embedding for the
 	// given node, plus a ready flag.
-	//
 	//   ready=true, hash non-empty: the embedding bytes are available via
 	//     LookupExisting(hash).
 	//   ready=false: the node has no row in node_embedding_refs, the row is
@@ -147,12 +143,11 @@ func NewLinker(refs EmbeddingLookup, vectors ports.VectorStorage, opts ...Option
 // Candidates computes top-k similarity candidates for every source node in
 // sourceNodeIDs. The output is the union across sources, in input order; ties
 // inside a single source are broken by VectorStorage.Search rank order.
-//
 // Per-source flow:
 //  1. Look up the source node's content_hash via EmbeddingLookup. If the node
 //     is not ready (pending, failed, missing), it is silently skipped — this
 //     is best-effort discovery, not a correctness invariant.
-//  2. Fetch the embedding bytes for that hash and decode to []float32.
+//  2. Fetch the embedding bytes for that hash and decode to float32.
 //  3. Ask VectorStorage for the k+1 nearest neighbours (k+1 leaves room to
 //     drop the source itself from its own result set).
 //  4. Filter out the self-hit and hits below threshold.

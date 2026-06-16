@@ -19,7 +19,7 @@ import (
 
 // statusRollupInputs is the pure-data input to computeStatusRollup. It carries
 // every per-subsystem signal the rollup considers, including the embedding
-// backlog snapshot  which is surfaced but NOT permitted to
+// backlog snapshot which is surfaced but NOT permitted to
 // promote the rollup status — see computeStatusRollup for the contract.
 type statusRollupInputs struct {
 	EmbedderStatus   string
@@ -48,10 +48,8 @@ type statusRollupJSONData struct {
 }
 
 // computeStatusRollup decides the rollup status from the per-subsystem signals.
-//
 // Rollup precedence (highest wins): broken > degraded > stopped > healthy.
-//
-// solov2-34rl: the embedding_backlog signal is INTENTIONALLY OMITTED from
+// the embedding_backlog signal is INTENTIONALLY OMITTED from
 // rollup classification. A non-zero backlog drives `eng_get_status`'s
 // `degraded_reasons:[embeddings_pending]` because agents need that signal to
 // pick between semantic and lexical search paths — but the daemon (embedder
@@ -122,7 +120,7 @@ func gatherStatusProbes(home string) statusProbes {
 	})
 	configReport, _ := doctor.CheckConfig(home)
 	p.ingestionStatus, p.ingestionDetail = checkIngestion(context.Background())
-	// solov2-j5ki: roll in post_promotion_queue health so the top-level
+	// roll in post_promotion_queue health so the top-level
 	// status doesn't report 'healthy' while a background pipeline
 	// (auto_link, embed, revalidate, wiki) has failed rows or a deep
 	// backlog. CheckPostPromotionQueue already classifies state.
@@ -131,7 +129,7 @@ func gatherStatusProbes(home string) statusProbes {
 		p.queueStatus = string(qr.Status)
 		p.queueFailedRows = qr.FailedRows
 		if p.queueStatus != "healthy" {
-			// solov2-gthm: include a pointer to the drilldown so a
+			// include a pointer to the drilldown so a
 			// junior who sees 'queue: N failed row(s)' in the rollup
 			// has an obvious next command. The detail line is
 			// printed as part of the status one-liner below.
@@ -139,15 +137,15 @@ func gatherStatusProbes(home string) statusProbes {
 		}
 	}
 
-	// solov2-34rl: surface embedder backfill depth so doctor and
+	// surface embedder backfill depth so doctor and
 	// eng_get_status agree on the number. The backlog is informational
-	// — it does NOT promote the rollup. See computeStatusRollup.
+	// it does NOT promote the rollup. See computeStatusRollup.
 	p.backlog = probeEmbeddingBacklog(context.Background(), home)
 
 	// Compute egress status: broken if any socket is missing. Track
 	// whether BOTH sockets are missing — that is the unambiguous
 	// "daemon never started" signal and warrants a friendlier message
-	// than the generic "broken" rollup .
+	// than the generic "broken" rollup.
 	p.egressStatus = "healthy"
 	missing := 0
 	for _, s := range egressReport.Sockets {
@@ -158,7 +156,7 @@ func gatherStatusProbes(home string) statusProbes {
 	}
 	p.daemonNotRunning = missing == len(egressReport.Sockets) && len(egressReport.Sockets) > 0
 
-	// solov2-bwly: distinguish "the daemon has never been started"
+	// distinguish "the daemon has never been started"
 	// (benign — operator just hasn't run `veska service start` yet)
 	// from "the daemon crash-looped" (a real fault flagged by the
 	// `<veskaHome>/broken` marker). The marker-less not-running
@@ -170,9 +168,9 @@ func gatherStatusProbes(home string) statusProbes {
 		p.egressStatus = "stopped"
 	}
 
-	// Compute config status. solov2-lp44: the DB file is created
+	// Compute config status.: the DB file is created
 	// on first daemon boot, so a missing veska.db between `veska
-	// init` and `veska service start` is the expected state —
+	// init` and `veska service start` is the expected state
 	// surfacing it as "config=degraded" misled fresh users into
 	// thinking config.toml was broken. Demote that single cause
 	// to "pending" so it doesn't double-report what the
@@ -189,7 +187,7 @@ func gatherStatusProbes(home string) statusProbes {
 }
 
 // StatusOptions are the boolean flags for RunStatus. See QueueOptions for the
-// single-flag-positional / multi-flag-struct convention .
+// single-flag-positional / multi-flag-struct convention.
 type StatusOptions struct {
 	JSON    bool
 	Verbose bool
@@ -257,7 +255,7 @@ func renderStatusText(w io.Writer, p statusProbes, rollup string, inputs statusR
 		detail += inputs.QueueDetail
 	}
 	backlogStr := backlogLabel(p.backlog)
-	// solov2-e141: when the daemon is down, lead with that fact and
+	// when the daemon is down, lead with that fact and
 	// flag the other subsystem labels as on-disk checks. Their
 	// 'healthy' (embedder weights present, config readable, DB query
 	// succeeded) was confusing readers into thinking the daemon was
@@ -279,8 +277,8 @@ func renderStatusText(w io.Writer, p statusProbes, rollup string, inputs statusR
 	}
 	// "stopped" reports a benign operator state (daemon never
 	// started, no broken marker) and uses the same exit semantics as
-	// "degraded": non-zero rollup label, zero exit .
-	// solov2-gthm: --verbose dumps the actual failed queue rows
+	// "degraded": non-zero rollup label, zero exit.
+	// verbose dumps the actual failed queue rows
 	// inline so juniors who hit 'queue: N failed row(s)' do not
 	// have to discover `doctor post_promotion_queue` separately.
 	if verbose && len(p.queueFailedRows) > 0 {
@@ -296,7 +294,7 @@ func renderStatusText(w io.Writer, p statusProbes, rollup string, inputs statusR
 // backlog probe. Falls back to an "unknown" report if the DB cannot be
 // opened (e.g. fresh `veska init` hasn't created it yet, or the daemon
 // holds the lock) — never returns an error, since this signal is purely
-// informational .
+// informational.
 func probeEmbeddingBacklog(ctx context.Context, home string) doctor.EmbeddingBacklogReport {
 	db, closeFn, err := repocmd.OpenLocalDB()
 	if err != nil {
@@ -313,9 +311,8 @@ func probeEmbeddingBacklog(ctx context.Context, home string) doctor.EmbeddingBac
 // (last_promoted_sha IS NULL or ”). A repo that has been registered
 // but is still unindexed is real degraded state — the daemon either is
 // not running, is mid-cold-scan, or hit a per-repo failure during
-// startup-resync (solov2-8ga's continue-on-error path) — and 'doctor
-// status' should not report 'healthy' while that's true .
-//
+// startup-resync ('s continue-on-error path) — and 'doctor
+// status' should not report 'healthy' while that's true.
 // Returns ("healthy"|"degraded", detail). detail is "" when healthy.
 // Database open errors are reported as 'degraded' with the err message
 // so the user gets a hint rather than a silent miss.
@@ -335,14 +332,13 @@ func checkIngestion(ctx context.Context) (string, string) {
 	}
 	// Pull scan progress so unindexed repos that are actively scanning
 	// surface as e.g. "9092cd5e0cff promoting/300" — tells the user the
-	// degraded state is progressing vs. idle (solov2-u9h9 follow-up).
+	// degraded state is progressing vs. idle ( follow-up).
 	progress := repocmd.FetchScanProgress(ctx)
 	var unindexed []string
 	for _, r := range recs {
 		// Synthetic ext:<module> repos never get a LastPromotedSHA — they
 		// have no git history. Skipping them avoids reporting "1 unindexed
 		// repo(s): [ext:github.c]" on a healthy `deps index` workspace
-		// .
 		if strings.HasPrefix(r.RepoID, extindex.SyntheticRepoIDPrefix) {
 			continue
 		}

@@ -1,21 +1,20 @@
 // Package diffgate is the shared substrate of the diff-safety gate
-// (solov2-ll57): it ephemerally indexes a candidate change against a base
+// it ephemerally indexes a candidate change against a base
 // graph WITHOUT mutating the persisted graph or hitting the network, so the
-// verify (solov2-h1yb.3) and blast-radius-containment (solov2-h1yb.4)
+// verify and blast-radius-containment
 // verdicts can query a (before, after) graph state. It computes no verdicts
 // itself — those are the consumer tasks; this package only produces the
 // queryable substrate they share.
-//
 // Two seams keep the substrate stable while its inputs vary:
 //
-//   - ChangeSource (the "after" input): where the candidate comes from. v1 is
-//     a git ref/worktree (RefChangeSource); a raw unified-diff source is the
-//     deferred solov2-ll57.3. Verify/guard never see it.
-//   - BaseGraph (the "before" input): what the candidate is diffed against.
-//     v1 is the persisted, indexed-HEAD graph (SQLite already implements
-//     EdgeReader+NodeLookup). An in-memory build at an arbitrary base ref, or
-//     a version-pinned query (solov2-9fsn), are future backends behind the
-//     same interface — so neither the Indexer nor the consumers change.
+//	ChangeSource (the "after" input): where the candidate comes from. v1 is
+//	  a git ref/worktree (RefChangeSource); a raw unified-diff source is the
+//	  deferred. Verify/guard never see it.
+//	BaseGraph (the "before" input): what the candidate is diffed against.
+//	  v1 is the persisted, indexed-HEAD graph (SQLite already implements
+//	  EdgeReader+NodeLookup). An in-memory build at an arbitrary base ref, or
+//	  a version-pinned query, are future backends behind the
+//	  same interface — so neither the Indexer nor the consumers change.
 //
 // Nothing here is persisted and no EmbeddingProvider is touched, so indexing
 // adds no network egress (AC2).
@@ -37,9 +36,8 @@ var ErrMissingDependency = errors.New("diffgate: missing required dependency")
 // CallEdgeReader is the consumer-owned narrow port the dead-code resolution
 // predicate needs from the base: CALLS-only inbound adjacency. It is distinct
 // from EdgeReader.InboundEdges (all kinds, used by the blast-radius BFS) so the
-// liveness re-run agrees with the CALLS-only check that raised the finding —
+// liveness re-run agrees with the CALLS-only check that raised the finding
 // counting structural CONTAINS edges resolved every dead-code finding for free
-// (solov2-nmps.9).
 type CallEdgeReader interface {
 	// InboundCallEdges returns, for each node_id, the src_node_id values of its
 	// inbound CALLS edges only.
@@ -64,7 +62,6 @@ type BaseGraph interface {
 // the two — the gate's blast-radius guard, for instance, queries
 // blastradius.NewService(eph.Base, eph.Base, eph.Overlay) with no new
 // interface — and read the overlay shadowing the base on the changed files.
-//
 // Building an Ephemeral mutates no durable state: Base is read-only and
 // Overlay is a fresh in-memory staging.Area.
 type Ephemeral struct {

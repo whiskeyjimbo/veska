@@ -23,12 +23,12 @@ const (
 // per stale finding on a given file) and the SQLite adapter applies all of
 // them under a single transaction — collapsing what was previously O(stale)
 // fsyncs into a single fsync per file.
-//
 // Field semantics:
-//   - FindingID is the row key (combined with (repoID, branch) at the call site).
-//   - Kind selects the SQL path (refresh vs close).
-//   - NewHash carries the new anchor_content_hash for DecisionRefresh; it is
-//     ignored for DecisionClose and may be empty.
+//
+//	FindingID is the row key (combined with (repoID, branch) at the call site).
+//	Kind selects the SQL path (refresh vs close).
+//	NewHash carries the new anchor_content_hash for DecisionRefresh; it is
+//	  ignored for DecisionClose and may be empty.
 type FindingDecision struct {
 	FindingID string
 	Kind      DecisionKind
@@ -38,7 +38,6 @@ type FindingDecision struct {
 // StaleFinding is one open finding whose recorded anchor content hash no longer
 // matches the current content_hash of its anchor node. The revalidation sweep
 // uses this view to drive the per-rule dispatch (refresh vs close).
-//
 // All five fields are scoped by (repo_id, branch) carried at the call site;
 // the struct is intentionally narrow so callers do not have to round-trip the
 // full domain.Finding aggregate just to flip a state column.
@@ -67,26 +66,22 @@ type StaleFinding struct {
 // RevalidateQuerier is the narrow port the revalidation sweep handler uses to
 // (1) discover findings whose anchor has drifted on a given file and
 // (2) close those findings as revalidated-obsolete.
-//
 // The port is intentionally file-scoped: the post-promotion queue enqueues one
 // revalidate row per file × work_kind, and the handler operates on exactly
 // that file's blast radius. Cross-file or cross-branch sweeps are out of scope
 // for this port; the queue produces those as separate rows.
-//
 // Implementations must be safe for concurrent use.
 type RevalidateQuerier interface {
 	// StaleFindingsForFile returns all open findings whose recorded
 	// anchor_content_hash differs from the current nodes.content_hash of
 	// the anchor node, scoped to (repoID, branch, filePath).
-	//
 	// Filters applied:
-	//   - findings.state = 'open'
-	//   - findings.anchor_content_hash IS NOT NULL
-	//   - nodes.file_path = filePath
-	//   - nodes.content_hash != findings.anchor_content_hash
-	//
+	//   findings.state = 'open'
+	//   findings.anchor_content_hash IS NOT NULL
+	//   nodes.file_path = filePath
+	//   nodes.content_hash != findings.anchor_content_hash
 	// A finding whose anchor node has no row in `nodes` (e.g. node was
-	// deleted on the latest promotion) is NOT returned by this query —
+	// deleted on the latest promotion) is NOT returned by this query
 	// that's a separate cleanup path that 5.2 deliberately does not own.
 	StaleFindingsForFile(ctx context.Context, repoID, branch, filePath string) ([]StaleFinding, error)
 
@@ -97,7 +92,7 @@ type RevalidateQuerier interface {
 	// obsolete. If it still has zero inbound CALLS edges, the rule still fires
 	// and the finding row is REFRESHED in place. Only CALLS count — a
 	// structural CONTAINS/IMPORTS parent edge is not a caller, so it must not
-	// resolve a dead-code finding (solov2-nmps.9).
+	// resolve a dead-code finding.
 	HasInboundCallEdges(ctx context.Context, repoID, branch, nodeID string) (bool, error)
 
 	// NodeSignaturePair returns the (prev_signature, signature) pair for
@@ -121,21 +116,19 @@ type RevalidateQuerier interface {
 	// is to collapse the per-file revalidation sweep — which can produce
 	// thousands of UPDATEs on large commits — into one fsync per file
 	// instead of one fsync per finding.
-	//
 	// Semantics:
-	//   - Empty decisions slice: no-op, no transaction opened, returns nil.
-	//   - Each DecisionRefresh updates findings.anchor_content_hash to
+	//   Empty decisions slice: no-op, no transaction opened, returns nil.
+	//   Each DecisionRefresh updates findings.anchor_content_hash to
 	//     d.NewHash on (finding_id, branch, repo_id) gated on state='open'.
-	//   - Each DecisionClose flips state='closed' with closed_reason=
+	//   Each DecisionClose flips state='closed' with closed_reason=
 	//     'revalidated_obsolete', closed_at=at, actor_id='service:veska',
 	//     actor_kind='system', gated on state='open'.
-	//   - Per-row UPDATE-matched-zero is NOT an error (a row that was
+	//   Per-row UPDATE-matched-zero is NOT an error (a row that was
 	//     already closed by another path is the normal case).
-	//   - If any step of the tx fails (incl. Commit), all decisions in the
+	//   If any step of the tx fails (incl. Commit), all decisions in the
 	//     batch roll back and an error is returned wrapping the underlying
 	//     driver error. Callers must NOT increment success metrics until
 	//     ApplyDecisions returns nil.
-	//
 	// The `at` parameter stamps closed_at on close decisions. Refresh
 	// decisions ignore it for now (no last_revalidated_at column), mirroring
 	// RefreshAnchorHash.

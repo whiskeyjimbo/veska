@@ -39,7 +39,7 @@ func newRootCmd(opts ...rootOption) *cobra.Command {
 	root := &cobra.Command{
 		Use:   "veska",
 		Short: "Veska code intelligence CLI",
-		// solov2-izh6.19: surface a 'start here' hint above the alphabetised
+		// surface a 'start here' hint above the alphabetised
 		// command list. Cobra renders Long at the top of --help, so this
 		// lands just before "Usage:" / "Available Commands:" and gives a
 		// brand-new user a single obvious next step instead of 30 commands
@@ -51,7 +51,7 @@ func newRootCmd(opts ...rootOption) *cobra.Command {
 		SilenceErrors: true,
 	}
 	// Compact one-liner for `veska --version`; `veska version` keeps the
-	// full multi-line build info dump .
+	// full multi-line build info dump.
 	root.SetVersionTemplate("veska {{.Version}}\n")
 	root.AddCommand(initCmd())
 	root.AddCommand(hookRunnerCmd())
@@ -83,14 +83,14 @@ func newRootCmd(opts ...rootOption) *cobra.Command {
 	root.AddCommand(installCmd())
 	root.AddCommand(versionCmd())
 	// Top-level alias for `veska doctor savings` so the marketing-y
-	// shortcut works without the doctor prefix .
+	// shortcut works without the doctor prefix.
 	root.AddCommand(doctorSavingsCmd())
 	// Hidden docs generator for the manual's CLI reference (make docs-gen).
 	root.AddCommand(gendocsCmd())
 
 	// Resolve the daemon binary path at startup. os.Executable returns the path
 	// of the current binary; the daemon is reachable via the veska-daemon
-	// symlink that ships alongside it .
+	// symlink that ships alongside it.
 	var mgr, dryMgr service.Manager
 	if exe, err := os.Executable(); err == nil {
 		// Construction errors are deliberately dropped: a nil manager is a
@@ -104,7 +104,7 @@ func newRootCmd(opts ...rootOption) *cobra.Command {
 	root.AddCommand(upgradeCmd(mgr))
 
 	// `veska daemon …` / `veska mcp …` mirror the symlinked-binary entry
-	// points . The symlinks remain the canonical invocation
+	// points. The symlinks remain the canonical invocation
 	// for service managers and editor MCP configs.
 	root.AddCommand(daemon.NewCmd())
 	root.AddCommand(mcp.NewCmd())
@@ -122,7 +122,7 @@ func main() {
 		os.Exit(mcp.Run())
 	}
 
-	// solov2-izh6.9: silence the default slog handler for CLI runs.
+	// silence the default slog handler for CLI runs.
 	// Sub-commands that drive in-process application code (e.g.
 	// `veska search --repo <url>` doing an ephemeral cold scan) would
 	// otherwise dump structured-log INFO lines from the ingester /

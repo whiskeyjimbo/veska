@@ -1,4 +1,4 @@
-# recall — semantic-search eval harness (m3.03.3)
+# recall - semantic-search eval harness (m3.03.3)
 
 End-to-end recall@10 / p95-latency harness for `search.Service.Semantic`.
 
@@ -14,7 +14,7 @@ every node in cluster K is a correct hit for cluster K's center query.
 
 | File | Role |
 |---|---|
-| `recall.go` | Pure functions: `RecallAtK`, `MeanRecall`, `P95Latency` (no build tag — unit-testable in standard CI). |
+| `recall.go` | Pure functions: `RecallAtK`, `MeanRecall`, `P95Latency` (no build tag - unit-testable in standard CI). |
 | `recall_internal_test.go` | Unit tests for the math above. Runs under default `go test`. |
 | `harness.go` | Synthetic corpus generation, deterministic fake embedder, fixture I/O, JSON output envelope. |
 | `recall_test.go` | End-to-end eval test (`//go:build eval`). |
@@ -43,7 +43,7 @@ clear message rather than burning the whole run.
 
 | Env var | Default | Meaning |
 |---|---|---|
-| `RECALL_POP` | `1000` | Total population. Snapped to a multiple of 100 (clusters). `≤ 5000` is "quick mode" — fake embedder, no fixture required. |
+| `RECALL_POP` | `1000` | Total population. Snapped to a multiple of 100 (clusters). `≤ 5000` is "quick mode" - fake embedder, no fixture required. |
 | `RECALL_GENERATE` | unset | When `1`, allow seeding `fixtures/embeddings_<pop>.bin`. Quick mode persists fake vectors; large-pop seeding drives `ollama.Provider` and writes the fixture atomically. |
 | `VESKA_OLLAMA_URL` | `http://localhost:11434` | Ollama base URL used during large-pop fixture generation and during query embedding when replaying an Ollama-seeded fixture. |
 | `VESKA_EMBED_MODEL` | `nomic-embed-text` | Embedding model used during large-pop fixture generation / replay. |
@@ -81,7 +81,7 @@ directory:
    writes `fixtures/embeddings_<pop>.bin` atomically (temp + rename)
    so a mid-run Ctrl-C leaves no half-written artefact.
 2. The resulting `fixtures/embeddings_<pop>.bin` artefacts are
-   gitignored on purpose — they're regenerable and large. The same
+   gitignored on purpose - they're regenerable and large. The same
    fixture path is replayed by the autolink-FP harness so a single
    50k generation seeds both gate-2 and gate-3.
 3. Run `RECALL_POP=50000 make eval-recall` and

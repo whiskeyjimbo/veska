@@ -1,6 +1,6 @@
 // Unit tests for the build-tag-free projection helpers. These run under
 // standard `go test` (no Ollama, no `eval` tag) and assert the core
-// solov2-7ma property: the variant selector produces DIFFERENT embed
+// property: the variant selector produces DIFFERENT embed
 // text for different variants, and the corpus is built via domain.EmbedText.
 package recallprojection
 
@@ -126,7 +126,7 @@ func TestVariantByName(t *testing.T) {
 		if got := VariantByName(name); got != want {
 			t.Fatalf("VariantByName(%q): got %v want %v", name, got, want)
 		}
-		// Round-trip through String() for the canonical names.
+		// Round-trip through String for the canonical names.
 		if want != domain.EmbedVariantBaseline && VariantByName(want.String()) != want {
 			t.Fatalf("round-trip failed for %v", want)
 		}

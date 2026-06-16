@@ -5,15 +5,15 @@ import (
 )
 
 // This file holds the variable-origin / return-type inference used to bind
-// chained-selector and local-variable method calls (`v := pkg.New(); v.M()` and
-// `g := New(); g.Render()`) at promotion time. The collectors here feed
+// chained-selector and local-variable method calls (`v:= pkg.New; v.M` and
+// `g:= New; g.Render`) at promotion time. The collectors here feed
 // collectCallNames and the cross-package CALLS resolver; the call extraction
 // itself lives in go.go.
 
-// localVarOrigin tracks variables declared via `v := pkg.X(...)` inside
+// localVarOrigin tracks variables declared via `v:= pkg.X(.)` inside
 // a function body, mapping the local name to its origin package. Used
-// to recognise chained-selector calls like `v.Method()` whose receiver
-// type the parser cannot infer . The map covers the most
+// to recognise chained-selector calls like `v.Method` whose receiver
+// type the parser cannot infer. The map covers the most
 // common Go DI pattern (constructor + method calls); more elaborate
 // inference (var via assignment, method chains through interfaces) is
 // out of scope here — those fall through to the existing unresolved
@@ -23,9 +23,10 @@ type localVarOrigin = string
 // collectLocalVarOrigins walks a function body and returns the map of
 // short-var-declared identifiers to their originating package qualifier.
 // Recognised RHS shapes (see originPkgFromRHS):
-//   - `v := pkg.X(...)`          call_expression with selector function
-//   - `v := pkg.Type{...}`       composite literal with qualified type
-//   - `v := &pkg.Type{...}`      address-of composite literal
+//
+//	`v:= pkg.X(.)` call_expression with selector function
+//	`v:= pkg.Type{.}` composite literal with qualified type
+//	`v:= &pkg.Type{.}` address-of composite literal
 //
 // Unrecognised shapes (multi-value returns, type assertions, method
 // chains, anonymous-type literals) are intentionally skipped so the map
@@ -60,23 +61,21 @@ func collectLocalVarOrigins(node *sitter.Node, src []byte) map[string]localVarOr
 }
 
 // collectPackageVarOrigins walks the file root and returns origins for
-// top-level `var x = ...` declarations whose RHS is a package-qualified
+// top-level `var x =.` declarations whose RHS is a package-qualified
 // constructor call or composite literal. Mirrors collectLocalVarOrigins
 // but covers the file-scope shape that drives every cobra app:
 //
-//	var rootCmd = &cobra.Command{...}   // -> rootCmd -> cobra
-//	var defaultPool = pool.New()        // -> defaultPool -> pool
+//	var rootCmd = &cobra.Command{.} // -> rootCmd -> cobra
+//	var defaultPool = pool.New // -> defaultPool -> pool
 //
-// Before this collector landed, `rootCmd.AddCommand(helloCmd)` in init()
+// Before this collector landed, `rootCmd.AddCommand(helloCmd)` in init
 // emitted UnresolvedCall{PkgQualifier:"rootCmd"} — an unresolvable
 // bareword — so no cross-repo CALLS stub was ever created against the
-// cobra module (solov2-8ffo / solov2-zuvl, surfaced by the junior
+// cobra module ( /, surfaced by the junior
 // onboarding journey).
-//
 // Only single-spec `var x = expr` shapes are recognised; grouped
-// `var ( ... )` blocks and multi-LHS specs are walked through the
+// `var (. )` blocks and multi-LHS specs are walked through the
 // var_spec_list path so each spec is inspected individually.
-//
 // Verbatim relocation: this var-spec walk predates the per-function complexity
 // gate, which is diff-scoped and only flags it because the file split makes git
 // see the move as new code.
@@ -135,13 +134,13 @@ func collectPackageVarOrigins(root *sitter.Node, src []byte) map[string]localVar
 // shapes the cross-package-CALLS resolver can use downstream are
 // included:
 //
-//	func New() Greeting       -> New -> Greeting
-//	func New() *Greeting      -> New -> Greeting
+//	func New Greeting -> New -> Greeting
+//	func New *Greeting -> New -> Greeting
 //
 // Multi-result returns, named result parameters with non-trivial
 // types, and qualified types (pkg.Other) are intentionally skipped:
 // without same-file binding the resolver has nothing to do, and
-// recording the wrong type would invent false edges .
+// recording the wrong type would invent false edges.
 func collectInFileFunctionReturns(root *sitter.Node, src []byte) map[string]string {
 	out := map[string]string{}
 	if root == nil {
@@ -184,7 +183,7 @@ func simpleReturnTypeName(result *sitter.Node, src []byte) string {
 		}
 		return ""
 	case "parameter_list":
-		// `func() T` parses as parameter_list with a single
+		// `func T` parses as parameter_list with a single
 		// parameter_declaration whose type is T.
 		if int(result.NamedChildCount()) != 1 {
 			return ""
@@ -202,15 +201,14 @@ func simpleReturnTypeName(result *sitter.Node, src []byte) string {
 	return ""
 }
 
-// collectLocalReceiverTypes walks a function body for `v := F(...)`
+// collectLocalReceiverTypes walks a function body for `v:= F(.)`
 // short-var declarations whose RHS is a bare-identifier call to a
 // function in funcReturns. The returned map binds v to the function's
-// return type so v.Method() downstream resolves to ReceiverType.Method
-// in this same file . Without it, `g := New("x"); g.Render()`
+// return type so v.Method downstream resolves to ReceiverType.Method
+// in this same file. Without it, `g:= New("x"); g.Render`
 // in greet_test.go emitted UnresolvedCall{PkgQualifier:"g"} — a bare
 // local-var name promotion could never bind, so test files were
 // invisible to blast/call_chain for in-repo methods.
-//
 // Verbatim relocation: this short-var walk predates the per-function complexity
 // gate, which is diff-scoped and only flags it because the file split makes git
 // see the move as new code.
@@ -235,8 +233,8 @@ func collectLocalReceiverTypes(body *sitter.Node, src []byte, funcReturns map[st
 					name := string(src[lhs.StartByte():lhs.EndByte()])
 					switch {
 					case rhs.Type() == "call_expression":
-						// `v := F(...)` where F is a same-file function returning
-						// a same-package type (solov2-rlfe).
+						// `v:= F(.)` where F is a same-file function returning
+						// a same-package type.
 						fn := rhs.ChildByFieldName("function")
 						if fn != nil && fn.Type() == "identifier" {
 							if recvType, ok := funcReturns[string(src[fn.StartByte():fn.EndByte()])]; ok {
@@ -244,8 +242,8 @@ func collectLocalReceiverTypes(body *sitter.Node, src []byte, funcReturns map[st
 							}
 						}
 					default:
-						// `v := T{...}` / `v := &T{...}` composite literal of a
-						// bare same-package type (solov2-d521).
+						// `v:= T{.}` / `v:= &T{.}` composite literal of a
+						// bare same-package type.
 						if t := compositeLitBareType(rhs, src); t != "" {
 							out[name] = t
 						}
@@ -263,11 +261,11 @@ func collectLocalReceiverTypes(body *sitter.Node, src []byte, funcReturns map[st
 }
 
 // compositeLitBareType returns the bare (unqualified, pointer-stripped) type
-// name of a composite-literal RHS — `T{...}` or `&T{...}` — when the type is a
-// same-package type_identifier, else "". A qualified `pkg.T{...}` returns ""
+// name of a composite-literal RHS — `T{.}` or `&T{.}` — when the type is a
+// same-package type_identifier, else "". A qualified `pkg.T{.}` returns ""
 // (it is a cross-package value, handled by collectLocalVarOrigins as a package
-// origin, not a same-package receiver type), so we never mis-bind `v.M()` to a
-// same-package `T.M` that isn't the real type (solov2-d521).
+// origin, not a same-package receiver type), so we never mis-bind `v.M` to a
+// same-package `T.M` that isn't the real type.
 func compositeLitBareType(rhs *sitter.Node, src []byte) string {
 	switch rhs.Type() {
 	case "composite_literal":
@@ -276,7 +274,7 @@ func compositeLitBareType(rhs *sitter.Node, src []byte) string {
 			return string(src[t.StartByte():t.EndByte()])
 		}
 	case "unary_expression":
-		// &T{...} — operand is the composite_literal.
+		// &T{.} — operand is the composite_literal.
 		if op := rhs.ChildByFieldName("operand"); op != nil {
 			return compositeLitBareType(op, src)
 		}
@@ -286,9 +284,9 @@ func compositeLitBareType(rhs *sitter.Node, src []byte) string {
 
 // collectParamReceiverTypes maps the caller declaration's parameter names to
 // their bare same-package type — `func f(o Order, s *Server)` yields
-// {o:Order, s:Server} — so a method call on a typed parameter, `o.Method()`,
+// {o:Order, s:Server} — so a method call on a typed parameter, `o.Method`,
 // binds to `Order.Method` rather than falling through as an unbindable
-// package-qualifier UnresolvedCall (solov2-d521). Only bare `T` / `*T`
+// package-qualifier UnresolvedCall. Only bare `T` / `*T`
 // parameter types are recorded (via simpleReturnTypeName, which pointer-strips
 // to match the method node's receiver-type name); qualified, slice, map, func
 // and generic parameter types yield "" and are skipped, so a wrong type is
@@ -360,7 +358,7 @@ func originPkgFromRHS(rhs *sitter.Node, src []byte) string {
 		}
 		return string(src[pkg.StartByte():pkg.EndByte()])
 	case "unary_expression":
-		// &pkg.Type{...} — operand is a composite_literal.
+		// &pkg.Type{.} — operand is a composite_literal.
 		operand := rhs.ChildByFieldName("operand")
 		if operand == nil {
 			return ""

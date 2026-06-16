@@ -73,7 +73,6 @@ func TestFindTodos_ReturnsOpenByDefault(t *testing.T) {
 
 // TestFindTodos_EmitsSnakeCaseKeys guards the snake_case surface contract:
 // the response must not leak the PascalCase Go field names of ports.TodoEntry
-// .
 func TestFindTodos_EmitsSnakeCaseKeys(t *testing.T) {
 	q := &stubTodoQuerier{entries: []ports.TodoEntry{
 		{FindingID: "t1", RepoID: "r", Branch: "main", FilePath: "a.go", Message: "TODO: x", State: "open", CreatedAt: 42},
@@ -101,9 +100,9 @@ func TestFindTodos_EmitsSnakeCaseKeys(t *testing.T) {
 	}
 }
 
-// TestFindTodos_EmitsDegradedReasonsAsEmptyArray pins solov2-7cw7: the
+// TestFindTodos_EmitsDegradedReasonsAsEmptyArray pins: the
 // README's "Conventions across the tool surface" promises every tool
-// includes degraded_reasons (as [] when nothing is degraded). eng_find_todos
+// includes degraded_reasons (as when nothing is degraded). eng_find_todos
 // previously omitted the field entirely.
 func TestFindTodos_EmitsDegradedReasonsAsEmptyArray(t *testing.T) {
 	q := &stubTodoQuerier{entries: nil}
@@ -169,9 +168,9 @@ func TestFindTodos_RegistersOneTool(t *testing.T) {
 	}
 }
 
-// TestFindTodos_RelativizesAbsolutePath guards solov2-v7dq: eng_find_todos
+// TestFindTodos_RelativizesAbsolutePath guards: eng_find_todos
 // emits repo-relative file_path so it agrees with eng_list_findings per
-// solov2-62gc. Without the RepoLister we can't relativize, so the absolute
+// Without the RepoLister we can't relativize, so the absolute
 // path passes through unchanged — both behaviours are tested.
 func TestFindTodos_RelativizesAbsolutePath(t *testing.T) {
 	q := &stubTodoQuerier{entries: []ports.TodoEntry{
@@ -200,7 +199,7 @@ func TestFindTodos_RelativizesAbsolutePath(t *testing.T) {
 	}
 }
 
-// TestFindTodos_DegradedWhenWorkingTreeDirty guards solov2-k1jm: an empty
+// TestFindTodos_DegradedWhenWorkingTreeDirty guards: an empty
 // todos result paired with an uncommitted edit in the working tree must
 // carry a degraded_reason so the caller can show "commit first to scan"
 // guidance instead of a confusing silent zero. Uses a real on-disk repo

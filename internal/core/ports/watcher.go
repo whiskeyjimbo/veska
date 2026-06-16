@@ -27,7 +27,7 @@ type FileEvent struct {
 type Watcher interface {
 	// Watch registers the directory tree rooted at dir for change events and
 	// returns a channel on which FileEvents are delivered. The channel is closed
-	// when ctx is cancelled or Close is called. Calling Watch again on an already-
+	// when ctx is cancelled or Close is called. Calling Watch again on an already
 	// watched directory is a no-op and returns the same channel.
 	Watch(ctx context.Context, dir string) (<-chan FileEvent, error)
 

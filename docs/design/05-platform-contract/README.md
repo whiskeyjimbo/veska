@@ -1,6 +1,6 @@
 ---
 id: SOLO-05
-title: "Plugin Surface — Go Interfaces, One Impl Each"
+title: "Plugin Surface - Go Interfaces, One Impl Each"
 status: draft
 version: 0.1.0
 last_reviewed: 2026-05-08
@@ -9,11 +9,11 @@ verified: true
 verified_date: "2026-05-17"
 ---
 
-# SOLO-05 — Plugin Surface
+# SOLO-05 - Plugin Surface
 
 Veska has plugin-swappable ports. Each is a plain Go interface
 in `internal/core/ports/`. **Each ships with exactly one
-implementation at M1.** A second impl is a future ADR — once
+implementation at M1.** A second impl is a future ADR - once
 that ADR ratifies the second impl, provider-keyed selection
 (`[<port>].provider = "x" | "y"`) becomes the legitimate
 composition mechanism without further ceremony. Today's
@@ -86,7 +86,7 @@ config surface; CONFIG-SURFACE.md §3 is the canonical inventory:
 
 The other six ports in §2 (`SecretsScanner`, `Notifier`,
 `CoverageSource`, `OwnershipSource`, `FileWatcher`, `CodeParser`)
-have **no config surface** — the daemon constructs the one shipped
+have **no config surface** - the daemon constructs the one shipped
 impl unconditionally. If a future impl needs config, the ADR that
 adds it also adds the TOML section to CONFIG-SURFACE.md.
 
@@ -101,11 +101,11 @@ Eleven ports (the original ten plus `TokenEstimator`, §2.11).
 Some have a default impl that ships and runs by default;
 some have a default impl of "off / no-op" because the feature is
 opt-in. The "what a second impl would need to provide" column is
-not a contract — it is a sketch of where another impl might go.
+not a contract - it is a sketch of where another impl might go.
 
 | Port | Default impl | Status |
 |---|---|---|
-| `Tracker` | `none` (no tracker integration); `bd-cli` (the local issue-tracker CLI) is the only shipped non-`none` impl | Ships **off** by default — opt-in via `veska init` or `[tracker] provider = "bd-cli"` |
+| `Tracker` | `none` (no tracker integration); `bd-cli` (the local issue-tracker CLI) is the only shipped non-`none` impl | Ships **off** by default - opt-in via `veska init` or `[tracker] provider = "bd-cli"` |
 | `VulnSource` | `osv` (OSV.dev with a local cache) | Ships off by default |
 | `SecretsScanner` | `veska-builtin` (in-process regex + entropy) | Ships on by default |
 | `Embedder` | `ollama` with `nomic-embed-text` | Ships on by default |
@@ -120,7 +120,7 @@ not a contract — it is a sketch of where another impl might go.
 ### 2.1 `Tracker`
 
 Reads the active task list and accepts task-state writes. **The
-default is `none`** — no tracker integration. Auto-link's
+default is `none`** - no tracker integration. Auto-link's
 "recent activity" signal (SOLO-11 §4) falls back to local
 heuristics (branch name, recently-touched symbols) when no
 tracker is configured.
@@ -268,7 +268,7 @@ non-streaming is what the review pipeline uses.
 The only `provider` value the daemon accepts today is `ollama`;
 any other value fails fast at startup. Hosted-provider config
 (API keys, additional `provider` values, USD cost caps) lands
-alongside hosted impls — not earlier.
+alongside hosted impls - not earlier.
 
 M5 ships the `ollama` impl. See `milestones/M5.md` epic m5.00.
 
@@ -279,7 +279,7 @@ writes a structured line to the daemon's stderr; the editor sees
 findings via MCP, so a noisy notifier is unnecessary for the
 common case. A second impl (Slack, email, webhook, syslog) would
 need to provide `Notify(NotificationEvent) error` and decide
-whether to fan out by severity / kind on its own — there is no
+whether to fan out by severity / kind on its own - there is no
 central de-dup policy in the daemon. Notifier is fire-and-forget
 from the application layer's perspective; failures log and do not
 block.
@@ -288,7 +288,7 @@ block.
 
 Ingests a coverage report (Go cover, lcov, cobertura, etc.) and
 emits per-symbol coverage records joined onto the graph. No
-default impl ships — coverage is opt-in and the user wires it via
+default impl ships - coverage is opt-in and the user wires it via
 `veska coverage import <path>` or a CI hook. A second impl would
 need to parse its format and return `CoverageRecord` rows keyed
 by `(file_path, line_start, line_end)`; the application layer
@@ -299,7 +299,7 @@ resolves those back to `NodeID`s.
 Answers "who owns this file?" The default impl parses
 `.github/CODEOWNERS` (and the equivalents under
 `.gitlab/CODEOWNERS` and `docs/CODEOWNERS`) and returns the
-matched owner strings as-is — no resolution to a directory record,
+matched owner strings as-is - no resolution to a directory record,
 because there is no directory (SOLO-10 §5). A second impl
 (an org-specific YAML, an internal API) would need to provide
 `Owners(path) []string` and a `Refresh()` to re-read its source.
@@ -334,7 +334,7 @@ namespace, not separate language address spaces. ADR-S0006's
 "five edges × N languages" framing counts TSX/JSX/JS once each
 because they each carry their own grammar; the address space is
 shared with TS/JS. New OO languages (Java, Python, C#) carry
-OQ-S008 — the five-edge set may need IMPLEMENTS / EXTENDS, and
+OQ-S008 - the five-edge set may need IMPLEMENTS / EXTENDS, and
 that lands as an ADR against measured queries when those
 parsers ship.
 
@@ -353,7 +353,7 @@ type TokenEstimator interface {
 }
 ```
 
-Default impl is `chars/4` — the cheapest correct-shape estimator
+Default impl is `chars/4` - the cheapest correct-shape estimator
 for English-ish source code. It is documented as approximate;
 callers tune token caps with that shape in mind. Adding a real
 tokenizer (tiktoken's `cl100k_base`) is a future second-impl
@@ -413,7 +413,7 @@ the resulting contract.
 Three steps:
 
 1. Write the Go interface in `internal/core/ports/` (file named
-   for the capability — e.g. `embedder.go`, `vector.go` — not
+   for the capability - e.g. `embedder.go`, `vector.go` - not
    `<port>_repository.go`).
 2. Write the one impl in `internal/infrastructure/<port>/`.
 3. Wire it into the composition root, `cmd/veska-daemon/wire.go`.
@@ -431,7 +431,7 @@ a contract.
 - Each port's configured `kind`.
 - Whether the impl initialized cleanly at startup.
 - The last successful operation timestamp (for impls that have a
-  natural "last call" — Embedder, VulnSource refresh, Tracker
+  natural "last call" - Embedder, VulnSource refresh, Tracker
   list).
 - The last error, if any.
 

@@ -112,7 +112,7 @@ func TestPromotionStore_RollsBackOnMidTxFailure(t *testing.T) {
 	}
 }
 
-// TestPromotionStore_CrossPackageCallsResolution pins solov2-xc51.2: a
+// TestPromotionStore_CrossPackageCallsResolution pins: a
 // package-qualified call (cmd.Execute) in one package binds to the exported
 // symbol in another package of the SAME module, emitting a concrete CALLS
 // edge. main.go imports github.com/acme/app/cmd; the module_path on the repo
@@ -128,7 +128,7 @@ func TestPromotionStore_CrossPackageCallsResolution(t *testing.T) {
 	}
 	store := sqlite.NewPromotionStore(db, []sqlite.PromotionSink{sqlite.NewFTSSink(), sqlite.NewEmbedRefSink()})
 
-	// cmd/root.go defines Execute; main.go calls cmd.Execute().
+	// cmd/root.go defines Execute; main.go calls cmd.Execute.
 	exec := mustNode(t, "execID", "/tmp/app/cmd/root.go", "Execute", domain.KindFunction, domain.WithExported(true))
 	mainFn := mustNode(t, "mainID", "/tmp/app/main.go", "main", domain.KindFunction)
 
@@ -169,7 +169,7 @@ func TestPromotionStore_CrossPackageCallsResolution(t *testing.T) {
 	}
 }
 
-// TestPromotionStore_PersistsFileImports pins solov2-xjm5: imports parsed
+// TestPromotionStore_PersistsFileImports pins: imports parsed
 // for each file land in file_imports with the (repo_id, branch, file_path)
 // grain, and a re-promote of the same file replaces rather than duplicates.
 func TestPromotionStore_PersistsFileImports(t *testing.T) {
@@ -228,8 +228,8 @@ func TestPromotionStore_PersistsFileImports(t *testing.T) {
 	}
 }
 
-// TestPromotionStore_ChainedSelectorMethodCallInModule covers solov2-9rc2
-// Phase B: a chained-selector method call (`g := pkg.New(...); g.Hello()`)
+// TestPromotionStore_ChainedSelectorMethodCallInModule covers
+// Phase B: a chained-selector method call (`g:= pkg.New(.); g.Hello`)
 // whose target package is in the SAME module must bind to the method node
 // via bare-name lookup against `<Receiver>.<Method>`. Parser flags the
 // UnresolvedCall with IsMethodCall=true; promotion resolves it by suffix
@@ -246,7 +246,7 @@ func TestPromotionStore_ChainedSelectorMethodCallInModule(t *testing.T) {
 	store := sqlite.NewPromotionStore(db, []sqlite.PromotionSink{sqlite.NewFTSSink(), sqlite.NewEmbedRefSink()})
 
 	// greet/greet.go defines Greeter.Hello (method) + New (constructor).
-	// runner/runner.go has Run that does `g := greet.New(...); g.Hello(...)`.
+	// runner/runner.go has Run that does `g:= greet.New(.); g.Hello(.)`.
 	helloMethod := mustNode(t, "helloID", "/tmp/app/greet/greet.go", "Greeter.Hello", domain.KindMethod, domain.WithExported(true))
 	newFn := mustNode(t, "newID", "/tmp/app/greet/greet.go", "New", domain.KindFunction, domain.WithExported(true))
 	runFn := mustNode(t, "runID", "/tmp/app/runner/runner.go", "Run", domain.KindFunction, domain.WithExported(true))
@@ -261,9 +261,9 @@ func TestPromotionStore_ChainedSelectorMethodCallInModule(t *testing.T) {
 				Nodes:   []*domain.Node{runFn},
 				Imports: map[string]string{"greet": "github.com/acme/app/greet"},
 				UnresolvedCalls: []domain.UnresolvedCall{
-					// Plain pkg.New from `g := greet.New(...)`.
+					// Plain pkg.New from `g:= greet.New(.)`.
 					{CallerID: "runID", CalleeName: "New", PkgQualifier: "greet"},
-					// Chained-selector method call from `g.Hello(...)`.
+					// Chained-selector method call from `g.Hello(.)`.
 					{CallerID: "runID", CalleeName: "Hello", PkgQualifier: "greet", IsMethodCall: true},
 				},
 			},
@@ -342,8 +342,8 @@ func TestPromotionStore_ChainedSelectorAmbiguityIsSkipped(t *testing.T) {
 	}
 }
 
-// TestPromotionStore_ChainedSelectorEmitsMethodCallStub covers solov2-9rc2
-// Phase C: when a chained-selector method call (`g := pkg.New(...); g.X()`)
+// TestPromotionStore_ChainedSelectorEmitsMethodCallStub covers
+// Phase C: when a chained-selector method call (`g:= pkg.New(.); g.X`)
 // imports from a DIFFERENT module (cross-repo), promotion must emit a
 // cross_repo_edge_stub with method_call=1 and symbol_path=bare-method-name.
 // The reverse resolver (phase D) binds this to the receiver method later.
@@ -369,9 +369,9 @@ func TestPromotionStore_ChainedSelectorEmitsMethodCallStub(t *testing.T) {
 				Nodes:   []*domain.Node{runFn},
 				Imports: map[string]string{"greetlib": "github.com/jrose/greetlib"},
 				UnresolvedCalls: []domain.UnresolvedCall{
-					// Plain pkg.New(...) — produces a regular stub (method_call=0).
+					// Plain pkg.New(.) — produces a regular stub (method_call=0).
 					{CallerID: "runID", CalleeName: "New", PkgQualifier: "greetlib"},
-					// g.Hello(...) chained selector — produces a method-call stub.
+					// g.Hello(.) chained selector — produces a method-call stub.
 					{CallerID: "runID", CalleeName: "Hello", PkgQualifier: "greetlib", IsMethodCall: true},
 				},
 			},
@@ -411,7 +411,7 @@ func TestPromotionStore_ChainedSelectorEmitsMethodCallStub(t *testing.T) {
 }
 
 // TestPromotionStore_CrossPackageResolvesAgainstPromotedGraph pins the
-// incremental-commit half of solov2-xc51.2: when the callee's file is NOT in
+// incremental-commit half of: when the callee's file is NOT in
 // the current batch (already promoted earlier), the qualified call still binds
 // by falling back to a promoted-graph lookup.
 func TestPromotionStore_CrossPackageResolvesAgainstPromotedGraph(t *testing.T) {
@@ -459,7 +459,7 @@ func TestPromotionStore_CrossPackageResolvesAgainstPromotedGraph(t *testing.T) {
 }
 
 // TestPromotionStore_IntraPackageResolvesAgainstPromotedGraph pins
-// solov2-ll57.13: an incremental single-file commit whose plain (non-method,
+// an incremental single-file commit whose plain (non-method,
 // non-pkg-qualified) call targets a same-package symbol in an UNCHANGED sibling
 // file (not in this batch) must still bind, by falling back to the promoted
 // graph — the intra-package twin of CrossPackageResolvesAgainstPromotedGraph.
@@ -487,7 +487,7 @@ func TestPromotionStore_IntraPackageResolvesAgainstPromotedGraph(t *testing.T) {
 		t.Fatalf("first Promote: %v", err)
 	}
 
-	// Second commit: only main.go (util.go unchanged, not in batch). Run() makes
+	// Second commit: only main.go (util.go unchanged, not in batch). Run makes
 	// a bare-name call to helper — same package, cross-file, callee not staged.
 	runFn := mustNode(t, "runID", "/tmp/app/main.go", "Run", domain.KindFunction)
 	if err := store.Promote(ctx, application.PromotionBatch{
@@ -509,7 +509,7 @@ func TestPromotionStore_IntraPackageResolvesAgainstPromotedGraph(t *testing.T) {
 	}
 }
 
-// TestPromotionStore_CrossRepoStub pins solov2-xc51.3 / solov2-1gj: a
+// TestPromotionStore_CrossRepoStub pins /: a
 // package-qualified call into ANOTHER module records a cross_repo_edge_stub
 // that the query-time resolver binds to the node in whichever registered repo
 // owns that module_path. Stdlib calls (fmt.Println) record no stub.
@@ -538,7 +538,7 @@ func TestPromotionStore_CrossRepoStub(t *testing.T) {
 		t.Fatalf("promote pflag: %v", err)
 	}
 
-	// Promote the app: main() calls flag.Parse() and fmt.Println().
+	// Promote the app: main calls flag.Parse and fmt.Println.
 	mainFn := mustNode(t, "mainID", "/tmp/app/main.go", "main", domain.KindFunction, domain.WithLanguage("go"))
 	if err := store.Promote(ctx, application.PromotionBatch{
 		RepoID: "app", Branch: "main", GitSHA: "a1", Actor: systemActor(), PromotedAt: now,
@@ -580,7 +580,7 @@ func TestPromotionStore_CrossRepoStub(t *testing.T) {
 	}
 }
 
-// TestPromotionStore_RouteHandlerEdgeResolution pins solov2-ketg: a route
+// TestPromotionStore_RouteHandlerEdgeResolution pins: a route
 // node's ROUTES route→handler reference (UnresolvedCall{EdgeKind:
 // EdgeRoutes}) binds to a same-package handler via the intra-package
 // resolver and materialises a ROUTES edge — not a CALLS edge. This is the
@@ -636,7 +636,7 @@ func TestPromotionStore_RouteHandlerEdgeResolution(t *testing.T) {
 	}
 }
 
-// TestPromotionStore_RouteHandlerCrossRepoStub pins solov2-ketg: a route
+// TestPromotionStore_RouteHandlerCrossRepoStub pins: a route
 // whose handler lives in another module records a cross-repo stub carrying
 // kind='ROUTES' (not CALLS), so the query-time resolver materialises a
 // ROUTES cross-repo edge. emitCrossRepoStub honours uc.EdgeKind and

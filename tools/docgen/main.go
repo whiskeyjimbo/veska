@@ -1,10 +1,9 @@
 // Command docgen generates derived Markdown reference pages for the manual
 // from the live source, so they cannot drift from the code. `make docs-gen`
 // runs it and CI fails if a committed page is stale.
-//
 // Subcommands:
 //
-//	docgen config <out.md>   env-var reference, AST-extracted from
+//	docgen config <out.md> env-var reference, AST-extracted from
 //	                         internal/platform/config (every os.Getenv("VESKA_*"))
 //
 // The CLI reference is generated separately by `veska gendocs` (it needs the

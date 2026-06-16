@@ -26,7 +26,7 @@ type fakeRepo struct {
 	edgesErr error
 	sigErr   error
 	// applyErr is returned from ApplyDecisions to simulate a tx-level
-	// failure (e.g. Commit fails) so callers can assert metrics-only-on-
+	// failure (e.g. Commit fails) so callers can assert metrics-only-on
 	// success.
 	applyErr error
 
@@ -364,9 +364,9 @@ func TestHandler_ContractDrift_Resolved_Closes(t *testing.T) {
 	}
 }
 
-// The discriminating test (solov2-zvh6.8): an untested-symbol finding whose
+// The discriminating test: an untested-symbol finding whose
 // anchor body drifted but STILL has no test caller must stay open via REFRESH,
-// not close. This is the exact failure the old "no anchor hash" doc feared —
+// not close. This is the exact failure the old "no anchor hash" doc feared
 // the proof Part A (emit anchor hash) is safe because Part B handles the re-run.
 func TestHandler_UntestedSymbol_StillUntested_Refreshes(t *testing.T) {
 	t.Parallel()
@@ -730,12 +730,12 @@ func TestHandler_Integration_PerRuleDispatch(t *testing.T) {
 	insertRepo(t, db, "repo1")
 
 	// Nodes:
-	//   n-dead-refresh   — no inbound edges, content changed.
-	//   n-dead-close     — has 1 inbound edge, content changed.
-	//   n-drift-refresh  — prev != current sig, content changed.
-	//   n-drift-close    — sigs match, content changed.
-	//   n-al             — content changed (auto-link gets closed regardless).
-	//   n-fresh          — content matches, finding stays open.
+	//   n-dead-refresh — no inbound edges, content changed.
+	//   n-dead-close — has 1 inbound edge, content changed.
+	//   n-drift-refresh — prev != current sig, content changed.
+	//   n-drift-close — sigs match, content changed.
+	//   n-al — content changed (auto-link gets closed regardless).
+	//   n-fresh — content matches, finding stays open.
 	insertNode(t, db, "n-dead-refresh", "repo1", "main", "pkg/a.go", "h-cur-dr")
 	insertNode(t, db, "n-dead-close", "repo1", "main", "pkg/a.go", "h-cur-dc")
 	insertNodeWithSig(t, db, "n-drift-refresh", "repo1", "main", "pkg/a.go", "h-cur-drr", "sig-old", "sig-new")
@@ -743,7 +743,7 @@ func TestHandler_Integration_PerRuleDispatch(t *testing.T) {
 	insertNode(t, db, "n-al", "repo1", "main", "pkg/a.go", "h-cur-al")
 	insertNode(t, db, "n-fresh", "repo1", "main", "pkg/a.go", "h-fresh")
 	//   n-untested-refresh — no test caller, content changed → stays untested.
-	//   n-untested-close   — a *_test.go CALLS caller appeared → now tested.
+	//   n-untested-close — a *_test.go CALLS caller appeared → now tested.
 	insertNode(t, db, "n-untested-refresh", "repo1", "main", "pkg/a.go", "h-cur-ur")
 	insertNode(t, db, "n-untested-close", "repo1", "main", "pkg/a.go", "h-cur-uc")
 	// A "caller" node + edge into n-dead-close.
@@ -921,7 +921,7 @@ func insertEdge(t *testing.T, db *sql.DB, edgeID, repoID, branch, src, dst strin
 	t.Helper()
 	// Production CALLS edges carry kind 'CALLS' (domain.EdgeCalls); the dead-code
 	// liveness predicate (HasInboundCallEdges) matches UPPER(kind)='CALLS', so
-	// this caller edge must use that kind to count as liveness (solov2-nmps.9).
+	// this caller edge must use that kind to count as liveness.
 	_, err := db.Exec(`INSERT INTO edges (
         edge_id, branch, repo_id, src_node_id, dst_node_id, kind, confidence, last_promoted_at
     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,

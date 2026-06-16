@@ -123,7 +123,7 @@ func TestAggregate_BucketsByPeriod(t *testing.T) {
 	}
 }
 
-// TestAggregateByRepo_Partitions covers solov2-0ql0: entries carrying a
+// TestAggregateByRepo_Partitions covers: entries carrying a
 // repo_id bucket into one Report per repo, untagged (pre-0ql0) entries
 // land under the "" key, and the per-repo Reports sum to the combined
 // Aggregate (same period-bucketing on both paths).
@@ -242,7 +242,7 @@ func TestEntryFor_UniqueFileChars(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// ADR-S0017 §1: FilePaths are repo-relative; EntryFor rejoins root to stat.
+	// FilePaths are repo-relative; EntryFor rejoins root to stat.
 	results := []savings.ResultFile{
 		{FilePath: "a.go", SnippetLen: 10},
 		{FilePath: "a.go", SnippetLen: 7}, // same file — count once

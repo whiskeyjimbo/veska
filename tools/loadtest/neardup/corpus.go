@@ -1,16 +1,16 @@
 //go:build eval
 
 // Package neardup holds the near-duplicate threshold-calibration harness
-// (solov2-md3n). The corpus is hand-curated real Go functions grouped into
+// The corpus is hand-curated real Go functions grouped into
 // families, each with mechanically-edited near-duplicate variants, so the
 // transformation (not synthetic prose) defines "clone". Three relationship
 // tiers are derived from it:
 //
-//   - neardup:   an original and a mechanical edit of it (rename, comment,
-//     reformat, statement reorder) — semantically identical code.
-//   - related:   two DIFFERENT real functions in the same family/domain —
-//     auto-link's "merely related" band.
-//   - unrelated: two functions from different families.
+//	neardup: an original and a mechanical edit of it (rename, comment,
+//	  reformat, statement reorder) — semantically identical code.
+//	related: two DIFFERENT real functions in the same family/domain
+//	  auto-link's "merely related" band.
+//	unrelated: two functions from different families.
 //
 // The harness embeds every text through a real provider, scores sampled
 // pairs through the production memvec path (1/(1+L2^2)), and reports the

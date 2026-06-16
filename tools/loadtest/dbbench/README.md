@@ -1,4 +1,4 @@
-# dbbench — Go SQLite driver comparison 
+# dbbench - Go SQLite driver comparison 
 
 Benchmarks Go SQLite drivers against the workloads veska's storage layer
 actually runs. Drove the solov2-jkgp decision to default to mattn; the
@@ -8,7 +8,7 @@ modernc opt-in has since been removed .
 
 | Driver | Build tags | Notes |
 |---|---|---|
-| `mattn/go-sqlite3`   | `eval,cgo,sqlite_fts5` | Production driver. cgo; `sqlite_fts5` is mandatory — the bench's FTS5 workload (`fts_query`) needs it. |
+| `mattn/go-sqlite3`   | `eval,cgo,sqlite_fts5` | Production driver. cgo; `sqlite_fts5` is mandatory - the bench's FTS5 workload (`fts_query`) needs it. |
 | `zombiezen.com/go/sqlite` | `eval` | Pure-Go. Non-`database/sql` API; the bench has a parallel implementation in `driver_zombiezen.go`. Swap would require an adapter rewrite of `internal/infrastructure/sqlite/*`. |
 
 ## Workloads
@@ -25,7 +25,7 @@ are computed from per-iteration wall time, ops/s from total elapsed time.
 | `bulk_ingest` | One tx with N node INSERTs (default 500) | initial ingest path |
 | `rehydrate_scan` | Full scan of `node_embedding_refs JOIN node_embeddings` (blob read) | `internal/application/embedder/rehydrate.go` (runs every daemon start) |
 
-The schema lives under `schema/0001_core.sql` — a trimmed superset of the
+The schema lives under `schema/0001_core.sql` - a trimmed superset of the
 production `internal/infrastructure/sqlite/migrations` (just what the six
 workloads touch). The bench owns its own schema so it can be applied
 identically through both the `database/sql` driver and zombiezen's `sqlitex`.
@@ -57,6 +57,6 @@ go test -tags="eval cgo sqlite_fts5" -run TestDBBench -timeout=600s -v ./tools/l
 
 `RESULTS.md` is regenerated on every run. The verdict block at the end picks
 the fastest driver per workload and counts wins, but **does not auto-pick a
-winner** — driver swap decisions need a human eye on the write-path numbers
+winner** - driver swap decisions need a human eye on the write-path numbers
 (`promotion_tx`, `bulk_ingest`) and the operational cost of swapping adapters
 (for zombiezen).

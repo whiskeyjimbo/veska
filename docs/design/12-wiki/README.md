@@ -1,6 +1,6 @@
 ---
 id: SOLO-12
-title: "Wiki — Mechanical Pages and the Context Pack"
+title: "Wiki - Mechanical Pages and the Context Pack"
 status: draft
 version: 0.2.0
 last_reviewed: 2026-05-16
@@ -19,7 +19,7 @@ files:
   - cmd/veska/wiki.go
 ---
 
-# SOLO-12 — Wiki
+# SOLO-12 - Wiki
 
 The wiki is small on purpose: two mechanically derived page kinds
 plus a small family of read-only MCP tools. Everything is computed
@@ -31,11 +31,11 @@ fixture corpus.
 
 As shipped in M4 (epic solov2-erp):
 
-1. **`hot_zone`** — a generated Markdown page, one per repo, plus
+1. **`hot_zone`** - a generated Markdown page, one per repo, plus
    the `eng_get_hot_zone` MCP tool.
-2. **`entry_points`** — a generated Markdown page, one per repo,
+2. **`entry_points`** - a generated Markdown page, one per repo,
    plus the `eng_get_entry_points` MCP tool.
-3. **`eng_get_context_pack`** — an MCP tool returning a
+3. **`eng_get_context_pack`** - an MCP tool returning a
    token-bounded context bundle for a symbol or a task.
 
 The Markdown page and the MCP tool for each kind are built from the
@@ -47,7 +47,7 @@ the two surfaces never diverge.
 A read-only MCP tool (`internal/application/contextpack`). The agent
 calls it; the daemon returns JSON. No LLM in the path.
 
-Input — exactly one of `symbol` or `task_id` is required:
+Input - exactly one of `symbol` or `task_id` is required:
 
 ```jsonc
 {
@@ -80,22 +80,22 @@ Output (`contextpack.Pack`):
 
 How each section is derived:
 
-- **`nodes`** — in symbol mode the seed set is `FindNodes(symbol)`;
+- **`nodes`** - in symbol mode the seed set is `FindNodes(symbol)`;
   in task mode `domain.Task` carries no graph link, so the repo's
   working-tree diff (`ChangedFiles`) is treated as the seed set and
   relevant nodes are the nodes in those changed files (`NodesInFile`).
   Either seed set is expanded by `blastradius.Service`.
-- **`recent_commits`** — `FileHistory` over the distinct files of the
+- **`recent_commits`** - `FileHistory` over the distinct files of the
   relevant nodes, 30-day window, capped at 25 files. Commit hash,
   author, time, subject. No LLM summary.
-- **`open_findings`** — relevant nodes flagged by
+- **`open_findings`** - relevant nodes flagged by
   `FindingQuerier.OpenFindingNodeIDs`.
-- **`tasks`** — the repo's active task, if any.
+- **`tasks`** - the repo's active task, if any.
 
 The bundle is clipped to the token budget by a deterministic
 byte-length heuristic (`len(json)/4`). Lowest-priority sections are
-dropped/clipped first — Tasks, then OpenFindings, then RecentCommits,
-then Nodes — and `truncated` records whether anything was cut. An
+dropped/clipped first - Tasks, then OpenFindings, then RecentCommits,
+then Nodes - and `truncated` records whether anything was cut. An
 oversized bundle is truncated, never rejected.
 
 ## 3. `hot_zone` page
@@ -124,7 +124,7 @@ just the table and a one-line header.
 
 One page per repo at `docs/veska/entry_points.md`
 (`wiki.EntryPointsPagePath`). Mechanical derivation, in
-`EntryPointsService.Select` — a symbol qualifies when **all three
+`EntryPointsService.Select` - a symbol qualifies when **all three
 gates** hold:
 
 1. **Adjacent test.** It has an inbound edge from a node whose file
@@ -141,7 +141,7 @@ ascending symbol name.
 
 `RenderEntryPoints` writes a single Markdown table:
 `Symbol`, `File`, `Kind`, `Blast Radius`. No LLM-written tour, no
-narrative, no synthesis prose — that material would need an LLM in
+narrative, no synthesis prose - that material would need an LLM in
 the loop, which the wiki avoids.
 
 ## 5. Rendering
@@ -161,7 +161,7 @@ rows. On each row it regenerates **both** pages and, only on full
 success (both pages written and the stamp persisted), records the
 wall-clock render time via the `RenderTimeStore` interface
 (SQLite-backed `daemon_state` key `wiki.last_render_at`). Any error
-— repo resolution, ranking, rendering, file write, stamp — propagates
+- repo resolution, ranking, rendering, file write, stamp - propagates
 wrapped so the `queue.Poller` retry path runs; a partial failure
 leaves the previous stamp intact, and re-render is idempotent.
 
@@ -197,10 +197,10 @@ convention (`BUDGET (unmeasured)` / `(measured M<N>)` /
 regeneration, and `entry_points` regeneration each have a row there.
 If a budget misses we rewrite it in SOLO-13, not here.
 
-## 7. What we deferred — M5/future, not shipped
+## 7. What we deferred - M5/future, not shipped
 
 Parked under `deferred/wiki/` (not in scope; return only behind
-an ADR). **None of the following ships in M4 — they all require an
+an ADR). **None of the following ships in M4 - they all require an
 LLM in the loop, which the M4 wiki has none of:**
 
 - `concept`, `entity`, `flow`, `decision`, `runbook`, `pitfall`

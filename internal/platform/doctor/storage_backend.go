@@ -19,16 +19,16 @@ type StorageBackendReport struct {
 	// VectorCount is the total number of stored vectors.
 	VectorCount int `json:"vector_count"`
 	// CeilingWarning is "" (healthy), "yellow" (≥75k for the memory backend),
-	// or "red" (≥90k for the memory backend).  Always "" for the usearch backend.
+	// or "red" (≥90k for the memory backend). Always "" for the usearch backend.
 	CeilingWarning string `json:"ceiling_warning"`
 }
 
 // CheckStorageBackend inspects the active VectorStorage backend and returns
 // a report including backend name, vector count, and any ceiling warnings.
-//
 // Ceiling warnings apply only to the in-memory backend:
-//   - yellow: VectorCount ≥ memvec.YellowThreshold (75k)
-//   - red:    VectorCount >  memvec.RedThreshold   (90k)
+//
+//	yellow: VectorCount ≥ memvec.YellowThreshold (75k)
+//	red: VectorCount > memvec.RedThreshold (90k)
 func CheckStorageBackend(params StorageBackendParams) StorageBackendReport {
 	report := StorageBackendReport{
 		Backend:     params.Backend,

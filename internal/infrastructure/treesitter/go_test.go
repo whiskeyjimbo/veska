@@ -41,7 +41,7 @@ func Add(a, b int) int {
 	}
 }
 
-// TestParseFile_TopLevelVarDecl guards solov2-b7wt + solov2-crn7:
+// TestParseFile_TopLevelVarDecl guards +:
 // generic top-level vars stay KindVariable, while a cobra command
 // struct-literal is promoted to a KindCommand node named by its Use:
 // word (not the Go var identifier). Without either, eng_find_symbol
@@ -81,7 +81,7 @@ const _hidden = "skip me"
 		}
 	}
 
-	// solov2-crn7: rootCmd is promoted to a command named by Use: ("tool"),
+	// rootCmd is promoted to a command named by Use: ("tool"),
 	// so the Go var name no longer appears as a KindVariable node.
 	if n := findNodeByName(result.Nodes, "rootCmd"); n != nil {
 		t.Errorf("rootCmd should be promoted to KindCommand, not emitted as %q", n.Kind)
@@ -100,7 +100,7 @@ const _hidden = "skip me"
 	}
 }
 
-// TestParseFile_CobraCommandTree guards solov2-crn7: AddCommand(...)
+// TestParseFile_CobraCommandTree guards: AddCommand(.)
 // wire-up becomes parent→child CONTAINS edges between command nodes, and
 // the Use: word — including the "verb [args]" form — names each command.
 func TestParseFile_CobraCommandTree(t *testing.T) {
@@ -143,7 +143,7 @@ func init() {
 	}
 }
 
-// TestParseFile_GinRoute guards solov2-ketg: a gin router.METHOD(path,
+// TestParseFile_GinRoute guards: a gin router.METHOD(path,
 // handler) call becomes a KindRoute node named "METHOD /path" plus a
 // ROUTES route→handler UnresolvedCall (resolved at promotion).
 func TestParseFile_GinRoute(t *testing.T) {
@@ -176,7 +176,7 @@ func listUsers(c *gin.Context) {}
 	}
 }
 
-// TestParseFile_ChiRouteTitleCaseVerb guards solov2-ketg: chi spells the
+// TestParseFile_ChiRouteTitleCaseVerb guards: chi spells the
 // verb title-case (Get); the route name still normalises to "GET /path"
 // and the handler selector resolves through the package qualifier.
 func TestParseFile_ChiRouteTitleCaseVerb(t *testing.T) {
@@ -203,10 +203,10 @@ func register(r chi.Router) {
 	}
 }
 
-// TestParseFile_RoutePrecisionGate guards solov2-ketg: selector calls that
+// TestParseFile_RoutePrecisionGate guards: selector calls that
 // look like routes but fail the gate must NOT promote to KindRoute nodes.
 // The title-case case is the key one — chi's verbs (Get/Post) collide with
-// common method names, so a gin/echo-only file's client.Post(...) must stay
+// common method names, so a gin/echo-only file's client.Post(.) must stay
 // inert (only chi enables title-case verbs).
 func TestParseFile_RoutePrecisionGate(t *testing.T) {
 	cases := map[string][]byte{
@@ -253,7 +253,7 @@ var _ = gin.New
 	}
 }
 
-// TestParseFile_EchoRouteFuncLiteralHandler guards solov2-ketg: echo uses
+// TestParseFile_EchoRouteFuncLiteralHandler guards: echo uses
 // upper-case verbs (like gin); an inline func-literal handler still yields
 // a route NODE but no route→handler edge (mirrors the deferred urfave
 // Action-closure case).
@@ -394,7 +394,7 @@ func hello() string {
 	}
 }
 
-// TestParseFile_CallsEdgeCarriesSourceLine guards solov2-izh6.31: every
+// TestParseFile_CallsEdgeCarriesSourceLine guards: every
 // CALLS edge must record the 1-indexed line of the call_expression on
 // edge.SourceLine. Without this, renderers fall back to the caller
 // node's declaration line and a 30-line function with three calls
@@ -449,7 +449,7 @@ func trailing()   {}
 	}
 }
 
-// TestParseFile_ErrorRecovery pins solov2-7nkm: a syntax error in one
+// TestParseFile_ErrorRecovery pins: a syntax error in one
 // declaration must not erase the file's other symbols. The clean function is
 // still extracted, a ParseFailure is reported, and the broken declaration is
 // skipped.
@@ -475,9 +475,9 @@ func AlsoGood() int { return 1 }
 	}
 }
 
-// TestParseFile_ImportsAndQualifiedCalls pins solov2-xc51.1: the parser must
+// TestParseFile_ImportsAndQualifiedCalls pins: the parser must
 // surface the file's import map and capture package-qualified calls
-// (cmd.Execute()) as UnresolvedCalls carrying a PkgQualifier — the foundation
+// (cmd.Execute) as UnresolvedCalls carrying a PkgQualifier — the foundation
 // for cross-package CALLS resolution at promotion.
 func TestParseFile_ImportsAndQualifiedCalls(t *testing.T) {
 	src := []byte(`package main
@@ -530,10 +530,10 @@ func main() {
 	}
 }
 
-// TestParseFile_ChainedSelectorMethodCall covers solov2-9rc2 phase A:
+// TestParseFile_ChainedSelectorMethodCall covers:
 // a local variable assigned from a package-qualified constructor whose
 // subsequent method calls were previously dropped by the parser
-// (`g := greetlib.New(...); g.Hello(...)` only produced Run→New, not
+// (`g:= greetlib.New(.); g.Hello(.)` only produced Run→New, not
 // Run→Hello). The parser must now emit an UnresolvedCall with
 // IsMethodCall=true so promotion can bind by method name within the
 // originating package.
@@ -575,8 +575,8 @@ func Run(name string) string {
 	}
 }
 
-// TestParseFile_StructFieldMethodCall covers solov2-9rc2 phase E v1:
-// `s.field.Method()` where the field is declared with a same-package
+// TestParseFile_StructFieldMethodCall covers v1:
+// `s.field.Method` where the field is declared with a same-package
 // concrete struct type resolves directly to ReceiverType.Method via the
 // file's symbol map. This is the hexagonal/DI shape that the original
 // epic acceptance ("Promoter.Promote ≥ 7 edges") was filed against.
@@ -627,7 +627,7 @@ func (p *Promoter) Promote() string {
 	}
 }
 
-// TestParseFile_InterfaceMethodsAsNodes covers solov2-9rc2 phase E v2:
+// TestParseFile_InterfaceMethodsAsNodes covers v2:
 // every method declared on an interface type must surface as its own
 // KindMethod node named IfaceName.MethodName, so chained-selector calls
 // through interface-typed fields can resolve to a concrete graph node.
@@ -659,8 +659,8 @@ type AuditWriter interface {
 	}
 }
 
-// TestParseFile_SamePackageInterfaceFieldCall covers solov2-9rc2 phase E
-// v2 same-package path: `p.store.Promote()` where store is a field of an
+// TestParseFile_SamePackageInterfaceFieldCall covers
+// v2 same-package path: `p.store.Promote` where store is a field of an
 // interface type declared in the same package resolves to the interface
 // method node IfaceName.Method via the file's symbol map.
 func TestParseFile_SamePackageInterfaceFieldCall(t *testing.T) {
@@ -707,8 +707,8 @@ func (p *Promoter) Promote() error {
 	}
 }
 
-// TestParseFile_CrossPackageInterfaceFieldCall covers solov2-9rc2 phase E v2
-// cross-package path: `p.audit.Write()` where audit is an interface-typed
+// TestParseFile_CrossPackageInterfaceFieldCall covers v2
+// cross-package path: `p.audit.Write` where audit is an interface-typed
 // field from another package emits an UnresolvedCall with PkgQualifier
 // and IsMethodCall=true, which Phase C/D resolve to the interface method
 // node in the imported package.
@@ -742,10 +742,9 @@ func (p *Promoter) Promote() {
 	}
 }
 
-// TestParseFile_PromoterShape_ChainedFieldCalls is a regression-shape
-// test mirroring the original solov2-9rc2 epic acceptance: a hexagonal
+// test mirroring the original epic acceptance: a hexagonal
 // Promoter with multiple chained-selector calls through struct fields.
-// Each p.X.M() chain must produce an UnresolvedCall or an in-file edge.
+// Each p.X.M chain must produce an UnresolvedCall or an in-file edge.
 func TestParseFile_PromoterShape_ChainedFieldCalls(t *testing.T) {
 	src := []byte(`package app
 
@@ -828,14 +827,14 @@ func (p *Promoter) Promote() {
 	}
 }
 
-// TestParseFile_AnonCallsInTopLevelVar covers solov2-y7gu (anonymous
+// TestParseFile_AnonCallsInTopLevelVar covers (anonymous
 // functions in top-level var initialisers contribute CALLS edges)
-// extended by solov2-zuvl (attribution is the SURROUNDING VAR, not the
+// extended by (attribution is the SURROUNDING VAR, not the
 // package node, whenever the var has a resolvable name). Legacy
 // behaviour attributed both calls to the package node — that hid the
 // caller's identity for every cobra-app initialiser. New behaviour:
-// `root = func(){ serveRoot() }` produces root → serveRoot, and
-// `chk = func(){ validate() }` produces chk → validate. The package
+// `root = func{ serveRoot }` produces root → serveRoot, and
+// `chk = func{ validate }` produces chk → validate. The package
 // node is no longer the CALLS src for these.
 func TestParseFile_AnonCallsInTopLevelVar(t *testing.T) {
 	src := []byte(`package cli
@@ -887,7 +886,7 @@ var (
 	if !hasEdge(chkID, validateID) {
 		t.Errorf("missing CALLS edge chk -> validate (from var's func literal)")
 	}
-	// Negative: must NOT attribute to package — solov2-zuvl regression.
+	// Negative: must NOT attribute to package regression.
 	if hasEdge(pkgID, serveRootID) || hasEdge(pkgID, validateID) {
 		t.Errorf("anon-func calls must attribute to surrounding var, not package node")
 	}
@@ -898,7 +897,7 @@ var (
 // variable (e.g. a function parameter, a struct field, an unrecognised
 // expression) must keep the prior behaviour — treated as a package
 // qualifier with IsMethodCall=false. Otherwise we'd wrongly bind real
-// pkg.Foo() calls to method-name lookups.
+// pkg.Foo calls to method-name lookups.
 func TestParseFile_ChainedSelector_UnknownOperandStillFallsThrough(t *testing.T) {
 	src := []byte(`package main
 
@@ -920,9 +919,9 @@ func main(arg string) {
 	}
 }
 
-// TestParseFile_ReceiverSelectorCallsEdge pins solov2-q9p: when a method
-// on *Server has body 's.foo()', the parser emits a CALLS edge from
-// Server.Bar -> Server.foo. Without this, idiomatic Go (s.x() / s.y())
+// TestParseFile_ReceiverSelectorCallsEdge pins: when a method
+// on *Server has body 's.foo', the parser emits a CALLS edge from
+// Server.Bar -> Server.foo. Without this, idiomatic Go (s.x / s.y)
 // produces zero call edges and the call graph is useless.
 func TestParseFile_ReceiverSelectorCallsEdge(t *testing.T) {
 	src := []byte(`package foo
@@ -993,9 +992,9 @@ func brokenFunc( {
 	}
 }
 
-// TestParseFile_TreeSitterFalsePositive_GoParserAccepts pins solov2-0kv6:
+// TestParseFile_TreeSitterFalsePositive_GoParserAccepts pins:
 // the tree-sitter Go grammar (smacker fork) lags behind Go's spec — it
-// flags valid constructs like `new("string-literal")` (Go 1.26+ new-as-
+// flags valid constructs like `new("string-literal")` (Go 1.26+ new-as
 // converter) as syntax errors. ParseFile must cross-check with go/parser
 // and suppress the spurious parse-failure when go/parser accepts the file.
 func TestParseFile_TreeSitterFalsePositive_GoParserAccepts(t *testing.T) {
@@ -1026,7 +1025,7 @@ func use() *string {
 }
 
 // TestParseFile_RealSyntaxError_StillReported guards the other half of
-// solov2-0kv6: when go/parser ALSO rejects the file, ParseFile must keep
+// when go/parser ALSO rejects the file, ParseFile must keep
 // emitting the parse-failure (and prefer go/parser's more precise message).
 func TestParseFile_RealSyntaxError_StillReported(t *testing.T) {
 	src := []byte(`package foo
@@ -1087,7 +1086,7 @@ func Bar() {}
 	}
 }
 
-// --- helpers ---
+// helpers
 
 func findNodeByName(nodes []*domain.Node, name string) *domain.Node {
 	for _, n := range nodes {
@@ -1137,7 +1136,7 @@ func findEdge(edges []*domain.Edge, src, tgt domain.NodeID, kind domain.EdgeKind
 	return nil
 }
 
-// TestParseFile_FunctionLocalTypesIgnored pins solov2-14lw: Go allows
+// TestParseFile_FunctionLocalTypesIgnored pins: Go allows
 // declaring named types inside function bodies, and real codebases (hugo:
 // common/hreflect/helpers_test.go) routinely declare the same local name
 // (`type k string`) inside two different functions. Those are not part of
@@ -1168,8 +1167,8 @@ func b() {
 	}
 }
 
-// TestParseFile_MultipleInitFunctions pins solov2-14lw: Go allows multiple
-// `func init()` per file (protobuf-generated .pb.go files routinely have
+// TestParseFile_MultipleInitFunctions pins: Go allows multiple
+// `func init` per file (protobuf-generated.pb.go files routinely have
 // two). Each must produce a distinct node_id; otherwise the promotion tx
 // fails on the UNIQUE-PK constraint and cold-scan crashes mid-promote.
 func TestParseFile_MultipleInitFunctions(t *testing.T) {
@@ -1219,11 +1218,11 @@ func nodeNames(nodes []*domain.Node) []string {
 }
 
 // TestParseFile_FunctionPassedAsArgumentEmitsCallsEdge covers the
-// pflag-shaped half of solov2-f1zp: a same-file function passed by
+// pflag-shaped half of: a same-file function passed by
 // value to another call (`f.getFlagType(name, "bool", boolConv)`)
 // must produce a CALLS edge to that function so the dead-code rule
 // doesn't flag it. Before this fix the parser only emitted CALLS for
-// direct invocation (boolConv(...)), so every *Conv helper in pflag
+// direct invocation (boolConv(.)), so every *Conv helper in pflag
 // appeared dead.
 func TestParseFile_FunctionPassedAsArgumentEmitsCallsEdge(t *testing.T) {
 	src := []byte(`package pflag
@@ -1264,7 +1263,7 @@ func DoIt() {
 // TestParseFile_BareIdentifierArg_NonFunctionSkipped guards the
 // negative: a bare identifier argument that is NOT a same-file
 // function/method (e.g. a parameter, a local variable, a constant)
-// must NOT produce a CALLS edge to a phantom node. solov2-f1zp's
+// must NOT produce a CALLS edge to a phantom node. 's
 // argument-passing rule is symbol-map-gated for exactly this reason.
 func TestParseFile_BareIdentifierArg_NonFunctionSkipped(t *testing.T) {
 	src := []byte(`package x
@@ -1291,9 +1290,9 @@ func DoIt(name string) {
 }
 
 // TestParseFile_AnonFuncInVarInitAttributesToSurroundingVar pins
-// solov2-zuvl: calls inside an anonymous function nested in a
+// calls inside an anonymous function nested in a
 // top-level var initialiser (the dominant cobra-app shape:
-// `var helloCmd = &cobra.Command{ RunE: func(){ Foo() } }`) must
+// `var helloCmd = &cobra.Command{ RunE: func{ Foo } }`) must
 // attribute to the surrounding var node (helloCmd), not the package
 // node. Before the fix, cross-repo blast on Foo named "package cmd"
 // as the caller for every cobra app in the workspace — a known false
@@ -1353,8 +1352,8 @@ var helloCmd = struct {
 	}
 }
 
-// TestParseFile_UrfaveCommandTree guards solov2-qqqy: a urfave
-// `var app = &cli.App{Name: ..., Commands: []*cli.Command{...}}` is
+// TestParseFile_UrfaveCommandTree guards: a urfave
+// `var app = &cli.App{Name:., Commands: *cli.Command{.}}` is
 // promoted to a KindCommand named by Name:, each Commands-slice literal
 // becomes a child KindCommand named by its own Name:, and an app→child
 // CONTAINS edge links them. The versioned import path (/v2) must still
@@ -1413,10 +1412,10 @@ func addAction() {}
 	}
 }
 
-// TestParseFile_UrfaveByReferenceSubcommands guards solov2-qqqy's
+// TestParseFile_UrfaveByReferenceSubcommands guards 's
 // by-reference idiom: subcommands declared as their own top-level
-// `var addCmd = &cli.Command{Name: ...}` and linked into the App by
-// identifier (`Commands: []*cli.Command{addCmd}`). Both the App and the
+// `var addCmd = &cli.Command{Name:.}` and linked into the App by
+// identifier (`Commands: *cli.Command{addCmd}`). Both the App and the
 // referenced command must promote to KindCommand, with an app→addCmd
 // CONTAINS edge — even though addCmd is declared after the App.
 func TestParseFile_UrfaveByReferenceSubcommands(t *testing.T) {
@@ -1462,8 +1461,8 @@ var addCmd = &cli.Command{Name: "add"}
 	}
 }
 
-// TestParseFile_CobraRunEAttributesToCommand guards solov2-crn7's
-// interaction with the cobra-app grain (solov2-zuvl): when a command var
+// TestParseFile_CobraRunEAttributesToCommand guards 's
+// interaction with the cobra-app grain: when a command var
 // is promoted to KindCommand it must STILL be the caller of its own
 // RunE-closure calls, not the package node. The promotion removes the
 // KindVariable entry the anon-call walker keyed on, so the command node
@@ -1523,7 +1522,7 @@ var helloCmd = &cobra.Command{
 	}
 }
 
-// TestParseFile_KongStructTagCommands guards solov2-su6d: kong models
+// TestParseFile_KongStructTagCommands guards: kong models
 // commands as struct fields with `cmd:""` tags, not composite literals.
 // Each tagged field becomes a KindCommand named by the dasherized field
 // name (or a `name:` override); nesting follows the field type, so the root
@@ -1595,14 +1594,14 @@ func TestParseFile_KongStructTagCommands(t *testing.T) {
 	}
 }
 
-// TestParseFile_SamePackageConstructorMethodCall covers solov2-rlfe:
-// when a test (or any same-package caller) does `g := New(...)` followed
-// by `g.Render()`, the Render call must bind to Greeting.Render in the
+// TestParseFile_SamePackageConstructorMethodCall covers:
+// when a test (or any same-package caller) does `g:= New(.)` followed
+// by `g.Render`, the Render call must bind to Greeting.Render in the
 // same file. Before this fix the parser emitted UnresolvedCall with
 // PkgQualifier="g" — a bare local-var name that couldn't possibly
 // resolve at promotion. Junior-journey symptom: `veska blast Render`
 // on greetlib showed zero in-repo callers even though greet_test.go
-// literally calls g.Render() twice.
+// literally calls g.Render twice.
 func TestParseFile_SamePackageConstructorMethodCall(t *testing.T) {
 	src := []byte(`package greetlib
 
@@ -1652,8 +1651,8 @@ func TestRender() {
 }
 
 // TestParseFile_SamePackageConstructorMethodCall_PointerReturn covers
-// the pointer-return shape of solov2-rlfe: `func New() *Greeting`
-// followed by `g := New(); g.Method()`. simpleReturnTypeName must
+// the pointer-return shape of: `func New *Greeting`
+// followed by `g:= New; g.Method`. simpleReturnTypeName must
 // unwrap *T to T so the in-file lookup binds the same way as the
 // value-return case.
 func TestParseFile_SamePackageConstructorMethodCall_PointerReturn(t *testing.T) {
@@ -1698,12 +1697,12 @@ func TestRenderPtr() {
 }
 
 // TestParseFile_PackageVarCompositeLiteralOrigin covers the cobra-shaped
-// pattern surfaced in the junior onboarding journey (solov2-8ffo /
-// solov2-zuvl): a package-level var initialised from a composite literal
-// `&pkg.Type{...}` is the dominant cobra app shape, and subsequent
-// `rootCmd.AddCommand(...)` calls must emit method-call UnresolvedCalls
+// pattern surfaced in the junior onboarding journey ( /
+// ): a package-level var initialised from a composite literal
+// `&pkg.Type{.}` is the dominant cobra app shape, and subsequent
+// `rootCmd.AddCommand(.)` calls must emit method-call UnresolvedCalls
 // against the pkg's import path. Before this fix collectLocalVarOrigins
-// only walked function bodies and only recognised `v := pkg.F(...)`, so
+// only walked function bodies and only recognised `v:= pkg.F(.)`, so
 // package-scoped vars holding a composite literal became
 // PkgQualifier="rootCmd" — an unresolvable bareword that never produced
 // a cross-repo stub.
@@ -1741,8 +1740,8 @@ func init() {
 }
 
 // TestParseFile_PackageVarConstructorOrigin guards the package-scope
-// variant of the existing function-scope rule: `var x = pkg.F(...)` at
-// file scope should be treated the same as `x := pkg.F(...)` inside a
+// variant of the existing function-scope rule: `var x = pkg.F(.)` at
+// file scope should be treated the same as `x:= pkg.F(.)` inside a
 // function body — its method calls must classify as method-call
 // UnresolvedCalls against pkg's import path.
 func TestParseFile_PackageVarConstructorOrigin(t *testing.T) {

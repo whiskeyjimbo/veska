@@ -82,7 +82,7 @@ def test_senior_depth_and_recovery(tmp_path: Path):
         assert target, "no open finding to govern"
         ws.mcp.result("eng_suppress_finding", {
             "finding_id": target, "scope": "finding",
-            "reason": "accepted risk — senior review",
+            "reason": "accepted risk - senior review",
         })
 
         def _open_ids(include_suppressed: bool) -> set[str]:
@@ -95,7 +95,7 @@ def test_senior_depth_and_recovery(tmp_path: Path):
         assert target not in _open_ids(False), "suppressed finding still listed by default"
         assert target in _open_ids(True), "suppressed finding hidden even with include_suppressed"
 
-        # ── S5: restart recovery — state + suppression survive ────────────
+        # ── S5: restart recovery - state + suppression survive ────────────
         print("[S5] restart daemon, verify recovery")
         ws.restart_daemon()
         status = ws.mcp.result("eng_get_status")

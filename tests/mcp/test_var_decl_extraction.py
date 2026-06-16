@@ -62,7 +62,7 @@ def test_top_level_var_declarations_become_variable_nodes(mcp_client):
     the const buildMode surface as kind='variable' nodes via eng_find_symbol.
 
     rootCmd is the exception: `var rootCmd = &cobra.Command{...}` is no
-    longer a plain variable — the cobra extractor (solov2, 'promote cobra
+    longer a plain variable - the cobra extractor (solov2, 'promote cobra
     command literals to KindCommand') reclassifies it as a kind='command'
     node keyed by its Use string ("tool"), NOT by the Go var name. So we
     assert the command surfaces under "tool" rather than expecting a
@@ -75,7 +75,7 @@ def test_top_level_var_declarations_become_variable_nodes(mcp_client):
         repo_id = add_result["repo_id"]
         try:
             assert _wait_for_promotion(mcp_client, repo_id), (
-                "fixture repo never reached promoted state — cold scan stuck?"
+                "fixture repo never reached promoted state - cold scan stuck?"
             )
             # Plain var/const declarations → kind='variable'.
             for name in ("verbose", "logFile", "buildMode"):

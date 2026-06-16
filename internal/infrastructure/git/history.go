@@ -2,12 +2,10 @@
 // FileHistory — thin os/exec wrappers around `git log` used by the
 // hot_zone ranking surface and the eng_get_context_pack MCP tool to
 // derive per-file recent-change frequency.
-//
 // git log is the data source (rather than post_promotion_queue done-rows,
 // which may be gc-pruned). The full log is walked and windowed in-process
 // on each commit's date; results are sorted so a fixed repo state + window
 // yields deterministic output.
-//
 // File paths are repoRoot-relative — the same convention as diff.go.
 
 package git
@@ -41,13 +39,11 @@ type Commit struct {
 // a commit within window, the number of commits in that window that
 // modified it. A zero window selects the 30-day default. Out-of-window
 // commits are excluded. The map is keyed by repoRoot-relative path.
-//
 // Filtering is done in-process on each commit's date rather than via
 // `git log --since`: --since stops history traversal at the first
 // out-of-window commit, so an out-of-window HEAD would hide every
 // in-window ancestor. Walking the full log and filtering ourselves
 // is correct regardless of commit-date ordering.
-//
 // An empty repoRoot returns an error rather than shelling out against
 // the process cwd: history queries must always run scoped to a repo.
 func ChangeCounts(ctx context.Context, repoRoot string, window time.Duration) (map[string]int, error) {

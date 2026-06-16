@@ -61,11 +61,9 @@ type ollamaGenerateResponse struct {
 // OllamaGenerator is an LLMGenerator backed by a locally running Ollama
 // instance. It POSTs to /api/generate with stream:false and returns the
 // complete generated text in a single call.
-//
 // Transient failures (HTTP 5xx or network/transport errors) are retried up to
 // maxAttempts times with exponential backoff; HTTP 4xx responses and context
 // cancellation are surfaced immediately without retry.
-//
 // OllamaGenerator is safe for concurrent use.
 type OllamaGenerator struct {
 	baseURL string
@@ -117,7 +115,7 @@ func WithBackoff(d time.Duration) Option {
 	}
 }
 
-// WithTimeout bounds a single Generate call — including all retry attempts —
+// WithTimeout bounds a single Generate call — including all retry attempts
 // to d. A non-positive value is ignored.
 func WithTimeout(d time.Duration) Option {
 	return func(g *OllamaGenerator) {
@@ -236,7 +234,7 @@ func (g *OllamaGenerator) doGenerate(ctx context.Context, encoded []byte) (ollam
 	if err != nil {
 		// Transport errors (DNS, connection refused, reset) are transient.
 		// A cancelled/expired context surfaces here too; the retry loop
-		// checks ctx.Err() and will not retry it despite the wrapper.
+		// checks ctx.Err and will not retry it despite the wrapper.
 		return ollamaGenerateResponse{}, &retryableError{fmt.Errorf("ollama: POST /api/generate: %w", err)}
 	}
 	defer func() { _ = resp.Body.Close() }()

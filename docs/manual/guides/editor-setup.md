@@ -1,11 +1,11 @@
 # Connecting your editor
 
-Your editor talks to Veska over MCP by launching **`veska-mcp`** — the thin
+Your editor talks to Veska over MCP by launching **`veska-mcp`** - the thin
 stdio shim that proxies JSON-RPC frames to the running daemon's Unix socket.
 Point your MCP client at the **absolute path** to `bin/veska-mcp`.
 
 !!! note "The daemon must be running"
-    `veska-mcp` is only a proxy. Start the daemon first — see
+    `veska-mcp` is only a proxy. Start the daemon first - see
     **[Running the daemon](running-the-daemon.md)**.
 
 ## Claude Desktop
@@ -69,7 +69,7 @@ updates only the Veska section and leaves the rest of the file alone.
 
 ## Verify without an editor
 
-You can drive `veska-mcp` straight from the shell — handy for debugging:
+You can drive `veska-mcp` straight from the shell - handy for debugging:
 
 ```sh
 printf '{"jsonrpc":"2.0","id":1,"method":"eng_find_symbol","params":{"symbol":"Run"}}\n' \

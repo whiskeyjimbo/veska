@@ -1,17 +1,14 @@
 //go:build eval
 
 // Package reviewtiming drives the M5 exit-gate-5 per-commit review time budget.
-//
 // Goal: measure the wall-clock time to run ONE review pass over a synthetic
 // ~100-file commit, using the real review Handler (WorkKindReview lane) wired
 // to a real local Ollama generator. The result is a MEASUREMENT, not a
-// pass/fail gate — the reference-laptop number is filled into docs/milestones/
+// pass/fail gate — the reference-laptop number is filled into
 // M5.md by a human running `make eval-review-timing`.
-//
 // What this measures: the total budget = sum of per-file review latency for
 // 100 files, each file dispatched through every registered review prompt.
 // Per-file mean is reported alongside the total.
-//
 // Build-tag-gated (`eval`); the make target is `make eval-review-timing`. The
 // test skips with a clear message if Ollama is not reachable, so the harness
 // is CI-safe and verifiable without a model.

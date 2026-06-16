@@ -108,7 +108,7 @@ func TestContextPack_SymbolMode(t *testing.T) {
 }
 
 // TestContextPack_AcceptsShortID guards the README contract that a short_id
-// prefix resolves anywhere a repo_id is required . Before the fix
+// prefix resolves anywhere a repo_id is required. Before the fix
 // context_pack rejected the prefix with "repo not found".
 func TestContextPack_AcceptsShortID(t *testing.T) {
 	const fullID = "62d72fa222a0193f8fa927f95dd6a3575c7566964c8b8f6ba14aafc5a1ea871f"
@@ -126,7 +126,7 @@ func TestContextPack_AcceptsShortID(t *testing.T) {
 	}
 }
 
-// TestContextPack_CrossRepoEdges guards solov2-7xrw: when a resolver is
+// TestContextPack_CrossRepoEdges guards: when a resolver is
 // wired and any node in the pack has cross_repo_edge_stubs, the response
 // must surface them in a top-level cross_repo_edges array — parity with
 // eng_get_call_chain and eng_get_blast_radius. Without it the CLI 'context'
@@ -181,7 +181,7 @@ func TestContextPack_CrossRepoEdges(t *testing.T) {
 
 // TestContextPack_NoResolverOmitsCrossRepo: without WithContextPackResolveFunc
 // the response must NOT include a cross_repo_edges field, so older clients
-// see exactly the same JSON shape they did before solov2-7xrw.
+// see exactly the same JSON shape they did before.
 func TestContextPack_NoResolverOmitsCrossRepo(t *testing.T) {
 	r := NewRegistry()
 	RegisterContextPackTool(r, contextPackFixture(t), stubRepoRoot(""), nil)
@@ -228,7 +228,7 @@ func TestContextPack_RejectsBothOrNeither(t *testing.T) {
 	}
 }
 
-// TestContextPack_NodeMode covers solov2-z81b: agents that already hold a
+// TestContextPack_NodeMode covers: agents that already hold a
 // node_id (from eng_find_symbol / eng_search_semantic) can anchor directly
 // without a symbol round-trip.
 func TestContextPack_NodeMode(t *testing.T) {

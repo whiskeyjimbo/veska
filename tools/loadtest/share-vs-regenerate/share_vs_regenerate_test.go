@@ -1,11 +1,10 @@
 //go:build eval
 
-// Package sharevsregenerate is the empirical gate for ADR-S0019 §4: on a real
+// Package sharevsregenerate is the empirical gate for: on a real
 // (large) library it measures, per derived-artifact family, the local
 // REGENERATION cost against the size/sync cost of carrying that artifact in the
 // shared store, and places the share-vs-regenerate line FROM DATA rather than
 // assumption.
-//
 // The ADR §3 table has already made the qualitative call for four of the five
 // families — parse-derived nodes/edges/FTS regenerate (cheap+deterministic);
 // summaries, review, and class-B curation share (LLM-produced or irreproducible,
@@ -13,17 +12,15 @@
 // family is EMBEDDINGS (§5): with a cheap CPU embedder (model2vec / static) they
 // may be cheaper to regenerate than to sync; with a heavy embedder (Ollama /
 // nomic) they are clearly worth sharing. This harness measures that crossover.
-//
-// The verdict is expressed as a BREAKEVEN BANDWIDTH per artifact —
+// The verdict is expressed as a BREAKEVEN BANDWIDTH per artifact
 //
 //	breakeven = bytes_carried / regen_seconds
 //
-// — the link speed at which downloading the artifact costs exactly as much as
+// the link speed at which downloading the artifact costs exactly as much as
 // regenerating it locally. Below breakeven: regenerate. Above breakeven: share.
 // No bandwidth is hardcoded into the verdict; reference link speeds are layered
 // on top purely for display. This keeps the placed line a property of the
 // measured data, with no injected free parameter.
-//
 // Runnable NOW, independent of the sharing implementation — it only times the
 // existing pipeline stages (parse via the production GoParser, embed via the
 // production elected embedder) and sizes the artifacts. The elected embedder is
@@ -31,12 +28,11 @@
 // the harness runs with no external service. Point VESKA_EMBEDDER=ollama (with
 // Ollama up) to capture the heavy-embedder data point and watch the embedding
 // verdict flip from REGENERATE to SHARE.
-//
 // Usage:
 //
-//	make eval-share-vs-regenerate                       # internal/ self-corpus
+//	make eval-share-vs-regenerate # internal/ self-corpus
 //	SHARE_REGEN_ROOT=/path/to/kubernetes \
-//	  make eval-share-vs-regenerate                     # a genuinely large repo
+//	  make eval-share-vs-regenerate # a genuinely large repo
 //	VESKA_EMBEDDER=ollama make eval-share-vs-regenerate # heavy-embedder crossover
 package sharevsregenerate
 
@@ -138,7 +134,7 @@ func TestShareVsRegenerate(t *testing.T) {
 	}
 }
 
-// scanAndParse walks every non-test .go file under root, parses each
+// scanAndParse walks every non-test.go file under root, parses each
 // with the production GoParser (timing only the parse calls), and
 // collects the embed input text for each node that has raw content.
 func scanAndParse(t *testing.T, root string, maxDocs int) parseStats {

@@ -42,18 +42,18 @@ type FailedRow struct {
 
 // PostPromotionQueueReport is the result of CheckPostPromotionQueue.
 //
-//   - Status "healthy"  — no failed rows
-//   - Status "degraded" — at least one failed row exists (review rows in this
-//     state must carry an open companion finding — the designed sticky state)
-//   - Status "broken"   — DB could not be opened/pinged, OR a failed review
-//     row has no open review-pipeline-failure companion finding
+//	Status "healthy" — no failed rows
+//	Status "degraded" — at least one failed row exists (review rows in this
+//	  state must carry an open companion finding — the designed sticky state)
+//	Status "broken" — DB could not be opened/pinged, OR a failed review
+//	  row has no open review-pipeline-failure companion finding
 type PostPromotionQueueReport struct {
 	Counts     []QueueCount  `json:"counts"`
 	FailedRows []FailedRow   `json:"failed_rows"`
 	Status     health.Status `json:"status"`
 	// OrphanCount is the number of failed rows whose repo_id is no longer
 	// registered — the exact set `--purge-orphans` would clear. Surfaced so
-	// the textual probe can point operators at the remediation .
+	// the textual probe can point operators at the remediation.
 	OrphanCount int `json:"orphan_count,omitempty"`
 }
 
@@ -82,7 +82,7 @@ func CheckPostPromotionQueue(dbPath string) (PostPromotionQueueReport, error) {
 		return PostPromotionQueueReport{Status: health.StatusBroken}, nil
 	}
 
-	// Review-failure invariant (solov2-nz2.3 AC3): every failed review row must
+	// Review-failure invariant ( AC3): every failed review row must
 	// have an open review-pipeline-failure companion finding. A failed review
 	// row WITHOUT one means the failure vanished silently — that is broken.
 	anyMissingFinding, err := markMissingReviewFindings(db, failedRows)
@@ -167,11 +167,9 @@ func queryQueueCounts(db *sql.DB) ([]QueueCount, error) {
 // repo_id is no longer present in the repos table — the only case where a
 // failed row can never make progress because the repo it targets has been
 // deregistered. Returns the number of rows deleted.
-//
-// solov2-zmzc: without this, removing a repo via `veska repo remove` leaves
-// its failed wiki/auto_link rows behind, permanently dragging the
+// without this, removing a repo via `veska repo remove` leaves
+// its failed rows behind, permanently dragging the
 // doctor-status rollup to "degraded".
-//
 // Opens the DB read/write (not the read-only DSN CheckPostPromotionQueue
 // uses) so the DELETE can run. Safe to call when no orphans exist (returns 0).
 func PurgeOrphanFailedRows(dbPath string) (int64, error) {
@@ -198,7 +196,7 @@ func PurgeOrphanFailedRows(dbPath string) (int64, error) {
 
 // queryOrphanCount returns the count of failed rows whose repo_id is no
 // longer in the repos table — the set --purge-orphans would clear
-// . A DB that doesn't carry the repos table (e.g. some test
+// A DB that doesn't carry the repos table (e.g. some test
 // fixtures) yields 0 rather than an error, since the orphan concept
 // requires the repos table to be meaningful.
 func queryOrphanCount(db *sql.DB) (int, error) {

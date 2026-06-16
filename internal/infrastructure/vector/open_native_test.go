@@ -9,7 +9,7 @@ import (
 )
 
 // TestOpen_NativeEmptyDirSucceeds verifies that Open on an empty/non-existent
-// directory succeeds under the hnsw_native build tag — no .json files means
+// directory succeeds under the hnsw_native build tag — no.json files means
 // no indexes are loaded and the store is empty but ready.
 func TestOpen_NativeEmptyDirSucceeds(t *testing.T) {
 	dir := t.TempDir()

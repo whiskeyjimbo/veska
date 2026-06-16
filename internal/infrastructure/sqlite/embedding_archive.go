@@ -16,7 +16,6 @@ import (
 // maintenance: loading persisted ready embeddings for vector rehydration and
 // requeuing every ref under a newly-elected model. It satisfies
 // embedder.EmbeddingLoader.
-//
 // Like EmbeddingRefsRepo it holds separate read and write handles so the
 // boot-time rehydration read never contends with the single writer connection.
 type EmbeddingArchive struct {
@@ -32,7 +31,7 @@ func NewEmbeddingArchive(readDB, writeDB *sql.DB) *EmbeddingArchive {
 
 // LoadReadyEmbeddings returns every ready embedding ref joined to its persisted
 // vector blob, for rehydration into a VectorStorage after a daemon restart
-// . Only refs with state='ready' and a non-NULL content_hash are
+// Only refs with state='ready' and a non-NULL content_hash are
 // returned; pending/failed refs carry no vector yet.
 func (a *EmbeddingArchive) LoadReadyEmbeddings(ctx context.Context) ([]embedder.ReadyEmbeddingRow, error) {
 	const q = `
@@ -65,13 +64,11 @@ func (a *EmbeddingArchive) LoadReadyEmbeddings(ctx context.Context) ([]embedder.
 // RequeueAllUnderNewModel wipes the content-addressed embedding store and
 // resets every embedding-ref to pending, so the embedder worker re-embeds all
 // promoted nodes under the currently-elected model.
-//
-// Why needed : node_embeddings is keyed by content_hash with
+// Why needed: node_embeddings is keyed by content_hash with
 // ON CONFLICT(content_hash) DO NOTHING — re-embedding the same content under
 // a different model would otherwise be a no-op and keep the old-model vector.
 // And the in-memory store is rehydrated from node_embeddings at
 // boot — so this MUST run before vector rehydration to start the store empty.
-//
 // Returns the number of refs flipped back to pending so the daemon log can
 // surface "auto-reindex N nodes".
 func (a *EmbeddingArchive) RequeueAllUnderNewModel(ctx context.Context) (int64, error) {

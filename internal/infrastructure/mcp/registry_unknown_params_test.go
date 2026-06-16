@@ -34,7 +34,7 @@ func registerWithSchema(t *testing.T, r *Registry, name string, schema json.RawM
 	})
 }
 
-// TestDispatch_FlatUnknownParamRejected — solov2-9bzq:
+// TestDispatch_FlatUnknownParamRejected:
 // Passing an unknown top-level param via the flat method form must
 // return -32602 naming the offending key.
 func TestDispatch_FlatUnknownParamRejected(t *testing.T) {
@@ -140,7 +140,7 @@ func TestDispatch_NonObjectParamsRejected(t *testing.T) {
 // TestDispatch_TransportInjectedCwdAllowed — the veska-mcp shim injects
 // "cwd" into every eng_* request even when the tool's schema doesn't list
 // it. Validation must accept the key so the shim path keeps working
-// (solov2-ktz0 + solov2-9bzq).
+// ( + ).
 func TestDispatch_TransportInjectedCwdAllowed(t *testing.T) {
 	r := NewRegistry()
 	// Schema with no cwd declared.

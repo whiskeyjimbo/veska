@@ -14,7 +14,6 @@ import (
 )
 
 // NodeLookupRepo is a SQLite-backed implementation of ports.NodeLookup.
-//
 // It uses the read-only DB handle: lookups never mutate state and must
 // not contend with the single-writer connection.
 type NodeLookupRepo struct {
@@ -27,7 +26,7 @@ func NewNodeLookupRepo(readDB *sql.DB) *NodeLookupRepo {
 }
 
 // LookupNodes returns NodeMeta rows for nodeIDs in the given (repoID, branch).
-// IDs not present in the nodes table are silently omitted from the result —
+// IDs not present in the nodes table are silently omitted from the result
 // the caller treats the vector index as eventually-consistent and drops any
 // hit whose backing row is gone. An empty nodeIDs slice short-circuits to a
 // nil result without a database round-trip.
@@ -77,7 +76,6 @@ func (r *NodeLookupRepo) LookupNodes(ctx context.Context, repoID, branch string,
 // (repoID, branch). An unknown node returns ("", nil) — callers (notably the
 // auto-link handler) treat a missing source as "no hash recorded" rather than
 // as an error.
-//
 // This is the per-symbol content_hash on the nodes table; it is intentionally
 // distinct from EmbeddingRefRepo.ContentHashForNode, which returns the
 // embedding-input hash on node_embedding_refs.
@@ -104,11 +102,10 @@ func (r *NodeLookupRepo) NodeContentHash(ctx context.Context, repoID, branch, no
 
 // NodesByContentHash returns every node in (repoID, branch) whose content_hash
 // equals hash, excluding excludeKinds. It is the read-side capability the
-// exact-clone diff gate (solov2-zvh6.7) needs to count how many existing nodes
+// exact-clone diff gate needs to count how many existing nodes
 // share a candidate's content_hash — the base-state membership of a potential
 // clone group. The kind filter mirrors clone_repo's ClonedNodes so the gate's
 // base counts and the whole-repo clones analyzer agree on what is eligible.
-//
 // An empty hash returns (nil, nil): "no content known" can never be a clone
 // match (consistent with ClonedNodes' content_hash != ” guard), so the gate
 // never queries one. idx_nodes_content_hash serves the lookup.

@@ -1,29 +1,26 @@
 //go:build eval
 
-// Dual-model fusion bench . Companion to TestEmbedModelsBenchmark
-// — instead of testing each model independently across corpora, this
+// Dual-model fusion bench. Companion to TestEmbedModelsBenchmark
+// instead of testing each model independently across corpora, this
 // test embeds every doc with TWO models and compares four ranking
 // strategies on the same ground-truth pairs:
-//
-//   1. code-only  — rank by potion-code-16M cosine alone (baseline)
-//   2. base-only  — rank by potion-base-32M cosine alone (baseline)
-//   3. concat     — store [code_vec || base_vec] L2-normalised, rank
+//   1. code-only — rank by potion-code-16M cosine alone (baseline)
+//   2. base-only — rank by potion-base-32M cosine alone (baseline)
+//   3. concat — store [code_vec || base_vec] L2-normalised, rank
 //                   by concat-cosine. Mathematically equivalent to
 //                   the mean of the two per-model cosines.
-//   4. RRF        — rank docs in each model's space independently,
+//   4. RRF — rank docs in each model's space independently,
 //                   fuse via reciprocal rank fusion
 //                   (score = Σ 1/(K + rank_in_list_i), K=60 per Cormack
 //                   et al. 2009).
-//
 // Output: tools/loadtest/embed_models/out/fuse-results.json and a
 // fusion section appended to the published embedder-benchmarks.md.
-//
 // Run with: make eval-embed-models-fuse
 // Env knobs (mirror the main bench):
-//   EMBED_BENCH_MAX_DOCS  — cap per corpus (default 5000)
-//   FUSE_MODEL_CODE       — code-side model name (default potion-code-16M)
-//   FUSE_MODEL_PROSE      — prose-side model name (default potion-base-32M)
-//   FUSE_RRF_K            — RRF constant (default 60)
+//   EMBED_BENCH_MAX_DOCS — cap per corpus (default 5000)
+//   FUSE_MODEL_CODE — code-side model name (default potion-code-16M)
+//   FUSE_MODEL_PROSE — prose-side model name (default potion-base-32M)
+//   FUSE_RRF_K — RRF constant (default 60)
 
 package embed_models
 
@@ -256,7 +253,7 @@ func computeFusionRecall(codeP, proseP Embedder, pairs []Pair, docs []fuseDoc, r
 			proseScored[i] = scored{i, ps}
 			// Concat-cosine is mean of the two cosines (since both
 			// vectors are unit-norm and a concat of two unit-norm
-			// vectors has norm sqrt(2); the renormalised concat-
+			// vectors has norm sqrt(2); the renormalised concat
 			// cosine evaluates to (cs+ps)/2).
 			catScored[i] = scored{i, (cs + ps) / 2}
 		}
@@ -389,7 +386,7 @@ func writeFuseResults(rows []fuseResult) error {
 }
 
 // appendFuseSectionToMarkdown writes (or replaces) a "## Dual-model
-// fusion" section in docs/operations/embedder-benchmarks.md. We don't
+// fusion" section in We don't
 // regenerate the rest of the table — that's owned by writeMarkdownTable
 // from the main bench. The section is delimited by start/end markers
 // so re-runs replace it idempotently.

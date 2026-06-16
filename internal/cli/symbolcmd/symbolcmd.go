@@ -3,8 +3,8 @@
 // MCP calls, the cross-repo fallback hint, and the textual/JSON rendering of
 // node lists and context packs. cmd/veska/symbol.go is reduced to Cobra
 // command construction whose RunE bodies are thin calls into the Run helpers
-// here (solov2-0omh.7, following the cmd = glue / logic-in-packages pattern
-// from solov2-0omh.4/.5/.6).
+// here (, following the cmd = glue / logic-in-packages pattern
+// from /.5/.6).
 package symbolcmd
 
 import (
@@ -56,7 +56,7 @@ func RunFind(ctx context.Context, p FindParams) error {
 	if err := mcpclient.Call(ctx, "eng_find_symbol", params, &resp); err != nil {
 		return fmt.Errorf("symbol: %w", err)
 	}
-	// solov2-zgwd: when the scoped probe is empty, ask every other registered
+	// when the scoped probe is empty, ask every other registered
 	// repo whether the symbol lives there. Non-empty in the original scope
 	// short-circuits — we never re-walk the registry for a happy result.
 	if len(resp.Nodes) == 0 && !p.JSONOut && p.RepoID != "" {
@@ -66,7 +66,7 @@ func RunFind(ctx context.Context, p FindParams) error {
 }
 
 // PrintCrossRepoSymbolHint walks every other registered repo and prints a
-// one-line hint when the symbol exists somewhere else . Stays
+// one-line hint when the symbol exists somewhere else. Stays
 // best-effort: any per-repo error is silently skipped — a stuck repo must
 // not turn a successful empty result into a noisy banner. The hint only
 // fires when there's at least one cross-repo match, so the "no matches
@@ -116,7 +116,7 @@ func PrintCrossRepoSymbolHint(ctx context.Context, errOut io.Writer, symbol, sco
 	fmt.Fprintf(errOut, "  hint: %q has no matches here, but matches elsewhere — %s (re-run with --repo <id>)\n", symbol, strings.Join(parts, ", "))
 }
 
-// RenderNodeList prints a {nodes:[...]} envelope (eng_find_symbol shape) as
+// RenderNodeList prints a {nodes:[.]} envelope (eng_find_symbol shape) as
 // either pretty JSON or a greppable table. It re-marshals through a generic
 // shape so it works for either {nodes} or {entries} envelopes.
 func RenderNodeList(w io.Writer, resp any, jsonOut bool) error {
@@ -147,7 +147,7 @@ func RenderNodeList(w io.Writer, resp any, jsonOut bool) error {
 		renderNoNodeMatches(w, any.DegradedReasons, any.IndexingRepos)
 		return nil
 	}
-	// solov2-efzv: when the daemon fanned out across repos (repo_id populated
+	// when the daemon fanned out across repos (repo_id populated
 	// on at least one hit) render a leading repo column so the user can
 	// disambiguate cross-repo matches without a follow-up query.
 	multiRepo := false
@@ -175,7 +175,6 @@ func RenderNodeList(w io.Writer, resp any, jsonOut bool) error {
 
 // renderNoNodeMatches prints the empty-result message plus the cold-scan
 // retry hint when an active indexing window is the likely cause
-// (solov2-izh6.30).
 func renderNoNodeMatches(w io.Writer, degradedReasons, indexingRepos []string) {
 	fmt.Fprintln(w, "no matches")
 	if slices.Contains(degradedReasons, protocol.DegradedReasonIndexingInProgress) {

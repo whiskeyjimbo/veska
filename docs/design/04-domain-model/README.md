@@ -1,6 +1,6 @@
 ---
 id: SOLO-04
-title: "Domain Model — Entities, Aggregates, Invariants"
+title: "Domain Model - Entities, Aggregates, Invariants"
 status: draft
 version: 0.1.0
 last_reviewed: 2026-05-08
@@ -9,7 +9,7 @@ verified: true
 verified_date: "2026-05-16"
 ---
 
-# SOLO-04 — Domain Model
+# SOLO-04 - Domain Model
 
 ## 1. Purpose
 
@@ -27,7 +27,7 @@ sub-tree would obscure rather than help.
 |---|---|---|
 | `Node` | Graph-scoped entity, written row-shaped (§11) | `stable_hash(repo_id, language, symbol_path)` |
 | `Edge` | Graph-scoped entity, written row-shaped (§11) | `(src NodeID, tgt NodeID, kind EdgeKind)` |
-| `Graph` | **Read projection** (§5.3) — *not* an aggregate root | `(repo_id, branch)` |
+| `Graph` | **Read projection** (§5.3) - *not* an aggregate root | `(repo_id, branch)` |
 | `Repo` | **Aggregate root** | `repo_id` (stable hash of root path) |
 | `Task` | **Aggregate root** | `task_id` (veska-native ULID) |
 | `Finding` | **Aggregate root** | `(finding_id, branch)` where `finding_id = stable_hash(rule, anchor)` is itself branch-stable |
@@ -36,7 +36,7 @@ sub-tree would obscure rather than help.
 Seven entities. Three aggregate roots (`Repo`, `Task`,
 `Finding`) plus the graph-scoped pair (`Node`, `Edge`) written
 row-shaped through `GraphRepository` (§11). `Graph` is a domain
-*read projection*, not an aggregate root — codebase graphs at
+*read projection*, not an aggregate root - codebase graphs at
 1M-node scale cannot be loaded whole for every write, so the
 write seam is row-shaped and the graph-shaped object is read
 only. `Suppression` is a member of `Finding`.
@@ -61,7 +61,7 @@ only. `Suppression` is a member of `Finding`.
   per-run aggregate.
 - **RiskScore.** Risk is computed at query time from `Finding`
   rows; it has no separate identity.
-- **CrossRepoStub.** Not an aggregate — a value object owned by
+- **CrossRepoStub.** Not an aggregate - a value object owned by
   the source `Node` (§5.2.1). Stored in `cross_repo_edge_stubs`,
   not `edges`, so the `Edge` same-Graph invariant stays absolute.
 
@@ -92,9 +92,9 @@ There is no `acting_as / on_behalf_of / via` triple.
 
 **The two fields answer different questions and vary
 independently.** `Kind` answers "what substrate wrote this row?"
-— the listener that accepted the connection (`cli.sock` →
+- the listener that accepted the connection (`cli.sock` →
 `human`, `mcp.sock` → `agent`) or the daemon goroutine
-(`system`). `ActorID` answers "what produced the content?" —
+(`system`). `ActorID` answers "what produced the content?" -
 the user, the named agent client, or `service:veska` for
 generic daemon work. The pairs that arise in practice:
 
@@ -109,7 +109,7 @@ The last row is the only `Kind`/`ActorID`-prefix mismatch and
 it is intentional: an auditor reading `audit.jsonl` sees both
 "the daemon scheduled this write" (`Kind=system`) and "an LLM
 produced the content" (`ActorID=agent:<llm>`). The
-human-action gate (§3 below, SOLO-10 §3) reads `Kind` only —
+human-action gate (§3 below, SOLO-10 §3) reads `Kind` only -
 `ActorID` is informational, not authoritative.
 
 The `actor_kind` enum is the single human-action-gate input. The one
@@ -135,8 +135,8 @@ DDD-lite tactical patterns. Specifically:
   by holding a `*Node`.
 - **One repository port per write seam.** Four ports total
   (see SOLO-07 §4): `RepoRepository`, `TaskRepository`,
-  `FindingRepository` — each carrying the standard
-  `Save(ctx, *Entity)` shape (§11) — plus `GraphRepository`,
+  `FindingRepository` - each carrying the standard
+  `Save(ctx, *Entity)` shape (§11) - plus `GraphRepository`,
   which is **graph-scoped** rather than aggregate-rooted: it
   exposes row-shaped writes (`SaveNode`, `SaveEdge`,
   `DeleteFile`) and a graph-shaped read (`LoadGraph`). §11 has
@@ -195,7 +195,7 @@ const (
 ```
 
 Eleven kinds. Adding a kind is an ADR. Kinds for documentation,
-infrastructure, contracts, etc. are deliberately deferred — they
+infrastructure, contracts, etc. are deliberately deferred - they
 ride along with the parser that produces them, and we do not have
 those parsers.
 
@@ -208,7 +208,7 @@ those parsers.
    (SOLO-08 §3.3); node identity does not.
 3. `language` is non-nil for any code-kind node.
 4. `lines.start ≤ lines.end` when present; both are 1-indexed.
-5. `exported` reflects source-language visibility — never inferred.
+5. `exported` reflects source-language visibility - never inferred.
 
 #### `symbol_path` per language
 
@@ -235,7 +235,7 @@ Required fields: `src NodeID`, `tgt NodeID`, `kind EdgeKind`.
 
 Optional: `confidence Confidence`, `resolved bool`, `source_line *int`.
 
-`EdgeKind` is closed at six values — five parser-derived
+`EdgeKind` is closed at six values - five parser-derived
 structural kinds plus the auto-link `SIMILAR_TO` kind:
 
 ```go
@@ -266,7 +266,7 @@ kind.
 #### Invariants
 
 1. **Same-scope, absolute.** `src` and `tgt` reference `Node`s
-   in the same `(repo_id, branch)` scope — i.e. the scope the
+   in the same `(repo_id, branch)` scope - i.e. the scope the
    `Graph` read projection (§5.3) is built from. No cross-scope
    references. Both fields are non-NULL. There is no carve-out,
    no exception, no unresolved dst. The invariant is enforced
@@ -281,7 +281,7 @@ kind.
 4. **Same-repo promotion.** A stored edge requires both endpoints to
    exist in the source graph at promotion time. Same-repo unresolved
    edges are dropped, not stored. Combined with invariant 1,
-   every stored `Edge` row has both endpoints in `nodes` —
+   every stored `Edge` row has both endpoints in `nodes` -
    structurally, not by application convention.
 
 #### 5.2.1 `CrossRepoStub` (companion value object)
@@ -312,7 +312,7 @@ attached to the source `Node` and stored in a sibling table
 output is a synthetic edge at read time). The resolver chain
 (SOLO-11 §9) reads stubs alongside `edges` and emits a synthetic
 cross-repo edge in the MCP response when the target becomes
-resolvable. A stub row is never rewritten in place — promotion
+resolvable. A stub row is never rewritten in place - promotion
 is a read-time projection. Stubs are GC'd when the source
 node's containing file is deleted or the source repo is
 forgotten.
@@ -323,20 +323,20 @@ bookkeeping is a separate kind of row with a separate lifecycle.
 
 ### 5.3 `Graph`
 
-`Graph` is a **domain read projection** — an in-memory bundle
+`Graph` is a **domain read projection** - an in-memory bundle
 of `Node` + `Edge` for a given `(repo_id, branch)` scope, built
 from rows by `GraphRepository.LoadGraph` (§11). It is **not**
 an aggregate root and never a persistent write seam: durable
 writes flow row-shaped through `GraphRepository.SaveNode` /
 `SaveEdge` / `DeleteFile`. `Graph` does expose `AddNode` /
 `AddEdge` mutators, but only so `LoadGraph` (and tests) can
-populate an in-memory projection from rows — they build the
+populate an in-memory projection from rows - they build the
 read object, they do not persist anything.
 
 Operations:
 
 ```go
-// Population — used by GraphRepository.LoadGraph to build the
+// Population - used by GraphRepository.LoadGraph to build the
 // in-memory projection from rows.  AddEdge requires both
 // endpoint nodes to be present (enforces §5.3 invariant 1).
 func (g *Graph) AddNode(n *Node) error
@@ -368,11 +368,11 @@ A codebase graph at 1M-node scale cannot be loaded whole for
 each write. The promotion pipeline (SOLO-11 §2) processes one file
 at a time and emits the file's nodes and edges as rows; the
 promotion transaction (SOLO-08 §5) is `INSERT INTO nodes (...);
-INSERT INTO edges (...);` — there is no `Graph.AddNode` round
+INSERT INTO edges (...);` - there is no `Graph.AddNode` round
 trip, and there couldn't be without breaking the promotion budget
 (SOLO-13 §3). The honest framing is: **writes are row-shaped,
 reads can be graph-shaped.** `Graph` exists where it earns its
-keep — the resolver, blast-radius, call-chain — and is absent
+keep - the resolver, blast-radius, call-chain - and is absent
 from the write paths because it never belonged there.
 
 There is no `Graph.Snapshot()` API. SQLite WAL gives readers a
@@ -399,8 +399,8 @@ this section does not duplicate the rule.
 ### 5.4 Cross-repo edges (synthetic)
 
 Stored `Edge`s always reference `Node`s in the same `Graph`
-(invariant 1, §5.2). Multi-repo working sets — service A indexed
-alongside SDK B — produce conceptual edges that cross repos: A's
+(invariant 1, §5.2). Multi-repo working sets - service A indexed
+alongside SDK B - produce conceptual edges that cross repos: A's
 `CALLS` resolves to a symbol in B, A's `IMPORTS` references B's
 package. These cross-repo edges are **not stored**. They are
 computed at query time by the resolver chain (SOLO-11 §9) and
@@ -433,7 +433,7 @@ Consequences:
    (multi-repo write coordination) is explicitly out of scope.
 
    **Naming this honestly.** A cross-repo answer is not
-   "structural ground truth" — the path it traces may compose
+   "structural ground truth" - the path it traces may compose
    states that never coexisted at any single moment. Treat
    cross-repo results as **best-effort across the most-recently-
    promoted SHA per repo**. This wording is binding on
@@ -458,7 +458,7 @@ Consequences:
 5. A cross-repo lookup misses when the target repo is not
    indexed. A `CrossRepoStub` is recorded against the source
    `Node` (§5.2.1) in the `cross_repo_edge_stubs` sibling
-   table — **not** in `edges`. The read-time resolver projects
+   table - **not** in `edges`. The read-time resolver projects
    the stub into the response with `confidence: "unresolved"`,
    `tgt: null`, and `cross_repo_target: {module_path,
    symbol_path, language}` so the agent can see what import
@@ -470,7 +470,7 @@ an indexed point lookup at query time rather than a join over a
 materialised table. SOLO-13 §3.4 gates the cost; **OQ-S010** is
 the M1 measurement that resolves whether the budget holds. If
 OQ-S010 trips, the fallback is a query-time cache invalidated on
-target-repo promotion — not an authoritative cross-repo edge table —
+target-repo promotion - not an authoritative cross-repo edge table -
 and lands as a real ADR against measured numbers, not as
 deferred work.
 
@@ -529,7 +529,7 @@ index, see SOLO-08 §3.2). Setting a new active task clears the
 previous one.
 
 `Task` does not own findings or commits. It is the answer to the
-question "what am I working on right now?" — used by the MCP
+question "what am I working on right now?" - used by the MCP
 surface to scope queries, and by the audit log to label state
 changes.
 
@@ -543,7 +543,7 @@ a structural rule violation.
 **Identity is `(finding_id, branch)`**, mirroring `nodes` and
 `edges`. `finding_id` is computed as `stable_hash(rule, anchor)`
 where `anchor` is `node_id` for symbol-anchored findings or
-`file_path` for file-anchored findings — both of which are
+`file_path` for file-anchored findings - both of which are
 themselves branch-stable. The same conceptual finding (same rule
 on the same target) shares `finding_id` across branches; only the
 per-branch row carries per-branch state (`open`, `closed`).
@@ -594,10 +594,10 @@ distinguish "the agent's revalidation determined this no longer
 applies" from "the human acknowledged and dismissed this." For
 solo, the distinction does not drive any agent behaviour and
 adds a state machine branch to every consumer. The reason is
-captured in `closed_reason: string` — common values include
+captured in `closed_reason: string` - common values include
 `"user_dismissed"`, `"revalidated_obsolete"`,
 `"human_actiond_ack"` (closing a sticky review-pipeline-failure
-finding) — but the field is free-form; new reasons can be
+finding) - but the field is free-form; new reasons can be
 introduced without a state-enum migration.
 
 **No `"superseded_by_revalidation"` closed_reason.** An earlier
@@ -607,7 +607,7 @@ chain was dropped: `finding_id` is the branch-stable hash of
 `(rule, anchor)`, so for a node-anchored finding, re-firing the
 rule on new content produces the SAME `finding_id`. There is
 nothing to chain. The revalidation sweep instead REFRESHES
-`anchor_content_hash` in place on the existing open row — state
+`anchor_content_hash` in place on the existing open row - state
 stays `open`, `closed_reason` stays NULL, and `actor_id` /
 `actor_kind` are left untouched. `"revalidated_obsolete"` is the
 only closed_reason the sweep ever writes.
@@ -635,11 +635,11 @@ Required fields: `id`, `scope`, `target`, `reason`, `actor_id`,
 Optional: `rule`, `expires_at`, `branch`.
 
 **The `branch` field controls cross-branch behaviour.** When
-`branch` is NULL the suppression applies on every branch — this
+`branch` is NULL the suppression applies on every branch - this
 is what you want for vulns, secret leaks, and any rule that fires
 against branch-stable inputs (dependency declarations, file paths
 in user-managed config). When `branch` is non-NULL the
-suppression applies only on that branch — useful for "yes I know
+suppression applies only on that branch - useful for "yes I know
 about this dead-code finding on the experimental branch; don't
 silence it on main."
 
@@ -691,7 +691,7 @@ declared but cannot bind it because the target repo is not in
 the working set. Same-repo unresolved references are dropped at
 promotion (§5.2 invariant 4), not stored as `Unresolved` edges. The
 prior name `Speculative` was retired because it implied "low-
-confidence guess" — a category the resolver does not currently
+confidence guess" - a category the resolver does not currently
 emit; heuristic resolution lands as `Probable`. If a future
 ADR introduces a genuine "low-confidence guess" case, it gets a
 new enum value, not a re-overload of `Unresolved`.
@@ -762,7 +762,7 @@ Rules:
    aggregate-root methods.
 5. Outside `core/domain/`, entities are constructed only through
    `New<Entity>`. `layercheck` (SOLO-07 §6) does not catch this
-   directly, but the import discipline keeps it tractable —
+   directly, but the import discipline keeps it tractable -
    `core/domain` is the only package that knows the struct
    internals.
 
@@ -771,8 +771,8 @@ Entities with constructors (signatures as shipped in
 
 - `NewNode(id, path, name string, kind NodeKind, ...NodeOption)`
 - `NewEdge(src, tgt NodeID, kind EdgeKind, ...EdgeOption)`
-- `NewGraph(repoID, branch string)` — no options
-- `NewRepo(...)` — see SOLO-07/SOLO-08; the `Repo` aggregate has
+- `NewGraph(repoID, branch string)` - no options
+- `NewRepo(...)` - see SOLO-07/SOLO-08; the `Repo` aggregate has
   no `core/domain` constructor yet (its state lives in the
   repos-table registry, `internal/repo`)
 - `NewTask(id, repoID, title string, ...TaskOption)`
@@ -810,7 +810,7 @@ type <Entity>Repository interface {
   invites partial-mutation patterns that violate aggregate
   consistency.
 - `Get` returns the whole aggregate.
-- `Find` returns read models — projection-shaped types named
+- `Find` returns read models - projection-shaped types named
   `<Entity>ReadModel`. They do not expose aggregate methods.
 
 ### 11.2 Graph-scoped repository
@@ -819,7 +819,7 @@ type <Entity>Repository interface {
 writes `Node` and `Edge` rows individually and reads either
 row-shaped projections or the whole `Graph` read object (§5.3).
 This is the one departure from the §11.1 shape, and it is
-deliberate — see §5.3 "Why `Graph` is a read projection."
+deliberate - see §5.3 "Why `Graph` is a read projection."
 
 ```go
 type GraphRepository interface {
@@ -846,7 +846,7 @@ type GraphRepository interface {
   structural backstop.
 - `LoadGraph` is the only place a whole-graph object is ever
   materialised for production use. The returned `*Graph` is a
-  read projection — its `AddNode` / `AddEdge` mutators populate
+  read projection - its `AddNode` / `AddEdge` mutators populate
   the in-memory object during `LoadGraph` but never persist;
   callers use only the traversal helpers (§5.3).
 - The promotion transaction (SOLO-08 §5) is the one cross-row

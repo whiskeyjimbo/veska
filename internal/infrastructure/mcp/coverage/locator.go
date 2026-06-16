@@ -7,8 +7,7 @@ import (
 
 // ModuleRoot returns the absolute filesystem path to a fixture module directory
 // under this package's testdata/ tree (e.g. ModuleRoot("modalpha")).
-//
-// It is anchored via runtime.Caller rather than a cwd-relative "testdata/..."
+// It is anchored via runtime.Caller rather than a cwd-relative "testdata/."
 // join so importers in OTHER packages (notably the in-process tool-coverage
 // harness in package daemon) can locate the fixtures regardless of their own
 // working directory. The dump/self-test helpers in this package use a

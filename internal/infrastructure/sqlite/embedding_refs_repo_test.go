@@ -146,7 +146,7 @@ func TestEmbeddingRefsRepo_MarkAttemptFailed_NoOpOnNonPending(t *testing.T) {
 // counts only pending refs that still have a backing node — orphaned refs
 // (node deleted, ref left behind) are excluded, matching FetchPending's
 // JOIN. Without this, orphans pin eng_get_status at degraded forever even
-// though the worker has nothing left to drain (solov2-khra).
+// though the worker has nothing left to drain.
 func TestEmbeddingRefsRepo_CountPending_IgnoresOrphans(t *testing.T) {
 	t.Parallel()
 	db, repo := openTestDB(t)
@@ -159,7 +159,7 @@ func TestEmbeddingRefsRepo_CountPending_IgnoresOrphans(t *testing.T) {
 		t.Fatalf("delete node: %v", err)
 	}
 
-	// The orphaned ref row is still present and still 'pending'...
+	// The orphaned ref row is still present and still 'pending'.
 	var raw int
 	if err := db.QueryRow(`SELECT COUNT(*) FROM node_embedding_refs WHERE state='pending'`).
 		Scan(&raw); err != nil {
@@ -169,7 +169,7 @@ func TestEmbeddingRefsRepo_CountPending_IgnoresOrphans(t *testing.T) {
 		t.Fatalf("raw pending rows: want 2 (incl orphan), got %d", raw)
 	}
 
-	// ...but CountPending excludes it.
+	// but CountPending excludes it.
 	n, err := repo.CountPending(ctx)
 	if err != nil {
 		t.Fatalf("CountPending: %v", err)
@@ -242,7 +242,7 @@ func TestEmbeddingRefsRepo_CountByState_AllZero(t *testing.T) {
 
 // TestEmbeddingRefsRepo_FetchPending_TextProjection verifies the embed-input
 // projection includes file_path and language so distinct nodes do not collapse
-// under the content-addressed embedding dedup .
+// under the content-addressed embedding dedup.
 func TestEmbeddingRefsRepo_FetchPending_TextProjection(t *testing.T) {
 	t.Parallel()
 	db, repo := openTestDB(t)
@@ -300,7 +300,7 @@ func TestEmbeddingRefsRepo_FetchPending_TextProjection(t *testing.T) {
 // TestEmbeddingRefsRepo_FetchPending_SnippetProjection verifies the embed-input
 // projection uses EmbedVariantSnippet: a node with a persisted snippet projects
 // "<kind> <symbol_path> <file> <language> <snippet>", while a node with a NULL
-// snippet degrades gracefully to the exact baseline projection (solov2-ok0.6).
+// snippet degrades gracefully to the exact baseline projection.
 func TestEmbeddingRefsRepo_FetchPending_SnippetProjection(t *testing.T) {
 	t.Parallel()
 	db, repo := openTestDB(t)

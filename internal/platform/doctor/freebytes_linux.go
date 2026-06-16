@@ -5,7 +5,7 @@ package doctor
 import "syscall"
 
 // getFreeBytes returns the number of free bytes available on the filesystem
-// containing path.  Uses syscall.Statfs (stdlib, no CGo).
+// containing path. Uses syscall.Statfs (stdlib, no CGo).
 func getFreeBytes(path string) int64 {
 	var stat syscall.Statfs_t
 	if err := syscall.Statfs(path, &stat); err != nil {

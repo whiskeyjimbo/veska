@@ -1,7 +1,7 @@
 # RESULTS: branch-in-PK SQLite Spike
 
 **Date:** 2026-05-11  
-**Verdict:** `GREEN` — **GREEN**
+**Verdict:** `GREEN` - **GREEN**
 
 ---
 
@@ -31,7 +31,7 @@ Representative for verdict: **10% overlap** (worst-case disk; best-case latency)
 | edges | 2,800,000 |
 | findings | 28,000 |
 
-**Linear growth confirmed:** YES — O(branches × symbols)
+**Linear growth confirmed:** YES - O(branches × symbols)
 
 ## Disk Size
 
@@ -64,7 +64,7 @@ Representative for verdict: **10% overlap** (worst-case disk; best-case latency)
 | Disk after | 1,098,625,024 bytes |
 | Reclaimed | 702,726,144 bytes |
 
-**GC sweep bounded:** YES — proportional to branches deleted
+**GC sweep bounded:** YES - proportional to branches deleted
 
 ## Verdict Matrix
 

@@ -1,8 +1,8 @@
 // Package restorecmd holds the business logic behind the `veska restore`
 // command. cmd/veska/restore.go is reduced to Cobra construction whose RunE
 // body delegates here, following the cmd = glue / logic-in-packages pattern
-// (solov2-0omh.10). The mode-selection (exactly one of <path>/--latest/
-// --pre-migration), the daemon-running guard, and tarball resolution all live
+// The mode-selection (exactly one of <path>/--latest/
+// pre-migration), the daemon-running guard, and tarball resolution all live
 // here so they are unit-testable without driving Cobra; $VESKA_HOME and
 // backup-dir resolution stay in cmd/veska and are injected as seams.
 package restorecmd
@@ -37,7 +37,7 @@ type Params struct {
 	VeskaHome string
 }
 
-// Run restores a backup tarball into VeskaHome (SOLO-17 §4.4). Exactly one
+// Run restores a backup tarball into VeskaHome. Exactly one
 // selection mode must be set; the daemon must be stopped.
 func Run(p Params) error {
 	if err := p.checkExactlyOneMode(); err != nil {
@@ -68,7 +68,7 @@ func Run(p Params) error {
 }
 
 // checkExactlyOneMode enforces that exactly one of <path>, --latest, or
-// --pre-migration was supplied.
+// pre-migration was supplied.
 func (p Params) checkExactlyOneMode() error {
 	modes := 0
 	if p.Path != "" {
@@ -92,7 +92,7 @@ func (p Params) resolveTarball() (string, error) {
 	case p.Path != "":
 		return p.Path, nil
 	case p.UseLatest:
-		// solov2-n57f: prefer the canonical $VESKA_HOME/backups but fall back
+		// prefer the canonical $VESKA_HOME/backups but fall back
 		// to ~/.veska-backups if the new dir is empty so users upgrading still
 		// find their tarballs.
 		dir, err := p.ResolveReadDir()

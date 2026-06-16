@@ -1,12 +1,11 @@
-// Package coverage builds the node→test reverse map (solov2-v6de.1): for a
+// Package coverage builds the node→test reverse map: for a
 // given prod node, the set of runnable test entrypoint functions that
 // transitively call it over CALLS edges. It needs no new ingestion — the
 // signal is latent in the CALLS edges already in the graph (the same proxy the
 // untested-symbol check consumes, extended from direct presence to a transitive
 // function-granularity map).
-//
-// The map is the data; impact-based test SELECTION (solov2-v6de.2) is the
-// consumer that turns it into a `go test -run` set. Both stay producer-side —
+// The map is the data; impact-based test SELECTION is the
+// consumer that turns it into a `go test -run` set. Both stay producer-side
 // no test execution, no real coverage ingestion.
 package coverage
 
@@ -28,7 +27,7 @@ var ErrMissingDependency = errors.New("coverage: missing required dependency")
 // knob. It is deliberately generous: for test SELECTION the safe failure is
 // OVER-selecting (running a few extra tests), so the walk uses unbounded depth
 // and no hub-gating (unlike blastradius, whose shallow depth + hub gate would
-// silently DROP covering tests). See solov2-v6de Decision B.
+// silently DROP covering tests). Decision B.
 const DefaultMaxNodes = 5000
 
 // InboundCallsReader is the CALLS-scoped, metadata-bearing inbound adjacency
@@ -96,7 +95,7 @@ func (m *ReverseMap) TestsCovering(ctx context.Context, repoID, branch, nodeID s
 }
 
 // TestsCoveringAny returns the UNION of test entrypoints covering any seed node
-// — the form impact-based selection (v6de.2) needs over a diff's changed-node
+// the form impact-based selection (v6de.2) needs over a diff's changed-node
 // set. A single inbound BFS is shared across all seeds. Duplicate test
 // entrypoints reached from multiple seeds are de-duplicated.
 func (m *ReverseMap) TestsCoveringAny(ctx context.Context, repoID, branch string, seedNodeIDs []string) ([]TestRef, error) {
@@ -161,7 +160,7 @@ func (m *ReverseMap) TestsCoveringAny(ctx context.Context, repoID, branch string
 // function — a top-level func in a *_test.go file whose name is a go-test
 // recognised prefix (Test/Benchmark/Fuzz/Example). Helpers in test files are
 // deliberately NOT entrypoints; they are walked THROUGH as intermediate hops
-// (solov2-v6de granularity decision).
+// ( granularity decision).
 func isTestEntrypoint(ref ports.NodeRef) bool {
 	if ref.Kind != "function" {
 		return false

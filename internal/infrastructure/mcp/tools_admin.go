@@ -70,9 +70,7 @@ func RegisterAdminTools(
 	})
 }
 
-// ---------------------------------------------------------------------------
 // eng_get_current_repo
-// ---------------------------------------------------------------------------
 
 type getCurrentRepoParams struct {
 	CWD string `json:"cwd"`
@@ -91,7 +89,7 @@ func makeGetCurrentRepoHandler(repos application.RepoLister) ToolHandler {
 		}
 
 		// When cwd is omitted, fall back to the sole-registered-repo case
-		// . Editors and MCP clients can't easily inject their
+		// Editors and MCP clients can't easily inject their
 		// project root automatically, and a junior tooling with exactly one
 		// repo in flight gets the right answer without needing to know
 		// about cwd at all. Multiple repos and no cwd is ambiguous — we
@@ -102,7 +100,7 @@ func makeGetCurrentRepoHandler(repos application.RepoLister) ToolHandler {
 			// rows (from `veska deps index`) are hidden by eng_list_repos, so
 			// counting them here would tell a caller "more than one repo" when
 			// the listing shows exactly one, and would pick the wrong record;
-			// skip them and default to the lone real repo (solov2-khra).
+			// skip them and default to the lone real repo.
 			var sole *application.RepoRecord
 			ambiguous := false
 			for i := range all {
@@ -142,25 +140,22 @@ func makeGetCurrentRepoHandler(repos application.RepoLister) ToolHandler {
 	}
 }
 
-// ---------------------------------------------------------------------------
 // eng_list_repos
-// ---------------------------------------------------------------------------
-
 // RepoView decorates an application.RepoRecord with a derived 'status'
 // field so callers (`veska repo list`, `doctor status`, AI tools) can
 // distinguish a freshly-registered repo from a fully-indexed one
-// without reverse-engineering empty strings .
-//
+// without reverse-engineering empty strings.
 // Status values:
-//   - "promoted"   — last_promoted_sha is set; repo is queryable.
-//   - "unindexed"  — last_promoted_sha is empty; repo was registered
-//     but the daemon has not (yet) cold-scanned it. Either the daemon
-//     is off, the daemon is mid-scan, or startup-resync errored on it
-//     (solov2-8ga's per-repo continue-on-error path).
-//   - "missing"    — root_path no longer exists on disk; the registration
-//     is stale and queries against it will return nothing useful. CLI
-//     `veska repo list` has surfaced this for a while ; MCP
-//     now matches so agents see the same signal .
+//
+//	"promoted" — last_promoted_sha is set; repo is queryable.
+//	"unindexed" — last_promoted_sha is empty; repo was registered
+//	  but the daemon has not (yet) cold-scanned it. Either the daemon
+//	  is off, the daemon is mid-scan, or startup-resync errored on it
+//	  ('s per-repo continue-on-error path).
+//	"missing" — root_path no longer exists on disk; the registration
+//	  is stale and queries against it will return nothing useful. CLI
+//	  `veska repo list` has surfaced this for a while; MCP
+//	  now matches so agents see the same signal.
 type RepoView struct {
 	RepoID          string `json:"repo_id"`
 	ShortID         string `json:"short_id"`
@@ -171,16 +166,15 @@ type RepoView struct {
 	// Kind is "tracked" (path-registered or `repo add <url>` clones) or
 	// "ephemeral" (search --repo <url> cache-tier clones). Always set;
 	// pre-kxo5.2 rows fall through the migration DEFAULT to 'tracked'
-	// (solov2-kxo5.9).
 	Kind string `json:"kind"`
 	// Aliases is the list of user-defined human-friendly names bound to
-	// this repo . Empty when none are set. Accepted as a
+	// this repo. Empty when none are set. Accepted as a
 	// repo_id substitute by every tool that resolves repo_id.
 	Aliases []string `json:"aliases"`
 }
 
 // ShortRepoIDLen is the number of leading hex chars of a repo_id that the
-// CLI and tools accept as a human-friendly alias . 12 chars of
+// CLI and tools accept as a human-friendly alias. 12 chars of
 // sha256 is collision-safe for any realistic number of tracked repos.
 const ShortRepoIDLen = 12
 
@@ -198,7 +192,7 @@ func decorateRepo(r application.RepoRecord) RepoView {
 	if r.LastPromotedSHA == "" {
 		status = "unindexed"
 	}
-	// solov2-cwjj: if the working-tree root no longer exists, report
+	// if the working-tree root no longer exists, report
 	// "missing" so MCP callers see the same signal the CLI surfaces.
 	if r.RootPath != "" {
 		if _, err := os.Stat(r.RootPath); errors.Is(err, fs.ErrNotExist) {
@@ -214,8 +208,8 @@ func decorateRepo(r application.RepoRecord) RepoView {
 	}
 	aliases := r.Aliases
 	if aliases == nil {
-		// README convention: empty result collections serialise as []
-		// rather than null. A nil []string from the repo registry
+		// README convention: empty result collections serialise as
+		// rather than null. A nil string from the repo registry
 		// would otherwise reach the wire as `"aliases": null` and
 		// crash agents that iterate the field without a nil-check.
 		aliases = []string{}
@@ -243,7 +237,7 @@ func decorateRepos(in []application.RepoRecord) []RepoView {
 // listReposParams accepts include_vendored=true to surface synthetic
 // ext: repo rows alongside user-registered ones. Default false hides
 // them so a multi-repo workspace's `eng_list_repos` result doesn't
-// balloon with one entry per indexed dependency .
+// balloon with one entry per indexed dependency.
 type listReposParams struct {
 	IncludeVendored bool `json:"include_vendored"`
 }
@@ -277,9 +271,7 @@ func makeListReposHandler(repos application.RepoLister) ToolHandler {
 	}
 }
 
-// ---------------------------------------------------------------------------
 // eng_get_repo
-// ---------------------------------------------------------------------------
 
 type getRepoParams struct {
 	RepoID string `json:"repo_id"`
@@ -310,14 +302,12 @@ func makeGetRepoHandler(repos application.RepoLister) ToolHandler {
 			}
 		}
 
-		// solov2-byxy: not-found is a domain error, not a malformed-params error.
+		// not-found is a domain error, not a malformed-params error.
 		return nil, &RPCError{Code: CodeNotFound, Message: fmt.Sprintf("repo not found: %s", p.RepoID)}
 	}
 }
 
-// ---------------------------------------------------------------------------
 // eng_get_status
-// ---------------------------------------------------------------------------
 
 func makeGetStatusHandler(sp StatusProvider) ToolHandler {
 	return func(ctx context.Context, _ domain.Actor, raw json.RawMessage) (any, *RPCError) {
@@ -338,9 +328,7 @@ func makeGetStatusHandler(sp StatusProvider) ToolHandler {
 	}
 }
 
-// ---------------------------------------------------------------------------
 // eng_get_config
-// ---------------------------------------------------------------------------
 
 func makeGetConfigHandler(cp ConfigProvider) ToolHandler {
 	return func(ctx context.Context, _ domain.Actor, raw json.RawMessage) (any, *RPCError) {

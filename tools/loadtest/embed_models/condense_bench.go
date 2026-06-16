@@ -1,22 +1,19 @@
 //go:build eval
 
-// Condensation axis for the embed-models bench (solov2-oo4q.2).
-//
+// Condensation axis for the embed-models bench.
 // When EMBED_BENCH_CONDENSE=on, the bench computes a SECOND embedding
 // per document using extractive condensation (top-K most-central pieces
 // of the raw content, joined and re-embedded). Both vectors are stored
 // per doc and both recall maps appear in results.json + the published
 // table, so the lift (condensed_R@10 - raw_R@10) is directly visible
 // per (model × corpus) cell.
-//
 // Knobs:
-//   EMBED_BENCH_CONDENSE         on|off (default off)
-//   EMBED_BENCH_CONDENSE_K       int (default 5) — top-K pieces kept
+//   EMBED_BENCH_CONDENSE on|off (default off)
+//   EMBED_BENCH_CONDENSE_K int (default 5) — top-K pieces kept
 //   EMBED_BENCH_CONDENSE_MIN_LEN int (default 500) — skip docs shorter
 //                                than this many bytes (short symbols
 //                                don't need condensing and condensation
 //                                of <5-line bodies is a no-op anyway)
-//
 // Cost note: condensation requires len(pieces) extra embeds per doc
 // (for centrality scoring) plus one more for the joined result. With
 // model2vec that's microseconds per piece — adds ~3 min to a full
@@ -51,7 +48,7 @@ func loadCondenseConfig() condenseConfig {
 
 // embedderAdapter wraps the bench's narrow Embedder interface to
 // satisfy ports.EmbeddingProvider (which condense.Condense requires).
-// The ModelID() stub is unused by the condenser — it only calls Embed.
+// The ModelID stub is unused by the condenser — it only calls Embed.
 type embedderAdapter struct{ inner Embedder }
 
 func (a embedderAdapter) Embed(ctx context.Context, text string) ([]float32, error) {
@@ -81,7 +78,6 @@ func splitPieces(raw string) []string {
 // than 2 pieces (centrality is undefined). The boolean reports whether
 // condensation was actually applied — counted into the per-run
 // CondenseAppliedCount for diagnostics.
-//
 // The name is ALWAYS prepended to the result so the embed input shape
 // is identical to the raw path (`name + "\n" + body`). Without the
 // name prepend, short helper symbols would land as vectors derived

@@ -1,4 +1,4 @@
-"""Sad paths — every tool's documented error conditions, concentrated.
+"""Sad paths - every tool's documented error conditions, concentrated.
 
 The per-tool files cover one or two error cases each. This file is the
 opposite: every error a user can hit, grouped by error category, so an
@@ -19,7 +19,7 @@ import pytest
 
 # ── Missing required args ─────────────────────────────────────────────────────
 
-# Cases that don't depend on a real registered repo — purely testing
+# Cases that don't depend on a real registered repo - purely testing
 # that the handler rejects a missing required param. Each entry's params
 # must omit *only* the param the want_substr refers to; supplying extra
 # valid-looking placeholders (e.g. repo_id="x") risks the handler erroring
@@ -30,7 +30,7 @@ MISSING_REQUIRED_CASES = [
     ("eng_add_repo", {}, "root_path"),
     ("eng_remove_repo", {}, "repo_id"),
     ("eng_promote_repo", {}, "root_path"),
-    # node_id is always required for eng_get_node — repo_id/branch are now
+    # node_id is always required for eng_get_node - repo_id/branch are now
     # optional , so the only remaining missing-arg path is
     # node_id itself.
     ("eng_get_node", {}, "required"),
@@ -54,7 +54,7 @@ MISSING_REQUIRED_CASES = [
     # auto-resolve (unlike find_symbol), so an empty call is rejected on
     # repo_id first (solov2-khra: re-pinned from "file_path").
     ("eng_find_owner", {}, "repo_id"),
-    # Findings family — finding_id is the always-required selector.
+    # Findings family - finding_id is the always-required selector.
     ("eng_get_finding", {}, "finding_id"),
     ("eng_close_finding", {}, "finding_id"),
     ("eng_reopen_finding", {}, "finding_id"),
@@ -97,7 +97,7 @@ def test_missing_required_args_with_real_repo(mcp_client, repo_id, branch, metho
 UNKNOWN_ID_CASES = [
     # Tools that can prove non-existence and return a clear error.
     # repo_id="not-a-real-repo-zzz" intentionally bypasses the prefix
-    # resolver (>= minRepoIDPrefix chars, no match) — surfaces the
+    # resolver (>= minRepoIDPrefix chars, no match) - surfaces the
     # explicit not-found path .
     ("eng_get_repo", {"repo_id": "not-a-real-repo-zzz"}, "not found"),
     ("eng_promote_repo", {"root_path": "/tmp/not-a-real-path-zzz"}, "not registered"),
@@ -117,7 +117,7 @@ def test_search_similar_unknown_node_is_loud(mcp_client, repo_id, branch):
     """eng_search_similar with a real repo but bogus node_id surfaces the
     shared node-id resolver error (-32002 'node_id … not in repo …') BEFORE
     it ever reaches the embedding lookup (solov2-izh6). The resolver
-    rejecting the unknown id is the loud failure we want — the node simply
+    rejecting the unknown id is the loud failure we want - the node simply
     doesn't exist in the repo (solov2-khra: re-pinned from the old
     'embedding'/'not found' wording)."""
     ok, text, _, _ = mcp_client.call("eng_search_similar", {
@@ -134,7 +134,7 @@ def test_search_similar_unknown_node_is_loud(mcp_client, repo_id, branch):
 
 # Tools that soft-fail on unknown ID (success + empty body). Pin the contract.
 # eng_get_call_chain used to live here but now LOUDLY rejects an unknown
-# node_id via the shared resolver (-32002) — see
+# node_id via the shared resolver (-32002) - see
 # test_call_chain.py::test_call_chain_unknown_node_errors (solov2-khra).
 SOFT_FAIL_UNKNOWN_CASES = [
     ("eng_find_symbol", "symbol"),       # unknown symbol → {nodes:nil}

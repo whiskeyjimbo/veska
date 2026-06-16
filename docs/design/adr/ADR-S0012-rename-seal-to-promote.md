@@ -8,7 +8,7 @@ verified: true
 verified_date: "2026-05-16"
 ---
 
-# ADR-S0012 — Rename "Seal" to "Promote/Promotion"
+# ADR-S0012 - Rename "Seal" to "Promote/Promotion"
 
 ## Context
 
@@ -16,7 +16,7 @@ The save/seal split (ADR-S0003) is the load-bearing primitive of
 the V2 design: interactive saves write to in-memory staging;
 `git commit` triggers a synchronous SQLite transaction that
 publishes nodes/edges and enqueues async work. The naming chosen
-in the original draft was *Seal* — a deliberately distinctive
+in the original draft was *Seal* - a deliberately distinctive
 verb that didn't collide with Git's "commit."
 
 Cumulative usage made the term unworkable:
@@ -32,7 +32,7 @@ Cumulative usage made the term unworkable:
 - The PRODUCT.md narrative had to insert a glossary block
   explaining the three meanings. The fact that the user-facing
   trailer needed disambiguation in the first paragraph was a
-  signal — fixed at the source.
+  signal - fixed at the source.
 
 The principal-architect review of 2026-05-09 named this as the
 single biggest terminology problem in the doc tree:
@@ -70,7 +70,7 @@ The verb form is *promote* (active, transitive: "the post-commit
 hook promotes staging to SQLite"). The noun form is *promotion*
 ("the promotion runs in one `BEGIN IMMEDIATE`"). The adjective
 form is *promoted* ("the promoted state"). Three forms, three
-words, one root — the same separation English already gives us
+words, one root - the same separation English already gives us
 with commit/committed/committal but without colliding with Git.
 
 The CLI verb is `veska promote` (rare; only used for headless
@@ -90,7 +90,7 @@ Positive:
   the verb the post-commit hook performs.
 - The CLI command `veska promote` reads as the verb it is.
 - "Save vs. Promote" reads more naturally than "Save vs. Seal"
-  did — both are verbs, parallel grammatical role.
+  did - both are verbs, parallel grammatical role.
 
 Negative:
 
@@ -142,12 +142,12 @@ Neutral:
 
 ## References
 
-- ADR-S0003 — Save-vs-promote split (was: save-vs-seal). Header
+- ADR-S0003 - Save-vs-promote split (was: save-vs-seal). Header
   note added pointing to this ADR.
-- ADR-S0004 — Post-promotion queue table (was: post-seal queue
+- ADR-S0004 - Post-promotion queue table (was: post-seal queue
   table). Header note added pointing to this ADR.
-- SOLO-01 §5 — The promote-vs-save split (renamed in §5 header).
-- SOLO-08 §5 — The promotion transaction.
-- SOLO-11 §2 — Promotion pipeline.
-- SOLO-15 — Glossary (entries updated; "Promote" replaces
+- SOLO-01 §5 - The promote-vs-save split (renamed in §5 header).
+- SOLO-08 §5 - The promotion transaction.
+- SOLO-11 §2 - Promotion pipeline.
+- SOLO-15 - Glossary (entries updated; "Promote" replaces
   "Seal").

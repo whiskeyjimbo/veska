@@ -1,10 +1,8 @@
 // Package model2vec is a pure-Go EmbeddingProvider that runs Model2Vec
 // inference against a pre-distilled static embedding model
-// (potion-code-16M is the design target; see solov2-vn0).
-//
+// (potion-code-16M is the design target).
 // Inference is trivial — Model2Vec's whole point is that there is no
 // transformer at query time:
-//
 //  1. Tokenise text with the model's HuggingFace WordPiece tokenizer.
 //  2. Look up each token id's row in the embedding matrix.
 //  3. Mean-pool the per-token vectors.
@@ -18,15 +16,14 @@
 // vectors that live in a different 768-dim subspace. The composite
 // EmbeddingProvider's ModelID-as-cache-key invariant already accepts
 // this trade-off: a configuration swap invalidates the cache.
-//
 // Model files (tokenizer.json + model.safetensors) live in
 // <VeskaHome>/static-model/<model-name>/. The download.go path can
-// fetch + sha-verify them from a HuggingFace base URL, but auto-
+// fetch + sha-verify them from a HuggingFace base URL, but auto
 // download on daemon start is gated on a future config flag — today
 // users opt in by manually placing the files:
 //
 //	mkdir -p ~/.veska/static-model/potion-code-16M
-//	curl -L https://huggingface.co/minishlab/potion-code-16M/resolve/main/tokenizer.json    -o ~/.veska/static-model/potion-code-16M/tokenizer.json
+//	curl -L https://huggingface.co/minishlab/potion-code-16M/resolve/main/tokenizer.json -o ~/.veska/static-model/potion-code-16M/tokenizer.json
 //	curl -L https://huggingface.co/minishlab/potion-code-16M/resolve/main/model.safetensors -o ~/.veska/static-model/potion-code-16M/model.safetensors
 //
 // The daemon's composite chain (cmd/veska-daemon/wire.go) calls
@@ -44,7 +41,7 @@ import (
 )
 
 // OutputDim is the index-compatible vector dimension. Vectors from
-// this provider are zero-padded from NativeDim() up to OutputDim so
+// this provider are zero-padded from NativeDim up to OutputDim so
 // they fit the existing 768-dim memory / usearch vector schema.
 const OutputDim = 768
 
@@ -91,7 +88,7 @@ func New(modelDir string) (*Provider, error) {
 
 // NewFromBytes builds a Provider from in-memory tokenizer + safetensors
 // bytes — the embedded-model path (//go:embed) for fat binary builds
-// . name becomes the ModelID suffix, so it MUST match the
+// name becomes the ModelID suffix, so it MUST match the
 // on-disk directory name for the same model version: fat and thin builds
 // then share one model_id and switching binary flavor triggers no reindex.
 func NewFromBytes(name string, tokenizerJSON, safetensors []byte) (*Provider, error) {

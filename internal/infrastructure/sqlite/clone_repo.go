@@ -13,7 +13,6 @@ import (
 )
 
 // CloneRepo is a SQLite-backed implementation of duplicates.CloneStore.
-//
 // It uses the read-only DB handle: the query never mutates state and must not
 // contend with the single-writer connection.
 type CloneRepo struct {
@@ -27,20 +26,19 @@ func NewCloneRepo(readDB *sql.DB) *CloneRepo {
 
 // ClonedNodes returns every node in (repoID, branch) whose content_hash is
 // shared by >=2 nodes, excluding excludeKinds. The set is selected by a
-// GROUP BY ... HAVING COUNT(*) >= 2 subquery over content_hash; the outer
+// GROUP BY. HAVING COUNT(*) >= 2 subquery over content_hash; the outer
 // query re-joins to hydrate each member's metadata. Both the subquery and the
 // outer query apply the same repo/branch + kind filter so the COUNT reflects
 // only eligible nodes (a chunk sharing a hash with a function must not inflate
 // the count). idx_nodes_content_hash + idx_nodes_repo_branch serve it.
-//
 // Empty content_hash is excluded from grouping: content_hash is NOT NULL on the
-// schema, but nodes with no raw content (and, before solov2-ozoi.2, every parsed
+// schema, but nodes with no raw content (and, before, every parsed
 // node) carry the empty string. Grouping by an empty hash would bucket all of
 // them into one bogus byte-identical clone group, so both query levels filter
-// empty out with a non-empty content_hash check —
+// empty out with a non-empty content_hash check
 // "no content known" can never be a clone match.
 func (r *CloneRepo) ClonedNodes(ctx context.Context, q duplicates.CloneQuery, excludeKinds []string) ([]duplicates.ClonedNode, error) {
-	// scope() emits the shared per-level predicate (branch, optional repo +
+	// scope emits the shared per-level predicate (branch, optional repo +
 	// path) plus the kind exclusion, so the outer query and the GROUP BY
 	// subquery filter identically — a chunk in one repo must not inflate a
 	// content_hash COUNT in another. Built positionally to keep SQLite's planner

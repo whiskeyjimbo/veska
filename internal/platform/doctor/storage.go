@@ -9,7 +9,7 @@ import (
 )
 
 // StorageReport holds filesystem metrics for the veska data directory,
-// matching the SOLO-13 §2.1.3 storage data schema.
+// matching the storage data schema.
 type StorageReport struct {
 	VeskaHome       string   `json:"veska_home"`
 	DBPath          string   `json:"db_path"`
@@ -39,7 +39,7 @@ func ComputeFreeRatio(freeBytes, dbBytes, walBytes, hnswBytes int64) float64 {
 }
 
 // fileSize returns the size of the file at path, or 0 if the file does not exist
-// or cannot be stat'd.  Missing files are not an error.
+// or cannot be stat'd. Missing files are not an error.
 func fileSize(path string) int64 {
 	info, err := os.Stat(path)
 	if err != nil {
@@ -49,7 +49,7 @@ func fileSize(path string) int64 {
 }
 
 // CheckStorage reads the filesystem under veskaHome and returns a populated
-// StorageReport.  It never requires a running UsearchStore — all data is derived
+// StorageReport. It never requires a running UsearchStore — all data is derived
 // from on-disk files.
 func CheckStorage(veskaHome string) (StorageReport, error) {
 	dbPath := filepath.Join(veskaHome, "veska.db")
@@ -71,7 +71,7 @@ func CheckStorage(veskaHome string) (StorageReport, error) {
 	for _, p := range hnswPaths {
 		hnswSizeBytes += fileSize(p)
 
-		// Matching sidecar: same base, .json extension.
+		// Matching sidecar: same base,.json extension.
 		sidecarPath := p[:len(p)-len(".hnsw")] + ".json"
 		data, err := os.ReadFile(sidecarPath)
 		if err != nil {

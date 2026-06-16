@@ -7,10 +7,8 @@ import (
 
 // doctor_probes.go holds the per-subsystem `veska doctor <probe>` constructors.
 // They are Cobra glue whose RunE bodies delegate into internal/cli/doctorcmd
-// (solov2-0omh.6); the command-tree wiring and the status/savings rollups live
+// the command-tree wiring and the status/savings rollups live
 // in doctor.go.
-
-// doctorPostPromotionQueueCmd returns the "doctor post_promotion_queue" subcommand.
 func doctorPostPromotionQueueCmd() *cobra.Command {
 	var (
 		jsonOut      bool
@@ -30,7 +28,7 @@ func doctorPostPromotionQueueCmd() *cobra.Command {
 }
 
 // doctorIdentityCmd returns the "doctor identity" subcommand. It reports each
-// repo's resolved identity tier and warns on non-converging tiers (ADR-S0017).
+// repo's resolved identity tier and warns on non-converging tiers.
 func doctorIdentityCmd() *cobra.Command {
 	var jsonOut bool
 	cmd := &cobra.Command{
@@ -52,7 +50,6 @@ func doctorIdentityCmd() *cobra.Command {
 	return cmd
 }
 
-// doctorWikiRenderCmd returns the "doctor wiki_render" subcommand.
 func doctorWikiRenderCmd() *cobra.Command {
 	var jsonOut bool
 	cmd := &cobra.Command{
@@ -67,7 +64,6 @@ func doctorWikiRenderCmd() *cobra.Command {
 	return cmd
 }
 
-// doctorPipelinesCmd returns the "doctor pipelines" subcommand.
 func doctorPipelinesCmd() *cobra.Command {
 	var jsonOut bool
 	cmd := &cobra.Command{
@@ -99,7 +95,6 @@ func doctorEmbedderCmd() *cobra.Command {
 	return cmd
 }
 
-// doctorEgressCmd returns the "doctor egress" subcommand.
 func doctorEgressCmd() *cobra.Command {
 	var jsonOut bool
 	cmd := &cobra.Command{
@@ -114,7 +109,6 @@ func doctorEgressCmd() *cobra.Command {
 	return cmd
 }
 
-// doctorConfigCmd returns the "doctor config" subcommand.
 func doctorConfigCmd() *cobra.Command {
 	var jsonOut bool
 	cmd := &cobra.Command{
@@ -129,12 +123,11 @@ func doctorConfigCmd() *cobra.Command {
 	return cmd
 }
 
-// doctorServiceCmd returns the "doctor service" subcommand.
-// Exit codes follow SOLO-13 §2.1:
+// Exit codes follow:
 //
-//	0 = healthy  (daemon running, no broken marker)
+//	0 = healthy (daemon running, no broken marker)
 //	1 = degraded (daemon unreachable, no broken marker)
-//	2 = broken   (broken marker present)
+//	2 = broken (broken marker present)
 func doctorServiceCmd() *cobra.Command {
 	var jsonOut bool
 	cmd := &cobra.Command{
@@ -149,12 +142,11 @@ func doctorServiceCmd() *cobra.Command {
 	return cmd
 }
 
-// doctorBackupCmd returns the "doctor backup" subcommand.
-// Exit codes follow SOLO-13 §2.1:
+// Exit codes follow:
 //
-//	0 = healthy  (most recent .tar.gz exists and passes gzip verification)
+//	0 = healthy (most recent.tar.gz exists and passes gzip verification)
 //	1 = degraded (no backup files found)
-//	2 = broken   (most recent backup fails gzip verification)
+//	2 = broken (most recent backup fails gzip verification)
 func doctorBackupCmd() *cobra.Command {
 	var jsonOut bool
 	cmd := &cobra.Command{
@@ -186,7 +178,6 @@ func doctorResetCrashLoopCmd() *cobra.Command {
 	return cmd
 }
 
-// doctorStorageCmd returns the "doctor storage" subcommand.
 func doctorStorageCmd() *cobra.Command {
 	var jsonOut bool
 	cmd := &cobra.Command{

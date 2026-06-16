@@ -145,7 +145,7 @@ func TestRunCycles_E2E_CrossFileCycle_Fails(t *testing.T) {
 	}
 }
 
-// Base-side splice guard (solov2-zvh6.11): a PRE-EXISTING cross-file cycle
+// Base-side splice guard: a PRE-EXISTING cross-file cycle
 // (a.go A->B, b.go B->A both at base-ref) with a body-only change to b.go must
 // PASS — it is not net-new. This is the symmetric companion to CrossFileCycle:
 // re-promoting b.go into the BASE clone cascade-deletes the inbound A->B edge
@@ -172,7 +172,7 @@ func TestRunCycles_E2E_PreExistingCrossFileCycle_Passes(t *testing.T) {
 	}
 }
 
-// INDEX-AHEAD HARDENING (solov2-zvh6.11) — the former false-PASS, now FAILing.
+// INDEX-AHEAD HARDENING — the former false-PASS, now FAILing.
 // The index is seeded AHEAD at the candidate's cyclic content (violating the
 // indexed-HEAD == base-ref precondition). Before pinning, both diff-gate legs
 // collapsed — base edges (from the live index) already held the cycle, and

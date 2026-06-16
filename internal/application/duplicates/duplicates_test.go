@@ -181,7 +181,7 @@ func TestNearThresholdFor(t *testing.T) {
 	if got := duplicates.NearThresholdFor("definitely-not-an-embedder"); got != duplicates.DefaultNearThreshold {
 		t.Errorf("unknown embedder = %v, want fallback %v", got, duplicates.DefaultNearThreshold)
 	}
-	// An Ollama :tag must resolve to the bare-name calibration, not the fallback.
+	// An Ollama:tag must resolve to the bare-name calibration, not the fallback.
 	if got, want := duplicates.NearThresholdFor("nomic-embed-text:latest"), duplicates.NearThresholdFor("nomic-embed-text"); got != want {
 		t.Errorf("tagged nomic = %v, want bare-name calibration %v", got, want)
 	}

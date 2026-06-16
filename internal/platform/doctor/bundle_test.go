@@ -14,7 +14,7 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/platform/doctor"
 )
 
-// openTarball opens a .tar.gz file and returns a map of path → contents for all entries.
+// openTarball opens a.tar.gz file and returns a map of path → contents for all entries.
 func openTarball(t *testing.T, path string) map[string][]byte {
 	t.Helper()
 	f, err := os.Open(path)
@@ -187,13 +187,13 @@ func TestCreateBundleRedaction(t *testing.T) {
 	}
 }
 
-// TestCreateBundleDefaultOutputDir verifies that CreateBundle uses os.TempDir() when OutputDir is empty.
+// TestCreateBundleDefaultOutputDir verifies that CreateBundle uses os.TempDir when OutputDir is empty.
 func TestCreateBundleDefaultOutputDir(t *testing.T) {
 	veskaHome := setupVeskaHome(t, "")
 
 	result, err := doctor.CreateBundle(doctor.BundleOptions{
 		VeskaHome: veskaHome,
-		OutputDir: "", // should default to os.TempDir()
+		OutputDir: "", // should default to os.TempDir
 	})
 	if err != nil {
 		t.Fatalf("CreateBundle: unexpected error: %v", err)
@@ -207,7 +207,7 @@ func TestCreateBundleDefaultOutputDir(t *testing.T) {
 		t.Errorf("tarball not found at %s: %v", result.Path, err)
 	}
 
-	// Clean up from os.TempDir().
+	// Clean up from os.TempDir.
 	t.Cleanup(func() { os.Remove(result.Path) })
 }
 

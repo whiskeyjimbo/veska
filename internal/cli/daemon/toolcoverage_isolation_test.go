@@ -1,7 +1,6 @@
 package daemon
 
-// Isolation proof for the tool-coverage harness (solov2-ti9x).
-//
+// Isolation proof for the tool-coverage harness.
 // The ~11 mutating tools (add_repo, remove_repo, set/remove_repo_alias,
 // promote/reindex_repo, close/reopen/suppress_finding, close_suppression,
 // set_active_task) make a shared DB order-dependent. newHarness defends against

@@ -9,13 +9,12 @@ import (
 )
 
 // Pools holds the two *sql.DB handles for a single veska.db file.
-//
 // ReadDB: unlimited connections, for all read paths.
-// Write:  MaxOpenConns=1, the single writer for promotion, MCP writes, and
+// Write: MaxOpenConns=1, the single writer for promotion, MCP writes, and
 //
 //	the embedder worker. SQLite WAL admits only one writer at the file
 //	level, so a second in-process write pool buys nothing but
-//	SQLITE_BUSY_SNAPSHOT races on transaction commit (solov2-jtl5.5).
+//	SQLITE_BUSY_SNAPSHOT races on transaction commit.
 //	Serializing all writes through one Go-level connection lets in-process
 //	contention queue on the *sql.DB conn instead of failing mid-tx.
 type Pools struct {
@@ -27,7 +26,7 @@ type Pools struct {
 // PRAGMA setup. Both handles use WAL mode and foreign keys. The write pool
 // gets a 30s busy_timeout to absorb the embedder's longer-running writes;
 // readers use 5s since they never block writers under WAL.
-// Caller must call pools.Close() when done.
+// Caller must call pools.Close when done.
 func OpenPools(dbPath string) (*Pools, error) {
 	readDB, err := openPool(dbPath, 0, 5000)
 	if err != nil {
@@ -54,7 +53,7 @@ func openPool(dbPath string, maxOpen, busyTimeoutMS int) (*sql.DB, error) {
 	// state; the previous one-shot `db.Exec("PRAGMA …")` only set them on a
 	// single connection, leaving foreign keys OFF on the rest — so ON DELETE
 	// CASCADE silently never fired and `repo remove` orphaned child rows
-	// . journal_mode=WAL is persisted in the db file, so encoding
+	// journal_mode=WAL is persisted in the db file, so encoding
 	// it per-connection is harmless.
 	db, err := sql.Open(sqldriver.Name, sqldriver.BuildDSN(dbPath, busyTimeoutMS))
 	if err != nil {

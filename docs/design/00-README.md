@@ -1,6 +1,6 @@
 ---
 id: SOLO-00
-title: "Veska Solo Design Set — Conventions"
+title: "Veska Solo Design Set - Conventions"
 status: draft
 version: 0.1.0
 last_reviewed: 2026-05-08

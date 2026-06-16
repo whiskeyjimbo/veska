@@ -1,4 +1,4 @@
-"""Critical paths — invariants that must hold across the system.
+"""Critical paths - invariants that must hold across the system.
 
 These tests pin contracts that, if broken, mean silent data loss or
 silent incorrectness. They are run-against-the-live-daemon checks; the
@@ -28,7 +28,7 @@ def test_critical_promoted_sha_matches_head(mcp_client, repo_id):
     row = query("SELECT last_promoted_sha FROM repos WHERE repo_id = ?", (repo_id,))
     assert row, f"repo {repo_id} missing from repos table"
     sha = row[0]["last_promoted_sha"]
-    assert sha, "last_promoted_sha is NULL/empty — c47 regression"
+    assert sha, "last_promoted_sha is NULL/empty - c47 regression"
     assert len(sha) == 40, f"last_promoted_sha is not a git SHA: {sha!r}"
 
 
@@ -37,7 +37,7 @@ def test_critical_active_branch_is_set(repo_id):
     Every node write keys by this branch; a NULL would silently route
     edits into a wrong-branch staging that never promotes."""
     branch = scalar("SELECT active_branch FROM repos WHERE repo_id = ?", (repo_id,))
-    assert branch, "active_branch is NULL/empty — f8p regression"
+    assert branch, "active_branch is NULL/empty - f8p regression"
 
 
 def test_critical_nodes_carry_snippet(repo_id, branch):
@@ -51,7 +51,7 @@ def test_critical_nodes_carry_snippet(repo_id, branch):
         (repo_id, branch),
     )
     assert n is not None and n > 0, (
-        "no function node has a snippet — sxa regressed; embed text will degrade to "
+        "no function node has a snippet - sxa regressed; embed text will degrade to "
         "kind+name+path only and semantic search quality will tank"
     )
 
@@ -60,7 +60,7 @@ def test_critical_vector_store_serves_ready_refs(mcp_client, repo_id, branch):
     """The vector store rehydrated from node_embeddings  must
     actually serve queries. eng_search_semantic caps k at 100 server-side
     (maxSearchK in tools_search.go) so we can't introspect the full vector
-    population through the search API — instead we assert non-zero hits
+    population through the search API - instead we assert non-zero hits
     plus that 'scans_in_flight' is empty (otherwise the snapshot is mid-
     rehydrate and the count would be racy).
 
@@ -73,9 +73,9 @@ def test_critical_vector_store_serves_ready_refs(mcp_client, repo_id, branch):
            WHERE n.repo_id = ? AND n.branch = ? AND r.state = 'ready'""",
         (repo_id, branch),
     )
-    assert ready_count and ready_count > 0, "no ready refs — populate the repo first"
+    assert ready_count and ready_count > 0, "no ready refs - populate the repo first"
 
-    # Quiescence check — bail rather than race a mid-rehydrate snapshot.
+    # Quiescence check - bail rather than race a mid-rehydrate snapshot.
     _, _, _, status = mcp_client.call("eng_get_status", {})
     if status.get("scans_in_flight"):
         pytest.skip(f"scan in flight: {status['scans_in_flight']}")
@@ -87,7 +87,7 @@ def test_critical_vector_store_serves_ready_refs(mcp_client, repo_id, branch):
     assert ok
     hits = result.get("results") or []
     assert len(hits) > 0, (
-        f"vector store returned 0 hits despite {ready_count} ready refs — "
+        f"vector store returned 0 hits despite {ready_count} ready refs - "
         "249 regression (rehydration dropped all rows) OR embedder hasn't run yet"
     )
 
@@ -115,14 +115,14 @@ def test_critical_promote_advances_sha(mcp_client, repo_id):
 def test_critical_suppress_unknown_rejected(mcp_client, repo_id, branch):
     """solov2-b36: orphan suppressions must not be creatable. If this
     accepts an arbitrary finding_id, list_suppressions will accumulate
-    rows that point at nothing — once visible they survive forever."""
+    rows that point at nothing - once visible they survive forever."""
     sentinel = f"definitely-not-real-{int(time.time())}"
     ok, text, _, _ = mcp_client.call("eng_suppress_finding", {
         "repo_id": repo_id, "branch": branch,
         "finding_id": sentinel,
         "reason": "critical-path probe",
     })
-    assert not ok, f"unknown finding_id was accepted — b36 regressed: {text}"
+    assert not ok, f"unknown finding_id was accepted - b36 regressed: {text}"
     # And no row should have been inserted with that sentinel.
     n = scalar("SELECT COUNT(*) FROM suppressions WHERE target = ?", (sentinel,))
     assert n == 0, f"orphan suppression row created for sentinel {sentinel!r}"
@@ -131,7 +131,7 @@ def test_critical_suppress_unknown_rejected(mcp_client, repo_id, branch):
 def test_critical_close_then_reopen_finding_is_round_trip(mcp_client, repo_id, branch):
     """Closing then reopening a finding must leave its state at 'open'.
     If close-followed-by-reopen left state='closed', findings could be
-    silently lost from list_findings(state=open) — a sad failure mode
+    silently lost from list_findings(state=open) - a sad failure mode
     for any agent relying on the open-set as actionable work."""
     fid = scalar(
         """SELECT finding_id FROM findings
@@ -139,7 +139,7 @@ def test_critical_close_then_reopen_finding_is_round_trip(mcp_client, repo_id, b
         (repo_id, branch),
     )
     if not fid:
-        pytest.skip("no open finding — promote first to generate one")
+        pytest.skip("no open finding - promote first to generate one")
 
     mcp_client.call("eng_close_finding", {
         "repo_id": repo_id, "branch": branch,

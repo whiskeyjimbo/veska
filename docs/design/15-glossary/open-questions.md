@@ -9,7 +9,7 @@ verified: true
 verified_date: "2026-05-17"
 ---
 
-# SOLO-OQ — Open Questions
+# SOLO-OQ - Open Questions
 
 Each entry has a milestone gate. When the gate runs, the question
 is resolved by an ADR or a number in SOLO-13.
@@ -17,7 +17,7 @@ is resolved by an ADR or a number in SOLO-13.
 We do not maintain a longer list. Deferred features are tracked
 in the roadmap (`docs/design/14-roadmap/README.md`), not here.
 
-## OQ-S001 — sqlite-vec p95 and recall, and the vec0 ceiling
+## OQ-S001 - sqlite-vec p95 and recall, and the vec0 ceiling
 
 **Question.** Three numbers, not one:
 
@@ -39,7 +39,7 @@ in the roadmap (`docs/design/14-roadmap/README.md`), not here.
 substrate decision (ADR-S0001) rests on these numbers. If vec0
 misses at 50k, the substrate is wrong, not the budget. The
 ceiling number drives whether the HNSW pivot (OQ-S003) is M1 or
-M3 work — see SOLO-13 §3.3.1.
+M3 work - see SOLO-13 §3.3.1.
 
 **Recall floor (working).** Recall@10 ≥ 0.95 against a 100-pair
 hold-out at 50k. M0 either confirms or replaces this. Below
@@ -53,7 +53,7 @@ vec0 ceiling falls below 250 000 nodes, the HNSW pivot ADR is
 **mandatory before M1 m1.03 begins** (SOLO-13 §3.3.1).
 See `docs/milestones/closed/M0.md`.
 
-**RESOLVED — M0 spike (commit 4d63d34). Verdict: RED-CEILING.**
+**RESOLVED - M0 spike (commit 4d63d34). Verdict: RED-CEILING.**
 
 | Measure | Budget | Measured | Result |
 |---|---|---|---|
@@ -69,7 +69,7 @@ ADR-S0001 amended (status: amended). ADR-S0014 (`hnsw-pivot`) created;
 the HNSW pivot is **mandatory before m1.03 begins** (SOLO-13 §3.3.1).
 See OQ-S003 for the M3 pivot-target decision.
 
-## OQ-S002 — WAL checkpoint cadence under refactor storms
+## OQ-S002 - WAL checkpoint cadence under refactor storms
 
 **Question.** Does `PRAGMA wal_autocheckpoint = 1000` plus the
 idle-5s checkpoint hold against sustained refactor storms (50k
@@ -84,7 +84,7 @@ upward over a working session.
 synthetic refactor sequence; record WAL size and promotion p95 over
 time.
 
-## OQ-S003 — HNSW pivot trigger and target
+## OQ-S003 - HNSW pivot trigger and target
 
 **Question.** At what node count does vec0 stop meeting the
 SOLO-13 §3 latency and recall budgets, and which HNSW backing
@@ -100,23 +100,23 @@ recall data.
 
 **Resolution gate.** **M3 exit gate.** Two outputs:
 
-1. **Pivot trigger** — a concrete embedded-node count above
+1. **Pivot trigger** - a concrete embedded-node count above
    which vec0 misses the SOLO-13 §3.1 `semantic_search` budget
    on the reference laptop. M0 sets this number; M3 confirms it
    on a real graph.
-2. **Target backing decision** — chosen from the HNSW
+2. **Target backing decision** - chosen from the HNSW
    candidates with measured recall ≥ 0.85 against a fixed eval
    set at 1M nodes, plus a backup/restore plan that keeps the
    SOLO-08 §9 single-tarball property (or documents the
    regression).
 
 **M0 update (commit 4d63d34).** The M0 spike measured the vec0 ceiling
-at **100,000 nodes** — this is the numeric pivot trigger (item 1 above).
+at **100,000 nodes** - this is the numeric pivot trigger (item 1 above).
 ADR-S0014 mandates the HNSW pivot before m1.03; that mandate is already
 in force. The M3 gate closes item 2: choosing and measuring the HNSW
 backing against recall and backup/restore requirements.
 
-## OQ-S004 — embedder swap blast radius
+## OQ-S004 - embedder swap blast radius
 
 **Question.** When the user swaps the embedder model (e.g.
 `nomic-embed-text:v1.5` → `bge-small`), the simple plan is "stop
@@ -148,7 +148,7 @@ reference laptop, both required to close OQ-S004 green:
    becomes the documented recovery path. This is the case the
    in-tx rollback is currently an assumption; OQ-S004 measures it.
 
-## OQ-S005 — auto-link false-positive ceiling
+## OQ-S005 - auto-link false-positive ceiling
 
 **Question.** What false-positive rate does the auto-link feature
 produce at the chosen similarity threshold, and is that rate low
@@ -164,7 +164,7 @@ fixture; document in the M3 close report. If FP > 10% at the
 chosen threshold, raise the threshold or remove auto-link from
 M3 scope (defer to a later milestone with a different design).
 
-## OQ-S006 — branch-in-PK storage cost on a real multi-branch repo
+## OQ-S006 - branch-in-PK storage cost on a real multi-branch repo
 
 **Question.** With `(node_id, branch)` and `(edge_id, branch)` as
 composite primary keys on `nodes` and `edges` (SOLO-08 §3.1),
@@ -212,29 +212,29 @@ schema" for the full green/yellow/red matrix. Summary:
   **before M1's m1.03 begins**.
 
 The `findings` table's branch-in-PK shape (SOLO-08 §3.2; design
-rationale in SOLO-04 §8.1) was forced by semantics — per-branch
+rationale in SOLO-04 §8.1) was forced by semantics - per-branch
 state for structural and quality findings; cross-branch
-suppression handled by the `Suppression` model — not by
+suppression handled by the `Suppression` model - not by
 measurement. The M0 spike measures the *cost* of branch-in-PK on
 findings the same way it does for nodes/edges; an unworkable
 finding-row cost triggers the same Red outcome as nodes/edges.
 
-**RESOLVED — M0 spike (commit 72d6ca4). Verdict: GREEN.**
+**RESOLVED - M0 spike (commit 72d6ca4). Verdict: GREEN.**
 
 | Measure | Budget | Measured | Result |
 |---|---|---|---|
 | node lookup p95 | < 25ms | 0.039ms | PASS |
 | edge lookup p95 | < 100ms | 0.047ms | PASS |
 | disk at 28 branches × 100k symbols | ≤ 5 GiB | 1.68 GiB | PASS |
-| GC sweep wall-clock | — | 518s | measured |
-| GC reclaim | — | ~700 MiB | measured |
+| GC sweep wall-clock | - | 518s | measured |
+| GC reclaim | - | ~700 MiB | measured |
 | Row growth shape | linear | linear (confirmed) | PASS |
 
 Linear row growth confirmed; GC sweep is bounded and reclaims as expected.
 The branch-in-PK schema stands. Numbers feed SOLO-13 §3. No delta-table
 scheme needed. Full results in `tools/loadtest/spikes/branchpk/RESULTS.md`.
 
-## OQ-S007 — `KindTest` parser pass
+## OQ-S007 - `KindTest` parser pass
 
 **Question.** Does `KindTest` warrant a parser pass distinct from
 regular function parsing, or is filename-heuristic tagging
@@ -252,7 +252,7 @@ and heuristic-violating test layouts; record precision and
 recall. If recall < 0.95 with heuristics alone, file an ADR for a
 dedicated test-detection pass.
 
-## OQ-S008 — Five-edge-kind set vs. OO languages
+## OQ-S008 - Five-edge-kind set vs. OO languages
 
 **Question.** Does the five-edge-kind set
 (`CALLS | IMPORTS | CONTAINS | TESTS | DEPENDS_ON`) hold for the
@@ -263,7 +263,7 @@ class hierarchies?
 **Why it matters.** When the M3 parser set expands beyond Go and
 TypeScript (Java, C#, Python), the question becomes urgent.
 Blast radius computed without `IMPLEMENTS` / `EXTENDS` will miss
-overrides — a structurally significant class of relationships
+overrides - a structurally significant class of relationships
 that the user expects the graph to capture.
 
 **Resolution gate.** **M3 measurement.** When (and if) M3 adds a
@@ -272,12 +272,12 @@ representative class hierarchies with and without the additional
 edge kinds. If the five-kind set produces unacceptable recall on
 real queries, file an ADR adding the missing kinds.
 
-## OQ-S009 — Post-promotion-queue-drain goroutine model under refactor storms
+## OQ-S009 - Post-promotion-queue-drain goroutine model under refactor storms
 
 **Question.** Does one goroutine per `work_kind` draining
 `post_promotion_queue` at 250ms cadence (SOLO-08 §3.4, SOLO-11 §2.2)
-hold under a refactor storm — e.g. 50k symbols promoted at once
-producing a 50k-row `embed` lane — without the drain falling
+hold under a refactor storm - e.g. 50k symbols promoted at once
+producing a 50k-row `embed` lane - without the drain falling
 behind the hot path or starving other lanes?
 
 **Why it matters.** Embedding throughput is already the slowest
@@ -291,12 +291,12 @@ record per-lane throughput and queue depth over time. If the
 embed lane starves the auto-link or revalidate lanes, redesign
 to a worker pool.
 
-## OQ-S010 — Cross-repo resolver budget at multi-repo working sets
+## OQ-S010 - Cross-repo resolver budget at multi-repo working sets
 
 **Question.** Does the query-time cross-repo resolver
-(SOLO-11 §9) hold the SOLO-13 §3.4 budgets — `< 5ms p95` per
+(SOLO-11 §9) hold the SOLO-13 §3.4 budgets - `< 5ms p95` per
 indexed point lookup, `< 250ms p95` for `get_call_chain` depth-3
-at `repo: "*"` over ≤ 5 indexed repos with ≤ 1 cross-repo hop —
+at `repo: "*"` over ≤ 5 indexed repos with ≤ 1 cross-repo hop -
 on a representative working set?
 
 **Why it matters.** Cross-repo edges are deliberately not stored
@@ -327,8 +327,8 @@ parsers beyond Go and TS.
   commit hash as citation. The cache fallback stays unwritten.
 - **Yellow.** One or more rows miss target by < 2×. Decide per
   row: raise the budget (with rationale), or file the cache ADR.
-  The cache key shape is specified in SOLO-11 §9 — `(src_node_id,
-  src_branch, target_repo_id, target_active_branch)` — and the
+  The cache key shape is specified in SOLO-11 §9 - `(src_node_id,
+  src_branch, target_repo_id, target_active_branch)` - and the
   cache is invalidated on `repos.last_promoted_sha` change *for the
   target repo and target_active_branch*. The cache is a
   materialisation of the resolver, not a stored edge; SOLO-04
@@ -340,11 +340,11 @@ parsers beyond Go and TS.
 The cache sketch lives in SOLO-11 §9 as the documented escape;
 this OQ is the trigger for promoting that sketch to a real ADR.
 
-**RESOLVED — M1 cross-repo resolver spike.** The M1 spike
+**RESOLVED - M1 cross-repo resolver spike.** The M1 spike
 (sub-issue `m1.10.9-bench`) exercised the service+SDK fixture and
 recorded the per-hop resolver p95 and the cross-repo
 `get_call_chain` / `get_blast_radius` p95 within the SOLO-13 §3.4
 budgets, and resolver recall ≥ 0.95 against the hand-labelled
-cross-repo call set. Verdict: GREEN — all four SOLO-13 §3.4
+cross-repo call set. Verdict: GREEN - all four SOLO-13 §3.4
 budget rows measured within target; the cache fallback stays
 unwritten.

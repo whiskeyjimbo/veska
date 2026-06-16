@@ -18,7 +18,7 @@ type EgressReport struct {
 }
 
 // CheckEgress attempts a 200ms dial to each Unix-domain socket path in sockPaths
-// and reports which are reachable vs. missing.  It never returns a non-nil error —
+// and reports which are reachable vs. missing. It never returns a non-nil error
 // connectivity failures are reflected in each SocketStatus.Status field.
 func CheckEgress(sockPaths []string) (EgressReport, error) {
 	statuses := make([]SocketStatus, 0, len(sockPaths))

@@ -7,7 +7,7 @@ import (
 )
 
 // Envelope is the common JSON wrapper emitted by all "doctor --json" subcommands,
-// matching the SOLO-13 §2.1 contract.
+// matching the contract.
 type Envelope struct {
 	SchemaVersion int           `json:"schema_version"`
 	Subsystem     string        `json:"subsystem"`

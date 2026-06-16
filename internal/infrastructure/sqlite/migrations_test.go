@@ -350,7 +350,7 @@ func TestMigrationSHA_Computation(t *testing.T) {
 	t.Parallel()
 
 	// Known input/output: SHA-256 of "hello\n" (UTF-8, no BOM).
-	// echo -n "hello\n" | sha256sum  => not what we want
+	// echo -n "hello\n" | sha256sum => not what we want
 	// We want SHA-256 of the 6-byte string "hello\n":
 	// sha256("hello\n") = 5891b5b522d5df086d0ff0b110fbd9d21bb4fc7163af34d08286a2e846f6be03
 	got := sqlite.ComputeMigrationSHA("hello\n")
@@ -383,10 +383,7 @@ func TestMigrationSHA_NormalisesLineEndings(t *testing.T) {
 	}
 }
 
-// ---------------------------------------------------------------------------
 // Migration 0003: tasks, findings, suppressions
-// ---------------------------------------------------------------------------
-
 // TestMigration0003_TablesAndIndexesExist verifies all three tables and their
 // indexes are created by migration 0003.
 func TestMigration0003_TablesAndIndexesExist(t *testing.T) {
@@ -531,10 +528,7 @@ func TestMigration0003_FindingsBranchPK(t *testing.T) {
 	}
 }
 
-// ---------------------------------------------------------------------------
 // Migration 0004: node_embeddings, node_embedding_refs, node_fts
-// ---------------------------------------------------------------------------
-
 // TestMigration0004_TablesExist verifies migration 0004 creates all three objects.
 func TestMigration0004_TablesExist(t *testing.T) {
 	t.Parallel()
@@ -1099,7 +1093,7 @@ func TestMigration0009_DefaultsToNull(t *testing.T) {
 	}
 }
 
-// ── Migration 0013: repos cache-tier columns (solov2-kxo5.2) ───────────────
+// ── Migration 0013: repos cache-tier columns ───────────────
 
 func TestMigration0013_AddsCacheTierColumns(t *testing.T) {
 	t.Parallel()

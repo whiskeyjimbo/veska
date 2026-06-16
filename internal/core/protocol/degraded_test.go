@@ -5,7 +5,7 @@ import "testing"
 // TestDegradedReasonWireValues pins the JSON wire-contract strings. These
 // values are part of the MCP response contract consumed by agents; a silent
 // edit here would break clients. If you intend to change a value, you are
-// changing the protocol — update consumers deliberately (solov2-geam).
+// changing the protocol — update consumers deliberately.
 func TestDegradedReasonWireValues(t *testing.T) {
 	cases := []struct {
 		name string

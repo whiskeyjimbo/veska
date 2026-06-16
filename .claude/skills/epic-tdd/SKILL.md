@@ -8,15 +8,15 @@ allowed-tools: [Bash, Read, Edit, Write, Agent]
 
 ## Pre-flight
 
-1. `bd show $epic_id` — confirm epic, get title.
-2. `bd list --parent $epic_id --status=open --limit 500` + `bd blocked` — collect ready issues in dependency order.
-3. Print `Epic $epic_id — N issues` + ordered ID list.
+1. `bd show $epic_id` - confirm epic, get title.
+2. `bd list --parent $epic_id --status=open --limit 500` + `bd blocked` - collect ready issues in dependency order.
+3. Print `Epic $epic_id - N issues` + ordered ID list.
 
 ## Per-Issue Orchestration (serial, blockers first)
 
-**NEVER dispatch multiple sub-agents in parallel. DISPATCH 1 agent for One issue at a time — wait for the Result Block before starting the next.**
+**NEVER dispatch multiple sub-agents in parallel. DISPATCH 1 agent for One issue at a time - wait for the Result Block before starting the next.**
 
-### Step 0 — Clarify (orchestrator, interactive)
+### Step 0 - Clarify (orchestrator, interactive)
 
 `bd show <issue_id>`. Read relevant code. **Pause and surface block** if any: description < 2 sentences of real behaviour; can't locate the change in the codebase; criteria are structural not behavioural; two interpretations would produce different code; touches an undescribed domain concept.
 
@@ -31,12 +31,12 @@ allowed-tools: [Bash, Read, Edit, Write, Agent]
 
 Two sharp questions > five fuzzy ones. After response: `bd update <issue_id> --description="<original + clarifications>"`
 
-### Step 1 — Dispatch Sub-agent (one at a time — never parallel, never `run_in_background`)
+### Step 1 - Dispatch Sub-agent (one at a time - never parallel, never `run_in_background`)
 
 Spawn **one** Agent with the template below, filling in `$issue_id`, the full `bd show` output, and (if relevant) a trimmed `## Prior Context` block from the previous result. Wait for the Result Block before moving to the next issue.
 
 **Sub-agent prompt:**
-> You are implementing a single beads issue using strict TDD. The orchestrator closes the bead — do NOT call `bd close`.
+> You are implementing a single beads issue using strict TDD. The orchestrator closes the bead - do NOT call `bd close`.
 >
 > **Issue:** $issue_id
 > **Details:**
@@ -47,12 +47,12 @@ Spawn **one** Agent with the template below, filling in `$issue_id`, the full `b
 >
 > Work directory: /home/jrose/src/engram/solov2. Follow Sub-agent Steps 1–8. Return only the Result Block.
 
-### Step 2 — Close Bead (orchestrator)
+### Step 2 - Close Bead (orchestrator)
 
 - `✓ COMPLETE` → `bd close <issue_id> --reason="DoD verified: <one line>"`
 - `✗ BLOCKED` → `bd update <issue_id> --status=open`
 
-### Step 3 — Report & Route
+### Step 3 - Report & Route
 
 Print Result Block verbatim. Extract **Context Hand-off**; carry forward only entries relevant to the next issue (new shared types, changed interfaces, hot files, patterns to follow). Discard issue-specific detail.
 
@@ -60,41 +60,41 @@ Print Result Block verbatim. Extract **Context Hand-off**; carry forward only en
 
 ## Sub-agent Steps 1–8
 
-**Step 1 — Claim & parse DoD**
+**Step 1 - Claim & parse DoD**
 ```bash
 bd update <issue_id> --claim && bd show <issue_id>
 ```
 Extract DoD/acceptance criteria as a numbered checklist of observable runtime behaviour (not code structure).
 
-**Step 2 — Write failing tests**
+**Step 2 - Write failing tests**
 Write Go tests for each criterion. Confirm they fail (single run, suppress output). Tests + implementation ship in one commit.
 
-**Step 3 — Implement (minimum viable)**
+**Step 3 - Implement (minimum viable)**
 Only code to pass tests. Scope creep → `bd create` a new bead. No Co-Authored-By trailers.
 
-**Step 4 — Race-clean loop (max 10)**
+**Step 4 - Race-clean loop (max 10)**
 ```bash
 go test ./... -race -count=3 2>&1
 ```
 Fix root cause, repeat. After 10 failures: return BLOCKED Result Block, release claim, stop.
 
-**Step 5 — Vet & staticcheck**
+**Step 5 - Vet & staticcheck**
 ```bash
 go vet ./... && staticcheck ./... 2>/dev/null || true
 ```
 Fix all `go vet` errors. Fix staticcheck except `SA1019` unless unavoidable. Re-run Step 4 if non-test code changed.
 
-**Step 6 — Concurrency & stdlib review (inner sub-agent)**
-> Review the following Go diff for: (a) concurrency bugs — TOCTOU races, close-of-closed-channel, nil deref on shared state, goroutine leaks; (b) reinvented stdlib or internal helpers — anything in `sync`, `io`, `os`, `path/filepath`, `slices`, `maps`, or an existing veska internal package, any std lib rewrites (re-invent wheel). (c) CLEAN/SOLID violations, functional options violations. (d) ddd-lite violations. Return numbered findings with file:line. If nothing found, return "LGTM".
+**Step 6 - Concurrency & stdlib review (inner sub-agent)**
+> Review the following Go diff for: (a) concurrency bugs - TOCTOU races, close-of-closed-channel, nil deref on shared state, goroutine leaks; (b) reinvented stdlib or internal helpers - anything in `sync`, `io`, `os`, `path/filepath`, `slices`, `maps`, or an existing veska internal package, any std lib rewrites (re-invent wheel). (c) CLEAN/SOLID violations, functional options violations. (d) ddd-lite violations. Return numbered findings with file:line. If nothing found, return "LGTM".
 
 Apply every finding. Re-run Step 4 if non-trivial changes result.
 
-**Step 7 — Format & fix**
+**Step 7 - Format & fix**
 ```bash
 go fmt ./... && go fix ./... && go test ./... -race -count=3 2>&1 | tail -5
 ```
 
-**Step 8 — Commit**
+**Step 8 - Commit**
 ```bash
 git add <explicit files>
 git commit -m "<type>(<area>): <description>"
@@ -106,14 +106,14 @@ git commit -m "<type>(<area>): <description>"
 
 ```
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Issue:    <id> — <title>
+Issue:    <id> - <title>
 Status:   ✓ COMPLETE  |  ✗ BLOCKED (reason)
-Clarity:  (no clarification needed) | Asked N questions — description updated
+Clarity:  (no clarification needed) | Asked N questions - description updated
 Tests:    +N new  |  N modified
 Commit:   <sha> <message>
 DoD:
   [x] criterion 1
-  [ ] criterion 2 — SKIPPED (reason, new bead: <id>)
+  [ ] criterion 2 - SKIPPED (reason, new bead: <id>)
 Review:   LGTM | <findings addressed>
 New beads: <ids or none>
 
@@ -147,7 +147,7 @@ After closing the epic bead, close out the feature doc:
 3. Move to archive: `mv docs/features/active/FEATURE-xxx.md docs/features/archive/`
 4. Regenerate index: `make features-index`
 5. Check if the feature's **phase** is now fully shipped:
-   - `grep "^phase:" docs/features/active/*.md | sort` — if no active docs remain at that phase, all phase N features are done.
+   - `grep "^phase:" docs/features/active/*.md | sort` - if no active docs remain at that phase, all phase N features are done.
 
 ```bash
 bd dolt push && git pull --rebase && git push

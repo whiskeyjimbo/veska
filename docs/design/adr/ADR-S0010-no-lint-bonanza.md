@@ -1,6 +1,6 @@
 ---
 id: ADR-S0010
-title: One custom lint analyser at V2.0 — layercheck
+title: One custom lint analyser at V2.0 - layercheck
 status: accepted
 date: 2026-05-08
 deciders: [whiskeyjimbo]
@@ -8,29 +8,29 @@ verified: true
 verified_date: "2026-05-16"
 ---
 
-# ADR-S0010 — One custom lint analyser at V2.0 — `layercheck`
+# ADR-S0010 - One custom lint analyser at V2.0 - `layercheck`
 
 ## Context
 
 The prior V2 design specified fourteen custom Go analysers under
 `tools/lint/`:
 
-- `layercheck` — domain imports nothing from app/infra
-- `domainentitynew` — domain entities constructed only via `New<Entity>()`
-- `compositeidentity` — every `Save()` carries the 3-tuple identity
-- `wireclean` — port methods accept serialisable types only
-- `auditshape` — audit-log entries match a schema
-- `embedmigration` — guards the 5-phase embedder migration FSM
-- `crossdbrefs` — references between Dolt and `_workspace` DBs
-- `typedregistry` — plugin slot registration uses typed registry
-- `capabilityschema` — slot capability schemas validate
-- `slogattrs` — standardised slog attribute names
-- `nofmtprintf` — `fmt.Printf` forbidden outside CLI render paths
-- `mcpprefix` — MCP tools prefixed with `eng_`
-- `sourcelayer` — `Finding.source_layer` ∈ closed enum
-- `autolinkconfig` — auto-link config references defined rules
-- `riskformula` — risk-score formula uses ratified weights
-- `docver` — doc frontmatter `version` matches `last_reviewed`
+- `layercheck` - domain imports nothing from app/infra
+- `domainentitynew` - domain entities constructed only via `New<Entity>()`
+- `compositeidentity` - every `Save()` carries the 3-tuple identity
+- `wireclean` - port methods accept serialisable types only
+- `auditshape` - audit-log entries match a schema
+- `embedmigration` - guards the 5-phase embedder migration FSM
+- `crossdbrefs` - references between Dolt and `_workspace` DBs
+- `typedregistry` - plugin slot registration uses typed registry
+- `capabilityschema` - slot capability schemas validate
+- `slogattrs` - standardised slog attribute names
+- `nofmtprintf` - `fmt.Printf` forbidden outside CLI render paths
+- `mcpprefix` - MCP tools prefixed with `eng_`
+- `sourcelayer` - `Finding.source_layer` ∈ closed enum
+- `autolinkconfig` - auto-link config references defined rules
+- `riskformula` - risk-score formula uses ratified weights
+- `docver` - doc frontmatter `version` matches `last_reviewed`
 
 Most of these protect features that no longer exist in solo
 (`compositeidentity` for the 3-tuple, `wireclean` for the wire-typed
@@ -41,7 +41,7 @@ a ratified-weights model). Several others are stylistic
 preferences that `golangci-lint` already covers (`slogattrs` via
 `sloglint`, `nofmtprintf` via `forbidigo`).
 
-Each custom analyser carries ongoing maintenance — Go SSA
+Each custom analyser carries ongoing maintenance - Go SSA
 changes break it, false positives need exemption mechanisms, CI
 flakes, every contributor learns the rules. The prior set was
 unresolved; many analysers protected code that did not yet
@@ -132,6 +132,6 @@ Negative:
 
 ## References
 
-- SOLO-07 (architecture — layering rules)
-- ADR-S0002 (hexagonal — `layercheck` is the one analyser that
+- SOLO-07 (architecture - layering rules)
+- ADR-S0002 (hexagonal - `layercheck` is the one analyser that
   enforces the layering)

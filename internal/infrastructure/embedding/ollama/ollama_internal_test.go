@@ -7,7 +7,7 @@ import (
 )
 
 // These white-box tests assert that WithTimeout and WithHTTPClient are
-// order-independent functional options, per solov2-xde2.2.
+// order-independent functional options, per.
 
 func TestOptions_TimeoutThenCustomClient_UsesCustomUnchanged(t *testing.T) {
 	custom := &http.Client{Timeout: 2 * time.Second}

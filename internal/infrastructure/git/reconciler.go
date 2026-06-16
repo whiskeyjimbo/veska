@@ -21,7 +21,7 @@ import (
 // granularity — so a file edited during suspend can pass the (mtime, size)
 // check unchanged. Comparing the first 64 bytes is a cheap intermediate that
 // catches most such edits; full content hashing is too expensive for working
-// trees with >50k files (SOLO-03 §5.2). Edits beyond the first 64 bytes that
+// trees with >50k files. Edits beyond the first 64 bytes that
 // keep mtime+size still slip through and are caught at the next live save or
 // promotion diff.
 const prefixLen = 64
@@ -48,8 +48,8 @@ type SweepStartHook func(ctx context.Context, repoID, dir string)
 
 // PostSweepHook is invoked exactly once at the end of a wake sweep, AFTER every
 // per-repo file-walk has joined. The daemon wires the watcher handle-restart
-// here (solov2-xde2.25.3): live events resume against a fresh OS stream once the
-// mtime sweep has covered the suspend window. The reconciler stays infra-pure —
+// here: live events resume against a fresh OS stream once the
+// mtime sweep has covered the suspend window. The reconciler stays infra-pure
 // it just calls the callback (no watcher/application import). ctx is the sweep's
 // context; the hook is skipped if the sweep returns early on cancellation.
 type PostSweepHook func(ctx context.Context)
@@ -70,7 +70,7 @@ type watchedDir struct {
 // BaselineStore is the per-file change-detection baseline a wake sweep compares
 // against. *FSWatcher satisfies it (its live lastSeen map), so the reconciler
 // converges onto the watcher's continuously-updated baseline rather than a
-// separate seeded copy (solov2-xde2.25.6). Implementations must be safe for
+// separate seeded copy. Implementations must be safe for
 // concurrent use — a parallel per-repo sweep and live debounced writes both
 // touch the store.
 type BaselineStore interface {
@@ -80,7 +80,7 @@ type BaselineStore interface {
 
 // BaselineResolver returns the CURRENT BaselineStore for a repo, resolved FRESH
 // on each sweep. The daemon wires it to the MultiRepoWatcher so a sweep follows
-// RestartAll replacing a repo's FSWatcher (solov2-xde2.25.3): each sweep reads
+// RestartAll replacing a repo's FSWatcher: each sweep reads
 // the live FSWatcher's baseline, not a pointer captured at construction. ok is
 // false when the repo is not (yet) watched, in which case the reconciler falls
 // back to its standalone in-memory baseline.
@@ -125,7 +125,7 @@ type WakeReconciler struct {
 	ignore        *infrafs.IgnoreList
 	nowFn         func() time.Time
 	// concurrency bounds how many per-repo sweeps run in parallel. Always
-	// resolved to a positive value at construction (NumCPU()/2, floor 1).
+	// resolved to a positive value at construction (NumCPU/2, floor 1).
 	concurrency int
 
 	// baselineFor resolves the live BaselineStore for a repo, fresh each sweep
@@ -163,7 +163,7 @@ func WithClock(nowFn func() time.Time) Option {
 	}
 }
 
-// WithIgnoreList supplies a .gitignore-semantics matcher; changed files it
+// WithIgnoreList supplies a.gitignore-semantics matcher; changed files it
 // matches are skipped. A nil list (the default) skips nothing.
 func WithIgnoreList(ignore *infrafs.IgnoreList) Option {
 	return func(r *WakeReconciler) { r.ignore = ignore }
@@ -180,7 +180,7 @@ func WithSweepStartHook(fn SweepStartHook) Option {
 // WithPostSweepHook registers a callback invoked exactly once at the end of a
 // wake sweep, after every per-repo file-walk has joined. The daemon wires the
 // watcher handle-restart here. A nil hook (the default) skips the after-phase. A
-// sweep that returns early on context cancellation does NOT invoke the hook —
+// sweep that returns early on context cancellation does NOT invoke the hook
 // that correctly avoids restarting watcher handles during shutdown.
 func WithPostSweepHook(fn PostSweepHook) Option {
 	return func(r *WakeReconciler) { r.postSweep = fn }
@@ -195,7 +195,7 @@ func WithBaseline(fn BaselineResolver) Option {
 }
 
 // WithWakeConcurrency caps how many per-repo sweeps run in parallel on a wake
-// event. n <= 0 (the default) resolves to runtime.NumCPU()/2 with a floor of 1.
+// event. n <= 0 (the default) resolves to runtime.NumCPU/2 with a floor of 1.
 func WithWakeConcurrency(n int) Option {
 	return func(r *WakeReconciler) {
 		if n <= 0 {
@@ -289,7 +289,6 @@ func (r *WakeReconciler) wallTick() time.Time {
 }
 
 // Start begins the background tick loop. Stops when ctx is cancelled.
-//
 // Gap detection compares wall-clock readings, not monotonic ones. time.Time's
 // Sub uses the monotonic component when present, and CLOCK_MONOTONIC (Linux) /
 // mach_absolute_time (macOS) do NOT advance while the system is suspended — so
@@ -352,7 +351,7 @@ func (r *WakeReconciler) sweepDirs(ctx context.Context) {
 
 	// Serial pre-pass: run the sweep-start hook for EVERY repo before launching
 	// any parallel file-walk, so all staging generation bumps complete before
-	// any parse runs (SOLO-03 §5.2: "bumped *before* any parse runs"). Running
+	// any parse runs (: "bumped *before* any parse runs"). Running
 	// it serially also avoids a parallel branch bump spuriously invalidating
 	// another repo's concurrently-starting parse.
 	if r.sweepStart != nil {
@@ -398,7 +397,7 @@ func (r *WakeReconciler) sweepOneRepo(ctx context.Context, repoID, dir string) {
 
 	// Resolve the baseline FRESH per sweep so we follow RestartAll replacing the
 	// repo's FSWatcher: a sweep started after a restart reads the new watcher's
-	// live baseline, never a stale captured pointer (solov2-xde2.25.6 / .25.3).
+	// live baseline, never a stale captured pointer ( /.25.3).
 	store := r.baselineForRepo(repoID)
 
 	r.walkFiles(dir, func(path string, current MtimeEntry) {
@@ -437,7 +436,7 @@ func (r *WakeReconciler) walkFiles(dir string, fn func(path string, current Mtim
 			return nil
 		}
 
-		// Skip ignored files. The matcher uses .gitignore semantics and
+		// Skip ignored files. The matcher uses.gitignore semantics and
 		// expects a path relative to the swept root, so anchored patterns
 		// resolve correctly; fall back to the absolute path if Rel fails.
 		rel := path

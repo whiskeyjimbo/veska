@@ -8,7 +8,7 @@ verified: true
 verified_date: "2026-05-16"
 ---
 
-# ADR-S0009 — Server tier is out of scope for the V2.0 doc tree
+# ADR-S0009 - Server tier is out of scope for the V2.0 doc tree
 
 ## Context
 
@@ -21,9 +21,9 @@ out-of-process loader that didn't exist yet.
 
 Late in the design cycle V2.0 was rescoped to local-only by
 adding disclaimers to the existing documents. The disclaimers
-named the rescope; the substance — schema columns, lint
+named the rescope; the substance - schema columns, lint
 analysers, ADR ratifications, MCP tool descriptions, mode-
-affinity tags, audit-log shapes, replication contracts — still
+affinity tags, audit-log shapes, replication contracts - still
 encoded the larger system.
 
 The "future drop-in" promise is what kept that substance alive:
@@ -51,16 +51,16 @@ or aspirational:
 
 The "future drop-in" principle is **rejected for V2.0**. Ports
 are Go interfaces sized for the one impl that ships. A future
-server tier is a fresh design exercise — new sections, new
-ADRs, new ports — not an extension of the present shapes.
+server tier is a fresh design exercise - new sections, new
+ADRs, new ports - not an extension of the present shapes.
 
 If a feature in the present design only makes sense in a server
 context, it is not in the present design. Examples: per-tenant
 quotas, replication-aware promotion coordination, cross-tier cache
 invalidation, OIDC token refresh budgets.
 
-Anything explicitly deferred — work we may do later but is
-out of V2.0 — lives under `docs/docsv2solo/deferred/` and is not
+Anything explicitly deferred - work we may do later but is
+out of V2.0 - lives under `docs/docsv2solo/deferred/` and is not
 referenced from normative text. Disclaimers in normative text are
 not allowed; if the substance is deferred, the substance is moved.
 

@@ -9,10 +9,10 @@ import (
 	"testing"
 )
 
-// TestRepoAddCmd_WaitWithoutDaemon covers solov2-qnt9: `repo add --wait`
+// TestRepoAddCmd_WaitWithoutDaemon covers: `repo add --wait`
 // against an unreachable daemon used to silently fall back to direct-write
 // (the flag became a no-op + a long warning line). The contract now is:
-// --wait + no daemon = explicit error naming `veska service start`, so the
+// wait + no daemon = explicit error naming `veska service start`, so the
 // user knows the cold-scan they asked to wait on never actually started.
 func TestRepoAddCmd_WaitWithoutDaemon(t *testing.T) {
 	if _, err := exec.LookPath("git"); err != nil {
@@ -52,7 +52,7 @@ func TestRepoAddCmd_WaitWithoutDaemon(t *testing.T) {
 		}
 	}
 	// Critical: NO repo should have been written to the local DB on the
-	// --wait error path — otherwise re-running after `service start`
+	// wait error path — otherwise re-running after `service start`
 	// would hit "already registered" without ever cold-scanning.
 	if _, statErr := exec.Command("test", "-f", filepath.Join(veskaHome, "veska.db")).Output(); statErr == nil {
 		// DB exists (init.go path or other CLI ran earlier in this test).
@@ -71,13 +71,12 @@ func TestRepoAddCmd_WaitWithoutDaemon(t *testing.T) {
 	}
 }
 
-// TestRepoAddCmd_DirectFallback covers solov2-trh: when the daemon socket is
+// TestRepoAddCmd_DirectFallback covers: when the daemon socket is
 // unreachable (no daemon running for this VESKA_HOME), `veska repo add <path>`
 // must still succeed by opening the local SQLite directly and calling
 // repo.Add. The previous wiring passed db=nil and unconditionally printed
 // "database not available", making the CLI subcommand dead code.
-//
-// We point VESKA_HOME at t.TempDir() to keep the test hermetic — no daemon
+// We point VESKA_HOME at t.TempDir to keep the test hermetic — no daemon
 // is running there so the dial fails fast and the fallback path executes.
 func TestRepoAddCmd_DirectFallback(t *testing.T) {
 	if _, err := exec.LookPath("git"); err != nil {

@@ -11,7 +11,7 @@ verified: true
 verified_date: "2026-05-16"
 ---
 
-# ADR-S0014 — HNSW Vector Index Pivot
+# ADR-S0014 - HNSW Vector Index Pivot
 
 ## Context
 
@@ -22,7 +22,7 @@ pivot ADR (OQ-S003) would be promoted from M3 to M1 mandatory work.
 M0 measured the ceiling at **100k nodes** on a Linux VM (spike commit `4d63d34`).
 The measurement was subsequently re-verified on the reference laptop (M2 MacBook Air)
 with the same result: p95 crosses 100ms between 100k and 150k nodes regardless of
-SQLite tuning (mmap, page cache, page size from 4KB to 64KB all tested — no meaningful
+SQLite tuning (mmap, page cache, page size from 4KB to 64KB all tested - no meaningful
 difference). The bottleneck is arithmetic throughput on the brute-force L2 scan, not
 I/O. The ceiling is confirmed at ~100k–125k on reference hardware, well below the
 250k minimum. The pivot is mandatory.
@@ -43,7 +43,7 @@ embedded nodes. The chosen backing is **to be determined** in m1.03 based on:
    - `usearch` (Unum Cloud, cgo, C++17, float32/float16/int8, mmap persistence)
    - `coder/hnsw` (pure Go, no cgo, float32 only, file persistence)
    - `lancedb` (embedded columnar + HNSW, Go SDK, Lance format)
-   - sqlite-vec HNSW when available (deferred — no release date)
+   - sqlite-vec HNSW when available (deferred - no release date)
 
 ## Status
 
@@ -80,7 +80,7 @@ DoD thresholds: recall@10 ≥ 0.95 @50k, ≥ 0.85 @250k; p95 ≤ 100ms @250k.
 - Backup round-trip: PASS
 - CGo dependency: requires `libusearch_c.so` (v2.25.2 .deb) and `usearch.h`
 
-**float16 quantization** halves file size (786→411 MB at 250k) with identical recall —
+**float16 quantization** halves file size (786→411 MB at 250k) with identical recall -
 use float16 as the default, float32 as the precision fallback. int8 is unsuitable for
 768-dim float32 embeddings (near-zero recall).
 
@@ -88,7 +88,7 @@ use float16 as the default, float32 as the precision fallback. int8 is unsuitabl
 is attractive for build simplicity, but M=16/EfSearch=100 is insufficient at 768 dims
 with cosine-like vectors. The library lacks quantization. Excluded.
 
-**lancedb** achieves perfect recall (brute-force scan under the hood — v0.1.2 does not
+**lancedb** achieves perfect recall (brute-force scan under the hood - v0.1.2 does not
 build an explicit HNSW index in-process). p95 = 234ms @250k is 2× above the 100ms
 budget. Heavy Rust FFI dependency with no binary in the module cache (needs download +
 ranlib). Excluded.
@@ -111,7 +111,7 @@ link against `libusearch_c.so` at compile time. CGo is required.
 
 Measured 2026-05-12 via `tools/loadtest/spikes/hnsw/cmd/vector-bench/` (build tag
 `hnsw_native`). Exercises the production `UsearchStore` adapter (`internal/infrastructure/vector`)
-via `UpsertEmbeddings` / `Search` — not the raw spike index adapter used above.
+via `UpsertEmbeddings` / `Search` - not the raw spike index adapter used above.
 Corpus: 768-dim synthetic vectors seed=42, float16 quantization (production default).
 Hold-out: 100 queries seed=999. 200-query pre-warm before measurement.
 
@@ -151,7 +151,7 @@ traversal.
 
 | Scale | Recommendation |
 |-------|---------------|
-| < 500k nodes | usearch/float16 in-process — no external dependency, ≤ 1 GiB RSS |
+| < 500k nodes | usearch/float16 in-process - no external dependency, ≤ 1 GiB RSS |
 | 500k – 1M nodes | Works but p95 degrades; only justified for very large multi-repo workspaces |
 | > 1M nodes | **Migrate to an external vector store** (Qdrant is already supported in the v1 adapter; see `solov2-zq3` dual-backend feature) |
 

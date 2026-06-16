@@ -43,7 +43,7 @@ SQL migrations, README/spec docs, and agent config files (CLAUDE.md, AGENTS.md) 
 **Chizu impl:** 18 edge kinds total; infra/doc kinds are `InfraNode`, `DocNode`,
 `AgentConfig`, `CiConfig`, `Migration`. Scanner-based (not AST) for most.
 
-**v2 overlap:** M1 domain model — `Node` and `EdgeKind` are defined in
+**v2 overlap:** M1 domain model - `Node` and `EdgeKind` are defined in
 `internal/core/domain/`. Adding new `NodeKind` variants is a domain-layer change.
 Could land as a separate M1.x epic or be deferred to M2/M3.
 
@@ -85,7 +85,7 @@ interactive explorer: search, breadcrumbs, node inspector pane, theme toggle, an
 **Chizu impl:** Static asset bundle embedded in the binary (JS + CSS); data serialized
 as JSON inline in the HTML. Also supports a simpler SVG-only mode.
 
-**v2 overlap:** M4 wiki area — wiki already renders to `docs/veska/`. Visualization
+**v2 overlap:** M4 wiki area - wiki already renders to `docs/veska/`. Visualization
 could be an additional `veska wiki --format=html` output, or a standalone
 `veska visualize` command. Pure read path; just needs a `GraphStorage.Query` call.
 
@@ -107,7 +107,7 @@ from reaching the agent.
 **Chizu impl:** Configurable `score_gap_cutoff` float in `.chizu.toml`; applied after
 reranking, before returning results.
 
-**v2 overlap:** M3 `semantic_search` — currently returns a fixed top-k from the vector
+**v2 overlap:** M3 `semantic_search` - currently returns a fixed top-k from the vector
 index with no quality floor. This is a small, self-contained improvement.
 
 **Sketch:**

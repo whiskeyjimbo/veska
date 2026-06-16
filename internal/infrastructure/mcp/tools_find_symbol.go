@@ -16,7 +16,7 @@ import (
 // isContainerKind reports whether a node kind is a structural container rather
 // than a callable/declaration symbol. Container nodes (package/file/module/
 // chunk) carry no CALLS edges, so eng_find_symbol ranks them below real
-// declarations for the same name .
+// declarations for the same name.
 func isContainerKind(k domain.NodeKind) bool {
 	switch k {
 	case domain.KindPackage, domain.KindFile, domain.KindModule, domain.KindChunk:
@@ -26,9 +26,7 @@ func isContainerKind(k domain.NodeKind) bool {
 	}
 }
 
-// ---------------------------------------------------------------------------
 // eng_find_symbol
-// ---------------------------------------------------------------------------
 
 type findSymbolParams struct {
 	Symbol string `json:"symbol"`
@@ -46,7 +44,7 @@ func makeFindSymbolHandler(graph ports.GraphReader, staging *staging.Area, repos
 		if rpcErr := checkRequired("symbol", p.Symbol); rpcErr != nil {
 			return nil, rpcErr
 		}
-		// solov2-g8fh: when repo_id is omitted and cwd doesn't match any
+		// when repo_id is omitted and cwd doesn't match any
 		// registered repo, fan out across every repo instead of erroring.
 		// Single-repo callers (the common case) still get a one-target
 		// result identical to the pre-fanout behaviour.
@@ -104,8 +102,8 @@ func makeFindSymbolHandler(graph ports.GraphReader, staging *staging.Area, repos
 		// Deterministic ranking (merged is a map, so iteration order is
 		// otherwise random). Exact-name matches first; then declaration /
 		// callable kinds ahead of container kinds (package/file/module/chunk)
-		// — a caller taking nodes[0] for call_chain/blast_radius wants the
-		// function "main", not the package "main" . Name, then
+		// a caller taking nodes[0] for call_chain/blast_radius wants the
+		// function "main", not the package "main". Name, then
 		// repo_id (for fanout), then node_id break ties so output is stable.
 		sort.SliceStable(result, func(i, j int) bool {
 			a, b := result[i], result[j]
@@ -126,7 +124,7 @@ func makeFindSymbolHandler(graph ports.GraphReader, staging *staging.Area, repos
 
 		dtos := nodesToDTO(result)
 		if fanout {
-			// solov2-g8fh: only stamp repo_id when the response actually
+			// only stamp repo_id when the response actually
 			// spans repos — single-repo responses keep the pre-fanout shape.
 			for i, n := range dtos {
 				dtos[i].RepoID = repoByNode[domain.NodeID(n.NodeID)]
@@ -134,7 +132,7 @@ func makeFindSymbolHandler(graph ports.GraphReader, staging *staging.Area, repos
 		}
 		reasons := []string{}
 		var indexing []string
-		// solov2-izh6.30: empty result during an active cold scan is the
+		// empty result during an active cold scan is the
 		// classic "junior just registered the repo and queried" race. Tell
 		// the caller so they retry instead of concluding the symbol doesn't
 		// exist. The hint fires only on empty responses — a non-empty hit
@@ -146,7 +144,7 @@ func makeFindSymbolHandler(graph ports.GraphReader, staging *staging.Area, repos
 			}
 		}
 		// wake_reconciling fires on empty AND non-empty results whenever a
-		// queried repo's suspend/resume sweep is mid-flight (solov2-xde2.25.1).
+		// queried repo's suspend/resume sweep is mid-flight.
 		queriedRepos := make([]string, 0, len(targets))
 		for _, tgt := range targets {
 			queriedRepos = append(queriedRepos, tgt.RepoID)

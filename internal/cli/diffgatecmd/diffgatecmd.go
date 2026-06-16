@@ -1,8 +1,7 @@
 // Package diffgatecmd is the CLI invocation surface for the diff-safety gate
-// (solov2-ll57.2). It wires the real indexed-HEAD graph + git ref reader into
+// It wires the real indexed-HEAD graph + git ref reader into
 // the diffgate composer and emits the machine-readable verdict, exiting
 // non-zero on FAIL for CI gating.
-//
 // Structural finding-discovery (dead-code, contract-drift) is wired: the
 // candidate is re-promoted into a throwaway clone of the base graph and the
 // real checks run over the whole graph, so a change that introduces a new
@@ -63,7 +62,7 @@ func Run(ctx context.Context, p Params) error {
 	}
 	// The target finding is identified EITHER by --finding (the finding_id from
 	// `veska findings list`, the ergonomic front door) OR by the explicit
-	// --anchor + --rule pair (for power users / CI without a finding id).
+	// anchor + --rule pair (for power users / CI without a finding id).
 	if p.FindingID == "" && (p.AnchorNodeID == "" || p.Rule == "") {
 		return errors.New("diff-gate: identify the target with --finding <id>, or with both --anchor and --rule")
 	}
@@ -79,7 +78,7 @@ func Run(ctx context.Context, p Params) error {
 	// `veska findings list` print), or an unambiguous hex prefix → the canonical
 	// full repo_id every downstream query keys on. Without this a junior who
 	// pastes the short id gets a spurious repo_not_indexed against an indexed repo
-	// (solov2-ll57.15). Unknown ids pass through and fail closed below.
+	// Unknown ids pass through and fail closed below.
 	resolved, err := resolveRepoID(ctx, pools.ReadDB, p.RepoID)
 	if err != nil {
 		return err
@@ -263,7 +262,7 @@ func resolveRepoID(ctx context.Context, db *sql.DB, repoID string) (string, erro
 			return matched, nil
 		}
 	}
-	return repoID, nil // unknown — repoIndexed() will fail closed with repo_not_indexed
+	return repoID, nil // unknown — repoIndexed will fail closed with repo_not_indexed
 }
 
 // repoIndexed reports whether (repoID, branch) has any indexed nodes. A missing
@@ -279,7 +278,7 @@ func repoIndexed(ctx context.Context, db *sql.DB, repoID, branch string) bool {
 // UNKNOWN --repo handle (a name/typo that resolveRepoID could not match to any
 // id) from a registered-but-UN-indexed repo — the two conditions a junior
 // conflates when an indexed repo, addressed by its name, reports "not indexed"
-// (solov2-i0tx.2 F2). A missing repos table counts as "not known".
+// ( F2). A missing repos table counts as "not known".
 func repoKnown(ctx context.Context, db *sql.DB, repoID string) bool {
 	var n int
 	err := db.QueryRowContext(ctx,
@@ -299,7 +298,7 @@ func notIndexedDetail(ctx context.Context, db *sql.DB, repoID string) string {
 }
 
 // cleanRefError maps git's raw "unknown revision" plumbing to an actionable
-// message naming the offending refs (solov2-i0tx.2 F3). The typed
+// message naming the offending refs ( F3). The typed
 // git.ErrUnknownRevision exists precisely so callers need not string-match.
 // Non-ref errors pass through unchanged.
 func cleanRefError(err error, baseRef, candidateRef string) error {

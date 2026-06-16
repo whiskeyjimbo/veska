@@ -8,7 +8,7 @@ import (
 
 // renderGeneratedHeader prints a one-line "Generated: ISO8601" stamp +
 // a refresh hint, so a Markdown page never lies about how current it is
-// . Zero time is rendered as "_unstamped_" to keep the
+// Zero time is rendered as "_unstamped_" to keep the
 // page readable when the handler hasn't filled in GeneratedAt — the
 // MCP responses share these renderers and don't necessarily set it.
 func renderGeneratedHeader(b *strings.Builder, at time.Time) {
@@ -34,7 +34,7 @@ func RenderHotZones(r Report) string {
 	renderGeneratedHeader(&b, r.GeneratedAt)
 	b.WriteString("Files ranked by change risk: recent change frequency multiplied by blast radius.\n\n")
 	if len(r.Zones) == 0 {
-		// solov2-z5o0: explain *why* this page is empty so the reader
+		// explain *why* this page is empty so the reader
 		// doesn't have to read the source. The same two cases as the
 		// MCP tool's degraded_reasons.
 		switch {

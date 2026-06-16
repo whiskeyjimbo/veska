@@ -1,11 +1,10 @@
 //go:build multi_branch_bench
 
 // Command multi-branch-bench performs the M1 multi-branch scenario:
-// - Steady-state seed: 50 branches × 5000 nodes for RSS and OQ-S006 measurement
-// - Promotion trials: 20 × 50k-node INSERT for p95 gate 5
-// - Query p95: 200 warm indexed lookups for OQ-S006 comparison
-// - GC sweep: DELETE 10 branches and measure wall time + reclaimed disk
-//
+// Steady-state seed: 50 branches × 5000 nodes for RSS and OQ-S006 measurement
+// Promotion trials: 20 × 50k-node INSERT for p95 gate 5
+// Query p95: 200 warm indexed lookups for OQ-S006 comparison
+// GC sweep: DELETE 10 branches and measure wall time + reclaimed disk
 // Exit codes:
 //
 //	0 — all gates PASS
@@ -46,7 +45,7 @@ const (
 // nodeQuery is the OQ-S006 indexed lookup.
 const nodeQuery = `SELECT node_id, kind, symbol_path, file_path FROM nodes WHERE repo_id=? AND branch=? AND node_id=?`
 
-// ---- schema ---------------------------------------------------------------
+// schema
 
 const ddl = `
 CREATE TABLE IF NOT EXISTS repos (
@@ -125,7 +124,7 @@ func setupSchema(db *sql.DB) error {
 	return nil
 }
 
-// ---- seed helpers ----------------------------------------------------------
+// seed helpers
 
 func seedRepo(db *sql.DB, rID string) error {
 	_, err := db.Exec(
@@ -278,7 +277,7 @@ func txInsert(db *sql.DB, rID, branch string, nNodes int) error {
 	return tx.Commit()
 }
 
-// ---- percentile helper -----------------------------------------------------
+// percentile helper
 
 func percentile(sorted []float64, p float64) float64 {
 	if len(sorted) == 0 {
@@ -291,7 +290,7 @@ func percentile(sorted []float64, p float64) float64 {
 	return sorted[idx]
 }
 
-// ---- disk size helper -------------------------------------------------------
+// disk size helper
 
 func dbFileSize(path string) int64 {
 	fi, err := os.Stat(path)
@@ -301,7 +300,7 @@ func dbFileSize(path string) int64 {
 	return fi.Size()
 }
 
-// ---- main ------------------------------------------------------------------
+// main
 
 func main() {
 	// Use a file-based temp dir — leave it until after RSS measurement.
@@ -332,7 +331,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	// ---- Phase 1: Steady-state seed -----------------------------------------
+	// Phase 1: Steady-state seed
 	fmt.Printf("Phase 1: Seeding %d branches × %d nodes...\n", steadyBranches, steadyNodes)
 	steadyBranchNames := make([]string, steadyBranches)
 	for b := range steadyBranches {
@@ -370,7 +369,7 @@ func main() {
 	}
 	fmt.Printf("Steady-state RSS: %d bytes (%.1f MiB)\n", rssBytes, float64(rssBytes)/1024/1024)
 
-	// ---- Phase 2: Promotion p95 ---------------------------------------------
+	// Phase 2: Promotion p95
 	fmt.Printf("Phase 2: %d promotion trials × %d nodes each...\n", promotionTrials, promotionNodesEach)
 
 	promoTimes := make([]float64, 0, promotionTrials)
@@ -394,7 +393,7 @@ func main() {
 	_ = db.QueryRow("SELECT COUNT(*) FROM edges").Scan(&edgeRowsAfterPromo)
 	diskAfterPromo := dbFileSize(dbPath)
 
-	// ---- Phase 3: Query p95 -------------------------------------------------
+	// Phase 3: Query p95
 	fmt.Printf("Phase 3: %d query iterations for OQ-S006...\n", queryIters)
 
 	// Warm-up query.
@@ -425,7 +424,7 @@ func main() {
 	queryP95 := percentile(queryTimes, 0.95)
 	queryP99 := percentile(queryTimes, 0.99)
 
-	// ---- Phase 4: GC sweep --------------------------------------------------
+	// Phase 4: GC sweep
 	fmt.Printf("Phase 4: GC sweep — deleting %d branches...\n", gcBranches)
 
 	diskBeforeGC := dbFileSize(dbPath)
@@ -454,7 +453,7 @@ func main() {
 	}
 	diskAfterGC := dbFileSize(dbPath)
 
-	// ---- Verdicts -----------------------------------------------------------
+	// Verdicts
 
 	// RSS formatting.
 	rssMiB := float64(rssBytes) / 1024 / 1024
@@ -501,7 +500,7 @@ func main() {
 		oqNote = fmt.Sprintf("1.5x–2x range: rowRatio=%.2f diskRatio=%.2f queryRatio=%.2f", rowRatio, diskRatio, queryRatio)
 	}
 
-	// ---- Write RESULTS.md ---------------------------------------------------
+	// Write RESULTS.md
 
 	content := fmt.Sprintf(`# Multi-Branch Bench — M1 Gates 4+5 + OQ-S006
 

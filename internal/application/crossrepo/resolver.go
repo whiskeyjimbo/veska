@@ -1,14 +1,13 @@
 // Package crossrepo provides a small primitive that walks every registered
 // repository and aggregates per-repo hit counts for a given symbol or
-// finding query .
-//
+// finding query.
 // Today each surface (`veska symbol`, `veska findings list`, `veska search`)
 // is one-repo-scoped — a junior on repo A who runs `veska symbol Greeter`
 // gets "no matches" with no hint that Greeter is defined in repo B. This
 // resolver gives those surfaces one shared way to ask "where does this
 // symbol live across the registry?" so they can format consistent hints
 // ("no matches in A; 1 in B"). The resolver itself does not change any
-// CLI output — that lives in the surfaces (solov2-zgwd / 0vau / vm5w).
+// CLI output — that lives in the surfaces ( / 0vau / vm5w).
 package crossrepo
 
 import (
@@ -77,7 +76,6 @@ func New(repos RepoLister, lookup SymbolLookup) (*Resolver, error) {
 // matches anywhere" (empty slice) and "matches in other repos" by length
 // alone. The slice preserves repo-registry order so callers see a stable
 // listing across invocations.
-//
 // Per-repo lookup errors are NOT fatal — one stuck repo would otherwise
 // suppress the entire cross-repo hint. They are returned in the second
 // return value via errors.Join so a caller that wants to surface them
@@ -117,7 +115,7 @@ func (r *Resolver) LookupSymbol(ctx context.Context, symbolName string) ([]RepoM
 }
 
 // ListRepos is a thin pass-through to the underlying registry, exposed so
-// callers (notably the findings --all surface, solov2-0vau) can enumerate
+// callers (notably the findings --all surface) can enumerate
 // without keeping a second reference to the repo registry. It is the same
 // data ListRepos returns from RepoLister; we forward it verbatim.
 func (r *Resolver) ListRepos(ctx context.Context) ([]RepoView, error) {

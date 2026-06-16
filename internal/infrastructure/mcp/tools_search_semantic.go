@@ -26,7 +26,7 @@ type searchSemanticParams struct {
 	Branch string `json:"branch"`
 	// K is the result count. 'limit' is accepted as an alias because
 	// every other MCP tool we expose uses 'limit' and callers naturally
-	// reach for it first . When both are set, K wins.
+	// reach for it first. When both are set, K wins.
 	K     int `json:"k,omitempty"`
 	Limit int `json:"limit,omitempty"`
 }
@@ -40,7 +40,7 @@ func makeSearchSemanticHandler(svc *search.Service, rec *savings.Recorder, repos
 		if rpcErr := checkRequired("query", p.Query); rpcErr != nil {
 			return nil, rpcErr
 		}
-		// solov2-g8fh: fanout across registered repos when repo_id is omitted
+		// fanout across registered repos when repo_id is omitted
 		// and cwd doesn't match one. Single-repo callers are unchanged.
 		targets, fanout, rpcErr := resolveRepoFanoutFromParams(ctx, repos, raw, p.RepoID, p.Branch)
 		if rpcErr != nil {
@@ -73,7 +73,7 @@ func makeSearchSemanticHandler(svc *search.Service, rec *savings.Recorder, repos
 			}
 		}
 		var indexing []string
-		// solov2-izh6.30: empty search result during an active cold scan
+		// empty search result during an active cold scan
 		// is the indexing window. Surface it so a junior who just ran
 		// 'veska search' on a freshly-added repo knows to retry.
 		if len(dtos) == 0 {
@@ -96,27 +96,23 @@ func makeSearchSemanticHandler(svc *search.Service, rec *savings.Recorder, repos
 
 // runSemanticFanout dispatches a semantic-search query across one or
 // more (repo_id, branch) targets and returns the top-K results.
-//
-// Single-repo (fanout=false): the existing svc.Semantic pipeline runs —
+// Single-repo (fanout=false): the existing svc.Semantic pipeline runs
 // intra-repo RRF + post-fusion rerank — and the response is returned
 // verbatim. Byte-stable with the pre-bcn behaviour.
-//
-// Multi-repo (fanout=true, solov2-bcn): every repo is queried in
+// Multi-repo (fanout=true): every repo is queried in
 // parallel via svc.SemanticCandidates which returns un-fused, hydrated
 // candidates with per-retriever ranks AND raw vector scores. When any
 // candidate carries a vector score — the common case, one daemon =
 // one embedder spanning every repo — the pool is fused by COSINE
-// SIMILARITY  so a stronger match in repo A beats a
+// SIMILARITY so a stronger match in repo A beats a
 // weaker one in repo B even though both ranked 1 locally. Lexical
 // confirms a candidate via a small multiplier; lexical-only
 // candidates survive via a small RRF baseline. When no vector score
 // is available, falls back to the original global RRF.
-//
 // Returns (results, repoByNode, reasons). repoByNode keys hits to the
 // repo they came from so the handler can populate per-hit repo_id.
-//
 // This is a verbatim relocation of the pre-existing fanout/fusion logic
-// (solov2-bcn/uuuk), unchanged by the file split. The per-function size gates
+// (/uuuk), unchanged by the file split. The per-function size gates
 // are diff-scoped (--new-from-merge-base) and only flag it because the move
 // makes git see it as new code; restructuring this fusion path to satisfy them
 // would add behaviour risk for no benefit.
@@ -189,7 +185,7 @@ func runSemanticFanout(
 		return nil, nil, reasonsSet, nil
 	}
 
-	// Cross-repo fusion : when the vector arm returned
+	// Cross-repo fusion: when the vector arm returned
 	// scores for any candidate — the common case, one daemon = one
 	// embedder spanning every repo — fuse by raw cosine similarity
 	// rather than RRF. RRF is rank-only, so every repo's vector top-1
@@ -197,7 +193,6 @@ func runSemanticFanout(
 	// across repos. Cosine scores ARE comparable across repos when the
 	// embedder is shared, which makes the fusion actually pick the
 	// best match.
-	//
 	// Falls back to the original global RRF when no candidate has a
 	// vector score (every repo's vector arm failed, or every hit came
 	// from the lexical arm only).
@@ -276,11 +271,10 @@ func runSemanticFanout(
 // semantic search. It is intentionally fire-and-forget: a write error
 // is silently dropped so the search hot path never fails for telemetry
 // reasons, and a nil recorder is a no-op (handled inside Record).
-//
-// Results are partitioned by repo (solov2-0ql0): a fanout search across
+// Results are partitioned by repo: a fanout search across
 // N repos writes one Entry per repo so the rollup can break down savings
 // per repo. repoByNode maps each hit's NodeID to its repo (populated only
-// on the fanout path); when it is nil or lacks an entry, defaultRepoID —
+// on the fanout path); when it is nil or lacks an entry, defaultRepoID
 // the single resolved target — is used. An empty result set records
 // nothing.
 func recordSavings(ctx context.Context, rec *savings.Recorder, repos application.RepoLister, query string, results []search.Result, repoByNode map[string]string, defaultRepoID string) {
@@ -299,7 +293,7 @@ func recordSavings(ctx context.Context, rec *savings.Recorder, repos application
 		}
 		byRepo[repoID] = append(byRepo[repoID], savings.ResultFile{FilePath: r.FilePath, SnippetLen: len(r.Snippet)})
 	}
-	// ADR-S0017 §1: result FilePaths are repo-relative, so EntryFor must
+	// result FilePaths are repo-relative, so EntryFor must
 	// rejoin each repo's root to stat the file on disk. Resolve roots once.
 	rootByRepo := rootPathsByRepoID(ctx, repos)
 	now := time.Now()

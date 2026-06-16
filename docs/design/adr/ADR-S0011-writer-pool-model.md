@@ -8,14 +8,14 @@ verified: true
 verified_date: "2026-05-16"
 ---
 
-# ADR-S0011 — Two-pool single-writer model via `database/sql`
+# ADR-S0011 - Two-pool single-writer model via `database/sql`
 
 ## Context
 
 SQLite in WAL mode permits many concurrent readers but exactly one
 writer at a time at the OS lock level. `sqlite-vec`'s `vec0` virtual
 table writes go through that same lock. Whatever model we pick,
-serialization is a physical requirement — the question is which
+serialization is a physical requirement - the question is which
 layer owns it and how backpressure surfaces.
 
 The first draft of SOLO-11 §10 specified an explicit
@@ -35,8 +35,8 @@ transaction. Two problems with that shape:
    Adding priority lanes to fix that re-grows the multi-tenant
    queueing surface this redesign deletes elsewhere.
 
-A second option — pure SQLite-native, every goroutine opens its own
-`BEGIN IMMEDIATE` and lets the OS lock serialize — is idiomatic but
+A second option - pure SQLite-native, every goroutine opens its own
+`BEGIN IMMEDIATE` and lets the OS lock serialize - is idiomatic but
 makes backpressure invisible: there is no queue depth to read, no
 metric, no place to surface "the writer is busy" cleanly.
 
@@ -45,7 +45,7 @@ connection pool be the queue. A `*sql.DB` with `SetMaxOpenConns(1)`
 serializes **transaction acquisition** at the pool: every
 `BEGIN IMMEDIATE`-to-`COMMIT` window holds the connection
 exclusively, so transactions on the same pool run one at a time.
-This is *transaction-grain* serialization, not statement-grain —
+This is *transaction-grain* serialization, not statement-grain -
 two consecutive `BEGIN; INSERT; COMMIT` cycles take the connection
 in turn, with no nesting and no statement interleaving. We keep
 the repository port shape; we get the metric surface for free; we
@@ -84,7 +84,7 @@ Properties:
 1. **One writer per pool, two pools total.** Each `writeDB` with
    `MaxOpenConns=1` queues writes at the connection-pool layer.
    When both pools have an in-flight transaction, SQLite's OS-level
-   writer lock serializes them — `BEGIN IMMEDIATE` on the second
+   writer lock serializes them - `BEGIN IMMEDIATE` on the second
    pool's connection blocks until the first pool commits. There is
    no goroutine-level coordination; the standard library and SQLite
    between them do all the queueing.
@@ -132,7 +132,7 @@ Properties:
 
 9. **post-promotion queue drains.** Three of the four `work_kind`s
    (`auto_link`, `revalidate`, `review`) write findings/state via
-   the hot pool — their writes are short SQL and rare relative to
+   the hot pool - their writes are short SQL and rare relative to
    promotions. Only `embed` writes are routed to `writeDB.embed`. The
    post-promotion queue `state` transition itself (`pending → in_progress →
    done`) is also a short write; each drainer takes the hot pool
@@ -156,7 +156,7 @@ Properties:
     transactions complete normally; the promotion then takes the
     connection in normal FIFO order and drops the barrier on
     commit or rollback. The barrier is not refcounted (promotions do
-    not stack — see SOLO-11 §2.3 short-circuit) and carries no
+    not stack - see SOLO-11 §2.3 short-circuit) and carries no
     work-class metadata. SOLO-11 §10.2 specifies the runtime
     contract.
 
@@ -175,8 +175,8 @@ Positive:
 - Restart recovery is unchanged: the promotion transaction's atomicity
   guarantees still hold; post-promotion queue drainers re-claim `in_progress`
   rows on startup the same way ADR-S0004 specifies.
-- `sqlite-vec` extension semantics — that `vec0` writes take the
-  same lock as table writes — work in our favor here. The two
+- `sqlite-vec` extension semantics - that `vec0` writes take the
+  same lock as table writes - work in our favor here. The two
   pools serialize via that lock without us writing a line of
   scheduling code.
 
@@ -213,7 +213,7 @@ Negative:
   **Fallback path if M1 shows the chain blows the budget:** the
   embed worker yields the OS lock (sleeps a configurable
   inter-chunk pause) when `promote_pending` is set or when the hot
-  pool's `WaitCount` is non-zero — the embed throughput drops,
+  pool's `WaitCount` is non-zero - the embed throughput drops,
   the promotion latency holds. Chunk-size shrinking is the secondary
   lever; the yield is the primary one because it preserves
   throughput while idle.
@@ -222,7 +222,7 @@ Negative:
   queue ahead of the promotion and erode the §3.1 typical-commit
   budget (each finding-state flip is low milliseconds, but ten
   of them is a meaningful fraction of 100ms). Mitigated by
-  property #11 (promotion barrier) — a single boolean that gates
+  property #11 (promotion barrier) - a single boolean that gates
   *new* MCP write entrants once the `Promote` RPC arrives. This is
   not a priority lane: there is no per-kind queue and no
   fairness scheduler, just one bit.
@@ -234,7 +234,7 @@ Negative:
   re-grows the multi-tenant queueing surface, and clashes with
   the repository port shape. The promotion-vs-MCP-write contention
   this would have addressed is instead handled by the one-bit
-  promotion barrier (property #11) — a single boolean, not a
+  promotion barrier (property #11) - a single boolean, not a
   scheduler.
 - **Pure SQLite-native, every goroutine opens its own
   `BEGIN IMMEDIATE`.** Rejected for one reason: backpressure is
@@ -255,6 +255,6 @@ Negative:
 - SOLO-08 §3.4 (`post_promotion_queue`), §5 (promotion transaction), §6 (failure modes)
 - SOLO-11 §10 (write serialization narrative)
 - SOLO-04 §11 (repository port shape)
-- SOLO-07 §3 (package layout — the `bootstrap/daemon.go` wires the three handles)
+- SOLO-07 §3 (package layout - the `bootstrap/daemon.go` wires the three handles)
 - ADR-S0001 (SQLite + sqlite-vec substrate)
 - ADR-S0004 (post-promotion queue `work_kind` and drain semantics)

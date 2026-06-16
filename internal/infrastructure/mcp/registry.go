@@ -44,7 +44,7 @@ type ToolSpec struct {
 
 	// CLIExempt declares that this tool intentionally does not have a
 	// corresponding `veska <subcommand>` wrapper. Without a value here, the
-	// CLI/MCP parity lint (tools/lint/cliparity, prereq for solov2-xomk)
+	// CLI/MCP parity lint (tools/lint/cliparity, prereq for )
 	// flags any tool that ships without a cobra counterpart. Use one of
 	// the CLIExempt* constants below; combine with ExemptReason on
 	// ExemptDeferred to explain the choice.
@@ -99,7 +99,6 @@ func (c CLIExempt) String() string {
 }
 
 // Registry holds the set of registered tools and dispatches incoming tool calls.
-//
 // Concurrency note: Register is intended to be called exclusively at startup,
 // before serving begins. The map is never written after the first call to
 // Dispatch or Handle; those methods are safe for concurrent use as they only
@@ -136,10 +135,11 @@ func (r *Registry) tracerProvider() observability.TracerProvider {
 }
 
 // Register adds a tool. Returns an error if:
-//   - name does not match eng_<verb>_<object> pattern
-//   - verb is not in the closed set (find/get/list/search/set/close/reopen)
-//   - description is shorter than 10 characters
-//   - a tool with the same name is already registered
+//
+//	name does not match eng_<verb>_<object> pattern
+//	verb is not in the closed set (find/get/list/search/set/close/reopen)
+//	description is shorter than 10 characters
+//	a tool with the same name is already registered
 //
 // Register is intended to be called at startup only; it is not safe for
 // concurrent use after serving begins.
@@ -168,7 +168,7 @@ func (r *Registry) Register(spec ToolSpec) error {
 }
 
 // Tools returns a snapshot of every registered ToolSpec, ordered by
-// name. Used by the parity lint  to walk the catalogue
+// name. Used by the parity lint to walk the catalogue
 // without exposing the internal map.
 func (r *Registry) Tools() []ToolSpec {
 	names := make([]string, 0, len(r.tools))
@@ -193,13 +193,12 @@ func (r *Registry) MustRegister(spec ToolSpec) {
 // Dispatch routes a JSON-RPC request to the matching tool handler.
 // Returns MethodNotFound (-32601) if no tool matches.
 // Safe for concurrent use provided no further Register calls occur.
+// Three method-name forms are accepted:
 //
-// Three method-name forms are accepted :
-//
-//   - "eng_<verb>_<object>" — flat dialect, original; method == tool name.
-//   - "tools/list"          — MCP standard discovery; returns the catalog.
-//   - "tools/call"          — MCP standard invocation; req.Params must
-//     carry {"name": "<tool>", "arguments": {...}}.
+//	"eng_<verb>_<object>" — flat dialect, original; method == tool name.
+//	"tools/list" — MCP standard discovery; returns the catalog.
+//	"tools/call" — MCP standard invocation; req.Params must
+//	  carry {"name": "<tool>", "arguments": {.}}.
 //
 // Existing flat callers (the veska-mcp shim, the CLI's callMCP) keep
 // working unchanged; new AI clients speaking standard MCP get the
@@ -234,11 +233,12 @@ func (r *Registry) Dispatch(ctx context.Context, actor domain.Actor, req *Reques
 
 // validateAgainstSchema enforces that, when a tool publishes an inputSchema
 // with declared "properties", incoming params:
-//   - decode to a JSON object (or are empty/null), and
-//   - contain no top-level keys outside the schema's properties set.
+//
+//	decode to a JSON object (or are empty/null), and
+//	contain no top-level keys outside the schema's properties set.
 //
 // Unknown keys yield CodeInvalidParams (-32602) with the offending key name,
-// closing the silent-drop bug . Tools without an inputSchema
+// closing the silent-drop bug. Tools without an inputSchema
 // publish no contract and are not validated here.
 func validateAgainstSchema(method string, schema, params json.RawMessage) *RPCError {
 	if len(schema) == 0 {
@@ -281,7 +281,7 @@ func validateAgainstSchema(method string, schema, params json.RawMessage) *RPCEr
 			continue
 		}
 		if transportInjectedKeys[k] {
-			// Keys injected by veska-mcp at the transport layer .
+			// Keys injected by veska-mcp at the transport layer.
 			// They're not part of the tool's published contract but every
 			// request passing through the shim carries them; rejecting them
 			// would break the shim path while validating the daemon-direct
@@ -289,7 +289,7 @@ func validateAgainstSchema(method string, schema, params json.RawMessage) *RPCEr
 			// via cwdFromParams, ones that don't ignore them.
 			continue
 		}
-		// solov2-m5c2: annotate required-ness in the allowed list so an
+		// annotate required-ness in the allowed list so an
 		// LLM consumer or junior dev who tried the obvious-but-wrong
 		// param ("node_id" on eng_find_related) learns from the error
 		// which params are mandatory instead of having to fetch the full
@@ -348,7 +348,7 @@ func sortedKeys(m map[string]json.RawMessage) string {
 // sortedKeysAnnotated returns m's keys joined with ", " in lexical order,
 // suffixing each name in `required` with " (required)". Required props
 // are also listed first so the eye lands on them before scanning the
-// optional ones .
+// optional ones.
 func sortedKeysAnnotated(m map[string]json.RawMessage, required map[string]bool) string {
 	if len(required) == 0 {
 		return sortedKeys(m)

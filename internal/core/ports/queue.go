@@ -35,7 +35,6 @@ type WorkRow struct {
 // WorkHandler processes one queue row. Implementations live in the
 // application layer (one per WorkKind) and are wired into the infrastructure
 // poller at start-up.
-//
 // A returned error tells the poller to either re-queue (attempts < 3) or
 // mark the row failed; nil indicates success. Implementations must be safe
 // for concurrent use even though the poller runs one goroutine per kind.

@@ -12,7 +12,6 @@ import (
 // escapeGlob wraps GLOB metacharacters (*, ?, [) in a literal-character
 // class so an identifier embedded in a GLOB pattern matches itself. GLOB
 // has no ESCAPE clause, so the only safe way is the [X] form.
-//
 // Identifiers in supported languages are [A-Za-z0-9_.] (plus a leading $ in
 // some), so the *, ?, and [ characters do not appear inside an identifier in
 // practice; this is defence-in-depth for fuzz inputs / odd languages.
@@ -35,14 +34,13 @@ func escapeGlob(s string) string {
 func (r *GraphRepo) FindNodes(ctx context.Context, repoID, branch, symbolName string) ([]*domain.Node, error) {
 	// Match the fully-qualified symbol_path exactly, OR an unqualified name
 	// against the trailing segment so "Start" finds "Server.Start" instead
-	// of silently returning nothing . Exact matches sort first.
-	//
-	// solov2-xcb1: SQLite LIKE is case-INsensitive for ASCII regardless of
+	// of silently returning nothing. Exact matches sort first.
+	// SQLite LIKE is case-INsensitive for ASCII regardless of
 	// COLLATE, so a search for "Run" used to also match
 	// "FSNotifyWatcher.run" — a distinct symbol. Identifiers are
 	// case-significant in every supported language, so we use GLOB (which
 	// is byte-exact) for the suffix match. GLOB uses *,? wildcards (vs
-	// LIKE's %,_), and treats [ ] as character classes — escape those in
+	// LIKE's %,_), and treats as character classes — escape those in
 	// the user-supplied identifier so a literal "[" isn't treated as a
 	// class opener.
 	suffixPattern := `*.` + escapeGlob(symbolName)
@@ -121,7 +119,6 @@ func (r *GraphRepo) GetNode(ctx context.Context, repoID, branch string, id domai
 // and fall back to conservative defaults. The returned text is capped to
 // maxSnippetBytes by the write path, so callers must not assume it equals
 // the full source. Backs the eng_get_call_chain seed-body discriminator
-// (solov2-izh6.22).
 func (r *GraphRepo) GetNodeSnippet(ctx context.Context, repoID, branch string, id domain.NodeID) (string, error) {
 	var snippet sql.NullString
 	err := r.readDB.QueryRowContext(ctx,
@@ -143,7 +140,7 @@ func (r *GraphRepo) GetNodeSnippet(ctx context.Context, repoID, branch string, i
 // FindNodeByID retrieves the first node matching the content-hashed id across
 // every (repo_id, branch). node_id is a sha256 content hash so collisions
 // across repos/branches are vanishingly rare; LIMIT 1 returns one
-// deterministic row. Returns (nil, nil) when no node matches .
+// deterministic row. Returns (nil, nil) when no node matches.
 func (r *GraphRepo) FindNodeByID(ctx context.Context, id domain.NodeID) (*domain.Node, error) {
 	row := r.readDB.QueryRowContext(ctx,
 		`SELECT `+nodeColumns+` FROM nodes WHERE node_id = ? LIMIT 1`,
@@ -163,7 +160,7 @@ func (r *GraphRepo) FindNodeByID(ctx context.Context, id domain.NodeID) (*domain
 // hash, so it contains no LIKE metacharacters (%, _) — the prefix is safe to
 // interpolate into a `LIKE ?||'%'` pattern without an ESCAPE clause. DISTINCT
 // collapses the same node present on several branches into one id, so a unique
-// display prefix is not misread as ambiguous . The caller passes
+// display prefix is not misread as ambiguous. The caller passes
 // limit=2 to detect ambiguity cheaply (.uej9.3).
 func (r *GraphRepo) FindNodeIDsByPrefix(ctx context.Context, prefix string, limit int) ([]domain.NodeID, error) {
 	rows, err := r.readDB.QueryContext(ctx,

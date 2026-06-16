@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# install-bench-models.sh — download the model2vec variants used by the
+# install-bench-models.sh - download the model2vec variants used by the
 # embed-models bench from Hugging Face into $VESKA_HOME/static-model/<name>/.
 # Idempotent: skips models already on disk. (solov2-0k5h.2)
 #
@@ -32,7 +32,7 @@ for model in "${MODELS[@]}"; do
     mkdir -p "${dir}"
 
     if [[ -s "${dir}/tokenizer.json" && -s "${dir}/model.safetensors" ]]; then
-        echo "install-bench-models: ${model} already installed — skip"
+        echo "install-bench-models: ${model} already installed - skip"
         continue
     fi
 

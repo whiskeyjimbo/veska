@@ -1,5 +1,4 @@
 // Command fatfiles enforces the per-file LOC ratchet.
-//
 // Usage:
 //
 //	fatfiles [-root dir] [-inventory path]
@@ -9,7 +8,6 @@
 // and exits non-zero if any file has grown past its recorded ceiling (or is
 // inventoried but missing). The ratchet only ratchets DOWN: shrinking a file and
 // lowering its recorded value keeps the gate green.
-//
 // To update an entry after thinning a file, run the file's new `wc -l` and set
 // the inventory record to that value (never raise it).
 package main

@@ -2,19 +2,16 @@
 
 // cmd/vector-bench measures application-layer recall@10 and warm p95 latency for
 // the production UsearchStore (VectorStorage port) at 50k and 250k vectors.
-//
 // It uses the same synthetic corpus and hold-out methodology as the raw usearch
 // spike (tools/loadtest/spikes/hnsw/cmd/hnsw-eval) but exercises the
 // UsearchStore adapter in internal/infrastructure/vector rather than the raw
 // usearch index directly.
-//
 // Results are printed as a Markdown table and written to RESULTS.md in the
 // same directory as the binary.
-//
 // Build:
 //
 //	LD_LIBRARY_PATH=<path-to-libusearch_c.so> \
-//	  go run -tags hnsw_native ./tools/loadtest/spikes/hnsw/cmd/vector-bench/
+//	  go run -tags hnsw_native./tools/loadtest/spikes/hnsw/cmd/vector-bench/
 package main
 
 import (

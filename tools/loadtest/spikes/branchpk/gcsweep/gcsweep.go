@@ -46,11 +46,10 @@ func fileSize(path string) int64 {
 }
 
 // RunGCSweep deletes branches not in keepBranches from db and records metrics.
-//
 // Steps:
 //  1. Ensure PRAGMA foreign_keys=ON
 //  2. Measure disk + WAL sizes before
-//  3. DELETE FROM nodes WHERE branch NOT IN (keepBranches...) — edges+findings cascade
+//  3. DELETE FROM nodes WHERE branch NOT IN (keepBranches.) — edges+findings cascade
 //  4. PRAGMA wal_checkpoint(TRUNCATE)
 //  5. VACUUM (to reclaim space after bulk delete)
 //  6. Measure disk + WAL sizes after

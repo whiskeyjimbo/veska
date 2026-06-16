@@ -15,9 +15,9 @@ type ResetReport struct {
 }
 
 // ResetCrashLoop removes the broken-marker file (<veskaHome>/broken) and the
-// crash-count file (<veskaHome>/crash_count) if they are present.  It returns
+// crash-count file (<veskaHome>/crash_count) if they are present. It returns
 // a ResetReport describing what was cleared and what the crash count was before
-// deletion.  If neither file exists the call succeeds and both cleared fields
+// deletion. If neither file exists the call succeeds and both cleared fields
 // are false.
 func ResetCrashLoop(veskaHome string) (ResetReport, error) {
 	var report ResetReport

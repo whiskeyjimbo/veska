@@ -6,7 +6,7 @@ import (
 	"testing"
 )
 
-// TestColdScanRunningHint covers solov2-rhaq: the post-`repo add` hint must
+// TestColdScanRunningHint covers: the post-`repo add` hint must
 // attribute `--wait` to `veska repo add`, not to `veska repo list`. A junior
 // reading the message will naturally copy-paste; suggesting `repo list --wait`
 // (the prior wording) errors with "unknown flag". The corrected hint embeds

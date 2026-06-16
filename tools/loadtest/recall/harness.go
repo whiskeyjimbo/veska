@@ -15,7 +15,6 @@ import (
 )
 
 // Re-exports from synthcorpus.
-//
 // The synthetic corpus generator and fake embedder were extracted into
 // tools/loadtest/synthcorpus so both the recall and the autolink eval
 // harnesses can share them. These aliases preserve the in-package
@@ -46,7 +45,7 @@ func GenerateSemanticCorpus(nodesPerCluster int) Corpus {
 // SemanticClusterCount re-exports synthcorpus.SemanticClusterCount.
 var SemanticClusterCount = synthcorpus.SemanticClusterCount
 
-// --- Fixture I/O -----------------------------------------------------------
+// Fixture I/O
 
 // FixtureHeader is the on-disk preamble for a cached embedding fixture.
 // The format is intentionally trivial — little-endian uint32 dim, uint32
@@ -114,7 +113,7 @@ func FixturePath(dir string, population int) string {
 	return filepath.Join(dir, fmt.Sprintf("embeddings_%d.bin", population))
 }
 
-// --- Result envelope -------------------------------------------------------
+// Result envelope
 
 // Result is the JSON envelope written by the eval harness. Field names
 // match the DoD exactly so downstream M3-close tooling can read it

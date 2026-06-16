@@ -39,7 +39,7 @@ type ModelSpec struct {
 // Install downloads and sha-verifies the files in spec into
 // <veskaHome>/static-model/<modelName>/ and returns that directory. It
 // is idempotent: a file already present with a matching sha is left
-// alone, so re-running is cheap. The concrete spec (HF base URL + per-
+// alone, so re-running is cheap. The concrete spec (HF base URL + per
 // file shas) is supplied by the caller — this package stays
 // model-agnostic. errDownloadFailed wraps transport/sha failures.
 func Install(ctx context.Context, veskaHome, modelName string, spec ModelSpec) (string, error) {

@@ -10,7 +10,6 @@ import (
 var ErrDuplicateActiveTask = errors.New("task: a task is already active for this repo")
 
 // Task represents a unit of work scoped to a single repository.
-//
 // The one-active-task-per-repo invariant cannot be enforced by Task alone;
 // use TaskSet to manage collections of tasks within a repo scope.
 type Task struct {
@@ -44,7 +43,7 @@ func WithActive() TaskOption {
 	}
 }
 
-// WithCreatedAt overrides the default creation timestamp (time.Now()). It makes
+// WithCreatedAt overrides the default creation timestamp (time.Now). It makes
 // NewTask deterministic for tests — mirroring the injected createdAt that
 // NewSuppression takes — without burdening the common call site with a
 // timestamp argument.
@@ -66,7 +65,7 @@ type TaskSpec struct {
 }
 
 // NewTask constructs a validated Task from spec. Returns an error if spec.ID,
-// spec.RepoID, or spec.Title is empty. CreatedAt defaults to time.Now(); pass
+// spec.RepoID, or spec.Title is empty. CreatedAt defaults to time.Now; pass
 // WithCreatedAt to set it deterministically.
 func NewTask(spec TaskSpec, opts ...TaskOption) (*Task, error) {
 	if spec.ID == "" {
@@ -97,7 +96,6 @@ func NewTask(spec TaskSpec, opts ...TaskOption) (*Task, error) {
 
 // TaskSet manages a collection of Tasks and enforces the one-active-task-per-repo
 // invariant.
-//
 // TaskSet is NOT safe for concurrent use without external synchronisation.
 type TaskSet struct {
 	// tasks holds all tasks indexed by ID.
@@ -138,7 +136,6 @@ func (ts *TaskSet) Active(repoID string) *Task {
 
 // SetActive activates t and deactivates any previously active task for t.RepoID.
 // If t is not already in the set it is added.
-//
 // Unlike Add, SetActive cannot violate the one-active-per-repo invariant — it
 // deactivates the incumbent before promoting t — so it returns no error.
 func (ts *TaskSet) SetActive(t *Task) {

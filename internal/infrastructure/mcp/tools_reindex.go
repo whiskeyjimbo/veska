@@ -11,32 +11,25 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/core/domain"
 )
 
-// ---------------------------------------------------------------------------
 // eng_reindex_repo
-//
 // `veska reindex` previously refused to run while the daemon was up because it
 // opened SQLite directly and would race the daemon's embedder worker for the
-// write lock . Telling a junior user to stop the daemon, reindex,
+// write lock. Telling a junior user to stop the daemon, reindex,
 // then restart kills their editor's MCP connection mid-task.
-//
 // This tool moves the reindex *into* the daemon — same cold-scan reparser the
-// add-repo path uses (solov2-0z1.3) — so `veska reindex` dispatches via MCP
+// add-repo path uses — so `veska reindex` dispatches via MCP
 // when a daemon is running and the editor stays connected throughout.
-//
 // Inputs:
 //
-//	repo_id    — full repo_id or short_id prefix (mirrors eng_promote_repo).
-//	root_path  — absolute filesystem path; canonicalised via EvalSymlinks.
+//	repo_id — full repo_id or short_id prefix (mirrors eng_promote_repo).
+//	root_path — absolute filesystem path; canonicalised via EvalSymlinks.
 //
 // One of the two is required. When both are passed, repo_id wins.
-//
 // The handler runs the cold-scan synchronously under the request context and
 // returns when the scan completes, so the CLI gets a deterministic "done"
 // signal instead of having to poll eng_get_status's scans_in_flight. The
 // reparser emits the standard "cold scan: starting" / "cold scan: complete"
 // log pair the add-repo path already produces, keeping daemon.log consistent.
-// ---------------------------------------------------------------------------
-
 // ReindexDeps bundles the collaborators eng_reindex_repo needs. Repos resolves
 // repo_id / root_path to an application.RepoRecord; Reparser runs the actual
 // cold-scan. The composition root wires both from the same singletons the

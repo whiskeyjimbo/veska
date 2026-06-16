@@ -95,8 +95,8 @@ func (w *RotatingWriter) Close() error {
 	return nil
 }
 
-// rotate renames rotated files upward (.{n-1}→.n, …, .1→.2) then renames the
-// active file to .1 and opens a fresh active file. Callers must hold w.mu.
+// rotate renames rotated files upward (.{n-1}→.n, …,.1→.2) then renames the
+// active file to.1 and opens a fresh active file. Callers must hold w.mu.
 func (w *RotatingWriter) rotate() error {
 	if err := w.file.Close(); err != nil {
 		return fmt.Errorf("close active file: %w", err)
@@ -116,7 +116,7 @@ func (w *RotatingWriter) rotate() error {
 		}
 	}
 
-	// Rename the active file to .1.
+	// Rename the active file to.1.
 	if err := os.Rename(w.path, rotatedName(w.path, 1)); err != nil {
 		return fmt.Errorf("rename active to .1: %w", err)
 	}

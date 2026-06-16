@@ -8,7 +8,7 @@ import (
 
 // The findings command tree's logic lives in internal/cli/findingscmd; the
 // constructors below are Cobra glue whose RunE bodies are thin delegating
-// calls into that package (solov2-0omh.7). The cwd→repo resolver
+// calls into that package. The cwd→repo resolver
 // (autoResolveRepo) stays in cmd/veska — it is shared across the findings and
 // deps families — and is injected through the ResolveRepo seam.
 
@@ -16,7 +16,7 @@ import (
 // eng_list_findings / eng_get_finding / eng_close_finding / eng_reopen_finding
 // tools plus the suppress and suppressions subcommands (which wrap the
 // finding-suppression tools) so users can interact with promotion-check
-// output without crafting JSON-RPC payloads .
+// output without crafting JSON-RPC payloads.
 func findingsCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:          "findings",

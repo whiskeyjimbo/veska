@@ -35,13 +35,11 @@ type EmbeddingLoader interface {
 // + node_embedding_refs join (exposed by the EmbeddingLoader). The memory backend is an
 // in-memory backend and the usearch backend's persisted indexes are at-rest
 // only — neither survives a daemon restart with its pre-restart contents intact
-// . Without this rehydration call at Daemon.Start, semantic search
+// Without this rehydration call at Daemon.Start, semantic search
 // returns ≤ 0 hits until something forces a re-embed, which can only happen via
 // a content_hash change.
-//
 // Idempotent: UpsertEmbeddings is keyed by node_id within (repo, branch),
 // so calling this multiple times is safe.
-//
 // Returns the per-(repo, branch) row count loaded so the daemon log can
 // confirm a non-zero hydrate at start.
 func RehydrateVectors(

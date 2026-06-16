@@ -504,7 +504,7 @@ func TestStart_WakeGapWallClock(t *testing.T) {
 // TestSeed_FirstWakeDetectsChange verifies that an initial seeding sweep
 // establishes a baseline so the SECOND wake sweep reports a file changed since
 // the seed. The first sweep only records state (first-sighting) and fires
-// nothing — the no-op first wake that solov2-w2r8's review flagged.
+// nothing — the no-op first wake that 's review flagged.
 func TestSeed_FirstWakeDetectsChange(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "seeded.go")

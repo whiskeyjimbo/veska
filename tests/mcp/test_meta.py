@@ -1,5 +1,5 @@
 """Cross-cutting tests: every registered MCP tool is discoverable. Acts as
-a smoke test for the whole surface — if a future change drops a tool we
+a smoke test for the whole surface - if a future change drops a tool we
 catch it here rather than in whichever per-tool file happens to exercise
 it. The list mirrors `grep -rn 'Name:\\s*\"eng_' internal/infrastructure/mcp`
 and matches cmd/veska-daemon/wire.go's registerMCPTools."""
@@ -37,7 +37,7 @@ ALL_TOOLS = {
     "eng_find_todos",
     # owner
     "eng_find_owner",
-    # tasks (PARKED — solov2-6m1; no MCP path to create a task, so the
+    # tasks (PARKED - solov2-6m1; no MCP path to create a task, so the
     # set/get/history tools are unregistered until a backend lands).
     # findings
     "eng_list_findings",
@@ -66,8 +66,8 @@ ALL_TOOLS = {
 
 
 def test_known_tools_all_registered(mcp_client):
-    """Every registered tool must respond — either with a result or with
-    a domain error — when called with an empty payload. method-not-found
+    """Every registered tool must respond - either with a result or with
+    a domain error - when called with an empty payload. method-not-found
     means the tool was dropped from wire.go's registerMCPTools."""
     missing = []
     for tool in sorted(ALL_TOOLS):
@@ -91,7 +91,7 @@ def test_all_tools_matches_live_catalog(mcp_client):
     """ALL_TOOLS must equal the daemon's live tools/list catalog. This is
     the self-maintaining guard: a tool added to wire.go but not to
     ALL_TOOLS (or vice-versa) fails here with the exact diff, so the
-    hardcoded set above can't silently drift from what the server serves —
+    hardcoded set above can't silently drift from what the server serves -
     the failure mode that left ALL_TOOLS stale at 31 while wire.go shipped
     37 (solov2-seut cleanup)."""
     _, text, _, result = mcp_client.call("tools/list", {})
@@ -100,7 +100,7 @@ def test_all_tools_matches_live_catalog(mcp_client):
     missing_from_tests = live - ALL_TOOLS
     stale_in_tests = ALL_TOOLS - live
     assert not (missing_from_tests or stale_in_tests), (
-        f"ALL_TOOLS drifted from live catalog — "
+        f"ALL_TOOLS drifted from live catalog - "
         f"registered but untracked: {sorted(missing_from_tests)}; "
         f"tracked but not registered: {sorted(stale_in_tests)}"
     )

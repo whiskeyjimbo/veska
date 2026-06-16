@@ -68,7 +68,7 @@ func NewIngester(parser ports.CodeParser, area *staging.Area, gate *staging.Gate
 // SupportedExtensions reports the file extensions the wired parser can read,
 // or nil when the parser does not enumerate them. The cold scan reads this to
 // filter its walk so the extension set lives with the parser rather than being
-// duplicated in coldscan.go (solov2-xde2.7).
+// duplicated in coldscan.go.
 func (ing *Ingester) SupportedExtensions() []string {
 	if l, ok := ing.parser.(supportedExtensionLister); ok {
 		return l.SupportedExtensions()
@@ -77,7 +77,7 @@ func (ing *Ingester) SupportedExtensions() []string {
 }
 
 // supportedExtensionLister is the parser-side capability the cold scan reads
-// to source its walk filter (solov2-xde2.7). Kept here next to its consumer
+// to source its walk filter. Kept here next to its consumer
 // (ISP) rather than widening the broad ports.CodeParser contract, which would
 // ripple to every ParseFile implementer and test fake.
 type supportedExtensionLister interface {
@@ -113,7 +113,7 @@ func (ing *Ingester) Save(ctx context.Context, repoID, branch, path string, src 
 // stages and still emits parse-failure findings for syntactically broken
 // files, but it skips clearParseFailure — the per-file no-op UPDATE that
 // the regular Save path issues to revalidate an already-clean file
-// (solov2-pc3 fix #2). On a 646-file cold scan against a fresh repo,
+// ( fix #2). On a 646-file cold scan against a fresh repo,
 // this eliminates 646 needless writes through the contended Write
 // pool. Per-file TODOs are still emitted because emitTodos has its own
 // len==0 guard and is genuinely free for files without TODO markers.
@@ -155,7 +155,7 @@ func (ing *Ingester) save(ctx context.Context, repoID, branch, path string, src 
 		// parse-failure finding the file carried from an earlier
 		// broken ingest. Cold-scan path skips: there's no prior
 		// finding to clear on a first-ever scan, and the per-file
-		// UPDATE is the dominant cost (solov2-pc3 #2).
+		// UPDATE is the dominant cost ( #2).
 		if !coldScan {
 			ing.emitter.ClearParseFailure(ctx, repoID, branch, path)
 		}

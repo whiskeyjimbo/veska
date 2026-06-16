@@ -8,7 +8,7 @@ verified: true
 verified_date: "2026-06-01"
 ---
 
-# ADR-S0007 — Embedder swap is one CLI subcommand against a live daemon
+# ADR-S0007 - Embedder swap is one CLI subcommand against a live daemon
 
 > **NOT YET IMPLEMENTED (status: accepted, unbuilt).** This ADR records
 > an accepted *decision*; the mechanism it describes is not shipped.
@@ -27,14 +27,14 @@ verified_date: "2026-06-01"
 Embedding models change. Users want to switch from
 `nomic-embed-text:v1.5` to a newer model, or from CPU Ollama to a
 hosted provider. The prior V2 design specified a five-phase
-migration ceremony — `Planned → DualWrite → Shadowing → Cutover →
-Complete` — with a per-row migration cursor, dual-index reads, and
+migration ceremony - `Planned → DualWrite → Shadowing → Cutover →
+Complete` - with a per-row migration cursor, dual-index reads, and
 a documented rollback. That ceremony was sized for a multi-tenant
 server with downtime budgets and SLAs.
 
 A single-user laptop has no SLA. The user's editor will be slow for
 a while during the rebuild. They know it. But "stop the daemon,
-edit the config, hand-craft SQL, restart" is not a UX — it is an
+edit the config, hand-craft SQL, restart" is not a UX - it is an
 OS-level surgery the user is not in a position to script
 correctly. In particular, the database's `vec_nodes` virtual
 table geometry, `database_meta.embedder_*`, and the
@@ -130,6 +130,6 @@ Negative:
 
 - SOLO-03 §3.2 (`veska embedder swap <model>` operational sequence)
 - SOLO-08 §3.3 (`database_meta` boot consistency check; `vec_nodes` geometry)
-- SOLO-08 §7 (what this design does NOT include — embedder migration ceremony)
+- SOLO-08 §7 (what this design does NOT include - embedder migration ceremony)
 - ADR-S0004 (the post-promotion queue the rebuild drains through)
 - Retracts ADR-0015 (see RETRACTED.md)

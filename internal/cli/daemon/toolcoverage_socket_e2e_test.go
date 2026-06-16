@@ -2,16 +2,13 @@
 
 package daemon
 
-// On-demand socket end-to-end harness (solov2-t9kg).
-//
+// On-demand socket end-to-end harness.
 // This file is build-tag gated behind `socket_e2e` so it stays OUT of the
 // default `go test` / `make all` path — it exercises the REAL daemon socket
 // server (two Unix sockets, line-delimited JSON-RPC) rather than the in-process
 // Registry.Call shortcut the coverage suite uses. Run it with `make
 // tool-test-e2e` or:
-//
-//	go test -tags "sqlite_fts5 socket_e2e" -run TestSocketE2E ./internal/cli/daemon/...
-//
+//	go test -tags "sqlite_fts5 socket_e2e" -run TestSocketE2E./internal/cli/daemon/.
 // It is intentionally NOT exhaustive: it proves the socket round-trip reaches
 // the registry and returns real fixture facts for one tool (eng_get_node). The
 // per-tool exhaustiveness lives in the in-process coverage suite.
@@ -99,7 +96,7 @@ func TestSocketE2E_GetNodeRoundTrip(t *testing.T) {
 	}
 }
 
-// startSocketServer spins up a real mcp.Server over handler under t.TempDir()
+// startSocketServer spins up a real mcp.Server over handler under t.TempDir
 // sockets, waits for both socket files to appear, and returns the agent
 // (mcp.sock) path. It mirrors server_test.go's startServer poll/cleanup pattern.
 func startSocketServer(t *testing.T, handler mcp.Handler) (mcpSock string) {

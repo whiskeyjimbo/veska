@@ -1,28 +1,22 @@
 // Package memvec provides a VectorStorage implementation backed by an in-memory
 // map with linear-scan nearest-neighbour search.
-//
 // # Naming
-//
 // This package was historically named after the asg017/sqlite-vec extension,
 // but it contains zero SQL: it is a pure-Go in-memory map with a brute-force L2
 // linear scan. The name was a vestige of the abandoned sqlite-vec spike (see the
-// loadtest spikes tree and ADR-S0014/S0015). It is now named for what it is —
-// an in-memory vector store (solov2-c0rk).
-//
+// loadtest spikes tree and /S0015). It is now named for what it is
+// an in-memory vector store.
 // # Design note
-//
 // This backend is the zero-extra-native-dependency default for veska. It requires
 // no external shared libraries (no libusearch_c.so, no liblancedb_go.a) and is
 // adequate for repositories with fewer than YellowThreshold (~75k) embedded
 // nodes. Above that threshold veska doctor storage will emit a warning, and above
 // RedThreshold (~90k) an error-level warning is shown.
-//
 // The search implementation is a brute-force L2-squared linear scan over all stored
 // vectors. This is intentional: for small corpora the scan is fast enough (sub-ms
 // for <75k 768-dim vectors on modern hardware), and the simplicity eliminates any
 // dependency on HNSW native libraries during development, CI, and small-scale
 // production use.
-//
 // For workspaces that exceed 75k nodes, switch to the usearch backend via the
 // vector.backend configuration key (see internal/infrastructure/vector/backend.go).
 package memvec
@@ -60,7 +54,6 @@ type row struct {
 
 // Store is an in-memory VectorStorage that uses linear scan for ANN
 // queries. It is safe for concurrent use.
-//
 // WARNING: This is a dev/low-count backend. Search is O(n·d) per query.
 // Use the usearch backend for workspaces exceeding YellowThreshold nodes.
 type Store struct {
@@ -115,7 +108,6 @@ func (s *Store) UpsertEmbeddings(_ context.Context, repoID, branch string, batch
 // Search returns the k nearest neighbours of vec in (repoID, branch) using
 // brute-force L2-squared linear scan. Results are sorted by score descending
 // (score = 1/(1+dist)).
-//
 // If filter.ModelID is non-empty, only the matching partition is searched;
 // otherwise all model partitions for the (repoID, branch) pair are merged.
 func (s *Store) Search(_ context.Context, repoID, branch string, vec []float32, k int, filter domain.VectorFilter) ([]domain.SearchHit, error) {

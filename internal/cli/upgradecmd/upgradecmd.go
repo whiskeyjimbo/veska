@@ -1,7 +1,7 @@
 // Package upgradecmd holds the business logic behind the `veska upgrade`
 // command. cmd/veska/upgrade.go is reduced to Cobra construction whose RunE
 // body delegates here, following the cmd = glue / logic-in-packages pattern
-// (solov2-0omh.11). The validate -> stage -> chmod -> atomic-rename ->
+// The validate -> stage -> chmod -> atomic-rename ->
 // optional-restart sequence lives here; the daemon restart is injected as a
 // closure so this package does not depend on the service manager.
 package upgradecmd

@@ -2,28 +2,27 @@
 
 // cmd/rss-sweep measures peak RSS and warm p95 latency for the production
 // UsearchStore (float16) at 50k, 250k, 500k, and 1M vectors.
-//
 // For each population it:
-//   - Builds the index in batches of 1000
-//   - Measures RSS after loading (before queries)
-//   - Runs 200 warm Search queries (seed=42 hold-out, seed=999)
-//   - Measures RSS at steady-state (after warm queries)
-//   - Records p95 latency at k=10
-//   - Records build time
+//
+//	Builds the index in batches of 1000
+//	Measures RSS after loading (before queries)
+//	Runs 200 warm Search queries (seed=42 hold-out, seed=999)
+//	Measures RSS at steady-state (after warm queries)
+//	Records p95 latency at k=10
+//	Records build time
 //
 // Results are printed as a Markdown table and written to RESULTS.md
 // in the same directory as the source file.
-//
 // Build:
 //
 //	SO=$(find $(go env GOMODCACHE) -name "libusearch_c.so" 2>/dev/null | head -1)
 //	SODIR=$(dirname $SO)
 //	CGO_LDFLAGS="-L${SODIR} -lusearch_c" CGO_CFLAGS="-I${SODIR}" \
-//	  go build -tags hnsw_native ./tools/loadtest/spikes/hnsw/cmd/rss-sweep/
+//	  go build -tags hnsw_native./tools/loadtest/spikes/hnsw/cmd/rss-sweep/
 //
 // Run:
 //
-//	LD_LIBRARY_PATH=${SODIR} ./rss-sweep
+//	LD_LIBRARY_PATH=${SODIR}./rss-sweep
 package main
 
 import (

@@ -6,10 +6,10 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/cli/duplicatescmd"
 )
 
-// duplicatesCmd wraps eng_find_clusters (solov2-phn0): the unified, tier-labeled
+// duplicatesCmd wraps eng_find_clusters: the unified, tier-labeled
 // similar-code view for de-dupe triage — exact (byte-identical), structural
 // (renamed Type-2), and near (vector) clusters in one ranked pass, repo-wide or
-// across all registered repos. Each grouping is shaped to become a verify-and-
+// across all registered repos. Each grouping is shaped to become a verify-and
 // dedupe task. For exact-only/near-only the older `veska clones` still works; for
 // the per-symbol "what's like THIS?" pivot use `veska similar <symbol>`.
 func duplicatesCmd() *cobra.Command {

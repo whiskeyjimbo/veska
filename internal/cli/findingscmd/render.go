@@ -22,14 +22,14 @@ func (p ListParams) render(resp findingsEnvelope) error {
 		fmt.Fprintln(w, "no findings")
 		return nil
 	}
-	// solov2-7ata: severity breakdown header so 100-row dumps don't hide a
+	// severity breakdown header so 100-row dumps don't hide a
 	// single critical among many mediums. Sort by severity then rule for
 	// stable, scannable output.
 	sortFindingsBySeverity(resp.Findings)
 	counts := countSeverities(resp.Findings)
 
 	shown, hiddenLow := p.filterLow(resp.Findings)
-	// solov2-izh6.25: summary reflects what's actually rendered, not the
+	// summary reflects what's actually rendered, not the
 	// unfiltered total.
 	fmt.Fprintln(w, summariseFindings(len(shown), len(resp.Findings), counts, resp.Findings))
 	if hiddenLow > 0 {
@@ -54,7 +54,7 @@ func (p ListParams) render(resp findingsEnvelope) error {
 }
 
 // filterLow drops low-severity rows unless --include-low or an explicit
-// --severity / --rule selector is in play . An explicit --rule means
+// severity / --rule selector is in play. An explicit --rule means
 // the user asked for that rule by name (e.g. dead-code, which is low-severity),
 // so re-hiding it by severity would yield a confusingly empty list; the
 // auto-link noise the default hide targets stays hidden in the unfiltered view.
@@ -66,7 +66,7 @@ func (p ListParams) filterLow(findings []FindingView) ([]FindingView, int) {
 	kept := findings[:0]
 	hiddenLow := 0
 	for _, f := range findings {
-		// solov2-uej9.7: a row explicitly surfaced by --include-suppressed must
+		// a row explicitly surfaced by --include-suppressed must
 		// not be re-hidden by the low-severity filter — the whole point was to
 		// see it.
 		if f.Severity == "low" && f.SuppressedBy == nil {
@@ -79,10 +79,10 @@ func (p ListParams) filterLow(findings []FindingView) ([]FindingView, int) {
 }
 
 // renderTable writes the findings table; the REPO column appears only in the
-// --all (cross-repo) view.
+// all (cross-repo) view.
 func (p ListParams) renderTable(w io.Writer, shown []FindingView) error {
 	tw := tabwriter.NewWriter(w, 0, 0, 2, ' ', 0)
-	// solov2-uej9.7: the trailing SUPPRESSED_BY column appears only when at
+	// the trailing SUPPRESSED_BY column appears only when at
 	// least one row is suppressed (i.e. --include-suppressed surfaced it), so
 	// the common view stays narrow.
 	supCol := anySuppressed(shown)
@@ -181,9 +181,9 @@ func countSeverities(fs []FindingView) map[string]int {
 // will render after the low-severity filter; total is the pre-filter count so
 // we can say "showing X of Y" honestly when those differ. counts/all reflect
 // the FULL set so the severity breakdown stays informative even when nothing
-// is rendered (solov2-izh6.25).
+// is rendered.
 func summariseFindings(shown, total int, counts map[string]int, all []FindingView) string {
-	// solov2-vpds: when low-severity findings are dominated by a single rule
+	// when low-severity findings are dominated by a single rule
 	// (typically "auto-link" on small repos), annotate the count. Threshold is
 	// 80% — if the rule mix is genuinely diverse, fall back to the unannotated
 	// count.
@@ -225,7 +225,6 @@ func summariseFindings(shown, total int, counts map[string]int, all []FindingVie
 // trimRedundantFilePrefix drops a leading "<file>:<line>" / "<file> " from the
 // message when the file column already shows the same file — vuln messages
 // embed "go.mod:151 [GHSA-…] …" but the FILE column already says "go.mod"
-// .
 func trimRedundantFilePrefix(msg, file string) string {
 	if file == "" {
 		return msg

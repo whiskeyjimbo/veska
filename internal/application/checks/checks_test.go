@@ -376,7 +376,7 @@ func (a *authoritativeStub) AuthoritativeRule(_ checks.Input) (string, bool) {
 	return a.rule, a.on
 }
 
-// 6. solov2-jvrc: an authoritative check triggers
+// 6.: an authoritative check triggers
 // FindingStorage.CloseSupersededByRule with the freshly-returned IDs as
 // the keep-set, so prior findings under the same rule that no longer
 // apply get auto-closed (e.g. a CVE on a dep that has since been bumped).

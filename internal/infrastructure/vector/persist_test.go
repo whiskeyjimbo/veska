@@ -17,7 +17,7 @@ import (
 func TestSaveLoadRoundTrip(t *testing.T) {
 	ctx := context.Background()
 
-	// --- Build store with 50 vectors ---
+	// Build store with 50 vectors
 	store := newStore(t)
 
 	const n = 50
@@ -34,7 +34,7 @@ func TestSaveLoadRoundTrip(t *testing.T) {
 		t.Fatalf("UpsertEmbeddings: %v", err)
 	}
 
-	// --- Run 5 hold-out queries on original store ---
+	// Run 5 hold-out queries on original store
 	querySeeds := []int64{5001, 5002, 5003, 5004, 5005}
 	filter := domain.VectorFilter{ModelID: "nomic-embed-text"}
 
@@ -54,13 +54,13 @@ func TestSaveLoadRoundTrip(t *testing.T) {
 		originalResults[qi] = nodeIDs
 	}
 
-	// --- Save to temp directory ---
+	// Save to temp directory
 	tmpDir := t.TempDir()
 	if err := store.Save(tmpDir); err != nil {
 		t.Fatalf("Save: %v", err)
 	}
 
-	// --- Load into fresh store ---
+	// Load into fresh store
 	store2, err := vector.NewUsearchStore()
 	if err != nil {
 		t.Fatalf("NewUsearchStore (store2): %v", err)
@@ -71,7 +71,7 @@ func TestSaveLoadRoundTrip(t *testing.T) {
 		t.Fatalf("Load: %v", err)
 	}
 
-	// --- Run same 5 queries on store2 and assert exact match ---
+	// Run same 5 queries on store2 and assert exact match
 	for qi, seed := range querySeeds {
 		hits, err := store2.Search(ctx, "r1", "main", randVec(seed), 5, filter)
 		if err != nil {

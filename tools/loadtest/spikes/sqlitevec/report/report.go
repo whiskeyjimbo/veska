@@ -64,7 +64,7 @@ type Verdict struct {
 	Reasons []string
 }
 
-// M0 exit-gate thresholds (from docs/milestones/M0.md §Outcomes).
+// M0 exit-gate thresholds (from §Outcomes).
 const (
 	gate50kP95Ms        = 100.0
 	gate1MP95GreenMs    = 200.0

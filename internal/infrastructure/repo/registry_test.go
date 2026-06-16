@@ -58,7 +58,7 @@ func newTestDB(t *testing.T) *sql.DB {
 	return db
 }
 
-// newGitRepo creates a temp directory with a .git/hooks/ subdirectory.
+// newGitRepo creates a temp directory with a.git/hooks/ subdirectory.
 func newGitRepo(t *testing.T) string {
 	t.Helper()
 	dir := t.TempDir()
@@ -68,11 +68,11 @@ func newGitRepo(t *testing.T) string {
 	return dir
 }
 
-// TestAddRepo_ConvergesAcrossRoots is the end-to-end ADR-S0017 contract at the
+// TestAddRepo_ConvergesAcrossRoots is the end-to-end contract at the
 // Add boundary: the same module manifest indexed at two DIFFERENT absolute
 // roots yields the SAME stored repo_id (so node IDs converge in a shared DB).
 // The second Add resolves to an already-present repo_id and reports existed=true
-// — root_path stays whichever root registered first (acceptable; mirrors the
+// root_path stays whichever root registered first (acceptable; mirrors the
 // ADR's "repo granularity = the registered root" limitation).
 func TestAddRepo_ConvergesAcrossRoots(t *testing.T) {
 	db := newTestDB(t)
@@ -223,7 +223,7 @@ func TestAddRepoInstallsHooks(t *testing.T) {
 	}
 }
 
-// TestAddRepoDetectsActiveBranch covers solov2-f8p: a real `git init -b <name>`
+// TestAddRepoDetectsActiveBranch covers: a real `git init -b <name>`
 // working tree records its branch in repos.active_branch. Without this every
 // downstream write keys by branch="" and the graph becomes unqueryable.
 func TestAddRepoDetectsActiveBranch(t *testing.T) {
@@ -261,7 +261,7 @@ func TestAddRepoDetectsActiveBranch(t *testing.T) {
 // TestAddRepoDefaultsBranchWhenDetectionFails covers the "freshly-init'd repo
 // with no commits / not actually a git tree" path: detection fails, but Add
 // must still produce a usable branch so the downstream pipeline is not
-// silently broken. The existing newGitRepo helper creates only .git/hooks
+// silently broken. The existing newGitRepo helper creates only.git/hooks
 // (no real git init), so this path is what every other test in this file
 // exercises by construction.
 func TestAddRepoDefaultsBranchWhenDetectionFails(t *testing.T) {
@@ -283,7 +283,7 @@ func TestAddRepoDefaultsBranchWhenDetectionFails(t *testing.T) {
 	}
 }
 
-// TestAddRepoHookUsesAbsoluteBinaryPath covers solov2-v7q: installed hooks
+// TestAddRepoHookUsesAbsoluteBinaryPath covers: installed hooks
 // must invoke the absolute path of the veska CLI binary, not bare "veska"
 // (broken for any non-PATH install) and NOT the daemon path either (which
 // has no 'hook-runner' subcommand — exposed by the second journey pass).
@@ -319,8 +319,8 @@ func TestAddRepoHookUsesAbsoluteBinaryPath(t *testing.T) {
 
 // TestVeskaBinary_StripsDaemonSuffix covers the daemon-side of v7q exposed
 // during the second journey pass: when repo.Add runs inside veska-daemon,
-// os.Executable returns ".../veska-daemon" — but the post-commit hook MUST
-// invoke ".../veska hook-runner …" because veska-daemon has no hook-runner
+// os.Executable returns "./veska-daemon" — but the post-commit hook MUST
+// invoke "./veska hook-runner …" because veska-daemon has no hook-runner
 // subcommand. We simulate this by symlinking the test binary as both
 // "veska" (the sibling we want resolved) and "veska-daemon" (the running
 // process) and asserting the hook script picks the CLI path.
@@ -372,7 +372,7 @@ func TestRemoveRepo(t *testing.T) {
 	}
 }
 
-// TestRemoveRepoDeletesEmbeddingRefs pins solov2-khra: node_embedding_refs
+// TestRemoveRepoDeletesEmbeddingRefs pins: node_embedding_refs
 // has no FK to nodes (composite PK), so the repos CASCADE that clears a
 // removed repo's nodes leaves its refs orphaned. Remove must delete them
 // explicitly, or they linger as 'pending' rows that pin eng_get_status at
@@ -430,7 +430,7 @@ func TestRemoveRepoDeletesEmbeddingRefs(t *testing.T) {
 	}
 }
 
-// TestRemoveRepoByShortPrefix pins solov2-d78r: Remove must accept a unique
+// TestRemoveRepoByShortPrefix pins: Remove must accept a unique
 // short id prefix (as printed by `veska repo add`). Before the fix the
 // exact-match DELETE silently no-op'd on a short id, leaving the repo (and its
 // CASCADE-able children) in place.

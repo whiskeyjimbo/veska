@@ -1,6 +1,6 @@
 ---
 id: FEATURE-SUMMARY-001
-title: "Summary Worker — LLM-generated node short_summary"
+title: "Summary Worker - LLM-generated node short_summary"
 status: draft
 version: 0.1.0
 last_reviewed: 2026-05-22
@@ -8,7 +8,7 @@ related: [SOLO-04, SOLO-05, SOLO-08, SOLO-09, SOLO-10, SOLO-11]
 verified: false
 ---
 
-# FEATURE-SUMMARY-001 — Summary Worker
+# FEATURE-SUMMARY-001 - Summary Worker
 
 A background pipeline that attaches a short natural-language summary to
 every promoted `Node` and keeps it fresh as source changes. The summary
@@ -35,7 +35,7 @@ post-promotion queue lane, exactly mirroring the review pipeline.
   the field and an LLM producer for it.
 - **Precedent exists.** The review pipeline (SOLO-11 §3) is already an
   optional, off-by-default, LLM-backed post-promotion lane. Summary
-  reuses that machinery wholesale — no new architectural pattern.
+  reuses that machinery wholesale - no new architectural pattern.
 
 ## 2. Domain model
 
@@ -56,7 +56,7 @@ the existing `WithSignature` / `WithRawContent` style.
 1. `len(*ShortSummary) ≤ 280` runes when present (the SOLO-09 budget).
 2. Provenance is mandatory: a summary written by the LLM lane is
    attributed `actor_id = "agent:<llm-generator-name>"`,
-   `actor_kind = "system"` (SOLO-10 §1.2 review-pipeline exception —
+   `actor_kind = "system"` (SOLO-10 §1.2 review-pipeline exception -
    a daemon goroutine writes the row, but an LLM produced the content).
 3. `ShortSummary` MAY be nil before the summary lane runs. Unlike
    engram-v2's "never null after seal" rule, solov2 promotion stays
@@ -78,7 +78,7 @@ Summary is a new **optional** `work_kind`, gated like review.
 
 ### 4.1 WorkKind
 
-`internal/core/ports/queue.go` — add:
+`internal/core/ports/queue.go` - add:
 
 ```go
 WorkKindSummary WorkKind = "summary"
@@ -94,7 +94,7 @@ summary joins `review` as an opt-in lane appended by
 ### 4.2 Handler
 
 `application/summary/handler.go` implements `ports.WorkHandler` for
-`WorkKindSummary`, one row per changed file (or per node — see §9 OQ-1):
+`WorkKindSummary`, one row per changed file (or per node - see §9 OQ-1):
 
 ```
 Handle(ctx, row WorkRow):
@@ -137,7 +137,7 @@ port.
 `summary` field. Tools returning nodes (`eng_get_node`,
 `eng_find_symbol`, `eng_search_semantic`, …) transparently surface the
 better summary. (`eng_get_review_summary` in SOLO-09 §future is an
-unrelated work-state tool — not this.)
+unrelated work-state tool - not this.)
 
 ## 7. Degradation
 
@@ -155,7 +155,7 @@ the user one thing is wrong. Promotion itself never blocks on summary.
 Off by default, like review. A workspace-config flag
 (`pipelines.summary.enabled`) appends `WorkKindSummary` to the
 post-promotion lanes. When disabled, every node response uses the
-heuristic summary — i.e. today's behaviour, unchanged. This makes the
+heuristic summary - i.e. today's behaviour, unchanged. This makes the
 feature a pure additive opt-in with a clean fallback.
 
 ## 9. Open questions

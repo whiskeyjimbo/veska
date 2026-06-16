@@ -4,8 +4,8 @@
 // textual/JSON rendering of their {nodes, edges, cross_repo_edges} and
 // added/removed/modified envelopes. cmd/veska/graph.go is reduced to Cobra
 // command construction whose RunE bodies are thin calls into the Run helpers
-// here (solov2-0omh.7, following the cmd = glue / logic-in-packages pattern
-// from solov2-0omh.4/.5/.6).
+// here (, following the cmd = glue / logic-in-packages pattern
+// from /.5/.6).
 package graphcmd
 
 import (
@@ -20,7 +20,7 @@ import (
 
 // NormalizeDirection accepts the user-friendly aliases callers/callees (which
 // match the help-text prose) in addition to the canonical in/out enum the
-// daemon expects. solov2-5out.
+// daemon expects.
 func NormalizeDirection(d string) string {
 	switch d {
 	case "callers":
@@ -36,7 +36,7 @@ func NormalizeDirection(d string) string {
 // prints — so a user copy-pasting the "(66f083714906)" suffix from `veska
 // symbol` output into `veska calls`/`veska blast` is routed through the
 // node_id path and prefix-expanded daemon-side, instead of being misread as
-// a symbol name (solov2-izh6.1).
+// a symbol name.
 func LooksLikeNodeID(s string) bool {
 	if len(s) < 12 {
 		return false
@@ -59,7 +59,7 @@ type CrossRepoEdgeDTO struct {
 	Kind      string `json:"kind"`
 	// SrcLine is the 1-indexed line of the originating call_expression. When
 	// set, the renderer uses it instead of the caller node's declaration line
-	// so each cross-repo edge points to its actual call site (solov2-izh6.31).
+	// so each cross-repo edge points to its actual call site.
 	// 0 = unknown (pre-migration data).
 	SrcLine int `json:"src_line,omitempty"`
 }
@@ -89,7 +89,7 @@ type graphChainEnv struct {
 // RenderGraphChain prints a {nodes, edges, cross_repo_edges} envelope as a
 // greppable table. Used by `veska calls` and `veska blast`. ctx feeds the
 // eng_get_node lookups that resolve cross-repo edge endpoints from opaque
-// hex to "symbol in file:line" form .
+// hex to "symbol in file:line" form.
 func RenderGraphChain(ctx context.Context, w io.Writer, raw json.RawMessage, jsonOut bool) error {
 	if jsonOut {
 		enc := json.NewEncoder(w)
@@ -124,8 +124,8 @@ func RenderGraphChain(ctx context.Context, w io.Writer, raw json.RawMessage, jso
 }
 
 // renderEmptyChain prints the "no nodes in chain" message plus per-reason
-// hints for the degraded reasons that need decoding (solov2-izh6.30,
-// solov2-4soa, solov2-izh6.22).
+// hints for the degraded reasons that need decoding (,
+// ).
 func renderEmptyChain(w io.Writer, env graphChainEnv) {
 	fmt.Fprintln(w, "no nodes in chain")
 	for _, d := range env.DegradedReasons {
@@ -148,7 +148,7 @@ func renderEmptyChain(w io.Writer, env graphChainEnv) {
 
 // renderChainCrossRepoEdges prints the cross-repo edges block, resolving each
 // endpoint to "symbol in file:line" form and emitting the package-grain note
-// when any src landed on a package node .
+// when any src landed on a package node.
 func renderChainCrossRepoEdges(ctx context.Context, w io.Writer, env graphChainEnv, localByID map[string]graphref.NodeInfo) {
 	if len(env.CrossRepoEdges) == 0 {
 		return
@@ -167,7 +167,7 @@ func renderChainCrossRepoEdges(ctx context.Context, w io.Writer, env graphChainE
 		if src.Kind == "package" {
 			anyPackageSrc = true
 		}
-		// solov2-izh6.31: prefer the edge's own SrcLine over the caller node's
+		// prefer the edge's own SrcLine over the caller node's
 		// declaration line so a function with multiple cross-repo calls
 		// renders each at its actual call site.
 		if e.SrcLine > 0 {
@@ -178,9 +178,9 @@ func renderChainCrossRepoEdges(ctx context.Context, w io.Writer, env graphChainE
 			graphref.FormatCrossRepoNode(dst, e.DstNodeID), shortID(e.DstRepoID))
 	}
 	if anyPackageSrc {
-		// solov2-urqy: cross-repo CALLS landing on a `package` src usually
+		// cross-repo CALLS landing on a `package` src usually
 		// means the call lives inside an anonymous function in a top-level var
-		// initialiser (e.g. cobra's `Run: func(...){...}`).
+		// initialiser (e.g. cobra's `Run: func(.){.}`).
 		fmt.Fprintln(w, "  note: package-grain src means the caller is an anonymous func in a top-level var initialiser (e.g. cobra Run/RunE).")
 		fmt.Fprintln(w, "        run `veska context <caller-symbol>` or grep that file for the dst symbol to pinpoint the call site.")
 	}

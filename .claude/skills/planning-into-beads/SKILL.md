@@ -1,6 +1,6 @@
 ---
 name: planning-into-beads
-description: Use when the user wants to plan an epic for orchestrated execution — converts a brainstorm/design into a beads epic with a tagged DAG of tasks, each with testable acceptance criteria and a concrete definition of done. Refuses to commit to beads without explicit human approval of a preview block.
+description: Use when the user wants to plan an epic for orchestrated execution - converts a brainstorm/design into a beads epic with a tagged DAG of tasks, each with testable acceptance criteria and a concrete definition of done. Refuses to commit to beads without explicit human approval of a preview block.
 ---
 
 <EXTREMELY-IMPORTANT>
@@ -10,7 +10,7 @@ condense them, or "just create the tasks first and refine later."
 Beads is touched ONLY in stage 5, and ONLY after the human has explicitly approved
 the preview block.
 
-If you find yourself wanting to call `bd create` before stage 5, STOP — that is the
+If you find yourself wanting to call `bd create` before stage 5, STOP - that is the
 exact failure mode this skill exists to prevent. Auto-committing planning output is
 how task graphs rot.
 </EXTREMELY-IMPORTANT>
@@ -33,7 +33,7 @@ Stages 1–5 below. Produces one new epic with N tasks, deps, and tags.
 ### Refine (`/plan --refine bd-x.N`)
 
 The named task is `requires_planning: true` (typically created from a worker
-proposal). Skip stage 1 — the design doc is inherited from the parent epic. Run
+proposal). Skip stage 1 - the design doc is inherited from the parent epic. Run
 stages 2–5 to decompose the task into properly-specified children. The original
 `requires_planning` task is closed as superseded once children are created.
 
@@ -55,32 +55,32 @@ Stages 1–4 happen entirely in the conversation. Beads is only touched in stage
 
 ---
 
-### Stage 1 — Synthesize design doc
+### Stage 1 - Synthesize design doc
 
 **Inputs.** Brainstorming output, problem statement, agreed approach.
 
 **Output.** A compact markdown document (≤ 1 page) with these sections:
 
-- **Problem** — why this work is being done
-- **Approach** — chosen direction; alternatives mentioned briefly
-- **Goals** — what success looks like at the epic level (different from per-task DoD)
-- **Out of scope** — explicit list; prevents scope creep during execution
+- **Problem** - why this work is being done
+- **Approach** - chosen direction; alternatives mentioned briefly
+- **Goals** - what success looks like at the epic level (different from per-task DoD)
+- **Out of scope** - explicit list; prevents scope creep during execution
 - **Risks / open questions**
-- **Constraints** — performance, compatibility, deadlines, etc.
+- **Constraints** - performance, compatibility, deadlines, etc.
 
 **Storage.** Three paths, pick the right one:
 
 1. **Inline in epic body.** If the doc is short (≤ 1 page) and self-contained.
 2. **`bd remember` with ID referenced from epic body.** If the doc is longer than fits comfortably in a task body but is *unique to this epic*.
-3. **External doc with stage-1 extract inlined.** If the work belongs to a larger pre-existing design document (e.g., a project-level design doc covering multiple epics), inline a compact extract — Problem / Approach / Goals / Out of scope — into the epic body, and reference the larger doc by path. The extract is the single source of truth for *this* epic; the larger doc is context.
+3. **External doc with stage-1 extract inlined.** If the work belongs to a larger pre-existing design document (e.g., a project-level design doc covering multiple epics), inline a compact extract - Problem / Approach / Goals / Out of scope - into the epic body, and reference the larger doc by path. The extract is the single source of truth for *this* epic; the larger doc is context.
 
 The doc (or its extract) is **canonical**; tasks reference it. Do NOT shred it into
-task bodies — workers will not have the brainstorming context, and this doc is how
+task bodies - workers will not have the brainstorming context, and this doc is how
 the "why" survives downstream.
 
 ---
 
-### Stage 2 — Decompose into candidates
+### Stage 2 - Decompose into candidates
 
 Produce a flat list in the conversation, NOT yet structured as a graph. For each
 candidate:
@@ -93,7 +93,7 @@ structuring second prevents premature dependency commitments.
 
 ---
 
-### Stage 3 — Quality bar (mechanical checklist)
+### Stage 3 - Quality bar (mechanical checklist)
 
 Every candidate must pass each line. Failures get fixed before stage 4.
 
@@ -104,7 +104,7 @@ Every candidate must pass each line. Failures get fixed before stage 4.
 - [ ] `estimated_scope` set: `small` / `medium` / `large`
 - [ ] Tags: ≥ 1 `area:*` and ≥ 1 `kind:*` (existing vocabulary or proposed)
 - [ ] Body < 300 words
-- [ ] Self-contained — a worker reading body + design-doc ref can start without conversation context
+- [ ] Self-contained - a worker reading body + design-doc ref can start without conversation context
 
 **Split-or-rewrite heuristics.** Apply each; if any triggers, fix before stage 4:
 
@@ -117,12 +117,12 @@ Every candidate must pass each line. Failures get fixed before stage 4.
 **After any fold or drop, renumber.** The preview block shows tasks numbered
 contiguously (`.1, .2, .3, .4`) regardless of which candidates were dropped during
 this stage. Gaps (`.1, .2, .4, .5`) look like a bug in the preview even when they're
-not — beads assigns real IDs at commit, so the preview's numbering is purely
+not - beads assigns real IDs at commit, so the preview's numbering is purely
 cosmetic; keep it tidy.
 
 **The hardest discipline.** ACs describe **externally observable behavior**, not
 implementation. "Service signs and verifies RS256 tokens against rotated keys" is
-observable. "Service uses jose-go library" is not — it's an implementation choice
+observable. "Service uses jose-go library" is not - it's an implementation choice
 the worker should be free to make or revise.
 
 A test for each AC: could a different implementation also satisfy it? If no, you
@@ -130,7 +130,7 @@ are over-specifying. Rewrite.
 
 ---
 
-### Stage 4 — Dependencies and tags
+### Stage 4 - Dependencies and tags
 
 #### Dependency rules (strict)
 
@@ -141,11 +141,11 @@ are over-specifying. Rewrite.
 - Tag overlap → not a dep.
 - "Just in case" → not a dep. Phantom edges silently kill parallelism.
 
-**Considered-but-rejected edges.** By default these live in the conversation only — they are deliberation, not decision, and beads records decisions. One carve-out: if a rejected edge is the kind a worker might later re-propose via `cross_cutting` (e.g., "A and B touch the same module so they probably should have a dep"), file the rejection as a comment on the **epic** with tag `planning:rejection`. This gives the orchestrator a place to look when a worker proposes something already considered. Use sparingly — most rejections are forgettable.
+**Considered-but-rejected edges.** By default these live in the conversation only - they are deliberation, not decision, and beads records decisions. One carve-out: if a rejected edge is the kind a worker might later re-propose via `cross_cutting` (e.g., "A and B touch the same module so they probably should have a dep"), file the rejection as a comment on the **epic** with tag `planning:rejection`. This gives the orchestrator a place to look when a worker proposes something already considered. Use sparingly - most rejections are forgettable.
 
 #### Tagging discipline
 
-1. Run `bd tag list` first AND **output the resulting vocabulary in the conversation** so the human can see what you are matching against. Silent vocabulary lookup is not enough — drift is invisible if the matching step is hidden.
+1. Run `bd tag list` first AND **output the resulting vocabulary in the conversation** so the human can see what you are matching against. Silent vocabulary lookup is not enough - drift is invisible if the matching step is hidden.
 2. For each task, propose tags from existing vocabulary first.
 3. Only invent a new tag when no existing tag fits.
 4. New tags go in a separate "tag proposals" block requiring human promotion.
@@ -163,7 +163,7 @@ are over-specifying. Rewrite.
 
 ---
 
-### Stage 5 — Preview and human checkpoint
+### Stage 5 - Preview and human checkpoint
 
 Before ANY `bd` write happens, produce a single preview block to the user. Wait for
 explicit approval. On reject → return to stage 2 with notes. On approve → atomic
@@ -198,7 +198,7 @@ PROPOSED DEPS
   ...
 
 PROPOSED NEW TAGS
-  <namespace>:<value>    used in: bd-NEW.X, bd-NEW.Y     — promote? [y/n]
+  <namespace>:<value>    used in: bd-NEW.X, bd-NEW.Y     - promote? [y/n]
 
 QUALITY GATE
   ✓ All tasks have ≥1 testable AC
@@ -249,14 +249,14 @@ Nothing else. The graph is the artifact.
 - `<slug>` is derived from the epic title: lowercase, replace non-alphanumeric runs with `-`, trim leading/trailing `-`, cap at 40 characters
 
 The slug is recorded in epic metadata (step 2 of atomic commit) so anything else
-that needs the branch name reads it from beads — single source of truth.
+that needs the branch name reads it from beads - single source of truth.
 
 ## Refine mode specifics (`/plan --refine bd-x.N`)
 
 When invoked with `--refine`:
 
 1. Read the target task: `bd show bd-x.N --json`. Verify `requires_planning: true`.
-2. Skip stage 1 — design doc is inherited from the parent epic.
+2. Skip stage 1 - design doc is inherited from the parent epic.
 3. Run stages 2–4 against the target task's title and body as the problem statement.
 4. The preview block in stage 5 is scoped to the new children, not a new epic.
 5. Atomic commit order:
@@ -272,7 +272,7 @@ Refined bd-x.N into <N> tasks. Closed bd-x.N as superseded.
 
 ### Worked example (refine)
 
-Input — a `requires_planning: true` task created from a worker proposal:
+Input - a `requires_planning: true` task created from a worker proposal:
 
 ```
 bd-x.42  [requires_planning: true, area:perf]
@@ -281,7 +281,7 @@ bd-x.42  [requires_planning: true, area:perf]
          proposes a cache layer in front of the profile service."
 ```
 
-Output of `/plan --refine bd-x.42` — three children, original closed as superseded:
+Output of `/plan --refine bd-x.42` - three children, original closed as superseded:
 
 ```
 bd-x.42.1 [small, area:perf, kind:feature]
@@ -331,7 +331,7 @@ Note: children are parented to the original epic that contained bd-x.42, NOT to 
 ## One trap
 
 The seductive failure here is **the planner doing the implementation work in its
-own head before writing the task** — ACs phrased as "implement X using approach Y"
+own head before writing the task** - ACs phrased as "implement X using approach Y"
 instead of behavioral specifications.
 
 This robs workers of the freedom to find a better approach, and makes ACs

@@ -1,4 +1,4 @@
-"""Golden path — the canonical end-to-end user journey, as one test.
+"""Golden path - the canonical end-to-end user journey, as one test.
 
 Pinned shape:
   1. eng_get_status reports healthy
@@ -45,8 +45,8 @@ def test_golden_user_journey(mcp_client, repo_id, branch, target_symbol, target_
         None,
     )
     assert record, f"repo {repo_id} not in eng_list_repos"
-    assert record["active_branch"], "active_branch is empty — f8p regression"
-    assert record["last_promoted_sha"], "last_promoted_sha empty — c47 regression"
+    assert record["active_branch"], "active_branch is empty - f8p regression"
+    assert record["last_promoted_sha"], "last_promoted_sha empty - c47 regression"
 
     # ── 3. Structural lookup by name ─────────────────────────────────
     _, _, _, fs = mcp_client.call("eng_find_symbol", {
@@ -60,7 +60,7 @@ def test_golden_user_journey(mcp_client, repo_id, branch, target_symbol, target_
     _, _, _, fn = mcp_client.call("eng_get_file_nodes", {
         "repo_id": repo_id, "branch": branch, "file_path": target_file,
     })
-    assert fn.get("nodes"), f"get_file_nodes({target_file!r}) empty — 8ex regression"
+    assert fn.get("nodes"), f"get_file_nodes({target_file!r}) empty - 8ex regression"
 
     # ── 5. Call chain ────────────────────────────────────────────────
     ok5, text5, _, cc = mcp_client.call("eng_get_call_chain", {
@@ -70,7 +70,7 @@ def test_golden_user_journey(mcp_client, repo_id, branch, target_symbol, target_
     assert "included_staging" in cc
 
     # ── 6. Semantic search returns ranked results ────────────────────
-    # Do NOT assert the target symbol's exact node is in top-N — on a
+    # Do NOT assert the target symbol's exact node is in top-N - on a
     # real-sized corpus bare-name queries have flat score distributions
     # (test_alternative.py spells this out). The golden assertion is that
     # the API responds and returns ≥1 hit.
@@ -79,7 +79,7 @@ def test_golden_user_journey(mcp_client, repo_id, branch, target_symbol, target_
         "query": target_symbol, "k": 10,
     })
     assert (sem.get("results") or []), (
-        f"semantic({target_symbol!r}) returned 0 hits — sxa/249 regression suspected"
+        f"semantic({target_symbol!r}) returned 0 hits - sxa/249 regression suspected"
     )
 
     # ── 7. Blast radius (seed always included) ───────────────────────
@@ -105,7 +105,7 @@ def test_golden_user_journey(mcp_client, repo_id, branch, target_symbol, target_
     _, _, _, pr = mcp_client.call("eng_promote_repo", {"root_path": root})
     assert pr.get("git_sha") == record["last_promoted_sha"], (
         "post-promote SHA differs from pre-promote SHA without an intervening "
-        "commit — promotion is not idempotent"
+        "commit - promotion is not idempotent"
     )
 
     # ── 10. Findings + suppressions surface (may be empty) ───────────

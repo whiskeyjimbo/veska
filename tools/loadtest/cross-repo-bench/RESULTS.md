@@ -1,4 +1,4 @@
-# Cross-Repo p95 Bench — ResolveStubsForNode
+# Cross-Repo p95 Bench - ResolveStubsForNode
 
 Generated: 2026-05-13
 Platform: linux amd64
@@ -26,6 +26,6 @@ Runs: 1000
 
 OQ-S010 asked: is per-hop cross-repo resolve latency acceptable for interactive use?
 
-Measured p95 = 339µs — **GREEN**
+Measured p95 = 339µs - **GREEN**
 
-Result is within the GREEN threshold (< 50ms p95). OQ-S010 is **RESOLVED — no cache ADR required before M2**.
+Result is within the GREEN threshold (< 50ms p95). OQ-S010 is **RESOLVED - no cache ADR required before M2**.

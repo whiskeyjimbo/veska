@@ -19,7 +19,7 @@ type ShowParams struct {
 }
 
 // RunShow wraps eng_get_finding for `veska findings show`. finding_id is
-// globally unique; --repo/--branch are opt-in scoping only .
+// globally unique; --repo/--branch are opt-in scoping only.
 func RunShow(ctx context.Context, p ShowParams) error {
 	params := map[string]any{"finding_id": p.FindingID}
 	if p.RepoID != "" {

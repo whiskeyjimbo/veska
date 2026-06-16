@@ -18,7 +18,7 @@ import (
 
 // SupportedExtensions reports the file extensions GoParser parses. The cold
 // scan reads this (via Ingester.SupportedExtensions) to source its walk filter
-// from the wired parser instead of duplicating the list (solov2-xde2.7). Lives
+// from the wired parser instead of duplicating the list. Lives
 // here rather than in go_query.go to keep that file under its LOC ceiling.
 func (p *GoParser) SupportedExtensions() []string { return []string{".go"} }
 
@@ -30,20 +30,20 @@ func goExported(name string) bool {
 	return r != utf8.RuneError && unicode.IsUpper(r)
 }
 
-// GoParser, NewGoParser, and ParseFile live in go_query.go now (solov2-1yev
+// GoParser, NewGoParser, and ParseFile live in go_query.go now (
 // phase 5). What remains in this file are the helpers that the query-driven
 // parser still uses: receiver-binding extractors, struct-field-type analysis
 // for chained selectors, the local-var-origin scanner, the import-map
 // reader, and small utilities (signature/lineRange/hasErrorNode/nodeID/
 // goExported/parseInterfaceMethods). Each survives because the query path
 // is a thin shell over `runQuery` plus these structural walks — replacing
-// them with .scm queries would either fight tree-sitter's predicate model
+// them with.scm queries would either fight tree-sitter's predicate model
 // (export-flag propagation, ERROR-node skip) or duplicate work the
 // existing helpers do correctly. The legacy hand-rolled extractors
-// (parseFunctionDecl / extractCallEdges / collectAnonCalls / ...) were
+// (parseFunctionDecl / extractCallEdges / collectAnonCalls /.) were
 // deleted in this commit.
 
-// ----- node extraction helpers -----
+// node extraction helpers
 
 // parseInterfaceMethods walks an interface_type's method_spec children
 // and returns one KindMethod node per declared method. Each node is
@@ -52,7 +52,7 @@ func goExported(name string) bool {
 // interfaces (which appear as type_identifier under the interface body)
 // are skipped here — capturing them as inheritance would require a
 // new edge kind; the simpler win is just listing the declared methods
-// (solov2-9rc2 phase E v2).
+// ( v2).
 func parseInterfaceMethods(typeDeclNode *sitter.Node, src []byte, repoID, path, ifaceName string) []*domain.Node {
 	var out []*domain.Node
 	// type_declaration -> type_spec -> type (interface_type) -> method_specs
@@ -109,27 +109,26 @@ func parseInterfaceMethods(typeDeclNode *sitter.Node, src []byte, repoID, path, 
 // declaration; each spec may itself bind multiple identifiers
 // (`var a, b = 1, 2`). Underscore names (`_`) are skipped — they aren't
 // addressable.
-//
 // Captured for framework-config patterns where the API surface lives in
-// initialised package-scope vars: cobra `var rootCmd = &cobra.Command{...}`,
+// initialised package-scope vars: cobra `var rootCmd = &cobra.Command{.}`,
 // gin/echo router globals, viper config singletons. Without this pass the
 // graph misses the entire command tree of any cobra-based CLI and
 // eng_find_symbol returns empty for the var names users actually search
-// for .
+// for.
 
-// ----- CALLS extraction -----
+// CALLS extraction
 
 // callKeySep separates the parts of an in-file call-dedup key. A NUL byte
 // cannot appear in a node id or identifier, so it is unambiguous and shared by
-// both the resolved-edge (seen) and unresolved-call (seenU) maps .
+// both the resolved-edge (seen) and unresolved-call (seenU) maps.
 const callKeySep = "\x00"
 
-// Cross-package call handling : collectCallNames returns
-// package-qualified calls (pkg.Bar()) with callRef.pkg set. extractCallEdges
+// Cross-package call handling: collectCallNames returns
+// package-qualified calls (pkg.Bar) with callRef.pkg set. extractCallEdges
 // cannot bind them in-file, so it stashes them as UnresolvedCalls carrying the
-// qualifier; the promotion store resolves each against the file's import map —
+// qualifier; the promotion store resolves each against the file's import map
 // to a concrete CALLS edge for intra-module targets, or a cross-repo edge stub
-// for external modules (which the query-time resolver later binds, solov2-1gj).
+// for external modules (which the query-time resolver later binds).
 
 // extractCallEdges walks the entire AST looking for call_expression nodes inside
 // function/method bodies and emits EdgeCalls when the callee is known in the file.
@@ -138,17 +137,16 @@ const callKeySep = "\x00"
 // children, finds function_literal bodies anywhere inside them, and emits CALLS
 // edges from pkgNode (the file's package node) to every callable target in those
 // bodies. This makes cobra-style anonymous-function call patterns visible to
-// call_chain and blast_radius .
-//
+// call_chain and blast_radius.
 // Only identifier-form calls are bound here; package-qualified and selector
 
 // collectAnonCalls walks node looking for function_literal subtrees; for each
 // one it harvests identifier and package-qualified calls in the body and
 // attributes them to callerNode. Recursive so nested closures
-// (func(){ go func(){ Foo() }() }) are reached too.
+// (func{ go func{ Foo } }) are reached too.
 
 // extractReceiverBinding returns the receiver's parameter name and type
-// from a method_declaration receiver_node. For `func (s *Server) Foo()`,
+// from a method_declaration receiver_node. For `func (s *Server) Foo`,
 // returns ("s", "Server"). Either may be empty (anonymous receiver, or
 // no type identifier found); callers should skip when recvName is empty.
 func extractReceiverBinding(receiverNode *sitter.Node, src []byte) (name, typ string) {
@@ -182,41 +180,41 @@ func extractReceiverBinding(receiverNode *sitter.Node, src []byte) (name, typ st
 // keys for every call_expression we can resolve against the file's symbol
 // map. Three forms are recognised:
 //
-//   - identifier call:        foo()             → "foo"
-//   - Go selector call:       recvName.X()      → "recvType.X"   (only when
-//     recvName and recvType are non-empty and the operand is an identifier
-//     equal to recvName — Go uses selector_expression)
-//   - TS member call:         this.X() / r.X()  → "recvType.X"   (only when
-//     recvName and recvType are non-empty and the object text equals
-//     recvName — TS/TSX tree-sitter uses member_expression with a "this"
-//     literal child rather than an identifier, so matching by text covers
-//     both r.X() with recvName="r" and this.X() with recvName="this".
-//     solov2-gv6.)
+//	identifier call: foo → "foo"
+//	Go selector call: recvName.X → "recvType.X" (only when
+//	  recvName and recvType are non-empty and the operand is an identifier
+//	  equal to recvName — Go uses selector_expression)
+//	TS member call: this.X / r.X → "recvType.X" (only when
+//	  recvName and recvType are non-empty and the object text equals
+//	  recvName — TS/TSX tree-sitter uses member_expression with a "this"
+//	  literal child rather than an identifier, so matching by text covers
+//	  both r.X with recvName="r" and this.X with recvName="this".
+//	  )
 //
-// Package-qualified selector calls (pkg.Bar()) are returned with callRef.pkg
+// Package-qualified selector calls (pkg.Bar) are returned with callRef.pkg
 // set so promotion can resolve them via the import map (see the cross-package
-// note on extractCallEdges, solov2-xc51). Chained selectors (s.field.X()) whose
+// note on extractCallEdges). Chained selectors (s.field.X) whose
 // operand is not a plain identifier are still skipped.
 // callRef is one call site collected from a function/method body. name is the
 // callee identifier (or "Receiver.method" for a resolved receiver call); pkg is
-// the selector operand for a package-qualified call (the "cmd" in cmd.Execute()),
+// the selector operand for a package-qualified call (the "cmd" in cmd.Execute),
 // empty for plain or receiver-local calls.
 type callRef struct {
 	name string
 	pkg  string
 	// method marks a call site where the operand is a local variable
-	// whose origin is the named package — `v := pkg.New(...); v.Method()`.
+	// whose origin is the named package — `v:= pkg.New(.); v.Method`.
 	// pkg holds the originating package qualifier, name holds the method
 	// identifier. The receiver type is unknown to the parser; the
 	// promotion-time resolver binds by method name within pkg. Plain
-	// pkg.Foo() calls keep method=false .
+	// pkg.Foo calls keep method=false.
 	method bool
 	// line is the 1-indexed start line of the call_expression in the
 	// source file. Carried through to domain.Edge.SourceLine on
 	// resolved edges and domain.UnresolvedCall.SrcLine for the
 	// promotion-time resolver, so cross-repo edge attribution reports
 	// the actual call site instead of the caller node's declaration
-	// line (solov2-izh6.31). 0 = unknown.
+	// line. 0 = unknown.
 	line int
 }
 
@@ -225,7 +223,7 @@ type callRef struct {
 // (import foo "x/y") the key is the alias; otherwise it is the path's last
 // segment (import "x/y" -> "y"), which equals the package name in the common
 // case. Blank ("_") and dot (".") imports are skipped — neither yields a
-// usable qualifier .
+// usable qualifier.
 func extractImports(root *sitter.Node, src []byte) map[string]string {
 	imports := map[string]string{}
 	var walk func(*sitter.Node)
@@ -270,7 +268,7 @@ func lastPathSegment(path string) string {
 	return path
 }
 
-// ----- misc helpers -----
+// misc helpers
 
 func extractReceiverType(receiverNode *sitter.Node, src []byte) string {
 	// receiver is a parameter_list: ( receiverSpec )
@@ -320,12 +318,10 @@ func lineRange(node *sitter.Node) domain.LineRange {
 }
 
 // goParserCheck re-parses src with the standard library go/parser to validate
-// tree-sitter's claim that the file has a syntax error .
-//
+// tree-sitter's claim that the file has a syntax error.
 // Returns (ParseFailure, true) when go/parser ALSO rejects the file — in
 // that case the failure carries go/parser's line + first error message
 // (more precise than tree-sitter's generic "syntax error").
-//
 // Returns (_, false) when go/parser accepts the file — the tree-sitter
 // error is a false positive (the smacker grammar lags Go's spec; e.g. it
 // chokes on Go 1.26+ `new("string-literal")` conversions). Callers should
@@ -336,7 +332,7 @@ func goParserCheck(path string, src []byte) (domain.ParseFailure, bool) {
 	if err == nil {
 		return domain.ParseFailure{}, false
 	}
-	// go/parser returns a scanner.ErrorList ([]*scanner.Error) for syntax
+	// go/parser returns a scanner.ErrorList (*scanner.Error) for syntax
 	// errors; pull the earliest position+message for a precise finding.
 	if list, ok := err.(goscanner.ErrorList); ok && len(list) > 0 {
 		first := list[0]
@@ -395,15 +391,15 @@ func nodeID(repoID, path string, kind domain.NodeKind, name string) string {
 	return hex.EncodeToString(h.Sum(nil))
 }
 
-// collectCallNames is the legacy call-name extractor. solov2-1yev phase 5
+// collectCallNames is the legacy call-name extractor.
 // deleted every other recursive walker in this file in favour of the
 // query-driven Go parser (go_query.go) — collectCallNames survives because
 // ts.go (the TypeScript parser, not yet ported to queries) still depends
-// on it for class-method body call extraction. When solov2-brw6 lands
+// on it for class-method body call extraction. When lands
 // the TS port + the unified-binary refactor, this function moves with it
 // (or gets replaced by ts-side queries) and goes away here.
 func collectCallNames(node *sitter.Node, src []byte, recvName, recvType string, structFields map[string]map[string]fieldType) []callRef {
-	// solov2-9rc2: pre-scan local-var origins so `v := pkg.New(...); v.X()`
+	// pre-scan local-var origins so `v:= pkg.New(.); v.X`
 	// is recognised as a method call on a value from pkg instead of being
 	// silently dropped (the old branch treated the operand as if it were
 	// an import qualifier and lost the call at promotion).
@@ -420,7 +416,7 @@ func collectCallNames(node *sitter.Node, src []byte, recvName, recvType string, 
 				case "selector_expression":
 					operand := fn.ChildByFieldName("operand")
 					field := fn.ChildByFieldName("field")
-					// solov2-9rc2 phase E: chained selector recvName.field.Method.
+					// chained selector recvName.field.Method.
 					// v1 handles same-package field types (local symbol-map
 					// lookup); v2 emits a cross-package method-call ref so
 					// promotion's existing Phase C/D machinery binds it
@@ -461,17 +457,17 @@ func collectCallNames(node *sitter.Node, src []byte, recvName, recvType string, 
 						fld := string(src[field.StartByte():field.EndByte()])
 						switch {
 						case recvName != "" && recvType != "" && op == recvName:
-							// s.foo() inside a method on *Server -> Server.foo (local).
+							// s.foo inside a method on *Server -> Server.foo (local).
 							refs = append(refs, callRef{name: recvType + "." + fld})
 						case localOrigins[op] != "":
-							// v.Method() where v := pkg.New(...). solov2-9rc2:
+							// v.Method where v:= pkg.New(.).:
 							// emit as a method call referencing the originating
 							// package; the promotion-time resolver binds by name
 							// within that package.
 							refs = append(refs, callRef{name: fld, pkg: localOrigins[op], method: true})
 						default:
-							// pkg.Foo() — package-qualified; resolved at
-							// promotion via the import map . The
+							// pkg.Foo — package-qualified; resolved at
+							// promotion via the import map. The
 							// operand may also be a local variable; a
 							// non-import qualifier simply misses there.
 							refs = append(refs, callRef{name: fld, pkg: op})

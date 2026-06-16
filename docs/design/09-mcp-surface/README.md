@@ -1,6 +1,6 @@
 ---
 id: SOLO-09
-title: "MCP Surface — Tools, Naming, Transport"
+title: "MCP Surface - Tools, Naming, Transport"
 status: draft
 version: 0.1.0
 last_reviewed: 2026-05-17
@@ -9,7 +9,7 @@ verified_date: "2026-06-01"
 related: [SOLO-01, SOLO-03, SOLO-04, SOLO-08, SOLO-11, SOLO-12, SOLO-15]
 ---
 
-# SOLO-09 — MCP Surface
+# SOLO-09 - MCP Surface
 
 The MCP surface is how the editor and the AI agent talk to the
 daemon. 33 registered tools (as of M5), one transport, a flat
@@ -18,9 +18,9 @@ whole surface; there are no sub-files.
 
 > **Verification note (2026-05-18):** All 33 tools listed in §3
 > below are registered in `internal/infrastructure/mcp` as of M5
-> close. The record/repo tools — `eng_get_finding`,
+> close. The record/repo tools - `eng_get_finding`,
 > `eng_get_suppression`, `eng_close_suppression`, `eng_add_repo`,
-> `eng_remove_repo` — were registered by `solov2-nz2.7`;
+> `eng_remove_repo` - were registered by `solov2-nz2.7`;
 > `eng_find_changed_symbols` was added by `solov2-4j5`.
 
 ## 1. Transport
@@ -29,7 +29,7 @@ One transport, two listeners: Unix domain sockets at
 `~/.veska/cli.sock` and `~/.veska/mcp.sock`. Both are created
 by the daemon at startup with mode `0600` and ownership matching
 the user that started the daemon. JSON-RPC 2.0 over each. No
-TCP, no TLS, no auth — file-system permissions are the gate. If
+TCP, no TLS, no auth - file-system permissions are the gate. If
 either socket is missing or unreachable, the caller sees a clean
 connection error.
 
@@ -44,7 +44,7 @@ Claude Code, Codex, Zed) point at it; it proxies to
 There is no third transport. If a future ADR adds one, it is an
 ADR; we do not pre-shape the surface for it.
 
-### 1.3 Two surfaces on one wire — MCP tools vs. control RPC
+### 1.3 Two surfaces on one wire - MCP tools vs. control RPC
 
 Both sockets carry JSON-RPC 2.0 frames. Each frame's `method`
 string belongs to one of two namespaces; the single driving
@@ -86,7 +86,7 @@ are wire-clean per §6 and `wireclean`.
 
 A read-only CLI verb that *does* fit the tool shape (e.g.,
 `veska find-symbol`, `veska blast-radius`) reuses the matching
-`eng_*` tool over the same socket — no duplicate handler. CLI
+`eng_*` tool over the same socket - no duplicate handler. CLI
 verbs in the design tree are CLI-side verbs; their underlying
 RPC is whichever namespace fits.
 
@@ -106,7 +106,7 @@ eng_<verb>_<object>
   prefix; the verb plus the object is enough.
 
 Anything that does not fit one of the verbs in ADR-S0008 gets
-renamed until it does, or it is not a tool — it is a CLI command
+renamed until it does, or it is not a tool - it is a CLI command
 or a config flag.
 
 ## 3. Tool inventory
@@ -129,14 +129,14 @@ W = write; R = read.
 | `eng_get_file_nodes` | Nodes contained in a path. | yes | R |
 | `eng_search_semantic` | Vector search over node embeddings. Cross-repo via `repo` arg. | no | R |
 | `eng_search_similar` | Top-k similar nodes to a given node by embedding. | no | R |
-| `eng_get_blast_radius` | Blast radius for a node (promoted graph). Cross-repo via `repo` arg — your service signature change → who in your other indexed repos calls it. | no | R |
+| `eng_get_blast_radius` | Blast radius for a node (promoted graph). Cross-repo via `repo` arg - your service signature change → who in your other indexed repos calls it. | no | R |
 | `eng_get_dirty_blast_radius` | Blast radius including staging-area edits. | yes | R |
 | `eng_get_diff_blast_radius` | Blast radius union over a working-tree diff (staging vs promoted `HEAD`). | yes | R |
-| `eng_find_changed_symbols` | Symbols added/removed/modified between two git refs (`ref_a`=base, `ref_b`=tip). Both default to `HEAD~1`/`HEAD` (the last commit) when omitted; supplying only one is rejected. Parses the changed files at each ref on demand — no history substrate; never reads the promoted graph. Single-repo. | no | R |
+| `eng_find_changed_symbols` | Symbols added/removed/modified between two git refs (`ref_a`=base, `ref_b`=tip). Both default to `HEAD~1`/`HEAD` (the last commit) when omitted; supplying only one is rejected. Parses the changed files at each ref on demand - no history substrate; never reads the promoted graph. Single-repo. | no | R |
 
 ### 3.2 Task
 
-> **Parked — not currently exposed.** `eng_set_active_task`,
+> **Parked - not currently exposed.** `eng_set_active_task`,
 > `eng_get_active_task`, and `eng_get_task_history` are implemented and
 > unit-tested but are **deliberately not registered by the daemon** (see
 > the keep-alive reference in `internal/cli/daemon/mcptools.go`): there is
@@ -161,7 +161,7 @@ W = write; R = read.
 | `eng_get_finding` | One finding by id. | yes | R |
 | `eng_close_finding` | Close a finding with a reason. | yes | W |
 | `eng_reopen_finding` | Reverse a close. Carries the original close-reason in history. | yes | W |
-| `eng_suppress_finding` | Apply a suppression scoped to symbol / file / repo / finding-id. Optional `expires_at`. Optional `branch` (NULL ⇒ all branches; SOLO-04 §8.2). The agent must pass `branch` explicitly — there is no implicit default to avoid silent cross-branch silencing. | yes | W |
+| `eng_suppress_finding` | Apply a suppression scoped to symbol / file / repo / finding-id. Optional `expires_at`. Optional `branch` (NULL ⇒ all branches; SOLO-04 §8.2). The agent must pass `branch` explicitly - there is no implicit default to avoid silent cross-branch silencing. | yes | W |
 | `eng_list_suppressions` | List active suppressions in the current scope. | yes | R |
 | `eng_get_suppression` | One suppression by id. | yes | R |
 | `eng_close_suppression` | Terminate an active suppression now (sets `expires_at = now`). | yes | W |
@@ -191,10 +191,10 @@ W = write; R = read.
 | `eng_get_status` | Daemon health, child-proc state (Ollama up?), schema version, queue depths. The "is the daemon ready to serve this call?" check. | yes | R |
 | `eng_get_config` | The daemon's effective config (defaults merged with `~/.veska/config.toml`). Includes every configured outbound destination (LLM provider, OTLP endpoint, vuln-source URLs). **Secrets are redacted** (`***`). The `veska doctor config --show-secrets` CLI is the only path that returns them in clear. | yes | R |
 
-`doctor` is a CLI noun, not an MCP one — `veska doctor` (and its
+`doctor` is a CLI noun, not an MCP one - `veska doctor` (and its
 subcommands) is the operator surface; the two tools above are the
 agent's window into the same data. Diagnostics that *fix* things
-(repair, gc, and the planned embedder swap — NOT YET IMPLEMENTED,
+(repair, gc, and the planned embedder swap - NOT YET IMPLEMENTED,
 SOLO-03 §3.2) are CLI-only on purpose.
 
 Total: 33 registered tools.
@@ -203,8 +203,8 @@ Total: 33 registered tools.
 purpose, this section names it.
 
 The time-travel tool `eng_get_node_as_of` is not present. The
-substrate stores only the latest promoted state per branch — there
-is no per-commit history of node bodies — so a point-in-time node
+substrate stores only the latest promoted state per branch - there
+is no per-commit history of node bodies - so a point-in-time node
 query against an arbitrary SHA would require a stored-history
 substrate that does not exist. It lands when (and if) one does,
 behind an ADR. `eng_find_changed_symbols` (§3.1) sidesteps this:
@@ -253,7 +253,7 @@ the agent can see what import path failed to resolve. The
 synthetic-edge tag is not set (the target hasn't been indexed
 yet, so there is nothing to synthesize). When the target repo
 is later registered and promotions the symbol, the next query
-projects the same stub as a fully-tagged synthetic edge — no
+projects the same stub as a fully-tagged synthetic edge - no
 storage rewrite, just a different read-time view.
 
 **One-hop default.** Traversal tools (`eng_get_call_chain`,
@@ -320,12 +320,12 @@ or `not-used`.
 
 | Knob | Default | Ceiling |
 |---|---|---|
-| `MAX_TOKENS_DEFAULT` | 8 000 | — |
-| `MAX_TOKENS_CEILING` | — | 24 000 |
+| `MAX_TOKENS_DEFAULT` | 8 000 | - |
+| `MAX_TOKENS_CEILING` | - | 24 000 |
 
 A per-response token estimate is computed as the response is
 built using the configured `TokenEstimator` port (SOLO-05 §2.11).
-Default impl is `chars/4` — a deliberately approximate
+Default impl is `chars/4` - a deliberately approximate
 heuristic; documented as such so cap behaviour is interpretable
 against the estimator that produced it. The estimator's
 `ModelHint()` is recorded in the audit line for any truncated
@@ -350,7 +350,7 @@ Truncation rules:
 Responses that read from staging carry a single boolean,
 `included_staging: true`. Responses that read promoted state only
 omit the field (or set `false`). That is the entire freshness
-surface: one process, one daemon, one user — there are not
+surface: one process, one daemon, one user - there are not
 multiple coherence levels worth distinguishing on the wire.
 
 ```jsonc
@@ -364,7 +364,7 @@ A tool that *can* read staging may return `included_staging:
 false` for an individual response (e.g. staging-overlay read
 failed; result reflects promoted state only). When that happens
 the response also sets `degraded_reasons: ["staging_unavailable"]`
-so callers see *why* the staging view is missing — the boolean
+so callers see *why* the staging view is missing - the boolean
 alone would conflate "no staging activity for this query" with
 "staging was unreachable."
 
@@ -406,17 +406,17 @@ each entry is informative to the operator." Common codes:
 |---|---|---|
 | `vector_index_stale` | `{minutes: int}` | Embedding queue lag. |
 | `pipeline_queue_depth` | `{depth: int}` | post-promotion queue queue depth. |
-| `memory_pressure` | — | Daemon is over its memory soft-cap. |
+| `memory_pressure` | - | Daemon is over its memory soft-cap. |
 | `response_truncated` | `{limit: "tokens" \| "rows"}` | Output hit a budget. |
-| `staging_unavailable` | — | Staging-overlay read failed; promoted-only result. |
+| `staging_unavailable` | - | Staging-overlay read failed; promoted-only result. |
 | `staging_reparsing` | `{path: string}` | Large-file fallback active for `path` (SOLO-11 §1, SOLO-13 §3.1b). |
 | `embedding_pending` | `{node_count: int}` (optional) | Affected nodes' embeddings are still in the post-promotion queue. |
 | `embedding_failed` | `{node_count: int}` (optional) | Affected nodes' embeddings exhausted retries. User retries via `veska doctor post-promotion-queue retry --kind=embed`. (SOLO-08 §3.4, ADR-S0004.) |
-| `embedder_offline_lexical_fallback` | — | `eng_search_semantic` returned BM25 from FTS5 (SOLO-08 §3.3) instead of vector recall. The agent should not silently switch reasoning modes. |
+| `embedder_offline_lexical_fallback` | - | `eng_search_semantic` returned BM25 from FTS5 (SOLO-08 §3.3) instead of vector recall. The agent should not silently switch reasoning modes. |
 | `post_promotion_queue_deferred` | `{work_kind: string, count: int}` | Rows in `state='deferred'` because queue depth was at high-water at promotion time (SOLO-08 §3.4). |
 | `startup_resync` | `{repos_pending: int}` | Daemon is replaying `git log <last_promoted_sha>..HEAD` (SOLO-03 §5.7). |
-| `wake_reconciling` | `wake_reconciling_repos: [string]` | A repo touched by the query has an in-flight suspend/wake mtime sweep (SOLO-03 §5.2). Emitted by `eng_find_symbol`, `eng_get_call_chain`, `eng_get_blast_radius`, `eng_get_context_pack`, `eng_search_semantic`. Per-repo: a query against a settled repo is NOT flagged while another repo sweeps. Fires on empty AND non-empty results — a populated response may still be momentarily stale mid-re-parse. Sweeps run in parallel, capped by `[watcher].wake_concurrency`. |
-| `embedder_swapping` | — | **Planned (NOT YET IMPLEMENTED).** Would signal the daemon is mid-`veska embedder swap`; no swap path exists today (SOLO-03 §3.2). |
+| `wake_reconciling` | `wake_reconciling_repos: [string]` | A repo touched by the query has an in-flight suspend/wake mtime sweep (SOLO-03 §5.2). Emitted by `eng_find_symbol`, `eng_get_call_chain`, `eng_get_blast_radius`, `eng_get_context_pack`, `eng_search_semantic`. Per-repo: a query against a settled repo is NOT flagged while another repo sweeps. Fires on empty AND non-empty results - a populated response may still be momentarily stale mid-re-parse. Sweeps run in parallel, capped by `[watcher].wake_concurrency`. |
+| `embedder_swapping` | - | **Planned (NOT YET IMPLEMENTED).** Would signal the daemon is mid-`veska embedder swap`; no swap path exists today (SOLO-03 §3.2). |
 | `vec0_ceiling_warn` | `{headroom_ratio: float}` | Approaching the vec0 substrate ceiling (SOLO-13 §3.3.1). |
 | `vec0_ceiling_exceeded` | `{headroom_ratio: float}` | Past the ceiling; `semantic_search` p95 budget likely missed. |
 
@@ -446,8 +446,8 @@ shape only:
 }
 ```
 
-`veska_code` is an open vocabulary — new codes can land next
-to new code paths without ceremony — but every code MUST appear
+`veska_code` is an open vocabulary - new codes can land next
+to new code paths without ceremony - but every code MUST appear
 in SOLO-16 before it ships. Tooling MUST tolerate unknown
 `veska_code` values (forward compat). The contract callers
 rely on is the envelope shape; the `veska_code` is the key
@@ -457,7 +457,7 @@ into SOLO-16's catalogue.
 
 The daemon enters several states where it is up but not fully
 serving: startup-resync (SOLO-03 §5.7), wake-reconcile (§5.2),
-embedder-swap (§3.2; Planned — NOT YET IMPLEMENTED), and
+embedder-swap (§3.2; Planned - NOT YET IMPLEMENTED), and
 crash-loop-recovery (§5.6). Editor
 authors integrating MCP need to know what tools return in each
 state so the surface can render usefully rather than appear
@@ -467,7 +467,7 @@ broken.
 |---|---|---|---|
 | **Startup-resync** running for ≥1 repo | promoted (pre-resync) data with `degraded_reasons: ["startup_resync"]`; `eng_get_status` carries `commits_total`/`commits_done` per repo | `ErrDaemonStarting` with the same payload; caller may retry | Non-blocking progress chip ("Veska catching up: 5/12 commits"); poll `eng_get_status` every 2s; show read results with a "catching up" badge |
 | **Wake-reconcile** running | promoted + (pre-sweep) staging with `degraded_reasons: ["wake_reconciling"]` + `wake_reconciling_repos` when a *queried* repo is mid-sweep (per-repo; other repos' queries are unaffected) | succeed normally; the sweep doesn't write | One-line non-blocking notice ("Veska re-syncing after sleep"); reads usable; clears within seconds |
-| **Embedder-swap** running *(Planned — NOT YET IMPLEMENTED; no swap path exists today, SOLO-03 §3.2)* | promoted reads succeed; `eng_search_semantic` returns FTS5 lexical fallback with `degraded_reasons: ["embedder_swapping", "embedder_offline_lexical_fallback"]` | refused with `ErrUpstreamUnavailable`, `data.context.cause = "embedder_swapping"`; caller may retry once the swap state clears | Show "lexical-only search" badge; allow other reads |
+| **Embedder-swap** running *(Planned - NOT YET IMPLEMENTED; no swap path exists today, SOLO-03 §3.2)* | promoted reads succeed; `eng_search_semantic` returns FTS5 lexical fallback with `degraded_reasons: ["embedder_swapping", "embedder_offline_lexical_fallback"]` | refused with `ErrUpstreamUnavailable`, `data.context.cause = "embedder_swapping"`; caller may retry once the swap state clears | Show "lexical-only search" badge; allow other reads |
 | **Crash-loop tripped** | shim returns `ErrDaemonNotRunning`; `data.context.cli_command` = `veska doctor reset-crash-loop` | same | Surface the `cli_command` as a copyable block; same paste-handoff pattern as the human-action gate (SOLO-10 §3.3) |
 | **Refuse-to-start** (usearch native library missing, schema mismatch, unsupported FS, etc.; SOLO-03 §5.8) | shim returns `ErrDaemonNotRunning` | same | Render `data.context.last_error` with an "open log file" affordance |
 
@@ -501,7 +501,7 @@ pool (SOLO-11 §10, ADR-S0011).
 Every write tool accepts an optional `max_wait_ms: <int>`. The
 default is `[mcp].write_max_wait_ms` (CONFIG-SURFACE; default
 3000 ms for ordinary writes, 30000 ms for `eng_add_repo` /
-`eng_remove_repo` whose work is cold-scan-bounded — those two
+`eng_remove_repo` whose work is cold-scan-bounded - those two
 tools override at the handler level). When the deadline fires
 the tool returns `ErrBusy` with `data.context.cause` set to
 `"seal_in_flight"` or `"pool_wait"` and the corresponding
@@ -518,8 +518,8 @@ interrupted.
 ### 5.1 `eng_find_owner`
 
 Veska has one user but its repos have many contributors. Owner
-resolution combines two signals — the rules-declared owner and
-the empirical owner — and returns both, because they are routinely
+resolution combines two signals - the rules-declared owner and
+the empirical owner - and returns both, because they are routinely
 not the same person:
 
 ```jsonc
@@ -559,7 +559,7 @@ The two signals are deliberately not merged. CODEOWNERS says "who
 should review"; blame says "who actually knows this code."
 Reviewers want both; agents want both.
 
-### 5.2 `eng_get_context_pack` — bundle schema
+### 5.2 `eng_get_context_pack` - bundle schema
 
 `eng_get_context_pack` returns a single token-bounded JSON bundle
 of the context an agent needs to start work. It shipped in M4
@@ -570,10 +570,10 @@ of the context an agent needs to start work. It shipped in M4
 passes **exactly one** of `symbol` or `task_id`. Passing both, or
 neither, is an `InvalidParams` error.
 
-- **`{symbol}` mode** (`mode: "symbol"`) — the symbol name is
+- **`{symbol}` mode** (`mode: "symbol"`) - the symbol name is
   resolved to its nodes (`FindNodes`); the relevant-nodes section
   is those seeds plus their blast radius.
-- **`{task_id}` mode** (`mode: "task"`) — `domain.Task` carries no
+- **`{task_id}` mode** (`mode: "task"`) - `domain.Task` carries no
   graph link, so the seed set is derived from the repo's
   **working-tree diff vs HEAD**: every changed file is mapped to
   the nodes it contains (`NodesInFile`), and the relevant-nodes
@@ -586,22 +586,22 @@ derived from the resulting node set.
 `branch`, `mode`, `query` (the symbol or task ID), four content
 sections, and the budget fields below:
 
-- `nodes` — relevant nodes (seeds + blast radius), BFS-distance
+- `nodes` - relevant nodes (seeds + blast radius), BFS-distance
   ordered. Each: `node_id`, `name`, `path`, `kind`, `distance`,
   `seed`, `has_open_finding`.
-- `recent_commits` — distinct commits that touched the relevant
+- `recent_commits` - distinct commits that touched the relevant
   nodes' files within the last 30 days, newest first. Each:
   `hash`, `author`, `when`, `subject`. The file walk is capped at
   25 files to bound git latency.
-- `open_findings` — node IDs carrying an open finding. Each:
+- `open_findings` - node IDs carrying an open finding. Each:
   `node_id`.
-- `tasks` — the repo's active task, if any. Each: `task_id`,
+- `tasks` - the repo's active task, if any. Each: `task_id`,
   `repo_id`, `tracker`, `tracker_ref`, `title`, `active`.
 
 **Token budget.** The bundle is clipped to a budget
 (`token_budget`; default `DefaultTokenBudget = 8192`, overridable
 at construction via `WithTokenBudget`). The estimate is
-deterministic — `len(json_bytes) / 4` — and reported as
+deterministic - `len(json_bytes) / 4` - and reported as
 `estimated_tokens`. When the bundle is over budget, the
 lowest-priority sections are dropped or clipped first, in order:
 **Tasks → OpenFindings → RecentCommits → Nodes** (Tasks is
@@ -649,18 +649,18 @@ port or feature lands, and folded into something else.
 
 ### 8.1 Permanently dead
 
-These won't return — either they belong upstream of a local
+These won't return - either they belong upstream of a local
 daemon, or the daemon's own design replaces them.
 
-- `eng_get_pr_context` — PR review state lives in GitHub/GitLab. A separate MCP server (`gh`, `glab`) is the right home.
-- `eng_get_session_recovery` — daemon restart already resumes from promoted state.
-- `eng_describe_platform`, `eng_get_platform_health` — replaced by `eng_get_status`.
-- `eng_estimate_task_complexity` — one-call derivation from `eng_get_dirty_blast_radius`.
-- `eng_get_diff_test_impact` — one-call derivation from `eng_get_diff_blast_radius` filtered by `TESTS` edges.
-- `eng_explain_edge` — debug tool; lives in `veska doctor` logs.
-- `eng_list_open_todos` — folded into `eng_find_todos` with a `scope` arg.
-- `eng_onboard_task` — replaced by `eng_get_context_pack`.
-- `eng_get_node_as_of` — historical-query tool. Substrate stores latest-promoted only; no per-commit history. Returns when (and if) a history substrate ships. (`eng_find_changed_symbols`, originally deferred here, was reactivated by `solov2-4j5` — it parses two refs on demand and needs no substrate; it now lives in §3.1.)
+- `eng_get_pr_context` - PR review state lives in GitHub/GitLab. A separate MCP server (`gh`, `glab`) is the right home.
+- `eng_get_session_recovery` - daemon restart already resumes from promoted state.
+- `eng_describe_platform`, `eng_get_platform_health` - replaced by `eng_get_status`.
+- `eng_estimate_task_complexity` - one-call derivation from `eng_get_dirty_blast_radius`.
+- `eng_get_diff_test_impact` - one-call derivation from `eng_get_diff_blast_radius` filtered by `TESTS` edges.
+- `eng_explain_edge` - debug tool; lives in `veska doctor` logs.
+- `eng_list_open_todos` - folded into `eng_find_todos` with a `scope` arg.
+- `eng_onboard_task` - replaced by `eng_get_context_pack`.
+- `eng_get_node_as_of` - historical-query tool. Substrate stores latest-promoted only; no per-commit history. Returns when (and if) a history substrate ships. (`eng_find_changed_symbols`, originally deferred here, was reactivated by `solov2-4j5` - it parses two refs on demand and needs no substrate; it now lives in §3.1.)
 
 ### 8.2 Deferred until a port or feature lands
 
@@ -672,11 +672,11 @@ These come back when a real trigger fires:
 | `eng_get_coverage_for_node`, `eng_list_uncovered` | `coverage-source` port lands. |
 | `eng_run_agent_specialty`, `eng_explain_agent_verdict`, `eng_get_agent_pr_preflight` | Review pipeline ships (M5). |
 | `eng_render_wiki`, `eng_get_wiki_page`, `eng_search_wiki`, `eng_list_wiki_drift` | LLM synthesis returns to wiki. |
-| `eng_find_dead_symbols`, `eng_rank_symbols`, `eng_risk_score`, `eng_find_duplicate_clusters`, `eng_explain_analysis_finding`, `eng_run_analysis_sweep` | Analysis port lands (likely M3 — `risk_score` is a real product feature). |
-| `eng_list_tracker_issues`, `eng_get_tracker_issue`, `eng_create_tracker_issue`, `eng_link_tracker_issue`, `eng_update_tracker_issue`, `eng_close_tracker_issue` | Tracker read/write through MCP — likely M2/M3 once the agent flow needs it locally. |
+| `eng_find_dead_symbols`, `eng_rank_symbols`, `eng_risk_score`, `eng_find_duplicate_clusters`, `eng_explain_analysis_finding`, `eng_run_analysis_sweep` | Analysis port lands (likely M3 - `risk_score` is a real product feature). |
+| `eng_list_tracker_issues`, `eng_get_tracker_issue`, `eng_create_tracker_issue`, `eng_link_tracker_issue`, `eng_update_tracker_issue`, `eng_close_tracker_issue` | Tracker read/write through MCP - likely M2/M3 once the agent flow needs it locally. |
 | `eng_scan_secrets`, `eng_explain_secrets`, `eng_purge_secrets_mirror` | Secrets-scanner port through MCP (currently CLI-only). |
 | `eng_list_contracts` | Contracts entity returns. |
-| `eng_get_review_summary` | Once tracker read tools land — "what's the state of work in flight" is a real solo question on a multi-contributor team. |
+| `eng_get_review_summary` | Once tracker read tools land - "what's the state of work in flight" is a real solo question on a multi-contributor team. |
 | `eng_find_tasks_touching` | Same trigger as tracker read tools. Useful in a team: "is anyone else's open ticket touching this file?" |
 
 ### 8.3 Renamed or replaced
@@ -700,14 +700,14 @@ eng_close_finding[severity >= high]   requires actor_kind = 'human'
 ```
 
 `Severity` is ordered (`info < low < medium < high < critical`;
-SOLO-04 §8.1) — the gate fires for `high` and `critical`.
+SOLO-04 §8.1) - the gate fires for `high` and `critical`.
 
 Every other tool runs unconditionally for the daemon's user. The
 gate is enforced server-side; failure returns
 `ErrHumanActionRequired` with a `cli_command` payload (§4.6) so the
 editor can render the close as a one-paste handoff (SOLO-10 §3.3).
 
-`actor_kind` is set by the daemon from the accepting listener —
+`actor_kind` is set by the daemon from the accepting listener -
 CLI socket → `'human'`, MCP socket → `'agent'`, daemon-internal
 goroutine → `'system'`. A typical MCP client cannot supply or
 override it.

@@ -6,12 +6,10 @@ import "context"
 // reverse and forward adjacency queries over the edges table for callers
 // that need to walk the graph without loading it entirely into memory
 // (e.g. the blast-radius BFS service).
-//
 // Both methods take a batch of node IDs and return a map keyed by the
 // queried node ID. IDs with no matching edges are returned with an
 // empty/nil slice rather than omitted from the map — callers can rely
 // on a present key meaning "queried".
-//
 // Implementations must scope the read to (repoID, branch); edges are
 // only meaningful within a branch.
 type EdgeReader interface {

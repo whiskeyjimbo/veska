@@ -12,7 +12,7 @@ func tref(name, file string) coverage.TestRef {
 }
 
 // TestBuildSelectionReport_GroupsAndAnchors asserts covering tests are grouped
-// per package and rendered as an anchored `^(...)$` -run command.
+// per package and rendered as an anchored `^(.)$` -run command.
 func TestBuildSelectionReport_GroupsAndAnchors(t *testing.T) {
 	tests := []coverage.TestRef{
 		tref("TestB", "pkg/a/a_test.go"),

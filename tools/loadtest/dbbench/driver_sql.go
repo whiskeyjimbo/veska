@@ -12,7 +12,7 @@ import (
 )
 
 // sqlBench is the shared Bench implementation for any database/sql-backed
-// driver. The driver-specific files supply only Name() and the registered
+// driver. The driver-specific files supply only Name and the registered
 // driver name passed to sql.Open.
 type sqlBench struct {
 	name      string

@@ -1,30 +1,27 @@
-// go_frameworks.go — framework-aware Go extraction (solov2-crn7, -qqqy).
-//
+// go_frameworks.go — framework-aware Go extraction (, -qqqy).
 // The generic symbol pass (go_query.go + symbols.scm) sees a framework
-// command as an opaque `var x = &pkg.Type{...}` KindVariable named after
+// command as an opaque `var x = &pkg.Type{.}` KindVariable named after
 // the Go var. This pass recognises the framework struct-literals via
 // frameworks.scm and promotes them to KindCommand nodes named by the
 // framework's command word, then builds the command tree as CONTAINS
-// edges so call_chain / blast_radius walk it .
-//
+// edges so call_chain / blast_radius walk it.
 // Frameworks:
-//   - spf13/cobra — `var rootCmd = &cobra.Command{Use: ...}` named by the
+//   spf13/cobra — `var rootCmd = &cobra.Command{Use:.}` named by the
 //     first word of Use:; `parent.AddCommand(child)` → CONTAINS.
-//   - urfave/cli  — `var app = &cli.App{Name: ..., Commands: []*cli.Command
-//     {...}}` named by Name:; each Commands-slice literal → a CONTAINS
-//     child (solov2-qqqy).
-//   - gin/echo/chi — `router.METHOD("/path", handler)` → a KindRoute node
+//   urfave/cli — `var app = &cli.App{Name:., Commands: *cli.Command
+//     {.}}` named by Name:; each Commands-slice literal → a CONTAINS
+//     child.
+//   gin/echo/chi — `router.METHOD("/path", handler)` → a KindRoute node
 //     named "METHOD /path" plus a ROUTES route→handler reference, emitted
 //     as a domain.UnresolvedCall{EdgeKind: EdgeRoutes} so the handler binds
 //     through the same package-wide promotion resolver as a plain call
-//     (solov2-ketg). The route is named with the method so GET and POST on
+//     The route is named with the method so GET and POST on
 //     one path don't collide on the (repo,path,kind,name) promotion PK.
-//   - alecthomas/kong — commands are struct FIELDS with `cmd:""` tags, not
+//   alecthomas/kong — commands are struct FIELDS with `cmd:""` tags, not
 //     composite literals; a `cmd:""`-tagged field → KindCommand named by the
 //     dasherized field name (or a `name:` tag), nested via the field's struct
 //     type (a command struct's own cmd fields are its subcommands). Runs as
 //     its own struct-tag walk, independent of the @fwvar.* literal dispatch
-//     (solov2-su6d).
 
 package treesitter
 
@@ -50,9 +47,9 @@ const (
 )
 
 // ginEchoImportPrefixes / chiImportPrefix are the HTTP-router module paths
-// whose router.METHOD(...) calls we promote to KindRoute nodes. echo and
+// whose router.METHOD(.) calls we promote to KindRoute nodes. echo and
 // chi version their module path (…/echo/v4, …/chi/v5), so these match by
-// prefix (solov2-ketg).
+// prefix.
 var ginEchoImportPrefixes = []string{
 	"github.com/gin-gonic/gin",
 	"github.com/labstack/echo",
@@ -65,7 +62,7 @@ const chiImportPrefix = "github.com/go-chi/chi"
 // route node name. They are kept per-framework, not flattened, because
 // chi's title-case verbs collide with extremely common Go method names
 // (cfg.Get, client.Post) — accepting them only when chi is the imported
-// router keeps a gin/echo-only file from mistaking client.Post(...) for a
+// router keeps a gin/echo-only file from mistaking client.Post(.) for a
 // route. This is the verb half of the precision gate; a field absent from
 // the active set drops the selector-call match.
 var upperVerbs = map[string]string{
@@ -84,14 +81,14 @@ var titleVerbs = map[string]string{
 // KindCommand nodes, a binding from the Go var identifier to its command
 // node (used to skip the generic var extraction, to resolve AddCommand
 // arguments, and to keep anon-call attribution on the command rather than
-// the package — solov2-zuvl), and the command-tree CONTAINS edges.
+// the package), and the command-tree CONTAINS edges.
 type frameworkCommands struct {
 	nodes []*domain.Node
 	byVar map[string]*domain.Node
 	edges []*domain.Edge
 	// unresolved carries route→handler references (KindRoute → handler)
 	// the promoter binds against the package-wide symbol map, emitting a
-	// ROUTES edge instead of CALLS (solov2-ketg). Routes don't appear in
+	// ROUTES edge instead of CALLS. Routes don't appear in
 	// byVar — no Go identifier references a route node.
 	unresolved []domain.UnresolvedCall
 }
@@ -144,13 +141,12 @@ func extractFrameworkCommands(root *sitter.Node, src []byte, imports map[string]
 	}
 	// Routes are independent of the command tree: each router.METHOD(path,
 	// handler) call becomes a KindRoute node + a ROUTES route→handler
-	// UnresolvedCall, resolved at promotion (solov2-ketg).
+	// UnresolvedCall, resolved at promotion.
 	if ginEchoOK || chiOK {
 		fw.addRoutes(matches, p)
 	}
 	// kong models commands as struct fields with `cmd:""` tags, not
 	// composite literals, so it runs independently of the @fwvar.* dispatch
-	// (solov2-su6d).
 	if kongOK {
 		fw.addKongCommands(matches, p)
 	}
@@ -193,7 +189,7 @@ func (c *frameworkCommands) dispatchVar(m queryMatch, p fwParse) {
 		}
 	case p.urfaveOK && typ == "Command" && isUrfavePkg(pkg, p.imports):
 		// urfave by-reference subcommand: `var addCmd = &cli.Command{Name:
-		// ...}`, linked into an App's Commands slice by identifier (resolved
+		// }`, linked into an App's Commands slice by identifier (resolved
 		// in urfaveRefContainsEdges). Named by Name:.
 		if n, varName := buildNamedCommandVar(m, p.src, p.repoID, p.path, "Name"); n != nil {
 			c.add(n, varName)
@@ -265,8 +261,8 @@ func buildNamedCommandVar(m queryMatch, src []byte, repoID, path, nameKey string
 	return newCommandNode(nodeID(repoID, path, domain.KindCommand, varName), cmdName, decl, src, path), varName
 }
 
-// addUrfaveApp promotes a `var app = &cli.App{Name: ..., Commands: []*cli.
-// Command{...}}` match: the app itself becomes a KindCommand named by
+// addUrfaveApp promotes a `var app = &cli.App{Name:., Commands: *cli.
+// Command{.}}` match: the app itself becomes a KindCommand named by
 // Name:, and every literal in its Commands slice becomes a child
 // KindCommand (named by its own Name:) with an app→child CONTAINS edge.
 // Subcommands are anonymous literals, so their node IDs are disambiguated
@@ -306,7 +302,7 @@ func (c *frameworkCommands) addUrfaveApp(m queryMatch, src []byte, repoID, path 
 }
 
 // urfaveCommandsBody returns the literal_value listing an App's
-// subcommands — the body of its `Commands: []*cli.Command{ ... }` field —
+// subcommands — the body of its `Commands: *cli.Command{. }` field
 // or nil when there is no Commands slice.
 func urfaveCommandsBody(body *sitter.Node, src []byte) *sitter.Node {
 	commands := keyedElementValue(body, src, "Commands")
@@ -316,7 +312,7 @@ func urfaveCommandsBody(body *sitter.Node, src []byte) *sitter.Node {
 	return commands.ChildByFieldName("body")
 }
 
-// urfaveSubcommandLiterals returns the inline `{Name: ...}` literal_value
+// urfaveSubcommandLiterals returns the inline `{Name:.}` literal_value
 // nodes in an App's Commands slice (the anonymous-literal idiom).
 func urfaveSubcommandLiterals(body *sitter.Node, src []byte) []*sitter.Node {
 	inner := urfaveCommandsBody(body, src)
@@ -338,7 +334,7 @@ func urfaveSubcommandLiterals(body *sitter.Node, src []byte) []*sitter.Node {
 }
 
 // urfaveSubcommandRefs returns the identifier names in an App's Commands
-// slice (the by-reference idiom `Commands: []*cli.Command{addCmd}`),
+// slice (the by-reference idiom `Commands: *cli.Command{addCmd}`),
 // resolved to command nodes by urfaveRefContainsEdges.
 func urfaveSubcommandRefs(body *sitter.Node, src []byte) []string {
 	inner := urfaveCommandsBody(body, src)
@@ -360,7 +356,7 @@ func urfaveSubcommandRefs(body *sitter.Node, src []byte) []string {
 }
 
 // urfaveRefContainsEdges resolves the by-reference subcommands of every
-// urfave App (`Commands: []*cli.Command{addCmd}`) to app→child CONTAINS
+// urfave App (`Commands: *cli.Command{addCmd}`) to app→child CONTAINS
 // edges via byVar. Run as a second pass so a subcommand var declared
 // after its App still resolves. Dedup is per (app, child).
 func urfaveRefContainsEdges(matches []queryMatch, p fwParse, byVar map[string]*domain.Node) []*domain.Edge {
@@ -404,7 +400,7 @@ func anyPrefixImported(imports map[string]string, prefixes []string) bool {
 // routeMethod resolves a router method's field name to its canonical
 // upper-case HTTP method, accepting upper-case verbs only when gin/echo is
 // the imported router and title-case verbs only when chi is — so a
-// gin-only file's client.Post(...) or a chi-only file's resp.GET(...) is
+// gin-only file's client.Post(.) or a chi-only file's resp.GET(.) is
 // not mistaken for a route. ok=false when the field is not an active verb.
 func routeMethod(field string, ginEchoOK, chiOK bool) (string, bool) {
 	if ginEchoOK {
@@ -430,7 +426,7 @@ func routeMethod(field string, ginEchoOK, chiOK bool) (string, bool) {
 // gin/echo file still can't be told apart from a real route (an accepted
 // v1 limitation). Group/Route/Mount and middleware nesting are deferred;
 // only flat r.METHOD(path, handler) is matched. Dedup is per route name
-// within the file (solov2-ketg).
+// within the file.
 func (c *frameworkCommands) addRoutes(matches []queryMatch, p fwParse) {
 	seen := map[string]bool{}
 	for _, m := range matches {
@@ -499,7 +495,7 @@ func routeArgs(argsNode *sitter.Node, src []byte) (string, *sitter.Node) {
 // edge is emitted). Func-literal and other handler forms produce no edge
 // (ok=false), mirroring the deferred urfave Action-closure case. The call
 // site's line is carried so the resolved edge attributes to the route
-// registration (solov2-ketg).
+// registration.
 func routeHandlerUnresolved(routeID domain.NodeID, handler, callNode *sitter.Node, src []byte) (domain.UnresolvedCall, bool) {
 	uc := domain.UnresolvedCall{CallerID: routeID, EdgeKind: domain.EdgeRoutes, SrcLine: lineRange(callNode).Start}
 	switch handler.Type() {
@@ -521,7 +517,7 @@ func routeHandlerUnresolved(routeID domain.NodeID, handler, callNode *sitter.Nod
 }
 
 // newRouteNode builds a KindRoute node named "METHOD /path", with lines +
-// raw content from the router.METHOD(...) call expression.
+// raw content from the router.METHOD(.) call expression.
 func newRouteNode(id, name string, callNode *sitter.Node, src []byte, path string) *domain.Node {
 	n, err := domain.NewNode(
 		domain.NodeSpec{ID: id, Path: path, Name: name, Kind: domain.KindRoute},
@@ -591,7 +587,7 @@ func (s *containsEdgeSet) add(parent, child domain.NodeID) {
 	}
 }
 
-// cobraContainsEdges turns every parent.AddCommand(child, ...) call whose
+// cobraContainsEdges turns every parent.AddCommand(child,.) call whose
 // parent and child(ren) both resolve to command nodes into parent→child
 // CONTAINS edges. Dedup is per (parent, child) so repeated registrations
 // produce one edge. Confidence is Definite — it's a literal wire-up, not
@@ -643,7 +639,7 @@ type kongField struct {
 // top-level commands (nothing has the CLI struct as a field type). Two
 // passes over the matches: build every command + the type→command index
 // first (a child struct may be declared before or after its parent), then
-// wire CONTAINS (solov2-su6d). v1 covers named fields with a plain (or
+// wire CONTAINS. v1 covers named fields with a plain (or
 // pointer) struct type; embedded/anonymous-struct command fields are
 // deferred.
 func (c *frameworkCommands) addKongCommands(matches []queryMatch, p fwParse) {

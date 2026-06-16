@@ -17,7 +17,6 @@ var validActorKinds = map[domain.ActorKind]struct{}{
 // ValidateAuditEntry returns an error if e is missing any required field or
 // carries an unrecognised ActorKind. Call this before passing an AuditEntry to
 // ports.AuditWriter.Write to guarantee the audit log is never incomplete.
-//
 // Required fields: RepoID, ActorID (non-empty), ActorKind (valid enum value), Op.
 func ValidateAuditEntry(e ports.AuditEntry) error {
 	if e.RepoID == "" {

@@ -8,7 +8,7 @@ verified: true
 verified_date: "2026-05-17"
 ---
 
-# ADR-S0006 — V2.0 ships five EdgeKinds
+# ADR-S0006 - V2.0 ships five EdgeKinds
 
 > **Factual-divergence note (2026-05-16).** The shipped code in
 > `internal/core/domain/edge.go` defines **six** `EdgeKind`
@@ -16,7 +16,7 @@ verified_date: "2026-05-17"
 > `SIMILAR_TO`, added in M3 for the auto-link pipeline. `SIMILAR_TO`
 > is a proposed semantic-similarity edge written with
 > `Confidence=Unresolved` and paired with a `source_layer='semantic'`
-> Finding — it is not a tree-sitter-parsed structural edge, so it
+> Finding - it is not a tree-sitter-parsed structural edge, so it
 > does not change the parser-cost reasoning below. This ADR records
 > the structural-edge decision and is not rewritten; the
 > `SIMILAR_TO` addition needs its own amending ADR. Until then, treat
@@ -28,18 +28,18 @@ verified_date: "2026-05-17"
 The prior V2 design ratified an additive set of fifteen EdgeKinds
 (seven structural, ten data-flow) including `READS`, `WRITES`,
 `MUTATES`, `THROWS`, `CATCHES`, `OVERRIDES`, `DECORATES`,
-`INSTANTIATES`, etc. The justification was downstream features —
+`INSTANTIATES`, etc. The justification was downstream features -
 reachability-aware vuln scoring, schema graph, decorator-driven
-frameworks — that all sit at M5/M6 in the prior roadmap.
+frameworks - that all sit at M5/M6 in the prior roadmap.
 
 Solo's M1 needs nodes/edges good enough to answer:
 
-- "Where is `Foo`?" — `find_symbol`.
-- "Who calls `Bar`?" — `get_call_chain` over `CALLS`.
-- "What's in this file?" — `CONTAINS`.
-- "What tests cover `Baz`?" — `TESTS`.
-- "What does this package depend on?" — `DEPENDS_ON`.
-- "What does this module import?" — `IMPORTS`.
+- "Where is `Foo`?" - `find_symbol`.
+- "Who calls `Bar`?" - `get_call_chain` over `CALLS`.
+- "What's in this file?" - `CONTAINS`.
+- "What tests cover `Baz`?" - `TESTS`.
+- "What does this package depend on?" - `DEPENDS_ON`.
+- "What does this module import?" - `IMPORTS`.
 
 That is six. We can fold "what's in this file/package" and
 "what does this module import" using the structural edges below.
@@ -70,11 +70,11 @@ NodeKinds at V2.0 stay coarse: `function`, `method`, `type`, `file`,
 
 **Deferred to a future ADR:**
 
-- `READS`, `WRITES`, `MUTATES` — wait until the schema-graph epic
+- `READS`, `WRITES`, `MUTATES` - wait until the schema-graph epic
   has a real consumer.
-- `THROWS`, `CATCHES` — wait until error-path blast radius has a
+- `THROWS`, `CATCHES` - wait until error-path blast radius has a
   user asking for it.
-- `OVERRIDES`, `DECORATES`, `INSTANTIATES` — wait until a per-language
+- `OVERRIDES`, `DECORATES`, `INSTANTIATES` - wait until a per-language
   parser pass earns them.
 
 The deferral is not a "we'll add this in M2" promise. The
@@ -95,7 +95,7 @@ parks until OQ-S008 has a real workload to test against.
 Positive:
 
 - M1 ships **five tree-sitter grammars × five edges** (Go, TS,
-  TSX, JS, JSX — five grammars, two `symbol_path` namespaces;
+  TSX, JS, JSX - five grammars, two `symbol_path` namespaces;
   see SOLO-04 §5.1.1). The earlier "six languages" framing
   conflated grammars and namespaces; the corrected count is
   five grammars over two address spaces. Cuts parser-authoring
@@ -134,15 +134,15 @@ roadmap entry.
 
 ## References
 
-- SOLO-04 (domain model — EdgeKind enum)
-- SOLO-15 (glossary — Edge)
+- SOLO-04 (domain model - EdgeKind enum)
+- SOLO-15 (glossary - Edge)
 - Prior ADR-0006 (the fifteen-kind set; superseded for V2.0)
 
 ## Amendment (2026-05-17)
 
 This ADR is amended in place to record that the shipped `EdgeKind`
 enum has **six** values, not five. The original decision prose above
-is left unchanged — it remains the authoritative record of the
+is left unchanged - it remains the authoritative record of the
 *structural* edge set and the parser-cost reasoning behind it.
 
 `SIMILAR_TO` (`EdgeSimilarTo` in `internal/core/domain/edge.go`) was
@@ -152,18 +152,18 @@ kinds decided above, it is a **non-structural** edge kind:
 - It is not produced by a tree-sitter parser pass, so it does not
   change the per-language parser-authoring scope or the parser-cost
   argument in the Consequences section.
-- It is written with `Confidence=Unresolved` — a proposed, not
-  resolved, edge — and is paired with a `source_layer='semantic'`
+- It is written with `Confidence=Unresolved` - a proposed, not
+  resolved, edge - and is paired with a `source_layer='semantic'`
   Finding. It carries semantic-similarity signal, not a parsed
   program relationship.
 - It is excluded from the resolver arity matrix used for the
   structural kinds; its `(src, tgt)` validity is governed by the
   auto-link pipeline rather than the structural arity table.
 
-Net effect: the shipped enum has six kinds — the five structural
+Net effect: the shipped enum has six kinds - the five structural
 kinds (`CALLS`, `IMPORTS`, `CONTAINS`, `TESTS`, `DEPENDS_ON`) plus
 the non-structural `SIMILAR_TO`. Where this ADR says "five", read it
 as the structural set; the total enum size is six. This amendment
 supersedes the 2026-05-16 factual-divergence note above, which
-called for a separate amending ADR — that work is now folded in
+called for a separate amending ADR - that work is now folded in
 here.

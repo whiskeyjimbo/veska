@@ -1,4 +1,4 @@
-// prose.jsonl — hand-curated ground truth for the prose corpora.
+// prose.jsonl - hand-curated ground truth for the prose corpora.
 // Each line: {"corpus":"<name>","query":"<natural-language>","expected":"<file.md>#<heading-slug>"}.
 // Expected keys match embedProseCorpus's doc-name format:
 //   <path-relative-to-corpus-root> + "#" + slugified H1/H2 heading.
@@ -31,7 +31,7 @@
 // ─── wikipedia-tech corpus ──────────────────────────────────────────────
 // Targets sections of Wikipedia software/CS articles fetched by
 // scripts/fetch-wikipedia-corpus.sh. Queries are deliberately phrased
-// without library-specific identifiers — this is the genuine-natural-
+// without library-specific identifiers - this is the genuine-natural-
 // prose corpus (solov2-0k5h.7).
 {"corpus":"wikipedia-tech","query":"how a compiler differs from an interpreter","expected":"compiler.md#comparison-with-interpreter"}
 {"corpus":"wikipedia-tech","query":"the history of how programming languages came to be compiled","expected":"compiler.md#history"}

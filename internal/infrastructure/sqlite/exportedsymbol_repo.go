@@ -12,7 +12,6 @@ import (
 // ExportedSymbolRepo is the SQLite adapter for the ExportedSymbolQuerier port.
 // It answers "which EXPORTED public-surface nodes in (repoID, branch) live in a
 // set of files?" in a single round-trip, for the breaking-removal diff gate
-// (solov2-zvh6.12).
 type ExportedSymbolRepo struct {
 	db *sql.DB
 }
@@ -27,11 +26,10 @@ func NewExportedSymbolRepo(db *sql.DB) *ExportedSymbolRepo {
 // file_path is one of filePaths and whose kind is a removable public-surface
 // kind: function, method, interface, struct, type, variable, class. This is
 // WIDER than the contract-drift gate's signature-shaped set {function, method,
-// interface} — removal/rename detection (solov2-zvh6.12/.14) needs only a name's
+// interface} — removal/rename detection (/.14) needs only a name's
 // presence, so it also covers exported types, structs, consts and vars (Go
 // const + var both surface as the parser's KindVariable).
-//
-// Empty filePaths is a no-op (returns nil, nil) — avoiding a degenerate "IN ()"
+// Empty filePaths is a no-op (returns nil, nil) — avoiding a degenerate "IN "
 // clause that SQLite rejects, symmetric with DriftedNodesInFiles.
 func (r *ExportedSymbolRepo) ExportedSymbolsInFiles(ctx context.Context, repoID, branch string, filePaths []string) ([]ports.ExportedSymbol, error) {
 	if len(filePaths) == 0 {

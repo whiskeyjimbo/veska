@@ -20,11 +20,10 @@ func capSnippet(s string) string {
 	return s[:cut]
 }
 
-// nodeSnippet returns the SQL bind value for the nodes.snippet column —
+// nodeSnippet returns the SQL bind value for the nodes.snippet column
 // capped RawContent when the parser populated it, otherwise nil (NULL in
 // SQLite). Shared between GraphRepo.SaveNode and PromotionStore.Promote so
 // the embed-text projection has the same body in both write paths
-// .
 func nodeSnippet(n *domain.Node) any {
 	if n == nil || n.RawContent == nil {
 		return nil

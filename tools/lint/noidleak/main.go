@@ -1,14 +1,12 @@
 // Command noidleak fails the build when internal bd issue IDs
 // leak into user-visible Go string literals — cobra flag descriptions,
 // fmt.Printf format strings, MCP tool descriptions, generated docs.
-//
 // Background: bd issue IDs are useful breadcrumbs in code comments (where
 // they tag the commit history) but read as cryptic noise when they reach
-// --help text or wiki pages. The lint exists because a junior-eng journey
+// help text or wiki pages. The lint exists because a junior-eng journey
 // kept tripping over leaked IDs in init output, flag help,
 // and entry_points.md.
-//
-// Walks every .go file under cmd/ and internal/ (skipping _test.go), parses
+// Walks every.go file under cmd/ and internal/ (skipping _test.go), parses
 // each one, visits every basic-string literal, and flags any match of
 // /solov2-[a-z0-9.]+/. Comments are not visited — they live outside the
 // AST's value-expression walk by design.

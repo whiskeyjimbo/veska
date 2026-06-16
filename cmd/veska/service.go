@@ -25,10 +25,9 @@ type ServiceStatus = service.ServiceStatus
 var errNoManager = errors.New("service manager not available")
 
 // serviceCmd returns the "service" Cobra command tree.
-//
 // mgr is the real-side manager that actually mutates supervisor state.
 // dryMgr is the dry-run-mode sibling: every mutating call on it prints the
-// concrete file paths and supervisor commands it WOULD run .
+// concrete file paths and supervisor commands it WOULD run.
 // Both may be nil; every subcommand guards against a nil manager and
 // returns a descriptive error rather than panicking.
 func serviceCmd(mgr, dryMgr ServiceManager) *cobra.Command {
@@ -130,7 +129,7 @@ func runServiceStatus(cmd *cobra.Command, m ServiceManager, _ bool) error {
 }
 
 // selectManager returns the manager that should service a request given the
-// --dry-run flag. mgr/dryMgr may be nil; selectManager falls back to mgr when
+// dry-run flag. mgr/dryMgr may be nil; selectManager falls back to mgr when
 // dryMgr wasn't wired, so dry-run still does something useful in test
 // callsites that only supply one.
 func selectManager(mgr, dryMgr ServiceManager, dryRun bool) ServiceManager {

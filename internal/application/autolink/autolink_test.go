@@ -20,7 +20,7 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/platform/observability"
 )
 
-// ---- fakes ----
+// fakes
 
 type fakeRefs struct {
 	hashes       map[string]string // nodeID -> hash
@@ -103,7 +103,7 @@ func (fv *fakeVectors) Search(_ context.Context, _, _ string, _ []float32, k int
 	return hh, nil
 }
 
-// ---- tests ----
+// tests
 
 // mustNewLinker constructs a Linker and fails the test if the constructor
 // returns an error. Used by the happy-path tests that pass non-nil deps.
@@ -339,7 +339,7 @@ func TestCandidates_CounterIncrementsByEmitted(t *testing.T) {
 	}
 }
 
-// ---- integration test against the real EmbeddingRefsRepo ----
+// integration test against the real EmbeddingRefsRepo
 
 func TestCandidates_Integration_RealRepo(t *testing.T) {
 	t.Parallel()

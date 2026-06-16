@@ -16,7 +16,7 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/platform/config"
 )
 
-// ReportParams are the advisory PR impact/risk report inputs (solov2-zvh6.5).
+// ReportParams are the advisory PR impact/risk report inputs.
 type ReportParams struct {
 	RepoID       string
 	Branch       string
@@ -33,7 +33,6 @@ type ReportParams struct {
 // producer that errors degrades its section to a Note, and an un-indexed repo
 // yields a noted (still exit-0) report. The ONLY non-zero exit is a usage error
 // (missing required flags) — that is an un-runnable invocation, not a gate.
-//
 // This deliberately diverges from the gate subcommands, which return
 // ErrGateFailed on repo_not_indexed: the report's contract is "drop it in CI and
 // it never breaks the build" (the soft on-ramp), so it must survive the most
@@ -106,7 +105,7 @@ func RunReport(ctx context.Context, p ReportParams) error {
 // blastNoiseKinds are node kinds that carry no "downstream impact" signal in the
 // PR report: structural containers (package/module/file) and the embedding
 // sub-symbol text chunks. They reach the blast set via CONTAINS edges but only
-// dilute the symbol-level impact list a reviewer reads (solov2-zvh6.13). Filtered
+// dilute the symbol-level impact list a reviewer reads. Filtered
 // here, in the report consumer, so other blastradius consumers still see them.
 var blastNoiseKinds = map[string]struct{}{
 	"chunk":   {},
@@ -131,7 +130,7 @@ func filterBlastNoise(entries []blastradius.Entry) []blastradius.Entry {
 
 // assembleBlast runs blastradius.DiffOf over the canonical changed-files set and
 // projects the response into the report section, dropping non-symbol noise kinds
-// (chunk/package/...). Errors degrade to a Note.
+// (chunk/package/.). Errors degrade to a Note.
 func assembleBlast(ctx context.Context, blast *blastradius.Service, p ReportParams, changedFiles []string, notes []string) (diffgate.BlastRadiusSection, []string) {
 	changedFunc := func(context.Context, string) ([]string, error) { return changedFiles, nil }
 	resp, err := blast.DiffOf(ctx, p.RepoID, p.Branch, p.RepoRoot, changedFunc, blastradius.Options{})
@@ -239,7 +238,7 @@ func assembleUntested(ctx context.Context, pools *sqlite.Pools, dbPath string, e
 	if err != nil {
 		return nil, append(notes, fmt.Sprintf("untested_changed: %v", err))
 	}
-	// Reuse the gate's intersection, then DISCARD its Pass/Failures verdict —
+	// Reuse the gate's intersection, then DISCARD its Pass/Failures verdict
 	// the report surfaces the symbols, it does not gate on them.
 	verdict := diffgate.NewCoverageGate().Evaluate(eph.ChangedNodeIDs(ctx), untested)
 	return verdict.UntestedChanged, notes

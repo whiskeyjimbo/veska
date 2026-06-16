@@ -10,9 +10,9 @@ Execute a disciplined verification loop over every ready issue in epic **$epic_i
 
 ## Pre-flight
 
-1. `bd show $epic_id` — confirm it's an epic, get title.
-2. `bd list --epic $epic_id --status=open --limit 500` — collect ready issues; cross-check with `bd blocked`.
-3. Print `Epic $epic_id — N issues to process` + ordered ID list, then proceed silently.
+1. `bd show $epic_id` - confirm it's an epic, get title.
+2. `bd list --epic $epic_id --status=open --limit 500` - collect ready issues; cross-check with `bd blocked`.
+3. Print `Epic $epic_id - N issues to process` + ordered ID list, then proceed silently.
 
 ---
 
@@ -20,7 +20,7 @@ Execute a disciplined verification loop over every ready issue in epic **$epic_i
 
 For each issue in dependency order (blockers first), run Steps 0–9. **Steps 1–9 are silent.** Step 0 is the only interactive step.
 
-### Step 0 — Understand & Clarify
+### Step 0 - Understand & Clarify
 
 `bd show <issue_id>`. Read each doc file listed in the issue description. Apply the **blanket test**: would leaving every section as-is (no edits, no frontmatter change) pass the task description? If yes, the criteria are too thin.
 
@@ -35,7 +35,7 @@ For each issue in dependency order (blockers first), run Steps 0–9. **Steps 1�
 │  My read: <1–2 sentences on what this doc covers and what's in question>
 │
 │  Before I audit I need answers to:
-│    1. <specific question — intended scope, missing context, design intent>
+│    1. <specific question - intended scope, missing context, design intent>
 │    2. <if applicable>
 │
 │  If my read is correct and the questions don't apply, say "proceed".
@@ -49,15 +49,15 @@ After the user responds, update description before claiming:
 bd update <issue_id> --description="<original + clarifications>"
 ```
 
-### Step 1 — Claim & Parse Checklist
+### Step 1 - Claim & Parse Checklist
 
 ```bash
 bd update <issue_id> --claim && bd show <issue_id>
 ```
 
-Extract every check from the issue's "Checks" or "What to check" section as a numbered checklist. Each check must describe an **observable doc property** (section present, link resolves, item checked) — not an editorial judgment.
+Extract every check from the issue's "Checks" or "What to check" section as a numbered checklist. Each check must describe an **observable doc property** (section present, link resolves, item checked) - not an editorial judgment.
 
-### Step 2 — File Existence Audit
+### Step 2 - File Existence Audit
 
 For every doc in scope, read its `files:` frontmatter list and verify each entry:
 
@@ -68,20 +68,20 @@ ls <path> 2>&1
 
 - **Exists**: mark pass.
 - **Missing, but path is a plausible planned location** (matches DESIGN.md package structure): annotate the entry with `# planned` comment in frontmatter and mark pass.
-- **Missing with no plausible basis**: flag as a finding — update the `files:` list to remove or correct it, and note the correction in the issue report.
+- **Missing with no plausible basis**: flag as a finding - update the `files:` list to remove or correct it, and note the correction in the issue report.
 
 Skip this step for tasks that cover no files: frontmatter (DESIGN.md, ADRs, top-level docs).
 
-### Step 3 — Section Audit & Update
+### Step 3 - Section Audit & Update
 
 For each doc file, run the full checklist from the issue description. For each failing check:
 
 1. If the section is **absent**: add it using the relevant template from `docs/templates/`.
-2. If the section is **present but empty or too thin**: fill it in from the codebase, DESIGN.md, and ADRs. Do not invent design intent — derive only from observable code and existing docs.
+2. If the section is **present but empty or too thin**: fill it in from the codebase, DESIGN.md, and ADRs. Do not invent design intent - derive only from observable code and existing docs.
 3. If the section **contradicts DESIGN.md**: correct the doc to match, unless there is an ADR explaining the divergence. If there is an ADR, add a cross-reference.
 
 **Archived feature rules:**
-- All DoD items must be `[x]` checked. If an item is genuinely incomplete in the shipped feature, mark it `[ ] — accepted-incomplete: <reason>` rather than silently leaving it unchecked.
+- All DoD items must be `[x]` checked. If an item is genuinely incomplete in the shipped feature, mark it `[ ] - accepted-incomplete: <reason>` rather than silently leaving it unchecked.
 - Empty `## Capability` sections are acceptable only if `status: shipped` in frontmatter. Do not fill them in if the shipped behavior is clear from surrounding sections.
 
 **Scope creep rule:** If a doc reveals a design gap (something that should exist but doesn't, in code or docs), file a new bead rather than expanding the current issue:
@@ -89,7 +89,7 @@ For each doc file, run the full checklist from the issue description. For each f
 bd create --type=task --title="<gap description>" --description="<what was found and where>"
 ```
 
-### Step 4 — Cross-Reference Check
+### Step 4 - Cross-Reference Check
 
 For each updated doc, verify that all internal cross-references resolve:
 
@@ -107,24 +107,24 @@ Also verify:
 
 Fix every broken reference inline.
 
-### Step 5 — DoD Checkbox Audit (Archived Only)
+### Step 5 - DoD Checkbox Audit (Archived Only)
 
 For archived feature docs: confirm every `- [ ]` DoD item has been addressed. Accept three states only:
-- `- [x] item` — completed
-- `- [ ] item — accepted-incomplete: <reason>` — knowingly skipped with explanation
-- `- [ ] item` with no annotation — **not acceptable**; must be resolved to one of the above
+- `- [x] item` - completed
+- `- [ ] item - accepted-incomplete: <reason>` - knowingly skipped with explanation
+- `- [ ] item` with no annotation - **not acceptable**; must be resolved to one of the above
 
-For active feature docs: DoD items may remain unchecked (they represent future work). Verify only that the items are specific and measurable — not structural descriptions like "add a function for X".
+For active feature docs: DoD items may remain unchecked (they represent future work). Verify only that the items are specific and measurable - not structural descriptions like "add a function for X".
 
-### Step 6 — Quality Review (Sub-agent)
+### Step 6 - Quality Review (Sub-agent)
 
 Produce a diff of all changes made in Steps 2–5 (`git diff -- <changed files>`), then spawn an Agent with this exact prompt (fill in the diff and doc type):
 
-> Review the following doc diff for a <doc type: feature doc / ADR / subsystem design doc / top-level doc>. Check: (a) **accuracy** — does the Capability section describe observable feature behavior, not implementation details? (b) **DoD quality** — are items specific, measurable, and describe outcomes a test could verify, or are they vague/structural? (c) **broken references** — do all file paths, ADR references, and DESIGN.md section citations in the updated content resolve? (d) **gaps** — is there any required section still missing or thin enough that an implementer would have to guess? Return a numbered list of findings. If nothing found, return "LGTM".
+> Review the following doc diff for a <doc type: feature doc / ADR / subsystem design doc / top-level doc>. Check: (a) **accuracy** - does the Capability section describe observable feature behavior, not implementation details? (b) **DoD quality** - are items specific, measurable, and describe outcomes a test could verify, or are they vague/structural? (c) **broken references** - do all file paths, ADR references, and DESIGN.md section citations in the updated content resolve? (d) **gaps** - is there any required section still missing or thin enough that an implementer would have to guess? Return a numbered list of findings. If nothing found, return "LGTM".
 
 Apply every finding. If a finding requires a judgment call about design intent, file a bead and note it as scope creep.
 
-### Step 7 — Add Verified Frontmatter
+### Step 7 - Add Verified Frontmatter
 
 Once all checks pass, add to each doc's YAML frontmatter:
 
@@ -135,16 +135,16 @@ verified_date: "<today's date YYYY-MM-DD>"
 
 If no frontmatter block exists, add one at the top of the file. If one exists, append the two fields.
 
-### Step 8 — Commit
+### Step 8 - Commit
 
 ```bash
-git add <changed files — explicit, no git add -A>
+git add <changed files - explicit, no git add -A>
 git commit -m "docs(<area>): verify and update <short description>"
 ```
 
 One-line conventional-commit. `<area>` is the subsystem name (e.g., `ingest`, `mcp`, `vuln`) or `design`/`adr` for foundation docs. No trailers.
 
-### Step 9 — Close
+### Step 9 - Close
 
 ```bash
 bd close <issue_id> --reason="verified: <one line summary of what changed>"
@@ -156,16 +156,16 @@ bd close <issue_id> --reason="verified: <one line summary of what changed>"
 
 ```
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Issue:    <id> — <title>
+Issue:    <id> - <title>
 Status:   ✓ CLOSED  |  ✗ BLOCKED (reason)
-Clarity:  (no clarification needed) | Asked N questions — answers updated description
+Clarity:  (no clarification needed) | Asked N questions - answers updated description
 Docs:     N files updated  |  N files verified as-is
 Fixes:    <summary: broken refs fixed, sections added, DoD items resolved, etc.>
 Commit:   <short sha> <message>
 Checks:
   [x] check 1
   [x] check 2
-  [ ] check 3 — SKIPPED (reason, new bead: <id>)
+  [ ] check 3 - SKIPPED (reason, new bead: <id>)
 Review:   <"LGTM" or numbered findings addressed>
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ```
@@ -174,8 +174,8 @@ Review:   <"LGTM" or numbered findings addressed>
 
 ```
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Issue:    <id> — <title>
-Status:   ✗ BLOCKED — <reason>
+Issue:    <id> - <title>
+Status:   ✗ BLOCKED - <reason>
 Detail:
   <what was found that requires human judgment, max 10 lines>
 New beads: <ids filed, or none>

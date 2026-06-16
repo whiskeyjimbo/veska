@@ -1,9 +1,9 @@
-# Multi-Branch Bench — M1 Gates 4+5 + OQ-S006
+# Multi-Branch Bench - M1 Gates 4+5 + OQ-S006
 
 Generated: 2026-05-13
 Platform: linux amd64
 
-## Phase 1 — Steady-State Seed (50 branches × 5000 nodes)
+## Phase 1 - Steady-State Seed (50 branches × 5000 nodes)
 
 | Metric | Value |
 |--------|-------|
@@ -14,7 +14,7 @@ Platform: linux amd64
 | Total finding rows | 2500 |
 | DB file size (post-seed) | 129.4 MiB |
 
-## Phase 2 — Promotion Trials (20 trials × 50000 nodes)
+## Phase 2 - Promotion Trials (20 trials × 50000 nodes)
 
 | Metric | Value |
 |--------|-------|
@@ -26,7 +26,7 @@ Platform: linux amd64
 | Total edge rows (post-promo) | 1250000 |
 | DB file size (post-promo) | 647.4 MiB |
 
-## Phase 3 — Query p95 (OQ-S006)
+## Phase 3 - Query p95 (OQ-S006)
 
 | Metric | Value |
 |--------|-------|
@@ -35,7 +35,7 @@ Platform: linux amd64
 | Query p95 | 0.030ms |
 | Query p99 | 0.035ms |
 
-## Phase 4 — GC Sweep (10 branches deleted)
+## Phase 4 - GC Sweep (10 branches deleted)
 
 | Metric | Value |
 |--------|-------|
@@ -54,7 +54,7 @@ M0 baseline: 28 branches × 100k nodes, disk=1.68 GiB, node-query p95=0.04ms
 | Disk/row (bytes) | 644.2 | 542.7 | 0.84x | <2x |
 | Query p95 (ms) | 0.040 | 0.030 | 0.75x | <2x |
 
-OQ-S006 verdict: **GREEN** — all ratios < 2x vs M0 baseline
+OQ-S006 verdict: **GREEN** - all ratios < 2x vs M0 baseline
 
 ## Gate Results
 

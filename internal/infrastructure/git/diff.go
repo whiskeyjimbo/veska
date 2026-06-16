@@ -1,14 +1,12 @@
 // Package git contains git-related infrastructure adapters.
-//
 // diff.go exposes ChangedFiles / ChangedFilesStaged — thin os/exec wrappers
 // around `git diff --name-only` used by the eng_get_diff_blast_radius
 // MCP tool to map a working-tree diff onto the set of touched files.
-//
 // Both helpers return paths relative to repoRoot — that is what
 // `git diff --name-only` emits. The nodes table, however, stores
 // file_path ABSOLUTE, so callers MUST join these paths against repoRoot
 // before looking them up in storage (blastradius.DiffOf does this;
-// solov2-im9o was an empty-blast bug from skipping that step).
+// was an empty-blast bug from skipping that step).
 package git
 
 import (
@@ -23,7 +21,6 @@ import (
 // relative to HEAD (i.e. unstaged + uncommitted changes that are NOT
 // yet `git add`-ed). It is the working-tree complement of
 // ChangedFilesStaged.
-//
 // An empty repoRoot returns an error rather than silently shelling out
 // against the process cwd: blast-radius tools must always run scoped to
 // a registered repo.

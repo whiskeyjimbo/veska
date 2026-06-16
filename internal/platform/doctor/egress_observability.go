@@ -1,7 +1,7 @@
 package doctor
 
 // EgressDestination describes one active outbound endpoint or listener.
-// Matches the SOLO-13 §2.1.2 egress schema.
+// Matches the egress schema.
 type EgressDestination struct {
 	// Kind is one of: "metrics", "otlp", "review_llm", "vuln_source".
 	Kind string `json:"kind"`

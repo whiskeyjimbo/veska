@@ -1,6 +1,6 @@
 ---
 id: SOLO-11
-title: "Pipelines — Save, Promotion, Review"
+title: "Pipelines - Save, Promotion, Review"
 status: draft
 version: 0.1.0
 last_reviewed: 2026-05-19
@@ -9,7 +9,7 @@ verified: true
 verified_date: "2026-05-19"
 ---
 
-# SOLO-11 — Pipelines
+# SOLO-11 - Pipelines
 
 Three pipelines run in the daemon. The save pipeline keeps staging
 fresh. The promotion pipeline runs synchronous structural checks at
@@ -40,7 +40,7 @@ is lost on daemon restart, which is fine because the editor is the
 source of truth for unsaved files. MCP queries read
 staging-overlay-on-promoted (SOLO-08 §5).
 
-Latency budget: see SOLO-13 §3.6. The intent is "imperceptible" —
+Latency budget: see SOLO-13 §3.6. The intent is "imperceptible" -
 the save pipeline must finish before the user notices the
 keystroke. M1 measures.
 
@@ -62,14 +62,14 @@ auto-save tick). The debounce is per-file: a new save event resets
 the timer; the reparse fires once the file has been quiet for
 `[watcher].debounce` (default 200ms; CONFIG-SURFACE). The save
 budget (SOLO-13 §3.6) starts when the debounce fires, not when
-the fsnotify event arrives — debounce is a coalescing knob, not
+the fsnotify event arrives - debounce is a coalescing knob, not
 part of the latency budget.
 
 ### 1.2 The staging-on-promoted read merge
 
 MCP read tools that declare `Reads staging: yes` (SOLO-09 §3)
 return a view that combines `StagingArea` with the promoted
-SQLite state. The merge rule is normative — every read tool
+SQLite state. The merge rule is normative - every read tool
 follows it identically.
 
 **Per-file overlay, not per-row.** Staging is keyed by
@@ -83,7 +83,7 @@ Three cases:
 | present (file is dirty in editor) | any | **staging rows replace all promoted rows for that file_path on the active branch**; promoted rows for the same file_path are excluded entirely |
 | present, marked deleted in staging (file removed in editor since last promotion) | rows present | no rows for that file_path |
 
-The replace-all-by-file rule avoids row-level merging — a partially
+The replace-all-by-file rule avoids row-level merging - a partially
 overlapping stale node/edge from promoted cannot leak into the
 view of a dirty file. Any read whose answer would draw nodes or
 edges from a file with both staging and promoted rows uses staging
@@ -104,7 +104,7 @@ rows.
 | Step | File | Source |
 |---|---|---|
 | `f` | `a.go` (clean) | promoted (no staging entry) |
-| `f` calls `g` in `b.go` (dirty) | `b.go` | staging-only — promoted rows for `b.go` are excluded; if `g` no longer exists in staging, the edge dead-ends here |
+| `f` calls `g` in `b.go` (dirty) | `b.go` | staging-only - promoted rows for `b.go` are excluded; if `g` no longer exists in staging, the edge dead-ends here |
 | `g` calls `h` in `c.go` (clean) | `c.go` | promoted |
 
 The traversal mixes rows from staging and promoted across the
@@ -124,7 +124,7 @@ work; `veska doctor` reports the per-repo
 visible.
 
 **Conflict cases.** Two saves to the same file produce one
-staging entry — the latest debounced parse wins. Saves to
+staging entry - the latest debounced parse wins. Saves to
 different files don't conflict by construction. A `git checkout`
 mid-edit fires the post-checkout hook (§1.3): staging is
 dropped, the watcher reparses the new working tree, and reads
@@ -133,7 +133,7 @@ reparse completes.
 
 **The active branch.** Staging is implicitly scoped to the
 repo's `active_branch`. A read against a non-active branch sees
-promoted-only — staging contributes nothing because it represents
+promoted-only - staging contributes nothing because it represents
 *the editor's current state*, which lives on the checked-out
 branch. Tools that take a `branch` arg explicitly different from
 `active_branch` set `included_staging: false` on the response.
@@ -143,7 +143,7 @@ contradicted by staging" three-way merge. The file is the
 unit. This keeps the read path explainable and the test surface
 small; it costs precision in the rare case where one file's
 parse fails halfway and partial staging is rejected (SOLO-11 §8
-"save reparse panic" handling — the file stays at last-good
+"save reparse panic" handling - the file stays at last-good
 staging or empty).
 
 ### 1.3 Branch-switch quiescence (post-checkout hook)
@@ -164,7 +164,7 @@ by `veska repo add`. The hook calls the daemon's
    into the new-branch staging.
 2. Pause the watcher's emit channel (events still queue at the
    kernel; they don't reach the parser).
-3. Drop the repo's `StagingArea` entries — the editor's
+3. Drop the repo's `StagingArea` entries - the editor's
    in-flight edits don't survive a branch change.
 4. Update `repos.active_branch` to the new branch.
 5. Re-walk the working tree's tracked files and seed staging
@@ -187,7 +187,7 @@ seconds for typical repos; large refactor branches with many
 dirty files are slower and the doctor surface reports the state.
 
 The post-checkout hook is a no-op during `git rebase`, `git
-merge --continue`, `git cherry-pick`, and `git bisect` — those
+merge --continue`, `git cherry-pick`, and `git bisect` - those
 operations fire post-checkout transitions Git itself treats as
 internal. §2.3 covers the promotion-pipeline side of the same story.
 
@@ -221,7 +221,7 @@ post-commit hook fires
 ```
 
 Budget: see SOLO-13 §3.1, "Post-commit hook return p95". The
-budget splits two cases — typical commit vs. refactor commit —
+budget splits two cases - typical commit vs. refactor commit -
 because synchronous structural checks (§2.1) scale with commit
 size. Both budgets are unmeasured at the time of writing; M1
 measures.
@@ -234,10 +234,10 @@ vuln-scan in M7).
 
 | Check | Status | Input | Output |
 |---|---|---|---|
-| Dead-code | **SHIPPED (M3)** — `internal/application/checks/deadcode.go` | Edge graph diff vs. promoted | Findings: `unreachable_symbol`, `dangling_import` |
-| Secrets-scan | **SHIPPED (M7)** — `internal/application/checks/secretsscan.go` | `Input.AddedLines` (newly-added lines only) | Findings: `secret_leak` with rule + redacted snippet |
-| Vuln-scan | **SHIPPED (M7)** — `internal/application/checks/vulnscan.go` | `go.mod` dependency set, against the OSV disk cache | Findings: `vuln` with advisory ID, package, range |
-| Contract-drift | **SHIPPED (M3)** — `internal/application/checks/contractdrift.go` | Public API edges vs. registered contracts | Findings: `contract_drift` with breaking-vs-additive class |
+| Dead-code | **SHIPPED (M3)** - `internal/application/checks/deadcode.go` | Edge graph diff vs. promoted | Findings: `unreachable_symbol`, `dangling_import` |
+| Secrets-scan | **SHIPPED (M7)** - `internal/application/checks/secretsscan.go` | `Input.AddedLines` (newly-added lines only) | Findings: `secret_leak` with rule + redacted snippet |
+| Vuln-scan | **SHIPPED (M7)** - `internal/application/checks/vulnscan.go` | `go.mod` dependency set, against the OSV disk cache | Findings: `vuln` with advisory ID, package, range |
+| Contract-drift | **SHIPPED (M3)** - `internal/application/checks/contractdrift.go` | Public API edges vs. registered contracts | Findings: `contract_drift` with breaking-vs-additive class |
 
 All four checks run inline because they are deterministic and bounded.
 None calls out to the network at promotion time: vuln-scan reads the
@@ -271,14 +271,14 @@ sticky `review-pipeline-failure` finding (rule
 `source_layer = quality`); closing that finding through the
 human-action gate flips the row to `done` (ADR-S0004). This is
 distinct from the per-commit token-cap finding emitted by §3.1
-(`review-pipeline-budget-exceeded`, severity `medium`) — the
+(`review-pipeline-budget-exceeded`, severity `medium`) - the
 budget-exceeded finding is informational and non-sticky, the
 pipeline-failure finding is sticky and human-action-gated.
 
 ### 2.3 Rebase, merge, cherry-pick, bisect
 
 Git operations that rewrite or replay history fire post-commit
-hooks at machine cadence — a 10-commit rebase produces ten
+hooks at machine cadence - a 10-commit rebase produces ten
 post-commit invocations in seconds. Promoting every one of them
 would chew through SQLite write transactions, generate ten
 embed batches per touched node, and (in the rebase case) fire
@@ -337,7 +337,7 @@ treats this case the same as the startup-resync divergent path
 (SOLO-03 §5.7): log `ErrPromotionDivergent`, fall back to a fresh
 parse of the working tree, set `last_promoted_sha = HEAD`. The
 distinction from a "real" divergent case (force-push from
-elsewhere) is impossible to make from the daemon's view — both
+elsewhere) is impossible to make from the daemon's view - both
 are recorded; the user investigates if they didn't intend a
 rewrite.
 
@@ -349,7 +349,7 @@ is not in `git log HEAD --first-parent`. The catch-up routine
 treats this exactly like the rebase divergent case above: log
 `ErrPromotionDivergent`, fall back to a fresh parse of the working
 tree, set `last_promoted_sha = HEAD`. The orphaned prior commit's
-nodes/edges remain in SQLite attributed to the dead SHA — they
+nodes/edges remain in SQLite attributed to the dead SHA - they
 are not actively pruned (the audit log still references them);
 `veska gc --branches` (SOLO-08 §6) is the eventual collector,
 matching how orphaned-branch findings are swept on a normal
@@ -437,7 +437,7 @@ mid-commit, remaining specialties for that commit skip and a
 nothing silently drops. The next commit starts fresh.
 
 **Daily token cap.** `max_tokens_per_day` is a hard halt on the
-*pipeline*, not the commit. Wallet-style caps are not Findings —
+*pipeline*, not the commit. Wallet-style caps are not Findings -
 making the user human-action-gate-close their own daily budget would run
 an operational signal through the same machinery as a CVE. The
 shape that fits a solo product:
@@ -452,7 +452,7 @@ shape that fits a solo product:
    measured spend, and the next reset time. That is how the user
    sees what happened; it is also where they raise the cap if
    they want to.
-4. New `review` post-promotion queue rows queue normally but stay `pending` —
+4. New `review` post-promotion queue rows queue normally but stay `pending` -
    they are not dropped. Promotion continues unaffected.
 5. At the next reset boundary the pipeline resumes; the queued
    rows drain in FIFO order. No human action required for the
@@ -498,19 +498,19 @@ confidence = clamp(0, 1, w_branch*branch + w_symbol*symbol + w_activity*activity
 
 | Confidence band | Action |
 |---|---|
-| `[T_high, 1.0]` | Auto-link target — but ship as **suggest only** until calibrated |
-| `[T_low, T_high)` | Suggest — set `details.suggested_task` |
+| `[T_high, 1.0]` | Auto-link target - but ship as **suggest only** until calibrated |
+| `[T_low, T_high)` | Suggest - set `details.suggested_task` |
 | `[0.0, T_low)` | No link |
 
 **Calibration honesty.** The weights and thresholds (`T_high`,
-`T_low`) are unset on purpose — they need real-workload tuning
+`T_low`) are unset on purpose - they need real-workload tuning
 before any finding is auto-linked silently. M3 epic m3.04.4
 ("FP measurement on fixture") is where the numbers come from;
 the M3 close report records them. Until calibration ships, every
 band emits as suggest. The config flag
 `autolink.mode = "suggest" | "auto"` switches the high-band
 behavior; default is `suggest`. **No illustrative numbers appear
-in this section until they are measured** — readers anchor on
+in this section until they are measured** - readers anchor on
 numbers they see, even ones labelled "placeholder."
 
 ### 4.1 Manual override
@@ -618,7 +618,7 @@ it had at `detected_commit` (resolvable via the same graph state
 `eng_get_node` reads), the rule's premise is unchanged and
 the rule does not need to re-run. Full rule rerun is the fallback.
 This closes the common "the file moved, the symbol didn't change"
-case cheaply — most open findings on a typical branch hit this
+case cheaply - most open findings on a typical branch hit this
 path.
 
 The sweep reads a single graph snapshot at the start. If the
@@ -647,7 +647,7 @@ the cadence interval even on large finding sets." M2 measures.
 ## 7. Merge gate / preflight
 
 A function the daemon evaluates and reports through the CLI and
-the editor. It does not enforce anything by itself — it is a
+the editor. It does not enforce anything by itself - it is a
 function `branch -> {eligible: bool, reasons: [...]}`.
 
 ```
@@ -716,13 +716,13 @@ tools (`eng_get_call_chain`, `eng_get_blast_radius`,
 **Two persistent inputs, one read path.** Two kinds of source-
 side state feed the resolver:
 
-1. **`cross_repo_edge_stubs` rows** (SOLO-08 §3.1) — written at
+1. **`cross_repo_edge_stubs` rows** (SOLO-08 §3.1) - written at
    source-side promotion when the parser produces a cross-repo
    reference whose target lookup keys (`module_path`,
    `symbol_path`, `language`) are already known. These are the
    common case: an `import "github.com/org/sdk"` plus a call to
    `sdk.Foo` produces one stub at promotion time.
-2. **Unresolved intra-graph edges** — edges with
+2. **Unresolved intra-graph edges** - edges with
    `confidence = unresolved` whose target the parser couldn't
    pin to a stub key (e.g. dynamic dispatch, language-level
    ambiguity). The resolver attempts to bind these
@@ -841,8 +841,8 @@ inserts the result into the cache, and serves it.
 
 **Why this is not a stored edge.** A row in `cross_repo_edge_cache`
 is keyed on the *source* graph's identifiers and a *target* repo's
-runtime branch state. The `Edge` aggregate's invariant — both
-endpoints in the same graph — is not violated: the cache row is a
+runtime branch state. The `Edge` aggregate's invariant - both
+endpoints in the same graph - is not violated: the cache row is a
 materialisation, dropped on any change to either endpoint's
 underlying state. SOLO-04 §5.2 invariant 1 stays intact.
 
@@ -854,7 +854,7 @@ cache ADR is written against measured numbers and ships in M2.
 ## 10. Write serialization (promotion vs. MCP writes vs. embed)
 
 The full rationale is **ADR-S0011**. The shape: three `*sql.DB`
-handles to the same `veska.db` — `readDB` (unlimited), and two
+handles to the same `veska.db` - `readDB` (unlimited), and two
 single-writer pools `writeDB.hot` (promotion + MCP writes + non-embed
 post-promotion queue transitions) and `writeDB.embed` (embed payloads only).
 `MaxOpenConns=1` on each writer pool serializes **transaction
@@ -892,8 +892,8 @@ Every MCP write tool documents:
 - **`ErrBusy` semantics.** Returned when the deadline expires
   waiting for `writeDB.hot`. The error payload (SOLO-09 §4.6)
   carries `data.context.cause` set to `"seal_in_flight"` (promotion
-  holds the connection — payload includes `promotion_id` and
-  `eta_ms`) or `"pool_wait"` (other writes ahead — payload
+  holds the connection - payload includes `promotion_id` and
+  `eta_ms`) or `"pool_wait"` (other writes ahead - payload
   includes `wait_count`, `wait_duration_ms`, `eta_ms` from
   `sql.DBStats()`).
 
@@ -923,7 +923,7 @@ The contract:
 
 1. When the `Promote` RPC arrives, the daemon raises the barrier
    *before* it calls `writeDB.hot.BeginTx`. The barrier is one
-   boolean (or one-element `chan struct{}`) per daemon — it is
+   boolean (or one-element `chan struct{}`) per daemon - it is
    not a queue, not a priority lane, and not aware of work
    kinds. Refcounting is unnecessary because promotions do not stack:
    `git commit` is single-shot, and the rebase / merge /
@@ -973,8 +973,8 @@ drain iteration does two writes:
   `in_progress → done`) goes through `writeDB.hot` because it's
   a tiny SQL update on `post_promotion_queue` and we want it visible
   fast in `veska doctor post-promotion-queue`.
-- The payload work — embedding-store insert plus `vec_nodes`
-  upsert — goes through `writeDB.embed`.
+- The payload work - embedding-store insert plus `vec_nodes`
+  upsert - goes through `writeDB.embed`.
 
 Two small writes per embed row, on pools sized for them.
 
@@ -1008,7 +1008,7 @@ debounce_ms = 100
 
 [promotion]
 # Shipped (M3): dead_code, contract_drift.
-# PLANNED — secrets, vuln await the secrets-scanner + vuln-source
+# PLANNED - secrets, vuln await the secrets-scanner + vuln-source
 # ports (09-mcp-surface §8.2, deferred); listing them has no effect
 # until those ports land.
 checks = ["dead_code", "contract_drift"]   # planned: "secrets", "vuln"

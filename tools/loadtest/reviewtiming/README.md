@@ -1,4 +1,4 @@
-# reviewtiming — M5 exit-gate-5 per-commit review time budget
+# reviewtiming - M5 exit-gate-5 per-commit review time budget
 
 Measures the wall-clock time to run **one review pass over a ~100-file commit**
 using the real review `Handler` (the `WorkKindReview` lane) wired to a real
@@ -15,8 +15,8 @@ dispatches one `WorkKindReview` row through `review.Handler.Handle`, which
 renders every registered review prompt over the file and calls the Ollama LLM.
 It reports:
 
-- `total_ms` / `wall_clock_budget` — the total time for the 100-file pass.
-- `per_file_mean_ms` — `total_ms / file_n`.
+- `total_ms` / `wall_clock_budget` - the total time for the 100-file pass.
+- `per_file_mean_ms` - `total_ms / file_n`.
 - `files_reviewed_ok` / `files_failed`.
 
 The fixture is generated in a temp directory (simple distinct Go files); no

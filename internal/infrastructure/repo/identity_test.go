@@ -119,7 +119,7 @@ func TestResolveIdentity_OriginAndAbsRoot(t *testing.T) {
 	})
 }
 
-// TestResolveIdentity_Converges is the core ADR-S0017 contract: the SAME module
+// TestResolveIdentity_Converges is the core contract: the SAME module
 // path indexed at two DIFFERENT absolute roots yields the SAME repo_id.
 func TestResolveIdentity_Converges(t *testing.T) {
 	ctx := context.Background()

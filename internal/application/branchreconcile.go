@@ -35,9 +35,8 @@ type StagingClearer interface {
 // tree's current branch differs from repos.active_branch at sweep/restart time,
 // it bumps the staging generation (before any parse runs), drops the prior
 // branch's staging entries, and updates repos.active_branch.
-//
 // It is the reusable unit shared by the wake-reconcile sweep (wired now) and
-// the startup-resync path (wiring deferred — see SOLO-03 §5.2). The check is
+// the startup-resync path (wiring deferred). The check is
 // deliberately LIGHTER than staging.Gate.BranchSwitch: no Pause/drain/Resume
 // quiescence — only the three primitives §5.2 calls for.
 type BranchReconciler struct {
@@ -65,7 +64,6 @@ func NewBranchReconciler(
 // mismatch, bumps the generation, clears the prior branch's staging, and stores
 // the new branch. A branch that cannot be determined ("" or git error) is a
 // no-op: a transient git failure must never wipe valid in-flight staging.
-//
 // It returns the resolved working-tree branch ONLY on a successful mismatch
 // reconcile (the authoritative new branch a caller should adopt as its
 // save/promote key); it returns "" on every no-op path (unreadable branch,

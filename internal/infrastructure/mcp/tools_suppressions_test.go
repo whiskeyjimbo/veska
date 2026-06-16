@@ -12,9 +12,7 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/sqlite/sqldriver"
 )
 
-// ---------------------------------------------------------------------------
 // helpers
-// ---------------------------------------------------------------------------
 
 func newSuppressionsDB(t *testing.T) *sql.DB {
 	t.Helper()
@@ -94,11 +92,8 @@ func dispatchSuppression(t *testing.T, r *Registry, method string, actor domain.
 	return r.Dispatch(context.Background(), actor, req)
 }
 
-// ---------------------------------------------------------------------------
 // eng_suppress_finding
-// ---------------------------------------------------------------------------
-
-// TestSuppressFinding_RejectsUnknownFinding covers solov2-b36: when scope is
+// TestSuppressFinding_RejectsUnknownFinding covers: when scope is
 // "finding" (the default) the handler must validate that (finding_id,
 // branch, repo_id) actually exists in findings before inserting. Otherwise
 // the suppressions table accumulates orphan rows that point at nothing
@@ -271,11 +266,8 @@ func TestSuppressFinding_MissingParams(t *testing.T) {
 	}
 }
 
-// ---------------------------------------------------------------------------
 // eng_list_suppressions
-// ---------------------------------------------------------------------------
-
-// TestListSuppressions_SingleRepoDefaultsRepoID guards solov2-7tz1: when a
+// TestListSuppressions_SingleRepoDefaultsRepoID guards: when a
 // RepoLister is wired and exactly one repo is registered, eng_list_suppressions
 // must auto-resolve repo_id from the singleton rather than rejecting the call.
 func TestListSuppressions_SingleRepoDefaultsRepoID(t *testing.T) {
@@ -294,7 +286,7 @@ func TestListSuppressions_SingleRepoDefaultsRepoID(t *testing.T) {
 	}
 }
 
-// TestListSuppressions_MultiRepoDefaultsToFanOut guards solov2-hlf2:
+// TestListSuppressions_MultiRepoDefaultsToFanOut guards:
 // when multiple repos are registered and repo_id is omitted, the call
 // must succeed (listing across all repos) rather than rejecting with
 // "repo_id is required" — mirroring eng_list_findings's default and

@@ -14,7 +14,6 @@ import (
 )
 
 // checkVulnProvider gates daemon startup on the [vuln_source] provider.
-//
 // The vulnerability-scan feature ships off by default: an empty provider
 // leaves the daemon on the NullVulnSource. The only enabled provider is "osv";
 // any other value is a fatal startup error so an operator does not silently
@@ -32,7 +31,6 @@ func checkVulnProvider(cfg config.Config) error {
 
 // buildVulnSource constructs the ports.VulnSource for the resolved config and
 // reports whether the vulnerability-scan feature is enabled.
-//
 // An empty [vuln_source] provider yields the NullVulnSource with enabled
 // false — no refresher goroutine, no vulnscan check. provider = "osv" yields
 // the OSV.dev-backed adapter with enabled true. The caller is expected to have
@@ -60,8 +58,7 @@ func vulnRefreshInterval(cfg config.Config) time.Duration {
 // using the captured *VulnScanCheck and FindingStorage. Wired as the
 // Refresher's first-refresh-ok callback so a freshly enabled [vuln_source]
 // (or a freshly started daemon catching up on a stale cache) doesn't leave
-// existing repos at "0 findings" until their next commit (solov2-jtl5.4).
-//
+// existing repos at "0 findings" until their next commit.
 // Per-repo failures are logged and swallowed — the sweep is best-effort and
 // must never crash the refresher goroutine. The active branch falls back to
 // "main" so a repo that hasn't been promoted yet (active_branch="") still

@@ -12,17 +12,14 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/core/domain"
 )
 
-// ---------------------------------------------------------------------------
 // eng_promote
-//
 // Called by the post-commit git hook to drive a real promotion after a commit.
 // The previous wire protocol — a bare {"cmd":"promote"} payload — was rejected
 // by the JSON-RPC listener with method-not-found and silently swallowed, so
-// post-commit promotion was effectively dead .
-//
+// post-commit promotion was effectively dead.
 // Inputs:
 //
-//	root_path  — absolute working-tree path of the just-committed repo.
+//	root_path — absolute working-tree path of the just-committed repo.
 //
 // Action:
 //  1. Resolve root_path → registered RepoRecord via the lister.
@@ -34,10 +31,8 @@ import (
 //
 // Idempotent and bounded — files deleted in the commit are skipped, parse
 // errors are logged but don't abort the promotion.
-// ---------------------------------------------------------------------------
-
 // PromoteDeps bundles the collaborators eng_promote needs. The wire layer
-// constructs these from the same singletons the daemon already builds —
+// constructs these from the same singletons the daemon already builds
 // repoLister, GitQuerier, Ingester, Promoter — so eng_promote and the
 // startup-resync / cold-scan paths share one source of truth per dependency.
 type PromoteDeps struct {
@@ -48,7 +43,7 @@ type PromoteDeps struct {
 }
 
 // PromoteIngester is the narrow surface eng_promote needs from the Ingester
-// — kept narrow so future Ingester refactors don't ripple here.
+// kept narrow so future Ingester refactors don't ripple here.
 type PromoteIngester interface {
 	Save(ctx context.Context, repoID, branch, path string, src []byte)
 }
@@ -60,16 +55,16 @@ type PromotePromoter interface {
 
 type promoteParams struct {
 	RootPath string `json:"root_path"`
-	// RepoID accepts the full repo_id or a 12-char short_id ,
+	// RepoID accepts the full repo_id or a 12-char short_id,
 	// matching every other repo-scoped tool. Either RepoID or RootPath is
 	// sufficient; when both are passed, RepoID wins.
 	RepoID string `json:"repo_id"`
-	// Optional overrides . Pre-validator the handler silently
+	// Optional overrides. Pre-validator the handler silently
 	// dropped these; agents calling eng_promote_repo with attribution had no
 	// way to learn that. They are now first-class:
-	//   - Branch overrides the repo's active_branch when non-empty.
-	//   - GitSHA pins the commit to promote at; defaults to git HEAD.
-	//   - ActorKind + ActorID stamp attribution on the promotion; default is
+	//   Branch overrides the repo's active_branch when non-empty.
+	//   GitSHA pins the commit to promote at; defaults to git HEAD.
+	//   ActorKind + ActorID stamp attribution on the promotion; default is
 	//     the system actor ('service:veska'). They must be supplied together
 	//     or both omitted.
 	Branch    string `json:"branch"`
@@ -111,7 +106,7 @@ func makePromoteHandler(deps PromoteDeps) ToolHandler {
 		if p.RootPath == "" && p.RepoID == "" {
 			return nil, &RPCError{Code: CodeInvalidParams, Message: "root_path or repo_id is required"}
 		}
-		// actor_kind / actor_id must be supplied together . The
+		// actor_kind / actor_id must be supplied together. The
 		// schema can't express "all-or-none", so validate here.
 		if (p.ActorKind == "") != (p.ActorID == "") {
 			return nil, &RPCError{Code: CodeInvalidParams, Message: "actor_kind and actor_id must both be set or both omitted"}
@@ -125,7 +120,7 @@ func makePromoteHandler(deps PromoteDeps) ToolHandler {
 		var rec application.RepoRecord
 		var canon string
 		if p.RepoID != "" {
-			// solov2-65bk: resolve by repo_id (full or short prefix) — parity
+			// resolve by repo_id (full or short prefix) — parity
 			// with every other repo-scoped tool.
 			for _, r := range repos {
 				if r.RepoID == p.RepoID || ShortRepoID(r.RepoID) == p.RepoID {
@@ -163,7 +158,7 @@ func makePromoteHandler(deps PromoteDeps) ToolHandler {
 		if branch == "" {
 			branch = "main"
 		}
-		// solov2-cyww: caller-supplied branch override (e.g. an agent
+		// caller-supplied branch override (e.g. an agent
 		// re-promoting a non-active branch) takes precedence over the
 		// repo-record default.
 		if p.Branch != "" {
@@ -197,7 +192,7 @@ func makePromoteHandler(deps PromoteDeps) ToolHandler {
 					"repo", rec.RepoID, "file", rel, "err", rerr)
 				continue
 			}
-			// ADR-S0017 §1: the parser keys on the repo-relative slash path.
+			// the parser keys on the repo-relative slash path.
 			// `rel` (from git ChangedFiles) is already that form; `abs` exists
 			// only to read the bytes above.
 			deps.Ingester.Save(ctx, rec.RepoID, branch, rel, src)
@@ -209,7 +204,7 @@ func makePromoteHandler(deps PromoteDeps) ToolHandler {
 			// NewActor enforces the kind enum (human/agent/system) and
 			// rejects an empty id, so an invalid actor_kind surfaces here
 			// as CodeInvalidParams rather than silently degrading to the
-			// system default .
+			// system default.
 			a, aerr := domain.NewActor(p.ActorID, domain.ActorKind(p.ActorKind))
 			if aerr != nil {
 				return nil, &RPCError{Code: CodeInvalidParams, Message: fmt.Sprintf("invalid actor: %v", aerr)}

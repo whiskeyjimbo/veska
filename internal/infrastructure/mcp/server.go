@@ -1,10 +1,9 @@
 // Package mcp provides a JSON-RPC 2.0 server over Unix domain sockets.
 // Two listeners are started: cli.sock (actor_kind=human) and mcp.sock (actor_kind=agent).
-//
-// File-naming convention: every MCP tool source file uses the tools_ prefix —
+// File-naming convention: every MCP tool source file uses the tools_ prefix
 // tools_<area>.go (e.g. tools_graph.go, tools_promote.go), with its test in
 // tools_<area>_test.go. (Historically some single-tool files used a singular
-// tool_ prefix; that was normalised away in solov2-u4mv.6.)
+// tool_ prefix; that was normalised away in.)
 package mcp
 
 import (
@@ -173,11 +172,11 @@ type initializeParams struct {
 
 // serveConn handles one client connection: read newline-delimited JSON requests,
 // dispatch to the handler, write JSON-RPC responses.
-//
 // Actor derivation:
-//   - cli.sock connections: ActorKindHuman, ID = "human:<osUser>".
-//   - mcp.sock connections: start as ActorKindAgent, ID = "agent:unknown";
-//     on "initialize" update ID to "agent:<clientInfo.name>".
+//
+//	cli.sock connections: ActorKindHuman, ID = "human:<osUser>".
+//	mcp.sock connections: start as ActorKindAgent, ID = "agent:unknown";
+//	  on "initialize" update ID to "agent:<clientInfo.name>".
 func (s *Server) serveConn(ctx context.Context, conn net.Conn, ak domain.ActorKind) {
 	defer conn.Close()
 
@@ -236,5 +235,5 @@ func (s *Server) serveConn(ctx context.Context, conn net.Conn, ak domain.ActorKi
 			return
 		}
 	}
-	// scanner.Err() == nil means EOF (client closed connection) — exit cleanly.
+	// scanner.Err == nil means EOF (client closed connection) — exit cleanly.
 }

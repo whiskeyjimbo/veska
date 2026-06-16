@@ -27,13 +27,11 @@ type ProgressFunc func(done, total int)
 // accumulate in memory and a single temp-file → rename hop publishes
 // the canonical path so a Ctrl-C or provider failure mid-run leaves no
 // half-written artefact behind.
-//
 // The first embed call doubles as the dim-detection step; subsequent
 // embeds whose length disagrees are reported as an error rather than
 // silently truncated.
-//
 // Context cancellation propagates: the loop exits as soon as ctx is
-// Done and the caller receives a wrapped ctx.Err().
+// Done and the caller receives a wrapped ctx.Err.
 func GenerateOllamaFixture(
 	ctx context.Context,
 	provider ports.EmbeddingProvider,
@@ -78,7 +76,7 @@ func GenerateOllamaFixture(
 		// nomic-embed-text return vectors with norm far from 1.0 (~19);
 		// the auto-link score = 1/(1+L2dist) only lands in its documented
 		// [0,1] threshold range for unit vectors. Production must do the
-		// same in the embedder pipeline — see solov2-uug.
+		// same in the embedder pipeline.
 		l2NormalizeInPlace(vec)
 		vectors = append(vectors, vec...)
 		if progress != nil {

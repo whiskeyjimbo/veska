@@ -1,5 +1,4 @@
 // Package sqlite provides the SQLite substrate for veska.
-//
 // It opens the database with WAL mode, runs the migration runner defined in
 // migrations.go, and exposes VacuumInto for pre-migration snapshots.
 package sqlite
@@ -12,9 +11,8 @@ import (
 )
 
 // VacuumInto creates a compact copy of db at destPath using SQLite's VACUUM INTO
-// statement.  The destination must not already exist; the caller is responsible for
+// statement. The destination must not already exist; the caller is responsible for
 // creating the parent directory.
-//
 // The context is checked before the VACUUM is executed, so a cancelled context
 // returns an error without touching destPath.
 func VacuumInto(ctx context.Context, db *sql.DB, destPath string) error {

@@ -11,7 +11,6 @@ import (
 
 // selectorParams routes a positional selector to the node_id or symbol MCP
 // param depending on whether it looks like a hex content-hash node id
-// (solov2-izh6.1).
 func selectorParams(arg string) map[string]any {
 	if LooksLikeNodeID(arg) {
 		return map[string]any{"node_id": arg}
@@ -56,7 +55,7 @@ func RunCalls(ctx context.Context, p CallsParams) error {
 // BlastMode selects which blast-radius seed RunBlast uses: a single symbol
 // (default), the staged overlay (--dirty), or the working-tree diff (--diff).
 // The three back onto distinct MCP tools that all return the same
-// BlastResponse shape, so the renderer is shared. solov2-yh5a.
+// BlastResponse shape, so the renderer is shared.
 type BlastMode int
 
 const (
@@ -70,9 +69,9 @@ type BlastParams struct {
 	Mode     BlastMode
 	Selector string // required when Mode == BlastSymbol; ignored otherwise
 	RepoID   string
-	// RefA/RefB scope a BlastDiff to a git ref range (ref_a..ref_b). Both
+	// RefA/RefB scope a BlastDiff to a git ref range (ref_a.ref_b). Both
 	// empty means the working-tree-vs-HEAD default. Ignored unless
-	// Mode == BlastDiff. solov2-l5tx.
+	// Mode == BlastDiff.
 	RefA      string
 	RefB      string
 	Direction string // raw flag value; normalized internally

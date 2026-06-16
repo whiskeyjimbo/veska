@@ -13,7 +13,7 @@ import (
 // repoRegistrar.AddRepo / RemoveRepo and pick up the cold-scan + live-watch
 // wiring) and fall back to a direct SQLite write when the daemon is
 // unreachable. All command logic lives in internal/cli/repocmd; the bodies
-// here are Cobra wiring + thin delegating calls (solov2-0omh.4).
+// here are Cobra wiring + thin delegating calls.
 func repoCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:          "repo",
@@ -31,7 +31,7 @@ func repoCmd() *cobra.Command {
 	return cmd
 }
 
-// repoShowCmd wraps eng_get_repo. solov2-yh5a parity wrapper.
+// repoShowCmd wraps eng_get_repo. parity wrapper.
 func repoShowCmd() *cobra.Command {
 	var jsonOut bool
 	cmd := &cobra.Command{
@@ -47,7 +47,7 @@ func repoShowCmd() *cobra.Command {
 	return cmd
 }
 
-// repoCurrentCmd wraps eng_get_current_repo. solov2-yh5a parity wrapper. With
+// repoCurrentCmd wraps eng_get_current_repo. parity wrapper. With
 // no positional it reports the repo the cwd belongs to (or the sole repo when
 // only one is registered).
 func repoCurrentCmd() *cobra.Command {
@@ -65,7 +65,7 @@ func repoCurrentCmd() *cobra.Command {
 	return cmd
 }
 
-// repoAliasCmd binds a user-defined human-friendly name to a repo .
+// repoAliasCmd binds a user-defined human-friendly name to a repo.
 func repoAliasCmd() *cobra.Command {
 	var force bool
 	cmd := &cobra.Command{
@@ -73,7 +73,7 @@ func repoAliasCmd() *cobra.Command {
 		Short: "Bind a human-friendly name to a repo",
 		Long: `Bind a human-friendly name to a repo.
 
-The new name comes FIRST, the existing repo SECOND — same order as
+The new name comes FIRST, the existing repo SECOND - same order as
 "git remote add <name> <url>". (Note this is the reverse of "ln -s <target>
 <link>".) If the arguments look swapped, the command detects it and prints a
 hint rather than failing silently.`,
@@ -92,7 +92,7 @@ hint rather than failing silently.`,
 	return cmd
 }
 
-// repoUnaliasCmd removes a user-defined alias .
+// repoUnaliasCmd removes a user-defined alias.
 func repoUnaliasCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:          "unalias <name>",
@@ -107,7 +107,7 @@ func repoUnaliasCmd() *cobra.Command {
 
 // repoPruneCmd is the deprecated alias for `repo remove --missing`. Hidden
 // from help but kept for one release so existing scripts/muscle memory keep
-// working . Remove this command after one release cycle.
+// working. Remove this command after one release cycle.
 func repoPruneCmd() *cobra.Command {
 	var dryRun bool
 	cmd := &cobra.Command{
@@ -125,7 +125,7 @@ func repoPruneCmd() *cobra.Command {
 	return cmd
 }
 
-// repoListCmd prints every registered repo .
+// repoListCmd prints every registered repo.
 func repoListCmd() *cobra.Command {
 	var includeExternal bool
 	cmd := &cobra.Command{
@@ -143,7 +143,7 @@ func repoListCmd() *cobra.Command {
 }
 
 // repoAddCmd registers a git repository (local path or remote URL) and installs
-// hooks (solov2-kxo5.3 covers the URL form).
+// hooks ( covers the URL form).
 func repoAddCmd() *cobra.Command {
 	var wait bool
 	cmd := &cobra.Command{
@@ -163,11 +163,12 @@ func repoAddCmd() *cobra.Command {
 	return cmd
 }
 
-// repoRemoveCmd unifies the deregister surface :
-//   - `repo remove <id|path>` — remove one
-//   - `repo remove --missing`  — remove every repo whose root dir is gone
-//   - `repo remove --all`      — wipe registry (requires --yes confirmation)
-//   - `--dry-run` is honored for --missing and --all.
+// repoRemoveCmd unifies the deregister surface:
+//
+//	`repo remove <id|path>` - remove one
+//	`repo remove --missing` - remove every repo whose root dir is gone
+//	`repo remove --all` - wipe registry (requires --yes confirmation)
+//	`--dry-run` is honored for --missing and --all.
 func repoRemoveCmd() *cobra.Command {
 	var (
 		missing bool

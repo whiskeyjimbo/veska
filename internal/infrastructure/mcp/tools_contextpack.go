@@ -26,13 +26,13 @@ type contextPackConfig struct {
 
 // WithContextPackScanTracker supplies the daemon's cold-scan tracker so
 // sparse context packs can carry an indexing_in_progress hint when a
-// scan is in flight at query time (solov2-izh6.30). Nil disables the hint.
+// scan is in flight at query time. Nil disables the hint.
 func WithContextPackScanTracker(t ScanTrackerReader) ContextPackOption {
 	return func(c *contextPackConfig) { c.scans = t }
 }
 
 // WithContextPackReconcileTracker supplies the wake reconciler so a pack whose
-// repo is mid-sweep carries a wake_reconciling hint (solov2-xde2.25.1). Nil
+// repo is mid-sweep carries a wake_reconciling hint. Nil
 // disables the hint.
 func WithContextPackReconcileTracker(t ReconcileReader) ContextPackOption {
 	return func(c *contextPackConfig) { c.reconcile = t }
@@ -41,7 +41,7 @@ func WithContextPackReconcileTracker(t ReconcileReader) ContextPackOption {
 // WithContextPackResolveFunc supplies a ResolveFunc so the handler can
 // turn each pack node's cross_repo_edge_stubs into CrossRepoEdges on the
 // response — parity with eng_get_call_chain and eng_get_blast_radius
-// . Without it the response carries no cross_repo_edges and
+// Without it the response carries no cross_repo_edges and
 // agents reading the pack alone cannot see consumers in other repos.
 func WithContextPackResolveFunc(fn ResolveFunc) ContextPackOption {
 	return func(c *contextPackConfig) { c.resolve = fn }
@@ -51,24 +51,24 @@ func WithContextPackResolveFunc(fn ResolveFunc) ContextPackOption {
 // context-pack response also surfaces cross-repo CALLERS of each node in
 // the pack. The pack's blast walks DirBoth, so the typical user question
 // "show me the surrounding neighbourhood" needs both directions of
-// cross-repo edges to be honest .
+// cross-repo edges to be honest.
 func WithContextPackInboundResolveFunc(fn InboundResolveFunc) ContextPackOption {
 	return func(c *contextPackConfig) { c.resolveInbound = fn }
 }
 
 // contextPackResponse embeds the application Pack so the existing JSON
-// shape is preserved bit-for-bit, then layers CrossRepoEdges on top —
+// shape is preserved bit-for-bit, then layers CrossRepoEdges on top
 // keeping the application layer free of an mcp-specific edge type.
 type contextPackResponse struct {
 	contextpack.Pack
 	CrossRepoEdges []CrossRepoEdge `json:"cross_repo_edges,omitempty"`
 	// DegradedReasons / IndexingRepos surface the cold-scan-in-progress
-	// window (solov2-izh6.30) so a sparse pack during indexing is
+	// window so a sparse pack during indexing is
 	// distinguishable from a genuinely isolated symbol.
 	DegradedReasons []string `json:"degraded_reasons,omitempty"`
 	IndexingRepos   []string `json:"indexing_repos,omitempty"`
 	// WakeReconcilingRepos: the pack's repo when its wake sweep was in flight
-	// at query time (solov2-xde2.25.1). Fires on sparse AND full packs.
+	// at query time. Fires on sparse AND full packs.
 	WakeReconcilingRepos []string `json:"wake_reconciling_repos,omitempty"`
 }
 
@@ -109,7 +109,7 @@ func makeContextPackHandler(asm *contextpack.Assembler, repoRoot RepoRootFunc, r
 		if rpcErr := bindParams(raw, &p); rpcErr != nil {
 			return nil, rpcErr
 		}
-		// Exactly one of node_id / symbol / task_id is required .
+		// Exactly one of node_id / symbol / task_id is required.
 		anchorCount := 0
 		if p.NodeID != "" {
 			anchorCount++
@@ -126,7 +126,7 @@ func makeContextPackHandler(asm *contextpack.Assembler, repoRoot RepoRootFunc, r
 				Message: "exactly one of node_id, symbol or task_id is required",
 			}
 		}
-		// solov2-z5cu: parity with eng_find_symbol. When the caller asks
+		// parity with eng_find_symbol. When the caller asks
 		// for a symbol-anchored pack and repo_id is omitted, probe every
 		// registered repo and auto-pick if exactly one contains the
 		// symbol. Multi-repo workspaces would otherwise dead-end on
@@ -140,7 +140,7 @@ func makeContextPackHandler(asm *contextpack.Assembler, repoRoot RepoRootFunc, r
 				p.RepoID = chosen
 			}
 		}
-		// solov2-ktz0: shim-injected cwd resolves repo_id when omitted.
+		// shim-injected cwd resolves repo_id when omitted.
 		repoID, rpcErr := resolveRepoIDFromParams(ctx, repos, raw, p.RepoID)
 		if rpcErr != nil {
 			return nil, rpcErr
@@ -171,7 +171,7 @@ func makeContextPackHandler(asm *contextpack.Assembler, repoRoot RepoRootFunc, r
 		if err != nil {
 			return nil, &RPCError{Code: CodeInternalError, Message: fmt.Sprintf("context pack: %v", err)}
 		}
-		// solov2-7xrw: resolve cross_repo_edge_stubs for each node in the
+		// resolve cross_repo_edge_stubs for each node in the
 		// pack so an agent (or the CLI wrapper) can see consumers/callees
 		// in other registered repos in the same response. Without this
 		// step a junior asking 'what does Run touch?' on a multi-repo
@@ -182,7 +182,7 @@ func makeContextPackHandler(asm *contextpack.Assembler, repoRoot RepoRootFunc, r
 			resolveCrossRepoInboundForNodes(ctx, resolveInbound, pack.Nodes, p.Branch),
 		)
 		var reasons, indexing []string
-		// solov2-izh6.30: a pack with only the seed node and no cross-repo
+		// a pack with only the seed node and no cross-repo
 		// edges, while a scan is in flight, is the indexing-window case.
 		// Surface so the caller can retry instead of treating the pack as
 		// the final shape.
@@ -208,7 +208,7 @@ func makeContextPackHandler(asm *contextpack.Assembler, repoRoot RepoRootFunc, r
 
 // resolveCrossRepoInboundForNodes is the contextpack analogue of
 // resolveCrossRepoInboundFor: for each node in the pack, ask "who in
-// OTHER repos calls this?" and return the inbound edges .
+// OTHER repos calls this?" and return the inbound edges.
 // The pack always walks DirBoth, so unlike the blast handler there's no
 // direction gating here — both perspectives are always relevant.
 func resolveCrossRepoInboundForNodes(ctx context.Context, resolve InboundResolveFunc, nodes []contextpack.NodeInfo, branch string) []CrossRepoEdge {
@@ -246,8 +246,7 @@ func resolveCrossRepoInboundForNodes(ctx context.Context, resolve InboundResolve
 // produce and reports the unique repo that contains the symbol, or "" when
 // auto-resolution should not apply. Returns an InvalidParams error listing
 // the candidates when more than one repo contains the symbol — the caller
-// must pass --repo to disambiguate .
-//
+// must pass --repo to disambiguate.
 // Errors from any single asm.ForSymbol probe are swallowed so a stuck repo
 // can't poison the auto-resolution for the others.
 func pickRepoForSymbol(ctx context.Context, asm *contextpack.Assembler, repoRoot RepoRootFunc, repos application.RepoLister, raw json.RawMessage, symbol, callerBranch string) (string, *RPCError) {

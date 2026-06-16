@@ -12,7 +12,7 @@ import (
 // TestWallTickStripsMonotonic guards the suspend-detection fix: wallTick must
 // return a time with no monotonic reading so gap arithmetic in Start uses
 // wall-clock elapsed time (which advances across system suspend) rather than
-// monotonic time (which does not). A regression that dropped the .Round(0)
+// monotonic time (which does not). A regression that dropped the.Round(0)
 // would let wallTick carry the monotonic component, and got != got.Round(0)
 // would then hold. We detect "has monotonic" via Go's == operator, which
 // compares the monotonic reading alongside the wall instant.
@@ -109,7 +109,7 @@ func TestSweepStartHook_FiresPerRepoBeforeWalk(t *testing.T) {
 }
 
 // TestPostSweepHook_FiresOnceAfterWalk asserts the post-sweep hook (the
-// wake-handle restart seam, solov2-xde2.25.3) runs exactly once at the end of a
+// wake-handle restart seam) runs exactly once at the end of a
 // sweep and only AFTER every file-walk handler has fired.
 func TestPostSweepHook_FiresOnceAfterWalk(t *testing.T) {
 	var mu sync.Mutex

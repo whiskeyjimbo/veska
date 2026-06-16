@@ -18,10 +18,10 @@ const (
 // EmbedQueueReport summarises the state of node_embedding_refs for the
 // doctor subcommand.
 //
-//   - Status "healthy"  — no failed rows, pending < degraded threshold.
-//   - Status "degraded" — pending count > embedQueueDegradedPending; the
-//     embedder is keeping up correctness-wise but not drain-wise.
-//   - Status "broken"   — at least one row has been parked in 'failed'.
+//	Status "healthy" — no failed rows, pending < degraded threshold.
+//	Status "degraded" — pending count > embedQueueDegradedPending; the
+//	  embedder is keeping up correctness-wise but not drain-wise.
+//	Status "broken" — at least one row has been parked in 'failed'.
 //
 // "broken" takes precedence over "degraded" when both conditions hold.
 type EmbedQueueReport struct {

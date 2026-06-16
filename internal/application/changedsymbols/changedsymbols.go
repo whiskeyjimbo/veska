@@ -1,6 +1,5 @@
 // Package changedsymbols computes the set of code symbols added, removed,
 // or modified between two arbitrary git refs.
-//
 // It deliberately sidesteps the promoted SQLite graph: rather than reading
 // a stored per-commit history substrate (which V2 does not have), the
 // Service parses each changed file at both refs on demand via the
@@ -33,7 +32,7 @@ type ChangedFilesBetweenFunc func(ctx context.Context, repoRoot, refA, refB stri
 // ErrFileAbsentAtRef — the Service treats that as "empty symbol set for
 // that side" and proceeds. Any OTHER error is interpreted as "this ref's
 // tree was unreadable" and propagated as the baseline_ref_not_indexed
-// degraded reason (solov2-izh6.17).
+// degraded reason.
 type FileAtRefFunc func(ctx context.Context, repoRoot, ref, path string) ([]byte, error)
 
 // ErrFileAbsentAtRef is the sentinel adapters must wrap when reporting
@@ -42,7 +41,7 @@ type FileAtRefFunc func(ctx context.Context, repoRoot, ref, path string) ([]byte
 // absent at ref" (an added/deleted file, expected) apart from "ref's
 // tree is unreadable" (e.g. an unfetched commit, corrupted object
 // store, or — in the user-facing rephrasing the bug report uses — a
-// baseline ref whose tree was never indexed) (solov2-izh6.17).
+// baseline ref whose tree was never indexed).
 var ErrFileAbsentAtRef = errors.New("changedsymbols: file absent at ref")
 
 // Change classifies one symbol's fate between ref_a and ref_b.
@@ -81,8 +80,8 @@ type Result struct {
 	// DegradedReasons surfaces advisory hints — currently only
 	// "non_symbol_changes_only" when files were modified but produced no
 	// symbol-level diff (typical for comment/whitespace/import-only
-	// edits). Agents reading {added:[],removed:[],modified:[]} would
-	// otherwise conclude "nothing changed" — solov2-u9os.
+	// edits). Agents reading {added:,removed:,modified:} would
+	// otherwise conclude "nothing changed".
 	DegradedReasons []string `json:"degraded_reasons"`
 }
 
@@ -117,13 +116,13 @@ func (s *Service) Diff(ctx context.Context, repoID, repoRoot, refA, refB string)
 	if err != nil {
 		// Pass the wrapped error through unchanged so callers can use
 		// errors.Is to distinguish "unknown revision" (e.g. HEAD~1 on a
-		// single-commit repo) from a generic git failure .
+		// single-commit repo) from a generic git failure.
 		return Result{}, fmt.Errorf("changedsymbols: list changed files: %w", err)
 	}
 	// Initialise with empty (non-nil) slices so JSON marshaling renders
-	// each field as [] when no symbols changed in that bucket. The MCP
+	// each field as when no symbols changed in that bucket. The MCP
 	// surface contract guarantees "empty result collections serialize as
-	// [], never omitted" .
+	// never omitted".
 	res := Result{
 		Added:           []SymbolChange{},
 		Removed:         []SymbolChange{},
@@ -138,7 +137,7 @@ func (s *Service) Diff(ctx context.Context, repoID, repoRoot, refA, refB string)
 			return Result{}, err
 		}
 		if aUnreachable {
-			// solov2-izh6.17: refA's tree couldn't be read for this file
+			// refA's tree couldn't be read for this file
 			// via a non-absence error. Treat the baseline side as empty
 			// for diff purposes but remember that we did NOT actually
 			// observe its contents — so a downstream "no symbol diff"
@@ -161,18 +160,18 @@ func (s *Service) Diff(ctx context.Context, repoID, repoRoot, refA, refB string)
 			nonSymbolOnlyFiles++
 		}
 	}
-	// solov2-qu6l: only surface the "non_symbol_changes_only" hint when
+	// only surface the "non_symbol_changes_only" hint when
 	// EVERY symbol bucket is empty. Previously the hint fired any time at
 	// least one changed file had no symbol diff — which contradicted itself
-	// in mixed commits (e.g. one .go file added a method AND a generated
-	// .md file changed: the response had a real symbol diff yet still
+	// in mixed commits (e.g. one.go file added a method AND a generated
+	// md file changed: the response had a real symbol diff yet still
 	// claimed "non_symbol_changes_only"). The user-visible purpose of the
 	// hint is "the diff is empty, but stuff did change — here's why"; once
 	// the diff is non-empty the hint is just noise.
 	if len(res.Added)+len(res.Removed)+len(res.Modified) == 0 {
 		switch {
 		case baselineUnreachable:
-			// solov2-izh6.17: when refA's tree was unreadable for at
+			// when refA's tree was unreadable for at
 			// least one changed file, the empty symbol diff is most
 			// honestly explained as "we never saw the baseline".
 			// Emit this in PLACE of non_symbol_changes_only — the two
@@ -193,7 +192,7 @@ func (s *Service) Diff(ctx context.Context, repoID, repoRoot, refA, refB string)
 // least one changed file produced no symbol-level diff — typical for
 // comment, whitespace, or import-only edits. Agents reading empty
 // added/removed/modified buckets would otherwise interpret the result as
-// "nothing changed" .
+// "nothing changed".
 const DegradedReasonNonSymbolChangesOnly = "non_symbol_changes_only"
 
 // DegradedReasonBaselineRefNotIndexed is emitted when ref_a's tree
@@ -204,14 +203,13 @@ const DegradedReasonNonSymbolChangesOnly = "non_symbol_changes_only"
 // indexed/promoted on this machine. Distinguishing it from
 // non_symbol_changes_only stops the tool from telling agents "only
 // comments/whitespace changed" when the real story is "we couldn't see
-// the baseline at all" (solov2-izh6.17).
+// the baseline at all".
 const DegradedReasonBaselineRefNotIndexed = "baseline_ref_not_indexed"
 
 // DegradedReasonNoParentCommit is emitted when the default HEAD~1 base
 // could not be resolved and the handler fell back to git's empty-tree SHA
 // to diff against. Surfaces the fact that "every symbol shows as added"
 // is a consequence of a single-commit repo, not a real wholesale change
-// .
 const DegradedReasonNoParentCommit = "no_parent_commit_used_empty_tree"
 
 // parseAtRef reads path at ref and parses it. The second return value
@@ -221,7 +219,6 @@ const DegradedReasonNoParentCommit = "no_parent_commit_used_empty_tree"
 // map with unreachable=false; an unreachable read also yields an empty
 // map but with unreachable=true so the caller can degrade the result
 // with baseline_ref_not_indexed rather than non_symbol_changes_only
-// (solov2-izh6.17).
 func (s *Service) parseAtRef(ctx context.Context, repoID, repoRoot, ref, path string) (map[string]*domain.Node, bool, error) {
 	content, err := s.fileAtRef(ctx, repoRoot, ref, path)
 	if err != nil {
@@ -240,7 +237,7 @@ func (s *Service) parseAtRef(ctx context.Context, repoID, repoRoot, ref, path st
 	if err != nil {
 		return nil, false, fmt.Errorf("changedsymbols: parse %s at %s: %w", path, ref, err)
 	}
-	// solov2-u9os: chunks are an embedding-internal concept (KindChunk
+	// chunks are an embedding-internal concept (KindChunk
 	// covers comment/whitespace/import gaps between symbols so semantic
 	// search can find non-declaration code). Including them here makes
 	// "find_changed_symbols" emit chunk:N-M entries that aren't symbols

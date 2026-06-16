@@ -3,7 +3,7 @@
 The solo redesign retracts the following ADRs from the prior V2
 set. Each retraction has a one-paragraph rationale. The prior-set
 ADR files (ADR-0001..0023, the old non-`S` numbering) are **not
-present as files** anywhere under `docs/` — they survive only in
+present as files** anywhere under `docs/` - they survive only in
 git history. This file is the authoritative list of "these
 decisions no longer apply to V2.0".
 
@@ -13,10 +13,10 @@ durable-queue decision carries forward; see below).
 
 ---
 
-## ADR-0008 — Transport & Auth for Networked Modes
+## ADR-0008 - Transport & Auth for Networked Modes
 
 **Retracted.** The solo product has one transport: Unix-domain
-sockets — `~/.veska/cli.sock` for CLI traffic and
+sockets - `~/.veska/cli.sock` for CLI traffic and
 `~/.veska/mcp.sock` for editor / MCP traffic. The accepting
 listener determines `actor_kind` (SOLO-10 §1.2), so the trust
 boundary is the file the client connected to. There is no TCP
@@ -31,12 +31,12 @@ exercise; they are not extensions of solo's Unix socket.
 
 ---
 
-## ADR-0009 — Executor Slot Cardinality → Additive
+## ADR-0009 - Executor Slot Cardinality → Additive
 
 **Retracted.** There is no executor port at V2.0. The prior ADR
 addressed how many concurrent execution ports a worker fleet would
 expose, with rules for cardinality and saturation. Solo has no
-worker fleet — the daemon is one process with goroutines, sized
+worker fleet - the daemon is one process with goroutines, sized
 by physical cores.
 
 Concurrency in solo is bounded by:
@@ -51,7 +51,7 @@ implementation choices that can move without an ADR.
 
 ---
 
-## ADR-0014 — Typed plugin registry with wire-typed Capabilities
+## ADR-0014 - Typed plugin registry with wire-typed Capabilities
 
 **Retracted; superseded by ADR-S0002.** Plugin ports are plain Go
 interfaces in `core/ports/`. The composition root in
@@ -65,7 +65,7 @@ earns its abstraction with a fresh ADR at the time, not now.
 
 ---
 
-## ADR-0015 — Embedder migration: dual-write, shadow re-embed, atomic cutover
+## ADR-0015 - Embedder migration: dual-write, shadow re-embed, atomic cutover
 
 **Retracted; superseded by ADR-S0007.** The five-phase migration
 ceremony (`Planned → DualWrite → Shadowing → Cutover → Complete`)
@@ -80,7 +80,7 @@ and the daemon flips back to full health when the rebuild finishes.
 
 ---
 
-## ADR-0018 — Cross-DB attribution refs are eager, not eventual
+## ADR-0018 - Cross-DB attribution refs are eager, not eventual
 
 **Retracted; superseded by ADR-S0005.** The prior ADR built an
 eager-cache mechanism for resolving the
@@ -92,10 +92,10 @@ because there is nothing cross-database to attribute.
 
 ---
 
-## ADR-0019 — Embedding queue lives in Dolt
+## ADR-0019 - Embedding queue lives in Dolt
 
-**Partially retracted.** The substantive decision — "the embedding
-queue is durable, not in-memory" — carries forward, but the queue
+**Partially retracted.** The substantive decision - "the embedding
+queue is durable, not in-memory" - carries forward, but the queue
 lives in SQLite (the `post_promotion_queue` table with `work_kind = embed`),
 not in Dolt. The prior ADR also specified a "unresolved drop"
 behavior: if the queue grew past a threshold, oldest rows would be
@@ -113,14 +113,14 @@ the per-node idempotency key all carry over from the prior ADR.
 
 ---
 
-## ADR-0011 — `finding-revalidator` port and escalation order
+## ADR-0011 - `finding-revalidator` port and escalation order
 
 **Retracted.** Revalidation is a goroutine that drains
 `post_promotion_queue` rows with `work_kind='revalidate'` (SOLO-11 §6),
-not a plugin port. The port framing in the prior ADR — `additive`
+not a plugin port. The port framing in the prior ADR - `additive`
 cardinality, `Uncertain` verdict, deterministic-before-LLM
 escalation order, lint enforcement of the order, per-impl trust
-gates — was sized for multi-impl revalidator stacks that solo
+gates - was sized for multi-impl revalidator stacks that solo
 does not have.
 
 **What carried forward:** the substantive optimisation worth
@@ -138,9 +138,9 @@ machinery, and per-impl gate granularity (solo's gate is
 
 ---
 
-## ADR-0012 — `AuditRun` identity and resume
+## ADR-0012 - `AuditRun` identity and resume
 
-**Retracted.** Solo's audit log is `audit.jsonl` — append-only,
+**Retracted.** Solo's audit log is `audit.jsonl` - append-only,
 synchronous before write returns, rotated at 100 MiB keeping five
 files (SOLO-08 §3.5, SOLO-10 §4). There is no per-run aggregate,
 no resume semantics, no audit-run identity. SOLO-04 §2.1 calls
@@ -155,7 +155,7 @@ that work.
 
 ---
 
-## ADR-0023 — Branch-per-Git-branch policy
+## ADR-0023 - Branch-per-Git-branch policy
 
 **Retracted; superseded by ADR-S0001.** Solo has no Dolt branches.
 The graph stores `branch TEXT` as a column on `nodes`, `edges`,
@@ -180,5 +180,5 @@ solo ADR that handles the genuine concern (identity, embedder
 swap, branches, plugin shape) at single-user scale.
 
 If a future server tier is ever built, these retracted ADRs are a
-useful starting point — but they are inputs to a fresh design, not
+useful starting point - but they are inputs to a fresh design, not
 constraints inherited from solo.

@@ -1,5 +1,5 @@
 // Package wakelatency exposes the JSON envelope written by the
-// solov2-xde2.25.4 wake-reconcile sweep latency gate. The bench itself
+// wake-reconcile sweep latency gate. The bench itself
 // lives in wakelatency_test.go behind the `eval` build tag; this file is
 // build-tag-free so the result type stays importable from documentation /
 // reporting tooling.
@@ -13,7 +13,6 @@ import (
 )
 
 // Result is the on-disk envelope written by the wake-latency bench.
-//
 // TypicalP95MS is the p95 sweep wall time over N InjectWake iterations on
 // the "typical repo" tree (TypicalFiles files); the NFR gate is < 500ms.
 // LargeWorstMS is the single worst-case sweep on the >50k tree

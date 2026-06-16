@@ -32,7 +32,7 @@ func TestChunkFile_EmitsChunksForUncoveredRanges(t *testing.T) {
 	}
 }
 
-// TestChunkFile_SkipsWhitespaceOnlyGaps guards solov2-wh7u: a blank-line gap
+// TestChunkFile_SkipsWhitespaceOnlyGaps guards: a blank-line gap
 // between two symbols must not become a chunk node. Whitespace-only chunks
 // embed to near-anything and outrank real code in search results.
 func TestChunkFile_SkipsWhitespaceOnlyGaps(t *testing.T) {
@@ -104,7 +104,7 @@ func TestChunkFile_DeterministicIDs(t *testing.T) {
 
 // TestChunkFile_FullyCoveredFileEmitsNoChunks: when symbols already
 // cover the entire file (line-by-line), no chunks should be emitted
-// — the chunk index is for non-declaration code only.
+// the chunk index is for non-declaration code only.
 func TestChunkFile_FullyCoveredFileEmitsNoChunks(t *testing.T) {
 	src := []byte(strings.Repeat("x\n", 50))
 	symbols := []*domain.Node{

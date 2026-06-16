@@ -8,7 +8,7 @@ verified: true
 verified_date: "2026-05-16"
 ---
 
-# ADR-S0004 — One post_promotion_queue table, four work-kinds, one goroutine each
+# ADR-S0004 - One post_promotion_queue table, four work-kinds, one goroutine each
 
 > **Terminology note.** This ADR was originally titled
 > "One `post_seal_queue` table…" The body has been rewritten in
@@ -62,10 +62,10 @@ error         TEXT
 
 Four `work_kind` values, exactly:
 
-- `embed` — generate embeddings for new/changed nodes.
-- `auto_link` — refresh findings against the new graph.
-- `revalidate` — recheck open findings still apply.
-- `review` — optional LLM review pass; off by default at V2.0.
+- `embed` - generate embeddings for new/changed nodes.
+- `auto_link` - refresh findings against the new graph.
+- `revalidate` - recheck open findings still apply.
+- `review` - optional LLM review pass; off by default at V2.0.
 
 One goroutine per `work_kind`. Each polls
 `SELECT ... WHERE state = 'pending' AND work_kind = ? ORDER BY seq LIMIT 16`
@@ -78,7 +78,7 @@ Retries: 3 attempts with exponential backoff (1s, 4s, 16s). On the
 fourth failure, `state = failed` and `error` is preserved.
 
 **Per-`work_kind` failure policy.** Failed rows stay `failed`.
-There is no 24h auto-acknowledge sweeper — the prior draft of
+There is no 24h auto-acknowledge sweeper - the prior draft of
 this ADR specified one but it had a fatal flaw: silently flipping
 `failed → done` after a day means an `embed` row whose model
 config is permanently broken disappears from the doctor surface
@@ -91,7 +91,7 @@ failed; user retries" model:
 | `work_kind` | When the row hits `state = failed` | Rationale |
 |---|---|---|
 | `embed` | Row stays `failed`. Reads against affected nodes carry `degraded_reasons: ["embedding_failed"]` (distinct from `embedding_pending`). User retries via `veska doctor post-promotion-queue retry --kind=embed [--seq=N]`. | Embed failures are usually a model config or pull issue; user is in the loop already, automatic retry hides the cause. |
-| `auto_link` | Row stays `failed`. Diagnostic only — the next promotion re-runs auto-link over the affected nodes, so the failure self-heals on subsequent activity. | Suggestion-shaped; one missed run is not load-bearing. |
+| `auto_link` | Row stays `failed`. Diagnostic only - the next promotion re-runs auto-link over the affected nodes, so the failure self-heals on subsequent activity. | Suggestion-shaped; one missed run is not load-bearing. |
 | `revalidate` | Row stays `failed`. The hourly sweep (SOLO-11 §6) re-evaluates every open finding regardless of post-promotion queue state. | Backstop is independent of the post-promotion queue row. |
 | `review` | **Sticky with a finding.** The daemon emits a `Finding` with `source_layer='quality'`, `severity='high'`, `rule='review-pipeline-failure'`, anchored to the promotion's commit. The post-promotion queue row stays `failed` until that finding closes through the human-action gate; closing flips the row to `done`. | No backstop; user with `review.enabled=true` believes review ran. |
 

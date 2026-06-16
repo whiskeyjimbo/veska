@@ -105,7 +105,6 @@ func (e *indexEntry) upsert(row domain.EmbeddingRow) error {
 
 // UsearchStore is an in-memory VectorStorage backed by per-(repoID,branch,modelID)
 // usearch HNSW indexes with float16 quantization.
-//
 // It is safe for concurrent use.
 type UsearchStore struct {
 	mu      sync.RWMutex

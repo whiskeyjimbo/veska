@@ -38,7 +38,7 @@ func newOllamaStub(t *testing.T, dim int) *httptest.Server {
 	return httptest.NewServer(mux)
 }
 
-// newOllamaProvider wires the real ollama.Provider at a custom base URL —
+// newOllamaProvider wires the real ollama.Provider at a custom base URL
 // the same adapter the daemon uses in production.
 func newOllamaProvider(t *testing.T, baseURL string) *ollama.Provider {
 	t.Helper()

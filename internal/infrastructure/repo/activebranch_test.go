@@ -9,7 +9,7 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/repo"
 )
 
-// gitInit creates an empty .git/hooks directory inside dir so that
+// gitInit creates an empty.git/hooks directory inside dir so that
 // repo.Add accepts it as a git work-tree (matches the helper used by
 // registry_test.go).
 func gitInit(t *testing.T, dir string) {

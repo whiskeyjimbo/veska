@@ -6,7 +6,6 @@ package coverage
 // critically, that every NodeKey resolves byte-for-byte to the node_id the
 // pipeline emits (which simultaneously validates ResolveID's path
 // reconstruction and the frozen node facts).
-//
 // If you edit the fixture source under testdata/, this test tells you exactly
 // which manifest facts went stale.
 
@@ -154,7 +153,7 @@ func TestManifestClonePairPresent(t *testing.T) {
 	}
 }
 
-// --- helpers ---
+// helpers
 
 func nodeRepo(nk NodeKey) string {
 	if strings.HasPrefix(nk.Path, "metric/") {

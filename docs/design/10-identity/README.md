@@ -1,6 +1,6 @@
 ---
 id: SOLO-10
-title: "Identity — actor_id and actor_kind"
+title: "Identity - actor_id and actor_kind"
 status: draft
 version: 0.2.0
 last_reviewed: 2026-05-08
@@ -9,13 +9,13 @@ verified: true
 verified_date: "2026-05-16"
 ---
 
-# SOLO-10 — Identity
+# SOLO-10 - Identity
 
 The whole identity model is two columns on every state-changing
 write:
 
-- `actor_id` — a string naming who did the write.
-- `actor_kind` — an enum: `'human'`, `'agent'`, or `'system'`.
+- `actor_id` - a string naming who did the write.
+- `actor_kind` - an enum: `'human'`, `'agent'`, or `'system'`.
 
 That is the whole story. The rest of this file says how those two
 values are filled in and what they gate.
@@ -29,7 +29,7 @@ lacks them.
 
 ### 1.1 `actor_id`
 
-A free-form string. It is a label, not a trust signal — an agent
+A free-form string. It is a label, not a trust signal - an agent
 that lies in its MCP handshake can pollute it. The human-action gate
 reads `actor_kind`, never `actor_id`. By convention:
 
@@ -55,7 +55,7 @@ shipped binaries) cannot supply or override it.
 | Daemon background goroutine (revalidation sweep, embedder, auto-revoke) | `'system'` |
 
 The daemon binds two Unix sockets (SOLO-03 §3). The accepting
-listener — not anything in the request — determines `actor_kind`,
+listener - not anything in the request - determines `actor_kind`,
 so the value is set before the request body is even read. A
 well-behaved MCP client cannot present itself as a human by
 lying in a header because there is no header to lie in:
@@ -65,12 +65,12 @@ The CLI binary `veska` connects only to `cli.sock`; the stdio
 shim `veska-mcp` connects only to `mcp.sock`. A user who
 deliberately points the CLI at `mcp.sock` (`veska --socket=...`)
 is declaring themselves an agent and the human-action gate behaves
-accordingly — that is the intended behavior for scripted use.
+accordingly - that is the intended behavior for scripted use.
 
 Why two sockets at all: the gate (§3) refuses high-severity
 writes from `actor_kind != 'human'`. If a single socket carried
 both kinds, the daemon would have to read the client's
-self-declaration before deciding whether to trust the call — so
+self-declaration before deciding whether to trust the call - so
 a benign editor extension could *accidentally* close a critical
 finding by claiming the human's role in its handshake. Two
 sockets remove the self-declaration field entirely; the gate
@@ -90,7 +90,7 @@ coding loop, it could be either. We do not try to guess. If the
 human wants their action recorded as human, they use the CLI.
 
 Daemon-internal goroutines stamp `actor_kind = 'system'` on the
-rows they write — this separates them from genuine agent activity
+rows they write - this separates them from genuine agent activity
 in audit review. The revalidation sweep, the auto-link re-scorer,
 the soft-suppression revoker, and the embed worker's
 auto-attribution writes all use `'system'`.
@@ -102,15 +102,15 @@ auto-attribution writes all use `'system'`.
 row) **and** `actor_id = "agent:<llm-generator-name>"` (so audit
 review can see *which* model produced the rationale). This split
 is deliberate: `actor_kind` answers "did a human, an agent, or
-the daemon write this row?" — the answer is "the daemon"; the
+the daemon write this row?" - the answer is "the daemon"; the
 review goroutine is one of the system writers in §1.2's table.
-`actor_id` answers "what produced the *content*?" — the answer
+`actor_id` answers "what produced the *content*?" - the answer
 is the LLM. The human-action gate (§3) reads `actor_kind` and refuses
 the row's high-severity *closure* without a human, regardless
 of which LLM authored the rationale.
 
 
-#### 1.2.1 Embed worker — what kind?
+#### 1.2.1 Embed worker - what kind?
 
 The embed worker writes `node_embedding_refs` rows after Ollama
 returns a vector for a promoted node. The worker writes
@@ -149,7 +149,7 @@ daemon stamps `actor_id = "human:unknown"` with a logged warning.
 There is no login, no OS keyring, no `veska login`.
 
 `actor_kind` for connections accepted on `cli.sock` is always
-`'human'` regardless of the `params.user` value — the listener
+`'human'` regardless of the `params.user` value - the listener
 is the gate substrate (§1.2), not the request body.
 
 ### 2.2 MCP
@@ -166,7 +166,7 @@ the connection and logs a warning. The connection still works;
 attribution is just less useful.
 
 `actor_kind` for connections on `mcp.sock` is always `'agent'`.
-The handshake's contents do not influence the kind — only the
+The handshake's contents do not influence the kind - only the
 `actor_id` label.
 
 ### 2.3 Daemon-internal
@@ -174,7 +174,7 @@ The handshake's contents do not influence the kind — only the
 Background goroutines write under `actor_id = "service:veska"`
 with `actor_kind = 'system'`. The revalidation sweep, the
 auto-link re-scorer, the soft-suppression revoker, the embedder
-worker — all of them.
+worker - all of them.
 
 ## 3. The single human-action gate
 
@@ -221,7 +221,7 @@ boundary. Be precise about both halves:
   is enough friction to ensure the human looked.
 - Makes the audit log say *which* path the close came through.
   A high-severity close is always attributable to a CLI
-  invocation, not an MCP one — useful when reading
+  invocation, not an MCP one - useful when reading
   `audit.jsonl` later.
 - Catches accidental MCP-side closures from a benign editor
   extension or a scripted agent that didn't mean to touch the
@@ -240,7 +240,7 @@ boundary. Be precise about both halves:
   Veska does not invent another one.
 - It does not authenticate the human. A second person with shell
   access on the same account is indistinguishable from the user
-  who started the daemon — by design, given the single-user
+  who started the daemon - by design, given the single-user
   product (SOLO-01 §1).
 - It does not bind the close to the editor's consent flow. The
   editor's "are you sure?" prompt happens above the daemon; if
@@ -255,7 +255,7 @@ are accidents, not adversarial actions. We design for the
 common failure mode and rely on the OS for the rest.
 
 A real role hierarchy, a token, an editor-to-CLI approval handoff
-that doesn't require pasting into a terminal — those return only
+that doesn't require pasting into a terminal - those return only
 if the product gains a second user.
 
 ### 3.2 Why this rule (and not others)
@@ -263,13 +263,13 @@ if the product gains a second user.
 - High and critical findings (vulns, secret leaks, contract
   breaks) are the ones whose silent dismissal causes real
   damage.
-- The agent should not close them on its own — even when it
+- The agent should not close them on its own - even when it
   thinks the finding is a false positive, the human types the
   close command. The §3.3 handoff makes that one paste away.
-- A daemon-internal sweep cannot close them either —
+- A daemon-internal sweep cannot close them either -
   `actor_kind = 'system'` fails the same gate.
-- Everything else — opening findings, suppressing low-severity
-  findings, writing nodes/edges/tasks — runs without a gate.
+- Everything else - opening findings, suppressing low-severity
+  findings, writing nodes/edges/tasks - runs without a gate.
 
 ### 3.3 Editor ↔ CLI handoff
 
@@ -305,7 +305,7 @@ The editor renders `cli_command` as a copyable code block with a
 returns to the editor. The agent's next read sees the finding
 closed.
 
-`cli_command` reuses the agent's `reason` string verbatim — the
+`cli_command` reuses the agent's `reason` string verbatim - the
 agent's argument to `eng_close_finding` is preserved through the
 terminal trip so the human is not retyping rationale. The CLI
 invocation is the human-action attestation; nothing about this scheme weakens
@@ -333,7 +333,7 @@ independently); the audit log records one `human:<user>` line
 per close, all with identical timestamps modulo microseconds.
 This is a friction reducer for vuln-heavy review cycles where
 the human has already decided "yes, all of these are false
-positives." It does **not** weaken the gate — every close still
+positives." It does **not** weaken the gate - every close still
 arrives via `cli.sock` and is attributable to the human. The
 editor's `cli_command` payload renders the multi-ID form when
 the agent's request listed more than one finding to close.
@@ -347,7 +347,7 @@ operation returns, in three cases:
 1. **Every state-changing write.** All MCP tools that mutate the
    graph, findings, suppressions, or tasks.
 2. **Every refused write.** Human-action-gate refusals and any other
-   server-side rejection — the *attempt* is recorded with
+   server-side rejection - the *attempt* is recorded with
    `result` describing the refusal.
 3. **Every read whose answer used cross-repo resolver work.** The
    resolver materialises synthetic edges (SOLO-04 §5.4, SOLO-11
@@ -355,13 +355,13 @@ operation returns, in three cases:
    without recording both, post-hoc audit cannot reproduce why
    an agent saw a given edge. The audit append is synchronous on
    the read path and is counted explicitly in the cross-repo
-   read budget (SOLO-13 §3.4) — typical-read p95 budgets assume
+   read budget (SOLO-13 §3.4) - typical-read p95 budgets assume
    no audit append (same-repo reads); cross-repo reads carry the
    audit-append cost in their separate budget. Same-repo reads
    do not write audit.
 
-Shape (illustrative; the canonical contract — fields, types,
-versioning rule — lives in SOLO-08 §3.5):
+Shape (illustrative; the canonical contract - fields, types,
+versioning rule - lives in SOLO-08 §3.5):
 
 ```json
 {
@@ -381,14 +381,14 @@ section names the trigger; SOLO-08 §3.5 owns the schema and
 stability rules.
 
 **Trust scope.** `actor_kind` is derived from the connecting
-socket (`cli.sock` ⇒ human; `mcp.sock` ⇒ agent — §3.1) and
+socket (`cli.sock` ⇒ human; `mcp.sock` ⇒ agent - §3.1) and
 nothing else. Any same-user process can dial `cli.sock`, so
 `actor_kind=human` is **attribution against well-behaved
 same-user processes**, not authentication. The audit log is
 trustworthy *to the extent the user trusts every process running
 under their UID*. This is enough for the design's stated
 purpose (post-hoc reconstruction of which path a write came
-through, plus a UX guardrail against reflexive agent closes —
+through, plus a UX guardrail against reflexive agent closes -
 §3) and is not enough for a multi-tenant or hostile-process
 threat model. Compromised same-user code can append
 `actor_kind=human` lines indistinguishable from a human's. We
@@ -406,15 +406,15 @@ the V2 roadmap.
 | Denial | What would change to add it |
 |---|---|
 | **No OIDC.** No bearer tokens, no JWTs, no token refresh. | A second user, or remote access; both require a server tier. |
-| **No SCIM.** No directory sync. | An organisational deployment — not a one-laptop product. |
+| **No SCIM.** No directory sync. | An organisational deployment - not a one-laptop product. |
 | **No SAML.** No identity providers of any kind. | Same as SCIM. |
 | **No `people` slot.** No plugin interface for an identity directory. The `actor_id` string is the identity. | A second user with a name the daemon doesn't already know from `$USER`. |
-| **No composite identity.** No `acting_as` / `on_behalf_of` / `via` triple. | A delegation model where one actor authorises another to write — not the case here, since the human and the agent both write directly. |
+| **No composite identity.** No `acting_as` / `on_behalf_of` / `via` triple. | A delegation model where one actor authorises another to write - not the case here, since the human and the agent both write directly. |
 | **No predicate language.** No CEL, no Rego, no DSL. The gate is one `if` statement. | More than one gate, or a gate that depends on per-finding metadata beyond severity. |
 | **No group-to-role mapping.** No groups. No roles. No `requires: committer`. | A multi-user product with privilege tiers. |
 | **No IDP integration.** No Okta, no Google Workspace, no AD, no GitHub Org. | A server tier with team-managed access. |
 | **No federation.** No `urn:veska:actor:...`, no DIDs, no ActivityPub. | A cross-machine product where multiple Veska instances exchange data. |
-| **No identity merge.** No aliasing across emails, no email-change handling. | A history that needs to track a single person across renames — not relevant when `actor_id` is a label. |
+| **No identity merge.** No aliasing across emails, no email-change handling. | A history that needs to track a single person across renames - not relevant when `actor_id` is a label. |
 | **No personal-data scrub.** Right-to-be-forgotten is not a workflow. | A regulatory obligation that applies to a multi-user audit log. |
 | **No fourth `actor_kind` value.** `'human'`, `'agent'`, `'system'` is the closed set. | A new origin category that doesn't fit any of the three (e.g., a federated peer). |
 
@@ -435,7 +435,7 @@ A: it doesn't, and it doesn't need to.
 - The human approves agent actions through the editor's MCP
   consent flow. That happens above the daemon, in the editor.
 - When an agent edit reaches the daemon, the daemon records
-  `actor_id = "agent:<name>"` and `actor_kind = 'agent'` — based
+  `actor_id = "agent:<name>"` and `actor_kind = 'agent'` - based
   on which socket accepted the connection (§1.2), not on
   anything the agent claimed. A *typical* MCP client cannot
   forge that label; a hostile process running as the same user
@@ -448,7 +448,7 @@ A: it doesn't, and it doesn't need to.
 
 This collapses the agent-delegation problem into "did the
 command come through the CLI listener, the MCP listener, or a
-daemon goroutine" — a distinction useful for the audit trail and
+daemon goroutine" - a distinction useful for the audit trail and
 for catching accidental MCP-side closures. It is sufficient for
 one user on one machine; it is not a substitute for OS-level
 isolation in any other setting.

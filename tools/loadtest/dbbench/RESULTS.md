@@ -1,4 +1,4 @@
-# dbbench — SQLite driver comparison
+# dbbench - SQLite driver comparison
 
 Generated: 2026-05-26T20:22:45Z
 

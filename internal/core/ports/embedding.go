@@ -18,7 +18,7 @@ var ErrBatchEmbedNotSupported = errors.New("embedder: batch not supported")
 // HTTP dial fails). It is the ONLY embedder error that triggers lexical
 // fallback in the application-layer search service (m3.03.2); any other
 // error propagates wrapped to the caller. Adapters must use errors.Is /
-// fmt.Errorf("...: %w", ErrEmbedderUnreachable) to participate.
+// fmt.Errorf(".: %w", ErrEmbedderUnreachable) to participate.
 var ErrEmbedderUnreachable = errors.New("embedder unreachable")
 
 // EmbeddingProvider is the port for generating vector embeddings from text.
@@ -38,11 +38,10 @@ type EmbeddingProvider interface {
 // BatchEmbeddingProvider is the optional batch interface — adapters that
 // can embed many texts in a single network roundtrip implement this in
 // addition to EmbeddingProvider, and the embedder Worker prefers it
-// . Implementations MUST preserve input order and return
+// Implementations MUST preserve input order and return
 // exactly len(texts) vectors; partial successes return ErrEmbedderUnreachable
 // (or another wrapped error) for the whole batch — the worker retries
 // individually on failure.
-//
 // Empty input returns (nil, nil). A nil or zero-length individual text
 // in the slice is the caller's responsibility to filter out; adapters
 // may pass it through to the underlying service.

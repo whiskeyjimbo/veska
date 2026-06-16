@@ -4,9 +4,8 @@
 // small regex + Shannon-entropy heuristic when gitleaks initialization
 // fails. Redaction is built in, so a raw secret value never reaches a
 // finding. It is fast enough to run on every promotion.
-//
-// solov2-j66g: gitleaks replaces the entropy-only detector that produced
-// false positives on Go import paths (subsumes solov2-1rfo) and missed
+// gitleaks replaces the entropy-only detector that produced
+// false positives on Go import paths (subsumes ) and missed
 // AWS Access Key shapes. Gitleaks' default config carries those exact
 // allowlists/rules; the local regex+entropy path remains as a safety net
 // so a broken gitleaks build/config never silently disables scanning.
@@ -32,7 +31,7 @@ import (
 // these creates a noise wall on the first-run journey — every junior
 // who copy-pastes AWS's quickstart hits the same canonical key. Real
 // callers never have a reason to ship these literal strings, so a
-// strict-equality allowlist is safe .
+// strict-equality allowlist is safe.
 var docsExampleSecrets = map[string]struct{}{
 	// AWS canonical examples published throughout AWS docs and SDKs.
 	"AKIAIOSFODNN7EXAMPLE":                     {},
@@ -175,7 +174,7 @@ func New(opts ...Option) *BuiltinScanner {
 }
 
 // newGitleaksDetector mirrors the reglet pattern (cross-checked at
-// /home/jrose/src/all-reglet/.../redactor.go): load gitleaks' embedded
+// /home/jrose/src/all-reglet/./redactor.go): load gitleaks' embedded
 // default config through viper, translate it, and build a Detector. The
 // default config carries the allowlists we need — Go import paths, lockfiles,
 // well-known package URLs — so we don't have to re-port them locally.
@@ -264,7 +263,7 @@ func (s *BuiltinScanner) scanLineGitleaks(path string, line ports.Line) []ports.
 	}
 	out := make([]ports.SecretFinding, 0, len(leaks))
 	for _, l := range leaks {
-		// solov2-j1yz: drop canonical vendor-docs placeholders.
+		// drop canonical vendor-docs placeholders.
 		if isDocsExampleSecret(l.Secret) {
 			continue
 		}
@@ -294,7 +293,7 @@ func (s *BuiltinScanner) scanLine(path string, line ports.Line) []ports.SecretFi
 			raw = m[1]
 		}
 		matched[raw] = struct{}{}
-		// solov2-j1yz: drop canonical vendor-docs placeholders.
+		// drop canonical vendor-docs placeholders.
 		if isDocsExampleSecret(raw) {
 			continue
 		}
@@ -314,7 +313,7 @@ func (s *BuiltinScanner) scanLine(path string, line ports.Line) []ports.SecretFi
 		if shannonEntropy(tok) < s.entropyThreshold {
 			continue
 		}
-		// solov2-3455: skip tokens that look like ordinary identifiers
+		// skip tokens that look like ordinary identifiers
 		// (Go method/function/type names commonly cross the entropy
 		// threshold when they're long camelCase strings). Real secrets
 		// almost always include digits or punctuation; pure-alpha
@@ -322,7 +321,7 @@ func (s *BuiltinScanner) scanLine(path string, line ports.Line) []ports.SecretFi
 		if looksLikeIdentifier(tok) {
 			continue
 		}
-		// solov2-1rfo (subsumed into solov2-j66g): Go import paths and
+		// (subsumed into ): Go import paths and
 		// well-known module URLs cross the entropy threshold but are
 		// never secrets. Gitleaks' default config carries the same
 		// allowlists; we replicate the most common shape here so the
@@ -332,14 +331,14 @@ func (s *BuiltinScanner) scanLine(path string, line ports.Line) []ports.SecretFi
 		}
 		// Absolute Unix filesystem paths (multi-segment, path-shaped
 		// components only) cross the entropy threshold but are never
-		// secrets. Agent-config files like .mcp.json embed binary
+		// secrets. Agent-config files like.mcp.json embed binary
 		// paths (e.g. "/home/user/.local/bin/veska-mcp") that the
 		// entropy heuristic otherwise flags — including the file
-		// veska itself writes during `veska init --agent` .
+		// veska itself writes during `veska init --agent`.
 		if looksLikeFilesystemPath(tok) {
 			continue
 		}
-		// solov2-izh6.24: SPDX license URLs and other http(s) links in
+		// SPDX license URLs and other http(s) links in
 		// comments / Markdown were producing 47 high-entropy false
 		// positives on a fresh spf13/cobra clone. Skip URL-path-shaped
 		// tokens BEFORE the entropy rule fires. A real secret on the
@@ -348,7 +347,7 @@ func (s *BuiltinScanner) scanLine(path string, line ports.Line) []ports.SecretFi
 		if looksLikeURL(tok) {
 			continue
 		}
-		// solov2-j1yz: drop canonical vendor-docs placeholders.
+		// drop canonical vendor-docs placeholders.
 		if isDocsExampleSecret(tok) {
 			continue
 		}
@@ -388,7 +387,7 @@ func mask(secret string) string {
 var importPathRe = regexp.MustCompile(`^(?:github\.com|gitlab\.com|bitbucket\.org|golang\.org|gopkg\.in|google\.golang\.org|cloud\.google\.com|k8s\.io|sigs\.k8s\.io|go\.uber\.org|go\.opentelemetry\.io)/[A-Za-z0-9._/\-]+$`)
 
 // looksLikeImportPath reports whether tok has the shape of a public
-// Go import path / module URL .
+// Go import path / module URL.
 func looksLikeImportPath(tok string) bool {
 	return importPathRe.MatchString(tok)
 }
@@ -396,9 +395,9 @@ func looksLikeImportPath(tok string) bool {
 // filesystemPathRe matches a token shaped like an absolute Unix
 // filesystem path: leading slash, at least three path components,
 // each component built only from path-safe characters (no random
-// alphanumeric runs the way a secret would). Restricting to multi-
+// alphanumeric runs the way a secret would). Restricting to multi
 // segment paths means a bare leading-slash token like "/sk_live_…"
-// still trips the entropy rule .
+// still trips the entropy rule.
 var filesystemPathRe = regexp.MustCompile(`^/[A-Za-z0-9._\-]+(?:/[A-Za-z0-9._\-]+){2,}$`)
 
 // looksLikeFilesystemPath reports whether tok has the shape of an
@@ -422,7 +421,7 @@ var urlPathRe = regexp.MustCompile(`^//[A-Za-z0-9\-]+(?:\.[A-Za-z0-9\-]+)+(?:/[A
 // after the scheme's colon has been stripped by tokenRe. SPDX license
 // header URLs, README cross-references, and Markdown link targets are
 // the dominant source — flagging them produced 47 high-entropy false
-// positives on a fresh spf13/cobra clone (solov2-izh6.24).
+// positives on a fresh spf13/cobra clone.
 func looksLikeURL(tok string) bool {
 	return urlPathRe.MatchString(tok)
 }
@@ -431,15 +430,14 @@ func looksLikeURL(tok string) bool {
 // language identifier or a dotted/slashed chain of identifiers. Three
 // shapes are accepted, all of which routinely cross the high-entropy
 // threshold on Go source and Markdown without being secrets:
-//
 //  1. Bare identifier: letters and underscores, no digits, no
-//     punctuation (the original solov2-3455 rule). Catches
+//     punctuation (the original rule). Catches
 //     "BenchmarkMemoryDuringPluginDiscovery".
 //  2. Identifier with embedded digits: each separator-delimited word
 //     starts with a letter or underscore, runs over [A-Za-z0-9_]
-//     (solov2-izh6.24). Catches "TestBashCompletionV2WithActiveHelp".
+//     Catches "TestBashCompletionV2WithActiveHelp".
 //  3. Dotted / slashed / hyphenated chain: each component matches
-//     shape (2) above (solov2-izh6.24). Catches
+//     shape (2) above. Catches
 //     "c.IsAdditionalHelpTopicCommand",
 //     "mutuallyExclusive/oneRequired/requiredAsGroup",
 //     "site/content/projects_using_cobra.md".
@@ -473,7 +471,7 @@ func looksLikeIdentifier(tok string) bool {
 	// "Completion") from random alphanumeric secrets ("h8Kq2Lx9Zp4Wn7…"
 	// has no letter run > 2). Checked at token-grain so a short
 	// receiver-like component (e.g. "c" in "c.IsAvailableCommand") does
-	// not disqualify the whole chain — solov2-izh6.24.
+	// not disqualify the whole chain.
 	return hasLetterRun(tok, 3)
 }
 
@@ -521,8 +519,8 @@ func isIdentifierWord(s string) bool {
 // hasLetterRun reports whether s contains a substring of n consecutive
 // ASCII letters anywhere. Used by looksLikeIdentifier to discriminate
 // real identifier chains ("TestBashCompletionV2WithActiveHelp" — many
-// long letter runs) from random alphanumeric secrets ("h8Kq2Lx9Zp4..."
-// — no run > 2).
+// long letter runs) from random alphanumeric secrets ("h8Kq2Lx9Zp4."
+// no run > 2).
 func hasLetterRun(s string, n int) bool {
 	run := 0
 	for _, r := range s {

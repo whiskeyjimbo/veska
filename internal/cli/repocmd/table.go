@@ -41,7 +41,7 @@ func PrintRepoTable(w io.Writer, repos []RepoView) {
 
 // PrintRepoTableWithProgress overlays in-flight scan progress onto the
 // (unindexed) rows so a user watching a long cold scan can tell hung
-// from progressing . progress maps repo_id → phase + files_seen.
+// from progressing. progress maps repo_id → phase + files_seen.
 func PrintRepoTableWithProgress(w io.Writer, repos []RepoView, progress map[string]ScanProgressRow) {
 	if len(repos) == 0 {
 		fmt.Fprintln(w, "no repositories registered — run: veska repo add <path>")
@@ -86,7 +86,7 @@ func repoStatus(r RepoView, progress map[string]ScanProgressRow) string {
 		status = unindexedStatus(r, progress)
 	}
 	// Flag repos whose root path no longer exists on disk so users can see
-	// stale registrations at a glance . `repo remove <id>` is
+	// stale registrations at a glance. `repo remove <id>` is
 	// still the cleanup path.
 	if r.RootPath != "" {
 		if _, err := os.Stat(r.RootPath); errors.Is(err, fs.ErrNotExist) {
@@ -100,7 +100,7 @@ func repoStatus(r RepoView, progress map[string]ScanProgressRow) string {
 // scan's phase + file count, a tailed cold-scan failure, or "(unindexed)".
 func unindexedStatus(r RepoView, progress map[string]ScanProgressRow) string {
 	status := "(unindexed)"
-	// solov2-jtl5.8: a never-promoted repo isn't always 'just hasn't
+	// a never-promoted repo isn't always 'just hasn't
 	// scanned yet'. A failed cold-scan leaves the repo in this state
 	// too, and the user has no signal until they tail daemon.log. If
 	// the most recent ERROR/WARN line in the log names this repo, surface
@@ -115,7 +115,7 @@ func unindexedStatus(r RepoView, progress map[string]ScanProgressRow) string {
 		return status
 	}
 	status = scanPhaseStatus(p, status)
-	// solov2-jtl5.1: append elapsed so a user can tell a slow-but-
+	// append elapsed so a user can tell a slow-but
 	// progressing scan from a hung one even when files_seen plateaus
 	// on a single large file. Older daemons omit started_at and the
 	// suffix is suppressed.
@@ -145,7 +145,7 @@ func scanPhaseStatus(p ScanProgressRow, base string) string {
 // has accepted a new repo and is cold-scanning it asynchronously. The hint
 // must name `veska repo add <path> --wait` explicitly — `--wait` is a flag on
 // `repo add`, not on `repo list`, and a copy-pasteable suggestion avoids the
-// solov2-rhaq trap where juniors run `veska repo list --wait` and hit
+// trap where juniors run `veska repo list --wait` and hit
 // "unknown flag".
 func ColdScanRunningHint(root, logPath string) string {
 	return fmt.Sprintf("  cold scan running in the background — `veska repo list` shows status; re-run with `veska repo add %s --wait` to block until it finishes, or `tail %s` for live progress", root, logPath)

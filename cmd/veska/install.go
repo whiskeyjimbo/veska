@@ -26,7 +26,7 @@ func installCmd() *cobra.Command {
 		SilenceUsage: true,
 		// No subcommand is a usage error, not a no-op. Cobra would print help
 		// and exit 0 by default; instead return an error so scripts that
-		// expect a successful install see a non-zero exit code .
+		// expect a successful install see a non-zero exit code.
 		RunE: func(cmd *cobra.Command, args []string) error {
 			_ = cmd.Help()
 			return fmt.Errorf("install: missing subcommand (try `veska install model2vec`)")
@@ -60,7 +60,7 @@ func installModel2vecCmd() *cobra.Command {
 				return fmt.Errorf("install model2vec: %w", err)
 			}
 			fmt.Fprintf(w, "Installed %s to %s\n", modelName, dir)
-			// solov2-mel2: only print the restart hint when a daemon is
+			// only print the restart hint when a daemon is
 			// likely running — on a fresh build there is no socket yet
 			// and the message confuses first-time users.
 			if _, statErr := os.Stat(filepath.Join(veskaHome, "mcp.sock")); statErr == nil {

@@ -19,7 +19,7 @@ type FileChange struct {
 
 // ChangeSource yields a candidate change as a set of per-file new contents,
 // abstracted from HOW the change is obtained. v1 is a git ref/worktree
-// (RefChangeSource); the deferred raw-unified-diff source (solov2-ll57.3)
+// (RefChangeSource); the deferred raw-unified-diff source
 // is a second implementation. The Indexer and the downstream verify/guard
 // consumers see only this interface, never the underlying mechanism — so a
 // new source slots in with no change to their code (AC3).
