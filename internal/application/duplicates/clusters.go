@@ -35,12 +35,18 @@ type Cluster struct {
 }
 
 // ClusterOptions configures Clusters. Empty Tiers means all tiers. MinScore <= 0
-// uses the calibrated near-dup default for the elected embedder.
+// uses the calibrated near-dup default for the elected embedder. AllRepos
+// clusters across every registered repo (cross-repo); in that mode the near
+// tier is skipped — cross-repo SIMILAR_TO edges are not persisted (autolink runs
+// per repo), so cross-repo near needs a vector fan-out that is a follow-up.
+// PathPrefix restricts the sweep to nodes whose file_path starts with it.
 type ClusterOptions struct {
-	RepoID   string
-	Branch   string
-	Tiers    []Tier
-	MinScore float32
+	RepoID     string
+	Branch     string
+	AllRepos   bool
+	PathPrefix string
+	Tiers      []Tier
+	MinScore   float32
 }
 
 // Clusters returns the unified, tier-labeled similar-code view for one repo: the
@@ -53,12 +59,18 @@ func (f *Finder) Clusters(ctx context.Context, opts ClusterOptions) ([]Cluster, 
 	claimed := make(map[string]bool) // node_ids already in a hash cluster
 	out := make([]Cluster, 0)
 
+	q := CloneQuery{Branch: opts.Branch, PathPrefix: opts.PathPrefix}
+	if !opts.AllRepos {
+		q.RepoID = opts.RepoID // empty RepoID => all repos in the store layer
+	}
+
 	// Structural grouping is the superset of exact; sub-tier each group by
 	// whether all its members are byte-identical.
-	structGroups, err := f.StructuralClones(ctx, opts.RepoID, opts.Branch)
+	structRows, err := f.clones.StructuralNodes(ctx, q, ExcludedKinds)
 	if err != nil {
 		return nil, fmt.Errorf("duplicates.Clusters: %w", err)
 	}
+	structGroups := groupByHash(structRows, func(r ClonedNode) string { return r.StructuralHash })
 	for _, g := range structGroups {
 		for _, m := range g.Members {
 			claimed[m.NodeID] = true
@@ -75,9 +87,10 @@ func (f *Finder) Clusters(ctx context.Context, opts ClusterOptions) ([]Cluster, 
 		}
 	}
 
-	// Near clusters: the looser tier. Drop members already structurally grouped
-	// so a node appears at most once, at its tightest tier.
-	if want[TierNear] {
+	// Near clusters: the looser tier (intra-repo only — skipped in AllRepos
+	// mode, see ClusterOptions). Drop members already structurally grouped so a
+	// node appears at most once, at its tightest tier.
+	if want[TierNear] && !opts.AllRepos {
 		nears, err := f.NearDuplicates(ctx, opts.RepoID, opts.Branch, opts.MinScore)
 		if err != nil {
 			return nil, fmt.Errorf("duplicates.Clusters: %w", err)

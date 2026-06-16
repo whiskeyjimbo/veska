@@ -18,19 +18,25 @@ type fakeStore struct {
 	structuralRows   []duplicates.ClonedNode
 	gotStructExclude []string
 
+	// captured CloneQuery scoping (repo/branch/path).
+	gotQuery       duplicates.CloneQuery
+	gotStructQuery duplicates.CloneQuery
+
 	// near-side fixtures.
 	edges       []duplicates.SimilarEdge
 	gotMinScore float32
 	gotNearExcl []string
 }
 
-func (f *fakeStore) ClonedNodes(_ context.Context, _, _ string, excludeKinds []string) ([]duplicates.ClonedNode, error) {
+func (f *fakeStore) ClonedNodes(_ context.Context, q duplicates.CloneQuery, excludeKinds []string) ([]duplicates.ClonedNode, error) {
 	f.gotExclude = excludeKinds
+	f.gotQuery = q
 	return f.rows, f.err
 }
 
-func (f *fakeStore) StructuralNodes(_ context.Context, _, _ string, excludeKinds []string) ([]duplicates.ClonedNode, error) {
+func (f *fakeStore) StructuralNodes(_ context.Context, q duplicates.CloneQuery, excludeKinds []string) ([]duplicates.ClonedNode, error) {
 	f.gotStructExclude = excludeKinds
+	f.gotStructQuery = q
 	return f.structuralRows, f.err
 }
 

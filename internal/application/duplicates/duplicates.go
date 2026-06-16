@@ -81,14 +81,23 @@ type CloneGroup struct {
 // excludeKinds. Grouping and ordering are the Finder's responsibility, so the
 // store may return rows in any order.
 type CloneStore interface {
-	ClonedNodes(ctx context.Context, repoID, branch string, excludeKinds []string) ([]ClonedNode, error)
-	// StructuralNodes returns every node in (repoID, branch) whose
-	// structural_hash is shared by >=2 nodes, excluding excludeKinds — the
-	// Type-2 (renamed-variable) clone projection. Returned rows carry the
-	// structural_hash in ClonedNode.ContentHash (the grouping key); the Finder
-	// folds them the same way as exact clones. NULL structural_hash (nodes the
-	// parser did not structurally hash) never groups.
-	StructuralNodes(ctx context.Context, repoID, branch string, excludeKinds []string) ([]ClonedNode, error)
+	ClonedNodes(ctx context.Context, q CloneQuery, excludeKinds []string) ([]ClonedNode, error)
+	// StructuralNodes returns every node matching q whose structural_hash is
+	// shared by >=2 nodes, excluding excludeKinds — the Type-2 (renamed-
+	// variable) clone projection. Returned rows carry the structural_hash in
+	// ClonedNode.StructuralHash (the grouping key) and the byte-identity hash in
+	// ContentHash. NULL structural_hash (nodes the parser did not structurally
+	// hash) never groups.
+	StructuralNodes(ctx context.Context, q CloneQuery, excludeKinds []string) ([]ClonedNode, error)
+}
+
+// CloneQuery scopes a clone projection. An empty RepoID means ALL registered
+// repos (cross-repo clustering); a non-empty PathPrefix restricts the sweep to
+// nodes whose file_path starts with it. Branch is always required.
+type CloneQuery struct {
+	RepoID     string
+	Branch     string
+	PathPrefix string
 }
 
 // DefaultNearThreshold is the near-dup minimum score used for an embedder with
@@ -216,7 +225,7 @@ func NewFinder(clones CloneStore, near NearStore, embedderID string) (*Finder, e
 // ContentHash (most-copied first, stable tie-break); members within a group by
 // (FilePath, LineStart) so the same physical layout always renders the same.
 func (f *Finder) ExactClones(ctx context.Context, repoID, branch string) ([]CloneGroup, error) {
-	rows, err := f.clones.ClonedNodes(ctx, repoID, branch, ExcludedKinds)
+	rows, err := f.clones.ClonedNodes(ctx, CloneQuery{RepoID: repoID, Branch: branch}, ExcludedKinds)
 	if err != nil {
 		return nil, fmt.Errorf("duplicates.ExactClones: %w", err)
 	}
@@ -233,7 +242,7 @@ func (f *Finder) ExactClones(ctx context.Context, repoID, branch string) ([]Clon
 // Ordering matches ExactClones: groups by descending Size then ascending hash;
 // members by (FilePath, LineStart).
 func (f *Finder) StructuralClones(ctx context.Context, repoID, branch string) ([]CloneGroup, error) {
-	rows, err := f.clones.StructuralNodes(ctx, repoID, branch, ExcludedKinds)
+	rows, err := f.clones.StructuralNodes(ctx, CloneQuery{RepoID: repoID, Branch: branch}, ExcludedKinds)
 	if err != nil {
 		return nil, fmt.Errorf("duplicates.StructuralClones: %w", err)
 	}
