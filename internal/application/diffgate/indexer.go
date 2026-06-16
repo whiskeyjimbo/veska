@@ -34,14 +34,28 @@ import (
 // is nil/empty. It wraps so callers can errors.Is against it.
 var ErrMissingDependency = errors.New("diffgate: missing required dependency")
 
+// CallEdgeReader is the consumer-owned narrow port the dead-code resolution
+// predicate needs from the base: CALLS-only inbound adjacency. It is distinct
+// from EdgeReader.InboundEdges (all kinds, used by the blast-radius BFS) so the
+// liveness re-run agrees with the CALLS-only check that raised the finding —
+// counting structural CONTAINS edges resolved every dead-code finding for free
+// (solov2-nmps.9).
+type CallEdgeReader interface {
+	// InboundCallEdges returns, for each node_id, the src_node_id values of its
+	// inbound CALLS edges only.
+	InboundCallEdges(ctx context.Context, repoID, branch string, nodeIDs []string) (map[string][]string, error)
+}
+
 // BaseGraph is the "before" picture the candidate is diffed against: a
 // queryable graph exposing the same adjacency (EdgeReader) and node-metadata
-// (NodeLookup) ports the gate's consumers already use. v1 is the persisted
-// indexed-HEAD graph; future backends (in-memory parse-at-ref, 9fsn pinned
-// query) satisfy the same interface so verify/guard never change.
+// (NodeLookup) ports the gate's consumers already use, plus CALLS-only inbound
+// (CallEdgeReader) for dead-code liveness. v1 is the persisted indexed-HEAD
+// graph; future backends (in-memory parse-at-ref, 9fsn pinned query) satisfy
+// the same interface so verify/guard never change.
 type BaseGraph interface {
 	ports.EdgeReader
 	ports.NodeLookup
+	CallEdgeReader
 }
 
 // Ephemeral is the (base, candidate) graph state the Indexer produces. Base is

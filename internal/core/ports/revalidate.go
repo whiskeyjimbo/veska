@@ -90,13 +90,15 @@ type RevalidateQuerier interface {
 	// that's a separate cleanup path that 5.2 deliberately does not own.
 	StaleFindingsForFile(ctx context.Context, repoID, branch, filePath string) ([]StaleFinding, error)
 
-	// HasInboundEdges reports whether the named node currently has at least
-	// one inbound edge on (repoID, branch). Used by the revalidation
-	// handler's dead-code re-run: if a stale dead-code finding's anchor
-	// node now has callers, the rule no longer fires and the finding is
-	// closed as obsolete. If it still has zero inbound edges, the rule
-	// still fires and the finding row is REFRESHED in place.
-	HasInboundEdges(ctx context.Context, repoID, branch, nodeID string) (bool, error)
+	// HasInboundCallEdges reports whether the named node currently has at least
+	// one inbound CALLS edge on (repoID, branch). Used by the revalidation
+	// handler's dead-code re-run: if a stale dead-code finding's anchor node
+	// now has a caller, the rule no longer fires and the finding is closed as
+	// obsolete. If it still has zero inbound CALLS edges, the rule still fires
+	// and the finding row is REFRESHED in place. Only CALLS count — a
+	// structural CONTAINS/IMPORTS parent edge is not a caller, so it must not
+	// resolve a dead-code finding (solov2-nmps.9).
+	HasInboundCallEdges(ctx context.Context, repoID, branch, nodeID string) (bool, error)
 
 	// NodeSignaturePair returns the (prev_signature, signature) pair for
 	// the named node on (repoID, branch). Used by the revalidation

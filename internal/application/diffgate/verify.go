@@ -153,28 +153,32 @@ func (v *Verifier) Verify(ctx context.Context, eph *Ephemeral, target *domain.Fi
 
 // ephemeralPredicates implements revalidate.PredicateSource over the ephemeral
 // graph so the dead-code re-run sees the CANDIDATE's edges, not the indexed
-// base. Inbound edges = base inbound ∪ resolved overlay edges targeting the
-// node. A candidate's NEW cross-file caller surfaces as an UnresolvedCall
-// (bound only at promotion), not a resolved overlay edge, so it is NOT counted
-// here — that under-reports inbound edges, which biases dead-code resolution
-// toward "still dead / unresolved". For a GATE that is the safe direction (it
-// over-blocks a genuinely-resolving change rather than passing an unresolved
-// one); intra-file caller additions are counted exactly.
+// base. Inbound CALLS edges = base inbound CALLS ∪ resolved overlay CALLS edges
+// targeting the node. Only CALLS count: a structural CONTAINS/IMPORTS parent
+// edge is not a caller, so it must not resolve a dead-code finding — counting
+// it made every dead-code finding read as resolved with no fix (solov2-nmps.9),
+// since every symbol has a CONTAINS parent. A candidate's NEW cross-file caller
+// surfaces as an UnresolvedCall (bound only at promotion), not a resolved
+// overlay edge, so it is NOT counted here — that under-reports inbound edges,
+// which biases dead-code resolution toward "still dead / unresolved". For a
+// GATE that is the safe direction (it over-blocks a genuinely-resolving change
+// rather than passing an unresolved one); intra-file caller additions are
+// counted exactly.
 type ephemeralPredicates struct {
 	eph *Ephemeral
 }
 
-func (p ephemeralPredicates) HasInboundEdges(ctx context.Context, repoID, branch, nodeID string) (bool, error) {
-	base, err := p.eph.Base.InboundEdges(ctx, repoID, branch, []string{nodeID})
+func (p ephemeralPredicates) HasInboundCallEdges(ctx context.Context, repoID, branch, nodeID string) (bool, error) {
+	base, err := p.eph.Base.InboundCallEdges(ctx, repoID, branch, []string{nodeID})
 	if err != nil {
-		return false, fmt.Errorf("diffgate: base inbound edges for %q: %w", nodeID, err)
+		return false, fmt.Errorf("diffgate: base inbound call edges for %q: %w", nodeID, err)
 	}
 	if len(base[nodeID]) > 0 {
 		return true, nil
 	}
 	for _, f := range p.eph.Overlay.Snapshot(repoID, branch) {
 		for _, e := range f.Edges {
-			if e != nil && e.Resolved && string(e.Tgt) == nodeID {
+			if e != nil && e.Resolved && e.Kind == domain.EdgeCalls && string(e.Tgt) == nodeID {
 				return true, nil
 			}
 		}

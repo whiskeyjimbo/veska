@@ -24,10 +24,20 @@ func (f fakeCloneBase) NodesByContentHash(_ context.Context, _, _, hash string, 
 	return f.byHash[hash], nil
 }
 
+// InboundCallEdges satisfies diffgate.CallEdgeReader; the clone gate never
+// re-runs dead-code resolution, so it is a no-op.
+func (fakeCloneBase) InboundCallEdges(context.Context, string, string, []string) (map[string][]string, error) {
+	return nil, nil
+}
+
 // plainBase satisfies BaseGraph but NOT cloneHashLookup (the degraded path).
 type plainBase struct {
 	ports.EdgeReader
 	ports.NodeLookup
+}
+
+func (plainBase) InboundCallEdges(context.Context, string, string, []string) (map[string][]string, error) {
+	return nil, nil
 }
 
 func cloneNode(t *testing.T, id, path, name, kind, hash string) *domain.Node {

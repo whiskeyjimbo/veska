@@ -60,7 +60,7 @@ func (f *fakeRepo) StaleFindingsForFile(_ context.Context, _, _, _ string) ([]po
 	return f.stale, nil
 }
 
-func (f *fakeRepo) HasInboundEdges(_ context.Context, _, _, nodeID string) (bool, error) {
+func (f *fakeRepo) HasInboundCallEdges(_ context.Context, _, _, nodeID string) (bool, error) {
 	if f.edgesErr != nil {
 		return false, f.edgesErr
 	}
@@ -750,8 +750,7 @@ func TestHandler_Integration_PerRuleDispatch(t *testing.T) {
 	insertNode(t, db, "n-caller", "repo1", "main", "pkg/b.go", "h-caller")
 	insertEdge(t, db, "edge-1", "repo1", "main", "n-caller", "n-dead-close")
 	// A TEST-shaped caller making a CALLS edge into n-untested-close (so the
-	// test-caller predicate fires). insertEdge writes kind 'call'; HasTestCaller
-	// matches UPPER(kind)='CALLS', so insert this edge explicitly.
+	// test-caller predicate fires), with the src node living in a *_test.go file.
 	insertNode(t, db, "n-test-caller", "repo1", "main", "pkg/a_test.go", "h-tcaller")
 	if _, err := db.Exec(`INSERT INTO edges (
         edge_id, branch, repo_id, src_node_id, dst_node_id, kind, confidence, last_promoted_at
@@ -920,10 +919,13 @@ func insertNodeWithSig(t *testing.T, db *sql.DB, nodeID, repoID, branch, filePat
 
 func insertEdge(t *testing.T, db *sql.DB, edgeID, repoID, branch, src, dst string) {
 	t.Helper()
+	// Production CALLS edges carry kind 'CALLS' (domain.EdgeCalls); the dead-code
+	// liveness predicate (HasInboundCallEdges) matches UPPER(kind)='CALLS', so
+	// this caller edge must use that kind to count as liveness (solov2-nmps.9).
 	_, err := db.Exec(`INSERT INTO edges (
         edge_id, branch, repo_id, src_node_id, dst_node_id, kind, confidence, last_promoted_at
     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-		edgeID, branch, repoID, src, dst, "call", "definite", time.Now().UnixMilli(),
+		edgeID, branch, repoID, src, dst, "CALLS", "definite", time.Now().UnixMilli(),
 	)
 	if err != nil {
 		t.Fatalf("insert edge %s: %v", edgeID, err)
