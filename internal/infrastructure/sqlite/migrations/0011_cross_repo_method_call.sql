@@ -1,4 +1,4 @@
--- solov2-9rc2 (phase C) - Add a method_call flag to cross_repo_edge_stubs so
+-- solov2-9rc2 (phase C) — Add a method_call flag to cross_repo_edge_stubs so
 -- chained-selector method calls (`v := pkg.New(...); v.Method()`) can produce
 -- cross-repo edge stubs alongside the existing exact-symbol-path stubs.
 --

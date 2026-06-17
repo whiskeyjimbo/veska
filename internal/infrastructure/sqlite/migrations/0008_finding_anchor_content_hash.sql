@@ -1,9 +1,9 @@
--- m3.05.1 - Persist the node content_hash captured at finding-write time so
+-- m3.05.1 — Persist the node content_hash captured at finding-write time so
 -- the revalidation sweep (m3.05.2) can detect when the anchored symbol has
 -- drifted and supersede the stale finding.
 --
 -- Forward-only: existing rows get NULL, which is treated by the sweep as "no
--- anchor hash recorded" - those findings are revalidated by other means
+-- anchor hash recorded" — those findings are revalidated by other means
 -- (e.g. anchor-still-exists check) rather than by hash comparison.
 --
 -- File-anchored findings (parse-failure) never populate this column; the file
