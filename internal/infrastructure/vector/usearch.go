@@ -17,32 +17,32 @@ import (
 const (
 	indexDim             = 768
 	indexConnectivity    = 16
-	indexExpansionAdd    = 64 // 64 is the practical default; 200 is 3x slower with negligible recall gain
+	indexExpansionAdd    = 64 // An expansion factor of 64 is the practical default because higher values are slower with negligible recall gain.
 	indexExpansionSearch = 100
 )
 
-// indexKey uniquely identifies a per-(repoID, branch, modelID) HNSW index.
+// indexKey uniquely identifies an HNSW index partitioned by repository, branch, and model.
 type indexKey struct {
 	repoID  string
 	branch  string
 	modelID string
 }
 
-// rowMeta is the Go-side metadata stored per usearch slot. The Vector field is
-// intentionally absent: usearch holds the float16-quantized copy; keeping a
-// second float32 copy here would double per-vector RSS for no benefit.
+// rowMeta stores the Go-side metadata associated with each usearch slot. The original
+// float32 vector is omitted because usearch maintains its own float16-quantized copy;
+// keeping a duplicate copy in Go memory would double the per-vector RSS without benefit.
 type rowMeta struct {
 	NodeID      string
 	ContentHash string
 	ModelID     string
 }
 
-// indexEntry holds one usearch HNSW index plus the metadata needed to implement
-// LookupContentHashes and to map usearch uint64 IDs back to nodeIDs.
+// indexEntry manages a single native usearch index alongside the auxiliary maps
+// required to resolve content hashes and map numeric usearch identifiers back to Go node IDs.
 type indexEntry struct {
 	idx      *usearchlib.Index
-	rows     map[uint64]rowMeta // usearch id → metadata (no vector)
-	nodeToID map[string]uint64  // nodeID → current usearch id
+	rows     map[uint64]rowMeta // Maps numeric usearch identifiers to row metadata.
+	nodeToID map[string]uint64  // Maps node identifiers to usearch identifiers.
 	nextID   uint64
 	capacity uint
 }
@@ -67,7 +67,7 @@ func newIndexEntry() (*indexEntry, error) {
 	}, nil
 }
 
-// reserve ensures the index has capacity for at least n additional vectors.
+// reserve pre-allocates space in the native index to accommodate at least n additional vectors.
 func (e *indexEntry) reserve(needed uint) error {
 	total := uint(len(e.rows)) + needed
 	if total <= e.capacity {
@@ -81,13 +81,13 @@ func (e *indexEntry) reserve(needed uint) error {
 	return nil
 }
 
-// upsert inserts or replaces a single row in the index.
-// usearch does not support in-place updates, so an existing entry is removed from
-// the metadata maps and a fresh ID is assigned.
+// upsert inserts or replaces a single row in the index. Because the underlying usearch
+// index does not support in-place updates, any pre-existing entry is untracked in the
+// metadata maps and a brand new identifier is generated for the updated vector.
 func (e *indexEntry) upsert(row domain.EmbeddingRow) error {
 	if oldID, exists := e.nodeToID[row.NodeID]; exists {
-		// Remove old metadata; the old slot in usearch is left as a tombstone
-		// (usearch has no Delete API in this version).
+		// Remove the old metadata. The obsolete slot in the usearch index is left
+		// as a tombstone because the usearch API does not support deletion.
 		delete(e.rows, oldID)
 	}
 	if err := e.reserve(1); err != nil {
@@ -103,26 +103,26 @@ func (e *indexEntry) upsert(row domain.EmbeddingRow) error {
 	return nil
 }
 
-// UsearchStore is an in-memory VectorStorage backed by per-(repoID,branch,modelID)
-// usearch HNSW indexes with float16 quantization.
-// It is safe for concurrent use.
+// UsearchStore implements the VectorStorage interface using separate, in-memory usearch
+// HNSW indexes partitioned by repository, branch, and model. It uses float16 quantization
+// and is safe for concurrent access.
 type UsearchStore struct {
 	mu      sync.RWMutex
 	indexes map[indexKey]*indexEntry
 }
 
-// Compile-time interface satisfaction check.
+// Compile-time check to ensure UsearchStore implements the ports.VectorStorage interface.
 var _ ports.VectorStorage = (*UsearchStore)(nil)
 
-// NewUsearchStore constructs an empty UsearchStore.
+// NewUsearchStore constructs an empty UsearchStore instance.
 func NewUsearchStore() (*UsearchStore, error) {
 	return &UsearchStore{
 		indexes: make(map[indexKey]*indexEntry),
 	}, nil
 }
 
-// Destroy releases all native usearch resources. Must be called when the store is
-// no longer needed to avoid leaking CGo memory.
+// Destroy releases all native usearch resources. This method must be called when
+// the store is no longer needed to prevent memory leaks in the C runtime.
 func (s *UsearchStore) Destroy() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -132,8 +132,8 @@ func (s *UsearchStore) Destroy() {
 	}
 }
 
-// getOrCreate returns the indexEntry for key, creating it if absent.
-// Caller must hold s.mu (write lock).
+// getOrCreate returns the indexEntry for the given key, constructing it if it does not exist.
+// The caller must hold the write lock on the store mutex.
 func (s *UsearchStore) getOrCreate(key indexKey) (*indexEntry, error) {
 	if e, ok := s.indexes[key]; ok {
 		return e, nil
@@ -146,9 +146,9 @@ func (s *UsearchStore) getOrCreate(key indexKey) (*indexEntry, error) {
 	return e, nil
 }
 
-// UpsertEmbeddings inserts or updates a batch of embedding rows under (repoID, branch).
-// Each row's ModelID determines which HNSW index it is stored in.
-// The full batch capacity is reserved upfront per index to avoid repeated resizes.
+// UpsertEmbeddings inserts or updates a batch of embedding rows partitioned by repository and branch.
+// Each row is stored in the specific HNSW index corresponding to its model identifier.
+// The index capacity is reserved in advance to prevent repeated reallocation overhead.
 func (s *UsearchStore) UpsertEmbeddings(_ context.Context, repoID, branch string, batch []domain.EmbeddingRow) error {
 	if len(batch) == 0 {
 		return nil
@@ -156,7 +156,7 @@ func (s *UsearchStore) UpsertEmbeddings(_ context.Context, repoID, branch string
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	// Count rows per model so we can reserve capacity in one shot per index.
+	// Count the rows required per model to perform a single pre-allocation for each index.
 	perModel := make(map[string]uint, 4)
 	for _, row := range batch {
 		perModel[row.ModelID] += 1
@@ -181,12 +181,11 @@ func (s *UsearchStore) UpsertEmbeddings(_ context.Context, repoID, branch string
 	return nil
 }
 
-// Search returns the k nearest neighbours to vec within (repoID, branch).
-// If filter.ModelID is non-empty, only the index for that model is searched;
-// otherwise all model indexes for the (repoID, branch) pair are searched and
-// results are merged.
-// Results are sorted by score descending (lower L2 distance → higher score:
-// score = 1 / (1 + distance)).
+// Search returns the k nearest neighbors to the query vector within the specified repository and branch.
+// If filter.ModelID is specified, only that model's index is queried; otherwise, searches are executed
+// across all active model indexes for the repository and branch and the results are merged.
+// The results are returned sorted by score in descending order, where the similarity score is derived
+// from the L2-squared distance.
 func (s *UsearchStore) Search(_ context.Context, repoID, branch string, vec []float32, k int, filter domain.VectorFilter) ([]domain.SearchHit, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -212,7 +211,7 @@ func (s *UsearchStore) Search(_ context.Context, repoID, branch string, vec []fl
 		for i, key := range keys {
 			row, ok := e.rows[key]
 			if !ok {
-				// tombstone slot - skip
+				// Skip slots that have been overwritten and left as tombstones.
 				continue
 			}
 			var dist float32
@@ -226,7 +225,7 @@ func (s *UsearchStore) Search(_ context.Context, repoID, branch string, vec []fl
 
 	if filter.ModelID != "" {
 		key := indexKey{repoID: repoID, branch: branch, modelID: filter.ModelID}
-		e := s.indexes[key] // nil if not found
+		e := s.indexes[key] // This will be nil if the index has not been created.
 		if err := search(e); err != nil {
 			return nil, err
 		}
@@ -241,7 +240,7 @@ func (s *UsearchStore) Search(_ context.Context, repoID, branch string, vec []fl
 		}
 	}
 
-	// Sort by distance ascending (closest first), then convert to score.
+	// Sort the aggregated candidates by distance in ascending order before truncating and converting to scores.
 	sort.Slice(candidates, func(i, j int) bool {
 		return candidates[i].dist < candidates[j].dist
 	})
@@ -251,7 +250,7 @@ func (s *UsearchStore) Search(_ context.Context, repoID, branch string, vec []fl
 
 	hits := make([]domain.SearchHit, len(candidates))
 	for i, c := range candidates {
-		// Convert L2-sq distance to a [0,1) similarity score.
+		// Convert the L2-squared distance to a similarity score between 0 and 1.
 		hits[i] = domain.SearchHit{
 			NodeID: c.nodeID,
 			Score:  1.0 / (1.0 + c.dist),
@@ -260,19 +259,19 @@ func (s *UsearchStore) Search(_ context.Context, repoID, branch string, vec []fl
 	return hits, nil
 }
 
-// Reindex is a no-op stub. The usearch store holds vectors in-memory; re-quantization
-// is handled at load time by the index configuration.
+// Reindex is a no-op implementation because the store maintains vector indexes in-memory.
+// Re-quantization is natively handled at load time via the index configuration.
 func (s *UsearchStore) Reindex(_ context.Context, _ string, _ string) error {
 	return nil
 }
 
-// LookupContentHashes returns a nodeID → contentHash map for the requested node IDs
-// within (repoID, branch). Missing node IDs are silently omitted from the result.
+// LookupContentHashes retrieves the content hashes for the specified node IDs within a repository and branch.
+// Identifiers that are not present in the index are silently omitted from the returned map.
 func (s *UsearchStore) LookupContentHashes(_ context.Context, repoID, branch string, nodeIDs []string) (map[string]string, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	// Build a lookup set for requested nodeIDs.
+	// Build a lookup set to check requested node IDs efficiently.
 	want := make(map[string]struct{}, len(nodeIDs))
 	for _, id := range nodeIDs {
 		want[id] = struct{}{}
