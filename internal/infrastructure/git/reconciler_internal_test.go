@@ -9,13 +9,9 @@ import (
 	"time"
 )
 
-// TestWallTickStripsMonotonic guards the suspend-detection fix: wallTick must
-// return a time with no monotonic reading so gap arithmetic in Start uses
-// wall-clock elapsed time (which advances across system suspend) rather than
-// monotonic time (which does not). A regression that dropped the.Round(0)
-// would let wallTick carry the monotonic component, and got != got.Round(0)
-// would then hold. We detect "has monotonic" via Go's == operator, which
-// compares the monotonic reading alongside the wall instant.
+// TestWallTickStripsMonotonic verifies that wallTick strips the monotonic clock component.
+// This is critical for gap arithmetic across system suspends because monotonic clocks do
+// not advance while the system is suspended.
 func TestWallTickStripsMonotonic(t *testing.T) {
 	mono := time.Now() // time.Now always carries a monotonic reading
 	r := NewWakeReconciler(
@@ -33,8 +29,7 @@ func TestWallTickStripsMonotonic(t *testing.T) {
 	}
 }
 
-// registerRepoDir creates a dir with one file and registers it, returning the
-// file's path so the caller can mutate it after the baseline is seeded.
+// registerRepoDir creates a directory containing a single file, registers it, and returns the file path.
 func registerRepoDir(t *testing.T, r *WakeReconciler, repoID string) string {
 	t.Helper()
 	dir := t.TempDir()
@@ -46,10 +41,8 @@ func registerRepoDir(t *testing.T, r *WakeReconciler, repoID string) string {
 	return path
 }
 
-// seedThenMutate seeds the reconciler's standalone baseline for each path
-// directly (no sweep, so sweep-start / post-sweep hooks do NOT fire during
-// seeding — matching the retired Seed's hook-free semantics), then mutates each
-// path so the next real sweep detects a change.
+// seedThenMutate initializes the standalone baseline directly for the specified paths,
+// then mutates each file on disk to guarantee that the next sweep detects changes.
 func seedThenMutate(t *testing.T, r *WakeReconciler, paths ...string) {
 	t.Helper()
 	for _, path := range paths {
@@ -66,9 +59,8 @@ func seedThenMutate(t *testing.T, r *WakeReconciler, paths ...string) {
 	}
 }
 
-// TestSweepStartHook_FiresPerRepoBeforeWalk asserts the sweep-start hook runs
-// once per registered repo and that every hook completes BEFORE any file-walk
-// handler fires (the serial pre-pass contract).
+// TestSweepStartHook_FiresPerRepoBeforeWalk asserts that the sweep-start hook runs
+// once per registered repository and completes before any file walks occur.
 func TestSweepStartHook_FiresPerRepoBeforeWalk(t *testing.T) {
 	var mu sync.Mutex
 	hookCount := map[string]int{}
@@ -108,9 +100,8 @@ func TestSweepStartHook_FiresPerRepoBeforeWalk(t *testing.T) {
 	}
 }
 
-// TestPostSweepHook_FiresOnceAfterWalk asserts the post-sweep hook (the
-// wake-handle restart seam) runs exactly once at the end of a
-// sweep and only AFTER every file-walk handler has fired.
+// TestPostSweepHook_FiresOnceAfterWalk asserts that the post-sweep hook runs
+// exactly once after all file walks have completed.
 func TestPostSweepHook_FiresOnceAfterWalk(t *testing.T) {
 	var mu sync.Mutex
 	postCount := 0
@@ -150,8 +141,7 @@ func TestPostSweepHook_FiresOnceAfterWalk(t *testing.T) {
 	}
 }
 
-// TestPostSweepHook_NilSkipped confirms a nil post-sweep hook leaves the sweep
-// working (back-compat: no after-phase).
+// TestPostSweepHook_NilSkipped confirms that a nil post-sweep hook does not affect sweep functionality.
 func TestPostSweepHook_NilSkipped(t *testing.T) {
 	fired := false
 	r := NewWakeReconciler(time.Second, time.Second,
@@ -164,8 +154,7 @@ func TestPostSweepHook_NilSkipped(t *testing.T) {
 	}
 }
 
-// TestSweepStartHook_NilSkipped confirms a nil hook leaves the sweep working
-// (back-compat: no pre-pass).
+// TestSweepStartHook_NilSkipped confirms that a nil sweep-start hook does not affect sweep functionality.
 func TestSweepStartHook_NilSkipped(t *testing.T) {
 	fired := false
 	r := NewWakeReconciler(time.Second, time.Second,

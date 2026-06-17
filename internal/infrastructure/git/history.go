@@ -1,12 +1,6 @@
-// history.go exposes read-only commit-history queries — ChangeCounts and
-// FileHistory — thin os/exec wrappers around `git log` used by the
-// hot_zone ranking surface and the eng_get_context_pack MCP tool to
-// derive per-file recent-change frequency.
-// git log is the data source (rather than post_promotion_queue done-rows,
-// which may be gc-pruned). The full log is walked and windowed in-process
-// on each commit's date; results are sorted so a fixed repo state + window
-// yields deterministic output.
-// File paths are repoRoot-relative — the same convention as diff.go.
+// history.go provides commit-history queries to analyze change frequency and commit history.
+// We query the Git log directly rather than relying on auxiliary databases, filtering and windowing
+// in-process to guarantee deterministic sorting.
 
 package git
 
@@ -21,13 +15,10 @@ import (
 	"time"
 )
 
-// defaultWindow is the look-back applied when ChangeCounts / FileHistory
-// are called with a zero window.
+// defaultWindow defines the default look-back window of 30 days applied if a duration of zero is specified.
 const defaultWindow = 30 * 24 * time.Hour
 
-// Commit is a single commit touching a queried file path. Fields are the
-// minimum the hot_zone surface and context-pack tool need; the full diff
-// is intentionally not exposed (read-only history, not blast radius).
+// Commit represents a single commit that modified a queried file path, exposing only read-only metadata.
 type Commit struct {
 	Hash    string    // full commit hash
 	Author  string    // author name
@@ -35,25 +26,17 @@ type Commit struct {
 	Subject string    // commit subject line
 }
 
-// ChangeCounts returns per-file change counts: for every file touched by
-// a commit within window, the number of commits in that window that
-// modified it. A zero window selects the 30-day default. Out-of-window
-// commits are excluded. The map is keyed by repoRoot-relative path.
-// Filtering is done in-process on each commit's date rather than via
-// `git log --since`: --since stops history traversal at the first
-// out-of-window commit, so an out-of-window HEAD would hide every
-// in-window ancestor. Walking the full log and filtering ourselves
-// is correct regardless of commit-date ordering.
-// An empty repoRoot returns an error rather than shelling out against
-// the process cwd: history queries must always run scoped to a repo.
+// ChangeCounts aggregates the number of commits modifying each file within the look-back window.
+// Filtering is performed in-process rather than utilizing `git log --since` because `--since` stops
+// traversal at the first out-of-window commit, which would hide older in-window ancestors if HEAD
+// is out-of-window. An empty repoRoot returns an error to prevent execution in incorrect contexts.
 func ChangeCounts(ctx context.Context, repoRoot string, window time.Duration) (map[string]int, error) {
 	if repoRoot == "" {
 		return nil, fmt.Errorf("git log: repoRoot is empty")
 	}
 	cutoff := cutoffTime(window)
-	// %x1f-delimited header line, then --name-only paths, then a blank
-	// line. A leading record-separator marks header lines apart from
-	// path lines.
+	// We format output with a leading record-separator character to clearly distinguish
+	// commit header dates from file paths during in-process parsing.
 	args := []string{
 		"-C", repoRoot, "log",
 		"--date=unix",
@@ -84,9 +67,7 @@ func ChangeCounts(ctx context.Context, repoRoot string, window time.Duration) (m
 	return counts, nil
 }
 
-// FileHistory returns the commits that touched path within window,
-// newest first. A zero window selects the 30-day default. path is
-// interpreted relative to repoRoot.
+// FileHistory retrieves the commit history for a specific file path within the look-back window, sorted newest first.
 func FileHistory(ctx context.Context, repoRoot, path string, window time.Duration) ([]Commit, error) {
 	if repoRoot == "" {
 		return nil, fmt.Errorf("git log: repoRoot is empty")
@@ -94,9 +75,7 @@ func FileHistory(ctx context.Context, repoRoot, path string, window time.Duratio
 	if path == "" {
 		return nil, fmt.Errorf("git log: path is empty")
 	}
-	// Record-separated, field-separated format keeps subjects with
-	// embedded characters from being mis-parsed. The committer date
-	// (%cd) drives windowing; the author date (%ad) is surfaced.
+	// We utilize a custom field-separated format to prevent subjects containing newlines or special characters from corrupting parsing.
 	const sep = "\x1f"
 	cutoff := cutoffTime(window)
 	args := []string{
@@ -136,8 +115,7 @@ func FileHistory(ctx context.Context, repoRoot, path string, window time.Duratio
 			Subject: parts[4],
 		})
 	}
-	// `git log` already emits newest-first; sort explicitly so output is
-	// deterministic even if commits share a timestamp.
+	// Sort commits explicitly by author date and then hash to ensure deterministic output even when commits share a timestamp.
 	sort.SliceStable(commits, func(i, j int) bool {
 		if !commits[i].When.Equal(commits[j].When) {
 			return commits[i].When.After(commits[j].When)
@@ -147,8 +125,7 @@ func FileHistory(ctx context.Context, repoRoot, path string, window time.Duratio
 	return commits, nil
 }
 
-// cutoffTime is the oldest commit time included by window; commits
-// before it are out-of-window. A zero window selects the 30-day default.
+// cutoffTime calculates the threshold timestamp beyond which commits are excluded.
 func cutoffTime(window time.Duration) time.Time {
 	if window <= 0 {
 		window = defaultWindow
@@ -156,7 +133,7 @@ func cutoffTime(window time.Duration) time.Time {
 	return time.Now().Add(-window)
 }
 
-// parseUnix parses a `--date=unix` timestamp (seconds since epoch).
+// parseUnix parses a Unix timestamp formatted as seconds since epoch into a Time value.
 func parseUnix(s string) (time.Time, error) {
 	secs, err := strconv.ParseInt(strings.TrimSpace(s), 10, 64)
 	if err != nil {
@@ -165,7 +142,7 @@ func parseUnix(s string) (time.Time, error) {
 	return time.Unix(secs, 0).UTC(), nil
 }
 
-// runGit executes a git command scoped to repoRoot and returns stdout.
+// runGit executes a git command scoped to the repository root and returns its output.
 func runGit(ctx context.Context, repoRoot string, args []string) (string, error) {
 	cmd := exec.CommandContext(ctx, "git", args...)
 	var stdout, stderr bytes.Buffer

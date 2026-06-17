@@ -1,9 +1,4 @@
-// refdiff.go exposes thin os/exec wrappers used by the
-// eng_find_changed_symbols MCP tool to compare two arbitrary git refs
-// on demand: ChangedFilesBetween lists the files that differ between
-// two refs, and FileAtRef reads a single file's content at a ref.
-// Like diff.go, paths are relative to repoRoot — that is what
-// `git diff --name-only` emits and what `git show <ref>:<path>` expects.
+// refdiff.go provides helpers to compare Git references and read file contents at specific references.
 
 package git
 
@@ -16,25 +11,15 @@ import (
 	"strings"
 )
 
-// ErrFileNotAtRef is returned by FileAtRef when the requested path does
-// not exist at the given ref (e.g. the file was added after ref_a or
-// deleted before ref_b). Callers treat this as "symbol set is empty at
-// that ref" rather than a hard failure.
+// ErrFileNotAtRef is returned when the requested file path does not exist at the specified reference.
 var ErrFileNotAtRef = errors.New("git show: file not present at ref")
 
-// ErrUnknownRevision is returned by ChangedFilesBetween when one of the
-// refs does not resolve in the repo — most commonly HEAD~1 on a
-// freshly-init'd repo with a single commit, but also typos and stale
-// branch names. Callers (e.g. the eng_find_changed_symbols MCP tool)
-// translate this into a typed invalid-params response rather than
-// leaking raw git stderr to the wire.
+// ErrUnknownRevision is returned when one of the provided Git references cannot be resolved.
 var ErrUnknownRevision = errors.New("git diff: unknown revision")
 
-// ChangedFilesBetween returns the list of files that differ between
-// refA and refB, as `git diff --name-only <refA> <refB>` reports them.
-// Paths are relative to repoRoot.
-// An empty repoRoot or an empty ref returns an error rather than
-// silently shelling out against the process cwd or HEAD.
+// ChangedFilesBetween returns the list of files that differ between two references.
+// The returned paths are relative to the repository root. An empty repoRoot or ref returns
+// an error to prevent running commands outside repository scope.
 func ChangedFilesBetween(ctx context.Context, repoRoot, refA, refB string) ([]string, error) {
 	if repoRoot == "" {
 		return nil, fmt.Errorf("git diff: repoRoot is empty")
@@ -47,9 +32,7 @@ func ChangedFilesBetween(ctx context.Context, repoRoot, refA, refB string) ([]st
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
 	if err := cmd.Run(); err != nil {
-		// Map the common "ref doesn't resolve" failure (ambiguous argument /
-		// unknown revision) to a typed error so callers can return a clean
-		// invalid-params response instead of leaking raw git stderr.
+		// Map unresolved reference failures to a typed error to simplify caller handling.
 		stderrStr := stderr.String()
 		if strings.Contains(stderrStr, "ambiguous argument") || strings.Contains(stderrStr, "unknown revision") {
 			return nil, fmt.Errorf("%w: refs=%s..%s", ErrUnknownRevision, refA, refB)
@@ -64,13 +47,9 @@ func ChangedFilesBetween(ctx context.Context, repoRoot, refA, refB string) ([]st
 	return out, nil
 }
 
-// WorkingTreeHasUncommittedChanges reports whether repoRoot has any
-// uncommitted modifications (staged, unstaged, or untracked Go-ish source
-// files) by running `git status --porcelain`. Returns false on any
-// shell-out error so callers don't surface a false "dirty" signal from a
-// transient git failure. Used by post-promotion-oriented tools
-// (eng_find_todos) to add a degraded_reason explaining why
-// working-tree edits are invisible to them.
+// WorkingTreeHasUncommittedChanges reports whether the repository contains any uncommitted
+// changes (staged, unstaged, or untracked). It returns false if the git command fails to
+// prevent reporting false positives on transient errors.
 func WorkingTreeHasUncommittedChanges(ctx context.Context, repoRoot string) bool {
 	if repoRoot == "" {
 		return false
@@ -84,11 +63,7 @@ func WorkingTreeHasUncommittedChanges(ctx context.Context, repoRoot string) bool
 	return strings.TrimSpace(stdout.String()) != ""
 }
 
-// ResolvesRef reports whether ref resolves to a commit in repoRoot via
-// `git rev-parse --verify <ref>^{commit}`. Used by callers that need to
-// say "ref_a is the bad one" after ChangedFilesBetween returned
-// ErrUnknownRevision — git's combined error doesn't say which side
-// failed.
+// ResolvesRef reports whether a Git reference successfully resolves to a commit in the repository.
 func ResolvesRef(ctx context.Context, repoRoot, ref string) bool {
 	if repoRoot == "" || ref == "" {
 		return false
@@ -97,11 +72,9 @@ func ResolvesRef(ctx context.Context, repoRoot, ref string) bool {
 	return cmd.Run() == nil
 }
 
-// FileAtRef returns the content of path as it existed at ref, via
-// `git show <ref>:<path>`. Path is relative to repoRoot.
-// When the file does not exist at ref, ErrFileNotAtRef is returned and
-// the content is nil — this is expected for files added or deleted
-// between the two refs being compared.
+// FileAtRef returns the content of a file as it existed at the specified reference.
+// The file path is relative to the repository root. It returns ErrFileNotAtRef if the path
+// is absent at that reference.
 func FileAtRef(ctx context.Context, repoRoot, ref, path string) ([]byte, error) {
 	if repoRoot == "" {
 		return nil, fmt.Errorf("git show: repoRoot is empty")
@@ -114,9 +87,7 @@ func FileAtRef(ctx context.Context, repoRoot, ref, path string) ([]byte, error) 
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
 	if err := cmd.Run(); err != nil {
-		// `git show` fails with a non-zero exit when the path is absent
-		// at the ref; treat that as ErrFileNotAtRef so callers can skip
-		// the missing side of an added/deleted file gracefully.
+		// An execution failure indicates the path is absent at the reference, which we map to ErrFileNotAtRef.
 		return nil, fmt.Errorf("%w: %s:%s in %s: %v: %s",
 			ErrFileNotAtRef, ref, path, repoRoot, err, strings.TrimSpace(stderr.String()))
 	}

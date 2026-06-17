@@ -10,13 +10,13 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/core/ports"
 )
 
-// RepoFileEvent wraps a ports.FileEvent with the source repo ID.
+// RepoFileEvent wraps a ports.FileEvent with the source repository identifier.
 type RepoFileEvent struct {
 	RepoID string
 	Event  ports.FileEvent
 }
 
-// repoWatch holds the per-repo watcher state.
+// repoWatch tracks the FSWatcher and context cancellation function for a specific repository.
 type repoWatch struct {
 	repoID   string
 	rootPath string
@@ -24,11 +24,10 @@ type repoWatch struct {
 	cancel   context.CancelFunc
 }
 
-// MultiRepoWatcher manages a dynamic set of per-repo FSWatcher instances.
-// Each repo has its own isolated debounce queue. Events from all repos are
-// multiplexed onto a single channel returned by Events.
-// A panic in one repo's watcher goroutine is recovered, logged, and that
-// repo is restarted after a 1-second delay.
+// MultiRepoWatcher manages a dynamic collection of repository-specific FSWatcher instances,
+// each maintaining an isolated debounce queue. Events from all watched repositories are multiplexed
+// onto a single output channel. If a watcher goroutine encounters a panic, it recovers, logs the
+// error, and restarts the watcher for that repository after a one-second delay.
 type MultiRepoWatcher struct {
 	mu     sync.RWMutex
 	repos  map[string]*repoWatch
@@ -38,7 +37,7 @@ type MultiRepoWatcher struct {
 	once   sync.Once // ensures out is only closed once
 }
 
-// NewMultiRepoWatcher creates a new MultiRepoWatcher. Call Start before Add.
+// NewMultiRepoWatcher constructs a new MultiRepoWatcher instance. Start must be called before adding repositories.
 func NewMultiRepoWatcher() *MultiRepoWatcher {
 	return &MultiRepoWatcher{
 		repos: make(map[string]*repoWatch),
@@ -46,20 +45,17 @@ func NewMultiRepoWatcher() *MultiRepoWatcher {
 	}
 }
 
-// Start initialises the multiplexer's parent context. It must be called before
-// any Add calls. Cancelling ctx is equivalent to calling Close.
+// Start initializes the multiplexer's parent context. This must be called before calling Add. Cancelling the context is equivalent to calling Close.
 func (m *MultiRepoWatcher) Start(ctx context.Context) {
 	m.ctx, m.cancel = context.WithCancel(ctx)
 }
 
-// Events returns the channel on which RepoFileEvents from all watched repos
-// are delivered.
+// Events returns the channel on which file events from all watched repositories are delivered.
 func (m *MultiRepoWatcher) Events() <-chan RepoFileEvent {
 	return m.out
 }
 
-// WatchedRepoIDs returns the IDs of every repository currently being watched.
-// The order is unspecified. It is safe to call concurrently with Add/Remove.
+// WatchedRepoIDs returns the identifiers of all repositories currently being watched in an unspecified order. This method is safe for concurrent access.
 func (m *MultiRepoWatcher) WatchedRepoIDs() []string {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -71,10 +67,9 @@ func (m *MultiRepoWatcher) WatchedRepoIDs() []string {
 	return ids
 }
 
-// Add starts watching rootPath for repoID. A per-repo FSWatcher is created and
-// a forwarding goroutine is launched that multiplexes its events onto the shared
-// output channel. If the forwarding goroutine panics it is recovered, logged,
-// and the watcher is restarted after 1 second.
+// Add starts watching the specified root path for a repository. It creates a dedicated FSWatcher
+// and launches a forwarding goroutine to multiplex events. If the forwarding goroutine panics, it
+// recovers, logs the error, and automatically restarts the watcher after one second.
 func (m *MultiRepoWatcher) Add(repoID, rootPath string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -93,8 +88,7 @@ func (m *MultiRepoWatcher) Add(repoID, rootPath string) error {
 	return nil
 }
 
-// startRepoWatch creates and starts a new repoWatch. The caller must hold mu (or
-// it must be called before sharing). It is also used by the panic-recovery path.
+// startRepoWatch constructs and launches a new repository watcher. The caller must hold the write lock.
 func (m *MultiRepoWatcher) startRepoWatch(repoID, rootPath string) (*repoWatch, error) {
 	fw, err := NewFSWatcher()
 	if err != nil {
@@ -122,9 +116,8 @@ func (m *MultiRepoWatcher) startRepoWatch(repoID, rootPath string) (*repoWatch, 
 	return rw, nil
 }
 
-// forwardEvents reads from eventCh and forwards each event to the shared output
-// channel with the repo ID attached. It recovers from panics and restarts the
-// watcher for the affected repo after 1 second.
+// forwardEvents reads events from the source channel and forwards them to the shared output channel.
+// It intercepts panics, logging the error and initiating a restart of the repository watcher after a delay.
 func (m *MultiRepoWatcher) forwardEvents(ctx context.Context, rw *repoWatch, eventCh <-chan ports.FileEvent) {
 	defer func() {
 		if r := recover(); r != nil {
@@ -132,13 +125,13 @@ func (m *MultiRepoWatcher) forwardEvents(ctx context.Context, rw *repoWatch, eve
 				"repoID", rw.repoID,
 				"panic", r,
 			)
-			// Drain remaining events to avoid a goroutine blocked on send.
+			// Drain remaining events to prevent any goroutine from blocking on a channel send.
 			go func() {
 				for range eventCh { //nolint:revive
 				}
 			}()
 
-			// Restart after 1 second unless the parent context is already done.
+			// Restart the watcher after one second unless the parent context has been cancelled.
 			select {
 			case <-m.ctx.Done():
 				return
@@ -146,7 +139,7 @@ func (m *MultiRepoWatcher) forwardEvents(ctx context.Context, rw *repoWatch, eve
 			}
 
 			m.mu.Lock()
-			// Only restart if the repo is still registered (Remove may have been called).
+			// Only restart the watcher if the repository remains in the registered set.
 			if _, exists := m.repos[rw.repoID]; exists {
 				newRW, err := m.startRepoWatch(rw.repoID, rw.rootPath)
 				if err != nil {
@@ -166,13 +159,13 @@ func (m *MultiRepoWatcher) forwardEvents(ctx context.Context, rw *repoWatch, eve
 		select {
 		case ev, ok := <-eventCh:
 			if !ok {
-				// Channel closed — normal shutdown.
+				// The channel was closed, indicating a normal shutdown.
 				return
 			}
 			select {
 			case m.out <- RepoFileEvent{RepoID: rw.repoID, Event: ev}:
 			case <-m.ctx.Done():
-				// Drain remaining events so the FSWatcher goroutine can exit.
+				// Drain remaining events to allow the FSWatcher goroutine to terminate cleanly.
 				go func() {
 					for range eventCh { //nolint:revive
 					}
@@ -180,7 +173,7 @@ func (m *MultiRepoWatcher) forwardEvents(ctx context.Context, rw *repoWatch, eve
 				return
 			}
 		case <-ctx.Done():
-			// Drain remaining events so the FSWatcher goroutine can exit.
+			// Drain remaining events to allow the FSWatcher goroutine to terminate cleanly.
 			go func() {
 				for range eventCh { //nolint:revive
 				}
@@ -190,12 +183,9 @@ func (m *MultiRepoWatcher) forwardEvents(ctx context.Context, rw *repoWatch, eve
 	}
 }
 
-// Inject synthesises a write event for path under repoID and multiplexes it
-// onto the shared output channel, exactly as a live fsnotify write would. The
-// wake reconciler uses this to feed suspend/resume-detected changes into the
-// same parse-on-save pipeline that drains Events. The send is bounded by the
-// multiplexer context so a stalled consumer cannot block a wake sweep past
-// shutdown. Calling before Start (m.ctx unset) is a no-op.
+// Inject synthesizes a write event for a file path and sends it to the shared output channel.
+// This is used to pipe suspend-detected changes into the parse-on-save pipeline. The send is
+// bounded by the multiplexer context to prevent blocked consumers from causing deadlocks on shutdown.
 func (m *MultiRepoWatcher) Inject(repoID, path string) {
 	if m.ctx == nil {
 		return
@@ -207,17 +197,10 @@ func (m *MultiRepoWatcher) Inject(repoID, path string) {
 	}
 }
 
-// RestartAll tears down and recreates every repo's FSWatcher so live events
-// resume against a fresh OS handle (a new inotify fd on Linux / FSEvents stream
-// on macOS). The wake reconciler invokes this after a suspend/resume sweep: the
-// mtime/size sweep already covered the suspend window, so the only job here is
-// to re-establish a clean live stream. Each repo is torn down (cancel + Close,
-// mirroring Remove) and recreated (startRepoWatch, mirroring Add) under m.mu,
-// replacing the map entry in place. A per-repo recreate failure is logged and
-// the entry dropped rather than aborting the remaining repos (startup-resync's
-// per-item resilience). The old forwardEvents goroutine drains and exits on its
-// cancelled ctx. cancel/Close/startRepoWatch are non-blocking, so holding m.mu
-// across the loop introduces no deadlock.
+// RestartAll tears down and recreates the FSWatcher for every watched repository, establishing
+// fresh operating system file handles. This method is called after a suspend/resume reconciliation
+// sweep to resume live event tracking. Recreation failures are logged and the corresponding entry is
+// removed to prevent stalling other repositories.
 func (m *MultiRepoWatcher) RestartAll() {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -239,12 +222,9 @@ func (m *MultiRepoWatcher) RestartAll() {
 	}
 }
 
-// BaselineFor returns the live change-detection baseline for repoID — the
-// current FSWatcher's lastSeen map — resolved under m.mu so it follows
-// RestartAll replacing the watcher (the lookup is performed on every call, never
-// captured once). ok is false when repoID is not watched, signalling the wake
-// reconciler to fall back to its standalone baseline. The returned *FSWatcher
-// satisfies git.BaselineStore.
+// BaselineFor returns the live change-detection baseline for a repository under a read lock.
+// It returns false if the repository is not currently being watched, indicating that the reconciler
+// should fall back to a standalone baseline.
 func (m *MultiRepoWatcher) BaselineFor(repoID string) (BaselineStore, bool) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
@@ -256,7 +236,7 @@ func (m *MultiRepoWatcher) BaselineFor(repoID string) (BaselineStore, bool) {
 }
 
 // Remove stops the watcher for repoID and removes it from the tracked set.
-// Returns an error if repoID is not currently watched.
+// It returns an error if the repository is not found in the watched set.
 func (m *MultiRepoWatcher) Remove(repoID string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -272,7 +252,7 @@ func (m *MultiRepoWatcher) Remove(repoID string) error {
 	return nil
 }
 
-// Close stops all repo watchers and closes the Events channel.
+// Close stops all repository watchers and closes the multiplexed events channel.
 func (m *MultiRepoWatcher) Close() error {
 	if m.cancel != nil {
 		m.cancel()
@@ -286,7 +266,7 @@ func (m *MultiRepoWatcher) Close() error {
 	}
 	m.mu.Unlock()
 
-	// Close the output channel exactly once.
+	// Close the output channel exactly once to prevent panics.
 	m.once.Do(func() {
 		close(m.out)
 	})

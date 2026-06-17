@@ -7,8 +7,7 @@ import (
 	veskagit "github.com/whiskeyjimbo/veska/internal/infrastructure/git"
 )
 
-// TestQuerier_HEAD verifies the Querier reports the working-tree HEAD SHA
-// for an initialised repo.
+// TestQuerier_HEAD verifies that the Querier reports the working-tree HEAD SHA for an initialized repository.
 func TestQuerier_HEAD(t *testing.T) {
 	dir := initRepoWithFile(t)
 	want := runGitOut(t, dir, "rev-parse", "HEAD")
@@ -23,8 +22,7 @@ func TestQuerier_HEAD(t *testing.T) {
 	}
 }
 
-// TestQuerier_HEAD_EmptyRoot ensures an empty repoRoot surfaces a clear
-// error rather than silently shelling out against the process cwd.
+// TestQuerier_HEAD_EmptyRoot ensures that an empty repository root path causes the call to return an error.
 func TestQuerier_HEAD_EmptyRoot(t *testing.T) {
 	var q veskagit.Querier
 	if _, err := q.HEAD(""); err == nil {
@@ -32,12 +30,11 @@ func TestQuerier_HEAD_EmptyRoot(t *testing.T) {
 	}
 }
 
-// TestQuerier_IsAncestor exercises the two branches: a SHA that is an
-// ancestor of HEAD reports true; an unrelated SHA reports false.
+// TestQuerier_IsAncestor verifies that reachable commits return true while unrelated commits return false.
 func TestQuerier_IsAncestor(t *testing.T) {
 	dir := initRepoWithFile(t)
 	first := runGitOut(t, dir, "rev-parse", "HEAD")
-	// Add a second commit so first is a proper ancestor of HEAD.
+	// Add a second commit so that the first commit is a proper ancestor of HEAD.
 	mustWriteFile(t, filepath.Join(dir, "b.txt"), "second\n")
 	runGit(t, dir, "add", "b.txt")
 	runGit(t, dir, "commit", "-q", "-m", "second")
@@ -52,8 +49,7 @@ func TestQuerier_IsAncestor(t *testing.T) {
 		t.Fatalf("IsAncestor(first, HEAD) = false; want true")
 	}
 
-	// Create a divergent branch off the first commit; its tip is a real
-	// commit in the repo but is NOT an ancestor of main's HEAD.
+	// Create a divergent branch whose commits are not ancestors of the main branch's HEAD.
 	runGit(t, dir, "checkout", "-q", "-b", "other", first)
 	mustWriteFile(t, filepath.Join(dir, "z.txt"), "divergent\n")
 	runGit(t, dir, "add", "z.txt")
@@ -70,8 +66,7 @@ func TestQuerier_IsAncestor(t *testing.T) {
 	}
 }
 
-// TestQuerier_CommitsSince_AndChangedFiles checks that CommitsSince returns
-// oldest-first commits and that ChangedFiles reports per-commit file paths.
+// TestQuerier_CommitsSince_AndChangedFiles verifies that CommitsSince returns oldest-first commits and ChangedFiles lists modified paths.
 func TestQuerier_CommitsSince_AndChangedFiles(t *testing.T) {
 	dir := initRepoWithFile(t)
 	first := runGitOut(t, dir, "rev-parse", "HEAD")
@@ -107,8 +102,7 @@ func TestQuerier_CommitsSince_AndChangedFiles(t *testing.T) {
 	}
 }
 
-// TestQuerier_ReadFileAtCommit returns committed file contents for a known
-// SHA.
+// TestQuerier_ReadFileAtCommit verifies that the contents of a committed file can be read at a specific commit SHA.
 func TestQuerier_ReadFileAtCommit(t *testing.T) {
 	dir := initRepoWithFile(t)
 	head := runGitOut(t, dir, "rev-parse", "HEAD")
