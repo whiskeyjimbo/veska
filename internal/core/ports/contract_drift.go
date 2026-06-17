@@ -18,25 +18,24 @@ type DriftedNode struct {
 	NewSig    string
 	LineStart int
 	LineEnd   int
-	// ContentHash is the CURRENT nodes.content_hash (after the drift). The
+	// ContentHash is the current nodes.content_hash after the drift. The
 	// contract-drift check threads it onto the resulting Finding so the
 	// revalidation sweep can supersede the finding once content drifts again.
 	ContentHash string
-	// Exported is the node's visibility flag (nodes.exported; NULL coalesced to
-	// false). The whole-repo contract-drift check ignores it — it flags drift of
-	// any visibility — but the breaking-exported-signature diff gate
-	// filters on it so only public-surface drift fails CI.
+	// Exported indicates if the node is public. The whole-repo contract-drift
+	// check flags drift of any visibility, but the breaking-exported-signature
+	// diff gate filters on it so only public-surface drift fails CI.
 	Exported bool
 }
 
 // ContractDriftQuerier is the read-side port used by the contract-drift
 // structural check.
 // DriftedNodesInFiles returns the subset of nodes in (repoID, branch) whose
-// file_path is in filePaths AND whose prev_signature differs from signature
-// AND whose kind is one of {function, method, interface}.
-// An empty filePaths slice MUST return an empty result with no error — this
+// file_path is in filePaths, whose prev_signature differs from signature,
+// and whose kind is function, method, or interface.
+// An empty filePaths slice must return an empty result with no error. This
 // keeps the contract symmetric with DeadCodeQuerier and avoids degenerate
-// "IN " clauses at the adapter layer.
+// "IN" clauses at the adapter layer.
 type ContractDriftQuerier interface {
 	DriftedNodesInFiles(ctx context.Context, repoID, branch string, filePaths []string) ([]DriftedNode, error)
 }

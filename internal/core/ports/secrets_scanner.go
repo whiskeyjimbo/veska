@@ -1,49 +1,34 @@
 package ports
 
-// Line is a single source line paired with its 1-based line number. This is a
-// field-identical copy of the Line types in the git, application, and checks
-// packages — mirrored here so callers need not cross-import, consistent with
-// how Dependency and VulnFinding are kept self-contained in this package.
+// Line is a single source line paired with its 1-based line number. It is defined
+// here so callers do not need to cross-import packages.
 type Line struct {
-	// Number is the 1-based line number within the file.
 	Number int
-
-	// Text is the verbatim content of the line.
-	Text string
+	Text   string
 }
 
-// ScanInput is the request passed to a SecretsScanner. It carries only the
-// lines newly added by a change, so scanning is confined to fresh content
-// rather than the whole file.
+// ScanInput carries only the lines newly added by a change, restricting scanning
+// to fresh content.
 type ScanInput struct {
-	// AddedLines maps a file path to the lines newly added in that file.
 	AddedLines map[string][]Line
 }
 
-// SecretFinding represents a single secret-shaped value detected in scanned
-// input. Fields mirror the minimal set needed by application-layer callers.
+// SecretFinding represents a single secret-shaped value detected in scanned input.
 type SecretFinding struct {
-	// Rule is the name of the detection rule that matched.
-	Rule string
-
-	// FilePath is the path of the file the secret was found in.
+	Rule     string
 	FilePath string
+	Line     int
 
-	// Line is the 1-based line number of the matching line.
-	Line int
-
-	// Redacted is the secret-shaped string with the sensitive value masked,
-	// safe to surface in findings and logs.
+	// Redacted is the secret-shaped string with the sensitive value masked, which
+	// is safe to surface in findings and logs.
 	Redacted string
 
-	// Confidence is the scanner's per-finding confidence in the range 0.1.
+	// Confidence is the scanner's per-finding confidence in the range 0 to 1.
 	Confidence float64
 }
 
 // SecretsScanner is the port for detecting secret-shaped values in newly-added
-// source lines. Implementations are provided by infrastructure adapters.
+// source lines.
 type SecretsScanner interface {
-	// Scan inspects the added lines in the input and returns any secret
-	// findings. An empty slice and a nil error means nothing matched.
 	Scan(in ScanInput) ([]SecretFinding, error)
 }

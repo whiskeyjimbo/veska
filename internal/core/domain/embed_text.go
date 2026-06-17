@@ -2,11 +2,8 @@ package domain
 
 import "strings"
 
-// EmbedTextInput carries the node fields that the embed-text projection
-// can draw on. Kind and SymbolPath are always populated; FilePath and
-// Language may be empty (the parser may leave language unset). Signature
-// and Snippet are optional enrichment fields — empty unless a variant
-// that consumes them is selected.
+// EmbedTextInput carries the node fields used for building text embeddings.
+// Kind and SymbolPath are always populated; FilePath and Language are optional.
 type EmbedTextInput struct {
 	Kind       string
 	SymbolPath string
@@ -16,34 +13,26 @@ type EmbedTextInput struct {
 	Snippet    string
 }
 
-// EmbedTextVariant selects which fields the projection folds into the
-// embed text. EmbedVariantBaseline is the ONLY value used in production
-// (sqlite embedding_refs_repo); EmbedVariantSignature/Snippet/Both are
-// eval-only candidates exercised solely by the recall sweep
-// (tools/loadtest/recallprojection).
-// The non-baseline variants deliberately stay in the domain rather than
-// moving next to the eval harness: the variant enum, its String labels,
-// and the EmbedText projection switch are one cohesive contract, and the
-// eval sweep's whole job is to compare candidate projections against the
-// production baseline through that shared surface. Splitting them would
-// fragment a single switch across two packages for no production benefit
-// (decision recorded: ). Revisit only if eval ownership moves.
+// EmbedTextVariant defines which fields are folded into the text embedding projection.
+// EmbedVariantBaseline is used in production, while other variants are eval-only
+// candidates. Keeping all variants in the domain package keeps the projection
+// logic and label mapping cohesive.
 type EmbedTextVariant int
 
 const (
-	// EmbedVariantBaseline is the production projection:
+	// EmbedVariantBaseline represents the production projection format:
 	// "<kind> <symbol_path> <file_path> <language>".
 	EmbedVariantBaseline EmbedTextVariant = iota
-	// EmbedVariantSignature folds the symbol signature in after language.
+	// EmbedVariantSignature appends the symbol signature to the baseline fields.
 	EmbedVariantSignature
-	// EmbedVariantSnippet folds a code snippet in after language.
+	// EmbedVariantSnippet appends a code snippet to the baseline fields.
 	EmbedVariantSnippet
-	// EmbedVariantBoth folds both signature and snippet in.
+	// EmbedVariantBoth appends both the signature and code snippet.
 	EmbedVariantBoth
 )
 
-// String returns the stable lowercase label for a variant, suitable for
-// env knobs and report rows.
+// String returns the lowercase string representation of the variant, suitable for
+// environment variables and reports.
 func (v EmbedTextVariant) String() string {
 	switch v {
 	case EmbedVariantSignature:
@@ -57,17 +46,11 @@ func (v EmbedTextVariant) String() string {
 	}
 }
 
-// EmbedText builds the deterministic Embed-input projection for a node.
-// The baseline variant joins the non-empty parts of
-// "<kind> <symbol_path> <file_path> <language>" with a single space
-// the exact projection the production FetchPending path produces.
-// kind and symbolPath are always present; filePath and language may be
-// empty. Enrichment variants append signature and/or snippet after the
-// baseline fields, again skipping empty parts so a node missing the
-// enrichment field projects identically to baseline.
-// This function is the single shared definition consumed both by the
-// production sqlite adapter and by the recall-projection eval harness so
-// a projection change is measured against exactly what production emits.
+// EmbedText builds the deterministic text projection for a node. The baseline
+// variant joins non-empty fields with a single space. Non-baseline variants
+// append signature and/or snippet fields, omitting any empty values to avoid
+// introducing extra spacing. This function is shared between the production
+// SQLite adapter and the evaluation harness to guarantee projection consistency.
 func EmbedText(in EmbedTextInput, variant EmbedTextVariant) string {
 	parts := make([]string, 0, 6)
 	for _, p := range []string{in.Kind, in.SymbolPath, in.FilePath, in.Language} {

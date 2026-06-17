@@ -1,9 +1,8 @@
 package ports
 
-// ResolvedEdge is the result of a successful one-hop cross-repo edge
-// resolution. CrossRepo is always true for edges produced by a resolver.
-// Defined in core/ports so application-layer consumers (e.g. MCP tools) can
-// reference the DTO without importing the SQLite adapter package.
+// ResolvedEdge is the result of a cross-repository edge resolution. It is defined
+// in ports so application-layer consumers can reference the DTO without importing
+// adapter packages.
 type ResolvedEdge struct {
 	SrcNodeID string
 	DstNodeID string
@@ -11,10 +10,9 @@ type ResolvedEdge struct {
 	DstBranch string
 	Kind      string
 	CrossRepo bool
-	// SrcLine is the 1-indexed source line of the call_expression in the
-	// SrcNodeID's file. Carried through from cross_repo_edge_stubs.src_line
-	// so renderers can attribute the cross-repo edge to the actual call
-	// site rather than the caller node's declaration line.
-	// 0 means unknown (pre-migration stubs).
+	// SrcLine is the 1-indexed source line of the call expression. It is carried
+	// through from cross_repo_edge_stubs so renderers can attribute the edge to the
+	// actual call site rather than the caller node's declaration line, where 0
+	// represents unknown.
 	SrcLine int
 }

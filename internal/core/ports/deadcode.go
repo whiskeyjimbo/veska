@@ -23,20 +23,16 @@ type NodeRef struct {
 
 // DeadCodeQuerier is the read-side port used by the dead-code structural check.
 // DeadNodesInFiles returns the subset of nodes in (repoID, branch) whose
-// file_path is in filePaths AND which have zero rows in edges with
-// dst_node_id = node_id AND branch = branch.
+// file_path is in filePaths and which have zero incoming edges in the branch.
 // InterfaceMethodNames returns the bare method names declared by every
-// interface type in (repoID, branch) — e.g. ["String", "Set", "Type"] for
-// a repo containing `type Value interface { String string; Set(string)
-// error; Type string }`. The dead-code check uses this to skip concrete
-// methods that satisfy a same-repo interface contract: a method like
-// boolValue.Set is invoked via interface dispatch the static graph cannot
-// see, so flagging it as dead is a confident false positive (,
-// surfaced by the junior journey on spf13/pflag where ~220 of the
-// low-severity findings were Value/SliceValue implementations).
-// The query MUST NOT apply any name/kind filtering — those rules live in the
-// application layer so they remain trivially testable without a database.
-// An empty filePaths slice MUST return an empty result with no error.
+// interface type in (repoID, branch) (e.g., ["String", "Set", "Type"] for
+// type Value interface { String() string; Set(string) error }). Concrete
+// methods that satisfy a same-repo interface contract are skipped because their
+// invocation via interface dispatch is invisible to static graph analysis;
+// flagging them as dead would yield false positives.
+// The query must not apply any name/kind filtering; those rules live in the
+// application layer so they remain testable without a database.
+// An empty filePaths slice must return an empty result with no error.
 type DeadCodeQuerier interface {
 	DeadNodesInFiles(ctx context.Context, repoID, branch string, filePaths []string) ([]NodeRef, error)
 	InterfaceMethodNames(ctx context.Context, repoID, branch string) ([]string, error)

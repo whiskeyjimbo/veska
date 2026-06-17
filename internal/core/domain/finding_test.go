@@ -56,8 +56,7 @@ func TestSeverity_AtLeast(t *testing.T) {
 		}
 	}
 
-	// An unknown severity has no defined rank: it must not alias to Info via
-	// the map zero value. AtLeast returns false on either side being unknown.
+	// An unknown severity has no defined rank and must not alias to Info via the map's zero value.
 	const bad Severity = "bogus"
 	if bad.AtLeast(SeverityInfo) {
 		t.Error("unknown severity should NOT be at least info")
@@ -293,9 +292,8 @@ func TestFinding_Close_Critical_RequiresHuman(t *testing.T) {
 }
 
 func TestFinding_Close_RejectsInvalidActorKind(t *testing.T) {
-	// A low-severity finding skips the human-actor gate, so this isolates the
-	// actor_kind enum check: Close must reject an unrecognised kind the same way
-	// NewActor and WithActorKind do, rather than silently storing it.
+	// A low-severity finding skips the human actor check, isolating the actor kind validation
+	// to verify that Close rejects unrecognized kinds.
 	f, _ := NewFinding(FindingSpec{RepoID: "repo", Branch: "main", Severity: SeverityLow, Layer: LayerQuality, Rule: "rule", Message: "msg"}, WithNodeAnchor("n1"))
 	now := time.Now()
 	if err := f.Close("fixed", ActorKind("robot"), "x", now); err == nil {

@@ -5,13 +5,13 @@ import (
 	"time"
 )
 
-// ErrDuplicateActiveTask is returned by TaskSet.Add when a second active task
-// is inserted for the same repo.
+// ErrDuplicateActiveTask is returned when attempting to add a second active task
+// for the same repository.
 var ErrDuplicateActiveTask = errors.New("task: a task is already active for this repo")
 
-// Task represents a unit of work scoped to a single repository.
-// The one-active-task-per-repo invariant cannot be enforced by Task alone;
-// use TaskSet to manage collections of tasks within a repo scope.
+// Task represents a unit of work scoped to a single repository. To enforce the
+// invariant of at most one active task per repository, use TaskSet to manage
+// task collections.
 type Task struct {
 	ID         string
 	RepoID     string
@@ -22,10 +22,9 @@ type Task struct {
 	CreatedAt  time.Time
 }
 
-// TaskOption is a functional option for NewTask.
 type TaskOption func(*Task) error
 
-// WithTracker sets the optional tracker name and ref on the task.
+// WithTracker sets the optional tracker name and reference on the task.
 func WithTracker(tracker, ref string) TaskOption {
 	return func(t *Task) error {
 		t.Tracker = &tracker
@@ -34,8 +33,7 @@ func WithTracker(tracker, ref string) TaskOption {
 	}
 }
 
-// WithActive marks the task as the active task for its repo.
-// Use TaskSet.SetActive to switch the active task in a collection.
+// WithActive marks the task as active.
 func WithActive() TaskOption {
 	return func(t *Task) error {
 		t.Active = true
@@ -43,10 +41,7 @@ func WithActive() TaskOption {
 	}
 }
 
-// WithCreatedAt overrides the default creation timestamp (time.Now). It makes
-// NewTask deterministic for tests — mirroring the injected createdAt that
-// NewSuppression takes — without burdening the common call site with a
-// timestamp argument.
+// WithCreatedAt overrides the default creation timestamp, primarily for testing determinism.
 func WithCreatedAt(t time.Time) TaskOption {
 	return func(task *Task) error {
 		task.CreatedAt = t
@@ -54,19 +49,16 @@ func WithCreatedAt(t time.Time) TaskOption {
 	}
 }
 
-// TaskSpec carries the required fields of a Task. It groups the constructor's
-// positional arguments into a named struct so adjacent same-typed fields
-// (ID/RepoID/Title) cannot be transposed at a call site, mirroring FindingSpec.
-// Optional fields (tracker, active, created_at) are still supplied via TaskOption.
+// TaskSpec groups the required fields of a Task into a struct to prevent
+// transposing adjacent same-typed parameters at construction call sites.
 type TaskSpec struct {
 	ID     string
 	RepoID string
 	Title  string
 }
 
-// NewTask constructs a validated Task from spec. Returns an error if spec.ID,
-// spec.RepoID, or spec.Title is empty. CreatedAt defaults to time.Now; pass
-// WithCreatedAt to set it deterministically.
+// NewTask constructs a validated Task from the specification, verifying that
+// spec.ID, spec.RepoID, and spec.Title are non-empty.
 func NewTask(spec TaskSpec, opts ...TaskOption) (*Task, error) {
 	if spec.ID == "" {
 		return nil, errors.New("task: id must not be empty")
@@ -95,16 +87,12 @@ func NewTask(spec TaskSpec, opts ...TaskOption) (*Task, error) {
 }
 
 // TaskSet manages a collection of Tasks and enforces the one-active-task-per-repo
-// invariant.
-// TaskSet is NOT safe for concurrent use without external synchronisation.
+// invariant. It is not safe for concurrent use without external synchronization.
 type TaskSet struct {
-	// tasks holds all tasks indexed by ID.
-	tasks map[string]*Task
-	// activeByRepo holds the currently active task per repoID.
+	tasks        map[string]*Task
 	activeByRepo map[string]*Task
 }
 
-// NewTaskSet returns an empty TaskSet.
 func NewTaskSet() *TaskSet {
 	return &TaskSet{
 		tasks:        make(map[string]*Task),
@@ -112,9 +100,8 @@ func NewTaskSet() *TaskSet {
 	}
 }
 
-// Add inserts t into the set. Returns ErrDuplicateActiveTask if t.Active is
-// true and a different task is already marked active for t.RepoID. A nil task
-// is rejected with an error rather than panicking, mirroring Graph.AddNode.
+// Add inserts a task into the set, returning ErrDuplicateActiveTask if the task
+// is active and another task is already active for the repository.
 func (ts *TaskSet) Add(t *Task) error {
 	if t == nil {
 		return errors.New("task: task must not be nil")
@@ -129,17 +116,14 @@ func (ts *TaskSet) Add(t *Task) error {
 	return nil
 }
 
-// Active returns the currently active task for repoID, or nil if none exists.
+// Active returns the currently active task for the repository, or nil if none is active.
 func (ts *TaskSet) Active(repoID string) *Task {
 	return ts.activeByRepo[repoID]
 }
 
-// SetActive activates t and deactivates any previously active task for t.RepoID.
-// If t is not already in the set it is added.
-// Unlike Add, SetActive cannot violate the one-active-per-repo invariant — it
-// deactivates the incumbent before promoting t — so it returns no error.
+// SetActive activates the task, deactivating the previously active task for the
+// repository, and adds the task to the set if not already present.
 func (ts *TaskSet) SetActive(t *Task) {
-	// Deactivate the previous active task for this repo, if any.
 	if prev, ok := ts.activeByRepo[t.RepoID]; ok && prev.ID != t.ID {
 		prev.Active = false
 	}

@@ -7,36 +7,28 @@
 package protocol
 
 // DegradedReasonChainedSelectorsUnresolved is emitted on eng_get_call_chain
-// responses when the seed node is a callable whose body contains chained
-// selector call sites (e.g. cobra's `rootCmd.PersistentFlags.StringVarP(.)`,
-// or `s.field.M`) that the tree-sitter extractor does not yet model as
-// edges — see epic. Agents should treat an empty edges array
-// on a callable carrying this reason as "parser limitation, may not be
-// authoritative."
+// responses when the seed node contains chained selector call sites that the
+// extractor does not model as edges. Agents should treat an empty edges array
+// carrying this reason as a parser limitation that may not be authoritative.
 const DegradedReasonChainedSelectorsUnresolved = "chained_selectors_unresolved"
 
-// DegradedReasonExternalCalleesOnly is emitted when the seed callable's
-// body has no chained selectors but also produced no resolvable CALLS
-// edges. The dominant cause is that every callee lives outside the
-// indexed graph (stdlib like fmt/strings, or third-party packages from
-// unregistered modules). An agent reading this should NOT conclude the
-// parser is buggy — the empty edges set reflects the index boundary,
-// not a parser limitation.
+// DegradedReasonExternalCalleesOnly is emitted when the seed callable's body
+// has no chained selectors but produced no resolvable CALLS edges. The main
+// cause is that every callee lives outside the indexed graph. An agent reading
+// this should not conclude the parser is buggy; the empty edges set reflects
+// the index boundary, not a parser limitation.
 const DegradedReasonExternalCalleesOnly = "external_callees_only"
 
-// DegradedReasonIndexingInProgress is emitted on any read tool that
-// returned an empty result while at least one cold scan was still
-// running. A query that hits the daemon during the cold-scan window
-// would otherwise see {nodes:} silently and conclude the symbol does
-// not exist; this reason tells the caller to retry once indexing
-// settles. The accompanying IndexingRepos field, when
-// populated, lists the repo_ids the caller should wait on.
+// DegradedReasonIndexingInProgress is emitted on any read tool that returned
+// an empty result while at least one cold scan was running. This tells the
+// caller to retry once indexing settles. The accompanying IndexingRepos field
+// lists the repository IDs the caller should wait on.
 const DegradedReasonIndexingInProgress = "indexing_in_progress"
 
 // DegradedReasonWakeReconciling is emitted on a graph read tool whenever a
-// repo touched by the query has an in-flight wake reconcile sweep (a
-// suspend/resume mtime re-scan). Unlike indexing_in_progress this fires on
-// empty AND non-empty results: a sweep may be mid-flight re-parsing files the
-// query just read, so even a populated response could be momentarily stale.
-// The accompanying WakeReconcilingRepos field lists the affected repo_ids.
+// repository touched by the query has an in-flight wake reconcile sweep. Unlike
+// indexing_in_progress, this fires on empty and non-empty results because a sweep
+// may be mid-flight re-parsing files, making even a populated response
+// momentarily stale. The accompanying WakeReconcilingRepos field lists the
+// affected repository IDs.
 const DegradedReasonWakeReconciling = "wake_reconciling"

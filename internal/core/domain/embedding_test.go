@@ -6,7 +6,6 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/core/domain"
 )
 
-// TestEmbeddingRowFields verifies EmbeddingRow has the expected fields and zero values.
 func TestEmbeddingRowFields(t *testing.T) {
 	var r domain.EmbeddingRow
 	if r.NodeID != "" {
@@ -42,7 +41,6 @@ func TestEmbeddingRowFields(t *testing.T) {
 	}
 }
 
-// TestHitFields verifies Hit has the expected fields and zero values.
 func TestHitFields(t *testing.T) {
 	var h domain.SearchHit
 	if h.NodeID != "" {
@@ -61,7 +59,6 @@ func TestHitFields(t *testing.T) {
 	}
 }
 
-// TestFilterFields verifies Filter has the expected fields and zero values.
 func TestFilterFields(t *testing.T) {
 	var f domain.VectorFilter
 	if f.RepoID != "" {

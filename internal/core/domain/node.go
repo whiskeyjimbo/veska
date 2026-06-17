@@ -25,37 +25,23 @@ const (
 	KindFile      NodeKind = "file"
 	KindField     NodeKind = "field"
 	KindTest      NodeKind = "test"
-	// KindVariable is a top-level (package-scope) var declaration. Captured
-	// so framework patterns where the API surface lives in initialised vars
-	// cobra command trees (`var rootCmd = &cobra.Command{.}`), gin/echo
-	// router globals, viper config singletons — appear in eng_find_symbol /
-	// eng_get_file_nodes and become navigable from agent tools.
+	// KindVariable represents a top-level variable declaration. This captures
+	// framework patterns where the API surface is exposed via initialized variables
+	// like command trees or config singletons.
 	KindVariable NodeKind = "variable"
-	// KindCommand is a CLI command surfaced from a framework's command
-	// struct-literal (e.g. cobra `var rootCmd = &cobra.Command{Use:.}`).
-	// Named by the framework's command word (cobra Use:, urfave Name:),
-	// not the Go var identifier, so agent tools see the actual command
-	// tree. Wire-up calls (rootCmd.AddCommand(sub)) emit CONTAINS edges so
-	// call_chain / blast_radius walk the command hierarchy.
+	// KindCommand represents a CLI command word (e.g. from cobra or urfave command
+	// specs) rather than the Go variable name, allowing agents to navigate the
+	// command tree structural hierarchy.
 	KindCommand NodeKind = "command"
-	// KindRoute is an HTTP route surfaced from a router framework's
-	// registration call (gin/echo `router.GET("/path", h)`), named by its
-	// path. Reserved alongside KindCommand as the framework-aware
-	// vocabulary; route extraction itself is a follow-up to the cobra
-	// command pass.
+	// KindRoute represents an HTTP route path surfaced from router registration calls.
 	KindRoute NodeKind = "route"
-	// KindChunk is a non-declaration source region — package-level
-	// vars, file-top comments, init guts, anything between symbol
-	// declarations. Chunks live alongside symbol nodes so the existing
-	// embedder / FTS / search pipeline picks them up without special
-	// casing, but they are excluded from entry_points and the
-	// rerank definition-boost.
+	// KindChunk represents a non-declaration source region. Chunks are indexed for
+	// search alongside symbols but are excluded from entry point analysis and search
+	// reranking boosts.
 	KindChunk NodeKind = "chunk"
 )
 
-// validNodeKinds is the closed set of recognised NodeKind values. NewNode
-// rejects any kind outside this set, mirroring validSourceLayers / severityOrder
-// in finding.go and validActorKinds in actor.go.
+// validNodeKinds defines the closed set of valid NodeKind values enforced by NewNode.
 var validNodeKinds = map[NodeKind]struct{}{
 	KindFunction:  {},
 	KindMethod:    {},
@@ -93,28 +79,20 @@ type Node struct {
 	Lines       *LineRange
 	RawContent  *string
 	ContentHash *ContentHash
-	// StructuralHash is a hex SHA-256 over the node's identifier-/literal
-	// normalised token stream, so renamed-variable (Type-2) clones collide even
-	// when ContentHash differs. Nil for nodes the parser does not structurally
-	// hash (packages, imports, chunks). Computed at parse time (the AST is
-	// needed); never auto-derived from RawContent.
+	// StructuralHash is a SHA-256 hash computed over normalized tokens, allowing
+	// variable-renamed (Type-2) code duplicates to match even when raw ContentHash
+	// differs.
 	StructuralHash *ContentHash
 	Language       *string
 	Exported       *bool
-	// External marks a node sourced from a registered repo's vendored
-	// or module-cache dependency rather than its first-party code
-	// Defaults to nil (i.e. first-party / unknown).
-	// Stored as INTEGER 0/1 in the nodes table; read paths set it on
-	// rehydrate so MCP responses can label hits without an extra
-	// lookup.
+	// External marks a node as sourced from a vendored or module-cache dependency
+	// rather than first-party code.
 	External *bool
 }
 
-// NodeOption is a functional option applied during Node construction.
-// Options are applied in order; the first error is returned immediately.
 type NodeOption func(*Node) error
 
-// WithSignature sets the optional method/function signature.
+// WithSignature sets the optional method or function signature.
 func WithSignature(sig string) NodeOption {
 	return func(n *Node) error {
 		n.Signature = &sig
@@ -122,8 +100,8 @@ func WithSignature(sig string) NodeOption {
 	}
 }
 
-// WithLines sets the optional 1-indexed line range.
-// Returns an error if start or end is less than 1, or if start > end.
+// WithLines sets the optional 1-indexed line range, validating that start is
+// positive and less than or equal to end.
 func WithLines(lr LineRange) NodeOption {
 	return func(n *Node) error {
 		if lr.Start < 1 {
@@ -140,8 +118,8 @@ func WithLines(lr LineRange) NodeOption {
 	}
 }
 
-// WithRawContent sets the raw source text. If ContentHash is already set it
-// must equal sha256(content); otherwise an error is returned.
+// WithRawContent sets the raw source text, validating that it matches any
+// pre-existing ContentHash.
 func WithRawContent(raw string) NodeOption {
 	return func(n *Node) error {
 		n.RawContent = &raw
@@ -154,9 +132,8 @@ func WithRawContent(raw string) NodeOption {
 	}
 }
 
-// WithContentHash sets a pre-computed SHA-256 content hash. If RawContent is
-// already set the hash must equal sha256(raw_content); otherwise an error is
-// returned.
+// WithContentHash sets the pre-computed ContentHash, validating that it matches
+// any pre-existing RawContent.
 func WithContentHash(h ContentHash) NodeOption {
 	return func(n *Node) error {
 		if n.RawContent != nil {
@@ -169,9 +146,7 @@ func WithContentHash(h ContentHash) NodeOption {
 	}
 }
 
-// WithStructuralHash sets the identifier-normalised structural hash (Type-2
-// clone signal). The parser computes it from the AST; it is carried verbatim
-// (unlike ContentHash, it is never derived from RawContent).
+// WithStructuralHash sets the normalized structural hash computed from the AST.
 func WithStructuralHash(h ContentHash) NodeOption {
 	return func(n *Node) error {
 		n.StructuralHash = &h
@@ -187,7 +162,7 @@ func WithLanguage(lang string) NodeOption {
 	}
 }
 
-// WithExported sets the exported/visibility flag.
+// WithExported sets the exported visibility flag.
 func WithExported(exported bool) NodeOption {
 	return func(n *Node) error {
 		n.Exported = &exported
@@ -195,9 +170,7 @@ func WithExported(exported bool) NodeOption {
 	}
 }
 
-// WithExternal marks the node as sourced from a vendored or
-// module-cache dependency. nil keeps the default
-// (first-party / unknown).
+// WithExternal marks the node as sourced from an external dependency.
 func WithExternal(external bool) NodeOption {
 	return func(n *Node) error {
 		n.External = &external
@@ -205,7 +178,7 @@ func WithExternal(external bool) NodeOption {
 	}
 }
 
-// validateHashMatchesContent returns an error when h != sha256(content).
+// validateHashMatchesContent verifies that the ContentHash matches the SHA-256 hash of the raw content.
 func validateHashMatchesContent(h ContentHash, content string) error {
 	sum := sha256.Sum256([]byte(content))
 	expected := hex.EncodeToString(sum[:])
@@ -215,11 +188,8 @@ func validateHashMatchesContent(h ContentHash, content string) error {
 	return nil
 }
 
-// NodeSpec carries the required fields of a Node. It groups the constructor's
-// positional arguments into a named struct so adjacent same-typed fields
-// (ID/Path/Name) cannot be transposed at a call site, mirroring FindingSpec.
-// Optional fields (signature, lines, content, language, exported, external)
-// are still supplied via NodeOption.
+// NodeSpec groups the required fields of a Node into a struct to prevent
+// transposing adjacent same-typed parameters at construction call sites.
 type NodeSpec struct {
 	ID   string
 	Path string
@@ -227,9 +197,8 @@ type NodeSpec struct {
 	Kind NodeKind
 }
 
-// NewNode constructs a Node from spec, validates invariants, and applies
-// functional options. spec.ID, spec.Path, and spec.Name must be non-empty.
-// An error is returned for any invariant violation.
+// NewNode constructs a validated Node from the specification, verifying that
+// spec.ID, spec.Path, and spec.Name are non-empty.
 func NewNode(spec NodeSpec, opts ...NodeOption) (*Node, error) {
 	if spec.ID == "" {
 		return nil, errors.New("node: id must not be empty")
@@ -257,12 +226,9 @@ func NewNode(spec NodeSpec, opts ...NodeOption) (*Node, error) {
 		}
 	}
 
-	// Derive the content hash from raw content when a caller supplied the
-	// body but not an explicit hash (the common parser path: WithRawContent
-	// only). Without this, every parsed node persisted content_hash='' and
-	// exact-clone detection bucketed all of them into one false byte-identity
-	// group. ContentHash stays nil for nodes with no raw
-	// content (packages, imports) so they never participate in clone grouping.
+	// Derive the content hash from the raw content if it was not explicitly supplied,
+	// ensuring that nodes with identical raw contents can be grouped correctly for
+	// clone detection.
 	if n.RawContent != nil && n.ContentHash == nil {
 		sum := sha256.Sum256([]byte(*n.RawContent))
 		h := ContentHash(hex.EncodeToString(sum[:]))

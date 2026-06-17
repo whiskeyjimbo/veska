@@ -7,8 +7,6 @@ import (
 	"time"
 )
 
-// ── SourceLayer ────────────────────────────────────────────────────────────
-
 // SourceLayer is a closed enum of the analysis layers that can produce a Finding.
 type SourceLayer string
 
@@ -31,8 +29,6 @@ func (l SourceLayer) valid() bool {
 	return ok
 }
 
-// ── Severity ───────────────────────────────────────────────────────────────
-
 // Severity is an ordered closed enum of finding severities.
 type Severity string
 
@@ -52,11 +48,8 @@ var severityOrder = map[Severity]int{
 	SeverityCritical: 4,
 }
 
-// AtLeast returns true when s is at least as severe as other. An unknown
-// severity on either side has no defined rank, so AtLeast returns false
-// conservatively rather than letting the map's zero value alias it to
-// SeverityInfo. In practice severities are valid-gated at construction;
-// this guard hardens the comparison against any future non-constructor caller.
+// AtLeast returns true when s is at least as severe as other. Unknown severities
+// return false conservatively to avoid zero-value aliasing.
 func (s Severity) AtLeast(other Severity) bool {
 	sRank, sOK := severityOrder[s]
 	oRank, oOK := severityOrder[other]
@@ -71,8 +64,6 @@ func (s Severity) valid() bool {
 	return ok
 }
 
-// ── FindingState ───────────────────────────────────────────────────────────
-
 // FindingState is a two-value enum: open or closed.
 type FindingState string
 
@@ -81,14 +72,10 @@ const (
 	FindingStateClosed FindingState = "closed"
 )
 
-// ── Finding ────────────────────────────────────────────────────────────────
-
 // Finding represents a detected code issue anchored to a symbol or file.
-// The finding_id is branch-stable: same rule + anchor (+ optional discriminator
-// key) → same finding_id on every branch.
+// The FindingID is branch-stable: the same rule, anchor, and optional key
+// yield the same identifier across all branches.
 type Finding struct {
-	// Branch-stable identifier and primary-key component (with Branch):
-	// hex(sha256(rule+"\x00"+anchor+"\x00"+key))[:32].
 	FindingID string
 
 	RepoID  string
@@ -100,39 +87,30 @@ type Finding struct {
 	SourceLayer SourceLayer
 	State       FindingState
 
-	// Anchor: exactly one of NodeID or FilePath is non-nil.
+	// Exactly one of NodeID or FilePath must be non-nil.
 	NodeID   *string
 	FilePath *string
 
-	// Set iff State == FindingStateClosed.
+	// Populated only when State is FindingStateClosed.
 	ClosedAt     *time.Time
 	ClosedReason *string
 
-	// Optional actor metadata.
 	ActorID   *string
 	ActorKind *ActorKind
 
-	// findingKey is an optional discriminator folded into the finding_id hash.
-	// It lets a caller emit several findings sharing the same (rule, anchor)
-	// e.g. multiple review-code findings in one file - without their
-	// finding_ids colliding. It defaults to "" and is not persisted.
+	// findingKey is an optional discriminator folded into the FindingID hash.
+	// It allows multiple findings to share the same rule and anchor without colliding.
 	findingKey string
 
-	// AnchorContentHash is the content_hash of the node anchor at the moment
-	// the finding was written. It is populated only when the finding anchors
-	// on a node whose content_hash is known to the producing check (dead-code,
-	// contract-drift, auto-link). File-anchored findings (parse-failure) leave
-	// it nil - the file as a whole has no per-symbol hash.
-	// The revalidation sweep (m3.05.2) compares this against the node's
-	// current content_hash to detect drift: a finding whose anchor has moved
-	// on is superseded rather than re-fired.
+	// AnchorContentHash is the content hash of the node anchor when the finding was
+	// written. It is compared against the node's current hash during revalidation to
+	// detect drift and avoid re-firing superseded findings.
 	AnchorContentHash *string
 }
 
-// FindingOption is a functional option for NewFinding.
 type FindingOption func(*Finding) error
 
-// WithNodeAnchor sets the node_id anchor for the finding.
+// WithNodeAnchor sets the node ID anchor for the finding.
 func WithNodeAnchor(nodeID string) FindingOption {
 	return func(f *Finding) error {
 		if nodeID == "" {
@@ -143,7 +121,7 @@ func WithNodeAnchor(nodeID string) FindingOption {
 	}
 }
 
-// WithFileAnchor sets the file_path anchor for the finding.
+// WithFileAnchor sets the file path anchor for the finding.
 func WithFileAnchor(filePath string) FindingOption {
 	return func(f *Finding) error {
 		if filePath == "" {
@@ -154,7 +132,7 @@ func WithFileAnchor(filePath string) FindingOption {
 	}
 }
 
-// WithActorKind sets the actor_kind on the finding.
+// WithActorKind sets the actor kind on the finding.
 func WithActorKind(ak ActorKind) FindingOption {
 	return func(f *Finding) error {
 		if _, ok := validActorKinds[ak]; !ok {
@@ -165,10 +143,8 @@ func WithActorKind(ak ActorKind) FindingOption {
 	}
 }
 
-// WithAnchorContentHash sets the content_hash of the node anchor captured at
-// finding-write time. An empty hash is rejected so callers cannot silently
-// confuse "anchor has no hash" (nil) with "anchor's hash is the empty string"
-// mirrors the empty-anchor validation on WithNodeAnchor / WithFileAnchor.
+// WithAnchorContentHash sets the content hash of the node anchor captured at creation
+// time. Empty hash values are rejected to prevent ambiguity.
 func WithAnchorContentHash(hash string) FindingOption {
 	return func(f *Finding) error {
 		if hash == "" {
@@ -179,11 +155,8 @@ func WithAnchorContentHash(hash string) FindingOption {
 	}
 }
 
-// WithFindingKey sets an optional discriminator folded into the finding_id
-// hash. Two findings with identical (rule, anchor) but different keys get
-// distinct finding_ids; an unset key (the default "") reproduces the plain
-// rule+anchor derivation. Use it when one anchor can carry several distinct
-// findings under the same rule (e.g. multiple review-code findings per file).
+// WithFindingKey sets an optional discriminator folded into the FindingID hash to
+// allow distinct findings for the same rule and anchor.
 func WithFindingKey(key string) FindingOption {
 	return func(f *Finding) error {
 		f.findingKey = key
@@ -191,7 +164,7 @@ func WithFindingKey(key string) FindingOption {
 	}
 }
 
-// WithActorID sets the actor_id on the finding.
+// WithActorID sets the actor ID on the finding.
 func WithActorID(id string) FindingOption {
 	return func(f *Finding) error {
 		if id == "" {
@@ -202,11 +175,8 @@ func WithActorID(id string) FindingOption {
 	}
 }
 
-// FindingSpec carries the required fields of a Finding. It groups the
-// constructor's positional arguments into a named struct so adjacent
-// same-typed fields (RepoID/Branch, Rule/Message) cannot be transposed at a
-// call site. Optional fields (anchors, actor, content hash, discriminator
-// key) are still supplied via FindingOption.
+// FindingSpec groups the required fields of a Finding into a struct to prevent
+// transposing adjacent same-typed parameters at construction call sites.
 type FindingSpec struct {
 	RepoID   string
 	Branch   string
@@ -216,14 +186,8 @@ type FindingSpec struct {
 	Message  string
 }
 
-// NewFinding constructs a validated Finding from spec. The finding_id is
-// computed from spec.Rule, the anchor, and an optional discriminator key (see
-// WithFindingKey); it is never accepted as a parameter.
-// Invariants enforced:
-//  1. spec.Rule non-empty.
-//  2. Exactly one anchor (node_id or file_path) provided.
-//  3. spec.Severity and spec.Layer must be valid enum values.
-//  4. State defaults to open; closed_at and closed_reason are nil.
+// NewFinding constructs a validated Finding from the specification, enforcing that the
+// rule is non-empty, exactly one anchor is provided, and severity and layer are valid.
 func NewFinding(spec FindingSpec, opts ...FindingOption) (*Finding, error) {
 	if spec.Rule == "" {
 		return nil, errors.New("finding: rule must not be empty")
@@ -251,12 +215,10 @@ func NewFinding(spec FindingSpec, opts ...FindingOption) (*Finding, error) {
 		}
 	}
 
-	// Invariant: exactly one anchor required.
 	if f.NodeID == nil && f.FilePath == nil {
 		return nil, errors.New("finding: an anchor (node_id or file_path) is required")
 	}
 
-	// Compute branch-stable finding_id.
 	anchor := ""
 	if f.NodeID != nil {
 		anchor = *f.NodeID
@@ -268,31 +230,19 @@ func NewFinding(spec FindingSpec, opts ...FindingOption) (*Finding, error) {
 	return f, nil
 }
 
-// DeriveFindingID computes the branch-stable finding_id for a Finding:
-// hex(sha256(rule + "\x00" + anchor + "\x00" + key))[:32].
-// It is the single source of truth for finding_id derivation. NewFinding uses
-// it internally; any code that must reconstruct a finding_id without a Finding
-// in hand (e.g. a doctor probe correlating a queue row to its companion
-// finding) MUST call this rather than re-implementing the hash - the two must
-// stay byte-identical or correlation silently breaks.
-// anchor is the finding's node_id or file_path. key is the optional
-// discriminator set via WithFindingKey ("" when the finding is one-per-anchor).
-// repoID and branch are intentionally NOT part of the hash - a finding is
-// scoped by the (finding_id, branch) primary key and the repo_id column.
+// DeriveFindingID computes the stable FindingID for a Finding. It is the single source
+// of truth for ID derivation; any code reconstructing IDs must call this function to
+// ensure matching byte-for-byte hash outputs. The repository ID and branch are
+// intentionally excluded from the hash to allow findings to be scoped by the
+// (FindingID, Branch) primary key.
 func DeriveFindingID(rule, anchor, key string) string {
 	h := sha256.Sum256([]byte(rule + "\x00" + anchor + "\x00" + key))
 	return hex.EncodeToString(h[:])[:32]
 }
 
-// Close transitions the finding to the closed state.
-// Invariants:
-//
-//	reason and actorID must be non-empty (mirrors NewSuppression, so the
-//	  close path cannot silently blank attribution or audit reason).
-//	actorKind must be a recognised ActorKind (same check NewActor and
-//	  WithActorKind enforce - the close path must not be the one place an
-//	  unvalidated kind slips onto a Finding).
-//	severity >= high requires actorKind == human.
+// Close transitions the finding to the closed state. It requires non-empty
+// attribution details and enforces that findings of high severity or above must
+// be closed by a human actor.
 func (f *Finding) Close(reason string, actorKind ActorKind, actorID string, now time.Time) error {
 	if f.State == FindingStateClosed {
 		return errors.New("finding: already closed")

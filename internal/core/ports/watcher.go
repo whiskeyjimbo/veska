@@ -23,15 +23,12 @@ type FileEvent struct {
 }
 
 // Watcher is the port for filesystem change notification.
-// Implementations are provided by infrastructure adapters (e.g. fsnotify).
 type Watcher interface {
-	// Watch registers the directory tree rooted at dir for change events and
-	// returns a channel on which FileEvents are delivered. The channel is closed
-	// when ctx is cancelled or Close is called. Calling Watch again on an already
-	// watched directory is a no-op and returns the same channel.
+	// Watch registers a directory tree for change events. Calling Watch again
+	// on an already watched directory is a no-op that returns the same channel.
 	Watch(ctx context.Context, dir string) (<-chan FileEvent, error)
 
-	// Close stops all watches and releases underlying OS resources.
-	// The event channel returned by Watch is closed before Close returns.
+	// Close stops all watches and releases underlying OS resources. The event
+	// channel returned by Watch is closed before Close returns.
 	Close() error
 }
