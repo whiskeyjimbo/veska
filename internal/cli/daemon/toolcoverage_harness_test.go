@@ -69,6 +69,17 @@ type toolHarness struct {
 	// Per the package doc this is the SHARED fixture root, identical across
 	// instances, so resolved node IDs are stable.
 	roots map[string]string
+
+	// ingester is the parse-on-save ingester built in buildPipeline. Exposed so
+	// stageDirtyEdit can simulate a watcher-staged working-tree edit.
+	ingester *application.Ingester
+
+	// stagingArea is the SINGLE staging.Area shared by the ingester (writer) and
+	// the blast service (reader). Production shares one area between the two via
+	// composition/coldscan.go; the harness must too, or dirty-blast reads an area
+	// nothing ever writes. After fixture indexing the reparser promotes and drains
+	// this area, so it is empty post-setup — identical to before for all other rows.
+	stagingArea *staging.Area
 }
 
 // fixtureRepo pairs a repoID with its module path and on-disk module root.
@@ -123,7 +134,7 @@ func newHarness(t *testing.T, opts ...HarnessOption) *toolHarness {
 	deps := mcpDeps{
 		pools:    pools,
 		cfg:      Config{},
-		staging:  staging.NewArea(),
+		staging:  h.stagingArea,
 		vectors:  vectors,
 		provider: provider,
 		refs:     sqlite.NewEmbeddingRefsRepo(pools.ReadDB, pools.Write),
@@ -169,9 +180,11 @@ func (h *toolHarness) buildPipeline() (
 	db := h.pools.Write
 	parser := treesitter.NewGoParser()
 	area := staging.NewArea()
+	h.stagingArea = area // shared with the blast service via mcpDeps.staging.
 	gate := staging.NewGate(area)
 	ingester := application.NewIngester(parser, area, gate,
 		application.WithFindingStorage(sqlite.NewFindingRepo(db)))
+	h.ingester = ingester
 	store := sqlite.NewPromotionStore(db, []sqlite.PromotionSink{
 		sqlite.NewFTSSink(), sqlite.NewEmbedRefSink(),
 	})
@@ -296,6 +309,17 @@ func (h *toolHarness) Root(repoID string) string {
 // way for a coverage bead to obtain a node ID — no bead pastes a raw sha256.
 func (h *toolHarness) ResolveID(repoID string, key coverage.NodeKey) domain.NodeID {
 	return key.ResolveID(repoID, h.Root(repoID))
+}
+
+// stageDirtyEdit simulates a watcher-staged working-tree edit: it runs the same
+// Ingester.Save the fsnotify hot path uses, writing the parsed nodes/edges into
+// the shared staging.Area the dirty-blast service reads. Use it AFTER indexing,
+// once the reparser has drained the area, to seed an uncommitted edit.
+func (h *toolHarness) stageDirtyEdit(repoID, branch, absPath string, src []byte) {
+	h.t.Helper()
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	h.ingester.Save(ctx, repoID, branch, absPath, src)
 }
 
 // fixtureHeadQuerier is the cold-scan headQuerier stub; the fixture is not a
