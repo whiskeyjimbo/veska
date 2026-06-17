@@ -22,8 +22,7 @@ func TestBuildVulnSource_OffByDefault(t *testing.T) {
 	}
 }
 
-// An unrecognised provider also falls back to the NullVulnSource (the daemon
-// gates unknown providers via checkVulnProvider before this point).
+// An unrecognized provider falls back to the NullVulnSource.
 func TestBuildVulnSource_UnknownIsOff(t *testing.T) {
 	t.Parallel()
 
@@ -38,7 +37,7 @@ func TestBuildVulnSource_UnknownIsOff(t *testing.T) {
 	}
 }
 
-// With provider = "osv", BuildVulnSource yields a non-null source and reports
+// With provider set to "osv", BuildVulnSource yields a non-null source and reports
 // the feature on.
 func TestBuildVulnSource_OSVEnabled(t *testing.T) {
 	t.Parallel()

@@ -17,12 +17,10 @@ const (
 	// defaultSizeLimit is 100 MiB.
 	defaultSizeLimit int64 = 100 << 20
 
-	// maxRotatedFiles is the maximum number of rotated log files to retain.
 	maxRotatedFiles = 5
 )
 
 // auditRecord is the on-disk JSON representation of a single AuditEntry.
-// Field names use snake_case to match Go JSON conventions.
 type auditRecord struct {
 	RepoID    string `json:"repo_id"`
 	ActorID   string `json:"actor_id"`
@@ -36,7 +34,7 @@ type auditRecord struct {
 
 // AuditFileWriter is a synchronous, mutex-protected JSONL file writer that
 // rotates the log when the file exceeds a size limit and retains at most 5
-// rotated files. It satisfies the ports.AuditWriter interface.
+// rotated files.
 type AuditFileWriter struct {
 	mu          sync.Mutex
 	path        string
@@ -51,9 +49,8 @@ func NewAuditFileWriter(path string) (*AuditFileWriter, error) {
 	return NewAuditFileWriterWithLimit(path, defaultSizeLimit)
 }
 
-// NewAuditFileWriterWithLimit creates or opens the file at path and returns an
-// AuditFileWriter that rotates when the file reaches limitBytes. Use this
-// constructor in tests to keep test data small.
+// NewAuditFileWriterWithLimit creates or opens the log file using the specified
+// limit. Use this constructor in tests to keep test data small.
 func NewAuditFileWriterWithLimit(path string, limitBytes int64) (*AuditFileWriter, error) {
 	f, size, err := openAuditFile(path)
 	if err != nil {
@@ -67,9 +64,8 @@ func NewAuditFileWriterWithLimit(path string, limitBytes int64) (*AuditFileWrite
 	}, nil
 }
 
-// Write serialises e as a single JSON line and appends it to the log file.
-// If the file size would reach or exceed the limit after the write the file is
-// rotated first. Write is safe for concurrent use.
+// Write serializes e as a single JSON line and appends it to the log file.
+// Write is safe for concurrent use.
 func (w *AuditFileWriter) Write(_ context.Context, e ports.AuditEntry) error {
 	rec := auditRecord{
 		RepoID:    e.RepoID,
@@ -86,7 +82,6 @@ func (w *AuditFileWriter) Write(_ context.Context, e ports.AuditEntry) error {
 	if err != nil {
 		return fmt.Errorf("audit.Write: marshal: %w", err)
 	}
-	// Append newline to form a complete JSONL record.
 	line = append(line, '\n')
 
 	w.mu.Lock()
@@ -107,9 +102,8 @@ func (w *AuditFileWriter) Write(_ context.Context, e ports.AuditEntry) error {
 	return nil
 }
 
-// rotate renames existing rotated files upward (.4→.5,.3→.4, …,.1→.2) then
-// renames the active log to.1.jsonl and opens a fresh active file.
-// Callers must hold w.mu.
+// rotate renames existing rotated files upward (.4 to .5, .3 to .4, etc.), renames
+// the active log to .1.jsonl, and opens a fresh active file. Callers must hold w.mu.
 func (w *AuditFileWriter) rotate() error {
 	// Close the current file before renaming it.
 	if err := w.file.Close(); err != nil {
@@ -118,20 +112,20 @@ func (w *AuditFileWriter) rotate() error {
 
 	// Delete the oldest rotated file if it exists (.5).
 	oldest := rotatedName(w.path, maxRotatedFiles)
-	_ = os.Remove(oldest) // ignore error; file may not exist
+	_ = os.Remove(oldest)
 
-	// Shift existing rotated files:.4→.5,.3→.4, …,.1→.2
+	// Shift existing rotated files: .4 to .5, .3 to .4, etc.
 	for i := maxRotatedFiles - 1; i >= 1; i-- {
 		src := rotatedName(w.path, i)
 		dst := rotatedName(w.path, i+1)
 		if _, err := os.Stat(src); err == nil {
 			if err := os.Rename(src, dst); err != nil {
-				return fmt.Errorf("rename %s→%s: %w", src, dst, err)
+				return fmt.Errorf("rename %s to %s: %w", src, dst, err)
 			}
 		}
 	}
 
-	// Rename the active file to.1.
+	// Rename the active file to .1.
 	if err := os.Rename(w.path, rotatedName(w.path, 1)); err != nil {
 		return fmt.Errorf("rename active to .1: %w", err)
 	}
@@ -146,8 +140,6 @@ func (w *AuditFileWriter) rotate() error {
 	return nil
 }
 
-// rotatedName returns the path for the nth rotated log file.
-// e.g. rotatedName("/var/log/audit.jsonl", 1) → "/var/log/audit.jsonl.1.jsonl"
 func rotatedName(base string, n int) string {
 	return fmt.Sprintf("%s.%d.jsonl", base, n)
 }

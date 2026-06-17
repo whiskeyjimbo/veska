@@ -8,7 +8,6 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/vulnsource"
 )
 
-// Compile-time interface satisfaction check.
 var _ ports.VulnSource = (*vulnsource.NullVulnSource)(nil)
 
 func TestNullVulnSource_RefreshReturnsNil(t *testing.T) {

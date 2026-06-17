@@ -16,30 +16,26 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/sqlite/sqldriver"
 )
 
-// VerifyResult summarises the outcome of a backup integrity check.
+// VerifyResult summarizes the outcome of a backup integrity check.
 type VerifyResult struct {
-	// DBIntegrityOK is true if PRAGMA integrity_check returned "ok".
+	// DBIntegrityOK indicates whether the SQLite database passed PRAGMA integrity_check.
 	DBIntegrityOK bool
-	// ForeignKeyOK is true if PRAGMA foreign_key_check returned no rows.
+	// ForeignKeyOK indicates whether the SQLite database passed PRAGMA foreign_key_check without violations.
 	ForeignKeyOK bool
-	// AuditPresent is true if audit.jsonl was present in the tarball.
+	// AuditPresent indicates whether the audit log file was found in the archive.
 	AuditPresent bool
-	// AuditJSONLOK is true if every line in audit.jsonl parsed as valid JSON.
-	// Always false when AuditPresent is false.
+	// AuditJSONLOK indicates whether all lines in the audit log are valid JSON.
 	AuditJSONLOK bool
-	// Status is one of "healthy", "degraded", or "broken".
-	//   healthy — all present checks passed
-	//   degraded — audit.jsonl present but malformed; DB checks passed
-	//   broken — veska.db could not be extracted or failed integrity checks
+	// Status represents the health status of the backup ("healthy", "degraded", or "broken").
+	// A healthy status indicates all database and audit log checks passed.
+	// A degraded status indicates database checks passed but the audit log is malformed.
+	// A broken status indicates the database could not be extracted or failed integrity checks.
 	Status string
 }
 
-// Verify extracts veska.db (and optionally audit.jsonl) from the.tar.gz at
-// path, runs PRAGMA integrity_check and PRAGMA foreign_key_check on the
-// database, and validates each line of audit.jsonl as JSON.
-// Exit codes (via caller): 0=healthy, 1=degraded, 2=broken.
+// Verify inspects the backup archive at the given path by checking database integrity,
+// verifying foreign keys, and validating the structure of the audit log if present.
 func Verify(path string) (VerifyResult, error) {
-	// Extract files into a temp dir.
 	tmpDir, err := os.MkdirTemp("", "veska-verify-*")
 	if err != nil {
 		return VerifyResult{}, fmt.Errorf("backup verify: MkdirTemp: %w", err)
@@ -51,16 +47,13 @@ func Verify(path string) (VerifyResult, error) {
 		return VerifyResult{Status: "broken"}, nil //nolint:nilerr // extraction failure → broken, not a caller error
 	}
 
-	// Write veska.db to temp dir.
 	dbPath := filepath.Join(tmpDir, "veska.db")
 	if err := os.WriteFile(dbPath, dbBytes, 0o600); err != nil {
 		return VerifyResult{Status: "broken"}, fmt.Errorf("backup verify: write veska.db: %w", err)
 	}
 
-	// Run SQLite integrity checks.
 	integrityOK, fkOK, err := checkSQLite(dbPath)
 	if err != nil {
-		// Could not even open the DB.
 		return VerifyResult{DBIntegrityOK: false, ForeignKeyOK: false, Status: "broken"}, nil //nolint:nilerr
 	}
 	if !integrityOK || !fkOK {
@@ -89,9 +82,6 @@ func Verify(path string) (VerifyResult, error) {
 	return result, nil
 }
 
-// extractVerifyFiles reads the.tar.gz at path and returns the raw bytes for
-// veska.db and audit.jsonl (if present). Returns an error if veska.db is
-// not found in the archive.
 func extractVerifyFiles(path string) (dbBytes []byte, auditBytes []byte, auditPresent bool, err error) {
 	f, err := os.Open(path)
 	if err != nil {
@@ -142,9 +132,6 @@ func extractVerifyFiles(path string) (dbBytes []byte, auditBytes []byte, auditPr
 	return dbBytes, auditBytes, auditPresent, nil
 }
 
-// checkSQLite opens the SQLite database at dbPath and runs PRAGMA
-// integrity_check and PRAGMA foreign_key_check. Returns (integrityOK, fkOK,
-// error). An error is returned only if the database cannot be opened.
 func checkSQLite(dbPath string) (integrityOK bool, fkOK bool, err error) {
 	db, err := sql.Open(sqldriver.Name, dbPath)
 	if err != nil {
@@ -154,7 +141,7 @@ func checkSQLite(dbPath string) (integrityOK bool, fkOK bool, err error) {
 
 	ctx := context.Background()
 
-	// PRAGMA integrity_check: a healthy DB returns a single row with value "ok".
+	// A healthy database returns a single row with the value "ok" from PRAGMA integrity_check.
 	rows, err := db.QueryContext(ctx, "PRAGMA integrity_check")
 	if err != nil {
 		return false, false, err
@@ -176,14 +163,14 @@ func checkSQLite(dbPath string) (integrityOK bool, fkOK bool, err error) {
 	}
 	rows.Close()
 
-	// PRAGMA foreign_key_check: no rows means no violations.
+	// PRAGMA foreign_key_check returns no rows if there are no foreign key violations.
 	fkRows, err := db.QueryContext(ctx, "PRAGMA foreign_key_check")
 	if err != nil {
 		return integrityOK, false, err
 	}
 	defer fkRows.Close()
 
-	fkOK = !fkRows.Next() // if there are rows, there are violations
+	fkOK = !fkRows.Next()
 	if err := fkRows.Err(); err != nil {
 		return integrityOK, false, err
 	}
@@ -191,7 +178,6 @@ func checkSQLite(dbPath string) (integrityOK bool, fkOK bool, err error) {
 	return integrityOK, fkOK, nil
 }
 
-// checkJSONL returns true if every non-empty line in data is valid JSON.
 func checkJSONL(data []byte) bool {
 	scanner := bufio.NewScanner(bytes.NewReader(data))
 	for scanner.Scan() {
@@ -205,3 +191,4 @@ func checkJSONL(data []byte) bool {
 	}
 	return true
 }
+

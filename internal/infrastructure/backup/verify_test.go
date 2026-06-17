@@ -13,8 +13,6 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/backup"
 )
 
-// buildTarball writes a.tar.gz to tarPath containing the files described by
-// entries (name -> content). If content is nil the file is empty.
 func buildTarball(t *testing.T, tarPath string, entries map[string][]byte) {
 	t.Helper()
 	f, err := os.Create(tarPath)
@@ -48,8 +46,6 @@ func buildTarball(t *testing.T, tarPath string, entries map[string][]byte) {
 	}
 }
 
-// minimalSQLiteDB creates a minimal valid SQLite database at dbPath and returns
-// its bytes for embedding in a tarball.
 func minimalSQLiteDB(t *testing.T) []byte {
 	t.Helper()
 	dir := t.TempDir()
@@ -72,8 +68,6 @@ func minimalSQLiteDB(t *testing.T) []byte {
 	return data
 }
 
-// TestVerifyHealthy builds a tarball with a valid veska.db (and valid
-// audit.jsonl) and expects Status="healthy", all checks pass.
 func TestVerifyHealthy(t *testing.T) {
 	dir := t.TempDir()
 	tarPath := filepath.Join(dir, "backup.tar.gz")
@@ -107,8 +101,6 @@ func TestVerifyHealthy(t *testing.T) {
 	}
 }
 
-// TestVerifyBrokenDB builds a tarball containing random bytes as veska.db.
-// Verify should return Status="broken".
 func TestVerifyBrokenDB(t *testing.T) {
 	dir := t.TempDir()
 	tarPath := filepath.Join(dir, "backup.tar.gz")
@@ -129,8 +121,6 @@ func TestVerifyBrokenDB(t *testing.T) {
 	}
 }
 
-// TestVerifyAuditJSONLMalformed builds a tarball with a valid veska.db but
-// an audit.jsonl that has a non-JSON line. Expects Status="degraded".
 func TestVerifyAuditJSONLMalformed(t *testing.T) {
 	dir := t.TempDir()
 	tarPath := filepath.Join(dir, "backup.tar.gz")
@@ -162,8 +152,6 @@ func TestVerifyAuditJSONLMalformed(t *testing.T) {
 	}
 }
 
-// TestVerifyNoAuditJSONL builds a tarball that only contains veska.db.
-// AuditPresent should be false and Status should be "healthy".
 func TestVerifyNoAuditJSONL(t *testing.T) {
 	dir := t.TempDir()
 	tarPath := filepath.Join(dir, "backup.tar.gz")

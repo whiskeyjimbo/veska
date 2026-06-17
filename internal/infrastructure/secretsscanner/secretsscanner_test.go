@@ -8,14 +8,12 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/secretsscanner"
 )
 
-// Compile-time interface satisfaction check.
 var _ ports.SecretsScanner = (*secretsscanner.BuiltinScanner)(nil)
 
 func TestBuiltinScanner_Scan(t *testing.T) {
 	t.Parallel()
 
-	// AKIA-shaped synthetic; NOT the AKIAIOSFODNN7EXAMPLE docs placeholder
-	// (the new docs-allowlist drops that one).
+	// A synthetic key that is not the allowed documentation placeholder.
 	const awsKey = "AKIAZQ7XFAKE1234ABCD"
 	const ghToken = "ghp_0123456789abcdefghijklmnopqrstuvwxyz"
 	const entropyTok = "h8Kq2Lx9Zp4Wn7Vc3Mb6Td1Rj5Yf0Gs"
@@ -24,7 +22,7 @@ func TestBuiltinScanner_Scan(t *testing.T) {
 		name       string
 		text       string
 		wantFinds  bool
-		wantRule   string // expected rule name when wantFinds; "" to skip check
+		wantRule   string
 		rawSecrets []string
 	}{
 		{
@@ -122,9 +120,8 @@ func TestBuiltinScanner_Scan(t *testing.T) {
 	}
 }
 
-// TestBuiltinScanner_ImportPathsNotFlagged pins +:
-// Go import paths and well-known module URLs must never produce a finding
-// they cross the entropy threshold but are never secrets.
+// TestBuiltinScanner_ImportPathsNotFlagged verifies that public Go import paths
+// and package URLs do not trigger findings despite having high entropy.
 func TestBuiltinScanner_ImportPathsNotFlagged(t *testing.T) {
 	t.Parallel()
 	s := secretsscanner.New()
@@ -151,25 +148,16 @@ func TestBuiltinScanner_ImportPathsNotFlagged(t *testing.T) {
 	}
 }
 
-// TestBuiltinScanner_URLsInCommentsNotFlagged guards:
-// a line whose only secret-shaped token is the path of an http(s) URL
-// (typical SPDX license header, doc cross-references, README links)
-// must not fire the high-entropy rule. The journey report saw 47 of
-// these on a fresh spf13/cobra clone — every Apache-2.0 header line
-// like `// http://www.apache.org/licenses/LICENSE-2.0` flagged.
+// TestBuiltinScanner_URLsInCommentsNotFlagged verifies that HTTP and HTTPS links
+// inside comments or markdown documentation do not trigger findings.
 func TestBuiltinScanner_URLsInCommentsNotFlagged(t *testing.T) {
 	t.Parallel()
 	s := secretsscanner.New()
 	cases := []string{
-		// Apache-2.0 SPDX header URL (literal from cobra v1.8.0).
 		"//      http://www.apache.org/licenses/LICENSE-2.0",
-		// HTTPS variant + trailing slash.
 		"// See https://github.com/golang/go/issues/12345/ for context",
-		// Bare hostname + long path with mixed case.
 		"// docs: https://pkg.go.dev/github.com/spf13/cobra#Command.Execute",
-		// Markdown link.
 		"[issue]: https://example.com/path/with/some-long-fragment-12345",
-		// Bare scheme + host (no path) — entropy lower but still not a secret.
 		"// see http://docs.example.com/api/reference for the spec",
 	}
 	for _, txt := range cases {
@@ -188,9 +176,8 @@ func TestBuiltinScanner_URLsInCommentsNotFlagged(t *testing.T) {
 	}
 }
 
-// TestBuiltinScanner_UrlsDoNotMaskRealSecrets guards that adding the
-// URL allowlist does NOT silently drop a real secret that happens to
-// share a line with a URL — the URL is filtered, the secret still fires.
+// TestBuiltinScanner_UrlsDoNotMaskRealSecrets ensures that lines containing both a URL
+// and a secret still trigger a finding for the secret.
 func TestBuiltinScanner_UrlsDoNotMaskRealSecrets(t *testing.T) {
 	t.Parallel()
 	s := secretsscanner.New()
@@ -206,9 +193,8 @@ func TestBuiltinScanner_UrlsDoNotMaskRealSecrets(t *testing.T) {
 	}
 }
 
-// TestBuiltinScanner_GitleaksAddsStripeRule pins: gitleaks
-// fires on Stripe test tokens that the previous local-only rules missed.
-// Uses a synthetic-but-realistic shape that gitleaks does not allowlist.
+// TestBuiltinScanner_GitleaksAddsStripeRule verifies that gitleaks rules correctly detect
+// secrets (like Stripe tokens) that the local fallback regex paths might miss.
 func TestBuiltinScanner_GitleaksAddsStripeRule(t *testing.T) {
 	t.Parallel()
 	s := secretsscanner.New()
@@ -254,7 +240,6 @@ func TestBuiltinScanner_EmptyInput(t *testing.T) {
 func TestBuiltinScanner_ExcludesLockfiles(t *testing.T) {
 	t.Parallel()
 	s := secretsscanner.New()
-	// A real go.sum line: high-entropy hash, but never a secret.
 	const goSumLine = "github.com/spf13/cobra v1.10.2 h1:DM3sOC6FYNAhJ8K0jK3K7vKQ8gQXl8Rh+nQ7eAQpQyU="
 	for _, path := range []string{"go.sum", "go.mod", "vendor/foo/go.sum", "package-lock.json", "Cargo.lock"} {
 		in := ports.ScanInput{AddedLines: map[string][]ports.Line{
@@ -270,11 +255,8 @@ func TestBuiltinScanner_ExcludesLockfiles(t *testing.T) {
 	}
 }
 
-// TestBuiltinScanner_DocsExamplesAllowlisted pins: well-known
-// vendor documentation placeholders (e.g. AWS's canonical
-// AKIAIOSFODNN7EXAMPLE / wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY) must
-// not surface as findings — they dominate the first-run journey otherwise
-// and erode trust in the scanner.
+// TestBuiltinScanner_DocsExamplesAllowlisted verifies that well-known vendor documentation
+// placeholder values are explicitly allowed and do not trigger warnings.
 func TestBuiltinScanner_DocsExamplesAllowlisted(t *testing.T) {
 	t.Parallel()
 	s := secretsscanner.New()
@@ -296,10 +278,8 @@ func TestBuiltinScanner_DocsExamplesAllowlisted(t *testing.T) {
 	}
 }
 
-// TestBuiltinScanner_FilesystemPathsNotFlagged pins: the
-// mcp.json file veska itself writes during `veska init --agent` embeds
-// the absolute path of veska-mcp, which previously tripped the
-// high-entropy rule. Filesystem paths must never produce a finding.
+// TestBuiltinScanner_FilesystemPathsNotFlagged verifies that absolute Unix filesystem
+// paths do not trigger high-entropy findings.
 func TestBuiltinScanner_FilesystemPathsNotFlagged(t *testing.T) {
 	t.Parallel()
 	s := secretsscanner.New()
@@ -326,13 +306,11 @@ func TestBuiltinScanner_FilesystemPathsNotFlagged(t *testing.T) {
 	}
 }
 
-// TestBuiltinScanner_FilesystemPathHeuristicStillCatchesSecrets pins
-// the narrow shape of the filesystem-path allowlist: tokens with only
-// one '/' (e.g. base64-with-slash secrets) must still be flagged.
+// TestBuiltinScanner_FilesystemPathHeuristicStillCatchesSecrets ensures that tokens that
+// resemble filesystem paths but only contain a single slash are still flagged.
 func TestBuiltinScanner_FilesystemPathHeuristicStillCatchesSecrets(t *testing.T) {
 	t.Parallel()
 	s := secretsscanner.New()
-	// Single-slash, random suffix — base64-ish secret shape.
 	const tok = "wJalrXUtnFEMI/K7MDENGbPxRfiCYZZTopSecret123XYZ"
 	in := ports.ScanInput{AddedLines: map[string][]ports.Line{
 		"file.go": {{Number: 1, Text: `password = "` + tok + `"`}},
@@ -348,7 +326,7 @@ func TestBuiltinScanner_FilesystemPathHeuristicStillCatchesSecrets(t *testing.T)
 
 func TestBuiltinScanner_RedactionMasksValue(t *testing.T) {
 	t.Parallel()
-	const awsKey = "AKIAZQ7XFAKE1234ABCD" // synthetic; not the docs allowlist
+	const awsKey = "AKIAZQ7XFAKE1234ABCD"
 	s := secretsscanner.New()
 	in := ports.ScanInput{AddedLines: map[string][]ports.Line{
 		"creds.go": {{Number: 1, Text: awsKey}},
@@ -364,3 +342,4 @@ func TestBuiltinScanner_RedactionMasksValue(t *testing.T) {
 		t.Errorf("Redacted %q does not appear masked", got[0].Redacted)
 	}
 }
+

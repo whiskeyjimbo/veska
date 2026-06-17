@@ -15,19 +15,17 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/vulnsource/osv"
 )
 
-// Compile-time interface satisfaction check.
 var _ ports.VulnSource = (*osv.Adapter)(nil)
 
-// failingTransport fails any HTTP round-trip. An adapter built with it proves a
-// code path performs no network I/O when it still succeeds.
+// failingTransport implements an http.RoundTripper that explicitly fails all requests.
+// This is used to verify that the scan operations run completely offline without triggering network I/O.
 type failingTransport struct{}
 
 func (failingTransport) RoundTrip(*http.Request) (*http.Response, error) {
 	return nil, errors.New("network access is forbidden in this test")
 }
 
-// xnetAdvisory is a fixture OSV advisory: golang.org/x/net affected below
-// v0.17.0.
+// xnetAdvisory is a fixture OSV advisory targeting golang.org/x/net below v0.17.0.
 const xnetAdvisory = `{
   "id": "GO-2023-9999",
   "summary": "Example HTTP/2 vulnerability in x/net",
@@ -38,7 +36,7 @@ const xnetAdvisory = `{
   }]
 }`
 
-// textAdvisory is a fixture OSV advisory affecting an unrelated package.
+// textAdvisory is a fixture OSV advisory affecting the golang.org/x/text package.
 const textAdvisory = `{
   "id": "GO-2024-0001",
   "summary": "Example issue in x/text",
@@ -49,8 +47,7 @@ const textAdvisory = `{
   }]
 }`
 
-// fooV2Advisory is a fixture OSV advisory affecting a v2 module across the
-// v2.0.0–v2.2.0 range, used to exercise +incompatible version matching.
+// fooV2Advisory is a fixture OSV advisory targeting example.com/foo v2 in the v2.0.0-v2.2.0 range.
 const fooV2Advisory = `{
   "id": "GO-2024-0002",
   "summary": "Example issue in example.com/foo v2",
@@ -61,9 +58,8 @@ const fooV2Advisory = `{
   }]
 }`
 
-// jwtGHSA + jwtGOAdvisory pin: OSV ships the same jwt-go
-// auth-bypass vulnerability under both a GHSA and a GO- ID; Scan must
-// emit one finding (GHSA wins), not two.
+// jwtGHSA and jwtGOAdvisory describe the same jwt-go auth-bypass vulnerability.
+// They are used to verify that duplicate findings are collapsed with preference given to GHSA IDs.
 const jwtGHSA = `{
   "id": "GHSA-w73w-5m7g-f7qc",
   "aliases": ["GO-2020-0017", "CVE-2020-26160"],
@@ -88,8 +84,6 @@ const jwtGOAdvisory = `{
   }]
 }`
 
-// writeFixtureCache builds an OSV cache directory containing the given advisory
-// JSON documents, keyed by filename.
 func writeFixtureCache(t *testing.T, advisories map[string]string) string {
 	t.Helper()
 	dir := t.TempDir()
@@ -101,10 +95,8 @@ func writeFixtureCache(t *testing.T, advisories map[string]string) string {
 	return dir
 }
 
-// TestScan_DedupesAliasedAdvisories pins: two OSV advisories that
-// describe the same vuln via different IDs (GHSA + GO-) must collapse to a
-// single finding, with the GHSA-prefixed ID winning and the suppressed IDs
-// surfacing in Aliases.
+// TestScan_DedupesAliasedAdvisories verifies that multiple advisories describing the
+// same vulnerability under different IDs are collapsed into a single finding.
 func TestScan_DedupesAliasedAdvisories(t *testing.T) {
 	t.Parallel()
 	dir := writeFixtureCache(t, map[string]string{
@@ -124,7 +116,7 @@ func TestScan_DedupesAliasedAdvisories(t *testing.T) {
 	if got[0].AdvisoryID != "GHSA-w73w-5m7g-f7qc" {
 		t.Errorf("canonical AdvisoryID = %q, want GHSA-w73w-5m7g-f7qc (GHSA-rank wins)", got[0].AdvisoryID)
 	}
-	wantAliases := []string{"CVE-2020-26160", "GO-2020-0017"} // sorted
+	wantAliases := []string{"CVE-2020-26160", "GO-2020-0017"}
 	if len(got[0].Aliases) != len(wantAliases) {
 		t.Fatalf("Aliases = %v, want %v", got[0].Aliases, wantAliases)
 	}
@@ -168,10 +160,8 @@ func TestScan_KnownVulnerableDepYieldsFinding(t *testing.T) {
 	}
 }
 
-// TestScan_PseudoVersionAndIncompatible verifies Scan matches dependencies
-// pinned at a Go pseudo-version or a +incompatible version. Both are valid
-// semver and must compare correctly against OSV affected ranges — they are
-// not silently dropped as unparseable.
+// TestScan_PseudoVersionAndIncompatible verifies that pseudo-versions and "+incompatible"
+// suffixes are parsed correctly and matched against advisory ranges without being discarded.
 func TestScan_PseudoVersionAndIncompatible(t *testing.T) {
 	t.Parallel()
 	dir := writeFixtureCache(t, map[string]string{
@@ -181,9 +171,7 @@ func TestScan_PseudoVersionAndIncompatible(t *testing.T) {
 	a := osv.New(osv.WithCacheDir(dir))
 
 	deps := []ports.Dependency{
-		// Pseudo-version below x/net v0.17.0 → inside the affected range.
 		{Ecosystem: "Go", Name: "golang.org/x/net", Version: "v0.16.1-0.20240115120000-abcdef123456"},
-		// +incompatible version inside foo's v2.0.0–v2.2.0 range.
 		{Ecosystem: "Go", Name: "example.com/foo", Version: "v2.1.0+incompatible"},
 	}
 	got, err := a.Scan(context.Background(), deps)
@@ -210,7 +198,6 @@ func TestScan_CleanDepYieldsNoFinding(t *testing.T) {
 	dir := writeFixtureCache(t, map[string]string{"GO-2023-9999.json": xnetAdvisory})
 	a := osv.New(osv.WithCacheDir(dir))
 
-	// v0.17.0 is the fixed version — not affected.
 	deps := []ports.Dependency{
 		{Ecosystem: "Go", Name: "golang.org/x/net", Version: "v0.17.0"},
 	}
@@ -249,9 +236,9 @@ func TestScan_LastAffectedRangeBoundary(t *testing.T) {
 		version string
 		want    bool
 	}{
-		{"v0.3.7", true},  // inclusive last_affected
-		{"v0.3.8", false}, // past last_affected
-		{"v0.2.0", false}, // before introduced
+		{"v0.3.7", true},
+		{"v0.3.8", false},
+		{"v0.2.0", false},
 	}
 	for _, tc := range cases {
 		deps := []ports.Dependency{{Ecosystem: "Go", Name: "golang.org/x/text", Version: tc.version}}
@@ -283,7 +270,7 @@ func TestScan_MissingCacheReturnsNilNil(t *testing.T) {
 
 func TestScan_EmptyCacheReturnsNilNil(t *testing.T) {
 	t.Parallel()
-	a := osv.New(osv.WithCacheDir(t.TempDir())) // exists but empty
+	a := osv.New(osv.WithCacheDir(t.TempDir()))
 
 	deps := []ports.Dependency{
 		{Ecosystem: "Go", Name: "golang.org/x/net", Version: "v0.15.0"},
@@ -297,8 +284,7 @@ func TestScan_EmptyCacheReturnsNilNil(t *testing.T) {
 	}
 }
 
-// TestScan_IsOffline proves Scan performs no network I/O: the adapter is built
-// with a transport that fails any request, yet Scan still produces findings.
+// TestScan_IsOffline verifies that Scan runs successfully offline without triggering HTTP requests.
 func TestScan_IsOffline(t *testing.T) {
 	t.Parallel()
 	dir := writeFixtureCache(t, map[string]string{"GO-2023-9999.json": xnetAdvisory})
@@ -319,7 +305,6 @@ func TestScan_IsOffline(t *testing.T) {
 	}
 }
 
-// fixtureZip builds an in-memory zip of OSV advisory JSON files.
 func fixtureZip(t *testing.T, files map[string]string) []byte {
 	t.Helper()
 	var buf bytes.Buffer
@@ -364,7 +349,6 @@ func TestRefresh_DownloadsAndExtractsDump(t *testing.T) {
 		}
 	}
 
-	// The freshly-refreshed cache must be scannable.
 	got, err := a.Scan(context.Background(), []ports.Dependency{
 		{Ecosystem: "Go", Name: "golang.org/x/net", Version: "v0.15.0"},
 	})
@@ -389,3 +373,4 @@ func TestRefresh_Non200ReturnsError(t *testing.T) {
 		return
 	}
 }
+

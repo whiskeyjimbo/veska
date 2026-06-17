@@ -14,8 +14,6 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/backup"
 )
 
-// makeBackup seeds a DB in a fresh home and creates a backup tarball, returning
-// the tarball path and the backup dir.
 func makeBackup(t *testing.T) (tarPath, backupDir string) {
 	t.Helper()
 	srcHome := t.TempDir()
@@ -54,7 +52,6 @@ func TestRestoreRoundTrip(t *testing.T) {
 		t.Fatalf("RestoreResult.DBSizeBytes=%d, want >0", res.DBSizeBytes)
 	}
 
-	// The restored DB must hold the seeded row.
 	db, err := sql.Open(sqldriver.Name, dbPath)
 	if err != nil {
 		t.Fatalf("open restored db: %v", err)
@@ -71,7 +68,6 @@ func TestRestoreRoundTrip(t *testing.T) {
 
 func TestRestoreRefusesCorruptTarball(t *testing.T) {
 	tarPath, _ := makeBackup(t)
-	// Corrupt the tarball by truncating it.
 	if err := os.WriteFile(tarPath, []byte("not a gzip"), 0o600); err != nil {
 		t.Fatalf("corrupt tarball: %v", err)
 	}
@@ -92,7 +88,6 @@ func TestRestoreRefusesCorruptTarball(t *testing.T) {
 		t.Fatalf("Restore err = %v, want ErrBackupCorrupt", err)
 	}
 
-	// No changes: the existing DB must be untouched.
 	after, err := os.ReadFile(existingDB)
 	if err != nil {
 		t.Fatalf("read existing db after: %v", err)
@@ -131,7 +126,6 @@ func TestRestoreAbortsOnStaleRescueCopy(t *testing.T) {
 	tarPath, _ := makeBackup(t)
 	destHome := t.TempDir()
 	seedDB(t, filepath.Join(destHome, "veska.db"))
-	// Pre-existing stale rescue copy.
 	stale := filepath.Join(destHome, "veska.db.before-restore-20200101T000000Z.bak")
 	if err := os.WriteFile(stale, []byte("stale"), 0o600); err != nil {
 		t.Fatalf("write stale rescue: %v", err)
@@ -167,7 +161,6 @@ func TestSelectLatestPicksNewest(t *testing.T) {
 
 func TestSelectPreMigrationErrorsWhenNone(t *testing.T) {
 	backupDir := t.TempDir()
-	// Only a user-initiated backup present, no auto-pre-migration snapshot.
 	if err := os.WriteFile(filepath.Join(backupDir, "veska-backup-20250101T000000Z.tar.gz"), []byte("x"), 0o600); err != nil {
 		t.Fatalf("write: %v", err)
 	}
@@ -180,7 +173,6 @@ func TestSelectPreMigrationErrorsWhenNone(t *testing.T) {
 
 func TestPruneKeepsMinCount(t *testing.T) {
 	backupDir := t.TempDir()
-	// 5 user backups, all old.
 	old := time.Now().Add(-90 * 24 * time.Hour)
 	var names []string
 	for _, ts := range []string{
@@ -196,7 +188,6 @@ func TestPruneKeepsMinCount(t *testing.T) {
 		}
 		names = append(names, n)
 	}
-	// An auto-pre-migration snapshot that must never be pruned.
 	auto := filepath.Join(backupDir, "auto-pre-migration-1-to-2-20200101T000000Z.tar.gz")
 	if err := os.WriteFile(auto, []byte("x"), 0o600); err != nil {
 		t.Fatalf("write auto: %v", err)
@@ -219,11 +210,9 @@ func TestPruneKeepsMinCount(t *testing.T) {
 	if len(res.Deleted) != 2 {
 		t.Fatalf("Prune deleted %d, want 2", len(res.Deleted))
 	}
-	// Auto-pre-migration snapshot must survive.
 	if _, err := os.Stat(auto); err != nil {
 		t.Fatalf("auto-pre-migration snapshot was pruned: %v", err)
 	}
-	// The 3 newest must survive.
 	for _, n := range names[2:] {
 		if _, err := os.Stat(n); err != nil {
 			t.Fatalf("expected %s to survive: %v", n, err)
@@ -262,3 +251,4 @@ func TestParseRetentionAge(t *testing.T) {
 		}
 	}
 }
+

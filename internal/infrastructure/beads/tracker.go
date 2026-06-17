@@ -14,28 +14,20 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/core/ports"
 )
 
-// currentTaskFile is the relative path (from the repo root) that beads writes
-// the active task ID into.
+// currentTaskFile specifies the relative path from the repository root where the active task ID is stored.
 const currentTaskFile = ".beads/current_task"
 
-// FileTracker is a Tracker that reads the active task ID from a
-// beads/current_task file located at the root of the given repository
-// directory. It satisfies ports.Tracker.
-// FileTracker is safe for concurrent use.
+// FileTracker reads the active task ID from a .beads/current_task file at the repository root.
 type FileTracker struct{}
 
-// Compile-time interface satisfaction check.
 var _ ports.Tracker = (*FileTracker)(nil)
 
-// NewFileTracker constructs a FileTracker.
 func NewFileTracker() *FileTracker {
 	return &FileTracker{}
 }
 
-// ActiveTask reads.beads/current_task from repoID (treated as a filesystem
-// path) and returns a Task whose ID is the trimmed file contents. Returns nil,
-// nil when the file is absent or empty — that is the normal state when no task
-// is active.
+// ActiveTask retrieves the active task by reading from the .beads/current_task file.
+// If the file is missing or empty, it returns nil without an error, indicating no active task.
 func (t *FileTracker) ActiveTask(_ context.Context, repoID string) (*ports.TaskSummary, error) {
 	raw, err := os.ReadFile(filepath.Join(repoID, currentTaskFile))
 	if err != nil {
@@ -54,13 +46,12 @@ func (t *FileTracker) ActiveTask(_ context.Context, repoID string) (*ports.TaskS
 		ID:        id,
 		RepoID:    repoID,
 		Active:    true,
-		CreatedAt: time.Time{}, // file does not record creation time
+		CreatedAt: time.Time{}, // File does not record creation time.
 	}, nil
 }
 
-// RecentTasks is not supported by the file-based tracker; it always returns an
-// empty slice. Use a richer Tracker implementation (e.g. beads HTTP API) to
-// query task history.
+// RecentTasks is not supported by the file-based tracker and always returns nil.
 func (t *FileTracker) RecentTasks(_ context.Context, _ string, _ int) ([]ports.TaskSummary, error) {
 	return nil, nil
 }
+

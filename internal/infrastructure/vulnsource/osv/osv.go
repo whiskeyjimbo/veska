@@ -27,26 +27,20 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/platform/config"
 )
 
-// DumpURL is the OSV full Go-ecosystem advisory dump. It is the single
-// outbound endpoint this adapter dials and is exported so the daemon's egress
-// observability report can cite it without re-deriving the literal.
+// DumpURL is the OSV Go-ecosystem advisory zip database location.
 const DumpURL = "https://osv-vulnerabilities.storage.googleapis.com/Go/all.zip"
 
 const (
 	defaultTimeout = 5 * time.Minute
-
-	// ecosystemGo is the OSV ecosystem label this adapter understands.
-	ecosystemGo = "Go"
+	ecosystemGo    = "Go"
 )
 
-// ErrMissingDependency is returned by New when a required dependency is missing.
-// It is errors.Is-matchable so callers can distinguish a wiring fault from a
-// runtime failure.
+// ErrMissingDependency is returned when a required wiring dependency is not provided.
 var ErrMissingDependency = errors.New("osv: missing required dependency")
 
 // Adapter implements ports.VulnSource against the OSV.dev advisory database.
-// Adapter is safe for concurrent use: Scan only reads from disk, and Refresh
-// writes via a fresh temporary file per advisory.
+// It is safe for concurrent use since Scan only reads from disk and Refresh
+// writes to a unique temporary file per advisory.
 type Adapter struct {
 	cacheDir string
 	dumpURL  string
@@ -55,11 +49,9 @@ type Adapter struct {
 
 var _ ports.VulnSource = (*Adapter)(nil)
 
-// Option configures an Adapter.
 type Option func(*Adapter)
 
-// WithCacheDir overrides the advisory cache directory (default
-// $VESKA_HOME/cache/osv). An empty value is ignored.
+// WithCacheDir configures a custom directory path for caching advisory files.
 func WithCacheDir(dir string) Option {
 	return func(a *Adapter) {
 		if dir != "" {
@@ -68,8 +60,7 @@ func WithCacheDir(dir string) Option {
 	}
 }
 
-// WithHTTPClient supplies a custom *http.Client used by Refresh. The client's
-// Timeout, if any, applies to the entire request.
+// WithHTTPClient registers a custom HTTP client for downloading database dumps.
 func WithHTTPClient(c *http.Client) Option {
 	return func(a *Adapter) {
 		if c != nil {
@@ -78,8 +69,7 @@ func WithHTTPClient(c *http.Client) Option {
 	}
 }
 
-// WithDumpURL overrides the OSV dump URL. Intended for tests serving a fixture
-// zip from an httptest.Server. An empty value is ignored.
+// WithDumpURL registers a custom database zip archive download URL.
 func WithDumpURL(u string) Option {
 	return func(a *Adapter) {
 		if u != "" {
@@ -88,9 +78,7 @@ func WithDumpURL(u string) Option {
 	}
 }
 
-// New constructs an Adapter. By default the cache lives under
-// $VESKA_HOME/cache/osv and Refresh downloads from the public OSV dump URL.
-// Apply WithCacheDir / WithHTTPClient / WithDumpURL to override.
+// New constructs an OSV Adapter.
 func New(opts ...Option) *Adapter {
 	a := &Adapter{
 		cacheDir: config.DefaultOSVCacheDir(),
@@ -103,9 +91,7 @@ func New(opts ...Option) *Adapter {
 	return a
 }
 
-// Refresh downloads the OSV Go-ecosystem advisory dump and extracts every
-// advisory JSON file into the cache directory. It is the only operation that
-// performs network egress.
+// Refresh downloads the full OSV database dump and extracts advisory JSON files.
 func (a *Adapter) Refresh(ctx context.Context) error {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, a.dumpURL, nil)
 	if err != nil {
@@ -122,8 +108,6 @@ func (a *Adapter) Refresh(ctx context.Context) error {
 		return fmt.Errorf("osv refresh: download dump: status %d", resp.StatusCode)
 	}
 
-	// zip.NewReader needs random access, so buffer the dump in memory. The Go
-	// dump is on the order of tens of MB.
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return fmt.Errorf("osv refresh: read dump: %w", err)
@@ -149,8 +133,6 @@ func (a *Adapter) Refresh(ctx context.Context) error {
 	return nil
 }
 
-// extractAdvisory writes a single advisory file from the zip into the cache.
-// The zip path is flattened to its base name to keep the cache directory flat.
 func (a *Adapter) extractAdvisory(f *zip.File) error {
 	rc, err := f.Open()
 	if err != nil {
@@ -167,7 +149,6 @@ func (a *Adapter) extractAdvisory(f *zip.File) error {
 	return os.WriteFile(dest, data, 0o644)
 }
 
-// advisory mirrors the subset of the OSV schema this adapter needs.
 type advisory struct {
 	ID             string            `json:"id"`
 	Aliases        []string          `json:"aliases"`
@@ -177,9 +158,7 @@ type advisory struct {
 	DatabaseSpecif osvDatabaseSpecif `json:"database_specific"`
 }
 
-// osvDatabaseSpecif carries GHSA-prefixed advisories' severity rating
-// (CRITICAL/HIGH/MODERATE/LOW), which is more useful than the raw CVSS
-// vector string when populating finding severity.
+// osvDatabaseSpecif maps GHSA-prefixed advisory severity levels ("CRITICAL", "HIGH", etc.).
 type osvDatabaseSpecif struct {
 	Severity string `json:"severity"`
 }
@@ -210,9 +189,7 @@ type osvSeverity struct {
 	Score string `json:"score"`
 }
 
-// Scan matches deps against the on-disk advisory cache and returns any
-// findings. It performs no network I/O. A missing or empty cache directory
-// yields (nil, nil).
+// Scan compares the input dependencies against the cached OSV database on disk.
 func (a *Adapter) Scan(ctx context.Context, deps []ports.Dependency) ([]ports.VulnFinding, error) {
 	entries, err := os.ReadDir(a.cacheDir)
 	if err != nil {
@@ -222,7 +199,6 @@ func (a *Adapter) Scan(ctx context.Context, deps []ports.Dependency) ([]ports.Vu
 		return nil, fmt.Errorf("osv scan: read cache dir: %w", err)
 	}
 
-	// Index deps by package name for O(1) lookup per advisory.
 	byPackage := make(map[string][]ports.Dependency, len(deps))
 	for _, d := range deps {
 		if !strings.EqualFold(d.Ecosystem, ecosystemGo) {
@@ -251,27 +227,19 @@ func (a *Adapter) Scan(ctx context.Context, deps []ports.Dependency) ([]ports.Vu
 	return dedupeAliased(findings), nil
 }
 
-// dedupeAliased collapses findings that point at the same vulnerability via
-// different advisory IDs (e.g. GHSA-w73w-5m7g-f7qc and GO-2020-0017 both
-// describe the same jwt-go authorization bypass). OSV.dev's `aliases` field
-// names the equivalent IDs; we keep one finding per (package, equivalence
-// class) and prefer GHSA-prefixed IDs (most widely cross-referenced), then
-// CVE, then anything else. The retained finding's Aliases field lists the
-// suppressed IDs so triage can still cross-check.
+// dedupeAliased collapses findings that represent the same vulnerability under different advisory IDs.
+// Equivalent IDs are identified via OSV's aliases field, grouped using union-find, and the finding with the
+// most widely recognized ID type (GHSA first, then CVE) is preferred.
 func dedupeAliased(findings []ports.VulnFinding) []ports.VulnFinding {
 	if len(findings) <= 1 {
 		return findings
 	}
-	// Build per-package index then walk aliases to assign each finding to
-	// an equivalence class. AdvisoryID + Aliases together define edges.
 	byPkg := make(map[string][]int, len(findings))
 	for i, f := range findings {
 		byPkg[f.Package] = append(byPkg[f.Package], i)
 	}
 	keep := make([]bool, len(findings))
 	for _, idxs := range byPkg {
-		// Map every advisory ID we've seen for this package to its
-		// finding-index, then group via union-find over Aliases.
 		idxByID := make(map[string]int, len(idxs)*2)
 		for _, i := range idxs {
 			idxByID[findings[i].AdvisoryID] = i
@@ -300,7 +268,6 @@ func dedupeAliased(findings []ports.VulnFinding) []ports.VulnFinding {
 				}
 			}
 		}
-		// For each class, pick the canonical representative.
 		bestOfClass := make(map[int]int)
 		for _, i := range idxs {
 			root := find(i)
@@ -318,16 +285,12 @@ func dedupeAliased(findings []ports.VulnFinding) []ports.VulnFinding {
 		if !keep[i] {
 			continue
 		}
-		// Collect aliases from every member of this equivalence class so
-		// the retained finding still cross-references the suppressed IDs.
 		aliasSet := make(map[string]struct{})
 		for _, alias := range f.Aliases {
 			if alias != "" && alias != f.AdvisoryID {
 				aliasSet[alias] = struct{}{}
 			}
 		}
-		// Add suppressed sibling IDs (they may not appear in our own
-		// Aliases list when the alias relation was unidirectional).
 		for j, other := range findings {
 			if j == i || keep[j] || other.Package != f.Package {
 				continue
@@ -342,7 +305,6 @@ func dedupeAliased(findings []ports.VulnFinding) []ports.VulnFinding {
 		for a := range aliasSet {
 			merged = append(merged, a)
 		}
-		// Deterministic order for tests / diff-stable findings output.
 		sortStrings(merged)
 		f.Aliases = merged
 		out = append(out, f)
@@ -350,10 +312,7 @@ func dedupeAliased(findings []ports.VulnFinding) []ports.VulnFinding {
 	return out
 }
 
-// advisoryRank ranks advisory-ID prefixes by usefulness as the canonical ID.
-// Lower is better. GHSA wins because GitHub Security Advisories carry the
-// richest cross-references; CVE is the universal alias; GO-/PYSEC are
-// ecosystem-specific and least portable.
+// advisoryRank defines the precedence order for canonical vulnerability IDs (GHSA wins over CVE, etc.).
 func advisoryRank(id string) int {
 	switch {
 	case strings.HasPrefix(id, "GHSA-"):
@@ -367,9 +326,7 @@ func advisoryRank(id string) int {
 	}
 }
 
-// sortStrings is a tiny in-place insertion sort. Aliases lists hold at most
-// a handful of IDs so the algorithm choice is irrelevant; using a one-line
-// helper keeps the osv package free of "sort" import churn.
+// sortStrings performs an in-place insertion sort to ensure a deterministic ordering of aliases.
 func sortStrings(s []string) {
 	for i := 1; i < len(s); i++ {
 		for j := i; j > 0 && s[j-1] > s[j]; j-- {
@@ -378,7 +335,6 @@ func sortStrings(s []string) {
 	}
 }
 
-// loadAdvisory reads and decodes a single advisory file from the cache.
 func (a *Adapter) loadAdvisory(path string) (advisory, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -391,8 +347,6 @@ func (a *Adapter) loadAdvisory(path string) (advisory, error) {
 	return adv, nil
 }
 
-// matchAdvisory returns a finding for each scanned dependency that the advisory
-// reports as affected.
 func matchAdvisory(adv advisory, byPackage map[string][]ports.Dependency) []ports.VulnFinding {
 	var findings []ports.VulnFinding
 	for _, aff := range adv.Affected {
@@ -417,18 +371,14 @@ func matchAdvisory(adv advisory, byPackage map[string][]ports.Dependency) []port
 	return findings
 }
 
-// versionAffected reports whether version falls inside any affected range.
-// OSV semantics: a version is affected when, in event order, an "introduced"
-// event applies and no subsequent "fixed" event does; "last_affected" closes
-// the range inclusively.
+// versionAffected reports whether a version falls inside any of the affected semver ranges.
+// Under OSV rules, a version is affected if an introduced event applies and no fixed event overrides it.
 func versionAffected(version string, ranges []osvRange) bool {
 	v := normalizeSemver(version)
 	if !semver.IsValid(v) {
 		return false
 	}
 	for _, r := range ranges {
-		// SEMVER and GIT are the OSV range types; only SEMVER is comparable
-		// here. An unrecognised type is skipped rather than guessed.
 		if r.Type != "" && r.Type != "SEMVER" {
 			continue
 		}
@@ -458,9 +408,8 @@ func versionAffected(version string, ranges []osvRange) bool {
 	return false
 }
 
-// minFixedAbove returns the lowest "fixed" version greater than the current
-// version among the matching ranges, with a leading "v" so it can be passed
-// straight to `go get`. Empty when no published fix exists.
+// minFixedAbove returns the lowest fixed version that resolves the vulnerability for the current version.
+// A leading "v" is attached to ensure compatibility when executing commands like `go get`.
 func minFixedAbove(current string, ranges []osvRange) string {
 	cur := normalizeSemver(current)
 	var best string
@@ -487,8 +436,7 @@ func minFixedAbove(current string, ranges []osvRange) string {
 	return best
 }
 
-// normalizeSemver gives a version the leading "v" that golang.org/x/mod/semver
-// requires. OSV stores Go versions without it; go.mod versions carry it.
+// normalizeSemver prepends a "v" prefix if not already present, conforming to golang.org/x/mod/semver.
 func normalizeSemver(v string) string {
 	if v == "" {
 		return v
@@ -499,8 +447,7 @@ func normalizeSemver(v string) string {
 	return "v" + v
 }
 
-// rangeString renders affected ranges into a compact, human-readable form for
-// the VulnFinding.AffectedRange field.
+// rangeString translates advisory range lists to a comma-separated readable string.
 func rangeString(ranges []osvRange) string {
 	var parts []string
 	for _, r := range ranges {
@@ -520,10 +467,7 @@ func rangeString(ranges []osvRange) string {
 	return strings.Join(parts, ", ")
 }
 
-// pickSeverity returns a human-readable severity rating for the advisory.
-// GHSA records carry a rating directly in database_specific.severity; for
-// other records we parse the CVSS3 vector and derive a label from the base
-// score. Empty string falls through to checks.mapSeverity's Medium default
+// pickSeverity returns a severity rating, falling back to CVSS score calculation if GHSA database values are absent.
 func pickSeverity(adv advisory) string {
 	if s := strings.TrimSpace(adv.DatabaseSpecif.Severity); s != "" {
 		return s
@@ -532,27 +476,17 @@ func pickSeverity(adv advisory) string {
 		if s.Score == "" {
 			continue
 		}
-		// CVSS3 base-score → severity per the official rubric.
 		if label := severityFromCVSS3(s.Score); label != "" {
 			return label
 		}
-		// Fall through with the raw score string — mapSeverity will default
-		// to Medium rather than guess.
 		return s.Score
 	}
 	return ""
 }
 
-// severityFromCVSS3 extracts the CVSS3 base score from a vector string of the
-// form "CVSS:3.1/AV:N/.". If a Score field is present numerically, use it;
-// otherwise compute nothing and return "". Recognised severity buckets per
-// FIRST.org's CVSS3 rubric: 0.1–3.9 Low, 4.0–6.9 Medium, 7.0–8.9 High,
-// 9.0–10.0 Critical.
+// severityFromCVSS3 extracts base scores to determine rating groups.
+// Currently returns an empty string as a placeholder for a future CVSS calculator.
 func severityFromCVSS3(vec string) string {
-	// We don't ship a CVSS calculator; the OSV vector strings we've seen
-	// don't include a precomputed score. Return "" and let the caller fall
-	// through. Splitting this out keeps the intent explicit for a future
-	// pass that adds a CVSS calculator.
 	_ = vec
 	return ""
 }

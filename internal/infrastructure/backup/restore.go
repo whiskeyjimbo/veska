@@ -57,18 +57,10 @@ type RestoreResult struct {
 	RescuePath string
 }
 
-// Restore restores a verified backup tarball into opts.VeskaHome.
-// The operation is non-running-only; the caller must confirm the daemon is
-// stopped (see ErrDaemonRunning). Steps follow:
-//  1. Verify the tarball; a corrupt archive aborts with ErrBackupCorrupt and
-//     leaves the veska home untouched.
-//  2. Rescue the existing veska.db/.db-wal/.db-shm to
-//     veska.db.before-restore-<ts>.bak (idempotent; ErrStaleRescueCopy if a
-//     rescue copy already exists).
-//  3. Extract the tarball into the veska home.
-//  4. Run PRAGMA integrity_check plus a schema_migrations sanity check.
-//  5. On integrity failure, roll the rescue rename back and abort with
-//     ErrRestoreFailed.
+// Restore restores a verified backup tarball. The daemon must be stopped
+// before running this. It verifies the tarball, saves a backup copy of the
+// existing database, extracts the archive, and runs an integrity check. On
+// failure, the backup copy is restored.
 func Restore(opts RestoreOptions) (RestoreResult, error) {
 	// 1. Verify before touching anything.
 	vr, err := Verify(opts.TarballPath)
@@ -118,10 +110,9 @@ func Restore(opts RestoreOptions) (RestoreResult, error) {
 	return result, nil
 }
 
-// rescueExistingDB renames veska.db and its WAL/SHM siblings to
-// veska.db.before-restore-<ts>.bak. It is idempotent in the sense that a
-// re-run with no live DB is a no-op; but if a before-restore copy already
-// exists it returns ErrStaleRescueCopy rather than silently overwriting.
+// rescueExistingDB renames the existing SQLite database and its WAL and SHM
+// files to a temporary backup path. If a backup copy already exists, it
+// returns ErrStaleRescueCopy to avoid overwriting it.
 func rescueExistingDB(veskaHome string) (rescuePath string, rescued bool, err error) {
 	dbPath := filepath.Join(veskaHome, "veska.db")
 	if _, statErr := os.Stat(dbPath); statErr != nil {
@@ -196,8 +187,8 @@ func checkRestoredDB(dbPath string) error {
 	return nil
 }
 
-// extractTarGz extracts the.tar.gz at tarPath into destDir. Entry names are
-// cleaned and confined to destDir to defend against path traversal.
+// extractTarGz extracts the archive into destDir. Entry names are cleaned and
+// confined to defend against path traversal.
 func extractTarGz(tarPath, destDir string) error {
 	f, err := os.Open(tarPath)
 	if err != nil {
@@ -284,9 +275,9 @@ func SelectPreMigration(backupDir string) (string, error) {
 	return selectNewest(backupDir, autoPrefix, "pre-migration snapshot")
 }
 
-// selectNewest returns the lexically-largest.tar.gz under backupDir whose
-// name starts with prefix. Backup filenames embed a sortable UTC timestamp,
-// so lexical order is chronological order.
+// selectNewest returns the lexically largest backup file starting with the
+// prefix. Filenames embed a sortable UTC timestamp, so lexical order is
+// chronological.
 func selectNewest(backupDir, prefix, kind string) (string, error) {
 	entries, err := os.ReadDir(backupDir)
 	if err != nil {

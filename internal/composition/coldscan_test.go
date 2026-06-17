@@ -8,13 +8,9 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/application"
 )
 
-// CheckRunnerAdapter must satisfy the application.CheckRunner port the Promoter
-// consumes; this is the contract both the daemon and the CLI cold-scan path
-// rely on when wiring their check runner.
 var _ application.CheckRunner = CheckRunnerAdapter{}
 
-// GitAddedLinesFunc must surface the repo-root resolver's error unchanged so
-// the Promoter can decide whether to skip diff-driven checks for the promotion.
+// GitAddedLinesFunc must propagate repository root resolver errors unchanged.
 func TestGitAddedLinesFunc_PropagatesRepoRootError(t *testing.T) {
 	sentinel := errors.New("repo not registered")
 	fn := GitAddedLinesFunc(func(context.Context, string) (string, error) {

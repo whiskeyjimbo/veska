@@ -12,14 +12,10 @@ import (
 	ignore "github.com/sabhiram/go-gitignore"
 )
 
-// DefaultIgnorePatterns are always excluded regardless of.veskaignore.
-// include common AI-agent worktree roots (`.claude/worktrees/`,
-// `.git/worktrees/`, `.cursor/`, `.aider*/`). Without these, a cold scan
-// inside a repo whose tools create per-task worktrees ends up indexing N
-// copies of every symbol — once for the main tree, once for each worktree
-// which trashes search ranking and inflates the embedder queue. The agent
-// worktree paths are conventional, not hard schema, so they belong with the
-// other "almost always wrong to index" defaults like vendor/ and node_modules/.
+// DefaultIgnorePatterns lists paths that are always excluded from indexing.
+// This includes common AI-agent worktree directories (such as .claude, .cursor, and .aider)
+// to prevent cold scans from indexing duplicate symbols across task worktrees.
+// Duplicate symbols inflate the embedder queue and degrade search ranking quality.
 var DefaultIgnorePatterns = []string{
 	"vendor/",
 	"node_modules/",
@@ -38,26 +34,23 @@ var DefaultIgnorePatterns = []string{
 	".aider*/",
 }
 
-// IgnoreList is the merged result of default patterns and a repo's.veskaignore
-// file, matched with standard.gitignore semantics (anchoring, recursive `**`
-// globs, and last-match-wins negation via `!`). Patterns are kept in
-// merge order (defaults first, user patterns last) so user lines can override
-// defaults — significant because negation makes order meaningful.
+// IgnoreList merges default ignore patterns with those defined in a repository's .veskaignore file.
+// It applies standard .gitignore matching rules, including globbing and last-match-wins negation.
+// Default patterns are evaluated first, allowing user-defined rules to override them.
 type IgnoreList struct {
 	patterns []string
 	matcher  *ignore.GitIgnore
 }
 
-// NewIgnoreListFromPatterns creates an IgnoreList from the provided patterns
-// without reading any file. Useful in tests and programmatic construction.
+// NewIgnoreListFromPatterns constructs an IgnoreList directly from a slice of patterns.
 func NewIgnoreListFromPatterns(patterns []string) *IgnoreList {
 	p := make([]string, len(patterns))
 	copy(p, patterns)
 	return newIgnoreList(p)
 }
 
-// newIgnoreList compiles patterns into a gitignore matcher. It takes ownership
-// of the slice (callers must not retain it).
+// newIgnoreList compiles patterns into a gitignore matcher. The caller must not retain
+// or modify the patterns slice after calling this function.
 func newIgnoreList(patterns []string) *IgnoreList {
 	return &IgnoreList{
 		patterns: patterns,
@@ -65,10 +58,7 @@ func newIgnoreList(patterns []string) *IgnoreList {
 	}
 }
 
-// Load reads.veskaignore from repoRoot (if it exists) and returns an IgnoreList
-// merging DefaultIgnorePatterns with the file's patterns.
-// Lines starting with # and blank lines are skipped.
-// Returns a list of default patterns only if the file doesn't exist.
+// Load reads patterns from .veskaignore in the repository root and merges them with DefaultIgnorePatterns.
 func Load(repoRoot string) (*IgnoreList, error) {
 	patterns := make([]string, len(DefaultIgnorePatterns))
 	copy(patterns, DefaultIgnorePatterns)
@@ -86,8 +76,7 @@ func Load(repoRoot string) (*IgnoreList, error) {
 	scanner := bufio.NewScanner(f)
 	for scanner.Scan() {
 		line := strings.TrimSpace(scanner.Text())
-		// Skip blank lines and comments. Negation lines (`!`) are real
-		// patterns under gitignore semantics, so only `#` is a comment.
+		// Comments start with "#". Negation patterns beginning with "!" are preserved.
 		if line == "" || strings.HasPrefix(line, "#") {
 			continue
 		}
@@ -100,15 +89,10 @@ func Load(repoRoot string) (*IgnoreList, error) {
 	return newIgnoreList(patterns), nil
 }
 
-// ShouldIgnore reports whether the given path matches the ignore list under
-// standard.gitignore semantics (anchoring, `**` recursion, character classes,
-// and last-match-wins negation). The path should be relative to the repo root;
-// callers pass directory paths with a trailing slash so directory-only patterns
-// (e.g. "vendor/") match. Forward and backslash separators are both accepted.
-// Negation (`!`) re-includes a path at the pattern level, but matches git's own
-// limitation during a tree walk: a cold scan that prunes an excluded directory
-// (SkipDir) never visits its children, so `!secret/keep.txt` cannot re-surface
-// a file under an already-excluded `secret/`.
+// ShouldIgnore reports whether the relative path matches any ignore patterns.
+// Directory paths should be passed with a trailing slash to match directory-only patterns.
+// Note that negation patterns starting with "!" cannot re-include files within directories
+// that have already been excluded, mirroring git's own tree walking behavior.
 func (il *IgnoreList) ShouldIgnore(path string) bool {
 	if il.matcher == nil {
 		return false
@@ -122,3 +106,4 @@ func (il *IgnoreList) Patterns() []string {
 	copy(out, il.patterns)
 	return out
 }
+
