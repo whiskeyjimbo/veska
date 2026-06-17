@@ -7,9 +7,8 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/core/domain"
 )
 
-// TestChunkFile_EmitsChunksForUncoveredRanges: a file with one symbol
-// at lines 10-15 should produce chunks for the surrounding regions,
-// not for the symbol's range (which is already a symbol node).
+// TestChunkFile_EmitsChunksForUncoveredRanges verifies that regions surrounding a symbol
+// produce chunks while the symbol's range is skipped.
 func TestChunkFile_EmitsChunksForUncoveredRanges(t *testing.T) {
 	src := []byte(strings.Repeat("line\n", 200))
 	symbols := []*domain.Node{
@@ -23,8 +22,6 @@ func TestChunkFile_EmitsChunksForUncoveredRanges(t *testing.T) {
 		if c.Kind != domain.KindChunk {
 			t.Errorf("chunk %q has kind %q, want %q", c.ID, c.Kind, domain.KindChunk)
 		}
-		// No chunk should overlap the symbol's [10,15] range — covered
-		// regions are skipped.
 		if c.Lines.Start <= 15 && c.Lines.End >= 10 {
 			t.Errorf("chunk %s [%d,%d] overlaps symbol [10,15]",
 				c.ID, c.Lines.Start, c.Lines.End)
@@ -32,9 +29,8 @@ func TestChunkFile_EmitsChunksForUncoveredRanges(t *testing.T) {
 	}
 }
 
-// TestChunkFile_SkipsWhitespaceOnlyGaps guards: a blank-line gap
-// between two symbols must not become a chunk node. Whitespace-only chunks
-// embed to near-anything and outrank real code in search results.
+// TestChunkFile_SkipsWhitespaceOnlyGaps verifies that empty or whitespace-only gaps
+// between symbols do not produce chunk nodes.
 func TestChunkFile_SkipsWhitespaceOnlyGaps(t *testing.T) {
 	src := []byte("type A struct{}\n\n\ntype B struct{}\n")
 	symbols := []*domain.Node{
@@ -49,17 +45,14 @@ func TestChunkFile_SkipsWhitespaceOnlyGaps(t *testing.T) {
 	}
 }
 
-// TestChunkFile_NoSymbolsChunksWholeFile: a documentation-only file
-// (no symbols) should be entirely covered by chunks. Without this,
-// READMEs, top-of-file commentary, and non-declarative TS modules
-// would be invisible to semantic search.
+// TestChunkFile_NoSymbolsChunksWholeFile ensures files without symbols are chunked completely
+// to preserve searchability.
 func TestChunkFile_NoSymbolsChunksWholeFile(t *testing.T) {
 	src := []byte(strings.Repeat("line\n", 100))
 	chunks := chunkFile("repo", "f.go", src, nil)
 	if len(chunks) == 0 {
 		t.Fatal("expected chunks for a no-symbol file")
 	}
-	// At chunkLineWindow=80, 100 lines yields 2 chunks: [1,80] and [81,100].
 	if len(chunks) != 2 {
 		t.Errorf("100-line file at 80-line windows: got %d chunks, want 2", len(chunks))
 	}
@@ -69,9 +62,7 @@ func TestChunkFile_NoSymbolsChunksWholeFile(t *testing.T) {
 	}
 }
 
-// TestChunkFile_SnippetPopulated: each chunk must carry its source
-// bytes via raw_content so the embedder and FTS pipeline can index
-// it. Without this, chunks would be empty rows.
+// TestChunkFile_SnippetPopulated verifies that raw content is populated for each chunk.
 func TestChunkFile_SnippetPopulated(t *testing.T) {
 	src := []byte("a\nb\nc\nd\ne\n")
 	chunks := chunkFile("repo", "f.go", src, nil)
@@ -86,8 +77,7 @@ func TestChunkFile_SnippetPopulated(t *testing.T) {
 	}
 }
 
-// TestChunkFile_DeterministicIDs: two passes over the same input
-// must produce byte-identical chunk IDs so promotion is idempotent.
+// TestChunkFile_DeterministicIDs verifies that chunking yields deterministic node IDs.
 func TestChunkFile_DeterministicIDs(t *testing.T) {
 	src := []byte(strings.Repeat("x\n", 250))
 	a := chunkFile("repo", "f.go", src, nil)
@@ -102,9 +92,8 @@ func TestChunkFile_DeterministicIDs(t *testing.T) {
 	}
 }
 
-// TestChunkFile_FullyCoveredFileEmitsNoChunks: when symbols already
-// cover the entire file (line-by-line), no chunks should be emitted
-// the chunk index is for non-declaration code only.
+// TestChunkFile_FullyCoveredFileEmitsNoChunks verifies that a file fully covered by
+// symbols yields no chunks.
 func TestChunkFile_FullyCoveredFileEmitsNoChunks(t *testing.T) {
 	src := []byte(strings.Repeat("x\n", 50))
 	symbols := []*domain.Node{
@@ -124,3 +113,4 @@ func mustNode(t *testing.T, id, path, name string, kind domain.NodeKind, lr doma
 	}
 	return n
 }
+

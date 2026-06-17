@@ -9,16 +9,10 @@ import (
 	"github.com/smacker/go-tree-sitter/typescript/typescript"
 )
 
-// Parser pools amortize the per-language CGO setup (sitter.NewParser +
-// SetLanguage) across files. ParseFile is hot under bulk re-index and the
-// fsnotify watcher; allocating a fresh parser per call was wasteful
-// One sync.Pool per language because tree-sitter parsers are
-// bound to a single language after SetLanguage.
-// Safety: Parser.ParseCtx is called with a nil "old tree" each time, so a
-// parse never depends on the parser's previous state, and parsers returned to
-// the pool can be reused without an explicit reset. Each call holds a parser
-// exclusively for the duration of ParseFile (Get/defer Put), so concurrent
-// ParseFile calls each get their own parser from the pool.
+// Parser pools amortize the CGO allocation costs of sitter.NewParser and SetLanguage
+// across multiple files. Since tree-sitter parsers are bound to a single language after
+// initialization, we maintain one sync.Pool per language. Parser instances are safe to
+// reuse without reset because each call uses a nil old tree.
 var (
 	goParserPool  = newParserPool(golang.GetLanguage())
 	tsParserPool  = newParserPool(typescript.GetLanguage())

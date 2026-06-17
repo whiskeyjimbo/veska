@@ -8,7 +8,7 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/treesitter"
 )
 
-// hasCallEdge reports whether result holds a CALLS edge from the node named
+// hasCallEdge returns true if the edges slice contains a CALLS edge from the node named
 // srcName to the node named dstName.
 func hasCallEdge(nodes []*domain.Node, edges []*domain.Edge, srcName, dstName string) bool {
 	src := findNodeByName(nodes, srcName)
@@ -24,13 +24,9 @@ func hasCallEdge(nodes []*domain.Node, edges []*domain.Edge, srcName, dstName st
 	return false
 }
 
-// TestParseFile_MethodCall_ValueReceiverIdioms guards: a value /
-// pointer-receiver method call `recv.Method` must resolve to a CALLS edge when
-// the receiver is a plain typed PARAMETER or a COMPOSITE-LITERAL local — the two
-// idioms that previously fell to the default (package-qualifier) branch and
-// produced an unbindable UnresolvedCall, so any method tested via `recv.M`
-// looked uncalled. All callers/callees are in one file so the same-package call
-// rewrites to "T.Method" and resolves intra-file to a real edge.
+// TestParseFile_MethodCall_ValueReceiverIdioms verifies that method calls on value
+// and pointer receivers resolve to call edges when the receiver is a typed parameter
+// or a local composite literal.
 func TestParseFile_MethodCall_ValueReceiverIdioms(t *testing.T) {
 	src := []byte(`package shop
 

@@ -7,9 +7,9 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/treesitter"
 )
 
-// TestStructuralHash_Type2Clones proves the renamed-variable (Type-2) clone
-// signal: a consistent rename (incl. the function name) leaves structural_hash
-// unchanged while content_hash differs, and a real logic change moves it.
+// TestStructuralHash_Type2Clones verifies that consistent renaming of symbols and
+// variables leaves the structural hash unchanged (identifying Type-2 clones),
+// while logic changes modify it.
 func TestStructuralHash_Type2Clones(t *testing.T) {
 	src := []byte(`package p
 
@@ -57,8 +57,7 @@ func Mul(a, b int) int {
 	addS, addC := sh("Add")
 	mulS, _ := sh("Mul")
 
-	// Renamed name only (SumCopy) and consistently-renamed body (Add) both
-	// structurally match Sum, despite different verbatim text.
+	// A name-only rename or consistently renamed body both yield matching structural hashes.
 	if sumS != copyS {
 		t.Errorf("Sum vs SumCopy: structural_hash should match (only the name differs)")
 	}
@@ -71,7 +70,7 @@ func Mul(a, b int) int {
 	if sumC == addC {
 		t.Errorf("Sum vs Add: content_hash should differ")
 	}
-	// A genuine logic change (+ vs *, no local) must move the structural hash.
+	// A genuine logic change must result in a different structural hash.
 	if sumS == mulS {
 		t.Errorf("Sum vs Mul: structural_hash should differ (different shape)")
 	}

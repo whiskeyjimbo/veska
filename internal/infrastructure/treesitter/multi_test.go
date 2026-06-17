@@ -8,9 +8,8 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/core/domain"
 )
 
-// TestMultiParser_SupportedExtensionsUnion pins that a MultiParser reports the
-// sorted union of its sub-parsers' extensions - the set the cold scan sources
-// its walk filter from.
+// TestMultiParser_SupportedExtensionsUnion verifies that MultiParser returns the sorted union
+// of all extensions supported by its sub-parsers.
 func TestMultiParser_SupportedExtensionsUnion(t *testing.T) {
 	m := NewMultiParser(NewGoParser(), NewTSParser())
 	got := m.SupportedExtensions()
@@ -20,9 +19,8 @@ func TestMultiParser_SupportedExtensionsUnion(t *testing.T) {
 	}
 }
 
-// TestMultiParser_RoutesByExtension confirms each extension reaches the
-// sub-parser that claims it: a.go file yields a Go module node, a.ts file a
-// TypeScript module node.
+// TestMultiParser_RoutesByExtension verifies that parser routing correctly delegates
+// file parsing to the sub-parser registered for the file extension.
 func TestMultiParser_RoutesByExtension(t *testing.T) {
 	m := NewMultiParser(NewGoParser(), NewTSParser())
 
@@ -43,8 +41,8 @@ func TestMultiParser_RoutesByExtension(t *testing.T) {
 	}
 }
 
-// TestMultiParser_UnknownExtensionEmpty confirms a file no sub-parser claims
-// returns an empty ParseResult and nil error.
+// TestMultiParser_UnknownExtensionEmpty verifies that parsing a file with an
+// unsupported extension returns an empty ParseResult.
 func TestMultiParser_UnknownExtensionEmpty(t *testing.T) {
 	m := NewMultiParser(NewGoParser(), NewTSParser())
 	res, err := m.ParseFile(context.Background(), "r", "README.md", []byte("# hi"))

@@ -35,9 +35,8 @@ function greet(name: string): string {
 	}
 }
 
-// TestTS_ErrorRecovery pins: a syntax error in one declaration
-// must not erase the file's other symbols. The clean function survives, a
-// ParseFailure is reported, and the broken declaration is skipped.
+// TestTS_ErrorRecovery verifies that a syntax error in one declaration does not prevent
+// clean sibling declarations from being indexed.
 func TestTS_ErrorRecovery(t *testing.T) {
 	src := []byte(`
 function good(): number { return 1; }
@@ -59,9 +58,8 @@ function alsoGood(): string { return "ok"; }
 	}
 }
 
-// TestTS_ExportedFlag pins: TS declarations under an
-// export_statement carry Exported=true; unexported ones Exported=false (not
-// nil). Methods inherit their class's export status.
+// TestTS_ExportedFlag verifies that declarations under an export statement have Exported set
+// to true, and unexported ones have Exported set to false.
 func TestTS_ExportedFlag(t *testing.T) {
 	src := []byte(`
 export function pub(): void {}
@@ -258,9 +256,8 @@ function greet(): string {
 	}
 }
 
-// TestTS_ThisCallsEdge_IntraClass covers: a `this.foo`
-// call inside a method on class C must emit a CALLS edge to C.foo,
-// matching the Go parser's receiver-selector resolution.
+// TestTS_ThisCallsEdge_IntraClass verifies that calls of the form `this.Method()` inside a
+// class resolve to class method calls.
 func TestTS_ThisCallsEdge_IntraClass(t *testing.T) {
 	src := []byte(`
 class Server {
@@ -286,9 +283,8 @@ class Server {
 	}
 }
 
-// TestTS_ThisCallsEdge_FromConstructor covers AC2: the constructor of a
-// class is itself a method whose this.foo calls must resolve. Without
-// this, the most common "wire dependencies" pattern is invisible.
+// TestTS_ThisCallsEdge_FromConstructor verifies that calls using `this` inside class constructors
+// correctly resolve to class method calls.
 func TestTS_ThisCallsEdge_FromConstructor(t *testing.T) {
 	src := []byte(`
 class App {
