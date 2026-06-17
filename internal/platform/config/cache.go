@@ -16,9 +16,8 @@ const (
 )
 
 // CacheConfig captures the three eviction knobs governing the ephemeral
-// repo cache. The actual sweeper is a follow-up bead;
-// kxo5 only plumbs the knobs so retrofitting the sweeper later does not
-// require a second migration or another pass over the query code.
+// repo cache. Plumbing these knobs allows retrofitting the sweeper later
+// without requiring database migrations or changes to query code.
 // Source fields record whether each value came from the corresponding
 // VESKA_CACHE_* env var ("env") or the compiled-in default ("default")
 // so `veska doctor config` can show the user where each value came from.

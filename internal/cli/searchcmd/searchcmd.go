@@ -216,7 +216,7 @@ func lookupCanonicalURL(ctx context.Context, db *sql.DB, repoID string) (string,
 }
 
 // resolveSearchTarget picks the repo the search will run against. The three
-// input modes mirror the bead AC:
+// input modes mirror the requirements:
 //
 //	empty arg: use the repo whose RootPath matches cwd (or the only
 //	  registered repo, if any). Doesn't clone or scan.
