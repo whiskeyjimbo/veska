@@ -12,13 +12,13 @@ import (
 // so the documented proxy limit is a regression lock, not a silent surprise.
 // Outcome of the probe (see untested.go "Proxy limits"):
 //   func-value (local-var, callback-arg) and table-driven struct field:
-//     no edge is produced → false-FAIL. Fix tracked as. FLIP the
-//     asserts here to PASS when it lands.
+//     no edge is produced → false-FAIL. Flip the assertions here to PASS
+//     once support for func-value proxy dispatch is implemented.
 //   embedded method promotion WITHOUT an interface: false-FAIL.
 //   embedded method satisfying an INTERFACE: already suppressed by the
 //     interface-dispatch fix → PASSES today. Locked as PASS.
-//   transitive-only coverage: false-FAIL. The principled fix is the
-//     transitive reverse map,.
+//   transitive-only coverage: false-FAIL. The principled fix is to use
+//     a transitive reverse map.
 //   a DIRECT test call PASSES (control).
 
 // proxyProbe is one untested-gate proxy-limit fixture: a prod file (base→cand
@@ -132,8 +132,8 @@ func TestUntestedProxyLimit_ReflectionDispatch_Permanent(t *testing.T) {
 	}
 }
 
-// The bead's ACTUAL embedded case — base method satisfying an INTERFACE via
-// embedding — is ALREADY suppressed by the interface-dispatch fix (zvh6.9), so
+// The actual embedded case — base method satisfying an interface via
+// embedding — is already suppressed by the interface-dispatch fix (zvh6.9), so
 // it must PASS. This locks that coverage so a regression there surfaces here.
 func TestUntested_EmbeddedInterfaceMethod_Passes(t *testing.T) {
 	v, err := probeUntestedModify(t, proxyProbe{

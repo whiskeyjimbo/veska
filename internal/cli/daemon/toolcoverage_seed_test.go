@@ -93,7 +93,7 @@ func (h *toolHarness) seedSuppressions(supps []coverage.SuppressionFact) {
 }
 
 // seedID builds a deterministic primary key for a seeded row, e.g.
-// "seed-finding-0". Determinism keeps a coverage bead able to assert on the ID.
+// "seed-finding-0". Determinism keeps the coverage harness able to assert on the ID.
 func seedID(kind string, i int) string {
 	return "seed-" + kind + "-" + itoa(i)
 }

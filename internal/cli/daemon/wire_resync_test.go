@@ -75,9 +75,9 @@ func TestDaemon_ResyncWired_FieldPresent(t *testing.T) {
 // reparser when StartupResync.Run is invoked.
 // We use the daemon's real repoLister (so the wiring path is exercised)
 // but swap a spy in for the reparser. The full real-pipeline path
-// (Ingester.Save → Promoter.Promote → SQLite nodes) is gated on the
-// cold-scan integration follow-up bead (see TestColdScanReparser_Integration
-// in coldscan_test.go, currently skipped under ).
+// (Ingester.Save → Promoter.Promote → SQLite nodes) is verified in the
+// cold-scan integration test (see TestColdScanReparser_Integration
+// in coldscan_test.go).
 func TestDaemon_StartupResync_NeverPromoted_Reparses(t *testing.T) {
 	cfg := testConfig(t)
 	d, err := newDaemon(cfg)
