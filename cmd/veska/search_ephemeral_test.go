@@ -178,7 +178,7 @@ func TestEphemeralEnsureFromURL_TrackedMatchSkipsClone(t *testing.T) {
 	pools := openPoolsAt(t, home)
 
 	// Seed a tracked row whose canonical_url matches what the URL form
-	// will canonicalise to. Mirrors the kxo5.4 origin-alias scenario.
+	// will canonicalise to. Mirrors the origin-alias scenario.
 	canonical, err := repo.CanonicalURL("file://" + source)
 	if err != nil {
 		t.Fatal(err)
@@ -220,7 +220,7 @@ func TestEphemeralEnsureFromURL_TrackedMatchSkipsClone(t *testing.T) {
 func TestIsGitURL_PreservesPositionalSemantics(t *testing.T) {
 	// Existing test (search_test.go) covers true/false expectations for
 	// the original 7 cases. Re-spot-check the new tracked-path-vs-URL
-	// disambiguation that landed with kxo5.6.
+	// disambiguation.
 	tmp := t.TempDir()
 	if searchcmd.IsGitURL(tmp) {
 		t.Errorf("searchcmd.IsGitURL(%q) = true, want false (existing path)", tmp)
@@ -396,7 +396,7 @@ func TestEmitColdScanSummary_NoFindingsStaysQuiet(t *testing.T) {
 }
 
 // Sanity check that config.RepoCachePath is the path we end up cloning into.
-// Locks the integration contract between kxo5.5 and kxo5.6.
+// Locks the integration contract for the repository cache path.
 func TestEphemeralCacheDirIsRepoCachePath(t *testing.T) {
 	t.Setenv("VESKA_CACHE_HOME", "/synthetic/cache")
 	t.Setenv("XDG_CACHE_HOME", "")
