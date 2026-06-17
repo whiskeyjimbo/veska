@@ -11,8 +11,7 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/sqlite"
 )
 
-// seedEdgesForReader inserts three nodes and two edges forming a→b→c so
-// adjacency queries have something to walk.
+// seedEdgesForReader inserts three nodes and two CALLS edges forming a→b→c for testing.
 func seedEdgesForReader(t *testing.T) (*sqlite.EdgeReaderRepo, func()) {
 	t.Helper()
 	dir := t.TempDir()
@@ -68,7 +67,6 @@ func TestEdgeReaderRepo_InboundEdges(t *testing.T) {
 	if !equalSorted(got["c"], []string{"b"}) {
 		t.Errorf("c inbound: got %v want [b]", got["c"])
 	}
-	// queried keys are present even with no rows.
 	if _, ok := got["a"]; !ok {
 		t.Error("expected key 'a' to be present in result map")
 	}

@@ -37,8 +37,8 @@ func openTodoTestDB(t *testing.T) *sqlite.TodoQuerierRepo {
 	insert("t1", "main", "todo", "a.go", "open")
 	insert("t2", "main", "todo", "b.go", "open")
 	insert("t3", "main", "todo", "c.go", "closed")
-	insert("t4", "main", "parse-failure", "d.go", "open") // different rule
-	insert("t5", "other", "todo", "a.go", "open")         // different branch
+	insert("t4", "main", "parse-failure", "d.go", "open")
+	insert("t5", "other", "todo", "a.go", "open")
 
 	return sqlite.NewTodoQuerierRepo(db)
 }

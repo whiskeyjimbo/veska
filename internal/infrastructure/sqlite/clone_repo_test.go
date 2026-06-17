@@ -13,14 +13,12 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/sqlite"
 )
 
-// hashedNode bundles the identifiers for one seeded node row so the helper
-// stays within the 5-arg budget.
+// hashedNode bundles identifiers for a seeded node row to keep parameter lists short.
 type hashedNode struct {
 	repoID, branch, nodeID, kind, contentHash string
 }
 
-// seedHashedNode inserts a node row with an explicit content_hash and kind so
-// clone-grouping behaviour can be exercised directly.
+// seedHashedNode inserts a node row with an explicit content_hash and kind to verify clone grouping.
 func seedHashedNode(t *testing.T, db *sql.DB, n hashedNode) {
 	t.Helper()
 	now := time.Now().UnixMilli()
@@ -39,19 +37,17 @@ func seedHashedNode(t *testing.T, db *sql.DB, n hashedNode) {
 	}
 }
 
-// simEdge bundles the identifiers for one seeded SIMILAR_TO edge so the helper
-// stays within the 5-arg budget. A nil score inserts NULL (legacy edge).
+// simEdge bundles identifiers for a seeded SIMILAR_TO edge, where a nil score inserts a NULL score representing a legacy edge.
 type simEdge struct {
 	repoID, branch, src, dst string
 	score                    any
 }
 
-// seedSimilarEdge inserts a SIMILAR_TO edge with a score between two existing
-// nodes.
+// seedSimilarEdge inserts a SIMILAR_TO edge between two existing nodes.
 func seedSimilarEdge(t *testing.T, db *sql.DB, e simEdge) {
 	t.Helper()
 	now := time.Now().UnixMilli()
-	edgeID := e.src + "->" + e.dst // test-local synthetic id; uniqueness is all that matters
+	edgeID := e.src + "->" + e.dst
 	if _, err := db.Exec(`INSERT INTO edges (
 		edge_id, branch, repo_id, src_node_id, dst_node_id, kind, confidence, score, last_promoted_at
 	) VALUES (?,?,?,?,?,?,?,?,?)`,
@@ -72,24 +68,18 @@ func openCloneTestDB(t *testing.T) (*sql.DB, *sqlite.CloneRepo) {
 	return db, sqlite.NewCloneRepo(db)
 }
 
-// TestCloneRepo_GroupsSharedHashes verifies the >=2 grouping, the kind
-// exclusion, and the repo/branch scoping in one pass.
+// TestCloneRepo_GroupsSharedHashes verifies size-based grouping, kind exclusions, and repository/branch scopes in a single run.
 func TestCloneRepo_GroupsSharedHashes(t *testing.T) {
 	t.Parallel()
 	db, repo := openCloneTestDB(t)
 	ctx := context.Background()
 
-	// Two functions share hashA -> a real clone group.
 	seedHashedNode(t, db, hashedNode{"r1", "main", "fnA1", "function", "hashA"})
 	seedHashedNode(t, db, hashedNode{"r1", "main", "fnA2", "function", "hashA"})
-	// A lone function with a unique hash -> excluded (count 1).
 	seedHashedNode(t, db, hashedNode{"r1", "main", "fnB", "function", "hashB"})
-	// Two chunks share hashC, but chunk is an excluded kind -> not a group.
 	seedHashedNode(t, db, hashedNode{"r1", "main", "chunk1", "chunk", "hashC"})
 	seedHashedNode(t, db, hashedNode{"r1", "main", "chunk2", "chunk", "hashC"})
-	// A function on another branch shares hashA but must not bleed in.
 	seedHashedNode(t, db, hashedNode{"r1", "feature", "fnA3", "function", "hashA"})
-	// A function in another repo shares hashA but must not bleed in.
 	seedHashedNode(t, db, hashedNode{"r2", "main", "fnA4", "function", "hashA"})
 
 	got, err := repo.ClonedNodes(ctx, duplicates.CloneQuery{RepoID: "r1", Branch: "main"}, duplicates.ExcludedKinds)
@@ -116,16 +106,12 @@ func TestCloneRepo_GroupsSharedHashes(t *testing.T) {
 	}
 }
 
-// TestCloneRepo_KindCountIsolation verifies a chunk sharing a hash with a
-// function does not push the function group over the >=2 threshold on its own:
-// the COUNT must reflect only eligible (non-excluded) kinds.
+// TestCloneRepo_KindCountIsolation verifies that a chunk sharing a hash with a function does not trigger grouping when the chunk kind is excluded.
 func TestCloneRepo_KindCountIsolation(t *testing.T) {
 	t.Parallel()
 	db, repo := openCloneTestDB(t)
 	ctx := context.Background()
 
-	// One function + one chunk share hashX. The function is alone among
-	// eligible kinds, so hashX must NOT form a group.
 	seedHashedNode(t, db, hashedNode{"r1", "main", "fnX", "function", "hashX"})
 	seedHashedNode(t, db, hashedNode{"r1", "main", "chunkX", "chunk", "hashX"})
 
@@ -138,9 +124,7 @@ func TestCloneRepo_KindCountIsolation(t *testing.T) {
 	}
 }
 
-// TestCloneRepo_SimilarEdges_ThresholdScopeAndNulls verifies the near-dup
-// query: score threshold, NULL-score exclusion, kind exclusion on both
-// endpoints, repo/branch scoping, and metadata hydration.
+// TestCloneRepo_SimilarEdges_ThresholdScopeAndNulls verifies near-duplicate edge queries, including score thresholds, NULL exclusions, and branch scopes.
 func TestCloneRepo_SimilarEdges_ThresholdScopeAndNulls(t *testing.T) {
 	t.Parallel()
 	db, repo := openCloneTestDB(t)
@@ -156,11 +140,11 @@ func TestCloneRepo_SimilarEdges_ThresholdScopeAndNulls(t *testing.T) {
 	seedHashedNode(t, db, hashedNode{"r1", "feature", "fa", "function", "h-fa"})
 	seedHashedNode(t, db, hashedNode{"r1", "feature", "fb", "function", "h-fb"})
 
-	seedSimilarEdge(t, db, simEdge{"r1", "main", "a", "b", 0.90})      // kept
-	seedSimilarEdge(t, db, simEdge{"r1", "main", "a", "c", 0.50})      // below threshold
-	seedSimilarEdge(t, db, simEdge{"r1", "main", "b", "c", nil})       // NULL score -> excluded
-	seedSimilarEdge(t, db, simEdge{"r1", "main", "a", "ch", 0.99})     // chunk endpoint -> excluded
-	seedSimilarEdge(t, db, simEdge{"r1", "feature", "fa", "fb", 0.99}) // other branch -> excluded
+	seedSimilarEdge(t, db, simEdge{"r1", "main", "a", "b", 0.90})
+	seedSimilarEdge(t, db, simEdge{"r1", "main", "a", "c", 0.50})
+	seedSimilarEdge(t, db, simEdge{"r1", "main", "b", "c", nil})
+	seedSimilarEdge(t, db, simEdge{"r1", "main", "a", "ch", 0.99})
+	seedSimilarEdge(t, db, simEdge{"r1", "feature", "fa", "fb", 0.99})
 
 	got, err := repo.SimilarEdges(ctx, "r1", "main", 0.80, duplicates.ExcludedKinds)
 	if err != nil {

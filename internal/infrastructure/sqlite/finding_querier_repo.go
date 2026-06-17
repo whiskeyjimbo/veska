@@ -1,7 +1,3 @@
-// FindingQuerierRepo backs ports.FindingQuerier by SELECTing open rows
-// from the findings table. Reads use the read-only DB handle so the query
-// never contends with the single-writer pool used by promotion.
-
 package sqlite
 
 import (
@@ -11,19 +7,20 @@ import (
 	"strings"
 )
 
-// FindingQuerierRepo is the SQLite-backed adapter for ports.FindingQuerier.
+// FindingQuerierRepo implements ports.FindingQuerier by querying open rows from
+// the findings table. It uses the read-only DB handle to prevent query contention
+// with the single-writer pool.
 type FindingQuerierRepo struct {
 	readDB *sql.DB
 }
 
-// NewFindingQuerierRepo constructs a FindingQuerierRepo bound to readDB.
+// NewFindingQuerierRepo constructs a FindingQuerierRepo.
 func NewFindingQuerierRepo(readDB *sql.DB) *FindingQuerierRepo {
 	return &FindingQuerierRepo{readDB: readDB}
 }
 
-// OpenFindingNodeIDs returns the set of node_id values with at least one
-// open finding in (repoID, branch). Findings with a NULL node_id are
-// skipped by the WHERE clause so they never appear in the result.
+// OpenFindingNodeIDs returns a map of node IDs that have at least one open
+// finding. Findings without a node ID are excluded.
 func (r *FindingQuerierRepo) OpenFindingNodeIDs(ctx context.Context, repoID, branch string) (map[string]bool, error) {
 	const query = `SELECT DISTINCT node_id
 	               FROM findings
@@ -49,10 +46,9 @@ func (r *FindingQuerierRepo) OpenFindingNodeIDs(ctx context.Context, repoID, bra
 	return out, nil
 }
 
-// OpenFinding is one open finding projected for the advisory PR report
-// enough to tell a reviewer which touched file carries a known
-// issue. FilePath coalesces the node's file for node-anchored findings (most
-// structural rules set only a node anchor) so file-level intersection works.
+// OpenFinding represents an open finding projected for the advisory PR report.
+// FilePath coalesces the associated node's file path for node-anchored findings
+// so file-level intersection logic works correctly.
 type OpenFinding struct {
 	FindingID string
 	Rule      string
@@ -62,9 +58,8 @@ type OpenFinding struct {
 	Message   string
 }
 
-// OpenFindingsInFiles returns every open finding in (repoID, branch) whose
-// (coalesced) file_path is one of filePaths. File-level, so a file-anchored
-// finding is not dropped. Empty filePaths is a no-op (nil, nil).
+// OpenFindingsInFiles returns all open findings that match the given file
+// paths. An empty slice of file paths returns early.
 func (r *FindingQuerierRepo) OpenFindingsInFiles(ctx context.Context, repoID, branch string, filePaths []string) ([]OpenFinding, error) {
 	if len(filePaths) == 0 {
 		return nil, nil
@@ -104,8 +99,8 @@ ORDER BY file_path, f.rule, f.finding_id`, strings.Join(placeholders, ","))
 	return out, rows.Err()
 }
 
-// OpenFindingCountsByRule returns the count of open findings per rule in
-// (repoID, branch). Rules with zero open findings are absent from the map.
+// OpenFindingCountsByRule returns counts of open findings grouped by rule.
+// Rules with no open findings are excluded.
 func (r *FindingQuerierRepo) OpenFindingCountsByRule(ctx context.Context, repoID, branch string) (map[string]int, error) {
 	const query = `SELECT rule, COUNT(*)
 	               FROM findings
@@ -132,3 +127,4 @@ func (r *FindingQuerierRepo) OpenFindingCountsByRule(ctx context.Context, repoID
 	}
 	return out, nil
 }
+

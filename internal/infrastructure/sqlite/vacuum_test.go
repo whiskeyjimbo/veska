@@ -68,7 +68,7 @@ func TestVacuumInto_FailsIfDestExists(t *testing.T) {
 	}
 	defer db.Close()
 
-	// Pre-create the destination to trigger an error.
+	// Pre-create the destination file to ensure VacuumInto rejects it.
 	if err := os.WriteFile(dstPath, []byte("existing"), 0o600); err != nil {
 		t.Fatalf("write existing file: %v", err)
 	}
@@ -94,7 +94,7 @@ func TestVacuumInto_ContextCancel(t *testing.T) {
 	defer db.Close()
 
 	ctx, cancel := context.WithCancel(context.Background())
-	cancel() // cancelled immediately
+	cancel()
 
 	err = sqlite.VacuumInto(ctx, db, dstPath)
 	if err == nil {

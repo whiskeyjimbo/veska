@@ -11,7 +11,7 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/sqlite"
 )
 
-// deadCodeFixture seeds repos, nodes, and edges for the dead-code adapter tests.
+// deadCodeFixture maintains database records for testing the dead-code SQLite adapter.
 type deadCodeFixture struct {
 	db     *sql.DB
 	repoID string
@@ -64,14 +64,11 @@ func TestDeadCodeRepo_ReturnsOnlyNodesWithZeroInbound(t *testing.T) {
 	t.Parallel()
 	f := setupDeadCodeFixture(t)
 
-	// Three nodes in two files in scope; one node in scope has inbound; one is dead;
-	// one in another file is dead but out-of-scope; one has only outbound (still dead).
 	f.insertNode(t, "n-called", "pkg/a.go", "function", "called")
 	f.insertNode(t, "n-dead", "pkg/a.go", "function", "deadHelper")
 	f.insertNode(t, "n-caller", "pkg/a.go", "function", "caller")
 	f.insertNode(t, "n-out-of-scope-dead", "pkg/c.go", "function", "outOfScopeDead")
 
-	// caller -> called (so n-called has 1 inbound; n-caller has 0 inbound and so is dead too)
 	f.insertEdge(t, "e1", "n-caller", "n-called", "calls")
 
 	repo := sqlite.NewDeadCodeRepo(f.db)
@@ -91,10 +88,7 @@ func TestDeadCodeRepo_ReturnsOnlyNodesWithZeroInbound(t *testing.T) {
 	}
 }
 
-// TestDeadCodeRepo_ContainsAndSimilarDoNotCountAsLiveness pins:
-// only inbound CALLS edges keep a node alive. A node with only a CONTAINS edge
-// (every symbol has one from its package) or a SIMILAR_TO edge (autolink) must
-// still be reported dead — otherwise the check is inert on real repos.
+// TestDeadCodeRepo_ContainsAndSimilarDoNotCountAsLiveness ensures that only inbound CALLS edges count as liveness, while CONTAINS and SIMILAR_TO edges are ignored.
 func TestDeadCodeRepo_ContainsAndSimilarDoNotCountAsLiveness(t *testing.T) {
 	t.Parallel()
 	f := setupDeadCodeFixture(t)
@@ -104,10 +98,8 @@ func TestDeadCodeRepo_ContainsAndSimilarDoNotCountAsLiveness(t *testing.T) {
 	f.insertNode(t, "n-called", "pkg/a.go", "function", "used")
 	f.insertNode(t, "n-caller", "pkg/a.go", "function", "caller")
 
-	// Package contains the uncalled func; autolink links it to a sibling.
 	f.insertEdge(t, "e-contains", "n-pkg", "n-uncalled", "CONTAINS")
 	f.insertEdge(t, "e-similar", "n-called", "n-uncalled", "SIMILAR_TO")
-	// A real call keeps n-called alive.
 	f.insertEdge(t, "e-call", "n-caller", "n-called", "CALLS")
 
 	repo := sqlite.NewDeadCodeRepo(f.db)
@@ -120,9 +112,7 @@ func TestDeadCodeRepo_ContainsAndSimilarDoNotCountAsLiveness(t *testing.T) {
 		gotIDs = append(gotIDs, n.NodeID)
 	}
 	sort.Strings(gotIDs)
-	// n-uncalled is dead (only CONTAINS/SIMILAR_TO inbound); n-caller is dead
-	// (no inbound CALLS); n-pkg is a package (dead by this query, filtered by
-	// the application-layer kind allowlist); n-called is live.
+
 	want := []string{"n-caller", "n-pkg", "n-uncalled"}
 	if !equalStrings(gotIDs, want) {
 		t.Errorf("dead nodes = %v, want %v", gotIDs, want)
@@ -148,11 +138,9 @@ func TestDeadCodeRepo_BranchIsolation(t *testing.T) {
 	t.Parallel()
 	f := setupDeadCodeFixture(t)
 
-	// Insert a node and an inbound edge ON A DIFFERENT BRANCH; the node on `main`
-	// must still be considered dead because the inbound edge is on `feature`.
+	// A node with inbound CALLS edges on a different branch must still be reported dead on the main branch.
 	f.insertNode(t, "n-target", "pkg/a.go", "function", "target")
 
-	// node + edge on feature branch
 	_, err := f.db.Exec(`INSERT INTO nodes (
         node_id, branch, repo_id, language, kind, symbol_path, file_path,
         line_start, line_end, content_hash, last_promoted_at, actor_id, actor_kind

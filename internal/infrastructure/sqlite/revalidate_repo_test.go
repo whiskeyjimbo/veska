@@ -13,9 +13,7 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/sqlite"
 )
 
-// revalFixture wires a temp DB with a single repo row so the FK on findings
-// is satisfied. It exposes typed helpers so tests stay focused on what the
-// revalidate repo returns / mutates, not on SQL boilerplate.
+// revalFixture sets up a temporary database fixture for testing RevalidateRepo.
 type revalFixture struct {
 	db       *sql.DB
 	repoID   string
@@ -79,7 +77,6 @@ func TestRevalidateRepo_StaleFindings_ReturnsOnlyDrift(t *testing.T) {
 	t.Parallel()
 	f := setupRevalFixture(t)
 
-	// Two nodes on the same file; one has drifted, one matches the recorded anchor.
 	f.insertNode(t, "n-stale", f.branch, "pkg/a.go", "h-current")
 	f.insertNode(t, "n-fresh", f.branch, "pkg/a.go", "h-fresh")
 
@@ -108,7 +105,6 @@ func TestRevalidateRepo_StaleFindings_SkipsNullAnchor(t *testing.T) {
 	t.Parallel()
 	f := setupRevalFixture(t)
 	f.insertNode(t, "n-x", f.branch, "pkg/a.go", "h-current")
-	// Finding with NULL anchor_content_hash (file-anchored / parse-failure style).
 	_ = f.insertFinding(t, "u-null", f.branch, "n-x", nil)
 
 	got, err := f.reval.StaleFindingsForFile(context.Background(), f.repoID, f.branch, "pkg/a.go")
@@ -126,7 +122,6 @@ func TestRevalidateRepo_StaleFindings_SkipsAlreadyClosed(t *testing.T) {
 	f.insertNode(t, "n-x", f.branch, "pkg/a.go", "h-current")
 	fnd := f.insertFinding(t, "u-closed", f.branch, "n-x", new("h-old"))
 
-	// Force-close it directly so the SELECT must observe state='open'.
 	if _, err := f.db.Exec(
 		`UPDATE findings SET state='closed', closed_reason='manual', closed_at=? WHERE finding_id=? AND branch=?`,
 		time.Now().UnixMilli(), fnd.FindingID, fnd.Branch,
@@ -168,11 +163,9 @@ func TestRevalidateRepo_StaleFindings_FileScoped(t *testing.T) {
 func TestRevalidateRepo_StaleFindings_BranchScoped(t *testing.T) {
 	t.Parallel()
 	f := setupRevalFixture(t)
-	// Same logical node lives on two branches with different current hashes.
 	f.insertNode(t, "n-x", "main", "pkg/a.go", "h-main")
 	f.insertNode(t, "n-x", "feature", "pkg/a.go", "h-feature")
 
-	// On main: drift. On feature: also drift but should not be returned by a main query.
 	_ = f.insertFinding(t, "u-main", "main", "n-x", new("h-old-main"))
 	_ = f.insertFinding(t, "u-feat", "feature", "n-x", new("h-old-feat"))
 
@@ -191,7 +184,6 @@ func TestRevalidateRepo_StaleFindings_BranchScoped(t *testing.T) {
 func TestRevalidateRepo_StaleFindings_RepoScoped(t *testing.T) {
 	t.Parallel()
 	f := setupRevalFixture(t)
-	// Add a second repo with a same-named node + file.
 	if _, err := f.db.Exec(
 		`INSERT INTO repos (repo_id, root_path, added_at) VALUES (?, ?, ?)`,
 		"repo2", "/tmp/repo2", time.Now().UnixMilli(),
@@ -199,9 +191,6 @@ func TestRevalidateRepo_StaleFindings_RepoScoped(t *testing.T) {
 		t.Fatalf("insert repo2: %v", err)
 	}
 
-	// (node_id, branch) is the nodes PK so the two repos must use distinct
-	// node_ids; the test still proves the SELECT scopes by repo_id because
-	// the repo2 node would otherwise match by file_path + branch.
 	f.insertNode(t, "n-r1", f.branch, "pkg/a.go", "h-current-1")
 	if _, err := f.db.Exec(`INSERT INTO nodes (
         node_id, branch, repo_id, language, kind, symbol_path, file_path,
@@ -213,9 +202,7 @@ func TestRevalidateRepo_StaleFindings_RepoScoped(t *testing.T) {
 		t.Fatalf("insert node repo2: %v", err)
 	}
 
-	// Finding in repo1.
 	_ = f.insertFinding(t, "u-r1", f.branch, "n-r1", new("h-old-1"))
-	// Finding in repo2 — emulate via direct insert because the helper is keyed on repo1.
 	fndR2, err := domain.NewFinding(domain.FindingSpec{RepoID: "repo2", Branch: f.branch, Severity: domain.SeverityLow, Layer: domain.LayerStructural, Rule: "dead-code", Message: "msg"}, domain.WithNodeAnchor("n-r2"), domain.WithAnchorContentHash("h-old-2"))
 	if err != nil {
 		t.Fatalf("NewFinding r2: %v", err)
@@ -270,9 +257,6 @@ func TestRevalidateRepo_HasInboundCallEdges(t *testing.T) {
 		}
 	}
 	mkEdge("edge-call", "n-src", "n-dst-with", "CALLS")
-	// nmps.9 regression: a node whose ONLY inbound edge is a structural
-	// CONTAINS (its package/file parent) is still dead — CONTAINS is not a
-	// caller, so liveness must read false.
 	mkEdge("edge-contains", "n-pkg", "n-dst-contains", "CONTAINS")
 
 	cases := []struct {
@@ -313,8 +297,6 @@ func TestRevalidateRepo_HasTestCaller(t *testing.T) {
 	}
 	mkEdge("e-test", "n-testcaller", "n-tested", "CALLS") // test file CALLS n-tested
 	mkEdge("e-prod", "n-prodcaller", "n-untested", "CALLS")
-	// A CALLS from a test file but to n-untested? no — n-untested has only prod.
-	// A non-CALLS edge from a test file must NOT count as a test caller.
 	mkEdge("e-contains", "n-testcaller", "n-untested", "CONTAINS")
 
 	got, err := f.reval.HasTestCaller(context.Background(), f.repoID, f.branch, "n-tested")
@@ -341,7 +323,6 @@ func TestRevalidateRepo_HasInboundCallEdges_BranchScoped(t *testing.T) {
 	f.insertNode(t, "n-dst", "main", "pkg/b.go", "h-b")
 	f.insertNode(t, "n-src", "feature", "pkg/a.go", "h-a-f")
 	f.insertNode(t, "n-dst", "feature", "pkg/b.go", "h-b-f")
-	// Edge only on feature branch.
 	if _, err := f.db.Exec(`INSERT INTO edges (
         edge_id, branch, repo_id, src_node_id, dst_node_id, kind, confidence, last_promoted_at
     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
@@ -349,7 +330,6 @@ func TestRevalidateRepo_HasInboundCallEdges_BranchScoped(t *testing.T) {
 	); err != nil {
 		t.Fatalf("insert edge: %v", err)
 	}
-	// main branch must see no inbound edge.
 	got, err := f.reval.HasInboundCallEdges(context.Background(), f.repoID, "main", "n-dst")
 	if err != nil {
 		t.Fatalf("HasInboundCallEdges: %v", err)
@@ -362,7 +342,6 @@ func TestRevalidateRepo_HasInboundCallEdges_BranchScoped(t *testing.T) {
 func TestRevalidateRepo_NodeSignaturePair(t *testing.T) {
 	t.Parallel()
 	f := setupRevalFixture(t)
-	// Node with both signatures via direct insert.
 	if _, err := f.db.Exec(`INSERT INTO nodes (
         node_id, branch, repo_id, language, kind, symbol_path, file_path,
         line_start, line_end, content_hash, last_promoted_at, actor_id, actor_kind,
@@ -388,7 +367,6 @@ func TestRevalidateRepo_NodeSignaturePair_NullsAndMissing(t *testing.T) {
 	t.Parallel()
 	f := setupRevalFixture(t)
 
-	// Node with NULL signatures (e.g. field / file kind).
 	f.insertNode(t, "n-null", f.branch, "pkg/a.go", "h-a")
 	prev, cur, err := f.reval.NodeSignaturePair(context.Background(), f.repoID, f.branch, "n-null")
 	if err != nil {
@@ -398,7 +376,6 @@ func TestRevalidateRepo_NodeSignaturePair_NullsAndMissing(t *testing.T) {
 		t.Errorf("NULL-signature node = (%q, %q), want both empty", prev, cur)
 	}
 
-	// Missing node.
 	prev, cur, err = f.reval.NodeSignaturePair(context.Background(), f.repoID, f.branch, "n-absent")
 	if err != nil {
 		t.Fatalf("NodeSignaturePair missing: %v", err)
@@ -408,10 +385,6 @@ func TestRevalidateRepo_NodeSignaturePair_NullsAndMissing(t *testing.T) {
 	}
 }
 
-// TestRevalidateRepo_ApplyDecisions_MixedBatch_RoundTrips verifies that one
-// ApplyDecisions call applies a mixed refresh+close batch correctly: refreshed
-// rows keep state='open' with their new anchor hash, closed rows transition
-// to state='closed' with closed_reason='revalidated_obsolete'.
 func TestRevalidateRepo_ApplyDecisions_MixedBatch_RoundTrips(t *testing.T) {
 	t.Parallel()
 	f := setupRevalFixture(t)
@@ -466,14 +439,12 @@ func TestRevalidateRepo_ApplyDecisions_MixedBatch_RoundTrips(t *testing.T) {
 		return r
 	}
 
-	// Refreshes: state=open, anchor moved, no reason.
 	if r := get(fR1.FindingID); r.state != "open" || r.anchor != "h-new-r1" || r.reason != "" {
 		t.Errorf("u-r1 = %+v, want open/h-new-r1/no-reason", r)
 	}
 	if r := get(fR2.FindingID); r.state != "open" || r.anchor != "h-new-r2" || r.reason != "" {
 		t.Errorf("u-r2 = %+v, want open/h-new-r2/no-reason", r)
 	}
-	// Closes: state=closed, reason set, system actor stamped, closed_at stamped.
 	for _, id := range []string{fC1.FindingID, fC2.FindingID} {
 		r := get(id)
 		if r.state != "closed" || r.reason != "revalidated_obsolete" {
@@ -488,10 +459,6 @@ func TestRevalidateRepo_ApplyDecisions_MixedBatch_RoundTrips(t *testing.T) {
 	}
 }
 
-// TestRevalidateRepo_ApplyDecisions_EmptyBatchNoop ensures that ApplyDecisions
-// with no decisions is a true no-op — no error, no row mutation. The handler
-// relies on this for the (rare-but-real) "all stale findings already closed"
-// race; more importantly it documents the contract.
 func TestRevalidateRepo_ApplyDecisions_EmptyBatchNoop(t *testing.T) {
 	t.Parallel()
 	f := setupRevalFixture(t)
@@ -514,17 +481,12 @@ func TestRevalidateRepo_ApplyDecisions_EmptyBatchNoop(t *testing.T) {
 	}
 }
 
-// TestRevalidateRepo_ApplyDecisions_RollbackOnError checks that when a single
-// decision errors mid-batch (e.g. unknown kind), no earlier-in-batch UPDATE
-// is visible after the call returns — the tx rolls back atomically.
 func TestRevalidateRepo_ApplyDecisions_RollbackOnError(t *testing.T) {
 	t.Parallel()
 	f := setupRevalFixture(t)
 	f.insertNode(t, "n-r", f.branch, "pkg/a.go", "h-cur-r")
 	fR := f.insertFinding(t, "u-r", f.branch, "n-r", new("h-old-r"))
 
-	// First decision would refresh; second is an invalid kind that triggers
-	// the adapter's error path BEFORE Commit. The refresh must roll back.
 	batch := []ports.FindingDecision{
 		{FindingID: fR.FindingID, Kind: ports.DecisionRefresh, NewHash: "h-new-r"},
 		{FindingID: "bogus", Kind: ports.DecisionKind(99)},
@@ -546,10 +508,6 @@ func TestRevalidateRepo_ApplyDecisions_RollbackOnError(t *testing.T) {
 	}
 }
 
-// TestRevalidateRepo_ApplyDecisions_GatedOnOpenState ensures the tx-batched
-// path respects the same state='open' gate as the single-row methods:
-// already-closed rows are not resurrected, and refreshing a closed row is a
-// no-op rather than an error.
 func TestRevalidateRepo_ApplyDecisions_GatedOnOpenState(t *testing.T) {
 	t.Parallel()
 	f := setupRevalFixture(t)

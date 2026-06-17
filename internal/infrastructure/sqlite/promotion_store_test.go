@@ -17,8 +17,6 @@ func systemActor() domain.Actor {
 	return domain.Actor{ID: "service:veska", Kind: domain.ActorKindSystem}
 }
 
-// TestPromotionStore_UnregisteredRepo verifies the registration check returns
-// application.ErrUnregisteredRepo (type-assertable) for an unknown repo.
 func TestPromotionStore_UnregisteredRepo(t *testing.T) {
 	t.Parallel()
 	db := openTest(t, filepath.Join(t.TempDir(), "v.db"))
@@ -39,10 +37,6 @@ func TestPromotionStore_UnregisteredRepo(t *testing.T) {
 	}
 }
 
-// TestPromotionStore_RollsBackOnMidTxFailure proves the transaction is atomic:
-// when a co-transactional write fails mid-promotion, every node/queue/FTS write
-// from that Promote call is rolled back, leaving the prior committed state
-// untouched.
 func TestPromotionStore_RollsBackOnMidTxFailure(t *testing.T) {
 	t.Parallel()
 	db := openTest(t, filepath.Join(t.TempDir(), "v.db"))
@@ -54,7 +48,6 @@ func TestPromotionStore_RollsBackOnMidTxFailure(t *testing.T) {
 	}
 	store := sqlite.NewPromotionStore(db, []sqlite.PromotionSink{sqlite.NewFTSSink(), sqlite.NewEmbedRefSink()})
 
-	// First promotion commits cleanly: 1 node.
 	n1 := mustNode(t, "n1", "a.go", "A", domain.KindFunction)
 	if err := store.Promote(context.Background(), application.PromotionBatch{
 		RepoID: "repo1", Branch: "main", GitSHA: "sha-1", Actor: systemActor(),
@@ -71,14 +64,10 @@ func TestPromotionStore_RollsBackOnMidTxFailure(t *testing.T) {
 		t.Fatalf("after first promote: nodes=%d want 1", nodes)
 	}
 
-	// Sabotage the FTS table so the next promotion fails mid-transaction,
-	// AFTER the node rows for the file have been deleted+inserted.
 	if _, err := db.Exec(`DROP TABLE node_fts_trigrams`); err != nil {
 		t.Fatalf("drop fts table: %v", err)
 	}
 
-	// Second promotion: changes the node and adds a sibling. It must fail and
-	// roll back completely.
 	n1b := mustNode(t, "n1", "a.go", "A-changed", domain.KindFunction)
 	n2 := mustNode(t, "n2", "a.go", "B", domain.KindFunction)
 	err := store.Promote(context.Background(), application.PromotionBatch{
@@ -91,9 +80,6 @@ func TestPromotionStore_RollsBackOnMidTxFailure(t *testing.T) {
 		return
 	}
 
-	// The prior committed state must be intact: still exactly 1 node, the
-	// original symbol, and the original queue rows — nothing from the failed
-	// promotion leaked.
 	var nodes2, queue2 int
 	var symbol string
 	db.QueryRow(`SELECT COUNT(*) FROM nodes`).Scan(&nodes2)
@@ -112,11 +98,6 @@ func TestPromotionStore_RollsBackOnMidTxFailure(t *testing.T) {
 	}
 }
 
-// TestPromotionStore_CrossPackageCallsResolution pins: a
-// package-qualified call (cmd.Execute) in one package binds to the exported
-// symbol in another package of the SAME module, emitting a concrete CALLS
-// edge. main.go imports github.com/acme/app/cmd; the module_path on the repo
-// row lets promotion map the import to the cmd/ package dir.
 func TestPromotionStore_CrossPackageCallsResolution(t *testing.T) {
 	t.Parallel()
 	db := openTest(t, filepath.Join(t.TempDir(), "v.db"))
@@ -128,7 +109,6 @@ func TestPromotionStore_CrossPackageCallsResolution(t *testing.T) {
 	}
 	store := sqlite.NewPromotionStore(db, []sqlite.PromotionSink{sqlite.NewFTSSink(), sqlite.NewEmbedRefSink()})
 
-	// cmd/root.go defines Execute; main.go calls cmd.Execute.
 	exec := mustNode(t, "execID", "/tmp/app/cmd/root.go", "Execute", domain.KindFunction, domain.WithExported(true))
 	mainFn := mustNode(t, "mainID", "/tmp/app/main.go", "main", domain.KindFunction)
 
@@ -161,7 +141,6 @@ func TestPromotionStore_CrossPackageCallsResolution(t *testing.T) {
 		t.Errorf("want 1 cross-package CALLS edge main->Execute, got %d", n)
 	}
 
-	// An import outside the module must NOT produce a same-module CALLS edge.
 	var stray int
 	db.QueryRow(`SELECT COUNT(*) FROM edges WHERE kind='CALLS' AND src_node_id='mainID' AND dst_node_id != 'execID'`).Scan(&stray)
 	if stray != 0 {
@@ -169,9 +148,6 @@ func TestPromotionStore_CrossPackageCallsResolution(t *testing.T) {
 	}
 }
 
-// TestPromotionStore_PersistsFileImports pins: imports parsed
-// for each file land in file_imports with the (repo_id, branch, file_path)
-// grain, and a re-promote of the same file replaces rather than duplicates.
 func TestPromotionStore_PersistsFileImports(t *testing.T) {
 	t.Parallel()
 	db := openTest(t, filepath.Join(t.TempDir(), "v.db"))
@@ -184,7 +160,6 @@ func TestPromotionStore_PersistsFileImports(t *testing.T) {
 	store := sqlite.NewPromotionStore(db, []sqlite.PromotionSink{sqlite.NewFTSSink(), sqlite.NewEmbedRefSink()})
 	n1 := mustNode(t, "n1", "/tmp/app/cmd/root.go", "main", domain.KindFunction)
 
-	// First promotion: 2 imports.
 	if err := store.Promote(context.Background(), application.PromotionBatch{
 		RepoID: "repo1", Branch: "main", GitSHA: "sha1", Actor: systemActor(),
 		PromotedAt: time.Now().UnixMilli(),
@@ -206,7 +181,6 @@ func TestPromotionStore_PersistsFileImports(t *testing.T) {
 		t.Errorf("after first promote: want 2 file_imports rows, got %d", n)
 	}
 
-	// Re-promote same file with the cobra import removed.
 	if err := store.Promote(context.Background(), application.PromotionBatch{
 		RepoID: "repo1", Branch: "main", GitSHA: "sha2", Actor: systemActor(),
 		PromotedAt: time.Now().UnixMilli(),
@@ -228,12 +202,6 @@ func TestPromotionStore_PersistsFileImports(t *testing.T) {
 	}
 }
 
-// TestPromotionStore_ChainedSelectorMethodCallInModule covers
-// Phase B: a chained-selector method call (`g:= pkg.New(.); g.Hello`)
-// whose target package is in the SAME module must bind to the method node
-// via bare-name lookup against `<Receiver>.<Method>`. Parser flags the
-// UnresolvedCall with IsMethodCall=true; promotion resolves it by suffix
-// match within the importing package's relDir.
 func TestPromotionStore_ChainedSelectorMethodCallInModule(t *testing.T) {
 	t.Parallel()
 	db := openTest(t, filepath.Join(t.TempDir(), "v.db"))
@@ -245,8 +213,6 @@ func TestPromotionStore_ChainedSelectorMethodCallInModule(t *testing.T) {
 	}
 	store := sqlite.NewPromotionStore(db, []sqlite.PromotionSink{sqlite.NewFTSSink(), sqlite.NewEmbedRefSink()})
 
-	// greet/greet.go defines Greeter.Hello (method) + New (constructor).
-	// runner/runner.go has Run that does `g:= greet.New(.); g.Hello(.)`.
 	helloMethod := mustNode(t, "helloID", "/tmp/app/greet/greet.go", "Greeter.Hello", domain.KindMethod, domain.WithExported(true))
 	newFn := mustNode(t, "newID", "/tmp/app/greet/greet.go", "New", domain.KindFunction, domain.WithExported(true))
 	runFn := mustNode(t, "runID", "/tmp/app/runner/runner.go", "Run", domain.KindFunction, domain.WithExported(true))
@@ -261,9 +227,7 @@ func TestPromotionStore_ChainedSelectorMethodCallInModule(t *testing.T) {
 				Nodes:   []*domain.Node{runFn},
 				Imports: map[string]string{"greet": "github.com/acme/app/greet"},
 				UnresolvedCalls: []domain.UnresolvedCall{
-					// Plain pkg.New from `g:= greet.New(.)`.
 					{CallerID: "runID", CalleeName: "New", PkgQualifier: "greet"},
-					// Chained-selector method call from `g.Hello(.)`.
 					{CallerID: "runID", CalleeName: "Hello", PkgQualifier: "greet", IsMethodCall: true},
 				},
 			},
@@ -273,7 +237,6 @@ func TestPromotionStore_ChainedSelectorMethodCallInModule(t *testing.T) {
 		t.Fatalf("Promote: %v", err)
 	}
 
-	// Phase B contract: Run -> Greeter.Hello edge must exist.
 	var n int
 	if err := db.QueryRow(
 		`SELECT COUNT(*) FROM edges WHERE kind='CALLS' AND src_node_id='runID' AND dst_node_id='helloID'`,
@@ -283,7 +246,6 @@ func TestPromotionStore_ChainedSelectorMethodCallInModule(t *testing.T) {
 	if n != 1 {
 		t.Errorf("want 1 CALLS edge Run->Greeter.Hello (chained selector resolved), got %d", n)
 	}
-	// And the plain constructor call should also bind (regression guard for Phase A keying).
 	if err := db.QueryRow(
 		`SELECT COUNT(*) FROM edges WHERE kind='CALLS' AND src_node_id='runID' AND dst_node_id='newID'`,
 	).Scan(&n); err != nil {
@@ -294,11 +256,9 @@ func TestPromotionStore_ChainedSelectorMethodCallInModule(t *testing.T) {
 	}
 }
 
-// TestPromotionStore_ChainedSelectorAmbiguityIsSkipped guards the
-// no-false-edge invariant: if two receiver types in the target package own
-// a method with the same name, the resolver must skip (not pick one
-// arbitrarily). Phase C will surface this as a cross-repo stub once that
-// path lands.
+// TestPromotionStore_ChainedSelectorAmbiguityIsSkipped verifies that if multiple
+// receiver types declare a method of the same name, the resolver skips the match
+// to prevent emitting a false edge.
 func TestPromotionStore_ChainedSelectorAmbiguityIsSkipped(t *testing.T) {
 	t.Parallel()
 	db := openTest(t, filepath.Join(t.TempDir(), "v.db"))
@@ -310,7 +270,6 @@ func TestPromotionStore_ChainedSelectorAmbiguityIsSkipped(t *testing.T) {
 	}
 	store := sqlite.NewPromotionStore(db, []sqlite.PromotionSink{sqlite.NewFTSSink(), sqlite.NewEmbedRefSink()})
 
-	// Two distinct receiver types each owning a Hello method.
 	helloA := mustNode(t, "helloAID", "/tmp/app/greet/greet.go", "TypeA.Hello", domain.KindMethod, domain.WithExported(true))
 	helloB := mustNode(t, "helloBID", "/tmp/app/greet/greet.go", "TypeB.Hello", domain.KindMethod, domain.WithExported(true))
 	runFn := mustNode(t, "runID", "/tmp/app/runner/runner.go", "Run", domain.KindFunction, domain.WithExported(true))
@@ -334,7 +293,6 @@ func TestPromotionStore_ChainedSelectorAmbiguityIsSkipped(t *testing.T) {
 		t.Fatalf("Promote: %v", err)
 	}
 
-	// Neither edge should be emitted — ambiguity is skipped.
 	var n int
 	db.QueryRow(`SELECT COUNT(*) FROM edges WHERE kind='CALLS' AND src_node_id='runID'`).Scan(&n)
 	if n != 0 {
@@ -342,11 +300,6 @@ func TestPromotionStore_ChainedSelectorAmbiguityIsSkipped(t *testing.T) {
 	}
 }
 
-// TestPromotionStore_ChainedSelectorEmitsMethodCallStub covers
-// Phase C: when a chained-selector method call (`g:= pkg.New(.); g.X`)
-// imports from a DIFFERENT module (cross-repo), promotion must emit a
-// cross_repo_edge_stub with method_call=1 and symbol_path=bare-method-name.
-// The reverse resolver (phase D) binds this to the receiver method later.
 func TestPromotionStore_ChainedSelectorEmitsMethodCallStub(t *testing.T) {
 	t.Parallel()
 	db := openTest(t, filepath.Join(t.TempDir(), "v.db"))
@@ -369,9 +322,7 @@ func TestPromotionStore_ChainedSelectorEmitsMethodCallStub(t *testing.T) {
 				Nodes:   []*domain.Node{runFn},
 				Imports: map[string]string{"greetlib": "github.com/jrose/greetlib"},
 				UnresolvedCalls: []domain.UnresolvedCall{
-					// Plain pkg.New(.) — produces a regular stub (method_call=0).
 					{CallerID: "runID", CalleeName: "New", PkgQualifier: "greetlib"},
-					// g.Hello(.) chained selector — produces a method-call stub.
 					{CallerID: "runID", CalleeName: "Hello", PkgQualifier: "greetlib", IsMethodCall: true},
 				},
 			},
@@ -381,7 +332,6 @@ func TestPromotionStore_ChainedSelectorEmitsMethodCallStub(t *testing.T) {
 		t.Fatalf("Promote: %v", err)
 	}
 
-	// Two stubs: plain (method_call=0, symbol_path=New) + method-call (method_call=1, symbol_path=Hello).
 	rows, err := db.Query(`SELECT symbol_path, method_call FROM cross_repo_edge_stubs WHERE src_node_id = 'runID' ORDER BY symbol_path`)
 	if err != nil {
 		t.Fatalf("query stubs: %v", err)
@@ -410,10 +360,6 @@ func TestPromotionStore_ChainedSelectorEmitsMethodCallStub(t *testing.T) {
 	}
 }
 
-// TestPromotionStore_CrossPackageResolvesAgainstPromotedGraph pins the
-// incremental-commit half of: when the callee's file is NOT in
-// the current batch (already promoted earlier), the qualified call still binds
-// by falling back to a promoted-graph lookup.
 func TestPromotionStore_CrossPackageResolvesAgainstPromotedGraph(t *testing.T) {
 	t.Parallel()
 	db := openTest(t, filepath.Join(t.TempDir(), "v.db"))
@@ -426,7 +372,6 @@ func TestPromotionStore_CrossPackageResolvesAgainstPromotedGraph(t *testing.T) {
 	store := sqlite.NewPromotionStore(db, []sqlite.PromotionSink{sqlite.NewFTSSink(), sqlite.NewEmbedRefSink()})
 	ctx := context.Background()
 
-	// First commit: only cmd/root.go.
 	exec := mustNode(t, "execID", "/tmp/app/cmd/root.go", "Execute", domain.KindFunction, domain.WithExported(true))
 	if err := store.Promote(ctx, application.PromotionBatch{
 		RepoID: "repo1", Branch: "main", GitSHA: "sha1", Actor: systemActor(),
@@ -436,7 +381,6 @@ func TestPromotionStore_CrossPackageResolvesAgainstPromotedGraph(t *testing.T) {
 		t.Fatalf("first Promote: %v", err)
 	}
 
-	// Second commit: only main.go (cmd/root.go unchanged, not in batch).
 	mainFn := mustNode(t, "mainID", "/tmp/app/main.go", "main", domain.KindFunction)
 	if err := store.Promote(ctx, application.PromotionBatch{
 		RepoID: "repo1", Branch: "main", GitSHA: "sha2", Actor: systemActor(),
@@ -458,13 +402,6 @@ func TestPromotionStore_CrossPackageResolvesAgainstPromotedGraph(t *testing.T) {
 	}
 }
 
-// TestPromotionStore_IntraPackageResolvesAgainstPromotedGraph pins
-// an incremental single-file commit whose plain (non-method,
-// non-pkg-qualified) call targets a same-package symbol in an UNCHANGED sibling
-// file (not in this batch) must still bind, by falling back to the promoted
-// graph — the intra-package twin of CrossPackageResolvesAgainstPromotedGraph.
-// Without the fallback the edge is silently dropped, which would flag the
-// callee dead-code on a single-file save.
 func TestPromotionStore_IntraPackageResolvesAgainstPromotedGraph(t *testing.T) {
 	t.Parallel()
 	db := openTest(t, filepath.Join(t.TempDir(), "v.db"))
@@ -477,7 +414,6 @@ func TestPromotionStore_IntraPackageResolvesAgainstPromotedGraph(t *testing.T) {
 	store := sqlite.NewPromotionStore(db, []sqlite.PromotionSink{sqlite.NewFTSSink(), sqlite.NewEmbedRefSink()})
 	ctx := context.Background()
 
-	// First commit: only util.go, defining helper.
 	helper := mustNode(t, "helperID", "/tmp/app/util.go", "helper", domain.KindFunction)
 	if err := store.Promote(ctx, application.PromotionBatch{
 		RepoID: "repo1", Branch: "main", GitSHA: "sha1", Actor: systemActor(),
@@ -487,8 +423,6 @@ func TestPromotionStore_IntraPackageResolvesAgainstPromotedGraph(t *testing.T) {
 		t.Fatalf("first Promote: %v", err)
 	}
 
-	// Second commit: only main.go (util.go unchanged, not in batch). Run makes
-	// a bare-name call to helper — same package, cross-file, callee not staged.
 	runFn := mustNode(t, "runID", "/tmp/app/main.go", "Run", domain.KindFunction)
 	if err := store.Promote(ctx, application.PromotionBatch{
 		RepoID: "repo1", Branch: "main", GitSHA: "sha2", Actor: systemActor(),
@@ -509,15 +443,10 @@ func TestPromotionStore_IntraPackageResolvesAgainstPromotedGraph(t *testing.T) {
 	}
 }
 
-// TestPromotionStore_CrossRepoStub pins /: a
-// package-qualified call into ANOTHER module records a cross_repo_edge_stub
-// that the query-time resolver binds to the node in whichever registered repo
-// owns that module_path. Stdlib calls (fmt.Println) record no stub.
 func TestPromotionStore_CrossRepoStub(t *testing.T) {
 	t.Parallel()
 	db := openTest(t, filepath.Join(t.TempDir(), "v.db"))
 	now := time.Now().UnixMilli()
-	// Caller repo (the app) + the dependency repo (pflag), each with module_path.
 	if _, err := db.Exec(`INSERT INTO repos (repo_id, root_path, added_at, module_path, active_branch) VALUES (?,?,?,?,?)`,
 		"app", "/tmp/app", now, "github.com/acme/app", "main"); err != nil {
 		t.Fatalf("insert app repo: %v", err)
@@ -529,7 +458,6 @@ func TestPromotionStore_CrossRepoStub(t *testing.T) {
 	store := sqlite.NewPromotionStore(db, []sqlite.PromotionSink{sqlite.NewFTSSink(), sqlite.NewEmbedRefSink()})
 	ctx := context.Background()
 
-	// Promote the pflag dependency: it exports Parse.
 	parse := mustNode(t, "parseID", "/tmp/pflag/flag.go", "Parse", domain.KindFunction, domain.WithLanguage("go"), domain.WithExported(true))
 	if err := store.Promote(ctx, application.PromotionBatch{
 		RepoID: "pflag", Branch: "main", GitSHA: "p1", Actor: systemActor(), PromotedAt: now,
@@ -538,7 +466,6 @@ func TestPromotionStore_CrossRepoStub(t *testing.T) {
 		t.Fatalf("promote pflag: %v", err)
 	}
 
-	// Promote the app: main calls flag.Parse and fmt.Println.
 	mainFn := mustNode(t, "mainID", "/tmp/app/main.go", "main", domain.KindFunction, domain.WithLanguage("go"))
 	if err := store.Promote(ctx, application.PromotionBatch{
 		RepoID: "app", Branch: "main", GitSHA: "a1", Actor: systemActor(), PromotedAt: now,
@@ -558,7 +485,6 @@ func TestPromotionStore_CrossRepoStub(t *testing.T) {
 		t.Fatalf("promote app: %v", err)
 	}
 
-	// One stub for flag.Parse; none for the stdlib fmt.Println.
 	var nStub int
 	db.QueryRow(`SELECT COUNT(*) FROM cross_repo_edge_stubs WHERE src_node_id='mainID'`).Scan(&nStub)
 	if nStub != 1 {
@@ -570,7 +496,6 @@ func TestPromotionStore_CrossRepoStub(t *testing.T) {
 		t.Errorf("stub = (%q,%q), want (github.com/spf13/pflag, Parse)", modulePath, symbol)
 	}
 
-	// The query-time resolver binds the stub to pflag's Parse node.
 	resolved, err := resolver.ResolveStubsForNode(ctx, db, "mainID", "main", false)
 	if err != nil {
 		t.Fatalf("resolve stubs: %v", err)
@@ -580,11 +505,6 @@ func TestPromotionStore_CrossRepoStub(t *testing.T) {
 	}
 }
 
-// TestPromotionStore_RouteHandlerEdgeResolution pins: a route
-// node's ROUTES route→handler reference (UnresolvedCall{EdgeKind:
-// EdgeRoutes}) binds to a same-package handler via the intra-package
-// resolver and materialises a ROUTES edge — not a CALLS edge. This is the
-// generalised resolver: buildCallEdge honours uc.EdgeKind.
 func TestPromotionStore_RouteHandlerEdgeResolution(t *testing.T) {
 	t.Parallel()
 	db := openTest(t, filepath.Join(t.TempDir(), "v.db"))
@@ -596,8 +516,6 @@ func TestPromotionStore_RouteHandlerEdgeResolution(t *testing.T) {
 	}
 	store := sqlite.NewPromotionStore(db, []sqlite.PromotionSink{sqlite.NewFTSSink(), sqlite.NewEmbedRefSink()})
 
-	// routes.go: a "GET /users" route plus its same-package handler in
-	// another file of the package (handler.go).
 	route := mustNode(t, "routeID", "/tmp/app/api/routes.go", "GET /users", domain.KindRoute)
 	handler := mustNode(t, "handlerID", "/tmp/app/api/handler.go", "listUsers", domain.KindFunction)
 
@@ -628,7 +546,6 @@ func TestPromotionStore_RouteHandlerEdgeResolution(t *testing.T) {
 	if n != 1 {
 		t.Errorf("want 1 ROUTES edge route->listUsers, got %d", n)
 	}
-	// The route→handler reference must NOT also leak a CALLS edge.
 	var calls int
 	db.QueryRow(`SELECT COUNT(*) FROM edges WHERE kind='CALLS' AND src_node_id='routeID'`).Scan(&calls)
 	if calls != 0 {
@@ -636,11 +553,6 @@ func TestPromotionStore_RouteHandlerEdgeResolution(t *testing.T) {
 	}
 }
 
-// TestPromotionStore_RouteHandlerCrossRepoStub pins: a route
-// whose handler lives in another module records a cross-repo stub carrying
-// kind='ROUTES' (not CALLS), so the query-time resolver materialises a
-// ROUTES cross-repo edge. emitCrossRepoStub honours uc.EdgeKind and
-// namespaces the stub_id by kind.
 func TestPromotionStore_RouteHandlerCrossRepoStub(t *testing.T) {
 	t.Parallel()
 	db := openTest(t, filepath.Join(t.TempDir(), "v.db"))
@@ -679,9 +591,6 @@ func TestPromotionStore_RouteHandlerCrossRepoStub(t *testing.T) {
 	}
 }
 
-// TestPromotionStore_EnqueuesExactlyOneWikiRow verifies AC1: a promotion
-// enqueues exactly one repo-scoped WorkKindWiki row regardless of how many
-// files the batch touches.
 func TestPromotionStore_EnqueuesExactlyOneWikiRow(t *testing.T) {
 	t.Parallel()
 	db := openTest(t, filepath.Join(t.TempDir(), "v.db"))
@@ -693,7 +602,6 @@ func TestPromotionStore_EnqueuesExactlyOneWikiRow(t *testing.T) {
 	}
 	store := sqlite.NewPromotionStore(db, []sqlite.PromotionSink{sqlite.NewFTSSink(), sqlite.NewEmbedRefSink()})
 
-	// Multi-file batch — the wiki lane must still get exactly one row.
 	na := mustNode(t, "na", "a.go", "A", domain.KindFunction)
 	nb := mustNode(t, "nb", "b.go", "B", domain.KindFunction)
 	if err := store.Promote(context.Background(), application.PromotionBatch{
@@ -717,7 +625,6 @@ func TestPromotionStore_EnqueuesExactlyOneWikiRow(t *testing.T) {
 		t.Errorf("wiki rows = %d, want exactly 1", wikiRows)
 	}
 
-	// The wiki row carries an empty (repo-scoped) payload.
 	var payload string
 	if err := db.QueryRow(
 		`SELECT payload FROM post_promotion_queue WHERE work_kind='wiki'`,
@@ -729,9 +636,6 @@ func TestPromotionStore_EnqueuesExactlyOneWikiRow(t *testing.T) {
 	}
 }
 
-// TestPromotionStore_ReviewEnabled_EnqueuesPerFileReviewRow verifies AC1: with
-// review enabled, a promotion enqueues a work_kind='review' row per changed
-// file, payloaded with the file path.
 func TestPromotionStore_ReviewEnabled_EnqueuesPerFileReviewRow(t *testing.T) {
 	t.Parallel()
 	db := openTest(t, filepath.Join(t.TempDir(), "v.db"))
@@ -780,8 +684,6 @@ func TestPromotionStore_ReviewEnabled_EnqueuesPerFileReviewRow(t *testing.T) {
 	}
 }
 
-// TestPromotionStore_ReviewDisabled_NoReviewRow verifies AC3: with review
-// disabled (the default), no work_kind='review' row is enqueued.
 func TestPromotionStore_ReviewDisabled_NoReviewRow(t *testing.T) {
 	t.Parallel()
 	db := openTest(t, filepath.Join(t.TempDir(), "v.db"))
@@ -791,7 +693,6 @@ func TestPromotionStore_ReviewDisabled_NoReviewRow(t *testing.T) {
 	); err != nil {
 		t.Fatalf("insert repo: %v", err)
 	}
-	// Default construction: review disabled.
 	store := sqlite.NewPromotionStore(
 		db, []sqlite.PromotionSink{sqlite.NewFTSSink(), sqlite.NewEmbedRefSink()})
 

@@ -1,6 +1,3 @@
-// EdgeReaderRepo backs ports.EdgeReader against the edges table. Reads
-// take the read-only connection so they never contend with the
-// single-writer pool used by promotion.
 
 package sqlite
 
@@ -11,48 +8,37 @@ import (
 	"strings"
 )
 
-// EdgeReaderRepo is the SQLite-backed adapter for ports.EdgeReader.
+// EdgeReaderRepo implements ports.EdgeReader using a SQLite database.
 type EdgeReaderRepo struct {
 	readDB *sql.DB
 }
 
-// NewEdgeReaderRepo constructs an EdgeReaderRepo bound to readDB. Pass
-// the read-only handle so adjacency walks do not contend with promotion.
+// NewEdgeReaderRepo constructs an EdgeReaderRepo bound to the given read-only sql.DB connection.
 func NewEdgeReaderRepo(readDB *sql.DB) *EdgeReaderRepo {
 	return &EdgeReaderRepo{readDB: readDB}
 }
 
-// InboundEdges returns dst_node_id → [src_node_id,.] for each node_id
-// that appears as a destination in the edges table.
+// InboundEdges returns a map of destination node IDs to their source node IDs.
 func (r *EdgeReaderRepo) InboundEdges(ctx context.Context, repoID, branch string, nodeIDs []string) (map[string][]string, error) {
 	return r.adjacency(ctx, repoID, branch, nodeIDs, "dst_node_id", "src_node_id", "")
 }
 
-// OutboundEdges returns src_node_id → [dst_node_id,.] for each node_id
-// that appears as a source in the edges table.
+// OutboundEdges returns a map of source node IDs to their destination node IDs.
 func (r *EdgeReaderRepo) OutboundEdges(ctx context.Context, repoID, branch string, nodeIDs []string) (map[string][]string, error) {
 	return r.adjacency(ctx, repoID, branch, nodeIDs, "src_node_id", "dst_node_id", "")
 }
 
-// InboundCallEdges is InboundEdges narrowed to CALLS edges — the liveness
-// signal the dead-code rule uses. A structural CONTAINS/IMPORTS parent edge is
-// NOT a caller, so it must not count toward liveness; mirrors
-// deadcode_repo.go's UPPER(kind)='CALLS' so the gate/revalidate resolution
-// predicate agrees with the check that raised the finding.
+// InboundCallEdges returns inbound edges filtered by the CALLS kind, matching the behavior of the dead-code check.
 func (r *EdgeReaderRepo) InboundCallEdges(ctx context.Context, repoID, branch string, nodeIDs []string) (map[string][]string, error) {
 	return r.adjacency(ctx, repoID, branch, nodeIDs, "dst_node_id", "src_node_id", "CALLS")
 }
 
-// adjacency is the shared body of InboundEdges and OutboundEdges. keyCol
-// is the column we filter on (the "from" side of the lookup) and valCol
-// is the column we return (the "to" side). kind, when non-empty, restricts the
-// match to that edge kind (case-insensitive).
+// adjacency queries edges matching the given direction and optional kind filter.
 func (r *EdgeReaderRepo) adjacency(ctx context.Context, repoID, branch string, nodeIDs []string, keyCol, valCol, kind string) (map[string][]string, error) {
 	out := make(map[string][]string, len(nodeIDs))
 	if len(nodeIDs) == 0 {
 		return out, nil
 	}
-	// Seed the map so callers can rely on "queried = present".
 	for _, id := range nodeIDs {
 		out[id] = nil
 	}

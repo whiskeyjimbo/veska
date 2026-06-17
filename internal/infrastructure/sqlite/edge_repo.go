@@ -9,31 +9,19 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/core/domain"
 )
 
-// EdgeRepo is the SQLite adapter for the ports.EdgeStorage port. It writes
-// to the `edges` table created by migration 0001.
-// SaveEdges uses ON CONFLICT(edge_id, branch) DO UPDATE SET score only: the
-// first writer still wins for identity and confidence — re-running a flow
-// (e.g. an auto-link queue handler) that proposes an already-existing edge
-// never downgrades a definite or resolver-derived edge to Unresolved, because
-// the conflict clause leaves confidence/last_promoted_at untouched. The single
-// exception is `score`, which refreshes from the incoming row when that row
-// carries one (COALESCE keeps the stored value when the writer passes NULL).
-// This lets a `veska reindex` backfill/refresh similarity scores on SIMILAR_TO
-// edges without disturbing any other edge attribute. edge_id
-// derives from (src, kind, tgt), so a conflict is always same-kind — a
-// non-SIMILAR_TO writer passing score=NULL is a guaranteed no-op here.
+// EdgeRepo implements ports.EdgeStorage using a SQLite database.
+// Conflict resolution updates only the score column on duplicate edge IDs,
+// leaving confidence and promotion timestamps unchanged.
 type EdgeRepo struct {
 	db *sql.DB
 }
 
-// NewEdgeRepo constructs an EdgeRepo bound to the write-capable *sql.DB.
+// NewEdgeRepo constructs an EdgeRepo bound to the given sql.DB.
 func NewEdgeRepo(db *sql.DB) *EdgeRepo {
 	return &EdgeRepo{db: db}
 }
 
-// confidenceText maps the domain Confidence enum onto the TEXT column value
-// stored in `edges.confidence`. The mapping is closed: an unknown int falls
-// through to "unresolved" as a defensive default.
+// confidenceText maps the domain Confidence enum onto the corresponding TEXT column representation.
 func confidenceText(c domain.Confidence) string {
 	switch c {
 	case domain.Definite:
@@ -47,11 +35,8 @@ func confidenceText(c domain.Confidence) string {
 	}
 }
 
-// SaveEdges persists edges into the `edges` table in a single transaction.
-// Re-saving the same edge is idempotent for identity and confidence: the
-// ON CONFLICT clause leaves the existing row in place and refreshes only
-// `score` (see the type doc). An empty edges slice short-circuits without a
-// round-trip.
+// SaveEdges persists edges into the edges table within a single SQL transaction.
+// An empty slice of edges is a no-op.
 func (r *EdgeRepo) SaveEdges(ctx context.Context, repoID, branch string, edges []*domain.Edge) error {
 	if len(edges) == 0 {
 		return nil

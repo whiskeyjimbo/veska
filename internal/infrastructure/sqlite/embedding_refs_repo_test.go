@@ -10,12 +10,10 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/sqlite"
 )
 
-// seedRefRow inserts a repo, node, and pending ref so we have a row to
-// mutate from MarkAttemptFailed. nodeID is unique per call.
+// seedRefRow seeds a repository, a node, and a pending reference for testing.
 func seedRefRow(t *testing.T, db *sql.DB, repoID, nodeID string) {
 	t.Helper()
 	now := time.Now().UnixMilli()
-	// Repo may already exist for prior rows in the same test — IGNORE conflict.
 	if _, err := db.Exec(
 		`INSERT OR IGNORE INTO repos (repo_id, root_path, added_at) VALUES (?,?,?)`,
 		repoID, "/tmp/"+repoID, now); err != nil {
@@ -49,8 +47,6 @@ func openTestDB(t *testing.T) (*sql.DB, *sqlite.EmbeddingRefsRepo) {
 	return db, sqlite.NewEmbeddingRefsRepo(db, db)
 }
 
-// TestEmbeddingRefsRepo_MarkAttemptFailed_BumpsAttempts verifies a single
-// failure bumps attempts but does not flip state when budget remains.
 func TestEmbeddingRefsRepo_MarkAttemptFailed_BumpsAttempts(t *testing.T) {
 	t.Parallel()
 	db, repo := openTestDB(t)
@@ -74,8 +70,6 @@ func TestEmbeddingRefsRepo_MarkAttemptFailed_BumpsAttempts(t *testing.T) {
 	}
 }
 
-// TestEmbeddingRefsRepo_MarkAttemptFailed_FlipsAtBudget verifies the row
-// flips to 'failed' exactly when attempts reaches maxAttempts.
 func TestEmbeddingRefsRepo_MarkAttemptFailed_FlipsAtBudget(t *testing.T) {
 	t.Parallel()
 	db, repo := openTestDB(t)
@@ -101,7 +95,6 @@ func TestEmbeddingRefsRepo_MarkAttemptFailed_FlipsAtBudget(t *testing.T) {
 		t.Errorf("attempts: want 3, got %d", attempts)
 	}
 
-	// FetchPending must exclude the failed row.
 	pending, err := repo.FetchPending(ctx, 10)
 	if err != nil {
 		t.Fatalf("FetchPending: %v", err)
@@ -111,15 +104,11 @@ func TestEmbeddingRefsRepo_MarkAttemptFailed_FlipsAtBudget(t *testing.T) {
 	}
 }
 
-// TestEmbeddingRefsRepo_MarkAttemptFailed_NoOpOnNonPending verifies that
-// non-pending rows are not modified by MarkAttemptFailed (idempotent guard
-// for race-y callers).
 func TestEmbeddingRefsRepo_MarkAttemptFailed_NoOpOnNonPending(t *testing.T) {
 	t.Parallel()
 	db, repo := openTestDB(t)
 	seedRefRow(t, db, "r1", "n1")
 
-	// Force the row into 'ready' state.
 	if _, err := db.Exec(`UPDATE node_embedding_refs SET state='ready' WHERE node_id='n1'`); err != nil {
 		t.Fatalf("force ready: %v", err)
 	}
@@ -142,24 +131,17 @@ func TestEmbeddingRefsRepo_MarkAttemptFailed_NoOpOnNonPending(t *testing.T) {
 	}
 }
 
-// TestEmbeddingRefsRepo_CountPending_IgnoresOrphans verifies CountPending
-// counts only pending refs that still have a backing node — orphaned refs
-// (node deleted, ref left behind) are excluded, matching FetchPending's
-// JOIN. Without this, orphans pin eng_get_status at degraded forever even
-// though the worker has nothing left to drain.
 func TestEmbeddingRefsRepo_CountPending_IgnoresOrphans(t *testing.T) {
 	t.Parallel()
 	db, repo := openTestDB(t)
 	ctx := context.Background()
 
-	// Two real pending refs, then orphan one by deleting its node.
 	seedRefRow(t, db, "r1", "live")
 	seedRefRow(t, db, "r1", "orphan")
 	if _, err := db.Exec(`DELETE FROM nodes WHERE node_id='orphan'`); err != nil {
 		t.Fatalf("delete node: %v", err)
 	}
 
-	// The orphaned ref row is still present and still 'pending'.
 	var raw int
 	if err := db.QueryRow(`SELECT COUNT(*) FROM node_embedding_refs WHERE state='pending'`).
 		Scan(&raw); err != nil {
@@ -169,7 +151,6 @@ func TestEmbeddingRefsRepo_CountPending_IgnoresOrphans(t *testing.T) {
 		t.Fatalf("raw pending rows: want 2 (incl orphan), got %d", raw)
 	}
 
-	// but CountPending excludes it.
 	n, err := repo.CountPending(ctx)
 	if err != nil {
 		t.Fatalf("CountPending: %v", err)
@@ -178,7 +159,6 @@ func TestEmbeddingRefsRepo_CountPending_IgnoresOrphans(t *testing.T) {
 		t.Errorf("CountPending: want 1 (orphan excluded), got %d", n)
 	}
 
-	// And FetchPending agrees — the orphan is never returned for embedding.
 	pending, err := repo.FetchPending(ctx, 10)
 	if err != nil {
 		t.Fatalf("FetchPending: %v", err)
@@ -188,8 +168,6 @@ func TestEmbeddingRefsRepo_CountPending_IgnoresOrphans(t *testing.T) {
 	}
 }
 
-// TestEmbeddingRefsRepo_CountByState returns accurate counts and
-// guarantees all three keys are present even when their count is zero.
 func TestEmbeddingRefsRepo_CountByState(t *testing.T) {
 	t.Parallel()
 	db, repo := openTestDB(t)
@@ -199,8 +177,6 @@ func TestEmbeddingRefsRepo_CountByState(t *testing.T) {
 	seedRefRow(t, db, "r1", "r1n")
 	seedRefRow(t, db, "r1", "f1")
 
-	// Flip one to ready, one to failed (without going through MarkReady which
-	// requires a valid content_hash).
 	if _, err := db.Exec(`UPDATE node_embedding_refs SET state='ready' WHERE node_id='r1n'`); err != nil {
 		t.Fatalf("force ready: %v", err)
 	}
@@ -223,8 +199,6 @@ func TestEmbeddingRefsRepo_CountByState(t *testing.T) {
 	}
 }
 
-// TestEmbeddingRefsRepo_CountByState_AllZero verifies the map has all three
-// keys present even when no rows exist.
 func TestEmbeddingRefsRepo_CountByState_AllZero(t *testing.T) {
 	t.Parallel()
 	_, repo := openTestDB(t)
@@ -240,9 +214,6 @@ func TestEmbeddingRefsRepo_CountByState_AllZero(t *testing.T) {
 	}
 }
 
-// TestEmbeddingRefsRepo_FetchPending_TextProjection verifies the embed-input
-// projection includes file_path and language so distinct nodes do not collapse
-// under the content-addressed embedding dedup.
 func TestEmbeddingRefsRepo_FetchPending_TextProjection(t *testing.T) {
 	t.Parallel()
 	db, repo := openTestDB(t)
@@ -279,7 +250,7 @@ func TestEmbeddingRefsRepo_FetchPending_TextProjection(t *testing.T) {
 	want := map[string]string{
 		"n1": "function pkg.Foo a/b.go go",
 		"n2": "function pkg.Foo c/d.ts typescript",
-		"n3": "function pkg.Bar e.go", // empty language omitted
+		"n3": "function pkg.Bar e.go",
 	}
 	got := make(map[string]string, len(pending))
 	for _, p := range pending {
@@ -290,17 +261,11 @@ func TestEmbeddingRefsRepo_FetchPending_TextProjection(t *testing.T) {
 			t.Errorf("%s: Text = %q, want %q", id, got[id], w)
 		}
 	}
-	// n1 and n2 share (kind, symbol) but differ in file+language — their
-	// projections must differ so the embedding dedup keeps them distinct.
 	if got["n1"] == got["n2"] {
 		t.Error("n1 and n2 collapsed to the same projection")
 	}
 }
 
-// TestEmbeddingRefsRepo_FetchPending_SnippetProjection verifies the embed-input
-// projection uses EmbedVariantSnippet: a node with a persisted snippet projects
-// "<kind> <symbol_path> <file> <language> <snippet>", while a node with a NULL
-// snippet degrades gracefully to the exact baseline projection.
 func TestEmbeddingRefsRepo_FetchPending_SnippetProjection(t *testing.T) {
 	t.Parallel()
 	db, repo := openTestDB(t)
@@ -329,7 +294,7 @@ func TestEmbeddingRefsRepo_FetchPending_SnippetProjection(t *testing.T) {
 	insertNode("s1", "function", "pkg.Foo", "a/b.go", "go",
 		sql.NullString{String: "func Foo() {}", Valid: true})
 	insertNode("s2", "function", "pkg.Bar", "c.go", "go",
-		sql.NullString{}) // NULL snippet
+		sql.NullString{})
 
 	pending, err := repo.FetchPending(context.Background(), 10)
 	if err != nil {

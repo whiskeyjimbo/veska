@@ -8,16 +8,14 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/sqlite"
 )
 
-// TestReviewTokenStore_RoundTrip verifies the per-day token total is persisted
-// to daemon_state, accumulates across AddTokens calls, and is keyed by local
-// date so a different date reads back zero (the local-midnight window reset).
+// TestReviewTokenStore_RoundTrip verifies that the per-day token total persists,
+// accumulates, and automatically resets on a different date.
 func TestReviewTokenStore_RoundTrip(t *testing.T) {
 	t.Parallel()
 	db := openTest(t, filepath.Join(t.TempDir(), "v.db"))
 	store := sqlite.NewReviewTokenStore(db, db)
 	ctx := context.Background()
 
-	// No usage recorded yet.
 	if n, err := store.TokensFor(ctx, "2026-05-17"); err != nil || n != 0 {
 		t.Fatalf("TokensFor empty: n=%d err=%v, want 0", n, err)
 	}

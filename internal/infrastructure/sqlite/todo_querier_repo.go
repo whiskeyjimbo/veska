@@ -1,7 +1,3 @@
-// TodoQuerierRepo backs ports.TodoQuerier by SELECTing rule='todo' rows
-// from the findings table. Reads use the read-only DB handle so the
-// query never contends with the single-writer pool used by promotion.
-
 package sqlite
 
 import (
@@ -12,7 +8,8 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/core/ports"
 )
 
-// TodoQuerierRepo is the SQLite-backed adapter for ports.TodoQuerier.
+// TodoQuerierRepo queries rule='todo' rows from the findings table using the
+// read-only database handle to avoid contending with write operations.
 type TodoQuerierRepo struct {
 	readDB *sql.DB
 }
@@ -22,8 +19,8 @@ func NewTodoQuerierRepo(readDB *sql.DB) *TodoQuerierRepo {
 	return &TodoQuerierRepo{readDB: readDB}
 }
 
-// FindTodos returns every 'todo'-rule finding scoped to (repoID, branch).
-// When onlyOpen is true the WHERE clause restricts to state='open'.
+// FindTodos retrieves 'todo' findings for the given repository and branch,
+// optionally filtering for open findings.
 func (r *TodoQuerierRepo) FindTodos(ctx context.Context, repoID, branch string, onlyOpen bool) ([]ports.TodoEntry, error) {
 	query := `SELECT finding_id, repo_id, branch, COALESCE(file_path, ''), message, state, created_at
 	          FROM findings

@@ -23,8 +23,7 @@ func openArchiveTestDB(t *testing.T) (*sql.DB, *sqlite.EmbeddingArchive) {
 	return db, sqlite.NewEmbeddingArchive(db, db)
 }
 
-// seedReady inserts a repo, node, content-addressed embedding, and a 'ready'
-// ref pointing at it — the shape LoadReadyEmbeddings rehydrates.
+// seedReady seeds a repository, a node, and a ready embedding reference for loading tests.
 func seedReady(t *testing.T, db *sql.DB, repoID, branch, nodeID, contentHash, model string, blob []byte, dim int) {
 	t.Helper()
 	now := time.Now().UnixMilli()
@@ -48,8 +47,6 @@ func mustExec(t *testing.T, db *sql.DB, q string, args ...any) {
 	}
 }
 
-// TestEmbeddingArchive_LoadReadyEmbeddings returns one row per ready ref joined
-// to its vector, and excludes pending refs (which carry no vector yet).
 func TestEmbeddingArchive_LoadReadyEmbeddings(t *testing.T) {
 	t.Parallel()
 	db, archive := openArchiveTestDB(t)
@@ -57,7 +54,6 @@ func TestEmbeddingArchive_LoadReadyEmbeddings(t *testing.T) {
 	seedReady(t, db, "repo1", "main", "n1", "h1", "m1", []byte{1, 2, 3}, 3)
 	seedReady(t, db, "repo1", "topic", "n2", "h2", "m1", []byte{4, 5, 6}, 3)
 
-	// A pending ref (no embedding) must NOT be returned.
 	now := time.Now().UnixMilli()
 	mustExec(t, db, `INSERT INTO nodes (
 		node_id, branch, repo_id, language, kind, symbol_path, file_path,
@@ -83,9 +79,6 @@ func TestEmbeddingArchive_LoadReadyEmbeddings(t *testing.T) {
 	}
 }
 
-// TestEmbeddingArchive_RequeueAllUnderNewModel pins: on embedder
-// switch, every ready ref must flip back to pending AND the content-addressed
-// embedding store must be wiped.
 func TestEmbeddingArchive_RequeueAllUnderNewModel(t *testing.T) {
 	t.Parallel()
 	db, archive := openArchiveTestDB(t)

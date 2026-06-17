@@ -9,36 +9,22 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/core/ports"
 )
 
-// RevalidateRepo is the SQLite adapter for the RevalidateQuerier port. It
-// reads the join of findings × nodes scoped by (repo_id, branch, file_path)
-// to discover findings whose recorded anchor_content_hash no longer matches
-// the current node's content_hash, and writes a state='closed' update with
-// closed_reason='revalidated_obsolete'.
-// The repo is intentionally write-narrow: only the closed_* / state / actor
-// columns are touched. The original creator (actor metadata at emission
-// time) is preserved on the row's history via closed_by columns owned by
-// this UPDATE — the schema today carries no separate audit log table, so
-// these columns are the only place revalidation provenance lives.
+// RevalidateRepo is the SQLite adapter for the RevalidateQuerier port. It queries
+// findings whose recorded anchor hashes diverge from current node content hashes,
+// and marks them closed. The update preserves creator metadata on the row's
+// history since the schema does not include a separate audit log table.
 type RevalidateRepo struct {
 	db *sql.DB
 }
 
-// NewRevalidateRepo constructs a RevalidateRepo bound to the provided
-// write-capable *sql.DB. The handle must point at a DB that has had
-// migrations 0003 (findings) and 0008 (anchor_content_hash) applied; both
-// are verified by Open.
+// NewRevalidateRepo constructs a RevalidateRepo using the provided database handle.
 func NewRevalidateRepo(db *sql.DB) *RevalidateRepo {
 	return &RevalidateRepo{db: db}
 }
 
-// StaleFindingsForFile returns the set of open findings on (repoID, branch)
-// whose anchor node lives in filePath AND whose recorded
-// anchor_content_hash differs from the node's current content_hash.
-// Rows with anchor_content_hash IS NULL (file-anchored findings such as
-// parse-failure) are filtered out — there is no hash to compare against.
-// Rows whose anchor node has no matching row in `nodes` (deleted symbol)
-// are filtered out by the INNER JOIN; cleaning those up is a separate
-// path (out of scope for this port).
+// StaleFindingsForFile returns open findings whose recorded anchor hashes differ
+// from current node content hashes. Findings with NULL anchor hashes are ignored,
+// and deleted symbols are filtered out by the inner join.
 func (r *RevalidateRepo) StaleFindingsForFile(
 	ctx context.Context, repoID, branch, filePath string,
 ) ([]ports.StaleFinding, error) {
@@ -88,14 +74,9 @@ WHERE f.repo_id              = ?
 	return out, nil
 }
 
-// HasInboundCallEdges reports whether the named node currently has at least one
-// inbound CALLS edge on (repoID, branch) — the liveness signal the dead-code
-// rule re-runs on. A structural CONTAINS/IMPORTS parent edge is NOT a caller,
-// so the kind filter (UPPER(kind)='CALLS', mirroring deadcode_repo.go) is what
-// keeps revalidation from spuriously closing a still-dead finding just because
-// its file/package contains it. Uses LIMIT 1 + EXISTS so the
-// query short-circuits at the first matching row; the (dst_node_id, branch,
-// kind) index on edges keeps this constant-time.
+// HasInboundCallEdges reports whether a node has at least one inbound CALLS edge.
+// Non-caller relationships (such as CONTAINS or IMPORTS parent edges) are ignored.
+// The query uses an EXISTS clause and short-circuits on the first match.
 func (r *RevalidateRepo) HasInboundCallEdges(
 	ctx context.Context, repoID, branch, nodeID string,
 ) (bool, error) {
@@ -116,13 +97,9 @@ SELECT EXISTS (
 	return has, nil
 }
 
-// HasTestCaller reports whether the named node currently has at least one
-// direct inbound CALLS caller defined in a test-shaped file on (repoID, branch)
-// the re-run predicate for the untested-symbol rule.
-// The test-file vocabulary stays in pathfilter.IsTestFile (one place, shared
-// with the checks), so this reads the distinct caller file paths via the same
-// CALLS-edge join the coverage adapter uses and applies the predicate in Go
-// rather than encoding _test.go / *.spec.ts naming into the SQL.
+// HasTestCaller reports whether a node has an inbound CALLS edge originating
+// from a test file. The test file check is executed in Go using pathfilter
+// to avoid embedding test file naming patterns directly into the SQL query.
 func (r *RevalidateRepo) HasTestCaller(
 	ctx context.Context, repoID, branch, nodeID string,
 ) (bool, error) {
@@ -157,9 +134,8 @@ WHERE e.dst_node_id = ?
 	return false, nil
 }
 
-// NodeSignaturePair returns (prev_signature, signature) for the node. If the
-// node row is absent, returns ("", "", nil) — the caller treats that as
-// "drift resolved" (close the finding). NULL columns also surface as "".
+// NodeSignaturePair retrieves the previous and current signatures for a node.
+// A missing node returns empty signatures without an error.
 func (r *RevalidateRepo) NodeSignaturePair(
 	ctx context.Context, repoID, branch, nodeID string,
 ) (prev, current string, err error) {
@@ -184,19 +160,9 @@ WHERE node_id = ? AND branch = ? AND repo_id = ?`
 	return prev, current, nil
 }
 
-// ApplyDecisions applies a batch of refresh + close decisions inside one
-// transaction, collapsing fsyncs from O(decisions) to one per call. See the
-// port doc for full semantics.
-// Implementation notes:
-//
-//	Empty input: returns nil without opening a tx.
-//	Both UPDATE statements are prepared once (lazily, only if the batch
-//	  contains decisions of that kind) and reused for every row of the
-//	  matching kind.
-//	state='open' gates on both UPDATEs mean idempotent on already-closed
-//	  rows (matched=0 is fine).
-//	On any error (incl. Commit) the tx rolls back; the caller treats this
-//	  as a retryable failure and MUST NOT bump success counters.
+// ApplyDecisions executes a batch of refresh and close decisions within a
+// single transaction. Prepared statements are initialized lazily and reused
+// per decision type to minimize database overhead.
 func (r *RevalidateRepo) ApplyDecisions(
 	ctx context.Context, repoID, branch string, decisions []ports.FindingDecision, at int64,
 ) error {
@@ -208,9 +174,7 @@ func (r *RevalidateRepo) ApplyDecisions(
 	if err != nil {
 		return fmt.Errorf("sqlite.RevalidateRepo.ApplyDecisions: begin: %w", err)
 	}
-	// Track commit success so the deferred rollback is a true cleanup path
-	// (it becomes a no-op once tx.Commit returns nil; calling Rollback
-	// after a successful Commit is a sql.ErrTxDone we deliberately ignore).
+	// Roll back the transaction on deferred cleanup if commit did not succeed.
 	committed := false
 	defer func() {
 		if !committed {
@@ -287,5 +251,4 @@ WHERE finding_id = ?
 	return nil
 }
 
-// Compile-time check: *RevalidateRepo satisfies the port.
 var _ ports.RevalidateQuerier = (*RevalidateRepo)(nil)

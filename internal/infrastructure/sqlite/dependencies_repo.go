@@ -1,9 +1,3 @@
-// DependenciesRepo backs dependencies.StubAggregator by SELECTing from
-// cross_repo_edge_stubs. The stub table is the canonical signal for
-// external module usage (every package-qualified call to a non-stdlib
-// import emits a row at promotion time — see promotion_store.go), so
-// aggregating it gives accurate per-module usage counts without
-// re-parsing go.mod.
 
 package sqlite
 
@@ -15,20 +9,16 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/application/dependencies"
 )
 
-// DependenciesRepo is the SQLite-backed adapter for
-// dependencies.StubAggregator.
+// DependenciesRepo implements dependencies.StubAggregator using a SQLite database.
 type DependenciesRepo struct {
 	readDB *sql.DB
 }
 
-// NewDependenciesRepo constructs a DependenciesRepo bound to readDB.
 func NewDependenciesRepo(readDB *sql.DB) *DependenciesRepo {
 	return &DependenciesRepo{readDB: readDB}
 }
 
-// ListImports returns one row per (file, import_path) in (repoID, branch),
-// backing dependencies.ImportLister. Ordered by file_path so the
-// application-layer union is deterministic.
+// ListImports returns all file-import associations in (repoID, branch).
 func (r *DependenciesRepo) ListImports(ctx context.Context, repoID, branch string) ([]dependencies.ImportRow, error) {
 	const query = `
 		SELECT file_path, import_path, language
@@ -56,9 +46,7 @@ func (r *DependenciesRepo) ListImports(ctx context.Context, repoID, branch strin
 	return out, nil
 }
 
-// AggregateStubs returns one row per cross_repo_edge_stub in
-// (repoID, branch). Ordered by src_node_id for deterministic
-// "first TopK call sites" sampling on the application side.
+// AggregateStubs returns cross-repository edge stubs in (repoID, branch).
 func (r *DependenciesRepo) AggregateStubs(ctx context.Context, repoID, branch string) ([]dependencies.StubRow, error) {
 	const query = `
 		SELECT module_path, symbol_path, src_node_id, language

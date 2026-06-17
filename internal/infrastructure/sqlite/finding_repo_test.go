@@ -11,14 +11,11 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/sqlite"
 )
 
-// TestFindingRepo_SaveRoundTrip verifies a Finding can be saved via the port
-// adapter and re-read with source_layer='structural'.
 func TestFindingRepo_SaveRoundTrip(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
 	db := openTest(t, filepath.Join(dir, "v.db"))
 
-	// FK constraint: insert a repo row first.
 	if _, err := db.Exec(
 		`INSERT INTO repos (repo_id, root_path, added_at) VALUES (?, ?, ?)`,
 		"repo1", "/tmp/repo1", time.Now().UnixMilli(),
@@ -37,7 +34,6 @@ func TestFindingRepo_SaveRoundTrip(t *testing.T) {
 		t.Fatalf("Save: %v", err)
 	}
 
-	// Verify row is present with source_layer='structural'.
 	var (
 		gotSrcLayer string
 		gotRule     string
@@ -65,9 +61,6 @@ func TestFindingRepo_SaveRoundTrip(t *testing.T) {
 	}
 }
 
-// TestFindingRepo_AnchorContentHash_RoundTrip verifies that a non-nil
-// anchor_content_hash on a domain.Finding survives INSERT and reads back
-// identically, while a nil value reads back as SQL NULL.
 func TestFindingRepo_AnchorContentHash_RoundTrip(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
@@ -124,9 +117,6 @@ func TestFindingRepo_AnchorContentHash_RoundTrip(t *testing.T) {
 	}
 }
 
-// TestFindingRepo_AnchorContentHash_OnConflictRefreshes verifies that re-saving
-// a finding with a DIFFERENT anchor_content_hash UPDATEs the column so the
-// revalidation sweep sees the new hash. This is the drift-propagation path.
 func TestFindingRepo_AnchorContentHash_OnConflictRefreshes(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
@@ -175,7 +165,6 @@ func TestFindingRepo_AnchorContentHash_OnConflictRefreshes(t *testing.T) {
 		t.Errorf("after re-save: anchor_content_hash = %+v, want h-new", got)
 	}
 
-	// Exactly one row survives (idempotency).
 	var cnt int
 	if err := db.QueryRow(
 		`SELECT COUNT(*) FROM findings WHERE finding_id = ?`, first.FindingID,
@@ -187,8 +176,6 @@ func TestFindingRepo_AnchorContentHash_OnConflictRefreshes(t *testing.T) {
 	}
 }
 
-// TestFindingRepo_Idempotent verifies that saving the same finding twice does
-// not error (UPSERT semantics).
 func TestFindingRepo_Idempotent(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
@@ -223,9 +210,6 @@ func TestFindingRepo_Idempotent(t *testing.T) {
 	}
 }
 
-// TestFindingRepo_CloseObsolete verifies that CloseObsolete flips an open
-// finding to closed with closed_reason='revalidated_obsolete', and is a
-// harmless no-op against a finding_id that does not exist.
 func TestFindingRepo_CloseObsolete(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
@@ -287,10 +271,6 @@ func TestFindingRepo_CloseObsolete(t *testing.T) {
 	}
 }
 
-// TestFindingRepo_CloseSupersededAutoLinks covers: an UPDATE
-// scoped by (repo_id, branch, rule='auto-link', state='open') and gated on
-// the finding anchor referencing a SIMILAR_TO edge whose src is in the
-// supplied source-node-id set. Rows that don't match are untouched.
 func TestFindingRepo_CloseSupersededAutoLinks(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
@@ -303,7 +283,6 @@ func TestFindingRepo_CloseSupersededAutoLinks(t *testing.T) {
 		t.Fatalf("insert repo: %v", err)
 	}
 
-	// Seed source and target nodes so the edges FK is satisfied.
 	for _, id := range []string{"n1", "n2", "tA", "tB", "tC"} {
 		if _, err := db.Exec(`INSERT INTO nodes (
 			node_id, branch, repo_id, language, kind, symbol_path, file_path,
@@ -315,7 +294,6 @@ func TestFindingRepo_CloseSupersededAutoLinks(t *testing.T) {
 		}
 	}
 
-	// Insert three SIMILAR_TO edges: n1→tA, n1→tB, n2→tC.
 	type edge struct{ id, src, dst string }
 	edges := []edge{
 		{id: "eA", src: "n1", dst: "tA"},
@@ -333,7 +311,6 @@ func TestFindingRepo_CloseSupersededAutoLinks(t *testing.T) {
 
 	repo := sqlite.NewFindingRepo(db)
 
-	// Helper that builds + saves an auto-link finding anchored on an edge id.
 	saveAutoLink := func(edgeID string) string {
 		f, err := domain.NewFinding(domain.FindingSpec{RepoID: "r1", Branch: "main", Severity: domain.SeverityLow, Layer: domain.LayerSemantic, Rule: "auto-link", Message: "similar to " + edgeID}, domain.WithNodeAnchor(edgeID))
 		if err != nil {
@@ -349,7 +326,6 @@ func TestFindingRepo_CloseSupersededAutoLinks(t *testing.T) {
 	fB := saveAutoLink("eB")
 	fC := saveAutoLink("eC")
 
-	// Insert a non-auto-link finding anchored on eA to verify the rule filter.
 	other, err := domain.NewFinding(domain.FindingSpec{RepoID: "r1", Branch: "main", Severity: domain.SeverityMedium, Layer: domain.LayerStructural, Rule: "dead-code", Message: "dead"}, domain.WithNodeAnchor("eA"))
 	if err != nil {
 		t.Fatalf("NewFinding dead-code: %v", err)
@@ -383,10 +359,6 @@ func TestFindingRepo_CloseSupersededAutoLinks(t *testing.T) {
 	assertState(t, db, fC, "main", "open")
 }
 
-// TestFindingRepo_CloseSupersededByRule pins: a re-scanned
-// authoritative rule (e.g. vulnerable_dependency) closes prior open
-// findings whose IDs are not in the freshly-returned keep set, leaves
-// keeps untouched, and leaves findings under OTHER rules alone.
 func TestFindingRepo_CloseSupersededByRule(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
