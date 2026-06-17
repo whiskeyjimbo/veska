@@ -93,7 +93,7 @@ func doctorStatusCmd() *cobra.Command {
 // doctorSavingsCmd returns the "doctor savings" subcommand (also registered
 // top-level as `veska savings`). It reads the per-search telemetry
 // the daemon's MCP search handler writes and renders today / 7d / all-time
-// savings bars. Logic lives in internal/cli/savingscmd; this is Cobra glue
+// savings bars. Logic lives in internal/cli/savingscmd; this is Cobra glue.
 func doctorSavingsCmd() *cobra.Command {
 	var jsonOut bool
 	var aggregate bool

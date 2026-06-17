@@ -128,7 +128,7 @@ func diffGateReportCmd() *cobra.Command {
 // contract-drift signal over the re-promoted candidate and filters to the
 // exported visibility flag, so unexported and body-only changes pass. Scope is
 // signature-shape only: symbol REMOVAL/RENAME is not detected (delete-replace
-// emits no drift; tracked as ), and "exported" is the name-based
+// emits no drift), and "exported" is the name-based
 // flag, not a reachability analysis.
 func diffGateAPICmd() *cobra.Command {
 	var (
