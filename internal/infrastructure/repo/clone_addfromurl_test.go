@@ -11,9 +11,8 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/repo"
 )
 
-// makeLocalBareRepo initialises a real git repo at a temp dir, makes a
-// single empty commit, then returns the dir's absolute path. Suitable as
-// a `file://` source for git clone — no network, deterministic, ~ms fast.
+// makeLocalBareRepo initializes a real Git repository in a temporary directory, makes a
+// single empty commit, and returns the absolute path to the directory.
 func makeLocalBareRepo(t *testing.T) string {
 	t.Helper()
 	dir := t.TempDir()
@@ -73,8 +72,7 @@ func TestSetCanonicalURL_RoundTrip(t *testing.T) {
 	if err := db.QueryRow(`SELECT canonical_url FROM repos WHERE repo_id = ?`, "abc123").Scan(&got); err != nil {
 		t.Fatalf("read back: %v", err)
 	}
-	// Input was the scp-like SSH form; stored value must be the canonical
-	// https form — the function canonicalises internally.
+	// Stored value must be the canonical HTTPS representation.
 	if got != "https://github.com/foo/bar" {
 		t.Errorf("canonical_url = %q, want canonicalised https form", got)
 	}
@@ -89,7 +87,7 @@ func TestLookupByCanonicalURL_HitAndMiss(t *testing.T) {
 		t.Fatalf("seed: %v", err)
 	}
 
-	// Lookup via the raw SSH form — must canonicalise to the stored value.
+	// Lookup via raw SSH format must successfully match the stored canonical HTTPS representation.
 	got, ok, err := repo.LookupByCanonicalURL(context.Background(), db, "git@github.com:foo/bar.git")
 	if err != nil {
 		t.Fatalf("Lookup: %v", err)
@@ -98,7 +96,7 @@ func TestLookupByCanonicalURL_HitAndMiss(t *testing.T) {
 		t.Errorf("hit: ok=%v repo_id=%q want abc123", ok, got.RepoID)
 	}
 
-	// Miss on a different URL.
+	// Verify a lookup on an unregistered URL returns a negative result.
 	_, ok, err = repo.LookupByCanonicalURL(context.Background(), db, "https://gitlab.com/x/y")
 	if err != nil {
 		t.Fatalf("miss query: %v", err)
@@ -107,7 +105,7 @@ func TestLookupByCanonicalURL_HitAndMiss(t *testing.T) {
 		t.Error("miss: ok=true, want false")
 	}
 
-	// Garbage URL returns an error.
+	// Verify that malformed URLs trigger an error.
 	_, _, err = repo.LookupByCanonicalURL(context.Background(), db, "not-a-url")
 	if !errors.Is(err, repo.ErrInvalidURL) {
 		t.Errorf("invalid URL err = %v, want ErrInvalidURL", err)
@@ -132,7 +130,7 @@ func TestAddFromURL_IdempotentOnExistingCanonicalURL(t *testing.T) {
 	if id != "preexisting-id" || !existed {
 		t.Errorf("got (%q, existed=%v), want (preexisting-id, true)", id, existed)
 	}
-	// No clone should have happened.
+	// Ensure no new repository directory was cloned.
 	if entries, _ := os.ReadDir(filepath.Join(home, "repos")); len(entries) != 0 {
 		t.Errorf("expected no clone dir; got %d entries under %s/repos", len(entries), home)
 	}
@@ -155,7 +153,7 @@ func TestAddFromURL_EndToEnd_LocalFileURL(t *testing.T) {
 		t.Fatal("empty repo_id")
 	}
 
-	// Row should have canonical_url stamped.
+	// Verify that the registered repository record stamps the canonical URL.
 	var canonical string
 	if err := db.QueryRow(`SELECT canonical_url FROM repos WHERE repo_id = ?`, id).Scan(&canonical); err != nil {
 		t.Fatalf("read canonical_url: %v", err)
@@ -164,7 +162,7 @@ func TestAddFromURL_EndToEnd_LocalFileURL(t *testing.T) {
 		t.Errorf("canonical_url = %q, want %q", canonical, "file://"+source)
 	}
 
-	// Re-running short-circuits via canonical_url.
+	// Re-running the registration should skip clone operations by matching the canonical URL.
 	id2, existed2, err := repo.AddFromURL(context.Background(), db, home,
 		"file://"+source, nil)
 	if err != nil {
@@ -179,8 +177,7 @@ func TestAddFromURL_RollsBackOnCloneFailure(t *testing.T) {
 	db := newTestDB(t)
 	home := t.TempDir()
 
-	// file:// URL pointing at a path that doesn't exist — git clone fails
-	// immediately without touching the network.
+	// Using a nonexistent local file URL triggers an immediate clone failure.
 	bogus := "file://" + filepath.Join(home, "no-such-source")
 
 	_, _, err := repo.AddFromURL(context.Background(), db, home, bogus, nil)
@@ -188,7 +185,7 @@ func TestAddFromURL_RollsBackOnCloneFailure(t *testing.T) {
 		t.Fatal("expected clone failure")
 	}
 
-	// No row landed.
+	// Ensure no repository database records were created.
 	var n int
 	if err := db.QueryRow(`SELECT COUNT(*) FROM repos`).Scan(&n); err != nil {
 		t.Fatal(err)
@@ -196,7 +193,7 @@ func TestAddFromURL_RollsBackOnCloneFailure(t *testing.T) {
 	if n != 0 {
 		t.Errorf("rows after failed add: %d, want 0", n)
 	}
-	// No leftover clone dir.
+	// Verify that any partial clone directories were cleaned up.
 	if entries, _ := os.ReadDir(filepath.Join(home, "repos")); len(entries) != 0 {
 		t.Errorf("orphan clone dirs: %d under %s/repos", len(entries), home)
 	}

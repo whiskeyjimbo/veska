@@ -20,7 +20,7 @@ func CurrentRSS() (int64, error) {
 		if !ok {
 			continue
 		}
-		// Value is in kB, e.g. "VmRSS: 12345 kB"
+		// The memory value is reported in kilobytes.
 		fields := strings.Fields(after)
 		if len(fields) == 0 {
 			return 0, fmt.Errorf("unexpected VmRSS format: %q", line)

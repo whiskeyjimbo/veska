@@ -14,24 +14,12 @@ import (
 	"time"
 )
 
-// ErrInvalidURL is returned by CanonicalURL when raw cannot be parsed as a
-// recognised git URL form (https, http, ssh://, git://, or scp-like
-// [user@]host:path).
+// ErrInvalidURL is returned when the raw input cannot be parsed as a recognized Git URL format.
 var ErrInvalidURL = errors.New("invalid git url")
 
-// CanonicalURL returns the canonical form of a git URL used as the alias
-// key for repo collision-resolution and as the input to DerivedRepoIDFromURL
-// Rules:
-//
-//	SSH scp-like form ([user@]host:path) is rewritten to https://host/path
-//	ssh:// and git:// schemes are rewritten to https://
-//	Host is lowercased; user-info is dropped
-//	Trailing.git on the path is stripped
-//	Trailing slash on the path is stripped
-//	Port (if present) is preserved
-//	Path case is preserved (some forges are case-sensitive)
-//
-// Anything that doesn't look like a URL at all returns ErrInvalidURL.
+// CanonicalURL returns the canonicalized form of a Git URL. It handles standard Git protocols
+// (http, https, ssh, git, file) and scp-like SSH formats, converting them to a standard HTTPS URL representation
+// while preserving path casing and ports, stripping user info, and removing trailing slashes and ".git" suffixes.
 func CanonicalURL(raw string) (string, error) {
 	raw = strings.TrimSpace(raw)
 	if raw == "" {
@@ -40,8 +28,7 @@ func CanonicalURL(raw string) (string, error) {
 
 	scheme, rest, ok := splitScheme(raw)
 	if !ok {
-		// scp-like: [user@]host:path. Must have a ':' separating host
-		// from path, and the segment before ':' must not contain '/'.
+		// Parse scp-like URLs format of [user@]host:path by ensuring a colon separates the host from the path.
 		host, path, sep := strings.Cut(raw, ":")
 		if !sep || host == "" || path == "" || strings.Contains(host, "/") {
 			return "", ErrInvalidURL
@@ -57,7 +44,7 @@ func CanonicalURL(raw string) (string, error) {
 
 	switch scheme {
 	case "https", "http", "ssh", "git":
-		// rest begins with the authority: [user@]host[:port][/path]
+		// Authority and path extraction.
 		authority, path, _ := strings.Cut(rest, "/")
 		if at := strings.LastIndex(authority, "@"); at >= 0 {
 			authority = authority[at+1:]
@@ -70,9 +57,7 @@ func CanonicalURL(raw string) (string, error) {
 		}
 		return normaliseURL("https", authority, path), nil
 	case "file":
-		// file URLs map to absolute paths and stay as file://;.git strip
-		// + trailing-slash strip still apply. The authority is conventionally
-		// empty or "localhost" and is stripped for canonicality.
+		// File URLs remain prefixed with file://, stripping the authority segment for canonicality.
 		_, path, _ := strings.Cut(rest, "/")
 		if path == "" {
 			return "", ErrInvalidURL
@@ -84,8 +69,7 @@ func CanonicalURL(raw string) (string, error) {
 	return "", ErrInvalidURL
 }
 
-// splitScheme separates the leading scheme from raw and returns the
-// remainder after "://". Returns ok=false if raw has no "scheme://" prefix.
+// splitScheme extracts the protocol scheme from the start of a URL, returning false if no "://" separator is present.
 func splitScheme(raw string) (scheme, rest string, ok bool) {
 	idx := strings.Index(raw, "://")
 	if idx <= 0 {
@@ -100,8 +84,7 @@ func splitScheme(raw string) (scheme, rest string, ok bool) {
 	return scheme, raw[idx+3:], true
 }
 
-// normaliseURL applies the host-lowercase,.git-strip, trailing-slash-strip
-// rules and assembles the canonical string. authority may include:port.
+// normaliseURL standardizes URL components by lowercasing the host and stripping trailing slashes or ".git" suffixes.
 func normaliseURL(scheme, authority, path string) string {
 	host, port, hasPort := strings.Cut(authority, ":")
 	host = strings.ToLower(host)
@@ -116,18 +99,12 @@ func normaliseURL(scheme, authority, path string) string {
 	return scheme + "://" + authority + path
 }
 
-// TrackedClonePath returns the on-disk root for a tracked URL-cloned repo
-// The first 16 hex characters of the URL-derived id give
-// a collision-free directory name without the unreadable 64-char form.
+// TrackedClonePath returns the destination directory path for a tracked repository clone using a shortened hash of its canonical URL.
 func TrackedClonePath(veskaHome, canonicalURL string) string {
 	return filepath.Join(veskaHome, "repos", DerivedRepoIDFromURL(canonicalURL)[:16])
 }
 
-// LookupByCanonicalURL returns the registered repo whose canonical_url
-// column matches the canonicalised URL. The needle is re-canonicalised
-// inside so callers can pass either the raw or canonical form (
-// adds the same helper signature; landed here because kxo5.3 needs it for
-// the "already registered" short-circuit).
+// LookupByCanonicalURL retrieves a registered repository record by matching its canonicalized URL.
 func LookupByCanonicalURL(ctx context.Context, db *sql.DB, urlOrCanonical string) (Record, bool, error) {
 	canonical, err := CanonicalURL(urlOrCanonical)
 	if err != nil {
@@ -154,12 +131,7 @@ func LookupByCanonicalURL(ctx context.Context, db *sql.DB, urlOrCanonical string
 	return rec, true, nil
 }
 
-// PromoteEphemeralToTracked flips an ephemeral row's kind to 'tracked'
-// and stamps prompted_at — the "user said yes" branch of the acceptance
-// prompt. In-place: no row replacement, no file move,
-// the clone stays where it is. The WHERE clause guards against running
-// against a row that isn't ephemeral so a stray call can't demote a
-// tracked repo.
+// PromoteEphemeralToTracked changes the repository's status from 'ephemeral' to 'tracked' in the database.
 func PromoteEphemeralToTracked(ctx context.Context, db *sql.DB, repoID string) error {
 	_, err := db.ExecContext(ctx,
 		`UPDATE repos SET kind = 'tracked', prompted_at = ? WHERE repo_id = ? AND kind = 'ephemeral'`,
@@ -171,10 +143,7 @@ func PromoteEphemeralToTracked(ctx context.Context, db *sql.DB, repoID string) e
 	return nil
 }
 
-// MarkPromptDeclined stamps prompted_at without changing kind — the "user
-// said no" branch. prompted_at is the once-per-row gate
-// for re-prompting; setting it here is what keeps the prompt from
-// re-firing on the next ephemeral query.
+// MarkPromptDeclined updates the prompt timestamp for an ephemeral repository without promoting it, suppressing future prompts.
 func MarkPromptDeclined(ctx context.Context, db *sql.DB, repoID string) error {
 	_, err := db.ExecContext(ctx,
 		`UPDATE repos SET prompted_at = ? WHERE repo_id = ? AND kind = 'ephemeral'`,
@@ -186,13 +155,8 @@ func MarkPromptDeclined(ctx context.Context, db *sql.DB, repoID string) error {
 	return nil
 }
 
-// TouchEphemeral bumps last_accessed_at to now for repoID, but only when
-// the row is kind='ephemeral'. Tracked rows are skipped silently — they
-// are not subject to LRU eviction so the column is meaningless for them
-// The combined WHERE clause is the gate; callers do not
-// need to check kind themselves.
-// Safe to call multiple times within a single query; the UPDATE is
-// idempotent and the second write is a no-op cost-wise.
+// TouchEphemeral updates the last accessed timestamp for an ephemeral repository, facilitating LRU eviction.
+// Touches the timestamp to prevent immediate eviction.
 func TouchEphemeral(ctx context.Context, db *sql.DB, repoID string) error {
 	_, err := db.ExecContext(ctx,
 		`UPDATE repos SET last_accessed_at = ? WHERE repo_id = ? AND kind = 'ephemeral'`,
@@ -204,13 +168,10 @@ func TouchEphemeral(ctx context.Context, db *sql.DB, repoID string) error {
 	return nil
 }
 
-// nowUnix is a seam for tests; the actual time source lives here so
-// TouchEphemeral can be tested without injecting a clock.
+// nowUnix acts as a pluggable time source for unit tests.
 var nowUnix = func() int64 { return time.Now().Unix() }
 
-// SetCanonicalURL writes (or rewrites) the canonical_url column for the
-// given repoID. The value is canonicalised inside so callers don't have to
-// remember which form to pass.
+// SetCanonicalURL updates the canonical URL for the specified repository ID.
 func SetCanonicalURL(ctx context.Context, db *sql.DB, repoID, urlOrCanonical string) error {
 	canonical, err := CanonicalURL(urlOrCanonical)
 	if err != nil {
@@ -226,17 +187,10 @@ func SetCanonicalURL(ctx context.Context, db *sql.DB, repoID, urlOrCanonical str
 	return nil
 }
 
-// AddFromURL clones a remote git URL into the tracked clones tier and
-// registers it like a normal `repo add <path>`.
-//
-//	veskaHome is the root for the on-disk clone (typically $VESKA_HOME)
-//	progressW receives `git clone --progress` output; pass nil to discard
-//
-// The function is idempotent: if a row already exists with the same
-// canonicalised URL, it returns that row's id with existed=true and
-// performs no clone. A partial-clone failure (clone succeeded but Add or
-// SetCanonicalURL failed) leaves no orphaned row; the cloned directory
-// is removed so a retry starts clean.
+// AddFromURL clones a remote Git repository to the tracked clones directory and registers it.
+// The operation is idempotent; if the canonicalized URL is already registered, it returns the
+// existing repository ID without re-cloning. In the event of a partial registration failure,
+// the cloned directory is cleaned up.
 func AddFromURL(ctx context.Context, db *sql.DB, veskaHome, rawURL string, progressW io.Writer) (string, bool, error) {
 	canonical, err := CanonicalURL(rawURL)
 	if err != nil {
@@ -253,9 +207,7 @@ func AddFromURL(ctx context.Context, db *sql.DB, veskaHome, rawURL string, progr
 	if err := os.MkdirAll(filepath.Dir(dest), 0o750); err != nil {
 		return "", false, fmt.Errorf("repo add: %w", err)
 	}
-	// git clone refuses to write into an existing directory; if a stale
-	// clone fragment is sitting at dest from a prior failed run, clear it
-	// before retrying so the user is not stuck with an unrecoverable repo.
+	// Remove any existing directory at the destination to prevent clone failures from stale state.
 	if _, statErr := os.Stat(dest); statErr == nil {
 		_ = os.RemoveAll(dest)
 	}
@@ -266,8 +218,7 @@ func AddFromURL(ctx context.Context, db *sql.DB, veskaHome, rawURL string, progr
 
 	id, existed, err := Add(ctx, db, dest)
 	if err != nil {
-		// Roll back the clone so a retry can succeed; the row didn't
-		// land so leaving the dir would just confuse `repo add` next time.
+		// Remove the cloned directory to ensure clean retries when registration fails.
 		_ = os.RemoveAll(dest)
 		return "", false, err
 	}
@@ -279,25 +230,13 @@ func AddFromURL(ctx context.Context, db *sql.DB, veskaHome, rawURL string, progr
 	return id, existed, nil
 }
 
-// Clone shells out to `git clone --depth=1 --progress url destDir`, streaming
-// git's stderr (which carries --progress lines) to progressW so callers can
-// render a live indicator. On failure the captured stderr is included
-// verbatim in the returned error — never swallowed or paraphrased — so a
-// permission/auth/404 diagnosis is obvious from one error string.
-// destDir must be a path that does not yet exist (git clone refuses to
-// clone into an existing non-empty directory). The returned path equals
-// destDir on success.
+// Clone runs `git clone --depth=1` to clone a repository to the destination directory,
+// writing output messages directly to the progress writer.
 func Clone(ctx context.Context, url, destDir string, progressW io.Writer) (string, error) {
 	if progressW == nil {
 		progressW = io.Discard
 	}
-	// drop --progress so git's own TTY detection picks
-	// between "show progress" (interactive shell) and "quiet" (logs, CI,
-	// background tool capture). With --progress we were dumping dozens
-	// of CR-overwritten "Counting/Compressing/Receiving" lines into
-	// non-TTY captures (background task output files, daemon-driven
-	// fetches), drowning the actual result. On a TTY git still emits
-	// the same progress because TTY is auto-detected.
+	// We omit the --progress flag so Git automatically detects if it should produce progress output based on TTY presence.
 	cmd := exec.CommandContext(ctx, "git", "clone", "--depth=1", url, destDir)
 	var captured bytes.Buffer
 	cmd.Stderr = io.MultiWriter(progressW, &captured)

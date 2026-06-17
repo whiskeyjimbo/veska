@@ -81,11 +81,11 @@ func TestValidateAliasName(t *testing.T) {
 	}{
 		{"", repo.ErrAliasInvalid},
 		{"has space", repo.ErrAliasInvalid},
-		{"deadbeef", repo.ErrAliasInvalid}, // hex-only >= 4 chars
+		{"deadbeef", repo.ErrAliasInvalid}, // Rejects hex-only strings of length 4 or more.
 		{"abcd", repo.ErrAliasInvalid},
 		{"my-repo", nil},
-		{"foo", nil}, // 3 chars, not hex-prefix-length
-		{"abc", nil}, // hex but < 4 chars
+		{"foo", nil}, // Acceptable because 3 characters is less than the minimum hex prefix length.
+		{"abc", nil}, // Acceptable because, although hex, it is too short to shadow a prefix.
 	}
 	for _, c := range cases {
 		err := repo.ValidateAliasName(c.name)
@@ -120,7 +120,7 @@ func TestSuggestAliasNames(t *testing.T) {
 	}{
 		{"https://github.com/foo/bar", "", "bar", "foo-bar"},
 		{"https://github.com/foo/bar.git", "", "bar", "foo-bar"},
-		{"https://example.com/single", "", "single", ""}, // only one path segment, no fallback
+		{"https://example.com/single", "", "single", ""}, // Only one path segment is present, so there is no fallback.
 		{"", "/home/jrose/src/myproj", "myproj", ""},
 		{"", "", "", ""},
 	}
@@ -193,7 +193,7 @@ func TestCascadeDelete_RemovesAliases(t *testing.T) {
 	); err != nil {
 		t.Fatal(err)
 	}
-	// Enable FK enforcement (off by default).
+	// Enable foreign key enforcement since it is disabled by default in SQLite.
 	if _, err := db.Exec(`PRAGMA foreign_keys = ON`); err != nil {
 		t.Fatal(err)
 	}

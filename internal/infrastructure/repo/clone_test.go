@@ -49,22 +49,25 @@ func TestCanonicalURL(t *testing.T) {
 func TestCanonicalURL_Invalid(t *testing.T) {
 	t.Parallel()
 
-	cases := []string{
-		"",
-		"   ",
-		"not-a-url",
-		"://missing-scheme",
-		"ftp://example.com/repo", // unsupported scheme
-		"git@:nohost",            // no host before ':'
-		"git@host:",              // no path after ':'
+	cases := []struct {
+		in   string
+		want error
+	}{
+		{"", repo.ErrInvalidURL},
+		{"   ", repo.ErrInvalidURL},
+		{"not-a-url", repo.ErrInvalidURL},
+		{"://missing-scheme", repo.ErrInvalidURL},
+		{"ftp://example.com/repo", repo.ErrInvalidURL}, // Unsupported scheme.
+		{"git@:nohost", repo.ErrInvalidURL},            // Missing host before colon.
+		{"git@host:", repo.ErrInvalidURL},              // Missing path after colon.
 	}
-	for _, in := range cases {
-		t.Run(in, func(t *testing.T) {
-			_, err := repo.CanonicalURL(in)
+	for _, tc := range cases {
+		t.Run(tc.in, func(t *testing.T) {
+			_, err := repo.CanonicalURL(tc.in)
 			if err == nil {
-				t.Errorf("CanonicalURL(%q) want error, got nil", in)
+				t.Errorf("CanonicalURL(%q) want error, got nil", tc.in)
 			} else if !errors.Is(err, repo.ErrInvalidURL) {
-				t.Errorf("CanonicalURL(%q) err = %v, want ErrInvalidURL", in, err)
+				t.Errorf("CanonicalURL(%q) err = %v, want ErrInvalidURL", tc.in, err)
 			}
 		})
 	}
@@ -73,9 +76,7 @@ func TestCanonicalURL_Invalid(t *testing.T) {
 func TestCanonicalURL_SSHAndHTTPSAreEqual(t *testing.T) {
 	t.Parallel()
 
-	// The collision-resolution use case (kxo5.4 → kxo5.6) depends on these
-	// producing identical canonical strings so DerivedRepoIDFromURL maps
-	// both to the same row.
+	// Equivalent URL formats must produce identical canonical strings.
 	pairs := [][2]string{
 		{"git@github.com:foo/bar.git", "https://github.com/foo/bar"},
 		{"ssh://git@github.com/foo/bar.git", "https://github.com/foo/bar/"},
@@ -97,10 +98,8 @@ func TestCanonicalURL_SSHAndHTTPSAreEqual(t *testing.T) {
 func TestClone_NoSuchLocalRepoSurfaceGitStderr(t *testing.T) {
 	t.Parallel()
 
-	// Use a definitely-nonexistent local path as the "url" so git exits
-	// immediately with a clear error and no network is touched. This
-	// covers AC3 (stderr verbatim) and AC's nil-progress-tolerance check
-	// without depending on DNS or a remote host.
+	// Using a nonexistent local path causes Git to fail immediately, helping to verify
+	// that standard error content is captured and returned without using network requests.
 	missing := t.TempDir() + "/no-such-repo"
 	_, err := repo.Clone(t.Context(), missing, t.TempDir()+"/dst", nil)
 	if err == nil {
@@ -109,8 +108,7 @@ func TestClone_NoSuchLocalRepoSurfaceGitStderr(t *testing.T) {
 	if !strings.Contains(err.Error(), "git clone") {
 		t.Errorf("err missing 'git clone' prefix: %v", err)
 	}
-	// Git's "does not exist" or "not a git repository" wording varies by
-	// version; just check that some stderr context was attached.
+	// Check that descriptive standard error context is attached to the error.
 	if !strings.Contains(err.Error(), missing) && !strings.Contains(err.Error(), "repository") {
 		t.Errorf("err lacks captured stderr context: %v", err)
 	}

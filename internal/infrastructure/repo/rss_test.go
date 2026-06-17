@@ -26,7 +26,7 @@ func TestProjectRepoRSSSmall(t *testing.T) {
 }
 
 func TestProjectRepoRSSCapped(t *testing.T) {
-	// Override walkAndCountFiles to simulate 200k files.
+	// Override walkAndCountFiles to simulate a count of 200,000 files.
 	orig := walkAndCountFiles
 	t.Cleanup(func() { walkAndCountFiles = orig })
 	walkAndCountFiles = func(_ string) (int64, error) {
@@ -53,7 +53,7 @@ func TestCheckRSSBudgetOK(t *testing.T) {
 
 func TestCheckRSSBudgetExceeded(t *testing.T) {
 	const GiB = int64(1024 * 1024 * 1024)
-	// 1.9 GiB current + 200 MiB projected = 2.1 GiB > 2 GiB cap
+	// Verify that a combined current and projected RSS (2.1 GiB) exceeding the cap (2 GiB) triggers an error.
 	err := CheckRSSBudget(
 		GiB+GiB*9/10, // ~1.9 GiB
 		200*1024*1024,

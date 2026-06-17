@@ -1,8 +1,7 @@
 //go:build network
 
-// Network-tagged integration tests for the clone helper.
-// Excluded from `go test./.` so the default loop stays offline-safe;
-// run with `go test -tags=network./internal/infrastructure/repo/`.
+// Network-tagged integration tests for the clone helper are excluded from
+// standard test runs to maintain offline safety.
 
 package repo_test
 
@@ -16,9 +15,7 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/repo"
 )
 
-// A small public repo that's unlikely to disappear; pick a fixed commit
-// for deterministic clone size. octocat/Hello-World is github's canonical
-// sample repo and trivially small.
+// A small, stable public repository URL used for network integration tests.
 const cloneTestRepoURL = "https://github.com/octocat/Hello-World.git"
 
 func TestClone_PublicRepo(t *testing.T) {
@@ -50,9 +47,7 @@ func TestClone_FailureSurfacesStderr(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected clone of nonexistent repo to fail")
 	}
-	// AC3: git's stderr must be present verbatim in the error message.
-	// The exact wording varies (404, authentication, terminal-progress
-	// noise) so just assert that some non-trivial stderr made it through.
+	// Git's standard error output must be returned verbatim within the error message.
 	if !strings.Contains(err.Error(), "git clone") {
 		t.Errorf("err missing 'git clone' prefix: %v", err)
 	}

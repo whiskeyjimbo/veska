@@ -17,9 +17,7 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/repo"
 )
 
-// createReposTable mirrors the schema after migration 0018 (dchd.1) so tests
-// touching canonical_url / kind / last_accessed_at / prompted_at /
-// identity_tier / identity_anchor can exercise the real column set.
+// createReposTable defines the database schema used for repository tests.
 const createReposTable = `
 CREATE TABLE repos (
 	repo_id          TEXT PRIMARY KEY,
@@ -58,7 +56,7 @@ func newTestDB(t *testing.T) *sql.DB {
 	return db
 }
 
-// newGitRepo creates a temp directory with a.git/hooks/ subdirectory.
+// newGitRepo creates a temporary directory structured as a Git repository hooks directory.
 func newGitRepo(t *testing.T) string {
 	t.Helper()
 	dir := t.TempDir()
@@ -68,12 +66,7 @@ func newGitRepo(t *testing.T) string {
 	return dir
 }
 
-// TestAddRepo_ConvergesAcrossRoots is the end-to-end contract at the
-// Add boundary: the same module manifest indexed at two DIFFERENT absolute
-// roots yields the SAME stored repo_id (so node IDs converge in a shared DB).
-// The second Add resolves to an already-present repo_id and reports existed=true
-// root_path stays whichever root registered first (acceptable; mirrors the
-// ADR's "repo granularity = the registered root" limitation).
+// TestAddRepo_ConvergesAcrossRoots verifies that registering identical module paths at different locations resolves to the same repository ID.
 func TestAddRepo_ConvergesAcrossRoots(t *testing.T) {
 	db := newTestDB(t)
 	mk := func() string {
@@ -223,9 +216,7 @@ func TestAddRepoInstallsHooks(t *testing.T) {
 	}
 }
 
-// TestAddRepoDetectsActiveBranch covers: a real `git init -b <name>`
-// working tree records its branch in repos.active_branch. Without this every
-// downstream write keys by branch="" and the graph becomes unqueryable.
+// TestAddRepoDetectsActiveBranch verifies that repository registration correctly identifies the active branch name.
 func TestAddRepoDetectsActiveBranch(t *testing.T) {
 	if _, err := exec.LookPath("git"); err != nil {
 		t.Skip("git not on PATH")
@@ -235,8 +226,7 @@ func TestAddRepoDetectsActiveBranch(t *testing.T) {
 			db := newTestDB(t)
 			dir := t.TempDir()
 			runGitTest(t, dir, "init", "-q", "-b", branch)
-			// symbolic-ref needs an initial commit to anchor the branch
-			// on some git versions; create a no-op commit.
+			// Create a no-op commit to anchor symbolic-ref execution.
 			runGitTest(t, dir, "config", "user.email", "t@t")
 			runGitTest(t, dir, "config", "user.name", "T")
 			runGitTest(t, dir, "commit", "-q", "--allow-empty", "-m", "init")
@@ -258,12 +248,7 @@ func TestAddRepoDetectsActiveBranch(t *testing.T) {
 	}
 }
 
-// TestAddRepoDefaultsBranchWhenDetectionFails covers the "freshly-init'd repo
-// with no commits / not actually a git tree" path: detection fails, but Add
-// must still produce a usable branch so the downstream pipeline is not
-// silently broken. The existing newGitRepo helper creates only.git/hooks
-// (no real git init), so this path is what every other test in this file
-// exercises by construction.
+// TestAddRepoDefaultsBranchWhenDetectionFails verifies that active branch defaults to "main" if Git detection fails.
 func TestAddRepoDefaultsBranchWhenDetectionFails(t *testing.T) {
 	db := newTestDB(t)
 	dir := newGitRepo(t)
@@ -283,10 +268,7 @@ func TestAddRepoDefaultsBranchWhenDetectionFails(t *testing.T) {
 	}
 }
 
-// TestAddRepoHookUsesAbsoluteBinaryPath covers: installed hooks
-// must invoke the absolute path of the veska CLI binary, not bare "veska"
-// (broken for any non-PATH install) and NOT the daemon path either (which
-// has no 'hook-runner' subcommand — exposed by the second journey pass).
+// TestAddRepoHookUsesAbsoluteBinaryPath verifies that Git hook scripts invoke the absolute path of the CLI binary.
 func TestAddRepoHookUsesAbsoluteBinaryPath(t *testing.T) {
 	db := newTestDB(t)
 	dir := newGitRepo(t)
@@ -306,29 +288,19 @@ func TestAddRepoHookUsesAbsoluteBinaryPath(t *testing.T) {
 	if !strings.Contains(script, "exec /") {
 		t.Errorf("post-commit does not invoke an absolute path. Body:\n%s", script)
 	}
-	// The hook must point at the CLI binary, not at veska-daemon /
-	// veska-mcp — those have no 'hook-runner' subcommand. When the test
-	// binary itself has neither suffix this is trivially true; the
-	// daemon-suffix case is exercised by TestVeskaBinary_StripsDaemonSuffix
-	// below.
+	// Ensure that hooks invoke the core CLI binary rather than companion daemon or MCP processes.
 	if strings.Contains(script, "veska-daemon hook-runner") ||
 		strings.Contains(script, "veska-mcp hook-runner") {
 		t.Errorf("post-commit invokes a non-CLI sibling. Body:\n%s", script)
 	}
 }
 
-// TestVeskaBinary_StripsDaemonSuffix covers the daemon-side of v7q exposed
-// during the second journey pass: when repo.Add runs inside veska-daemon,
-// os.Executable returns "./veska-daemon" — but the post-commit hook MUST
-// invoke "./veska hook-runner …" because veska-daemon has no hook-runner
-// subcommand. We simulate this by symlinking the test binary as both
-// "veska" (the sibling we want resolved) and "veska-daemon" (the running
-// process) and asserting the hook script picks the CLI path.
+// TestVeskaBinary_StripsDaemonSuffix verifies that ResolveVeskaBinary correctly identifies the CLI sibling path when run inside the daemon.
 func TestVeskaBinary_StripsDaemonSuffix(t *testing.T) {
 	dir := t.TempDir()
 	cliPath := filepath.Join(dir, "veska")
 	daemonPath := filepath.Join(dir, "veska-daemon")
-	// The two siblings must both exist for the resolver to pick the CLI.
+	// Both CLI and daemon sibling files must exist for resolution to occur.
 	if err := os.WriteFile(cliPath, []byte("#!/bin/sh\nexit 0\n"), 0o755); err != nil {
 		t.Fatalf("write cli stub: %v", err)
 	}
@@ -341,7 +313,7 @@ func TestVeskaBinary_StripsDaemonSuffix(t *testing.T) {
 	}
 }
 
-// runGitTest shells `git -C dir <args>`, failing the test on non-zero exit.
+// runGitTest runs a Git command, failing the test if the execution fails.
 func runGitTest(t *testing.T, dir string, args ...string) {
 	t.Helper()
 	cmd := exec.Command("git", append([]string{"-C", dir}, args...)...)
@@ -372,11 +344,7 @@ func TestRemoveRepo(t *testing.T) {
 	}
 }
 
-// TestRemoveRepoDeletesEmbeddingRefs pins: node_embedding_refs
-// has no FK to nodes (composite PK), so the repos CASCADE that clears a
-// removed repo's nodes leaves its refs orphaned. Remove must delete them
-// explicitly, or they linger as 'pending' rows that pin eng_get_status at
-// degraded forever.
+// TestRemoveRepoDeletesEmbeddingRefs verifies that removing a repository explicitly cleans up orphaned embedding reference records.
 func TestRemoveRepoDeletesEmbeddingRefs(t *testing.T) {
 	db := newTestDB(t)
 	dir := newGitRepo(t)
@@ -387,8 +355,7 @@ func TestRemoveRepoDeletesEmbeddingRefs(t *testing.T) {
 		t.Fatalf("Add: %v", err)
 	}
 
-	// newTestDB only creates the repos tables; add the minimal nodes +
-	// refs shape this path touches.
+	// Set up database tables required for the removal test case.
 	if _, err := db.Exec(`
 		CREATE TABLE nodes (node_id TEXT, branch TEXT, repo_id TEXT, language TEXT,
 			kind TEXT, symbol_path TEXT, file_path TEXT, content_hash TEXT,
@@ -400,7 +367,7 @@ func TestRemoveRepoDeletesEmbeddingRefs(t *testing.T) {
 		t.Fatalf("create nodes/refs tables: %v", err)
 	}
 
-	// Seed a node for the repo plus a pending ref into it.
+	// Seed a test node and corresponding pending embedding reference.
 	now := time.Now().UnixMilli()
 	if _, err := db.Exec(`INSERT INTO nodes (
 		node_id, branch, repo_id, language, kind, symbol_path, file_path,
@@ -430,10 +397,7 @@ func TestRemoveRepoDeletesEmbeddingRefs(t *testing.T) {
 	}
 }
 
-// TestRemoveRepoByShortPrefix pins: Remove must accept a unique
-// short id prefix (as printed by `veska repo add`). Before the fix the
-// exact-match DELETE silently no-op'd on a short id, leaving the repo (and its
-// CASCADE-able children) in place.
+// TestRemoveRepoByShortPrefix verifies that Remove correctly resolves unique short ID prefixes.
 func TestRemoveRepoByShortPrefix(t *testing.T) {
 	db := newTestDB(t)
 	dir := newGitRepo(t)
@@ -455,7 +419,7 @@ func TestRemoveRepoByShortPrefix(t *testing.T) {
 		t.Errorf("expected repo removed via short prefix, got %d rows", count)
 	}
 
-	// An unknown id is now a loud error, not a silent success.
+	// Verify that removing an unregistered repository ID returns an error.
 	if err := repo.Remove(context.Background(), db, "ffffffffffff"); err == nil {
 		t.Error("expected error removing unknown repo id, got nil")
 	}
@@ -470,7 +434,7 @@ func TestRemoveRepoRemovesHooks(t *testing.T) {
 		t.Fatalf("Add: %v", err)
 	}
 
-	// Confirm hooks are present first.
+	// Ensure hooks are present before executing removal.
 	for _, hook := range []string{"post-commit", "post-checkout"} {
 		if _, err := os.Stat(filepath.Join(dir, ".git", "hooks", hook)); err != nil {
 			t.Fatalf("hook %s missing after Add: %v", hook, err)
@@ -492,7 +456,7 @@ func TestRemoveRepoRemovesHooks(t *testing.T) {
 func TestList_ReturnsRegisteredRepos(t *testing.T) {
 	db := newTestDB(t)
 
-	// One fully-populated row.
+	// Insert a repository row containing complete metadata.
 	if _, err := db.Exec(
 		`INSERT INTO repos (repo_id, root_path, added_at, active_branch, last_promoted_sha, module_path)
 		 VALUES (?, ?, ?, ?, ?, ?)`,
@@ -500,7 +464,7 @@ func TestList_ReturnsRegisteredRepos(t *testing.T) {
 	); err != nil {
 		t.Fatalf("insert row b: %v", err)
 	}
-	// One row with NULL active_branch + last_promoted_sha.
+	// Insert a repository row containing minimal metadata.
 	if _, err := db.Exec(
 		`INSERT INTO repos (repo_id, root_path, added_at, module_path)
 		 VALUES (?, ?, ?, ?)`,
@@ -517,7 +481,7 @@ func TestList_ReturnsRegisteredRepos(t *testing.T) {
 		t.Fatalf("len(List) = %d, want 2", len(got))
 	}
 
-	// ORDER BY repo_id: id-a then id-b.
+	// Verify sorting order of records.
 	if !reflect.DeepEqual(got[0], repo.Record{RepoID: "id-a", RootPath: "/path/a", Kind: "tracked"}) {
 		t.Errorf("got[0] = %+v, want id-a with empty nullable fields", got[0])
 	}
@@ -628,7 +592,7 @@ func TestDerivedRepoIDFromURL(t *testing.T) {
 		})
 	}
 
-	// Different canonical URLs must produce different ids.
+	// Distinct URLs must map to unique IDs.
 	a := repo.DerivedRepoIDFromURL("https://github.com/foo/bar")
 	b := repo.DerivedRepoIDFromURL("https://github.com/foo/baz")
 	if a == b {

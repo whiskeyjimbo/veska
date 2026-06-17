@@ -6,9 +6,10 @@ import (
 	"fmt"
 )
 
-// SetActiveBranch updates repos.active_branch for the given repoID.
-// Returns nil if repoID is not found — unregistered repos are a silent no-op
-// so the post-checkout hook never blocks a checkout.
+// SetActiveBranch updates the active branch for a repository in the database.
+// It returns nil if the repository ID is not found because unregistered
+// repositories should be a silent no-op to prevent blocking checkouts during
+// post-checkout hooks.
 func SetActiveBranch(ctx context.Context, db *sql.DB, repoID, branch string) error {
 	_, err := db.ExecContext(ctx,
 		`UPDATE repos SET active_branch = ? WHERE repo_id = ?`,

@@ -9,8 +9,7 @@ import (
 	"strings"
 )
 
-// readMaxWatches is a package-level var for testability.
-// In production it reads /proc/sys/fs/inotify/max_user_watches.
+// readMaxWatches reads the maximum user watches from /proc/sys/fs/inotify/max_user_watches. It is structured as a package-level variable for test stubbing.
 var readMaxWatches = func() (int, error) {
 	data, err := os.ReadFile("/proc/sys/fs/inotify/max_user_watches")
 	if err != nil {
@@ -35,11 +34,8 @@ func InotifyFixCommand() string {
 	return "sudo sysctl -w fs.inotify.max_user_watches=524288"
 }
 
-// CheckInotifyBudget reads the kernel inotify watch limit and computes headroom.
-// currentWatchers is the number of repos currently being watched; watchesPerRepo
-// is the estimated number of inotify watches consumed per repo.
-// Returns an error (containing the sysctl fix command) if adding one more repo
-// would exceed the budget.
+// CheckInotifyBudget evaluates current inotify resource consumption against system limits,
+// returning an error with a recovery command if insufficient budget remains.
 func CheckInotifyBudget(currentWatchers, watchesPerRepo int) (InotifyBudget, error) {
 	max, err := readMaxWatches()
 	if err != nil {
