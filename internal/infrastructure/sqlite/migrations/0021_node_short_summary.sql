@@ -1,0 +1,15 @@
+-- Persist an optional natural-language short summary on each node, populated by
+-- the optional LLM summary lane (FEATURE-SUMMARY-001, docs/design/11-pipelines/
+-- summary-worker.md). It mirrors the review pipeline: an off-by-default
+-- post-promotion queue lane writes this column from the [llm_generator] slot.
+--
+-- Nullable: NULL until the summary lane drains for the node's file (or forever,
+-- when the [summary] lane is disabled). The default node projection falls back
+-- to a heuristic summary computed on the fly when this is NULL, so the contract
+-- field is always populated in responses. Bounded to 280 runes by the writer
+-- (domain.MaxShortSummaryRunes); the column itself imposes no length limit.
+--
+-- Fully backward-compatible: existing writers that omit the column leave it
+-- NULL, and promotion's delete+reinsert of a file's nodes naturally clears it
+-- so a changed file re-summarises on its next summary-lane pass.
+ALTER TABLE nodes ADD COLUMN short_summary TEXT;

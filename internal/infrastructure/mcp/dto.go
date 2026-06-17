@@ -20,9 +20,13 @@ type nodeDTO struct {
 	LineStart int    `json:"line_start,omitempty"`
 	LineEnd   int    `json:"line_end,omitempty"`
 	Signature string `json:"signature,omitempty"`
-	Language  string `json:"language,omitempty"`
-	Exported  *bool  `json:"exported,omitempty"`
-	RepoID    string `json:"repo_id,omitempty"`
+	// Summary is a short natural-language description: the LLM summary lane's
+	// stored value when present, else a heuristic computed from the node. Always
+	// populated so the field is a stable part of the default projection.
+	Summary  string `json:"summary,omitempty"`
+	Language string `json:"language,omitempty"`
+	Exported *bool  `json:"exported,omitempty"`
+	RepoID   string `json:"repo_id,omitempty"`
 	// External indicates if a symbol resides in a vendored or module-cache dependency.
 	// Omitted on first-party files to keep the wire payload stable.
 	External bool `json:"external,omitempty"`
@@ -62,7 +66,6 @@ type blastEntryDTO struct {
 	Pending bool `json:"pending,omitempty"`
 }
 
-
 func nodeToDTO(n *domain.Node) nodeDTO {
 	if n == nil {
 		return nodeDTO{}
@@ -83,6 +86,13 @@ func nodeToDTO(n *domain.Node) nodeDTO {
 	}
 	if n.Signature != nil {
 		d.Signature = *n.Signature
+	}
+	// Summary: the stored LLM summary when the summary lane has run, else the
+	// heuristic, so the contract field is always populated.
+	if n.ShortSummary != nil {
+		d.Summary = *n.ShortSummary
+	} else {
+		d.Summary = n.HeuristicSummary()
 	}
 	if n.Language != nil {
 		d.Language = *n.Language

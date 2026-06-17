@@ -18,6 +18,7 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/application/embedder"
 	"github.com/whiskeyjimbo/veska/internal/application/revalidate"
 	"github.com/whiskeyjimbo/veska/internal/application/review"
+	"github.com/whiskeyjimbo/veska/internal/application/summary"
 	"github.com/whiskeyjimbo/veska/internal/application/savings"
 	"github.com/whiskeyjimbo/veska/internal/application/staging"
 	"github.com/whiskeyjimbo/veska/internal/application/vulnrefresh"
@@ -234,7 +235,9 @@ func (b *daemonBuilder) buildCore() error {
 		promoterOpts = append(promoterOpts, application.WithPromoterTracerProvider(b.tracer))
 	}
 
-	core := composition.NewColdScanCore(b.pools, ingesterOpts, promoterOpts, composition.WithReviewEnabled(b.fileCfg.Review.Enabled))
+	core := composition.NewColdScanCore(b.pools, ingesterOpts, promoterOpts,
+		composition.WithReviewEnabled(b.fileCfg.Review.Enabled),
+		composition.WithSummaryEnabled(b.fileCfg.Summary.Enabled))
 	b.staging = core.Staging
 	b.gate = core.Gate
 	b.ingester = core.Ingester
@@ -401,6 +404,13 @@ func (b *daemonBuilder) buildQueueHandlers() error {
 		}
 		b.handlers[ports.WorkKindReview] = reviewH
 	}
+	if b.fileCfg.Summary.Enabled {
+		summaryH, serr := b.buildSummaryHandler()
+		if serr != nil {
+			return serr
+		}
+		b.handlers[ports.WorkKindSummary] = summaryH
+	}
 	return nil
 }
 
@@ -481,6 +491,37 @@ func (b *daemonBuilder) buildReviewHandler() (queue.WorkHandler, error) {
 		return nil, fmt.Errorf("daemon: review handler: %w", err)
 	}
 	return reviewH, nil
+}
+
+// buildSummaryHandler wires the optional WorkKindSummary lane: the Ollama
+// generator (shared [llm_generator] slot) and the node short_summary store.
+// Only called when summary is enabled.
+func (b *daemonBuilder) buildSummaryHandler() (queue.WorkHandler, error) {
+	var genOpts []llm.Option
+	if d, derr := time.ParseDuration(b.fileCfg.LLMGenerator.Timeout); derr == nil && d > 0 {
+		genOpts = append(genOpts, llm.WithTimeout(d))
+	}
+	gen := llm.NewOllamaGenerator(
+		b.fileCfg.LLMGenerator.Model,
+		append([]llm.Option{llm.WithBaseURL(b.fileCfg.LLMGenerator.Endpoint)}, genOpts...)...)
+	root := func(ctx context.Context, repoID string) (string, error) {
+		return repoRootFunc(b.pools.ReadDB)(ctx, repoID)
+	}
+	store := sqlite.NewSummaryStore(b.pools.ReadDB, b.pools.Write)
+
+	opts := []summary.HandlerOption{summary.WithGeneratorName(b.fileCfg.LLMGenerator.Model)}
+	auditW, err := audit.NewAuditFileWriter(
+		filepath.Join(config.DefaultVectorDir(), "audit.jsonl"))
+	if err != nil {
+		return nil, fmt.Errorf("daemon: summary audit writer: %w", err)
+	}
+	opts = append(opts, summary.WithAuditWriter(auditW))
+
+	summaryH, err := summary.NewHandler(gen, store, root, opts...)
+	if err != nil {
+		return nil, fmt.Errorf("daemon: summary handler: %w", err)
+	}
+	return summaryH, nil
 }
 
 // buildPollerWatcher constructs the post-promotion queue poller, the fsnotify

@@ -26,6 +26,7 @@ type Config struct {
 	Budget             BudgetConfig             `toml:"budget"`
 	LLMGenerator       LLMGeneratorConfig       `toml:"llm_generator"`
 	Review             ReviewConfig             `toml:"review"`
+	Summary            SummaryConfig            `toml:"summary"`
 	Backup             BackupConfig             `toml:"backup"`
 	VulnSource         VulnSourceConfig         `toml:"vuln_source"`
 	Promotion          PromotionConfig          `toml:"promotion"`
@@ -180,6 +181,13 @@ type ReviewConfig struct {
 	MaxTokensPerDay    int  `toml:"max_tokens_per_day"`
 }
 
+// SummaryConfig gates the optional LLM summary lane (FEATURE-SUMMARY-001).
+// Off by default; when enabled, promoted files enqueue a summary work row that
+// fills nodes.short_summary via the [llm_generator] slot.
+type SummaryConfig struct {
+	Enabled bool `toml:"enabled"`
+}
+
 // BackupConfig holds the retention policy for veska backup prune.
 type BackupConfig struct {
 	// KeepMinCount is the number of most-recent user-initiated backups always
@@ -279,6 +287,9 @@ func DefaultConfig() Config {
 			Enabled:            false,
 			MaxTokensPerCommit: 100000,
 			MaxTokensPerDay:    500000,
+		},
+		Summary: SummaryConfig{
+			Enabled: false,
 		},
 		Backup: BackupConfig{
 			KeepMinCount: 3,

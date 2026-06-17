@@ -25,9 +25,11 @@ var _ application.PromotionStore = (*PromotionStore)(nil)
 // Sinks are registered at construction time to keep the core Promote
 // transaction logic extensible without modification.
 type PromotionStore struct {
-	writeDB   *sql.DB
-	sinks     []PromotionSink
-	workKinds []string
+	writeDB        *sql.DB
+	sinks          []PromotionSink
+	reviewEnabled  bool
+	summaryEnabled bool
+	workKinds      []string
 }
 
 // PromotionStoreOption configures a PromotionStore at construction time.
@@ -35,22 +37,25 @@ type PromotionStoreOption func(*PromotionStore)
 
 // WithReviewEnabled configures whether the optional WorkKindReview lane is enqueued.
 func WithReviewEnabled(enabled bool) PromotionStoreOption {
-	return func(s *PromotionStore) {
-		s.workKinds = application.PromotionWorkKinds(enabled)
-	}
+	return func(s *PromotionStore) { s.reviewEnabled = enabled }
+}
+
+// WithSummaryEnabled configures whether the optional WorkKindSummary lane is enqueued.
+func WithSummaryEnabled(enabled bool) PromotionStoreOption {
+	return func(s *PromotionStore) { s.summaryEnabled = enabled }
 }
 
 // NewPromotionStore constructs a PromotionStore with the given database handle
 // and sinks.
 func NewPromotionStore(writeDB *sql.DB, sinks []PromotionSink, opts ...PromotionStoreOption) *PromotionStore {
 	s := &PromotionStore{
-		writeDB:   writeDB,
-		sinks:     sinks,
-		workKinds: application.PromotionWorkKinds(false),
+		writeDB: writeDB,
+		sinks:   sinks,
 	}
 	for _, o := range opts {
 		o(s)
 	}
+	s.workKinds = application.PromotionWorkKinds(s.reviewEnabled, s.summaryEnabled)
 	return s
 }
 
