@@ -15,83 +15,54 @@ import (
 	infrafs "github.com/whiskeyjimbo/veska/internal/infrastructure/fs"
 )
 
-// prefixLen is the number of leading bytes the wake sweep compares in addition
-// to mtime+size. Format-on-save tools (gofmt, prettier, ruff) routinely produce
-// same-length replacements, and some filesystems coalesce mtime at second
-// granularity — so a file edited during suspend can pass the (mtime, size)
-// check unchanged. Comparing the first 64 bytes is a cheap intermediate that
-// catches most such edits; full content hashing is too expensive for working
-// trees with >50k files. Edits beyond the first 64 bytes that
-// keep mtime+size still slip through and are caught at the next live save or
-// promotion diff.
+// prefixLen specifies the number of leading bytes compared during a wake sweep in addition
+// to mtime and size. Because some editors produce same-length modifications and some filesystems
+// have coarse mtime granularity, comparing the prefix helps catch edits during system suspend without
+// incurring the overhead of hashing full file contents.
 const prefixLen = 64
 
-// MtimeEntry records the last-seen mtime, size, and leading-byte prefix of a
-// file for change detection.
+// MtimeEntry records the last-seen modification time, size, and prefix of a file for change detection.
 type MtimeEntry struct {
 	ModTime time.Time
 	Size    int64
 	Prefix  [prefixLen]byte
 }
 
-// changedFrom reports whether e differs from prev in mtime, size, or prefix.
+// changedFrom reports whether the current entry differs from a previous entry in modification time, size, or prefix.
 func (e MtimeEntry) changedFrom(prev MtimeEntry) bool {
 	return e.ModTime != prev.ModTime || e.Size != prev.Size || e.Prefix != prev.Prefix
 }
 
-// SweepStartHook is invoked once per registered repo at the start of a wake
-// sweep, SERIALLY and BEFORE any parallel file-walk begins. It carries the
-// owning repo ID and root directory. The daemon wires the staging-vs-HEAD
-// branch reconcile here; the reconciler itself stays infra-pure and just calls
-// the callback (no staging/application import). ctx is the sweep's context.
+// SweepStartHook is invoked serially for each registered repository at the start of a wake sweep
+// before any parallel walk begins. It is passed the repository identifier and root directory.
 type SweepStartHook func(ctx context.Context, repoID, dir string)
 
-// PostSweepHook is invoked exactly once at the end of a wake sweep, AFTER every
-// per-repo file-walk has joined. The daemon wires the watcher handle-restart
-// here: live events resume against a fresh OS stream once the
-// mtime sweep has covered the suspend window. The reconciler stays infra-pure
-// it just calls the callback (no watcher/application import). ctx is the sweep's
-// context; the hook is skipped if the sweep returns early on cancellation.
+// PostSweepHook is invoked once at the end of a wake sweep after all parallel walks have completed.
+// It is skipped if the sweep is cancelled before completion.
 type PostSweepHook func(ctx context.Context)
 
-// ReconcileHandler is called with the owning repo ID and the path of each file
-// whose mtime/size changed since the last sweep. The reconciler calls this for
-// every changed file it discovers. ctx is the sweep's context so a long handler
-// can honour daemon shutdown.
+// ReconcileHandler is called with the repository identifier and absolute path of each modified file.
 type ReconcileHandler func(ctx context.Context, repoID, path string)
 
-// watchedDir pairs a registered directory tree with the repo that owns it, so
-// the handler can be told which repo a changed file belongs to.
+// watchedDir associates a directory tree with its owning repository.
 type watchedDir struct {
 	repoID string
 	dir    string
 }
 
-// BaselineStore is the per-file change-detection baseline a wake sweep compares
-// against. *FSWatcher satisfies it (its live lastSeen map), so the reconciler
-// converges onto the watcher's continuously-updated baseline rather than a
-// separate seeded copy. Implementations must be safe for
-// concurrent use — a parallel per-repo sweep and live debounced writes both
-// touch the store.
+// BaselineStore represents the interface used to query and update the file baselines.
+// Implementations must be safe for concurrent use since they are shared between wake sweeps and live writes.
 type BaselineStore interface {
 	Get(path string) (MtimeEntry, bool)
 	Put(path string, e MtimeEntry)
 }
 
-// BaselineResolver returns the CURRENT BaselineStore for a repo, resolved FRESH
-// on each sweep. The daemon wires it to the MultiRepoWatcher so a sweep follows
-// RestartAll replacing a repo's FSWatcher: each sweep reads
-// the live FSWatcher's baseline, not a pointer captured at construction. ok is
-// false when the repo is not (yet) watched, in which case the reconciler falls
-// back to its standalone in-memory baseline.
+// BaselineResolver returns the active BaselineStore for a given repository. It returns false if
+// the repository is not currently being tracked.
 type BaselineResolver func(repoID string) (BaselineStore, bool)
 
-// memBaseline is the standalone in-memory baseline used when no BaselineResolver
-// is wired (the reconciler running without a watcher: eval harness and unit
-// tests). It is filled lazily by the sweep's first sighting of each file — NOT
-// by a separate seed pass — so "first sighting records, fires nothing" still
-// holds. This is the seam's standalone implementation, not a revival of the
-// retired per-reconciler mtimeMap.
+// memBaseline implements an in-memory fallback baseline store used when no baseline resolver is configured.
+// It is populated lazily on the first sighting of each file.
 type memBaseline struct {
 	mu sync.Mutex
 	m  map[string]MtimeEntry
@@ -112,10 +83,9 @@ func (b *memBaseline) Put(path string, e MtimeEntry) {
 	b.mu.Unlock()
 }
 
-// WakeReconciler detects system suspend/resume by comparing wall-clock time
-// across a periodic tick interval. When the gap between two ticks exceeds
-// wakeThreshold, it sweeps the registered directory trees for mtime/size changes
-// and calls the handler for each changed file.
+// WakeReconciler monitors system suspend/resume events by tracking elapsed wall-clock time
+// across periodic ticks. If a gap exceeds wakeThreshold, it performs a sweep across registered
+// directories to detect modified files and triggers the handler.
 type WakeReconciler struct {
 	wakeTick      time.Duration
 	wakeThreshold time.Duration
@@ -124,37 +94,28 @@ type WakeReconciler struct {
 	postSweep     PostSweepHook
 	ignore        *infrafs.IgnoreList
 	nowFn         func() time.Time
-	// concurrency bounds how many per-repo sweeps run in parallel. Always
-	// resolved to a positive value at construction (NumCPU/2, floor 1).
+	// concurrency limits the number of parallel sweeps executed across repositories.
 	concurrency int
 
-	// baselineFor resolves the live BaselineStore for a repo, fresh each sweep
-	// (so it tracks RestartAll replacing the FSWatcher). Nil / a false return
-	// falls back to the standalone in-memory baseline below. Set via
-	// WithBaseline.
+	// baselineFor resolves the active BaselineStore for a repository dynamically on each sweep.
 	baselineFor BaselineResolver
-	// standalone is the fallback baseline when baselineFor is unset or the repo
-	// is not watched. It keeps the reconciler usable without a watcher (eval
-	// harness, unit tests).
+	// standalone is the fallback baseline used when no resolver is configured or the repository is untracked.
 	standalone *memBaseline
 
 	mu       sync.Mutex
 	dirs     []watchedDir
 	lastTick time.Time // guarded by mu
-	// reconciling is the set of repo IDs whose per-repo sweep is in flight,
-	// guarded by mu. Per-repo (not a global flag) so an MCP query against a
-	// settled repo is not flagged wake_reconciling because some OTHER repo is
-	// still sweeping.
+	// reconciling maps repository identifiers to their in-progress sweep count.
 	reconciling map[string]int
 
-	// wakeCh is used by injectWake to trigger an immediate sweep.
+	// wakeCh is used to request an immediate, manual reconciliation sweep.
 	wakeCh chan struct{}
 }
 
 // Option configures a WakeReconciler at construction.
 type Option func(*WakeReconciler)
 
-// WithClock overrides the time source (default time.Now). Injectable for tests.
+// WithClock overrides the default time source. This option is primarily intended for unit testing.
 func WithClock(nowFn func() time.Time) Option {
 	return func(r *WakeReconciler) {
 		if nowFn != nil {
@@ -163,39 +124,27 @@ func WithClock(nowFn func() time.Time) Option {
 	}
 }
 
-// WithIgnoreList supplies a.gitignore-semantics matcher; changed files it
-// matches are skipped. A nil list (the default) skips nothing.
+// WithIgnoreList registers an ignore list to exclude specific files from sweep detection.
 func WithIgnoreList(ignore *infrafs.IgnoreList) Option {
 	return func(r *WakeReconciler) { r.ignore = ignore }
 }
 
-// WithSweepStartHook registers a callback invoked once per registered repo at
-// the start of a wake sweep, serially and before the parallel file-walk phase
-// begins (so all generation bumps complete before any parse runs). A nil hook
-// (the default) skips the pre-pass.
+// WithSweepStartHook registers a hook called before the file-walk phase begins.
 func WithSweepStartHook(fn SweepStartHook) Option {
 	return func(r *WakeReconciler) { r.sweepStart = fn }
 }
 
-// WithPostSweepHook registers a callback invoked exactly once at the end of a
-// wake sweep, after every per-repo file-walk has joined. The daemon wires the
-// watcher handle-restart here. A nil hook (the default) skips the after-phase. A
-// sweep that returns early on context cancellation does NOT invoke the hook
-// that correctly avoids restarting watcher handles during shutdown.
+// WithPostSweepHook registers a hook called after all parallel file walks have completed. It is skipped on context cancellation.
 func WithPostSweepHook(fn PostSweepHook) Option {
 	return func(r *WakeReconciler) { r.postSweep = fn }
 }
 
-// WithBaseline wires the resolver that supplies the live per-repo change
-// baseline (the watcher's lastSeen). When unset, the reconciler uses a
-// standalone in-memory baseline filled lazily by the sweep (first-sighting
-// records, fires nothing) — keeping it usable without a watcher.
+// WithBaseline configures the resolver providing the active change baseline.
 func WithBaseline(fn BaselineResolver) Option {
 	return func(r *WakeReconciler) { r.baselineFor = fn }
 }
 
-// WithWakeConcurrency caps how many per-repo sweeps run in parallel on a wake
-// event. n <= 0 (the default) resolves to runtime.NumCPU/2 with a floor of 1.
+// WithWakeConcurrency limits the number of parallel sweeps executed across repositories.
 func WithWakeConcurrency(n int) Option {
 	return func(r *WakeReconciler) {
 		if n <= 0 {
@@ -208,9 +157,7 @@ func WithWakeConcurrency(n int) Option {
 	}
 }
 
-// NewWakeReconciler creates a reconciler that ticks every wakeTick and considers
-// a gap > wakeThreshold to indicate a suspend/resume event. handler is called
-// with the owning repo ID and absolute path of each changed file on wake.
+// NewWakeReconciler constructs a new WakeReconciler instance.
 func NewWakeReconciler(
 	wakeTick time.Duration,
 	wakeThreshold time.Duration,
@@ -233,22 +180,21 @@ func NewWakeReconciler(
 	return r
 }
 
-// AddDir registers a repo's directory tree to sweep on wake.
+// AddDir registers a repository's root directory for wake reconciliation.
 func (r *WakeReconciler) AddDir(repoID, dir string) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.dirs = append(r.dirs, watchedDir{repoID: repoID, dir: dir})
 }
 
-// IsRepoReconciling reports whether the given repo's wake sweep is in flight.
+// IsRepoReconciling reports whether a sweep is currently active for the repository.
 func (r *WakeReconciler) IsRepoReconciling(repoID string) bool {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	return r.reconciling[repoID] > 0
 }
 
-// ReconcilingRepos returns the sorted set of repo IDs whose wake sweep is
-// currently in flight. Empty when no sweep is running.
+// ReconcilingRepos returns a sorted list of repository identifiers that are currently undergoing a sweep.
 func (r *WakeReconciler) ReconcilingRepos() []string {
 	r.mu.Lock()
 	out := make([]string, 0, len(r.reconciling))
@@ -263,14 +209,14 @@ func (r *WakeReconciler) ReconcilingRepos() []string {
 	return out
 }
 
-// markReconciling records that repoID's sweep has started.
+// markReconciling tracks that a repository sweep has commenced.
 func (r *WakeReconciler) markReconciling(repoID string) {
 	r.mu.Lock()
 	r.reconciling[repoID]++
 	r.mu.Unlock()
 }
 
-// clearReconciling records that repoID's sweep has finished.
+// clearReconciling tracks that a repository sweep has completed.
 func (r *WakeReconciler) clearReconciling(repoID string) {
 	r.mu.Lock()
 	if r.reconciling[repoID] <= 1 {
@@ -281,21 +227,16 @@ func (r *WakeReconciler) clearReconciling(repoID string) {
 	r.mu.Unlock()
 }
 
-// wallTick returns the current time with its monotonic reading stripped, so
-// gap arithmetic in Start measures wall-clock elapsed time (which advances
-// across system suspend) rather than monotonic time (which does not).
+// wallTick returns the current time with its monotonic reading stripped. Monotonic time does
+// not advance during system suspend, so stripping it ensures that duration subtraction reflects
+// wall-clock elapsed time across sleep states.
 func (r *WakeReconciler) wallTick() time.Time {
 	return r.nowFn().Round(0)
 }
 
-// Start begins the background tick loop. Stops when ctx is cancelled.
-// Gap detection compares wall-clock readings, not monotonic ones. time.Time's
-// Sub uses the monotonic component when present, and CLOCK_MONOTONIC (Linux) /
-// mach_absolute_time (macOS) do NOT advance while the system is suspended — so
-// a monotonic comparison would see only ~wakeTick after a real sleep and never
-// fire. wallTick strips the monotonic reading (.Round(0)) so Sub falls back to
-// wall-clock arithmetic, which does advance across suspend. This is the whole
-// point of the detector.
+// Start begins the background tick loop, executing until the context is cancelled.
+// It compares wall-clock timestamps rather than monotonic clocks because monotonic
+// clocks do not advance during system suspend.
 func (r *WakeReconciler) Start(ctx context.Context) {
 	r.mu.Lock()
 	r.lastTick = r.wallTick()
@@ -327,33 +268,25 @@ func (r *WakeReconciler) Start(ctx context.Context) {
 	}
 }
 
-// InjectWake simulates a wake event for testing. It runs the sweep
-// synchronously in the caller's goroutine so tests can observe results
-// immediately after the call returns.
+// InjectWake triggers a synchronous reconciliation sweep immediately in the current goroutine.
 func (r *WakeReconciler) InjectWake() {
 	r.runSweep(context.Background())
 }
 
-// runSweep performs the mtime sweep synchronously (blocks until every per-repo
-// sweep finishes), then returns.
+// runSweep executes a synchronous sweep across all registered directories.
 func (r *WakeReconciler) runSweep(ctx context.Context) {
 	r.sweepDirs(ctx)
 }
 
-// sweepDirs walks each registered directory tree, comparing mtime+size to the
-// last-seen map and calling the handler for changed files. Per-repo sweeps run
-// in parallel, bounded by r.concurrency. The handler may be invoked from
-// multiple goroutines concurrently.
+// sweepDirs compares the modification times, sizes, and prefixes of files in registered directories
+// against the baseline store. Sweeps run in parallel up to the concurrency limit.
 func (r *WakeReconciler) sweepDirs(ctx context.Context) {
 	r.mu.Lock()
 	dirs := append([]watchedDir(nil), r.dirs...)
 	r.mu.Unlock()
 
-	// Serial pre-pass: run the sweep-start hook for EVERY repo before launching
-	// any parallel file-walk, so all staging generation bumps complete before
-	// any parse runs (: "bumped *before* any parse runs"). Running
-	// it serially also avoids a parallel branch bump spuriously invalidating
-	// another repo's concurrently-starting parse.
+	// Execute the sweep-start hook serially for all repositories before starting parallel file-walks,
+	// ensuring initialization tasks are fully completed.
 	if r.sweepStart != nil {
 		for _, wd := range dirs {
 			if ctx.Err() != nil {
@@ -379,46 +312,34 @@ func (r *WakeReconciler) sweepDirs(ctx context.Context) {
 	}
 	wg.Wait()
 
-	// After-phase: restart the watcher handles so live events resume against a
-	// fresh stream. Runs once, after all parallel walks join. Skipped on a
-	// cancelled context so shutdown does not recreate watchers we are tearing
-	// down.
+	// Execute the post-sweep hook once all parallel file-walks have completed.
 	if r.postSweep != nil && ctx.Err() == nil {
 		r.postSweep(ctx)
 	}
 }
 
-// sweepOneRepo walks one repo's directory tree and fires the handler for each
-// changed file. The repo is marked reconciling for the duration so an MCP query
-// against it can observe the in-flight sweep (cleared via defer on return).
+// sweepOneRepo walks the directory tree of a single repository and invokes the change handler.
 func (r *WakeReconciler) sweepOneRepo(ctx context.Context, repoID, dir string) {
 	r.markReconciling(repoID)
 	defer r.clearReconciling(repoID)
 
-	// Resolve the baseline FRESH per sweep so we follow RestartAll replacing the
-	// repo's FSWatcher: a sweep started after a restart reads the new watcher's
-	// live baseline, never a stale captured pointer ( /.25.3).
+	// Resolve the baseline freshly on each sweep to ensure we query the active watcher's baseline.
 	store := r.baselineForRepo(repoID)
 
 	r.walkFiles(dir, func(path string, current MtimeEntry) {
 		prev, known := store.Get(path)
 		store.Put(path, current)
 
-		// Fire only for a file we already had a baseline for (live edit, prior
-		// sweep, or watcher seed) that has since changed. A first-ever sighting
-		// just records state. Because the live save path keeps the watcher
-		// baseline current, a file edited during the session but NOT during the
-		// suspend window has prev == current and does not fire — so the first
-		// post-suspend wake reports only suspend-window changes.
+		// Trigger the handler only if a baseline was previously recorded and the file
+		// state has changed since that baseline. Initial sightings only record the baseline.
 		if known && current.changedFrom(prev) {
 			r.handler(ctx, repoID, path)
 		}
 	})
 }
 
-// baselineForRepo resolves the live BaselineStore for repoID via the wired
-// resolver, falling back to the standalone in-memory baseline when no resolver
-// is set or the repo is not (yet) watched.
+// baselineForRepo resolves the active baseline store for a repository, falling back to the standalone
+// store if no resolver is available.
 func (r *WakeReconciler) baselineForRepo(repoID string) BaselineStore {
 	if r.baselineFor != nil {
 		if store, ok := r.baselineFor(repoID); ok && store != nil {
@@ -428,17 +349,14 @@ func (r *WakeReconciler) baselineForRepo(repoID string) BaselineStore {
 	return r.standalone
 }
 
-// walkFiles walks dir and invokes fn with the current MtimeEntry for each
-// non-ignored regular file. Stat/ignore handling is shared across sweeps.
+// walkFiles walks the directory tree and invokes the callback for each non-ignored file.
 func (r *WakeReconciler) walkFiles(dir string, fn func(path string, current MtimeEntry)) {
 	_ = filepath.WalkDir(dir, func(path string, d fs.DirEntry, err error) error {
 		if err != nil || d.IsDir() {
 			return nil
 		}
 
-		// Skip ignored files. The matcher uses.gitignore semantics and
-		// expects a path relative to the swept root, so anchored patterns
-		// resolve correctly; fall back to the absolute path if Rel fails.
+		// Skip files matching the ignore patterns, using relative paths where possible.
 		rel := path
 		if rp, err := filepath.Rel(dir, path); err == nil {
 			rel = rp
@@ -456,9 +374,7 @@ func (r *WakeReconciler) walkFiles(dir string, fn func(path string, current Mtim
 	})
 }
 
-// statEntry reads the mtime, size, and leading-byte prefix of path. ok is false
-// when the file cannot be stat'd (e.g. removed mid-walk), in which case the
-// caller skips it.
+// statEntry retrieves the modification time, size, and prefix for the specified path.
 func statEntry(path string) (MtimeEntry, bool) {
 	info, err := os.Stat(path)
 	if err != nil {
@@ -467,9 +383,7 @@ func statEntry(path string) (MtimeEntry, bool) {
 	return MtimeEntry{ModTime: info.ModTime(), Size: info.Size(), Prefix: readPrefix(path)}, true
 }
 
-// readPrefix returns the first prefixLen bytes of path, zero-padded for shorter
-// files. A read error yields the zero prefix — change detection still falls
-// back to mtime+size, so a transient open failure cannot wedge the sweep.
+// readPrefix reads the initial bytes of a file up to the prefix length limit, returning a zero-padded buffer.
 func readPrefix(path string) [prefixLen]byte {
 	var buf [prefixLen]byte
 	f, err := os.Open(path)

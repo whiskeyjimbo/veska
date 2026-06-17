@@ -1,5 +1,3 @@
-// Package git provides filesystem change notification via fsnotify with
-// 50 ms debounce and an overflow-triggered polling fallback.
 package git
 
 import (
@@ -16,20 +14,10 @@ import (
 
 const debounceWindow = 50 * time.Millisecond
 
-// FSWatcher implements ports.Watcher using fsnotify with a 50 ms debounce
-// window. When the underlying watcher emits an overflow sentinel (Op == 0 /
-// fsnotify.ErrEventOverflow), it falls back to a full directory walk,
-// compares mtime+size+prefix to the last-seen map, and emits FileEvents for any
-// changed files.
-// lastSeen is the SINGLE per-file change-detection baseline shared with the
-// wake reconciler: it is seeded at Watch, updated on every
-// live debounced write (run loop emit path), and updated by the overflow
-// fallback. The reconciler reaches it through the BaselineStore seam so a
-// post-suspend sweep compares against state that already tracked the session's
-// live edits, and therefore reports only the suspend-window changes. The map is
-// per-FSWatcher-instance: RestartAll creates a fresh FSWatcher (and thus a fresh
-// map), which is what makes the teardown race safe — see the package note on
-// RestartAll in multiwatcher.go.
+// FSWatcher implements ports.Watcher using fsnotify with a 50 ms debounce window.
+// If an overflow sentinel is received, it executes a fallback walk of the directory
+// to detect changed files by comparing their modification time, size, and prefix against
+// a last-seen baseline.
 type FSWatcher struct {
 	mu       sync.Mutex
 	fw       *fsnotify.Watcher
@@ -38,8 +26,7 @@ type FSWatcher struct {
 	emitMu   sync.RWMutex          // guards emitFn
 }
 
-// NewFSWatcher creates a new FSWatcher and initialises the underlying fsnotify
-// watcher.
+// NewFSWatcher constructs a new FSWatcher instance and initializes the underlying fsnotify watcher.
 func NewFSWatcher() (*FSWatcher, error) {
 	fw, err := fsnotify.NewWatcher()
 	if err != nil {
@@ -51,8 +38,7 @@ func NewFSWatcher() (*FSWatcher, error) {
 	}, nil
 }
 
-// Get returns the last-seen baseline entry for path. It satisfies BaselineStore
-// so the wake reconciler can compare against the watcher's live baseline.
+// Get retrieves the last-seen baseline entry for the specified file path.
 func (w *FSWatcher) Get(path string) (MtimeEntry, bool) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
@@ -60,28 +46,15 @@ func (w *FSWatcher) Get(path string) (MtimeEntry, bool) {
 	return e, ok
 }
 
-// Put records path's baseline entry. It satisfies BaselineStore. The live
-// debounced-write path, the overflow fallback, and seedLastSeen all funnel
-// through it (directly or under w.mu) so the baseline tracks live edits.
+// Put records the baseline entry for the specified file path.
 func (w *FSWatcher) Put(path string, e MtimeEntry) {
 	w.mu.Lock()
 	w.lastSeen[path] = e
 	w.mu.Unlock()
 }
 
-// refreshBaseline updates the shared baseline for path to its current on-disk
-// state (mtime+size+prefix) and reports whether it wrote. It is the live update
-// path that keeps lastSeen tracking session edits so a wake sweep reports only
-// suspend-window changes.
-// It first checks ctx: a debounce timer that fires after this watcher's ctx is
-// cancelled (i.e. after RestartAll tore it down) must NOT write to the baseline.
-// The new FSWatcher owns a SEPARATE lastSeen map (RestartAll calls NewFSWatcher,
-// which allocates a fresh map), so a stray write here could only land on this
-// orphaned instance's map and can never resurrect an entry the reconciler reads
-// off the new watcher — the per-instance-fresh-map property, not the mutex, is
-// what makes the teardown race safe. The mutex only serializes individual
-// writes. The ctx guard additionally spares a needless stat + 64-byte read once
-// the watcher is gone (, guardrail 3).
+// refreshBaseline updates the shared baseline for the specified path to match its current on-disk state.
+// It returns false if the context has been cancelled, preventing stale updates after the watcher is stopped.
 func (w *FSWatcher) refreshBaseline(ctx context.Context, path string) bool {
 	if ctx.Err() != nil {
 		return false
@@ -94,16 +67,15 @@ func (w *FSWatcher) refreshBaseline(ctx context.Context, path string) bool {
 	return true
 }
 
-// Watch registers the directory tree rooted at dir for change events and
-// returns a channel on which FileEvents are delivered. The channel is closed
-// when ctx is cancelled or Close is called.
+// Watch registers the directory tree for change events, returning a channel on which file events
+// are delivered. The channel is closed when the context is cancelled or Close is called.
 func (w *FSWatcher) Watch(ctx context.Context, dir string) (<-chan ports.FileEvent, error) {
-	// Recursively add all subdirectories.
+	// Recursively add all subdirectories to the watcher.
 	if err := w.addTree(dir); err != nil {
 		return nil, err
 	}
 
-	// Seed the last-seen map so the overflow fallback has a baseline.
+	// Seed the last-seen map to establish an initial baseline for overflow detection.
 	w.seedLastSeen(dir)
 
 	out := make(chan ports.FileEvent, 64)
@@ -113,7 +85,7 @@ func (w *FSWatcher) Watch(ctx context.Context, dir string) (<-chan ports.FileEve
 	return out, nil
 }
 
-// setEmit stores the emit func so InjectOverflow can use it.
+// setEmit registers the emit callback for synthetic events.
 func (w *FSWatcher) setEmit(fn func(ports.FileEvent)) {
 	w.emitMu.Lock()
 	w.emitFn = fn
@@ -126,19 +98,17 @@ func (w *FSWatcher) getEmit() func(ports.FileEvent) {
 	return w.emitFn
 }
 
-// Close stops all watches and releases underlying OS resources.
+// Close stops all directory watches and releases the underlying fsnotify resources.
 func (w *FSWatcher) Close() error {
 	return w.fw.Close()
 }
 
-// InjectOverflow simulates an fsnotify overflow for the given directory.
-// This is intentionally exported (capital I) so tests in the git_test package
-// can call it; real callers should never need to invoke it directly.
+// InjectOverflow simulates an fsnotify overflow event for testing purposes.
 func (w *FSWatcher) InjectOverflow(dir string) {
 	w.handleOverflow(w.getEmit(), dir)
 }
 
-// addTree walks dir and adds every directory to the fsnotify watcher.
+// addTree walks the directory recursively and adds all subdirectories to the watcher.
 func (w *FSWatcher) addTree(dir string) error {
 	return filepath.WalkDir(dir, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
@@ -151,9 +121,7 @@ func (w *FSWatcher) addTree(dir string) error {
 	})
 }
 
-// seedLastSeen populates the last-seen map with current stat data (mtime, size,
-// and leading-byte prefix) for all files under dir, reusing statEntry so the
-// baseline format matches the reconciler's change-detection.
+// seedLastSeen populates the baseline map with current file state details for all files in the directory.
 func (w *FSWatcher) seedLastSeen(dir string) {
 	_ = filepath.WalkDir(dir, func(path string, d fs.DirEntry, err error) error {
 		if err != nil || d.IsDir() {
@@ -168,16 +136,15 @@ func (w *FSWatcher) seedLastSeen(dir string) {
 	})
 }
 
-// run is the main event loop. It reads from fw.Events, debounces writes, and
-// forwards FileEvents to out. It closes out when the loop exits.
+// run executes the main event loop, debouncing writes and forwarding events to the output channel.
 func (w *FSWatcher) run(ctx context.Context, dir string, out chan<- ports.FileEvent) {
-	// pending holds debounce timers keyed by absolute path.
+	// pending maps file paths to their active debounce timers.
 	pending := make(map[string]*time.Timer)
 
-	// pendingMu guards pending; timer callbacks (separate goroutines) also lock it.
+	// pendingMu serializes access to the pending timers map.
 	var pendingMu sync.Mutex
 
-	// done is closed when the loop exits so timer callbacks can detect shutdown.
+	// done is closed on exit to notify timer callbacks of shutdown.
 	done := make(chan struct{})
 
 	emit := func(ev ports.FileEvent) {
@@ -189,17 +156,13 @@ func (w *FSWatcher) run(ctx context.Context, dir string, out chan<- ports.FileEv
 	}
 	w.setEmit(emit)
 
-	// emitWrite is the debounced-write action: refresh the shared baseline for
-	// name to its current on-disk state, then emit the write event. It is the
-	// live update path that keeps lastSeen tracking session edits, so a wake
-	// sweep compares against post-edit state and reports only suspend-window
-	// changes.
+	// emitWrite updates the baseline and sends a write event to the output channel.
 	emitWrite := func(name string) {
 		w.refreshBaseline(ctx, name)
 		emit(ports.FileEvent{Path: name, Op: ports.WatchOpWrite})
 	}
 
-	// loop until ctx is done or the fsnotify channels close.
+	// Loop until the context is cancelled or the fsnotify channels close.
 	for {
 		select {
 		case <-ctx.Done():
@@ -216,7 +179,7 @@ func (w *FSWatcher) run(ctx context.Context, dir string, out chan<- ports.FileEv
 				goto cleanup
 			}
 
-			// Overflow sentinel: Op == 0 means the kernel dropped events.
+			// An operation code of zero indicates a kernel event queue overflow.
 			if fev.Op == 0 {
 				go w.handleOverflow(emit, dir)
 				continue
@@ -241,7 +204,7 @@ func (w *FSWatcher) run(ctx context.Context, dir string, out chan<- ports.FileEv
 				pendingMu.Unlock()
 
 			case isRemove:
-				// Cancel any pending debounce for this path.
+				// Cancel any pending write debounce timer for the removed path.
 				pendingMu.Lock()
 				if t, exists := pending[fev.Name]; exists {
 					t.Stop()
@@ -251,18 +214,17 @@ func (w *FSWatcher) run(ctx context.Context, dir string, out chan<- ports.FileEv
 				emit(ports.FileEvent{Path: fev.Name, Op: ports.WatchOpRemove})
 
 			default:
-				// Chmod alone (or any other op) carries no semantic meaning; skip.
+				// Ignore changes other than writes and removals.
 			}
 		}
 	}
 
 cleanup:
-	// Signal done first so in-flight timer callbacks stop trying to send.
+	// Close the done channel to signal in-flight timer callbacks to discard changes.
 	close(done)
 	w.setEmit(nil)
 
-	// Stop all pending debounce timers so their goroutines do not fire after
-	// we close out.
+	// Stop all active timers to prevent post-shutdown executions.
 	pendingMu.Lock()
 	for path, t := range pending {
 		t.Stop()
@@ -270,23 +232,12 @@ cleanup:
 	}
 	pendingMu.Unlock()
 
-	// A timer that already fired but is blocked on done/ctx.Done will unblock
-	// now that done is closed. Give it a moment, then close the output channel.
-	// The brief sleep is intentional: AfterFunc goroutines run concurrently and
-	// the t.Stop above may not cancel a timer that has already expired and is
-	// waiting to be scheduled. Closing done unblocks them; they will return
-	// without sending.
+	// Allow in-flight timers that have already expired to terminate cleanly before closing the channel.
 	close(out)
 }
 
-// handleOverflow is called when fsnotify signals that events were dropped.
-// It walks dir, compares current stat data to the last-seen map, emits
-// WatchOpWrite for any file that changed, and updates the map.
-// emit may be nil when called from InjectOverflow (test helper path); in that
-// case the method writes to the watcher's internal channel via the stored
-// reference — but since we don't store out, callers that need events must
-// ensure the loop is running. The simplest design is: handleOverflow accepts
-// an optional emit func.
+// handleOverflow performs a full directory scan to reconcile the baseline state and trigger write
+// events for any modified files when an overflow occurs.
 func (w *FSWatcher) handleOverflow(emit func(ports.FileEvent), dir string) {
 	slog.Warn("watcher_overflow", "dir", dir)
 

@@ -13,8 +13,7 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/git"
 )
 
-// makeReconciler creates a WakeReconciler with a no-op handler suitable for
-// overriding in each test and a fixed nowFn.
+// makeReconciler constructs a WakeReconciler helper with a customizable handler and a clock function.
 func makeReconciler(
 	handler git.ReconcileHandler,
 	ignore *fs.IgnoreList,
@@ -29,8 +28,7 @@ func makeReconciler(
 	)
 }
 
-// TestInjectWake_ChangedFile verifies that injectWake calls the handler for a
-// file whose mtime was modified between two sweeps.
+// TestInjectWake_ChangedFile verifies that InjectWake triggers the handler when a file's modification time changes between sweeps.
 func TestInjectWake_ChangedFile(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "file.go")
@@ -49,16 +47,16 @@ func TestInjectWake_ChangedFile(t *testing.T) {
 	r := makeReconciler(handler, nil, time.Now)
 	r.AddDir("repo1", dir)
 
-	// First injectWake seeds the baseline mtime map.
+	// The first InjectWake call seeds the initial baseline.
 	r.InjectWake()
 
-	// Advance mtime by touching the file with a future time.
+	// Simulate an edit by updating the modification time to a future timestamp.
 	future := time.Now().Add(2 * time.Second)
 	if err := os.Chtimes(path, future, future); err != nil {
 		t.Fatal(err)
 	}
 
-	// Second injectWake should detect the change.
+	// The second InjectWake call should detect the updated file.
 	r.InjectWake()
 
 	mu.Lock()
@@ -71,8 +69,7 @@ func TestInjectWake_ChangedFile(t *testing.T) {
 	}
 }
 
-// TestInjectWake_UnchangedFile verifies the handler is NOT called when files
-// have not changed between sweeps.
+// TestInjectWake_UnchangedFile verifies that the handler is not triggered when files remain unchanged between sweeps.
 func TestInjectWake_UnchangedFile(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "stable.go")
@@ -91,9 +88,9 @@ func TestInjectWake_UnchangedFile(t *testing.T) {
 	r := makeReconciler(handler, nil, time.Now)
 	r.AddDir("repo1", dir)
 
-	// Seed baseline.
+	// Seed the baseline store.
 	r.InjectWake()
-	// Second sweep — file unchanged.
+	// Execute a second sweep where the file is unchanged.
 	r.InjectWake()
 
 	mu.Lock()
@@ -103,10 +100,8 @@ func TestInjectWake_UnchangedFile(t *testing.T) {
 	}
 }
 
-// TestIsRepoReconciling_PerRepo verifies the per-repo reconciling state: only
-// the repo whose sweep is in flight reports true, a settled repo reports false,
-// and the flag clears after the sweep completes. A blocking handler holds the
-// target repo's sweep in flight while the test observes.
+// TestIsRepoReconciling_PerRepo verifies that only the repository whose sweep is actively running
+// reports true, and that the flag is correctly cleared once the sweep is completed.
 func TestIsRepoReconciling_PerRepo(t *testing.T) {
 	dirA := t.TempDir()
 	dirB := t.TempDir()
@@ -126,23 +121,23 @@ func TestIsRepoReconciling_PerRepo(t *testing.T) {
 	handler := func(_ context.Context, repoID, _ string) {
 		if repoID == "repoA" {
 			once.Do(func() {
-				close(ready) // repoA sweep is inside the handler
-				<-proceed    // hold it in flight
+				close(ready) // Close the channel once the sweep handler for repoA is entered.
+				<-proceed    // Block the handler to hold the sweep in progress.
 			})
 		}
 	}
 
-	// concurrency 1 so repoB does NOT sweep while repoA is held — that lets
-	// us assert repoB reports false (settled) during repoA's in-flight sweep.
+	// Configure concurrency to 1 so that repoB does not sweep while repoA is blocked,
+	// allowing us to verify that repoB is not marked as reconciling.
 	r := git.NewWakeReconciler(100*time.Millisecond, 500*time.Millisecond, handler,
 		git.WithClock(time.Now), git.WithWakeConcurrency(1))
 	r.AddDir("repoA", dirA)
 	r.AddDir("repoB", dirB)
 
-	// Seed baseline (first inject — no handler calls expected).
+	// Seed the baseline using a first sweep which should not invoke the handler.
 	r.InjectWake()
 
-	// Advance only repoA's file so its sweep fires the handler.
+	// Modify repoA's file modification time to trigger the handler on the next sweep.
 	future := time.Now().Add(3 * time.Second)
 	if err := os.Chtimes(pathA, future, future); err != nil {
 		t.Fatal(err)
@@ -181,10 +176,7 @@ func TestIsRepoReconciling_PerRepo(t *testing.T) {
 	}
 }
 
-// TestSweepConcurrencyCap verifies that per-repo sweeps run in parallel but
-// never exceed the configured wake_concurrency cap. A handler that blocks on a
-// barrier lets the test count how many repo sweeps are simultaneously in
-// flight. Run under -race to catch shared-state hazards.
+// TestSweepConcurrencyCap verifies that parallel repository sweeps do not exceed the configured concurrency limit.
 func TestSweepConcurrencyCap(t *testing.T) {
 	const repos = 6
 	const cap = 2
@@ -212,7 +204,7 @@ func TestSweepConcurrencyCap(t *testing.T) {
 		}
 		mu.Unlock()
 		entered <- struct{}{}
-		<-release // hold the sweep in flight until the test releases all
+		<-release // Block execution until the test releases the barrier.
 		mu.Lock()
 		active--
 		mu.Unlock()
@@ -224,10 +216,10 @@ func TestSweepConcurrencyCap(t *testing.T) {
 		r.AddDir(repoID(i), d)
 	}
 
-	// Seed baseline.
+	// Seed the initial baseline.
 	r.InjectWake()
 
-	// Advance every file so the next sweep fires the handler for each repo.
+	// Update modification times for all files so they register as modified.
 	future := time.Now().Add(3 * time.Second)
 	for _, d := range dirs {
 		if err := os.Chtimes(filepath.Join(d, "f.go"), future, future); err != nil {
@@ -242,7 +234,7 @@ func TestSweepConcurrencyCap(t *testing.T) {
 	}()
 
 	// Wait until `cap` handlers have entered (proving parallelism reached the
-	// cap). They are all blocked on release, so this is a stable barrier.
+	// Wait until the concurrent sweeps have all blocked at the cap limit.
 	for range cap {
 		select {
 		case <-entered:
@@ -271,12 +263,11 @@ func TestSweepConcurrencyCap(t *testing.T) {
 
 func repoID(i int) string { return "repo" + string(rune('A'+i)) }
 
-// TestIgnoredFile verifies that files matched by the IgnoreList are not
-// passed to the handler.
+// TestIgnoredFile verifies that files matched by the ignore patterns do not trigger the handler.
 func TestIgnoredFile(t *testing.T) {
 	dir := t.TempDir()
 
-	// Create a normal file and an ignored file.
+	// Create a regular file and an ignored file.
 	normalPath := filepath.Join(dir, "main.go")
 	ignoredPath := filepath.Join(dir, "main_gen.go")
 	for _, p := range []string{normalPath, ignoredPath} {
@@ -293,16 +284,16 @@ func TestIgnoredFile(t *testing.T) {
 		mu.Unlock()
 	}
 
-	// Build an ignore list that matches *_gen.go files.
+	// Configure ignore patterns to match generated files.
 	il := fs.NewIgnoreListFromPatterns([]string{"*_gen.go"})
 
 	r := makeReconciler(handler, il, time.Now)
 	r.AddDir("repo1", dir)
 
-	// Seed baseline.
+	// Seed the baseline store.
 	r.InjectWake()
 
-	// Advance mtime on both files.
+	// Update modification times on both files.
 	future := time.Now().Add(2 * time.Second)
 	for _, p := range []string{normalPath, ignoredPath} {
 		if err := os.Chtimes(p, future, future); err != nil {
@@ -310,7 +301,7 @@ func TestIgnoredFile(t *testing.T) {
 		}
 	}
 
-	// Second sweep — only normalPath should fire.
+	// Perform a second sweep and verify only the non-ignored file triggers the handler.
 	r.InjectWake()
 
 	mu.Lock()
@@ -331,9 +322,8 @@ func TestIgnoredFile(t *testing.T) {
 	}
 }
 
-// TestFreezeMonotonicClock_WakeDetected verifies the "freeze monotonic clock"
-// scenario: nowFn returns a time far in the future after the first tick,
-// simulating a suspend/resume gap. Changed files must be detected.
+// TestFreezeMonotonicClock_WakeDetected verifies that a jump in wall-clock time
+// is correctly detected as a wake event, even if the monotonic clock was frozen.
 func TestFreezeMonotonicClock_WakeDetected(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "wake.go")
@@ -341,8 +331,7 @@ func TestFreezeMonotonicClock_WakeDetected(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// nowFn advances time dramatically on the second call to simulate a
-	// wall-clock gap larger than wakeThreshold (500 ms).
+	// Simulate a clock jump larger than the wake threshold on subsequent calls.
 	var callCount int
 	var nowMu sync.Mutex
 	base := time.Now()
@@ -353,7 +342,7 @@ func TestFreezeMonotonicClock_WakeDetected(t *testing.T) {
 		if callCount <= 1 {
 			return base
 		}
-		// Return a time 10 seconds ahead — well past wakeThreshold.
+		// Advance the returned time past the threshold.
 		return base.Add(10 * time.Second)
 	}
 
@@ -373,16 +362,16 @@ func TestFreezeMonotonicClock_WakeDetected(t *testing.T) {
 	)
 	r.AddDir("repo1", dir)
 
-	// First InjectWake seeds baseline (nowFn call 1 = base time).
+	// Seed the baseline with the initial clock reading.
 	r.InjectWake()
 
-	// Advance file mtime so sweep detects a change.
+	// Modify the file's modification time.
 	future := time.Now().Add(2 * time.Second)
 	if err := os.Chtimes(path, future, future); err != nil {
 		t.Fatal(err)
 	}
 
-	// Second InjectWake: nowFn call 2 returns base+10s (simulated wake).
+	// Trigger the second sweep which reads the advanced clock time.
 	r.InjectWake()
 
 	mu.Lock()
@@ -395,9 +384,8 @@ func TestFreezeMonotonicClock_WakeDetected(t *testing.T) {
 	}
 }
 
-// TestStart_WakeGapTriggersSweep drives the real tick loop (not InjectWake):
-// a clock that jumps forward past wakeThreshold between ticks must trigger a
-// sweep that reports the changed file with its owning repo ID.
+// TestStart_WakeGapTriggersSweep verifies that running the background loop detects
+// clock jumps and triggers a sweep reporting modified files.
 func TestStart_WakeGapTriggersSweep(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "wake.go")
@@ -405,9 +393,7 @@ func TestStart_WakeGapTriggersSweep(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// The first clock read (Start's baseline lastTick) returns base; every
-	// later read jumps 10s ahead, so the first ticker read shows a gap well
-	// past the 500ms threshold the helper sets — i.e. a simulated resume.
+	// Force the clock to jump ahead on subsequent tick reads.
 	base := time.Now()
 	var nowMu sync.Mutex
 	var calls int
@@ -429,8 +415,7 @@ func TestStart_WakeGapTriggersSweep(t *testing.T) {
 
 	r := git.NewWakeReconciler(20*time.Millisecond, 500*time.Millisecond, handler, git.WithClock(nowFn))
 	r.AddDir("repoA", dir)
-	// Seed the mtime baseline (no nowFn call) so the post-gap sweep sees a real
-	// change, then bump mtime so the gap sweep has something to report.
+	// Seed the baseline and modify the file on disk.
 	r.InjectWake()
 	future := time.Now().Add(2 * time.Second)
 	if err := os.Chtimes(path, future, future); err != nil {
@@ -451,11 +436,8 @@ func TestStart_WakeGapTriggersSweep(t *testing.T) {
 	}
 }
 
-// TestStart_WakeGapWallClock proves the detector fires on a wall-clock gap even
-// when the clock readings carry NO monotonic component — the real post-suspend
-// case, where CLOCK_MONOTONIC barely advanced but wall time jumped. time.Unix
-// values have no monotonic reading, so a regression that reverted Start to a
-// monotonic comparison would fail to see the gap here.
+// TestStart_WakeGapWallClock verifies that the detector successfully detects a gap using
+// wall-clock time even when the clock readings carry no monotonic component.
 func TestStart_WakeGapWallClock(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "wake.go")
@@ -501,10 +483,8 @@ func TestStart_WakeGapWallClock(t *testing.T) {
 	}
 }
 
-// TestSeed_FirstWakeDetectsChange verifies that an initial seeding sweep
-// establishes a baseline so the SECOND wake sweep reports a file changed since
-// the seed. The first sweep only records state (first-sighting) and fires
-// nothing — the no-op first wake that 's review flagged.
+// TestSeed_FirstWakeDetectsChange verifies that the initial sweep registers the file baseline
+// without triggering events, while a subsequent sweep correctly reports post-seed modifications.
 func TestSeed_FirstWakeDetectsChange(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "seeded.go")
@@ -522,7 +502,7 @@ func TestSeed_FirstWakeDetectsChange(t *testing.T) {
 
 	r := makeReconciler(handler, nil, time.Now)
 	r.AddDir("repo1", dir)
-	r.InjectWake() // baseline (first-sighting) — no handler calls
+	r.InjectWake() // Seeding sweep registers the files but must not fire events.
 
 	mu.Lock()
 	if len(called) != 0 {
@@ -530,7 +510,7 @@ func TestSeed_FirstWakeDetectsChange(t *testing.T) {
 	}
 	mu.Unlock()
 
-	// Change the file AFTER seeding, then the FIRST wake must detect it.
+	// Modify the file on disk after seeding.
 	future := time.Now().Add(2 * time.Second)
 	if err := os.WriteFile(path, []byte("v2"), 0o644); err != nil {
 		t.Fatal(err)
@@ -547,9 +527,8 @@ func TestSeed_FirstWakeDetectsChange(t *testing.T) {
 	}
 }
 
-// TestPrefixProbe_SameSizeSameMtime verifies the same-length-same-mtime hazard
-// is caught: a file whose content changes in the first 64 bytes but whose size
-// and mtime are identical (format-on-save behaviour) must still be reported.
+// TestPrefixProbe_SameSizeSameMtime verifies that content changes within the prefix limit
+// are detected even if the file size and modification time remain identical.
 func TestPrefixProbe_SameSizeSameMtime(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "fmt.go")
@@ -557,7 +536,7 @@ func TestPrefixProbe_SameSizeSameMtime(t *testing.T) {
 	if err := os.WriteFile(path, []byte(strings.Repeat("A", n)), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	// Capture the original mtime so we can restore it after the rewrite.
+	// Store the original modification time to restore it later.
 	info, err := os.Stat(path)
 	if err != nil {
 		t.Fatal(err)
@@ -574,10 +553,9 @@ func TestPrefixProbe_SameSizeSameMtime(t *testing.T) {
 
 	r := makeReconciler(handler, nil, time.Now)
 	r.AddDir("repo1", dir)
-	r.InjectWake() // baseline (first-sighting)
+	r.InjectWake() // Seed the baseline store.
 
-	// Overwrite with the same length but different leading bytes, then force
-	// the mtime back to the original so only the prefix distinguishes them.
+	// Modify the content without changing the size, then restore the original modification time.
 	if err := os.WriteFile(path, []byte(strings.Repeat("B", n)), 0o644); err != nil {
 		t.Fatal(err)
 	}

@@ -1,9 +1,6 @@
-// querier.go exposes a Querier struct that gathers the read-only git
-// history queries needed by application.StartupResync into a single value
-// satisfying the application.GitQuerier port. Each method shells out via
-// os/exec the same way the existing free functions in this package do
-// (diff.go, refdiff.go, history.go); behaviour is intentionally identical
-// so callers can rely on the same path conventions (repoRoot-relative).
+// querier.go exposes a Querier struct that gathers the read-only Git
+// history queries needed by the application StartupResync process. Each method
+// wraps Git command execution and aligns with repository-relative path conventions.
 
 package git
 
@@ -14,15 +11,10 @@ import (
 	"strings"
 )
 
-// Querier implements application.GitQuerier by shelling out to the
-// `git` CLI. It carries no state — methods are pinned to a value receiver
-// so callers can pass either &Querier{} or Querier{} interchangeably.
+// Querier implements the GitQuerier interface by executing the git CLI. It carries no state and uses a value receiver.
 type Querier struct{}
 
-// HEAD returns the current HEAD SHA for the repo at rootPath.
-// An empty rootPath returns an error rather than silently shelling out
-// against the process cwd: history queries must always run scoped to a
-// registered repo.
+// HEAD returns the current HEAD SHA for the repository. An empty rootPath returns an error to prevent running commands outside repository scope.
 func (Querier) HEAD(rootPath string) (string, error) {
 	if rootPath == "" {
 		return "", fmt.Errorf("git rev-parse: repoRoot is empty")
@@ -34,10 +26,7 @@ func (Querier) HEAD(rootPath string) (string, error) {
 	return strings.TrimSpace(out), nil
 }
 
-// IsAncestor reports whether sha is reachable from head — i.e. sha is in
-// HEAD's commit history. Implemented with `git merge-base --is-ancestor`,
-// which exits 0 (ancestor) or 1 (not an ancestor); other exit codes
-// surface as errors.
+// IsAncestor reports whether the specified commit is reachable from the head reference. It returns an error if the underlying git merge-base command fails.
 func (Querier) IsAncestor(rootPath, sha, head string) (bool, error) {
 	if rootPath == "" {
 		return false, fmt.Errorf("git merge-base: repoRoot is empty")
@@ -60,9 +49,7 @@ func (Querier) IsAncestor(rootPath, sha, head string) (bool, error) {
 	return false, fmt.Errorf("git merge-base in %s: %w: %s", rootPath, err, strings.TrimSpace(stderr.String()))
 }
 
-// CommitsSince returns the list of commit SHAs from sha.head in
-// oldest-first order — the output of `git log <sha>.<head> --reverse
-// format=%H`. The set excludes sha itself.
+// CommitsSince returns the list of commit SHAs from the baseline reference up to head, sorted oldest first.
 func (Querier) CommitsSince(rootPath, sha, head string) ([]string, error) {
 	if rootPath == "" {
 		return nil, fmt.Errorf("git log: repoRoot is empty")
@@ -81,9 +68,7 @@ func (Querier) CommitsSince(rootPath, sha, head string) ([]string, error) {
 	return lines, nil
 }
 
-// ChangedFiles returns the files modified in the given commit SHA — i.e.
-// `git diff-tree --no-commit-id --name-only -r <sha>`. Paths are
-// repoRoot-relative, matching the convention of ChangedFiles in diff.go.
+// ChangedFiles returns the files modified in the specified commit. The returned paths are relative to the repository root.
 func (Querier) ChangedFiles(rootPath, sha string) ([]string, error) {
 	if rootPath == "" {
 		return nil, fmt.Errorf("git diff-tree: repoRoot is empty")
@@ -102,9 +87,7 @@ func (Querier) ChangedFiles(rootPath, sha string) ([]string, error) {
 	return lines, nil
 }
 
-// ReadFileAtCommit returns the contents of filePath as it existed at sha,
-// via `git show <sha>:<path>`. The error surface mirrors FileAtRef in
-// refdiff.go for missing paths.
+// ReadFileAtCommit retrieves the contents of the specified file at a given commit.
 func (Querier) ReadFileAtCommit(rootPath, sha, filePath string) ([]byte, error) {
 	if rootPath == "" {
 		return nil, fmt.Errorf("git show: repoRoot is empty")
@@ -123,10 +106,7 @@ func (Querier) ReadFileAtCommit(rootPath, sha, filePath string) ([]byte, error) 
 	return stdout.Bytes(), nil
 }
 
-// runQuerierGit runs a context-less git command scoped to rootPath and
-// returns stdout. The Querier interface methods do not accept a ctx
-// argument (application.GitQuerier is ctx-less by design — see
-// application/resync.go), so cancellation is not threaded here.
+// runQuerierGit runs a context-less git command scoped to the specified repository root and returns its standard output.
 func runQuerierGit(rootPath string, args ...string) (string, error) {
 	full := append([]string{"-C", rootPath}, args...)
 	cmd := exec.Command("git", full...)
@@ -140,7 +120,4 @@ func runQuerierGit(rootPath string, args ...string) (string, error) {
 	return stdout.String(), nil
 }
 
-// Note: importing internal/application from infrastructure/git would
-// violate hexagonal layering, so no compile-time interface assertion
-// lives here. Contract conformance is verified by composition in
-// cmd/veska-daemon/wire.go.
+// Conformance to the application.GitQuerier interface is verified in the daemon wire step to prevent hexagonal layering violations.

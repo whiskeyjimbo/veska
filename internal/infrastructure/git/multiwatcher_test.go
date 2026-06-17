@@ -12,8 +12,7 @@ import (
 
 const multiEventTimeout = 500 * time.Millisecond
 
-// TestMultiRepoWatcherAdd creates a MultiRepoWatcher, adds two tempdir repos,
-// and verifies that the Events channel is non-nil.
+// TestMultiRepoWatcherAdd verifies that new repositories can be added and the events channel is initialized.
 func TestMultiRepoWatcherAdd(t *testing.T) {
 	t.Parallel()
 
@@ -42,8 +41,7 @@ func TestMultiRepoWatcherAdd(t *testing.T) {
 	}
 }
 
-// TestMultiRepoWatcherRemove adds then removes a repo and verifies no panic and
-// that Remove returns nil.
+// TestMultiRepoWatcherRemove verifies that repositories can be successfully removed without errors or panics.
 func TestMultiRepoWatcherRemove(t *testing.T) {
 	t.Parallel()
 
@@ -61,7 +59,7 @@ func TestMultiRepoWatcherRemove(t *testing.T) {
 		t.Fatalf("Remove: %v", err)
 	}
 
-	// Remove a non-existent repo should return an error, not panic.
+	// Removing a non-existent repository should return an error rather than causing a panic.
 	err := mw.Remove("doesNotExist")
 	if err == nil {
 		t.Error("expected error when removing non-existent repo, got nil")
@@ -72,8 +70,7 @@ func TestMultiRepoWatcherRemove(t *testing.T) {
 	}
 }
 
-// TestMultiRepoWatcherReceivesEvent adds a tempdir, starts the watcher, creates a
-// file, and expects a RepoFileEvent on Events within 500ms.
+// TestMultiRepoWatcherReceivesEvent verifies that writing a file to a watched directory triggers a corresponding event.
 func TestMultiRepoWatcherReceivesEvent(t *testing.T) {
 	t.Parallel()
 
@@ -87,7 +84,7 @@ func TestMultiRepoWatcherReceivesEvent(t *testing.T) {
 		t.Fatalf("Add: %v", err)
 	}
 
-	// Small sleep to allow the watcher to register before writing.
+	// Wait briefly to allow the file watcher to initialize.
 	time.Sleep(50 * time.Millisecond)
 
 	path := filepath.Join(dir, "hello.go")
@@ -112,8 +109,7 @@ func TestMultiRepoWatcherReceivesEvent(t *testing.T) {
 	}
 }
 
-// TestMultiRepoWatcherIsolatedDebounce verifies that writing to repo A produces
-// only repo A's ID in the events, not repo B's.
+// TestMultiRepoWatcherIsolatedDebounce verifies that file events in one watched repository do not leak into another.
 func TestMultiRepoWatcherIsolatedDebounce(t *testing.T) {
 	t.Parallel()
 
@@ -131,16 +127,16 @@ func TestMultiRepoWatcherIsolatedDebounce(t *testing.T) {
 		t.Fatalf("Add beta: %v", err)
 	}
 
-	// Small sleep to allow both watchers to register.
+	// Wait briefly to allow both file watchers to register.
 	time.Sleep(50 * time.Millisecond)
 
-	// Write only to repo A.
+	// Modify a file only within repository A's directory.
 	pathA := filepath.Join(dirA, "change.go")
 	if err := os.WriteFile(pathA, []byte("package a"), 0o644); err != nil {
 		t.Fatalf("WriteFile: %v", err)
 	}
 
-	// Collect events for 300ms (well past the 50ms debounce).
+	// Collect events for a duration exceeding the debounce interval.
 	deadline := time.After(300 * time.Millisecond)
 	var repoIDs []string
 loop:
@@ -170,12 +166,8 @@ loop:
 	}
 }
 
-// TestMultiRepoWatcherRestartAll tears down and recreates each repo's FSWatcher
-// (the wake-handle restart) and verifies that a live file
-// write AFTER the restart still produces a RepoFileEvent — proving the fresh
-// handle is wired to the same Events stream. No file is written before the
-// restart, so the only event that can arrive is the post-restart one (the
-// buffered out channel cannot replay a stale pre-restart event as a false pass).
+// TestMultiRepoWatcherRestartAll verifies that restarting all file watchers successfully
+// teardown and recreates watcher instances, and that subsequent file changes are still detected.
 func TestMultiRepoWatcherRestartAll(t *testing.T) {
 	t.Parallel()
 
@@ -189,13 +181,13 @@ func TestMultiRepoWatcherRestartAll(t *testing.T) {
 
 	mw.RestartAll()
 
-	// The repo must still be watched after the restart.
+	// The repository must remain in the watched set after the restart.
 	ids := mw.WatchedRepoIDs()
 	if len(ids) != 1 || ids[0] != "repoR" {
 		t.Fatalf("WatchedRepoIDs after restart = %v, want [repoR]", ids)
 	}
 
-	// Let the fresh watcher register its inotify watches before writing.
+	// Wait briefly for the new watcher handles to register before modifying the file.
 	time.Sleep(50 * time.Millisecond)
 
 	path := filepath.Join(dir, "post-wake.go")
@@ -220,9 +212,8 @@ func TestMultiRepoWatcherRestartAll(t *testing.T) {
 	}
 }
 
-// TestMultiRepoWatcherInject verifies that Inject multiplexes a synthetic write
-// event (the wake-reconciler path) onto Events with the given repo ID, and
-// that an Inject before Start is a no-op rather than a panic.
+// TestMultiRepoWatcherInject verifies that manually injecting file events successfully
+// pipes them to the events channel, and that injection before starting does not panic.
 func TestMultiRepoWatcherInject(t *testing.T) {
 	t.Parallel()
 

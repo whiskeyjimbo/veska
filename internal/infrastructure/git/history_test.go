@@ -11,8 +11,7 @@ import (
 	veskagit "github.com/whiskeyjimbo/veska/internal/infrastructure/git"
 )
 
-// runGitEnv runs a git command with extra environment variables and
-// fails the test on error. Used to pin committer dates for windowing.
+// runGitEnv executes a Git command with custom environment variables, failing the test if an error occurs.
 func runGitEnv(t *testing.T, args []string, extraEnv ...string) {
 	t.Helper()
 	cmd := exec.Command("git", args...)
@@ -22,8 +21,7 @@ func runGitEnv(t *testing.T, args []string, extraEnv ...string) {
 	}
 }
 
-// commitFileAt writes content to path, stages it, and commits with an
-// explicit author+committer date so windowing tests are deterministic.
+// commitFileAt writes content to a file, stages it, and commits it with specific dates to ensure deterministic test execution.
 func commitFileAt(t *testing.T, dir, name, content, msg string, when time.Time) {
 	t.Helper()
 	mustWriteFile(t, filepath.Join(dir, name), content)
@@ -42,17 +40,17 @@ func commitFileAt(t *testing.T, dir, name, content, msg string, when time.Time) 
 func TestChangeCounts_WindowExcludesOldCommits(t *testing.T) {
 	dir := initRepoWithFile(t)
 	now := time.Now()
-	// In-window: 2 commits to a.txt within the last 30 days.
+	// Ensure 2 commits occur within the 30-day window.
 	commitFileAt(t, dir, "a.txt", "v1\n", "recent 1", now.AddDate(0, 0, -1))
 	commitFileAt(t, dir, "a.txt", "v2\n", "recent 2", now.AddDate(0, 0, -2))
-	// Out-of-window: 100 days ago.
+	// Ensure 1 commit is outside the 30-day window.
 	commitFileAt(t, dir, "b.txt", "old\n", "old b", now.AddDate(0, 0, -100))
 
 	counts, err := veskagit.ChangeCounts(context.Background(), dir, 30*24*time.Hour)
 	if err != nil {
 		t.Fatalf("ChangeCounts: %v", err)
 	}
-	// init (current time) + 2 backdated edits all touch a.txt in window.
+	// Both backdated commits and the initial commit should fall within the lookup window.
 	if counts["a.txt"] != 3 {
 		t.Errorf("a.txt: got %d want 3", counts["a.txt"])
 	}
@@ -67,12 +65,12 @@ func TestChangeCounts_DefaultWindowIs30Days(t *testing.T) {
 	commitFileAt(t, dir, "a.txt", "v1\n", "recent", now.AddDate(0, 0, -5))
 	commitFileAt(t, dir, "b.txt", "old\n", "old", now.AddDate(0, 0, -90))
 
-	// Zero window selects the default (30 days).
+	// Passing a zero window duration defaults to the 30-day look-back period.
 	counts, err := veskagit.ChangeCounts(context.Background(), dir, 0)
 	if err != nil {
 		t.Fatalf("ChangeCounts: %v", err)
 	}
-	// init (current time) + the -5d edit are within the default window.
+	// Verify that only files modified within the default 30-day window are counted.
 	if counts["a.txt"] != 2 {
 		t.Errorf("a.txt: got %d want 2", counts["a.txt"])
 	}
@@ -92,7 +90,7 @@ func TestFileHistory_ListsRecentCommitsTouchingFile(t *testing.T) {
 	if err != nil {
 		t.Fatalf("FileHistory: %v", err)
 	}
-	// init + 2 edits = 3 commits touching a.txt.
+	// A total of three commits should touch a.txt.
 	if len(commits) != 3 {
 		t.Fatalf("got %d commits want 3: %+v", len(commits), commits)
 	}
@@ -104,8 +102,7 @@ func TestFileHistory_ListsRecentCommitsTouchingFile(t *testing.T) {
 			t.Errorf("empty subject in %+v", c)
 		}
 	}
-	// Newest first by author date: init is committed at the real current
-	// time, the edits are backdated, so init sorts ahead of them.
+	// Verify that sorting places the newest commits first, ordered by author date.
 	if commits[0].Subject != "init" {
 		t.Errorf("expected newest first (init), got %q", commits[0].Subject)
 	}
@@ -117,9 +114,7 @@ func TestFileHistory_ListsRecentCommitsTouchingFile(t *testing.T) {
 func TestFileHistory_WindowExcludesOldCommits(t *testing.T) {
 	dir := initRepoWithFile(t)
 	now := time.Now()
-	// "old a" is 100 days back; "recent a" is in window. "init" (from
-	// initRepoWithFile) is committed at the real current time so it is
-	// also in window — expect those two, not the old one.
+	// Ensure that older out-of-window commits are correctly excluded from the returned file history.
 	commitFileAt(t, dir, "a.txt", "v1\n", "recent a", now.AddDate(0, 0, -2))
 	commitFileAt(t, dir, "a.txt", "v2\n", "old a", now.AddDate(0, 0, -100))
 

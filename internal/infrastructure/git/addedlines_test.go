@@ -8,18 +8,17 @@ import (
 	veskagit "github.com/whiskeyjimbo/veska/internal/infrastructure/git"
 )
 
-// TestAddedLinesForCommit_ReportsOnlyAddedLines verifies that for a known
-// commit the parser returns only "+"-introduced lines, with correct
-// new-file line numbers and text, and never context or removed lines.
+// TestAddedLinesForCommit_ReportsOnlyAddedLines verifies that the parser extracts only newly introduced
+// lines with correct line numbers, ignoring unmodified context or deleted lines.
 func TestAddedLinesForCommit_ReportsOnlyAddedLines(t *testing.T) {
-	dir := initRepoWithFile(t) // a.txt = "hello\n", committed as "init"
+	dir := initRepoWithFile(t) // Initialize the repository with a text file.
 
-	// code.go: 3 lines, first commit of this file.
+	// Create and commit the initial Go source file.
 	mustWriteFile(t, filepath.Join(dir, "code.go"), "package p\nfunc A() {}\nfunc B() {}\n")
 	runGit(t, dir, "add", "code.go")
 	runGit(t, dir, "commit", "-q", "-m", "add code")
 
-	// Modify code.go: line 2 changes, append a new line 4. Also touch a.txt.
+	// Modify the Go source file and append a new line to trigger changes.
 	mustWriteFile(t, filepath.Join(dir, "code.go"),
 		"package p\nfunc A() { _ = 1 }\nfunc B() {}\nfunc C() {}\n")
 	mustWriteFile(t, filepath.Join(dir, "a.txt"), "hello\nworld\n")
@@ -42,8 +41,8 @@ func TestAddedLinesForCommit_ReportsOnlyAddedLines(t *testing.T) {
 	assertLines(t, "a.txt", got["a.txt"], wantTxt)
 }
 
-// TestAddedLinesForCommit_RootCommit verifies the first commit of a repo
-// (no parent) yields every line as added.
+// TestAddedLinesForCommit_RootCommit verifies that analyzing the initial commit of a repository
+// treats all lines in the file as added.
 func TestAddedLinesForCommit_RootCommit(t *testing.T) {
 	dir := initRepoWithFile(t)
 	sha := revParse(t, dir, "HEAD")

@@ -10,9 +10,8 @@ import (
 	veskagit "github.com/whiskeyjimbo/veska/internal/infrastructure/git"
 )
 
-// initRepoTwoCommits initialises a temp repo with two commits and returns
-// the dir plus the two commit SHAs (refA = first, refB = second). The
-// second commit modifies code.go and adds new.go.
+// initRepoTwoCommits initializes a temporary repository with two commits and returns
+// the directory and both commit SHAs.
 func initRepoTwoCommits(t *testing.T) (dir, refA, refB string) {
 	t.Helper()
 	dir = initRepoWithFile(t) // a.txt committed as "init"
@@ -90,7 +89,7 @@ func TestFileAtRef_ReadsContentAtEachRef(t *testing.T) {
 
 func TestFileAtRef_AbsentFileIsErrFileNotAtRef(t *testing.T) {
 	dir, refA, _ := initRepoTwoCommits(t)
-	// new.go was added in refB, so it is absent at refA.
+	// new.go was added in the second commit, so it should be absent at the first commit reference.
 	_, err := veskagit.FileAtRef(context.Background(), dir, refA, "new.go")
 	if !errors.Is(err, veskagit.ErrFileNotAtRef) {
 		t.Fatalf("expected ErrFileNotAtRef, got %v", err)

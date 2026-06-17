@@ -9,20 +9,10 @@ import (
 	"time"
 )
 
-// TestFirstWakeReportsOnlySuspendWindowChanges is the behavioral heart of
-// It proves the convergence goal: when the reconciler shares
-// the watcher's live baseline (kept current by the live save path), the first
-// post-suspend wake fires the handler ONLY for files edited during the suspend
-// window - NOT for files edited live during the session whose baseline already
-// tracks disk.
-// Setup mirrors the production wiring without fsnotify timing flake:
-//
-//	a real FSWatcher is the BaselineStore, wired via WithBaseline;
-//	seedLastSeen records the baseline (as Watch does);
-//	the LIVE edit goes through the watcher's baseline Put (what the live
-//	  debounced-write path does), so its baseline == current disk → no fire;
-//	the SUSPEND-WINDOW edit changes a DIFFERENT file on disk WITHOUT updating
-//	  the watcher baseline (as a real suspend does) → fires.
+// TestFirstWakeReportsOnlySuspendWindowChanges verifies that the reconciler correctly fires
+// events only for files modified during a suspend window. When the reconciler shares the
+// watcher's baseline, post-suspend wakes only report files modified on disk without an associated
+// baseline update, ensuring already-processed live edits do not trigger redundant events.
 func TestFirstWakeReportsOnlySuspendWindowChanges(t *testing.T) {
 	dir := t.TempDir()
 	liveFile := filepath.Join(dir, "live.go")
@@ -38,7 +28,7 @@ func TestFirstWakeReportsOnlySuspendWindowChanges(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer fw.Close()
-	fw.seedLastSeen(dir) // establish the session-start baseline for both files
+	fw.seedLastSeen(dir) // Establish the initial session baseline for both files.
 
 	var mu sync.Mutex
 	var fired []string
@@ -52,9 +42,8 @@ func TestFirstWakeReportsOnlySuspendWindowChanges(t *testing.T) {
 		WithBaseline(func(repoID string) (BaselineStore, bool) { return fw, true }))
 	r.AddDir("repo1", dir)
 
-	// LIVE edit during the session: change content, then update the shared
-	// baseline through the watcher's Put - exactly what emitWrite does on a live
-	// debounced write. Its baseline now equals disk.
+	// Simulate a live edit during the session by changing the file content and updating
+	// the baseline store directly. This matches the behavior of a live debounced write.
 	if err := os.WriteFile(liveFile, []byte("package x // live edit\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -64,13 +53,13 @@ func TestFirstWakeReportsOnlySuspendWindowChanges(t *testing.T) {
 	}
 	fw.Put(liveFile, entry)
 
-	// SUSPEND-WINDOW edit: a DIFFERENT file changes on disk while the watcher is
-	// suspended, so its baseline is NOT updated.
+	// Simulate a suspend window edit where a different file is modified on disk
+	// without updating the baseline store.
 	if err := os.WriteFile(suspendFile, []byte("package x // changed during suspend\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
-	// First post-suspend wake.
+	// Trigger the first post-suspend reconciliation wake.
 	r.InjectWake()
 
 	mu.Lock()
@@ -83,12 +72,9 @@ func TestFirstWakeReportsOnlySuspendWindowChanges(t *testing.T) {
 	}
 }
 
-// TestRefreshBaselineUpdatesToDisk proves the LIVE debounced-write action
-// (refreshBaseline, called by the run loop on every debounced write) updates the
-// shared baseline to current on-disk state (mtime+size+prefix). Tested
-// deterministically by calling the extracted method directly rather than relying
-// on fsnotify timing. This is the code change that makes the behavioral test
-// above hold in production.
+// TestRefreshBaselineUpdatesToDisk verifies that refreshing the baseline updates the
+// entry to match the current on-disk state. This is verified deterministically by calling
+// the update function directly rather than relying on fsnotify asynchronous events.
 func TestRefreshBaselineUpdatesToDisk(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "f.go")
@@ -104,7 +90,7 @@ func TestRefreshBaselineUpdatesToDisk(t *testing.T) {
 	fw.seedLastSeen(dir)
 	before, _ := fw.Get(path)
 
-	// Change content AND force a distinct mtime so the entry must differ.
+	// Modify the file content and explicitly adjust its modification time to ensure the baseline entry changes.
 	if err := os.WriteFile(path, []byte("package x // edited longer\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -133,9 +119,8 @@ func TestRefreshBaselineUpdatesToDisk(t *testing.T) {
 	}
 }
 
-// TestRefreshBaselineSkipsAfterCtxCancel proves the teardown-race guard
-// (guardrail 3): a debounced timer that fires AFTER its FSWatcher's ctx is
-// cancelled (i.e. after RestartAll tore it down) does NOT write to the baseline.
+// TestRefreshBaselineSkipsAfterCtxCancel verifies that updates to the baseline are ignored
+// if the context has been cancelled, preventing stale writes during teardown.
 func TestRefreshBaselineSkipsAfterCtxCancel(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "f.go")
@@ -152,7 +137,7 @@ func TestRefreshBaselineSkipsAfterCtxCancel(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 
-	// Mutate disk after cancel; refreshBaseline must refuse to record it.
+	// Mutate the file on disk after cancellation and verify that the baseline is not updated.
 	if err := os.WriteFile(path, []byte("package x // after teardown\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -164,19 +149,8 @@ func TestRefreshBaselineSkipsAfterCtxCancel(t *testing.T) {
 	}
 }
 
-// BenchmarkRefreshBaseline measures the live-emit baseline update on a
-// page-cache-hot just-written file (guardrail 2: hot-path no-regression
-// evidence). It is the per-debounced-write cost the convergence adds: one
-// os.Stat + a 64-byte prefix read + a map Put under a mutex.
-// Measured (Intel i7-7700, Linux, t.TempDir page-cache hot):
-//
-//	BenchmarkRefreshBaseline-4 ~5985 ns/op, 504 B/op, 6 allocs/op.
-//
-// Cost argument: ~6µs runs once per debounced write, AFTER the 50ms debounce
-// window and BEFORE a channel send + downstream tree-sitter parse + Ingester
-// Save. Six microseconds of stat + hot 64-byte read is ~4 orders of magnitude
-// below the 50ms debounce it follows and is dwarfed by the parse it precedes, so
-// it is not a measurable hot-path regression.
+// BenchmarkRefreshBaseline measures the latency of updating the file baseline for a recently modified
+// file, ensuring that stat operations and small prefix reads do not introduce performance regressions.
 func BenchmarkRefreshBaseline(b *testing.B) {
 	dir := b.TempDir()
 	path := filepath.Join(dir, "hot.go")

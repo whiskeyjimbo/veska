@@ -42,7 +42,7 @@ func firstEvent(ch <-chan ports.FileEvent, timeout time.Duration) (ports.FileEve
 	}
 }
 
-// TestFSWatcher_Write verifies that writing to a watched file emits WatchOpWrite.
+// TestFSWatcher_Write verifies that writing to a watched file emits a WatchOpWrite event.
 func TestFSWatcher_Write(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
@@ -60,7 +60,7 @@ func TestFSWatcher_Write(t *testing.T) {
 		t.Fatalf("Watch: %v", err)
 	}
 
-	// Create and write a file.
+	// Create and write content to a test file.
 	path := filepath.Join(dir, "test.go")
 	if err := os.WriteFile(path, []byte("hello"), 0o644); err != nil {
 		t.Fatalf("WriteFile: %v", err)
@@ -78,12 +78,12 @@ func TestFSWatcher_Write(t *testing.T) {
 	}
 }
 
-// TestFSWatcher_Remove verifies that removing a file emits WatchOpRemove.
+// TestFSWatcher_Remove verifies that removing a file emits a WatchOpRemove event.
 func TestFSWatcher_Remove(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
 
-	// Pre-create the file so we're removing an existing file.
+	// Pre-create a file so that we have an active tracked file to delete.
 	path := filepath.Join(dir, "remove_me.go")
 	if err := os.WriteFile(path, []byte("bye"), 0o644); err != nil {
 		t.Fatalf("WriteFile: %v", err)
@@ -102,9 +102,9 @@ func TestFSWatcher_Remove(t *testing.T) {
 		t.Fatalf("Watch: %v", err)
 	}
 
-	// Drain any create events from the initial watch registration.
+	// Drain any file events triggered during the initial watch registration.
 	time.Sleep(100 * time.Millisecond)
-	// drain buffered
+	// Drain all remaining events from the buffer.
 	for {
 		select {
 		case <-ch:
@@ -127,7 +127,7 @@ drained:
 	}
 }
 
-// TestFSWatcher_Debounce verifies that two rapid writes produce only one FileEvent.
+// TestFSWatcher_Debounce verifies that multiple rapid writes to the same file are debounced into a single file event.
 func TestFSWatcher_Debounce(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
@@ -146,7 +146,7 @@ func TestFSWatcher_Debounce(t *testing.T) {
 	}
 
 	path := filepath.Join(dir, "debounced.go")
-	// Write twice within 10ms — well inside the 50ms debounce window.
+	// Perform two writes within a brief interval to check the debounce logic.
 	if err := os.WriteFile(path, []byte("v1"), 0o644); err != nil {
 		t.Fatalf("WriteFile v1: %v", err)
 	}
@@ -155,7 +155,7 @@ func TestFSWatcher_Debounce(t *testing.T) {
 		t.Fatalf("WriteFile v2: %v", err)
 	}
 
-	// Collect all events for 200ms (4x debounce window).
+	// Collect all events for a duration that allows the debounce timer to settle.
 	events := drainEvents(ch, 200*time.Millisecond)
 
 	writeCount := 0
@@ -169,13 +169,13 @@ func TestFSWatcher_Debounce(t *testing.T) {
 	}
 }
 
-// TestFSWatcher_OverflowFallback verifies that injecting an overflow emits
-// "watcher_overflow" in logs and emits FileEvents for changed files.
+// TestFSWatcher_OverflowFallback verifies that an injected overflow event is handled correctly
+// by logging the overflow warning and scanning the directory for changes.
 func TestFSWatcher_OverflowFallback(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
 
-	// Capture slog output.
+	// Redirect default structured logging to a buffer for verification.
 	var buf bytes.Buffer
 	logger := slog.New(slog.NewTextHandler(&buf, &slog.HandlerOptions{Level: slog.LevelDebug}))
 	slog.SetDefault(logger)
@@ -194,13 +194,13 @@ func TestFSWatcher_OverflowFallback(t *testing.T) {
 		t.Fatalf("Watch: %v", err)
 	}
 
-	// Create a file so there's something to detect in the overflow walk.
+	// Create an initial file to establish a baseline in the watch tree.
 	path := filepath.Join(dir, "overflow_file.go")
 	if err := os.WriteFile(path, []byte("initial"), 0o644); err != nil {
 		t.Fatalf("WriteFile: %v", err)
 	}
 
-	// Drain the initial write event (if any) so we have a clean baseline.
+	// Drain any initial file events to ensure a clean starting point.
 	time.Sleep(150 * time.Millisecond)
 	for {
 		select {
@@ -211,15 +211,15 @@ func TestFSWatcher_OverflowFallback(t *testing.T) {
 	}
 cleanBaseline:
 
-	// Modify the file to change mtime/size, then inject overflow.
+	// Modify the file content to alter its signature, then trigger the overflow simulation.
 	if err := os.WriteFile(path, []byte("changed content after overflow"), 0o644); err != nil {
 		t.Fatalf("WriteFile changed: %v", err)
 	}
 
-	// Inject the overflow — this should walk the dir, compare stats, and emit events.
+	// Inject the overflow event to trigger a full directory scan.
 	w.InjectOverflow(dir)
 
-	// Wait for event.
+	// Wait for the expected write event to be delivered.
 	ev, ok := firstEvent(ch, eventTimeout)
 	if !ok {
 		t.Fatal("expected FileEvent from overflow polling, got none")
@@ -228,7 +228,7 @@ cleanBaseline:
 		t.Errorf("expected WatchOpWrite from overflow, got %q", ev.Op)
 	}
 
-	// Check that "watcher_overflow" appeared in the log.
+	// Verify that the overflow warning was logged.
 	logOutput := buf.String()
 	if !bytes.Contains([]byte(logOutput), []byte("watcher_overflow")) {
 		t.Errorf("expected 'watcher_overflow' in slog output, got: %s", logOutput)

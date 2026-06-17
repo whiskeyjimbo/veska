@@ -11,7 +11,7 @@ import (
 	veskagit "github.com/whiskeyjimbo/veska/internal/infrastructure/git"
 )
 
-// runGit runs a git command in dir and fails the test on error.
+// runGit runs a git command in the specified directory, failing the test if the execution encounters an error.
 func runGit(t *testing.T, dir string, args ...string) {
 	t.Helper()
 	cmd := exec.Command("git", append([]string{"-C", dir}, args...)...)
@@ -21,8 +21,7 @@ func runGit(t *testing.T, dir string, args ...string) {
 	}
 }
 
-// runGitOut runs a git command in dir, fails on error, and returns the
-// trimmed stdout.
+// runGitOut runs a git command in the specified directory, failing the test on error and returning the trimmed stdout.
 func runGitOut(t *testing.T, dir string, args ...string) string {
 	t.Helper()
 	cmd := exec.Command("git", append([]string{"-C", dir}, args...)...)
@@ -40,8 +39,8 @@ func mustWriteFile(t *testing.T, path, content string) {
 	}
 }
 
-// initRepoWithFile initialises a temp git repo with one committed file
-// so subsequent edits show up as working-tree changes against HEAD.
+// initRepoWithFile initializes a temporary Git repository with a single committed file,
+// ensuring subsequent edits register as working-tree changes relative to HEAD.
 func initRepoWithFile(t *testing.T) string {
 	t.Helper()
 	if _, err := exec.LookPath("git"); err != nil {
@@ -60,7 +59,7 @@ func initRepoWithFile(t *testing.T) string {
 
 func TestChangedFiles_ReportsWorkingTreeDiff(t *testing.T) {
 	dir := initRepoWithFile(t)
-	// Modify an existing tracked file (unstaged).
+	// Modify an existing tracked file without staging it.
 	mustWriteFile(t, filepath.Join(dir, "a.txt"), "world\n")
 
 	got, err := veskagit.ChangedFiles(context.Background(), dir)
@@ -98,7 +97,7 @@ func TestChangedFilesStaged_ReportsCachedDiff(t *testing.T) {
 		t.Fatalf("got %v want [a.txt]", got)
 	}
 
-	// Working-tree diff (uncached) should be clean.
+	// Ensure the working-tree diff is clean once the changes are staged.
 	gotWT, err := veskagit.ChangedFiles(context.Background(), dir)
 	if err != nil {
 		t.Fatalf("ChangedFiles: %v", err)
