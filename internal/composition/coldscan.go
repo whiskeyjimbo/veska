@@ -12,17 +12,12 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/treesitter"
 )
 
-// ColdScanCore bundles the ingestion + promotion graph shared by the daemon and
-// the CLI cold-scan (reindex) path: the staging area, the Ingester, the
-// PromotionStore with its FTS + embedding-ref sinks, and the Promoter.
-// The reparser is intentionally NOT part of the core - it legitimately differs
-// between callers (the daemon passes a scan tracker). The Ingester's finding
-// storage and the Promoter's check/added-lines/tracer seams also differ per
-// caller (the daemon registers dead-code + contract-drift checks the CLI omits,
-// and only the daemon emits parse findings), so they are supplied by the caller
-// as construction options via ingesterOpts/promoterOpts rather than mutated
-// afterward. The core is exactly the part that was previously copied verbatim
-// between cmd/veska/reindex.go and internal/cli/daemon/wire.go.
+// ColdScanCore bundles the ingestion and promotion graph components shared by the
+// daemon and the CLI cold-scan path: the staging area, the Ingester, the
+// PromotionStore with its FTS and embedding-ref sinks, and the Promoter.
+// The reparser is not part of the core because it differs between callers (the
+// daemon uses a scan tracker, while the CLI does not). Callers configure
+// components like finding storage and tracers via options instead of post-construction mutation.
 type ColdScanCore struct {
 	Staging        *staging.Area
 	Gate           *staging.Gate
@@ -31,22 +26,16 @@ type ColdScanCore struct {
 	Promoter       *application.Promoter
 }
 
-// NewColdScanCore wires the cold-scan core over the given pools. reviewEnabled
-// gates the optional WorkKindReview promotion lane (sqlite.WithReviewEnabled);
-// pass false for the CLI path, which never enqueues review work. The
-// caller-specific Ingester and Promoter collaborators (finding storage, check
-// runner, added-lines seam, tracer) are forwarded as ingesterOpts/promoterOpts
-// so the constructed core is fully wired and immutable.
-// coldScanCoreConfig holds the tuneable knobs for NewColdScanCore.
+// NewColdScanCore wires the cold-scan core over the given database pools. The
+// reviewEnabled option gates the review promotion lane; it is false for the CLI
+// path which does not enqueue review work.
 type coldScanCoreConfig struct {
 	reviewEnabled bool
 }
 
-// ColdScanCoreOption configures NewColdScanCore.
 type ColdScanCoreOption func(*coldScanCoreConfig)
 
-// WithReviewEnabled turns on the M5 review pipeline for the cold-scan core's
-// promotion store. Absent ⇒ false (review off).
+// WithReviewEnabled enables the review pipeline for the cold-scan core's promotion store.
 func WithReviewEnabled(enabled bool) ColdScanCoreOption {
 	return func(c *coldScanCoreConfig) { c.reviewEnabled = enabled }
 }
@@ -58,9 +47,8 @@ func NewColdScanCore(pools *sqlite.Pools, ingesterOpts []application.IngesterOpt
 	}
 	area := staging.NewArea()
 	gate := staging.NewGate(area)
-	// Cold scan walks and parses Go + TS/TSX; the walk filter is sourced from
-	// this parser's SupportedExtensions via Ingester.SupportedExtensions
-	// so adding a language here is the only edit needed.
+	// The file walk filter is sourced from this parser's SupportedExtensions,
+	// so adding a language here updates the target files.
 	parser := treesitter.NewMultiParser(treesitter.NewGoParser(), treesitter.NewTSParser())
 	ingester := application.NewIngester(parser, area, gate, ingesterOpts...)
 
@@ -84,16 +72,9 @@ func NewColdScanCore(pools *sqlite.Pools, ingesterOpts []application.IngesterOpt
 }
 
 // NewColdScanReparser builds the cold-scan reparser closure from an
-// already-wired Ingester/Promoter pair, an IgnoreLoader, and any
-// caller-specific options. It is the single construction site for the reparser:
-// the daemon passes application.WithScanTracker (so eng_get_status can surface
-// in-flight scans); the CLI cold-scan path omits it. Previously both callers
-// hand-built this closure from application.NewColdScanReparser - daemon
-// wire.go and NewCLIColdScanReparser each had a near-identical copy.
-// The reparser is deliberately not folded into NewColdScanCore: the core is the
-// part both callers share verbatim, whereas the reparser legitimately differs
-// (the scan tracker) and is built from the core's Ingester/Promoter after the
-// fact.
+// already-wired Ingester/Promoter pair and an IgnoreLoader. The reparser is not
+// folded into NewColdScanCore because the daemon needs to pass WithScanTracker,
+// which is not used by the CLI.
 func NewColdScanReparser(ingester *application.Ingester, promoter *application.Promoter, loader application.IgnoreLoader, opts ...application.ColdScanOption) (func(context.Context, application.RepoRecord) error, error) {
 	all := append([]application.ColdScanOption{application.WithIgnoreLoader(loader)}, opts...)
 	reparser, err := application.NewColdScanReparser(ingester, promoter, gitwatch.Querier{}, all...)
@@ -103,11 +84,9 @@ func NewColdScanReparser(ingester *application.Ingester, promoter *application.P
 	return reparser, nil
 }
 
-// GitAddedLinesFunc builds the Promoter AddedLines seam from a repo-root
-// resolver: it resolves the repo's working-tree root, then parses the promoted
-// commit's newly-added lines via git diff. Shared so the daemon and the CLI
-// cold-scan path resolve diffs identically (the closure was previously copied
-// into both). Keeps the Promoter free of an infrastructure import.
+// GitAddedLinesFunc builds the Promoter AddedLines seam from a repository root
+// resolver, parsing newly-added lines via git diff. This keeps the Promoter
+// package clean of infrastructure imports.
 func GitAddedLinesFunc(repoRoot func(ctx context.Context, repoID string) (string, error)) application.AddedLinesFunc {
 	return func(ctx context.Context, repoID, gitSHA string) (map[string][]application.Line, error) {
 		root, err := repoRoot(ctx, repoID)
@@ -130,10 +109,8 @@ func GitAddedLinesFunc(repoRoot func(ctx context.Context, repoID string) (string
 	}
 }
 
-// CheckRunnerAdapter bridges *checks.Runner to the application.CheckRunner port
-// the Promoter consumes, converting application.Line to checks.Line. Both the
-// daemon and the CLI cold-scan path wrap their runner in this - previously two
-// byte-identical copies (daemon.checkRunnerAdapter, reindex.coldScanCheckRunner).
+// CheckRunnerAdapter bridges *checks.Runner to the application.CheckRunner port,
+// converting application.Line to checks.Line.
 type CheckRunnerAdapter struct {
 	Inner *checks.Runner
 }

@@ -32,11 +32,10 @@ type PruneResult struct {
 	Kept int
 }
 
-// Prune applies the retention policy to user-initiated backups
-// in opts.BackupDir. It keeps the KeepMinCount most-recent backups regardless
-// of age and deletes the rest if they are older than MaxAge.
-// Auto-pre-migration snapshots have their own retention (§2.3) and are never
-// touched here. Prune is idempotent and a no-op on a clean directory.
+// Prune applies the retention policy to user-initiated backups. It keeps the
+// KeepMinCount most-recent backups regardless of age and deletes the rest if
+// they are older than MaxAge. Auto-pre-migration snapshots are never touched
+// here. Prune is idempotent.
 func Prune(opts PruneOptions) (PruneResult, error) {
 	now := opts.Now
 	if now.IsZero() {
@@ -96,9 +95,8 @@ func Prune(opts PruneOptions) (PruneResult, error) {
 	return result, nil
 }
 
-// ParseRetentionAge parses a retention duration string. It accepts a plain Go
-// duration (e.g. "720h", "30m") and the day suffix "d" (e.g. "30d") which Go's
-// time.ParseDuration does not support.
+// ParseRetentionAge parses a retention duration string. It accepts Go durations
+// and a custom day suffix 'd', which time.ParseDuration does not natively support.
 func ParseRetentionAge(s string) (time.Duration, error) {
 	s = strings.TrimSpace(s)
 	if s == "" {

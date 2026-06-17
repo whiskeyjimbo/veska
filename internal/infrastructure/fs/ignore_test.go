@@ -21,7 +21,6 @@ func TestLoad_NoFile_ReturnsDefaults(t *testing.T) {
 		t.Fatal("expected at least one pattern (defaults), got none")
 	}
 
-	// Check a few known defaults are present
 	want := map[string]bool{
 		"vendor/":       false,
 		"node_modules/": false,
@@ -55,18 +54,15 @@ func TestLoad_WithFile_MergesDefaultsAndFile(t *testing.T) {
 		have[p] = true
 	}
 
-	// defaults must still be present
 	if !have["vendor/"] {
 		t.Error("expected default pattern vendor/ to be present after merge")
 	}
-	// user patterns must be present
 	if !have["custom-dir/"] {
 		t.Error("expected user pattern custom-dir/ to be present")
 	}
 	if !have["*.tmp"] {
 		t.Error("expected user pattern *.tmp to be present")
 	}
-	// comment and blank line must NOT be patterns
 	for _, p := range patterns {
 		if p == "" || p[0] == '#' {
 			t.Errorf("unexpected pattern %q: comments and blank lines should be skipped", p)
@@ -158,7 +154,6 @@ func TestLoad_CommentsAndBlankLinesSkipped(t *testing.T) {
 
 func TestShouldIgnore_GlobPattern(t *testing.T) {
 	dir := t.TempDir()
-	// *.pb.go is a default pattern
 	il, err := fsignore.Load(dir)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -175,10 +170,8 @@ func TestShouldIgnore_GlobPattern(t *testing.T) {
 	}
 }
 
-// TestShouldIgnore_NoSubstringOvermatch guards deficiency (1):
-// the old matcher used strings.Contains, so a pattern like "build" wrongly
-// ignored "rebuild/" and "src/build_config.go". Under.gitignore semantics a
-// bare token anchors to a full path component, not an arbitrary substring.
+// TestShouldIgnore_NoSubstringOvermatch verifies that patterns like "build" only
+// match full path components and do not cause substring overmatching.
 func TestShouldIgnore_NoSubstringOvermatch(t *testing.T) {
 	il := fsignore.NewIgnoreListFromPatterns([]string{"build"})
 
@@ -192,9 +185,7 @@ func TestShouldIgnore_NoSubstringOvermatch(t *testing.T) {
 	}
 }
 
-// TestShouldIgnore_Negation guards deficiency (2): the old matcher
-// had no negation support. A trailing "!pattern" must re-include a path that an
-// earlier pattern excluded (last-match-wins).
+// TestShouldIgnore_Negation verifies that negation patterns override earlier exclusions.
 func TestShouldIgnore_Negation(t *testing.T) {
 	il := fsignore.NewIgnoreListFromPatterns([]string{"secret/", "!secret/keep.txt"})
 
@@ -206,9 +197,8 @@ func TestShouldIgnore_Negation(t *testing.T) {
 	}
 }
 
-// TestShouldIgnore_RecursiveGlob guards deficiency (3): the old
-// matcher used filepath.Match, which does not cross "/" and so could not honor
-// "**". A "**/generated/" pattern must match the directory at any depth.
+// TestShouldIgnore_RecursiveGlob verifies that patterns using "**" recursively match
+// directories at any depth.
 func TestShouldIgnore_RecursiveGlob(t *testing.T) {
 	il := fsignore.NewIgnoreListFromPatterns([]string{"**/generated/"})
 
@@ -222,9 +212,8 @@ func TestShouldIgnore_RecursiveGlob(t *testing.T) {
 	}
 }
 
-// TestShouldIgnore_AgentWorktrees guards: AI-agent worktree roots
-// (.claude/worktrees/,.cursor/,.aider*/) are skipped by default so cold
-// scans don't index N duplicate copies of every symbol — one per worktree.
+// TestShouldIgnore_AgentWorktrees verifies that AI-agent worktree patterns are ignored
+// by default to avoid duplicate symbol indexing.
 func TestShouldIgnore_AgentWorktrees(t *testing.T) {
 	dir := t.TempDir()
 	il, err := fsignore.Load(dir)
@@ -242,10 +231,10 @@ func TestShouldIgnore_AgentWorktrees(t *testing.T) {
 			t.Errorf("expected %q to be ignored under default agent-worktree patterns", p)
 		}
 	}
-	// Sanity: real source files outside those roots still scan.
 	for _, p := range []string{"main.go", "internal/api/server.go"} {
 		if il.ShouldIgnore(p) {
 			t.Errorf("expected %q to NOT be ignored", p)
 		}
 	}
 }
+

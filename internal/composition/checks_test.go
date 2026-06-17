@@ -14,7 +14,7 @@ func stubRepoRoot(context.Context, string) (string, error) { return "", nil }
 
 func TestRegisterCommonChecks_SecretsAndVuln(t *testing.T) {
 	reg := checks.NewRegistry()
-	cfg := config.Config{} // no disabled checks
+	cfg := config.Config{}
 	src := vulnsource.NewNullVulnSource()
 
 	RegisterCommonChecks(reg, cfg, src, true, stubRepoRoot)

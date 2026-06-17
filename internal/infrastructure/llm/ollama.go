@@ -17,30 +17,22 @@ import (
 )
 
 const (
-	// defaultOllamaBase is the default Ollama API base URL.
-	defaultOllamaBase = "http://localhost:11434"
-
-	// defaultOllamaModel is the default text-generation model used when none
-	// is specified.
+	defaultOllamaBase  = "http://localhost:11434"
 	defaultOllamaModel = "llama3"
 
-	// maxAttempts is the total number of Generate attempts (1 initial + 2
-	// retries) made before a transient failure is surfaced to the caller.
+	// maxAttempts specifies the maximum number of request attempts before giving up.
 	maxAttempts = 3
 
-	// defaultBackoff is the base delay before the first retry. Each subsequent
-	// retry doubles it (exponential backoff).
+	// defaultBackoff is the initial delay before retrying a failed request using exponential backoff.
 	defaultBackoff = 500 * time.Millisecond
 
-	// defaultTimeout bounds a single Generate call (across all attempts) when
-	// no WithTimeout option is supplied.
+	// defaultTimeout bounds a single Generate call, encompassing all retry attempts.
 	defaultTimeout = 60 * time.Second
 )
 
-// ollamaGenerateRequest is the JSON body for POST /api/generate. Format, when
-// set, is Ollama's structured-output 'format' parameter — a JSON Schema the
-// model output is constrained to; it is omitted when empty so plain-text
-// generation is unaffected.
+// ollamaGenerateRequest defines the JSON payload sent to the Ollama /api/generate endpoint.
+// Format is Ollama's structured-output schema that constrains model output; it is omitted
+// when empty so plain-text generation is unaffected.
 type ollamaGenerateRequest struct {
 	Model      string          `json:"model"`
 	Prompt     string          `json:"prompt"`
@@ -49,21 +41,17 @@ type ollamaGenerateRequest struct {
 	Format     json.RawMessage `json:"format,omitempty"`
 }
 
-// ollamaGenerateResponse is the JSON body returned by POST /api/generate
-// when stream is false. PromptEvalCount and EvalCount are the actual token
-// counts Ollama reports for the prompt and the generated completion.
+// ollamaGenerateResponse represents the JSON response from the Ollama /api/generate endpoint.
+// PromptEvalCount and EvalCount represent token usage stats reported by Ollama.
 type ollamaGenerateResponse struct {
 	Response        string `json:"response"`
 	PromptEvalCount int    `json:"prompt_eval_count"`
 	EvalCount       int    `json:"eval_count"`
 }
 
-// OllamaGenerator is an LLMGenerator backed by a locally running Ollama
-// instance. It POSTs to /api/generate with stream:false and returns the
-// complete generated text in a single call.
-// Transient failures (HTTP 5xx or network/transport errors) are retried up to
-// maxAttempts times with exponential backoff; HTTP 4xx responses and context
-// cancellation are surfaced immediately without retry.
+// OllamaGenerator generates text completions using a local or remote Ollama service.
+// Transient HTTP 5xx errors and network failures are retried with exponential backoff,
+// while client-side HTTP 4xx failures and context cancellations abort immediately.
 // OllamaGenerator is safe for concurrent use.
 type OllamaGenerator struct {
 	baseURL string
@@ -72,20 +60,15 @@ type OllamaGenerator struct {
 	backoff time.Duration
 	timeout time.Duration
 
-	// customClient holds a caller-supplied client (WithHTTPClient). Recorded
-	// during the option loop and reconciled once in NewOllamaGenerator so the
-	// options are order-independent.
+	// customClient holds a caller-supplied HTTP client to ensure option order independence.
 	customClient *http.Client
 }
 
-// Compile-time interface satisfaction check.
 var _ ports.LLMGenerator = (*OllamaGenerator)(nil)
 
-// Option customises an OllamaGenerator at construction time.
 type Option func(*OllamaGenerator)
 
-// WithBaseURL overrides the Ollama base URL (default http://localhost:11434).
-// An empty value is ignored, preserving the default.
+// WithBaseURL configures a custom Ollama service base URL.
 func WithBaseURL(u string) Option {
 	return func(g *OllamaGenerator) {
 		if u != "" {
@@ -94,9 +77,7 @@ func WithBaseURL(u string) Option {
 	}
 }
 
-// WithHTTPClient supplies a caller-owned *http.Client, used as-is and never
-// mutated. When supplied this wins, regardless of option order. A nil client is
-// ignored, preserving the default (http.DefaultClient).
+// WithHTTPClient registers a custom HTTP client for Ollama API requests.
 func WithHTTPClient(c *http.Client) Option {
 	return func(g *OllamaGenerator) {
 		if c != nil {
@@ -105,8 +86,7 @@ func WithHTTPClient(c *http.Client) Option {
 	}
 }
 
-// WithBackoff sets the base delay before the first retry. Each subsequent
-// retry doubles it. A non-positive value is ignored.
+// WithBackoff configures the initial delay duration before the first retry.
 func WithBackoff(d time.Duration) Option {
 	return func(g *OllamaGenerator) {
 		if d > 0 {
@@ -115,8 +95,7 @@ func WithBackoff(d time.Duration) Option {
 	}
 }
 
-// WithTimeout bounds a single Generate call — including all retry attempts
-// to d. A non-positive value is ignored.
+// WithTimeout bounds the lifetime of a complete Generate call, including retries.
 func WithTimeout(d time.Duration) Option {
 	return func(g *OllamaGenerator) {
 		if d > 0 {
@@ -125,10 +104,7 @@ func WithTimeout(d time.Duration) Option {
 	}
 }
 
-// NewOllamaGenerator constructs an OllamaGenerator for the given model. Pass an
-// empty model to use the default ("llama3"). Apply WithBaseURL / WithHTTPClient /
-// WithBackoff / WithTimeout to override the defaults (base URL
-// http://localhost:11434, http.DefaultClient, backoff, per-call timeout).
+// NewOllamaGenerator creates a generator targeting the specified model.
 func NewOllamaGenerator(model string, opts ...Option) *OllamaGenerator {
 	if model == "" {
 		model = defaultOllamaModel
@@ -142,9 +118,7 @@ func NewOllamaGenerator(model string, opts ...Option) *OllamaGenerator {
 	for _, opt := range opts {
 		opt(g)
 	}
-	// Reconcile the client once, after all options are recorded, so the result
-	// is independent of option order. A caller-supplied client wins and is used
-	// unchanged; otherwise fall back to http.DefaultClient.
+
 	if g.customClient != nil {
 		g.client = g.customClient
 	} else {
@@ -153,17 +127,13 @@ func NewOllamaGenerator(model string, opts ...Option) *OllamaGenerator {
 	return g
 }
 
-// retryableError marks an HTTP 5xx response so the retry loop can distinguish
-// it from a non-retryable 4xx.
+// retryableError wraps an underlying error to signal that the failed operation can be retried.
 type retryableError struct{ err error }
 
 func (e *retryableError) Error() string { return e.err.Error() }
 func (e *retryableError) Unwrap() error { return e.err }
 
-// Generate sends req to the Ollama /api/generate endpoint and returns the
-// generated text together with its Provenance. Transient failures are retried
-// with exponential backoff; the call is bounded by the configured per-call
-// timeout and respects ctx cancellation.
+// Generate requests a text completion from Ollama.
 func (g *OllamaGenerator) Generate(ctx context.Context, req ports.GenerateRequest) (ports.GenerateResponse, error) {
 	ctx, cancel := context.WithTimeout(ctx, g.timeout)
 	defer cancel()
@@ -195,11 +165,10 @@ func (g *OllamaGenerator) Generate(ctx context.Context, req ports.GenerateReques
 		}
 		lastErr = genErr
 
-		// Context cancellation/deadline is terminal — never retry.
 		if ctx.Err() != nil {
 			return ports.GenerateResponse{}, genErr
 		}
-		// Only HTTP 5xx and transport errors are retryable; a 4xx is not.
+
 		var retry *retryableError
 		if !errors.As(genErr, &retry) {
 			return ports.GenerateResponse{}, genErr
@@ -208,7 +177,6 @@ func (g *OllamaGenerator) Generate(ctx context.Context, req ports.GenerateReques
 			break
 		}
 
-		// Exponential backoff, interruptible by ctx.
 		delay := g.backoff << (attempt - 1)
 		timer := time.NewTimer(delay)
 		select {
@@ -221,8 +189,8 @@ func (g *OllamaGenerator) Generate(ctx context.Context, req ports.GenerateReques
 	return ports.GenerateResponse{}, fmt.Errorf("ollama: generate failed after %d attempts: %w", maxAttempts, lastErr)
 }
 
-// doGenerate performs a single POST /api/generate. It returns a *retryableError
-// for HTTP 5xx and transport-level failures so the caller can decide to retry.
+// doGenerate executes a single HTTP request to the Ollama endpoint.
+// It wraps transient issues in a retryableError so the retry loop can identify them.
 func (g *OllamaGenerator) doGenerate(ctx context.Context, encoded []byte) (ollamaGenerateResponse, error) {
 	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, g.baseURL+"/api/generate", bytes.NewReader(encoded))
 	if err != nil {
@@ -232,15 +200,11 @@ func (g *OllamaGenerator) doGenerate(ctx context.Context, encoded []byte) (ollam
 
 	resp, err := g.client.Do(httpReq)
 	if err != nil {
-		// Transport errors (DNS, connection refused, reset) are transient.
-		// A cancelled/expired context surfaces here too; the retry loop
-		// checks ctx.Err and will not retry it despite the wrapper.
 		return ollamaGenerateResponse{}, &retryableError{fmt.Errorf("ollama: POST /api/generate: %w", err)}
 	}
 	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
-		// Drain so the connection can be reused.
 		_, _ = io.Copy(io.Discard, resp.Body)
 		statusErr := fmt.Errorf("ollama: POST /api/generate: status %d", resp.StatusCode)
 		if resp.StatusCode >= 500 {
@@ -256,9 +220,6 @@ func (g *OllamaGenerator) doGenerate(ctx context.Context, encoded []byte) (ollam
 	return out, nil
 }
 
-// provenance builds the Provenance for a successful call: the generator's
-// model, the request's prompt-template version echoed back, and a sha256 hex
-// digest of the request prompt.
 func (g *OllamaGenerator) provenance(req ports.GenerateRequest) ports.Provenance {
 	sum := sha256.Sum256([]byte(req.Prompt))
 	return ports.Provenance{
@@ -267,3 +228,4 @@ func (g *OllamaGenerator) provenance(req ports.GenerateRequest) ports.Provenance
 		InputHash:             hex.EncodeToString(sum[:]),
 	}
 }
+

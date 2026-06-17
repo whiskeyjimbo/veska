@@ -10,7 +10,6 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/beads"
 )
 
-// Compile-time interface satisfaction check.
 var _ ports.Tracker = (*beads.FileTracker)(nil)
 
 func TestFileTracker_ActiveTask_NoFile(t *testing.T) {

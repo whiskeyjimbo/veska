@@ -16,7 +16,6 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/platform/archive"
 )
 
-// seedDB creates a minimal SQLite database at dbPath.
 func seedDB(t *testing.T, dbPath string) {
 	t.Helper()
 	db, err := sql.Open(sqldriver.Name, dbPath)
@@ -32,7 +31,6 @@ func seedDB(t *testing.T, dbPath string) {
 	}
 }
 
-// tarEntries returns the set of file names inside a.tar.gz archive.
 func tarEntries(t *testing.T, path string) map[string]bool {
 	t.Helper()
 	f, err := os.Open(path)
@@ -78,17 +76,14 @@ func TestCreateBackupBasic(t *testing.T) {
 		t.Fatalf("Create: %v", err)
 	}
 
-	// Tarball must exist.
 	if _, err := os.Stat(result.Path); err != nil {
 		t.Fatalf("tarball missing: %v", err)
 	}
 
-	// Must be a valid gzip.
 	if err := archive.VerifyGzip(result.Path); err != nil {
 		t.Fatalf("VerifyGzip: %v", err)
 	}
 
-	// Must contain manifest.json.
 	entries := tarEntries(t, result.Path)
 	if !entries["manifest.json"] {
 		t.Fatalf("tarball missing manifest.json; got %v", entries)
@@ -102,7 +97,6 @@ func TestCreateBackupCopiesAuditLog(t *testing.T) {
 	dbPath := filepath.Join(veskaHome, "veska.db")
 	seedDB(t, dbPath)
 
-	// Seed audit.jsonl.
 	auditPath := filepath.Join(veskaHome, "audit.jsonl")
 	if err := os.WriteFile(auditPath, []byte(`{"event":"test"}`+"\n"), 0o644); err != nil {
 		t.Fatalf("write audit.jsonl: %v", err)
@@ -130,7 +124,6 @@ func TestCreateBackupSkipsMissingConfig(t *testing.T) {
 	dbPath := filepath.Join(veskaHome, "veska.db")
 	seedDB(t, dbPath)
 
-	// Deliberately do NOT create config.toml.
 	_, err := backup.Create(backup.CreateOptions{
 		DBPath:    dbPath,
 		VeskaHome: veskaHome,
@@ -181,7 +174,6 @@ func TestCreateBackupManifestFields(t *testing.T) {
 		t.Fatalf("Create: %v", err)
 	}
 
-	// Open tarball and extract manifest.json.
 	f, err := os.Open(result.Path)
 	if err != nil {
 		t.Fatalf("open tarball: %v", err)
@@ -227,3 +219,4 @@ func TestCreateBackupManifestFields(t *testing.T) {
 	}
 	t.Fatal("manifest.json not found in tarball")
 }
+

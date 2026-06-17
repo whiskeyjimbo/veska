@@ -8,7 +8,6 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/notifier"
 )
 
-// Compile-time interface satisfaction check.
 var _ ports.Notifier = (*notifier.StderrNotifier)(nil)
 
 func TestStderrNotifier_Notify_DoesNotError(t *testing.T) {

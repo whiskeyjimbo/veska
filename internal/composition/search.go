@@ -13,12 +13,10 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/platform/config"
 )
 
-// NewCLISearchService builds the search service for the one-shot `veska search`
-// CLI path: it resolves the embedder from env/defaults, opens the local
-// in-memory store, and assembles the search.Service. The daemon builds its own
-// search service from the elected provider and its configured vector backend
-// (with metrics), so this is the CLI-side construction only — moved out of the
-// Cobra file so cmd/veska/search.go is a thin adapter.
+// NewCLISearchService builds the search service for the one-shot CLI path. It
+// resolves the embedder from environment variables or defaults, opens local
+// storage, and assembles the search service. This construction is moved out
+// of the CLI command package to keep command delivery files as thin adapters.
 func NewCLISearchService(pools *sqlite.Pools) (*search.Service, error) {
 	prov, err := NewCLIEmbeddingProvider()
 	if err != nil {
@@ -36,9 +34,9 @@ func NewCLISearchService(pools *sqlite.Pools) (*search.Service, error) {
 	return svc, nil
 }
 
-// NewCLIEmbeddingProvider resolves the same embedder the daemon elects, reading
-// VESKA_OLLAMA_URL / VESKA_EMBED_MODEL / VESKA_EMBEDDER with the historical CLI
-// defaults. Shared by the CLI search service and the embedder-queue drain.
+// NewCLIEmbeddingProvider resolves the same embedder that the daemon elects by
+// reading environment overrides and historical CLI defaults. It is shared by
+// both the CLI search service and the embedder-queue worker.
 func NewCLIEmbeddingProvider() (ports.EmbeddingProvider, error) {
 	baseURL := os.Getenv("VESKA_OLLAMA_URL")
 	if baseURL == "" {

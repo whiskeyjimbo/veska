@@ -39,19 +39,10 @@ type CreateResult struct {
 	SizeBytes int64
 }
 
-// Create produces a timestamped backup tarball in opts.BackupDir.
-// Steps:
-//  1. Creates a temp staging directory.
-//  2. Runs VACUUM INTO <staging>/veska.db on opts.DBPath (read-only connection).
-//  3. Copies audit.jsonl and rotations (.1–.5) from opts.VeskaHome if present.
-//  4. Copies config.toml from opts.VeskaHome if present (silently skipped if absent).
-//  5. Copies cache/ directory recursively if present.
-//  6. Writes manifest.json with created_at, veska_home, go_version.
-//  7. Creates <opts.BackupDir>/veska-backup-<timestamp>.tar.gz from staging.
-//  8. Removes the staging directory.
-//  9. Calls archive.VerifyGzip on the finished tarball.
-//
-// 10. Returns CreateResult{Path, SizeBytes}.
+// Create produces a timestamped backup tarball. It uses SQLite's VACUUM INTO
+// on a read-only database connection to produce a safe copy without locking the
+// database. It then copies the configurations, caches, and logs into a staging
+// directory, bundles them into a gzipped tarball, and verifies the archive format.
 func Create(opts CreateOptions) (CreateResult, error) {
 	// 1. Staging directory.
 	staging, err := os.MkdirTemp("", "veska-backup-*")

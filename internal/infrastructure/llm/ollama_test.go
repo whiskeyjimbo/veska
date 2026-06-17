@@ -16,7 +16,6 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/llm"
 )
 
-// Compile-time interface satisfaction check.
 var _ ports.LLMGenerator = (*llm.OllamaGenerator)(nil)
 
 func TestOllamaGenerator_Generate_Success(t *testing.T) {
@@ -45,7 +44,7 @@ func TestOllamaGenerator_Generate_Success(t *testing.T) {
 	}
 }
 
-// AC1: a successful Generate returns provenance with model id, prompt-template
+// A successful Generate returns provenance containing model id, prompt-template
 // version, and an input hash.
 func TestOllamaGenerator_Generate_Provenance(t *testing.T) {
 	t.Parallel()
@@ -79,9 +78,8 @@ func TestOllamaGenerator_Generate_Provenance(t *testing.T) {
 	}
 }
 
-// AC1: when GenerateRequest.Format is set, OllamaGenerator forwards it as the
-// /api/generate 'format' parameter so the model is constrained to schema-valid
-// JSON.
+// When GenerateRequest.Format is set, OllamaGenerator forwards it as the
+// /api/generate 'format' parameter so the model is constrained to schema-valid JSON.
 func TestOllamaGenerator_Generate_StructuredFormat(t *testing.T) {
 	t.Parallel()
 
@@ -120,8 +118,8 @@ func TestOllamaGenerator_Generate_StructuredFormat(t *testing.T) {
 	}
 }
 
-// AC1: a plain-text GenerateRequest (zero Format) omits the 'format' field, so
-// existing callers and plain-text generation are unaffected.
+// A plain-text GenerateRequest (empty Format) omits the 'format' field to ensure
+// standard plain-text generation is unaffected.
 func TestOllamaGenerator_Generate_NoFormatByDefault(t *testing.T) {
 	t.Parallel()
 
@@ -145,7 +143,7 @@ func TestOllamaGenerator_Generate_NoFormatByDefault(t *testing.T) {
 	}
 }
 
-// AC2: a transient 5xx is retried up to 3 attempts total, then succeeds.
+// A transient HTTP 5xx error triggers a retry up to the maximum attempts count.
 func TestOllamaGenerator_Generate_RetriesTransient(t *testing.T) {
 	t.Parallel()
 
@@ -174,7 +172,7 @@ func TestOllamaGenerator_Generate_RetriesTransient(t *testing.T) {
 	}
 }
 
-// AC2: a 5xx that never recovers is retried exactly 3 times then fails.
+// A transient error that does not resolve within the retry limit is surfaced to the caller.
 func TestOllamaGenerator_Generate_RetriesExhausted(t *testing.T) {
 	t.Parallel()
 
@@ -197,7 +195,7 @@ func TestOllamaGenerator_Generate_RetriesExhausted(t *testing.T) {
 	}
 }
 
-// AC2: a 4xx is not retried.
+// Client-side HTTP 4xx failures are not retried.
 func TestOllamaGenerator_Generate_NoRetryOn4xx(t *testing.T) {
 	t.Parallel()
 
@@ -240,13 +238,12 @@ func TestOllamaGenerator_Generate_ContextCancelled(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Block until the client disconnects.
 		<-r.Context().Done()
 	}))
 	defer srv.Close()
 
 	ctx, cancel := context.WithCancel(context.Background())
-	cancel() // cancel immediately
+	cancel()
 
 	gen := llm.NewOllamaGenerator("llama3", llm.WithBaseURL(srv.URL), llm.WithHTTPClient(srv.Client()))
 	_, err := gen.Generate(ctx, ports.GenerateRequest{Prompt: "hello"})
@@ -256,7 +253,7 @@ func TestOllamaGenerator_Generate_ContextCancelled(t *testing.T) {
 	}
 }
 
-// A cancelled context must not trigger retries.
+// A cancelled context must abort immediately and not trigger retries.
 func TestOllamaGenerator_Generate_ContextCancelNoRetry(t *testing.T) {
 	t.Parallel()
 
@@ -283,7 +280,6 @@ func TestOllamaGenerator_Generate_ContextCancelNoRetry(t *testing.T) {
 
 func TestNewOllamaGenerator_Defaults(t *testing.T) {
 	t.Parallel()
-	// Ensures no panic when an empty model and no options are passed.
 	gen := llm.NewOllamaGenerator("")
 	if gen == nil {
 		t.Fatal("expected non-nil generator")
@@ -291,10 +287,7 @@ func TestNewOllamaGenerator_Defaults(t *testing.T) {
 	}
 }
 
-// TestNewOllamaGenerator_OptionOrderIndependence asserts the functional-options
-// contract: WithBaseURL + WithHTTPClient produce the same effective base URL and
-// client regardless of the order they are supplied in, and a caller-supplied
-// client is used unchanged. WithBaseURL("") is ignored, preserving the default.
+// Option arguments modify the generator consistently regardless of their registration order.
 func TestNewOllamaGenerator_OptionOrderIndependence(t *testing.T) {
 	t.Parallel()
 
@@ -304,9 +297,6 @@ func TestNewOllamaGenerator_OptionOrderIndependence(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	// (a) Forward and reversed option order must both route to srv via its
-	// client. If the base URL or client were dropped, the request would not
-	// reach srv and Generate would fail.
 	forward := llm.NewOllamaGenerator("llama3",
 		llm.WithBaseURL(srv.URL), llm.WithHTTPClient(srv.Client()))
 	reverse := llm.NewOllamaGenerator("llama3",
@@ -321,8 +311,6 @@ func TestNewOllamaGenerator_OptionOrderIndependence(t *testing.T) {
 		}
 	}
 
-	// (b) WithBaseURL("") is ignored: the generator keeps the default base URL
-	// (localhost), so a request via srv's client does NOT reach srv.
 	def := llm.NewOllamaGenerator("llama3",
 		llm.WithBaseURL(""), llm.WithHTTPClient(srv.Client()))
 	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
@@ -332,20 +320,16 @@ func TestNewOllamaGenerator_OptionOrderIndependence(t *testing.T) {
 	}
 }
 
-// WithTimeout bounds a single Generate call independently of the http.Client.
 func TestOllamaGenerator_Generate_PerCallTimeout(t *testing.T) {
 	t.Parallel()
 
 	release := make(chan struct{})
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Block until either the client disconnects or the test ends, so the
-		// per-call timeout is what unblocks the client.
 		select {
 		case <-r.Context().Done():
 		case <-release:
 		}
 	}))
-	// Cleanups run LIFO: release the handler first, then Close can return.
 	t.Cleanup(srv.Close)
 	t.Cleanup(func() { close(release) })
 
@@ -362,8 +346,6 @@ func TestOllamaGenerator_Generate_PerCallTimeout(t *testing.T) {
 	}
 }
 
-// TestOllamaGenerator_Generate_Usage verifies the adapter surfaces Ollama's
-// prompt_eval_count and eval_count as ports.TokenUsage.
 func TestOllamaGenerator_Generate_Usage(t *testing.T) {
 	t.Parallel()
 
@@ -392,3 +374,4 @@ func TestOllamaGenerator_Generate_Usage(t *testing.T) {
 		t.Errorf("Total: got %d, want 59", resp.Usage.Total())
 	}
 }
+

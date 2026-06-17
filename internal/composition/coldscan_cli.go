@@ -19,17 +19,10 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/platform/observability"
 )
 
-// NewCLIColdScanReparser builds the in-process cold-scan reparser used by
-// `veska reindex` and the ephemeral-clone path of `veska search` when no
-// daemon is running. It wires the shared ingestion/promotion core
-// (NewColdScanCore) together with the CLI post-promotion check pipeline
-// (secret-scan always, vuln-scan when [vuln_source] is enabled) so a cold
-// scan emits findings on the FIRST promotion of an ephemeral or freshly-added
-// repo, exactly as the daemon does.
-// This was previously assembled inside cmd/veska/reindex.go; it lives here so
-// the delivery layer carries no composition wiring and the check pipeline no
-// longer hand-mirrors internal/cli/daemon/wire.go from a separate copy
-// (, follow-up to the SOLID/CLEAN review of cmd/veska).
+// NewCLIColdScanReparser builds the in-process cold-scan reparser used when no
+// daemon is running. It wires the shared ingestion and promotion core with the
+// CLI post-promotion check pipeline so a cold scan emits findings on the first
+// promotion of a repository.
 func NewCLIColdScanReparser(pools *sqlite.Pools, loader application.IgnoreLoader) (func(context.Context, application.RepoRecord) error, error) {
 	// reviewEnabled=false: the CLI path never enqueues review work. The CLI
 	// ingester emits no parse findings (no ingesterOpts); only the promoter
@@ -40,26 +33,18 @@ func NewCLIColdScanReparser(pools *sqlite.Pools, loader application.IgnoreLoader
 }
 
 // cliColdScanPromoterOpts builds the Promoter options for the CLI cold-scan
-// path: the secret-leak + vuln-scan check runner (per resolved config) and the
-// AddedLinesFunc that drives the secret-scan rule.
-// Errors during config load fall back to "secret-scan only" — vuln-scan is off
-// by default anyway and a malformed config.toml should not silently disable
-// secret detection on the cold-scan path.
+// path. If config loading fails, it falls back to running only the secrets-scan
+// check to ensure secret detection is not silently disabled.
 func cliColdScanPromoterOpts(pools *sqlite.Pools) []application.PromoterOption {
 	findings := sqlite.NewFindingRepo(pools.Write)
 
-	// AddedLines seam: the cold-scan promotion path runs against the repo at
-	// its current HEAD, so resolve the diff for that SHA via the same
-	// git.AddedLinesForCommit helper the daemon uses. Failure is non-fatal:
-	// the runner just skips diff-driven checks for this promotion.
+	// AddedLines seam resolves the diff for the current HEAD commit using
+	// git.AddedLinesForCommit. Failure is non-fatal: the runner skips
+	// diff-driven checks on failure.
 	root := RepoRootByID(pools.ReadDB)
 
 	reg := checks.NewRegistry()
 
-	// Secrets-scan (on unless disabled) + vuln-scan (only when [vuln_source] is
-	// enabled) share their enablement policy with the daemon via
-	// RegisterCommonChecks. Config load failure falls through to "secret-scan
-	// only" — vuln-scan is off by default. The CLI discards the returned check.
 	fileCfg, _ := config.Load()
 	vulnSource, vulnEnabled := BuildVulnSource(fileCfg)
 	RegisterCommonChecks(reg, fileCfg, vulnSource, vulnEnabled, checks.RepoRootFunc(root))
@@ -72,15 +57,9 @@ func cliColdScanPromoterOpts(pools *sqlite.Pools) []application.PromoterOption {
 	}
 }
 
-// BuildVulnSource constructs the ports.VulnSource for the resolved config and
-// reports whether the vulnerability-scan feature is enabled. It is the single
-// source of the provider-switch rule shared by the in-process cold-scan path
-// (cliColdScanPromoterOpts) and the daemon (daemon.buildVulnSource).
-// An empty or unrecognised [vuln_source] provider yields the NullVulnSource
-// with enabled false — no refresher goroutine, no vuln-scan check. provider =
-// "osv" yields the OSV.dev-backed adapter with enabled true. Daemon callers are
-// expected to have run checkVulnProvider first, so an unrecognised provider
-// falls back to the NullVulnSource here rather than panicking.
+// BuildVulnSource constructs the ports.VulnSource for the resolved configuration
+// and reports whether the vulnerability-scan feature is enabled. An unrecognized
+// provider defaults to a NullVulnSource to prevent panics.
 func BuildVulnSource(cfg config.Config) (ports.VulnSource, bool) {
 	if cfg.VulnSource.Provider != "osv" {
 		return vulnsource.NewNullVulnSource(), false
@@ -89,10 +68,8 @@ func BuildVulnSource(cfg config.Config) (ports.VulnSource, bool) {
 }
 
 // RepoRootByID resolves a repoID to its registered working-tree path via the
-// repos table. It is the single canonical resolver shared by the cold-scan CLI
-// and the daemon (whose repoRootFunc converts it to mcp.RepoRootFunc). An
-// unknown repoID yields an error so callers surface a clear "repo not
-// registered" message rather than running against an empty path.
+// repos table. An unknown repository ID yields an error to prevent running
+// against an empty path.
 func RepoRootByID(db *sql.DB) func(ctx context.Context, repoID string) (string, error) {
 	return func(ctx context.Context, repoID string) (string, error) {
 		records, err := repo.List(ctx, db)

@@ -8,10 +8,10 @@ import (
 
 var sha256Re = regexp.MustCompile(`^[0-9a-f]{64}$`)
 
-// TestPotionCode16MSpec_PinnedAndVerifiable guards the install manifest:
-// the base URL must be pinned to a revision (not the moving `main` ref)
-// and every file must carry a syntactically valid sha256, so the
-// download is reproducible and integrity-checked.
+// TestPotionCode16MSpec_PinnedAndVerifiable guards the install manifest.
+// The base URL must be pinned to a revision and every file must carry a
+// syntactically valid SHA256 to ensure the download is reproducible and
+// integrity-checked.
 func TestPotionCode16MSpec_PinnedAndVerifiable(t *testing.T) {
 	spec := PotionCode16MSpec()
 

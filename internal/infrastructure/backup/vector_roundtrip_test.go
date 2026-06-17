@@ -16,10 +16,6 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/platform/archive"
 )
 
-// TestBackupIncludesVeskaDB verifies that the primary veska.db is always
-// present in the backup tarball — this is the in-memory backend's persistence
-// file (vectors live in the node_embeddings SQLite table inside veska.db and
-// are rehydrated into the in-memory store on boot).
 func TestBackupIncludesVeskaDB(t *testing.T) {
 	veskaHome := t.TempDir()
 	backupDir := t.TempDir()
@@ -42,8 +38,6 @@ func TestBackupIncludesVeskaDB(t *testing.T) {
 	}
 }
 
-// TestBackupVerifyPassesForMemoryBackend verifies the full create → verify round-trip
-// for the in-memory backend (veska.db is the sole vector store file).
 func TestBackupVerifyPassesForMemoryBackend(t *testing.T) {
 	veskaHome := t.TempDir()
 	backupDir := t.TempDir()
@@ -72,10 +66,6 @@ func TestBackupVerifyPassesForMemoryBackend(t *testing.T) {
 	}
 }
 
-// TestBackupIncludesUsearchIndexFiles verifies that *.hnsw and *.json sidecar
-// files placed in veskaHome are captured in the backup tarball.
-// The usearch backend writes vec-{repo}|{branch}|{model}.hnsw +.json into
-// veskaHome on shutdown; backup.Create must include them.
 func TestBackupIncludesUsearchIndexFiles(t *testing.T) {
 	veskaHome := t.TempDir()
 	backupDir := t.TempDir()
@@ -105,30 +95,21 @@ func TestBackupIncludesUsearchIndexFiles(t *testing.T) {
 	entries := tarEntries(t, result.Path)
 
 	// The current backup implementation copies only explicit files (audit.jsonl,
-	// config.toml, cache/) and the vacuumed veska.db. *.hnsw files in veskaHome
-	// are NOT copied by the current create.go. This test documents the gap and
-	// acts as a contract: if/when backup.Create is extended to include *.hnsw
-	// files, this assertion should flip to require their presence.
-	// For the usearch backend, the DoD says "*.usearch index file in VESKA_HOME"
-	// is included. The current backup.Create implementation copies veska.db and
-	// the cache/ tree; *.hnsw files live at the top level of veskaHome which is
-	// NOT currently walked by createTarGz (only the staging dir is walked).
-	// Track: once backup.Create is updated, change the assertion below to:
-	//   if !entries[hnswName] { t.Fatalf(.) }
+	// config.toml, cache/) and the vacuumed veska.db. Top-level *.hnsw files in
+	// veskaHome are not copied by the current backup.Create implementation.
+	// If backup.Create is extended in the future to include these files, this assertion
+	// should be updated to require their presence.
 	if entries[hnswName] {
 		t.Logf("INFO: .hnsw file %q IS now in tarball (backup.Create was extended)", hnswName)
 	} else {
 		t.Logf("INFO: .hnsw file %q not in tarball (gap tracked: backup.Create copies only veska.db + cache + audit)", hnswName)
 	}
 
-	// Regardless, veska.db must always be present.
 	if !entries["veska.db"] {
 		t.Fatalf("tarball missing veska.db; entries: %v", keys(entries))
 	}
 }
 
-// TestBackupUsearchVerifyRoundTrip verifies that a backup containing a fake
-// hnsw file (placed in cache/ so it IS copied) survives the verify step.
 func TestBackupUsearchVerifyRoundTrip(t *testing.T) {
 	veskaHome := t.TempDir()
 	backupDir := t.TempDir()
@@ -156,23 +137,20 @@ func TestBackupUsearchVerifyRoundTrip(t *testing.T) {
 		t.Fatalf("Create: %v", err)
 	}
 
-	// Confirm the cache file is present.
 	entries := tarEntries(t, result.Path)
 	wantEntry := filepath.Join("cache", "vec-repo1|main|nomic.hnsw")
 	if !entries[wantEntry] {
 		t.Errorf("tarball missing %q; entries: %v", wantEntry, keys(entries))
 	}
 
-	// Verify the tarball passes the gzip integrity check.
 	if err := archive.VerifyGzip(result.Path); err != nil {
 		t.Fatalf("VerifyGzip: %v", err)
 	}
 }
 
-// seedMemoryBackendVectors writes vector rows into an existing SQLite DB using the
-// standard database/sql interface (no sqlite-vec extension is involved).
-// This simulates what the embedder pipeline persists for the in-memory backend
-// in production.
+// seedMemoryBackendVectors populates vector rows into an existing SQLite database using
+// database/sql, bypassing the sqlite-vec extension to simulate persisted vectors for
+// the in-memory backend.
 func seedMemoryBackendVectors(t *testing.T, dbPath string) {
 	t.Helper()
 	db, err := sql.Open(sqldriver.Name, dbPath)
@@ -206,8 +184,6 @@ func seedMemoryBackendVectors(t *testing.T, dbPath string) {
 	}
 }
 
-// TestBackupMemoryBackendVectorsInDB verifies that vector rows written into veska.db
-// survive the backup → verify round-trip (i.e. the VACUUM INTO copy preserves them).
 func TestBackupMemoryBackendVectorsInDB(t *testing.T) {
 	veskaHome := t.TempDir()
 	backupDir := t.TempDir()
@@ -225,7 +201,6 @@ func TestBackupMemoryBackendVectorsInDB(t *testing.T) {
 		t.Fatalf("Create: %v", err)
 	}
 
-	// Verify round-trip passes.
 	vr, err := backup.Verify(result.Path)
 	if err != nil {
 		t.Fatalf("Verify: %v", err)
@@ -234,7 +209,6 @@ func TestBackupMemoryBackendVectorsInDB(t *testing.T) {
 		t.Errorf("Verify status: got %q, want %q", vr.Status, "healthy")
 	}
 
-	// Confirm vec_embeddings table survived by opening the extracted DB.
 	tmpDir := t.TempDir()
 	extractDB(t, result.Path, tmpDir)
 	db, err := sql.Open(sqldriver.Name, filepath.Join(tmpDir, "veska.db"))
@@ -252,7 +226,6 @@ func TestBackupMemoryBackendVectorsInDB(t *testing.T) {
 	}
 }
 
-// extractDB extracts veska.db from the.tar.gz at tarPath into destDir.
 func extractDB(t *testing.T, tarPath, destDir string) {
 	t.Helper()
 	f, err := os.Open(tarPath)
@@ -292,7 +265,6 @@ func extractDB(t *testing.T, tarPath, destDir string) {
 	t.Fatal("veska.db not found in tarball")
 }
 
-// keys returns the map keys as a slice for diagnostic output.
 func keys(m map[string]bool) []string {
 	ks := make([]string, 0, len(m))
 	for k := range m {
@@ -300,3 +272,4 @@ func keys(m map[string]bool) []string {
 	}
 	return ks
 }
+

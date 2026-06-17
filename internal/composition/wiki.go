@@ -19,27 +19,16 @@ type wikiHandlerConfig struct {
 // WikiHandlerOption configures NewWikiHandler.
 type WikiHandlerOption func(*wikiHandlerConfig)
 
-// WithWritePages enables writing into the repo working tree on
-// every promotion. Absent ⇒ false (no files written).
+// WithWritePages enables writing wiki pages into the repository working tree on
+// every promotion.
 func WithWritePages(write bool) WikiHandlerOption {
 	return func(c *wikiHandlerConfig) { c.writePages = write }
 }
 
-// NewWikiHandler builds the WorkKindWiki regeneration handler (the hot_zone and
-// entry_points surfaces). It is shared by the daemon's queue lane and the CLI
-// `veska wiki` command, which previously held byte-for-byte copies kept in sync
-// by hand.
-// The three caller differences are parameters:
-//
-//	staging: the daemon shares its live StagingArea so blast radius sees
-//	  in-flight (staged-but-unpromoted) nodes; the CLI passes a fresh one.
-//	repoRoot: the daemon resolves repoID→root via the repos table; the CLI
-//	  uses its prefix-matching resolver.
-//	write-pages: `veska wiki` always writes pages (WithWritePages(true)); the
-//	  daemon honours the [wiki] write_pages config.
-//
-// Write-pages defaults to false (no files written) when WithWritePages is
-// absent, matching the README's "no files written to disk" contract.
+// NewWikiHandler builds the WorkKindWiki regeneration handler. It is shared by
+// the daemon queue lane and the CLI wiki command. The staging area, repository
+// root resolver, and page writing behavior are configured as parameters to
+// allow sharing logic while accommodating caller differences.
 func NewWikiHandler(pools *sqlite.Pools, staging *staging.Area, repoRoot func(ctx context.Context, repoID string) (string, error), opts ...WikiHandlerOption) (*wiki.Handler, error) {
 	var cfg wikiHandlerConfig
 	for _, opt := range opts {

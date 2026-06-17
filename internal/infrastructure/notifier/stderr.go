@@ -9,24 +9,19 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/core/ports"
 )
 
-// StderrNotifier is a Notifier that writes notifications to os.Stderr in the
-// format "[<level>] <message>\n". It is the default implementation and
-// requires no external dependencies.
-// StderrNotifier is safe for concurrent use; individual Fprintf calls to
-// os.Stderr are atomic on all supported platforms for small writes.
+// StderrNotifier writes notifications directly to os.Stderr.
+// Writes to os.Stderr are atomic on all supported platforms for small payloads,
+// making StderrNotifier safe for concurrent use.
 type StderrNotifier struct{}
 
-// Compile-time interface satisfaction check.
 var _ ports.Notifier = (*StderrNotifier)(nil)
 
-// NewStderrNotifier constructs a StderrNotifier.
 func NewStderrNotifier() *StderrNotifier {
 	return &StderrNotifier{}
 }
 
-// Notify writes "[<n.Level>] <n.Message>\n" to os.Stderr.
-// It respects ctx cancellation — if the context is already done when Notify is
-// called, it returns the context error without writing.
+// Notify writes the formatted level and message to os.Stderr.
+// It returns a context error without writing if the context is already cancelled.
 func (s *StderrNotifier) Notify(ctx context.Context, n ports.Notification) error {
 	if err := ctx.Err(); err != nil {
 		return err
@@ -34,3 +29,4 @@ func (s *StderrNotifier) Notify(ctx context.Context, n ports.Notification) error
 	_, err := fmt.Fprintf(os.Stderr, "[%s] %s\n", n.Level, n.Message)
 	return err
 }
+
