@@ -11,10 +11,7 @@ import (
 	"testing"
 )
 
-// makeSyntheticModel builds a self-consistent vocab + tokenizer.json +
-// safetensors model.bin in tmp dir; returns the directory. Each vocab
-// id maps to its own row in the embedding matrix so the test can
-// reason about exact arithmetic.
+// makeSyntheticModel creates a synthetic Model2Vec model directory with consistent tokenizer and safetensors configurations.
 func makeSyntheticModel(t *testing.T, tmp string) (string, []int, int) {
 	t.Helper()
 	_ = tmp // dir is the input
@@ -52,8 +49,7 @@ func makeSyntheticModel(t *testing.T, tmp string) (string, []int, int) {
 	return tmp, []int{rows, dim}, dim
 }
 
-// TestNew_LoadsModelDir loads the synthetic fixture and verifies the
-// Provider reports the expected dim + vocab size.
+// TestNew_LoadsModelDir verifies that the loaded model directory returns correct dimensions and ID.
 func TestNew_LoadsModelDir(t *testing.T) {
 	dir, shape, _ := makeSyntheticModel(t, t.TempDir())
 	p, err := New(dir)
@@ -68,11 +64,7 @@ func TestNew_LoadsModelDir(t *testing.T) {
 	}
 }
 
-// TestEmbed_MeanPoolsKnownVocabularyTokens: "parse config" tokenises
-// to [parse(1), config(2)]; embedding is mean-pool of rows 1 + 2.
-// Pre-pad pre-normalize values: (0.5, 0.5, 0, 0). After L2-normalize:
-// component magnitudes are equal in the parse/config slots and zero
-// elsewhere; checking the relative ordering is enough.
+// TestEmbed_MeanPoolsKnownVocabularyTokens verifies that embedding combines active token vectors.
 func TestEmbed_MeanPoolsKnownVocabularyTokens(t *testing.T) {
 	dir, _, _ := makeSyntheticModel(t, t.TempDir())
 	p, err := New(dir)
@@ -86,8 +78,7 @@ func TestEmbed_MeanPoolsKnownVocabularyTokens(t *testing.T) {
 	if len(v) != p.OutputDim() {
 		t.Fatalf("dim: got %d, want %d", len(v), p.OutputDim())
 	}
-	// The native 4-dim portion of v should have non-zero parse/config
-	// slots and zero ##ing / return slots.
+	// Verify that active slots contain positive values.
 	if v[0] <= 0 || v[1] <= 0 {
 		t.Errorf("parse + config slots should be positive: %v", v[:4])
 	}
@@ -96,9 +87,7 @@ func TestEmbed_MeanPoolsKnownVocabularyTokens(t *testing.T) {
 	}
 }
 
-// TestEmbed_PadsToOutputDim: native dim is 4 but we project to
-// OutputDim (768) for index compatibility — zero-pad the tail so
-// the cosine in the native subspace is preserved.
+// TestEmbed_PadsToOutputDim verifies that native vectors are padded to the expected output dimension with zeros.
 func TestEmbed_PadsToOutputDim(t *testing.T) {
 	dir, _, native := makeSyntheticModel(t, t.TempDir())
 	p, _ := New(dir)
@@ -113,10 +102,7 @@ func TestEmbed_PadsToOutputDim(t *testing.T) {
 	}
 }
 
-// TestEmbed_L2Normalized pins the unit-magnitude invariant. The
-// vector storage's cosine math assumes |v|=1 — without this every
-// model2vec hit would have its score systematically biased by the
-// raw mean-pool magnitude.
+// TestEmbed_L2Normalized verifies that the generated embedding vector is L2-normalized.
 func TestEmbed_L2Normalized(t *testing.T) {
 	dir, _, _ := makeSyntheticModel(t, t.TempDir())
 	p, _ := New(dir)
@@ -130,10 +116,7 @@ func TestEmbed_L2Normalized(t *testing.T) {
 	}
 }
 
-// TestEmbed_EmptyInputReturnsZeroVector: empty input produces no
-// tokens — the embedder must return a finite, dim-correct vector.
-// Returning all-zeros is preferable to NaN (cosine of zero is 0,
-// which is fine).
+// TestEmbed_EmptyInputReturnsZeroVector verifies that empty text input yields a zero vector.
 func TestEmbed_EmptyInputReturnsZeroVector(t *testing.T) {
 	dir, _, _ := makeSyntheticModel(t, t.TempDir())
 	p, _ := New(dir)
@@ -152,14 +135,7 @@ func TestEmbed_EmptyInputReturnsZeroVector(t *testing.T) {
 	}
 }
 
-// TestEmbed_AppliesPerTokenWeights: when a "weights" tensor is present
-// the pool is a weighted mean, matching the reference model2vec library
-// (potion-* models ship these weights; a plain mean lands ~0.91 cosine
-// off the reference, which would invalidate any recall comparison).
-// vocab: parse=1, config=2 with rows e1=[1,0,0,0], e2=[0,1,0,0] and
-// weights w1=1, w2=3 ⇒ weighted mean of "parse config" is
-// [0.25,0.75,0,0], so after L2-normalize slot[1] == 3*slot[0]. A plain
-// (unweighted) mean would make the two slots equal.
+// TestEmbed_AppliesPerTokenWeights verifies that token weights are correctly applied during mean-pooling.
 func TestEmbed_AppliesPerTokenWeights(t *testing.T) {
 	tmp := t.TempDir()
 	vocab := map[string]int{"[UNK]": 0, "parse": 1, "config": 2}
@@ -191,9 +167,7 @@ func TestEmbed_AppliesPerTokenWeights(t *testing.T) {
 	}
 }
 
-// buildSafetensorsEmbedWeights builds a two-tensor safetensors blob:
-// "embeddings" (F32, shape rows×dim) + "weights" (F64, length rows),
-// the layout real potion-* models ship.
+// buildSafetensorsEmbedWeights constructs a synthetic Safetensors payload with both embeddings and weights.
 func buildSafetensorsEmbedWeights(t *testing.T, shape []int, emb []float32, weights []float64) []byte {
 	t.Helper()
 	embBytes := make([]byte, 4*len(emb))
@@ -218,10 +192,7 @@ func buildSafetensorsEmbedWeights(t *testing.T, shape []int, emb []float32, weig
 	return buf.Bytes()
 }
 
-// TestNewFromBytes builds a Provider from in-memory bytes (the embedded
-// fat-binary path) and confirms it embeds and reports the name-derived
-// ModelID — which must match the on-disk New ID for the same model so
-// fat/thin builds share a model_id.
+// TestNewFromBytes verifies that the in-memory initialization matches the behavior of disk loading.
 func TestNewFromBytes(t *testing.T) {
 	vocab := map[string]int{"[UNK]": 0, "parse": 1, "config": 2}
 	tokSpec := map[string]any{
@@ -257,9 +228,7 @@ func TestNewFromBytes(t *testing.T) {
 	}
 }
 
-// writeTokenizerFixture writes a synthetic tokenizer.json to path
-// using the same BertNormalizer+BertPreTokenizer+WordPiece pipeline
-// the real model uses.
+// writeTokenizerFixture writes a simulated tokenizer configuration to the specified path.
 func writeTokenizerFixture(t *testing.T, path string, vocab map[string]int) {
 	t.Helper()
 	spec := map[string]any{

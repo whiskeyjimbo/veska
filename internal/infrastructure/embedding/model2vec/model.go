@@ -1,33 +1,4 @@
-// Package model2vec is a pure-Go EmbeddingProvider that runs Model2Vec
-// inference against a pre-distilled static embedding model
-// (potion-code-16M is the design target).
-// Inference is trivial — Model2Vec's whole point is that there is no
-// transformer at query time:
-//  1. Tokenise text with the model's HuggingFace WordPiece tokenizer.
-//  2. Look up each token id's row in the embedding matrix.
-//  3. Mean-pool the per-token vectors.
-//  4. L2-normalise.
-//
-// The native model dimension (e.g. 256) is zero-padded to OutputDim
-// (768) so vectors slot into the existing nomic-shaped index without
-// a schema change. The padded tail carries zero magnitude, so within
-// the index cosine ranking against other model2vec vectors is
-// preserved — but model2vec vectors are NOT comparable to Ollama
-// vectors that live in a different 768-dim subspace. The composite
-// EmbeddingProvider's ModelID-as-cache-key invariant already accepts
-// this trade-off: a configuration swap invalidates the cache.
-// Model files (tokenizer.json + model.safetensors) live in
-// <VeskaHome>/static-model/<model-name>/. The download.go path can
-// fetch + sha-verify them from a HuggingFace base URL, but auto
-// download on daemon start is gated on a future config flag — today
-// users opt in by manually placing the files:
-//
-//	mkdir -p ~/.veska/static-model/potion-code-16M
-//	curl -L https://huggingface.co/minishlab/potion-code-16M/resolve/main/tokenizer.json -o ~/.veska/static-model/potion-code-16M/tokenizer.json
-//	curl -L https://huggingface.co/minishlab/potion-code-16M/resolve/main/model.safetensors -o ~/.veska/static-model/potion-code-16M/model.safetensors
-//
-// The daemon's composite chain (cmd/veska-daemon/wire.go) calls
-// TryLoad; ErrModelNotPresent triggers the hash-static fallback.
+// Package model2vec implements a pure-Go EmbeddingProvider executing Model2Vec inference against static embedding models.
 package model2vec
 
 import (
@@ -40,39 +11,26 @@ import (
 	"path/filepath"
 )
 
-// OutputDim is the index-compatible vector dimension. Vectors from
-// this provider are zero-padded from NativeDim up to OutputDim so
-// they fit the existing 768-dim memory / usearch vector schema.
+// OutputDim defines the uniform output vector dimension. Native vectors are zero-padded to this size.
 const OutputDim = 768
 
-// embeddingsTensorName is the conventional key safetensors uses for
-// the matrix Model2Vec models ship. If a downstream model uses a
-// different name, surface a clear error rather than silently embed
-// against random data.
+// embeddingsTensorName is the tensor name for the embedding matrix in Safetensors format.
 const embeddingsTensorName = "embeddings"
 
-// weightsTensorName is the optional per-token weight vector potion-*
-// models ship (F64, length vocabSize). When present, Embed does a
-// weighted mean-pool — this is what the reference model2vec library
-// does, and matching it is required for a valid recall comparison
-// (plain mean-pool lands ~0.91 cosine off the reference). Models that
-// omit it fall back to a uniform (plain) mean.
+// weightsTensorName is the tensor name for optional per-token pooling weights.
 const weightsTensorName = "weights"
 
-// Provider is the model2vec EmbeddingProvider adapter.
+// Provider is the Model2Vec embedding provider.
 type Provider struct {
 	tk        *tokenizer
-	matrix    []float32 // flat row-major
-	weights   []float32 // optional per-token pooling weights; nil ⇒ uniform
+	matrix    []float32 // Embedding matrix data stored flat in row-major order.
+	weights   []float32 // Optional per-token weights for weighted mean-pooling.
 	vocabSize int
 	nativeDim int
 	modelID   string
 }
 
-// New loads a model directory containing tokenizer.json +
-// model.safetensors and returns a ready-to-embed Provider. The
-// directory's basename is used as the model identifier — bumping the
-// distilled model swaps the ID and invalidates the embedding cache.
+// New loads model and tokenizer files from the specified directory.
 func New(modelDir string) (*Provider, error) {
 	tkBytes, err := os.ReadFile(filepath.Join(modelDir, "tokenizer.json"))
 	if err != nil {
@@ -86,17 +44,12 @@ func New(modelDir string) (*Provider, error) {
 	return newFromParts(filepath.Base(modelDir), tkBytes, stf)
 }
 
-// NewFromBytes builds a Provider from in-memory tokenizer + safetensors
-// bytes — the embedded-model path (//go:embed) for fat binary builds
-// name becomes the ModelID suffix, so it MUST match the
-// on-disk directory name for the same model version: fat and thin builds
-// then share one model_id and switching binary flavor triggers no reindex.
+// NewFromBytes initializes a Provider directly from tokenizer and Safetensors byte payloads.
 func NewFromBytes(name string, tokenizerJSON, safetensors []byte) (*Provider, error) {
 	return newFromParts(name, tokenizerJSON, bytes.NewReader(safetensors))
 }
 
-// newFromParts is the shared constructor for the on-disk (New) and
-// embedded (NewFromBytes) paths.
+// newFromParts constructs the Model2Vec provider from configuration parts.
 func newFromParts(name string, tkBytes []byte, safetensors io.Reader) (*Provider, error) {
 	tk, err := newTokenizer(tkBytes)
 	if err != nil {
@@ -118,8 +71,7 @@ func newFromParts(name string, tkBytes []byte, safetensors io.Reader) (*Provider
 	}
 	vocabSize := emb.Shape[0]
 
-	// Optional per-token weights. If present they must cover the vocab;
-	// a length mismatch means the file is internally inconsistent.
+	// Verify that the optional per-token weights match the vocabulary size if present.
 	var weights []float32
 	if w, ok := tensors[weightsTensorName]; ok {
 		if len(w.Data) != vocabSize {
@@ -138,21 +90,16 @@ func newFromParts(name string, tkBytes []byte, safetensors io.Reader) (*Provider
 	}, nil
 }
 
-// ModelID returns the stable cache key.
+// ModelID returns the model identifier.
 func (p *Provider) ModelID() string { return p.modelID }
 
-// NativeDim is the model's actual embedding dimension before padding.
-// Exposed for tests + observability.
+// NativeDim returns the model's native vector dimensions.
 func (p *Provider) NativeDim() int { return p.nativeDim }
 
-// OutputDim is the padded dimension every Embed call returns.
+// OutputDim returns the output dimensions.
 func (*Provider) OutputDim() int { return OutputDim }
 
-// Embed tokenises, looks up rows, mean-pools, normalises, and pads.
-// An empty input (or one with no usable tokens) returns a zero vector
-// rather than an error — callers cannot distinguish "no content" from
-// "no signal" anyway, and propagating an error here would break the
-// composite's clean delegation contract.
+// Embed runs tokenizer tokenization, embedding lookup, pooling, and L2-normalization on the input text.
 func (p *Provider) Embed(_ context.Context, text string) ([]float32, error) {
 	ids := p.tk.encode(text)
 	if len(ids) == 0 {
@@ -163,7 +110,7 @@ func (p *Provider) Embed(_ context.Context, text string) ([]float32, error) {
 	var wsum float32
 	for _, id := range ids {
 		if id < 0 || id >= p.vocabSize {
-			continue // safety — shouldn't happen with a self-consistent model
+			continue // Ignore out-of-bounds token IDs.
 		}
 		w := float32(1)
 		if p.weights != nil {
@@ -183,7 +130,7 @@ func (p *Provider) Embed(_ context.Context, text string) ([]float32, error) {
 		acc[i] *= inv
 	}
 
-	// L2-normalise in the native subspace; padding stays zero.
+	// Perform L2-normalization on the native vector workspace.
 	var sumsq float64
 	for _, x := range acc {
 		sumsq += float64(x) * float64(x)

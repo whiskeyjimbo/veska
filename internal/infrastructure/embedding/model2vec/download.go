@@ -12,36 +12,22 @@ import (
 	"path/filepath"
 )
 
-// errDownloadFailed wraps every non-200 / transport-level failure
-// from the model-download path so the daemon can decide (via
-// errors.Is) whether to disable the model2vec branch and fall back
-// to the hash-static embedder for this run.
+// errDownloadFailed represents a transport or checksum verification failure during embedder model download.
 var errDownloadFailed = errors.New("model2vec: download failed")
 
-// FileSpec describes one file expected in the model directory along
-// with the sha256 it must hash to. A cached file whose sha doesn't
-// match is treated as corrupt and re-downloaded.
+// FileSpec defines the expected filename and SHA-256 checksum for verification.
 type FileSpec struct {
 	Name   string
 	SHA256 string // hex-encoded
 }
 
-// ModelSpec is the manifest the download path needs: where to fetch
-// each file from (BaseURL + Name) and which sha to verify it against.
-// Concrete model specs (potion-code-16M, etc.) live alongside the
-// daemon composition root, not here — this package stays
-// model-agnostic.
+// ModelSpec defines the download location and expected file signatures for an embedder model.
 type ModelSpec struct {
 	BaseURL string
 	Files   []FileSpec
 }
 
-// Install downloads and sha-verifies the files in spec into
-// <veskaHome>/static-model/<modelName>/ and returns that directory. It
-// is idempotent: a file already present with a matching sha is left
-// alone, so re-running is cheap. The concrete spec (HF base URL + per
-// file shas) is supplied by the caller — this package stays
-// model-agnostic. errDownloadFailed wraps transport/sha failures.
+// Install downloads and verifies model files into the target directories, skipping files that already match their checksums.
 func Install(ctx context.Context, veskaHome, modelName string, spec ModelSpec) (string, error) {
 	dir := ModelDir(veskaHome, modelName)
 	if err := ensureModel(ctx, dir, spec); err != nil {
@@ -50,11 +36,7 @@ func Install(ctx context.Context, veskaHome, modelName string, spec ModelSpec) (
 	return dir, nil
 }
 
-// ensureModel guarantees that every file in spec is present in dir
-// and hashes to its declared sha256. Files already present with a
-// matching sha are left alone. Files missing or wrong are
-// re-downloaded into the same path. A partial download is removed on
-// error so the next attempt re-tries cleanly.
+// ensureModel downloads and verifies all files defined in the model specification.
 func ensureModel(ctx context.Context, dir string, spec ModelSpec) error {
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return fmt.Errorf("model2vec: mkdir %s: %w", dir, err)
@@ -76,9 +58,7 @@ func ensureModel(ctx context.Context, dir string, spec ModelSpec) error {
 	return nil
 }
 
-// verifySHA returns (true, nil) when path exists and its sha256 matches
-// want. A missing file returns (false, the stat error); a present but
-// wrong file returns (false, nil) so the caller refetches.
+// verifySHA checks if the file at path exists and matches the expected SHA-256 checksum.
 func verifySHA(path, want string) (bool, error) {
 	f, err := os.Open(path)
 	if err != nil {
@@ -96,9 +76,7 @@ func verifySHA(path, want string) (bool, error) {
 	return true, nil
 }
 
-// downloadFile streams a GET into path. The HTTP client uses the
-// default 30s timeout via http.DefaultClient; callers wanting a
-// custom timeout can wrap the parent context.
+// downloadFile streams an HTTP GET request to the specified path.
 func downloadFile(ctx context.Context, url, path string) error {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {

@@ -111,7 +111,7 @@ func TestProvider_EmptyInputDoesNotPanic(t *testing.T) {
 // should land closer in vector space than unrelated identifiers.
 // Without this property the static embedder cannot retrieve
 // "configParser" when the query mentions "parseConfig" — the exact
-// failure mode that motivated 's quality follow-up.
+// failure mode that motivated the quality follow-up.
 func TestProvider_SubwordSimilarity_BeatsUnrelated(t *testing.T) {
 	p, _ := static.New()
 	a, _ := p.Embed(context.Background(), "parseConfig")

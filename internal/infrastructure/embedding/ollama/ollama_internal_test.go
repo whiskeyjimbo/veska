@@ -7,7 +7,7 @@ import (
 )
 
 // These white-box tests assert that WithTimeout and WithHTTPClient are
-// order-independent functional options, per.
+// order-independent functional options, ensuring correct client timeouts regardless of the order they are applied.
 
 func TestOptions_TimeoutThenCustomClient_UsesCustomUnchanged(t *testing.T) {
 	custom := &http.Client{Timeout: 2 * time.Second}

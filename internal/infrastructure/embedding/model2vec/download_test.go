@@ -12,9 +12,7 @@ import (
 	"testing"
 )
 
-// TestEnsureModel_FreshDownload covers the first-run path: the model
-// dir is empty, ensureModel pulls each file from the HF server, and
-// the resulting dir contains the expected payloads.
+// TestEnsureModel_FreshDownload verifies that ensureModel downloads all files from the server into an empty directory.
 func TestEnsureModel_FreshDownload(t *testing.T) {
 	tokJSON := []byte(`{"model":{"type":"WordPiece","unk_token":"[UNK]","vocab":{"[UNK]":0}}}`)
 	stBytes := []byte("safetensors-bytes")
@@ -46,9 +44,7 @@ func TestEnsureModel_FreshDownload(t *testing.T) {
 	}
 }
 
-// TestInstall_WritesToModelDir: the exported Install wrapper resolves
-// the <veskaHome>/static-model/<modelName>/ layout, fetches via
-// ensureModel, and returns that directory.
+// TestInstall_WritesToModelDir verifies that the Install function resolves and populates the model directory.
 func TestInstall_WritesToModelDir(t *testing.T) {
 	tokJSON := []byte(`{"model":{"type":"WordPiece","unk_token":"[UNK]","vocab":{"[UNK]":0}}}`)
 	stBytes := []byte("safetensors-bytes")
@@ -78,9 +74,7 @@ func TestInstall_WritesToModelDir(t *testing.T) {
 	}
 }
 
-// TestEnsureModel_ReusesCachedFiles: on a subsequent invocation
-// against the same dir, files already present with matching sha
-// are NOT re-fetched — the HTTP handler counts hits to prove it.
+// TestEnsureModel_ReusesCachedFiles verifies that files with matching checksums are not downloaded again on subsequent runs.
 func TestEnsureModel_ReusesCachedFiles(t *testing.T) {
 	tokJSON := []byte(`{"model":{"type":"WordPiece","unk_token":"[UNK]","vocab":{"[UNK]":0}}}`)
 	stBytes := []byte("safetensors-bytes")
@@ -115,10 +109,7 @@ func TestEnsureModel_ReusesCachedFiles(t *testing.T) {
 	}
 }
 
-// TestEnsureModel_ShaMismatchTriggersRefetch covers the corruption
-// path: a cached file whose sha doesn't match the spec is treated as
-// missing — re-downloaded, never silently trusted. Without this, a
-// truncated download would poison the cache forever.
+// TestEnsureModel_ShaMismatchTriggersRefetch verifies that files with mismatched checksums are redownloaded.
 func TestEnsureModel_ShaMismatchTriggersRefetch(t *testing.T) {
 	stBytes := []byte("safetensors-bytes")
 	hits := map[string]int{}
@@ -150,9 +141,7 @@ func TestEnsureModel_ShaMismatchTriggersRefetch(t *testing.T) {
 	}
 }
 
-// TestEnsureModel_DownloadFailureSurfaces: a 5xx during download must
-// not leave a half-written file that next-run's sha check then
-// accepts as valid.
+// TestEnsureModel_DownloadFailureSurfaces verifies that server errors trigger failures and clean up partial downloads.
 func TestEnsureModel_DownloadFailureSurfaces(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.Error(w, "boom", http.StatusInternalServerError)
@@ -178,7 +167,7 @@ func TestEnsureModel_DownloadFailureSurfaces(t *testing.T) {
 	}
 }
 
-// helpers
+
 
 func sha256Hex(b []byte) string {
 	h := sha256.Sum256(b)

@@ -11,8 +11,8 @@
 //  4. Sum all n-gram vectors across all tokens; divide by count
 //     (mean-pool); L2-normalise.
 //
-// This is NOT a faithful Model2Vec / potion-code-16M port - that work
-// is filed as and requires a HuggingFace tokenizer +
+// This is NOT a faithful Model2Vec / potion-code-16M port; that work
+// is implemented in the model2vec package and requires a HuggingFace tokenizer and
 // safetensors loader. The v2 subword scheme captures the property the
 // v1 per-token hash could not: identifiers sharing morphology
 // ("parseConfig" vs "configParser") land closer in vector space than
