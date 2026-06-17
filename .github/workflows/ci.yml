@@ -1,0 +1,67 @@
+name: ci
+
+# Mirrors the local `make all` gate: build, test, vet, lint, layercheck, and the
+# ratchets. cgo is required (tree-sitter + the sqlite_fts5 driver), so jobs run
+# on the default ubuntu runner which ships gcc. The fat/hnsw_native path is not
+# exercised here - it needs libusearch_c.so, which is out of scope for CI.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.26'
+          cache: true
+      - name: Build (thin)
+        run: make build-small
+      - name: Test
+        run: make test
+      - name: Vet
+        run: make vet
+      - name: Layercheck
+        run: make layercheck
+      - name: Ratchets
+        run: make fatfile-ratchet noidleak cliparity
+
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.26'
+          cache: true
+      - name: golangci-lint
+        uses: golangci/golangci-lint-action@v6
+        with:
+          version: v2.1.6
+
+  notices:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.26'
+          cache: true
+      - name: Check THIRD_PARTY_NOTICES is current
+        run: |
+          go install github.com/google/go-licenses@latest
+          make notices
+          git diff --exit-code THIRD_PARTY_NOTICES \
+            || (echo "THIRD_PARTY_NOTICES is stale - run 'make notices' and commit." >&2; exit 1)
