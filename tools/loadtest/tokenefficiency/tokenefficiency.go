@@ -137,8 +137,8 @@ type Result struct {
 	USDSavedOverConversation    float64 `json:"usd_saved_over_conversation"`
 }
 
-// SummaryLine renders Result into the semble-shaped one-liner the bead
-// calls for. Phrasing follows the bead's stated shape so docs can quote
+// SummaryLine renders Result into the expected one-liner output.
+// Phrasing follows the standard stated shape so documentation can quote
 // it verbatim.
 func (r Result) SummaryLine() string {
 	return fmt.Sprintf(
@@ -169,8 +169,8 @@ func (r Result) TokensLine() string {
 
 // FillAbsoluteSavings populates the concrete-tokens / per-conversation
 // / dollar fields of Result from its already-aggregated ratio fields.
-// conversationQueries is the assumed conversation length (the bead
-// suggested 50; callers can override). usdPerMToken is the model's
+// conversationQueries is the assumed conversation length (defaults to 50;
+// callers can override). usdPerMToken is the model's
 // input-token rate ($ per million tokens); label names the rate for
 // the printed line.
 func (r *Result) FillAbsoluteSavings(conversationQueries int, usdPerMToken float64, label string) {

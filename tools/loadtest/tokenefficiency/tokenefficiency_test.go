@@ -160,7 +160,7 @@ func TestFormatThousands(t *testing.T) {
 	}
 }
 
-func TestSummaryLine_ShapeMatchesBead(t *testing.T) {
+func TestSummaryLine_ExpectedShape(t *testing.T) {
 	t.Parallel()
 	r := Result{
 		Queries:             100,
@@ -172,7 +172,7 @@ func TestSummaryLine_ShapeMatchesBead(t *testing.T) {
 		MeanSavingsHiVsGrep: 0.95,
 	}
 	got := r.SummaryLine()
-	// Spot-check the structural words from the bead's stated shape.
+	// Spot-check the structural words from the expected summary layout.
 	for _, want := range []string{"Veska found", "65%", "80", "95", "100 queries"} {
 		if !contains(got, want) {
 			t.Errorf("summary missing %q: %s", want, got)
