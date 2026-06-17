@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Jeff Rose
+// SPDX-License-Identifier: AGPL-3.0-only
+
 // Package bench provides latency benchmarking utilities for sqlite-vec (vec0) KNN queries.
 // It measures warm and cold query latency percentiles and sweeps populations to find
 // the vec0 ceiling based on latency or RSS budget constraints.

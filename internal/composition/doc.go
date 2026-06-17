@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Jeff Rose
+// SPDX-License-Identifier: AGPL-3.0-only
+
 // Package composition holds composition-root helpers for the daemon and CLI
 // entry points. It defines shared wiring for the cold-scan ingestion/promotion
 // core and the wiki handler, keeping entry points as thin adapters. As the

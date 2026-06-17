@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Jeff Rose
+// SPDX-License-Identifier: AGPL-3.0-only
+
 // Package vecbin provides read/write helpers for the flat binary vector file format.
 // Format: little-endian uint64 count, then count*768 little-endian float32 values.
 // There is no per-vector dimension prefix.

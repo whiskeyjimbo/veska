@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Jeff Rose
+// SPDX-License-Identifier: AGPL-3.0-only
+
 //go:build hnsw_native
 
 // cmd/hnsw-eval runs the full HNSW candidate evaluation sweep at 50k and 250k vectors.

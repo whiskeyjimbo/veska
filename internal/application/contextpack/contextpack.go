@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Jeff Rose
+// SPDX-License-Identifier: AGPL-3.0-only
+
 // Package contextpack assembles a token-bounded bundle of code-graph context
 // (nodes, commits, findings, tasks) for a symbol or task, clipping sections
 // by descending priority to fit a token budget.

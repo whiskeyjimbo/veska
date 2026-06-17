@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Jeff Rose
+// SPDX-License-Identifier: AGPL-3.0-only
+
 // Package review holds the versioned LLM review prompt set and the per-kind
 // response parsers used by the optional post-promotion review pipeline.
 // Each review kind (security, contract_drift) ships as a cohesive unit: a

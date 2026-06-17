@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Jeff Rose
+// SPDX-License-Identifier: AGPL-3.0-only
+
 // Package similarcmd holds the delivery-layer logic behind `veska similar`
 // (eng_search_similar) and `veska related` (eng_find_related). Both ride the
 // same vector-neighbourhood path on the daemon and return a SearchResponse

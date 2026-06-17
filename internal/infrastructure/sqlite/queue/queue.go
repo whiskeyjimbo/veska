@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Jeff Rose
+// SPDX-License-Identifier: AGPL-3.0-only
+
 // Package queue implements the post-promotion work queue poller.
 // It manages per-work_kind goroutines that poll the post_promotion_queue table
 // at a configurable cadence and dispatch rows to registered WorkHandler implementations.

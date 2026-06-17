@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Jeff Rose
+// SPDX-License-Identifier: AGPL-3.0-only
+
 // Package recall provides hold-out generation and recall@k computation for sqlite-vec KNN queries.
 // It measures how accurately vec0's approximate KNN matches brute-force exact L2 nearest neighbors.
 package recall

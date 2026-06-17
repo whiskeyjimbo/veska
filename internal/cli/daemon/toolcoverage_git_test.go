@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Jeff Rose
+// SPDX-License-Identifier: AGPL-3.0-only
+
 package daemon
 
 // Shared git-fixture helpers for TestToolCoverage rows whose tools diff or

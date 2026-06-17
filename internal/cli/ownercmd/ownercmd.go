@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Jeff Rose
+// SPDX-License-Identifier: AGPL-3.0-only
+
 // Package ownercmd holds the delivery-layer logic behind `veska owner`
 // (eng_find_owner): resolve the owner of a file via CODEOWNERS (longest-match)
 // or a git-blame fallback. The anchor may be a path, a symbol, or a node_id

@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Jeff Rose
+// SPDX-License-Identifier: AGPL-3.0-only
+
 // Package gcsweep benchmarks branch-GC sweep: deletes branches from SQLite,
 // records wall-clock time, disk size before/after, and WAL size before/after.
 package gcsweep

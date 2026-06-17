@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Jeff Rose
+// SPDX-License-Identifier: AGPL-3.0-only
+
 package mcp
 
 import (
@@ -14,8 +17,6 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/core/domain"
 	"github.com/whiskeyjimbo/veska/internal/core/protocol"
 )
-
-
 
 type searchSemanticParams struct {
 	Query  string `json:"query"`

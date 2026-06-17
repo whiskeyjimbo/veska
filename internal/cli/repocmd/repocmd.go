@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Jeff Rose
+// SPDX-License-Identifier: AGPL-3.0-only
+
 // Package repocmd holds the business logic behind the `veska repo` command
 // family: repo add/remove/list orchestration, daemon MCP dialing, scan-progress
 // watching + daemon-log tailing, repo-id resolution, and table formatting.

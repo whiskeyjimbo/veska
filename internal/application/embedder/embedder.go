@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Jeff Rose
+// SPDX-License-Identifier: AGPL-3.0-only
+
 // Package embedder contains the long-running goroutine that drains
 // node_embedding_refs(state='pending'), computes embeddings via the
 // EmbeddingProvider, persists the bytes to node_embeddings, and upserts

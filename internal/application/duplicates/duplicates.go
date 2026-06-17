@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Jeff Rose
+// SPDX-License-Identifier: AGPL-3.0-only
+
 // Package duplicates finds exact-clone groups of nodes (functions/symbols) with
 // byte-identical content hashes. Near-duplicate detection is deferred to vector
 // similarity search (`veska similar`), avoiding a global clustering scan.

@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Jeff Rose
+// SPDX-License-Identifier: AGPL-3.0-only
+
 //go:build loadtest
 
 // Command loadtest reads M1 exit-gate RESULTS.md files and emits a consolidated

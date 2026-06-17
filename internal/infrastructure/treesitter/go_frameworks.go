@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Jeff Rose
+// SPDX-License-Identifier: AGPL-3.0-only
+
 // Package treesitter provides framework-aware AST extraction. While generic symbol
 // passes see framework commands as simple variables, this pass recognizes command
 // struct-literals and route declarations from supported frameworks and promotes

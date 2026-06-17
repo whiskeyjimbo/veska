@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Jeff Rose
+// SPDX-License-Identifier: AGPL-3.0-only
+
 package mcp
 
 import (
@@ -93,7 +96,6 @@ func makeFindOwnerHandler(db *sql.DB, repos application.RepoLister) ToolHandler 
 
 		root := resolveOwnerRoot(db, p.RepoID)
 
-
 		if owner, ok := lookupCodeowners(root, p.FilePath); ok {
 			return map[string]any{
 				"owner":  owner,
@@ -101,14 +103,12 @@ func makeFindOwnerHandler(db *sql.DB, repos application.RepoLister) ToolHandler 
 			}, nil
 		}
 
-
 		if email, ok := gitBlameEmail(root, p.FilePath); ok {
 			return map[string]any{
 				"owner":  email,
 				"source": "git_blame",
 			}, nil
 		}
-
 
 		reason := codeownersAbsenceReason(root)
 		return map[string]any{

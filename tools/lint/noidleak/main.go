@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Jeff Rose
+// SPDX-License-Identifier: AGPL-3.0-only
+
 // Command noidleak fails the build when internal bd issue IDs
 // leak into user-visible Go string literals - cobra flag descriptions,
 // fmt.Printf format strings, MCP tool descriptions, generated docs.

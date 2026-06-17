@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Jeff Rose
+// SPDX-License-Identifier: AGPL-3.0-only
+
 //go:build multi_branch_bench
 
 // Command multi-branch-bench performs the M1 multi-branch scenario:

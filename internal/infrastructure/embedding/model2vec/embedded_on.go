@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Jeff Rose
+// SPDX-License-Identifier: AGPL-3.0-only
+
 //go:build embed_model
 
 // Package model2vec provides embedded Model2Vec weights and configurations compiled via go:embed.

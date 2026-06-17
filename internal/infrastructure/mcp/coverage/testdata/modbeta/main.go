@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Jeff Rose
+// SPDX-License-Identifier: AGPL-3.0-only
+
 // Command modbeta serves the beta dashboard. It is the program entry point
 // (eng_get_entry_points must surface main) and registers one HTTP handler.
 package main

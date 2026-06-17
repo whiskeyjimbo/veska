@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Jeff Rose
+// SPDX-License-Identifier: AGPL-3.0-only
+
 //go:build eval
 
 // Eval harness for: measures recall@10 + p95 for each

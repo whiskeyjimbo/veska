@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Jeff Rose
+// SPDX-License-Identifier: AGPL-3.0-only
+
 // Package backupcmd holds the business logic behind the `veska backup` command
 // family. cmd/veska/backup.go is reduced to Cobra construction whose RunE bodies
 // delegate here, following the cmd = glue / logic-in-packages pattern

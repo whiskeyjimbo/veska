@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Jeff Rose
+// SPDX-License-Identifier: AGPL-3.0-only
+
 package mcp
 
 import (
@@ -53,7 +56,6 @@ func makeGetFindingHandler(db *sql.DB) ToolHandler {
 		if rpcErr := checkRequired("finding_id", p.FindingID); rpcErr != nil {
 			return nil, rpcErr
 		}
-
 
 		fullID, rpcErr := resolveFindingPrefix(ctx, db, p.FindingID, p.Branch)
 		if rpcErr != nil {
@@ -137,8 +139,6 @@ func findingRepoMatches(actual, supplied string) bool {
 	return strings.HasPrefix(actual, supplied)
 }
 
-
-
 type getSuppressionParams struct {
 	SuppressionID string `json:"suppression_id"`
 }
@@ -172,8 +172,6 @@ func makeGetSuppressionHandler(db *sql.DB) ToolHandler {
 		return map[string]any{"suppression": s}, nil
 	}
 }
-
-
 
 type closeSuppressionParams struct {
 	SuppressionID string `json:"suppression_id"`

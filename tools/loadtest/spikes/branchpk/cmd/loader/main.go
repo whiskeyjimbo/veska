@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Jeff Rose
+// SPDX-License-Identifier: AGPL-3.0-only
+
 // Command loader runs synthetic branch-in-PK schema load tests at 10%, 30%, and 60%
 // dirty overlap and emits a JSON metrics array.
 package main

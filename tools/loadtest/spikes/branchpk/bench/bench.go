@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Jeff Rose
+// SPDX-License-Identifier: AGPL-3.0-only
+
 // Package bench provides indexed-lookup latency benchmarks for the branchpk SQLite schema.
 // It measures warm p50/p95/p99 for the two hot queries (get_node, get_edges) and
 // compares them against budgets.

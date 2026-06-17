@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Jeff Rose
+// SPDX-License-Identifier: AGPL-3.0-only
+
 // Package mcpclient is the CLI's JSON-RPC 2.0 client for the daemon's cli.sock.
 // It owns the socket dialing (with cold-start retry), request framing, cwd
 // injection, and CLI-flavored error humanization that the `veska` subcommands

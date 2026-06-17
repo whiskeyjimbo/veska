@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Jeff Rose
+// SPDX-License-Identifier: AGPL-3.0-only
+
 package mcp
 
 // This file provides shared user-facing descriptions for MCP tools and CLI commands to prevent documentation drift.

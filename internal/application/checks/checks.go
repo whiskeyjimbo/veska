@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Jeff Rose
+// SPDX-License-Identifier: AGPL-3.0-only
+
 // Package checks contains the synchronous structural-check pipeline that runs
 // immediately after a promotion transaction commits. It exposes the Check
 // interface, an in-memory Registry, and a Runner that:

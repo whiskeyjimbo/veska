@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Jeff Rose
+// SPDX-License-Identifier: AGPL-3.0-only
+
 // Package layercheck implements an import-graph layer analyser that enforces
 // architectural boundaries between core, application, and infrastructure layers.
 // Forbidden import directions:

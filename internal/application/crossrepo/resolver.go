@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Jeff Rose
+// SPDX-License-Identifier: AGPL-3.0-only
+
 // Package crossrepo provides a small primitive that walks every registered
 // repository and aggregates per-repo hit counts for a given symbol or
 // finding query.

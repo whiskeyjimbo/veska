@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Jeff Rose
+// SPDX-License-Identifier: AGPL-3.0-only
+
 // Package restorecmd holds the business logic behind the `veska restore`
 // command. cmd/veska/restore.go is reduced to Cobra construction whose RunE
 // body delegates here, following the cmd = glue / logic-in-packages pattern

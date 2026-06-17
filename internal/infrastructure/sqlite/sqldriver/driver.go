@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Jeff Rose
+// SPDX-License-Identifier: AGPL-3.0-only
+
 // Package sqldriver pins veska's SQLite driver.
 // veska uses github.com/mattn/go-sqlite3 (cgo, with the sqlite_fts5 build
 // tag so the lexical-fallback FTS5 virtual tables work). cgo is required

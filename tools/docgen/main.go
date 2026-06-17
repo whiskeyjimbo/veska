@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Jeff Rose
+// SPDX-License-Identifier: AGPL-3.0-only
+
 // Command docgen generates derived Markdown reference pages for the manual
 // from the live source, so they cannot drift from the code. `make docs-gen`
 // runs it and CI fails if a committed page is stale.

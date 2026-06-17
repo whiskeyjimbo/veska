@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Jeff Rose
+// SPDX-License-Identifier: AGPL-3.0-only
+
 // Package memvec_test exercises the in-memory Store via the ports.VectorStorage contract.
 package memvec_test
 

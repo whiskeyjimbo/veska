@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Jeff Rose
+// SPDX-License-Identifier: AGPL-3.0-only
+
 // Package extindex indexes a registered repo's vendored Go module
 // sources into the graph as external nodes.
 // Why: the multi-repo wedge promises "your agent knows

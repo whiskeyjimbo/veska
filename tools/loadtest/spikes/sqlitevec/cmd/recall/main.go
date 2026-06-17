@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Jeff Rose
+// SPDX-License-Identifier: AGPL-3.0-only
+
 // Command recall runs recall@10 and recall@50 benchmarks against sqlite-vec KNN queries.
 // It generates a corpus at each population size, creates a hold-out set of query vectors,
 // computes ground-truth nearest neighbors via brute force, queries vec0, and reports recall.

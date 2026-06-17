@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Jeff Rose
+// SPDX-License-Identifier: AGPL-3.0-only
+
 package mcp
 
 import (
@@ -33,7 +36,7 @@ type PromotePromoter interface {
 type promoteParams struct {
 	RootPath string `json:"root_path"`
 	// RepoID accepts the full repository identifier or a short ID prefix.
-	RepoID string `json:"repo_id"`
+	RepoID    string `json:"repo_id"`
 	Branch    string `json:"branch"`
 	GitSHA    string `json:"git_sha"`
 	ActorKind string `json:"actor_kind"`
@@ -133,7 +136,6 @@ func makePromoteHandler(deps PromoteDeps) ToolHandler {
 			}
 			head = h
 		}
-
 
 		changed, err := deps.Git.ChangedFiles(canon, head)
 		if err != nil {

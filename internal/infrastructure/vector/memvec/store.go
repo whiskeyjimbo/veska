@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Jeff Rose
+// SPDX-License-Identifier: AGPL-3.0-only
+
 // Package memvec provides a VectorStorage implementation backed by an in-memory
 // map with linear-scan nearest-neighbor search.
 //

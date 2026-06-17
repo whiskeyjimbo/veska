@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Jeff Rose
+// SPDX-License-Identifier: AGPL-3.0-only
+
 // Package eval defines the VectorIndex interface and shared harness utilities
 // for evaluating HNSW backing library candidates (usearch, coder/hnsw, lancedb).
 // All adapters must implement VectorIndex. The harness measures:

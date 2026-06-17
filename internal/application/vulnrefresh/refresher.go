@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Jeff Rose
+// SPDX-License-Identifier: AGPL-3.0-only
+
 // Package vulnrefresh contains the daemon-owned goroutine that keeps the OSV
 // advisory cache fresh, off the promotion hot path.
 // Scope (M7 §3 task A4): lifecycle and scheduling only. The refresher depends

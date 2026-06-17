@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Jeff Rose
+// SPDX-License-Identifier: AGPL-3.0-only
+
 // Package duplicatescmd holds the delivery-layer logic behind `veska duplicates`
 // (eng_find_clusters): the unified, tier-labeled similar-code view (exact +
 // structural + near) for de-dupe triage. It proxies to the daemon like the other

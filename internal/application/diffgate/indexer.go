@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Jeff Rose
+// SPDX-License-Identifier: AGPL-3.0-only
+
 // Package diffgate is the shared substrate of the diff-safety gate
 // it ephemerally indexes a candidate change against a base
 // graph WITHOUT mutating the persisted graph or hitting the network, so the

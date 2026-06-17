@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Jeff Rose
+// SPDX-License-Identifier: AGPL-3.0-only
+
 package mcp
 
 import (
@@ -55,7 +58,6 @@ type setActiveTaskParams struct {
 	TaskID string `json:"task_id"`
 	RepoID string `json:"repo_id"`
 }
-
 
 var setActiveTaskInputSchema = json.RawMessage(`{
   "$schema": "https://json-schema.org/draft/2020-12/schema",

@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Jeff Rose
+// SPDX-License-Identifier: AGPL-3.0-only
+
 // Command loader loads synthetic 768-dim vectors into a sqlite-vec vec0 virtual table
 // for two populations (50k and 1M), recording wall-clock time, disk footprint, and
 // peak RSS. Metrics are written as a JSON array to the output file.

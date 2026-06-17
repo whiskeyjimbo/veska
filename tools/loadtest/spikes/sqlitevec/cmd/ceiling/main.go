@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Jeff Rose
+// SPDX-License-Identifier: AGPL-3.0-only
+
 // Command ceiling sweeps vec0 query latency across user-specified populations to find
 // the node count at which warm p95 first exceeds the budget (100ms).
 // Each population is loaded into a fresh temporary DB so measurements are independent.

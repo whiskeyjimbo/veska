@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Jeff Rose
+// SPDX-License-Identifier: AGPL-3.0-only
+
 package llm_test
 
 import (
@@ -374,4 +377,3 @@ func TestOllamaGenerator_Generate_Usage(t *testing.T) {
 		t.Errorf("Total: got %d, want 59", resp.Usage.Total())
 	}
 }
-

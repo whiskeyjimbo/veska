@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Jeff Rose
+// SPDX-License-Identifier: AGPL-3.0-only
+
 // Package resolver provides query-time cross-repo edge resolution for the
 // veska graph store. It performs one-hop indexed lookups against the
 // cross_repo_edge_stubs and nodes tables. Multi-hop traversal is deferred to M2+.

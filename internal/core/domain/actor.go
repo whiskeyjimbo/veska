@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Jeff Rose
+// SPDX-License-Identifier: AGPL-3.0-only
+
 package domain
 
 import "errors"
@@ -19,9 +22,10 @@ var validActorKinds = map[ActorKind]struct{}{
 
 // Actor is an attribution stamp that records who or what performed an action.
 // The ID field follows these format conventions:
-//   "human:<username>" - a human developer
-//   "agent:<name>" - an AI agent
-//   "service:veska" - the veska system itself
+//
+//	"human:<username>" - a human developer
+//	"agent:<name>" - an AI agent
+//	"service:veska" - the veska system itself
 type Actor struct {
 	ID   string
 	Kind ActorKind

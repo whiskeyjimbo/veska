@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Jeff Rose
+// SPDX-License-Identifier: AGPL-3.0-only
+
 // Package observability provides Prometheus metrics and OpenTelemetry tracing
 // building blocks. All features are opt-in: the HTTP listener only binds when
 // the caller explicitly calls StartHTTPListener, and the tracer provider only

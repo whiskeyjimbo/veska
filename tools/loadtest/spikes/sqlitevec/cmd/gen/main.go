@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Jeff Rose
+// SPDX-License-Identifier: AGPL-3.0-only
+
 // Command gen generates synthetic 768-dim float32 vectors with L2 norms drawn
 // from Gaussian(μ=7.5, σ=1.5) and writes them to disk in the vecbin format.
 // Usage:

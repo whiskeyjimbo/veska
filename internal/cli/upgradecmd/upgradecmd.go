@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Jeff Rose
+// SPDX-License-Identifier: AGPL-3.0-only
+
 // Package upgradecmd holds the business logic behind the `veska upgrade`
 // command. cmd/veska/upgrade.go is reduced to Cobra construction whose RunE
 // body delegates here, following the cmd = glue / logic-in-packages pattern

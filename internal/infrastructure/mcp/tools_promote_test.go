@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Jeff Rose
+// SPDX-License-Identifier: AGPL-3.0-only
+
 package mcp
 
 import (
@@ -12,7 +15,6 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/application"
 	"github.com/whiskeyjimbo/veska/internal/core/domain"
 )
-
 
 type fakeRepoLister struct{ recs []application.RepoRecord }
 
@@ -55,7 +57,6 @@ func (f *fakeProm) Promote(_ context.Context, repoID, branch, sha string, actor 
 	f.calls = append(f.calls, promoCall{repoID, branch, sha, actor.Kind})
 	return f.err
 }
-
 
 // TestPromoteHandler_HappyPath verifies that when a registered repository has modifications at HEAD,
 // the modified files are in-memory saved and a single promotion is triggered under the system actor.
@@ -346,7 +347,6 @@ func TestPromoteHandler_RejectsPartialActor(t *testing.T) {
 		t.Fatalf("want CodeInvalidParams for partial actor, got %+v", rpcErr)
 	}
 }
-
 
 func mustWrite(t *testing.T, dir, rel, body string) {
 	t.Helper()

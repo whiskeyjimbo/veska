@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Jeff Rose
+// SPDX-License-Identifier: AGPL-3.0-only
+
 // Command bench measures warm indexed-lookup latency for the branchpk SQLite schema
 // and compares the results against budgets.
 package main

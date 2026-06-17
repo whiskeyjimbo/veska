@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Jeff Rose
+// SPDX-License-Identifier: AGPL-3.0-only
+
 package mcp
 
 import (
@@ -12,8 +15,6 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/core/domain"
 	"github.com/whiskeyjimbo/veska/internal/core/ports"
 )
-
-
 
 type searchSimilarParams struct {
 	NodeID string `json:"node_id"`
@@ -81,7 +82,6 @@ func findSimilarByNodeID(ctx context.Context, lookup SimilarLookup, vectors port
 	}
 	vec := veccodec.DecodeFloat32LE(blob, dim)
 
-
 	hits, err := vectors.Search(ctx, repoID, branch, vec, k+1, domain.VectorFilter{})
 	if err != nil {
 		return nil, &RPCError{Code: CodeInternalError, Message: fmt.Sprintf("similar: vector search: %v", err)}
@@ -128,7 +128,6 @@ func findSimilarByNodeID(ctx context.Context, lookup SimilarLookup, vectors port
 	}
 	return out, nil
 }
-
 
 var findRelatedInputSchema = []byte(`{
   "$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -183,7 +182,6 @@ func makeFindRelatedHandler(lookup SimilarLookup, vectors ports.VectorStorage, n
 		if rpcErr != nil {
 			return nil, rpcErr
 		}
-
 
 		p.FilePath = toStoredPath(ctx, repos, p.RepoID, p.FilePath)
 

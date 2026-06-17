@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Jeff Rose
+// SPDX-License-Identifier: AGPL-3.0-only
+
 // Package report reads bench/recall/load JSON metrics and emits a markdown verdict report
 // for the sqlite-vec sqlitevec loadtest spike.
 package report

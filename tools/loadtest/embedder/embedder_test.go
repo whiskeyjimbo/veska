@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Jeff Rose
+// SPDX-License-Identifier: AGPL-3.0-only
+
 //go:build eval
 
 // Package embedder drives the M3 gate-1 embedder throughput bench.

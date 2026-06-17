@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Jeff Rose
+// SPDX-License-Identifier: AGPL-3.0-only
+
 package mcp
 
 import (
@@ -14,7 +17,6 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/core/domain"
 	"github.com/whiskeyjimbo/veska/internal/core/ports"
 )
-
 
 type stubEmbedder struct {
 	vec []float32
@@ -141,7 +143,6 @@ func dispatchSearch(t *testing.T, r *Registry, method string, params any) (Searc
 	}
 	return resp, nil
 }
-
 
 func TestSearchSemantic_ReturnsHydratedResults(t *testing.T) {
 	emb := &stubEmbedder{vec: []float32{0.1, 0.2}}
@@ -397,7 +398,6 @@ type stubLex struct {
 func (s *stubLex) Search(_ context.Context, _, _, _ string, _ int) ([]ports.LexicalHit, error) {
 	return s.hits, nil
 }
-
 
 func TestSearchSimilar_ReturnsNeighboursExcludingSeed(t *testing.T) {
 	seedVec := []float32{0.5, 0.5, 0.5}

@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Jeff Rose
+// SPDX-License-Identifier: AGPL-3.0-only
+
 // history.go provides commit-history queries to analyze change frequency and commit history.
 // We query the Git log directly rather than relying on auxiliary databases, filtering and windowing
 // in-process to guarantee deterministic sorting.

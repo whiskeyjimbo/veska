@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Jeff Rose
+// SPDX-License-Identifier: AGPL-3.0-only
+
 // Package condense implements extractive condensation: given a list of
 // text pieces (lines from a function body, sentences from a doc-comment
 // paragraph, etc.), it returns the k most-central pieces in original

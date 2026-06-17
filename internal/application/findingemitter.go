@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Jeff Rose
+// SPDX-License-Identifier: AGPL-3.0-only
+
 package application
 
 import (
@@ -16,7 +19,6 @@ import (
 type findingEmitter struct {
 	findings ports.FindingStorage
 }
-
 
 func newFindingEmitter(findings ports.FindingStorage) *findingEmitter {
 	return &findingEmitter{findings: findings}
@@ -69,7 +71,6 @@ func (e *findingEmitter) ClearParseFailure(ctx context.Context, repoID, branch, 
 		return
 	}
 
-
 	f, err := domain.NewFinding(domain.FindingSpec{
 		RepoID:   repoID,
 		Branch:   branch,
@@ -95,7 +96,6 @@ func (e *findingEmitter) Todos(ctx context.Context, repoID, branch, path string,
 	if len(todos) == 0 || e.findings == nil {
 		return
 	}
-
 
 	const inlineCap = 5
 	parts := make([]string, 0, inlineCap)

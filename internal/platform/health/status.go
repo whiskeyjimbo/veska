@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Jeff Rose
+// SPDX-License-Identifier: AGPL-3.0-only
+
 // Package health defines the typed health Status vocabulary shared by the
 // doctor probes and the embedder probe. It is a zero-internal-dependency leaf:
 // it imports nothing from the rest of veska so that lightweight callers (e.g.

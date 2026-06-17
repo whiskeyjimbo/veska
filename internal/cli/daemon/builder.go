@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Jeff Rose
+// SPDX-License-Identifier: AGPL-3.0-only
+
 package daemon
 
 import (
@@ -18,9 +21,9 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/application/embedder"
 	"github.com/whiskeyjimbo/veska/internal/application/revalidate"
 	"github.com/whiskeyjimbo/veska/internal/application/review"
-	"github.com/whiskeyjimbo/veska/internal/application/summary"
 	"github.com/whiskeyjimbo/veska/internal/application/savings"
 	"github.com/whiskeyjimbo/veska/internal/application/staging"
+	"github.com/whiskeyjimbo/veska/internal/application/summary"
 	"github.com/whiskeyjimbo/veska/internal/application/vulnrefresh"
 	"github.com/whiskeyjimbo/veska/internal/application/wiki"
 	"github.com/whiskeyjimbo/veska/internal/composition"

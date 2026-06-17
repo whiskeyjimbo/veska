@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Jeff Rose
+// SPDX-License-Identifier: AGPL-3.0-only
+
 package metric
 
 // averageSamples is a near-duplicate of computeMean: same structure, same

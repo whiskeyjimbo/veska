@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Jeff Rose
+// SPDX-License-Identifier: AGPL-3.0-only
+
 // Package treesitter provides query_runner, a wrapper over sitter.QueryCursor that executes
 // tree-sitter queries. It compiles queries once per process via sync.Once, minimizes CGO
 // crossings by iterating within C, and exposes captures by name for easier processing.

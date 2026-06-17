@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Jeff Rose
+// SPDX-License-Identifier: AGPL-3.0-only
+
 // Package main is the entry point for the veska CLI binary.
 // One binary serves three personalities, selected by argv[0]: invoked as
 // `veska` it runs the Cobra CLI; the `veska-daemon` and `veska-mcp` symlinks

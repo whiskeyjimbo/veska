@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Jeff Rose
+// SPDX-License-Identifier: AGPL-3.0-only
+
 // Package application contains use-case orchestrators and application-layer
 // services that coordinate the domain entities. Implementations of
 // side-effecting ports (storage, parsers, embedding providers) are wired in

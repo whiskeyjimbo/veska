@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Jeff Rose
+// SPDX-License-Identifier: AGPL-3.0-only
+
 // Package hookcmd holds the business logic behind the git-hook shims that
 // `veska init` installs (`veska hook-runner post-commit` and
 // `hook-runner post-checkout`). cmd/veska/hook_runner.go is reduced to Cobra

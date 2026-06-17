@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Jeff Rose
+// SPDX-License-Identifier: AGPL-3.0-only
+
 package mcp
 
 import (
@@ -89,13 +92,13 @@ func resolveRepoIDDB(ctx context.Context, db *sql.DB, repoID string) (string, *R
 }
 
 type listFindingsParams struct {
-	RepoID            string `json:"repo_id"`
-	Branch            string `json:"branch"`
-	State             string `json:"state,omitempty"`
-	Severity          string `json:"severity,omitempty"`
-	Rule              string `json:"rule,omitempty"`
+	RepoID   string `json:"repo_id"`
+	Branch   string `json:"branch"`
+	State    string `json:"state,omitempty"`
+	Severity string `json:"severity,omitempty"`
+	Rule     string `json:"rule,omitempty"`
 	// IncludeSuppressed returns findings hidden by active suppressions.
-	IncludeSuppressed bool   `json:"include_suppressed,omitempty"`
+	IncludeSuppressed bool `json:"include_suppressed,omitempty"`
 }
 
 type findingRow struct {
@@ -143,7 +146,6 @@ func makeListFindingsHandler(db *sql.DB, repos application.RepoLister) ToolHandl
 		if p.State == "" {
 			p.State = "open"
 		}
-
 
 		nowMS := time.Now().UnixMilli()
 		query := `SELECT f.finding_id, f.branch, f.repo_id, f.node_id,
@@ -205,7 +207,6 @@ func makeListFindingsHandler(db *sql.DB, repos application.RepoLister) ToolHandl
 		if err := rows.Err(); err != nil {
 			return nil, &RPCError{Code: CodeInternalError, Message: fmt.Sprintf("iterate findings: %v", err)}
 		}
-
 
 		return map[string]any{
 			"findings":         findings,

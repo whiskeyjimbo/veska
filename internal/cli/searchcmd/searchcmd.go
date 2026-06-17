@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Jeff Rose
+// SPDX-License-Identifier: AGPL-3.0-only
+
 // Package searchcmd holds the business logic behind the `veska search`
 // command: the daemon-first / ephemeral-clone / in-process search paths, the
 // {results, degraded_reasons} envelope build + render, the 'searching:'

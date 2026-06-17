@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Jeff Rose
+// SPDX-License-Identifier: AGPL-3.0-only
+
 package daemon
 
 // TestToolCoverage is the parent skeleton for the 40 per-tool MCP

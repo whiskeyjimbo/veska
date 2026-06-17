@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Jeff Rose
+// SPDX-License-Identifier: AGPL-3.0-only
+
 // Package findingscmd holds the delivery-layer logic behind the `veska
 // findings …` command tree: the eng_list_findings / eng_get_finding /
 // eng_reopen_finding / suppression MCP calls, the severity sort + breakdown

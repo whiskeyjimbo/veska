@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Jeff Rose
+// SPDX-License-Identifier: AGPL-3.0-only
+
 //go:build eval
 
 // Package reviewtiming drives the M5 exit-gate-5 per-commit review time budget.

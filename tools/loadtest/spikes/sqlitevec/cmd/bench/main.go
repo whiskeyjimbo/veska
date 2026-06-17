@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Jeff Rose
+// SPDX-License-Identifier: AGPL-3.0-only
+
 // Command bench measures warm and cold KNN query latency for sqlite-vec (vec0)
 // at multiple populations and k values, then sweeps to find the vec0 ceiling.
 // Usage:

@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Jeff Rose
+// SPDX-License-Identifier: AGPL-3.0-only
+
 // Package fatfiles implements a per-file line-count ratchet.
 // Unlike `make lint-size` (which enforces per-FUNCTION limits on CHANGED code
 // only via golangci-lint --new-from-merge-base), this ratchet tracks the TOTAL

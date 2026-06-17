@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Jeff Rose
+// SPDX-License-Identifier: AGPL-3.0-only
+
 // Package autolink computes auto-link candidates: top-k similarity edges
 // proposed for a set of recently-promoted source nodes.
 // This package ships the pure computation only (m3.04.1). It does not write

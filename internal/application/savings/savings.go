@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Jeff Rose
+// SPDX-License-Identifier: AGPL-3.0-only
+
 // Package savings records per-search token-savings telemetry to a JSONL file
 // (~/.veska/savings.jsonl by default) and reports rollups for the doctor subcommand.
 // Telemetry is cheap to compute and local-only, using O_APPEND write per search.

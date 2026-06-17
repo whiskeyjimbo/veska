@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Jeff Rose
+// SPDX-License-Identifier: AGPL-3.0-only
+
 // Package reindexcmd holds the business logic behind the `veska reindex`
 // command: the daemon-dispatch fork (route through eng_reindex_repo when the
 // daemon is up) and the direct-SQLite cold-scan fallback when it is down.

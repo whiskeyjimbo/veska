@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Jeff Rose
+// SPDX-License-Identifier: AGPL-3.0-only
+
 package sqlite_test
 
 import (
@@ -30,7 +33,6 @@ func setupExportedSymbolFixture(t *testing.T) *exportedSymbolFixture {
 	}
 	return &exportedSymbolFixture{db: db, repoID: repoID, branch: "main"}
 }
-
 
 func (f *exportedSymbolFixture) insertNode(t *testing.T, nodeID, filePath, kind, name string, exported bool) {
 	t.Helper()

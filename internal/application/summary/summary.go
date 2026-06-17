@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Jeff Rose
+// SPDX-License-Identifier: AGPL-3.0-only
+
 // Package summary implements the optional LLM summary lane: an off-by-default
 // post-promotion queue handler that attaches a short natural-language summary
 // to each promoted node via the [llm_generator] slot. It mirrors the review

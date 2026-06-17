@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Jeff Rose
+// SPDX-License-Identifier: AGPL-3.0-only
+
 // refdiff.go provides helpers to compare Git references and read file contents at specific references.
 
 package git

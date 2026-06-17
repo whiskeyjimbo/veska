@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Jeff Rose
+// SPDX-License-Identifier: AGPL-3.0-only
+
 package ports
 
 // ResolvedEdge is the result of a cross-repository edge resolution. It is defined
