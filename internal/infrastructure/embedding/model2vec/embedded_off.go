@@ -2,8 +2,5 @@
 
 package model2vec
 
-// Embedded reports no compiled-in model in thin (default) builds. The fat
-// build (build tag `embed_model`, see embedded_on.go) replaces this with a
-// real provider. Keeping the symbol in both builds lets callers (elect)
-// reference Embedded unconditionally.
+// Embedded returns a negative indicator since no model is compiled into this thin build.
 func Embedded() (*Provider, bool) { return nil, false }

@@ -8,12 +8,10 @@ import (
 	"testing"
 )
 
-// buildSafetensorsFile builds a minimal safetensors blob in memory for
-// tests: a single tensor of float32 data with given name + shape.
+// buildSafetensorsFile constructs a minimal in-memory Safetensors payload containing a single float32 tensor.
 func buildSafetensorsFile(t *testing.T, name string, shape []int, data []float32) []byte {
 	t.Helper()
-	// safetensors data is a flat byte buffer of tensors, declared in
-	// header order with byte-offset ranges into the data segment.
+	// Safetensors data consists of a flat byte buffer described by header offsets.
 	dataBytes := make([]byte, 4*len(data))
 	for i, v := range data {
 		binary.LittleEndian.PutUint32(dataBytes[i*4:], math.Float32bits(v))
@@ -63,10 +61,7 @@ func intToStr(x int) string {
 	return s
 }
 
-// TestReadSafetensors_RoundTripsSingleF32: build a 2x3 F32 tensor in
-// memory, write the safetensors envelope, parse it back, and assert
-// the values come out identical. Pins both the header layout (u64
-// little-endian length + JSON) and the F32 little-endian tensor decode.
+// TestReadSafetensors_RoundTripsSingleF32 verifies that a written single float32 tensor can be read back identically.
 func TestReadSafetensors_RoundTripsSingleF32(t *testing.T) {
 	in := []float32{1, 2, 3, 4, 5, 6}
 	blob := buildSafetensorsFile(t, "embeddings", []int{2, 3}, in)
@@ -95,10 +90,7 @@ func TestReadSafetensors_RoundTripsSingleF32(t *testing.T) {
 	}
 }
 
-// TestReadSafetensors_TruncatedHeaderErrors: a header shorter than
-// declared must not silently produce empty results — that would mask
-// a corrupt model file as "no embeddings", which manifests as 100%
-// retrieval miss in production with no useful error.
+// TestReadSafetensors_TruncatedHeaderErrors verifies that a truncated Safetensors header triggers an error.
 func TestReadSafetensors_TruncatedHeaderErrors(t *testing.T) {
 	var buf bytes.Buffer
 	// Claim 1KiB of header, supply only 4 bytes.
@@ -110,11 +102,7 @@ func TestReadSafetensors_TruncatedHeaderErrors(t *testing.T) {
 	}
 }
 
-// TestReadSafetensors_SkipsIntegerTensors: real potion-* models ship an
-// identity I64 "mapping" tensor alongside the float matrix. We decode
-// only float dtypes and skip integer/aux tensors rather than erroring
-// erroring on a valid model file is worse than ignoring an unused
-// tensor. The float entry alongside it must still decode.
+// TestReadSafetensors_SkipsIntegerTensors verifies that integer tensors are skipped while float tensors are decoded.
 func TestReadSafetensors_SkipsIntegerTensors(t *testing.T) {
 	// "mapping" is I64 (skipped); "embeddings" is F32 (kept).
 	header := `{"mapping":{"dtype":"I64","shape":[2],"data_offsets":[0,16]},` +

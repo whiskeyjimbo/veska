@@ -12,8 +12,7 @@ import (
 	embedstatic "github.com/whiskeyjimbo/veska/internal/infrastructure/embedding/static"
 )
 
-// writeMinimalModel2Vec writes a valid (tiny) model2vec model dir so the
-// auto/override model2vec branches can be exercised without a download.
+// writeMinimalModel2Vec creates a minimal valid Model2Vec model directory on disk for local testing.
 func writeMinimalModel2Vec(t *testing.T, veskaHome, name string) {
 	t.Helper()
 	dir := filepath.Join(veskaHome, "static-model", name)
@@ -33,7 +32,7 @@ func writeMinimalModel2Vec(t *testing.T, veskaHome, name string) {
 	if err := os.WriteFile(filepath.Join(dir, "tokenizer.json"), b, 0o644); err != nil {
 		t.Fatalf("write tokenizer: %v", err)
 	}
-	// safetensors: one F32 "embeddings" tensor, shape [2,4].
+	// safetensors defines one F32 "embeddings" tensor with shape [2,4].
 	emb := []float32{0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8}
 	data := make([]byte, 4*len(emb))
 	for i, v := range emb {
@@ -114,7 +113,7 @@ func TestElect_UnknownOverrideErrors(t *testing.T) {
 
 func TestElect_MarkerSwitchDetection(t *testing.T) {
 	home := t.TempDir()
-	// First boot: static elected, marker fresh.
+	// First boot simulates an initial election with a fresh marker.
 	r1, err := Elect(Config{VeskaHome: home, Override: OverrideStatic})
 	if err != nil {
 		t.Fatalf("Elect 1: %v", err)
@@ -122,7 +121,7 @@ func TestElect_MarkerSwitchDetection(t *testing.T) {
 	if r1.Previous != "" || r1.SwitchedModel {
 		t.Errorf("fresh election: Previous=%q SwitchedModel=%v, want empty/false", r1.Previous, r1.SwitchedModel)
 	}
-	// Second boot, same embedder: no switch.
+	// Second boot simulates checking without altering the elected model.
 	r2, err := Elect(Config{VeskaHome: home, Override: OverrideStatic})
 	if err != nil {
 		t.Fatalf("Elect 2: %v", err)
@@ -130,7 +129,7 @@ func TestElect_MarkerSwitchDetection(t *testing.T) {
 	if r2.SwitchedModel {
 		t.Errorf("same embedder should not report a switch")
 	}
-	// Third boot, different embedder (ollama): switch detected.
+	// Third boot simulates switching the embedder to trigger switch detection.
 	r3, err := Elect(Config{VeskaHome: home, Override: OverrideOllama, EmbedModel: "nomic-embed-text"})
 	if err != nil {
 		t.Fatalf("Elect 3: %v", err)

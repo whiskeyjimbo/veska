@@ -7,12 +7,7 @@ import (
 	"testing"
 )
 
-// TestTryLoad_NoFilesReturnsErrModelNotPresent: a fresh install has
-// no <VeskaHome>/static-model/* dir. The daemon relies on the
-// errors.Is(err, ErrModelNotPresent) gate to decide whether to skip
-// model2vec and use only the hash-static fallback — without this
-// sentinel, the daemon would either crash on boot or silently
-// surface a more confusing "open: no such file" error.
+// TestTryLoad_NoFilesReturnsErrModelNotPresent verifies that TryLoad returns ErrModelNotPresent if model files are absent.
 func TestTryLoad_NoFilesReturnsErrModelNotPresent(t *testing.T) {
 	home := t.TempDir()
 	_, err := TryLoad(home, "potion-code-16M")
@@ -21,9 +16,7 @@ func TestTryLoad_NoFilesReturnsErrModelNotPresent(t *testing.T) {
 	}
 }
 
-// TestTryLoad_SuccessWhenFilesPresent: when both tokenizer.json and
-// model.safetensors live under <VeskaHome>/static-model/<name>/,
-// TryLoad returns a working Provider.
+// TestTryLoad_SuccessWhenFilesPresent verifies that TryLoad successfully initializes the provider when both model files are present.
 func TestTryLoad_SuccessWhenFilesPresent(t *testing.T) {
 	home := t.TempDir()
 	modelDir := filepath.Join(home, "static-model", "fake-model")
@@ -51,10 +44,7 @@ func TestTryLoad_SuccessWhenFilesPresent(t *testing.T) {
 	}
 }
 
-// TestTryLoad_HalfPresentReturnsErrModelNotPresent: when only one of
-// the two required files is on disk, treat the model as not-installed
-// rather than half-installed. A partial download is exactly the
-// "missing" state from the consumer's perspective.
+// TestTryLoad_HalfPresentReturnsErrModelNotPresent verifies that having only one model file returns ErrModelNotPresent.
 func TestTryLoad_HalfPresentReturnsErrModelNotPresent(t *testing.T) {
 	home := t.TempDir()
 	modelDir := filepath.Join(home, "static-model", "fake-model")

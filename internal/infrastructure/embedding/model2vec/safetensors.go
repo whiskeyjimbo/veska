@@ -8,26 +8,9 @@ import (
 	"math"
 )
 
-// safetensors file layout:
-//	+--------+--------------------+--------------------+
-//	| u64 LE | header (UTF-8 JSON)| concatenated data |
-//	| N | N bytes | rest of file |
-//	+--------+--------------------+--------------------+
-// Header schema (Model2Vec only uses the embedding-matrix entry):
-//	{
-//	  "tensor_name": {
-//	    "dtype": "F32" | "F16",
-//	    "shape": [int,.],
-//	    "data_offsets": [start, end] // relative to start of data segment
-//	  },
-//	}
-// The "__metadata__" key is optional and ignored here — Model2Vec
-// doesn't depend on it for inference.
+// Safetensors format consists of a little-endian uint64 length header, a UTF-8 JSON header describing tensor shapes and offsets, and concatenated raw data bytes.
 
-// Tensor is one decoded entry from a safetensors file. Data is
-// flattened in row-major order; callers slice it according to Shape.
-// The float values are normalised to float32 regardless of whether the
-// source dtype was F16 or F32 so downstream math has one type.
+// Tensor represents a single decoded tensor from a Safetensors payload, with values normalized to float32.
 type Tensor struct {
 	Dtype string
 	Shape []int
@@ -40,15 +23,7 @@ type safetensorsHeaderEntry struct {
 	DataOffsets []int  `json:"data_offsets"`
 }
 
-// readSafetensors parses the safetensors envelope from r and returns
-// one decoded Tensor per named entry. The "__metadata__" key is
-// silently skipped — it carries optional model metadata, not tensors.
-// Float tensors (F32/F16/F64) are decoded to float32. Tensors with an
-// integer dtype (e.g. the identity I64 "mapping" tensor potion models
-// ship) are skipped rather than rejected — they aren't used in the
-// float pooling math, and erroring on a perfectly valid model file is
-// worse than ignoring an unused tensor. A genuinely corrupt float
-// tensor still surfaces via the decode error path below.
+// readSafetensors parses the Safetensors envelope and returns a map of decoded float tensors.
 func readSafetensors(r io.Reader) (map[string]Tensor, error) {
 	var hdrLen uint64
 	if err := binary.Read(r, binary.LittleEndian, &hdrLen); err != nil {
@@ -67,8 +42,7 @@ func readSafetensors(r io.Reader) (map[string]Tensor, error) {
 		return nil, fmt.Errorf("safetensors: parse header json: %w", err)
 	}
 
-	// Read the rest of the file as the data segment — sized by the
-	// largest data_offsets[end] across all tensors.
+	// Read the rest of the file as the data segment sized by the largest data offset.
 	type entry struct {
 		name string
 		safetensorsHeaderEntry
@@ -99,7 +73,7 @@ func readSafetensors(r io.Reader) (map[string]Tensor, error) {
 	out := make(map[string]Tensor, len(entries))
 	for _, e := range entries {
 		if !isFloatDtype(e.Dtype) {
-			continue // skip integer/aux tensors (e.g. identity "mapping")
+			continue // Skip integer and auxiliary tensors.
 		}
 		raw := dataBuf[e.DataOffsets[0]:e.DataOffsets[1]]
 		floats, err := decodeTensorBytes(e.Dtype, raw)
@@ -115,8 +89,7 @@ func readSafetensors(r io.Reader) (map[string]Tensor, error) {
 	return out, nil
 }
 
-// isFloatDtype reports whether dtype is one decodeTensorBytes can turn
-// into float32. Non-float tensors are skipped at load time.
+// isFloatDtype returns true if the data type is a supported float format (F16, F32, or F64).
 func isFloatDtype(dtype string) bool {
 	switch dtype {
 	case "F16", "F32", "F64":
@@ -126,10 +99,7 @@ func isFloatDtype(dtype string) bool {
 	}
 }
 
-// decodeTensorBytes interprets raw bytes as a flat float32 slice. F16
-// and F64 values are converted to float32 (the cost is one widen/narrow
-// per element, happens once at model load). potion-* models store the
-// per-token "weights" tensor as F64.
+// decodeTensorBytes converts raw bytes of supported formats to a float32 slice.
 func decodeTensorBytes(dtype string, raw []byte) ([]float32, error) {
 	switch dtype {
 	case "F32":
@@ -165,9 +135,7 @@ func decodeTensorBytes(dtype string, raw []byte) ([]float32, error) {
 	}
 }
 
-// float16ToFloat32 converts an IEEE 754 half-precision float to single
-// precision. Handles sub-normals, infinities, and NaN by the standard
-// bit-juggling recipe — fast and allocation-free.
+// float16ToFloat32 converts a half-precision float (F16) to single-precision float32.
 func float16ToFloat32(h uint16) float32 {
 	sign := uint32(h>>15) & 0x1
 	exp := uint32(h>>10) & 0x1F
@@ -177,7 +145,7 @@ func float16ToFloat32(h uint16) float32 {
 	case exp == 0 && frac == 0:
 		bits = sign << 31
 	case exp == 0:
-		// Subnormal: normalise into single-precision form.
+		// Normalize subnormal half-precision numbers.
 		e := uint32(1)
 		for frac&0x400 == 0 {
 			frac <<= 1
@@ -186,7 +154,7 @@ func float16ToFloat32(h uint16) float32 {
 		frac &= 0x3FF
 		bits = (sign << 31) | ((127 - 15 - e + 1) << 23) | (frac << 13)
 	case exp == 0x1F:
-		// Inf / NaN.
+		// Handle infinities and NaN cases.
 		bits = (sign << 31) | (0xFF << 23) | (frac << 13)
 	default:
 		bits = (sign << 31) | ((exp + (127 - 15)) << 23) | (frac << 13)

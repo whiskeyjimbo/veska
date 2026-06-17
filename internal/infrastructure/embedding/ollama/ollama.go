@@ -193,9 +193,9 @@ type batchResponse struct {
 }
 
 // EmbedBatch sends multiple texts to Ollama's POST /api/embed in a
-// single request and returns embeddings in the same order. One network
-// roundtrip instead of N — primary lever for 's cobra
-// cold-scan dropping from ~15s to <3s. Empty input is a no-op.
+// single request and returns embeddings in the same order. Performing one network
+// roundtrip instead of N is the primary lever for dropping CLI cold-scan times
+// from ~15s to <3s. Empty input is a no-op.
 // Failure modes mirror Embed: 5xx / net errors are wrapped with
 // ErrEmbedderUnreachable so callers can fall back; 4xx propagates as
 // a plain error. A short response (fewer embeddings than texts) is
