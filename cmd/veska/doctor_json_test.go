@@ -39,7 +39,7 @@ func captureJSONOutput(cmd *cobra.Command) (map[string]any, error) {
 		return nil, err
 	}
 	if err := cmd.Execute(); err != nil {
-		// ProbeStatusError is acceptable — envelope should still be present.
+		// ProbeStatusError is acceptable - envelope should still be present.
 		if _, ok := err.(ProbeStatusError); !ok {
 			return nil, err
 		}
@@ -148,7 +148,7 @@ func TestDoctorJSONEnvelopeStatus(t *testing.T) {
 }
 
 func TestDoctorJSONEnvelopeStub(t *testing.T) {
-	// post_promotion_queue is a stub — data should be an empty object.
+	// post_promotion_queue is a stub - data should be an empty object.
 	cmd := doctorSubCmd("post_promotion_queue", "stub", func(jsonOut bool, w io.Writer) error {
 		return doctorcmd.StubOK("post_promotion_queue", jsonOut, w)
 	})

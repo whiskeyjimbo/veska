@@ -94,7 +94,7 @@ func TestParseFileLine(t *testing.T) {
 
 // TestYH5AWrappersRegistered asserts the new parity wrappers are wired onto
 // the root command so they're reachable from the CLI (the other half of the
-// cliparity contract — the manifest names a tool, the command must exist).
+// cliparity contract - the manifest names a tool, the command must exist).
 func TestYH5AWrappersRegistered(t *testing.T) {
 	root := newRootCmd()
 	want := []string{"node", "file-nodes", "similar", "related", "owner", "todos", "entry-points", "hot-zones"}

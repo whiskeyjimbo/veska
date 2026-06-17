@@ -15,11 +15,11 @@ const (
 	// FailUnresolved: the target finding's rule still fires on the candidate.
 	FailUnresolved = "unresolved"
 	// FailResolutionUnchecked: the target's rule/anchor is not soundly
-	// re-runnable over the ephemeral graph in v1 — degraded, not a pass.
+	// re-runnable over the ephemeral graph in v1 - degraded, not a pass.
 	FailResolutionUnchecked = "resolution_unchecked"
 	// FailNewFindings: the candidate introduced finding(s) absent in the base.
 	FailNewFindings = "new_findings"
-	// FailDiscoveryUnchecked: no-new-findings discovery was not run — degraded,
+	// FailDiscoveryUnchecked: no-new-findings discovery was not run - degraded,
 	// not a pass (the fail-safe that stops a stubbed discovery from greenlighting
 	// exactly the changes the gate exists to catch).
 	FailDiscoveryUnchecked = "discovery_unchecked"
@@ -27,11 +27,11 @@ const (
 	// blast radius.
 	FailBlastRadiusExceeded = "blast_radius_exceeded"
 	// FailAnchorNotResolved: the target finding's anchor node does not resolve
-	// in the base graph, so its blast radius — and thus scope containment
+	// in the base graph, so its blast radius - and thus scope containment
 	// cannot be computed. Degraded, not a pass (fail-safe).
 	FailAnchorNotResolved = "anchor_not_resolved"
 	// FailRepoNotIndexed: the base graph for (repo, branch) has no indexed
-	// nodes (or the schema is absent) — the gate cannot judge a change against
+	// nodes (or the schema is absent) - the gate cannot judge a change against
 	// a graph that isn't there. Degraded, not a pass; the caller should index
 	// the repo first. Emitted by the invocation surface, not Evaluate.
 	FailRepoNotIndexed = "repo_not_indexed"
@@ -67,7 +67,7 @@ func derefAnchor(f *domain.Finding) string {
 }
 
 // Gate composes the verify and scope-containment sub-verdicts into one pass/fail
-// result. It adds no analysis logic of its own — all judgement lives in the
+// result. It adds no analysis logic of its own - all judgement lives in the
 // Verifier and Guard; the Gate only runs both and combines their outputs.
 type Gate struct {
 	verifier *Verifier
@@ -91,7 +91,7 @@ func NewGate(verifier *Verifier, guard *Guard) (*Gate, error) {
 // blast-radius policy (depth/direction/bounds) the scope check uses.
 // PASS requires ALL of: resolution checked AND resolved; discovery checked AND
 // no new findings; blast radius contained. A node-anchored target is required
-// for the scope check — a file-anchored target degrades to resolution_unchecked
+// for the scope check - a file-anchored target degrades to resolution_unchecked
 // and is not scope-checked.
 func (g *Gate) Evaluate(ctx context.Context, eph *Ephemeral, target *domain.Finding, disc Discovery, radiusOpts blastradius.Options) (GateVerdict, error) {
 	if eph == nil {

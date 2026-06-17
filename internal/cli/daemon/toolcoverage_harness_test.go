@@ -3,7 +3,7 @@ package daemon
 // In-process MCP tool-coverage harness.
 // This is the white-box test substrate the 40 per-tool coverage beads build on.
 // It reuses the REAL wiring: it hand-builds an mcpDeps over a freshly indexed
-// golden fixture and calls the unexported registerMCPTools — it does NOT
+// golden fixture and calls the unexported registerMCPTools - it does NOT
 // replicate registration and does NOT call newDaemon (which would start the
 // fsnotify watcher, the socket server, and the async embedder worker, adding
 // timing nondeterminism unwanted in CI).
@@ -15,7 +15,7 @@ package daemon
 // reader-side cached golden may be added later if setup time becomes a concern.
 // Indexing walks the SHARED read-only fixture root (a read-only walk is safe
 // across parallel instances) rather than copying the source per instance, so
-// node IDs — which embed the absolute walked path — are identical across every
+// node IDs - which embed the absolute walked path - are identical across every
 // harness instance. Only the DB and vector store are per-instance.
 
 import (
@@ -75,7 +75,7 @@ type toolHarness struct {
 	// the blast service (reader). Production shares one area between the two via
 	// composition/coldscan.go; the harness must too, or dirty-blast reads an area
 	// nothing ever writes. After fixture indexing the reparser promotes and drains
-	// this area, so it is empty post-setup — identical to before for all other rows.
+	// this area, so it is empty post-setup - identical to before for all other rows.
 	stagingArea *staging.Area
 }
 
@@ -303,7 +303,7 @@ func (h *toolHarness) Root(repoID string) string {
 
 // ResolveID maps a manifest NodeKey to the node_id the pipeline emitted for it
 // in repoID, using the root this harness indexed at. This is the ONLY supported
-// way for a coverage bead to obtain a node ID — no bead pastes a raw sha256.
+// way for a coverage bead to obtain a node ID - no bead pastes a raw sha256.
 func (h *toolHarness) ResolveID(repoID string, key coverage.NodeKey) domain.NodeID {
 	return key.ResolveID(repoID, h.Root(repoID))
 }

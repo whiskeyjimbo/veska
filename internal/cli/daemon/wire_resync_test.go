@@ -92,7 +92,7 @@ func TestDaemon_StartupResync_NeverPromoted_Reparses(t *testing.T) {
 		t.Fatalf("repo.Add: %v", err)
 	}
 	// last_promoted_sha defaults to NULL after repo.Add, which RepoLister
-	// flattens to "" — the never-promoted route.
+	// flattens to "" - the never-promoted route.
 
 	called := make(map[string]int)
 	var mu sync.Mutex
@@ -197,7 +197,7 @@ func TestDaemon_StartupResync_FullPipeline(t *testing.T) {
 	}
 
 	// Drive the daemon's real resync (with the daemon's real cold-scan
-	// reparser closure) synchronously — no goroutine race.
+	// reparser closure) synchronously - no goroutine race.
 	if err := d.resync.Run(context.Background()); err != nil {
 		t.Fatalf("d.resync.Run: %v", err)
 	}
@@ -224,7 +224,7 @@ func TestDaemon_StartupResync_FullPipeline(t *testing.T) {
 		t.Error("post_promotion_queue: got 0 rows for repo; promotion sinks did not run")
 	}
 
-	// repos.last_promoted_sha must advance to HEAD — the promotion
+	// repos.last_promoted_sha must advance to HEAD - the promotion
 	// transaction writes it atomically with the node rows.
 	headOut, err := exec.Command("git", "-C", gitDir, "rev-parse", "HEAD").Output()
 	if err != nil {
@@ -269,7 +269,7 @@ func TestDaemon_VectorStoreRehydratesOnSecondStart(t *testing.T) {
 	cfg := testConfig(t)
 
 	// First daemon: register a repo + drive a cold scan so node_embeddings
-	// gets populated. We don't need a real embedder run — directly seed
+	// gets populated. We don't need a real embedder run - directly seed
 	// the durable tables via the same daemon's write pool.
 	d1, err := newDaemon(cfg)
 	if err != nil {
@@ -287,7 +287,7 @@ func TestDaemon_VectorStoreRehydratesOnSecondStart(t *testing.T) {
 		t.Fatalf("d1.resync.Run: %v", err)
 	}
 
-	// Seed a single known embedding directly into the durable tables — the
+	// Seed a single known embedding directly into the durable tables - the
 	// real embedder requires Ollama which we don't have in unit tests.
 	// The vec is L2-normalised (magnitude 1) so any score comparison
 	// downstream behaves as the production code expects.
@@ -323,7 +323,7 @@ func TestDaemon_VectorStoreRehydratesOnSecondStart(t *testing.T) {
 		t.Fatalf("d1.Stop: %v", err)
 	}
 
-	// Second daemon — same VESKA_HOME, fresh in-memory store. Search before Start
+	// Second daemon - same VESKA_HOME, fresh in-memory store. Search before Start
 	// returns nothing (memory empty). Start triggers rehydrate and Search
 	// returns the seeded row.
 	d2, err := newDaemon(cfg)
@@ -365,7 +365,7 @@ func TestDaemon_VectorStoreRehydratesOnSecondStart(t *testing.T) {
 // TestDaemon_StartupResync_StartDoesNotBlock guards the epic constraint
 // that the scan must not block Start. We hold-up the resync by registering
 // no repos (cheap path) and confirm Start returns well under the resync's
-// nominal completion window — the goroutine fans out on its own.
+// nominal completion window - the goroutine fans out on its own.
 func TestDaemon_StartupResync_StartDoesNotBlock(t *testing.T) {
 	cfg := testConfig(t)
 	d, err := newDaemon(cfg)

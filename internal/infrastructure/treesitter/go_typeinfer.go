@@ -70,7 +70,7 @@ func collectPackageVarOrigins(root *sitter.Node, src []byte) map[string]localVar
 			if name == nil || value == nil {
 				continue
 			}
-			// Single-name, single-value only — multi-LHS and tuple
+			// Single-name, single-value only - multi-LHS and tuple
 			// returns are intentionally skipped to keep origin
 			// inferences unambiguous.
 			if int(name.NamedChildCount()) > 1 || int(value.NamedChildCount()) != 1 {
@@ -216,7 +216,7 @@ func compositeLitBareType(rhs *sitter.Node, src []byte) string {
 			return string(src[t.StartByte():t.EndByte()])
 		}
 	case "unary_expression":
-		// &T{.} — operand is the composite_literal.
+		// &T{.} - operand is the composite_literal.
 		if op := rhs.ChildByFieldName("operand"); op != nil {
 			return compositeLitBareType(op, src)
 		}

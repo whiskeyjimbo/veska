@@ -164,7 +164,7 @@ func TestRenderHotZones_Deterministic(t *testing.T) {
 
 // TestRank_DropsZeroScoreZones pins: a file that churns
 // in-window but maps to no graph nodes (e.g. lockfile, dependabot config,
-// hand-edited go.mod) yields score 0 and must be excluded — otherwise on
+// hand-edited go.mod) yields score 0 and must be excluded - otherwise on
 // a quiet repo the surface returns one useless score=0 entry.
 func TestRank_DropsZeroScoreZones(t *testing.T) {
 	edges := &fakeEdges{inbound: map[string][]string{"a": {"x"}}}
@@ -172,7 +172,7 @@ func TestRank_DropsZeroScoreZones(t *testing.T) {
 		metas: map[string]ports.NodeMeta{"a": {NodeID: "a"}, "x": {NodeID: "x"}},
 		byFile: map[string][]string{
 			"a.go": {"a"},
-			// go.mod has no graph nodes — common in real repos.
+			// go.mod has no graph nodes - common in real repos.
 			"go.mod": nil,
 		},
 	}

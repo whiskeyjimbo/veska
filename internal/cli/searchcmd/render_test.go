@@ -11,7 +11,7 @@ import (
 
 // TestIsGitURL covers the heuristic that routes a positional arg to
 // the clone path vs the local-path path. False negatives are loud (a
-// path with a "://" in it would route to clone — but no real filesystem
+// path with a "://" in it would route to clone - but no real filesystem
 // path looks like that).
 func TestIsGitURL(t *testing.T) {
 	cases := []struct {
@@ -35,7 +35,7 @@ func TestIsGitURL(t *testing.T) {
 
 // TestRenderSearchResults_JSONMatchesMCPEnvelope covers AC3: the
 // stdout JSON shape must match what the eng_search_semantic MCP tool
-// emits — a top-level {results, degraded_reasons} envelope keyed
+// emits - a top-level {results, degraded_reasons} envelope keyed
 // exactly that way so agents can pipe the CLI output through the
 // same parser they use for tool responses.
 func TestRenderSearchResults_JSONMatchesMCPEnvelope(t *testing.T) {
@@ -73,7 +73,7 @@ func TestRenderSearchResults_JSONMatchesMCPEnvelope(t *testing.T) {
 }
 
 // TestRenderSearchResults_HumanFormatIncludesKey: the non-JSON
-// fallback should be greppable — the symbol path + line range belong
+// fallback should be greppable - the symbol path + line range belong
 // on one line so the user can pipe through grep without losing
 // context.
 func TestRenderSearchResults_HumanFormatIncludesKey(t *testing.T) {

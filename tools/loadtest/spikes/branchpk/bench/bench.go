@@ -133,7 +133,7 @@ func RunNodeBench(db *sql.DB, symbols []pkloader.Symbol, branches []string, n in
 		branch := branches[rng.Intn(len(branches))]
 
 		start := time.Now()
-		// Ignore ErrNoRows — the symbol may not exist on this branch (overlap scenario).
+		// Ignore ErrNoRows - the symbol may not exist on this branch (overlap scenario).
 		_ = GetNode(db, sym.NodeID, branch)
 		durs = append(durs, time.Since(start))
 	}

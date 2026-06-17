@@ -41,8 +41,8 @@ func ruleForKind(kind ReviewKind) (string, error) {
 // several review findings under the same rule, so the finding's Title is
 // passed as the WithFindingKey discriminator: domain.NewFinding folds it into
 // the finding_id hash so each finding stays distinct. Re-reviewing an
-// unchanged file reproduces the same (rule, filePath, title) triple — and
-// therefore the same finding_id — so FindingStorage.Save is idempotent on
+// unchanged file reproduces the same (rule, filePath, title) triple - and
+// therefore the same finding_id - so FindingStorage.Save is idempotent on
 // (finding_id, branch).
 func toDomainFinding(rf ReviewFinding, repoID, branch, filePath string) (*domain.Finding, error) {
 	rule, err := ruleForKind(rf.Kind)

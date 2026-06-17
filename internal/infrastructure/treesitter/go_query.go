@@ -411,7 +411,7 @@ func extractCallsFromBody(q *sitter.Query, body *sitter.Node, src []byte, caller
 // buildFunctionNodeFromCaptures mirrors parseFunctionDecl in go.go but
 // takes the already-located decl + name nodes from a query match. The
 // rest (lines, raw content, exported flag, signature) is byte-for-byte
-// identical to the legacy path — that is the explicit equivalence
+// identical to the legacy path - that is the explicit equivalence
 // contract for phase 1.
 func buildFunctionNodeFromCaptures(declNode, nameNode *sitter.Node, src []byte, repoID, path string) *domain.Node {
 	name := string(src[nameNode.StartByte():nameNode.EndByte()])

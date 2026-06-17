@@ -8,7 +8,7 @@ import (
 
 // ownerCmd wraps eng_find_owner. parity wrapper. eng_find_owner
 // requires repo_id, so when --repo is omitted we resolve it from the cwd
-// (autoResolveRepo) before calling — the daemon can't infer it server-side
+// (autoResolveRepo) before calling - the daemon can't infer it server-side
 // for this tool (its schema has no cwd param).
 func ownerCmd() *cobra.Command {
 	var (
@@ -19,7 +19,7 @@ func ownerCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:          "owner <path-or-symbol>",
 		Short:        "Find the owner of a file via CODEOWNERS or git blame (wraps eng_find_owner)",
-		Long:         "Resolve who owns a file — CODEOWNERS longest-match first, git-blame dominant-committer fallback. The argument may be a file path, a symbol, or a node_id (symbol/node resolve to their defining file).",
+		Long:         "Resolve who owns a file - CODEOWNERS longest-match first, git-blame dominant-committer fallback. The argument may be a file path, a symbol, or a node_id (symbol/node resolve to their defining file).",
 		Args:         cobra.ExactArgs(1),
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {

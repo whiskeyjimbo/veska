@@ -107,7 +107,7 @@ func classifyFieldType(typeNode *sitter.Node, src []byte) (fieldType, bool) {
 	case "type_identifier":
 		return fieldType{name: string(src[typeNode.StartByte():typeNode.EndByte()])}, true
 	case "qualified_type":
-		// pkg.Type — operand is the pkg identifier, field-like node is the type name.
+		// pkg.Type - operand is the pkg identifier, field-like node is the type name.
 		var pkg, name string
 		count := int(typeNode.NamedChildCount())
 		for i := range count {

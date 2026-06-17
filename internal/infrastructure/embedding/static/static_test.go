@@ -9,7 +9,7 @@ import (
 )
 
 // TestProvider_Deterministic: the same input must produce the same
-// vector across runs, processes, and machines — otherwise the
+// vector across runs, processes, and machines - otherwise the
 // content_hash + model_id embedding cache would silently miss every
 // re-run and re-embed every node.
 func TestProvider_Deterministic(t *testing.T) {
@@ -38,7 +38,7 @@ func TestProvider_Deterministic(t *testing.T) {
 
 // TestProvider_DimensionMatchesNomic: 768 matches nomic-embed-text so
 // the static embedder is a drop-in replacement at the vector-storage
-// layer — no schema or migration needed.
+// layer - no schema or migration needed.
 func TestProvider_DimensionMatchesNomic(t *testing.T) {
 	p, _ := static.New()
 	v, err := p.Embed(context.Background(), "anything")
@@ -110,7 +110,7 @@ func TestProvider_EmptyInputDoesNotPanic(t *testing.T) {
 // hashing, FastText-style): identifiers that share subword morphology
 // should land closer in vector space than unrelated identifiers.
 // Without this property the static embedder cannot retrieve
-// "configParser" when the query mentions "parseConfig" — the exact
+// "configParser" when the query mentions "parseConfig" - the exact
 // failure mode that motivated the quality follow-up.
 func TestProvider_SubwordSimilarity_BeatsUnrelated(t *testing.T) {
 	p, _ := static.New()

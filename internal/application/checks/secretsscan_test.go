@@ -137,7 +137,7 @@ func TestSecretsScanCheck_EmptyAddedLines_NoFindings(t *testing.T) {
 }
 
 // A pre-existing secret on an untouched line is excluded because AddedLines
-// only carries added lines — the scanner never sees it, so no finding.
+// only carries added lines - the scanner never sees it, so no finding.
 func TestSecretsScanCheck_PreexistingSecretOnUntouchedLine_NoFinding(t *testing.T) {
 	scanner := &fakeSecretsScanner{} // sees no matching content -> no findings
 	c := NewSecretsScanCheck(scanner)
@@ -347,7 +347,7 @@ func TestSecretsScanCheck_NonFixturePEMStillFlags(t *testing.T) {
 // TestSecretsScanCheck_CollapsesMultiLinePEM verifies that many consecutive
 // line-hits from the same rule on the same file collapse to a single
 // finding with a count suffix in the message. Without this, a 28-line PEM
-// block flagged line-by-line produces 28 separate findings — the dominant
+// block flagged line-by-line produces 28 separate findings - the dominant
 // failure mode of `veska search --repo` on jwt-go.
 func TestSecretsScanCheck_CollapsesMultiLinePEM(t *testing.T) {
 	const path = "config/private.pem" // non-fixture path so we reach the scanner
@@ -375,7 +375,7 @@ func TestSecretsScanCheck_CollapsesMultiLinePEM(t *testing.T) {
 	if len(got) != 1 {
 		t.Fatalf("want 1 collapsed finding for 28-line PEM, got %d", len(got))
 	}
-	// The message should indicate additional matches (collapsed) — either
+	// The message should indicate additional matches (collapsed) - either
 	// the raw count of additional lines or a total. We assert the "+27
 	// more" form to pin the chosen surface.
 	if !strings.Contains(got[0].Message, "27") {

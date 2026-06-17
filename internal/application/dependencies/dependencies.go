@@ -20,7 +20,7 @@ import (
 // services so callers can errors.Is the wrapped constructor error.
 var ErrMissingDependency = errors.New("missing dependency")
 
-// CallSite is one call-site reference to an external symbol — the node
+// CallSite is one call-site reference to an external symbol - the node
 // that issued the call and the symbol_path inside the imported module.
 type CallSite struct {
 	SrcNodeID  string `json:"src_node_id"`
@@ -48,7 +48,7 @@ type Result struct {
 	Dependencies []Dependency `json:"dependencies"`
 }
 
-// StubAggregator is the narrow port the service consumes — given a (repoID,
+// StubAggregator is the narrow port the service consumes - given a (repoID,
 // branch), return per-(module, symbol) stub counts plus the source node IDs.
 // The single port keeps the application layer decoupled from the SQLite
 // adapter and lets tests stub it without spinning up the resolver.
@@ -61,7 +61,7 @@ type StubAggregator interface {
 // StubAggregator so a module that's imported but only referenced via
 // struct literals / type assertions (no resolved CALLS edge) still
 // surfaces in `veska deps list`.
-// An empty result is normal — repos with no parsed imports (or non-Go
+// An empty result is normal - repos with no parsed imports (or non-Go
 // repos until the writer is extended) return (, nil). A nil
 // implementation on the service is treated the same as an empty result.
 type ImportLister interface {
@@ -89,7 +89,7 @@ type StubRow struct {
 
 // ModuleVersionFunc looks up a module's version from the importing repo's
 // build manifest (go.mod, package.json, …). An empty string + nil error
-// signals "not pinned" (no require line / no manifest) — the dependency
+// signals "not pinned" (no require line / no manifest) - the dependency
 // still ranks. An error short-circuits the whole List call.
 type ModuleVersionFunc func(ctx context.Context, repoRoot, modulePath string) (string, error)
 
@@ -114,7 +114,7 @@ type Service struct {
 const DefaultTopK = 5
 
 // NewService constructs a Service. aggregator is required; versions and
-// repoRoot are optional — when nil the dependency's Version field is
+// repoRoot are optional - when nil the dependency's Version field is
 // always empty (still useful for ranking + symbol navigation). Pass an
 // ImportLister via WithImportLister to union bare-import modules with
 // the stub-derived list.
@@ -150,7 +150,7 @@ func WithImportLister(l ImportLister) ServiceOption {
 // OwnModulePathFunc returns the importing repo's own module path (e.g.
 // "github.com/junior/greetcli") so the service can filter that path and
 // its subpackages out of the external-dependency list. An
-// empty string disables filtering — useful for non-Go repos or when go.mod
+// empty string disables filtering - useful for non-Go repos or when go.mod
 // is absent.
 type OwnModulePathFunc func(ctx context.Context, repoRoot string) (string, error)
 
@@ -256,7 +256,7 @@ func (s *Service) List(ctx context.Context, repoID, branch string) (Result, erro
 	// filter the repo's own module path (and its
 	// subpackages) out of the external-dependency list. Stub rows can
 	// carry intra-module imports when one subpackage imports another
-	// (e.g. greetcli/main.go importing greetcli/cmd) — those are not
+	// (e.g. greetcli/main.go importing greetcli/cmd) - those are not
 	// "external" deps and confuse the listing.
 	if s.ownModule != nil && repoRoot != "" {
 		own, oerr := s.ownModule(ctx, repoRoot)
@@ -300,7 +300,7 @@ func (s *Service) List(ctx context.Context, repoID, branch string) (Result, erro
 // a heavily-imported-but-uncalled module ranks ahead of a once-imported
 // one.
 func sortDependencies(deps []Dependency) {
-	// Stable insertion sort — n is tiny (number of distinct imported
+	// Stable insertion sort - n is tiny (number of distinct imported
 	// modules per repo) and we want deterministic output without
 	// pulling in sort.Slice's allocator overhead at this scale.
 	for i := 1; i < len(deps); i++ {

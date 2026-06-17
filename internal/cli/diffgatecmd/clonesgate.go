@@ -18,7 +18,7 @@ import (
 )
 
 // CloneParams are the exact-clone diff-gate inputs. Unlike the verify gate this
-// is a BLANKET gate — no target finding — so it needs only the change refs.
+// is a BLANKET gate - no target finding - so it needs only the change refs.
 type CloneParams struct {
 	RepoID       string
 	Branch       string
@@ -120,17 +120,17 @@ type ephemeralParams struct {
 
 // buildPinnedEphemeral is the index-ahead-safe variant of buildEphemeral
 // Instead of pairing the candidate overlay with the LIVE
-// index — whose SHA can drift ahead of base-ref and silently mask a net-new
-// finding (the documented index-ahead false-PASS) — it pins the base graph to
+// index - whose SHA can drift ahead of base-ref and silently mask a net-new
+// finding (the documented index-ahead false-PASS) - it pins the base graph to
 // base-ref: it clones the index and re-promotes the changed files' BASE-REF
 // content onto the clone, generalising discovery.go's symmetric re-promote. Both
 // the ChangedNodeIDs content-hash comparison AND any base-state lookup (e.g.
 // clones' NodesByContentHash) then read a base-ref-pinned graph, so the gate
 // compares base-ref vs candidate regardless of how far the index has advanced.
 // It returns the (base-ref-pinned) ephemeral, the candidate FileChanges, the
-// base-clone DB path — gates that build a candidate after-state clone (untested,
+// base-clone DB path - gates that build a candidate after-state clone (untested,
 // cycles, api) clone FROM this so their pre-state is base-ref too, not the live
-// index — and a cleanup func the caller MUST defer (it closes the base-clone
+// index - and a cleanup func the caller MUST defer (it closes the base-clone
 // pools and removes the file; the pools stay open until then because eph.Base
 // reads from them).
 // Soundness: unchanged-file state is inherited from the index by BOTH this base

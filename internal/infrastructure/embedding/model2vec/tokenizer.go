@@ -11,7 +11,7 @@ import (
 // supports the exact pipeline Model2Vec's distill targets ship with:
 // BertNormalizer + BertPreTokenizer + WordPiece. That covers
 // minishlab/potion-* (distilled from BAAI/bge-* base models).
-// BPE and Unigram are explicitly rejected — surfacing the limit at
+// BPE and Unigram are explicitly rejected - surfacing the limit at
 // load time beats producing garbage token IDs at query time.
 type tokenizer struct {
 	vocab map[string]int
@@ -87,7 +87,7 @@ func newTokenizer(jsonBytes []byte) (*tokenizer, error) {
 		maxCharsPerWord:  model.MaxInputCharsPerWord,
 	}
 
-	// BertNormalizer config is optional — older tokenizer.json variants
+	// BertNormalizer config is optional - older tokenizer.json variants
 	// omit the section entirely. Default to lowercase=true to match
 	// the dominant bge-* base behaviour.
 	if len(spec.Normalizer) > 0 {
@@ -177,7 +177,7 @@ func bertPreTokenize(s string) []string {
 // the vocab. On the FIRST sub-token, no continuing-subword prefix is
 // applied; on every subsequent sub-token, the prefix is. When no
 // prefix of the remaining word matches the vocab, the WHOLE word
-// resolves to [UNK] — this matches HuggingFace's reference algorithm
+// resolves to [UNK] - this matches HuggingFace's reference algorithm
 // (it doesn't emit a partial split followed by [UNK]).
 func (t *tokenizer) wordPiece(word string) []int {
 	if len(word) > t.maxCharsPerWord {

@@ -9,7 +9,7 @@ import (
 // findings_suppress.go wires the suppression family of MCP tools
 // (eng_suppress_finding, eng_list_suppressions, eng_get_suppression,
 // eng_close_suppression) onto the CLI so users do not have to craft JSON-RPC
-// payloads to suppress findings — parity with `findings list / show / close /
+// payloads to suppress findings - parity with `findings list / show / close /
 // reopen`. The list/show rendering lives in
 // internal/cli/findingscmd; these constructors are Cobra glue.
 

@@ -21,7 +21,7 @@ type candidateProducer interface {
 // Defined here so the autolink package does not import the full NodeLookup
 // surface (which carries the LookupNodes method aimed at the search layer).
 // NodeContentHash returns nodes.content_hash for a single node scoped to
-// (repoID, branch). An unknown node MUST return ("", nil) — the Handler
+// (repoID, branch). An unknown node MUST return ("", nil) - the Handler
 // treats a missing source as "no hash recorded" (NULL on the finding) rather
 // than as an error, mirroring the eventual-consistency contract on LookupNodes.
 // NOTE: this is the SOURCE node's content_hash (the dirty side that re-ran
@@ -73,7 +73,7 @@ type Handler struct {
 
 	// repoKind, when set, returns the registered Kind ("tracked" /
 	// "ephemeral") of a repo. ephemeral repos (search --repo <url>
-	// clones) skip autolink entirely — a 75-file external clone like
+	// clones) skip autolink entirely - a 75-file external clone like
 	// spf13/pflag otherwise yields ~100 low-severity findings on the
 	// junior's first 'findings list'. When the option
 	// is unset (older composition roots), behaviour is unchanged.
@@ -188,7 +188,7 @@ func (h *Handler) Handle(ctx context.Context, row ports.WorkRow) error {
 	// (now-orphaned) auto-link findings would otherwise accumulate alongside
 	// the fresh ones and the "open findings" surface would balloon across
 	// reindexes. Auto-link findings anchor on edge_id, not
-	// node_id, so the revalidation sweep cannot reach them — the supersession
+	// node_id, so the revalidation sweep cannot reach them - the supersession
 	// has to happen at write time.
 	// The close runs BEFORE the linker call so the new finding-Save's
 	// ON CONFLICT path correctly re-opens (closed_at NULL, state='open') any
@@ -218,7 +218,7 @@ func (h *Handler) Handle(ctx context.Context, row ports.WorkRow) error {
 
 // resolveSources hydrates the file's node IDs and drops container/sub-symbol
 // source nodes (package, chunk, …): linking them is noise. Nodes whose
-// metadata is missing (index lag) are kept — this is best-effort discovery,
+// metadata is missing (index lag) are kept - this is best-effort discovery,
 // not a correctness invariant. It returns the eligible source node IDs and the
 // full source metadata (reused downstream for filtering and finding labels).
 func (h *Handler) resolveSources(ctx context.Context, row ports.WorkRow, nodeIDs []string) ([]string, []ports.NodeMeta, error) {
@@ -244,7 +244,7 @@ func (h *Handler) resolveSources(ctx context.Context, row ports.WorkRow, nodeIDs
 // targets that are container/sub-symbol kinds, targets that live in the same
 // file as their source, and idiomatic-name matches.
 // Without these filters a tiny repo immediately gets a noise finding like
-// "Similar to chunk:1-22 in main.go" — useless to the user and leaks the
+// "Similar to chunk:1-22 in main.go" - useless to the user and leaks the
 // internal chunk artifact name. Filtering at the candidate level (after the
 // linker call) keeps the linker's vector-space logic generic while ensuring
 // the user-visible side is clean. The returned target metadata is reused for
@@ -295,7 +295,7 @@ func (h *Handler) filterCandidates(ctx context.Context, row ports.WorkRow, cands
 // emitFindings persists each surviving candidate as a SIMILAR_TO edge and emits
 // one source_layer='semantic' Finding per edge. cands and the edges it builds
 // are parallel slices; the finding loop walks them by index.: the
-// message names BOTH sides — "X in src.go similar to Y in tgt.go" — falling
+// message names BOTH sides - "X in src.go similar to Y in tgt.go" - falling
 // back to the opaque node ID when a side's metadata is missing.
 func (h *Handler) emitFindings(ctx context.Context, row ports.WorkRow, cands []Candidate, srcMeta, tgtMeta []ports.NodeMeta, nodeIDs []string) error {
 	edges := make([]*domain.Edge, 0, len(cands))
@@ -423,7 +423,7 @@ var idiomaticIdenticalNames = map[string]struct{}{
 //     for every cobra subcommand.
 //  2. Both sides are package-level variables with names ending in "Cmd"
 //     (e.g. rootCmd, shoutCmd, tokenCmd). These are cobra.Command{.}
-//     literals — the structural similarity is intentional repetition,
+//     literals - the structural similarity is intentional repetition,
 //     not a refactor target.
 //
 // SymbolPaths arrive as full paths (e.g. "Greeter.Hello", "cmd.shoutCmd");

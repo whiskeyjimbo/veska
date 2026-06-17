@@ -9,15 +9,15 @@
 // per (model × corpus) cell.
 // Knobs:
 //   EMBED_BENCH_CONDENSE on|off (default off)
-//   EMBED_BENCH_CONDENSE_K int (default 5) — top-K pieces kept
-//   EMBED_BENCH_CONDENSE_MIN_LEN int (default 500) — skip docs shorter
+//   EMBED_BENCH_CONDENSE_K int (default 5) - top-K pieces kept
+//   EMBED_BENCH_CONDENSE_MIN_LEN int (default 500) - skip docs shorter
 //                                than this many bytes (short symbols
 //                                don't need condensing and condensation
 //                                of <5-line bodies is a no-op anyway)
 // Cost note: condensation requires len(pieces) extra embeds per doc
 // (for centrality scoring) plus one more for the joined result. With
-// model2vec that's microseconds per piece — adds ~3 min to a full
-// model2vec sweep. With Ollama it would be ruinous (~hours) — keep
+// model2vec that's microseconds per piece - adds ~3 min to a full
+// model2vec sweep. With Ollama it would be ruinous (~hours) - keep
 // EMBED_BENCH_CONDENSE off when the Ollama subset is enabled, or
 // expect long runtimes.
 
@@ -48,7 +48,7 @@ func loadCondenseConfig() condenseConfig {
 
 // embedderAdapter wraps the bench's narrow Embedder interface to
 // satisfy ports.EmbeddingProvider (which condense.Condense requires).
-// The ModelID stub is unused by the condenser — it only calls Embed.
+// The ModelID stub is unused by the condenser - it only calls Embed.
 type embedderAdapter struct{ inner Embedder }
 
 func (a embedderAdapter) Embed(ctx context.Context, text string) ([]float32, error) {
@@ -76,7 +76,7 @@ func splitPieces(raw string) []string {
 // condenseInput returns the condensed embed-text for a doc, or the raw
 // embed-text unchanged if the doc is shorter than minLen or has fewer
 // than 2 pieces (centrality is undefined). The boolean reports whether
-// condensation was actually applied — counted into the per-run
+// condensation was actually applied - counted into the per-run
 // CondenseAppliedCount for diagnostics.
 // The name is ALWAYS prepended to the result so the embed input shape
 // is identical to the raw path (`name + "\n" + body`). Without the

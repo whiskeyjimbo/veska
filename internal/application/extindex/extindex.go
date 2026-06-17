@@ -39,7 +39,7 @@ var ErrMissingDependency = errors.New("missing dependency")
 var ErrModuleNotVendored = errors.New("module not vendored")
 
 // ExternalNodeSaver is the narrow write port the indexer consumes.
-// *sqlite.GraphRepo's SaveExternalNode satisfies it — the indirection
+// *sqlite.GraphRepo's SaveExternalNode satisfies it - the indirection
 // keeps the application layer decoupled from the sqlite adapter and
 // lets tests stub it without spinning up a DB.
 type ExternalNodeSaver interface {
@@ -49,13 +49,13 @@ type ExternalNodeSaver interface {
 // ExternalRepoUpserter inserts a synthetic repo row for an indexed
 // vendor module. The row's module_path lets the
 // existing cross_repo_edge_stubs resolver find vendored destinations
-// for CALLS edges — without it, a stub from myapp.Run targeting
+// for CALLS edges - without it, a stub from myapp.Run targeting
 // greetlib.New would dead-end at the import boundary.
 // Implementations should:
 //
 //	INSERT … ON CONFLICT DO NOTHING (idempotent re-index)
 //	use the supplied synthetic repo_id (caller decides the format;
-//	  today's convention is "ext:<module-path>" — no version yet)
+//	  today's convention is "ext:<module-path>" - no version yet)
 type ExternalRepoUpserter interface {
 	UpsertExternalRepo(ctx context.Context, repoID, rootPath, modulePath, branch string) error
 }
@@ -90,7 +90,7 @@ type Service struct {
 }
 
 // NewService constructs a Service. parser + saver are required;
-// upserter is optional — when nil, indexed nodes still get written
+// upserter is optional - when nil, indexed nodes still get written
 // against the importing repo's repo_id (phase 1 fallback) and
 // cross-repo CALLS edges through them do NOT resolve. With an
 // upserter wired, the indexer creates a synthetic repo per module
@@ -123,7 +123,7 @@ func WithExternalRepoUpserter(u ExternalRepoUpserter) Option {
 // IndexVendorModule walks <repoRoot>/vendor/<modulePath> for.go
 // files, parses each via the injected CodeParser, and persists the
 // resulting nodes with external=1 against (repoID, branch). Returns
-// ErrModuleNotVendored when the path doesn't exist — callers can
+// ErrModuleNotVendored when the path doesn't exist - callers can
 // distinguish "module not vendored" from a genuine I/O error.
 // Test files (`_test.go`) are skipped: they aren't part of the
 // shipped API and would balloon the external-node count with stub
@@ -146,7 +146,7 @@ func (s *Service) IndexVendorModule(ctx context.Context, repoID, branch, repoRoo
 	// when an upserter is wired, write nodes under a
 	// synthetic per-module repo row so cross_repo_edge_stubs can bind
 	// against module_path. Without it (older callers), fall back to
-	// the importing repo's repo_id — find_symbol still surfaces the
+	// the importing repo's repo_id - find_symbol still surfaces the
 	// nodes but CALLS edges through them stay unresolved.
 	nodeRepoID := repoID
 	nodeBranch := branch

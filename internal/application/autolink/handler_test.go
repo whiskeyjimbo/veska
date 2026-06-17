@@ -721,7 +721,7 @@ func TestHandler_Integration_SupersedesPriorAutoLinksWhenTargetsDrift(t *testing
 		t.Fatalf("Handle (pass 1): %v", err)
 	}
 
-	// Pass 2: same source n1 now matches only t3 — the t1/t2 picks must be
+	// Pass 2: same source n1 now matches only t3 - the t1/t2 picks must be
 	// superseded (closed), not coexist alongside the new finding.
 	linker.out = []autolink.Candidate{
 		{SourceNodeID: "n1", TargetNodeID: "t3", Score: 0.95},
@@ -822,7 +822,7 @@ func TestIsIdiomaticAutolinkNoise(t *testing.T) {
 		{"cmd.fooCmd", "other.barCmd", "variable", "variable", true, "cross-package cobra vars"},
 
 		// Genuine signals must survive.
-		{"foo.Hello", "bar.Hello", "method", "method", false, "non-idiomatic same name — keep"},
+		{"foo.Hello", "bar.Hello", "method", "method", false, "non-idiomatic same name - keep"},
 		{"foo.Run", "bar.Run", "method", "method", false, "Run is common but not idiomatic enough"},
 		{"cmd.rootCmd", "cmd.shoutCmd", "function", "function", false, "Cmd-suffix only filtered when both variable"},
 		{"foo.Parse", "bar.Parse", "function", "function", false, "non-idiomatic"},

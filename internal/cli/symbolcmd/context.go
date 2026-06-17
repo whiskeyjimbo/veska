@@ -49,7 +49,7 @@ func RunContext(ctx context.Context, p ContextParams) error {
 	if p.RepoID != "" {
 		params["repo_id"] = p.RepoID
 	}
-	// omit repo_id so the daemon fans out by default — the common
+	// omit repo_id so the daemon fans out by default - the common
 	// cobra-CLI-plus-shared-lib pattern wants `veska context Greeter.Hello`
 	// from the CLI repo to surface the library's symbol (and its cross-repo
 	// edges back).

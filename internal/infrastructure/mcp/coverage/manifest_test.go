@@ -2,7 +2,7 @@ package coverage
 
 // Frozen self-test: the guard against fixture drift. It re-indexes the golden
 // fixture through the real cold-scan pipeline and asserts that every
-// parse-derived fact in the manifest is actually present in the index — and,
+// parse-derived fact in the manifest is actually present in the index - and,
 // critically, that every NodeKey resolves byte-for-byte to the node_id the
 // pipeline emits (which simultaneously validates ResolveID's path
 // reconstruction and the frozen node facts).

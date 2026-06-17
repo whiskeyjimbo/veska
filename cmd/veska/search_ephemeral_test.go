@@ -21,7 +21,7 @@ import (
 func startsWith(s, prefix string) bool { return strings.HasPrefix(s, prefix) }
 
 // makeBareSource creates a real git repo with one empty commit and returns
-// its absolute path — suitable as a `file://` source for clone tests. Skips
+// its absolute path - suitable as a `file://` source for clone tests. Skips
 // the test if git is unavailable so the suite still passes in a no-git
 // environment.
 func makeBareSource(t *testing.T) string {
@@ -122,7 +122,7 @@ func TestEphemeralEnsureFromURL_CacheHitSkipsClone(t *testing.T) {
 	}
 	info2, _ := os.Stat(filepath.Join(rec2.RootPath, ".git"))
 	if !info2.ModTime().Equal(firstMtime) {
-		t.Error("cache dir mtime changed — second call appears to have re-cloned")
+		t.Error("cache dir mtime changed - second call appears to have re-cloned")
 	}
 
 	// last_accessed_at was bumped on the cache hit (touch).
@@ -228,7 +228,7 @@ func TestIsGitURL_PreservesPositionalSemantics(t *testing.T) {
 }
 
 // makeSecretSource creates a real git repo with a Go file that hard-codes a
-// synthetic AWS access-key — gitleaks's BuiltinScanner detects it and the
+// synthetic AWS access-key - gitleaks's BuiltinScanner detects it and the
 // docs allowlist does NOT cover this shape, so it survives
 // to the findings table. Returns the absolute path of the new repo.
 func makeSecretSource(t *testing.T) string {
@@ -288,7 +288,7 @@ func TestSearchEphemeral_FirstPromotionRunsSecretCheck(t *testing.T) {
 	}
 
 	// Run the same cold-scan reparser that ensureIndexed builds. The
-	// embedder drain is skipped — the check chain runs synchronously
+	// embedder drain is skipped - the check chain runs synchronously
 	// inside Promoter.Promote, before drainEmbedderQueue.
 	loader := func(repoRoot string) (application.IgnoreMatcher, error) {
 		return fsignore.Load(repoRoot)
@@ -380,7 +380,7 @@ func TestEphemeralPromotionPrintsCheckSummary(t *testing.T) {
 }
 
 // TestEmitColdScanSummary_NoFindingsStaysQuiet guards that the helper
-// does not print anything when no findings were produced — a clean
+// does not print anything when no findings were produced - a clean
 // promotion should not pollute the search output with empty
 // "0 finding(s)" lines.
 func TestEmitColdScanSummary_NoFindingsStaysQuiet(t *testing.T) {

@@ -120,12 +120,12 @@ func tailVulnScanResult(logPath, repoID string) (deps, findings int, found bool)
 // scanWaitTuning groups the poll-loop timing constants for WaitForScanComplete.
 // See the field comments for the per-constant rationale.
 const (
-	// heartbeatEvery: — when the scanner sits on a slow file the
+	// heartbeatEvery: - when the scanner sits on a slow file the
 	// phase + files_seen don't change, so the original loop printed nothing
 	// for tens of seconds. Heartbeat with elapsed-since-last-update so the
 	// user can see we're still working.
 	heartbeatEvery = 10 * time.Second
-	// pollInterval: — poll at 100ms (was 500ms). Small repos walk
+	// pollInterval: - poll at 100ms (was 500ms). Small repos walk
 	// + promote in well under 500ms; the old cadence usually missed every
 	// intermediate files_seen update.
 	pollInterval = 100 * time.Millisecond
@@ -195,10 +195,10 @@ func (st *waitState) handleNotInFlight(ctx context.Context, w io.Writer, repoID 
 		return true, fmt.Errorf("cold scan failed")
 	}
 	if !st.sawInFlight {
-		fmt.Fprintf(w, "  ✗ scan never started after %.0fs — daemon may be wedged; tail %s\n", time.Since(st.start).Seconds(), logPath)
+		fmt.Fprintf(w, "  ✗ scan never started after %.0fs - daemon may be wedged; tail %s\n", time.Since(st.start).Seconds(), logPath)
 		return true, fmt.Errorf("cold scan did not start")
 	}
-	fmt.Fprintf(w, "  scan no longer in flight, repo not yet promoted — tail %s for the cause\n", logPath)
+	fmt.Fprintf(w, "  scan no longer in flight, repo not yet promoted - tail %s for the cause\n", logPath)
 	return true, nil
 }
 
@@ -252,7 +252,7 @@ func (st *waitState) reportProgress(w io.Writer, row ScanProgressRow) {
 	if row.FilesSeen > st.maxFiles {
 		st.maxFiles = row.FilesSeen
 	}
-	// suppress the "0 files (0.0s)" first tick — it just reflects
+	// suppress the "0 files (0.0s)" first tick - it just reflects
 	// the race between scan start and the first poll and reads as broken. We
 	// still report when files_seen first crosses 0 or when phase changes after
 	// we've seen files.
@@ -267,7 +267,7 @@ func (st *waitState) reportProgress(w io.Writer, row ScanProgressRow) {
 		return
 	}
 	if time.Since(st.lastEvent) >= heartbeatEvery {
-		fmt.Fprintf(w, "  %s → %d files (%.1fs, stalled %.0fs — check ~/.veska/logs/daemon.log)\n",
+		fmt.Fprintf(w, "  %s → %d files (%.1fs, stalled %.0fs - check ~/.veska/logs/daemon.log)\n",
 			phaseOrRunning(row.Phase), row.FilesSeen, time.Since(st.start).Seconds(), time.Since(st.lastEvent).Seconds())
 		st.lastEvent = time.Now()
 	}

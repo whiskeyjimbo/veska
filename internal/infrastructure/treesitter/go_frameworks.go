@@ -220,7 +220,7 @@ func buildNamedCommandVar(m queryMatch, src []byte, repoID, path, nameKey string
 	// Node identity keys on (repo, path, kind, name); two sibling commands
 	// could in principle share a Use word, so the ID is disambiguated by
 	// the Go var name (unique at package scope) while the human-facing Name
-	// stays the command word — same tactic as the init@L disambiguator in
+	// stays the command word - same tactic as the init@L disambiguator in
 	// buildFunctionNodeFromCaptures.
 	return newCommandNode(nodeID(repoID, path, domain.KindCommand, varName), cmdName, decl, src, path), varName
 }
@@ -341,7 +341,7 @@ func urfaveRefContainsEdges(matches []queryMatch, p fwParse, byVar map[string]*d
 }
 
 // anyPrefixImported reports whether any imported path starts with one of
-// prefixes — the file half of the route precision gate.
+// prefixes - the file half of the route precision gate.
 func anyPrefixImported(imports map[string]string, prefixes []string) bool {
 	for _, prefix := range prefixes {
 		if anyImportHasPrefix(imports, prefix) {
@@ -604,7 +604,7 @@ func (c *frameworkCommands) buildKongField(m queryMatch, p fwParse) (string, kon
 		return "", kongField{}, false
 	}
 	// ID disambiguated by struct+field (the command word can repeat across
-	// sibling structs), human name stays the command word — same tactic as
+	// sibling structs), human name stays the command word - same tactic as
 	// the cobra/urfave var disambiguator.
 	id := nodeID(p.repoID, p.path, domain.KindCommand, structName+"/"+fieldName)
 	// Source node is the whole field declaration (lines + raw content),

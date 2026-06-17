@@ -78,7 +78,7 @@ func resolveRepoIDOrCwd(ctx context.Context, repos application.RepoLister, repoI
 	}
 	switch len(all) {
 	case 0:
-		return "", &RPCError{Code: CodeInvalidParams, Message: "repo_id is required (no repos registered — run `veska repo add <path>` first)"}
+		return "", &RPCError{Code: CodeInvalidParams, Message: "repo_id is required (no repos registered - run `veska repo add <path>` first)"}
 	case 1:
 		return all[0].RepoID, nil
 	}
@@ -162,7 +162,7 @@ func resolveRepoFanoutFromParams(ctx context.Context, repos application.RepoList
 		return nil, false, &RPCError{Code: CodeInternalError, Message: fmt.Sprintf("list repos failed: %v", err)}
 	}
 	if len(all) == 0 {
-		return nil, false, &RPCError{Code: CodeInvalidParams, Message: "repo_id is required (no repos registered — run `veska repo add <path>` first)"}
+		return nil, false, &RPCError{Code: CodeInvalidParams, Message: "repo_id is required (no repos registered - run `veska repo add <path>` first)"}
 	}
 	if len(all) == 1 {
 		br := callerBranch
@@ -190,7 +190,7 @@ func resolveRepoFanoutFromParams(ctx context.Context, repos application.RepoList
 		}
 	}
 	// Multi-repo fanout: every registered repo on its own active_branch.
-	// callerBranch is intentionally ignored here — a single branch name
+	// callerBranch is intentionally ignored here - a single branch name
 	// can't sensibly span heterogenous repos.
 	targets = make([]repoBranch, 0, len(all))
 	for _, rec := range all {
@@ -233,7 +233,7 @@ func expandNodeIDPrefix(ctx context.Context, graph ports.GraphReader, repoID, br
 	}
 	if matched == "" {
 
-		return "", &RPCError{Code: CodeNotFound, Message: fmt.Sprintf("node_id %q not in repo=%s branch=%s — the prefix may belong to a different registered repo; run `veska repo list` and retry with --repo <id> (or cd into the owning repo)", nodeID, ShortRepoID(repoID), branch)}
+		return "", &RPCError{Code: CodeNotFound, Message: fmt.Sprintf("node_id %q not in repo=%s branch=%s - the prefix may belong to a different registered repo; run `veska repo list` and retry with --repo <id> (or cd into the owning repo)", nodeID, ShortRepoID(repoID), branch)}
 	}
 	return matched, nil
 }
@@ -291,7 +291,7 @@ func resolveSeedOwner(ctx context.Context, repos application.RepoLister, graph p
 		return "", "", "", &RPCError{Code: CodeInternalError, Message: fmt.Sprintf("list repos failed: %v", err)}
 	}
 	if len(all) == 0 {
-		return "", "", "", &RPCError{Code: CodeInvalidParams, Message: "repo_id is required (no repos registered — run `veska repo add <path>` first)"}
+		return "", "", "", &RPCError{Code: CodeInvalidParams, Message: "repo_id is required (no repos registered - run `veska repo add <path>` first)"}
 	}
 	if len(all) == 1 {
 		br := callerBranch

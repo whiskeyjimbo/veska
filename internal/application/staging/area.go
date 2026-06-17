@@ -95,7 +95,7 @@ func (s *Area) Stage(repoID, branch, filePath string, f File, opts ...Option) bo
 }
 
 // GetStagedNodes returns the staged nodes for (repoID, branch, filePath).
-// Returns (nil, false) when no entry exists (cache miss — caller falls through
+// Returns (nil, false) when no entry exists (cache miss - caller falls through
 // to SQLite).
 func (s *Area) GetStagedNodes(repoID, branch, filePath string) ([]*domain.Node, bool) {
 	k := key{repoID: repoID, branch: branch, filePath: filePath}
@@ -158,7 +158,7 @@ func (s *Area) Clear(repoID, branch string) {
 	}
 }
 
-// File is the per-file snapshot the promotion path consumes — nodes
+// File is the per-file snapshot the promotion path consumes - nodes
 // AND parser-produced edges. SIMILAR_TO edges (autolink) are NOT included
 // here; only structural edges the parser determined at parse time
 type File struct {

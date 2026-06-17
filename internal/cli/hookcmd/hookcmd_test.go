@@ -137,7 +137,7 @@ func TestSendSeal_DaemonTimeout(t *testing.T) {
 	}
 	defer ln.Close()
 
-	// Accept but never respond — simulates a hung daemon.
+	// Accept but never respond - simulates a hung daemon.
 	go func() {
 		conn, err := ln.Accept()
 		if err != nil {

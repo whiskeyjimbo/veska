@@ -111,7 +111,7 @@ func TestHandler_CommitOverageRefusesRemaining(t *testing.T) {
 		Kind: ports.WorkKindReview, RepoID: "repo1", Branch: "main",
 		GitSHA: "sha-budget", Payload: "a.go",
 	}
-	// First job runs (crosses the line) — succeeds.
+	// First job runs (crosses the line) - succeeds.
 	if err := h.Handle(context.Background(), row); err != nil {
 		t.Fatalf("first Handle: %v", err)
 	}
@@ -187,7 +187,7 @@ func TestHandler_CommitCapZeroUnlimited(t *testing.T) {
 }
 
 // TestHandler_DailyCapPauses verifies AC2: when the daily total has reached
-// max_tokens_per_day the handler pauses — no LLM call — and writes exactly one
+// max_tokens_per_day the handler pauses - no LLM call - and writes exactly one
 // audit.jsonl line the first time the pause trips. No finding is filed.
 func TestHandler_DailyCapPauses(t *testing.T) {
 	t.Parallel()

@@ -186,12 +186,12 @@ func TestRedactFile(t *testing.T) {
 	got := audit.RedactFile(input)
 
 	lines := bytes.Split(got, []byte("\n"))
-	// lines[0] = "repo_id: repo-1" — unchanged
-	// lines[1] = "api_key: sk-." — redacted
-	// lines[2] = "branch: main" — unchanged
-	// lines[3] = "token: ghp_foobar" — redacted
-	// lines[4] = "normal: no secrets." — unchanged
-	// lines[5] = "" — trailing newline
+	// lines[0] = "repo_id: repo-1" - unchanged
+	// lines[1] = "api_key: sk-." - redacted
+	// lines[2] = "branch: main" - unchanged
+	// lines[3] = "token: ghp_foobar" - redacted
+	// lines[4] = "normal: no secrets." - unchanged
+	// lines[5] = "" - trailing newline
 
 	if !bytes.Equal(lines[0], []byte("repo_id: repo-1")) {
 		t.Errorf("line 0 unexpectedly changed: %q", lines[0])

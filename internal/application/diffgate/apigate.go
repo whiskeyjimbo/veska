@@ -8,7 +8,7 @@ import (
 )
 
 // FailBreakingAPIChange names the failing check: the candidate changed the
-// signature shape of an EXPORTED symbol — a breaking public-surface change.
+// signature shape of an EXPORTED symbol - a breaking public-surface change.
 const FailBreakingAPIChange = "breaking_api_change"
 
 // FailRemovedAPISymbol names the failing check: an EXPORTED symbol present at
@@ -74,12 +74,12 @@ func (v APIVerdict) ExitCode() int {
 }
 
 // APIGate flags a candidate change that alters the signature SHAPE of an
-// EXPORTED symbol — a breaking change a reviewer misses on a large diff. It
+// EXPORTED symbol - a breaking change a reviewer misses on a large diff. It
 // reuses the whole-repo contract-drift signal (a node whose prev_signature
 // differs from its signature after the candidate is re-promoted) and applies the
 // public-surface policy here: only nodes with Exported==true fail. So an
 // unexported signature change PASSES (AC2), and a body-only change PASSES (AC3,
-// no drift row — prev_sig == sig). Drift is self-scoping (it only fires where a
+// no drift row - prev_sig == sig). Drift is self-scoping (it only fires where a
 // signature genuinely changed in this re-promote), so no change-set intersection
 // is needed.
 // Scope (deliberate, matching the bead's "exported symbols only / signature
@@ -87,7 +87,7 @@ func (v APIVerdict) ExitCode() int {
 //
 //	Signature shape is the parser's signature string (name + parameters +
 //	  result). It includes parameter NAMES, so a cosmetic parameter rename of an
-//	  exported symbol false-FAILs — documented, not judged for semantic breakage.
+//	  exported symbol false-FAILs - documented, not judged for semantic breakage.
 //	REMOVAL or RENAME of an exported symbol fires the SECOND detector
 //	  (RemovedSymbols): a base-ref exported symbol whose
 //	  package-scoped identity key is absent from the candidate after-state.
@@ -99,7 +99,7 @@ func (v APIVerdict) ExitCode() int {
 //	  method, interface, struct, type, variable, class}: a
 //	  removed exported type/const/var is breaking too. (Signature drift stays
 //	  narrow to the signature-shaped kinds.) A same-name type SHAPE change is
-//	  NOT a removal — see symbolIdentity.
+//	  NOT a removal - see symbolIdentity.
 //
 // Language-agnostic: signature drift judges ports.DriftedNode.Exported, and
 // removal judges a package-scoped identity key (package = path.Dir(file_path)),
@@ -121,22 +121,22 @@ func NewAPIGate() *APIGate { return &APIGate{} }
 // type named Foo), and methods are receiver-qualified ("T.Method"), so a bare
 // name is already unambiguous. Dropping kind means a same-name type SHAPE change
 // (`type Foo struct{}` -> `type Foo interface{}`) is correctly NOT reported as a
-// removal — the name persists; that is a shape change, a different concern from
+// removal - the name persists; that is a shape change, a different concern from
 // "the name disappeared". Kind is still carried in the reported APIRemoval.
 func symbolIdentity(filePath, name string) string {
 	return path.Dir(filePath) + "\x00" + name
 }
 
-// Evaluate reports two classes of breaking public-API change. Pure — no I/O.
+// Evaluate reports two classes of breaking public-API change. Pure - no I/O.
 //
 //	BreakingChanges: exported nodes among drifted whose signature shape changed.
 //	RemovedSymbols: base-ref exported symbols whose package-scoped identity key
 //	  is absent from the candidate's exported set (removed/renamed/unexported).
 //
 // baseExported and candidateExported are the exported public-surface symbols
-// (the wide removable set — function/method/interface/struct/type/variable/
+// (the wide removable set - function/method/interface/struct/type/variable/
 // class; see ExportedSymbolQuerier) over the CHANGED files at base-ref and in
-// the candidate after-state respectively — the complete scope, since a moved
+// the candidate after-state respectively - the complete scope, since a moved
 // symbol's destination is always a changed file too.
 func (g *APIGate) Evaluate(drifted []ports.DriftedNode, baseExported, candidateExported []ports.ExportedSymbol) APIVerdict {
 	var breaking []APIChange
@@ -167,7 +167,7 @@ func (g *APIGate) Evaluate(drifted []ports.DriftedNode, baseExported, candidateE
 	var removed []APIRemoval
 	for _, s := range baseExported {
 		if _, present := candKeys[symbolIdentity(s.FilePath, s.Name)]; present {
-			continue // identity survives (incl. intra-package move) — not a removal
+			continue // identity survives (incl. intra-package move) - not a removal
 		}
 		removed = append(removed, APIRemoval{
 			NodeID:     s.NodeID,

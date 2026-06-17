@@ -311,7 +311,7 @@ class App {
 }
 
 func TestTS_ParseFailureSurfaced(t *testing.T) {
-	// Unclosed brace + bogus token — tree-sitter will mark ERROR nodes.
+	// Unclosed brace + bogus token - tree-sitter will mark ERROR nodes.
 	src := []byte(`
 function broken(
   return

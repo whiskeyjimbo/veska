@@ -19,7 +19,7 @@
 //
 // # Amendment, not forking (F1)
 // Later tool beads amend this manifest in place when a fact a tool needs is
-// missing — they never fork it. 5zka delivers the amendable base + schema and
+// missing - they never fork it. 5zka delivers the amendable base + schema and
 // freezes the facts for the fixture as built; it does NOT author all 40 tools'
 // exact assertions.
 package coverage
@@ -52,7 +52,7 @@ const (
 
 // NodeKey identifies a node by its stable, machine-independent coordinates:
 // the repo-RELATIVE slash path, the kind, and the symbol name. The manifest
-// NEVER stores raw sha256 node IDs or absolute paths — a harness resolves keys
+// NEVER stores raw sha256 node IDs or absolute paths - a harness resolves keys
 // to IDs at test time via ResolveID, supplying the root it indexed at.
 // Name mirrors the parser's node name, NOT the symbol_path: methods are keyed
 // "Type.method" (e.g. "Badge.RenderBadge"), packages by the package name.
@@ -67,8 +67,8 @@ type NodeKey struct {
 // this key.
 // Since the pipeline keys node IDs on the repo-relative SLASH
 // path (coldscan.go fileStager.stage passes `rel`, already ToSlash'd, to the
-// parser — no longer the absolute walked path). So ResolveID hashes k.Path
-// verbatim — it is already the repo-relative slash form treesitter nodeID
+// parser - no longer the absolute walked path). So ResolveID hashes k.Path
+// verbatim - it is already the repo-relative slash form treesitter nodeID
 // receives. No Join/FromSlash: the root is no longer part of the identity.
 // root is retained in the signature (ignored) so the many coverage-harness
 // call sites that pass the per-repo root keep compiling; it is dead for ID
@@ -139,7 +139,7 @@ type TodoFact struct {
 
 // CloneFact names a near-duplicate pair the clone detector should relate
 // (eng_find_clones). The two members share structure with only identifier
-// differences. Frozen as keys, not scores — the exact similarity is the
+// differences. Frozen as keys, not scores - the exact similarity is the
 // clone tool's concern, not this manifest's.
 type CloneFact struct {
 	RepoID string

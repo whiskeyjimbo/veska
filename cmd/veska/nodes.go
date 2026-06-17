@@ -19,7 +19,7 @@ func nodeCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:          "node <node-id>",
 		Short:        "Show a single node by id (wraps eng_get_node)",
-		Long:         "Look up one node by its content-hashed node_id (or 12-char display prefix). repo_id/branch are optional — the id is globally unique; pass both to apply the staging overlay.",
+		Long:         "Look up one node by its content-hashed node_id (or 12-char display prefix). repo_id/branch are optional - the id is globally unique; pass both to apply the staging overlay.",
 		Args:         cobra.ExactArgs(1),
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {

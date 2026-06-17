@@ -25,9 +25,9 @@ type BackupReport struct {
 // modified one, reports its age, and verifies that it is a valid gzip archive.
 // Status values:
 //
-//	"healthy" — at least one backup exists and its gzip header is valid
-//	"degraded" — no *.tar.gz files found in backupDir
-//	"broken" — most recent backup exists but fails gzip verification
+//	"healthy" - at least one backup exists and its gzip header is valid
+//	"degraded" - no *.tar.gz files found in backupDir
+//	"broken" - most recent backup exists but fails gzip verification
 func CheckBackup(backupDir string) (BackupReport, error) {
 	matches, err := filepath.Glob(filepath.Join(backupDir, "*.tar.gz"))
 	if err != nil {

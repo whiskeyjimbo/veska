@@ -84,12 +84,12 @@ func (g *Gate) WaitIfPaused() {
 }
 
 // BranchSwitch executes the full quiescence sequence:
-//  1. BumpGeneration — invalidates all in-flight saves from the prior branch.
-//  2. Pause — new Save calls will block at WaitIfPaused.
-//  3. staging.Clear(repoID, prevBranch) — drops stale overlay data.
-//  4. drainFn(ctx) — caller drains the post_promotion_queue; blocks until empty
+//  1. BumpGeneration - invalidates all in-flight saves from the prior branch.
+//  2. Pause - new Save calls will block at WaitIfPaused.
+//  3. staging.Clear(repoID, prevBranch) - drops stale overlay data.
+//  4. drainFn(ctx) - caller drains the post_promotion_queue; blocks until empty
 //     or ctx is done.
-//  5. Resume — releases any goroutines blocked in WaitIfPaused.
+//  5. Resume - releases any goroutines blocked in WaitIfPaused.
 //
 // Resume is deferred so it always fires even if drainFn panics, preventing a
 // permanent deadlock. The error from drainFn (if non-nil) is returned to the

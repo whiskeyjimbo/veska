@@ -43,7 +43,7 @@ func RunRepoAddPath(ctx context.Context, w io.Writer, root string, wait bool) er
 	}
 	root = abs
 
-	// Prefer the daemon when up — it triggers cold scan and seeds the live
+	// Prefer the daemon when up - it triggers cold scan and seeds the live
 	// watcher in one call (parity with eng_add_repo).
 	id, existed, dialErr := dialAddRepo(ctx, root)
 	if dialErr == nil {
@@ -101,7 +101,7 @@ func directAdd(ctx context.Context, w io.Writer, root string, dialErr error) err
 	if existedLocal {
 		verb = "already registered"
 	}
-	fmt.Fprintf(w, "%s repo %s (direct write; daemon dial failed: %v — restart daemon to cold-scan/live-watch)\n", verb, ShortRepoID(id), dialErr)
+	fmt.Fprintf(w, "%s repo %s (direct write; daemon dial failed: %v - restart daemon to cold-scan/live-watch)\n", verb, ShortRepoID(id), dialErr)
 	if !existedLocal {
 		promptAliasAfterAdd(ctx, w, id, "", root)
 	}
@@ -156,7 +156,7 @@ func RunRepoAddURL(ctx context.Context, w, stderr io.Writer, rawURL string, wait
 	}
 	defer closeFn()
 	// Stamp canonical_url on the freshly-registered row. Failure here rolls
-	// back both the row and the clone — a row without canonical_url looks like
+	// back both the row and the clone - a row without canonical_url looks like
 	// a normal path-registered repo and would confuse alias-resolution.
 	if err := repo.SetCanonicalURL(ctx, db, id, canonical); err != nil {
 		_, _ = db.ExecContext(ctx, `DELETE FROM repos WHERE repo_id = ?`, id)

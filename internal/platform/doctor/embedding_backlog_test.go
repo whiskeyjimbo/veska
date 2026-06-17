@@ -21,7 +21,7 @@ func (f *fakePendingCounter) CountPending(_ context.Context) (int, error) {
 }
 
 // TestCheckEmbeddingBacklog_Drained verifies that with no pending refs the
-// backlog status is "drained" — never "healthy" (which would conflate with
+// backlog status is "drained" - never "healthy" (which would conflate with
 // rollup status terms) and never "degraded" (the agent-facing degradation
 // signal lives in eng_get_status, not doctor).
 func TestCheckEmbeddingBacklog_Drained(t *testing.T) {
@@ -57,7 +57,7 @@ func TestCheckEmbeddingBacklog_Backfilling(t *testing.T) {
 }
 
 // TestCheckEmbeddingBacklog_QueryError reports "unknown" so the rollup
-// shows we couldn't measure it — but never "degraded" or "broken", because
+// shows we couldn't measure it - but never "degraded" or "broken", because
 // a backlog query failure is not itself a real fault (it could be the
 // daemon holding the write lock, etc).
 func TestCheckEmbeddingBacklog_QueryError(t *testing.T) {

@@ -10,7 +10,7 @@
 //     published headline metric for code retrieval).
 //   Average recall@10 on "headline" GT across PROSE corpora.
 //   Average per-query embed latency (model2vec: CPU in-process;
-//     ollama: HTTP round-trip — REPORTED SEPARATELY since they aren't
+//     ollama: HTTP round-trip - REPORTED SEPARATELY since they aren't
 //     comparable).
 //   Disk footprint for model2vec (size of the model dir). Ollama
 //     models are server-side; cell reads "server-side".
@@ -34,14 +34,14 @@ import (
 
 // codeCorpora is the set of corpus names whose embed-time results
 // contribute to the published "code recall" cell. Mirrors the kind
-// classification in discoverCorpora — but ground-truth headlines come
+// classification in discoverCorpora - but ground-truth headlines come
 // from fixtures/headline.jsonl only for veska today; the bench
 // curator extends as needed and the aggregate adapts automatically.
 var codeCorporaSet = map[string]bool{
 	"veska": true, "cobra": true, "pflag": true, "testify": true, "gin": true,
 }
 
-// proseCorporaSet — mirror for prose.
+// proseCorporaSet - mirror for prose.
 var proseCorporaSet = map[string]bool{
 	"veska-docs": true, "cobra-docs": true, "wikipedia-tech": true,
 }
@@ -198,10 +198,10 @@ func writeMarkdownTable(rows []runResult) error {
 	sb.WriteString("Source: `tools/loadtest/embed_models/out/results.json`.\n\n")
 	sb.WriteString("Recall numbers are **fair** recall@10 on the hand-curated headline set ")
 	sb.WriteString("(`fixtures/headline.jsonl` + `fixtures/prose.jsonl`), averaged over corpora that contributed a headline number. ")
-	sb.WriteString("'Fair' = recall computed over the pairs whose expected target was actually in the embedded subset — corrects for the different `max_docs` cap between model2vec (5000) and Ollama (500) so models running on different subset sizes aren't penalised for missing targets that weren't embedded at all. ")
+	sb.WriteString("'Fair' = recall computed over the pairs whose expected target was actually in the embedded subset - corrects for the different `max_docs` cap between model2vec (5000) and Ollama (500) so models running on different subset sizes aren't penalised for missing targets that weren't embedded at all. ")
 	sb.WriteString("Raw R@10 and the per-corpus breakdown live in `results.json`.\n")
 	sb.WriteString("Latency is per-query embed time. ")
-	sb.WriteString("**model2vec rows measure in-process CPU compute; ollama rows measure HTTP round-trip — do NOT compare across types.**\n\n")
+	sb.WriteString("**model2vec rows measure in-process CPU compute; ollama rows measure HTTP round-trip - do NOT compare across types.**\n\n")
 	sb.WriteString("| Model | Type | Size | Code R@10 | Prose R@10 | Query ms | Recommended for |\n")
 	sb.WriteString("|---|---|---|---|---|---|---|\n")
 	for _, a := range models {
@@ -225,12 +225,12 @@ func writeMarkdownTable(rows []runResult) error {
 			badges = append(badges, "smallest footprint")
 		}
 		if a.queryMS > 0 && bestQuery > 0 && a.queryMS <= bestQuery*1.10 {
-			// 10% slack — many fast models bunch up
+			// 10% slack - many fast models bunch up
 			badges = append(badges, "fastest query")
 		}
 		recommend := strings.Join(badges, ", ")
 		if recommend == "" {
-			recommend = "—"
+			recommend = "-"
 		}
 		fmt.Fprintf(&sb, "| `%s` | %s | %s | %s | %s | %.3f | %s |\n",
 			a.model, a.modelType, size, codeStr, proseStr, a.queryMS, recommend)
@@ -240,7 +240,7 @@ func writeMarkdownTable(rows []runResult) error {
 	// has a condensed series. Reports the per-model lift (condensed
 	// raw) on code and prose headline R@10, plus the share of corpus
 	// docs that actually got condensed (the rest were below the
-	// minLen gate and embedded raw — so they cap the achievable lift).
+	// minLen gate and embedded raw - so they cap the achievable lift).
 	anyCond := false
 	for _, a := range models {
 		if a.hasCond {
@@ -252,7 +252,7 @@ func writeMarkdownTable(rows []runResult) error {
 		sb.WriteString("\n## Condensation lift (EMBED_BENCH_CONDENSE=on)\n\n")
 		sb.WriteString("Extractive condensation: per doc, split into pieces (lines), embed each, ")
 		sb.WriteString("keep top-K most-central by cosine-centroid, concatenate, re-embed. ")
-		sb.WriteString("Docs below `EMBED_BENCH_CONDENSE_MIN_LEN` are embedded raw — the gated subset caps the achievable lift. ")
+		sb.WriteString("Docs below `EMBED_BENCH_CONDENSE_MIN_LEN` are embedded raw - the gated subset caps the achievable lift. ")
 		sb.WriteString("Positive lift = condensed beats raw.\n\n")
 		sb.WriteString("| Model | Code R@10 (cond) | Code Lift | Prose R@10 (cond) | Prose Lift |\n")
 		sb.WriteString("|---|---|---|---|---|\n")
@@ -262,11 +262,11 @@ func writeMarkdownTable(rows []runResult) error {
 			}
 			codeCondStr := fmtRecall(a.codeR10Cond, a.nCodeCond)
 			proseCondStr := fmtRecall(a.proseR10Cond, a.nProseCond)
-			codeLift := "—"
+			codeLift := "-"
 			if a.nCode > 0 && a.nCodeCond > 0 {
 				codeLift = fmt.Sprintf("%+.3f", a.codeR10Cond-a.codeR10)
 			}
-			proseLift := "—"
+			proseLift := "-"
 			if a.nProse > 0 && a.nProseCond > 0 {
 				proseLift = fmt.Sprintf("%+.3f", a.proseR10Cond-a.proseR10)
 			}
@@ -294,7 +294,7 @@ func writeMarkdownTable(rows []runResult) error {
 
 func fmtRecall(v float64, n int) string {
 	if n == 0 {
-		return "—"
+		return "-"
 	}
 	return fmt.Sprintf("%.3f", v)
 }
@@ -312,7 +312,7 @@ func humanBytes(n int64) string {
 }
 
 // modelDirBytes sums the sizes of every file under
-// $VESKA_HOME/static-model/<model>/ — what `veska install <model>`
+// $VESKA_HOME/static-model/<model>/ - what `veska install <model>`
 // costs on disk. Returns -1 if the dir doesn't exist.
 func modelDirBytes(modelName string) int64 {
 	dir := filepath.Join(modelRoot(), modelName)

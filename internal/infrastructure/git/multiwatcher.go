@@ -75,7 +75,7 @@ func (m *MultiRepoWatcher) Add(repoID, rootPath string) error {
 	defer m.mu.Unlock()
 
 	if _, exists := m.repos[repoID]; exists {
-		// Already watching — idempotent.
+		// Already watching - idempotent.
 		return nil
 	}
 

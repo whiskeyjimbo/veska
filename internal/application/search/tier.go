@@ -36,8 +36,8 @@ const WeakTopAbsolute float32 = 0.018
 // NormalizeScores returns the per-result min-max-normalised score
 // (0.1) for a results slice. When all scores are equal (or only one
 // result is present), each entry returns 1.0 so consumers don't have
-// to special-case the divide-by-zero. The function is pure — it
-// computes a parallel slice instead of mutating results — so the raw
+// to special-case the divide-by-zero. The function is pure - it
+// computes a parallel slice instead of mutating results - so the raw
 // RRF score remains intact for power consumers.
 func NormalizeScores(results []Result) []float32 {
 	out := make([]float32, len(results))

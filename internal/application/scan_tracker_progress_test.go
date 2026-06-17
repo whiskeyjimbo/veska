@@ -2,7 +2,7 @@ package application
 
 import "testing"
 
-// verification — ScanTracker.Progress sets files_seen on the
+// verification - ScanTracker.Progress sets files_seen on the
 // snapshot for an in-flight scan and is a no-op for unknown repos /
 // nil receivers.
 
@@ -34,7 +34,7 @@ func TestScanTracker_ProgressNilSafe(t *testing.T) {
 }
 
 // TestScanTracker_ProgressEndClears verifies End clears the row even
-// after Progress was called — otherwise the tracker pins the repo
+// after Progress was called - otherwise the tracker pins the repo
 // forever on long scans that fail mid-walk.
 func TestScanTracker_ProgressEndClears(t *testing.T) {
 	tr := NewScanTracker()

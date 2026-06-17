@@ -154,7 +154,7 @@ func TestDoctorRealProbeSubcommandsRun(t *testing.T) {
 			root.SetOut(&out)
 			root.SetErr(&out)
 			root.SetArgs([]string{"doctor", name})
-			// We do NOT assert err == nil — probes may legitimately return a
+			// We do NOT assert err == nil - probes may legitimately return a
 			// ProbeStatusError when services are unavailable in CI. We only
 			// assert the command ran (no panic) and any error is a ProbeStatusError.
 			err := root.Execute()

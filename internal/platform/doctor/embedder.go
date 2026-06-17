@@ -14,9 +14,9 @@ type EmbedderReport struct {
 	OllamaURL string `json:"ollama_url"`
 	ModelName string `json:"model_name"`
 	// Status is one of: "healthy", "degraded", "broken".
-	// healthy — Ollama reachable and model present.
-	// degraded — Ollama reachable but model not in the list.
-	// broken — Ollama unreachable.
+	// healthy - Ollama reachable and model present.
+	// degraded - Ollama reachable but model not in the list.
+	// broken - Ollama unreachable.
 	Status health.Status `json:"status"`
 }
 
@@ -29,7 +29,7 @@ type ollamaTagsResponse struct {
 
 // CheckEmbedder probes the Ollama instance at ollamaURL and checks whether
 // modelName is available. It uses a 3-second timeout and never returns a
-// non-nil error — connectivity failures are reflected in the Status field.
+// non-nil error - connectivity failures are reflected in the Status field.
 func CheckEmbedder(ollamaURL, modelName string) (EmbedderReport, error) {
 	report := EmbedderReport{
 		OllamaURL: ollamaURL,
@@ -51,7 +51,7 @@ func CheckEmbedder(ollamaURL, modelName string) (EmbedderReport, error) {
 
 	var tags ollamaTagsResponse
 	if err := json.NewDecoder(resp.Body).Decode(&tags); err != nil {
-		// Unexpected response body — treat as broken.
+		// Unexpected response body - treat as broken.
 		report.Status = health.StatusBroken
 		return report, nil
 	}

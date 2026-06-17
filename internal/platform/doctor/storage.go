@@ -49,7 +49,7 @@ func fileSize(path string) int64 {
 }
 
 // CheckStorage reads the filesystem under veskaHome and returns a populated
-// StorageReport. It never requires a running UsearchStore — all data is derived
+// StorageReport. It never requires a running UsearchStore - all data is derived
 // from on-disk files.
 func CheckStorage(veskaHome string) (StorageReport, error) {
 	dbPath := filepath.Join(veskaHome, "veska.db")
@@ -75,12 +75,12 @@ func CheckStorage(veskaHome string) (StorageReport, error) {
 		sidecarPath := p[:len(p)-len(".hnsw")] + ".json"
 		data, err := os.ReadFile(sidecarPath)
 		if err != nil {
-			// Sidecar missing or unreadable — skip vector count for this index.
+			// Sidecar missing or unreadable - skip vector count for this index.
 			continue
 		}
 		var sc sidecarRows
 		if err := json.Unmarshal(data, &sc); err != nil {
-			// Malformed sidecar — skip rather than error.
+			// Malformed sidecar - skip rather than error.
 			continue
 		}
 		hnswVectorCount += int64(len(sc.Rows))

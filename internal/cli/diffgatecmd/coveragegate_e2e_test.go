@@ -97,7 +97,7 @@ func TestRunUntested_E2E_InterfaceDispatchTested_Passes(t *testing.T) {
 
 // Discriminating case (advisor): interface declared in an UNCHANGED file,
 // impl in a CHANGED file. Verifies the interface-method lister sees the
-// interface even though only the impl file was re-promoted — the clone is a
+// interface even though only the impl file was re-promoted - the clone is a
 // full base snapshot, so unchanged-file interface nodes survive (unlike the
 // cascade-deleted caller edges). Must PASS.
 func TestRunUntested_E2E_InterfaceInUnchangedFile_Passes(t *testing.T) {
@@ -187,7 +187,7 @@ func TestRunUntested_E2E_AddedUntested_Fails(t *testing.T) {
 // Test-removal lock (the union's dangerous direction): modifying a prod symbol
 // AND deleting its test must FAIL. base still lists the now-gone test as a
 // caller, but it lives in a CHANGED file, so the clone (where the test is gone)
-// is authoritative — the union must drop the stale base caller. This also
+// is authoritative - the union must drop the stale base caller. This also
 // self-validates that CallerFiles and ChangedFiles share a path format: a
 // format mismatch makes the filter a no-op and this test goes green (PASS).
 func TestRunUntested_E2E_ModifyProdRemoveTest_Fails(t *testing.T) {
@@ -211,12 +211,12 @@ func TestRunUntested_E2E_ModifyProdRemoveTest_Fails(t *testing.T) {
 	}
 }
 
-// INDEX-AHEAD HARDENING: the index is seeded AHEAD — it already
-// holds the added, untested Bar — while base-ref has only foo.go/foo_test.go.
+// INDEX-AHEAD HARDENING: the index is seeded AHEAD - it already
+// holds the added, untested Bar - while base-ref has only foo.go/foo_test.go.
 // Before pinning, ChangedNodeIDs went empty (overlay matched the drifted index)
 // so the new untested symbol wrongly PASSED. With buildPinnedEphemeral the base
-// clone re-promotes base-ref's changed files — DELETING the added bar.go the
-// drifted index carried — so Bar is correctly net-new and the gate FAILs.
+// clone re-promotes base-ref's changed files - DELETING the added bar.go the
+// drifted index carried - so Bar is correctly net-new and the gate FAILs.
 func TestRunUntested_E2E_IndexAhead_NowDetected(t *testing.T) {
 	home := t.TempDir()
 	barSrc := "package p\n\nfunc Bar() int { return 9 }\n" // untested
@@ -240,7 +240,7 @@ func TestRunUntested_E2E_IndexAhead_NowDetected(t *testing.T) {
 	}
 }
 
-// AC2 positive — the case that justifies the re-promote: adding a prod symbol
+// AC2 positive - the case that justifies the re-promote: adding a prod symbol
 // AND its test in a new _test.go (cross-file) must PASS. The test→prod CALLS
 // edge resolves at promotion (the ephemeral overlay alone would miss it).
 func TestRunUntested_E2E_AddedWithTest_Passes(t *testing.T) {

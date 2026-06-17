@@ -125,7 +125,7 @@ func RunRepoRemoveMissing(ctx context.Context, w io.Writer, dryRun bool) error {
 		}
 	}
 	if len(missing) == 0 {
-		fmt.Fprintln(w, "no missing repos — nothing to remove")
+		fmt.Fprintln(w, "no missing repos - nothing to remove")
 		return nil
 	}
 	return applyBulkRemove(ctx, w, missing, dryRun, "missing")
@@ -138,7 +138,7 @@ func RunRepoRemoveAll(ctx context.Context, w io.Writer, in io.Reader, dryRun, ye
 		return fmt.Errorf("repo remove --all: %w", err)
 	}
 	if len(repos) == 0 {
-		fmt.Fprintln(w, "registry is empty — nothing to remove")
+		fmt.Fprintln(w, "registry is empty - nothing to remove")
 		return nil
 	}
 	if !dryRun && !yes {
@@ -155,7 +155,7 @@ func RunRepoRemoveAll(ctx context.Context, w io.Writer, in io.Reader, dryRun, ye
 
 // applyBulkRemove iterates targets and removes each via daemon-or-direct,
 // printing per-row status and a trailing summary. Errors on individual rows
-// are printed but do not abort the loop — partial cleanup is better than none.
+// are printed but do not abort the loop - partial cleanup is better than none.
 func applyBulkRemove(ctx context.Context, w io.Writer, targets []RepoView, dryRun bool, scope string) error {
 	useDaemon := false
 	if _, err := dialEngStatus(ctx); err == nil {
@@ -175,7 +175,7 @@ func applyBulkRemove(ctx context.Context, w io.Writer, targets []RepoView, dryRu
 		removeBulkRow(ctx, w, db, r, bulkRemoveOpts{UseDaemon: useDaemon, DryRun: dryRun})
 	}
 	if dryRun {
-		fmt.Fprintf(w, "%d candidate(s) — rerun without --dry-run to apply\n", len(targets))
+		fmt.Fprintf(w, "%d candidate(s) - rerun without --dry-run to apply\n", len(targets))
 	} else {
 		fmt.Fprintf(w, "removed %d repo(s)\n", len(targets))
 	}
@@ -231,7 +231,7 @@ func RunRepoAlias(ctx context.Context, w io.Writer, name, target string, force b
 		// the documented `<name> <id>`. If args[0] resolves and args[1] does
 		// not, surface the swap hint instead of the generic error.
 		if _, swapErr := ResolveCLIRepoID(recs, name); swapErr == nil {
-			return fmt.Errorf("repo alias: %w — did you swap the arguments? usage: `veska repo alias <name> <repo-id-or-prefix-or-alias>` (got name=%q repo=%q)", err, name, target)
+			return fmt.Errorf("repo alias: %w - did you swap the arguments? usage: `veska repo alias <name> <repo-id-or-prefix-or-alias>` (got name=%q repo=%q)", err, name, target)
 		}
 		return fmt.Errorf("repo alias: %w", err)
 	}

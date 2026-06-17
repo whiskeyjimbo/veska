@@ -142,7 +142,7 @@ func countLines(b []byte) int {
 	return n
 }
 
-const resultsTmpl = `# Cold-Scan Benchmark — GoParser
+const resultsTmpl = `# Cold-Scan Benchmark - GoParser
 
 Generated: {{.Date}}
 Platform: {{.OS}} {{.Arch}}
@@ -153,8 +153,8 @@ Gate: <60s total elapsed
 | Metric | Value | Gate |
 |--------|-------|------|
 | Total elapsed | {{.TotalElapsed}} | <60s |
-| Per-file p95 | {{.P95}} | — |
-| Files/sec | {{.FilesPerSec}} | — |
+| Per-file p95 | {{.P95}} | - |
+| Files/sec | {{.FilesPerSec}} | - |
 
 Gate: {{.GateVerdict}}
 `

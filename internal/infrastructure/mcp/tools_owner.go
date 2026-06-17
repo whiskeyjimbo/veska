@@ -176,7 +176,7 @@ func lookupNodeFilePath(db *sql.DB, repoID, branch, symbol, nodeID string) (stri
 	case 1:
 		return paths[0], nil
 	default:
-		return "", &RPCError{Code: CodeInvalidParams, Message: fmt.Sprintf("find_owner: symbol %q is ambiguous (multiple files match) — pass file_path or node_id", symbol)}
+		return "", &RPCError{Code: CodeInvalidParams, Message: fmt.Sprintf("find_owner: symbol %q is ambiguous (multiple files match) - pass file_path or node_id", symbol)}
 	}
 }
 

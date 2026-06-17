@@ -69,7 +69,7 @@ type EntryPointsService struct {
 type EntryPointOption func(*EntryPointsService)
 
 // DefaultMaxResults caps the rendered entry_points list. The page is a
-// human-facing surface — beyond ~50 rows the table stops being a useful
+// human-facing surface - beyond ~50 rows the table stops being a useful
 // "where do I start" guide.
 const DefaultMaxResults = 50
 
@@ -120,8 +120,8 @@ type SelectOptions struct {
 // Select computes the entry_points report for (repoID, branch).
 // Real entry points have HIGH inbound fan-in: lots of call sites depend
 // on them. Exported (capitalised) names in non-test files are likelier
-// entry points than internal helpers. The previous gate — "must have
-// an adjacent test, must have small blast radius" — selected leaves,
+// entry points than internal helpers. The previous gate - "must have
+// an adjacent test, must have small blast radius" - selected leaves,
 // not entry points ('s close-reason flagged this). Adjacent
 // tests are now a tiebreaker bonus, not a hard requirement.
 // Ranking:
@@ -170,7 +170,7 @@ func (s *EntryPointsService) SelectWith(ctx context.Context, repoID, branch stri
 			continue
 		}
 		// filter Go init functions. Go's runtime invokes
-		// every init automatically — they are framework magic, not
+		// every init automatically - they are framework magic, not
 		// "places to start reading the code." cobra-based CLIs use init
 		// heavily to register subcommands, which would otherwise dominate
 		// the entry_points page (one per command file). Python's __init__
@@ -231,7 +231,7 @@ func isEntryPointKind(k domain.NodeKind) bool {
 		domain.KindStruct, domain.KindInterface, domain.KindClass,
 		domain.KindCommand, domain.KindRoute:
 		// Commands and routes are the literal entry surface of a CLI / HTTP
-		// service — exactly what a developer starts from.
+		// service - exactly what a developer starts from.
 		return true
 	default:
 		return false
@@ -258,7 +258,7 @@ func isTestSymbol(n *domain.Node) bool {
 	return false
 }
 
-// isGoInitFunc reports whether n is a Go init function — name "init",
+// isGoInitFunc reports whether n is a Go init function - name "init",
 // kind function (not method/etc.), in a.go file. The Go runtime calls
 // every package-scoped init at startup; they are framework magic, not
 // agent-useful entry points. cobra-based CLIs especially

@@ -6,7 +6,7 @@ import (
 	"time"
 )
 
-// + verification — empty hot_zones and
+// + verification - empty hot_zones and
 // entry_points pages render a friendly explanation, not the old "no
 // files changed" / "no symbols qualify" lines that read as "feature
 // broken" on a fresh repo. The hot-zone page now picks one of three

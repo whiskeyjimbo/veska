@@ -3,12 +3,12 @@
 // side-effecting ports (storage, parsers, embedding providers) are wired in
 // from the infrastructure layer via constructors defined throughout this
 // package.
-// Layout — flat core, sub-packages for satellites: the promotion pipeline
+// Layout - flat core, sub-packages for satellites: the promotion pipeline
 // core lives as loose files directly in this package (ingester, promoter,
 // coldscan, resync, scan_tracker, findingemitter, promotion store, errors)
 // because those pieces form one cohesive ingestion→promotion flow and share
-// the same private seams — the saveFunc/promoteFunc function types and the
-// RepoRecord value — which would otherwise force exported plumbing or an
+// the same private seams - the saveFunc/promoteFunc function types and the
+// RepoRecord value - which would otherwise force exported plumbing or an
 // import cycle if split across sub-packages. Self-contained satellite
 // concerns that do NOT touch those shared seams (search, blastradius,
 // autolink, contextpack, review, embedder, revalidate, dependencies,

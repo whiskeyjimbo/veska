@@ -205,7 +205,7 @@ func TestOpen_Idempotent(t *testing.T) {
 	if err := raw.QueryRow(`SELECT COUNT(*) FROM schema_migrations`).Scan(&cnt); err != nil {
 		t.Fatalf("count schema_migrations: %v", err)
 	}
-	// Count should equal the number of migrations in the registry — each applied exactly once.
+	// Count should equal the number of migrations in the registry - each applied exactly once.
 	wantMigrations := sqlite.MigrationCount()
 	if cnt != wantMigrations {
 		t.Errorf("expected exactly %d migration row(s), got %d", wantMigrations, cnt)
@@ -406,13 +406,13 @@ func TestMigration0003_TasksActivePartialIndex(t *testing.T) {
 		t.Fatalf("insert repo: %v", err)
 	}
 
-	// Insert first active task — must succeed.
+	// Insert first active task - must succeed.
 	if _, err := db.Exec(`INSERT INTO tasks (task_id, repo_id, title, active, created_at) VALUES (?, ?, ?, ?, ?)`,
 		"task-1", "repo-1", "First Task", 1, now); err != nil {
 		t.Fatalf("insert first active task: %v", err)
 	}
 
-	// Insert second active task for same repo — must fail (partial unique index).
+	// Insert second active task for same repo - must fail (partial unique index).
 	_, err = db.Exec(`INSERT INTO tasks (task_id, repo_id, title, active, created_at) VALUES (?, ?, ?, ?, ?)`,
 		"task-2", "repo-1", "Second Task", 1, now)
 	if err == nil {
@@ -420,7 +420,7 @@ func TestMigration0003_TasksActivePartialIndex(t *testing.T) {
 		return
 	}
 
-	// Insert inactive task for same repo — must succeed.
+	// Insert inactive task for same repo - must succeed.
 	if _, err := db.Exec(`INSERT INTO tasks (task_id, repo_id, title, active, created_at) VALUES (?, ?, ?, ?, ?)`,
 		"task-3", "repo-1", "Inactive Task", 0, now); err != nil {
 		t.Fatalf("insert inactive task should succeed: %v", err)
@@ -458,7 +458,7 @@ func TestMigration0003_FindingsBranchPK(t *testing.T) {
 		t.Fatalf("insert finding on branch-a: %v", err)
 	}
 
-	// Same finding_id closed on branch B — must succeed (different PK).
+	// Same finding_id closed on branch B - must succeed (different PK).
 	if _, err := db.Exec(`INSERT INTO findings
 		(finding_id, branch, repo_id, severity, source_layer, rule, message, state, created_at, actor_id, actor_kind)
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,

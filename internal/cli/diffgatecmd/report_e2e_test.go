@@ -61,7 +61,7 @@ func notesContain(notes []string, sub string) bool {
 }
 
 // LOAD-BEARING (AC2/DoD): the report ALWAYS exits 0, even degraded. An un-indexed
-// repo — the most common early-adoption state — must yield a noted report with a
+// repo - the most common early-adoption state - must yield a noted report with a
 // nil error (the gates fail closed here; the advisory report must not). This is
 // the divergence that makes "drop it in CI, it never breaks the build" true.
 func TestRunReport_E2E_NotIndexed_ExitsZeroWithNote(t *testing.T) {
@@ -78,7 +78,7 @@ func TestRunReport_E2E_NotIndexed_ExitsZeroWithNote(t *testing.T) {
 	}
 }
 
-// DoD: each impact section is populated from a fixture diff — and the report
+// DoD: each impact section is populated from a fixture diff - and the report
 // exits 0 (nil err) even though it carries content (untested symbols present),
 // proving content never gates. Base: a.go A->B, b.go B. Candidate modifies b.go
 // (so it has base nodes -> a real blast seed) and adds an untested prod symbol.
@@ -99,7 +99,7 @@ func TestRunReport_E2E_PopulatesSections(t *testing.T) {
 		t.Fatalf("advisory report must exit 0 with content present; got err=%v", err)
 	}
 	if len(r.ChangedFiles) == 0 {
-		t.Fatalf("changed_files empty — path/diff wiring broken; got %+v", r)
+		t.Fatalf("changed_files empty - path/diff wiring broken; got %+v", r)
 	}
 	if r.BlastRadius.NodeCount == 0 || len(r.BlastRadius.Entries) == 0 {
 		t.Fatalf("blast_radius section empty; got %+v", r.BlastRadius)
@@ -108,7 +108,7 @@ func TestRunReport_E2E_PopulatesSections(t *testing.T) {
 	for _, e := range r.BlastRadius.Entries {
 		switch e.Kind {
 		case "chunk", "package", "module", "file":
-			t.Errorf("blast entry has noise kind %q (%s) — must be filtered", e.Kind, e.SymbolPath)
+			t.Errorf("blast entry has noise kind %q (%s) - must be filtered", e.Kind, e.SymbolPath)
 		}
 	}
 	if len(r.ChangeRisk) == 0 || r.ChangeRisk[0].Score == 0 {
@@ -120,7 +120,7 @@ func TestRunReport_E2E_PopulatesSections(t *testing.T) {
 }
 
 // DoD: open findings on touched files are surfaced. Seeds a file-anchored open
-// finding on b.go, then changes b.go — the report's open_findings must list it,
+// finding on b.go, then changes b.go - the report's open_findings must list it,
 // and still exit 0.
 func TestRunReport_E2E_OpenFindings_Populated(t *testing.T) {
 	home := t.TempDir()

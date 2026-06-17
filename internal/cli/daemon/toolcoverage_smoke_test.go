@@ -2,12 +2,12 @@ package daemon
 
 // Harness substrate smoke test.
 // Every TestToolCoverage leaf currently t.Skips, so the harness's two core APIs
-// Call and ResolveID — would otherwise never execute. This test exercises both
+// Call and ResolveID - would otherwise never execute. This test exercises both
 // against the real indexed fixture so the 40 downstream beads build on a proven
 // substrate, and it validates the EXACT template the TestToolCoverage doc gives
 // them (eng_get_node with a ResolveID'd node_id). It is a harness self-test, not
 // a per-tool coverage assertion: it does not assert tool semantics against the
-// manifest — only that the substrate dispatches a real handler against real data.
+// manifest - only that the substrate dispatches a real handler against real data.
 
 import (
 	"testing"

@@ -5,7 +5,7 @@
 // whether folding signature and/or a code snippet into the embed text
 // improves embedding quality.
 // The corpus is built from node-shaped projection inputs run through
-// domain.EmbedText — the SAME projection production FetchPending uses
+// domain.EmbedText - the SAME projection production FetchPending uses
 // so a variant change is exactly what the recall delta measures.
 // Build-tag-gated (`eval`) like the sibling harnesses; the make target is
 // `make eval-recall-projection`. The test SKIPS with a clear message when
@@ -74,7 +74,7 @@ func TestRecallProjectionSweep(t *testing.T) {
 
 	if spec := os.Getenv("RECALL_PROJECTION_CORPUS"); strings.HasPrefix(spec, "real:") {
 		// Faithful corpus: real source bodies (snippet) and doc-comment
-		// queries written independently of them — no synthSnippet circularity.
+		// queries written independently of them - no synthSnippet circularity.
 		path := strings.TrimPrefix(spec, "real:")
 		rc, err := BuildRealCorpus(path)
 		if err != nil {
@@ -105,7 +105,7 @@ func TestRecallProjectionSweep(t *testing.T) {
 	probeCtx, probeCancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer probeCancel()
 	if err := probeOllama(probeCtx, ollamaURL); err != nil {
-		t.Skipf("recallprojection: Ollama not reachable at %s (%v) — skipping projection sweep",
+		t.Skipf("recallprojection: Ollama not reachable at %s (%v) - skipping projection sweep",
 			ollamaURL, err)
 		return
 	}

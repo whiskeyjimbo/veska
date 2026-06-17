@@ -136,7 +136,7 @@ func (p *Poller) runKind(ctx context.Context, kind WorkKind, handler WorkHandler
 		case <-timer.C:
 		}
 
-		// Skip the tick if a cold scan is in flight — the post
+		// Skip the tick if a cold scan is in flight - the post
 		// promotion queue's work routinely takes the Write lock
 		// for tens-to-hundreds of ms per processOne, and contending
 		// with a serial cold-scan promote turns a 1-minute scan into
@@ -201,7 +201,7 @@ func (p *Poller) processOne(ctx context.Context, kind WorkKind, handler WorkHand
 		return err
 	}
 
-	// Step 4b: failure — re-queue or fail permanently.
+	// Step 4b: failure - re-queue or fail permanently.
 	if row.Attempts >= 3 {
 		_, err = p.writeDB.ExecContext(ctx,
 			`UPDATE post_promotion_queue SET state='failed', error=? WHERE seq=?`,

@@ -91,7 +91,7 @@ func ephemeralDisplayName(canonicalURL, repoID string) string {
 // prettifyEphemeralPaths rewrites file_path on every hit whose path lives
 // under the ephemeral cache repo dir, replacing the cache prefix with
 // "<displayName>/" so the user sees `pflag/flag.go:194-206` rather than the
-// unscannable 64-char sha. JSON output should skip this — callers gate on
+// unscannable 64-char sha. JSON output should skip this - callers gate on
 // jsonOut.
 func prettifyEphemeralPaths(env *SearchEnvelope, cacheRepoDir, displayName string) {
 	if env == nil || cacheRepoDir == "" || displayName == "" {
@@ -135,7 +135,7 @@ func RenderSearchEnvelope(w io.Writer, env SearchEnvelope, jsonOut bool) error {
 // command never exits without any text feedback.
 func renderEmptyResults(w io.Writer, env SearchEnvelope) {
 	if pending, ok := pendingEmbedsHint(); ok && pending > 0 {
-		fmt.Fprintf(w, "no results (%d embeds pending — try again shortly)\n", pending)
+		fmt.Fprintf(w, "no results (%d embeds pending - try again shortly)\n", pending)
 	} else {
 		fmt.Fprintln(w, "no results")
 	}
@@ -174,12 +174,12 @@ func renderResultTable(w io.Writer, env SearchEnvelope) {
 	for _, r := range env.Results {
 		renderResultRow(w, r, top, multiRepo)
 	}
-	// tiers are relative to this query's top hit — a query with
+	// tiers are relative to this query's top hit - a query with
 	// no strong absolute match still gets a "top" label, which reads as
 	// confidence the data can't back up. Below an absolute floor, append a
 	// one-liner so the user knows the labels are relative and recall is weak.
 	if top > 0 && top < weakTopAbsolute {
-		fmt.Fprintf(w, "note: top match score is low (%.4f) — labels are relative to this query; recall may be weak. Try refining the query.\n", top)
+		fmt.Fprintf(w, "note: top match score is low (%.4f) - labels are relative to this query; recall may be weak. Try refining the query.\n", top)
 	}
 	for _, d := range env.DegradedReasons {
 		fmt.Fprintf(w, "[degraded: %s%s]\n", d, degradedReasonHint(d))
@@ -220,7 +220,7 @@ func renderResultRow(w io.Writer, r SearchHitView, top float32, multiRepo bool) 
 //	rank-1 in both lists → 2 * 1/(60+1) = 0.03279
 //
 // A top below ~0.018 means even the best hit only made it into ONE retriever's
-// list — the cross-corroboration signal is missing and recall is weak. The
+// list - the cross-corroboration signal is missing and recall is weak. The
 // floor sits a hair above 0.0164 so a single-list rank-1 (the common small
 // corpus case) trips the hint and prompts the user to refine.
 const weakTopAbsolute = 0.018
@@ -233,13 +233,13 @@ func degradedReasonHint(code string) string {
 	switch code {
 	case "embeddings_pending":
 		if pending, ok := pendingEmbedsHint(); ok && pending > 0 {
-			return fmt.Sprintf(" — ~%d embeds still queued; re-run shortly for fuller recall", pending)
+			return fmt.Sprintf(" - ~%d embeds still queued; re-run shortly for fuller recall", pending)
 		}
-		return " — embedder worker is still draining; re-run shortly for fuller recall"
+		return " - embedder worker is still draining; re-run shortly for fuller recall"
 	case "low_quality_static_embedder":
-		return " — install the model2vec weights for better recall: `veska install model2vec`"
+		return " - install the model2vec weights for better recall: `veska install model2vec`"
 	case "no_post_registration_commits":
-		return " — only populates after commits land while the repo is registered with veska"
+		return " - only populates after commits land while the repo is registered with veska"
 	default:
 		return ""
 	}

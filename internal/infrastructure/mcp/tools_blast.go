@@ -373,13 +373,13 @@ func diffBlastError(ctx context.Context, root, refA, refB string, err error) *RP
 	var msg string
 	switch {
 	case !aOK && !bOK:
-		msg = fmt.Sprintf("neither ref_a=%q nor ref_b=%q resolves in this repository — check for typos and verify with `git rev-parse <ref>`", refA, refB)
+		msg = fmt.Sprintf("neither ref_a=%q nor ref_b=%q resolves in this repository - check for typos and verify with `git rev-parse <ref>`", refA, refB)
 	case !aOK:
-		msg = fmt.Sprintf("ref_a=%q does not resolve in this repository — verify with `git rev-parse %s`", refA, refA)
+		msg = fmt.Sprintf("ref_a=%q does not resolve in this repository - verify with `git rev-parse %s`", refA, refA)
 	case !bOK:
-		msg = fmt.Sprintf("ref_b=%q does not resolve in this repository — verify with `git rev-parse %s`", refB, refB)
+		msg = fmt.Sprintf("ref_b=%q does not resolve in this repository - verify with `git rev-parse %s`", refB, refB)
 	default:
-		msg = fmt.Sprintf("git diff %s..%s failed despite both refs resolving — try `git diff %s %s` in the repo for details", refA, refB, refA, refB)
+		msg = fmt.Sprintf("git diff %s..%s failed despite both refs resolving - try `git diff %s %s` in the repo for details", refA, refB, refA, refB)
 	}
 	return &RPCError{Code: CodeInvalidParams, Message: msg}
 }

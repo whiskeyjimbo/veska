@@ -7,7 +7,7 @@
 // tiers are derived from it:
 //
 //	neardup: an original and a mechanical edit of it (rename, comment,
-//	  reformat, statement reorder) — semantically identical code.
+//	  reformat, statement reorder) - semantically identical code.
 //	related: two DIFFERENT real functions in the same family/domain
 //	  auto-link's "merely related" band.
 //	unrelated: two functions from different families.
@@ -19,7 +19,7 @@
 package neardup
 
 // base is one source function plus its near-duplicate variants. original and
-// every variant are byte-distinct (so content_hash differs — these are
+// every variant are byte-distinct (so content_hash differs - these are
 // NEAR, not exact, clones) but semantically the same code.
 type base struct {
 	id       string

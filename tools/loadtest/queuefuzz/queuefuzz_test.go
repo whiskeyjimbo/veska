@@ -50,7 +50,7 @@ func TestQueueFuzz(t *testing.T) {
 	t.Cleanup(cancel)
 
 	// SQLite pools with full migrations (Promoter requires every table it
-	// touches — nodes, edges, post_promotion_queue, node_embedding_refs,
+	// touches - nodes, edges, post_promotion_queue, node_embedding_refs,
 	// node_fts_words, node_fts_trigrams, repos, findings).
 	tmpDir := t.TempDir()
 	dbPath := tmpDir + "/veska.db"
@@ -101,7 +101,7 @@ func TestQueueFuzz(t *testing.T) {
 
 	elapsed := time.Since(start)
 
-	// Tally per-kind outcomes — done / failed / stuck (pending OR in_progress).
+	// Tally per-kind outcomes - done / failed / stuck (pending OR in_progress).
 	counts := tallyCounts(t, pools.ReadDB)
 	expectedPerKind := promotions // 1 file per promotion → 1 row per kind
 

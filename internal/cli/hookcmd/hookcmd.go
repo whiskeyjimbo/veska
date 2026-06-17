@@ -33,7 +33,7 @@ import (
 func RunPostCommit() error {
 	gitRoot, err := gitRevParseTopLevel()
 	if err != nil {
-		// Not in a git repo or git unavailable — silently succeed.
+		// Not in a git repo or git unavailable - silently succeed.
 		debugf("hook-runner: git rev-parse failed: %v\n", err)
 		return nil
 	}

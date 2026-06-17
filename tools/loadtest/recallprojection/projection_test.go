@@ -77,7 +77,7 @@ func TestVariantSelectorProducesDistinctText(t *testing.T) {
 		t.Fatalf("variants did not all produce distinct text: %v", seen)
 	}
 
-	// Baseline must be a prefix of every enrichment variant — enrichment
+	// Baseline must be a prefix of every enrichment variant - enrichment
 	// only appends, it never rewrites the production projection.
 	for name, text := range map[string]string{"+signature": sig, "+snippet": snip, "+both": both} {
 		if !strings.HasPrefix(text, base) {

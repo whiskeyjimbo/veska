@@ -25,7 +25,7 @@ type apiVerdict struct {
 }
 
 // runAPIRemoval seeds base with x.go=baseSrc, modifies it to candSrc, and runs
-// the api gate — the shared harness for the removal/shape e2e cases.
+// the api gate - the shared harness for the removal/shape e2e cases.
 func runAPIRemoval(t *testing.T, baseSrc, candSrc string) (apiVerdict, error) {
 	t.Helper()
 	home := t.TempDir()
@@ -138,7 +138,7 @@ func TestRunAPIBreak_E2E_ExportedBodyOnly_Passes(t *testing.T) {
 // Added-exported-function PASS: adding a brand-new exported function (nothing
 // else changes) is NOT a breaking change. Under base-ref pinning the added file
 // is deleted from the base clone, so the new node is created fresh on the
-// after-clone with no prior signature — the drift query must NOT treat a
+// after-clone with no prior signature - the drift query must NOT treat a
 // null/empty prev_signature as drift, or every added export would false-FAIL.
 func TestRunAPIBreak_E2E_AddedExportedFunc_Passes(t *testing.T) {
 	home := t.TempDir()
@@ -160,7 +160,7 @@ func TestRunAPIBreak_E2E_AddedExportedFunc_Passes(t *testing.T) {
 	}
 }
 
-// INDEX-AHEAD HARDENING — the former false-PASS, now FAILing.
+// INDEX-AHEAD HARDENING - the former false-PASS, now FAILing.
 // The index is seeded AHEAD at the candidate's changed content. Before pinning,
 // each node's prev_signature equalled its signature after the re-promote (the
 // clone-of-the-live-index already held the candidate sig), so contract-drift
@@ -219,7 +219,7 @@ func TestRunAPIBreak_E2E_RemovedExportedFunc_Fails(t *testing.T) {
 	}
 }
 
-// Rename: renaming an EXPORTED function FAILs — the OLD name is
+// Rename: renaming an EXPORTED function FAILs - the OLD name is
 // gone (breaking for importers). Removal/rename collapse into one category.
 func TestRunAPIBreak_E2E_RenamedExportedFunc_Fails(t *testing.T) {
 	home := t.TempDir()
@@ -266,7 +266,7 @@ func TestRunAPIBreak_E2E_UnexportInPlace_Fails(t *testing.T) {
 }
 
 // Unexporting-as-removal negative: removing an UNEXPORTED function is not a
-// public-API break — it never entered the base-exported set, so PASS.
+// public-API break - it never entered the base-exported set, so PASS.
 func TestRunAPIBreak_E2E_RemovedUnexportedFunc_Passes(t *testing.T) {
 	home := t.TempDir()
 	const baseSrc = "package p\n\nfunc Foo() int { return 1 }\nfunc helper() int { return 2 }\n"
@@ -357,7 +357,7 @@ func TestRunAPIBreak_E2E_RemovedExportedVar_Fails(t *testing.T) {
 // A same-name type SHAPE change (struct -> interface) is NOT a removal: the
 // exported NAME persists (, kind dropped from identity). It must
 // PASS the removal detector. (Type shape drift is a separate, currently
-// undetected concern — neither removal nor signature-drift covers it.)
+// undetected concern - neither removal nor signature-drift covers it.)
 func TestRunAPIBreak_E2E_TypeShapeChange_NotRemoval_Passes(t *testing.T) {
 	v, err := runAPIRemoval(t,
 		"package p\n\ntype Config struct{ A int }\n\nfunc Keep() {}\n",
@@ -395,7 +395,7 @@ func TestRunAPIBreak_E2E_IntraPackageMove_Passes(t *testing.T) {
 }
 
 // INDEX-AHEAD removal lock ( +.12): the index is seeded AHEAD
-// it already reflects Bar's removal — while base-ref still has Bar. Before
+// it already reflects Bar's removal - while base-ref still has Bar. Before
 // pinning, the base-exported leg (read from a clone of the drifted index) would
 // also lack Bar, so no removal is detected → false PASS. With buildPinnedEphemeral
 // the base clone re-promotes base-ref's x.go (Bar present), so the removal is

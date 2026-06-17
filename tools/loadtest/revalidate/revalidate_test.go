@@ -12,7 +12,7 @@
 //	30% of nodes carry an open finding with a STALE anchor_content_hash
 //	  (half rule='dead-code' on head nodes, half rule='contract-drift' on
 //	  nodes whose prev_signature != signature). All 3000 findings should
-//	  resolve to REFRESH on the first sweep — the explicit count check is
+//	  resolve to REFRESH on the first sweep - the explicit count check is
 //	  part of DoD #7.
 //
 // Build-tag-gated so plain CI runs (`go test./.`) skip this end-to-end
@@ -227,7 +227,7 @@ func seedRepo(t *testing.T, db *sql.DB) {
 // seedNodesAndEdges inserts spec.files * spec.nodesPerFile node rows plus
 // one outbound edge per src node. Every edge dst lives in the file's
 // "tail" slice [tailStart, nodesPerFile), so dead-code anchor nodes in
-// [0, deadPerFile) always have zero inbound edges — the dead-code
+// [0, deadPerFile) always have zero inbound edges - the dead-code
 // dispatch path therefore takes the REFRESH branch.
 // Nodes in [deadPerFile, deadPerFile+driftPerFile) receive distinct
 // (prev_signature, signature) values so the contract-drift dispatch path

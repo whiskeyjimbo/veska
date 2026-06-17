@@ -9,8 +9,8 @@ import (
 // The findings command tree's logic lives in internal/cli/findingscmd; the
 // constructors below are Cobra glue whose RunE bodies are thin delegating
 // calls into that package. The cwd→repo resolver
-// (autoResolveRepo) stays in cmd/veska — it is shared across the findings and
-// deps families — and is injected through the ResolveRepo seam.
+// (autoResolveRepo) stays in cmd/veska - it is shared across the findings and
+// deps families - and is injected through the ResolveRepo seam.
 
 // findingsCmd is the parent for `veska findings …`, wrapping the
 // eng_list_findings / eng_get_finding / eng_close_finding / eng_reopen_finding

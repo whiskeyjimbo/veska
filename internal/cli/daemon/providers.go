@@ -65,7 +65,7 @@ func (rr *repoRegistrar) AddRepo(ctx context.Context, rootPath string) (string, 
 	// rapid edit between the cold scan finishing and the next loop iteration
 	// is not lost. The watcher is idempotent (already-watched repos are a
 	// no-op) so a redundant call from a future code path is safe. A failure
-	// here is logged but not fatal — the cold scan still runs and live
+	// here is logged but not fatal - the cold scan still runs and live
 	// watching can be recovered on the next daemon restart.
 	if rr.watchAdd != nil {
 		if werr := rr.watchAdd(repoID, rootPath); werr != nil {
@@ -79,7 +79,7 @@ func (rr *repoRegistrar) AddRepo(ctx context.Context, rootPath string) (string, 
 	}
 
 	// skip the cold-scan dispatch ONLY when the existing row
-	// already has a last_promoted_sha — i.e. a previous scan ran to
+	// already has a last_promoted_sha - i.e. a previous scan ran to
 	// completion. A row inserted via the direct-write fallback (CLI's
 	// no-daemon path) has no SHA and was never indexed, but pre-fix this
 	// branch happily skipped the rescan because the row "existed". The
@@ -92,13 +92,13 @@ func (rr *repoRegistrar) AddRepo(ctx context.Context, rootPath string) (string, 
 		if lerr == nil && rec.RepoID != "" && rec.LastPromotedSHA != "" {
 			return repoID, existed, nil
 		}
-		// Fall through to cold-scan dispatch below — either the lookup
+		// Fall through to cold-scan dispatch below - either the lookup
 		// failed (treat as needs-scan, idempotent) or the SHA is empty.
 	}
 
 	// daemonCtx outlives any single request ctx, so the goroutine survives
 	// the caller returning. Fall back to context.Background if Start has
-	// not yet wired one (defensive — production wiring always sets it).
+	// not yet wired one (defensive - production wiring always sets it).
 	scanCtx := rr.daemonCtx
 	if scanCtx == nil {
 		scanCtx = context.Background()
@@ -183,7 +183,7 @@ func (gitBranchReader) CurrentBranch(rootPath string) (string, error) {
 
 // activeBranchStore adapts repo.Get / repo.SetActiveBranch to
 // application.ActiveBranchStore. Reads go through the read pool; the write
-// goes through the write pool — repos.active_branch lives in the same row.
+// goes through the write pool - repos.active_branch lives in the same row.
 type activeBranchStore struct {
 	read  *sql.DB
 	write *sql.DB
@@ -236,7 +236,7 @@ func lookupAppRecord(db *sql.DB) func(ctx context.Context, repoID string) (appli
 // callers that previously relied on the fallback keep working.
 // scans is the optional in-flight cold-scan registry. When set,
 // Status surfaces a 'scans_in_flight' key so programmatic consumers can see
-// when a cold scan is running without tailing the log. Nil-safe — a zero
+// when a cold scan is running without tailing the log. Nil-safe - a zero
 // scans field surfaces an empty list.
 type statusProvider struct {
 	db    *sql.DB
@@ -262,7 +262,7 @@ func (sp *statusProvider) Status(ctx context.Context) (map[string]any, error) {
 		return nil, fmt.Errorf("query repo count: %w", err)
 	}
 
-	// Count only pending refs that still have a backing node — the real
+	// Count only pending refs that still have a backing node - the real
 	// embed backlog the worker will drain. The EXISTS guard mirrors the
 	// embedder's FetchPending JOIN (and sqlite.EmbeddingRefsRepo.CountPending):
 	// orphaned refs left behind by node deletion / re-promotion churn are
@@ -289,7 +289,7 @@ func (sp *statusProvider) Status(ctx context.Context) (map[string]any, error) {
 	// keep the rollup status aligned with the eng_search_semantic
 	// 'embeddings_pending' signal. Returning {status: "ok", pending_embeds:
 	// 4699} alongside search responses that already flag 'embeddings_pending'
-	// is contradictory — the same backlog drove both, so both should reflect it.
+	// is contradictory - the same backlog drove both, so both should reflect it.
 	reasons := []string{}
 	rollup := "ok"
 	if pendingEmbeds > 0 {
@@ -338,7 +338,7 @@ func (cp *configProvider) Config(_ context.Context) (map[string]any, error) {
 		"ollama_url":     cp.cfg.OllamaURL,
 		"embed_model":    embedModel,
 		// config_schema_version is the version of THIS config payload's
-		// shape — distinct from eng_get_status's schema_version, which is
+		// shape - distinct from eng_get_status's schema_version, which is
 		// the SQLite migration version of the data store.
 		"config_schema_version": 1,
 		"degraded_reasons":      []string{},

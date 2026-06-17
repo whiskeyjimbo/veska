@@ -40,7 +40,7 @@ func (b *sqlBench) Open(_ context.Context, path string) error {
 	// fine for the relative comparison we care about.
 	db.SetMaxOpenConns(8)
 	// Sanity check: pragmas applied. Misapplied pragmas would invalidate
-	// the comparison — most obviously, a driver that quietly stays on
+	// the comparison - most obviously, a driver that quietly stays on
 	// rollback-journal mode would show 100× faster write-tx latency
 	// because every commit skips an fsync that the others pay.
 	var fk int

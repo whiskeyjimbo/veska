@@ -88,7 +88,7 @@ func CheckDir(dir string) ([]Violation, error) {
 
 	for _, pkg := range pkgs {
 		if len(pkg.Errors) > 0 {
-			// Surface load errors but don't abort — partial results are still useful.
+			// Surface load errors but don't abort - partial results are still useful.
 			for _, e := range pkg.Errors {
 				fmt.Printf("warning: package %s: %v\n", pkg.PkgPath, e)
 			}

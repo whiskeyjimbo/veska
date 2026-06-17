@@ -102,7 +102,7 @@ const _hidden = "skip me"
 
 // TestParseFile_CobraCommandTree guards: AddCommand(.)
 // wire-up becomes parent→child CONTAINS edges between command nodes, and
-// the Use: word — including the "verb [args]" form — names each command.
+// the Use: word - including the "verb [args]" form - names each command.
 func TestParseFile_CobraCommandTree(t *testing.T) {
 	src := []byte(`package main
 
@@ -205,7 +205,7 @@ func register(r chi.Router) {
 
 // TestParseFile_RoutePrecisionGate guards: selector calls that
 // look like routes but fail the gate must NOT promote to KindRoute nodes.
-// The title-case case is the key one — chi's verbs (Get/Post) collide with
+// The title-case case is the key one - chi's verbs (Get/Post) collide with
 // common method names, so a gin/echo-only file's client.Post(.) must stay
 // inert (only chi enables title-case verbs).
 func TestParseFile_RoutePrecisionGate(t *testing.T) {
@@ -398,7 +398,7 @@ func hello() string {
 // CALLS edge must record the 1-indexed line of the call_expression on
 // edge.SourceLine. Without this, renderers fall back to the caller
 // node's declaration line and a 30-line function with three calls
-// reports all three at the same line — exactly the junior-journey
+// reports all three at the same line - exactly the junior-journey
 // surprise on the cobra fixture.
 func TestParseFile_CallsEdgeCarriesSourceLine(t *testing.T) {
 	src := []byte(`package foo
@@ -477,7 +477,7 @@ func AlsoGood() int { return 1 }
 
 // TestParseFile_ImportsAndQualifiedCalls pins: the parser must
 // surface the file's import map and capture package-qualified calls
-// (cmd.Execute) as UnresolvedCalls carrying a PkgQualifier — the foundation
+// (cmd.Execute) as UnresolvedCalls carrying a PkgQualifier - the foundation
 // for cross-package CALLS resolution at promotion.
 func TestParseFile_ImportsAndQualifiedCalls(t *testing.T) {
 	src := []byte(`package main
@@ -602,7 +602,7 @@ func (p *Promoter) Promote() string {
 	}
 
 	// Find Promote -> Staging.Snapshot edge in the resolved edges (not in
-	// UnresolvedCalls — same-file/same-package resolves directly).
+	// UnresolvedCalls - same-file/same-package resolves directly).
 	var promoteID, snapshotID string
 	for _, n := range result.Nodes {
 		switch n.Name {
@@ -831,7 +831,7 @@ func (p *Promoter) Promote() {
 // functions in top-level var initialisers contribute CALLS edges)
 // extended by (attribution is the SURROUNDING VAR, not the
 // package node, whenever the var has a resolvable name). Legacy
-// behaviour attributed both calls to the package node — that hid the
+// behaviour attributed both calls to the package node - that hid the
 // caller's identity for every cobra-app initialiser. New behaviour:
 // `root = func{ serveRoot }` produces root → serveRoot, and
 // `chk = func{ validate }` produces chk → validate. The package
@@ -895,7 +895,7 @@ var (
 // TestParseFile_ChainedSelector_UnknownOperandStillFallsThrough guards
 // the negative case: a selector whose operand is NOT a tracked local
 // variable (e.g. a function parameter, a struct field, an unrecognised
-// expression) must keep the prior behaviour — treated as a package
+// expression) must keep the prior behaviour - treated as a package
 // qualifier with IsMethodCall=false. Otherwise we'd wrongly bind real
 // pkg.Foo calls to method-name lookups.
 func TestParseFile_ChainedSelector_UnknownOperandStillFallsThrough(t *testing.T) {
@@ -993,7 +993,7 @@ func brokenFunc( {
 }
 
 // TestParseFile_TreeSitterFalsePositive_GoParserAccepts pins:
-// the tree-sitter Go grammar (smacker fork) lags behind Go's spec — it
+// the tree-sitter Go grammar (smacker fork) lags behind Go's spec - it
 // flags valid constructs like `new("string-literal")` (Go 1.26+ new-as
 // converter) as syntax errors. ParseFile must cross-check with go/parser
 // and suppress the spurious parse-failure when go/parser accepts the file.
@@ -1017,7 +1017,7 @@ func use() *string {
 		t.Errorf("expected zero failures (go/parser accepts), got %d: %+v",
 			len(result.Failures), result.Failures)
 	}
-	// Siblings must still be extracted — the per-child error-skip should
+	// Siblings must still be extracted - the per-child error-skip should
 	// not have dropped `use` either.
 	if findNodeByName(result.Nodes, "use") == nil {
 		t.Errorf("clean func 'use' was discarded; nodes: %v", nodeNames(result.Nodes))
@@ -1107,7 +1107,7 @@ func hasContainsEdge(edges []*domain.Edge, src, tgt domain.NodeID) bool {
 	return false
 }
 
-// findCommand returns the KindCommand node with the given name, or nil — a
+// findCommand returns the KindCommand node with the given name, or nil - a
 // kind-aware finder so a struct type (StopCmd) doesn't shadow its command.
 func findCommand(nodes []*domain.Node, name string) *domain.Node {
 	for _, n := range nodes {
@@ -1295,7 +1295,7 @@ func DoIt(name string) {
 // `var helloCmd = &cobra.Command{ RunE: func{ Foo } }`) must
 // attribute to the surrounding var node (helloCmd), not the package
 // node. Before the fix, cross-repo blast on Foo named "package cmd"
-// as the caller for every cobra app in the workspace — a known false
+// as the caller for every cobra app in the workspace - a known false
 // signal documented with the "package-grain src" disclaimer that
 // shipped with the prior workaround.
 func TestParseFile_AnonFuncInVarInitAttributesToSurroundingVar(t *testing.T) {
@@ -1417,7 +1417,7 @@ func addAction() {}
 // `var addCmd = &cli.Command{Name:.}` and linked into the App by
 // identifier (`Commands: *cli.Command{addCmd}`). Both the App and the
 // referenced command must promote to KindCommand, with an app→addCmd
-// CONTAINS edge — even though addCmd is declared after the App.
+// CONTAINS edge - even though addCmd is declared after the App.
 func TestParseFile_UrfaveByReferenceSubcommands(t *testing.T) {
 	src := []byte(`package main
 
@@ -1466,7 +1466,7 @@ var addCmd = &cli.Command{Name: "add"}
 // is promoted to KindCommand it must STILL be the caller of its own
 // RunE-closure calls, not the package node. The promotion removes the
 // KindVariable entry the anon-call walker keyed on, so the command node
-// is re-registered under its Go var name — this test pins that.
+// is re-registered under its Go var name - this test pins that.
 func TestParseFile_CobraRunEAttributesToCommand(t *testing.T) {
 	src := []byte(`package cmd
 
@@ -1584,7 +1584,7 @@ func TestParseFile_KongStructTagCommands(t *testing.T) {
 	if dryRun == nil || !hasContainsEdge(result.Edges, server.ID, dryRun.ID) {
 		t.Errorf("expected command 'dry-run' contained by server; got %v", nodeNames(result.Nodes))
 	}
-	// Top-level commands (CLI's fields) must have no parent COMMAND — the
+	// Top-level commands (CLI's fields) must have no parent COMMAND - the
 	// package node still CONTAINS them, but no other command does.
 	cmds := []*domain.Node{server, remove, start, stop}
 	for _, parent := range cmds {
@@ -1598,7 +1598,7 @@ func TestParseFile_KongStructTagCommands(t *testing.T) {
 // when a test (or any same-package caller) does `g:= New(.)` followed
 // by `g.Render`, the Render call must bind to Greeting.Render in the
 // same file. Before this fix the parser emitted UnresolvedCall with
-// PkgQualifier="g" — a bare local-var name that couldn't possibly
+// PkgQualifier="g" - a bare local-var name that couldn't possibly
 // resolve at promotion. Junior-journey symptom: `veska blast Render`
 // on greetlib showed zero in-repo callers even though greet_test.go
 // literally calls g.Render twice.
@@ -1626,7 +1626,7 @@ func TestRender() {
 
 	// The TestRender → Greeting.Render edge must materialise as a
 	// resolved CALLS edge (both endpoints live in this file), not an
-	// UnresolvedCall — there's no cross-package indirection here.
+	// UnresolvedCall - there's no cross-package indirection here.
 	var hasEdge bool
 	var renderNodeID, testRenderNodeID domain.NodeID
 	for _, n := range result.Nodes {
@@ -1704,7 +1704,7 @@ func TestRenderPtr() {
 // against the pkg's import path. Before this fix collectLocalVarOrigins
 // only walked function bodies and only recognised `v:= pkg.F(.)`, so
 // package-scoped vars holding a composite literal became
-// PkgQualifier="rootCmd" — an unresolvable bareword that never produced
+// PkgQualifier="rootCmd" - an unresolvable bareword that never produced
 // a cross-repo stub.
 func TestParseFile_PackageVarCompositeLiteralOrigin(t *testing.T) {
 	src := []byte(`package cmd
@@ -1742,7 +1742,7 @@ func init() {
 // TestParseFile_PackageVarConstructorOrigin guards the package-scope
 // variant of the existing function-scope rule: `var x = pkg.F(.)` at
 // file scope should be treated the same as `x:= pkg.F(.)` inside a
-// function body — its method calls must classify as method-call
+// function body - its method calls must classify as method-call
 // UnresolvedCalls against pkg's import path.
 func TestParseFile_PackageVarConstructorOrigin(t *testing.T) {
 	src := []byte(`package app

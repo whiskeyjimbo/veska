@@ -18,7 +18,7 @@ type modelFinding struct {
 
 // modelResponse is the wire shape of a review model's JSON response: an object
 // with a "findings" array. An empty (or absent) array means the model found
-// nothing — that is success, not an error.
+// nothing - that is success, not an error.
 type modelResponse struct {
 	Findings []modelFinding `json:"findings"`
 }
@@ -27,10 +27,10 @@ type modelResponse struct {
 // with kind.
 // The response contract: a JSON object with a "findings" array; each finding
 // carries severity, title and message. Surrounding prose or whitespace is
-// tolerated — the first balanced JSON object in the response is decoded. An
+// tolerated - the first balanced JSON object in the response is decoded. An
 // empty findings array yields an empty slice and no error. Any response that
 // cannot be decoded into the contract shape, or that carries an invalid
-// finding, returns ErrMalformedResponse — the parser never panics.
+// finding, returns ErrMalformedResponse - the parser never panics.
 func parseJSON(kind ReviewKind, modelOutput string) ([]ReviewFinding, error) {
 	raw := extractJSONObject(modelOutput)
 	if raw == "" {

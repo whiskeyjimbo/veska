@@ -2,11 +2,11 @@ package diffgate
 
 // PRReport is the advisory PR impact/risk report: a non-gating
 // assembly of "what this diff touches and where it is risky". It is ADVISORY by
-// construction — unlike the gate verdicts it has no Pass/Failures/ExitCode, and
+// construction - unlike the gate verdicts it has no Pass/Failures/ExitCode, and
 // the CLI always exits 0 once it can emit one. Each section is sourced from an
 // existing producer scoped to the diff's changed files; a producer that errors
 // degrades its section (left empty) and appends a Note rather than failing the
-// report. The report never blocks a merge — that is the whole point of the soft
+// report. The report never blocks a merge - that is the whole point of the soft
 // on-ramp (teams trust an advisory view before they let the graph gate).
 // The index-ahead caveat that the gate family carries does NOT
 // apply here: the report does not gate, so reflecting current index state is
@@ -58,7 +58,7 @@ type ChangeRiskFile struct {
 	Score                 int    `json:"score"`
 }
 
-// ReportFinding is one open finding whose file is in the diff — a heads-up that
+// ReportFinding is one open finding whose file is in the diff - a heads-up that
 // a touched file carries a known issue. File-level (not node-level) so
 // file-anchored findings are not dropped.
 type ReportFinding struct {

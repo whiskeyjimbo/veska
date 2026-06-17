@@ -66,7 +66,7 @@ func ensureIndexed(ctx context.Context, pools *sqlite.Pools, rec repo.Record, op
 // non-zero rule for the given (repo, branch), matching the per-rule summary
 // the `repo add --wait` flow surfaces. Silent when no findings exist so a
 // clean promotion doesn't pollute `veska search --repo <url>` output. Best
-// effort: any DB error is swallowed — the summary is advisory, not load
+// effort: any DB error is swallowed - the summary is advisory, not load
 // bearing.
 func EmitColdScanSummary(ctx context.Context, db *sql.DB, w io.Writer, repoID, branch string) {
 	emitColdScanSummary(ctx, db, w, repoID, branch)
@@ -100,7 +100,7 @@ func emitColdScanSummary(ctx context.Context, db *sql.DB, w io.Writer, repoID, b
 
 // drainEmbedderQueue starts an Embedder.Worker, polls the pending-refs count
 // to zero (or a deadline), then stops the worker. The CLI must not return
-// before vectors are populated — otherwise the search runs against an empty
+// before vectors are populated - otherwise the search runs against an empty
 // vector index and returns no hits.
 func drainEmbedderQueue(ctx context.Context, pools *sqlite.Pools, w io.Writer) error {
 	worker, refs, err := buildDrainWorker(pools)
@@ -169,7 +169,7 @@ func pollEmbedderDrain(ctx context.Context, refs *sqlite.EmbeddingRefsRepo, w io
 // EphemeralEnsureFromURL implements the URL-target half of `veska search`
 // Steps:
 //  1. canonicalise the URL
-//  2. consult canonical_url for an existing row (tracked or ephemeral) — if
+//  2. consult canonical_url for an existing row (tracked or ephemeral) - if
 //     hit, reuse it (and bump last_accessed_at when ephemeral); no clone. AC3:
 //     ephemeral hit whose cache dir vanished triggers a silent re-clone
 //     instead of erroring.
@@ -208,7 +208,7 @@ func ephemeralEnsureFromURL(ctx context.Context, pools *sqlite.Pools, rawURL str
 // re-add doesn't trip the UNIQUE(root_path) index.
 func reuseExistingClone(ctx context.Context, pools *sqlite.Pools, existing repo.Record, canonical string, w io.Writer) (repo.Record, bool) {
 	if existing.Kind != "ephemeral" {
-		// tracked match — the URL points at code the user already has
+		// tracked match - the URL points at code the user already has
 		// locally registered. Skip the clone entirely; the existing index
 		// is authoritative.
 		fmt.Fprintf(w, "search: %s is already tracked at %s\n", canonical, existing.RootPath)

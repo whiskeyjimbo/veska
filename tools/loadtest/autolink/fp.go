@@ -8,7 +8,7 @@ package autolink
 
 // Pair is a single (source, target) classification record passed to
 // FPRate. The pure math layer never sees the cluster integers
-// directly — the caller folds the cluster lookup into TruePositive
+// directly - the caller folds the cluster lookup into TruePositive
 // (true iff src and tgt are in the same cluster).
 type Pair struct {
 	TruePositive bool

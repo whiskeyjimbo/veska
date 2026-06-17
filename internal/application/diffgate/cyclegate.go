@@ -4,8 +4,8 @@ import "sort"
 
 // DependencyKinds are the edge kinds whose cycles this gate detects. Today only
 // CALLS edges are emitted (by the Go parser); IMPORTS is included so that when a
-// language whose parser emits module/file IMPORTS edges is added — Python, JS,
-// Ruby permit circular imports where Go's compiler forbids them — the same gate
+// language whose parser emits module/file IMPORTS edges is added - Python, JS,
+// Ruby permit circular imports where Go's compiler forbids them - the same gate
 // flags those net-new cycles with no change here. A kind absent from the graph
 // simply matches nothing.
 var DependencyKinds = []string{"CALLS", "IMPORTS"}
@@ -57,10 +57,10 @@ func (v CycleVerdict) ExitCode() int {
 // CycleGate flags a candidate change that introduces a net-new dependency cycle:
 // a strongly-connected component (SCC) of >=2 symbols, mutually reachable over
 // DependencyKinds edges, whose members were NOT already a single cycle at base.
-// Self-loops (direct recursion A->A) are excluded — they are size-1 SCCs and
+// Self-loops (direct recursion A->A) are excluded - they are size-1 SCCs and
 // ubiquitous/benign.
 // Net-new is decided per after-state SCC C (|C|>=2): C is flagged iff its members
-// are NOT all contained in one base SCC — i.e. they were not already mutually
+// are NOT all contained in one base SCC - i.e. they were not already mutually
 // reachable before the change. A symbol added by the change has no base SCC, so a
 // cycle formed with newly-added code trivially fails containment and is caught.
 // Flagged SCCs are further scoped to those touching the change's node set, so a
@@ -78,7 +78,7 @@ func NewCycleGate() *CycleGate { return &CycleGate{} }
 // Evaluate flags net-new cycles. afterEdges/baseEdges are the after- and
 // base-state directed dependency graphs; changedNodeIDs is the node-precision
 // change set; info names a node_id for the verdict (a missing id falls back to
-// the bare id). Pure — no I/O.
+// the bare id). Pure - no I/O.
 func (g *CycleGate) Evaluate(afterEdges, baseEdges []DirectedEdge, changedNodeIDs []string, info map[string]CycleMember) CycleVerdict {
 	baseComp := componentIndex(stronglyConnected(baseEdges))
 	changed := make(map[string]struct{}, len(changedNodeIDs))
@@ -130,7 +130,7 @@ func touchesChanged(scc []string, changed map[string]struct{}) bool {
 }
 
 // componentIndex maps each node in a >=2-sized SCC to a stable component id.
-// Nodes in singleton SCCs are omitted — they are not cycles.
+// Nodes in singleton SCCs are omitted - they are not cycles.
 func componentIndex(sccs [][]string) map[string]int {
 	idx := make(map[string]int)
 	for i, scc := range sccs {

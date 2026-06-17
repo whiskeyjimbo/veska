@@ -32,7 +32,7 @@ import (
 // DefaultBatchSize is the maximum number of refs drained per tick (M3 §m3.02).
 const DefaultBatchSize = 32
 
-// DefaultInterval is the poll cadence — matches the post_promotion_queue
+// DefaultInterval is the poll cadence - matches the post_promotion_queue
 // Poller default so back-pressure characteristics line up.
 const DefaultInterval = 250 * time.Millisecond
 
@@ -50,7 +50,7 @@ const DefaultMaxAttempts = 3
 
 // EmbedRefQueue is the consumer-owned slice of ports.EmbeddingRefRepo that the
 // Worker actually uses to drain and resolve the embedding queue. It omits the
-// two methods the Worker never calls (ContentHashForNode, CountByState — those
+// two methods the Worker never calls (ContentHashForNode, CountByState - those
 // belong to autolink and the doctor count probes, which declare their own
 // narrow interfaces). Following the same ISP convention as those consumers
 // keeps the Worker's dependency honest; the single sqlite.EmbeddingRefsRepo
@@ -88,7 +88,7 @@ type Worker struct {
 	// FetchPending+Embed pass. The poll loop still runs at interval so
 	// the worker resumes promptly when the gate clears. Used by the
 	// daemon to hold the embedder off the Write pool while the
-	// resync path is committing on Write ( — closes the
+	// resync path is committing on Write ( - closes the
 	// race 's queue-poller pause only partially fixed).
 	pauser func() bool
 
@@ -124,7 +124,7 @@ func WithInterval(d time.Duration) Option {
 
 // WithRatePerSec installs a token-bucket rate limit on Embed calls. The
 // limiter is checked once per row before invoking EmbeddingProvider.Embed.
-// A value of 0 (or negative) disables the limiter entirely — useful for
+// A value of 0 (or negative) disables the limiter entirely - useful for
 // tests and for backends that handle their own throttling. If the option
 // is not supplied, the worker uses DefaultRatePerSec.
 // The bucket size is fixed at 1: the limiter smooths load rather than
@@ -140,7 +140,7 @@ func WithRatePerSec(r float64) Option {
 // WithMaxAttempts overrides the per-row retry budget (default 3).
 // After this many consecutive Embed failures on the same row, the row is
 // flipped to state='failed' and excluded from future FetchPending results.
-// Values <= 0 are ignored — use 1 to fail rows after a single error.
+// Values <= 0 are ignored - use 1 to fail rows after a single error.
 func WithMaxAttempts(n int) Option {
 	return func(w *Worker) {
 		if n > 0 {
@@ -150,7 +150,7 @@ func WithMaxAttempts(n int) Option {
 }
 
 // WithPauser installs a predicate the worker consults at every tick.
-// When it returns true the tick is a no-op — no FetchPending, no
+// When it returns true the tick is a no-op - no FetchPending, no
 // Embed, no writes. Used by the daemon to hold the embedder off the
 // db while resync / cold-scan is committing.
 func WithPauser(p func() bool) Option {
@@ -159,7 +159,7 @@ func WithPauser(p func() bool) Option {
 
 // WithMetrics installs a Metrics struct so the worker can publish
 // veska_embed_queue_depth on every tick. When nil the gauge update is
-// silently skipped — the worker still functions.
+// silently skipped - the worker still functions.
 func WithMetrics(m *observability.Metrics) Option {
 	return func(w *Worker) { w.metrics = m }
 }
@@ -171,7 +171,7 @@ var ErrMissingDependency = errors.New("embedder: missing required dependency")
 
 // NewWorker constructs a Worker. Dependencies are required: all three of
 // refs, embedder, and vectors must be non-nil. A nil dependency yields an
-// error wrapping ErrMissingDependency and a nil *Worker — surfacing the
+// error wrapping ErrMissingDependency and a nil *Worker - surfacing the
 // wiring fault at construction time rather than crashing inside a goroutine
 // at first tick.
 func NewWorker(
@@ -203,7 +203,7 @@ func NewWorker(
 	}
 	// Resolve the limiter after options have been applied. If the caller
 	// never invoked WithRatePerSec, fall back to the default. A zero or
-	// negative rate means "no limiter installed" — the per-row gate is a
+	// negative rate means "no limiter installed" - the per-row gate is a
 	// nil-check away.
 	effective := w.ratePerSec
 	if !w.rateExplicit {
@@ -281,8 +281,8 @@ func (w *Worker) run(ctx context.Context) {
 // gauge is updated once per tick whether or not work was processed.
 func (w *Worker) tick(ctx context.Context) {
 	if w.pauser != nil && w.pauser() {
-		// While paused we deliberately do NOT touch the refs table — not
-		// even the count probe — so the Write pool stays idle and
+		// While paused we deliberately do NOT touch the refs table - not
+		// even the count probe - so the Write pool stays idle and
 		// can't race the Write promotion tx into SQLITE_BUSY
 		// The next tick re-checks; the daemon clears the
 		// pause when resync finishes.
@@ -299,7 +299,7 @@ func (w *Worker) tick(ctx context.Context) {
 
 	// Group successful embeddings by (repo_id, branch) so they can be
 	// upserted into VectorStorage in batches keyed correctly. The vector
-	// port is per-(repo,branch) — a single upsert call can't span them.
+	// port is per-(repo,branch) - a single upsert call can't span them.
 	type vecKey struct{ repo, branch string }
 	vecBatches := make(map[vecKey][]domain.EmbeddingRow)
 
@@ -352,7 +352,7 @@ func (w *Worker) tick(ctx context.Context) {
 			continue
 		}
 
-		// Fast path 2: a prior tick already embedded this key — the bytes
+		// Fast path 2: a prior tick already embedded this key - the bytes
 		// are in node_embeddings.
 		if blob, dim, found, err := w.refs.LookupExisting(ctx, contentHash); err == nil && found {
 			vec := veccodec.DecodeFloat32LE(blob, dim)
@@ -372,7 +372,7 @@ func (w *Worker) tick(ctx context.Context) {
 
 	// Pass 2: deduplicate by content_hash within needsEmbed so two refs
 	// with identical text only cost one Embed call. Order matters for
-	// EmbedBatch's contract — preserve first-seen order.
+	// EmbedBatch's contract - preserve first-seen order.
 	uniqueByHash := make(map[string]int, len(needsEmbed))
 	var uniqueTexts []string
 	for _, p := range needsEmbed {
@@ -384,7 +384,7 @@ func (w *Worker) tick(ctx context.Context) {
 	}
 
 	// Pass 3: call Embed (batch when the provider supports it, otherwise
-	// loop). Rate limiter counts each unique text — preserves the
+	// loop). Rate limiter counts each unique text - preserves the
 	// per-second cap callers expect (a batch of 32 unique texts is
 	// still 32 'requests' under the limiter's accounting).
 	uniqueVecs := make([][]float32, len(uniqueTexts))
@@ -407,10 +407,10 @@ func (w *Worker) tick(ctx context.Context) {
 			copy(uniqueVecs, vecs)
 			usedBatch = true
 		case errors.Is(err, ports.ErrBatchEmbedNotSupported):
-			// Wrapped provider didn't actually support batch — fall
+			// Wrapped provider didn't actually support batch - fall
 			// through to the serial path below. usedBatch stays false.
 		default:
-			// Real batch failure (ErrEmbedderUnreachable, etc.) — mark
+			// Real batch failure (ErrEmbedderUnreachable, etc.) - mark
 			// every unique text as failed; MarkAttemptFailed below will
 			// bump attempts and (eventually) flip to state='failed'.
 			for i := range uniqueTexts {
@@ -481,7 +481,7 @@ func (w *Worker) tick(ctx context.Context) {
 	}
 }
 
-// hashEmbedText returns a content_hash keyed on the EMBED INPUT — the model
+// hashEmbedText returns a content_hash keyed on the EMBED INPUT - the model
 // identifier and the deterministic embed_text projection. Two refs that hash
 // to the same value are guaranteed to produce the same vector under this
 // model, so the worker can dedup before calling EmbeddingProvider.Embed.
@@ -498,7 +498,7 @@ func hashEmbedText(modelID, embedText string) string {
 
 // l2Normalize scales vec in place to unit L2 norm. A zero vector is left
 // unchanged. Keeping every stored embedding unit-length is what makes the
-// VectorStorage score 1/(1+L2dist) — and thus the auto-link threshold
+// VectorStorage score 1/(1+L2dist) - and thus the auto-link threshold
 // behave as documented regardless of the embedding model's native scale.
 func l2Normalize(vec []float32) {
 	var sq float64

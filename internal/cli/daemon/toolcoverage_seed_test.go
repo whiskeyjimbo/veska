@@ -2,7 +2,7 @@ package daemon
 
 // Operational seed-state inserts for the tool-coverage harness.
 // These rows are the literal starting state the finding / suppression / task /
-// alias tools assert against — NOT parse output. The coverage package's seed
+// alias tools assert against - NOT parse output. The coverage package's seed
 // facts carry only the test-meaningful columns; this file fills the remaining
 // NOT NULL / CHECK columns (finding_id, branch, source_layer, created_at,
 // actor_id, actor_kind∈{human,agent,system}, suppression scope/target, task
@@ -10,7 +10,7 @@ package daemon
 // node IDs via the harness root so no raw sha256 is ever written here.
 // The fixture repos themselves are already inserted (with their real root +
 // module path) by indexRepo; seedRepos in the coverage facts is therefore not
-// re-inserted as repos rows — the aliases below reference the already-present
+// re-inserted as repos rows - the aliases below reference the already-present
 // fixture repo IDs.
 
 import (
@@ -78,7 +78,7 @@ func (h *toolHarness) seedFindings(findings []coverage.FindingFact) {
 func (h *toolHarness) seedSuppressions(supps []coverage.SuppressionFact) {
 	now := time.Now().UnixMilli()
 	for i, s := range supps {
-		// scope=node, target=the anchored node ID — the suppression tools key
+		// scope=node, target=the anchored node ID - the suppression tools key
 		// on (target, branch); see idx_suppressions_target.
 		target := string(h.ResolveID(s.RepoID, s.Anchor))
 		h.execSeed(

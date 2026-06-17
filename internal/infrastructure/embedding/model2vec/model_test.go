@@ -16,7 +16,7 @@ func makeSyntheticModel(t *testing.T, tmp string) (string, []int, int) {
 	t.Helper()
 	_ = tmp // dir is the input
 
-	// 6 rows × 4 cols — same vocab as the tokenizer fixture.
+	// 6 rows × 4 cols - same vocab as the tokenizer fixture.
 	vocab := map[string]int{
 		"[UNK]":  0,
 		"parse":  1,

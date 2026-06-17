@@ -4,7 +4,7 @@
 // Goal: drive the real embedder.Worker against a real local Ollama instance
 // for a measurement window and assert sustained throughput is at or above the
 // gate-1 floor (5 emb/s, see M3.md exit gates).
-// What this measures: the WORKER's sustained output rate — i.e. the rate that
+// What this measures: the WORKER's sustained output rate - i.e. the rate that
 // production observes, which is the min of (Ollama capacity, Worker rate
 // limiter). The Worker defaults to 10 emb/s; the gate floor is 5 emb/s; if
 // Ollama is healthy the run reports a rate close to the limiter cap. A rate
@@ -79,7 +79,7 @@ func TestEmbedderThroughput(t *testing.T) {
 	probeCtx, probeCancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer probeCancel()
 	if err := probeOllama(probeCtx, ollamaURL); err != nil {
-		t.Skipf("Ollama not reachable at %s (%v) — skipping M3 gate-1 throughput bench", ollamaURL, err)
+		t.Skipf("Ollama not reachable at %s (%v) - skipping M3 gate-1 throughput bench", ollamaURL, err)
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -130,7 +130,7 @@ func TestEmbedderThroughput(t *testing.T) {
 	})
 
 	// Wait the measurement window, honouring ctx cancellation. The window
-	// is the explicit gate input — we don't end early on drain because
+	// is the explicit gate input - we don't end early on drain because
 	// "rate" is defined over a fixed wall-clock interval.
 	select {
 	case <-ctx.Done():
@@ -155,7 +155,7 @@ func TestEmbedderThroughput(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CountPending (post-stop): %v", err)
 	}
-	// Prefer the larger drain (i.e. smaller pending) — but the canonical
+	// Prefer the larger drain (i.e. smaller pending) - but the canonical
 	// measurement is the post-window read because Stop adds latency outside
 	// the measured interval. Log both so a reviewer can see the in-flight
 	// delta.
@@ -183,7 +183,7 @@ func TestEmbedderThroughput(t *testing.T) {
 	t.Logf("started→post-window elapsed=%s (window=%s)", elapsed, duration)
 
 	if completed < 0 {
-		t.Fatalf("embeds_completed=%d is negative — seed or count is wrong", completed)
+		t.Fatalf("embeds_completed=%d is negative - seed or count is wrong", completed)
 	}
 	if !out.GateMet {
 		t.Fatalf("M3 gate-1 FAIL: rate=%.2f emb/s < floor=%.2f emb/s (completed=%d in %ds)",

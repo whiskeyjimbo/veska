@@ -13,7 +13,7 @@
 // Score range depends on input. score lands in (0, 1] only when stored
 // embeddings are unit-length (L2-squared distance then bounded in [0, 4]).
 // The embedder pipeline L2-normalises every vector before storage
-// precisely so this holds — see internal/application/embedder. If that
+// precisely so this holds - see internal/application/embedder. If that
 // invariant is ever broken, DefaultThreshold below becomes meaningless.
 package autolink
 
@@ -70,7 +70,7 @@ type EmbeddingLookup interface {
 
 	// LookupExisting fetches the stored embedding BLOB and dimension for
 	// contentHash. found=false with nil error means a row vanished between
-	// ContentHashForNode and the lookup (eviction or DB inconsistency) — the
+	// ContentHashForNode and the lookup (eviction or DB inconsistency) - the
 	// Linker treats this as "skip this source".
 	LookupExisting(ctx context.Context, contentHash string) (embedding []byte, dim int, found bool, err error)
 }
@@ -145,7 +145,7 @@ func NewLinker(refs EmbeddingLookup, vectors ports.VectorStorage, opts ...Option
 // inside a single source are broken by VectorStorage.Search rank order.
 // Per-source flow:
 //  1. Look up the source node's content_hash via EmbeddingLookup. If the node
-//     is not ready (pending, failed, missing), it is silently skipped — this
+//     is not ready (pending, failed, missing), it is silently skipped - this
 //     is best-effort discovery, not a correctness invariant.
 //  2. Fetch the embedding bytes for that hash and decode to float32.
 //  3. Ask VectorStorage for the k+1 nearest neighbours (k+1 leaves room to

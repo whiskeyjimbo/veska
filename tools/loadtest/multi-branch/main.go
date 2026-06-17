@@ -7,8 +7,8 @@
 // GC sweep: DELETE 10 branches and measure wall time + reclaimed disk
 // Exit codes:
 //
-//	0 — all gates PASS
-//	1 — at least one gate FAIL
+//	0 - all gates PASS
+//	1 - at least one gate FAIL
 package main
 
 import (
@@ -303,13 +303,13 @@ func dbFileSize(path string) int64 {
 // main
 
 func main() {
-	// Use a file-based temp dir — leave it until after RSS measurement.
+	// Use a file-based temp dir - leave it until after RSS measurement.
 	dir, err := os.MkdirTemp("", "multi-branch-bench-*")
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "mktemp: %v\n", err)
 		os.Exit(1)
 	}
-	// Do NOT defer RemoveAll here — we need the file to persist for RSS measurement.
+	// Do NOT defer RemoveAll here - we need the file to persist for RSS measurement.
 
 	dbPath := filepath.Join(dir, "bench.db")
 	db, err := sql.Open(sqldriver.Name, dbPath)
@@ -425,7 +425,7 @@ func main() {
 	queryP99 := percentile(queryTimes, 0.99)
 
 	// Phase 4: GC sweep
-	fmt.Printf("Phase 4: GC sweep — deleting %d branches...\n", gcBranches)
+	fmt.Printf("Phase 4: GC sweep - deleting %d branches...\n", gcBranches)
 
 	diskBeforeGC := dbFileSize(dbPath)
 	gcStart := time.Now()
@@ -502,12 +502,12 @@ func main() {
 
 	// Write RESULTS.md
 
-	content := fmt.Sprintf(`# Multi-Branch Bench — M1 Gates 4+5 + OQ-S006
+	content := fmt.Sprintf(`# Multi-Branch Bench - M1 Gates 4+5 + OQ-S006
 
 Generated: %s
 Platform: linux amd64
 
-## Phase 1 — Steady-State Seed (%d branches × %d nodes)
+## Phase 1 - Steady-State Seed (%d branches × %d nodes)
 
 | Metric | Value |
 |--------|-------|
@@ -518,7 +518,7 @@ Platform: linux amd64
 | Total finding rows | %d |
 | DB file size (post-seed) | %s |
 
-## Phase 2 — Promotion Trials (%d trials × %d nodes)
+## Phase 2 - Promotion Trials (%d trials × %d nodes)
 
 | Metric | Value |
 |--------|-------|
@@ -530,7 +530,7 @@ Platform: linux amd64
 | Total edge rows (post-promo) | %d |
 | DB file size (post-promo) | %s |
 
-## Phase 3 — Query p95 (OQ-S006)
+## Phase 3 - Query p95 (OQ-S006)
 
 | Metric | Value |
 |--------|-------|
@@ -539,7 +539,7 @@ Platform: linux amd64
 | Query p95 | %.3fms |
 | Query p99 | %.3fms |
 
-## Phase 4 — GC Sweep (%d branches deleted)
+## Phase 4 - GC Sweep (%d branches deleted)
 
 | Metric | Value |
 |--------|-------|
@@ -558,7 +558,7 @@ M0 baseline: 28 branches × 100k nodes, disk=1.68 GiB, node-query p95=0.04ms
 | Disk/row (bytes) | %.1f | %.1f | %.2fx | <2x |
 | Query p95 (ms) | %.3f | %.3f | %.2fx | <2x |
 
-OQ-S006 verdict: **%s** — %s
+OQ-S006 verdict: **%s** - %s
 
 ## Gate Results
 

@@ -6,8 +6,8 @@
 // cmd/veska/search.go is reduced to Cobra command construction whose RunE
 // is a thin call into Run here (, following the cmd = glue /
 // logic-in-packages pattern from ). Cross-package seams the cmd
-// package owns — the cold-scan reparser factory and the cwd→repo matcher,
-// both shared with `veska reindex` — are injected through RunOpts rather
+// package owns - the cold-scan reparser factory and the cwd→repo matcher,
+// both shared with `veska reindex` - are injected through RunOpts rather
 // than re-extracted here.
 package searchcmd
 
@@ -89,7 +89,7 @@ func Run(ctx context.Context, w, stderr io.Writer, opts RunOpts) error {
 
 	// announce the resolved repo before running the
 	// search. The in-process / URL-target flow always knows the exact
-	// repo (rec) — show its short_id since aliases aren't loaded on
+	// repo (rec) - show its short_id since aliases aren't loaded on
 	// the Record here. JSON mode suppresses inside EmitSearchHeader.
 	EmitSearchHeader(stderr, w, opts.JSONOut, SearchHeaderInfo{
 		Mode:    SearchHeaderModeExplicit,
@@ -136,7 +136,7 @@ func ephemeralPrettifier(ctx context.Context, pools *sqlite.Pools, rec repo.Reco
 	display := ephemeralDisplayName(canonical, rec.RepoID)
 	// The on-disk clone dir is named by the URL-derived id (see
 	// ephemeralEnsureFromURL), not the path-sha rec.RepoID stored in the
-	// registry — rec.RootPath is the authoritative prefix.
+	// registry - rec.RootPath is the authoritative prefix.
 	cacheRepoDir := rec.RootPath
 	return func(env *SearchEnvelope) {
 		prettifyEphemeralPaths(env, cacheRepoDir, display)
@@ -184,7 +184,7 @@ func runResolvedSearch(ctx context.Context, rs resolvedSearch) error {
 
 // offerAcceptancePrompt runs the post-search "keep this indexed?" prompt for
 // ephemeral repos. No-op for tracked rows, JSON output, or already-prompted
-// repos. Failure to record the outcome is non-fatal — the search succeeded;
+// repos. Failure to record the outcome is non-fatal - the search succeeded;
 // we log to stderr so the user knows the row stays ephemeral.
 func offerAcceptancePrompt(ctx context.Context, pools *sqlite.Pools, rec repo.Record, opts RunOpts, w io.Writer) {
 	if opts.JSONOut || rec.Kind != "ephemeral" {
@@ -223,7 +223,7 @@ func lookupCanonicalURL(ctx context.Context, db *sql.DB, repoID string) (string,
 //	a filesystem path: register if needed; subsequent runs reuse the
 //	  registration so the index survives.
 //	a git URL: clone to the cache tier on first use, reuse the same dir on
-//	  re-runs (AC2 — index reuse).
+//	  re-runs (AC2 - index reuse).
 func resolveSearchTarget(ctx context.Context, pools *sqlite.Pools, opts RunOpts, w io.Writer) (repo.Record, error) {
 	target := opts.Target
 	if target == "" {
@@ -233,7 +233,7 @@ func resolveSearchTarget(ctx context.Context, pools *sqlite.Pools, opts RunOpts,
 		// URL targets route through the cache tier and land
 		// as kind='ephemeral' rows so the eviction story works. A
 		// canonical_url match (tracked or ephemeral) short-circuits the
-		// clone — same code re-used between sessions hits the warm graph
+		// clone - same code re-used between sessions hits the warm graph
 		// instead of re-parsing.
 		return ephemeralEnsureFromURL(ctx, pools, target, w)
 	}
@@ -268,7 +268,7 @@ func findOrRegisterRepo(ctx context.Context, pools *sqlite.Pools, opts RunOpts, 
 	if err == nil {
 		return rec, nil
 	}
-	// Not registered yet — add. Subsequent runs find the existing
+	// Not registered yet - add. Subsequent runs find the existing
 	// registration (AC2: reuse the index).
 	id, _, addErr := repo.Add(ctx, pools.Write, path)
 	if addErr != nil {

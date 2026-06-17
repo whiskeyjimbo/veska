@@ -49,13 +49,13 @@ func fileSize(path string) int64 {
 // Steps:
 //  1. Ensure PRAGMA foreign_keys=ON
 //  2. Measure disk + WAL sizes before
-//  3. DELETE FROM nodes WHERE branch NOT IN (keepBranches.) — edges+findings cascade
+//  3. DELETE FROM nodes WHERE branch NOT IN (keepBranches.) - edges+findings cascade
 //  4. PRAGMA wal_checkpoint(TRUNCATE)
 //  5. VACUUM (to reclaim space after bulk delete)
 //  6. Measure disk + WAL sizes after
 //  7. Record wall-clock
 //
-// For in-memory DB (dbPath=""), disk sizes will be 0 — that is expected.
+// For in-memory DB (dbPath=""), disk sizes will be 0 - that is expected.
 func RunGCSweep(db *sql.DB, dbPath string, keepBranches []string) (GCSweepResult, error) {
 	var result GCSweepResult
 

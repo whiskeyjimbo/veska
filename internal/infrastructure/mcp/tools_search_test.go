@@ -588,7 +588,7 @@ func TestSearchSimilar_SymbolResolvesCrossRepoWithoutRepoID(t *testing.T) {
 	resp, rpcErr := dispatchSearch(t, r, "eng_search_similar", map[string]any{
 		"symbol": "Target",
 		"k":      1,
-		// no repo_id, no branch — must resolve via the single-repo
+		// no repo_id, no branch - must resolve via the single-repo
 		// short-circuit in resolveSeedOwner.
 	})
 	if rpcErr != nil {

@@ -1,13 +1,13 @@
 // Package vulnrefresh contains the daemon-owned goroutine that keeps the OSV
 // advisory cache fresh, off the promotion hot path.
 // Scope (M7 §3 task A4): lifecycle and scheduling only. The refresher depends
-// on the ports.VulnSource interface and calls its Refresh — it owns no cache
+// on the ports.VulnSource interface and calls its Refresh - it owns no cache
 // state and performs no scanning. Network egress is entirely the adapter's
 // concern; this package only decides *when* Refresh runs.
 // Run calls Refresh once immediately on entry (so a daemon start kicks a
 // catch-up refresh) and then on every tick of a configurable interval. A
 // Refresh error is logged and swallowed: a transient OSV.dev failure must not
-// crash the daemon or stop the ticker — the next tick simply retries.
+// crash the daemon or stop the ticker - the next tick simply retries.
 package vulnrefresh
 
 import (

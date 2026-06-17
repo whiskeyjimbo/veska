@@ -187,7 +187,7 @@ func RenderMarkdown(inputs SpikeInputs, v Verdict) string {
 	bench50k, recall50k, load50k := popStats(inputs, 50_000)
 	bench1M, recall1M, load1M := popStats(inputs, 1_000_000)
 
-	sb.WriteString("# sqlite-vec Spike — RESULTS\n\n")
+	sb.WriteString("# sqlite-vec Spike - RESULTS\n\n")
 	fmt.Fprintf(&sb, "Generated: %s\n\n", time.Now().UTC().Format(time.RFC3339))
 
 	// Verdict box.
@@ -232,10 +232,10 @@ func RenderMarkdown(inputs SpikeInputs, v Verdict) string {
 					gate = fmt.Sprintf("RED (> %.0fms)", gate1MP95YellowMs)
 				}
 			default:
-				gate = "—"
+				gate = "-"
 			}
 		} else {
-			gate = "—"
+			gate = "-"
 		}
 		fmt.Fprintf(&sb, "| %d | %d | %.2f | %.2f | %.2f | %.2f | %s |\n",
 			pop.Population, pop.K,
@@ -262,7 +262,7 @@ func RenderMarkdown(inputs SpikeInputs, v Verdict) string {
 	}
 	_ = has50kRecall
 	if !has1MRecall {
-		sb.WriteString("| 1000000 | N/A (measurement failed) | N/A | N/A | N/A — consistent with ceiling=100k |\n")
+		sb.WriteString("| 1000000 | N/A (measurement failed) | N/A | N/A | N/A - consistent with ceiling=100k |\n")
 	}
 	for _, r := range inputs.Recall {
 		var gate string
@@ -283,7 +283,7 @@ func RenderMarkdown(inputs SpikeInputs, v Verdict) string {
 				gate = fmt.Sprintf("RED (< %.2f)", gate1MRecallYellow)
 			}
 		default:
-			gate = "—"
+			gate = "-"
 		}
 		fmt.Fprintf(&sb, "| %d | %.4f | %.4f | %d | %s |\n",
 			r.Population, r.RecallAt10, r.RecallAt50, r.HoldOutSize, gate,
@@ -329,7 +329,7 @@ func RenderMarkdown(inputs SpikeInputs, v Verdict) string {
 	// Measurement notes for missing or failed populations.
 	var notes []string
 	if recall1M.Population == 0 {
-		notes = append(notes, "1M recall: measurement failed — sqlite-vec returned an internal error when inserting ~272k vectors into the 1M recall DB. This is consistent with the vec0 ceiling of 100k nodes detected in the bench sweep.")
+		notes = append(notes, "1M recall: measurement failed - sqlite-vec returned an internal error when inserting ~272k vectors into the 1M recall DB. This is consistent with the vec0 ceiling of 100k nodes detected in the bench sweep.")
 	}
 	if len(notes) > 0 {
 		sb.WriteString("## Measurement Notes\n\n")

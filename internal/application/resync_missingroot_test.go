@@ -5,7 +5,7 @@ import (
 	"testing"
 )
 
-// verification — startup-resync's missing-root predicate
+// verification - startup-resync's missing-root predicate
 // matches the git CLI's "No such file or directory" wrappings (any case)
 // so we downgrade to WARN instead of crying ERROR wolf every boot.
 

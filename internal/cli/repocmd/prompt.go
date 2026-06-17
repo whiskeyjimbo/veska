@@ -46,7 +46,7 @@ type AliasTarget struct {
 }
 
 // RunAliasSuggestPrompt offers an auto-suggested alias on `veska repo add`
-// TTY-only — non-TTY callers skip silently so scripts /
+// TTY-only - non-TTY callers skip silently so scripts /
 // MCP-driven adds don't block.
 // UX:
 //
@@ -56,7 +56,7 @@ type AliasTarget struct {
 //
 // If the suggested name collides with an existing alias and a fallback
 // exists (URL form: "<owner>-<name>"), the prompt tries the fallback. If
-// that also collides, the prompt is skipped — the user can still bind one
+// that also collides, the prompt is skipped - the user can still bind one
 // by hand via `veska repo alias`.
 func RunAliasSuggestPrompt(ctx context.Context, db *sql.DB, target AliasTarget, deps PromptDeps) error {
 	if !deps.IsTTY() {

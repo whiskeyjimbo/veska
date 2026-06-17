@@ -54,8 +54,8 @@ type repoBreakdown struct {
 }
 
 // Run reads the savings.jsonl rollup and renders it.
-// Default mode breaks savings down per repo — one section per
-// repo that has recorded searches, plus a pooled "total" — so the user can see
+// Default mode breaks savings down per repo - one section per
+// repo that has recorded searches, plus a pooled "total" - so the user can see
 // which repo's symbol embeddings are paying off. --aggregate keeps the older
 // single pooled view (every repo summed into one "all repos" bucket) for
 // scripts and users that want just the headline number.
@@ -153,7 +153,7 @@ func printSection(w io.Writer, label string, rep savings.Report, formatBytes fun
 
 // printWarmupNote explains the "warming up" rows when the sample is still small.
 // In per-repo mode each repo warms up independently, so this fires off the
-// pooled total — the most generous threshold.
+// pooled total - the most generous threshold.
 func printWarmupNote(w io.Writer, calls int) {
 	if calls < minSampleCalls {
 		fmt.Fprintf(w, "  (ratio reported once a period has >= %d calls; below that the row reads 'warming up')\n", minSampleCalls)

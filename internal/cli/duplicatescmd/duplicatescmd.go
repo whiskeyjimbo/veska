@@ -22,7 +22,7 @@ type clusterMember struct {
 	LineStart int    `json:"line_start"`
 }
 
-// clustersResp mirrors the MCP FindClustersResponse shape — enough to render
+// clustersResp mirrors the MCP FindClustersResponse shape - enough to render
 // without importing the infra package.
 type clustersResp struct {
 	Scope    string `json:"scope"`
@@ -91,7 +91,7 @@ func Run(ctx context.Context, p Params) error {
 func render(w io.Writer, resp clustersResp) {
 	if len(resp.Clusters) == 0 {
 		fmt.Fprintln(w, "no similar-code clusters found")
-		fmt.Fprintln(w, "(structural/near tiers need structural_hash + scored SIMILAR_TO edges — reindex a graph promoted before they landed)")
+		fmt.Fprintln(w, "(structural/near tiers need structural_hash + scored SIMILAR_TO edges - reindex a graph promoted before they landed)")
 		return
 	}
 	for i, c := range resp.Clusters {

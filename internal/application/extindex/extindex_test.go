@@ -107,7 +107,7 @@ type testingT struct{}
 
 func TestIndexVendorModule_ModuleNotVendored(t *testing.T) {
 	root := t.TempDir()
-	// No vendor/ tree — the indexer should report ErrModuleNotVendored.
+	// No vendor/ tree - the indexer should report ErrModuleNotVendored.
 	saver := &fakeSaver{}
 	svc, _ := extindex.NewService(treesitter.NewGoParser(), saver)
 	_, err := svc.IndexVendorModule(context.Background(), "repo1", "main", root, "github.com/example/lib")

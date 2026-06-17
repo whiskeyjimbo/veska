@@ -104,7 +104,7 @@ func RunVerify(out io.Writer, tarPath string, jsonOut bool) error {
 // resolveTarballPath resolves a bare backup name (the NAME column from
 // `backup list`) against the configured backups dir.: without this
 // Verify's "couldn't open the archive" failure rendered as "broken
-// (db_integrity=false,.)" — indistinguishable from a real corrupt-DB
+// (db_integrity=false,.)" - indistinguishable from a real corrupt-DB
 // result, making fat-fingered paths look like healthy backups had gone bad.
 func resolveTarballPath(tarPath string) string {
 	if _, err := os.Stat(tarPath); err == nil {

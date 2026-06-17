@@ -23,7 +23,7 @@ type Badge struct {
 }
 
 // RenderBadge formats the badge label with its palette theme. It calls into
-// modalpha.metric.ComputeVariance to derive a jitter factor — this is the
+// modalpha.metric.ComputeVariance to derive a jitter factor - this is the
 // genuine cross-module call that produces a cross-repo edge fact.
 func (b Badge) RenderBadge(samples []float64) string {
 	jitter := metric.ComputeVariance(metric.Series{Samples: samples})

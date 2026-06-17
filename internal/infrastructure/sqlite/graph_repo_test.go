@@ -264,7 +264,7 @@ func TestGraphRepo_FindNodes_UnqualifiedSuffix(t *testing.T) {
 	}
 	for _, n := range got {
 		if n.Name == "Restart" {
-			t.Errorf("FindNodes(Start) wrongly matched 'Restart' — '.' anchor missing")
+			t.Errorf("FindNodes(Start) wrongly matched 'Restart' - '.' anchor missing")
 		}
 	}
 }
@@ -276,7 +276,7 @@ func TestGraphRepo_FindNodes_CaseSensitive(t *testing.T) {
 
 	for _, n := range []*domain.Node{
 		mustNode(t, "n1", "a.go", "Server.Run", domain.KindMethod),          // matches "Run"
-		mustNode(t, "n2", "b.go", "FSNotifyWatcher.run", domain.KindMethod), // distinct lowercase — must NOT match "Run"
+		mustNode(t, "n2", "b.go", "FSNotifyWatcher.run", domain.KindMethod), // distinct lowercase - must NOT match "Run"
 	} {
 		if err := r.SaveNode(ctx, "r1", "main", n); err != nil {
 			t.Fatalf("SaveNode %s: %v", n.ID, err)

@@ -66,7 +66,7 @@ func TestRecorder_AppendsJSONLPerCall(t *testing.T) {
 }
 
 // TestRecorder_NilSafe: a nil recorder is the documented "disabled"
-// state — Record/Close must not panic and must not produce a file.
+// state - Record/Close must not panic and must not produce a file.
 func TestRecorder_NilSafe(t *testing.T) {
 	var r *savings.Recorder
 	if err := r.Record(savings.Entry{Query: "x"}); err != nil {
@@ -200,7 +200,7 @@ func TestAggregateByRepo_MissingFileIsEmpty(t *testing.T) {
 
 // TestAggregate_MissingFileIsEmpty: when the jsonl doesn't exist yet
 // (no searches recorded), Aggregate must return a zeroed Report and
-// no error — the doctor subcommand should print "no data" cleanly.
+// no error - the doctor subcommand should print "no data" cleanly.
 func TestAggregate_MissingFileIsEmpty(t *testing.T) {
 	dir := t.TempDir()
 	rep, err := savings.Aggregate(filepath.Join(dir, "nope.jsonl"), time.Now())
@@ -245,7 +245,7 @@ func TestEntryFor_UniqueFileChars(t *testing.T) {
 	// FilePaths are repo-relative; EntryFor rejoins root to stat.
 	results := []savings.ResultFile{
 		{FilePath: "a.go", SnippetLen: 10},
-		{FilePath: "a.go", SnippetLen: 7}, // same file — count once
+		{FilePath: "a.go", SnippetLen: 7}, // same file - count once
 		{FilePath: "b.go", SnippetLen: 4},
 	}
 	e := savings.EntryFor("repo-x", dir, "test", results, time.Date(2026, 5, 20, 0, 0, 0, 0, time.UTC))
@@ -264,7 +264,7 @@ func TestEntryFor_UniqueFileChars(t *testing.T) {
 }
 
 // TestEntryFor_MissingFileSilentlySkipped: a file that has since been
-// deleted shouldn't break the recorder — it just contributes 0 to
+// deleted shouldn't break the recorder - it just contributes 0 to
 // FileChars. Otherwise an in-flight delete would crash search.
 func TestEntryFor_MissingFileSilentlySkipped(t *testing.T) {
 	results := []savings.ResultFile{

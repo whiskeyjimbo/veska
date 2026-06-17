@@ -75,7 +75,7 @@ func (f *Finder) Clusters(ctx context.Context, opts ClusterOptions) ([]Cluster, 
 		}
 	}
 
-	// Near clusters: the looser tier (intra-repo only — skipped in AllRepos
+	// Near clusters: the looser tier (intra-repo only - skipped in AllRepos
 	// mode, see ClusterOptions). Drop members already structurally grouped so a
 	// node appears at most once, at its tightest tier.
 	if want[TierNear] && !opts.AllRepos {

@@ -4,7 +4,7 @@
 // in-memory SQLite NodeLookup adapter and an in-process VectorStorage
 // (the sqlite-vec linear-scan backend by default, per ), with
 // a deterministic synthetic corpus. Build-tag-gated so plain CI runs
-// (`go test./.`) skip this end-to-end driver — it stays available
+// (`go test./.`) skip this end-to-end driver - it stays available
 // via `go test -tags=eval` from the eval-recall make target.
 package recall
 
@@ -42,8 +42,8 @@ const (
 // search.Service.Semantic, and emits a JSON summary.
 // Modes (env):
 //
-//	RECALL_POP=N — total population (default 1000)
-//	RECALL_GENERATE=1 — seed the fixture from real Ollama for
+//	RECALL_POP=N - total population (default 1000)
+//	RECALL_GENERATE=1 - seed the fixture from real Ollama for
 //	  non-quick-mode populations (pop > 5000). Honors VESKA_OLLAMA_URL
 //	  and VESKA_EMBED_MODEL. If Ollama is unreachable (/api/tags probe
 //	  with a 3s timeout) the test SKIPS rather than failing. In quick
@@ -99,7 +99,7 @@ func TestRecall(t *testing.T) {
 	}
 	if _, err := os.Stat(fixturePath); err == nil {
 		// Replay cached fixture (could be either fake-seeded or
-		// ollama-seeded — we don't distinguish on disk; the embedder
+		// ollama-seeded - we don't distinguish on disk; the embedder
 		// label below reflects the runtime path actually taken).
 		d, vecs, rerr := ReadFixture(fixturePath)
 		if rerr != nil {
@@ -120,7 +120,7 @@ func TestRecall(t *testing.T) {
 			nodeVecs = append(nodeVecs, synthcorpus.FakeEmbed(n.Text)...)
 		}
 		if generate {
-			// Persist for reproducibility — harmless when seeded from
+			// Persist for reproducibility - harmless when seeded from
 			// fake; gives the M3-close report a deterministic artefact.
 			if err := WriteFixture(fixturePath, dim, nodeVecs); err != nil {
 				t.Logf("WriteFixture(%s): %v (continuing in-memory)", fixturePath, err)
@@ -136,7 +136,7 @@ func TestRecall(t *testing.T) {
 		probeCtx, probeCancel := context.WithTimeout(context.Background(), 3*time.Second)
 		defer probeCancel()
 		if err := probeOllama(probeCtx, ollamaURL); err != nil {
-			t.Skipf("recall: Ollama not reachable at %s (%v) — skipping real-Ollama fixture seeding",
+			t.Skipf("recall: Ollama not reachable at %s (%v) - skipping real-Ollama fixture seeding",
 				ollamaURL, err)
 			return
 		}
@@ -239,7 +239,7 @@ func TestRecall(t *testing.T) {
 		probeCtx, probeCancel := context.WithTimeout(context.Background(), 3*time.Second)
 		defer probeCancel()
 		if err := probeOllama(probeCtx, ollamaURL); err != nil {
-			t.Skipf("recall: Ollama not reachable at %s (%v) — cannot embed queries for a fixture-seeded run",
+			t.Skipf("recall: Ollama not reachable at %s (%v) - cannot embed queries for a fixture-seeded run",
 				ollamaURL, err)
 			return
 		}
@@ -279,7 +279,7 @@ func TestRecall(t *testing.T) {
 	p95 := P95Latency(latencies)
 
 	if mean <= 0 {
-		t.Fatalf("mean_recall is zero — embedder %q did not produce cluster-aligned vectors (pop=%d)", embedderName, pop)
+		t.Fatalf("mean_recall is zero - embedder %q did not produce cluster-aligned vectors (pop=%d)", embedderName, pop)
 	}
 
 	// emit JSON + single-line summary
@@ -315,7 +315,7 @@ func envStr(key, def string) string {
 
 // probeOllama issues a quick GET /api/tags. Any non-2xx response or
 // transport failure is reported as an error so the caller can t.Skip
-// cleanly — mirrors the embedder gate-1 probe (commit f91b51e).
+// cleanly - mirrors the embedder gate-1 probe (commit f91b51e).
 func probeOllama(ctx context.Context, baseURL string) error {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, baseURL+"/api/tags", nil)
 	if err != nil {

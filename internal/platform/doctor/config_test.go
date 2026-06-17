@@ -35,7 +35,7 @@ func TestCheckConfigExists(t *testing.T) {
 func TestCheckConfigMissing(t *testing.T) {
 	dir := t.TempDir()
 
-	// No veska.db written — empty dir.
+	// No veska.db written - empty dir.
 	report, err := doctor.CheckConfig(dir)
 	if err != nil {
 		t.Fatalf("CheckConfig: unexpected error: %v", err)

@@ -219,8 +219,8 @@ func TestHandler_GeneratorErrorPropagates(t *testing.T) {
 
 // TestHandler_FinalAttemptEmitsFailureFinding verifies AC1: a review job that
 // fails on its FINAL attempt (row.Attempts >= 3) emits exactly one
-// review-pipeline-failure Finding — severity high, source_layer quality,
-// node_id anchored on the promotion commit — before returning the job error.
+// review-pipeline-failure Finding - severity high, source_layer quality,
+// node_id anchored on the promotion commit - before returning the job error.
 func TestHandler_FinalAttemptEmitsFailureFinding(t *testing.T) {
 	t.Parallel()
 	root := t.TempDir()
@@ -367,7 +367,7 @@ func TestHandler_EmitsReviewFindings(t *testing.T) {
 
 // TestToDomainFinding_DistinctTitlesDistinctIDs verifies AC4: two review-code
 // findings in the same file under the same rule but with different Titles get
-// distinct finding_ids — the Title is passed to NewFinding as the discriminator
+// distinct finding_ids - the Title is passed to NewFinding as the discriminator
 // key rather than overriding f.FindingID after construction.
 func TestToDomainFinding_DistinctTitlesDistinctIDs(t *testing.T) {
 	t.Parallel()
@@ -426,7 +426,7 @@ func TestHandler_ReviewFindingsAreIdempotent(t *testing.T) {
 
 // TestHandler_ReviewFindingSaveErrorPropagates verifies a FindingStorage Save
 // failure on the review-finding emit path surfaces as a job error so the
-// poller retries — the job is not done if its findings did not persist.
+// poller retries - the job is not done if its findings did not persist.
 func TestHandler_ReviewFindingSaveErrorPropagates(t *testing.T) {
 	t.Parallel()
 	root := t.TempDir()

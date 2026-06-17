@@ -73,7 +73,7 @@ type Metrics struct {
 	// (application/revalidate) as 'revalidated_obsolete'. One increment per
 	// closed finding (NOT per queue row), so the series tracks real anchor
 	// drift, not how often the sweep fires. Unlabeled: revalidation is a
-	// system-wide signal — repo/branch fanout is observable via the queue
+	// system-wide signal - repo/branch fanout is observable via the queue
 	// metrics already.
 	RevalidateClosed prometheus.Counter
 
@@ -102,7 +102,7 @@ func NewMetrics(reg prometheus.Registerer) *Metrics {
 	postCommitHookDuration := prometheus.NewHistogramVec(
 		prometheus.HistogramOpts{
 			Name: "veska_post_commit_hook_duration_seconds",
-			Help: "Wall-clock from hook entry to hook return — the user-visible commit latency budget.",
+			Help: "Wall-clock from hook entry to hook return - the user-visible commit latency budget.",
 		},
 		[]string{"repo_id", "commit_size"},
 	)
@@ -232,7 +232,7 @@ func (c *httpCloser) Close() error {
 
 // StartHTTPListener binds an HTTP listener on addr and serves /metrics from reg.
 // It returns the io.Closer that shuts the listener down gracefully and the
-// actual bound address — when addr is "127.0.0.1:0" the OS picks a free port,
+// actual bound address - when addr is "127.0.0.1:0" the OS picks a free port,
 // so callers learn the real address from the returned string rather than addr.
 // The caller is responsible for checking config before calling this function
 // it binds immediately.

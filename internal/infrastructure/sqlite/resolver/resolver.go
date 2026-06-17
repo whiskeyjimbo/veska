@@ -45,7 +45,7 @@ type ResolvedEdge = ports.ResolvedEdge
 // target module, or no node in the target subpackage matches the symbol).
 // The matcher is two-step so subpackage imports of multi-package modules
 // resolve: step 1 finds the most-specific repo whose module_path
-// is a prefix of stub.module_path (longest prefix wins — so import
+// is a prefix of stub.module_path (longest prefix wins - so import
 // github.com/x/y/z prefers a repo with module_path github.com/x/y/z over one
 // with github.com/x/y); step 2 looks up the symbol in that repo, constrained
 // to the subpackage dir derived from the prefix gap. expandCrossRepo is
@@ -80,7 +80,7 @@ func ResolveCrossRepoEdge(ctx context.Context, db *sql.DB, stub CrossRepoStub, e
 	// method-call stubs match by suffix against the
 	// stored symbol_path (which has form <Receiver>.<Method>) rather than
 	// exact equality. Ambiguity (multiple receiver types in the same
-	// subpackage owning a method with that name) returns no edge — the
+	// subpackage owning a method with that name) returns no edge - the
 	// no-false-edges invariant is the same as Phase B's in-module path.
 	var nodeQ string
 	var args []any
@@ -188,7 +188,7 @@ func moduleRelDir(filePath, root string) string {
 // match with DstNodeID=N. This makes "who calls this library symbol?"
 // answerable across repo boundaries.
 // Mechanics: stubs are keyed by (language, module_path, symbol_path) at the
-// import-path level — N's import path is N.repo's module_path joined with
+// import-path level - N's import path is N.repo's module_path joined with
 // N's subpackage directory (relative to the repo root). We query the
 // idx_stubs_resolver index, then for each match run the forward resolver
 // and keep edges whose DstNodeID equals N's node_id. Branch matching

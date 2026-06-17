@@ -33,7 +33,7 @@ type RepoRootFunc func(ctx context.Context, repoID string) (string, error)
 // Failure semantics mirror the other application handlers: any error (repo
 // resolution, ranking, rendering, file write) propagates wrapped so the
 // queue.Poller retry path runs. The render time is stamped ONLY when both
-// pages were written — a partial failure leaves the previous stamp intact.
+// pages were written - a partial failure leaves the previous stamp intact.
 // The handler is stateless beyond its injected dependencies and is safe for
 // concurrent use; the poller runs it in its own goroutine.
 type Handler struct {
@@ -59,7 +59,7 @@ func WithHandlerClock(c func() time.Time) HandlerOption {
 }
 
 // WithWritePages enables Markdown page writes under in the
-// user's repo work-tree. Off by default — the README contract is that
+// user's repo work-tree. Off by default - the README contract is that
 // veska does not write to user repos. The MCP tools eng_get_hot_zone and
 // eng_get_entry_points still serve the same ranked data when this is off
 func WithWritePages(enabled bool) HandlerOption {
@@ -145,14 +145,14 @@ func (h *Handler) Handle(ctx context.Context, row ports.WorkRow) error {
 		}
 	}
 	// When writePages is false the report is still ranked and the
-	// last-render stamp is bumped — the MCP tools eng_get_hot_zone /
+	// last-render stamp is bumped - the MCP tools eng_get_hot_zone /
 	// eng_get_entry_points serve the same data on demand. We keep the
 	// rank pass to populate any caches and to surface ranking errors at
 	// the same point in the queue lifecycle.
 	_ = report
 	_ = epReport
 
-	// Both pages written — stamp the last-render time. A stamp failure is
+	// Both pages written - stamp the last-render time. A stamp failure is
 	// still a handler failure (the render is recorded as incomplete) so the
 	// poller retries; the re-render is idempotent.
 	if err := h.store.SetLastRenderAt(ctx, h.clock()); err != nil {

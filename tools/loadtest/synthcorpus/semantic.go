@@ -205,7 +205,7 @@ const (
 )
 
 // SemanticClusterCount is the number of clusters the semantic corpus
-// provides — fixed by the hand-authored topic vocabulary. Harnesses must
+// provides - fixed by the hand-authored topic vocabulary. Harnesses must
 // use this rather than assuming a cluster count.
 var SemanticClusterCount = len(semanticTopics)
 
@@ -241,7 +241,7 @@ func GenerateSemanticCorpus(nodesPerCluster int) Corpus {
 	}
 	for k, topic := range semanticTopics {
 		// Center query: the first semanticPhrasesPerNode phrases of the
-		// bag — a strong, representative anchor for the recall harness.
+		// bag - a strong, representative anchor for the recall harness.
 		c.CenterQueries[k] = strings.Join(topic.phrases[:semanticPhrasesPerNode], ". ") + "."
 		for j := range nodesPerCluster {
 			pick := nthCombination(j, semanticPhrasesPerTopic, semanticPhrasesPerNode)
@@ -291,7 +291,7 @@ func nthCombination(n, total, k int) []int {
 	value := 0
 	for k > 0 {
 		// Combinations of the remaining (total-1-value) values taken
-		// (k-1) at a time — i.e. those that include `value`.
+		// (k-1) at a time - i.e. those that include `value`.
 		c := binomial(total-1-value, k-1)
 		if n < c {
 			out = append(out, value)

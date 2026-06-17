@@ -65,7 +65,7 @@ func goStructuralHash(decl *sitter.Node, src []byte) string {
 				}
 				h.Write([]byte(ph))
 			} else {
-				// keyword / operator / punctuation — a structural token.
+				// keyword / operator / punctuation - a structural token.
 				h.Write([]byte(t))
 			}
 			h.Write(sep)

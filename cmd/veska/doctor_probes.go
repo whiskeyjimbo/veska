@@ -36,11 +36,11 @@ func doctorIdentityCmd() *cobra.Command {
 		Short: "Report repo identity-tier convergence for shared-DB readiness",
 		Long: "Report each registered repo's resolved identity tier (ADR-S0017) and warn on any that won't converge in a shared multi-contributor graph DB.\n\n" +
 			"A tier is how a repo's identity (and therefore its node ids) is derived:\n" +
-			"  module-hostpath  go.mod `github.com/org/repo` — CONVERGES: two contributors indexing the same upstream get identical ids (the shareable tier)\n" +
-			"  origin-url       git remote URL — local-only (diverges across forks)\n" +
-			"  module-bare      bare `module myapp` — local-only (collision-prone)\n" +
-			"  abs-root         absolute checkout path — local-only\n\n" +
-			"Non-converging is perfectly fine for single-user use; it only matters before sharing a DB. Advisory only — never folded into `doctor status`.",
+			"  module-hostpath  go.mod `github.com/org/repo` - CONVERGES: two contributors indexing the same upstream get identical ids (the shareable tier)\n" +
+			"  origin-url       git remote URL - local-only (diverges across forks)\n" +
+			"  module-bare      bare `module myapp` - local-only (collision-prone)\n" +
+			"  abs-root         absolute checkout path - local-only\n\n" +
+			"Non-converging is perfectly fine for single-user use; it only matters before sharing a DB. Advisory only - never folded into `doctor status`.",
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return doctorcmd.RunIdentity(cmd.OutOrStdout(), jsonOut)
@@ -79,7 +79,7 @@ func doctorPipelinesCmd() *cobra.Command {
 }
 
 // doctorEmbedderCmd returns the "doctor embedder" subcommand. It verifies the
-// embedder the daemon actually elected — in-process by default, Ollama only
+// embedder the daemon actually elected - in-process by default, Ollama only
 // when VESKA_EMBEDDER=ollama.
 func doctorEmbedderCmd() *cobra.Command {
 	var jsonOut bool

@@ -67,7 +67,7 @@ func (p ListParams) filterLow(findings []FindingView) ([]FindingView, int) {
 	hiddenLow := 0
 	for _, f := range findings {
 		// a row explicitly surfaced by --include-suppressed must
-		// not be re-hidden by the low-severity filter — the whole point was to
+		// not be re-hidden by the low-severity filter - the whole point was to
 		// see it.
 		if f.Severity == "low" && f.SuppressedBy == nil {
 			hiddenLow++
@@ -117,7 +117,7 @@ func (p ListParams) renderTable(w io.Writer, shown []FindingView) error {
 	return tw.Flush()
 }
 
-// anySuppressed reports whether any row carries an active suppression — the
+// anySuppressed reports whether any row carries an active suppression - the
 // trigger for the optional SUPPRESSED_BY column.
 func anySuppressed(fs []FindingView) bool {
 	for _, f := range fs {
@@ -185,7 +185,7 @@ func countSeverities(fs []FindingView) map[string]int {
 func summariseFindings(shown, total int, counts map[string]int, all []FindingView) string {
 	// when low-severity findings are dominated by a single rule
 	// (typically "auto-link" on small repos), annotate the count. Threshold is
-	// 80% — if the rule mix is genuinely diverse, fall back to the unannotated
+	// 80% - if the rule mix is genuinely diverse, fall back to the unannotated
 	// count.
 	lowAnnotation := ""
 	if counts["low"] > 0 {
@@ -223,7 +223,7 @@ func summariseFindings(shown, total int, counts map[string]int, all []FindingVie
 }
 
 // trimRedundantFilePrefix drops a leading "<file>:<line>" / "<file> " from the
-// message when the file column already shows the same file — vuln messages
+// message when the file column already shows the same file - vuln messages
 // embed "go.mod:151 [GHSA-…] …" but the FILE column already says "go.mod"
 func trimRedundantFilePrefix(msg, file string) string {
 	if file == "" {
@@ -233,7 +233,7 @@ func trimRedundantFilePrefix(msg, file string) string {
 		return msg
 	}
 	rest := msg[len(file):]
-	// Accept "<file>:<n> ", "<file>: ", or "<file> " — trim through the first
+	// Accept "<file>:<n> ", "<file>: ", or "<file> " - trim through the first
 	// space, then any leading whitespace on what remains.
 	if _, after, ok := strings.Cut(rest, " "); ok {
 		return strings.TrimLeft(after, " ")

@@ -39,7 +39,7 @@ func TestCoverageGate_ChangedAndUntested_Fails(t *testing.T) {
 }
 
 // AC2: an untested symbol that is NOT in the changed set (unchanged symbol
-// sharing a touched file) must NOT fail the gate — the changed symbols are all
+// sharing a touched file) must NOT fail the gate - the changed symbols are all
 // tested.
 func TestCoverageGate_UntestedButUnchanged_Passes(t *testing.T) {
 	g := diffgate.NewCoverageGate()
@@ -73,7 +73,7 @@ func TestCoverageGate_MultipleUntested_Listed(t *testing.T) {
 	}
 }
 
-// A file-anchored finding (no node anchor) is ignored — the gate is node-keyed.
+// A file-anchored finding (no node anchor) is ignored - the gate is node-keyed.
 func TestCoverageGate_FileAnchoredIgnored(t *testing.T) {
 	g := diffgate.NewCoverageGate()
 	f, err := domain.NewFinding(domain.FindingSpec{

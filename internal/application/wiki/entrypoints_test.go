@@ -131,7 +131,7 @@ func TestSelect_ExportedBeatsUnexportedOnTie(t *testing.T) {
 		t.Fatalf("Select: %v", err)
 	}
 	// lowFanCaps and helper both have InboundCount=1 (1 caller each).
-	// lowFanCaps is exported, helper is not — lowFanCaps must rank higher.
+	// lowFanCaps is exported, helper is not - lowFanCaps must rank higher.
 	lowIdx, helperIdx := -1, -1
 	for i, ep := range rep.EntryPoints {
 		switch ep.SymbolName {
@@ -201,7 +201,7 @@ func TestSelect_AdjacentTestIsTiebreakerNotGate(t *testing.T) {
 	for _, ep := range rep.EntryPoints {
 		have[ep.SymbolName] = true
 	}
-	// helper has no adjacent test — must STILL appear (no hard gate).
+	// helper has no adjacent test - must STILL appear (no hard gate).
 	if !have["helper"] {
 		t.Errorf("helper (no adjacent test) must still appear under new ranking; got %+v",
 			rep.EntryPoints)
@@ -260,7 +260,7 @@ func TestEntryPointsService_FiltersGoInitFuncs(t *testing.T) {
 	mk("root-init", "init", "cmd/root.go", domain.KindFunction)
 	mk("token-init", "init", "cmd/token.go", domain.KindFunction)
 	mk("Execute", "Execute", "cmd/root.go", domain.KindFunction)
-	// Python __init__ must NOT be filtered — it is a constructor, not a
+	// Python __init__ must NOT be filtered - it is a constructor, not a
 	// Go-runtime hook. Keep one in the fixture to lock that contract.
 	mk("py-init", "__init__", "app/server.py", domain.KindFunction)
 
@@ -301,7 +301,7 @@ func TestEntryPointsService_FiltersGoInitFuncs(t *testing.T) {
 		t.Errorf("Python __init__ was filtered; only Go init() should be")
 	}
 	if !hasExecute {
-		t.Errorf("Execute missing — Go init() filter is too aggressive")
+		t.Errorf("Execute missing - Go init() filter is too aggressive")
 	}
 }
 

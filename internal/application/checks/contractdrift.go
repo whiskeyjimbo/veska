@@ -16,7 +16,7 @@ import (
 // Scope:
 //
 //	Only nodes of kind function, method, or interface are considered.
-//	Both prev_signature and signature must be non-empty — first-time
+//	Both prev_signature and signature must be non-empty - first-time
 //	  promotions (no prior row) cannot drift by construction.
 //	Body-only edits leave signature unchanged and so emit no finding.
 //

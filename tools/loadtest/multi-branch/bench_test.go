@@ -65,7 +65,7 @@ func TestSeedAndQuery(t *testing.T) {
 		t.Errorf("want %d edges, got %d", nBranches*nNodes, edgeCount)
 	}
 
-	// Run 10 query iterations — assert each < 1s.
+	// Run 10 query iterations - assert each < 1s.
 	const iters = 10
 	deadline := time.Second
 	for i := range iters {

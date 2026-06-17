@@ -7,7 +7,7 @@ import (
 )
 
 func TestParseColdScan(t *testing.T) {
-	fixture := `# Cold-Scan Benchmark — GoParser
+	fixture := `# Cold-Scan Benchmark - GoParser
 
 Generated: 2026-05-13
 Platform: linux amd64
@@ -18,8 +18,8 @@ Gate: <60s total elapsed
 | Metric | Value | Gate |
 |--------|-------|------|
 | Total elapsed | 1.616s | <60s |
-| Per-file p95 | 3.04ms | — |
-| Files/sec | 619 | — |
+| Per-file p95 | 3.04ms | - |
+| Files/sec | 619 | - |
 
 Gate: PASS
 `
@@ -56,12 +56,12 @@ func TestParseColdScan_Missing(t *testing.T) {
 }
 
 func TestParseHookBench(t *testing.T) {
-	fixture := `# Hook p95 Benchmark — sendSeal round-trip
+	fixture := `# Hook p95 Benchmark - sendSeal round-trip
 
 | Metric | Value | Gate |
 |--------|-------|------|
 | p95 latency | 0.116ms | ≤100ms |
-| p99 latency | 0.208ms | — |
+| p99 latency | 0.208ms | - |
 
 Gate: PASS (p95 ≤ 100ms)
 `
@@ -140,7 +140,7 @@ func TestParseCIGates_Missing(t *testing.T) {
 }
 
 func TestParseMCPLatencyBench(t *testing.T) {
-	fixture := `# MCP Latency Benchmark — find_symbol warm p95
+	fixture := `# MCP Latency Benchmark - find_symbol warm p95
 
 Generated: 2026-05-13
 Platform: linux amd64

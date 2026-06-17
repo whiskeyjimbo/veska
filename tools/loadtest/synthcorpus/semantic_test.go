@@ -38,7 +38,7 @@ func TestGenerateSemanticCorpus_Shape(t *testing.T) {
 func TestGenerateSemanticCorpus_NodeTextDistinctWithinCluster(t *testing.T) {
 	t.Parallel()
 	// 100 nodes/cluster must be 100 distinct phrasings (no duplicate text
-	// within a cluster) — that is what nthCombination guarantees.
+	// within a cluster) - that is what nthCombination guarantees.
 	c := GenerateSemanticCorpus(100)
 	byCluster := make(map[int]map[string]struct{}, c.Clusters)
 	for _, n := range c.Nodes {
@@ -133,7 +133,7 @@ func TestGenerateSemanticCorpus_TopicBagsWellFormed(t *testing.T) {
 			}
 			local[p] = struct{}{}
 			if owner, ok := phraseOwner[p]; ok {
-				t.Fatalf("phrase %q shared across topics %s and %s — vocabularies must be disjoint",
+				t.Fatalf("phrase %q shared across topics %s and %s - vocabularies must be disjoint",
 					p, owner, topic.name)
 			}
 			phraseOwner[p] = topic.name

@@ -55,7 +55,7 @@ func renderReport(gates []GateResult, w io.Writer) error {
 	for _, g := range gates {
 		measured := g.Measured
 		if measured == "" {
-			measured = "—"
+			measured = "-"
 		}
 		note := ""
 		if g.Note != "" {
@@ -82,9 +82,9 @@ func WriteReport(gates []GateResult, path string) error {
 
 // exitCode returns the appropriate exit code for the gate set:
 //
-//	0 — all non-pending gates pass
-//	1 — at least one gate fails
-//	2 — no failures, but at least one gate is pending
+//	0 - all non-pending gates pass
+//	1 - at least one gate fails
+//	2 - no failures, but at least one gate is pending
 func exitCode(gates []GateResult) int {
 	hasPending := false
 	for _, g := range gates {

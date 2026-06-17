@@ -178,7 +178,7 @@ func TestGCReclaimIsPositive(t *testing.T) {
 		}
 	}
 
-	// Keep only b2, b3, b4 — delete b0 and b1.
+	// Keep only b2, b3, b4 - delete b0 and b1.
 	result, err := gcsweep.RunGCSweep(db, dbPath, []string{"b2", "b3", "b4"})
 	if err != nil {
 		t.Fatalf("RunGCSweep: %v", err)
@@ -197,7 +197,7 @@ func TestGCReclaimIsPositive(t *testing.T) {
 	// Verify disk sizes were captured (file-based DB should have non-zero sizes).
 	if result.DiskBeforeBytes == 0 && result.DiskAfterBytes == 0 {
 		// This is acceptable if the DB file wasn't flushed yet, just warn.
-		t.Logf("disk sizes both 0 — WAL may not have flushed yet (acceptable for small test DB)")
+		t.Logf("disk sizes both 0 - WAL may not have flushed yet (acceptable for small test DB)")
 	}
 
 	t.Logf("GCSweepResult: branches_before=%d branches_after=%d deleted=%d wall_ms=%d disk_before=%d disk_after=%d reclaim=%d",

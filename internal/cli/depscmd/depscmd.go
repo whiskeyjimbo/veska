@@ -95,7 +95,7 @@ func RunList(ctx context.Context, p ListParams) error {
 		return enc.Encode(resp)
 	}
 	if len(resp.Dependencies) == 0 {
-		fmt.Fprintln(p.Out, "no external dependencies (or no calls into them yet — the graph fills in as files are promoted)")
+		fmt.Fprintln(p.Out, "no external dependencies (or no calls into them yet - the graph fills in as files are promoted)")
 		return nil
 	}
 	shown := resp.Dependencies
@@ -119,7 +119,7 @@ func RunList(ctx context.Context, p ListParams) error {
 		// is used through chained selector expressions (e.g. cobra
 		// `&cobra.Command{.}`, `yaml.Marshal`) that the parser attributes to
 		// the package node, not the calling function. Without a marker, a
-		// junior reads "CALLS=0" as "unused dep, safe to remove" — dangerous.
+		// junior reads "CALLS=0" as "unused dep, safe to remove" - dangerous.
 		// Tag the row with "*" and emit a footer explaining the suppression.
 		callsCell := fmt.Sprintf("%d", d.UsageCount)
 		if d.UsageCount == 0 && d.ImportCount > 0 {
@@ -190,7 +190,7 @@ func RunIndex(ctx context.Context, p IndexParams) error {
 	}
 
 	// refuse to index a vendored copy of a module that is
-	// already a tracked registered repo — the synthetic ext:<module> row would
+	// already a tracked registered repo - the synthetic ext:<module> row would
 	// shadow the real repo's nodes and confuse cross-repo CALLS resolution.
 	if existing, lookupErr := repocmd.FindTrackedRepoByModulePath(ctx, db, p.ModulePath); lookupErr == nil && existing != "" {
 		return fmt.Errorf("deps index: module %s is already a tracked registered repo (%s); indexing its vendored copy would duplicate it. Re-run after `veska repo remove %s` if you really want the vendored snapshot instead, or just rely on the registered repo for cross-repo CALLS", p.ModulePath, existing, existing)
@@ -199,7 +199,7 @@ func RunIndex(ctx context.Context, p IndexParams) error {
 	res, err := svc.IndexVendorModule(ctx, repoID, branch, root, p.ModulePath)
 	if err != nil {
 		if errors.Is(err, extindex.ErrModuleNotVendored) {
-			return fmt.Errorf("deps index: %s is not vendored under %s/vendor/ — run `go mod vendor` first, or (phase 2) the module-cache path will cover non-vendored modules", p.ModulePath, root)
+			return fmt.Errorf("deps index: %s is not vendored under %s/vendor/ - run `go mod vendor` first, or (phase 2) the module-cache path will cover non-vendored modules", p.ModulePath, root)
 		}
 		return fmt.Errorf("deps index: %w", err)
 	}

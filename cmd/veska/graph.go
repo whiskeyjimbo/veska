@@ -16,7 +16,7 @@ import (
 // calls into that package.
 
 // callsCmd wraps eng_get_call_chain. One command with --direction
-// (out|in|both) instead of separate `callers` / `callees` verbs — the
+// (out|in|both) instead of separate `callers` / `callees` verbs - the
 // underlying MCP tool already takes that parameter and a single CLI surface
 // keeps the help text simple. parity wrapper.
 func callsCmd() *cobra.Command {
@@ -49,7 +49,7 @@ func callsCmd() *cobra.Command {
 		},
 	}
 	cmd.Flags().StringVar(&repoFlag, "repo", "", "repo id, short_id, or alias (default: fan out across registered repos)")
-	cmd.Flags().StringVar(&dir, "direction", "out", "out|in|both (aliases: callees|callers) — outgoing callees, incoming callers, or both")
+	cmd.Flags().StringVar(&dir, "direction", "out", "out|in|both (aliases: callees|callers) - outgoing callees, incoming callers, or both")
 	cmd.Flags().IntVar(&depth, "depth", 0, "BFS depth limit (0 = daemon default)")
 	cmd.Flags().BoolVar(&expandXR, "expand-cross-repo", true, "follow CALLS edges into other registered repos")
 	cmd.Flags().BoolVar(&jsonOut, "json", false, "emit JSON (eng_get_call_chain shape)")
@@ -95,7 +95,7 @@ func blastCmd() *cobra.Command {
 		},
 	}
 	cmd.Flags().StringVar(&repoFlag, "repo", "", "repo id, short_id, or alias (default: fan out across registered repos)")
-	cmd.Flags().StringVar(&dir, "direction", "both", "out|in|both (aliases: callees|callers) — callees, callers, or both")
+	cmd.Flags().StringVar(&dir, "direction", "both", "out|in|both (aliases: callees|callers) - callees, callers, or both")
 	cmd.Flags().BoolVar(&jsonOut, "json", false, "emit JSON (eng_get_blast_radius shape)")
 	cmd.Flags().BoolVar(&dirty, "dirty", false, "seed from the staged overlay (uncommitted, pre-commit changes)")
 	cmd.Flags().BoolVar(&diff, "diff", false, "seed from a git diff: bare = working-tree vs HEAD; with a positional ref range (e.g. main..HEAD) = that range")
@@ -112,7 +112,7 @@ func blastModeFromFlags(args []string, dirty, diff bool) (graphcmd.BlastMode, st
 	case dirty && diff:
 		return 0, "", "", "", fmt.Errorf("blast: pass only one of --dirty or --diff")
 	case dirty && len(args) == 1:
-		return 0, "", "", "", fmt.Errorf("blast: --dirty seeds from staged changes, not a symbol — drop the positional argument")
+		return 0, "", "", "", fmt.Errorf("blast: --dirty seeds from staged changes, not a symbol - drop the positional argument")
 	case dirty:
 		return graphcmd.BlastDirty, "", "", "", nil
 	case diff && len(args) == 1:
@@ -146,7 +146,7 @@ func parseDiffRange(arg string) (string, string, error) {
 		return arg, "HEAD", nil
 	}
 	if refA == "" {
-		return "", "", fmt.Errorf("blast: --diff range %q has no base ref — write <ref_a>..<ref_b> (e.g. main..HEAD)", arg)
+		return "", "", fmt.Errorf("blast: --diff range %q has no base ref - write <ref_a>..<ref_b> (e.g. main..HEAD)", arg)
 	}
 	if refB == "" {
 		refB = "HEAD"

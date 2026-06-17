@@ -14,7 +14,7 @@ import (
 
 // DeadCodeCheck is a structural check that flags nodes with no inbound edges
 // on the promotion branch. "No inbound edges" is a necessary-but-not-sufficient
-// signal of deadness — the symbol could still be called by an external caller
+// signal of deadness - the symbol could still be called by an external caller
 // the graph cannot see (entry points, exported APIs, framework callbacks, test
 // helpers). To minimise false positives the check skips a small allowlist of
 // well-known external-entry shapes:
@@ -29,7 +29,7 @@ type DeadCodeCheck struct {
 	q ports.DeadCodeQuerier
 	// repoKind, when non-nil, returns the kind ("tracked" / "ephemeral")
 	// of a given repoID. Ephemeral cache-tier clones (registered by
-	// `veska search --repo <url>`) short-circuit to zero findings — the
+	// `veska search --repo <url>`) short-circuit to zero findings - the
 	// user is exploring an external codebase, not curating its findings,
 	// and a 75-file pflag clone otherwise emits ~220 low-severity
 	// dead-code findings on the upstream public API.
@@ -44,7 +44,7 @@ type DeadCodeOption func(*DeadCodeCheck)
 
 // WithDeadCodeRepoKindLookup wires a callback that returns a repo's Kind
 // ("tracked" / "ephemeral"). Used by Run to skip dead-code reporting on
-// ephemeral repos — siblings the autolink short-circuit added in
+// ephemeral repos - siblings the autolink short-circuit added in
 func WithDeadCodeRepoKindLookup(fn func(ctx context.Context, repoID string) (string, error)) DeadCodeOption {
 	return func(c *DeadCodeCheck) { c.repoKind = fn }
 }
@@ -98,7 +98,7 @@ func (c *DeadCodeCheck) Run(ctx context.Context, in Input) ([]*domain.Finding, e
 	// emits no CALLS edges the static graph can see; without this filter
 	// almost every method on a Value-shaped type in any library repo
 	// (the junior journey hit 220 on pflag) shows up as "no inbound
-	// edges". An error here fails open — we'd rather over-report than
+	// edges". An error here fails open - we'd rather over-report than
 	// suppress real findings on a tracked repo when the registry briefly
 	// hiccups.
 	var ifaceMethods map[string]struct{}
@@ -145,7 +145,7 @@ func (c *DeadCodeCheck) Run(ctx context.Context, in Input) ([]*domain.Finding, e
 }
 
 // deadCodeKinds is the set of node kinds for which "no inbound CALLS
-// edges" is a meaningful deadness signal — i.e. things the language
+// edges" is a meaningful deadness signal - i.e. things the language
 // actually CALLS. Container and sub-symbol kinds (package, file,
 // module, chunk, field) carry no inbound CALLS by construction
 // 'type', 'struct', and 'interface' were dropped from this
@@ -174,7 +174,7 @@ func isDeadCodeCandidate(n ports.NodeRef) bool {
 // isTestFile reports whether path is a unit-test source by file-name
 // convention across the languages veska indexes. Test-only helpers
 // (fixtures, mocks, table builders) are commonly referenced only by
-// their tests and as function values — neither of which produces a
+// their tests and as function values - neither of which produces a
 // CALLS edge today. Skipping symbols defined in test
 // files cuts a noisy class of false positives without weakening the
 // signal for production code.
@@ -188,7 +188,7 @@ func isTestFile(path string) bool {
 // isInterfaceMethodImpl reports whether name is a method whose bare
 // suffix matches one of the interface method names declared in the
 // same repo. Used by Run to skip dead-code reports on methods that
-// likely satisfy an interface contract — interface dispatch produces
+// likely satisfy an interface contract - interface dispatch produces
 // no CALLS edge the static graph can see. Names without
 // a '.' (orphan methods) and an empty ifaceMethods map are no-ops.
 func isInterfaceMethodImpl(name string, ifaceMethods map[string]struct{}) bool {
@@ -209,7 +209,7 @@ func isInterfaceMethodImpl(name string, ifaceMethods map[string]struct{}) bool {
 func isExternalEntry(n ports.NodeRef) bool {
 	name := n.Name
 	if name == "" {
-		// No name to reason about — be conservative and treat as external.
+		// No name to reason about - be conservative and treat as external.
 		return true
 	}
 

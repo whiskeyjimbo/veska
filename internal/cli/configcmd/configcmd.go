@@ -21,7 +21,7 @@ var ErrNoManager = errors.New("service manager not available")
 
 // Supervisor is the ISP-narrowed view of service.Manager that RunReload needs:
 // restart the daemon, then poll until it reports healthy. Declaring it in the
-// consuming package — sized to exactly the two methods this use case drives
+// consuming package - sized to exactly the two methods this use case drives
 // keeps configcmd from depending on Install/Uninstall/Start/Stop, mirroring the
 // method-injection narrowing upgradeCmd uses for its single Restart call. Any
 // service.Manager satisfies it.
@@ -106,7 +106,7 @@ func RunReload(ctx context.Context, p ReloadParams) error {
 		return fmt.Errorf("config reload: list repos: %w", err)
 	}
 	if len(lr.Repos) == 0 {
-		fmt.Fprintln(p.Out, "no repos registered — nothing to re-scan")
+		fmt.Fprintln(p.Out, "no repos registered - nothing to re-scan")
 		return nil
 	}
 	ok, failed := 0, 0

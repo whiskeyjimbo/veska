@@ -108,7 +108,7 @@ func TestWikiCmd_ByteIdenticalOutput(t *testing.T) {
 	// the wiki Handler stamps a wall-clock GeneratedAt in
 	// the page header on every render, which is non-deterministic by
 	// design. Strip that single line before the byte-identical
-	// comparison — the data rows (ranking input is the same) must still
+	// comparison - the data rows (ranking input is the same) must still
 	// match across runs.
 	stripGenerated := func(b []byte) []byte {
 		lines := bytes.Split(b, []byte("\n"))

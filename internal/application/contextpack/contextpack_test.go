@@ -116,7 +116,7 @@ func newAssembler(t *testing.T, opts ...contextpack.Option) *contextpack.Assembl
 	return a
 }
 
-// AC1 — symbol mode.
+// AC1 - symbol mode.
 func TestForSymbol_BundlesAllSections(t *testing.T) {
 	a := newAssembler(t)
 	p, err := a.ForSymbol(context.Background(), "r", "main", "/repo", "Target")
@@ -140,7 +140,7 @@ func TestForSymbol_BundlesAllSections(t *testing.T) {
 	}
 }
 
-// AC1 — task mode.
+// AC1 - task mode.
 func TestForTask_BundlesFromChangedFiles(t *testing.T) {
 	a := newAssembler(t)
 	p, err := a.ForTask(context.Background(), "r", "main", "/repo", "t1")
@@ -156,7 +156,7 @@ func TestForTask_BundlesFromChangedFiles(t *testing.T) {
 	}
 }
 
-// AC2 — oversized bundle truncated, not rejected.
+// AC2 - oversized bundle truncated, not rejected.
 func TestClip_TruncatesOversizedBundle(t *testing.T) {
 	a := newAssembler(t, contextpack.WithTokenBudget(1))
 	p, err := a.ForSymbol(context.Background(), "r", "main", "/repo", "Target")
@@ -193,7 +193,7 @@ func TestNewAssembler_RejectsNilDependency(t *testing.T) {
 	}
 }
 
-// AC3 — p95 latency under 50ms for a typical input.
+// AC3 - p95 latency under 50ms for a typical input.
 func TestForSymbol_P95Latency(t *testing.T) {
 	a := newAssembler(t)
 	const iter = 200

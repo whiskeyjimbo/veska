@@ -113,7 +113,7 @@ func TestUnionAndDedup(t *testing.T) {
 
 // TestNonTestCallerNotEndpoint: a function in a *_test.go file whose name is
 // not a go-test prefix (a helper) is not collected even when it directly calls
-// the prod node — it is walked through to whatever calls IT.
+// the prod node - it is walked through to whatever calls IT.
 func TestHelperInTestFileNotEndpoint(t *testing.T) {
 	r := &fakeReader{inbound: map[string][]ports.NodeRef{
 		"prod": {fn("h", "setupGraph", "x_test.go")}, // helper, no test above it
@@ -145,7 +145,7 @@ func TestCyclesTerminate(t *testing.T) {
 // TestMaxNodesValve stops the walk once the visited-node budget is exhausted.
 func TestMaxNodesValve(t *testing.T) {
 	// A long helper chain longer than the valve; the test entrypoint sits past
-	// the budget, so it is (safely) not reached — the valve trades recall for a
+	// the budget, so it is (safely) not reached - the valve trades recall for a
 	// bound, the documented behaviour.
 	r := &fakeReader{inbound: map[string][]ports.NodeRef{
 		"prod": {fn("h1", "helper1", "x_test.go")},

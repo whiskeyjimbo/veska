@@ -38,7 +38,7 @@ func (b *zbBench) Open(_ context.Context, path string) error {
 			if err := sqlitex.ExecuteTransient(conn, "PRAGMA foreign_keys=on;", nil); err != nil {
 				return err
 			}
-			// Match driver_sql.go — see comment there for why synchronous=NORMAL
+			// Match driver_sql.go - see comment there for why synchronous=NORMAL
 			// is set explicitly across drivers.
 			if err := sqlitex.ExecuteTransient(conn, "PRAGMA synchronous=NORMAL;", nil); err != nil {
 				return err

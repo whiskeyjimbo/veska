@@ -155,14 +155,14 @@ func TestDiff_BaselineRefUnreachable_EmitsBaselineRefNotIndexed(t *testing.T) {
 
 // acceptance #2: when both refs are reachable and a new
 // file containing a new symbol is added between them, the added symbol
-// is returned — NOT classified as a non-symbol change. The existing
+// is returned - NOT classified as a non-symbol change. The existing
 // classifier already does this, so the test guards against regressions
 // from the baseline-unreachable refactor.
 func TestDiff_NewFileWithNewSymbol_ClassifiedAsAdded(t *testing.T) {
 	m := &multiFileFiles{
 		changed: []string{"cmd/jwt.go"},
 		contents: map[string]string{
-			// File doesn't exist at refA (legitimately absent — sentinel
+			// File doesn't exist at refA (legitimately absent - sentinel
 			// wrapped by the mock). At refB it contains a new function.
 			"refB:cmd/jwt.go": "package cmd\nfunc usingJWT() {}\n",
 		},

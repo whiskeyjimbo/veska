@@ -30,8 +30,8 @@ func shortVersion() string {
 	return resolveVersion(info)
 }
 
-// versionCmd prints the binary's build info — module version, VCS revision,
-// commit time, and Go runtime — using runtime/debug.ReadBuildInfo so no
+// versionCmd prints the binary's build info - module version, VCS revision,
+// commit time, and Go runtime - using runtime/debug.ReadBuildInfo so no
 // ldflag-set version variable is needed.
 func versionCmd() *cobra.Command {
 	return &cobra.Command{

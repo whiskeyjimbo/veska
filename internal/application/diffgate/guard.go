@@ -22,7 +22,7 @@ var _ BlastRadius = (*blastradius.Service)(nil)
 
 // ScopeVerdict reports whether a candidate change stayed within the blast
 // radius of its target finding's anchor. It is a signal, not an action: the
-// Guard never blocks or merges — composition into a pass/fail gate is ll57.2.
+// Guard never blocks or merges - composition into a pass/fail gate is ll57.2.
 type ScopeVerdict struct {
 	// Contained is true when every changed node falls inside the allowed set
 	// (the anchor plus its blast radius, expanded by new nodes wired into it).
@@ -40,7 +40,7 @@ type ScopeVerdict struct {
 
 // Guard answers the blast-radius-containment half of the diff-safety gate: did
 // a candidate change stay within the anchor's blast radius? It distinguishes
-// "modified EXISTING distant code" (scope creep — offending) from "NEW code
+// "modified EXISTING distant code" (scope creep - offending) from "NEW code
 // wired into the allowed neighbourhood" (the fix's natural footprint
 // contained), so the canonical fix that adds a caller of a dead symbol is not
 // over-blocked. It is stateless and safe for concurrent
@@ -61,15 +61,15 @@ func NewGuard(radius BlastRadius) (*Guard, error) {
 // Check reports whether the candidate's changed nodes stay within the anchor's
 // blast radius. The allowed set starts as {anchor ∪ radius(anchor)} over the
 // base graph, then is expanded with NEW nodes (absent in the base) that the
-// candidate wires — via a resolved overlay edge — into the allowed set; the
+// candidate wires - via a resolved overlay edge - into the allowed set; the
 // expansion is run to a fixpoint so a chain of new nodes connected to the fix
 // is admitted. A changed node outside the resulting set is offending.
 // opts selects the radius policy (depth/direction/bounds); the zero value uses
-// the blastradius defaults. The Guard does no network IO — it reads the base
+// the blastradius defaults. The Guard does no network IO - it reads the base
 // radius and the in-memory ephemeral overlay.
 // Safe/unsafe asymmetry: when membership or connectivity can't be determined
 // (a base lookup error, an unresolved edge), the node stays OFFENDING
-// (over-block) rather than being admitted — a false "exceeded" over-blocks a
+// (over-block) rather than being admitted - a false "exceeded" over-blocks a
 // good change, but never lets scope creep pass.
 func (g *Guard) Check(ctx context.Context, eph *Ephemeral, anchorNodeID string, opts blastradius.Options) (ScopeVerdict, error) {
 	if eph == nil {
@@ -142,8 +142,8 @@ func (g *Guard) newNodes(ctx context.Context, eph *Ephemeral, changed []string) 
 	return out, nil
 }
 
-// admitNewWired adds to allowed every new node connected — through a resolved
-// candidate edge, in either direction — to a node already in allowed, repeated
+// admitNewWired adds to allowed every new node connected - through a resolved
+// candidate edge, in either direction - to a node already in allowed, repeated
 // to a fixpoint so a chain of new nodes wired to the fix is admitted. Only NEW
 // nodes are admitted this way: a modified EXISTING node outside the radius is
 // real scope creep and is never expanded in.
@@ -153,7 +153,7 @@ func (g *Guard) admitNewWired(allowed, newNodes map[string]struct{}, eph *Epheme
 	}
 	// Undirected adjacency over resolved overlay edges, restricted to endpoints
 	// we care about. An unresolved edge has no bound target, so it cannot
-	// establish connectivity — leaving its new node offending (over-block).
+	// establish connectivity - leaving its new node offending (over-block).
 	adj := make(map[string][]string)
 	for _, f := range eph.Overlay.Snapshot(eph.RepoID, eph.Branch) {
 		for _, e := range f.Edges {

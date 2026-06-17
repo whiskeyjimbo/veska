@@ -3,8 +3,8 @@
 // Background: the recall harness in tools/loadtest/recall
 // embeds the synthetic corpus Text field directly. It therefore does not
 // exercise the production FetchPending embed-text projection
-// (domain.EmbedText), so swapping projection variants — folding the
-// symbol signature and/or a code snippet into the embed text — does not
+// (domain.EmbedText), so swapping projection variants - folding the
+// symbol signature and/or a code snippet into the embed text - does not
 // move its measured recall number.
 // This harness closes that gap: it builds the recall corpus from
 // node-shaped projection inputs run through domain.EmbedText, the SAME
@@ -57,13 +57,13 @@ type ProjectionCorpus struct {
 // projection corpus. Each synthetic node's semantic Text is decomposed
 // into the projection fields:
 //
-//	Kind / SymbolPath / FilePath / Language — the structural identifiers
+//	Kind / SymbolPath / FilePath / Language - the structural identifiers
 //	  the production baseline projection joins. SymbolPath and FilePath
 //	  come straight from the synthetic node; Language is fixed to "go".
-//	Signature — a synthesized symbol signature that paraphrases the
+//	Signature - a synthesized symbol signature that paraphrases the
 //	  node's semantic content, consumed only by the +signature / +both
 //	  variants.
-//	Snippet — a synthesized one-line code snippet that restates the
+//	Snippet - a synthesized one-line code snippet that restates the
 //	  semantic content, consumed only by the +snippet / +both variants.
 //
 // The baseline projection therefore carries only the structural

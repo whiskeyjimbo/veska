@@ -21,7 +21,7 @@ func TestNewTracerProvider_EmptyEndpointReturnsError(t *testing.T) {
 }
 
 func TestNewTracerProvider_ValidEndpointReturnsProvider(t *testing.T) {
-	// Use a local address that likely isn't running — OTLP gRPC exporter creates
+	// Use a local address that likely isn't running - OTLP gRPC exporter creates
 	// the exporter lazily, so no dial happens at construction time.
 	tp, err := observability.NewTracerProvider("localhost:4317", 1.0)
 	if err != nil {

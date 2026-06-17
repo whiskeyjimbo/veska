@@ -22,9 +22,9 @@ type ServiceReport struct {
 // The broken marker is expected at <veskaHome>/broken.
 // Status rules:
 //
-//	"broken" — broken marker file is present (regardless of daemon state)
-//	"degraded" — no broken marker but daemon socket is unreachable
-//	"healthy" — daemon running and no broken marker
+//	"broken" - broken marker file is present (regardless of daemon state)
+//	"degraded" - no broken marker but daemon socket is unreachable
+//	"healthy" - daemon running and no broken marker
 func CheckService(veskaHome string) (ServiceReport, error) {
 	markerPath := filepath.Join(veskaHome, "broken")
 	sockPath := filepath.Join(veskaHome, "cli.sock")

@@ -188,7 +188,7 @@ func TestStatusProvider_HealthyWhenNoPending(t *testing.T) {
 
 // TestStatusProvider_OrphanPendingRefsNotCounted pins: a
 // pending ref whose node has been deleted (repo removal / re-promotion
-// churn left it dangling — node_embedding_refs has no FK to nodes) is NOT
+// churn left it dangling - node_embedding_refs has no FK to nodes) is NOT
 // real backlog. The embedder's FetchPending JOIN already skips it, so
 // eng_get_status must too, or the daemon reports degraded forever with a
 // queue the worker considers fully drained.
@@ -240,7 +240,7 @@ func TestStatusProvider_OrphanPendingRefsNotCounted(t *testing.T) {
 // "degraded" (it now reports the backlog as a separate informational line),
 // `eng_get_status` MUST keep reporting `degraded_reasons:[embeddings_pending]`
 // while pending_embeds > 0. Agents rely on that signal to choose between the
-// semantic and lexical search paths during the indexing-lag window — that
+// semantic and lexical search paths during the indexing-lag window - that
 // contract predates the doctor reconciliation and must not regress.
 func TestStatusProvider_BacklogStaysDegradedForAgentContract(t *testing.T) {
 	db := providersTestDB(t)
@@ -414,7 +414,7 @@ func TestRepoRegistrar_AddRepo_TriggersReparser(t *testing.T) {
 	if repoID == "" {
 		t.Fatalf("AddRepo returned empty repoID")
 	}
-	// 1s is a generous ceiling for "non-blocking" — under -race the harness
+	// 1s is a generous ceiling for "non-blocking" - under -race the harness
 	// overhead alone can push a fully-async dispatch into the high-hundreds
 	// of milliseconds. The point is to catch a *synchronous wait* on the
 	// reparser, which would be many seconds (the blocked reparser holds the
@@ -452,7 +452,7 @@ func TestRepoRegistrar_AddRepo_TriggersReparser(t *testing.T) {
 }
 
 // TestRepoRegistrar_AddRepo_ReparserErrorIsNonFatal asserts that a reparser
-// failure is logged (not returned) — AddRepo's contract is success on a
+// failure is logged (not returned) - AddRepo's contract is success on a
 // successful registration regardless of the background scan outcome.
 func TestRepoRegistrar_AddRepo_ReparserErrorIsNonFatal(t *testing.T) {
 	db, root := newAddRepoTestEnv(t)
@@ -572,7 +572,7 @@ func TestRepoRegistrar_AddRepo_SeedsLiveWatcher(t *testing.T) {
 }
 
 // TestRepoRegistrar_AddRepo_WatcherErrorIsNonFatal asserts that a watchAdd
-// failure is logged (not returned) — registration succeeds and the cold scan
+// failure is logged (not returned) - registration succeeds and the cold scan
 // still dispatches even when seeding the live watcher fails. Reasoning:
 // daemon restart can recover the watch, but losing registration over a
 // transient inotify error would be a worse user-facing failure.
@@ -635,7 +635,7 @@ func TestRepoRegistrar_AddRepo_ReDispatchesScanForDirectWriteRow(t *testing.T) {
 			reparserCalled.Add(1)
 			return nil
 		},
-		// recordFor returns a record with EMPTY LastPromotedSHA — the
+		// recordFor returns a record with EMPTY LastPromotedSHA - the
 		// signature of a direct-write row that was never scanned.
 		recordFor: func(_ context.Context, repoID string) (application.RepoRecord, error) {
 			return application.RepoRecord{RepoID: repoID, RootPath: root, LastPromotedSHA: ""}, nil

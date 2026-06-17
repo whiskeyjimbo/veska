@@ -147,7 +147,7 @@ func TestRunCycles_E2E_CrossFileCycle_Fails(t *testing.T) {
 
 // Base-side splice guard: a PRE-EXISTING cross-file cycle
 // (a.go A->B, b.go B->A both at base-ref) with a body-only change to b.go must
-// PASS — it is not net-new. This is the symmetric companion to CrossFileCycle:
+// PASS - it is not net-new. This is the symmetric companion to CrossFileCycle:
 // re-promoting b.go into the BASE clone cascade-deletes the inbound A->B edge
 // (src in unchanged a.go), so without splicing it back from the live index the
 // base graph would show no cycle and the gate would false-FAIL.
@@ -172,11 +172,11 @@ func TestRunCycles_E2E_PreExistingCrossFileCycle_Passes(t *testing.T) {
 	}
 }
 
-// INDEX-AHEAD HARDENING — the former false-PASS, now FAILing.
+// INDEX-AHEAD HARDENING - the former false-PASS, now FAILing.
 // The index is seeded AHEAD at the candidate's cyclic content (violating the
 // indexed-HEAD == base-ref precondition). Before pinning, both diff-gate legs
-// collapsed — base edges (from the live index) already held the cycle, and
-// ChangedNodeIDs went empty because the overlay matched the index — so the
+// collapsed - base edges (from the live index) already held the cycle, and
+// ChangedNodeIDs went empty because the overlay matched the index - so the
 // net-new cycle wrongly PASSED. With buildPinnedEphemeral the base clone
 // re-promotes base-ref's acyclic x.go and the after-state clone chains from it,
 // so the cycle is correctly net-new and the gate FAILs naming A and B.

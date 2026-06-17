@@ -207,7 +207,7 @@ func TestIngester_Save_ParseFailureIdempotent(t *testing.T) {
 	if len(got) != 2 {
 		t.Fatalf("expected 2 Save calls, got %d", len(got))
 	}
-	// Idempotency means the same FindingID on every call — repo SQL layer
+	// Idempotency means the same FindingID on every call - repo SQL layer
 	// then collapses to one row via ON CONFLICT(finding_id, branch).
 	if got[0].FindingID != got[1].FindingID {
 		t.Errorf("FindingID not deterministic: %q vs %q", got[0].FindingID, got[1].FindingID)
@@ -236,7 +236,7 @@ func TestIngester_Save_CleanReparseClosesParseFailureFinding(t *testing.T) {
 
 	const path = "src/bad.ts"
 
-	// First ingest: file fails to parse — a parse-failure finding opens.
+	// First ingest: file fails to parse - a parse-failure finding opens.
 	parser.result = &domain.ParseResult{
 		Failures: []domain.ParseFailure{{Line: 3, Message: "syntax error"}},
 	}
@@ -251,7 +251,7 @@ func TestIngester_Save_CleanReparseClosesParseFailureFinding(t *testing.T) {
 		t.Fatalf("finding closed prematurely: reason %q", r)
 	}
 
-	// Second ingest: same file now parses cleanly — the finding must close.
+	// Second ingest: same file now parses cleanly - the finding must close.
 	parser.result = &domain.ParseResult{Nodes: []*domain.Node{{}}}
 	ing.Save(context.Background(), "repo1", "main", path, []byte("package x"))
 

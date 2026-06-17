@@ -13,7 +13,7 @@ import (
 )
 
 // RunShow prints the effective resolved config: defaults merged with
-// ~/.veska/config.toml and env-var overrides — the same pipeline the daemon
+// ~/.veska/config.toml and env-var overrides - the same pipeline the daemon
 // uses at boot, so the operator sees the EXACT shape the daemon will observe
 // Read-only.
 func RunShow(w io.Writer, jsonOut bool) error {

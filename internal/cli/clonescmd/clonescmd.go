@@ -22,7 +22,7 @@ type cloneMember struct {
 	LineStart int    `json:"line_start"`
 }
 
-// clonesResp mirrors the MCP FindClonesResponse shape — enough to render
+// clonesResp mirrors the MCP FindClonesResponse shape - enough to render
 // either exact groups or near clusters without importing the infra package.
 type clonesResp struct {
 	Mode   string `json:"mode"`
@@ -110,7 +110,7 @@ func renderGroups(w io.Writer, resp clonesResp) {
 func renderClusters(w io.Writer, resp clonesResp) {
 	if len(resp.Clusters) == 0 {
 		fmt.Fprintln(w, "no near-duplicate clusters found")
-		fmt.Fprintln(w, "(near mode needs SIMILAR_TO edges with scores — reindex the repo if it was promoted before scoring landed)")
+		fmt.Fprintln(w, "(near mode needs SIMILAR_TO edges with scores - reindex the repo if it was promoted before scoring landed)")
 		return
 	}
 	for i, c := range resp.Clusters {

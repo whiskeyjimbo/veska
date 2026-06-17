@@ -31,7 +31,7 @@ type DailyTokenStore interface {
 // Quota enforces the review token caps. The per-commit total is held in memory
 // (a promotion's review jobs run close together); the per-day total is
 // persisted via a DailyTokenStore so it survives a daemon restart. A cap of
-// zero means "unlimited" — the corresponding check never trips.
+// zero means "unlimited" - the corresponding check never trips.
 // Quota is safe for concurrent use.
 type Quota struct {
 	maxPerCommit int
@@ -44,7 +44,7 @@ type Quota struct {
 }
 
 // QuotaOption configures a Quota. It mirrors the HandlerOption convention in
-// this package and search.Option elsewhere — optional dependencies are
+// this package and search.Option elsewhere - optional dependencies are
 // injected via With* helpers rather than positional params.
 type QuotaOption func(*Quota)
 

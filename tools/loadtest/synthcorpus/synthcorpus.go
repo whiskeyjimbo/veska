@@ -21,7 +21,7 @@ import (
 )
 
 // FakeEmbeddingDim is the dimensionality of the deterministic fake
-// embedder. We pick 64 — large enough that the cluster centroid
+// embedder. We pick 64 - large enough that the cluster centroid
 // projection is well-conditioned, small enough that 250k vectors fit
 // comfortably in memory for the sqlite-vec linear-scan backend.
 const FakeEmbeddingDim = 64

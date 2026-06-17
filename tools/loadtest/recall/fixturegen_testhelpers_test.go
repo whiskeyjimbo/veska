@@ -16,7 +16,7 @@ import (
 // POST /api/embeddings with an Ollama-shaped JSON envelope. Each request
 // gets a vector pointing along a different axis (request idx selects the
 // non-zero dimension), so the vectors stay distinct even after the
-// generator L2-normalises them — magnitude-only variation would collapse
+// generator L2-normalises them - magnitude-only variation would collapse
 // to identical unit vectors.
 func newOllamaStub(t *testing.T, dim int) *httptest.Server {
 	t.Helper()

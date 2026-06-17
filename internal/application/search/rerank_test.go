@@ -39,7 +39,7 @@ func TestSplitIdentifier_DottedSymbolPath(t *testing.T) {
 
 func TestSplitIdentifier_AcronymRun(t *testing.T) {
 	// HTTPServer should split as http + server. Without acronym
-	// handling we'd get [h,t,t,p,server] or [httpserver] — both wrong.
+	// handling we'd get [h,t,t,p,server] or [httpserver] - both wrong.
 	got := splitIdentifier("HTTPServer")
 	want := []string{"http", "server"}
 	if !reflect.DeepEqual(got, want) {
@@ -89,7 +89,7 @@ func TestRerank_IdentifierStems_CamelMatch(t *testing.T) {
 }
 
 // TestRerank_IdentifierStems_NoPartialWordMatch: a query token "conf"
-// must NOT match "config" via the stems matcher — stems are exact
+// must NOT match "config" via the stems matcher - stems are exact
 // subword equality, not prefix. (Substring matcher could pick this up
 // elsewhere; this test pins stem semantics, not the overall rerank.)
 func TestRerank_IdentifierStems_NoPartialWordMatch(t *testing.T) {
@@ -111,7 +111,7 @@ func TestRerank_VerbSynonym_RegisterMatchesAdd(t *testing.T) {
 	in := []Result{
 		// Large method that merely mentions subcommands in its body.
 		{NodeID: "exec", Score: 0.020, SymbolPath: "Command.ExecuteC", FilePath: "/cobra/command.go", Kind: "method"},
-		// Canonical answer — small method whose name is Add<Noun>.
+		// Canonical answer - small method whose name is Add<Noun>.
 		{NodeID: "add", Score: 0.011, SymbolPath: "Command.AddCommand", FilePath: "/cobra/command.go", Kind: "method"},
 	}
 	out := rerank(in, "register subcommand")
@@ -122,7 +122,7 @@ func TestRerank_VerbSynonym_RegisterMatchesAdd(t *testing.T) {
 }
 
 // TestRerank_VerbSynonym_LookupMatchesGet pins the synonym table on the
-// retrieve-verb cluster (get / fetch / lookup / find / resolve) — a
+// retrieve-verb cluster (get / fetch / lookup / find / resolve) - a
 // query "lookup config" should lift GetConfig above unrelated rows.
 func TestRerank_VerbSynonym_LookupMatchesGet(t *testing.T) {
 	in := []Result{
@@ -138,11 +138,11 @@ func TestRerank_VerbSynonym_LookupMatchesGet(t *testing.T) {
 
 // TestRerank_VerbSynonym_NoFalsePositive guards that the synonym layer
 // does NOT lift a candidate whose leading subword is unrelated to any
-// query token — the boost is gated on the symbol's HEAD identifier (the
+// query token - the boost is gated on the symbol's HEAD identifier (the
 // verb position), not on substring presence anywhere.
 func TestRerank_VerbSynonym_NoFalsePositive(t *testing.T) {
 	in := []Result{
-		// "add" appears mid-identifier as "ToAdd" suffix — not a verb position.
+		// "add" appears mid-identifier as "ToAdd" suffix - not a verb position.
 		{NodeID: "1", Score: 0.5, SymbolPath: "ItemsToAdd", FilePath: "/x/items.go", Kind: "function"},
 		// A plain unrelated function.
 		{NodeID: "2", Score: 0.5, SymbolPath: "Serialize", FilePath: "/x/io.go", Kind: "function"},
@@ -150,7 +150,7 @@ func TestRerank_VerbSynonym_NoFalsePositive(t *testing.T) {
 	out := rerank(in, "register subcommand")
 	// Both started at score 0.5 with no other rerank signals; expect
 	// ItemsToAdd NOT lifted above Serialize (no leading verb match).
-	// We assert by checking neither got a synonym bonus — equal final
+	// We assert by checking neither got a synonym bonus - equal final
 	// scores preserve input order.
 	if out[0].NodeID != "1" {
 		t.Errorf("stable order broken (unexpected lift): got %s,%s", out[0].SymbolPath, out[1].SymbolPath)

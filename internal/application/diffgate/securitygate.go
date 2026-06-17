@@ -19,7 +19,7 @@ const (
 	// at base.
 	FailNewVulnDep = "new_vulnerable_dependency"
 	// FailVulnUnchecked: vuln scanning is configured but could not run over the
-	// candidate (manifest read / parse / scan error) — degraded, never a pass.
+	// candidate (manifest read / parse / scan error) - degraded, never a pass.
 	// Distinct from "vuln not configured", which is not-applicable and silent.
 	FailVulnUnchecked = "vuln_unchecked"
 )
@@ -109,9 +109,9 @@ func (v SecurityVerdict) ExitCode() int {
 }
 
 // SecurityGate gates a candidate change on net-new security findings under two
-// rules: secret_leak (added-line scan — language-agnostic) and
+// rules: secret_leak (added-line scan - language-agnostic) and
 // vulnerable_dependency (manifest finding-delta by finding_id). It is a blanket
-// gate: no target finding, no graph index — pure git refs + scanners.
+// gate: no target finding, no graph index - pure git refs + scanners.
 type SecurityGate struct {
 	scanSecrets SecretsScanFn
 	scanDeps    DepsScanFn
@@ -131,7 +131,7 @@ func (g *SecurityGate) Evaluate(ctx context.Context, in SecurityInput) (Security
 	v := SecurityVerdict{VulnApplicable: g.vulnEnabled}
 
 	// secret_leak: scanning the candidate's added lines yields ONLY net-new
-	// secrets — a new secret must land on an added/modified line, and a
+	// secrets - a new secret must land on an added/modified line, and a
 	// pre-existing secret on an untouched line is never scanned. No base diff.
 	secrets, err := g.scanSecrets(ctx, checks.Input{RepoID: in.RepoID, Branch: in.Branch, AddedLines: in.AddedLines})
 	if err != nil {

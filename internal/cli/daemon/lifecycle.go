@@ -60,7 +60,7 @@ func (d *Daemon) Start(ctx context.Context) error {
 
 // startMetricsListener binds the Prometheus metrics HTTP listener when metrics
 // are enabled; its closer is shut down in Stop. A bind failure is logged, not
-// fatal — a daemon without a metrics endpoint is still a valid running daemon.
+// fatal - a daemon without a metrics endpoint is still a valid running daemon.
 func (d *Daemon) startMetricsListener() {
 	if d.metrics == nil {
 		return
@@ -116,7 +116,7 @@ func (d *Daemon) rehydrateVectors() {
 }
 
 // seedWatcher registers every known repository with the fsnotify watcher. A
-// failed or empty listing is logged, not fatal — a daemon watching zero repos
+// failed or empty listing is logged, not fatal - a daemon watching zero repos
 // is still a valid running daemon.
 func (d *Daemon) seedWatcher() {
 	repos, err := repo.List(d.ctx, d.pools.ReadDB)
@@ -187,7 +187,7 @@ func (d *Daemon) startVulnRefresher() {
 	go d.vulnRefresher.Run(d.ctx)
 }
 
-// sumCounts returns the total row count across all buckets — used to gate
+// sumCounts returns the total row count across all buckets - used to gate
 // the "rehydrated vectors" log line to non-zero hydrates so a fresh install
 // doesn't emit a misleading "rehydrated 0" message.
 func sumCounts(counts map[string]int) int {
@@ -317,7 +317,7 @@ func (d *Daemon) awaitBackgroundGoroutines(timeoutC <-chan time.Time) {
 
 // drainScans waits for in-flight AddRepo cold-scan goroutines
 // under the shared budget. ctx is already cancelled so a well-behaved reparser
-// exits promptly; a stuck scan does not wedge shutdown — we fall through after
+// exits promptly; a stuck scan does not wedge shutdown - we fall through after
 // the deadline and proceed with pool close.
 func (d *Daemon) drainScans(timeoutC <-chan time.Time) {
 	if d.scanWG == nil {

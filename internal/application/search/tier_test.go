@@ -61,7 +61,7 @@ func TestNormalizeScores_MinMaxRescaledTo01(t *testing.T) {
 
 func TestNormalizeScores_AllEqualScores(t *testing.T) {
 	// when the result set has zero spread (all scores
-	// equal, or only one result), every hit gets 1.0 — no divide-by
+	// equal, or only one result), every hit gets 1.0 - no divide-by
 	// zero, and the caller still sees a meaningful "this is the best
 	// we've got" signal.
 	in := []search.Result{
