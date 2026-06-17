@@ -25,6 +25,13 @@ they reason from the same structural ground truth instead of guessing.
   it takes effect from the next `veska service start` (restart the service
   after editing the block). New scans pick it up automatically; to scan
   already-promoted repos retroactively, run `veska reindex <path>`.
+- **Duplicate & similar-code detection.** Find copy-paste and drifted clones
+  for de-dupe triage: `eng_find_clones` for one symbol-group mode at a time
+  (`exact` byte-identical, or `near` fuzzy via stored similarity), and
+  `eng_find_clusters` for a whole-repo (or cross-repo) sweep across `exact`,
+  `structural` (Type-2, same shape after renaming), and `near` tiers, ranked
+  tightest first. Exact/structural are deterministic hashes; near reads the
+  similarity scores auto-link already stored (no new embedding sweep).
 - **Optional LLM review.** An off-by-default post-promotion review pipeline.
 - **Mechanical wiki.** Hot-zones and entry-points computed from the graph,
   no LLM in the path. The `eng_get_hot_zone` and `eng_get_entry_points`
@@ -284,7 +291,7 @@ Key environment variables:
 |---|---|---|
 | `VESKA_HOME` | Data root | `~/.veska` |
 | `VESKA_EMBEDDER` | Embedder election: `auto` (model2vec→static-v2), or force `model2vec` / `static` / `ollama` | `auto` |
-| `VESKA_VECTOR_BACKEND` | `sqlite-vec` or `usearch` | `sqlite-vec` |
+| `VESKA_VECTOR_BACKEND` | `memory` (in-process `memvec` linear scan) or `usearch` (HNSW) | `memory` |
 | `VESKA_OLLAMA_URL` | Ollama endpoint - review pipeline, and `VESKA_EMBEDDER=ollama` | `http://localhost:11434` |
 | `VESKA_EMBED_MODEL` | Ollama embedding model - only when `VESKA_EMBEDDER=ollama` | `nomic-embed-text` |
 
@@ -310,7 +317,7 @@ docs/                 design set (SOLO-NN sections), milestones, operations runb
 
 ## MCP tools
 
-The daemon exposes 36 tools over a Unix-socket JSON-RPC server (forwarded to
+The daemon exposes 38 tools over a Unix-socket JSON-RPC server (forwarded to
 editors by `veska-mcp`). Tool names follow `eng_<verb>_<object>`. Quick map:
 
 | Family | Tools |
@@ -319,6 +326,7 @@ editors by `veska-mcp`). Tool names follow `eng_<verb>_<object>`. Quick map:
 | Repo lifecycle | `eng_add_repo`, `eng_remove_repo`, `eng_promote_repo`, `eng_reindex_repo`, `eng_set_repo_alias`, `eng_remove_repo_alias` |
 | Graph | `eng_find_symbol`, `eng_get_node`, `eng_get_file_nodes`, `eng_get_call_chain` |
 | Search | `eng_search_semantic`, `eng_search_similar`, `eng_find_related` (semantic neighbours of the code at a `file_path`+`line`) |
+| Duplicates | `eng_find_clones` (duplicate groups for one mode: `exact` byte-identical or `near` fuzzy), `eng_find_clusters` (whole-repo / cross-repo de-dupe triage across `exact`/`structural`/`near` tiers, tightest first) |
 | Blast radius | `eng_get_blast_radius`, `eng_get_diff_blast_radius`, `eng_get_dirty_blast_radius` |
 | Context | `eng_get_context_pack`, `eng_find_changed_symbols` (takes `ref_a`/`ref_b` or aliases `base`/`head`; defaults to `HEAD~1..HEAD`; chunks filtered, comment-only diffs surface `non_symbol_changes_only` in `degraded_reasons`) |
 | Dependencies | `eng_list_dependencies` (external modules the repo CALLS into, ranked by call-site count) |
