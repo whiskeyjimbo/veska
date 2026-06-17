@@ -8,9 +8,6 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/application/search"
 )
 
-// verification — eng_search_semantic's PendingEmbedsCounter
-// contract is honoured: the token, the public response shape, and the
-// pluggable interface that wires from sqlite.EmbeddingRefsRepo.
 
 type stubPendingCounter struct{ n int }
 
@@ -18,11 +15,7 @@ func (s *stubPendingCounter) CountPending(ctx context.Context) (int, error) {
 	return s.n, nil
 }
 
-// Compile-time guard: PendingEmbedsCounter is what the handler type-asserts
-// on against SimilarLookup. If its shape ever changes, every call site
-// (incl. wire.go's assertion from *sqlite.EmbeddingRefsRepo) must follow
-// pin that contract here so a rename trips this test instead of silently
-// dropping the degraded signal.
+// Compile-time assertion ensures stubPendingCounter implements the PendingEmbedsCounter interface.
 var _ PendingEmbedsCounter = (*stubPendingCounter)(nil)
 
 func TestSearchSemantic_PendingTokenStable(t *testing.T) {
@@ -31,8 +24,7 @@ func TestSearchSemantic_PendingTokenStable(t *testing.T) {
 	}
 }
 
-// TestSearchSemantic_DegradedReasonsRoundTripJSON guards against an
-// accidental serializer drop of the new field.
+// TestSearchSemantic_DegradedReasonsRoundTripJSON ensures that the DegradedReasons field is correctly serialized to and deserialized from JSON.
 func TestSearchSemantic_DegradedReasonsRoundTripJSON(t *testing.T) {
 	resp := SearchResponse{
 		Results:         []searchHitDTO{},
@@ -53,9 +45,7 @@ func TestSearchSemantic_DegradedReasonsRoundTripJSON(t *testing.T) {
 	}
 }
 
-// TestSearchSemantic_StubReturnsConfiguredCount exercises the stub used
-// by future integration tests; verifies the pending counter contract
-// returns the configured value without error.
+// TestSearchSemantic_StubReturnsConfiguredCount verifies that the stub counter returns its configured value correctly.
 func TestSearchSemantic_StubReturnsConfiguredCount(t *testing.T) {
 	pc := &stubPendingCounter{n: 42}
 	n, err := pc.CountPending(context.Background())

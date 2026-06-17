@@ -15,18 +15,13 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/core/protocol"
 )
 
-// This file holds the eng_search_semantic handler and its cross-repo fanout
-// fusion. The tool registration, shared response types, and options live in
-// tools_search.go; the similar / find_related handlers live in
-// tools_search_similar.go.
+
 
 type searchSemanticParams struct {
 	Query  string `json:"query"`
 	RepoID string `json:"repo_id"`
 	Branch string `json:"branch"`
-	// K is the result count. 'limit' is accepted as an alias because
-	// every other MCP tool we expose uses 'limit' and callers naturally
-	// reach for it first. When both are set, K wins.
+	// K is the result count.
 	K     int `json:"k,omitempty"`
 	Limit int `json:"limit,omitempty"`
 }
@@ -73,9 +68,7 @@ func makeSearchSemanticHandler(svc *search.Service, rec *savings.Recorder, repos
 			}
 		}
 		var indexing []string
-		// empty search result during an active cold scan
-		// is the indexing window. Surface it so a junior who just ran
-		// 'veska search' on a freshly-added repo knows to retry.
+		// Empty results during active scanning return an indexing degraded reason.
 		if len(dtos) == 0 {
 			if ids, busy := indexingRepoIDs(scans); busy {
 				reasons = append(reasons, protocol.DegradedReasonIndexingInProgress)
@@ -94,30 +87,9 @@ func makeSearchSemanticHandler(svc *search.Service, rec *savings.Recorder, repos
 	}
 }
 
-// runSemanticFanout dispatches a semantic-search query across one or
-// more (repo_id, branch) targets and returns the top-K results.
-// Single-repo (fanout=false): the existing svc.Semantic pipeline runs
-// intra-repo RRF + post-fusion rerank — and the response is returned
-// verbatim. Byte-stable with the pre-bcn behaviour.
-// Multi-repo (fanout=true): every repo is queried in
-// parallel via svc.SemanticCandidates which returns un-fused, hydrated
-// candidates with per-retriever ranks AND raw vector scores. When any
-// candidate carries a vector score — the common case, one daemon =
-// one embedder spanning every repo — the pool is fused by COSINE
-// SIMILARITY so a stronger match in repo A beats a
-// weaker one in repo B even though both ranked 1 locally. Lexical
-// confirms a candidate via a small multiplier; lexical-only
-// candidates survive via a small RRF baseline. When no vector score
-// is available, falls back to the original global RRF.
-// Returns (results, repoByNode, reasons). repoByNode keys hits to the
-// repo they came from so the handler can populate per-hit repo_id.
-// This is a verbatim relocation of the pre-existing fanout/fusion logic
-// (/uuuk), unchanged by the file split. The per-function size gates
-// are diff-scoped (--new-from-merge-base) and only flag it because the move
-// makes git see it as new code; restructuring this fusion path to satisfy them
-// would add behaviour risk for no benefit.
+// runSemanticFanout queries targets and fuses results using cosine similarity or rank reciprocal fusion.
 //
-//nolint:funlen,cyclop,revive // see note above: verbatim relocation, diff-scoped gate
+//nolint:funlen,cyclop,revive
 func runSemanticFanout(
 	ctx context.Context,
 	svc *search.Service,
@@ -267,16 +239,7 @@ func runSemanticFanout(
 	return out, repoByNode, reasonsSet, nil
 }
 
-// recordSavings is the savings-telemetry side-effect for a successful
-// semantic search. It is intentionally fire-and-forget: a write error
-// is silently dropped so the search hot path never fails for telemetry
-// reasons, and a nil recorder is a no-op (handled inside Record).
-// Results are partitioned by repo: a fanout search across
-// N repos writes one Entry per repo so the rollup can break down savings
-// per repo. repoByNode maps each hit's NodeID to its repo (populated only
-// on the fanout path); when it is nil or lacks an entry, defaultRepoID
-// the single resolved target — is used. An empty result set records
-// nothing.
+// recordSavings records semantic search savings telemetry per repository.
 func recordSavings(ctx context.Context, rec *savings.Recorder, repos application.RepoLister, query string, results []search.Result, repoByNode map[string]string, defaultRepoID string) {
 	if rec == nil {
 		return
@@ -302,10 +265,7 @@ func recordSavings(ctx context.Context, rec *savings.Recorder, repos application
 	}
 }
 
-// rootPathsByRepoID lists registered repos and indexes their absolute
-// working-tree roots by repo_id. A nil lister or a list error yields an empty
-// map — savings telemetry degrades to FileChars=0 rather than failing the
-// search (EntryFor tolerates an empty root).
+// rootPathsByRepoID resolves and maps repository IDs to their filesystem roots.
 func rootPathsByRepoID(ctx context.Context, repos application.RepoLister) map[string]string {
 	out := map[string]string{}
 	if repos == nil {

@@ -1,29 +1,19 @@
 package mcp
 
-// Envelope is the standard MCP response wrapper for all tool responses.
-// Tools embed or compose this struct in their specific response types.
-// DegradedReasons is intentionally non-omitempty so the empty case
-// serializes as per the README's "empty collections serialize as "
-// contract. IncludedStaging is a scalar default-false flag
-// so omitempty is fine there.
+// Envelope wraps all tool responses to carry staging inclusion status and degradation reasons.
+// DegradedReasons is intentionally not marked omitempty so that it serializes as an empty JSON array rather than null.
 type Envelope struct {
 	IncludedStaging bool     `json:"included_staging,omitempty"`
 	DegradedReasons []string `json:"degraded_reasons"`
 }
 
-// DaemonState provides the current degradation state to the overlay helper.
-// Implementations are provided by the daemon bootstrap.
+// DaemonState provides the current degradation state during startup resync or wake-reconciliation.
 type DaemonState interface {
-	// IsSyncing returns true if startup resync is in progress.
 	IsSyncing() bool
-	// IsReconciling returns true if wake-reconcile is in progress.
 	IsReconciling() bool
 }
 
-// BuildEnvelope constructs the Envelope for a tool response.
-// stagingRead: whether this tool attempted to read staging.
-// stagingOK: whether the staging read succeeded (false triggers staging_unavailable).
-// state: current daemon state (may be nil — treated as all-false).
+// BuildEnvelope constructs the Envelope for a tool response, capturing daemon degradation states and staging read statuses.
 func BuildEnvelope(stagingRead bool, stagingOK bool, state DaemonState) Envelope {
 	reasons := []string{}
 
@@ -42,14 +32,14 @@ func BuildEnvelope(stagingRead bool, stagingOK bool, state DaemonState) Envelope
 		includedStaging = true
 	}
 
-	// Always emit a non-nil slice so json.Marshal renders not null
+	// We return an empty slice instead of nil to guarantee the field serializes as an empty JSON array.
 	return Envelope{
 		IncludedStaging: includedStaging,
 		DegradedReasons: reasons,
 	}
 }
 
-// AppendDegradedReason returns a new slice with reason appended (avoids mutating the original).
+// AppendDegradedReason returns a new slice with the reason appended, avoiding in-place mutation of the original slice.
 func AppendDegradedReason(reasons []string, reason string) []string {
 	result := make([]string, len(reasons), len(reasons)+1)
 	copy(result, reasons)

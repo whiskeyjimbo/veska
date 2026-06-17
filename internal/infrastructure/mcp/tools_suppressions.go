@@ -12,11 +12,7 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/core/ports"
 )
 
-// RegisterSuppressionTools registers suppression management tools on r.
-// db is the SQLite connection that backs the suppressions table.
-// aw is an optional AuditWriter; pass nil to disable audit logging.
-// repos is an optional RepoLister; when supplied, eng_list_suppressions
-// auto-resolves repo_id from the single registered repo.
+// RegisterSuppressionTools registers tools for managing finding suppressions.
 func RegisterSuppressionTools(r *Registry, db *sql.DB, aw ports.AuditWriter, repos application.RepoLister) {
 	r.MustRegister(ToolSpec{
 		Name:            "eng_suppress_finding",
@@ -35,8 +31,6 @@ func RegisterSuppressionTools(r *Registry, db *sql.DB, aw ports.AuditWriter, rep
 	})
 }
 
-// eng_suppress_finding
-
 type suppressFindingParams struct {
 	FindingID string `json:"finding_id"`
 	Branch    string `json:"branch"`
@@ -46,7 +40,7 @@ type suppressFindingParams struct {
 	ExpiresAt *int64 `json:"expires_at,omitempty"`
 }
 
-// suppressFindingInputSchema describes the params object for eng_suppress_finding.
+
 var suppressFindingInputSchema = json.RawMessage(`{
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "type": "object",
@@ -62,7 +56,6 @@ var suppressFindingInputSchema = json.RawMessage(`{
   "required": ["finding_id", "reason"]
 }`)
 
-// suppressFindingOutputSchema describes the result object for eng_suppress_finding.
 var suppressFindingOutputSchema = json.RawMessage(`{
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "type": "object",
@@ -88,18 +81,12 @@ func makeSuppressFindingHandler(db *sql.DB, aw ports.AuditWriter) ToolHandler {
 			p.Scope = "finding"
 		}
 
-		// For scope='finding' the FindingID must reference an actual row in
-		// findings. branch/repo_id are derived from the row when omitted, so
-		// callers can address a finding by id alone. When the
-		// caller supplies them, they must match the row's values. Other scopes
-		// carry a different kind of target (rule name, file path) and require
-		// the caller to provide branch/repo_id explicitly.
+
 		if p.Scope == "finding" {
-			// accept an unambiguous prefix.
+
 			fullID, rpcErr := resolveFindingPrefix(ctx, db, p.FindingID, p.Branch)
 			if rpcErr != nil {
-				// suppress historically returned InvalidParams for not-found;
-				// keep that for scope-mismatch cases by translating NotFound.
+
 				if rpcErr.Code == CodeNotFound {
 					rpcErr.Code = CodeInvalidParams
 				}
@@ -173,8 +160,6 @@ func makeSuppressFindingHandler(db *sql.DB, aw ports.AuditWriter) ToolHandler {
 	}
 }
 
-// eng_list_suppressions
-
 type listSuppressionsParams struct {
 	RepoID string `json:"repo_id"`
 	Branch string `json:"branch"`
@@ -199,22 +184,14 @@ func makeListSuppressionsHandler(db *sql.DB, repos application.RepoLister) ToolH
 		if rpcErr := bindParams(raw, &p); rpcErr != nil {
 			return nil, rpcErr
 		}
-		// when exactly one repo is registered, auto-resolve
-		// repo_id so the caller does not have to look it up.
-		// an empty repo_id is no longer fatal — the underlying
-		// query is repo-agnostic, so we mirror eng_list_findings's default
-		// and list across every repo when ambiguous instead of erroring.
-		// Explicit repo_id still validates so callers that pass a typo
-		// learn about it.
+
 		if p.RepoID != "" {
 			if _, rpcErr := resolveRepoIDOrSingleton(ctx, repos, p.RepoID); rpcErr != nil {
 				return nil, rpcErr
 			}
 		}
 
-		// Suppressions are scoped by branch. branch-NULL rows (repo-wide) are
-		// always included. When the caller omits Branch, all branches are
-		// listed.
+
 		query := `SELECT suppression_id, scope, target, branch, rule, reason, expires_at, created_at, actor_id, actor_kind
 			   FROM suppressions`
 		var args []any

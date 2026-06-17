@@ -10,10 +10,7 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/core/ports"
 )
 
-// TaskStore is the narrow port the task tools need from the tasks-table adapter.
-// *sqlite.TaskRepo satisfies it structurally; keeping the interface beside its
-// sole consumer (the rule of thumb in CLAUDE.md) is why the tasks-table SQL no
-// longer leaks into this inbound-adapter layer.
+// TaskStore defines the interface for interacting with the database tasks table.
 type TaskStore interface {
 	// ActiveTask returns repoID's active task, or (nil, nil) when none is active.
 	ActiveTask(ctx context.Context, repoID string) (*domain.Task, error)
@@ -24,17 +21,7 @@ type TaskStore interface {
 	ListTasks(ctx context.Context, repoID string, limit int) ([]domain.Task, error)
 }
 
-// RegisterTaskTools registers task management tools on r.
-// store backs the tasks table; aw is an optional AuditWriter (pass nil to
-// disable audit logging).
-// PARKED — not wired into the daemon. The composition root keeps only a
-// keep-alive reference to this function (see internal/cli/daemon/mcptools.go)
-// and never calls it, because there is no MCP path to *create* a task yet, so
-// exposing eng_set_active_task / eng_get_active_task / eng_get_task_history
-// would surface a dead-end (callers get -32601 method not found). The specs
-// and handlers below are kept compiling + unit-tested so the feature
-// re-registers cleanly once a task backend lands; they are exercised only by
-// the coverage harness's WithTaskTools option, never the live registry.
+// RegisterTaskTools registers task management tools in the registry.
 func RegisterTaskTools(r *Registry, store TaskStore, aw ports.AuditWriter) {
 	r.MustRegister(ToolSpec{
 		Name:            "eng_set_active_task",
@@ -64,14 +51,12 @@ func RegisterTaskTools(r *Registry, store TaskStore, aw ports.AuditWriter) {
 	})
 }
 
-// eng_set_active_task
-
 type setActiveTaskParams struct {
 	TaskID string `json:"task_id"`
 	RepoID string `json:"repo_id"`
 }
 
-// setActiveTaskInputSchema describes the params object for eng_set_active_task.
+
 var setActiveTaskInputSchema = json.RawMessage(`{
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "type": "object",
@@ -83,7 +68,6 @@ var setActiveTaskInputSchema = json.RawMessage(`{
   "required": ["task_id", "repo_id"]
 }`)
 
-// setActiveTaskOutputSchema describes the result object for eng_set_active_task.
 var setActiveTaskOutputSchema = json.RawMessage(`{
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "type": "object",
@@ -128,8 +112,6 @@ func makeSetActiveTaskHandler(store TaskStore, aw ports.AuditWriter) ToolHandler
 	}
 }
 
-// eng_get_active_task
-
 type getActiveTaskParams struct {
 	RepoID string `json:"repo_id"`
 }
@@ -144,9 +126,7 @@ type taskRow struct {
 	CreatedAt  int64   `json:"created_at"`
 }
 
-// newTaskRow maps a domain.Task to the tools' wire shape: the integer active
-// column (0/1), the unix-seconds created_at, and nil tracker pointers omitted
-// from the JSON — the projection these MCP tools have always emitted.
+// newTaskRow maps a domain.Task to the tools' external wire shape.
 func newTaskRow(t domain.Task) taskRow {
 	active := 0
 	if t.Active {
@@ -184,8 +164,6 @@ func makeGetActiveTaskHandler(store TaskStore) ToolHandler {
 		return newTaskRow(*t), nil
 	}
 }
-
-// eng_get_task_history
 
 type getTaskHistoryParams struct {
 	RepoID string `json:"repo_id"`

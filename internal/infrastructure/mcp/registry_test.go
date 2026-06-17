@@ -8,7 +8,6 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/core/domain"
 )
 
-// noopHandler is a minimal ToolHandler for use in tests.
 func noopHandler(_ context.Context, _ domain.Actor, _ json.RawMessage) (any, *RPCError) {
 	return nil, nil
 }
@@ -21,8 +20,6 @@ func makeSpec(name, desc string) ToolSpec {
 	}
 }
 
-// Register — happy path
-
 func TestRegister_ValidSpec(t *testing.T) {
 	r := NewRegistry()
 	err := r.Register(makeSpec("eng_find_symbol", "finds a symbol by name in the graph"))
@@ -30,8 +27,6 @@ func TestRegister_ValidSpec(t *testing.T) {
 		t.Fatalf("expected no error, got: %v", err)
 	}
 }
-
-// Register — name validation
 
 func TestRegister_NoPrefixRejectsName(t *testing.T) {
 	r := NewRegistry()
@@ -65,7 +60,6 @@ func TestRegister_AllValidVerbsAccepted(t *testing.T) {
 
 func TestRegister_EmptyObjectSegmentRejectsName(t *testing.T) {
 	r := NewRegistry()
-	// "eng_get_" has no object segment
 	err := r.Register(makeSpec("eng_get_", "some valid description here ok"))
 	if err == nil {
 		t.Fatal("expected error for missing object segment, got nil")
@@ -82,11 +76,8 @@ func TestRegister_ObjectStartsWithDigitRejectsName(t *testing.T) {
 	}
 }
 
-// Register — description validation
-
 func TestRegister_ShortDescriptionRejected(t *testing.T) {
 	r := NewRegistry()
-	// 9 chars — below the 10-char minimum
 	err := r.Register(makeSpec("eng_get_node", "too short"))
 	if err == nil {
 		t.Fatal("expected error for description < 10 chars, got nil")
@@ -102,8 +93,6 @@ func TestRegister_ExactlyTenCharDescriptionAccepted(t *testing.T) {
 	}
 }
 
-// Register — duplicate rejection
-
 func TestRegister_DuplicateNameRejected(t *testing.T) {
 	r := NewRegistry()
 	spec := makeSpec("eng_get_node", "gets a node by its unique identifier")
@@ -115,8 +104,6 @@ func TestRegister_DuplicateNameRejected(t *testing.T) {
 		return
 	}
 }
-
-// Dispatch
 
 func TestDispatch_RoutesToHandler(t *testing.T) {
 	r := NewRegistry()
@@ -143,8 +130,6 @@ func TestDispatch_RoutesToHandler(t *testing.T) {
 	}
 }
 
-// TestDispatch_ToolsListReturnsCatalog pins: tools/list is
-// recognised and returns every registered tool's name/description.
 func TestDispatch_ToolsListReturnsCatalog(t *testing.T) {
 	r := NewRegistry()
 	r.MustRegister(ToolSpec{
@@ -172,9 +157,6 @@ func TestDispatch_ToolsListReturnsCatalog(t *testing.T) {
 	}
 }
 
-// TestDispatch_ToolsCallRoutesByName pins: tools/call with
-// {"name":"eng_find_symbol","arguments":{.}} dispatches to the tool
-// handler with the unwrapped arguments.
 func TestDispatch_ToolsCallRoutesByName(t *testing.T) {
 	r := NewRegistry()
 	var gotParams json.RawMessage
@@ -209,10 +191,7 @@ func TestDispatch_ToolsCallUnknownToolReturnsNotFound(t *testing.T) {
 	}
 }
 
-// TestDispatch_InitializeReturnsServerInfo pins: strict MCP
-// clients require a successful initialize handshake before issuing
-// tools/list, so the registry must answer with protocolVersion + capabilities
-// + serverInfo instead of method-not-found.
+// Strict MCP clients require a successful initialize handshake before executing other tools, so the registry must support this endpoint.
 func TestDispatch_InitializeReturnsServerInfo(t *testing.T) {
 	r := NewRegistry()
 	params := json.RawMessage(`{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"test","version":"1"}}`)
@@ -238,9 +217,7 @@ func TestDispatch_InitializeReturnsServerInfo(t *testing.T) {
 	}
 }
 
-// TestDispatch_InitializeEmptyParamsDefaultsProtocol covers clients that
-// omit protocolVersion: we must still respond with a usable default rather
-// than echoing an empty string.
+// If the client omits the protocol version during initialization, the server must supply a default protocol version instead of returning an empty string.
 func TestDispatch_InitializeEmptyParamsDefaultsProtocol(t *testing.T) {
 	r := NewRegistry()
 	result, rpcErr := r.Dispatch(context.Background(), domain.Actor{}, &Request{Method: "initialize"})
@@ -253,9 +230,7 @@ func TestDispatch_InitializeEmptyParamsDefaultsProtocol(t *testing.T) {
 	}
 }
 
-// TestDispatch_NotificationsInitializedReturnsNoError pins the MCP lifecycle
-// notification: it must dispatch without error so serveConn can skip writing
-// a response (notifications carry no id).
+// MCP lifecycle notifications must dispatch without returning an error so the connection handler can process them without sending a response.
 func TestDispatch_NotificationsInitializedReturnsNoError(t *testing.T) {
 	r := NewRegistry()
 	result, rpcErr := r.Dispatch(context.Background(), domain.Actor{}, &Request{Method: "notifications/initialized"})
@@ -280,8 +255,6 @@ func TestDispatch_UnknownMethodReturnsMethodNotFound(t *testing.T) {
 	}
 }
 
-// Names
-
 func TestNames_ReturnsSortedList(t *testing.T) {
 	r := NewRegistry()
 	for _, name := range []string{"eng_search_aaaa", "eng_get_node", "eng_find_symbol"} {
@@ -300,8 +273,6 @@ func TestNames_ReturnsSortedList(t *testing.T) {
 		}
 	}
 }
-
-// Handle — satisfies Handler interface
 
 func TestHandle_DelegatesToDispatch(t *testing.T) {
 	r := NewRegistry()
@@ -326,8 +297,6 @@ func TestHandle_DelegatesToDispatch(t *testing.T) {
 	}
 }
 
-// MustRegister
-
 func TestMustRegister_PanicsOnBadSpec(t *testing.T) {
 	defer func() {
 		if r := recover(); r == nil {
@@ -338,8 +307,6 @@ func TestMustRegister_PanicsOnBadSpec(t *testing.T) {
 	r := NewRegistry()
 	r.MustRegister(makeSpec("bad_name", "description long enough here"))
 }
-
-// Contract test: all m1.06 tools pass validation
 
 func TestAllM106ToolsPassValidation(t *testing.T) {
 	tools := []string{
@@ -366,11 +333,7 @@ func TestAllM106ToolsPassValidation(t *testing.T) {
 	}
 }
 
-// TestRegister_CLIExemptDeferredRequiresReason pins: a
-// tool that opts out of CLI parity with ExemptDeferred must justify
-// the choice so the parity lint and future readers know whether to
-// upgrade it. ExemptInternal and ExemptAgentOnly are self-explanatory
-// and need no reason.
+// A tool exempt from CLI parity via ExemptDeferred must specify a justification reason so that parity lint tools and maintainers can evaluate when to upgrade it.
 func TestRegister_CLIExemptDeferredRequiresReason(t *testing.T) {
 	r := NewRegistry()
 	spec := makeSpec("eng_get_widget", "gets the widget")
@@ -385,8 +348,6 @@ func TestRegister_CLIExemptDeferredRequiresReason(t *testing.T) {
 	}
 }
 
-// TestRegister_CLIExemptOtherKindsNoReason confirms ExemptInternal /
-// ExemptAgentOnly tools do not require a reason.
 func TestRegister_CLIExemptOtherKindsNoReason(t *testing.T) {
 	cases := []CLIExempt{ExemptInternal, ExemptAgentOnly}
 	for _, k := range cases {
@@ -399,8 +360,7 @@ func TestRegister_CLIExemptOtherKindsNoReason(t *testing.T) {
 	}
 }
 
-// TestRegistry_ToolsReturnsSnapshot pins the Tools accessor that the
-// parity lint relies on.
+// The Tools accessor must return a copy of the registered tools list so that external lints can inspect the configuration without mutating state.
 func TestRegistry_ToolsReturnsSnapshot(t *testing.T) {
 	r := NewRegistry()
 	_ = r.Register(makeSpec("eng_find_symbol", "finds symbols"))

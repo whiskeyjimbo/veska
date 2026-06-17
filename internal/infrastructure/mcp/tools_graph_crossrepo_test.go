@@ -9,10 +9,7 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/sqlite/resolver"
 )
 
-// eng_get_call_chain — cross-repo edges injected into response
-// TestGetCallChainCrossRepoEdges verifies that when a ResolveFunc is provided
-// and returns a ResolvedEdge for a visited node, the GraphResponse contains a
-// matching CrossRepoEdge with cross_repo=true.
+// We verify that when a cross-repository resolver function is configured, the resulting call chain response successfully maps external edges.
 func TestGetCallChainCrossRepoEdges(t *testing.T) {
 	store := newStubGraphStorage()
 	a := mustNode(t, "a", "pkg/a.go", "A", domain.KindFunction)
@@ -21,7 +18,6 @@ func TestGetCallChainCrossRepoEdges(t *testing.T) {
 	store.addNode(b)
 	store.addEdge(mustEdge(t, "a", "b", domain.EdgeCalls))
 
-	// Resolver returns a cross-repo edge for node "b".
 	mockResolve := func(_ context.Context, nodeID, _ string, _ bool) ([]resolver.ResolvedEdge, error) {
 		if nodeID == "b" {
 			return []resolver.ResolvedEdge{{
@@ -73,8 +69,7 @@ func TestGetCallChainCrossRepoEdges(t *testing.T) {
 	}
 }
 
-// TestGetCallChainNoCrossRepoByDefault verifies that when no ResolveFunc is
-// provided (nil), the response still succeeds and contains no cross-repo edges.
+// If no resolver function is provided, the call chain succeeds but omits the cross_repo_edges field.
 func TestGetCallChainNoCrossRepoByDefault(t *testing.T) {
 	store := newStubGraphStorage()
 	a := mustNode(t, "a", "pkg/a.go", "A", domain.KindFunction)
@@ -99,14 +94,12 @@ func TestGetCallChainNoCrossRepoByDefault(t *testing.T) {
 	if len(resp.CrossRepoEdges) != 0 {
 		t.Errorf("expected 0 cross-repo edges with nil resolver, got %d", len(resp.CrossRepoEdges))
 	}
-	// In-repo traversal still works.
 	if len(resp.Nodes) == 0 {
 		t.Error("expected in-repo nodes to be returned even with nil resolver")
 	}
 }
 
-// TestGetCallChainCrossRepoSilentMiss verifies that when the resolver returns
-// nothing for a node, the response succeeds with no cross-repo edges (silent miss).
+// If the resolver returns an empty set of external edges, the request succeeds with an empty cross-repo edge collection.
 func TestGetCallChainCrossRepoSilentMiss(t *testing.T) {
 	store := newStubGraphStorage()
 	a := mustNode(t, "a", "pkg/a.go", "A", domain.KindFunction)
@@ -115,7 +108,6 @@ func TestGetCallChainCrossRepoSilentMiss(t *testing.T) {
 	store.addNode(b)
 	store.addEdge(mustEdge(t, "a", "b", domain.EdgeCalls))
 
-	// Resolver returns nothing (silent miss).
 	mockResolve := func(_ context.Context, _ string, _ string, _ bool) ([]resolver.ResolvedEdge, error) {
 		return nil, nil
 	}
@@ -138,9 +130,7 @@ func TestGetCallChainCrossRepoSilentMiss(t *testing.T) {
 	}
 }
 
-// TestGetCallChainBFSDoesNotFollowCrossRepoEdges verifies that cross-repo edges
-// do not cause BFS to continue traversal into the foreign repo. Only in-repo
-// nodes appear in Nodes; cross-repo edges only appear in CrossRepoEdges.
+// The graph search traversal must not traverse across external dependency boundaries into other repositories.
 func TestGetCallChainBFSDoesNotFollowCrossRepoEdges(t *testing.T) {
 	store := newStubGraphStorage()
 	a := mustNode(t, "a", "pkg/a.go", "A", domain.KindFunction)
@@ -176,7 +166,6 @@ func TestGetCallChainBFSDoesNotFollowCrossRepoEdges(t *testing.T) {
 		t.Fatalf("unexpected error: %+v", rpcErr)
 	}
 
-	// In-repo: should see node b but NOT ext-node-x in Nodes.
 	nodeIDs := make(map[string]bool)
 	for _, n := range resp.Nodes {
 		nodeIDs[n.NodeID] = true
@@ -188,7 +177,6 @@ func TestGetCallChainBFSDoesNotFollowCrossRepoEdges(t *testing.T) {
 		t.Error("expected in-repo node b to appear in Nodes")
 	}
 
-	// Cross-repo edges are in their own collection.
 	if len(resp.CrossRepoEdges) != 1 {
 		t.Fatalf("expected 1 cross-repo edge, got %d", len(resp.CrossRepoEdges))
 	}

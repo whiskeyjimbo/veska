@@ -13,7 +13,6 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/core/domain"
 )
 
-// fakes
 
 type fakeRepoLister struct{ recs []application.RepoRecord }
 
@@ -57,11 +56,9 @@ func (f *fakeProm) Promote(_ context.Context, repoID, branch, sha string, actor 
 	return f.err
 }
 
-// tests
 
-// TestPromoteHandler_HappyPath: a registered repo's HEAD-changed files are
-// re-Saved and Promote is called once at HEAD with the system actor. This
-// is the end-to-end shape the post-commit hook depends on.
+// TestPromoteHandler_HappyPath verifies that when a registered repository has modifications at HEAD,
+// the modified files are in-memory saved and a single promotion is triggered under the system actor.
 func TestPromoteHandler_HappyPath(t *testing.T) {
 	root := t.TempDir()
 	mustWrite(t, root, "a.go", "package a\nfunc A() {}\n")
@@ -101,9 +98,7 @@ func TestPromoteHandler_HappyPath(t *testing.T) {
 	}
 }
 
-// TestPromoteHandler_RepoNotRegistered: an unknown root_path returns
-// InvalidParams rather than silently no-op'ing. The previous {"cmd":"promote"}
-// protocol was a silent black hole; we want this one to be loud.
+// TestPromoteHandler_RepoNotRegistered ensures that an unregistered root_path causes a CodeNotFound error instead of a silent no-op.
 func TestPromoteHandler_RepoNotRegistered(t *testing.T) {
 	deps := PromoteDeps{
 		Repos:    &fakeRepoLister{recs: nil},
@@ -116,7 +111,6 @@ func TestPromoteHandler_RepoNotRegistered(t *testing.T) {
 		t.Fatal("expected error for unregistered root_path; got nil")
 		return
 	}
-	// unregistered root is a domain not-found, not invalid-params.
 	if rpcErr.Code != CodeNotFound {
 		t.Errorf("error code = %d, want CodeNotFound (%d)", rpcErr.Code, CodeNotFound)
 	}
@@ -125,9 +119,8 @@ func TestPromoteHandler_RepoNotRegistered(t *testing.T) {
 	}
 }
 
-// TestPromoteHandler_AcceptsRepoID guards: eng_promote_repo accepts
-// repo_id (full or short) in lieu of root_path, matching every other
-// repo-scoped MCP tool. The handler resolves it back to root_path internally.
+// TestPromoteHandler_AcceptsRepoID verifies that eng_promote_repo accepts both full and short
+// repository IDs as an alternative to root_path.
 func TestPromoteHandler_AcceptsRepoID(t *testing.T) {
 	root := t.TempDir()
 	mustWrite(t, root, "a.go", "package a\n")
@@ -143,20 +136,18 @@ func TestPromoteHandler_AcceptsRepoID(t *testing.T) {
 		Promoter: prom,
 	}
 
-	// Short prefix (12 chars).
 	res := dispatchPromote(t, deps, map[string]string{"repo_id": fullID[:12]})
 	if res.RepoID != fullID || res.GitSHA != "sha-rid" {
 		t.Errorf("short-prefix dispatch: result mismatch: %+v", res)
 	}
 
-	// Full id.
 	res = dispatchPromote(t, deps, map[string]string{"repo_id": fullID})
 	if res.RepoID != fullID {
 		t.Errorf("full-id dispatch: result mismatch: %+v", res)
 	}
 }
 
-// TestPromoteHandler_UnknownRepoID returns CodeNotFound ( + byxy).
+// TestPromoteHandler_UnknownRepoID ensures that an unknown repo_id results in a CodeNotFound error.
 func TestPromoteHandler_UnknownRepoID(t *testing.T) {
 	deps := PromoteDeps{
 		Repos:    &fakeRepoLister{recs: nil},
@@ -174,8 +165,7 @@ func TestPromoteHandler_UnknownRepoID(t *testing.T) {
 	}
 }
 
-// TestPromoteHandler_NilDeps: misconfigured wiring returns an internal-error
-// rather than panicking. Surface-level safety check.
+// TestPromoteHandler_NilDeps ensures that misconfigured dependencies result in an internal error instead of a panic.
 func TestPromoteHandler_NilDeps(t *testing.T) {
 	for name, deps := range map[string]PromoteDeps{
 		"no repos":    {Git: &fakeGit{}, Ingester: &fakeIng{}, Promoter: &fakeProm{}},
@@ -192,8 +182,7 @@ func TestPromoteHandler_NilDeps(t *testing.T) {
 	}
 }
 
-// TestPromoteHandler_PropagatesPromoteError: a Promoter failure surfaces as
-// an internal-error so the daemon's hook-runner log can show what broke.
+// TestPromoteHandler_PropagatesPromoteError verifies that Promoter failures are wrapped and surfaced as RPC errors for visibility.
 func TestPromoteHandler_PropagatesPromoteError(t *testing.T) {
 	root := t.TempDir()
 	mustWrite(t, root, "a.go", "package a\n")
@@ -211,11 +200,7 @@ func TestPromoteHandler_PropagatesPromoteError(t *testing.T) {
 	}
 }
 
-// TestPromoteRepoSchema_PublishesAttributionParams guards:
-// eng_promote_repo's inputSchema must publish branch/git_sha/actor_kind/
-// actor_id alongside repo_id/root_path, restrict actor_kind to the domain
-// enum (human/agent/system), and continue to reject unknown keys via
-// additionalProperties:false (closing the silent-drop bug from ).
+// TestPromoteRepoSchema_PublishesAttributionParams ensures the schema defines and enforces attribution parameters while rejecting unknown fields.
 func TestPromoteRepoSchema_PublishesAttributionParams(t *testing.T) {
 	var s struct {
 		AdditionalProperties any                        `json:"additionalProperties"`
@@ -232,7 +217,6 @@ func TestPromoteRepoSchema_PublishesAttributionParams(t *testing.T) {
 			t.Errorf("schema.properties missing %q", k)
 		}
 	}
-	// actor_kind must be a string-typed enum restricted to the domain values.
 	var ak struct {
 		Type string   `json:"type"`
 		Enum []string `json:"enum"`
@@ -254,10 +238,7 @@ func TestPromoteRepoSchema_PublishesAttributionParams(t *testing.T) {
 	}
 }
 
-// TestPromoteRepoSchema_RejectsUnknownKeyAtDispatch confirms the dispatch-time
-// validator still rejects keys that aren't in the published
-// schema after the schema was widened for. A regression here
-// would re-open the silent-drop bug.
+// TestPromoteRepoSchema_RejectsUnknownKeyAtDispatch verifies that the dispatch validator rejects request parameters not matching the schema.
 func TestPromoteRepoSchema_RejectsUnknownKeyAtDispatch(t *testing.T) {
 	rpcErr := validateAgainstSchema("eng_promote_repo", promoteRepoInputSchema,
 		json.RawMessage(`{"repo_id":"x","totally_made_up":"y"}`))
@@ -272,8 +253,7 @@ func TestPromoteRepoSchema_RejectsUnknownKeyAtDispatch(t *testing.T) {
 	}
 }
 
-// TestPromoteHandler_HonoursActorOverride verifies the attribution params
-// announced in the schema are actually applied.
+// TestPromoteHandler_HonoursActorOverride ensures that custom actor attribution parameters from the schema are respected during promotion.
 func TestPromoteHandler_HonoursActorOverride(t *testing.T) {
 	root := t.TempDir()
 	mustWrite(t, root, "a.go", "package a\n")
@@ -299,8 +279,8 @@ func TestPromoteHandler_HonoursActorOverride(t *testing.T) {
 	}
 }
 
-// TestPromoteHandler_HonoursBranchAndSHAOverride: branch and git_sha
-// overrides reach the Promoter without consulting git.HEAD.
+// TestPromoteHandler_HonoursBranchAndSHAOverride verifies that branch and git_sha overrides
+// skip the default git.HEAD lookup path.
 func TestPromoteHandler_HonoursBranchAndSHAOverride(t *testing.T) {
 	root := t.TempDir()
 	mustWrite(t, root, "a.go", "package a\n")
@@ -309,8 +289,6 @@ func TestPromoteHandler_HonoursBranchAndSHAOverride(t *testing.T) {
 		Repos: &fakeRepoLister{recs: []application.RepoRecord{
 			{RepoID: "r1", RootPath: realPath(t, root), ActiveBranch: "main"},
 		}},
-		// headErr would normally fail the call — proving git.HEAD is
-		// short-circuited when git_sha is supplied is the point of this test.
 		Git:      &fakeGit{headErr: errors.New("git.HEAD must not be called when git_sha is supplied"), files: []string{"a.go"}},
 		Ingester: &fakeIng{},
 		Promoter: prom,
@@ -328,10 +306,7 @@ func TestPromoteHandler_HonoursBranchAndSHAOverride(t *testing.T) {
 	}
 }
 
-// TestPromoteHandler_RejectsInvalidActorKind: an actor_kind outside the
-// domain enum surfaces as CodeInvalidParams. The dispatch-time
-// validator covers the schema-side enum check; this guards the handler-side
-// domain.NewActor fallback for clients that bypass schema validation.
+// TestPromoteHandler_RejectsInvalidActorKind ensures that custom clients bypassing the schema are still rejected at the handler if the actor kind is invalid.
 func TestPromoteHandler_RejectsInvalidActorKind(t *testing.T) {
 	root := t.TempDir()
 	deps := PromoteDeps{
@@ -352,8 +327,7 @@ func TestPromoteHandler_RejectsInvalidActorKind(t *testing.T) {
 	}
 }
 
-// TestPromoteHandler_RejectsPartialActor: supplying only one of actor_kind
-// / actor_id is rejected.
+// TestPromoteHandler_RejectsPartialActor ensures that a request providing only one of the actor_kind or actor_id parameters is rejected.
 func TestPromoteHandler_RejectsPartialActor(t *testing.T) {
 	root := t.TempDir()
 	deps := PromoteDeps{
@@ -373,7 +347,6 @@ func TestPromoteHandler_RejectsPartialActor(t *testing.T) {
 	}
 }
 
-// helpers
 
 func mustWrite(t *testing.T, dir, rel, body string) {
 	t.Helper()
@@ -382,8 +355,7 @@ func mustWrite(t *testing.T, dir, rel, body string) {
 	}
 }
 
-// realPath returns the EvalSymlinks form of p — matches what the handler
-// canonicalises root_path to before lookup.
+// realPath resolves symlinks in the path to match the canonicalization behavior of the promotion handler.
 func realPath(t *testing.T, p string) string {
 	t.Helper()
 	r, err := filepath.EvalSymlinks(p)

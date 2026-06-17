@@ -71,8 +71,7 @@ func TestFindTodos_ReturnsOpenByDefault(t *testing.T) {
 	}
 }
 
-// TestFindTodos_EmitsSnakeCaseKeys guards the snake_case surface contract:
-// the response must not leak the PascalCase Go field names of ports.TodoEntry
+// TestFindTodos_EmitsSnakeCaseKeys verifies that the serialized JSON keys are snake_case rather than PascalCase struct field names.
 func TestFindTodos_EmitsSnakeCaseKeys(t *testing.T) {
 	q := &stubTodoQuerier{entries: []ports.TodoEntry{
 		{FindingID: "t1", RepoID: "r", Branch: "main", FilePath: "a.go", Message: "TODO: x", State: "open", CreatedAt: 42},
@@ -100,10 +99,7 @@ func TestFindTodos_EmitsSnakeCaseKeys(t *testing.T) {
 	}
 }
 
-// TestFindTodos_EmitsDegradedReasonsAsEmptyArray pins: the
-// README's "Conventions across the tool surface" promises every tool
-// includes degraded_reasons (as when nothing is degraded). eng_find_todos
-// previously omitted the field entirely.
+// TestFindTodos_EmitsDegradedReasonsAsEmptyArray ensures degraded_reasons is always serialized as an array, even when empty.
 func TestFindTodos_EmitsDegradedReasonsAsEmptyArray(t *testing.T) {
 	q := &stubTodoQuerier{entries: nil}
 	r := NewRegistry()
@@ -142,7 +138,7 @@ func TestFindTodos_RequiresParams(t *testing.T) {
 	r := NewRegistry()
 	RegisterTodoTools(r, &stubTodoQuerier{}, nil)
 
-	_, rpcErr := dispatchTodos(t, r, map[string]string{"repo_id": "r"}) // missing branch
+	_, rpcErr := dispatchTodos(t, r, map[string]string{"repo_id": "r"})
 	if rpcErr == nil || rpcErr.Code != CodeInvalidParams {
 		t.Fatalf("expected InvalidParams, got %+v", rpcErr)
 	}
@@ -168,10 +164,7 @@ func TestFindTodos_RegistersOneTool(t *testing.T) {
 	}
 }
 
-// TestFindTodos_RelativizesAbsolutePath guards: eng_find_todos
-// emits repo-relative file_path so it agrees with eng_list_findings per
-// Without the RepoLister we can't relativize, so the absolute
-// path passes through unchanged — both behaviours are tested.
+// TestFindTodos_RelativizesAbsolutePath ensures absolute paths in todo entries are relative to the repository root when the repository is listed.
 func TestFindTodos_RelativizesAbsolutePath(t *testing.T) {
 	q := &stubTodoQuerier{entries: []ports.TodoEntry{
 		{
@@ -199,11 +192,7 @@ func TestFindTodos_RelativizesAbsolutePath(t *testing.T) {
 	}
 }
 
-// TestFindTodos_DegradedWhenWorkingTreeDirty guards: an empty
-// todos result paired with an uncommitted edit in the working tree must
-// carry a degraded_reason so the caller can show "commit first to scan"
-// guidance instead of a confusing silent zero. Uses a real on-disk repo
-// because the check shells out to git.
+// TestFindTodos_DegradedWhenWorkingTreeDirty ensures a dirty working tree returns the todos_are_post_promotion degraded reason.
 func TestFindTodos_DegradedWhenWorkingTreeDirty(t *testing.T) {
 	dir := t.TempDir()
 	runGit := func(args ...string) {
@@ -221,8 +210,7 @@ func TestFindTodos_DegradedWhenWorkingTreeDirty(t *testing.T) {
 	}
 	runGit("add", "a.go")
 	runGit("commit", "--no-gpg-sign", "-m", "init")
-	// Make a working-tree edit but DON'T commit — todos scan should miss
-	// it but the response should carry todos_are_post_promotion.
+
 	if err := os.WriteFile(filepath.Join(dir, "a.go"), []byte("package a\n// TODO: pending\n"), 0o644); err != nil {
 		t.Fatalf("write2: %v", err)
 	}
@@ -250,9 +238,7 @@ func TestFindTodos_DegradedWhenWorkingTreeDirty(t *testing.T) {
 	}
 }
 
-// TestFindTodos_CleanRepoStaysUndegraded: an empty todos result on a
-// clean working tree must NOT carry the degraded hint — that would
-// mislead callers into thinking a commit is pending when there isn't.
+// TestFindTodos_CleanRepoStaysUndegraded ensures that a clean working tree does not carry the todos_are_post_promotion degraded reason.
 func TestFindTodos_CleanRepoStaysUndegraded(t *testing.T) {
 	dir := t.TempDir()
 	runCmd := exec.Command("git", "-C", dir, "init")

@@ -15,7 +15,6 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/sqlite/sqldriver"
 )
 
-// capturingAuditWriter records every AuditEntry passed to Write.
 type capturingAuditWriter struct {
 	mu      sync.Mutex
 	entries []ports.AuditEntry
@@ -38,12 +37,9 @@ func (c *capturingAuditWriter) ops() []string {
 	return out
 }
 
-// newFindingsDBWithEdges adds the edges table to the in-memory DB so auto-link
-// promotion tests can verify confidence transitions.
 func newFindingsDBWithEdges(t *testing.T) *sql.DB {
 	t.Helper()
 	db := newFindingsDB(t)
-	// Minimal edges table (no FKs — we don't need node rows for promotion tests).
 	_, err := db.Exec(`
 		CREATE TABLE IF NOT EXISTS edges (
 			edge_id          TEXT NOT NULL,
@@ -63,8 +59,6 @@ func newFindingsDBWithEdges(t *testing.T) *sql.DB {
 	return db
 }
 
-// seedAutoLinkFinding inserts a finding row with rule='auto-link' whose node_id
-// holds the anchored edge_id.
 func seedAutoLinkFinding(t *testing.T, db *sql.DB, findingID, branch, repoID, severity, state, edgeID string) {
 	t.Helper()
 	var nodeID any
@@ -114,8 +108,7 @@ func findingState(t *testing.T, db *sql.DB, findingID, branch string) string {
 	return s
 }
 
-// helpers
-// newFindingsDB creates an in-memory SQLite DB seeded with the findings table.
+// newFindingsDB initializes an in-memory SQLite database seeded with minimal findings, suppressions, and nodes tables.
 func newFindingsDB(t *testing.T) *sql.DB {
 	t.Helper()
 	db, err := sql.Open(sqldriver.Name, ":memory:")
@@ -147,9 +140,6 @@ func newFindingsDB(t *testing.T) *sql.DB {
 	if err != nil {
 		t.Fatalf("create findings table: %v", err)
 	}
-	// Minimal suppressions table so eng_list_findings' LEFT JOIN compiles
-	// Tests that don't seed suppressions get the empty-join
-	// case automatically.
 	_, err = db.Exec(`
 		CREATE TABLE IF NOT EXISTS suppressions (
 			suppression_id TEXT PRIMARY KEY,
@@ -167,10 +157,6 @@ func newFindingsDB(t *testing.T) *sql.DB {
 	if err != nil {
 		t.Fatalf("create suppressions table: %v", err)
 	}
-	// Minimal nodes table so eng_list_findings' LEFT JOIN can resolve a
-	// file_path from a node-anchored finding. Dead-code
-	// findings only carry node_id; without the join, the FILE column on
-	// the CLI is empty even though the file path is recoverable.
 	_, err = db.Exec(`
 		CREATE TABLE IF NOT EXISTS nodes (
 			node_id     TEXT NOT NULL,
@@ -185,9 +171,6 @@ func newFindingsDB(t *testing.T) *sql.DB {
 	return db
 }
 
-// seedNodeAnchoredFinding inserts a finding row anchored on a node_id
-// (no file_path of its own) plus the matching node row so the resolver
-// in eng_list_findings can recover a path. Used for.
 func seedNodeAnchoredFinding(t *testing.T, db *sql.DB, findingID, branch, repoID, nodeID, nodeFile string) {
 	t.Helper()
 	if _, err := db.Exec(`
@@ -204,7 +187,6 @@ func seedNodeAnchoredFinding(t *testing.T, db *sql.DB, findingID, branch, repoID
 	}
 }
 
-// seedFinding inserts a finding row for use in tests.
 func seedFinding(t *testing.T, db *sql.DB, findingID, branch, repoID, severity, state string) {
 	t.Helper()
 	_, err := db.Exec(`
@@ -217,7 +199,6 @@ func seedFinding(t *testing.T, db *sql.DB, findingID, branch, repoID, severity, 
 	}
 }
 
-// dispatchFinding dispatches eng_close_finding with the given actor and params.
 func dispatchFinding(t *testing.T, r *Registry, actor domain.Actor, params map[string]string) (any, *RPCError) {
 	t.Helper()
 	raw, err := json.Marshal(params)
@@ -232,15 +213,13 @@ func dispatchFinding(t *testing.T, r *Registry, actor domain.Actor, params map[s
 	return r.Dispatch(context.Background(), actor, req)
 }
 
-// Tests
-
 func TestCloseFindings_HumanActionGate(t *testing.T) {
 	tests := []struct {
 		name       string
 		severity   string
 		actor      domain.Actor
-		wantCode   int    // 0 means expect success
-		wantReason string // substring in Message for error cases
+		wantCode   int
+		wantReason string
 	}{
 		{
 			name:       "high + agent → refuse",
@@ -287,7 +266,6 @@ func TestCloseFindings_HumanActionGate(t *testing.T) {
 			})
 
 			if tc.wantCode != 0 {
-				// Expect an RPC error.
 				if rpcErr == nil {
 					t.Fatalf("expected RPC error with code %d, got result: %v", tc.wantCode, result)
 					return
@@ -298,7 +276,6 @@ func TestCloseFindings_HumanActionGate(t *testing.T) {
 				if tc.wantReason != "" && !strings.Contains(rpcErr.Message, tc.wantReason) {
 					t.Errorf("expected message to contain %q, got %q", tc.wantReason, rpcErr.Message)
 				}
-				// Verify finding was NOT closed in DB.
 				var state string
 				err := db.QueryRow(`SELECT state FROM findings WHERE finding_id = ? AND branch = ?`, findingID, "main").Scan(&state)
 				if err != nil {
@@ -310,12 +287,10 @@ func TestCloseFindings_HumanActionGate(t *testing.T) {
 				return
 			}
 
-			// Expect success.
 			if rpcErr != nil {
 				t.Fatalf("unexpected RPC error: code=%d message=%q", rpcErr.Code, rpcErr.Message)
 			}
 
-			// Verify finding was closed in DB.
 			var state string
 			err := db.QueryRow(`SELECT state FROM findings WHERE finding_id = ? AND branch = ?`, findingID, "main").Scan(&state)
 			if err != nil {
@@ -348,7 +323,6 @@ func TestCloseFindings_MessageContainsFindingAndSeverity(t *testing.T) {
 		t.Fatal("expected RPC error")
 		return
 	}
-	// finding_id and severity are in Data, not Message.
 	data, ok := rpcErr.Data.(map[string]any)
 	if !ok {
 		t.Fatalf("expected RPCError.Data to be map[string]any, got %T", rpcErr.Data)
@@ -361,21 +335,15 @@ func TestCloseFindings_MessageContainsFindingAndSeverity(t *testing.T) {
 	}
 }
 
-// TestCloseFindings_PreservesCreatorActor guards: closing a
-// finding must NOT overwrite actor_id/actor_kind on the row. Those columns
-// mean "who created/last-saved this finding"; the closer is recorded
-// independently in the audit log. Previously a service-created TODO surfaced
-// as actor_id=agent:unknown after any MCP-driven close.
+// The closing operation must not overwrite the creator actor fields on the finding record because the closer identity is tracked in the audit log.
 func TestCloseFindings_PreservesCreatorActor(t *testing.T) {
 	db := newFindingsDB(t)
 	const fid = "finding-actor-preserved-001"
-	// Seed with the creator actor — see seedFinding: actor:seed / human.
 	seedFinding(t, db, fid, "main", "repo-1", "low", "open")
 
 	r := NewRegistry()
 	RegisterFindingTools(r, db, &capturingAuditWriter{}, nil)
 
-	// A human closes it (admin action allowed even at low severity).
 	closer := domain.Actor{ID: "agent:unknown", Kind: domain.ActorKindAgent}
 	_, rpcErr := dispatchFinding(t, r, closer, map[string]string{
 		"finding_id": fid,
@@ -384,7 +352,6 @@ func TestCloseFindings_PreservesCreatorActor(t *testing.T) {
 		"reason":     "not a real issue",
 	})
 	if rpcErr != nil {
-		// Low severity may still require human; if so, run as human.
 		closer = domain.Actor{ID: "human:alice", Kind: domain.ActorKindHuman}
 		_, rpcErr = dispatchFinding(t, r, closer, map[string]string{
 			"finding_id": fid,
@@ -436,7 +403,6 @@ func TestCloseFindings_MissingParams(t *testing.T) {
 	RegisterFindingTools(r, db, nil, nil)
 
 	actor := domain.Actor{ID: "human:alice", Kind: domain.ActorKindHuman}
-	// Missing finding_id.
 	_, rpcErr := dispatchFinding(t, r, actor, map[string]string{
 		"branch":  "main",
 		"repo_id": "repo-1",
@@ -451,8 +417,6 @@ func TestCloseFindings_MissingParams(t *testing.T) {
 		t.Errorf("expected code %d, got %d", CodeInvalidParams, rpcErr.Code)
 	}
 }
-
-// eng_list_findings tests
 
 func dispatchListFindings(t *testing.T, r *Registry, actor domain.Actor, params map[string]string) (any, *RPCError) {
 	t.Helper()
@@ -492,10 +456,7 @@ func TestListFindings_Empty(t *testing.T) {
 	}
 }
 
-// TestListFindings_EmitsDegradedReasonsAsEmptyArray pins: the
-// README's "Conventions across the tool surface" promises every tool
-// includes degraded_reasons (as when nothing is degraded). eng_list_findings
-// previously omitted the field entirely.
+// The response must include an empty degraded_reasons array by default to adhere to the tool surface contract.
 func TestListFindings_EmitsDegradedReasonsAsEmptyArray(t *testing.T) {
 	db := newFindingsDB(t)
 	r := NewRegistry()
@@ -514,13 +475,7 @@ func TestListFindings_EmitsDegradedReasonsAsEmptyArray(t *testing.T) {
 	}
 }
 
-// TestListFindings_ResolvesFilePathFromNodeAnchor guards:
-// node-anchored findings (dead-code is the dominant case — see
-// internal/application/checks/deadcode.go: only WithNodeAnchor is set)
-// must surface a file_path in the response by joining nodes.file_path on
-// the anchor. Without this, the CLI's FILE column is empty and the user
-// gets the path crammed into MESSAGE, which is what the junior-journey
-// report flagged.
+// For node-anchored findings that lack their own file path, we resolve the path by joining with the referenced graph node record.
 func TestListFindings_ResolvesFilePathFromNodeAnchor(t *testing.T) {
 	db := newFindingsDB(t)
 	seedNodeAnchoredFinding(t, db, "dc-1", "main", "repo-1", "node-abc", "internal/foo/bar.go")
@@ -560,7 +515,6 @@ func TestListFindings_DefaultStateIsOpen(t *testing.T) {
 	result, rpcErr := dispatchListFindings(t, r, actor, map[string]string{
 		"repo_id": "repo-1",
 		"branch":  "main",
-		// no state → defaults to "open"
 	})
 	if rpcErr != nil {
 		t.Fatalf("unexpected RPC error: %v", rpcErr.Message)
@@ -576,12 +530,7 @@ func TestListFindings_DefaultStateIsOpen(t *testing.T) {
 	}
 }
 
-// TestListFindings_StateAnyReturnsEveryLifecycleRow pins:
-// state="any" disables the per-state WHERE clause so closed/resolved
-// findings come back in the same query as open ones. This is the daemon
-// side of `veska findings list --all --repo <id>` ("all states, one repo")
-// previously the CLI rejected that combination with a "mutually
-// exclusive" error.
+// Querying with state='any' returns findings in all lifecycle states (open, closed, suppressed) in a single request.
 func TestListFindings_StateAnyReturnsEveryLifecycleRow(t *testing.T) {
 	db := newFindingsDB(t)
 	seedFinding(t, db, "open-f", "main", "repo-1", "low", "open")
@@ -604,10 +553,7 @@ func TestListFindings_StateAnyReturnsEveryLifecycleRow(t *testing.T) {
 	}
 }
 
-// TestListFindings_ResolvesRepoIDFromCWD pins: when the caller
-// omits repo_id but the shim has injected a cwd that matches a registered
-// repo's RootPath, eng_list_findings must resolve via the RepoLister instead
-// of erroring "repo_id is required".
+// If repo_id is omitted but the current working directory matches a registered repository's root path, we automatically resolve the repo ID.
 func TestListFindings_ResolvesRepoIDFromCWD(t *testing.T) {
 	const fullID = "62d72fa222a0193f8fa927f95dd6a3575c7566964c8b8f6ba14aafc5a1ea871f"
 	db := newFindingsDB(t)
@@ -620,7 +566,6 @@ func TestListFindings_ResolvesRepoIDFromCWD(t *testing.T) {
 	RegisterFindingTools(r, db, nil, repos)
 
 	actor := domain.Actor{ID: "agent:bot", Kind: domain.ActorKindAgent}
-	// repo_id omitted; cwd hint inside the registered root.
 	result, rpcErr := dispatchListFindings(t, r, actor, map[string]string{
 		"cwd": "/tmp/myrepo/subdir",
 	})
@@ -634,9 +579,7 @@ func TestListFindings_ResolvesRepoIDFromCWD(t *testing.T) {
 	}
 }
 
-// TestListFindings_AcceptsShortID pins: eng_list_findings must
-// resolve a 12-char short_id prefix the same way the graph tools do, instead
-// of querying findings by the raw prefix and silently returning.
+// We resolve short repository ID prefixes when listing findings to match the behavior of graph query tools.
 func TestListFindings_AcceptsShortID(t *testing.T) {
 	const fullID = "62d72fa222a0193f8fa927f95dd6a3575c7566964c8b8f6ba14aafc5a1ea871f"
 	db := newFindingsDB(t)
@@ -652,7 +595,6 @@ func TestListFindings_AcceptsShortID(t *testing.T) {
 	RegisterFindingTools(r, db, nil, nil)
 	actor := domain.Actor{ID: "agent:bot", Kind: domain.ActorKindAgent}
 
-	// Short id resolves to the finding.
 	result, rpcErr := dispatchListFindings(t, r, actor, map[string]string{
 		"repo_id": ShortRepoID(fullID), "branch": "main",
 	})
@@ -663,7 +605,6 @@ func TestListFindings_AcceptsShortID(t *testing.T) {
 		t.Fatalf("short_id: want 1 finding, got %d", len(findings))
 	}
 
-	// Unknown id errors loudly (not silent empty).
 	_, rpcErr = dispatchListFindings(t, r, actor, map[string]string{
 		"repo_id": "deadbeef0000", "branch": "main",
 	})
@@ -672,8 +613,6 @@ func TestListFindings_AcceptsShortID(t *testing.T) {
 	}
 }
 
-// seedFindingRule inserts a finding with an explicit rule so tests can
-// exercise the rule filter.
 func seedFindingRule(t *testing.T, db *sql.DB, findingID, branch, repoID, severity, state, rule string) {
 	t.Helper()
 	_, err := db.Exec(`
@@ -686,9 +625,7 @@ func seedFindingRule(t *testing.T, db *sql.DB, findingID, branch, repoID, severi
 	}
 }
 
-// TestListFindings_RuleFilter pins: the rule param must narrow
-// results to that rule. Before the fix the param was silently ignored and
-// the full unfiltered list came back.
+// The rule parameter narrows the findings list to matching rule names.
 func TestListFindings_RuleFilter(t *testing.T) {
 	db := newFindingsDB(t)
 	seedFindingRule(t, db, "vuln-f", "main", "repo-1", "high", "open", "vuln")
@@ -742,8 +679,6 @@ func TestListFindings_SeverityFilter(t *testing.T) {
 	}
 }
 
-// eng_reopen_finding tests
-
 func dispatchReopenFinding(t *testing.T, r *Registry, actor domain.Actor, params map[string]string) (any, *RPCError) {
 	t.Helper()
 	raw, err := json.Marshal(params)
@@ -783,7 +718,6 @@ func TestReopenFinding_Basic(t *testing.T) {
 		t.Errorf("expected state=open, got %v", m["state"])
 	}
 
-	// Verify DB.
 	var state string
 	if err := db.QueryRow(`SELECT state FROM findings WHERE finding_id = 'reopen-f' AND branch = 'main'`).Scan(&state); err != nil {
 		t.Fatalf("query state: %v", err)
@@ -793,9 +727,7 @@ func TestReopenFinding_Basic(t *testing.T) {
 	}
 }
 
-// TestReopenFinding_RecordsReasonInAudit guards the reopen/close audit-reason
-// symmetry: an optional reopen reason is recorded in the audit entry (close
-// already requires + records one). verify follow-up.
+// An optional reopen reason is captured and recorded in the audit log for tracking purposes.
 func TestReopenFinding_RecordsReasonInAudit(t *testing.T) {
 	db := newFindingsDB(t)
 	seedFinding(t, db, "reopen-reason", "main", "repo-1", "low", "closed")
@@ -829,6 +761,7 @@ func TestReopenFinding_RecordsReasonInAudit(t *testing.T) {
 	}
 }
 
+// Any actor is permitted to reopen a finding, as the human-only safety gate only restricts closures.
 func TestReopenFinding_AnyActorCanReopen(t *testing.T) {
 	db := newFindingsDB(t)
 	seedFinding(t, db, "reopen-agent", "main", "repo-1", "critical", "closed")
@@ -836,7 +769,6 @@ func TestReopenFinding_AnyActorCanReopen(t *testing.T) {
 	r := NewRegistry()
 	RegisterFindingTools(r, db, nil, nil)
 
-	// An agent should be able to reopen even a critical finding (no human gate).
 	actor := domain.Actor{ID: "agent:bot", Kind: domain.ActorKindAgent}
 	_, rpcErr := dispatchReopenFinding(t, r, actor, map[string]string{
 		"finding_id": "reopen-agent",
@@ -868,10 +800,7 @@ func TestReopenFinding_NotFound(t *testing.T) {
 	}
 }
 
-// Auto-link accept-flow tests (m3.04.3)
-// TestCloseFinding_AutoLinkAccept_PromotesEdge verifies the canonical happy
-// path: accept on an auto-link finding promotes its anchored edge from
-// 'unresolved' to 'definite' in the same tx.
+// Accepting an auto-link finding promotes the associated unresolved edge to definite confidence in the same transaction.
 func TestCloseFinding_AutoLinkAccept_PromotesEdge(t *testing.T) {
 	db := newFindingsDBWithEdges(t)
 	seedEdge(t, db, "edge-1", "main", "repo-1", "unresolved")
@@ -904,7 +833,6 @@ func TestCloseFinding_AutoLinkAccept_PromotesEdge(t *testing.T) {
 		t.Errorf("expected single audit op=finding.accept, got %v", ops)
 	}
 
-	// Verify closed metadata is recorded.
 	var (
 		closedReason sql.NullString
 		closedAt     sql.NullInt64
@@ -922,16 +850,12 @@ func TestCloseFinding_AutoLinkAccept_PromotesEdge(t *testing.T) {
 	if !closedAt.Valid || closedAt.Int64 == 0 {
 		t.Errorf("expected closed_at to be set, got %v", closedAt)
 	}
-	// close no longer overwrites actor_id/actor_kind. The row
-	// keeps its creator (seeded as actor:seed/agent); the closer is recorded
-	// in the audit log via the finding.accept op asserted above.
 	if actorID != "actor:seed" || actorKind != "agent" {
 		t.Errorf("expected creator actor preserved (actor:seed/agent), got %s/%s", actorID, actorKind)
 	}
 }
 
-// TestCloseFinding_AutoLinkSuppress_LeavesEdgeUnresolved confirms that the
-// suppress-flow on an auto-link finding does NOT touch the edge.
+// Suppressing an auto-link finding closes the finding but leaves the associated edge in its unresolved state.
 func TestCloseFinding_AutoLinkSuppress_LeavesEdgeUnresolved(t *testing.T) {
 	db := newFindingsDBWithEdges(t)
 	seedEdge(t, db, "edge-2", "main", "repo-1", "unresolved")
@@ -965,16 +889,11 @@ func TestCloseFinding_AutoLinkSuppress_LeavesEdgeUnresolved(t *testing.T) {
 	}
 }
 
-// TestCloseFinding_NonAutoLinkAccept_LeavesEdgesAlone verifies that accept on a
-// non-auto-link rule does not promote anything. We use a distinct rule and
-// ensure that even an edge sharing the finding's node_id is untouched.
+// Accepting non-auto-link findings must not promote any edges, even if the node IDs match.
 func TestCloseFinding_NonAutoLinkAccept_LeavesEdgesAlone(t *testing.T) {
 	db := newFindingsDBWithEdges(t)
-	// Seed an edge whose id matches what could be misread as an anchor
-	// this guards against accidental promotion regardless of rule.
 	seedEdge(t, db, "node-123", "main", "repo-1", "unresolved")
 
-	// Seed a regular finding with rule='dead-code'.
 	_, err := db.Exec(`
 		INSERT INTO findings
 			(finding_id, branch, repo_id, node_id, file_path, severity, source_layer, rule, message, state, created_at, actor_id, actor_kind)
@@ -1012,8 +931,7 @@ func TestCloseFinding_NonAutoLinkAccept_LeavesEdgesAlone(t *testing.T) {
 	}
 }
 
-// TestCloseFinding_AutoLinkAccept_NullAnchor closes a finding without crashing
-// when the node_id (anchor) is NULL. No edge promotion runs.
+// Accepting an auto-link finding with a null node ID closes the finding without executing edge promotion.
 func TestCloseFinding_AutoLinkAccept_NullAnchor(t *testing.T) {
 	db := newFindingsDBWithEdges(t)
 	seedAutoLinkFinding(t, db, "f-al-null", "main", "repo-1", "low", "open", "")
@@ -1037,12 +955,9 @@ func TestCloseFinding_AutoLinkAccept_NullAnchor(t *testing.T) {
 	}
 }
 
-// TestCloseFinding_AutoLinkAccept_MissingEdge documents the soft-fail policy:
-// when the anchor points to an edge_id that does not exist, the UPDATE affects
-// zero rows but the transaction commits, so the finding still closes.
+// If the referenced edge ID does not exist in the database, the accept operation soft-fails and proceeds to close the finding.
 func TestCloseFinding_AutoLinkAccept_MissingEdge(t *testing.T) {
 	db := newFindingsDBWithEdges(t)
-	// Note: no seedEdge call — anchor points at a missing edge.
 	seedAutoLinkFinding(t, db, "f-al-orphan", "main", "repo-1", "low", "open", "edge-does-not-exist")
 
 	aw := &capturingAuditWriter{}
@@ -1069,8 +984,7 @@ func TestCloseFinding_AutoLinkAccept_MissingEdge(t *testing.T) {
 	}
 }
 
-// TestCloseFinding_AutoLinkAccept_AlreadyDefinite verifies idempotency: an
-// already-definite edge stays definite without error.
+// Accepting an auto-link finding when the edge is already definite succeeds idempotently.
 func TestCloseFinding_AutoLinkAccept_AlreadyDefinite(t *testing.T) {
 	db := newFindingsDBWithEdges(t)
 	seedEdge(t, db, "edge-def", "main", "repo-1", "definite")
@@ -1097,16 +1011,11 @@ func TestCloseFinding_AutoLinkAccept_AlreadyDefinite(t *testing.T) {
 	}
 }
 
-// TestCloseFinding_AutoLinkAccept_AtomicRollback proves the finding-close and
-// edge-promote share a transaction: forcing the edges table into a state where
-// the promotion UPDATE fails must leave the finding in state='open'.
-// We trigger a failure by dropping the edges table so the UPDATE returns a
-// "no such table" error AFTER the SELECT but BEFORE the finding UPDATE.
+// The finding closure and edge promotion are executed within a shared transaction, so a failure in the promotion step rolls back the closure.
 func TestCloseFinding_AutoLinkAccept_AtomicRollback(t *testing.T) {
 	db := newFindingsDBWithEdges(t)
 	seedAutoLinkFinding(t, db, "f-al-rb", "main", "repo-1", "low", "open", "edge-x")
 
-	// Force the next UPDATE edges to fail.
 	if _, err := db.Exec(`DROP TABLE edges`); err != nil {
 		t.Fatalf("drop edges: %v", err)
 	}
@@ -1130,19 +1039,16 @@ func TestCloseFinding_AutoLinkAccept_AtomicRollback(t *testing.T) {
 		t.Errorf("expected CodeInternalError, got %d", rpcErr.Code)
 	}
 
-	// Finding must remain open because the tx rolled back.
 	if got := findingState(t, db, "f-al-rb", "main"); got != "open" {
 		t.Errorf("expected finding to roll back to open, got %q", got)
 	}
 
-	// No audit entry on failure.
 	if ops := aw.ops(); len(ops) != 0 {
 		t.Errorf("expected no audit entries on rollback, got %v", ops)
 	}
 }
 
-// TestCloseFinding_HumanGate_AcceptPath confirms the human-action gate still
-// applies when reason=accept on an auto-link finding.
+// The human-only action gate applies when accepting auto-link findings.
 func TestCloseFinding_HumanGate_AcceptPath(t *testing.T) {
 	db := newFindingsDBWithEdges(t)
 	seedEdge(t, db, "edge-h", "main", "repo-1", "unresolved")
@@ -1151,7 +1057,6 @@ func TestCloseFinding_HumanGate_AcceptPath(t *testing.T) {
 	r := NewRegistry()
 	RegisterFindingTools(r, db, nil, nil)
 
-	// Agent attempts to accept a high-severity auto-link finding.
 	actor := domain.Actor{ID: "agent:claude", Kind: domain.ActorKindAgent}
 	_, rpcErr := dispatchFinding(t, r, actor, map[string]string{
 		"finding_id": "f-al-h",
@@ -1167,7 +1072,6 @@ func TestCloseFinding_HumanGate_AcceptPath(t *testing.T) {
 		t.Errorf("expected CodeHumanRequired, got %d", rpcErr.Code)
 	}
 
-	// Finding remains open, edge remains unresolved.
 	if got := findingState(t, db, "f-al-h", "main"); got != "open" {
 		t.Errorf("expected finding to remain open, got %q", got)
 	}
@@ -1185,7 +1089,6 @@ func TestReopenFinding_MissingParams(t *testing.T) {
 	_, rpcErr := dispatchReopenFinding(t, r, actor, map[string]string{
 		"branch":  "main",
 		"repo_id": "repo-1",
-		// missing finding_id
 	})
 	if rpcErr == nil {
 		t.Fatal("expected RPC error for missing finding_id")
@@ -1196,9 +1099,7 @@ func TestReopenFinding_MissingParams(t *testing.T) {
 	}
 }
 
-// review-pipeline-failure: close-flips-row contract ( AC2)
-// newFindingsDBWithQueue adds the post_promotion_queue table so the
-// review-pipeline-failure close path can flip a failed review row to done.
+// newFindingsDBWithQueue initializes an in-memory database containing the post_promotion_queue table.
 func newFindingsDBWithQueue(t *testing.T) *sql.DB {
 	t.Helper()
 	db := newFindingsDB(t)
@@ -1261,9 +1162,6 @@ func reviewRowState(t *testing.T, db *sql.DB, repoID, branch, gitSHA string) str
 	return s
 }
 
-// seedReviewSemanticFinding inserts a review-produced finding row: a
-// file-anchored finding carrying source_layer='semantic', a review-* rule, and
-// actor_kind='system' — the row shape the review Handler persists (nz2.6).
 func seedReviewSemanticFinding(t *testing.T, db *sql.DB, findingID, branch, repoID, rule, severity string) {
 	t.Helper()
 	_, err := db.Exec(`
@@ -1276,9 +1174,7 @@ func seedReviewSemanticFinding(t *testing.T, db *sql.DB, findingID, branch, repo
 	}
 }
 
-// TestListFindings_SurfacesReviewSemanticFinding verifies AC1: a review-produced
-// finding (source_layer='semantic') is returned by eng_list_findings like any
-// structural finding.
+// We list review-produced semantic findings in the response along with other findings.
 func TestListFindings_SurfacesReviewSemanticFinding(t *testing.T) {
 	db := newFindingsDB(t)
 	seedReviewSemanticFinding(t, db, "f-rev-sec", "main", "repo-1", "review-security", "high")
@@ -1307,8 +1203,7 @@ func TestListFindings_SurfacesReviewSemanticFinding(t *testing.T) {
 	}
 }
 
-// TestSuppressFinding_ReviewSemanticFinding verifies AC2: a review finding is
-// suppressible via eng_suppress_finding like any structural finding.
+// Review-produced semantic findings are suppressible in the same manner as structural findings.
 func TestSuppressFinding_ReviewSemanticFinding(t *testing.T) {
 	db := newSuppressionsDB(t)
 	seedReviewSemanticFinding(t, db, "f-rev-cd", "main", "repo-1", "review-contract-drift", "medium")
@@ -1339,9 +1234,7 @@ func TestSuppressFinding_ReviewSemanticFinding(t *testing.T) {
 	}
 }
 
-// TestCloseFinding_ReviewSemanticFinding_HumanGate verifies AC3: closing a
-// high-severity review finding is refused for a non-human actor and succeeds
-// for a human actor.
+// The human closure gate enforces restriction on closing high-severity review findings.
 func TestCloseFinding_ReviewSemanticFinding_HumanGate(t *testing.T) {
 	t.Run("agent refused", func(t *testing.T) {
 		db := newFindingsDB(t)
@@ -1386,13 +1279,10 @@ func TestCloseFinding_ReviewSemanticFinding_HumanGate(t *testing.T) {
 	})
 }
 
-// TestCloseFinding_ReviewFailure_FlipsRowToDone verifies AC2: closing a
-// review-pipeline-failure finding flips the anchored failed review row(s) to
-// state='done' in the same tx.
+// Closing a review pipeline failure finding updates the status of the associated failed review rows to done.
 func TestCloseFinding_ReviewFailure_FlipsRowToDone(t *testing.T) {
 	db := newFindingsDBWithQueue(t)
 	const gitSHA = "sha-deadbeef"
-	// Two failed review files in one commit collapse to one finding.
 	seedReviewRow(t, db, "repo-1", "main", gitSHA, "a.go", "failed")
 	seedReviewRow(t, db, "repo-1", "main", gitSHA, "b.go", "failed")
 	seedReviewFailureFinding(t, db, "f-rpf-1", "main", "repo-1", gitSHA)
@@ -1427,9 +1317,7 @@ func TestCloseFinding_ReviewFailure_FlipsRowToDone(t *testing.T) {
 	}
 }
 
-// TestCloseFinding_ReviewFailure_NonHumanRejected confirms the human-action
-// gate fires for the high-severity review-pipeline-failure finding before any
-// row is flipped.
+// A non-human actor is blocked from closing high-severity review failure findings.
 func TestCloseFinding_ReviewFailure_NonHumanRejected(t *testing.T) {
 	db := newFindingsDBWithQueue(t)
 	const gitSHA = "sha-cafe"

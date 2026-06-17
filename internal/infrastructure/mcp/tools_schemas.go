@@ -2,21 +2,7 @@ package mcp
 
 import "encoding/json"
 
-// Input schemas for every MCP tool. Without these, tools/list returns
-// {properties:, required:} for the tool catalog and MCP clients (Claude
-// Code, Cursor, generic IDE adapters) have to discover argument names by
-// guessing, parsing human error messages, or reading the daemon source.
-// Publishing the schema makes the surface self-describing.
-// Schemas are draft 2020-12. Field descriptions match the param-struct comments
-// in their respective tool files; aliases that the handler accepts (e.g.
-// file_path/path on eng_get_file_nodes) are listed under "properties" so
-// callers know either form is valid.
-// Every schema sets "additionalProperties": false so unknown keys are
-// rejected with -32602 at dispatch. Tools whose handler
-// resolves the active repo from the caller's working directory must list
-// "cwd" explicitly — the dispatch-time validator only knows what's in
-// "properties".
-// New tools should add their schema here and reference it from the ToolSpec.
+// This file declares the JSON Schema input descriptions for all registered MCP tools.
 
 var addRepoInputSchema = json.RawMessage(`{
   "$schema": "https://json-schema.org/draft/2020-12/schema",

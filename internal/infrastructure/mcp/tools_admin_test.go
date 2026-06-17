@@ -10,8 +10,6 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/core/domain"
 )
 
-// Stub RepoLister
-
 type stubRepoLister struct {
 	repos []application.RepoRecord
 	err   error
@@ -20,8 +18,6 @@ type stubRepoLister struct {
 func (s *stubRepoLister) ListRepos(_ context.Context) ([]application.RepoRecord, error) {
 	return s.repos, s.err
 }
-
-// helpers
 
 func mustMarshal(t *testing.T, v any) json.RawMessage {
 	t.Helper()
@@ -41,8 +37,6 @@ func dispatchAdmin(t *testing.T, r *Registry, method string, params any) (any, *
 	}
 	return r.Dispatch(context.Background(), domain.Actor{ID: "agent:test", Kind: domain.ActorKindAgent}, req)
 }
-
-// Tests
 
 var sampleRepos = []application.RepoRecord{
 	{RepoID: "repo-1", RootPath: "/home/user/project", ActiveBranch: "main", LastPromotedSHA: "abc123"},
@@ -119,11 +113,7 @@ func TestAdminTools_GetCurrentRepo_MissingCwd(t *testing.T) {
 	}
 }
 
-// TestAdminTools_GetCurrentRepo_SoleVisibleIgnoresExt pins:
-// synthetic ext:<module> rows (from `veska deps index`) are hidden by
-// eng_list_repos, so a workspace with one real repo + indexed deps must
-// still auto-resolve to the sole *visible* repo when cwd is omitted — not
-// fail with "more than one repo registered", and not return the ext: row.
+// We exclude synthetic external dependency repository records from sole-visible auto-resolution when no working directory is specified.
 func TestAdminTools_GetCurrentRepo_SoleVisibleIgnoresExt(t *testing.T) {
 	r := NewRegistry()
 	repos := []application.RepoRecord{
@@ -175,7 +165,6 @@ func TestAdminTools_ListRepos(t *testing.T) {
 	if len(repos) != 2 {
 		t.Errorf("expected 2 repos, got %d", len(repos))
 	}
-	// Every returned view must have a non-empty 'status'.
 	for _, r := range repos {
 		if r.Status == "" {
 			t.Errorf("repo %q missing status field", r.RepoID)
@@ -190,12 +179,7 @@ func TestAdminTools_ListRepos(t *testing.T) {
 		t.Errorf("expected empty degraded_reasons")
 	}
 
-	// README convention: empty result collections serialise as never
-	// null. Each sampleRepo has Aliases unset (nil), and the registry
-	// reaches the wire through json.Marshal of RepoView — so the decorator
-	// must materialise an empty slice. Round-tripping through json.Marshal
-	// is the only reliable check: a nil string masquerades as string
-	// at the Go level but serialises to "null" on the wire.
+	// We round-trip the serialization of RepoView to guarantee that empty slices like Aliases serialize as empty arrays rather than null.
 	for _, v := range repos {
 		b, err := json.Marshal(v)
 		if err != nil {
@@ -207,9 +191,7 @@ func TestAdminTools_ListRepos(t *testing.T) {
 	}
 }
 
-// TestAdminTools_ListRepos_MissingRoot guards: when a repo's
-// root_path no longer exists on disk, MCP eng_list_repos surfaces
-// status="missing", matching the CLI's "(missing)" rendering.
+// If a repository's root path is missing from the filesystem, we report its status as 'missing'.
 func TestAdminTools_ListRepos_MissingRoot(t *testing.T) {
 	live := t.TempDir()
 	gone := t.TempDir() + "/never-existed"
@@ -275,7 +257,7 @@ func TestAdminTools_GetRepo_NotFound(t *testing.T) {
 		t.Fatal("expected RPC error, got nil")
 		return
 	}
-	// not-found is a domain error (CodeNotFound), not -32602.
+	// A missing repository resource must return a CodeNotFound RPC error instead of CodeInvalidParams.
 	if rpcErr.Code != CodeNotFound {
 		t.Errorf("expected %d, got %d", CodeNotFound, rpcErr.Code)
 	}

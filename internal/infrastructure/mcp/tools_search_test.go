@@ -15,7 +15,6 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/core/ports"
 )
 
-// stubs
 
 type stubEmbedder struct {
 	vec []float32
@@ -31,9 +30,7 @@ func (s *stubEmbedder) ModelID() string { return "test-model" }
 type stubVectors struct {
 	hits []domain.SearchHit
 	err  error
-	// captured params from the most recent Search call. Guarded by mu so
-	// the cross-repo parallel fanout path doesn't race the
-	// writes.
+	// gotVec and gotK are guarded by mu to prevent races when parallel fan-out search runs across multiple repositories.
 	mu     sync.Mutex
 	gotVec []float32
 	gotK   int
@@ -68,14 +65,13 @@ func (s *stubVectors) LookupContentHashes(_ context.Context, _, _ string, _ []st
 type stubNodes struct {
 	metas  []ports.NodeMeta
 	err    error
-	byFile map[string][]string // file_path → node_ids; populated by eng_find_related tests
+	byFile map[string][]string // file_path → node_ids
 }
 
 func (s *stubNodes) LookupNodes(_ context.Context, _, _ string, ids []string) ([]ports.NodeMeta, error) {
 	if s.err != nil {
 		return nil, s.err
 	}
-	// filter by ids if specified — return all matching
 	want := make(map[string]struct{}, len(ids))
 	for _, id := range ids {
 		want[id] = struct{}{}
@@ -115,7 +111,7 @@ func (s *stubSimilarLookup) LookupExisting(_ context.Context, _ string) ([]byte,
 	return s.blob, s.dim, s.found, s.existErr
 }
 
-// encodeVec packs a float32 into the LE byte layout the embedder writes.
+// encodeVec serializes a slice of float32s into a little-endian byte slice representation.
 func encodeVec(v []float32) []byte {
 	out := make([]byte, len(v)*4)
 	for i, x := range v {
@@ -146,7 +142,6 @@ func dispatchSearch(t *testing.T, r *Registry, method string, params any) (Searc
 	return resp, nil
 }
 
-// eng_search_semantic
 
 func TestSearchSemantic_ReturnsHydratedResults(t *testing.T) {
 	emb := &stubEmbedder{vec: []float32{0.1, 0.2}}
@@ -179,11 +174,7 @@ func TestSearchSemantic_ReturnsHydratedResults(t *testing.T) {
 	}
 }
 
-// TestSearchSemantic_FansOutWhenRepoIDOmittedAndCwdMismatch pins:
-// the README's quick-start sanity-check example calls eng_search_semantic
-// without a repo_id. With ≥2 repos registered and the shim's cwd outside
-// any registered RootPath, the handler must fan out across every repo
-// instead of rejecting with "repo_id is required".
+// TestSearchSemantic_FansOutWhenRepoIDOmittedAndCwdMismatch ensures semantic searches fan out across all registered repositories when the query is run without a repo ID outside any registered workspace root.
 func TestSearchSemantic_FansOutWhenRepoIDOmittedAndCwdMismatch(t *testing.T) {
 	emb := &stubEmbedder{vec: []float32{0.1, 0.2}}
 	vecs := &stubVectors{hits: []domain.SearchHit{{NodeID: "n1", Score: 0.9}}}
@@ -219,9 +210,7 @@ func TestSearchSemantic_FansOutWhenRepoIDOmittedAndCwdMismatch(t *testing.T) {
 	}
 }
 
-// TestSearchSemantic_SingleRepoOmitsRepoIDOnHits pins: the
-// per-hit repo_id field is only emitted when the response spans repos.
-// Single-repo callers must see byte-stable pre-fanout output.
+// TestSearchSemantic_SingleRepoOmitsRepoIDOnHits ensures the repo_id field is omitted from hits in a single-repository response.
 func TestSearchSemantic_SingleRepoOmitsRepoIDOnHits(t *testing.T) {
 	emb := &stubEmbedder{vec: []float32{0.1, 0.2}}
 	vecs := &stubVectors{hits: []domain.SearchHit{{NodeID: "n1", Score: 0.9}}}
@@ -251,11 +240,7 @@ func TestSearchSemantic_SingleRepoOmitsRepoIDOnHits(t *testing.T) {
 	}
 }
 
-// TestSearchSemantic_LimitAliasHonoured pins: callers
-// naturally try 'limit' (the convention used by every other MCP tool we
-// expose). When 'k' is absent we honour 'limit' so a request with
-// limit=3 actually returns at most 3 rows instead of silently defaulting
-// to k=10.
+// TestSearchSemantic_LimitAliasHonoured ensures that the limit parameter is respected as an alias for k.
 func TestSearchSemantic_LimitAliasHonoured(t *testing.T) {
 	emb := &stubEmbedder{vec: []float32{0.1, 0.2}}
 	hits := []domain.SearchHit{
@@ -284,12 +269,7 @@ func TestSearchSemantic_LimitAliasHonoured(t *testing.T) {
 	if rpcErr != nil {
 		t.Fatalf("unexpected error: %+v", rpcErr)
 	}
-	// search.Service over-requests by fusionFanout=3 with a floor of 30
-	// so the post-fusion name-match boost has candidates to reorder
-	// even for small-k callers. caller k=3
-	// hits the floor → 100 to the vector backend (floor widened in
-	// ). The contract under test is that the alias got
-	// threaded through; the floor/fanout are internal details.
+	// search.Service over-requests to ensure enough candidates are retrieved for reordering, regardless of small caller k values.
 	if vecs.gotK != 100 {
 		t.Errorf("expected vectors.Search called with k=100 (floor for small caller k=3 alias), got k=%d", vecs.gotK)
 	}
@@ -310,7 +290,6 @@ func TestSearchSemantic_MissingParamsRejected(t *testing.T) {
 	_, rpcErr := dispatchSearch(t, r, "eng_search_semantic", map[string]string{
 		"query":  "x",
 		"branch": "main",
-		// missing repo_id
 	})
 	if rpcErr == nil || rpcErr.Code != CodeInvalidParams {
 		t.Fatalf("expected InvalidParams, got %+v", rpcErr)
@@ -362,17 +341,8 @@ func TestSearchSemantic_PropagatesEmbedError(t *testing.T) {
 	}
 }
 
-// TestSearchSemantic_GlobalRRFAcrossRepos pins: when fanout is
-// triggered, the handler runs ONE global RRF across every repo's
-// candidate set rather than per-repo RRF + score-sort. A candidate
-// appearing in both the vector AND lexical retrievers of its repo must
-// outrank a candidate appearing in only one retriever, regardless of
-// which repo it came from.
+// TestSearchSemantic_GlobalRRFAcrossRepos ensures that a single global Reciprocal Rank Fusion runs across all candidates retrieved from fanned-out repositories.
 func TestSearchSemantic_GlobalRRFAcrossRepos(t *testing.T) {
-	// Repo A: vector + lexical hits (double-retriever winner).
-	// Repo B: vector-only hits.
-	// Global RRF: A's nodeA1 should score 2/(60+1) = 0.0328, beating
-	// any B node whose best score is 1/(60+1) = 0.0164.
 	emb := &stubEmbedder{vec: []float32{0.1}}
 	vecs := &stubVectors{hits: []domain.SearchHit{
 		{NodeID: "nodeA1"}, {NodeID: "nodeA2"},
@@ -419,7 +389,7 @@ func TestSearchSemantic_GlobalRRFAcrossRepos(t *testing.T) {
 	}
 }
 
-// stubLex is a minimal LexicalSearcher used by the cross-repo RRF test.
+// stubLex is a stub implementation of LexicalSearcher for reciprocal rank fusion tests.
 type stubLex struct {
 	hits []ports.LexicalHit
 }
@@ -428,7 +398,6 @@ func (s *stubLex) Search(_ context.Context, _, _, _ string, _ int) ([]ports.Lexi
 	return s.hits, nil
 }
 
-// eng_search_similar
 
 func TestSearchSimilar_ReturnsNeighboursExcludingSeed(t *testing.T) {
 	seedVec := []float32{0.5, 0.5, 0.5}
@@ -474,11 +443,9 @@ func TestSearchSimilar_ReturnsNeighboursExcludingSeed(t *testing.T) {
 	if resp.Results[0].NodeID != "n2" || resp.Results[1].NodeID != "n3" {
 		t.Errorf("unexpected order: %+v", resp.Results)
 	}
-	// Verify the seed vector was passed through unchanged.
 	if len(vecs.gotVec) != 3 || vecs.gotVec[0] != 0.5 {
 		t.Errorf("unexpected vec passed to Search: %+v", vecs.gotVec)
 	}
-	// k+1 over-request.
 	if vecs.gotK != 3 {
 		t.Errorf("expected over-request k=3, got %d", vecs.gotK)
 	}
@@ -522,17 +489,13 @@ func TestSearchSimilar_MissingParams(t *testing.T) {
 	_, rpcErr := dispatchSearch(t, r, "eng_search_similar", map[string]string{
 		"repo_id": "r",
 		"branch":  "main",
-		// missing node_id
 	})
 	if rpcErr == nil || rpcErr.Code != CodeInvalidParams {
 		t.Fatalf("expected InvalidParams, got %+v", rpcErr)
 	}
 }
 
-// TestSearchSimilar_AcceptsSymbolAlias covers: eng_search_similar
-// must accept `symbol` resolved via FindNodes — parity with eng_find_symbol /
-// eng_get_call_chain / eng_get_blast_radius. Before the fix, the schema
-// rejected `symbol` as an unknown parameter.
+// TestSearchSimilar_AcceptsSymbolAlias verifies that eng_search_similar accepts the symbol parameter and resolves it using a search graph.
 func TestSearchSimilar_AcceptsSymbolAlias(t *testing.T) {
 	seedVec := []float32{0.5, 0.5, 0.5}
 	emb := &stubEmbedder{}
@@ -569,8 +532,7 @@ func TestSearchSimilar_AcceptsSymbolAlias(t *testing.T) {
 	}
 }
 
-// TestSearchSimilar_AmbiguousSymbolRejected: two nodes with the same name
-// must produce CodeInvalidParams asking the caller to pass node_id.
+// TestSearchSimilar_AmbiguousSymbolRejected ensures that querying an ambiguous symbol name results in an invalid params error.
 func TestSearchSimilar_AmbiguousSymbolRejected(t *testing.T) {
 	emb := &stubEmbedder{}
 	vecs := &stubVectors{}
@@ -597,14 +559,7 @@ func TestSearchSimilar_AmbiguousSymbolRejected(t *testing.T) {
 	}
 }
 
-// TestSearchSimilar_SymbolResolvesCrossRepoWithoutRepoID pins:
-// eng_search_similar must accept a bare `symbol` without a repo_id and
-// fan out across registered repos, the same way eng_find_symbol,
-// eng_get_blast_radius and eng_get_context_pack do. Before the fix this
-// handler hard-required repo_id via resolveRepoIDFromParams, so a junior
-// caller invoking `search_similar Symbol` from outside any registered
-// cwd got "repo_id is required" — different contract from peer tools
-// the README's conventions block told them all behaved the same.
+// TestSearchSimilar_SymbolResolvesCrossRepoWithoutRepoID verifies that a symbol-based search can run across repositories without a repo ID, using a single-repo short-circuit.
 func TestSearchSimilar_SymbolResolvesCrossRepoWithoutRepoID(t *testing.T) {
 	seedVec := []float32{0.5, 0.5, 0.5}
 	emb := &stubEmbedder{}
@@ -620,11 +575,6 @@ func TestSearchSimilar_SymbolResolvesCrossRepoWithoutRepoID(t *testing.T) {
 	}
 	lookup := &stubSimilarLookup{hash: "h", ready: true, blob: encodeVec(seedVec), dim: 3, found: true}
 
-	// Single registered repo — the resolveSeedOwner short-circuit
-	// for len(repos)==1 must kick in even though the caller passed
-	// neither repo_id nor cwd. Previously the handler routed through
-	// resolveRepoIDFromParams which raised "repo_id is required" in
-	// this exact shape (no repo_id, no cwd injected).
 	graph := newStubGraphStorage()
 	seedNode, _ := domain.NewNode(domain.NodeSpec{ID: "seed", Path: "seed.go", Name: "Target", Kind: domain.KindFunction})
 	graph.addNode(seedNode)
@@ -649,14 +599,8 @@ func TestSearchSimilar_SymbolResolvesCrossRepoWithoutRepoID(t *testing.T) {
 	}
 }
 
-// TestFindRelated_ResolvesSmallestEnclosingNode covers:
-// when multiple nodes overlap a line (e.g. a chunk and a function),
-// the resolver picks the tightest span so the embedding seed is the
-// most specific match the agent could expect.
+// TestFindRelated_ResolvesSmallestEnclosingNode ensures that the resolved enclosing node is the most specific (smallest span) overlap when multiple node ranges match the requested line.
 func TestFindRelated_ResolvesSmallestEnclosingNode(t *testing.T) {
-	// Three nodes in the same file: a wide function (lines 5-30),
-	// a tight method nested inside (10-20), and an even tighter
-	// helper (15-17). Line 16 should resolve to the helper.
 	nodes := &stubNodes{
 		byFile: map[string][]string{"foo.go": {"wide", "mid", "tight"}},
 		metas: []ports.NodeMeta{
@@ -692,10 +636,7 @@ func TestFindRelated_ResolvesSmallestEnclosingNode(t *testing.T) {
 	}
 }
 
-// TestFindRelated_ResolvesRelativePath covers /: node
-// file_paths are stored repo-relative, so a relative file_path matches directly
-// and an absolute one is relativised against RootPath. The byFile stub is keyed
-// on the repo-relative path.
+// TestFindRelated_ResolvesRelativePath ensures that relative and absolute file paths are correctly resolved against the repository root.
 func TestFindRelated_ResolvesRelativePath(t *testing.T) {
 	const root = "/abs/repo"
 	nodes := &stubNodes{
@@ -717,7 +658,6 @@ func TestFindRelated_ResolvesRelativePath(t *testing.T) {
 	r := NewRegistry()
 	RegisterSearchTools(r, svc, lookup, vecs, nodes, nil, repos)
 
-	// Relative path resolves against the repo root → reaches the seeded node.
 	resp, rpcErr := dispatchSearch(t, r, "eng_find_related", map[string]any{
 		"file_path": "foo.go",
 		"line":      16,
@@ -732,7 +672,6 @@ func TestFindRelated_ResolvesRelativePath(t *testing.T) {
 		t.Errorf("want [neighbour] from resolved relative path, got %+v", resp.Results)
 	}
 
-	// Absolute path is relativised against the root and still resolves.
 	respAbs, rpcErr := dispatchSearch(t, r, "eng_find_related", map[string]any{
 		"file_path": root + "/foo.go",
 		"line":      16,
@@ -748,10 +687,7 @@ func TestFindRelated_ResolvesRelativePath(t *testing.T) {
 	}
 }
 
-// TestFindRelated_LineOutsideAnyNodeReturnsNotFound: a line that
-// falls in pre-package whitespace or below the last symbol has no
-// enclosing anchor; the handler returns CodeNotFound with a hint
-// rather than a confusing empty result.
+// TestFindRelated_LineOutsideAnyNodeReturnsNotFound ensures that a line request falling outside any defined node span returns a CodeNotFound error.
 func TestFindRelated_LineOutsideAnyNodeReturnsNotFound(t *testing.T) {
 	nodes := &stubNodes{
 		byFile: map[string][]string{"foo.go": {"only"}},
@@ -776,8 +712,7 @@ func TestFindRelated_LineOutsideAnyNodeReturnsNotFound(t *testing.T) {
 	}
 }
 
-// TestFindRelated_RejectsZeroLine: lines are 1-indexed everywhere on
-// the surface; 0 or negative must error as InvalidParams.
+// TestFindRelated_RejectsZeroLine ensures that requests for line 0 are rejected with an invalid parameters error.
 func TestFindRelated_RejectsZeroLine(t *testing.T) {
 	r := NewRegistry()
 	svc, err := search.NewService(&stubEmbedder{}, &stubVectors{}, &stubNodes{})
@@ -796,9 +731,7 @@ func TestFindRelated_RejectsZeroLine(t *testing.T) {
 	}
 }
 
-// TestSearchTools_RegistersExpectedTools — count grew from 2 → 3 when
-// added eng_find_related. Keep order in sync with the
-// RegisterSearchTools registration block.
+// TestSearchTools_RegistersExpectedTools ensures all search tools are registered correctly in alphabetical order.
 func TestSearchTools_RegistersExpectedTools(t *testing.T) {
 	emb := &stubEmbedder{}
 	vecs := &stubVectors{}

@@ -5,7 +5,6 @@ import (
 	"testing"
 )
 
-// mockDaemonState implements DaemonState for testing.
 type mockDaemonState struct {
 	syncing     bool
 	reconciling bool

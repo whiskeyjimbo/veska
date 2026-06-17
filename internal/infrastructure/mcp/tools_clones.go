@@ -10,23 +10,12 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/core/domain"
 )
 
-// This file holds the eng_find_clones handler: exact-clone detection by
-// content_hash equality. It is the deterministic, embedding-free
-// half of duplicate detection — for the per-function "is THIS duplicated?"
-// pivot use eng_search_similar instead (noted in the tool description).
-
-// CloneFinder is the narrow port the handler needs from the duplicates
-// application service. *duplicates.Finder satisfies it structurally.
 type CloneFinder interface {
 	ExactClones(ctx context.Context, repoID, branch string) ([]duplicates.CloneGroup, error)
 	NearDuplicates(ctx context.Context, repoID, branch string, minScore float32) ([]duplicates.NearCluster, error)
 	Clusters(ctx context.Context, opts duplicates.ClusterOptions) ([]duplicates.Cluster, error)
 }
 
-// DescFindClones is the eng_find_clones tool description. It states the exact
-// semantics (byte-identical copy-paste, not "similar"), the near mode (fuzzy
-// clusters over persisted similarity edges), and points the agent at
-// eng_search_similar for the single-function question.
 const DescFindClones = "Find duplicate code. mode='exact' (default): groups of >=2 symbols whose source text is byte-for-byte identical (literal copy-paste), detected by content_hash equality — deterministic, no embeddings. mode='near': clusters of symbols whose persisted SIMILAR_TO similarity exceeds a threshold higher than auto-link's 'related' cutoff (fuzzy near-duplicates — renamed copies, drifted variants); reads scores auto-link already stored, runs no new similarity sweep. For 'what else looks LIKE this ONE symbol?' use eng_search_similar instead. Container/sub-symbol kinds (package, chunk, file, module, field, import) are excluded so boilerplate doesn't flood results. NOTE: near mode needs SIMILAR_TO edges carrying a score, which only exist after a promotion/reindex on a build with the score column — older indexes report no near clusters until reindexed."
 
 var findClonesInputSchema = []byte(`{
@@ -50,7 +39,6 @@ type findClonesParams struct {
 	MinScore float32 `json:"min_score"`
 }
 
-// cloneMemberDTO is one occurrence of a clone on the wire.
 type cloneMemberDTO struct {
 	NodeID    string `json:"node_id"`
 	Name      string `json:"name"`
@@ -60,15 +48,12 @@ type cloneMemberDTO struct {
 	LineEnd   int    `json:"line_end"`
 }
 
-// cloneGroupDTO is one set of byte-identical copies (mode=exact).
 type cloneGroupDTO struct {
 	ContentHash string           `json:"content_hash"`
 	Size        int              `json:"size"`
 	Members     []cloneMemberDTO `json:"members"`
 }
 
-// nearClusterDTO is one set of fuzzily-similar symbols (mode=near). Score
-// bounds describe the weakest/strongest SIMILAR_TO link inside the cluster.
 type nearClusterDTO struct {
 	Size     int              `json:"size"`
 	MinScore float32          `json:"min_score"`
@@ -76,18 +61,13 @@ type nearClusterDTO struct {
 	Members  []cloneMemberDTO `json:"members"`
 }
 
-// FindClonesResponse is the eng_find_clones envelope. Exactly one of Groups
-// (mode=exact) / Clusters (mode=near) is populated per call; both are non-null
-// so clients can range over either unconditionally. Mode echoes the resolved
-// mode so the caller knows which field to read.
+// FindClonesResponse returns duplicate code groups or clusters, defaulting collections to empty slices to ensure safe client serialization.
 type FindClonesResponse struct {
 	Mode     string           `json:"mode"`
 	Groups   []cloneGroupDTO  `json:"groups"`
 	Clusters []nearClusterDTO `json:"clusters"`
 }
 
-// RegisterCloneTools registers eng_find_clones. finder + repos are required;
-// the tool is skipped by callers that pass a nil finder (legacy/test wiring).
 func RegisterCloneTools(r *Registry, finder CloneFinder, repos application.RepoLister) {
 	r.MustRegister(ToolSpec{
 		Name:            "eng_find_clones",

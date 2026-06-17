@@ -13,12 +13,7 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/core/domain"
 )
 
-// relativizeFindingPath normalizes a finding's stored file_path to a
-// repo-root-relative form. Findings are anchored at different layers - the
-// checks pipeline stores repo-relative paths while the ingester (cold scan)
-// stores absolute ones - so the wire contract is unified here at the read
-// boundary instead. A nil path (e.g. auto-link findings, which
-// anchor on an edge, not a file) is left untouched.
+// relativizeFindingPath normalizes a finding's file path to be relative to the repository root.
 func relativizeFindingPath(path *string, root string) *string {
 	if path == nil || root == "" || !filepath.IsAbs(*path) {
 		return path
@@ -30,8 +25,7 @@ func relativizeFindingPath(path *string, root string) *string {
 	return &rel
 }
 
-// findingRepoRoot looks up the working-tree root for repoID from the repos
-// table; "" when unknown so relativizeFindingPath is a no-op.
+// findingRepoRoot retrieves the working-tree root path for the specified repository.
 func findingRepoRoot(ctx context.Context, db *sql.DB, repoID string) string {
 	var root string
 	if err := db.QueryRowContext(ctx, `SELECT root_path FROM repos WHERE repo_id = ?`, repoID).Scan(&root); err != nil {
@@ -40,12 +34,7 @@ func findingRepoRoot(ctx context.Context, db *sql.DB, repoID string) string {
 	return root
 }
 
-// resolveRepoIDDB canonicalizes repoID against the repos table the same way
-// resolveRepoID does for RepoLister-backed tools: an exact match
-// wins; otherwise a unique short_id (ShortRepoIDLen-char) prefix is accepted.
-// Findings-family tools query the DB directly and have no RepoLister, so this
-// keeps the short_id contract uniform across the surface. Unknown/ambiguous
-// ids surface as a loud RPCError rather than a silently-empty result.
+// resolveRepoIDDB resolves a repository ID from the database using its full identifier or short ID prefix.
 func resolveRepoIDDB(ctx context.Context, db *sql.DB, repoID string) (string, *RPCError) {
 	var exact string
 	err := db.QueryRowContext(ctx, `SELECT repo_id FROM repos WHERE repo_id = ?`, repoID).Scan(&exact)
@@ -99,18 +88,14 @@ func resolveRepoIDDB(ctx context.Context, db *sql.DB, repoID string) (string, *R
 	return "", &RPCError{Code: CodeNotFound, Message: fmt.Sprintf("unknown repo_id: %s (run eng_list_repos; prefixes must be >= %d chars)", repoID, minRepoIDPrefix)}
 }
 
-// eng_list_findings
-
 type listFindingsParams struct {
-	RepoID   string `json:"repo_id"`
-	Branch   string `json:"branch"`
-	State    string `json:"state,omitempty"`
-	Severity string `json:"severity,omitempty"`
-	Rule     string `json:"rule,omitempty"`
-	// IncludeSuppressed surfaces findings hidden by an active suppression
-	// row. Default false matches the user expectation that
-	// eng_suppress_finding actually suppresses.
-	IncludeSuppressed bool `json:"include_suppressed,omitempty"`
+	RepoID            string `json:"repo_id"`
+	Branch            string `json:"branch"`
+	State             string `json:"state,omitempty"`
+	Severity          string `json:"severity,omitempty"`
+	Rule              string `json:"rule,omitempty"`
+	// IncludeSuppressed returns findings hidden by active suppressions.
+	IncludeSuppressed bool   `json:"include_suppressed,omitempty"`
 }
 
 type findingRow struct {
@@ -129,8 +114,7 @@ type findingRow struct {
 	ClosedAt     *int64  `json:"closed_at,omitempty"`
 	ActorID      string  `json:"actor_id"`
 	ActorKind    string  `json:"actor_kind"`
-	// SuppressedBy carries the suppression_id when an active suppression
-	// is hiding this finding. Populated only when IncludeSuppressed=true
+	// SuppressedBy contains the suppression ID when the finding is actively suppressed.
 	SuppressedBy *string `json:"suppressed_by,omitempty"`
 }
 
@@ -140,10 +124,7 @@ func makeListFindingsHandler(db *sql.DB, repos application.RepoLister) ToolHandl
 		if rpcErr := bindParams(raw, &p); rpcErr != nil {
 			return nil, rpcErr
 		}
-		// fall back to a cwd-injected hint when repo_id is
-		// omitted, matching the other repo-scoped query tools. A nil
-		// RepoLister preserves the old "repo_id is required" behaviour so
-		// test sites that don't care about resolution can still pass nil.
+
 		if p.RepoID == "" && repos != nil {
 			resolved, rpcErr := resolveRepoIDFromParams(ctx, repos, raw, "")
 			if rpcErr != nil {
@@ -163,21 +144,8 @@ func makeListFindingsHandler(db *sql.DB, repos application.RepoLister) ToolHandl
 			p.State = "open"
 		}
 
-		// LEFT JOIN against active suppressions so we can either filter out
-		// suppressed findings (default) or surface them with a suppressed_by
-		// hint (when include_suppressed=true). An "active" suppression is one
-		// whose expires_at is NULL or in the future - eng_close_suppression
-		// terminates by setting expires_at = now.
-		// state="any" disables the state filter so callers can
-		// list findings across every lifecycle state (open, closed, …) for
-		// one repo in a single query. Previously the CLI had to choose
-		// either "all repos default-state" or "one repo default-state".
+
 		nowMS := time.Now().UnixMilli()
-		// COALESCE in the nodes.file_path for node-anchored
-		// findings (dead-code is the dominant case; deadcode.go sets only
-		// WithNodeAnchor) so the CLI's FILE column is never blank when the
-		// path is recoverable. file-anchored findings keep f.file_path
-		// verbatim; rows with neither anchor still serialize as NULL.
 		query := `SELECT f.finding_id, f.branch, f.repo_id, f.node_id,
 			COALESCE(f.file_path, n.file_path) AS file_path,
 			f.severity, f.source_layer,
@@ -211,9 +179,7 @@ func makeListFindingsHandler(db *sql.DB, repos application.RepoLister) ToolHandl
 			args = append(args, p.Rule)
 		}
 
-		// Resolve the repo root BEFORE opening the findings cursor: on the
-		// single-connection write pool, a second query while rows is open
-		// deadlocks (the cursor holds the only connection).
+		// Resolve the repo root before opening the rows cursor to prevent single-connection pool deadlocks.
 		root := findingRepoRoot(ctx, db, p.RepoID)
 
 		rows, err := db.QueryContext(ctx, query, args...)
@@ -240,8 +206,7 @@ func makeListFindingsHandler(db *sql.DB, repos application.RepoLister) ToolHandl
 			return nil, &RPCError{Code: CodeInternalError, Message: fmt.Sprintf("iterate findings: %v", err)}
 		}
 
-		// degraded_reasons is always emitted (as when nothing is degraded)
-		// to match the README's "Conventions across the tool surface" contract
+
 		return map[string]any{
 			"findings":         findings,
 			"degraded_reasons": []string{},

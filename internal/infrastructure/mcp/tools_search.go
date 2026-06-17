@@ -10,64 +10,36 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/core/ports"
 )
 
-// This file registers the search tool family and holds the types shared across
-// its handlers. The handler implementations are split by concern:
-// eng_search_semantic lives in tools_search_semantic.go; eng_search_similar and
-// eng_find_related live in tools_search_similar.go.
 
-// CodeFailedPrecondition is returned when a tool cannot proceed because a
-// required upstream invariant is not met (e.g. similar-search against a node
-// that has not yet been embedded).
+
+// CodeFailedPrecondition indicates that a required upstream invariant is not met for a tool execution.
 const CodeFailedPrecondition = -32003
 
-// SearchResponse is the envelope returned by eng_search_semantic and
-// eng_search_similar. DegradedReasons forwards lexical-fallback markers
-// from search.Service unchanged so callers can branch on the mode that
-// actually serviced the query.
-// SearchResponse fields use non-omitempty tags so the wire shape is
-// stable across calls — empty collections serialize as per the
-// README's "Conventions across the tool surface" contract.
+// SearchResponse is the envelope returned by the semantic and similar search tools.
 type SearchResponse struct {
 	Results         []searchHitDTO `json:"results"`
 	DegradedReasons []string       `json:"degraded_reasons"`
-	// IndexingRepos populates alongside DegradedReason "indexing_in_progress"
-	// when a cold scan is in flight at query time and the result is empty
-	// Omitted from JSON when empty.
+	// IndexingRepos lists repositories undergoing indexing when the result is degraded.
 	IndexingRepos []string `json:"indexing_repos,omitempty"`
-	// WakeReconcilingRepos lists queried repos whose wake reconcile sweep was
-	// in flight at query time, alongside DegradedReason
-	// "wake_reconciling". Fires on empty AND non-empty results. Omitted when
-	// empty.
+	// WakeReconcilingRepos lists repositories undergoing wake reconciliation at query time.
 	WakeReconcilingRepos []string `json:"wake_reconciling_repos,omitempty"`
 }
 
-// PendingEmbedsCounter exposes the global pending-embeds depth so the
-// semantic handler can tag responses with 'embeddings_pending' while the
-// index is still warming. nil is a no-op.
+// PendingEmbedsCounter checks the count of pending node embeddings.
 type PendingEmbedsCounter interface {
 	CountPending(ctx context.Context) (int, error)
 }
 
-// DegradedReasonEmbeddingsPending is the canonical token emitted on
-// eng_search_semantic responses when the daemon still has un-embedded
-// nodes queued. A junior running a search against a freshly-registered
-// repo and getting otherwise has no signal that the index is warming
-// rather than the query being wrong.
+// DegradedReasonEmbeddingsPending indicates that the daemon has un-embedded nodes queued.
 const DegradedReasonEmbeddingsPending = "embeddings_pending"
 
-// SimilarLookup is the narrow port the eng_search_similar handler needs from
-// EmbeddingRefRepo: given a node, return its content_hash if ready, and given
-// a content_hash, return the stored embedding bytes + dimension. This
-// interface is satisfied by *sqlite.EmbeddingRefsRepo without modification.
+// SimilarLookup defines the query interface for checking code similarity by content hash.
 type SimilarLookup interface {
 	ContentHashForNode(ctx context.Context, repoID, branch, nodeID string) (contentHash string, ready bool, err error)
 	LookupExisting(ctx context.Context, contentHash string) (embedding []byte, dim int, found bool, err error)
 }
 
-// SearchToolOption configures RegisterSearchTools. The only knob today is
-// the GraphStorage used by eng_search_similar to resolve a `symbol` param
-// to a node_id; composition roots that don't wire it can
-// still call the tool with node_id directly.
+// SearchToolOption configures the search tools registration.
 type SearchToolOption func(*searchToolConfig)
 
 type searchToolConfig struct {
@@ -76,24 +48,17 @@ type searchToolConfig struct {
 	reconcile ReconcileReader
 }
 
-// WithSearchScanTracker supplies the daemon's cold-scan tracker so empty
-// search responses can carry an indexing_in_progress hint when a scan is
-// in flight. Nil disables the hint.
+// WithSearchScanTracker registers the background scan tracker.
 func WithSearchScanTracker(t ScanTrackerReader) SearchToolOption {
 	return func(c *searchToolConfig) { c.scans = t }
 }
 
-// WithSearchReconcileTracker supplies the wake reconciler so a semantic search
-// touching a mid-sweep repo carries a wake_reconciling hint.
-// Nil disables the hint.
+// WithSearchReconcileTracker registers the repository reconciliation tracker.
 func WithSearchReconcileTracker(t ReconcileReader) SearchToolOption {
 	return func(c *searchToolConfig) { c.reconcile = t }
 }
 
-// WithSearchGraph supplies the GraphStorage used by eng_search_similar's
-// symbol-to-node_id resolution. Without it, `symbol` is rejected and only
-// node_id is accepted — preserving existing behaviour for callers that
-// don't pass the option.
+// WithSearchGraph registers the graph reader used for symbol resolution in searches.
 func WithSearchGraph(g ports.GraphReader) SearchToolOption {
 	return func(c *searchToolConfig) { c.graph = g }
 }
@@ -105,10 +70,7 @@ const (
 	maxSearchK     = 100
 )
 
-// resolveK normalises the k / limit aliases shared by every search handler:
-// k wins, 'limit' is the fallback alias, zero/negative means the
-// default, and anything above maxSearchK is rejected. Centralising it keeps the
-// three handlers byte-identical on this contract instead of triplicating it.
+// resolveK normalizes search result limit arguments and rejects counts exceeding the maximum.
 func resolveK(k, limit int) (int, *RPCError) {
 	if k <= 0 {
 		k = limit
@@ -122,10 +84,7 @@ func resolveK(k, limit int) (int, *RPCError) {
 	return k, nil
 }
 
-// RegisterSearchTools registers eng_search_semantic and eng_search_similar.
-// svc is required and orchestrates the semantic + lexical-fallback path.
-// lookup + vectors + nodes drive the similar-by-node-id path. rec is
-// optional: a nil recorder disables savings telemetry.
+// RegisterSearchTools registers MCP search tools in the registry.
 func RegisterSearchTools(
 	r *Registry,
 	svc *search.Service,
@@ -140,9 +99,7 @@ func RegisterSearchTools(
 	for _, o := range opts {
 		o(&cfg)
 	}
-	// opportunistically extract a PendingEmbedsCounter from the
-	// SimilarLookup. *sqlite.EmbeddingRefsRepo satisfies both interfaces; test
-	// stubs that don't can ignore the signal (handler treats nil as "no info").
+
 	var pending PendingEmbedsCounter
 	if pc, ok := lookup.(PendingEmbedsCounter); ok {
 		pending = pc

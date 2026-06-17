@@ -15,14 +15,7 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/core/domain"
 )
 
-// RegisterOwnerTools registers the eng_find_owner tool on r.
-// db, when non-nil, is used to resolve a repo_id to its working-tree root
-// (the repos table has root_path). When db is nil — the test path — repo_id
-// is treated as a literal filesystem root.
-// repos, when non-nil, is used by the handler to resolve repo_id from cwd
-// or short_id and to give the standard 'N repos registered' hint on a
-// missing-repo_id error. When nil the handler falls back
-// to the bare "repo_id is required" behaviour.
+// RegisterOwnerTools registers the eng_find_owner tool.
 func RegisterOwnerTools(r *Registry, db *sql.DB, repos application.RepoLister) {
 	r.MustRegister(ToolSpec{
 		Name:            "eng_find_owner",
@@ -33,11 +26,7 @@ func RegisterOwnerTools(r *Registry, db *sql.DB, repos application.RepoLister) {
 	})
 }
 
-// resolveOwnerRoot turns a repo_id into the on-disk working-tree path used
-// for CODEOWNERS and git blame. The repos table has the canonical mapping;
-// when the db lookup fails (no db, or repo_id is an unknown id), the input
-// is returned as-is so direct callers that pass a path still work. Short
-// repo_id (12 char) prefixes are accepted for parity with other tools
+// resolveOwnerRoot resolves a repository ID to its absolute filesystem root path.
 func resolveOwnerRoot(db *sql.DB, repoID string) string {
 	if db == nil {
 		return repoID
@@ -47,7 +36,7 @@ func resolveOwnerRoot(db *sql.DB, repoID string) string {
 	if err == nil && root != "" {
 		return root
 	}
-	// Try short_id prefix match (mirrors resolveRepoIDDB).
+
 	rows, qerr := db.Query(`SELECT repo_id, root_path FROM repos`)
 	if qerr == nil {
 		defer rows.Close()
@@ -61,17 +50,11 @@ func resolveOwnerRoot(db *sql.DB, repoID string) string {
 	return repoID
 }
 
-// eng_find_owner
-
 type findOwnerParams struct {
 	FilePath string `json:"file_path"`
-	// Path is an accepted alias for FilePath, matching the precedent set by
-	// eng_get_file_nodes. Users naturally reach for "path"; honouring both
-	// keeps the MCP surface internally consistent.
+	// Path is supported as an alias for FilePath.
 	Path string `json:"path"`
-	// Symbol / NodeID resolve to the defining file's path before the
-	// CODEOWNERS / blame lookup. Mirrors the symbol-or-node pattern other
-	// eng_* tools accept (find_symbol, get_blast_radius,.).
+	// Symbol/NodeID are parsed to resolve to the defining file path.
 	Symbol string `json:"symbol"`
 	NodeID string `json:"node_id"`
 	RepoID string `json:"repo_id"`
@@ -87,12 +70,7 @@ func makeFindOwnerHandler(db *sql.DB, repos application.RepoLister) ToolHandler 
 		if p.FilePath == "" {
 			p.FilePath = p.Path
 		}
-		// when a RepoLister is wired, route through the
-		// shared resolver so the missing-repo_id error carries the same
-		// "N repos registered; pass eng_list_repos to find the id" hint
-		// the peer tools give, and so single-repo callers get
-		// auto-resolution + cwd-pin fallback for free. Test/no-DB
-		// callers (repos == nil) keep the bare contract.
+
 		if repos != nil {
 			if id, rpcErr := resolveRepoIDOrCwd(ctx, repos, p.RepoID, cwdFromParams(raw)); rpcErr != nil {
 				return nil, rpcErr
@@ -115,7 +93,7 @@ func makeFindOwnerHandler(db *sql.DB, repos application.RepoLister) ToolHandler 
 
 		root := resolveOwnerRoot(db, p.RepoID)
 
-		// Step 1: try CODEOWNERS.
+
 		if owner, ok := lookupCodeowners(root, p.FilePath); ok {
 			return map[string]any{
 				"owner":  owner,
@@ -123,7 +101,7 @@ func makeFindOwnerHandler(db *sql.DB, repos application.RepoLister) ToolHandler 
 			}, nil
 		}
 
-		// Step 2: git blame fallback.
+
 		if email, ok := gitBlameEmail(root, p.FilePath); ok {
 			return map[string]any{
 				"owner":  email,
@@ -131,10 +109,7 @@ func makeFindOwnerHandler(db *sql.DB, repos application.RepoLister) ToolHandler 
 			}, nil
 		}
 
-		// Step 3: both failed. Surface a 'reason' so the caller can tell
-		// 'no CODEOWNERS file' from 'file exists but covers nothing' from
-		// 'git blame failed'. Cheap stat: just check whether
-		// a CODEOWNERS file is present at either of the canonical paths.
+
 		reason := codeownersAbsenceReason(root)
 		return map[string]any{
 			"owner":  nil,
@@ -144,19 +119,12 @@ func makeFindOwnerHandler(db *sql.DB, repos application.RepoLister) ToolHandler 
 	}
 }
 
-// lookupNodeFilePath resolves a symbol or node_id to its defining file
-// path under (repoID, branch), so eng_find_owner accepts the same
-// symbol-or-node-id pattern as the rest of the eng_* surface
-// Returns (filePath, nil) on a single match; an empty
-// string + RPCError when no row or ambiguous matches are found. branch
-// may be empty: when so, we pick the row with the largest node_id and
-// don't constrain the branch.
+// lookupNodeFilePath resolves a symbol or node ID to its defining file path under the specified repository and branch.
 func lookupNodeFilePath(db *sql.DB, repoID, branch, symbol, nodeID string) (string, *RPCError) {
 	if db == nil {
 		return "", &RPCError{Code: CodeInternalError, Message: "find_owner: no database wired for symbol/node_id resolution"}
 	}
-	// Accept short_id (12-char prefix) for parity with the rest of the
-	// eng_* surface /.
+
 	if len(repoID) < 64 {
 		rows, qerr := db.Query(`SELECT repo_id FROM repos`)
 		if qerr == nil {
@@ -171,8 +139,7 @@ func lookupNodeFilePath(db *sql.DB, repoID, branch, symbol, nodeID string) (stri
 		}
 	}
 	if nodeID != "" {
-		// Accept full node_id or a short prefix (>=8 chars), mirroring
-		// how other eng_* tools resolve node ids.
+
 		var fp string
 		err := db.QueryRow(`SELECT file_path FROM nodes WHERE repo_id = ? AND (node_id = ? OR node_id LIKE ?) LIMIT 1`, repoID, nodeID, nodeID+"%").Scan(&fp)
 		if err == sql.ErrNoRows {
@@ -183,8 +150,7 @@ func lookupNodeFilePath(db *sql.DB, repoID, branch, symbol, nodeID string) (stri
 		}
 		return fp, nil
 	}
-	// Match the bare symbol against either the full symbol_path
-	// ("pkg.Sym") or its trailing component ("Sym").
+
 	args := []any{repoID, symbol, "%." + symbol}
 	q := `SELECT DISTINCT file_path FROM nodes WHERE repo_id = ? AND (symbol_path = ? OR symbol_path LIKE ?)`
 	if branch != "" {
@@ -214,9 +180,7 @@ func lookupNodeFilePath(db *sql.DB, repoID, branch, symbol, nodeID string) (stri
 	}
 }
 
-// codeownersAbsenceReason explains why find_owner produced no owner.
-// Used only on the null path; the message is for human / agent
-// consumption, not parsed as a structured enum.
+// codeownersAbsenceReason details why find_owner could not locate an owner.
 func codeownersAbsenceReason(repoRoot string) string {
 	for _, path := range []string{
 		filepath.Join(repoRoot, "CODEOWNERS"),
@@ -229,8 +193,7 @@ func codeownersAbsenceReason(repoRoot string) string {
 	return "no CODEOWNERS file in repo root or .github/; git blame also yielded no author"
 }
 
-// lookupCodeowners searches for a CODEOWNERS file at repoRoot or repoRoot/.github,
-// parses it, and returns the owner of the longest-matching pattern.
+// lookupCodeowners parses CODEOWNERS configurations and matches the target path against the rules.
 func lookupCodeowners(repoRoot, filePath string) (string, bool) {
 	candidates := []string{
 		filepath.Join(repoRoot, "CODEOWNERS"),
@@ -254,9 +217,7 @@ func lookupCodeowners(repoRoot, filePath string) (string, bool) {
 		return "", false
 	}
 
-	// Parse patterns. Last match wins (CODEOWNERS semantics: last matching rule wins).
-	// We implement longest-pattern wins as a proxy since we want the most specific match.
-	// The spec says "longest-matching glob wins", so we track pattern length.
+	// Longest matching pattern is selected to find the most specific rule.
 	bestOwner := ""
 	bestPatternLen := -1
 
@@ -286,12 +247,7 @@ func lookupCodeowners(repoRoot, filePath string) (string, bool) {
 	return bestOwner, true
 }
 
-// matchesCodeownersPattern checks whether filePath matches a CODEOWNERS pattern.
-// Supports:
-//
-//	"*" wildcard (matches anything in any directory component, a la filepath.Match)
-//	Leading "/" anchors to repo root
-//	Trailing "/" matches a directory prefix
+// matchesCodeownersPattern returns whether the file path matches a CODEOWNERS glob pattern.
 func matchesCodeownersPattern(pattern, filePath string) bool {
 	// Normalise file path (remove leading /).
 	fp := strings.TrimPrefix(filePath, "/")
@@ -338,8 +294,7 @@ func matchesCodeownersPattern(pattern, filePath string) bool {
 	return false
 }
 
-// pathSegments returns progressively shorter suffix paths of fp.
-// e.g. "a/b/c.go" → ["a/b/c.go", "b/c.go", "c.go"]
+// pathSegments returns suffix paths of the file path.
 func pathSegments(fp string) []string {
 	var segs []string
 	for {
@@ -353,7 +308,7 @@ func pathSegments(fp string) []string {
 	return segs
 }
 
-// gitBlameEmail runs git log to get the last committer's email for a file.
+// gitBlameEmail runs git log to retrieve the last committer's email.
 func gitBlameEmail(repoRoot, filePath string) (string, bool) {
 	cmd := exec.Command("git", "-C", repoRoot, "log", "--follow", "-1", "--format=%ae", "--", filePath)
 	out, err := cmd.Output()

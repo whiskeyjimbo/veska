@@ -11,12 +11,6 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/core/domain"
 )
 
-// This file holds eng_find_clusters: the unified, tier-labeled similar-code view
-// One pass returns exact (byte-identical), structural (Type-2
-// renamed) and near (vector) clusters, ranked, repo-wide or cross-repo — shaped
-// so each grouping can become a de-dupe task.
-
-// DescFindClusters is the eng_find_clusters tool description.
 const DescFindClusters = "Whole-repo (or cross-repo) similar-code clusters for de-dupe triage. One pass returns groups of >=2 symbols at three tiers, ranked tightest first: 'exact' (byte-identical copy-paste, content_hash), 'structural' (same shape after renaming variables/literals — Type-2 clones, structural_hash), and 'near' (vector-similar above the elected embedder's calibrated threshold). A symbol appears at most once, at its tightest tier. No seed needed. scope='all' clusters across EVERY registered repo (exact+structural only — cross-repo near is not yet computed); 'path' narrows to a file_path prefix; 'tiers' selects a subset. Container kinds (package/chunk/file/module/field/import) are excluded. Each cluster's members carry repo_id/file/line so you can open a verify-and-dedupe task per grouping. NOTE: structural/near need structural_hash + scored SIMILAR_TO edges, populated by a promotion/reindex on a current build — reindex older graphs first."
 
 var findClustersInputSchema = []byte(`{
@@ -44,8 +38,7 @@ type findClustersParams struct {
 	Path     string  `json:"path"`
 }
 
-// clusterMemberDTO is one symbol in a cluster. repo_id is included so cross-repo
-// clusters are actionable (which repo each copy lives in).
+// clusterMemberDTO represents one symbol in a cluster, containing RepoID so cross-repo matches are actionable.
 type clusterMemberDTO struct {
 	NodeID    string `json:"node_id"`
 	Name      string `json:"name"`
@@ -56,8 +49,7 @@ type clusterMemberDTO struct {
 	LineEnd   int    `json:"line_end"`
 }
 
-// clusterDTO is one tier-labeled group of similar symbols. Score is set for the
-// near tier only (the weakest SIMILAR_TO link in the component).
+// clusterDTO is a group of similar symbols, where Score is set only for the near tier to represent the weakest SIMILAR_TO link in the component.
 type clusterDTO struct {
 	Tier      string             `json:"tier"`
 	Size      int                `json:"size"`
@@ -66,8 +58,7 @@ type clusterDTO struct {
 	Members   []clusterMemberDTO `json:"members"`
 }
 
-// FindClustersResponse is the eng_find_clusters envelope. Clusters is non-null so
-// clients can range over it unconditionally; Scope echoes the resolved scope.
+// FindClustersResponse is the response envelope where Clusters is guaranteed non-null to prevent serialization issues.
 type FindClustersResponse struct {
 	Scope    string       `json:"scope"`
 	Clusters []clusterDTO `json:"clusters"`
@@ -119,7 +110,6 @@ func makeFindClustersHandler(finder CloneFinder, repos application.RepoLister) T
 	}
 }
 
-// parseTiers parses the comma-separated tier filter, validating each value.
 func parseTiers(csv string) ([]duplicates.Tier, *RPCError) {
 	if strings.TrimSpace(csv) == "" {
 		return nil, nil

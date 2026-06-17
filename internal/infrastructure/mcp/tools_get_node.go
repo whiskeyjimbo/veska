@@ -11,8 +11,6 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/core/ports"
 )
 
-// eng_get_node
-
 type getNodeParams struct {
 	NodeID string `json:"node_id"`
 	RepoID string `json:"repo_id"`
@@ -29,25 +27,14 @@ func makeGetNodeHandler(graph ports.GraphReader, staging *staging.Area, repos ap
 			return nil, rpcErr
 		}
 
-		// Resolve a node_id prefix (e.g. the 12-char display id that
-		// eng_find_symbol / `veska symbol` print) to its full id up front, so
-		// both the scoped (repo_id supplied) and global lookup paths below run
-		// against an exact id. A full 64-char id resolves to
-		// itself; an ambiguous prefix errors with the candidate ids.
+		// Node ID prefixes are expanded to full IDs before lookup to support partial matching from CLI queries.
 		resolvedID, rpcErr := resolveNodeIDPrefix(ctx, graph, p.NodeID)
 		if rpcErr != nil {
 			return nil, rpcErr
 		}
 		p.NodeID = resolvedID
 
-		// node_id is a content-hashed sha256, globally unique by construction,
-		// so repo_id+branch are not needed to locate the node. The scoped path
-		// is taken whenever the caller supplied repo_id — branch defaults to
-		// that repo's active_branch. Previously, supplying
-		// repo_id without branch silently dropped to the cross-repo fallback
-		// and ignored repo_id; an unknown or mistyped repo_id never surfaced
-		// to the caller. Only when both repo_id and branch are absent does
-		// the handler take the global FindNodeByID path.
+		// Look up node by ID within the specified repository/branch if RepoID is provided; otherwise, search globally.
 		var (
 			node            *domain.Node
 			err             error
@@ -93,7 +80,7 @@ func makeGetNodeHandler(graph ports.GraphReader, staging *staging.Area, repos ap
 		}
 
 		if node == nil {
-			// not-found is a domain error, not a malformed-params error.
+
 			return nil, &RPCError{Code: CodeNotFound, Message: fmt.Sprintf("node not found: %s", p.NodeID)}
 		}
 
@@ -105,20 +92,10 @@ func makeGetNodeHandler(graph ports.GraphReader, staging *staging.Area, repos ap
 	}
 }
 
-// nodePrefixMinLen is the shortest accepted node_id prefix. The display id
-// eng_find_symbol prints is 12 hex chars; we accept down to this floor and lean
-// on the ambiguity guard for everything else. A shorter input is treated as an
-// exact id (resolveNodeIDPrefix is a no-op) so legitimately short test ids and
-// any non-hex literal still match exactly.
+// nodePrefixMinLen is the minimum length required to trigger prefix expansion for node IDs.
 const nodePrefixMinLen = 8
 
-// resolveNodeIDPrefix maps a node_id prefix to its full id. A full 64-char id
-// resolves to itself (it is its own unique prefix). When the input is shorter
-// than nodePrefixMinLen it is returned unchanged so the downstream exact-match
-// path runs as before. Zero matches also pass through unchanged so the existing
-// not-found / staging-overlay handling owns that case. An ambiguous prefix
-// (more than one distinct node_id matches) is a CodeInvalidParams error listing
-// the candidates, so the caller can disambiguate.
+// resolveNodeIDPrefix expands a partial node ID to its full ID, returning an error if the prefix is ambiguous.
 func resolveNodeIDPrefix(ctx context.Context, graph ports.GraphReader, nodeID string) (string, *RPCError) {
 	if len(nodeID) < nodePrefixMinLen {
 		return nodeID, nil

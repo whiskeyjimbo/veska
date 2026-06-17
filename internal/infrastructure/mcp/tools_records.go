@@ -12,9 +12,7 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/core/ports"
 )
 
-// RegisterRecordTools registers the single-record finding/suppression read
-// tools plus eng_close_suppression on r. db backs the findings and
-// suppressions tables; aw is an optional AuditWriter (pass nil to disable).
+// RegisterRecordTools registers finding and suppression management tools.
 func RegisterRecordTools(r *Registry, db *sql.DB, aw ports.AuditWriter) {
 	r.MustRegister(ToolSpec{
 		Name:            "eng_get_finding",
@@ -39,14 +37,10 @@ func RegisterRecordTools(r *Registry, db *sql.DB, aw ports.AuditWriter) {
 	})
 }
 
-// eng_get_finding
-
 type getFindingParams struct {
 	FindingID string `json:"finding_id"`
 	Branch    string `json:"branch"`
-	// RepoID is accepted for symmetry with eng_list_findings
-	// but the lookup is by finding_id alone — when supplied it is checked
-	// against the row's repo_id and a mismatch returns NotFound.
+	// RepoID is an optional constraint check to verify the finding belongs to the expected repository.
 	RepoID string `json:"repo_id"`
 }
 
@@ -60,9 +54,7 @@ func makeGetFindingHandler(db *sql.DB) ToolHandler {
 			return nil, rpcErr
 		}
 
-		// accept an unambiguous finding_id prefix (12+ chars in
-		// the CLI listing).: finding_id is globally unique, so
-		// branch is just a consistency hint; the resolver checks it when set.
+
 		fullID, rpcErr := resolveFindingPrefix(ctx, db, p.FindingID, p.Branch)
 		if rpcErr != nil {
 			return nil, rpcErr
@@ -80,9 +72,7 @@ func makeGetFindingHandler(db *sql.DB) ToolHandler {
 		if err != nil {
 			return nil, &RPCError{Code: CodeInternalError, Message: fmt.Sprintf("query finding: %v", err)}
 		}
-		// when --repo is supplied, ensure it agrees with the
-		// row we loaded; mismatch is a NotFound (the agent asked for "this
-		// finding scoped to repo X" and that pair does not exist).
+
 		if p.RepoID != "" && !findingRepoMatches(f.RepoID, p.RepoID) {
 			return nil, &RPCError{Code: CodeNotFound, Message: fmt.Sprintf("finding not found: %s in repo %s", p.FindingID, p.RepoID)}
 		}
@@ -92,18 +82,12 @@ func makeGetFindingHandler(db *sql.DB) ToolHandler {
 	}
 }
 
-// findingPrefixQuerier is the subset of *sql.DB / *sql.Tx that the prefix
-// resolver needs — lets close/reopen handlers resolve on their own tx so
-// the row is locked through the subsequent UPDATE.
+// findingPrefixQuerier is a subset interface of database queries needed by the prefix resolver.
 type findingPrefixQuerier interface {
 	QueryContext(ctx context.Context, query string, args ...any) (*sql.Rows, error)
 }
 
-// resolveFindingPrefix maps a finding_id prefix to its full id. Used so the
-// MCP handlers (eng_get_finding, eng_close_finding, eng_reopen_finding,
-// eng_suppress_finding) accept the 12-char short form `veska findings list`
-// prints, mirroring the short-id resolution other tools already do
-// Branch, when supplied, scopes the match.
+// resolveFindingPrefix resolves a partial finding ID prefix to its full identifier.
 // Returns the full finding_id when exactly one row matches; CodeNotFound
 // for zero matches and CodeInvalidParams for an ambiguous prefix.
 func resolveFindingPrefix(ctx context.Context, q findingPrefixQuerier, prefix, branch string) (string, *RPCError) {
@@ -145,9 +129,7 @@ func resolveFindingPrefix(ctx context.Context, q findingPrefixQuerier, prefix, b
 	return matched[0], nil
 }
 
-// findingRepoMatches returns true when supplied matches actual exactly or
-// is a prefix of actual (mirrors the short-id matching eng_list_findings
-// and eng_promote_repo already accept).
+// findingRepoMatches returns true if the supplied repository ID matches the actual repository ID or its prefix.
 func findingRepoMatches(actual, supplied string) bool {
 	if supplied == "" || actual == supplied {
 		return true
@@ -155,7 +137,7 @@ func findingRepoMatches(actual, supplied string) bool {
 	return strings.HasPrefix(actual, supplied)
 }
 
-// eng_get_suppression
+
 
 type getSuppressionParams struct {
 	SuppressionID string `json:"suppression_id"`
@@ -191,7 +173,7 @@ func makeGetSuppressionHandler(db *sql.DB) ToolHandler {
 	}
 }
 
-// eng_close_suppression
+
 
 type closeSuppressionParams struct {
 	SuppressionID string `json:"suppression_id"`

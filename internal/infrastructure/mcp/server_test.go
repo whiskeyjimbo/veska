@@ -15,7 +15,6 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/mcp"
 )
 
-// stubHandler records the actor of each call and returns a fixed result or error.
 type stubHandler struct {
 	mu     sync.Mutex
 	calls  []domain.Actor
@@ -39,7 +38,6 @@ func (h *stubHandler) lastKind() domain.ActorKind {
 	return h.calls[len(h.calls)-1].Kind
 }
 
-// startServer spins up a Server and waits until both sockets exist.
 func startServer(t *testing.T, handler mcp.Handler) (cliSock, mcpSock string) {
 	t.Helper()
 	dir := t.TempDir()
@@ -53,7 +51,6 @@ func startServer(t *testing.T, handler mcp.Handler) (cliSock, mcpSock string) {
 	errCh := make(chan error, 1)
 	go func() { errCh <- srv.Start(ctx) }()
 
-	// wait for sockets to appear (up to 2 s)
 	deadline := time.Now().Add(2 * time.Second)
 	for time.Now().Before(deadline) {
 		_, e1 := os.Stat(cliSock)
@@ -77,7 +74,6 @@ func startServer(t *testing.T, handler mcp.Handler) (cliSock, mcpSock string) {
 	return cliSock, mcpSock
 }
 
-// sendRequest dials path, sends req as newline-terminated JSON, reads one response line.
 func sendRequest(t *testing.T, path string, req mcp.Request) mcp.Response {
 	t.Helper()
 	conn, err := net.DialTimeout("unix", path, time.Second)
@@ -101,7 +97,6 @@ func sendRequest(t *testing.T, path string, req mcp.Request) mcp.Response {
 	return resp
 }
 
-// makeID returns a *json.RawMessage containing the JSON number n.
 func makeID(n int) *json.RawMessage {
 	b := json.RawMessage([]byte{byte('0' + n)})
 	return &b
@@ -149,7 +144,6 @@ func TestValidRequestResponse(t *testing.T) {
 	if resp.Result == nil {
 		t.Error("expected non-nil result")
 	}
-	// ID should be echoed back
 	if resp.ID == nil {
 		t.Error("expected response id to be set")
 	}
@@ -165,7 +159,6 @@ func TestMalformedJSONParseError(t *testing.T) {
 	}
 	defer conn.Close()
 
-	// send malformed JSON terminated by newline
 	if _, err := conn.Write([]byte("{bad json}\n")); err != nil {
 		t.Fatalf("write: %v", err)
 	}
@@ -222,7 +215,6 @@ func TestCtxCancelShutdown(t *testing.T) {
 	errCh := make(chan error, 1)
 	go func() { errCh <- srv.Start(ctx) }()
 
-	// wait for sockets
 	deadline := time.Now().Add(2 * time.Second)
 	for time.Now().Before(deadline) {
 		_, e1 := os.Stat(cliSock)
@@ -233,7 +225,6 @@ func TestCtxCancelShutdown(t *testing.T) {
 		time.Sleep(5 * time.Millisecond)
 	}
 
-	// cancel and expect clean shutdown
 	cancel()
 	select {
 	case err := <-errCh:
@@ -244,7 +235,6 @@ func TestCtxCancelShutdown(t *testing.T) {
 		t.Error("server did not shut down within 3 seconds after ctx cancel")
 	}
 
-	// socket files should be cleaned up
 	if _, err := os.Stat(cliSock); !os.IsNotExist(err) {
 		t.Error("cli.sock was not removed after shutdown")
 	}

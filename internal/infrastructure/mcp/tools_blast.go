@@ -14,36 +14,23 @@ import (
 	gitinfra "github.com/whiskeyjimbo/veska/internal/infrastructure/git"
 )
 
-// BlastResponse is the envelope returned by the eng_get_*_blast_radius tools.
 type BlastResponse struct {
 	Entries         []blastEntryDTO `json:"entries"`
 	Truncated       bool            `json:"truncated"`
 	IncludedStaging bool            `json:"included_staging"`
-	// CrossRepoEdges are synthetic edges from any visited node into another
-	// registered repo, resolved via cross_repo_edge_stubs.
-	// Omitted when no resolver is wired or no stubs match — same convention
-	// as eng_get_call_chain.
+	// CrossRepoEdges contains resolved synthetic edges targeting external repositories in the workspace.
 	CrossRepoEdges []CrossRepoEdge `json:"cross_repo_edges,omitempty"`
-	// DegradedReasons / IndexingRepos surface the cold-scan-in-progress
-	// window so an empty/sparse blast during indexing is
-	// distinguishable from a genuinely-isolated symbol. Both omitted when
-	// empty so the pre-bead JSON shape is preserved.
+	// DegradedReasons and IndexingRepos indicate in-progress cold scans to explain potentially incomplete results.
 	DegradedReasons []string `json:"degraded_reasons,omitempty"`
 	IndexingRepos   []string `json:"indexing_repos,omitempty"`
-	// WakeReconcilingRepos lists the seed's repo when its wake reconcile sweep
-	// was in flight at query time. Fires on empty AND
-	// non-empty results. Omitted when empty.
+	// WakeReconcilingRepos lists repository IDs whose wake reconciliation sweep was active at query time.
 	WakeReconcilingRepos []string `json:"wake_reconciling_repos,omitempty"`
 }
 
-// RepoRootFunc returns the absolute path of the working tree for a given
-// repoID. It is injected into RegisterBlastTools to keep the MCP layer
-// from importing the workspace registry directly.
+// RepoRootFunc resolves the workspace root path, allowing decouple from direct imports.
 type RepoRootFunc func(ctx context.Context, repoID string) (string, error)
 
-// BlastToolOption configures optional blast-tool dependencies — primarily the
-// cross-repo stub resolver used to expand the BFS frontier into other repos
-// Composition roots without a resolver simply omit it.
+// BlastToolOption configures optional blast-tool extensions such as cross-repository stub resolvers.
 type BlastToolOption func(*blastToolConfig)
 
 type blastToolConfig struct {
@@ -54,50 +41,32 @@ type blastToolConfig struct {
 	changedFilesBetween blastradius.ChangedFilesBetweenFunc
 }
 
-// WithBlastChangedFilesBetween supplies the ranged-diff change-set lister so
-// eng_get_diff_blast_radius accepts ref_a/ref_b. Nil (the
-// default) leaves the tool working-tree-only: a ranged request then returns
-// InternalError, while the bare working-tree diff is unaffected.
+// WithBlastChangedFilesBetween registers a ranged-diff change lister to support ref ranges on diff-blast queries.
 func WithBlastChangedFilesBetween(fn blastradius.ChangedFilesBetweenFunc) BlastToolOption {
 	return func(c *blastToolConfig) { c.changedFilesBetween = fn }
 }
 
-// WithBlastScanTracker supplies the daemon's cold-scan tracker so empty
-// blast responses can carry an indexing_in_progress hint when a scan is
-// in flight. Nil disables the hint.
+// WithBlastScanTracker registers the scan tracker to surface in-progress indexing hints on query results.
 func WithBlastScanTracker(t ScanTrackerReader) BlastToolOption {
 	return func(c *blastToolConfig) { c.scans = t }
 }
 
-// WithBlastReconcileTracker supplies the wake reconciler so a blast on a node
-// whose repo is mid-sweep carries a wake_reconciling hint.
-// Nil disables the hint.
+// WithBlastReconcileTracker registers a reconciler to surface active wake reconciliation hints.
 func WithBlastReconcileTracker(t ReconcileReader) BlastToolOption {
 	return func(c *blastToolConfig) { c.reconcile = t }
 }
 
-// WithBlastResolveFunc supplies a ResolveFunc that the blast handlers use to
-// turn each visited node's cross_repo_edge_stubs into CrossRepoEdges in the
-// response — parity with eng_get_call_chain's WithResolveFunc.
+// WithBlastResolveFunc registers a callback to resolve outbound cross-repository edges.
 func WithBlastResolveFunc(fn ResolveFunc) BlastToolOption {
 	return func(c *blastToolConfig) { c.resolve = fn }
 }
 
-// WithBlastInboundResolveFunc supplies an InboundResolveFunc so blast in
-// the callers direction (or DirBoth) also surfaces cross-repo callers in
-// OTHER repos targeting the visited nodes. Without it, blast_radius on a
-// library symbol cannot see consumers in workspace repos — the
-// library-author journey gap closed by.
+// WithBlastInboundResolveFunc registers a callback to resolve inbound cross-repository edges from dependent workspace repos.
 func WithBlastInboundResolveFunc(fn InboundResolveFunc) BlastToolOption {
 	return func(c *blastToolConfig) { c.resolveInbound = fn }
 }
 
-// RegisterBlastTools registers the three blast-radius tools: by-node,
-// by-staging, and by-working-tree-diff. svc is required for all three.
-// repoRoot and changedFiles are required only by eng_get_diff_blast_radius.
-// When either is nil the tool is still registered but will return
-// InternalError on every call — this keeps the registry uniform across
-// composition roots that have not wired the git adapter.
+// RegisterBlastTools registers blast-radius analysis tools, returning internal errors if required git dependencies are not wired.
 func RegisterBlastTools(r *Registry, svc *blastradius.Service, repoRoot RepoRootFunc, changedFiles blastradius.ChangedFilesFunc, repos application.RepoLister, graph ports.GraphReader, opts ...BlastToolOption) {
 	cfg := blastToolConfig{}
 	for _, opt := range opts {
@@ -147,8 +116,7 @@ func makeBlastRadiusHandler(svc *blastradius.Service, repos application.RepoList
 		if rpcErr := bindParams(raw, &p); rpcErr != nil {
 			return nil, rpcErr
 		}
-		// fan-out by seed when repo_id is omitted (same contract
-		// as `veska blast --help`: "default: fan out across registered repos").
+		// Omitting the repo ID prompts a fan-out search across all registered repositories.
 		repoID, branch, nid, rpcErr := resolveSeedOwner(ctx, repos, graph, raw, p.RepoID, p.Branch, p.NodeID, p.Symbol)
 		if rpcErr != nil {
 			return nil, rpcErr
@@ -174,9 +142,7 @@ func makeBlastRadiusHandler(svc *blastradius.Service, repos application.RepoList
 			resolveCrossRepoInboundFor(ctx, resolveInbound, resp.Entries, p.Branch, dir),
 		)
 		var reasons, indexing []string
-		// surface the cold-scan window on a sparse blast
-		// (entries==[seed-only] or empty + no cross-repo). An ongoing scan
-		// may still be populating the target repo's edges.
+		// We surface indexing status for sparse results as the database edges might still be indexing.
 		if len(resp.Entries) <= 1 && len(crossRepoEdges) == 0 {
 			if ids, busy := indexingRepoIDs(scans); busy {
 				reasons = append(reasons, protocol.DegradedReasonIndexingInProgress)
@@ -199,12 +165,7 @@ func makeBlastRadiusHandler(svc *blastradius.Service, repos application.RepoList
 	}
 }
 
-// resolveCrossRepoInboundFor mirrors resolveCrossRepoFor but asks the
-// inbound resolver for each entry: "which stubs in OTHER repos point at
-// this node?" Returns nil when direction is callees-only — inbound
-// expansion only makes sense when the user actually wants callers
-// Silent on per-node errors (a stuck remote repo must not
-// break the primary blast result).
+// resolveCrossRepoInboundFor queries the resolver for external incoming edges, ignoring individual remote lookup errors to prevent system-wide blocking.
 func resolveCrossRepoInboundFor(ctx context.Context, resolve InboundResolveFunc, entries []blastradius.Entry, branch string, dir blastradius.Direction) []CrossRepoEdge {
 	if resolve == nil || len(entries) == 0 {
 		return nil
@@ -239,10 +200,7 @@ func resolveCrossRepoInboundFor(ctx context.Context, resolve InboundResolveFunc,
 	return out
 }
 
-// mergeCrossRepoEdges concatenates outbound and inbound edge lists while
-// deduping on the (src, dst, kind) triple — the two resolvers can describe
-// the same edge from opposite perspectives and the caller should see it
-// once.
+// mergeCrossRepoEdges combines outbound and inbound cross-repository edges, deduplicating matching pairs.
 func mergeCrossRepoEdges(out, in []CrossRepoEdge) []CrossRepoEdge {
 	if len(out) == 0 {
 		return in
@@ -271,11 +229,7 @@ func mergeCrossRepoEdges(out, in []CrossRepoEdge) []CrossRepoEdge {
 	return merged
 }
 
-// resolveCrossRepoFor walks each entry's cross_repo_edge_stubs via the
-// injected resolver and collects the resolved edges. Silent on per-node
-// errors (matches call_chain) — cross-repo expansion is advisory and a
-// stuck repo must not break the primary blast result. nil resolve is a
-// no-op.
+// resolveCrossRepoFor queries the resolver for outbound cross-repository edges, ignoring individual repository errors to maintain availability.
 func resolveCrossRepoFor(ctx context.Context, resolve ResolveFunc, entries []blastradius.Entry, branch string, expand bool) []CrossRepoEdge {
 	if resolve == nil || len(entries) == 0 {
 		return nil
@@ -318,11 +272,7 @@ type diffBlastRadiusParams struct {
 	ExpandCrossRepo bool   `json:"expand_cross_repo,omitempty"`
 }
 
-// DiffBlastDeps bundles the git adapters eng_get_diff_blast_radius needs:
-// the repo-root resolver, the working-tree change-set lister, and the
-// optional ranged (ref_a.ref_b) lister. Grouping them keeps the handler
-// within the argument budget and collapses the "is diff blast wired" gate to
-// one place. ChangedFilesBetween may be nil (working-tree-only deployments).
+// DiffBlastDeps groups git adapter dependencies to avoid excessive parameter lists.
 type DiffBlastDeps struct {
 	RepoRoot            RepoRootFunc
 	ChangedFiles        blastradius.ChangedFilesFunc
@@ -359,11 +309,7 @@ func makeDiffBlastRadiusHandler(svc *blastradius.Service, deps DiffBlastDeps, re
 	}
 }
 
-// prepareDiffBlast validates and resolves the shared diff-blast preamble:
-// the wiring gate, param binding, the all-or-nothing ref_a/ref_b rule, repo /
-// branch / direction resolution, the repo root, and the wider default
-// max_nodes. It returns the resolved params plus the repo root and direction
-// so the handler body stays focused on running the blast.
+// prepareDiffBlast extracts and validates the parameters and repository boundaries required to run a diff blast.
 func prepareDiffBlast(ctx context.Context, repos application.RepoLister, deps DiffBlastDeps, raw json.RawMessage) (diffBlastRadiusParams, string, blastradius.Direction, *RPCError) {
 	var p diffBlastRadiusParams
 	if deps.RepoRoot == nil || deps.ChangedFiles == nil {
@@ -372,14 +318,10 @@ func prepareDiffBlast(ctx context.Context, repos application.RepoLister, deps Di
 	if rpcErr := bindParams(raw, &p); rpcErr != nil {
 		return p, "", "", rpcErr
 	}
-	// ref_a/ref_b are all-or-nothing: both set selects a ranged diff, both
-	// omitted falls back to the working-tree-vs-HEAD default. A lone ref is a
-	// caller error — no sensible "the other side is HEAD" default exists that
-	// wouldn't silently mask a typo.
+	// Ref parameters are all-or-nothing; passing a single ref is rejected to prevent masking typos.
 	if (p.RefA == "") != (p.RefB == "") {
 		return p, "", "", &RPCError{Code: CodeInvalidParams, Message: "ref_a and ref_b must be provided together (or both omitted to diff the working tree against HEAD)"}
 	}
-	// shim-injected cwd resolves repo_id when omitted.
 	repoID, rpcErr := resolveRepoIDFromParams(ctx, repos, raw, p.RepoID)
 	if rpcErr != nil {
 		return p, "", "", rpcErr
@@ -401,21 +343,14 @@ func prepareDiffBlast(ctx context.Context, repos application.RepoLister, deps Di
 	if root == "" {
 		return p, "", "", &RPCError{Code: CodeNotFound, Message: fmt.Sprintf("repo has no root path: %s", p.RepoID)}
 	}
-	// Default max_nodes for diff-blast is wider than the by-node default:
-	// changes typically span many seeds and a too-tight cap would clip most
-	// answers.
+	// We default max_nodes to a larger threshold for diff blasts since changed files naturally seed more expansion paths.
 	if p.MaxNodes == 0 {
 		p.MaxNodes = 500
 	}
 	return p, root, dir, nil
 }
 
-// diffBlastChangeLister picks the change-set lister for a diff-blast request:
-// the working-tree ChangedFiles by default, or a closure capturing ref_a/ref_b
-// when both are supplied. The closure satisfies the working-tree
-// ChangedFilesFunc signature so DiffOf stays agnostic about how the change set
-// was derived. A ranged request with no ranged lister wired is an
-// InternalError.
+// diffBlastChangeLister returns the appropriate change function based on whether a working tree or ranged reference diff is requested.
 func diffBlastChangeLister(deps DiffBlastDeps, p diffBlastRadiusParams) (blastradius.ChangedFilesFunc, *RPCError) {
 	if p.RefA == "" {
 		return deps.ChangedFiles, nil
@@ -428,11 +363,7 @@ func diffBlastChangeLister(deps DiffBlastDeps, p diffBlastRadiusParams) (blastra
 	}, nil
 }
 
-// diffBlastError maps a DiffOf failure onto an RPCError. An unresolvable ref
-// (typo, unfetched commit) is a caller problem → InvalidParams naming the
-// offending side, rather than leaking raw git stderr as an InternalError.
-// refA/refB are empty for the working-tree path, where ErrUnknownRevision
-// cannot arise, so the ranged-only messaging is safe.
+// diffBlastError maps git errors to validation or internal errors, checking which references failed to resolve to provide helpful messages.
 func diffBlastError(ctx context.Context, root, refA, refB string, err error) *RPCError {
 	if !errors.Is(err, gitinfra.ErrUnknownRevision) {
 		return &RPCError{Code: CodeInternalError, Message: fmt.Sprintf("diff blast radius: %v", err)}
@@ -468,7 +399,6 @@ func makeDirtyBlastRadiusHandler(svc *blastradius.Service, repos application.Rep
 		if rpcErr := bindParams(raw, &p); rpcErr != nil {
 			return nil, rpcErr
 		}
-		// shim-injected cwd resolves repo_id when omitted.
 		repoID, rpcErr := resolveRepoIDFromParams(ctx, repos, raw, p.RepoID)
 		if rpcErr != nil {
 			return nil, rpcErr

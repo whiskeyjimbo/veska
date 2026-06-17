@@ -14,7 +14,6 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/mcp"
 )
 
-// stubActorHandler satisfies mcp.Handler and records domain.Actor values.
 type stubActorHandler struct {
 	mu     sync.Mutex
 	actors []domain.Actor
@@ -47,8 +46,6 @@ func mustRawJSON(t *testing.T, v any) json.RawMessage {
 	return b
 }
 
-// TestCliSock_ActorKindHuman_IDPrefixed verifies that connections on cli.sock
-// receive ActorKindHuman and an actor_id with the "human:" prefix.
 func TestCliSock_ActorKindHuman_IDPrefixed(t *testing.T) {
 	h := &stubActorHandler{result: map[string]string{"ok": "true"}}
 	cliSock, _ := startServer(t, h)
@@ -65,8 +62,6 @@ func TestCliSock_ActorKindHuman_IDPrefixed(t *testing.T) {
 	}
 }
 
-// TestMcpSock_ActorKindAgent_DefaultID verifies that connections on mcp.sock
-// receive ActorKindAgent and an actor_id of "agent:unknown" by default.
 func TestMcpSock_ActorKindAgent_DefaultID(t *testing.T) {
 	h := &stubActorHandler{result: map[string]string{"ok": "true"}}
 	_, mcpSock := startServer(t, h)
@@ -83,14 +78,10 @@ func TestMcpSock_ActorKindAgent_DefaultID(t *testing.T) {
 	}
 }
 
-// TestMcpSock_InitializeUpdatesActorID verifies that sending an "initialize"
-// request with clientInfo.name updates the actor_id for subsequent requests
-// on the same connection.
 func TestMcpSock_InitializeUpdatesActorID(t *testing.T) {
 	h := &stubActorHandler{result: map[string]string{"ok": "true"}}
 	_, mcpSock := startServer(t, h)
 
-	// Open one persistent connection and send initialize + a follow-up request.
 	conn, err := net.DialTimeout("unix", mcpSock, time.Second)
 	if err != nil {
 		t.Fatalf("dial: %v", err)
@@ -113,7 +104,6 @@ func TestMcpSock_InitializeUpdatesActorID(t *testing.T) {
 		t.Fatal("no response to initialize")
 	}
 
-	// Send a second request on the same connection.
 	pingReq := mcp.Request{JSONRPC: "2.0", ID: makeID(2), Method: "ping"}
 	if err := enc.Encode(pingReq); err != nil {
 		t.Fatalf("encode ping: %v", err)

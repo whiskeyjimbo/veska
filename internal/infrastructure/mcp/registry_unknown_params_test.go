@@ -9,7 +9,6 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/core/domain"
 )
 
-// schemaWithProps builds an inputSchema with the given property names.
 func schemaWithProps(props ...string) json.RawMessage {
 	m := map[string]any{
 		"type":       "object",
@@ -34,9 +33,6 @@ func registerWithSchema(t *testing.T, r *Registry, name string, schema json.RawM
 	})
 }
 
-// TestDispatch_FlatUnknownParamRejected:
-// Passing an unknown top-level param via the flat method form must
-// return -32602 naming the offending key.
 func TestDispatch_FlatUnknownParamRejected(t *testing.T) {
 	r := NewRegistry()
 	registerWithSchema(t, r, "eng_find_changed_symbols", schemaWithProps("repo_id", "branch", "ref_a", "ref_b"))
@@ -54,7 +50,6 @@ func TestDispatch_FlatUnknownParamRejected(t *testing.T) {
 	}
 }
 
-// TestDispatch_ToolsCallUnknownParamRejected — same behaviour via tools/call.
 func TestDispatch_ToolsCallUnknownParamRejected(t *testing.T) {
 	r := NewRegistry()
 	registerWithSchema(t, r, "eng_get_status", schemaWithProps())
@@ -73,7 +68,6 @@ func TestDispatch_ToolsCallUnknownParamRejected(t *testing.T) {
 	}
 }
 
-// TestDispatch_KnownParamsAccepted — sanity: known keys still dispatch.
 func TestDispatch_KnownParamsAccepted(t *testing.T) {
 	r := NewRegistry()
 	registerWithSchema(t, r, "eng_find_changed_symbols", schemaWithProps("repo_id", "branch", "ref_a", "ref_b"))
@@ -88,23 +82,19 @@ func TestDispatch_KnownParamsAccepted(t *testing.T) {
 	}
 }
 
-// TestDispatch_EmptyParamsAccepted — empty / no params must not error.
 func TestDispatch_EmptyParamsAccepted(t *testing.T) {
 	r := NewRegistry()
 	registerWithSchema(t, r, "eng_get_status", schemaWithProps())
 
-	// nil params
 	if _, rpcErr := r.Dispatch(context.Background(), domain.Actor{}, &Request{Method: "eng_get_status"}); rpcErr != nil {
 		t.Errorf("nil params: unexpected error %+v", rpcErr)
 	}
-	// empty object
 	if _, rpcErr := r.Dispatch(context.Background(), domain.Actor{}, &Request{Method: "eng_get_status", Params: json.RawMessage(`{}`)}); rpcErr != nil {
 		t.Errorf("empty object: unexpected error %+v", rpcErr)
 	}
 }
 
-// TestDispatch_ToolWithoutSchemaSkipsValidation — tools that don't publish
-// an inputSchema must not block on unknown keys (no schema = no contract).
+// Tools that do not specify an input schema skip parameter validation to support legacy or dynamic message schemas.
 func TestDispatch_ToolWithoutSchemaSkipsValidation(t *testing.T) {
 	r := NewRegistry()
 	r.MustRegister(ToolSpec{
@@ -121,8 +111,7 @@ func TestDispatch_ToolWithoutSchemaSkipsValidation(t *testing.T) {
 	}
 }
 
-// TestDispatch_NonObjectParamsRejected — params declared object but given an
-// array/string should be rejected with -32602.
+// Parameter payloads that are not JSON objects are rejected with invalid parameters error.
 func TestDispatch_NonObjectParamsRejected(t *testing.T) {
 	r := NewRegistry()
 	registerWithSchema(t, r, "eng_get_status", schemaWithProps("repo_id"))
@@ -137,13 +126,9 @@ func TestDispatch_NonObjectParamsRejected(t *testing.T) {
 	}
 }
 
-// TestDispatch_TransportInjectedCwdAllowed — the veska-mcp shim injects
-// "cwd" into every eng_* request even when the tool's schema doesn't list
-// it. Validation must accept the key so the shim path keeps working
-// ( + ).
+// The MCP transport layer implicitly injects a 'cwd' parameter, so validation must accept it even when the tool schema does not list it.
 func TestDispatch_TransportInjectedCwdAllowed(t *testing.T) {
 	r := NewRegistry()
-	// Schema with no cwd declared.
 	registerWithSchema(t, r, "eng_get_status", schemaWithProps())
 	params := json.RawMessage(`{"cwd":"/abs/work"}`)
 	if _, rpcErr := r.Dispatch(context.Background(), domain.Actor{}, &Request{Method: "eng_get_status", Params: params}); rpcErr != nil {
@@ -151,8 +136,7 @@ func TestDispatch_TransportInjectedCwdAllowed(t *testing.T) {
 	}
 }
 
-// TestDispatch_ToolsListUnchanged — tools/list takes no schema params and
-// must not be subjected to validation.
+// The tools/list method accepts no parameters and is excluded from parameter validation.
 func TestDispatch_ToolsListUnchanged(t *testing.T) {
 	r := NewRegistry()
 	registerWithSchema(t, r, "eng_get_status", schemaWithProps())

@@ -8,7 +8,6 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/core/ports"
 )
 
-// TestValidateAuditEntry covers all required-field invariants.
 func TestValidateAuditEntry(t *testing.T) {
 	good := ports.AuditEntry{
 		RepoID:    "repo-1",
@@ -59,7 +58,7 @@ func TestValidateAuditEntry(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			e := good // copy
+			e := good
 			tc.mutate(&e)
 			err := ValidateAuditEntry(e)
 			if tc.wantErr && err == nil {

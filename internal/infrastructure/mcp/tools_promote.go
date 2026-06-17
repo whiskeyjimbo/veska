@@ -12,29 +12,7 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/core/domain"
 )
 
-// eng_promote
-// Called by the post-commit git hook to drive a real promotion after a commit.
-// The previous wire protocol — a bare {"cmd":"promote"} payload — was rejected
-// by the JSON-RPC listener with method-not-found and silently swallowed, so
-// post-commit promotion was effectively dead.
-// Inputs:
-//
-//	root_path — absolute working-tree path of the just-committed repo.
-//
-// Action:
-//  1. Resolve root_path → registered RepoRecord via the lister.
-//  2. Read HEAD from git.
-//  3. Read the files changed in the HEAD commit and Ingester.Save each one,
-//     so the staging area is populated even when fsnotify missed the events
-//     (the hook is the second-chance gate, not just a notification).
-//  4. Promoter.Promote(repoID, branch, HEAD, system actor) flushes staging.
-//
-// Idempotent and bounded — files deleted in the commit are skipped, parse
-// errors are logged but don't abort the promotion.
-// PromoteDeps bundles the collaborators eng_promote needs. The wire layer
-// constructs these from the same singletons the daemon already builds
-// repoLister, GitQuerier, Ingester, Promoter — so eng_promote and the
-// startup-resync / cold-scan paths share one source of truth per dependency.
+// PromoteDeps bundles the dependencies required by the repository promotion service.
 type PromoteDeps struct {
 	Repos    application.RepoLister
 	Git      application.GitQuerier
@@ -42,31 +20,20 @@ type PromoteDeps struct {
 	Promoter PromotePromoter
 }
 
-// PromoteIngester is the narrow surface eng_promote needs from the Ingester
-// kept narrow so future Ingester refactors don't ripple here.
+// PromoteIngester defines the subset of ingester functionality required for staging changes.
 type PromoteIngester interface {
 	Save(ctx context.Context, repoID, branch, path string, src []byte)
 }
 
-// PromotePromoter is the narrow surface eng_promote needs from the Promoter.
+// PromotePromoter defines the subset of promoter functionality required to apply changes to the persistent graph.
 type PromotePromoter interface {
 	Promote(ctx context.Context, repoID, branch, gitSHA string, actor domain.Actor) error
 }
 
 type promoteParams struct {
 	RootPath string `json:"root_path"`
-	// RepoID accepts the full repo_id or a 12-char short_id,
-	// matching every other repo-scoped tool. Either RepoID or RootPath is
-	// sufficient; when both are passed, RepoID wins.
+	// RepoID accepts the full repository identifier or a short ID prefix.
 	RepoID string `json:"repo_id"`
-	// Optional overrides. Pre-validator the handler silently
-	// dropped these; agents calling eng_promote_repo with attribution had no
-	// way to learn that. They are now first-class:
-	//   Branch overrides the repo's active_branch when non-empty.
-	//   GitSHA pins the commit to promote at; defaults to git HEAD.
-	//   ActorKind + ActorID stamp attribution on the promotion; default is
-	//     the system actor ('service:veska'). They must be supplied together
-	//     or both omitted.
 	Branch    string `json:"branch"`
 	GitSHA    string `json:"git_sha"`
 	ActorKind string `json:"actor_kind"`
@@ -80,9 +47,7 @@ type promoteResult struct {
 	FilesPromoted int    `json:"files_promoted"`
 }
 
-// RegisterPromoteTool wires eng_promote. Nil deps are tolerated: the handler
-// returns a clear error rather than panicking, so a misconfigured wiring
-// degrades to "promote is unavailable" without taking the daemon down.
+// RegisterPromoteTool registers the eng_promote_repo tool.
 func RegisterPromoteTool(r *Registry, deps PromoteDeps) {
 	r.MustRegister(ToolSpec{
 		Name:         "eng_promote_repo",
@@ -106,8 +71,7 @@ func makePromoteHandler(deps PromoteDeps) ToolHandler {
 		if p.RootPath == "" && p.RepoID == "" {
 			return nil, &RPCError{Code: CodeInvalidParams, Message: "root_path or repo_id is required"}
 		}
-		// actor_kind / actor_id must be supplied together. The
-		// schema can't express "all-or-none", so validate here.
+
 		if (p.ActorKind == "") != (p.ActorID == "") {
 			return nil, &RPCError{Code: CodeInvalidParams, Message: "actor_kind and actor_id must both be set or both omitted"}
 		}
@@ -120,8 +84,7 @@ func makePromoteHandler(deps PromoteDeps) ToolHandler {
 		var rec application.RepoRecord
 		var canon string
 		if p.RepoID != "" {
-			// resolve by repo_id (full or short prefix) — parity
-			// with every other repo-scoped tool.
+
 			for _, r := range repos {
 				if r.RepoID == p.RepoID || ShortRepoID(r.RepoID) == p.RepoID {
 					rec = r
@@ -136,8 +99,7 @@ func makePromoteHandler(deps PromoteDeps) ToolHandler {
 			// Canonicalise so the lookup matches the canonical form repo.Add stored.
 			canon, err = filepath.EvalSymlinks(p.RootPath)
 			if err != nil {
-				// Fall back to an absolute path — repo.Add does the same when
-				// EvalSymlinks fails on a missing directory.
+
 				if abs, aerr := filepath.Abs(p.RootPath); aerr == nil {
 					canon = abs
 				} else {
@@ -158,9 +120,7 @@ func makePromoteHandler(deps PromoteDeps) ToolHandler {
 		if branch == "" {
 			branch = "main"
 		}
-		// caller-supplied branch override (e.g. an agent
-		// re-promoting a non-active branch) takes precedence over the
-		// repo-record default.
+
 		if p.Branch != "" {
 			branch = p.Branch
 		}
@@ -174,9 +134,7 @@ func makePromoteHandler(deps PromoteDeps) ToolHandler {
 			head = h
 		}
 
-		// Re-stage files changed in the HEAD commit. Treating the hook as the
-		// second-chance gate (rather than trusting fsnotify alone) is what
-		// makes commit-driven updates land deterministically.
+
 		changed, err := deps.Git.ChangedFiles(canon, head)
 		if err != nil {
 			return nil, &RPCError{Code: CodeInternalError, Message: fmt.Sprintf("git ChangedFiles: %v", err)}
@@ -186,25 +144,19 @@ func makePromoteHandler(deps PromoteDeps) ToolHandler {
 			abs := filepath.Join(canon, rel)
 			src, rerr := os.ReadFile(abs)
 			if rerr != nil {
-				// File deleted in this commit or unreadable — skip; Promoter
-				// will not produce nodes for it, which is the correct outcome.
+				// Unreadable files are skipped during promotion.
 				slog.Debug("eng_promote: skip unreadable file",
 					"repo", rec.RepoID, "file", rel, "err", rerr)
 				continue
 			}
-			// the parser keys on the repo-relative slash path.
-			// `rel` (from git ChangedFiles) is already that form; `abs` exists
-			// only to read the bytes above.
+
 			deps.Ingester.Save(ctx, rec.RepoID, branch, rel, src)
 			staged++
 		}
 
 		actor := domain.Actor{ID: "service:veska", Kind: domain.ActorKindSystem}
 		if p.ActorKind != "" {
-			// NewActor enforces the kind enum (human/agent/system) and
-			// rejects an empty id, so an invalid actor_kind surfaces here
-			// as CodeInvalidParams rather than silently degrading to the
-			// system default.
+
 			a, aerr := domain.NewActor(p.ActorID, domain.ActorKind(p.ActorKind))
 			if aerr != nil {
 				return nil, &RPCError{Code: CodeInvalidParams, Message: fmt.Sprintf("invalid actor: %v", aerr)}

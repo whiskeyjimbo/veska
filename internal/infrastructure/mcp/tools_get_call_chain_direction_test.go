@@ -7,15 +7,10 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/core/domain"
 )
 
-// verification — eng_get_call_chain accepts direction =
-// out (default), in, or both, and walks the requested edge directions.
-// Uses the same in-package fixture helpers (newStubGraphStorage, mustNode,
-// mustEdge, dispatchCallChain) that the existing TestGetCallChain_*
-// suite uses, so the new direction tests stay aligned with the others.
+// We verify that eng_get_call_chain supports querying inbound, outbound, or bidirectional call graphs using the standard graph test helpers.
 
 func TestGetCallChain_DirectionIn_WalksIncomingEdges(t *testing.T) {
 	store := newStubGraphStorage()
-	// Build: A -> B. Querying B with direction=in must surface A as a caller.
 	a := mustNode(t, "a", "pkg/a.go", "A", domain.KindFunction)
 	b := mustNode(t, "b", "pkg/b.go", "B", domain.KindFunction)
 	store.addNode(a)
@@ -56,7 +51,6 @@ func TestGetCallChain_DirectionOutIsDefault(t *testing.T) {
 	r := NewRegistry()
 	RegisterGraphTools(r, store, staging.NewArea())
 
-	// No direction → default 'out'. From A, must reach B.
 	resp, rpcErr := dispatchCallChain(t, r, "eng_get_call_chain", map[string]any{
 		"node_id": "a",
 		"repo_id": "repo1",
@@ -78,8 +72,6 @@ func TestGetCallChain_DirectionOutIsDefault(t *testing.T) {
 
 func TestGetCallChain_DirectionBoth_WalksEitherWay(t *testing.T) {
 	store := newStubGraphStorage()
-	// Build: A -> B -> C. From B with direction=both we should reach BOTH A
-	// (incoming caller) and C (outgoing callee).
 	a := mustNode(t, "a", "pkg/a.go", "A", domain.KindFunction)
 	b := mustNode(t, "b", "pkg/b.go", "B", domain.KindFunction)
 	c := mustNode(t, "c", "pkg/c.go", "C", domain.KindFunction)
