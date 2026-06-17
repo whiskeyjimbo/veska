@@ -1,10 +1,8 @@
-// Package ports_test contains compile-time interface surface tests.
-// These blank-identifier checks ensure that all stub implementations satisfy
-// every interface in the ports package. The stubs have empty method bodies;
-// their only purpose is to make the compiler validate the full method set.
-// Adding a new method to an interface will cause a compile error here until
-// the stub (and any real adapter) is updated — giving you fast, zero-overhead
-// coverage of the interface contract.
+// Package ports_test contains compile-time interface compliance checks.
+// These checks ensure that stub implementations satisfy every interface
+// in the ports package. Adding a new method to an interface causes a
+// compiler error here until the stub is updated, providing zero-overhead
+// compliance verification.
 package ports_test
 
 import (
@@ -154,5 +152,5 @@ func (s *stubSecretsScanner) Scan(_ ports.ScanInput) ([]ports.SecretFinding, err
 	return nil, nil
 }
 
-// Prevent "imported and not used" errors for packages only referenced by stubs.
+
 var _ = time.Time{}

@@ -12,11 +12,9 @@ type Notification struct {
 	Message string
 }
 
-// Notifier is the port for dispatching runtime notifications to the user or an
-// external system. Implementations are provided by infrastructure adapters
-// (e.g. stderr, desktop notifications, Slack webhooks).
+// Notifier dispatches runtime notifications to the user or an external system.
 type Notifier interface {
 	// Notify dispatches n to the underlying sink. Implementations must be safe
-	// for concurrent use and must respect ctx cancellation.
+	// for concurrent use and must respect context cancellation.
 	Notify(ctx context.Context, n Notification) error
 }

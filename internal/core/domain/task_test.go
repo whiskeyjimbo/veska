@@ -186,12 +186,10 @@ func TestTaskSet_SetActiveDeactivatesPrevious(t *testing.T) {
 
 	ts.SetActive(t2)
 
-	// t2 should now be active.
 	active := ts.Active("repo1")
 	if active == nil || active.ID != "t2" {
 		t.Errorf("Active after SetActive: got %v, want t2", active)
 	}
-	// t1 should be deactivated.
 	if t1.Active {
 		t.Error("t1 should have been deactivated by SetActive")
 	}
@@ -200,7 +198,7 @@ func TestTaskSet_SetActiveDeactivatesPrevious(t *testing.T) {
 func TestTaskSet_SetActiveTaskNotInSet(t *testing.T) {
 	ts := NewTaskSet()
 	t1, _ := NewTask(TaskSpec{ID: "t1", RepoID: "repo1", Title: "Orphan"})
-	// t1 was never Add-ed; SetActive should still work by treating it as the new active.
+	// t1 was not previously added to the set; SetActive should still set it as the active task.
 	ts.SetActive(t1)
 	if got := ts.Active("repo1"); got == nil || got.ID != "t1" {
 		t.Errorf("Active: got %v, want t1", got)

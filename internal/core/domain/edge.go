@@ -16,21 +16,17 @@ const (
 	EdgeContains  EdgeKind = "CONTAINS"
 	EdgeTests     EdgeKind = "TESTS"
 	EdgeDependsOn EdgeKind = "DEPENDS_ON"
-	// EdgeSimilarTo is the auto-link kind: a proposed semantic similarity edge
-	// emitted by the auto-link pipeline (see internal/application/autolink).
-	// These edges are written with Confidence=Unresolved and paired with a
-	// source_layer='semantic' Finding for human review.
+	// EdgeSimilarTo represents a proposed semantic similarity edge emitted by the
+	// auto-link pipeline. These are created with Confidence=Unresolved and paired
+	// with a 'semantic' finding for review.
 	EdgeSimilarTo EdgeKind = "SIMILAR_TO"
-	// EdgeRoutes connects a router/mux node to the handler a framework
-	// registration call binds to a path (gin/echo `router.GET("/p", h)`).
-	// Reserved alongside KindRoute as the framework-aware vocabulary; the
-	// cobra command tree uses CONTAINS (a command literally contains its
-	// subcommands), so ROUTES emission lands with the route pass.
+	// EdgeRoutes connects a router node to the HTTP handler bound by a framework
+	// registration call. The cobra command tree uses CONTAINS for subcommand
+	// relationships.
 	EdgeRoutes EdgeKind = "ROUTES"
 )
 
-// validEdgeKinds is the closed set of recognised EdgeKind values. NewEdge
-// rejects any kind outside this set, mirroring validNodeKinds in node.go.
+// validEdgeKinds defines the closed set of valid EdgeKind values enforced by NewEdge.
 var validEdgeKinds = map[EdgeKind]struct{}{
 	EdgeCalls:     {},
 	EdgeImports:   {},
@@ -61,19 +57,15 @@ type Edge struct {
 	Confidence Confidence
 	Resolved   bool
 	SourceLine *int
-	// Score is the strength of the relationship, currently populated only for
-	// EdgeSimilarTo edges by the auto-link pipeline: the vector-similarity
-	// Hit.Score (1/(1+L2^2) space — see internal/application/autolink), where
-	// higher means more similar. nil means "no score recorded" (every
-	// non-SIMILAR_TO edge, plus legacy SIMILAR_TO rows promoted before the
-	// score column existed). Near-duplicate detection thresholds on this.
+	// Score indicates the strength of the relationship, populated only for
+	// EdgeSimilarTo edges. It represents vector similarity where higher is
+	// more similar, and is used to threshold near-duplicates.
 	Score *float32
 }
 
-// EdgeOption is a functional option applied during Edge construction.
 type EdgeOption func(*Edge) error
 
-// WithConfidence sets the confidence level and derives the resolved flag.
+// WithConfidence sets the edge confidence and derives the corresponding resolved flag.
 func WithConfidence(c Confidence) EdgeOption {
 	return func(e *Edge) error {
 		if c < Unresolved || c > Definite {
@@ -85,7 +77,6 @@ func WithConfidence(c Confidence) EdgeOption {
 	}
 }
 
-// WithSourceLine sets the optional 1-indexed source line of the edge reference.
 func WithSourceLine(line int) EdgeOption {
 	return func(e *Edge) error {
 		e.SourceLine = &line
@@ -93,9 +84,7 @@ func WithSourceLine(line int) EdgeOption {
 	}
 }
 
-// WithScore sets the optional relationship-strength score (see Edge.Score).
-// Used by the auto-link pipeline to record the vector-similarity score on a
-// SIMILAR_TO edge so near-duplicate detection can threshold it.
+// WithScore sets the relationship-strength score for similarity thresholding.
 func WithScore(score float32) EdgeOption {
 	return func(e *Edge) error {
 		e.Score = &score
@@ -103,27 +92,23 @@ func WithScore(score float32) EdgeOption {
 	}
 }
 
-// edgeID computes the deterministic edge identifier.
+// edgeID computes a deterministic SHA-256 edge identifier from its source, target, and kind.
 func edgeID(src NodeID, kind EdgeKind, tgt NodeID) string {
 	h := sha256.New()
 	_, _ = fmt.Fprintf(h, "%s\x00%s\x00%s", src, kind, tgt)
 	return hex.EncodeToString(h.Sum(nil))[:32]
 }
 
-// EdgeSpec carries the required fields of an Edge. It groups the constructor's
-// positional arguments into a named struct so the two adjacent same-typed
-// NodeID fields (Src/Tgt) cannot be transposed at a call site, mirroring
-// NodeSpec/FindingSpec. Optional fields (confidence, source line) are still
-// supplied via EdgeOption.
+// EdgeSpec groups the required fields of an Edge into a struct to prevent
+// transposing the adjacent same-typed NodeID fields (Src/Tgt) at construction call sites.
 type EdgeSpec struct {
 	Src  NodeID
 	Tgt  NodeID
 	Kind EdgeKind
 }
 
-// NewEdge constructs an Edge from spec, validates invariants, and applies
-// functional options. spec.Src and spec.Tgt must be non-empty and spec.Kind
-// must be a recognised EdgeKind.
+// NewEdge constructs a validated Edge, applying functional options and verifying
+// that Src, Tgt, and Kind are valid.
 func NewEdge(spec EdgeSpec, opts ...EdgeOption) (*Edge, error) {
 	if spec.Src == "" {
 		return nil, errors.New("edge: src must not be empty")

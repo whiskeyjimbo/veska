@@ -1,94 +1,58 @@
 package domain
 
-// ParseResult is the output of CodeParser.ParseFile.
-// It carries the Nodes and Edges extracted from a single source file.
-// Both slices may be nil or empty when the file contains no recognisable symbols.
-// Failures carries any non-fatal syntax errors detected while parsing the file
-// (tree-sitter ERROR / MISSING nodes). A non-empty Failures slice does not
-// suppress whatever partial Nodes/Edges the parser was able to extract — the
-// caller decides what to do with each (typically: stage the partial result and
-// raise a 'parse-failure' finding for downstream visibility).
+// ParseResult is the output of CodeParser.ParseFile, containing the Nodes and Edges
+// extracted from a single source file. Failures contains non-fatal syntax errors
+// (such as tree-sitter ERROR or MISSING nodes); a non-empty Failures list does not
+// suppress the partially extracted Nodes and Edges.
 type ParseResult struct {
 	Nodes    []*Node
 	Edges    []*Edge
 	Failures []ParseFailure
-	// Todos carries TODO/FIXME-style comments detected by the parser's
-	// lexical pre-scan. The list is best-effort: the parser walks the raw
-	// source bytes once for the marker and does not attempt to bind the
-	// comment to a containing symbol. The Ingester collapses the list into
-	// a single file-anchored finding per (repo, branch, file).
+	// Todos contains TODO/FIXME comments detected by the parser's lexical pre-scan.
+	// The Ingester collapses this list into a single file-anchored finding per
+	// repository, branch, and file.
 	Todos []ParseTodo
-	// UnresolvedCalls carries call sites whose callee is named by the
-	// source but is not in the file's symbol map — typically because
-	// the callee lives in another file of the same Go package. The
-	// promoter resolves these against a per-package map built from the
-	// whole batch and emits CALLS edges in the same transaction
+	// UnresolvedCalls contains call sites whose target callee is not defined in the
+	// current file. These are resolved package-wide by the promoter during ingestion.
 	UnresolvedCalls []UnresolvedCall
-	// Imports maps a file's local package identifiers to their full import
-	// paths (alias -> path; for unaliased imports the key is the path's last
-	// segment, matching the common case where the package name equals it).
-	// Promotion uses this to resolve package-qualified UnresolvedCalls
-	// nil/empty when the file imports nothing.
+	// Imports maps local package identifiers to full import paths (alias -> path),
+	// allowing the promoter to resolve package-qualified unresolved calls.
 	Imports map[string]string
 }
 
-// UnresolvedCall is one call site the parser saw but could not bind to
-// a target within the same file. CallerID is the in-file node that
-// contains the call; CalleeName is the lookup key for the package-wide
-// resolver — either "foo" for a plain-identifier call or "Type.foo" for
-// a receiver-method call (the receiver type having been determined from
-// the enclosing method_declaration).
-// PkgQualifier, when non-empty, names the selector operand of a
-// package-qualified call (the "cmd" in cmd.Execute). At promotion time it
-// is resolved against the file's import map ([[ParseResult]].Imports) to a
-// package — intra-module packages bind to a concrete CALLS edge, external
-// modules become a cross-repo edge stub. When PkgQualifier is
-// empty the call is plain/receiver-local as before.
+// UnresolvedCall represents a call site that could not be bound to a target within the
+// same file. CallerID is the enclosing node; CalleeName is the resolver lookup key
+// (e.g. 'foo' or 'Type.foo'). When PkgQualifier is set, it names the package selector
+// (e.g. 'cmd' in 'cmd.Execute') which is resolved using the file imports to create
+// either a concrete CALLS edge or a cross-repository edge stub.
 type UnresolvedCall struct {
 	CallerID     NodeID
 	CalleeName   string
 	PkgQualifier string
-	// IsMethodCall marks a call site of the form `v.Method(.)` where the
-	// parser recognised `v` as a local variable assigned from a
-	// package-qualified call (`v:= pkg.New(.)` / `v:= pkg.Func(.)`).
-	// PkgQualifier holds `pkg`; CalleeName holds `Method`. The receiver
-	// TYPE is intentionally unknown — Go return-type inference is out of
-	// scope for tree-sitter — so the resolver looks up `Method` by name
-	// inside the imported package and binds when the match is unambiguous
-	// ( epic). Non-method calls keep IsMethodCall=false and
-	// resolve through the existing PkgQualifier path.
+	// IsMethodCall indicates a method call of the form 'v.Method()' where the receiver
+	// type is unknown due to the lack of full type inference. The resolver resolves
+	// these by looking up the method name inside the imported package, binding if the
+	// match is unambiguous.
 	IsMethodCall bool
-	// SrcLine is the 1-indexed source line of the call_expression. The
-	// promotion-time resolver carries it through to the resulting
-	// cross-repo edge stub (and from there to the resolved Edge) so
-	// renderers attribute the cross-repo edge to the actual call site,
-	// not the caller node's declaration line. 0 means
-	// unknown (legacy parser output or non-Go parsers that have not
-	// adopted the field yet).
+	// SrcLine is the 1-indexed source line of the call expression, allowing resolved
+	// edges to be attributed directly to the call site instead of the enclosing node's
+	// declaration line. A value of 0 indicates the location is unknown.
 	SrcLine int
-	// EdgeKind is the kind of edge to emit when this call site resolves.
-	// The zero value ("") means EdgeCalls — every ordinary call site
-	// leaves it unset, so the resolver's default path is unchanged. The
-	// framework route extractor sets it to EdgeRoutes so a
-	// router.METHOD("/path", handler) wire-up resolves the route→handler
-	// reference through the same package-wide resolver as a plain call,
-	// but materialises a ROUTES edge instead of a CALLS edge.
+	// EdgeKind specifies the edge relationship to create when this call resolves,
+	// defaulting to EdgeCalls. Framework adaptors can set this to EdgeRoutes to
+	// materialize ROUTES edges.
 	EdgeKind EdgeKind
 }
 
-// ParseFailure describes a single syntax-error region surfaced by the parser.
-// Line is 1-based and points to the first ERROR/MISSING node encountered; it
-// is best-effort — when the parser cannot pinpoint a location it falls back
-// to 0. Message is a short, human-readable reason ("syntax error" by default).
+// ParseFailure describes a syntax-error region surfaced by the parser. Line is 1-based
+// and defaults to 0 if the exact location cannot be determined.
 type ParseFailure struct {
 	Line    int
 	Message string
 }
 
-// ParseTodo describes one TODO/FIXME-style marker found in a source file.
-// Line is 1-based and points at the line where the marker appeared.
-// Message is the rest of the comment line (trimmed) so downstream tools
-// can show "TODO: refactor this" without re-reading the file.
+// ParseTodo describes a TODO or FIXME comment marker found in the source file,
+// capturing the 1-based line number and the trimmed message content.
 type ParseTodo struct {
 	Line    int
 	Message string

@@ -2,12 +2,10 @@ package ports
 
 import "context"
 
-// ExportedSymbol is the minimal projection the breaking-removal diff gate
-// needs to decide whether an exported public-surface symbol
-// present at base-ref has disappeared from the candidate. It carries node_id
-// for naming/anchoring and the (file_path, kind, name) the gate folds into a
-// package-scoped identity key (package = path.Dir(file_path)) so an
-// intra-package file move is NOT mistaken for a removal.
+// ExportedSymbol is the projection needed by the breaking-removal diff gate
+// to determine if an exported symbol from base-ref has disappeared. It carries
+// node ID and identity fields (file path, kind, name) that are folded into a
+// package-scoped key so that intra-package file moves are not mistaken for removals.
 type ExportedSymbol struct {
 	NodeID   string
 	FilePath string
@@ -17,15 +15,12 @@ type ExportedSymbol struct {
 
 // ExportedSymbolQuerier is the read-side port the breaking-removal gate uses to
 // enumerate exported public-surface symbols over a set of changed files.
-// ExportedSymbolsInFiles returns the nodes in (repoID, branch) whose file_path
-// is in filePaths, whose exported flag is true, and whose kind is a removable
-// public-surface kind: function, method, interface, struct, type, variable,
-// class. This is WIDER than the contract-drift gate's
-// signature-shaped set — removal detection needs only a name's presence, so it
-// also covers exported types, structs, consts and vars. An empty filePaths
-// slice MUST return an empty result with no error — symmetric with
-// ContractDriftQuerier / DeadCodeQuerier, and it avoids a degenerate "IN "
-// clause at the adapter.
+// ExportedSymbolsInFiles returns the nodes in (repoID, branch) whose file path
+// is in filePaths, whose exported flag is true, and whose kind is removable
+// (e.g., function, method, interface, struct, type, variable, class). This is
+// wider than the contract-drift gate's signature-shaped set because removal
+// detection only requires name presence, covering exported types, structs, constants,
+// and variables. An empty filePaths slice must return an empty result with no error.
 type ExportedSymbolQuerier interface {
 	ExportedSymbolsInFiles(ctx context.Context, repoID, branch string, filePaths []string) ([]ExportedSymbol, error)
 }

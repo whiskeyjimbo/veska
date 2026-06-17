@@ -4,7 +4,6 @@ import (
 	"testing"
 )
 
-// DoD 6: NewEdge produces deterministic ID for same (src, kind, tgt).
 func TestNewEdge_DeterministicID(t *testing.T) {
 	e1, err := NewEdge(EdgeSpec{Src: "nodeA", Tgt: "nodeB", Kind: EdgeCalls})
 	if err != nil {
@@ -19,7 +18,6 @@ func TestNewEdge_DeterministicID(t *testing.T) {
 	}
 }
 
-// ID should be 32 hex chars.
 func TestNewEdge_IDLength(t *testing.T) {
 	e, err := NewEdge(EdgeSpec{Src: "nodeA", Tgt: "nodeB", Kind: EdgeCalls})
 	if err != nil {
@@ -30,7 +28,6 @@ func TestNewEdge_IDLength(t *testing.T) {
 	}
 }
 
-// Different (src, kind, tgt) should produce different IDs.
 func TestNewEdge_DifferentInputsDifferentID(t *testing.T) {
 	e1, _ := NewEdge(EdgeSpec{Src: "nodeA", Tgt: "nodeB", Kind: EdgeCalls})
 	e2, _ := NewEdge(EdgeSpec{Src: "nodeA", Tgt: "nodeC", Kind: EdgeCalls})
@@ -39,7 +36,6 @@ func TestNewEdge_DifferentInputsDifferentID(t *testing.T) {
 	}
 }
 
-// DoD 7: confidence != Unresolved sets resolved = true.
 func TestNewEdge_ConfidenceSetResolved(t *testing.T) {
 	e, err := NewEdge(EdgeSpec{Src: "nodeA", Tgt: "nodeB", Kind: EdgeCalls}, WithConfidence(Probable))
 	if err != nil {
@@ -53,7 +49,6 @@ func TestNewEdge_ConfidenceSetResolved(t *testing.T) {
 	}
 }
 
-// Default confidence is Unresolved and resolved is false.
 func TestNewEdge_DefaultUnresolved(t *testing.T) {
 	e, err := NewEdge(EdgeSpec{Src: "nodeA", Tgt: "nodeB", Kind: EdgeCalls})
 	if err != nil {
@@ -67,7 +62,6 @@ func TestNewEdge_DefaultUnresolved(t *testing.T) {
 	}
 }
 
-// Strong and Definite also set resolved.
 func TestNewEdge_StrongAndDefiniteResolved(t *testing.T) {
 	for _, c := range []Confidence{Strong, Definite} {
 		e, err := NewEdge(EdgeSpec{Src: "src", Tgt: "tgt", Kind: EdgeImports}, WithConfidence(c))
@@ -80,7 +74,6 @@ func TestNewEdge_StrongAndDefiniteResolved(t *testing.T) {
 	}
 }
 
-// NewEdge with empty src returns error.
 func TestNewEdge_EmptySrc(t *testing.T) {
 	_, err := NewEdge(EdgeSpec{Src: "", Tgt: "nodeB", Kind: EdgeCalls})
 	if err == nil {
@@ -89,7 +82,6 @@ func TestNewEdge_EmptySrc(t *testing.T) {
 	}
 }
 
-// NewEdge with empty tgt returns error.
 func TestNewEdge_EmptyTgt(t *testing.T) {
 	_, err := NewEdge(EdgeSpec{Src: "nodeA", Tgt: "", Kind: EdgeCalls})
 	if err == nil {
@@ -98,7 +90,6 @@ func TestNewEdge_EmptyTgt(t *testing.T) {
 	}
 }
 
-// WithSourceLine sets the source_line optional field.
 func TestNewEdge_WithSourceLine(t *testing.T) {
 	line := 42
 	e, err := NewEdge(EdgeSpec{Src: "nodeA", Tgt: "nodeB", Kind: EdgeContains}, WithSourceLine(line))
@@ -110,7 +101,6 @@ func TestNewEdge_WithSourceLine(t *testing.T) {
 	}
 }
 
-// EdgeKind enum values.
 func TestEdgeKindValues(t *testing.T) {
 	kinds := []EdgeKind{EdgeCalls, EdgeImports, EdgeContains, EdgeTests, EdgeDependsOn, EdgeSimilarTo}
 	if len(kinds) != 6 {
@@ -118,7 +108,6 @@ func TestEdgeKindValues(t *testing.T) {
 	}
 }
 
-// DoD 6: NewEdge accepts SIMILAR_TO + Unresolved without rejecting the new kind.
 func TestNewEdge_SimilarToUnresolved(t *testing.T) {
 	e, err := NewEdge(EdgeSpec{Src: "nodeA", Tgt: "nodeB", Kind: EdgeSimilarTo}, WithConfidence(Unresolved))
 	if err != nil {
@@ -138,7 +127,6 @@ func TestNewEdge_SimilarToUnresolved(t *testing.T) {
 	}
 }
 
-// NewEdge accepts every valid EdgeKind and rejects an unknown kind.
 func TestNewEdge_KindValidation(t *testing.T) {
 	valid := []EdgeKind{EdgeCalls, EdgeImports, EdgeContains, EdgeTests, EdgeDependsOn, EdgeSimilarTo, EdgeRoutes}
 	if len(valid) != 7 {
@@ -157,7 +145,6 @@ func TestNewEdge_KindValidation(t *testing.T) {
 	}
 }
 
-// WithConfidence accepts the valid range and rejects out-of-range values.
 func TestWithConfidence_RangeValidation(t *testing.T) {
 	cases := []struct {
 		c        Confidence
@@ -184,14 +171,12 @@ func TestWithConfidence_RangeValidation(t *testing.T) {
 	}
 }
 
-// Confidence ordering.
 func TestConfidenceOrdering(t *testing.T) {
 	if Unresolved >= Probable || Probable >= Strong || Strong >= Definite {
 		t.Error("Confidence ordering invariant violated")
 	}
 }
 
-// Required fields are set correctly.
 func TestNewEdge_RequiredFields(t *testing.T) {
 	e, err := NewEdge(EdgeSpec{Src: "src123", Tgt: "tgt456", Kind: EdgeTests})
 	if err != nil {

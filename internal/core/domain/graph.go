@@ -6,26 +6,20 @@ import (
 	"sort"
 )
 
-// Graph is a domain read projection — an in-memory bundle of Nodes and Edges
-// scoped to a single (repo_id, branch) pair. It is NOT a write aggregate;
-// writes flow row-shaped through GraphRepository (a port). Graph exists for
-// read-time traversal only.
+// Graph is a domain read projection that provides an in-memory representation
+// of Nodes and Edges scoped to a single repository and branch. It is designed
+// for read-time traversal; write operations are handled directly via the
+// GraphRepository port.
 type Graph struct {
 	RepoID string
 	Branch string
 
-	// nodes is keyed by NodeID.
-	nodes map[NodeID]*Node
-
-	// outgoing maps a NodeID to the edges that originate from it.
+	nodes    map[NodeID]*Node
 	outgoing map[NodeID][]*Edge
-
-	// incoming maps a NodeID to the edges that terminate at it.
 	incoming map[NodeID][]*Edge
 }
 
-// NewGraph constructs an empty Graph scoped to (repoID, branch).
-// Both arguments must be non-empty.
+// NewGraph constructs an empty Graph scoped to the given repository and branch.
 func NewGraph(repoID, branch string) (*Graph, error) {
 	if repoID == "" {
 		return nil, errors.New("graph: repoID must not be empty")
@@ -42,8 +36,8 @@ func NewGraph(repoID, branch string) (*Graph, error) {
 	}, nil
 }
 
-// AddNode inserts a Node into the projection. Returns an error if a node with
-// the same ID already exists.
+// AddNode inserts a Node into the graph projection, returning an error if the
+// node already exists.
 func (g *Graph) AddNode(n *Node) error {
 	if n == nil {
 		return errors.New("graph: node must not be nil")
@@ -55,8 +49,8 @@ func (g *Graph) AddNode(n *Node) error {
 	return nil
 }
 
-// AddEdge inserts a directed Edge into the projection. Both endpoint nodes
-// must already be present; otherwise an error is returned.
+// AddEdge inserts a directed Edge into the graph projection. Both endpoint nodes
+// must already exist.
 func (g *Graph) AddEdge(e *Edge) error {
 	if e == nil {
 		return errors.New("graph: edge must not be nil")
@@ -72,10 +66,9 @@ func (g *Graph) AddEdge(e *Edge) error {
 	return nil
 }
 
-// Nodes returns every Node in the projection, ordered by ascending NodeID.
-// The deterministic order lets read-time consumers (e.g. the wiki
-// entry_points ranking) enumerate candidates without map-iteration order
-// leaking into their output.
+// Nodes returns all Nodes in the projection, sorted by ascending NodeID. This
+// deterministic ordering prevents random map-iteration order from leaking to
+// read-time consumers like the wiki page generation.
 func (g *Graph) Nodes() []*Node {
 	out := make([]*Node, 0, len(g.nodes))
 	for _, n := range g.nodes {
@@ -85,14 +78,13 @@ func (g *Graph) Nodes() []*Node {
 	return out
 }
 
-// Node returns the Node for the given ID, or (nil, false) if not present.
+// Node returns the Node for the given ID, returning false if it is not present.
 func (g *Graph) Node(id NodeID) (*Node, bool) {
 	n, ok := g.nodes[id]
 	return n, ok
 }
 
-// OutgoingEdges returns all edges whose source is id. Returns an empty
-// (non-nil) slice if none exist.
+// OutgoingEdges returns all edges originating from the specified node ID.
 func (g *Graph) OutgoingEdges(id NodeID) []*Edge {
 	if edges, ok := g.outgoing[id]; ok {
 		return edges
@@ -100,8 +92,7 @@ func (g *Graph) OutgoingEdges(id NodeID) []*Edge {
 	return []*Edge{}
 }
 
-// IncomingEdges returns all edges whose target is id. Returns an empty
-// (non-nil) slice if none exist.
+// IncomingEdges returns all edges terminating at the specified node ID.
 func (g *Graph) IncomingEdges(id NodeID) []*Edge {
 	if edges, ok := g.incoming[id]; ok {
 		return edges

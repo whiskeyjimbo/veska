@@ -6,76 +6,46 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/core/domain"
 )
 
-// GraphStorage is the write-side port for the code graph. It mirrors
-// EdgeStorage: a narrow set of mutating operations, kept separate from the
-// read surface (GraphReader) so read-only consumers — the MCP graph tools,
-// blast-radius, call-chain — depend only on what they use. Implementations
-// are provided by infrastructure adapters (e.g. SQLite GraphRepo).
-// Production graph writes flow through application.PromotionStore inside the
-// promotion transaction; these methods exist for the adapter's own
-// round-trip coverage and any future non-promotion writer.
+// GraphStorage is the write-side port for the code graph, separated from the
+// read surface (GraphReader) so read-only consumers depend only on what they use.
+// These methods exist for round-trip test coverage and future non-promotion write paths.
 type GraphStorage interface {
-	// SaveNode inserts or replaces a Node for the given repository and branch.
-	// The node's ID is used as the upsert key.
 	SaveNode(ctx context.Context, repoID, branch string, n *domain.Node) error
 
-	// SaveEdge inserts or replaces an Edge for the given repository and branch.
-	// Edges are keyed on (From, To, Kind).
 	SaveEdge(ctx context.Context, repoID, branch string, e *domain.Edge) error
 
-	// DeleteFile removes all Nodes and Edges whose source file matches filePath
-	// for the given repository and branch.
 	DeleteFile(ctx context.Context, repoID, branch, filePath string) error
 }
 
 // GraphReader is the read-side companion to GraphStorage, mirroring the
-// EdgeReader/EdgeStorage split. It is the port the MCP graph tools and the
-// graph-walking services (blast-radius, call-chain) depend on; none of them
-// mutate the graph, so they take this narrow interface rather than the full
-// storage port. Implementations are provided by infrastructure adapters
-// (e.g. SQLite GraphRepo).
+// EdgeReader/EdgeStorage split. Read-only services depend on this narrow
+// interface rather than the full storage port.
 type GraphReader interface {
-	// LoadGraph builds and returns the full in-memory Graph for the given
-	// repository and branch. Returns a non-nil empty Graph when no data is stored.
 	LoadGraph(ctx context.Context, repoID, branch string) (*domain.Graph, error)
 
-	// FindNodes returns all Nodes whose symbol name equals symbolName (exact match)
-	// in the given repository and branch.
 	FindNodes(ctx context.Context, repoID, branch, symbolName string) ([]*domain.Node, error)
 
-	// GetNode retrieves a single Node by its NodeID. Returns nil, nil when not found.
 	GetNode(ctx context.Context, repoID, branch string, id domain.NodeID) (*domain.Node, error)
 
-	// FindNodeByID looks up a Node by its content-hashed NodeID, scanning
-	// across every (repo_id, branch) pair. Used by eng_get_node so the caller
-	// can omit repo_id+branch when they already have the (globally unique)
-	// node_id. Returns nil, nil when not found.
+	// FindNodeByID looks up a Node by its content-hashed NodeID across all
+	// repositories and branches. This allows callers to omit repoID and branch
+	// when they have the globally unique node ID.
 	FindNodeByID(ctx context.Context, id domain.NodeID) (*domain.Node, error)
 
-	// FindNodeIDsByPrefix returns the distinct node_ids that begin with prefix,
-	// scanning across every (repo_id, branch) pair, capped at limit. It exists
-	// so eng_get_node can resolve the 12-char display prefix that
-	// eng_find_symbol / `veska symbol` print, not just the full 64-char id
-	// Implementations DISTINCT on node_id so a node present on
-	// multiple branches is not mistaken for an ambiguous prefix. The caller
-	// (eng_get_node) treats len>1 as an ambiguous-prefix error listing the
-	// candidates and len==1 as the resolved id. Returns an empty slice (not an
-	// error) when nothing matches.
+	// FindNodeIDsByPrefix returns distinct node IDs that begin with prefix,
+	// capped at limit. This resolves the 12-character display prefix printed
+	// by symbol tools. Implementations select distinct node IDs so a node
+	// present on multiple branches is not mistaken for an ambiguous prefix.
+	// A length greater than one represents an ambiguous prefix.
 	FindNodeIDsByPrefix(ctx context.Context, prefix string, limit int) ([]domain.NodeID, error)
 
-	// NodesForFile returns every Node whose file_path equals filePath in the
-	// given repository and branch. Returns an empty slice (not an error) when
-	// the file has no promoted nodes. This is the primary read for
-	// eng_get_file_nodes; promoting it to the port retires the optional
-	// type-assertion dance the handler used to do.
+	// NodesForFile returns every Node in the given repository and branch whose
+	// file path equals filePath. It returns an empty slice if the file has no
+	// promoted nodes.
 	NodesForFile(ctx context.Context, repoID, branch, filePath string) ([]*domain.Node, error)
 
-	// GetNodeSnippet returns the persisted capped body for a single node.
-	// Returns "" (not an error) when the row exists but stored NULL, and
-	// "" with sql.ErrNoRows-equivalent treatment when the row is missing.
-	// Implementations cap the returned bytes (sqlite uses maxSnippetBytes)
-	// so callers must not assume the snippet equals the full source.
-	// Used by eng_get_call_chain to discriminate the
-	// chained_selectors_unresolved / external_callees_only degraded reasons
+	// GetNodeSnippet returns the persisted snippet for a single node. The
+	// returned content may be capped, so callers must not assume it equals
+	// the full source.
 	GetNodeSnippet(ctx context.Context, repoID, branch string, id domain.NodeID) (string, error)
 }

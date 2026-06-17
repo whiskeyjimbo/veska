@@ -5,8 +5,6 @@ import (
 	"time"
 )
 
-// ── SuppressionScope ───────────────────────────────────────────────────────
-
 // SuppressionScope is a closed enum of the entities a suppression can target.
 type SuppressionScope string
 
@@ -24,13 +22,9 @@ var validSuppressionScopes = map[SuppressionScope]struct{}{
 	ScopeRepo:    {},
 }
 
-// ── Suppression ────────────────────────────────────────────────────────────
-
 // Suppression silences one or more findings that match its scope and target.
-// Branch semantics:
-//
-//	Branch == nil → branch-agnostic: suppression applies on every branch.
-//	Branch != nil → branch-specific: suppression applies only on that branch.
+// When Branch is nil, the suppression applies globally on every branch;
+// otherwise, it is branch-specific.
 type Suppression struct {
 	ID        string
 	Scope     SuppressionScope
@@ -40,16 +34,14 @@ type Suppression struct {
 	ActorKind ActorKind
 	CreatedAt time.Time
 
-	// Optional fields.
 	Rule      *string
 	ExpiresAt *time.Time
 	Branch    *string
 }
 
-// SuppressionOption is a functional option for NewSuppression.
 type SuppressionOption func(*Suppression) error
 
-// WithSuppressionRule restricts the suppression to a specific rule.
+// WithSuppressionRule restricts the suppression to a specific rule ID.
 func WithSuppressionRule(rule string) SuppressionOption {
 	return func(s *Suppression) error {
 		s.Rule = &rule
@@ -57,7 +49,7 @@ func WithSuppressionRule(rule string) SuppressionOption {
 	}
 }
 
-// WithExpiresAt sets an expiry time. Must be after CreatedAt.
+// WithExpiresAt sets the suppression expiry time, which must be after CreatedAt.
 func WithExpiresAt(t time.Time) SuppressionOption {
 	return func(s *Suppression) error {
 		if !t.After(s.CreatedAt) {
@@ -68,7 +60,7 @@ func WithExpiresAt(t time.Time) SuppressionOption {
 	}
 }
 
-// WithBranch makes the suppression branch-specific.
+// WithBranch restricts the suppression to a specific branch.
 func WithBranch(branch string) SuppressionOption {
 	return func(s *Suppression) error {
 		s.Branch = &branch
@@ -76,11 +68,8 @@ func WithBranch(branch string) SuppressionOption {
 	}
 }
 
-// SuppressionSpec carries the required fields of a Suppression. It groups the
-// constructor's positional arguments into a named struct so the adjacent
-// same-typed fields (Target/Reason/ActorID) cannot be transposed at a call
-// site. Optional fields (rule, expiry, branch) are still supplied via
-// SuppressionOption.
+// SuppressionSpec groups the required fields of a Suppression into a struct to
+// prevent transposing adjacent same-typed parameters at construction call sites.
 type SuppressionSpec struct {
 	ID        string
 	Scope     SuppressionScope
@@ -91,15 +80,8 @@ type SuppressionSpec struct {
 	CreatedAt time.Time
 }
 
-// NewSuppression constructs a validated Suppression from spec.
-// Invariants enforced:
-//  1. ID, Target, Reason, ActorID must be non-empty.
-//  2. Scope must be a valid enum value.
-//  3. ActorKind must be a recognised ActorKind (same check NewActor enforces).
-//  4. Target non-emptiness (invariant #1) covers every scope, including
-//     ScopeFinding; the finding_id payload is treated as an opaque, non-empty
-//     string — its internal shape is not separately validated here.
-//  5. expires_at, when set, must be after created_at (enforced by WithExpiresAt).
+// NewSuppression constructs a validated Suppression from the specification,
+// verifying that required fields are non-empty and that enum values are valid.
 func NewSuppression(spec SuppressionSpec, opts ...SuppressionOption) (*Suppression, error) {
 	if spec.ID == "" {
 		return nil, errors.New("suppression: id must not be empty")
