@@ -12,23 +12,20 @@ import (
 	"time"
 )
 
-// ErrAliasExists is returned by SetAlias when name already points at a
-// different repo and force is false. Callers surface it as a hint to retry
-// with --force.
+// ErrAliasExists is returned when the alias name already points to a different
+// repository and force is false.
 var ErrAliasExists = errors.New("alias already exists for a different repo")
 
-// ErrAliasNotFound is returned by RemoveAlias / LookupAlias for an unknown
-// alias name.
+// ErrAliasNotFound is returned when the requested alias name is not registered.
 var ErrAliasNotFound = errors.New("alias not found")
 
-// ErrAliasInvalid is returned by SetAlias when name fails validation
-// (empty, whitespace, or looks like a repo_id / short_id prefix that would
-// shadow the prefix-resolution step in the resolver).
+// ErrAliasInvalid is returned when the alias name fails validation checks
+// because it contains whitespace, is empty, or shadows hex-based repository IDs.
 var ErrAliasInvalid = errors.New("alias name is invalid")
 
-// SetAlias creates or replaces an alias. When the name already points at
-// repoID the call is a no-op; when it points elsewhere ErrAliasExists is
-// returned unless force is true.
+// SetAlias creates or overwrites a repository alias. It is a no-op if the alias already
+// points to the target repository; it returns ErrAliasExists if it points to a different
+// repository, unless force is set to true.
 func SetAlias(ctx context.Context, db *sql.DB, name, repoID string, force bool) error {
 	if err := ValidateAliasName(name); err != nil {
 		return err
@@ -38,7 +35,6 @@ func SetAlias(ctx context.Context, db *sql.DB, name, repoID string, force bool) 
 	err := db.QueryRowContext(ctx, `SELECT repo_id FROM repo_aliases WHERE name = ?`, name).Scan(&existing)
 	switch {
 	case err == sql.ErrNoRows:
-		// insert below
 	case err != nil:
 		return fmt.Errorf("lookup alias: %w", err)
 	case existing == repoID:
@@ -57,8 +53,8 @@ func SetAlias(ctx context.Context, db *sql.DB, name, repoID string, force bool) 
 	return nil
 }
 
-// RemoveAlias drops name. Returns ErrAliasNotFound if no row matched so a
-// CLI caller can distinguish typo-on-removal from a successful delete.
+// RemoveAlias deletes the specified alias from the database, returning ErrAliasNotFound
+// if no alias with the given name existed.
 func RemoveAlias(ctx context.Context, db *sql.DB, name string) error {
 	res, err := execWithBusyRetry(ctx, db, 5, 500*time.Millisecond,
 		`DELETE FROM repo_aliases WHERE name = ?`, name,
@@ -76,8 +72,8 @@ func RemoveAlias(ctx context.Context, db *sql.DB, name string) error {
 	return nil
 }
 
-// LookupAlias returns the repo_id name points at. The bool reports whether
-// a row was found so callers can distinguish "no such alias" from an error.
+// LookupAlias resolves an alias name to its corresponding repository ID,
+// returning a boolean flag indicating whether the alias was found.
 func LookupAlias(ctx context.Context, db *sql.DB, name string) (string, bool, error) {
 	var repoID string
 	err := db.QueryRowContext(ctx, `SELECT repo_id FROM repo_aliases WHERE name = ?`, name).Scan(&repoID)
@@ -90,8 +86,7 @@ func LookupAlias(ctx context.Context, db *sql.DB, name string) (string, bool, er
 	return repoID, true, nil
 }
 
-// AliasesByRepoID returns a map repo_id -> sorted alias names. Empty repos
-// are absent from the map (callers default to a nil slice).
+// AliasesByRepoID returns a map of all repository IDs to their sorted alias names.
 func AliasesByRepoID(ctx context.Context, db *sql.DB) (map[string][]string, error) {
 	rows, err := db.QueryContext(ctx, `SELECT repo_id, name FROM repo_aliases ORDER BY name`)
 	if err != nil {
@@ -116,8 +111,7 @@ func AliasesByRepoID(ctx context.Context, db *sql.DB) (map[string][]string, erro
 	return out, nil
 }
 
-// AliasesForRepo returns the sorted alias list for a single repo. A repo
-// with no aliases yields a nil slice and a nil error.
+// AliasesForRepo retrieves the sorted list of aliases registered for a single repository ID.
 func AliasesForRepo(ctx context.Context, db *sql.DB, repoID string) ([]string, error) {
 	rows, err := db.QueryContext(ctx,
 		`SELECT name FROM repo_aliases WHERE repo_id = ? ORDER BY name`,
@@ -142,13 +136,8 @@ func AliasesForRepo(ctx context.Context, db *sql.DB, repoID string) ([]string, e
 	return out, nil
 }
 
-// ValidateAliasName rejects names that would either silently shadow the
-// resolver's higher-precedence steps (full repo_id, 12-char short_id, hex
-// prefix) or be unusable as a CLI argument.
-// Specifically: empty/whitespace, contains whitespace, or is hex-only and
-// >= the minimum prefix length the resolver accepts (4 chars). The latter
-// is what looksLikeRepoID would catch — we duplicate the check here rather
-// than import a CLI helper into the repo package.
+// ValidateAliasName ensures that an alias name does not contain whitespace, is not empty,
+// and does not shadow repository hex ID prefixes (which must be at least 4 hex characters).
 func ValidateAliasName(name string) error {
 	if name == "" {
 		return fmt.Errorf("%w: empty", ErrAliasInvalid)
@@ -162,9 +151,8 @@ func ValidateAliasName(name string) error {
 	return nil
 }
 
-// isHexPrefix reports whether s is hex-only and long enough to be accepted
-// as a repo_id prefix by the resolver. Kept package-private; the only
-// caller is ValidateAliasName.
+// isHexPrefix reports whether the string consists only of hexadecimal characters
+// and is at least 4 characters long.
 func isHexPrefix(s string) bool {
 	if len(s) < 4 {
 		return false
@@ -180,13 +168,10 @@ func isHexPrefix(s string) bool {
 	return true
 }
 
-// SuggestAliasNames returns (primary, fallback) name candidates for a
-// freshly added repo. The CLI's auto-suggest prompt offers primary, then
-// falls back to fallback when primary collides with an existing alias.
-// For a URL-registered repo: primary is the repo basename ("bar" for
-// https://github.com/foo/bar), fallback is "<owner>-<name>" ("foo-bar").
-// For a path-registered repo with no canonical URL: primary is the
-// directory basename, fallback is "" (caller skips on collision).
+// SuggestAliasNames returns suggested primary and fallback alias names for a repository.
+// For URL-registered repositories, the primary suggestion is the repository basename and
+// the fallback is the owner-basename combination. For local paths, the primary is the directory
+// basename and there is no fallback.
 func SuggestAliasNames(canonicalURL, rootPath string) (primary, fallback string) {
 	if canonicalURL != "" {
 		owner, name := parseURLOwnerName(canonicalURL)
@@ -204,17 +189,15 @@ func SuggestAliasNames(canonicalURL, rootPath string) (primary, fallback string)
 	return "", ""
 }
 
-// parseURLOwnerName extracts the trailing two path segments of a git URL
-// as (owner, name). Drops a ".git" suffix on name. Returns ("", "") when
-// the URL is unparseable; ("", name) when only one segment is available
-// (e.g. a self-hosted single-tenant URL).
+// parseURLOwnerName parses a Git URL to extract the repository owner and name,
+// stripping any ".git" suffix from the name segment.
 func parseURLOwnerName(canonicalURL string) (owner, name string) {
 	u, err := url.Parse(canonicalURL)
 	if err != nil {
 		return "", ""
 	}
 	segs := strings.Split(strings.Trim(u.Path, "/"), "/")
-	// Drop empty segments.
+	// Drop empty path segments.
 	out := segs[:0]
 	for _, s := range segs {
 		if s != "" {

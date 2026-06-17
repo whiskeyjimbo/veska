@@ -32,7 +32,7 @@ func TestCheckInotifyBudgetShort(t *testing.T) {
 	defer func() { readMaxWatches = orig }()
 	readMaxWatches = func() (int, error) { return 512, nil }
 
-	// 5 * 128 = 640 > 512, so budget is short
+	// Verify that a total consumption of 640 watches exceeding the limit of 512 triggers a budget exhaustion error.
 	_, err := CheckInotifyBudget(5, 128)
 	if err == nil {
 		t.Fatal("expected error for short budget, got nil")

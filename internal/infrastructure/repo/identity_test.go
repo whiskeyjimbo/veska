@@ -32,7 +32,7 @@ func TestModuleHostPathAnchor(t *testing.T) {
 	}
 }
 
-// writeFile is a tiny test helper for seeding a manifest file into root.
+// writeFile creates a manifest file in the specified root directory for test purposes.
 func writeFile(t *testing.T, root, name, content string) {
 	t.Helper()
 	if err := os.WriteFile(filepath.Join(root, name), []byte(content), 0o644); err != nil {
@@ -40,8 +40,7 @@ func writeFile(t *testing.T, root, name, content string) {
 	}
 }
 
-// gitInitOrigin initialises a git work-tree at dir with an origin remote, or
-// skips when git is unavailable. (Whitebox twin of repo_test.gitInitWithRemote.)
+// gitInitOrigin initializes a Git repository with an origin remote, skipping the test if Git is unavailable.
 func gitInitOrigin(t *testing.T, dir, originURL string) {
 	t.Helper()
 	for _, a := range [][]string{
@@ -105,7 +104,7 @@ func TestResolveIdentity_OriginAndAbsRoot(t *testing.T) {
 	})
 
 	t.Run("abs-root fallback reproduces legacy repoID", func(t *testing.T) {
-		dir := t.TempDir() // no go.mod, no git remote
+		dir := t.TempDir() // Ensure directory has no go.mod and no Git remote.
 		tier, anchor, id := ResolveIdentity(ctx, dir)
 		if tier != TierAbsRoot {
 			t.Fatalf("tier = %q, want %q", tier, TierAbsRoot)
@@ -114,13 +113,12 @@ func TestResolveIdentity_OriginAndAbsRoot(t *testing.T) {
 			t.Fatalf("anchor = %q, want canonical root %q", anchor, dir)
 		}
 		if id != repoID(dir) {
-			t.Fatalf("abs-root id must be byte-identical to legacy repoID(): no churn for local-only repos")
+			t.Fatalf("The absolute root ID must match the legacy repo ID to avoid churn.")
 		}
 	})
 }
 
-// TestResolveIdentity_Converges is the core contract: the SAME module
-// path indexed at two DIFFERENT absolute roots yields the SAME repo_id.
+// TestResolveIdentity_Converges verifies that identical module paths at different root paths resolve to the same ID.
 func TestResolveIdentity_Converges(t *testing.T) {
 	ctx := context.Background()
 	mk := func() string {

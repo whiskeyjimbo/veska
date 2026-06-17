@@ -9,9 +9,8 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/repo"
 )
 
-// gitInit creates an empty.git/hooks directory inside dir so that
-// repo.Add accepts it as a git work-tree (matches the helper used by
-// registry_test.go).
+// gitInit creates an empty .git/hooks directory inside dir so that repo.Add
+// accepts it as a valid git work-tree.
 func gitInit(t *testing.T, dir string) {
 	t.Helper()
 	if err := os.MkdirAll(filepath.Join(dir, ".git", "hooks"), 0o755); err != nil {
@@ -19,7 +18,7 @@ func gitInit(t *testing.T, dir string) {
 	}
 }
 
-// TestSetActiveBranch verifies that SetActiveBranch stores the branch name.
+// TestSetActiveBranch verifies that SetActiveBranch correctly writes the active branch name to the database.
 func TestSetActiveBranch(t *testing.T) {
 	db := newTestDB(t)
 	dir := t.TempDir()
@@ -44,7 +43,7 @@ func TestSetActiveBranch(t *testing.T) {
 	}
 }
 
-// TestSetActiveBranchUpdates verifies that a second call overwrites the first.
+// TestSetActiveBranchUpdates verifies that subsequent calls overwrite the previously stored branch name.
 func TestSetActiveBranchUpdates(t *testing.T) {
 	db := newTestDB(t)
 	dir := t.TempDir()
@@ -72,9 +71,8 @@ func TestSetActiveBranchUpdates(t *testing.T) {
 	}
 }
 
-// TestSetActiveBranchUnknownRepo verifies that an unknown repoID is a silent no-op.
-// Unregistered repos (e.g. repos that haven't been added with `veska repo add`)
-// are ignored — the hook must never block a checkout.
+// TestSetActiveBranchUnknownRepo verifies that updating an unknown repository ID is a silent no-op
+// to ensure the post-checkout hook does not fail or block git checkouts for unregistered repositories.
 func TestSetActiveBranchUnknownRepo(t *testing.T) {
 	db := newTestDB(t)
 

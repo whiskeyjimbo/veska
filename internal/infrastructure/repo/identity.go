@@ -1,8 +1,6 @@
 package repo
 
-// This file holds git working-tree detection, canonicalisation, and repo-ID
-// derivation helpers, split out of registry.go to keep that file focused on
-// the registry CRUD (Add/List/Get/Remove) and hook lifecycle.
+// Package repo provides Git working-tree detection, canonicalization, and repository ID derivation helpers.
 
 import (
 	"bufio"
@@ -17,11 +15,8 @@ import (
 	"strings"
 )
 
-// detectActiveBranch reads the current branch from a working tree via
-// 'git symbolic-ref --short HEAD'. Returns "" when the directory is not a
-// git working tree, is in a detached-HEAD state, or git is unavailable
-// the caller decides how to handle that (Add defaults to "main"). Bounded
-// to a short timeout so a hung git invocation cannot stall registration.
+// detectActiveBranch reads the current branch from a Git working tree. It returns an empty string
+// if the directory is not a Git repository, is in a detached HEAD state, or Git is unavailable.
 func detectActiveBranch(ctx context.Context, root string) string {
 	cmd := exec.CommandContext(ctx, "git", "-C", root, "symbolic-ref", "--short", "-q", "HEAD")
 	out, err := cmd.Output()
@@ -31,21 +26,15 @@ func detectActiveBranch(ctx context.Context, root string) string {
 	return strings.TrimSpace(string(out))
 }
 
-// CurrentBranch returns the working-tree current branch name for the repo at
-// root via `git symbolic-ref --short HEAD`. It returns "" (and a nil error)
-// for detached HEAD / non-git / missing tree — the single source of truth for
-// "what branch is checked out", shared by registration and the staging-vs-HEAD
-// branch reconcile. The error return exists for symmetry with
-// the application.BranchReader port; today every failure flattens to "".
+// CurrentBranch returns the name of the currently checked-out branch at the repository root path.
+// It returns an empty string and no error if the directory is missing, not a Git repository,
+// or in a detached HEAD state.
 func CurrentBranch(root string) (string, error) {
 	return detectActiveBranch(context.Background(), root), nil
 }
 
-// detectOriginURL reads `git remote get-url origin` from the working tree
-// and returns the canonicalised form. Returns "" when the
-// remote is missing, git is unavailable, or the URL can't be canonicalised
-// every failure mode is treated identically so `repo add <path>` never
-// fails on a remote-config issue that the user doesn't need to care about.
+// detectOriginURL reads the Git remote origin URL and returns its canonicalized HTTPS form.
+// It returns an empty string if origin is missing or cannot be canonicalized.
 func detectOriginURL(ctx context.Context, root string) string {
 	cmd := exec.CommandContext(ctx, "git", "-C", root, "remote", "get-url", "origin")
 	out, err := cmd.Output()
@@ -59,59 +48,38 @@ func detectOriginURL(ctx context.Context, root string) string {
 	return canonical
 }
 
-// hashAnchor is the single hash function shared by every identity tier
-// repo_id is sha256(anchor) regardless of which anchor — module
-// path, canonical URL, or absolute root — was chosen. Keeping one function
-// guarantees the abs-root tier reproduces the legacy repoID byte-for-byte, so
-// local-only repos see no id churn until the identity-scheme rescan runs.
+// hashAnchor returns the SHA-256 hash of a string, used uniformly across all repository identity tiers.
 func hashAnchor(anchor string) string {
 	h := sha256.New()
 	_, _ = fmt.Fprintf(h, "%s", anchor)
 	return hex.EncodeToString(h.Sum(nil))
 }
 
-// repoID returns a deterministic hex ID for a canonical root path (the
-// abs-root identity tier).
+// repoID returns a deterministic hexadecimal repository ID derived from the canonicalized repository path.
 func repoID(canonicalPath string) string {
 	return hashAnchor(canonicalPath)
 }
 
-// IdentityTier names the rung of the fallback chain a repo resolved
-// to. Persisted on the repos row (identity_tier) so identity is auditable and
-// never silently re-derived per client.
+// IdentityTier identifies which fallback step was used to establish repository identity.
 type IdentityTier string
 
 const (
-	// TierModuleHostPath — in-tree module path shaped as a canonical host/path
-	// (Go `github.com/org/repo`) or scoped npm (`@org/pkg`). Committed content,
-	// so byte-identical across clones AND forks, and host/path-shaped, so
-	// globally unique: the supported shared-DB anchor.
+	// TierModuleHostPath represents an in-tree module path structured as a canonical host/path.
 	TierModuleHostPath IdentityTier = "module-hostpath"
-	// TierOriginURL — canonical git remote URL. Globally unique but local git
-	// config, so it diverges across forks. Used when no module manifest exists.
+	// TierOriginURL represents the canonicalized Git remote origin URL.
 	TierOriginURL IdentityTier = "origin-url"
-	// TierModuleBare — a bare/vanity module name (`module myapp`) that is not
-	// host/path-shaped. Local-stable but collision-prone in a shared DB, so it
-	// ranks below any globally-unique anchor.
+	// TierModuleBare represents a vanity or bare module name lacking host structure.
 	TierModuleBare IdentityTier = "module-bare"
-	// TierAbsRoot — absolute checkout path. Never converges; local-only
-	// fallback reproducing pre behaviour.
+	// TierAbsRoot represents the absolute root path of the local working directory.
 	TierAbsRoot IdentityTier = "abs-root"
 )
 
-// Converges reports whether this tier can participate in a shared graph DB
-// i.e. whether two contributors indexing the same upstream resolve to the same
-// repo_id. Only the host/path module anchor converges AND is globally unique;
-// origin-url converges only when origins agree (doctor warns on the rest).
+// Converges reports whether the identity tier is globally unique and stable enough
+// to be shared across multiple environments or contributors.
 func (t IdentityTier) Converges() bool { return t == TierModuleHostPath }
 
-// ResolveIdentity selects the strongest available identity anchor for the repo
-// at canonical (an already-canonicalised absolute root) per the
-// locked chain — host/path module > origin URL > bare module > abs-root — and
-// returns the chosen tier, the exact anchor string hashed, and the resulting
-// repo_id. Resolved ONCE at repo.Add and persisted; never re-derived per
-// client (convergence comes from the anchor being globally shared, not from
-// each client recomputing it).
+// ResolveIdentity selects the strongest available identity tier for the repository path
+// by evaluating module host/paths, origin URLs, bare module names, or absolute directory roots.
 func ResolveIdentity(ctx context.Context, canonical string) (IdentityTier, string, string) {
 	mod := readModulePath(canonical)
 	if anchor, ok := moduleHostPathAnchor(mod); ok {
@@ -126,10 +94,7 @@ func ResolveIdentity(ctx context.Context, canonical string) (IdentityTier, strin
 	return TierAbsRoot, canonical, hashAnchor(canonical)
 }
 
-// moduleHostPathAnchor reports whether a module path is shaped as a canonical
-// host/path (Go convention `github.com/org/repo` — first segment is a DNS host)
-// or a scoped npm package (`@org/pkg`). Such a path is simultaneously committed
-// content and globally unique, the strongest possible anchor.
+// moduleHostPathAnchor returns true if the module path conforms to Go dns-like modules or npm scoped packages.
 func moduleHostPathAnchor(mod string) (string, bool) {
 	if mod == "" {
 		return "", false
@@ -144,13 +109,7 @@ func moduleHostPathAnchor(mod string) (string, bool) {
 	return mod, true // host/path-shaped Go module
 }
 
-// RepoIDForPath returns the deterministic repo_id veska assigns to the repo
-// rooted at path. It canonicalises (absolute + symlink-resolved) before
-// hashing, exactly as registration does, so out-of-band callers — notably the
-// git hook runner, which only has the raw `git rev-parse --show-toplevel`
-// output — derive the SAME id the registry stored. Without this, an
-// unresolved symlinked checkout path would hash to a different id and updates
-// keyed on it (e.g. SetActiveBranch) would silently match zero rows.
+// RepoIDForPath resolves symlinks and obtains the absolute path to generate a stable repository ID.
 func RepoIDForPath(path string) string {
 	canonical, err := canonicalise(path)
 	if err != nil {
@@ -159,26 +118,12 @@ func RepoIDForPath(path string) string {
 	return repoID(canonical)
 }
 
-// DerivedRepoIDFromURL returns the deterministic hex ID used as repo_id
-// for an ephemeral, URL-cloned repository. The input must
-// already be canonicalised — callers obtain a canonical URL via the
-// CanonicalURL helper that lands in kxo5.1. Keeping both id derivations
-// (path-based repoID, URL-based DerivedRepoIDFromURL) in the same file
-// preserves the invariant that the two id spaces share one hash function.
+// DerivedRepoIDFromURL generates a deterministic ID for a repository based on its canonicalized URL.
 func DerivedRepoIDFromURL(canonicalURL string) string {
 	return hashAnchor(canonicalURL)
 }
 
-// validateRepoRoot rejects paths that should never be registered as a
-// veska repo:
-//
-//	non-existent paths
-//	non-directory paths
-//	directories with no `.git` entry AND no parent.git work-tree marker
-//
-// The.git lookup also walks parents so registering a subdirectory of a
-// real repo would still be accepted (veska canonicalises to the path the
-// user passed; this preserves that behaviour).
+// validateRepoRoot ensures the given path exists, is a directory, and resides within a Git working tree.
 func validateRepoRoot(canonical string) error {
 	info, err := os.Stat(canonical)
 	if err != nil {

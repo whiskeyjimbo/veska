@@ -11,7 +11,7 @@ import (
 func TestTouchEphemeral_UpdatesOnlyEphemeralRows(t *testing.T) {
 	db := newTestDB(t)
 
-	// Seed one tracked + one ephemeral row.
+	// Seed one tracked and one ephemeral repository record.
 	for _, args := range [][]any{
 		{"tracked-id", "/tmp/tracked", int64(1000), "tracked"},
 		{"ephemeral-id", "/tmp/ephemeral", int64(1000), "ephemeral"},

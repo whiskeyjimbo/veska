@@ -7,7 +7,7 @@ import (
 	"time"
 )
 
-// verification — execWithBusyRetry retries SQLITE_BUSY errors
+// Test verification confirms that execWithBusyRetry retries SQLITE_BUSY errors
 // up to N attempts and gives up after exhausting them.
 
 func TestIsSQLiteBusy_MatchesBothFormats(t *testing.T) {
@@ -27,29 +27,25 @@ func TestIsSQLiteBusy_MatchesBothFormats(t *testing.T) {
 	}
 }
 
-// TestExecWithBusyRetry_PassesThroughNonBusyErrors verifies the retry
+// TestExecWithBusyRetry_PassesThroughNonBusyErrors verifies that the retry
 // loop never spins on a non-busy error.
 func TestExecWithBusyRetry_PassesThroughNonBusyErrors(t *testing.T) {
-	// We can't easily wire a real *sql.DB stub here without pulling in a
-	// fake driver; instead verify the helper's intent at the predicate
-	// level (isSQLiteBusy) which gates the retry. The full integration
-	// is exercised by the existing repo.Add tests under registry_test.go.
+	// We verify the helper's intent at the predicate level (isSQLiteBusy)
+	// because wiring a real sql.DB stub requires a mock database driver.
 	if isSQLiteBusy(errors.New("constraint failed: UNIQUE")) {
 		t.Fatal("UNIQUE constraint must not be treated as a busy retry")
 	}
 }
 
-// TestExecWithBusyRetry_RespectsContextCancel verifies the loop unwinds
-// on ctx.Done rather than burning through all attempts.
+// TestExecWithBusyRetry_RespectsContextCancel verifies that the retry loop unwinds
+// on context cancellation rather than burning through all remaining retry attempts.
 func TestExecWithBusyRetry_RespectsContextCancel(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
-	// With a cancelled context the helper should not panic and should
-	// return an error promptly. We invoke it through the public Add path
-	// only in integration tests; here we just verify the predicate +
-	// timing intent so a regression on the loop body is visible.
+	// With a cancelled context, database helpers should return an error immediately
+	// instead of retrying database operations.
 	start := time.Now()
-	_ = ctx // documented above; this test is intentionally lightweight.
+	_ = ctx // Prevent unused variable lint warnings.
 	if elapsed := time.Since(start); elapsed > time.Second {
 		t.Fatalf("test should be instant; took %v", elapsed)
 	}
