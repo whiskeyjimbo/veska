@@ -8,10 +8,9 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/vector"
 )
 
-// TestOpen_StubReturnsErrVectorStoreUnavailable confirms that without the
-// hnsw_native build tag, Open returns ErrVectorStoreUnavailable.
-// When the hnsw_native tag IS present this test is skipped — the native path
-// is exercised by open_native_test.go.
+// TestOpen_StubReturnsErrVectorStoreUnavailable confirms that calling Open without the
+// hnsw_native build tag returns ErrVectorStoreUnavailable. When the hnsw_native tag
+// is present, this test is skipped because the native path is covered by open_native_test.go.
 func TestOpen_StubReturnsErrVectorStoreUnavailable(t *testing.T) {
 	if isNativeBuild() {
 		t.Skip("skipping stub test: hnsw_native build tag is active")

@@ -26,7 +26,7 @@ func makeRow(nodeID string, vec []float32) domain.EmbeddingRow {
 
 func vec(vals ...float32) []float32 { return vals }
 
-// TestUpsertAndSearch verifies that inserted rows are returned by Search.
+// TestUpsertAndSearch verifies that calling Search returns previously inserted embedding rows.
 func TestUpsertAndSearch(t *testing.T) {
 	s := memvec.New()
 	ctx := context.Background()
@@ -40,7 +40,7 @@ func TestUpsertAndSearch(t *testing.T) {
 		t.Fatalf("UpsertEmbeddings: %v", err)
 	}
 
-	// Query closest to n1.
+	// Query with a vector closest to n1.
 	hits, err := s.Search(ctx, testRepo, testBranch, vec(1, 0, 0), 1, domain.VectorFilter{})
 	if err != nil {
 		t.Fatalf("Search: %v", err)
@@ -53,7 +53,7 @@ func TestUpsertAndSearch(t *testing.T) {
 	}
 }
 
-// TestUpsertReplaces verifies that upserting an existing nodeID replaces the row.
+// TestUpsertReplaces verifies that upserting an existing node identifier replaces the row and updates the vector.
 func TestUpsertReplaces(t *testing.T) {
 	s := memvec.New()
 	ctx := context.Background()
@@ -63,14 +63,14 @@ func TestUpsertReplaces(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("first upsert: %v", err)
 	}
-	// Replace n1 with a different vector.
+	// Replace the existing node n1 with a different vector.
 	if err := s.UpsertEmbeddings(ctx, testRepo, testBranch, []domain.EmbeddingRow{
 		makeRow("n1", vec(0, 1, 0)),
 	}); err != nil {
 		t.Fatalf("second upsert: %v", err)
 	}
 
-	// Now search for (0,1,0) — n1 (updated) should be closest.
+	// Search for the updated vector to confirm that the node now matches the new values.
 	hits, err := s.Search(ctx, testRepo, testBranch, vec(0, 1, 0), 1, domain.VectorFilter{})
 	if err != nil {
 		t.Fatalf("Search: %v", err)
@@ -80,7 +80,7 @@ func TestUpsertReplaces(t *testing.T) {
 	}
 }
 
-// TestSearchEmptyStore verifies that searching an empty store returns an empty slice.
+// TestSearchEmptyStore verifies that searching an empty store returns a slice of zero length.
 func TestSearchEmptyStore(t *testing.T) {
 	s := memvec.New()
 	ctx := context.Background()
@@ -94,7 +94,7 @@ func TestSearchEmptyStore(t *testing.T) {
 	}
 }
 
-// TestSearchKLargerThanCorpus verifies that k>n returns all n rows.
+// TestSearchKLargerThanCorpus verifies that requesting a search limit larger than the total number of rows returns all available rows.
 func TestSearchKLargerThanCorpus(t *testing.T) {
 	s := memvec.New()
 	ctx := context.Background()
@@ -116,7 +116,7 @@ func TestSearchKLargerThanCorpus(t *testing.T) {
 	}
 }
 
-// TestSearchFilterByModel verifies that Filter.ModelID restricts results.
+// TestSearchFilterByModel verifies that specifying a model filter restricts search results to only matching rows.
 func TestSearchFilterByModel(t *testing.T) {
 	s := memvec.New()
 	ctx := context.Background()
@@ -141,7 +141,7 @@ func TestSearchFilterByModel(t *testing.T) {
 	}
 }
 
-// TestReindexNoOp verifies Reindex returns nil (no-op for the linear-scan backend).
+// TestReindexNoOp verifies that Reindex returns a nil error on this backend.
 func TestReindexNoOp(t *testing.T) {
 	s := memvec.New()
 	if err := s.Reindex(context.Background(), testRepo, testModel); err != nil {
@@ -149,7 +149,7 @@ func TestReindexNoOp(t *testing.T) {
 	}
 }
 
-// TestLookupContentHashes verifies that hashes are returned for existing nodeIDs.
+// TestLookupContentHashes verifies that LookupContentHashes returns content hashes for existing node identifiers.
 func TestLookupContentHashes(t *testing.T) {
 	s := memvec.New()
 	ctx := context.Background()
@@ -177,7 +177,7 @@ func TestLookupContentHashes(t *testing.T) {
 	}
 }
 
-// TestSearchScoreDescending verifies that hits are returned in score-descending order.
+// TestSearchScoreDescending verifies that search results are ordered by similarity score descending.
 func TestSearchScoreDescending(t *testing.T) {
 	s := memvec.New()
 	ctx := context.Background()
@@ -206,12 +206,12 @@ func TestSearchScoreDescending(t *testing.T) {
 	}
 }
 
-// TestCrossRepoBranchIsolation verifies that (repoID, branch) partitions are isolated.
+// TestCrossRepoBranchIsolation verifies that repository and branch partitions are isolated from each other.
 func TestCrossRepoBranchIsolation(t *testing.T) {
 	s := memvec.New()
 	ctx := context.Background()
 
-	// Insert into repo1/main and repo2/main.
+	// Insert row data into separate repository partitions.
 	if err := s.UpsertEmbeddings(ctx, "repo1", "main", []domain.EmbeddingRow{
 		makeRow("r1", vec(1, 0)),
 	}); err != nil {
@@ -223,7 +223,7 @@ func TestCrossRepoBranchIsolation(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Search repo1/main: should only see r1.
+	// Query the first repository to ensure that search results do not bleed across partitions.
 	hits, err := s.Search(ctx, "repo1", "main", vec(1, 0), 10, domain.VectorFilter{})
 	if err != nil {
 		t.Fatal(err)

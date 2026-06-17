@@ -36,9 +36,8 @@ func TestNewVectorStorage_UnknownKindError(t *testing.T) {
 	}
 }
 
-// TestNewVectorStorage_Usearch verifies that requesting the usearch backend
-// without the hnsw_native build tag returns ErrVectorStoreUnavailable (the
-// expected behaviour on a plain CI build).
+// TestNewVectorStorage_Usearch_StubReturnsError verifies that requesting the usearch backend
+// without the hnsw_native tag returns an error.
 func TestNewVectorStorage_Usearch_StubReturnsError(t *testing.T) {
 	if isNativeBuild() {
 		t.Skip("skipping stub-path test: hnsw_native build tag is active")

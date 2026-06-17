@@ -14,7 +14,7 @@ import (
 
 const testDim = 768
 
-// randVec generates a random unit-ish float32 vector of length testDim.
+// randVec generates a pseudo-random float32 vector of length testDim for testing.
 func randVec(seed int64) []float32 {
 	rng := rand.New(rand.NewSource(seed))
 	v := make([]float32, testDim)
@@ -34,7 +34,7 @@ func newStore(t *testing.T) *vector.UsearchStore {
 	return s
 }
 
-// TestUpsertAndLookup: insert 10 rows → LookupContentHashes returns all 10 hashes.
+// TestUpsertAndLookup verifies that inserting a batch of rows allows their content hashes to be successfully retrieved.
 func TestUpsertAndLookup(t *testing.T) {
 	ctx := context.Background()
 	store := newStore(t)
@@ -72,7 +72,7 @@ func TestUpsertAndLookup(t *testing.T) {
 	}
 }
 
-// TestSearch: insert 50 rows → Search k=5 returns 5 results, all scores >= 0.
+// TestSearch verifies that searching the store returns the requested number of nearest neighbor hits with non-negative similarity scores.
 func TestSearch(t *testing.T) {
 	ctx := context.Background()
 	store := newStore(t)
@@ -107,7 +107,7 @@ func TestSearch(t *testing.T) {
 	}
 }
 
-// TestFilterModelID: Search with mismatched modelID returns 0 results.
+// TestFilterModelID verifies that searching with a model identifier that does not match any indexed rows returns zero results.
 func TestFilterModelID(t *testing.T) {
 	ctx := context.Background()
 	store := newStore(t)
@@ -133,7 +133,7 @@ func TestFilterModelID(t *testing.T) {
 	}
 }
 
-// TestReindex: returns nil error (no-op stub).
+// TestReindex verifies that calling Reindex on UsearchStore returns a nil error.
 func TestReindex(t *testing.T) {
 	ctx := context.Background()
 	store := newStore(t)
@@ -143,7 +143,7 @@ func TestReindex(t *testing.T) {
 	}
 }
 
-// TestUpsertUpdatesExistingNode: upserting a duplicate nodeID replaces the row.
+// TestUpsertUpdatesExistingNode verifies that inserting a row with a pre-existing node identifier replaces the existing row metadata and vector.
 func TestUpsertUpdatesExistingNode(t *testing.T) {
 	ctx := context.Background()
 	store := newStore(t)

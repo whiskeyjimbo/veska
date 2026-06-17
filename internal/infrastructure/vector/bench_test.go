@@ -26,8 +26,8 @@ const (
 	batchSize    = 1000
 )
 
-// buildStore inserts n vectors into a fresh UsearchStore via UpsertEmbeddings.
-// Returns the store, the corpus (indexed), and any error.
+// buildStore constructs a temporary, populated UsearchStore containing n randomly
+// generated vectors for performance evaluation.
 func buildStore(tb testing.TB, n int) (*vector.UsearchStore, [][]float32) {
 	tb.Helper()
 	store, err := vector.NewUsearchStore()
@@ -61,8 +61,8 @@ func buildStore(tb testing.TB, n int) (*vector.UsearchStore, [][]float32) {
 	return store, corpus
 }
 
-// computeRecallAt10 computes mean recall@10 for holdOut queries against corpus
-// using UsearchStore.Search and BruteForce ground truth.
+// computeRecallAt10 calculates the average recall at a retrieval limit of 10 for
+// query vectors, comparing search results against brute-force ground truth.
 func computeRecallAt10(tb testing.TB, store *vector.UsearchStore, corpus [][]float32) float64 {
 	tb.Helper()
 	holdOut := gen.GenerateVectors(nHoldOut, holdOutSeed)
@@ -79,8 +79,8 @@ func computeRecallAt10(tb testing.TB, store *vector.UsearchStore, corpus [][]flo
 			tb.Fatalf("Search: %v", err)
 		}
 
-		// Convert Search hit NodeIDs to the 1-based rowids that BruteForceKNN returns.
-		// NodeID is "node-{i}" where i is 0-based, so rowid = i+1.
+		// Map node ID strings back to 1-based indices because the brute-force
+		// ground truth implementation operates on 1-based vector indices.
 		ret1 := make([]int64, 0, len(hits))
 		for _, h := range hits {
 			var idx int
@@ -96,7 +96,6 @@ func computeRecallAt10(tb testing.TB, store *vector.UsearchStore, corpus [][]flo
 	return sumRecall / float64(nHoldOut)
 }
 
-// TestRecallFloor50k: recall@10 must be ≥ 0.95 at 50k vectors.
 func TestRecallFloor50k(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping 50k recall test in short mode")
@@ -110,7 +109,6 @@ func TestRecallFloor50k(t *testing.T) {
 	}
 }
 
-// TestRecallFloor250k: recall@10 must be ≥ 0.85 at 250k vectors.
 func TestRecallFloor250k(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping 250k recall test in short mode")
@@ -124,15 +122,14 @@ func TestRecallFloor250k(t *testing.T) {
 	}
 }
 
-// BenchmarkSearch50k measures warm Search latency at 50k vectors.
-// Run with: go test -tags hnsw_native -bench=BenchmarkSearch50k -benchtime=1x
+// BenchmarkSearch50k measures warm search performance under load on 50k vectors.
 func BenchmarkSearch50k(b *testing.B) {
 	store, _ := buildStore(b, 50_000)
 	warmQueries := gen.GenerateVectors(nWarmQueries, 7777)
 	ctx := context.Background()
 	filter := domain.VectorFilter{ModelID: benchModelID}
 
-	// pre-warm
+	// Warm up the search cache to measure steady-state query latencies.
 	for _, q := range warmQueries {
 		_, _ = store.Search(ctx, benchRepoID, benchBranch, q, 10, filter)
 	}
@@ -159,15 +156,14 @@ func BenchmarkSearch50k(b *testing.B) {
 	}
 }
 
-// BenchmarkSearch250k measures warm Search latency at 250k vectors.
-// Run with: go test -tags hnsw_native -bench=BenchmarkSearch250k -benchtime=1x
+// BenchmarkSearch250k measures warm search performance under load on 250k vectors.
 func BenchmarkSearch250k(b *testing.B) {
 	store, _ := buildStore(b, 250_000)
 	warmQueries := gen.GenerateVectors(nWarmQueries, 7777)
 	ctx := context.Background()
 	filter := domain.VectorFilter{ModelID: benchModelID}
 
-	// pre-warm
+	// Warm up the search cache to measure steady-state query latencies.
 	for _, q := range warmQueries {
 		_, _ = store.Search(ctx, benchRepoID, benchBranch, q, 10, filter)
 	}

@@ -12,12 +12,12 @@ import (
 )
 
 // TestSaveLoadRoundTrip inserts 50 vectors, runs 5 hold-out queries on the original
-// store, saves to a temp directory, loads into a fresh store, then asserts that the
+// store, saves to a temporary directory, loads into a fresh store, and asserts that the
 // same 5 queries return identical top-5 nodeID lists in the same order.
 func TestSaveLoadRoundTrip(t *testing.T) {
 	ctx := context.Background()
 
-	// Build store with 50 vectors
+	// Build a store populated with 50 vectors.
 	store := newStore(t)
 
 	const n = 50
@@ -34,7 +34,7 @@ func TestSaveLoadRoundTrip(t *testing.T) {
 		t.Fatalf("UpsertEmbeddings: %v", err)
 	}
 
-	// Run 5 hold-out queries on original store
+	// Run 5 hold-out queries on the original store.
 	querySeeds := []int64{5001, 5002, 5003, 5004, 5005}
 	filter := domain.VectorFilter{ModelID: "nomic-embed-text"}
 
@@ -54,13 +54,13 @@ func TestSaveLoadRoundTrip(t *testing.T) {
 		originalResults[qi] = nodeIDs
 	}
 
-	// Save to temp directory
+	// Save the original store to a temporary directory.
 	tmpDir := t.TempDir()
 	if err := store.Save(tmpDir); err != nil {
 		t.Fatalf("Save: %v", err)
 	}
 
-	// Load into fresh store
+	// Load the saved index into a fresh store instance.
 	store2, err := vector.NewUsearchStore()
 	if err != nil {
 		t.Fatalf("NewUsearchStore (store2): %v", err)
@@ -71,7 +71,7 @@ func TestSaveLoadRoundTrip(t *testing.T) {
 		t.Fatalf("Load: %v", err)
 	}
 
-	// Run same 5 queries on store2 and assert exact match
+	// Run the same 5 queries on the new store and assert that the results match exactly.
 	for qi, seed := range querySeeds {
 		hits, err := store2.Search(ctx, "r1", "main", randVec(seed), 5, filter)
 		if err != nil {
@@ -90,7 +90,7 @@ func TestSaveLoadRoundTrip(t *testing.T) {
 }
 
 // TestSaveLoadRoundTripHyphenatedKeys verifies that key fields containing hyphens
-// (e.g. repoID="my-repo") round-trip correctly through Save and Load.
+// (such as repoID="my-repo") round-trip correctly through Save and Load.
 func TestSaveLoadRoundTripHyphenatedKeys(t *testing.T) {
 	ctx := context.Background()
 	store := newStore(t)
@@ -131,7 +131,7 @@ func TestSaveLoadRoundTripHyphenatedKeys(t *testing.T) {
 	}
 }
 
-// TestSaveEmptyStore verifies that Save on an empty store does not error.
+// TestSaveEmptyStore verifies that calling Save on an empty store does not return an error.
 func TestSaveEmptyStore(t *testing.T) {
 	store := newStore(t)
 	tmpDir := t.TempDir()
@@ -140,7 +140,7 @@ func TestSaveEmptyStore(t *testing.T) {
 	}
 }
 
-// TestLoadEmptyDir verifies that Load from an empty directory does not error.
+// TestLoadEmptyDir verifies that calling Load on an empty directory does not return an error.
 func TestLoadEmptyDir(t *testing.T) {
 	store := newStore(t)
 	tmpDir := t.TempDir()

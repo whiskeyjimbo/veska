@@ -8,9 +8,9 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/vector"
 )
 
-// TestOpen_NativeEmptyDirSucceeds verifies that Open on an empty/non-existent
-// directory succeeds under the hnsw_native build tag — no.json files means
-// no indexes are loaded and the store is empty but ready.
+// TestOpen_NativeEmptyDirSucceeds verifies that calling Open on an empty or non-existent
+// directory succeeds when compiled with the hnsw_native tag. In this case, no index files
+// are loaded, resulting in an empty but fully functional store.
 func TestOpen_NativeEmptyDirSucceeds(t *testing.T) {
 	dir := t.TempDir()
 	store, err := vector.Open(dir)
@@ -21,6 +21,7 @@ func TestOpen_NativeEmptyDirSucceeds(t *testing.T) {
 		t.Fatal("Open returned nil store without error")
 		return
 	}
-	// Caller is responsible for Destroy; cast to *UsearchStore if needed.
-	// Nothing to call here in the test as the interface does not expose Destroy.
+	// The caller is responsible for calling Destroy to free CGo resources by casting the
+	// returned interface to a *UsearchStore. No cleanup is performed in this test because
+	// the returned interface does not expose Destroy.
 }
