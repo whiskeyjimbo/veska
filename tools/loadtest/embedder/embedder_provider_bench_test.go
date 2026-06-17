@@ -8,7 +8,7 @@
 //	model2vec Embed is ~500x faster than static-v2 (table lookup +
 //	  weighted mean vs n-gram hashing), and higher quality — so static-v2
 //	  is a weak last resort, not a "fast lightweight" option.
-//	go:embed adds no load-time penalty vs reading the file from disk.
+//	Using go:embed adds no load-time penalty vs reading the file from disk.
 //	The embedded path keeps the ~62MB weights resident for the process
 //	  lifetime (binary data section), which is the fat binary's RSS cost
 //	  over thin+install. Run a process-RSS check separately for that.

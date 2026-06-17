@@ -41,7 +41,7 @@ const (
 	branch = "main"
 )
 
-// result is the JSON output payload — keys are pinned by the bead spec.
+// result represents the JSON output payload with keys matching the benchmark schema.
 type result struct {
 	Model           string  `json:"model"`
 	OllamaURL       string  `json:"ollama_url"`

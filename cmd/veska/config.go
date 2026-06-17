@@ -27,8 +27,7 @@ func configCmd(mgr service.Manager) *cobra.Command {
 // configShowCmd prints the effective resolved config: defaults merged with
 // ~/.veska/config.toml and env-var overrides — same pipeline the daemon
 // uses at boot, so the operator sees the EXACT shape the daemon will
-// observe. Read-only; the write-side subcommands
-// (set/enable/disable) are deferred behind a follow-up bead because
+// observe. Read-only; write-side subcommands (set/enable/disable) are deferred because
 // BurntSushi/toml v1.6 loses comments on marshal.
 func configShowCmd() *cobra.Command {
 	var jsonOut bool
