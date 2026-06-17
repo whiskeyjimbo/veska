@@ -9,29 +9,20 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/core/domain"
 )
 
-// extParser is a CodeParser that can also enumerate the extensions it parses.
-// Both GoParser and TSParser satisfy it; MultiParser routes by extension and
-// exposes the union of its members' SupportedExtensions.
+// extParser defines a CodeParser that can enumerate the file extensions it parses.
 type extParser interface {
 	ParseFile(ctx context.Context, repoID, path string, src []byte) (*domain.ParseResult, error)
 	SupportedExtensions() []string
 }
 
-// MultiParser routes ParseFile to the sub-parser that claims a file's
-// extension and reports the union of its sub-parsers' supported extensions.
-// It lets the cold scan parse several languages through one ports.CodeParser
-// while sourcing its walk filter from SupportedExtensions instead of a
-// hand-synced list. A file whose extension no sub-parser
-// claims yields an empty ParseResult — the same contract each sub-parser
-// already honours for unrecognised extensions. Safe for concurrent use:
-// byExt is read-only after construction.
+// MultiParser routes ParseFile requests to the sub-parser registered for a file's
+// extension. It is safe for concurrent use.
 type MultiParser struct {
 	byExt map[string]extParser
 }
 
-// NewMultiParser builds a MultiParser routing each parser's
-// SupportedExtensions to it. When two parsers claim the same extension the
-// last one wins; production wires disjoint sets (Go vs TS/TSX).
+// NewMultiParser builds a MultiParser instance. If multiple parsers claim the same
+// file extension, the last one registered takes precedence.
 func NewMultiParser(parsers ...extParser) *MultiParser {
 	byExt := make(map[string]extParser)
 	for _, p := range parsers {

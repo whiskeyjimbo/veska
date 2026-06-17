@@ -8,10 +8,9 @@ import (
 	sitter "github.com/smacker/go-tree-sitter"
 )
 
-// goIdentifierTypes are the tree-sitter-go leaf node types that NAME a symbol,
-// variable, field, type, package, or label. Normalising them is what makes the
-// structural hash invariant to renames — i.e. catches Type-2 clones that
-// content_hash (byte-identical) misses.
+// goIdentifierTypes maps the tree-sitter-go leaf node types that name a symbol,
+// variable, field, type, package, or label. Normalizing them makes the structural
+// hash invariant to variable renames.
 var goIdentifierTypes = map[string]struct{}{
 	"identifier":         {},
 	"field_identifier":   {},
@@ -20,9 +19,9 @@ var goIdentifierTypes = map[string]struct{}{
 	"label_name":         {},
 }
 
-// goLiteralClass collapses each tree-sitter-go literal type to one class token,
-// so "1" vs "42" or "x" vs "y" strings don't block a structural match — while a
-// literal stays distinct from an identifier (a number is not a variable).
+// goLiteralClass collapses literal types to representative class tokens (for example,
+// `$NUM` for numeric literals), ensuring different literal values do not block a
+// structural match.
 var goLiteralClass = map[string]string{
 	"int_literal":                "$NUM",
 	"float_literal":              "$NUM",
@@ -32,17 +31,9 @@ var goLiteralClass = map[string]string{
 	"raw_string_literal":         "$STR",
 }
 
-// goStructuralHash returns a hex SHA-256 over decl's identifier-/literal
-// normalised token stream, so two declarations with the same SHAPE after a
-// consistent renaming of identifiers (and any literals) hash identically
-// Type-2 clone detection. Comments and whitespace are ignored (it is
-// token-stream based, not text based).
-// Identifiers are renamed CONSISTENTLY: the first distinct name becomes $1, the
-// next $2, and so on, so a variable reused keeps the same token — `a+a` and
-// `b+b` match, but `a+b` does NOT match `a+a`. This includes the declaration's
-// own name, so two identically-bodied, differently-named functions collide
-// (the de-dupe signal we want). Operators, punctuation, and keywords are
-// emitted verbatim via their tree-sitter Type, which carries the structure.
+// goStructuralHash returns a SHA-256 hash over a normalized token stream of the
+// declaration. Identifiers are renamed consistently based on their order of appearance,
+// ignoring comments and whitespace, to identify Type-2 clones.
 func goStructuralHash(decl *sitter.Node, src []byte) string {
 	h := sha256.New()
 	idMap := make(map[string]string)

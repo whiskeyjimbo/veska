@@ -4,34 +4,17 @@ import (
 	sitter "github.com/smacker/go-tree-sitter"
 )
 
-// This file holds the variable-origin / return-type inference used to bind
-// chained-selector and local-variable method calls (`v:= pkg.New; v.M` and
-// `g:= New; g.Render`) at promotion time. The collectors here feed
-// collectCallNames and the cross-package CALLS resolver; the call extraction
-// itself lives in go.go.
+// This file implements variable origin and return type inference to resolve method calls
+// on variables initialized from constructor functions or composite literals. The extracted
+// information is used during call resolution.
 
-// localVarOrigin tracks variables declared via `v:= pkg.X(.)` inside
-// a function body, mapping the local name to its origin package. Used
-// to recognise chained-selector calls like `v.Method` whose receiver
-// type the parser cannot infer. The map covers the most
-// common Go DI pattern (constructor + method calls); more elaborate
-// inference (var via assignment, method chains through interfaces) is
-// out of scope here — those fall through to the existing unresolved
-// path and stay unbound.
+// localVarOrigin maps local variable names to their source packages (for example,
+// mapping `v` to `pkg` for `v := pkg.New()`).
 type localVarOrigin = string
 
-// collectLocalVarOrigins walks a function body and returns the map of
-// short-var-declared identifiers to their originating package qualifier.
-// Recognised RHS shapes (see originPkgFromRHS):
-//
-//	`v:= pkg.X(.)` call_expression with selector function
-//	`v:= pkg.Type{.}` composite literal with qualified type
-//	`v:= &pkg.Type{.}` address-of composite literal
-//
-// Unrecognised shapes (multi-value returns, type assertions, method
-// chains, anonymous-type literals) are intentionally skipped so the map
-// never contains a wrong origin — a missing entry just degrades to
-// existing behaviour.
+// collectLocalVarOrigins maps variables declared with short variable assignments (`:=`)
+// to their originating package. It recognizes constructor calls and composite literals,
+// skipping unrecognized patterns to avoid incorrect inferences.
 func collectLocalVarOrigins(node *sitter.Node, src []byte) map[string]localVarOrigin {
 	origins := map[string]localVarOrigin{}
 	var walk func(*sitter.Node)
@@ -60,27 +43,11 @@ func collectLocalVarOrigins(node *sitter.Node, src []byte) map[string]localVarOr
 	return origins
 }
 
-// collectPackageVarOrigins walks the file root and returns origins for
-// top-level `var x =.` declarations whose RHS is a package-qualified
-// constructor call or composite literal. Mirrors collectLocalVarOrigins
-// but covers the file-scope shape that drives every cobra app:
+// collectPackageVarOrigins extracts origins for top-level variables initialized with
+// package-qualified constructors or composite literals (for example, `var rootCmd = &cobra.Command{}`).
+// Only single-variable declarations are processed.
 //
-//	var rootCmd = &cobra.Command{.} // -> rootCmd -> cobra
-//	var defaultPool = pool.New // -> defaultPool -> pool
-//
-// Before this collector landed, `rootCmd.AddCommand(helloCmd)` in init
-// emitted UnresolvedCall{PkgQualifier:"rootCmd"} — an unresolvable
-// bareword — so no cross-repo CALLS stub was ever created against the
-// cobra module ( /, surfaced by the junior
-// onboarding journey).
-// Only single-spec `var x = expr` shapes are recognised; grouped
-// `var (. )` blocks and multi-LHS specs are walked through the
-// var_spec_list path so each spec is inspected individually.
-// Verbatim relocation: this var-spec walk predates the per-function complexity
-// gate, which is diff-scoped and only flags it because the file split makes git
-// see the move as new code.
-//
-//nolint:cyclop // see note above: verbatim relocation, diff-scoped gate
+//nolint:cyclop // We accept this cyclomatic complexity as the var spec walk logic is self-contained.
 func collectPackageVarOrigins(root *sitter.Node, src []byte) map[string]localVarOrigin {
 	origins := map[string]localVarOrigin{}
 	if root == nil {
@@ -128,19 +95,9 @@ func collectPackageVarOrigins(root *sitter.Node, src []byte) map[string]localVar
 	return origins
 }
 
-// collectInFileFunctionReturns walks the file root for top-level
-// function declarations whose result is a single, simple type (or
-// pointer to one) and returns funcName → bareReturnTypeName. Only
-// shapes the cross-package-CALLS resolver can use downstream are
-// included:
-//
-//	func New Greeting -> New -> Greeting
-//	func New *Greeting -> New -> Greeting
-//
-// Multi-result returns, named result parameters with non-trivial
-// types, and qualified types (pkg.Other) are intentionally skipped:
-// without same-file binding the resolver has nothing to do, and
-// recording the wrong type would invent false edges.
+// collectInFileFunctionReturns maps local function names to their simple return type
+// names (for example, mapping `New` to `Greeting` for `func New() *Greeting`). Multi-result
+// and non-local types are skipped to avoid false positive bindings.
 func collectInFileFunctionReturns(root *sitter.Node, src []byte) map[string]string {
 	out := map[string]string{}
 	if root == nil {
@@ -165,12 +122,9 @@ func collectInFileFunctionReturns(root *sitter.Node, src []byte) map[string]stri
 	return out
 }
 
-// simpleReturnTypeName returns the bare type identifier for a Go
-// function's result node when it is a single type — `Greeting`,
-// `*Greeting`, or `pkg.T` (skipped: see collectInFileFunctionReturns).
-// Returns "" for anything else (parameter_list with >1 entry, tuple
-// returns, generics, channels, slices, maps, …) so that ambiguity is
-// expressed as absence rather than a wrong binding.
+// simpleReturnTypeName returns the bare type name of a single return value, unwrapping
+// pointer modifiers. It returns an empty string for complex types like maps, slices,
+// channels, or multiple return values.
 func simpleReturnTypeName(result *sitter.Node, src []byte) string {
 	switch result.Type() {
 	case "type_identifier":
@@ -201,19 +155,11 @@ func simpleReturnTypeName(result *sitter.Node, src []byte) string {
 	return ""
 }
 
-// collectLocalReceiverTypes walks a function body for `v:= F(.)`
-// short-var declarations whose RHS is a bare-identifier call to a
-// function in funcReturns. The returned map binds v to the function's
-// return type so v.Method downstream resolves to ReceiverType.Method
-// in this same file. Without it, `g:= New("x"); g.Render`
-// in greet_test.go emitted UnresolvedCall{PkgQualifier:"g"} — a bare
-// local-var name promotion could never bind, so test files were
-// invisible to blast/call_chain for in-repo methods.
-// Verbatim relocation: this short-var walk predates the per-function complexity
-// gate, which is diff-scoped and only flags it because the file split makes git
-// see the move as new code.
+// collectLocalReceiverTypes matches variables initialized from local constructor
+// functions in funcReturns and associates them with their return types to resolve
+// method calls locally.
 //
-//nolint:cyclop // see note above: verbatim relocation, diff-scoped gate
+//nolint:cyclop // We accept this cyclomatic complexity as the short variable walk logic is self-contained.
 func collectLocalReceiverTypes(body *sitter.Node, src []byte, funcReturns map[string]string) map[string]string {
 	out := map[string]string{}
 	if body == nil {
@@ -260,12 +206,8 @@ func collectLocalReceiverTypes(body *sitter.Node, src []byte, funcReturns map[st
 	return out
 }
 
-// compositeLitBareType returns the bare (unqualified, pointer-stripped) type
-// name of a composite-literal RHS — `T{.}` or `&T{.}` — when the type is a
-// same-package type_identifier, else "". A qualified `pkg.T{.}` returns ""
-// (it is a cross-package value, handled by collectLocalVarOrigins as a package
-// origin, not a same-package receiver type), so we never mis-bind `v.M` to a
-// same-package `T.M` that isn't the real type.
+// compositeLitBareType returns the unqualified base type name of a composite literal
+// (for example, `T` for `&T{}`). It returns an empty string for qualified package types.
 func compositeLitBareType(rhs *sitter.Node, src []byte) string {
 	switch rhs.Type() {
 	case "composite_literal":
@@ -282,15 +224,9 @@ func compositeLitBareType(rhs *sitter.Node, src []byte) string {
 	return ""
 }
 
-// collectParamReceiverTypes maps the caller declaration's parameter names to
-// their bare same-package type — `func f(o Order, s *Server)` yields
-// {o:Order, s:Server} — so a method call on a typed parameter, `o.Method`,
-// binds to `Order.Method` rather than falling through as an unbindable
-// package-qualifier UnresolvedCall. Only bare `T` / `*T`
-// parameter types are recorded (via simpleReturnTypeName, which pointer-strips
-// to match the method node's receiver-type name); qualified, slice, map, func
-// and generic parameter types yield "" and are skipped, so a wrong type is
-// never recorded (a missing entry just degrades to prior behaviour).
+// collectParamReceiverTypes maps parameter names to their simple same-package types
+// (for example, mapping `o` to `Order` in `func f(o Order)`). Complex and cross-package
+// parameter types are omitted.
 func collectParamReceiverTypes(decl *sitter.Node, src []byte) map[string]string {
 	out := map[string]string{}
 	if decl == nil {
@@ -314,8 +250,8 @@ func collectParamReceiverTypes(decl *sitter.Node, src []byte) map[string]string 
 		if bare == "" {
 			continue
 		}
-		// A parameter_declaration may share one type across several names:
-		// `func f(a, b Order)`. Bind each identifier child to the bare type.
+		// Bind each parameter identifier to the shared type when multiple names share a type
+		// definition (for example, `func f(a, b Order)`).
 		nc := int(pd.NamedChildCount())
 		for j := range nc {
 			ch := pd.NamedChild(j)
@@ -327,11 +263,8 @@ func collectParamReceiverTypes(decl *sitter.Node, src []byte) map[string]string 
 	return out
 }
 
-// originPkgFromRHS returns the qualifying package identifier for a
-// var declaration's RHS, or "" when the shape isn't recognised.
-// Handles three shapes that all behave the same way for downstream
-// cross-repo CALLS resolution: a constructor call, a value composite
-// literal, or an address-of composite literal.
+// originPkgFromRHS extracts the package prefix from a package-qualified call or
+// composite literal expression.
 func originPkgFromRHS(rhs *sitter.Node, src []byte) string {
 	if rhs == nil {
 		return ""
@@ -358,7 +291,7 @@ func originPkgFromRHS(rhs *sitter.Node, src []byte) string {
 		}
 		return string(src[pkg.StartByte():pkg.EndByte()])
 	case "unary_expression":
-		// &pkg.Type{.} — operand is a composite_literal.
+
 		operand := rhs.ChildByFieldName("operand")
 		if operand == nil {
 			return ""

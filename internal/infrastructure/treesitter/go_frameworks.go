@@ -1,27 +1,16 @@
-// go_frameworks.go — framework-aware Go extraction (, -qqqy).
-// The generic symbol pass (go_query.go + symbols.scm) sees a framework
-// command as an opaque `var x = &pkg.Type{.}` KindVariable named after
-// the Go var. This pass recognises the framework struct-literals via
-// frameworks.scm and promotes them to KindCommand nodes named by the
-// framework's command word, then builds the command tree as CONTAINS
-// edges so call_chain / blast_radius walk it.
-// Frameworks:
-//   spf13/cobra — `var rootCmd = &cobra.Command{Use:.}` named by the
-//     first word of Use:; `parent.AddCommand(child)` → CONTAINS.
-//   urfave/cli — `var app = &cli.App{Name:., Commands: *cli.Command
-//     {.}}` named by Name:; each Commands-slice literal → a CONTAINS
-//     child.
-//   gin/echo/chi — `router.METHOD("/path", handler)` → a KindRoute node
-//     named "METHOD /path" plus a ROUTES route→handler reference, emitted
-//     as a domain.UnresolvedCall{EdgeKind: EdgeRoutes} so the handler binds
-//     through the same package-wide promotion resolver as a plain call
-//     The route is named with the method so GET and POST on
-//     one path don't collide on the (repo,path,kind,name) promotion PK.
-//   alecthomas/kong — commands are struct FIELDS with `cmd:""` tags, not
-//     composite literals; a `cmd:""`-tagged field → KindCommand named by the
-//     dasherized field name (or a `name:` tag), nested via the field's struct
-//     type (a command struct's own cmd fields are its subcommands). Runs as
-//     its own struct-tag walk, independent of the @fwvar.* literal dispatch
+// Package treesitter provides framework-aware AST extraction. While generic symbol
+// passes see framework commands as simple variables, this pass recognizes command
+// struct-literals and route declarations from supported frameworks and promotes
+// them to specialized nodes (KindCommand and KindRoute) with their corresponding
+// tree and handler relationships:
+//   - spf13/cobra: Promotes variables of type cobra.Command named by the first word of Use.
+//     Builds parent-child edges from AddCommand calls.
+//   - urfave/cli: Promotes variables of type cli.App and subcommands declared in Commands
+//     slices, linking them with contains edges.
+//   - gin/echo/chi: Promotes router.METHOD calls to KindRoute nodes linked to their target
+//     handler via route edges.
+//   - alecthomas/kong: Promotes struct fields carrying cmd:"" tags to command nodes, nesting
+//     them based on struct type relationships.
 
 package treesitter
 
@@ -36,20 +25,18 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/core/domain"
 )
 
-// Module paths whose struct-literals we promote. Matched against the file
-// import map so an unrelated `foo.Command{}` / `foo.App{}` literal can't
-// masquerade as a framework command. urfaveImportPrefix is a prefix
-// because urfave versions its module path (…/cli, …/cli/v2, …/cli/v3).
+// Module paths for supported frameworks are matched against the file's import map
+// to prevent unrelated struct literals from being incorrectly promoted. For example,
+// the urfave import path is checked by prefix to accommodate major version suffixes
+// like cli/v2 or cli/v3.
 const (
 	cobraImportPath    = "github.com/spf13/cobra"
 	urfaveImportPrefix = "github.com/urfave/cli"
 	kongImportPath     = "github.com/alecthomas/kong"
 )
 
-// ginEchoImportPrefixes / chiImportPrefix are the HTTP-router module paths
-// whose router.METHOD(.) calls we promote to KindRoute nodes. echo and
-// chi version their module path (…/echo/v4, …/chi/v5), so these match by
-// prefix.
+// Router module paths are matched by prefix to support versioned paths (for example,
+// echo/v4 or chi/v5).
 var ginEchoImportPrefixes = []string{
 	"github.com/gin-gonic/gin",
 	"github.com/labstack/echo",
@@ -57,14 +44,9 @@ var ginEchoImportPrefixes = []string{
 
 const chiImportPrefix = "github.com/go-chi/chi"
 
-// upperVerbs (gin/echo: GET) and titleVerbs (chi: Get) each map a router
-// method's field name to the canonical upper-case HTTP method used in the
-// route node name. They are kept per-framework, not flattened, because
-// chi's title-case verbs collide with extremely common Go method names
-// (cfg.Get, client.Post) — accepting them only when chi is the imported
-// router keeps a gin/echo-only file from mistaking client.Post(.) for a
-// route. This is the verb half of the precision gate; a field absent from
-// the active set drops the selector-call match.
+// upperVerbs and titleVerbs map router method field names to canonical uppercase
+// HTTP methods. They are separated per-framework to prevent chi's title-case verbs
+// (like Get) from colliding with common Go methods (like cfg.Get) in non-chi source files.
 var upperVerbs = map[string]string{
 	"GET": "GET", "POST": "POST", "PUT": "PUT", "DELETE": "DELETE",
 	"PATCH": "PATCH", "HEAD": "HEAD", "OPTIONS": "OPTIONS",
@@ -77,25 +59,20 @@ var titleVerbs = map[string]string{
 	"Connect": "CONNECT", "Trace": "TRACE",
 }
 
-// frameworkCommands is the framework pass result: the promoted
-// KindCommand nodes, a binding from the Go var identifier to its command
-// node (used to skip the generic var extraction, to resolve AddCommand
-// arguments, and to keep anon-call attribution on the command rather than
-// the package), and the command-tree CONTAINS edges.
+// frameworkCommands holds the results of the framework extraction pass, including
+// promoted command and route nodes, mappings from Go variables to their promoted
+// commands, and containment edges.
 type frameworkCommands struct {
 	nodes []*domain.Node
 	byVar map[string]*domain.Node
 	edges []*domain.Edge
-	// unresolved carries route→handler references (KindRoute → handler)
-	// the promoter binds against the package-wide symbol map, emitting a
-	// ROUTES edge instead of CALLS. Routes don't appear in
-	// byVar — no Go identifier references a route node.
+	// unresolved contains unresolved route-to-handler references that are resolved
+	// during promotion to emit ROUTES edges. Routes do not map to Go variable identifiers.
 	unresolved []domain.UnresolvedCall
 }
 
-// commandVar reports whether the Go var identifier name was promoted to a
-// KindCommand node, so the generic var extractor can skip it. Safe on the
-// zero value (nil map).
+// commandVar returns true if a Go variable identifier was promoted to a command node,
+// indicating that generic variable extraction should be skipped.
 func (c frameworkCommands) commandVar(name string) bool {
 	return c.byVar[name] != nil
 }
@@ -106,11 +83,9 @@ func (c *frameworkCommands) add(n *domain.Node, varName string) {
 	c.byVar[varName] = n
 }
 
-// extractFrameworkCommands runs frameworks.scm over root and promotes
-// recognised command struct-literals (cobra, urfave) to KindCommand nodes
-// plus their command-tree CONTAINS edges. Returns the zero value when no
-// supported framework is imported, so the caller no-ops the common file
-// cheaply.
+// extractFrameworkCommands runs the frameworks query and promotes recognized command struct
+// literals and router definitions. If no supported framework is imported in the file,
+// it returns an empty result immediately.
 func extractFrameworkCommands(root *sitter.Node, src []byte, imports map[string]string, repoID, path string) frameworkCommands {
 	_, cobraOK := cobraAlias(imports)
 	urfaveOK := anyImportHasPrefix(imports, urfaveImportPrefix)
@@ -131,10 +106,8 @@ func extractFrameworkCommands(root *sitter.Node, src []byte, imports map[string]
 	for _, m := range matches {
 		fw.dispatchVar(m, p)
 	}
-	// Second pass: resolve the by-reference command-tree wire-ups now that
-	// every command var is in byVar (a child may be declared after its
-	// parent). cobra: parent.AddCommand(child); urfave: App.Commands slice
-	// identifier elements. Only when a command var was actually promoted.
+	// Second pass: resolve parent-child relationships because children may be declared
+	// after their parent in the source file.
 	if len(fw.byVar) > 0 {
 		fw.edges = append(fw.edges, cobraContainsEdges(matches, src, fw.byVar)...)
 		fw.edges = append(fw.edges, urfaveRefContainsEdges(matches, p, fw.byVar)...)
@@ -145,8 +118,8 @@ func extractFrameworkCommands(root *sitter.Node, src []byte, imports map[string]
 	if ginEchoOK || chiOK {
 		fw.addRoutes(matches, p)
 	}
-	// kong models commands as struct fields with `cmd:""` tags, not
-	// composite literals, so it runs independently of the @fwvar.* dispatch
+	// Kong models commands as struct fields with cmd tags, which are processed
+	// independently of structural variable declarations.
 	if kongOK {
 		fw.addKongCommands(matches, p)
 	}
@@ -169,10 +142,8 @@ type fwParse struct {
 	kongOK       bool
 }
 
-// dispatchVar classifies one @fwvar.* match by (resolved import, type
-// name) and routes it to the matching framework builder. Non-framework
-// vars and unsupported types fall through silently (they stay
-// KindVariable via the generic pass).
+// dispatchVar routes a matched variable declaration to the appropriate framework
+// builder based on its import and type. Unmatched declarations are ignored.
 func (c *frameworkCommands) dispatchVar(m queryMatch, p fwParse) {
 	pkgNode := m.node("fwvar.pkg")
 	typeNode := m.node("fwvar.type")
@@ -211,12 +182,9 @@ func cobraAlias(imports map[string]string) (string, bool) {
 	return "", false
 }
 
-// isUrfavePkg reports whether the source qualifier pkg refers to
-// urfave/cli. urfave's package name is always "cli" regardless of the
-// versioned module path, but tree-sitter's import map keys a non-aliased
-// `…/cli/v2` import under "v2" (the path's last segment), so an exact
-// alias lookup misses; the bare "cli" fallback covers that case (the
-// caller already verified urfave is imported in the file).
+// isUrfavePkg returns true if the qualifier refers to the urfave/cli package. This
+// handles default imports where the local package qualifier is 'cli' or major version
+// segments like 'v2'.
 func isUrfavePkg(pkg string, imports map[string]string) bool {
 	if strings.HasPrefix(imports[pkg], urfaveImportPrefix) {
 		return true
@@ -234,13 +202,9 @@ func anyImportHasPrefix(imports map[string]string, prefix string) bool {
 	return false
 }
 
-// buildNamedCommandVar promotes one command-var match to a KindCommand
-// node and returns it with the Go var identifier (the byVar binding key).
-// The display Name is the first word of the struct field nameKey (cobra's
-// Use: "verb [args]" → "verb"; urfave's Name: → itself), so
-// eng_find_symbol hits the command word rather than the Go var name. A
-// missing/empty nameKey field returns nil — there's nothing meaningful to
-// name the command, so it stays a generic KindVariable.
+// buildNamedCommandVar promotes a matched variable to a command node. The display
+// name is extracted from the first word of the identifying field (for example, the
+// first word of cobra's Use or the name of urfave's cli.Command).
 func buildNamedCommandVar(m queryMatch, src []byte, repoID, path, nameKey string) (*domain.Node, string) {
 	varNode := m.node("fwvar.name")
 	body := m.node("fwvar.body")
@@ -261,13 +225,9 @@ func buildNamedCommandVar(m queryMatch, src []byte, repoID, path, nameKey string
 	return newCommandNode(nodeID(repoID, path, domain.KindCommand, varName), cmdName, decl, src, path), varName
 }
 
-// addUrfaveApp promotes a `var app = &cli.App{Name:., Commands: *cli.
-// Command{.}}` match: the app itself becomes a KindCommand named by
-// Name:, and every literal in its Commands slice becomes a child
-// KindCommand (named by its own Name:) with an app→child CONTAINS edge.
-// Subcommands are anonymous literals, so their node IDs are disambiguated
-// by "appVar/subName" and they are NOT added to byVar (no Go identifier
-// references them). Nested Subcommands are deferred to a follow-up.
+// addUrfaveApp promotes a cli.App declaration. The application itself becomes a
+// command node, and subcommands declared as anonymous struct literals inside the
+// Commands field are promoted and nested via containment edges.
 func (c *frameworkCommands) addUrfaveApp(m queryMatch, src []byte, repoID, path string) {
 	varNode := m.node("fwvar.name")
 	body := m.node("fwvar.body")
@@ -301,9 +261,7 @@ func (c *frameworkCommands) addUrfaveApp(m queryMatch, src []byte, repoID, path 
 	c.edges = append(c.edges, set.edges...)
 }
 
-// urfaveCommandsBody returns the literal_value listing an App's
-// subcommands — the body of its `Commands: *cli.Command{. }` field
-// or nil when there is no Commands slice.
+// urfaveCommandsBody returns the composite literal body of an App's subcommand slice.
 func urfaveCommandsBody(body *sitter.Node, src []byte) *sitter.Node {
 	commands := keyedElementValue(body, src, "Commands")
 	if commands == nil || commands.Type() != "composite_literal" {
@@ -312,8 +270,8 @@ func urfaveCommandsBody(body *sitter.Node, src []byte) *sitter.Node {
 	return commands.ChildByFieldName("body")
 }
 
-// urfaveSubcommandLiterals returns the inline `{Name:.}` literal_value
-// nodes in an App's Commands slice (the anonymous-literal idiom).
+// urfaveSubcommandLiterals returns inline subcommand literals declared within an App's
+// subcommand slice.
 func urfaveSubcommandLiterals(body *sitter.Node, src []byte) []*sitter.Node {
 	inner := urfaveCommandsBody(body, src)
 	if inner == nil {
@@ -333,9 +291,7 @@ func urfaveSubcommandLiterals(body *sitter.Node, src []byte) []*sitter.Node {
 	return out
 }
 
-// urfaveSubcommandRefs returns the identifier names in an App's Commands
-// slice (the by-reference idiom `Commands: *cli.Command{addCmd}`),
-// resolved to command nodes by urfaveRefContainsEdges.
+// urfaveSubcommandRefs returns variable references declared within an App's subcommand slice.
 func urfaveSubcommandRefs(body *sitter.Node, src []byte) []string {
 	inner := urfaveCommandsBody(body, src)
 	if inner == nil {
@@ -355,10 +311,8 @@ func urfaveSubcommandRefs(body *sitter.Node, src []byte) []string {
 	return out
 }
 
-// urfaveRefContainsEdges resolves the by-reference subcommands of every
-// urfave App (`Commands: *cli.Command{addCmd}`) to app→child CONTAINS
-// edges via byVar. Run as a second pass so a subcommand var declared
-// after its App still resolves. Dedup is per (app, child).
+// urfaveRefContainsEdges builds containment edges from an App to its subcommands
+// when those subcommands are referenced by variable name.
 func urfaveRefContainsEdges(matches []queryMatch, p fwParse, byVar map[string]*domain.Node) []*domain.Edge {
 	set := newContainsEdgeSet()
 	for _, m := range matches {
@@ -397,11 +351,8 @@ func anyPrefixImported(imports map[string]string, prefixes []string) bool {
 	return false
 }
 
-// routeMethod resolves a router method's field name to its canonical
-// upper-case HTTP method, accepting upper-case verbs only when gin/echo is
-// the imported router and title-case verbs only when chi is — so a
-// gin-only file's client.Post(.) or a chi-only file's resp.GET(.) is
-// not mistaken for a route. ok=false when the field is not an active verb.
+// routeMethod resolves a router method name to its uppercase HTTP equivalent,
+// enforcing framework-specific casing rules to prevent accidental non-router call matches.
 func routeMethod(field string, ginEchoOK, chiOK bool) (string, bool) {
 	if ginEchoOK {
 		if m, ok := upperVerbs[field]; ok {
@@ -416,17 +367,9 @@ func routeMethod(field string, ginEchoOK, chiOK bool) (string, bool) {
 	return "", false
 }
 
-// addRoutes promotes every router.METHOD("/path", handler) selector call to
-// a KindRoute node named "METHOD /path" and records the route→handler
-// reference as a ROUTES UnresolvedCall (bound at promotion). The precision
-// gate — framework-specific verb field, string-literal path, present
-// handler arg, on top of the file-level router import already checked by
-// the caller — reduces but cannot eliminate misfires: the router is a
-// param of an unresolved type, so a same-file someVar.GET("x", y) in a
-// gin/echo file still can't be told apart from a real route (an accepted
-// v1 limitation). Group/Route/Mount and middleware nesting are deferred;
-// only flat r.METHOD(path, handler) is matched. Dedup is per route name
-// within the file.
+// addRoutes promotes router route registrations to KindRoute nodes. It records the
+// route-to-handler mapping as an unresolved reference that will be bound during
+// promotion.
 func (c *frameworkCommands) addRoutes(matches []queryMatch, p fwParse) {
 	seen := map[string]bool{}
 	for _, m := range matches {
@@ -460,14 +403,8 @@ func (c *frameworkCommands) addRoutes(matches []queryMatch, p fwParse) {
 	}
 }
 
-// routeArgs extracts the route's path (first arg, which must be a string
-// literal) and handler (the second arg) from a router.METHOD argument
-// list. Returns ("", nil) when the first arg is not a string literal or
-// there is no handler arg — the literal-path + handler-present halves of
-// the precision gate. The handler is taken as the second positional arg,
-// which is correct for echo/chi and the common single-handler gin form
-// r.GET(path, handler); a gin route with leading middleware
-// (r.GET(path, mw, handler)) attributes to the middleware in v1.
+// routeArgs extracts the path string literal and the handler node from a route
+// registration call. The handler is assumed to be the second argument.
 func routeArgs(argsNode *sitter.Node, src []byte) (string, *sitter.Node) {
 	if int(argsNode.NamedChildCount()) < 2 {
 		return "", nil
@@ -488,14 +425,9 @@ func routeArgs(argsNode *sitter.Node, src []byte) (string, *sitter.Node) {
 	return path, argsNode.NamedChild(1)
 }
 
-// routeHandlerUnresolved builds the ROUTES route→handler UnresolvedCall for
-// a handler argument. A bare identifier (h) resolves by name against the
-// route file's package; a package/receiver selector (pkg.Handler) resolves
-// via the import map (a local-var receiver simply won't match, so no false
-// edge is emitted). Func-literal and other handler forms produce no edge
-// (ok=false), mirroring the deferred urfave Action-closure case. The call
-// site's line is carried so the resolved edge attributes to the route
-// registration.
+// routeHandlerUnresolved constructs an unresolved route-to-handler call reference.
+// It supports simple package identifiers or selector expressions, returning false
+// for inline function closures.
 func routeHandlerUnresolved(routeID domain.NodeID, handler, callNode *sitter.Node, src []byte) (domain.UnresolvedCall, bool) {
 	uc := domain.UnresolvedCall{CallerID: routeID, EdgeKind: domain.EdgeRoutes, SrcLine: lineRange(callNode).Start}
 	switch handler.Type() {
@@ -531,9 +463,7 @@ func newRouteNode(id, name string, callNode *sitter.Node, src []byte, path strin
 	return n
 }
 
-// newCommandNode builds a KindCommand node whose lines + raw content come
-// from srcNode (the declaration or subcommand literal). Returns nil if the
-// domain constructor rejects the spec.
+// newCommandNode initializes a new command node from an AST node.
 func newCommandNode(id string, name string, srcNode *sitter.Node, src []byte, path string) *domain.Node {
 	n, err := domain.NewNode(
 		domain.NodeSpec{ID: id, Path: path, Name: name, Kind: domain.KindCommand},
@@ -560,13 +490,8 @@ func containsEdge(srcID, tgtID domain.NodeID) *domain.Edge {
 	return e
 }
 
-// containsEdgeSet accumulates command-tree CONTAINS edges, deduped per
-// (parent, child) — the wire-up shared by every command framework (cobra
-// AddCommand, urfave Commands slice, kong nested struct types). Each
-// recogniser differs only in how it resolves the parent/child pair; this
-// collapses the identical "key, skip-if-seen, build edge" tail. A repeated
-// registration of the same pair yields one edge; an edge the constructor
-// rejects is silently dropped.
+// containsEdgeSet tracks parent-child command containment relationships, deduplicating
+// relationships based on their parent and child node IDs.
 type containsEdgeSet struct {
 	edges []*domain.Edge
 	seen  map[string]bool
@@ -587,11 +512,7 @@ func (s *containsEdgeSet) add(parent, child domain.NodeID) {
 	}
 }
 
-// cobraContainsEdges turns every parent.AddCommand(child,.) call whose
-// parent and child(ren) both resolve to command nodes into parent→child
-// CONTAINS edges. Dedup is per (parent, child) so repeated registrations
-// produce one edge. Confidence is Definite — it's a literal wire-up, not
-// an inferred relationship.
+// cobraContainsEdges extracts command containment edges from cobra AddCommand calls.
 func cobraContainsEdges(matches []queryMatch, src []byte, byVar map[string]*domain.Node) []*domain.Edge {
 	set := newContainsEdgeSet()
 	for _, m := range matches {
@@ -622,26 +543,15 @@ func cobraContainsEdges(matches []queryMatch, src []byte, byVar map[string]*doma
 	return set.edges
 }
 
-// kongField is one `cmd:""`-tagged struct field promoted to a command: the
-// command node plus the bare name of the field's struct type, used to nest
-// subcommands (a command whose struct type has its own cmd fields CONTAINS
-// them).
+// kongField represents a struct field promoted to a kong command, tracking the
+// command node and the field's underlying type name.
 type kongField struct {
 	node     *domain.Node
 	declType string // bare type identifier of the field, "" if not a plain type
 }
 
-// addKongCommands promotes alecthomas/kong struct-tag commands. Each
-// `cmd:""`-tagged field of a struct becomes a KindCommand node named by its
-// `name:` tag or the dasherized field name. Nesting follows the field type,
-// not Go embedding: a command field of type T is the parent of every cmd
-// field declared on struct T, so the root CLI struct's fields fall out as
-// top-level commands (nothing has the CLI struct as a field type). Two
-// passes over the matches: build every command + the type→command index
-// first (a child struct may be declared before or after its parent), then
-// wire CONTAINS. v1 covers named fields with a plain (or
-// pointer) struct type; embedded/anonymous-struct command fields are
-// deferred.
+// addKongCommands promotes fields tagged with cmd to command nodes, establishing
+// containment edges based on their declaring struct types.
 func (c *frameworkCommands) addKongCommands(matches []queryMatch, p fwParse) {
 	// byType: bare struct type → the command node whose field has that type,
 	// i.e. the parent of that struct's own cmd fields.
@@ -672,10 +582,8 @@ func (c *frameworkCommands) addKongCommands(matches []queryMatch, p fwParse) {
 	c.edges = append(c.edges, set.edges...)
 }
 
-// buildKongField promotes one @kong.* match to a command node when its tag
-// carries a `cmd` key. Returns the containing struct's type name (the
-// fieldsOf / byType key), the field, and ok=false for non-command fields
-// (arg:/flag tags also match the query but lack a cmd key).
+// buildKongField constructs a kong command node from a tagged struct field,
+// returning the parent struct type and the promoted field type.
 func (c *frameworkCommands) buildKongField(m queryMatch, p fwParse) (string, kongField, bool) {
 	structNode := m.node("kong.struct.name")
 	nameNode := m.node("kong.field.name")
@@ -708,9 +616,8 @@ func (c *frameworkCommands) buildKongField(m queryMatch, p fwParse) (string, kon
 	return structName, kongField{node: n, declType: kongBareType(typeNode, p.src)}, true
 }
 
-// kongCommandName derives a kong command's display name: the `name:` tag
-// when set, otherwise the dasherized field name (kong lowercases and inserts
-// a dash at camelCase boundaries — ListUsers → list-users).
+// kongCommandName returns the display name for a kong command, using either the
+// name tag or a dasherized representation of the field name.
 func kongCommandName(fieldName string, tag reflect.StructTag) string {
 	if name := tag.Get("name"); name != "" {
 		return name
@@ -718,8 +625,7 @@ func kongCommandName(fieldName string, tag reflect.StructTag) string {
 	return dasherize(fieldName)
 }
 
-// dasherize lowercases s and inserts a dash before each interior upper-case
-// run boundary, approximating kong's field-name → command-name derivation.
+// dasherize formats a camelCase string into a lowercase dash-separated string.
 func dasherize(s string) string {
 	var b strings.Builder
 	for i, r := range s {
@@ -731,10 +637,7 @@ func dasherize(s string) string {
 	return b.String()
 }
 
-// kongBareType returns the bare type-identifier name of a field type,
-// unwrapping a single pointer (`*ServerCmd` → "ServerCmd"). Returns "" for
-// qualified, slice, map, or anonymous-struct types — those don't name a
-// local command struct, so the field has no nestable children.
+// kongBareType returns the bare type name of a field, unwrapping a single pointer if present.
 func kongBareType(typeNode *sitter.Node, src []byte) string {
 	switch typeNode.Type() {
 	case "type_identifier":
@@ -747,9 +650,8 @@ func kongBareType(typeNode *sitter.Node, src []byte) string {
 	return ""
 }
 
-// keyedStringValue returns the string value of the keyed_element named key
-// in a composite-literal body (`Use: "tool"` → "tool"), or "" when absent
-// or non-string. Handles both interpreted ("…") and raw (`…`) literals.
+// keyedStringValue returns the raw or interpreted string value of a keyed element in
+// a composite literal.
 func keyedStringValue(body *sitter.Node, src []byte, key string) string {
 	v := keyedElementValue(body, src, key)
 	if v == nil {
@@ -762,11 +664,7 @@ func keyedStringValue(body *sitter.Node, src []byte, key string) string {
 	return ""
 }
 
-// keyedElementValue returns the inner value node of the keyed_element
-// named key in a composite-literal body, or nil when absent. The
-// literal_value's keyed_element children wrap a literal_element(key
-// identifier) and a literal_element(value); this returns the value
-// element's inner node (a string literal, composite_literal, etc.).
+// keyedElementValue retrieves the value node of a keyed element in a composite literal.
 func keyedElementValue(body *sitter.Node, src []byte, key string) *sitter.Node {
 	named := int(body.NamedChildCount())
 	for i := range named {
@@ -786,9 +684,8 @@ func keyedElementValue(body *sitter.Node, src []byte, key string) *sitter.Node {
 	return nil
 }
 
-// literalElementText returns the text of a literal_element's inner node
-// when that node has the wanted type, else "". Struct keys/values are
-// wrapped one level deep (literal_element → identifier / string).
+// literalElementText extracts the string content of a literal element's inner node
+// if it matches the expected type.
 func literalElementText(el *sitter.Node, src []byte, wantType string) string {
 	if el == nil || int(el.NamedChildCount()) == 0 {
 		return ""
@@ -800,9 +697,7 @@ func literalElementText(el *sitter.Node, src []byte, wantType string) string {
 	return string(src[inner.StartByte():inner.EndByte()])
 }
 
-// firstWord returns the first whitespace-delimited token of s, or "".
-// cobra's Use: is a "verb [positional args]" usage string, so the verb is
-// the command name; urfave's Name: is already a single token.
+// firstWord returns the first whitespace-delimited token in a string.
 func firstWord(s string) string {
 	f := strings.Fields(s)
 	if len(f) == 0 {

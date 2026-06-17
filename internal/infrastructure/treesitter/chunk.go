@@ -7,24 +7,13 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/core/domain"
 )
 
-// chunkLineWindow is the size of one chunk in lines. 80 is a
-// compromise: small enough that a single chunk's embedding stays
-// semantically focused (a long function body across multiple chunks
-// still gets distinct embeddings per section), large enough that the
-// chunk count per file stays bounded and the embedding cost is
-// proportionate to file size, not symbol count. Semble uses a similar
-// window.
+// chunkLineWindow specifies the line window size for a single chunk. An 80-line window
+// balances semantic focus for search embeddings with chunk count limits per file.
 const chunkLineWindow = 80
 
-// chunkFile walks src in chunkLineWindow-sized line windows and emits
-// one KindChunk node per window whose line range is NOT fully covered
-// by an existing symbol. Symbols already produce per-symbol embeddings;
-// chunks fill in everything between them — package vars, init guts,
-// top-of-file commentary, helper TS modules without classes — so
-// semantic search can find non-declaration code.
-// IDs are deterministic per (repoID, path, start, end) so promotion is
-// idempotent. raw_content is populated so the embedder + FTS index
-// pick the chunk up through the same pipeline as symbol nodes.
+// chunkFile divides the file into fixed-size line windows and emits a KindChunk node
+// for gaps that are not covered by any symbol node. This ensures that non-declaration
+// code (like init logic or module helpers) remains searchable.
 func chunkFile(repoID, path string, src []byte, symbols []*domain.Node) []*domain.Node {
 	if len(src) == 0 {
 		return nil
@@ -36,11 +25,8 @@ func chunkFile(repoID, path string, src []byte, symbols []*domain.Node) []*domai
 		return nil
 	}
 
-	// Walk the file's [1, totalLines] range in left-to-right order,
-	// emitting chunks for each maximal gap between symbol ranges. A
-	// chunk never overlaps a symbol: symbols are already indexed as
-	// their own nodes, so re-embedding their body inside a chunk would
-	// just duplicate retrieval candidates.
+	// We emit chunks only for gaps between symbol ranges to prevent redundant indexing
+	// of symbols that are already retrieved separately.
 	uncovered := uncoveredRanges(symbols, totalLines)
 
 	var chunks []*domain.Node
@@ -50,14 +36,12 @@ func chunkFile(repoID, path string, src []byte, symbols []*domain.Node) []*domai
 			startByte := lineStarts[start-1]
 			var endByte int
 			if end < totalLines {
-				endByte = lineStarts[end] // start of next line, exclusive
+				endByte = lineStarts[end]
 			} else {
 				endByte = len(src)
 			}
 			body := string(src[startByte:endByte])
-			// Skip whitespace-only windows (blank-line gaps between
-			// symbols). They embed to near-anything and pollute search
-			// results, ranking above real code.
+			// Skip whitespace-only windows to avoid polluting search results with blank lines.
 			if strings.TrimSpace(body) == "" {
 				continue
 			}
@@ -73,11 +57,9 @@ func chunkFile(repoID, path string, src []byte, symbols []*domain.Node) []*domai
 	return chunks
 }
 
-// uncoveredRanges returns the maximal [start,end] line intervals within
-// [1, totalLines] that are NOT covered by any symbol's Lines range.
-// Used by chunkFile to emit chunks only for non-declaration code.
+// uncoveredRanges returns the maximal line intervals that are not covered by any symbol.
 func uncoveredRanges(symbols []*domain.Node, totalLines int) []domain.LineRange {
-	covered := make([]bool, totalLines+2) // sentinel slots for boundary loop
+	covered := make([]bool, totalLines+2)
 	for _, s := range symbols {
 		if s == nil || s.Lines == nil {
 			continue
@@ -107,10 +89,7 @@ func uncoveredRanges(symbols []*domain.Node, totalLines int) []domain.LineRange 
 	return out
 }
 
-// bytesToLineOffsets returns a slice where index i is the byte offset
-// of the start of line (i+1). Used to convert line-window boundaries
-// back to a byte slice for raw_content. A trailing newline contributes
-// no extra entry; the last line is the one containing the final byte.
+// bytesToLineOffsets returns the byte offsets corresponding to the start of each line.
 func bytesToLineOffsets(src []byte) []int {
 	if len(src) == 0 {
 		return nil
@@ -123,3 +102,4 @@ func bytesToLineOffsets(src []byte) []int {
 	}
 	return offsets
 }
+

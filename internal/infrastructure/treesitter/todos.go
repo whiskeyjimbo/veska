@@ -7,26 +7,15 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/core/domain"
 )
 
-// todoMarkers is the closed set of marker tokens scanTodos recognises.
-// We deliberately exclude generic words ("NOTE", "HACK") to keep the
-// signal-to-noise ratio high — only actionable markers are surfaced.
+// todoMarkers lists the target keywords scanned by scanTodos. Generic terms like
+// NOTE or HACK are omitted to maintain high signal quality.
 var todoMarkers = []string{"TODO", "FIXME", "XXX"}
 
-// scanTodos walks src once line-by-line and returns a ParseTodo for each
-// line that begins (after optional comment leaders and whitespace) with
-// one of the recognised markers.
-// The scan is lexical and language-agnostic: it understands the common
-// single-line and block-comment leaders //, #, /*, *, --, <!--,; and any
-// run of whitespace before the marker. It does NOT distinguish code from
-// strings — a literal containing "// TODO" would be flagged. We accept
-// this false-positive rate as the cost of language-independence: the
-// alternative is a per-language tree-sitter query, which costs an order
-// of magnitude more code for marginal precision.
-// Each emitted ParseTodo.Line is 1-based. ParseTodo.Message is the
-// substring of the line FROM the marker onward, with the trailing
-// closing comment leader (*/ or -->) stripped and whitespace trimmed.
-// The marker itself is included in the message so renderers can show
-// "TODO: foo" vs "FIXME: bar" without an extra field.
+// scanTodos extracts TODO, FIXME, and XXX comments from source text. The scanner is
+// lexical and language-agnostic to avoid the overhead of language-specific parsers.
+// Because the scanner is lexical, it may flag markers inside string literals. Returned
+// line numbers are 1-based. The message starts from the marker keyword and extends
+// to the end of the line with comment closers (like `*/` or `-->`) stripped.
 func scanTodos(src []byte) []domain.ParseTodo {
 	if len(src) == 0 {
 		return nil
@@ -46,13 +35,10 @@ func scanTodos(src []byte) []domain.ParseTodo {
 	return out
 }
 
-// matchTodoLine returns a populated ParseTodo when raw (one line, no
-// trailing newline) starts with a recognised TODO marker after the
-// optional comment-leader run.
+// matchTodoLine parses a single line and returns a ParseTodo if it contains a
+// supported marker keyword.
 func matchTodoLine(raw []byte, line int) (domain.ParseTodo, bool) {
-	// Find where the comment content begins. We skip whitespace, then
-	// known leader runs, then whitespace again. Repeating until stable
-	// handles cases like " // " and "/* TODO".
+	// Skip preceding whitespace and comment leaders.
 	i := 0
 	for {
 		j := i
@@ -83,13 +69,13 @@ func matchTodoLine(raw []byte, line int) (domain.ParseTodo, bool) {
 		if !bytes.HasPrefix(rest, []byte(m)) {
 			continue
 		}
-		// The character right after the marker must be a word boundary
-		// so "TODOLIST" is not flagged as a TODO.
+		// Check that the marker is followed by a word boundary to prevent matching prefixes
+		// (such as 'TODOLIST').
 		boundary := len(m) == len(rest) || isMarkerBoundary(rest[len(m)])
 		if !boundary {
 			continue
 		}
-		// Strip a trailing block-comment closer if present.
+		// Strip trailing block comment closers.
 		msg := strings.TrimRight(string(rest), " \t")
 		msg = strings.TrimSuffix(msg, "*/")
 		msg = strings.TrimSuffix(msg, "-->")
@@ -99,9 +85,8 @@ func matchTodoLine(raw []byte, line int) (domain.ParseTodo, bool) {
 	return domain.ParseTodo{}, false
 }
 
-// isMarkerBoundary returns true when b is a character that legitimately
-// terminates a TODO marker — colon, whitespace, or a punctuation that
-// commonly follows a marker word.
+// isMarkerBoundary returns true if the given byte is a valid separator following
+// a marker keyword.
 func isMarkerBoundary(b byte) bool {
 	switch b {
 	case ':', ' ', '\t', '(', '[', '-', '!', '.', '?', ',':

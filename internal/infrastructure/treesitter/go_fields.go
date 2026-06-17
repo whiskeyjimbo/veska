@@ -4,30 +4,18 @@ import (
 	sitter "github.com/smacker/go-tree-sitter"
 )
 
-// This file holds the struct-field-type analysis used by collectCallNames to
-// resolve chained-selector method calls `s.field.M`: the fieldType record and
-// the walkers that build a struct-name → field-name → fieldType map. The
-// call-extraction and node-building helpers live in go.go.
+// This file implements the struct field type analysis used to resolve chained selector
+// method calls like `s.field.Method()`. The call extraction logic itself resides in go.go.
 
-// fieldType describes a struct field's declared type for the limited
-// purpose of resolving chained-selector method calls `s.field.M`. The
-// parser strips pointer/slice/etc. modifiers and records the base type
-// name plus an optional package qualifier.
-// Phase E v1 only acts on fields whose pkg=="" (same-package concrete
-// types) — those bind directly to the method node already in the
-// file's symbol map. Cross-package field types and interface-typed
-// fields are captured but the resolver currently ignores them; they
-// remain TODOs for phase E v2.
+// fieldType describes a struct field's declared type. It stores the base type name
+// and package qualifier with pointer, slice, and array modifiers stripped.
 type fieldType struct {
 	pkg  string // empty for fields declared with a local type name
 	name string // base type name with *,, chan etc. stripped
 }
 
-// collectStructFields walks every top-level type_declaration with a
-// struct_type body and returns a map of struct-name -> field-name ->
-// fieldType, keyed by the struct name as it appears in the type_spec
-// (without any pointer/slice prefix). Used by collectCallNames to
-// resolve `s.field.M` chains where s is the method receiver.
+// collectStructFields extracts field types for all top-level struct declarations in a file.
+// The returned map is used to resolve method calls on struct fields.
 func collectStructFields(root *sitter.Node, src []byte) map[string]map[string]fieldType {
 	out := map[string]map[string]fieldType{}
 	count := int(root.ChildCount())
@@ -57,11 +45,9 @@ func collectStructFields(root *sitter.Node, src []byte) map[string]map[string]fi
 	return out
 }
 
-// extractStructFields parses a struct_type node's field_declaration
-// children into a name -> fieldType map. Skips field declarations the
-// parser can't represent cleanly (embedded types without a name, struct
-// tags-only nodes, anonymous fields). Multiple names sharing one type
-// (`a, b int`) each map to the same fieldType.
+// extractStructFields parses field declarations from a struct body. Multiple fields
+// sharing a single type definition (for example, `a, b int`) each map to their
+// shared type.
 func extractStructFields(structNode *sitter.Node, src []byte) map[string]fieldType {
 	out := map[string]fieldType{}
 	// struct_type -> field_declaration_list -> field_declaration
@@ -79,9 +65,8 @@ func walkStructFields(n *sitter.Node, src []byte, out map[string]fieldType) {
 		if typeNode != nil {
 			ft, ok := classifyFieldType(typeNode, src)
 			if ok {
-				// Field name nodes are the named children typed 'field_identifier'
-				// before the type node. Tree-sitter exposes them under 'name'
-				// when there is one and as separate named children otherwise.
+				// Tree-sitter Go grammar exposes fields under the name field when singular, or as
+				// sibling children of type field_identifier when multiple fields are declared together.
 				namedCount := int(n.NamedChildCount())
 				for i := range namedCount {
 					nc := n.NamedChild(i)
@@ -103,12 +88,10 @@ func walkStructFields(n *sitter.Node, src []byte, out map[string]fieldType) {
 	}
 }
 
-// classifyFieldType extracts the base type name + optional package
-// qualifier from a struct field's type node. Pointer (`*T`), slice
-// (`T`), and channel (`chan T`) prefixes are stripped — for the
-// purpose of method-call resolution we just need the underlying type.
-// Returns ok=false for shapes the resolver can't act on (function
-// types, map types, anonymous struct/interface literals,.).
+// classifyFieldType extracts the base type name and optional package qualifier from
+// a field's type node, stripping pointer, slice, array, and channel modifiers.
+// It returns false for unsupported types like functions, maps, or anonymous
+// struct/interface literals.
 func classifyFieldType(typeNode *sitter.Node, src []byte) (fieldType, bool) {
 	switch typeNode.Type() {
 	case "pointer_type":
