@@ -177,11 +177,39 @@ func TestDispatch_ToolsCallRoutesByName(t *testing.T) {
 	if rpcErr != nil {
 		t.Fatalf("tools/call error: %+v", rpcErr)
 	}
-	if result != "found" {
-		t.Errorf("expected handler return 'found', got %v", result)
+	// tools/call wraps the handler payload in the MCP CallToolResult envelope.
+	ctr, ok := result.(CallToolResult)
+	if !ok {
+		t.Fatalf("expected CallToolResult, got %T", result)
+	}
+	if len(ctr.Content) != 1 || ctr.Content[0].Type != "text" || ctr.Content[0].Text != "\"found\"" {
+		t.Errorf("expected text content '\"found\"', got %+v", ctr.Content)
+	}
+	if ctr.StructuredContent != "found" {
+		t.Errorf("expected structuredContent 'found', got %v", ctr.StructuredContent)
 	}
 	if string(gotParams) != string(args) {
 		t.Errorf("handler got params %s, want %s", gotParams, args)
+	}
+}
+
+// TestDispatch_FlatPathReturnsBarePayload pins that the legacy flat-dispatch
+// path (method == tool name, used by the CLI via mcpclient) is NOT wrapped in
+// the CallToolResult envelope - only tools/call is (solov2-z3mu).
+func TestDispatch_FlatPathReturnsBarePayload(t *testing.T) {
+	r := NewRegistry()
+	r.MustRegister(ToolSpec{
+		Name: "eng_find_symbol", Description: "find symbol by name",
+		Handler: func(_ context.Context, _ domain.Actor, _ json.RawMessage) (any, *RPCError) {
+			return "found", nil
+		},
+	})
+	result, rpcErr := r.Dispatch(context.Background(), domain.Actor{}, &Request{Method: "eng_find_symbol", Params: json.RawMessage(`{}`)})
+	if rpcErr != nil {
+		t.Fatalf("flat dispatch error: %+v", rpcErr)
+	}
+	if result != "found" {
+		t.Errorf("flat path should return the bare payload 'found', got %v", result)
 	}
 }
 

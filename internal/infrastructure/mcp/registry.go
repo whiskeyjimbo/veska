@@ -323,7 +323,47 @@ func (r *Registry) handleToolsCall(ctx context.Context, actor domain.Actor, raw 
 	}
 	ctx, span := observability.StartSpan(ctx, r.tracerProvider(), "mcp."+p.Name)
 	defer span.End()
-	return spec.Handler(ctx, actor, p.Arguments)
+	result, rpcErr := spec.Handler(ctx, actor, p.Arguments)
+	if rpcErr != nil {
+		return nil, rpcErr
+	}
+	// tools/call must return the MCP CallToolResult envelope, not the bare
+	// handler payload. Spec-compliant clients (Claude Code) render the
+	// content[] blocks; a bare object has no content[] and shows as empty
+	// output (solov2-z3mu). The flat-dispatch path (Dispatch) keeps returning
+	// the bare payload - the CLI/mcpclient consumes that shape directly.
+	return newCallToolResult(result)
+}
+
+// CallToolResult is the MCP-spec envelope for a tools/call response. content is
+// the load-bearing field every compliant client renders; structuredContent is
+// the same payload in object form for clients that prefer it.
+type CallToolResult struct {
+	Content           []ToolContent `json:"content"`
+	StructuredContent any           `json:"structuredContent,omitempty"`
+	IsError           bool          `json:"isError,omitempty"`
+}
+
+// ToolContent is one MCP content block. Only text blocks are emitted; the text
+// is the JSON-serialised handler payload.
+type ToolContent struct {
+	Type string `json:"type"`
+	Text string `json:"text"`
+}
+
+// newCallToolResult wraps a handler payload in the tools/call envelope.
+func newCallToolResult(payload any) (any, *RPCError) {
+	text, err := json.MarshalIndent(payload, "", "  ")
+	if err != nil {
+		return nil, &RPCError{
+			Code:    CodeInternalError,
+			Message: fmt.Sprintf("tools/call: marshal result: %v", err),
+		}
+	}
+	return CallToolResult{
+		Content:           []ToolContent{{Type: "text", Text: string(text)}},
+		StructuredContent: payload,
+	}, nil
 }
 
 func (r *Registry) Handle(ctx context.Context, actor domain.Actor, req *Request) (any, *RPCError) {
