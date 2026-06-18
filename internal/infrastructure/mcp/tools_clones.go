@@ -31,6 +31,7 @@ var findClonesInputSchema = []byte(`{
     "branch":    {"type": "string", "description": "Branch to scan. Defaults to the repo's active branch."},
     "mode":      {"type": "string", "enum": ["exact", "near"], "description": "exact (default): byte-identical clones via content_hash, populates 'groups'. near: fuzzy clusters from thresholded SIMILAR_TO edges, populates 'clusters'."},
     "min_score": {"type": "number", "description": "near mode only: minimum SIMILAR_TO edge score (higher = more similar). Omit to use the default calibrated for the elected embedder (model spaces differ; near-dup and 'related' bands overlap, so this is a high-precision/partial-recall knob). Lower it for more recall."},
+    "limit":     {"type": "integer", "minimum": 1, "description": "Max groups/clusters to return (default 100). The response 'total' reports the full count and 'truncated' is true when capped."},
     "cwd":       {"type": "string", "description": "Working directory used to resolve the active repo when repo_id is omitted."}
   }
 }`)
@@ -40,6 +41,7 @@ type findClonesParams struct {
 	Branch   string  `json:"branch"`
 	Mode     string  `json:"mode"`
 	MinScore float32 `json:"min_score"`
+	Limit    int     `json:"limit,omitempty"`
 }
 
 type cloneMemberDTO struct {
@@ -65,10 +67,13 @@ type nearClusterDTO struct {
 }
 
 // FindClonesResponse returns duplicate code groups or clusters, defaulting collections to empty slices to ensure safe client serialization.
+// Total is the full unclamped count of the active mode's collection; Truncated is true when the page was capped.
 type FindClonesResponse struct {
-	Mode     string           `json:"mode"`
-	Groups   []cloneGroupDTO  `json:"groups"`
-	Clusters []nearClusterDTO `json:"clusters"`
+	Mode      string           `json:"mode"`
+	Groups    []cloneGroupDTO  `json:"groups"`
+	Clusters  []nearClusterDTO `json:"clusters"`
+	Total     int              `json:"total"`
+	Truncated bool             `json:"truncated"`
 }
 
 func RegisterCloneTools(r *Registry, finder CloneFinder, repos application.RepoLister) {
@@ -110,11 +115,17 @@ func makeFindClonesHandler(finder CloneFinder, repos application.RepoLister) Too
 			return nil, rpcErr
 		}
 
+		limit := clampListLimit(p.Limit)
 		resp := FindClonesResponse{Mode: mode, Groups: []cloneGroupDTO{}, Clusters: []nearClusterDTO{}}
 		if mode == "near" {
 			clusters, err := finder.NearDuplicates(ctx, repoID, branch, p.MinScore)
 			if err != nil {
 				return nil, &RPCError{Code: CodeInternalError, Message: fmt.Sprintf("find_clones: %v", err)}
+			}
+			resp.Total = len(clusters)
+			if len(clusters) > limit {
+				clusters = clusters[:limit]
+				resp.Truncated = true
 			}
 			resp.Clusters = nearClustersToDTO(clusters)
 			return resp, nil
@@ -122,6 +133,11 @@ func makeFindClonesHandler(finder CloneFinder, repos application.RepoLister) Too
 		groups, err := finder.ExactClones(ctx, repoID, branch)
 		if err != nil {
 			return nil, &RPCError{Code: CodeInternalError, Message: fmt.Sprintf("find_clones: %v", err)}
+		}
+		resp.Total = len(groups)
+		if len(groups) > limit {
+			groups = groups[:limit]
+			resp.Truncated = true
 		}
 		resp.Groups = cloneGroupsToDTO(groups)
 		return resp, nil

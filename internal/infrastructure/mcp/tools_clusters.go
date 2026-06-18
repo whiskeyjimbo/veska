@@ -28,6 +28,7 @@ var findClustersInputSchema = []byte(`{
     "tiers":     {"type": "string", "description": "Comma-separated subset of exact,structural,near. Omit for all tiers."},
     "min_score": {"type": "number", "description": "near tier only: minimum SIMILAR_TO score. Omit for the elected embedder's calibrated default; lower for more recall."},
     "path":      {"type": "string", "description": "Restrict to nodes whose file_path starts with this prefix (e.g. internal/infrastructure/mcp)."},
+    "limit":     {"type": "integer", "minimum": 1, "description": "Max clusters to return (default 100). The response 'total' reports the full count and 'truncated' is true when capped."},
     "cwd":       {"type": "string", "description": "Working directory used to resolve the active repo when repo_id is omitted (scope=repo)."}
   }
 }`)
@@ -39,6 +40,7 @@ type findClustersParams struct {
 	Tiers    string  `json:"tiers"`
 	MinScore float32 `json:"min_score"`
 	Path     string  `json:"path"`
+	Limit    int     `json:"limit,omitempty"`
 }
 
 // clusterMemberDTO represents one symbol in a cluster, containing RepoID so cross-repo matches are actionable.
@@ -62,9 +64,12 @@ type clusterDTO struct {
 }
 
 // FindClustersResponse is the response envelope where Clusters is guaranteed non-null to prevent serialization issues.
+// Total is the full unclamped cluster count; Truncated is true when the page was capped.
 type FindClustersResponse struct {
-	Scope    string       `json:"scope"`
-	Clusters []clusterDTO `json:"clusters"`
+	Scope     string       `json:"scope"`
+	Clusters  []clusterDTO `json:"clusters"`
+	Total     int          `json:"total"`
+	Truncated bool         `json:"truncated"`
 }
 
 func makeFindClustersHandler(finder CloneFinder, repos application.RepoLister) ToolHandler {
@@ -109,7 +114,14 @@ func makeFindClustersHandler(finder CloneFinder, repos application.RepoLister) T
 		if err != nil {
 			return nil, &RPCError{Code: CodeInternalError, Message: fmt.Sprintf("find_clusters: %v", err)}
 		}
-		return FindClustersResponse{Scope: scope, Clusters: clustersToDTO(clusters)}, nil
+		resp := FindClustersResponse{Scope: scope, Total: len(clusters)}
+		limit := clampListLimit(p.Limit)
+		if len(clusters) > limit {
+			clusters = clusters[:limit]
+			resp.Truncated = true
+		}
+		resp.Clusters = clustersToDTO(clusters)
+		return resp, nil
 	}
 }
 

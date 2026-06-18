@@ -99,6 +99,8 @@ type listFindingsParams struct {
 	Rule     string `json:"rule,omitempty"`
 	// IncludeSuppressed returns findings hidden by active suppressions.
 	IncludeSuppressed bool `json:"include_suppressed,omitempty"`
+	// Limit caps the number of findings returned (default 100). total/truncated report the full set.
+	Limit int `json:"limit,omitempty"`
 }
 
 type findingRow struct {
@@ -190,8 +192,17 @@ func makeListFindingsHandler(db *sql.DB, repos application.RepoLister) ToolHandl
 		}
 		defer rows.Close()
 
-		findings := make([]findingRow, 0)
+		// Cap the page to keep the serialized payload bounded - the full result
+		// set on a large repo overflows the agent context and pressures memory.
+		// We keep scanning past the cap only to count total, never retaining rows.
+		limit := clampListLimit(p.Limit)
+		findings := make([]findingRow, 0, limit)
+		total := 0
 		for rows.Next() {
+			total++
+			if len(findings) >= limit {
+				continue
+			}
 			var f findingRow
 			if err := rows.Scan(
 				&f.FindingID, &f.Branch, &f.RepoID, &f.NodeID, &f.FilePath,
@@ -210,6 +221,8 @@ func makeListFindingsHandler(db *sql.DB, repos application.RepoLister) ToolHandl
 
 		return map[string]any{
 			"findings":         findings,
+			"total":            total,
+			"truncated":        total > len(findings),
 			"degraded_reasons": []string{},
 		}, nil
 	}

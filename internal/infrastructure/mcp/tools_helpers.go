@@ -18,6 +18,21 @@ import (
 // minRepoIDPrefix is the minimum prefix length allowed when resolving a repository ID alias to prevent collisions.
 const minRepoIDPrefix = 4
 
+// defaultListLimit caps the top-level collection of unbounded list tools
+// (clones, clusters, findings) so a first page fits an agent's context budget.
+// Callers can override via an explicit "limit" param; total/truncated report
+// the full result set so the agent knows more exists.
+const defaultListLimit = 100
+
+// clampListLimit returns the effective page size: the explicit limit when
+// positive, otherwise the default cap.
+func clampListLimit(limit int) int {
+	if limit <= 0 {
+		return defaultListLimit
+	}
+	return limit
+}
+
 // resolveRepoID resolves a repository identifier alias, short ID, or prefix to its full canonical ID.
 func resolveRepoID(ctx context.Context, repos application.RepoLister, repoID string) (string, *RPCError) {
 	if repos == nil {

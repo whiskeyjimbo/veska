@@ -341,6 +341,7 @@ var listFindingsInputSchema = json.RawMessage(`{
     "severity":           {"type": "string", "enum": ["critical", "high", "medium", "low", "info"]},
     "rule":               {"type": "string", "description": "Rule name (e.g. 'vulnerable_dependency', 'dead-code', 'secret_leak')."},
     "include_suppressed": {"type": "boolean", "description": "Surface findings hidden by an active suppression (default false)."},
+    "limit":              {"type": "integer", "minimum": 1, "description": "Max findings to return (default 100). The response 'total' reports the full count and 'truncated' is true when capped."},
     "cwd":                {"type": "string", "description": "Working directory used to resolve the active repo when repo_id is omitted."}
   }
 }`)
