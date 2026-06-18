@@ -258,7 +258,7 @@ func TestPromote_Idempotent(t *testing.T) {
 
 // TestPromote_AdvancesLastPromotedSHA verifies that a successful Promote writes
 // repos.last_promoted_sha and repos.active_branch atomically with the node
-// rows — the contract that StartupResync's cheap-path check depends on
+// rows - the contract that StartupResync's cheap-path check depends on
 // The first promote stamps the SHA; a second promote with a
 // different SHA overwrites it; an empty-batch (no-op) promote leaves it
 // unchanged; a promote with an empty SHA does NOT clobber a known-good value.
@@ -290,7 +290,7 @@ func TestPromote_AdvancesLastPromotedSHA(t *testing.T) {
 	}
 
 	// Empty-batch promote (registered repo, nothing staged) returns nil and
-	// must not touch the row — the early-return guards before BEGIN TX.
+	// must not touch the row - the early-return guards before BEGIN TX.
 	if err := p.Promote(context.Background(), "repo1", "topic", "sha-noop", actor); err != nil {
 		t.Fatalf("empty-batch Promote: %v", err)
 	}
@@ -375,7 +375,7 @@ func TestPromoteRegisteredRepo(t *testing.T) {
 	sa := staging.NewArea()
 	p := newTestPromoter(sa, db)
 
-	// Empty staging — should return nil (not application.ErrUnregisteredRepo).
+	// Empty staging - should return nil (not application.ErrUnregisteredRepo).
 	if err := p.Promote(context.Background(), "known-repo", "main", "sha-abc", domain.Actor{ID: "service:veska", Kind: domain.ActorKindSystem}); err != nil {
 		t.Fatalf("expected no error for registered repo, got: %v", err)
 	}

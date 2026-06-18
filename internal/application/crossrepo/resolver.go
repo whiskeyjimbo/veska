@@ -2,12 +2,12 @@
 // repository and aggregates per-repo hit counts for a given symbol or
 // finding query.
 // Today each surface (`veska symbol`, `veska findings list`, `veska search`)
-// is one-repo-scoped — a junior on repo A who runs `veska symbol Greeter`
+// is one-repo-scoped - a junior on repo A who runs `veska symbol Greeter`
 // gets "no matches" with no hint that Greeter is defined in repo B. This
 // resolver gives those surfaces one shared way to ask "where does this
 // symbol live across the registry?" so they can format consistent hints
 // ("no matches in A; 1 in B"). The resolver itself does not change any
-// CLI output — that lives in the surfaces ( / 0vau / vm5w).
+// CLI output - that lives in the surfaces ( / 0vau / vm5w).
 package crossrepo
 
 import (
@@ -54,7 +54,7 @@ type RepoMatch struct {
 }
 
 // Resolver coordinates a multi-repo symbol probe. Construction takes the
-// list-and-lookup pair so callers can swap in fakes — the daemon wires a
+// list-and-lookup pair so callers can swap in fakes - the daemon wires a
 // real repo registry + ports.GraphStorage.FindNodes; tests use stubs.
 type Resolver struct {
 	repos  RepoLister
@@ -76,7 +76,7 @@ func New(repos RepoLister, lookup SymbolLookup) (*Resolver, error) {
 // matches anywhere" (empty slice) and "matches in other repos" by length
 // alone. The slice preserves repo-registry order so callers see a stable
 // listing across invocations.
-// Per-repo lookup errors are NOT fatal — one stuck repo would otherwise
+// Per-repo lookup errors are NOT fatal - one stuck repo would otherwise
 // suppress the entire cross-repo hint. They are returned in the second
 // return value via errors.Join so a caller that wants to surface them
 // (e.g. doctor) still has access; surfaces that only render hints can

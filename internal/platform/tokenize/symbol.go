@@ -4,8 +4,8 @@
 // Why pre-tokenise in Go rather than register a custom FTS5 tokenizer?
 // Custom tokenizers are platform-specific and brittle to wire through
 // database/sql. Pre-tokenising on the write path lets unicode61 do what
-// it already does well — lower-case folding, diacritic stripping,
-// latin-script word splitting — while the upstream Go code is responsible
+// it already does well - lower-case folding, diacritic stripping,
+// latin-script word splitting - while the upstream Go code is responsible
 // for the splits unicode61 cannot make (camelCase, snake_case, `::`, `.`).
 package tokenize
 
@@ -38,7 +38,7 @@ func Symbol(text string) string {
 
 	// First, emit the whole input as one chunk with non-alnum runes
 	// converted to spaces. This preserves the "raw" string in a form
-	// that unicode61 can tokenise — e.g. "pkg/api.closeFinding" →
+	// that unicode61 can tokenise - e.g. "pkg/api.closeFinding" →
 	// "pkg api closeFinding".
 	flattened := flattenNonAlnum(text)
 	out.WriteString(flattened)
@@ -47,7 +47,7 @@ func Symbol(text string) string {
 	// splitting and append those expansions.
 	for chunk := range strings.FieldsSeq(flattened) {
 		parts := splitCamel(chunk)
-		// Only append the parts if there are at least two — otherwise the
+		// Only append the parts if there are at least two - otherwise the
 		// chunk is already a single word and would just be duplicated.
 		if len(parts) >= 2 {
 			for _, p := range parts {

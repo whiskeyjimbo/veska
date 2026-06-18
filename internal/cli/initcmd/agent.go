@@ -22,66 +22,66 @@ const AgentSnippetSentinel = "<!-- veska:init -->"
 // agentSnippetBody is the per-agent instruction block.
 // Lists the four MCP tools an agent reaches for most often plus a
 // one-line "when to use" so the agent doesn't have to guess. Kept
-// terse on purpose — these files are loaded into every conversation
+// terse on purpose - these files are loaded into every conversation
 // and long blocks consume context the agent could spend on the task.
 const agentSnippetBody = AgentSnippetSentinel + `
 ## Veska code-graph tools
 
 This repo is indexed by Veska. Prefer these MCP tools over re-grepping the
-tree — they reason from the parsed graph, not raw text.
+tree - they reason from the parsed graph, not raw text.
 
 **` + "`repo_id`" + ` and ` + "`branch`" + ` are usually optional.** The daemon resolves
-` + "`repo_id`" + ` from cwd (preferred — works in multi-repo setups) or, as a
+` + "`repo_id`" + ` from cwd (preferred - works in multi-repo setups) or, as a
 fallback, from the single registered repo. ` + "`branch`" + ` defaults to the
 repo's active branch. Pass them explicitly only when operating outside the
 cwd repo or against a non-current branch. Discovery helpers:
 ` + "`eng_get_current_repo`" + ` (cwd → repo) and ` + "`eng_list_repos`" + ` (full set).
 
-- ` + "`eng_search_semantic`" + ` — natural-language → ranked code chunks. Use when
+- ` + "`eng_search_semantic`" + ` - natural-language → ranked code chunks. Use when
   the user describes behavior ("where do we validate session tokens"). Inline
   snippets are returned; you usually don't need a follow-up Read.
   Example: ` + "`{query: \"parse config\"}`" + ` (or pass ` + "`repo_id`" + `/` + "`branch`" + ` explicitly).
 
-- ` + "`eng_find_symbol`" + ` — exact symbol lookup by name or symbol_path. Use
+- ` + "`eng_find_symbol`" + ` - exact symbol lookup by name or symbol_path. Use
   when you know the identifier ("show me ParseConfig").
 
-- ` + "`eng_get_call_chain`" + ` — CALLS-edge BFS for a node. Accepts either
+- ` + "`eng_get_call_chain`" + ` - CALLS-edge BFS for a node. Accepts either
   ` + "`node_id`" + ` or ` + "`symbol`" + ` (parity with ` + "`eng_find_symbol`" + `), and
   ` + "`direction`" + ` = ` + "`out`" + ` (default, callees) / ` + "`in`" + ` (callers) /
   ` + "`both`" + `. Use to answer "what does this reach" (` + "`out`" + `) or "what calls
   this" (` + "`in`" + `) without manually tracing through files.
 
-- ` + "`eng_get_context_pack`" + ` — bundles a seed node with its callers,
+- ` + "`eng_get_context_pack`" + ` - bundles a seed node with its callers,
   callees, and tests into a single payload. Use at the start of a non-trivial
   change so you don't have to assemble the surrounding context piecewise.
 
-**Other tools available** — call ` + "`tools/list`" + ` for full schemas; reach
+**Other tools available** - call ` + "`tools/list`" + ` for full schemas; reach
 for these when the four above aren't enough:
 
-- ` + "`eng_get_node`" + `, ` + "`eng_get_file_nodes`" + ` — node-by-id /
+- ` + "`eng_get_node`" + `, ` + "`eng_get_file_nodes`" + ` - node-by-id /
   per-file listing when you already have an identifier.
-- ` + "`eng_find_changed_symbols`" + `, ` + "`eng_get_diff_blast_radius`" + ` — symbol-grain
+- ` + "`eng_find_changed_symbols`" + `, ` + "`eng_get_diff_blast_radius`" + ` - symbol-grain
   diff and downstream-impact between two git refs, for PR review and regression triage.
-- ` + "`eng_list_repos`" + `, ` + "`eng_get_repo`" + `, ` + "`eng_get_current_repo`" + ` — repo registry inspection.
-- ` + "`eng_list_dependencies`" + ` — modules this repo calls into, with sampled call-sites.
+- ` + "`eng_list_repos`" + `, ` + "`eng_get_repo`" + `, ` + "`eng_get_current_repo`" + ` - repo registry inspection.
+- ` + "`eng_list_dependencies`" + ` - modules this repo calls into, with sampled call-sites.
 - ` + "`eng_list_findings`" + `, ` + "`eng_get_finding`" + `, ` + "`eng_close_finding`" + `, ` + "`eng_suppress_finding`" + `,
-  ` + "`eng_list_suppressions`" + `, ` + "`eng_close_suppression`" + ` — promotion-check findings:
+  ` + "`eng_list_suppressions`" + `, ` + "`eng_close_suppression`" + ` - promotion-check findings:
   vuln deps, secret leaks, dead code, auto-link candidates. Use ` + "`eng_close_finding`" + `
   to record an "accept" / "fixed" decision an agent can defend later.
-- ` + "`eng_add_repo`" + ` — register a new repo path; the daemon kicks off a cold scan.
-- ` + "`eng_get_status`" + ` — daemon health + in-flight scans + pending-embed counts.
+- ` + "`eng_add_repo`" + ` - register a new repo path; the daemon kicks off a cold scan.
+- ` + "`eng_get_status`" + ` - daemon health + in-flight scans + pending-embed counts.
 
 If a search returns no hits, the index may be stale or the repo may not be
 registered. Run ` + "`veska doctor status`" + ` to check.
 
 **Cold-start handling.** When ` + "`eng_search_semantic`" + ` returns
 ` + "`embeddings_pending`" + ` in ` + "`degraded_reasons`" + `, the daemon is still
-embedding nodes — results are partial. Call ` + "`eng_get_status`" + ` and inspect
+embedding nodes - results are partial. Call ` + "`eng_get_status`" + ` and inspect
 ` + "`scans_in_flight[]`" + `: ` + "`phase=walking`" + ` or ` + "`phase=promoting`" + ` means
 "wait a bit and retry"; an empty ` + "`scans_in_flight`" + ` plus a non-zero
 ` + "`pending_embeds`" + ` means the embedder worker is draining the queue (also
 worth a retry). No in-flight scan and ` + "`pending_embeds=0`" + ` means the
-query genuinely matched nothing — don't loop.
+query genuinely matched nothing - don't loop.
 <!-- /veska:init -->
 `
 
@@ -91,7 +91,7 @@ query genuinely matched nothing — don't loop.
 // mcpConfigPath, when non-empty, points at a JSON file the harness
 // reads to discover MCP servers (`.mcp.json` for Claude Code project
 // scope, `.cursor/mcp.json` for Cursor). On `veska init --agent X`,
-// veska merges itself into that file's mcpServers map — idempotent,
+// veska merges itself into that file's mcpServers map - idempotent,
 // preserves other servers.
 type agentFlavor struct {
 	name          string
@@ -122,7 +122,7 @@ func lookupFlavor(name string) (agentFlavor, bool) {
 	return agentFlavor{}, false
 }
 
-// SupportedFlavorNames returns the sorted list of flavor names — used
+// SupportedFlavorNames returns the sorted list of flavor names - used
 // in the unknown-flavor error message and the --agent flag help text.
 func SupportedFlavorNames() []string {
 	names := make([]string, 0, len(agentFlavors))
@@ -152,7 +152,7 @@ type AgentSnippetParams struct {
 // preview of every file it will touch (with the absolute root path) and gates
 // the write on confirmation: AssumeYes writes immediately; an interactive TTY
 // prompts [Y/n]; a non-interactive stdin without AssumeYes prints the preview
-// and writes NOTHING ( — prevents accidental writes in the wrong
+// and writes NOTHING ( - prevents accidental writes in the wrong
 // tree / in automation). Idempotent: a second call against the same
 // rootDir+flavor detects the sentinel and reports "already present".
 func WriteAgentSnippet(p AgentSnippetParams) error {
@@ -211,7 +211,7 @@ func applyAgentSnippet(f agentFlavor, p AgentSnippetParams) error {
 	// when the harness reads an MCP-server config JSON,
 	// merge veska in so the user doesn't have to hand-edit. Idempotent:
 	// preserves other servers; skips when veska is already registered
-	// with the same command. Non-fatal on error — the instruction file
+	// with the same command. Non-fatal on error - the instruction file
 	// (the primary deliverable) is already written.
 	if f.mcpConfigPath != "" {
 		mcpBin, err := resolveVeskaMcpPath()
@@ -251,7 +251,7 @@ type agentPlanItem struct {
 	action string
 }
 
-// buildAgentPlan computes — without writing anything — the set of files
+// buildAgentPlan computes - without writing anything - the set of files
 // WriteAgentSnippet will touch and the action for each, so the preview is
 // accurate. Mirrors the writer's decision logic (sentinel scan for the
 // instruction file, mcpServerAction for the MCP config).
@@ -311,7 +311,7 @@ func confirmAgentWrite(p AgentSnippetParams, out io.Writer) (bool, error) {
 	fmt.Fprint(out, "Apply these changes? [Y/n] ")
 	line, err := reader.ReadString('\n')
 	if err != nil && line == "" {
-		// EOF before any answer — treat as the safe non-interactive default.
+		// EOF before any answer - treat as the safe non-interactive default.
 		fmt.Fprintln(out, "veska: no input; nothing written (re-run with -y to apply)")
 		return false, nil
 	}
@@ -325,7 +325,7 @@ func confirmAgentWrite(p AgentSnippetParams, out io.Writer) (bool, error) {
 }
 
 // mcpServerAction reports the verb EnsureMcpServerEntry would use for cfgPath
-// WITHOUT writing — read-only counterpart used by the preview so it can't
+// WITHOUT writing - read-only counterpart used by the preview so it can't
 // drift from the actual write. On any read/parse trouble it optimistically
 // reports "register", matching the create path.
 func mcpServerAction(cfgPath, name, command string) string {
@@ -377,7 +377,7 @@ func resolveVeskaMcpPath() (string, error) {
 // mcpServers map. Creates cfgPath when absent; preserves unrelated keys
 // and other server entries when present. Returns the verb used for the
 // status line ("registered", "updated", "already registered"). Errors
-// on JSON parse failure — corruption is surprising and we'd rather the
+// on JSON parse failure - corruption is surprising and we'd rather the
 // user fix it than silently overwrite their file.
 func EnsureMcpServerEntry(cfgPath, name, command string) (string, error) {
 	if err := os.MkdirAll(filepath.Dir(cfgPath), 0o755); err != nil {
@@ -443,7 +443,7 @@ const (
 
 // gitignoreStanza is the body veska maintains inside the sentinel block.
 // Kept minimal: only paths veska itself writes. Edit this list (and bump the
-// sentinel format if you must) rather than appending one-off entries — the
+// sentinel format if you must) rather than appending one-off entries - the
 // re-run logic relies on the block being a single atomic unit.
 const gitignoreStanza = gitignoreSentinelBegin + `
 docs/veska/
@@ -476,7 +476,7 @@ func ensureGitignoreStanza(rootDir string, out io.Writer) error {
 		}
 		return os.WriteFile(target, []byte(newText), 0o644)
 	}
-	// No existing block — append (with a separating newline if needed).
+	// No existing block - append (with a separating newline if needed).
 	prefix := text
 	if len(prefix) > 0 && !strings.HasSuffix(prefix, "\n") {
 		prefix += "\n"

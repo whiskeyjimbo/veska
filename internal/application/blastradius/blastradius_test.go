@@ -376,7 +376,7 @@ func TestDirtyOf_NilStagingReturnsEmpty(t *testing.T) {
 
 // TestDirtyOf_CleanTreeReportsNoStaging is the regression: with a
 // staging area present but no dirty nodes, DirtyOf contributes no seeds and must
-// report IncludedStaging=false — the flag means "staging contributed rows"
+// report IncludedStaging=false - the flag means "staging contributed rows"
 // ( 4.4), not merely "this is the dirty view".
 func TestDirtyOf_CleanTreeReportsNoStaging(t *testing.T) {
 	area := staging.NewArea() // present but empty: nothing staged
@@ -571,7 +571,7 @@ func TestOf_HubDegreeThresholdSuppressesFanout(t *testing.T) {
 		}
 	}
 
-	// With gating disabled (threshold -1): legacy behaviour — every sibling
+	// With gating disabled (threshold -1): legacy behaviour - every sibling
 	// init-* is pulled in at distance 3 (cmd-a → hub → init-b →.).
 	wide, err := s.Of(context.Background(), "r", "main", []string{"cmd-a"},
 		blastradius.Options{MaxDepth: 3, HubDegreeThreshold: -1})

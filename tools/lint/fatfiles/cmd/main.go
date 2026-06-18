@@ -39,6 +39,6 @@ func main() {
 	for _, v := range violations {
 		fmt.Fprintln(os.Stderr, v)
 	}
-	fmt.Fprintf(os.Stderr, "\nfatfiles: %d violation(s) — the LOC ratchet only ratchets down; shrink the file (WS-2) or, if you legitimately shrank it, lower its inventory entry\n", len(violations))
+	fmt.Fprintf(os.Stderr, "\nfatfiles: %d violation(s) - the LOC ratchet only ratchets down; shrink the file (WS-2) or, if you legitimately shrank it, lower its inventory entry\n", len(violations))
 	os.Exit(1)
 }

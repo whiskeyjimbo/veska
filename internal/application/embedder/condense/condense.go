@@ -13,7 +13,7 @@
 // average dot product against every other piece (vectors are assumed
 // L2-normalised, which model2vec already guarantees, so dot == cosine).
 // Chosen over TextRank because piece counts in real veska nodes are
-// small (~5-100) — full TextRank's eigenvector iteration is overkill
+// small (~5-100) - full TextRank's eigenvector iteration is overkill
 // at that scale. If quality plateaus during oo4q.2 a future
 // implementer can A/B against TextRank here.
 package condense
@@ -43,7 +43,7 @@ import (
 //	  producing a well-defined vector for empty input.
 //
 // Returns an error if any embed call fails. Partial results are not
-// returned — the caller can fall back to the raw input.
+// returned - the caller can fall back to the raw input.
 func Condense(ctx context.Context, embedder ports.EmbeddingProvider, pieces []string, k int) ([]string, error) {
 	if k <= 0 {
 		return nil, nil

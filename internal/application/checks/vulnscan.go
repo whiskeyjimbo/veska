@@ -62,14 +62,14 @@ func (c *VulnScanCheck) AuthoritativeRule(in Input) (string, bool) {
 
 // Run scans the module dependency set against the advisory cache when go.mod
 // is among the promotion's changed files. When the repo has no go.mod at all
-// it is a no-op returning (nil, nil) — no manifest, no scan.
+// it is a no-op returning (nil, nil) - no manifest, no scan.
 // Historically this check skipped any promotion that didn't include go.mod in
 // its file list, which collapsed two distinct cases into "no scan": (a) the
 // commit really didn't touch go.mod, and (b) the promotion was a partial
 // re-promote (e.g. `eng_promote_repo` invoked by `veska config reload`, which
 // only restages the latest commit's changed files). Case (b) meant
 // retroactive vuln scans after enabling [vuln_source] never fired on repos
-// whose last commit was unrelated to deps — exactly the gap that hit during
+// whose last commit was unrelated to deps - exactly the gap that hit during
 // junior-journey round 3. The scan against the OSV cache is
 // ~35ms; running it on every promote is cheap, and findings dedup by
 // finding_key so a no-change re-scan is a no-op at the storage layer.
@@ -85,7 +85,7 @@ func (c *VulnScanCheck) Run(ctx context.Context, in Input) ([]*domain.Finding, e
 	content, err := os.ReadFile(filepath.Join(root, "go.mod"))
 	if err != nil {
 		if os.IsNotExist(err) {
-			// No go.mod, nothing to scan. Not an error — non-Go repos are
+			// No go.mod, nothing to scan. Not an error - non-Go repos are
 			// a normal case once the touchesGoMod gate is gone.
 			return nil, nil
 		}
@@ -132,7 +132,7 @@ func (c *VulnScanCheck) Run(ctx context.Context, in Input) ([]*domain.Finding, e
 // from disk) and the net-new security diff gate (, which scans a
 // manifest's content at two refs and diffs by finding_id). lineFor maps a
 // package to its line in the manifest for an editor-clickable message; pass nil
-// to omit line numbers — it never affects the finding_id (key = repoID +
+// to omit line numbers - it never affects the finding_id (key = repoID +
 // advisoryID + package, manifestPath the anchor), so the same advisory at a
 // different line yields the SAME finding_id, which is what makes the gate's
 // net-new-by-id diff line-stable.
@@ -181,7 +181,7 @@ func ScanManifestDeps(ctx context.Context, src ports.VulnSource, repoID, branch,
 			domain.WithFileAnchor(manifestPath),
 			// namespace the finding key by repo id. The
 			// finding_id is sha256(rule+anchor+key) with no repo_id, and the
-			// storage PK is (finding_id, branch) — so two repos sharing one
+			// storage PK is (finding_id, branch) - so two repos sharing one
 			// advisory on the same branch would derive an identical
 			// finding_id and one scan's upsert would silently overwrite the
 			// other repo's row. Folding repoID (stable per repo) into the

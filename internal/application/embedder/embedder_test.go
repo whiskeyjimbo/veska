@@ -112,7 +112,7 @@ func (f *fakeEmbedder) Embed(_ context.Context, text string) ([]float32, error) 
 	}
 	// Return a copy with a per-input perturbation so different texts
 	// produce different vectors (and therefore different content_hashes).
-	// Identical inputs yield identical vectors — used by the dedup test.
+	// Identical inputs yield identical vectors - used by the dedup test.
 	out := make([]float32, len(f.vector))
 	copy(out, f.vector)
 	if len(text) > 0 && len(out) > 0 {
@@ -465,7 +465,7 @@ func TestWorker_IdempotentSameContentHash(t *testing.T) {
 	db := openSchemaDB(t)
 	repo := infsqlite.NewEmbeddingRefsRepo(db, db)
 
-	// Two nodes whose Text projections will collide — same kind, same symbol.
+	// Two nodes whose Text projections will collide - same kind, same symbol.
 	seedNode(t, db, "a", "r1", "main", "X", "function")
 	seedNode(t, db, "b", "r1", "main", "X", "function")
 	emb := &fakeEmbedder{vector: []float32{0, 0, 0}, modelID: "m-stable"}
@@ -494,7 +494,7 @@ func TestWorker_IdempotentSameContentHash(t *testing.T) {
 		t.Fatal("expected 2 ready")
 	}
 
-	// Exactly one Embed call — second ref deduped against the in-flight hash.
+	// Exactly one Embed call - second ref deduped against the in-flight hash.
 	if got := emb.calls.Load(); got != 1 {
 		t.Errorf("Embed calls: want 1 (dedup), got %d", got)
 	}
@@ -567,7 +567,7 @@ func TestWorker_DedupCrossTick(t *testing.T) {
 	cancel()
 	w.Wait()
 
-	// Still exactly one Embed call — the second tick took the LookupExisting hit.
+	// Still exactly one Embed call - the second tick took the LookupExisting hit.
 	if got := emb.calls.Load(); got != 1 {
 		t.Errorf("after tick 2: Embed calls want 1 (cross-tick dedup), got %d", got)
 	}
@@ -656,7 +656,7 @@ func TestWorker_ModelIDChangeForcesFreshEmbed(t *testing.T) {
 	// Seed a sibling with identical (kind, symbol_path).
 	seedNode(t, db, "b", "r1", "main", "X", "function")
 
-	// Second worker: model="new" — same embed_text, different modelID.
+	// Second worker: model="new" - same embed_text, different modelID.
 	embNew := &fakeEmbedder{vector: []float32{1, 1, 1}, modelID: "new"}
 	w2 := mustNewWorker(t, repo, embNew, &fakeVectorStore{},
 		embedder.WithInterval(5*time.Millisecond))
@@ -831,7 +831,7 @@ func TestWorker_RateLimitThrottlesEmbedCalls(t *testing.T) {
 	}
 
 	// Lower bound: bucket size is 1, so (n-1) tokens are awaited at 1/r each.
-	// Allow a generous fudge — assert >= 60% of theoretical minimum.
+	// Allow a generous fudge - assert >= 60% of theoretical minimum.
 	minWant := time.Duration(float64(n-1) / rps * float64(time.Second) * 0.6)
 	if elapsed < minWant {
 		t.Fatalf("rate limiter did not throttle: elapsed=%s want>=%s (n=%d, rps=%v)", elapsed, minWant, n, rps)
@@ -853,7 +853,7 @@ func TestWorker_RateLimitCtxCancelUnwinds(t *testing.T) {
 	emb := &fakeEmbedder{vector: []float32{1}, modelID: "m"}
 	vs := &fakeVectorStore{}
 
-	// Very slow rate — guarantees the worker is parked in limiter.Wait.
+	// Very slow rate - guarantees the worker is parked in limiter.Wait.
 	w := mustNewWorker(t, repo, emb, vs,
 		embedder.WithInterval(5*time.Millisecond),
 		embedder.WithRatePerSec(0.5), // 1 call per 2 seconds

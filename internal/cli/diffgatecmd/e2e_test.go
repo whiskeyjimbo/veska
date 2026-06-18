@@ -104,7 +104,7 @@ func runGate(t *testing.T, home, repoRoot, anchorID string) (diffgate.GateVerdic
 }
 
 // TestRun_E2E_FailOnNewFinding: a change that removes the only caller of a
-// cross-file helper makes it newly dead — the live gate, with discovery wired,
+// cross-file helper makes it newly dead - the live gate, with discovery wired,
 // must FAIL naming new_findings (and exit non-zero).
 func TestRun_E2E_FailOnNewFinding(t *testing.T) {
 	home := t.TempDir()
@@ -134,8 +134,8 @@ func TestRun_E2E_FailOnNewFinding(t *testing.T) {
 	}
 }
 
-// TestRun_E2E_PassOnDeadCodeFix: the canonical fix — add an (exported, entry)
-// caller of a dead symbol — resolves the finding, adds no new findings, stays
+// TestRun_E2E_PassOnDeadCodeFix: the canonical fix - add an (exported, entry)
+// caller of a dead symbol - resolves the finding, adds no new findings, stays
 // in scope. The live gate, discovery wired, must PASS (exit zero).
 func TestRun_E2E_PassOnDeadCodeFix(t *testing.T) {
 	home := t.TempDir()
@@ -215,7 +215,7 @@ func TestRun_E2E_FindingFlag(t *testing.T) {
 }
 
 // TestRun_E2E_RepoNotIndexed: pointed at a fresh/empty VESKA_HOME, the gate must
-// emit a clean JSON verdict (repo_not_indexed) and exit non-zero — NOT crash
+// emit a clean JSON verdict (repo_not_indexed) and exit non-zero - NOT crash
 // with a raw "no such table" and empty stdout (the ll57.8 finding, ll57.12 fix).
 func TestRun_E2E_RepoNotIndexed(t *testing.T) {
 	home := t.TempDir()

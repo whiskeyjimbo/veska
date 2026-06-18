@@ -178,7 +178,7 @@ func makeGetCallChainHandler(graph ports.GraphReader, resolve ResolveFunc, resol
 			if seed, ok := g.Node(startID); ok {
 				switch seed.Kind {
 				case domain.KindFunction, domain.KindMethod:
-					// snippet fetch is best-effort — on error we keep the
+					// snippet fetch is best-effort - on error we keep the
 					// conservative legacy reason rather than swallow the
 					// failure into a different signal.
 					body, snipErr := graph.GetNodeSnippet(ctx, p.RepoID, p.Branch, startID)

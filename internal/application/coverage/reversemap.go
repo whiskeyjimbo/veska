@@ -1,6 +1,6 @@
 // Package coverage builds the node→test reverse map: for a
 // given prod node, the set of runnable test entrypoint functions that
-// transitively call it over CALLS edges. It needs no new ingestion — the
+// transitively call it over CALLS edges. It needs no new ingestion - the
 // signal is latent in the CALLS edges already in the graph (the same proxy the
 // untested-symbol check consumes, extended from direct presence to a transitive
 // function-granularity map).
@@ -22,7 +22,7 @@ import (
 // is nil, matching the application-service convention.
 var ErrMissingDependency = errors.New("coverage: missing required dependency")
 
-// DefaultMaxNodes bounds the inbound BFS by total visited nodes — a safety
+// DefaultMaxNodes bounds the inbound BFS by total visited nodes - a safety
 // valve against a pathological reverse-reachability fan-out, NOT a precision
 // knob. It is deliberately generous: for test SELECTION the safe failure is
 // OVER-selecting (running a few extra tests), so the walk uses unbounded depth
@@ -157,7 +157,7 @@ func (m *ReverseMap) TestsCoveringAny(ctx context.Context, repoID, branch string
 }
 
 // isTestEntrypoint reports whether ref is a runnable Go test entrypoint
-// function — a top-level func in a *_test.go file whose name is a go-test
+// function - a top-level func in a *_test.go file whose name is a go-test
 // recognised prefix (Test/Benchmark/Fuzz/Example). Helpers in test files are
 // deliberately NOT entrypoints; they are walked THROUGH as intermediate hops
 // ( granularity decision).
@@ -173,7 +173,7 @@ func isTestEntrypoint(ref ports.NodeRef) bool {
 
 // isGoTestName applies go test's own naming rule: a recognised prefix
 // (Test, Benchmark, Fuzz, Example) where the following rune, if any, is not a
-// lowercase letter — so `TestFoo` matches but the helper `Testify` does not.
+// lowercase letter - so `TestFoo` matches but the helper `Testify` does not.
 func isGoTestName(name string) bool {
 	for _, prefix := range [...]string{"Test", "Benchmark", "Fuzz", "Example"} {
 		if len(name) < len(prefix) || name[:len(prefix)] != prefix {

@@ -7,7 +7,7 @@
 // into the Run helpers here (, following the cmd = glue /
 // logic-in-packages pattern from /.5/.6).
 // The cwd→repo resolver (autoResolveRepo) is a shared cmd-level helper
-// deps.go/symbol.go/graph.go also call it — so it stays in cmd/veska and is
+// deps.go/symbol.go/graph.go also call it - so it stays in cmd/veska and is
 // injected here through the ResolveRepo seam rather than re-extracted.
 package findingscmd
 
@@ -106,7 +106,7 @@ func (p ListParams) listScope(ctx context.Context) (map[string]any, bool) {
 	}
 	// a suppressed finding keeps state="open" (suppression hides
 	// it rather than closing it), so no --state value surfaces it. Only
-	// include_suppressed=true does — the daemon LEFT JOINs active suppressions
+	// include_suppressed=true does - the daemon LEFT JOINs active suppressions
 	// and populates suppressed_by on the returned rows.
 	if p.IncludeSuppressed {
 		baseParams["include_suppressed"] = true
@@ -119,7 +119,7 @@ type findingsEnvelope struct {
 	Findings []FindingView `json:"findings"`
 }
 
-// gatherFindings issues the eng_list_findings call(s) — one per registered
+// gatherFindings issues the eng_list_findings call(s) - one per registered
 // repo when fanning out, otherwise a single scoped call.
 func (p ListParams) gatherFindings(ctx context.Context, baseParams map[string]any, fanout bool) (findingsEnvelope, error) {
 	var resp findingsEnvelope

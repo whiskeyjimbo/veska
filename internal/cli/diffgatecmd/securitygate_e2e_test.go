@@ -67,7 +67,7 @@ func TestRunSecurity_E2E_SecretFailsNonZero(t *testing.T) {
 
 // TestRunSecurity_E2E_EmptyCacheDegrades is the security-sensitive fail-safe:
 // vuln_source=osv is configured but the advisory cache was never refreshed
-// (osv.Adapter.Scan returns nil,nil on an empty cache — no error). A candidate
+// (osv.Adapter.Scan returns nil,nil on an empty cache - no error). A candidate
 // touching go.mod must NOT silently PASS; the gate degrades to a FAIL with
 // vuln_unchecked. Without the cache-readiness guard this would be a false green.
 func TestRunSecurity_E2E_EmptyCacheDegrades(t *testing.T) {

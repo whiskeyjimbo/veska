@@ -41,7 +41,7 @@ type Input struct {
 // in the post-commit revision plus the line text (no leading "+" marker,
 // no trailing newline). It mirrors application.Line and git.Line; the
 // type is re-declared here so the application package need not import the
-// checks sub-package — consistent with how Input mirrors CheckRunInput.
+// checks sub-package - consistent with how Input mirrors CheckRunInput.
 type Line struct {
 	Number int
 	Text   string
@@ -145,7 +145,7 @@ func WithLogger(l *slog.Logger) RunnerOption {
 	}
 }
 
-// NewRunner constructs a Runner. metrics may be nil — in that case timing is
+// NewRunner constructs a Runner. metrics may be nil - in that case timing is
 // silently dropped (useful for embedded callers that do not yet wire metrics).
 // Without WithLogger the Runner logs to slog.Default.
 func NewRunner(reg *Registry, storage ports.FindingStorage, metrics *observability.Metrics, opts ...RunnerOption) *Runner {
@@ -178,7 +178,7 @@ func (r *Runner) Run(ctx context.Context, in Input) {
 func (r *Runner) runOne(ctx context.Context, c Check, in Input) {
 	start := time.Now()
 	defer func() {
-		// Recover any panic — by contract a check failure is non-fatal because
+		// Recover any panic - by contract a check failure is non-fatal because
 		// the promotion transaction has already committed. The recovered value
 		// is surfaced at WARN; the recover itself is what makes the isolation
 		// contract hold.

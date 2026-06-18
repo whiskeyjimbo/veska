@@ -15,7 +15,7 @@ import (
 //	[UNK] [CLS] [SEP] [PAD]
 //	parse config parser ##er ##ing func return
 //
-// Token IDs are assigned by vocab order — same convention HF uses.
+// Token IDs are assigned by vocab order - same convention HF uses.
 func synthTokenizerJSON(t *testing.T) []byte {
 	t.Helper()
 	vocab := map[string]int{
@@ -82,7 +82,7 @@ func TestEncode_KnownVocabulary(t *testing.T) {
 }
 
 // TestEncode_WordPieceContinuation: "configing" decomposes as
-// config + ##ing — both are in the vocab and the character split
+// config + ##ing - both are in the vocab and the character split
 // is exact (con-fig-i-n-g). The continuing-subword prefix is what
 // lets WordPiece handle morphology.
 func TestEncode_WordPieceContinuation(t *testing.T) {
@@ -97,7 +97,7 @@ func TestEncode_WordPieceContinuation(t *testing.T) {
 // TestEncode_UnknownTokenFallsBackToUNK: a word that has NO greedy
 // WordPiece decomposition (no prefix in vocab) collapses to [UNK].
 // Without this the encoder would return an empty list or panic on
-// out-of-vocab input — every real-world tokeniser must handle OOV.
+// out-of-vocab input - every real-world tokeniser must handle OOV.
 func TestEncode_UnknownTokenFallsBackToUNK(t *testing.T) {
 	tk, _ := newTokenizer(synthTokenizerJSON(t))
 	got := tk.encode("xyzqwerty")
@@ -121,7 +121,7 @@ func TestEncode_Lowercasing(t *testing.T) {
 
 // TestEncode_PunctuationIsItsOwnToken: BertPreTokenizer splits on
 // punctuation. Each punctuation char is then a separate word for the
-// WordPiece pass — unknown to our synthetic vocab → [UNK].
+// WordPiece pass - unknown to our synthetic vocab → [UNK].
 func TestEncode_PunctuationIsItsOwnToken(t *testing.T) {
 	tk, _ := newTokenizer(synthTokenizerJSON(t))
 	got := tk.encode("parse, config")
@@ -146,7 +146,7 @@ func TestEncode_EmptyStringYieldsNoTokens(t *testing.T) {
 }
 
 // TestNewTokenizer_RejectsUnsupportedModel: BPE / Unigram aren't
-// supported by this MVP — surface a clear error rather than fall back
+// supported by this MVP - surface a clear error rather than fall back
 // to a partial WordPiece path that produces garbage IDs.
 func TestNewTokenizer_RejectsUnsupportedModel(t *testing.T) {
 	spec := `{"model":{"type":"BPE","vocab":{},"merges":[]}}`

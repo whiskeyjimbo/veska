@@ -87,7 +87,7 @@ func WithHTTPClient(c *http.Client) Option {
 }
 
 // WithTimeout sets the per-request timeout on the default http.Client. Ignored
-// when WithHTTPClient is also supplied — set the timeout on the custom client
+// when WithHTTPClient is also supplied - set the timeout on the custom client
 // instead. The effect is order-independent: it never mutates a caller-supplied
 // client.
 func WithTimeout(d time.Duration) Option {

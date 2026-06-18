@@ -32,7 +32,7 @@ type ErrUnregisteredRepo struct{ RepoID string }
 
 func (e ErrUnregisteredRepo) Error() string {
 	return fmt.Sprintf(
-		"promoter: repo %q is not registered — run: veska repo add <path>",
+		"promoter: repo %q is not registered - run: veska repo add <path>",
 		e.RepoID,
 	)
 }

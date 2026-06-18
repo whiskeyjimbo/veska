@@ -10,7 +10,7 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/core/ports"
 )
 
-// fakeCloneBase satisfies diffgate.BaseGraph (via nil-embedded interfaces — the
+// fakeCloneBase satisfies diffgate.BaseGraph (via nil-embedded interfaces - the
 // gate never calls EdgeReader/NodeLookup) plus the cloneHashLookup capability.
 // It deliberately does NOT implement NodeContentHash, so ChangedNodeIDs treats
 // every overlay node as changed (tests control candidacy via the overlay).
@@ -176,7 +176,7 @@ func TestCloneGate_ThirdCopyToExistingPair_Passes(t *testing.T) {
 
 // Co-touched twin (AC1 false-negative regression): the clone's twin is
 // UNCHANGED but lives in a file the same diff also touches. The overlay is the
-// after-state of touched files, so the unchanged twin is a live member — the
+// after-state of touched files, so the unchanged twin is a live member - the
 // gate must still FAIL (base 1 -> after 2).
 func TestCloneGate_CoTouchedUnchangedTwin_Fails(t *testing.T) {
 	// base has Must only in a/util.go (unique).

@@ -37,7 +37,7 @@ type untestedReport struct {
 
 // RunUntested gates the candidate on changed prod symbols that no test reaches.
 // It re-promotes the candidate's changed files into a throwaway clone of the
-// base graph (so cross-file test→prod CALLS edges RESOLVE — the ephemeral
+// base graph (so cross-file test→prod CALLS edges RESOLVE - the ephemeral
 // overlay only carries intra-file resolved edges), runs the untested-symbol
 // check over that after-state scoped to the changed files, and
 // FAILs on untested findings whose node is in the node-precision changed set.
@@ -115,11 +115,11 @@ func RunUntested(ctx context.Context, p UntestedParams) error {
 // Caller attribution is the UNION of base and clone: re-promoting a changed
 // prod file delete-replaces its nodes, which CASCADE-deletes inbound CALLS
 // edges from UNCHANGED caller files (the edges schema is ON DELETE CASCADE on
-// dst_node_id) — so the clone alone loses the test→prod edge of a pre-existing
+// dst_node_id) - so the clone alone loses the test→prod edge of a pre-existing
 // test, falsely flagging a modified-but-tested symbol. The base graph still
 // holds that edge; the union restores it. So after-state test callers =
 // base callers (unchanged callers) ∪ clone callers (changed/added callers).
-// It deliberately does NOT use fullCheckPass/openStructuralFindingIDs — those
+// It deliberately does NOT use fullCheckPass/openStructuralFindingIDs - those
 // filter to structuralRules (dead-code, contract-drift), which excludes
 // untested-symbol and would silently drop every finding (a false PASS). The
 // check's in-memory *domain.Finding carry the node_id anchors the gate needs.
@@ -162,7 +162,7 @@ func untestedInChangedFiles(ctx context.Context, basePools *sqlite.Pools, baseDB
 // Base callers are authoritative ONLY for UNCHANGED files: a base caller file
 // the diff changed/deleted is stale (the clone re-promoted it and is the
 // authority), so base callers in the changed set are dropped. Without this,
-// modifying a prod symbol AND deleting its test would PASS — base still shows
+// modifying a prod symbol AND deleting its test would PASS - base still shows
 // the now-gone test as a caller. eph.ChangedFiles and CallerFiles are both
 // repo-root-relative, so the membership check matches.
 type unionCoverage struct {

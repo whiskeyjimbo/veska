@@ -2,13 +2,13 @@ package daemon
 
 // Guard tests for the tool-coverage skeleton:
 //   TestToolCoverageCompleteness: the coverageTools table covers exactly the
-//     live tool surface — the 37 production tools plus the 3 opt-in task tools,
+//     live tool surface - the 37 production tools plus the 3 opt-in task tools,
 //     and no more. This is what stops a newly-added MCP tool from slipping in
 //     uncovered, and stops a removed tool from rotting in the table.
 //   TestToolCoverageHarnessMatchesProduction: the harness's default registry
 //     (no task opt-in) registers exactly the same tool names a fresh PRODUCTION
 //     registry does. The production reference comes from newDaemon, NOT from a
-//     second registerMCPTools call — comparing the harness registry to another
+//     second registerMCPTools call - comparing the harness registry to another
 //     registerMCPTools output would be circular and prove nothing. It catches a
 //     harness that forgot to wire ingester/promoter/reparser (which would drop
 //     eng_promote_repo / eng_reindex_repo).

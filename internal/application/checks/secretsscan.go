@@ -16,7 +16,7 @@ import (
 // by default. These name on-disk caches for issue trackers and similar tools
 // whose payloads routinely contain high-entropy slugs (memory keys, sequence
 // hashes) that are not credentials. Without this filter the high-entropy
-// heuristic fires repeatedly on the project's own tracker file — exactly the
+// heuristic fires repeatedly on the project's own tracker file - exactly the
 // failure mode that hit on.beads/issues.jsonl during junior-journey round 3
 // Paths are matched as prefixes against the promotion's
 // repo-relative file path.
@@ -28,7 +28,7 @@ var secretsScanIgnoredPrefixes = []string{
 // SecretsScanCheck is a structural check that turns SecretsScanner output into
 // findings on promotion. It scans only the lines newly added by the promoted
 // commit (Input.AddedLines), so a pre-existing secret on an untouched line is
-// excluded by construction — no extra filtering is required.
+// excluded by construction - no extra filtering is required.
 // Findings anchor on the leaking file's path with a discriminator key of
 // rule+line, which makes the resulting finding_ids branch-stable and
 // idempotent: re-running on unchanged input yields byte-identical finding_ids.
@@ -144,7 +144,7 @@ func (c *SecretsScanCheck) Run(ctx context.Context, in Input) ([]*domain.Finding
 // directory or a dependency-vendoring directory whose payloads routinely look
 // secret-shaped to the high-entropy heuristic but never actually contain
 // credentials. The vendored-deps half is shared with the dead-code and
-// auto-link rules — see pathfilter.IsVendored. Test-fixture credential
+// auto-link rules - see pathfilter.IsVendored. Test-fixture credential
 // extensions under conventional test directories are also skipped, since
 // PEM/key files inside testdata/ or test/ subtrees are vanishingly unlikely
 // to be real and dominate the noise on forks of crypto-adjacent projects

@@ -75,7 +75,7 @@ func Run(ctx context.Context, p Params) error {
 
 // looksLikePath reports whether s reads as a file path rather than a symbol
 // name: it contains a path separator or ends in a source extension. A bare
-// "." is NOT enough — qualified Go symbols like "FlagSet.Parse" or
+// "." is NOT enough - qualified Go symbols like "FlagSet.Parse" or
 // "pkg.Func" contain a dot but are symbols, so anchoring on ".go"/".ts"/etc.
 // (or a slash) keeps them on the symbol branch.
 func looksLikePath(s string) bool {

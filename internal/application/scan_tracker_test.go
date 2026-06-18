@@ -51,7 +51,7 @@ func TestScanTracker_StartEndSnapshotLifecycle(t *testing.T) {
 }
 
 // TestScanTracker_NilSafe pins that Start/End/Snapshot tolerate a nil
-// receiver — that's the contract callers (statusProvider, the reparser)
+// receiver - that's the contract callers (statusProvider, the reparser)
 // rely on for "no tracker wired" graceful degradation.
 func TestScanTracker_NilSafe(t *testing.T) {
 	var tr *application.ScanTracker

@@ -35,7 +35,7 @@ func SchemaStatements() ([]string, error) {
 		if err != nil {
 			return nil, fmt.Errorf("read %s: %w", n, err)
 		}
-		// Split on ";" + newline — every statement in this dir ends with ";\n".
+		// Split on ";" + newline - every statement in this dir ends with ";\n".
 		for _, stmt := range splitStatements(string(b)) {
 			s := strings.TrimSpace(stmt)
 			if s != "" {

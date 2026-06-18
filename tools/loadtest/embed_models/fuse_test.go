@@ -4,12 +4,12 @@
 // instead of testing each model independently across corpora, this
 // test embeds every doc with TWO models and compares four ranking
 // strategies on the same ground-truth pairs:
-//   1. code-only — rank by potion-code-16M cosine alone (baseline)
-//   2. base-only — rank by potion-base-32M cosine alone (baseline)
-//   3. concat — store [code_vec || base_vec] L2-normalised, rank
+//   1. code-only - rank by potion-code-16M cosine alone (baseline)
+//   2. base-only - rank by potion-base-32M cosine alone (baseline)
+//   3. concat - store [code_vec || base_vec] L2-normalised, rank
 //                   by concat-cosine. Mathematically equivalent to
 //                   the mean of the two per-model cosines.
-//   4. RRF — rank docs in each model's space independently,
+//   4. RRF - rank docs in each model's space independently,
 //                   fuse via reciprocal rank fusion
 //                   (score = Σ 1/(K + rank_in_list_i), K=60 per Cormack
 //                   et al. 2009).
@@ -17,10 +17,10 @@
 // fusion section appended to the published embedder-benchmarks.md.
 // Run with: make eval-embed-models-fuse
 // Env knobs (mirror the main bench):
-//   EMBED_BENCH_MAX_DOCS — cap per corpus (default 5000)
-//   FUSE_MODEL_CODE — code-side model name (default potion-code-16M)
-//   FUSE_MODEL_PROSE — prose-side model name (default potion-base-32M)
-//   FUSE_RRF_K — RRF constant (default 60)
+//   EMBED_BENCH_MAX_DOCS - cap per corpus (default 5000)
+//   FUSE_MODEL_CODE - code-side model name (default potion-code-16M)
+//   FUSE_MODEL_PROSE - prose-side model name (default potion-base-32M)
+//   FUSE_RRF_K - RRF constant (default 60)
 
 package embed_models
 
@@ -40,7 +40,7 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/embedding/model2vec"
 )
 
-// fuseDoc holds a doc plus its TWO embeddings — the code-model vector
+// fuseDoc holds a doc plus its TWO embeddings - the code-model vector
 // and the prose-model vector. Vectors are L2-normalised by the model2vec
 // adapter so dot product == cosine throughout.
 type fuseDoc struct {
@@ -50,7 +50,7 @@ type fuseDoc struct {
 	proseVec []float32
 }
 
-// fuseResult is one corpus's outcome — four recall maps from the same
+// fuseResult is one corpus's outcome - four recall maps from the same
 // fixture pairs, evaluated by four different ranking strategies.
 type fuseResult struct {
 	Corpus     string                  `json:"corpus"`
@@ -74,10 +74,10 @@ func TestEmbedModelsFusion(t *testing.T) {
 	codeDir := filepath.Join(modelRoot(), codeName)
 	proseDir := filepath.Join(modelRoot(), proseName)
 	if !fileNonEmpty(filepath.Join(codeDir, "model.safetensors")) {
-		t.Skipf("code model %s not installed at %s — run scripts/install-bench-models.sh", codeName, codeDir)
+		t.Skipf("code model %s not installed at %s - run scripts/install-bench-models.sh", codeName, codeDir)
 	}
 	if !fileNonEmpty(filepath.Join(proseDir, "model.safetensors")) {
-		t.Skipf("prose model %s not installed at %s — run scripts/install-bench-models.sh", proseName, proseDir)
+		t.Skipf("prose model %s not installed at %s - run scripts/install-bench-models.sh", proseName, proseDir)
 	}
 	codeP, err := model2vec.New(codeDir)
 	if err != nil {
@@ -99,7 +99,7 @@ func TestEmbedModelsFusion(t *testing.T) {
 		t.Logf("--- corpus=%s (%s) ---", c.name, c.kind)
 		docs := embedFuseCorpus(t, codeP, proseP, c, maxDocs)
 		if len(docs) == 0 {
-			t.Logf("  no docs — skip")
+			t.Logf("  no docs - skip")
 			continue
 		}
 		gtSources := CollectGroundTruth(c.name, c.root, fixturesDir(), c.kind)
@@ -142,7 +142,7 @@ func TestEmbedModelsFusion(t *testing.T) {
 
 // embedFuseCorpus walks the corpus and embeds each doc with BOTH
 // models. Mirrors embedCorpus/embedProseCorpus but stores two vectors
-// per doc. The two passes are sequential — model2vec is fully
+// per doc. The two passes are sequential - model2vec is fully
 // CPU-bound and sub-ms per embed, so parallelising adds complexity for
 // no realistic speedup at this scale.
 func embedFuseCorpus(t *testing.T, codeP, proseP Embedder, c corpusEntry, maxDocs int) []fuseDoc {
@@ -174,7 +174,7 @@ func embedFuseCorpus(t *testing.T, codeP, proseP Embedder, c corpusEntry, maxDoc
 		proseDocs, _, _ = embedCorpus(t, proseP, c.root, maxDocs, condenseConfig{})
 	}
 	if len(proseDocs) != len(docs) {
-		t.Logf("  WARN: walker mismatch — code=%d prose=%d (truncating to min)", len(docs), len(proseDocs))
+		t.Logf("  WARN: walker mismatch - code=%d prose=%d (truncating to min)", len(docs), len(proseDocs))
 	}
 	n := len(docs)
 	if len(proseDocs) < n {
@@ -184,7 +184,7 @@ func embedFuseCorpus(t *testing.T, codeP, proseP Embedder, c corpusEntry, maxDoc
 	for i := 0; i < n; i++ {
 		// Sanity: both walkers should produce the same (name, file)
 		// pair at position i. If not, the corpus changed mid-flight or
-		// the walkers diverged — fail rather than silently mis-align.
+		// the walkers diverged - fail rather than silently mis-align.
 		if docs[i].name != proseDocs[i].name || docs[i].file != proseDocs[i].file {
 			t.Fatalf("fuse-walker divergence at i=%d: code=(%s,%s) prose=(%s,%s)",
 				i, docs[i].name, docs[i].file, proseDocs[i].name, proseDocs[i].file)
@@ -199,7 +199,7 @@ func embedFuseCorpus(t *testing.T, codeP, proseP Embedder, c corpusEntry, maxDoc
 	return out
 }
 
-// computeFusionRecall is the dual of ComputeRecall — embeds each pair's
+// computeFusionRecall is the dual of ComputeRecall - embeds each pair's
 // query with BOTH models and reports four recall series (one per
 // strategy) on the same fixture set.
 func computeFusionRecall(codeP, proseP Embedder, pairs []Pair, docs []fuseDoc, rrfK int) (codeOnly, proseOnly, concat, rrf RecallScores) {
@@ -282,7 +282,7 @@ func computeFusionRecall(codeP, proseP Embedder, pairs []Pair, docs []fuseDoc, r
 
 		// RRF: per-doc score = 1/(K+rank_code) + 1/(K+rank_prose),
 		// where rank is the doc's full rank in each list (0-based).
-		// We have both per-doc lists fully sorted — invert each to a
+		// We have both per-doc lists fully sorted - invert each to a
 		// (idx -> rank) map and combine.
 		codeRankByIdx := make(map[int]int, len(docs))
 		for r, e := range codeScored {
@@ -387,7 +387,7 @@ func writeFuseResults(rows []fuseResult) error {
 
 // appendFuseSectionToMarkdown writes (or replaces) a "## Dual-model
 // fusion" section in We don't
-// regenerate the rest of the table — that's owned by writeMarkdownTable
+// regenerate the rest of the table - that's owned by writeMarkdownTable
 // from the main bench. The section is delimited by start/end markers
 // so re-runs replace it idempotently.
 func appendFuseSectionToMarkdown(rows []fuseResult) error {
@@ -439,7 +439,7 @@ func appendFuseSectionToMarkdown(rows []fuseResult) error {
 			fuseSrc = "RRF"
 		}
 		delta := fuseBest - best
-		mark := "—"
+		mark := "-"
 		if delta >= 0.05 {
 			mark = "✓ " + fuseSrc + " wins"
 		} else if delta <= -0.05 {
@@ -474,7 +474,7 @@ func appendFuseSectionToMarkdown(rows []fuseResult) error {
 
 func ftoa(v float64) string {
 	if v == 0 {
-		return "—"
+		return "-"
 	}
 	return strconv.FormatFloat(v, 'f', 3, 64)
 }

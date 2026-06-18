@@ -6,7 +6,7 @@
 // deterministic Markdown page so engineers and agents can see where
 // change risk concentrates.
 // The ranking service depends only on injected function types and the
-// blastradius application service — never on internal/infrastructure
+// blastradius application service - never on internal/infrastructure
 // so the domain/application layering stays intact (make layercheck).
 package wiki
 
@@ -156,7 +156,7 @@ func (s *HotZoneService) Rank(ctx context.Context, repoID, branch, repoRoot stri
 		// touched in-window but has zero downstream blast radius
 		// (lockfiles, READMEs, generated assets, hand-edited go.mod
 		// without graph nodes) is not "hot" by any meaningful
-		// definition and crowds out genuinely hot files — or, on a
+		// definition and crowds out genuinely hot files - or, on a
 		// quiet repo with one churn file, produces a single
 		// score=0 entry that contradicts the surface's promise.
 		score := freq * radius
@@ -171,7 +171,7 @@ func (s *HotZoneService) Rank(ctx context.Context, repoID, branch, repoRoot stri
 		})
 	}
 
-	// Descending score; ascending path on ties — fully deterministic.
+	// Descending score; ascending path on ties - fully deterministic.
 	sort.Slice(zones, func(i, j int) bool {
 		if zones[i].Score != zones[j].Score {
 			return zones[i].Score > zones[j].Score

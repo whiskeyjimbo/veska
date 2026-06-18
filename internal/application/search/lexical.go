@@ -11,7 +11,7 @@ import (
 // touching the embedder. Intended for callers that have already decided
 // the lexical path is the right one (e.g. an explicit /lexical tool or a
 // caller that wants deterministic substring matching). For the
-// embedder-fallback case, prefer Semantic — it tags the response with
+// embedder-fallback case, prefer Semantic - it tags the response with
 // degraded_reasons so the agent knows the reasoning mode changed.
 func (s *Service) Lexical(ctx context.Context, repoID, branch, query string, k int) ([]Result, error) {
 	if k <= 0 || s.lexical == nil {

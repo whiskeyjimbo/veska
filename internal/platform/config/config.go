@@ -193,7 +193,7 @@ type BackupConfig struct {
 
 // VulnSourceConfig configures the vulnerability advisory source (M7). The
 // feature ships off by default: an empty Provider leaves the daemon on the
-// NullVulnSource — no refresher goroutine, no vulnscan check. Setting
+// NullVulnSource - no refresher goroutine, no vulnscan check. Setting
 // Provider = "osv" turns on the OSV.dev-backed adapter.
 type VulnSourceConfig struct {
 	// Provider selects the VulnSource implementation. "" (default) keeps the
@@ -305,7 +305,7 @@ func configPath() string {
 
 // Load resolves the daemon configuration with precedence
 // defaults < config.toml < environment variables. A missing config.toml is
-// not an error — the compile-time defaults stand.
+// not an error - the compile-time defaults stand.
 func Load() (Config, error) {
 	cfg := DefaultConfig()
 
@@ -331,7 +331,7 @@ func Load() (Config, error) {
 // applyEnvOverrides folds the daemon's environment variables over the resolved
 // struct. They are the last (highest-precedence) overlay. Numeric overrides
 // (the autolink/blast tuning knobs) return a parse error rather than silently
-// ignoring a malformed value — consistent with Load's fail-loud contract.
+// ignoring a malformed value - consistent with Load's fail-loud contract.
 func applyEnvOverrides(cfg *Config) error {
 	if v := os.Getenv("VESKA_OLLAMA_URL"); v != "" {
 		cfg.Embedder.Endpoint = v
@@ -374,7 +374,7 @@ func applyEnvOverrides(cfg *Config) error {
 
 // Validate enforces cross-field invariants. It covers the documented tracing
 // both-or-neither rule: tracing.enabled requires an OTLP endpoint, and an
-// endpoint without tracing.enabled is a misconfiguration — both are startup
+// endpoint without tracing.enabled is a misconfiguration - both are startup
 // errors so the operator's intent is never silently ignored.
 func (c Config) Validate() error {
 	if c.Tracing.Enabled && c.Tracing.OTLPEndpoint == "" {

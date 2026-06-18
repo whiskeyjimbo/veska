@@ -42,7 +42,7 @@ func TestCheckRequired_ReportsAllMissing(t *testing.T) {
 }
 
 // scopedGraphStub is a minimal ports.GraphReader that scopes nodes by
-// (repoID, branch) — unlike stubGraphStorage which is global. Used by the
+// (repoID, branch) - unlike stubGraphStorage which is global. Used by the
 // fan-out tests so the helper actually has to walk multiple repos to find
 // the seed's owner.
 type scopedGraphStub struct {
@@ -135,7 +135,7 @@ func (s *scopedGraphStub) GetNodeSnippet(_ context.Context, repoID, branch strin
 
 // TestResolveSeedOwner_FanoutFindsUniqueOwner pins: when repo_id
 // is omitted and multiple repos are registered, the seed must be located
-// across all of them and resolve to the single owner — matching the
+// across all of them and resolve to the single owner - matching the
 // "default: fan out across registered repos" documented in `veska
 // calls/blast --help`. The previous code path errored "repo_id is required"
 // despite the help text promising fan-out.
@@ -211,7 +211,7 @@ func TestResolveSeedOwner_FanoutNotFound(t *testing.T) {
 // symbol/node_id does NOT live in that repo, the helper must fall through
 // to the fan-out path (Path 3) instead of returning NotFound. Otherwise
 // `veska calls Hello` from a sibling repo fails with "symbol not found"
-// despite Hello being registered elsewhere — contradicting the documented
+// despite Hello being registered elsewhere - contradicting the documented
 // "default: fan out across registered repos" contract.
 func TestResolveSeedOwner_CwdPinFallsThroughToFanout(t *testing.T) {
 	repos := &stubRepoLister{repos: []application.RepoRecord{
@@ -251,7 +251,7 @@ func TestResolveSeedOwner_CwdPinFallsThroughToFanout(t *testing.T) {
 // TestExpandNodeIDPrefix_RejectsBadAndExpandsGood pins: when a
 // caller passes a 12-char short_id (the form veska's CLI prints under the
 // "(.)" column), the daemon must NOT silently pass it through to a SQL
-// equality lookup and report "node has no embedding" — instead either
+// equality lookup and report "node has no embedding" - instead either
 // expand it to the canonical 64-char form (unique prefix), or surface a
 // "no node matches prefix" error so the user knows the id was wrong.
 func TestExpandNodeIDPrefix_RejectsBadAndExpandsGood(t *testing.T) {

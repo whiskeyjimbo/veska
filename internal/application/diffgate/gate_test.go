@@ -52,7 +52,7 @@ func gateFixture(t *testing.T, withCaller bool, extraNodes []string, radiusReach
 // TestGate_RealRadius_CanonicalDeadCodeFix is the end-to-end proof of ll57.5:
 // with a REAL blastradius service, the canonical dead-code fix (add a caller)
 // resolves the finding AND passes scope, because the new caller is admitted
-// into the allowed set as code wired into the fix — even though the dead
+// into the allowed set as code wired into the fix - even though the dead
 // anchor's base radius is just {anchor}. This is the flagship case the gate
 // must NOT over-block.
 func TestGate_RealRadius_CanonicalDeadCodeFix(t *testing.T) {
@@ -198,7 +198,7 @@ func TestGate_FileAnchoredDegrades(t *testing.T) {
 
 // TestGate_AnchorNotResolvedDegrades: when the anchor doesn't resolve in the
 // base graph (blastradius.ErrSeedNotFound), the gate degrades to a named
-// failure instead of crashing — the fail-safe the smoke test surfaced.
+// failure instead of crashing - the fail-safe the smoke test surfaced.
 func TestGate_AnchorNotResolvedDegrades(t *testing.T) {
 	base := &fakeBaseGraph{inbound: map[string][]string{"a:Dead": {}}}
 	eph := indexCandidate(t, base, &domain.ParseResult{Nodes: []*domain.Node{mustNode(t, "a:Dead", "a.go", "Dead")}})

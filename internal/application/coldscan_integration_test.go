@@ -14,7 +14,7 @@ import (
 )
 
 // fakeColdScanGit supplies a fixed HEAD; the cold-scan reparser only consults
-// GitQuerier.HEAD — the remaining methods are unused on the full-reparse path.
+// GitQuerier.HEAD - the remaining methods are unused on the full-reparse path.
 type fakeColdScanGit struct{ head string }
 
 func (f *fakeColdScanGit) HEAD(string) (string, error)                     { return f.head, nil }
@@ -52,7 +52,7 @@ func writeIntFile(t *testing.T, dir, rel, content string) {
 // asserts (1) nodes from the fixture files land in the promoted graph, and
 // (2) running the reparser a second time leaves the node count unchanged
 // (pipeline-level idempotency).
-// Scope: base sqlite only — the vector backend is downstream of the embedder
+// Scope: base sqlite only - the vector backend is downstream of the embedder
 // worker (tracked separately as ).
 func TestColdScanReparser_Integration_RealPipeline(t *testing.T) {
 	db := openMemDB(t)
@@ -111,7 +111,7 @@ func TestColdScanReparser_Integration_RealPipeline(t *testing.T) {
 
 	// Promotion-queue rows must also be present (FTS + embedding work_kinds).
 	if got := countQueue(t, db); got == 0 {
-		t.Error("post_promotion_queue: want > 0, got 0 — promotion sinks did not run")
+		t.Error("post_promotion_queue: want > 0, got 0 - promotion sinks did not run")
 	}
 
 	// Sanity: a node row carries a non-empty symbol_path drawn from the parser.
@@ -120,7 +120,7 @@ func TestColdScanReparser_Integration_RealPipeline(t *testing.T) {
 		t.Fatalf("query sample node: %v", err)
 	}
 	if sample == "" {
-		t.Error("sample node symbol_path empty — parser likely produced no useful nodes")
+		t.Error("sample node symbol_path empty - parser likely produced no useful nodes")
 	}
 
 	// The promotion transaction advances repos.last_promoted_sha and

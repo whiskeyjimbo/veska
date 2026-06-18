@@ -5,7 +5,7 @@
 // in-process VectorStorage (the sqlite-vec linear-scan backend by
 // default, per ), using a deterministic synthetic corpus.
 // Build-tag-gated so plain CI runs (`go test./.`) skip this
-// end-to-end driver — it stays available via `go test -tags=eval`
+// end-to-end driver - it stays available via `go test -tags=eval`
 // from the eval-autolink-fp make target.
 package autolink
 
@@ -42,12 +42,12 @@ const sharedFixtureDir = "../recall/fixtures"
 // truth.
 // Modes (env):
 //
-//	AUTOLINK_POP=N — total population (default 1000).
-//	AUTOLINK_THRESHOLD=X.XX — minimum similarity to admit a
+//	AUTOLINK_POP=N - total population (default 1000).
+//	AUTOLINK_THRESHOLD=X.XX - minimum similarity to admit a
 //	  candidate (default 0.85, matching autolink.DefaultThreshold).
-//	AUTOLINK_TOPK=K — per-source candidate cap (default 5,
+//	AUTOLINK_TOPK=K - per-source candidate cap (default 5,
 //	  matching autolink.DefaultTopK).
-//	RECALL_GENERATE=1 — persist a fixture for reproducibility
+//	RECALL_GENERATE=1 - persist a fixture for reproducibility
 //	  (currently a no-op on this harness; reserved for future real
 //	  Ollama seeding to mirror the recall harness).
 func TestAutolinkFP(t *testing.T) {
@@ -259,7 +259,7 @@ func seedNodes(t *testing.T, db *sql.DB, repoID, branch string, nodes []synthcor
 // bytes table) and node_embedding_refs (state='ready') so that
 // EmbeddingRefRepo.ContentHashForNode and LookupExisting return real
 // rows. The Linker calls both for every source node. vecOf supplies
-// the vector for node index i — either from a shared on-disk fixture
+// the vector for node index i - either from a shared on-disk fixture
 // or from FakeEmbed.
 func seedEmbeddings(t *testing.T, db *sql.DB, nodes []synthcorpus.SyntheticNode, vecOf func(int, synthcorpus.SyntheticNode) []float32) {
 	t.Helper()
@@ -332,7 +332,7 @@ func loadEmbeddings(t *testing.T, nodes []synthcorpus.SyntheticNode, pop int, fa
 	}, "fixture"
 }
 
-// encodeF32LE mirrors application/embedder.encodeFloat32LE — duplicated
+// encodeF32LE mirrors application/embedder.encodeFloat32LE - duplicated
 // in the harness to keep tools/ free of an upward import into a
 // non-exported helper.
 func encodeF32LE(v []float32) []byte {

@@ -11,7 +11,7 @@ import (
 )
 
 // EncodingName is the tiktoken encoding used for every token count. We
-// pin to cl100k_base — GPT-4 / GPT-3.5-turbo / claude-flavoured estimate
+// pin to cl100k_base - GPT-4 / GPT-3.5-turbo / claude-flavoured estimate
 // because it is the published default and the comparable baseline
 // semble uses for its public figure. The exact encoding doesn't bias the
 // ratio (veska and grep are tokenised by the same function); the choice
@@ -40,7 +40,7 @@ func CountTokens(s string) (int, error) {
 }
 
 // QueryFixture is one row in the benchmark input: a query, the text
-// veska's search ought to retrieve (the "right answer" — i.e. the
+// veska's search ought to retrieve (the "right answer" - i.e. the
 // snippet content for the truth nodes), the set of ground-truth node
 // ids, and the simulated filesystem grep would read against.
 // FilesByPath holds every file in the corpus by absolute (or fake)
@@ -57,7 +57,7 @@ type QueryFixture struct {
 // SearchResult is the K-shaped output expected from veska. Each
 // element carries the NodeID the engine returned plus the snippet bytes
 // that would land in the agent's context. Only Snippet and NodeID are
-// used by the harness — passing the full search.Result keeps callers
+// used by the harness - passing the full search.Result keeps callers
 // straightforward.
 type SearchResult struct {
 	NodeID  string
@@ -81,7 +81,7 @@ const (
 
 // PerQuery captures one query's full token-efficiency picture: veska's
 // recall + token cost paired with both bracketed baselines. Negative
-// "savings" values mean grep+read used FEWER tokens for that query — a
+// "savings" values mean grep+read used FEWER tokens for that query - a
 // healthy bracket for queries where the grep keyword path happens to
 // be cheap.
 type PerQuery struct {
@@ -117,7 +117,7 @@ type Result struct {
 	// same embedder; the harness prefers model2vec when its assets are
 	// present and falls back to the deterministic FakeEmbedder
 	// otherwise (the latter is plumbing-only, not a realistic recall
-	// signal — published recall on the semantic corpus requires the
+	// signal - published recall on the semantic corpus requires the
 	// real model).
 	Embedder  string    `json:"embedder"`
 	Timestamp time.Time `json:"timestamp"`
@@ -154,7 +154,7 @@ func (r Result) SummaryLine() string {
 // TokensLine concretises the savings ratio. Per-query absolute, the
 // per-conversation extrapolation (default 50 searches per chat), and a
 // dollar estimate at a configurable rate. Pricing drifts month to
-// month — the label is printed alongside so a stale number is loud.
+// month - the label is printed alongside so a stale number is loud.
 func (r Result) TokensLine() string {
 	return fmt.Sprintf(
 		"~ savings: %s tokens/query · %s tokens over %d searches · $%.4f at $%g/Mtok (%s).",
@@ -315,7 +315,7 @@ func recallFromFiles(paths []string, fileNodeIDs map[string][]string, truth map[
 			}
 		}
 	}
-	// Cap at 1.0 — a single grep hit can cover many truth nodes.
+	// Cap at 1.0 - a single grep hit can cover many truth nodes.
 	r := float64(matched) / float64(len(truth))
 	if r > 1 {
 		r = 1

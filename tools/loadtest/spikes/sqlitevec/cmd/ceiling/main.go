@@ -54,7 +54,7 @@ func main() {
 	outFlag := flag.String("out", "data/ceiling_metrics.json", "output JSON path")
 	tmpDir := flag.String("tmpdir", "", "directory for temp DBs (default: system temp)")
 	seed := flag.Uint64("seed", 42, "RNG seed")
-	// mmap maps the DB file into virtual memory — major speedup on M1/M2 unified memory.
+	// mmap maps the DB file into virtual memory - major speedup on M1/M2 unified memory.
 	// Default covers 2M vectors × 768 dims × 4 bytes ≈ 6 GiB with headroom.
 	mmapBytes := flag.Int64("mmap", 0, "mmap_size in bytes (0 to disable)")
 	cacheSizeKB := flag.Int64("cache", 0, "cache_size in KiB (0 = SQLite default)")

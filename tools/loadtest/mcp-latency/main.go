@@ -4,8 +4,8 @@
 // file-based SQLite database seeded with 50,000 nodes.
 // Exit codes:
 //
-//	0 — p95 < 50ms (PASS)
-//	1 — p95 >= 50ms (FAIL)
+//	0 - p95 < 50ms (PASS)
+//	1 - p95 >= 50ms (FAIL)
 package main
 
 import (
@@ -145,7 +145,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	// Warm run — discard result.
+	// Warm run - discard result.
 	warmRows, err := db.Query(findSymbolQuery, repoID, branch, "pkg.Symbol25000")
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "warm query: %v\n", err)
@@ -181,7 +181,7 @@ func main() {
 	fmt.Printf("p95 = %.3fms  gate=<%.0fms  %s\n", p95ms, gateMs, verdict)
 
 	// Write RESULTS.md.
-	content := fmt.Sprintf(`# MCP Latency Benchmark — find_symbol warm p95
+	content := fmt.Sprintf(`# MCP Latency Benchmark - find_symbol warm p95
 
 Generated: %s
 Platform: linux amd64

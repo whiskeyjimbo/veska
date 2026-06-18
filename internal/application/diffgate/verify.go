@@ -14,7 +14,7 @@ import (
 // SOUNDLY over the ephemeral graph using only the Base ports + overlay edges.
 // It MUST be consulted before delegating to revalidate.Decide: Decide's
 // default case returns DecisionClose ("rule obsolete") for any rule it can't
-// cheaply re-run, which the gate would misread as "resolved" — a false PASS,
+// cheaply re-run, which the gate would misread as "resolved" - a false PASS,
 // the one unsafe direction. dead-code is sound now (edge-based). contract-drift
 // needs node-signature access the Base ports don't expose; it joins the
 // allowlist when the ephemeral finding-discovery adapter lands (follow-up).
@@ -40,7 +40,7 @@ type VerifyVerdict struct {
 	// not wired; an unchecked discovery is degraded, never green.
 	NewFindingsChecked bool `json:"new_findings_checked"`
 	// NewFindings lists finding_ids present in the candidate but absent in the
-	// base — findings the diff introduced. Sorted; empty when none (and when
+	// base - findings the diff introduced. Sorted; empty when none (and when
 	// NewFindingsChecked).
 	NewFindings []string `json:"new_findings"`
 	// NewFindingsCoveredRules names the rules discovery actually evaluated, so
@@ -55,13 +55,13 @@ type VerifyVerdict struct {
 // distinguishes "discovery was performed" from "not run": when Ran is false the
 // verdict's NewFindingsChecked is false (fail-safe). BaseIDs and CandidateIDs
 // are the complete sets of open finding_ids over the base and candidate graph
-// states respectively — the diff is by finding identity, so ids are all the
+// states respectively - the diff is by finding identity, so ids are all the
 // Verifier needs. Producing these (re-promoting changed files into a cloned
 // base graph and running the real structural checks over it) is the scope:large
 // adapter the gate's CLI wires; the Verifier only consumes the sets.
 // SCOPE: discovery covers the graph-structural rules (dead-code, contract-drift)
 // that a re-promote + full-file check pass makes sound. Line/dep scanners
-// (secrets, vuln) need per-line/dep inputs and are out of v1 scope — the gate's
+// (secrets, vuln) need per-line/dep inputs and are out of v1 scope - the gate's
 // "no new findings" is over structural findings.
 type Discovery struct {
 	Ran          bool
@@ -80,7 +80,7 @@ type Discovery struct {
 // no network IO.
 type Verifier struct{}
 
-// NewVerifier constructs a Verifier. It has no dependencies — the graph it
+// NewVerifier constructs a Verifier. It has no dependencies - the graph it
 // reads is supplied per-call via the Ephemeral.
 func NewVerifier() *Verifier { return &Verifier{} }
 
@@ -154,11 +154,11 @@ func (v *Verifier) Verify(ctx context.Context, eph *Ephemeral, target *domain.Fi
 // graph so the dead-code re-run sees the CANDIDATE's edges, not the indexed
 // base. Inbound CALLS edges = base inbound CALLS ∪ resolved overlay CALLS edges
 // targeting the node. Only CALLS count: a structural CONTAINS/IMPORTS parent
-// edge is not a caller, so it must not resolve a dead-code finding — counting
+// edge is not a caller, so it must not resolve a dead-code finding - counting
 // it made every dead-code finding read as resolved with no fix,
 // since every symbol has a CONTAINS parent. A candidate's NEW cross-file caller
 // surfaces as an UnresolvedCall (bound only at promotion), not a resolved
-// overlay edge, so it is NOT counted here — that under-reports inbound edges,
+// overlay edge, so it is NOT counted here - that under-reports inbound edges,
 // which biases dead-code resolution toward "still dead / unresolved". For a
 // GATE that is the safe direction (it over-blocks a genuinely-resolving change
 // rather than passing an unresolved one); intra-file caller additions are
@@ -198,7 +198,7 @@ func (p ephemeralPredicates) NodeSignaturePair(_ context.Context, _, _, _ string
 // gate. It returns false (= "still untested" = refresh = over-block), the
 // fail-safe direction for a gate. A sound ephemeral impl would need the inbound
 // edges' SRC FILE PATHS to apply the test-file predicate, which the Base
-// EdgeReader port does not expose (it returns src node_ids only) — so this stays
+// EdgeReader port does not expose (it returns src node_ids only) - so this stays
 // a stub until untested-symbol is added to the allowlist as a separate decision.
 func (p ephemeralPredicates) HasTestCaller(_ context.Context, _, _, _ string) (bool, error) {
 	return false, nil

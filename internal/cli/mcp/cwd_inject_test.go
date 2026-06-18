@@ -8,7 +8,7 @@ import (
 	"testing"
 )
 
-// verification — the shim rewrites eng_get_current_repo
+// verification - the shim rewrites eng_get_current_repo
 // requests that omit cwd to carry the shim's working directory.
 
 func TestMaybeInjectCwd_AddsCwdWhenMissing(t *testing.T) {
@@ -106,7 +106,7 @@ func TestInjectCwdAndCopy_StreamRewritesOnlyTargetFrames(t *testing.T) {
 	if cwd, _ := p["cwd"].(string); cwd == "" {
 		t.Fatalf("eng_get_current_repo frame should now carry cwd, got: %s", lines[1])
 	}
-	// Frames 1 and 3 are also eng_* calls — they should now carry cwd too
+	// Frames 1 and 3 are also eng_* calls - they should now carry cwd too
 	// ( broadened the rewrite from just eng_get_current_repo to
 	// every eng_* method).
 	var frame1, frame3 map[string]any

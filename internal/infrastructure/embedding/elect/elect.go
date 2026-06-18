@@ -42,7 +42,7 @@ type Config struct {
 type Result struct {
 	// Provider is the elected EmbeddingProvider, ready to wire.
 	Provider ports.EmbeddingProvider
-	// Name is the elected provider's ModelID — also the marker contents.
+	// Name is the elected provider's ModelID - also the marker contents.
 	Name string
 	// Previous is the marker value before this election ("" if none).
 	Previous string
@@ -100,7 +100,7 @@ func pick(cfg Config, modelName string) (ports.EmbeddingProvider, error) {
 			return nil, err
 		}
 		if p == nil {
-			return nil, fmt.Errorf("VESKA_EMBEDDER=model2vec but %q is not installed and this binary has no embedded model — run 'veska install model2vec'", modelName)
+			return nil, fmt.Errorf("VESKA_EMBEDDER=model2vec but %q is not installed and this binary has no embedded model - run 'veska install model2vec'", modelName)
 		}
 		return p, nil
 	case OverrideAuto:

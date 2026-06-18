@@ -5,7 +5,7 @@ import "github.com/whiskeyjimbo/veska/internal/core/domain"
 // This file holds SEED-STATE facts: literal operational state a coverage
 // harness INSERTS before exercising the registry / task / finding /
 // suppression tools. These are NOT parse output and are NOT guarded by the
-// drift self-test — there is nothing to re-derive from a parse. They exist so
+// drift self-test - there is nothing to re-derive from a parse. They exist so
 // the manifest schema spans every fact category the 40 eng_* tools assert.
 // RootPath on RepoFact is intentionally empty here: the absolute testdata
 // module root is only known at harness time. The harness fills it in (it is

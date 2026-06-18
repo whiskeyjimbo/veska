@@ -32,8 +32,8 @@ func NormalizeDirection(d string) string {
 }
 
 // LooksLikeNodeID reports whether s looks like a hex content-hash node ID.
-// The threshold is 12 hex chars — the width of the display short_id the CLI
-// prints — so a user copy-pasting the "(66f083714906)" suffix from `veska
+// The threshold is 12 hex chars - the width of the display short_id the CLI
+// prints - so a user copy-pasting the "(66f083714906)" suffix from `veska
 // symbol` output into `veska calls`/`veska blast` is routed through the
 // node_id path and prefix-expanded daemon-side, instead of being misread as
 // a symbol name.

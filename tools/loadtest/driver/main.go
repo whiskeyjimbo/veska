@@ -4,9 +4,9 @@
 // REPORT.md under tools/loadtest/.
 // Exit codes:
 //
-//	0 — all non-pending gates pass
-//	1 — at least one gate fails
-//	2 — no failures but at least one gate is pending
+//	0 - all non-pending gates pass
+//	1 - at least one gate fails
+//	2 - no failures but at least one gate is pending
 package main
 
 import (
@@ -62,7 +62,7 @@ func buildGates(ltRoot string) []GateResult {
 	// Gate 6: semantic_search p95 < 100ms at 50k vectors
 	gates = append(gates, gate6VectorBench(ltRoot))
 
-	// Gates 7 & 8: race tests + lint — read from ci-gates/RESULTS.md if present
+	// Gates 7 & 8: race tests + lint - read from ci-gates/RESULTS.md if present
 	g7, g8 := gatesCIGates(ltRoot)
 	gates = append(gates, g7, g8)
 
@@ -176,7 +176,7 @@ func gate4RSS(ltRoot string) GateResult {
 		g.Measured = fmt.Sprintf("%dmb", int64(rssMiB))
 	}
 	if rssBytes == 0 {
-		// Platform returned 0 (non-Linux) — treat as pending.
+		// Platform returned 0 (non-Linux) - treat as pending.
 		g.Status = StatusPending
 		g.Note = "RSS measurement unavailable on this platform"
 		return g
@@ -257,7 +257,7 @@ func gatesCIGates(ltRoot string) (GateResult, GateResult) {
 
 	content, err := readFile(filepath.Join(ltRoot, "ci-gates", "RESULTS.md"))
 	if err != nil {
-		// ci-gates/RESULTS.md absent — mark pending
+		// ci-gates/RESULTS.md absent - mark pending
 		g7.Status = StatusPending
 		g7.Measured = "see CI"
 		g8.Status = StatusPending

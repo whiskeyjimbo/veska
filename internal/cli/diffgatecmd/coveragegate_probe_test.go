@@ -50,7 +50,7 @@ func probeUntestedModify(t *testing.T, p proxyProbe) (untestedVerdict, error) {
 func assertProxyLimit(t *testing.T, v untestedVerdict, err error, flipWhen string) {
 	t.Helper()
 	if !errors.Is(err, ErrGateFailed) {
-		t.Fatalf("documented proxy limit no longer FAILs — FLIP this assert to PASS and close %s; got err=%v verdict=%+v", flipWhen, err, v)
+		t.Fatalf("documented proxy limit no longer FAILs - FLIP this assert to PASS and close %s; got err=%v verdict=%+v", flipWhen, err, v)
 	}
 }
 
@@ -117,7 +117,7 @@ func TestUntestedProxyLimit_TransitiveOnly(t *testing.T) {
 }
 
 // reflection / generated harness: a method invoked by string name via reflect
-// (MethodByName) can NEVER produce a static edge — this is a PERMANENT proxy
+// (MethodByName) can NEVER produce a static edge - this is a PERMANENT proxy
 // limit, asserted FAIL with no flip-when target (unlike the locks above).
 func TestUntestedProxyLimit_ReflectionDispatch_Permanent(t *testing.T) {
 	v, err := probeUntestedModify(t, proxyProbe{
@@ -132,8 +132,8 @@ func TestUntestedProxyLimit_ReflectionDispatch_Permanent(t *testing.T) {
 	}
 }
 
-// The actual embedded case — base method satisfying an interface via
-// embedding — is already suppressed by the interface-dispatch fix (zvh6.9), so
+// The actual embedded case - base method satisfying an interface via
+// embedding - is already suppressed by the interface-dispatch fix (zvh6.9), so
 // it must PASS. This locks that coverage so a regression there surfaces here.
 func TestUntested_EmbeddedInterfaceMethod_Passes(t *testing.T) {
 	v, err := probeUntestedModify(t, proxyProbe{
@@ -148,7 +148,7 @@ func TestUntested_EmbeddedInterfaceMethod_Passes(t *testing.T) {
 	}
 }
 
-// Control: a DIRECT test call must PASS — proves the harness wiring.
+// Control: a DIRECT test call must PASS - proves the harness wiring.
 func TestUntested_DirectCall_Passes(t *testing.T) {
 	v, err := probeUntestedModify(t, proxyProbe{
 		prodFile: "greet.go",

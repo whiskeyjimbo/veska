@@ -123,7 +123,7 @@ func ResolveConfig(c Config) Config {
 	}
 	// EmbedModel is only consulted when the elected embedder is Ollama; it
 	// is no longer defaulted to nomic-embed-text here, since that implied
-	// Ollama-embedding was the daemon default (it isn't — see elect). When
+	// Ollama-embedding was the daemon default (it isn't - see elect). When
 	// VESKA_EMBEDDER=ollama and this is unset, elect supplies the default.
 	if c.EmbedModel == "" {
 		c.EmbedModel = os.Getenv("VESKA_EMBED_MODEL")
@@ -228,7 +228,7 @@ type Daemon struct {
 
 // newDaemon builds the full collaborator graph from cfg. Every dep is
 // validated; any failure produces a typed *ErrMissingDep without panicking.
-// The returned Daemon is not yet running — call Start.
+// The returned Daemon is not yet running - call Start.
 // The work is split across daemonBuilder phase methods so each stays small, and
 // the partial-failure cleanup (closing the SQLite pools once they are open) is
 // expressed once as a deferred guard rather than repeated at every error site.
@@ -322,7 +322,7 @@ type mcpDeps struct {
 	refs     *sqlite.EmbeddingRefsRepo
 	metrics  *observability.Metrics
 	// savings records per-search token-savings telemetry.
-	// Nil disables recording — RegisterSearchTools is nil-safe.
+	// Nil disables recording - RegisterSearchTools is nil-safe.
 	savings *savings.Recorder
 	// ingester + promoter drive eng_promote (post-commit hook target,
 	// ). When either is nil eng_promote is skipped at wire time.
@@ -339,11 +339,11 @@ type mcpDeps struct {
 	// wired (legacy / test callers); the tool degrades cleanly in that case.
 	reparser func(ctx context.Context, rec application.RepoRecord) error
 	// scanTracker surfaces in-flight cold scans to eng_get_status
-	// Nil-safe — statusProvider tolerates a nil tracker.
+	// Nil-safe - statusProvider tolerates a nil tracker.
 	scanTracker *application.ScanTracker
 	// reconciler surfaces in-flight per-repo wake sweeps so graph read tools
 	// can attach a wake_reconciling degraded reason. It
-	// satisfies mcp.ReconcileReader. Nil-safe — the helper no-ops on nil.
+	// satisfies mcp.ReconcileReader. Nil-safe - the helper no-ops on nil.
 	reconciler *gitwatch.WakeReconciler
 	// hubDegreeThreshold is the operator-configured blast.hub_degree_threshold
 	// threaded into the blast-radius service so the gate is
@@ -353,7 +353,7 @@ type mcpDeps struct {
 
 // repoRootFunc adapts the canonical composition.RepoRootByID resolver to
 // mcp.RepoRootFunc. The underlying signatures match, so this is a trivial type
-// conversion — the lookup body and error wording live in composition.
+// conversion - the lookup body and error wording live in composition.
 func repoRootFunc(db *sql.DB) mcp.RepoRootFunc {
 	return mcp.RepoRootFunc(composition.RepoRootByID(db))
 }

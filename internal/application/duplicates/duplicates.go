@@ -66,14 +66,14 @@ const DefaultNearThreshold float32 = 0.68
 // calibratedNearThreshold maps embedder models to similarity score limits calibrated
 // to minimize false positives. Scores are model-specific and not comparable across architectures.
 var calibratedNearThreshold = map[string]float32{
-	// near-dup median 0.69 vs related max 0.68 — separable at high precision.
+	// near-dup median 0.69 vs related max 0.68 - separable at high precision.
 	"model2vec(potion-code-16M)": 0.68,
 	// scores compress high (near-dup median 0.84, related p90 0.80, unrelated
 	// max 0.82); 0.85 clears the related/unrelated bands.
 	"nomic-embed-text": 0.85,
 	// hash-ngram: bands are INVERTED (near-dup median 0.56 < related max 0.68),
 	// so no threshold separates well; 0.70 is high-precision/near-zero-recall.
-	// static-v2 is a poor fit for near-dup — prefer model2vec.
+	// static-v2 is a poor fit for near-dup - prefer model2vec.
 	"veska-static-v2": 0.70,
 }
 

@@ -15,9 +15,9 @@ import (
 // frames pass through byte-for-byte.
 // Two callers:
 //
-//	eng_get_current_repo — cwd is the *only* signal for "what
+//	eng_get_current_repo - cwd is the *only* signal for "what
 //	  repo is the user in".
-//	every other eng_* tool — cwd is a fallback the daemon
+//	every other eng_* tool - cwd is a fallback the daemon
 //	  uses to resolve repo_id when the caller omits it AND multiple repos are
 //	  registered. Without this, an agent running inside a registered repo
 //	  still has to look up and pass a short_id explicitly.
@@ -25,7 +25,7 @@ import (
 // The shim is normally a pure byte pump, but tools that key off the
 // caller's filesystem location need cwd, and most MCP clients (Claude
 // Desktop, Cursor, raw `printf | veska-mcp`) have no way to express
-// that. The shim already runs in the user's working directory — using
+// that. The shim already runs in the user's working directory - using
 // it as a fallback Just Works for the common case.
 func injectCwdAndCopy(dst io.Writer, src io.Reader) {
 	cwd, _ := os.Getwd()

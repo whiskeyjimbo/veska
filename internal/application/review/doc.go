@@ -7,7 +7,7 @@
 // output contract is not testable, so the two are never split apart.
 // The package is application-layer: it may depend on internal/core/{domain,
 // ports} but never on internal/infrastructure. The review goroutine (a
-// separate task) is a thin orchestrator — it asks the [Loader] for a [Prompt],
+// separate task) is a thin orchestrator - it asks the [Loader] for a [Prompt],
 // calls Render, hands the rendered text to a ports.LLMGenerator, and feeds the
 // model output to Parse. The Prompt's Version is passed verbatim into
 // ports.GenerateRequest.PromptTemplateVersion so cached outputs can be

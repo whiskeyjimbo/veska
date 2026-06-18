@@ -89,7 +89,7 @@ func TestVulnScanCheck_GoModTouched_EmitsFindings(t *testing.T) {
 // TestVulnScanCheck_MessageCarriesGoModLine pins: the
 // finding message must include the go.mod line of the offending require
 // so editors can jump to source. (The findings table has no dedicated
-// line column today — see also the schema note in the issue.)
+// line column today - see also the schema note in the issue.)
 func TestVulnScanCheck_MessageCarriesGoModLine(t *testing.T) {
 	const goMod = `module example.com/app
 
@@ -148,7 +148,7 @@ func TestVulnScanCheck_GoModNotTouched_StillScans(t *testing.T) {
 // is a no-op, not an error.
 func TestVulnScanCheck_NoGoModOnDisk_NoFindings(t *testing.T) {
 	src := &fakeVulnSource{}
-	// repoRoot points at an empty dir — no go.mod present.
+	// repoRoot points at an empty dir - no go.mod present.
 	emptyRoot := t.TempDir()
 	repoRoot := func(_ context.Context, _ string) (string, error) { return emptyRoot, nil }
 	c := NewVulnScanCheck(src, repoRoot)
@@ -190,7 +190,7 @@ func TestVulnScanCheck_Idempotent(t *testing.T) {
 // that share the SAME advisory (same AdvisoryID+Package) must each retain
 // their OWN vulnerable_dependency finding. Because the storage PK is
 // (finding_id, branch) with no repo_id, identical finding_ids on the same
-// branch would let one repo's scan overwrite the other's row — silently
+// branch would let one repo's scan overwrite the other's row - silently
 // dropping a real CVE from all-but-one repo. The finding_id must therefore
 // be namespaced by repo id while staying idempotent within a repo.
 func TestVulnScanCheck_RepoNamespacedFindingID(t *testing.T) {
@@ -239,7 +239,7 @@ func TestVulnScanCheck_NilSource(t *testing.T) {
 }
 
 // TestVulnScanCheck_GoModReadFailure pins: a missing go.mod
-// is no longer an error after the touchesGoMod gate removal — non-Go repos
+// is no longer an error after the touchesGoMod gate removal - non-Go repos
 // are a normal case (TestVulnScanCheck_NoGoModOnDisk_NoFindings covers that).
 // This test now pins the residual error path: a read failure that ISN'T
 // os.IsNotExist (e.g. a directory at the go.mod path) still surfaces.

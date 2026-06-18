@@ -6,7 +6,7 @@
 // shared store, and places the share-vs-regenerate line FROM DATA rather than
 // assumption.
 // The ADR §3 table has already made the qualitative call for four of the five
-// families — parse-derived nodes/edges/FTS regenerate (cheap+deterministic);
+// families - parse-derived nodes/edges/FTS regenerate (cheap+deterministic);
 // summaries, review, and class-B curation share (LLM-produced or irreproducible,
 // content-addressed → conflict-free). The one genuinely deployment-dependent
 // family is EMBEDDINGS (§5): with a cheap CPU embedder (model2vec / static) they
@@ -21,7 +21,7 @@
 // No bandwidth is hardcoded into the verdict; reference link speeds are layered
 // on top purely for display. This keeps the placed line a property of the
 // measured data, with no injected free parameter.
-// Runnable NOW, independent of the sharing implementation — it only times the
+// Runnable NOW, independent of the sharing implementation - it only times the
 // existing pipeline stages (parse via the production GoParser, embed via the
 // production elected embedder) and sizes the artifacts. The elected embedder is
 // model2vec when installed, else the zero-dependency static-v2 hash embedder, so
@@ -62,7 +62,7 @@ func resultsFile() string {
 
 // refLinks are display-only reference link speeds (MB/s) the report
 // evaluates each artifact's breakeven against. They never enter a
-// verdict computation — the verdict is the breakeven number itself.
+// verdict computation - the verdict is the breakeven number itself.
 var refLinks = []struct {
 	name string
 	mbs  float64
@@ -114,7 +114,7 @@ func TestShareVsRegenerate(t *testing.T) {
 	t.Logf("parse: files=%d nodes=%d edges=%d src=%dKB wall=%s",
 		ps.files, ps.nodeCount, ps.edgeCount, ps.srcBytes/1024, ps.wall.Round(time.Millisecond))
 	if ps.nodeCount == 0 {
-		t.Fatalf("no nodes parsed under %s — is it a Go corpus? set SHARE_REGEN_ROOT", root)
+		t.Fatalf("no nodes parsed under %s - is it a Go corpus? set SHARE_REGEN_ROOT", root)
 	}
 
 	emb := embedNodes(t, ps.texts)
@@ -273,7 +273,7 @@ func buildRows(ps parseStats, emb embedStats) []artifactRow {
 
 // embeddingRow is the decision-critical row: it reports the breakeven
 // bandwidth from the measured embed wall time and the carried byte
-// size. regenS is the MARGINAL embed cost — parsing is excluded because
+// size. regenS is the MARGINAL embed cost - parsing is excluded because
 // the graph is regenerated locally regardless, so the text is already
 // in hand when deciding whether to also carry the vectors.
 func embeddingRow(family string, emb embedStats, bytes int64, regenS float64) artifactRow {
@@ -296,19 +296,19 @@ func embeddingRow(family string, emb embedStats, bytes int64, regenS float64) ar
 
 func renderReport(root string, maxDocs int, ps parseStats, emb embedStats, rows []artifactRow) string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "# Share-vs-Regenerate — ADR-S0019 §4 empirical gate\n\n")
+	fmt.Fprintf(&b, "# Share-vs-Regenerate - ADR-S0019 §4 empirical gate\n\n")
 	fmt.Fprintf(&b, "Generated: %s\nPlatform: %s %s\n",
 		time.Now().UTC().Format("2006-01-02"), runtime.GOOS, runtime.GOARCH)
 	fmt.Fprintf(&b, "Corpus root: `%s` (max_docs=%d)\n", root, maxDocs)
 	fmt.Fprintf(&b, "Parsed: %d files, %d nodes, %d edges, ~%dKB source.\n",
 		ps.files, ps.nodeCount, ps.edgeCount, ps.srcBytes/1024)
-	fmt.Fprintf(&b, "Embedder: **%s** — %d vecs × %d dims, embed wall=%s (mean %s/vec).\n\n",
+	fmt.Fprintf(&b, "Embedder: **%s** - %d vecs × %d dims, embed wall=%s (mean %s/vec).\n\n",
 		emb.model, emb.count, emb.dim, emb.wall.Round(time.Millisecond), meanPer(emb.wall, emb.count))
 
-	fmt.Fprintf(&b, "## Verdict — breakeven bandwidth per artifact\n\n")
+	fmt.Fprintf(&b, "## Verdict - breakeven bandwidth per artifact\n\n")
 	fmt.Fprintf(&b, "`breakeven = bytes_carried / regen_seconds`: the link speed at which "+
 		"downloading the artifact costs exactly what regenerating it locally does. "+
-		"Below breakeven, regenerate; above, share. No bandwidth is assumed — it is computed.\n\n")
+		"Below breakeven, regenerate; above, share. No bandwidth is assumed - it is computed.\n\n")
 	fmt.Fprintf(&b, "| Artifact | Decided | Regen | Carried | Breakeven | Note |\n")
 	fmt.Fprintf(&b, "|---|---|---|---|---|---|\n")
 	for _, r := range rows {
@@ -317,7 +317,7 @@ func renderReport(root string, maxDocs int, ps parseStats, emb embedStats, rows 
 	}
 
 	fmt.Fprintf(&b, "\n## Embedding verdict at reference link speeds\n\n")
-	fmt.Fprintf(&b, "Display-only — derived from the breakeven above, not assumed.\n\n")
+	fmt.Fprintf(&b, "Display-only - derived from the breakeven above, not assumed.\n\n")
 	fmt.Fprintf(&b, "| Artifact | %s |\n", strings.Join(refLinkHeaders(), " | "))
 	fmt.Fprintf(&b, "|---|%s\n", strings.Repeat("---|", len(refLinks)))
 	for _, r := range rows {
@@ -338,10 +338,10 @@ func renderReading(b *strings.Builder, emb embedStats) {
 	fmt.Fprintf(b, "The breakeven scales with per-embed latency: a faster embedder produces a "+
 		"HIGHER breakeven (you would need a faster link for sharing to win → lean regenerate); "+
 		"a slower embedder produces a LOWER breakeven (almost any link beats re-embedding → "+
-		"lean share). The crossover is therefore deployment-dependent — exactly the "+
+		"lean share). The crossover is therefore deployment-dependent - exactly the "+
 		"per-deployment toggle ADR-S0019 §4 places behind `SharedArtifactStore`.\n\n")
 	fmt.Fprintf(b, "This run measured **%s** at %s/vec. For the cheap-CPU endpoint, install the "+
-		"fat-build default model2vec (`veska install model2vec`) — sub-millisecond/vec keeps the "+
+		"fat-build default model2vec (`veska install model2vec`) - sub-millisecond/vec keeps the "+
 		"breakeven high (regenerate up to a fast LAN). For the heavy endpoint, re-run with "+
 		"`VESKA_EMBEDDER=ollama` (network round-trip per vec drives the breakeven toward zero, so "+
 		"share wins at almost any link).\n",
@@ -349,20 +349,20 @@ func renderReading(b *strings.Builder, emb embedStats) {
 	fmt.Fprintf(b, "\n_Measurement basis: regen timed unbatched on a single goroutine; "+
 		"production embeds via a worker pool + `BatchEmbeddingProvider`, so real regen "+
 		"wall-clock is lower and the true breakeven is somewhat HIGHER (biased toward "+
-		"regenerate). The breakeven is corpus-size-invariant — `count` cancels — so a "+
+		"regenerate). The breakeven is corpus-size-invariant - `count` cancels - so a "+
 		"larger library buys measurement stability, not a different verdict._\n")
 }
 
 func regenCell(r artifactRow) string {
 	if r.RegenSeconds == 0 {
-		return "—"
+		return "-"
 	}
 	return fmt.Sprintf("%.2fs", r.RegenSeconds)
 }
 
 func bytesCell(b int64) string {
 	if b == 0 {
-		return "—"
+		return "-"
 	}
 	switch {
 	case b >= 1<<20:
@@ -376,7 +376,7 @@ func bytesCell(b int64) string {
 
 func breakevenCell(mbs float64) string {
 	if mbs == 0 {
-		return "—"
+		return "-"
 	}
 	return fmt.Sprintf("%.3g MB/s", mbs)
 }

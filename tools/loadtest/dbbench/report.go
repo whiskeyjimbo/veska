@@ -34,7 +34,7 @@ func RenderReport(w io.Writer, drivers []string, results []WorkloadResult, cfg R
 	}
 	sort.Strings(workloads)
 
-	fmt.Fprintf(w, "# dbbench — SQLite driver comparison\n\n")
+	fmt.Fprintf(w, "# dbbench - SQLite driver comparison\n\n")
 	fmt.Fprintf(w, "Generated: %s\n\n", time.Now().UTC().Format(time.RFC3339))
 	fmt.Fprintf(w, "Source issue: solov2-6e5r\n\n")
 

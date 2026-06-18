@@ -49,7 +49,7 @@ type Params struct {
 }
 
 // Run performs a full cold-scan reparse of the target (or cwd-resolved) repo
-// unconditionally — bypassing the daemon's StartupResync gate that skips
+// unconditionally - bypassing the daemon's StartupResync gate that skips
 // at-HEAD repos. When the daemon is up the reindex is routed through its
 // eng_reindex_repo MCP tool so the user does not have to stop the
 // daemon; the direct-SQLite path below handles the no-daemon case.

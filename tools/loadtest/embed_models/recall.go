@@ -17,10 +17,10 @@ import (
 
 // RecallScores holds the per-source metric output.
 // Two recall series are reported. RAW recall@k uses N (all pairs) as the
-// denominator — penalises models whose target docs weren't embedded at all
+// denominator - penalises models whose target docs weren't embedded at all
 // (e.g. an Ollama run capped at max_docs=500 against a 2489-doc corpus
 // where the headline target lives outside the first 500). FAIR recall@k
-// uses (N - NotInCorpus) — recall over pairs whose target was actually
+// uses (N - NotInCorpus) - recall over pairs whose target was actually
 // in the embedded subset, so cross-type comparisons (model2vec vs ollama,
 // where the corpus caps differ by design) aren't biased by the cap.
 // Reporters should prefer FairAt10 when comparing models with different
@@ -46,7 +46,7 @@ type RecallScores struct {
 // ComputeRecall embeds every pair.Query with provider, ranks against
 // docs, and returns aggregate recall@k + MRR. Pairs whose expected
 // symbol does not appear anywhere in docs are still counted (they
-// contribute 0 to every metric — the bench measures how well the model
+// contribute 0 to every metric - the bench measures how well the model
 // surfaces a target that's known to be in the corpus, so a missing
 // target is a real failure of the corpus or pair set).
 func ComputeRecall(provider Embedder, pairs []Pair, docs []doc) RecallScores {
@@ -59,7 +59,7 @@ func ComputeRecall(provider Embedder, pairs []Pair, docs []doc) RecallScores {
 	s.Total = len(pairs)
 	// Precompute the set of names present in the corpus so we can
 	// distinguish "fixture references a name that doesn't exist" from
-	// "model failed to rank the right name highly" — different
+	// "model failed to rank the right name highly" - different
 	// remediation paths for the bench curator.
 	corpusNames := make(map[string]bool, len(docs))
 	for _, d := range docs {
@@ -104,7 +104,7 @@ func ComputeRecall(provider Embedder, pairs []Pair, docs []doc) RecallScores {
 	s.MRR = sumRR / denom
 
 	// Fair series: denominator excludes pairs whose target wasn't in
-	// the embedded subset — measures "how well does the model rank
+	// the embedded subset - measures "how well does the model rank
 	// targets that actually exist among the embedded docs?"
 	s.FairN = s.N - s.NotInCorpus
 	if s.FairN > 0 {
@@ -120,7 +120,7 @@ func ComputeRecall(provider Embedder, pairs []Pair, docs []doc) RecallScores {
 // topKByDot returns the 0-based rank of the first doc whose name matches
 // expected within the top probe results, or -1 if no match in the top
 // probe. We compute the full score list and partial-sort to k=probe so
-// we don't allocate a heap structure for small probe sizes — the
+// we don't allocate a heap structure for small probe sizes - the
 // corpus sizes here (≤few thousand docs) make this trivially fast.
 func topKByDot(q []float32, docs []doc, probe int, expected string) int {
 	type sd struct {

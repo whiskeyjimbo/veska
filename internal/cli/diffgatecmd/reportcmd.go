@@ -28,15 +28,15 @@ type ReportParams struct {
 
 // RunReport assembles and emits the advisory PR impact/risk report: the diff's
 // blast radius, each changed file's change-risk standing, open findings on the
-// touched files, and the changed-but-untested symbols. It is ADVISORY — it never
+// touched files, and the changed-but-untested symbols. It is ADVISORY - it never
 // gates: presence of findings/risk/untested does NOT cause a non-zero exit, a
 // producer that errors degrades its section to a Note, and an un-indexed repo
 // yields a noted (still exit-0) report. The ONLY non-zero exit is a usage error
-// (missing required flags) — that is an un-runnable invocation, not a gate.
+// (missing required flags) - that is an un-runnable invocation, not a gate.
 // This deliberately diverges from the gate subcommands, which return
 // ErrGateFailed on repo_not_indexed: the report's contract is "drop it in CI and
 // it never breaks the build" (the soft on-ramp), so it must survive the most
-// common early-adoption state — an index not yet built.
+// common early-adoption state - an index not yet built.
 func RunReport(ctx context.Context, p ReportParams) error {
 	if p.RepoID == "" || p.BaseRef == "" || p.CandidateRef == "" {
 		return fmt.Errorf("diff-gate report: --repo, --base-ref and --candidate-ref are required")
@@ -245,7 +245,7 @@ func assembleUntested(ctx context.Context, pools *sqlite.Pools, dbPath string, e
 }
 
 // emitReport writes the indented JSON report to out. It always returns nil on a
-// successful encode — the report never signals a gate failure.
+// successful encode - the report never signals a gate failure.
 func emitReport(out io.Writer, report diffgate.PRReport) error {
 	enc := json.NewEncoder(out)
 	enc.SetIndent("", "  ")

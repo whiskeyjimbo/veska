@@ -133,7 +133,7 @@ func TestUntestedCheck_NoFindingWhenTestCallerPresent(t *testing.T) {
 }
 
 // The trap: an EXPORTED untested symbol is the highest-value finding, NOT a
-// false positive — unlike dead-code, a test caller is always a visible CALLS
+// false positive - unlike dead-code, a test caller is always a visible CALLS
 // edge, so the dead-code exported-symbol exclusion must NOT be carried here.
 func TestUntestedCheck_FlagsExportedSymbol(t *testing.T) {
 	q := &fakeCoverageQuerier{nodes: []ports.NodeCallers{
@@ -151,7 +151,7 @@ func TestUntestedCheck_FlagsExportedSymbol(t *testing.T) {
 	}
 }
 
-// A zero-caller node (no callers at all) is still untested — intentional
+// A zero-caller node (no callers at all) is still untested - intentional
 // overlap with dead-code; the freshly-added exported API with no caller yet
 // is the highest-value case and must not be suppressed.
 func TestUntestedCheck_FlagsZeroCallerSymbol(t *testing.T) {
@@ -170,7 +170,7 @@ func TestUntestedCheck_FlagsZeroCallerSymbol(t *testing.T) {
 	}
 }
 
-// Symbols DEFINED in a test file are not prod symbols — never flagged.
+// Symbols DEFINED in a test file are not prod symbols - never flagged.
 func TestUntestedCheck_SkipsTestFileSymbols(t *testing.T) {
 	q := &fakeCoverageQuerier{nodes: []ports.NodeCallers{
 		nc("n1", "internal/svc/svc_test.go", "function", "helperFn"),
@@ -215,7 +215,7 @@ func TestUntestedCheck_SkipsEntryPoints(t *testing.T) {
 	}
 }
 
-// Ephemeral repos (cache-tier clones) skip entirely — mirrors dead-code's
+// Ephemeral repos (cache-tier clones) skip entirely - mirrors dead-code's
 // izh6.13 short-circuit; untested-symbol has strictly worse exposure on an
 // external library's public API.
 func TestUntestedCheck_SkipsEphemeralRepo(t *testing.T) {
@@ -236,7 +236,7 @@ func TestUntestedCheck_SkipsEphemeralRepo(t *testing.T) {
 	}
 }
 
-// A tracked repo (or a lookup error — fail open) still reports.
+// A tracked repo (or a lookup error - fail open) still reports.
 func TestUntestedCheck_TrackedRepoReports(t *testing.T) {
 	q := &fakeCoverageQuerier{nodes: []ports.NodeCallers{
 		nc("n1", "internal/svc/svc.go", "function", "doWork"),
@@ -259,7 +259,7 @@ func (f fakeIfaceLister) InterfaceMethodNames(context.Context, string, string) (
 }
 
 // A concrete method whose bare name matches a same-repo interface method is
-// suppressed (interface-dispatch proxy blind spot) — the persona-test fix.
+// suppressed (interface-dispatch proxy blind spot) - the persona-test fix.
 func TestUntestedCheck_SuppressesInterfaceMethodImpl(t *testing.T) {
 	q := &fakeCoverageQuerier{nodes: []ports.NodeCallers{
 		nc("n1", "internal/svc/en.go", "method", "EN.Greet"), // no test caller

@@ -44,7 +44,7 @@ type EntryPointsResponse struct {
 func RegisterEntryPointsTool(r *Registry, svc *wiki.EntryPointsService, repos application.RepoLister) {
 	r.MustRegister(ToolSpec{
 		Name:        "eng_get_entry_points",
-		Description: "High-fan-in symbols ranked by inbound call count — the natural entry points a newcomer (or agent) should read first to understand the repo. Exported, tested symbols rank above unexported untested ones at the same inbound count.",
+		Description: "High-fan-in symbols ranked by inbound call count - the natural entry points a newcomer (or agent) should read first to understand the repo. Exported, tested symbols rank above unexported untested ones at the same inbound count.",
 		InputSchema: entryPointsInputSchema,
 		Handler:     makeEntryPointsHandler(svc, repos),
 	})
@@ -196,12 +196,12 @@ func makeHotZoneHandler(svc *wiki.HotZoneService, repoRoot RepoRootFunc, repos a
 			switch {
 			case rep.CandidatesScanned == 0:
 				degraded = append(degraded, "no_recent_commits")
-				hint = "no commits in the past 30 days — hot-zone ranking is per-commit-frequency-driven, so commit some changes and re-run"
+				hint = "no commits in the past 30 days - hot-zone ranking is per-commit-frequency-driven, so commit some changes and re-run"
 			case rep.CandidatesScored == 0:
 				degraded = append(degraded, "no_scored_zones")
-				hint = fmt.Sprintf("%d file(s) changed in the last 30 days but none have graph nodes (lockfiles, READMEs, generated assets) — hot-zone scores them at 0 and drops them", rep.CandidatesScanned)
+				hint = fmt.Sprintf("%d file(s) changed in the last 30 days but none have graph nodes (lockfiles, READMEs, generated assets) - hot-zone scores them at 0 and drops them", rep.CandidatesScanned)
 			default:
-				// Should be unreachable — if scored>0 we'd have zones. Be
+				// Should be unreachable - if scored>0 we'd have zones. Be
 				// defensive so the caller still gets a hint.
 				degraded = append(degraded, "no_post_registration_commits")
 			}

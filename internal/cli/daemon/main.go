@@ -18,7 +18,7 @@ import (
 )
 
 const (
-	// daemonLogSize is 100 MiB — rotate when the active log exceeds this.
+	// daemonLogSize is 100 MiB - rotate when the active log exceeds this.
 	daemonLogSize = 100 << 20
 
 	// daemonLogKeep is the number of rotated copies to retain.
@@ -102,7 +102,7 @@ func Run() int {
 
 	if err := crashloop.Check(config.DefaultVectorDir()); err != nil {
 		if errors.Is(err, crashloop.ErrBroken) {
-			slog.Error("crash-loop breaker tripped — run `veska doctor reset-crash-loop` to recover")
+			slog.Error("crash-loop breaker tripped - run `veska doctor reset-crash-loop` to recover")
 			return crashloop.ExitCode
 		}
 		slog.Error("crash-loop check failed", "err", err)

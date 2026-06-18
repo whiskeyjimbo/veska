@@ -48,7 +48,7 @@ func DefaultOSVCacheDir() string {
 
 // DefaultBackupDir returns the directory `veska backup create` writes to:
 // $VESKA_HOME/backups. Co-located with the rest of veska's
-// state so a single `rm -rf $VESKA_HOME` clears everything — the original
+// state so a single `rm -rf $VESKA_HOME` clears everything - the original
 // ~/.veska-backups layout left tarballs orphaned after a data wipe.
 // Backward compat: LegacyBackupDir returns the prior path; callers that
 // read backups (list, restore) should fall back to it when the canonical

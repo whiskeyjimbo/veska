@@ -7,7 +7,7 @@ import (
 )
 
 // duplicatesCmd wraps eng_find_clusters: the unified, tier-labeled
-// similar-code view for de-dupe triage — exact (byte-identical), structural
+// similar-code view for de-dupe triage - exact (byte-identical), structural
 // (renamed Type-2), and near (vector) clusters in one ranked pass, repo-wide or
 // across all registered repos. Each grouping is shaped to become a verify-and
 // dedupe task. For exact-only/near-only the older `veska clones` still works; for
@@ -25,7 +25,7 @@ func duplicatesCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:          "duplicates",
 		Short:        "Whole-repo (or cross-repo) similar-code clusters for de-dupe triage (wraps eng_find_clusters)",
-		Long:         "List groups of >=2 similar symbols in one ranked pass across three tiers (tightest first): 'exact' (byte-identical copy-paste), 'structural' (same shape after renaming variables/literals — Type-2 clones), and 'near' (vector-similar above the elected embedder's calibrated threshold). A symbol appears at most once, at its tightest tier. No seed needed — point it at a repo (or --all-repos) and turn each cluster into a verify-and-dedupe task. Note: structural/near need structural_hash + scored SIMILAR_TO edges; reindex a graph promoted before they landed.",
+		Long:         "List groups of >=2 similar symbols in one ranked pass across three tiers (tightest first): 'exact' (byte-identical copy-paste), 'structural' (same shape after renaming variables/literals - Type-2 clones), and 'near' (vector-similar above the elected embedder's calibrated threshold). A symbol appears at most once, at its tightest tier. No seed needed - point it at a repo (or --all-repos) and turn each cluster into a verify-and-dedupe task. Note: structural/near need structural_hash + scored SIMILAR_TO edges; reindex a graph promoted before they landed.",
 		Args:         cobra.NoArgs,
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, _ []string) error {

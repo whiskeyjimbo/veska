@@ -33,7 +33,7 @@ func (e *InstrumentedEmbedder) ModelID() string {
 }
 
 // EmbedBatch passes through to the inner provider's BatchEmbeddingProvider
-// implementation if it has one — preserves the batch fast path through
+// implementation if it has one - preserves the batch fast path through
 // the tracing wrapper. Without this, embedder.Worker's
 // type assertion on the wrapped provider fails and we degrade to N
 // serial Embed calls. Span is named "embed.batch" with the batch size

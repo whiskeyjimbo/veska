@@ -21,7 +21,7 @@ import (
 )
 
 // SecurityParams are the net-new security gate inputs. Like the clone gate this
-// is a BLANKET gate — no target finding. Unlike the other gates it needs NO
+// is a BLANKET gate - no target finding. Unlike the other gates it needs NO
 // indexed graph (no repoIndexed precondition, no sqlite): it is pure git refs +
 // scanners, so it runs on a repo that was never indexed.
 type SecurityParams struct {
@@ -56,11 +56,11 @@ func RunSecurity(ctx context.Context, p SecurityParams) error {
 	secretsCheck := checks.NewSecretsScanCheck(secretsscanner.New())
 
 	// vulnerable_dependency: scan recognised manifests against the advisory
-	// source. vulnEnabled mirrors the daemon — when no source is configured the
+	// source. vulnEnabled mirrors the daemon - when no source is configured the
 	// gate skips the dimension entirely rather than failing closed.
 	vulnSource, vulnEnabled := composition.BuildVulnSource(cfg)
 	// Cache-readiness fail-safe: osv.Adapter.Scan returns
-	// (nil, nil) on a missing/empty advisory cache — no error. vulnEnabled
+	// (nil, nil) on a missing/empty advisory cache - no error. vulnEnabled
 	// reflects CONFIG, not cache STATE, so a CI runner with vuln_source=osv but
 	// an unrefreshed cache would otherwise silently PASS a vulnerable-dep PR.
 	// When deps exist but the cache is empty we surface a scan error, which the
@@ -68,14 +68,14 @@ func RunSecurity(ctx context.Context, p SecurityParams) error {
 	cacheReady := vulnEnabled && osvCachePopulated(config.DefaultOSVCacheDir())
 	scanDeps := func(ctx context.Context, repoID, branch, manifestPath string, deps []ports.Dependency) ([]*domain.Finding, error) {
 		if len(deps) == 0 {
-			return nil, nil // nothing to scan — cache state is moot
+			return nil, nil // nothing to scan - cache state is moot
 		}
 		if !cacheReady {
 			return nil, fmt.Errorf("vuln advisory cache empty/absent at %s; refresh it before gating (vuln_source=osv is configured but no advisories are cached)", config.DefaultOSVCacheDir())
 		}
 		return checks.ScanManifestDeps(ctx, vulnSource, repoID, branch, manifestPath, deps, nil)
 	}
-	// Manifest-reader registry — the multi-language seam. go.mod is the only
+	// Manifest-reader registry - the multi-language seam. go.mod is the only
 	// entry until a multi-ecosystem advisory source lands (tracked separately);
 	// another ecosystem's reader drops in here with no gate change.
 	readers := map[string]diffgate.ManifestReaderFn{
@@ -131,7 +131,7 @@ func RunSecurity(ctx context.Context, p SecurityParams) error {
 }
 
 // osvCachePopulated reports whether the OSV advisory cache directory exists and
-// holds at least one advisory file — the same directory osv.Adapter.Scan reads.
+// holds at least one advisory file - the same directory osv.Adapter.Scan reads.
 // An absent dir or a dir with no files means the cache was never refreshed, so
 // a clean scan result would be vacuous (the source of the silent-false-PASS the
 // caller guards against).

@@ -143,14 +143,14 @@ func CreateBundle(opts BundleOptions) (BundleResult, error) {
 		return BundleResult{}, err
 	}
 
-	// 8. doctor/identity.json — repo identity-tier convergence
+	// 8. doctor/identity.json - repo identity-tier convergence
 	identityReport, _ := CheckIdentityTiers(dbPath)
 	identityEnv := NewEnvelope("identity", identityReport.Status, identityReport)
 	if err := addProbeEntry(tw, &fileCount, "doctor/identity.json", identityEnv, false); err != nil {
 		return BundleResult{}, err
 	}
 
-	// 9. audit.tail — last 100 lines, redacted
+	// 9. audit.tail - last 100 lines, redacted
 	auditTail := readAuditTail(filepath.Join(opts.VeskaHome, "audit.jsonl"), 100)
 	auditTail = audit.RedactFile(auditTail)
 	if err := addEntry("audit.tail", auditTail); err != nil {

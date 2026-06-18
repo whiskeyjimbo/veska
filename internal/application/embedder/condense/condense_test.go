@@ -45,7 +45,7 @@ func (f *fakeEmbedder) ModelID() string { return "fake" }
 // embedder makes centrality purely a majority count, so T (5) wins
 // over N (3); top-3 must be the three highest-centrality T lines.
 // Order matters: top-3 by centrality and then by original index, so we
-// expect the FIRST three T pieces (positions 0, 1, 2) — a tie among
+// expect the FIRST three T pieces (positions 0, 1, 2) - a tie among
 // equal-centrality pieces breaks toward the earlier index, which keeps
 // natural reading order (docstring before body).
 func TestCondense_CodeBody_PicksTopicLines(t *testing.T) {
@@ -123,7 +123,7 @@ func TestCondense_TopicMajority(t *testing.T) {
 	}
 }
 
-// TestCondense_KGreaterThanN: case (c) — k > len(pieces) returns a
+// TestCondense_KGreaterThanN: case (c) - k > len(pieces) returns a
 // copy of pieces unchanged (no condensation needed).
 func TestCondense_KGreaterThanN(t *testing.T) {
 	pieces := []string{"[T] one", "[T] two"}
@@ -136,7 +136,7 @@ func TestCondense_KGreaterThanN(t *testing.T) {
 	}
 }
 
-// TestCondense_KZero: case (d) — k <= 0 returns nil.
+// TestCondense_KZero: case (d) - k <= 0 returns nil.
 func TestCondense_KZero(t *testing.T) {
 	for _, k := range []int{0, -1, -100} {
 		got, err := Condense(context.Background(), &fakeEmbedder{}, []string{"[T] x"}, k)
@@ -149,7 +149,7 @@ func TestCondense_KZero(t *testing.T) {
 	}
 }
 
-// TestCondense_SinglePiece: degenerate case — a one-piece input has no
+// TestCondense_SinglePiece: degenerate case - a one-piece input has no
 // centrality to compute, so return it unchanged.
 func TestCondense_SinglePiece(t *testing.T) {
 	pieces := []string{"[T] solo"}

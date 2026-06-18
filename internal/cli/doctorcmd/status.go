@@ -20,7 +20,7 @@ import (
 // statusRollupInputs is the pure-data input to computeStatusRollup. It carries
 // every per-subsystem signal the rollup considers, including the embedding
 // backlog snapshot which is surfaced but NOT permitted to
-// promote the rollup status — see computeStatusRollup for the contract.
+// promote the rollup status - see computeStatusRollup for the contract.
 type statusRollupInputs struct {
 	EmbedderStatus   string
 	EgressStatus     string
@@ -52,7 +52,7 @@ type statusRollupJSONData struct {
 // the embedding_backlog signal is INTENTIONALLY OMITTED from
 // rollup classification. A non-zero backlog drives `eng_get_status`'s
 // `degraded_reasons:[embeddings_pending]` because agents need that signal to
-// pick between semantic and lexical search paths — but the daemon (embedder
+// pick between semantic and lexical search paths - but the daemon (embedder
 // worker, queue, ingestion) is still healthy, work just isn't finished. A
 // junior running `veska doctor` wants a go/no-go on the daemon, not a
 // warmup-aware classification. The backlog is reported in the formatted
@@ -143,7 +143,7 @@ func gatherStatusProbes(home string) statusProbes {
 	p.backlog = probeEmbeddingBacklog(context.Background(), home)
 
 	// Compute egress status: broken if any socket is missing. Track
-	// whether BOTH sockets are missing — that is the unambiguous
+	// whether BOTH sockets are missing - that is the unambiguous
 	// "daemon never started" signal and warrants a friendlier message
 	// than the generic "broken" rollup.
 	p.egressStatus = "healthy"
@@ -157,7 +157,7 @@ func gatherStatusProbes(home string) statusProbes {
 	p.daemonNotRunning = missing == len(egressReport.Sockets) && len(egressReport.Sockets) > 0
 
 	// distinguish "the daemon has never been started"
-	// (benign — operator just hasn't run `veska service start` yet)
+	// (benign - operator just hasn't run `veska service start` yet)
 	// from "the daemon crash-looped" (a real fault flagged by the
 	// `<veskaHome>/broken` marker). The marker-less not-running
 	// case should not be labelled "broken", which a fresh user sees
@@ -244,11 +244,11 @@ func RunStatus(w io.Writer, opts StatusOptions) error {
 func renderStatusText(w io.Writer, p statusProbes, rollup string, inputs statusRollupInputs, verbose bool) {
 	detail := ""
 	if inputs.IngestionDetail != "" {
-		detail = " — " + inputs.IngestionDetail
+		detail = " - " + inputs.IngestionDetail
 	}
 	if inputs.QueueDetail != "" {
 		if detail == "" {
-			detail = " — "
+			detail = " - "
 		} else {
 			detail += "; "
 		}
@@ -266,8 +266,8 @@ func renderStatusText(w io.Writer, p statusProbes, rollup string, inputs statusR
 		// only non-healthy thing is "daemon not started yet", the
 		// rollup is "stopped" and that's what the user should see.
 		// When another subsystem is independently broken, the rollup
-		// (and lead) is still "broken" — a real fault.
-		fmt.Fprintf(w, "status: %s — daemon is not running (egress=%s)\n", rollup, p.egressStatus)
+		// (and lead) is still "broken" - a real fault.
+		fmt.Fprintf(w, "status: %s - daemon is not running (egress=%s)\n", rollup, p.egressStatus)
 		fmt.Fprintf(w, "  on-disk checks (independent of daemon): embedder=%s, config=%s, ingestion=%s, queue=%s, %s%s\n",
 			p.embedder.Status, p.configStatus, p.ingestionStatus, p.queueStatus, backlogStr, detail)
 		fmt.Fprintln(w, "  hint: start it with `veska service start` (or `veska-daemon &` for a quick try)")
@@ -293,7 +293,7 @@ func renderStatusText(w io.Writer, p statusProbes, rollup string, inputs statusR
 // probeEmbeddingBacklog opens the local sqlite DB and runs the embedding
 // backlog probe. Falls back to an "unknown" report if the DB cannot be
 // opened (e.g. fresh `veska init` hasn't created it yet, or the daemon
-// holds the lock) — never returns an error, since this signal is purely
+// holds the lock) - never returns an error, since this signal is purely
 // informational.
 func probeEmbeddingBacklog(ctx context.Context, home string) doctor.EmbeddingBacklogReport {
 	db, closeFn, err := repocmd.OpenLocalDB()
@@ -309,9 +309,9 @@ func probeEmbeddingBacklog(ctx context.Context, home string) doctor.EmbeddingBac
 
 // checkIngestion inspects the repos table for never-promoted entries
 // (last_promoted_sha IS NULL or ”). A repo that has been registered
-// but is still unindexed is real degraded state — the daemon either is
+// but is still unindexed is real degraded state - the daemon either is
 // not running, is mid-cold-scan, or hit a per-repo failure during
-// startup-resync ('s continue-on-error path) — and 'doctor
+// startup-resync ('s continue-on-error path) - and 'doctor
 // status' should not report 'healthy' while that's true.
 // Returns ("healthy"|"degraded", detail). detail is "" when healthy.
 // Database open errors are reported as 'degraded' with the err message
@@ -331,12 +331,12 @@ func checkIngestion(ctx context.Context) (string, string) {
 		return "healthy", ""
 	}
 	// Pull scan progress so unindexed repos that are actively scanning
-	// surface as e.g. "9092cd5e0cff promoting/300" — tells the user the
+	// surface as e.g. "9092cd5e0cff promoting/300" - tells the user the
 	// degraded state is progressing vs. idle ( follow-up).
 	progress := repocmd.FetchScanProgress(ctx)
 	var unindexed []string
 	for _, r := range recs {
-		// Synthetic ext:<module> repos never get a LastPromotedSHA — they
+		// Synthetic ext:<module> repos never get a LastPromotedSHA - they
 		// have no git history. Skipping them avoids reporting "1 unindexed
 		// repo(s): [ext:github.c]" on a healthy `deps index` workspace
 		if strings.HasPrefix(r.RepoID, extindex.SyntheticRepoIDPrefix) {

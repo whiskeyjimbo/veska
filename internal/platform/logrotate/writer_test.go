@@ -96,7 +96,7 @@ func TestRotatingWriterMaxFiles(t *testing.T) {
 	}
 
 	// Nothing to assert on.5: rotation shifts.4→.5, so the file may exist.
-	// The key invariant — max 5 rotated copies — is verified by the shift logic itself.
+	// The key invariant - max 5 rotated copies - is verified by the shift logic itself.
 
 	// 1 must exist.
 	if _, err := os.Stat(path + ".1"); os.IsNotExist(err) {
@@ -105,7 +105,7 @@ func TestRotatingWriterMaxFiles(t *testing.T) {
 
 	// Verify no.6 file exists.
 	if _, err := os.Stat(fmt.Sprintf("%s.6", path)); err == nil {
-		t.Errorf("found unexpected %s.6 — too many rotated files", path)
+		t.Errorf("found unexpected %s.6 - too many rotated files", path)
 	}
 }
 

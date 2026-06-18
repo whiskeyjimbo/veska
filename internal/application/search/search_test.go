@@ -120,7 +120,7 @@ func TestSemantic_StaticEmbedderFlagsLowQuality(t *testing.T) {
 }
 
 // TestSemantic_HappyPath_PreservesHitRank verifies the service returns
-// hydrated Results in the order VectorStorage.Search produced — even
+// hydrated Results in the order VectorStorage.Search produced - even
 // when the NodeLookup adapter returns rows in a different order.
 func TestSemantic_HappyPath_PreservesHitRank(t *testing.T) {
 	t.Parallel()
@@ -159,7 +159,7 @@ func TestSemantic_HappyPath_PreservesHitRank(t *testing.T) {
 		}
 	}
 	// Score is now the fused RRF score (1/(60+rank), summed across
-	// retrievers) — vector-only fusion still places n2 at rank 1 with
+	// retrievers) - vector-only fusion still places n2 at rank 1 with
 	// the largest RRF contribution. SymbolPath hydration is unchanged.
 	if got[0].SymbolPath != "pkg.B" {
 		t.Errorf("top hit not hydrated correctly: %+v", got[0])
@@ -331,7 +331,7 @@ func TestSemantic_EmptyHits_ReturnsEmptyNilError(t *testing.T) {
 	}
 	got := resp.Results
 	if got == nil {
-		t.Fatal("expected empty slice, got nil — callers serialize nil as null")
+		t.Fatal("expected empty slice, got nil - callers serialize nil as null")
 		return
 	}
 	if len(got) != 0 {
@@ -499,13 +499,13 @@ func TestSemantic_EmbedderUnreachable_FallsBackToLexical(t *testing.T) {
 
 // TestSemantic_HybridFusion_LiftsLexicalOnlyHit pins:
 // when a node ranks #1 in lexical (e.g. exact identifier match) but is
-// missing from the vector top — typical on small corpora where vector
-// scores cluster — RRF fusion still lifts it ahead of vector-only
+// missing from the vector top - typical on small corpora where vector
+// scores cluster - RRF fusion still lifts it ahead of vector-only
 // candidates. Without the fusion, the right answer never surfaces.
 func TestSemantic_HybridFusion_LiftsLexicalOnlyHit(t *testing.T) {
 	t.Parallel()
 	emb := &fakeEmbedder{vec: []float32{0.1}}
-	// Vector ranks v1.v4 in that order with tight scores — typical of
+	// Vector ranks v1.v4 in that order with tight scores - typical of
 	// a small corpus where the cosine distances barely discriminate.
 	// NAMEMATCH appears at vector rank 4 (the tail) but lexical rank 1.
 	vec := &fakeVectors{hits: []domain.SearchHit{
@@ -538,7 +538,7 @@ func TestSemantic_HybridFusion_LiftsLexicalOnlyHit(t *testing.T) {
 		t.Errorf("expected exactly 1 lexical call, got %d", lex.calls)
 	}
 	// fanout=3 with floor=100 ( widening) so k=5 caller
-	// still requests k=100 of each retriever — floor protects small-k
+	// still requests k=100 of each retriever - floor protects small-k
 	// callers from losing recall to the post-fusion rerank having no
 	// candidates to lift.
 	if lex.gotK != 100 {
@@ -574,7 +574,7 @@ func TestSemantic_HybridFusion_LexicalError_DegradesGracefully(t *testing.T) {
 
 // TestSemantic_EmbedderUnreachable_NoLexical_PropagatesError verifies
 // that without a LexicalSearcher wired in, ErrEmbedderUnreachable
-// surfaces wrapped to the caller — no silent zero-result return.
+// surfaces wrapped to the caller - no silent zero-result return.
 func TestSemantic_EmbedderUnreachable_NoLexical_PropagatesError(t *testing.T) {
 	t.Parallel()
 	emb := &fakeEmbedder{err: fmt.Errorf("dial: %w", ports.ErrEmbedderUnreachable)}
@@ -597,7 +597,7 @@ func TestSemantic_EmbedderUnreachable_NoLexical_PropagatesError(t *testing.T) {
 
 // TestSemantic_NonSentinelEmbedderError_DoesNotFallBack verifies that a
 // generic embedder error (not ErrEmbedderUnreachable) propagates even
-// when a LexicalSearcher is installed — fallback is restricted to the
+// when a LexicalSearcher is installed - fallback is restricted to the
 // sentinel so genuinely actionable failures aren't masked.
 func TestSemantic_NonSentinelEmbedderError_DoesNotFallBack(t *testing.T) {
 	t.Parallel()

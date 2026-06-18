@@ -220,7 +220,7 @@ func TestContractDriftCheck_NilQuerierReturnsError(t *testing.T) {
 }
 
 // TestContractDriftCheck_PassesScopeThrough verifies the check forwards
-// (repoID, branch, filePaths) verbatim to the querier — the storage layer is
+// (repoID, branch, filePaths) verbatim to the querier - the storage layer is
 // responsible for scoping the search.
 func TestContractDriftCheck_PassesScopeThrough(t *testing.T) {
 	q := &fakeDriftQuerier{}

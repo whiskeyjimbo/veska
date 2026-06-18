@@ -10,7 +10,7 @@ import (
 // migrates, or pollutes ~/.veska.
 // surfaced why this matters: editing an already-applied migration
 // in place (0019) makes the integrity check tamper-fail on any pre-existing DB,
-// and OpenWithOptions responds with os.Exit(78) — so a single storage-opening
+// and OpenWithOptions responds with os.Exit(78) - so a single storage-opening
 // test against a stale ~/.veska aborts the entire test binary (no clean
 // `--- FAIL`). Defaulting VESKA_HOME to a fresh temp dir makes every test
 // hermetic; a fresh DB migrates with the current SHA, so there is nothing to

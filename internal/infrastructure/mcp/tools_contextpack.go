@@ -234,7 +234,7 @@ func pickRepoForSymbol(ctx context.Context, asm *contextpack.Assembler, repoRoot
 	}
 	switch len(hits) {
 	case 0:
-		// No repo contains the symbol — let the normal path emit the
+		// No repo contains the symbol - let the normal path emit the
 		// existing "repo_id is required" error.
 		return "", nil
 	case 1:

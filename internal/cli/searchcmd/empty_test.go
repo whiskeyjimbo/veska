@@ -6,7 +6,7 @@ import (
 	"testing"
 )
 
-// verification — renderSearchEnvelope must print SOMETHING
+// verification - renderSearchEnvelope must print SOMETHING
 // when there are no results, so a junior user can tell "ran with no
 // hits" from "broken / misconfigured". The exact wording follows the
 // pendingEmbedsHint signal, but the contract is: non-empty text output
@@ -53,7 +53,7 @@ func TestRenderSearchEnvelope_DegradedReasonsSurfacedWithEmpty(t *testing.T) {
 // TestRenderSearchEnvelope_DegradedHintAppendsToCode guards: a
 // raw "[degraded: <code>]" line is opaque to a new user. The renderer
 // appends a short actionable hint per known code (low_quality_static_embedder
-// and no_post_registration_commits don't need a daemon to look up — they
+// and no_post_registration_commits don't need a daemon to look up - they
 // are static guidance).
 func TestRenderSearchEnvelope_DegradedHintAppendsToCode(t *testing.T) {
 	cases := []struct {
@@ -127,7 +127,7 @@ func TestRenderSearchEnvelope_LowAbsoluteTopAppendsNote(t *testing.T) {
 }
 
 // TestRenderSearchEnvelope_HealthyTopOmitsNote: the note is only printed when
-// the top is below the floor — confident matches should be quiet.
+// the top is below the floor - confident matches should be quiet.
 func TestRenderSearchEnvelope_HealthyTopOmitsNote(t *testing.T) {
 	var w bytes.Buffer
 	env := SearchEnvelope{

@@ -148,7 +148,7 @@ func TestClear(t *testing.T) {
 
 	sa.Stage("repo1", "main", "a.go", File{Nodes: nil, Edges: nil})
 	sa.Stage("repo1", "main", "b.go", File{Nodes: nil, Edges: nil})
-	sa.Stage("repo1", "feat/x", "c.go", File{Nodes: nil, Edges: nil}) // different branch — must survive
+	sa.Stage("repo1", "feat/x", "c.go", File{Nodes: nil, Edges: nil}) // different branch - must survive
 
 	sa.Clear("repo1", "main")
 

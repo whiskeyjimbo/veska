@@ -12,7 +12,7 @@ import (
 
 // writeSidecar writes a minimal JSON sidecar with the given number of rows
 // into dir under the given base name (e.g. "vec-r1|main|nomic").
-// We write the sidecar manually — no dependency on the hnsw_native package.
+// We write the sidecar manually - no dependency on the hnsw_native package.
 func writeSidecar(t *testing.T, dir, base string, rowCount int) {
 	t.Helper()
 	// Build a map with rowCount entries. Keys are uint64 marshalled as strings.

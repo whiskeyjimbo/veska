@@ -28,9 +28,9 @@ type ProbeResult struct {
 	// the model when the embedder is not healthy.
 	InstallHint string `json:"install_hint,omitempty"`
 	// Status is one of: "healthy", "degraded", "broken".
-	//   healthy — all three checks passed.
-	//   degraded — Ollama is reachable but model is missing or embed probe failed.
-	//   broken — Ollama is not reachable.
+	//   healthy - all three checks passed.
+	//   degraded - Ollama is reachable but model is missing or embed probe failed.
+	//   broken - Ollama is not reachable.
 	Status health.Status `json:"status"`
 }
 
@@ -53,9 +53,9 @@ type ollamaEmbedResponse struct {
 }
 
 // Probe runs three sequential checks against the Ollama instance at ollamaURL:
-//  1. Reachable — GET /api/tags returns 200.
-//  2. ModelPresent — modelName appears in the tags list.
-//  3. ProbeEmbed — POST /api/embeddings with a dummy prompt returns a non-empty vector.
+//  1. Reachable - GET /api/tags returns 200.
+//  2. ModelPresent - modelName appears in the tags list.
+//  3. ProbeEmbed - POST /api/embeddings with a dummy prompt returns a non-empty vector.
 //
 // Probe never returns a non-nil error; all failures are encoded in ProbeResult.
 // A per-request timeout of 3 seconds is applied to each check.
@@ -94,7 +94,7 @@ func Probe(ctx context.Context, ollamaURL, modelName string) (*ProbeResult, erro
 	// ── Check 2: model present ───────────────────────────────────────────────
 	// Ollama tags models like "nomic-embed-text:latest" but callers typically
 	// pass the bare model name. Match either an exact equality (caller passed
-	// "name:tag") or a prefix on "name:" (caller passed bare "name" — accept
+	// "name:tag") or a prefix on "name:" (caller passed bare "name" - accept
 	// any tag the user happens to have pulled). Ollama's /api/embeddings does
 	// the same resolution server-side, so this mirrors what actually works.
 	for _, m := range tags.Models {
@@ -143,7 +143,7 @@ func Probe(ctx context.Context, ollamaURL, modelName string) (*ProbeResult, erro
 
 // InstallHint returns a platform-specific string describing how to install
 // Ollama and pull the required model. goos should be runtime.GOOS.
-// This function is pure — no network calls — so it is trivially testable.
+// This function is pure - no network calls - so it is trivially testable.
 func InstallHint(goos, modelName string) string {
 	switch goos {
 	case "darwin":

@@ -24,7 +24,7 @@ var (
 	// has no registered prompt.
 	ErrUnknownKind = errors.New("review: unknown review kind")
 	// ErrEmptyInput is returned by Render when the Input carries no code to
-	// review — a prompt with no subject is not worth a model call.
+	// review - a prompt with no subject is not worth a model call.
 	ErrEmptyInput = errors.New("review: input has no code to review")
 	// ErrMalformedResponse is returned by Parse when the model output cannot
 	// be interpreted as the expected response contract.

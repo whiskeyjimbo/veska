@@ -19,13 +19,13 @@ const (
 
 // fakeBaseGraph is a deterministic in-memory BaseGraph (EdgeReader +
 // NodeLookup) standing in for the persisted indexed-HEAD graph. It records
-// whether any method mutated it — it never does, proving the ephemeral index
+// whether any method mutated it - it never does, proving the ephemeral index
 // leaves the base untouched (AC1).
 type fakeBaseGraph struct {
 	inbound  map[string][]string
 	outbound map[string][]string
 	// callInbound models CALLS-only inbound adjacency (InboundCallEdges). When
-	// nil it falls back to `inbound` — most tests don't care about edge kind, so
+	// nil it falls back to `inbound` - most tests don't care about edge kind, so
 	// their `inbound` doubles as the call set; a test exercising the CALLS-vs
 	// structural distinction sets callInbound explicitly.
 	callInbound map[string][]string
@@ -98,7 +98,7 @@ func (p *fakeParser) ParseFile(_ context.Context, _ string, path string, _ []byt
 	return pr, nil
 }
 
-// staticChangeSource is a ChangeSource that returns a fixed slice — the test
+// staticChangeSource is a ChangeSource that returns a fixed slice - the test
 // fake that proves AC3: a second source feeds the same Indexer/consumers with
 // no change to their code.
 type staticChangeSource struct {
@@ -128,7 +128,7 @@ func mustNodeH(t *testing.T, id, path, name, hash string) *domain.Node {
 }
 
 // TestIndex_NodePrecisionAgainstBase covers the DoD: the ephemeral graph
-// differs from the base on EXACTLY the changed nodes — not on every symbol of
+// differs from the base on EXACTLY the changed nodes - not on every symbol of
 // a touched file. A re-parse stages the whole file (m:Keep AND m:Edit), so
 // node-precision is derived the way a consumer does: content-hash-compare each
 // staged node against the base. Only m:Edit, whose body changed, must show as
@@ -279,7 +279,7 @@ func TestIndex_ConsumerReadsEphemeralUnchanged(t *testing.T) {
 	base := &fakeBaseGraph{
 		// The candidate MODIFIES an existing symbol a:Foo. The base still
 		// knows the symbol (it resolves as a seed) and records that caller:X
-		// calls it — that inbound edge is what the guard walks.
+		// calls it - that inbound edge is what the guard walks.
 		metas:   map[string]ports.NodeMeta{"a:Foo": {NodeID: "a:Foo", FilePath: "a.go"}},
 		inbound: map[string][]string{"a:Foo": {"caller:X"}},
 	}

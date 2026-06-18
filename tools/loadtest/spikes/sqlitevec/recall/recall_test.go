@@ -116,7 +116,7 @@ func TestBruteForceKNN(t *testing.T) {
 		t.Errorf("BruteForceKNN: expected rowid 3, got %d", got[0])
 	}
 
-	// Also test k=2; the second nearest should be corpus[1] (value 5.0) — dist to 1.1 is
+	// Also test k=2; the second nearest should be corpus[1] (value 5.0) - dist to 1.1 is
 	// smaller than corpus[3] (8.0), corpus[4] (9.0), corpus[0] (10.0).
 	got2 := recall.BruteForceKNN(corpus, query, 2)
 	if len(got2) != 2 {
@@ -157,7 +157,7 @@ func TestRecallPerfect(t *testing.T) {
 		t.Errorf("Population: expected %d, got %d", n, res.Population)
 	}
 
-	// For a small corpus, vec0 is exact — recall@10 should be 1.0.
+	// For a small corpus, vec0 is exact - recall@10 should be 1.0.
 	// Allow a small tolerance in case vec0 uses approximate search.
 	if res.RecallAt10 < 0.9 {
 		t.Errorf("RecallAt10: expected >= 0.9 for small corpus, got %.4f", res.RecallAt10)

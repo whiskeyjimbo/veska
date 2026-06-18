@@ -310,7 +310,7 @@ func TestValidateRejectsBadAutolinkAndBlast(t *testing.T) {
 
 func TestValidateAllowsNegativeHubThreshold(t *testing.T) {
 	c := DefaultConfig()
-	c.Blast.HubDegreeThreshold = -1 // disables the hub gate — an explicit intent
+	c.Blast.HubDegreeThreshold = -1 // disables the hub gate - an explicit intent
 	if err := c.Validate(); err != nil {
 		t.Errorf("Validate should allow a negative hub threshold (gate disabled): %v", err)
 	}

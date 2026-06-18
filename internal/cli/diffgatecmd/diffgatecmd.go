@@ -224,7 +224,7 @@ func resolveRepoID(ctx context.Context, db *sql.DB, repoID string) (string, erro
 	case errors.Is(err, sql.ErrNoRows):
 		// fall through to short-id / prefix matching
 	default:
-		return repoID, nil // repos table unavailable — never worse than no resolution
+		return repoID, nil // repos table unavailable - never worse than no resolution
 	}
 
 	rows, err := db.QueryContext(ctx, `SELECT repo_id FROM repos`)
@@ -262,7 +262,7 @@ func resolveRepoID(ctx context.Context, db *sql.DB, repoID string) (string, erro
 			return matched, nil
 		}
 	}
-	return repoID, nil // unknown — repoIndexed will fail closed with repo_not_indexed
+	return repoID, nil // unknown - repoIndexed will fail closed with repo_not_indexed
 }
 
 // repoIndexed reports whether (repoID, branch) has any indexed nodes. A missing
@@ -276,7 +276,7 @@ func repoIndexed(ctx context.Context, db *sql.DB, repoID, branch string) bool {
 
 // repoKnown reports whether repoID is a registered repo. It distinguishes an
 // UNKNOWN --repo handle (a name/typo that resolveRepoID could not match to any
-// id) from a registered-but-UN-indexed repo — the two conditions a junior
+// id) from a registered-but-UN-indexed repo - the two conditions a junior
 // conflates when an indexed repo, addressed by its name, reports "not indexed"
 // ( F2). A missing repos table counts as "not known".
 func repoKnown(ctx context.Context, db *sql.DB, repoID string) bool {
@@ -292,7 +292,7 @@ func repoKnown(ctx context.Context, db *sql.DB, repoID string) bool {
 // diff-gate subcommand's not-indexed branch so the distinction is uniform.
 func notIndexedDetail(ctx context.Context, db *sql.DB, repoID string) string {
 	if !repoKnown(ctx, db, repoID) {
-		return fmt.Sprintf("unknown repo %q — use the REPO_ID from `veska repo list`", repoID)
+		return fmt.Sprintf("unknown repo %q - use the REPO_ID from `veska repo list`", repoID)
 	}
 	return fmt.Sprintf("repo_not_indexed: index %q first, e.g. `veska reindex`", repoID)
 }
@@ -303,7 +303,7 @@ func notIndexedDetail(ctx context.Context, db *sql.DB, repoID string) string {
 // Non-ref errors pass through unchanged.
 func cleanRefError(err error, baseRef, candidateRef string) error {
 	if errors.Is(err, git.ErrUnknownRevision) {
-		return fmt.Errorf("ref not found (base %q .. candidate %q) — is the base committed, or is this a shallow clone?", baseRef, candidateRef)
+		return fmt.Errorf("ref not found (base %q .. candidate %q) - is the base committed, or is this a shallow clone?", baseRef, candidateRef)
 	}
 	return err
 }

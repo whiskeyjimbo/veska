@@ -87,7 +87,7 @@ type Response struct {
 // one of the two.
 // VectorScore is the raw distance-derived score the VectorStorage
 // returned (higher = better). It is comparable across queries against
-// the same embedder, and — critically for cross-repo fanout — across
+// the same embedder, and - critically for cross-repo fanout - across
 // repos when one embedder spans them. 0 means the
 // candidate didn't appear in the vector retriever, so cosine fusion
 // must either fall back to a baseline contribution or drop it. The
@@ -127,7 +127,7 @@ type Option func(*Service)
 
 // WithMetrics installs a Metrics struct so the service can observe
 // VectorQueryDuration{kind="semantic_search"} on every Semantic call.
-// When nil, the histogram update is silently skipped — the service
+// When nil, the histogram update is silently skipped - the service
 // still functions.
 func WithMetrics(m *observability.Metrics) Option {
 	return func(s *Service) { s.metrics = m }
@@ -199,8 +199,8 @@ func (s *Service) Semantic(ctx context.Context, repoID, branch, query string, k 
 	vec, err := s.embedder.Embed(ctx, query)
 	if err != nil {
 		// Only the ErrEmbedderUnreachable sentinel triggers fallback.
-		// Every other embedder error — bad input, malformed config,
-		// server-side 5xx that isn't a dial failure — surfaces wrapped
+		// Every other embedder error - bad input, malformed config,
+		// server-side 5xx that isn't a dial failure - surfaces wrapped
 		// so the caller can decide. This narrow contract keeps the
 		// fallback from masking genuinely actionable failures.
 		if errors.Is(err, ports.ErrEmbedderUnreachable) && s.lexical != nil {
@@ -217,7 +217,7 @@ func (s *Service) Semantic(ctx context.Context, repoID, branch, query string, k 
 	}
 
 	// Over-request from each retriever so RRF + the post-fusion
-	// name-match boost have headroom — fusing two top-K lists where the
+	// name-match boost have headroom - fusing two top-K lists where the
 	// second-best in one only appears at rank K+1 in the other still
 	// produces a sensible top-K. 3× is the sweet spot in the semble
 	// paper. A minimum floor protects small-k callers so the rerank
@@ -237,8 +237,8 @@ func (s *Service) Semantic(ctx context.Context, repoID, branch, query string, k 
 
 	// Hybrid: when a LexicalSearcher is wired, run BM25/FTS5 in parallel
 	// and fuse with Reciprocal Rank Fusion. Vector cosine
-	// alone is too thin on small corpora — Sam's notes-API session
-	// returned scores in a ~0.00004 range across the top-10 — so the
+	// alone is too thin on small corpora - Sam's notes-API session
+	// returned scores in a ~0.00004 range across the top-10 - so the
 	// "right" answer routinely lost to neighbours by a rounding error.
 	// RRF is rank-only so the two retrievers' incompatible score
 	// distributions don't need normalising.
@@ -320,7 +320,7 @@ func (s *Service) withEmbedderCaveat(resp Response) Response {
 
 // SemanticCandidates returns the per-retriever-ranked, hydrated candidate
 // set for query without applying RRF or the name-match rerank. It is the
-// fan-in primitive used by the MCP cross-repo handler — the
+// fan-in primitive used by the MCP cross-repo handler - the
 // handler runs a SINGLE global RRF across every repo's candidates so a
 // rank-1 hit in repo A competes fairly with a rank-1 hit in repo B,
 // rather than the two top hits both scoring ~1/61 in their local fusion.
@@ -437,7 +437,7 @@ func (s *Service) SemanticCandidates(ctx context.Context, repoID, branch, query 
 }
 
 // withCaveatOnCandidates is the CandidatesResponse twin of
-// withEmbedderCaveat — appends the low-quality static-embedder degraded
+// withEmbedderCaveat - appends the low-quality static-embedder degraded
 // reason when applicable so cross-repo callers get the same signal.
 func (s *Service) withCaveatOnCandidates(resp CandidatesResponse) CandidatesResponse {
 	stub := s.withEmbedderCaveat(Response{DegradedReasons: resp.DegradedReasons})

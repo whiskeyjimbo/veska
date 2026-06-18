@@ -12,8 +12,8 @@ import (
 
 // The deps command logic lives in internal/cli/depscmd; the constructors below
 // are Cobra glue whose RunE bodies delegate into that package.
-// The cwd→repo resolver (autoResolveRepo) stays in cmd/veska — it is shared
-// across the symbol, graph, findings, and deps families — and is injected
+// The cwd→repo resolver (autoResolveRepo) stays in cmd/veska - it is shared
+// across the symbol, graph, findings, and deps families - and is injected
 // through the ResolveRepo seam.
 
 // depsCmd is the `veska deps …` parent. Bare `veska deps` lists
@@ -41,7 +41,7 @@ func depsCmd() *cobra.Command {
 	// list's repo resolver.
 	cmd.RunE = func(c *cobra.Command, args []string) error {
 		if len(args) == 1 && looksLikeUnknownDepsSubcommand(args[0], c) {
-			return fmt.Errorf("unknown deps subcommand %q — run `veska deps --help` for available subcommands", args[0])
+			return fmt.Errorf("unknown deps subcommand %q - run `veska deps --help` for available subcommands", args[0])
 		}
 		return listCmd.RunE(c, args)
 	}
@@ -73,7 +73,7 @@ func looksLikeUnknownDepsSubcommand(arg string, parent *cobra.Command) bool {
 	return true
 }
 
-// depsListCmd wraps eng_list_dependencies — the existing
+// depsListCmd wraps eng_list_dependencies - the existing
 // behaviour, now available as both `veska deps` and `veska deps list`.
 func depsListCmd() *cobra.Command {
 	var (
@@ -87,7 +87,7 @@ func depsListCmd() *cobra.Command {
 		// Long reuses the MCP DescDepsImportOnlyCaveat fragment so the
 		// import-only absence rule can't drift from the eng_list_dependencies
 		// description.
-		Long:         "List external modules the repo CALLS into, ranked by call-site count.\n\nNote: " + mcpinfra.DescDepsImportOnlyCaveat + " — this tracks the import-side backfill.",
+		Long:         "List external modules the repo CALLS into, ranked by call-site count.\n\nNote: " + mcpinfra.DescDepsImportOnlyCaveat + " - this tracks the import-side backfill.",
 		Args:         cobra.MaximumNArgs(1),
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {

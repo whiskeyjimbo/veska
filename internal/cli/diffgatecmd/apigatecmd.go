@@ -91,7 +91,7 @@ func RunAPIBreak(ctx context.Context, p APIParams) error {
 	defer cleanup()
 
 	// Base-ref exported public surface over the changed files (from the pinned
-	// base clone) — the symbols whose disappearance is a breaking removal.
+	// base clone) - the symbols whose disappearance is a breaking removal.
 	baseExported, err := exportedSymbolsAt(ctx, baseClonePath, p.RepoID, p.Branch, eph.ChangedFiles)
 	if err != nil {
 		return fmt.Errorf("diff-gate api: base exported: %w", err)

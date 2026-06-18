@@ -4,7 +4,7 @@
 // Goal: measure the wall-clock time to run ONE review pass over a synthetic
 // ~100-file commit, using the real review Handler (WorkKindReview lane) wired
 // to a real local Ollama generator. The result is a MEASUREMENT, not a
-// pass/fail gate — the reference-laptop number is filled into
+// pass/fail gate - the reference-laptop number is filled into
 // M5.md by a human running `make eval-review-timing`.
 // What this measures: the total budget = sum of per-file review latency for
 // 100 files, each file dispatched through every registered review prompt.
@@ -38,7 +38,7 @@ const (
 
 	// defaultLLMTimeout bounds a single review LLM call. The llm package
 	// default is 60s, which is too tight for a structured-JSON review
-	// generation on CPU Ollama — a real call routinely exceeds it. This
+	// generation on CPU Ollama - a real call routinely exceeds it. This
 	// generous default keeps the measurement from dying on per-call
 	// deadlines; override with REVIEW_TIMING_LLM_TIMEOUT.
 	defaultLLMTimeout = 5 * time.Minute
@@ -87,7 +87,7 @@ func TestReviewTiming(t *testing.T) {
 	probeCtx, probeCancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer probeCancel()
 	if err := probeOllama(probeCtx, ollamaURL, model); err != nil {
-		t.Skipf("Ollama review model %q not available at %s (%v) — skipping M5 exit-gate-5 review-timing harness", model, ollamaURL, err)
+		t.Skipf("Ollama review model %q not available at %s (%v) - skipping M5 exit-gate-5 review-timing harness", model, ollamaURL, err)
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -149,7 +149,7 @@ func TestReviewTiming(t *testing.T) {
 		t.Fatalf("review pass produced a non-positive duration: %s", total)
 	}
 	if filesOK == 0 {
-		t.Fatalf("no files were reviewed successfully (%d failed) — Ollama or model misconfigured", filesFailed)
+		t.Fatalf("no files were reviewed successfully (%d failed) - Ollama or model misconfigured", filesFailed)
 	}
 }
 
@@ -191,7 +191,7 @@ func Process%03d(w Widget%03d, total float64) float64 {
 
 // probeOllama issues a quick GET /api/tags and confirms the named review model
 // is present. Any non-2xx response, transport failure, or missing model is
-// reported as an error so the caller can t.Skip cleanly — the harness is a
+// reported as an error so the caller can t.Skip cleanly - the harness is a
 // measurement, so it must not fail merely because the model is not pulled.
 func probeOllama(ctx context.Context, baseURL, model string) error {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, baseURL+"/api/tags", nil)

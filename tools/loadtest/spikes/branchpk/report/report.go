@@ -1,6 +1,6 @@
 // Package report generates the RESULTS.md verdict document for the branchpk spike.
 // It re-declares the minimal JSON-matching structs locally so it does not import
-// the bench, gcsweep, or pkloader packages — keeping the report package dependency-free.
+// the bench, gcsweep, or pkloader packages - keeping the report package dependency-free.
 package report
 
 import (
@@ -169,7 +169,7 @@ func RenderMarkdown(in SpikeInputs, v Verdict) string {
 
 	fmt.Fprintf(&sb, "# RESULTS: branch-in-PK SQLite Spike\n\n")
 	fmt.Fprintf(&sb, "**Date:** %s  \n", reportDate)
-	fmt.Fprintf(&sb, "**Verdict:** `%s` — **%s**\n\n", strings.ToUpper(string(v)), verdictBadge)
+	fmt.Fprintf(&sb, "**Verdict:** `%s` - **%s**\n\n", strings.ToUpper(string(v)), verdictBadge)
 
 	fmt.Fprintf(&sb, "---\n\n")
 
@@ -198,9 +198,9 @@ func RenderMarkdown(in SpikeInputs, v Verdict) string {
 	fmt.Fprintf(&sb, "| nodes | %s |\n", fmtInt64(in.Load.NodeRows))
 	fmt.Fprintf(&sb, "| edges | %s |\n", fmtInt64(in.Load.EdgeRows))
 	fmt.Fprintf(&sb, "| findings | %s |\n", fmtInt64(in.Load.FindingRows))
-	linearLabel := "YES — O(branches × symbols)"
+	linearLabel := "YES - O(branches × symbols)"
 	if !in.LinearGrowthConfirmed {
-		linearLabel = "NO — super-linear detected"
+		linearLabel = "NO - super-linear detected"
 	}
 	fmt.Fprintf(&sb, "\n**Linear growth confirmed:** %s\n\n", linearLabel)
 
@@ -216,7 +216,7 @@ func RenderMarkdown(in SpikeInputs, v Verdict) string {
 	if diskGiB > diskYellowGiB {
 		diskStatus = "FAIL (exceeds 10 GiB)"
 	} else if diskGiB > diskGreenGiB {
-		diskStatus = "PASS (yellow — within 2× budget)"
+		diskStatus = "PASS (yellow - within 2× budget)"
 	}
 	fmt.Fprintf(&sb, "**Disk status:** %s\n\n", diskStatus)
 
@@ -241,7 +241,7 @@ func RenderMarkdown(in SpikeInputs, v Verdict) string {
 	fmt.Fprintf(&sb, "| Disk before | %s bytes |\n", fmtInt64(in.GC.DiskBeforeBytes))
 	fmt.Fprintf(&sb, "| Disk after | %s bytes |\n", fmtInt64(in.GC.DiskAfterBytes))
 	fmt.Fprintf(&sb, "| Reclaimed | %s bytes |\n", fmtInt64(in.GC.ReclaimBytes))
-	gcBounded := "YES — proportional to branches deleted"
+	gcBounded := "YES - proportional to branches deleted"
 	fmt.Fprintf(&sb, "\n**GC sweep bounded:** %s\n\n", gcBounded)
 
 	fmt.Fprintf(&sb, "## Verdict Matrix\n\n")

@@ -30,7 +30,7 @@ func (s cloneChangeSource) Changes(context.Context) ([]diffgate.FileChange, erro
 // carries the parser's true content_hash); the candidate adds b.go with a
 // byte-identical Foo, parsed by the same Indexer. If the parser emitted empty or
 // path-dependent hashes for function nodes, the hashes would not match and the
-// gate would (wrongly) PASS — exactly the silent false-PASS the unit tests with
+// gate would (wrongly) PASS - exactly the silent false-PASS the unit tests with
 // synthetic hashes cannot catch. The gate must FAIL, naming the clone group.
 func TestCloneGate_RealParserDetectsCrossFileClone(t *testing.T) {
 	dbPath := filepath.Join(t.TempDir(), "veska.db")
@@ -52,7 +52,7 @@ func TestCloneGate_RealParserDetectsCrossFileClone(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewIndexer: %v", err)
 	}
-	// Candidate adds b.go with a byte-identical Foo — a new exact clone.
+	// Candidate adds b.go with a byte-identical Foo - a new exact clone.
 	src := cloneChangeSource{changes: []diffgate.FileChange{
 		{Path: "b.go", Content: []byte(fooBody)},
 	}}
@@ -66,7 +66,7 @@ func TestCloneGate_RealParserDetectsCrossFileClone(t *testing.T) {
 		t.Fatalf("Evaluate: %v", err)
 	}
 	if v.Pass || !v.Checked {
-		t.Fatalf("real-parser cross-file clone must FAIL (checked); got pass=%v checked=%v — likely empty/mismatched parser content_hash", v.Pass, v.Checked)
+		t.Fatalf("real-parser cross-file clone must FAIL (checked); got pass=%v checked=%v - likely empty/mismatched parser content_hash", v.Pass, v.Checked)
 	}
 	if len(v.NewClones) != 1 {
 		t.Fatalf("want exactly one new clone group; got %d: %+v", len(v.NewClones), v.NewClones)
@@ -121,11 +121,11 @@ func TestRunClones_E2E_FailsAndExitsNonZero(t *testing.T) {
 }
 
 // TestRunClones_E2E_IndexAhead_NowDetected is the lock: the index
-// is seeded AHEAD (at the candidate's content — it already holds the cloned b.go),
+// is seeded AHEAD (at the candidate's content - it already holds the cloned b.go),
 // base-ref has only a.go. Before the base graph was pinned to base-ref, the live
 // index already showed the clone (baseCount>=2) so the net-new group cancelled →
 // false-PASS. With buildPinnedEphemeral the base clone re-promotes base-ref's
-// changed files — and DELETES the added b.go the drifted index carried — so the
+// changed files - and DELETES the added b.go the drifted index carried - so the
 // base reflects base-ref (a.go only) and the gate correctly FAILs. This exercises
 // the added-file delete path that a plain skip would miss.
 func TestRunClones_E2E_IndexAhead_NowDetected(t *testing.T) {

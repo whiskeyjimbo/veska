@@ -63,7 +63,7 @@ func seedBaseDB(t *testing.T, dbPath string, files map[string]string) {
 // TestDiscoverStructural_CrossFileNewlyDead is the soundness proof for ll57.4:
 // a CHANGED file (main.go) removes the only caller of a helper that lives in an
 // UNCHANGED file (lib.go). The helper becomes dead. Discovery must surface that
-// as a NEW finding even though lib.go was not in the change set — which only
+// as a NEW finding even though lib.go was not in the change set - which only
 // holds because the candidate check pass runs over the WHOLE graph, not just
 // the changed files. A per-file scope would miss it (false green).
 func TestDiscoverStructural_CrossFileNewlyDead(t *testing.T) {
@@ -75,7 +75,7 @@ func TestDiscoverStructural_CrossFileNewlyDead(t *testing.T) {
 
 	// Complete candidate file set: lib.go UNCHANGED, main.go changed to drop the
 	// call. The full batch is what lets the promoter rebind the (now absent)
-	// cross-file call — so a new finding here means the call is GENUINELY gone,
+	// cross-file call - so a new finding here means the call is GENUINELY gone,
 	// not that resolution silently broke.
 	disc, err := DiscoverStructural(context.Background(), dbPath, discRepo, discBranch, "cand-sha",
 		[]diffgate.FileChange{{Path: "main.go", Content: []byte("package p\n\nfunc Run() {}\n")}},
@@ -130,7 +130,7 @@ func TestDiscoverStructural_NoChangeNoNewFindings(t *testing.T) {
 
 // files-only soundness proof: the CHANGED file (target.go) holds
 // a symbol whose only caller lives in an UNCHANGED file (caller.go). An inert
-// (comment-only) edit must yield NO new finding — the inbound edge from the
+// (comment-only) edit must yield NO new finding - the inbound edge from the
 // unchanged caller survives because re-promoting target.go re-mints `target`
 // with the SAME node_id (sha256 of repo/file/kind/symbol), so caller.go's edge
 // still resolves. A naive "re-promote drops the node" would false-positive here.
@@ -148,7 +148,7 @@ func TestDiscoverStructural_InertEditToCalledFileNoNewFindings(t *testing.T) {
 	}
 
 	// Only target.go changes (comment added); caller.go is untouched and NOT
-	// re-promoted — its edge to target must keep target alive.
+	// re-promoted - its edge to target must keep target alive.
 	disc, err := DiscoverStructural(context.Background(), dbPath, discRepo, discBranch, "cand-sha",
 		[]diffgate.FileChange{{Path: "target.go", Content: []byte("package p\n\n// keep\nfunc target() {}\n")}},
 		readBase,
@@ -194,7 +194,7 @@ func TestDiscoverStructural_AddedFileSkippedAtBase(t *testing.T) {
 // the candidate's new dead symbol. Because dead-code is not an authoritative
 // check, discovery's re-check never closes it, so a naive diff cancels it on
 // both sides → false GREEN. After clearing the inherited findings, the genuinely
-// new finding must surface. This seeds via a REAL check pass — the check-free
+// new finding must surface. This seeds via a REAL check pass - the check-free
 // seedBaseDB is exactly what hid this bug from the other fixtures.
 func TestDiscoverStructural_IndexAheadOfBaseStillDetectsNewFinding(t *testing.T) {
 	dbPath := filepath.Join(t.TempDir(), "veska.db")
@@ -203,7 +203,7 @@ func TestDiscoverStructural_IndexAheadOfBaseStillDetectsNewFinding(t *testing.T)
 		"app.go": "package p\n\nfunc Run() {}\n\nfunc greet() string { return \"hi\" }\n",
 	})
 	// Persist the dead-code finding the daemon would have left, via a real check
-	// pass — the step seedBaseDB omits, which is why the other fixtures (clean
+	// pass - the step seedBaseDB omits, which is why the other fixtures (clean
 	// findings table) never reproduced the leak.
 	pools, err := sqlite.OpenPools(dbPath)
 	if err != nil {
@@ -230,7 +230,7 @@ func TestDiscoverStructural_IndexAheadOfBaseStillDetectsNewFinding(t *testing.T)
 		t.Fatalf("DiscoverStructural: %v", err)
 	}
 	if newIDs := setDiff(disc.CandidateIDs, disc.BaseIDs); len(newIDs) == 0 {
-		t.Fatalf("greet is newly dead (base calls it, candidate orphans it) but discovery found no new finding — false GREEN (base=%v cand=%v)", disc.BaseIDs, disc.CandidateIDs)
+		t.Fatalf("greet is newly dead (base calls it, candidate orphans it) but discovery found no new finding - false GREEN (base=%v cand=%v)", disc.BaseIDs, disc.CandidateIDs)
 	}
 }
 

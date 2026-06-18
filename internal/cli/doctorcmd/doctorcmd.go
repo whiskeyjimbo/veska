@@ -9,9 +9,9 @@
 // RunE bodies are thin calls into the Run* helpers here (,
 // following the cmd = glue / logic-in-packages pattern established by
 // repocmd and searchcmd).
-// Cross-cmd seams the cmd package owns — ProbeStatusError (its exit-code
+// Cross-cmd seams the cmd package owns - ProbeStatusError (its exit-code
 // translation is shared with main.go and backup.go) and the in-process
-// embedder default constants (shared with init.go) — are exported here and
+// embedder default constants (shared with init.go) - are exported here and
 // re-exported from cmd/veska so the other subcommands keep compiling against
 // stable names.
 package doctorcmd

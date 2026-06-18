@@ -11,7 +11,7 @@ import (
 
 // TestPromote_WritesSignatureAndNilPrevOnFirstPromotion verifies that the very
 // first promotion of a file sets signature from the parsed Node and leaves
-// prev_signature NULL — there is no prior row to carry forward, so the
+// prev_signature NULL - there is no prior row to carry forward, so the
 // contract-drift check cannot fire by construction.
 func TestPromote_WritesSignatureAndNilPrevOnFirstPromotion(t *testing.T) {
 	db := openMemDB(t)
@@ -102,7 +102,7 @@ func TestPromote_ThreadsPrevSignatureAcrossPromotions(t *testing.T) {
 }
 
 // TestPromote_NilSignatureWritesNullColumn verifies that a node with no
-// parser-supplied signature writes NULL — not "" — into the column so the
+// parser-supplied signature writes NULL - not "" - into the column so the
 // contract-drift comparison treats it as "unknown".
 func TestPromote_NilSignatureWritesNullColumn(t *testing.T) {
 	db := openMemDB(t)

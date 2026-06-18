@@ -38,7 +38,7 @@ func main() {
 
 	// Create DB if it doesn't exist.
 	if _, statErr := os.Stat(dbPath); os.IsNotExist(statErr) {
-		fmt.Fprintf(os.Stderr, "DB not found at %s — generating with %d branches, %d symbols, %d%% overlap\n",
+		fmt.Fprintf(os.Stderr, "DB not found at %s - generating with %d branches, %d symbols, %d%% overlap\n",
 			dbPath, *branches, *symbols, *overlap)
 		if err := generate(dbPath, *branches, *symbols, *overlap); err != nil {
 			fmt.Fprintf(os.Stderr, "generate: %v\n", err)

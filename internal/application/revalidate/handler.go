@@ -8,7 +8,7 @@
 //	"dead-code": cheap re-run. If the anchor node now has >=1 inbound
 //	  edge, the rule no longer fires and the finding is closed as
 //	  'revalidated_obsolete'. If it still has zero inbound edges, the rule
-//	  still fires on the new content — the existing row is REFRESHED in
+//	  still fires on the new content - the existing row is REFRESHED in
 //	  place (anchor_content_hash:= current_hash; state stays 'open').
 //	"contract-drift": cheap re-run. Read the node's (prev_signature,
 //	  signature) pair. If prev != "" && prev != current, drift still
@@ -19,17 +19,17 @@
 //	  Structural twin of dead-code.
 //	"auto-link": NOT swept. Auto-link findings store an edge_id in the
 //	  findings.node_id column; StaleFindingsForFile joins findings.node_id
-//	  to nodes.node_id, which an edge_id never matches — so auto-link
+//	  to nodes.node_id, which an edge_id never matches - so auto-link
 //	  findings are never selected here. Their lifecycle is developer-driven
 //	  (accept/suppress); a stale similarity suggestion is low-harm. An
 //	  edge-anchored revalidation path would be a separate feature.
-//	any other rule: conservative default — close. New rules opt into
+//	any other rule: conservative default - close. New rules opt into
 //	  refresh behaviour by adding a case here.
 //
 // Why no "superseded_by_revalidation" closed_reason: finding IDs are
 // branch-stable hash(rule + anchor). For a node-anchored finding, re-firing
 // the rule produces the SAME finding_id, so "the rule still fires on new
-// content" never produces a new row — it just means the existing row is
+// content" never produces a new row - it just means the existing row is
 // still valid. Refresh the anchor hash and move on.
 // Scope discipline:
 //
@@ -58,10 +58,10 @@ var ErrMissingDependency = errors.New("revalidate: missing required dependency")
 // Rule names recognised by the per-rule dispatch. They are duplicated here
 // (not imported from internal/application/checks or autolink) to keep the
 // application/revalidate package free of inbound deps on its sibling
-// packages — the rule name on a stored Finding is the wire contract.
+// packages - the rule name on a stored Finding is the wire contract.
 // "auto-link" is intentionally NOT listed: auto-link findings store an
 // edge_id in the findings.node_id column, but StaleFindingsForFile selects
-// stale findings via JOIN nodes ON nodes.node_id = findings.node_id — an
+// stale findings via JOIN nodes ON nodes.node_id = findings.node_id - an
 // edge_id never matches a nodes row, so auto-link findings are never picked
 // up by this sweep. Their lifecycle is developer-driven (accept/suppress);
 // An edge-anchored revalidation path would be a new feature,
@@ -167,7 +167,7 @@ func (h *Handler) Handle(ctx context.Context, row ports.WorkRow) error {
 	}
 
 	// Phase 2: one transaction, one fsync per file. If commit fails, no
-	// metrics are bumped — queue.Poller will retry the row and the same
+	// metrics are bumped - queue.Poller will retry the row and the same
 	// decisions will be re-derived on the next attempt.
 	if err := h.repo.ApplyDecisions(ctx, row.RepoID, row.Branch, decisions, at); err != nil {
 		return fmt.Errorf("revalidate.Handle: apply decisions on %q: %w", filePath, err)
@@ -186,7 +186,7 @@ func (h *Handler) Handle(ctx context.Context, row ports.WorkRow) error {
 }
 
 // decide derives a FindingDecision for one stale finding using per-rule
-// re-run logic. Reads only — no writes happen until ApplyDecisions. The rule
+// re-run logic. Reads only - no writes happen until ApplyDecisions. The rule
 // dispatch lives in the shared Decide function so the diff-safety gate reuses
 // it; the Handler's RevalidateQuerier satisfies PredicateSource directly.
 func (h *Handler) decide(ctx context.Context, row ports.WorkRow, s ports.StaleFinding) (ports.FindingDecision, error) {

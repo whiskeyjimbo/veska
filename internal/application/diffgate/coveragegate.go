@@ -19,7 +19,7 @@ type UntestedSymbol struct {
 
 // CoverageVerdict is the diff-coverage gate result: PASS only when every changed
 // prod symbol has a test-file caller (under the CALLS-edge proxy). It carries no
-// "checked" flag — unlike the security/clone gates there is no degraded path:
+// "checked" flag - unlike the security/clone gates there is no degraded path:
 // the inputs (changed set + untested findings) are always computable once the
 // repo is indexed; an indexing/promote failure surfaces as an error from the
 // invocation surface, not a verdict.
@@ -47,13 +47,13 @@ func (v CoverageVerdict) ExitCode() int {
 // CoverageGate flags a candidate change that modifies or adds a prod symbol no
 // test reaches. It is a blanket gate (no target finding). The heavy lifting
 // re-promoting the candidate so cross-file test→prod CALLS edges resolve, then
-// running the untested-symbol check over the after-state — is
+// running the untested-symbol check over the after-state - is
 // the invocation surface's job; this gate only intersects the two results.
 // The intersection is the whole gate, and it is exactly what AC2 requires:
 // "untested" is judged over ALL symbols in the changed files (the check scopes
 // by file), but the gate fires ONLY for symbols in the node-precision CHANGED
 // set. An unchanged-but-untested symbol sharing a touched file is therefore NOT
-// flagged — flagging it would fail a diff whose CHANGED symbols are all tested.
+// flagged - flagging it would fail a diff whose CHANGED symbols are all tested.
 type CoverageGate struct{}
 
 // NewCoverageGate constructs a CoverageGate. It is stateless.

@@ -124,7 +124,7 @@ func resolveFindingPrefix(ctx context.Context, q findingPrefixQuerier, prefix, b
 		return "", &RPCError{Code: CodeNotFound, Message: fmt.Sprintf("finding not found: %s", prefix)}
 	}
 	if len(matched) > 1 {
-		return "", &RPCError{Code: CodeInvalidParams, Message: fmt.Sprintf("ambiguous finding_id prefix %q: matches multiple findings — supply more characters", prefix)}
+		return "", &RPCError{Code: CodeInvalidParams, Message: fmt.Sprintf("ambiguous finding_id prefix %q: matches multiple findings - supply more characters", prefix)}
 	}
 	return matched[0], nil
 }

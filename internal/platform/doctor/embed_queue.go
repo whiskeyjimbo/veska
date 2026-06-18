@@ -7,7 +7,7 @@ import (
 )
 
 // Thresholds for the embed-queue health probe. The "broken" status only
-// fires on a true outage (Failed > 0) — accumulating failed rows means
+// fires on a true outage (Failed > 0) - accumulating failed rows means
 // rows are giving up after the worker's retry budget is exhausted. The
 // "degraded" threshold is a soft signal that the queue is not draining
 // fast enough; chosen at 1000 to align with M3 capacity expectations.
@@ -18,10 +18,10 @@ const (
 // EmbedQueueReport summarises the state of node_embedding_refs for the
 // doctor subcommand.
 //
-//	Status "healthy" — no failed rows, pending < degraded threshold.
-//	Status "degraded" — pending count > embedQueueDegradedPending; the
+//	Status "healthy" - no failed rows, pending < degraded threshold.
+//	Status "degraded" - pending count > embedQueueDegradedPending; the
 //	  embedder is keeping up correctness-wise but not drain-wise.
-//	Status "broken" — at least one row has been parked in 'failed'.
+//	Status "broken" - at least one row has been parked in 'failed'.
 //
 // "broken" takes precedence over "degraded" when both conditions hold.
 type EmbedQueueReport struct {

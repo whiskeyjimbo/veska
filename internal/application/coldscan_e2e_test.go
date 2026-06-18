@@ -40,7 +40,7 @@ import (
 // level race coverage already exists in narrower tests.
 func TestColdScanE2E_ReindexProducesSearchableVectors(t *testing.T) {
 	if !ollamaReachable(t) {
-		t.Skip("ollama unreachable at http://localhost:11434 — skipping e2e (set up Ollama with nomic-embed-text to run)")
+		t.Skip("ollama unreachable at http://localhost:11434 - skipping e2e (set up Ollama with nomic-embed-text to run)")
 	}
 
 	t.Run("sqlite-vec", func(t *testing.T) {
@@ -53,7 +53,7 @@ func TestColdScanE2E_ReindexProducesSearchableVectors(t *testing.T) {
 }
 
 // ollamaReachable does a fast (1s) probe against /api/tags. We accept any
-// non-error response — a healthy Ollama returns 200, but a 404 would still
+// non-error response - a healthy Ollama returns 200, but a 404 would still
 // prove the daemon is up.
 func ollamaReachable(t *testing.T) bool {
 	t.Helper()
@@ -77,7 +77,7 @@ func ollamaReachable(t *testing.T) bool {
 func runColdScanE2E(t *testing.T, kind vector.BackendKind) {
 	t.Helper()
 
-	// Vector storage first — for usearch this is the gate that decides
+	// Vector storage first - for usearch this is the gate that decides
 	// whether the subtest can run at all.
 	vecDir := t.TempDir()
 	vecStore, err := vector.NewVectorStorage(kind, vecDir)
@@ -103,7 +103,7 @@ func runColdScanE2E(t *testing.T, kind vector.BackendKind) {
 		branch = "main"
 	)
 
-	// Fixture repo on disk — its path doubles as the repos.root_path FK.
+	// Fixture repo on disk - its path doubles as the repos.root_path FK.
 	repoRoot := t.TempDir()
 	writeIntFile(t, repoRoot, "alpha_metric.go",
 		"package fixture\n\n// ComputeAlphaMetric calculates the alpha metric for a series.\n"+
@@ -119,7 +119,7 @@ func runColdScanE2E(t *testing.T, kind vector.BackendKind) {
 		t.Fatalf("insert repos row: %v", err)
 	}
 
-	// Parse / promote chain — identical to wire.go.
+	// Parse / promote chain - identical to wire.go.
 	parser := treesitter.NewGoParser()
 	area := staging.NewArea()
 	gate := staging.NewGate(area)
@@ -156,13 +156,13 @@ func runColdScanE2E(t *testing.T, kind vector.BackendKind) {
 		t.Fatal("expected node_embedding_refs(state=pending) > 0 after reparser; got 0")
 	}
 
-	// Ollama provider —:latest matches the local tag from `ollama list`.
+	// Ollama provider -:latest matches the local tag from `ollama list`.
 	prov, err := ollama.New("nomic-embed-text:latest", ollama.WithBaseURL("http://localhost:11434"))
 	if err != nil {
 		t.Fatalf("ollama.New: %v", err)
 	}
 
-	// Embedder worker — short interval for fast convergence in this test.
+	// Embedder worker - short interval for fast convergence in this test.
 	worker, err := embedder.NewWorker(refs, prov, vecStore, embedder.WithInterval(50*time.Millisecond))
 	if err != nil {
 		t.Fatalf("embedder.NewWorker: %v", err)
@@ -181,7 +181,7 @@ func runColdScanE2E(t *testing.T, kind vector.BackendKind) {
 
 	worker.Stop()
 
-	// Worker upserts to node_embeddings before flipping refs.embedded — at
+	// Worker upserts to node_embeddings before flipping refs.embedded - at
 	// least one row must exist.
 	if n := countNodeEmbeddings(t, db); n == 0 {
 		t.Fatal("node_embeddings is empty after embedder drained; worker did not persist any vectors")

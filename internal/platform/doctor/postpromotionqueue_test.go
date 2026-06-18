@@ -266,7 +266,7 @@ func TestCheckPostPromotionQueue_FailedReviewWithFinding(t *testing.T) {
 // TestPurgeOrphanFailedRows guards: failed queue rows whose
 // repo_id is no longer in the repos table are deleted by PurgeOrphanFailedRows.
 // Rows for still-registered repos and non-failed orphan rows are preserved
-// (only "failed" state qualifies — pending/in_progress/done rows might still
+// (only "failed" state qualifies - pending/in_progress/done rows might still
 // belong to an in-flight or completed promotion of a re-registered repo).
 func TestPurgeOrphanFailedRows(t *testing.T) {
 	path := t.TempDir() + "/test.db"

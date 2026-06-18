@@ -9,16 +9,16 @@ import "context"
 // agrees with the agent-facing `eng_get_status` signal.
 // Status values:
 //
-//	"drained" — Pending == 0; the embedder has nothing left to do.
-//	"backfilling" — Pending > 0; the embedder is working through a backlog.
-//	  This is NOT classified as "degraded" in the rollup — the daemon
+//	"drained" - Pending == 0; the embedder has nothing left to do.
+//	"backfilling" - Pending > 0; the embedder is working through a backlog.
+//	  This is NOT classified as "degraded" in the rollup - the daemon
 //	  (embedder worker, queue, ingestion) is healthy, work just isn't done
 //	  yet. The same backlog DOES drive `eng_get_status`'s
 //	  `degraded_reasons:["embeddings_pending"]` because that signal tells
 //	  agents to choose between semantic and lexical search paths; doctor's
 //	  audience is operators reading a go/no-go, who care that the daemon
 //	  is functioning, not that semantic search is mid-warmup.
-//	"unknown" — counter is nil or the underlying query failed. Surfaces
+//	"unknown" - counter is nil or the underlying query failed. Surfaces
 //	  "we couldn't measure" without poisoning the rollup as a real fault.
 type EmbeddingBacklogReport struct {
 	Pending int    `json:"pending"`

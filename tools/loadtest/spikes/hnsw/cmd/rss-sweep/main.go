@@ -96,7 +96,7 @@ func main() {
 	for _, r := range results {
 		if r.population == 1_000_000 && r.rssSteadyMiB > rssThresholdMiB {
 			fmt.Fprintf(os.Stderr,
-				"\nWARN: 1M steady-state RSS=%dMiB exceeds 1.5GiB threshold (%dMiB) — budget risk\n",
+				"\nWARN: 1M steady-state RSS=%dMiB exceeds 1.5GiB threshold (%dMiB) - budget risk\n",
 				r.rssSteadyMiB, rssThresholdMiB)
 		}
 	}

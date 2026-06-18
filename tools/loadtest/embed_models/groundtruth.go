@@ -40,10 +40,10 @@ type GTSource struct {
 
 // CollectGroundTruth returns every available source for the corpus, in
 // order: headline (loaded from every *.jsonl file in fixturesDir), doc
-// (auto-extracted from Go source — code corpora only), test-name
-// (auto-extracted from _test.go — code corpora only). Empty sources
+// (auto-extracted from Go source - code corpora only), test-name
+// (auto-extracted from _test.go - code corpora only). Empty sources
 // are returned with an empty Pairs slice so per-source recall rows are
-// still emitted. kind toggles the doc/test-name sources on/off — they
+// still emitted. kind toggles the doc/test-name sources on/off - they
 // only make sense for code corpora.
 func CollectGroundTruth(corpusName, corpusRoot, fixturesDir, kind string) []GTSource {
 	headline, _ := loadHeadlineDir(fixturesDir, corpusName)
@@ -65,7 +65,7 @@ func CollectGroundTruth(corpusName, corpusRoot, fixturesDir, kind string) []GTSo
 // (ParseComments) and emits one Pair per exported function/method/type
 // with a non-empty doc comment. The query is the first sentence of the
 // doc with the symbol's name stripped from the front (Go's convention
-// is "Foo does X" — keeping "Foo" leaks the answer into the query).
+// is "Foo does X" - keeping "Foo" leaks the answer into the query).
 // Symbol naming matches treesitter's convention so recall can compare
 // directly against the embedded docs' name field:
 //
@@ -111,7 +111,7 @@ func docDerived(root string) []Pair {
 				if d.Doc == nil {
 					continue
 				}
-				// type/var/const declarations — emit one pair per
+				// type/var/const declarations - emit one pair per
 				// exported type spec only (vars/consts rarely have
 				// search-worthy individual docs).
 				if d.Tok != token.TYPE {
@@ -144,7 +144,7 @@ func funcSymbolName(d *ast.FuncDecl) string {
 	if d.Recv == nil || len(d.Recv.List) == 0 {
 		return d.Name.Name
 	}
-	// Extract receiver type — strip the pointer if present.
+	// Extract receiver type - strip the pointer if present.
 	t := d.Recv.List[0].Type
 	if star, ok := t.(*ast.StarExpr); ok {
 		t = star.X
@@ -157,7 +157,7 @@ func funcSymbolName(d *ast.FuncDecl) string {
 }
 
 // firstSentenceMinusPrefix returns the first sentence of comment with
-// any leading occurrence of symbolName stripped — Go's "Foo does X"
+// any leading occurrence of symbolName stripped - Go's "Foo does X"
 // convention would otherwise leak the answer into the query.
 func firstSentenceMinusPrefix(comment, symbolName string) string {
 	text := strings.TrimSpace(comment)
@@ -177,7 +177,7 @@ func firstSentenceMinusPrefix(comment, symbolName string) string {
 	}
 	sentence := strings.TrimSpace(text[:end])
 
-	// Strip "<symbolName> " prefix if present (case-sensitive — Go
+	// Strip "<symbolName> " prefix if present (case-sensitive - Go
 	// convention starts the doc with the exact name).
 	prefix := symbolName + " "
 	if strings.HasPrefix(sentence, prefix) {

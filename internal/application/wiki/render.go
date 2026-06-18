@@ -9,14 +9,14 @@ import (
 // renderGeneratedHeader prints a one-line "Generated: ISO8601" stamp +
 // a refresh hint, so a Markdown page never lies about how current it is
 // Zero time is rendered as "_unstamped_" to keep the
-// page readable when the handler hasn't filled in GeneratedAt — the
+// page readable when the handler hasn't filled in GeneratedAt - the
 // MCP responses share these renderers and don't necessarily set it.
 func renderGeneratedHeader(b *strings.Builder, at time.Time) {
 	if at.IsZero() {
-		b.WriteString("_Generated: unstamped — re-run `veska wiki` to refresh._\n\n")
+		b.WriteString("_Generated: unstamped - re-run `veska wiki` to refresh._\n\n")
 		return
 	}
-	fmt.Fprintf(b, "_Generated: %s — re-run `veska wiki` to refresh._\n\n", at.UTC().Format(time.RFC3339))
+	fmt.Fprintf(b, "_Generated: %s - re-run `veska wiki` to refresh._\n\n", at.UTC().Format(time.RFC3339))
 }
 
 // HotZonesPagePath is the repoRoot-relative path the hot_zone Markdown
@@ -39,11 +39,11 @@ func RenderHotZones(r Report) string {
 		// MCP tool's degraded_reasons.
 		switch {
 		case r.CandidatesScanned == 0:
-			b.WriteString("_No commits in the past 30 days. Hot-zone ranking is per-commit-frequency-driven — commit some changes and re-run `veska wiki`._\n")
+			b.WriteString("_No commits in the past 30 days. Hot-zone ranking is per-commit-frequency-driven - commit some changes and re-run `veska wiki`._\n")
 		case r.CandidatesScored == 0:
 			fmt.Fprintf(&b, "_%d file(s) changed in the last 30 days, but none have graph nodes (lockfiles, READMEs, generated assets). Nothing to rank._\n", r.CandidatesScanned)
 		default:
-			b.WriteString("_No hot zones yet — re-run `veska wiki` after more commits land._\n")
+			b.WriteString("_No hot zones yet - re-run `veska wiki` after more commits land._\n")
 		}
 		return b.String()
 	}
@@ -80,7 +80,7 @@ func RenderEntryPoints(r EntryPointsReport) string {
 	b.WriteString("inbound call count, with exported symbols and symbols having ")
 	b.WriteString("adjacent tests breaking ties.\n\n")
 	if len(r.EntryPoints) == 0 {
-		b.WriteString("_No entry points yet — symbols appear here once the auto-link pipeline has built inbound CALLS edges. Check `veska doctor post_promotion_queue`; if pending/auto_link is large the index is still warming up._\n")
+		b.WriteString("_No entry points yet - symbols appear here once the auto-link pipeline has built inbound CALLS edges. Check `veska doctor post_promotion_queue`; if pending/auto_link is large the index is still warming up._\n")
 		return b.String()
 	}
 	b.WriteString("| Symbol | File | Kind | Inbound | Exported | Tested |\n")

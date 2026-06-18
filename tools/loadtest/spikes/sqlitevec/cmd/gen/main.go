@@ -28,7 +28,7 @@ func main() {
 	vecs := gen.GenerateVectors(*n, seed)
 
 	stats := gen.ComputeStats(vecs)
-	fmt.Printf("Norm stats — mean: %.4f  p50: %.4f  p95: %.4f\n", stats.Mean, stats.P50, stats.P95)
+	fmt.Printf("Norm stats - mean: %.4f  p50: %.4f  p95: %.4f\n", stats.Mean, stats.P50, stats.P95)
 
 	if err := os.MkdirAll(filepath.Dir(*out), 0o755); err != nil {
 		log.Fatalf("mkdir %s: %v", filepath.Dir(*out), err)

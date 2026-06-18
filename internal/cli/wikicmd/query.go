@@ -38,7 +38,7 @@ type entryPointsResp struct {
 }
 
 // RunEntryPoints wraps eng_get_entry_points: high-fan-in symbols ranked by
-// inbound call count — the natural starting points for reading a repo.
+// inbound call count - the natural starting points for reading a repo.
 func RunEntryPoints(ctx context.Context, p EntryPointsParams) error {
 	params := map[string]any{}
 	if p.RepoID != "" {

@@ -15,11 +15,11 @@ type nodeHasher interface {
 
 // ChangedNodeIDs returns the node IDs the candidate actually changed: the
 // overlay's nodes minus those a content-hash comparison positively proves
-// unchanged. It is the guard's input — the set checked against the finding's
+// unchanged. It is the guard's input - the set checked against the finding's
 // blast radius.
 // Safe-direction bias (this set gates scope-containment): a node is dropped
 // ONLY when the base reports a non-empty hash that equals the candidate's. Any
-// uncertainty — base has no hasher, the lookup errors, either hash is empty
+// uncertainty - base has no hasher, the lookup errors, either hash is empty
 // leaves the node IN the changed set. Over-reporting makes the guard check more
 // nodes against the radius (over-block), which is safe; excluding-on-uncertainty
 // would silently shrink the checked set and let a far-reaching change slip
@@ -44,7 +44,7 @@ func (e *Ephemeral) ChangedNodeIDs(ctx context.Context) []string {
 			if hasHasher && n.ContentHash != nil {
 				baseHash, err := hasher.NodeContentHash(ctx, e.RepoID, e.Branch, id)
 				if err == nil && baseHash != "" && baseHash == string(*n.ContentHash) {
-					// Positively confirmed unchanged — the only case we drop.
+					// Positively confirmed unchanged - the only case we drop.
 					continue
 				}
 			}

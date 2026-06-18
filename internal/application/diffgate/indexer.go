@@ -3,7 +3,7 @@
 // graph WITHOUT mutating the persisted graph or hitting the network, so the
 // verify and blast-radius-containment
 // verdicts can query a (before, after) graph state. It computes no verdicts
-// itself — those are the consumer tasks; this package only produces the
+// itself - those are the consumer tasks; this package only produces the
 // queryable substrate they share.
 // Two seams keep the substrate stable while its inputs vary:
 //
@@ -14,7 +14,7 @@
 //	  v1 is the persisted, indexed-HEAD graph (SQLite already implements
 //	  EdgeReader+NodeLookup). An in-memory build at an arbitrary base ref, or
 //	  a version-pinned query, are future backends behind the
-//	  same interface — so neither the Indexer nor the consumers change.
+//	  same interface - so neither the Indexer nor the consumers change.
 //
 // Nothing here is persisted and no EmbeddingProvider is touched, so indexing
 // adds no network egress (AC2).
@@ -59,9 +59,9 @@ type BaseGraph interface {
 // Ephemeral is the (base, candidate) graph state the Indexer produces. Base is
 // the unchanged "before"; Overlay holds the candidate's parsed nodes/edges as
 // a staging overlay (a deleted file stages an empty entry). Consumers compose
-// the two — the gate's blast-radius guard, for instance, queries
+// the two - the gate's blast-radius guard, for instance, queries
 // blastradius.NewService(eph.Base, eph.Base, eph.Overlay) with no new
-// interface — and read the overlay shadowing the base on the changed files.
+// interface - and read the overlay shadowing the base on the changed files.
 // Building an Ephemeral mutates no durable state: Base is read-only and
 // Overlay is a fresh in-memory staging.Area.
 type Ephemeral struct {

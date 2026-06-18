@@ -14,7 +14,7 @@ import (
 // repo exists. Used by `veska deps index` to refuse indexing a vendored copy of
 // an already-tracked module.
 // The query lives here rather than in cmd/veska so the delivery layer holds no
-// SQL — it is the deps-index sibling of the resolution helpers above.
+// SQL - it is the deps-index sibling of the resolution helpers above.
 func FindTrackedRepoByModulePath(ctx context.Context, db *sql.DB, modulePath string) (string, error) {
 	if modulePath == "" {
 		return "", nil

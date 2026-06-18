@@ -58,7 +58,7 @@ func TestQuota_CommitCap(t *testing.T) {
 }
 
 // TestQuota_CommitCapZeroUnlimited proves a cap of 0 disables the per-commit
-// check entirely — it never trips no matter the usage.
+// check entirely - it never trips no matter the usage.
 func TestQuota_CommitCapZeroUnlimited(t *testing.T) {
 	t.Parallel()
 	q := NewQuota(0, 0, newFakeDailyStore())

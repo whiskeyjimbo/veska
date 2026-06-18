@@ -72,7 +72,7 @@ func encodeF32LE(v []float32) []byte {
 }
 
 type fakeVectors struct {
-	// Hits are returned in queue order — one Search call pops one element.
+	// Hits are returned in queue order - one Search call pops one element.
 	// This keeps multi-source tests deterministic without needing to inspect
 	// the input vector.
 	queue [][]domain.SearchHit

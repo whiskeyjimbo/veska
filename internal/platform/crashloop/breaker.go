@@ -1,9 +1,9 @@
 // Package crashloop implements a crash-loop breaker for the veska daemon.
 // It tracks restart frequency in two files under <veskaHome>:
 //
-//	crash_count — integer restart counter for the current window
-//	crash_window_start — Unix timestamp (seconds) when the current window began
-//	broken — presence of this file signals the breaker has tripped
+//	crash_count - integer restart counter for the current window
+//	crash_window_start - Unix timestamp (seconds) when the current window began
+//	broken - presence of this file signals the breaker has tripped
 //
 // When five or more restarts occur within a 10-minute sliding window the
 // breaker trips: it writes the broken marker and returns tripped=true from

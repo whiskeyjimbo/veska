@@ -69,7 +69,7 @@ func RunPostPromotionQueue(w io.Writer, opts QueueOptions) error {
 	// deregistered repos, tell the operator what to run instead of
 	// leaving them to grep the error messages for "is not registered".
 	if report.OrphanCount > 0 {
-		fmt.Fprintf(w, "  hint: %d failed row(s) point at a deregistered repo — run `veska doctor post_promotion_queue --purge-orphans` to clear them\n", report.OrphanCount)
+		fmt.Fprintf(w, "  hint: %d failed row(s) point at a deregistered repo - run `veska doctor post_promotion_queue --purge-orphans` to clear them\n", report.OrphanCount)
 	}
 	if report.Status != "healthy" {
 		return ProbeStatusError{Subsystem: "post_promotion_queue", Status: string(report.Status)}
@@ -78,7 +78,7 @@ func RunPostPromotionQueue(w io.Writer, opts QueueOptions) error {
 }
 
 // RunIdentity reports each registered repo's resolved identity tier and warns
-// when any repo sits on a non-converging tier — its node_ids would not match
+// when any repo sits on a non-converging tier - its node_ids would not match
 // another contributor indexing the same upstream in a shared graph DB
 // Non-converging is the expected, fine state for single-user use,
 // so this probe is advisory: it is NOT folded into the `doctor status` rollup.
@@ -103,7 +103,7 @@ func RunIdentity(w io.Writer, jsonOut bool) error {
 			// Distinguish an unresolved (pre-0018) repo from a resolved-but
 			// local-only tier; they read differently to an operator.
 			if r.Tier == "" {
-				note = "  WARN unresolved tier — won't converge in a shared DB"
+				note = "  WARN unresolved tier - won't converge in a shared DB"
 			} else {
 				note = "  WARN won't converge in a shared DB"
 			}
@@ -200,7 +200,7 @@ func RunPipelines(ctx context.Context, w io.Writer, jsonOut bool) error {
 	return nil
 }
 
-// RunEmbedder verifies the embedder the daemon actually elected — in-process
+// RunEmbedder verifies the embedder the daemon actually elected - in-process
 // by default, Ollama only when VESKA_EMBEDDER=ollama.
 func RunEmbedder(w io.Writer, jsonOut bool) error {
 	h := CheckEmbedderHealth(context.Background(), config.DefaultVectorDir())
@@ -446,6 +446,6 @@ func RunBundle(w io.Writer, jsonOut bool, outputDir string) error {
 		}))
 	}
 	fmt.Fprintln(w, result.Path)
-	fmt.Fprintln(w, "attach this tarball to support / issue reports — contains probe outputs and recent audit log")
+	fmt.Fprintln(w, "attach this tarball to support / issue reports - contains probe outputs and recent audit log")
 	return nil
 }

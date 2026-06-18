@@ -201,7 +201,7 @@ func TestResync_MissedCommits(t *testing.T) {
 	if len(tracker.saveCalls) != 2 {
 		t.Errorf("expected 2 Save calls, got %d", len(tracker.saveCalls))
 	}
-	// 2 Promote calls — one per commit
+	// 2 Promote calls - one per commit
 	if len(tracker.promoteCalls) != 2 {
 		t.Errorf("expected 2 Promote calls, got %d", len(tracker.promoteCalls))
 	}
@@ -300,7 +300,7 @@ func TestResync_IsSyncing(t *testing.T) {
 		RepoID:          "repo1",
 		RootPath:        "/tmp/repo1",
 		ActiveBranch:    "main",
-		LastPromotedSHA: headSHA, // already up to date — but Run still runs
+		LastPromotedSHA: headSHA, // already up to date - but Run still runs
 	}}}
 	git := &stubGitQuerier{
 		headFn: func(_ string) (string, error) { return headSHA, nil },
@@ -419,7 +419,7 @@ func TestResync_PerRepoFailureSkipsAndContinues(t *testing.T) {
 // when the working-tree branch differs from repos.active_branch, the branch
 // check must run FIRST (bump generation, clear prior-branch staging, update
 // active_branch) and the subsequent commit replay must use the NEW branch as
-// the save/promote key — not the stale in-memory ActiveBranch.
+// the save/promote key - not the stale in-memory ActiveBranch.
 func TestResync_BranchCheck_SwitchedBranch_ReplayUsesNewBranch(t *testing.T) {
 	const (
 		lastSHA = "old-sha"

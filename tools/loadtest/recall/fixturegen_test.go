@@ -18,7 +18,7 @@ import (
 // stubProvider is a deterministic in-memory EmbeddingProvider used to
 // exercise the generator end-to-end without hitting real Ollama. Each
 // text deterministically maps to a vector of length dim where the first
-// byte of text drives the spike — enough to assert the body is round
+// byte of text drives the spike - enough to assert the body is round
 // tripped and the dim header is correct.
 type stubProvider struct {
 	dim    int
@@ -157,8 +157,8 @@ func TestGenerateOllamaFixture_ContextCancellation(t *testing.T) {
 
 // TestGenerateOllamaFixture_HTTPStub exercises the real ollama.Provider
 // against a local httptest server returning Ollama-shaped JSON. This
-// verifies the wiring choice — generator + ports.EmbeddingProvider +
-// real adapter — without depending on a live Ollama install.
+// verifies the wiring choice - generator + ports.EmbeddingProvider +
+// real adapter - without depending on a live Ollama install.
 func TestGenerateOllamaFixture_HTTPStub(t *testing.T) {
 	// Imported here (not at top-of-file) to keep the package-level
 	// imports lean for the non-stub tests above.

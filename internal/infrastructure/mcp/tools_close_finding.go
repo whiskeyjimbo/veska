@@ -108,7 +108,7 @@ func makeCloseFindingHandler(db *sql.DB, aw ports.AuditWriter) ToolHandler {
 			// We include a resolution hint in the error message to guide automated systems on how a human can perform this action.
 			return nil, &RPCError{
 				Code:    CodeHumanRequired,
-				Message: fmt.Sprintf("human_required: severity=%s requires a human actor — close from the CLI as a human user (veska findings close %s --reason=...) or have a teammate run eng_close_finding", severity, p.FindingID),
+				Message: fmt.Sprintf("human_required: severity=%s requires a human actor - close from the CLI as a human user (veska findings close %s --reason=...) or have a teammate run eng_close_finding", severity, p.FindingID),
 				Data: map[string]any{
 					"reason":     "human_required",
 					"finding_id": p.FindingID,

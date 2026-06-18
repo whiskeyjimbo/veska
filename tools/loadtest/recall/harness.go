@@ -48,8 +48,8 @@ var SemanticClusterCount = synthcorpus.SemanticClusterCount
 // Fixture I/O
 
 // FixtureHeader is the on-disk preamble for a cached embedding fixture.
-// The format is intentionally trivial — little-endian uint32 dim, uint32
-// count, then count*dim float32s — so a regenerated fixture is bit-stable
+// The format is intentionally trivial - little-endian uint32 dim, uint32
+// count, then count*dim float32s - so a regenerated fixture is bit-stable
 // across runs of the same harness binary.
 type FixtureHeader struct {
 	Dim   uint32

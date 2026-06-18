@@ -10,7 +10,7 @@ import (
 )
 
 // RepoIdentity describes one registered repo's resolved identity tier and
-// whether that tier converges — i.e. whether two contributors indexing the
+// whether that tier converges - i.e. whether two contributors indexing the
 // same upstream resolve to the same repo_id. Only the
 // module-hostpath tier converges AND is globally unique; everything below it
 // is local-stable but unsafe to merge into a shared graph DB.
@@ -23,13 +23,13 @@ type RepoIdentity struct {
 
 // IdentityReport is the result of CheckIdentityTiers.
 //
-//	Status "healthy" — every registered repo resolved to a converging tier
+//	Status "healthy" - every registered repo resolved to a converging tier
 //	  (or there are no repos / no repos table)
-//	Status "degraded" — at least one repo sits on a non-converging tier; its
+//	Status "degraded" - at least one repo sits on a non-converging tier; its
 //	  node_ids will NOT match another contributor indexing the same upstream.
 //	  Fine for single-user use; a warning only for the shared-DB goal, so this
 //	  status is advisory and does NOT promote the doctor `status` rollup.
-//	Status "broken" — the DB could not be opened/pinged/queried (e.g. a
+//	Status "broken" - the DB could not be opened/pinged/queried (e.g. a
 //	  tamper-aborted DB). Reported, never os.Exit.
 type IdentityReport struct {
 	Repos         []RepoIdentity `json:"repos"`
@@ -59,7 +59,7 @@ func CheckIdentityTiers(dbPath string) (IdentityReport, error) {
 
 	// Some test fixtures (and a pre-0018 DB) lack the repos table or the
 	// identity_tier column. Absence of the table means there is nothing to
-	// classify — report healthy/empty rather than broken.
+	// classify - report healthy/empty rather than broken.
 	var present int
 	if err := db.QueryRow(
 		`SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='repos'`,
@@ -95,7 +95,7 @@ func CheckIdentityTiers(dbPath string) (IdentityReport, error) {
 }
 
 // queryRepoIdentities reads every repo's stored tier and classifies convergence
-// through repo.IdentityTier.Converges — never by hardcoding the tier string, so
+// through repo.IdentityTier.Converges - never by hardcoding the tier string, so
 // adding/renaming a tier ripples through exactly one method.
 func queryRepoIdentities(db *sql.DB) ([]RepoIdentity, error) {
 	rows, err := db.Query(

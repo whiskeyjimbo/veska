@@ -6,7 +6,7 @@
 // (fat build). These informed the fat/thin packaging decision:
 //
 //	model2vec Embed is ~500x faster than static-v2 (table lookup +
-//	  weighted mean vs n-gram hashing), and higher quality — so static-v2
+//	  weighted mean vs n-gram hashing), and higher quality - so static-v2
 //	  is a weak last resort, not a "fast lightweight" option.
 //	Using go:embed adds no load-time penalty vs reading the file from disk.
 //	The embedded path keeps the ~62MB weights resident for the process
@@ -29,7 +29,7 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/platform/config"
 )
 
-// benchEmbedText is a representative code snippet — the kind of projection
+// benchEmbedText is a representative code snippet - the kind of projection
 // text the embedder worker sees in production.
 const benchEmbedText = `func (p *Promoter) Promote(ctx context.Context, repoID, branch, sha string) (Result, error) {
 	// atomic promotion: all SQL behind PromotionStore; co-transactional sinks run inline
@@ -56,7 +56,7 @@ func BenchmarkLoad_Static(b *testing.B) {
 func BenchmarkLoad_Model2VecDisk(b *testing.B) {
 	dir := model2vecDir()
 	if dir == "" {
-		b.Skip("model2vec not installed under VESKA_HOME — run 'veska install model2vec'")
+		b.Skip("model2vec not installed under VESKA_HOME - run 'veska install model2vec'")
 	}
 	for b.Loop() {
 		if _, err := model2vec.New(dir); err != nil {
@@ -67,7 +67,7 @@ func BenchmarkLoad_Model2VecDisk(b *testing.B) {
 
 func BenchmarkLoad_Model2VecEmbedded(b *testing.B) {
 	if _, ok := model2vec.Embedded(); !ok {
-		b.Skip("not a fat build — rebuild with -tags 'eval embed_model'")
+		b.Skip("not a fat build - rebuild with -tags 'eval embed_model'")
 	}
 	for b.Loop() {
 		if _, ok := model2vec.Embedded(); !ok {
@@ -93,7 +93,7 @@ func BenchmarkEmbed_Static(b *testing.B) {
 func BenchmarkEmbed_Model2Vec(b *testing.B) {
 	dir := model2vecDir()
 	if dir == "" {
-		b.Skip("model2vec not installed under VESKA_HOME — run 'veska install model2vec'")
+		b.Skip("model2vec not installed under VESKA_HOME - run 'veska install model2vec'")
 	}
 	p, err := model2vec.New(dir)
 	if err != nil {

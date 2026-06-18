@@ -14,18 +14,18 @@ import (
 // they bite even on tight-clustered small-corpus distributions yet
 // stay sub-noise on real corpora where raw vector scores already
 // discriminate well:
-//  1. definition boost — exact match on the trailing identifier of a
+//  1. definition boost - exact match on the trailing identifier of a
 //     SymbolPath for a definitional Kind (function/method/type/.).
 //     Lifts the chunk that DEFINES the queried symbol above chunks
 //     that merely mention it.
-//  2. identifier stems — split SymbolPath (and file basename) on
+//  2. identifier stems - split SymbolPath (and file basename) on
 //     camelCase / snake_case / dotted boundaries; bonus per query
 //     token that exactly equals a subword. "parse config" → matches
 //     ParseConfig, configParser, parse_config_file.
-//  3. file coherence — when multiple candidates share a file, each
+//  3. file coherence - when multiple candidates share a file, each
 //     candidate in that file gets a small bump (capped) so a tightly
 //     clustered file outranks scattered isolated hits.
-//  4. noise penalty — multiplicative dampener for *_test.go, legacy/,
+//  4. noise penalty - multiplicative dampener for *_test.go, legacy/,
 //     examples/, vendor/, testdata/, *.d.ts paths.
 //
 // Stable-sorted by descending final score so equal-final-score input
@@ -74,7 +74,7 @@ func rerank(results []Result, query string) []Result {
 
 // definitionalKinds is the closed set of node kinds we treat as
 // "definitions" for the definition-boost signal. Files, packages,
-// modules, and fields are excluded — a file named save.go matching a
+// modules, and fields are excluded - a file named save.go matching a
 // query for "save" is a weak signal compared to a method literally
 // named Save.
 var definitionalKinds = map[string]bool{
@@ -125,7 +125,7 @@ func identifierStemBonus(r Result, tokens []string, maxScore float32) float32 {
 
 // identifierStemMatches counts query tokens that exactly equal a
 // lowercased subword of the symbol path or file basename (extension
-// stripped). Exact subword equality, not prefix — "conf" does NOT
+// stripped). Exact subword equality, not prefix - "conf" does NOT
 // match "config", because prefix matching turns common short tokens
 // into wildcards that lift the entire candidate set uniformly.
 func identifierStemMatches(tokens []string, symbolPath, fileBasename string) int {
@@ -193,7 +193,7 @@ func splitIdentifier(s string) []string {
 
 // verbSynonyms maps a query-side verb to API-side verbs callers commonly
 // reach for the same action under. The lexical/embedding pipeline has
-// no model of these clusters — a user types "register subcommand" but
+// no model of these clusters - a user types "register subcommand" but
 // cobra exposes "AddCommand", so neither retriever surfaces the
 // canonical answer well.
 // Conservative on purpose: only well-known API-design clusters that
@@ -221,12 +221,12 @@ var verbSynonyms = map[string][]string{
 }
 
 // verbSynonymBonus boosts a result when its symbol's HEAD identifier
-// (the leading subword — the "verb position" by Go API convention) is a
+// (the leading subword - the "verb position" by Go API convention) is a
 // known synonym of a query token. Gated on the head position so it
 // doesn't false-fire on substring matches deep inside the identifier
 // (e.g. "ItemsToAdd" is not registration).
-// Bonus magnitude equals definitionBonusFrac × maxScore — same weight
-// as an exact trailing-identifier match — so the canonical "AddCommand"
+// Bonus magnitude equals definitionBonusFrac × maxScore - same weight
+// as an exact trailing-identifier match - so the canonical "AddCommand"
 // for "register subcommand" can leapfrog larger sibling methods that
 // gained a fusion edge from mentioning the noun in their body.
 const verbSynonymBonusFrac = 1.0

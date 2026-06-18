@@ -164,7 +164,7 @@ func TestBranchSwitch_DrainError_StillResumes(t *testing.T) {
 	case <-done:
 		// expected
 	case <-time.After(100 * time.Millisecond):
-		t.Fatal("WaitIfPaused blocked after drainFn error — gate stuck paused")
+		t.Fatal("WaitIfPaused blocked after drainFn error - gate stuck paused")
 	}
 }
 

@@ -39,7 +39,7 @@ func TestFindSymbolLatency_Sanity(t *testing.T) {
 	}
 	rows.Close()
 
-	// 10 iterations — sanity only, gate is <1s per query
+	// 10 iterations - sanity only, gate is <1s per query
 	const iters = 10
 	deadline := 1 * time.Second
 	for i := range iters {

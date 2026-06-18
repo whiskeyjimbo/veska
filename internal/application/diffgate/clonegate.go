@@ -12,7 +12,7 @@ import (
 // FailClonesUnchecked names the degraded outcome where the base graph cannot
 // answer content-hash membership (it does not implement the clone-lookup
 // capability), so the gate cannot judge net-new duplication. Like the verify
-// gate's unchecked dimensions this is a FAIL, never a PASS — a gate that
+// gate's unchecked dimensions this is a FAIL, never a PASS - a gate that
 // cannot see the base must not greenlight a change.
 const FailClonesUnchecked = "clones_unchecked"
 
@@ -21,7 +21,7 @@ const FailClonesUnchecked = "clones_unchecked"
 // whole-repo clones analyzer. The persisted graph store (sqlite.NodeLookupRepo)
 // implements it; an in-memory base backend that does not leaves the gate
 // degraded (Checked=false). This mirrors the nodeHasher optional capability in
-// changednodes.go — structurally satisfied, type-asserted off Base.
+// changednodes.go - structurally satisfied, type-asserted off Base.
 type cloneHashLookup interface {
 	NodesByContentHash(ctx context.Context, repoID, branch, hash string, excludeKinds []string) ([]ports.NodeRef, error)
 }
@@ -34,7 +34,7 @@ type CloneMember struct {
 }
 
 // CloneGroup is a set of >=2 byte-identical nodes (shared content_hash) that
-// the candidate diff newly introduced — duplication absent at base.
+// the candidate diff newly introduced - duplication absent at base.
 type CloneGroup struct {
 	ContentHash string        `json:"content_hash"`
 	Members     []CloneMember `json:"members"`
@@ -42,7 +42,7 @@ type CloneGroup struct {
 
 // CloneVerdict is the exact-clone diff gate's pass/fail result. Pass is true
 // only when the gate was CHECKED and found no net-new clone group. Checked is
-// false when the base lacks the content-hash lookup capability — a degraded
+// false when the base lacks the content-hash lookup capability - a degraded
 // run that fails rather than passes.
 type CloneVerdict struct {
 	Pass      bool         `json:"pass"`
@@ -92,13 +92,13 @@ type CloneGate struct{}
 // NewCloneGate constructs a CloneGate. It is stateless.
 func NewCloneGate() *CloneGate { return &CloneGate{} }
 
-// Evaluate runs the gate over the ephemeral candidate. It reads only — no
+// Evaluate runs the gate over the ephemeral candidate. It reads only - no
 // durable state changes. A nil eph is a programming error and panics via the
 // nil-deref; callers always pass a built Ephemeral.
 func (g *CloneGate) Evaluate(ctx context.Context, eph *Ephemeral) (CloneVerdict, error) {
 	lookup, ok := eph.Base.(cloneHashLookup)
 	if !ok {
-		// Base cannot answer content-hash membership — degraded, not a pass.
+		// Base cannot answer content-hash membership - degraded, not a pass.
 		return CloneVerdict{Pass: false, Checked: false}, nil
 	}
 
@@ -113,7 +113,7 @@ func (g *CloneGate) Evaluate(ctx context.Context, eph *Ephemeral) (CloneVerdict,
 
 	// Overlay nodes grouped by content_hash. The overlay holds the after-state
 	// of every TOUCHED file, so EVERY eligible overlay node is a live member of
-	// its hash group — not just the ones whose content changed. A twin that the
+	// its hash group - not just the ones whose content changed. A twin that the
 	// diff left unchanged but that lives in a co-touched file is still a real
 	// clone member; filtering to changed-only nodes would drop it and miss a
 	// net-new duplication (an AC1 false negative). Eligible = non-excluded kind,

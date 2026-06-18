@@ -32,7 +32,7 @@ import (
 
 // loadEmbedder picks the real model2vec provider when its assets are
 // present on disk and falls back to the deterministic FakeEmbedder
-// otherwise. The FakeEmbedder is hash-based — useful for plumbing
+// otherwise. The FakeEmbedder is hash-based - useful for plumbing
 // smoke-tests but NOT for honest recall numbers on the semantic corpus
 // (its cluster-aligned tuning targets the original GenerateCorpus
 // vocabulary, not the per-topic semantic phrase bags). The returned
@@ -77,13 +77,13 @@ func findModel2VecAssets() string {
 }
 
 // TestTokenEfficiency is the headline harness. Wiring mirrors
-// recall.TestRecall — synthetic semantic corpus, fake embedder, real
-// search.Service + sqlite-vec — so apples-to-apples comparisons stay
+// recall.TestRecall - synthetic semantic corpus, fake embedder, real
+// search.Service + sqlite-vec - so apples-to-apples comparisons stay
 // possible. Output: tools/loadtest/tokenefficiency/results.json plus a
 // one-line semble-shaped summary on stdout.
 // Env knobs:
 //
-//	TOKEFF_NODES_PER_CLUSTER (default 24) — larger files exaggerate
+//	TOKEFF_NODES_PER_CLUSTER (default 24) - larger files exaggerate
 //	  grep's read-all-matches cost so the bracket widens. Capped by
 //	  synthcorpus' per-cluster combinatorial cap.
 func TestTokenEfficiency(t *testing.T) {
@@ -242,12 +242,12 @@ func TestTokenEfficiency(t *testing.T) {
 	// real result. Fail loudly so the eval never silently publishes a
 	// nonsense headline number.
 	if res.MeanRecall == 0 {
-		t.Fatalf("mean recall is zero — embedder + corpus plumbing is broken")
+		t.Fatalf("mean recall is zero - embedder + corpus plumbing is broken")
 	}
 }
 
 // seedNodesWithSnippets is the recall harness' seedNodes + a snippet
-// payload. The snippet IS the node's synthetic Text — that's what
+// payload. The snippet IS the node's synthetic Text - that's what
 // search.Service hydrates and what the agent would land in its context.
 func seedNodesWithSnippets(t *testing.T, db *sql.DB, repoID, branch string, nodes []synthcorpus.SyntheticNode) {
 	t.Helper()
@@ -342,12 +342,12 @@ func envFloat(key string, def float64) float64 {
 // tokenPricingFromEnv returns (conversationQueries, $/Mtoken, label)
 // for the absolute-savings extrapolation. Defaults: 50 queries per
 // conversation; Claude Sonnet input rate $3/Mtok (defensible
-// mid-range — Haiku is cheaper, Opus more expensive). Pricing drifts;
+// mid-range - Haiku is cheaper, Opus more expensive). Pricing drifts;
 // the label travels with the number so a stale figure is obvious.
 //
-//	TOKEFF_CONVERSATION_QUERIES — how many searches per conversation
-//	TOKEFF_USD_PER_MTOKEN — $/M input tokens
-//	TOKEFF_PRICE_LABEL — human name for the rate
+//	TOKEFF_CONVERSATION_QUERIES - how many searches per conversation
+//	TOKEFF_USD_PER_MTOKEN - $/M input tokens
+//	TOKEFF_PRICE_LABEL - human name for the rate
 func tokenPricingFromEnv() (int, float64, string) {
 	label := os.Getenv("TOKEFF_PRICE_LABEL")
 	if label == "" {
@@ -368,7 +368,7 @@ func writeJSON(path string, v any) error {
 
 // embedAllNodes runs embedder.Embed over every node's Text and returns
 // the EmbeddingRow batch ready for VectorStorage.UpsertEmbeddings. The
-// ContentHash is a placeholder ("h-<NodeID>") — these rows never go
+// ContentHash is a placeholder ("h-<NodeID>") - these rows never go
 // through the real promotion path. ModelID derives from embedderName so
 // the cached vectors are tagged with the actual model that produced
 // them (sqlite-vec doesn't read ModelID for search, but downstream

@@ -22,7 +22,7 @@ func entryPointsCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:          "entry-points",
 		Short:        "List high-fan-in entry-point symbols (wraps eng_get_entry_points)",
-		Long:         "List the high-fan-in symbols ranked by inbound call count — the natural entry points to read first when learning a repo. Exported, tested symbols rank above unexported untested ones at equal inbound count.",
+		Long:         "List the high-fan-in symbols ranked by inbound call count - the natural entry points to read first when learning a repo. Exported, tested symbols rank above unexported untested ones at equal inbound count.",
 		Args:         cobra.NoArgs,
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -55,7 +55,7 @@ func hotZonesCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:          "hot-zones",
 		Short:        "List files ranked by change risk (wraps eng_get_hot_zone)",
-		Long:         "List the top files by change risk = recent-change-frequency × blast-radius — the load-bearing files where a small edit fans out the most. Useful during PR review or onboarding.",
+		Long:         "List the top files by change risk = recent-change-frequency × blast-radius - the load-bearing files where a small edit fans out the most. Useful during PR review or onboarding.",
 		Args:         cobra.NoArgs,
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {

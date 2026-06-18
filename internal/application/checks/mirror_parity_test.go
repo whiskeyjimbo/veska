@@ -13,7 +13,7 @@ import (
 // application.CheckRunInput / application.Line: those types are deliberate
 // copies of checks.Input / checks.Line, re-declared so the application package
 // need not import checks. The copy is correct, but the parity is enforced by
-// hand — a field added to checks.Input must be mirrored. A field-signature
+// hand - a field added to checks.Input must be mirrored. A field-signature
 // comparison fails compilation-adjacent here the moment the two drift, turning
 // a silent latent bug into a red test.
 // The Line package qualifier is normalised away so map[string]checks.Line
@@ -37,7 +37,7 @@ func TestCheckRunInputMirrorsChecksInput(t *testing.T) {
 	got := fieldSignature(reflect.TypeFor[application.CheckRunInput]())
 	want := fieldSignature(reflect.TypeFor[checks.Input]())
 	if !reflect.DeepEqual(got, want) {
-		t.Errorf("application.CheckRunInput drifted from checks.Input — keep them in sync (promoter.go vs checks.go)\n  application.CheckRunInput: %v\n  checks.Input:              %v", got, want)
+		t.Errorf("application.CheckRunInput drifted from checks.Input - keep them in sync (promoter.go vs checks.go)\n  application.CheckRunInput: %v\n  checks.Input:              %v", got, want)
 	}
 }
 
@@ -45,6 +45,6 @@ func TestApplicationLineMirrorsChecksLine(t *testing.T) {
 	got := fieldSignature(reflect.TypeFor[application.Line]())
 	want := fieldSignature(reflect.TypeFor[checks.Line]())
 	if !reflect.DeepEqual(got, want) {
-		t.Errorf("application.Line drifted from checks.Line — keep them in sync\n  application.Line: %v\n  checks.Line:      %v", got, want)
+		t.Errorf("application.Line drifted from checks.Line - keep them in sync\n  application.Line: %v\n  checks.Line:      %v", got, want)
 	}
 }

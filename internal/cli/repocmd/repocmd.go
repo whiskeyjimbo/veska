@@ -44,7 +44,7 @@ type listResult struct {
 	Repos []RepoView `json:"repos"`
 }
 
-// ShortRepoID returns the first 12 chars of a repo id — the alias shown by
+// ShortRepoID returns the first 12 chars of a repo id - the alias shown by
 // `veska repo list` and accepted anywhere a repo_id is required. The CLI
 // surfaces this form so users copy the same token the tools expect, instead
 // of the unwieldy 64-char canonical id.
@@ -55,7 +55,7 @@ func ShortRepoID(id string) string {
 	return id
 }
 
-// cliMinRepoIDPrefix mirrors mcp.minRepoIDPrefix — see that constant for the
+// cliMinRepoIDPrefix mirrors mcp.minRepoIDPrefix - see that constant for the
 // reasoning.
 const cliMinRepoIDPrefix = 4
 
@@ -110,7 +110,7 @@ func resolveByPrefix(records []repo.Record, repoID string) (repo.Record, bool, e
 }
 
 // ResolveRepoArg returns the canonical repo_id for arg. A hex-only string
-// (repo_id or short_id prefix) is returned unchanged — the registry already
+// (repo_id or short_id prefix) is returned unchanged - the registry already
 // resolves prefixes. Anything else is treated as a filesystem path: it is
 // resolved to absolute form and matched against the RootPath of every
 // registered repo. The not-found error mentions the resolved abs path so
@@ -141,7 +141,7 @@ func ResolveRepoArg(ctx context.Context, arg string) (string, error) {
 }
 
 // looksLikeRepoID reports whether arg is plausibly a repo_id or short_id
-// prefix — a non-empty hex-only string. Repo IDs are SHA-256 hex; even a
+// prefix - a non-empty hex-only string. Repo IDs are SHA-256 hex; even a
 // 4-char prefix is uniquely identifying in practice. Filesystem paths almost
 // always contain a non-hex character (`/`, `.`, `-`).
 func looksLikeRepoID(arg string) bool {
@@ -178,7 +178,7 @@ func daemonLogPath() string {
 }
 
 // dialAddRepo sends eng_add_repo over the daemon's MCP unix socket. Returns
-// the assigned repo_id on success. Errors are translated into context — a
+// the assigned repo_id on success. Errors are translated into context - a
 // dial failure means "daemon not running" and the caller should fall back.
 func dialAddRepo(ctx context.Context, rootPath string) (string, bool, error) {
 	type result struct {
@@ -212,7 +212,7 @@ func dialEngStatus(ctx context.Context) (any, error) {
 }
 
 // ScanProgressRow is the per-scan progress snapshot surfaced into repo
-// list — phase ("walking" / "promoting") + files_seen — so a user can
+// list - phase ("walking" / "promoting") + files_seen - so a user can
 // tell the sub-second walk from the long promotion phase that follows
 // it.
 type ScanProgressRow struct {

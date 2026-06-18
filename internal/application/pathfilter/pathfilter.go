@@ -45,7 +45,7 @@ func IsVendored(path string) bool {
 // name, across the languages veska parses. It is the single source of truth for
 // the test-file vocabulary, shared by the dead-code / untested-symbol checks
 // (which exclude or attribute test files) AND the revalidation sweep's
-// test-caller predicate (sqlite.RevalidateRepo.HasTestCaller) — so the
+// test-caller predicate (sqlite.RevalidateRepo.HasTestCaller) - so the
 // language-specific naming rules stay in one trivially-testable place rather
 // than being duplicated into adapter SQL. An empty path is not a test file.
 func IsTestFile(path string) bool {

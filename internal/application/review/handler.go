@@ -135,10 +135,10 @@ func NewHandler(gen ports.LLMGenerator, loader *Loader, repoRoot RepoRootFunc, f
 //	  the review error metric is incremented.
 //	Repo-root resolution / file-read error: wrapped error so the Poller
 //	  retries.
-//	On success: nil — the row drains to 'done'.
+//	On success: nil - the row drains to 'done'.
 func (h *Handler) Handle(ctx context.Context, row ports.WorkRow) error {
 	if row.Kind != ports.WorkKindReview {
-		// A misrouted row is a wiring bug, not a review failure — no finding.
+		// A misrouted row is a wiring bug, not a review failure - no finding.
 		return fmt.Errorf("review.Handle: unexpected kind %q", row.Kind)
 	}
 
@@ -325,7 +325,7 @@ func (h *Handler) runKind(ctx context.Context, kind ReviewKind, in Input, gitSHA
 
 	rendered, err := prompt.Render(in)
 	if errors.Is(err, ErrEmptyInput) {
-		// Nothing to review for this kind — not a failure.
+		// Nothing to review for this kind - not a failure.
 		return nil
 	}
 	if err != nil {

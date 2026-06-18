@@ -120,7 +120,7 @@ func TestBranchReconcile_Match_NoOp(t *testing.T) {
 }
 
 // A working tree whose branch cannot be determined (detached HEAD, no git)
-// must NEVER bump the generation or wipe staging — that would discard valid
+// must NEVER bump the generation or wipe staging - that would discard valid
 // in-flight work on a transient git failure.
 func TestBranchReconcile_EmptyBranch_NoOp(t *testing.T) {
 	br := &fakeBranchReader{branch: ""}

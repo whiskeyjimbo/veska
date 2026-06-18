@@ -3,7 +3,7 @@
 // Refresh downloads OSV's full Go-ecosystem advisory dump (a zip of per-advisory
 // JSON files in the OSV schema) and extracts it into an on-disk cache. It is the
 // only operation that performs network egress. Scan reads that cache and matches
-// dependencies against it offline — it never touches the network, so it is safe
+// dependencies against it offline - it never touches the network, so it is safe
 // on the promotion path.
 package osv
 

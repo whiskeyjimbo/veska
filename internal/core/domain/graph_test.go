@@ -4,7 +4,7 @@ import (
 	"testing"
 )
 
-// helpers — build minimal valid nodes and edges
+// helpers - build minimal valid nodes and edges
 
 func makeNode(t *testing.T, id string) *Node {
 	t.Helper()

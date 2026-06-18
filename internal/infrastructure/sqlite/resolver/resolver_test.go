@@ -163,7 +163,7 @@ func TestResolveCrossRepoEdgeMiss(t *testing.T) {
 	db := setupTestDB(t)
 
 	seedRepo(t, db, "repo-b", "github.com/example/lib", "main")
-	// No node seeded — intentional miss.
+	// No node seeded - intentional miss.
 
 	stub := resolver.CrossRepoStub{
 		StubID:     "stub-miss",
@@ -193,7 +193,7 @@ func TestResolveCrossRepoEdge_Subpackage(t *testing.T) {
 
 	// Single repo whose module root covers multiple packages.
 	seedRepo(t, db, "repo-cobra", "github.com/spf13/cobra", "main")
-	// Same-named symbol exists in TWO subpackages — only the right one must bind.
+	// Same-named symbol exists in TWO subpackages - only the right one must bind.
 	seedNode(t, db, "node-doc", "main", "repo-cobra", "go", "function", "Render", "doc/util.go")
 	seedNode(t, db, "node-root", "main", "repo-cobra", "go", "function", "Render", "command.go")
 
@@ -432,14 +432,14 @@ func TestResolveStubsTargetingNode_FindsInboundCallers(t *testing.T) {
 }
 
 // TestResolveStubsTargetingNode_ExcludesIntraRepoStubs guards against
-// returning a stub whose src repo equals the dst node's repo — that's
+// returning a stub whose src repo equals the dst node's repo - that's
 // not a cross-repo edge by definition and would leak self-references.
 func TestResolveStubsTargetingNode_ExcludesIntraRepoStubs(t *testing.T) {
 	db := setupTestDB(t)
 	seedRepo(t, db, "repo-b", "github.com/example/lib", "main")
 	seedNode(t, db, "node-b-target", "main", "repo-b", "go", "func", "pkg.Foo", "file.go")
 	seedNode(t, db, "node-b-caller", "main", "repo-b", "go", "func", "pkg.Caller", "caller.go")
-	// Same-repo stub — must NOT be returned.
+	// Same-repo stub - must NOT be returned.
 	seedStub(t, db, "stub-self", "main", "repo-b", "node-b-caller", "calls",
 		"github.com/example/lib", "pkg.Foo", "go")
 
@@ -453,7 +453,7 @@ func TestResolveStubsTargetingNode_ExcludesIntraRepoStubs(t *testing.T) {
 }
 
 // TestResolveStubsTargetingNode_NoStubs returns empty when nothing points
-// at the target — the common case for a fresh leaf symbol.
+// at the target - the common case for a fresh leaf symbol.
 func TestResolveStubsTargetingNode_NoStubs(t *testing.T) {
 	db := setupTestDB(t)
 	seedRepo(t, db, "repo-b", "github.com/example/lib", "main")
@@ -469,7 +469,7 @@ func TestResolveStubsTargetingNode_NoStubs(t *testing.T) {
 }
 
 // TestResolveStubsTargetingNode_UnknownNode returns empty silently when
-// the dst node_id doesn't exist — a resolver call from a stale plan must
+// the dst node_id doesn't exist - a resolver call from a stale plan must
 // not error the entire blast response.
 func TestResolveStubsTargetingNode_UnknownNode(t *testing.T) {
 	db := setupTestDB(t)

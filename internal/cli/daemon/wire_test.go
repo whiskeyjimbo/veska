@@ -411,7 +411,7 @@ func TestWire_WatchLoopRoutesEditsToStaging(t *testing.T) {
 			for time.Now().Before(deadline) {
 				files := d.staging.StagedFiles(repoID, branch)
 				if slices.Contains(files, wantRel) {
-					return // success — staged under correct branch
+					return // success - staged under correct branch
 				}
 				time.Sleep(50 * time.Millisecond)
 			}

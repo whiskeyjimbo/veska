@@ -111,7 +111,7 @@ func resolveNodeIDPrefix(ctx context.Context, graph ports.GraphReader, nodeID st
 		return string(ids[0]), nil
 	default:
 		return "", &RPCError{Code: CodeInvalidParams, Message: fmt.Sprintf(
-			"ambiguous node_id prefix %q matches multiple nodes (e.g. %s, %s) — supply more characters",
+			"ambiguous node_id prefix %q matches multiple nodes (e.g. %s, %s) - supply more characters",
 			nodeID, ids[0], ids[1])}
 	}
 }

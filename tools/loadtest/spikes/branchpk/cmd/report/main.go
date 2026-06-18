@@ -44,7 +44,7 @@ func main() {
 	}
 
 	// Pick the 10% overlap entry as the representative.
-	// Worst-case for disk, best-case for latency — most informative for the verdict.
+	// Worst-case for disk, best-case for latency - most informative for the verdict.
 	load := pickByOverlap(loads, 10)
 	bench := pickBenchByOverlap(benches, 10)
 	gc := gcs[0]

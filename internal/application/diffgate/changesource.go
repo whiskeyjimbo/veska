@@ -21,7 +21,7 @@ type FileChange struct {
 // abstracted from HOW the change is obtained. v1 is a git ref/worktree
 // (RefChangeSource); the deferred raw-unified-diff source
 // is a second implementation. The Indexer and the downstream verify/guard
-// consumers see only this interface, never the underlying mechanism — so a
+// consumers see only this interface, never the underlying mechanism - so a
 // new source slots in with no change to their code (AC3).
 type ChangeSource interface {
 	// Changes returns the files the candidate adds, modifies, or deletes.
@@ -51,7 +51,7 @@ var ErrFileAbsentAtRef = errors.New("diffgate: file absent at ref")
 
 // RefChangeSource is the v1 ChangeSource: the change is the diff between a
 // base ref and a candidate ref/worktree in the single repo at repoRoot. It is
-// network-free — both the changed-file listing and the per-file reads go
+// network-free - both the changed-file listing and the per-file reads go
 // through injected git adapters, no embedder is touched.
 type RefChangeSource struct {
 	repoRoot     string

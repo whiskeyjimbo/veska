@@ -41,16 +41,16 @@ var discoverActor = domain.Actor{ID: "service:veska-diff-gate", Kind: domain.Act
 //	Re-promoting only the changed files is sound because the promoter resolves
 //	  a changed file's calls into UNCHANGED same-package siblings against the
 //	  already-promoted graph, and the inbound edge that makes a
-//	  symbol in an unchanged file newly-dead is OWNED by the changed file — so
+//	  symbol in an unchanged file newly-dead is OWNED by the changed file - so
 //	  deleting/rebinding the changed file's edges is enough to surface it.
 //	Running the check pass over ALL files (not just the changed ones) is what
 //	  catches a node that became dead in an UNCHANGED file because the change
-//	  removed its last caller — the false-green a per-file check scope misses.
+//	  removed its last caller - the false-green a per-file check scope misses.
 //
 // Both sides run the IDENTICAL clone + re-promote-changed + check path, so an
 // inert change yields no spurious "new" finding from a graph-build difference
 // It mutates only the throwaway clones (removed on return) and
-// reads only the changed files' base content via readBaseContent — O(changed),
+// reads only the changed files' base content via readBaseContent - O(changed),
 // not O(repo), the whole point of.
 // changes are the candidate's changed files (new content, or Deleted).
 // readBaseContent supplies a changed file's content at the base ref (in the live
@@ -79,7 +79,7 @@ func DiscoverStructural(ctx context.Context, baseDBPath, repoID, branch, gitSHA 
 	}, nil
 }
 
-// candidateChangedFiles maps each changed path to its candidate content — nil
+// candidateChangedFiles maps each changed path to its candidate content - nil
 // for a deletion, so re-promotion drops the file's nodes. Added files (not in
 // the base graph) are included; the promoter inserts their nodes.
 func candidateChangedFiles(changes []diffgate.FileChange) map[string][]byte {
@@ -97,7 +97,7 @@ func candidateChangedFiles(changes []diffgate.FileChange) map[string][]byte {
 // baseChangedFiles maps each changed path to its content at the BASE ref. An
 // ADDED file (absent at base → ErrFileAbsentAtRef) is skipped: it never existed
 // in the base graph, so the base side must not promote it. The result is what
-// the base side re-promotes — a no-op over the clone (same content already
+// the base side re-promotes - a no-op over the clone (same content already
 // promoted) that keeps the build path symmetric with the candidate side.
 func baseChangedFiles(ctx context.Context, changes []diffgate.FileChange, readBaseContent func(ctx context.Context, path string) ([]byte, error)) (map[string][]byte, error) {
 	out := make(map[string][]byte, len(changes))
@@ -134,7 +134,7 @@ func findingsForChangedFiles(ctx context.Context, baseDBPath, repoID, branch, gi
 	defer pools.Close()
 	// The clone inherits the indexed graph's findings table. dead-code and
 	// contract-drift are NOT authoritative checks (only vulnscan is), so the
-	// re-check below never closes a stale open finding — it would leak into this
+	// re-check below never closes a stale open finding - it would leak into this
 	// side's set and, being symmetric in id, cancel a genuinely-new candidate
 	// finding (a false GREEN when the index sits AHEAD of base).
 	// Clear the structural findings so each side derives them purely from graph
@@ -165,7 +165,7 @@ func clearStructuralFindings(ctx context.Context, db *sql.DB, repoID, branch str
 
 // discover runs structural finding-discovery for the live gate. ANY error
 // degrades to a not-run Discovery (Ran=false) so the gate FAILs with
-// discovery_unchecked rather than risking a false green — the fail-safe. The
+// discovery_unchecked rather than risking a false green - the fail-safe. The
 // base-content reader is git.FileAtRef at the base ref, consulted only for the
 // changed files' base content.
 func discover(ctx context.Context, dbPath string, p Params, changes []diffgate.FileChange) diffgate.Discovery {
@@ -232,7 +232,7 @@ func buildStructuralRunner(pools *sqlite.Pools) *checks.Runner {
 
 // fullCheckPass runs the structural checks over EVERY file in (repoID, branch)
 // making absence-triggered rules like dead-code sound across files the change
-// did not touch directly — then reads back the open structural finding ids.
+// did not touch directly - then reads back the open structural finding ids.
 func fullCheckPass(ctx context.Context, pools *sqlite.Pools, runner *checks.Runner, repoID, branch, gitSHA string) ([]string, error) {
 	files, err := allFiles(ctx, pools.ReadDB, repoID, branch)
 	if err != nil {
@@ -247,7 +247,7 @@ func fullCheckPass(ctx context.Context, pools *sqlite.Pools, runner *checks.Runn
 // calls into unchanged same-package siblings against the already-promoted graph
 // so a partial batch no longer drops cross-file edges. A file
 // mapped to nil content stages no nodes (a deletion). Checks are NOT run during
-// promotion — fullCheckPass runs them over the whole graph afterwards.
+// promotion - fullCheckPass runs them over the whole graph afterwards.
 func repromoteChanged(ctx context.Context, pools *sqlite.Pools, repoID, branch, gitSHA string, changedFiles map[string][]byte) error {
 	core := composition.NewColdScanCore(pools, nil, nil)
 	for path, content := range changedFiles {
@@ -275,7 +275,7 @@ func allFiles(ctx context.Context, db *sql.DB, repoID, branch string) ([]string,
 }
 
 // openStructuralFindingIDs reads the open finding ids for the structural rules
-// only — a base-promotion finding from another rule (parse-failure, auto-link)
+// only - a base-promotion finding from another rule (parse-failure, auto-link)
 // must not leak into the diff, since discovery doesn't re-evaluate those.
 func openStructuralFindingIDs(ctx context.Context, db *sql.DB, repoID, branch string) ([]string, error) {
 	placeholders := strings.TrimSuffix(strings.Repeat("?,", len(structuralRules)), ",")

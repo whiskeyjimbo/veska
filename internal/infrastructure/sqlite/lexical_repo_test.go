@@ -105,7 +105,7 @@ func TestLexical_RRFCombinesArms(t *testing.T) {
 	db := openLexDB(t)
 	// n1: kicked up by both words ("close") and trigrams (substring "lose").
 	seedLexical(t, db, "n1", "main", "r1", "function", "closeFinding")
-	// n2: only the trigram arm sees this — words won't match "close".
+	// n2: only the trigram arm sees this - words won't match "close".
 	seedLexical(t, db, "n2", "main", "r1", "function", "loseTracker")
 
 	repo := sqlite.NewLexicalRepo(db)

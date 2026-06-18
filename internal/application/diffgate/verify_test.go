@@ -40,7 +40,7 @@ func indexCandidate(t *testing.T, base diffgate.BaseGraph, pr *domain.ParseResul
 // TestVerify_TargetResolved covers AC1: the candidate adds an intra-file caller
 // of the dead anchor, so the dead-code rule no longer fires → resolved. The
 // caller must be intra-file: a cross-file caller surfaces as an UnresolvedCall
-// and (safely) under-resolves to "unresolved" — see ephemeralPredicates.
+// and (safely) under-resolves to "unresolved" - see ephemeralPredicates.
 func TestVerify_TargetResolved(t *testing.T) {
 	anchor := "a:Dead"
 	callEdge, err := domain.NewEdge(
@@ -91,7 +91,7 @@ func TestVerify_TargetUnresolved(t *testing.T) {
 
 // the anchor has an inbound edge in the base, but it is a STRUCTURAL parent edge
 // (its package/file CONTAINS it), not a CALLS caller. Dead-code liveness is
-// CALLS-only, so the finding must read UNRESOLVED — counting the CONTAINS edge
+// CALLS-only, so the finding must read UNRESOLVED - counting the CONTAINS edge
 // reported every dead-code finding resolved with no fix at all, since every
 // symbol has a CONTAINS parent.
 func TestVerify_DeadCodeStructuralEdgeNotResolved(t *testing.T) {
@@ -116,7 +116,7 @@ func TestVerify_DeadCodeStructuralEdgeNotResolved(t *testing.T) {
 		t.Fatalf("dead-code is on the allowlist; ResolutionChecked must be true, got %+v", got)
 	}
 	if got.TargetResolved {
-		t.Fatalf("anchor has only a CONTAINS parent edge, no CALLS caller — must read UNRESOLVED, got %+v", got)
+		t.Fatalf("anchor has only a CONTAINS parent edge, no CALLS caller - must read UNRESOLVED, got %+v", got)
 	}
 }
 
@@ -188,7 +188,7 @@ func TestVerify_DiscoveryNotRunIsDegraded(t *testing.T) {
 
 // TestVerify_UnsupportedRuleNotResolved is the safety-critical case: a rule NOT
 // on the v1 allowlist (contract-drift) must NOT be routed through Decide and
-// read as resolved — that would be a false PASS. It must report
+// read as resolved - that would be a false PASS. It must report
 // ResolutionChecked=false.
 func TestVerify_UnsupportedRuleNotResolved(t *testing.T) {
 	anchor := "a:Sig"

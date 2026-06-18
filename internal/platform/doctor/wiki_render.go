@@ -7,7 +7,7 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/platform/health"
 )
 
-// WikiRenderReport summarises whether — and how long ago — the wiki was last
+// WikiRenderReport summarises whether - and how long ago - the wiki was last
 // rendered. It carries no staleness verdict: a never-rendered wiki and a
 // freshly rendered one are both reported as Status "healthy" (the absence of
 // a render is operational state, not a fault). Status "broken" is reserved

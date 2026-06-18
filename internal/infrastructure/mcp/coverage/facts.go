@@ -4,7 +4,7 @@ import "github.com/whiskeyjimbo/veska/internal/core/domain"
 
 // This file holds the FROZEN, parse-derived facts authored from real pipeline
 // output (see dump_test.go's TestDumpFixtureFacts). Chunk nodes are
-// deliberately EXCLUDED — their names are line-ranges (chunk:1-5) that couple
+// deliberately EXCLUDED - their names are line-ranges (chunk:1-5) that couple
 // the manifest to exact line numbers and no tool keys on chunk identity.
 // Relative paths are in slash form; the parser emits one package node PER FILE
 // (so modalpha/metric has two "metric" package nodes, one per.go file).

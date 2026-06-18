@@ -1,27 +1,27 @@
 //go:build eval
 
-// Package embed_models benchmarks embedding model variants — model2vec
-// in-process providers and (in later phases) Ollama models — over real
+// Package embed_models benchmarks embedding model variants - model2vec
+// in-process providers and (in later phases) Ollama models - over real
 // codebase corpora, so hi5's defaults are data-backed and end users get
 // a published comparison table.
-// Phase 0k5h.2 — multi-model, multi-corpus, structured output.
+// Phase 0k5h.2 - multi-model, multi-corpus, structured output.
 // Iterates over every model under $VESKA_HOME/static-model/<name>/ that
 // matches the BenchModels list, and every corpus directory that's been
 // fetched into out/repos/<name>/ (via scripts/fetch-corpora.sh) plus the
 // always-present veska self-corpus. Models / corpora that aren't on disk
-// are skipped with a warning — the bench is runnable with whatever
+// are skipped with a warning - the bench is runnable with whatever
 // subset is installed.
 // Run with: make eval-embed-models
 //
 //	Env knobs:
-//	  EMBED_BENCH_MODEL_DIR — override the model search path (default:
+//	  EMBED_BENCH_MODEL_DIR - override the model search path (default:
 //	                           $VESKA_HOME/static-model)
-//	  EMBED_BENCH_QUERY — query string used for the printed top-K
+//	  EMBED_BENCH_QUERY - query string used for the printed top-K
 //	                           sanity check (default: "load config")
-//	  EMBED_BENCH_TOPK — number of top results to print (default 10)
-//	  EMBED_BENCH_MAX_DOCS — cap docs per corpus to bound runtime
+//	  EMBED_BENCH_TOPK - number of top results to print (default 10)
+//	  EMBED_BENCH_MAX_DOCS - cap docs per corpus to bound runtime
 //	                           during iteration (default 5000)
-//	  EMBED_BENCH_OUT — path to write results JSON
+//	  EMBED_BENCH_OUT - path to write results JSON
 //	                           (default: tools/loadtest/embed_models/out/results.json)
 package embed_models
 
@@ -49,7 +49,7 @@ import (
 // BenchModels lists the model2vec variants the bench targets.
 // Order is footprint-ascending so output is easier to scan.
 // Note: minishlab's lineup tops out at 32M for the English-monolingual
-// variants — the 128M tier exists only as potion-multilingual-128M
+// variants - the 128M tier exists only as potion-multilingual-128M
 // (different use case, deferred to a follow-up).
 var BenchModels = []string{
 	"potion-base-2M",
@@ -85,16 +85,16 @@ type Embedder interface {
 var BenchCorpora = []string{
 	// Code corpora
 	"veska", "cobra", "pflag", "testify", "gin",
-	// Prose corpora — dense-technical
+	// Prose corpora - dense-technical
 	"veska-docs", "cobra-docs",
-	// Prose corpora — genuine natural prose (Wikipedia software-topic articles)
+	// Prose corpora - genuine natural prose (Wikipedia software-topic articles)
 	"wikipedia-tech",
 }
 
 // doc is one embedded corpus document. vecCondensed is populated only
 // when EMBED_BENCH_CONDENSE=on; otherwise nil and the second recall
 // pass is skipped. The two vectors share name/file because they
-// describe the same source node — only the embed input differs.
+// describe the same source node - only the embed input differs.
 type doc struct {
 	name         string
 	file         string
@@ -119,7 +119,7 @@ type corpusEntry struct {
 	kind string
 }
 
-// runResult captures per-(model × corpus) bench data — what gets
+// runResult captures per-(model × corpus) bench data - what gets
 // written to results.json and consumed by 0k5h.6's table generator.
 type runResult struct {
 	Model        string                  `json:"model"`
@@ -148,7 +148,7 @@ type topHit struct {
 	Score float32 `json:"score"`
 }
 
-// benchResults is the on-disk JSON shape — a phase number + every
+// benchResults is the on-disk JSON shape - a phase number + every
 // per-run row. Later phases (0k5h.3 recall, 0k5h.6 table) read it.
 type benchResults struct {
 	Phase       string      `json:"phase"`
@@ -174,7 +174,7 @@ func TestEmbedModelsBenchmark(t *testing.T) {
 
 	condenseCfg := loadCondenseConfig()
 	if condenseCfg.enabled {
-		t.Logf("condensation: ON (k=%d min_len=%d) — each doc gets a second condensed-vec embed; recall computed for both",
+		t.Logf("condensation: ON (k=%d min_len=%d) - each doc gets a second condensed-vec embed; recall computed for both",
 			condenseCfg.k, condenseCfg.minLen)
 	}
 
@@ -183,9 +183,9 @@ func TestEmbedModelsBenchmark(t *testing.T) {
 	if includeOllama {
 		if reachable, url := ollamaReachable(); reachable {
 			ollamaModels = BenchOllamaModels
-			t.Logf("ollama reachable at %s — including %d models (max_docs=%d)", url, len(ollamaModels), ollamaMaxDocs)
+			t.Logf("ollama reachable at %s - including %d models (max_docs=%d)", url, len(ollamaModels), ollamaMaxDocs)
 		} else {
-			t.Logf("WARN: EMBED_BENCH_INCLUDE_OLLAMA=1 but ollama unreachable at %s — skipping ollama subset", url)
+			t.Logf("WARN: EMBED_BENCH_INCLUDE_OLLAMA=1 but ollama unreachable at %s - skipping ollama subset", url)
 		}
 	}
 
@@ -208,13 +208,13 @@ func TestEmbedModelsBenchmark(t *testing.T) {
 			docs, stats, condCount = embedCorpus(t, provider, c.root, mxDocs, condenseCfg)
 		}
 		if len(docs) == 0 {
-			t.Logf("  no docs from %s — skip", c.root)
+			t.Logf("  no docs from %s - skip", c.root)
 			return
 		}
 		qStart := time.Now()
 		qvec, err := provider.Embed(context.Background(), query)
 		if err != nil {
-			t.Logf("  embed query failed: %v — skip", err)
+			t.Logf("  embed query failed: %v - skip", err)
 			return
 		}
 		qElapsed := time.Since(qStart)
@@ -252,7 +252,7 @@ func TestEmbedModelsBenchmark(t *testing.T) {
 		// Condensation pass: build a parallel docs slice whose.vec is
 		// the condensed vector (where one was computed) and re-run
 		// recall. Docs without a condensed vec are kept with the raw
-		// vec — that's the natural "below the minLen gate" behavior:
+		// vec - that's the natural "below the minLen gate" behavior:
 		// short docs participate in the index unchanged, just not
 		// condensed. The query vec is unchanged (queries are short,
 		// condensation makes no sense for them).
@@ -316,7 +316,7 @@ func TestEmbedModelsBenchmark(t *testing.T) {
 	for _, m := range models {
 		provider, err := model2vec.New(m.dir)
 		if err != nil {
-			t.Logf("WARN: load %s: %v — skipping", m.name, err)
+			t.Logf("WARN: load %s: %v - skipping", m.name, err)
 			continue
 		}
 		for _, c := range corpora {
@@ -327,18 +327,18 @@ func TestEmbedModelsBenchmark(t *testing.T) {
 	for _, om := range ollamaModels {
 		provider, err := ollama.New(om, ollama.WithBaseURL(ollamaURL()))
 		if err != nil {
-			t.Logf("WARN: ollama.New %s: %v — skipping", om, err)
+			t.Logf("WARN: ollama.New %s: %v - skipping", om, err)
 			continue
 		}
 		// Per-model probe: ollama.New does not validate the model is
-		// pulled — that fails on first Embed. Probe with a tiny query
+		// pulled - that fails on first Embed. Probe with a tiny query
 		// so a model the user hasn't `ollama pull`'d skips cleanly
 		// instead of failing every corpus run.
 		probeCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		_, perr := provider.Embed(probeCtx, "probe")
 		cancel()
 		if perr != nil {
-			t.Logf("WARN: ollama %s probe failed: %v — skipping (run 'ollama pull %s' to include)", om, perr, om)
+			t.Logf("WARN: ollama %s probe failed: %v - skipping (run 'ollama pull %s' to include)", om, perr, om)
 			continue
 		}
 		for _, c := range corpora {
@@ -422,7 +422,7 @@ func discoverModels(t *testing.T) []modelEntry {
 		tok := filepath.Join(dir, "tokenizer.json")
 		st := filepath.Join(dir, "model.safetensors")
 		if !fileNonEmpty(tok) || !fileNonEmpty(st) {
-			t.Logf("WARN: model %s not installed at %s — skip (run scripts/install-bench-models.sh)", name, dir)
+			t.Logf("WARN: model %s not installed at %s - skip (run scripts/install-bench-models.sh)", name, dir)
 			continue
 		}
 		out = append(out, modelEntry{name: name, dir: dir})
@@ -432,7 +432,7 @@ func discoverModels(t *testing.T) []modelEntry {
 
 // discoverCorpora resolves each named corpus to a root directory.
 // "veska" is always this repo; the rest live under out/repos/<name>/.
-// Missing corpora are logged and skipped — run scripts/fetch-corpora.sh
+// Missing corpora are logged and skipped - run scripts/fetch-corpora.sh
 // to fetch them.
 func discoverCorpora(t *testing.T) []corpusEntry {
 	t.Helper()
@@ -446,7 +446,7 @@ func discoverCorpora(t *testing.T) []corpusEntry {
 		var root, kind string
 		switch name {
 		case "veska":
-			// Scope to internal/ — covers application + infrastructure
+			// Scope to internal/ - covers application + infrastructure
 			// + domain. Excludes cmd/ (which is small and CLI-shaped)
 			// and tools/ (eval harnesses, not "production" content).
 			root = filepath.Join(repoRoot, "internal")
@@ -468,7 +468,7 @@ func discoverCorpora(t *testing.T) []corpusEntry {
 			kind = "code"
 		}
 		if !dirExists(root) {
-			t.Logf("WARN: corpus %s not present at %s — skip (run scripts/fetch-corpora.sh)", name, root)
+			t.Logf("WARN: corpus %s not present at %s - skip (run scripts/fetch-corpora.sh)", name, root)
 			continue
 		}
 		out = append(out, corpusEntry{name: name, root: root, kind: kind})

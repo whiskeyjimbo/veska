@@ -79,7 +79,7 @@ func repoDisplayLabel(info SearchHeaderInfo) string {
 
 // daemonSearch resolves the target repo through a running daemon and runs the
 // query via eng_search_semantic. handled is false when the daemon is
-// unreachable or the target repo is not yet tracked — the caller then falls
+// unreachable or the target repo is not yet tracked - the caller then falls
 // back to the in-process clone/index/query path. This keeps the common
 // "search my already-indexed repo" case on the daemon's hybrid pipeline and
 // avoids a second writer on veska.db ().
@@ -95,7 +95,7 @@ func daemonSearch(ctx context.Context, stderr, stdout io.Writer, opts RunOpts) (
 		// when the cwd isn't part of any registered repo
 		// (junior who registered repos in another dir and ran search from
 		// /tmp), fan out across every registered repo instead of erroring.
-		// Only fires when target is empty — explicit paths / URLs still go
+		// Only fires when target is empty - explicit paths / URLs still go
 		// through the in-process path so we don't change their semantics.
 		if opts.Target == "" {
 			env, fanned, ferr := daemonSearchAllRepos(ctx, stderr, stdout, opts)
@@ -124,7 +124,7 @@ func daemonSearch(ctx context.Context, stderr, stdout io.Writer, opts RunOpts) (
 		"k":       kOrDefault(opts.K),
 	}, &env); err != nil {
 		// Daemon was reachable enough to resolve the repo but the search
-		// call failed — surface it rather than silently re-running a
+		// call failed - surface it rather than silently re-running a
 		// divergent in-process query.
 		return SearchEnvelope{}, true, fmt.Errorf("search: daemon eng_search_semantic: %w", err)
 	}
@@ -188,7 +188,7 @@ func daemonSearchAllRepos(ctx context.Context, stderr, stdout io.Writer, opts Ru
 			"query":   opts.Query,
 			"k":       k,
 		}, &env); err != nil {
-			// Per-repo failures must not abort the whole fanout — a stuck
+			// Per-repo failures must not abort the whole fanout - a stuck
 			// repo would otherwise suppress every other repo's hits. Track
 			// it in degraded_reasons so the user still sees something.
 			merged.DegradedReasons = append(merged.DegradedReasons, fmt.Sprintf("repo %s search failed: %v", r.RepoID, err))
@@ -201,8 +201,8 @@ func daemonSearchAllRepos(ctx context.Context, stderr, stdout io.Writer, opts Ru
 		merged.DegradedReasons = append(merged.DegradedReasons, env.DegradedReasons...)
 	}
 	// Score-desc sort across the combined set, then trim to k. The score is
-	// the daemon's post-fusion RRF — same scale across repos because the
-	// embedder is one process — so cross-repo comparison is sound.
+	// the daemon's post-fusion RRF - same scale across repos because the
+	// embedder is one process - so cross-repo comparison is sound.
 	sort.SliceStable(merged.Results, func(i, j int) bool {
 		return merged.Results[i].Score > merged.Results[j].Score
 	})
@@ -286,7 +286,7 @@ func resolveTargetRepoViaDaemon(ctx context.Context, target string) (repoID, bra
 	}
 
 	// Filesystem-root match: target was a path. filepath.Abs turns "lib"
-	// into "$cwd/lib" which wouldn't match anything in the registry — but
+	// into "$cwd/lib" which wouldn't match anything in the registry - but
 	// that's fine because we already exhausted the identifier-string match
 	// above and a literal alias would never coincide with a real path.
 	canonical, err := filepath.Abs(target)
@@ -307,7 +307,7 @@ func resolveTargetRepoViaDaemon(ctx context.Context, target string) (repoID, bra
 // pendingEmbedsHint asks the daemon (if reachable) how many embeds are still
 // queued so a zero-result search can tell the user "the index is still warming
 // up" instead of staying silent. Returns ok=false if the daemon is down or
-// doesn't expose the field — the caller falls back to a plain "no results"
+// doesn't expose the field - the caller falls back to a plain "no results"
 // line.
 func pendingEmbedsHint() (int, bool) {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)

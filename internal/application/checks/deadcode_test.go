@@ -129,11 +129,11 @@ func TestDeadCodeCheck_AppliesAllowlistFilters(t *testing.T) {
 		{"lowercase function reported", "helper", "function", false},
 		{"lowercase method reported", "doit", "method", false},
 		// 'type', 'struct', 'interface' kinds are no longer
-		// in deadCodeKinds — a CALLS-based liveness test is meaningless
+		// in deadCodeKinds - a CALLS-based liveness test is meaningless
 		// for non-callable kinds. Both cases must filter regardless of
 		// name casing.
 		{"type kind excluded (non-callable, post f1zp)", "Foo", "type", true},
-		{"type kind excluded — lowercase too (post f1zp)", "foo", "type", true},
+		{"type kind excluded - lowercase too (post f1zp)", "foo", "type", true},
 		{"struct kind excluded (post f1zp)", "boolValue", "struct", true},
 		{"interface kind excluded (post f1zp)", "Value", "interface", true},
 		// non-Go-named entry: function named 'main' is filtered regardless of casing.
@@ -377,7 +377,7 @@ func TestDeadCodeCheck_SkipsEphemeralRepo(t *testing.T) {
 }
 
 // TestDeadCodeCheck_RepoKindLookupErrorFailsOpen verifies that a lookup
-// error does not suppress findings — we'd rather over-report on a registry
+// error does not suppress findings - we'd rather over-report on a registry
 // glitch than silently skip dead-code on a tracked repo.
 func TestDeadCodeCheck_RepoKindLookupErrorFailsOpen(t *testing.T) {
 	q := &fakeDeadQuerier{
@@ -450,7 +450,7 @@ func TestDeadCodeCheck_SkipsInterfaceMethodImplementations(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Run: %v", err)
 	}
-	// Only the helper survives — its bare name "privateHelper" isn't an
+	// Only the helper survives - its bare name "privateHelper" isn't an
 	// interface method declared in this repo.
 	if len(got) != 1 {
 		names := make([]string, 0, len(got))

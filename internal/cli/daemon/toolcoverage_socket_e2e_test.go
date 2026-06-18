@@ -4,7 +4,7 @@ package daemon
 
 // On-demand socket end-to-end harness.
 // This file is build-tag gated behind `socket_e2e` so it stays OUT of the
-// default `go test` / `make all` path — it exercises the REAL daemon socket
+// default `go test` / `make all` path - it exercises the REAL daemon socket
 // server (two Unix sockets, line-delimited JSON-RPC) rather than the in-process
 // Registry.Call shortcut the coverage suite uses. Run it with `make
 // tool-test-e2e` or:
@@ -31,7 +31,7 @@ import (
 
 // TestSocketE2E_GetNodeRoundTrip starts the real mcp.Server over the harness's
 // fixture-indexed registry, dials the agent (mcp.sock) socket, and drives the
-// full JSON-RPC protocol — initialize, tools/list, tools/call — asserting the
+// full JSON-RPC protocol - initialize, tools/list, tools/call - asserting the
 // socket round-trip reaches the registry and returns real fixture facts.
 func TestSocketE2E_GetNodeRoundTrip(t *testing.T) {
 	h := newHarness(t)

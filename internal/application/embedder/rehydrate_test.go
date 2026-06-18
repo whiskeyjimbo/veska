@@ -59,7 +59,7 @@ func TestRehydrateVectors_LoadError(t *testing.T) {
 
 // TestRehydrateVectors_Idempotent: a second invocation produces the same store
 // contents. The contract relies on VectorStorage.UpsertEmbeddings keying by
-// node_id within (repo, branch), so multiple runs do not bloat the store — the
+// node_id within (repo, branch), so multiple runs do not bloat the store - the
 // spy here only counts call shape, not store state.
 func TestRehydrateVectors_Idempotent(t *testing.T) {
 	loader := &fakeLoader{rows: []embedder.ReadyEmbeddingRow{

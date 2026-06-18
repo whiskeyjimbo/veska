@@ -25,7 +25,7 @@ const (
 func RegisterChangedSymbolsTool(r *Registry, svc *changedsymbols.Service, repoRoot RepoRootFunc, repos application.RepoLister) {
 	r.MustRegister(ToolSpec{
 		Name:            "eng_find_changed_symbols",
-		Description:     "Symbol-grain diff between two git refs — answers 'which functions/methods/structs actually changed?' for PR review, blame, or 'why did this break since yesterday'. ref_a/ref_b (aliases base/head) default to HEAD~1..HEAD. Comment- or whitespace-only changes emit a 'non_symbol_changes_only' degraded_reason so callers know the file changed even when no symbol diff comes back. Pair with eng_get_diff_blast_radius for 'what's downstream of these changes'.",
+		Description:     "Symbol-grain diff between two git refs - answers 'which functions/methods/structs actually changed?' for PR review, blame, or 'why did this break since yesterday'. ref_a/ref_b (aliases base/head) default to HEAD~1..HEAD. Comment- or whitespace-only changes emit a 'non_symbol_changes_only' degraded_reason so callers know the file changed even when no symbol diff comes back. Pair with eng_get_diff_blast_radius for 'what's downstream of these changes'.",
 		IncludesStaging: false,
 		InputSchema:     findChangedSymbolsInputSchema,
 		Handler:         makeChangedSymbolsHandler(svc, repoRoot, repos),
@@ -119,14 +119,14 @@ func makeChangedSymbolsHandler(svc *changedsymbols.Service, repoRoot RepoRootFun
 				var msg string
 				switch {
 				case !aOK && !bOK:
-					msg = fmt.Sprintf("neither ref_a=%q nor ref_b=%q resolves in this repository — check for typos and verify the refs with `git rev-parse <ref>`", p.RefA, p.RefB)
+					msg = fmt.Sprintf("neither ref_a=%q nor ref_b=%q resolves in this repository - check for typos and verify the refs with `git rev-parse <ref>`", p.RefA, p.RefB)
 				case !aOK:
-					msg = fmt.Sprintf("ref_a=%q does not resolve in this repository — if you meant 'the parent of HEAD' note this repo has too few commits for that; omit both refs to diff staged+working-tree against HEAD instead", p.RefA)
+					msg = fmt.Sprintf("ref_a=%q does not resolve in this repository - if you meant 'the parent of HEAD' note this repo has too few commits for that; omit both refs to diff staged+working-tree against HEAD instead", p.RefA)
 				case !bOK:
-					msg = fmt.Sprintf("ref_b=%q does not resolve in this repository — verify the ref with `git rev-parse %s`", p.RefB, p.RefB)
+					msg = fmt.Sprintf("ref_b=%q does not resolve in this repository - verify the ref with `git rev-parse %s`", p.RefB, p.RefB)
 				default:
 
-					msg = fmt.Sprintf("git diff %s..%s failed despite both refs resolving — try `git diff %s %s` in the repo for details", p.RefA, p.RefB, p.RefA, p.RefB)
+					msg = fmt.Sprintf("git diff %s..%s failed despite both refs resolving - try `git diff %s %s` in the repo for details", p.RefA, p.RefB, p.RefA, p.RefB)
 				}
 				return nil, &RPCError{Code: CodeInvalidParams, Message: msg}
 			}

@@ -22,7 +22,7 @@ func similarCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:          "similar <symbol-or-node-id>",
 		Short:        "Find symbols nearest to a seed in vector space (wraps eng_search_similar)",
-		Long:         "Vector-nearest-neighbour search seeded by an existing symbol or node_id — 'what else looks like this?'. Use to find variants, near-duplicates, or refactor targets. The seed itself is excluded from results.",
+		Long:         "Vector-nearest-neighbour search seeded by an existing symbol or node_id - 'what else looks like this?'. Use to find variants, near-duplicates, or refactor targets. The seed itself is excluded from results.",
 		Args:         cobra.ExactArgs(1),
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -53,7 +53,7 @@ func relatedCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:          "related <file:line>",
 		Short:        "Find symbols similar to the code at a file:line (wraps eng_find_related)",
-		Long:         "Find symbols semantically similar to the code at a (file, line) anchor — a moat-pivot from a search hit, error trace, or editor cursor. Line is 1-indexed.",
+		Long:         "Find symbols semantically similar to the code at a (file, line) anchor - a moat-pivot from a search hit, error trace, or editor cursor. Line is 1-indexed.",
 		Args:         cobra.ExactArgs(1),
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {

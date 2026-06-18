@@ -4,7 +4,7 @@ package daemon
 // coverage beads. It is a per-FAMILY subtest tree where every one of the 40
 // tools is a PENDING leaf: each leaf currently calls t.Skip with its owning
 // bead ID and makes ZERO real assertions. A per-tool bead replaces ONLY its own
-// leaf's body — it does not touch the table or any sibling.
+// leaf's body - it does not touch the table or any sibling.
 // HOW A TOOL BEAD PLUGS IN (exact pattern):
 //	Find the entry in coverageTools for your tool (e.g. eng_get_node /
 //	) and replace its run func. Inside, build a harness and call:
@@ -16,7 +16,7 @@ package daemon
 //	        if rpcErr != nil { t.Fatalf("eng_get_node: %v", rpcErr) }
 //	        //. assert on res against coverage.Manifest facts.
 //	    }
-//	For a MUTATING tool just do the same — newHarness gives a fresh isolated
+//	For a MUTATING tool just do the same - newHarness gives a fresh isolated
 //	DB + vector store, so the mutation cannot leak to any other subtest. For a
 //	TASK tool (eng_set_active_task / eng_get_active_task / eng_get_task_history)
 //	construct the harness with the opt-in: newHarness(t, WithTaskTools).
@@ -398,7 +398,7 @@ func repoFamily() []coverageTool {
 			// CODEOWNERS path is deterministic (no git blame). The modalpha
 			// fixture carries a root CODEOWNERS with `*.go @alpha-team`; the
 			// handler resolves Alpha's root_path from the repos table and reads
-			// it. file_path is repo-relative — matchesCodeownersPattern falls
+			// it. file_path is repo-relative - matchesCodeownersPattern falls
 			// back to the filename component (series.go) for the unanchored glob.
 			res, rpcErr := h.Call("eng_find_owner", map[string]any{
 				"file_path": "metric/series.go", "repo_id": coverage.AlphaRepoID,
@@ -855,7 +855,7 @@ func suppressionFamily() []coverageTool {
 	}
 }
 
-// taskFamily holds the 3 PARKED task tools — covered only via the WithTaskTools
+// taskFamily holds the 3 PARKED task tools - covered only via the WithTaskTools
 // opt-in (production registers 37, not 40). task=true marks the opt-in need.
 func taskFamily() []coverageTool {
 	const f = "task"
@@ -1112,7 +1112,7 @@ func graphFamily() []coverageTool {
 				t.Fatalf("eng_get_file_nodes: result type %T, want mcp.GraphResponse", res)
 			}
 			// Expected manifest facts for this file (chunk nodes are excluded
-			// from the manifest by design — their names are volatile line ranges).
+			// from the manifest by design - their names are volatile line ranges).
 			// node file_path is repo-relative, matching `file`.
 			wantPath := file
 			var want []string
@@ -1155,9 +1155,9 @@ func graphFamily() []coverageTool {
 			// handler resolves the SMALLEST ENCLOSING node (computeMean) and reuses
 			// the eng_search_similar vector core, so the same near-dup partner
 			// (averageSamples) surfaces. file_path is matched verbatim against the
-			// stored ABSOLUTE node paths — pass an absolute path. Assert ranking
+			// stored ABSOLUTE node paths - pass an absolute path. Assert ranking
 			// INVARIANTS only: seed-exclusion, descending ORDERING, near-dup
-			// MEMBERSHIP by node_id — never absolute vector scores.
+			// MEMBERSHIP by node_id - never absolute vector scores.
 			seed := string(h.ResolveID(repoID, coverage.NodeKey{
 				Path: "metric/series.go", Kind: domain.KindFunction, Name: "computeMean"}))
 			want := string(h.ResolveID(repoID, coverage.NodeKey{
@@ -1360,7 +1360,7 @@ func searchFamily() []coverageTool {
 			repoID := coverage.AlphaRepoID
 			// Identifier query: lexical (FTS) fusion deterministically surfaces the
 			// ComputeVariance node regardless of static-embedder recall, so assert
-			// MEMBERSHIP (by node_id) and descending ORDERING — never absolute RRF
+			// MEMBERSHIP (by node_id) and descending ORDERING - never absolute RRF
 			// scores, which cluster in ~0.016–0.033 and are query-relative only.
 			want := string(h.ResolveID(repoID, coverage.NodeKey{
 				Path: "metric/series.go", Kind: domain.KindFunction, Name: "ComputeVariance"}))
@@ -1378,7 +1378,7 @@ func searchFamily() []coverageTool {
 				t.Fatal("eng_search_semantic returned no results for an indexed identifier")
 			}
 			// MEMBERSHIP: the queried symbol's node is present (containment, not
-			// position) — a function-name query may also surface sibling/chunk nodes.
+			// position) - a function-name query may also surface sibling/chunk nodes.
 			found := false
 			for i, hit := range resp.Results {
 				if hit.NodeID == want {
@@ -1399,7 +1399,7 @@ func searchFamily() []coverageTool {
 			repoID := coverage.AlphaRepoID
 			// Seed: computeMean. averageSamples is its frozenClones near-dup
 			// partner (facts.go), so it surfaces among the static-embedder
-			// neighbours. Assert ranking INVARIANTS only — never absolute
+			// neighbours. Assert ranking INVARIANTS only - never absolute
 			// vector scores: seed-exclusion, descending ORDERING, and
 			// near-dup MEMBERSHIP by node_id.
 			seed := string(h.ResolveID(repoID, coverage.NodeKey{
@@ -1586,7 +1586,7 @@ func wikiFamily() []coverageTool {
 				t.Fatalf("eng_get_entry_points: result type %T, want mcp.EntryPointsResponse", res)
 			}
 			// Selection runs fan-in ranking plus documented gates, so assert only
-			// the manifest's frozen entry points are PRESENT — not an exact set.
+			// the manifest's frozen entry points are PRESENT - not an exact set.
 			// EntryPoint.FilePath is absolute on the wire (mirrors sibling DTOs).
 			got := map[string]bool{}
 			for _, e := range resp.EntryPoints {
@@ -1603,7 +1603,7 @@ func wikiFamily() []coverageTool {
 			}
 			// pin the open-finding gate (entrypoints.go Select:
 			// "no open finding on the node"). Alpha's ComputeVariance is an
-			// exported function with inbound>=1 — it would rank as an entry point
+			// exported function with inbound>=1 - it would rank as an entry point
 			// but the fixture seeds an OPEN complexity finding on it
 			// (seed.go seedFindings), so the selector MUST exclude it. This is
 			// working-as-designed, not the ranking inversion ozoi.1 first
@@ -1647,7 +1647,7 @@ func contextFamily() []coverageTool {
 			}
 			// contextPackResponse is unexported in package mcp and embeds the
 			// application Pack anonymously, so Pack's fields are JSON-promoted to
-			// the top level — decode them there, not under a "pack" key.
+			// the top level - decode them there, not under a "pack" key.
 			var resp struct {
 				Nodes []struct {
 					NodeID  string `json:"node_id"`
@@ -1663,7 +1663,7 @@ func contextFamily() []coverageTool {
 			}
 			// The pack anchors on ComputeVariance; its node must be present (with
 			// blast neighbours) and flagged as carrying the open finding. Assert
-			// CONTAINMENT — the node set also holds blast-radius neighbours.
+			// CONTAINMENT - the node set also holds blast-radius neighbours.
 			var anchor struct {
 				present bool
 				hasOpen bool
@@ -1911,7 +1911,7 @@ func promotionFamily() []coverageTool {
 				return resp
 			}
 
-			// BEFORE: registered but not yet scanned — zero nodes.
+			// BEFORE: registered but not yet scanned - zero nodes.
 			if n := fileNodes().Nodes; len(n) != 0 {
 				t.Fatalf("before promote: got %d nodes, want 0 (unindexed)", len(n))
 			}
@@ -2009,7 +2009,7 @@ func TestToolCoverage(t *testing.T) {
 	for _, ct := range coverageTools() {
 		t.Run(ct.family+"/"+ct.tool, func(t *testing.T) {
 			if ct.run == nil {
-				t.Skipf("pending: %s — replace this leaf's run func with real assertions", ct.bead)
+				t.Skipf("pending: %s - replace this leaf's run func with real assertions", ct.bead)
 				return
 			}
 			ct.run(t)

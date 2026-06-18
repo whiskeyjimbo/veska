@@ -231,7 +231,7 @@ func main() {
 	measuredP95 := p95(durations)
 	v := verdict(int64(measuredP95))
 
-	fmt.Printf("\ncross_repo_resolve p95=%s (N=%d) — %s\n", measuredP95.Round(time.Microsecond), numRuns, v)
+	fmt.Printf("\ncross_repo_resolve p95=%s (N=%d) - %s\n", measuredP95.Round(time.Microsecond), numRuns, v)
 
 	if err := writeResults(measuredP95, v); err != nil {
 		fmt.Fprintf(os.Stderr, "write results: %v\n", err)
@@ -240,7 +240,7 @@ func main() {
 	fmt.Printf("Results written to %s\n", resultsPath)
 }
 
-const resultsTmpl = `# Cross-Repo p95 Bench — ResolveStubsForNode
+const resultsTmpl = `# Cross-Repo p95 Bench - ResolveStubsForNode
 
 Generated: {{.Date}}
 Platform: {{.OS}} {{.Arch}}
@@ -268,17 +268,17 @@ Runs: {{.NumRuns}}
 
 OQ-S010 asked: is per-hop cross-repo resolve latency acceptable for interactive use?
 
-Measured p95 = {{.P95}} — **{{.Verdict}}**
+Measured p95 = {{.P95}} - **{{.Verdict}}**
 
 {{- if eq .Verdict "GREEN"}}
 
-Result is within the GREEN threshold (< 50ms p95). OQ-S010 is **RESOLVED — no cache ADR required before M2**.
+Result is within the GREEN threshold (< 50ms p95). OQ-S010 is **RESOLVED - no cache ADR required before M2**.
 {{- else if eq .Verdict "YELLOW"}}
 
-Result is in the YELLOW band (50–150ms p95). Per SOLO-11 §9: a cache ADR must be filed before M2 closes. OQ-S010 is **RESOLVED — YELLOW, cache ADR required**.
+Result is in the YELLOW band (50–150ms p95). Per SOLO-11 §9: a cache ADR must be filed before M2 closes. OQ-S010 is **RESOLVED - YELLOW, cache ADR required**.
 {{- else}}
 
-Result exceeds the RED threshold (≥ 150ms p95). Per SOLO-11 §9: a cache ADR is MANDATORY before M2 closes. OQ-S010 is **RESOLVED — RED, cache ADR mandatory**.
+Result exceeds the RED threshold (≥ 150ms p95). Per SOLO-11 §9: a cache ADR is MANDATORY before M2 closes. OQ-S010 is **RESOLVED - RED, cache ADR mandatory**.
 {{- end}}
 `
 

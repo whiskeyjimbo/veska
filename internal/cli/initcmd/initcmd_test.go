@@ -37,7 +37,7 @@ func TestResolveVulnChoice_NonInteractiveStdinSkipsPromptAndEchoes(t *testing.T)
 }
 
 // TestResolveVulnChoice_InteractiveStillPrompts guards that the prompt
-// path is unchanged for real TTY callers — `y\n` still accepts and
+// path is unchanged for real TTY callers - `y\n` still accepts and
 // `n\n` still declines.
 func TestResolveVulnChoice_InteractiveStillPrompts(t *testing.T) {
 	var out bytes.Buffer
@@ -111,7 +111,7 @@ func TestInitCreatesLayout(t *testing.T) {
 
 // TestInitOllamaOverrideDownExitsNonZero: when the user EXPLICITLY forces
 // VESKA_EMBEDDER=ollama, init still probes and hard-fails (with the install
-// hint) if Ollama is down — the only path that requires Ollama.
+// hint) if Ollama is down - the only path that requires Ollama.
 func TestInitOllamaOverrideDownExitsNonZero(t *testing.T) {
 	tmp := t.TempDir()
 	hint := embedderprobe.InstallHint("linux", "nomic-embed-text")
@@ -134,7 +134,7 @@ func TestInitOllamaOverrideDownExitsNonZero(t *testing.T) {
 
 // TestInitAutoSucceedsWithoutOllama: the default (auto) path never touches
 // Ollama. With no model installed it elects static-v2, succeeds, and prints
-// the model2vec install tip — the probe must NOT be called.
+// the model2vec install tip - the probe must NOT be called.
 func TestInitAutoSucceedsWithoutOllama(t *testing.T) {
 	tmp := t.TempDir()
 	probeCalled := false

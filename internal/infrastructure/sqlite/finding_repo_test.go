@@ -351,7 +351,7 @@ func TestFindingRepo_CloseSupersededAutoLinks(t *testing.T) {
 	assertState(t, db, fC, "main", "open")
 	assertState(t, db, other.FindingID, "main", "open") // dead-code untouched
 
-	// Calling again is idempotent — no further state change.
+	// Calling again is idempotent - no further state change.
 	if err := repo.CloseSupersededAutoLinks(ctx, "r1", "main", []string{"n1"}); err != nil {
 		t.Fatalf("CloseSupersededAutoLinks(idempotent): %v", err)
 	}

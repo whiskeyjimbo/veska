@@ -158,8 +158,8 @@ func runSemanticFanout(
 	}
 
 	// Cross-repo fusion: when the vector arm returned
-	// scores for any candidate — the common case, one daemon = one
-	// embedder spanning every repo — fuse by raw cosine similarity
+	// scores for any candidate - the common case, one daemon = one
+	// embedder spanning every repo - fuse by raw cosine similarity
 	// rather than RRF. RRF is rank-only, so every repo's vector top-1
 	// ties at 1/(60+1) and the cross-repo top-K becomes a coin flip
 	// across repos. Cosine scores ARE comparable across repos when the
@@ -189,7 +189,7 @@ func runSemanticFanout(
 			// candidate confirmed by both retrievers beats a
 			// vector-only candidate of equal score. Lexical-only
 			// candidates (vector miss) get a baseline RRF
-			// contribution so they survive in the pool — they're
+			// contribution so they survive in the pool - they're
 			// rare but useful when the embedder misses a
 			// keyword-heavy query.
 			if pc.cand.VectorScore > 0 {

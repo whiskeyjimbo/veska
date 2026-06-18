@@ -71,7 +71,7 @@ func TestLoader_Kinds(t *testing.T) {
 	}
 }
 
-// AC2: record/replay — render the prompt (golden compare) then parse a
+// AC2: record/replay - render the prompt (golden compare) then parse a
 // committed model-output fixture and assert the structured findings.
 func TestRecordReplay(t *testing.T) {
 	cases := []struct {
@@ -185,8 +185,8 @@ func TestRender_EmptyCodeErrors(t *testing.T) {
 	}
 }
 
-// AC2: an empty findings array (the model found nothing) is success — zero
-// findings, no error — not a magic sentinel string.
+// AC2: an empty findings array (the model found nothing) is success - zero
+// findings, no error - not a magic sentinel string.
 func TestParse_EmptyFindings(t *testing.T) {
 	l := newLoader(t)
 	p, _ := l.LoadPrompt(review.KindSecurity)

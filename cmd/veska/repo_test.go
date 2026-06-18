@@ -52,7 +52,7 @@ func TestRepoAddCmd_WaitWithoutDaemon(t *testing.T) {
 		}
 	}
 	// Critical: NO repo should have been written to the local DB on the
-	// wait error path — otherwise re-running after `service start`
+	// wait error path - otherwise re-running after `service start`
 	// would hit "already registered" without ever cold-scanning.
 	if _, statErr := exec.Command("test", "-f", filepath.Join(veskaHome, "veska.db")).Output(); statErr == nil {
 		// DB exists (init.go path or other CLI ran earlier in this test).
@@ -76,7 +76,7 @@ func TestRepoAddCmd_WaitWithoutDaemon(t *testing.T) {
 // must still succeed by opening the local SQLite directly and calling
 // repo.Add. The previous wiring passed db=nil and unconditionally printed
 // "database not available", making the CLI subcommand dead code.
-// We point VESKA_HOME at t.TempDir to keep the test hermetic — no daemon
+// We point VESKA_HOME at t.TempDir to keep the test hermetic - no daemon
 // is running there so the dial fails fast and the fallback path executes.
 func TestRepoAddCmd_DirectFallback(t *testing.T) {
 	if _, err := exec.LookPath("git"); err != nil {

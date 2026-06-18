@@ -58,7 +58,7 @@ func RunFind(ctx context.Context, p FindParams) error {
 	}
 	// when the scoped probe is empty, ask every other registered
 	// repo whether the symbol lives there. Non-empty in the original scope
-	// short-circuits — we never re-walk the registry for a happy result.
+	// short-circuits - we never re-walk the registry for a happy result.
 	if len(resp.Nodes) == 0 && !p.JSONOut && p.RepoID != "" {
 		PrintCrossRepoSymbolHint(ctx, p.ErrOut, p.Symbol, p.RepoID)
 	}
@@ -67,7 +67,7 @@ func RunFind(ctx context.Context, p FindParams) error {
 
 // PrintCrossRepoSymbolHint walks every other registered repo and prints a
 // one-line hint when the symbol exists somewhere else. Stays
-// best-effort: any per-repo error is silently skipped — a stuck repo must
+// best-effort: any per-repo error is silently skipped - a stuck repo must
 // not turn a successful empty result into a noisy banner. The hint only
 // fires when there's at least one cross-repo match, so the "no matches
 // anywhere" case is unchanged.
@@ -113,7 +113,7 @@ func PrintCrossRepoSymbolHint(ctx context.Context, errOut io.Writer, symbol, sco
 	for _, h := range others {
 		parts = append(parts, fmt.Sprintf("%d in %s", h.count, h.shortID))
 	}
-	fmt.Fprintf(errOut, "  hint: %q has no matches here, but matches elsewhere — %s (re-run with --repo <id>)\n", symbol, strings.Join(parts, ", "))
+	fmt.Fprintf(errOut, "  hint: %q has no matches here, but matches elsewhere - %s (re-run with --repo <id>)\n", symbol, strings.Join(parts, ", "))
 }
 
 // RenderNodeList prints a {nodes:[.]} envelope (eng_find_symbol shape) as

@@ -133,8 +133,8 @@ func (w *mcpToolWiring) registerBasicDataTools() {
 }
 
 // registerPromotionTools registers eng_promote and eng_reindex_repo
-// Each degrades cleanly (skipped) when its deps are nil — legacy
-// or test wiring — rather than panicking at startup.
+// Each degrades cleanly (skipped) when its deps are nil - legacy
+// or test wiring - rather than panicking at startup.
 func (w *mcpToolWiring) registerPromotionTools() {
 	if w.d.ingester != nil && w.d.promoter != nil {
 		mcp.RegisterPromoteTool(w.r, mcp.PromoteDeps{
@@ -189,7 +189,7 @@ func (w *mcpToolWiring) registerGraphTools() {
 
 // registerChangedSymbolsTool registers eng_find_changed_symbols, which parses
 // each file changed between two git refs at both refs and diffs the symbol
-// sets — no promoted-graph history substrate needed. fileAtRef wraps the git
+// sets - no promoted-graph history substrate needed. fileAtRef wraps the git
 // adapter's ErrFileNotAtRef so the service distinguishes "file absent at ref"
 // from "ref tree unreadable".
 func (w *mcpToolWiring) registerChangedSymbolsTool() {

@@ -13,7 +13,7 @@ import (
 
 // wikiCmd returns the "wiki" Cobra command. It regenerates both wiki pages
 // (hot_zones + entry_points) on demand by reusing the WorkKindWiki render
-// orchestration (wiki.Handler.Handle) — the same code path the post-promotion
+// orchestration (wiki.Handler.Handle) - the same code path the post-promotion
 // queue lane runs, so the output is byte-identical.
 func wikiCmd() *cobra.Command {
 	var (
@@ -34,7 +34,7 @@ func wikiCmd() *cobra.Command {
 			// accept an optional positional path or repo id so
 			// 'veska wiki /path/to/repo' works the same way 'veska reindex'
 			// and 'veska repo add' do. The positional arg and --repo flag
-			// are mutually exclusive — pick one source of truth.
+			// are mutually exclusive - pick one source of truth.
 			if len(args) == 1 {
 				if repoID != "" {
 					return fmt.Errorf("wiki: pass either a positional repo selector or --repo, not both")

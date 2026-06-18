@@ -31,7 +31,7 @@ type NodeInfo struct {
 // print "RunE in cmd/root.go:18 --CALLS--> greetlib.Greeter.Hello" instead
 // of opaque hashes (extends,; rendering upgrade for
 // ). Pass repoID/branch empty to let the daemon scan all (repo,
-// branch) pairs — needed for inbound src nodes whose containing repo isn't
+// branch) pairs - needed for inbound src nodes whose containing repo isn't
 // on the response envelope. Returns the zero value on any error or empty
 // result so a stuck remote repo never fails the primary output.
 func ResolveCrossRepoNode(ctx context.Context, nodeID, repoID, branch string) NodeInfo {

@@ -63,7 +63,7 @@ func depScanErr(_ context.Context, _, _, _ string, _ []ports.Dependency) ([]*dom
 }
 
 // goModReader parses one "name version" per line into a Go dependency. Blank
-// lines ignored — so the SAME deps survive line shifts/reorders.
+// lines ignored - so the SAME deps survive line shifts/reorders.
 func goModReader(content []byte) ([]ports.Dependency, error) {
 	var deps []ports.Dependency
 	for line := range strings.SplitSeq(string(content), "\n") {
@@ -157,7 +157,7 @@ func TestSecurityGate_NewVuln_Fails(t *testing.T) {
 }
 
 // Line-move: a vulnerable dep that merely shifts line between base and candidate
-// is NOT net-new — net-new is by finding_id, which excludes the line.
+// is NOT net-new - net-new is by finding_id, which excludes the line.
 func TestSecurityGate_VulnLineMove_NotNetNew(t *testing.T) {
 	g := diffgate.NewSecurityGate(fakeSecrets, fakeDepsScan, goModReaders(), true)
 	refs := map[string]string{

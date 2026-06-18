@@ -55,7 +55,7 @@ func TestWriteAgentSnippet_KnownFlavorsCreateExpectedPath(t *testing.T) {
 }
 
 // TestWriteAgentSnippet_Idempotent: a second invocation against the
-// same root must be a no-op — the file content must NOT contain the
+// same root must be a no-op - the file content must NOT contain the
 // sentinel twice, and the report must say "already present".
 func TestWriteAgentSnippet_Idempotent(t *testing.T) {
 	root := t.TempDir()
@@ -162,7 +162,7 @@ func TestEnsureMcpServerEntry_CreatesFile(t *testing.T) {
 }
 
 // TestEnsureMcpServerEntry_PreservesOtherServers guards the "don't
-// stomp on other MCP servers" invariant — a project that already
+// stomp on other MCP servers" invariant - a project that already
 // registered, say, github + linear must keep both after veska's
 // merge.
 func TestEnsureMcpServerEntry_PreservesOtherServers(t *testing.T) {
@@ -323,7 +323,7 @@ func TestWriteAgentSnippet_PreviewAndConfirm(t *testing.T) {
 }
 
 // TestWriteAgentSnippet_UnknownFlavorErrors: an unknown flavor must
-// surface a helpful error listing the supported flavors — otherwise
+// surface a helpful error listing the supported flavors - otherwise
 // the user has no way to discover what they typed wrong.
 func TestWriteAgentSnippet_UnknownFlavorErrors(t *testing.T) {
 	root := t.TempDir()

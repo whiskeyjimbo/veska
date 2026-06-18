@@ -2,7 +2,7 @@
 
 // Package lancedb implements the eval.VectorIndex interface using
 // github.com/lancedb/lancedb-go (CGo via Rust FFI, Lance columnar format + HNSW).
-// CGo requirement: yes — requires liblancedb_go.a and lancedb.h at build time.
+// CGo requirement: yes - requires liblancedb_go.a and lancedb.h at build time.
 // Quantization: float32 only (Lance handles its own compression internally).
 // Build with: go build/test -tags hnsw_native
 // Save/Load semantics: the Lance database directory is the persistent form.
@@ -54,7 +54,7 @@ func New(dbPath string) (*Index, error) {
 	}
 
 	// Build the schema: id (int64) + embedding (FixedSizeList<float32>[768]).
-	// Use lancedb.NewSchema(arrowSchema) directly — the SchemaBuilder's
+	// Use lancedb.NewSchema(arrowSchema) directly - the SchemaBuilder's
 	// AddVectorField produces a different internal type than VectorSearch expects.
 	arrowSchema := arrow.NewSchema([]arrow.Field{
 		{Name: colID, Type: arrow.PrimitiveTypes.Int64, Nullable: false},

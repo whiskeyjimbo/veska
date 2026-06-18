@@ -98,7 +98,7 @@ type Entry struct {
 	// framework registry noise.
 	IsHub bool `json:"is_hub,omitempty"`
 	// Pending is true when the node id was reachable from the BFS but
-	// NodeLookup couldn't yet hydrate its metadata — the graph index is
+	// NodeLookup couldn't yet hydrate its metadata - the graph index is
 	// eventually-consistent against the edges table, so a freshly-changed
 	// file may surface an unresolved node for a few hundred ms. Callers
 	// can use this to render "pending" instead of treating the empty
@@ -116,7 +116,7 @@ type Response struct {
 	Truncated bool
 	// IncludedStaging is true when the in-memory staging area actually
 	// contributed seeds to this response (a dirty node was staged via DirtyOf).
-	// A clean working tree — or a non-staging path (Of/DiffOf) — reports false,
+	// A clean working tree - or a non-staging path (Of/DiffOf) - reports false,
 	// so a consumer can trust the flag as "staging contributed rows"
 	// ( 4.4), not merely "this is the dirty view".
 	IncludedStaging bool
@@ -141,7 +141,7 @@ type ServiceOption func(*Service)
 
 // WithDefaultHubDegreeThreshold overrides the hub-degree threshold used when a
 // per-call Options leaves HubDegreeThreshold at 0. Any value is honoured,
-// including a negative one (which disables the hub gate) — the daemon threads
+// including a negative one (which disables the hub gate) - the daemon threads
 // the operator-configured blast.hub_degree_threshold through here.
 func WithDefaultHubDegreeThreshold(n int) ServiceOption {
 	return func(s *Service) { s.defaultHubDegree = n }
@@ -218,7 +218,7 @@ func (s *Service) Of(ctx context.Context, repoID, branch string, seedIDs []strin
 	opts = opts.applied(s.defaultHubDegree)
 
 	// Seed validation: if NONE of the supplied seed_ids resolve to a real
-	// node in (repoID, branch), that's a user error — the radius is
+	// node in (repoID, branch), that's a user error - the radius is
 	// undefined, and the historical behaviour of returning a single entry
 	// with empty name/kind/file_path silently masked it. A
 	// partial miss is still tolerated: downstream BFS entries may be
@@ -370,7 +370,7 @@ type ChangedFilesFunc func(ctx context.Context, repoRoot string) ([]string, erro
 // ChangedFilesBetweenFunc returns the files that differ between two git
 // refs for repoRoot. It mirrors git.ChangedFilesBetween. Callers wanting a
 // ranged blast (eng_get_diff_blast_radius with ref_a/ref_b) capture the two
-// refs in a closure and pass it to DiffOf as a ChangedFilesFunc — the
+// refs in a closure and pass it to DiffOf as a ChangedFilesFunc - the
 // service stays agnostic about how the change set was derived (working-tree
 // vs ref range), it just blasts the union of nodes in the changed files.
 type ChangedFilesBetweenFunc func(ctx context.Context, repoRoot, refA, refB string) ([]string, error)
@@ -442,7 +442,7 @@ type ContentHasher interface {
 // "seed" is the in-flight change set, not a single node_id.
 // Staged nodes are not themselves in the edges table (edges are written
 // only at promotion time), so the BFS expands them via inbound edges
-// only — answering "who currently calls things I am about to change".
+// only - answering "who currently calls things I am about to change".
 // The direction option is honoured but the canonical use is callers.
 // a re-parse stages every symbol in a file regardless of
 // whether the symbol body actually changed. To avoid claiming the whole
@@ -468,7 +468,7 @@ func (s *Service) DirtyOf(ctx context.Context, repoID, branch string, opts Optio
 			if hasher != nil && n.ContentHash != nil {
 				promoted, err := hasher.NodeContentHash(ctx, repoID, branch, string(n.ID))
 				if err == nil && promoted != "" && promoted == string(*n.ContentHash) {
-					// Unchanged symbol — re-parsed because its file was
+					// Unchanged symbol - re-parsed because its file was
 					// edited, but the body hash matches the promoted
 					// version, so it isn't actually dirty.
 					continue

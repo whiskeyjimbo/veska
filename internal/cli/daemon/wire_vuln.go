@@ -32,7 +32,7 @@ func checkVulnProvider(cfg config.Config) error {
 // buildVulnSource constructs the ports.VulnSource for the resolved config and
 // reports whether the vulnerability-scan feature is enabled.
 // An empty [vuln_source] provider yields the NullVulnSource with enabled
-// false — no refresher goroutine, no vulnscan check. provider = "osv" yields
+// false - no refresher goroutine, no vulnscan check. provider = "osv" yields
 // the OSV.dev-backed adapter with enabled true. The caller is expected to have
 // run checkVulnProvider first, so an unrecognised provider also falls back to
 // the NullVulnSource here rather than panicking.
@@ -59,7 +59,7 @@ func vulnRefreshInterval(cfg config.Config) time.Duration {
 // Refresher's first-refresh-ok callback so a freshly enabled [vuln_source]
 // (or a freshly started daemon catching up on a stale cache) doesn't leave
 // existing repos at "0 findings" until their next commit.
-// Per-repo failures are logged and swallowed — the sweep is best-effort and
+// Per-repo failures are logged and swallowed - the sweep is best-effort and
 // must never crash the refresher goroutine. The active branch falls back to
 // "main" so a repo that hasn't been promoted yet (active_branch="") still
 // gets scanned.

@@ -1,9 +1,9 @@
 // Command personaparity enforces the persona-suite coverage contract
 // every eng_* MCP tool registered in
 // internal/infrastructure/mcp/ must be EXERCISED by some test under
-// tests/mcp/ — either a persona workflow (tests/mcp/test_persona_*.py,
+// tests/mcp/ - either a persona workflow (tests/mcp/test_persona_*.py,
 // tests/mcp/persona_harness.py) or the per-tool suite (any other
-// tests/mcp/*.py) — OR be listed in tools/lint/personaparity/parked.txt
+// tests/mcp/*.py) - OR be listed in tools/lint/personaparity/parked.txt
 // with a reason.
 // Unlike a hand-maintained allow-list, the gate VERIFIES references: it
 // greps the test corpus for each tool name, so a tool that no test names
@@ -39,7 +39,7 @@ const (
 )
 
 // personaFiles are the test files that count a tool as persona-covered (as
-// opposed to delegated to the per-tool suite). Reporting only — both kinds
+// opposed to delegated to the per-tool suite). Reporting only - both kinds
 // satisfy the gate.
 var personaFiles = map[string]struct{}{
 	"persona_harness.py":      {},
@@ -49,7 +49,7 @@ var personaFiles = map[string]struct{}{
 	"test_persona_agent.py":   {},
 }
 
-// engToolRe matches a tool name only as a quoted string literal — the way a
+// engToolRe matches a tool name only as a quoted string literal - the way a
 // tool is actually invoked over MCP (mcp.call("eng_x",.)). Bare mentions in
 // comments/docstrings (e.g. a PARKED note naming a tool) are deliberately NOT
 // counted as coverage.
@@ -92,19 +92,19 @@ func main() {
 		}
 	}
 	// A parked tool that is actually exercised (or no longer registered) means
-	// the manifest has rotted — surface it so parked.txt stays honest.
+	// the manifest has rotted - surface it so parked.txt stays honest.
 	for name := range parked {
 		if _, ok := registered[name]; !ok {
 			staleParked = append(staleParked, name+" (no longer registered)")
 			continue
 		}
 		if files := refs[name]; referencedByPersona(files) {
-			staleParked = append(staleParked, name+" (now persona-covered — unpark it)")
+			staleParked = append(staleParked, name+" (now persona-covered - unpark it)")
 		}
 	}
 
 	if len(uncovered) == 0 && len(staleParked) == 0 {
-		fmt.Printf("personaparity: OK — %d tools (%d persona-covered, %d delegated, %d parked)\n",
+		fmt.Printf("personaparity: OK - %d tools (%d persona-covered, %d delegated, %d parked)\n",
 			len(tools), persona, delegated, len(parked))
 		return
 	}
@@ -146,7 +146,7 @@ func fail(format string, args ...any) {
 
 // scanRegisteredTools walks internal/infrastructure/mcp/*.go and extracts the
 // Name of every ToolSpec composite literal passed to r.MustRegister or
-// r.Register. Test files are excluded — test-only registrations aren't part of
+// r.Register. Test files are excluded - test-only registrations aren't part of
 // the shipped surface. Parked-but-compiled tools (RegisterTaskTools) ARE
 // returned: they live in a non-test file, so parked.txt must account for them.
 func scanRegisteredTools() ([]string, error) {
@@ -216,7 +216,7 @@ func toolSpecName(lit *ast.CompositeLit) string {
 
 // scanTestRefs maps each eng_* tool name to the set of tests/mcp basenames
 // that reference it (string-literal grep over *.py). A reference is any
-// occurrence of the tool name — call, comment, or fixture — which is the
+// occurrence of the tool name - call, comment, or fixture - which is the
 // honest signal that a test names the tool.
 func scanTestRefs() (map[string]map[string]struct{}, error) {
 	out := make(map[string]map[string]struct{})

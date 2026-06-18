@@ -25,7 +25,7 @@ type ReadyEmbeddingRow struct {
 
 // EmbeddingLoader yields the persisted ready embeddings a daemon restart must
 // reload into VectorStorage. The SQL implementation lives in
-// internal/infrastructure/sqlite (EmbeddingArchive) — keeping RehydrateVectors
+// internal/infrastructure/sqlite (EmbeddingArchive) - keeping RehydrateVectors
 // free of database/sql, mirroring how the Promoter delegates to PromotionStore.
 type EmbeddingLoader interface {
 	LoadReadyEmbeddings(ctx context.Context) ([]ReadyEmbeddingRow, error)
@@ -34,7 +34,7 @@ type EmbeddingLoader interface {
 // RehydrateVectors rebuilds the VectorStorage from the durable node_embeddings
 // + node_embedding_refs join (exposed by the EmbeddingLoader). The memory backend is an
 // in-memory backend and the usearch backend's persisted indexes are at-rest
-// only — neither survives a daemon restart with its pre-restart contents intact
+// only - neither survives a daemon restart with its pre-restart contents intact
 // Without this rehydration call at Daemon.Start, semantic search
 // returns ≤ 0 hits until something forces a re-embed, which can only happen via
 // a content_hash change.
@@ -59,7 +59,7 @@ func RehydrateVectors(
 		return nil, fmt.Errorf("rehydrate: load: %w", err)
 	}
 
-	// Bucket per (repo, branch) — VectorStorage.UpsertEmbeddings is scoped to
+	// Bucket per (repo, branch) - VectorStorage.UpsertEmbeddings is scoped to
 	// (repo, branch), and each row carries its own ModelID for the usearch
 	// backend's partition key.
 	type bucketKey struct{ repo, branch string }

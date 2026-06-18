@@ -2,7 +2,7 @@
 // It owns the socket dialing (with cold-start retry), request framing, cwd
 // injection, and CLI-flavored error humanization that the `veska` subcommands
 // previously carried inline in cmd/veska. It is a request/
-// response client — distinct from internal/cli/mcp, the editor-facing stdio
+// response client - distinct from internal/cli/mcp, the editor-facing stdio
 // shim that proxies whole frames.
 package mcpclient
 
@@ -71,8 +71,8 @@ func IsDaemonUnreachable(err error) bool {
 }
 
 // dial opens cli.sock with a bounded retry. cli.sock (not mcp.sock) is required:
-// the daemon classifies the actor by socket — cli.sock → human, mcp.sock →
-// agent — and routing CLI commands through mcp.sock breaks human_required gates
+// the daemon classifies the actor by socket - cli.sock → human, mcp.sock →
+// agent - and routing CLI commands through mcp.sock breaks human_required gates
 func dial(ctx context.Context) (net.Conn, error) {
 	sockPath := config.CLISockPath()
 	var (

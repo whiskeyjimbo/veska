@@ -5,7 +5,7 @@
 // H1/H2 headings, and emits one document per section. Section docs use
 // a "<relative-path>#<heading-slug>" name so hand-curated prose.jsonl
 // can address them stably.
-// We use a minimal ATX-only line scanner — no inline markdown parsing
+// We use a minimal ATX-only line scanner - no inline markdown parsing
 // needed since we treat the section body as a flat text blob to embed.
 
 package embed_models
@@ -90,7 +90,7 @@ func embedProseCorpus(p Embedder, root string, maxDocs int, cfg condenseConfig) 
 		}
 		return nil
 	})
-	_ = walkErr // walk errors are non-fatal — partial corpora are fine
+	_ = walkErr // walk errors are non-fatal - partial corpora are fine
 	stats := embedStats{total: time.Since(start)}
 	if nEmbeds > 0 {
 		stats.avgMS = float64(totalEmbedNS) / float64(nEmbeds) / 1e6

@@ -1,7 +1,7 @@
 // realcorpus.go builds a recall-projection corpus from a real Go module
 // instead of the synthetic corpus.
 // Background: the synthetic sweep's +snippet
-// input is synthSnippet — a restatement of the cluster query text — so
+// input is synthSnippet - a restatement of the cluster query text - so
 // its recall figure is circular. A faithful measurement needs real
 // source bodies and queries that are written independently of them.
 // BuildRealCorpus walks a Go module with go/parser + go/doc and emits a
@@ -10,7 +10,7 @@
 //   Signature = the symbol's real declaration line.
 //   Kind/SymbolPath/FilePath = real structural identifiers.
 //   the center query (documented symbols only) = the symbol's doc
-//     comment — natural-language prose written separately from the body.
+//     comment - natural-language prose written separately from the body.
 // Each documented symbol is its own cluster with single-node ground
 // truth: recall@10 asks whether a symbol's doc-comment query retrieves
 // that symbol out of the whole corpus. Undocumented exported symbols are
@@ -33,7 +33,7 @@ import (
 )
 
 // maxSnippetBytes caps a node's source snippet. nomic-embed-text has a
-// bounded context; a snippet — not a whole 500-line function — is what a
+// bounded context; a snippet - not a whole 500-line function - is what a
 // realistic projection would carry, and the cap keeps embed cost uniform.
 const maxSnippetBytes = 2000
 

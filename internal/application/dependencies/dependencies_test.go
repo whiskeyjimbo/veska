@@ -139,7 +139,7 @@ func TestService_DefaultTopKCapsCallSites(t *testing.T) {
 // rows all target the same SymbolPath (the common case for a hot library
 // function called from many sites), TopCallSites must show that symbol
 // exactly once and use the remaining TopK slots for other symbols.
-// Previously the output was "New, Hello, New, Shout" — the same name
+// Previously the output was "New, Hello, New, Shout" - the same name
 // duplicated across the sample.
 func TestService_DedupesTopCallSitesBySymbol(t *testing.T) {
 	rows := []dependencies.StubRow{

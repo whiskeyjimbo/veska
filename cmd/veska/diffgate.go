@@ -11,7 +11,7 @@ import (
 // diffGateCmd is the CI diff-safety gate: index a candidate
 // change against the indexed-HEAD graph, verify it resolves its target finding
 // within blast radius and introduces no new findings, and emit a machine
-// readable pass/fail verdict — exiting non-zero on FAIL for CI gating.
+// readable pass/fail verdict - exiting non-zero on FAIL for CI gating.
 // Structural finding-discovery (dead-code, contract-drift) is wired; a change
 // that introduces a new structural finding FAILs. The target finding is
 // supplied as flags (--anchor/--rule) rather than looked up from storage.
@@ -76,7 +76,7 @@ func diffGateCmd() *cobra.Command {
 // diffGateReportCmd is the advisory PR impact/risk report: NOT a
 // gate. It assembles, for a diff, the blast radius, each changed file's
 // change-risk standing, open findings on the touched files, and the
-// changed-but-untested symbols — and ALWAYS exits 0 (presence of findings/risk
+// changed-but-untested symbols - and ALWAYS exits 0 (presence of findings/risk
 // never blocks; an un-indexed repo yields a noted report). The soft on-ramp:
 // teams trust an advisory "what this diff touches / where it's risky" before
 // they let the graph block a merge.
@@ -90,8 +90,8 @@ func diffGateReportCmd() *cobra.Command {
 	)
 	cmd := &cobra.Command{
 		Use:          "report",
-		Short:        "Advisory PR impact/risk report (blast radius, change-risk, findings, untested) — always exits 0, never gates",
-		Long:         "Assemble an ADVISORY report for a candidate change (base-ref..candidate-ref): the diff's blast radius, each changed file's change-risk standing (recent-change-frequency × blast-radius), open findings on the touched files, and changed-but-untested symbols. Unlike the diff-gate subcommands this NEVER gates — it always exits 0 (findings/risk never block; an un-indexed repo or a failed section yields a noted report). The soft on-ramp before teams trust blocking gates. Emits JSON.",
+		Short:        "Advisory PR impact/risk report (blast radius, change-risk, findings, untested) - always exits 0, never gates",
+		Long:         "Assemble an ADVISORY report for a candidate change (base-ref..candidate-ref): the diff's blast radius, each changed file's change-risk standing (recent-change-frequency × blast-radius), open findings on the touched files, and changed-but-untested symbols. Unlike the diff-gate subcommands this NEVER gates - it always exits 0 (findings/risk never block; an un-indexed repo or a failed section yields a noted report). The soft on-ramp before teams trust blocking gates. Emits JSON.",
 		Example:      "  veska diff-gate report --repo <id> --base-ref HEAD~1 --candidate-ref HEAD",
 		Args:         cobra.NoArgs,
 		SilenceUsage: true,
@@ -141,7 +141,7 @@ func diffGateAPICmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:          "api",
 		Short:        "Gate a candidate change on breaking exported-signature changes, emit pass/fail JSON (exits non-zero on FAIL)",
-		Long:         "Index a candidate change (base-ref..candidate-ref) against the indexed-HEAD graph and FAIL when it changes the signature shape (name + parameters + result) of an EXPORTED symbol — a breaking public-surface change. Unexported signature changes and body-only edits pass. Scope is signature-shape only: symbol removal/rename is not detected, and exported is the name-based visibility flag, not reachability. Deterministic, network-free; emits JSON and exits non-zero on FAIL for CI gating.",
+		Long:         "Index a candidate change (base-ref..candidate-ref) against the indexed-HEAD graph and FAIL when it changes the signature shape (name + parameters + result) of an EXPORTED symbol - a breaking public-surface change. Unexported signature changes and body-only edits pass. Scope is signature-shape only: symbol removal/rename is not detected, and exported is the name-based visibility flag, not reachability. Deterministic, network-free; emits JSON and exits non-zero on FAIL for CI gating.",
 		Example:      "  veska diff-gate api --repo <id> --base-ref HEAD~1 --candidate-ref HEAD",
 		Args:         cobra.NoArgs,
 		SilenceUsage: true,
@@ -174,7 +174,7 @@ func diffGateAPICmd() *cobra.Command {
 
 // diffGateCyclesCmd is the dependency-cycle diff-twin gate: a
 // blanket gate (no target finding) that FAILs when the candidate introduces a
-// net-new dependency cycle — a strongly-connected component of >=2 symbols over
+// net-new dependency cycle - a strongly-connected component of >=2 symbols over
 // CALLS/IMPORTS edges that was not already a single cycle at base. Node-level and
 // language-agnostic; on compiling Go the catchable case is within-package mutual
 // recursion (the compiler forbids package import cycles), but the same gate
@@ -191,7 +191,7 @@ func diffGateCyclesCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:          "cycles",
 		Short:        "Gate a candidate change on newly-introduced dependency cycles, emit pass/fail JSON (exits non-zero on FAIL)",
-		Long:         "Index a candidate change (base-ref..candidate-ref) against the indexed-HEAD graph and FAIL when it introduces a net-new dependency cycle — a strongly-connected component of >=2 symbols (over CALLS/IMPORTS edges) absent at base. The candidate is re-promoted so cross-file edges resolve; only cycles touching the change set are judged. Node-level, deterministic, network-free; emits JSON and exits non-zero on FAIL for CI gating.",
+		Long:         "Index a candidate change (base-ref..candidate-ref) against the indexed-HEAD graph and FAIL when it introduces a net-new dependency cycle - a strongly-connected component of >=2 symbols (over CALLS/IMPORTS edges) absent at base. The candidate is re-promoted so cross-file edges resolve; only cycles touching the change set are judged. Node-level, deterministic, network-free; emits JSON and exits non-zero on FAIL for CI gating.",
 		Example:      "  veska diff-gate cycles --repo <id> --base-ref HEAD~1 --candidate-ref HEAD",
 		Args:         cobra.NoArgs,
 		SilenceUsage: true,
@@ -237,7 +237,7 @@ func diffGateUntestedCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:          "untested",
 		Short:        "Gate a candidate change on changed prod symbols that no test reaches, emit pass/fail JSON (exits non-zero on FAIL)",
-		Long:         "Index a candidate change (base-ref..candidate-ref) and FAIL when a changed or added prod symbol has no test-file caller in the candidate after-state — a CALLS-edge coverage proxy, not real coverage data. The candidate is re-promoted so a test added in the same diff counts; only symbols in the change set are judged. Emits JSON and exits non-zero on FAIL for CI gating.",
+		Long:         "Index a candidate change (base-ref..candidate-ref) and FAIL when a changed or added prod symbol has no test-file caller in the candidate after-state - a CALLS-edge coverage proxy, not real coverage data. The candidate is re-promoted so a test added in the same diff counts; only symbols in the change set are judged. Emits JSON and exits non-zero on FAIL for CI gating.",
 		Example:      "  veska diff-gate untested --repo <id> --base-ref HEAD~1 --candidate-ref HEAD",
 		Args:         cobra.NoArgs,
 		SilenceUsage: true,
@@ -269,7 +269,7 @@ func diffGateUntestedCmd() *cobra.Command {
 }
 
 // diffGateSelectTestsCmd is impact-based test selection: NOT a
-// gate — it emits the tests whose covered nodes intersect the diff's changed
+// gate - it emits the tests whose covered nodes intersect the diff's changed
 // prod nodes as a `go test -run` selection, always exiting 0.
 func diffGateSelectTestsCmd() *cobra.Command {
 	var (
@@ -282,7 +282,7 @@ func diffGateSelectTestsCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:          "select-tests",
 		Short:        "Select the tests whose covered nodes intersect a diff (emit go test -run per package); never gates",
-		Long:         "Select the tests whose covered nodes intersect a candidate change (base-ref..candidate-ref) and emit a runner-consumable `go test -run` selection per package. Covering tests are derived transitively from the latent *_test.go CALLS edges already in the index (no real coverage data) — a selection HEURISTIC that over-selects (the safe direction), not a guarantee. Changed test files force their whole package since their tests may not be indexed yet. NEVER gates: every selection outcome — including unknown-repo, repo-not-indexed, and bad-ref — exits 0 with a JSON envelope (an advisory reason lands in the `error` field); only a usage or infrastructure error exits non-zero. Always emits JSON.",
+		Long:         "Select the tests whose covered nodes intersect a candidate change (base-ref..candidate-ref) and emit a runner-consumable `go test -run` selection per package. Covering tests are derived transitively from the latent *_test.go CALLS edges already in the index (no real coverage data) - a selection HEURISTIC that over-selects (the safe direction), not a guarantee. Changed test files force their whole package since their tests may not be indexed yet. NEVER gates: every selection outcome - including unknown-repo, repo-not-indexed, and bad-ref - exits 0 with a JSON envelope (an advisory reason lands in the `error` field); only a usage or infrastructure error exits non-zero. Always emits JSON.",
 		Example:      "  veska diff-gate select-tests --repo <id> --base-ref HEAD~1 --candidate-ref HEAD",
 		Args:         cobra.NoArgs,
 		SilenceUsage: true,
@@ -328,7 +328,7 @@ func diffGateSecurityCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:          "security",
 		Short:        "Gate a candidate change on net-new secret/vulnerable-dependency findings, emit pass/fail JSON (exits non-zero on FAIL)",
-		Long:         "Scan a candidate change (base-ref..candidate-ref) and FAIL when it introduces a new secret_leak (scanned over the diff's added lines — any language) or a new vulnerable_dependency (manifest finding-delta by finding_id; go.mod today). A blanket gate: no target finding, no indexed graph required. Offline and deterministic; emits JSON and exits non-zero on FAIL for CI gating.",
+		Long:         "Scan a candidate change (base-ref..candidate-ref) and FAIL when it introduces a new secret_leak (scanned over the diff's added lines - any language) or a new vulnerable_dependency (manifest finding-delta by finding_id; go.mod today). A blanket gate: no target finding, no indexed graph required. Offline and deterministic; emits JSON and exits non-zero on FAIL for CI gating.",
 		Example:      "  veska diff-gate security --repo <id> --base-ref HEAD~1 --candidate-ref HEAD",
 		Args:         cobra.NoArgs,
 		SilenceUsage: true,
@@ -361,7 +361,7 @@ func diffGateSecurityCmd() *cobra.Command {
 
 // diffGateClonesCmd is the exact-clone diff-twin gate: a
 // blanket gate (no target finding) that FAILs when the candidate introduces a
-// byte-identical copy of existing code — net-new exact-clone duplication absent
+// byte-identical copy of existing code - net-new exact-clone duplication absent
 // at base. Deterministic and embedding-free (content_hash equality); near-mode
 // is out by design.
 func diffGateClonesCmd() *cobra.Command {
@@ -375,7 +375,7 @@ func diffGateClonesCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:          "clones",
 		Short:        "Gate a candidate change on newly-introduced exact-clone duplication, emit pass/fail JSON (exits non-zero on FAIL)",
-		Long:         "Index a candidate change (base-ref..candidate-ref) against the indexed-HEAD graph and FAIL when it introduces a new exact-clone group — a byte-identical copy (content_hash equality) of code it did not already duplicate at base. Deterministic, network-free, embedding-free; emits JSON and exits non-zero on FAIL for CI gating.",
+		Long:         "Index a candidate change (base-ref..candidate-ref) against the indexed-HEAD graph and FAIL when it introduces a new exact-clone group - a byte-identical copy (content_hash equality) of code it did not already duplicate at base. Deterministic, network-free, embedding-free; emits JSON and exits non-zero on FAIL for CI gating.",
 		Example:      "  veska diff-gate clones --repo <id> --base-ref HEAD~1 --candidate-ref HEAD",
 		Args:         cobra.NoArgs,
 		SilenceUsage: true,

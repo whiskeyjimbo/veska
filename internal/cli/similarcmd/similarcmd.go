@@ -15,7 +15,7 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/cli/mcpclient"
 )
 
-// searchResp is the local mirror of the MCP SearchResponse shape — enough of
+// searchResp is the local mirror of the MCP SearchResponse shape - enough of
 // it to render a neighbour table without importing the infrastructure package.
 type searchResp struct {
 	Results []struct {

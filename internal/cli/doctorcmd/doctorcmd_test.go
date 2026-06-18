@@ -10,7 +10,7 @@ import (
 
 // TestCheckEmbedderHealthDefaultIsInProcess verifies the default (no override)
 // embedder health reports the elected in-process embedder and never claims to
-// be probing Ollama — the bug behind, where doctor reported
+// be probing Ollama - the bug behind, where doctor reported
 // "nomic-embed-text @ ollama" on the documented zero-dependency path.
 func TestCheckEmbedderHealthDefaultIsInProcess(t *testing.T) {
 	t.Setenv("VESKA_EMBEDDER", "")
@@ -36,7 +36,7 @@ func TestCheckEmbedderHealthDefaultIsInProcess(t *testing.T) {
 
 // TestStatusRollupBacklogIsInformational verifies that a non-zero embedding
 // backlog does NOT promote the rollup status. The backlog
-// surfaces as its own line/field — the daemon as a whole remains healthy
+// surfaces as its own line/field - the daemon as a whole remains healthy
 // while the backfill drains. This is the contract that lets `doctor status`
 // stop contradicting `eng_get_status`'s degraded_reasons:[embeddings_pending]:
 // the two are now classifying the same backlog for different audiences,

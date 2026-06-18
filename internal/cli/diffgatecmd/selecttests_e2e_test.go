@@ -27,7 +27,7 @@ func runSelectTests(t *testing.T, home, repoDir string) (selectTestsReport, erro
 // TestRunSelectTests_E2E_SelectsCoveringTest is the positive integration proof:
 // over a REAL cold-scanned graph, modifying prod Foo selects the test that
 // transitively calls it. This is also the only check that verifies the
-// isTestEntrypoint assumption against a real parse — that a Go test function
+// isTestEntrypoint assumption against a real parse - that a Go test function
 // node lands as kind="function" with symbol_path="TestFoo". If tree-sitter
 // tagged test funcs differently, the selection would be empty and this fails.
 func TestRunSelectTests_E2E_SelectsCoveringTest(t *testing.T) {
@@ -72,7 +72,7 @@ func TestRunSelectTests_E2E_SelectsCoveringTest(t *testing.T) {
 
 // TestRunSelectTests_E2E_UnknownRepo_AdvisoryEmpty: an unknown --repo handle is
 // reported as an empty selection + a distinct "unknown repo" error at exit 0
-// (nil err) — the never-gates contract (v6de.3) and the unknown-vs-unindexed
+// (nil err) - the never-gates contract (v6de.3) and the unknown-vs-unindexed
 // distinction (i0tx.2 F2).
 func TestRunSelectTests_E2E_UnknownRepo_AdvisoryEmpty(t *testing.T) {
 	home := t.TempDir()
@@ -131,7 +131,7 @@ func TestRunSelectTests_E2E_BadRef_AdvisoryEmpty(t *testing.T) {
 
 // TestRunSelectTests_E2E_ChangedTestFileForcesPackage: editing a *_test.go file
 // forces its whole package (run-all), since a newly-added/edited test may not be
-// in the index — the safe over-selecting direction.
+// in the index - the safe over-selecting direction.
 func TestRunSelectTests_E2E_ChangedTestFileForcesPackage(t *testing.T) {
 	home := t.TempDir()
 	seedBaseDB(t, filepath.Join(home, "veska.db"), map[string]string{

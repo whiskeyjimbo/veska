@@ -87,25 +87,25 @@ func TestNearDupThreshold(t *testing.T) {
 }
 
 // availableEmbedders returns the providers to calibrate. model2vec is the
-// primary target (code-specific potion-code-16M, no service — representative
+// primary target (code-specific potion-code-16M, no service - representative
 // of veska's default-quality path); nomic is included for cross-reference and
 // gate-3 continuity when Ollama is up.
 func availableEmbedders(t *testing.T) map[string]embedder {
 	out := map[string]embedder{}
 
 	// static-v2: the zero-install fallback default (elected when model2vec is
-	// neither installed nor embedded — i.e. a thin build with no model). Always
+	// neither installed nor embedded - i.e. a thin build with no model). Always
 	// in-binary, so always measured.
 	if p, err := embedstatic.New(); err == nil {
 		out["static/"+p.ModelID()] = p
 	} else {
-		t.Logf("static-v2 unavailable (%v) — skipping", err)
+		t.Logf("static-v2 unavailable (%v) - skipping", err)
 	}
 
 	if p, ok := model2vec.Embedded(); ok {
 		out["model2vec/"+p.ModelID()] = p
 	} else {
-		t.Log("model2vec embedded weights unavailable (build without embed_model?) — skipping")
+		t.Log("model2vec embedded weights unavailable (build without embed_model?) - skipping")
 	}
 
 	base := os.Getenv("VESKA_OLLAMA_URL")
@@ -117,7 +117,7 @@ func availableEmbedders(t *testing.T) map[string]embedder {
 		if _, perr := p.Embed(ctx, "package main"); perr == nil {
 			out["ollama/nomic-embed-text"] = p
 		} else {
-			t.Logf("ollama nomic-embed-text unreachable (%v) — skipping", perr)
+			t.Logf("ollama nomic-embed-text unreachable (%v) - skipping", perr)
 		}
 		cancel()
 	}

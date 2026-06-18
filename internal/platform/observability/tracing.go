@@ -11,7 +11,7 @@ import (
 // NewTracerProvider constructs an OTLP gRPC TracerProvider with a
 // parentbased_traceidratio sampler at sampleRatio.
 // endpoint must be a non-empty host:port string (e.g. "localhost:4317").
-// Returns an error when endpoint is empty — the caller must check both
+// Returns an error when endpoint is empty - the caller must check both
 // tracing.enabled=true AND VESKA_OTLP_ENDPOINT before calling this.
 // sampleRatio is the head-sampling probability applied to root spans
 // (0.0 drops all, 1.0 keeps all); the caller is responsible for bounding
