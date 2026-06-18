@@ -413,3 +413,15 @@ Milestones **M0–M7 are complete**: substrate, identity & observability,
 pipelines & embedder, the mechanical wiki, the optional review pipeline,
 vuln + secrets scanning, and the design-set cutover. The build is green
 (`make all`).
+
+## License
+
+Veska is licensed under the **GNU Affero General Public License v3.0**
+(`AGPL-3.0-only`) - see [`LICENSE`](LICENSE). You may use, study, modify, and
+share it freely; if you run a modified version as a network service, the AGPL
+requires you to offer that version's source to its users.
+
+Third-party components (Go dependencies and, in `embed_model` builds, the
+potion-code-16M model weights) are redistributed under their own permissive
+licenses, reproduced in [`THIRD_PARTY_NOTICES`](THIRD_PARTY_NOTICES).
+Regenerate that file with `make notices` after a dependency change.

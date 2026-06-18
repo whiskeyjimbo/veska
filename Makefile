@@ -12,7 +12,7 @@ LAYERCHECK_BIN  := $(BINDIR)/layercheck
 SQLITE_TAGS    ?= sqlite_fts5
 SQLITE_CGO_ENV ?= CGO_ENABLED=1
 
-.PHONY: all build build-small build-fat fetch-embed-assets install release-archive test lint vet layercheck fatfile-ratchet noidleak cliparity clean loadtest test-mcp test-mcp-deep test-mcp-bootstrap eval-recall eval-recall-projection eval-autolink-fp eval-neardup-threshold eval-revalidate-bench eval-wake-latency eval-queue-fuzz eval-embed-throughput eval-embedder-bench eval-embed-models eval-embed-models-full eval-embed-models-condense eval-embed-models-fuse eval-dbbench eval-dbbench-cgo docs-gen docs-check
+.PHONY: all build build-small build-fat fetch-embed-assets notices install release-archive test lint vet layercheck fatfile-ratchet noidleak cliparity clean loadtest test-mcp test-mcp-deep test-mcp-bootstrap eval-recall eval-recall-projection eval-autolink-fp eval-neardup-threshold eval-revalidate-bench eval-wake-latency eval-queue-fuzz eval-embed-throughput eval-embedder-bench eval-embed-models eval-embed-models-full eval-embed-models-condense eval-embed-models-fuse eval-dbbench eval-dbbench-cgo docs-gen docs-check
 
 # `all` uses build-small to keep the test loop fast - the model2vec assets
 # add a network fetch + ~62MB to every CI/dev run. End-user packaging
@@ -69,6 +69,21 @@ fetch-embed-assets:
 	cp $$tmp/static-model/potion-code-16M/tokenizer.json $$tmp/static-model/potion-code-16M/model.safetensors $(EMBED_ASSET_DIR)/; \
 	rm -rf $$tmp; \
 	echo "embed assets ready in $(EMBED_ASSET_DIR)"
+
+# notices: regenerate THIRD_PARTY_NOTICES from the live dependency graph. Scans
+# with every tag that ships in a binary (embed_model + hnsw_native + sqlite_fts5)
+# so fat-build deps (usearch) are covered. Auto-detected license texts come from
+# go-licenses; the model weights + sqlite-vec (which go-licenses can't classify)
+# live in manual-notices.txt and are appended. Run after any dependency bump.
+# Requires: go install github.com/google/go-licenses@latest
+notices:
+	GOFLAGS="-tags=embed_model,hnsw_native,sqlite_fts5" go-licenses report ./... \
+		--template tools/licensing/notices.tpl \
+		--ignore github.com/whiskeyjimbo/veska \
+		--ignore github.com/asg017/sqlite-vec-go-bindings \
+		> THIRD_PARTY_NOTICES
+	cat tools/licensing/manual-notices.txt >> THIRD_PARTY_NOTICES
+	@echo "THIRD_PARTY_NOTICES regenerated ($$(wc -l < THIRD_PARTY_NOTICES) lines)"
 
 $(VESKA_BIN):
 	$(SQLITE_CGO_ENV) go build -tags "$(SQLITE_TAGS)" -o $@ ./cmd/veska
