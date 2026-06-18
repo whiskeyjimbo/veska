@@ -181,9 +181,9 @@ func frozenEntryPoints() []EntryPointFact {
 // frozenTodos: one TODO marker per file, surfaced as a rule='todo' finding.
 func frozenTodos() []TodoFact {
 	return []TodoFact{
-		{RepoID: AlphaRepoID, RelPath: alphaSeries, Line: 20, Marker: "TODO",
+		{RepoID: AlphaRepoID, RelPath: alphaSeries, Line: 23, Marker: "TODO",
 			Text: "switch to Welford's online algorithm for numerical stability."},
-		{RepoID: BetaRepoID, RelPath: betaMain, Line: 14, Marker: "TODO",
+		{RepoID: BetaRepoID, RelPath: betaMain, Line: 17, Marker: "TODO",
 			Text: "make the listen address configurable via flag."},
 	}
 }
