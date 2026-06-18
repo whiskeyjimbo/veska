@@ -8,12 +8,12 @@
 -- This is deliberately a PLAIN drop+rescan, not a key-preserving migration. The
 -- scheme transition is one-time and runs while veska is single-user (ADR-S0017
 -- sequences it BEFORE any DB is shared), so the only thing a rescan "loses" is a
--- handful of suppressions whose anchor id moved - cheap to re-author. A shared
+-- handful of suppressions whose anchor id moved — cheap to re-author. A shared
 -- DB never hits this: routine rescans are id-stable (content-derived ids), so
 -- suppressions ride along untouched and need no carry-forward. See ADR-S0017
 -- "Migration" for why the elaborate snapshot/re-key path was dropped.
 --
--- The expensive artifact - embeddings - SURVIVES: node_embeddings is PK'd on
+-- The expensive artifact — embeddings — SURVIVES: node_embeddings is PK'd on
 -- content_hash (body-derived, invariant), so the rescan re-points
 -- node_embedding_refs to existing vectors without re-embedding. node_embeddings
 -- is therefore deliberately NOT cleared. The suppressions table is likewise left

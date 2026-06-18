@@ -1,4 +1,4 @@
--- solov2-kxo5.2 - Cache-tier columns on repos, prerequisite for accepting
+-- solov2-kxo5.2 — Cache-tier columns on repos, prerequisite for accepting
 -- remote git URLs in `veska repo add` and `veska search --repo`. See
 -- solov2-kxo5 body + "Pinned design (2026-05-26)" notes for the full
 -- design; this file only adds storage.
@@ -6,7 +6,7 @@
 --   kind             tracked (today's behaviour, default) vs ephemeral
 --                    (cloned into the cache tier on first URL query, subject
 --                    to LRU eviction). Existing rows are 'tracked' via the
---                    DEFAULT - no behavioural change for already-registered
+--                    DEFAULT — no behavioural change for already-registered
 --                    repos.
 --   canonical_url    Normalised git URL alias. On `repo add <path>` it is
 --                    populated from `git remote get-url origin` (kxo5.4) so

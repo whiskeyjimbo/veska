@@ -1,4 +1,4 @@
--- solov2-xjm5 - Persist parsed file imports.
+-- solov2-xjm5 — Persist parsed file imports.
 --
 -- Until now, the importer table was transient: the parser computed
 -- file.Imports (local-alias → import-path) per file, the promotion handler
@@ -6,7 +6,7 @@
 -- `veska deps list` could only show modules with *resolved* calls (entries
 -- in cross_repo_edge_stubs) and missed modules that were imported but
 -- only referenced via struct literals / type assertions / interface
--- implementations - the failure mode solov2-rpbo flagged in the junior
+-- implementations — the failure mode solov2-rpbo flagged in the junior
 -- journey (cobra absent before `go mod vendor`).
 --
 -- This table records every import the parser saw, scoped to the same
