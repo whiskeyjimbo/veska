@@ -65,9 +65,10 @@ type daemonBuilder struct {
 	findings    ports.FindingStorage
 	checkRunner application.CheckRunner
 
-	scanTracker   *application.ScanTracker
-	resyncRef     *application.StartupResync
-	ingestionBusy func() bool
+	scanTracker      *application.ScanTracker
+	resyncRef        *application.StartupResync
+	ingestionBusy    func() bool
+	embedderIsOllama bool
 
 	vulnRefresher *vulnrefresh.Refresher
 	vulnScanCheck *checks.VulnScanCheck
@@ -325,8 +326,16 @@ func (b *daemonBuilder) buildEmbedder() error {
 		return err
 	}
 	b.refs = sqlite.NewEmbeddingRefsRepo(b.pools.ReadDB, b.pools.Write)
+	// The rate limit (Embedder.RatePerSec, default 10/s) exists to smooth load
+	// on the Ollama network branch. Local embedders (model2vec/static) do
+	// thousands/s, so applying it there throttled backfill to ~10/s
+	// (solov2-5r1u). Disable the limiter (rate 0) unless Ollama was elected.
+	rate := 0.0
+	if b.embedderIsOllama {
+		rate = b.fileCfg.Embedder.RatePerSec
+	}
 	worker, err := embedder.NewWorker(b.refs, b.provider, b.vec,
-		embedder.WithRatePerSec(b.fileCfg.Embedder.RatePerSec),
+		embedder.WithRatePerSec(rate),
 		embedder.WithMaxAttempts(embedder.DefaultMaxAttempts),
 		embedder.WithMetrics(b.metrics),
 		embedder.WithPauser(b.ingestionBusy),
@@ -370,6 +379,7 @@ func (b *daemonBuilder) electEmbedder() error {
 		slog.Info("daemon: embedder changed since last boot; queued background re-embed under new model",
 			"previous", election.Previous, "current", election.Name, "nodes_pending", n)
 	}
+	b.embedderIsOllama = election.Ollama
 	provider := election.Provider
 	if b.tracer != nil {
 		provider = observability.NewInstrumentedEmbedder(provider, b.tracer)

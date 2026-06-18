@@ -51,6 +51,10 @@ type Result struct {
 	Previous string
 	// SwitchedModel indicates whether the newly elected embedder differs from the previously locked model.
 	SwitchedModel bool
+	// Ollama is true when the elected embedder is the Ollama network branch.
+	// Local embedders (model2vec/static) are fast and must not be rate-limited
+	// like the network path (solov2-5r1u).
+	Ollama bool
 }
 
 // Elect selects the appropriate embedder, writes the selection to the lock file, and returns the provider.
@@ -78,6 +82,7 @@ func Elect(cfg Config) (Result, error) {
 		Name:          name,
 		Previous:      prev,
 		SwitchedModel: prev != "" && prev != name,
+		Ollama:        cfg.Override == OverrideOllama,
 	}, nil
 }
 
