@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Jeff Rose
+// SPDX-License-Identifier: AGPL-3.0-only
+
 // Package ollama provides a ports.EmbeddingProvider implementation backed by a
 // locally running Ollama instance via POST /api/embeddings.
 // Errors caused by an unreachable embedder (dial failures, DNS, EOF mid-flight,

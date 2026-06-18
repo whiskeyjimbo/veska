@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Jeff Rose
+// SPDX-License-Identifier: AGPL-3.0-only
+
 package treesitter
 
 import (
@@ -57,7 +60,6 @@ func (p *TSParser) ParseFile(ctx context.Context, repoID, path string, src []byt
 		result.Failures = append(result.Failures, firstErrorFailure(root))
 	}
 
-
 	base := filepath.Base(path)
 	modName := strings.TrimSuffix(base, filepath.Ext(base))
 	modID := nodeID(repoID, path, domain.KindModule, modName)
@@ -66,13 +68,11 @@ func (p *TSParser) ParseFile(ctx context.Context, repoID, path string, src []byt
 		result.Nodes = append(result.Nodes, modNode)
 	}
 
-
 	symbolByName := map[string]*domain.Node{}
 	// track class names for method association: className -> node
 	classNames := map[string]bool{}
 
 	extractTSSymbols(root, src, repoID, path, result, symbolByName, classNames)
-
 
 	for _, n := range result.Nodes {
 		if n == modNode {
@@ -90,13 +90,10 @@ func (p *TSParser) ParseFile(ctx context.Context, repoID, path string, src []byt
 		}
 	}
 
-
 	callEdges := extractTSCallEdges(root, src, symbolByName)
 	result.Edges = append(result.Edges, callEdges...)
 
-
 	result.Nodes = append(result.Nodes, chunkFile(repoID, path, src, result.Nodes)...)
-
 
 	result.Todos = scanTodos(src)
 
@@ -182,7 +179,6 @@ func processTopLevelNode(
 	}
 }
 
-
 func parseTSFunctionDecl(node *sitter.Node, src []byte, repoID, path string, exported bool) *domain.Node {
 	nameNode := node.ChildByFieldName("name")
 	if nameNode == nil {
@@ -239,7 +235,6 @@ func parseTSClassBody(
 	}
 }
 
-
 func parseTSMethodDef(node *sitter.Node, src []byte, repoID, path, className string, exported bool) *domain.Node {
 	nameNode := node.ChildByFieldName("name")
 	if nameNode == nil {
@@ -256,7 +251,6 @@ func parseTSMethodDef(node *sitter.Node, src []byte, repoID, path, className str
 	}
 	return n
 }
-
 
 func parseTSInterfaceDecl(node *sitter.Node, src []byte, repoID, path string, exported bool) *domain.Node {
 	nameNode := node.ChildByFieldName("name")

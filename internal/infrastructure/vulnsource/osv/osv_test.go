@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Jeff Rose
+// SPDX-License-Identifier: AGPL-3.0-only
+
 package osv_test
 
 import (
@@ -373,4 +376,3 @@ func TestRefresh_Non200ReturnsError(t *testing.T) {
 		return
 	}
 }
-

@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Jeff Rose
+// SPDX-License-Identifier: AGPL-3.0-only
+
 // Package graphcmd holds the delivery-layer logic behind the `veska calls`,
 // `veska blast`, and `veska changed` commands: the eng_get_call_chain /
 // eng_get_blast_radius / eng_find_changed_symbols MCP calls and the

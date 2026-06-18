@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Jeff Rose
+// SPDX-License-Identifier: AGPL-3.0-only
+
 // Unit tests for the build-tag-free projection helpers. These run under
 // standard `go test` (no Ollama, no `eval` tag) and assert the core
 // property: the variant selector produces DIFFERENT embed

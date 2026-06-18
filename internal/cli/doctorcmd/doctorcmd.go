@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Jeff Rose
+// SPDX-License-Identifier: AGPL-3.0-only
+
 // Package doctorcmd holds the delivery-layer logic behind the `veska doctor`
 // command tree: the per-subsystem health-probe orchestration, the status
 // rollup assembly, and the textual/JSON rendering of each probe report.

@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Jeff Rose
+// SPDX-License-Identifier: AGPL-3.0-only
+
 // Package savingscmd holds the business logic behind `veska doctor savings`
 // (and its top-level `veska savings` alias). cmd/veska delegates here, following
 // the cmd = glue / logic-in-packages pattern.

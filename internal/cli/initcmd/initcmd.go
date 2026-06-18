@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Jeff Rose
+// SPDX-License-Identifier: AGPL-3.0-only
+
 // Package initcmd holds the business logic behind `veska init`: the first-run
 // machine setup (directory layout, starter config.toml, embedder election) and
 // the project-scoped per-agent instruction snippet writer (--agent). cmd/veska/

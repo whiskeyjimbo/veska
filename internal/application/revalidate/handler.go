@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Jeff Rose
+// SPDX-License-Identifier: AGPL-3.0-only
+
 // Package revalidate implements the post-promotion sweep that revalidates
 // open findings whose anchor symbol has drifted on disk.
 // One queue row -> one file. The handler asks the RevalidateQuerier port for

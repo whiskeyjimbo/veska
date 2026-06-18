@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Jeff Rose
+// SPDX-License-Identifier: AGPL-3.0-only
+
 package sqlite
 
 import (
@@ -127,4 +130,3 @@ func (r *FindingQuerierRepo) OpenFindingCountsByRule(ctx context.Context, repoID
 	}
 	return out, nil
 }
-

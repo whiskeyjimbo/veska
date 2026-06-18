@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Jeff Rose
+// SPDX-License-Identifier: AGPL-3.0-only
+
 package secretsscanner_test
 
 import (
@@ -342,4 +345,3 @@ func TestBuiltinScanner_RedactionMasksValue(t *testing.T) {
 		t.Errorf("Redacted %q does not appear masked", got[0].Redacted)
 	}
 }
-

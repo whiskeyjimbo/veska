@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Jeff Rose
+// SPDX-License-Identifier: AGPL-3.0-only
+
 // Package elect performs boot-time embedder election to pick exactly one embedder
 // to own the index. Vectors from different models reside in incompatible spaces and must not be mixed.
 //

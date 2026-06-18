@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Jeff Rose
+// SPDX-License-Identifier: AGPL-3.0-only
+
 package application
 
 import (
@@ -18,6 +21,5 @@ type ErrBusy struct {
 func (e ErrBusy) Error() string {
 	return fmt.Sprintf("veska: writer busy (cause=%s, in_use=%d, wait_count=%d)", e.Cause, e.InUse, e.WaitCount)
 }
-
 
 var ErrDaemonStarting = errors.New("veska: daemon starting (startup resync in progress)")

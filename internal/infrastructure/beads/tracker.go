@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Jeff Rose
+// SPDX-License-Identifier: AGPL-3.0-only
+
 // Package beads provides a Tracker implementation backed by the beads
 // file-based issue tracker. The active task ID is read from the
 // beads/current_task file that beads writes into the repository root.
@@ -54,4 +57,3 @@ func (t *FileTracker) ActiveTask(_ context.Context, repoID string) (*ports.TaskS
 func (t *FileTracker) RecentTasks(_ context.Context, _ string, _ int) ([]ports.TaskSummary, error) {
 	return nil, nil
 }
-

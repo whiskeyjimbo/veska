@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Jeff Rose
+// SPDX-License-Identifier: AGPL-3.0-only
+
 package mcp
 
 import (
@@ -29,13 +32,11 @@ func makeReopenFindingHandler(db *sql.DB, aw ports.AuditWriter) ToolHandler {
 			return nil, rpcErr
 		}
 
-
 		fullID, rpcErr := resolveFindingPrefix(ctx, db, p.FindingID, p.Branch)
 		if rpcErr != nil {
 			return nil, rpcErr
 		}
 		p.FindingID = fullID
-
 
 		var rowBranch, rowRepoID string
 		err := db.QueryRowContext(ctx,

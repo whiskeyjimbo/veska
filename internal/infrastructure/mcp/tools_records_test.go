@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Jeff Rose
+// SPDX-License-Identifier: AGPL-3.0-only
+
 package mcp
 
 import (
@@ -7,7 +10,6 @@ import (
 
 	"github.com/whiskeyjimbo/veska/internal/core/domain"
 )
-
 
 func TestGetFinding(t *testing.T) {
 	db := newSuppressionsDB(t)
@@ -90,7 +92,6 @@ func TestGetFinding(t *testing.T) {
 	}
 }
 
-
 func TestGetSuppression(t *testing.T) {
 	db := newSuppressionsDB(t)
 	seedFindingForSuppression(t, db, "finding-gs-1", "main", "repo-1")
@@ -137,7 +138,6 @@ func TestGetSuppression(t *testing.T) {
 		}
 	})
 }
-
 
 func TestCloseSuppression(t *testing.T) {
 	db := newSuppressionsDB(t)

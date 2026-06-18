@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Jeff Rose
+// SPDX-License-Identifier: AGPL-3.0-only
+
 // Package veccodec holds the little-endian float32 vector wire codec shared by
 // the embedder, autolink, and MCP similarity consumers. It is a zero-dependency
 // leaf: the decode routine was hand-copied into three packages (embedder,

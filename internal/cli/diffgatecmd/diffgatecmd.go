@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Jeff Rose
+// SPDX-License-Identifier: AGPL-3.0-only
+
 // Package diffgatecmd is the CLI invocation surface for the diff-safety gate
 // It wires the real indexed-HEAD graph + git ref reader into
 // the diffgate composer and emits the machine-readable verdict, exiting

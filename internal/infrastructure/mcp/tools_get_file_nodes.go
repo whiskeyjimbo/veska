@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Jeff Rose
+// SPDX-License-Identifier: AGPL-3.0-only
+
 package mcp
 
 import (
@@ -49,7 +52,6 @@ func makeGetFileNodesHandler(graph ports.GraphReader, staging *staging.Area, rep
 
 		// Normalize caller paths to repo-relative slash format to match the stored paths format.
 		filePath = toStoredPath(ctx, repos, p.RepoID, filePath)
-
 
 		if stagedNodes, ok := staging.GetStagedNodes(p.RepoID, p.Branch, filePath); ok {
 			return GraphResponse{Nodes: nodesToDTO(stagedNodes), IncludedStaging: true, DegradedReasons: []string{}}, nil

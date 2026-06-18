@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Jeff Rose
+// SPDX-License-Identifier: AGPL-3.0-only
+
 //go:build hnsw_native
 
 // cmd/rss-sweep measures peak RSS and warm p95 latency for the production

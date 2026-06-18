@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Jeff Rose
+// SPDX-License-Identifier: AGPL-3.0-only
+
 // Package gen provides synthetic vector generation with realistic L2 norms
 // matching the empirical distribution of nomic-embed-text embeddings.
 // Each vector is drawn by:

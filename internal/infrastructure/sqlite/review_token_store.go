@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Jeff Rose
+// SPDX-License-Identifier: AGPL-3.0-only
+
 // Package sqlite provides SQLite implementations of domain repositories.
 // ReviewTokenStore backs review.DailyTokenStore against the daemon_state
 // key-value table. Storing this in daemon_state ensures the token counter

@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Jeff Rose
+// SPDX-License-Identifier: AGPL-3.0-only
+
 // Package cohnsw implements the eval.VectorIndex interface using
 // github.com/coder/hnsw (pure Go, no CGo, float32 only, file persistence).
 // CGo requirement: none.

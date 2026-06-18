@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Jeff Rose
+// SPDX-License-Identifier: AGPL-3.0-only
+
 // Package configcmd holds the business logic behind the `veska config` command
 // family. cmd/veska/config.go is reduced to Cobra construction whose RunE bodies
 // delegate here, following the cmd = glue / logic-in-packages pattern

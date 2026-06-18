@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Jeff Rose
+// SPDX-License-Identifier: AGPL-3.0-only
+
 // Command gcsweep benchmarks branch-GC sweep on a SQLite DB:
 // deletes N branches, records wall-clock time, disk reclaim, and WAL sizes.
 package main

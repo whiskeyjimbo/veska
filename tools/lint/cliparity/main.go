@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Jeff Rose
+// SPDX-License-Identifier: AGPL-3.0-only
+
 // Command cliparity enforces the CLI/MCP surface-parity contract
 // Every MCP tool registered in internal/infrastructure/mcp/
 // must EITHER:

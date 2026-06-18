@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Jeff Rose
+// SPDX-License-Identifier: AGPL-3.0-only
+
 // Package vector provides VectorStorage implementations for the veska module.
 // The usearch-backed implementation is compiled only when the hnsw_native build tag
 // is present (CGo + libusearch_c.so required). This file anchors the package for

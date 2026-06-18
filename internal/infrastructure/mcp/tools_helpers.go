@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Jeff Rose
+// SPDX-License-Identifier: AGPL-3.0-only
+
 package mcp
 
 import (
@@ -244,7 +247,6 @@ func resolveSeedOwner(ctx context.Context, repos application.RepoLister, graph p
 		return "", "", "", &RPCError{Code: CodeInvalidParams, Message: "missing required params: node_id or symbol"}
 	}
 
-
 	resolveInRepo := func(repoID, branch string) (string, *RPCError) {
 		if nodeID != "" {
 
@@ -307,7 +309,6 @@ func resolveSeedOwner(ctx context.Context, repos application.RepoLister, graph p
 		}
 		return all[0].RepoID, br, nid, nil
 	}
-
 
 	if cwd := cwdFromParams(raw); cwd != "" {
 		for _, rec := range all {

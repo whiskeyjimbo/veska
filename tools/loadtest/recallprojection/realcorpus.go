@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Jeff Rose
+// SPDX-License-Identifier: AGPL-3.0-only
+
 // realcorpus.go builds a recall-projection corpus from a real Go module
 // instead of the synthetic corpus.
 // Background: the synthetic sweep's +snippet

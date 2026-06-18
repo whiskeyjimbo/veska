@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Jeff Rose
+// SPDX-License-Identifier: AGPL-3.0-only
+
 // Package ports_test contains compile-time interface compliance checks.
 // These checks ensure that stub implementations satisfy every interface
 // in the ports package. Adding a new method to an interface causes a
@@ -151,6 +154,5 @@ type stubSecretsScanner struct{}
 func (s *stubSecretsScanner) Scan(_ ports.ScanInput) ([]ports.SecretFinding, error) {
 	return nil, nil
 }
-
 
 var _ = time.Time{}

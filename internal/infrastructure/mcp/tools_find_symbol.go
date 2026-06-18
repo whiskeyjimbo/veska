@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Jeff Rose
+// SPDX-License-Identifier: AGPL-3.0-only
+
 package mcp
 
 import (
@@ -44,7 +47,6 @@ func makeFindSymbolHandler(graph ports.GraphReader, staging *staging.Area, repos
 		if rpcErr != nil {
 			return nil, rpcErr
 		}
-
 
 		type mergeKey struct {
 			repoID string

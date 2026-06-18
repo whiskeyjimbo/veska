@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Jeff Rose
+// SPDX-License-Identifier: AGPL-3.0-only
+
 // Package coverage builds the node→test reverse map: for a
 // given prod node, the set of runnable test entrypoint functions that
 // transitively call it over CALLS edges. It needs no new ingestion - the

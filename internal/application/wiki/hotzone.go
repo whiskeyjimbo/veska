@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Jeff Rose
+// SPDX-License-Identifier: AGPL-3.0-only
+
 // Package wiki contains the application-layer surfaces that render the
 // generated developer wiki under
 // The hot_zone surface (m4.02) ranks source files by change risk: the

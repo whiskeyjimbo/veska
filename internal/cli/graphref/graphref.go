@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Jeff Rose
+// SPDX-License-Identifier: AGPL-3.0-only
+
 // Package graphref holds the delivery-layer helper that resolves an opaque
 // cross-repo node_id to a "symbol in file:line" projection and renders one
 // side of a cross-repo edge. It is shared by the `veska symbol`/`veska

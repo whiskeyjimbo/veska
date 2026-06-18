@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Jeff Rose
+// SPDX-License-Identifier: AGPL-3.0-only
+
 // This file implements ports.LexicalSearcher on top of the m3.03.2 FTS
 // pair (node_fts_words + node_fts_trigrams). Results are fused with
 // Reciprocal Rank Fusion (RRF) at query time.

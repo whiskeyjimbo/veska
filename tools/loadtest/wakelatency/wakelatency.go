@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Jeff Rose
+// SPDX-License-Identifier: AGPL-3.0-only
+
 // Package wakelatency exposes the JSON envelope written by the
 // wake-reconcile sweep latency gate. The bench itself
 // lives in wakelatency_test.go behind the `eval` build tag; this file is

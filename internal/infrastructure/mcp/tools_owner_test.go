@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Jeff Rose
+// SPDX-License-Identifier: AGPL-3.0-only
+
 package mcp
 
 import (
@@ -14,7 +17,6 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/core/domain"
 )
 
-
 func dispatchOwner(t *testing.T, r *Registry, actor domain.Actor, params map[string]any) (any, *RPCError) {
 	t.Helper()
 	raw, err := json.Marshal(params)
@@ -28,7 +30,6 @@ func dispatchOwner(t *testing.T, r *Registry, actor domain.Actor, params map[str
 	}
 	return r.Dispatch(context.Background(), actor, req)
 }
-
 
 func makeGitRepoWithCommit(t *testing.T, dir, filePath, authorEmail string) {
 	t.Helper()

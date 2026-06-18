@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Jeff Rose
+// SPDX-License-Identifier: AGPL-3.0-only
+
 package model2vec
 
 import (
@@ -166,8 +169,6 @@ func TestEnsureModel_DownloadFailureSurfaces(t *testing.T) {
 		t.Error("partial download left a file behind")
 	}
 }
-
-
 
 func sha256Hex(b []byte) string {
 	h := sha256.Sum256(b)

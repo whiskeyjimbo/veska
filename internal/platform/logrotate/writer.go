@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Jeff Rose
+// SPDX-License-Identifier: AGPL-3.0-only
+
 // Package logrotate provides a general-purpose rotating log writer that
 // implements io.Writer. It rotates the active file when it reaches a
 // configurable size limit and retains at most maxFiles rotated copies.

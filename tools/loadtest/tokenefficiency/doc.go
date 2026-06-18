@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Jeff Rose
+// SPDX-License-Identifier: AGPL-3.0-only
+
 // Package tokenefficiency is the eval harness that produces veska's
 // "tokens saved vs grep+read" benchmark figure. It is
 // distinct from internal/savings - which reports a live char-ratio

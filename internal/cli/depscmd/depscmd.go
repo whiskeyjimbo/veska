@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Jeff Rose
+// SPDX-License-Identifier: AGPL-3.0-only
+
 // Package depscmd holds the business logic behind the `veska deps` command
 // family: listing the external modules a repo calls into (eng_list_dependencies)
 // and indexing a vendored module's symbols into the graph. cmd/veska/deps.go is

@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Jeff Rose
+// SPDX-License-Identifier: AGPL-3.0-only
+
 // Package treesitter implements a query-driven Go parser utilizing tree-sitter
 // queries to extract declarations and call relationships.
 

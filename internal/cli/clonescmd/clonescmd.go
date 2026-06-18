@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Jeff Rose
+// SPDX-License-Identifier: AGPL-3.0-only
+
 // Package clonescmd holds the delivery-layer logic behind `veska clones`
 // (eng_find_clones): exact-clone detection by content_hash equality. It proxies
 // to the daemon like the other read commands and renders one block per clone

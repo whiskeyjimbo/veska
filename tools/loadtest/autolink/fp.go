@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Jeff Rose
+// SPDX-License-Identifier: AGPL-3.0-only
+
 // Package autolink contains the eval harness for veska's auto-link
 // candidate computation (internal/application/autolink.Linker). Pure
 // FP-rate math lives here without a build tag so it compiles under

@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Jeff Rose
+// SPDX-License-Identifier: AGPL-3.0-only
+
 // Package sqlite contains SQLite-backed adapters for the veska ports layer.
 package sqlite
 
@@ -83,4 +86,3 @@ func (a *EmbeddingArchive) RequeueAllUnderNewModel(ctx context.Context) (int64, 
 	}
 	return n, nil
 }
-

@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Jeff Rose
+// SPDX-License-Identifier: AGPL-3.0-only
+
 // Package tokenize provides pure-Go helpers that pre-tokenise symbol-bearing
 // strings (kind, symbol_path, name) into a whitespace-joined form suitable
 // for indexing by FTS5's built-in unicode61 tokenizer.

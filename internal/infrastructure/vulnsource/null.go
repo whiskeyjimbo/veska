@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Jeff Rose
+// SPDX-License-Identifier: AGPL-3.0-only
+
 // Package vulnsource provides VulnSource implementations for the veska module.
 package vulnsource
 
@@ -24,4 +27,3 @@ func (n *NullVulnSource) Refresh(_ context.Context) error {
 func (n *NullVulnSource) Scan(_ context.Context, _ []ports.Dependency) ([]ports.VulnFinding, error) {
 	return nil, nil
 }
-

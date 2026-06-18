@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Jeff Rose
+// SPDX-License-Identifier: AGPL-3.0-only
+
 // querier.go exposes a Querier struct that gathers the read-only Git
 // history queries needed by the application StartupResync process. Each method
 // wraps Git command execution and aligns with repository-relative path conventions.

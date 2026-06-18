@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Jeff Rose
+// SPDX-License-Identifier: AGPL-3.0-only
+
 //go:build eval
 
 // Package queuefuzz drives the M3 gate-5 queue-lane drain fuzz test.

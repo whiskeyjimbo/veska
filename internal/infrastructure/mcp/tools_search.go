@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Jeff Rose
+// SPDX-License-Identifier: AGPL-3.0-only
+
 package mcp
 
 import (
@@ -9,8 +12,6 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/application/search"
 	"github.com/whiskeyjimbo/veska/internal/core/ports"
 )
-
-
 
 // CodeFailedPrecondition indicates that a required upstream invariant is not met for a tool execution.
 const CodeFailedPrecondition = -32003

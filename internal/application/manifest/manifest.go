@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Jeff Rose
+// SPDX-License-Identifier: AGPL-3.0-only
+
 // Package manifest reads project dependency manifests and produces the
 // ecosystem-tagged dependency set consumed by vulnerability scanning.
 // The scope is deliberately narrow: only Go module manifests (go.mod) are

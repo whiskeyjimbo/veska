@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Jeff Rose
+// SPDX-License-Identifier: AGPL-3.0-only
+
 // Package audit provides an append-only JSONL file writer that implements
 // the ports.AuditWriter port. The writer rotates the log file when it reaches
 // a configurable size limit (default 100 MiB) and retains at most 5 rotated files.

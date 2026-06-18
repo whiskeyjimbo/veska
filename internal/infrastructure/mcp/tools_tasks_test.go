@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Jeff Rose
+// SPDX-License-Identifier: AGPL-3.0-only
+
 package mcp
 
 import (
@@ -11,7 +14,6 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/sqlite"
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/sqlite/sqldriver"
 )
-
 
 func newTasksDB(t *testing.T) *sql.DB {
 	t.Helper()
@@ -90,7 +92,6 @@ func dispatchTask(t *testing.T, r *Registry, method string, actor domain.Actor, 
 	}
 	return r.Dispatch(context.Background(), actor, req)
 }
-
 
 func TestSetActiveTask_Basic(t *testing.T) {
 	db := newTasksDB(t)
@@ -174,7 +175,6 @@ func TestSetActiveTask_MissingParams(t *testing.T) {
 	}
 }
 
-
 func TestGetActiveTask_NoActive(t *testing.T) {
 	db := newTasksDB(t)
 	seedRepo(t, db, "repo-1", "/repos/repo-1")
@@ -227,7 +227,6 @@ func TestGetActiveTask_WithActive(t *testing.T) {
 		t.Errorf("expected task_id=task-active, got %v", m["task_id"])
 	}
 }
-
 
 func TestGetTaskHistory_DefaultLimit(t *testing.T) {
 	db := newTasksDB(t)

@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Jeff Rose
+// SPDX-License-Identifier: AGPL-3.0-only
+
 // Package embedderprobe provides shared health-check helpers for the Ollama
 // embedding provider. It is used by both "veska init" and "veska doctor
 // embedder" to avoid duplicating connectivity logic.

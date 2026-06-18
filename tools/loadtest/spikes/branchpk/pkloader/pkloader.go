@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Jeff Rose
+// SPDX-License-Identifier: AGPL-3.0-only
+
 // Package pkloader provides a synthetic data loader for the branch-in-PK SQLite schema
 // defined in /§3.2.
 package pkloader

@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Jeff Rose
+// SPDX-License-Identifier: AGPL-3.0-only
+
 package mcp
 
 import (
@@ -40,7 +43,6 @@ type suppressFindingParams struct {
 	ExpiresAt *int64 `json:"expires_at,omitempty"`
 }
 
-
 var suppressFindingInputSchema = json.RawMessage(`{
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "type": "object",
@@ -80,7 +82,6 @@ func makeSuppressFindingHandler(db *sql.DB, aw ports.AuditWriter) ToolHandler {
 		if p.Scope == "" {
 			p.Scope = "finding"
 		}
-
 
 		if p.Scope == "finding" {
 
@@ -190,7 +191,6 @@ func makeListSuppressionsHandler(db *sql.DB, repos application.RepoLister) ToolH
 				return nil, rpcErr
 			}
 		}
-
 
 		query := `SELECT suppression_id, scope, target, branch, rule, reason, expires_at, created_at, actor_id, actor_kind
 			   FROM suppressions`

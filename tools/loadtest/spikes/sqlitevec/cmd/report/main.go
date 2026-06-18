@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Jeff Rose
+// SPDX-License-Identifier: AGPL-3.0-only
+
 // Command report reads bench/recall/load JSON metrics and writes RESULTS.md with a verdict.
 package main
 

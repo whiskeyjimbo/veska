@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Jeff Rose
+// SPDX-License-Identifier: AGPL-3.0-only
+
 package mcp
 
 import (
@@ -72,7 +75,6 @@ func makeAddRepoHandler(reg RepoRegistrar) ToolHandler {
 		if reg == nil {
 			return nil, &RPCError{Code: CodeInternalError, Message: "repo registrar unavailable"}
 		}
-
 
 		id, existed, err := reg.AddRepo(ctx, p.RootPath)
 		if err != nil {

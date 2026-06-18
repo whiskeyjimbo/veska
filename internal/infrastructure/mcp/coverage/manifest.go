@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Jeff Rose
+// SPDX-License-Identifier: AGPL-3.0-only
+
 // Package coverage holds the frozen golden fixture's known-facts manifest:
 // the single source of truth that every eng_* tool coverage subtest asserts
 // against. The fixture source trees live under testdata/ as two

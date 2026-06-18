@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Jeff Rose
+// SPDX-License-Identifier: AGPL-3.0-only
+
 // Package service provides platform-specific OS service managers for the
 // veska daemon. Use New to get the correct implementation for the current OS.
 package service

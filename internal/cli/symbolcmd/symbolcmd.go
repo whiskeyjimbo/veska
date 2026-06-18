@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Jeff Rose
+// SPDX-License-Identifier: AGPL-3.0-only
+
 // Package symbolcmd holds the delivery-layer logic behind the `veska symbol`
 // and `veska context` commands: the eng_find_symbol / eng_get_context_pack
 // MCP calls, the cross-repo fallback hint, and the textual/JSON rendering of

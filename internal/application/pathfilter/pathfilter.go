@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Jeff Rose
+// SPDX-License-Identifier: AGPL-3.0-only
+
 // Package pathfilter centralises the "is this a third-party / vendored path"
 // predicate shared by promotion-side checks (dead-code, secret_leak) and
 // auto-link. A junior user's first promotion of a freshly-vendored Go CLI

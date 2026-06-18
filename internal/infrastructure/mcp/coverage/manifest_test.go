@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Jeff Rose
+// SPDX-License-Identifier: AGPL-3.0-only
+
 package coverage
 
 // Frozen self-test: the guard against fixture drift. It re-indexes the golden

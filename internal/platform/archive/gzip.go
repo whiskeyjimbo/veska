@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Jeff Rose
+// SPDX-License-Identifier: AGPL-3.0-only
+
 // Package archive provides small, dependency-free helpers for inspecting
 // archive files. It is a zero-dep platform leaf, importable from both the
 // infrastructure backup writer and the doctor diagnostic consumer without

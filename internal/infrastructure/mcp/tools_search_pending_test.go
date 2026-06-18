@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Jeff Rose
+// SPDX-License-Identifier: AGPL-3.0-only
+
 package mcp
 
 import (
@@ -7,7 +10,6 @@ import (
 
 	"github.com/whiskeyjimbo/veska/internal/application/search"
 )
-
 
 type stubPendingCounter struct{ n int }
 

@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Jeff Rose
+// SPDX-License-Identifier: AGPL-3.0-only
+
 // Package wikicmd holds the business logic behind the `veska wiki` command:
 // opening the SQLite pools, replicating the daemon's WorkKindWiki handler
 // wiring, resolving the target repo/branch, and driving the render.

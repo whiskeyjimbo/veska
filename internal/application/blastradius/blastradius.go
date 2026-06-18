@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Jeff Rose
+// SPDX-License-Identifier: AGPL-3.0-only
+
 // Package blastradius computes reverse/forward reachability sets over the
 // promoted edges table. It is used by the eng_get_blast_radius family of
 // MCP tools to answer "what is affected if I change this symbol".

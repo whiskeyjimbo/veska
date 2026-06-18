@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Jeff Rose
+// SPDX-License-Identifier: AGPL-3.0-only
+
 // Package protocol holds the wire-protocol vocabulary shared between the MCP
 // server (infrastructure) and the CLI (delivery). It is a pure inner-layer
 // leaf with no internal imports, so both an outer adapter and a delivery

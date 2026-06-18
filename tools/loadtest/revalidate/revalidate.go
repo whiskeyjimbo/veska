@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Jeff Rose
+// SPDX-License-Identifier: AGPL-3.0-only
+
 // Package revalidate exposes the JSON envelope written by the m3.05.4
 // revalidation timing bench. The bench itself lives in revalidate_test.go
 // behind the `eval` build tag; this file is build-tag-free so the result

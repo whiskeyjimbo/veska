@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Jeff Rose
+// SPDX-License-Identifier: AGPL-3.0-only
+
 // Package report generates the RESULTS.md verdict document for the branchpk spike.
 // It re-declares the minimal JSON-matching structs locally so it does not import
 // the bench, gcsweep, or pkloader packages - keeping the report package dependency-free.

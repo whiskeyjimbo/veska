@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Jeff Rose
+// SPDX-License-Identifier: AGPL-3.0-only
+
 // Package loader provides a SQLite + sqlite-vec loader for synthetic vectors.
 // It creates a vec0 virtual table (vec_nodes) and inserts batches of float32 vectors,
 // recording load wall-clock time, on-disk size, and peak RSS.

@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Jeff Rose
+// SPDX-License-Identifier: AGPL-3.0-only
+
 // Package search contains the application-layer semantic-search service.
 // Scope (m3.03.1): backend-agnostic k-NN. The service embeds the query,
 // dispatches the k-NN through ports.VectorStorage (which itself routes

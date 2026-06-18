@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Jeff Rose
+// SPDX-License-Identifier: AGPL-3.0-only
+
 // Package synthcorpus generates deterministic synthetic node corpora and
 // a deterministic hash-to-vector embedder used by the loadtest harnesses
 // (recall@k in tools/loadtest/recall and auto-link FP-rate in

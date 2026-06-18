@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Jeff Rose
+// SPDX-License-Identifier: AGPL-3.0-only
+
 // Package dependencies lists a repo's external-module imports, ranked by
 // call-site frequency derived from cross_repo_edge_stubs.
 // The stub table is the canonical signal: every external (non-stdlib) call
