@@ -58,6 +58,9 @@ they reason from the same structural ground truth instead of guessing.
 ## Requirements
 
 - **Go 1.26+**
+- **Go repositories only, for now.** The tree-sitter parser ships a single
+  Go grammar, so the code graph is built from `.go` files. Other languages
+  are a deliberate future step, not a current capability.
 - **No external services for core use.** SQLite, the vector index, and the
   default embedder all run in-process. A fresh machine indexes and searches
   with nothing else installed or running.
@@ -343,8 +346,12 @@ editors by `veska-mcp`). Tool names follow `eng_<verb>_<object>`. Quick map:
 
 - **Responses are `snake_case`.** Every tool emits the same node shape -
   `{node_id, name, kind, file_path, line_start, line_end, signature?,
-  language?, exported?}` - plus `score`/`distance`/`snippet` on search and
-  blast hits. Empty result collections serialize as `[]`, never omitted.
+  summary?, language?, exported?}` - plus `score`/`distance`/`snippet` on
+  search and blast hits. `summary` is a one-line description on graph-tool
+  responses (`eng_get_node`/`eng_find_symbol`/`eng_get_file_nodes`/
+  `eng_get_call_chain`): the optional LLM summary lane's stored value when
+  enabled, otherwise a heuristic. Empty result collections serialize as `[]`,
+  never omitted.
 - **`repo_id` accepts a short alias.** `eng_list_repos` returns a 12-char
   `short_id` for each repo; anywhere a `repo_id` is required you may pass the
   full id or that short prefix. An unknown `repo_id` is a loud `NotFound`

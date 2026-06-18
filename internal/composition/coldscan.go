@@ -30,7 +30,8 @@ type ColdScanCore struct {
 // reviewEnabled option gates the review promotion lane; it is false for the CLI
 // path which does not enqueue review work.
 type coldScanCoreConfig struct {
-	reviewEnabled bool
+	reviewEnabled  bool
+	summaryEnabled bool
 }
 
 type ColdScanCoreOption func(*coldScanCoreConfig)
@@ -38,6 +39,11 @@ type ColdScanCoreOption func(*coldScanCoreConfig)
 // WithReviewEnabled enables the review pipeline for the cold-scan core's promotion store.
 func WithReviewEnabled(enabled bool) ColdScanCoreOption {
 	return func(c *coldScanCoreConfig) { c.reviewEnabled = enabled }
+}
+
+// WithSummaryEnabled enables the summary lane for the cold-scan core's promotion store.
+func WithSummaryEnabled(enabled bool) ColdScanCoreOption {
+	return func(c *coldScanCoreConfig) { c.summaryEnabled = enabled }
 }
 
 func NewColdScanCore(pools *sqlite.Pools, ingesterOpts []application.IngesterOption, promoterOpts []application.PromoterOption, opts ...ColdScanCoreOption) *ColdScanCore {
@@ -59,6 +65,7 @@ func NewColdScanCore(pools *sqlite.Pools, ingesterOpts []application.IngesterOpt
 			sqlite.NewEmbedRefSink(),
 		},
 		sqlite.WithReviewEnabled(cfg.reviewEnabled),
+		sqlite.WithSummaryEnabled(cfg.summaryEnabled),
 	)
 	promoter := application.NewPromoter(area, promotionStore, promoterOpts...)
 

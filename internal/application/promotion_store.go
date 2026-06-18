@@ -15,13 +15,16 @@ var workKinds = []string{
 	string(ports.WorkKindRevalidate),
 }
 
-// PromotionWorkKinds returns the enqueued work types. The 'review' lane is
-// optional and only enqueued if reviewEnabled is true.
-func PromotionWorkKinds(reviewEnabled bool) []string {
-	out := make([]string, len(workKinds), len(workKinds)+1)
+// PromotionWorkKinds returns the enqueued work types. The 'review' and
+// 'summary' lanes are optional, appended only when their flag is set.
+func PromotionWorkKinds(reviewEnabled, summaryEnabled bool) []string {
+	out := make([]string, len(workKinds), len(workKinds)+2)
 	copy(out, workKinds)
 	if reviewEnabled {
 		out = append(out, string(ports.WorkKindReview))
+	}
+	if summaryEnabled {
+		out = append(out, string(ports.WorkKindSummary))
 	}
 	return out
 }

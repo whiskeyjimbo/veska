@@ -32,7 +32,7 @@ func NewGraphRepo(readDB, writeDB *sql.DB) *GraphRepo {
 
 // nodeColumns lists the columns needed to rehydrate a domain.Node.
 const nodeColumns = `node_id, symbol_path, file_path, kind, language,
-	line_start, line_end, content_hash, signature, exported, external`
+	line_start, line_end, content_hash, signature, exported, external, short_summary`
 
 // scanNode rehydrates a domain.Node from a query row.
 func scanNode(s interface {
@@ -47,9 +47,10 @@ func scanNode(s interface {
 		signature                      sql.NullString
 		exported                       sql.NullBool
 		external                       sql.NullBool
+		shortSummary                   sql.NullString
 	)
 	if err := s.Scan(&id, &symbolPath, &filePath, &kind, &language,
-		&lineStart, &lineEnd, &contentHash, &signature, &exported, &external); err != nil {
+		&lineStart, &lineEnd, &contentHash, &signature, &exported, &external, &shortSummary); err != nil {
 		return nil, err
 	}
 
@@ -74,6 +75,11 @@ func scanNode(s interface {
 	}
 	if external.Valid && external.Bool {
 		opts = append(opts, domain.WithExternal(true))
+	}
+	if shortSummary.Valid && shortSummary.String != "" {
+		// Stored summaries are written ≤ MaxShortSummaryRunes by the lane; clamp
+		// defensively so a longer legacy value cannot fail rehydration.
+		opts = append(opts, domain.WithShortSummary(domain.TruncateRunes(shortSummary.String, domain.MaxShortSummaryRunes)))
 	}
 
 	n, err := domain.NewNode(domain.NodeSpec{ID: id, Path: filePath, Name: symbolPath, Kind: domain.NodeKind(kind)}, opts...)

@@ -5,6 +5,8 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"strings"
+	"unicode/utf8"
 )
 
 // NodeID is a unique identifier for a Node.
@@ -88,7 +90,15 @@ type Node struct {
 	// External marks a node as sourced from a vendored or module-cache dependency
 	// rather than first-party code.
 	External *bool
+	// ShortSummary is an optional natural-language one-liner describing the node,
+	// produced either heuristically or by the LLM summary lane. Nil until the
+	// summary lane runs; readers fall back to a heuristic. Bounded to
+	// MaxShortSummaryRunes when present.
+	ShortSummary *string
 }
+
+// MaxShortSummaryRunes bounds ShortSummary to the SOLO-09 §4.1 summary budget.
+const MaxShortSummaryRunes = 280
 
 type NodeOption func(*Node) error
 
@@ -174,6 +184,42 @@ func WithExported(exported bool) NodeOption {
 func WithExternal(external bool) NodeOption {
 	return func(n *Node) error {
 		n.External = &external
+		return nil
+	}
+}
+
+// HeuristicSummary returns the deterministic fallback one-liner for a node:
+// its signature when present, otherwise "<kind> <name>". The result is bounded
+// to MaxShortSummaryRunes so it satisfies the same contract as a stored
+// ShortSummary. Used by the default node projection when ShortSummary is nil
+// and by the summary lane as the baseline the LLM upgrade is measured against.
+func (n *Node) HeuristicSummary() string {
+	s := ""
+	if n.Signature != nil {
+		s = strings.TrimSpace(*n.Signature)
+	}
+	if s == "" {
+		s = strings.TrimSpace(string(n.Kind) + " " + n.Name)
+	}
+	return TruncateRunes(s, MaxShortSummaryRunes)
+}
+
+// TruncateRunes clips s to at most n runes, cutting on a rune boundary.
+func TruncateRunes(s string, n int) string {
+	if utf8.RuneCountInString(s) <= n {
+		return s
+	}
+	return string([]rune(s)[:n])
+}
+
+// WithShortSummary sets the optional natural-language summary, rejecting a
+// value longer than MaxShortSummaryRunes runes.
+func WithShortSummary(summary string) NodeOption {
+	return func(n *Node) error {
+		if c := utf8.RuneCountInString(summary); c > MaxShortSummaryRunes {
+			return fmt.Errorf("node: ShortSummary is %d runes, max is %d", c, MaxShortSummaryRunes)
+		}
+		n.ShortSummary = &summary
 		return nil
 	}
 }

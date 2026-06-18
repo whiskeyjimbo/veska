@@ -12,6 +12,7 @@ const (
 	WorkKindRevalidate WorkKind = "revalidate"
 	WorkKindReview     WorkKind = "review"
 	WorkKindWiki       WorkKind = "wiki"
+	WorkKindSummary    WorkKind = "summary"
 )
 
 type WorkRow struct {
