@@ -13,6 +13,7 @@ import (
 
 	"github.com/whiskeyjimbo/veska/internal/application/extindex"
 	"github.com/whiskeyjimbo/veska/internal/cli/repocmd"
+	"github.com/whiskeyjimbo/veska/internal/infrastructure/git"
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/repo"
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/sqlite"
 	"github.com/whiskeyjimbo/veska/internal/platform/config"
@@ -48,6 +49,8 @@ type statusRollupJSONData struct {
 	QueueDetail      string `json:"queue_detail,omitempty"`
 	EmbeddingBacklog string `json:"embedding_backlog"`
 	PendingEmbeds    int    `json:"pending_embeds"`
+	IndexFreshness   string `json:"index_freshness"`
+	BehindRepos      int    `json:"behind_repos,omitempty"`
 }
 
 // computeStatusRollup decides the rollup status from the per-subsystem signals.
@@ -106,6 +109,7 @@ type statusProbes struct {
 	queueDetail      string
 	queueFailedRows  []doctor.FailedRow
 	backlog          doctor.EmbeddingBacklogReport
+	freshness        doctor.IndexFreshnessReport
 	egressStatus     string
 	daemonNotRunning bool
 	configStatus     string
@@ -144,6 +148,11 @@ func gatherStatusProbes(home string) statusProbes {
 	// eng_get_status agree on the number. The backlog is informational
 	// it does NOT promote the rollup. See computeStatusRollup.
 	p.backlog = probeEmbeddingBacklog(context.Background(), home)
+
+	// surface index freshness (promoted sha vs current git HEAD) so a
+	// "committed but not yet reindexed" repo is visible. Informational only -
+	// like the backlog, it does NOT promote the rollup (veska auto-reconciles).
+	p.freshness = probeIndexFreshness(context.Background())
 
 	// Compute egress status: broken if any socket is missing. Track
 	// whether BOTH sockets are missing - that is the unambiguous
@@ -229,6 +238,8 @@ func RunStatus(w io.Writer, opts StatusOptions) error {
 			QueueDetail:      inputs.QueueDetail,
 			EmbeddingBacklog: p.backlog.Status,
 			PendingEmbeds:    p.backlog.Pending,
+			IndexFreshness:   p.freshness.Status,
+			BehindRepos:      p.freshness.BehindCount(),
 		}))
 	}
 
@@ -258,6 +269,7 @@ func renderStatusText(w io.Writer, p statusProbes, rollup string, inputs statusR
 		detail += inputs.QueueDetail
 	}
 	backlogStr := backlogLabel(p.backlog)
+	indexStr := indexLabel(p.freshness)
 	// when the daemon is down, lead with that fact and
 	// flag the other subsystem labels as on-disk checks. Their
 	// 'healthy' (embedder weights present, config readable, DB query
@@ -271,12 +283,12 @@ func renderStatusText(w io.Writer, p statusProbes, rollup string, inputs statusR
 		// When another subsystem is independently broken, the rollup
 		// (and lead) is still "broken" - a real fault.
 		fmt.Fprintf(w, "status: %s - daemon is not running (egress=%s)\n", rollup, p.egressStatus)
-		fmt.Fprintf(w, "  on-disk checks (independent of daemon): embedder=%s, config=%s, ingestion=%s, queue=%s, %s%s\n",
-			p.embedder.Status, p.configStatus, p.ingestionStatus, p.queueStatus, backlogStr, detail)
+		fmt.Fprintf(w, "  on-disk checks (independent of daemon): embedder=%s, config=%s, ingestion=%s, queue=%s, %s, %s%s\n",
+			p.embedder.Status, p.configStatus, p.ingestionStatus, p.queueStatus, backlogStr, indexStr, detail)
 		fmt.Fprintln(w, "  hint: start it with `veska service start` (or `veska-daemon &` for a quick try)")
 	} else {
-		fmt.Fprintf(w, "status: %s (embedder=%s, egress=%s, config=%s, ingestion=%s, queue=%s, %s)%s\n",
-			rollup, p.embedder.Status, p.egressStatus, p.configStatus, p.ingestionStatus, p.queueStatus, backlogStr, detail)
+		fmt.Fprintf(w, "status: %s (embedder=%s, egress=%s, config=%s, ingestion=%s, queue=%s, %s, %s)%s\n",
+			rollup, p.embedder.Status, p.egressStatus, p.configStatus, p.ingestionStatus, p.queueStatus, backlogStr, indexStr, detail)
 	}
 	// "stopped" reports a benign operator state (daemon never
 	// started, no broken marker) and uses the same exit semantics as
@@ -308,6 +320,46 @@ func probeEmbeddingBacklog(ctx context.Context, home string) doctor.EmbeddingBac
 	rep, _ := doctor.CheckEmbeddingBacklog(ctx, refs)
 	_ = home
 	return rep
+}
+
+// probeIndexFreshness reads the repos table and compares each repo's last
+// promoted sha against its current git HEAD via git.Querier. Returns an
+// "unknown" report (never an error) when the DB can't be read, since the signal
+// is purely informational and must not break the rollup.
+func probeIndexFreshness(ctx context.Context) doctor.IndexFreshnessReport {
+	db, closeFn, err := repocmd.OpenLocalDB()
+	if err != nil {
+		return doctor.IndexFreshnessReport{Status: "unknown"}
+	}
+	defer closeFn()
+	recs, err := repo.List(ctx, db)
+	if err != nil {
+		return doctor.IndexFreshnessReport{Status: "unknown"}
+	}
+	refs := make([]doctor.RepoFreshnessRef, 0, len(recs))
+	for _, r := range recs {
+		// Synthetic ext:<module> repos have no git history - skip them so they
+		// don't show up as perpetually "never_promoted".
+		if strings.HasPrefix(r.RepoID, extindex.SyntheticRepoIDPrefix) {
+			continue
+		}
+		refs = append(refs, doctor.RepoFreshnessRef{
+			RepoID:      r.RepoID,
+			Branch:      r.ActiveBranch,
+			RootPath:    r.RootPath,
+			PromotedSHA: r.LastPromotedSHA,
+		})
+	}
+	return doctor.CheckIndexFreshness(refs, git.Querier{}.HEAD)
+}
+
+// indexLabel renders the freshness one-liner field, e.g. "index=current" or
+// "index=behind(1)". A behind count points the operator at `veska reindex`.
+func indexLabel(r doctor.IndexFreshnessReport) string {
+	if r.Status == "behind" {
+		return fmt.Sprintf("index=behind(%d)", r.BehindCount())
+	}
+	return "index=" + r.Status
 }
 
 // checkIngestion inspects the repos table for never-promoted entries
