@@ -18,22 +18,52 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/platform/config"
 )
 
-const dialTimeout = 2 * time.Second
+const (
+	dialTimeout = 2 * time.Second
+	// dialRetryWindow bounds how long the shim retries the daemon socket on a
+	// cold editor start (daemon not yet listening when the editor launches the
+	// shim). Kept short to stay inside the MCP client's own initialize timeout
+	// so we never get killed mid-retry (solov2-s2ux).
+	dialRetryWindow  = 8 * time.Second
+	dialRetryBackoff = 250 * time.Millisecond
+)
 
 // ErrDaemonNotRunning is returned by runProxy when the MCP socket is not reachable.
 var ErrDaemonNotRunning = errors.New("daemon not running")
+
+// dialWithRetry dials the daemon socket, retrying for up to dialRetryWindow.
+// Without this a shim launched before the daemon is listening connects to
+// nothing and registers zero tools - silently - for the whole editor session
+// (solov2-s2ux). Returns ErrDaemonNotRunning (wrapped) once the window expires
+// or ctx is cancelled.
+func dialWithRetry(ctx context.Context, sockPath string) (net.Conn, error) {
+	deadline := time.Now().Add(dialRetryWindow)
+	var d net.Dialer
+	for {
+		dialCtx, cancel := context.WithTimeout(ctx, dialTimeout)
+		conn, err := d.DialContext(dialCtx, "unix", sockPath)
+		cancel()
+		if err == nil {
+			return conn, nil
+		}
+		if ctx.Err() != nil || !time.Now().Before(deadline) {
+			return nil, fmt.Errorf("%w: %s", ErrDaemonNotRunning, sockPath)
+		}
+		select {
+		case <-ctx.Done():
+			return nil, fmt.Errorf("%w: %s", ErrDaemonNotRunning, sockPath)
+		case <-time.After(dialRetryBackoff):
+		}
+	}
+}
 
 // runProxy dials sockPath over Unix domain socket and bidirectionally proxies
 // data between in/out and the socket until either side closes or ctx is cancelled.
 // Returns ErrDaemonNotRunning (wrapped) when the socket is missing or refused.
 func runProxy(ctx context.Context, sockPath string, in io.Reader, out io.Writer) error {
-	dialCtx, dialCancel := context.WithTimeout(ctx, dialTimeout)
-	defer dialCancel()
-
-	var d net.Dialer
-	rawConn, err := d.DialContext(dialCtx, "unix", sockPath)
+	rawConn, err := dialWithRetry(ctx, sockPath)
 	if err != nil {
-		return fmt.Errorf("%w: %s", ErrDaemonNotRunning, sockPath)
+		return err
 	}
 	defer rawConn.Close()
 
