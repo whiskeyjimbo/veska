@@ -22,8 +22,8 @@
 # Blank lines and `#` comments are ignored.
 internal/application/embedder/embedder.go 530
 internal/application/search/search.go 593
-internal/cli/daemon/builder.go 684
-internal/cli/daemon/wire.go 361
+internal/cli/daemon/builder.go 732
+internal/cli/daemon/wire.go 363
 internal/infrastructure/mcp/registry.go 454
 internal/infrastructure/mcp/tools_helpers.go 527
 internal/infrastructure/repo/registry.go 446
