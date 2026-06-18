@@ -7,6 +7,8 @@ linters:
     - unused
     # errcheck omitted: generates noise for idiomatic defer Close() and fmt.Fprint*
     # patterns; staticcheck (SA4006, SA1006) covers the substantive cases.
-issues:
-  exclude-dirs:
-    - tools
+  exclusions:
+    # golangci-lint v2 moved directory exclusion here (was issues.exclude-dirs).
+    # Paths are regexps matched against the file path from the module root.
+    paths:
+      - ^tools/

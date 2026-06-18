@@ -27,6 +27,8 @@ linters:
       rules:
         - name: argument-limit
           arguments: [5]
-issues:
-  exclude-dirs:
-    - tools
+  exclusions:
+    # v2: directory exclusion lives under linters.exclusions.paths (regexp on
+    # the path from module root), not the old issues.exclude-dirs.
+    paths:
+      - ^tools/
