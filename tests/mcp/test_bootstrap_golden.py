@@ -196,7 +196,7 @@ def test_bootstrap_golden_zero_to_working_install(tmp_path: Path):
     print("\n[P1] veska init")
     env = os.environ.copy()
     env["VESKA_HOME"] = veska_home
-    res = _run(bin_veska, "init", env=env, check=False)
+    res = _run(bin_veska, "init", "-y", env=env, check=False)
     if res.returncode != 0:
         if "embedder" in res.stderr.lower() or "ollama" in res.stderr.lower():
             pytest.skip(

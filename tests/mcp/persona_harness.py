@@ -342,7 +342,7 @@ def persona_workspace(tmp_path: Path) -> Iterator[PersonaWorkspace]:
     env["VESKA_HOME"] = home
 
     # P1 - init (model2vec by default; skip only if an embedder probe fails).
-    res = run(bins["veska"], "init", env=env, check=False)
+    res = run(bins["veska"], "init", "-y", env=env, check=False)
     if res.returncode != 0:
         if "embedder" in res.stderr.lower() or "ollama" in res.stderr.lower():
             pytest.skip(f"veska init failed embedder probe: {res.stderr.strip()}")
