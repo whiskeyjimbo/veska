@@ -227,7 +227,7 @@ provider               = "none"              # "none" (default) | "bd-cli"
 # `eng_close_finding`. "apply" writes the edges directly with
 # confidence='probable'. "off" disables the worker entirely.
 #
-# threshold / top_k tune the candidate computation (solov2-l8su). Defaults
+# threshold / top_k tune the candidate computation. Defaults
 # are calibrated against the gate-3 nomic-embed-text fixture; a different
 # embedder or repo layout is the reason to change them. threshold is a lower
 # bound on the higher-is-closer similarity 1/(1+L2dist) and is only meaningful
@@ -237,7 +237,7 @@ mode                   = "suggest"           # "suggest" (default) | "apply" | "
 threshold              = 0.60                 # minimum similarity to emit a candidate; range [0, 1]
 top_k                  = 5                    # per-source candidate cap; must be > 0
 
-# ─── blast radius (graph BFS heuristics; solov2-l8su) ────────
+# ─── blast radius (graph BFS heuristics) ────────
 # hub_degree_threshold gates BFS expansion through high-degree "registry"
 # nodes (cobra rootCmd, http muxes): nodes with more neighbors than this are
 # reported but not expanded through, so a blast radius isn't drowned in
