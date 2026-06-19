@@ -68,6 +68,7 @@ type daemonBuilder struct {
 	scanTracker      *application.ScanTracker
 	resyncRef        *application.StartupResync
 	ingestionBusy    func() bool
+	availMem         availMemFunc
 	embedderIsOllama bool
 
 	vulnRefresher *vulnrefresh.Refresher
@@ -196,20 +197,12 @@ func (b *daemonBuilder) openStorage() error {
 		return fmt.Errorf("daemon: migrate sqlite: %w", err)
 	}
 
-	// Shared ingestion-busy predicate ( + 8ga): the queue poller and
-	// the embedder worker both hold writes off while a cold-scan or startup
-	// resync is committing. resyncRef is filled in by finalize; the closure
-	// reads it through the builder so the later assignment is visible.
-	b.scanTracker = application.NewScanTracker()
-	b.ingestionBusy = func() bool {
-		if b.scanTracker.IsAnyScanRunning() {
-			return true
-		}
-		if b.resyncRef != nil && b.resyncRef.IsSyncing() {
-			return true
-		}
-		return false
-	}
+	b.buildIngestionBusy(defaultAvailMem)
+
+	// One-shot startup advisory: warn when the in-memory vector backend is
+	// elected on a low-RAM host, since memvec keeps every vector in RAM
+	// (solov2-btpj). Mirrors the static-embedder WARN in electEmbedder.
+	maybeWarnLowMemory(b.cfg.VectorBackend, b.availMem, slog.Default())
 
 	vec, err := vector.NewVectorStorage(b.cfg.VectorBackend, b.cfg.VeskaHome)
 	if err != nil {
@@ -218,6 +211,28 @@ func (b *daemonBuilder) openStorage() error {
 	}
 	b.vec = vec
 	return nil
+}
+
+// buildIngestionBusy installs the scan tracker and the shared ingestion-busy
+// predicate ( + 8ga): the queue poller and the embedder worker both hold writes
+// off while a cold-scan or startup resync is committing, AND now also while the
+// host is under memory pressure (solov2-btpj) so both lanes skip their tick and
+// let RAM recover instead of pushing the daemon toward OOM. resyncRef is filled
+// in by finalize; the closure reads it through the builder so the later
+// assignment is visible. avail is injected so tests can drive the
+// memory-pressure branch with a fake reader.
+func (b *daemonBuilder) buildIngestionBusy(avail availMemFunc) {
+	b.scanTracker = application.NewScanTracker()
+	b.availMem = avail
+	b.ingestionBusy = func() bool {
+		if b.scanTracker.IsAnyScanRunning() {
+			return true
+		}
+		if b.resyncRef != nil && b.resyncRef.IsSyncing() {
+			return true
+		}
+		return underMemoryPressure(b.availMem)
+	}
 }
 
 // buildCore wires the shared ingestion+promotion core (internal/composition),
