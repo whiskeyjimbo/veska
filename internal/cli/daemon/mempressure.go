@@ -10,7 +10,7 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/platform/meminfo"
 )
 
-// Memory floors for the in-memory (memvec) vector backend (solov2-btpj). memvec
+// Memory floors for the in-memory (memvec) vector backend. memvec
 // holds every vector in RAM via linear scan, so a heavy promotion burst plus a
 // concurrent query fan-out can drive the daemon into OOM. These two consts let
 // the daemon react before that happens.

@@ -1,4 +1,4 @@
--- solov2-dchd.1 (ADR-S0017 §2) — Persist the portable identity anchor a repo
+-- Persist the portable identity anchor a repo
 -- resolved to at `repo add` time, so node IDs derive from a globally-shared
 -- anchor (committed content / remote URL) rather than the local checkout path,
 -- and so the choice is auditable and never silently re-derived per client.

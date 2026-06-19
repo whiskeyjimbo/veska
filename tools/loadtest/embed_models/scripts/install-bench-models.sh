@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # install-bench-models.sh - download the model2vec variants used by the
 # embed-models bench from Hugging Face into $VESKA_HOME/static-model/<name>/.
-# Idempotent: skips models already on disk. (solov2-0k5h.2)
+# Idempotent: skips models already on disk.
 #
 # Usage:
 #   VESKA_HOME=$HOME/.veska tools/loadtest/embed_models/scripts/install-bench-models.sh

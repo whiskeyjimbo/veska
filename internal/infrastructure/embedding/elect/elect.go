@@ -53,7 +53,7 @@ type Result struct {
 	SwitchedModel bool
 	// Ollama is true when the elected embedder is the Ollama network branch.
 	// Local embedders (model2vec/static) are fast and must not be rate-limited
-	// like the network path (solov2-5r1u).
+	// like the network path.
 	Ollama bool
 }
 

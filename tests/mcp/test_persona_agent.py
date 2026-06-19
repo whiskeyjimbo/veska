@@ -1,4 +1,4 @@
-"""Agent persona workflow (solov2-nmps.5).
+"""Agent persona workflow.
 
 An AI agent drives veska over MCP to ground its reasoning in the graph and to
 understand the blast radius of its in-flight (staged) edits - the live agent
@@ -12,7 +12,7 @@ PARKED - task scoping. SOLO-02's task-anchored Agent stories (US-04.02,
 US-09.02: eng_set_active_task / task-mode context_pack / eng_get_task_history)
 are NOT reachable over the live MCP surface: RegisterTaskTools is parked off the
 daemon registry (no MCP path to create a task - see tools_tasks.go), so those
-calls return -32601. Filed as a persona-coverage finding under solov2-nmps; this
+calls return -32601. Filed as a persona-coverage finding; this
 test asserts the agent loop that IS live and will grow a task-scoping phase when
 the tools re-enable.
 """
@@ -73,7 +73,7 @@ def test_agent_grounding_and_staging_aware(tmp_path: Path):
         print(f"   dirty entries={entries} included_staging={dirty.get('included_staging')}")
         assert COVERED_SYMBOL in entries, f"staged edit not reflected in dirty blast: {entries}"
         # With a real staged edit contributing rows, included_staging must be
-        # true (solov2-nmps.11: it now reflects contribution, not just the view).
+        # true (it now reflects contribution, not just the view).
         assert dirty.get("included_staging") is True, "staged edit must set included_staging"
 
         print("[OK] agent journey: ground (pack) → call-chain → staging-aware blast")

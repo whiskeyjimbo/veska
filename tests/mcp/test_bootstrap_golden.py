@@ -247,7 +247,7 @@ def test_bootstrap_golden_zero_to_working_install(tmp_path: Path):
 
             res = _run(bin_veska, "repo", "add", git_repo, env=env)
             assert "(via daemon)" in res.stdout, (
-                f"repo add didn't route via daemon - solov2-trh regression? "
+                f"repo add didn't route via daemon - regression? "
                 f"stdout: {res.stdout!r}"
             )
 

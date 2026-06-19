@@ -1,4 +1,4 @@
--- solov2-qd9 — Add a per-node `exported` visibility flag so graph tools
+-- Add a per-node `exported` visibility flag so graph tools
 -- (eng_find_symbol / eng_get_node / eng_get_file_nodes) can surface whether a
 -- symbol is exported instead of always returning null.
 --

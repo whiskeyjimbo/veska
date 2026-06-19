@@ -1,6 +1,6 @@
--- solov2-kxo5.2 — Cache-tier columns on repos, prerequisite for accepting
+-- Cache-tier columns on repos, prerequisite for accepting
 -- remote git URLs in `veska repo add` and `veska search --repo`. See
--- solov2-kxo5 body + "Pinned design (2026-05-26)" notes for the full
+-- body + "Pinned design (2026-05-26)" notes for the full
 -- design; this file only adds storage.
 --
 --   kind             tracked (today's behaviour, default) vs ephemeral

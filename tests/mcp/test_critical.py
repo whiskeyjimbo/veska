@@ -3,13 +3,6 @@
 These tests pin contracts that, if broken, mean silent data loss or
 silent incorrectness. They are run-against-the-live-daemon checks; the
 pytest expressions are cross-validation against SQLite ground truth.
-
-Most assertions here pin bugs we've already fixed in this codebase:
-  - solov2-c47: repos.last_promoted_sha advances atomically with nodes
-  - solov2-sxa: nodes.snippet is populated by the promotion path
-  - solov2-249: sqlite-vec rehydrates from node_embeddings on restart
-  - solov2-f8p: repo.Add records the HEAD branch (not '')
-  - solov2-b36: eng_suppress_finding rejects unknown finding_ids
 """
 
 from __future__ import annotations
@@ -113,9 +106,9 @@ def test_critical_promote_advances_sha(mcp_client, repo_id):
 
 
 def test_critical_suppress_unknown_rejected(mcp_client, repo_id, branch):
-    """solov2-b36: orphan suppressions must not be creatable. If this
-    accepts an arbitrary finding_id, list_suppressions will accumulate
-    rows that point at nothing - once visible they survive forever."""
+    """Orphan suppressions must not be creatable. If this accepts an
+    arbitrary finding_id, list_suppressions will accumulate rows that
+    point at nothing - once visible they survive forever."""
     sentinel = f"definitely-not-real-{int(time.time())}"
     ok, text, _, _ = mcp_client.call("eng_suppress_finding", {
         "repo_id": repo_id, "branch": branch,

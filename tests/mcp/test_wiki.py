@@ -25,7 +25,7 @@ def test_get_entry_points_responds(mcp_client, repo_id, branch):
 
 
 def test_get_hot_zone_branch_defaults_to_active(mcp_client, repo_id):
-    """branch was required pre-solov2-5vu1; now optional. Omitting branch
+    """branch was required; now optional. Omitting branch
     should succeed (resolves to the repo's active_branch)."""
     ok, text, _, result = mcp_client.call("eng_get_hot_zone", {"repo_id": repo_id})
     assert ok, f"eng_get_hot_zone without branch should default to active_branch, got: {text}"
@@ -33,7 +33,7 @@ def test_get_hot_zone_branch_defaults_to_active(mcp_client, repo_id):
 
 
 def test_get_entry_points_branch_defaults_to_active(mcp_client, repo_id):
-    """branch was required pre-solov2-5vu1; now optional."""
+    """branch was required; now optional."""
     ok, text, _, result = mcp_client.call("eng_get_entry_points", {"repo_id": repo_id})
     assert ok, f"eng_get_entry_points without branch should default to active_branch, got: {text}"
     assert isinstance(result, dict)

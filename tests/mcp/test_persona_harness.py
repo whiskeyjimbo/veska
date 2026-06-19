@@ -1,4 +1,4 @@
-"""Smoke test for the persona harness (solov2-nmps.1).
+"""Smoke test for the persona harness.
 
 Proves the harness stands up a daemon + indexed synthetic repo and that the
 promoted graph carries the four shapes every persona workflow relies on:

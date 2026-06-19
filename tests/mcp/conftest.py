@@ -33,7 +33,7 @@ _W = 64
 # Transient JSON-RPC error substrings that warrant a retry (case-insensitive
 # match against the error text). New SQLITE_BUSY-class patterns get added
 # here without touching MCPClient.call - the predicate stays closed for
-# modification, open for extension (solov2-seut).
+# modification, open for extension.
 _TRANSIENT_ERROR_PATTERNS = (
     "database is locked",
 )
@@ -74,7 +74,7 @@ def _print_call(name: str, args: dict, ok: bool, text: str, elapsed: float) -> N
 # it (rather than calling _print_call directly inside MCPClient) keeps the
 # client responsible only for JSON-RPC transport: changing the on-screen
 # format, silencing it, or capturing it for assertions is now a constructor
-# concern, not a reason to edit the transport class (solov2-gr3p).
+# concern, not a reason to edit the transport class.
 Transcript = Callable[[str, dict, bool, str, float], None]
 
 

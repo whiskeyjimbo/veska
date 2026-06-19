@@ -4,7 +4,7 @@
 # markdown file per article into out/wikipedia-tech/. Used by the
 # embed-models bench to evaluate models on GENUINE natural prose, since
 # our other prose corpora (veska-docs, cobra-docs) are really dense
-# technical documentation full of library identifiers (solov2-0k5h.7).
+# technical documentation full of library identifiers.
 #
 # Idempotent: skips files already on disk. Content is CC-BY-SA 3.0 (the
 # Wikipedia license); out/ is gitignored to avoid redistribution issues.

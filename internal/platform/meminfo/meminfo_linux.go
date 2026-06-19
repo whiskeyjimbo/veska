@@ -5,7 +5,7 @@
 
 // Package meminfo is a zero-dependency platform leaf that reports available
 // system RAM. It exists so daemon lanes can back off under memory pressure
-// instead of pushing the process to OOM (solov2-btpj). Mechanism only - the
+// instead of pushing the process to OOM. Mechanism only - the
 // floor/threshold policy lives with its consumer (the daemon), mirroring the
 // doctor freebytes leaf which reports disk free bytes without baking in policy.
 package meminfo

@@ -16,7 +16,7 @@ def test_find_symbol_auto_resolves_repo_id(mcp_client):
     auto-resolves it from cwd, then falls back to the sole registered repo
     (resolveRepoIDOrSingleton). The call succeeds (empty nodes for an
     unknown symbol is fine) rather than failing with 'repo_id required'
-    (solov2-khra: re-pinned from the pre-auto-resolve contract)."""
+    (re-pinned from the pre-auto-resolve contract)."""
     ok, text, _, result = mcp_client.call("eng_find_symbol", {
         "branch": "main",
         "symbol": "definitely-not-a-real-symbol-zzz",
@@ -28,7 +28,7 @@ def test_find_symbol_auto_resolves_repo_id(mcp_client):
 def test_get_file_nodes_auto_resolves_branch(mcp_client, repo_id, target_file):
     """eng_get_file_nodes no longer requires an explicit branch - it
     defaults to the repo's active_branch. Supplying a real repo_id +
-    file_path with no branch succeeds (solov2-khra: re-pinned)."""
+    file_path with no branch succeeds (re-pinned)."""
     ok, text, _, _ = mcp_client.call("eng_get_file_nodes", {
         "repo_id": repo_id,
         "file_path": target_file,

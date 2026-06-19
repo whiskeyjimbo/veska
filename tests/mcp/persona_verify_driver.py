@@ -1,4 +1,4 @@
-"""Committed persona-verify capture driver (solov2-nmps.8 follow-up).
+"""Committed persona-verify capture driver.
 
 The `/persona-verify` skill judges whether the MCP tools' real outputs match
 what they *should* be. Previously the driver was improvised and thrown away each

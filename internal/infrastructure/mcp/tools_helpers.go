@@ -34,8 +34,8 @@ func clampListLimit(limit int) int {
 }
 
 // normalizeDirection maps either accepted traversal vocabulary onto a single
-// canonical form so all graph-traversal tools accept the same inputs as aliases
-// (solov2-py5m). The semantics: in==callers (inbound, "who calls this"),
+// canonical form so all graph-traversal tools accept the same inputs as aliases.
+// The semantics: in==callers (inbound, "who calls this"),
 // out==callees (outbound, "what this calls"), both==both. An empty string is
 // passed through neutrally (ok=true, "") so each tool can apply its OWN default
 // downstream - collapsing empty into a canonical value here would silently flip
@@ -273,7 +273,6 @@ func expandNodeIDPrefix(ctx context.Context, graph ports.GraphReader, repoID, br
 		matched = id
 	}
 	if matched == "" {
-
 		return "", &RPCError{Code: CodeNotFound, Message: fmt.Sprintf("node_id %q not in repo=%s branch=%s - the prefix may belong to a different registered repo; run `veska repo list` and retry with --repo <id> (or cd into the owning repo)", nodeID, ShortRepoID(repoID), branch)}
 	}
 	return matched, nil
@@ -287,7 +286,6 @@ func resolveSeedOwner(ctx context.Context, repos application.RepoLister, graph p
 
 	resolveInRepo := func(repoID, branch string) (string, *RPCError) {
 		if nodeID != "" {
-
 			return expandNodeIDPrefix(ctx, graph, repoID, branch, nodeID)
 		}
 		if graph == nil {

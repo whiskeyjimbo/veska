@@ -38,7 +38,7 @@ def test_get_current_repo_uses_injected_cwd(mcp_client):
     veska source tree, not a registered repo, the daemon answers with the
     loud 'no indexed repo found for cwd' error.
 
-    (solov2-khra: the prior assertion expected sole-repo auto-resolve here,
+    (the prior assertion expected sole-repo auto-resolve here,
     which the cwd-injecting shim makes unreachable.)"""
     rid = query(
         "SELECT repo_id FROM repos WHERE ? LIKE root_path || '%'",

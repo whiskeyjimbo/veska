@@ -1,4 +1,4 @@
--- solov2-c1s4 — Persist the auto-link similarity score on SIMILAR_TO edges so
+-- Persist the auto-link similarity score on SIMILAR_TO edges so
 -- near-duplicate clustering can threshold them directly.
 --
 -- Before: edges recorded only (src, dst, kind, confidence). The similarity

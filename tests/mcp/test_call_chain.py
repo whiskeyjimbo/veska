@@ -23,11 +23,11 @@ def test_call_chain_for_target_node(mcp_client, repo_id, branch, target_symbol):
 
 def test_call_chain_unknown_node_errors(mcp_client, repo_id, branch):
     """eng_get_call_chain now LOUDLY rejects an unknown node_id rather than
-    soft-failing with an empty body: the shared node-id resolver (solov2-izh6,
+    soft-failing with an empty body: the shared node-id resolver,
     "junior-engineer journey gaps") returns -32002 with a "node_id … not in
     repo … may belong to a different registered repo" hint across every
     node-id tool. That's more useful to an agent than a silent empty result,
-    so it's the canonical contract (solov2-khra: re-pinned from soft-fail)."""
+    so it's the canonical contract (re-pinned from soft-fail)."""
     ok, text, _, _ = mcp_client.call("eng_get_call_chain", {
         "repo_id": repo_id, "branch": branch,
         "node_id": "definitely-not-a-real-node-deadbeef",
@@ -38,7 +38,7 @@ def test_call_chain_unknown_node_errors(mcp_client, repo_id, branch):
 
 
 def test_call_chain_requires_node_id_or_symbol(mcp_client, repo_id, branch):
-    """solov2-lcz6: call_chain now accepts node_id OR symbol; supplying
+    """call_chain now accepts node_id OR symbol; supplying
     neither must still error with a 'required' message."""
     ok, text, _, _ = mcp_client.call("eng_get_call_chain", {
         "repo_id": repo_id, "branch": branch, "depth": 2,
@@ -47,7 +47,7 @@ def test_call_chain_requires_node_id_or_symbol(mcp_client, repo_id, branch):
 
 
 def test_call_chain_accepts_symbol(mcp_client, repo_id, branch, target_symbol):
-    """solov2-lcz6: passing 'symbol' instead of 'node_id' must resolve via
+    """passing 'symbol' instead of 'node_id' must resolve via
     FindNodes and return the same shape as the node_id path. Ambiguous
     symbols are rejected (separate case)."""
     ok, text, _, result = mcp_client.call("eng_get_call_chain", {
