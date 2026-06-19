@@ -61,8 +61,9 @@ No Ollama, no network, and no separate process is required for search.
 
 ## Optional: Ollama
 
-Ollama is **only** for the optional LLM review pipeline (off by default). It is
-**not** used for embeddings in the default config.
+Ollama is **only** for the optional LLM features - the review pipeline and
+per-node summaries (both off by default). It is **not** used for embeddings in
+the default config.
 
 ```sh
 # macOS:        brew install ollama && ollama serve &

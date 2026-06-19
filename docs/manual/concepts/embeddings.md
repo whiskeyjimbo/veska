@@ -19,8 +19,8 @@ one embedder owns the index at a time. The election order:
 2. **static-v2** - an in-binary fallback that works with no model files at all
    (lower quality), used only when model2vec is unavailable.
 
-Ollama is **optional** and only backs the LLM review pipeline; it is not used
-for embeddings in the default config. (Power users can force an Ollama embedding
+Ollama is **optional** and only backs the LLM features - the review pipeline and
+per-node summaries; it is not used for embeddings in the default config. (Power users can force an Ollama embedding
 model, but model2vec is faster and higher-quality on code.) See
 **[Install](../getting-started/install.md#the-embedder)**.
 
