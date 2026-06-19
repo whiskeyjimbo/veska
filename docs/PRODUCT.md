@@ -68,25 +68,15 @@ outbound connection *when enabled*.
 
 **System view - three boxes.**
 
-```
-┌─ developer machine ─────────────────────────────────────┐
-│                                                         │
-│   ┌──────────────┐    unix sockets    ┌──────────────┐  │
-│   │  client      │ ─────────────────▶ │   veska-     │  │
-│   │  surfaces    │                    │   daemon     │  │
-│   │              │                    │              │  │
-│   │  • CLI       │                    │  owns SQLite │  │
-│   │  • editor    │                    │  + memvec,   │  │
-│   │    MCP shim  │                    │  fsnotify,   │  │
-│   └──────────────┘                    │  embed/promo │  │
-│                                       │  goroutines  │  │
-│                                       └───┬──────┬───┘  │
-│                                           │      │ HTTP │
-│                                           ▼      ▼      │
-│                                    ┌─────────┐ ┌──────┐ │
-│                                    │~/.veska │ │Ollama│ │
-│                                    └─────────┘ └──────┘ │
-└─────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TD
+    subgraph machine [developer machine]
+        client["client surfaces<br/>• CLI<br/>• editor MCP shim"]
+        daemon["veska-daemon<br/>owns SQLite + memvec,<br/>fsnotify, embed/promo goroutines"]
+        client -->|unix sockets| daemon
+        daemon --> store[("~/.veska")]
+        daemon -->|HTTP| ollama["Ollama (optional)"]
+    end
 ```
 
 **[client surfaces] ↔ [daemon] → [SQLite file] (+ optional Ollama).**
@@ -109,47 +99,37 @@ There are three flows through this picture:
 
 **Save** - the hot path. Runs in RAM, answers in milliseconds.
 
-```
-editor writes file
-      │
-      ▼
- fsnotify ──► tree-sitter parse ──► staging (in-memory)
-                                          │
-                                          ▼
-                                 answers via MCP (synchronous)
+```mermaid
+flowchart TD
+    write[editor writes file] --> fsnotify[fsnotify]
+    fsnotify --> parse[tree-sitter parse]
+    parse --> staging["staging (in-memory)"]
+    staging --> answers["answers via MCP (synchronous)"]
 ```
 
 **Promotion** - durable, on `git commit`. The only path that touches disk for writes. ("Promote" is the verb, "promotion" the transaction, "promoted" the adjective for durable rows.)
 
-```
-git commit
-      │
-      ▼
-post-commit hook ──► daemon drains staging ──► SQLite tx (atomic)
-                                                     │
-                                                     ▼
-                                              post_promotion_queue (queue)
-                                                     │
-                                     ┌───────────────┼───────────────┐
-                                     ▼               ▼               ▼
-                                  embed          auto-link      revalidate
-                                  worker
-                                     │
-                                     ▼
-                                  embedder ──► memvec
+```mermaid
+flowchart TD
+    commit[git commit] --> hook[post-commit hook]
+    hook --> drain[daemon drains staging]
+    drain --> tx["SQLite tx (atomic)"]
+    tx --> queue[post_promotion_queue]
+    queue --> embed[embed worker]
+    queue --> autolink[auto-link]
+    queue --> revalidate[revalidate]
+    embed --> embedder[embedder]
+    embedder --> memvec[memvec]
 ```
 
 **Query** - MCP reads through both layers. Tools declare which freshness they provide.
 
-```
-editor / agent
-      │
-      ▼
-veska-mcp ──► unix socket ──► router ──┬──► staging (sees unpromoted edits)
-                                        │
-                                        └──► SQLite + memvec
-                                              (promoted state;
-                                               may report degraded)
+```mermaid
+flowchart TD
+    ea[editor / agent] --> mcp[veska-mcp]
+    mcp -->|unix socket| router[router]
+    router --> staging["staging<br/>(sees unpromoted edits)"]
+    router --> store["SQLite + memvec<br/>(promoted state; may report degraded)"]
 ```
 
 **Read merge - per-file overlay, not per-row.** When staging has
