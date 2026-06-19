@@ -1,5 +1,11 @@
 # Veska
 
+[![CI](https://github.com/whiskeyjimbo/veska/actions/workflows/ci.yml/badge.svg)](https://github.com/whiskeyjimbo/veska/actions/workflows/ci.yml)
+[![Docs](https://github.com/whiskeyjimbo/veska/actions/workflows/docs.yml/badge.svg)](https://github.com/whiskeyjimbo/veska/actions/workflows/docs.yml)
+[![Go Report Card](https://goreportcard.com/badge/github.com/whiskeyjimbo/veska)](https://goreportcard.com/report/github.com/whiskeyjimbo/veska)
+[![Go Version](https://img.shields.io/github/go-mod/go-version/whiskeyjimbo/veska)](go.mod)
+[![License: AGPL v3](https://img.shields.io/badge/License-AGPL%20v3-blue.svg)](LICENSE)
+
 **Veska** is a local code-intelligence daemon. It runs on your laptop, parses
 your repository into a code graph (nodes + edges), embeds that graph
 semantically, and serves both to your editor and your AI agent over MCP - so
