@@ -36,17 +36,15 @@
 ; extractor inspects @type.body.Type() to dispatch between
 ; KindStruct / KindInterface / KindType, matching parseTypeDecl's switch
 ; in the legacy walker. Capturing the body lets the same extractor also
-; collect interface method nodes (solov2-9rc2 phase E v2) without a
-; second pass.
+; collect interface method nodes without a second pass.
 ;
 ; Anchored to source_file to match TOP-LEVEL types only - function-local
 ; type declarations (Go allows `func f(){ type k int; ... }`) are not
 ; part of the symbol graph, and on real codebases two different funcs
 ; routinely declare the same local name (hugo: helpers_test.go has
 ; `type k string` inside two different test functions). Without the
-; anchor those collide on (repoID, path, kind, name) → identical
+; anchor those collide on (repoID, path, kind, name) -> identical
 ; node_id and the promotion tx fails with UNIQUE-PK on nodes (1555).
-; Pinned by solov2-14lw.
 (source_file
   (type_declaration
     (type_spec

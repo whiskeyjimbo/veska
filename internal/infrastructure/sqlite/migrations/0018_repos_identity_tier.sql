@@ -4,14 +4,14 @@
 -- and so the choice is auditable and never silently re-derived per client.
 --
 --   identity_tier    Which rung of the fallback chain this repo resolved to:
---                    'module-hostpath' (Go host/path module or scoped npm —
+--                    'module-hostpath' (Go host/path module or scoped npm -
 --                    converges AND globally unique; the supported shared-DB
---                    anchor), 'origin-url' (canonical git remote — unique but
+--                    anchor), 'origin-url' (canonical git remote - unique but
 --                    diverges across forks), 'module-bare' (vanity/bare module
---                    name — local-stable, collision-prone), or 'abs-root'
---                    (absolute checkout path — never converges, local-only).
+--                    name - local-stable, collision-prone), or 'abs-root'
+--                    (absolute checkout path - never converges, local-only).
 --                    NULL on rows registered before this migration; backfilled
---                    by the identity-scheme rescan (solov2-dchd.4).
+--                    by the identity-scheme rescan.
 --   identity_anchor  The exact string hashed into repo_id for the chosen tier
 --                    (module path, canonical URL, or canonical abs root).
 --                    Stored for auditability and deterministic migration.

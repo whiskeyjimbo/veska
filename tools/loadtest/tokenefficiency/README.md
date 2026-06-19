@@ -67,7 +67,7 @@ go test -tags=eval -run TestTokenEfficiencyMultiRepo ./tools/loadtest/tokeneffic
 Layout: clusters are split contiguously across `TOKEFF_REPOS` repos.
 For each query, veska runs `search.Service.SemanticCandidates` against
 every repo and fuses with a single global RRF (mirroring the
-production MCP handler shipped in solov2-bcn). The simulated grep
+production MCP handler). The simulated grep
 walks every repo's filesystem.
 
 Output: `results-multirepo.json` (same envelope as the single-repo

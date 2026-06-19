@@ -1,4 +1,4 @@
-; imports.scm - import declarations (solov2-1yev phase 3a).
+; imports.scm - import declarations.
 ;
 ; Both bare and aliased import_specs surface; the Go-side extractor
 ; walks each spec for an optional name child (alias). Path values

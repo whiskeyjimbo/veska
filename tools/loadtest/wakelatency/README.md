@@ -1,4 +1,4 @@
-# wakelatency - wake-reconcile sweep latency gate (solov2-xde2.25.4)
+# wakelatency - wake-reconcile sweep latency gate
 
 Wall-time gate for `internal/infrastructure/git.WakeReconciler`'s wake
 sweep. Generates a synthetic on-disk tree, seeds the reconciler baseline,
