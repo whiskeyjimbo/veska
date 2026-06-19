@@ -234,6 +234,67 @@ func TestSuppressFinding_WithExpiresAt(t *testing.T) {
 	}
 }
 
+// repo_id resolution for scope='finding' must accept a short prefix, the full
+// id, or omission - matching eng_close_finding / eng_get_finding. A genuinely
+// different repo_id must still be rejected. Regression: solov2-9xwc.
+func TestSuppressFinding_RepoIDResolutionParity(t *testing.T) {
+	const fullRepoID = "1436fd395322aabbccddeeff00112233445566778899aabbccddeeff00112233"
+	const shortRepoID = "1436fd395322"
+
+	cases := []struct {
+		name      string
+		findingID string
+		repoID    string
+		wantErr   bool
+	}{
+		{name: "short prefix", findingID: "finding-short", repoID: shortRepoID, wantErr: false},
+		{name: "full id", findingID: "finding-full", repoID: fullRepoID, wantErr: false},
+		{name: "omitted", findingID: "finding-omit", repoID: "", wantErr: false},
+		{name: "wrong repo", findingID: "finding-wrong", repoID: "deadbeef", wantErr: true},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			db := newSuppressionsDB(t)
+			seedFindingForSuppression(t, db, tc.findingID, "main", fullRepoID)
+
+			r := NewRegistry()
+			RegisterSuppressionTools(r, db, nil, nil)
+
+			actor := domain.Actor{ID: "agent:bot", Kind: domain.ActorKindAgent}
+			params := map[string]any{
+				"finding_id": tc.findingID,
+				"branch":     "main",
+				"reason":     "parity check",
+			}
+			if tc.repoID != "" {
+				params["repo_id"] = tc.repoID
+			}
+			_, rpcErr := dispatchSuppression(t, r, "eng_suppress_finding", actor, params)
+
+			if tc.wantErr {
+				if rpcErr == nil {
+					t.Fatal("expected RPC error for mismatched repo_id; got nil")
+				}
+				if rpcErr.Code != CodeInvalidParams {
+					t.Errorf("error code = %d, want CodeInvalidParams (%d)", rpcErr.Code, CodeInvalidParams)
+				}
+				return
+			}
+			if rpcErr != nil {
+				t.Fatalf("unexpected RPC error: code=%d message=%q", rpcErr.Code, rpcErr.Message)
+			}
+			var count int
+			if err := db.QueryRow(`SELECT COUNT(*) FROM suppressions WHERE target = ?`, tc.findingID).Scan(&count); err != nil {
+				t.Fatalf("count suppressions: %v", err)
+			}
+			if count != 1 {
+				t.Errorf("expected 1 suppression row, got %d", count)
+			}
+		})
+	}
+}
+
 func TestSuppressFinding_MissingParams(t *testing.T) {
 	db := newSuppressionsDB(t)
 	r := NewRegistry()

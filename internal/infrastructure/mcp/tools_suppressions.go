@@ -114,7 +114,7 @@ func makeSuppressFindingHandler(db *sql.DB, aw ports.AuditWriter) ToolHandler {
 					Message: fmt.Sprintf("finding %s is on branch %s, not %s", p.FindingID, rowBranch, p.Branch),
 				}
 			}
-			if p.RepoID != "" && p.RepoID != rowRepoID {
+			if p.RepoID != "" && !findingRepoMatches(rowRepoID, p.RepoID) {
 				return nil, &RPCError{
 					Code:    CodeInvalidParams,
 					Message: fmt.Sprintf("finding %s belongs to repo %s, not %s", p.FindingID, rowRepoID, p.RepoID),
