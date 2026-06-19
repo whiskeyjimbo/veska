@@ -138,6 +138,24 @@ func TestRerank_VerbSynonym_LookupMatchesGet(t *testing.T) {
 	}
 }
 
+// TestRerank_CoarseKindDemotion_PackageBelowMethod pins the coarse-kind
+// dampener: a package node that merely matched on aggregate text must not
+// outrank a real method, even when its raw score is higher. The query shares
+// no tokens with either symbol, so only the kind demotion differentiates them.
+func TestRerank_CoarseKindDemotion_PackageBelowMethod(t *testing.T) {
+	in := []Result{
+		// Coarse container, higher raw score - the keyword-coincidence winner.
+		{NodeID: "pkg", Score: 0.030, SymbolPath: "metrics", FilePath: "/x/metrics/collector.go", Kind: "package"},
+		// The method that actually implements the behavior.
+		{NodeID: "method", Score: 0.020, SymbolPath: "Server.Shutdown", FilePath: "/x/server.go", Kind: "method"},
+	}
+	out := rerank(in, "handle incoming request")
+	if out[0].NodeID != "method" {
+		t.Errorf("expected method to outrank demoted package; got order %s(%s),%s(%s)",
+			out[0].SymbolPath, out[0].Kind, out[1].SymbolPath, out[1].Kind)
+	}
+}
+
 // TestRerank_VerbSynonym_NoFalsePositive guards that the synonym layer
 // does NOT lift a candidate whose leading subword is unrelated to any
 // query token - the boost is gated on the symbol's HEAD identifier (the
