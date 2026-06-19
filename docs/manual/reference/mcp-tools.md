@@ -171,6 +171,11 @@ Find duplicate code. mode='exact' (default): groups of >=2 symbols whose source 
       "type": "number",
       "description": "near mode only: minimum SIMILAR_TO edge score (higher = more similar). Omit to use the default calibrated for the elected embedder (model spaces differ; near-dup and 'related' bands overlap, so this is a high-precision/partial-recall knob). Lower it for more recall."
     },
+    "limit": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Max groups/clusters to return (default 100). The response 'total' reports the full count and 'truncated' is true when capped."
+    },
     "cwd": {
       "type": "string",
       "description": "Working directory used to resolve the active repo when repo_id is omitted."
@@ -220,6 +225,11 @@ Whole-repo (or cross-repo) similar-code clusters for de-dupe triage. One pass re
     "path": {
       "type": "string",
       "description": "Restrict to nodes whose file_path starts with this prefix (e.g. internal/infrastructure/mcp)."
+    },
+    "limit": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Max clusters to return (default 100). The response 'total' reports the full count and 'truncated' is true when capped."
     },
     "cwd": {
       "type": "string",
@@ -437,8 +447,11 @@ Compute the blast radius (callers/callees/both) of a symbol - 'if I change this,
       "enum": [
         "in",
         "out",
-        "both"
-      ]
+        "both",
+        "callers",
+        "callees"
+      ],
+      "description": "'callers'/'in' (inbound, default), 'callees'/'out' (outbound), or 'both'. in==callers, out==callees."
     },
     "expand_cross_repo": {
       "type": "boolean"
@@ -490,9 +503,11 @@ Walk CALLS edges from a symbol. Use this - not search - when the question is 'wh
       "enum": [
         "in",
         "out",
-        "both"
+        "both",
+        "callers",
+        "callees"
       ],
-      "description": "'out' (callees, default), 'in' (callers), or 'both'."
+      "description": "'out'/'callees' (default), 'in'/'callers', or 'both'. in==callers (inbound), out==callees (outbound)."
     },
     "expand_cross_repo": {
       "type": "boolean",
@@ -627,8 +642,11 @@ Blast radius across every symbol in files changed by a git diff. By default the 
       "enum": [
         "in",
         "out",
-        "both"
-      ]
+        "both",
+        "callers",
+        "callees"
+      ],
+      "description": "'callers'/'in' (inbound, default), 'callees'/'out' (outbound), or 'both'. in==callers, out==callees."
     },
     "expand_cross_repo": {
       "type": "boolean"
@@ -676,8 +694,11 @@ _Reads through the staging overlay (reflects uncommitted edits)._
       "enum": [
         "in",
         "out",
-        "both"
-      ]
+        "both",
+        "callers",
+        "callees"
+      ],
+      "description": "'callers'/'in' (inbound, default), 'callees'/'out' (outbound), or 'both'. in==callers, out==callees."
     },
     "expand_cross_repo": {
       "type": "boolean"
@@ -1002,6 +1023,11 @@ List findings for a repo and branch, optionally filtered by state or severity.
     "include_suppressed": {
       "type": "boolean",
       "description": "Surface findings hidden by an active suppression (default false)."
+    },
+    "limit": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Max findings to return (default 100). The response 'total' reports the full count and 'truncated' is true when capped."
     },
     "cwd": {
       "type": "string",
