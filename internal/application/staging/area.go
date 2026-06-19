@@ -1,4 +1,3 @@
-// SPDX-FileCopyrightText: 2026 Jeff Rose
 // SPDX-License-Identifier: AGPL-3.0-only
 
 // Package staging holds the in-memory, pre-promotion overlay: parse results

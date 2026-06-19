@@ -1,4 +1,3 @@
-// SPDX-FileCopyrightText: 2026 Jeff Rose
 // SPDX-License-Identifier: AGPL-3.0-only
 
 // Package autolink computes auto-link candidates: top-k similarity edges

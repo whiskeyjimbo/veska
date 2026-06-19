@@ -1,4 +1,3 @@
-// SPDX-FileCopyrightText: 2026 Jeff Rose
 // SPDX-License-Identifier: AGPL-3.0-only
 
 // Package summary implements the optional LLM summary lane: an off-by-default

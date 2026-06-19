@@ -1,4 +1,3 @@
-// SPDX-FileCopyrightText: 2026 Jeff Rose
 // SPDX-License-Identifier: AGPL-3.0-only
 
 // Package dependencies lists a repo's external-module imports, ranked by

@@ -1,4 +1,3 @@
-// SPDX-FileCopyrightText: 2026 Jeff Rose
 // SPDX-License-Identifier: AGPL-3.0-only
 
 // Package mcpclient is the CLI's JSON-RPC 2.0 client for the daemon's cli.sock.

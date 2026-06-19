@@ -1,4 +1,3 @@
-// SPDX-FileCopyrightText: 2026 Jeff Rose
 // SPDX-License-Identifier: AGPL-3.0-only
 
 // Command recall runs recall@10 and recall@50 benchmarks against sqlite-vec KNN queries.
