@@ -58,16 +58,16 @@ func makeGetCallChainHandler(graph ports.GraphReader, resolve ResolveFunc, resol
 			return nil, rpcErr
 		}
 		p.RepoID, p.Branch, p.NodeID = repoID, branch, nid
-		dirOut, dirIn := true, false
-		switch p.Direction {
-		case "", "out":
-			// defaults
+		canonical, ok := normalizeDirection(p.Direction)
+		if !ok {
+			return nil, &RPCError{Code: CodeInvalidParams, Message: fmt.Sprintf("invalid direction %q (want in|out|both or callers|callees|both)", p.Direction)}
+		}
+		dirOut, dirIn := true, false // empty defaults to outbound (callees)
+		switch canonical {
 		case "in":
 			dirOut, dirIn = false, true
 		case "both":
 			dirOut, dirIn = true, true
-		default:
-			return nil, &RPCError{Code: CodeInvalidParams, Message: fmt.Sprintf("invalid direction %q (want out|in|both)", p.Direction)}
 		}
 
 		g, err := graph.LoadGraph(ctx, p.RepoID, p.Branch)

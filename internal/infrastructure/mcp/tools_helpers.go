@@ -33,6 +33,29 @@ func clampListLimit(limit int) int {
 	return limit
 }
 
+// normalizeDirection maps either accepted traversal vocabulary onto a single
+// canonical form so all graph-traversal tools accept the same inputs as aliases
+// (solov2-py5m). The semantics: in==callers (inbound, "who calls this"),
+// out==callees (outbound, "what this calls"), both==both. An empty string is
+// passed through neutrally (ok=true, "") so each tool can apply its OWN default
+// downstream - collapsing empty into a canonical value here would silently flip
+// blast's callers-default. Unrecognised values return ok=false so the caller
+// still surfaces the existing CodeInvalidParams error rather than defaulting.
+func normalizeDirection(s string) (canonical string, ok bool) {
+	switch s {
+	case "":
+		return "", true
+	case "in", "callers":
+		return "in", true
+	case "out", "callees":
+		return "out", true
+	case "both":
+		return "both", true
+	default:
+		return "", false
+	}
+}
+
 // resolveRepoID resolves a repository identifier alias, short ID, or prefix to its full canonical ID.
 func resolveRepoID(ctx context.Context, repos application.RepoLister, repoID string) (string, *RPCError) {
 	if repos == nil {

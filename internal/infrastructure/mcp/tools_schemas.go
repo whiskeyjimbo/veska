@@ -170,7 +170,7 @@ var getCallChainInputSchema = json.RawMessage(`{
     "repo_id":           {"type": "string"},
     "branch":            {"type": "string"},
     "depth":             {"type": "integer", "minimum": 1, "maximum": 10, "description": "Traversal depth (default 3, max 10)."},
-    "direction":         {"type": "string", "enum": ["in", "out", "both"], "description": "'out' (callees, default), 'in' (callers), or 'both'."},
+    "direction":         {"type": "string", "enum": ["in", "out", "both", "callers", "callees"], "description": "'out'/'callees' (default), 'in'/'callers', or 'both'. in==callers (inbound), out==callees (outbound)."},
     "expand_cross_repo": {"type": "boolean", "description": "Follow CALLS edges into other registered repos when true."},
     "cwd":               {"type": "string", "description": "Working directory used to resolve the active repo when repo_id is omitted."}
   }
@@ -187,7 +187,7 @@ var blastRadiusInputSchema = json.RawMessage(`{
     "branch":            {"type": "string"},
     "max_depth":         {"type": "integer", "minimum": 1},
     "max_nodes":         {"type": "integer", "minimum": 1},
-    "direction":         {"type": "string", "enum": ["in", "out", "both"]},
+    "direction":         {"type": "string", "enum": ["in", "out", "both", "callers", "callees"], "description": "'callers'/'in' (inbound, default), 'callees'/'out' (outbound), or 'both'. in==callers, out==callees."},
     "expand_cross_repo": {"type": "boolean"},
     "cwd":               {"type": "string", "description": "Working directory used to resolve the active repo when repo_id is omitted."}
   }
@@ -205,7 +205,7 @@ var diffBlastRadiusInputSchema = json.RawMessage(`{
     "ref_b":             {"type": "string", "description": "Target git ref. Must be paired with ref_a."},
     "max_depth":         {"type": "integer", "minimum": 1},
     "max_nodes":         {"type": "integer", "minimum": 1},
-    "direction":         {"type": "string", "enum": ["in", "out", "both"]},
+    "direction":         {"type": "string", "enum": ["in", "out", "both", "callers", "callees"], "description": "'callers'/'in' (inbound, default), 'callees'/'out' (outbound), or 'both'. in==callers, out==callees."},
     "expand_cross_repo": {"type": "boolean"},
     "cwd":               {"type": "string", "description": "Working directory used to resolve the active repo when repo_id is omitted."}
   }
@@ -221,7 +221,7 @@ var dirtyBlastRadiusInputSchema = json.RawMessage(`{
     "branch":            {"type": "string"},
     "max_depth":         {"type": "integer", "minimum": 1},
     "max_nodes":         {"type": "integer", "minimum": 1},
-    "direction":         {"type": "string", "enum": ["in", "out", "both"]},
+    "direction":         {"type": "string", "enum": ["in", "out", "both", "callers", "callees"], "description": "'callers'/'in' (inbound, default), 'callees'/'out' (outbound), or 'both'. in==callers, out==callees."},
     "expand_cross_repo": {"type": "boolean"},
     "cwd":               {"type": "string", "description": "Working directory used to resolve the active repo when repo_id is omitted."}
   }

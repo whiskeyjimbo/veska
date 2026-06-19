@@ -102,6 +102,34 @@ func RegisterBlastTools(r *Registry, svc *blastradius.Service, repoRoot RepoRoot
 	})
 }
 
+// parseBlastDirection accepts either traversal vocabulary (in|out|both or
+// callers|callees|both, plus empty for the callers default) and returns the
+// blast-layer Direction. It widens the accepted input set without changing the
+// existing default (empty -> DirCallers via ParseDirection). Unknown values
+// return CodeInvalidParams, matching the prior behaviour.
+func parseBlastDirection(s string) (blastradius.Direction, *RPCError) {
+	canonical, ok := normalizeDirection(s)
+	if !ok {
+		return "", &RPCError{Code: CodeInvalidParams, Message: fmt.Sprintf("unknown direction %q (want in|out|both or callers|callees|both)", s)}
+	}
+	// Translate canonical (in/out/both) to the blast vocabulary; empty stays
+	// empty so ParseDirection applies the callers default.
+	var blastVocab string
+	switch canonical {
+	case "in":
+		blastVocab = string(blastradius.DirCallers)
+	case "out":
+		blastVocab = string(blastradius.DirCallees)
+	case "both":
+		blastVocab = string(blastradius.DirBoth)
+	}
+	dir, err := blastradius.ParseDirection(blastVocab)
+	if err != nil {
+		return "", &RPCError{Code: CodeInvalidParams, Message: err.Error()}
+	}
+	return dir, nil
+}
+
 type blastRadiusParams struct {
 	NodeID          string `json:"node_id"`
 	Symbol          string `json:"symbol"`
@@ -125,9 +153,9 @@ func makeBlastRadiusHandler(svc *blastradius.Service, repos application.RepoList
 			return nil, rpcErr
 		}
 		p.RepoID, p.Branch, p.NodeID = repoID, branch, nid
-		dir, err := blastradius.ParseDirection(p.Direction)
-		if err != nil {
-			return nil, &RPCError{Code: CodeInvalidParams, Message: err.Error()}
+		dir, rpcErr := parseBlastDirection(p.Direction)
+		if rpcErr != nil {
+			return nil, rpcErr
 		}
 		resp, err := svc.Of(ctx, p.RepoID, p.Branch, []string{p.NodeID}, blastradius.Options{
 			MaxDepth:  p.MaxDepth,
@@ -335,9 +363,9 @@ func prepareDiffBlast(ctx context.Context, repos application.RepoLister, deps Di
 		return p, "", "", rpcErr
 	}
 	p.Branch = br
-	dir, err := blastradius.ParseDirection(p.Direction)
-	if err != nil {
-		return p, "", "", &RPCError{Code: CodeInvalidParams, Message: err.Error()}
+	dir, dirErr := parseBlastDirection(p.Direction)
+	if dirErr != nil {
+		return p, "", "", dirErr
 	}
 	root, err := deps.RepoRoot(ctx, p.RepoID)
 	if err != nil {
@@ -412,9 +440,9 @@ func makeDirtyBlastRadiusHandler(svc *blastradius.Service, repos application.Rep
 		} else {
 			p.Branch = br
 		}
-		dir, err := blastradius.ParseDirection(p.Direction)
-		if err != nil {
-			return nil, &RPCError{Code: CodeInvalidParams, Message: err.Error()}
+		dir, rpcErr := parseBlastDirection(p.Direction)
+		if rpcErr != nil {
+			return nil, rpcErr
 		}
 		resp, err := svc.DirtyOf(ctx, p.RepoID, p.Branch, blastradius.Options{
 			MaxDepth:  p.MaxDepth,
