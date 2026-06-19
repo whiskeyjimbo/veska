@@ -1,36 +1,27 @@
 ---
 title: "Configuration Surface"
 status: reference
-last_reviewed: 2026-05-08
-related: [SOLO-13]
+last_reviewed: 2026-06-19
+related: [ARCHITECTURE]
 verified: true
-verified_date: "2026-05-17"
+verified_date: "2026-06-19"
 ---
 
 # Configuration Surface
 
-> **Loader status (solov2-s5c.6).** `internal/config` now ships a real
-> TOML loader (`config.go`): `Load()` resolves
+> **Loader status.** `internal/platform/config` ships a real TOML
+> loader (`config.go`): `Load()` resolves
 > **defaults < `~/.veska/config.toml` < env vars** and `Validate()`
-> enforces the tracing rule. The struct covers `[daemon]`, `[logging]`,
-> `[metrics]`, `[tracing]`, `[storage]`, `[watcher]`, `[embedder]`,
-> `[post_promotion_queue]`, `[budget]`, `[llm_generator]`, `[review]`,
-> `[autolink]`, `[blast]`.
-> **Consumed today (live):** `embedder.rate_per_sec`,
-> `post_promotion_queue.poll_interval`, the `[watcher]` wake knobs
-> (`wake_tick`, `wake_threshold`, `wake_concurrency`) threaded into
-> `cmd/veska-daemon/wire.go` (`buildReconciler`), and the `[autolink]`
-> (`threshold`, `top_k`) / `[blast]` (`hub_degree_threshold`) tuning knobs
-> wired into the autolink linker and blast-radius service (solov2-l8su);
-> the env vars `VESKA_OLLAMA_URL`, `VESKA_EMBED_MODEL`,
-> `VESKA_VECTOR_BACKEND`, `VESKA_DEBUG`, `VESKA_HUB_THRESHOLD`,
-> `VESKA_AUTOLINK_THRESHOLD`, `VESKA_AUTOLINK_TOPK` override their struct
-> fields. **Planned:** every other key is decoded and available on
-> `Config` but not yet read by the daemon. Sections not in the struct
-> above (`[parser]`, `[branch_pk]`, `[save]`, `[vuln_source]`,
-> `[tracker]`, `[mcp]`, `[memory]`, `[supervisor]`, `[backup]`,
-> `[writer.*]`, `[reader]`, `[tokens]`, `[retention]`) remain
-> documented-but-unparsed.
+> enforces the tracing and embedder rules. The `Config` struct parses
+> `[daemon]`, `[logging]`, `[metrics]`, `[tracing]`, `[storage]`,
+> `[watcher]`, `[embedder]`, `[post_promotion_queue]`, `[budget]`,
+> `[llm_generator]`, `[review]`, `[summary]`, `[backup]`,
+> `[vuln_source]`, `[promotion]`, `[wiki]`, `[autolink]`, and `[blast]`.
+> **Not yet parsed** (documented below for forward planning, decoded as
+> raw TOML but not bound to a struct field): `[parser]`, `[branch_pk]`,
+> `[save]`, `[tracker]`, `[mcp]`, `[memory]`, `[supervisor]`,
+> `[writer.*]`, `[reader]`, `[tokens]`, `[retention]`. Treat any key in
+> those sections as a planning placeholder, not a live knob.
 
 The whole story. One file (`~/.veska/config.toml`) plus a handful
 of environment variables. No per-workspace config files, no
@@ -45,7 +36,7 @@ identity policy, no replication policy, no mode selectors.
 | `<repo>/.veskaignore` | Per-repo ignore patterns. Plain `.gitignore` syntax. |
 | `<repo>/.beads/current_task` | Active-task pin if the `bd-cli` tracker integration is on. |
 
-That's it. Backup is `veska backup create` (SOLO-08 §9), not a
+That's it. Backup is `veska backup create`, not a
 `tar` of the live directory - tarring a running SQLite database
 captures inconsistent WAL state.
 
@@ -55,10 +46,13 @@ captures inconsistent WAL state.
 |---|---|---|
 | `VESKA_HOME` | Daemon data root. | `~/.veska` |
 | `VESKA_CONFIG` | Override the config file path. | `$VESKA_HOME/config.toml` |
-| `VESKA_LOG_FORMAT` | `text` or `json`. | `text` |
-| `VESKA_LOG_LEVEL` | `debug`, `info`, `warn`, `error`. | `info` |
+| `VESKA_DEBUG` | Enable debug-level logging when set. | unset |
+| `VESKA_EMBEDDER` | Force the embedder election. `ollama` is the only override that probes a network embedder; otherwise the daemon elects model2vec (or the static-v2 fallback). | unset (elect model2vec) |
+| `VESKA_EMBED_MODEL` | Ollama model name used when `VESKA_EMBEDDER=ollama`. Overrides `embedder.model`. | `nomic-embed-text` |
+| `VESKA_OLLAMA_URL` | Ollama endpoint used when the Ollama embedder is elected. Overrides `embedder.endpoint`. | `http://localhost:11434` |
+| `VESKA_VECTOR_BACKEND` | Vector store backend: `memory` (memvec) or `usearch` (HNSW). Overrides `storage.vector_backend`. | `memory` |
 | `VESKA_OTLP_ENDPOINT` | OTLP exporter target. Enables tracing if set. Overrides `tracing.otlp_endpoint`. | unset |
-| `VESKA_METRICS_LISTEN` | Prometheus listener address (e.g. `127.0.0.1:9090`). Enables metrics if set. Overrides `metrics.listen`. | unset |
+| `VESKA_PPROF` | Bind a pprof listener (host:port) for profiling. | unset |
 | `VESKA_HUB_THRESHOLD` | Blast-radius hub-degree gate. Integer; negative disables the gate. Overrides `blast.hub_degree_threshold`. | `50` |
 | `VESKA_AUTOLINK_THRESHOLD` | Auto-link minimum similarity, `[0, 1]`. Overrides `autolink.threshold`. | `0.60` |
 | `VESKA_AUTOLINK_TOPK` | Auto-link per-source candidate cap (> 0). Overrides `autolink.top_k`. | `5` |
@@ -96,7 +90,7 @@ keep_rotations  = 5                          # daemon.log.1..5
 # ─── metrics (opt-in) ────────────────────────────────────────
 [metrics]
 enabled         = false
-listen          = "127.0.0.1:9090"           # only bound when enabled; VESKA_METRICS_LISTEN overrides
+listen          = "127.0.0.1:9090"           # only bound when enabled = true
 
 # ─── tracing (opt-in; off by default) ────────────────────────
 # Both `enabled = true` AND `otlp_endpoint` (or
@@ -113,7 +107,7 @@ sample_ratio    = 1.0                        # set at opt-in time; lower for noi
 [storage]
 db_path                = "~/.veska/veska.db"
 journal_mode           = "WAL"               # do not change
-synchronous            = "FULL"              # "FULL" (default) | "NORMAL". See SOLO-08 §5.1.
+synchronous            = "FULL"              # "FULL" (default) | "NORMAL".
 wal_autocheckpoint     = 1000                # pages
 idle_checkpoint_after  = "5s"
 audit_max_size_mb      = 100
@@ -128,15 +122,15 @@ max_file_size_kb       = 1024
 [watcher]
 debounce               = "200ms"
 poll_fallback_interval = "5s"
-wake_threshold         = "30s"               # monotonic-clock gap that triggers wake reconcile (SOLO-03 §5.2)
+wake_threshold         = "30s"               # monotonic-clock gap that triggers wake reconcile
 wake_tick              = "5s"                # cadence of the wake-detector tick
 wake_concurrency       = 0                   # parallel per-repo wake-reconcile sweeps; 0 = runtime.NumCPU()/2 (floor 1)
-max_paths_per_repo     = 50000               # repo add admission ceiling (SOLO-03 §3.0)
+max_paths_per_repo     = 50000               # repo add admission ceiling
 max_paths_total        = 200000              # daemon-global path-watch ceiling
 
 # ─── budgets ─────────────────────────────────────────────────
 [budget]
-refactor_commit_threshold_symbols = 5000     # promote count above which the §3.1 refactor budget applies (SOLO-13 §3.1)
+refactor_commit_threshold_symbols = 5000     # promote count above which the refactor budget applies
 
 # ─── branch-PK row growth (OQ-S006 / ADR-S0013) ──────────────
 [branch_pk]
@@ -144,11 +138,19 @@ max_growth_per_branch_pct = 10               # % of trunk row count per active b
 
 # ─── save large-file fallback ────────────────────────────────
 [save]
-large_file_threshold_loc = 1500              # files above this reparse on a background goroutine (SOLO-13 §3.1b)
+large_file_threshold_loc = 1500              # files above this reparse on a background goroutine
 
 # ─── embedder ────────────────────────────────────────────────
+# NOTE: the *active* embedder is chosen at boot by the election in
+# `electEmbedder` (builder.go), NOT by `provider` here. The daemon
+# elects model2vec (potion-code-16M) when available, else the in-binary
+# static-v2 fallback; Ollama is used only when VESKA_EMBEDDER=ollama.
+# `provider` is currently not consumed for selection - it is retained
+# for the planned config-driven override. `endpoint`/`model` apply when
+# the Ollama path is elected (env vars VESKA_OLLAMA_URL / VESKA_EMBED_MODEL
+# override them); `rate_per_sec` and `batch_size` are live today.
 [embedder]
-provider               = "ollama"
+provider               = "ollama"            # not consumed for election; see note above
 endpoint               = "http://localhost:11434"
 model                  = "nomic-embed-text"
 dim                    = 768
@@ -159,7 +161,7 @@ batch_size             = 32
 # Ships only the local Ollama generator. Hosted providers
 # (Anthropic, OpenAI, Gemini, openai_compatible) and the
 # environment-variable key resolution they require come behind a
-# future ADR (see SOLO-05 §2.5). Setting `provider` to anything
+# future ADR. Setting `provider` to anything
 # other than "ollama" causes the daemon to refuse to start.
 [llm_generator]
 enabled                = false
@@ -169,13 +171,13 @@ model                  = "llama3.1:8b"
 timeout                = "60s"
 
 # ─── review pipeline ─────────────────────────────────────────
-# Hard halts. See SOLO-11 §3.1 for behavior:
+# Hard halts. Behavior:
 #   - per_commit overage: skip remaining specialties this commit;
 #                         file `BudgetExceeded` finding (medium)
 #   - daily cap reached:  pause new review jobs until midnight;
 #                         logged via `veska doctor pipelines` and
 #                         one line in audit.jsonl. Not a Finding;
-#                         not human-action-gated. (See SOLO-11 §3.1.)
+#                         not human-action-gated. 
 # USD caps come with hosted LLM providers when they ship. We
 # track token caps only today; with the local Ollama provider
 # tokens are the meaningful cost. Caps reset at local-midnight.
@@ -184,7 +186,7 @@ enabled               = false
 max_tokens_per_commit = 100000
 max_tokens_per_day    = 500000
 
-# ─── vuln source (SOLO-11 §2.1, M7) ──────────────────────────
+# ─── vuln source (M7) ──────────────────────────
 # Drives the `vuln-scan` promotion check. Two layers: the bare
 # schema zero-value (empty `provider`) is off - the daemon falls
 # back to the no-op NullVulnSource - BUT `veska init` writes this
@@ -218,7 +220,7 @@ disabled_checks        = []                   # e.g. ["secrets-scan"]
 [tracker]
 provider               = "none"              # "none" (default) | "bd-cli"
 
-# ─── auto-link (background post-promotion queue worker; SOLO-11 §4) ────────
+# ─── auto-link (background post-promotion queue worker) ────────
 # How aggressively the auto-link goroutine writes synthetic edges
 # discovered after promotion. "suggest" (default) writes findings of
 # kind `auto-link-candidate`; the user accepts/rejects via
@@ -248,7 +250,7 @@ hub_degree_threshold   = 50
 # Daemon-global RSS ceilings. Soft cap pauses the embed worker
 # and coalesces tree-sitter reparse; hard cap exits and lets the
 # supervisor restart (the crash-loop breaker takes over from
-# there). See SOLO-13 §3.3.
+# there).
 [memory]
 soft_cap_gib           = 2                   # pause embed worker, coalesce reparse above this
 hard_cap_gib           = 4                   # exit and restart above this; raise with care
@@ -270,13 +272,14 @@ stable_boot_after      = "60s"               # alive this long → counter reset
 write_pages            = false
 
 # ─── backup ──────────────────────────────────────────────────
+# Retention policy applied by `veska backup prune` to user-initiated
+# backup tarballs. KeepMinCount most-recent backups are always kept
+# regardless of age; older ones are deleted once they exceed
+# keep_max_age (subject to keep_min_count). Auto-pre-migration
+# snapshots taken by the upgrade runner are managed separately.
 [backup]
-default_path           = "~/.veska-backups/" # where veska backup create writes by default
-auto                   = true                 # daily auto-backup at first idle window after local midnight (SOLO-08 §9.5)
-auto_retain            = 7                    # number of auto-backup files retained (older auto-backups pruned; user-initiated backups never auto-pruned)
-staleness_warn         = "24h"                # doctor warns if last backup older than this (with auto on, 24h is reachable; lower the alarm window)
-required               = false                # if true, daemon refuses to start unless a verified backup exists
-pre_migration_keep     = 5                    # auto-snapshots taken by the migration runner (SOLO-08 §10) - last N retained, older pruned
+keep_min_count         = 3                    # most-recent backups always kept
+keep_max_age           = "30d"                # delete user backups older than this (normalised to hours)
 ```
 
 ### 3.2 Advanced
@@ -289,11 +292,11 @@ divergence should come with a reason.
 ```toml
 # ─── post_promotion_queue (advanced) ──────────────────────────────────
 [post_promotion_queue]
-high_water             = 10000               # `embed` rows enqueued above this defer instead of pending; promotion proceeds (SOLO-08 §3.4)
+high_water             = 10000               # `embed` rows enqueued above this defer instead of pending; promotion proceeds
 low_water              = 8000                # deferred rows transition back to pending below this
 done_retention         = "168h"              # 7d; `done` rows GC'd after this. `failed` rows persist until retried.
 
-# ─── writer pools (advanced; SOLO-11 §10, ADR-S0011) ─────────
+# ─── writer pools (advanced) ─────────
 # database/sql MaxOpenConns=1 serializes transaction acquisition
 # at the pool. busy_timeout is the SQLite-level wait when the
 # other writer pool holds the OS writer lock. eta_ms returned
@@ -312,12 +315,12 @@ busy_timeout_ms        = 5000                # PRAGMA busy_timeout on readDB con
 [mcp]
 # Default deadline for write tools when the caller omits max_wait_ms.
 # eng_add_repo / eng_remove_repo override this in the handler (30s,
-# cold-scan-bounded); see SOLO-09 §4.7.
+# cold-scan-bounded)
 write_max_wait_ms      = 3000
-shim_start_timeout_ms  = 3000                # shim wait for socket after asking supervisor to start daemon (SOLO-03 §3.1)
+shim_start_timeout_ms  = 3000                # shim wait for socket after asking supervisor to start daemon
 
 # ─── tokens (advanced) ───────────────────────────────────────
-# Pluggable token estimator (SOLO-05 §2.11). Default chars/4 is a
+# Pluggable token estimator. Default chars/4 is a
 # deliberately approximate heuristic; tune token caps with that
 # in mind. ModelHint is recorded in audit lines for truncated
 # responses.
@@ -353,5 +356,5 @@ Restart required for any change. There is no hot reload.
   are Go interfaces; one impl each.
 - **Mode selector (`[L]`/`[W]`/`[C]`).** Only one mode exists.
 
-If a knob you want is not here, file an open question (SOLO-OQ)
+If a knob you want is not here, file an issue
 rather than adding a key in passing.

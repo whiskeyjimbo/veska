@@ -1,10 +1,10 @@
 ---
 title: "Secrets Runbook"
 status: reference
-last_reviewed: 2026-05-08
-related: [SOLO-08, SOLO-13]
+last_reviewed: 2026-06-19
+related: [ARCHITECTURE]
 verified: true
-verified_date: "2026-05-17"
+verified_date: "2026-06-19"
 ---
 
 # Secrets Runbook

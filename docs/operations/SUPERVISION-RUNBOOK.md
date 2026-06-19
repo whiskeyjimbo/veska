@@ -1,19 +1,20 @@
 ---
-id: SOLO-OPS-SUPERVISION
+id: OPS-SUPERVISION
 title: "Supervision Runbook - Install, Upgrade, Crash-loop"
-status: draft
-last_reviewed: 2026-05-08
-related: [SOLO-03, SOLO-13, CONFIG-SURFACE]
+status: reference
+last_reviewed: 2026-06-19
+related: [ARCHITECTURE, CONFIG-SURFACE]
 verified: true
-verified_date: "2026-06-01"
+verified_date: "2026-06-19"
 ---
 
 # Supervision Runbook
 
 How `veska-daemon` is supervised on a developer machine. The
-canonical design is SOLO-03 §5; this document is operator-facing
-detail - the unit-file shape, the `veska service` subcommands,
-the recovery steps when something goes wrong.
+architecture reference is
+[`docs/ARCHITECTURE.md`](../ARCHITECTURE.md) §2; this document is
+operator-facing detail - the unit-file shape, the `veska service`
+subcommands, the recovery steps when something goes wrong.
 
 ## 1. Install
 
@@ -57,7 +58,7 @@ Loaded with `launchctl bootstrap gui/$(id -u)
 
 `KeepAlive.SuccessfulExit = false` means launchd restarts on
 non-zero exit but **not** on a clean exit (code 0). Exit code 78
-(crash-loop breaker; SOLO-03 §5.6) is treated as failure by
+(crash-loop breaker) is treated as failure by
 default - the breaker's marker file is what stops the loop, not
 the exit code.
 
@@ -113,7 +114,7 @@ Properties:
   2s up to the breaker's window (5 in 10 min by default;
   CONFIG-SURFACE `[supervisor]`).
 - Maintains a PID file the MCP shim reads at startup to detect
-  whether a supervisor is registered (SOLO-03 §3.1).
+  whether a supervisor is registered.
 - Forwards SIGTERM to the child for clean stop.
 
 `veska service install` on a no-systemd-user host writes a
@@ -153,7 +154,7 @@ veska service restart               # asks supervisor to stop+start the daemon
 Or in one command: `veska upgrade --restart`.
 
 If the new daemon's required schema is newer than what's on
-disk, the migration runner (SOLO-08 §10) takes its own
+disk, the migration runner takes its own
 pre-migration snapshot and applies the pending migrations in
 order. The user does not need to run `veska backup create`
 manually before an upgrade.
@@ -175,7 +176,7 @@ veska service restart
 # 2c. If 2a and 2b are both blocked: restore from the pre-migration
 #     snapshot the runner took before the failing migration
 veska service stop
-veska restore --pre-migration   # (planned - see s5c.12) auto-selects the most recent
+veska restore --pre-migration   # auto-selects the most recent
                                   # pre-migration snapshot, verifies it,
                                   # renames the live DB to .replaced-<ts>/,
                                   # extracts the snapshot, prints the
@@ -197,7 +198,7 @@ Linux with `notify-send`; on platforms without either, the next
 MCP socket close with `ErrDaemonNotRunning`; `veska service
 status` shows the supervisor gave up; `veska doctor service`
 shows `~/.veska/state/broken` exists. The notification path is
-defined in SOLO-03 §5.6.
+handled by the daemon's crash-loop breaker.
 
 The breaker tripped because the daemon restarted ≥ 5 times in
 the last 10 minutes. Common causes:
@@ -246,9 +247,8 @@ with the `rm -rf` only when you actually want a fresh start.
 ## 6. What this runbook does not cover
 
 - The daemon's internal failure modes during normal operation -
-  see SOLO-13 §4.
-- The audit log - see SOLO-08 §3.5.
-- Ollama / embedder issues - see `veska doctor embedder` and
-  SOLO-13.
+  see `veska doctor`.
+- The audit log (`~/.veska/audit.jsonl`).
+- Ollama / embedder issues - see `veska doctor embedder`.
 - Backup creation and verification - see `veska backup` and
   `veska doctor backup`.

@@ -1,18 +1,14 @@
 ---
 verified: true
-verified_date: "2026-05-16"
+verified_date: "2026-06-19"
 ---
 
 # Veska - Product Narrative
 
-> Reader-friendly. The Charter (`design/01-charter/`) is binding;
-> this file is for new readers and anyone deciding whether to use it.
-
-> **Design status.** Draft. Numbered budgets in the design tree are
-> labelled `BUDGET (unmeasured) | (measured M<N>) | INVARIANT |
-> DEFAULT` (SOLO-13 §3); unmeasured budgets are gated by milestone
-> measurement and may be revised. Approval comes after M1 ships
-> with real numbers.
+> Reader-friendly. This file is for new readers and anyone deciding
+> whether to use Veska. The technical reference is
+> [`docs/ARCHITECTURE.md`](ARCHITECTURE.md); operational detail lives
+> under [`docs/operations/`](operations/).
 
 ## What it is
 
@@ -24,8 +20,7 @@ AI agent see the same model of the codebase.
 That is the entire product. There is no upstream. There is no
 shared service. There is no multi-tenant tier. The data lives in
 `~/.veska/` on your machine; backup is `veska backup create`
-(SQLite online snapshot + a tarball; see
-`design/08-data-and-storage/` §9).
+(SQLite online snapshot + a tarball).
 
 ## What it gives you
 
@@ -33,30 +28,26 @@ shared service. There is no multi-tenant tier. The data lives in
   type, file, or call traces to a node, an edge, a commit, or a
   file. Your agent has a real structural ground truth to check
   against instead of guessing function names. Structural recall
-  converges within the save→staging freshness budget (SOLO-13
-  §3.1b): the save event, fsnotify debounce, and tree-sitter
-  reparse. Sub-second on a quiet laptop with small files; longer
-  on macOS (FSEvents coalesces) or on large files (parse cost
-  dominates). Not a hard real-time guarantee - a measured budget.
-  Staging is in-memory and volatile; a daemon crash before commit
-  drops unpromoted parses, which the next save reproduces.
-- **Eventually-consistent semantic answers.** `semantic_search`
+  converges within the save→staging freshness window: the save
+  event, fsnotify debounce, and tree-sitter reparse. Sub-second on a
+  quiet laptop with small files; longer on macOS (FSEvents coalesces)
+  or on large files (parse cost dominates). Not a hard real-time
+  guarantee. Staging is in-memory and volatile; a daemon crash
+  before commit drops unpromoted parses, which the next save
+  reproduces.
+- **Eventually-consistent semantic answers.** `eng_search_semantic`
   is the one part of the surface that runs on a different clock.
   With the default in-process embedder (model2vec), embedding is
   fast - microseconds per symbol - so the lag is bounded mainly by
   how quickly the post-promotion queue drains, typically seconds.
   (The *optional* Ollama embedder is far slower: a refactor commit
   can take minutes to hours, depending on the model and CPU.) During
-  the lag window `semantic_search` falls back to a BM25 lexical index
+  the lag window `eng_search_semantic` falls back to a lexical index
   over symbol names and tags the response `degraded_reasons:
-  ["embedding_pending"]` or `["embedder_offline_lexical_fallback"]`.
+  ["embeddings_pending"]` or `["embedder_offline_lexical_fallback"]`.
   We do not promise point-in-time semantic recall; we promise
   structural recall is always current and semantic recall catches up
-  quickly. If embedding throughput is sustainedly outpaced (the
-  Ollama path on a busy machine), the daemon emits a sticky
-  `embed-deferred-saturated` finding when the deferred-embed queue's
-  oldest row ages past 24h (SOLO-08 §3.4) so the condition is visible
-  rather than silent.
+  quickly.
 - **Cross-actor attribution.** When the agent edits a file and you
   edit a file, the audit log can tell them apart. (One enum:
   `actor_kind: human | agent | system`. That is the entire
@@ -72,8 +63,8 @@ clients. The daemon owns one SQLite file under `~/.veska/`. The
 default embedder runs **in-process** (model2vec), so the default
 config makes **no outbound connection at all**. Ollama is optional
 - it backs the off-by-default LLM review pipeline (and an opt-in
-embedder override) - and is the only outbound connection *when
-enabled*.
+embedder override via `VESKA_EMBEDDER=ollama`) - and is the only
+outbound connection *when enabled*.
 
 **System view - three boxes.**
 
@@ -81,19 +72,19 @@ enabled*.
 ┌─ developer machine ─────────────────────────────────────┐
 │                                                         │
 │   ┌──────────────┐    unix sockets    ┌──────────────┐  │
-│   │  client      │ ─────────────────▶ │   veska-    │  │
+│   │  client      │ ─────────────────▶ │   veska-     │  │
 │   │  surfaces    │                    │   daemon     │  │
 │   │              │                    │              │  │
 │   │  • CLI       │                    │  owns SQLite │  │
-│   │  • editor    │                    │  + vec0,     │  │
+│   │  • editor    │                    │  + memvec,   │  │
 │   │    MCP shim  │                    │  fsnotify,   │  │
-│   └──────────────┘                    │  embed/promotion  │  │
+│   └──────────────┘                    │  embed/promo │  │
 │                                       │  goroutines  │  │
 │                                       └───┬──────┬───┘  │
 │                                           │      │ HTTP │
 │                                           ▼      ▼      │
 │                                    ┌─────────┐ ┌──────┐ │
-│                                    │~/.veska│ │Ollama│ │
+│                                    │~/.veska │ │Ollama│ │
 │                                    └─────────┘ └──────┘ │
 └─────────────────────────────────────────────────────────┘
 ```
@@ -105,14 +96,14 @@ when the review pipeline or a forced Ollama embedder is enabled.
 
 **A working install runs:** `veska-daemon`, the `veska` CLI, the
 `veska-mcp` stdio shim, an OS-level supervisor (launchd /
-systemd-user / the built-in `veska supervise`), and your editor -
+systemd-user / the built-in supervisor), and your editor -
 **plus Ollama only if you enable the LLM review pipeline.** The
-diagram above collapses CLI + editor into
-"client surfaces" and elides the supervisor for narrative
-clarity, but the supervisor is **load-bearing** for first-run
-UX, the orphan-process refusal, and the crash-loop story - it is
-not optional. SOLO-03 §3 carries the canonical topology with
-all six pieces named.
+diagram above collapses CLI + editor into "client surfaces" and
+elides the supervisor for narrative clarity, but the supervisor is
+**load-bearing** for first-run UX, the orphan-process refusal, and
+the crash-loop story - it is not optional. The
+[Supervision Runbook](operations/SUPERVISION-RUNBOOK.md) carries the
+canonical topology and recovery steps.
 
 There are three flows through this picture:
 
@@ -128,7 +119,7 @@ editor writes file
                                  answers via MCP (synchronous)
 ```
 
-**Promotion** - durable, on `git commit`. The only path that touches disk for writes. ("Promote" is verb, "promotion" is the transaction, "promoted" is the adjective for durable rows; the [glossary](design/15-glossary/README.md#promote--the-term-family) is the disambiguation home.)
+**Promotion** - durable, on `git commit`. The only path that touches disk for writes. ("Promote" is the verb, "promotion" the transaction, "promoted" the adjective for durable rows.)
 
 ```
 git commit
@@ -145,7 +136,7 @@ post-commit hook ──► daemon drains staging ──► SQLite tx (atomic)
                                   worker
                                      │
                                      ▼
-                                  Ollama ──► memvec
+                                  embedder ──► memvec
 ```
 
 **Query** - MCP reads through both layers. Tools declare which freshness they provide.
@@ -168,23 +159,21 @@ rows for that file are excluded entirely. There is no
 three-way row-level merge. A traversal can therefore mix promoted
 rows (from clean files) with staging rows (from dirty files)
 across the *file* boundary, but within any single file the source
-is one or the other. SOLO-11 §1.2 is normative.
+is one or the other.
 
 **History-rewrite operations short-circuit.** During `git rebase`,
 `git merge --continue`, `git cherry-pick`, and `git bisect` the
 post-commit hook detects the operation marker and returns 0
 without promoting; catch-up runs on the next clean commit.
-`git commit --amend` falls through the standard divergent-promotion
-path (SOLO-11 §2.3): the original commit's SHA is unreachable
-from the new HEAD, `ErrPromotionDivergent` is logged, and the daemon
-re-parses the working tree. Bulk-replay storms (10-commit rebase
-fires 10 hooks in seconds) collapse into a single catch-up walk.
+`git commit --amend` falls through the divergent-promotion path:
+the original commit's SHA is unreachable from the new HEAD,
+`ErrPromotionDivergent` is logged, and the daemon re-parses the
+working tree. Bulk-replay storms (a 10-commit rebase fires 10 hooks
+in seconds) collapse into a single catch-up walk.
 
-Process topology and supervision are in
-[`design/03-the-daemon/`](design/03-the-daemon/README.md); the
-save/promote split, the merge rule, and the history-rewrite handling
-are in [`design/11-pipelines/`](design/11-pipelines/README.md)
-§1.2 and §2.3.
+The process topology, the save/promote split, and the read-merge
+rule are documented in [`docs/ARCHITECTURE.md`](ARCHITECTURE.md)
+§2 and §5.
 
 ## What it is not
 
@@ -194,13 +183,14 @@ are in [`design/11-pipelines/`](design/11-pipelines/README.md)
   and review; they don't replace the structural graph.
 - A distributed database. SQLite is one. Veska leans on it.
 - A multi-machine product. If you want to share intelligence
-  across a team, that is parked in `deferred/`.
+  across a team, that is out of scope.
 - An identity-as-a-product offering. Identity here is "the user
   who started the daemon" plus an `actor_kind` enum.
 - A general-purpose audit/compliance system. The audit log is an
   append-only `audit.jsonl`. Forward it to whatever you like.
 - A secret-recovery tool. Veska surfaces secret leaks; rewriting
-  Git history and rotating credentials is on you.
+  Git history and rotating credentials is on you (see the
+  [Secrets Runbook](operations/SECRETS-RUNBOOK.md)).
 
 ## Privacy & telemetry
 
@@ -208,9 +198,9 @@ are in [`design/11-pipelines/`](design/11-pipelines/README.md)
 reports. No usage analytics. No model-call logs. The flip side:
 **when the daemon misbehaves, no one - including you - has data
 to diagnose unless you opted in.** `veska doctor` and
-`veska bundle` are the on-demand operator surfaces; if you want
-proactive "is my daemon OK?" telemetry, you wire it up yourself
-(Prometheus + your own scraper + your own dashboard).
+`veska doctor bundle` are the on-demand operator surfaces; if you
+want proactive "is my daemon OK?" telemetry, you wire it up
+yourself (Prometheus + your own scraper + your own dashboard).
 
 You opt in to egress explicitly:
 
@@ -218,60 +208,47 @@ You opt in to egress explicitly:
 - A Prometheus `/metrics` endpoint.
 - A vendor LLM. **Ships only the local Ollama generator.**
   Hosted providers (Anthropic, OpenAI, Gemini, OpenAI-compatible)
-  are deferred behind an ADR + measurement of the local
-  pipeline. The review pipeline honors hard halts on
-  tokens-per-commit and tokens-per-day (`[review]` table in your
-  config); USD caps come with hosted providers when they ship.
-- A vuln feed source (configure `vuln-source`; default is none).
+  are deferred behind a future decision. The review pipeline honors
+  hard halts on tokens-per-commit and tokens-per-day (`[review]`
+  table in your config); USD caps come with hosted providers when
+  they ship.
+- A vuln feed source (`[vuln_source]`; `veska init` writes
+  `provider = "osv"` by default, opt out with `veska init --no-vuln`).
 
 `veska doctor` (with `--json` for machine-readable output)
 lists every configured outbound destination under its `egress`
 section so you can audit at any time. If something goes wrong
 and you want to share state without uploading anything yourself,
-`veska bundle` writes a single `.tar.gz` to disk that you can
+`veska doctor bundle` writes a single `.tar.gz` to disk that you can
 attach to a GitHub issue. Source code, node bodies,
 embedding bytes, and LLM payloads are excluded; secret-shaped
 config keys are redacted. The bundle is operator data, not
-sanitised data - open it before sharing (SOLO-13 §2.2 spells
-out exactly what redaction does and doesn't catch). Nothing
-leaves your machine until you send the file yourself.
+sanitised data - open it before sharing. Nothing leaves your
+machine until you send the file yourself.
 
 ## What it costs
 
-Veska runs on a commodity laptop (8-core, 16 GB, NVMe). Budgets and
-the gates that turn them into measurements live in
-[`design/13-nfr/`](design/13-nfr/README.md) §3. One framing worth
-knowing: every performance number in the design tree is labelled
-(`BUDGET (unmeasured)` / `BUDGET (measured M<N>)` / `INVARIANT` /
-`DEFAULT`). Unmeasured budgets are targets, not decisions; SOLO-13
-§3 is the canonical home and any number elsewhere cross-references
-it.
+Veska runs on a commodity laptop (8-core, 16 GB, NVMe). The
+performance characteristics that matter - parse latency, embedding
+throughput, write contention, and RSS - are measured rather than
+promised in the abstract; the embedder numbers live in
+[`docs/operations/embedder-benchmarks.md`](operations/embedder-benchmarks.md).
 
-**Vector substrate at M1 - gated on M0 measurement.** The plan
-is to ship brute-force `vec0` for `semantic_search` and
-`find_similar_symbols` at M1, with HNSW as the M2 pivot. That
-plan is **conditional on M0's measurement** (epic m0.01) - not
-a foregone conclusion:
+**Vector substrate.** Semantic search runs over a single elected
+embedding model (model2vec / potion-code-16M by default; see
+[`docs/ARCHITECTURE.md`](ARCHITECTURE.md) §3). Vectors are served two
+ways:
 
-- M0 measures the vec0 ceiling on the reference laptop: the node
-  count at which brute-force vec0 misses either the
-  `semantic_search` p95 budget or the 2 GiB soft RSS cap.
-- If the measured ceiling clears `[ceiling].minimum_for_m1`
-  (DEFAULT 250 000 nodes - matched to M0's "Red - ceiling"
-  trigger), M1 ships vec0 and the runtime guard below catches
-  the long-tail user whose working set runs over.
-- If the measured ceiling falls below the floor, **M1 does not
-  ship vec0**. The HNSW pivot moves into M1 scope and M1's exit
-  gate slides. M1 will not ship a substrate the design says
-  cannot serve a typical working set.
+- **`memory` (memvec, default)** - an in-process linear scan. Zero
+  native dependency, fine for a typical working set.
+- **`usearch` (opt-in)** - an HNSW index for larger graphs, behind
+  the `hnsw_native` build tag and `libusearch_c.so`. Selected via
+  `VESKA_VECTOR_BACKEND=usearch`.
 
-Either way, the runtime guard ships at M1: `veska doctor
-storage` reports headroom from the first day, and
-`semantic_search` returns
-`degraded_reasons: ["vec0_ceiling_warn" | "vec0_ceiling_exceeded"]`
-as the user approaches or crosses the measured ceiling. SOLO-13
-§3.3.1 is the normative version of this gate; this paragraph is
-the user-facing summary.
+`veska doctor storage` reports headroom (RSS against the
+`[memory]` soft/hard caps) so the long-tail user whose working set
+outgrows the linear scan sees it before it bites, and can switch to
+`usearch`.
 
 ## Getting started
 
@@ -281,7 +258,7 @@ veska init
 
 Run it from inside a Git working tree. `veska init` writes the
 config, reports the **elected in-process embedder** (model2vec if
-installed or embedded in the binary, else the built-in static-v2
+installed or compiled into the binary, else the built-in static-v2
 fallback), registers the daemon with your session manager, and
 registers the current repo. A short summary at the end (data dir,
 embedder, service status, registered repos) tells you what
@@ -303,14 +280,14 @@ when it is unreachable.
 
 ## Where the detail lives
 
-- `design/01-charter/` - binding pillars.
-- `design/03-the-daemon/` - runtime topology.
-- `design/04-domain-model/` - entities, ports, invariants.
-- `design/08-data-and-storage/` - SQLite substrate.
-- `design/11-pipelines/` - save vs. promotion flow.
-- `design/09-mcp-surface/` - editor-facing API.
-- `design/13-nfr/` - observability and performance budgets.
-- `design/adr/` - decisions worth recording.
-- `milestones/` - PR-sized work breakdown.
-
-The Charter is the contract; this file is the trailer.
+- [`docs/ARCHITECTURE.md`](ARCHITECTURE.md) - process topology,
+  storage substrate, hexagonal layering, save vs. promotion clocks.
+- [`docs/operations/CONFIG-SURFACE.md`](operations/CONFIG-SURFACE.md)
+  - the config file and environment variables.
+- [`docs/operations/SUPERVISION-RUNBOOK.md`](operations/SUPERVISION-RUNBOOK.md)
+  - install, upgrade, crash-loop recovery.
+- [`docs/operations/SECRETS-RUNBOOK.md`](operations/SECRETS-RUNBOOK.md)
+  - what to do when a secret-scan fires.
+- [`docs/operations/embedder-benchmarks.md`](operations/embedder-benchmarks.md)
+  - measured recall and latency per embedding model.
+- `docs/manual/` - the user manual.
