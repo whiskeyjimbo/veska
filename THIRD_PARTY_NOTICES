@@ -20470,7 +20470,7 @@ SOFTWARE.
 
 ================================================================================
 github.com/mattn/go-sqlite3
-https://github.com/mattn/go-sqlite3/blob/v1.14.45/LICENSE
+https://github.com/mattn/go-sqlite3/blob/v1.14.46/LICENSE
 --------------------------------------------------------------------------------
 The MIT License (MIT)
 
@@ -26929,7 +26929,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 ================================================================================
 google.golang.org/genproto/googleapis/api/httpbody
-https://github.com/googleapis/go-genproto/blob/62b3387ff324/googleapis/api/LICENSE
+https://github.com/googleapis/go-genproto/blob/87f3d3e198d3/googleapis/api/LICENSE
 --------------------------------------------------------------------------------
 
                                  Apache License
@@ -27137,7 +27137,7 @@ https://github.com/googleapis/go-genproto/blob/62b3387ff324/googleapis/api/LICEN
 
 ================================================================================
 google.golang.org/genproto/googleapis/rpc
-https://github.com/googleapis/go-genproto/blob/62b3387ff324/googleapis/rpc/LICENSE
+https://github.com/googleapis/go-genproto/blob/87f3d3e198d3/googleapis/rpc/LICENSE
 --------------------------------------------------------------------------------
 
                                  Apache License
