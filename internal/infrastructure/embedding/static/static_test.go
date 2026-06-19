@@ -55,7 +55,7 @@ func TestProvider_DimensionMatchesNomic(t *testing.T) {
 
 // TestProvider_L2Normalized: search scores derive from cosine-shaped
 // math (1 / (1 + L2)) and assume unit-length vectors; an
-// un-normalised embedder would silently skew rankings.
+// un-normalized embedder would silently skew rankings.
 func TestProvider_L2Normalized(t *testing.T) {
 	p, _ := static.New()
 	v, _ := p.Embed(context.Background(), "func parseConfig() error")
@@ -65,7 +65,7 @@ func TestProvider_L2Normalized(t *testing.T) {
 	}
 	mag := math.Sqrt(sumsq)
 	if math.Abs(mag-1.0) > 1e-5 {
-		t.Errorf("vector not L2-normalised: |v| = %v", mag)
+		t.Errorf("vector not L2-normalized: |v| = %v", mag)
 	}
 }
 
@@ -91,7 +91,7 @@ func TestProvider_DifferentInputsProduceDifferentVectors(t *testing.T) {
 
 // TestProvider_EmptyInputDoesNotPanic: tokenising an empty (or
 // whitespace-only) string yields zero tokens; the embedder must
-// still return a finite, L2-normalised vector instead of NaN or 0/0.
+// still return a finite, L2-normalized vector instead of NaN or 0/0.
 func TestProvider_EmptyInputDoesNotPanic(t *testing.T) {
 	p, _ := static.New()
 	v, err := p.Embed(context.Background(), "")
@@ -130,7 +130,7 @@ func TestProvider_SubwordSimilarity_BeatsUnrelated(t *testing.T) {
 }
 
 func cosine(a, b []float32) float64 {
-	// Both vectors are L2-normalised, so cosine = dot product.
+	// Both vectors are L2-normalized, so cosine = dot product.
 	var dot float64
 	for i := range a {
 		dot += float64(a[i]) * float64(b[i])

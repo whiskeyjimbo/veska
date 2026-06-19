@@ -45,7 +45,7 @@ func TestExecWithBusyRetry_PassesThroughNonBusyErrors(t *testing.T) {
 func TestExecWithBusyRetry_RespectsContextCancel(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
-	// With a cancelled context, database helpers should return an error immediately
+	// With a canceled context, database helpers should return an error immediately
 	// instead of retrying database operations.
 	start := time.Now()
 	_ = ctx // Prevent unused variable lint warnings.

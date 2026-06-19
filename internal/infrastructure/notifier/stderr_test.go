@@ -26,16 +26,16 @@ func TestStderrNotifier_Notify_DoesNotError(t *testing.T) {
 	}
 }
 
-func TestStderrNotifier_Notify_CancelledContext(t *testing.T) {
+func TestStderrNotifier_Notify_CanceledContext(t *testing.T) {
 	t.Parallel()
 	n := notifier.NewStderrNotifier()
 
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 
-	err := n.Notify(ctx, ports.Notification{Level: "WARN", Message: "cancelled"})
+	err := n.Notify(ctx, ports.Notification{Level: "WARN", Message: "canceled"})
 	if err == nil {
-		t.Fatal("expected error for cancelled context, got nil")
+		t.Fatal("expected error for canceled context, got nil")
 		return
 	}
 }

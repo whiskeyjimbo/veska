@@ -25,7 +25,7 @@ func similarCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:          "similar <symbol-or-node-id>",
 		Short:        "Find symbols nearest to a seed in vector space (wraps eng_search_similar)",
-		Long:         "Vector-nearest-neighbour search seeded by an existing symbol or node_id - 'what else looks like this?'. Use to find variants, near-duplicates, or refactor targets. The seed itself is excluded from results.",
+		Long:         "Vector-nearest-neighbor search seeded by an existing symbol or node_id - 'what else looks like this?'. Use to find variants, near-duplicates, or refactor targets. The seed itself is excluded from results.",
 		Args:         cobra.ExactArgs(1),
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -39,14 +39,14 @@ func similarCmd() *cobra.Command {
 		},
 	}
 	cmd.Flags().StringVar(&repoFlag, "repo", "", "repo id, short_id, or alias")
-	cmd.Flags().IntVar(&k, "k", 0, "neighbour count (0 = daemon default of 10)")
+	cmd.Flags().IntVar(&k, "k", 0, "neighbor count (0 = daemon default of 10)")
 	cmd.Flags().BoolVar(&jsonOut, "json", false, "emit JSON (eng_search_similar shape)")
 	return cmd
 }
 
 // relatedCmd wraps eng_find_related. parity wrapper. The anchor is
 // a file:line; the daemon resolves the smallest enclosing node and runs the
-// same neighbourhood search as `veska similar`.
+// same neighborhood search as `veska similar`.
 func relatedCmd() *cobra.Command {
 	var (
 		repoFlag string
@@ -75,7 +75,7 @@ func relatedCmd() *cobra.Command {
 		},
 	}
 	cmd.Flags().StringVar(&repoFlag, "repo", "", "repo id, short_id, or alias")
-	cmd.Flags().IntVar(&k, "k", 0, "neighbour count (0 = daemon default of 10)")
+	cmd.Flags().IntVar(&k, "k", 0, "neighbor count (0 = daemon default of 10)")
 	cmd.Flags().BoolVar(&jsonOut, "json", false, "emit JSON (eng_find_related shape)")
 	return cmd
 }

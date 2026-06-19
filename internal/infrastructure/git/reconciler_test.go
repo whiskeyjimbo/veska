@@ -574,7 +574,7 @@ func TestPrefixProbe_SameSizeSameMtime(t *testing.T) {
 	}
 }
 
-// TestStart_ContextCancel verifies that Start exits cleanly when ctx is cancelled.
+// TestStart_ContextCancel verifies that Start exits cleanly when ctx is canceled.
 func TestStart_ContextCancel(t *testing.T) {
 	r := makeReconciler(func(context.Context, string, string) {}, nil, time.Now)
 	ctx, cancel := context.WithCancel(context.Background())

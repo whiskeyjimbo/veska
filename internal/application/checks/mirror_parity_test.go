@@ -19,7 +19,7 @@ import (
 // hand - a field added to checks.Input must be mirrored. A field-signature
 // comparison fails compilation-adjacent here the moment the two drift, turning
 // a silent latent bug into a red test.
-// The Line package qualifier is normalised away so map[string]checks.Line
+// The Line package qualifier is normalized away so map[string]checks.Line
 // and map[string]application.Line compare equal by shape.
 
 func normalizeLineType(s string) string {

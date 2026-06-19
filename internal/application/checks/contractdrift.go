@@ -65,7 +65,7 @@ func (c *ContractDriftCheck) Run(ctx context.Context, in Input) ([]*domain.Findi
 			d.Kind, d.Name, d.FilePath, in.Branch, d.PrevSig, d.NewSig,
 		)
 		// Capture the drifted node's CURRENT content_hash so the revalidation
-		// sweep (m3.05.2) recognises a subsequent drift and supersedes this
+		// sweep (m3.05.2) recognizes a subsequent drift and supersedes this
 		// finding. An empty hash from the adapter falls back to NULL.
 		opts := []domain.FindingOption{domain.WithNodeAnchor(d.NodeID)}
 		if d.ContentHash != "" {

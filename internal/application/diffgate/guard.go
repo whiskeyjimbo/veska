@@ -44,7 +44,7 @@ type ScopeVerdict struct {
 // Guard answers the blast-radius-containment half of the diff-safety gate: did
 // a candidate change stay within the anchor's blast radius? It distinguishes
 // "modified EXISTING distant code" (scope creep - offending) from "NEW code
-// wired into the allowed neighbourhood" (the fix's natural footprint
+// wired into the allowed neighborhood" (the fix's natural footprint
 // contained), so the canonical fix that adds a caller of a dead symbol is not
 // over-blocked. It is stateless and safe for concurrent
 // callers.

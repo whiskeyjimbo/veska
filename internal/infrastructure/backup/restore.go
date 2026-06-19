@@ -49,7 +49,7 @@ type RestoreOptions struct {
 	VeskaHome string
 }
 
-// RestoreResult summarises a successful restore.
+// RestoreResult summarizes a successful restore.
 type RestoreResult struct {
 	// TarballPath is the backup that was restored.
 	TarballPath string

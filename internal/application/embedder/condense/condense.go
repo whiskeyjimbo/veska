@@ -14,7 +14,7 @@
 // is worth chasing further.
 // Centrality scoring is raw cosine-centroid: each piece's score is the
 // average dot product against every other piece (vectors are assumed
-// L2-normalised, which model2vec already guarantees, so dot == cosine).
+// L2-normalized, which model2vec already guarantees, so dot == cosine).
 // Chosen over TextRank because piece counts in real veska nodes are
 // small (~5-100) - full TextRank's eigenvector iteration is overkill
 // at that scale. If quality plateaus during oo4q.2 a future

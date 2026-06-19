@@ -132,12 +132,12 @@ func TestEmbedderThroughput(t *testing.T) {
 		worker.Wait()
 	})
 
-	// Wait the measurement window, honouring ctx cancellation. The window
+	// Wait the measurement window, honoring ctx cancellation. The window
 	// is the explicit gate input - we don't end early on drain because
 	// "rate" is defined over a fixed wall-clock interval.
 	select {
 	case <-ctx.Done():
-		t.Fatalf("context cancelled before measurement window elapsed: %v", ctx.Err())
+		t.Fatalf("context canceled before measurement window elapsed: %v", ctx.Err())
 	case <-time.After(time.Duration(durationS) * time.Second):
 	}
 

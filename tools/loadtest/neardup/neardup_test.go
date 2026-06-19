@@ -46,7 +46,7 @@ type embedder interface {
 	ModelID() string
 }
 
-// tierStats summarises one tier's score distribution.
+// tierStats summarizes one tier's score distribution.
 type tierStats struct {
 	Tier   string  `json:"tier"`
 	Count  int     `json:"count"`
@@ -143,7 +143,7 @@ func calibrate(t *testing.T, name string, e embedder, texts []labeledText) embed
 		if err != nil {
 			t.Fatalf("%s: embed %s: %v", name, lt.id, err)
 		}
-		v := l2normalize(raw) // prod's embedder pipeline L2-normalises before storage
+		v := l2normalize(raw) // prod's embedder pipeline L2-normalizes before storage
 		vecByID[lt.id] = v
 		rows[i] = domain.EmbeddingRow{NodeID: lt.id, ContentHash: "h-" + lt.id, ModelID: e.ModelID(), Vector: v}
 	}
@@ -166,12 +166,12 @@ func calibrate(t *testing.T, name string, e embedder, texts []labeledText) embed
 			byTier[tr] = append(byTier[tr], score[texts[j].id])
 		}
 	}
-	return summarise(name, byTier)
+	return summarize(name, byTier)
 }
 
-// summarise turns the per-tier score samples into an embedderResult with
+// summarize turns the per-tier score samples into an embedderResult with
 // distribution stats and a separation verdict.
-func summarise(name string, byTier map[tier][]float64) embedderResult {
+func summarize(name string, byTier map[tier][]float64) embedderResult {
 	res := embedderResult{Embedder: name}
 	for _, tr := range []tier{tierNearDup, tierRelated, tierUnrelated} {
 		res.Tiers = append(res.Tiers, statsFor(tr.String(), byTier[tr]))

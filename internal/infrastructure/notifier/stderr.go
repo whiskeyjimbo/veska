@@ -24,7 +24,7 @@ func NewStderrNotifier() *StderrNotifier {
 }
 
 // Notify writes the formatted level and message to os.Stderr.
-// It returns a context error without writing if the context is already cancelled.
+// It returns a context error without writing if the context is already canceled.
 func (s *StderrNotifier) Notify(ctx context.Context, n ports.Notification) error {
 	if err := ctx.Err(); err != nil {
 		return err

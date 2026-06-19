@@ -39,7 +39,7 @@ func searchCmd(reparserFactory reparserFactoryFunc) *cobra.Command {
 		// (DescSearchSemantic) so the RRF score-range guidance - scores
 		// cluster around ~0.01–0.03, use rank not absolute score to
 		// compare hits - can't drift between CLI and MCP surfaces. The
-		// CLI-specific positional/--repo behaviour is appended below.
+		// CLI-specific positional/--repo behavior is appended below.
 		Long: mcpinfra.DescSearchSemantic + `
 
 The optional second argument (or --repo flag) selects the repo to search:

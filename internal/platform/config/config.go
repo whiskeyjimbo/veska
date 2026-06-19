@@ -15,7 +15,7 @@ import (
 
 // Config is the resolved daemon configuration. It mirrors the documented
 // surface in Sections that map to real
-// current behaviour are loaded and consumed today; M5 sections (budget,
+// current behavior are loaded and consumed today; M5 sections (budget,
 // llm_generator, review) are decoded and validated but not all consumed yet.
 type Config struct {
 	Daemon             DaemonConfig             `toml:"daemon"`
@@ -44,10 +44,10 @@ type Config struct {
 // users should never touch these; a different embedder or repository layout is
 // the reason to. The score-space caveat applies: Threshold is a lower bound on
 // the higher-is-closer similarity 1/(1+L2dist), only meaningful on
-// L2-normalised embeddings.
+// L2-normalized embeddings.
 type AutolinkConfig struct {
 	// Threshold is the minimum similarity for a candidate edge to be emitted.
-	// Range [0, 1]; 0 admits every non-self neighbour.
+	// Range [0, 1]; 0 admits every non-self neighbor.
 	Threshold float64 `toml:"threshold"`
 	// TopK is the per-source candidate cap. Must be > 0.
 	TopK int `toml:"top_k"`
@@ -56,9 +56,9 @@ type AutolinkConfig struct {
 // BlastConfig tunes the blast-radius BFS heuristics.
 type BlastConfig struct {
 	// HubDegreeThreshold gates BFS expansion through high-degree "registry"
-	// nodes (cobra rootCmd, http muxes). Nodes whose neighbour count exceeds
+	// nodes (cobra rootCmd, http muxes). Nodes whose neighbor count exceeds
 	// this are reported but not expanded through. A negative value disables
-	// the gate entirely (legacy expand-through-everything behaviour); 0 is
+	// the gate entirely (legacy expand-through-everything behavior); 0 is
 	// rejected by Validate so the disable intent is always explicit.
 	HubDegreeThreshold int `toml:"hub_degree_threshold"`
 }
@@ -198,7 +198,7 @@ type BackupConfig struct {
 	KeepMinCount int `toml:"keep_min_count"`
 	// KeepMaxAge deletes user-initiated backups older than this duration,
 	// subject to KeepMinCount. Expressed as a Go duration string (e.g. "30d"
-	// is normalised to hours; "720h").
+	// is normalized to hours; "720h").
 	KeepMaxAge string `toml:"keep_max_age"`
 }
 
@@ -308,7 +308,7 @@ func DefaultConfig() Config {
 	}
 }
 
-// configPath returns the resolved path of ~/.veska/config.toml, honouring
+// configPath returns the resolved path of ~/.veska/config.toml, honoring
 // VESKA_CONFIG (explicit override) then VESKA_HOME.
 func configPath() string {
 	if p := os.Getenv("VESKA_CONFIG"); p != "" {

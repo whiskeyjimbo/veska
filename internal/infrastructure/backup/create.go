@@ -23,7 +23,7 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/platform/archive"
 )
 
-// CreateOptions controls backup creation behaviour.
+// CreateOptions controls backup creation behavior.
 type CreateOptions struct {
 	// DBPath is the path to the live veska.db SQLite database.
 	DBPath string

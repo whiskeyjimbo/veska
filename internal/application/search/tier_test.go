@@ -52,13 +52,13 @@ func TestNormalizeScores_MinMaxRescaledTo01(t *testing.T) {
 		t.Fatalf("len = %d, want 3", len(got))
 	}
 	if math.Abs(float64(got[0])-0) > 1e-6 {
-		t.Errorf("min should normalise to 0, got %v", got[0])
+		t.Errorf("min should normalize to 0, got %v", got[0])
 	}
 	if math.Abs(float64(got[1])-0.5) > 1e-6 {
-		t.Errorf("middle should normalise to 0.5, got %v", got[1])
+		t.Errorf("middle should normalize to 0.5, got %v", got[1])
 	}
 	if math.Abs(float64(got[2])-1.0) > 1e-6 {
-		t.Errorf("max should normalise to 1, got %v", got[2])
+		t.Errorf("max should normalize to 1, got %v", got[2])
 	}
 }
 

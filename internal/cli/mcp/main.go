@@ -35,7 +35,7 @@ var ErrDaemonNotRunning = errors.New("daemon not running")
 // Without this a shim launched before the daemon is listening connects to
 // nothing and registers zero tools - silently - for the whole editor session
 // (solov2-s2ux). Returns ErrDaemonNotRunning (wrapped) once the window expires
-// or ctx is cancelled.
+// or ctx is canceled.
 func dialWithRetry(ctx context.Context, sockPath string) (net.Conn, error) {
 	deadline := time.Now().Add(dialRetryWindow)
 	var d net.Dialer
@@ -58,7 +58,7 @@ func dialWithRetry(ctx context.Context, sockPath string) (net.Conn, error) {
 }
 
 // runProxy dials sockPath over Unix domain socket and bidirectionally proxies
-// data between in/out and the socket until either side closes or ctx is cancelled.
+// data between in/out and the socket until either side closes or ctx is canceled.
 // Returns ErrDaemonNotRunning (wrapped) when the socket is missing or refused.
 func runProxy(ctx context.Context, sockPath string, in io.Reader, out io.Writer) error {
 	rawConn, err := dialWithRetry(ctx, sockPath)

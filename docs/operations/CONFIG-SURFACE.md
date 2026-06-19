@@ -231,7 +231,7 @@ provider               = "none"              # "none" (default) | "bd-cli"
 # are calibrated against the gate-3 nomic-embed-text fixture; a different
 # embedder or repo layout is the reason to change them. threshold is a lower
 # bound on the higher-is-closer similarity 1/(1+L2dist) and is only meaningful
-# on L2-normalised embeddings.
+# on L2-normalized embeddings.
 [autolink]
 mode                   = "suggest"           # "suggest" (default) | "apply" | "off"  (mode not yet consumed)
 threshold              = 0.60                 # minimum similarity to emit a candidate; range [0, 1]
@@ -239,7 +239,7 @@ top_k                  = 5                    # per-source candidate cap; must b
 
 # ─── blast radius (graph BFS heuristics; solov2-l8su) ────────
 # hub_degree_threshold gates BFS expansion through high-degree "registry"
-# nodes (cobra rootCmd, http muxes): nodes with more neighbours than this are
+# nodes (cobra rootCmd, http muxes): nodes with more neighbors than this are
 # reported but not expanded through, so a blast radius isn't drowned in
 # framework fan-out. A negative value disables the gate (legacy
 # expand-through-everything); 0 is rejected so the disable intent is explicit.
@@ -264,7 +264,7 @@ stable_boot_after      = "60s"               # alive this long → counter reset
 # ─── wiki ────────────────────────────────────────────────────
 # The developer-wiki Markdown pages (hot_zones.md + entry_points.md).
 # Off by default - the product contract is that veska writes no
-# files into user repos. Set write_pages = true to materialise the
+# files into user repos. Set write_pages = true to materialize the
 # pages under <repo>/docs/veska/ on every promotion. The eng_get_hot_zone
 # and eng_get_entry_points MCP tools serve the same data either way
 # .
@@ -279,13 +279,13 @@ write_pages            = false
 # snapshots taken by the upgrade runner are managed separately.
 [backup]
 keep_min_count         = 3                    # most-recent backups always kept
-keep_max_age           = "30d"                # delete user backups older than this (normalised to hours)
+keep_max_age           = "30d"                # delete user backups older than this (normalized to hours)
 ```
 
 ### 3.2 Advanced
 
 The keys below exist so a user with a measurement can tune a
-specific behaviour. Most users should never edit them; the
+specific behavior. Most users should never edit them; the
 defaults are picked against the M1 reference workload and any
 divergence should come with a reason.
 

@@ -23,7 +23,7 @@ const reviewTokenKeyPrefix = "review.tokens."
 var _ review.DailyTokenStore = (*ReviewTokenStore)(nil)
 
 // ReviewTokenStore is the SQLite adapter for review.DailyTokenStore. The increment
-// is a read-modify-write, so a process-local mutex serialises concurrent AddTokens
+// is a read-modify-write, so a process-local mutex serializes concurrent AddTokens
 // calls to keep the running total consistent.
 type ReviewTokenStore struct {
 	readDB  *sql.DB

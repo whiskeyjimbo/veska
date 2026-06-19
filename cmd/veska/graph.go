@@ -76,7 +76,7 @@ func blastCmd() *cobra.Command {
 		Short: "Compute blast radius for a symbol, or --dirty/--diff for staged/working-tree/ranged changes",
 		// Long is shared verbatim with the eng_get_blast_radius MCP tool
 		// description so the diff/dirty variants and cross-repo fan-out
-		// behaviour can't drift between CLI and MCP surfaces.
+		// behavior can't drift between CLI and MCP surfaces.
 		Long:         mcpinfra.DescBlastRadius,
 		Args:         cobra.MaximumNArgs(1),
 		SilenceUsage: true,

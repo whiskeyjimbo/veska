@@ -413,7 +413,7 @@ func buildPackageNode(root *sitter.Node, src []byte, repoID, path string) *domai
 		name := string(src[nameNode.StartByte():nameNode.EndByte()])
 		id := nodeID(repoID, path, domain.KindPackage, name)
 		// Package node intentionally omits Lines (matches the historical
-		// extractPackageName + NewNode-without-WithLines behaviour).
+		// extractPackageName + NewNode-without-WithLines behavior).
 		n, err := domain.NewNode(domain.NodeSpec{ID: id, Path: path, Name: name, Kind: domain.KindPackage}, domain.WithLanguage("go"))
 		if err != nil {
 			return nil

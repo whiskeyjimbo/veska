@@ -39,7 +39,7 @@ func clampListLimit(limit int) int {
 // out==callees (outbound, "what this calls"), both==both. An empty string is
 // passed through neutrally (ok=true, "") so each tool can apply its OWN default
 // downstream - collapsing empty into a canonical value here would silently flip
-// blast's callers-default. Unrecognised values return ok=false so the caller
+// blast's callers-default. Unrecognized values return ok=false so the caller
 // still surfaces the existing CodeInvalidParams error rather than defaulting.
 func normalizeDirection(s string) (canonical string, ok bool) {
 	switch s {

@@ -101,7 +101,7 @@ func makeReindexHandler(deps ReindexDeps) ToolHandler {
 
 		if err := deps.Reparser(ctx, toScan); err != nil {
 			if errors.Is(err, context.Canceled) {
-				return nil, &RPCError{Code: CodeInternalError, Message: "reindex cancelled"}
+				return nil, &RPCError{Code: CodeInternalError, Message: "reindex canceled"}
 			}
 			return nil, &RPCError{Code: CodeInternalError, Message: fmt.Sprintf("reindex: %v", err)}
 		}

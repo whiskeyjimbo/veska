@@ -584,7 +584,7 @@ type hit struct {
 
 // rank computes a dot product between the query vector and each
 // document's vector, returning hits sorted by score descending.
-// model2vec vectors are L2-normalised, so dot product ≡ cosine.
+// model2vec vectors are L2-normalized, so dot product ≡ cosine.
 func rank(q []float32, docs []doc) []hit {
 	hits := make([]hit, 0, len(docs))
 	for _, d := range docs {

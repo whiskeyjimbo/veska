@@ -75,7 +75,7 @@ func SyntheticRepoID(modulePath string) string {
 	return SyntheticRepoIDPrefix + modulePath
 }
 
-// Result summarises one IndexVendorModule call. Callers print it to
+// Result summarizes one IndexVendorModule call. Callers print it to
 // stderr / stdout so the user sees what was indexed.
 type Result struct {
 	ModulePath string

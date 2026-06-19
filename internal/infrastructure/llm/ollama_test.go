@@ -237,7 +237,7 @@ func TestOllamaGenerator_Generate_NonOKStatus(t *testing.T) {
 	}
 }
 
-func TestOllamaGenerator_Generate_ContextCancelled(t *testing.T) {
+func TestOllamaGenerator_Generate_ContextCanceled(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -251,12 +251,12 @@ func TestOllamaGenerator_Generate_ContextCancelled(t *testing.T) {
 	gen := llm.NewOllamaGenerator("llama3", llm.WithBaseURL(srv.URL), llm.WithHTTPClient(srv.Client()))
 	_, err := gen.Generate(ctx, ports.GenerateRequest{Prompt: "hello"})
 	if err == nil {
-		t.Fatal("expected error for cancelled context, got nil")
+		t.Fatal("expected error for canceled context, got nil")
 		return
 	}
 }
 
-// A cancelled context must abort immediately and not trigger retries.
+// A canceled context must abort immediately and not trigger retries.
 func TestOllamaGenerator_Generate_ContextCancelNoRetry(t *testing.T) {
 	t.Parallel()
 
@@ -273,7 +273,7 @@ func TestOllamaGenerator_Generate_ContextCancelNoRetry(t *testing.T) {
 	gen := llm.NewOllamaGenerator("llama3", llm.WithBaseURL(srv.URL), llm.WithHTTPClient(srv.Client()), llm.WithBackoff(time.Millisecond))
 	_, err := gen.Generate(ctx, ports.GenerateRequest{Prompt: "hello"})
 	if err == nil {
-		t.Fatal("expected error for cancelled context")
+		t.Fatal("expected error for canceled context")
 		return
 	}
 	if got := atomic.LoadInt32(&calls); got > 1 {

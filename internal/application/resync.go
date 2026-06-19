@@ -69,7 +69,7 @@ type StartupResync struct {
 	syncing atomic.Bool
 }
 
-// StartupResyncOption configures optional StartupResync behaviour.
+// StartupResyncOption configures optional StartupResync behavior.
 type StartupResyncOption func(*StartupResync)
 
 // WithBranchReconciler registers a branch reconciler to check branch switches

@@ -6,16 +6,16 @@
 // This package ships the pure computation only (m3.04.1). It does not write
 // findings or unresolved edges (m3.04.2) and is not wired into the queue
 // handler (m3.04.3). The Linker reads embedding bytes via a narrow port
-// (EmbeddingLookup) and queries a VectorStorage for nearest neighbours; the
+// (EmbeddingLookup) and queries a VectorStorage for nearest neighbors; the
 // result is a flat slice of Candidate rows ready for downstream consumption.
 // Score direction. Hit.Score from ports.VectorStorage.Search is always a
 // "higher = closer" similarity: both active backends (memory and
 // usearch) compute L2-squared distance internally and report
 // score = 1 / (1 + dist). The threshold is therefore a simple lower bound
-// on Hit.Score; no per-backend normalisation is required at this layer.
+// on Hit.Score; no per-backend normalization is required at this layer.
 // Score range depends on input. score lands in (0, 1] only when stored
 // embeddings are unit-length (L2-squared distance then bounded in [0, 4]).
-// The embedder pipeline L2-normalises every vector before storage
+// The embedder pipeline L2-normalizes every vector before storage
 // precisely so this holds - see internal/application/embedder. If that
 // invariant is ever broken, DefaultThreshold below becomes meaningless.
 package autolink
@@ -37,7 +37,7 @@ const (
 
 	// DefaultThreshold is the minimum Hit.Score for a candidate to be emitted.
 	// Tuned against the gate-3 measurement: on a
-	// real nomic-embed-text fixture of unit-normalised vectors, within-topic
+	// real nomic-embed-text fixture of unit-normalized vectors, within-topic
 	// pairs score ≈0.66 and cross-topic pairs ≈0.50. 0.60 sits in that gap
 	// it admitted 100% of true links with a 0.00% false-positive rate on the
 	// gate-3 fixture. (The original 0.85 assumed a cosine-like score range
@@ -151,7 +151,7 @@ func NewLinker(refs EmbeddingLookup, vectors ports.VectorStorage, opts ...Option
 //     is not ready (pending, failed, missing), it is silently skipped - this
 //     is best-effort discovery, not a correctness invariant.
 //  2. Fetch the embedding bytes for that hash and decode to float32.
-//  3. Ask VectorStorage for the k+1 nearest neighbours (k+1 leaves room to
+//  3. Ask VectorStorage for the k+1 nearest neighbors (k+1 leaves room to
 //     drop the source itself from its own result set).
 //  4. Filter out the self-hit and hits below threshold.
 //  5. Emit at most k candidates.

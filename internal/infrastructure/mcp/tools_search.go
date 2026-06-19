@@ -114,14 +114,14 @@ func RegisterSearchTools(
 	})
 	r.MustRegister(ToolSpec{
 		Name:            "eng_search_similar",
-		Description:     "Vector-nearest-neighbour search seeded by an existing symbol's embedding - 'what else looks like this?'. Use after eng_find_symbol or eng_search_semantic when you want to find variants, near-duplicates, or candidate refactor targets. Accepts node_id (exact) or symbol (resolved via FindNodes). Excludes the seed itself from results.",
+		Description:     "Vector-nearest-neighbor search seeded by an existing symbol's embedding - 'what else looks like this?'. Use after eng_find_symbol or eng_search_semantic when you want to find variants, near-duplicates, or candidate refactor targets. Accepts node_id (exact) or symbol (resolved via FindNodes). Excludes the seed itself from results.",
 		IncludesStaging: false,
 		InputSchema:     searchSimilarInputSchema,
 		Handler:         makeSearchSimilarHandler(lookup, vectors, nodes, repos, cfg.graph),
 	})
 	r.MustRegister(ToolSpec{
 		Name:            "eng_find_related",
-		Description:     "Find symbols semantically similar to the code at a given (file_path, line). Use as a moat-pivot from a search hit, an error trace, or an open editor cursor: 'what else in the graph looks like this?'. Resolves the smallest enclosing symbol or chunk for the given line, then runs the same vector-neighbourhood search as eng_search_similar - no separate find_symbol round-trip needed.",
+		Description:     "Find symbols semantically similar to the code at a given (file_path, line). Use as a moat-pivot from a search hit, an error trace, or an open editor cursor: 'what else in the graph looks like this?'. Resolves the smallest enclosing symbol or chunk for the given line, then runs the same vector-neighborhood search as eng_search_similar - no separate find_symbol round-trip needed.",
 		IncludesStaging: false,
 		InputSchema:     findRelatedInputSchema,
 		Handler:         makeFindRelatedHandler(lookup, vectors, nodes, repos),

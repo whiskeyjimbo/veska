@@ -1177,24 +1177,24 @@ func graphFamily() []coverageTool {
 				t.Fatalf("eng_find_related: result type %T, want mcp.SearchResponse", res)
 			}
 			if len(resp.Results) == 0 {
-				t.Fatal("eng_find_related returned no neighbours for the enclosing seed")
+				t.Fatal("eng_find_related returned no neighbors for the enclosing seed")
 			}
 			found := false
 			for i, hit := range resp.Results {
 				if hit.NodeID == seed {
-					t.Errorf("enclosing seed %q must be excluded from its own neighbours", seed)
+					t.Errorf("enclosing seed %q must be excluded from its own neighbors", seed)
 				}
 				if hit.NodeID == want {
 					found = true
 				}
 				// ORDERING: scores are non-increasing.
 				if i > 0 && hit.Score > resp.Results[i-1].Score {
-					t.Errorf("neighbours not sorted descending: hit[%d] %v > hit[%d] %v",
+					t.Errorf("neighbors not sorted descending: hit[%d] %v > hit[%d] %v",
 						i, hit.Score, i-1, resp.Results[i-1].Score)
 				}
 			}
 			if !found {
-				t.Errorf("near-dup averageSamples %q missing from computeMean neighbours", want)
+				t.Errorf("near-dup averageSamples %q missing from computeMean neighbors", want)
 			}
 		}},
 	}
@@ -1402,7 +1402,7 @@ func searchFamily() []coverageTool {
 			repoID := coverage.AlphaRepoID
 			// Seed: computeMean. averageSamples is its frozenClones near-dup
 			// partner (facts.go), so it surfaces among the static-embedder
-			// neighbours. Assert ranking INVARIANTS only - never absolute
+			// neighbors. Assert ranking INVARIANTS only - never absolute
 			// vector scores: seed-exclusion, descending ORDERING, and
 			// near-dup MEMBERSHIP by node_id.
 			seed := string(h.ResolveID(repoID, coverage.NodeKey{
@@ -1420,24 +1420,24 @@ func searchFamily() []coverageTool {
 				t.Fatalf("eng_search_similar: result type %T, want mcp.SearchResponse", res)
 			}
 			if len(resp.Results) == 0 {
-				t.Fatal("eng_search_similar returned no neighbours for an embedded seed")
+				t.Fatal("eng_search_similar returned no neighbors for an embedded seed")
 			}
 			found := false
 			for i, hit := range resp.Results {
 				if hit.NodeID == seed {
-					t.Errorf("seed node %q must be excluded from its own neighbours", seed)
+					t.Errorf("seed node %q must be excluded from its own neighbors", seed)
 				}
 				if hit.NodeID == want {
 					found = true
 				}
 				// ORDERING: scores are non-increasing.
 				if i > 0 && hit.Score > resp.Results[i-1].Score {
-					t.Errorf("neighbours not sorted descending: hit[%d] %v > hit[%d] %v",
+					t.Errorf("neighbors not sorted descending: hit[%d] %v > hit[%d] %v",
 						i, hit.Score, i-1, resp.Results[i-1].Score)
 				}
 			}
 			if !found {
-				t.Errorf("near-dup averageSamples %q missing from computeMean neighbours", want)
+				t.Errorf("near-dup averageSamples %q missing from computeMean neighbors", want)
 			}
 		}},
 	}
@@ -1665,8 +1665,8 @@ func contextFamily() []coverageTool {
 				t.Fatalf("decode context pack: %v", err)
 			}
 			// The pack anchors on ComputeVariance; its node must be present (with
-			// blast neighbours) and flagged as carrying the open finding. Assert
-			// CONTAINMENT - the node set also holds blast-radius neighbours.
+			// blast neighbors) and flagged as carrying the open finding. Assert
+			// CONTAINMENT - the node set also holds blast-radius neighbors.
 			var anchor struct {
 				present bool
 				hasOpen bool

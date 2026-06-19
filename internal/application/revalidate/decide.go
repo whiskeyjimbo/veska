@@ -87,7 +87,7 @@ func Decide(ctx context.Context, repoID, branch string, s ports.StaleFinding, sr
 		return ports.FindingDecision{FindingID: s.FindingID, Kind: ports.DecisionRefresh, NewHash: s.CurrentHash}, nil
 
 	default:
-		// Unknown rule: conservative close (matches m3.05.2 behaviour for
+		// Unknown rule: conservative close (matches m3.05.2 behavior for
 		// rules that have no defined re-run path). Note "auto-link" never
 		// reaches here - see the const block in handler.go.
 		return ports.FindingDecision{FindingID: s.FindingID, Kind: ports.DecisionClose}, nil

@@ -320,7 +320,7 @@ type baseGraph struct {
 }
 
 // fileAtRef adapts git.FileAtRef's absence sentinel to diffgate's so the
-// RefChangeSource recognises deleted files.
+// RefChangeSource recognizes deleted files.
 func fileAtRef(ctx context.Context, repoRoot, ref, path string) ([]byte, error) {
 	return adaptAbsence(git.FileAtRef(ctx, repoRoot, ref, path))
 }

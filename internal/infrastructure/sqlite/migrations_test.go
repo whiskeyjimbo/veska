@@ -348,13 +348,13 @@ func TestMigrationSHA_StripsBOM(t *testing.T) {
 	}
 }
 
-func TestMigrationSHA_NormalisesLineEndings(t *testing.T) {
+func TestMigrationSHA_NormalizesLineEndings(t *testing.T) {
 	t.Parallel()
 
 	crlf := "hello\r\nworld\r\n"
 	lf := "hello\nworld\n"
 	if sqlite.ComputeMigrationSHA(crlf) != sqlite.ComputeMigrationSHA(lf) {
-		t.Error("line-ending normalisation failed: SHA differs for CRLF vs LF input")
+		t.Error("line-ending normalization failed: SHA differs for CRLF vs LF input")
 	}
 }
 

@@ -101,7 +101,7 @@ func TestVacuumInto_ContextCancel(t *testing.T) {
 
 	err = sqlite.VacuumInto(ctx, db, dstPath)
 	if err == nil {
-		t.Fatal("expected error for cancelled context, got nil")
+		t.Fatal("expected error for canceled context, got nil")
 		return
 	}
 }

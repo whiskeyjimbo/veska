@@ -119,7 +119,7 @@ func ResolveCrossRepoEdge(ctx context.Context, db *sql.DB, stub CrossRepoStub, e
 			continue
 		}
 		if !stub.MethodCall {
-			// Original behaviour: first match in the subpackage wins
+			// Original behavior: first match in the subpackage wins
 			// (exact symbol_path equality already constrains uniqueness).
 			return &ResolvedEdge{
 				SrcNodeID: stub.SrcNodeID,

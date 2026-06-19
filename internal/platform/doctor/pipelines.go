@@ -9,7 +9,7 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/platform/health"
 )
 
-// PipelinesReport summarises the review pipeline's token-budget state for the
+// PipelinesReport summarizes the review pipeline's token-budget state for the
 // doctor subcommand.
 //
 //	Status "healthy" - tokens_today is below the configured daily cap (or

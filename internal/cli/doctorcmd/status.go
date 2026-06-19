@@ -172,7 +172,7 @@ func gatherStatusProbes(home string) statusProbes {
 	// (benign - operator just hasn't run `veska service start` yet)
 	// from "the daemon crash-looped" (a real fault flagged by the
 	// `<veskaHome>/broken` marker). The marker-less not-running
-	// case should not be labelled "broken", which a fresh user sees
+	// case should not be labeled "broken", which a fresh user sees
 	// between `veska init` and `veska service start`.
 	svcReport, _ := doctor.CheckService(home)
 	daemonStopped := p.daemonNotRunning && !svcReport.BrokenMarkerPresent

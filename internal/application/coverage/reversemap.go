@@ -161,7 +161,7 @@ func (m *ReverseMap) TestsCoveringAny(ctx context.Context, repoID, branch string
 
 // isTestEntrypoint reports whether ref is a runnable Go test entrypoint
 // function - a top-level func in a *_test.go file whose name is a go-test
-// recognised prefix (Test/Benchmark/Fuzz/Example). Helpers in test files are
+// recognized prefix (Test/Benchmark/Fuzz/Example). Helpers in test files are
 // deliberately NOT entrypoints; they are walked THROUGH as intermediate hops
 // ( granularity decision).
 func isTestEntrypoint(ref ports.NodeRef) bool {
@@ -174,7 +174,7 @@ func isTestEntrypoint(ref ports.NodeRef) bool {
 	return isGoTestName(ref.Name)
 }
 
-// isGoTestName applies go test's own naming rule: a recognised prefix
+// isGoTestName applies go test's own naming rule: a recognized prefix
 // (Test, Benchmark, Fuzz, Example) where the following rune, if any, is not a
 // lowercase letter - so `TestFoo` matches but the helper `Testify` does not.
 func isGoTestName(name string) bool {

@@ -13,10 +13,10 @@ import (
 // VacuumInto creates a compact copy of db at destPath using SQLite's VACUUM INTO
 // statement. The destination must not already exist. The caller is responsible for
 // creating the parent directory. The context is checked before execution to avoid
-// touching the destination path if the operation was cancelled.
+// touching the destination path if the operation was canceled.
 func VacuumInto(ctx context.Context, db *sql.DB, destPath string) error {
 	if err := ctx.Err(); err != nil {
-		return fmt.Errorf("sqlite.VacuumInto: context cancelled before snapshot: %w", err)
+		return fmt.Errorf("sqlite.VacuumInto: context canceled before snapshot: %w", err)
 	}
 
 	// Refuse to overwrite an existing file to ensure the pre-migration snapshot is unique.

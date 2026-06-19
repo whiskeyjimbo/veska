@@ -150,7 +150,7 @@ func ResolveTarget(ctx context.Context, db *sql.DB, repoID, branch string) (stri
 			}
 		}
 	} else {
-		// Match the MCP resolveRepoID progression so the CLI honours the same
+		// Match the MCP resolveRepoID progression so the CLI honors the same
 		// short_id / prefix contract: exact full id, then
 		// ShortRepoIDLen-char short_id, then unambiguous >= 4-char prefix.
 		// on id miss, try the same value as a filesystem path

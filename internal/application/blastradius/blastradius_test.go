@@ -517,7 +517,7 @@ func TestDiffOf_RejectsEmptyRepoRoot(t *testing.T) {
 }
 
 // TestOf_HubDegreeThresholdSuppressesFanout guards: when a node
-// in the BFS frontier has more neighbours than HubDegreeThreshold, the
+// in the BFS frontier has more neighbors than HubDegreeThreshold, the
 // walker does NOT expand through it. The node itself still appears in the
 // result with IsHub=true so callers see the structural fact; what's
 // excluded is the irrelevant fan-out. This models cobra's rootCmd
@@ -574,7 +574,7 @@ func TestOf_HubDegreeThresholdSuppressesFanout(t *testing.T) {
 		}
 	}
 
-	// With gating disabled (threshold -1): legacy behaviour - every sibling
+	// With gating disabled (threshold -1): legacy behavior - every sibling
 	// init-* is pulled in at distance 3 (cmd-a → hub → init-b →.).
 	wide, err := s.Of(context.Background(), "r", "main", []string{"cmd-a"},
 		blastradius.Options{MaxDepth: 3, HubDegreeThreshold: -1})
@@ -640,7 +640,7 @@ func blastFrom(t *testing.T, defaultHub int) map[string]bool {
 // TestOf_ConfiguredDefaultHubGates guards: WithDefaultHubDegreeThreshold
 // supplies the gate value when a per-call Options leaves HubDegreeThreshold at 0.
 func TestOf_ConfiguredDefaultHubGates(t *testing.T) {
-	ids := blastFrom(t, 3) // hub has 6 neighbours > 3 → gated
+	ids := blastFrom(t, 3) // hub has 6 neighbors > 3 → gated
 	for _, sib := range []string{"init-b", "init-c", "init-d", "init-e", "init-f"} {
 		if ids[sib] {
 			t.Errorf("configured default should gate hub: %s should be absent", sib)

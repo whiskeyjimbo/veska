@@ -9,7 +9,7 @@ package widget
 
 import "example.com/modalpha/metric"
 
-// Palette names the colour theme a widget renders with.
+// Palette names the color theme a widget renders with.
 type Palette struct {
 	Theme string
 }
@@ -19,7 +19,7 @@ type Renderer interface {
 	Render() string
 }
 
-// Badge is a small labelled widget. RenderBadge formats it for display.
+// Badge is a small labeled widget. RenderBadge formats it for display.
 type Badge struct {
 	Label   string
 	Palette Palette

@@ -289,7 +289,7 @@ func lookupNodeID(t *testing.T, db *sql.DB, like string) string {
 	return id
 }
 
-// l2Normalize matches the embedder worker's normalisation step so the query
+// l2Normalize matches the embedder worker's normalization step so the query
 // vector lives on the same unit sphere as stored document vectors. The
 // VectorStorage score 1/(1+L2dist) is only meaningful between unit vectors.
 func l2Normalize(vec []float32) {

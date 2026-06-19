@@ -147,7 +147,7 @@ make build
 # Size-sensitive builds can `make build-small` instead, then run
 # `./bin/veska install model2vec` to avoid the low-quality static-v2 fallback.
 
-# 2. Initialise veska's data directory at ~/.veska/.
+# 2. Initialize veska's data directory at ~/.veska/.
 ./bin/veska init
 
 # 3. Start the daemon.
@@ -334,7 +334,7 @@ editors by `veska-mcp`). Tool names follow `eng_<verb>_<object>`. Quick map:
 | Admin | `eng_get_status`, `eng_get_config`, `eng_get_current_repo`, `eng_get_repo`, `eng_list_repos` |
 | Repo lifecycle | `eng_add_repo`, `eng_remove_repo`, `eng_promote_repo`, `eng_reindex_repo`, `eng_set_repo_alias`, `eng_remove_repo_alias` |
 | Graph | `eng_find_symbol`, `eng_get_node`, `eng_get_file_nodes`, `eng_get_call_chain` |
-| Search | `eng_search_semantic`, `eng_search_similar`, `eng_find_related` (semantic neighbours of the code at a `file_path`+`line`) |
+| Search | `eng_search_semantic`, `eng_search_similar`, `eng_find_related` (semantic neighbors of the code at a `file_path`+`line`) |
 | Duplicates | `eng_find_clones` (duplicate groups for one mode: `exact` byte-identical or `near` fuzzy), `eng_find_clusters` (whole-repo / cross-repo de-dupe triage across `exact`/`structural`/`near` tiers, tightest first) |
 | Blast radius | `eng_get_blast_radius`, `eng_get_diff_blast_radius`, `eng_get_dirty_blast_radius` |
 | Context | `eng_get_context_pack`, `eng_find_changed_symbols` (takes `ref_a`/`ref_b` or aliases `base`/`head`; defaults to `HEAD~1..HEAD`; chunks filtered, comment-only diffs surface `non_symbol_changes_only` in `degraded_reasons`) |

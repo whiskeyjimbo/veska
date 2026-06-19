@@ -138,7 +138,7 @@ func splitSections(src string) []section {
 	return out
 }
 
-// slugify normalises a heading into a kebab-case identifier for the
+// slugify normalizes a heading into a kebab-case identifier for the
 // doc-name key. Matches the convention used by most static-site
 // generators so headline pairs are intuitive to author.
 func slugify(s string) string {

@@ -14,7 +14,7 @@ import (
 )
 
 // fakeCoverageQuerier returns a preconfigured candidate list, filtered to the
-// requested file paths so empty-paths semantics are honoured.
+// requested file paths so empty-paths semantics are honored.
 type fakeCoverageQuerier struct {
 	nodes     []ports.NodeCallers
 	err       error
@@ -94,7 +94,7 @@ func TestUntestedCheck_FlagsSymbolWithNoTestCaller(t *testing.T) {
 
 // the finding carries the symbol's content-hash as its anchor,
 // so the revalidation sweep selects it on body drift and re-runs the test-caller
-// predicate (rather than the old no-anchor behaviour that excluded it).
+// predicate (rather than the old no-anchor behavior that excluded it).
 func TestUntestedCheck_EmitsAnchorContentHash(t *testing.T) {
 	q := &fakeCoverageQuerier{nodes: []ports.NodeCallers{
 		{

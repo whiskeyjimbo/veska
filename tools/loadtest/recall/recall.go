@@ -20,7 +20,7 @@ import (
 // the query. The returned value is len(hits[:min(k,len(hits))] ∩ truth)
 // divided by min(k, len(truth)). When len(truth) is zero the result is
 // zero - a query with no correct answers cannot have positive recall.
-// Semantics note: we normalise the denominator by min(k, len(truth))
+// Semantics note: we normalize the denominator by min(k, len(truth))
 // rather than len(truth). This is the standard recall@k definition: if
 // truth has more members than k the score is bounded by 1.0 (otherwise
 // recall would be capped below 1 even with a perfect ranker).

@@ -58,7 +58,7 @@ func RunSecurity(ctx context.Context, p SecurityParams) error {
 	// secret_leak: scan the candidate's added lines (language-agnostic).
 	secretsCheck := checks.NewSecretsScanCheck(secretsscanner.New())
 
-	// vulnerable_dependency: scan recognised manifests against the advisory
+	// vulnerable_dependency: scan recognized manifests against the advisory
 	// source. vulnEnabled mirrors the daemon - when no source is configured the
 	// gate skips the dimension entirely rather than failing closed.
 	vulnSource, vulnEnabled := composition.BuildVulnSource(cfg)

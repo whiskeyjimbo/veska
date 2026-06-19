@@ -286,7 +286,7 @@ Find the owner of a file via CODEOWNERS lookup or git blame fallback.
 
 ## `eng_find_related`
 
-Find symbols semantically similar to the code at a given (file_path, line). Use as a moat-pivot from a search hit, an error trace, or an open editor cursor: 'what else in the graph looks like this?'. Resolves the smallest enclosing symbol or chunk for the given line, then runs the same vector-neighbourhood search as eng_search_similar - no separate find_symbol round-trip needed.
+Find symbols semantically similar to the code at a given (file_path, line). Use as a moat-pivot from a search hit, an error trace, or an open editor cursor: 'what else in the graph looks like this?'. Resolves the smallest enclosing symbol or chunk for the given line, then runs the same vector-neighborhood search as eng_search_similar - no separate find_symbol round-trip needed.
 
 **Input schema:**
 
@@ -295,7 +295,7 @@ Find symbols semantically similar to the code at a given (file_path, line). Use 
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "type": "object",
   "additionalProperties": false,
-  "description": "Find symbols semantically similar to the code at a (file_path, line). The handler resolves the smallest enclosing node and reuses the eng_search_similar vector-neighbourhood path. Line is 1-indexed.",
+  "description": "Find symbols semantically similar to the code at a (file_path, line). The handler resolves the smallest enclosing node and reuses the eng_search_similar vector-neighborhood path. Line is 1-indexed.",
   "properties": {
     "file_path": {
       "type": "string",
@@ -315,7 +315,7 @@ Find symbols semantically similar to the code at a given (file_path, line). Use 
     "k": {
       "type": "integer",
       "minimum": 1,
-      "description": "Neighbour count (default 10). 'limit' is accepted as an alias."
+      "description": "Neighbor count (default 10). 'limit' is accepted as an alias."
     },
     "limit": {
       "type": "integer",
@@ -467,7 +467,7 @@ Compute the blast radius (callers/callees/both) of a symbol - 'if I change this,
 
 ## `eng_get_call_chain`
 
-Walk CALLS edges from a symbol. Use this - not search - when the question is 'what does this reach' (direction=out, default) or 'what calls this' (direction=in). Surfaces cross_repo_edges into other registered repos so library-symbol callers in a multi-repo workspace are visible without separate queries. Pass node_id (exact) or symbol (resolved via eng_find_symbol; ambiguity is rejected). NOTE: empty edges on a function/method seed carry one of two degraded_reasons hints: 'chained_selectors_unresolved' (parser limit - chained selector call sites like rootCmd.AddCommand(...).Execute() or s.field.M() are not yet modelled) or 'external_callees_only' (index boundary - callees are stdlib or unregistered modules, NOT a parser bug). Fall back to eng_get_blast_radius, eng_search_semantic, or eng_find_symbol.
+Walk CALLS edges from a symbol. Use this - not search - when the question is 'what does this reach' (direction=out, default) or 'what calls this' (direction=in). Surfaces cross_repo_edges into other registered repos so library-symbol callers in a multi-repo workspace are visible without separate queries. Pass node_id (exact) or symbol (resolved via eng_find_symbol; ambiguity is rejected). NOTE: empty edges on a function/method seed carry one of two degraded_reasons hints: 'chained_selectors_unresolved' (parser limit - chained selector call sites like rootCmd.AddCommand(...).Execute() or s.field.M() are not yet modeled) or 'external_callees_only' (index boundary - callees are stdlib or unregistered modules, NOT a parser bug). Fall back to eng_get_blast_radius, eng_search_semantic, or eng_find_symbol.
 
 **Input schema:**
 
@@ -541,7 +541,7 @@ Return effective daemon configuration (secrets redacted).
 
 ## `eng_get_context_pack`
 
-Bundle a symbol's neighbourhood (callers, callees, adjacent tests, recent commits, open findings, active task) into one token-bounded payload. Use at the START of a non-trivial change so you don't have to assemble surrounding context piecewise. Surfaces cross_repo_edges in both directions, so cross-repo callers/callees show up in the same response. Pass exactly one of node_id, symbol, or task_id as the anchor.
+Bundle a symbol's neighborhood (callers, callees, adjacent tests, recent commits, open findings, active task) into one token-bounded payload. Use at the START of a non-trivial change so you don't have to assemble surrounding context piecewise. Surfaces cross_repo_edges in both directions, so cross-repo callers/callees show up in the same response. Pass exactly one of node_id, symbol, or task_id as the anchor.
 
 **Input schema:**
 
@@ -1279,7 +1279,7 @@ Natural-language search over embedded symbols (RRF-fused with FTS, lexical fallb
 
 ## `eng_search_similar`
 
-Vector-nearest-neighbour search seeded by an existing symbol's embedding - 'what else looks like this?'. Use after eng_find_symbol or eng_search_semantic when you want to find variants, near-duplicates, or candidate refactor targets. Accepts node_id (exact) or symbol (resolved via FindNodes). Excludes the seed itself from results.
+Vector-nearest-neighbor search seeded by an existing symbol's embedding - 'what else looks like this?'. Use after eng_find_symbol or eng_search_semantic when you want to find variants, near-duplicates, or candidate refactor targets. Accepts node_id (exact) or symbol (resolved via FindNodes). Excludes the seed itself from results.
 
 **Input schema:**
 
@@ -1288,7 +1288,7 @@ Vector-nearest-neighbour search seeded by an existing symbol's embedding - 'what
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "type": "object",
   "additionalProperties": false,
-  "description": "k-nearest-neighbour vector search seeded by an existing node. Accepts node_id (exact) or symbol (resolved via FindNodes; ambiguous matches rejected)",
+  "description": "k-nearest-neighbor vector search seeded by an existing node. Accepts node_id (exact) or symbol (resolved via FindNodes; ambiguous matches rejected)",
   "properties": {
     "node_id": {
       "type": "string"
@@ -1306,7 +1306,7 @@ Vector-nearest-neighbour search seeded by an existing symbol's embedding - 'what
     "k": {
       "type": "integer",
       "minimum": 1,
-      "description": "Neighbour count (default 10). 'limit' is accepted as an alias."
+      "description": "Neighbor count (default 10). 'limit' is accepted as an alias."
     },
     "limit": {
       "type": "integer",

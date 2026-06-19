@@ -4,7 +4,7 @@
 // Package observability provides Prometheus metrics and OpenTelemetry tracing
 // building blocks. All features are opt-in: the HTTP listener only binds when
 // the caller explicitly calls StartHTTPListener, and the tracer provider only
-// initialises when NewTracerProvider is called with a non-empty endpoint.
+// initializes when NewTracerProvider is called with a non-empty endpoint.
 package observability
 
 import (

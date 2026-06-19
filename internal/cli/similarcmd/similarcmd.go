@@ -3,7 +3,7 @@
 
 // Package similarcmd holds the delivery-layer logic behind `veska similar`
 // (eng_search_similar) and `veska related` (eng_find_related). Both ride the
-// same vector-neighbourhood path on the daemon and return a SearchResponse
+// same vector-neighborhood path on the daemon and return a SearchResponse
 // envelope, so they share one renderer here.
 package similarcmd
 
@@ -19,7 +19,7 @@ import (
 )
 
 // searchResp is the local mirror of the MCP SearchResponse shape - enough of
-// it to render a neighbour table without importing the infrastructure package.
+// it to render a neighbor table without importing the infrastructure package.
 type searchResp struct {
 	Results []struct {
 		NodeID    string  `json:"node_id"`
@@ -42,7 +42,7 @@ type SimilarParams struct {
 	Out      io.Writer
 }
 
-// RunSimilar wraps eng_search_similar: vector-nearest-neighbour search seeded
+// RunSimilar wraps eng_search_similar: vector-nearest-neighbor search seeded
 // by an existing symbol or node_id.
 func RunSimilar(ctx context.Context, p SimilarParams) error {
 	params := map[string]any{}
@@ -72,7 +72,7 @@ type RelatedParams struct {
 
 // RunRelated wraps eng_find_related: find symbols similar to the code at a
 // (file_path, line) anchor. The daemon resolves the smallest enclosing node
-// and reuses the eng_search_similar neighbourhood path.
+// and reuses the eng_search_similar neighborhood path.
 func RunRelated(ctx context.Context, p RelatedParams) error {
 	params := map[string]any{"file_path": p.FilePath, "line": p.Line}
 	if p.RepoID != "" {
@@ -100,11 +100,11 @@ func callAndRender(ctx context.Context, tool string, params map[string]any, out 
 	if err := json.Unmarshal(raw, &resp); err != nil {
 		return err
 	}
-	renderNeighbours(out, resp)
+	renderNeighbors(out, resp)
 	return nil
 }
 
-func renderNeighbours(w io.Writer, resp searchResp) {
+func renderNeighbors(w io.Writer, resp searchResp) {
 	if len(resp.Results) == 0 {
 		fmt.Fprintln(w, "no similar symbols found")
 		for _, d := range resp.DegradedReasons {

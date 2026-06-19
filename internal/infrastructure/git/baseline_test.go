@@ -123,7 +123,7 @@ func TestRefreshBaselineUpdatesToDisk(t *testing.T) {
 }
 
 // TestRefreshBaselineSkipsAfterCtxCancel verifies that updates to the baseline are ignored
-// if the context has been cancelled, preventing stale writes during teardown.
+// if the context has been canceled, preventing stale writes during teardown.
 func TestRefreshBaselineSkipsAfterCtxCancel(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "f.go")

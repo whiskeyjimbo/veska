@@ -95,7 +95,7 @@ func New(readDB, writeDB *sql.DB, handlers map[WorkKind]WorkHandler, opts ...Opt
 }
 
 // Start launches one goroutine per registered WorkKind and returns immediately.
-// Goroutines stop when ctx is cancelled. Call Wait to block until all have exited.
+// Goroutines stop when ctx is canceled. Call Wait to block until all have exited.
 func (p *Poller) Start(ctx context.Context) {
 	remaining := len(p.handlers)
 	if remaining == 0 {

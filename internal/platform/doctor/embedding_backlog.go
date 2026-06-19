@@ -5,7 +5,7 @@ package doctor
 
 import "context"
 
-// EmbeddingBacklogReport summarises the depth of the embedder backfill queue
+// EmbeddingBacklogReport summarizes the depth of the embedder backfill queue
 // for `veska doctor status`. Unlike EmbedQueueReport (which classifies the
 // embedder *worker* and uses "healthy"/"degraded"/"broken"), this report is
 // purely informational: it surfaces the queue depth so the doctor rollup

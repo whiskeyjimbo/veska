@@ -70,7 +70,7 @@ func NewServer(cliSock, mcpSock string, handler Handler) *Server {
 	}
 }
 
-// Start spawns the listener routines and blocks until the context is cancelled, performing socket cleanup on shutdown.
+// Start spawns the listener routines and blocks until the context is canceled, performing socket cleanup on shutdown.
 func (s *Server) Start(ctx context.Context) error {
 	cliL, err := listenUnix(s.cliSock)
 	if err != nil {

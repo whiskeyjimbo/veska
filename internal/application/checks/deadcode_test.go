@@ -39,7 +39,7 @@ func (f *fakeDeadQuerier) DeadNodesInFiles(_ context.Context, repoID, branch str
 	if f.err != nil {
 		return nil, f.err
 	}
-	// Filter to the requested file paths so empty-paths semantics are honoured by the fake.
+	// Filter to the requested file paths so empty-paths semantics are honored by the fake.
 	if len(filePaths) == 0 {
 		return nil, nil
 	}

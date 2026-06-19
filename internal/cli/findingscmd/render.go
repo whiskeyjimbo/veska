@@ -34,7 +34,7 @@ func (p ListParams) render(resp findingsEnvelope) error {
 	shown, hiddenLow := p.filterLow(resp.Findings)
 	// summary reflects what's actually rendered, not the
 	// unfiltered total.
-	fmt.Fprintln(w, summariseFindings(len(shown), len(resp.Findings), counts, resp.Findings))
+	fmt.Fprintln(w, summarizeFindings(len(shown), len(resp.Findings), counts, resp.Findings))
 	if hiddenLow > 0 {
 		fmt.Fprintf(w, "  (%d low-severity hidden; pass --include-low to show)\n", hiddenLow)
 	}
@@ -180,12 +180,12 @@ func countSeverities(fs []FindingView) map[string]int {
 	return out
 }
 
-// summariseFindings produces the human header. shown is the count the table
+// summarizeFindings produces the human header. shown is the count the table
 // will render after the low-severity filter; total is the pre-filter count so
 // we can say "showing X of Y" honestly when those differ. counts/all reflect
 // the FULL set so the severity breakdown stays informative even when nothing
 // is rendered.
-func summariseFindings(shown, total int, counts map[string]int, all []FindingView) string {
+func summarizeFindings(shown, total int, counts map[string]int, all []FindingView) string {
 	// when low-severity findings are dominated by a single rule
 	// (typically "auto-link" on small repos), annotate the count. Threshold is
 	// 80% - if the rule mix is genuinely diverse, fall back to the unannotated

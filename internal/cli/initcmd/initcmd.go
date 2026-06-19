@@ -57,7 +57,7 @@ type Flags struct {
 	Interactive bool
 }
 
-// Run performs the full first-run initialisation flow:
+// Run performs the full first-run initialization flow:
 //  1. Creates the ~/.veska/ directory layout (logs/, cache/, state/).
 //  2. Resolves the embedder via the same boot-election as the daemon. The
 //     default (model2vec/static) is in-process and needs no external service,
@@ -84,7 +84,7 @@ func Run(ctx context.Context, deps Deps, flags Flags, out io.Writer) error {
 	}
 
 	// CONFIG-SURFACE.md promises `veska init` writes
-	// ~/.veska/config.toml when absent. Honour that - drop a starter file
+	// ~/.veska/config.toml when absent. Honor that - drop a starter file
 	// so a junior can grep, edit, restart, and go. Never overwrites an
 	// existing file (the prompt above does NOT mutate an existing config).
 	if err := writeDefaultConfigIfAbsent(deps.VeskaHome, vulnEnabled); err != nil {
@@ -148,7 +148,7 @@ func Run(ctx context.Context, deps Deps, flags Flags, out io.Writer) error {
 // StdinIsInteractive reports whether os.Stdin is a TTY. Used to decide
 // whether to prompt or silently take the default during `veska init`
 // On any stat error we conservatively report false - the
-// quiet, non-interactive default behaviour is the right answer when the
+// quiet, non-interactive default behavior is the right answer when the
 // shape of stdin can't be determined.
 func StdinIsInteractive() bool {
 	info, err := os.Stdin.Stat()

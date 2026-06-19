@@ -48,7 +48,7 @@ func NewMultiRepoWatcher() *MultiRepoWatcher {
 	}
 }
 
-// Start initializes the multiplexer's parent context. This must be called before calling Add. Cancelling the context is equivalent to calling Close.
+// Start initializes the multiplexer's parent context. This must be called before calling Add. Canceling the context is equivalent to calling Close.
 func (m *MultiRepoWatcher) Start(ctx context.Context) {
 	m.ctx, m.cancel = context.WithCancel(ctx)
 }
@@ -134,7 +134,7 @@ func (m *MultiRepoWatcher) forwardEvents(ctx context.Context, rw *repoWatch, eve
 				}
 			}()
 
-			// Restart the watcher after one second unless the parent context has been cancelled.
+			// Restart the watcher after one second unless the parent context has been canceled.
 			select {
 			case <-m.ctx.Done():
 				return

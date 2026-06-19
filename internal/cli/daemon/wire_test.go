@@ -49,7 +49,7 @@ func TestWire_Constructs(t *testing.T) {
 // TestDaemon_ReconcilerWired_FieldPresent is the composition-root smoke test for
 // the wake-reconciler wiring: newDaemon must populate d.reconciler so Start can
 // spawn the suspend/resume tick loop. A nil field means the wiring was dropped.
-// The gap-detection behaviour itself is covered by the git package's
+// The gap-detection behavior itself is covered by the git package's
 // TestStart_WakeGapTriggersSweep.
 func TestDaemon_ReconcilerWired_FieldPresent(t *testing.T) {
 	cfg := testConfig(t)
@@ -387,7 +387,7 @@ func TestWire_WatchLoopRoutesEditsToStaging(t *testing.T) {
 			}
 			// repo.Add defaults to "main" when HEAD detection fails (this
 			// fixture has no real git init). Force the recorded branch so
-			// runWatchLoop's lookup must honour something other than "main".
+			// runWatchLoop's lookup must honor something other than "main".
 			if _, err := d.pools.Write.Exec(
 				`UPDATE repos SET active_branch = ? WHERE repo_id = ?`,
 				branch, repoID,

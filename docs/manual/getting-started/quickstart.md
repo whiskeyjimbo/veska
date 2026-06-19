@@ -3,7 +3,7 @@
 This walks you from a built binary to a daemon serving your repo, in five
 steps. Commands assume `./bin/` - drop the prefix if Veska is on your `PATH`.
 
-## 1. Initialise the data directory
+## 1. Initialize the data directory
 
 ```sh
 ./bin/veska init

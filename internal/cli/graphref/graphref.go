@@ -20,7 +20,7 @@ import (
 
 // NodeInfo is the projection ResolveCrossRepoNode returns for cross-repo
 // edge rendering: the symbol name, the kind (so a package-grain edge can be
-// visibly labelled as such), and a file:line hint so the user can navigate
+// visibly labeled as such), and a file:line hint so the user can navigate
 // to the call site.
 type NodeInfo struct {
 	Name     string
@@ -68,7 +68,7 @@ func ResolveCrossRepoNode(ctx context.Context, nodeID, repoID, branch string) No
 
 // FormatCrossRepoNode renders one side of a cross-repo edge: the symbol
 // name, optionally with a "package " prefix when the resolved node is a Go
-// package (signalling the parser attributed the call to the package because
+// package (signaling the parser attributed the call to the package because
 // it couldn't bind the specific function), and appended with "in
 // file_path[:line]" when known. Falls back to a short-id slice of the raw
 // node_id when nothing resolves so the row still has *some* identifier.

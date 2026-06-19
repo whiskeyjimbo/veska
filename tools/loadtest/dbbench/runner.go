@@ -112,10 +112,10 @@ func time1(driver, name string, iters int, fn func(int) error) WorkloadResult {
 		samples = append(samples, time.Since(t0))
 	}
 	total := time.Since(start)
-	return summarise(driver, name, iters, samples, total)
+	return summarize(driver, name, iters, samples, total)
 }
 
-func summarise(driver, name string, iters int, samples []time.Duration, total time.Duration) WorkloadResult {
+func summarize(driver, name string, iters int, samples []time.Duration, total time.Duration) WorkloadResult {
 	sort.Slice(samples, func(i, j int) bool { return samples[i] < samples[j] })
 	pct := func(p float64) float64 {
 		if len(samples) == 0 {

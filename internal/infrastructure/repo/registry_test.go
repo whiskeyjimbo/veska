@@ -569,7 +569,7 @@ func TestDerivedRepoIDFromURL(t *testing.T) {
 		{"github https", "https://github.com/foo/bar"},
 		{"gitlab https", "https://gitlab.com/group/proj"},
 		{"self-hosted https port", "https://git.example.com:8443/team/repo"},
-		{"ssh-normalised form", "https://github.com/foo/bar"},
+		{"ssh-normalized form", "https://github.com/foo/bar"},
 	}
 
 	seen := make(map[string]string, len(cases))

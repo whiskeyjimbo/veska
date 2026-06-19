@@ -179,7 +179,7 @@ func (d *Daemon) startResync() {
 }
 
 // startVulnRefresher launches the OSV advisory-cache refresher (non-nil only
-// when [vuln_source] provider="osv"); its Run blocks until d.ctx is cancelled.
+// when [vuln_source] provider="osv"); its Run blocks until d.ctx is canceled.
 // On the first successful refresh it kicks a one-shot vuln-scan sweep over every
 // repo so promotions that ran against a cold cache get retroactive findings
 func (d *Daemon) startVulnRefresher() {
@@ -202,7 +202,7 @@ func sumCounts(counts map[string]int) int {
 }
 
 // runWatchLoop reads from the multi-repo watcher and forwards each file event
-// to Ingester.Save. The loop terminates when ctx is cancelled or Events
+// to Ingester.Save. The loop terminates when ctx is canceled or Events
 // closes.
 // Branch resolution: we look up each event's repo via repo.Get
 // to use its recorded active_branch instead of the previous hardcoded "main".
@@ -319,7 +319,7 @@ func (d *Daemon) awaitBackgroundGoroutines(timeoutC <-chan time.Time) {
 }
 
 // drainScans waits for in-flight AddRepo cold-scan goroutines
-// under the shared budget. ctx is already cancelled so a well-behaved reparser
+// under the shared budget. ctx is already canceled so a well-behaved reparser
 // exits promptly; a stuck scan does not wedge shutdown - we fall through after
 // the deadline and proceed with pool close.
 func (d *Daemon) drainScans(timeoutC <-chan time.Time) {

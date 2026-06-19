@@ -15,7 +15,7 @@ import (
 
 // recordingFindingStorage captures every Save call and tracks the open/closed
 // state of stored findings keyed by (finding_id, branch) so tests can assert
-// CloseObsolete behaviour.
+// CloseObsolete behavior.
 type recordingFindingStorage struct {
 	mu       sync.Mutex
 	findings []*domain.Finding

@@ -25,7 +25,7 @@ first. A symbol appears at most once, at its tightest tier.
 - **structural** - the same **shape** after a consistent rename of variables,
   parameters, and literals (Type-2 clones). Two functions with identical bodies
   but different names - or `a + b` vs `x + y` - land here even though their text
-  differs. Computed from an identifier-normalised hash of the syntax tree at
+  differs. Computed from an identifier-normalized hash of the syntax tree at
   parse time.
 - **near** - **semantically** similar above the elected embedder's calibrated
   threshold (the `SIMILAR_TO` edges auto-link already stores). The loosest tier:

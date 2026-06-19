@@ -27,7 +27,7 @@ type PruneOptions struct {
 	Now time.Time
 }
 
-// PruneResult summarises a retention sweep.
+// PruneResult summarizes a retention sweep.
 type PruneResult struct {
 	// Deleted is the list of tarball paths removed.
 	Deleted []string

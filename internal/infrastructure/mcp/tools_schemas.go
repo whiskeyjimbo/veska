@@ -262,13 +262,13 @@ var searchSimilarInputSchema = json.RawMessage(`{
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "type": "object",
   "additionalProperties": false,
-  "description": "k-nearest-neighbour vector search seeded by an existing node. Accepts node_id (exact) or symbol (resolved via FindNodes; ambiguous matches rejected)",
+  "description": "k-nearest-neighbor vector search seeded by an existing node. Accepts node_id (exact) or symbol (resolved via FindNodes; ambiguous matches rejected)",
   "properties": {
     "node_id": {"type": "string"},
     "symbol":  {"type": "string", "description": "Alias for node_id by symbol name (resolved like eng_find_symbol). Ambiguity is rejected."},
     "repo_id": {"type": "string"},
     "branch":  {"type": "string"},
-    "k":       {"type": "integer", "minimum": 1, "description": "Neighbour count (default 10). 'limit' is accepted as an alias."},
+    "k":       {"type": "integer", "minimum": 1, "description": "Neighbor count (default 10). 'limit' is accepted as an alias."},
     "limit":   {"type": "integer", "minimum": 1, "description": "Alias for k."},
     "cwd":     {"type": "string", "description": "Working directory used to resolve the active repo when repo_id is omitted."}
   }

@@ -23,7 +23,7 @@ var ErrMissingDependency = errors.New("summary: missing required dependency")
 
 // maxBodyRunes caps the per-node source slice fed to the model so a huge
 // function does not blow the token budget; the signature plus a leading slice
-// is enough to summarise intent.
+// is enough to summarize intent.
 const maxBodyRunes = 4000
 
 // maxSummaryTokens bounds the model's completion: a summary is one sentence, so
@@ -36,7 +36,7 @@ const maxSummaryTokens = 128
 type RepoRootFunc func(ctx context.Context, repoID string) (string, error)
 
 // Handler implements ports.WorkHandler for WorkKindSummary rows. One row maps
-// to one promoted file: the handler loads the file's summarisable nodes, slices
+// to one promoted file: the handler loads the file's summarizable nodes, slices
 // each node's body out of the on-disk source, asks the LLMGenerator for a
 // one-line summary, and persists it to nodes.short_summary.
 //
@@ -60,7 +60,7 @@ type Handler struct {
 // HandlerOption customises a Handler.
 type HandlerOption func(*Handler)
 
-// WithAuditWriter records a system-actor audit line per summarised file so the
+// WithAuditWriter records a system-actor audit line per summarized file so the
 // LLM-authored provenance is traceable (summary-worker.md §2 invariant 2).
 func WithAuditWriter(w ports.AuditWriter) HandlerOption {
 	return func(h *Handler) { h.audit = w }
@@ -120,13 +120,13 @@ func (h *Handler) Handle(ctx context.Context, row ports.WorkRow) error {
 		return fmt.Errorf("summary.Handle: load promoted nodes for %q: %w", filePath, err)
 	}
 
-	summarised := 0
+	summarized := 0
 	for _, n := range nodes {
-		if !summarisable(n.Kind) {
+		if !summarizable(n.Kind) {
 			continue
 		}
 		body := sliceBody(lines, n.LineStart, n.LineEnd)
-		text, gerr := h.summariseNode(ctx, row, filePath, n, body)
+		text, gerr := h.summarizeNode(ctx, row, filePath, n, body)
 		if gerr != nil {
 			// Re-queue: a generator error must not lose the rest of the file's
 			// progress permanently, but the poller retries the whole row.
@@ -135,17 +135,17 @@ func (h *Handler) Handle(ctx context.Context, row ports.WorkRow) error {
 		if err := h.store.SetShortSummary(ctx, row.RepoID, row.Branch, n.NodeID, text); err != nil {
 			return fmt.Errorf("summary.Handle: persist summary for %q: %w", n.NodeID, err)
 		}
-		summarised++
+		summarized++
 	}
 
-	h.auditFile(ctx, row, filePath, summarised)
+	h.auditFile(ctx, row, filePath, summarized)
 	return nil
 }
 
-// summariseNode renders the prompt for one node, dispatches it, and returns the
+// summarizeNode renders the prompt for one node, dispatches it, and returns the
 // parsed summary truncated to the rune budget. An empty model summary falls
 // back to the node's heuristic so the column is never written empty.
-func (h *Handler) summariseNode(ctx context.Context, row ports.WorkRow, filePath string, n Node, body string) (string, error) {
+func (h *Handler) summarizeNode(ctx context.Context, row ports.WorkRow, filePath string, n Node, body string) (string, error) {
 	prompt := renderPrompt(row.RepoID, row.Branch, filePath, n, body)
 	resp, err := h.gen.Generate(ctx, ports.GenerateRequest{
 		Prompt:                prompt,
@@ -163,7 +163,7 @@ func (h *Handler) summariseNode(ctx context.Context, row ports.WorkRow, filePath
 	return domain.TruncateRunes(text, domain.MaxShortSummaryRunes), nil
 }
 
-// auditFile records one system-actor audit line for a summarised file. A write
+// auditFile records one system-actor audit line for a summarized file. A write
 // failure is logged, not propagated: the summaries are already persisted.
 func (h *Handler) auditFile(ctx context.Context, row ports.WorkRow, filePath string, n int) {
 	if h.audit == nil || n == 0 {
@@ -177,7 +177,7 @@ func (h *Handler) auditFile(ctx context.Context, row ports.WorkRow, filePath str
 		TargetID:  filePath,
 		Branch:    row.Branch,
 		CreatedAt: h.now(),
-		Reason:    fmt.Sprintf("summarised %d node(s)", n),
+		Reason:    fmt.Sprintf("summarized %d node(s)", n),
 	}); err != nil {
 		slog.Error("summary: write audit line", "file", filePath, "err", err)
 	}

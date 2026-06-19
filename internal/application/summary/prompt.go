@@ -17,7 +17,7 @@ const promptVersion = "summary.v1"
 // pure function of its inputs.
 func renderPrompt(repoID, branch, filePath string, n Node, body string) string {
 	var b strings.Builder
-	b.WriteString("You summarise a single code symbol in one sentence for a code-search index.\n")
+	b.WriteString("You summarize a single code symbol in one sentence for a code-search index.\n")
 	b.WriteString("Write a concise, factual description of what it does - no preamble, no restating its name.\n\n")
 	fmt.Fprintf(&b, "Repository: %s\n", repoID)
 	fmt.Fprintf(&b, "Branch: %s\n", branch)

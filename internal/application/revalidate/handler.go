@@ -27,7 +27,7 @@
 //	  (accept/suppress); a stale similarity suggestion is low-harm. An
 //	  edge-anchored revalidation path would be a separate feature.
 //	any other rule: conservative default - close. New rules opt into
-//	  refresh behaviour by adding a case here.
+//	  refresh behavior by adding a case here.
 //
 // Why no "superseded_by_revalidation" closed_reason: finding IDs are
 // branch-stable hash(rule + anchor). For a node-anchored finding, re-firing
@@ -58,7 +58,7 @@ import (
 // dependency is nil. It wraps so callers can errors.Is against it.
 var ErrMissingDependency = errors.New("revalidate: missing required dependency")
 
-// Rule names recognised by the per-rule dispatch. They are duplicated here
+// Rule names recognized by the per-rule dispatch. They are duplicated here
 // (not imported from internal/application/checks or autolink) to keep the
 // application/revalidate package free of inbound deps on its sibling
 // packages - the rule name on a stored Finding is the wire contract.
@@ -126,7 +126,7 @@ func NewHandler(repo ports.RevalidateQuerier, opts ...Option) (*Handler, error) 
 }
 
 // Handle processes a single ports.WorkRow of kind WorkKindRevalidate.
-// Behaviour:
+// Behavior:
 //
 //	Wrong kind: wrapped error (routing bug).
 //	Empty payload: nil (no file => nothing to sweep).

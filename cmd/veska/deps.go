@@ -21,7 +21,7 @@ import (
 
 // depsCmd is the `veska deps …` parent. Bare `veska deps` lists
 // imported modules ranked by call-site usage (the original
-// behaviour); `veska deps index <module>` adds the new vendor-scan
+// behavior); `veska deps index <module>` adds the new vendor-scan
 // indexer.
 func depsCmd() *cobra.Command {
 	listCmd := depsListCmd()
@@ -37,7 +37,7 @@ func depsCmd() *cobra.Command {
 		// list inherits.
 		Args: cobra.MaximumNArgs(1),
 	}
-	// Preserve the prior `veska deps` (no subcommand) behaviour by
+	// Preserve the prior `veska deps` (no subcommand) behavior by
 	// promoting `list` as the default run target. When the lone arg
 	// looks like a subcommand name (alphabetic word, no path separator
 	// or dot) we reject it explicitly rather than passing nonsense to
@@ -77,7 +77,7 @@ func looksLikeUnknownDepsSubcommand(arg string, parent *cobra.Command) bool {
 }
 
 // depsListCmd wraps eng_list_dependencies - the existing
-// behaviour, now available as both `veska deps` and `veska deps list`.
+// behavior, now available as both `veska deps` and `veska deps list`.
 func depsListCmd() *cobra.Command {
 	var (
 		repoFlag string

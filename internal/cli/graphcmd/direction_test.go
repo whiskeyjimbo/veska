@@ -6,7 +6,7 @@ package graphcmd
 import "testing"
 
 // callers/callees aliases for the --direction flag must
-// normalise to the canonical in/out enum the daemon expects.
+// normalize to the canonical in/out enum the daemon expects.
 func TestNormalizeDirection(t *testing.T) {
 	cases := map[string]string{
 		"callers": "in",

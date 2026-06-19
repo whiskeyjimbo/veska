@@ -15,7 +15,7 @@ type VectorStorage interface {
 	// duplicate NodeIDs replace existing entries.
 	UpsertEmbeddings(ctx context.Context, repoID, branch string, batch []domain.EmbeddingRow) error
 
-	// Search returns the k nearest neighbours to vec, optionally constrained by filter.
+	// Search returns the k nearest neighbors to vec, optionally constrained by filter.
 	// Results are sorted by score descending. If fewer than k vectors are indexed,
 	// all stored vectors are returned.
 	Search(ctx context.Context, repoID, branch string, vec []float32, k int, filter domain.VectorFilter) ([]domain.SearchHit, error)

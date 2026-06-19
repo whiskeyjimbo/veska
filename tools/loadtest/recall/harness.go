@@ -59,7 +59,7 @@ type FixtureHeader struct {
 	Count uint32
 }
 
-// WriteFixture serialises vectors to path. vectors must be a flat slice
+// WriteFixture serializes vectors to path. vectors must be a flat slice
 // of count*dim float32s.
 func WriteFixture(path string, dim int, vectors []float32) error {
 	if dim <= 0 {

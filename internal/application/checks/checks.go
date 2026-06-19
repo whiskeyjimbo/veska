@@ -80,7 +80,7 @@ type AuthoritativeChecker interface {
 
 // Registry is a small in-memory map of name → Check.
 // Registration is expected to happen at daemon start-up; the Registry is not
-// optimised for hot-path mutation. It is, however, safe for concurrent reads.
+// optimized for hot-path mutation. It is, however, safe for concurrent reads.
 type Registry struct {
 	mu     sync.RWMutex
 	checks []Check

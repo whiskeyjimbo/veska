@@ -10,7 +10,7 @@
 // skips the EmbeddingProvider.Embed call when the (modelID, embed_text)
 // hash already has a row in node_embeddings.
 // Lifecycle mirrors the post_promotion_queue Poller: Start launches one
-// background goroutine; passing a cancelled context (or calling Stop)
+// background goroutine; passing a canceled context (or calling Stop)
 // terminates it cleanly; Wait blocks until exit.
 package embedder
 
@@ -220,7 +220,7 @@ func NewWorker(
 
 // Start launches the poll loop in a new goroutine and returns immediately.
 // Subsequent calls are no-ops (the worker may only be started once).
-// The provided ctx is the parent for the worker's lifetime; cancelling it
+// The provided ctx is the parent for the worker's lifetime; canceling it
 // stops the loop. Stop and Wait are also available for callers that want
 // explicit lifecycle control without owning the ctx.
 func (w *Worker) Start(ctx context.Context) {
@@ -254,7 +254,7 @@ func (w *Worker) Stop() {
 // without going through Stop.
 func (w *Worker) Wait() { <-w.done }
 
-// run is the poll loop body. It exits when ctx is cancelled.
+// run is the poll loop body. It exits when ctx is canceled.
 func (w *Worker) run(ctx context.Context) {
 	defer close(w.done)
 
@@ -270,7 +270,7 @@ func (w *Worker) run(ctx context.Context) {
 
 		w.tick(ctx)
 
-		// Reset for next tick. Honour cancellation immediately rather
+		// Reset for next tick. Honor cancellation immediately rather
 		// than waiting a full interval.
 		if ctx.Err() != nil {
 			return

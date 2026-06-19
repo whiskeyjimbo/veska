@@ -4,7 +4,7 @@ Generated: 2026-05-26
 
 Measures whether swapping `modernc.org/sqlite` → `github.com/mattn/go-sqlite3`
 moves veska's real user-visible numbers - not just isolated SQLite ops
-(which solov2-6e5r/dbbench already settled in mattn's favour). The shim
+(which solov2-6e5r/dbbench already settled in mattn's favor). The shim
 landed for this run is `internal/infrastructure/sqlite/sqldriver/`,
 selected by build tag `sqlite_mattn` + `CGO_ENABLED=1` + `sqlite_fts5`.
 

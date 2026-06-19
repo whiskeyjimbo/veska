@@ -25,7 +25,7 @@ func ValidateAuditEntry(e ports.AuditEntry) error {
 		return errors.New("audit: ActorID must not be empty")
 	}
 	if _, ok := validActorKinds[e.ActorKind]; !ok {
-		return errors.New("audit: ActorKind is missing or not a recognised value")
+		return errors.New("audit: ActorKind is missing or not a recognized value")
 	}
 	if e.Op == "" {
 		return errors.New("audit: Op must not be empty")

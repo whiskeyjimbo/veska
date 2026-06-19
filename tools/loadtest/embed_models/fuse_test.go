@@ -9,7 +9,7 @@
 // strategies on the same ground-truth pairs:
 //   1. code-only - rank by potion-code-16M cosine alone (baseline)
 //   2. base-only - rank by potion-base-32M cosine alone (baseline)
-//   3. concat - store [code_vec || base_vec] L2-normalised, rank
+//   3. concat - store [code_vec || base_vec] L2-normalized, rank
 //                   by concat-cosine. Mathematically equivalent to
 //                   the mean of the two per-model cosines.
 //   4. RRF - rank docs in each model's space independently,
@@ -44,7 +44,7 @@ import (
 )
 
 // fuseDoc holds a doc plus its TWO embeddings - the code-model vector
-// and the prose-model vector. Vectors are L2-normalised by the model2vec
+// and the prose-model vector. Vectors are L2-normalized by the model2vec
 // adapter so dot product == cosine throughout.
 type fuseDoc struct {
 	name     string
@@ -256,7 +256,7 @@ func computeFusionRecall(codeP, proseP Embedder, pairs []Pair, docs []fuseDoc, r
 			proseScored[i] = scored{i, ps}
 			// Concat-cosine is mean of the two cosines (since both
 			// vectors are unit-norm and a concat of two unit-norm
-			// vectors has norm sqrt(2); the renormalised concat
+			// vectors has norm sqrt(2); the renormalized concat
 			// cosine evaluates to (cs+ps)/2).
 			catScored[i] = scored{i, (cs + ps) / 2}
 		}

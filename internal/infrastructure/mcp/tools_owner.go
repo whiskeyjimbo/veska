@@ -249,7 +249,7 @@ func lookupCodeowners(repoRoot, filePath string) (string, bool) {
 
 // matchesCodeownersPattern returns whether the file path matches a CODEOWNERS glob pattern.
 func matchesCodeownersPattern(pattern, filePath string) bool {
-	// Normalise file path (remove leading /).
+	// Normalize file path (remove leading /).
 	fp := strings.TrimPrefix(filePath, "/")
 
 	// Strip leading / from pattern to make it relative.

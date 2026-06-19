@@ -841,7 +841,7 @@ func TestWorker_RateLimitThrottlesEmbedCalls(t *testing.T) {
 	}
 }
 
-// TestWorker_RateLimitCtxCancelUnwinds verifies that cancelling the ctx
+// TestWorker_RateLimitCtxCancelUnwinds verifies that canceling the ctx
 // while a goroutine is blocked inside limiter.Wait returns cleanly and the
 // worker shuts down promptly.
 func TestWorker_RateLimitCtxCancelUnwinds(t *testing.T) {

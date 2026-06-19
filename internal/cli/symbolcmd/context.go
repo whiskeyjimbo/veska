@@ -46,7 +46,7 @@ type contextPack struct {
 
 // RunContext wraps eng_get_context_pack: it issues the lookup and renders the
 // seed + callers/callees/tests bundle (and any cross-repo edges) as JSON or
-// text. Behaviour mirrors the prior cmd/veska contextCmd RunE.
+// text. Behavior mirrors the prior cmd/veska contextCmd RunE.
 func RunContext(ctx context.Context, p ContextParams) error {
 	params := map[string]any{"symbol": p.Symbol}
 	if p.RepoID != "" {
@@ -75,7 +75,7 @@ func RunContext(ctx context.Context, p ContextParams) error {
 }
 
 // renderContextPack prints the text-mode context pack: header, one line per
-// neighbour, then resolved cross-repo edges.
+// neighbor, then resolved cross-repo edges.
 func renderContextPack(ctx context.Context, w io.Writer, pack contextPack) error {
 	// a zero-node pack means the symbol didn't resolve. Say so
 	// plainly + point to `veska symbol` for fuzzier lookup instead of the
@@ -99,7 +99,7 @@ func renderContextPack(ctx context.Context, w io.Writer, pack contextPack) error
 
 // renderContextCrossRepoEdges prints the cross-repo edges the daemon resolved
 // through cross_repo_edge_stubs (). Each edge is
-// labelled with the calling function/method + file:line when the graph has
+// labeled with the calling function/method + file:line when the graph has
 // it, falling back to a per-side eng_get_node lookup.
 func renderContextCrossRepoEdges(ctx context.Context, w io.Writer, pack contextPack) {
 	if len(pack.CrossRepoEdges) == 0 {

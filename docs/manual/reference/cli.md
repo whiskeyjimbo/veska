@@ -104,7 +104,7 @@ veska blast [<symbol-or-node-id> | --diff [<ref_a>..<ref_b>]] [flags]
 
 Walk CALLS edges from a symbol (wraps eng_get_call_chain)
 
-Walk CALLS edges from a symbol. Use this - not search - when the question is 'what does this reach' (direction=out, default) or 'what calls this' (direction=in). Surfaces cross_repo_edges into other registered repos so library-symbol callers in a multi-repo workspace are visible without separate queries. Pass node_id (exact) or symbol (resolved via eng_find_symbol; ambiguity is rejected). NOTE: empty edges on a function/method seed carry one of two degraded_reasons hints: 'chained_selectors_unresolved' (parser limit - chained selector call sites like rootCmd.AddCommand(...).Execute() or s.field.M() are not yet modelled) or 'external_callees_only' (index boundary - callees are stdlib or unregistered modules, NOT a parser bug). Fall back to eng_get_blast_radius, eng_search_semantic, or eng_find_symbol.
+Walk CALLS edges from a symbol. Use this - not search - when the question is 'what does this reach' (direction=out, default) or 'what calls this' (direction=in). Surfaces cross_repo_edges into other registered repos so library-symbol callers in a multi-repo workspace are visible without separate queries. Pass node_id (exact) or symbol (resolved via eng_find_symbol; ambiguity is rejected). NOTE: empty edges on a function/method seed carry one of two degraded_reasons hints: 'chained_selectors_unresolved' (parser limit - chained selector call sites like rootCmd.AddCommand(...).Execute() or s.field.M() are not yet modeled) or 'external_callees_only' (index boundary - callees are stdlib or unregistered modules, NOT a parser bug). Fall back to eng_get_blast_radius, eng_search_semantic, or eng_find_symbol.
 
 ```
 veska calls <symbol-or-node-id> [flags]
@@ -339,7 +339,7 @@ veska config show [flags]
 
 Bundle a symbol with its callers/callees/tests (wraps eng_get_context_pack)
 
-Bundle a symbol's neighbourhood (callers, callees, adjacent tests, recent commits, open findings, active task) into one token-bounded payload. Use at the START of a non-trivial change so you don't have to assemble surrounding context piecewise. Surfaces cross_repo_edges in both directions, so cross-repo callers/callees show up in the same response.
+Bundle a symbol's neighborhood (callers, callees, adjacent tests, recent commits, open findings, active task) into one token-bounded payload. Use at the START of a non-trivial change so you don't have to assemble surrounding context piecewise. Surfaces cross_repo_edges in both directions, so cross-repo callers/callees show up in the same response.
 
 ```
 veska context <symbol> [flags]
@@ -1296,7 +1296,7 @@ veska related <file:line> [flags]
 
 ```
       --json          emit JSON (eng_find_related shape)
-      --k int         neighbour count (0 = daemon default of 10)
+      --k int         neighbor count (0 = daemon default of 10)
       --repo string   repo id, short_id, or alias
 ```
 
@@ -1609,7 +1609,7 @@ veska service uninstall [flags]
 
 Find symbols nearest to a seed in vector space (wraps eng_search_similar)
 
-Vector-nearest-neighbour search seeded by an existing symbol or node_id - 'what else looks like this?'. Use to find variants, near-duplicates, or refactor targets. The seed itself is excluded from results.
+Vector-nearest-neighbor search seeded by an existing symbol or node_id - 'what else looks like this?'. Use to find variants, near-duplicates, or refactor targets. The seed itself is excluded from results.
 
 ```
 veska similar <symbol-or-node-id> [flags]
@@ -1619,7 +1619,7 @@ veska similar <symbol-or-node-id> [flags]
 
 ```
       --json          emit JSON (eng_search_similar shape)
-      --k int         neighbour count (0 = daemon default of 10)
+      --k int         neighbor count (0 = daemon default of 10)
       --repo string   repo id, short_id, or alias
 ```
 

@@ -103,7 +103,7 @@ func (r *Refresher) SetOnFirstRefreshOk(cb func(context.Context)) {
 }
 
 // Run blocks, refreshing the advisory cache once immediately and then on every
-// tick of the configured interval. It returns when ctx is cancelled. A Refresh
+// tick of the configured interval. It returns when ctx is canceled. A Refresh
 // error is logged and swallowed; the ticker keeps running.
 // Run is intended to be launched in its own goroutine by the daemon
 // composition root.
@@ -125,7 +125,7 @@ func (r *Refresher) Run(ctx context.Context) {
 	}
 }
 
-// refresh performs a single Refresh and isolates its error. A cancelled
+// refresh performs a single Refresh and isolates its error. A canceled
 // context is expected during shutdown and is not logged as a failure.
 // Success and failure are both logged so operators can verify the refresher
 // is alive and confirm the network egress that Refresh implies.

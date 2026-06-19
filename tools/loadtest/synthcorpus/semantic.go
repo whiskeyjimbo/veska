@@ -22,7 +22,7 @@ import (
 // no phrases at all, so its embedding similarity stays well below a
 // within-cluster pair's. A probe of nomic-embed-text on this design
 // measured within-cluster cosine mean ≈ 0.74 vs between-cluster ≈ 0.49.
-// Topics deliberately include semantically adjacent neighbours
+// Topics deliberately include semantically adjacent neighbors
 // (authentication/permissions/encryption, payments/tax/shipping,
 // caching/database) so the auto-link false-positive measurement still
 // sees realistic cross-cluster confusion rather than a trivially
@@ -59,7 +59,7 @@ var semanticTopics = []struct {
 	}},
 	{"message-queue", []string{
 		"message broker", "topic partition", "consumer group", "dead letter queue",
-		"message acknowledgement", "consumer backpressure", "at-least-once delivery",
+		"message acknowledgment", "consumer backpressure", "at-least-once delivery",
 		"queue depth", "event publication", "offset commit", "message redelivery",
 		"poison message",
 	}},

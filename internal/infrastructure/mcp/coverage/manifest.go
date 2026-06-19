@@ -44,7 +44,7 @@ const (
 
 	// AlphaModulePath / BetaModulePath are the Go module paths declared in each
 	// fixture module's go.mod. modbeta's repo MUST be registered with
-	// BetaModulePath so the promoter recognises example.com/modalpha/metric as
+	// BetaModulePath so the promoter recognizes example.com/modalpha/metric as
 	// an external module and emits a cross-repo edge stub.
 	AlphaModulePath = "example.com/modalpha"
 	BetaModulePath  = "example.com/modbeta"
