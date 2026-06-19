@@ -11,6 +11,9 @@ CLAUDE.md
 
 .vscode/
 
+# Local MCP client config (contains machine-specific absolute paths)
+.mcp.json
+
 # Binaries
 /driver
 /engram
