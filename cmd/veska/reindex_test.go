@@ -58,7 +58,6 @@ func setupReindexEnv(t *testing.T) (repoRoot, repoID string) {
 	if err != nil {
 		t.Fatalf("repo.Add: %v", err)
 	}
-	repoID = id
 	// Resolve the canonical root that repo.Add stored, so the test can
 	// chdir into it (repo.Add EvalSymlinks-canonicalises the path).
 	rec, err := repo.Get(context.Background(), db, id)

@@ -5,6 +5,8 @@ linters:
     - govet
     - staticcheck
     - unused
+    - ineffassign
+    - misspell
     # errcheck omitted: generates noise for idiomatic defer Close() and fmt.Fprint*
     # patterns; staticcheck (SA4006, SA1006) covers the substantive cases.
   exclusions:

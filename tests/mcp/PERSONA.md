@@ -45,7 +45,7 @@ and CLI/git/sqlite drivers.
 
 ## Workflows → SOLO-02 stories
 
-Personas and stories are defined in `docs/design/02-personas-stories`.
+Personas and stories are defined in the archived design set (under `docs/design/02-personas-stories` in the local backup).
 
 ### Junior dev - `test_persona_junior.py`
 

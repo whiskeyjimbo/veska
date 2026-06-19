@@ -7,8 +7,8 @@ lives in `~/.veska/` on your machine - no upstream, no shared service, no
 multi-tenant tier.
 
 These pages give you the mental model an operator needs. They are deliberately
-lighter than the design set under `docs/design/`; follow the cross-links there
-when you want the binding detail.
+lighter than the detailed architecture summary at `docs/ARCHITECTURE.md`; refer to that
+when you want the binding details.
 
 - **[The code graph](graph.md)** - how your repo becomes nodes and edges.
 - **[Promotion & staging](promotion-staging.md)** - the two clocks: structural

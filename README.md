@@ -315,7 +315,7 @@ internal/
   infrastructure/     adapters: sqlite, vector, embedding/{model2vec,static,ollama,elect}, treesitter, mcp, git
   repo/               repos-table registry
   platform/           cross-cutting operational concerns (config, doctor, health, …)
-docs/                 design set (SOLO-NN sections), milestones, operations runbooks
+docs/                 user manual, architecture summary, and operational runbooks
 ```
 
 ## MCP tools
@@ -401,11 +401,10 @@ at a running daemon's data dir and at least one `veska repo add`'d repo.
 
 ## Documentation
 
-- [`docs/PRODUCT.md`](docs/PRODUCT.md) - what Veska is, in plain English.
-- [`docs/README.md`](docs/README.md) - the design set, with a recommended read order.
-- [`docs/design/`](docs/design/) - the `SOLO-NN` design sections and ADRs.
-- [`docs/milestones/`](docs/milestones/) - milestone breakdowns (M0–M7 closed).
-- [`docs/operations/`](docs/operations/) - config surface and runbooks.
+- [`docs/PRODUCT.md`](docs/PRODUCT.md) - What Veska is, in plain English.
+- [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) - High-level system architecture and design.
+- [`docs/manual/`](docs/manual/) - User and operator manual (MkDocs source).
+- [`docs/operations/`](docs/operations/) - Config surface and runbooks.
 
 ## Status
 

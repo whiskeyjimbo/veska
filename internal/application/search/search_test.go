@@ -198,12 +198,12 @@ func TestSemanticCandidates_TagsRanksAndUnionsRetrievers(t *testing.T) {
 	}}
 	lex := &fakeLexical{hits: []ports.LexicalHit{
 		{NodeID: "vlex"},  // rank 1 in lex
-		{NodeID: "lonly"}, // rank 2 in lex
+		{NodeID: "lexonly"}, // rank 2 in lex
 	}}
 	nodes := &fakeNodes{rows: []ports.NodeMeta{
 		{NodeID: "vlex", SymbolPath: "v.Lex"},
 		{NodeID: "vonly", SymbolPath: "v.Only"},
-		{NodeID: "lonly", SymbolPath: "l.Only"},
+		{NodeID: "lexonly", SymbolPath: "l.Only"},
 	}}
 	s, err := search.NewService(emb, vec, nodes, search.WithLexicalSearcher(lex))
 	if err != nil {
@@ -227,8 +227,8 @@ func TestSemanticCandidates_TagsRanksAndUnionsRetrievers(t *testing.T) {
 	if vonly := byID["vonly"]; vonly.VectorRank != 2 || vonly.LexicalRank != 0 {
 		t.Errorf("vonly ranks = (%d,%d); want (2,0)", vonly.VectorRank, vonly.LexicalRank)
 	}
-	if lonly := byID["lonly"]; lonly.VectorRank != 0 || lonly.LexicalRank != 2 {
-		t.Errorf("lonly ranks = (%d,%d); want (0,2)", lonly.VectorRank, lonly.LexicalRank)
+	if lexonly := byID["lexonly"]; lexonly.VectorRank != 0 || lexonly.LexicalRank != 2 {
+		t.Errorf("lexonly ranks = (%d,%d); want (0,2)", lexonly.VectorRank, lexonly.LexicalRank)
 	}
 }
 

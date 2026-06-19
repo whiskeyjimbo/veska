@@ -22,9 +22,9 @@ func TestCheckIndexFreshness(t *testing.T) {
 		{RepoID: "r-nogit", Branch: "main", RootPath: "/d", PromotedSHA: "sha9"},
 	}
 	resolver := head(map[string]string{
-		"/a": "sha1",     // matches -> current
-		"/b": "sha-new",  // differs -> behind
-		"/d": "",         // missing -> handled as unknown via error
+		"/a": "sha1",    // matches -> current
+		"/b": "sha-new", // differs -> behind
+		"/d": "",        // missing -> handled as unknown via error
 	})
 
 	got := CheckIndexFreshness(repos, resolver)

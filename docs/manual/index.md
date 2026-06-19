@@ -7,7 +7,7 @@ they reason from the same structural ground truth instead of guessing.
 
 This is the **operator and user manual**: how to install Veska, run the daemon,
 connect your editor, and drive it day to day. For the design rationale and
-architecture decision records, see the design set under `docs/design/`.
+architecture details, see the high-level architecture at `docs/ARCHITECTURE.md`.
 
 ## What it gives you
 
