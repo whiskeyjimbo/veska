@@ -6,6 +6,10 @@ site_dir: site
 
 theme:
   name: material
+  custom_dir: overrides
+  favicon: assets/logo.svg
+  icon:
+    logo: veska/logo
   features:
     - navigation.instant
     - navigation.tracking
