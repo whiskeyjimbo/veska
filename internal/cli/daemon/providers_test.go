@@ -266,7 +266,7 @@ func TestStatusProvider_BacklogStaysDegradedForAgentContract(t *testing.T) {
 		t.Fatalf("Status: %v", err)
 	}
 	if m["status"] != "degraded" {
-		t.Fatalf("eng_get_status rollup = %v; want degraded (agent contract: see solov2-34rl)", m["status"])
+		t.Fatalf("eng_get_status rollup = %v; want degraded", m["status"])
 	}
 	reasons, _ := m["degraded_reasons"].([]string)
 	if !slices.Contains(reasons, mcp.DegradedReasonEmbeddingsPending) {

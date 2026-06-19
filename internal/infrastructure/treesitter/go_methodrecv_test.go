@@ -73,7 +73,7 @@ func build() string {
 	}
 	for _, c := range cases {
 		if !hasCallEdge(result.Nodes, result.Edges, c.src, c.dst) {
-			t.Errorf("expected CALLS edge %s -> %s (solov2-d521); got unresolved=%+v", c.src, c.dst, result.UnresolvedCalls)
+			t.Errorf("expected CALLS edge %s -> %s; got unresolved=%+v", c.src, c.dst, result.UnresolvedCalls)
 		}
 	}
 }

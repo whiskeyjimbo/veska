@@ -181,7 +181,7 @@ func TestAliasPrompt_BothCollideSkips(t *testing.T) {
 
 func TestAliasPrompt_PathFormUsesBasename(t *testing.T) {
 	pools := openAliasPromptPools(t)
-	seedTrackedRepo(t, pools, "id-7", "/home/jrose/src/myproj")
+	seedTrackedRepo(t, pools, "id-7", "/home/user/src/myproj")
 
 	deps := PromptDeps{
 		IsTTY:  func() bool { return true },
@@ -189,7 +189,7 @@ func TestAliasPrompt_PathFormUsesBasename(t *testing.T) {
 		Stdout: &bytes.Buffer{},
 	}
 	if err := RunAliasSuggestPrompt(context.Background(), pools.Write,
-		AliasTarget{RepoID: "id-7", RootPath: "/home/jrose/src/myproj"}, deps,
+		AliasTarget{RepoID: "id-7", RootPath: "/home/user/src/myproj"}, deps,
 	); err != nil {
 		t.Fatal(err)
 	}

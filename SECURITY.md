@@ -9,9 +9,7 @@ Instead, report them privately through GitHub's built-in mechanism:
 1. Go to the **Security** tab of this repository.
 2. Click **Report a vulnerability** (this opens a private security advisory).
 
-This keeps the report confidential until a fix is available. If you cannot use
-GitHub Security Advisories, contact the maintainer at
-`<TODO: security contact email>`.
+This keeps the report confidential until a fix is available.
 
 Please include:
 

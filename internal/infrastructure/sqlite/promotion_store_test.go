@@ -323,7 +323,7 @@ func TestPromotionStore_ChainedSelectorEmitsMethodCallStub(t *testing.T) {
 			{
 				Path:    "/tmp/app/runner/runner.go",
 				Nodes:   []*domain.Node{runFn},
-				Imports: map[string]string{"greetlib": "github.com/jrose/greetlib"},
+				Imports: map[string]string{"greetlib": "github.com/example/greetlib"},
 				UnresolvedCalls: []domain.UnresolvedCall{
 					{CallerID: "runID", CalleeName: "New", PkgQualifier: "greetlib"},
 					{CallerID: "runID", CalleeName: "Hello", PkgQualifier: "greetlib", IsMethodCall: true},
