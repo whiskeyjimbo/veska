@@ -6,6 +6,13 @@
 [![Go Version](https://img.shields.io/github/go-mod/go-version/whiskeyjimbo/veska)](go.mod)
 [![License: AGPL v3](https://img.shields.io/badge/License-AGPL%20v3-blue.svg)](LICENSE)
 
+> **Give your AI coding agent real structural understanding of your codebase.**
+> Veska parses your repo into a queryable code graph + semantic index and serves
+> it to your agent (and you) over MCP - so answers come back as exact
+> `file:line` spans, not grep-and-guess. Fully local, in-process, zero-setup.
+
+![Veska - natural-language query in, exact file:line answer out](docs/manual/assets/demo.gif)
+
 **Veska** is a local code-intelligence daemon. It runs on your laptop, parses
 your repository into a code graph (nodes + edges), embeds that graph
 semantically, and serves both to your editor and your AI agent over MCP - so
