@@ -147,7 +147,15 @@ func (a *Adapter) extractAdvisory(f *zip.File) error {
 		return err
 	}
 
+	// Entry names from the downloaded archive are untrusted. filepath.Base strips
+	// any directory components; the prefix check then rejects anything that would
+	// still resolve outside cacheDir, so a crafted "../" name cannot escape the
+	// cache (zip-slip, CWE-22). A traversal entry in the OSV dump implies a
+	// tampered source, so we fail closed rather than skip.
 	dest := filepath.Join(a.cacheDir, filepath.Base(f.Name))
+	if !strings.HasPrefix(dest, filepath.Clean(a.cacheDir)+string(os.PathSeparator)) {
+		return fmt.Errorf("unsafe archive entry %q", f.Name)
+	}
 	return os.WriteFile(dest, data, 0o644)
 }
 
