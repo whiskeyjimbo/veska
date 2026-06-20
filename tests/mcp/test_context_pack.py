@@ -1,4 +1,4 @@
-"""Tests for eng_get_context_pack - bundles a node's neighbourhood for an
+"""Tests for eng_get_context_pack - bundles a node's neighborhood for an
 LLM prompt window."""
 
 from __future__ import annotations

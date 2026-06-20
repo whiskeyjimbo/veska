@@ -180,7 +180,7 @@ func TestEphemeralEnsureFromURL_TrackedMatchSkipsClone(t *testing.T) {
 	pools := openPoolsAt(t, home)
 
 	// Seed a tracked row whose canonical_url matches what the URL form
-	// will canonicalise to. Mirrors the origin-alias scenario.
+	// will canonicalize to. Mirrors the origin-alias scenario.
 	canonical, err := repo.CanonicalURL("file://" + source)
 	if err != nil {
 		t.Fatal(err)

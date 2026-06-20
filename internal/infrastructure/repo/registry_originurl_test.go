@@ -54,7 +54,7 @@ func TestAdd_PopulatesCanonicalURLFromOrigin(t *testing.T) {
 	}
 	// The stored URL must match the canonical HTTPS format even when initialized with SSH.
 	if !canonical.Valid || canonical.String != "https://github.com/foo/bar" {
-		t.Errorf("canonical_url = %v, want canonicalised https://github.com/foo/bar", canonical)
+		t.Errorf("canonical_url = %v, want canonicalized https://github.com/foo/bar", canonical)
 	}
 }
 

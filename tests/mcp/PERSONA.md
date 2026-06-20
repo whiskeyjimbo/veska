@@ -63,7 +63,7 @@ Personas and stories are defined in the archived design set (under `docs/design/
 |---|---|---|
 | structural onboard | US-08.01 | `eng_get_entry_points` / `eng_get_hot_zone` |
 | blast radius | US-04.02 | `eng_get_blast_radius` (caller of a changed callee) |
-| context pack | US-08.02 | `eng_get_context_pack` (token-bounded neighbourhood) |
+| context pack | US-08.02 | `eng_get_context_pack` (token-bounded neighborhood) |
 | suppression governance | US-05.02 | `eng_suppress_finding` round-trip |
 | restart recovery | US-07.01 | promoted state **and** the suppression survive a restart |
 

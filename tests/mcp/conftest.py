@@ -105,7 +105,7 @@ class MCPClient:
     def call(self, name: str, args: dict | None = None, retries: int = 3) -> tuple[bool, str, float, dict]:
         """Send one JSON-RPC call. Returns (ok, text, elapsed_ms, result_obj).
 
-        Retries on transient SQLITE_BUSY: SQLite serialises writes through
+        Retries on transient SQLITE_BUSY: SQLite serializes writes through
         a single connection in the daemon's WriteHot pool, and back-to-back
         writes from rapid tests can collide with the embedder / queue
         / wiki workers that share the same lock. A 50ms backoff per attempt

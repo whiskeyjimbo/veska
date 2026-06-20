@@ -109,7 +109,7 @@ func TestTokenEfficiency(t *testing.T) {
 		filesByPath[n.FilePath] = filesByPath[n.FilePath] + n.Text + "\n\n"
 		fileNodeIDs[n.FilePath] = append(fileNodeIDs[n.FilePath], n.NodeID)
 	}
-	// Pre-tokenise every file once; baseline mode re-uses the counts.
+	// Pre-tokenize every file once; baseline mode re-uses the counts.
 	fileTokens := make(map[string]int, len(filesByPath))
 	for p, body := range filesByPath {
 		n, err := CountTokens(body)

@@ -126,7 +126,7 @@ func promptAliasAfterAdd(ctx context.Context, w io.Writer, repoID, canonicalURL,
 	}
 }
 
-// RunRepoAddURL implements `veska repo add <url>`: canonicalise the URL,
+// RunRepoAddURL implements `veska repo add <url>`: canonicalize the URL,
 // short-circuit on a matching canonical_url row, clone to the tracked tier
 // with live progress, then register via the daemon (with direct fallback)
 // and stamp canonical_url on the new row.

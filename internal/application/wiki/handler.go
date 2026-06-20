@@ -137,7 +137,7 @@ func (h *Handler) Handle(ctx context.Context, row ports.WorkRow) error {
 	if h.writePages {
 		// committed Markdown carries repo-relative file_path
 		// so the docs stay portable across machines and contributors.
-		// The MCP tool responses still canonicalise to absolute (see
+		// The MCP tool responses still canonicalize to absolute (see
 		// tools_wiki.go).
 		if err := writePage(filepath.Join(root, HotZonesPagePath), RenderHotZones(relativizeHotZoneReport(report, root))); err != nil {
 			return fmt.Errorf("wiki.Handle: write hot zones page: %w", err)

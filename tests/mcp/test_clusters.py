@@ -1,7 +1,7 @@
 """Tests for eng_find_clusters - unified, tier-labeled similar-code clusters.
 
 One pass returns exact / structural / near groups for de-dupe triage. Read-only,
-so these assert the contract (responds, well-shaped, tiers/scope honoured) rather
+so these assert the contract (responds, well-shaped, tiers/scope honored) rather
 than the presence of clones, which is corpus-dependent."""
 
 from __future__ import annotations
@@ -29,7 +29,7 @@ def test_find_clusters_groups_are_well_formed(mcp_client, repo_id, branch):
             assert "repo_id" in m and "file_path" in m, f"member missing fields: {m}"
 
 
-def test_find_clusters_tier_filter_honoured(mcp_client, repo_id, branch):
+def test_find_clusters_tier_filter_honored(mcp_client, repo_id, branch):
     """A tiers=exact filter must never return a structural/near cluster."""
     _, _, _, result = mcp_client.call("eng_find_clusters", {
         "repo_id": repo_id, "branch": branch, "tiers": "exact",

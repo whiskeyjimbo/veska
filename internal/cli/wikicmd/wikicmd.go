@@ -199,7 +199,7 @@ func buildWikiHandler(pools *sqlite.Pools) (*wiki.Handler, error) {
 		if err != nil {
 			return "", fmt.Errorf("wiki: repo root lookup: %w", err)
 		}
-		// ResolveTarget already canonicalised repoID to the full sha, so
+		// ResolveTarget already canonicalized repoID to the full sha, so
 		// equality is the expected hit. Keep the prefix resolver as a defensive
 		// fallback for any caller that bypasses it.
 		for _, rec := range records {

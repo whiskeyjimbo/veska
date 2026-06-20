@@ -324,7 +324,7 @@ func TestHandler_EmitsReviewFindings(t *testing.T) {
 		t.Fatalf("write file: %v", err)
 	}
 	loader, _ := NewLoader()
-	gen := &fakeGenerator{reply: reviewBlock("medium", "SQL injection", "unsanitised input reaches the query")}
+	gen := &fakeGenerator{reply: reviewBlock("medium", "SQL injection", "unsanitized input reaches the query")}
 	fs := &fakeFindingStorage{}
 	h, _ := NewHandler(gen, loader, staticRoot(root), fs)
 

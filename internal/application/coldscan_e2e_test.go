@@ -26,7 +26,7 @@ import (
 // TestColdScanE2E_ReindexProducesSearchableVectors exercises the full
 // reindex → embedder → VectorStorage pipeline against the real production
 // adapters: sqlite (with migrations), tree-sitter, Ollama, and a concrete
-// VectorStorage backend. It is parameterised over backend kind so the same
+// VectorStorage backend. It is parameterized over backend kind so the same
 // fixture proves that vectors land in whichever store the operator
 // configures via VESKA_VECTOR_BACKEND.
 // Skips:

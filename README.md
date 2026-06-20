@@ -165,7 +165,7 @@ make build
 # 3. Start the daemon.
 #
 #    Pick one:
-#      - Just kicking the tyres? Background it:    ./bin/veska-daemon &
+#      - Just kicking the tires? Background it:    ./bin/veska-daemon &
 #      - Want it on every boot, auto-restart on
 #        crash, logs under ~/.veska/logs?           use the service form below.
 #

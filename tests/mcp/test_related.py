@@ -45,7 +45,7 @@ def test_find_related_requires_file_path_and_line(mcp_client, repo_id, branch):
     assert "method not found" not in text.lower()
 
 
-def test_find_related_honours_k(mcp_client, repo_id, branch, file_and_line):
+def test_find_related_honors_k(mcp_client, repo_id, branch, file_and_line):
     """The result count must not exceed the requested k, and each hit must
     carry the ranked-result shape (node_id + score). Pinned to the real
     'results' key so a shape drift fails loudly rather than passing on an

@@ -4,7 +4,7 @@
 // requires zero external services - no Ollama, no Python sidecar, no
 // network, no model file.
 // Algorithm (v2, FastText-style subword hashing):
-//  1. Tokenise into camelCase / snake_case / non-alphanumeric subwords.
+//  1. Tokenize into camelCase / snake_case / non-alphanumeric subwords.
 //  2. For each token, derive character n-grams (3.6) plus the token
 //     itself, with explicit boundary markers ('<' / '>') so prefix and
 //     suffix morphology contributes - FastText's trick.

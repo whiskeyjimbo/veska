@@ -13,10 +13,10 @@ import (
 )
 
 // EncodingName is the tiktoken encoding used for every token count. We
-// pin to cl100k_base - GPT-4 / GPT-3.5-turbo / claude-flavoured estimate
+// pin to cl100k_base - GPT-4 / GPT-3.5-turbo / claude-flavored estimate
 // because it is the published default and the comparable baseline
 // semble uses for its public figure. The exact encoding doesn't bias the
-// ratio (veska and grep are tokenised by the same function); the choice
+// ratio (veska and grep are tokenized by the same function); the choice
 // matters only for cross-tool comparisons.
 const EncodingName = "cl100k_base"
 

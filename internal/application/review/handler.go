@@ -65,7 +65,7 @@ type Handler struct {
 	dailyPauseAudited atomicString
 }
 
-// HandlerOption customises a Handler at construction time.
+// HandlerOption customizes a Handler at construction time.
 type HandlerOption func(*Handler)
 
 // WithQuota wires in the review token Quota. Without it the handler runs every

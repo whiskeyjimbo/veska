@@ -99,7 +99,7 @@ func TestEncode_WordPieceContinuation(t *testing.T) {
 // TestEncode_UnknownTokenFallsBackToUNK: a word that has NO greedy
 // WordPiece decomposition (no prefix in vocab) collapses to [UNK].
 // Without this the encoder would return an empty list or panic on
-// out-of-vocab input - every real-world tokeniser must handle OOV.
+// out-of-vocab input - every real-world tokenizer must handle OOV.
 func TestEncode_UnknownTokenFallsBackToUNK(t *testing.T) {
 	tk, _ := newTokenizer(synthTokenizerJSON(t))
 	got := tk.encode("xyzqwerty")

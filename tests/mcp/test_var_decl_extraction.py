@@ -2,8 +2,8 @@
 
 Pre- the tree-sitter Go extractor emitted only function/method/type
 nodes; package-scope var declarations were invisible. That made cobra
-CLIs (and any other framework where the API surface lives in initialised
-vars) look empty to eng_find_symbol. These tests pin the new behaviour
+CLIs (and any other framework where the API surface lives in initialized
+vars) look empty to eng_find_symbol. These tests pin the new behavior
 end-to-end through the MCP socket: register a tiny cobra-style repo,
 wait for cold scan + promotion, then assert the rootCmd / multi-var
 declarations come back as kind='variable' nodes."""

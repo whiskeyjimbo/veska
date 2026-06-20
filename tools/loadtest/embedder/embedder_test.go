@@ -146,7 +146,7 @@ func TestEmbedderThroughput(t *testing.T) {
 	}
 
 	// Stop synchronously so any in-flight Embed call returns before we
-	// finalise the count. The window is the input; CountPending is read
+	// finalize the count. The window is the input; CountPending is read
 	// AFTER Stop to keep the embeds_completed value internally consistent
 	// with the duration.
 	worker.Stop()

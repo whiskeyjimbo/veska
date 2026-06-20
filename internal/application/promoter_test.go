@@ -385,7 +385,7 @@ func TestPromoteRegisteredRepo(t *testing.T) {
 
 // TestPromote_WritesFTS verifies that promoting a node lands rows in
 // both node_fts_words and node_fts_trigrams within the same transaction,
-// using the camelCase-split pre-tokenisation contract from m3.03.2.
+// using the camelCase-split pre-tokenization contract from m3.03.2.
 func TestPromote_WritesFTS(t *testing.T) {
 	db := openMemDB(t)
 	insertTestRepo(t, db, "repo-fts")
