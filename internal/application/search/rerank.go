@@ -66,6 +66,9 @@ func rerank(results []Result, query string) []Result {
 		if isNoisePath(r.FilePath) {
 			r.Score *= noiseMultiplier
 		}
+		if coarseKinds[r.Kind] {
+			r.Score *= coarseKindMultiplier
+		}
 		out[i] = r
 	}
 	sort.SliceStable(out, func(i, j int) bool {
@@ -282,6 +285,21 @@ func fileCoherenceBonus(filePath string, fileCounts map[string]int, maxScore flo
 }
 
 const noiseMultiplier = 0.6
+
+// coarseKindMultiplier dampens coarse container kinds so a definition that
+// implements the queried behavior outranks a container that merely matched on
+// aggregate text (e.g. a package named "archive" winning an "extract from
+// archive" query over the method that does it). Not a filter: the node keeps
+// enough score to still surface for a genuine "where is package X" query.
+const coarseKindMultiplier = 0.5
+
+// coarseKinds are the file-spanning container kinds demoted by the signal
+// above. Symbol-grain kinds (function/method/type/...) are never demoted.
+var coarseKinds = map[string]bool{
+	"package": true,
+	"file":    true,
+	"module":  true,
+}
 
 // noiseSuffixes / noiseSubstrings are the file-path patterns demoted
 // by the noise-penalty signal. Conservative on purpose: a false noise
