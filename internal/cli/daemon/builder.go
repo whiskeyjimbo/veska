@@ -198,7 +198,7 @@ func (b *daemonBuilder) openStorage() error {
 		return fmt.Errorf("daemon: open sqlite pools: %w", err)
 	}
 	b.pools = pools
-	if _, err := sqlite.OpenWithOptions(b.cfg.SQLitePath, sqlite.Options{}); err != nil {
+	if _, err := sqlite.OpenWithOptions(b.cfg.SQLitePath, sqlite.Options{VerifyIntegrity: b.fileCfg.Storage.VerifyMigrationIntegrity}); err != nil {
 		_ = pools.Close()
 		return fmt.Errorf("daemon: migrate sqlite: %w", err)
 	}
@@ -220,13 +220,11 @@ func (b *daemonBuilder) openStorage() error {
 }
 
 // buildIngestionBusy installs the scan tracker and the shared ingestion-busy
-// predicate ( + 8ga): the queue poller and the embedder worker both hold writes
-// off while a cold-scan or startup resync is committing, AND now also while the
-// host is under memory pressure so both lanes skip their tick and
-// let RAM recover instead of pushing the daemon toward OOM. resyncRef is filled
-// in by finalize; the closure reads it through the builder so the later
-// assignment is visible. avail is injected so tests can drive the
-// memory-pressure branch with a fake reader.
+// predicate: the queue poller and embedder worker hold writes off while a
+// cold-scan or startup resync is committing, or while the host is under memory
+// pressure (both lanes skip their tick to let RAM recover instead of risking
+// OOM). resyncRef is filled in by finalize; the closure reads it through the
+// builder. avail is injected so tests can drive the memory-pressure branch.
 func (b *daemonBuilder) buildIngestionBusy(avail availMemFunc) {
 	b.scanTracker = application.NewScanTracker()
 	b.availMem = avail
@@ -251,10 +249,9 @@ func (b *daemonBuilder) buildCore() error {
 		application.WithCheckRunner(b.checkRunner),
 		application.WithAddedLinesFunc(composition.GitAddedLinesFunc(repoRootFunc(b.pools.ReadDB))),
 	}
-	// Pass the tracer only when one was constructed: b.tracer is a concrete
-	// *sdktrace.TracerProvider, and wrapping a nil pointer in the option's
-	// interface parameter would defeat the noop fallback (non-nil interface,
-	// nil concrete value).
+	// Pass the tracer only when one was constructed: wrapping a nil concrete
+	// *sdktrace.TracerProvider in the option's interface param would defeat the
+	// noop fallback (non-nil interface, nil concrete value).
 	if b.tracer != nil {
 		ingesterOpts = append(ingesterOpts, application.WithIngesterTracerProvider(b.tracer))
 		promoterOpts = append(promoterOpts, application.WithPromoterTracerProvider(b.tracer))
@@ -299,9 +296,9 @@ func (b *daemonBuilder) buildCheckPipeline() error {
 
 	// Secrets-scan (on unless disabled) + vuln-scan (only when provider="osv")
 	// share their enablement policy with the cold-scan CLI path via
-	// composition.RegisterCommonChecks. The daemon's dead-code + contract-drift
-	// checks above are daemon-only and layer on top. The vuln source is built
-	// once here and fed to BOTH the check and its advisory-cache refresher.
+	// composition.RegisterCommonChecks; the dead-code + contract-drift checks
+	// above are daemon-only. The vuln source is built once here and fed to BOTH
+	// the check and its advisory-cache refresher.
 	vulnSource, vulnEnabled := buildVulnSource(b.fileCfg)
 	vulnRoot := func(ctx context.Context, repoID string) (string, error) {
 		return repoRootFunc(b.pools.ReadDB)(ctx, repoID)
@@ -319,10 +316,9 @@ func (b *daemonBuilder) buildCheckPipeline() error {
 }
 
 // buildVulnRefresher builds the advisory-cache refresher (launched later in
-// Start) for the vulnerability-scan feature. The VulnScanCheck registration
-// itself lives in composition.RegisterCommonChecks (shared with the cold-scan
-// CLI); this is the daemon-only refresher half. Off by default - when
-// vuln-scan is disabled there is no refresher.
+// Start) for vuln-scan. The VulnScanCheck registration lives in
+// composition.RegisterCommonChecks; this is the daemon-only refresher half, and
+// is absent when vuln-scan is disabled.
 func (b *daemonBuilder) buildVulnRefresher(vulnSource ports.VulnSource, vulnEnabled bool) error {
 	if !vulnEnabled {
 		return nil
@@ -347,10 +343,9 @@ func (b *daemonBuilder) buildEmbedder() error {
 		return err
 	}
 	b.refs = sqlite.NewEmbeddingRefsRepo(b.pools.ReadDB, b.pools.Write)
-	// The rate limit (Embedder.RatePerSec, default 10/s) exists to smooth load
-	// on the Ollama network branch. Local embedders (model2vec/static) do
-	// thousands/s, so applying it there throttled backfill to ~10/s.
-	// . Disable the limiter (rate 0) unless Ollama was elected.
+	// The rate limit (Embedder.RatePerSec, default 10/s) smooths load on the
+	// Ollama network branch. Local embedders (model2vec/static) do thousands/s,
+	// so it would throttle backfill to ~10/s - disable it unless Ollama elected.
 	rate := 0.0
 	if b.embedderIsOllama {
 		rate = b.fileCfg.Embedder.RatePerSec
@@ -371,8 +366,7 @@ func (b *daemonBuilder) buildEmbedder() error {
 // electEmbedder picks the single embedder for this boot (model2vec if
 // installed, else the in-binary static embedder; Ollama only when
 // VESKA_EMBEDDER=ollama). Vectors from different models occupy incompatible
-// spaces, so a model switch wipes the embedding store and
-// re-queues every promoted node under the new model.
+// spaces, so a model switch wipes the store and re-queues every node.
 func (b *daemonBuilder) electEmbedder() error {
 	election, err := elect.Elect(elect.Config{
 		VeskaHome:     b.cfg.VeskaHome,
@@ -385,8 +379,8 @@ func (b *daemonBuilder) electEmbedder() error {
 		return fmt.Errorf("daemon: embedder election: %w", err)
 	}
 	slog.Info("daemon: embedder elected", "model_id", election.Name)
-	// surface a one-shot WARN so operators tailing daemon.log see
-	// why eng_search_semantic returns 'low_quality_static_embedder'.
+	// one-shot WARN so operators tailing daemon.log see why search returns
+	// 'low_quality_static_embedder'.
 	if election.Name == "veska-static-v2" {
 		slog.Warn("daemon: low-quality static-v2 embedder elected - run `veska install model2vec` for higher-quality code search",
 			"model_id", election.Name)
@@ -448,8 +442,8 @@ func (b *daemonBuilder) buildQueueHandlers() error {
 	return nil
 }
 
-// buildAutolinkHandler wires the SIMILAR_TO autolink handler.:
-// the repo-kind lookup skips ephemeral (cache-tier) repos.
+// buildAutolinkHandler wires the SIMILAR_TO autolink handler; the repo-kind
+// lookup skips ephemeral (cache-tier) repos.
 func (b *daemonBuilder) buildAutolinkHandler() (*autolink.Handler, error) {
 	nodeLookup := sqlite.NewNodeLookupRepo(b.pools.ReadDB)
 	edgeRepo := sqlite.NewEdgeRepo(b.pools.Write)
@@ -476,16 +470,14 @@ func (b *daemonBuilder) buildAutolinkHandler() (*autolink.Handler, error) {
 }
 
 // buildWikiHandler wires the WorkKindWiki regeneration handler (hot_zone +
-// entry_points pages) via the shared composition constructor. The daemon shares
-// its live staging so blast radius sees in-flight nodes, resolves repo roots
-// through the repos table, and honors the [wiki] write_pages config.
+// entry_points pages) via the shared composition constructor. It shares the
+// live staging so blast radius sees in-flight nodes, and honors [wiki].write_pages.
 func (b *daemonBuilder) buildWikiHandler() (*wiki.Handler, error) {
 	return composition.NewWikiHandler(b.pools, b.staging, repoRootFunc(b.pools.ReadDB), composition.WithWritePages(b.fileCfg.Wiki.WritePages))
 }
 
-// buildReviewHandler wires the optional WorkKindReview lane: the Ollama
-// generator, prompt loader, per-commit/per-day token quota (persisted in
-// daemon_state), and the audit writer. Only called when review is enabled.
+// buildReviewHandler wires the optional WorkKindReview lane (Ollama generator,
+// prompt loader, per-commit/per-day token quota, audit writer); review-enabled only.
 func (b *daemonBuilder) buildReviewHandler() (queue.WorkHandler, error) {
 	reviewLoader, err := review.NewLoader()
 	if err != nil {
@@ -501,8 +493,8 @@ func (b *daemonBuilder) buildReviewHandler() (queue.WorkHandler, error) {
 	reviewRoot := func(ctx context.Context, repoID string) (string, error) {
 		return repoRootFunc(b.pools.ReadDB)(ctx, repoID)
 	}
-	// Token-quota enforcement: the per-day total persists in
-	// daemon_state; the audit writer records the daily-cap pause.
+	// Token-quota: the per-day total persists in daemon_state; the audit writer
+	// records the daily-cap pause.
 	tokenStore := sqlite.NewReviewTokenStore(b.pools.ReadDB, b.pools.Write)
 	quota := review.NewQuota(
 		b.fileCfg.Review.MaxTokensPerCommit,
@@ -560,7 +552,7 @@ func (b *daemonBuilder) buildSummaryHandler() (queue.WorkHandler, error) {
 
 // buildPollerWatcher constructs the post-promotion queue poller, the fsnotify
 // watcher, the shared cold-scan reparser, and the cold-scan-aware repo
-// registrar (/0z1.3). The poller and embedder share ingestionBusy.
+// registrar. The poller and embedder share ingestionBusy.
 func (b *daemonBuilder) buildPollerWatcher() error {
 	pollInterval := parseDurationOr(b.fileCfg.PostPromotionQueue.PollInterval, 250*time.Millisecond)
 	b.poller = queue.New(b.pools.ReadDB, b.pools.Write, b.handlers,

@@ -129,6 +129,14 @@ type StorageConfig struct {
 	WALAutocheckpoint   int    `toml:"wal_autocheckpoint"`
 	IdleCheckpointAfter string `toml:"idle_checkpoint_after"`
 	VectorBackend       string `toml:"vector_backend"`
+
+	// VerifyMigrationIntegrity gates the schema-tamper check that compares each
+	// applied migration's SHA against the embedded SQL. Off by default for now -
+	// the check is brittle (a comment edit in an already-applied migration trips
+	// a false alarm). Flip the default here to make it on-by-default later;
+	// operators can still disable it per-host via this key or the
+	// VESKA_MIGRATION_INTEGRITY env var.
+	VerifyMigrationIntegrity bool `toml:"verify_migration_integrity"`
 }
 
 // WatcherConfig holds fsnotify debounce + admission ceilings.
@@ -245,12 +253,13 @@ func DefaultConfig() Config {
 			SampleRatio:  1.0,
 		},
 		Storage: StorageConfig{
-			DBPath:              "~/.veska/veska.db",
-			JournalMode:         "WAL",
-			Synchronous:         "FULL",
-			WALAutocheckpoint:   1000,
-			IdleCheckpointAfter: "5s",
-			VectorBackend:       "memory",
+			DBPath:                   "~/.veska/veska.db",
+			JournalMode:              "WAL",
+			Synchronous:              "FULL",
+			WALAutocheckpoint:        1000,
+			IdleCheckpointAfter:      "5s",
+			VectorBackend:            "memory",
+			VerifyMigrationIntegrity: false,
 		},
 		Watcher: WatcherConfig{
 			Debounce:             "200ms",
