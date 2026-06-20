@@ -1097,7 +1097,7 @@ Re-stage and promote files changed in HEAD. Accepts repo_id (full or short) or r
     },
     "root_path": {
       "type": "string",
-      "description": "Absolute filesystem path; canonicalised via EvalSymlinks before lookup."
+      "description": "Absolute filesystem path; canonicalized via EvalSymlinks before lookup."
     },
     "branch": {
       "type": "string",
@@ -1144,7 +1144,7 @@ Force a full cold-scan reparse of a registered repo. Accepts repo_id (full or sh
     },
     "root_path": {
       "type": "string",
-      "description": "Absolute filesystem path; canonicalised via EvalSymlinks before lookup."
+      "description": "Absolute filesystem path; canonicalized via EvalSymlinks before lookup."
     }
   }
 }
