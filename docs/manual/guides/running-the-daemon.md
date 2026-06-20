@@ -10,7 +10,7 @@ it as an OS service so it survives reboots and crashes.
 ./bin/veska-daemon &
 ```
 
-Fine for kicking the tyres. No auto-restart, no managed logs - when your shell
+Fine for kicking the tires. No auto-restart, no managed logs - when your shell
 exits, so does the daemon.
 
 ## Real use: run it as a service

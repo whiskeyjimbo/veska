@@ -56,7 +56,7 @@ var promoteRepoInputSchema = json.RawMessage(`{
   "description": "Re-promote the latest commit of a registered repo. One of repo_id or root_path is required; when both are passed, repo_id wins. branch, git_sha, and actor_kind/actor_id are optional overrides for callers (e.g. agents) that want to attribute the promotion to themselves or pin a specific SHA; when omitted the handler reads HEAD from git and stamps the system actor.",
   "properties": {
     "repo_id":    {"type": "string", "description": "Full repo_id or short_id prefix."},
-    "root_path":  {"type": "string", "description": "Absolute filesystem path; canonicalised via EvalSymlinks before lookup."},
+    "root_path":  {"type": "string", "description": "Absolute filesystem path; canonicalized via EvalSymlinks before lookup."},
     "branch":     {"type": "string", "description": "Optional branch override; defaults to the repo's active_branch (or 'main')."},
     "git_sha":    {"type": "string", "description": "Optional commit SHA to promote at; defaults to git HEAD of the resolved root_path."},
     "actor_kind": {"type": "string", "enum": ["human", "agent", "system"], "description": "Attribution kind for the promotion stamp; defaults to 'system'. Must be paired with actor_id."},
@@ -71,7 +71,7 @@ var reindexRepoInputSchema = json.RawMessage(`{
   "description": "Force a full cold-scan reparse of a registered repo, in-daemon. One of repo_id or root_path is required; when both are passed, repo_id wins. Returns when the scan completes; the daemon's standard 'cold scan: starting' / 'cold scan: complete' log pair is emitted as for the add-repo path.",
   "properties": {
     "repo_id":   {"type": "string", "description": "Full repo_id or short_id prefix."},
-    "root_path": {"type": "string", "description": "Absolute filesystem path; canonicalised via EvalSymlinks before lookup."}
+    "root_path": {"type": "string", "description": "Absolute filesystem path; canonicalized via EvalSymlinks before lookup."}
   }
 }`)
 

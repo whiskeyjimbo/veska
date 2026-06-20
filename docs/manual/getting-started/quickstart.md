@@ -15,7 +15,7 @@ checks run by default. Opt out with `veska init --no-vuln`.
 
 ## 2. Start the daemon
 
-For kicking the tyres, background it:
+For kicking the tires, background it:
 
 ```sh
 ./bin/veska-daemon &
