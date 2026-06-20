@@ -61,7 +61,7 @@ print(urllib.parse.quote(sys.argv[1].replace(' ', '_')))
     # without one. A 0.5s sleep between requests stays under the
     # one-per-second courtesy guideline.
     body=$(curl -fsSL --max-time 20 \
-        -H 'User-Agent: veska-embed-models-bench/1.0 (solov2-0k5h.7; https://github.com/whiskeyjimbo/veska)' \
+        -H 'User-Agent: veska-embed-models-bench/1.0 (https://github.com/whiskeyjimbo/veska)' \
         -H 'Accept: application/json' \
         "${url}" || true)
     sleep 0.5

@@ -1,4 +1,4 @@
-; calls.scm - call-expression patterns (solov2-1yev phase 3a).
+; calls.scm - call-expression patterns.
 ;
 ; Two shapes cover the bulk of legacy collectCallNames:
 ;   1. identifier(...)               - plain in-package call
@@ -35,7 +35,7 @@
 ; The Go-side extractor uses the file-wide struct-field-type map +
 ; per-body local-var-origin map (built once per function) to classify
 ; each match into either an in-file FieldType.Method edge or an
-; UnresolvedCall (with PkgQualifier + IsMethodCall=true). solov2-9rc2.
+; UnresolvedCall (with PkgQualifier + IsMethodCall=true).
 (call_expression
   function: (selector_expression
     operand: (selector_expression

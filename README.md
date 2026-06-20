@@ -389,7 +389,7 @@ editors by `veska-mcp`). Tool names follow `eng_<verb>_<object>`. Quick map:
 `eng_set_active_task`, `eng_get_task_history`) is implemented in the tree
 but **not** registered on the socket - calling it returns `method not
 found`. It stays parked until a task backend (Jira / Linear / GitHub) lands
-to populate the underlying table (`wire.go`, solov2-6m1). Treat it as
+to populate the underlying table (`wire.go`). Treat it as
 non-existent for now; agent instruction snippets do not advertise it.
 
 ## Testing

@@ -2,7 +2,7 @@
 # scripts/fetch-wikipedia-corpus.sh into out/wikipedia-tech/. Curated to
 # span the breadth of topics a developer might semantic-search for -
 # ~25 titles is enough to drive headline-set recall comparisons without
-# bloating fetch time. (solov2-0k5h.7)
+# bloating fetch time.
 #
 # Content is CC-BY-SA 3.0 / GFDL (Wikipedia license). out/ is gitignored.
 

@@ -32,7 +32,7 @@
 // Targets sections of Wikipedia software/CS articles fetched by
 // scripts/fetch-wikipedia-corpus.sh. Queries are deliberately phrased
 // without library-specific identifiers - this is the genuine-natural-
-// prose corpus (solov2-0k5h.7).
+// prose corpus.
 {"corpus":"wikipedia-tech","query":"how a compiler differs from an interpreter","expected":"compiler.md#comparison-with-interpreter"}
 {"corpus":"wikipedia-tech","query":"the history of how programming languages came to be compiled","expected":"compiler.md#history"}
 {"corpus":"wikipedia-tech","query":"different ways to resolve collisions when two keys hash the same","expected":"hash-table.md#collision-resolution"}

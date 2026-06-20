@@ -1,4 +1,4 @@
-; frameworks.scm - framework-aware symbol extraction (solov2-crn7).
+; frameworks.scm - framework-aware symbol extraction.
 ;
 ; Where a generic top-level var (symbols.scm) only sees `var rootCmd =
 ; &cobra.Command{...}` as an opaque KindVariable named "rootCmd", these
@@ -11,10 +11,10 @@
 ; Frameworks handled: spf13/cobra (Command → command named by Use:),
 ; urfave/cli (App → command named by Name:, with its Commands:[]*Command
 ; slice as subcommands), and HTTP routers gin/echo/chi (router.METHOD(
-; "/path", handler) → KindRoute named "METHOD /path" + a ROUTES
-; route→handler edge resolved at promotion - solov2-ketg), and
-; alecthomas/kong (struct fields tagged `cmd:""` → KindCommand, nested via
-; field type - solov2-su6d), which is a struct-tag walk rather than a
+; "/path", handler) -> KindRoute named "METHOD /path" + a ROUTES
+; route->handler edge resolved at promotion), and
+; alecthomas/kong (struct fields tagged `cmd:""` -> KindCommand, nested via
+; field type), which is a struct-tag walk rather than a
 ; composite-literal match.
 ;
 ; The @fwvar.* patterns capture EVERY top-level `var X = &pkg.Type{...}`;
@@ -84,7 +84,7 @@
 ; arg present (the four-way precision gate). The operand is intentionally
 ; uncaptured - the router is a param of an unresolved type, so it can't be
 ; verified by receiver type; precision comes from the import + verb + arg
-; gate instead (solov2-ketg).
+; gate instead.
 (call_expression
   function: (selector_expression
     field: (field_identifier) @route.method)
