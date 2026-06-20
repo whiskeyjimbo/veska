@@ -133,14 +133,27 @@ func main() {
 	// this only affects the CLI process.
 	slog.SetDefault(slog.New(slog.NewTextHandler(io.Discard, nil)))
 
+	// Optional CPU/heap profiling of this run. stop() must run before
+	// os.Exit (which skips defers), so we compute the exit code first.
+	stopProfiling := startCLIProfiling()
+	code := runRoot()
+	stopProfiling()
+	os.Exit(code)
+}
+
+// runRoot executes the CLI command tree and maps its error to a process exit
+// code, returning rather than calling os.Exit so the caller can flush profiles
+// first.
+func runRoot() int {
 	if err := newRootCmd().Execute(); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		// A probe-status error carries its own conventional exit code; every
 		// other error exits 1.
 		var pse ProbeStatusError
 		if isProbeStatusError(err, &pse) {
-			os.Exit(exitCodeForProbeStatus(pse.Status))
+			return exitCodeForProbeStatus(pse.Status)
 		}
-		os.Exit(1)
+		return 1
 	}
+	return 0
 }
