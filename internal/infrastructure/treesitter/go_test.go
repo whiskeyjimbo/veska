@@ -543,7 +543,7 @@ func main() {
 func TestParseFile_ChainedSelectorMethodCall(t *testing.T) {
 	src := []byte(`package runner
 
-import "github.com/jrose/greetlib"
+import "github.com/example/greetlib"
 
 func Run(name string) string {
 	g := greetlib.New("Hello")
@@ -1750,7 +1750,7 @@ func init() {
 func TestParseFile_PackageVarConstructorOrigin(t *testing.T) {
 	src := []byte(`package app
 
-import "github.com/jrose/greetlib"
+import "github.com/example/greetlib"
 
 var g = greetlib.New("hi")
 

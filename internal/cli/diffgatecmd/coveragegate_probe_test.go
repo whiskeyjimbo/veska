@@ -66,7 +66,7 @@ func TestUntestedProxyLimit_FuncValueLocalVar(t *testing.T) {
 		testFile: "greet_test.go",
 		testSrc:  "package p\n\nimport \"testing\"\n\nfunc TestGreet(t *testing.T) {\n\tfn := Greet\n\tif fn() != \"hi\" {\n\t\tt.Fatal(\"bad\")\n\t}\n}\n",
 	})
-	assertProxyLimit(t, v, err, "solov2-zvh6.15")
+	assertProxyLimit(t, v, err, "")
 }
 
 // func-value passed directly as a callback argument (cross-file → no edge).
@@ -78,7 +78,7 @@ func TestUntestedProxyLimit_FuncValueCallbackArg(t *testing.T) {
 		testFile: "cleanup_test.go",
 		testSrc:  "package p\n\nimport \"testing\"\n\nfunc TestCleanup(t *testing.T) {\n\tt.Cleanup(Cleanup)\n}\n",
 	})
-	assertProxyLimit(t, v, err, "solov2-zvh6.15")
+	assertProxyLimit(t, v, err, "")
 }
 
 // func-value dispatched through a table-driven struct field (no edge).
@@ -90,7 +90,7 @@ func TestUntestedProxyLimit_TableDrivenStructField(t *testing.T) {
 		testFile: "greet_test.go",
 		testSrc:  "package p\n\nimport \"testing\"\n\nfunc TestGreet(t *testing.T) {\n\tcases := []struct{ fn func() string }{{Greet}}\n\tfor _, c := range cases {\n\t\tif c.fn() != \"hi\" {\n\t\t\tt.Fatal(\"bad\")\n\t\t}\n\t}\n}\n",
 	})
-	assertProxyLimit(t, v, err, "solov2-zvh6.15")
+	assertProxyLimit(t, v, err, "")
 }
 
 // embedded-struct method promotion WITHOUT an interface (w.Do binds to a
@@ -103,7 +103,7 @@ func TestUntestedProxyLimit_EmbeddedMethodNoInterface(t *testing.T) {
 		testFile: "base_test.go",
 		testSrc:  "package p\n\nimport \"testing\"\n\nfunc TestDo(t *testing.T) {\n\tw := Wrap{}\n\tif w.Do() != \"x\" {\n\t\tt.Fatal(\"bad\")\n\t}\n}\n",
 	})
-	assertProxyLimit(t, v, err, "solov2-zvh6.16")
+	assertProxyLimit(t, v, err, "")
 }
 
 // transitive-only coverage: the test calls Outer, Outer calls Inner; Inner has
@@ -116,7 +116,7 @@ func TestUntestedProxyLimit_TransitiveOnly(t *testing.T) {
 		testFile: "calc_test.go",
 		testSrc:  "package p\n\nimport \"testing\"\n\nfunc TestOuter(t *testing.T) {\n\tif Outer() != \"x\" {\n\t\tt.Fatal(\"bad\")\n\t}\n}\n",
 	})
-	assertProxyLimit(t, v, err, "solov2-v6de.1")
+	assertProxyLimit(t, v, err, "")
 }
 
 // reflection / generated harness: a method invoked by string name via reflect

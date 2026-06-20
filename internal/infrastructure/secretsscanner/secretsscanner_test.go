@@ -287,7 +287,7 @@ func TestBuiltinScanner_FilesystemPathsNotFlagged(t *testing.T) {
 	t.Parallel()
 	s := secretsscanner.New()
 	cases := []string{
-		`      "command": "/home/jrose/src/engram/solov2/bin/veska-mcp"`,
+		`      "command": "/home/user/src/veska/bin/veska-mcp"`,
 		`exec: /usr/local/bin/some-tool-with-a-long-name`,
 		`path = "/var/lib/foo/bar/baz/long-suffix-string"`,
 	}

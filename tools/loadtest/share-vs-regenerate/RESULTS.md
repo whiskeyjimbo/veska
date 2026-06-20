@@ -2,7 +2,7 @@
 
 Generated: 2026-06-02
 Platform: linux amd64
-Corpus root: `/home/jrose/src/engram/solov2/internal` (max_docs=5000)
+Corpus root: `/home/user/src/veska/internal` (max_docs=5000)
 Parsed: 315 files, 5318 nodes, 3625 edges, ~1850KB source.
 Embedder: **model2vec(potion-code-16M)** - 5000 vecs × 768 dims, embed wall=264ms (mean 53µs/vec).
 

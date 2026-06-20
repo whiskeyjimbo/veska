@@ -124,7 +124,7 @@ func TestSuggestAliasNames(t *testing.T) {
 		{"https://github.com/foo/bar", "", "bar", "foo-bar"},
 		{"https://github.com/foo/bar.git", "", "bar", "foo-bar"},
 		{"https://example.com/single", "", "single", ""}, // Only one path segment is present, so there is no fallback.
-		{"", "/home/jrose/src/myproj", "myproj", ""},
+		{"", "/home/user/src/myproj", "myproj", ""},
 		{"", "", "", ""},
 	}
 	for _, c := range cases {

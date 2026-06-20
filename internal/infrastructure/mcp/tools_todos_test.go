@@ -191,7 +191,7 @@ func TestFindTodos_RelativizesAbsolutePath(t *testing.T) {
 	}
 	want := "internal/server/server.go"
 	if got := resp.Todos[0].FilePath; got != want {
-		t.Errorf("file_path = %q, want %q (repo-relative per solov2-62gc/v7dq)", got, want)
+		t.Errorf("file_path = %q, want %q (repo-relative)", got, want)
 	}
 }
 
