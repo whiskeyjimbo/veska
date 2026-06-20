@@ -1,4 +1,3 @@
-// SPDX-FileCopyrightText: 2026 Jeff Rose
 // SPDX-License-Identifier: AGPL-3.0-only
 
 // Package model2vec implements a pure-Go EmbeddingProvider executing Model2Vec inference against static embedding models.
