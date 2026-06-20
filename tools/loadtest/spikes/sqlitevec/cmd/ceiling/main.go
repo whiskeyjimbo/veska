@@ -91,7 +91,7 @@ func main() {
 			os.Exit(1)
 		}
 
-		if err := loadVectors(dbPath, int(pop), *pageSize, rng); err != nil {
+		if err := loadVectors(dbPath, pop, *pageSize, rng); err != nil {
 			cleanup()
 			fmt.Fprintf(os.Stderr, "error: load vectors at %d: %v\n", pop, err)
 			os.Exit(1)
@@ -125,7 +125,7 @@ func main() {
 		)
 
 		results = append(results, popResult{
-			Population:  pop,
+			Population:  int64(pop),
 			Warm:        warm,
 			RSSBytes:    rss,
 			PassLatency: passLat,
@@ -134,10 +134,10 @@ func main() {
 
 		if ceiling == 0 {
 			if !passLat {
-				ceiling = pop
+				ceiling = int64(pop)
 				ceilingReason = "latency"
 			} else if !passRSS {
-				ceiling = pop
+				ceiling = int64(pop)
 				ceilingReason = "rss"
 			}
 		}
@@ -201,15 +201,17 @@ func openBenchDB(path string, mmapBytes, cacheSizeKB int64) (*sql.DB, error) {
 	return db, nil
 }
 
-func parsePops(s string) ([]int64, error) {
+func parsePops(s string) ([]int, error) {
 	parts := strings.Split(s, ",")
-	out := make([]int64, 0, len(parts))
+	out := make([]int, 0, len(parts))
 	for _, p := range parts {
 		p = strings.TrimSpace(p)
 		if p == "" {
 			continue
 		}
-		n, err := strconv.ParseInt(p, 10, 64)
+		// Atoi parses straight into a platform int (range-checked), so a
+		// population is used as a slice size / loop bound with no narrowing cast.
+		n, err := strconv.Atoi(p)
 		if err != nil || n <= 0 {
 			return nil, fmt.Errorf("invalid population %q", p)
 		}
