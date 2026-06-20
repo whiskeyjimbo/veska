@@ -414,13 +414,6 @@ at a running daemon's data dir and at least one `veska repo add`'d repo.
 - [`docs/manual/`](docs/manual/) - User and operator manual (MkDocs source).
 - [`docs/operations/`](docs/operations/) - Config surface and runbooks.
 
-## Status
-
-Milestones **M0–M7 are complete**: substrate, identity & observability,
-pipelines & embedder, the mechanical wiki, the optional review pipeline,
-vuln + secrets scanning, and the design-set cutover. The build is green
-(`make all`).
-
 ## License
 
 Veska is licensed under the **GNU Affero General Public License v3.0**
