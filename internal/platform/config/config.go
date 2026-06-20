@@ -143,13 +143,15 @@ type WatcherConfig struct {
 }
 
 // EmbedderConfig selects the embedding provider and its rate limits.
+// EmbedderConfig holds the Ollama-branch embedder knobs. Election itself is
+// driven by VESKA_EMBEDDER (auto: model2vec -> static, Ollama only on explicit
+// override), not by this block. Endpoint/Model carry the VESKA_OLLAMA_URL /
+// VESKA_EMBED_MODEL env values consumed when Ollama is elected; RatePerSec
+// throttles the Ollama network branch.
 type EmbedderConfig struct {
-	Provider   string  `toml:"provider"`
 	Endpoint   string  `toml:"endpoint"`
 	Model      string  `toml:"model"`
-	Dim        int     `toml:"dim"`
 	RatePerSec float64 `toml:"rate_per_sec"`
-	BatchSize  int     `toml:"batch_size"`
 }
 
 // PostPromotionQueueConfig tunes the background work queue poller.
@@ -260,12 +262,9 @@ func DefaultConfig() Config {
 			MaxPathsTotal:        200000,
 		},
 		Embedder: EmbedderConfig{
-			Provider:   "ollama",
 			Endpoint:   "http://localhost:11434",
 			Model:      "nomic-embed-text",
-			Dim:        768,
 			RatePerSec: 10,
-			BatchSize:  32,
 		},
 		PostPromotionQueue: PostPromotionQueueConfig{
 			PollInterval:  "250ms",
