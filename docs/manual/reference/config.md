@@ -25,7 +25,7 @@ Veska's state lives under `~/.veska/` (override with `VESKA_HOME`). Configuratio
 | `VESKA_EMBED_MODEL` | Embedding model name (default `nomic-embed-text`; only relevant when forcing an Ollama embedder). |
 | `VESKA_HOME` | Data root. All of Veska's state lives here (default `~/.veska`). |
 | `VESKA_HUB_THRESHOLD` | Blast-radius hub-degree threshold (integer). |
-| `VESKA_OLLAMA_URL` | Ollama base URL for the optional LLM review pipeline (default `http://localhost:11434`). |
+| `VESKA_OLLAMA_URL` | Ollama base URL for the optional LLM features - review pipeline and per-node summaries (default `http://localhost:11434`). |
 | `VESKA_OTLP_ENDPOINT` | OTLP endpoint for tracing export (required when tracing is enabled). |
 | `VESKA_VECTOR_BACKEND` | Vector store backend: `memory` (default) or `usearch`. |
 

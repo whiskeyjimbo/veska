@@ -86,7 +86,7 @@ var envPurpose = map[string]string{
 	"VESKA_CACHE_DECLINED_TTL":   "How long a declined cache entry stays suppressed.",
 	"VESKA_CACHE_MAX_BYTES":      "Cache size ceiling in bytes (0 = unbounded).",
 	"VESKA_CACHE_MAX_EPHEMERALS": "Max number of ephemeral cache entries retained.",
-	"VESKA_OLLAMA_URL":           "Ollama base URL for the optional LLM review pipeline (default `http://localhost:11434`).",
+	"VESKA_OLLAMA_URL":           "Ollama base URL for the optional LLM features - review pipeline and per-node summaries (default `http://localhost:11434`).",
 	"VESKA_EMBED_MODEL":          "Embedding model name (default `nomic-embed-text`; only relevant when forcing an Ollama embedder).",
 	"VESKA_VECTOR_BACKEND":       "Vector store backend: `memory` (default) or `usearch`.",
 	"VESKA_DEBUG":                "Enable debug logging when set to a non-empty, non-`0` value.",
