@@ -16,25 +16,14 @@ Veska is a local-first code-intelligence daemon designed to serve structural and
 
 The build produces a single compiled binary at `bin/veska` with symlinks directing process dispatch into three distinct execution modes:
 
-```
-                  +--------------+
-                  |  cmd/veska/  |  (Entry point)
-                  +-------+------+
-                          |
-             +------------+------------+
-             |                         |
-     (argv[0] dispatch)        (argv[0] dispatch)
-             v                         v
-     +---------------+         +---------------+
-     | veska-daemon  |         |   veska-mcp   |
-     +-------+-------+         +-------+-------+
-             |                         |
-      (Unix Socket) <------------------+ (stdio proxy)
-             ^                         ^
-             |                         |
-     +-------+-------+         +-------+-------+
-     |   veska CLI   |         |  IDE / Agent  |
-     +---------------+         +---------------+
+```mermaid
+flowchart TD
+    entry["cmd/veska/ (entry point)"]
+    entry -->|"argv[0] dispatch"| daemon[veska-daemon]
+    entry -->|"argv[0] dispatch"| mcp[veska-mcp]
+    cli[veska CLI] -->|Unix socket| daemon
+    ide["IDE / Agent"] -->|stdio proxy| mcp
+    mcp -->|Unix socket| daemon
 ```
 
 1. **`veska` (CLI):** The developer's operator and management surface. Used to initialize the configuration (`veska init`), register repositories (`veska repo add`), manually trigger diagnostic checks (`veska doctor`), and generate output wiki sites (`veska wiki`).
@@ -56,31 +45,15 @@ Veska isolates its database and index models into two storage schemas under `~/.
 
 Veska is organized cleanly into domain-driven hexagonal layers:
 
-```
-               +----------------------------------+
-               |          Infrastructure          |
-               | (Adapters: SQLite, Tree-sitter,  |
-               |   Model2Vec, MCP socket, Git)    |
-               +----------------+-----------------+
-                                |
-                                v
-               +----------------+-----------------+
-               |              Ports               |
-               |     (Interface boundaries)       |
-               +----------------+-----------------+
-                                |
-                                v
-               +----------------+-----------------+
-               |         Application            |
-               | (Use-cases: ingester, promoter,  |
-               |  checks runner, search service)  |
-               +----------------+-----------------+
-                                |
-                                v
-               +----------------+-----------------+
-               |             Domain               |
-               |     (Pure entities & rules)      |
-               +----------------------------------+
+```mermaid
+flowchart TD
+    infra["Infrastructure<br/>(Adapters: SQLite, Tree-sitter, Model2Vec, MCP socket, Git)"]
+    ports["Ports<br/>(Interface boundaries)"]
+    app["Application<br/>(Use-cases: ingester, promoter, checks runner, search service)"]
+    domain["Domain<br/>(Pure entities & rules)"]
+    infra --> ports
+    ports --> app
+    app --> domain
 ```
 
 ### Domain (`internal/core/domain/`)
